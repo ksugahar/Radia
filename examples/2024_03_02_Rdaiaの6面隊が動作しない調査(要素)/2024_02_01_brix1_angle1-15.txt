@@ -1,0 +1,28 @@
+import os, sys
+from numpy import *
+sys.path.append("C:/Program Files/Coreform Cubit 2023.11/bin")
+import cubit
+
+cubit.init(['cubit','-nojournal','-batch','nographics','-nogui','-noecho'])
+cubit.reset()
+
+n = 1
+angle = 1 #in range(1,16): # for angle in range(1,16): #角度を1°から15°まで1°ずつ
+
+cubit.silent_cmd(f'create brick x {n} y {n} z {n}  ')
+volume_id = cubit.get_last_id('volume')
+
+cubit.silent_cmd(f'webcut volume {volume_id} with plane yplane offset 0.4 rotate {angle} about x center 0 0 0 ')
+
+cubit.silent_cmd(f'volume 1 interval 1 ')
+br1.mesh()
+
+
+br1 = cubit.volume(volume_id)
+
+cubit.silent_cmd(f'block 1 add volume {volume_id}')
+cubit.silent_cmd(f'block 1 name "york"')
+
+export nastran "O:/Bdot/angle_{angle}.bdf"  dimension 3  overwrite  everything  large 
+
+

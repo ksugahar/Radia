@@ -1,0 +1,397 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="MinSizeRel|x64">
+      <Configuration>MinSizeRel</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="RelWithDebInfo|x64">
+      <Configuration>RelWithDebInfo</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{6EC5F38E-C33C-3450-B460-3A0B7D57AE30}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <Platform>x64</Platform>
+    <ProjectName>radia</ProjectName>
+    <VCProjectUpgraderObjectName>NoUpgrade</VCProjectUpgraderObjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\lib\Debug\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">radia.dir\Debug\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">radia</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.pyd</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\lib\Release\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">radia.dir\Release\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">radia</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.pyd</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\lib\MinSizeRel\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">radia.dir\MinSizeRel\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">radia</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">.pyd</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">true</GenerateManifest>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\lib\RelWithDebInfo\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">radia.dir\RelWithDebInfo\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">radia</TargetName>
+    <TargetExt Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">.pyd</TargetExt>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</LinkIncremental>
+    <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">true</GenerateManifest>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/Program Files/Python312/include"</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OpenMPSupport>true</OpenMPSupport>
+      <Optimization>Disabled</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;ALPHA__LIB__;FFTW_ENABLE_FLOAT;NO_TIMER;ANSI_DECLARATORS;TRILIBRARY;_GM_WITHOUT_BASE;_DEBUG;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;CMAKE_INTDIR="Debug";radia_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WINDOWS;ALPHA__LIB__;FFTW_ENABLE_FLOAT;NO_TIMER;ANSI_DECLARATORS;TRILIBRARY;_GM_WITHOUT_BASE;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;CMAKE_INTDIR=\"Debug\";radia_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;C:\Program Files\Python312\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;C:\Program Files\Python312\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Link>
+      <AdditionalDependencies>C:\Program Files\Python312\libs\python312_d.lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\fftw\fftw64_f.lib;version.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/Debug/radia.lib</ImportLibrary>
+      <ProgramDataBaseFile>S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/lib/Debug/radia.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/Program Files/Python312/include"</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OpenMPSupport>true</OpenMPSupport>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ALPHA__LIB__;FFTW_ENABLE_FLOAT;NO_TIMER;ANSI_DECLARATORS;TRILIBRARY;_GM_WITHOUT_BASE;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;CMAKE_INTDIR="Release";radia_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ALPHA__LIB__;FFTW_ENABLE_FLOAT;NO_TIMER;ANSI_DECLARATORS;TRILIBRARY;_GM_WITHOUT_BASE;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;CMAKE_INTDIR=\"Release\";radia_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;C:\Program Files\Python312\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;C:\Program Files\Python312\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Link>
+      <AdditionalDependencies>C:\Program Files\Python312\libs\python312.lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\fftw\fftw64_f.lib;version.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/Release/radia.lib</ImportLibrary>
+      <ProgramDataBaseFile>S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/lib/Release/radia.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/Program Files/Python312/include"</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OpenMPSupport>true</OpenMPSupport>
+      <Optimization>MinSpace</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ALPHA__LIB__;FFTW_ENABLE_FLOAT;NO_TIMER;ANSI_DECLARATORS;TRILIBRARY;_GM_WITHOUT_BASE;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;CMAKE_INTDIR="MinSizeRel";radia_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ALPHA__LIB__;FFTW_ENABLE_FLOAT;NO_TIMER;ANSI_DECLARATORS;TRILIBRARY;_GM_WITHOUT_BASE;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;CMAKE_INTDIR=\"MinSizeRel\";radia_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;C:\Program Files\Python312\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;C:\Program Files\Python312\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Link>
+      <AdditionalDependencies>C:\Program Files\Python312\libs\python312.lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\fftw\fftw64_f.lib;version.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/MinSizeRel/radia.lib</ImportLibrary>
+      <ProgramDataBaseFile>S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/lib/MinSizeRel/radia.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /external:I "C:/Program Files/Python312/include"</AdditionalOptions>
+      <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <MinimalRebuild></MinimalRebuild>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <OpenMPSupport>true</OpenMPSupport>
+      <Optimization>MaxSpeed</Optimization>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <SupportJustMyCode></SupportJustMyCode>
+      <UseFullPaths>false</UseFullPaths>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ALPHA__LIB__;FFTW_ENABLE_FLOAT;NO_TIMER;ANSI_DECLARATORS;TRILIBRARY;_GM_WITHOUT_BASE;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;CMAKE_INTDIR="RelWithDebInfo";radia_EXPORTS</PreprocessorDefinitions>
+      <ObjectFileName>$(IntDir)</ObjectFileName>
+      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;ALPHA__LIB__;FFTW_ENABLE_FLOAT;NO_TIMER;ANSI_DECLARATORS;TRILIBRARY;_GM_WITHOUT_BASE;_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;CMAKE_INTDIR=\"RelWithDebInfo\";radia_EXPORTS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;C:\Program Files\Python312\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Midl>
+      <AdditionalIncludeDirectories>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python;C:\Program Files\Python312\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OutputDirectory>$(ProjectDir)/$(IntDir)</OutputDirectory>
+      <HeaderFileName>%(Filename).h</HeaderFileName>
+      <TypeLibraryName>%(Filename).tlb</TypeLibraryName>
+      <InterfaceIdentifierFileName>%(Filename)_i.c</InterfaceIdentifierFileName>
+      <ProxyFileName>%(Filename)_p.c</ProxyFileName>
+    </Midl>
+    <Link>
+      <AdditionalDependencies>C:\Program Files\Python312\libs\python312.lib;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\fftw\fftw64_f.lib;version.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalOptions>%(AdditionalOptions) /machine:x64</AdditionalOptions>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <ImportLibrary>S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/RelWithDebInfo/radia.lib</ImportLibrary>
+      <ProgramDataBaseFile>S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/lib/RelWithDebInfo/radia.pdb</ProgramDataBaseFile>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <CustomBuild Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\CMakeLists.txt">
+      <UseUtf8Encoding>Always</UseUtf8Encoding>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Building Custom Rule S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SS:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia -BS:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build --check-stamp-file S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCXXInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeGenericSystem.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeLanguageInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeParseImplicitLinkInfo.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeRCInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindOpenMP.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPackageMessage.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPython\Support.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPython3.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\WindowsPaths.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeCCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeCXXCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeRCCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeSystem.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building Custom Rule S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SS:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia -BS:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build --check-stamp-file S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCXXInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeGenericSystem.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeLanguageInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeParseImplicitLinkInfo.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeRCInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindOpenMP.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPackageMessage.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPython\Support.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPython3.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\WindowsPaths.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeCCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeCXXCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeRCCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeSystem.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">Building Custom Rule S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SS:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia -BS:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build --check-stamp-file S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCXXInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeGenericSystem.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeLanguageInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeParseImplicitLinkInfo.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeRCInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindOpenMP.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPackageMessage.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPython\Support.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPython3.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\WindowsPaths.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeCCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeCXXCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeRCCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeSystem.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">false</LinkObjects>
+      <Message Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">Building Custom Rule S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/CMakeLists.txt</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SS:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia -BS:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build --check-stamp-file S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia/build/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal &amp; call :cmErrorLevel %errorlevel% &amp; goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd</Command>
+      <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCXXInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeCommonLanguageInclude.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeGenericSystem.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeInitializeConfigs.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeLanguageInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeParseImplicitLinkInfo.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeRCInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeSystemSpecificInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\CMakeSystemSpecificInitialize.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\CMakeCommonCompilerMacros.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Compiler\MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindOpenMP.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPackageHandleStandardArgs.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPackageMessage.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPython\Support.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\FindPython3.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCXXLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Internal\CMakeCommonLinkerInformation.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Linker\Windows-MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-Initialize.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC-C.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC-CXX.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows-MSVC.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\Windows.cmake;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\share\cmake-3.31\Modules\Platform\WindowsPaths.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeCCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeCXXCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeRCCompiler.cmake;S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\3.31.6-msvc6\CMakeSystem.cmake;%(AdditionalInputs)</AdditionalInputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\CMakeFiles\generate.stamp</Outputs>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">false</LinkObjects>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl1.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl2.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl3.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl4.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl5.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl6.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl7.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radarccu.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radcast.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radexpgn.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radflm.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radg3d.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radg3dgr.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radgroup.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radinter.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radintrc.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radiobuf.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radmamet.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radmater.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radplnr1.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radplnr2.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radptrj.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radrec.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radrlmet.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radsbdac.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radsbdep.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radsbdrc.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radsbdvp.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radsend.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radvlpgn.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse\auxparse.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath\gmfft.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath\gmtrans.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle\triangle.c" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib\radentry.cpp" />
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python\radpy.cpp" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <ProjectReference Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\ZERO_CHECK.vcxproj">
+      <Project>{4755DBBF-9A37-342C-8D7F-A753160C2F14}</Project>
+      <Name>ZERO_CHECK</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

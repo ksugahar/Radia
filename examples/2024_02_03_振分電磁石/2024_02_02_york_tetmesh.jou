@@ -1,0 +1,25 @@
+import acis "C:/msys64/home\Administrator/Bmap_reconstruction_BH16/2024_01_27_レゴメッシュ代理モデル/Coil_York.sat" nofreesurfaces heal attributes_on  separate_bodies 
+
+create vertex location 41.000000, 478.971685, 985.799715
+create vertex location 41.000000, 34.466820, 50.000000
+create vertex location 81.000000, 78.750000, 50.000000
+create vertex location 81.000000, 504.250000, 945.789474
+
+create surface vertex 49 52 51 50  
+webcut vol 1  with sheet extended from surface 29 
+
+delete volume 3 5
+unite volume 1  4 
+
+remove surface 51 extend blend_chain 
+
+compress
+
+volume 1 scheme tetmesh
+volume 1 size auto factor 5
+mesh volume 1
+
+compress
+
+block 1 add volume 1
+block 1 name "1"

@@ -1,0 +1,121 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl1.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl3.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl4.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl5.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl6.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radapl7.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radarccu.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radcast.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radexpgn.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radflm.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radg3d.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radg3dgr.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radgroup.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radinter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radintrc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radiobuf.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radmamet.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radmater.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radplnr1.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radplnr2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radptrj.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radrec.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radrlmet.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radsbdac.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radsbdep.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radsbdrc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radsbdvp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radsend.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\core\radvlpgn.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\auxparse\auxparse.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath\gmfft.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\genmath\gmtrans.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\ext\triangle\triangle.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\lib\radentry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\src\python\radpy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{C5D92239-C1F3-3E84-B699-EBD6BE02D775}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

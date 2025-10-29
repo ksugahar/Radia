@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File build.ps1)",
+      "Bash(where:*)",
+      "Read(//c/Program Files/Microsoft Visual Studio/2022//**)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File build.ps1 -Clean)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File build.ps1 -Rebuild)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File build.ps1 -BuildType Debug)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File build.ps1 -Rebuild -BuildType Release)",
+      "Bash(xargs:*)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File build.ps1 -BuildType RelWithDebInfo)",
+      "Bash(awk:*)",
+      "Bash(cat:*)",
+      "Bash(python test_simple.py:*)",
+      "Bash(python test_radia.py:*)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File build_multi_python.ps1)",
+      "Bash(rm:*)",
+      "Bash(tree:*)",
+      "Bash(find:*)",
+      "Bash(git checkout:*)",
+      "Bash(python:*)",
+      "Bash(for file in test_simple.py test_radia.py test_advanced.py test_parallel_performance.py)",
+      "Bash(do)",
+      "Bash(echo:*)",
+      "Bash(done)",
+      "Bash(ls:*)",
+      "Bash(for:*)",
+      "Bash(do echo \"=== Test $i ===\")",
+      "Bash(test:*)",
+      "Read(//c/Program Files/**)",
+      "Bash(timeout 60 python:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

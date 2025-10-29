@@ -1,0 +1,13 @@
+reset
+create sphere radius 0.5
+surface all scheme tri
+surface all size 0.1
+mesh surface all
+compress
+
+block 1 add surface in vol 1
+block 1 name "air"
+
+nodeset 1 add surface 1
+nodeset 1 name "out"
+
