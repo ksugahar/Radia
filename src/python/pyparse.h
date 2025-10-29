@@ -601,7 +601,7 @@ public:
 
 		if((len > 0) && (pStr != 0))
 		{
-			if(len > maxLenStr) len = maxLenStr;
+			if(len >= maxLenStr) len = maxLenStr - 1;
 			strncpy(c_str, pStr, len);
 			c_str[len] = '\0';
 		}
@@ -674,7 +674,7 @@ public:
 				if(strcmp(sTypeName, "instance") != 0)
 				{
 					int len = (int)strlen(sTypeName);
-					if(len > maxLenStr) len = maxLenStr;
+					if(len >= maxLenStr) len = maxLenStr - 1;
 					strncpy(c_str, sTypeName, len);
 					c_str[len] = '\0';
 					return;
@@ -699,7 +699,7 @@ public:
 						long len = (long)(pEndName - (pFirstDot + 1));
 						if(len > 0)
 						{
-							if(len > maxLenStr) len = maxLenStr;
+							if(len >= maxLenStr) len = maxLenStr - 1;
 							strncpy(c_str, pFirstDot + 1, len);
 							c_str[len] = '\0';
 						}

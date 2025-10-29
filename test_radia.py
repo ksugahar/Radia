@@ -76,8 +76,8 @@ def test_material(rad):
 	print("Test 4: Material Definition")
 	print("=" * 60)
 	try:
-		# Create a material (iron)
-		mat = rad.MatStd('Iron', 2000)  # Saturation magnetization
+		# Create a material (Steel37 - valid material in database)
+		mat = rad.MatStd('Steel37', 2000)  # Saturation magnetization
 		print(f"[OK] SUCCESS: Created material")
 		print(f"  Material ID: {mat}")
 
@@ -129,7 +129,7 @@ def test_solve(rad):
 	try:
 		# Create a simple magnetic system
 		block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
-		mat = rad.MatStd('Iron', 2000)
+		mat = rad.MatStd('Steel37', 2000)
 		rad.MatApl(block, mat)
 
 		# Solve the system
