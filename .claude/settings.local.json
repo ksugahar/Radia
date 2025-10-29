@@ -31,7 +31,10 @@
       "Read(//c/Program Files/**)",
       "Bash(timeout 60 python:*)",
       "Bash(git remote set-url:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git mv:*)"
     ],
     "deny": [],
     "ask": []
