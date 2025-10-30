@@ -1,0 +1,40 @@
+--- a/src/python/radpy.cpp
++++ b/src/python/radpy.cpp
+@@ -26,9 +26,24 @@ CPyParse g_pyParse(RadErrGetText);
+ /************************************************************************//**
+  * Auxiliary function for combining error string out of pieces
+  ***************************************************************************/
+ static char* CombErStr(const char* s1, const char* s2)
+ {
+-	return strcat(strcpy(g_strErTot, s1), s2);
++	// Use safe string operations to prevent buffer overflow
++	size_t len1 = strlen(s1);
++	size_t len2 = strlen(s2);
++	size_t total_len = len1 + len2;
++
++	if(total_len >= sizeof(g_strErTot)) {
++		// Truncate if necessary to fit in buffer
++		strncpy(g_strErTot, s1, sizeof(g_strErTot) - 1);
++		size_t remaining = sizeof(g_strErTot) - strlen(g_strErTot) - 1;
++		if(remaining > 0) {
++			strncat(g_strErTot, s2, remaining);
++		}
++		g_strErTot[sizeof(g_strErTot) - 1] = '\0';
++	} else {
++		strcpy(g_strErTot, s1);
++		strcat(g_strErTot, s2);
++	}
++	return g_strErTot;
+ }
+
+--- a/src/python/pyparse.h
++++ b/src/python/pyparse.h
+@@ -599,7 +599,7 @@ class CPyParse {
+
+ 		if((len > 0) && (pStr != 0))
+ 		{
+-			if(len > maxLenStr) len = maxLenStr;
++			if(len >= maxLenStr) len = maxLenStr - 1;
+ 			strncpy(c_str, pStr, len);
+ 			c_str[len] = '\0';
+ 		}
