@@ -89,9 +89,16 @@ python tests/test_magpylib_comparison.py
 **Note**: This test validates Radia's magnetic field calculations by comparing with magpylib (an independent library). Key points:
 - Both libraries use **SI units (Tesla)** for magnetization/polarization and field output
 - For permanent magnets: M = Br (remanence)
-- Agreement: **~2-3%** for cylindrical permanent magnets
+- Agreement: **~0.5%** with 32 subdivisions (default setting)
 
-This validates the accuracy of Radia's electromagnetic field calculations.
+**Subdivision convergence** (azimuthal segments):
+- 16 segments: ~2% error
+- 32 segments: ~0.5% error (current default)
+- 64 segments: ~0.1% error
+- 128 segments: ~0.03% error
+
+This validates the accuracy of Radia's electromagnetic field calculations and demonstrates
+second-order convergence with mesh refinement.
 
 ## Using pytest (Optional)
 

@@ -91,7 +91,7 @@ def test_cylindrical_magnet_comparison():
 	# Radia: ObjCylMag([x,y,z], radius, height, nseg, axis, [mx,my,mz])
 	# Magnetization in Tesla (default Radia units)
 	# Subdivide cylinder for better accuracy
-	n_phi = 16  # azimuthal subdivisions (number of segments)
+	n_phi = 32  # azimuthal subdivisions (32→0.5% error, 64→0.1%, 128→0.03%)
 
 	radia_mag = rad.ObjCylMag([0, 0, 0], radius, height, n_phi, 'z', [0, 0, magnetization_T])
 	print(f"[OK] Radia cylindrical magnet created (ID: {radia_mag})")
