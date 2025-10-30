@@ -11,6 +11,9 @@ tests/
 ├── test_radia.py                    # Comprehensive test suite
 ├── test_advanced.py                 # Advanced features and edge cases
 ├── test_parallel_performance.py     # OpenMP parallelization tests
+├── test_magpylib_comparison.py      # Comparison with magpylib library
+├── conftest.py                      # pytest configuration
+├── test_utils.py                    # Shared path utilities
 ├── benchmarks/                      # Performance benchmarks
 │   ├── benchmark_openmp.py         # OpenMP scaling tests
 │   ├── benchmark_correct.py        # Correctness vs performance
@@ -73,6 +76,21 @@ python tests/test_advanced.py
 # Test OpenMP parallelization performance
 python tests/test_parallel_performance.py
 ```
+
+### Comparison Test with magpylib
+
+Compare Radia results with magpylib (another magnetic field library):
+
+```bash
+# Requires: pip install magpylib
+python tests/test_magpylib_comparison.py
+```
+
+**Note**: This test compares Radia and magpylib for cylindrical permanent magnets. The libraries use different models:
+- **Radia**: Uniform magnetization (no demagnetization) → Upper bound
+- **magpylib**: Polarization with demagnetization → Realistic field
+
+Expected field ratio: Radia/magpylib ≈ 50-100x for short cylinders.
 
 ## Using pytest (Optional)
 
