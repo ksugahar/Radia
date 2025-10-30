@@ -87,11 +87,11 @@ python tests/test_magpylib_comparison.py
 ```
 
 **Note**: This test validates Radia's magnetic field calculations by comparing with magpylib (an independent library). Key points:
-- **Radia**: Uses CGS-Gaussian units (Gauss) for magnetization
-- **magpylib**: Uses SI units (Tesla) for polarization
-- **Unit conversion**: M(Gauss) = Br(Tesla) × 10000
+- Both libraries use **SI units (Tesla)** for magnetization/polarization and field output
+- For permanent magnets: M = Br (remanence)
+- Agreement: **~2-3%** for cylindrical permanent magnets
 
-When units are properly converted, both libraries agree within **~2-3%** for cylindrical permanent magnets.
+This validates the accuracy of Radia's electromagnetic field calculations.
 
 ## Using pytest (Optional)
 

@@ -72,17 +72,16 @@ def test_cylindrical_magnet_comparison():
 	# Typical NdFeB: Br = 1.2 T (remanence)
 	remanence_T = 1.2  # Tesla (typical NdFeB)
 
-	# IMPORTANT: Radia uses CGS-Gaussian units for magnetization
-	# In CGS: M is in Gauss, and for permanent magnets M = Br
-	# 1 Tesla = 10000 Gauss
-	magnetization_gauss = remanence_T * 10000  # Convert T to Gauss
+	# IMPORTANT: Radia uses Tesla for magnetization (default units)
+	# For permanent magnets: M = Br (remanence)
+	magnetization_T = remanence_T
 
 	print(f"  Shape: Cylinder")
 	print(f"  Radius: {radius} mm")
 	print(f"  Height: {height} mm")
 	print(f"  Material: NdFeB-like")
-	print(f"  Remanence Br: {remanence_T} T = {magnetization_gauss} Gauss")
-	print(f"  Magnetization M: {magnetization_gauss} Gauss (Z-direction)")
+	print(f"  Remanence Br: {remanence_T} T")
+	print(f"  Magnetization M: {magnetization_T} T (Z-direction)")
 
 	# Create magnet in Radia
 	print("\n" + "-" * 70)
@@ -90,14 +89,14 @@ def test_cylindrical_magnet_comparison():
 	print("-" * 70)
 
 	# Radia: ObjCylMag([x,y,z], radius, height, nseg, axis, [mx,my,mz])
-	# Magnetization in CGS-Gaussian units (Gauss)
+	# Magnetization in Tesla (default Radia units)
 	# Subdivide cylinder for better accuracy
 	n_phi = 16  # azimuthal subdivisions (number of segments)
 
-	radia_mag = rad.ObjCylMag([0, 0, 0], radius, height, n_phi, 'z', [0, 0, magnetization_gauss])
+	radia_mag = rad.ObjCylMag([0, 0, 0], radius, height, n_phi, 'z', [0, 0, magnetization_T])
 	print(f"[OK] Radia cylindrical magnet created (ID: {radia_mag})")
 	print(f"     Subdivisions: {n_phi} segments (azimuthal)")
-	print(f"     Magnetization: {magnetization_gauss} Gauss (CGS units)")
+	print(f"     Magnetization: {magnetization_T} T")
 
 	# Create magnet in magpylib
 	print("\n" + "-" * 70)
@@ -156,10 +155,9 @@ def test_cylindrical_magnet_comparison():
 	bz_mag_first = 0.0
 
 	for i, pt in enumerate(test_points):
-		# Radia field calculation (returns field in Gauss)
-		# Radia uses Gauss-cm system: 1 Tesla = 10000 Gauss
+		# Radia field calculation (returns field in Tesla)
 		b_radia = rad.Fld(radia_mag, 'b', pt)
-		bx_rad, by_rad, bz_rad = b_radia[0] / 10, b_radia[1] / 10, b_radia[2] / 10  # Convert Gauss to mT
+		bx_rad, by_rad, bz_rad = b_radia[0] * 1000, b_radia[1] * 1000, b_radia[2] * 1000  # Convert T to mT
 
 		# magpylib field calculation (returns field in Tesla)
 		b_magpy = magpy_mag.getB(pt)
@@ -196,14 +194,14 @@ def test_cylindrical_magnet_comparison():
 	print("\n" + "=" * 70)
 	print("ANALYSIS")
 	print("=" * 70)
-	print(f"\nImportant: Unit system for magnetization:")
-	print(f"  - Radia: Uses CGS-Gaussian units (Gauss)")
-	print(f"    → For permanent magnets: M = Br (in Gauss)")
-	print(f"    → 1 Tesla = 10000 Gauss")
-	print(f"  - magpylib: Uses SI units (Tesla)")
+	print(f"\nImportant: Unit systems:")
+	print(f"  - Radia: Uses Tesla for both magnetization and field (SI units)")
+	print(f"    → For permanent magnets: M = Br (in Tesla)")
+	print(f"    → Field output: B in Tesla")
+	print(f"  - magpylib: Uses Tesla for polarization and field (SI units)")
 	print(f"    → Polarization = Br (in Tesla)")
-	print(f"\nBoth libraries use the same physical model for permanent magnets")
-	print(f"when magnetization is properly converted.")
+	print(f"    → Field output: B in Tesla")
+	print(f"\nBoth libraries use the same unit system and physical model.")
 	print(f"\nExpected agreement: Within a few percent")
 	if bz_mag_first > 0:
 		ratio = bz_rad_first / bz_mag_first
