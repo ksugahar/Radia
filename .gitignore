@@ -1,0 +1,122 @@
+# Radia Python Module - Git Ignore File
+
+# Build directories
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Compiled files
+*.pyd
+*.so
+*.dll
+*.dylib
+*.o
+*.obj
+*.exe
+*.out
+*.app
+*.lib
+*.exp
+*.ilk
+*.pdb
+*.iobj
+*.ipdb
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Visual Studio
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.tlog
+
+# Build logs
+build.log
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Python virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# Documentation build
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# Backup files
+*.cpp.bak
+*.h.bak
+*.py.bak
+
+# Security and local configs
+.env
+.env.local
+*.key
+*.pem
+.claude/settings.local.json
+
+# Test output files
+test_output/
+benchmark_results/
+*.vtk
+*.vtu
+*.csv
+
+# Ignore specific build artifacts but keep source
+!src/**/*.cpp
+!src/**/*.h
+!src/**/*.c
+
+# Keep important config files
+!.gitignore
+!pytest.ini
+!pyproject.toml
+!CMakeLists.txt

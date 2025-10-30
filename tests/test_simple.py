@@ -13,7 +13,9 @@ if sys.platform == 'win32':
 	sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
 # Add build output directory to path
-build_dir = os.path.join(os.path.dirname(__file__), 'build', 'lib', 'Release')
+# Tests are now in tests/ subdirectory, so go up one level to find build/
+project_root = os.path.dirname(os.path.dirname(__file__))
+build_dir = os.path.join(project_root, 'build', 'lib', 'Release')
 sys.path.insert(0, build_dir)
 
 print("=" * 60)

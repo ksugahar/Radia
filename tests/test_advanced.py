@@ -8,7 +8,9 @@ import os
 import math
 
 # Add build output directory to path
-build_dir = os.path.join(os.path.dirname(__file__), 'build', 'lib', 'Release')
+# Tests are now in tests/ subdirectory, so go up one level to find build/
+project_root = os.path.dirname(os.path.dirname(__file__))
+build_dir = os.path.join(project_root, 'build', 'lib', 'Release')
 sys.path.insert(0, build_dir)
 
 def test_dipole_magnet():

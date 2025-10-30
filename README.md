@@ -80,15 +80,23 @@ Practical examples are available in the `examples/` directory:
 ## Testing
 
 ```bash
-# Simple test
-python test_simple.py
+# Quick basic test
+python tests/test_simple.py
 
-# Comprehensive test
-python test_radia.py
+# Comprehensive test suite
+python tests/test_radia.py
+
+# Advanced features test
+python tests/test_advanced.py
 
 # OpenMP performance test
-python test_parallel_performance.py
+python tests/test_parallel_performance.py
+
+# Or use pytest to run all tests
+pytest tests/
 ```
+
+See [tests/README.md](tests/README.md) for detailed testing documentation.
 
 ## Visualization
 
