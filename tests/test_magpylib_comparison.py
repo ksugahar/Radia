@@ -69,17 +69,20 @@ def test_cylindrical_magnet_comparison():
 	height = 20.0  # mm
 
 	# Use NdFeB-like material properties for realistic comparison
-	# Typical NdFeB: Br = 1.2 T (remanence), Hc = 900 kA/m (coercivity)
-	# For hard permanent magnet: M ≈ Br/μ₀ = 1.2/(4π×10⁻⁷) ≈ 955 kA/m
+	# Typical NdFeB: Br = 1.2 T (remanence)
 	remanence_T = 1.2  # Tesla (typical NdFeB)
-	magnetization = remanence_T / (4 * np.pi * 1e-7)  # Convert to A/m
+
+	# IMPORTANT: Radia uses CGS-Gaussian units for magnetization
+	# In CGS: M is in Gauss, and for permanent magnets M = Br
+	# 1 Tesla = 10000 Gauss
+	magnetization_gauss = remanence_T * 10000  # Convert T to Gauss
 
 	print(f"  Shape: Cylinder")
 	print(f"  Radius: {radius} mm")
 	print(f"  Height: {height} mm")
 	print(f"  Material: NdFeB-like")
-	print(f"  Remanence Br: {remanence_T} T")
-	print(f"  Magnetization M: {magnetization/1000:.1f} kA/m (Z-direction)")
+	print(f"  Remanence Br: {remanence_T} T = {magnetization_gauss} Gauss")
+	print(f"  Magnetization M: {magnetization_gauss} Gauss (Z-direction)")
 
 	# Create magnet in Radia
 	print("\n" + "-" * 70)
@@ -87,12 +90,14 @@ def test_cylindrical_magnet_comparison():
 	print("-" * 70)
 
 	# Radia: ObjCylMag([x,y,z], radius, height, nseg, axis, [mx,my,mz])
+	# Magnetization in CGS-Gaussian units (Gauss)
 	# Subdivide cylinder for better accuracy
 	n_phi = 16  # azimuthal subdivisions (number of segments)
 
-	radia_mag = rad.ObjCylMag([0, 0, 0], radius, height, n_phi, 'z', [0, 0, magnetization])
+	radia_mag = rad.ObjCylMag([0, 0, 0], radius, height, n_phi, 'z', [0, 0, magnetization_gauss])
 	print(f"[OK] Radia cylindrical magnet created (ID: {radia_mag})")
 	print(f"     Subdivisions: {n_phi} segments (azimuthal)")
+	print(f"     Magnetization: {magnetization_gauss} Gauss (CGS units)")
 
 	# Create magnet in magpylib
 	print("\n" + "-" * 70)
@@ -191,39 +196,45 @@ def test_cylindrical_magnet_comparison():
 	print("\n" + "=" * 70)
 	print("ANALYSIS")
 	print("=" * 70)
-	print(f"\nNote: Radia and magpylib use DIFFERENT permanent magnet models:")
-	print(f"\n  Radia:")
-	print(f"    - Uses uniform magnetization M (A/m) throughout volume")
-	print(f"    - Does NOT account for demagnetization field")
-	print(f"    - Gives UPPER BOUND on external field")
-	print(f"\n  magpylib:")
-	print(f"    - Uses polarization J (remanence Br in Tesla)")
-	print(f"    - DOES account for demagnetization effects")
-	print(f"    - Gives REALISTIC field for actual permanent magnets")
-	print(f"\nFor short cylinders (L/D ≈ 1):")
-	print(f"  - Demagnetization factor N ≈ 0.3-0.4")
-	print(f"  - Expected field ratio: Radia/magpylib ≈ 1/(1-N) ≈ 50-100x")
+	print(f"\nImportant: Unit system for magnetization:")
+	print(f"  - Radia: Uses CGS-Gaussian units (Gauss)")
+	print(f"    → For permanent magnets: M = Br (in Gauss)")
+	print(f"    → 1 Tesla = 10000 Gauss")
+	print(f"  - magpylib: Uses SI units (Tesla)")
+	print(f"    → Polarization = Br (in Tesla)")
+	print(f"\nBoth libraries use the same physical model for permanent magnets")
+	print(f"when magnetization is properly converted.")
+	print(f"\nExpected agreement: Within a few percent")
 	if bz_mag_first > 0:
-		print(f"Observed ratio at (0,0,25): {bz_rad_first/bz_mag_first:.1f}x")
+		ratio = bz_rad_first / bz_mag_first
+		diff_percent = abs(ratio - 1.0) * 100
+		print(f"Observed ratio at (0,0,25): {ratio:.3f}x ({diff_percent:.1f}% difference)")
 	else:
 		print(f"Observed values at (0,0,25): Radia={bz_rad_first:.2f} mT, magpylib={bz_mag_first:.2f} mT")
 
-	# Determine if libraries are working (not if they agree perfectly)
-	# Both should give non-zero, physically reasonable results
-	radia_ok = (bz_rad_first > 100)  # Should be strong field for NdFeB
-	magpy_ok = (bz_mag_first > 1)    # Should be reasonable field
+	# Determine if libraries agree within tolerance
+	# Should agree within 10% for proper unit conversion
+	tolerance_percent = 10.0
+	if bz_mag_first > 0:
+		ratio = bz_rad_first / bz_mag_first
+		diff_percent = abs(ratio - 1.0) * 100
+		passed = diff_percent < tolerance_percent
+	else:
+		passed = False
 
 	# Cleanup Radia
 	rad.UtiDelAll()
 
 	print("\n" + "=" * 70)
-	if radia_ok and magpy_ok:
-		print(f"[PASS] Both libraries produce physically reasonable fields")
-		print(f"       (Exact agreement not expected due to different models)")
+	if passed:
+		print(f"[PASS] Radia and magpylib agree within {tolerance_percent}% tolerance")
+		print(f"       Difference: {diff_percent:.2f}%")
 		print("=" * 70)
 		return True
 	else:
-		print(f"[FAIL] One or both libraries produce unreasonable results")
+		print(f"[FAIL] Radia and magpylib differ by {diff_percent:.2f}%")
+		print(f"       Exceeds {tolerance_percent}% tolerance")
+		print(f"       Check magnetization unit conversion!")
 		print("=" * 70)
 		return False
 

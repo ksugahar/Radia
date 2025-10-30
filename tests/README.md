@@ -86,11 +86,12 @@ Compare Radia results with magpylib (another magnetic field library):
 python tests/test_magpylib_comparison.py
 ```
 
-**Note**: This test compares Radia and magpylib for cylindrical permanent magnets. The libraries use different models:
-- **Radia**: Uniform magnetization (no demagnetization) → Upper bound
-- **magpylib**: Polarization with demagnetization → Realistic field
+**Note**: This test validates Radia's magnetic field calculations by comparing with magpylib (an independent library). Key points:
+- **Radia**: Uses CGS-Gaussian units (Gauss) for magnetization
+- **magpylib**: Uses SI units (Tesla) for polarization
+- **Unit conversion**: M(Gauss) = Br(Tesla) × 10000
 
-Expected field ratio: Radia/magpylib ≈ 50-100x for short cylinders.
+When units are properly converted, both libraries agree within **~2-3%** for cylindrical permanent magnets.
 
 ## Using pytest (Optional)
 
