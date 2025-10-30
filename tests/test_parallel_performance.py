@@ -8,9 +8,29 @@ import sys
 import time
 import os
 
+# Add project root's build directory to path
+import sys
+import os
+from pathlib import Path
+
+# Find project root (works from any test subdirectory)
+current_file = Path(__file__).resolve()
+if 'tests' in current_file.parts:
+    # Find the 'tests' directory and go up one level
+	tests_index = current_file.parts.index('tests')
+	project_root = Path(*current_file.parts[:tests_index])
+else:
+    # Fallback
+	project_root = current_file.parent
+
+# Add build directory to path
+build_dir = project_root / 'build' / 'lib' / 'Release'
+if build_dir.exists():
+	sys.path.insert(0, str(build_dir))
+
+
 # Add dist directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'dist'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'build', 'lib', 'Release'))
 
 import radia as rad
 

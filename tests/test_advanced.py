@@ -7,11 +7,30 @@ import sys
 import os
 import math
 
-# Add build output directory to path
-# Tests are now in tests/ subdirectory, so go up one level to find build/
-project_root = os.path.dirname(os.path.dirname(__file__))
-build_dir = os.path.join(project_root, 'build', 'lib', 'Release')
-sys.path.insert(0, build_dir)
+# Add project root's build directory to path
+import sys
+import os
+from pathlib import Path
+
+# Find project root (works from any test subdirectory)
+current_file = Path(__file__).resolve()
+if 'tests' in current_file.parts:
+    # Find the 'tests' directory and go up one level
+	tests_index = current_file.parts.index('tests')
+	project_root = Path(*current_file.parts[:tests_index])
+else:
+    # Fallback
+	project_root = current_file.parent
+
+# Add build directory to path
+build_dir = project_root / 'build' / 'lib' / 'Release'
+if build_dir.exists():
+	sys.path.insert(0, str(build_dir))
+
+# Configure UTF-8 output
+import codecs
+sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
 def test_dipole_magnet():
 	"""Create and test a simple dipole magnet"""
@@ -132,7 +151,7 @@ def test_iron_core():
 	print(f"   Core created: ID={core}")
 
 	# Create iron material
-	mat_iron = rad.MatStd('Iron', 2000)
+	mat_iron = rad.MatStd('Steel37', 2000)
 	rad.MatApl(core, mat_iron)
 	print(f"   Iron material applied")
 

@@ -24,13 +24,13 @@
 
 ```powershell
 # 基本ビルド
-.\build.ps1
+.\Build.ps1
 
 # Debugビルド
-.\build.ps1 -BuildType Debug
+.\Build.ps1 -BuildType Debug
 
 # クリーンビルド
-.\build.ps1 -Rebuild
+.\Build.ps1 -Rebuild
 ```
 
 **出力:**
@@ -209,7 +209,7 @@ Visual Studio Installerで「C++によるデスクトップ開発」をインス
 
 ```
 04_Radia/
-├── build.ps1                    # 単一バージョンビルド
+├── Build.ps1                    # 単一バージョンビルド
 ├── build_multi_python.ps1       # マルチバージョンビルド
 ├── CMakeLists.txt               # CMake設定
 ├── output/                      # マルチビルド出力

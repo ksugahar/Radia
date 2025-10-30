@@ -9,14 +9,30 @@ import os
 # Set UTF-8 encoding for output
 if sys.platform == 'win32':
 	import codecs
+
+# Add project root's build directory to path
+import sys
+import os
+from pathlib import Path
+
+# Find project root (works from any test subdirectory)
+current_file = Path(__file__).resolve()
+if 'tests' in current_file.parts:
+    # Find the 'tests' directory and go up one level
+	tests_index = current_file.parts.index('tests')
+	project_root = Path(*current_file.parts[:tests_index])
+else:
+    # Fallback
+	project_root = current_file.parent
+
+# Add build directory to path
+build_dir = project_root / 'build' / 'lib' / 'Release'
+if build_dir.exists():
+	sys.path.insert(0, str(build_dir))
+
 	sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
 	sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
-# Add build output directory to path
-# Tests are now in tests/ subdirectory, so go up one level to find build/
-project_root = os.path.dirname(os.path.dirname(__file__))
-build_dir = os.path.join(project_root, 'build', 'lib', 'Release')
-sys.path.insert(0, build_dir)
 
 print("=" * 60)
 print("Simple Radia Module Test")

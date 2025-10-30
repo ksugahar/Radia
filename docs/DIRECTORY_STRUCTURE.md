@@ -25,7 +25,7 @@
 ├── build/              # CMake build output
 ├── dist/               # Distribution files (radia.pyd)
 ├── CMakeLists.txt      # CMake build configuration
-└── build.ps1           # PowerShell build script
+└── Build.ps1           # PowerShell build script
 ```
 
 ## Recent Changes

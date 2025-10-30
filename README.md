@@ -27,7 +27,7 @@ This is a modernized version of Radia focusing on Python integration with perfor
 
 ```bash
 # Windows (PowerShell)
-.\build.ps1
+.\Build.ps1
 
 # The module will be available in dist/radia.pyd
 ```

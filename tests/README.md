@@ -27,7 +27,7 @@ tests/
 ```bash
 # Ensure radia module is built and available
 cd S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia
-powershell.exe -ExecutionPolicy Bypass -File build.ps1
+powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 
 # Install test dependencies (optional)
 pip install pytest pytest-cov
@@ -261,7 +261,7 @@ ls build/lib/Release/radia.pyd  # Should exist
 
 ### Tests Fail After Code Changes
 
-1. Rebuild module: `powershell.exe -ExecutionPolicy Bypass -File build.ps1`
+1. Rebuild module: `powershell.exe -ExecutionPolicy Bypass -File Build.ps1`
 2. Clear Python cache: `find . -name "*.pyc" -delete`
 3. Re-run tests
 

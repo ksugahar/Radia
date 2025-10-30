@@ -8,6 +8,27 @@ import subprocess
 import sys
 import os
 
+# Add project root's build directory to path
+import sys
+import os
+from pathlib import Path
+
+# Find project root (works from any test subdirectory)
+current_file = Path(__file__).resolve()
+if 'tests' in current_file.parts:
+    # Find the 'tests' directory and go up one level
+	tests_index = current_file.parts.index('tests')
+	project_root = Path(*current_file.parts[:tests_index])
+else:
+    # Fallback
+	project_root = current_file.parent
+
+# Add build directory to path
+build_dir = project_root / 'build' / 'lib' / 'Release'
+if build_dir.exists():
+	sys.path.insert(0, str(build_dir))
+
+
 def run_test_with_threads(num_threads):
 	"""Run the performance test with specified number of threads"""
 	env = os.environ.copy()
