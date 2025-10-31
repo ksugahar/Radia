@@ -72,7 +72,7 @@ radia.vcxproj -> S:\Radia\01_GitHub\build\Release\radia.cp312-win_amd64.pyd
 import radia as rd
 
 def uniform_field(pos):
-    return [0.0, 1.0, 0.0]  # 1 T in Y direction
+	return [0.0, 1.0, 0.0]  # 1 T in Y direction
 
 cf_src = rd.ObjBckgCF(uniform_field)
 fld = rd.Fld(cf_src, 'b', [0, 0, 0])
@@ -84,8 +84,8 @@ print(fld)  # Output: [0.0, 1.0, 0.0]
 import radia as rd
 
 def gradient_field(pos):
-    x, y, z = pos
-    return [0.01 * x, 0.01 * y, 0.01 * z]
+	x, y, z = pos
+	return [0.01 * x, 0.01 * y, 0.01 * z]
 
 cf_src = rd.ObjBckgCF(gradient_field)
 fld = rd.Fld(cf_src, 'b', [10, 20, 30])

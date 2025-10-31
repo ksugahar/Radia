@@ -96,7 +96,7 @@ Export["out.dat", t]
 ```python
 field = rad.Fld(g2, 'b', [0, 0, 0])
 with open('out.dat', 'w') as f:
-    f.write(f"{field[0]}\t{field[1]}\t{field[2]}\n")
+	f.write(f"{field[0]}\t{field[1]}\t{field[2]}\n")
 ```
 
 ## 発見された問題点

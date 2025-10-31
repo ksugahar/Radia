@@ -27,10 +27,10 @@ find_package(NGSolve CONFIG REQUIRED)
 
 # Explicit source lists (no file GLOB)
 add_ngsolve_python_module(rad_ngsolve
-    ${RADIA_CORE_SOURCES}    # 30 core files
-    ${RADIA_EXT_SOURCES}      # auxparse, genmath
-    ${RADIA_LIB_SOURCES}      # radentry
-    ${PYTHON_DIR}/rad_ngsolve.cpp
+	${RADIA_CORE_SOURCES}    # 30 core files
+	${RADIA_EXT_SOURCES}      # auxparse, genmath
+	${RADIA_LIB_SOURCES}      # radentry
+	${PYTHON_DIR}/rad_ngsolve.cpp
 )
 
 # Triangle library as separate static library
@@ -107,24 +107,24 @@ The module implements NGSolve `CoefficientFunction` classes that call Radia's C 
 ```cpp
 class RadiaBFieldCF : public CoefficientFunction
 {
-    int radia_obj;
-    std::string field_comp;
+	int radia_obj;
+	std::string field_comp;
 
-    virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
-                         FlatVector<> result) const override
-    {
-        auto pnt = mip.GetPoint();
-        double coords[3] = {pnt[0], pnt[1], pnt[2]};
-        double B[3];
-        int nB = 3;
-        char id[2] = {field_comp[0], '\0'};
+	virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
+	                     FlatVector<> result) const override
+	{
+	    auto pnt = mip.GetPoint();
+	    double coords[3] = {pnt[0], pnt[1], pnt[2]};
+	    double B[3];
+	    int nB = 3;
+	    char id[2] = {field_comp[0], '\0'};
 
-        int err = RadFld(B, &nB, radia_obj, id, coords, 1);
+	    int err = RadFld(B, &nB, radia_obj, id, coords, 1);
 
-        result(0) = B[0];
-        result(1) = B[1];
-        result(2) = B[2];
-    }
+	    result(0) = B[0];
+	    result(1) = B[1];
+	    result(2) = B[2];
+	}
 };
 ```
 

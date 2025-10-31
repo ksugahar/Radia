@@ -57,7 +57,7 @@ Creating SmCo magnet array...
   Magnet spacing: 10.00 mm
 
   Creating base plate...
-    Creating meshed disk: 6 radial × 24 angular = 144 elements
+	Creating meshed disk: 6 radial × 24 angular = 144 elements
   [OK] Created 125 magnets in hexagonal array
 
 Calculating magnetic field...
@@ -137,25 +137,25 @@ Recommended ParaView settings:
 
 ```python
 def create_smco_magnet_array(
-    mag_radius=0.005,      # Magnet radius (m)
-    mag_height=0.01,       # Magnet height (m)
-    mag_M=[0, 0, 1],       # Magnetization (T)
-    spacing=0.01,          # Magnet spacing (m)
-    array_radius=0.06,     # Array radius (m)
-    base_plate_height=0.005  # Base plate height (m)
+	mag_radius=0.005,      # Magnet radius (m)
+	mag_height=0.01,       # Magnet height (m)
+	mag_M=[0, 0, 1],       # Magnetization (T)
+	spacing=0.01,          # Magnet spacing (m)
+	array_radius=0.06,     # Array radius (m)
+	base_plate_height=0.005  # Base plate height (m)
 ):
-    """Create hexagonal array of SmCo magnets."""
+	"""Create hexagonal array of SmCo magnets."""
 ```
 
 ### Helper Function
 
 ```python
 def create_meshed_disk(R, H, n_radial, n_angular, x0=0, y0=0, z0=0):
-    """
-    Create meshed circular disk using hexahedral elements.
+	"""
+	Create meshed circular disk using hexahedral elements.
 
-    Uses pentahedra for center ring and hexahedra for outer rings.
-    """
+	Uses pentahedra for center ring and hexahedra for outer rings.
+	"""
 ```
 
 ### Magnet Creation
@@ -173,16 +173,16 @@ The hexagonal packing is achieved using:
 
 ```python
 for nx in range(-20, 21):
-    for ny in range(-20, 21):
-        # Offset every other row by half spacing
-        x = nx * spacing + (ny % 2) * spacing / 2
+	for ny in range(-20, 21):
+	    # Offset every other row by half spacing
+	    x = nx * spacing + (ny % 2) * spacing / 2
 
-        # Vertical spacing for hexagonal pattern
-        y = ny * spacing * np.sqrt(3) / 2
+	    # Vertical spacing for hexagonal pattern
+	    y = ny * spacing * np.sqrt(3) / 2
 
-        # Only create magnets within array radius
-        if x**2 + y**2 < array_radius**2:
-            # Create magnet at (x, y)
+	    # Only create magnets within array radius
+	    if x**2 + y**2 < array_radius**2:
+	        # Create magnet at (x, y)
 ```
 
 This creates a close-packed hexagonal arrangement with optimal packing density.
@@ -213,8 +213,8 @@ In this example:
 ```python
 # Create larger array
 geometry, info = create_smco_magnet_array(
-    array_radius=0.10,  # 100 mm radius
-    spacing=0.015,      # 15 mm spacing
+	array_radius=0.10,  # 100 mm radius
+	spacing=0.015,      # 15 mm spacing
 )
 ```
 
@@ -223,7 +223,7 @@ geometry, info = create_smco_magnet_array(
 ```python
 # Horizontal magnetization
 geometry, info = create_smco_magnet_array(
-    mag_M=[1, 0, 0],  # X-direction
+	mag_M=[1, 0, 0],  # X-direction
 )
 ```
 

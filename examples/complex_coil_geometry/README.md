@@ -130,13 +130,13 @@ import radia as rad
 
 # Simple racetrack coil
 coil_segments = (CoilBuilder(current=1000)
-    .set_start([0, -50, 0])
-    .set_cross_section(width=20, height=20)
-    .add_straight(length=100)
-    .add_arc(radius=50, arc_angle=180, tilt=90)
-    .add_straight(length=100)
-    .add_arc(radius=50, arc_angle=180, tilt=90)
-    .to_radia())
+	.set_start([0, -50, 0])
+	.set_cross_section(width=20, height=20)
+	.add_straight(length=100)
+	.add_arc(radius=50, arc_angle=180, tilt=90)
+	.add_straight(length=100)
+	.add_arc(radius=50, arc_angle=180, tilt=90)
+	.to_radia())
 
 # Combine into Radia container
 coils = rad.ObjCnt(coil_segments)
@@ -146,17 +146,17 @@ coils = rad.ObjCnt(coil_segments)
 
 ```python
 coil = (CoilBuilder(current=1265)
-    .set_start([218, -16.4, -81])
-    .set_cross_section(122, 122)
-    .add_straight(32.9)
-    .add_arc(121, 64.6, tilt=90)
-    .add_straight(1018.5, tilt=90)
-    .add_arc(121, 115.4, tilt=-90)
-    .add_straight(906.9, tilt=90)
-    .add_arc(121, 115.4, tilt=-90)
-    .add_straight(1018.5, tilt=90)
-    .add_arc(121, 64.6, tilt=-90)
-    .to_radia())
+	.set_start([218, -16.4, -81])
+	.set_cross_section(122, 122)
+	.add_straight(32.9)
+	.add_arc(121, 64.6, tilt=90)
+	.add_straight(1018.5, tilt=90)
+	.add_arc(121, 115.4, tilt=-90)
+	.add_straight(906.9, tilt=90)
+	.add_arc(121, 115.4, tilt=-90)
+	.add_straight(1018.5, tilt=90)
+	.add_arc(121, 64.6, tilt=-90)
+	.to_radia())
 ```
 
 For the complete example with field calculation and visualization, see `visualize_coils.py`.
@@ -175,9 +175,9 @@ CoilSegment (ABC)
 │   └── to_radia(): ObjRecCur + transforms
 │
 └── ArcSegment
-    ├── Geometry: toroidal sector
-    ├── end_pos: rotation around center
-    └── to_radia(): ObjArcCur + transforms
+	├── Geometry: toroidal sector
+	├── end_pos: rotation around center
+	└── to_radia(): ObjArcCur + transforms
 
 CoilBuilder
 ├── State management: position, orientation, cross-section
@@ -214,11 +214,11 @@ COIL.append(cCOIL('ARC', I, x0, V, W, H, R, phi, 90, 0))
 **New approach (automatic tracking):**
 ```python
 segments = (CoilBuilder(current=1000)
-    .set_start([0, 0, 0])
-    .set_cross_section(20, 20)
-    .add_straight(100)
-    .add_arc(50, 180, tilt=90)
-    .to_radia())
+	.set_start([0, 0, 0])
+	.set_cross_section(20, 20)
+	.add_straight(100)
+	.add_arc(50, 180, tilt=90)
+	.to_radia())
 ```
 
 **Benefits:**
@@ -281,8 +281,8 @@ B = rad.Fld(obj, 'b', [0, 0, 100])  # Returns [Bx, By, Bz] in Tesla
 
 # Multiple points
 for z in [0, 100, 500]:
-    B = rad.Fld(obj, 'b', [0, 0, z])
-    print(f"At z={z}: B={B}")
+	B = rad.Fld(obj, 'b', [0, 0, z])
+	print(f"At z={z}: B={B}")
 ```
 
 **Example output:**

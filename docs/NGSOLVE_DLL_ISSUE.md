@@ -111,7 +111,7 @@ import rad_ngsolve as _rad_ngsolve
 
 # ラッパー関数
 def RadBfield(radia_obj):
-    return _rad_ngsolve.RadBfield(radia_obj)
+	return _rad_ngsolve.RadBfield(radia_obj)
 ```
 
 ## 暫定的な回避策
@@ -124,16 +124,16 @@ import radia as rad
 from ngsolve import CoefficientFunction
 
 class RadiaBFieldPy(CoefficientFunction):
-    def __init__(self, radia_obj):
-        super().__init__(3)
-        self.radia_obj = radia_obj
+	def __init__(self, radia_obj):
+	    super().__init__(3)
+	    self.radia_obj = radia_obj
 
-    def Evaluate(self, mip, result):
-        pnt = mip.GetPoint()
-        B = rad.Fld(self.radia_obj, 'b', [pnt[0], pnt[1], pnt[2]])
-        result[0] = B[0]
-        result[1] = B[1]
-        result[2] = B[2]
+	def Evaluate(self, mip, result):
+	    pnt = mip.GetPoint()
+	    B = rad.Fld(self.radia_obj, 'b', [pnt[0], pnt[1], pnt[2]])
+	    result[0] = B[0]
+	    result[1] = B[1]
+	    result[2] = B[2]
 
 # 使用方法
 magnet = rad.ObjRecMag([0,0,0], [20,20,30], [0,0,1000])

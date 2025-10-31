@@ -69,13 +69,13 @@ Elegant object-oriented design for multi-segment coil paths with automatic state
 from radia_coil_builder import CoilBuilder
 
 coil = (CoilBuilder(current=1000)
-    .set_start([0, 0, 0])
-    .set_cross_section(width=20, height=20)
-    .add_straight(length=100)
-    .add_arc(radius=50, arc_angle=180, tilt=90)
-    .add_straight(length=100)
-    .add_arc(radius=50, arc_angle=180, tilt=90)
-    .to_radia())
+	.set_start([0, 0, 0])
+	.set_cross_section(width=20, height=20)
+	.add_straight(length=100)
+	.add_arc(radius=50, arc_angle=180, tilt=90)
+	.add_straight(length=100)
+	.add_arc(radius=50, arc_angle=180, tilt=90)
+	.to_radia())
 ```
 
 ### radia_vtk_export.py

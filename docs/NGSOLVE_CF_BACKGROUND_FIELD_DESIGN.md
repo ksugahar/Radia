@@ -21,12 +21,12 @@ Extend Radia's background field capability to accept arbitrary spatial distribut
 ```cpp
 class radTBackgroundFieldSource : public radTg3d {
 public:
-    TVector3d BackgrB;  // Constant field vector
+	TVector3d BackgrB;  // Constant field vector
 
-    void B_comp(radTField* FieldPtr) {
-        if(FieldPtr->FieldKey.B_) FieldPtr->B += BackgrB;
-        // ...
-    }
+	void B_comp(radTField* FieldPtr) {
+	    if(FieldPtr->FieldKey.B_) FieldPtr->B += BackgrB;
+	    // ...
+	}
 };
 ```
 
@@ -50,7 +50,7 @@ public:
 │  Store CF callback              Call Python callback     │
 │                                                           │
 └─────────────────────────────────────────────────────────┘
-                    ↕ PyObject*             ↕ GIL
+	                ↕ PyObject*             ↕ GIL
 ┌─────────────────────────────────────────────────────────┐
 │ C++ Core (Radia)                                         │
 ├─────────────────────────────────────────────────────────┤
@@ -100,150 +100,150 @@ public:
 
 class radTCoefficientFunctionFieldSource : public radTg3d {
 public:
-    PyObject* cf_callback;  // Python callable (CF or function)
+	PyObject* cf_callback;  // Python callable (CF or function)
 
-    radTCoefficientFunctionFieldSource(PyObject* callback)
-        : cf_callback(callback)
-    {
-        if(cf_callback) Py_INCREF(cf_callback);
-    }
+	radTCoefficientFunctionFieldSource(PyObject* callback)
+	    : cf_callback(callback)
+	{
+	    if(cf_callback) Py_INCREF(cf_callback);
+	}
 
-    virtual ~radTCoefficientFunctionFieldSource()
-    {
-        if(cf_callback) {
-            // GIL may not be held during destruction
-            // Should be handled by Python GC
-            Py_DECREF(cf_callback);
-        }
-    }
+	virtual ~radTCoefficientFunctionFieldSource()
+	{
+	    if(cf_callback) {
+	        // GIL may not be held during destruction
+	        // Should be handled by Python GC
+	        Py_DECREF(cf_callback);
+	    }
+	}
 
-    // Copy constructor for duplication
-    radTCoefficientFunctionFieldSource(const radTCoefficientFunctionFieldSource& src)
-        : radTg3d(src), cf_callback(src.cf_callback)
-    {
-        if(cf_callback) Py_INCREF(cf_callback);
-    }
+	// Copy constructor for duplication
+	radTCoefficientFunctionFieldSource(const radTCoefficientFunctionFieldSource& src)
+	    : radTg3d(src), cf_callback(src.cf_callback)
+	{
+	    if(cf_callback) Py_INCREF(cf_callback);
+	}
 
-    void B_comp(radTField* FieldPtr)
-    {
-        if(!cf_callback) return;
+	void B_comp(radTField* FieldPtr)
+	{
+	    if(!cf_callback) return;
 
-        // Need Python GIL to call Python code
-        py::gil_scoped_acquire acquire;
+	    // Need Python GIL to call Python code
+	    py::gil_scoped_acquire acquire;
 
-        try {
-            // Prepare coordinates (Radia uses mm)
-            py::list coords;
-            coords.append(FieldPtr->P.x);
-            coords.append(FieldPtr->P.y);
-            coords.append(FieldPtr->P.z);
+	    try {
+	        // Prepare coordinates (Radia uses mm)
+	        py::list coords;
+	        coords.append(FieldPtr->P.x);
+	        coords.append(FieldPtr->P.y);
+	        coords.append(FieldPtr->P.z);
 
-            // Call Python callback: B = callback([x, y, z])
-            py::handle cb_handle = py::handle(cf_callback);
-            py::object result = cb_handle(coords);
+	        // Call Python callback: B = callback([x, y, z])
+	        py::handle cb_handle = py::handle(cf_callback);
+	        py::object result = cb_handle(coords);
 
-            // Extract [Bx, By, Bz]
-            py::list B_list = result.cast<py::list>();
-            if(py::len(B_list) != 3) {
-                throw std::runtime_error("CF callback must return [Bx, By, Bz]");
-            }
+	        // Extract [Bx, By, Bz]
+	        py::list B_list = result.cast<py::list>();
+	        if(py::len(B_list) != 3) {
+	            throw std::runtime_error("CF callback must return [Bx, By, Bz]");
+	        }
 
-            TVector3d B_from_cf(
-                B_list[0].cast<double>(),
-                B_list[1].cast<double>(),
-                B_list[2].cast<double>()
-            );
+	        TVector3d B_from_cf(
+	            B_list[0].cast<double>(),
+	            B_list[1].cast<double>(),
+	            B_list[2].cast<double>()
+	        );
 
-            // Add to field components
-            if(FieldPtr->FieldKey.B_) FieldPtr->B += B_from_cf;
-            if(FieldPtr->FieldKey.H_) FieldPtr->H += B_from_cf;
+	        // Add to field components
+	        if(FieldPtr->FieldKey.B_) FieldPtr->B += B_from_cf;
+	        if(FieldPtr->FieldKey.H_) FieldPtr->H += B_from_cf;
 
-            // Vector potential A (if needed)
-            // For arbitrary B(r), need to compute A from B
-            // This is non-trivial for general fields
-            // For now, skip A computation
-            if(FieldPtr->FieldKey.A_) {
-                // TODO: Implement A computation
-                // May need to store/compute curl^-1(B)
-            }
+	        // Vector potential A (if needed)
+	        // For arbitrary B(r), need to compute A from B
+	        // This is non-trivial for general fields
+	        // For now, skip A computation
+	        if(FieldPtr->FieldKey.A_) {
+	            // TODO: Implement A computation
+	            // May need to store/compute curl^-1(B)
+	        }
 
-        } catch (std::exception &e) {
-            std::cerr << "[CFFieldSource] Evaluation error: " << e.what() << std::endl;
-            std::cerr << "  at point: (" << FieldPtr->P.x << ", "
-                      << FieldPtr->P.y << ", " << FieldPtr->P.z << ")" << std::endl;
-            // Don't add anything on error
-        }
-    }
+	    } catch (std::exception &e) {
+	        std::cerr << "[CFFieldSource] Evaluation error: " << e.what() << std::endl;
+	        std::cerr << "  at point: (" << FieldPtr->P.x << ", "
+	                  << FieldPtr->P.y << ", " << FieldPtr->P.z << ")" << std::endl;
+	        // Don't add anything on error
+	    }
+	}
 
-    void B_intComp(radTField* FieldPtr)
-    {
-        // Field integral computation
-        if(!cf_callback) return;
+	void B_intComp(radTField* FieldPtr)
+	{
+	    // Field integral computation
+	    if(!cf_callback) return;
 
-        if(FieldPtr->FieldKey.FinInt_)
-        {
-            // For arbitrary field, need numerical integration
-            // Use trapezoidal or Simpson's rule
-            TVector3d P1 = FieldPtr->P;
-            TVector3d P2 = FieldPtr->NextP;
-            TVector3d D = P2 - P1;
-            double L = sqrt(D.x*D.x + D.y*D.y + D.z*D.z);
+	    if(FieldPtr->FieldKey.FinInt_)
+	    {
+	        // For arbitrary field, need numerical integration
+	        // Use trapezoidal or Simpson's rule
+	        TVector3d P1 = FieldPtr->P;
+	        TVector3d P2 = FieldPtr->NextP;
+	        TVector3d D = P2 - P1;
+	        double L = sqrt(D.x*D.x + D.y*D.y + D.z*D.z);
 
-            // Simple trapezoidal: Integral ≈ (B(P1) + B(P2))/2 * L
-            radTField F1 = *FieldPtr;
-            F1.P = P1;
-            F1.FieldKey.FinInt_ = 0;  // Disable infinite integral
-            B_comp(&F1);
+	        // Simple trapezoidal: Integral ≈ (B(P1) + B(P2))/2 * L
+	        radTField F1 = *FieldPtr;
+	        F1.P = P1;
+	        F1.FieldKey.FinInt_ = 0;  // Disable infinite integral
+	        B_comp(&F1);
 
-            radTField F2 = *FieldPtr;
-            F2.P = P2;
-            F2.FieldKey.FinInt_ = 0;
-            B_comp(&F2);
+	        radTField F2 = *FieldPtr;
+	        F2.P = P2;
+	        F2.FieldKey.FinInt_ = 0;
+	        B_comp(&F2);
 
-            TVector3d B_avg = (F1.B + F2.B) * 0.5;
-            TVector3d BufIb = L * B_avg;
+	        TVector3d B_avg = (F1.B + F2.B) * 0.5;
+	        TVector3d BufIb = L * B_avg;
 
-            if(FieldPtr->FieldKey.Ib_) FieldPtr->Ib += BufIb;
-            if(FieldPtr->FieldKey.Ih_) FieldPtr->Ih += BufIb;
-        }
+	        if(FieldPtr->FieldKey.Ib_) FieldPtr->Ib += BufIb;
+	        if(FieldPtr->FieldKey.Ih_) FieldPtr->Ih += BufIb;
+	    }
 
-        // Infinite integral: set to zero (formally infinite for non-localized fields)
-    }
+	    // Infinite integral: set to zero (formally infinite for non-localized fields)
+	}
 
-    radTg3dGraphPresent* CreateGraphPresent()
-    {
-        // No geometry to display for field source
-        return 0;
-    }
+	radTg3dGraphPresent* CreateGraphPresent()
+	{
+	    // No geometry to display for field source
+	    return 0;
+	}
 
-    void Dump(std::ostream& o, int ShortSign = 0)
-    {
-        radTg3d::Dump(o);
-        o << "CoefficientFunction-based background field source";
-        if(ShortSign==1) return;
-        o << endl;
-        o << "   Python callback: " << (cf_callback ? "registered" : "none");
-        o << endl;
-        o << "   Memory occupied: " << SizeOfThis() << " bytes";
-    }
+	void Dump(std::ostream& o, int ShortSign = 0)
+	{
+	    radTg3d::Dump(o);
+	    o << "CoefficientFunction-based background field source";
+	    if(ShortSign==1) return;
+	    o << endl;
+	    o << "   Python callback: " << (cf_callback ? "registered" : "none");
+	    o << endl;
+	    o << "   Memory occupied: " << SizeOfThis() << " bytes";
+	}
 
-    void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut,
-                 map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers,
-                 int& gUniqueMapKey, int elemKey)
-    {
-        // Binary serialization not supported for Python callbacks
-        // Would need to pickle the callback
-        throw std::runtime_error("Binary dump not supported for CF field source");
-    }
+	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut,
+	             map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers,
+	             int& gUniqueMapKey, int elemKey)
+	{
+	    // Binary serialization not supported for Python callbacks
+	    // Would need to pickle the callback
+	    throw std::runtime_error("Binary dump not supported for CF field source");
+	}
 
-    int DuplicateItself(radThg& hg, radTApplication*, char)
-    {
-        return FinishDuplication(new radTCoefficientFunctionFieldSource(*this), hg);
-    }
+	int DuplicateItself(radThg& hg, radTApplication*, char)
+	{
+	    return FinishDuplication(new radTCoefficientFunctionFieldSource(*this), hg);
+	}
 
-    int SizeOfThis() {
-        return sizeof(radTCoefficientFunctionFieldSource);
-    }
+	int SizeOfThis() {
+	    return sizeof(radTCoefficientFunctionFieldSource);
+	}
 };
 ```
 
@@ -256,24 +256,24 @@ public:
 
 int radTApplication::SetCoefficientFunctionFieldSource(PyObject* callback)
 {
-    if(!callback) return 0;
-    if(!PyCallable_Check(callback)) {
-        Send.ErrorMessage("Radia::Error: Callback must be callable");
-        return 0;
-    }
+	if(!callback) return 0;
+	if(!PyCallable_Check(callback)) {
+	    Send.ErrorMessage("Radia::Error: Callback must be callable");
+	    return 0;
+	}
 
-    try
-    {
-        radThg hg(new radTCoefficientFunctionFieldSource(callback));
-        int ElemKey = AddElementToContainer(hg);
-        if(SendingIsRequired) Send.Int(ElemKey);
-        return ElemKey;
-    }
-    catch(...)
-    {
-        Initialize();
-        return 0;
-    }
+	try
+	{
+	    radThg hg(new radTCoefficientFunctionFieldSource(callback));
+	    int ElemKey = AddElementToContainer(hg);
+	    if(SendingIsRequired) Send.Int(ElemKey);
+	    return ElemKey;
+	}
+	catch(...)
+	{
+	    Initialize();
+	    return 0;
+	}
 }
 ```
 
@@ -290,7 +290,7 @@ int SetCoefficientFunctionFieldSource(PyObject* callback);
 ```cpp
 void CoefficientFunctionFieldSource(PyObject* callback)
 {
-    rad.SetCoefficientFunctionFieldSource(callback);
+	rad.SetCoefficientFunctionFieldSource(callback);
 }
 ```
 
@@ -307,9 +307,9 @@ int CALL RadObjBckgCF(int* n, PyObject* callback);
 ```cpp
 int CALL RadObjBckgCF(int* n, PyObject* callback)
 {
-    CoefficientFunctionFieldSource(callback);
-    *n = ioBuffer.OutInt();
-    return ioBuffer.OutErrorStatus();
+	CoefficientFunctionFieldSource(callback);
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
 }
 ```
 
@@ -317,8 +317,8 @@ int CALL RadObjBckgCF(int* n, PyObject* callback)
 
 ```
 EXPORTS
-    ...
-    RadObjBckgCF
+	...
+	RadObjBckgCF
 ```
 
 ### 5. Python Binding
@@ -332,27 +332,27 @@ EXPORTS
 ***************************************************************************/
 static PyObject* radia_ObjBckgCF(PyObject* self, PyObject* args)
 {
-    PyObject *oCallback=0, *oResInd=0;
-    try
-    {
-        if(!PyArg_ParseTuple(args, "O:ObjBckgCF", &oCallback))
-            throw CombErStr(strEr_BadFuncArg, ": ObjBckgCF");
-        if(oCallback == 0)
-            throw CombErStr(strEr_BadFuncArg, ": ObjBckgCF");
+	PyObject *oCallback=0, *oResInd=0;
+	try
+	{
+	    if(!PyArg_ParseTuple(args, "O:ObjBckgCF", &oCallback))
+	        throw CombErStr(strEr_BadFuncArg, ": ObjBckgCF");
+	    if(oCallback == 0)
+	        throw CombErStr(strEr_BadFuncArg, ": ObjBckgCF");
 
-        if(!PyCallable_Check(oCallback))
-            throw CombErStr(strEr_BadFuncArg,
-                ": ObjBckgCF requires callable (CF or function)");
+	    if(!PyCallable_Check(oCallback))
+	        throw CombErStr(strEr_BadFuncArg,
+	            ": ObjBckgCF requires callable (CF or function)");
 
-        int ind = 0;
-        g_pyParse.ProcRes(RadObjBckgCF(&ind, oCallback));
-        oResInd = Py_BuildValue("i", ind);
-    }
-    catch(const char* erText)
-    {
-        PyErr_SetString(PyExc_RuntimeError, erText);
-    }
-    return oResInd;
+	    int ind = 0;
+	    g_pyParse.ProcRes(RadObjBckgCF(&ind, oCallback));
+	    oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+	    PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
 }
 ```
 
@@ -391,10 +391,10 @@ cf = CF((Bx, By, Bz))  # x, y, z in meters
 
 # Wrapper converts:
 def cf_wrapper(coords):  # coords in mm
-    x_m = coords[0] / 1000.0  # Convert to meters
-    y_m = coords[1] / 1000.0
-    z_m = coords[2] / 1000.0
-    return cf(x_m, y_m, z_m)  # Evaluate in meters
+	x_m = coords[0] / 1000.0  # Convert to meters
+	y_m = coords[1] / 1000.0
+	z_m = coords[2] / 1000.0
+	return cf(x_m, y_m, z_m)  # Evaluate in meters
 ```
 
 ## Usage Examples
@@ -410,7 +410,7 @@ b1 = rad.ObjBckg([0, 0, 1.0])
 
 # New way (same result)
 def uniform_field(x, y, z):
-    return [0, 0, 1.0]
+	return [0, 0, 1.0]
 
 b2 = create_analytical_field(uniform_field)
 
@@ -478,8 +478,8 @@ A.vec.data = a.mat.Inverse() * f.vec
 
 # Step 2: Get B = curl(A)
 B_coil = CF((A[2].Diff(y) - A[1].Diff(z),
-             A[0].Diff(z) - A[2].Diff(x),
-             A[1].Diff(x) - A[0].Diff(y)))
+	         A[0].Diff(z) - A[2].Diff(x),
+	         A[1].Diff(x) - A[0].Diff(y)))
 
 # Step 3: Use as Radia background field
 field_obj = create_cf_field_source(B_coil, unit='m')
@@ -531,8 +531,8 @@ field_obj = create_cf_field_source(B_dipole, unit='m')
 
 # Calculate field at various points
 for pos in [[0.1, 0, 0], [0, 0.1, 0], [0, 0, 0.1]]:
-    B = rad.Fld(field_obj, 'b', [p*1000 for p in pos])  # Convert m to mm
-    print(f"B at {pos} m: {B} T")
+	B = rad.Fld(field_obj, 'b', [p*1000 for p in pos])  # Convert m to mm
+	print(f"B at {pos} m: {B} T")
 ```
 
 ## Performance Considerations
@@ -591,24 +591,24 @@ All examples from Section "Usage Examples" should be implemented as test cases.
 
 ```python
 radia.ObjBckgCF(callback)
-    """
-    Create arbitrary background field source from callable.
+	"""
+	Create arbitrary background field source from callable.
 
-    Parameters
-    ----------
-    callback : callable
-        Function accepting [x, y, z] in mm, returning [Bx, By, Bz] in Tesla
-        Signature: callback([x, y, z]) -> [Bx, By, Bz]
+	Parameters
+	----------
+	callback : callable
+	    Function accepting [x, y, z] in mm, returning [Bx, By, Bz] in Tesla
+	    Signature: callback([x, y, z]) -> [Bx, By, Bz]
 
-    Returns
-    -------
-    int : Radia object key
+	Returns
+	-------
+	int : Radia object key
 
-    See Also
-    --------
-    radia.ObjBckg : Uniform background field
-    radia_ngsolve_field.create_cf_field_source : NGSolve CF wrapper
-    """
+	See Also
+	--------
+	radia.ObjBckg : Uniform background field
+	radia_ngsolve_field.create_cf_field_source : NGSolve CF wrapper
+	"""
 ```
 
 ## Implementation Steps

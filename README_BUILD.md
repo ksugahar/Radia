@@ -117,11 +117,11 @@ C:\Program Files\Python312\
 
 ```powershell
 $PythonVersions = @(
-    @{
-        Version = "3.11"
-        Path = "D:\MyPython\Python311"  # カスタムパス
-        MinorVersion = "3.11"
-    }
+	@{
+	    Version = "3.11"
+	    Path = "D:\MyPython\Python311"  # カスタムパス
+	    MinorVersion = "3.11"
+	}
 )
 ```
 
@@ -155,20 +155,20 @@ import os
 import importlib.util
 
 def load_radia():
-    version = f"cp{sys.version_info.major}{sys.version_info.minor}"
-    pyd_name = f"radia.{version}-win_amd64.pyd"
+	version = f"cp{sys.version_info.major}{sys.version_info.minor}"
+	pyd_name = f"radia.{version}-win_amd64.pyd"
 
-    # 同じディレクトリから探す
-    module_dir = os.path.dirname(__file__)
-    pyd_path = os.path.join(module_dir, pyd_name)
+	# 同じディレクトリから探す
+	module_dir = os.path.dirname(__file__)
+	pyd_path = os.path.join(module_dir, pyd_name)
 
-    if not os.path.exists(pyd_path):
-        raise ImportError(f"Radia not available for Python {sys.version_info.major}.{sys.version_info.minor}")
+	if not os.path.exists(pyd_path):
+	    raise ImportError(f"Radia not available for Python {sys.version_info.major}.{sys.version_info.minor}")
 
-    spec = importlib.util.spec_from_file_location("radia", pyd_path)
-    radia = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(radia)
-    return radia
+	spec = importlib.util.spec_from_file_location("radia", pyd_path)
+	radia = importlib.util.module_from_spec(spec)
+	spec.loader.exec_module(radia)
+	return radia
 
 rad = load_radia()
 ```

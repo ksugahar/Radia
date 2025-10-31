@@ -118,21 +118,21 @@ Testing rad_ngsolve_py (Pure Python Implementation)
 ============================================================
 
 [1] Importing radia...
-    [OK] radia imported
+	[OK] radia imported
 
 [2] Importing rad_ngsolve_py...
-    [OK] rad_ngsolve_py imported
-    Version: 0.1.0
+	[OK] rad_ngsolve_py imported
+	Version: 0.1.0
 
 [3] Creating simple Radia geometry...
-    [OK] Magnet created: object #1
+	[OK] Magnet created: object #1
 
 [4] Creating B-field coefficient function...
-    [OK] B-field CF created: <class 'rad_ngsolve_py.RadiaBFieldCF'>
+	[OK] B-field CF created: <class 'rad_ngsolve_py.RadiaBFieldCF'>
 
 [5] Evaluating B-field at test points...
-    B at (0, 0, 0): (...) T
-    [OK] Field evaluation successful
+	B at (0, 0, 0): (...) T
+	[OK] Field evaluation successful
 
 ============================================================
 SUCCESS - All tests passed!
@@ -176,12 +176,12 @@ The implementation supports Radia's field component identifiers:
 
 ```python
 class CustomField:
-    def __init__(self, radia_obj, component):
-        self.radia_obj = radia_obj
-        self.component = component  # 'b', 'h', 'a', 'bx', 'by', 'bz', etc.
+	def __init__(self, radia_obj, component):
+	    self.radia_obj = radia_obj
+	    self.component = component  # 'b', 'h', 'a', 'bx', 'by', 'bz', etc.
 
-    def Evaluate(self, x, y, z):
-        return rad.Fld(self.radia_obj, self.component, [x, y, z])
+	def Evaluate(self, x, y, z):
+	    return rad.Fld(self.radia_obj, self.component, [x, y, z])
 ```
 
 ### Field Magnitude
@@ -190,11 +190,11 @@ class CustomField:
 import math
 
 def field_magnitude(B):
-    """Compute magnitude of vector field"""
-    def magnitude(x, y, z):
-        Bvec = B.Evaluate(x, y, z)
-        return math.sqrt(Bvec[0]**2 + Bvec[1]**2 + Bvec[2]**2)
-    return magnitude
+	"""Compute magnitude of vector field"""
+	def magnitude(x, y, z):
+	    Bvec = B.Evaluate(x, y, z)
+	    return math.sqrt(Bvec[0]**2 + Bvec[1]**2 + Bvec[2]**2)
+	return magnitude
 
 magnet = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,1000])
 B = rad_ngsolve.RadBfield(magnet)
@@ -254,15 +254,15 @@ See the `examples/ngsolve_integration/` directory for complete examples:
 
 ```
 Python Application
-    ↓
+	↓
 rad_ngsolve_py.RadBfield(obj)
-    ↓
+	↓
 RadiaBFieldCF.Evaluate(x, y, z)
-    ↓
+	↓
 rad.Fld(obj, 'b', [x, y, z])
-    ↓
+	↓
 radia.pyd (C++ extension)
-    ↓
+	↓
 Radia Core (magnetostatics solver)
 ```
 
@@ -277,7 +277,7 @@ B = rad_ngsolve.RadBfield(magnet)
 points = [(x, 0, 0) for x in range(-50, 50, 5)]
 
 with ThreadPoolExecutor() as executor:
-    results = list(executor.map(lambda p: B.Evaluate(*p), points))
+	results = list(executor.map(lambda p: B.Evaluate(*p), points))
 ```
 
 ## Future Enhancements

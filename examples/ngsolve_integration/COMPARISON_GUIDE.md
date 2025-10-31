@@ -181,9 +181,9 @@ gfB.Set(B_cf)  # Interpolate once
 
 # Fast repeated evaluation
 for z in [0, 0.01, 0.02, 0.03, 0.04]:
-    mesh_pt = mesh(0, 0, z)
-    B = gfB(mesh_pt)  # Fast (no Radia call)
-    print(f"z={z*1000}mm: Bz = {B[2]:.6f} T")
+	mesh_pt = mesh(0, 0, z)
+	B = gfB(mesh_pt)  # Fast (no Radia call)
+	print(f"z={z*1000}mm: Bz = {B[2]:.6f} T")
 ```
 
 ### Error Analysis
@@ -200,8 +200,8 @@ B_gf_val = gfB(mesh_pt)
 
 # Compute error
 error = np.sqrt((B_cf_val[0] - B_gf_val[0])**2 +
-                (B_cf_val[1] - B_gf_val[1])**2 +
-                (B_cf_val[2] - B_gf_val[2])**2)
+	            (B_cf_val[1] - B_gf_val[1])**2 +
+	            (B_cf_val[2] - B_gf_val[2])**2)
 
 print(f"CF: Bz = {B_cf_val[2]:.6f} T")
 print(f"GF: Bz = {B_gf_val[2]:.6f} T")

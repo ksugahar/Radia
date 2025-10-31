@@ -232,9 +232,9 @@ For comprehensive validation:
 ```yaml
 - name: Run all tests
   run: |
-    python tests/test_simple.py
-    python tests/test_radia.py
-    python tests/test_parallel_performance.py
+	python tests/test_simple.py
+	python tests/test_radia.py
+	python tests/test_parallel_performance.py
 ```
 
 ## Test Data
@@ -259,32 +259,32 @@ magnet = create_test_magnet()
 
 ```python
 def test_feature_name():
-    """Test description"""
-    # Arrange
-    # Act
-    # Assert
+	"""Test description"""
+	# Arrange
+	# Act
+	# Assert
 ```
 
 ### Example Test
 
 ```python
 def test_magnet_field_calculation():
-    """Test that rectangular magnet produces correct field"""
-    import sys
-    sys.path.insert(0, 'build/lib/Release')
-    import radia as rad
+	"""Test that rectangular magnet produces correct field"""
+	import sys
+	sys.path.insert(0, 'build/lib/Release')
+	import radia as rad
 
-    # Create magnet
-    mag = rad.ObjRecMag([0,0,0], [10,10,10])
-    rad.ObjSetM(mag, [0,0,1000])
+	# Create magnet
+	mag = rad.ObjRecMag([0,0,0], [10,10,10])
+	rad.ObjSetM(mag, [0,0,1000])
 
-    # Calculate field
-    field = rad.Fld(mag, 'b', [0,0,20])
+	# Calculate field
+	field = rad.Fld(mag, 'b', [0,0,20])
 
-    # Verify
-    assert field[2] > 0, "Field should be positive in Z direction"
-    assert abs(field[0]) < 0.01, "Bx should be near zero"
-    assert abs(field[1]) < 0.01, "By should be near zero"
+	# Verify
+	assert field[2] > 0, "Field should be positive in Z direction"
+	assert abs(field[0]) < 0.01, "Bx should be near zero"
+	assert abs(field[1]) < 0.01, "By should be near zero"
 ```
 
 ## Troubleshooting

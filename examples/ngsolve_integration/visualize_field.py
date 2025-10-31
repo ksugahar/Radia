@@ -29,9 +29,9 @@ import argparse
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Radia field visualization')
 parser.add_argument('--method', choices=['cf', 'gf', 'both'], default='both',
-                    help='Evaluation method: cf (CoefficientFunction), gf (GridFunction), both (compare)')
+	                help='Evaluation method: cf (CoefficientFunction), gf (GridFunction), both (compare)')
 parser.add_argument('--maxh', type=float, default=0.005,
-                    help='Maximum mesh size in meters (default: 0.005 = 5mm)')
+	                help='Maximum mesh size in meters (default: 0.005 = 5mm)')
 args = parser.parse_args()
 
 print("=" * 70)

@@ -1,22 +1,30 @@
 cmake_minimum_required(VERSION 3.21)
 project(rad_ngsolve C CXX)
 
-# Set Python environment path (following EMPY_Field pattern)
-set(ENVIRONMENT_PATH "C:/Program Files/Python312/")
-message("ENVIRONMENT_PATH:" ${ENVIRONMENT_PATH})
+# Find Python3 first to get the installation path
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
+message("Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
+
+# Get Python's site-packages directory
+execute_process(
+	COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('purelib'))"
+	OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+message("Python site-packages: ${PYTHON_SITE_PACKAGES}")
 
 # Set pybind11 directory
-set(pybind11_DIR ${ENVIRONMENT_PATH}Lib/site-packages/pybind11/share/cmake/pybind11)
+set(pybind11_DIR ${PYTHON_SITE_PACKAGES}/pybind11/share/cmake/pybind11)
 
 message("Finding pybind11...")
-find_package(pybind11 REQUIRED HINTS ${ENVIRONMENT_PATH})
+find_package(pybind11 REQUIRED)
 
 # Set NGSolve and Netgen directories
-set(NGSolve_DIR ${ENVIRONMENT_PATH}Lib/site-packages/ngsolve/cmake)
-set(Netgen_DIR ${ENVIRONMENT_PATH}Lib/site-packages/netgen/cmake)
+set(NGSolve_DIR ${PYTHON_SITE_PACKAGES}/ngsolve/cmake)
+set(Netgen_DIR ${PYTHON_SITE_PACKAGES}/netgen/cmake)
 
 # Find NGSolve
-find_package(NGSolve CONFIG REQUIRED HINTS ${ENVIRONMENT_PATH})
+find_package(NGSolve CONFIG REQUIRED)
 
 # Radia source directories
 set(CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/core")

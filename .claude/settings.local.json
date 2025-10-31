@@ -34,7 +34,16 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe\" ..)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe\" --build . --config Release --parallel)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"Get-ChildItem -Path build -Recurse | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue; Remove-Item -Path build -Force -Recurse -ErrorAction SilentlyContinue\")",
+      "Bash(PYTHONPATH=\"build/Release:$PYTHONPATH\" python:*)",
+      "Bash(powershell -Command \"$env:PYTHONPATH=''''S:\\Radia\\01_GitHub\\build\\Release''''; python tests/test_simple.py\")",
+      "Bash(PYTHONPATH=\"../build/Release:$PYTHONPATH\" python:*)",
+      "Bash(powershell -Command \"cd tests; $env:PYTHONPATH=''''S:\\Radia\\01_GitHub\\build\\Release''''; python test_radia.py\")",
+      "Bash(git log:*)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "ask": []

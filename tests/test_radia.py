@@ -18,11 +18,11 @@ from pathlib import Path
 # Find project root (works from any test subdirectory)
 current_file = Path(__file__).resolve()
 if 'tests' in current_file.parts:
-    # Find the 'tests' directory and go up one level
+	# Find the 'tests' directory and go up one level
 	tests_index = current_file.parts.index('tests')
 	project_root = Path(*current_file.parts[:tests_index])
 else:
-    # Fallback
+	# Fallback
 	project_root = current_file.parent
 
 # Add build directory to path

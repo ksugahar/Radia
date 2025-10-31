@@ -69,8 +69,8 @@ import sys
 
 # Windows 10/11の場合
 if hasattr(os, 'add_dll_directory'):
-    os.add_dll_directory(r'C:\Program Files\Python312\Lib\site-packages\ngsolve')
-    os.add_dll_directory(r'C:\Program Files\Python312\Lib\site-packages\netgen')
+	os.add_dll_directory(r'C:\Program Files\Python312\Lib\site-packages\ngsolve')
+	os.add_dll_directory(r'C:\Program Files\Python312\Lib\site-packages\netgen')
 
 sys.path.insert(0, r'S:\radia\01_GitHub\build\Release')
 import rad_ngsolve
@@ -81,9 +81,9 @@ import rad_ngsolve
 必要なDLLを`build/Release`にコピー：
 ```powershell
 Copy-Item "C:\Program Files\Python312\Lib\site-packages\ngsolve\*.dll" `
-          "S:\radia\01_GitHub\build\Release\"
+	      "S:\radia\01_GitHub\build\Release\"
 Copy-Item "C:\Program Files\Python312\Lib\site-packages\netgen\*.dll" `
-          "S:\radia\01_GitHub\build\Release\"
+	      "S:\radia\01_GitHub\build\Release\"
 ```
 
 ### 方法4: NGSolveと同じ場所にインストール
@@ -92,7 +92,7 @@ Copy-Item "C:\Program Files\Python312\Lib\site-packages\netgen\*.dll" `
 ```powershell
 # rad_ngsolve.pydをNGSolveのsite-packagesにコピー
 Copy-Item "S:\radia\01_GitHub\build\Release\rad_ngsolve.pyd" `
-          "C:\Program Files\Python312\Lib\site-packages\"
+	      "C:\Program Files\Python312\Lib\site-packages\"
 ```
 
 その後：
@@ -106,13 +106,13 @@ import rad_ngsolve  # どこからでもimport可能
 
 ```
 Python Script
-    ↓
+	↓
 rad_ngsolve.pyd (Pythonモジュール)
-    ↓
+	↓
 ngfem::RadiaBFieldCF (CoefficientFunction)
-    ↓
+	↓
 RadFld() (Radia C API)
-    ↓
+	↓
 Radia Core (磁場計算)
 ```
 
@@ -129,22 +129,22 @@ rad_ngsolve.RadAfield(radia_obj: int) -> CoefficientFunction
 
 ```cpp
 namespace ngfem {
-    class RadiaBFieldCF : public CoefficientFunction {
-        int radia_obj;  // Radiaオブジェクトインデックス
+	class RadiaBFieldCF : public CoefficientFunction {
+	    int radia_obj;  // Radiaオブジェクトインデックス
 
-        virtual void Evaluate(
-            const BaseMappedIntegrationPoint& mip,
-            FlatVector<> result) const override
-        {
-            auto pnt = mip.GetPoint();
-            double coords[3] = {pnt[0], pnt[1], pnt[2]};
-            double B[3];
-            RadFld(B, &nB, radia_obj, "b", coords, 1);
-            result(0) = B[0];
-            result(1) = B[1];
-            result(2) = B[2];
-        }
-    };
+	    virtual void Evaluate(
+	        const BaseMappedIntegrationPoint& mip,
+	        FlatVector<> result) const override
+	    {
+	        auto pnt = mip.GetPoint();
+	        double coords[3] = {pnt[0], pnt[1], pnt[2]};
+	        double B[3];
+	        RadFld(B, &nB, radia_obj, "b", coords, 1);
+	        result(0) = B[0];
+	        result(1) = B[1];
+	        result(2) = B[2];
+	    }
+	};
 }
 ```
 

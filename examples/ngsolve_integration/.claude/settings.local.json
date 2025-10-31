@@ -4,8 +4,8 @@
       "Bash(rm:*)",
       "Bash(cat:*)",
       "Bash(python:*)",
-      "Read(//s/radia/01_GitHub/src/python/**)",
-      "Read(//s/radia/01_GitHub/**)",
+      "Read(../../src/python/**)",
+      "Read(../../**)",
       "Bash(md5sum:*)",
       "Bash(powershell -File:*)",
       "Bash(where:*)",
@@ -14,7 +14,7 @@
       "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build build --config Release --target rad_ngsolve)",
       "WebSearch",
       "WebFetch(domain:docu.ngsolve.org)",
-      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build \"S:/radia/01_GitHub/build\" --config Release --target rad_ngsolve)",
+      "Bash(cmake --build ../../build --config Release --target rad_ngsolve)",
       "Bash(test_cf_direct.py )",
       "Bash(test_coordinates.py )",
       "Bash(test_rad_ngsolve_full.py )",
@@ -35,7 +35,7 @@
       "Bash(radia_field_direct.vtu )",
       "Bash(README.md.backup )",
       "Bash(find:*)",
-      "Bash(if [ -f \"S:/radia/01_GitHub/.gitignore\" ])",
+      "Bash(if [ -f ../../.gitignore ])",
       "Bash(then)",
       "Bash(else)",
       "Bash(fi)",
@@ -46,7 +46,8 @@
       "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" -G \"Visual Studio 17 2022\" -A x64 ..)",
       "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build . --config Release --target radia)",
       "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" ..)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []

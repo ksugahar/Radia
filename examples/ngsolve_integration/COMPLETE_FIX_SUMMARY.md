@@ -167,7 +167,7 @@ Test field evaluation on mesh (NGSolve meter coordinates):
   (0.0, 0.0, 0.04) m = [0.0, 0.0, 40.0] mm:   Bz = 0.042048 T
 
 [OK] Field evaluation successful!
-     Peak field magnitude: 11.9390 T
+	 Peak field magnitude: 11.9390 T
 ```
 
 ## Key Technical Points
@@ -187,14 +187,14 @@ Import Radia on each evaluation to avoid lifetime issues:
 ```cpp
 // Do this (safe)
 virtual void Evaluate(...) const override {
-    py::module_ rad = py::module_::import("radia");
-    py::object result = rad.attr("Fld")(radia_obj, field_comp, coords);
+	py::module_ rad = py::module_::import("radia");
+	py::object result = rad.attr("Fld")(radia_obj, field_comp, coords);
 }
 
 // Don't do this (unsafe)
 class RadiaBFieldCF {
-    py::module_ rad;  // Stored reference - dangerous!
-    RadiaBFieldCF() : rad(py::module_::import("radia")) {}
+	py::module_ rad;  // Stored reference - dangerous!
+	RadiaBFieldCF() : rad(py::module_::import("radia")) {}
 };
 ```
 

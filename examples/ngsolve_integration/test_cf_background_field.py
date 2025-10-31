@@ -5,7 +5,11 @@ Tests for radia.ObjBckgCF() functionality
 """
 
 import sys
-sys.path.insert(0, 'S:/radia/01_GitHub/src/python')
+# Add src/python to path (relative to this script)
+import os
+script_dir = os.path.dirname(os.path.abspath(__file__))
+src_python_dir = os.path.join(script_dir, '..', '..', 'src', 'python')
+sys.path.insert(0, src_python_dir)
 
 import radia as rad
 from radia_ngsolve_field import (

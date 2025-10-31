@@ -25,8 +25,7 @@ Write-Host "      Build directory cleaned" -ForegroundColor Green
 # Configure with CMake
 Write-Host ""
 Write-Host "[2/4] Configuring CMake..." -ForegroundColor Cyan
-cmake -S . -B build -G "Visual Studio 17 2022" `
-    -Dpybind11_DIR="C:/Program Files/Python312/Lib/site-packages/pybind11/share/cmake/pybind11"
+cmake -S . -B build -G "Visual Studio 17 2022"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERROR] CMake configuration failed" -ForegroundColor Red

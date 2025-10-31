@@ -86,18 +86,18 @@ Creates a racetrack coil matching the York.nas yoke geometry.
 **Function:**
 ```python
 def create_racetrack_coil(current=-2000):
-    """
-    Create racetrack coil for electromagnet.
+	"""
+	Create racetrack coil for electromagnet.
 
-    Original Mathematica specification:
-    coil = radObjRaceTrk[{0, 131.25, 0}, {5, 40}, {50, 62.5}, 105, 3, current/105/35]
+	Original Mathematica specification:
+	coil = radObjRaceTrk[{0, 131.25, 0}, {5, 40}, {50, 62.5}, 105, 3, current/105/35]
 
-    Args:
-        current: Total current (A), default -2000 A
+	Args:
+	    current: Total current (A), default -2000 A
 
-    Returns:
-        tuple: (coil_object, coil_parameters)
-    """
+	Returns:
+	    tuple: (coil_object, coil_parameters)
+	"""
 ```
 
 **Coil parameters:**
@@ -123,18 +123,18 @@ Imports magnetic yoke geometry from Nastran .nas file.
 **Function:**
 ```python
 def create_yoke_from_nastran(nas_file, material_properties=None):
-    """
-    Create magnetic yoke from Nastran mesh file.
+	"""
+	Create magnetic yoke from Nastran mesh file.
 
-    Args:
-        nas_file: Path to .nas file
-        material_properties: Dictionary with material properties
-            - permeability: [mu_x, mu_y] or scalar
-            - type: 'linear' (default)
+	Args:
+	    nas_file: Path to .nas file
+	    material_properties: Dictionary with material properties
+	        - permeability: [mu_x, mu_y] or scalar
+	        - type: 'linear' (default)
 
-    Returns:
-        tuple: (yoke_object, mesh_info)
-    """
+	Returns:
+	    tuple: (yoke_object, mesh_info)
+	"""
 ```
 
 **Features:**
@@ -158,15 +158,15 @@ Low-level parser for Nastran bulk data format.
 **Function:**
 ```python
 def read_nastran_mesh(filename):
-    """
-    Read Nastran mesh file (.nas format).
+	"""
+	Read Nastran mesh file (.nas format).
 
-    Returns:
-        dict: Dictionary with 'nodes' and 'elements'
-            - nodes: numpy array (N, 3) with node coordinates
-            - elements: numpy array (M, 8) with element connectivity (1-indexed)
-            - node_ids: dict mapping node_id to array index
-    """
+	Returns:
+	    dict: Dictionary with 'nodes' and 'elements'
+	        - nodes: numpy array (N, 3) with node coordinates
+	        - elements: numpy array (M, 8) with element connectivity (1-indexed)
+	        - node_ids: dict mapping node_id to array index
+	"""
 ```
 
 **Supported entries:**

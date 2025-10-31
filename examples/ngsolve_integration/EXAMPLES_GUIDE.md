@@ -88,10 +88,10 @@ python example_rad_ngsolve_demo.py
 
 [Step 6] Sampling field along z-axis...
   z [mm]    Bz [T]
-     0.0     0.78431
-    10.0     0.51283
-    20.0     0.15857
-    30.0     0.05336
+	 0.0     0.78431
+	10.0     0.51283
+	20.0     0.15857
+	30.0     0.05336
 
 SUCCESS: Demonstration completed
 ```

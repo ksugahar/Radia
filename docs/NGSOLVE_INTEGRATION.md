@@ -45,11 +45,11 @@ The implementation follows the NGSolve CoefficientFunction pattern:
 
 ```cpp
 namespace ngfem {
-    class RadiaBFieldCF : public CoefficientFunction {
-        // 3D vector field (dimension = 3)
-        virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
-                             FlatVector<> result) const override;
-    };
+	class RadiaBFieldCF : public CoefficientFunction {
+	    // 3D vector field (dimension = 3)
+	    virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
+	                         FlatVector<> result) const override;
+	};
 }
 ```
 
@@ -109,14 +109,14 @@ The NGSolve module is optional and built only if NGSolve is detected:
 find_package(NGSolve CONFIG QUIET)
 
 if(NGSolve_FOUND)
-    add_library(rad_ngsolve MODULE
-        ${RADIA_LIB_SOURCES}
-        ${RADIA_NGSOLVE_SOURCES}
-    )
-    target_link_libraries(rad_ngsolve PRIVATE
-        Python3::Python
-        NGSolve::ngsolve
-    )
+	add_library(rad_ngsolve MODULE
+	    ${RADIA_LIB_SOURCES}
+	    ${RADIA_NGSOLVE_SOURCES}
+	)
+	target_link_libraries(rad_ngsolve PRIVATE
+	    Python3::Python
+	    NGSolve::ngsolve
+	)
 endif()
 ```
 

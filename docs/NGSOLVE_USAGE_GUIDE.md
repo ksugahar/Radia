@@ -41,9 +41,9 @@ gf_Bz = GridFunction(fes)
 
 # メッシュ頂点でフィールドを評価
 for i in range(mesh.nv):
-    pnt = mesh.vertices[i].point
-    B_vec = B_radia.Evaluate(pnt[0], pnt[1], pnt[2])
-    gf_Bz.vec[i] = B_vec[2]  # Z成分
+	pnt = mesh.vertices[i].point
+	B_vec = B_radia.Evaluate(pnt[0], pnt[1], pnt[2])
+	gf_Bz.vec[i] = B_vec[2]  # Z成分
 
 # 可視化
 import netgen.gui
@@ -142,25 +142,25 @@ Bz = B[2]
 class RadiaBFieldCF : public CoefficientFunction
 {
 public:
-    int radia_obj;
+	int radia_obj;
 
-    RadiaBFieldCF(int obj)
-        : CoefficientFunction(3), radia_obj(obj) {}
+	RadiaBFieldCF(int obj)
+	    : CoefficientFunction(3), radia_obj(obj) {}
 
-    virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
-                         FlatVector<> result) const override
-    {
-        auto pnt = mip.GetPoint();
-        double coords[3] = {pnt[0], pnt[1], pnt[2]};
-        double B[3];
-        int nB = 3;
+	virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
+	                     FlatVector<> result) const override
+	{
+	    auto pnt = mip.GetPoint();
+	    double coords[3] = {pnt[0], pnt[1], pnt[2]};
+	    double B[3];
+	    int nB = 3;
 
-        RadFld(B, &nB, radia_obj, "b", coords, 1);
+	    RadFld(B, &nB, radia_obj, "b", coords, 1);
 
-        result(0) = B[0];
-        result(1) = B[1];
-        result(2) = B[2];
-    }
+	    result(0) = B[0];
+	    result(1) = B[1];
+	    result(2) = B[2];
+	}
 };
 ```
 
@@ -221,9 +221,9 @@ gf_Bz = GridFunction(fes)
 
 # フィールド評価
 for i in range(mesh.nv):
-    pnt = mesh.vertices[i].point
-    B_vec = B.Evaluate(pnt[0], pnt[1], pnt[2])
-    gf_Bz.vec[i] = B_vec[2]
+	pnt = mesh.vertices[i].point
+	B_vec = B.Evaluate(pnt[0], pnt[1], pnt[2])
+	gf_Bz.vec[i] = B_vec[2]
 
 # 積分
 integral = Integrate(gf_Bz, mesh)

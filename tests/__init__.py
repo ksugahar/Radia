@@ -11,17 +11,17 @@ Test Categories:
 - benchmarks/: Performance benchmarking scripts
 
 Usage:
-    # Run all tests
-    pytest tests/
+	# Run all tests
+	pytest tests/
 
-    # Run specific test file
-    pytest tests/test_simple.py
+	# Run specific test file
+	pytest tests/test_simple.py
 
-    # Run with verbose output
-    pytest -v tests/
+	# Run with verbose output
+	pytest -v tests/
 
-    # Run benchmarks
-    python tests/benchmarks/benchmark_openmp.py
+	# Run benchmarks
+	python tests/benchmarks/benchmark_openmp.py
 """
 
 __version__ = "4.32"

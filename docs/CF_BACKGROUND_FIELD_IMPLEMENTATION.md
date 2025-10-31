@@ -65,11 +65,11 @@ radTCoefficientFunctionFieldSource(callback)  [radcffld.cpp]
   ├─ Stores PyObject* cf_callback with INCREF
   │
   └─ B_comp(radTField*):
-      1. Acquire Python GIL
-      2. Create coords list [x, y, z] in mm
-      3. Call callback(coords) → [Bx, By, Bz]
-      4. Add to FieldPtr->B
-      5. Release GIL
+	  1. Acquire Python GIL
+	  2. Create coords list [x, y, z] in mm
+	  3. Call callback(coords) → [Bx, By, Bz]
+	  4. Add to FieldPtr->B
+	  5. Release GIL
 ```
 
 ## Key Features Implemented
@@ -139,8 +139,8 @@ from radia_ngsolve_field import create_analytical_field
 
 # Quadrupole field: Bx = g*y, By = g*x
 def quadrupole(x, y, z):
-    gradient = 10.0  # T/m
-    return [gradient * y, gradient * x, 0]
+	gradient = 10.0  # T/m
+	return [gradient * y, gradient * x, 0]
 
 field = create_analytical_field(quadrupole, unit='m')
 ```
@@ -174,8 +174,8 @@ mesh = Mesh(unit_cube.GenerateMesh(maxh=0.05))
 
 # Step 2: Get B = curl(A)
 B_coil = CF((A[2].Diff(y) - A[1].Diff(z),
-             A[0].Diff(z) - A[2].Diff(x),
-             A[1].Diff(x) - A[0].Diff(y)))
+	         A[0].Diff(z) - A[2].Diff(x),
+	         A[1].Diff(x) - A[0].Diff(y)))
 
 # Step 3: Use as Radia background
 field_obj = create_cf_field_source(B_coil, unit='m')
@@ -306,8 +306,8 @@ Create arbitrary background field source from callable.
 Parameters
 ----------
 callback : callable
-    Function accepting [x, y, z] in mm, returning [Bx, By, Bz] in Tesla
-    Signature: callback([x, y, z]) -> [Bx, By, Bz]
+	Function accepting [x, y, z] in mm, returning [Bx, By, Bz] in Tesla
+	Signature: callback([x, y, z]) -> [Bx, By, Bz]
 
 Returns
 -------
@@ -332,9 +332,9 @@ Create Radia background field from NGSolve CoefficientFunction.
 Parameters
 ----------
 cf : ngsolve.CoefficientFunction or callable
-    NGSolve CF or Python function defining [Bx, By, Bz]
+	NGSolve CF or Python function defining [Bx, By, Bz]
 unit : str
-    Coordinate unit: 'm' or 'mm'
+	Coordinate unit: 'm' or 'mm'
 
 Returns
 -------

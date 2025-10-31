@@ -35,23 +35,23 @@ The conversion is implemented in `rad_ngsolve.cpp`:
 
 ```cpp
 virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
-                     FlatVector<> result) const override
+	                 FlatVector<> result) const override
 {
-    auto pnt = mip.GetPoint();
-    int dim = pnt.Size();
+	auto pnt = mip.GetPoint();
+	int dim = pnt.Size();
 
-    // Convert NGSolve coordinates (m) to Radia coordinates (mm)
-    py::list coords;
-    coords.append(pnt[0] * 1000.0);  // x: m -> mm
-    coords.append((dim >= 2) ? pnt[1] * 1000.0 : 0.0);  // y: m -> mm
-    coords.append((dim >= 3) ? pnt[2] * 1000.0 : 0.0);  // z: m -> mm
+	// Convert NGSolve coordinates (m) to Radia coordinates (mm)
+	py::list coords;
+	coords.append(pnt[0] * 1000.0);  // x: m -> mm
+	coords.append((dim >= 2) ? pnt[1] * 1000.0 : 0.0);  // y: m -> mm
+	coords.append((dim >= 3) ? pnt[2] * 1000.0 : 0.0);  // z: m -> mm
 
-    // Call Radia with mm coordinates
-    py::module_ rad = py::module_::import("radia");
-    py::object B_result = rad.attr("Fld")(radia_obj, field_comp, coords);
+	// Call Radia with mm coordinates
+	py::module_ rad = py::module_::import("radia");
+	py::object B_result = rad.attr("Fld")(radia_obj, field_comp, coords);
 
-    // Field values are in Tesla (no conversion needed)
-    ...
+	// Field values are in Tesla (no conversion needed)
+	...
 }
 ```
 

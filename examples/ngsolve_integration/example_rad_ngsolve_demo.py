@@ -60,9 +60,9 @@ print("\n[Step 2] Creating NGSolve mesh...")
 # Create 2D mesh in x-y plane (will evaluate at different z heights)
 geo = SplineGeometry()
 geo.AddRectangle(
-    p1=(-40, -40),  # mm
-    p2=(40, 40),    # mm
-    bc="outer"
+	p1=(-40, -40),  # mm
+	p2=(40, 40),    # mm
+	bc="outer"
 )
 mesh = Mesh(geo.GenerateMesh(maxh=10))
 
@@ -133,10 +133,10 @@ Bz_along_z = []
 print("  z [mm]    Bz [T]")
 print("  " + "-" * 22)
 for z in z_points:
-    B = rad.Fld(magnet, 'b', [0, 0, z])
-    Bz_along_z.append(B[2])
-    if abs(z) < 31 or z > 29:  # Print selected points
-        print(f"  {z:6.1f}    {B[2]:8.5f}")
+	B = rad.Fld(magnet, 'b', [0, 0, z])
+	Bz_along_z.append(B[2])
+	if abs(z) < 31 or z > 29:  # Print selected points
+	    print(f"  {z:6.1f}    {B[2]:8.5f}")
 
 print(f"\n  [OK] Field sampled at {len(z_points)} points")
 
