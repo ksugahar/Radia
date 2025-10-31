@@ -208,10 +208,10 @@ def test_sphere_in_quadrupole():
         [0, 0, 0.001]    # Small initial magnetization to define easy axis
     )
 
-    # Subdivide for better accuracy
-    rd.ObjDivMag(sphere, [3, 3, 3])
+    # Subdivide for better accuracy - very fine mesh for high accuracy
+    rd.ObjDivMag(sphere, [10, 10, 10])
 
-    print(f"  Magnetic sphere created as subdivided cube (3x3x3 = 27 segments)")
+    print(f"  Magnetic sphere created as subdivided cube (10x10x10 = 1000 segments)")
 
     # 2. Create linear magnetic material
     # MatLin requires susceptibility chi = mu_r - 1
