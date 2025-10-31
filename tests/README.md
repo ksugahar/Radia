@@ -11,6 +11,7 @@ tests/
 ├── test_radia.py                    # Comprehensive test suite
 ├── test_advanced.py                 # Advanced features and edge cases
 ├── test_parallel_performance.py     # OpenMP parallelization tests
+├── test_rad_ngsolve.py              # NGSolve integration tests
 ├── test_magpylib_comparison.py      # Comparison with magpylib library
 ├── conftest.py                      # pytest configuration
 ├── test_utils.py                    # Shared path utilities
@@ -75,6 +76,20 @@ python tests/test_advanced.py
 ```bash
 # Test OpenMP parallelization performance
 python tests/test_parallel_performance.py
+```
+
+### NGSolve Integration Test
+
+```bash
+# Test rad_ngsolve module (requires NGSolve)
+python tests/test_rad_ngsolve.py
+```
+
+**Note:** This test requires NGSolve to be installed. If NGSolve is not available, the test will be skipped.
+
+**Expected output:**
+```
+[OK] ALL TESTS PASSED!
 ```
 
 ### Comparison Test with magpylib

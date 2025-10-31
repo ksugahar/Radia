@@ -8,6 +8,7 @@ This is a modernized version of Radia focusing on Python integration with perfor
 
 - **Python 3.12 only** - Streamlined for modern Python
 - **OpenMP 2.0 parallelization** - 2.7x speedup on 8-core systems
+- **NGSolve integration** - C++ CoefficientFunction for FEM coupling
 - **CMake build system** - Modern, cross-platform build
 - **Tab indentation** - Consistent code style throughout
 - **PyVista viewer** - Modern 3D visualization alternative
@@ -15,6 +16,7 @@ This is a modernized version of Radia focusing on Python integration with perfor
 ## Key Features
 
 - ✓ OpenMP parallel field computation
+- ✓ NGSolve C++ CoefficientFunction integration
 - ✓ VTK export functionality (`rad.ObjDrwVTK`)
 - ✓ PyVista-based 3D viewer (replaces OpenGL viewer)
 - ✓ All hexahedron tests passing
@@ -27,14 +29,21 @@ This is a modernized version of Radia focusing on Python integration with perfor
 
 ```bash
 # Windows (PowerShell)
+
+# 1. Build radia.pyd (core module)
 .\Build.ps1
 
-# The module will be available in dist/radia.pyd
+# 2. Build rad_ngsolve.pyd (optional, for NGSolve integration)
+.\build_ngsolve.ps1
+
+# Outputs:
+# - dist/radia.pyd
+# - build/Release/rad_ngsolve.pyd
 ```
 
 See [README_BUILD.md](README_BUILD.md) for detailed build instructions.
 
-### Usage
+### Basic Usage
 
 ```python
 import radia as rad
@@ -47,12 +56,48 @@ field = rad.Fld(mag, 'b', [0,0,20])
 print(f"Field: {field} T")
 ```
 
+### NGSolve Integration
+
+```python
+# IMPORTANT: Import ngsolve first
+import ngsolve
+from ngsolve import Mesh, H1, GridFunction
+
+import radia as rad
+import rad_ngsolve
+
+# Create Radia magnet
+magnet = rad.ObjRecMag([0,0,0], [20,20,20], [0,0,1.2])
+rad.MatApl(magnet, rad.MatStd('NdFeB', 1.2))
+rad.Solve(magnet, 0.0001, 10000)
+
+# Create NGSolve CoefficientFunction
+B_field = rad_ngsolve.RadBfield(magnet)
+
+# Use in FEM analysis
+gf = GridFunction(fes)
+gf.Set(B_field)
+```
+
+See [examples/ngsolve_integration/](examples/ngsolve_integration/) for complete examples.
+
 ## Documentation
 
+### Core
 - [README_BUILD.md](README_BUILD.md) - Build instructions
 - [docs/OPENMP_PERFORMANCE_REPORT.md](docs/OPENMP_PERFORMANCE_REPORT.md) - OpenMP benchmarks
-- [docs/PYVISTA_VIEWER.md](examples/2024_02_03_振分電磁石/PYVISTA_VIEWER.md) - PyVista viewer guide
 - [docs/DIRECTORY_STRUCTURE.md](docs/DIRECTORY_STRUCTURE.md) - Project structure
+
+### NGSolve Integration
+- [RAD_NGSOLVE_BUILD_SUCCESS.md](RAD_NGSOLVE_BUILD_SUCCESS.md) - Complete rad_ngsolve documentation
+- [examples/ngsolve_integration/README.md](examples/ngsolve_integration/README.md) - NGSolve examples overview
+- [examples/ngsolve_integration/EXAMPLES_GUIDE.md](examples/ngsolve_integration/EXAMPLES_GUIDE.md) - Detailed usage guide
+- [tests/test_rad_ngsolve.py](tests/test_rad_ngsolve.py) - Integration tests
+
+### Visualization
+- [docs/PYVISTA_VIEWER.md](examples/2024_02_03_振分電磁石/PYVISTA_VIEWER.md) - PyVista viewer guide
+
+### Development
 - [docs/TAB_CONVERSION_REPORT.md](docs/TAB_CONVERSION_REPORT.md) - Code style conversion
 - [docs/CLAUDE.md](docs/CLAUDE.md) - Development notes
 
@@ -73,7 +118,18 @@ See [docs/OPENMP_PERFORMANCE_REPORT.md](docs/OPENMP_PERFORMANCE_REPORT.md) for d
 
 Practical examples are available in the `examples/` directory:
 
-- `examples/2019_11_29_Radia_練習/` - Converted from Wolfram Language
+### NGSolve Integration
+- `examples/ngsolve_integration/` - **Radia + NGSolve FEM coupling**
+  - `example_rad_ngsolve_demo.py` - Complete demonstration
+  - `test_rad_ngsolve_full.py` - Integration test
+  - `visualize_field.py` - Field visualization
+
+### Magnetostatics
+- `examples/simple_problems/` - Basic magnet configurations
+- `examples/electromagnet/` - Electromagnet designs
+- `examples/complex_coil_geometry/` - Advanced coil geometries
+
+### Legacy Examples
 - `examples/2024_02_03_振分電磁石/` - Septum magnet simulation
 - `examples/2024_03_02_Rdaiaの6面隊が動作しない調査(要素)/` - Hexahedron tests
 
@@ -89,11 +145,17 @@ python tests/test_radia.py
 # Advanced features test
 python tests/test_advanced.py
 
+# NGSolve integration test
+python tests/test_rad_ngsolve.py
+
 # OpenMP performance test
 python tests/test_parallel_performance.py
 
 # Or use pytest to run all tests
 pytest tests/
+
+# Run specific test suite
+pytest tests/test_rad_ngsolve.py -v
 ```
 
 See [tests/README.md](tests/README.md) for detailed testing documentation.
@@ -129,6 +191,7 @@ exportGeometryToVTK(mag, 'geometry')
 ### Runtime Requirements
 - Python 3.12
 - NumPy
+- NGSolve (optional, for FEM coupling via rad_ngsolve)
 - PyVista (optional, for 3D visualization)
 
 ## Changes from Original Radia
@@ -142,10 +205,11 @@ exportGeometryToVTK(mag, 'geometry')
 - Python 2.7, 3.6, 3.7, 3.8 support
 
 ### Added Features
-- OpenMP parallelization
+- OpenMP parallelization (2.7x speedup)
+- NGSolve C++ CoefficientFunction integration
 - PyVista viewer support
 - Modern CMake build system
-- Comprehensive test suite
+- Comprehensive test suite (including NGSolve tests)
 - Performance benchmarks
 - Updated documentation
 
@@ -159,6 +223,7 @@ Original Radia license applies. See source files for details.
 
 **This Fork**:
 - OpenMP parallelization
+- NGSolve C++ integration (rad_ngsolve)
 - Python 3.12 optimization
 - Build system modernization
 - PyVista integration
@@ -173,5 +238,5 @@ Original Radia license applies. See source files for details.
 
 ---
 
-**Version**: 4.32 (OpenMP Edition)
-**Last Updated**: 2025-10-29
+**Version**: 4.32 (OpenMP + NGSolve Edition)
+**Last Updated**: 2025-10-31
