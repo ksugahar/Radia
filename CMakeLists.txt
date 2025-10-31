@@ -35,6 +35,7 @@ set(RADIA_CORE_SOURCES
     ${CORE_DIR}/radapl6.cpp
     ${CORE_DIR}/radapl7.cpp
     ${CORE_DIR}/radarccu.cpp
+    ${CORE_DIR}/radcffld.cpp
     ${CORE_DIR}/radcast.cpp
     ${CORE_DIR}/radexpgn.cpp
     ${CORE_DIR}/radflm.cpp
@@ -138,3 +139,59 @@ if(MSVC)
 endif()
 
 message(STATUS "rad_ngsolve module configured")
+
+# ========================================
+# Radia Python Module (radia.pyd)
+# ========================================
+
+# Create radia Python module using pybind11
+pybind11_add_module(radia
+    ${RADIA_CORE_SOURCES}
+    ${EXT_DIR}/auxparse/auxparse.cpp
+    ${EXT_DIR}/genmath/gmfft.cpp
+    ${EXT_DIR}/genmath/gmtrans.cpp
+    ${RADIA_LIB_SOURCES}
+    ${PYTHON_DIR}/radpy.cpp
+)
+
+# Link triangle library
+target_link_libraries(radia PRIVATE triangle_lib)
+
+# Add include directories
+target_include_directories(radia PRIVATE
+    ${CORE_DIR}
+    ${LIB_DIR}
+    ${EXT_DIR}/auxparse
+    ${EXT_DIR}/genmath
+    ${FFTW_DIR}
+)
+
+# Add preprocessor definitions
+target_compile_definitions(radia PRIVATE
+    _CRT_SECURE_NO_WARNINGS
+    _GM_WITHOUT_BASE
+    ALPHA__DLL__
+    ANSI_DECLARATORS
+)
+
+# FFTW library (64-bit MSVC)
+if(EXISTS ${FFTW_LIB})
+    target_link_libraries(radia PRIVATE ${FFTW_LIB})
+else()
+    message(WARNING "FFTW library not found: ${FFTW_LIB}")
+endif()
+
+# Link Windows system libraries
+if(WIN32)
+    target_link_libraries(radia PRIVATE version.lib)
+endif()
+
+# Compiler-specific flags
+if(MSVC)
+    target_compile_options(radia PRIVATE
+        /wd4244  # Disable conversion warnings
+        /wd4267  # Disable size_t conversion warnings
+    )
+endif()
+
+message(STATUS "radia module configured")

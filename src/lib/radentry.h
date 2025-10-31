@@ -28,6 +28,10 @@
 #else
 #endif
 #endif /*ALPHA_NONE*/
+// Forward declaration for Python callback support
+struct _object;
+typedef _object PyObject;
+
 
 #ifndef EXP
 #define EXP
@@ -326,6 +330,7 @@ EXP int CALL RadObjScaleCur(int n, double scaleCoef);
 @author O.C.
 */
 EXP int CALL RadObjBckg(int* n, double* B);
+EXP int CALL RadObjBckgCF(int* n, PyObject* callback);
 
 /** Creates a container of magnetic field sources.
 @param n [out] reference number of the object created

@@ -1,6 +1,7 @@
 
 #include "radstlon.h"
 #include "auxparse.h"
+#include <Python.h>
 
 //#ifdef WIN32
 //#define WIN32_LEAN_AND_MEAN
@@ -37,6 +38,7 @@ void RaceTrack( double,double,double, double,double, double,double, double, int,
 void FlmCurDLL( double*, int, double );
 void ScaleCurInObj( int,double );
 void BackgroundFieldSource( double,double,double );
+void CoefficientFunctionFieldSource( PyObject* );
 void Rectngl( double,double,double, double,double );
 void Group( int*, long );
 void AddToGroup( int, int*, long );
@@ -390,6 +392,16 @@ int CALL RadObjScaleCur(int n, double scaleCoef)
 int CALL RadObjBckg(int* n, double* pB)
 {
 	BackgroundFieldSource(pB[0], pB[1], pB[2]);
+
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadObjBckgCF(int* n, PyObject* callback)
+{
+	CoefficientFunctionFieldSource(callback);
 
 	*n = ioBuffer.OutInt();
 	return ioBuffer.OutErrorStatus();

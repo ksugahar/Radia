@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 #include <string.h>
+#include <Python.h>
 
 #include "radappl.h"
 #include "gmvect.h"
@@ -107,6 +108,7 @@ void MagnOfObj( int );
 void ObjField( int, char* );
 void SetObjMagn( int, double,double,double );
 void BackgroundFieldSource( double,double,double );
+void CoefficientFunctionFieldSource( PyObject* );
 void ScaleCurInObj( int,double );
 
 void Translation( double,double,double );
@@ -214,6 +216,7 @@ void ProcMPI( const char*, double*, long*, long*, long*);
 //int AuxSetOptionNameAndValue(const char* OptTot, char* OptName, char** OptValue);
 int AuxSetOptionNameAndValue(const char* OptTot, char* OptName, const char** OptValue);
 }
+
 
 //-------------------------------------------------------------------------
 
@@ -2167,6 +2170,11 @@ void BackgroundFieldSource(double Bx, double By, double Bz)
 {
 	double B[] = {Bx, By, Bz};
 	rad.SetBackgroundFieldSource(B, 3);
+}
+
+void CoefficientFunctionFieldSource(PyObject* callback)
+{
+	rad.SetCoefficientFunctionFieldSource(callback);
 }
 
 //-------------------------------------------------------------------------

@@ -22,7 +22,6 @@
 #define REAL double
 extern "C" {
 	#include "triangle.h"
-	void triangulate(char *, struct triangulateio *, struct triangulateio *, struct triangulateio *);
 	int gErrorTRIANGLE;
 }
 //extern void triangulate(char *, struct triangulateio *, struct triangulateio *, struct triangulateio *);

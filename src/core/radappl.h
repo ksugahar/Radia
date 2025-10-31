@@ -18,6 +18,10 @@
 #ifndef __RADAPPL_H
 #define __RADAPPL_H
 
+// Forward declaration for Python callback support
+struct _object;
+typedef _object PyObject;
+
 #include "radsend.h"
 #include "radg.h"
 #include "radcast.h"
@@ -151,6 +155,7 @@ public:
 	int SetFlmCur(double I, TVector3d* ArrayOfPoints, int lenArrayOfPoints);
 	int SetRectangle(double* CPoi, long lenCPoi, double* Dims, long lenDims);
 	int SetBackgroundFieldSource(double* B, long lenB);
+	int SetCoefficientFunctionFieldSource(PyObject* callback);
 
 	int ComputeNumberOfDegOfFreedom(int ElemKey);
 	int ComputeGeometricalVolume(int ElemKey);

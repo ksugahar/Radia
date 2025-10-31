@@ -862,6 +862,35 @@ static PyObject* radia_ObjBckg(PyObject* self, PyObject* args)
 	}
 	return oResInd;
 }
+/************************************************************************//**
+* Creates a source of arbitrary background field from callable.
+* Callable should accept [x, y, z] in mm and return [Bx, By, Bz] in Tesla.
+***************************************************************************/
+static PyObject* radia_ObjBckgCF(PyObject* self, PyObject* args)
+{
+	PyObject *oCallback=0, *oResInd=0;
+	try
+	{
+		if(!PyArg_ParseTuple(args, "O:ObjBckgCF", &oCallback))
+			throw CombErStr(strEr_BadFuncArg, ": ObjBckgCF");
+		if(oCallback == 0)
+			throw CombErStr(strEr_BadFuncArg, ": ObjBckgCF");
+
+		if(!PyCallable_Check(oCallback))
+			throw CombErStr(strEr_BadFuncArg,
+				": ObjBckgCF requires callable (CF or function)");
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadObjBckgCF(&ind, oCallback));
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
+}
+
 
 /************************************************************************//**
  * Magnetic Field Source: Container of Magnetic Field Sources
@@ -3286,6 +3315,7 @@ static PyMethodDef radia_methods[] = {
 	{"ObjRaceTrk", radia_ObjRaceTrk, METH_VARARGS, "ObjRaceTrk([x,y,z],[rmin,rmax],[lx,ly],h,nseg,j,'man|auto':'man',a:'z') creates a current carrying racetrack coil consisting of four 90-degree bents connected by four straight parts of rectangular straight section, center point [x,y,z], inner and outer bent radii [rmin,rmax], straight section lengths [lx,ly], height h, number of segments in bents nseg, and azimuthal current density j. According to the value of the 'man|auto' switch, the field from the bents is computed based on the number of segments nseg ('man'), or on the general absolute precision level specified by the function FldCmpCrt ('auto'). The orientation of the racetrack axis is defined by the character a (which can be either 'x', 'y' or 'z')."},
 	{"ObjFlmCur", radia_ObjFlmCur, METH_VARARGS, "ObjFlmCur([[x1,y1,z1],[x2,y2,z2],...],i) creates a filament polygonal line conductor defined by the sequence of points [[x1,y1,z1],[x2,y2,z2],...] with current i."},
 	{"ObjBckg", radia_ObjBckg, METH_VARARGS, "ObjBckg([bx,by,bz]) creates a source of uniform background magnetic field [bx,by,bz]."},
+	{"ObjBckgCF", radia_ObjBckgCF, METH_VARARGS, "ObjBckgCF(callback) creates a source of arbitrary background field. Callback should accept [x,y,z] in mm and return [Bx,By,Bz] in Tesla."},
 	{"ObjCnt", radia_ObjCnt, METH_VARARGS, "ObjCnt([obj1,obj2,...]) creates a container object for magnetic field source objects [obj1,obj2,...]."},
 	{"ObjAddToCnt", radia_ObjAddToCnt, METH_VARARGS, "ObjAddToCnt(cnt,[obj1,obj2,...]) adds objects [obj1,obj2,...] to the container object cnt."},
 	{"ObjCntStuf", radia_ObjCntStuf, METH_VARARGS, "ObjCntStuf(obj) returns list of general indexes of the objects present in container if obj is a container; or returns [obj] if obj is not a container."}, 

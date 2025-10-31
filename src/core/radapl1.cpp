@@ -19,11 +19,13 @@
 #include "radg3da1.h"
 #include "radrec.h"
 #include "radarccu.h"
+#include "radcffld.h"
 #include "radplnr.h"
 #include "radexpgn.h"
 #include "radvlpgn.h"
 #include "radcnvrg.h"
 #include "radopnam.h"
+#include <Python.h>
 
 #include <math.h>
 #include <string.h>
@@ -2324,3 +2326,27 @@ int radTApplication::ProcMPI(const char* sCommand, double* arData, long* pnData,
 }
 
 //-------------------------------------------------------------------------
+
+//-------------------------------------------------------------------------
+
+int radTApplication::SetCoefficientFunctionFieldSource(PyObject* callback)
+{
+	if(!callback) return 0;
+	if(!PyCallable_Check(callback)) {
+		Send.ErrorMessage("Radia::Error: Callback must be callable");
+		return 0;
+	}
+
+	try
+	{
+		radThg hg(new radTCoefficientFunctionFieldSource(callback));
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		Initialize();
+		return 0;
+	}
+}
