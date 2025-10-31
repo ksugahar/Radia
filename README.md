@@ -165,7 +165,10 @@ See [tests/README.md](tests/README.md) for detailed testing documentation.
 ### PyVista Viewer (Recommended)
 
 ```python
-from examples.2024_02_03_振分電磁石.radia_pyvista_viewer import view_radia_object
+import sys
+sys.path.insert(0, 'S:/radia/01_GitHub/src/python')
+
+from radia_pyvista_viewer import view_radia_object
 
 # View Radia object
 view_radia_object(mag)
@@ -174,10 +177,13 @@ view_radia_object(mag)
 ### VTK Export
 
 ```python
-from examples.2024_02_03_振分電磁石.my_module import exportGeometryToVTK
+import sys
+sys.path.insert(0, 'S:/radia/01_GitHub/src/python')
+
+from radia_vtk_export import export_geometry_to_vtk
 
 # Export to VTK file for Paraview
-exportGeometryToVTK(mag, 'geometry')
+export_geometry_to_vtk(mag, 'geometry.vtk')
 ```
 
 ## System Requirements
@@ -228,8 +234,6 @@ Original Radia license applies. See source files for details.
 - Build system modernization
 - PyVista integration
 - Documentation updates
-
-🤖 Modernization performed with [Claude Code](https://claude.com/claude-code)
 
 ## Links
 
