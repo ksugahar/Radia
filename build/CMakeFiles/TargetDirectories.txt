@@ -1,0 +1,5 @@
+S:/Radia/01_GitHub/build/CMakeFiles/triangle_lib.dir
+S:/Radia/01_GitHub/build/CMakeFiles/rad_ngsolve.dir
+S:/Radia/01_GitHub/build/CMakeFiles/radia.dir
+S:/Radia/01_GitHub/build/CMakeFiles/ALL_BUILD.dir
+S:/Radia/01_GitHub/build/CMakeFiles/ZERO_CHECK.dir
