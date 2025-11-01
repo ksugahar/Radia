@@ -240,12 +240,33 @@ Original Radia license applies. See source files for details.
 - PyVista integration
 - Documentation updates
 
+## Related Tools
+
+### Coreform Cubit Mesh Export
+[**Coreform_Cubit_Mesh_Export**](https://github.com/ksugahar/Coreform_Cubit_Mesh_Export) - Python library for exporting Coreform Cubit meshes to multiple formats
+
+This tool perfectly complements Radia_NGSolve by providing high-quality mesh generation:
+
+- **Nastran Format Export** - Compatible with Radia's `nastran_reader.py` module
+- **Multiple Format Support** - Gmsh, MEG, VTK, and Nastran exports
+- **2D/3D Meshing** - Supports complex 3D geometries
+- **Second-Order Elements** - High-accuracy mesh generation
+
+**Workflow Example:**
+1. Create complex geometry in Coreform Cubit
+2. Export to Nastran format using `Coreform_Cubit_Mesh_Export`
+3. Import into Radia using `nastran_reader.py`
+4. Couple with NGSolve for FEM analysis
+
+See [examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/](examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/) for Nastran mesh usage examples.
+
 ## Links
 
 - Original Radia: https://github.com/ochubar/Radia
 - ESRF Radia Page: https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia
+- Coreform Cubit: https://coreform.com/products/coreform-cubit/
 
 ---
 
-**Version**: 4.32 (OpenMP + NGSolve Edition)
-**Last Updated**: 2025-10-31
+**Version**: 1.0 (OpenMP + NGSolve Edition)
+**Last Updated**: 2025-11-02
