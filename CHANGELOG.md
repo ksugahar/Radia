@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (2025-11-01)
+
+- **rad_ngsolve Unified Interface**
+  - New unified `RadiaField` class supporting all field types
+  - Field type selection: 'b' (flux density), 'h' (field), 'a' (vector potential), 'm' (magnetization)
+  - Removed legacy interfaces (RadBfield, RadHfield, RadAfield) for cleaner API
+  - Updated all examples and tests to use new interface
+
+- **VTK Export Improvements**
+  - Automatic mm → m unit conversion in `radia_vtk_export.py`
+  - Consistent units across Radia (mm) and visualization tools (m)
+
+- **Project Documentation**
+  - Created `claude.md` with coding standards and project guidelines
+  - Updated `.gitignore` to preserve `.pvsm` files and small example `.vtk` files
+  - Consolidated build documentation in `README_BUILD.md`
+
+- **Examples Cleanup**
+  - Created two NGSolve integration example directories:
+  - `examples/Radia_to_NGSolve_CoefficientFunction/` - Use Radia fields in NGSolve
+  - `examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/` - Use background fields in Radia
+  - Added `demo_field_types.py` demonstrating all field types
+  - Removed obsolete documentation and test files
+  - Reduced directory size from 11MB to 52KB
+
+### Changed (2025-11-01)
+
+- **Coding Standards**
+  - Standardized on TAB characters for indentation (not 4 spaces)
+  - Updated all Python and C++ files to follow new standards
+  - Documented standards in `claude.md`
+
+- **rad_ngsolve API Simplification**
+  - Single unified interface: `RadiaField(obj, field_type)`
+  - Removed backward compatibility layer
+  - Cleaner, more maintainable codebase
+
+### Fixed (2025-11-01)
+
+- **Unit Conversion**
+  - Fixed VTK export to properly convert mm → m
+  - Consistent coordinate systems across Radia/NGSolve integration
+
 ### Added (2025-10-30)
 
 - **Test Suite Reorganization**
@@ -80,40 +123,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Test Results
 
-### Before Security Fixes
+### Current (2025-11-01)
 ```
-Total: 5/7 tests passed (71.4%)
-[FAIL] Material creation
-[FAIL] Solver test
-```
-
-### After Security Fixes (Current)
-```
-Total: 7/7 tests passed (100.0%)
-✅ ALL TESTS PASSED
-```
-
-## Git History
-
-```
-fba5576 Add development scripts to docs/scripts for reference
-5670f4b Reorganize test suite into standard tests/ directory structure
-10a3511 Add comprehensive security fixes documentation
-14f17cf Update radia.pyd with security fixes
-f3e776a Fix critical security vulnerabilities and improve code safety
-644b7f2 Organize documentation and remove large CSV file
-9487bb5 Complete restructure: Python-only build with OpenMP parallelization
+rad_ngsolve tests: 4/4 passed (100%)
+radia core tests: 7/7 passed (100%)
 ```
 
 ## Links
 
+- [Coding Standards](claude.md) (not in repository)
 - [Security Fixes Documentation](SECURITY_FIXES.md)
 - [Testing Guide](tests/README.md)
-- [OpenMP Performance Report](docs/OPENMP_PERFORMANCE_REPORT.md)
 - [Build Instructions](README_BUILD.md)
 
 ---
 
 **Maintained by**: Radia Development Team
 **Python Version**: 3.12
-**Last Updated**: 2025-10-30
+**Last Updated**: 2025-11-01

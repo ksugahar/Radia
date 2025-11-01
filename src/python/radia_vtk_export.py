@@ -56,7 +56,8 @@ def exportGeometryToVTK(obj, fileName='radia_Geometry'):
 	nPnts = int(len(points)/3)
 
 	# format the points array to be floats rather than double
-	points = [round(num, 8) for num in points]		
+	points = [round(num/1000.0, 8) for num in points]		
+	# Note: Converted from mm (Radia units) to m
 	# define the connectivity list
 	conn = list(range(nPnts)) 
 	# define colours array

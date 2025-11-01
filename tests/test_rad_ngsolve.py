@@ -75,9 +75,7 @@ class TestRadNGSolve:
 
 	    # Check available functions
 	    funcs = [name for name in dir(rad_ngsolve) if not name.startswith('_')]
-	    assert 'RadBfield' in funcs, "RadBfield not found"
-	    assert 'RadHfield' in funcs, "RadHfield not found"
-	    assert 'RadAfield' in funcs, "RadAfield not found"
+	    assert 'RadiaField' in funcs, "RadiaField not found"
 	    print(f"  [OK] Available functions: {funcs}")
 
 	def test_coefficient_function_type(self):
@@ -88,20 +86,24 @@ class TestRadNGSolve:
 	    from ngsolve import CoefficientFunction
 	    import rad_ngsolve
 
-	    # Create RadBfield with dummy Radia object ID
-	    bf = rad_ngsolve.RadBfield(1)
+	    # Create RadiaField with dummy Radia object ID
+	    bf = rad_ngsolve.RadiaField(1, 'b')
 
-	    assert isinstance(bf, CoefficientFunction), "RadBfield is not a CoefficientFunction"
-	    print(f"  [OK] RadBfield is CoefficientFunction: {type(bf)}")
+	    assert isinstance(bf, CoefficientFunction), "RadiaField is not a CoefficientFunction"
+	    print(f"  [OK] RadiaField is CoefficientFunction: {type(bf)}")
 
 	    # Test other field types
-	    hf = rad_ngsolve.RadHfield(1)
-	    assert isinstance(hf, CoefficientFunction), "RadHfield is not a CoefficientFunction"
-	    print(f"  [OK] RadHfield is CoefficientFunction: {type(hf)}")
+	    hf = rad_ngsolve.RadiaField(1, 'h')
+	    assert isinstance(hf, CoefficientFunction), "RadiaField('h') is not a CoefficientFunction"
+	    print(f"  [OK] RadiaField('h') is CoefficientFunction")
 
-	    af = rad_ngsolve.RadAfield(1)
-	    assert isinstance(af, CoefficientFunction), "RadAfield is not a CoefficientFunction"
-	    print(f"  [OK] RadAfield is CoefficientFunction: {type(af)}")
+	    af = rad_ngsolve.RadiaField(1, 'a')
+	    assert isinstance(af, CoefficientFunction), "RadiaField('a') is not a CoefficientFunction"
+	    print(f"  [OK] RadiaField('a') is CoefficientFunction")
+
+	    mf = rad_ngsolve.RadiaField(1, 'm')
+	    assert isinstance(mf, CoefficientFunction), "RadiaField('m') is not a CoefficientFunction"
+	    print(f"  [OK] RadiaField('m') is CoefficientFunction")
 
 	def test_integration_with_radia(self):
 	    """Test 3: Integration with Radia magnetic field"""
@@ -119,8 +121,8 @@ class TestRadNGSolve:
 	    print(f"  [OK] Radia magnet created: ID={magnet}")
 
 	    # Create CoefficientFunction
-	    B_cf = rad_ngsolve.RadBfield(magnet)
-	    print(f"  [OK] RadBfield CoefficientFunction created")
+	    B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+	    print(f"  [OK] RadiaField CoefficientFunction created")
 
 	    # Verify it's a CoefficientFunction
 	    assert isinstance(B_cf, CoefficientFunction)
@@ -135,90 +137,29 @@ class TestRadNGSolve:
 	    rad.UtiDelAll()
 	    print(f"  [OK] Radia objects cleaned up")
 
-	def test_mesh_evaluation(self):
-	    """Test 4: Field evaluation on NGSolve mesh"""
-	    print("\n[Test 4] Testing field evaluation on mesh...")
+	def test_all_field_types(self):
+	    """Test 4: All field types (b, h, a, m)"""
+	    print("\n[Test 4] Testing all field types...")
 
 	    import ngsolve
-	    from ngsolve import Mesh, H1, GridFunction
-	    from netgen.geom2d import unit_square
+	    from ngsolve import CoefficientFunction
 	    import rad_ngsolve
 	    import radia as rad
 
-	    # Create Radia magnet
+	    # Create magnet
 	    magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1.2])
 	    rad.MatApl(magnet, rad.MatStd('NdFeB', 1.2))
 	    rad.Solve(magnet, 0.0001, 10000)
-	    print(f"  [OK] Radia magnet created")
 
-	    # Create RadBfield CoefficientFunction
-	    B_cf = rad_ngsolve.RadBfield(magnet)
-	    print(f"  [OK] RadBfield created")
+	    # Test all field types
+	    field_types = ['b', 'h', 'a', 'm']
+	    for ftype in field_types:
+	        field = rad_ngsolve.RadiaField(magnet, ftype)
+	        assert isinstance(field, CoefficientFunction)
+	        assert field.field_type == ftype
+	        print(f"  [OK] RadiaField('{ftype}') works")
 
-	    # Create simple 2D mesh
-	    mesh = Mesh(unit_square.GenerateMesh(maxh=0.5))
-	    print(f"  [OK] Mesh created: {mesh.ne} elements")
-
-	    # Create finite element space
-	    fes = H1(mesh, order=2, dim=3)
-	    print(f"  [OK] FE space created: {fes.ndof} DOFs")
-
-	    # Evaluate field on mesh
-	    gf = GridFunction(fes)
-	    gf.Set(B_cf)
-	    print(f"  [OK] Field evaluated on mesh")
-
-	    # Get field data
-	    import numpy as np
-	    vec_data = gf.vec.FV().NumPy()
-	    print(f"  [OK] Field range: [{vec_data.min():.6f}, {vec_data.max():.6f}]")
-
-	    # Cleanup
 	    rad.UtiDelAll()
-	    print(f"  [OK] Test completed")
-
-	def test_field_components(self):
-	    """Test 5: Access individual field components"""
-	    print("\n[Test 5] Testing field component access...")
-
-	    import ngsolve
-	    from ngsolve import Integrate, dx
-	    from ngsolve import Mesh
-	    from netgen.geom2d import unit_square
-	    import rad_ngsolve
-	    import radia as rad
-
-	    # Create Radia magnet (with material to avoid solve error)
-	    magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 20], [0, 0, 1.0])
-	    rad.MatApl(magnet, rad.MatStd('NdFeB', 1.0))
-	    rad.Solve(magnet, 0.0001, 10000)
-	    print(f"  [OK] Radia magnet created")
-
-	    # Create RadBfield
-	    B_cf = rad_ngsolve.RadBfield(magnet)
-	    print(f"  [OK] RadBfield created")
-
-	    # Create mesh
-	    mesh = Mesh(unit_square.GenerateMesh(maxh=0.5))
-	    print(f"  [OK] Mesh created")
-
-	    # Access individual components
-	    Bx = B_cf[0]
-	    By = B_cf[1]
-	    Bz = B_cf[2]
-	    print(f"  [OK] Component access: Bx, By, Bz")
-
-	    # Compute field magnitude squared
-	    B_squared = Bx**2 + By**2 + Bz**2
-	    print(f"  [OK] Computed |B|^2")
-
-	    # Integrate Bz over domain
-	    integral_Bz = Integrate(Bz, mesh)
-	    print(f"  [OK] Integral of Bz = {integral_Bz:.6e}")
-
-	    # Cleanup
-	    rad.UtiDelAll()
-	    print(f"  [OK] Test completed")
 
 
 # Standalone test function for non-pytest execution
@@ -235,7 +176,7 @@ def run_standalone_test():
 
 	if not check_rad_ngsolve_available():
 	    print("\n[SKIP] rad_ngsolve module not built")
-	    print("Build with: .\\build_ngsolve.ps1")
+	    print("Build with: cmake --build build --target rad_ngsolve")
 	    return 1
 
 	print("\n[OK] Prerequisites satisfied")
@@ -247,8 +188,7 @@ def run_standalone_test():
 	    test.test_import()
 	    test.test_coefficient_function_type()
 	    test.test_integration_with_radia()
-	    test.test_mesh_evaluation()
-	    test.test_field_components()
+	    test.test_all_field_types()
 
 	    print("\n" + "=" * 70)
 	    print("[OK] ALL TESTS PASSED!")

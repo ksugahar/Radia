@@ -8,8 +8,14 @@
  * - NGSolve uses meters, Radia uses millimeters
  * - Automatic unit conversion: m -> mm (multiply by 1000)
  *
+ * Field types supported:
+ * - 'b': Magnetic flux density (Tesla)
+ * - 'h': Magnetic field (A/m)
+ * - 'a': Vector potential (T·m)
+ * - 'm': Magnetization (A/m)
+ *
  * @authors Claude Code
- * @version 0.04
+ * @version 0.06
  ***************************************************************************/
 
 #include <iostream>
@@ -26,18 +32,25 @@ namespace py = pybind11;
 namespace ngfem
 {
 
-class RadiaBFieldCF : public CoefficientFunction
+class RadiaFieldCF : public CoefficientFunction
 {
 public:
 	int radia_obj;
-	std::string field_comp;
+	std::string field_type;
 
-	RadiaBFieldCF(int obj, const std::string& comp = "b")
-	    : CoefficientFunction(3), radia_obj(obj), field_comp(comp)
+	RadiaFieldCF(int obj, const std::string& ftype = "b")
+	    : CoefficientFunction(3), radia_obj(obj), field_type(ftype)
 	{
+		// Validate field type
+		if (field_type != "b" && field_type != "h" &&
+		    field_type != "a" && field_type != "m") {
+			throw std::invalid_argument(
+				"Invalid field_type. Must be 'b' (flux density), "
+				"'h' (magnetic field), 'a' (vector potential), or 'm' (magnetization)");
+		}
 	}
 
-	virtual ~RadiaBFieldCF() {}
+	virtual ~RadiaFieldCF() {}
 
 	virtual double Evaluate(const BaseMappedIntegrationPoint& mip) const override
 	{
@@ -61,103 +74,16 @@ public:
 	        coords.append((dim >= 3) ? pnt[2] * 1000.0 : 0.0);
 
 	        py::module_ rad = py::module_::import("radia");
-	        py::object B_result = rad.attr("Fld")(radia_obj, field_comp, coords);
+	        py::object field_result = rad.attr("Fld")(radia_obj, field_type, coords);
 
-	        py::list B_list = B_result.cast<py::list>();
-	        result(0) = B_list[0].cast<double>();
-	        result(1) = B_list[1].cast<double>();
-	        result(2) = B_list[2].cast<double>();
-
-	    } catch (std::exception &e) {
-	        std::cerr << "[RadBfield] Error: " << e.what() << std::endl;
-	        result(0) = 0.0;
-	        result(1) = 0.0;
-	        result(2) = 0.0;
-	    }
-	}
-};
-
-class RadiaHFieldCF : public CoefficientFunction
-{
-public:
-	int radia_obj;
-
-	RadiaHFieldCF(int obj) : CoefficientFunction(3), radia_obj(obj) {}
-	virtual ~RadiaHFieldCF() {}
-
-	virtual double Evaluate(const BaseMappedIntegrationPoint& mip) const override
-	{
-	    return 0.0;
-	}
-
-	virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
-	                     FlatVector<> result) const override
-	{
-	    py::gil_scoped_acquire acquire;
-
-	    try {
-	        auto pnt = mip.GetPoint();
-	        int dim = pnt.Size();
-
-	        py::list coords;
-	        coords.append(pnt[0] * 1000.0);
-	        coords.append((dim >= 2) ? pnt[1] * 1000.0 : 0.0);
-	        coords.append((dim >= 3) ? pnt[2] * 1000.0 : 0.0);
-
-	        py::module_ rad = py::module_::import("radia");
-	        py::object H_result = rad.attr("Fld")(radia_obj, "h", coords);
-	        py::list H_list = H_result.cast<py::list>();
-
-	        result(0) = H_list[0].cast<double>();
-	        result(1) = H_list[1].cast<double>();
-	        result(2) = H_list[2].cast<double>();
+	        py::list field_list = field_result.cast<py::list>();
+	        result(0) = field_list[0].cast<double>();
+	        result(1) = field_list[1].cast<double>();
+	        result(2) = field_list[2].cast<double>();
 
 	    } catch (std::exception &e) {
-	        std::cerr << "[RadHfield] Error: " << e.what() << std::endl;
-	        result(0) = 0.0;
-	        result(1) = 0.0;
-	        result(2) = 0.0;
-	    }
-	}
-};
-
-class RadiaAFieldCF : public CoefficientFunction
-{
-public:
-	int radia_obj;
-
-	RadiaAFieldCF(int obj) : CoefficientFunction(3), radia_obj(obj) {}
-	virtual ~RadiaAFieldCF() {}
-
-	virtual double Evaluate(const BaseMappedIntegrationPoint& mip) const override
-	{
-	    return 0.0;
-	}
-
-	virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
-	                     FlatVector<> result) const override
-	{
-	    py::gil_scoped_acquire acquire;
-
-	    try {
-	        auto pnt = mip.GetPoint();
-	        int dim = pnt.Size();
-
-	        py::list coords;
-	        coords.append(pnt[0] * 1000.0);
-	        coords.append((dim >= 2) ? pnt[1] * 1000.0 : 0.0);
-	        coords.append((dim >= 3) ? pnt[2] * 1000.0 : 0.0);
-
-	        py::module_ rad = py::module_::import("radia");
-	        py::object A_result = rad.attr("Fld")(radia_obj, "a", coords);
-	        py::list A_list = A_result.cast<py::list>();
-
-	        result(0) = A_list[0].cast<double>();
-	        result(1) = A_list[1].cast<double>();
-	        result(2) = A_list[2].cast<double>();
-
-	    } catch (std::exception &e) {
-	        std::cerr << "[RadAfield] Error: " << e.what() << std::endl;
+	        std::cerr << "[RadiaField] Error (" << field_type << "): "
+	                  << e.what() << std::endl;
 	        result(0) = 0.0;
 	        result(1) = 0.0;
 	        result(2) = 0.0;
@@ -170,24 +96,16 @@ public:
 PYBIND11_MODULE(rad_ngsolve, m) {
 	m.doc() = "NGSolve CoefficientFunction interface for Radia (with m->mm conversion)";
 
-	py::class_<ngfem::RadiaBFieldCF,
-	           std::shared_ptr<ngfem::RadiaBFieldCF>,
-	           ngfem::CoefficientFunction>(m, "RadBfield")
-	    .def(py::init<int>(), py::arg("radia_obj"))
+	// Unified interface
+	py::class_<ngfem::RadiaFieldCF,
+	           std::shared_ptr<ngfem::RadiaFieldCF>,
+	           ngfem::CoefficientFunction>(m, "RadiaField")
+	    .def(py::init<int>(), py::arg("radia_obj"),
+	         "Create Radia field CoefficientFunction (default: magnetic flux density)")
 	    .def(py::init<int, const std::string&>(),
-	         py::arg("radia_obj"), py::arg("field_comp"))
-	    .def_readonly("radia_obj", &ngfem::RadiaBFieldCF::radia_obj)
-	    .def_readonly("field_comp", &ngfem::RadiaBFieldCF::field_comp);
-
-	py::class_<ngfem::RadiaHFieldCF,
-	           std::shared_ptr<ngfem::RadiaHFieldCF>,
-	           ngfem::CoefficientFunction>(m, "RadHfield")
-	    .def(py::init<int>(), py::arg("radia_obj"))
-	    .def_readonly("radia_obj", &ngfem::RadiaHFieldCF::radia_obj);
-
-	py::class_<ngfem::RadiaAFieldCF,
-	           std::shared_ptr<ngfem::RadiaAFieldCF>,
-	           ngfem::CoefficientFunction>(m, "RadAfield")
-	    .def(py::init<int>(), py::arg("radia_obj"))
-	    .def_readonly("radia_obj", &ngfem::RadiaAFieldCF::radia_obj);
+	         py::arg("radia_obj"), py::arg("field_type"),
+	         "Create Radia field CoefficientFunction\n"
+	         "field_type: 'b' (flux density), 'h' (field), 'a' (vector potential), 'm' (magnetization)")
+	    .def_readonly("radia_obj", &ngfem::RadiaFieldCF::radia_obj)
+	    .def_readonly("field_type", &ngfem::RadiaFieldCF::field_type);
 }

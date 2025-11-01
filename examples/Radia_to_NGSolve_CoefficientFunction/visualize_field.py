@@ -30,8 +30,8 @@ import argparse
 parser = argparse.ArgumentParser(description='Radia field visualization')
 parser.add_argument('--method', choices=['cf', 'gf', 'both'], default='both',
 	                help='Evaluation method: cf (CoefficientFunction), gf (GridFunction), both (compare)')
-parser.add_argument('--maxh', type=float, default=0.005,
-	                help='Maximum mesh size in meters (default: 0.005 = 5mm)')
+parser.add_argument('--maxh', type=float, default=0.015,
+	                help='Maximum mesh size in meters (default: 0.015 = 15mm)')
 args = parser.parse_args()
 
 print("=" * 70)
@@ -67,7 +67,7 @@ print(f"  Material: NdFeB, Br = 1.2 T")
 print("\n[Step 2] Creating NGSolve Coefficient Function")
 print("-" * 70)
 
-B_cf = rad_ngsolve.RadBfield(magnet)
+B_cf = rad_ngsolve.RadiaField(magnet, 'b')
 print(f"B-field CoefficientFunction created: {type(B_cf).__name__}")
 
 # Test evaluation using Radia directly
@@ -253,10 +253,10 @@ print("  - For exact values: Use CoefficientFunction (--method cf)")
 print("  - For fast repeated evaluation: Use GridFunction with fine mesh (--method gf)")
 print("  - For mesh refinement study: Try different --maxh values")
 print("    Examples:")
-print("      python visualize_field.py --maxh 0.02   # Coarse (60% error)")
-print("      python visualize_field.py --maxh 0.01   # Medium (30% error)")
-print("      python visualize_field.py --maxh 0.005  # Fine (1% error)")
-print("      python visualize_field.py --maxh 0.002  # Very fine (<0.01% error)")
+print("      python visualize_field.py --maxh 0.03   # Very coarse (shows clear GF interpolation error)")
+print("      python visualize_field.py --maxh 0.015  # Coarse (default, visible difference)")
+print("      python visualize_field.py --maxh 0.005  # Fine (small difference)")
+print("      python visualize_field.py --maxh 0.002  # Very fine (CF and GF nearly identical)")
 
 print("\n" + "=" * 70)
 print("Complete")

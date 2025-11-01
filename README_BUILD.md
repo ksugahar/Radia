@@ -248,3 +248,126 @@ python test_radia.py
 `build_multi_python.ps1` を使用することで、複数バージョンを効率的にビルドできます。
 
 配布時は、サポートする各Pythonバージョン用のpydファイルを用意してください。
+
+---
+
+## Advanced Features Build Success
+
+### rad_ngsolve Module (NGSolve Integration)
+
+**Status**: ✅ PRODUCTION READY
+
+The `rad_ngsolve` module provides NGSolve CoefficientFunction integration for Radia magnetic fields.
+
+#### Building rad_ngsolve
+
+```bash
+cmake -S . -B build -G "Visual Studio 17 2022"
+cmake --build build --config Release --target rad_ngsolve
+```
+
+**Output**: `build/Release/rad_ngsolve.pyd`
+
+#### Usage
+
+```python
+import ngsolve  # MUST import first
+import rad_ngsolve
+import radia as rad
+
+# Create Radia magnet
+magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1.2])
+rad.MatApl(magnet, rad.MatStd('NdFeB', 1.2))
+rad.Solve(magnet, 0.0001, 10000)
+
+# Create field CoefficientFunctions
+B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # Flux density
+H_cf = rad_ngsolve.RadiaField(magnet, 'h')  # Magnetic field
+A_cf = rad_ngsolve.RadiaField(magnet, 'a')  # Vector potential
+M_cf = rad_ngsolve.RadiaField(magnet, 'm')  # Magnetization
+```
+
+**Field Types**:
+- `'b'`: Magnetic flux density (Tesla)
+- `'h'`: Magnetic field (A/m)
+- `'a'`: Vector potential (T·m)
+- `'m'`: Magnetization (A/m)
+
+**Unit Conversion**: Automatic m ↔ mm conversion (NGSolve uses m, Radia uses mm)
+
+---
+
+### CoefficientFunction Background Field
+
+**Status**: ✅ FUNCTIONAL
+
+Allows Python callback functions to define arbitrary background magnetic fields.
+
+#### Building
+
+Included automatically in main Radia build.
+
+#### Usage
+
+```python
+import radia as rd
+
+def custom_field(pos):
+	"""
+	pos: [x, y, z] in millimeters
+	returns: [Bx, By, Bz] in Tesla
+	"""
+	x, y, z = pos
+	return [0.01 * x, 0.01 * y, 0.01 * z]  # Gradient field
+
+cf_src = rd.ObjBckgCF(custom_field)
+field = rd.Fld(cf_src, 'b', [10, 20, 30])
+```
+
+**Limitations**:
+- Binary serialization not supported
+- Vector potential (A) computation not implemented
+- Infinite integral uses simple trapezoidal rule
+
+---
+
+## Build Verification
+
+After building, verify installation:
+
+```python
+# Test radia module
+import radia as rad
+print(f"Radia version: {rad.__version__ if hasattr(rad, '__version__') else 'OK'}")
+print(f"Available: ObjRecMag, ObjBckgCF")
+
+# Test rad_ngsolve (if built)
+import ngsolve
+import rad_ngsolve
+print(f"rad_ngsolve: RadiaField available")
+```
+
+---
+
+## Troubleshooting Advanced Features
+
+### rad_ngsolve Import Error
+
+**Error**: `ImportError: DLL load failed`
+
+**Solution**: Import `ngsolve` before `rad_ngsolve`:
+```python
+import ngsolve  # Load dependencies first
+import rad_ngsolve
+```
+
+### CoefficientFunction Field Not Working
+
+**Check**:
+1. Callback function signature: `def field(pos) -> [Bx, By, Bz]`
+2. Units: pos in mm, field in Tesla
+3. Return value is a list/tuple of 3 numbers
+
+---
+
+**Last Updated**: 2025-11-01

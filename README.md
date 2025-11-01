@@ -79,7 +79,7 @@ gf = GridFunction(fes)
 gf.Set(B_field)
 ```
 
-See [examples/ngsolve_integration/](examples/ngsolve_integration/) for complete examples.
+See [examples/Radia_to_NGSolve_CoefficientFunction/](examples/Radia_to_NGSolve_CoefficientFunction/) for complete examples.
 
 ## Documentation
 
@@ -90,8 +90,8 @@ See [examples/ngsolve_integration/](examples/ngsolve_integration/) for complete 
 
 ### NGSolve Integration
 - [RAD_NGSOLVE_BUILD_SUCCESS.md](RAD_NGSOLVE_BUILD_SUCCESS.md) - Complete rad_ngsolve documentation
-- [examples/ngsolve_integration/README.md](examples/ngsolve_integration/README.md) - NGSolve examples overview
-- [examples/ngsolve_integration/EXAMPLES_GUIDE.md](examples/ngsolve_integration/EXAMPLES_GUIDE.md) - Detailed usage guide
+- [examples/Radia_to_NGSolve_CoefficientFunction/README.md](examples/Radia_to_NGSolve_CoefficientFunction/README.md) - NGSolve examples overview
+- [examples/Radia_to_NGSolve_CoefficientFunction/EXAMPLES_GUIDE.md](examples/Radia_to_NGSolve_CoefficientFunction/EXAMPLES_GUIDE.md) - Detailed usage guide
 - [tests/test_rad_ngsolve.py](tests/test_rad_ngsolve.py) - Integration tests
 
 ### Visualization
@@ -118,11 +118,16 @@ See [docs/OPENMP_PERFORMANCE_REPORT.md](docs/OPENMP_PERFORMANCE_REPORT.md) for d
 
 Practical examples are available in the `examples/` directory:
 
+
 ### NGSolve Integration
-- `examples/ngsolve_integration/` - **Radia + NGSolve FEM coupling**
-  - `example_rad_ngsolve_demo.py` - Complete demonstration
-  - `test_rad_ngsolve_full.py` - Integration test
-  - `visualize_field.py` - Field visualization
+- `examples/Radia_to_NGSolve_CoefficientFunction/` - **Radia → NGSolve: Use Radia fields in FEM**
+  - `demo_field_types.py` - All field types demonstration
+  - `visualize_field.py` - Field visualization and comparison
+  - `export_radia_geometry.py` - Export geometry to VTK
+
+- `examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/` - **NGSolve → Radia: Background fields**
+  - `test_sphere_in_quadrupole.py` - Magnetizable sphere in quadrupole field
+  - Uses Python callbacks to define arbitrary background fields
 
 ### Magnetostatics
 - `examples/simple_problems/` - Basic magnet configurations

@@ -95,6 +95,7 @@ docs/_templates/
 *.cpp.bak
 *.h.bak
 *.py.bak
+*.old
 
 # Security and local configs
 .env
@@ -106,9 +107,17 @@ docs/_templates/
 # Test output files
 test_output/
 benchmark_results/
-*.vtk
-*.vtu
+# Test output files (but keep small example files)
+test_output/
+benchmark_results/
 *.csv
+
+# Large VTK files (keep small examples)
+*_field_compare.vtu
+*_field_*.vtu
+
+# Claude Code project-specific file (not for repository)
+CLAUDE.md
 
 # Ignore specific build artifacts but keep source
 !src/**/*.cpp
@@ -120,3 +129,7 @@ benchmark_results/
 !pytest.ini
 !pyproject.toml
 !CMakeLists.txt
+
+# Keep example VTK files and ParaView state files
+!examples/**/radia_components.vtk
+!examples/**/*.pvsm
