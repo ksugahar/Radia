@@ -226,7 +226,15 @@ export_geometry_to_vtk(mag, 'geometry.vtk')
 
 ## License
 
-Original Radia license applies. See source files for details.
+This project is licensed under **LGPL-2.1** (to match NGSolve licensing).
+
+The original RADIA code is licensed under a **BSD-style license** by the European Synchrotron Radiation Facility (ESRF), Copyright © 1997-2018.
+
+Both licenses are included in the `LICENSE` file. The BSD-style license is compatible with and subsumed by the LGPL-2.1 license used for this derivative work.
+
+See:
+- `LICENSE` - Complete license text (LGPL-2.1 + Original RADIA BSD-style)
+- `COPYRIGHT.txt` - Original RADIA copyright notice
 
 ## Credits
 
