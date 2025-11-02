@@ -1,14 +1,22 @@
-# Local development files
-CLAUDE.md
-.claude
+# Radia Python Module - Git Ignore File
 
-# Build directories
+# ============================================================================
+# Local Development Files (DO NOT COMMIT)
+# ============================================================================
+CLAUDE.md
+.claude/settings.local.json
+
+# ============================================================================
+# Build Directories
+# ============================================================================
 build/
 dist/
 *.egg-info/
 .eggs/
 
-# Compiled files
+# ============================================================================
+# Compiled Files
+# ============================================================================
 *.pyd
 *.so
 *.dll
@@ -25,14 +33,18 @@ dist/
 *.iobj
 *.ipdb
 
-# Python cache
+# ============================================================================
+# Python Cache
+# ============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.pyc
 *.pyo
 
-# Test artifacts
+# ============================================================================
+# Test Artifacts
+# ============================================================================
 .pytest_cache/
 .coverage
 htmlcov/
@@ -41,8 +53,13 @@ htmlcov/
 coverage.xml
 *.cover
 .hypothesis/
+test_output/
+benchmark_results/
+*.csv
 
-# IDE and editor files
+# ============================================================================
+# IDE and Editor Files
+# ============================================================================
 .vscode/
 .idea/
 *.swp
@@ -52,7 +69,9 @@ coverage.xml
 *.sublime-project
 *.sublime-workspace
 
+# ============================================================================
 # CMake
+# ============================================================================
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
@@ -60,7 +79,9 @@ Makefile
 *.cmake
 !CMakeLists.txt
 
+# ============================================================================
 # Visual Studio
+# ============================================================================
 .vs/
 *.vcxproj
 *.vcxproj.filters
@@ -72,59 +93,63 @@ Makefile
 *.sln.docstates
 *.tlog
 
-# Build logs
+# ============================================================================
+# Build Logs
+# ============================================================================
 build.log
 *.log
 
-# Temporary files
+# ============================================================================
+# Temporary and Backup Files
+# ============================================================================
 *.tmp
 *.temp
 *.bak
 *.backup
-
-# Python virtual environments
-venv/
-env/
-ENV/
-.venv
-
-# Documentation build
-docs/_build/
-docs/_static/
-docs/_templates/
-
-# Backup files
 *.cpp.bak
 *.h.bak
 *.py.bak
 *.old
 
-# Security and local configs
+# ============================================================================
+# Python Virtual Environments
+# ============================================================================
+venv/
+env/
+ENV/
+.venv
+
+# ============================================================================
+# Documentation Build
+# ============================================================================
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# ============================================================================
+# Security and Credentials
+# ============================================================================
 .env
 .env.local
 *.key
 *.pem
-.claude/settings.local.json
 
-# Test output files
-test_output/
-benchmark_results/
-# Test output files (but keep small example files)
-test_output/
-benchmark_results/
-*.csv
-
+# ============================================================================
+# Large Output Files
+# ============================================================================
 # Large VTK files (keep small examples)
 *_field_compare.vtu
 *_field_*.vtu
 
-# Claude Code project-specific file (not for repository)
-CLAUDE.md
-
-# File format documentation (potential license violations)
+# ============================================================================
+# Potential License Violations
+# ============================================================================
 file_format_documents/
 
-# Ignore specific build artifacts but keep source
+# ============================================================================
+# Exceptions - Keep These Files
+# ============================================================================
+# Keep source files
 !src/**/*.cpp
 !src/**/*.h
 !src/**/*.c
@@ -138,3 +163,14 @@ file_format_documents/
 # Keep example VTK files and ParaView state files
 !examples/**/radia_components.vtk
 !examples/**/*.pvsm
+
+# ============================================================================
+# IMPORTANT: PyPI Distribution Files - DO NOT IGNORE
+# ============================================================================
+# The following files are tracked and required for PyPI distribution:
+# - build_pypi_package.cmd
+# - setup.py
+# - pyproject.toml
+# - MANIFEST.in
+# - LICENSE
+# - COPYRIGHT.txt
