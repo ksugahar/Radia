@@ -1,7 +1,7 @@
 
 OPEN SOURCE LICENSE AGREEMENT
 
-Copyright © 1997 - 2018, European Synchrotron Radiation Facility
+Copyright Â© 1997 - 2018, European Synchrotron Radiation Facility
 
 The RADIA software is distributed subject to the following license conditions:
 
