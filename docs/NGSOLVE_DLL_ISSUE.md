@@ -1,100 +1,100 @@
-# NGSolve Integration - DLL依存関係の問題
+# NGSolve Integration - DLL Dependency Issues
 
-## 現状
+## Current Status
 
-`rad_ngsolve.pyd`は正常にビルドされましたが、インポート時に以下のエラーが発生します：
-
-```
-ImportError: DLL load failed while importing rad_ngsolve: 指定されたモジュールが見つかりません。
-```
-
-## 依存関係の確認結果
-
-### rad_ngsolve.pydの直接依存
+`rad_ngsolve.pyd` was built successfully, but the following error occurs when importing:
 
 ```
-- python312.dll     [OK] - Pythonランタイム
-- libngsolve.dll    [コピー済み] - NGSolveコアライブラリ
+ImportError: DLL load failed while importing rad_ngsolve: The specified module could not be found.
+```
+
+## Dependency Check Results
+
+### Direct Dependencies of rad_ngsolve.pyd
+
+```
+- python312.dll     [OK] - Python runtime
+- libngsolve.dll    [Copied] - NGSolve core library
 - KERNEL32.dll      [OK] - Windows API
-- VCOMP140.DLL      [コピー済み] - OpenMPランタイム
+- VCOMP140.DLL      [Copied] - OpenMP runtime
 ```
 
-### libngsolve.dllの依存（推定）
+### Dependencies of libngsolve.dll (Estimated)
 
 ```
-- ngcore.dll        [コピー済み]
-- nglib.dll         [コピー済み]
-- mkl_rt.lib        [不明] - Intel MKL
-- その他のMKL DLL  [不明]
+- ngcore.dll        [Copied]
+- nglib.dll         [Copied]
+- mkl_rt.lib        [Unknown] - Intel MKL
+- Other MKL DLLs    [Unknown]
 ```
 
-## 試行した解決策
+## Attempted Solutions
 
-### ✗ 失敗した方法
+### ✗ Failed Methods
 
-1. **DLLのコピー**: `netgen`フォルダから必要なDLLをコピー
-   - 結果: 依然として同じエラー
+1. **Copying DLLs**: Copied necessary DLLs from `netgen` folder
+   - Result: Same error persists
 
-2. **PATH環境変数**: netgenディレクトリをPATHに追加
-   - 結果: 依然として同じエラー
+2. **PATH Environment Variable**: Added netgen directory to PATH
+   - Result: Same error persists
 
-3. **site-packagesへのコピー**: rad_ngsolve.pydをsite-packagesに直接コピー
-   - 結果: 依然として同じエラー
+3. **Copy to site-packages**: Copied rad_ngsolve.pyd directly to site-packages
+   - Result: Same error persists
 
-## 根本原因の推定
+## Root Cause Analysis
 
-NGSolveがIntel MKL（Math Kernel Library）に依存しており、これらのDLLが見つからない可能性が高いです。
+NGSolve likely depends on Intel MKL (Math Kernel Library), and these DLLs cannot be found.
 
-NGSolveConfig.cmakeの内容：
+Contents of NGSolveConfig.cmake:
 ```cmake
 set(NGSOLVE_MKL_LIBRARIES "C:/gitlabci/tools/builds/3zsqG5ns/0/ngsolve/venv_ngs/Library/lib/mkl_rt.lib")
 ```
 
-このパスは**ビルド環境専用**のパスで、実際のインストール環境には存在しません。
+This path is **specific to the build environment** and does not exist in the actual installation environment.
 
-## 推奨される解決策
+## Recommended Solutions
 
-### オプション1: Condaを使用（最も確実）
+### Option 1: Use Conda (Most Reliable)
 
-Conda環境を使用すると、すべての依存関係が自動的に解決されます：
+Using a Conda environment automatically resolves all dependencies:
 
 ```bash
-# NGSolve環境を作成
+# Create NGSolve environment
 conda create -n ngsolve_env python=3.12
 conda activate ngsolve_env
 conda install -c ngsolve ngsolve
 
-# Radiaをビルド（この環境内で）
+# Build Radia (within this environment)
 cd S:\radia\01_GitHub
 .\build_ngsolve.ps1
 
-# テスト
+# Test
 python -c "import rad_ngsolve; print('OK')"
 ```
 
-### オプション2: スタンドアロンビルド（MKL不要版）
+### Option 2: Standalone Build (MKL-free Version)
 
-NGSolveへのリンクを避け、ヘッダーのみを使用する実装に変更：
+Avoid linking to NGSolve, using headers only:
 
-1. `rad_ngsolve.cpp`を修正してNGSolveライブラリへのリンクを削除
-2. 必要な定義のみをヘッダーから取得
-3. 実行時にngsolveモジュールから必要な機能をインポート
+1. Modify `rad_ngsolve.cpp` to remove NGSolve library linking
+2. Obtain only necessary definitions from headers
+3. Import required functionality from ngsolve module at runtime
 
-### オプション3: MKLをインストール
+### Option 3: Install MKL
 
-Intel oneMKLをシステムにインストール：
+Install Intel oneMKL on the system:
 
 ```powershell
-# Intel oneMKL (無料)をダウンロードしてインストール
+# Download and install Intel oneMKL (free)
 # https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html
 
-# インストール後、PATH環境変数に追加
+# After installation, add to PATH environment variable
 $env:PATH += ";C:\Program Files (x86)\Intel\oneAPI\mkl\latest\redist\intel64"
 ```
 
-### オプション4: 動的ロード方式
+### Option 4: Dynamic Loading Approach
 
-Pythonレベルで実装を変更：
+Modify implementation at Python level:
 
 ```python
 # rad_ngsolve_wrapper.py
@@ -102,21 +102,21 @@ import ctypes
 import os
 import radia as rad
 
-# DLLパスを動的に設定
+# Dynamically set DLL path
 ngsolve_path = r"C:\Program Files\Python312\Lib\site-packages\netgen"
 os.add_dll_directory(ngsolve_path)
 
-# rad_ngsolve.pydをロード
+# Load rad_ngsolve.pyd
 import rad_ngsolve as _rad_ngsolve
 
-# ラッパー関数
+# Wrapper function
 def RadBfield(radia_obj):
 	return _rad_ngsolve.RadBfield(radia_obj)
 ```
 
-## 暫定的な回避策
+## Temporary Workaround
 
-現時点で最も現実的な解決策は、NGSolve統合を**純粋なPython実装**に変更することです：
+The most practical solution at this time is to change the NGSolve integration to a **pure Python implementation**:
 
 ```python
 # rad_ngsolve_py.py - Pure Python implementation
@@ -135,28 +135,28 @@ class RadiaBFieldPy(CoefficientFunction):
 	    result[1] = B[1]
 	    result[2] = B[2]
 
-# 使用方法
+# Usage
 magnet = rad.ObjRecMag([0,0,0], [20,20,30], [0,0,1000])
 B = RadiaBFieldPy(magnet)
 ```
 
-この方法の利点：
-- ✓ DLL依存関係の問題なし
-- ✓ インストール不要
-- ✓ デバッグが容易
+Advantages of this approach:
+- ✓ No DLL dependency issues
+- ✓ No installation required
+- ✓ Easy to debug
 
-欠点：
-- ✗ C++実装より遅い可能性
-- ✗ NGSolveのCoefficientFunction継承が正しく動作しない可能性
+Disadvantages:
+- ✗ Potentially slower than C++ implementation
+- ✗ NGSolve CoefficientFunction inheritance may not work correctly
 
-## 次のステップ
+## Next Steps
 
-1. **Conda環境でのテスト**を推奨（最も確実）
-2. 失敗した場合は**純粋なPython実装**に切り替え
-3. または**MKLをシステムにインストール**
+1. **Test in Conda environment** (recommended, most reliable)
+2. If that fails, **switch to pure Python implementation**
+3. Or **install MKL on the system**
 
-## 参考情報
+## References
 
-- NGSolve公式ドキュメント: https://ngsolve.org/
+- NGSolve Official Documentation: https://ngsolve.org/
 - Intel oneMKL: https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html
-- Windows DLL検索順序: https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order
+- Windows DLL Search Order: https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-search-order

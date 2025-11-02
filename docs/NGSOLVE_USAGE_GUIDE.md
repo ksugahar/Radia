@@ -1,17 +1,17 @@
 # NGSolve Integration Usage Guide
 
-## 概要
+## Overview
 
-RadiaとNGSolveの統合には2つの実装があります：
+There are two implementations for Radia and NGSolve integration:
 
-| 実装 | 状態 | 推奨度 |
+| Implementation | Status | Recommendation |
 |------|------|--------|
-| **Pure Python版** (`rad_ngsolve_py.py`) | ✓ 動作中 | ⭐⭐⭐ 推奨 |
-| **C++版** (`rad_ngsolve.pyd`) | △ DLL問題 | Conda環境のみ |
+| **Pure Python version** (`rad_ngsolve_py.py`) | ✓ Working | ⭐⭐⭐ Recommended |
+| **C++ version** (`rad_ngsolve.pyd`) | △ DLL issues | Conda environment only |
 
-## Pure Python版の使い方（推奨）
+## Pure Python Version Usage (Recommended)
 
-### 基本的な使用方法
+### Basic Usage
 
 ```python
 import sys
@@ -23,120 +23,120 @@ import rad_ngsolve_py as rad_ngsolve
 from ngsolve import *
 from netgen.csg import *
 
-# Radiaジオメトリを作成
+# Create Radia geometry
 magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1])
 
-# Radiaフィールドオブジェクトを作成
+# Create Radia field object
 B_radia = rad_ngsolve.RadBfield(magnet)
 
-# メッシュを生成
+# Generate mesh
 geo = CSGeometry()
 box = OrthoBrick(Pnt(-50,-50,-50), Pnt(50,50,50))
 geo.Add(box)
 mesh = Mesh(geo.GenerateMesh(maxh=15))
 
-# GridFunctionを作成して可視化
+# Create GridFunction for visualization
 fes = H1(mesh, order=1)
 gf_Bz = GridFunction(fes)
 
-# メッシュ頂点でフィールドを評価
+# Evaluate field at mesh vertices
 for i in range(mesh.nv):
 	pnt = mesh.vertices[i].point
 	B_vec = B_radia.Evaluate(pnt[0], pnt[1], pnt[2])
-	gf_Bz.vec[i] = B_vec[2]  # Z成分
+	gf_Bz.vec[i] = B_vec[2]  # Z component
 
-# 可視化
+# Visualization
 import netgen.gui
 netgen.gui.Draw(gf_Bz, mesh, "Bz")
 
-# 積分
+# Integration
 integral = Integrate(gf_Bz, mesh)
 ```
 
-### 完全な例
+### Complete Example
 
-`examples/ngsolve_integration/visualize_field.py`を参照してください。
+See `examples/ngsolve_integration/visualize_field.py`.
 
-## C++版の使い方（Conda環境）
+## C++ Version Usage (Conda Environment)
 
-C++版はEMPY_Fieldと同じパターンで実装されていますが、DLL依存関係の問題があります。
+The C++ version is implemented with the same pattern as EMPY_Field, but has DLL dependency issues.
 
-### 前提条件
+### Prerequisites
 
 ```bash
-# Conda環境を作成
+# Create Conda environment
 conda create -n radia_ngsolve python=3.12
 conda activate radia_ngsolve
 conda install -c ngsolve ngsolve
 ```
 
-### ビルド
+### Build
 
 ```powershell
 cd S:\radia\01_GitHub
 .\build_ngsolve.ps1
 ```
 
-### 使用方法
+### Usage
 
 ```python
-# Conda環境内で実行
+# Execute within Conda environment
 import sys
 sys.path.insert(0, r"S:\radia\01_GitHub\build\Release")
 
 import radia as rad
-import rad_ngsolve  # C++版
+import rad_ngsolve  # C++ version
 
 magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1])
 B = rad_ngsolve.RadBfield(magnet)
 
-# NGSolveで直接使用可能（理論上）
+# Can be used directly in NGSolve (in theory)
 from ngsolve import *
 Bz = B[2]
 ```
 
-**注意**: C++版は現在DLL問題により動作しません。Pure Python版の使用を推奨します。
+**Note**: The C++ version currently does not work due to DLL issues. Use of the Pure Python version is recommended.
 
-## 実装の比較
+## Implementation Comparison
 
-### Pure Python版の特徴
+### Pure Python Version Features
 
-✓ **利点**:
-- DLL依存なし
-- インストール不要
-- デバッグが容易
-- クロスプラットフォーム
+✓ **Advantages**:
+- No DLL dependencies
+- No installation required
+- Easy to debug
+- Cross-platform
 
-✗ **欠点**:
-- GridFunctionへの手動変換が必要
-- C++版より若干遅い（実用上は問題なし）
+✗ **Disadvantages**:
+- Manual conversion to GridFunction required
+- Slightly slower than C++ version (not an issue in practice)
 
-### C++版の特徴
+### C++ Version Features
 
-✓ **利点**:
-- NGSolve CoefficientFunctionとして直接使用可能
-- 若干高速
-- EMPY_Fieldと同じパターン
+✓ **Advantages**:
+- Can be used directly as NGSolve CoefficientFunction
+- Slightly faster
+- Same pattern as EMPY_Field
 
-✗ **欠点**:
-- DLL依存関係の問題
-- Conda環境が必要
-- ビルドが複雑
+✗ **Disadvantages**:
+- DLL dependency issues
+- Conda environment required
+- Complex build process
 
-## 技術的詳細
+## Technical Details
 
-### Pure Python版の仕組み
+### Pure Python Version Mechanism
 
-`rad_ngsolve_py.py`は以下のように動作します：
+`rad_ngsolve_py.py` works as follows:
 
-1. `RadiaBFieldCF`クラスが`Evaluate(x, y, z)`メソッドを提供
-2. `rad.Fld()`を呼び出してRadiaフィールドを計算
-3. ユーザーがGridFunctionを作成し、メッシュ頂点で評価
-4. NGSolveの`Draw()`や`Integrate()`で使用
+1. `RadiaBFieldCF` class provides `Evaluate(x, y, z)` method
+2. Calls `rad.Fld()` to calculate Radia field
+3. User creates GridFunction and evaluates at mesh vertices
+4. Used with NGSolve's `Draw()` and `Integrate()`
 
-### C++版の仕組み
+### C++ Version Mechanism
 
-`rad_ngsolve.cpp`は以下のように実装されています：
+`rad_ngsolve.cpp` is implemented as follows:
 
 ```cpp
 class RadiaBFieldCF : public CoefficientFunction
@@ -164,36 +164,36 @@ public:
 };
 ```
 
-これはEMPY_Fieldの`B_MAGNET_CF`と同じパターンです。
+This follows the same pattern as EMPY_Field's `B_MAGNET_CF`.
 
-## トラブルシューティング
+## Troubleshooting
 
-### Pure Python版
+### Pure Python Version
 
-**問題**: `No module named 'rad_ngsolve_py'`
+**Issue**: `No module named 'rad_ngsolve_py'`
 
-**解決**:
+**Solution**:
 ```python
 import sys
 sys.path.insert(0, r"S:\radia\01_GitHub\src\python")
 ```
 
-**問題**: `No module named 'radia'`
+**Issue**: `No module named 'radia'`
 
-**解決**:
+**Solution**:
 ```python
 sys.path.insert(0, r"S:\radia\01_GitHub\build\lib\Release")
 ```
 
-### C++版
+### C++ Version
 
-**問題**: `DLL load failed while importing rad_ngsolve`
+**Issue**: `DLL load failed while importing rad_ngsolve`
 
-**解決**: Pure Python版を使用するか、Conda環境を使用してください。
+**Solution**: Use the Pure Python version or use a Conda environment.
 
-## サンプルコード
+## Sample Code
 
-### 例1: 単純な磁場評価
+### Example 1: Simple Field Evaluation
 
 ```python
 import rad_ngsolve_py as rad_ngsolve
@@ -201,48 +201,48 @@ import rad_ngsolve_py as rad_ngsolve
 magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
 B = rad_ngsolve.RadBfield(magnet)
 
-# 点での評価
+# Evaluate at a point
 Bx, By, Bz = B.Evaluate(0, 0, 20)
 print(f"B at (0,0,20): Bz = {Bz:.6f} T")
 ```
 
-### 例2: NGSolve統合
+### Example 2: NGSolve Integration
 
 ```python
-# メッシュ生成
+# Generate mesh
 geo = CSGeometry()
 box = OrthoBrick(Pnt(-50,-50,-50), Pnt(50,50,50))
 geo.Add(box)
 mesh = Mesh(geo.GenerateMesh(maxh=15))
 
-# GridFunction作成
+# Create GridFunction
 fes = H1(mesh, order=1)
 gf_Bz = GridFunction(fes)
 
-# フィールド評価
+# Field evaluation
 for i in range(mesh.nv):
 	pnt = mesh.vertices[i].point
 	B_vec = B.Evaluate(pnt[0], pnt[1], pnt[2])
 	gf_Bz.vec[i] = B_vec[2]
 
-# 積分
+# Integration
 integral = Integrate(gf_Bz, mesh)
 print(f"∫Bz dV = {integral:.6f} T·mm³")
 ```
 
-### 例3: 可視化
+### Example 3: Visualization
 
 ```python
 import netgen.gui
 
-# Bz成分の可視化
+# Visualize Bz component
 netgen.gui.Draw(gf_Bz, mesh, "Bz_component")
 ```
 
-## 参考資料
+## References
 
-- [NGSOLVE_PYTHON_SOLUTION.md](NGSOLVE_PYTHON_SOLUTION.md) - Pure Python版の詳細
-- [NGSOLVE_DLL_ISSUE.md](NGSOLVE_DLL_ISSUE.md) - C++版のDLL問題
-- [EMPY_Field実装](S:/radia/02_EMPY_Field) - C++版の参考実装
+- [NGSOLVE_PYTHON_SOLUTION.md](NGSOLVE_PYTHON_SOLUTION.md) - Pure Python version details
+- [NGSOLVE_DLL_ISSUE.md](NGSOLVE_DLL_ISSUE.md) - C++ version DLL issues
+- [EMPY_Field Implementation](S:/radia/02_EMPY_Field) - C++ version reference implementation
 - [NGSolve Documentation](https://ngsolve.org/)
 - [Radia Manual](https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia)
