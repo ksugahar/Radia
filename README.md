@@ -4,7 +4,7 @@
 
 ## Overview
 
-This is a modernized version of Radia focusing on Python integration with performance optimizations:
+This is a modernized version of [Radia](https://github.com/ochubar/Radia) focusing on Python integration with performance optimizations:
 
 - **Python 3.12 only** - Streamlined for modern Python
 - **OpenMP 2.0 parallelization** - 2.7x speedup on 8-core systems
@@ -12,6 +12,10 @@ This is a modernized version of Radia focusing on Python integration with perfor
 - **CMake build system** - Modern, cross-platform build
 - **Tab indentation** - Consistent code style throughout
 - **PyVista viewer** - Modern 3D visualization alternative
+
+**For Radia usage and API documentation**, please refer to the [original Radia repository](https://github.com/ochubar/Radia) and [ESRF Radia documentation](https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia).
+
+This repository adds NGSolve integration and performance improvements while maintaining full compatibility with the original Radia API.
 
 ## Key Features
 
@@ -64,7 +68,37 @@ field = rad.Fld(mag, 'b', [0,0,20])
 print(f"Field: {field} T")
 ```
 
+**Note:** This example uses the standard Radia API. For complete Radia API documentation and examples, see:
+- [Original Radia repository](https://github.com/ochubar/Radia)
+- [ESRF Radia Manual](https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia)
+
 ### NGSolve Integration
+
+The `rad_ngsolve` module provides a C++ CoefficientFunction interface for using Radia magnetic fields in NGSolve FEM analysis.
+
+**Function Specification:**
+
+```python
+rad_ngsolve.RadiaField(radia_obj, field_type='b')
+```
+
+**Parameters:**
+- `radia_obj` (int): Radia object handle returned by `rad.ObjRecMag()`, `rad.ObjThckPgn()`, etc.
+- `field_type` (str, optional): Field type to compute. Default: `'b'`
+  - `'b'`: Magnetic flux density [Tesla]
+  - `'h'`: Magnetic field [A/m]
+  - `'a'`: Vector potential [T·m]
+  - `'m'`: Magnetization [A/m]
+
+**Returns:**
+- NGSolve CoefficientFunction (3D vector field)
+
+**Unit Conversion:**
+- NGSolve uses **meters**, Radia uses **millimeters**
+- Automatic conversion: coordinates are multiplied by 1000 (m → mm)
+- Field values remain in SI units (no conversion needed)
+
+**Example:**
 
 ```python
 # IMPORTANT: Import ngsolve first
@@ -75,16 +109,19 @@ import radia as rad
 import rad_ngsolve
 
 # Create Radia magnet
-magnet = rad.ObjRecMag([0,0,0], [20,20,20], [0,0,1.2])
+magnet = rad.ObjRecMag([0,0,0], [20,20,20], [0,0,1.2])  # mm units
 rad.MatApl(magnet, rad.MatStd('NdFeB', 1.2))
 rad.Solve(magnet, 0.0001, 10000)
 
-# Create NGSolve CoefficientFunction
-B_field = rad_ngsolve.RadBfield(magnet)
+# Create NGSolve CoefficientFunction for different field types
+B_field = rad_ngsolve.RadiaField(magnet, 'b')  # Flux density [T]
+H_field = rad_ngsolve.RadiaField(magnet, 'h')  # Magnetic field [A/m]
+A_field = rad_ngsolve.RadiaField(magnet, 'a')  # Vector potential [T·m]
+M_field = rad_ngsolve.RadiaField(magnet, 'm')  # Magnetization [A/m]
 
-# Use in FEM analysis
+# Use in FEM analysis (NGSolve mesh in meters)
 gf = GridFunction(fes)
-gf.Set(B_field)
+gf.Set(B_field)  # Automatically converts mesh coordinates m → mm
 ```
 
 See [examples/Radia_to_NGSolve_CoefficientFunction/](examples/Radia_to_NGSolve_CoefficientFunction/) for complete examples.
