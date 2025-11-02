@@ -1,6 +1,5 @@
 # Local development files
 CLAUDE.md
-python_build.cmd
 .claude
 
 # Build directories

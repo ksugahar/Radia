@@ -41,7 +41,7 @@ This creates `build\Release\rad_ngsolve.pyd`
 Run the automated build script:
 
 ```cmd
-python_build.cmd
+build_pypi_package.cmd
 ```
 
 This script will:
@@ -219,7 +219,7 @@ To release a new version:
 1. Update version in `pyproject.toml`
 2. Update version in `setup.py`
 3. Rebuild extensions
-4. Run `python_build.cmd`
+4. Run `build_pypi_package.cmd`
 5. Upload to PyPI
 
 ## Troubleshooting
