@@ -14,6 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Updated all documentation with new package name
   - Installation: `pip install radia-ngsolve`
 
+- **Build Scripts Migration**
+  - Migrated from .cmd to PowerShell (.ps1) scripts
+  - `build_pypi_package.cmd` → `Build_PyPI_Package.ps1`
+  - Improved error handling and colored output
+  - Updated documentation to reference new scripts
+
 ### Added (2025-11-02)
 
 - **PyPI Distribution**

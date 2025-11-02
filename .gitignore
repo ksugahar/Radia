@@ -6,6 +6,7 @@
 CLAUDE.md
 .claude/settings.local.json
 publish_to_pypi.cmd
+Publish_to_PyPI.ps1
 
 # ============================================================================
 # Build Directories
@@ -169,7 +170,7 @@ file_format_documents/
 # IMPORTANT: PyPI Distribution Files - DO NOT IGNORE
 # ============================================================================
 # The following files are tracked and required for PyPI distribution:
-# - build_pypi_package.cmd
+# - Build_PyPI_Package.ps1
 # - setup.py
 # - pyproject.toml
 # - MANIFEST.in

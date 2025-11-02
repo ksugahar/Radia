@@ -48,7 +48,20 @@
       "Bash(git rm:*)",
       "Bash(git reset:*)",
       "Bash(git tag:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(git fetch:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl:*)",
+      "Bash(LICENSE.new)",
+      "Bash(do sed -i 's/^Author: Claude Code$//' \"$file\")",
+      "Bash(git check-ignore:*)",
+      "WebSearch",
+      "WebFetch(domain:pypi.org)",
+      "Bash(pip search:*)",
+      "Bash(pip index:*)",
+      "Bash(pip show:*)",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": []

@@ -40,8 +40,8 @@ This creates `build\Release\rad_ngsolve.pyd`
 
 Run the automated build script:
 
-```cmd
-build_pypi_package.cmd
+```powershell
+.\Build_PyPI_Package.ps1
 ```
 
 This script will:
@@ -99,18 +99,14 @@ python -m twine check dist/*
 Upload to Test PyPI to verify everything works:
 
 ```bash
-# Using the upload script
-pypi_upload.cmd
-# Select option 1 (Test PyPI)
-
-# Or manually
+# Manually upload to Test PyPI
 python -m twine upload --repository testpypi dist/*
 ```
 
 Test the installation:
 
 ```bash
-pip install --index-url https://test.pypi.org/simple/ radia
+pip install --index-url https://test.pypi.org/simple/ radia-ngsolve
 ```
 
 ### Production PyPI
@@ -118,11 +114,7 @@ pip install --index-url https://test.pypi.org/simple/ radia
 Once verified on Test PyPI, upload to production:
 
 ```bash
-# Using the upload script
-pypi_upload.cmd
-# Select option 2 (PyPI)
-
-# Or manually
+# Manually upload to PyPI
 python -m twine upload dist/*
 ```
 
