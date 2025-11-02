@@ -1,0 +1,46 @@
+# Include license and copyright files
+include LICENSE
+include COPYRIGHT.txt
+
+# Include documentation
+include README.md
+include README_BUILD.md
+include RAD_NGSOLVE_BUILD_SUCCESS.md
+
+# Include Python utilities
+recursive-include src/python *.py
+
+# Include compiled extension modules (.pyd files)
+recursive-include src/python *.pyd
+
+# Include examples
+recursive-include examples *.py
+recursive-include examples *.pvsm
+recursive-include examples *.md
+recursive-include examples *.vtk
+
+# Include tests
+recursive-include tests *.py
+include tests/README.md
+
+# Include documentation
+recursive-include docs *.md
+
+# Exclude build artifacts
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude *.swp
+
+# Exclude large output files
+global-exclude *.vtu
+global-exclude *_field_compare.vtu
+
+# Exclude build directories
+prune build
+prune dist
+prune .git
+prune .vscode
+prune .idea

@@ -8,7 +8,7 @@ version = "4.32"
 description = "3D Magnetostatics Computer Code with OpenMP Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "ESRF License"}
+license = {text = "LGPL-2.1"}
 authors = [
     {name = "Oleg Chubar", email = "chubar@bnl.gov"},
     {name = "Pascal Elleaume"},
@@ -46,10 +46,12 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ochubar/Radia"
-Documentation = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
-Repository = "https://github.com/ochubar/Radia"
-Issues = "https://github.com/ochubar/Radia/issues"
+Homepage = "https://github.com/ksugahar/Radia_NGSolve"
+Documentation = "https://github.com/ksugahar/Radia_NGSolve/blob/master/README.md"
+Repository = "https://github.com/ksugahar/Radia_NGSolve"
+Issues = "https://github.com/ksugahar/Radia_NGSolve/issues"
+"Original Radia" = "https://github.com/ochubar/Radia"
+"ESRF Radia Page" = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
