@@ -33,7 +33,15 @@
 
 以下のファイルはローカル環境のみで使用し、リポジトリには含めません：
 
-- **Publish_to_PyPI.ps1** - PyPI アップロードスクリプト（認証情報を含む可能性）
-- **publish_to_pypi.cmd** - 旧形式（廃止予定）
+- **Publish_to_PyPI.ps1** - PyPI アップロードスクリプト（認証トークンを含む）
+  - 旧: publish_to_pypi.cmd（廃止）
+  - PyPI API トークンを含むため .gitignore に追加
+  - 使用方法: `.\Publish_to_PyPI.ps1`
 - **CLAUDE.md** - プロジェクト固有の開発メモ
+
+## PyPI パッケージ公開ワークフロー
+
+1. **ビルド**: `.\Build.ps1` でコアモジュールをビルド
+2. **パッケージング**: `.\Build_PyPI_Package.ps1` で配布パッケージ作成
+3. **アップロード**: `.\Publish_to_PyPI.ps1` で PyPI に公開（ローカルのみ）
 
