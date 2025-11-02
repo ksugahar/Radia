@@ -119,6 +119,9 @@ benchmark_results/
 # Claude Code project-specific file (not for repository)
 CLAUDE.md
 
+# File format documentation (potential license violations)
+file_format_documents/
+
 # Ignore specific build artifacts but keep source
 !src/**/*.cpp
 !src/**/*.h
