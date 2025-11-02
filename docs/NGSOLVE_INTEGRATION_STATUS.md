@@ -189,7 +189,7 @@ Draw(B, mesh, "B_field")
 conda install -c ngsolve ngsolve
 
 # 2. Run build script
-.\build_ngsolve.ps1
+.\Build_NGSolve.ps1
 
 # 3. Verify output
 ls build\Release\rad_ngsolve.pyd

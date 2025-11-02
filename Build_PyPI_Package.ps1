@@ -5,7 +5,7 @@
 #
 # Prerequisites:
 # 1. Run Build.ps1 first to build radia.pyd
-# 2. (Optional) Run build_ngsolve.ps1 to build rad_ngsolve.pyd
+# 2. (Optional) Run Build_NGSolve.ps1 to build rad_ngsolve.pyd
 # 3. Install build tools: pip install build twine
 
 Write-Host "========================================" -ForegroundColor Cyan

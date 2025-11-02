@@ -42,7 +42,7 @@ pip install radia-ngsolve
 .\Build.ps1
 
 # 2. Build rad_ngsolve.pyd (optional, for NGSolve integration)
-.\build_ngsolve.ps1
+.\Build_NGSolve.ps1
 
 # Outputs:
 # - dist/radia.pyd

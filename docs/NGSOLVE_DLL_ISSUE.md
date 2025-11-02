@@ -66,7 +66,7 @@ conda install -c ngsolve ngsolve
 
 # Build Radia (within this environment)
 cd S:\radia\01_GitHub
-.\build_ngsolve.ps1
+.\Build_NGSolve.ps1
 
 # Test
 python -c "import rad_ngsolve; print('OK')"

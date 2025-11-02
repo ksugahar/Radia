@@ -7,7 +7,7 @@ the pre-compiled C++ extension modules (radia.pyd, rad_ngsolve.pyd).
 
 For development builds, use the CMake build scripts:
 - Build.ps1 for radia.pyd
-- build_ngsolve.ps1 for rad_ngsolve.pyd
+- Build_NGSolve.ps1 for rad_ngsolve.pyd
 """
 
 from setuptools import setup, find_packages

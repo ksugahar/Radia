@@ -29,7 +29,7 @@ This creates `dist\radia.pyd`
 
 ```powershell
 # Build rad_ngsolve.pyd
-.\build_ngsolve.ps1
+.\Build_NGSolve.ps1
 ```
 
 This creates `build\Release\rad_ngsolve.pyd`

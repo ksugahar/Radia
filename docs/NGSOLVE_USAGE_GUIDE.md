@@ -74,7 +74,7 @@ conda install -c ngsolve ngsolve
 
 ```powershell
 cd S:\radia\01_GitHub
-.\build_ngsolve.ps1
+.\Build_NGSolve.ps1
 ```
 
 ### Usage
