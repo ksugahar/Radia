@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Setup script for Radia package
+Setup script for Radia-NGSolve package
 
 This setup.py is used for building binary distributions (wheels) that include
 the pre-compiled C++ extension modules (radia.pyd, rad_ngsolve.pyd).
@@ -16,7 +16,7 @@ import shutil
 import sys
 
 # Read version from pyproject.toml
-version = "4.32"
+version = "1.0.0"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -53,9 +53,9 @@ if "sdist" not in sys.argv:
 	package_dir = prepare_package_data()
 
 setup(
-	name="radia",
+	name="radia-ngsolve",
 	version=version,
-	description="3D Magnetostatics Computer Code with OpenMP Parallelization",
+	description="Radia 3D Magnetostatics with NGSolve Integration and OpenMP Parallelization",
 	long_description=long_description,
 	long_description_content_type="text/markdown",
 	author="Oleg Chubar, Pascal Elleaume",

@@ -25,7 +25,15 @@ This is a modernized version of Radia focusing on Python integration with perfor
 
 ## Quick Start
 
-### Build
+### Installation from PyPI
+
+```bash
+pip install radia-ngsolve
+```
+
+**Note**: The PyPI package includes pre-built binaries for Windows Python 3.12.
+
+### Build from Source
 
 ```bash
 # Windows (PowerShell)

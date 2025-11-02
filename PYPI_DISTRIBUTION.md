@@ -184,9 +184,9 @@ The package metadata is defined in `pyproject.toml`:
 Install with extras:
 
 ```bash
-pip install radia[viz]        # Visualization support
-pip install radia[test]       # Testing tools
-pip install radia[dev]        # Development tools
+pip install radia-ngsolve[viz]        # Visualization support
+pip install radia-ngsolve[test]       # Testing tools
+pip install radia-ngsolve[dev]        # Development tools
 ```
 
 ## Important Notes

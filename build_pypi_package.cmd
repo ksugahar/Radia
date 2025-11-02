@@ -82,7 +82,7 @@ echo Next Steps
 echo ========================================
 echo.
 echo To test the package locally:
-echo   pip install dist\radia-4.32-py3-none-any.whl
+echo   pip install dist\radia-ngsolve-1.0.0-py3-none-any.whl
 echo.
 echo To upload to Test PyPI:
 echo   python -m twine upload --repository testpypi dist/*
