@@ -14,7 +14,6 @@
  * - 'a': Vector potential (T·m)
  * - 'm': Magnetization (A/m)
  *
- * @authors Claude Code
  * @version 0.06
  ***************************************************************************/
 

@@ -13,7 +13,7 @@ This script:
 
 Tetrahedral elements are always convex, perfect for Radia.
 
-Author: Claude Code
+
 Date: 2025-11-01
 """
 

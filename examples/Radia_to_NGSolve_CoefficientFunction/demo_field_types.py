@@ -11,7 +11,7 @@ to access different physical field quantities:
 Usage:
 	python demo_field_types.py
 
-Author: Claude Code
+
 Date: 2025-11-01
 """
 

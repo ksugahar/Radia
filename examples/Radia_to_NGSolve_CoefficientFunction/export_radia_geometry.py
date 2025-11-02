@@ -10,7 +10,7 @@ Usage:
 Output:
 	radia_components.vtk - VTK file containing the magnet geometry
 
-Author: Claude Code
+
 Date: 2025-11-01
 """
 

@@ -7,11 +7,7 @@
 * Description:    CoefficientFunction-based background field source
 *                 (Python callback support)
 *
-* Author(s):      Claude Code
-*
 * First release:  2025
-*
-* Copyright (C):  2025
 *
 *-------------------------------------------------------------------------*/
 

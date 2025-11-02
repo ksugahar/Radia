@@ -309,4 +309,4 @@ The magnetizable sphere acts as a magnetic dipole in the quadrupole field:
 
 ---
 
-**Author**: Claude Code, 2025
+**Date**: 2025

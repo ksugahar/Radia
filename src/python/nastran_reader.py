@@ -19,7 +19,6 @@ Usage:
 	tetra_elements = mesh['tetra_elements']  # list of [n1, ..., n4]
 	tria_groups = mesh['tria_groups']  # dict {material_id: {'faces': [[n1,n2,n3], ...], 'nodes': set(...)}}
 
-Author: Claude Code
 Date: 2025-11-01
 """
 

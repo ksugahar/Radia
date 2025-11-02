@@ -11,7 +11,7 @@ Usage:
 	python visualize_field.py --method both      # Compare both (default)
 	python visualize_field.py --maxh 0.005       # Set mesh size
 
-Author: Claude Code
+
 Date: 2025-10-31
 """
 

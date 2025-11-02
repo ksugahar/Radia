@@ -3,7 +3,6 @@ Radia-NGSolve Field Integration
 
 Provides arbitrary background field from NGSolve CoefficientFunction or analytical functions.
 
-Author: Claude Code
 Date: 2025-10-31
 """
 
