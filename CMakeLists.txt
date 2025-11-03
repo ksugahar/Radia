@@ -113,8 +113,6 @@ target_include_directories(rad_ngsolve PRIVATE
 
 # Add compile definitions (from Radia)
 target_compile_definitions(rad_ngsolve PRIVATE
-	WIN32
-	_WINDOWS
 	ALPHA__LIB__
 	FFTW_ENABLE_FLOAT
 	NO_TIMER
@@ -123,14 +121,56 @@ target_compile_definitions(rad_ngsolve PRIVATE
 	_GM_WITHOUT_BASE
 	$<$<CONFIG:Debug>:_DEBUG>
 	$<$<CONFIG:Release>:NDEBUG>
+	$<$<PLATFORM_ID:Windows>:WIN32>
+	$<$<PLATFORM_ID:Windows>:_WINDOWS>
 )
 
-# FFTW library (64-bit MSVC)
-set(FFTW_LIB ${FFTW_DIR}/fftw64_f.lib)
-if(EXISTS ${FFTW_LIB})
-	target_link_libraries(rad_ngsolve PRIVATE ${FFTW_LIB})
+# FFTW library - platform-specific detection
+if(WIN32)
+	# Windows: Look for precompiled FFTW library
+	set(FFTW_LIB ${FFTW_DIR}/fftw64_f.lib)
+	if(EXISTS ${FFTW_LIB})
+		target_link_libraries(rad_ngsolve PRIVATE ${FFTW_LIB})
+		message(STATUS "Found FFTW library: ${FFTW_LIB}")
+	else()
+		message(WARNING "FFTW library not found: ${FFTW_LIB}")
+	endif()
+elseif(APPLE)
+	# macOS: Try to find FFTW via pkg-config or Homebrew
+	find_library(FFTW_LIBRARY NAMES fftw3f fftw3
+		PATHS /usr/local/lib /opt/homebrew/lib
+		NO_DEFAULT_PATH
+	)
+	if(FFTW_LIBRARY)
+		target_link_libraries(rad_ngsolve PRIVATE ${FFTW_LIBRARY})
+		find_path(FFTW_INCLUDE_DIR fftw3.h
+			PATHS /usr/local/include /opt/homebrew/include
+			NO_DEFAULT_PATH
+		)
+		if(FFTW_INCLUDE_DIR)
+			target_include_directories(rad_ngsolve PRIVATE ${FFTW_INCLUDE_DIR})
+		endif()
+		message(STATUS "Found FFTW library: ${FFTW_LIBRARY}")
+	else()
+		message(WARNING "FFTW library not found. Install with: brew install fftw")
+	endif()
 else()
-	message(WARNING "FFTW library not found: ${FFTW_LIB}")
+	# Linux: Try to find FFTW via pkg-config
+	find_library(FFTW_LIBRARY NAMES fftw3f fftw3
+		PATHS /usr/lib /usr/local/lib /usr/lib/x86_64-linux-gnu
+	)
+	if(FFTW_LIBRARY)
+		target_link_libraries(rad_ngsolve PRIVATE ${FFTW_LIBRARY})
+		find_path(FFTW_INCLUDE_DIR fftw3.h
+			PATHS /usr/include /usr/local/include
+		)
+		if(FFTW_INCLUDE_DIR)
+			target_include_directories(rad_ngsolve PRIVATE ${FFTW_INCLUDE_DIR})
+		endif()
+		message(STATUS "Found FFTW library: ${FFTW_LIBRARY}")
+	else()
+		message(WARNING "FFTW library not found. Install with: sudo apt-get install libfftw3-dev")
+	endif()
 endif()
 
 # Link Windows system libraries
@@ -138,11 +178,26 @@ if(WIN32)
 	target_link_libraries(rad_ngsolve PRIVATE version.lib)
 endif()
 
-# Compiler-specific flags (following EMPY_Field pattern - NO OpenMP)
+# Compiler-specific flags
 if(MSVC)
+	# MSVC (Visual Studio)
 	target_compile_options(rad_ngsolve PRIVATE
 		/wd4244  # Disable conversion warnings
 		/wd4267  # Disable size_t conversion warnings
+	)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+	# GCC
+	target_compile_options(rad_ngsolve PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+		-Wno-unused-variable
+	)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	# Clang (including Apple Clang)
+	target_compile_options(rad_ngsolve PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+		-Wno-unused-variable
 	)
 endif()
 
@@ -182,11 +237,37 @@ target_compile_definitions(radia PRIVATE
 	ANSI_DECLARATORS
 )
 
-# FFTW library (64-bit MSVC)
-if(EXISTS ${FFTW_LIB})
-	target_link_libraries(radia PRIVATE ${FFTW_LIB})
+# FFTW library - platform-specific detection (same as rad_ngsolve)
+if(WIN32)
+	# Windows: Look for precompiled FFTW library
+	if(EXISTS ${FFTW_LIB})
+		target_link_libraries(radia PRIVATE ${FFTW_LIB})
+		message(STATUS "Found FFTW library for radia: ${FFTW_LIB}")
+	else()
+		message(WARNING "FFTW library not found for radia: ${FFTW_LIB}")
+	endif()
+elseif(APPLE)
+	# macOS: Try to find FFTW via pkg-config or Homebrew
+	if(FFTW_LIBRARY)
+		target_link_libraries(radia PRIVATE ${FFTW_LIBRARY})
+		if(FFTW_INCLUDE_DIR)
+			target_include_directories(radia PRIVATE ${FFTW_INCLUDE_DIR})
+		endif()
+		message(STATUS "Found FFTW library for radia: ${FFTW_LIBRARY}")
+	else()
+		message(WARNING "FFTW library not found for radia. Install with: brew install fftw")
+	endif()
 else()
-	message(WARNING "FFTW library not found: ${FFTW_LIB}")
+	# Linux: Try to find FFTW via pkg-config
+	if(FFTW_LIBRARY)
+		target_link_libraries(radia PRIVATE ${FFTW_LIBRARY})
+		if(FFTW_INCLUDE_DIR)
+			target_include_directories(radia PRIVATE ${FFTW_INCLUDE_DIR})
+		endif()
+		message(STATUS "Found FFTW library for radia: ${FFTW_LIBRARY}")
+	else()
+		message(WARNING "FFTW library not found for radia. Install with: sudo apt-get install libfftw3-dev")
+	endif()
 endif()
 
 # Link Windows system libraries
@@ -196,9 +277,24 @@ endif()
 
 # Compiler-specific flags
 if(MSVC)
+	# MSVC (Visual Studio)
 	target_compile_options(radia PRIVATE
 		/wd4244  # Disable conversion warnings
 		/wd4267  # Disable size_t conversion warnings
+	)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+	# GCC
+	target_compile_options(radia PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+		-Wno-unused-variable
+	)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	# Clang (including Apple Clang)
+	target_compile_options(radia PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+		-Wno-unused-variable
 	)
 endif()
 
