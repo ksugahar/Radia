@@ -60,7 +60,7 @@ struct radGraphPresOptions {
 
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
+#ifdef __GNUC__
 typedef	map <int, radTDrawAttr, less<int> >  radTMapOfDrawAttr;
 typedef	vector<radTDrawAttr> radTVectOfDrawAttr;
 

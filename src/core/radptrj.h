@@ -167,7 +167,7 @@ public:
 
 
 	static void ComposeStrReportSecondOrderKickPer(const char* StrComment, double len, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData1, double* pKickData2, double* pBtE2Int, char*& StrReport, char cKickUnit=1, char cOutFormat=1);
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //	static void ComposeStrReportSecondOrderKickPer_AddMainData(ostrstream& OutStream, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData);
 //#else
 	//static void ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream& OutStream, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData);

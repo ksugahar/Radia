@@ -58,7 +58,7 @@ inline int operator ==(const radTHandlePgnAndTrans& h1, const radTHandlePgnAndTr
 
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
+#ifdef __GNUC__
 typedef vector<radTHandlePgnAndTrans> radTVectHandlePgnAndTrans;
 typedef vector<TVector3d*> radTVectOfPtrToVect3d;
 typedef list<TVector3d> radTListOfVector3d;

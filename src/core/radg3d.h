@@ -35,7 +35,7 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
+#ifdef __GNUC__
 typedef list <radTPair_int_hg> radTlphg;
 #else
 typedef list <radTPair_int_hg, allocator<radTPair_int_hg> > radTlphg; // Porting

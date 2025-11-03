@@ -13,12 +13,6 @@
     <ClCompile Include="S:\Radia\01_GitHub\src\core\radapl4.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="S:\Radia\01_GitHub\src\core\radapl5.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="S:\Radia\01_GitHub\src\core\radapl6.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="S:\Radia\01_GitHub\src\core\radapl7.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

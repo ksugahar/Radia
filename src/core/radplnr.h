@@ -211,7 +211,7 @@ public:
 
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
+#ifdef __GNUC__
 typedef vector<radTPolyg2dIntrsctInfo> radTPolyg2dIntrsctInfoVect;
 typedef vector<TVector2d> radTVect2dVect;
 typedef vector<int> radTVectInt;

@@ -33,7 +33,7 @@
 #include <math.h>
 #endif
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //#include <strstream.h>
 //#else
 #include <sstream>

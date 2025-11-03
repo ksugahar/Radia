@@ -1173,7 +1173,7 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer(const char* StrComment, do
 	if(cKickUnit == 2) psKickUnit = sKickUnit_microrad;
 	else if(cKickUnit == 3) psKickUnit = sKickUnit_rad;
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //	ostrstream OutStream;
 //#else
 	ostringstream OutStream;
@@ -1217,7 +1217,7 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer(const char* StrComment, do
 
 //-------------------------------------------------------------------------
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostrstream& OutStream, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData)
 //#else
 //void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream& OutStream, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData)
@@ -1300,7 +1300,7 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream&
 
 void radTPrtclTrj::ComposeStrReportSecondOrderKick(const char* StrComment, double* ArrLongDist, int lenArrLongDist, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData1, double* pKickData2, double* pIBe2Data, char*& pStrReport)
 {// coordinates expected in mm at input
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //	ostrstream OutStream;
 //#else
 	ostringstream OutStream;

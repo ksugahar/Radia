@@ -897,7 +897,7 @@ void radTApplication::GenDump()
 {
 	try
 	{
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //		ostrstream OutDumpStream;
 //#else
 		ostringstream OutDumpStream; // Porting
@@ -915,7 +915,7 @@ void radTApplication::GenDump()
 			}
 			OutDumpStream << ends;
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //			Send.String(OutDumpStream.str());
 //#else
 			Send.String(OutDumpStream.str().c_str()); // Porting

@@ -343,8 +343,6 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="S:\Radia\01_GitHub\src\core\radapl2.cpp" />
     <ClCompile Include="S:\Radia\01_GitHub\src\core\radapl3.cpp" />
     <ClCompile Include="S:\Radia\01_GitHub\src\core\radapl4.cpp" />
-    <ClCompile Include="S:\Radia\01_GitHub\src\core\radapl5.cpp" />
-    <ClCompile Include="S:\Radia\01_GitHub\src\core\radapl6.cpp" />
     <ClCompile Include="S:\Radia\01_GitHub\src\core\radapl7.cpp" />
     <ClCompile Include="S:\Radia\01_GitHub\src\core\radarccu.cpp" />
     <ClCompile Include="S:\Radia\01_GitHub\src\core\radcffld.cpp" />

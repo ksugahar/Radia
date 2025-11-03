@@ -19,7 +19,7 @@
 #include <string>
 #include <cstring>
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //#define std
 //#else
 using namespace std;

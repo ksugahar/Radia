@@ -506,7 +506,7 @@ inline bool radTAuxIndNorm::greater(const radTAuxIndNorm& P1, const radTAuxIndNo
 
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
+#ifdef __GNUC__
 typedef list <radTAuxIndNorm> radTlAuxIndNorm;
 typedef vector <int> radTvInt;
 //typedef vector <radTvInt> radTvvInt;

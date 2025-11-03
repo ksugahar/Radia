@@ -188,7 +188,7 @@ void radTExtrPolygon::B_comp(radTField* FieldPtr)
 	double z1e2 = z1*z1, z2e2 = z2*z2;
 	double absz1 = Abs(z1), absz2 = Abs(z2);
 
-#ifdef __GCC__
+#ifdef __GNUC__
 	vector<TVector2d>::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
 #else
 	vector<TVector2d, allocator<TVector2d> >::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
@@ -763,7 +763,7 @@ void radTExtrPolygon::B_intComp(radTField* FieldPtr)
 
 	radTPolygon* BasePolygonPtr = (radTPolygon*)(BasePolygonHandle.rep);
 
-#ifdef __GCC__
+#ifdef __GNUC__
 	vector<TVector2d>::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
 #else
 	vector<TVector2d, allocator<TVector2d> >::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
@@ -993,7 +993,7 @@ void radTExtrPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID&
 
 	radTPolygon* BasePolygonPtr = (radTPolygon*)(BasePolygonHandle.rep);
 
-#ifdef __GCC__
+#ifdef __GNUC__
 	vector<TVector2d>::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
 #else
 	vector<TVector2d, allocator<TVector2d> >::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();

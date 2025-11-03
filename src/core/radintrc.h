@@ -30,7 +30,7 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
+#ifdef __GNUC__
 typedef list <radTPair_int_hg*> radTlphgPtr;
 #else
 typedef list <radTPair_int_hg*, allocator<radTPair_int_hg*> > radTlphgPtr;
@@ -80,7 +80,7 @@ inline int operator ==(const radTRelaxSubInterval& i1, const radTRelaxSubInterva
 
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
+#ifdef __GNUC__
 typedef vector<radTg3dRelax*> radTVectPtrg3dRelax;
 typedef vector<radTg3d*> radTVectPtr_g3d;
 typedef vector<radTrans*> radTVectPtrTrans;

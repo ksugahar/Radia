@@ -24,7 +24,7 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
+#ifdef __GNUC__
 typedef vector<int> radTVectOfInt;
 #else
 typedef vector<int, allocator<int> > radTVectOfInt;

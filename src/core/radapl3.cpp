@@ -905,7 +905,7 @@ int radTApplication::SetAndShowPhysUnits()
 		char FieldStrengthUnitID[] = "Tesla";
 		char FieldForceUnitID[] = "Newton";
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //		ostrstream OutUnitsInfoStream;
 //#else
 		ostringstream OutUnitsInfoStream; // Porting
@@ -925,7 +925,7 @@ int radTApplication::SetAndShowPhysUnits()
 
 		OutUnitsInfoStream << ends;
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //		if(SendingIsRequired) Send.String(OutUnitsInfoStream.str());
 //#else
 		if(SendingIsRequired) Send.String(OutUnitsInfoStream.str().c_str()); // Porting

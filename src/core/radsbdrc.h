@@ -26,7 +26,7 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
+#ifdef __GNUC__
 typedef vector<TVector3d*> radTVectPtrVect3d;
 #else
 typedef vector<TVector3d*, allocator<TVector3d*> > radTVectPtrVect3d;

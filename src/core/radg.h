@@ -52,7 +52,7 @@ public:
 
 typedef radTHandle<radTg> radThg;
 
-#ifdef __GCC__
+#ifdef __GNUC__
 typedef map <int, radThg, less<int> > radTmhg;
 typedef vector <radThg > radTvhg;
 #else
