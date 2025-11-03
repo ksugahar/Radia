@@ -474,14 +474,6 @@ EXP int CALL RadObjDegFre(int* num, int obj);
 */
 EXP int CALL RadObjDrwQD3D(int obj, char* opt);
 
-/** Starts an application for viewing of 3D geometry of the object obj. The viewer is based on the GLUT / OpenGL graphics library. 
-@param obj [in] reference number of the object to be viewed
-@param opt [in] pointer to options string, which can be "Axes->True" (default) or "Axes->False" for showing or not the axes of the Cartesian laboratory frame; "Faces->True" (default) or "Faces->False" for showing or not visible faces of 3D objects; "EdgeLines->True" (default) or "EdgeLines->False" for highlighting or not the edge lines of 3D objects. opt can contain composition of these option sub-strings separated by ";".
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjDrwOpenGL(int obj, char* opt);
-
 /** Generates data for viewing 3D geometry of an object obj as polygons and lines with VTK (or compatible) viewer, and outputs integer parameters defining the lengths / sizes of these polygons' and lines' data. The data itself has to be "taken" using the function RadObjDrwDataGetVTK
 @param nVP [out] number of polygon vertices
 @param nP [out] number of polygons

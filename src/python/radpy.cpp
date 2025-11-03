@@ -1493,34 +1493,6 @@ static PyObject* radia_ObjDrwAtr(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Field Sources: Starts an application for viewing of 3D geometry of the object obj (the viewer is based on the GLUT / OpenGL graphics library)
- ***************************************************************************/
-static PyObject* radia_ObjDrwOpenGL(PyObject* self, PyObject* args)
-{
-	PyObject *oInd=0, *oOpt=0;
-	try
-	{
-		if(!PyArg_ParseTuple(args, "O|O:ObjDrwOpenGL", &oInd, &oOpt)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwOpenGL");
-		if(oInd == 0) throw CombErStr(strEr_BadFuncArg, ": ObjDrwOpenGL");
-
-		if(!PyNumber_Check(oInd)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwOpenGL");
-		int ind = (int)PyLong_AsLong(oInd);
-
-		char sOpt[1024]; *sOpt = '\0';
-		if(oOpt != 0) CPyParse::CopyPyStringToC(oOpt, sOpt, 1024);
-
-		g_pyParse.ProcRes(RadObjDrwOpenGL(ind, sOpt));
-		Py_XINCREF(oInd); //?
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		PyErr_PrintEx(1); //OC04102018 Need to clear the error in this case, to let Py script runing further if ObjDrwOpenGL is not implemented
-	}
-	return oInd;
-}
-
-/************************************************************************//**
  * Magnetic Field Sources: outputs data for viewing of 3D geometry of an object using the VTK software system
  ***************************************************************************/
 static PyObject* ParseGeomDataDrwVTK(double* arCrdV, int nV, int* arLenP, float* arColP, int nP) //OC05112019 (from by R. Nagler's static PyObject* radia_ObjGeometry_helper)
@@ -3333,7 +3305,6 @@ static PyMethodDef radia_methods[] = {
 	{"ObjSetM", radia_ObjSetM, METH_VARARGS, "ObjSetM(obj,[mx,my,mz]) sets magnetization [mx,my,mz] in 3D object obj."},
 	{"ObjScaleCur", radia_ObjScaleCur, METH_VARARGS, "ObjScaleCur(obj,k) scales current (density) in 3D object obj by multiplying it by constant k (if obj is a current-carying object). If obj is a container, the current (density) scaling applies to all its members."},
 	{"ObjDrwAtr", radia_ObjDrwAtr, METH_VARARGS, "ObjDrwAtr(obj,[r,g,b],thcn) assigns drawing attributes - RGB color [r,g,b] and line thickness thcn - to 3D object obj."},
-	{"ObjDrwOpenGL", radia_ObjDrwOpenGL, METH_VARARGS, "ObjDrwOpenGL(obj,'EdgeLines->True|False,Faces->True|False,Axes->True|False') starts an application for viewing 3D geometry of the object obj. The viewer is based on the GLUT / OpenGL graphics library. The option 'EdgeLines->True|False' (default 'EdgeLines->True') highlights the edge lines of objects; the option 'Faces->True|False' (default 'Faces->True') shows faces of the objects; the option 'Axes->True|False' (default 'Axes->True') shows the Cartesian frame axes."},
 	{"ObjDrwVTK", radia_ObjDrwVTK, METH_VARARGS, "ObjDrwVTK(obj,'EdgeLines->True|False,Faces->True|False,Axes->True|False') exports data for viewing 3D geometry of the object obj. The data is in the format compatible with VTK graphics library. The option 'EdgeLines->True|False' (default 'EdgeLines->True') highlights the edge lines of objects; the option 'Faces->True|False' (default 'Faces->True') shows faces of the objects; the option 'Axes->True|False' (default 'Axes->True') shows the Cartesian frame axes."},
 
 	{"TrfTrsl", radia_TrfTrsl, METH_VARARGS, "TrfTrsl([vx,vy,vz]) creates a translation by vector [vx,vy,vz]."},

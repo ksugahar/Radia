@@ -39,8 +39,8 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/radapl2.cpp
 	${CORE_DIR}/radapl3.cpp
 	${CORE_DIR}/radapl4.cpp
-	${CORE_DIR}/radapl5.cpp
-	${CORE_DIR}/radapl6.cpp
+	# ${CORE_DIR}/radapl5.cpp  # Removed: QD3D viewer (deprecated)
+	# ${CORE_DIR}/radapl6.cpp  # Removed: OpenGL 3D viewer (deprecated)
 	${CORE_DIR}/radapl7.cpp
 	${CORE_DIR}/radarccu.cpp
 	${CORE_DIR}/radcffld.cpp

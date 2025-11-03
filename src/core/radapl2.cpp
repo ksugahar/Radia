@@ -1058,7 +1058,7 @@ int radTApplication::GraphicsForElem_g3d_VTK(int ElemKey, const char** OptionNam
 		radGraphPresOptions InGraphPresOptions(DoShowSymChilds);
 		radTg3dGraphPresent* g3dGraphPresentPtr = g3dPtr->CreateGraphPresent();
 
-		char DrawFacilityInd = 2; // OpenGL Draw facility index
+		char DrawFacilityInd = 2; // VTK export facility index
 		g3dGraphPresentPtr->DrawFacilityInd = DrawFacilityInd;
 
 		radTg3dGraphPresent::Send = Send;

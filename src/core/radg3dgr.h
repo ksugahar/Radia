@@ -62,32 +62,11 @@ struct radGraphPresOptions {
 
 #ifdef __GCC__
 typedef	map <int, radTDrawAttr, less<int> >  radTMapOfDrawAttr;
-
-//#ifdef _WITH_QD3D
 typedef	vector<radTDrawAttr> radTVectOfDrawAttr;
-//#endif
 
 #else
 typedef	map <int, radTDrawAttr, less<int> >  radTMapOfDrawAttr;
-
-//#ifdef _WITH_QD3D
 typedef	vector<radTDrawAttr, allocator<radTDrawAttr> > radTVectOfDrawAttr;
-//#endif
-#endif
-
-#ifdef __MWERKS__
-#ifdef _WITH_QD3D
-/*
-null_template
-struct iterator_traits <radTDrawAttr*> {
-	 typedef ptrdiff_t difference_type;
-	 typedef radTDrawAttr value_type;
-	 typedef radTDrawAttr* pointer;
-	 typedef radTDrawAttr& reference;
-	 typedef random_access_iterator_tag iterator_category;
-};
-*/
-#endif
 #endif
 
 //-------------------------------------------------------------------------
@@ -95,9 +74,7 @@ struct iterator_traits <radTDrawAttr*> {
 class radTg3dGraphPresent {
 public:
 
-//#ifdef _WITH_QD3D
 	static radTVectOfDrawAttr DrawAttrStack;
-//#endif
 
 	static radRGB SbdLineColor;
 
@@ -110,19 +87,19 @@ public:
 
 	bool ShowInternalFacesAfterCut;
 	int DrawAttrAreSet;
-	char DrawFacilityInd; // 0- Mathematica, 1- QuickDraw3D, 2- OpenGL
-	char ShowEdgeLines; //ShowEdgeLinesInQD3D;
-	char ShowFaces; //ShowFacesInQD3D;
+	char DrawFacilityInd; // 2- VTK export
+	char ShowEdgeLines;
+	char ShowFaces;
 	char ShowGridTicks;
 
 	radTrans GenTrans;
 
 	radTg3dGraphPresent(radTg3d*); 
-	radTg3dGraphPresent() 
-	{ 
+	radTg3dGraphPresent()
+	{
 		ShowInternalFacesAfterCut = true; DrawFacilityInd = 0;
-		ShowEdgeLines = 0; //ShowEdgeLinesInQD3D = 0;
-		ShowFaces = 1; //ShowFacesInQD3D = 1;
+		ShowEdgeLines = 0;
+		ShowFaces = 1;
 		ShowGridTicks = 1;
 	}
 

@@ -20,12 +20,6 @@
 
 #include <time.h>
 
-#ifdef __MATHEMATICA__
-extern "C" {
-#include <mathlink.h>
-}
-#endif
-
 #ifndef __RADSEND_H
 #include "radsend.h"
 #endif
@@ -50,23 +44,11 @@ public:
 
 //-------------------------------------------------------------------------
 
-inline int radTYield::Check() 
+inline int radTYield::Check()
 {
 // takes 1.6, 2.3 s or 0.2 s of CPU time on Performa 5200
 	if(delta <= 0) return 1;
 
-#ifdef __MATHEMATICA__
-	if(MLAbort) 
-	{ 
-		MLPutFunction(stdlink, "Abort", 0); 
-		return 0; // aborting (more  smart action needed?)
-	}  
-	if(clock() > oldtime) 
-	{
-		MLCallYieldFunction(MLYieldFunction(stdlink), stdlink, (MLYieldParameters)0);
-		oldtime = clock()+delta;
-	}
-#endif
 #if defined ALPHA__DLL__ || defined ALPHA__LIB__
 
 	if(clock() > oldtime) 

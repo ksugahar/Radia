@@ -33,7 +33,6 @@ RadObjGeoVol
 RadObjGeoLim
 
 RadObjDrwQD3D
-RadObjDrwOpenGL
 RadObjDrwAtr
 
 RadTrfCmbL

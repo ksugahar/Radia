@@ -31,10 +31,8 @@
 
 radTSend radTg3dGraphPresent::Send;
 
-//#ifdef _WITH_QD3D
 radTVectOfDrawAttr radTg3dGraphPresent::DrawAttrStack;
 radRGB radTg3dGraphPresent::SbdLineColor = radRGB(0,0,0); //ensure BLACK lines
-//#endif
 
 //-------------------------------------------------------------------------
 
@@ -87,10 +85,7 @@ void radTg3dGraphPresent::NestedFor_Draw(radTrans* BaseTransPtr, const radTlphg:
 
 void radTg3dGraphPresent::GenDraw()
 {
-//#ifdef _WITH_QD3D
-	//if(DrawAttrAreSet) DrawAttrStack.push_back(DrawAttr);
 	if(DrawAttrAreSet && (!GraphPresOptions.doDebug)) DrawAttrStack.push_back(DrawAttr); //OC130709
-//#endif
 
 	//radTCast Cast;
 	if(GraphPresOptions.ShowSymmetryChilds)
@@ -114,10 +109,7 @@ void radTg3dGraphPresent::GenDraw()
 		Draw(&GenTrans);
 	}
 
-//#ifdef _WITH_QD3D
-	//if(DrawAttrAreSet) DrawAttrStack.pop_back();
 	if(DrawAttrAreSet && (!GraphPresOptions.doDebug)) DrawAttrStack.pop_back(); //OC130709
-//#endif
 }
 
 //-------------------------------------------------------------------------
@@ -754,7 +746,6 @@ void radTRecMagGraphPresent::Draw(radTrans* BaseTransPtr)
 		for(int k=0; k<6; k++) if(!InternalFaces[k]) AmOfNonInternalFaces++;
 	}
 
-	//char SendExtraContourLines = (ShowEdgeLinesInQD3D && (DrawFacilityInd == 1));
 	char SendExtraContourLines = (ShowEdgeLines && ((DrawFacilityInd == 1) || (DrawFacilityInd == 2)));
 
 	if(AmOfNonInternalFaces > 0)
@@ -951,7 +942,6 @@ void radTExtrPolygonGraphPresent::Draw(radTrans* BaseTransPtr)
 	TVector3d AuxVect(0.,0.,0.);
 
 	int LocParity = BaseTransPtr->ShowParity();
-	//char SendExtraContourLines = (ShowEdgeLinesInQD3D && (DrawFacilityInd == 1));
 	char SendExtraContourLines = (ShowEdgeLines && ((DrawFacilityInd == 1) || (DrawFacilityInd == 2)));
 
 	FirstEdgePoint = TransForBasePgn.TrPoint(FirstEdgePoint);
@@ -1464,7 +1454,6 @@ void radTSubdivRecMagGraphPresent::Draw(radTrans* BaseTransPtr)
 		Send.InitOutList(AmOfNonInternalFaces + 1, DrawFacilityInd);
 		TVector3d Side[5];
 
-		//char SendExtraContourLines = (ShowEdgeLinesInQD3D && (DrawFacilityInd == 1));
 		char SendExtraContourLines = (ShowEdgeLines && ((DrawFacilityInd == 1) || (DrawFacilityInd == 2)));
 
 		int LocParity = BaseTransPtr->ShowParity();
@@ -1804,7 +1793,6 @@ void radTSubdivExtrPolygGraphPresent::Draw(radTrans* BaseTransPtr)
 	TVector3d AuxVect(0.,0.,0.);
 
 	int LocParity = BaseTransPtr->ShowParity();
-	//char SendExtraContourLines = (ShowEdgeLinesInQD3D && (DrawFacilityInd == 1));
 	char SendExtraContourLines = (ShowEdgeLines && ((DrawFacilityInd == 1) || (DrawFacilityInd == 2)));
 
 	FirstEdgePoint = TransForBasePgn.TrPoint(FirstEdgePoint);
@@ -2206,7 +2194,6 @@ void radTPolygonGraphPresent::Draw(radTrans* BaseTransPtr)
 
 	Send.Polygon(PolygonArray, PolygonP->AmOfEdgePoints, DrawFacilityInd);
 
-	//char SendExtraContourLines = (ShowEdgeLinesInQD3D && (DrawFacilityInd == 1));
 	char SendExtraContourLines = (ShowEdgeLines && ((DrawFacilityInd == 1) || (DrawFacilityInd == 2)));
 
 	if(SendExtraContourLines) 
@@ -2230,19 +2217,12 @@ void radTFlmLinCurGraphPresent::Draw(radTrans* BaseTransPtr)
 	aLine[0] = BaseTransPtr->TrPoint(FlmLinCurP->StartPoint);
 	aLine[1] = BaseTransPtr->TrPoint(FlmLinCurP->EndPoint);
 
-#ifdef _WITH_QD3D
-	//char OldShowLinesInQD3D = Send.ShowLinesInQD3D;
-	//Send.ShowLinesInQD3D = 1;
 	char OldShowLines = Send.ShowLines;
 	Send.ShowLines = 1;
-#endif
 
 	Send.Line(aLine, 2, DrawFacilityInd);
 
-#ifdef _WITH_QD3D
-	//Send.ShowLinesInQD3D = OldShowLinesInQD3D;
 	Send.ShowLines = OldShowLines;
-#endif
 }
 
 //-------------------------------------------------------------------------

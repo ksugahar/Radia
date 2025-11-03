@@ -48,8 +48,6 @@ class radTApplication {
 	radTCast Cast;
 	radTCompCriterium CompCriterium;
 
-	char QD3D_ViewerWasInitialized;
-
 	int m_nProcMPI, m_rankMPI; //OC01012020
 
 public:
@@ -75,8 +73,6 @@ public:
 		TreatRecMagsAsExtrPolygons = TreatRecMagsAsPolyhedrons = TreatExtrPgnsAsPolyhedrons = 0;
 		RecognizeRecMagsInPolyhedrons = 1; // If possible, of course
 		MemAllocForIntrctMatrTotAtOnce = 0;
-
-		QD3D_ViewerWasInitialized = 0;
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
 	}
@@ -249,14 +245,11 @@ public:
 	int RemoveDrawAttrFromElem_g3d(int ElemKey);
 	int GraphicsForElem_g3d(int ElemKey, int InShowSymmetryChilds, const char** arOptionNames =0, const char** arOptionValues =0, int numOptions =0);
 	int GraphicsForElem_g3d_VTK(int ElemKey, const char** OptionNames =0, const char** OptionValues =0, int OptionCount =0); //OC04112019
-
-	void GraphicsForAll_g3d(int InShowSymmetryChilds);
-
-	int GoQuickDraw3D_Viewer(int ElemKey, const char** OptionNames, const char** OptionValues, int OptionCount);
-	int GoOpenGL_3D_Viewer(int ElemKey, const char** OptionNames, const char** OptionValues, int OptionCount);
 	int DecodeViewingOptions(const char** OptionNames, const char** OptionValues, int OptionCount, char* OptBits);
 	void PrepareGeomPolygDataForViewing(radTVectGeomPolygon& GeomPolygons, double*& VertCoord, int& Nv, int*& VertInd, int*& PgLen, float*& PgColors, int& Npg);
 	void DeallocateAuxPgnViewData(double** dArr, int** iArr1, int** iArr2, float** fArr);
+
+	void GraphicsForAll_g3d(int InShowSymmetryChilds);
 
 	int SubdivideElement_g3d(int ElemKey, double* SubdivArray, long lenSubdivArray, char TypeExtraSpec, double* ExtraSpec, long lenExtraSpec, const char** OptionNames, const char** OptionValues, int OptionCount);
 	int CutElement_g3d(int ElemKey, double* PointOnPlane, long lenPointOnPlane, double* PlaneNormal, long lenPlaneNormal, const char** OptionNames, const char** OptionValues, int OptionCount);
