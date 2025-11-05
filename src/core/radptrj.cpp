@@ -337,7 +337,8 @@ void radTPrtclTrj::ComputeFocusPotentPerOnMesh2D(const TVector3d& P1Vect, const 
 	int twoNs = ns << 1;
 	if(twoNs < 4) twoNs = 4;
 
-	double *pAuxBuffer = new double[twoNs];
+	std::vector<double> vAuxBuffer(twoNs);
+	double *pAuxBuffer = vAuxBuffer.data();
 	double *tFocPotData = pFocPotData;
 
 	double Arg2Min = -0.5*step2*(np2 - 1), Arg1Min = -0.5*step1*(np1 - 1);
@@ -364,7 +365,7 @@ void radTPrtclTrj::ComputeFocusPotentPerOnMesh2D(const TVector3d& P1Vect, const 
 		}
 		arg2 += step2;
 	}
-	if(pAuxBuffer != 0) delete[] pAuxBuffer;
+	// pAuxBuffer cleaned up automatically by RAII
 }
 
 //-------------------------------------------------------------------------
@@ -500,15 +501,11 @@ void radTPrtclTrj::AnalyzeForHarmonics(double* pB, int AmOfPts, double Per, doub
 {
 	if((pB == 0) || (AmOfPts <= 0) || (Per <= 0) || (RelPrec <= 0)) return;
 
-	float *AuxDataContIn=0, *AuxDataContOut=0;
-	double *CkArr=0, *PhikArr=0;
-	int *HarmNoArr=0;
-
-	AuxDataContIn = new float[AmOfPts << 1];
-	if(AuxDataContIn == 0) throw 0;
-
-	AuxDataContOut = new float[AmOfPts << 1];
-	if(AuxDataContOut == 0) throw 0;
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<float> vAuxDataContIn(AmOfPts << 1);
+	std::vector<float> vAuxDataContOut(AmOfPts << 1);
+	float *AuxDataContIn = vAuxDataContIn.data();
+	float *AuxDataContOut = vAuxDataContOut.data();
 	double *tB = pB;
 	float *tIn = AuxDataContIn;
 	double MaxAbsB = 0;
@@ -522,8 +519,7 @@ void radTPrtclTrj::AnalyzeForHarmonics(double* pB, int AmOfPts, double Per, doub
 	}
 	if(MaxAbsB <= 0)
 	{
-	    AnalyzeForHarmonics_DeleteAuxArrays(AuxDataContIn, AuxDataContOut, CkArr, PhikArr, HarmNoArr);
-		return;
+		return; // RAII: std::vector cleanup automatic
 	}
 
 	double Step = Per/double(AmOfPts);
@@ -548,14 +544,13 @@ void radTPrtclTrj::AnalyzeForHarmonics(double* pB, int AmOfPts, double Per, doub
 	int MaxAmOfHarm = AmOfHarm;
 	if(MaxAmOfHarm >= HalfAmOfPts) MaxAmOfHarm = HalfAmOfPts - 1;
 
-	CkArr = new double[MaxAmOfHarm];
-	if(CkArr == 0) throw MEMORY_ALLOCATION_FAILURE;
-
-	PhikArr = new double[MaxAmOfHarm];
-	if(PhikArr == 0) throw MEMORY_ALLOCATION_FAILURE;
-
-	HarmNoArr = new int[MaxAmOfHarm];
-	if(HarmNoArr == 0) throw MEMORY_ALLOCATION_FAILURE;
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<double> vCkArr(MaxAmOfHarm);
+	std::vector<double> vPhikArr(MaxAmOfHarm);
+	std::vector<int> vHarmNoArr(MaxAmOfHarm);
+	double *CkArr = vCkArr.data();
+	double *PhikArr = vPhikArr.data();
+	int *HarmNoArr = vHarmNoArr.data();
 
 	double CoefMult = 2./Per;
 	double AbsThreshold = RelPrec*MaxAbsB/CoefMult;
@@ -578,10 +573,9 @@ void radTPrtclTrj::AnalyzeForHarmonics(double* pB, int AmOfPts, double Per, doub
 		*(tHarmNoArr++) = (j + 1);
 		HarmCount++;
 	}
-	if(HarmCount <= 0) 
+	if(HarmCount <= 0)
 	{
-		AnalyzeForHarmonics_DeleteAuxArrays(AuxDataContIn, AuxDataContOut, CkArr, PhikArr, HarmNoArr);
-		return;
+		return; // RAII: std::vector cleanup automatic
 	}
 
 	MagHarmArr = new radTMagHarm[HarmCount];
@@ -598,7 +592,7 @@ void radTPrtclTrj::AnalyzeForHarmonics(double* pB, int AmOfPts, double Per, doub
 		tMagHarmArr++;
 	}
 	AmOfHarm = HarmCount;
-	AnalyzeForHarmonics_DeleteAuxArrays(AuxDataContIn, AuxDataContOut, CkArr, PhikArr, HarmNoArr);
+	// RAII: std::vector cleanup automatic
 }
 
 //-------------------------------------------------------------------------
