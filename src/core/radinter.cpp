@@ -689,10 +689,10 @@ void MultGenExtrRectangle()
 
 void MultGenExtrRectangleOpt(double** Layers, int AmOfLayers, double* M)
 {
-	TVector3d* RectCenPoints = new TVector3d[AmOfLayers];
-	if(RectCenPoints == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
-	TVector2d* RectDims = new TVector2d[AmOfLayers];
-	if(RectDims == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+	std::vector<TVector3d> vRectCenPoints(AmOfLayers);
+	std::vector<TVector2d> vRectDims(AmOfLayers);
+	TVector3d* RectCenPoints = vRectCenPoints.data();
+	TVector2d* RectDims = vRectDims.data();
 	TVector3d* tRectCenPoints = RectCenPoints;
 	TVector2d* tRectDims = RectDims;
 	double** tLayers = Layers;
@@ -704,19 +704,17 @@ void MultGenExtrRectangleOpt(double** Layers, int AmOfLayers, double* M)
 		tRectDims->x = *(tCoord++); (tRectDims++)->y = *(tCoord++);
 	}
 	rad.SetMultGenExtrRectangle(RectCenPoints, RectDims, AmOfLayers, M, 3);
-
-	if(RectDims != 0) delete[] RectDims;
-	if(RectCenPoints != 0) delete[] RectCenPoints;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
 
 void MultGenExtrRectangleDLL(double* pFlatCenPts, double* pFlatRtgSizes, int AmOfLayers, double* pM)
 {
-	TVector3d* RectCenPoints = new TVector3d[AmOfLayers];
-	if(RectCenPoints == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
-	TVector2d* RectDims = new TVector2d[AmOfLayers];
-	if(RectDims == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+	std::vector<TVector3d> vRectCenPoints(AmOfLayers);
+	std::vector<TVector2d> vRectDims(AmOfLayers);
+	TVector3d* RectCenPoints = vRectCenPoints.data();
+	TVector2d* RectDims = vRectDims.data();
 
 	TVector3d* tRectCenPoints = RectCenPoints;
 	TVector2d* tRectDims = RectDims;
@@ -729,9 +727,7 @@ void MultGenExtrRectangleDLL(double* pFlatCenPts, double* pFlatRtgSizes, int AmO
 		tRectDims->x = *(tRtgSizes++); (tRectDims++)->y = *(tRtgSizes++);
 	}
 	rad.SetMultGenExtrRectangle(RectCenPoints, RectDims, AmOfLayers, pM, 3);
-
-	if(RectDims != 0) delete[] RectDims;
-	if(RectCenPoints != 0) delete[] RectCenPoints;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
