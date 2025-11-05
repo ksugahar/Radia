@@ -1094,11 +1094,11 @@ int radTApplication::SetUpPolyhedronsFromLayerRectangles(TVector3d* RectCenPoint
 		LayerPolygons = new TVector2d*[AmOfLayerRect];
 		if(LayerPolygons == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 
-		PtsNumbersInLayerPgns = new int[AmOfLayerRect];
-		if(PtsNumbersInLayerPgns == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
-
-		CoordsZ = new double[AmOfLayerRect];
-		if(CoordsZ == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+		// RAII: Use std::vector for automatic cleanup
+		std::vector<int> vPtsNumbersInLayerPgns(AmOfLayerRect);
+		std::vector<double> vCoordsZ(AmOfLayerRect);
+		PtsNumbersInLayerPgns = vPtsNumbersInLayerPgns.data();
+		CoordsZ = vCoordsZ.data();
 
 		TVector3d* tRectCenPoints = RectCenPoints;
 		TVector2d* tRectDims = RectDims;
@@ -1132,8 +1132,7 @@ int radTApplication::SetUpPolyhedronsFromLayerRectangles(TVector3d* RectCenPoint
 			}
 			delete[] LayerPolygons;
 		}
-		if(PtsNumbersInLayerPgns != 0) delete[] PtsNumbersInLayerPgns;
-		if(CoordsZ != 0) delete[] CoordsZ;
+		// RAII: automatic cleanup
 
 		if(!SetUpOK) return 0;
 		return 1;
@@ -1148,8 +1147,7 @@ int radTApplication::SetUpPolyhedronsFromLayerRectangles(TVector3d* RectCenPoint
 			}
 			delete[] LayerPolygons;
 		}
-		if(PtsNumbersInLayerPgns != 0) delete[] PtsNumbersInLayerPgns;
-		if(CoordsZ != 0) delete[] CoordsZ;
+		// RAII: automatic cleanup
 
 		Initialize(); return 0;
 	}

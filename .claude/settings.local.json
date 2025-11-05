@@ -69,7 +69,9 @@
       "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python case0.py\")",
       "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python tests/test_radia.py\")",
       "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python tests/test_simple.py\")",
-      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python tests/test_simple.py; python tests/test_radia.py\")"
+      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python tests/test_simple.py; python tests/test_radia.py\")",
+      "Bash(while read line)",
+      "Bash(do sed -i \"$lines/return nullptr;/return 0;/\" src/core/radvlpgn.cpp)"
     ],
     "deny": [],
     "ask": []

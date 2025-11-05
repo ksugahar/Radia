@@ -1088,8 +1088,11 @@ void radTApplication::GraphicsForAll_g3d(int InShowSymmetryChilds)
 	try
 	{
 		int TotalElem = (int)(GlobalMapOfHandlers.size());
-		radTg3d** g3dPtrPtr = new radTg3d*[TotalElem];
-		int* KeyPtr = new int[TotalElem];
+		// RAII: Use std::vector for automatic cleanup
+		std::vector<radTg3d*> vG3dPtrPtr(TotalElem);
+		std::vector<int> vKeyPtr(TotalElem);
+		radTg3d** g3dPtrPtr = vG3dPtrPtr.data();
+		int* KeyPtr = vKeyPtr.data();
 
 		radGraphPresOptions InGraphPresOptions((char)InShowSymmetryChilds);
 
@@ -1123,7 +1126,7 @@ void radTApplication::GraphicsForAll_g3d(int InShowSymmetryChilds)
 			}
 		}
 		else Send.ErrorMessage("Radia::Error101");
-		delete[] g3dPtrPtr;
+		// RAII: automatic cleanup (also fixes missing delete[] KeyPtr!)
 	}
 	catch(...)
 	{
