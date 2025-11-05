@@ -16,6 +16,7 @@
 -------------------------------------------------------------------------*/
 
 #include <string.h>
+#include <array>
 #include <Python.h>
 
 #include "radappl.h"
@@ -405,10 +406,10 @@ void MultGenExtrTriangleDLL(double xc, double lx, double* pFlatVert, double* pFl
 	SetExtrPolygFirstPoint(xc, lx, ArrayOfPoints2d[0], a, FirstPoi); //OC040306
 	for(int i1=0; i1<3; i1++) FirstPoi[i1] = radCR.Double(FirstPoi[i1]);
 
-	//char CharBuf1[200], CharBuf2[200], CharBuf3[200];
-	char CharBuf1[200], CharBuf2[200], CharBuf3[200], CharBuf4[200]; //OC30072018
-	//const char* OptionNames[] = {CharBuf1, CharBuf2, CharBuf3};
-	const char* OptionNames[] = {CharBuf1, CharBuf2, CharBuf3, CharBuf4}; //OC30072018
+	//std::array<char, 200> CharBuf1, CharBuf2, CharBuf3;
+	std::array<char, 200> CharBuf1, CharBuf2, CharBuf3, CharBuf4; //OC30072018
+	//const char* OptionNames[] = {CharBuf1.data(), CharBuf2.data(), CharBuf3.data()};
+	const char* OptionNames[] = {CharBuf1.data(), CharBuf2.data(), CharBuf3.data(), CharBuf4.data()}; //OC30072018
 	//const char* OptionValues[] = {0,0,0};
 	const char* OptionValues[] = {0,0,0,0}; //OC30072018
 	//const char* NonParsedOpts[] = {sOpt1, sOpt2, sOpt3};
@@ -934,14 +935,14 @@ void DuplicateElementG3DOpt(int ElemKey, const char* Opt)
 	const char* OptionValues[] = {0};
 	int OptionCount = 0;
 
-	char CharBuf[200];
-	if((Opt != 0) && (*Opt != '\0')) 
+	std::array<char, 200> CharBuf;
+	if((Opt != 0) && (*Opt != '\0'))
 	{
-		strcpy(CharBuf, Opt);
-		char *pEndOptName = strrchr(CharBuf, '-');
+		strcpy(CharBuf.data(), Opt);
+		char *pEndOptName = strrchr(CharBuf.data(), '-');
 		if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 		*pEndOptName = '\0';
-		OptionNames[0] = CharBuf;
+		OptionNames[0] = CharBuf.data();
 		OptionValues[0] = strrchr(Opt, '>') + 1;
 		OptionCount++;
 	}
@@ -1007,16 +1008,16 @@ void SubdivideElementG3DOpt(int ElemKey, double* SubdivArray, char TypeExtraSpec
 	const char* OptionValues[] = {0,0,0};
 	int OptionCount = 0;
 
-	char CharBuf1[200], CharBuf2[200], CharBuf3[200];
+	std::array<char, 200> CharBuf1, CharBuf2, CharBuf3;
 	if(Opt1 != 0)
 	{
 		if(*Opt1 != '\0') 
 		{
-			strcpy(CharBuf1, Opt1);
-			char *pEndOptName = strrchr(CharBuf1, '-');
+			strcpy(CharBuf1.data(), Opt1);
+			char *pEndOptName = strrchr(CharBuf1.data(), '-');
 			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 			*pEndOptName = '\0';
-			OptionNames[0] = CharBuf1;
+			OptionNames[0] = CharBuf1.data();
 			OptionValues[0] = strrchr(Opt1, '>') + 1;
 			OptionCount++;
 		}
@@ -1025,11 +1026,11 @@ void SubdivideElementG3DOpt(int ElemKey, double* SubdivArray, char TypeExtraSpec
 	{
 		if(*Opt2 != '\0') 
 		{
-			strcpy(CharBuf2, Opt2);
-			char *pEndOptName = strrchr(CharBuf2, '-');
+			strcpy(CharBuf2.data(), Opt2);
+			char *pEndOptName = strrchr(CharBuf2.data(), '-');
 			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 			*pEndOptName = '\0';
-			OptionNames[OptionCount] = CharBuf2;
+			OptionNames[OptionCount] = CharBuf2.data();
 			OptionValues[OptionCount] = strrchr(Opt2, '>') + 1;
 			OptionCount++;
 		}
@@ -1038,11 +1039,11 @@ void SubdivideElementG3DOpt(int ElemKey, double* SubdivArray, char TypeExtraSpec
 	{
 		if(*Opt3 != '\0') 
 		{
-			strcpy(CharBuf3, Opt3);
-			char *pEndOptName = strrchr(CharBuf3, '-');
+			strcpy(CharBuf3.data(), Opt3);
+			char *pEndOptName = strrchr(CharBuf3.data(), '-');
 			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 			*pEndOptName = '\0';
-			OptionNames[OptionCount] = CharBuf3;
+			OptionNames[OptionCount] = CharBuf3.data();
 			OptionValues[OptionCount] = strrchr(Opt3, '>') + 1;
 			OptionCount++;
 		}
@@ -1098,14 +1099,14 @@ void CutElementG3DOpt(int ElemKey, double x, double y, double z, double nx, doub
 	const char* OptionValues[] = {0};
 	int OptionCount = 0;
 
-	char CharBuf1[200];
+	std::array<char, 200> CharBuf1;
 	if(*Opt1 != '\0') 
 	{
-		strcpy(CharBuf1, Opt1);
-		char *pEndOptName = strrchr(CharBuf1, '-');
+		strcpy(CharBuf1.data(), Opt1);
+		char *pEndOptName = strrchr(CharBuf1.data(), '-');
 		if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 		*pEndOptName = '\0';
-		OptionNames[0] = CharBuf1;
+		OptionNames[0] = CharBuf1.data();
 		OptionValues[0] = strrchr(Opt1, '>') + 1;
 		OptionCount++;
 	}
@@ -1496,8 +1497,8 @@ void AutoRelax()
 
 void AutoRelaxOpt(int InteractElemKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char* Opt1)
 {
-	char CharBuf1[200];
-	const char* OptionNames[] = {CharBuf1};
+	std::array<char, 200> CharBuf1;
+	const char* OptionNames[] = {CharBuf1.data()};
 	const char* OptionValues[] = {0};
 	const char* NonParsedOpts[] = {Opt1};
 	int OptionCount = 1;
@@ -1546,8 +1547,8 @@ void CompPrecisionOpt(const char* Opt1, const char* Opt2, const char* Opt3, cons
 	int OptionCount = 0;
 
 	int MaxAmOfOptions = 8;
-	char CharBuf1[200], CharBuf2[200], CharBuf3[200], CharBuf4[200], CharBuf5[200], CharBuf6[200], CharBuf7[200], CharBuf8[200];
-	char *TotCharBuf[] = {CharBuf1, CharBuf2, CharBuf3, CharBuf4, CharBuf5, CharBuf6, CharBuf7, CharBuf8};
+	std::array<char, 200> CharBuf1, CharBuf2, CharBuf3, CharBuf4, CharBuf5, CharBuf6, CharBuf7, CharBuf8;
+	char *TotCharBuf[] = {CharBuf1.data(), CharBuf2.data(), CharBuf3.data(), CharBuf4.data(), CharBuf5.data(), CharBuf6.data(), CharBuf7.data(), CharBuf8.data()};
 	const char *InOpt[] = {Opt1, Opt2,  Opt3, Opt4, Opt5, Opt6, Opt7, Opt8};
 	for(int i=0; i<MaxAmOfOptions; i++)
 	{
@@ -1815,8 +1816,8 @@ void GraphicsForElemWithSymChildsExt()
 
 int GraphicsForElemVTK(int ElemKey, const char* Opt1, const char* Opt2, const char* Opt3) //OC04112019 (requested by R.Nagler)
 {
-	char CharBuf1[200], CharBuf2[200], CharBuf3[200];
-	const char* OptionNames[] ={ CharBuf1, CharBuf2, CharBuf3 };
+	std::array<char, 200> CharBuf1, CharBuf2, CharBuf3;
+	const char* OptionNames[] ={ CharBuf1.data(), CharBuf2.data(), CharBuf3.data() };
 	const char* OptionValues[] ={ 0, 0, 0 };
 	const char* NonParsedOpts[] ={ Opt1, Opt2, Opt3 };
 	int OptionCount = 3;

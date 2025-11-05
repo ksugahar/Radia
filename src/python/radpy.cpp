@@ -11,6 +11,7 @@
 #include "radentry.h"
 #include "pyparse.h"
 #include "auxparse.h"
+#include <sstream>
 
 /************************************************************************//**
  * Error messages related to Python interface functions
@@ -58,22 +59,17 @@ static char ParseOrnt(PyObject* oOrnt, char aDef='x', const char* sFuncName=0)
 	char sOrnt[256]; *sOrnt = '\0';
 	CPyParse::CopyPyStringToC(oOrnt, sOrnt, 256);
 	char a = *sOrnt;
-	if((a != 'x') && (a != 'X') && (a != 'y') && (a != 'Y') && (a != 'z') && (a != 'Z')) 
+	if((a != 'x') && (a != 'X') && (a != 'y') && (a != 'Y') && (a != 'z') && (a != 'Z'))
 	{
 		const char sErCom[] = "orientation definition should be \'x\', \'y\' or \'z\'";
-		char sAux[1024];
-		strcpy(sAux, ": ");
-		if(sFuncName == 0) 
+		std::ostringstream sAux;
+		sAux << ": ";
+		if(sFuncName != 0)
 		{
-			strcat(sAux, sErCom);
+			sAux << sFuncName << ", ";
 		}
-		else 
-		{
-			strcat(sAux, sFuncName);
-			strcat(sAux, ", ");
-			strcat(sAux, sErCom);
-		}
-		throw CombErStr(strEr_BadFuncArg, sAux);
+		sAux << sErCom;
+		throw CombErStr(strEr_BadFuncArg, sAux.str().c_str());
 	}
 	return a;
 }
@@ -88,22 +84,17 @@ static void ParseM(double arM[3], PyObject* oM, const char* sFuncName=0)
 		int lenM = 3;
 		bool lenIsSmall = false;
 		CPyParse::CopyPyListElemsToNumArray(oM, 'd', arM, lenM, lenIsSmall);
-		if((lenM != 3) || lenIsSmall) 
+		if((lenM != 3) || lenIsSmall)
 		{
 			const char sErCom[] = "incorrect definition of magnetization vector";
-			char sAux[1024];
-			strcpy(sAux, ": ");
-			if(sFuncName == 0) 
+			std::ostringstream sAux;
+			sAux << ": ";
+			if(sFuncName != 0)
 			{
-				strcat(sAux, sErCom);
+				sAux << sFuncName << ", ";
 			}
-			else 
-			{
-				strcat(sAux, sFuncName);
-				strcat(sAux, ", ");
-				strcat(sAux, sErCom);
-			}
-			throw CombErStr(strEr_BadFuncArg, sAux);
+			sAux << sErCom;
+			throw CombErStr(strEr_BadFuncArg, sAux.str().c_str());
 		}
 	}
 	else
@@ -118,20 +109,20 @@ static void ParseM(double arM[3], PyObject* oM, const char* sFuncName=0)
 static void ParseSubdPar(double arSbdPar[6], PyObject* oSbdPar, const char* sFuncName=0)
 //static void ParseSubdPar(double arSbdPar[6], PyObject* oSbdPar, char* sFuncName=0)
 {//OC29022020
-	char sErrMes[2000];
-	strcpy(sErrMes, ": \0");
-	if(sFuncName == 0) strcat(sErrMes, "ObjDivMag\0");
-	else strcat(sErrMes, sFuncName);
+	std::ostringstream ssErrMes;
+	ssErrMes << ": ";
+	if(sFuncName == 0) ssErrMes << "ObjDivMag";
+	else ssErrMes << sFuncName;
+	ssErrMes << ", incorrect subdivision parameters";
+	std::string sErrMes = ssErrMes.str();
 
-	strcat(sErrMes, ", incorrect subdivision parameters");
-
-	if(oSbdPar == 0) throw CombErStr(strEr_BadFuncArg, sErrMes);
+	if(oSbdPar == 0) throw CombErStr(strEr_BadFuncArg, sErrMes.c_str());
 
 	double arSbdParLoc[6];
 	double *pSbdParLoc = arSbdParLoc;
 	int nSbdParLoc = 6;
 	char resP = CPyParse::CopyPyNestedListElemsToNumAr(oSbdPar, 'd', pSbdParLoc, nSbdParLoc);
-	if(resP == 0) throw CombErStr(strEr_BadFuncArg, sErrMes);
+	if(resP == 0) throw CombErStr(strEr_BadFuncArg, sErrMes.c_str());
 	
 	if(nSbdParLoc == 6)
 	{
