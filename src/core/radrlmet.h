@@ -507,12 +507,12 @@ inline bool radTAuxIndNorm::greater(const radTAuxIndNorm& P1, const radTAuxIndNo
 //-------------------------------------------------------------------------
 
 #ifdef __GNUC__
-typedef list <radTAuxIndNorm> radTlAuxIndNorm;
-typedef vector <int> radTvInt;
+using radTlAuxIndNorm = list <radTAuxIndNorm>;
+using radTvInt = vector <int>;
 //typedef vector <radTvInt> radTvvInt;
 #else
-typedef list <radTAuxIndNorm, allocator<radTAuxIndNorm> > radTlAuxIndNorm;
-typedef vector <int, allocator<int> > radTvInt;
+using radTlAuxIndNorm = list <radTAuxIndNorm, allocator<radTAuxIndNorm> >;
+using radTvInt = vector <int, allocator<int> >;
 //typedef vector <radTvInt, allocator<radTvInt> > radTvvInt;
 #endif
 

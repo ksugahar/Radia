@@ -20,7 +20,7 @@
 
 // Forward declaration for Python callback support
 struct _object;
-typedef _object PyObject;
+using PyObject = _object;
 
 #include "radsend.h"
 #include "radg.h"

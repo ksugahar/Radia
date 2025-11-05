@@ -212,13 +212,13 @@ public:
 //-------------------------------------------------------------------------
 
 #ifdef __GNUC__
-typedef vector<radTPolyg2dIntrsctInfo> radTPolyg2dIntrsctInfoVect;
-typedef vector<TVector2d> radTVect2dVect;
-typedef vector<int> radTVectInt;
+using radTPolyg2dIntrsctInfoVect = vector<radTPolyg2dIntrsctInfo>;
+using radTVect2dVect = vector<TVector2d>;
+using radTVectInt = vector<int>;
 #else
-typedef vector<radTPolyg2dIntrsctInfo, allocator<radTPolyg2dIntrsctInfo> > radTPolyg2dIntrsctInfoVect;
-typedef vector<TVector2d, allocator<TVector2d> > radTVect2dVect;
-typedef vector<int, allocator<int> > radTVectInt;
+using radTPolyg2dIntrsctInfoVect = vector<radTPolyg2dIntrsctInfo, allocator<radTPolyg2dIntrsctInfo> >;
+using radTVect2dVect = vector<TVector2d, allocator<TVector2d> >;
+using radTVectInt = vector<int, allocator<int> >;
 #endif
 
 #ifdef __MWERKS__

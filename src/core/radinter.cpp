@@ -1610,10 +1610,10 @@ void FieldArbitraryPointsStruct()
 	if(!resListRead) { rad.Send.ErrorMessage("Radia::Error000"); return;}
 	else if(resListRead == 2) return; //OC29092010 calculation should not be performed because symbol was sent (?)
 
-	for(int i=0; i<(int)(VectorOfVector3d.size()); i++) //OC050504
+	for(auto& vec : VectorOfVector3d) //OC050504
 	{
 	TVector3d vSmallRand(radCR.Double(0), radCR.Double(0), radCR.Double(0));
-	VectorOfVector3d[i] += vSmallRand;
+	vec += vSmallRand;
 	}
 
 	rad.ComputeField(ElemKey, FieldChar, VectorOfVector3d, VectInputCell);

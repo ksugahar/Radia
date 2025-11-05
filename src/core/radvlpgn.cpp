@@ -1459,7 +1459,7 @@ int radTPolyhedron::CutItself(TVector3d* InCuttingPlane, radThg& In_hg, radTPair
 		}
 	}
 
-	for(int k=0; k<(int)VectOfTwoPoints3d.size(); k++) delete[] VectOfTwoPoints3d[k];
+	for(auto ptr : VectOfTwoPoints3d) delete[] ptr;
 	VectOfTwoPoints3d.erase(VectOfTwoPoints3d.begin(), VectOfTwoPoints3d.end());
 	LowerNewVectPgnAndTrans.erase(LowerNewVectPgnAndTrans.begin(), LowerNewVectPgnAndTrans.end());
 	UpperNewVectPgnAndTrans.erase(UpperNewVectPgnAndTrans.begin(), UpperNewVectPgnAndTrans.end());
@@ -3802,9 +3802,9 @@ void radTPolyhedron::VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool Ensu
 			bool ThisPtAlreadyExists = false;
 			if(EnsureUnique)
 			{
-				for(int k=0; k<(int)LocPts.size(); k++)
+				for(const auto& pt : LocPts)
 				{
-					TVector3d dp = LocPts[k] - p3d;
+					TVector3d dp = pt - p3d;
 					if((dp.x*dp.x + dp.y*dp.y + dp.z*dp.z) <= AbsTolE2)
 					{
 						ThisPtAlreadyExists = true;

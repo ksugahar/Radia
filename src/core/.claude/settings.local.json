@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake --build:*)",
+      "Bash(powershell.exe -Command \"cmake --build build --config Release 2>&1 | Select-Object -First 50\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -Clean)",
+      "Bash(cat:*)",
+      "Bash(powershell.exe -Command \"Get-Content build.log -Tail 50\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File Build_NGSolve.ps1)",
+      "Bash(git checkout:*)",
+      "Bash(python:*)",
+      "Bash(powershell.exe -Command \"Get-Content build.log | Select-Object -Last 100\")",
+      "Bash(\"C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" ..)",
+      "Bash(\"C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build . --config Release --target radia)",
+      "Bash(git -C /s/Radia/01_GitHub show HEAD:src/core/radappl.h)",
+      "Bash(git -C /s/Radia/01_GitHub show HEAD:src/core/radapl6.cpp)",
+      "Bash(git -C /s/Radia/01_GitHub show HEAD:src/core/radapl4.cpp)",
+      "Bash(git add:*)",
+      "Bash(git reset:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File Build_PyPI_Package.ps1)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File Publish_to_PyPI.ps1)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"& ''''.\\Publish_to_PyPI.ps1''''; Read-Host ''''Press Enter to continue''''\")",
+      "Bash(\"C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build /s/Radia/01_GitHub/build --config Release --target radia)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command '$env:PYTHONIOENCODING=\"\"\"\"utf-8\"\"\"\"; $env:PYTHONUTF8=1; chcp 65001 | Out-Null; python -m twine upload dist/* --username __token__ --password pypi-AgEIcHlwaS5vcmcCJDY2Y2I5NzU4LTc5M2YtNDgwYS05OTJlLTU2MTNmODRmNjEwOQACKlszLCJjNzczYTE0NS02ODljLTQ4ZTUtOTUyYy05YWVkZDYyYTAyMzciXQAABiDZrvZyoJFiQCQBSolPte1H291JgjcgNCxMZs5kBc7IHw --verbose')",
+      "Bash(awk:*)",
+      "Bash(test -f:*)",
+      "Bash(for:*)",
+      "Bash(do echo \"=== $f ===\")",
+      "Bash(done)",
+      "Bash(git rm:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

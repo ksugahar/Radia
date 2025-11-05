@@ -1094,9 +1094,8 @@ int radTGroup::FindEdgePointsOverPhiAndAxForCylSubd(radTCylindricSubdivSpec* pSu
 				else
 				{
 					CleanPhiSectorsDupl.erase(CleanPhiSectorsDupl.begin(), CleanPhiSectorsDupl.end());
-					for(int j=0; j<(int)(CleanPhiSectors.size()); j++)
+					for(auto& CurSect : CleanPhiSectors)
 					{
-						radTPairOfDouble& CurSect = CleanPhiSectors[j];
 						double& CurSectSt = CurSect.First;
 						double& CurSectFi = CurSect.Second;
 

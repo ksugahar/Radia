@@ -661,13 +661,12 @@ int radTApplication::SetUpOnePolyhedronSegment(radTPtrsToPgnAndVect2d* PtrsToPgn
 				{
 					if(!(pThisPoLinks->SecondIndVect.empty()))
 					{
-						for(int j=0; j<(int)(pThisPoLinks->SecondIndVect.size()); j++)
+						for(const auto& IndOfPoFromBase : pThisPoLinks->SecondIndVect)
 						{
-							int IndOfPoFromBase = (pThisPoLinks->SecondIndVect)[j];
 							char LetsMakeFace = 0;
-							for(int k=0; k<(int)(pNextPoLinks->FirstIndVect.size()); k++)
+							for(const auto& firstInd : pNextPoLinks->FirstIndVect)
 							{
-								if(IndOfPoFromBase == (pNextPoLinks->FirstIndVect)[k])
+								if(IndOfPoFromBase == firstInd)
 								{
 									LetsMakeFace = 1; break;
 								}

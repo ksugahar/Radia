@@ -27,9 +27,9 @@
 //-------------------------------------------------------------------------
 
 #ifdef __GNUC__
-typedef vector<TVector3d*> radTVectPtrVect3d;
+using radTVectPtrVect3d = vector<TVector3d*>;
 #else
-typedef vector<TVector3d*, allocator<TVector3d*> > radTVectPtrVect3d;
+using radTVectPtrVect3d = vector<TVector3d*, allocator<TVector3d*> >;
 #endif
 
 //-------------------------------------------------------------------------

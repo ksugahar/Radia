@@ -38,8 +38,8 @@ public:
 	virtual radTMaterial* SetupMater(double InMr=0) { return 0;}
 };
 
-typedef radTHandle<radTMaterialDB> radTHMatDB;
-typedef vector <radTHMatDB> radTHMatDBVect;
+using radTHMatDB = radTHandle<radTMaterialDB>;
+using radTHMatDBVect = vector <radTHMatDB>;
 
 //-------------------------------------------------------------------------
 

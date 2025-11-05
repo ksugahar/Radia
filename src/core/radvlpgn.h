@@ -59,15 +59,15 @@ inline int operator ==(const radTHandlePgnAndTrans& h1, const radTHandlePgnAndTr
 //-------------------------------------------------------------------------
 
 #ifdef __GNUC__
-typedef vector<radTHandlePgnAndTrans> radTVectHandlePgnAndTrans;
-typedef vector<TVector3d*> radTVectOfPtrToVect3d;
-typedef list<TVector3d> radTListOfVector3d;
-typedef vector<TVector3d> radTVectVect3d;
+using radTVectHandlePgnAndTrans = vector<radTHandlePgnAndTrans>;
+using radTVectOfPtrToVect3d = vector<TVector3d*>;
+using radTListOfVector3d = list<TVector3d>;
+using radTVectVect3d = vector<TVector3d>;
 #else
-typedef vector<radTHandlePgnAndTrans, allocator<radTHandlePgnAndTrans> > radTVectHandlePgnAndTrans;
-typedef vector<TVector3d*, allocator<TVector3d*> > radTVectOfPtrToVect3d;
-typedef list<TVector3d, allocator<TVector3d> > radTListOfVector3d;
-typedef vector<TVector3d, allocator<TVector3d> > radTVectVect3d;
+using radTVectHandlePgnAndTrans = vector<radTHandlePgnAndTrans, allocator<radTHandlePgnAndTrans> >;
+using radTVectOfPtrToVect3d = vector<TVector3d*, allocator<TVector3d*> >;
+using radTListOfVector3d = list<TVector3d, allocator<TVector3d> >;
+using radTVectVect3d = vector<TVector3d, allocator<TVector3d> >;
 #endif
 
 #ifdef __MWERKS__

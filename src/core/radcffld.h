@@ -18,7 +18,7 @@
 
 // Forward declaration to avoid Python.h dependency in header
 struct _object;
-typedef _object PyObject;
+using PyObject = _object;
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------

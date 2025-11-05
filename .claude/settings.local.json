@@ -61,7 +61,12 @@
       "Bash(pip search:*)",
       "Bash(pip index:*)",
       "Bash(pip show:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe\" -B build -S .)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe\" --build build --config Release --parallel)",
+      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python test_radia.py\")",
+      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python test_simple.py\")",
+      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python case0.py\")"
     ],
     "deny": [],
     "ask": []
