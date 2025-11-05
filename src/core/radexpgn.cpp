@@ -1257,7 +1257,9 @@ int radTExtrPolygon::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr,
 	int** ArrayOfFaces = new int*[AmOfFaces];
 	if(ArrayOfFaces == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 
-	int* FacesIndexes = new int[AmOfEdgePoInBase*7+2];
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<int> vFacesIndexes(AmOfEdgePoInBase*7+2);
+	int* FacesIndexes = vFacesIndexes.data();
 
 	int* BaseFace1 = &(FacesIndexes[0]);
 	int* BaseFace2 = &(FacesIndexes[AmOfEdgePoInBase]);
@@ -1339,7 +1341,7 @@ int radTExtrPolygon::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr,
 
 	if(ArrayOfPoints != 0) delete[] ArrayOfPoints;
 	if(ArrayOfFaces != 0) delete[] ArrayOfFaces;
-	if(FacesIndexes != 0) delete[] FacesIndexes;
+	// RAII: FacesIndexes cleanup automatic
 	return 1;
 }
 
