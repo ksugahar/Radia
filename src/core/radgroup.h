@@ -129,10 +129,10 @@ public:
 
 //-------------------------------------------------------------------------
 
-inline void radTGroup::AddElement(int ElemKey, const radThg& hg) 
-{ 
+inline void radTGroup::AddElement(int ElemKey, const radThg& hg)
+{
 	GroupMapOfHandlers[ElemKey] = hg;
-	((radTg3d*)(hg.rep))->IsGroupMember = 1;
+	static_cast<radTg3d*>(hg.rep)->IsGroupMember = 1;
 }
 
 //-------------------------------------------------------------------------
@@ -141,7 +141,7 @@ inline void radTGroup::B_comp(radTField* FieldPtr)
 {
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->B_genComp(FieldPtr);  // To check carefully!!!
+		static_cast<radTg3d*>(iter->second.rep)->B_genComp(FieldPtr);
 }
 
 //-------------------------------------------------------------------------
@@ -170,7 +170,7 @@ inline int radTGroup::ItemIsNotFullyInternalAfterCut()
 {
 	for(radTmhg::iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		if(((radTg3d*)(((*iter).second).rep))->ItemIsNotFullyInternalAfterCut()) return 1;
+		if(static_cast<radTg3d*>(iter->second.rep)->ItemIsNotFullyInternalAfterCut()) return 1;
 	return 0;
 }
 
@@ -180,8 +180,8 @@ inline double radTGroup::Volume()
 {
 	double SumVol = 0.;
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
-		//SumVol += ((radTg3d*)(((*iter).second).rep))->Volume();
-		SumVol += ((radTg3d*)(((*iter).second).rep))->VolumeWithSym();
+		//SumVol += static_cast<radTg3d*>(iter->second.rep)->Volume();
+		SumVol += static_cast<radTg3d*>(iter->second.rep)->VolumeWithSym();
 
 	return SumVol;
 }
@@ -200,7 +200,7 @@ inline void radTGroup::LimitsAtTransform(radTrans* pExtTr, double* LimArr)
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 	{
 		double LocLimArr[6];
-		((radTg3d*)(((*iter).second).rep))->Limits(pExtTr, LocLimArr);
+		static_cast<radTg3d*>(iter->second.rep)->Limits(pExtTr, LocLimArr);
 		if(xMin > LocLimArr[0]) xMin = LocLimArr[0];
 		if(xMax < LocLimArr[1]) xMax = LocLimArr[1];
 		if(yMin > LocLimArr[2]) yMin = LocLimArr[2];
@@ -216,7 +216,7 @@ inline void radTGroup::VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool En
 {
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->VerticesInLocFrame(OutVect, EnsureUnique);
+		static_cast<radTg3d*>(iter->second.rep)->VerticesInLocFrame(OutVect, EnsureUnique);
 }
 
 //-------------------------------------------------------------------------
@@ -226,7 +226,7 @@ inline void radTGroup::SimpleEnergyComp(radTField* FieldPtr)
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
 	{
-		radTg3d* g3dPtr = (radTg3d*)(((*iter).second).rep);
+		auto* g3dPtr = static_cast<radTg3d*>(iter->second.rep);
 		if(g3dPtr->g3dListOfTransform.empty()) g3dPtr->SimpleEnergyComp(FieldPtr);
 		else
 		{
@@ -243,7 +243,7 @@ inline void radTGroup::MarkFurtherSubdNeed(char SubdNeedX, char SubdNeedY, char 
 
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->MarkFurtherSubdNeed(SubdNeedX, SubdNeedY, SubdNeedZ);
+		static_cast<radTg3d*>(iter->second.rep)->MarkFurtherSubdNeed(SubdNeedX, SubdNeedY, SubdNeedZ);
 }
 
 //-------------------------------------------------------------------------
@@ -254,7 +254,7 @@ inline void radTGroup::MarkFurtherSubdNeed1D(char SubdNeed, char XorYorZ)
 
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->MarkFurtherSubdNeed1D(SubdNeed, XorYorZ);
+		static_cast<radTg3d*>(iter->second.rep)->MarkFurtherSubdNeed1D(SubdNeed, XorYorZ);
 }
 
 //-------------------------------------------------------------------------
@@ -265,7 +265,7 @@ inline void radTGroup::SetupFurtherSubdInd(char InSubdInd)
 
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->SetupFurtherSubdInd(InSubdInd);
+		static_cast<radTg3d*>(iter->second.rep)->SetupFurtherSubdInd(InSubdInd);
 }
 
 //-------------------------------------------------------------------------
@@ -275,7 +275,7 @@ inline void radTGroup::SetMessageChar(char InMessageChar)
 	MessageChar = InMessageChar;
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->SetMessageChar(InMessageChar);
+		static_cast<radTg3d*>(iter->second.rep)->SetMessageChar(InMessageChar);
 }
 
 //-------------------------------------------------------------------------
@@ -285,7 +285,7 @@ inline int radTGroup::ScaleCurrent(double scaleCoef)
 	int scalingWasApplied = 0;
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 	{
-		if(((radTg3d*)(((*iter).second).rep))->ScaleCurrent(scaleCoef)) scalingWasApplied = 1;
+		if(static_cast<radTg3d*>(iter->second.rep)->ScaleCurrent(scaleCoef)) scalingWasApplied = 1;
 	}
 	return scalingWasApplied;
 }

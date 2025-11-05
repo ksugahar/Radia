@@ -466,7 +466,7 @@ int radTApplication::SetExtrudedPolygon(double* FirstPoi, long lenFirstPoi, doub
 		radTExtrPolygon* ExtrPgnPtr = new radTExtrPolygon(FirstPoiVect, AxOrnt, Lx, ArrayOfPoints2d, int(lenArrayOfPoints2d), MagnVect);
 		if(ExtrPgnPtr == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 
-		if(((radTPolygon*)(ExtrPgnPtr->BasePolygonHandle.rep))->SomethingIsWrong)
+		if(static_cast<radTPolygon*>(ExtrPgnPtr->BasePolygonHandle.rep)->SomethingIsWrong)
 		{
 			SendingIsRequired = PrevSendingIsRequired;
 			delete ExtrPgnPtr; return 0;
@@ -2055,7 +2055,7 @@ void radTApplication::ComputeMagnOrJ_InCenter(int ElemKey, char MorJ)
 		radThg hgDplWithoutSym;
 		char PutNewStuffIntoGenCont = 0;
 		if(!g3dPtr->CreateFromSym(hgDplWithoutSym, this, PutNewStuffIntoGenCont)) return;
-		radTg3d* g3dDplWithoutSymPtr = (radTg3d*)(hgDplWithoutSym.rep);
+		radTg3d* g3dDplWithoutSymPtr = static_cast<radTg3d*>(hgDplWithoutSym.rep);
 
 		radTvhg vhFlatTransforms; //OC061007_BNL
 		g3dDplWithoutSymPtr->FlattenSpaceTransforms(vhFlatTransforms);

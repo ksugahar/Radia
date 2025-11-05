@@ -227,7 +227,7 @@ int radTApplication::SetUpPolyhedronsFromBaseFacePolygons(double zc, const char*
 				radThg hgTrf(TransPtr);
 				//int trfElemKey = AddElementToContainer(hgTrf);
 				//if(trfElemKey != 0) hgLoc.rep->AddTransform(1, hgTrf);
-				((radTg3d*)(hgLoc.rep))->AddTransform(1, hgTrf);
+				(static_cast<radTg3d*>(hgLoc.rep))->AddTransform(1, hgTrf);
 			}
 		}
 
@@ -413,7 +413,7 @@ int radTApplication::SetUpPolyhedronsFromBaseFacePolygonsTri(double zc, const ch
 				radTrans* TransPtr = new radTrans(auxTrans0);
 				if(TransPtr == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 				radThg hgTrf(TransPtr);
-				((radTg3d*)(hgLoc.rep))->AddTransform(1, hgTrf);
+				(static_cast<radTg3d*>(hgLoc.rep))->AddTransform(1, hgTrf);
 			}
 		}
 
@@ -839,7 +839,7 @@ CreatingPolyhedronPiece:
 			if(pNewPlhdr == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 			if(pNewPlhdr->SomethingIsWrong) { delete pNewPlhdr; return 0;}
 			radThg hgNew(pNewPlhdr);
-			((radTGroup*)((radTg3d*)(hgGroup.rep)))->AddElement(AddElementToContainer(hgNew), hgNew);
+			((radTGroup*)(static_cast<radTg3d*>(hgGroup.rep)))->AddElement(AddElementToContainer(hgNew), hgNew);
 		}
 
 		if(CuttingIsNeeded) 
@@ -1027,7 +1027,7 @@ int radTApplication::SetUpTetrahedronBasedOnTwoLinSegm(radTVect2dVect* pFirstVec
 	if(pTetr == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 	if(pTetr->SomethingIsWrong) { delete pTetr; return 0;}
 	radThg hgNew(pTetr);
-	((radTGroup*)((radTg3d*)(hgGroup.rep)))->AddElement(AddElementToContainer(hgNew), hgNew);
+	((radTGroup*)(static_cast<radTg3d*>(hgGroup.rep)))->AddElement(AddElementToContainer(hgNew), hgNew);
 	return 1;
 }
 
@@ -1071,7 +1071,7 @@ int radTApplication::CheckLayerPolygonStructures(TVector2d** LayerPolygons, int*
 int radTApplication::CheckIfGroupIsNeeded(radThg& In_hg)
 {
 	radThg hgOld = In_hg;
-	radTGroup* pGroup = Cast.GroupCast((radTg3d*)(In_hg.rep));
+	radTGroup* pGroup = Cast.GroupCast(static_cast<radTg3d*>(In_hg.rep));
 	if(pGroup == 0) return 0;
 
 	int Size = (int)(pGroup->GroupMapOfHandlers.size());

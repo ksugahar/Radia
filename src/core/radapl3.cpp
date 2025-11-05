@@ -944,7 +944,7 @@ int radTApplication::SetAndShowPhysUnits()
 
 void radTApplication::ReplaceInAllGroups(radThg& OldHandle, radThg& NewHandle)
 {
-	radTg3d* g3dOldPtr = (radTg3d*)(OldHandle.rep);
+	radTg3d* g3dOldPtr = static_cast<radTg3d*>(OldHandle.rep);
 
 	try
 	{
@@ -972,7 +972,7 @@ void radTApplication::ReplaceInAllGroups(radThg& OldHandle, radThg& NewHandle)
 
 void radTApplication::ReplaceInGlobalMap(radThg& OldHandle, radThg& NewHandle)
 {
-	radTg3d* g3dOldPtr = (radTg3d*)(OldHandle.rep);
+	radTg3d* g3dOldPtr = static_cast<radTg3d*>(OldHandle.rep);
 
 	try
 	{

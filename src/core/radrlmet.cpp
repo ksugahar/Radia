@@ -274,7 +274,7 @@ radTRelaxationMethNo_a5::radTRelaxationMethNo_a5(radTInteraction* InInteractionP
 		for(int i=0; i<IntrctPtr->AmOfRelaxSubInterv; i++)
 		{
 			radTRelaxSubInterval& LocSubInterv = IntrctPtr->RelaxSubIntervArray[i];
-			if(LocSubInterv.SubIntervalID == RelaxTogether) 
+			if(LocSubInterv.SubIntervalID == TRelaxSubIntervalID::RelaxTogether) 
 			{
 				TmpSubIntervArray[RelaxTogetherCount] = LocSubInterv;
 				RelaxTogetherCount++;
@@ -358,7 +358,7 @@ void radTRelaxationMethNo_a5::DefineNewMagnetizations()
 	{
 		radTRelaxSubInterval& CurrentSubInterv = IntrctPtr->RelaxSubIntervArray[IntrvNo];
 
-		if(CurrentSubInterv.SubIntervalID == RelaxTogether)
+		if(CurrentSubInterv.SubIntervalID == TRelaxSubIntervalID::RelaxTogether)
 		{
 			RelaxTogetherCount++;
 			for(StrNo = CurrentSubInterv.StartNo; StrNo <= CurrentSubInterv.FinNo; StrNo++)
@@ -444,7 +444,7 @@ void radTRelaxationMethNo_a5::DefineNewMagnetizations()
 			}
 		}
 		
-		if(CurrentSubInterv.SubIntervalID == RelaxApart)
+		if(CurrentSubInterv.SubIntervalID == TRelaxSubIntervalID::RelaxApart)
 		{
 			for(StrNo = CurrentSubInterv.StartNo; StrNo <= CurrentSubInterv.FinNo; StrNo++)
 			{

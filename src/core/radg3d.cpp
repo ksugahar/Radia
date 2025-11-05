@@ -97,7 +97,7 @@ void radTg3d::NestedFor_Energy(radTField* FieldPtr, const radTlphg::iterator& It
 	radTlphg::iterator LocalNextIter = Iter;
 	LocalNextIter++;
 
-	radTg3d* SourcePtr = (radTg3d*)(FieldPtr->HandleEnergyForceTorqueCompData.rep->hSource.rep);
+	radTg3d* SourcePtr = static_cast<radTg3d*>(FieldPtr->HandleEnergyForceTorqueCompData.rep->hSource.rep);
 	radTrans* InvTransPtr = new radTrans(*TransPtr); // This is to let handler work correctly
 	InvTransPtr->Invert();
 	radThg hInvTrans(InvTransPtr);
@@ -327,7 +327,7 @@ void radTg3d::NormStressTensor(radTField* FieldPtr)
 	short PrevB_= FieldPtr->FieldKey.B_; FieldPtr->FieldKey.B_= 1;
 	FieldPtr->B = ZeroVect;
 
-	((radTg3d*)(FieldPtr->ShapeIntDataPtr->HandleOfSource.rep))->B_genComp(FieldPtr);
+	(static_cast<radTg3d*>(FieldPtr->ShapeIntDataPtr->HandleOfSource.rep))->B_genComp(FieldPtr);
 
 	const double ConForStrTensInSI = 1.E-06/(4*3.14159265358979*1.E-07); // (10^(-3))^2/mu0
 	TVector3d LocB = FieldPtr->B;
@@ -479,7 +479,7 @@ void radTg3d::EnergyForceTorqueComp(radTField* FieldPtr)
 		{ 
 			EnFrcTrqCompDataPtr->SomethingIsWrong = 1; return;
 		}
-		radTg3d* DuplDestPtr = (radTg3d*)(EnFrcTrqCompDataPtr->hDest.rep);
+		radTg3d* DuplDestPtr = static_cast<radTg3d*>(EnFrcTrqCompDataPtr->hDest.rep);
 
 		if((fabs(EnFrcTrqCompDataPtr->DestSubdivArray[0]-1.)<RelTol) && (fabs(EnFrcTrqCompDataPtr->DestSubdivArray[2]-1.)<RelTol) && (fabs(EnFrcTrqCompDataPtr->DestSubdivArray[4]-1.)<RelTol))
 		{
@@ -497,7 +497,7 @@ void radTg3d::EnergyForceTorqueComp(radTField* FieldPtr)
 			{ 
 				EnFrcTrqCompDataPtr->SomethingIsWrong = 1; return;
 			}
-			((radTg3d*)(EnFrcTrqCompDataPtr->hDest.rep))->ActualEnergyForceTorqueComp(FieldPtr); 
+			(static_cast<radTg3d*>(EnFrcTrqCompDataPtr->hDest.rep))->ActualEnergyForceTorqueComp(FieldPtr); 
 		}
 	}
 }
@@ -509,7 +509,7 @@ char radTg3d::CheckIfMoreEnrFrcTrqCompNeededAndUpdate(radTField* WorkFieldPtr, r
 	radTFieldKey &FieldKey = WorkFieldPtr->FieldKey;
 	char EnergyCompNotNeeded = 1, ForceCompNotNeeded = 1, TorqueCompNotNeeded = 1;
 	
-	radTg3d* LocDestPtr = (radTg3d*)(WorkFieldPtr->HandleEnergyForceTorqueCompData.rep->hDest.rep);
+	radTg3d* LocDestPtr = static_cast<radTg3d*>(WorkFieldPtr->HandleEnergyForceTorqueCompData.rep->hDest.rep);
 	radTAuxCompDataG3D* AuxCompDataPtr = LocDestPtr->HandleAuxCompData.rep;
 
 	if(FieldKey.Energy_)
@@ -579,7 +579,7 @@ int radTg3d::ProceedNextStepEnergyForceTorqueComp(double* SubdArr, radThg& Handl
 	SubdivOptions.SubdivideCoils = 1;
 	SubdivOptions.PutNewStuffIntoGenCont = 0;
 
-	if(!((radTg3d*)(hOld.rep))->SubdivideItself(SubdArr, HandleOfThis, FieldPtr->HandleEnergyForceTorqueCompData.rep->radPtr, &SubdivOptions))
+	if(!(static_cast<radTg3d*>(hOld.rep))->SubdivideItself(SubdArr, HandleOfThis, FieldPtr->HandleEnergyForceTorqueCompData.rep->radPtr, &SubdivOptions))
 	{
 		FieldPtr->HandleEnergyForceTorqueCompData.rep->SomethingIsWrong = 1; return 0;
 	}
@@ -588,16 +588,16 @@ int radTg3d::ProceedNextStepEnergyForceTorqueComp(double* SubdArr, radThg& Handl
 
 	LocFieldPtr->HandleEnergyForceTorqueCompData.rep->hDest = HandleOfThis;
 
-	radTg3d* NewGroupPtr = (radTg3d*)(HandleOfThis.rep);
+	radTg3d* NewGroupPtr = static_cast<radTg3d*>(HandleOfThis.rep);
 	NewGroupPtr->ActualEnergyForceTorqueCompWithAdd(LocFieldPtr);
-	NewGroupPtr->HandleAuxCompData = ((radTg3d*)(hOld.rep))->HandleAuxCompData; // Move to constructors of subdivided items
+	NewGroupPtr->HandleAuxCompData = (static_cast<radTg3d*>(hOld.rep))->HandleAuxCompData; // Move to constructors of subdivided items
 
 	NewGroupPtr->SetupFurtherSubdInd(NewGroupPtr->HandleAuxCompData.rep->SubdNeedInd);
 
 	SubdNeed = CheckIfMoreEnrFrcTrqCompNeededAndUpdate(LocFieldPtr, FieldPtr);
 	if(!SubdNeed) HandleOfThis = hOld;
 
-	radTg3d* GroupInPlaceOfThis_Or_This = (radTg3d*)(HandleOfThis.rep);
+	radTg3d* GroupInPlaceOfThis_Or_This = static_cast<radTg3d*>(HandleOfThis.rep);
 	GroupInPlaceOfThis_Or_This->MarkFurtherSubdNeed1D(SubdNeed, XorYorZ);
 	return 1;
 }
@@ -625,13 +625,13 @@ int radTg3d::NextStepEnergyForceTorqueComp(double* TotSubdArr, radThg& HandleOfT
 	if(SubdNeedY)
 	{
 		radThg hgOld = HandleOfThis;
-		radTg3d* DestPtr = (radTg3d*)(hgOld.rep);
+		radTg3d* DestPtr = static_cast<radTg3d*>(hgOld.rep);
 		if(!DestPtr->ProceedNextStepEnergyForceTorqueComp(SubdArrY, HandleOfThis, &LocField, FieldPtr, SubdNeedY, 'y')) return 0;
 	}
 	if(SubdNeedZ)
 	{
 		radThg hgOld = HandleOfThis;
-		radTg3d* DestPtr = (radTg3d*)(hgOld.rep);
+		radTg3d* DestPtr = static_cast<radTg3d*>(hgOld.rep);
 		if(!DestPtr->ProceedNextStepEnergyForceTorqueComp(SubdArrZ, HandleOfThis, &LocField, FieldPtr, SubdNeedZ, 'z')) return 0;
 	}
 	MoreSubdNeeded = SubdNeedX || SubdNeedY || SubdNeedZ;
@@ -655,7 +655,7 @@ void radTg3d::EnergyForceTorqueCompAutoDestSubd(radTField* FieldPtr)
 	radTField LocField = *FieldPtr;
 	LocField.Force = LocField.Torque = ZeroVect; LocField.Energy = 0.;
 
-	radTg3d* DestPtr = (radTg3d*)(EnFrcTrqCompDataPtr->hDest.rep);
+	radTg3d* DestPtr = static_cast<radTg3d*>(EnFrcTrqCompDataPtr->hDest.rep);
 	DestPtr->ActualEnergyForceTorqueCompWithAdd(&LocField);
 	DestPtr->MarkFurtherSubdNeed(1, 1, 1);
 
@@ -663,7 +663,7 @@ void radTg3d::EnergyForceTorqueCompAutoDestSubd(radTField* FieldPtr)
 	while(MoreSubdNeeded)
 	{
 		radThg hDestOld = LocField.HandleEnergyForceTorqueCompData.rep->hDest; // To prevent from automatic deletion through handle
-		if(!((radTg3d*)(hDestOld.rep))->NextStepEnergyForceTorqueComp(TotSubdArray, EnFrcTrqCompDataPtr->hDest, &LocField, MoreSubdNeeded))
+		if(!(static_cast<radTg3d*>(hDestOld.rep))->NextStepEnergyForceTorqueComp(TotSubdArray, EnFrcTrqCompDataPtr->hDest, &LocField, MoreSubdNeeded))
 		{
 			EnFrcTrqCompDataPtr->SomethingIsWrong = 1; return;
 		}
@@ -913,7 +913,7 @@ int radTg3d::CreateAndAddToGroupOrNestedFor(radTGroup* pGroup, radTApplication* 
 		radThg hgNew;
 		if(!DuplicateItself(hgNew, radPtr, PutNewStuffIntoGenCont)) return 0;
 
-		radTg3d* g3dDplPtr = (radTg3d*)(hgNew.rep);
+		radTg3d* g3dDplPtr = static_cast<radTg3d*>(hgNew.rep);
 		g3dDplPtr->EraseAllTransformations();
 
 		double RelTol = 1.E-12;		
@@ -1239,7 +1239,7 @@ void radTg3dRelax::DumpMaterApplied(std::ostream& o) // Porting
 	{
 		o << endl;
 		o << "      Index " << rad.RetrieveElemKey(MaterHandle.rep) << ": ";
-		((radTMaterial*)(MaterHandle.rep))->Dump(o, 1);
+		(static_cast<radTMaterial*>(MaterHandle.rep))->Dump(o, 1);
 	}
 	else { o << "None";}
 }

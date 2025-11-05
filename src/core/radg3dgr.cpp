@@ -872,7 +872,7 @@ void radTRecMagGraphPresent::Draw(radTrans* BaseTransPtr)
 void radTExtrPolygonGraphPresent::Draw(radTrans* BaseTransPtr)
 {
 	radTExtrPolygon* ExtrPolygonP = (radTExtrPolygon*)g3dPtr;
-	radTPolygon* BasePolygonPtr = (radTPolygon*)(ExtrPolygonP->BasePolygonHandle.rep);
+	radTPolygon* BasePolygonPtr = static_cast<radTPolygon*>(ExtrPolygonP->BasePolygonHandle.rep);
 
 	radTPolygonGraphPresent* PolygonGraphPresentPtr = (radTPolygonGraphPresent*)(BasePolygonPtr->CreateGraphPresent());
 	PolygonGraphPresentPtr->DrawFacilityInd = DrawFacilityInd;
@@ -1691,7 +1691,7 @@ void radTSubdivRecMagGraphPresent::DrawSubdivisionLines(radTSubdividedRecMag* Su
 	for(radTmhg::const_iterator iter = SubdividedRecMagP->GroupMapOfHandlers.begin();
 		iter != SubdividedRecMagP->GroupMapOfHandlers.end(); ++iter)
 	{
-		radTg3d* g3dPtr = (radTg3d*)((*iter).second.rep);
+		radTg3d* g3dPtr = static_cast<radTg3d*>(iter->second.rep);
 		radTGroup* GroupPtr = radTCast::GroupCast(g3dPtr); // Because Subdivided ExtrPolygons (and Subd. RecMags) are placed to the general container through the Group branch
 		radTSubdividedRecMag* SubdividedRecMagPtr = (GroupPtr!=0)? radTCast::SubdividedRecMagCast(GroupPtr) : 0;
 		if(SubdividedRecMagPtr != 0)
@@ -1724,7 +1724,7 @@ void radTSubdivRecMagGraphPresent::DrawSubdivisionLines(radTSubdividedRecMag* Su
 void radTSubdivExtrPolygGraphPresent::Draw(radTrans* BaseTransPtr)
 {
 	radTSubdividedExtrPolygon* SubdExtrPolygonP = (radTSubdividedExtrPolygon*)((radTGroup*)g3dPtr);
-	radTPolygon* BasePolygonPtr = (radTPolygon*)(SubdExtrPolygonP->BasePolygonHandle.rep);
+	radTPolygon* BasePolygonPtr = static_cast<radTPolygon*>(SubdExtrPolygonP->BasePolygonHandle.rep);
 	radTPolygonGraphPresent* PolygonGraphPresentPtr = (radTPolygonGraphPresent*)(BasePolygonPtr->CreateGraphPresent());
 	PolygonGraphPresentPtr->DrawFacilityInd = DrawFacilityInd;
 	
@@ -1884,7 +1884,7 @@ void radTSubdivExtrPolygGraphPresent::DrawSubdivisionLines(radTSubdividedExtrPol
 
 		if(ExtrPolygPtr != 0)
 		{
-			PolygPtr = (radTPolygon*)(ExtrPolygPtr->BasePolygonHandle.rep);
+			PolygPtr = static_cast<radTPolygon*>(ExtrPolygPtr->BasePolygonHandle.rep);
 			if(SubdExtrPolygonP->AxOrnt==ParallelToX) SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.x - SubdExtrPolygonP->FirstPoint.x) < PointCoinsToler)? 1 : 0;
 			else if(SubdExtrPolygonP->AxOrnt==ParallelToY) SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.y - SubdExtrPolygonP->FirstPoint.y) < PointCoinsToler)? 1 : 0;
 			else SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.z - SubdExtrPolygonP->FirstPoint.z) < PointCoinsToler)? 1 : 0;
@@ -1893,7 +1893,7 @@ void radTSubdivExtrPolygGraphPresent::DrawSubdivisionLines(radTSubdividedExtrPol
 		{
 			AmOfSubdExtrPolygInTheGroup++;
 
-			PolygPtr = (radTPolygon*)(SubdividedExtrPolygPtr->BasePolygonHandle.rep);
+			PolygPtr = static_cast<radTPolygon*>(SubdividedExtrPolygPtr->BasePolygonHandle.rep);
 			if(SubdExtrPolygonP->AxOrnt==ParallelToX) SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.x - SubdExtrPolygonP->FirstPoint.x) < PointCoinsToler)? 1 : 0;
 			else if(SubdExtrPolygonP->AxOrnt==ParallelToY) SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.y - SubdExtrPolygonP->FirstPoint.y) < PointCoinsToler)? 1 : 0;
 			else SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.z - SubdExtrPolygonP->FirstPoint.z) < PointCoinsToler)? 1 : 0;
@@ -1925,7 +1925,7 @@ void radTSubdivExtrPolygGraphPresent::DrawSubdivisionLines(radTSubdividedExtrPol
 
 	TVector2d* AuxVect2dPtr;
 	TVector3d AuxVect(0.,0.,0.), ZeroVect(0.,0.,0.);
-	radTPolygon* BasePolygonPtr = (radTPolygon*)(SubdExtrPolygonP->BasePolygonHandle.rep);
+	radTPolygon* BasePolygonPtr = static_cast<radTPolygon*>(SubdExtrPolygonP->BasePolygonHandle.rep);
 
 	for(int ii=0; ii<BasePolygonPtr->AmOfEdgePoints; ii++)
 	{
@@ -1953,21 +1953,21 @@ void radTSubdivExtrPolygGraphPresent::DrawSubdivisionLines(radTSubdividedExtrPol
 			radTPolygon* PolygPtr;
 			short SubPolygonsAreOnTheBase=0;
 
-			radTg3d* g3dPtr = (radTg3d*)((*iter).second.rep);
+			radTg3d* g3dPtr = static_cast<radTg3d*>(iter->second.rep);
 			radTGroup* GroupPtr = radTCast::GroupCast(g3dPtr); // Because Subdivided ExtrPolygons (and Subd. RecMags) are placed to the general container through the Group branch
 			radTSubdividedExtrPolygon* SubdividedExtrPolygPtr = (GroupPtr!=0)? radTCast::SubdExtrPolygonCastFromGroup(GroupPtr) : 0;
 			radTExtrPolygon* ExtrPolygPtr = (GroupPtr==0)? radTCast::ExtrPolygonCast((radTg3dRelax*)g3dPtr) : 0;
 
 			if(ExtrPolygPtr != 0)
 			{
-				PolygPtr = (radTPolygon*)(ExtrPolygPtr->BasePolygonHandle.rep);
+				PolygPtr = static_cast<radTPolygon*>(ExtrPolygPtr->BasePolygonHandle.rep);
 				if(SubdExtrPolygonP->AxOrnt==ParallelToX) SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.x - SubdExtrPolygonP->FirstPoint.x) < PointCoinsToler)? 1 : 0;
 				else if(SubdExtrPolygonP->AxOrnt==ParallelToY) SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.y - SubdExtrPolygonP->FirstPoint.y) < PointCoinsToler)? 1 : 0;
 				else SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.z - SubdExtrPolygonP->FirstPoint.z) < PointCoinsToler)? 1 : 0;
 			}
 			else if(SubdividedExtrPolygPtr != 0)
 			{
-				PolygPtr = (radTPolygon*)(SubdividedExtrPolygPtr->BasePolygonHandle.rep);
+				PolygPtr = static_cast<radTPolygon*>(SubdividedExtrPolygPtr->BasePolygonHandle.rep);
 				if(SubdExtrPolygonP->AxOrnt==ParallelToX) SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.x - SubdExtrPolygonP->FirstPoint.x) < PointCoinsToler)? 1 : 0;
 				else if(SubdExtrPolygonP->AxOrnt==ParallelToY) SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.y - SubdExtrPolygonP->FirstPoint.y) < PointCoinsToler)? 1 : 0;
 				else SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.z - SubdExtrPolygonP->FirstPoint.z) < PointCoinsToler)? 1 : 0;

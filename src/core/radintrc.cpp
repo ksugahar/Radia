@@ -86,7 +86,7 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	IdentTransPtr = new radIdentTrans();
 
 	radTlphgPtr NewListOfTransPtr;
-	CountMainRelaxElems((radTg3d*)(SourceHandle.rep), &NewListOfTransPtr);
+	CountMainRelaxElems(static_cast<radTg3d*>(SourceHandle.rep), &NewListOfTransPtr);
 
 	if(!NotEmpty()) return 0;
 
@@ -251,7 +251,7 @@ void radTInteraction::CountMainRelaxElems(radTg3d* g3dPtr, radTlphgPtr* CurrList
 
 				if(RelaxSubIntervConstrVect.empty())
 				{
-					radTRelaxSubInterval RlxSbIntrv(SubIntervStart, SubIntervFin, RelaxTogether);
+					radTRelaxSubInterval RlxSbIntrv(SubIntervStart, SubIntervFin, TRelaxSubIntervalID::RelaxTogether);
 					RelaxSubIntervConstrVect.push_back(RlxSbIntrv);
 				}
 				else
@@ -259,7 +259,7 @@ void radTInteraction::CountMainRelaxElems(radTg3d* g3dPtr, radTlphgPtr* CurrList
 					radTRelaxSubInterval& LastEnteredSubIntrv = RelaxSubIntervConstrVect.back();
 					if((SubIntervStart != LastEnteredSubIntrv.StartNo) && (SubIntervFin != LastEnteredSubIntrv.FinNo))
 					{
-						radTRelaxSubInterval RlxSbIntrv(SubIntervStart, SubIntervFin, RelaxTogether);
+						radTRelaxSubInterval RlxSbIntrv(SubIntervStart, SubIntervFin, TRelaxSubIntervalID::RelaxTogether);
 						RelaxSubIntervConstrVect.push_back(RlxSbIntrv);
 					}
 				}
@@ -281,7 +281,7 @@ void radTInteraction::CountMainRelaxElems(radTg3d* g3dPtr, radTlphgPtr* CurrList
 
 			for(radTmhg::iterator iter = GroupPtr->GroupMapOfHandlers.begin();
 				iter != GroupPtr->GroupMapOfHandlers.end(); ++iter) 
-				CountMainRelaxElems((radTg3d*)((*iter).second.rep), LocListOfTransPtrPtr);
+				CountMainRelaxElems(static_cast<radTg3d*>(iter->second.rep), LocListOfTransPtrPtr);
 
 			if(GroupListOfTransIsNotEmpty) delete LocListOfTransPtrPtr;
 		//--New
@@ -304,13 +304,13 @@ void radTInteraction::FillInRelaxSubIntervArray() // New
 		int LocStartNo = (*Iter).StartNo;
 		if(LocStartNo != CurrentStartNo)
 		{
-			RelaxSubIntervArray[++PlainCount] = radTRelaxSubInterval(CurrentStartNo, LocStartNo-1, RelaxApart);
+			RelaxSubIntervArray[++PlainCount] = radTRelaxSubInterval(CurrentStartNo, LocStartNo-1, TRelaxSubIntervalID::RelaxApart);
 		}
 		RelaxSubIntervArray[++PlainCount] = *Iter;
 		CurrentStartNo = (*Iter).FinNo + 1;
 	}
 	if(CurrentStartNo != AmOfMainElem)
-		RelaxSubIntervArray[++PlainCount] = radTRelaxSubInterval(CurrentStartNo, AmOfMainElem-1, RelaxApart);
+		RelaxSubIntervArray[++PlainCount] = radTRelaxSubInterval(CurrentStartNo, AmOfMainElem-1, TRelaxSubIntervalID::RelaxApart);
 	
 	AmOfRelaxSubInterv = ++PlainCount;
 
@@ -597,7 +597,7 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 			InitObsPoiVect = MainTransPtrArray[StrNo]->TrPoint((g3dRelaxPtrVect[StrNo])->CentrPoint);
 			radTField Field(FieldKeyExtern, CompCriterium, InitObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.); // Improve
 
-			((radTg3d*)(MoreExtSourceHandle.rep))->B_genComp(&Field);
+			(static_cast<radTg3d*>(MoreExtSourceHandle.rep))->B_genComp(&Field);
 
 			//TVector3d BufVect = ExternFieldArray[StrNo];
 
@@ -612,7 +612,7 @@ void radTInteraction::AddMoreExternField(const radThg& hExtraExtSrc)
 {
 	if(hExtraExtSrc.rep == 0) return;
 
-	radTg3d* pExtraExtSrc = (radTg3d*)(hExtraExtSrc.rep);
+	radTg3d* pExtraExtSrc = static_cast<radTg3d*>(hExtraExtSrc.rep);
 
 	radTFieldKey FieldKeyExtern; FieldKeyExtern.H_=1;
 	TVector3d ZeroVect(0.,0.,0.), InitObsPoiVect(0.,0.,0.);

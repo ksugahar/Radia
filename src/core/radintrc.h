@@ -45,7 +45,7 @@ struct radTRelaxStatusParam {
 
 //-------------------------------------------------------------------------
 
-enum TRelaxSubIntervalID { RelaxTogether, RelaxApart };
+enum class TRelaxSubIntervalID { RelaxTogether, RelaxApart };
 
 //-------------------------------------------------------------------------
 
