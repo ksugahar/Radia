@@ -758,25 +758,28 @@ void radTPrtclTrj::ComputeSecondOrderKick(const TVector3d& P1Vect, const TVector
 	long AmOfTrPtsFocPot = 0;
 	SetupTransverseMeshForKickCalc(r1, np1, r2, np2, d1, d2, TrGridStep1, TrGridStep2, UseSpecStepForDeriv1, UseSpecStepForDeriv2, pCoordDir1, pCoordDir2, AmOfTrPtsFocPot);
 
-	double *pFocPotData = new double[AmOfTrPtsFocPot*AmOfLongGridPts];
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<double> vFocPotData(AmOfTrPtsFocPot*AmOfLongGridPts);
+	double *pFocPotData = vFocPotData.data();
 	ComputeFocusPotentOnMesh3D(P1Vect, NlongVect, ArrLongDist, AmOfLongGridPts, ns, N1Vect, np1, TrGridStep1, d1, np2, TrGridStep2, d2, UseSpecStepForDeriv1, UseSpecStepForDeriv2, pFocPotData, pIBe2);
 	ComputeFocusPotentDerivOnMesh3D(pFocPotData, AmOfLongGridPts, np1, d1, UseSpecStepForDeriv1, np2, d2, UseSpecStepForDeriv2, pKickData1, pKickData2);
 
 	if(AmOfLongGridPts > 1)
 	{
 		long AmOfTransvPts = np1*np2;
-		double *pAuxTotKickData1 = new double[AmOfTransvPts];
-		double *pAuxTotKickData2 = new double[AmOfTransvPts];
-		double *pAuxTotIBe2 = new double[AmOfTransvPts];
+		// RAII: Use std::vector for automatic cleanup
+		std::vector<double> vAuxTotKickData1(AmOfTransvPts);
+		std::vector<double> vAuxTotKickData2(AmOfTransvPts);
+		std::vector<double> vAuxTotIBe2(AmOfTransvPts);
+		double *pAuxTotKickData1 = vAuxTotKickData1.data();
+		double *pAuxTotKickData2 = vAuxTotKickData2.data();
+		double *pAuxTotIBe2 = vAuxTotIBe2.data();
 
 		SumUpPartialSecondOrderKicks(AmOfLongGridPts, AmOfTransvPts, pKickData1, pKickData2, pIBe2, pAuxTotKickData1, pAuxTotKickData2, pAuxTotIBe2);
 		ArrangeAllSecondOrderKickData(AmOfLongGridPts, AmOfTransvPts, pAuxTotKickData1, pAuxTotKickData2, pAuxTotIBe2, pKickData1, pKickData2, pIBe2);
-
-		if(pAuxTotKickData1 != 0) delete[] pAuxTotKickData1;
-		if(pAuxTotKickData2 != 0) delete[] pAuxTotKickData2;
-		if(pAuxTotIBe2 != 0) delete[] pAuxTotIBe2;
+		// RAII: automatic cleanup
 	}
-	if(pFocPotData != 0) delete[] pFocPotData;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -805,8 +808,11 @@ void radTPrtclTrj::ComputeFocusPotentOnMesh3D(const TVector3d& P1Vect, const TVe
 	}
 	double invNumFocPotArrPerTrPoint = 1./NumFocPotArrPerTrPoint;
 
-	int *ArrLongNumPts = new int[AmOfLongGridPts];
-	double *auxArIntBtrE2 = new double[AmOfLongGridPts];
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<int> vArrLongNumPts(AmOfLongGridPts);
+	std::vector<double> vAuxArIntBtrE2(AmOfLongGridPts);
+	int *ArrLongNumPts = vArrLongNumPts.data();
+	double *auxArIntBtrE2 = vAuxArIntBtrE2.data();
 	SetupLongNumPointsArray(ArrLongDist, AmOfLongGridPts, ns, ArrLongNumPts);
 
 	double Arg2Min = -0.5*TrGridStep2*(np2 - 1), Arg1Min = -0.5*TrGridStep1*(np1 - 1);
@@ -849,8 +855,7 @@ void radTPrtclTrj::ComputeFocusPotentOnMesh3D(const TVector3d& P1Vect, const TVe
 		}
 		arg2 += TrGridStep2;
 	}
-	delete[] ArrLongNumPts;
-	delete[] auxArIntBtrE2;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -1101,9 +1106,13 @@ void radTPrtclTrj::SumUpPartialSecondOrderKicks(long AmOfLongGridPts, long AmOfT
 void radTPrtclTrj::ArrangeAllSecondOrderKickData(long AmOfLongGridPts, long AmOfTransvPts, double* pTotKickData1, double* pTotKickData2, double* pTotIBe2, double* pKickData1, double* pKickData2, double* pIBe2)
 {
 	long TotAmOfData = (AmOfLongGridPts + 1)*AmOfTransvPts;
-	double *pAuxContKick1 = new double[TotAmOfData];
-	double *pAuxContKick2 = new double[TotAmOfData];
-	double *pAuxContIBe2 = new double[TotAmOfData];
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<double> vAuxContKick1(TotAmOfData);
+	std::vector<double> vAuxContKick2(TotAmOfData);
+	std::vector<double> vAuxContIBe2(TotAmOfData);
+	double *pAuxContKick1 = vAuxContKick1.data();
+	double *pAuxContKick2 = vAuxContKick2.data();
+	double *pAuxContIBe2 = vAuxContIBe2.data();
 
 	double *tAuxContKick1 = pAuxContKick1;
 	double *tAuxContKick2 = pAuxContKick2;
@@ -1149,10 +1158,7 @@ void radTPrtclTrj::ArrangeAllSecondOrderKickData(long AmOfLongGridPts, long AmOf
 			*(tIBe2++) = *(tAuxContIBe2++);
 		}
 	}
-
-	if(pAuxContKick1 != 0) delete[] pAuxContKick1;
-	if(pAuxContKick2 != 0) delete[] pAuxContKick2;
-	if(pAuxContIBe2 != 0) delete[] pAuxContIBe2;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
