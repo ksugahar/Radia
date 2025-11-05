@@ -290,12 +290,12 @@ void radTPrtclTrj::ComputeSecondOrderKickPer(const TVector3d& P1Vect, const TVec
 	long AmOfPtsFocPot = 0;
 	SetupTransverseMeshForKickCalc(r1, np1, r2, np2, d1, d2, step1, step2, UseSpecStepForDeriv1, UseSpecStepForDeriv2, pCoordDir1, pCoordDir2, AmOfPtsFocPot);
 
-	double *pFocPotData = new double[AmOfPtsFocPot];
+	std::vector<double> vFocPotData(AmOfPtsFocPot);
+	double *pFocPotData = vFocPotData.data();
 	ComputeFocusPotentPerOnMesh2D(P1Vect, NlongVect, per, nper, N1Vect, np1, step1, d1, np2, step2, d2, nharm, ns, pFocPotData, pBtE2Int);
 	//ComputeFocusPotentDerivOnMesh2D(pFocPotData, np1, d1, UseSpecStepForDeriv1, np2, d2, UseSpecStepForDeriv2, pKickData1, pKickData2);
 	ComputeFocusPotentDerivOnMesh2D(pFocPotData, np1, d1, UseSpecStepForDeriv1, np2, d2, UseSpecStepForDeriv2, pKickData1, pKickData2, cKickUnit); //OC050413
-
-	if(pFocPotData != 0) delete[] pFocPotData;
+	// pFocPotData cleaned up automatically by RAII
 }
 
 //-------------------------------------------------------------------------
