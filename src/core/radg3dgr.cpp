@@ -26,6 +26,8 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <sstream>
+#include <iomanip>
 
 //-------------------------------------------------------------------------
 
@@ -434,22 +436,15 @@ void radTg3dGraphPresent::DrawTickNumbers(TVector3d& P0, TVector3d& Vpar, TVecto
 
 	TVector3d VectFromCenToLowerLeft = (HalfAllCharWidth*UnitVper) - HalfHeightVect;
 	TVector3d CharTranslVect = ((-1 - IntervToWidthRat)*AbsCharWidth)*UnitVper;
-	char FormStr[6];
-	strcpy(FormStr, "%");
-	if(PerDir > 0) 
+	bool leftAlign = false;
+	if(PerDir > 0)
 	{
 		VectFromCenToLowerLeft = (-1)*VectFromCenToLowerLeft;
 		CharTranslVect = (-1)*CharTranslVect;
-		strcat(FormStr, "-");
+		leftAlign = true;
 	}
 	TVector3d StartLowerLeftP = StartCenP + VectFromCenToLowerLeft;
 
-	char ExtraStrBuf[3];
-	sprintf(ExtraStrBuf, "%d", AmOfNumChar);
-	strcat(FormStr, ExtraStrBuf);
-	strcat(FormStr, "g");
-
-	char NumStrBuf[10];
 	int AmOfTicks = (int)(TickNumPositions.size());
 	for(int i=0; i<AmOfTicks; i++)
 	{
@@ -457,8 +452,12 @@ void radTg3dGraphPresent::DrawTickNumbers(TVector3d& P0, TVector3d& Vpar, TVecto
 		double CurTickOffset = CurTickNum - TickOffsetPos;
 		TVector3d CurLowerLeftP = StartLowerLeftP + (CurTickOffset*UnitVpar);
 
-		int AmOfChar = sprintf(NumStrBuf, FormStr, CurTickNum);
-		char *tStrBuf = NumStrBuf;
+		std::ostringstream oss;
+		if(leftAlign) oss << std::left;
+		oss << std::setw(AmOfNumChar) << std::setprecision(AmOfNumChar-2) << CurTickNum;
+		std::string numStr = oss.str();
+		int AmOfChar = static_cast<int>(numStr.length());
+		const char *tStrBuf = numStr.c_str();
 
 		for(int k=0; k<AmOfChar; k++)
 		{
