@@ -26,7 +26,7 @@ else:
 	project_root = current_file.parent
 
 # Add build directory to path
-build_dir = project_root / 'build' / 'lib' / 'Release'
+build_dir = project_root / 'build' / 'Release'
 if build_dir.exists():
 	sys.path.insert(0, str(build_dir))
 

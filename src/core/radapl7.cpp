@@ -33,28 +33,28 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 	//SetMultGenExtrTriangle(FirstPoi, 3, radCR.Double(Lx), ArrayOfPoints2d, lenArrayOfPoints2d, AuxSubdDataPtr, Magn, 3, OrientStr, OptionNames, OptionValues, OptionCount);
 	//Data structures for TRIANGLE
 	struct triangulateio trIn, trOut, trVorOut;
-	trIn.pointlist = NULL;
-	trIn.pointattributelist = NULL;
-	trIn.pointmarkerlist = NULL;
-	trIn.segmentlist = NULL;
-	trIn.segmentmarkerlist = NULL;
-	//trIn.regionlist = NULL;
+	trIn.pointlist = nullptr;
+	trIn.pointattributelist = nullptr;
+	trIn.pointmarkerlist = nullptr;
+	trIn.segmentlist = nullptr;
+	trIn.segmentmarkerlist = nullptr;
+	//trIn.regionlist = nullptr;
 	
-	trOut.pointlist = (REAL*) NULL; //Not needed if -N switch used.
-	trOut.pointattributelist = (REAL*) NULL; //Not needed if -N switch used or number of point attributes is zero:
-	trOut.pointmarkerlist = (int*) NULL; //Not needed if -N or -B switch used.
-	trOut.trianglelist = (int*) NULL; //Not needed if -E switch used.
-	trOut.triangleattributelist = (REAL*) NULL; //Not needed if -E switch used or number of triangle attributes is zero:
-	trOut.neighborlist = (int*) NULL; //Needed only if -n switch used.
-	trOut.segmentlist = (int*) NULL; //Needed only if segments are output (-p or -c) and -P not used:
-	trOut.segmentmarkerlist = (int*) NULL; //Needed only if segments are output (-p or -c) and -P and -B not used:
-	trOut.edgelist = (int*) NULL; //Needed only if -e switch used.
-	trOut.edgemarkerlist = (int*) NULL; //Needed if -e used and -B not used.
+	trOut.pointlist = (REAL*) nullptr; //Not needed if -N switch used.
+	trOut.pointattributelist = (REAL*) nullptr; //Not needed if -N switch used or number of point attributes is zero:
+	trOut.pointmarkerlist = (int*) nullptr; //Not needed if -N or -B switch used.
+	trOut.trianglelist = (int*) nullptr; //Not needed if -E switch used.
+	trOut.triangleattributelist = (REAL*) nullptr; //Not needed if -E switch used or number of triangle attributes is zero:
+	trOut.neighborlist = (int*) nullptr; //Needed only if -n switch used.
+	trOut.segmentlist = (int*) nullptr; //Needed only if segments are output (-p or -c) and -P not used:
+	trOut.segmentmarkerlist = (int*) nullptr; //Needed only if segments are output (-p or -c) and -P and -B not used:
+	trOut.edgelist = (int*) nullptr; //Needed only if -e switch used.
+	trOut.edgemarkerlist = (int*) nullptr; //Needed if -e used and -B not used.
 
-	trVorOut.pointlist = (REAL*) NULL; //Needed only if -v switch used.
-	trVorOut.pointattributelist = (REAL*) NULL; //Needed only if -v switch used and number of attributes is not zero:
-	trVorOut.edgelist = (int*) NULL; //Needed only if -v switch used.
-	trVorOut.normlist = (REAL*) NULL; //Needed only if -v switch used.
+	trVorOut.pointlist = (REAL*) nullptr; //Needed only if -v switch used.
+	trVorOut.pointattributelist = (REAL*) nullptr; //Needed only if -v switch used and number of attributes is not zero:
+	trVorOut.edgelist = (int*) nullptr; //Needed only if -v switch used.
+	trVorOut.normlist = (REAL*) nullptr; //Needed only if -v switch used.
 
 	short PrevSendingIsRequired = SendingIsRequired; 
 	try
@@ -194,21 +194,21 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 		}
 
 		//trIn.numberofsegments = 0;
-		//trIn.segmentlist = NULL;
-		//trIn.segmentmarkerlist = NULL;
+		//trIn.segmentlist = nullptr;
+		//trIn.segmentmarkerlist = nullptr;
 
-		trIn.trianglelist = NULL;
-		trIn.triangleattributelist = NULL;
-		trIn.trianglearealist = NULL;
-		trIn.neighborlist = NULL;
+		trIn.trianglelist = nullptr;
+		trIn.triangleattributelist = nullptr;
+		trIn.trianglearealist = nullptr;
+		trIn.neighborlist = nullptr;
 		trIn.numberoftriangles = 0;
 		trIn.numberofcorners = 0;
 		trIn.numberoftriangleattributes = 0;
 
-		trIn.holelist = NULL;
+		trIn.holelist = nullptr;
 		trIn.numberofholes = 0;
 
-		trIn.regionlist = NULL;
+		trIn.regionlist = nullptr;
 		trIn.numberofregions = 0;
 
 		ostringstream osTriSwitches;
@@ -247,7 +247,7 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 
 		int numTri = trOut.numberoftriangles;
 		int numPts = trOut.numberofpoints;
-		if((gErrorTRIANGLE != 0) || (trOut.trianglelist == NULL) || (trOut.pointlist == NULL) || (numTri <= 0) || (numPts <= 0))
+		if((gErrorTRIANGLE != 0) || (trOut.trianglelist == nullptr) || (trOut.pointlist == nullptr) || (numTri <= 0) || (numPts <= 0))
 		{
 			Send.ErrorMessage("Radia::Error119"); throw 0;
 		}
@@ -297,28 +297,28 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 		SendingIsRequired = PrevSendingIsRequired;
 		if(SendingIsRequired) Send.Int(resGrpKey);
 
-		if(trIn.pointlist != NULL) delete[] trIn.pointlist;
-		if(trIn.pointattributelist != NULL) delete[] trIn.pointattributelist;
-		if(trIn.pointmarkerlist != NULL) delete[] trIn.pointmarkerlist;
-		if(trIn.segmentlist != NULL) delete[] trIn.segmentlist;
-		if(trIn.segmentmarkerlist != NULL) delete[] trIn.segmentmarkerlist;
-		//if(trIn.regionlist != NULL) delete[] trIn.regionlist;
+		if(trIn.pointlist != nullptr) delete[] trIn.pointlist;
+		if(trIn.pointattributelist != nullptr) delete[] trIn.pointattributelist;
+		if(trIn.pointmarkerlist != nullptr) delete[] trIn.pointmarkerlist;
+		if(trIn.segmentlist != nullptr) delete[] trIn.segmentlist;
+		if(trIn.segmentmarkerlist != nullptr) delete[] trIn.segmentmarkerlist;
+		//if(trIn.regionlist != nullptr) delete[] trIn.regionlist;
 
-		if(trOut.pointlist != NULL) free(trOut.pointlist); //Not needed if -N switch used.
-		if(trOut.pointattributelist != NULL) free(trOut.pointattributelist); //Not needed if -N switch used or number of point attributes is zero:
-		if(trOut.pointmarkerlist != NULL) free(trOut.pointmarkerlist); //Not needed if -N or -B switch used.
-		if(trOut.trianglelist != NULL) free(trOut.trianglelist); //Not needed if -E switch used.
-		if(trOut.triangleattributelist != NULL) free(trOut.triangleattributelist); //Not needed if -E switch used or number of triangle attributes is zero:
-		if(trOut.neighborlist != NULL) free(trOut.neighborlist); //Needed only if -n switch used.
-		if(trOut.segmentlist != NULL) free(trOut.segmentlist); //Needed only if segments are output (-p or -c) and -P not used:
-		if(trOut.segmentmarkerlist != NULL) free(trOut.segmentmarkerlist); //Needed only if segments are output (-p or -c) and -P and -B not used:
-		if(trOut.edgelist != NULL) free(trOut.edgelist); //Needed only if -e switch used.
-		if(trOut.edgemarkerlist != NULL) free(trOut.edgemarkerlist); //Needed if -e used and -B not used.
+		if(trOut.pointlist != nullptr) free(trOut.pointlist); //Not needed if -N switch used.
+		if(trOut.pointattributelist != nullptr) free(trOut.pointattributelist); //Not needed if -N switch used or number of point attributes is zero:
+		if(trOut.pointmarkerlist != nullptr) free(trOut.pointmarkerlist); //Not needed if -N or -B switch used.
+		if(trOut.trianglelist != nullptr) free(trOut.trianglelist); //Not needed if -E switch used.
+		if(trOut.triangleattributelist != nullptr) free(trOut.triangleattributelist); //Not needed if -E switch used or number of triangle attributes is zero:
+		if(trOut.neighborlist != nullptr) free(trOut.neighborlist); //Needed only if -n switch used.
+		if(trOut.segmentlist != nullptr) free(trOut.segmentlist); //Needed only if segments are output (-p or -c) and -P not used:
+		if(trOut.segmentmarkerlist != nullptr) free(trOut.segmentmarkerlist); //Needed only if segments are output (-p or -c) and -P and -B not used:
+		if(trOut.edgelist != nullptr) free(trOut.edgelist); //Needed only if -e switch used.
+		if(trOut.edgemarkerlist != nullptr) free(trOut.edgemarkerlist); //Needed if -e used and -B not used.
 
-		if(trVorOut.pointlist != NULL) free(trVorOut.pointlist); //Needed only if -v switch used.
-		if(trVorOut.pointattributelist != NULL) free(trVorOut.pointattributelist); //Needed only if -v switch used and number of attributes is not zero:
-		if(trVorOut.edgelist != NULL) free(trVorOut.edgelist); //Needed only if -v switch used.
-		if(trVorOut.normlist != NULL) free(trVorOut.normlist); //Needed only if -v switch used.
+		if(trVorOut.pointlist != nullptr) free(trVorOut.pointlist); //Needed only if -v switch used.
+		if(trVorOut.pointattributelist != nullptr) free(trVorOut.pointattributelist); //Needed only if -v switch used and number of attributes is not zero:
+		if(trVorOut.edgelist != nullptr) free(trVorOut.edgelist); //Needed only if -v switch used.
+		if(trVorOut.normlist != nullptr) free(trVorOut.normlist); //Needed only if -v switch used.
 
 		return resGrpKey;
 	}
@@ -326,28 +326,28 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 	{
 		SendingIsRequired = PrevSendingIsRequired;
 
-		if(trIn.pointlist != NULL) delete[] trIn.pointlist;
-		if(trIn.pointattributelist != NULL) delete[] trIn.pointattributelist;
-		if(trIn.pointmarkerlist != NULL) delete[] trIn.pointmarkerlist;
-		if(trIn.segmentlist != NULL) delete[] trIn.segmentlist;
-		if(trIn.segmentmarkerlist != NULL) delete[] trIn.segmentmarkerlist;
-		//if(trIn.regionlist != NULL) delete[] trIn.regionlist;
+		if(trIn.pointlist != nullptr) delete[] trIn.pointlist;
+		if(trIn.pointattributelist != nullptr) delete[] trIn.pointattributelist;
+		if(trIn.pointmarkerlist != nullptr) delete[] trIn.pointmarkerlist;
+		if(trIn.segmentlist != nullptr) delete[] trIn.segmentlist;
+		if(trIn.segmentmarkerlist != nullptr) delete[] trIn.segmentmarkerlist;
+		//if(trIn.regionlist != nullptr) delete[] trIn.regionlist;
 
-		if(trOut.pointlist != NULL) free(trOut.pointlist); //Not needed if -N switch used.
-		if(trOut.pointattributelist != NULL) free(trOut.pointattributelist); //Not needed if -N switch used or number of point attributes is zero:
-		if(trOut.pointmarkerlist != NULL) free(trOut.pointmarkerlist); //Not needed if -N or -B switch used.
-		if(trOut.trianglelist != NULL) free(trOut.trianglelist); //Not needed if -E switch used.
-		if(trOut.triangleattributelist != NULL) free(trOut.triangleattributelist); //Not needed if -E switch used or number of triangle attributes is zero:
-		if(trOut.neighborlist != NULL) free(trOut.neighborlist); //Needed only if -n switch used.
-		if(trOut.segmentlist != NULL) free(trOut.segmentlist); //Needed only if segments are output (-p or -c) and -P not used:
-		if(trOut.segmentmarkerlist != NULL) free(trOut.segmentmarkerlist); //Needed only if segments are output (-p or -c) and -P and -B not used:
-		if(trOut.edgelist != NULL) free(trOut.edgelist); //Needed only if -e switch used.
-		if(trOut.edgemarkerlist != NULL) free(trOut.edgemarkerlist); //Needed if -e used and -B not used.
+		if(trOut.pointlist != nullptr) free(trOut.pointlist); //Not needed if -N switch used.
+		if(trOut.pointattributelist != nullptr) free(trOut.pointattributelist); //Not needed if -N switch used or number of point attributes is zero:
+		if(trOut.pointmarkerlist != nullptr) free(trOut.pointmarkerlist); //Not needed if -N or -B switch used.
+		if(trOut.trianglelist != nullptr) free(trOut.trianglelist); //Not needed if -E switch used.
+		if(trOut.triangleattributelist != nullptr) free(trOut.triangleattributelist); //Not needed if -E switch used or number of triangle attributes is zero:
+		if(trOut.neighborlist != nullptr) free(trOut.neighborlist); //Needed only if -n switch used.
+		if(trOut.segmentlist != nullptr) free(trOut.segmentlist); //Needed only if segments are output (-p or -c) and -P not used:
+		if(trOut.segmentmarkerlist != nullptr) free(trOut.segmentmarkerlist); //Needed only if segments are output (-p or -c) and -P and -B not used:
+		if(trOut.edgelist != nullptr) free(trOut.edgelist); //Needed only if -e switch used.
+		if(trOut.edgemarkerlist != nullptr) free(trOut.edgemarkerlist); //Needed if -e used and -B not used.
 
-		if(trVorOut.pointlist != NULL) free(trVorOut.pointlist); //Needed only if -v switch used.
-		if(trVorOut.pointattributelist != NULL) free(trVorOut.pointattributelist); //Needed only if -v switch used and number of attributes is not zero:
-		if(trVorOut.edgelist != NULL) free(trVorOut.edgelist); //Needed only if -v switch used.
-		if(trVorOut.normlist != NULL) free(trVorOut.normlist); //Needed only if -v switch used.
+		if(trVorOut.pointlist != nullptr) free(trVorOut.pointlist); //Needed only if -v switch used.
+		if(trVorOut.pointattributelist != nullptr) free(trVorOut.pointattributelist); //Needed only if -v switch used and number of attributes is not zero:
+		if(trVorOut.edgelist != nullptr) free(trVorOut.edgelist); //Needed only if -v switch used.
+		if(trVorOut.normlist != nullptr) free(trVorOut.normlist); //Needed only if -v switch used.
 
 		Initialize(); 
 		return 0;
@@ -361,28 +361,28 @@ int radTApplication::TriangulatePolygon(TVector2d* ArrayOfPoints2d, long lenArra
 {
 	//Data structures for TRIANGLE
 	struct triangulateio trIn, trOut, trVorOut;
-	trIn.pointlist = NULL;
-	trIn.pointattributelist = NULL;
-	trIn.pointmarkerlist = NULL;
-	trIn.segmentlist = NULL;
-	trIn.segmentmarkerlist = NULL;
-	//trIn.regionlist = NULL;
+	trIn.pointlist = nullptr;
+	trIn.pointattributelist = nullptr;
+	trIn.pointmarkerlist = nullptr;
+	trIn.segmentlist = nullptr;
+	trIn.segmentmarkerlist = nullptr;
+	//trIn.regionlist = nullptr;
 	
-	trOut.pointlist = (REAL*) NULL; //Not needed if -N switch used.
-	trOut.pointattributelist = (REAL*) NULL; //Not needed if -N switch used or number of point attributes is zero:
-	trOut.pointmarkerlist = (int*) NULL; //Not needed if -N or -B switch used.
-	trOut.trianglelist = (int*) NULL; //Not needed if -E switch used.
-	trOut.triangleattributelist = (REAL*) NULL; //Not needed if -E switch used or number of triangle attributes is zero:
-	trOut.neighborlist = (int*) NULL; //Needed only if -n switch used.
-	trOut.segmentlist = (int*) NULL; //Needed only if segments are output (-p or -c) and -P not used:
-	trOut.segmentmarkerlist = (int*) NULL; //Needed only if segments are output (-p or -c) and -P and -B not used:
-	trOut.edgelist = (int*) NULL; //Needed only if -e switch used.
-	trOut.edgemarkerlist = (int*) NULL; //Needed if -e used and -B not used.
+	trOut.pointlist = (REAL*) nullptr; //Not needed if -N switch used.
+	trOut.pointattributelist = (REAL*) nullptr; //Not needed if -N switch used or number of point attributes is zero:
+	trOut.pointmarkerlist = (int*) nullptr; //Not needed if -N or -B switch used.
+	trOut.trianglelist = (int*) nullptr; //Not needed if -E switch used.
+	trOut.triangleattributelist = (REAL*) nullptr; //Not needed if -E switch used or number of triangle attributes is zero:
+	trOut.neighborlist = (int*) nullptr; //Needed only if -n switch used.
+	trOut.segmentlist = (int*) nullptr; //Needed only if segments are output (-p or -c) and -P not used:
+	trOut.segmentmarkerlist = (int*) nullptr; //Needed only if segments are output (-p or -c) and -P and -B not used:
+	trOut.edgelist = (int*) nullptr; //Needed only if -e switch used.
+	trOut.edgemarkerlist = (int*) nullptr; //Needed if -e used and -B not used.
 
-	trVorOut.pointlist = (REAL*) NULL; //Needed only if -v switch used.
-	trVorOut.pointattributelist = (REAL*) NULL; //Needed only if -v switch used and number of attributes is not zero:
-	trVorOut.edgelist = (int*) NULL; //Needed only if -v switch used.
-	trVorOut.normlist = (REAL*) NULL; //Needed only if -v switch used.
+	trVorOut.pointlist = (REAL*) nullptr; //Needed only if -v switch used.
+	trVorOut.pointattributelist = (REAL*) nullptr; //Needed only if -v switch used and number of attributes is not zero:
+	trVorOut.edgelist = (int*) nullptr; //Needed only if -v switch used.
+	trVorOut.normlist = (REAL*) nullptr; //Needed only if -v switch used.
 
 	//short PrevSendingIsRequired = SendingIsRequired; 
 	try
@@ -506,21 +506,21 @@ int radTApplication::TriangulatePolygon(TVector2d* ArrayOfPoints2d, long lenArra
 		}
 
 		//trIn.numberofsegments = 0;
-		//trIn.segmentlist = NULL;
-		//trIn.segmentmarkerlist = NULL;
+		//trIn.segmentlist = nullptr;
+		//trIn.segmentmarkerlist = nullptr;
 
-		trIn.trianglelist = NULL;
-		trIn.triangleattributelist = NULL;
-		trIn.trianglearealist = NULL;
-		trIn.neighborlist = NULL;
+		trIn.trianglelist = nullptr;
+		trIn.triangleattributelist = nullptr;
+		trIn.trianglearealist = nullptr;
+		trIn.neighborlist = nullptr;
 		trIn.numberoftriangles = 0;
 		trIn.numberofcorners = 0;
 		trIn.numberoftriangleattributes = 0;
 
-		trIn.holelist = NULL;
+		trIn.holelist = nullptr;
 		trIn.numberofholes = 0;
 
-		trIn.regionlist = NULL;
+		trIn.regionlist = nullptr;
 		trIn.numberofregions = 0;
 
 		ostringstream osTriSwitches;
@@ -562,7 +562,7 @@ int radTApplication::TriangulatePolygon(TVector2d* ArrayOfPoints2d, long lenArra
 		numTri = trOut.numberoftriangles;
 		numTriVertPt = trOut.numberofpoints;
 
-		if((gErrorTRIANGLE != 0) || (trOut.trianglelist == NULL) || (trOut.pointlist == NULL) || (numTri <= 0) || (numTriVertPt <= 0))
+		if((gErrorTRIANGLE != 0) || (trOut.trianglelist == nullptr) || (trOut.pointlist == nullptr) || (numTri <= 0) || (numTriVertPt <= 0))
 		{
 			Send.ErrorMessage("Radia::Error119"); throw 0;
 		}
@@ -598,28 +598,28 @@ int radTApplication::TriangulatePolygon(TVector2d* ArrayOfPoints2d, long lenArra
 		//SendingIsRequired = PrevSendingIsRequired;
 		//if(SendingIsRequired) Send.Int(resGrpKey);
 
-		if(trIn.pointlist != NULL) delete[] trIn.pointlist;
-		if(trIn.pointattributelist != NULL) delete[] trIn.pointattributelist;
-		if(trIn.pointmarkerlist != NULL) delete[] trIn.pointmarkerlist;
-		if(trIn.segmentlist != NULL) delete[] trIn.segmentlist;
-		if(trIn.segmentmarkerlist != NULL) delete[] trIn.segmentmarkerlist;
-		//if(trIn.regionlist != NULL) delete[] trIn.regionlist;
+		if(trIn.pointlist != nullptr) delete[] trIn.pointlist;
+		if(trIn.pointattributelist != nullptr) delete[] trIn.pointattributelist;
+		if(trIn.pointmarkerlist != nullptr) delete[] trIn.pointmarkerlist;
+		if(trIn.segmentlist != nullptr) delete[] trIn.segmentlist;
+		if(trIn.segmentmarkerlist != nullptr) delete[] trIn.segmentmarkerlist;
+		//if(trIn.regionlist != nullptr) delete[] trIn.regionlist;
 
-		if(trOut.pointlist != NULL) free(trOut.pointlist); //Not needed if -N switch used.
-		if(trOut.pointattributelist != NULL) free(trOut.pointattributelist); //Not needed if -N switch used or number of point attributes is zero:
-		if(trOut.pointmarkerlist != NULL) free(trOut.pointmarkerlist); //Not needed if -N or -B switch used.
-		if(trOut.trianglelist != NULL) free(trOut.trianglelist); //Not needed if -E switch used.
-		if(trOut.triangleattributelist != NULL) free(trOut.triangleattributelist); //Not needed if -E switch used or number of triangle attributes is zero:
-		if(trOut.neighborlist != NULL) free(trOut.neighborlist); //Needed only if -n switch used.
-		if(trOut.segmentlist != NULL) free(trOut.segmentlist); //Needed only if segments are output (-p or -c) and -P not used:
-		if(trOut.segmentmarkerlist != NULL) free(trOut.segmentmarkerlist); //Needed only if segments are output (-p or -c) and -P and -B not used:
-		if(trOut.edgelist != NULL) free(trOut.edgelist); //Needed only if -e switch used.
-		if(trOut.edgemarkerlist != NULL) free(trOut.edgemarkerlist); //Needed if -e used and -B not used.
+		if(trOut.pointlist != nullptr) free(trOut.pointlist); //Not needed if -N switch used.
+		if(trOut.pointattributelist != nullptr) free(trOut.pointattributelist); //Not needed if -N switch used or number of point attributes is zero:
+		if(trOut.pointmarkerlist != nullptr) free(trOut.pointmarkerlist); //Not needed if -N or -B switch used.
+		if(trOut.trianglelist != nullptr) free(trOut.trianglelist); //Not needed if -E switch used.
+		if(trOut.triangleattributelist != nullptr) free(trOut.triangleattributelist); //Not needed if -E switch used or number of triangle attributes is zero:
+		if(trOut.neighborlist != nullptr) free(trOut.neighborlist); //Needed only if -n switch used.
+		if(trOut.segmentlist != nullptr) free(trOut.segmentlist); //Needed only if segments are output (-p or -c) and -P not used:
+		if(trOut.segmentmarkerlist != nullptr) free(trOut.segmentmarkerlist); //Needed only if segments are output (-p or -c) and -P and -B not used:
+		if(trOut.edgelist != nullptr) free(trOut.edgelist); //Needed only if -e switch used.
+		if(trOut.edgemarkerlist != nullptr) free(trOut.edgemarkerlist); //Needed if -e used and -B not used.
 
-		if(trVorOut.pointlist != NULL) free(trVorOut.pointlist); //Needed only if -v switch used.
-		if(trVorOut.pointattributelist != NULL) free(trVorOut.pointattributelist); //Needed only if -v switch used and number of attributes is not zero:
-		if(trVorOut.edgelist != NULL) free(trVorOut.edgelist); //Needed only if -v switch used.
-		if(trVorOut.normlist != NULL) free(trVorOut.normlist); //Needed only if -v switch used.
+		if(trVorOut.pointlist != nullptr) free(trVorOut.pointlist); //Needed only if -v switch used.
+		if(trVorOut.pointattributelist != nullptr) free(trVorOut.pointattributelist); //Needed only if -v switch used and number of attributes is not zero:
+		if(trVorOut.edgelist != nullptr) free(trVorOut.edgelist); //Needed only if -v switch used.
+		if(trVorOut.normlist != nullptr) free(trVorOut.normlist); //Needed only if -v switch used.
 
 		return 1;
 	}
@@ -627,28 +627,28 @@ int radTApplication::TriangulatePolygon(TVector2d* ArrayOfPoints2d, long lenArra
 	{
 		//SendingIsRequired = PrevSendingIsRequired;
 
-		if(trIn.pointlist != NULL) delete[] trIn.pointlist;
-		if(trIn.pointattributelist != NULL) delete[] trIn.pointattributelist;
-		if(trIn.pointmarkerlist != NULL) delete[] trIn.pointmarkerlist;
-		if(trIn.segmentlist != NULL) delete[] trIn.segmentlist;
-		if(trIn.segmentmarkerlist != NULL) delete[] trIn.segmentmarkerlist;
-		//if(trIn.regionlist != NULL) delete[] trIn.regionlist;
+		if(trIn.pointlist != nullptr) delete[] trIn.pointlist;
+		if(trIn.pointattributelist != nullptr) delete[] trIn.pointattributelist;
+		if(trIn.pointmarkerlist != nullptr) delete[] trIn.pointmarkerlist;
+		if(trIn.segmentlist != nullptr) delete[] trIn.segmentlist;
+		if(trIn.segmentmarkerlist != nullptr) delete[] trIn.segmentmarkerlist;
+		//if(trIn.regionlist != nullptr) delete[] trIn.regionlist;
 
-		if(trOut.pointlist != NULL) free(trOut.pointlist); //Not needed if -N switch used.
-		if(trOut.pointattributelist != NULL) free(trOut.pointattributelist); //Not needed if -N switch used or number of point attributes is zero:
-		if(trOut.pointmarkerlist != NULL) free(trOut.pointmarkerlist); //Not needed if -N or -B switch used.
-		if(trOut.trianglelist != NULL) free(trOut.trianglelist); //Not needed if -E switch used.
-		if(trOut.triangleattributelist != NULL) free(trOut.triangleattributelist); //Not needed if -E switch used or number of triangle attributes is zero:
-		if(trOut.neighborlist != NULL) free(trOut.neighborlist); //Needed only if -n switch used.
-		if(trOut.segmentlist != NULL) free(trOut.segmentlist); //Needed only if segments are output (-p or -c) and -P not used:
-		if(trOut.segmentmarkerlist != NULL) free(trOut.segmentmarkerlist); //Needed only if segments are output (-p or -c) and -P and -B not used:
-		if(trOut.edgelist != NULL) free(trOut.edgelist); //Needed only if -e switch used.
-		if(trOut.edgemarkerlist != NULL) free(trOut.edgemarkerlist); //Needed if -e used and -B not used.
+		if(trOut.pointlist != nullptr) free(trOut.pointlist); //Not needed if -N switch used.
+		if(trOut.pointattributelist != nullptr) free(trOut.pointattributelist); //Not needed if -N switch used or number of point attributes is zero:
+		if(trOut.pointmarkerlist != nullptr) free(trOut.pointmarkerlist); //Not needed if -N or -B switch used.
+		if(trOut.trianglelist != nullptr) free(trOut.trianglelist); //Not needed if -E switch used.
+		if(trOut.triangleattributelist != nullptr) free(trOut.triangleattributelist); //Not needed if -E switch used or number of triangle attributes is zero:
+		if(trOut.neighborlist != nullptr) free(trOut.neighborlist); //Needed only if -n switch used.
+		if(trOut.segmentlist != nullptr) free(trOut.segmentlist); //Needed only if segments are output (-p or -c) and -P not used:
+		if(trOut.segmentmarkerlist != nullptr) free(trOut.segmentmarkerlist); //Needed only if segments are output (-p or -c) and -P and -B not used:
+		if(trOut.edgelist != nullptr) free(trOut.edgelist); //Needed only if -e switch used.
+		if(trOut.edgemarkerlist != nullptr) free(trOut.edgemarkerlist); //Needed if -e used and -B not used.
 
-		if(trVorOut.pointlist != NULL) free(trVorOut.pointlist); //Needed only if -v switch used.
-		if(trVorOut.pointattributelist != NULL) free(trVorOut.pointattributelist); //Needed only if -v switch used and number of attributes is not zero:
-		if(trVorOut.edgelist != NULL) free(trVorOut.edgelist); //Needed only if -v switch used.
-		if(trVorOut.normlist != NULL) free(trVorOut.normlist); //Needed only if -v switch used.
+		if(trVorOut.pointlist != nullptr) free(trVorOut.pointlist); //Needed only if -v switch used.
+		if(trVorOut.pointattributelist != nullptr) free(trVorOut.pointattributelist); //Needed only if -v switch used and number of attributes is not zero:
+		if(trVorOut.edgelist != nullptr) free(trVorOut.edgelist); //Needed only if -v switch used.
+		if(trVorOut.normlist != nullptr) free(trVorOut.normlist); //Needed only if -v switch used.
 
 		Initialize(); 
 		return 0;

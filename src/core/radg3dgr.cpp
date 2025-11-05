@@ -94,7 +94,7 @@ void radTg3dGraphPresent::GenDraw()
 		for(radTlphg::iterator iter = g3dPtr->g3dListOfTransform.begin();
 			iter != g3dPtr->g3dListOfTransform.end(); ++iter) NumberOfSymChilds_pl_Orig *= (*iter).m;
 
-		if(radTCast::FlmLinCurCast(g3dPtr) != NULL) // To separate Linear primitives (since DrawAttr apply differently to them)
+		if(radTCast::FlmLinCurCast(g3dPtr) != nullptr) // To separate Linear primitives (since DrawAttr apply differently to them)
 			Send.InitDrawLinElem(DrawAttrAreSet, DrawAttr, NumberOfSymChilds_pl_Orig, DrawFacilityInd);
 		else Send.InitDrawSurfElem(DrawAttrAreSet, DrawAttr, NumberOfSymChilds_pl_Orig, DrawFacilityInd);
 
@@ -103,7 +103,7 @@ void radTg3dGraphPresent::GenDraw()
 	}
 	else
 	{
-		if(radTCast::FlmLinCurCast(g3dPtr) != NULL) // To separate Linear primitives (since DrawAttr apply diferently to them)
+		if(radTCast::FlmLinCurCast(g3dPtr) != nullptr) // To separate Linear primitives (since DrawAttr apply diferently to them)
 			Send.InitDrawLinElem(DrawAttrAreSet, DrawAttr, 1, DrawFacilityInd);
 		else Send.InitDrawSurfElem(DrawAttrAreSet, DrawAttr, 1, DrawFacilityInd);
 		Draw(&GenTrans);
@@ -1027,7 +1027,7 @@ void radTPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 			//char ErrorStr[100];
 			//int j = sprintf(ErrorStr, "Polyhedron: AmOfFacesToDraw: %d", AmOfFacesToDraw);
 			//UINT DlgStyle = MB_OK | MB_ICONSTOP | MB_DEFBUTTON1 | MB_SYSTEMMODAL;
-			//int MesBoxInf = MessageBox(NULL, ErrorStr, ErrorMesTitle, DlgStyle); 
+			//int MesBoxInf = MessageBox(nullptr, ErrorStr, ErrorMesTitle, DlgStyle); 
 			//end test
 
 	if(AmOfFacesToDraw > 0)
@@ -1364,7 +1364,7 @@ void radTGroupGraphPresent::Draw(radTrans* BaseTransPtr)
 		//char ErrorStr[100];
 		//int j = sprintf(ErrorStr, "AmOfElemToDraw: %d", AmOfElemToDraw);
 		//UINT DlgStyle = MB_OK | MB_ICONSTOP | MB_DEFBUTTON1 | MB_SYSTEMMODAL;
-		//int MesBoxInf = MessageBox(NULL, ErrorStr, ErrorMesTitle, DlgStyle); 
+		//int MesBoxInf = MessageBox(nullptr, ErrorStr, ErrorMesTitle, DlgStyle); 
 		//end test
 
 	if(AmOfElemToDraw > 0)
@@ -1379,7 +1379,7 @@ void radTGroupGraphPresent::Draw(radTrans* BaseTransPtr)
 			{
 				radTg3d* g3dPtrLoc = (radTg3d*)(((*iter).second).rep);
 				radTg3dGraphPresent* g3dGraphPresentPtr = g3dPtrLoc->CreateGraphPresent();
-				if(g3dGraphPresentPtr != NULL)
+				if(g3dGraphPresentPtr != nullptr)
 				{
 					if(!ShowInternalFacesAfterCut) g3dGraphPresentPtr->ShowInternalFacesAfterCut = false;
 
@@ -2040,7 +2040,7 @@ void radTSubdivPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 			//char ErrorStr[100];
 			//int j = sprintf(ErrorStr, "SubdivPolyhedron: AmOfElemToDraw: %d", AmOfElemToDraw);
 			//UINT DlgStyle = MB_OK | MB_ICONSTOP | MB_DEFBUTTON1 | MB_SYSTEMMODAL;
-			//int MesBoxInf = MessageBox(NULL, ErrorStr, ErrorMesTitle, DlgStyle); 
+			//int MesBoxInf = MessageBox(nullptr, ErrorStr, ErrorMesTitle, DlgStyle); 
 			//end test
 
 	if(AmOfElemToDraw > 0)
@@ -2053,7 +2053,7 @@ void radTSubdivPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 			{
 				radTg3d* Loc_g3dPtr = (radTg3d*)(((*iter).second).rep);
 				radTg3dGraphPresent* g3dGraphPresentPtr = Loc_g3dPtr->CreateGraphPresent();
-				if(g3dGraphPresentPtr != NULL)
+				if(g3dGraphPresentPtr != nullptr)
 				{
 					g3dGraphPresentPtr->DrawFacilityInd = DrawFacilityInd;
 					g3dGraphPresentPtr->ShowInternalFacesAfterCut = false;
@@ -2111,7 +2111,7 @@ void radTSubdivArcCurGraphPresent::Draw(radTrans* BaseTransPtr)
 			{
 				radTg3d* Loc_g3dPtr = (radTg3d*)(((*iter).second).rep);
 				radTg3dGraphPresent* g3dGraphPresentPtr = Loc_g3dPtr->CreateGraphPresent();
-				if(g3dGraphPresentPtr != NULL)
+				if(g3dGraphPresentPtr != nullptr)
 				{
 					g3dGraphPresentPtr->DrawFacilityInd = DrawFacilityInd;
 					g3dGraphPresentPtr->ShowInternalFacesAfterCut = false;
@@ -2165,7 +2165,7 @@ void radTRectangleGraphPresent::Draw(radTrans* BaseTransPtr)
 void radTPolygonGraphPresent::Draw(radTrans* BaseTransPtr)
 {
 	radTPolygon* PolygonP = (radTPolygon*)g3dPtr;
-	TVector3d* PolygonArray = NULL;
+	TVector3d* PolygonArray = nullptr;
 	PolygonArray = new TVector3d[PolygonP->AmOfEdgePoints + 1];
 
 	TVector2d AuxVect2d;

@@ -482,48 +482,48 @@ void radTApplication::ComputeMvsH(int g3dRelaxOrMaterElemKey, char* MagnChar, do
 		radThg hg;
 		if(!ValidateElemKey(g3dRelaxOrMaterElemKey, hg)) return;
 
-		radTMaterial* MaterPtr = NULL;
+		radTMaterial* MaterPtr = nullptr;
 
 		radTg3d* g3dPtr = Cast.g3dCast(hg.rep);
-		if(g3dPtr!=NULL)
+		if(g3dPtr!=nullptr)
 		{
 			radTg3dRelax* g3dRelaxPtr = Cast.g3dRelaxCast(g3dPtr);
-			if(g3dRelaxPtr!=NULL) 
+			if(g3dRelaxPtr!=nullptr)
 			{
-				MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
-				if(MaterPtr==NULL) { Send.ErrorMessage("Radia::Error027"); return;}
+				MaterPtr = static_cast<radTMaterial*>(g3dRelaxPtr->MaterHandle.rep);
+				if(MaterPtr==nullptr) { Send.ErrorMessage("Radia::Error027"); return;}
 			}
 			else
 			{
 				radTGroup* GroupPtr = Cast.GroupCast(g3dPtr);
-				if(GroupPtr!=NULL)
+				if(GroupPtr!=nullptr)
 				{
-					radTg3dRelax* g3dSubdRelaxPtr = NULL;
+					radTg3dRelax* g3dSubdRelaxPtr = nullptr;
 
 					radTSubdividedRecMag* SubdividedRecMagPtr = Cast.SubdividedRecMagCast(GroupPtr);
-					if(SubdividedRecMagPtr!=NULL) g3dSubdRelaxPtr = (radTg3dRelax*)SubdividedRecMagPtr;
+					if(SubdividedRecMagPtr!=nullptr) g3dSubdRelaxPtr = static_cast<radTg3dRelax*>(SubdividedRecMagPtr);
 					else
 					{
 						radTSubdividedExtrPolygon* SubdividedExtrPolygonPtr = Cast.SubdExtrPolygonCastFromGroup(GroupPtr);
-						if(SubdividedExtrPolygonPtr!=NULL) g3dSubdRelaxPtr = (radTg3dRelax*)SubdividedExtrPolygonPtr;
+						if(SubdividedExtrPolygonPtr!=nullptr) g3dSubdRelaxPtr = static_cast<radTg3dRelax*>(SubdividedExtrPolygonPtr);
 						else
 						{
 							radTSubdividedPolyhedron* SubdividedPolyhedronPtr = Cast.SubdPolyhedronCastFromGroup(GroupPtr);
-							if(SubdividedPolyhedronPtr!=NULL) g3dSubdRelaxPtr = (radTg3dRelax*)SubdividedPolyhedronPtr;
+							if(SubdividedPolyhedronPtr!=nullptr) g3dSubdRelaxPtr = static_cast<radTg3dRelax*>(SubdividedPolyhedronPtr);
 						}
 					}
-					if(g3dSubdRelaxPtr!=NULL) 
+					if(g3dSubdRelaxPtr!=nullptr)
 					{
-						MaterPtr = (radTMaterial*)(g3dSubdRelaxPtr->MaterHandle.rep);
-						if(MaterPtr==NULL) { Send.ErrorMessage("Radia::Error027"); return;}
+						MaterPtr = static_cast<radTMaterial*>(g3dSubdRelaxPtr->MaterHandle.rep);
+						if(MaterPtr==nullptr) { Send.ErrorMessage("Radia::Error027"); return;}
 					}
 				}
 			}
 		}
-		if(MaterPtr==NULL)
+		if(MaterPtr==nullptr)
 		{
 			MaterPtr = Cast.MaterCast(hg.rep);
-			if(MaterPtr==NULL) { Send.ErrorMessage("Radia::Error025"); return;}
+			if(MaterPtr==nullptr) { Send.ErrorMessage("Radia::Error025"); return;}
 		}
 
 		if(!ValidateMagnChar(MagnChar)) return;
@@ -733,15 +733,15 @@ int radTApplication::DumpElemParse(const unsigned char *bstr, int bstrLen)
 					}
 					else if(cType3 == sbdRecMag.Type_Group())
 					{
-						hg = radThg((radTGroup*)(new radTSubdividedRecMag(inStr, mKeysOldNew, GlobalMapOfHandlers)));
+						hg = radThg(static_cast<radTGroup*>(new radTSubdividedRecMag(inStr, mKeysOldNew, GlobalMapOfHandlers)));
 					}
 					else if(cType3 == sbdExtPgn.Type_Group())
 					{//Instantiate Subdivided ExtrPolygon
-						hg = radThg((radTGroup*)(new radTSubdividedExtrPolygon(inStr, mKeysOldNew, GlobalMapOfHandlers)));
+						hg = radThg(static_cast<radTGroup*>(new radTSubdividedExtrPolygon(inStr, mKeysOldNew, GlobalMapOfHandlers)));
 					}
 					else if(cType3 == sbdPolyhdr.Type_Group())
 					{//Instantiate Subdivided Polyhedron
-						hg = radThg((radTGroup*)(new radTSubdividedPolyhedron(inStr, mKeysOldNew, GlobalMapOfHandlers)));
+						hg = radThg(static_cast<radTGroup*>(new radTSubdividedPolyhedron(inStr, mKeysOldNew, GlobalMapOfHandlers)));
 					}
 				}
 				else if(cType2 == arcCur.Type_g3d())
@@ -1100,9 +1100,9 @@ void radTApplication::GraphicsForAll_g3d(int InShowSymmetryChilds)
 			radTg* gPtr = ((*iter).second).rep;
 			radTg3d g3d;
 			if(gPtr->Type_g() == g3d.Type_g())
-				if(!((radTg3d*)gPtr)->IsGroupMember) 
+				if(!static_cast<radTg3d*>(gPtr)->IsGroupMember)
 				{
-					g3dPtrPtr[g3dPresElemCount] = (radTg3d*)gPtr;
+					g3dPtrPtr[g3dPresElemCount] = static_cast<radTg3d*>(gPtr);
 					KeyPtr[g3dPresElemCount++] = (*iter).first;
 				}
 		}
@@ -1489,7 +1489,7 @@ void radTApplication::OutFieldCompRes(char* FieldChar, radTField* FieldArray, do
 	radTField* FieldPtr = FieldArray;
 	for(int i=0; i<Np; i++)
 	{
-		if(ArgArray != NULL) // Argument Needed
+		if(ArgArray != nullptr) // Argument Needed
 		{
 			Send.InitOutList(2);
 			Send.Double(ArgArray[i]);
@@ -1729,7 +1729,7 @@ void radTApplication::ParseAndSendOneFieldValue(radTField* FieldPtr, char* BufCh
 void radTApplication::OutFieldIntCompRes(char* FieldIntChar, radTField* FieldPtr)
 {
 	char* BufChar = FieldIntChar;
-	char* BufCharPrev = NULL;
+	char* BufCharPrev = nullptr;
 	char* EqEmptyStr = "Ib";
 
 	short I_used = 0;

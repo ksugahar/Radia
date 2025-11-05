@@ -200,13 +200,13 @@ public:
 	{
 		DeleteElemVolumeArray();
 
-		if(IntrctPtr != NULL)
+		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
 			mElemVolumeArray = new double[AmOfMainEl];
 
 			double *tElemVolumeArray = mElemVolumeArray;
-			radTg3dRelax* g3dRelaxPtr = NULL;
+			radTg3dRelax* g3dRelaxPtr = nullptr;
 			for(long i=0; i<AmOfMainEl; i++) 
 			{
 				g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
@@ -223,7 +223,7 @@ public:
 	{
 		DeleteOptimValuesArrays();
 
-		if(IntrctPtr != NULL)
+		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
 			mOptMagnArray = new TVector3d[AmOfMainEl];
@@ -349,13 +349,13 @@ public:
 	{
 		DeleteElemVolumeArray();
 
-		if(IntrctPtr != NULL)
+		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
 			mElemVolumeArray = new double[AmOfMainEl];
 
 			double *tElemVolumeArray = mElemVolumeArray;
-			radTg3dRelax* g3dRelaxPtr = NULL;
+			radTg3dRelax* g3dRelaxPtr = nullptr;
 			for(long i=0; i<AmOfMainEl; i++) 
 			{
 				g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
@@ -372,7 +372,7 @@ public:
 	{
 		DeleteOptimValuesArrays();
 
-		if(IntrctPtr != NULL)
+		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
 			mOptMagnArray = new TVector3d[AmOfMainEl];
@@ -454,7 +454,7 @@ public:
 	}; 
 	~radTRelaxationMethNo_6() 
 	{
-		if(IntrctPtr != NULL) delete[] IntrctPtr;
+		if(IntrctPtr != nullptr) delete[] IntrctPtr;
 		mMapOfPartHandlers.erase(mMapOfPartHandlers.begin(), mMapOfPartHandlers.end());
 	}; 
 
@@ -650,23 +650,23 @@ public:
 
 	void DeleteArrays_AutoRelax(int* TotArrSubMatrNos, int* SubMatrLengths)
 	{
-		if(TotArrSubMatrNos != NULL)
+		if(TotArrSubMatrNos != nullptr)
 		{
-			delete[] TotArrSubMatrNos; TotArrSubMatrNos = NULL;
+			delete[] TotArrSubMatrNos; TotArrSubMatrNos = nullptr;
 		}
-		if(SubMatrLengths != NULL)
+		if(SubMatrLengths != nullptr)
 		{
-			delete[] SubMatrLengths; SubMatrLengths = NULL;
+			delete[] SubMatrLengths; SubMatrLengths = nullptr;
 		}
-		if(mArrAuxQuasiExtField != NULL)
+		if(mArrAuxQuasiExtField != nullptr)
 		{
-			delete[] mArrAuxQuasiExtField; mArrAuxQuasiExtField = NULL;
+			delete[] mArrAuxQuasiExtField; mArrAuxQuasiExtField = nullptr;
 		}
 	}
 
 	void DeleteInterMatrData()
 	{
-		if(IntrctPtr != NULL) { delete IntrctPtr; IntrctPtr = NULL;}
+		if(IntrctPtr != nullptr) { delete IntrctPtr; IntrctPtr = nullptr;}
 	}
 
 };

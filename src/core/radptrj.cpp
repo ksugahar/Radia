@@ -61,7 +61,7 @@ radTPrtclTrj::radTPrtclTrj(double InEnergy, radTg3d* InFldSrcPtr, const radTComp
 		dydx_ap = new double[AmOfEq];
 
 		kmax_ap = count_ap = 0;                    // To allow storage of intermediate results in AutoPropagate,
-		xp_ap = NULL; yp_ap = NULL; dxsav_ap = 0.; // set this to desired values and allocate memory
+		xp_ap = nullptr; yp_ap = nullptr; dxsav_ap = 0.; // set this to desired values and allocate memory
 	}
 }
 
@@ -69,12 +69,12 @@ radTPrtclTrj::radTPrtclTrj(double InEnergy, radTg3d* InFldSrcPtr, const radTComp
 
 radTPrtclTrj::~radTPrtclTrj()
 {
-	if(dym_rk4!=NULL) delete[] dym_rk4;
-	if(dyt_rk4!=NULL) delete[] dyt_rk4;
-	if(yt_rk4!=NULL) delete[] yt_rk4;
+	if(dym_rk4!=nullptr) delete[] dym_rk4;
+	if(dyt_rk4!=nullptr) delete[] dyt_rk4;
+	if(yt_rk4!=nullptr) delete[] yt_rk4;
 
-	if(Y!=NULL) delete[] Y; 
-	if(dYdx!=NULL) delete[] dYdx;
+	if(Y!=nullptr) delete[] Y; 
+	if(dYdx!=nullptr) delete[] dYdx;
 
 	if(OnPrc)
 	{

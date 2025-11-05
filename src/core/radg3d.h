@@ -35,11 +35,7 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-#ifdef __GNUC__
-typedef list <radTPair_int_hg> radTlphg;
-#else
-typedef list <radTPair_int_hg, allocator<radTPair_int_hg> > radTlphg; // Porting
-#endif
+using radTlphg = list<radTPair_int_hg>;
 
 //-------------------------------------------------------------------------
 
@@ -151,7 +147,7 @@ struct radTCylindricSubdivSpec {
 
 //-------------------------------------------------------------------------
 
-typedef radTHandle<radTAuxCompDataG3D> radTHandleAuxCompDataG3D;
+using radTHandleAuxCompDataG3D = radTHandle<radTAuxCompDataG3D>;
 class radTApplication;
 class radTg3dGraphPresent;
 class radTField;
@@ -239,7 +235,7 @@ public:
 	void NestedFor_IntOverShape(radTField*, const radTlphg::iterator&);
 	virtual void IntOverShape(radTField*) {}
 
-	virtual radTg3dGraphPresent* CreateGraphPresent() { return NULL;}
+	virtual radTg3dGraphPresent* CreateGraphPresent() { return nullptr;}
 
 	virtual int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*) { return 1;}
 	virtual int CutItself(TVector3d*, radThg&, radTPair_int_hg&, radTPair_int_hg&, radTApplication*, radTSubdivOptions*) { return 1;}
@@ -285,10 +281,10 @@ public:
 	inline double TransAtans(double, double, double&);
 	inline double Argument(double x, double y); 
 
-	double Abs(double x) { return (x<0.)? -x : x;}
-	double Max(double x1, double x2) { return (x1<x2)? x2 : x1;}
-	double Sign(double x) { return (x<0.)? -1. : 1.;}
-	double Step(double x) { return (x>0.)? 1. : 0.;}
+	constexpr double Abs(double x) { return (x<0.)? -x : x;}
+	constexpr double Max(double x1, double x2) { return (x1<x2)? x2 : x1;}
+	constexpr double Sign(double x) { return (x<0.)? -1. : 1.;}
+	constexpr double Step(double x) { return (x>0.)? 1. : 0.;}
 
 	void FindEllipticCoordOfPoint(radTCylindricSubdivSpec*, TVector3d&, double&, double&);
 	double EstimateLengthAlongEllipse(double, double, double, double);
@@ -522,7 +518,7 @@ struct radTStructForEnergyForceTorqueComp {
 
 //-------------------------------------------------------------------------
 
-typedef radTHandle<radTStructForEnergyForceTorqueComp> radTHandleStructForEnergyForceTorqueComp;
+using radTHandleStructForEnergyForceTorqueComp = radTHandle<radTStructForEnergyForceTorqueComp>;
 
 //-------------------------------------------------------------------------
 
@@ -557,7 +553,7 @@ public:
 		PointIsInsideFrame = 0;
 	}
 	radTField(const radTFieldKey& InFieldKey, const radTCompCriterium& InCompCriterium, 
-			  radTStructForShapeInt* InShapeIntDataPtr =NULL)
+			  radTStructForShapeInt* InShapeIntDataPtr =nullptr)
 	{// This is used in NestedFor_IntOverShape
 		FieldKey = InFieldKey; CompCriterium = InCompCriterium; ShapeIntDataPtr = InShapeIntDataPtr;
 		TVector3d ZeroVect(0.,0.,0.);

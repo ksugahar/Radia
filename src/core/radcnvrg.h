@@ -43,7 +43,7 @@ public:
 		RelRand = 1.E-11;
 		ZeroRand = AbsRand;
 
-		//srand((unsigned)time(NULL)); // To seed random generator by current time
+		//srand((unsigned)time(nullptr)); // To seed random generator by current time
 	}
 
 	void SwitchActOnDoubles(short InActOnDoubles, double InAbsRand =0., double InRelRand =0., double InZeroRand =0.)
@@ -54,7 +54,7 @@ public:
 		RelRand = InRelRand;
 		ZeroRand = InZeroRand;
 
-		srand((unsigned)time(NULL));
+		srand((unsigned)time(nullptr));
 	}
 
 	double Double(double A)

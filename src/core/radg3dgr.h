@@ -60,14 +60,8 @@ struct radGraphPresOptions {
 
 //-------------------------------------------------------------------------
 
-#ifdef __GNUC__
-typedef	map <int, radTDrawAttr, less<int> >  radTMapOfDrawAttr;
-typedef	vector<radTDrawAttr> radTVectOfDrawAttr;
-
-#else
-typedef	map <int, radTDrawAttr, less<int> >  radTMapOfDrawAttr;
-typedef	vector<radTDrawAttr, allocator<radTDrawAttr> > radTVectOfDrawAttr;
-#endif
+using radTMapOfDrawAttr = map<int, radTDrawAttr, less<int>>;
+using radTVectOfDrawAttr = vector<radTDrawAttr>;
 
 //-------------------------------------------------------------------------
 

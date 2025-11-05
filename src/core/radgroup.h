@@ -24,11 +24,7 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-#ifdef __GNUC__
-typedef vector<int> radTVectOfInt;
-#else
-typedef vector<int, allocator<int> > radTVectOfInt;
-#endif
+using radTVectOfInt = vector<int>;
 
 //-------------------------------------------------------------------------
 
@@ -40,12 +36,12 @@ public:
 	radTGroup() {}
 	~radTGroup() {}
 
-	int Type_g3d() { return 2;}
+	int Type_g3d() override { return 2;}
 	virtual int Type_Group() { return 0;}
 
 	inline void AddElement(int, const radThg&);
-	
-	inline void B_comp(radTField*);  // Modified by P. Elleaume 8 Nov 96
+
+	inline void B_comp(radTField*) override;  // Modified by P. Elleaume 8 Nov 96
 	void B_intComp(radTField* FieldPtr) { B_comp(FieldPtr);} // This is not an Error!!!
 
 	void Dump(std::ostream&, int =0);
@@ -56,9 +52,9 @@ public:
 	//void DumpBin(CAuxBinStrVect& oStr, radTmhg& mEl, radThg& hg);
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 
-	radTg3dGraphPresent* CreateGraphPresent();
+	radTg3dGraphPresent* CreateGraphPresent() override;
 
-	int DuplicateItself(radThg& hg, radTApplication* radPtr, char PutNewStuffIntoGenCont)
+	int DuplicateItself(radThg& hg, radTApplication* radPtr, char PutNewStuffIntoGenCont) override
 	{
 		return DuplicateGroupStuff(new radTGroup(*this), hg, radPtr, PutNewStuffIntoGenCont);
 	}
@@ -75,12 +71,12 @@ public:
 
 	int CreateFromSym(radThg&, radTApplication*, char);
 
-	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);
+	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*) override;
 	int SubdivideItselfAsWholeInLabFrame(double*, radThg&, radTApplication*, radTSubdivOptions*);
 	int SetUpCuttingPlanes(TVector3d&, double*, radTSubdivOptions*, TVector3d*);
 	int FindLowestAndUppestVertices(TVector3d&, radTSubdivOptions*, TVector3d&, TVector3d&, radTrans&, char&, char&);
 
-	int SubdivideItselfByEllipticCylinder(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
+	int SubdivideItselfByEllipticCylinder(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*) override;
 	int SubdivideItselfByEllipticCylinderAsWholeInLabFrame(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
 	int FindEdgePointsOverPhiAndAxForCylSubd(radTCylindricSubdivSpec*, TVector3d*, double*);
 	int ConvertToPolyhedron(radThg&, radTApplication*, char);
@@ -95,22 +91,22 @@ public:
 
 	int CutItself(TVector3d*, radThg&, radTPair_int_hg&, radTPair_int_hg&, radTApplication*, radTSubdivOptions*);
 
-	int SubdivideItselfByParPlanes(double*, int, radThg&, radTApplication*, radTSubdivOptions*);
+	int SubdivideItselfByParPlanes(double*, int, radThg&, radTApplication*, radTSubdivOptions*) override;
 	int SubdivideItselfByParPlanesAsWholeInLabFrame(double*, int, radThg&, radTApplication*, radTSubdivOptions*);
 
-	int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions*, radTvhg*);
+	int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions*, radTvhg*) override;
 
-	int SetMaterial(radThg&, radTApplication*);
-	void SetM(TVector3d& M); //virtual
-	inline int ScaleCurrent(double); //virtual in radTg3d
+	int SetMaterial(radThg&, radTApplication*) override;
+	void SetM(TVector3d& M) override; //virtual
+	inline int ScaleCurrent(double) override; //virtual in radTg3d
 
 	void FlattenNestedStructure(radTApplication*, char);
 	void CollectNonGroupElements(radTmhg*, int&, radTApplication*, char);
 
 	inline int ItemIsNotFullyInternalAfterCut();
 
-	inline int NumberOfDegOfFreedom();
-	inline int SizeOfThis();
+	inline int NumberOfDegOfFreedom() override;
+	inline int SizeOfThis() override;
 
 	void Push_backCenterPointAndField(radTFieldKey*, radTVectPairOfVect3d*, radTrans*, radTg3d*, radTApplication*);
 
@@ -150,12 +146,11 @@ inline void radTGroup::B_comp(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-inline int radTGroup::NumberOfDegOfFreedom() 
+inline int radTGroup::NumberOfDegOfFreedom()
 {
 	int DegFrCount = 0;
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-		DegFrCount += ((radTg3d*)(((*iter).second).rep))->NumberOfDegOfFreedom();  // To check carefully!!!
+	for(const auto& pair : GroupMapOfHandlers)
+		DegFrCount += static_cast<radTg3d*>(pair.second.rep)->NumberOfDegOfFreedom();
 	return DegFrCount;
 }
 
@@ -164,9 +159,8 @@ inline int radTGroup::NumberOfDegOfFreedom()
 inline int radTGroup::SizeOfThis()
 {
 	int GenSize = sizeof(*this);
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-		GenSize += (((*iter).second).rep)->SizeOfThis();
+	for(const auto& pair : GroupMapOfHandlers)
+		GenSize += pair.second.rep->SizeOfThis();
 	return GenSize;
 }
 

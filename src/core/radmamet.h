@@ -70,7 +70,7 @@ template<class T> class radTMathOrdDifEq {
 	int MaxAutoStp;
 
 public:
-	radTMathOrdDifEq(int, T*, void (T::*)(double,double*,double*), short, double* =NULL, double =1., int =5000);
+	radTMathOrdDifEq(int, T*, void (T::*)(double,double*,double*), short, double* =nullptr, double =1., int =5000);
 	~radTMathOrdDifEq();
 
 	void RungeKutta4(double*, double*, double, double, double*);
@@ -111,7 +111,7 @@ template <class T> radTMathOrdDifEq<T>::
 		dydx_ap = new double[AmOfEq];
 
 		kmax_ap = count_ap = 0;                    // To allow storage of intermediate results in AutoPropagate,
-		xp_ap = NULL; yp_ap = NULL; dxsav_ap = 0.; // set this to desired values and allocate memory
+		xp_ap = nullptr; yp_ap = nullptr; dxsav_ap = 0.; // set this to desired values and allocate memory
 	}
 }
 

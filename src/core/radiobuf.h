@@ -79,7 +79,7 @@ public:
 	int GetErrorSize(int e)
 	{
 		const char* ErrStr = GetError(e);
-		if(ErrStr == NULL) return 0;
+		if(ErrStr == nullptr) return 0;
 		return (int)strlen(ErrStr);
 	}
 
@@ -94,7 +94,7 @@ public:
 	int GetWarningSize(int e)
 	{
 		const char* ErrStr = GetWarning(e);
-		if(ErrStr == NULL) return 0;
+		if(ErrStr == nullptr) return 0;
 		return (int)strlen(ErrStr);
 	}
 
@@ -449,7 +449,7 @@ public:
 				return RemoveDecorFromErrWarnStr(CurStr);
 			}
 		}
-		return NULL;
+		return nullptr;
 	}
 	const char* DecodeWarningText(const char* ErrorTitle)
 	{
@@ -467,7 +467,7 @@ public:
 				return RemoveDecorFromErrWarnStr(CurStr);
 			}
 		}
-		return NULL;
+		return nullptr;
 	}
 
 	void PrepErrWarnMesageForMathematica(char* ErrMesForMath, const char* ErrorTitle, char e_or_w)
@@ -566,13 +566,13 @@ private:
 		int LenStrSepar = (int)strlen(StrSepar);
 
 		int LenDecoratedStr = (int)strlen(DecoratedStr);
-		if(LenDecoratedStr <= LenStrSepar) return NULL;
+		if(LenDecoratedStr <= LenStrSepar) return nullptr;
 
 		const char* StrSeparAndNonDecoratedStr = strstr(DecoratedStr, StrSepar);
-		if(StrSeparAndNonDecoratedStr == NULL) return NULL;
+		if(StrSeparAndNonDecoratedStr == nullptr) return nullptr;
 
 		int LenStrSeparAndNonDecoratedStr = (int)strlen(StrSeparAndNonDecoratedStr);
-		if(LenStrSeparAndNonDecoratedStr <= LenStrSepar) return NULL;
+		if(LenStrSeparAndNonDecoratedStr <= LenStrSepar) return nullptr;
 		
 		return StrSeparAndNonDecoratedStr + LenStrSepar;
 	}

@@ -653,11 +653,7 @@ int radTPolygon::SubdivideBySetOfParallelLines(const TVector2d& V, TVector2d* St
 
 	radTVect2dVect BaseForBoundStartLoop, BaseForLineStartLoop;
 
-#ifdef __GNUC__
 	vector<int> NosOfPointsPassedVect, NoOfPointOnCurLineVect;
-#else
-	vector<int, allocator<int> > NosOfPointsPassedVect, NoOfPointOnCurLineVect;
-#endif
 
 	radTPolyg2dIntrsctInfoVect* CurLinIntrsctInfoVectPtr = &(IntrsctInfoVectsForParLines[1]);
 

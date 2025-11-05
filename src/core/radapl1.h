@@ -33,11 +33,7 @@ struct radTIntPtrAndInt {
 
 //-------------------------------------------------------------------------
 
-#ifdef __GNUC__
-typedef vector<radTIntPtrAndInt> radTVectIntPtrAndInt;
-#else
-typedef vector<radTIntPtrAndInt, allocator<radTIntPtrAndInt> > radTVectIntPtrAndInt;
-#endif
+using radTVectIntPtrAndInt = vector<radTIntPtrAndInt>;
 
 //-------------------------------------------------------------------------
 

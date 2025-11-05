@@ -70,7 +70,7 @@ class radTPrtclTrj {
 	int MaxAutoStp;
 
 public:
-	radTPrtclTrj(double, radTg3d*, const radTCompCriterium&, short, double* =NULL, double =1., int =5000);
+	radTPrtclTrj(double, radTg3d*, const radTCompCriterium&, short, double* =nullptr, double =1., int =5000);
 	radTPrtclTrj(radTg3d* InFldSourcePtr, const radTCompCriterium& InCompCrit, double inEnergyGeV =0) // For Focusing Potential
 	{
 		FldSrcPtr = InFldSourcePtr;
@@ -78,7 +78,7 @@ public:
 		Field.CompCriterium = InCompCrit; //? OC050413
 		Energy = inEnergyGeV;
 
-		dym_rk4 = dyt_rk4 = yt_rk4 = Y = dYdx = NULL;
+		dym_rk4 = dyt_rk4 = yt_rk4 = Y = dYdx = nullptr;
 		OnPrc = 0;
 	}
 	~radTPrtclTrj();

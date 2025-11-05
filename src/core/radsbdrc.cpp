@@ -42,8 +42,8 @@ radTSubdividedRecMag::radTSubdividedRecMag(const TVector3d& InCPoiVect, const TV
 	InternalFacesAfterCut = 0;
 
 	FldCmpMeth = 0;
-	Q_forM = NULL;
-	FormCenPoPtrArray = NULL;
+	Q_forM = nullptr;
+	FormCenPoPtrArray = nullptr;
 	AmOfSubElem = int(kx)*int(ky)*int(kz);
 	CenPoLoopCounter = IntrcMatrConstrCounter = FormIntrctMembCounter = -1;
 
@@ -64,8 +64,8 @@ radTSubdividedRecMag::radTSubdividedRecMag(const TVector3d& InCPoiVect, const TV
 	InternalFacesAfterCut = 0;
 
 	FldCmpMeth = 0;
-	Q_forM = NULL;
-	FormCenPoPtrArray = NULL;
+	Q_forM = nullptr;
+	FormCenPoPtrArray = nullptr;
 	AmOfSubElem = int(kx)*int(ky)*int(kz);
 	CenPoLoopCounter = IntrcMatrConstrCounter = FormIntrctMembCounter = -1;
 
@@ -96,8 +96,8 @@ radTSubdividedRecMag::radTSubdividedRecMag(const radTRecMag* RecMagPtr, const do
 	qx = InSubdivArray[1]; qy = InSubdivArray[3]; qz = InSubdivArray[5];
 
 	FldCmpMeth = 0;
-	Q_forM = NULL;
-	FormCenPoPtrArray = NULL;
+	Q_forM = nullptr;
+	FormCenPoPtrArray = nullptr;
 	AmOfSubElem = int(kx)*int(ky)*int(kz);
 	CenPoLoopCounter = IntrcMatrConstrCounter = FormIntrctMembCounter = -1;
 
@@ -125,8 +125,8 @@ radTSubdividedRecMag::radTSubdividedRecMag(const radTRecMag* RecMagPtr)
 	AlgsBasedOnKsQsMayNotWork = true;
 
 	FldCmpMeth = 0;
-	Q_forM = NULL;
-	FormCenPoPtrArray = NULL;
+	Q_forM = nullptr;
+	FormCenPoPtrArray = nullptr;
 	CenPoLoopCounter = IntrcMatrConstrCounter = FormIntrctMembCounter = -1;
 }
 
@@ -137,8 +137,8 @@ radTSubdividedRecMag::radTSubdividedRecMag()
 	InternalFacesAfterCut = 0;
 
 	FldCmpMeth = 0;
-	Q_forM = NULL;
-	FormCenPoPtrArray = NULL;
+	Q_forM = nullptr;
+	FormCenPoPtrArray = nullptr;
 
 	CenPoLoopCounter = IntrcMatrConstrCounter = FormIntrctMembCounter = -1;
 	AlgsBasedOnKsQsMayNotWork = true;
@@ -921,12 +921,12 @@ int radTSubdividedRecMag::SetupFldCmpData(short InFldCmpMeth, int SubLevel)
 
 	if(FldCmpMeth==0)
 	{
-		if(Q_forM!=NULL)
+		if(Q_forM!=nullptr)
 		{
 			for(int j=0; j<AmOfSubElem; j++) delete[] (Q_forM[j]);
 			delete[] Q_forM;
 		}
-		if(FormCenPoPtrArray!=NULL) delete[] FormCenPoPtrArray;
+		if(FormCenPoPtrArray!=nullptr) delete[] FormCenPoPtrArray;
 
 		return 1;
 	}
@@ -1041,7 +1041,7 @@ radTg3dRelax* radTSubdividedRecMag::FormalIntrctMemberPtr()
 			FormIntrctMembCounter = -1; // ??
 		}
 
-		radTg3dRelax* FormIntrctMembPtr = NULL;
+		radTg3dRelax* FormIntrctMembPtr = nullptr;
 		radTg3d* g3dPtr = (radTg3d*)(((*FormIntrctMembIter).second).rep);
 
 		//radTCast Cast;

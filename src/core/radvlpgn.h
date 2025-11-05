@@ -461,22 +461,22 @@ public:
 		TVector3d N1_vect_by_N2(N1.y*N2.z - N2.y*N1.z, N2.x*N1.z - N1.x*N2.z, N1.x*N2.y - N2.x*N1.y);
 		return (N1_vect_by_N2*JointSegm >= 0.)? 1 : 0; // Or ">"?
 	}
-	void DeleteInputArrays(TVector3d* ArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths =NULL)
+	void DeleteInputArrays(TVector3d* ArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths =nullptr)
 	{
-		if(ArrayOfFaces != NULL)
+		if(ArrayOfFaces != nullptr)
 		{
 			for(int i=0; i<AmOfFaces; i++) delete[] (ArrayOfFaces[i]);
 			delete[] ArrayOfFaces;
 		}
-		if(ArrayOfLengths != NULL) delete[] ArrayOfLengths;
-		if(ArrayOfPoints != NULL) delete[] ArrayOfPoints;
+		if(ArrayOfLengths != nullptr) delete[] ArrayOfLengths;
+		if(ArrayOfPoints != nullptr) delete[] ArrayOfPoints;
 
 		if(pJ_LinCoef != 0) delete pJ_LinCoef;
 		pJ_LinCoef = 0;
 	}
 	void DeleteAuxInputArrays(TVector3d** ArrayOfFaces)
 	{
-		if(ArrayOfFaces != NULL)
+		if(ArrayOfFaces != nullptr)
 		{
 			for(int i=0; i<AmOfFaces; i++) delete[] (ArrayOfFaces[i]);
 			delete[] ArrayOfFaces;
@@ -484,7 +484,7 @@ public:
 	}
 	void DeleteAuxInputArrays(short** ArrayOfFaces)
 	{
-		if(ArrayOfFaces != NULL)
+		if(ArrayOfFaces != nullptr)
 		{
 			for(int i=0; i<AmOfFaces; i++) delete[] (ArrayOfFaces[i]);
 			delete[] ArrayOfFaces;

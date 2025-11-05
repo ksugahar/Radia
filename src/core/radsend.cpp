@@ -801,7 +801,7 @@ void radTSend::OutFieldCompRes(char* FieldChar, radTField* FieldArray, double* A
 	for(int i=0; i<Np; i++)
 	{
 		nv = 0;
-		if(ArgArray != NULL) // Argument Needed
+		if(ArgArray != nullptr) // Argument Needed
 		{
 			*(t++) = ArgArray[i]; nv++;
 		}
@@ -863,7 +863,7 @@ void radTSend::OutFieldCompRes(char* FieldChar, radTField* FieldArray, double* A
 void radTSend::OutFieldIntCompRes(char* FieldIntChar, radTField* FieldArray, double* ArgArray, int Np)
 {
 	char* BufChar = FieldIntChar;
-	char* BufCharPrev = NULL;
+	char* BufCharPrev = nullptr;
 	//char* EqEmptyStr = "Ib";
 	char EqEmptyStr[] = "Ib"; //OC01052013
 
@@ -915,7 +915,7 @@ void radTSend::OutFieldIntCompRes(char* FieldIntChar, radTField* FieldArray, dou
 	for(int i=0; i<Np; i++)
 	{
 		nv = 0;
-		if(ArgArray != NULL) // Argument Needed
+		if(ArgArray != nullptr) // Argument Needed
 		{
 			*(t++) = ArgArray[i]; nv++;
 		}

@@ -188,12 +188,8 @@ void radTExtrPolygon::B_comp(radTField* FieldPtr)
 	double z1e2 = z1*z1, z2e2 = z2*z2;
 	double absz1 = Abs(z1), absz2 = Abs(z2);
 
-#ifdef __GNUC__
-	vector<TVector2d>::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#else
-	vector<TVector2d, allocator<TVector2d> >::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#endif
-	
+	auto BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
+
 	TVector2d First2d(FirstPoint.y - ObsPo.y, FirstPoint.z - ObsPo.z);
 	TVector2d Vect2dToAdd(First2d.x - (*BaseIter).x, First2d.y - (*BaseIter).y);
 
@@ -763,11 +759,7 @@ void radTExtrPolygon::B_intComp(radTField* FieldPtr)
 
 	radTPolygon* BasePolygonPtr = (radTPolygon*)(BasePolygonHandle.rep);
 
-#ifdef __GNUC__
-	vector<TVector2d>::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#else
-	vector<TVector2d, allocator<TVector2d> >::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#endif
+	auto BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
 
 	int AmOfEdPoInBase = BasePolygonPtr->AmOfEdgePoints;
 	int AmOfEdPoInBase_mi_1 = AmOfEdPoInBase - 1;
@@ -993,11 +985,7 @@ void radTExtrPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID&
 
 	radTPolygon* BasePolygonPtr = (radTPolygon*)(BasePolygonHandle.rep);
 
-#ifdef __GNUC__
-	vector<TVector2d>::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#else
-	vector<TVector2d, allocator<TVector2d> >::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#endif
+	auto BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
 
 	int AmOfEdPoInBase = BasePolygonPtr->AmOfEdgePoints;
 	int AmOfEdPoInBase_mi_1 = AmOfEdPoInBase - 1;

@@ -82,7 +82,7 @@ void radTCoefficientFunctionFieldSource::B_comp(radTField* FieldPtr)
 		PyList_SetItem(coords, 2, PyFloat_FromDouble(FieldPtr->P.z));
 
 		// Call Python callback: B = callback([x, y, z])
-		PyObject* result = PyObject_CallFunctionObjArgs(cf_callback, coords, NULL);
+		PyObject* result = PyObject_CallFunctionObjArgs(cf_callback, coords, nullptr);
 		Py_DECREF(coords);
 
 		if(!result) {

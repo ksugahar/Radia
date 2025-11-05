@@ -34,8 +34,8 @@
 void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPoi, long lenStObsPoi, 
 								   double* FiObsPoi, long lenFiObsPoi, int Np, char* ShowArgFlag, double StrtArg)
 {
-	radTField* FieldArray = NULL;
-	double* ArgArray = NULL;
+	radTField* FieldArray = nullptr;
+	double* ArgArray = nullptr;
 	try
 	{
 		radThg hg;
@@ -89,15 +89,15 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPo
 		if(Np>1) 
 		{
 			delete[] FieldArray;
-			FieldArray = NULL;
+			FieldArray = nullptr;
 			if(ArgumentNeeded) delete[] ArgArray;
-			ArgArray = NULL;
+			ArgArray = nullptr;
 		}
 	}
 	catch(...) 
 	{ 
-		if(FieldArray != NULL) delete[] FieldArray;
-		if(ArgArray != NULL) delete[] ArgArray;
+		if(FieldArray != nullptr) delete[] FieldArray;
+		if(ArgArray != nullptr) delete[] ArgArray;
 		Initialize(); return;
 	}
 }
@@ -861,12 +861,12 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 		{
 			if(FieldKey.Ib_	|| FieldKey.Ih_)
 			{
-				Send.OutFieldIntCompRes(FldID, arr_resField, NULL, Np);
+				Send.OutFieldIntCompRes(FldID, arr_resField, nullptr, Np);
 				//Send.OutFieldIntCompRes(FldID, &Field);
 			}
 			else
 			{
-				Send.OutFieldCompRes(FldID, arr_resField, NULL, Np);
+				Send.OutFieldCompRes(FldID, arr_resField, nullptr, Np);
 			}
 		}
 
@@ -1499,7 +1499,7 @@ int radTApplication::ComputeGeometricalLimits(int ElemKey)
 
 void radTApplication::ReturnInput(double Input, int NumTimes)
 {
-	double* OutArray = NULL;
+	double* OutArray = nullptr;
 
 	try
 	{
@@ -1510,11 +1510,11 @@ void radTApplication::ReturnInput(double Input, int NumTimes)
 			OutArray[i] = Input;
 		}
 		Send.DoubleList(OutArray, NumTimes);
-		if(OutArray != NULL) { delete[] OutArray; OutArray = NULL;}
+		if(OutArray != nullptr) { delete[] OutArray; OutArray = nullptr;}
 	}
 	catch(...)
 	{
-		if(OutArray != NULL) { delete[] OutArray; OutArray = NULL;}
+		if(OutArray != nullptr) { delete[] OutArray; OutArray = nullptr;}
 		Initialize(); return;
 	}
 }

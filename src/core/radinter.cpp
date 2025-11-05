@@ -208,7 +208,7 @@ radTConvergRepair& radCR = rad.CnRep;
 //#ifdef _DEBUG
 //extern "C" _CRTIMP void __cdecl _invalid_parameter_noinfo(void)
 //{
-//	_invalid_parameter(NULL, NULL, NULL, 0, 0);
+//	_invalid_parameter(nullptr, nullptr, nullptr, 0, 0);
 //}
 //#endif
 //#endif
@@ -222,8 +222,8 @@ int AuxSetOptionNameAndValue(const char* OptTot, char* OptName, const char** Opt
 		strcpy(OptName, OptTot);
 		//char *pEndOptName = strrchr(OptName, '-');
 		char *pEndOptName = strrchr(OptName, '>'); //OC19122019
-		//if(pEndOptName == NULL) { rad.Send.ErrorMessage("Radia::Error062"); return 0;}
-		if((pEndOptName == NULL) || (*(--pEndOptName) != '-')) { rad.Send.ErrorMessage("Radia::Error062"); return 0;} //OC19122019
+		//if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return 0;}
+		if((pEndOptName == nullptr) || (*(--pEndOptName) != '-')) { rad.Send.ErrorMessage("Radia::Error062"); return 0;} //OC19122019
 		*pEndOptName = '\0';
 		//*OptValue = strrchr(OptTot, '>') + 1;
 		*OptValue = pEndOptName + 2; //OC19122019
@@ -420,7 +420,7 @@ void MultGenExtrTriangleDLL(double xc, double lx, double* pFlatVert, double* pFl
 	
 	rad.SetMultGenExtrTriangle(FirstPoi, 3, radCR.Double(lx), ArrayOfPoints2d, nv, pFlatSubd, pM, 3, &a, OptionNames, OptionValues, OptionCount);
 
-	if(ArrayOfPoints2d != NULL) delete[] ArrayOfPoints2d;
+	if(ArrayOfPoints2d != nullptr) delete[] ArrayOfPoints2d;
 }
 
 //-------------------------------------------------------------------------
@@ -780,7 +780,7 @@ void ArcPolygonDLL(double xc, double yc, char a, double* pFlatVert, int nv, doub
 
 	rad.SetArcPolygon(CenP, &a, ArrayOfPoints2d, nv, Angles, nseg, SymOrNoSymStr, Magn);
 
-	if(ArrayOfPoints2d != NULL) delete[] ArrayOfPoints2d;
+	if(ArrayOfPoints2d != nullptr) delete[] ArrayOfPoints2d;
 }
 
 //-------------------------------------------------------------------------
@@ -939,7 +939,7 @@ void DuplicateElementG3DOpt(int ElemKey, const char* Opt)
 	{
 		strcpy(CharBuf, Opt);
 		char *pEndOptName = strrchr(CharBuf, '-');
-		if(pEndOptName == NULL) { rad.Send.ErrorMessage("Radia::Error062"); return;}
+		if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 		*pEndOptName = '\0';
 		OptionNames[0] = CharBuf;
 		OptionValues[0] = strrchr(Opt, '>') + 1;
@@ -1014,7 +1014,7 @@ void SubdivideElementG3DOpt(int ElemKey, double* SubdivArray, char TypeExtraSpec
 		{
 			strcpy(CharBuf1, Opt1);
 			char *pEndOptName = strrchr(CharBuf1, '-');
-			if(pEndOptName == NULL) { rad.Send.ErrorMessage("Radia::Error062"); return;}
+			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 			*pEndOptName = '\0';
 			OptionNames[0] = CharBuf1;
 			OptionValues[0] = strrchr(Opt1, '>') + 1;
@@ -1027,7 +1027,7 @@ void SubdivideElementG3DOpt(int ElemKey, double* SubdivArray, char TypeExtraSpec
 		{
 			strcpy(CharBuf2, Opt2);
 			char *pEndOptName = strrchr(CharBuf2, '-');
-			if(pEndOptName == NULL) { rad.Send.ErrorMessage("Radia::Error062"); return;}
+			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 			*pEndOptName = '\0';
 			OptionNames[OptionCount] = CharBuf2;
 			OptionValues[OptionCount] = strrchr(Opt2, '>') + 1;
@@ -1040,7 +1040,7 @@ void SubdivideElementG3DOpt(int ElemKey, double* SubdivArray, char TypeExtraSpec
 		{
 			strcpy(CharBuf3, Opt3);
 			char *pEndOptName = strrchr(CharBuf3, '-');
-			if(pEndOptName == NULL) { rad.Send.ErrorMessage("Radia::Error062"); return;}
+			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 			*pEndOptName = '\0';
 			OptionNames[OptionCount] = CharBuf3;
 			OptionValues[OptionCount] = strrchr(Opt3, '>') + 1;
@@ -1068,7 +1068,7 @@ void CutElementG3DOpt1(int ElemKey, double x, double y, double z, double nx, dou
 	char CharBuf[200];
 	strcpy(CharBuf, Opt);
 	char *pEndOptName = strrchr(CharBuf, '-');
-	if(pEndOptName == NULL) { rad.Send.ErrorMessage("Radia::Error062"); return;}
+	if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 	*pEndOptName = '\0';
 
 	const char* OptionNames[] = {CharBuf};
@@ -1103,7 +1103,7 @@ void CutElementG3DOpt(int ElemKey, double x, double y, double z, double nx, doub
 	{
 		strcpy(CharBuf1, Opt1);
 		char *pEndOptName = strrchr(CharBuf1, '-');
-		if(pEndOptName == NULL) { rad.Send.ErrorMessage("Radia::Error062"); return;}
+		if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 		*pEndOptName = '\0';
 		OptionNames[0] = CharBuf1;
 		OptionValues[0] = strrchr(Opt1, '>') + 1;
@@ -1267,12 +1267,12 @@ void NonlinearIsotropMaterial2(double ks1, double Ms1, double ks2, double Ms2, d
 void NonlinearIsotropMaterial3()
 {
 	int lenArrayOfPoints2d;
-	TVector2d* ArrayOfPoints2d = NULL;
+	TVector2d* ArrayOfPoints2d = nullptr;
 	if(!rad.Send.GetArrayOfVector2d(ArrayOfPoints2d, lenArrayOfPoints2d)) { rad.Send.ErrorMessage("Radia::Error000"); return;};
 
 	rad.SetNonlinearIsotropMaterial(ArrayOfPoints2d, lenArrayOfPoints2d);
 
-	if(ArrayOfPoints2d != NULL) delete[] ArrayOfPoints2d;
+	if(ArrayOfPoints2d != nullptr) delete[] ArrayOfPoints2d;
 }
 
 //-------------------------------------------------------------------------
@@ -1333,7 +1333,7 @@ void NonlinearLaminatedMaterialFrm(double* pKsiMs1, double* pKsiMs2, double* pKs
 	}
 	rad.SetNonlinearLaminatedMaterial(ArrayOfPoints2d, lenArrayOfPoints2d, PackFactor, dN);
 
-	if(ArrayOfPoints2d != NULL) delete[] ArrayOfPoints2d;
+	if(ArrayOfPoints2d != nullptr) delete[] ArrayOfPoints2d;
 }
 
 //-------------------------------------------------------------------------
@@ -1355,7 +1355,7 @@ void NonlinearLaminatedMaterialTab(double* pFlatMatDef, int AmOfMatPts, double P
 	}
 	rad.SetNonlinearLaminatedMaterial(ArrayOfPoints2d, AmOfMatPts, PackFactor, dN);
 
-	if(ArrayOfPoints2d != NULL) delete[] ArrayOfPoints2d;
+	if(ArrayOfPoints2d != nullptr) delete[] ArrayOfPoints2d;
 }
 
 //-------------------------------------------------------------------------
@@ -1558,8 +1558,8 @@ void CompPrecisionOpt(const char* Opt1, const char* Opt2, const char* Opt3, cons
 				strcpy(TotCharBuf[i], InOpt[i]);
 				//char *pEndOptName = strrchr(TotCharBuf[i], '-');
 				char *pEndOptName = strrchr(TotCharBuf[i], '>'); //OC19122019
-				//if(pEndOptName == NULL) { rad.Send.ErrorMessage("Radia::Error062"); return;}
-				if((pEndOptName == NULL) || (*(--pEndOptName) != '-')) { rad.Send.ErrorMessage("Radia::Error062"); return;} //OC19122019
+				//if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
+				if((pEndOptName == nullptr) || (*(--pEndOptName) != '-')) { rad.Send.ErrorMessage("Radia::Error062"); return;} //OC19122019
 				*pEndOptName = '\0';
 				OptionNames[i] = TotCharBuf[i];
 				//OptionValues[i] = atof(strrchr(InOpt[i], '>') + 1);
