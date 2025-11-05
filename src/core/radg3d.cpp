@@ -184,8 +184,10 @@ void radTg3d::NestedFor_IntOverShape(radTField* FieldPtr, const radTlphg::iterat
 	{
 		radTStructForShapeInt LocStructForShapeInt1 = *(FieldPtr->ShapeIntDataPtr);
 		radTStructForShapeInt LocStructForShapeInt = *(FieldPtr->ShapeIntDataPtr);
-		TVector3d* LocVectArrayMult1 = new TVector3d[LocLenVal];
-		TVector3d* LocVectArrayMult = new TVector3d[LocLenVal];
+		std::vector<TVector3d> vLocVectArrayMult1(LocLenVal);
+		std::vector<TVector3d> vLocVectArrayMult(LocLenVal);
+		TVector3d* LocVectArrayMult1 = vLocVectArrayMult1.data();
+		TVector3d* LocVectArrayMult = vLocVectArrayMult.data();
 		LocStructForShapeInt1.VectArray = LocVectArrayMult1;
 		LocStructForShapeInt.VectArray = LocVectArrayMult;
 		for(int i=0; i<LocLenVal; i++)
@@ -223,9 +225,7 @@ void radTg3d::NestedFor_IntOverShape(radTField* FieldPtr, const radTlphg::iterat
 			SourcePtr->EraseOuterTransform();
 		}
 		for(int iiii=0; iiii<LocLenVal; iiii++) LocVectArray[iiii] += LocVectArrayMult1[iiii] + LocVectArrayMult[iiii];
-		
-		delete[] LocVectArrayMult1;
-		delete[] LocVectArrayMult;
+		// RAII: automatic cleanup
 	}
 }
 
