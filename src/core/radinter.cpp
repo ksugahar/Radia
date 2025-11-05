@@ -341,8 +341,8 @@ void MultGenExtrTriangle()
 
 void ExtrudedPolygonOpt(double xc, double Lx, double** Polygon, int AmOfVertices, double* M)
 {
-	TVector2d* ArrayOfPoints2d = new TVector2d[AmOfVertices];
-	if(ArrayOfPoints2d == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+	std::vector<TVector2d> vArrayOfPoints2d(AmOfVertices);
+	TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
 	TVector2d* tArrayOfPoints2d = ArrayOfPoints2d;
 	double** tPolygon = Polygon;
 
@@ -355,16 +355,15 @@ void ExtrudedPolygonOpt(double xc, double Lx, double** Polygon, int AmOfVertices
 	double FirstPoi[] = {xc - 0.5*Lx, ArrayOfPoints2d->x, ArrayOfPoints2d->y};
 
 	rad.SetExtrudedPolygon(FirstPoi, 3, radCR.Double(Lx), ArrayOfPoints2d, AmOfVertices, M, 3, "x");
-
-	if(ArrayOfPoints2d != 0) delete[] ArrayOfPoints2d;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
 
 void ExtrudedPolygonDLL(double xc, double Lx, double* Polygon, int AmOfVertices, char a, double* M)
 {
-	TVector2d* ArrayOfPoints2d = new TVector2d[AmOfVertices];
-	if(ArrayOfPoints2d == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+	std::vector<TVector2d> vArrayOfPoints2d(AmOfVertices);
+	TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
 	TVector2d* tArrayOfPoints2d = ArrayOfPoints2d;
 	double* tPolygon = Polygon;
 
@@ -381,8 +380,7 @@ void ExtrudedPolygonDLL(double xc, double Lx, double* Polygon, int AmOfVertices,
 	for(int i1=0; i1<3; i1++) FirstPoi[i1] = radCR.Double(FirstPoi[i1]);
 
 	rad.SetExtrudedPolygon(FirstPoi, 3, radCR.Double(Lx), ArrayOfPoints2d, AmOfVertices, M, 3, &a);
-
-	if(ArrayOfPoints2d != 0) delete[] ArrayOfPoints2d;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -390,8 +388,8 @@ void ExtrudedPolygonDLL(double xc, double Lx, double* Polygon, int AmOfVertices,
 void MultGenExtrTriangleDLL(double xc, double lx, double* pFlatVert, double* pFlatSubd, int nv, char a, double* pM, const char* sOpt1, const char* sOpt2, const char* sOpt3, const char* sOpt4) //OC30072018
 //void MultGenExtrTriangleDLL(double xc, double lx, double* pFlatVert, double* pFlatSubd, int nv, char a, double* pM, const char* sOpt1, const char* sOpt2, const char* sOpt3)
 {
-	TVector2d* ArrayOfPoints2d = new TVector2d[nv];
-	if(ArrayOfPoints2d == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+	std::vector<TVector2d> vArrayOfPoints2d(nv);
+	TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
 
 	TVector2d* tArrayOfPoints2d = ArrayOfPoints2d;
 	double* tPolygon = pFlatVert;
@@ -420,8 +418,7 @@ void MultGenExtrTriangleDLL(double xc, double lx, double* pFlatVert, double* pFl
 	AuxParseOptionNamesAndValues(NonParsedOpts, OptionNames, OptionValues, OptionCount);
 	
 	rad.SetMultGenExtrTriangle(FirstPoi, 3, radCR.Double(lx), ArrayOfPoints2d, nv, pFlatSubd, pM, 3, &a, OptionNames, OptionValues, OptionCount);
-
-	if(ArrayOfPoints2d != nullptr) delete[] ArrayOfPoints2d;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
