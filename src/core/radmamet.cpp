@@ -23,35 +23,19 @@
 //-------------------------------------------------------------------------
 
 radTMathLinAlgEq::radTMathLinAlgEq(int InSize)
+	: SizeOfMatr(InSize),
+	  indxInverseMatrix(InSize),
+	  colInverseMatrix(InSize),
+	  vvLU_Dcmp(InSize)
 {
-	SizeOfMatr = InSize;
-
-	//radTSend Send;
-	//try	
-	//{
-		indxInverseMatrix = new int[SizeOfMatr];
-		colInverseMatrix = new double[SizeOfMatr];
-		vvLU_Dcmp = new double[SizeOfMatr];
-	//}
-	//catch (radTException* radExceptionPtr) 
-	//{
-	//	Send.ErrorMessage(radExceptionPtr->what()); return;
-	//}
-	//catch (...)
-	//{
-	//	Send.ErrorMessage("Radia::Error999"); return;
-	//}
-
-	// Apply another allocation check procedure here !!!
+	// RAII: vectors automatically initialized in initializer list
 }
 
 //-------------------------------------------------------------------------
 
 radTMathLinAlgEq::~radTMathLinAlgEq()
 {
-	delete[] indxInverseMatrix;
-	delete[] colInverseMatrix;
-	delete[] vvLU_Dcmp;
+	// RAII: vectors automatically cleaned up
 }
 
 //-------------------------------------------------------------------------
@@ -59,8 +43,8 @@ radTMathLinAlgEq::~radTMathLinAlgEq()
 void radTMathLinAlgEq::InverseMatrix(double** DirMatr, int Len, double** InvMatr)
 {
 	double d;
-	double* col = colInverseMatrix;
-	int* indx = indxInverseMatrix;
+	double* col = colInverseMatrix.data();
+	int* indx = indxInverseMatrix.data();
 	SizeOfMatr = Len;
 
 	LU_Dcmp(DirMatr, indx, &d);
@@ -85,7 +69,7 @@ void radTMathLinAlgEq::LU_Dcmp(double** a, int* indx, double* d)
 	double big, dum, sum, temp;
 	int n = SizeOfMatr;
 
-	double* vv = vvLU_Dcmp;
+	double* vv = vvLU_Dcmp.data();
 
 	*d = 1.;
 	for(i=0; i<n; i++)

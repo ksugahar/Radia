@@ -603,7 +603,9 @@ void radTApplication::ComputeFocusKickPer(int ElemKey, double* P1, double* Nlong
 		{
 			//long LenArr = 2*np1*np2 + np1 + np2 + 1;
 			long LenArr = 3*np1*np2 + np1 + np2 + 1;
-			pAuxFlatArr = new double[LenArr];
+			// RAII: Use std::vector for automatic cleanup
+			std::vector<double> vAuxFlatArr(LenArr);
+			pAuxFlatArr = vAuxFlatArr.data();
 			double *tAuxFlatArr = pAuxFlatArr;
 			double *tKickData1 = pKickData1;
 			double *tKickData2 = pKickData2;
@@ -622,13 +624,11 @@ void radTApplication::ComputeFocusKickPer(int ElemKey, double* P1, double* Nlong
 			//*tAuxFlatArr += strlen(pStrReport);
 
 			Send.DoubleList(pAuxFlatArr, LenArr);
-
-			if(pAuxFlatArr != 0) { delete[] pAuxFlatArr; pAuxFlatArr = 0;}
+			// RAII: automatic cleanup
 		}
 
-		// pKickData1-5 cleaned up automatically by RAII (std::vector)
+		// pKickData1-5 and pAuxFlatArr cleaned up automatically by RAII (std::vector)
 		if(pStrReport != 0) { delete[] pStrReport; pStrReport = 0;}
-		if(pAuxFlatArr != 0) { delete[] pAuxFlatArr; pAuxFlatArr = 0;}
 	}
 	catch(...)
 	{

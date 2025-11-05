@@ -24,6 +24,7 @@
 
 #include <time.h>
 #include <stdlib.h>
+#include <vector>
 
 #ifndef NEGATIVE_NUM_INTEG_OF_MODIF_BESSEL_FUNC //in line with SRW
 #define NEGATIVE_NUM_INTEG_OF_MODIF_BESSEL_FUNC 67 + 23000
@@ -35,9 +36,10 @@
 class radTMathLinAlgEq {
 	int SizeOfMatr;
 
-	double* vvLU_Dcmp;
-	double* colInverseMatrix;
-	int* indxInverseMatrix;
+	// RAII: Use std::vector for automatic memory management
+	std::vector<double> vvLU_Dcmp;
+	std::vector<double> colInverseMatrix;
+	std::vector<int> indxInverseMatrix;
 
 public:
 	radTMathLinAlgEq(int);
