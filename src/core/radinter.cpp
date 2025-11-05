@@ -439,8 +439,8 @@ void Polyhedron1()
 
 void PolyhedronOpt(double** Vertices, int AmOfVertices, int** Faces, int* AmOfPoInFaces, int AmOfFaces, double* M)
 {
-	TVector3d* ArrayOfPoints = new TVector3d[AmOfVertices];
-	if(ArrayOfPoints == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+	std::vector<TVector3d> vArrayOfPoints(AmOfVertices);
+	TVector3d* ArrayOfPoints = vArrayOfPoints.data();
 	TVector3d* tArrayOfPoints = ArrayOfPoints;
 	double** tVertices = Vertices;
 	for(int i=0; i<AmOfVertices; i++)
@@ -453,8 +453,7 @@ void PolyhedronOpt(double** Vertices, int AmOfVertices, int** Faces, int* AmOfPo
 
 	rad.SetPolyhedron1(ArrayOfPoints, AmOfVertices, Faces, AmOfPoInFaces, AmOfFaces, M, 0, 0, 0);
 	//rad.SetPolyhedron1(ArrayOfPoints, AmOfVertices, Faces, AmOfPoInFaces, AmOfFaces, M, 3);
-
-	if(ArrayOfPoints != 0) delete[] ArrayOfPoints;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -754,7 +753,8 @@ void ArcPolygonDLL(double xc, double yc, char a, double* pFlatVert, int nv, doub
 {
 	double CenP[] = {radCR.Double(xc), radCR.Double(yc)};
 
-	TVector2d* ArrayOfPoints2d = new TVector2d[nv];
+	std::vector<TVector2d> vArrayOfPoints2d(nv);
+	TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
 	double *tFlatVert = pFlatVert;
 	TVector2d *tArrayOfPoints2d = ArrayOfPoints2d;
 	for(int i=0; i<nv; i++)
@@ -773,8 +773,7 @@ void ArcPolygonDLL(double xc, double yc, char a, double* pFlatVert, int nv, doub
 	double Magn[] = {mx, my, mz};
 
 	rad.SetArcPolygon(CenP, &a, ArrayOfPoints2d, nv, Angles, nseg, SymOrNoSymStr, Magn);
-
-	if(ArrayOfPoints2d != nullptr) delete[] ArrayOfPoints2d;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -826,8 +825,8 @@ void FlmCur()
 
 void FlmCurOpt(double** Points, long LenPoints, double Cur)
 {
-	TVector3d* ArrayOfPoints = new TVector3d[LenPoints];
-	if(ArrayOfPoints == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+	std::vector<TVector3d> vArrayOfPoints(LenPoints);
+	TVector3d* ArrayOfPoints = vArrayOfPoints.data();
 	TVector3d* tArrayOfPoints = ArrayOfPoints;
 	double** tPoints = Points;
 
@@ -838,15 +837,15 @@ void FlmCurOpt(double** Points, long LenPoints, double Cur)
 	}
 
 	rad.SetFlmCur(Cur, ArrayOfPoints, (int)LenPoints);
-	delete[] ArrayOfPoints;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
 
 void FlmCurDLL(double* Points, int LenPoints, double Cur)
 {
-	TVector3d* ArrayOfPoints = new TVector3d[LenPoints];
-	if(ArrayOfPoints == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+	std::vector<TVector3d> vArrayOfPoints(LenPoints);
+	TVector3d* ArrayOfPoints = vArrayOfPoints.data();
 	TVector3d* tArrayOfPoints = ArrayOfPoints;
 	double* tPoints = Points;
 
@@ -858,7 +857,7 @@ void FlmCurDLL(double* Points, int LenPoints, double Cur)
 		*(tArrayOfPoints++) = TVector3d(radCR.Double(x), radCR.Double(y), radCR.Double(z));
 	}
 	rad.SetFlmCur(Cur, ArrayOfPoints, (int)LenPoints);
-	delete[] ArrayOfPoints;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
