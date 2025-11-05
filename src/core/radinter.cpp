@@ -1272,8 +1272,8 @@ void NonlinearIsotropMaterial3()
 
 void NonlinearIsotropMaterial3Opt(double** HandM_Array, long LenHandM_Array)
 {
-	TVector2d* ArrayOfPoints2d = new TVector2d[LenHandM_Array];
-	if(ArrayOfPoints2d == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+	std::vector<TVector2d> vArrayOfPoints2d(LenHandM_Array);
+	TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
 	TVector2d* tArrayOfPoints2d = ArrayOfPoints2d;
 	double** tHandM_Array = HandM_Array;
 
@@ -1285,8 +1285,7 @@ void NonlinearIsotropMaterial3Opt(double** HandM_Array, long LenHandM_Array)
 	}
 
 	rad.SetNonlinearIsotropMaterial(ArrayOfPoints2d, (int)LenHandM_Array);
-
-	if(ArrayOfPoints2d != 0) delete[] ArrayOfPoints2d;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -1307,7 +1306,8 @@ void NonlinearLaminatedMaterialFrm(double* pKsiMs1, double* pKsiMs2, double* pKs
 
 	if(lenArrayOfPoints2d == 0) { rad.Send.ErrorMessage("Radia::Error000"); return;}
 
-	TVector2d* ArrayOfPoints2d = new TVector2d[lenArrayOfPoints2d];
+	std::vector<TVector2d> vArrayOfPoints2d(lenArrayOfPoints2d);
+	TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
 
 	if(pKsiMs1 != 0)
 	{
@@ -1325,8 +1325,7 @@ void NonlinearLaminatedMaterialFrm(double* pKsiMs1, double* pKsiMs2, double* pKs
 		ArrayOfPoints2d[2].y = pKsiMs3[1];
 	}
 	rad.SetNonlinearLaminatedMaterial(ArrayOfPoints2d, lenArrayOfPoints2d, PackFactor, dN);
-
-	if(ArrayOfPoints2d != nullptr) delete[] ArrayOfPoints2d;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -1337,7 +1336,8 @@ void NonlinearLaminatedMaterialTab(double* pFlatMatDef, int AmOfMatPts, double P
 	{
 		rad.Send.ErrorMessage("Radia::Error088");
 	}
-	TVector2d* ArrayOfPoints2d = new TVector2d[AmOfMatPts];
+	std::vector<TVector2d> vArrayOfPoints2d(AmOfMatPts);
+	TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
 
 	TVector2d *tArrayOfPoints2d = ArrayOfPoints2d;
 	double *tFlatMatDef = pFlatMatDef;
@@ -1347,8 +1347,7 @@ void NonlinearLaminatedMaterialTab(double* pFlatMatDef, int AmOfMatPts, double P
 		(tArrayOfPoints2d++)->y = *(tFlatMatDef++);
 	}
 	rad.SetNonlinearLaminatedMaterial(ArrayOfPoints2d, AmOfMatPts, PackFactor, dN);
-
-	if(ArrayOfPoints2d != nullptr) delete[] ArrayOfPoints2d;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
