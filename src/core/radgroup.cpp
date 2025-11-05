@@ -305,8 +305,8 @@ int radTGroup::SubdivideItselfAsWholeInLabFrame(double* SubdivArray, radThg& In_
 		if(AmOfPieces > 1)
 		{
 			int AmOfPieces_mi_1 = AmOfPieces - 1;
-			TVector3d* PointsOnCuttingPlanes = new TVector3d[AmOfPieces_mi_1];
-			if(PointsOnCuttingPlanes == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+			std::vector<TVector3d> vPointsOnCuttingPlanes(AmOfPieces_mi_1);
+			TVector3d* PointsOnCuttingPlanes = vPointsOnCuttingPlanes.data();
 
 			double q0 = (fabs(kk-1.)>RelZeroTol)? pow(qq, 1./(kk-1.)) : qq;
 			double Buf = qq*q0 - 1.;
@@ -336,7 +336,7 @@ int radTGroup::SubdivideItselfAsWholeInLabFrame(double* SubdivArray, radThg& In_
 					}
 				}
 			}
-			delete[] PointsOnCuttingPlanes;
+			// RAII: automatic cleanup
 		}
 	}
 
@@ -669,8 +669,8 @@ int radTGroup::SubdivideItselfByParPlanes(double* SubdivArray, int AmOfDir, radT
 int radTGroup::SubdivideItselfByParPlanesAsWholeInLabFrame(double* SubdivArray, int AmOfDir, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
 {
 	radTSend Send;
-	TVector3d* Directions = new TVector3d[AmOfDir];
-	if(Directions == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<TVector3d> vDirections(AmOfDir);
+	TVector3d* Directions = vDirections.data();
 
 	TVector3d* tDirections = Directions;
 	double* tSubdivArray = SubdivArray;
@@ -716,8 +716,8 @@ int radTGroup::SubdivideItselfByParPlanesAsWholeInLabFrame(double* SubdivArray, 
 		if(AmOfPieces > 1)
 		{
 			int AmOfPieces_mi_1 = AmOfPieces - 1;
-			TVector3d* PointsOnCuttingPlanes = new TVector3d[AmOfPieces_mi_1];
-			if(PointsOnCuttingPlanes == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+			std::vector<TVector3d> vPointsOnCuttingPlanes2(AmOfPieces_mi_1);
+			TVector3d* PointsOnCuttingPlanes = vPointsOnCuttingPlanes2.data();
 
 			double q0 = (fabs(kk-1.)>RelZeroTol)? pow(qq, 1./(kk-1.)) : qq;
 			double Buf = qq*q0 - 1.;
@@ -747,7 +747,7 @@ int radTGroup::SubdivideItselfByParPlanesAsWholeInLabFrame(double* SubdivArray, 
 					}
 				}
 			}
-			delete[] PointsOnCuttingPlanes;
+			// RAII: automatic cleanup
 		}
 	}
 	//radTCast Cast;
@@ -770,7 +770,7 @@ int radTGroup::SubdivideItselfByParPlanesAsWholeInLabFrame(double* SubdivArray, 
 	}
 
 	SetMessageChar(0);
-	if(Directions != 0) delete[] Directions;
+	// RAII: automatic cleanup
 	return 1;
 }
 
