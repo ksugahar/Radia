@@ -1493,22 +1493,22 @@ int radTApplication::ComputeGeometricalLimits(int ElemKey)
 
 void radTApplication::ReturnInput(double Input, int NumTimes)
 {
-	double* OutArray = nullptr;
-
 	try
 	{
-		OutArray = new double[NumTimes];
+		// RAII: Use std::vector for automatic cleanup (exception-safe)
+		std::vector<double> vOutArray(NumTimes);
+		double* OutArray = vOutArray.data();
 
-		for(int i=0; i<NumTimes; ++i) 
+		for(int i=0; i<NumTimes; ++i)
 		{
 			OutArray[i] = Input;
 		}
 		Send.DoubleList(OutArray, NumTimes);
-		if(OutArray != nullptr) { delete[] OutArray; OutArray = nullptr;}
+		// RAII: automatic cleanup
 	}
 	catch(...)
 	{
-		if(OutArray != nullptr) { delete[] OutArray; OutArray = nullptr;}
+		// RAII: automatic cleanup even on exception
 		Initialize(); return;
 	}
 }

@@ -1566,8 +1566,9 @@ void radTApplication::OutFieldCompRes(char* FieldChar, radTField* FieldArray, lo
 	}
 	char* ActualInitCharPtr = BufChar;
 
-	double *TotOutArray = new double[Np*12];
-	if(TotOutArray == 0) { Send.ErrorMessage("Radia::Error900"); return;}
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<double> vTotOutArray(Np*12);
+	double *TotOutArray = vTotOutArray.data();
 
 	int InnerCount=0;
 	radTField* FieldPtr = FieldArray;
@@ -1627,8 +1628,7 @@ void radTApplication::OutFieldCompRes(char* FieldChar, radTField* FieldArray, lo
 	}
 	int Dims[] = { InnerCount, Np};
 	Send.MultiDimArrayOfDouble(TotOutArray, Dims, 2);
-
-	if(TotOutArray != 0) delete[] TotOutArray;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------

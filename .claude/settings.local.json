@@ -68,7 +68,8 @@
       "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python test_simple.py\")",
       "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python case0.py\")",
       "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python tests/test_radia.py\")",
-      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python tests/test_simple.py\")"
+      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python tests/test_simple.py\")",
+      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python tests/test_simple.py; python tests/test_radia.py\")"
     ],
     "deny": [],
     "ask": []
