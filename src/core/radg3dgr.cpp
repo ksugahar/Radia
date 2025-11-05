@@ -1339,7 +1339,8 @@ void radTGroupGraphPresent::Draw(radTrans* BaseTransPtr)
 	int *ItemIsNotFullyInternal, *tItemIsNotFullyInternal;
 	ItemIsNotFullyInternal = tItemIsNotFullyInternal = 0;
 
-	ItemIsNotFullyInternal = new int[AmOfElemToDraw]; //OC071002
+	std::vector<int> vItemIsNotFullyInternal(AmOfElemToDraw); //OC071002
+	ItemIsNotFullyInternal = vItemIsNotFullyInternal.data();
 	for(int k=0; k<AmOfElemToDraw; k++) ItemIsNotFullyInternal[k] = 1; //OC071002
 
 	if(!ShowInternalFacesAfterCut)
@@ -1404,7 +1405,7 @@ void radTGroupGraphPresent::Draw(radTrans* BaseTransPtr)
 			}
 		}
 	}
-	if(ItemIsNotFullyInternal != 0) delete[] ItemIsNotFullyInternal;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -2022,7 +2023,8 @@ void radTSubdivPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 	radTSubdividedPolyhedron* SubdPolyhedronP = (radTSubdividedPolyhedron*)((radTGroup*)g3dPtr);
 
 	int AmOfElemToDraw = 0, ElemCount = 0;
-	int* ItemIsNotFullyInternal = new int[SubdPolyhedronP->GroupMapOfHandlers.size()];
+	std::vector<int> vItemIsNotFullyInternal(SubdPolyhedronP->GroupMapOfHandlers.size());
+	int* ItemIsNotFullyInternal = vItemIsNotFullyInternal.data();
 
 	radTmhg& GrMapOfHndl = SubdPolyhedronP->GroupMapOfHandlers;
 	radTmhg::const_iterator iter;
@@ -2077,7 +2079,7 @@ void radTSubdivPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 			}
 		}
 	}
-	if(ItemIsNotFullyInternal != 0) delete[] ItemIsNotFullyInternal;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -2088,7 +2090,8 @@ void radTSubdivArcCurGraphPresent::Draw(radTrans* BaseTransPtr)
 	radTSubdividedArcCur* SubdArcCurP = (radTSubdividedArcCur*)((radTGroup*)g3dPtr);
 
 	int AmOfElemToDraw = 0, ElemCount = 0;
-	int* ItemIsNotFullyInternal = new int[SubdArcCurP->GroupMapOfHandlers.size()];
+	std::vector<int> vItemIsNotFullyInternal(SubdArcCurP->GroupMapOfHandlers.size());
+	int* ItemIsNotFullyInternal = vItemIsNotFullyInternal.data();
 
 	radTmhg& GrMapOfHndl = SubdArcCurP->GroupMapOfHandlers;
 	radTmhg::const_iterator iter;
@@ -2131,7 +2134,7 @@ void radTSubdivArcCurGraphPresent::Draw(radTrans* BaseTransPtr)
 			}
 		}
 	}
-	if(ItemIsNotFullyInternal != 0) delete[] ItemIsNotFullyInternal;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
