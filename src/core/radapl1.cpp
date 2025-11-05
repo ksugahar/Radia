@@ -1852,7 +1852,7 @@ int radTApplication::OutGroupSubObjectKeys(int ElemKey)
 		if(GroupPtr==0) { if(SendingIsRequired) Send.IntList(&ElemKey, 1); return ElemKey;}
 		else
 		{
-			int* GroupSubObjArray = NULL;
+			int* GroupSubObjArray = nullptr;
 			int lenGroupSubObjArray = (int)(GroupPtr->GroupMapOfHandlers.size());
 			GroupSubObjArray = new int[lenGroupSubObjArray];
 
@@ -1989,7 +1989,7 @@ int radTApplication::SetFlmCur(double I, TVector3d* ArrayOfPoints, int lenArrayO
 		else
 		{
 			int AmOfFlmLinCur = lenArrayOfPoints-1;
-			int* ArrayOfFlmLinCur = NULL;
+			int* ArrayOfFlmLinCur = nullptr;
 			ArrayOfFlmLinCur = new int[AmOfFlmLinCur];
 			for(int i=0; i<AmOfFlmLinCur; i++)
 			{
