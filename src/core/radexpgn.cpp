@@ -723,11 +723,11 @@ void radTExtrPolygon::B_intComp(radTField* FieldPtr)
 	short InitVzIsZero = (Abs(V.z) <= ZeroToler);
 
 // This is the attempt to avoid "divide by zero" problem
-	TSpecCaseID SpecCaseID = NoSpecCase;
-	if(InitVxIsZero && InitVyIsZero) SpecCaseID = ZeroVxVz;
-	else if(InitVxIsZero && InitVzIsZero) SpecCaseID = ZeroVyVz;
-	else if(InitVyIsZero && InitVzIsZero) SpecCaseID = ZeroVxVy;
-	if(SpecCaseID==ZeroVxVy || SpecCaseID==ZeroVxVz || SpecCaseID==ZeroVyVz) { B_intCompSpecCases(FieldPtr, SpecCaseID); return;}
+	TSpecCaseID SpecCaseID = TSpecCaseID::NoSpecCase;
+	if(InitVxIsZero && InitVyIsZero) SpecCaseID = TSpecCaseID::ZeroVxVz;
+	else if(InitVxIsZero && InitVzIsZero) SpecCaseID = TSpecCaseID::ZeroVyVz;
+	else if(InitVyIsZero && InitVzIsZero) SpecCaseID = TSpecCaseID::ZeroVxVy;
+	if(SpecCaseID==TSpecCaseID::ZeroVxVy || SpecCaseID==TSpecCaseID::ZeroVxVz || SpecCaseID==TSpecCaseID::ZeroVyVz) { B_intCompSpecCases(FieldPtr, SpecCaseID); return;}
 
 	double AbsRandX = radCR.AbsRandMagnitude(FirstPoint.x - CentrPoint.x);
 	double AbsRandY = radCR.AbsRandMagnitude(FirstPoint.y - CentrPoint.y);
@@ -1034,7 +1034,7 @@ void radTExtrPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID&
 
 		if(abs_x2mx1*Max_k > abs_y2my1)
 		{
-			if(SpecCaseID==ZeroVxVz)
+			if(SpecCaseID==TSpecCaseID::ZeroVxVz)
 			{
 				double k = y2my1/x2mx1, b = y1 - k*x1;
 				
@@ -1055,7 +1055,7 @@ void radTExtrPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID&
 		}
 		if(abs_y2my1*Max_k > abs_x2mx1)
 		{
-			if(SpecCaseID==ZeroVxVy)
+			if(SpecCaseID==TSpecCaseID::ZeroVxVy)
 			{
 				double k1 = x2mx1/y2my1, b1 = x1 - k1*y1;
 
@@ -1079,7 +1079,7 @@ void radTExtrPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID&
 				S12 += z2mz1*(2.*k1*SumAtans1 + SumLogs1)/k1e2p1;
 				S22 += Buf1;
 			}
-			else if(SpecCaseID==ZeroVyVz)
+			else if(SpecCaseID==TSpecCaseID::ZeroVyVz)
 			{
 				double k1 = x2mx1/y2my1, b1 = x1 - k1*y1;
 

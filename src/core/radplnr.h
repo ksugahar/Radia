@@ -125,8 +125,8 @@ inline void radTRectangle::FunForInnerIntAtSurfInt(double Arg, TVector3d* VectAr
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-enum TBoundOrLine { Bound, ParLine };
-enum TLinesIntrsctCase { PointWithinBound, PointOnBoundEdge, PointOutsideBound, LineIsIntrsct, Zero };
+enum class TBoundOrLine { Bound, ParLine };
+enum class TLinesIntrsctCase { PointWithinBound, PointOnBoundEdge, PointOutsideBound, LineIsIntrsct, Zero };
 
 //-------------------------------------------------------------------------
 
@@ -236,7 +236,7 @@ struct iterator_traits <TVector2d*> {
 
 //-------------------------------------------------------------------------
 
-enum TSpecCaseID { ZeroVxVy, ZeroVxVz, ZeroVyVz, NoSpecCase };
+enum class TSpecCaseID { ZeroVxVy, ZeroVxVz, ZeroVyVz, NoSpecCase };
 
 //-------------------------------------------------------------------------
 

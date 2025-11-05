@@ -292,12 +292,12 @@ void radTPolygon::IntrsctOfTwoLines(const TVector2d& V1, const TVector2d& R01, c
 		IntrsctPo.x = -(-R01.y*V1.x*V2.x + R02.y*V1.x*V2.x + R01.x*V1yV2x - R02.x*V1xV2y)/D;
 		IntrsctPo.y = -(R02.y*V1yV2x - R01.y*V1xV2y + R01.x*V1.y*V2.y - R02.x*V1.y*V2.y)/D;
 		double t_Intrsct = (Abs(V2.x) > V_Toler)? (IntrsctPo.x - R02.x)/V2.x : (IntrsctPo.y - R02.y)/V2.y;
-		IntrsctCase = ((t_Intrsct > t_Toler) && (t_Intrsct + t_Toler < 1.))? PointWithinBound : (((Abs(t_Intrsct) < t_Toler) || (Abs(t_Intrsct-1.) < t_Toler))? PointOnBoundEdge : PointOutsideBound);
+		IntrsctCase = ((t_Intrsct > t_Toler) && (t_Intrsct + t_Toler < 1.))? TLinesIntrsctCase::PointWithinBound : (((Abs(t_Intrsct) < t_Toler) || (Abs(t_Intrsct-1.) < t_Toler))? TLinesIntrsctCase::PointOnBoundEdge : TLinesIntrsctCase::PointOutsideBound);
 	}
 	else 
 	{
 		double LineCoinsToler = MaxR*MaxR*V_Toler;
-		IntrsctCase = (fabs(V2.x*(R01.y-R02.y) - V2.y*(R01.x-R02.x)) < LineCoinsToler)? LineIsIntrsct : Zero; // To check !!!
+		IntrsctCase = (fabs(V2.x*(R01.y-R02.y) - V2.y*(R01.x-R02.x)) < LineCoinsToler)? TLinesIntrsctCase::LineIsIntrsct : TLinesIntrsctCase::Zero; // To check !!!
 		IntrsctPo = R02;
 	}
 }
@@ -328,42 +328,42 @@ void radTPolygon::IntrsctOfTwoLines2(const TVector2d& R01, const TVector2d& R11,
 		IntrsctPo.y = -(R02.y*V1yV2x - R01.y*V1xV2y + R01.x*V1.y*V2.y - R02.x*V1.y*V2.y)/D;
 
 		double t_Intrsct2 = (Abs(V2.x) > Abs(V2.y))? (IntrsctPo.x - R02.x)/V2.x : (IntrsctPo.y - R02.y)/V2.y;
-		IntrsctCase = ((t_Intrsct2 > t_Toler) && (t_Intrsct2 + t_Toler < 1.))? PointWithinBound : PointOutsideBound;
-		if(IntrsctCase == PointWithinBound)
+		IntrsctCase = ((t_Intrsct2 > t_Toler) && (t_Intrsct2 + t_Toler < 1.))? TLinesIntrsctCase::PointWithinBound : TLinesIntrsctCase::PointOutsideBound;
+		if(IntrsctCase == TLinesIntrsctCase::PointWithinBound)
 		{
 			double t_Intrsct1 = (Abs(V1.x) > Abs(V1.y))? (IntrsctPo.x - R01.x)/V1.x : (IntrsctPo.y - R01.y)/V1.y;
-			IntrsctCase = ((t_Intrsct1 > t_Toler) && (t_Intrsct1 + t_Toler < 1.))? PointWithinBound : PointOutsideBound;
+			IntrsctCase = ((t_Intrsct1 > t_Toler) && (t_Intrsct1 + t_Toler < 1.))? TLinesIntrsctCase::PointWithinBound : TLinesIntrsctCase::PointOutsideBound;
 		}
 
-		if(IntrsctCase == PointWithinBound)
+		if(IntrsctCase == TLinesIntrsctCase::PointWithinBound)
 		{
 			TVector2d IP_mi_R = IntrsctPo - R01;
 			double AbsIP_mi_Rx = fabs(IP_mi_R.x), AbsIP_mi_Ry = fabs(IP_mi_R.y);
 			double NormIP_mi_R = (AbsIP_mi_Rx > AbsIP_mi_Ry)? AbsIP_mi_Rx : AbsIP_mi_Ry;
 			double AbsRx = fabs(R01.x), AbsRy = fabs(R01.x);
 			double RNorm = ((AbsRx > AbsRy)? AbsRx : AbsRy);
-			if(NormIP_mi_R < RNorm*t_Toler) { IntrsctCase = PointOnBoundEdge; return;}
+			if(NormIP_mi_R < RNorm*t_Toler) { IntrsctCase = TLinesIntrsctCase::PointOnBoundEdge; return;}
 
 			IP_mi_R = IntrsctPo - R11;
 			AbsIP_mi_Rx = fabs(IP_mi_R.x); AbsIP_mi_Ry = fabs(IP_mi_R.y);
 			NormIP_mi_R = (AbsIP_mi_Rx > AbsIP_mi_Ry)? AbsIP_mi_Rx : AbsIP_mi_Ry;
 			AbsRx = fabs(R11.x); AbsRy = fabs(R11.x);
 			RNorm = ((AbsRx > AbsRy)? AbsRx : AbsRy);
-			if(NormIP_mi_R < RNorm*t_Toler) { IntrsctCase = PointOnBoundEdge; return;}
+			if(NormIP_mi_R < RNorm*t_Toler) { IntrsctCase = TLinesIntrsctCase::PointOnBoundEdge; return;}
 
 			IP_mi_R = IntrsctPo - R02;
 			AbsIP_mi_Rx = fabs(IP_mi_R.x); AbsIP_mi_Ry = fabs(IP_mi_R.y);
 			NormIP_mi_R = (AbsIP_mi_Rx > AbsIP_mi_Ry)? AbsIP_mi_Rx : AbsIP_mi_Ry;
 			AbsRx = fabs(R02.x); AbsRy = fabs(R02.x);
 			RNorm = ((AbsRx > AbsRy)? AbsRx : AbsRy);
-			if(NormIP_mi_R < RNorm*t_Toler) { IntrsctCase = PointOnBoundEdge; return;}
+			if(NormIP_mi_R < RNorm*t_Toler) { IntrsctCase = TLinesIntrsctCase::PointOnBoundEdge; return;}
 
 			IP_mi_R = IntrsctPo - R12;
 			AbsIP_mi_Rx = fabs(IP_mi_R.x), AbsIP_mi_Ry = fabs(IP_mi_R.y);
 			NormIP_mi_R = (AbsIP_mi_Rx > AbsIP_mi_Ry)? AbsIP_mi_Rx : AbsIP_mi_Ry;
 			AbsRx = fabs(R12.x); AbsRy = fabs(R12.x);
 			RNorm = ((AbsRx > AbsRy)? AbsRx : AbsRy);
-			if(NormIP_mi_R < RNorm*t_Toler) { IntrsctCase = PointOnBoundEdge; return;}
+			if(NormIP_mi_R < RNorm*t_Toler) { IntrsctCase = TLinesIntrsctCase::PointOnBoundEdge; return;}
 		}
 	}
 	else 
@@ -382,13 +382,13 @@ void radTPolygon::IntrsctOfTwoLines2(const TVector2d& R01, const TVector2d& R11,
 
 		if(V3Norm < MaxNormR01R02*t_Toler)
 		{
-			IntrsctCase = LineIsIntrsct; return;
+			IntrsctCase = TLinesIntrsctCase::LineIsIntrsct; return;
 		}
 
 		double LineCoinsBufToler = V1Norm*t_Toler;
 		double LineCoinsToler = LineCoinsBufToler*V3Norm;
 		double CompareVal = fabs(V1.x*V3y - V1.y*V3x);
-		IntrsctCase = (CompareVal < LineCoinsToler)? LineIsIntrsct : Zero; // To check !!!
+		IntrsctCase = (CompareVal < LineCoinsToler)? TLinesIntrsctCase::LineIsIntrsct : TLinesIntrsctCase::Zero; // To check !!!
 	}
 }
 
@@ -506,16 +506,16 @@ void radTPolygon::FillInIntrsctInfoStruct(const TVector2d& V, const TVector2d* S
 
 			radTPolyg2dIntrsctInfo IntrsctInfoForBound, IntrsctInfoForParLine;
 			short CurIntrsctIsAtBoundEnd = 0;
-			if((IntrsctCase == PointWithinBound) || (IntrsctCase == PointOnBoundEdge))
+			if((IntrsctCase == TLinesIntrsctCase::PointWithinBound) || (IntrsctCase == TLinesIntrsctCase::PointOnBoundEdge))
 			{
 				IntrsctInfoForBound.IntrsctPoint = IntrsctPo;
 				IntrsctInfoForBound.NoOfIntrsctItem = i_ParLin;
-				IntrsctInfoForBound.TypeOfIntrsctItem = ParLine;
+				IntrsctInfoForBound.TypeOfIntrsctItem = TBoundOrLine::ParLine;
 				//NoOfIntrsctPoOnIntrsctItem to fill later
 
 				IntrsctInfoForParLine.IntrsctPoint = IntrsctPo;
 				IntrsctInfoForParLine.NoOfIntrsctItem = i_Bound;
-				IntrsctInfoForParLine.TypeOfIntrsctItem = Bound;
+				IntrsctInfoForParLine.TypeOfIntrsctItem = TBoundOrLine::Bound;
 				//NoOfIntrsctPoOnIntrsctItem to fill later
 
 				if((Abs(IntrsctPo.x - R0_Bound.x) < AbsPrecToler) && (Abs(IntrsctPo.y - R0_Bound.y) < AbsPrecToler))
@@ -531,20 +531,20 @@ void radTPolygon::FillInIntrsctInfoStruct(const TVector2d& V, const TVector2d* S
 					IntrsctInfoForBound.IntrsctPoint.y = R1_Bound.y;
 				}
 
-				IntrsctInfoForParLine.IntrsctMultiplicity = (IntrsctCase == PointWithinBound)? 1 : 2;
+				IntrsctInfoForParLine.IntrsctMultiplicity = (IntrsctCase == TLinesIntrsctCase::PointWithinBound)? 1 : 2;
 				IntrsctInfoForBound.IntrsctMultiplicity = IntrsctInfoForParLine.IntrsctMultiplicity;
 				IntrsctInfoForParLine.IntrsctIsLine = IntrsctInfoForBound.IntrsctIsLine = 0;
 			}
-			else if(IntrsctCase == LineIsIntrsct)
+			else if(IntrsctCase == TLinesIntrsctCase::LineIsIntrsct)
 			{
 				IntrsctInfoForBound.IntrsctPoint = R0_Bound;
 				IntrsctInfoForBound.NoOfIntrsctItem = i_ParLin;
-				IntrsctInfoForBound.TypeOfIntrsctItem = ParLine;
+				IntrsctInfoForBound.TypeOfIntrsctItem = TBoundOrLine::ParLine;
 				//NoOfIntrsctPoOnIntrsctItem to fill later
 
 				IntrsctInfoForParLine.IntrsctPoint = R0_Bound;
 				IntrsctInfoForParLine.NoOfIntrsctItem = i_Bound;
-				IntrsctInfoForParLine.TypeOfIntrsctItem = Bound;
+				IntrsctInfoForParLine.TypeOfIntrsctItem = TBoundOrLine::Bound;
 				//NoOfIntrsctPoOnIntrsctItem to fill later
 
 				StartEdgeAlreadyMarked = 1;
@@ -552,7 +552,7 @@ void radTPolygon::FillInIntrsctInfoStruct(const TVector2d& V, const TVector2d* S
 				IntrsctInfoForParLine.IntrsctMultiplicity = IntrsctInfoForBound.IntrsctMultiplicity = 2;
 				IntrsctInfoForParLine.IntrsctIsLine = IntrsctInfoForBound.IntrsctIsLine = 1;
 			}
-			if((IntrsctCase == PointWithinBound) || (IntrsctCase == PointOnBoundEdge) || (IntrsctCase == LineIsIntrsct))
+			if((IntrsctCase == TLinesIntrsctCase::PointWithinBound) || (IntrsctCase == TLinesIntrsctCase::PointOnBoundEdge) || (IntrsctCase == TLinesIntrsctCase::LineIsIntrsct))
 			{
 				IntrsctInfoVectsForPolygBounds[i_Bound].push_back(IntrsctInfoForBound);
 				if(!CurIntrsctIsAtBoundEnd) IntrsctInfoVectsForParLines[i_ParLin].push_back(IntrsctInfoForParLine);
@@ -563,7 +563,7 @@ void radTPolygon::FillInIntrsctInfoStruct(const TVector2d& V, const TVector2d* S
 			radTPolyg2dIntrsctInfo IntrsctInfoForBound;
 			IntrsctInfoForBound.IntrsctPoint = R0_Bound;
 			IntrsctInfoForBound.NoOfIntrsctItem = (i_Bound != 0)? (i_Bound - 1) : AmOfEdgePoints_m_1;
-			IntrsctInfoForBound.TypeOfIntrsctItem = Bound;
+			IntrsctInfoForBound.TypeOfIntrsctItem = TBoundOrLine::Bound;
 			//NoOfIntrsctPoOnIntrsctItem to fill later: the last one
 			IntrsctInfoVectsForPolygBounds[i_Bound].push_back(IntrsctInfoForBound);
 		}
@@ -572,7 +572,7 @@ void radTPolygon::FillInIntrsctInfoStruct(const TVector2d& V, const TVector2d* S
 			radTPolyg2dIntrsctInfo IntrsctInfoForBound;
 			IntrsctInfoForBound.IntrsctPoint = R1_Bound;
 			IntrsctInfoForBound.NoOfIntrsctItem = (i_Bound != AmOfEdgePoints_m_1)? (i_Bound + 1) : 0;
-			IntrsctInfoForBound.TypeOfIntrsctItem = Bound;
+			IntrsctInfoForBound.TypeOfIntrsctItem = TBoundOrLine::Bound;
 			IntrsctInfoForBound.NoOfIntrsctPoOnIntrsctItem = 0;
 			IntrsctInfoVectsForPolygBounds[i_Bound].push_back(IntrsctInfoForBound);
 		}
@@ -608,7 +608,7 @@ void radTPolygon::FillInIntrsctInfoStruct(const TVector2d& V, const TVector2d* S
 		{
 			BufInfoPtr = &(*iter);
 			TVector2d ThisPoint = BufInfoPtr->IntrsctPoint;
-			InfoVectPtr = (BufInfoPtr->TypeOfIntrsctItem == Bound)? &(IntrsctInfoVectsForPolygBounds[BufInfoPtr->NoOfIntrsctItem]) : &(IntrsctInfoVectsForParLines[BufInfoPtr->NoOfIntrsctItem]);
+			InfoVectPtr = (BufInfoPtr->TypeOfIntrsctItem == TBoundOrLine::Bound)? &(IntrsctInfoVectsForPolygBounds[BufInfoPtr->NoOfIntrsctItem]) : &(IntrsctInfoVectsForParLines[BufInfoPtr->NoOfIntrsctItem]);
 			int ProbNo;
 			for(ProbNo = 0; ProbNo < (int)(InfoVectPtr->size()); ProbNo++)
 			{
@@ -717,7 +717,7 @@ int radTPolygon::SubdivideBySetOfParallelLines(const TVector2d& V, TVector2d* St
 				SecondPointOnThisLine = CurFirstPoint;
 			}
 
-// Loop starting from Bound:
+// Loop starting from TBoundOrLine::Bound:
 			radTPolyg2dIntrsctInfo* IntrsctInfoPtr = StartIntrsctInfoPtr;
 			radTPolyg2dIntrsctInfo* PrevIntrsctInfoPtr;
 
@@ -741,7 +741,7 @@ int radTPolygon::SubdivideBySetOfParallelLines(const TVector2d& V, TVector2d* St
 				int LocLoopPassCount = 0;
 				for(;;)
 				{
-					radTPolyg2dIntrsctInfoVect* CurIntrsctInfoVectPtr = (IntrsctInfoPtr->TypeOfIntrsctItem == Bound)? &(IntrsctInfoVectsForPolygBounds[IntrsctInfoPtr->NoOfIntrsctItem]) : &(IntrsctInfoVectsForParLines[IntrsctInfoPtr->NoOfIntrsctItem]);
+					radTPolyg2dIntrsctInfoVect* CurIntrsctInfoVectPtr = (IntrsctInfoPtr->TypeOfIntrsctItem == TBoundOrLine::Bound)? &(IntrsctInfoVectsForPolygBounds[IntrsctInfoPtr->NoOfIntrsctItem]) : &(IntrsctInfoVectsForParLines[IntrsctInfoPtr->NoOfIntrsctItem]);
 
 					if(CurIntrsctInfoVectPtr != CurLinIntrsctInfoVectPtr)
 					{
@@ -751,7 +751,7 @@ int radTPolygon::SubdivideBySetOfParallelLines(const TVector2d& V, TVector2d* St
 							PrevIntrsctInfoPtr = IntrsctInfoPtr;
 
 							IntrsctInfoPtr = &((*CurIntrsctInfoVectPtr)[BufIndx]);
-							CurIntrsctInfoVectPtr = (IntrsctInfoPtr->TypeOfIntrsctItem == Bound)? &(IntrsctInfoVectsForPolygBounds[IntrsctInfoPtr->NoOfIntrsctItem]) : &(IntrsctInfoVectsForParLines[IntrsctInfoPtr->NoOfIntrsctItem]);
+							CurIntrsctInfoVectPtr = (IntrsctInfoPtr->TypeOfIntrsctItem == TBoundOrLine::Bound)? &(IntrsctInfoVectsForPolygBounds[IntrsctInfoPtr->NoOfIntrsctItem]) : &(IntrsctInfoVectsForParLines[IntrsctInfoPtr->NoOfIntrsctItem]);
 						}
 
 						PrevIntrsctInfoPtr = IntrsctInfoPtr;
@@ -795,7 +795,7 @@ int radTPolygon::SubdivideBySetOfParallelLines(const TVector2d& V, TVector2d* St
 
 						int LocCheckCount=0;
 CheckTheProbPoint:
-						radTPolyg2dIntrsctInfoVect* ProbIntrsctInfoVectPtr = (ProbIntrsctInfoPtr->TypeOfIntrsctItem == Bound)? &(IntrsctInfoVectsForPolygBounds[ProbIntrsctInfoPtr->NoOfIntrsctItem]) : &(IntrsctInfoVectsForParLines[ProbIntrsctInfoPtr->NoOfIntrsctItem]);
+						radTPolyg2dIntrsctInfoVect* ProbIntrsctInfoVectPtr = (ProbIntrsctInfoPtr->TypeOfIntrsctItem == TBoundOrLine::Bound)? &(IntrsctInfoVectsForPolygBounds[ProbIntrsctInfoPtr->NoOfIntrsctItem]) : &(IntrsctInfoVectsForParLines[ProbIntrsctInfoPtr->NoOfIntrsctItem]);
 						TVector2d NextProbPoint = ((*ProbIntrsctInfoVectPtr)[ProbIntrsctInfoPtr->NoOfIntrsctPoOnIntrsctItem + 1]).IntrsctPoint;
 						TVector2d NextProbPo_m_ProbCurPo = NextProbPoint - ProbCurPoint;
 
@@ -878,13 +878,13 @@ AssignNewCurPoint:
 					int LocLoopPassCount=0;
 					for(;;)
 					{
-						radTPolyg2dIntrsctInfoVect* CurIntrsctInfoVectPtr = (IntrsctInfoPtr->TypeOfIntrsctItem == Bound)? &(IntrsctInfoVectsForPolygBounds[IntrsctInfoPtr->NoOfIntrsctItem]) : &(IntrsctInfoVectsForParLines[IntrsctInfoPtr->NoOfIntrsctItem]);
+						radTPolyg2dIntrsctInfoVect* CurIntrsctInfoVectPtr = (IntrsctInfoPtr->TypeOfIntrsctItem == TBoundOrLine::Bound)? &(IntrsctInfoVectsForPolygBounds[IntrsctInfoPtr->NoOfIntrsctItem]) : &(IntrsctInfoVectsForParLines[IntrsctInfoPtr->NoOfIntrsctItem]);
 
 						PrevIntrsctInfoPtr = IntrsctInfoPtr;
 
 						IntrsctInfoPtr = &((*CurIntrsctInfoVectPtr)[IntrsctInfoPtr->NoOfIntrsctPoOnIntrsctItem + 1]);
 						CurPoint = IntrsctInfoPtr->IntrsctPoint;
-						if(IntrsctInfoPtr->TypeOfIntrsctItem == ParLine)
+						if(IntrsctInfoPtr->TypeOfIntrsctItem == TBoundOrLine::ParLine)
 						{
 							if(&(IntrsctInfoVectsForParLines[IntrsctInfoPtr->NoOfIntrsctItem]) != CurLinIntrsctInfoVectPtr) { PolygHasSegmentOfOtherParLine = 1; break;}
 							else if((Abs(CurPoint.x - CurFirstPoint.x) < AbsPrecToler) && (Abs(CurPoint.y - CurFirstPoint.y) < AbsPrecToler)) break;
@@ -1413,7 +1413,7 @@ int radTPolygon::CheckIfNotSelfIntersecting()
 			TVector2d r1Tmp = EdgePointsVector[(k!=AmOfEdgePoints_m_1)? k+1 : 0];
 			
 			IntrsctOfTwoLines2(r0Gen, r1Gen, r0Tmp, r1Tmp, IntrsctPo, IntrsctCase);
-			if(IntrsctCase == PointWithinBound) 
+			if(IntrsctCase == TLinesIntrsctCase::PointWithinBound) 
 			{ 
 				Send.ErrorMessage("Radia::Error104"); return 0;
 			}

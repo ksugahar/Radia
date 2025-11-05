@@ -771,9 +771,10 @@ void radTPolyhedron::B_comp_frJ(radTField* pField)
 
 void radTPolyhedron::B_intComp_frM(radTField* FieldPtr)
 //void radTPolyhedron::B_intComp(radTField* FieldPtr)
-{ 
+{
 	if(FieldPtr->FieldKey.FinInt_) { B_intCompFinNum(FieldPtr); return;}
 
+	TVector3d Zero(0.,0.,0.);
 	for(int i=0; i<AmOfFaces; i++)
 	{
 		radTHandlePgnAndTrans HandlePgnAndTrans = VectHandlePgnAndTrans[i];
@@ -1547,7 +1548,7 @@ int radTPolyhedron::FindIntersectionWithFace(int FaceNo, TVector3d* CuttingPlane
 		R1_Bound = FacePgnPtr->EdgePointsVector[NextCircularNumber(i_Bound, AmOfEdgePo)];
 		IntrsctOfTwoLines(VectIntrsctLine, PointOnIntrsctLine, R0_Bound, R1_Bound, IntrsctPo, IntrsctCase, RelAbsTol);
 
-		if(IntrsctCase == PointOnBoundEdge)
+		if(IntrsctCase == TLinesIntrsctCase::PointOnBoundEdge)
 		{
 			if(OneEdgePointAlreadyTrapped)
 			{
@@ -1573,7 +1574,7 @@ int radTPolyhedron::FindIntersectionWithFace(int FaceNo, TVector3d* CuttingPlane
 				}
 			}
 		}
-		else if(IntrsctCase == PointWithinBound)
+		else if(IntrsctCase == TLinesIntrsctCase::PointWithinBound)
 		{
 			AtLeastOnePointIsWithinBounds = 1; //OC291003
 			if(OnePointAlreadyFound)
@@ -1587,7 +1588,7 @@ int radTPolyhedron::FindIntersectionWithFace(int FaceNo, TVector3d* CuttingPlane
 				IntersectingBoundsNos[0] = i_Bound;
 			}
 		}
-		else if(IntrsctCase == LineIsIntrsct) 
+		else if(IntrsctCase == TLinesIntrsctCase::LineIsIntrsct) 
 		{ 
 			TwoGoodPointsFound = 0; 
 
@@ -1672,7 +1673,7 @@ void radTPolyhedron::IntrsctOfTwoLines(const TVector2d& V1, const TVector2d& R01
 		IntrsctPo.x = -(-R01.y*V1.x*V2.x + R02.y*V1.x*V2.x + R01.x*V1yV2x - R02.x*V1xV2y)/D;
 		IntrsctPo.y = -(R02.y*V1yV2x - R01.y*V1xV2y + R01.x*V1.y*V2.y - R02.x*V1.y*V2.y)/D;
 		double t_Intrsct = (Abs(V2.x) > V_Toler)? (IntrsctPo.x - R02.x)/V2.x : (IntrsctPo.y - R02.y)/V2.y;
-		//IntrsctCase = ((t_Intrsct > t_Toler) && (t_Intrsct + t_Toler < 1.))? PointWithinBound : (((Abs(t_Intrsct) < t_Toler) || (Abs(t_Intrsct-1.) < t_Toler))? PointOnBoundEdge : PointOutsideBound);
+		//IntrsctCase = ((t_Intrsct > t_Toler) && (t_Intrsct + t_Toler < 1.))? TLinesIntrsctCase::PointWithinBound : (((Abs(t_Intrsct) < t_Toler) || (Abs(t_Intrsct-1.) < t_Toler))? TLinesIntrsctCase::PointOnBoundEdge : TLinesIntrsctCase::PointOutsideBound);
 
 			//DEBUG test
 			//TVector2d V2u = V2, V1u = V1;
@@ -1682,25 +1683,25 @@ void radTPolyhedron::IntrsctOfTwoLines(const TVector2d& V1, const TVector2d& R01
 
 		if((t_Intrsct > t_Toler) && (t_Intrsct + t_Toler < 1.))
 		{
-			IntrsctCase = PointWithinBound; return;
+			IntrsctCase = TLinesIntrsctCase::PointWithinBound; return;
 		}
 		else
 		{
 			if(Abs(t_Intrsct) < t_Toler)
 			{
-				IntrsctCase = PointOnBoundEdge;
+				IntrsctCase = TLinesIntrsctCase::PointOnBoundEdge;
 				IntrsctPo = R02;
 				return;
 			}
 			else if(Abs(t_Intrsct-1.) < t_Toler)
 			{
-				IntrsctCase = PointOnBoundEdge;
+				IntrsctCase = TLinesIntrsctCase::PointOnBoundEdge;
 				IntrsctPo = R12;
 				return;
 			}
 			else 
 			{
-				IntrsctCase = PointOutsideBound;
+				IntrsctCase = TLinesIntrsctCase::PointOutsideBound;
 				return;
 			}
 		}
@@ -1722,13 +1723,13 @@ void radTPolyhedron::IntrsctOfTwoLines(const TVector2d& V1, const TVector2d& R01
 
 		if(V3Norm < MaxNormR01R02*t_Toler)
 		{//is this really important?
-			IntrsctCase = LineIsIntrsct; return;
+			IntrsctCase = TLinesIntrsctCase::LineIsIntrsct; return;
 		}
 
 		//double LineCoinsBufToler = V1Norm*t_Toler;
 		double LineCoinsToler = V_Toler*V3Norm;
 		double CompareVal = fabs(V1.x*V3y - V1.y*V3x);
-		IntrsctCase = (CompareVal < LineCoinsToler)? LineIsIntrsct : Zero; // To check !!!
+		IntrsctCase = (CompareVal < LineCoinsToler)? TLinesIntrsctCase::LineIsIntrsct : TLinesIntrsctCase::Zero; // To check !!!
 	}
 }
 
