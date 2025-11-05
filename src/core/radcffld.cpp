@@ -157,7 +157,7 @@ void radTCoefficientFunctionFieldSource::B_intComp(radTField* FieldPtr)
 	if(FieldPtr->FieldKey.FinInt_)
 	{
 		// For arbitrary field, use numerical integration
-		// Simple trapezoidal rule: Integral ≈ (B(P1) + B(P2))/2 * L
+		// Simple trapezoidal rule: Integral ~= (B(P1) + B(P2))/2 * L
 
 		TVector3d P1 = FieldPtr->P;
 		TVector3d P2 = FieldPtr->NextP;
