@@ -22,6 +22,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <vector>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -483,8 +484,8 @@ void radTApplication::ComputeParticleTrajectory(int ElemKey, double Energy, doub
 		radTg3d* SourcePtr = Cast.g3dCast(hSource.rep);
 		if(SourcePtr==0) { Send.ErrorMessage("Radia::Error003"); return;}
 
-		TrjData = new double[Np*5];
-		if(TrjData==0) { Send.ErrorMessage("Radia::Error900"); return;}
+		std::vector<double> vTrjData(Np*5);
+		TrjData = vTrjData.data();
 
 		short OnPrc = (CompCriterium.AbsPrecTrjCoord > 0.) || (CompCriterium.AbsPrecTrjAngle > 0.);
 		double PrecArray[] = { CompCriterium.AbsPrecTrjCoord, CompCriterium.AbsPrecTrjAngle,
@@ -499,8 +500,7 @@ void radTApplication::ComputeParticleTrajectory(int ElemKey, double Energy, doub
 		int Dims[] = { 5, Np };
 		if(SendingIsRequired) Send.ArbNestedArrays(TrjData, Dims, Depth);
 
-		if(TrjData != 0) delete[] TrjData;
-		TrjData = 0;
+		// TrjData cleaned up automatically by RAII (std::vector)
 	}
 	catch(...) 
 	{ 
@@ -580,11 +580,16 @@ void radTApplication::ComputeFocusKickPer(int ElemKey, double* P1, double* Nlong
 		else if(strcmp(strOutFormat, "fix") && strcmp(strOutFormat, "FIX")) { Send.ErrorMessage("Radia::Error502"); return;}
 
 		long NpKick = np1*np2;
-		pKickData1 = new double[NpKick]; if(pKickData1==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pKickData2 = new double[NpKick]; if(pKickData2==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pBtE2Int = new double[NpKick]; if(pBtE2Int==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pCoordDir1 = new double[np1]; if(pCoordDir1==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pCoordDir2 = new double[np2]; if(pCoordDir2==0) { Send.ErrorMessage("Radia::Error900"); return;}
+		std::vector<double> vKickData1(NpKick);
+		std::vector<double> vKickData2(NpKick);
+		std::vector<double> vBtE2Int(NpKick);
+		std::vector<double> vCoordDir1(np1);
+		std::vector<double> vCoordDir2(np2);
+		pKickData1 = vKickData1.data();
+		pKickData2 = vKickData2.data();
+		pBtE2Int = vBtE2Int.data();
+		pCoordDir1 = vCoordDir1.data();
+		pCoordDir2 = vCoordDir2.data();
 
 		radTPrtclTrj PrtclTrj(SourcePtr, CompCriterium, inEnergyGeV);
 		//PrtclTrj.ComputeSecondOrderKickPer(P1Vect, NlongVect, per, nper, N1Vect, r1, np1, r2, np2, nharm, ns, d1, d2, pCoordDir1, pCoordDir2, pKickData1, pKickData2, pBtE2Int);
@@ -621,21 +626,13 @@ void radTApplication::ComputeFocusKickPer(int ElemKey, double* P1, double* Nlong
 			if(pAuxFlatArr != 0) { delete[] pAuxFlatArr; pAuxFlatArr = 0;}
 		}
 
-		if(pKickData1 != 0) { delete[] pKickData1; pKickData1 = 0;}
-		if(pKickData2 != 0) { delete[] pKickData2; pKickData2 = 0;}
-		if(pBtE2Int != 0) { delete[] pBtE2Int; pBtE2Int = 0;}
-		if(pCoordDir1 != 0) { delete[] pCoordDir1; pCoordDir1 = 0;}
-		if(pCoordDir2 != 0) { delete[] pCoordDir2; pCoordDir2 = 0;}
+		// pKickData1-5 cleaned up automatically by RAII (std::vector)
 		if(pStrReport != 0) { delete[] pStrReport; pStrReport = 0;}
 		if(pAuxFlatArr != 0) { delete[] pAuxFlatArr; pAuxFlatArr = 0;}
 	}
-	catch(...) 
-	{ 
-		if(pKickData1 != 0) delete[] pKickData1;
-		if(pKickData2 != 0) delete[] pKickData2;
-		if(pBtE2Int != 0) delete[] pBtE2Int;
-		if(pCoordDir1 != 0) delete[] pCoordDir1;
-		if(pCoordDir2 != 0) delete[] pCoordDir2;
+	catch(...)
+	{
+		// pKickData1-5 cleaned up automatically by RAII (std::vector)
 		if(pStrReport != 0) delete[] pStrReport;
 		if(pAuxFlatArr != 0) delete[] pAuxFlatArr;
 		Initialize(); return;
@@ -700,11 +697,16 @@ void radTApplication::ComputeFocusKick(int ElemKey, double* P1, double* Nlong, d
 		int TotAmOfPairsOfMatr = lenArrLongDist;
 		if(TotAmOfPairsOfMatr > 1) TotAmOfPairsOfMatr++;
 		long NpKick = np1*np2*TotAmOfPairsOfMatr;
-		pKickData1 = new double[NpKick]; if(pKickData1==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pKickData2 = new double[NpKick]; if(pKickData2==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pIBe2 = new double[NpKick]; if(pIBe2==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pCoordDir1 = new double[np1]; if(pCoordDir1==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pCoordDir2 = new double[np2]; if(pCoordDir2==0) { Send.ErrorMessage("Radia::Error900"); return;}
+		std::vector<double> vKickData1(NpKick);
+		std::vector<double> vKickData2(NpKick);
+		std::vector<double> vIBe2(NpKick);
+		std::vector<double> vCoordDir1(np1);
+		std::vector<double> vCoordDir2(np2);
+		pKickData1 = vKickData1.data();
+		pKickData2 = vKickData2.data();
+		pIBe2 = vIBe2.data();
+		pCoordDir1 = vCoordDir1.data();
+		pCoordDir2 = vCoordDir2.data();
 
 		radTPrtclTrj PrtclTrj(SourcePtr, CompCriterium);
 		PrtclTrj.ComputeSecondOrderKick(P1Vect, NlongVect, ArrLongDist, lenArrLongDist, ns, N1Vect, r1, np1, r2, np2, d1, d2, pCoordDir1, pCoordDir2, pKickData1, pKickData2, pIBe2);
@@ -743,20 +745,12 @@ void radTApplication::ComputeFocusKick(int ElemKey, double* P1, double* Nlong, d
 			Send.String(pStrToSend);
 		}
 
-		if(pKickData1 != 0) { delete[] pKickData1; pKickData1 = 0;}
-		if(pKickData2 != 0) { delete[] pKickData2; pKickData2 = 0;}
-		if(pIBe2 != 0) { delete[] pIBe2; pIBe2 = 0;}
-		if(pCoordDir1 != 0) { delete[] pCoordDir1; pCoordDir1 = 0;}
-		if(pCoordDir2 != 0) { delete[] pCoordDir2; pCoordDir2 = 0;}
+		// pKickData1-5 cleaned up automatically by RAII (std::vector)
 		if(pStrReport != 0) { delete[] pStrReport; pStrReport = 0;}
 	}
-	catch(...) 
-	{ 
-		if(pKickData1 != 0) { delete[] pKickData1; pKickData1 = 0;}
-		if(pKickData2 != 0) { delete[] pKickData2; pKickData2 = 0;}
-		if(pIBe2 != 0) { delete[] pIBe2; pIBe2 = 0;}
-		if(pCoordDir1 != 0) { delete[] pCoordDir1; pCoordDir1 = 0;}
-		if(pCoordDir2 != 0) { delete[] pCoordDir2; pCoordDir2 = 0;}
+	catch(...)
+	{
+		// pKickData1-5 cleaned up automatically by RAII (std::vector)
 		if(pStrReport != 0) { delete[] pStrReport; pStrReport = 0;}
 
 		Initialize(); return;
