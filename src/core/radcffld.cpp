@@ -81,7 +81,8 @@ void radTCoefficientFunctionFieldSource::B_comp(radTField* FieldPtr)
 		PyList_SetItem(coords, 1, PyFloat_FromDouble(FieldPtr->P.y));
 		PyList_SetItem(coords, 2, PyFloat_FromDouble(FieldPtr->P.z));
 
-		// Call Python callback: B = callback([x, y, z])
+		// Call Python callback: result = callback([x, y, z])
+		// Result can be [Bx, By, Bz] or {'B': [Bx, By, Bz], 'A': [Ax, Ay, Az]}
 		PyObject* result = PyObject_CallFunctionObjArgs(cf_callback, coords, nullptr);
 		Py_DECREF(coords);
 
@@ -92,53 +93,100 @@ void radTCoefficientFunctionFieldSource::B_comp(radTField* FieldPtr)
 			return;
 		}
 
-		// Extract [Bx, By, Bz] from result
-		if(!PyList_Check(result) && !PyTuple_Check(result)) {
-			std::cerr << "[CFFieldSource] Callback must return list or tuple [Bx, By, Bz]" << std::endl;
+		// Check if result is a dictionary (for B and A)
+		if(PyDict_Check(result)) {
+			// Dictionary format: {'B': [Bx, By, Bz], 'A': [Ax, Ay, Az]}
+			PyObject* B_obj = PyDict_GetItemString(result, "B");
+			PyObject* A_obj = PyDict_GetItemString(result, "A");
+
+			// Extract B field
+			if(B_obj && (PyList_Check(B_obj) || PyTuple_Check(B_obj))) {
+				if(PySequence_Size(B_obj) == 3) {
+					PyObject* bx = PySequence_GetItem(B_obj, 0);
+					PyObject* by = PySequence_GetItem(B_obj, 1);
+					PyObject* bz = PySequence_GetItem(B_obj, 2);
+
+					double Bx = PyFloat_AsDouble(bx);
+					double By = PyFloat_AsDouble(by);
+					double Bz = PyFloat_AsDouble(bz);
+
+					Py_DECREF(bx); Py_DECREF(by); Py_DECREF(bz);
+
+					if(!PyErr_Occurred()) {
+						TVector3d B_from_cf(Bx, By, Bz);
+						if(FieldPtr->FieldKey.B_) FieldPtr->B += B_from_cf;
+						if(FieldPtr->FieldKey.H_) FieldPtr->H += B_from_cf;
+					}
+				}
+			}
+
+			// Extract A field (vector potential)
+			if(A_obj && (PyList_Check(A_obj) || PyTuple_Check(A_obj))) {
+				if(PySequence_Size(A_obj) == 3) {
+					PyObject* ax = PySequence_GetItem(A_obj, 0);
+					PyObject* ay = PySequence_GetItem(A_obj, 1);
+					PyObject* az = PySequence_GetItem(A_obj, 2);
+
+					double Ax = PyFloat_AsDouble(ax);
+					double Ay = PyFloat_AsDouble(ay);
+					double Az = PyFloat_AsDouble(az);
+
+					Py_DECREF(ax); Py_DECREF(ay); Py_DECREF(az);
+
+					if(!PyErr_Occurred()) {
+						TVector3d A_from_cf(Ax, Ay, Az);
+						if(FieldPtr->FieldKey.A_) FieldPtr->A += A_from_cf;
+					}
+				}
+			}
+
+			Py_DECREF(result);
+		}
+		// Backward compatibility: [Bx, By, Bz] format
+		else if(PyList_Check(result) || PyTuple_Check(result)) {
+			Py_ssize_t size = PySequence_Size(result);
+			if(size != 3) {
+				std::cerr << "[CFFieldSource] Callback must return 3 components [Bx, By, Bz], got "
+				          << size << std::endl;
+				Py_DECREF(result);
+				PyGILState_Release(gstate);
+				return;
+			}
+
+			PyObject* item0 = PySequence_GetItem(result, 0);
+			PyObject* item1 = PySequence_GetItem(result, 1);
+			PyObject* item2 = PySequence_GetItem(result, 2);
+
+			double Bx = PyFloat_AsDouble(item0);
+			double By = PyFloat_AsDouble(item1);
+			double Bz = PyFloat_AsDouble(item2);
+
+			Py_DECREF(item0);
+			Py_DECREF(item1);
+			Py_DECREF(item2);
+			Py_DECREF(result);
+
+			if(PyErr_Occurred()) {
+				PyErr_Print();
+				PyGILState_Release(gstate);
+				return;
+			}
+
+			TVector3d B_from_cf(Bx, By, Bz);
+			if(FieldPtr->FieldKey.B_) FieldPtr->B += B_from_cf;
+			if(FieldPtr->FieldKey.H_) FieldPtr->H += B_from_cf;
+
+			// For backward compatibility, A is not provided in list format
+		}
+		else {
+			std::cerr << "[CFFieldSource] Callback must return [Bx, By, Bz] or {'B': [...], 'A': [...]}" << std::endl;
 			Py_DECREF(result);
 			PyGILState_Release(gstate);
 			return;
 		}
-
-		Py_ssize_t size = PySequence_Size(result);
-		if(size != 3) {
-			std::cerr << "[CFFieldSource] Callback must return 3 components [Bx, By, Bz], got "
-			          << size << std::endl;
-			Py_DECREF(result);
-			PyGILState_Release(gstate);
-			return;
-		}
-
-		PyObject* item0 = PySequence_GetItem(result, 0);
-		PyObject* item1 = PySequence_GetItem(result, 1);
-		PyObject* item2 = PySequence_GetItem(result, 2);
-
-		double Bx = PyFloat_AsDouble(item0);
-		double By = PyFloat_AsDouble(item1);
-		double Bz = PyFloat_AsDouble(item2);
-
-		Py_DECREF(item0);
-		Py_DECREF(item1);
-		Py_DECREF(item2);
-		Py_DECREF(result);
 
 		if(PyErr_Occurred()) {
 			PyErr_Print();
-			PyGILState_Release(gstate);
-			return;
-		}
-
-		TVector3d B_from_cf(Bx, By, Bz);
-
-		// Add to field components
-		if(FieldPtr->FieldKey.B_) FieldPtr->B += B_from_cf;
-		if(FieldPtr->FieldKey.H_) FieldPtr->H += B_from_cf;
-
-		// Vector potential A - skip for now (complex to implement for arbitrary B)
-		// Most use cases only need B field
-		if(FieldPtr->FieldKey.A_) {
-			// TODO: Implement A computation if needed
-			// For arbitrary B(r), need to solve curl(A) = B
 		}
 
 	} catch (...) {
