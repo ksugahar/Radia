@@ -794,12 +794,10 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 		if(Np <= 0) { Send.ErrorMessage("Radia::Error079"); return;}
 
 		TVector3d ZeroVect(0.,0.,0.);
-		arr_pField = new radTField*[TwoNp];
+		std::vector<radTField*> vArr_pField(TwoNp, nullptr);
+		arr_pField = vArr_pField.data();
 		std::vector<radTField> vArr_resField(Np);
 		arr_resField = vArr_resField.data();
-
-		radTField **tField = arr_pField;
-		for(int s=0; s<TwoNp; s++) *(tField++) = 0;
 
 		TVector3d vTransl = ((Np > 1)? (1./double(Np - 1)) : 1)*(vFiPoi - vStPoi);
 
@@ -816,7 +814,7 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 
 		radTg3d *arrSourceDispPtr[] = {SourcePtr, SourceDispPtr};
 
-		tField = arr_pField;
+		radTField **tField = arr_pField;
 		for(int k=0; k<2; k++)
 		{
 			radTg3d *curSourceDispPtr = arrSourceDispPtr[k];
@@ -865,7 +863,7 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 		if(arr_pField != 0) 
 		{
 			for(int i=0; i<TwoNp; i++) if(arr_pField[i] != 0) delete arr_pField[i];
-			delete[] arr_pField;
+			// RAII: vArr_pField cleaned up automatically
 		}
 		// RAII: vArr_resField cleaned up automatically
 	}
@@ -874,7 +872,7 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 		if(arr_pField != 0) 
 		{
 			for(int i=0; i<TwoNp; i++) if(arr_pField[i] != 0) delete arr_pField[i];
-			delete[] arr_pField;
+			// RAII: vArr_pField cleaned up automatically
 		}
 		// RAII: vArr_resField cleaned up automatically
 		Initialize(); return;
