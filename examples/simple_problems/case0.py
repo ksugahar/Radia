@@ -33,18 +33,11 @@ g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
 
 # Create rectangular magnet with magnetization [0,0,1.0] T
 # Note: Radia magnetization unit is Tesla (T), not A/m
+# For permanent magnets, set magnetization directly (no material needed)
 g2 = rad.ObjRecMag([0, 0, -50], [300, 300, 5], [0, 0, 1.0])
 
-# Define material - Linear material
-# Note: In the original script, material is defined but for a magnet with magnetization,
-# you typically either set magnetization OR apply material properties to soft magnetic material
-m1 = rad.MatLin([0.001, 0.001], [0, 0, 0])
-
-# Alternative: Nonlinear isotropic material (commented out in original)
-# m1 = rad.MatSatIso([10000, 2000], [0.1, 2], [0.1, 2])
-
-# Apply material to g2
-rad.MatApl(g2, m1)
+# Note: Material properties (MatLin, MatSatIso) are for soft magnetic materials
+# like iron yokes, NOT for permanent magnets with fixed magnetization
 
 # Set drawing attributes
 rad.ObjDrwAtr(g1, [1, 0, 0], 0.001)  # Red for g1
