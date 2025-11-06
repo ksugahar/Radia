@@ -230,16 +230,15 @@ int radTPolyhedron::DetermineActualFacesNormals(TVector3d* ArrayOfPoints, int Am
 	int NoOfFirstGoodFace = i;
 
 // Determining all the rest normals
-	short** SegmentPassed = new short*[AmOfFaces];
-	if(SegmentPassed == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<std::vector<short>> vSegmentPassed(AmOfFaces);
+	std::vector<short*> vSegmentPassedPtrs(AmOfFaces);
 	for(i=0; i<AmOfFaces; i++)
 	{
 		int CurrentLength = ArrayOfLengths[i];
-		SegmentPassed[i] = new short[CurrentLength];
-		short* LocSegmentPassed = SegmentPassed[i];
-		if(LocSegmentPassed == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return 0;}
-		for(int k=0; k<CurrentLength; k++) LocSegmentPassed[k] = 0;
+		vSegmentPassed[i].resize(CurrentLength, 0);
+		vSegmentPassedPtrs[i] = vSegmentPassed[i].data();
 	}
+	short** SegmentPassed = vSegmentPassedPtrs.data();
 	int ii = NoOfFirstGoodFace;
 
 	std::vector<char> vGenFacesPassed(AmOfFaces, 0);
