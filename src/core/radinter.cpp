@@ -218,9 +218,10 @@ radTConvergRepair& radCR = rad.CnRep;
 
 int AuxSetOptionNameAndValue(const char* OptTot, char* OptName, const char** OptValue)
 {
-	if(*OptTot != '\0') 
+	if(*OptTot != '\0')
 	{
-		strcpy(OptName, OptTot);
+		strncpy(OptName, OptTot, 199);
+		OptName[199] = '\0';
 		//char *pEndOptName = strrchr(OptName, '-');
 		char *pEndOptName = strrchr(OptName, '>'); //OC19122019
 		//if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return 0;}
@@ -764,11 +765,17 @@ void ArcPolygonDLL(double xc, double yc, char a, double* pFlatVert, int nv, doub
 		tArrayOfPoints2d++;
 	}
 
-	double Angles[] = {radCR.DoublePlus(PhiMin), radCR.DoubleMinus(PhiMax)}; 
+	double Angles[] = {radCR.DoublePlus(PhiMin), radCR.DoubleMinus(PhiMax)};
 
 	char SymOrNoSymStr[20];
-	if((sym_no == 's') || (sym_no == 'S')) strcpy(SymOrNoSymStr, "sym");
-	else strcpy(SymOrNoSymStr, "nosym");
+	if((sym_no == 's') || (sym_no == 'S')) {
+		strncpy(SymOrNoSymStr, "sym", 19);
+		SymOrNoSymStr[19] = '\0';
+	}
+	else {
+		strncpy(SymOrNoSymStr, "nosym", 19);
+		SymOrNoSymStr[19] = '\0';
+	}
 
 	double Magn[] = {mx, my, mz};
 
@@ -930,7 +937,8 @@ void DuplicateElementG3DOpt(int ElemKey, const char* Opt)
 	std::array<char, 200> CharBuf;
 	if((Opt != 0) && (*Opt != '\0'))
 	{
-		strcpy(CharBuf.data(), Opt);
+		strncpy(CharBuf.data(), Opt, 199);
+		CharBuf[199] = '\0';
 		char *pEndOptName = strrchr(CharBuf.data(), '-');
 		if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 		*pEndOptName = '\0';

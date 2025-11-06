@@ -34,22 +34,25 @@ This creates `dist\radia.pyd`
 
 This creates `build\Release\rad_ngsolve.pyd`
 
-## Building Distribution Packages
+## Building and Uploading to PyPI
 
-### Using the Build Script
+### Using the Unified Script (Recommended)
 
-Run the automated build script:
+Run the unified build and upload script:
 
 ```powershell
-.\Build_PyPI_Package.ps1
+.\Publish_to_PyPI.ps1
 ```
 
-This script will:
+This script will automatically:
 1. Check for required `.pyd` files
 2. Clean previous builds
 3. Build source distribution (`.tar.gz`)
 4. Build wheel distribution (`.whl`)
 5. Show created files in `dist/`
+6. Upload to PyPI
+
+**Note**: This script contains PyPI credentials and is not tracked in git.
 
 ### Manual Build
 
@@ -113,10 +116,30 @@ pip install --index-url https://test.pypi.org/simple/ radia-ngsolve
 
 Once verified on Test PyPI, upload to production:
 
+#### Option 1: Using Publish_to_PyPI.ps1 (Recommended)
+
+**IMPORTANT**: Set your PyPI API token as an environment variable before running:
+
+```powershell
+# Set the API token (get it from https://pypi.org/manage/account/token/)
+$env:PYPI_TOKEN = "your-pypi-token-here"
+
+# Run the build and upload script
+.\Publish_to_PyPI.ps1
+```
+
+This automatically builds and uploads the package.
+
+**Security Note**: Never commit API tokens to the repository. The script now requires the token to be set as an environment variable.
+
+#### Option 2: Manual Upload
+
 ```bash
 # Manually upload to PyPI
-python -m twine upload dist/*
+python -m twine upload dist/*.whl dist/*.tar.gz
 ```
+
+**Note**: When uploading manually, specify only `.whl` and `.tar.gz` files to exclude `.pyd` files.
 
 ## PyPI Credentials
 
@@ -210,9 +233,8 @@ To release a new version:
 
 1. Update version in `pyproject.toml`
 2. Update version in `setup.py`
-3. Rebuild extensions
-4. Run `build_pypi_package.cmd`
-5. Upload to PyPI
+3. Rebuild extensions (`.\Build.ps1` and optionally `.\Build_NGSolve.ps1`)
+4. Run `.\Publish_to_PyPI.ps1` (builds and uploads automatically)
 
 ## Troubleshooting
 

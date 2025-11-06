@@ -6,26 +6,21 @@
 
 以下のファイルは PyPI パッケージの配布に必要なため、削除してはいけません：
 
-1. **Build_PyPI_Package.ps1** - PyPI パッケージビルドスクリプト
-   - 旧: build_pypi_package.cmd（廃止）
-   - source distribution (sdist) と wheel distribution (bdist_wheel) をビルド
-   - 使用方法: `.\Build_PyPI_Package.ps1`
-
-2. **setup.py** - パッケージセットアップ設定
+1. **setup.py** - パッケージセットアップ設定
    - パッケージメタデータと依存関係を定義
    - バイナリ拡張モジュール (.pyd) のパッケージング
 
-3. **pyproject.toml** - モダンな Python プロジェクト設定
+2. **pyproject.toml** - モダンな Python プロジェクト設定
    - PEP 518/621 準拠
    - ビルドシステムとプロジェクトメタデータ
 
-4. **MANIFEST.in** - 配布ファイルの包含ルール
+3. **MANIFEST.in** - 配布ファイルの包含ルール
    - ソース配布に含めるファイルを指定
 
-5. **LICENSE** - ライセンステキスト
+4. **LICENSE** - ライセンステキスト
    - LGPL-2.1 + 元の RADIA BSD-style ライセンス
 
-6. **COPYRIGHT.txt** - 元の Radia 著作権表示
+5. **COPYRIGHT.txt** - 元の Radia 著作権表示
    - ESRF (1997-2018) の著作権を維持
    - 絶対に削除しないこと
 
@@ -33,15 +28,25 @@
 
 以下のファイルはローカル環境のみで使用し、リポジトリには含めません：
 
-- **Publish_to_PyPI.ps1** - PyPI アップロードスクリプト（認証トークンを含む）
-  - 旧: publish_to_pypi.cmd（廃止）
-  - PyPI API トークンを含むため .gitignore に追加
-  - 使用方法: `.\Publish_to_PyPI.ps1`
+- **Publish_to_PyPI.ps1** - PyPI ビルド・アップロード統合スクリプト（ローカルのみ）
+  - 旧: build_pypi_package.cmd, publish_to_pypi.cmd（廃止）
+  - ビルドとアップロードを統合した単一スクリプト
+  - .gitignore に含まれているため Git にコミットされない
+  - 使用方法:
+    ```powershell
+    $env:PYPI_TOKEN = "your-token-here"
+    .\Publish_to_PyPI.ps1
+    ```
+  - **セキュリティ**: API トークンは環境変数として設定（スクリプトにハードコードしない）
+- **Build_PyPI_Package.ps1** - 廃止（Publish_to_PyPI.ps1 に統合）
 - **CLAUDE.md** - プロジェクト固有の開発メモ
 
 ## PyPI パッケージ公開ワークフロー
 
-1. **ビルド**: `.\Build.ps1` でコアモジュールをビルド
-2. **パッケージング**: `.\Build_PyPI_Package.ps1` で配布パッケージ作成
-3. **アップロード**: `.\Publish_to_PyPI.ps1` で PyPI に公開（ローカルのみ）
+1. **ビルド**: `.\Build.ps1` でコアモジュールをビルド（必須）
+2. **公開**: API トークンを設定して `.\Publish_to_PyPI.ps1` を実行（ローカルのみ）
+   ```powershell
+   $env:PYPI_TOKEN = "your-token-here"  # PyPI API トークンを設定
+   .\Publish_to_PyPI.ps1                 # ビルドとアップロードを統合して実行
+   ```
 
