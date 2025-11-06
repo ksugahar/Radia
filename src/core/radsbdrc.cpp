@@ -958,9 +958,12 @@ int radTSubdividedRecMag::SetupFldCmpData(short InFldCmpMeth, int SubLevel)
 
 		double Xj, Yj, Zj, MultCx, MultCy, MultCz;
 
-		double* Cx = new double[int(kx)];
-		double* Cy = new double[int(ky)];
-		double* Cz = new double[int(kz)];
+		std::vector<double> vCx(kx);
+		std::vector<double> vCy(ky);
+		std::vector<double> vCz(kz);
+		double* Cx = vCx.data();
+		double* Cy = vCy.data();
+		double* Cz = vCz.data();
 
 		int ColNo, StrNo, ix, iy, iz;
 		StrNo = 0;
@@ -1007,7 +1010,7 @@ int radTSubdividedRecMag::SetupFldCmpData(short InFldCmpMeth, int SubLevel)
 			ax *= q0x;
 			Xj += 0.5*ax;
 		}
-		delete[] Cx; delete[] Cy; delete[] Cz;
+		// RAII: vCx, vCy, vCz cleaned up automatically
 
 		radTMathLinAlgEq MathMet(AmOfSubElem);
 		MathMet.InverseMatrix(DirQ, AmOfSubElem, Q_forM);

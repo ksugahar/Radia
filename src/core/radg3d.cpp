@@ -1029,7 +1029,8 @@ void radTg3d::Limits(double* LimArr)
 	int AmOfVertices = LocVertices.size();
 	if(AmOfVertices <= 0) return;
 
-	TVector3d* VertArr = new TVector3d[AmOfVertices];
+	std::vector<TVector3d> vVertArr(AmOfVertices);
+	TVector3d* VertArr = vVertArr.data();
 	for(int i=0; i<AmOfVertices; i++) VertArr[i] = LocVertices[i];
 
 	if(g3dListOfTransform.empty()) 
@@ -1060,7 +1061,7 @@ void radTg3d::Limits(double* LimArr)
 		}
 
 	}
-	delete[] VertArr;
+	// RAII: vVertArr cleaned up automatically
 }
 **/
 //-------------------------------------------------------------------------
