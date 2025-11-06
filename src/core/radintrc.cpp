@@ -1302,7 +1302,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> externFieldArrayExists;
 	if(externFieldArrayExists && (AmOfMainElem > 0))
 	{
-		ExternFieldArray = new TVector3d[AmOfMainElem];
+		vExternFieldArray.resize(AmOfMainElem);
+		ExternFieldArray = vExternFieldArray.data();
 		for(int i=0; i<AmOfMainElem; i++) inStr >> ExternFieldArray[i];
 	}
 
@@ -1312,7 +1313,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> newMagnArrayExists;
 	if(newMagnArrayExists && (AmOfMainElem > 0))
 	{
-		NewMagnArray = new TVector3d[AmOfMainElem];
+		vNewMagnArray.resize(AmOfMainElem);
+		NewMagnArray = vNewMagnArray.data();
 		for(int i=0; i<AmOfMainElem; i++) inStr >> NewMagnArray[i];
 	}
 
@@ -1322,7 +1324,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> newFieldArrayExists;
 	if(newFieldArrayExists && (AmOfMainElem > 0))
 	{
-		NewFieldArray = new TVector3d[AmOfMainElem];
+		vNewFieldArray.resize(AmOfMainElem);
+		NewFieldArray = vNewFieldArray.data();
 		for(int i=0; i<AmOfMainElem; i++) inStr >> NewFieldArray[i];
 	}
 
@@ -1332,7 +1335,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> auxOldMagnArrayExists;
 	if(auxOldMagnArrayExists && (AmOfMainElem > 0))
 	{
-		AuxOldMagnArray = new TVector3d[AmOfMainElem];
+		vAuxOldMagnArray.resize(AmOfMainElem);
+		AuxOldMagnArray = vAuxOldMagnArray.data();
 		for(int i=0; i<AmOfMainElem; i++) inStr >> AuxOldMagnArray[i];
 	}
 
@@ -1342,7 +1346,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> auxOldFieldArrayExists;
 	if(auxOldFieldArrayExists && (AmOfMainElem > 0))
 	{
-		AuxOldFieldArray = new TVector3d[AmOfMainElem];
+		vAuxOldFieldArray.resize(AmOfMainElem);
+		AuxOldFieldArray = vAuxOldFieldArray.data();
 		for(int i=0; i<AmOfMainElem; i++) inStr >> AuxOldFieldArray[i];
 	}
 
