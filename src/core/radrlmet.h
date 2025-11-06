@@ -417,9 +417,12 @@ public:
 
 class radTRelaxationMethNo_a5 : public radTIterativeRelaxMeth {
 	double InstMisfitM;
+	std::vector<std::vector<double>> vAuxMatr1Storage, vAuxMatr2Storage;
+	std::vector<double*> vAuxMatr1, vAuxMatr2;
 	double** AuxMatr1;
 	double** AuxMatr2;
 
+	std::vector<double> vAuxArray;
 	double* AuxArray;
 
 	int AmOfRelaxTogether;

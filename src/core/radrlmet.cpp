@@ -88,27 +88,15 @@ void radTIterativeRelaxMeth::MakeN_iter(int IterNum)
 	}
 
 	//radTSend Send;
-	TVector3d* OldMagnArray = nullptr;
-	//try
-	//{
-		OldMagnArray = new TVector3d[IntrctPtr->AmOfMainElem];
-	//}
-	//catch (radTException* radExceptionPtr)
-	//{
-	//	Send.ErrorMessage(radExceptionPtr->what());	return;
-	//}
-	//catch (...)
-	//{
-	//	Send.ErrorMessage("Radia::Error999");	return;
-	//}
+	std::vector<TVector3d> vOldMagnArray(IntrctPtr->AmOfMainElem);
+	TVector3d* OldMagnArray = vOldMagnArray.data();
 
 	for(int k=0; k<IntrctPtr->AmOfMainElem; k++) OldMagnArray[k] = (IntrctPtr->g3dRelaxPtrVect[k])->Magn;
 	DefineNewMagnetizations();
-	for(int q=0; q<IntrctPtr->AmOfMainElem; q++) 
+	for(int q=0; q<IntrctPtr->AmOfMainElem; q++)
 		IntrctPtr->NewMagnArray[q] = (IntrctPtr->g3dRelaxPtrVect[q])->Magn;
 
 	ComputeRelaxStatusParam(IntrctPtr->NewMagnArray, OldMagnArray, IntrctPtr->NewFieldArray);
-	delete[] OldMagnArray;
 }
 
 //-------------------------------------------------------------------------
@@ -263,70 +251,58 @@ radTRelaxationMethNo_a5::radTRelaxationMethNo_a5(radTInteraction* InInteractionP
 { 
 	IntrctPtr = InInteractionPtr; InstMisfitM = 1.E+23;
 
-	radTRelaxSubInterval* TmpSubIntervArray;
-	//try
-	//{
-		TmpSubIntervArray = new radTRelaxSubInterval[IntrctPtr->AmOfRelaxSubInterv];
+	std::vector<radTRelaxSubInterval> vTmpSubIntervArray(IntrctPtr->AmOfRelaxSubInterv);
+	radTRelaxSubInterval* TmpSubIntervArray = vTmpSubIntervArray.data();
 
-		int RelaxTogetherCount = 0;
-		int MaxSize = 0;
+	int RelaxTogetherCount = 0;
+	int MaxSize = 0;
 
-		for(int i=0; i<IntrctPtr->AmOfRelaxSubInterv; i++)
+	for(int i=0; i<IntrctPtr->AmOfRelaxSubInterv; i++)
+	{
+		radTRelaxSubInterval& LocSubInterv = IntrctPtr->RelaxSubIntervArray[i];
+		if(LocSubInterv.SubIntervalID == TRelaxSubIntervalID::RelaxTogether)
 		{
-			radTRelaxSubInterval& LocSubInterv = IntrctPtr->RelaxSubIntervArray[i];
-			if(LocSubInterv.SubIntervalID == TRelaxSubIntervalID::RelaxTogether) 
-			{
-				TmpSubIntervArray[RelaxTogetherCount] = LocSubInterv;
-				RelaxTogetherCount++;
+			TmpSubIntervArray[RelaxTogetherCount] = LocSubInterv;
+			RelaxTogetherCount++;
 
-				int CurSize = LocSubInterv.FinNo - LocSubInterv.StartNo + 1;
-				if(CurSize>MaxSize) MaxSize = CurSize;
-			}
+			int CurSize = LocSubInterv.FinNo - LocSubInterv.StartNo + 1;
+			if(CurSize>MaxSize) MaxSize = CurSize;
 		}
-		AmOfRelaxTogether = RelaxTogetherCount;
+	}
+	AmOfRelaxTogether = RelaxTogetherCount;
 
-		SizeOfAuxs = 3*MaxSize;
+	SizeOfAuxs = 3*MaxSize;
 
-		MathMethPtr = new radTMathLinAlgEq(SizeOfAuxs);
+	MathMethPtr = new radTMathLinAlgEq(SizeOfAuxs);
 
-		if(AmOfRelaxTogether != 0)
+	if(AmOfRelaxTogether != 0)
+	{
+		vAuxMatr1Storage.resize(SizeOfAuxs);
+		vAuxMatr2Storage.resize(SizeOfAuxs);
+		vAuxMatr1.resize(SizeOfAuxs);
+		vAuxMatr2.resize(SizeOfAuxs);
+
+		vAuxArray.resize(SizeOfAuxs);
+		AuxArray = vAuxArray.data();
+
+		for(int m=0; m<SizeOfAuxs; m++)
 		{
-			AuxMatr1 = new double*[SizeOfAuxs];
-			AuxMatr2 = new double*[SizeOfAuxs];
-			
-			AuxArray = new double[SizeOfAuxs];
-
-			for(int m=0; m<SizeOfAuxs; m++)
-			{
-				AuxMatr1[m] = new double[SizeOfAuxs];
-				AuxMatr2[m] = new double[SizeOfAuxs];
-			}
+			vAuxMatr1Storage[m].resize(SizeOfAuxs);
+			vAuxMatr2Storage[m].resize(SizeOfAuxs);
+			vAuxMatr1[m] = vAuxMatr1Storage[m].data();
+			vAuxMatr2[m] = vAuxMatr2Storage[m].data();
 		}
-	//}
-	//catch (radTException* radExceptionPtr)
-	//{
-	//	Send.ErrorMessage(radExceptionPtr->what());	return;
-	//}
-	//catch (...)
-	//{
-	//	Send.ErrorMessage("Radia::Error999");	return;
-	//}
-
-	delete[] TmpSubIntervArray; 
+		AuxMatr1 = vAuxMatr1.data();
+		AuxMatr2 = vAuxMatr2.data();
+	}
+	// Automatic cleanup via RAII 
 }
 
 //-------------------------------------------------------------------------
 
 radTRelaxationMethNo_a5::~radTRelaxationMethNo_a5()
 {
-	for(int j=0; j<SizeOfAuxs; j++)
-	{
-		delete[] (AuxMatr1[j]);
-		delete[] (AuxMatr2[j]);
-	}
-	delete[] AuxMatr1;
-	delete[] AuxMatr2;
-	delete[] AuxArray;
+	// Automatic cleanup via RAII (std::vector)
 }
 
 //-------------------------------------------------------------------------
