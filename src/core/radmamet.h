@@ -590,7 +590,9 @@ public:
 
 class TMathInterpol1D {
 
+	std::vector<double> vAllCf;
 	double* AllCf;
+	std::vector<double*> vPlnCf;
 	double** PlnCf;
 	double Orig_sStart, Orig_sStep, InvStep;
 	int OrigNp;
@@ -710,10 +712,11 @@ private:
 		if((OrigF == 0) || (OrigNp <= 0)) throw 0;
 		AllocateMemoryForCfs();
 
-		double* DerF = new double[OrigNp];
+		std::vector<double> vDerF(OrigNp);
+		double* DerF = vDerF.data();
 		CompDerivForOrigData(OrigF, DerF);
 		CalcPlnCfs(OrigF, DerF);
-		if(DerF != 0) delete[] DerF;
+		// RAII: vDerF cleaned up automatically
 	}
 	void CalcPlnCfs(double* OrigF, double* DerF)
 	{
@@ -735,17 +738,20 @@ private:
 		DeallocateMemoryForCfs();
 		int LenFieldData_m_1 = OrigNp - 1;
 
-		PlnCf = new double*[LenFieldData_m_1];
-		if(PlnCf == 0) throw 0;
-		AllCf = new double[LenFieldData_m_1*4];
-		if(AllCf == 0) { delete[] PlnCf; throw 0;}
+		vPlnCf.resize(LenFieldData_m_1);
+		PlnCf = vPlnCf.data();
+		vAllCf.resize(LenFieldData_m_1*4);
+		AllCf = vAllCf.data();
 		double* tAllCf = AllCf;
 		for(int i=0; i<LenFieldData_m_1; i++) { PlnCf[i] = tAllCf; tAllCf += 4;}
 	}
 	void DeallocateMemoryForCfs()
 	{
-		if(AllCf != 0) { delete[] AllCf; AllCf = 0;}
-		if(PlnCf != 0) { delete[] PlnCf; PlnCf = 0;}
+		// RAII: vAllCf and vPlnCf cleaned up automatically
+		vAllCf.clear();
+		AllCf = 0;
+		vPlnCf.clear();
+		PlnCf = 0;
 	}
 };
 
