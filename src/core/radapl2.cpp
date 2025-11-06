@@ -660,7 +660,8 @@ int radTApplication::DumpElemParse(const unsigned char *bstr, int bstrLen)
 		int nElemDir = 0;
 		inStr >> nElemDir;
 
-		arDirElemOldKeys = new int[nElemDir];
+		std::vector<int> vArDirElemOldKeys(nElemDir);
+		arDirElemOldKeys = vArDirElemOldKeys.data();
 		int *t_arDirElemOldKeys = arDirElemOldKeys;
 		for(int j=0; j<nElemDir; j++)
 		{
@@ -860,14 +861,14 @@ int radTApplication::DumpElemParse(const unsigned char *bstr, int bstrLen)
 			res = 1;
 		}
 
-		if(arDirElemOldKeys != 0) delete[] arDirElemOldKeys;
+		// RAII: vArDirElemOldKeys cleaned up automatically
 		return res;
 	}
 	catch(...)
 	{
 		Send.ErrorMessage("Radia::Error202");
-		Initialize(); 
-		if(arDirElemOldKeys != 0) delete[] arDirElemOldKeys;
+		Initialize();
+		// RAII: vArDirElemOldKeys cleaned up automatically
 		return 0;
 	}
 }

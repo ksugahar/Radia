@@ -1109,7 +1109,8 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 		bool RadiusOverlaps = false;
 		bool RadiusIsZeroAtOnePoint = false, RadiusIsZeroAtTwoPoints = false;
 
-		arIndBase2 = new int[lenArrayOfPoints2d];
+		std::vector<int> vArIndBase2(lenArrayOfPoints2d);
+		arIndBase2 = vArIndBase2.data();
 
 		TVector2d *tPoints2d = ArrayOfPoints2d;
 		TVector3d *tVertexPoints = VertexPointsArr, *tVertexPoints2 = VertexPointsArr + lenArrayOfPoints2d;
@@ -1356,7 +1357,7 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 			delete[] ArrayOfFaces;
 		}
 		if(ArrayOfNumOfPoInFaces != 0) delete[] ArrayOfNumOfPoInFaces;
-		if(arIndBase2 != 0) delete[] arIndBase2;
+		// RAII: vArIndBase2 cleaned up automatically
 
 		if(SendingIsRequired) Send.Int(IndPolyhedr); 
 		return IndPolyhedr;
@@ -1375,7 +1376,7 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 			delete[] ArrayOfFaces;
 		}
 		if(ArrayOfNumOfPoInFaces != 0) delete[] ArrayOfNumOfPoInFaces;
-		if(arIndBase2 != 0) delete[] arIndBase2;
+		// RAII: vArIndBase2 cleaned up automatically
 
 		Initialize(); return 0;
 	}
@@ -1854,9 +1855,9 @@ int radTApplication::OutGroupSubObjectKeys(int ElemKey)
 		if(GroupPtr==0) { if(SendingIsRequired) Send.IntList(&ElemKey, 1); return ElemKey;}
 		else
 		{
-			int* GroupSubObjArray = nullptr;
 			int lenGroupSubObjArray = (int)(GroupPtr->GroupMapOfHandlers.size());
-			GroupSubObjArray = new int[lenGroupSubObjArray];
+			std::vector<int> vGroupSubObjArray(lenGroupSubObjArray);
+			int* GroupSubObjArray = vGroupSubObjArray.data();
 
 			int* ArrayTravers = GroupSubObjArray;
 			for(radTmhg::const_iterator iter = GroupPtr->GroupMapOfHandlers.begin();
@@ -1864,7 +1865,7 @@ int radTApplication::OutGroupSubObjectKeys(int ElemKey)
 				*(ArrayTravers++) = (*iter).first;
 
 			if(SendingIsRequired) Send.IntList(GroupSubObjArray, lenGroupSubObjArray);
-			delete[] GroupSubObjArray;
+			// RAII: vGroupSubObjArray cleaned up automatically
 			return ElemKey;
 		}
 	}
