@@ -1377,7 +1377,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 		inStr >> MaxSubIntervArraySize;
 		if(MaxSubIntervArraySize > 0)
 		{
-			RelaxSubIntervArray = new radTRelaxSubInterval[MaxSubIntervArraySize];
+			vRelaxSubIntervArray.resize(MaxSubIntervArraySize);
+			RelaxSubIntervArray = vRelaxSubIntervArray.data();
 			radTRelaxSubInterval *t_RelaxSubIntervArray = RelaxSubIntervArray;
 			for(int i=0; i<MaxSubIntervArraySize; i++)
 			{

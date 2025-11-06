@@ -1546,7 +1546,8 @@ int radTRelaxationMethNo_7::FillInSubMatrixArrays(double PrecOnMagnetiz, int*& T
 	int ActualIterNum = RelaxMethNo_4.AutoRelax(PrecOnMagnetiz, AmOfInitIter);
 	if(ActualIterNum < AmOfInitIter) return ActualIterNum;
 
-	radTlAuxIndNorm *ArrAuxIndNorm = new radTlAuxIndNorm[AmOfRelaxElem];
+	std::vector<radTlAuxIndNorm> vArrAuxIndNorm(AmOfRelaxElem);
+	radTlAuxIndNorm *ArrAuxIndNorm = vArrAuxIndNorm.data();
 	radTlAuxIndNorm *tAuxIndNorm = ArrAuxIndNorm;
 
 	//radTg3dRelax *g3dRelaxPtr = nullptr;
@@ -1592,7 +1593,8 @@ int radTRelaxationMethNo_7::FillInSubMatrixArrays(double PrecOnMagnetiz, int*& T
 	AmOfSubMatr = (int)(AmOfRelaxElem/ApproxAmOfElemInSubMatr);
 	if(AmOfSubMatr <= 0) AmOfSubMatr = 1;
 
-	radTvInt* ArrVectSubMatrNos = new radTvInt[AmOfSubMatr];
+	std::vector<radTvInt> vArrVectSubMatrNos(AmOfSubMatr);
+	radTvInt* ArrVectSubMatrNos = vArrVectSubMatrNos.data();
 
 	radTlAuxIndNorm::iterator it1, it2;
 	tAuxIndNorm = ArrAuxIndNorm;
@@ -1650,22 +1652,8 @@ int radTRelaxationMethNo_7::FillInSubMatrixArrays(double PrecOnMagnetiz, int*& T
 	SubMatrLengths = vSubMatrLengths.data();
 	CopyVectSubMatrDataToArrays(ArrVectSubMatrNos, AmOfSubMatr, TotArrSubMatrNos, SubMatrLengths);
 
-	if(ArrAuxIndNorm != nullptr)
-	{
-		for(int k=0; k<AmOfRelaxElem; k++) ArrAuxIndNorm[k].erase(ArrAuxIndNorm[k].begin(), ArrAuxIndNorm[k].end());
-		delete[] ArrAuxIndNorm; ArrAuxIndNorm = nullptr;
-	}
-	if((ArrVectSubMatrNos != nullptr) && (AmOfSubMatr > 0))
-	{
-		radTvInt *tArrVectSubMatrNos = ArrVectSubMatrNos;
-		for(int i=0; i<AmOfSubMatr; i++) 
-		{
-			tArrVectSubMatrNos->erase(tArrVectSubMatrNos->begin(), tArrVectSubMatrNos->end());
-			tArrVectSubMatrNos++;
-		}
-		delete[] ArrVectSubMatrNos;
-		ArrVectSubMatrNos = nullptr;
-	}
+	// RAII: automatic cleanup via vArrAuxIndNorm and vArrVectSubMatrNos
+	// Lists are automatically cleaned up when vectors go out of scope
 	return ActualIterNum;
 }
 
