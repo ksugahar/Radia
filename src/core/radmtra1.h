@@ -29,8 +29,10 @@ protected:
 	double Ksi[2][4], Ms[2][3], Hci[4];
 	char DependenceIsNonlinear[2];
 
+	std::vector<TVector2d> vgArrayHM_Par, vgArrayHM_Perp;
 	TVector2d *gArrayHM_Par, *gArrayHM_Perp;
 	int gLenArrayHM_Par, gLenArrayHM_Perp;
+	std::vector<double> vgdMdH_Par, vgdMdH_Perp;
 	double *gdMdH_Par, *gdMdH_Perp;
 	double gMaxKsi_Par, gMaxKsi_Perp;
 
@@ -125,33 +127,35 @@ public:
 		DeallocateArrays();
 		if(InLenArrayHM_Par > 0)
 		{
-			gArrayHM_Par = new TVector2d[InLenArrayHM_Par];
-			if(gArrayHM_Par == 0) return 0;
-			gdMdH_Par = new double[InLenArrayHM_Par];
-			if(gdMdH_Par == 0) return 0;
+			vgArrayHM_Par.resize(InLenArrayHM_Par);
+			gArrayHM_Par = vgArrayHM_Par.data();
+			vgdMdH_Par.resize(InLenArrayHM_Par);
+			gdMdH_Par = vgdMdH_Par.data();
 			gLenArrayHM_Par = InLenArrayHM_Par;
 		}
 		if(InLenArrayHM_Perp > 0)
 		{
-			gArrayHM_Perp = new TVector2d[InLenArrayHM_Perp];
-			if(gArrayHM_Perp == 0) return 0;
-			gdMdH_Perp = new double[InLenArrayHM_Perp];
-			if(gdMdH_Perp == 0) return 0;
+			vgArrayHM_Perp.resize(InLenArrayHM_Perp);
+			gArrayHM_Perp = vgArrayHM_Perp.data();
+			vgdMdH_Perp.resize(InLenArrayHM_Perp);
+			gdMdH_Perp = vgdMdH_Perp.data();
 			gLenArrayHM_Perp = InLenArrayHM_Perp;
 		}
 		return 1;
 	}
 	void DeallocateArrays()
 	{
-		if(gArrayHM_Par != 0) delete[] gArrayHM_Par; 
+		// RAII: vgArrayHM_Par and vgdMdH_Par cleaned up automatically
+		vgArrayHM_Par.clear();
 		gArrayHM_Par = 0;
-		if(gdMdH_Par != 0) delete[] gdMdH_Par; 
+		vgdMdH_Par.clear();
 		gdMdH_Par = 0;
 		gLenArrayHM_Par = 0;
 
-		if(gArrayHM_Perp != 0) delete[] gArrayHM_Perp; 
+		// RAII: vgArrayHM_Perp and vgdMdH_Perp cleaned up automatically
+		vgArrayHM_Perp.clear();
 		gArrayHM_Perp = 0;
-		if(gdMdH_Perp != 0) delete[] gdMdH_Perp; 
+		vgdMdH_Perp.clear(); 
 		gdMdH_Perp = 0;
 		gLenArrayHM_Perp = 0;
 	}
