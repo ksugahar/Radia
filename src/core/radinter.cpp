@@ -1011,9 +1011,10 @@ void SubdivideElementG3DOpt(int ElemKey, double* SubdivArray, char TypeExtraSpec
 	std::array<char, 200> CharBuf1, CharBuf2, CharBuf3;
 	if(Opt1 != 0)
 	{
-		if(*Opt1 != '\0') 
+		if(*Opt1 != '\0')
 		{
-			strcpy(CharBuf1.data(), Opt1);
+			strncpy(CharBuf1.data(), Opt1, 199);
+			CharBuf1[199] = '\0';
 			char *pEndOptName = strrchr(CharBuf1.data(), '-');
 			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 			*pEndOptName = '\0';
@@ -1024,9 +1025,10 @@ void SubdivideElementG3DOpt(int ElemKey, double* SubdivArray, char TypeExtraSpec
 	}
 	if(Opt2 != 0)
 	{
-		if(*Opt2 != '\0') 
+		if(*Opt2 != '\0')
 		{
-			strcpy(CharBuf2.data(), Opt2);
+			strncpy(CharBuf2.data(), Opt2, 199);
+			CharBuf2[199] = '\0';
 			char *pEndOptName = strrchr(CharBuf2.data(), '-');
 			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 			*pEndOptName = '\0';
@@ -1037,9 +1039,10 @@ void SubdivideElementG3DOpt(int ElemKey, double* SubdivArray, char TypeExtraSpec
 	}
 	if(Opt3 != 0)
 	{
-		if(*Opt3 != '\0') 
+		if(*Opt3 != '\0')
 		{
-			strcpy(CharBuf3.data(), Opt3);
+			strncpy(CharBuf3.data(), Opt3, 199);
+			CharBuf3[199] = '\0';
 			char *pEndOptName = strrchr(CharBuf3.data(), '-');
 			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 			*pEndOptName = '\0';
@@ -1067,7 +1070,8 @@ void CutElementG3DOpt1(int ElemKey, double x, double y, double z, double nx, dou
 	double PlaneNormal[] = {nx,ny,nz};
 
 	char CharBuf[200];
-	strcpy(CharBuf, Opt);
+	strncpy(CharBuf, Opt, 199);
+	CharBuf[199] = '\0';
 	char *pEndOptName = strrchr(CharBuf, '-');
 	if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 	*pEndOptName = '\0';
@@ -1100,9 +1104,10 @@ void CutElementG3DOpt(int ElemKey, double x, double y, double z, double nx, doub
 	int OptionCount = 0;
 
 	std::array<char, 200> CharBuf1;
-	if(*Opt1 != '\0') 
+	if(*Opt1 != '\0')
 	{
-		strcpy(CharBuf1.data(), Opt1);
+		strncpy(CharBuf1.data(), Opt1, 199);
+		CharBuf1[199] = '\0';
 		char *pEndOptName = strrchr(CharBuf1.data(), '-');
 		if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
 		*pEndOptName = '\0';
@@ -1553,9 +1558,10 @@ void CompPrecisionOpt(const char* Opt1, const char* Opt2, const char* Opt3, cons
 	{
 		if(InOpt[i] != 0) //OC240108
 		{
-			if(*(InOpt[i]) != '\0') 
+			if(*(InOpt[i]) != '\0')
 			{
-				strcpy(TotCharBuf[i], InOpt[i]);
+				strncpy(TotCharBuf[i], InOpt[i], 199);
+				TotCharBuf[i][199] = '\0';
 				//char *pEndOptName = strrchr(TotCharBuf[i], '-');
 				char *pEndOptName = strrchr(TotCharBuf[i], '>'); //OC19122019
 				//if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
@@ -1634,7 +1640,8 @@ void FieldArbitraryPointsStruct(int ElemKey, char* FieldChar)
 void FieldArbitraryPointsArray(long ElemKey, const char* FieldChar, double** Points, long LenPoints)
 {
 	char LocStr[50];
-	strcpy(LocStr, FieldChar);
+	strncpy(LocStr, FieldChar, 49);
+	LocStr[49] = '\0';
 	rad.ComputeField((int)ElemKey, LocStr, Points, LenPoints);
 }
 
