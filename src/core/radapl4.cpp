@@ -1092,12 +1092,13 @@ int radTApplication::SetUpPolyhedronsFromLayerRectangles(TVector3d* RectCenPoint
 	double* CoordsZ = 0;
 	try
 	{
-		LayerPolygons = new TVector2d*[AmOfLayerRect];
-		if(LayerPolygons == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
-
-		// RAII: Use std::vector for automatic cleanup
+		// RAII: Use std::vector for all allocations
+		std::vector<TVector2d*> vLayerPolygons(AmOfLayerRect);
+		std::vector<std::vector<TVector2d>> vRectanglePointsStorage(AmOfLayerRect);
 		std::vector<int> vPtsNumbersInLayerPgns(AmOfLayerRect);
 		std::vector<double> vCoordsZ(AmOfLayerRect);
+
+		LayerPolygons = vLayerPolygons.data();
 		PtsNumbersInLayerPgns = vPtsNumbersInLayerPgns.data();
 		CoordsZ = vCoordsZ.data();
 
@@ -1105,8 +1106,8 @@ int radTApplication::SetUpPolyhedronsFromLayerRectangles(TVector3d* RectCenPoint
 		TVector2d* tRectDims = RectDims;
 		for(int i=0; i<AmOfLayerRect; i++)
 		{
-			TVector2d* RectanglePoints = new TVector2d[4];
-			if(RectanglePoints == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+			vRectanglePointsStorage[i].resize(4);
+			TVector2d* RectanglePoints = vRectanglePointsStorage[i].data();
 
 			double HalfWx = 0.5*tRectDims->x, HalfWy = 0.5*tRectDims->y;
 			double Xmin = tRectCenPoints->x - HalfWx, Xmax = tRectCenPoints->x + HalfWx;
@@ -1124,32 +1125,14 @@ int radTApplication::SetUpPolyhedronsFromLayerRectangles(TVector3d* RectCenPoint
 		}
 		char SetUpOK = SetUpPolyhedronsFromLayerPolygons(LayerPolygons, PtsNumbersInLayerPgns, CoordsZ, AmOfLayerRect, MagnVect, hg);
 
-		if(LayerPolygons != 0)
-		{
-			for(int k=0; k<AmOfLayerRect; k++) 
-			{
-				delete[] (LayerPolygons[k]);
-				LayerPolygons[k] = 0;
-			}
-			delete[] LayerPolygons;
-		}
-		// RAII: automatic cleanup
+		// RAII: vRectanglePointsStorage, vLayerPolygons, vPtsNumbersInLayerPgns, vCoordsZ cleaned up automatically
 
 		if(!SetUpOK) return 0;
 		return 1;
 	}
 	catch(...)
 	{
-		if(LayerPolygons != 0)
-		{
-			for(int k=0; k<AmOfLayerRect; k++) 
-			{
-				if(LayerPolygons[k] != 0) delete[] (LayerPolygons[k]);
-			}
-			delete[] LayerPolygons;
-		}
-		// RAII: automatic cleanup
-
+		// RAII: All vectors cleaned up automatically on exception
 		Initialize(); return 0;
 	}
 }
