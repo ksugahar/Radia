@@ -12,6 +12,7 @@ import numpy as np
 # Add parent directory to path to import radia
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'dist'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'build', 'lib', 'Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "build", "Release"))
 
 import radia as rad
 

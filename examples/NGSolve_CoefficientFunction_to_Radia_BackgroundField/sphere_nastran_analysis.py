@@ -302,10 +302,10 @@ for pt in external_points:
 print(f"\n[Step 8] Calculating Field Distribution")
 print("-" * 70)
 
-# Define evaluation grid (extended to 50mm for far-field evaluation)
-x_min, x_max = -50, 50
-y_min, y_max = -50, 50
-z_min, z_max = -50, 50
+# Define evaluation grid (extended to 20mm for far-field evaluation)
+x_min, x_max = -20, 20
+y_min, y_max = -20, 20
+z_min, z_max = -20, 20
 
 # Grid resolution
 nx, ny, nz = 21, 21, 21
