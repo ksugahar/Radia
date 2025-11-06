@@ -60,12 +60,12 @@ inline int operator ==(const radTHandlePgnAndTrans& h1, const radTHandlePgnAndTr
 
 #ifdef __GNUC__
 using radTVectHandlePgnAndTrans = vector<radTHandlePgnAndTrans>;
-using radTVectOfPtrToVect3d = vector<TVector3d*>;
+using radTVectOfPtrToVect3d = vector<std::array<TVector3d, 2>>;
 using radTListOfVector3d = list<TVector3d>;
 using radTVectVect3d = vector<TVector3d>;
 #else
 using radTVectHandlePgnAndTrans = vector<radTHandlePgnAndTrans, allocator<radTHandlePgnAndTrans> >;
-using radTVectOfPtrToVect3d = vector<TVector3d*, allocator<TVector3d*> >;
+using radTVectOfPtrToVect3d = vector<std::array<TVector3d, 2>, allocator<std::array<TVector3d, 2>> >;
 using radTListOfVector3d = list<TVector3d, allocator<TVector3d> >;
 using radTVectVect3d = vector<TVector3d, allocator<TVector3d> >;
 #endif

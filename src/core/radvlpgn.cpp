@@ -18,6 +18,7 @@
 
 #include "radsend.h"
 #include "radvlpgn.h"
+#include <array>
 #include "radg3dgr.h"
 #include "radsbdvp.h"
 #include "radg3da1.h"
@@ -1456,8 +1457,8 @@ int radTPolyhedron::CutItself(TVector3d* InCuttingPlane, radThg& In_hg, radTPair
 		}
 	}
 
-	for(auto ptr : VectOfTwoPoints3d) delete[] ptr;
-	VectOfTwoPoints3d.erase(VectOfTwoPoints3d.begin(), VectOfTwoPoints3d.end());
+	// RAII: std::array cleanup is automatic
+	VectOfTwoPoints3d.clear();
 	LowerNewVectPgnAndTrans.erase(LowerNewVectPgnAndTrans.begin(), LowerNewVectPgnAndTrans.end());
 	UpperNewVectPgnAndTrans.erase(UpperNewVectPgnAndTrans.begin(), UpperNewVectPgnAndTrans.end());
 	return 1;
@@ -1594,7 +1595,7 @@ int radTPolyhedron::FindIntersectionWithFace(int FaceNo, TVector3d* CuttingPlane
 			SecondPo3d = FaceTransPtr->TrPoint(SecondPo3d);
 			if(!CheckIfTwoPointAlreadyMapped(FirstPo3d, SecondPo3d, VectOfTwoPoints3d, RelAbsTol))
 			{
-				TVector3d* TwoPoints3d = new TVector3d[2];
+				std::array<TVector3d, 2> TwoPoints3d;
 				TwoPoints3d[0] = FirstPo3d;
 				TwoPoints3d[1] = SecondPo3d;
 				VectOfTwoPoints3d.push_back(TwoPoints3d);
@@ -1619,7 +1620,7 @@ int radTPolyhedron::FindIntersectionWithFace(int FaceNo, TVector3d* CuttingPlane
 		
 		TVector3d FirstPo3d(FirstIntersectPoint2d.x, FirstIntersectPoint2d.y, FacePgnPtr->CoordZ);
 		TVector3d SecondPo3d(SecondIntersectPoint2d.x, SecondIntersectPoint2d.y, FacePgnPtr->CoordZ);
-		TVector3d* TwoPoints3d = new TVector3d[2];
+		std::array<TVector3d, 2> TwoPoints3d;
 		TwoPoints3d[0] = FaceTransPtr->TrPoint(FirstPo3d);
 		TwoPoints3d[1] = FaceTransPtr->TrPoint(SecondPo3d);
 		VectOfTwoPoints3d.push_back(TwoPoints3d);
@@ -1739,7 +1740,7 @@ int radTPolyhedron::CheckIfTwoPointAlreadyMapped(
 	short CaseFound = 0;
 	for(radTVectOfPtrToVect3d::iterator iter = VectOfTwoPoints3d.begin(); iter != VectOfTwoPoints3d.end(); ++iter)
 	{
-		TVector3d* aPair = *iter;
+		std::array<TVector3d, 2>& aPair = *iter;
 		TVector3d& p0 = aPair[0];
 		TVector3d& p1 = aPair[1];
 		if((((Abs(p0.x - pp0.x) < AbsZeroToler) && (Abs(p0.y - pp0.y) < AbsZeroToler) && (Abs(p0.z - pp0.z) < AbsZeroToler)) &&
@@ -1859,8 +1860,9 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 
 	radTVectOfPtrToVect3d::iterator VectOfPtrToVect3dIter = VectOfTwoPoints3d.begin();
 
-	TVector3d* P0Ptr = *VectOfPtrToVect3dIter;
-	TVector3d* P1Ptr = P0Ptr + 1;
+	std::array<TVector3d, 2>& firstPair = *VectOfPtrToVect3dIter;
+	TVector3d* P0Ptr = &firstPair[0];
+	TVector3d* P1Ptr = &firstPair[1];
 	++VectOfPtrToVect3dIter;
 
 	radTSend Send;
@@ -1894,8 +1896,9 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 
 		for(radTVectOfPtrToVect3d::iterator iter = VectOfPtrToVect3dIter; iter != VectOfTwoPoints3d.end(); ++iter)
 		{
-			TVector3d* TestPoint0Ptr = *iter;
-			TVector3d* TestPoint1Ptr = TestPoint0Ptr + 1;
+			std::array<TVector3d, 2>& testPair = *iter;
+			TVector3d* TestPoint0Ptr = &testPair[0];
+			TVector3d* TestPoint1Ptr = &testPair[1];
 			
 			//TVector3d BufVect00 = *TestPoint0Ptr - *P0Ptr;
 			//if(NormAbs(BufVect00) < AbsZeroToler) 
@@ -1946,8 +1949,9 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 			radTVectOfPtrToVect3d::iterator iterClosest = VectOfPtrToVect3dIter;
 			for(radTVectOfPtrToVect3d::iterator iter = VectOfPtrToVect3dIter; iter != VectOfTwoPoints3d.end(); ++iter)
 			{
-				TVector3d* TestPoint0Ptr = *iter;
-				TVector3d* TestPoint1Ptr = TestPoint0Ptr + 1;
+				std::array<TVector3d, 2>& testPairAlt = *iter;
+				TVector3d* TestPoint0Ptr = &testPairAlt[0];
+				TVector3d* TestPoint1Ptr = &testPairAlt[1];
 
 				auxR = *TestPoint0Ptr - *P0Ptr; testDistE2 = auxR.AmpE2();
 				if(curMinDistE2 > testDistE2) { curMinDistE2 = testDistE2; choiceCase = 0; iterClosest = iter;}
@@ -1963,19 +1967,23 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 			}
 			if(choiceCase == 0)
 			{
-				NewFaceFirstList[FirstCount++] = P0Ptr = (*iterClosest) + 1; //TestPoint1Ptr;
+				std::array<TVector3d, 2>& closestPair = *iterClosest;
+				NewFaceFirstList[FirstCount++] = P0Ptr = &closestPair[1]; //TestPoint1Ptr;
 			}
 			else if(choiceCase == 1)
 			{
-				NewFaceSecondList[SecondCount++] = P1Ptr = (*iterClosest) + 1; //TestPoint1Ptr;
+				std::array<TVector3d, 2>& closestPair = *iterClosest;
+				NewFaceSecondList[SecondCount++] = P1Ptr = &closestPair[1]; //TestPoint1Ptr;
 			}
 			else if(choiceCase == 2)
 			{
-				NewFaceFirstList[FirstCount++] = P0Ptr = *iterClosest; //TestPoint0Ptr;
+				std::array<TVector3d, 2>& closestPair = *iterClosest;
+				NewFaceFirstList[FirstCount++] = P0Ptr = &closestPair[0]; //TestPoint0Ptr;
 			}
 			else //if(choiceCase == 3)
 			{
-				NewFaceSecondList[SecondCount++] = P1Ptr = *iterClosest; //TestPoint0Ptr;
+				std::array<TVector3d, 2>& closestPair = *iterClosest;
+				NewFaceSecondList[SecondCount++] = P1Ptr = &closestPair[0]; //TestPoint0Ptr;
 			}
 			VectOfTwoPoints3d.erase(iterClosest);
 		}

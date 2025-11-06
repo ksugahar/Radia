@@ -133,6 +133,7 @@ class radTRelaxationMethNo_4 : public radTIterativeRelaxMeth {
 	std::vector<double> vmElemVolumeArray; //OC010604
 	double *mElemVolumeArray; //OC010604
 	std::vector<TVector3d> vmOptMagnArray;
+	std::vector<TVector3d> vmOptFieldArray;
 	TVector3d *mOptMagnArray, *mOptFieldArray;
 
 public:
@@ -235,7 +236,8 @@ public:
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
 			vmOptMagnArray.resize(AmOfMainEl);
 			mOptMagnArray = vmOptMagnArray.data();
-			mOptFieldArray = new TVector3d[AmOfMainEl];
+			vmOptFieldArray.resize(AmOfMainEl);
+			mOptFieldArray = vmOptFieldArray.data();
 		}
 	}
 	void StoreOptimValuesFromOldArrays()
@@ -267,7 +269,8 @@ public:
 	{
 		vmOptMagnArray.clear();
 		mOptMagnArray = 0;
-		if(mOptFieldArray != 0) { delete[] mOptFieldArray; mOptFieldArray = 0;}
+		vmOptFieldArray.clear();
+		mOptFieldArray = 0;
 	}
 };
 
@@ -390,7 +393,8 @@ public:
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
 			vmOptMagnArray.resize(AmOfMainEl);
 			mOptMagnArray = vmOptMagnArray.data();
-			mOptFieldArray = new TVector3d[AmOfMainEl];
+			vmOptFieldArray.resize(AmOfMainEl);
+			mOptFieldArray = vmOptFieldArray.data();
 		}
 	}
 	void StoreOptimValuesFromOldArrays()
@@ -422,7 +426,8 @@ public:
 	{
 		vmOptMagnArray.clear();
 		mOptMagnArray = 0;
-		if(mOptFieldArray != 0) { delete[] mOptFieldArray; mOptFieldArray = 0;}
+		vmOptFieldArray.clear();
+		mOptFieldArray = 0;
 	}
 **/
 };
