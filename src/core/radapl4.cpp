@@ -256,11 +256,13 @@ int radTApplication::SetUpPolyhedronsFromBaseFacePolygonsTri(double zc, const ch
 		if(pGroup == 0) { Send.ErrorMessage("Radia::Error900"); throw 0;}
 		radThg hgLoc(pGroup);
 
-		arTriVertPt1 = new TVector2d[numTriVertPt];
+		std::vector<TVector2d> vArTriVertPt1(numTriVertPt);
+		arTriVertPt1 = vArTriVertPt1.data();
 		TVector2d *t_arTriVertPt1 = arTriVertPt1, *t_arTriVertPt = arTriVertPt;
 		for(int i=0; i<numTriVertPt; i++) *(t_arTriVertPt1++) = *(t_arTriVertPt++);
 
-		arTriVertPt2 = new TVector2d[numTriVertPt];
+		std::vector<TVector2d> vArTriVertPt2(numTriVertPt);
+		arTriVertPt2 = vArTriVertPt2.data();
 
 		//radTPolygon *pBaseFacePgn1 = new radTPolygon(arPoints2d, lenArPoints2d), *pBaseFacePgn2=0;
 		//pBaseFacePgn1->CoordZ = 0;
@@ -425,8 +427,7 @@ int radTApplication::SetUpPolyhedronsFromBaseFacePolygonsTri(double zc, const ch
 		Initialize(); //return 0;
 		resOK = 0;
 	}
-	if(arTriVertPt1 != 0) delete[] arTriVertPt1;
-	if(arTriVertPt2 != 0) delete[] arTriVertPt2;
+	// RAII: vArTriVertPt1 and vArTriVertPt2 cleaned up automatically
 	return resOK;
 }
 
@@ -783,8 +784,8 @@ CreatingPolyhedronPiece:
 			StartPoIndForNewFace = (!FinalPassAfterCut)? (PrevVertexPoVectSize + 1) : ((int)(pVertexPointsVect->size()) - PtrsToPgnAndVect2d_p_1->AmOfPoints + 1);
 		}
 
-		TVector3d* ArrayOfVertexPoints = new TVector3d[AmOfVertexPoints];
-		if(ArrayOfVertexPoints == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+		std::vector<TVector3d> vArrayOfVertexPoints(AmOfVertexPoints);
+		TVector3d* ArrayOfVertexPoints = vArrayOfVertexPoints.data();
 
 		TVector3d* tArrayOfVertexPoints = ArrayOfVertexPoints;
 		for(int p=0; p<AmOfVertexPoints; p++)
@@ -814,8 +815,8 @@ CreatingPolyhedronPiece:
 		}
 
 		int AmOfFaces = CuttingIsNeeded? (PrevFacesVectSize + ((AmOfPoInLastFace > 2)? 1 : 0)) : (int)(pFacesVect->size());
-		int* ArrayOfFacesLengths = new int[AmOfFaces];
-		if(ArrayOfFacesLengths == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+		std::vector<int> vArrayOfFacesLengths(AmOfFaces);
+		int* ArrayOfFacesLengths = vArrayOfFacesLengths.data();
 		int** ArrayOfFaces = new int*[AmOfFaces];
 		if(ArrayOfFaces == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 
@@ -865,8 +866,7 @@ CreatingPolyhedronPiece:
 			}
 		}
 
-		if(ArrayOfVertexPoints != 0) delete[] ArrayOfVertexPoints;
-		if(ArrayOfFacesLengths != 0) delete[] ArrayOfFacesLengths;
+		// RAII: vArrayOfVertexPoints and vArrayOfFacesLengths cleaned up automatically
 		if(ArrayOfFaces != 0) 
 		{
 			for(int j=0; j<AmOfFacesToDelete; j++) delete[] (ArrayOfFaces[j]);
