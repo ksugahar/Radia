@@ -303,8 +303,12 @@ void radTSend::AddGeomPolygon(const TVector3d* Side, int lenSide, radTVectGeomPo
 	if((Side == 0) || (lenSide == 0)) return;
 
 	TVector3d* tSide = (TVector3d*)Side;
-	double* NewVertCoords = new double[lenSide*3];
-	double* tVertCoords = NewVertCoords;
+
+	radTGeomPolygon aNewGeomPolygon;
+	aNewGeomPolygon.vVertCoords.resize(lenSide*3);
+	aNewGeomPolygon.VertCoords = aNewGeomPolygon.vVertCoords.data();
+
+	double* tVertCoords = aNewGeomPolygon.VertCoords;
 
 	for(int i = 0; i < lenSide; i++)
 	{
@@ -322,8 +326,6 @@ void radTSend::AddGeomPolygon(const TVector3d* Side, int lenSide, radTVectGeomPo
 		tSide++;
 	}
 
-	radTGeomPolygon aNewGeomPolygon;
-	aNewGeomPolygon.VertCoords = NewVertCoords;
 	aNewGeomPolygon.Nv = lenSide;
 
 	if(!(radTg3dGraphPresent::DrawAttrStack).empty())

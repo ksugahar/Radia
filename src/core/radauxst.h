@@ -120,6 +120,7 @@ struct iterator_traits <radTPairOfDouble*> {
 //-------------------------------------------------------------------------
 
 struct radTGeomPolygon {
+	std::vector<double> vVertCoords; // Vector for ownership
 	double* VertCoords;
 	int Nv;
 	float ColRGB[3];
@@ -129,6 +130,12 @@ struct radTGeomPolygon {
 		VertCoords = 0;
 		Nv = 0;
 		ColRGB[0] = ColRGB[1] = ColRGB[2] = -1;
+	}
+
+	// Destructor to ensure cleanup (though vector handles it automatically)
+	~radTGeomPolygon()
+	{
+		// RAII: vector cleanup is automatic
 	}
 };
 
