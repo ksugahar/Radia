@@ -1158,13 +1158,19 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 		AmOfFacesOrig = AmOfFaces;
 		if(RadiusIsZeroAtTwoPoints) AmOfFaces--;
 
-		//ArrayOfFaces = new int*[AmOfFaces];
-		ArrayOfFaces = new int*[AmOfFacesOrig];
-		ArrayOfFaces[0] = new int[lenArrayOfPoints2d];
-		ArrayOfFaces[1] = new int[lenArrayOfPoints2d];
+		// RAII: Use std::vector for all allocations
+		std::vector<int*> vArrayOfFaces(AmOfFacesOrig);
+		std::vector<int> vArrayOfNumOfPoInFaces(AmOfFacesOrig);
+		std::vector<std::vector<int>> vFaceStorage(AmOfFacesOrig);
 
-		//ArrayOfNumOfPoInFaces = new int[AmOfFaces];
-		ArrayOfNumOfPoInFaces = new int[AmOfFacesOrig];
+		ArrayOfFaces = vArrayOfFaces.data();
+		ArrayOfNumOfPoInFaces = vArrayOfNumOfPoInFaces.data();
+
+		// Allocate base faces
+		vFaceStorage[0].resize(lenArrayOfPoints2d);
+		vFaceStorage[1].resize(lenArrayOfPoints2d);
+		ArrayOfFaces[0] = vFaceStorage[0].data();
+		ArrayOfFaces[1] = vFaceStorage[1].data();
 		ArrayOfNumOfPoInFaces[0] = lenArrayOfPoints2d;
 		ArrayOfNumOfPoInFaces[1] = lenArrayOfPoints2d;
 
@@ -1177,7 +1183,9 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 		int lenArrayOfPoints2d_mi_1 = lenArrayOfPoints2d - 1;
 		for(int j=0; j<lenArrayOfPoints2d; j++)
 		{
-			*tFaces = new int[4];
+			int faceIdx = 2 + j;
+			vFaceStorage[faceIdx].resize(4);
+			*tFaces = vFaceStorage[faceIdx].data();
 			tMantlePoints = *tFaces;
 			*tNumOfPoInFaces = 4;
 
@@ -1342,42 +1350,14 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 		}
 		SendingIsRequired = PrevSendingIsRequired;
 
-		// RAII: vVertexPointsArr cleaned up automatically
-		if((ArrayOfFaces != 0) && (AmOfFaces > 0)) 
-		{
-			int** tFaces = ArrayOfFaces;
-			//for(int i=0; i<AmOfFaces; i++)
-			for(int i=0; i<AmOfFacesOrig; i++)
-			{
-				if(*tFaces != 0) 
-				{ 
-					delete[] (*tFaces); *tFaces = 0;
-				}
-				tFaces++;
-			}
-			delete[] ArrayOfFaces;
-		}
-		if(ArrayOfNumOfPoInFaces != 0) delete[] ArrayOfNumOfPoInFaces;
-		// RAII: vArIndBase2 cleaned up automatically
+		// RAII: vVertexPointsArr, vFaceStorage, vArrayOfFaces, vArrayOfNumOfPoInFaces, vArIndBase2 cleaned up automatically
 
-		if(SendingIsRequired) Send.Int(IndPolyhedr); 
+		if(SendingIsRequired) Send.Int(IndPolyhedr);
 		return IndPolyhedr;
 	}
 	catch(...)
 	{
-		// RAII: vVertexPointsArr cleaned up automatically
-		if((ArrayOfFaces != 0) && (AmOfFaces > 0)) 
-		{
-			int** tFaces = ArrayOfFaces;
-			for(int i=0; i<AmOfFaces; i++)
-			{
-				if(*tFaces != 0) { delete[] (*tFaces); *tFaces = 0;}
-				tFaces++;
-			}
-			delete[] ArrayOfFaces;
-		}
-		if(ArrayOfNumOfPoInFaces != 0) delete[] ArrayOfNumOfPoInFaces;
-		// RAII: vArIndBase2 cleaned up automatically
+		// RAII: All vectors cleaned up automatically on exception
 
 		Initialize(); return 0;
 	}
