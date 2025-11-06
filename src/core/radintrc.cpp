@@ -177,8 +177,7 @@ void radTInteraction::DeallocateMemory() //OC27122019
 	g3dExternPtrVect.erase(g3dExternPtrVect.begin(), g3dExternPtrVect.end()); //OC240408, to enable current scaling/update
 
 	// Automatic cleanup via RAII for vector arrays
-
-	if(RelaxSubIntervArray != nullptr) delete[] RelaxSubIntervArray;
+	// RelaxSubIntervArray: automatic cleanup via vRelaxSubIntervArray
 
 	if(mKeepTransData) //OC021103
 	{
@@ -386,7 +385,11 @@ void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded)
 	int MaxSubIntervArraySize = 2 * ((int)(RelaxSubIntervConstrVect.size())) + 1; // New
 	//try
 	//{
-		if(MaxSubIntervArraySize > 1) RelaxSubIntervArray = new radTRelaxSubInterval[MaxSubIntervArraySize]; // New
+		if(MaxSubIntervArraySize > 1)
+		{
+			vRelaxSubIntervArray.resize(MaxSubIntervArraySize);
+			RelaxSubIntervArray = vRelaxSubIntervArray.data();
+		}
 	//}
 	//catch (radTException* radExceptionPtr)
 	//{

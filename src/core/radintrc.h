@@ -153,6 +153,7 @@ class radTInteraction : public radTg {
 	TVector3d* AuxOldMagnArray;
 	TVector3d* AuxOldFieldArray;
 
+	std::vector<radTRelaxSubInterval> vRelaxSubIntervArray;
 	radTRelaxSubInterval* RelaxSubIntervArray; // New 
 	radTVectPtrg3dRelax g3dRelaxPtrVect;
 	radTVectPtr_g3d g3dExternPtrVect;
