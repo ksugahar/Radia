@@ -537,7 +537,7 @@ public:
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, double* RelaxStatusParamArray);
 	void SetupMainInteractionData(const radThg& hg, const radTCompCriterium& CompCrit);
-	int FillInSubMatrixArrays(double PrecOnMagnetiz, int*& TotArrSubMatrNos, int*& SubMatrLengths, int& AmOfSubMatr);
+	int FillInSubMatrixArrays(double PrecOnMagnetiz, int*& TotArrSubMatrNos, int*& SubMatrLengths, int& AmOfSubMatr, std::vector<int>& vSubMatrLengths);
 	void FindSubMatricesToWhichElemCanBeAdded(radTlAuxIndNorm* pAuxIndNorm, int ApproxAmOfElemInSubMatr, radTvInt* ArrVectSubMatrNos, int AmOfSubMatr, radTvInt& VectIndPossibleSubMatr);
 	int FindSubMatrWithSmallestNumOfElem(radTvInt& VectIndPossibleSubMatr, radTvInt* ArrVectSubMatrNos, int AmOfSubMatr);
 	int RelaxCurrentSubMatrix(int* pTotArrSubMatrNos, int SubMatrSize, double PrecOnMagnetizE2, int MaxIterNumForSubMatr);

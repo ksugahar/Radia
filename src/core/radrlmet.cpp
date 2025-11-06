@@ -1337,9 +1337,11 @@ int radTRelaxationMethNo_7::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	if(AmOfRelaxElem <= 0) return 0;
 
 	int AmOfSubMatr = 0;
-	int *TotArrSubMatrNos = new int[AmOfRelaxElem];
+	std::vector<int> vTotArrSubMatrNos(AmOfRelaxElem);
+	int *TotArrSubMatrNos = vTotArrSubMatrNos.data();
+	std::vector<int> vSubMatrLengths;
 	int *SubMatrLengths=nullptr;
-	int AmOfInitIter = FillInSubMatrixArrays(PrecOnMagnetiz, TotArrSubMatrNos, SubMatrLengths, AmOfSubMatr);
+	int AmOfInitIter = FillInSubMatrixArrays(PrecOnMagnetiz, TotArrSubMatrNos, SubMatrLengths, AmOfSubMatr, vSubMatrLengths);
 	if((TotArrSubMatrNos == nullptr) || (SubMatrLengths == nullptr) || (AmOfSubMatr <= 0)) return 0;
 
 	mArrAuxQuasiExtField = new TVector3d[AmOfRelaxElem];
@@ -1382,11 +1384,11 @@ int radTRelaxationMethNo_7::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	}
 	catch(int ErrNo)
 	{
-		DeleteArrays_AutoRelax(TotArrSubMatrNos, SubMatrLengths);
+		// RAII: automatic cleanup via vTotArrSubMatrNos and vSubMatrLengths
 		throw ErrNo;
 	}
 
-	DeleteArrays_AutoRelax(TotArrSubMatrNos, SubMatrLengths);
+	// RAII: automatic cleanup via vTotArrSubMatrNos and vSubMatrLengths
 	return IterCount;
 }
 
@@ -1530,7 +1532,7 @@ int radTRelaxationMethNo_7::RelaxCurrentSubMatrix(int* pTotArrSubMatrNos, int Su
 
 //-------------------------------------------------------------------------
 
-int radTRelaxationMethNo_7::FillInSubMatrixArrays(double PrecOnMagnetiz, int*& TotArrSubMatrNos, int*& SubMatrLengths, int& AmOfSubMatr)
+int radTRelaxationMethNo_7::FillInSubMatrixArrays(double PrecOnMagnetiz, int*& TotArrSubMatrNos, int*& SubMatrLengths, int& AmOfSubMatr, std::vector<int>& vSubMatrLengths)
 {
 	if(IntrctPtr == nullptr) return 0;
 	int AmOfRelaxElem = IntrctPtr->OutAmOfRelaxObjs();
@@ -1643,7 +1645,8 @@ int radTRelaxationMethNo_7::FillInSubMatrixArrays(double PrecOnMagnetiz, int*& T
 		tAuxIndNorm++;
 	}
 
-	SubMatrLengths = new int[AmOfSubMatr];
+	vSubMatrLengths.resize(AmOfSubMatr);
+	SubMatrLengths = vSubMatrLengths.data();
 	CopyVectSubMatrDataToArrays(ArrVectSubMatrNos, AmOfSubMatr, TotArrSubMatrNos, SubMatrLengths);
 
 	if(ArrAuxIndNorm != nullptr)
