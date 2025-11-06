@@ -43,6 +43,7 @@ class radTSubdividedRecMag : public radTGroup, public radTRecMag {
 	int CenPoLoopCounter, IntrcMatrConstrCounter, FormIntrctMembCounter;
 	radTmhg::const_iterator FormIntrctMembIter;
 	radTVectPtrVect3d VectOfTsComputed, VectOfSsComputed;
+	vector<vector<TVector3d>> VectOfTsStorage, VectOfSsStorage;
 	short GroupMembersArePureRecMags;
 
 public:
