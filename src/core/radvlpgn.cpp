@@ -2222,8 +2222,8 @@ int radTPolyhedron::SubdivideItselfByParPlanes(double* InSubdivArray, int AmOfDi
 		if(AmOfPieces > 1)
 		{
 			int AmOfPieces_mi_1 = AmOfPieces - 1;
-			TVector3d* PointsOnCuttingPlanes = new TVector3d[AmOfPieces_mi_1];
-			if(PointsOnCuttingPlanes == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+			std::vector<TVector3d> vPointsOnCuttingPlanes(AmOfPieces_mi_1);
+			TVector3d* PointsOnCuttingPlanes = vPointsOnCuttingPlanes.data();
 
 			// The following may change the PlanesNormal
 			if(!DeterminePointsOnCuttingPlanes(PlanesNormal, SubdivisionParam, SubdInLocFrame, PointsOnCuttingPlanes))
@@ -2282,7 +2282,7 @@ int radTPolyhedron::SubdivideItselfByParPlanes(double* InSubdivArray, int AmOfDi
 				OneDirectionAlreadyPassed = 1;
 				LocElemCount = (int)(((radTGroup*)(AuxGroupHandle.rep))->GroupMapOfHandlers.size());
 			}
-			delete[] PointsOnCuttingPlanes;
+			// RAII: automatic cleanup via vPointsOnCuttingPlanes
 		}
 	}
 	if(GroupInPlaceOfThisPtr != 0) 
@@ -2883,8 +2883,8 @@ int radTPolyhedron::SubdivideItselfByEllipticCylinder(double* SubdivArray, radTC
 		radThg OldAuxGroupHandle = AuxGroupHandle;
 		radTvhg VectOfHgChanged;
 		int AmOfPieces_mi_1 = int(kz) - 1;
-		TVector3d* PointsOnCuttingPlanes = new TVector3d[AmOfPieces_mi_1];
-		if(PointsOnCuttingPlanes==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+		std::vector<TVector3d> vPointsOnCuttingPlanes(AmOfPieces_mi_1);
+		TVector3d* PointsOnCuttingPlanes = vPointsOnCuttingPlanes.data();
 
 		const double AbsZeroTol = 5.E-12;
 		double DelZ = Limits[3] - Limits[2];
@@ -2912,7 +2912,7 @@ int radTPolyhedron::SubdivideItselfByEllipticCylinder(double* SubdivArray, radTC
 			radTApplication* Loc_radPtr = 0; // No operations on Global Container !
 			pGroup->FlattenNestedStructure(Loc_radPtr, RespectKeys);
 		}
-		if(PointsOnCuttingPlanes!=0) delete[] PointsOnCuttingPlanes;
+		// RAII: automatic cleanup via vPointsOnCuttingPlanes
 	}
 
 	if(AuxGroupHandle.rep != this) //OC030504
