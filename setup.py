@@ -16,7 +16,7 @@ import shutil
 import sys
 
 # Read version from pyproject.toml
-version = "1.0.4"
+version = "1.0.5"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
