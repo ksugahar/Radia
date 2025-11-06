@@ -45,7 +45,9 @@ class radTIOBuffer /*: public ErrorWarning*/ {
 	double *DoubleBufferMulti;
 	int *DimsDoubleBufferMulti, NumDimsDoubleBufferMulti;
 
+	std::vector<int> vIntBufferMulti;
 	int *IntBufferMulti;
+	std::vector<int> vDimsIntBufferMulti;
 	int *DimsIntBufferMulti, NumDimsIntBufferMulti;
 
 	map<int, double*, less<int> > m_DoubleBufferMulti; //OC04112019
@@ -115,10 +117,10 @@ public:
 	}
 	void StoreMultiDimArrayOfInt(int* Array, int* Dims, int NumDims)
 	{
-		DimsIntBufferMulti = new int[NumDims];
-		if(DimsIntBufferMulti == 0) { StoreErrorMessage("Radia::Error900"); return;}
+		vDimsIntBufferMulti.resize(NumDims);
+		DimsIntBufferMulti = vDimsIntBufferMulti.data();
 		long TotLen = 1;
-		for(int i=0; i<NumDims; i++) 
+		for(int i=0; i<NumDims; i++)
 		{
 			int aDim = Dims[i];
 			TotLen *= aDim;
@@ -126,8 +128,8 @@ public:
 		}
 		NumDimsIntBufferMulti = NumDims;
 
-		IntBufferMulti = new int[TotLen];
-		if(IntBufferMulti == 0) { StoreErrorMessage("Radia::Error900"); return;}
+		vIntBufferMulti.resize(TotLen);
+		IntBufferMulti = vIntBufferMulti.data();
 		int *tIntBufferMulti = IntBufferMulti;
 		int *tArray = Array;
 		for(int k=0; k<TotLen; k++) *(tIntBufferMulti++) = *(tArray++);
@@ -549,8 +551,11 @@ private:
 
 	void EraseIntBufferMulti()
 	{
-		if(IntBufferMulti != 0) delete[] IntBufferMulti; IntBufferMulti = 0;
-		if(DimsIntBufferMulti != 0) delete[] DimsIntBufferMulti; DimsIntBufferMulti = 0;
+		// RAII: vIntBufferMulti and vDimsIntBufferMulti cleaned up automatically
+		vIntBufferMulti.clear();
+		IntBufferMulti = 0;
+		vDimsIntBufferMulti.clear();
+		DimsIntBufferMulti = 0;
 		NumDimsIntBufferMulti = 0;
 	}
 	void EraseDoubleBufferMulti()
