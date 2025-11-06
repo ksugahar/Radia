@@ -418,7 +418,9 @@ class radTNonlinearIsotropMaterial : public radTMaterial {
 	double Ms[3], ks[3];
 	int lenMs_ks;
 
+	std::vector<TVector2d> vgArrayHM;
 	TVector2d* gArrayHM;
+	std::vector<double> vgdMdH;
 	double* gdMdH;
 	int gLenArrayHM;
 
@@ -471,8 +473,8 @@ public:
 		inStr >> cTest;
 		if(cTest > 0)
 		{
-			gArrayHM = new TVector2d[gLenArrayHM];
-			if(gArrayHM == 0) throw 0;
+			vgArrayHM.resize(gLenArrayHM);
+			gArrayHM = vgArrayHM.data();
 			TVector2d *t_gArrayHM = gArrayHM;
 			for(int i=0; i<gLenArrayHM; i++) inStr >> (*(t_gArrayHM++));
 		}
@@ -481,8 +483,8 @@ public:
 		inStr >> cTest;
 		if(cTest > 0)
 		{
-			gdMdH = new double[gLenArrayHM];
-			if(gdMdH == 0) throw 0;
+			vgdMdH.resize(gLenArrayHM);
+			gdMdH = vgdMdH.data();
 			double *t_gdMdH = gdMdH;
 			for(int i=0; i<gLenArrayHM; i++) inStr >> (*(t_gdMdH++));
 		}
@@ -566,18 +568,21 @@ public:
 	{
 		DeallocateArrays();
 		gLenArrayHM = InLenArrayHM;
-		
-		gArrayHM = new TVector2d[gLenArrayHM];
-		if(gArrayHM == 0) return 0;
 
-		gdMdH = new double[gLenArrayHM];
-		if(gdMdH == 0) return 0;
+		vgArrayHM.resize(gLenArrayHM);
+		gArrayHM = vgArrayHM.data();
+
+		vgdMdH.resize(gLenArrayHM);
+		gdMdH = vgdMdH.data();
 		return 1;
 	}
 	void DeallocateArrays()
 	{
-		if(gArrayHM != 0) delete[] gArrayHM; gArrayHM = 0;
-		if(gdMdH != 0) delete[] gdMdH; gdMdH = 0;
+		// RAII: vgArrayHM and vgdMdH cleaned up automatically
+		vgArrayHM.clear();
+		gArrayHM = 0;
+		vgdMdH.clear();
+		gdMdH = 0;
 		gLenArrayHM = 0;
 	}
 
