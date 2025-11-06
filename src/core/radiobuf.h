@@ -54,12 +54,15 @@ class radTIOBuffer /*: public ErrorWarning*/ {
 
 	map<int, double*, less<int> > m_DoubleBufferMulti; //OC04112019
 	map<int, vector<int>, less<int> > m_DimsDoubleBufferMulti; //OC04112019
+	map<int, vector<double>, less<int> > m_VectDoubleBufferMulti; // Vector storage for ownership
 
 	map<int, float*, less<int> > m_FloatBufferMulti; //OC04112019
 	map<int, vector<int>, less<int> > m_DimsFloatBufferMulti; //OC04112019
+	map<int, vector<float>, less<int> > m_VectFloatBufferMulti; // Vector storage for ownership
 
 	map<int, int*, less<int> > m_IntBufferMulti; //OC04112019
 	map<int, vector<int>, less<int> > m_DimsIntBufferMulti; //OC04112019
+	map<int, vector<int>, less<int> > m_VectIntBufferMulti; // Vector storage for ownership
 
 	map<int, vector<int>, less<int> > m_IntBuffer; //OC04112019
 
@@ -180,10 +183,13 @@ public:
 		for(int i=0; i<Npg; i++) Nv += GeomPolygons[i].Nv;
 		if(Nv <= 0) return;
 
-		double *arVertCoord = new double[3*Nv];
+		std::vector<double> vArVertCoord(3*Nv);
+		double *arVertCoord = vArVertCoord.data();
 		//VertInd = new int[Nv];
-		int *arPgLen = new int[Npg];
-		float *arPgColors = new float[3*Npg];
+		std::vector<int> vArPgLen(Npg);
+		int *arPgLen = vArPgLen.data();
+		std::vector<float> vArPgColors(3*Npg);
+		float *arPgColors = vArPgColors.data();
 
 		double *tVertCoord = arVertCoord;
 		//int *tVertInd = VertInd;
@@ -213,15 +219,18 @@ public:
 			}
 		}
 
-		m_DoubleBufferMulti[key] = arVertCoord;
+		m_VectDoubleBufferMulti[key] = std::move(vArVertCoord);
+		m_DoubleBufferMulti[key] = m_VectDoubleBufferMulti[key].data();
 		vector<int> vNumVertCoord; vNumVertCoord.push_back(3*Nv);
 		m_DimsDoubleBufferMulti[key] = vNumVertCoord;
 
-		m_IntBufferMulti[key] = arPgLen;
+		m_VectIntBufferMulti[key] = std::move(vArPgLen);
+		m_IntBufferMulti[key] = m_VectIntBufferMulti[key].data();
 		vector<int> vNumPg; vNumPg.push_back(Npg);
 		m_DimsIntBufferMulti[key] = vNumPg;
 
-		m_FloatBufferMulti[key] = arPgColors;
+		m_VectFloatBufferMulti[key] = std::move(vArPgColors);
+		m_FloatBufferMulti[key] = m_VectFloatBufferMulti[key].data();
 		vector<int> vNumPgCol; vNumPgCol.push_back(3*Npg);
 		m_DimsFloatBufferMulti[key] = vNumPgCol;
 		
