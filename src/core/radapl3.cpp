@@ -61,10 +61,17 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPo
 		radTField Field(FieldKey, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 		g3dPtr->B_genComp(&Field);
 
+		std::vector<radTField> vFieldArray;
+		std::vector<double> vArgArray;
 		if(Np>1)
 		{
-			FieldArray = new radTField[Np];
-			if(ArgumentNeeded) ArgArray = new double[Np];
+			vFieldArray.resize(Np);
+			FieldArray = vFieldArray.data();
+			if(ArgumentNeeded)
+			{
+				vArgArray.resize(Np);
+				ArgArray = vArgArray.data();
+			}
 
 			FieldArray[0] = Field;
 			TVector3d TranslVect = (1./double(Np-1))*(FiObsPoiVect-StObsPoiVect);
@@ -87,18 +94,11 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPo
 		else FieldArray = &Field;
 
 		if(SendingIsRequired) Send.OutFieldCompRes(FieldChar, FieldArray, ArgArray, Np);
-		if(Np>1) 
-		{
-			delete[] FieldArray;
-			FieldArray = nullptr;
-			if(ArgumentNeeded) delete[] ArgArray;
-			ArgArray = nullptr;
-		}
+		// RAII: vFieldArray and vArgArray cleaned up automatically
 	}
-	catch(...) 
-	{ 
-		if(FieldArray != nullptr) delete[] FieldArray;
-		if(ArgArray != nullptr) delete[] ArgArray;
+	catch(...)
+	{
+		// RAII: vFieldArray and vArgArray cleaned up automatically
 		Initialize(); return;
 	}
 }
@@ -118,8 +118,8 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, radTVectorOfVec
 		if(!ValidateFieldChar(FieldChar, &FieldKey)) return;
 
 		long Np = (long)(VectorOfVector3d.size());
-		FieldArray = new radTField[Np];
-		if(FieldArray == 0) { Send.ErrorMessage("Radia::Error900"); return;}
+		std::vector<radTField> vFieldArray(Np);
+		FieldArray = vFieldArray.data();
 		radTField* tField = FieldArray;
 
 		TVector3d ZeroVect(0.,0.,0.);
@@ -131,15 +131,11 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, radTVectorOfVec
 		}
 
 		if(SendingIsRequired) OutFieldCompRes(FieldChar, FieldArray, Np, VectInputCell);
-		if(FieldArray != 0) 
-		{
-			delete[] FieldArray;
-			FieldArray = 0;
-		}
+		// RAII: vFieldArray cleaned up automatically
 	}
-	catch(...) 
-	{ 
-		if(FieldArray != 0) delete[] FieldArray;
+	catch(...)
+	{
+		// RAII: vFieldArray cleaned up automatically
 		Initialize(); return;
 	}
 }
@@ -159,10 +155,11 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double** Points
 		radTFieldKey FieldKey;
 		if(!ValidateFieldChar(FieldChar, &FieldKey)) return;
 
+		std::vector<radTField> vFieldArray;
 		if(m_nProcMPI < 2) //OC01012020
 		{
-			FieldArray = new radTField[Np];
-			if(FieldArray == 0) { Send.ErrorMessage("Radia::Error900"); return;}
+			vFieldArray.resize(Np);
+			FieldArray = vFieldArray.data();
 			radTField* tField = FieldArray;
 
 			TVector3d ZeroVect(0.,0.,0.), v;
@@ -177,12 +174,12 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double** Points
 				g3dPtr->B_genComp(&(FieldArray[i]));
 			}
 			if(SendingIsRequired) OutFieldCompRes(FieldChar, FieldArray, Np);
-			if(FieldArray != 0) { delete[] FieldArray; FieldArray = 0;}
+			// RAII: vFieldArray cleaned up automatically
 		}
 	}
-	catch(...) 
-	{ 
-		if(FieldArray != 0) delete[] FieldArray;
+	catch(...)
+	{
+		// RAII: vFieldArray cleaned up automatically
 		if(arFldVals != 0) delete[] arFldVals; //OC02012020
 		if(arFldValsRecv != 0) delete[] arFldValsRecv; //OC02012020
 		Initialize(); return;
@@ -798,7 +795,8 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 
 		TVector3d ZeroVect(0.,0.,0.);
 		arr_pField = new radTField*[TwoNp];
-		arr_resField = new radTField[Np];
+		std::vector<radTField> vArr_resField(Np);
+		arr_resField = vArr_resField.data();
 
 		radTField **tField = arr_pField;
 		for(int s=0; s<TwoNp; s++) *(tField++) = 0;
@@ -869,7 +867,7 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 			for(int i=0; i<TwoNp; i++) if(arr_pField[i] != 0) delete arr_pField[i];
 			delete[] arr_pField;
 		}
-		if(arr_resField != 0) delete[] arr_resField;
+		// RAII: vArr_resField cleaned up automatically
 	}
 	catch(...) 
 	{ 
@@ -878,7 +876,7 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 			for(int i=0; i<TwoNp; i++) if(arr_pField[i] != 0) delete arr_pField[i];
 			delete[] arr_pField;
 		}
-		if(arr_resField != 0) delete[] arr_resField;
+		// RAII: vArr_resField cleaned up automatically
 		Initialize(); return;
 	}
 }

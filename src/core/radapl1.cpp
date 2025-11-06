@@ -1104,7 +1104,8 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 		else RadVect2 = AzAxVect0;
 
 		int AmOfVertexPoints = 2*lenArrayOfPoints2d;
-		VertexPointsArr = new TVector3d[AmOfVertexPoints];
+		std::vector<TVector3d> vVertexPointsArr(AmOfVertexPoints);
+		VertexPointsArr = vVertexPointsArr.data();
 
 		bool RadiusOverlaps = false;
 		bool RadiusIsZeroAtOnePoint = false, RadiusIsZeroAtTwoPoints = false;
@@ -1341,7 +1342,7 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 		}
 		SendingIsRequired = PrevSendingIsRequired;
 
-		if(VertexPointsArr != 0) delete[] VertexPointsArr;
+		// RAII: vVertexPointsArr cleaned up automatically
 		if((ArrayOfFaces != 0) && (AmOfFaces > 0)) 
 		{
 			int** tFaces = ArrayOfFaces;
@@ -1364,7 +1365,7 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 	}
 	catch(...)
 	{
-		if(VertexPointsArr != 0) delete[] VertexPointsArr;
+		// RAII: vVertexPointsArr cleaned up automatically
 		if((ArrayOfFaces != 0) && (AmOfFaces > 0)) 
 		{
 			int** tFaces = ArrayOfFaces;
@@ -1992,8 +1993,8 @@ int radTApplication::SetFlmCur(double I, TVector3d* ArrayOfPoints, int lenArrayO
 		else
 		{
 			int AmOfFlmLinCur = lenArrayOfPoints-1;
-			int* ArrayOfFlmLinCur = nullptr;
-			ArrayOfFlmLinCur = new int[AmOfFlmLinCur];
+			std::vector<int> vArrayOfFlmLinCur(AmOfFlmLinCur);
+			int* ArrayOfFlmLinCur = vArrayOfFlmLinCur.data();
 			for(int i=0; i<AmOfFlmLinCur; i++)
 			{
 				radThg hg(new radTFlmLinCur(ArrayOfPoints[i], ArrayOfPoints[i+1], I));
