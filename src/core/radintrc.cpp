@@ -389,7 +389,8 @@ void radTInteraction::NestedFor_Trans(radTrans* BaseTransPtr, const radTlphgPtr:
 
 void radTInteraction::FillInMainTransPtrArray()
 {
-	MainTransPtrArray = new radTrans*[AmOfMainElem];
+	vMainTransPtrArray.resize(AmOfMainElem);
+	MainTransPtrArray = vMainTransPtrArray.data();
 	FillInMainTransOnly = 1;
 
 	for(int i=0; i<AmOfMainElem; i++)
@@ -1368,7 +1369,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> size_vIndMainTrans;
 	if(size_vIndMainTrans > 0)
 	{
-		MainTransPtrArray = new radTrans*[AmOfMainElem];
+		vMainTransPtrArray.resize(AmOfMainElem);
+		MainTransPtrArray = vMainTransPtrArray.data();
 
 		for(int i=0; i<AmOfMainElem; i++)
 		{

@@ -164,6 +164,7 @@ class radTInteraction : public radTg {
 	radVectPtr_lphgPtr IntVectOfPtrToListsOfTransPtr;
 	radVectPtr_lphgPtr ExtVectOfPtrToListsOfTransPtr;
 	radTVectRelaxSubInterval RelaxSubIntervConstrVect; // New
+	std::vector<radTrans*> vMainTransPtrArray;
 	radTrans** MainTransPtrArray;
 
 	radTCast Cast;
@@ -344,14 +345,14 @@ inline void radTInteraction::DestroyMainTransPtrArray()
 		radTrans* MainTransPtr = MainTransPtrArray[i];
 		if(MainTransPtr != 0)
 		{
-			if(Cast.IdentTransCast(MainTransPtr)==0) 
+			if(Cast.IdentTransCast(MainTransPtr)==0)
 			{
 				delete (MainTransPtr);
 				MainTransPtr = 0;
 			}
 		}
 	}
-	delete[] MainTransPtrArray;
+	// RAII: automatic cleanup via vMainTransPtrArray
 	MainTransPtrArray = 0;
 }
 
