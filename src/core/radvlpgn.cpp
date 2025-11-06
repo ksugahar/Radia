@@ -242,11 +242,10 @@ int radTPolyhedron::DetermineActualFacesNormals(TVector3d* ArrayOfPoints, int Am
 	}
 	int ii = NoOfFirstGoodFace;
 
-	char* GenFacesPassed = new char[AmOfFaces];
-	if(GenFacesPassed == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return 0;}
-	char* PossibleNextFaces = new char[AmOfFaces];
-	if(PossibleNextFaces == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return 0;}
-	for(int p=0; p<AmOfFaces; p++) GenFacesPassed[p] = 0;
+	std::vector<char> vGenFacesPassed(AmOfFaces, 0);
+	char* GenFacesPassed = vGenFacesPassed.data();
+	std::vector<char> vPossibleNextFaces(AmOfFaces);
+	char* PossibleNextFaces = vPossibleNextFaces.data();
 
 	for(i=0; i<AmOfFaces; i++)
 	{
@@ -337,8 +336,7 @@ int radTPolyhedron::DetermineActualFacesNormals(TVector3d* ArrayOfPoints, int Am
 	}
 	DeleteAuxInputArrays(SegmentPassed);
 
-	if(GenFacesPassed != 0) delete[] GenFacesPassed;
-	if(PossibleNextFaces != 0) delete[] PossibleNextFaces;
+	// RAII: automatic cleanup via vGenFacesPassed and vPossibleNextFaces
 	return 1;
 }
 
