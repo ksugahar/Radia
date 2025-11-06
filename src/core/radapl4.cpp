@@ -606,10 +606,11 @@ int radTApplication::SetUpOnePolyhedronSegment(radTPtrsToPgnAndVect2d* PtrsToPgn
 	char OnlyOnePointInUpperLayer = (PtrsToPgnAndVect2d_p_1->AmOfPoints == 1);
 	char OnlyOnePointInLowerLayer = (PtrsToPgnAndVect2d->AmOfPoints == 1);
 
+	std::vector<radTVertexPointLiaison> vNextLayerPointLinks;
 	if(!CurrentPartCanOnlyBeTetrahedron)
 	{
-		radTVertexPointLiaison* NextLayerPointLinks = new radTVertexPointLiaison[pNextVect2dVect->size()];
-		if(NextLayerPointLinks == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+		vNextLayerPointLinks.resize(pNextVect2dVect->size());
+		radTVertexPointLiaison* NextLayerPointLinks = vNextLayerPointLinks.data();
 
 		int AmOfBasePoints = (int)(pBaseVect2dVect->size());
 		int AmOfBasePoints_m_1 = AmOfBasePoints - 1;
@@ -758,7 +759,7 @@ int radTApplication::SetUpOnePolyhedronSegment(radTPtrsToPgnAndVect2d* PtrsToPgn
 			CuttingIsNeeded = 0;
 		}
 
-		if(NextLayerPointLinks != 0) delete[] NextLayerPointLinks;
+		// RAII: vNextLayerPointLinks cleaned up automatically
 	}
 
 	char FinalPassAfterCut = 0;
