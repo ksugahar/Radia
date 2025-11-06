@@ -123,13 +123,16 @@ struct radTRelaxAuxData { //OC140103
 class radTRelaxationMethNo_4 : public radTIterativeRelaxMeth {
 	
 	double InstMisfitMe2, DesiredPrecOnMagnetizE2;
+	std::vector<radTRelaxAuxData> vmpRelaxAuxData; //OC140103
 	radTRelaxAuxData *mpRelaxAuxData; //OC140103
 
 	double mRelaxPar, mRelaxParMin, mRelaxParModFact, mMisfitE2RatToStartModifRelaxPar, mSysEnergy, mSysEnergyMin;
 	int mNumConvergPasses, mNumConvergPassesMax, mNumDivergPasses, mNumDivergPassesMax, mMethNo, mIterCount;
 	bool mKeepPrevOldValues, mBadConverg;
 
+	std::vector<double> vmElemVolumeArray; //OC010604
 	double *mElemVolumeArray; //OC010604
+	std::vector<TVector3d> vmOptMagnArray;
 	TVector3d *mOptMagnArray, *mOptFieldArray;
 
 public:
@@ -183,7 +186,8 @@ public:
 		DeleteAuxArrays();
 
 		long AmOfMainEl = IntrctPtr->AmOfMainElem;
-		mpRelaxAuxData = new radTRelaxAuxData[AmOfMainEl];
+		vmpRelaxAuxData.resize(AmOfMainEl);
+		mpRelaxAuxData = vmpRelaxAuxData.data();
 
 		radTRelaxAuxData *tRelaxAuxData = mpRelaxAuxData;
 		for(long i=0; i<AmOfMainEl; i++) 
@@ -193,7 +197,8 @@ public:
 	}
 	void DeleteAuxArrays() //OC140103
 	{
-		if(mpRelaxAuxData != 0) { delete[] mpRelaxAuxData; mpRelaxAuxData = 0;}
+		vmpRelaxAuxData.clear();
+		mpRelaxAuxData = 0;
 	}
 
 	void SetupElemVolumeArray()
@@ -203,7 +208,8 @@ public:
 		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
-			mElemVolumeArray = new double[AmOfMainEl];
+			vmElemVolumeArray.resize(AmOfMainEl);
+			mElemVolumeArray = vmElemVolumeArray.data();
 
 			double *tElemVolumeArray = mElemVolumeArray;
 			radTg3dRelax* g3dRelaxPtr = nullptr;
@@ -216,7 +222,8 @@ public:
 	}
 	void DeleteElemVolumeArray() //OC140103
 	{
-		if(mElemVolumeArray != 0) { delete[] mElemVolumeArray; mElemVolumeArray = 0;}
+		vmElemVolumeArray.clear();
+		mElemVolumeArray = 0;
 	}
 
 	void SetupOptimValuesArrays()
@@ -226,7 +233,8 @@ public:
 		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
-			mOptMagnArray = new TVector3d[AmOfMainEl];
+			vmOptMagnArray.resize(AmOfMainEl);
+			mOptMagnArray = vmOptMagnArray.data();
 			mOptFieldArray = new TVector3d[AmOfMainEl];
 		}
 	}
@@ -257,7 +265,8 @@ public:
 	}
 	void DeleteOptimValuesArrays()
 	{
-		if(mOptMagnArray != 0) { delete[] mOptMagnArray; mOptMagnArray = 0;}
+		vmOptMagnArray.clear();
+		mOptMagnArray = 0;
 		if(mOptFieldArray != 0) { delete[] mOptFieldArray; mOptFieldArray = 0;}
 	}
 };
@@ -332,7 +341,8 @@ public:
 		DeleteAuxArrays();
 
 		long AmOfMainEl = IntrctPtr->AmOfMainElem;
-		mpRelaxAuxData = new radTRelaxAuxData[AmOfMainEl];
+		vmpRelaxAuxData.resize(AmOfMainEl);
+		mpRelaxAuxData = vmpRelaxAuxData.data();
 
 		radTRelaxAuxData *tRelaxAuxData = mpRelaxAuxData;
 		for(long i=0; i<AmOfMainEl; i++) 
@@ -342,7 +352,8 @@ public:
 	}
 	void DeleteAuxArrays() //OC140103
 	{
-		if(mpRelaxAuxData != 0) { delete[] mpRelaxAuxData; mpRelaxAuxData = 0;}
+		vmpRelaxAuxData.clear();
+		mpRelaxAuxData = 0;
 	}
 
 	void SetupElemVolumeArray()
@@ -352,7 +363,8 @@ public:
 		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
-			mElemVolumeArray = new double[AmOfMainEl];
+			vmElemVolumeArray.resize(AmOfMainEl);
+			mElemVolumeArray = vmElemVolumeArray.data();
 
 			double *tElemVolumeArray = mElemVolumeArray;
 			radTg3dRelax* g3dRelaxPtr = nullptr;
@@ -365,7 +377,8 @@ public:
 	}
 	void DeleteElemVolumeArray() //OC140103
 	{
-		if(mElemVolumeArray != 0) { delete[] mElemVolumeArray; mElemVolumeArray = 0;}
+		vmElemVolumeArray.clear();
+		mElemVolumeArray = 0;
 	}
 
 	void SetupOptimValuesArrays()
@@ -375,7 +388,8 @@ public:
 		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
-			mOptMagnArray = new TVector3d[AmOfMainEl];
+			vmOptMagnArray.resize(AmOfMainEl);
+			mOptMagnArray = vmOptMagnArray.data();
 			mOptFieldArray = new TVector3d[AmOfMainEl];
 		}
 	}
@@ -406,7 +420,8 @@ public:
 	}
 	void DeleteOptimValuesArrays()
 	{
-		if(mOptMagnArray != 0) { delete[] mOptMagnArray; mOptMagnArray = 0;}
+		vmOptMagnArray.clear();
+		mOptMagnArray = 0;
 		if(mOptFieldArray != 0) { delete[] mOptFieldArray; mOptFieldArray = 0;}
 	}
 **/
