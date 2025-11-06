@@ -34,18 +34,24 @@ radTPrtclTrj::radTPrtclTrj(double InEnergy, radTg3d* InFldSrcPtr, const radTComp
 	Field.CompCriterium = InCompCriterium;
 
 	OnPrc = InOnPrc; AmOfEq = 4;
-	
-	dym_rk4 = new double[AmOfEq];
-	dyt_rk4 = new double[AmOfEq];
-	yt_rk4 = new double[AmOfEq];
 
-	Y = new double[AmOfEq];
-	dYdx = new double[AmOfEq];
+	vDym_rk4.resize(AmOfEq);
+	vDyt_rk4.resize(AmOfEq);
+	vYt_rk4.resize(AmOfEq);
+	dym_rk4 = vDym_rk4.data();
+	dyt_rk4 = vDyt_rk4.data();
+	yt_rk4 = vYt_rk4.data();
+
+	vY.resize(AmOfEq);
+	vDYdx.resize(AmOfEq);
+	Y = vY.data();
+	dYdx = vDYdx.data();
 
 	if(OnPrc)
 	{
-		PrecArray = new double[AmOfEq];
-		for(int i=0; i<AmOfEq; i++) 
+		vPrecArray.resize(AmOfEq);
+		PrecArray = vPrecArray.data();
+		for(int i=0; i<AmOfEq; i++)
 		{
 			PrecArray[i] = InPrecArray[i];
 			if(PrecArray[i]==0.) PrecArray[i] = 1.E+23;
@@ -53,12 +59,17 @@ radTPrtclTrj::radTPrtclTrj(double InEnergy, radTg3d* InFldSrcPtr, const radTComp
 		EpsTol = InEpsTol;
 		MaxAutoStp = InMaxAutoStp;
 
-		dysav_rks5 = new double[AmOfEq];
-		ysav_rks5 = new double[AmOfEq];
-		ytemp_rks5 = new double[AmOfEq];
+		vDysav_rks5.resize(AmOfEq);
+		vYsav_rks5.resize(AmOfEq);
+		vYtemp_rks5.resize(AmOfEq);
+		dysav_rks5 = vDysav_rks5.data();
+		ysav_rks5 = vYsav_rks5.data();
+		ytemp_rks5 = vYtemp_rks5.data();
 
-		y_ap = new double[AmOfEq];
-		dydx_ap = new double[AmOfEq];
+		vY_ap.resize(AmOfEq);
+		vDydx_ap.resize(AmOfEq);
+		y_ap = vY_ap.data();
+		dydx_ap = vDydx_ap.data();
 
 		kmax_ap = count_ap = 0;                    // To allow storage of intermediate results in AutoPropagate,
 		xp_ap = nullptr; yp_ap = nullptr; dxsav_ap = 0.; // set this to desired values and allocate memory
@@ -69,24 +80,7 @@ radTPrtclTrj::radTPrtclTrj(double InEnergy, radTg3d* InFldSrcPtr, const radTComp
 
 radTPrtclTrj::~radTPrtclTrj()
 {
-	if(dym_rk4!=nullptr) delete[] dym_rk4;
-	if(dyt_rk4!=nullptr) delete[] dyt_rk4;
-	if(yt_rk4!=nullptr) delete[] yt_rk4;
-
-	if(Y!=nullptr) delete[] Y; 
-	if(dYdx!=nullptr) delete[] dYdx;
-
-	if(OnPrc)
-	{
-		delete[] PrecArray;
-
-		delete[] dysav_rks5;
-		delete[] ysav_rks5;
-		delete[] ytemp_rks5;
-
-		delete[] y_ap;
-		delete[] dydx_ap;
-	}
+	// Automatic cleanup via RAII (std::vector)
 }
 
 //-------------------------------------------------------------------------

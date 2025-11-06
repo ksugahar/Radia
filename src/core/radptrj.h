@@ -53,12 +53,16 @@ class radTPrtclTrj {
 	radTField Field;
 	TVector3d ZeroVect;
 
+	std::vector<double> vDym_rk4, vDyt_rk4, vYt_rk4;
+	std::vector<double> vDysav_rks5, vYsav_rks5, vYtemp_rks5;
+	std::vector<double> vY_ap, vDydx_ap;
 	double *dym_rk4, *dyt_rk4, *yt_rk4;
 	double *dysav_rks5, *ysav_rks5, *ytemp_rks5;
 	double *y_ap, *dydx_ap;
 	int kmax_ap, count_ap;
-	double *xp_ap, **yp_ap, dxsav_ap; 
+	double *xp_ap, **yp_ap, dxsav_ap;
 
+	std::vector<double> vY, vDYdx;
 	double* Y;
 	double* dYdx;
 
@@ -66,6 +70,7 @@ class radTPrtclTrj {
 	int AmOfEq;
 
 	short OnPrc;
+	std::vector<double> vPrecArray;
 	double *PrecArray, EpsTol;
 	int MaxAutoStp;
 
@@ -74,10 +79,11 @@ public:
 	radTPrtclTrj(radTg3d* InFldSourcePtr, const radTCompCriterium& InCompCrit, double inEnergyGeV =0) // For Focusing Potential
 	{
 		FldSrcPtr = InFldSourcePtr;
-		
+
 		Field.CompCriterium = InCompCrit; //? OC050413
 		Energy = inEnergyGeV;
 
+		// Vectors are empty by default
 		dym_rk4 = dyt_rk4 = yt_rk4 = Y = dYdx = nullptr;
 		OnPrc = 0;
 	}
