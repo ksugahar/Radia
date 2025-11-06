@@ -949,7 +949,8 @@ int radTApplication::SetArcMag(double* CPoi, long lenCPoi, double* Radii, long l
 		ArrayOfPoints2d->x = x11; ArrayOfPoints2d->y = y11;
 		ArrayOfPoints2d[1].x = x12; ArrayOfPoints2d[1].y = y12;
 
-		int* ArrayOfKeys = new int[NumberOfSegm];
+		std::vector<int> vArrayOfKeys(NumberOfSegm);
+		int* ArrayOfKeys = vArrayOfKeys.data();
 
 		short PrevSendingIsRequired = SendingIsRequired; //OC301207
 		SendingIsRequired = 0;
@@ -987,9 +988,9 @@ int radTApplication::SetArcMag(double* CPoi, long lenCPoi, double* Radii, long l
 			SendingIsRequired = 0;
 			ArrayOfKeys[i] = SetExtrudedPolygon(FirstPoi, 3, h, ArrayOfPoints2d, 4, Magn, lenMagn, "x");
 			SendingIsRequired = PrevSendingIsRequired;
-			if(ArrayOfKeys[i] <= 0) 
-			{ 
-				if(ArrayOfKeys != 0) { delete[] ArrayOfKeys; ArrayOfKeys = 0;}
+			if(ArrayOfKeys[i] <= 0)
+			{
+				// RAII: vArrayOfKeys cleaned up automatically
 				Send.Int(0); return 0;
 			}
 
@@ -1009,7 +1010,7 @@ int radTApplication::SetArcMag(double* CPoi, long lenCPoi, double* Radii, long l
 		if(IndTr != 0) GrpInd = ApplySymmetry(GrpInd, IndTr, 1);
 		SendingIsRequired = PrevSendingIsRequired;
 
-		if(ArrayOfKeys != 0) { delete[] ArrayOfKeys; ArrayOfKeys = 0;}
+		// RAII: vArrayOfKeys cleaned up automatically
 
 		if(SendingIsRequired) Send.Int(GrpInd); 
 		return GrpInd;
@@ -1451,7 +1452,8 @@ int radTApplication::SetCylMag(double* CPoi, long lenCPoi, double r, double h, i
 		const double TwoPi = 2.*Pi;
 		double AngSegm = TwoPi/NumberOfSegm;
 
-		TVector2d* ArrayOfPoints2d = new TVector2d[NumberOfSegm];
+		std::vector<TVector2d> vArrayOfPoints2d(NumberOfSegm);
+		TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
 		TVector2d *tPoint2D = ArrayOfPoints2d;
 		double CurAng = 0.;
 
@@ -1468,7 +1470,7 @@ int radTApplication::SetCylMag(double* CPoi, long lenCPoi, double r, double h, i
 		int CylInd = SetExtrudedPolygon(FirstPoi, 3, h, ArrayOfPoints2d, NumberOfSegm, Magn, lenMagn, Orient);
 		SendingIsRequired = PrevSendingIsRequired;
 
-		if(ArrayOfPoints2d != 0) { delete[] ArrayOfPoints2d; ArrayOfPoints2d = 0;}
+		// RAII: vArrayOfPoints2d cleaned up automatically
 
 		if(SendingIsRequired) Send.Int(CylInd);
 		return CylInd;
