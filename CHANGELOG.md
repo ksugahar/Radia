@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Build Scripts Migration**
   - Migrated from .cmd to PowerShell (.ps1) scripts
-  - `build_pypi_package.cmd` → `Build_PyPI_Package.ps1`
+  - Unified build and upload into single `Publish_to_PyPI.ps1` script
   - Improved error handling and colored output
   - Updated documentation to reference new scripts
 

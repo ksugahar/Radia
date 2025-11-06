@@ -523,6 +523,7 @@ using radTvInt = vector <int, allocator<int> >;
 
 class radTRelaxationMethNo_7 : public radTIterativeRelaxMeth {
 
+	std::vector<TVector3d> vArrAuxQuasiExtField;
 	TVector3d* mArrAuxQuasiExtField;
 
 public:
@@ -661,10 +662,8 @@ public:
 		{
 			delete[] SubMatrLengths; SubMatrLengths = nullptr;
 		}
-		if(mArrAuxQuasiExtField != nullptr)
-		{
-			delete[] mArrAuxQuasiExtField; mArrAuxQuasiExtField = nullptr;
-		}
+		// RAII: automatic cleanup via vArrAuxQuasiExtField
+		mArrAuxQuasiExtField = nullptr;
 	}
 
 	void DeleteInterMatrData()

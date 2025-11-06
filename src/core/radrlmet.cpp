@@ -1344,7 +1344,8 @@ int radTRelaxationMethNo_7::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	int AmOfInitIter = FillInSubMatrixArrays(PrecOnMagnetiz, TotArrSubMatrNos, SubMatrLengths, AmOfSubMatr, vSubMatrLengths);
 	if((TotArrSubMatrNos == nullptr) || (SubMatrLengths == nullptr) || (AmOfSubMatr <= 0)) return 0;
 
-	mArrAuxQuasiExtField = new TVector3d[AmOfRelaxElem];
+	vArrAuxQuasiExtField.resize(AmOfRelaxElem);
+	mArrAuxQuasiExtField = vArrAuxQuasiExtField.data();
 
 	CalcQuasiExtFieldForAll(TotArrSubMatrNos, SubMatrLengths, AmOfSubMatr);
 

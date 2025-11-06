@@ -71,7 +71,13 @@
       "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python tests/test_simple.py\")",
       "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python tests/test_simple.py; python tests/test_radia.py\")",
       "Bash(while read line)",
-      "Bash(do sed -i \"$lines/return nullptr;/return 0;/\" src/core/radvlpgn.cpp)"
+      "Bash(do sed -i \"$lines/return nullptr;/return 0;/\" src/core/radvlpgn.cpp)",
+      "Bash(./build_pypi_package.cmd)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File Publish_to_PyPI.ps1)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File Build_PyPI_Package.ps1)",
+      "Bash(powershell -Command \"cd tests; $env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python test_simple.py; python test_radia.py\")",
+      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; cd tests; python test_simple.py\")",
+      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; cd tests; python test_simple.py; python test_radia.py\")"
     ],
     "deny": [],
     "ask": []
