@@ -932,12 +932,17 @@ int radTSubdividedRecMag::SetupFldCmpData(short InFldCmpMeth, int SubLevel)
 	}
 
 	Q_forM = new double*[AmOfSubElem];
-	double** DirQ = new double*[AmOfSubElem];
+
+	// RAII: Use std::vector for DirQ
+	std::vector<std::vector<double>> vDirQ(AmOfSubElem);
+	std::vector<double*> vDirQPtrs(AmOfSubElem);
 	for(int j=0; j<AmOfSubElem; j++)
 	{
 		Q_forM[j] = new double[AmOfSubElem];
-		DirQ[j] = new double[AmOfSubElem];
+		vDirQ[j].resize(AmOfSubElem);
+		vDirQPtrs[j] = vDirQ[j].data();
 	}
+	double** DirQ = vDirQPtrs.data();
 	FormCenPoPtrArray = new TVector3d*[AmOfSubElem];
 
 	if(FldCmpMeth==1)
@@ -1025,9 +1030,8 @@ int radTSubdividedRecMag::SetupFldCmpData(short InFldCmpMeth, int SubLevel)
 			FormCenPoPtrArray[StrNo++] = (GroupPtr == 0)? &(((radTg3dRelax*)g3dPtr)->CentrPoint) : &(GroupPtr->CentrPoint); //OC061008
 		}
 	}
-	
-	for(int jj=0; jj<AmOfSubElem; jj++) delete[] (DirQ[jj]);
-	delete[] DirQ;
+
+	// RAII: vDirQ and vDirQPtrs cleaned up automatically
 
 	return 1;
 }
