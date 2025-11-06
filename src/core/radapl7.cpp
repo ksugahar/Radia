@@ -157,15 +157,20 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 		trIn.numberofpoints = numBorderPoints;
 		trIn.numberofpointattributes = 1;
 		//trIn.pointlist = (REAL*) malloc(trIn.numberofpoints * 2 * sizeof(REAL));
-		trIn.pointlist = new REAL[numBorderPoints << 1];
+		std::vector<REAL> vPointlist(numBorderPoints << 1);
+		trIn.pointlist = vPointlist.data();
 		//trIn.pointattributelist = (REAL*) malloc(trIn.numberofpoints*trIn.numberofpointattributes*sizeof(REAL));
-		trIn.pointattributelist = new REAL[numBorderPoints*trIn.numberofpointattributes];
+		std::vector<REAL> vPointattributelist(numBorderPoints*trIn.numberofpointattributes);
+		trIn.pointattributelist = vPointattributelist.data();
 		//trIn.pointmarkerlist = (int*) malloc(trIn.numberofpoints * sizeof(int));
-		trIn.pointmarkerlist = new int[numBorderPoints];
+		std::vector<int> vPointmarkerlist(numBorderPoints);
+		trIn.pointmarkerlist = vPointmarkerlist.data();
 
 		trIn.numberofsegments = numBorderPoints;
-		trIn.segmentlist = new int[numBorderPoints << 1];
-		trIn.segmentmarkerlist = new int[numBorderPoints];
+		std::vector<int> vSegmentlist(numBorderPoints << 1);
+		trIn.segmentlist = vSegmentlist.data();
+		std::vector<int> vSegmentmarkerlist(numBorderPoints);
+		trIn.segmentmarkerlist = vSegmentmarkerlist.data();
 
 		//trIn.numberofregions = 1;
 		//trIn.regionlist = new REAL[trIn.numberofregions << 2];
@@ -297,11 +302,7 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 		SendingIsRequired = PrevSendingIsRequired;
 		if(SendingIsRequired) Send.Int(resGrpKey);
 
-		if(trIn.pointlist != nullptr) delete[] trIn.pointlist;
-		if(trIn.pointattributelist != nullptr) delete[] trIn.pointattributelist;
-		if(trIn.pointmarkerlist != nullptr) delete[] trIn.pointmarkerlist;
-		if(trIn.segmentlist != nullptr) delete[] trIn.segmentlist;
-		if(trIn.segmentmarkerlist != nullptr) delete[] trIn.segmentmarkerlist;
+		// RAII: vectors cleaned up automatically
 		//if(trIn.regionlist != nullptr) delete[] trIn.regionlist;
 
 		if(trOut.pointlist != nullptr) free(trOut.pointlist); //Not needed if -N switch used.
@@ -326,11 +327,7 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 	{
 		SendingIsRequired = PrevSendingIsRequired;
 
-		if(trIn.pointlist != nullptr) delete[] trIn.pointlist;
-		if(trIn.pointattributelist != nullptr) delete[] trIn.pointattributelist;
-		if(trIn.pointmarkerlist != nullptr) delete[] trIn.pointmarkerlist;
-		if(trIn.segmentlist != nullptr) delete[] trIn.segmentlist;
-		if(trIn.segmentmarkerlist != nullptr) delete[] trIn.segmentmarkerlist;
+		// RAII: vectors cleaned up automatically
 		//if(trIn.regionlist != nullptr) delete[] trIn.regionlist;
 
 		if(trOut.pointlist != nullptr) free(trOut.pointlist); //Not needed if -N switch used.
@@ -469,15 +466,20 @@ int radTApplication::TriangulatePolygon(TVector2d* ArrayOfPoints2d, long lenArra
 		trIn.numberofpoints = numBorderPoints;
 		trIn.numberofpointattributes = 1;
 		//trIn.pointlist = (REAL*) malloc(trIn.numberofpoints * 2 * sizeof(REAL));
-		trIn.pointlist = new REAL[numBorderPoints << 1];
+		std::vector<REAL> vPointlist(numBorderPoints << 1);
+		trIn.pointlist = vPointlist.data();
 		//trIn.pointattributelist = (REAL*) malloc(trIn.numberofpoints*trIn.numberofpointattributes*sizeof(REAL));
-		trIn.pointattributelist = new REAL[numBorderPoints*trIn.numberofpointattributes];
+		std::vector<REAL> vPointattributelist(numBorderPoints*trIn.numberofpointattributes);
+		trIn.pointattributelist = vPointattributelist.data();
 		//trIn.pointmarkerlist = (int*) malloc(trIn.numberofpoints * sizeof(int));
-		trIn.pointmarkerlist = new int[numBorderPoints];
+		std::vector<int> vPointmarkerlist(numBorderPoints);
+		trIn.pointmarkerlist = vPointmarkerlist.data();
 
 		trIn.numberofsegments = numBorderPoints;
-		trIn.segmentlist = new int[numBorderPoints << 1];
-		trIn.segmentmarkerlist = new int[numBorderPoints];
+		std::vector<int> vSegmentlist(numBorderPoints << 1);
+		trIn.segmentlist = vSegmentlist.data();
+		std::vector<int> vSegmentmarkerlist(numBorderPoints);
+		trIn.segmentmarkerlist = vSegmentmarkerlist.data();
 
 		//trIn.numberofregions = 1;
 		//trIn.regionlist = new REAL[trIn.numberofregions << 2];
@@ -598,11 +600,7 @@ int radTApplication::TriangulatePolygon(TVector2d* ArrayOfPoints2d, long lenArra
 		//SendingIsRequired = PrevSendingIsRequired;
 		//if(SendingIsRequired) Send.Int(resGrpKey);
 
-		if(trIn.pointlist != nullptr) delete[] trIn.pointlist;
-		if(trIn.pointattributelist != nullptr) delete[] trIn.pointattributelist;
-		if(trIn.pointmarkerlist != nullptr) delete[] trIn.pointmarkerlist;
-		if(trIn.segmentlist != nullptr) delete[] trIn.segmentlist;
-		if(trIn.segmentmarkerlist != nullptr) delete[] trIn.segmentmarkerlist;
+		// RAII: vectors cleaned up automatically
 		//if(trIn.regionlist != nullptr) delete[] trIn.regionlist;
 
 		if(trOut.pointlist != nullptr) free(trOut.pointlist); //Not needed if -N switch used.
@@ -627,11 +625,7 @@ int radTApplication::TriangulatePolygon(TVector2d* ArrayOfPoints2d, long lenArra
 	{
 		//SendingIsRequired = PrevSendingIsRequired;
 
-		if(trIn.pointlist != nullptr) delete[] trIn.pointlist;
-		if(trIn.pointattributelist != nullptr) delete[] trIn.pointattributelist;
-		if(trIn.pointmarkerlist != nullptr) delete[] trIn.pointmarkerlist;
-		if(trIn.segmentlist != nullptr) delete[] trIn.segmentlist;
-		if(trIn.segmentmarkerlist != nullptr) delete[] trIn.segmentmarkerlist;
+		// RAII: vectors cleaned up automatically
 		//if(trIn.regionlist != nullptr) delete[] trIn.regionlist;
 
 		if(trOut.pointlist != nullptr) free(trOut.pointlist); //Not needed if -N switch used.
