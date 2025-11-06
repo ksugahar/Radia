@@ -539,8 +539,8 @@ inline void radTNonlinearAnisotropMaterial::DumpBinParse_NonlinearAnisotropMater
 	//TVector2d *gArrayHM_Par
 	if(cTest > 0)
 	{
-		gArrayHM_Par = new TVector2d[gLenArrayHM_Par];
-		if(gArrayHM_Par == 0) throw 0;
+		vgArrayHM_Par.resize(gLenArrayHM_Par);
+		gArrayHM_Par = vgArrayHM_Par.data();
 		TVector2d *t_gArrayHM_Par = gArrayHM_Par;
 		for(int i=0; i<gLenArrayHM_Par; i++) inStr >> (*(t_gArrayHM_Par++));
 	}
@@ -548,8 +548,8 @@ inline void radTNonlinearAnisotropMaterial::DumpBinParse_NonlinearAnisotropMater
 	inStr >> cTest;
 	if(cTest > 0)
 	{
-		gdMdH_Par = new double[gLenArrayHM_Par];
-		if(gdMdH_Par == 0) throw 0;
+		vgdMdH_Par.resize(gLenArrayHM_Par);
+		gdMdH_Par = vgdMdH_Par.data();
 		double *t_gdMdH_Par = gdMdH_Par;
 		for(int i=0; i<gLenArrayHM_Par; i++) inStr >> (*(t_gdMdH_Par++));
 	}
@@ -560,8 +560,8 @@ inline void radTNonlinearAnisotropMaterial::DumpBinParse_NonlinearAnisotropMater
 	inStr >> cTest;
 	if(cTest > 0)
 	{
-		gArrayHM_Perp = new TVector2d[gLenArrayHM_Perp];
-		if(gArrayHM_Perp == 0) throw 0;
+		vgArrayHM_Perp.resize(gLenArrayHM_Perp);
+		gArrayHM_Perp = vgArrayHM_Perp.data();
 		TVector2d *t_gArrayHM_Perp = gArrayHM_Perp;
 		for(int i=0; i<gLenArrayHM_Perp; i++) inStr >> (*(t_gArrayHM_Perp++));
 	}
@@ -569,8 +569,8 @@ inline void radTNonlinearAnisotropMaterial::DumpBinParse_NonlinearAnisotropMater
 	inStr >> cTest;
 	if(cTest > 0)
 	{
-		gdMdH_Perp = new double[gLenArrayHM_Perp];
-		if(gdMdH_Perp == 0) throw 0;
+		vgdMdH_Perp.resize(gLenArrayHM_Perp);
+		gdMdH_Perp = vgdMdH_Perp.data();
 		double *t_gdMdH_Perp = gdMdH_Perp;
 		for(int i=0; i<gLenArrayHM_Perp; i++) inStr >> (*(t_gdMdH_Perp++));
 	}
