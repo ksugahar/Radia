@@ -1331,12 +1331,12 @@ int radTRecMag::SubdivideItselfByOneSetOfParPlanes(
 //-------------------------------------------------------------------------
 
 int radTRecMag::SubdivideItselfByPlanesParToFace(
-	short DirNo, TVector3d* PointsOnCuttingPlanes, int AmOfPieces_mi_1, 
+	short DirNo, TVector3d* PointsOnCuttingPlanes, int AmOfPieces_mi_1,
 	radThg& In_hg, radTApplication* radPtr, char SubdivideCoils, char PutNewStuffIntoGenCont)
 {
 	radTSend Send;
-	double* CutCoords = new double[AmOfPieces_mi_1];
-	if(CutCoords==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<double> vCutCoords(AmOfPieces_mi_1);
+	double* CutCoords = vCutCoords.data();
 
 	double RelAbsTol[2];
 	DefineRelAndAbsTol(RelAbsTol);
@@ -1439,8 +1439,7 @@ int radTRecMag::SubdivideItselfByPlanesParToFace(
 	}
 
 	In_hg = NewHandle;
-
-	if(CutCoords != 0) delete[] CutCoords;
+	// RAII: automatic cleanup
 	return 1;
 }
 

@@ -31,14 +31,13 @@ void radTPolyhedron::FillInVectHandlePgnAndTrans(TVector3d* ArrayOfPoints, int l
 {
 	radTSend Send;
 
-	TVector3d* ArrayOfFacesNormals = new TVector3d[AmOfFaces];
-	if(ArrayOfFacesNormals == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return;}
+	std::vector<TVector3d> vArrayOfFacesNormals(AmOfFaces);
+	TVector3d* ArrayOfFacesNormals = vArrayOfFacesNormals.data();
 
 	if(!CheckIfFacePolygonsArePlanar(ArrayOfPoints, ArrayOfFaces, ArrayOfLengths, ArrayOfFacesNormals)) return;
 	if(!DetermineActualFacesNormals(ArrayOfPoints, lenArrayOfPoints, ArrayOfFaces, ArrayOfLengths, ArrayOfFacesNormals)) return;
 	if(!FillInTransAndFacesInLocFrames(ArrayOfPoints, ArrayOfFaces, ArrayOfLengths, ArrayOfFacesNormals)) return;
-
-	delete[] ArrayOfFacesNormals;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------

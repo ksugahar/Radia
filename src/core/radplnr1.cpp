@@ -1348,11 +1348,12 @@ void radTPolygon::CheckAndRearrangeEdgePoints(TVector2d* InEdgePointsArray, int 
 
 	if(CheckCount<0)
 	{
-		TVector2d* BufArray = new TVector2d[InAmOfEdgePoints];
+		std::vector<TVector2d> vBufArray(InAmOfEdgePoints);
+		TVector2d* BufArray = vBufArray.data();
 		*BufArray = *InEdgePointsArray;
 		for(int i=1; i<InAmOfEdgePoints; i++) BufArray[i] = InEdgePointsArray[InAmOfEdgePoints-i];
 		for(int k=0; k<InAmOfEdgePoints; k++) InEdgePointsArray[k] = BufArray[k];
-		delete[] BufArray;
+		// RAII: automatic cleanup
 	}
 }
 
