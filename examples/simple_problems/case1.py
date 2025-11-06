@@ -35,8 +35,9 @@ g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
 m1 = rad.MatLin([0.001, 0.001], [0, 0, 0])
 
 # Create two rectangular magnets with magnetization
-g2 = rad.ObjRecMag([0, 0, -50], [300, 300, 5], [0, 0, 800])
-g3 = rad.ObjRecMag([0, 0, 50], [200, 200, 5], [0, 0, 600])
+# Note: Radia magnetization unit is Tesla (T), not A/m
+g2 = rad.ObjRecMag([0, 0, -50], [300, 300, 5], [0, 0, 1.0])
+g3 = rad.ObjRecMag([0, 0, 50], [200, 200, 5], [0, 0, 0.8])
 
 # Combine magnets into a container
 g2 = rad.ObjCnt([g2, g3])

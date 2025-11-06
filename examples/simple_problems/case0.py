@@ -31,8 +31,9 @@ j = 10
 # Create arc with current
 g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
 
-# Create rectangular magnet with magnetization [0,0,1000] A/m
-g2 = rad.ObjRecMag([0, 0, -50], [300, 300, 5], [0, 0, 1000])
+# Create rectangular magnet with magnetization [0,0,1.0] T
+# Note: Radia magnetization unit is Tesla (T), not A/m
+g2 = rad.ObjRecMag([0, 0, -50], [300, 300, 5], [0, 0, 1.0])
 
 # Define material - Linear material
 # Note: In the original script, material is defined but for a magnet with magnetization,
