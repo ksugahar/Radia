@@ -471,8 +471,8 @@ void PolyhedronDLL(double* Vertices, int AmOfVertices, int* InFaces, int* AmOfPo
 	int **Faces=0, **tFaces=0, *tInFaces=0;
 	double *pJ=0, *pJ_LinCoef=0;
 
-	TVector3d* ArrayOfPoints = new TVector3d[AmOfVertices];
-	if(ArrayOfPoints == 0) { rad.Send.ErrorMessage("Radia::Error900"); goto Finish;}
+	std::vector<TVector3d> vArrayOfPoints(AmOfVertices);
+	TVector3d* ArrayOfPoints = vArrayOfPoints.data();
 	//TVector3d* tArrayOfPoints = ArrayOfPoints;
 	tArrayOfPoints = ArrayOfPoints;
 	//double* tVertices = Vertices;
@@ -485,8 +485,8 @@ void PolyhedronDLL(double* Vertices, int AmOfVertices, int* InFaces, int* AmOfPo
 	}
 
 	//int** Faces = new int*[AmOfFaces];
-	Faces = new int*[AmOfFaces];
-	if(Faces == 0) { rad.Send.ErrorMessage("Radia::Error900"); goto Finish;}
+	std::vector<int*> vFaces(AmOfFaces);
+	Faces = vFaces.data();
 	//int** tFaces = Faces;
 	tFaces = Faces;
 	//int* tInFaces = InFaces;
@@ -539,8 +539,8 @@ void PolyhedronDLL(double* Vertices, int AmOfVertices, int* InFaces, int* AmOfPo
 	rad.SetPolyhedron1(ArrayOfPoints, AmOfVertices, Faces, AmOfPoInFaces, AmOfFaces, M, 0, pJ, pJ_LinCoef);
 
 Finish:
-	if(ArrayOfPoints != 0) delete[] ArrayOfPoints;
-	if(Faces != 0) delete[] Faces;
+	// RAII: automatic cleanup via vArrayOfPoints and vFaces
+	return;
 }
 
 //-------------------------------------------------------------------------
