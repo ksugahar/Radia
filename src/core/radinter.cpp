@@ -589,62 +589,59 @@ void MultGenExtrPolygon()
 
 void MultGenExtrPolygonOpt(double** Layers, double* Heights, int* AmOfPointsInLayers, int AmOfLayers, double* M)
 {
-	TVector2d** LayerPolygons = new TVector2d*[AmOfLayers];
-	if(LayerPolygons == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+	// RAII: Use std::vector for all allocations
+	std::vector<TVector2d*> vLayerPolygons(AmOfLayers);
+	std::vector<std::vector<TVector2d>> vLayerStorage(AmOfLayers);
+	TVector2d** LayerPolygons = vLayerPolygons.data();
 	TVector2d** tLayerPolygons = LayerPolygons;
 	double** tLayers = Layers;
 
 	for(int i=0; i<AmOfLayers; i++)
 	{
 		int AmOfPointsInTheLayer = AmOfPointsInLayers[i];
-		*tLayerPolygons = new TVector2d[AmOfPointsInTheLayer];
-		if(*tLayerPolygons == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+		vLayerStorage[i].resize(AmOfPointsInTheLayer);
+		*tLayerPolygons = vLayerStorage[i].data();
 
 		TVector2d* tPoints = *(tLayerPolygons++);
 		double* tLayer = *(tLayers++);
 		for(int k=0; k<AmOfPointsInTheLayer; k++)
 		{
-			tPoints->x = *(tLayer++); (tPoints++)->y = *(tLayer++); 
+			tPoints->x = *(tLayer++); (tPoints++)->y = *(tLayer++);
 		}
 	}
 	rad.SetMultGenExtrPolygon(LayerPolygons, AmOfPointsInLayers, Heights, AmOfLayers, M, 3);
 
-	if(LayerPolygons != 0)
-	{
-		for(int k=0; k<AmOfLayers; k++) delete[] (LayerPolygons[k]);
-		delete[] LayerPolygons;
-	}
+	// RAII: vLayerPolygons and vLayerStorage cleaned up automatically
 }
 
 //-------------------------------------------------------------------------
 
 void MultGenExtrPolygonDLL(double* Layers, int* AmOfPointsInLayers, double* Heights, int AmOfLayers, double* M)
 {
-	TVector2d** LayerPolygons = new TVector2d*[AmOfLayers];
-	if(LayerPolygons == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+	// RAII: Use std::vector for all allocations
+	std::vector<TVector2d*> vLayerPolygons(AmOfLayers);
+	std::vector<std::vector<TVector2d>> vLayerStorage(AmOfLayers);
+	TVector2d** LayerPolygons = vLayerPolygons.data();
 	TVector2d** tLayerPolygons = LayerPolygons;
 
 	double* tLayer = Layers;
 	for(int i=0; i<AmOfLayers; i++)
 	{
 		int AmOfPointsInTheLayer = AmOfPointsInLayers[i];
-		*tLayerPolygons = new TVector2d[AmOfPointsInTheLayer];
-		if(*tLayerPolygons == 0) { rad.Send.ErrorMessage("Radia::Error900"); return;}
+		vLayerStorage[i].resize(AmOfPointsInTheLayer);
+		*tLayerPolygons = vLayerStorage[i].data();
 
 		TVector2d* tPoints = *(tLayerPolygons++);
 		for(int k=0; k<AmOfPointsInTheLayer; k++)
 		{
-			tPoints->x = *(tLayer++); (tPoints++)->y = *(tLayer++); 
+			tPoints->x = *(tLayer++); (tPoints++)->y = *(tLayer++);
 		}
 		Heights[i] = radCR.Double(Heights[i]);
 	}
 
 	rad.SetMultGenExtrPolygon(LayerPolygons, AmOfPointsInLayers, Heights, AmOfLayers, M, 3);
-	if(LayerPolygons != 0)
-	{
-		for(int k=0; k<AmOfLayers; k++) delete[] (LayerPolygons[k]);
-		delete[] LayerPolygons;
-	}
+
+	// RAII: vLayerPolygons and vLayerStorage cleaned up automatically
 }
 
 //-------------------------------------------------------------------------
