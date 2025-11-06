@@ -1203,7 +1203,8 @@ void radTRelaxationMethNo_6::SetupInteractionMatrices(const radThg& hg, const ra
 
 	radThg hEmpty;
 	mAmOfParts = (int)(GroupPtr->GroupMapOfHandlers.size());
-	IntrctPtr = new radTInteraction[mAmOfParts];
+	vIntrctPtr.resize(mAmOfParts);
+	IntrctPtr = vIntrctPtr.data();
 	radTInteraction *tIntrct = IntrctPtr;
 
 	int LocMapCount = 0;
@@ -1212,7 +1213,7 @@ void radTRelaxationMethNo_6::SetupInteractionMatrices(const radThg& hg, const ra
 		tIntrct->Setup((*iter).second, hEmpty, CompCrit, 0, 1, 1);
 		if(tIntrct->SomethingIsWrong)
 		{
-			delete[] IntrctPtr; IntrctPtr = nullptr;
+			// RAII: automatic cleanup via vIntrctPtr
 			Send.ErrorMessage("Radia::Error116"); throw 0;
 		}
 

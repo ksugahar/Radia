@@ -443,6 +443,7 @@ public:
 
 class radTRelaxationMethNo_6 : public radTIterativeRelaxMeth {
 
+	std::vector<radTInteraction> vIntrctPtr;
 	int mAmOfParts;
 	radTmhg mMapOfPartHandlers;
 	radThg mhGroup;
@@ -455,9 +456,9 @@ public:
 	{
 		SetupInteractionMatrices(hObj, CompCrit);
 	}; 
-	~radTRelaxationMethNo_6() 
+	~radTRelaxationMethNo_6()
 	{
-		if(IntrctPtr != nullptr) delete[] IntrctPtr;
+		// RAII: automatic cleanup via vIntrctPtr
 		mMapOfPartHandlers.erase(mMapOfPartHandlers.begin(), mMapOfPartHandlers.end());
 	}; 
 
