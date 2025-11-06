@@ -37,6 +37,8 @@ using radTVectPtrVect3d = vector<TVector3d*, allocator<TVector3d*> >;
 
 class radTSubdividedRecMag : public radTGroup, public radTRecMag {
 
+	std::vector<std::vector<double>> vQ_forM;
+	std::vector<double*> vQ_forMPtrs;
 	double** Q_forM;
 	TVector3d** FormCenPoPtrArray;
 	int AmOfSubElem;
