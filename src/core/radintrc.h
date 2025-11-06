@@ -142,6 +142,11 @@ class radTInteraction : public radTg {
 	TMatrix3df** InteractMatrix; //OC250504
 	//TMatrix3d** InteractMatrix; //OC250504
 
+	std::vector<TVector3d> vExternFieldArray;
+	std::vector<TVector3d> vNewMagnArray;
+	std::vector<TVector3d> vNewFieldArray;
+	std::vector<TVector3d> vAuxOldMagnArray;
+	std::vector<TVector3d> vAuxOldFieldArray;
 	TVector3d* ExternFieldArray;
 	TVector3d* NewMagnArray;
 	TVector3d* NewFieldArray;

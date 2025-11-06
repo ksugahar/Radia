@@ -176,12 +176,7 @@ void radTInteraction::DeallocateMemory() //OC27122019
 
 	g3dExternPtrVect.erase(g3dExternPtrVect.begin(), g3dExternPtrVect.end()); //OC240408, to enable current scaling/update
 
-	if(ExternFieldArray != nullptr) delete[] ExternFieldArray;
-	if(AuxOldMagnArray != nullptr) delete[] AuxOldMagnArray;
-	if(AuxOldFieldArray != nullptr) delete[] AuxOldFieldArray;
-
-	if(NewMagnArray != nullptr) delete[] NewMagnArray;
-	if(NewFieldArray != nullptr) delete[] NewFieldArray;
+	// Automatic cleanup via RAII for vector arrays
 
 	if(RelaxSubIntervArray != nullptr) delete[] RelaxSubIntervArray;
 
@@ -321,30 +316,26 @@ void radTInteraction::FillInRelaxSubIntervArray() // New
 
 void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded)
 {
-	//try
-	//{
-		ExternFieldArray = new TVector3d[AmOfMainElem];
-		if(AuxOldMagnArrayIsNeeded) 
-		{
-			AuxOldMagnArray = new TVector3d[AmOfMainElem];
-			AuxOldFieldArray = new TVector3d[AmOfMainElem];
-		}
+	vExternFieldArray.resize(AmOfMainElem);
+	ExternFieldArray = vExternFieldArray.data();
 
-		NewMagnArray = new TVector3d[AmOfMainElem];
-		NewFieldArray = new TVector3d[AmOfMainElem];
-		InteractMatrix = new TMatrix3df*[AmOfMainElem]; //OC250504
-		//InteractMatrix = new TMatrix3d*[AmOfMainElem]; //OC250504
+	if(AuxOldMagnArrayIsNeeded)
+	{
+		vAuxOldMagnArray.resize(AmOfMainElem);
+		vAuxOldFieldArray.resize(AmOfMainElem);
+		AuxOldMagnArray = vAuxOldMagnArray.data();
+		AuxOldFieldArray = vAuxOldFieldArray.data();
+	}
 
-		for(int k=0; k<AmOfMainElem; k++) InteractMatrix[k] = nullptr;
-	//}
-	//catch (radTException* radExceptionPtr)
-	//{
-	//	Send.ErrorMessage(radExceptionPtr->what());	return;
-	//}
-	//catch (...)
-	//{
-	//	Send.ErrorMessage("Radia::Error999"); return;
-	//}
+	vNewMagnArray.resize(AmOfMainElem);
+	vNewFieldArray.resize(AmOfMainElem);
+	NewMagnArray = vNewMagnArray.data();
+	NewFieldArray = vNewFieldArray.data();
+
+	InteractMatrix = new TMatrix3df*[AmOfMainElem]; //OC250504
+	//InteractMatrix = new TMatrix3d*[AmOfMainElem]; //OC250504
+
+	for(int k=0; k<AmOfMainElem; k++) InteractMatrix[k] = nullptr;
 
 	if(MemAllocTotAtOnce)
 	{
