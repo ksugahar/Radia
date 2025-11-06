@@ -1867,10 +1867,10 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 	++VectOfPtrToVect3dIter;
 
 	radTSend Send;
-	TVector3d** NewFaceFirstList = new TVector3d*[AmOfEdgePoints];
-	if(NewFaceFirstList == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
-	TVector3d** NewFaceSecondList = new TVector3d*[AmOfEdgePoints];
-	if(NewFaceSecondList == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<TVector3d*> vNewFaceFirstList(AmOfEdgePoints);
+	std::vector<TVector3d*> vNewFaceSecondList(AmOfEdgePoints);
+	TVector3d** NewFaceFirstList = vNewFaceFirstList.data();
+	TVector3d** NewFaceSecondList = vNewFaceSecondList.data();
 	NewFaceSecondList[0] = P0Ptr;
 	NewFaceSecondList[1] = P1Ptr;
 
@@ -1983,8 +1983,8 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 			VectOfTwoPoints3d.erase(iterClosest);
 		}
 	}
-	TVector3d** ArrayOf3dEdgePo = new TVector3d*[AmOfEdgePoints];
-	if(ArrayOf3dEdgePo == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<TVector3d*> vArrayOf3dEdgePo(AmOfEdgePoints);
+	TVector3d** ArrayOf3dEdgePo = vArrayOf3dEdgePo.data();
 
 	//Filling-in the array of actual edge points of the new polygon
 	//TVector3d** TraversMain = &(ArrayOf3dEdgePo[FirstCount-1]);
@@ -2032,9 +2032,6 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 	else FilledOK = FillInNewHandlePgnAndTransFrom3d(ArrayOf3dEdgePo, AmOfEdgePoints, NormalForUpper, UpperNewHandlePgnAndTrans, RelAbsTol);
 	if(!FilledOK) { SomethingIsWrong = 1; return 0;}
 
-	delete[] ArrayOf3dEdgePo;
-	delete[] NewFaceSecondList;
-	delete[] NewFaceFirstList;
 	return 1;
 }
 
