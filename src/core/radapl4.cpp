@@ -548,10 +548,10 @@ int radTApplication::SetUpOnePolyhedronSegment(radTPtrsToPgnAndVect2d* PtrsToPgn
 		int* NewFace = 0;
 		if(MakeBaseFace)
 		{
-			NewFace = new int[PtrsToPgnAndVect2d->AmOfPoints];
-			if(NewFace == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+			std::vector<int> vNewFace(PtrsToPgnAndVect2d->AmOfPoints);
+			NewFace = vNewFace.data();
 
-			radTIntPtrAndInt IntPtrAndInt(NewFace, PtrsToPgnAndVect2d->AmOfPoints);
+			radTIntPtrAndInt IntPtrAndInt(std::move(vNewFace), PtrsToPgnAndVect2d->AmOfPoints);
 			pFacesVect->push_back(IntPtrAndInt);
 		}
 		for(int kk=0; kk<PtrsToPgnAndVect2d->AmOfPoints; kk++)
@@ -633,8 +633,8 @@ int radTApplication::SetUpOnePolyhedronSegment(radTPtrsToPgnAndVect2d* PtrsToPgn
 			pNextLayerPointLinks->SecondIndVect.push_back(NextInd);
 
 			int AmOfPoInFace = AmOfLwstPo + 2;
-			int* NewFace = new int[AmOfPoInFace];
-			if(NewFace == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+			std::vector<int> vNewFace(AmOfPoInFace);
+			int* NewFace = vNewFace.data();
 			*NewFace = NextVertexPoVectOffset + IndOfPointFromNextLayer;
 			NewFace[1] = BaseVertexPoVectOffset + k;
 			NewFace[2] = BaseVertexPoVectOffset + NextInd;
@@ -646,7 +646,7 @@ int radTApplication::SetUpOnePolyhedronSegment(radTPtrsToPgnAndVect2d* PtrsToPgn
 				radTVertexPointLiaison* pNextNextLayerPointLinks = NextLayerPointLinks + NextIndOfPointFromNextLayer;
 				pNextNextLayerPointLinks->SecondIndVect.push_back(NextInd);
 			}
-			radTIntPtrAndInt IntPtrAndInt(NewFace, AmOfPoInFace);
+			radTIntPtrAndInt IntPtrAndInt(std::move(vNewFace), AmOfPoInFace);
 			pFacesVect->push_back(IntPtrAndInt);
 		}
 
@@ -675,12 +675,11 @@ int radTApplication::SetUpOnePolyhedronSegment(radTPtrsToPgnAndVect2d* PtrsToPgn
 							}
 							if(LetsMakeFace)
 							{
-								int* NewFace = new int[3];
-								if(NewFace == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
-								*NewFace = NextVertexPoVectOffset + i;
-								NewFace[1] = BaseVertexPoVectOffset + IndOfPoFromBase;
-								NewFace[2] = NextVertexPoVectOffset + NextInd;
-								radTIntPtrAndInt IntPtrAndInt(NewFace, 3);
+								std::vector<int> vNewFace(3);
+								vNewFace[0] = NextVertexPoVectOffset + i;
+								vNewFace[1] = BaseVertexPoVectOffset + IndOfPoFromBase;
+								vNewFace[2] = NextVertexPoVectOffset + NextInd;
+								radTIntPtrAndInt IntPtrAndInt(std::move(vNewFace), 3);
 								pFacesVect->push_back(IntPtrAndInt);
 							}
 						}
@@ -695,20 +694,18 @@ int radTApplication::SetUpOnePolyhedronSegment(radTPtrsToPgnAndVect2d* PtrsToPgn
 						int IndOfPointFromBaseLayer;
 						if(!FindLowestPoint(pBaseVect2dVect, SegmVect, RelAbsTol, IndOfPointFromBaseLayer, AmOfLwstPo)) return 0;
 
-						int* NewFace = new int[3];
-						if(NewFace == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
-						*NewFace = NextVertexPoVectOffset + i;
-						NewFace[1] = NextVertexPoVectOffset + PrevInd;
-						NewFace[2] = BaseVertexPoVectOffset + IndOfPointFromBaseLayer;
-						radTIntPtrAndInt IntPtrAndInt1(NewFace, 3);
+						std::vector<int> vNewFace1(3);
+						vNewFace1[0] = NextVertexPoVectOffset + i;
+						vNewFace1[1] = NextVertexPoVectOffset + PrevInd;
+						vNewFace1[2] = BaseVertexPoVectOffset + IndOfPointFromBaseLayer;
+						radTIntPtrAndInt IntPtrAndInt1(std::move(vNewFace1), 3);
 						pFacesVect->push_back(IntPtrAndInt1);
 
-						NewFace = new int[3];
-						if(NewFace == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
-						*NewFace = NextVertexPoVectOffset + i;
-						NewFace[1] = BaseVertexPoVectOffset + IndOfPointFromBaseLayer;
-						NewFace[2] = NextVertexPoVectOffset + NextInd;
-						radTIntPtrAndInt IntPtrAndInt2(NewFace, 3);
+						std::vector<int> vNewFace2(3);
+						vNewFace2[0] = NextVertexPoVectOffset + i;
+						vNewFace2[1] = BaseVertexPoVectOffset + IndOfPointFromBaseLayer;
+						vNewFace2[2] = NextVertexPoVectOffset + NextInd;
+						radTIntPtrAndInt IntPtrAndInt2(std::move(vNewFace2), 3);
 						pFacesVect->push_back(IntPtrAndInt2);
 					}
 				}
@@ -798,11 +795,9 @@ CreatingPolyhedronPiece:
 
 		if(AmOfPoInLastFace > 2)
 		{
-			int* NewFace = new int[AmOfPoInLastFace];
-			if(NewFace == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
-			int* tNewFace = NewFace;
-			for(int s=0; s<AmOfPoInLastFace; s++) *(tNewFace++) = StartPoIndForNewFace + s;
-			radTIntPtrAndInt IntPtrAndInt(NewFace, AmOfPoInLastFace);
+			std::vector<int> vNewFace(AmOfPoInLastFace);
+			for(int s=0; s<AmOfPoInLastFace; s++) vNewFace[s] = StartPoIndForNewFace + s;
+			radTIntPtrAndInt IntPtrAndInt(std::move(vNewFace), AmOfPoInLastFace);
 
 			if(CuttingIsNeeded) 
 			{
@@ -868,8 +863,7 @@ CreatingPolyhedronPiece:
 		}
 
 		// RAII: vArrayOfVertexPoints, vArrayOfFacesLengths, and vArrayOfFaces cleaned up automatically
-		// Individual face arrays (ArrayOfFaces[j]) are still owned by pFacesVect and will be deleted there
-		for(int j=0; j<AmOfFacesToDelete; j++) delete[] (ArrayOfFaces[j]);
+		// Individual face arrays now owned by radTIntPtrAndInt::vInt vectors (RAII cleanup)
 		if(FinalizeAll && CuttingIsNeeded)
 		{
 			CuttingIsNeeded = 0; FinalPassAfterCut = 1;

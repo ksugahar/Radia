@@ -26,9 +26,14 @@
 //-------------------------------------------------------------------------
 
 struct radTIntPtrAndInt {
+	std::vector<int> vInt;  // Vector for ownership
 	int* pInt;
 	int AnInt;
 	radTIntPtrAndInt(int* In_pInt =0, int InAnInt =0) { pInt=In_pInt; AnInt=InAnInt;}
+	// New constructor that takes ownership via vector
+	radTIntPtrAndInt(std::vector<int>&& v, int InAnInt) : vInt(std::move(v)), AnInt(InAnInt) {
+		pInt = vInt.data();
+	}
 };
 
 //-------------------------------------------------------------------------
