@@ -818,8 +818,8 @@ CreatingPolyhedronPiece:
 		int AmOfFaces = CuttingIsNeeded? (PrevFacesVectSize + ((AmOfPoInLastFace > 2)? 1 : 0)) : (int)(pFacesVect->size());
 		std::vector<int> vArrayOfFacesLengths(AmOfFaces);
 		int* ArrayOfFacesLengths = vArrayOfFacesLengths.data();
-		int** ArrayOfFaces = new int*[AmOfFaces];
-		if(ArrayOfFaces == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+		std::vector<int*> vArrayOfFaces(AmOfFaces);
+		int** ArrayOfFaces = vArrayOfFaces.data();
 
 		int* tArrayOfFacesLengths = ArrayOfFacesLengths;
 		int** tArrayOfFaces = ArrayOfFaces;
@@ -867,12 +867,9 @@ CreatingPolyhedronPiece:
 			}
 		}
 
-		// RAII: vArrayOfVertexPoints and vArrayOfFacesLengths cleaned up automatically
-		if(ArrayOfFaces != 0) 
-		{
-			for(int j=0; j<AmOfFacesToDelete; j++) delete[] (ArrayOfFaces[j]);
-			delete[] ArrayOfFaces;
-		}
+		// RAII: vArrayOfVertexPoints, vArrayOfFacesLengths, and vArrayOfFaces cleaned up automatically
+		// Individual face arrays (ArrayOfFaces[j]) are still owned by pFacesVect and will be deleted there
+		for(int j=0; j<AmOfFacesToDelete; j++) delete[] (ArrayOfFaces[j]);
 		if(FinalizeAll && CuttingIsNeeded)
 		{
 			CuttingIsNeeded = 0; FinalPassAfterCut = 1;
