@@ -139,6 +139,9 @@ class radTInteraction : public radTg {
 	radTRelaxStatusParam RelaxStatusParam;
 	short RelaxationStarted;
 
+	std::vector<std::vector<TMatrix3df>> vInteractMatrix;
+	std::vector<TMatrix3df*> vInteractMatrixPtrs;
+	std::vector<TMatrix3df> vGenMatrStorage; // Storage for MemAllocTotAtOnce mode
 	TMatrix3df** InteractMatrix; //OC250504
 	//TMatrix3d** InteractMatrix; //OC250504
 

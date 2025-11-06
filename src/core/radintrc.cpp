@@ -152,27 +152,7 @@ radTInteraction::~radTInteraction()
 
 void radTInteraction::DeallocateMemory() //OC27122019
 {
-	if(MemAllocTotAtOnce)
-	{
-		if(InteractMatrix != nullptr)
-		{
-			if(InteractMatrix[0] != nullptr) delete[](InteractMatrix[0]);
-			delete[] InteractMatrix;
-		}
-	}
-	else
-	{
-		if(InteractMatrix != nullptr)
-		{
-			for(int i=0; i<AmOfMainElem; i++)
-			{
-				TMatrix3df* Matrix3dPtr = InteractMatrix[i]; //OC250504
-				//TMatrix3d* Matrix3dPtr = InteractMatrix[i]; //OC250504
-				if(Matrix3dPtr != nullptr) delete[] Matrix3dPtr;
-			}
-			delete[] InteractMatrix;
-		}
-	}
+	// RAII: automatic cleanup via vInteractMatrix, vInteractMatrixPtrs, and vGenMatrStorage
 
 	g3dExternPtrVect.erase(g3dExternPtrVect.begin(), g3dExternPtrVect.end()); //OC240408, to enable current scaling/update
 
@@ -331,54 +311,28 @@ void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded)
 	NewMagnArray = vNewMagnArray.data();
 	NewFieldArray = vNewFieldArray.data();
 
-	InteractMatrix = new TMatrix3df*[AmOfMainElem]; //OC250504
-	//InteractMatrix = new TMatrix3d*[AmOfMainElem]; //OC250504
-
-	for(int k=0; k<AmOfMainElem; k++) InteractMatrix[k] = nullptr;
+	vInteractMatrixPtrs.resize(AmOfMainElem, nullptr);
+	InteractMatrix = vInteractMatrixPtrs.data();
 
 	if(MemAllocTotAtOnce)
 	{
-		TMatrix3df* GenMatrPtr = 0; //OC250504
-		//TMatrix3d* GenMatrPtr = 0; //OC250504
-		//try
-		//{
-			GenMatrPtr = new TMatrix3df[AmOfMainElem*AmOfMainElem]; //OC250504
-			//GenMatrPtr = new TMatrix3d[AmOfMainElem*AmOfMainElem]; //OC250504
-		//}
-		//catch (radTException* radExceptionPtr)
-		//{
-		//	InteractMatrix[0] = nullptr;
-		//	SomethingIsWrong = 1;
-		//	Send.ErrorMessage(radExceptionPtr->what());	return;
-		//}
-		//catch (...)
-		//{
-		//	Send.ErrorMessage("Radia::Error999"); return;
-		//}
+		vGenMatrStorage.resize(AmOfMainElem * AmOfMainElem);
+		TMatrix3df* GenMatrPtr = vGenMatrStorage.data();
 
-		if(GenMatrPtr != 0) // Check for allocation failure
-			for(int i=0; i<AmOfMainElem; i++) InteractMatrix[i] = &(GenMatrPtr[i*AmOfMainElem]);
-		else
+		for(int i=0; i<AmOfMainElem; i++)
 		{
-			InteractMatrix[0] = nullptr;
-			SomethingIsWrong = 1;
-			Send.ErrorMessage("Radia::Error900"); return;
+			InteractMatrix[i] = &(GenMatrPtr[i*AmOfMainElem]);
+			vInteractMatrixPtrs[i] = InteractMatrix[i];
 		}
 	}
 	else
 	{
+		vInteractMatrix.resize(AmOfMainElem);
 		for(int i=0; i<AmOfMainElem; i++)
 		{
-			InteractMatrix[i] = new TMatrix3df[AmOfMainElem]; //OC250504
-			//InteractMatrix[i] = new TMatrix3d[AmOfMainElem]; //OC250504
-			if(InteractMatrix[i] == 0) // Check for allocation failure
-			{
-				for(int k=0; k<i; k++) delete[] (InteractMatrix[i]);
-				delete[] InteractMatrix;
-
-				SomethingIsWrong = 1;
-				Send.ErrorMessage("Radia::Error900"); return;
-			}
+			vInteractMatrix[i].resize(AmOfMainElem);
+			InteractMatrix[i] = vInteractMatrix[i].data();
+			vInteractMatrixPtrs[i] = InteractMatrix[i];
 		}
 	}
 
@@ -1278,19 +1232,20 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> matrixExists;
 	if(matrixExists && (AmOfMainElem > 0))
 	{
-		InteractMatrix = new TMatrix3df*[AmOfMainElem];
-		TMatrix3df **pLineInteractMatrix = InteractMatrix;
+		vInteractMatrixPtrs.resize(AmOfMainElem, nullptr);
+		vInteractMatrix.resize(AmOfMainElem);
+		InteractMatrix = vInteractMatrixPtrs.data();
 
 		for(int i=0; i<AmOfMainElem; i++)
 		{
 			char matrixRowExists = 0;
-			*pLineInteractMatrix = nullptr;
-
 			inStr >> matrixRowExists;
 			if(matrixRowExists)
 			{
-				*pLineInteractMatrix = new TMatrix3df[AmOfMainElem];
-				TMatrix3df *tLine = *(pLineInteractMatrix++);
+				vInteractMatrix[i].resize(AmOfMainElem);
+				InteractMatrix[i] = vInteractMatrix[i].data();
+				vInteractMatrixPtrs[i] = InteractMatrix[i];
+				TMatrix3df *tLine = InteractMatrix[i];
 				for(int j=0; j<AmOfMainElem; j++)
 				{
 					inStr >> *(tLine++);
