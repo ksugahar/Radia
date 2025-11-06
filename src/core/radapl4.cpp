@@ -1223,6 +1223,12 @@ int radTApplication::DecodeViewingOptions(const char** OptionNames, const char**
 }
 
 //-------------------------------------------------------------------------
+// WARNING: This function is currently unused (no callers found in codebase).
+// NOTE: Allocates memory via new[] that caller must delete[] (4 arrays).
+// Similar to radiobuf.h::StoreGeomPolygData but with different output format.
+// TODO: If this function is ever used, consider refactoring to use std::vector
+//       or updating StoreGeomPolygData to support this use case.
+//-------------------------------------------------------------------------
 
 void radTApplication::PrepareGeomPolygDataForViewing(radTVectGeomPolygon& GeomPolygons, double*& VertCoord, int& Nv, int*& VertInd, int*& PgLen, float*& PgColors, int& Npg)
 {
@@ -1233,6 +1239,7 @@ void radTApplication::PrepareGeomPolygDataForViewing(radTVectGeomPolygon& GeomPo
 	for(int i=0; i<Npg; i++) Nv += GeomPolygons[i].Nv;
 	if(Nv <= 0) return;
 
+	// WARNING: Caller must delete[] these four arrays to avoid memory leak!
 	VertCoord = new double[3*Nv];
 	VertInd = new int[Nv];
 	PgLen = new int[Npg];
