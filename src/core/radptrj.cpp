@@ -1246,8 +1246,8 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream&
 		dVal = 0.001*ApplyZeroTol(pCoordDir1[i], AbsZeroTol);
 		if(cOutFormat == 1)
 		{
-			//sprintf(BufStr, FormatStr, 0.001*ApplyZeroTol(pCoordDir1[i], AbsZeroTol));
-			sprintf(BufStr, FormatStr, dVal);
+			//snprintf(BufStr, 16, FormatStr, 0.001*ApplyZeroTol(pCoordDir1[i], AbsZeroTol));
+			snprintf(BufStr, 16, FormatStr, dVal);
 			OutStream << BufStr;
 		}
 		else if(cOutFormat == 2)
@@ -1266,8 +1266,8 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream&
 
 		if(cOutFormat == 1)
 		{
-			//sprintf(BufStr, FormatStr, 0.001*ApplyZeroTol(pCoordDir2[IndRow], AbsZeroTol));
-			sprintf(BufStr, FormatStr, dVal);
+			//snprintf(BufStr, 16, FormatStr, 0.001*ApplyZeroTol(pCoordDir2[IndRow], AbsZeroTol));
+			snprintf(BufStr, 16, FormatStr, dVal);
 			OutStream << BufStr;
 		}
 		else if(cOutFormat == 2)
@@ -1282,8 +1282,8 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream&
 
 			if(cOutFormat == 1)
 			{
-				//sprintf(BufStr, FormatStr, ApplyZeroTol(tKickData[k], AbsZeroTol));
-				sprintf(BufStr, FormatStr, dVal);
+				//snprintf(BufStr, 16, FormatStr, ApplyZeroTol(tKickData[k], AbsZeroTol));
+				snprintf(BufStr, 16, FormatStr, dVal);
 				OutStream << BufStr;
 			}
 			else if(cOutFormat == 2)
@@ -1350,9 +1350,9 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKick(const char* StrComment, doubl
 	        OutStream << "# " << endl;
 
 			double CurPos = ArrLongDist[i];
-			sprintf(BufStr, FormatStr, 0.001*ApplyZeroTol(PrevPos, AbsZeroTol));
+			snprintf(BufStr, 16, FormatStr, 0.001*ApplyZeroTol(PrevPos, AbsZeroTol));
 			OutStream << BufStr;
-			sprintf(BufStr, FormatStr, 0.001*ApplyZeroTol(CurPos, AbsZeroTol));
+			snprintf(BufStr, 16, FormatStr, 0.001*ApplyZeroTol(CurPos, AbsZeroTol));
 			OutStream << BufStr;
 			OutStream << endl;
 			PrevPos = CurPos;
