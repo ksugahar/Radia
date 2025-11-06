@@ -18,6 +18,7 @@
 #include "radsend.h"
 #include <stdio.h>
 #include <string.h>
+#include <vector>
 
 //#ifdef __JAVA__
 //#ifndef __SEND2JAVA_H
@@ -680,8 +681,8 @@ void radTSend::ArrayOfPairOfVect3d(radTVectPairOfVect3d* pVectPairOfVect3d)
 	int Dims[] = {3,2,AmOfPoints};
 
 	long TotLen = Dims[0]*Dims[1]*Dims[2];
-	double *TotArray = new double[TotLen];
-	if(TotArray == 0) { ErrorMessage("Radia::Error900"); return;}
+	std::vector<double> vTotArray(TotLen);
+	double *TotArray = vTotArray.data();
 	double *tTotArray = TotArray;
 	for(int k=0; k<AmOfPoints; k++)
 	{
@@ -792,8 +793,8 @@ void radTSend::OutFieldCompRes(char* FieldChar, radTField* FieldArray, double* A
 //#ifdef __JAVA__
 #if defined __JAVA__ || defined ALPHA__DLL__ || defined ALPHA__LIB__
 
-	double *TotOutArray = new double[14*Np];
-	if(TotOutArray == 0) { ErrorMessage("Radia::Error900"); return;}
+	std::vector<double> vTotOutArray(14*Np);
+	double *TotOutArray = vTotOutArray.data();
 	double *t = TotOutArray;
 	int nv = 0;
 
@@ -853,7 +854,7 @@ void radTSend::OutFieldCompRes(char* FieldChar, radTField* FieldArray, double* A
 	int Dims[] = { nv, Np};
 	MultiDimArrayOfDouble(TotOutArray, Dims, 2);
 
-	if(TotOutArray != 0) delete[] TotOutArray;
+	// RAII: automatic cleanup via vTotOutArray
 #endif
 }
 
@@ -906,8 +907,8 @@ void radTSend::OutFieldIntCompRes(char* FieldIntChar, radTField* FieldArray, dou
 	//double *t = TotOutArray;
 	//int nv = 0;
 
-	double *TotOutArray = new double[10*Np];
-	if(TotOutArray == 0) { ErrorMessage("Radia::Error900"); return;}
+	std::vector<double> vTotOutArray(10*Np);
+	double *TotOutArray = vTotOutArray.data();
 	double *t = TotOutArray;
 	int nv = 0;
 
@@ -975,7 +976,7 @@ void radTSend::OutFieldIntCompRes(char* FieldIntChar, radTField* FieldArray, dou
 	int Dims[] = { nv, Np};
 	MultiDimArrayOfDouble(TotOutArray, Dims, 2);
 
-	if(TotOutArray != 0) delete[] TotOutArray;
+	// RAII: automatic cleanup via vTotOutArray
 #endif
 }
 
@@ -986,8 +987,8 @@ void radTSend::OutRelaxResultsInfo(double* RelaxStatusParamArray, int lenRelaxSt
 //#ifdef __JAVA__
 #if defined __JAVA__ || defined ALPHA__DLL__ || defined ALPHA__LIB__
 	int TotOutElem = lenRelaxStatusParamArray + 1;
-	double *TotOutArray = new double[TotOutElem];
-	if(TotOutArray == 0) { ErrorMessage("Radia::Error900"); return;}
+	std::vector<double> vTotOutArray(TotOutElem);
+	double *TotOutArray = vTotOutArray.data();
 	double *t = TotOutArray;
 	double *tRelaxStatusParamArray = RelaxStatusParamArray;
 	for(int i=0; i<lenRelaxStatusParamArray; i++) *(t++) = *(tRelaxStatusParamArray++);
@@ -996,7 +997,7 @@ void radTSend::OutRelaxResultsInfo(double* RelaxStatusParamArray, int lenRelaxSt
 	int Dims[] = { TotOutElem};
 	MultiDimArrayOfDouble(TotOutArray, Dims, 1);
 
-	delete[] TotOutArray; //OC30122019 (pointed-out by per-gron)
+	// RAII: automatic cleanup via vTotOutArray
 #endif
 }
 
