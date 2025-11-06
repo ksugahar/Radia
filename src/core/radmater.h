@@ -55,7 +55,7 @@ public:
 
 	void SetParam(const char* InName, double InKsiPar, double InKsiPerp, double InMr)
 	{
-		strcpy(Name, InName);
+		strncpy(Name, InName, 49); Name[49] = '\0';
 		KsiPar = InKsiPar; KsiPerp = InKsiPerp; Mr = InMr;
 	}
 
@@ -76,7 +76,7 @@ public:
 
 	void SetParam(const char* InName, double ms0, double ms1, double ms2, double ks0, double ks1, double ks2)
 	{
-		strcpy(Name, InName);
+		strncpy(Name, InName, 49); Name[49] = '\0';
 		ks[0] = ks0; ms[0] = ms0;
 		ks[1] = ks1; ms[1] = ms1;
 		ks[2] = ks2; ms[2] = ms2;

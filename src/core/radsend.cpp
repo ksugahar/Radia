@@ -703,8 +703,8 @@ void radTSend::OutFieldForceOrTorqueThroughEnergyCompRes(char* ForceComponID, TV
 	//char* EqEmptyStr = (ID=='f')? "FxFyFz" : "TxTyTz";
 	//char EqEmptyStr[6];
 	char EqEmptyStr[10]; //OC150505
-	strcpy(EqEmptyStr, "TxTyTz");
-	if(ID=='f') strcpy(EqEmptyStr, "FxFyFz");
+	strncpy(EqEmptyStr, "TxTyTz", 9); EqEmptyStr[9] = '\0';
+	if(ID=='f') { strncpy(EqEmptyStr, "FxFyFz", 9); EqEmptyStr[9] = '\0'; }
 
 	char SmallID = ID;
 	char CapitalID = (SmallID=='f')? 'F' : 'T';
