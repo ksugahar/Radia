@@ -40,6 +40,7 @@ class radTSubdividedRecMag : public radTGroup, public radTRecMag {
 	std::vector<std::vector<double>> vQ_forM;
 	std::vector<double*> vQ_forMPtrs;
 	double** Q_forM;
+	std::vector<TVector3d*> vFormCenPoPtrArray;
 	TVector3d** FormCenPoPtrArray;
 	int AmOfSubElem;
 	int CenPoLoopCounter, IntrcMatrConstrCounter, FormIntrctMembCounter;

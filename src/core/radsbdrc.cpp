@@ -918,8 +918,9 @@ int radTSubdividedRecMag::SetupFldCmpData(short InFldCmpMeth, int SubLevel)
 
 	if(FldCmpMeth==0)
 	{
-		// RAII: automatic cleanup via vQ_forM
-		if(FormCenPoPtrArray!=nullptr) delete[] FormCenPoPtrArray;
+		// RAII: automatic cleanup
+		vFormCenPoPtrArray.clear();
+		FormCenPoPtrArray = nullptr;
 
 		return 1;
 	}
@@ -938,7 +939,8 @@ int radTSubdividedRecMag::SetupFldCmpData(short InFldCmpMeth, int SubLevel)
 	}
 	Q_forM = vQ_forMPtrs.data();
 	double** DirQ = vDirQPtrs.data();
-	FormCenPoPtrArray = new TVector3d*[AmOfSubElem];
+	vFormCenPoPtrArray.resize(AmOfSubElem);
+	FormCenPoPtrArray = vFormCenPoPtrArray.data();
 
 	if(FldCmpMeth==1)
 	{
