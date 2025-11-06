@@ -1185,15 +1185,20 @@ void radTArcCurGraphPresent::Draw(radTrans* BaseTransPtr)
 
 	int lenEdgeLine = ArcCurP->NumberOfSectors + 1;
 	TVector3d *LowerCloseEdgeLine=0, *LowerFarEdgeLine=0, *UpperCloseEdgeLine=0, *UpperFarEdgeLine=0;
+	std::vector<TVector3d> vLowerCloseEdgeLine, vLowerFarEdgeLine, vUpperCloseEdgeLine, vUpperFarEdgeLine;
 	TVector3d FrontLine[] = { SideFrontEnd[0], SideFrontEnd[1], SideFrontEnd[2], SideFrontEnd[3], SideFrontEnd[0] };
 	if(!OutlineSegments)
 	{
 		if(AmOfNonInternalLongFaces > 0)
 		{
-			LowerCloseEdgeLine = new TVector3d[lenEdgeLine];
-			LowerFarEdgeLine = new TVector3d[lenEdgeLine];
-			UpperCloseEdgeLine = new TVector3d[lenEdgeLine];
-			UpperFarEdgeLine = new TVector3d[lenEdgeLine];
+			vLowerCloseEdgeLine.resize(lenEdgeLine);
+			vLowerFarEdgeLine.resize(lenEdgeLine);
+			vUpperCloseEdgeLine.resize(lenEdgeLine);
+			vUpperFarEdgeLine.resize(lenEdgeLine);
+			LowerCloseEdgeLine = vLowerCloseEdgeLine.data();
+			LowerFarEdgeLine = vLowerFarEdgeLine.data();
+			UpperCloseEdgeLine = vUpperCloseEdgeLine.data();
+			UpperFarEdgeLine = vUpperFarEdgeLine.data();
 
 			LowerCloseEdgeLine[0] = SideBottom[0];
 			LowerFarEdgeLine[0] = SideBottom[3];
@@ -1321,10 +1326,7 @@ void radTArcCurGraphPresent::Draw(radTrans* BaseTransPtr)
 		if(Face5 || Face3) Send.Line(UpperFarEdgeLine, lenEdgeLine, DrawFacilityInd);
 		if(Face1Line) Send.Line(EndLine, 5, DrawFacilityInd);
 
-		if(LowerCloseEdgeLine != 0) delete[] LowerCloseEdgeLine;
-		if(LowerFarEdgeLine != 0) delete[] LowerFarEdgeLine;
-		if(UpperCloseEdgeLine != 0) delete[] UpperCloseEdgeLine;
-		if(UpperFarEdgeLine != 0) delete[] UpperFarEdgeLine;
+		// RAII: vLowerCloseEdgeLine, vLowerFarEdgeLine, vUpperCloseEdgeLine, vUpperFarEdgeLine cleaned up automatically
 	}
 }
 
@@ -2167,8 +2169,8 @@ void radTRectangleGraphPresent::Draw(radTrans* BaseTransPtr)
 void radTPolygonGraphPresent::Draw(radTrans* BaseTransPtr)
 {
 	radTPolygon* PolygonP = (radTPolygon*)g3dPtr;
-	TVector3d* PolygonArray = nullptr;
-	PolygonArray = new TVector3d[PolygonP->AmOfEdgePoints + 1];
+	std::vector<TVector3d> vPolygonArray(PolygonP->AmOfEdgePoints + 1);
+	TVector3d* PolygonArray = vPolygonArray.data();
 
 	TVector2d AuxVect2d;
 	TVector3d AuxVect(0.,0., PolygonP->CoordZ);
@@ -2206,7 +2208,7 @@ void radTPolygonGraphPresent::Draw(radTrans* BaseTransPtr)
 		RemoveCurrentColorFromStack();
 	}
 
-	delete[] PolygonArray;
+	// RAII: vPolygonArray cleaned up automatically
 }
 
 //-------------------------------------------------------------------------

@@ -1520,8 +1520,8 @@ int radTGroup::SubdivideByPlanesPerpToCylAx(double* kz_qz, double* Limits, TVect
 
 	radTSend Send;
 	int AmOfPieces_mi_1 = int(kz) - 1;
-	TVector3d* PointsOnCuttingPlanes = new TVector3d[AmOfPieces_mi_1];
-	if(PointsOnCuttingPlanes==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<TVector3d> vPointsOnCuttingPlanes(AmOfPieces_mi_1);
+	TVector3d* PointsOnCuttingPlanes = vPointsOnCuttingPlanes.data();
 
 	const double AbsZeroTol = 5.E-12;
 	double DelZ = Limits[1] - Limits[0];
@@ -1570,7 +1570,7 @@ int radTGroup::SubdivideByPlanesPerpToCylAx(double* kz_qz, double* Limits, TVect
 		}
 	}
 
-	if(PointsOnCuttingPlanes!=0) delete[] PointsOnCuttingPlanes;
+	// RAII: vPointsOnCuttingPlanes cleaned up automatically
 	return 1;
 }
 		
