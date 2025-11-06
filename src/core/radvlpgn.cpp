@@ -2169,12 +2169,13 @@ int radTPolyhedron::KsFromSizeToNumb(double* SubdivArray, int AmOfDir, radTSubdi
 int radTPolyhedron::SubdivideItselfByParPlanes(double* InSubdivArray, int AmOfDir, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
 {
 	double* SubdivArray = InSubdivArray;
+	std::vector<double> vSubdivArrayToDelete;
 	double* SubdivArrayToDelete = 0;
 	radTSend Send;
-	if(pSubdivOptions->SubdivisionParamCode == 1) 
+	if(pSubdivOptions->SubdivisionParamCode == 1)
 	{
-		SubdivArrayToDelete = new double[AmOfDir*5];
-		if(SubdivArrayToDelete == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+		vSubdivArrayToDelete.resize(AmOfDir*5);
+		SubdivArrayToDelete = vSubdivArrayToDelete.data();
 		SubdivArray = SubdivArrayToDelete;
 
 		double* tSubdivArray = SubdivArray;
@@ -2296,7 +2297,7 @@ int radTPolyhedron::SubdivideItselfByParPlanes(double* InSubdivArray, int AmOfDi
 		In_hg = GroupHandle;
 	}
 
-	if(SubdivArrayToDelete != 0) delete[] SubdivArrayToDelete;
+	// RAII: automatic cleanup via vSubdivArrayToDelete
 	return 1;
 }
 
