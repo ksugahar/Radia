@@ -2131,8 +2131,8 @@ int radTPolyhedron::KsFromSizeToNumb(double* SubdivArray, int AmOfDir, radTSubdi
 
 	TransfShouldBeTreated = (TransfShouldBeTreated && SomethingFound);
 
-	TVector3d* Directions = new TVector3d[AmOfDir];
-	if(Directions == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<TVector3d> vDirections(AmOfDir);
+	TVector3d* Directions = vDirections.data();
 	TVector3d* tDirections = Directions;
 	double* tSubdivArray = SubdivArray;
 	for(int i=0; i<AmOfDir; i++)
@@ -2146,8 +2146,8 @@ int radTPolyhedron::KsFromSizeToNumb(double* SubdivArray, int AmOfDir, radTSubdi
 		tSubdivArray += 2;
 	}
 
-	double* Sizes = new double[AmOfDir];
-	if(Sizes == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<double> vSizes(AmOfDir);
+	double* Sizes = vSizes.data();
 
 	EstimateSize(Directions, Sizes, AmOfDir);
 
@@ -2162,8 +2162,7 @@ int radTPolyhedron::KsFromSizeToNumb(double* SubdivArray, int AmOfDir, radTSubdi
 		tSubdivArray +=2;
 	}
 
-	if(Directions != 0) delete[] Directions;
-	if(Sizes != 0) delete[] Sizes;
+	// RAII: automatic cleanup via vDirections and vSizes
 	return 1;
 }
 
