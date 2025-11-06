@@ -246,7 +246,6 @@ public:
 	int GraphicsForElem_g3d(int ElemKey, int InShowSymmetryChilds, const char** arOptionNames =0, const char** arOptionValues =0, int numOptions =0);
 	int GraphicsForElem_g3d_VTK(int ElemKey, const char** OptionNames =0, const char** OptionValues =0, int OptionCount =0); //OC04112019
 	int DecodeViewingOptions(const char** OptionNames, const char** OptionValues, int OptionCount, char* OptBits);
-	void PrepareGeomPolygDataForViewing(radTVectGeomPolygon& GeomPolygons, double*& VertCoord, int& Nv, int*& VertInd, int*& PgLen, float*& PgColors, int& Npg);
 	void DeallocateAuxPgnViewData(double** dArr, int** iArr1, int** iArr2, float** fArr);
 
 	void GraphicsForAll_g3d(int InShowSymmetryChilds);

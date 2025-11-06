@@ -1223,59 +1223,6 @@ int radTApplication::DecodeViewingOptions(const char** OptionNames, const char**
 }
 
 //-------------------------------------------------------------------------
-// WARNING: This function is currently unused (no callers found in codebase).
-// NOTE: Allocates memory via new[] that caller must delete[] (4 arrays).
-// Similar to radiobuf.h::StoreGeomPolygData but with different output format.
-// TODO: If this function is ever used, consider refactoring to use std::vector
-//       or updating StoreGeomPolygData to support this use case.
-//-------------------------------------------------------------------------
-
-void radTApplication::PrepareGeomPolygDataForViewing(radTVectGeomPolygon& GeomPolygons, double*& VertCoord, int& Nv, int*& VertInd, int*& PgLen, float*& PgColors, int& Npg)
-{
-	Npg = (int)(GeomPolygons.size());
-	if(Npg <= 0) return;
-
-	Nv=0;
-	for(int i=0; i<Npg; i++) Nv += GeomPolygons[i].Nv;
-	if(Nv <= 0) return;
-
-	// WARNING: Caller must delete[] these four arrays to avoid memory leak!
-	VertCoord = new double[3*Nv];
-	VertInd = new int[Nv];
-	PgLen = new int[Npg];
-	PgColors = new float[3*Npg];
-
-	double *tVertCoord = VertCoord;
-	int *tVertInd = VertInd;
-	int *tPgLen = PgLen;
-	float *tPgColors = PgColors;
-
-	int AbsPointCount = 0; //1; //OC240804
-	for(int j=0; j<Npg; j++)
-	{
-		radTGeomPolygon& CurPolygon = GeomPolygons[j];
-		double *tCurVert = CurPolygon.VertCoords;
-		int CurNv = CurPolygon.Nv;
-
-		*(tPgLen++) = CurNv;
-
-		float *tColor = CurPolygon.ColRGB;
-		*(tPgColors++) = *(tColor++);
-		*(tPgColors++) = *(tColor++);
-		*(tPgColors++) = *(tColor++);
-
-		for(int k=0; k<CurNv; k++)
-		{
-			*(tVertCoord++) = *(tCurVert++);
-			*(tVertCoord++) = *(tCurVert++);
-			*(tVertCoord++) = *(tCurVert++);
-
-			*(tVertInd++) = (AbsPointCount++); //correct if necessary
-		}
-	}
-}
-
-//-------------------------------------------------------------------------
 
 void radTApplication::DeallocateAuxPgnViewData(double** dArr, int** iArr1, int** iArr2, float** fArr)
 {
