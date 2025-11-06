@@ -76,9 +76,16 @@ public:
 	        py::object field_result = rad.attr("Fld")(radia_obj, field_type, coords);
 
 	        py::list field_list = field_result.cast<py::list>();
-	        result(0) = field_list[0].cast<double>();
-	        result(1) = field_list[1].cast<double>();
-	        result(2) = field_list[2].cast<double>();
+
+	        // Coordinate system conversion for vector potential 'a':
+	        // NGSolve differentiates in meters, Radia uses millimeters
+	        // curl(A) = ∂A/∂x_m = (∂A/∂x_mm) × (∂x_mm/∂x_m) = (∂A/∂x_mm) × 1000
+	        // To get correct B = curl(A), we need to divide A by 1000
+	        double scale = (field_type == "a") ? 0.001 : 1.0;
+
+	        result(0) = field_list[0].cast<double>() * scale;
+	        result(1) = field_list[1].cast<double>() * scale;
+	        result(2) = field_list[2].cast<double>() * scale;
 
 	    } catch (std::exception &e) {
 	        std::cerr << "[RadiaField] Error (" << field_type << "): "

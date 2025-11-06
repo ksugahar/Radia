@@ -49,13 +49,13 @@ rad.UtiDelAll()
 magnet = rad.ObjRecMag(
 	[0, 0, 0],           # Center (mm)
 	[40, 40, 60],        # Dimensions (mm) - larger for stronger field
-	[0, 0, 1500]         # Magnetization (A/m) - stronger for better measurement
+	[0, 0, 1.2]          # Magnetization (T) - NdFeB typical value
 )
 
 print(f"  Magnet ID: {magnet}")
 print(f"  Center: [0, 0, 0] mm")
 print(f"  Dimensions: [40, 40, 60] mm")
-print(f"  Magnetization: [0, 0, 1500] A/m")
+print(f"  Magnetization: [0, 0, 1.2] T")
 
 # Calculate field at a reference point
 ref_point = [0, 0, 50]  # mm
@@ -134,88 +134,10 @@ print(f"  A_cf created: {type(A_cf)}")
 B_cf = rad_ngsolve.RadiaField(bg_field, 'b')
 print(f"  B_cf created: {type(B_cf)}")
 
-# Compute curl(A) using NGSolve
-curl_A_cf = curl(A_cf)
-print(f"  curl(A) CoefficientFunction created")
-
 # ============================================================================
-# Step 5: Point-wise verification at test points
+# Step 5: Create GridFunctions for visualization
 # ============================================================================
-print("\n[Step 5] Point-wise verification: curl(A) vs B")
-print("-" * 80)
-
-# Define comprehensive test points (in meters)
-test_points_meters = [
-	(0.030, 0.020, 0.030),  # Near magnet surface
-	(0.030, 0.020, 0.040),  # Near center
-	(0.030, 0.020, 0.050),  # Center region
-	(0.020, 0.020, 0.040),  # Corner region
-	(0.040, 0.040, 0.050),  # Off-center
-	(0.050, 0.030, 0.060),  # Edge region
-	(0.035, 0.035, 0.045),  # Diagonal
-	(0.025, 0.045, 0.055),  # Asymmetric
-]
-
-print("\n  Point (m)                curl(A) (T)                    B (T)                       Error (T)")
-print("  " + "-" * 100)
-
-errors = []
-for point in test_points_meters:
-	try:
-		mip = mesh(*point)
-
-		curl_A_val = np.array(curl_A_cf(mip))
-		B_val = np.array(B_cf(mip))
-
-		error_vec = curl_A_val - B_val
-		error_norm = np.linalg.norm(error_vec)
-		errors.append(error_norm)
-
-		# Relative error
-		B_norm = np.linalg.norm(B_val)
-		rel_error = error_norm / B_norm if B_norm > 1e-10 else 0.0
-
-		print(f"  {point}  [{curl_A_val[0]:9.6f}, {curl_A_val[1]:9.6f}, {curl_A_val[2]:9.6f}]  "
-		      f"[{B_val[0]:9.6f}, {B_val[1]:9.6f}, {B_val[2]:9.6f}]  "
-		      f"{error_norm:.3e} ({rel_error*100:.4f}%)")
-
-	except Exception as e:
-		print(f"  {point}  [Point outside mesh: {e}]")
-
-# ============================================================================
-# Step 6: Statistical error analysis
-# ============================================================================
-print("\n[Step 6] Statistical Error Analysis")
-print("-" * 80)
-
-if len(errors) > 0:
-	errors = np.array(errors)
-	mean_error = np.mean(errors)
-	std_error = np.std(errors)
-	max_error = np.max(errors)
-	min_error = np.min(errors)
-
-	print(f"  Number of test points: {len(errors)}")
-	print(f"  Mean error:   {mean_error:.6e} T")
-	print(f"  Std deviation: {std_error:.6e} T")
-	print(f"  Min error:    {min_error:.6e} T")
-	print(f"  Max error:    {max_error:.6e} T")
-
-	# Verification criterion
-	tolerance = 1e-4  # Tesla (0.1 mT)
-	if max_error < tolerance:
-		print(f"\n  ✓ [SUCCESS] curl(A) = B verified!")
-		print(f"    Maximum error {max_error:.6e} T < tolerance {tolerance:.6e} T")
-	else:
-		print(f"\n  ✗ [WARNING] Large errors detected!")
-		print(f"    Maximum error {max_error:.6e} T >= tolerance {tolerance:.6e} T")
-else:
-	print("  No valid test points evaluated")
-
-# ============================================================================
-# Step 7: Create GridFunctions for visualization
-# ============================================================================
-print("\n[Step 7] Creating GridFunctions for VTK export")
+print("\n[Step 5] Creating GridFunctions for VTK export")
 print("-" * 80)
 
 # Create H(curl) finite element space
@@ -260,6 +182,80 @@ curl_A_magnitude.Set(sqrt(curl_A_gf[0]**2 + curl_A_gf[1]**2 + curl_A_gf[2]**2))
 print("  All GridFunctions created")
 
 # ============================================================================
+# Step 6: Point-wise verification at test points
+# ============================================================================
+print("\n[Step 6] Point-wise verification: curl(A) vs B")
+print("-" * 80)
+
+# Define comprehensive test points (in meters)
+test_points_meters = [
+	(0.030, 0.020, 0.030),  # Near magnet surface
+	(0.030, 0.020, 0.040),  # Near center
+	(0.030, 0.020, 0.050),  # Center region
+	(0.020, 0.020, 0.040),  # Corner region
+	(0.040, 0.040, 0.050),  # Off-center
+	(0.050, 0.030, 0.060),  # Edge region
+	(0.035, 0.035, 0.045),  # Diagonal
+	(0.025, 0.045, 0.055),  # Asymmetric
+]
+
+print("\n  Point (m)                curl(A) (T)                    B (T)                       Error (T)")
+print("  " + "-" * 100)
+
+errors = []
+for point in test_points_meters:
+	try:
+		mip = mesh(*point)
+
+		curl_A_val = np.array(curl_A_gf(mip))
+		B_val = np.array(B_cf(mip))
+
+		error_vec = curl_A_val - B_val
+		error_norm = np.linalg.norm(error_vec)
+		errors.append(error_norm)
+
+		# Relative error
+		B_norm = np.linalg.norm(B_val)
+		rel_error = error_norm / B_norm if B_norm > 1e-10 else 0.0
+
+		print(f"  {point}  [{curl_A_val[0]:9.6f}, {curl_A_val[1]:9.6f}, {curl_A_val[2]:9.6f}]  "
+		      f"[{B_val[0]:9.6f}, {B_val[1]:9.6f}, {B_val[2]:9.6f}]  "
+		      f"{error_norm:.3e} ({rel_error*100:.4f}%)")
+
+	except Exception as e:
+		print(f"  {point}  [Point outside mesh: {e}]")
+
+# ============================================================================
+# Step 7: Statistical error analysis
+# ============================================================================
+print("\n[Step 7] Statistical Error Analysis")
+print("-" * 80)
+
+if len(errors) > 0:
+	errors = np.array(errors)
+	mean_error = np.mean(errors)
+	std_error = np.std(errors)
+	max_error = np.max(errors)
+	min_error = np.min(errors)
+
+	print(f"  Number of test points: {len(errors)}")
+	print(f"  Mean error:   {mean_error:.6e} T")
+	print(f"  Std deviation: {std_error:.6e} T")
+	print(f"  Min error:    {min_error:.6e} T")
+	print(f"  Max error:    {max_error:.6e} T")
+
+	# Verification criterion
+	tolerance = 1e-4  # Tesla (0.1 mT)
+	if max_error < tolerance:
+		print(f"\n  [SUCCESS] curl(A) = B verified!")
+		print(f"    Maximum error {max_error:.6e} T < tolerance {tolerance:.6e} T")
+	else:
+		print(f"\n  [WARNING] Large errors detected!")
+		print(f"    Maximum error {max_error:.6e} T >= tolerance {tolerance:.6e} T")
+else:
+	print("  No valid test points evaluated")
+
+# ============================================================================
 # Step 8: Export VTK files
 # ============================================================================
 print("\n[Step 8] Exporting VTK visualization files")
@@ -275,7 +271,7 @@ try:
 		subdivision=2
 	)
 	vtk_vectors.Do()
-	print("  ✓ vector_fields.vtu exported (A, curl(A), B)")
+	print("  [OK] vector_fields.vtu exported (A, curl(A), B)")
 
 	# Export scalar fields (magnitudes and error)
 	vtk_scalars = VTKOutput(
@@ -286,7 +282,7 @@ try:
 		subdivision=2
 	)
 	vtk_scalars.Do()
-	print("  ✓ scalar_fields.vtu exported (magnitudes and error)")
+	print("  [OK] scalar_fields.vtu exported (magnitudes and error)")
 
 	# Export error field separately for detailed analysis
 	vtk_error = VTKOutput(
@@ -297,7 +293,7 @@ try:
 		subdivision=3  # Higher subdivision for error visualization
 	)
 	vtk_error.Do()
-	print("  ✓ error_field.vtu exported (|curl(A) - B|)")
+	print("  [OK] error_field.vtu exported (|curl(A) - B|)")
 
 	print("\n  Visualization files created:")
 	print("    - vector_fields.vtu: A, curl(A), B vector fields")
@@ -310,7 +306,7 @@ try:
 	print("    4. Use 'Threshold' filter to highlight regions with high error")
 
 except Exception as e:
-	print(f"  ✗ VTK export failed: {e}")
+	print(f"  [ERROR] VTK export failed: {e}")
 	import traceback
 	traceback.print_exc()
 
@@ -321,14 +317,14 @@ print("\n[Step 9] Verification Summary")
 print("=" * 80)
 
 if len(errors) > 0 and max_error < tolerance:
-	print("STATUS: ✓ VERIFICATION PASSED")
+	print("STATUS: [VERIFICATION PASSED]")
 	print(f"\ncurl(A) = B relationship verified to within {tolerance:.6e} T")
 	print(f"Maximum error: {max_error:.6e} T")
 	print(f"Mean error: {mean_error:.6e} T")
 	print("\nThe vector potential A correctly represents the magnetic field B.")
 	print("The relationship B = curl(A) is satisfied numerically.")
 else:
-	print("STATUS: ⚠ VERIFICATION INCOMPLETE")
+	print("STATUS: [VERIFICATION INCOMPLETE]")
 	if len(errors) == 0:
 		print("\nNo valid test points could be evaluated.")
 	else:
