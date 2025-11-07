@@ -305,3 +305,81 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 message(STATUS "radia module configured")
+
+# ========================================
+# Test Programs
+# ========================================
+
+# Test for radTHMatrixFieldSource (Phase 2 validation)
+add_executable(test_radhmat test_radhmat.cpp)
+
+# Link with Radia core libraries
+target_link_libraries(test_radhmat PRIVATE
+	triangle_lib
+	hacapk
+)
+
+# Link with FFTW and system libraries
+if(WIN32)
+	if(EXISTS ${FFTW_LIB})
+		target_link_libraries(test_radhmat PRIVATE ${FFTW_LIB})
+	endif()
+	target_link_libraries(test_radhmat PRIVATE version.lib)
+endif()
+
+# Add Radia core source files directly to test (since radia is a Python module)
+target_sources(test_radhmat PRIVATE
+	${RADIA_CORE_SOURCES}
+	${EXT_DIR}/auxparse/auxparse.cpp
+	${EXT_DIR}/genmath/gmfft.cpp
+	${EXT_DIR}/genmath/gmtrans.cpp
+	${RADIA_LIB_SOURCES}
+)
+
+# Add include directories
+target_include_directories(test_radhmat PRIVATE
+	${CORE_DIR}
+	${LIB_DIR}
+	${EXT_DIR}/auxparse
+	${EXT_DIR}/genmath
+	${EXT_DIR}/triangle
+	${EXT_DIR}/HACApK_LH-Cimplm
+	${FFTW_DIR}
+)
+
+# Add compile definitions
+target_compile_definitions(test_radhmat PRIVATE
+	ALPHA__LIB__
+	FFTW_ENABLE_FLOAT
+	NO_TIMER
+	ANSI_DECLARATORS
+	TRILIBRARY
+	_GM_WITHOUT_BASE
+	_CRT_SECURE_NO_WARNINGS
+	$<$<CONFIG:Debug>:_DEBUG>
+	$<$<CONFIG:Release>:NDEBUG>
+	$<$<PLATFORM_ID:Windows>:WIN32>
+	$<$<PLATFORM_ID:Windows>:_WINDOWS>
+)
+
+# Compiler-specific flags
+if(MSVC)
+	target_compile_options(test_radhmat PRIVATE
+		/wd4244  # Disable conversion warnings
+		/wd4267  # Disable size_t conversion warnings
+	)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+	target_compile_options(test_radhmat PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+		-Wno-unused-variable
+	)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(test_radhmat PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+		-Wno-unused-variable
+	)
+endif()
+
+message(STATUS "test_radhmat executable configured")

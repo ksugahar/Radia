@@ -16,12 +16,23 @@
 #include "radhmat.h"
 #include "radgroup.h"
 #include "radexcep.h"
+#include "radrec.h"
 #include <iostream>
 #include <chrono>
 #include <cmath>
 
-// HACApK includes (will be used in Phase 2)
-// #include "hacapk.hpp"
+// HACApK includes
+#include "hacapk.hpp"
+
+//-------------------------------------------------------------------------
+// Helper structures for kernel function
+//-------------------------------------------------------------------------
+
+struct KernelData {
+	std::vector<hacapk::Point3D>* source_points;
+	std::vector<hacapk::Point3D>* target_points;
+	std::vector<TVector3d>* magnetic_moments;  // Magnetic moments (A·m²)
+};
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -44,6 +55,8 @@ radTHMatrixFieldSource::radTHMatrixFieldSource(
 	// Copy source elements from group
 	source_elements = group->GroupMapOfHandlers;
 	num_elements = static_cast<int>(source_elements.size());
+
+	std::cout << "[HMatrix] Created field source with " << num_elements << " elements" << std::endl;
 
 	// Extract geometry for future H-matrix construction
 	if(!ExtractGeometry()) {
@@ -95,15 +108,12 @@ radTHMatrixFieldSource::radTHMatrixFieldSource(const radTHMatrixFieldSource& src
 radTHMatrixFieldSource::~radTHMatrixFieldSource()
 {
 	// Clean up H-matrix data structures
-	// Phase 2: Add proper cleanup of HACApK objects
-	// if (hmatrix_data) {
-	//     delete static_cast<hacapk::HMatrix*>(hmatrix_data);
-	// }
-	// if (cluster_tree_data) {
-	//     delete static_cast<hacapk::Cluster*>(cluster_tree_data);
-	// }
+	if(hmatrix_data) {
+		delete static_cast<hacapk::HMatrix*>(hmatrix_data);
+		hmatrix_data = nullptr;
+	}
 
-	hmatrix_data = nullptr;
+	// Cluster tree is owned by shared_ptr, will be cleaned up automatically
 	cluster_tree_data = nullptr;
 }
 
@@ -112,6 +122,7 @@ radTHMatrixFieldSource::~radTHMatrixFieldSource()
 int radTHMatrixFieldSource::ExtractGeometry()
 {
 	if(source_elements.empty()) {
+		std::cerr << "[HMatrix] No source elements to extract" << std::endl;
 		return 0;
 	}
 
@@ -119,27 +130,52 @@ int radTHMatrixFieldSource::ExtractGeometry()
 	element_positions.reserve(num_elements * 3);
 	element_moments.reserve(num_elements * 3);
 
+	int extracted_count = 0;
+
 	// Extract center positions and magnetic properties
 	for(const auto& pair : source_elements) {
 		radTg3d* elem = static_cast<radTg3d*>(pair.second.rep);
+		if(!elem) continue;
 
-		// Get element center (simplified - needs proper implementation)
+		// Get element center and magnetization
 		TVector3d center(0, 0, 0);
-
-		// Try to get magnetization
-		// This is a placeholder - proper implementation in Phase 2
 		TVector3d M(0, 0, 0);
+		double volume = 0.0;
 
-		// Store data
-		element_positions.push_back(center.x);
-		element_positions.push_back(center.y);
-		element_positions.push_back(center.z);
+		// Try to cast to known types and extract geometry
+		// Type 1: radTg3dRelax (magnetized volume)
+		radTg3dRelax* relaxable = dynamic_cast<radTg3dRelax*>(elem);
+		if(relaxable) {
+			// Get magnetization
+			M = relaxable->Magn;
 
-		element_moments.push_back(M.x);
-		element_moments.push_back(M.y);
-		element_moments.push_back(M.z);
+			// Estimate center (simplified - proper implementation needed)
+			center = TVector3d(0, 0, 0);  // Should get actual center
+
+			// Get volume (approximate)
+			volume = relaxable->Volume();
+
+			// Store data
+			element_positions.push_back(center.x);
+			element_positions.push_back(center.y);
+			element_positions.push_back(center.z);
+
+			// Magnetic moment = M * Volume (A·m²)
+			TVector3d moment = M * volume;
+			element_moments.push_back(moment.x);
+			element_moments.push_back(moment.y);
+			element_moments.push_back(moment.z);
+
+			extracted_count++;
+		}
 	}
 
+	if(extracted_count == 0) {
+		std::cerr << "[HMatrix] Warning: No geometry could be extracted" << std::endl;
+		return 0;
+	}
+
+	std::cout << "[HMatrix] Extracted geometry from " << extracted_count << " elements" << std::endl;
 	return 1;
 }
 
@@ -166,21 +202,118 @@ int radTHMatrixFieldSource::BuildHMatrix()
 
 	auto start_time = std::chrono::high_resolution_clock::now();
 
-	// Phase 2: Implement H-matrix construction using HACApK
-	// 1. Build cluster tree
-	// 2. Assemble H-matrix with ACA
-	// 3. Store in hmatrix_data
+	try {
+		// Convert element positions to hacapk::Point3D
+		std::vector<hacapk::Point3D> points;
+		points.reserve(num_elements);
 
-	// Placeholder for Phase 1
-	std::cout << "[HMatrix] Phase 1: H-matrix construction not yet implemented" << std::endl;
-	std::cout << "[HMatrix] Falling back to direct calculation" << std::endl;
+		for(int i = 0; i < num_elements; i++) {
+			points.emplace_back(
+				element_positions[3*i],
+				element_positions[3*i+1],
+				element_positions[3*i+2]
+			);
+		}
+
+		// Convert element moments to TVector3d
+		std::vector<TVector3d> moments;
+		moments.reserve(num_elements);
+
+		for(int i = 0; i < num_elements; i++) {
+			moments.emplace_back(
+				element_moments[3*i],
+				element_moments[3*i+1],
+				element_moments[3*i+2]
+			);
+		}
+
+		// Setup HACApK control parameters
+		hacapk::ControlParams params;
+		params.eps_aca = config.eps;
+		params.leaf_size = static_cast<double>(config.min_cluster_size);
+		params.aca_type = 1;  // Standard ACA
+		params.eta = 2.0;     // Distance parameter for admissibility
+		params.print_level = 1;
+
+		if(config.use_openmp) {
+			if(config.num_threads > 0) {
+				hacapk::set_num_threads(config.num_threads);
+			}
+			std::cout << "[HMatrix] Using " << hacapk::get_num_threads() << " OpenMP threads" << std::endl;
+		}
+
+		// Prepare kernel data
+		KernelData kdata;
+		kdata.source_points = &points;
+		kdata.target_points = &points;  // Self-interaction for now
+		kdata.magnetic_moments = &moments;
+
+		// Define kernel function (Biot-Savart law)
+		auto kernel = [](int i, int j, void* user_data) -> double {
+			KernelData* kd = static_cast<KernelData*>(user_data);
+
+			const hacapk::Point3D& pi = (*kd->target_points)[i];
+			const hacapk::Point3D& pj = (*kd->source_points)[j];
+			const TVector3d& mj = (*kd->magnetic_moments)[j];
+
+			// Distance vector (mm)
+			double dx = pi.x - pj.x;
+			double dy = pi.y - pj.y;
+			double dz = pi.z - pj.z;
+			double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+
+			if(r < 1e-10) {
+				// Self-interaction or very close points
+				return 0.0;
+			}
+
+			// Biot-Savart law: B = (μ₀/4π) * (m × r) / r³
+			// For simplicity, return scalar influence (magnitude)
+			// Full implementation should handle vector field
+			const double mu0_over_4pi = 1e-7;  // T·m/A
+			double r3 = r*r*r;
+
+			// Cross product: m × r
+			// For now, approximate with m·r term (simplified)
+			double influence = mu0_over_4pi / r3;
+
+			return influence;
+		};
+
+		// Build H-matrix
+		std::cout << "[HMatrix] Calling hacapk::build_hmatrix..." << std::endl;
+		std::unique_ptr<hacapk::HMatrix> hmat = hacapk::build_hmatrix(
+			points, points, kernel, &kdata, params
+		);
+
+		if(!hmat) {
+			std::cerr << "[HMatrix] Error: H-matrix construction failed" << std::endl;
+			return 0;
+		}
+
+		// Store H-matrix
+		hmatrix_data = hmat.release();
+		hmatrix_memory = static_cast<hacapk::HMatrix*>(hmatrix_data)->memory_usage();
+
+		is_built = true;
+
+		std::cout << "[HMatrix] H-matrix construction successful" << std::endl;
+		std::cout << "  Number of blocks: " << static_cast<hacapk::HMatrix*>(hmatrix_data)->nlf << std::endl;
+		std::cout << "  Low-rank blocks: " << static_cast<hacapk::HMatrix*>(hmatrix_data)->nlfkt << std::endl;
+		std::cout << "  Max rank: " << static_cast<hacapk::HMatrix*>(hmatrix_data)->ktmax << std::endl;
+		std::cout << "  Memory usage: " << hmatrix_memory / 1024.0 / 1024.0 << " MB" << std::endl;
+		std::cout << "  Compression ratio: " << static_cast<hacapk::HMatrix*>(hmatrix_data)->compression_ratio() << std::endl;
+
+	} catch(const std::exception& e) {
+		std::cerr << "[HMatrix] Exception during construction: " << e.what() << std::endl;
+		return 0;
+	} catch(...) {
+		std::cerr << "[HMatrix] Unknown exception during construction" << std::endl;
+		return 0;
+	}
 
 	auto end_time = std::chrono::high_resolution_clock::now();
 	construction_time = std::chrono::duration<double>(end_time - start_time).count();
-
-	// Mark as "built" even though we're using direct calculation
-	// This allows testing the rest of the infrastructure
-	is_built = true;
 
 	std::cout << "[HMatrix] Construction completed in " << construction_time << " seconds" << std::endl;
 
@@ -193,21 +326,29 @@ void radTHMatrixFieldSource::B_comp(radTField* FieldPtr)
 {
 	if(!FieldPtr) return;
 
-	// Phase 1: Use direct calculation (fallback)
-	// Phase 2: Use H-matrix if available
+	// If H-matrix is not available, use direct calculation
 	if(!is_built || hmatrix_data == nullptr) {
 		B_comp_direct(FieldPtr);
 		return;
 	}
 
-	// Phase 2: Implement H-matrix field evaluation
-	// TVector3d P = FieldPtr->P;
-	// TVector3d B = hmatrix_eval_field(P);
-	// if(FieldPtr->FieldKey.B_) FieldPtr->B += B;
-	// if(FieldPtr->FieldKey.H_) FieldPtr->H += B;
+	// Phase 2: Use H-matrix for fast field evaluation
+	try {
+		hacapk::HMatrix* hmat = static_cast<hacapk::HMatrix*>(hmatrix_data);
 
-	// For now, use direct calculation
-	B_comp_direct(FieldPtr);
+		// Evaluation point (mm)
+		TVector3d P = FieldPtr->P;
+
+		// For now, use direct calculation since H-matrix evaluation
+		// requires proper implementation of field evaluation at arbitrary points
+		// (not just at element centers)
+		// TODO: Implement proper field evaluation with H-matrix
+		B_comp_direct(FieldPtr);
+
+	} catch(...) {
+		// Fallback to direct calculation on error
+		B_comp_direct(FieldPtr);
+	}
 }
 
 //-------------------------------------------------------------------------
@@ -227,11 +368,34 @@ void radTHMatrixFieldSource::B_comp_batch(std::vector<radTField*>& fields)
 {
 	if(fields.empty()) return;
 
-	// Phase 2: Implement efficient batch evaluation with H-matrix
-	// For now, use direct calculation for each point
-	for(radTField* field : fields) {
-		if(field) {
-			B_comp(field);
+	if(!is_built || hmatrix_data == nullptr) {
+		// Use direct calculation for each point
+		for(radTField* field : fields) {
+			if(field) {
+				B_comp_direct(field);
+			}
+		}
+		return;
+	}
+
+	// Phase 2: Batch evaluation with H-matrix
+	try {
+		hacapk::HMatrix* hmat = static_cast<hacapk::HMatrix*>(hmatrix_data);
+
+		// For now, use direct calculation
+		// TODO: Implement efficient batch evaluation
+		for(radTField* field : fields) {
+			if(field) {
+				B_comp(field);
+			}
+		}
+
+	} catch(...) {
+		// Fallback to direct calculation
+		for(radTField* field : fields) {
+			if(field) {
+				B_comp_direct(field);
+			}
 		}
 	}
 }
@@ -255,11 +419,7 @@ void radTHMatrixFieldSource::B_comp_direct(radTField* FieldPtr)
 
 double radTHMatrixFieldSource::KernelFunction(int i, int j, void* kernel_data)
 {
-	// Phase 2: Implement kernel function for magnetic field
-	// This should compute the field influence from element j to element i
-	// using Biot-Savart law or dipole approximation
-
-	// Placeholder
+	// This is now handled by the lambda in BuildHMatrix()
 	return 0.0;
 }
 
@@ -276,9 +436,14 @@ void radTHMatrixFieldSource::Dump(std::ostream& o, int ShortSign)
 	o << "   Number of source elements: " << num_elements << std::endl;
 	o << "   H-matrix status: " << (is_built ? "built" : "not built") << std::endl;
 
-	if(is_built) {
+	if(is_built && hmatrix_data) {
+		hacapk::HMatrix* hmat = static_cast<hacapk::HMatrix*>(hmatrix_data);
 		o << "   Construction time: " << construction_time << " seconds" << std::endl;
-		o << "   Memory usage: " << hmatrix_memory << " bytes" << std::endl;
+		o << "   Memory usage: " << hmatrix_memory / 1024.0 / 1024.0 << " MB" << std::endl;
+		o << "   Number of blocks: " << hmat->nlf << std::endl;
+		o << "   Low-rank blocks: " << hmat->nlfkt << std::endl;
+		o << "   Max rank: " << hmat->ktmax << std::endl;
+		o << "   Compression ratio: " << hmat->compression_ratio() << std::endl;
 	}
 
 	o << "   Configuration:" << std::endl;
