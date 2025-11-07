@@ -13,6 +13,9 @@ This example performs comprehensive verification:
    - B field from Radia
    - Error field: |curl(A) - B|
 6. Statistical error analysis
+
+NOTE: For coordinate transformation examples (rotation, translation),
+see test_coordinate_transform.py in this directory.
 """
 
 import sys
