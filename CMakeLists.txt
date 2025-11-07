@@ -50,6 +50,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/radg3d.cpp
 	${CORE_DIR}/radg3dgr.cpp
 	${CORE_DIR}/radgroup.cpp
+	${CORE_DIR}/radhmat.cpp
 	${CORE_DIR}/radinter.cpp
 	${CORE_DIR}/radintrc.cpp
 	${CORE_DIR}/radiobuf.cpp
@@ -87,6 +88,9 @@ add_library(triangle_lib STATIC ${EXT_DIR}/triangle/triangle.c)
 target_compile_definitions(triangle_lib PRIVATE TRILIBRARY ANSI_DECLARATORS NO_TIMER)
 target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
 
+# HACApK library for H-matrix acceleration
+add_subdirectory(${EXT_DIR}/HACApK_LH-Cimplm)
+
 # Create NGSolve Python module using add_ngsolve_python_module
 # (following EMPY_Field pattern exactly)
 add_ngsolve_python_module(rad_ngsolve
@@ -98,8 +102,8 @@ add_ngsolve_python_module(rad_ngsolve
 	${PYTHON_DIR}/rad_ngsolve.cpp
 )
 
-# Link triangle library
-target_link_libraries(rad_ngsolve PRIVATE triangle_lib)
+# Link triangle library and HACApK
+target_link_libraries(rad_ngsolve PRIVATE triangle_lib hacapk)
 
 # Add include directories
 target_include_directories(rad_ngsolve PRIVATE
@@ -108,6 +112,7 @@ target_include_directories(rad_ngsolve PRIVATE
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
 	${EXT_DIR}/triangle
+	${EXT_DIR}/HACApK_LH-Cimplm
 	${PYTHON_DIR}
 )
 
@@ -217,8 +222,8 @@ pybind11_add_module(radia
 	${PYTHON_DIR}/radpy.cpp
 )
 
-# Link triangle library
-target_link_libraries(radia PRIVATE triangle_lib)
+# Link triangle library and HACApK
+target_link_libraries(radia PRIVATE triangle_lib hacapk)
 
 # Add include directories
 target_include_directories(radia PRIVATE
@@ -226,6 +231,7 @@ target_include_directories(radia PRIVATE
 	${LIB_DIR}
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
+	${EXT_DIR}/HACApK_LH-Cimplm
 	${FFTW_DIR}
 )
 
