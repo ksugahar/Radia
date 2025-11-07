@@ -367,6 +367,27 @@ EXP int CALL RadObjCntSize(int* n, int cnt);
 */
 EXP int CALL RadObjCntStuf(int* Objs, int cnt);
 
+/** Creates an H-matrix field source from a group of magnetic elements for fast field computation.
+@param n [out] reference number of the created H-matrix field source object
+@param grp [in] reference number of the group (container) object containing magnetic elements
+@param eps [in] ACA tolerance (default: 1e-6)
+@param max_rank [in] maximum rank for low-rank blocks (default: 50)
+@param min_cluster_size [in] minimum cluster size (default: 10)
+@param use_openmp [in] enable OpenMP parallelization: 1=enabled, 0=disabled (default: 1)
+@param num_threads [in] number of OpenMP threads, 0=automatic (default: 0)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadObjHMatrix(int* n, int grp, double eps, int max_rank, int min_cluster_size, int use_openmp, int num_threads);
+
+/** Builds the H-matrix structure for fast field computation.
+This function must be called after creating the H-matrix field source with RadObjHMatrix.
+@param hmat [in] reference number of the H-matrix field source object
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadHMatrixBuild(int hmat);
+
 /** Duplicates the object obj. 
 @param n [out] reference number of the object created
 @param obj [in] reference number of the object to duplicate

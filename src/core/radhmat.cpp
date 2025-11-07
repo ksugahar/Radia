@@ -24,6 +24,10 @@
 // HACApK includes
 #include "hacapk.hpp"
 
+// Radia application includes
+#include "radappl.h"
+#include "radsend.h"
+
 //-------------------------------------------------------------------------
 // Helper structures for kernel function
 //-------------------------------------------------------------------------
@@ -609,6 +613,99 @@ int radTHMatrixFieldSource::DuplicateItself(
 	}
 
 	return FinishDuplication(pNew, hg);
+}
+
+//-------------------------------------------------------------------------
+//-------------------------------------------------------------------------
+// Global functions for Python/C API
+//-------------------------------------------------------------------------
+//-------------------------------------------------------------------------
+
+extern radTApplication* g_pRadApp; // Defined in radappl.cpp
+
+void CreateHMatrixFieldSource(int grpKey, double eps, int max_rank, int min_cluster_size, int use_openmp, int num_threads)
+{
+	try {
+		// Get group object
+		radThg hGroup;
+		if(!g_pRadApp->RetrieveObject(grpKey, hGroup)) {
+			throw radTException("H-matrix: Invalid group key");
+		}
+
+		radTGroup* pGroup = dynamic_cast<radTGroup*>(static_cast<radTg*>(hGroup.rep));
+		if(!pGroup) {
+			throw radTException("H-matrix: Object is not a group");
+		}
+
+		// Create H-matrix configuration
+		radTHMatrixConfig config;
+		config.eps = eps;
+		config.max_rank = max_rank;
+		config.min_cluster_size = min_cluster_size;
+		config.use_openmp = (use_openmp != 0);
+		config.num_threads = num_threads;
+
+		// Create H-matrix field source
+		radTHMatrixFieldSource* pHMat = new radTHMatrixFieldSource(pGroup, config);
+		if(!pHMat) {
+			throw radTException("H-matrix: Failed to create H-matrix field source");
+		}
+
+		// Register in application
+		radThg hHMat;
+		hHMat.rep = pHMat;
+		int newKey = g_pRadApp->AddElementToContainer(hHMat);
+
+		// Output key
+		g_pRadApp->OutInt(newKey);
+
+	} catch(const radTException& ex) {
+		radTSend Send;
+		Send.ErrorMessage(ex.what());
+		g_pRadApp->OutInt(0);
+	} catch(const std::exception& ex) {
+		radTSend Send;
+		Send.ErrorMessage(ex.what());
+		g_pRadApp->OutInt(0);
+	} catch(...) {
+		radTSend Send;
+		Send.ErrorMessage("H-matrix: Unknown error");
+		g_pRadApp->OutInt(0);
+	}
+}
+
+//-------------------------------------------------------------------------
+
+void BuildHMatrixFieldSource(int hmatKey)
+{
+	try {
+		// Get H-matrix object
+		radThg hHMat;
+		if(!g_pRadApp->RetrieveObject(hmatKey, hHMat)) {
+			throw radTException("H-matrix: Invalid H-matrix key");
+		}
+
+		radTHMatrixFieldSource* pHMat = dynamic_cast<radTHMatrixFieldSource*>(static_cast<radTg*>(hHMat.rep));
+		if(!pHMat) {
+			throw radTException("H-matrix: Object is not an H-matrix field source");
+		}
+
+		// Build H-matrix
+		int result = pHMat->BuildHMatrix();
+		if(result != 1) {
+			throw radTException("H-matrix: Build failed");
+		}
+
+	} catch(const radTException& ex) {
+		radTSend Send;
+		Send.ErrorMessage(ex.what());
+	} catch(const std::exception& ex) {
+		radTSend Send;
+		Send.ErrorMessage(ex.what());
+	} catch(...) {
+		radTSend Send;
+		Send.ErrorMessage("H-matrix: Unknown error during build");
+	}
 }
 
 //-------------------------------------------------------------------------

@@ -44,6 +44,8 @@ void Group( int*, long );
 void AddToGroup( int, int*, long );
 void OutGroupSize( int );
 void OutGroupSubObjectKeys( int );
+void CreateHMatrixFieldSource( int, double, int, int, int, int );
+void BuildHMatrixFieldSource( int );
 
 void DuplicateElementG3DOpt( int, const char* );
 void CutElementG3DOpt( int, double,double,double, double,double,double, const char* );
@@ -457,6 +459,25 @@ int CALL RadObjDpl(int* n, int Obj, char* Opt1)
 	DuplicateElementG3DOpt(Obj, Opt1);
 
 	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadObjHMatrix(int* n, int grp, double eps, int max_rank, int min_cluster_size, int use_openmp, int num_threads)
+{
+	CreateHMatrixFieldSource(grp, eps, max_rank, min_cluster_size, use_openmp, num_threads);
+
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadHMatrixBuild(int hmat)
+{
+	BuildHMatrixFieldSource(hmat);
+
 	return ioBuffer.OutErrorStatus();
 }
 
