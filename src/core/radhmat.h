@@ -194,6 +194,16 @@ private:
 	 * @param FieldPtr Pointer to field structure
 	 */
 	void B_comp_direct(radTField* FieldPtr);
+
+	/**
+	 * OpenMP-parallelized direct field computation
+	 *
+	 * Accelerates field calculation using OpenMP parallelization.
+	 * Each thread computes contributions from a subset of elements.
+	 *
+	 * @param FieldPtr Pointer to field structure
+	 */
+	void B_comp_direct_openmp(radTField* FieldPtr);
 };
 
 //-------------------------------------------------------------------------

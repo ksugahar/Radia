@@ -332,18 +332,25 @@ void radTHMatrixFieldSource::B_comp(radTField* FieldPtr)
 		return;
 	}
 
-	// Phase 2: Use H-matrix for fast field evaluation
+	// Phase 3: Fast field evaluation for arbitrary points
 	try {
-		hacapk::HMatrix* hmat = static_cast<hacapk::HMatrix*>(hmatrix_data);
-
 		// Evaluation point (mm)
 		TVector3d P = FieldPtr->P;
 
-		// For now, use direct calculation since H-matrix evaluation
-		// requires proper implementation of field evaluation at arbitrary points
-		// (not just at element centers)
-		// TODO: Implement proper field evaluation with H-matrix
+		// For arbitrary points, we compute direct contribution from each element
+		// This is still O(N), but we can use OpenMP for parallelization
+		// Note: H-matrix is most beneficial for batch evaluation or
+		// field calculations at element centers (self-consistent fields)
+
+		#ifdef _OPENMP
+		if(config.use_openmp) {
+			B_comp_direct_openmp(FieldPtr);
+		} else {
+			B_comp_direct(FieldPtr);
+		}
+		#else
 		B_comp_direct(FieldPtr);
+		#endif
 
 	} catch(...) {
 		// Fallback to direct calculation on error
@@ -370,25 +377,65 @@ void radTHMatrixFieldSource::B_comp_batch(std::vector<radTField*>& fields)
 
 	if(!is_built || hmatrix_data == nullptr) {
 		// Use direct calculation for each point
+		#ifdef _OPENMP
+		if(config.use_openmp) {
+			// Parallel batch evaluation
+			int n_fields = static_cast<int>(fields.size());
+
+			#pragma omp parallel for schedule(dynamic)
+			for(int i = 0; i < n_fields; i++) {
+				if(fields[i]) {
+					B_comp_direct(fields[i]);
+				}
+			}
+		} else {
+			// Serial batch evaluation
+			for(radTField* field : fields) {
+				if(field) {
+					B_comp_direct(field);
+				}
+			}
+		}
+		#else
+		// Serial batch evaluation (no OpenMP)
 		for(radTField* field : fields) {
 			if(field) {
 				B_comp_direct(field);
 			}
 		}
+		#endif
 		return;
 	}
 
-	// Phase 2: Batch evaluation with H-matrix
+	// Phase 3: Optimized batch evaluation with OpenMP
 	try {
-		hacapk::HMatrix* hmat = static_cast<hacapk::HMatrix*>(hmatrix_data);
+		#ifdef _OPENMP
+		if(config.use_openmp) {
+			// Parallel batch evaluation
+			int n_fields = static_cast<int>(fields.size());
 
-		// For now, use direct calculation
-		// TODO: Implement efficient batch evaluation
+			#pragma omp parallel for schedule(dynamic)
+			for(int i = 0; i < n_fields; i++) {
+				if(fields[i]) {
+					B_comp_direct(fields[i]);
+				}
+			}
+		} else {
+			// Serial batch evaluation
+			for(radTField* field : fields) {
+				if(field) {
+					B_comp(field);
+				}
+			}
+		}
+		#else
+		// Serial batch evaluation (no OpenMP)
 		for(radTField* field : fields) {
 			if(field) {
 				B_comp(field);
 			}
 		}
+		#endif
 
 	} catch(...) {
 		// Fallback to direct calculation
@@ -413,6 +460,75 @@ void radTHMatrixFieldSource::B_comp_direct(radTField* FieldPtr)
 			elem->B_genComp(FieldPtr);
 		}
 	}
+}
+
+//-------------------------------------------------------------------------
+
+void radTHMatrixFieldSource::B_comp_direct_openmp(radTField* FieldPtr)
+{
+	if(!FieldPtr) return;
+
+	#ifdef _OPENMP
+	// OpenMP-parallelized direct calculation
+	// Each thread computes contributions from a subset of elements
+
+	// Collect element pointers into vector for indexed access
+	std::vector<radTg3d*> elements;
+	elements.reserve(source_elements.size());
+
+	for(const auto& pair : source_elements) {
+		radTg3d* elem = static_cast<radTg3d*>(pair.second.rep);
+		if(elem) {
+			elements.push_back(elem);
+		}
+	}
+
+	int n_elem = static_cast<int>(elements.size());
+
+	// Each thread accumulates its contribution separately
+	// Note: Cannot directly update FieldPtr->B in parallel due to race condition
+	// Instead, we compute contributions and sum them at the end
+
+	TVector3d B_total(0, 0, 0);
+	TVector3d H_total(0, 0, 0);
+	TVector3d A_total(0, 0, 0);
+
+	// Store original field values
+	TVector3d B_orig = FieldPtr->B;
+	TVector3d H_orig = FieldPtr->H;
+	TVector3d A_orig = FieldPtr->A;
+
+	#pragma omp parallel
+	{
+		// Each thread has its own field accumulator
+		radTField thread_field = *FieldPtr;
+		thread_field.B = TVector3d(0, 0, 0);
+		thread_field.H = TVector3d(0, 0, 0);
+		thread_field.A = TVector3d(0, 0, 0);
+
+		#pragma omp for nowait
+		for(int i = 0; i < n_elem; i++) {
+			elements[i]->B_genComp(&thread_field);
+		}
+
+		// Combine results using critical section
+		#pragma omp critical
+		{
+			B_total += thread_field.B;
+			H_total += thread_field.H;
+			A_total += thread_field.A;
+		}
+	}
+
+	// Update field with accumulated values
+	FieldPtr->B = B_orig + B_total;
+	FieldPtr->H = H_orig + H_total;
+	FieldPtr->A = A_orig + A_total;
+
+	#else
+	// OpenMP not available, fall back to serial
+	B_comp_direct(FieldPtr);
+	#endif
 }
 
 //-------------------------------------------------------------------------
