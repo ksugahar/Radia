@@ -629,12 +629,12 @@ void CreateHMatrixFieldSource(int grpKey, double eps, int max_rank, int min_clus
 		// Get group object
 		radThg hGroup;
 		if(!g_pRadApp->RetrieveObject(grpKey, hGroup)) {
-			throw radTException("H-matrix: Invalid group key");
+			throw std::runtime_error("H-matrix: Invalid group key");
 		}
 
 		radTGroup* pGroup = dynamic_cast<radTGroup*>(static_cast<radTg*>(hGroup.rep));
 		if(!pGroup) {
-			throw radTException("H-matrix: Object is not a group");
+			throw std::runtime_error("H-matrix: Object is not a group");
 		}
 
 		// Create H-matrix configuration
@@ -648,7 +648,7 @@ void CreateHMatrixFieldSource(int grpKey, double eps, int max_rank, int min_clus
 		// Create H-matrix field source
 		radTHMatrixFieldSource* pHMat = new radTHMatrixFieldSource(pGroup, config);
 		if(!pHMat) {
-			throw radTException("H-matrix: Failed to create H-matrix field source");
+			throw std::runtime_error("H-matrix: Failed to create H-matrix field source");
 		}
 
 		// Register in application
@@ -682,18 +682,18 @@ void BuildHMatrixFieldSource(int hmatKey)
 		// Get H-matrix object
 		radThg hHMat;
 		if(!g_pRadApp->RetrieveObject(hmatKey, hHMat)) {
-			throw radTException("H-matrix: Invalid H-matrix key");
+			throw std::runtime_error("H-matrix: Invalid H-matrix key");
 		}
 
 		radTHMatrixFieldSource* pHMat = dynamic_cast<radTHMatrixFieldSource*>(static_cast<radTg*>(hHMat.rep));
 		if(!pHMat) {
-			throw radTException("H-matrix: Object is not an H-matrix field source");
+			throw std::runtime_error("H-matrix: Object is not an H-matrix field source");
 		}
 
 		// Build H-matrix
 		int result = pHMat->BuildHMatrix();
 		if(result != 1) {
-			throw radTException("H-matrix: Build failed");
+			throw std::runtime_error("H-matrix: Build failed");
 		}
 
 	} catch(const radTException& ex) {

@@ -16,6 +16,14 @@
 //#endif
 
 //-------------------------------------------------------------------------
+// Global H-matrix solver settings
+//-------------------------------------------------------------------------
+
+static bool g_SolverHMatrixEnabled = false;
+static double g_SolverHMatrixEps = 1e-6;
+static int g_SolverHMatrixMaxRank = 50;
+
+//-------------------------------------------------------------------------
 
 extern "C" {
 
@@ -44,8 +52,9 @@ void Group( int*, long );
 void AddToGroup( int, int*, long );
 void OutGroupSize( int );
 void OutGroupSubObjectKeys( int );
-void CreateHMatrixFieldSource( int, double, int, int, int, int );
-void BuildHMatrixFieldSource( int );
+// Temporarily disabled - field source H-matrix (has API compatibility issues)
+// void CreateHMatrixFieldSource( int, double, int, int, int, int );
+// void BuildHMatrixFieldSource( int );
 
 void DuplicateElementG3DOpt( int, const char* );
 void CutElementG3DOpt( int, double,double,double, double,double,double, const char* );
@@ -463,7 +472,8 @@ int CALL RadObjDpl(int* n, int Obj, char* Opt1)
 }
 
 //-------------------------------------------------------------------------
-
+// Temporarily disabled - field source H-matrix (has API compatibility issues)
+/*
 int CALL RadObjHMatrix(int* n, int grp, double eps, int max_rank, int min_cluster_size, int use_openmp, int num_threads)
 {
 	CreateHMatrixFieldSource(grp, eps, max_rank, min_cluster_size, use_openmp, num_threads);
@@ -480,7 +490,7 @@ int CALL RadHMatrixBuild(int hmat)
 
 	return ioBuffer.OutErrorStatus();
 }
-
+*/
 //-------------------------------------------------------------------------
 
 int CALL RadObjM(double* pM, int* arMesh, int Obj) //OC21092018
@@ -1705,6 +1715,51 @@ int CALL RadUtiDataGet(char* pcData, const char typeData[3], long key) //OC04102
 
 	int ErrStat = ioBuffer.OutErrorStatus();
 	return ErrStat;
+}
+
+//-------------------------------------------------------------------------
+// H-Matrix Solver Acceleration Control
+//-------------------------------------------------------------------------
+
+int CALL RadSolverHMatrixEnable(int enable, double eps, int max_rank)
+{
+	g_SolverHMatrixEnabled = (enable != 0);
+	g_SolverHMatrixEps = eps;
+	g_SolverHMatrixMaxRank = max_rank;
+
+	if(g_SolverHMatrixEnabled)
+	{
+		// Note: Actual H-matrix will be created when Solve() is called
+		// and radTInteraction object is constructed
+	}
+
+	return 0;
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadSolverHMatrixDisable()
+{
+	g_SolverHMatrixEnabled = false;
+	return 0;
+}
+
+//-------------------------------------------------------------------------
+
+// Accessor functions for radTInteraction to read global settings
+bool RadSolverGetHMatrixEnabled()
+{
+	return g_SolverHMatrixEnabled;
+}
+
+double RadSolverGetHMatrixEps()
+{
+	return g_SolverHMatrixEps;
+}
+
+int RadSolverGetHMatrixMaxRank()
+{
+	return g_SolverHMatrixMaxRank;
 }
 
 //-------------------------------------------------------------------------

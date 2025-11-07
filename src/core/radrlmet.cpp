@@ -105,13 +105,24 @@ void radTIterativeRelaxMeth::MakeN_iter(int IterNum)
 void radTSimpleRelaxation::DefineNewMagnetizations()
 {
 	int LocAmOfMainElem = IntrctPtr->AmOfMainElem;
-	for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
-	{
-		TVector3d H_atElemStrNo(0.,0.,0.);
-		for(int ColNo=0; ColNo<LocAmOfMainElem; ColNo++)
-			H_atElemStrNo += (IntrctPtr->InteractMatrix[StrNo][ColNo])*(IntrctPtr->NewMagnArray[ColNo]);
 
-		IntrctPtr->NewFieldArray[StrNo] = H_atElemStrNo + IntrctPtr->ExternFieldArray[StrNo];
+	// Use H-matrix if available
+	if(IntrctPtr->use_hmatrix && IntrctPtr->hmat_interaction)
+	{
+		// H-matrix matrix-vector multiplication
+		IntrctPtr->DefineFieldArray_HMatrix(IntrctPtr->NewMagnArray, IntrctPtr->NewFieldArray);
+	}
+	else
+	{
+		// Dense matrix-vector multiplication (original code)
+		for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
+		{
+			TVector3d H_atElemStrNo(0.,0.,0.);
+			for(int ColNo=0; ColNo<LocAmOfMainElem; ColNo++)
+				H_atElemStrNo += (IntrctPtr->InteractMatrix[StrNo][ColNo])*(IntrctPtr->NewMagnArray[ColNo]);
+
+			IntrctPtr->NewFieldArray[StrNo] = H_atElemStrNo + IntrctPtr->ExternFieldArray[StrNo];
+		}
 	}
 
 	double One_mi_RelaxParam = 1.- RelaxParam;
@@ -137,17 +148,41 @@ void radTRelaxationMethNo_2::DefineNewMagnetizations()
 
 	TVector3d* OldField = IntrctPtr->NewMagnArray;
 	TVector3d* NewField = IntrctPtr->NewFieldArray;
+
+	// Interaction matrix needed for diagonal correction later
 	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix; //OC250504
-	//TMatrix3d** IntrcMat = IntrctPtr->InteractMatrix; //OC250504
 
-	for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
+	// Use H-matrix if available
+	if(IntrctPtr->use_hmatrix && IntrctPtr->hmat_interaction)
 	{
-		TVector3d H_atElemStrNo(0.,0.,0.);
-		for(int ColNo=0; ColNo<LocAmOfMainElem; ColNo++)
-			H_atElemStrNo += (IntrcMat[StrNo][ColNo])*((IntrctPtr->g3dRelaxPtrVect[ColNo])->Magn);
+		// Store old fields
+		for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
+		{
+			OldField[StrNo] = NewField[StrNo];
+		}
 
-		OldField[StrNo] = NewField[StrNo];
-		NewField[StrNo] = H_atElemStrNo + IntrctPtr->ExternFieldArray[StrNo];
+		// Get current magnetizations for matvec
+		std::vector<TVector3d> CurrentMagn(LocAmOfMainElem);
+		for(int i=0; i<LocAmOfMainElem; i++)
+		{
+			CurrentMagn[i] = (IntrctPtr->g3dRelaxPtrVect[i])->Magn;
+		}
+
+		// H-matrix matvec
+		IntrctPtr->DefineFieldArray_HMatrix(CurrentMagn.data(), NewField);
+	}
+	else
+	{
+		// Dense matrix (original code)
+		for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
+		{
+			TVector3d H_atElemStrNo(0.,0.,0.);
+			for(int ColNo=0; ColNo<LocAmOfMainElem; ColNo++)
+				H_atElemStrNo += (IntrcMat[StrNo][ColNo])*((IntrctPtr->g3dRelaxPtrVect[ColNo])->Magn);
+
+			OldField[StrNo] = NewField[StrNo];
+			NewField[StrNo] = H_atElemStrNo + IntrctPtr->ExternFieldArray[StrNo];
+	}
 	}
 
 	TVector3d E_Str0(1.,0.,0.), E_Str1(0.,1.,0.), E_Str2(0.,0.,1.), MagnFromMaterRel, InstantMr; // The later is not actually used here
@@ -182,8 +217,6 @@ void radTRelaxationMethNo_3::DefineNewMagnetizations()
 	TVector3d MultByInstMr, Mnew_mi_MoldVect;
 	double BufMisfitM=0.;
 
-	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix; //OC250504
-	//TMatrix3d** IntrcMat = IntrctPtr->InteractMatrix; //OC250504
 	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
@@ -191,7 +224,17 @@ void radTRelaxationMethNo_3::DefineNewMagnetizations()
 	radTMaterial* MaterPtr = nullptr;
 
 	int LocAmOfMainElem = IntrctPtr->AmOfMainElem;
-	int AmOfMainElem_mi_One = LocAmOfMainElem - 1; // What for?
+
+	// Note: Method 3 treats diagonal separately, so H-matrix needs special handling
+	// For now, fall back to dense for this method
+	if(IntrctPtr->use_hmatrix && IntrctPtr->hmat_interaction)
+	{
+		// Method 3 is more complex - for now use dense
+		// Future: Implement diagonal extraction from H-matrix
+	}
+
+	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix; //OC250504
+	int AmOfMainElem_mi_One = LocAmOfMainElem - 1;
 	for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
 	{
 		TVector3d QuasiExtFieldAtElemStrNo(0.,0.,0.);

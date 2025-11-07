@@ -17,6 +17,8 @@
 
 #include "radintrc.h"
 #include "radsbdrc.h"
+#include "radintrc_hmat.h"
+#include "radentry.h"  // For RadSolverGetHMatrixEnabled()
 
 
 //-------------------------------------------------------------------------
@@ -49,6 +51,10 @@ radTInteraction::radTInteraction()
 	NewFieldArray = nullptr;
 	IdentTransPtr = nullptr;
 
+	// Initialize H-matrix support
+	hmat_interaction = nullptr;
+	use_hmatrix = false;
+
 	RelaxSubIntervArray = nullptr; // New
 	mKeepTransData = 0;
 }
@@ -73,6 +79,10 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 
 	RelaxSubIntervArray = nullptr; // New
 	AmOfRelaxSubInterv = 0; // New
+
+	// Initialize H-matrix support
+	hmat_interaction = nullptr;
+	use_hmatrix = RadSolverGetHMatrixEnabled();  // Read global setting
 
 	SourceHandle = In_hg;
 	CompCriterium = InCompCriterium;
@@ -145,6 +155,13 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 
 radTInteraction::~radTInteraction()
 {
+	// Clean up H-matrix
+	if(hmat_interaction != nullptr)
+	{
+		delete hmat_interaction;
+		hmat_interaction = nullptr;
+	}
+
 	DeallocateMemory(); //OC27122019
 }
 
@@ -432,6 +449,12 @@ int radTInteraction::CountRelaxElemsWithSym()
 int radTInteraction::SetupInteractMatrix() //OC26122019
 //void radTInteraction::SetupInteractMatrix()
 {
+	// Check if H-matrix should be used
+	if(use_hmatrix && AmOfMainElem > 50)
+	{
+		return SetupInteractMatrix_HMatrix();
+	}
+
 	radTFieldKey FieldKeyInteract; FieldKeyInteract.B_=FieldKeyInteract.H_=FieldKeyInteract.PreRelax_=1;
 	TVector3d ZeroVect(0.,0.,0.);
 
@@ -1389,6 +1412,96 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 
 	//short MemAllocTotAtOnce;
 	inStr >> MemAllocTotAtOnce;
+}
+
+//-------------------------------------------------------------------------
+// H-Matrix Support Methods
+//-------------------------------------------------------------------------
+
+void radTInteraction::EnableHMatrix(bool enable, double eps, int max_rank)
+{
+	use_hmatrix = enable;
+
+	if(enable && AmOfMainElem > 50)  // Use H-matrix for N > 50
+	{
+		std::cout << "\nEnabling H-matrix acceleration for relaxation solver" << std::endl;
+		std::cout << "Number of elements: " << AmOfMainElem << std::endl;
+	}
+	else if(enable)
+	{
+		std::cout << "\nH-matrix requested but N=" << AmOfMainElem << " is too small (< 50)" << std::endl;
+		std::cout << "Using standard dense solver" << std::endl;
+		use_hmatrix = false;
+	}
+}
+
+//-------------------------------------------------------------------------
+
+int radTInteraction::SetupInteractMatrix_HMatrix()
+{
+	try
+	{
+		// Create H-matrix configuration from global settings
+		radTHMatrixSolverConfig config;
+		config.eps = RadSolverGetHMatrixEps();
+		config.max_rank = RadSolverGetHMatrixMaxRank();
+		config.min_cluster_size = 10;
+		config.use_openmp = true;
+		config.num_threads = 0;  // Auto-detect
+
+		// Create H-matrix interaction object
+		hmat_interaction = new radTHMatrixInteraction(this, config);
+
+		// Build H-matrix
+		int result = hmat_interaction->BuildHMatrix();
+
+		if(result != 0)
+		{
+			// H-matrix construction succeeded
+			hmat_interaction->PrintStatistics();
+			return 1;
+		}
+		else
+		{
+			// Fallback to dense matrix
+			delete hmat_interaction;
+			hmat_interaction = nullptr;
+			use_hmatrix = false;
+
+			std::cerr << "H-matrix construction failed, falling back to dense solver" << std::endl;
+			return SetupInteractMatrix();  // Call dense version
+		}
+	}
+	catch(const std::exception& e)
+	{
+		std::cerr << "H-matrix error: " << e.what() << std::endl;
+		if(hmat_interaction != nullptr)
+		{
+			delete hmat_interaction;
+			hmat_interaction = nullptr;
+		}
+		use_hmatrix = false;
+		return SetupInteractMatrix();  // Fallback to dense
+	}
+}
+
+//-------------------------------------------------------------------------
+
+void radTInteraction::DefineFieldArray_HMatrix(const TVector3d* MagnArray, TVector3d* FieldArray)
+{
+	if(!use_hmatrix || hmat_interaction == nullptr)
+	{
+		throw std::runtime_error("H-matrix not initialized");
+	}
+
+	// Use H-matrix for matrix-vector product
+	hmat_interaction->MatVec(MagnArray, FieldArray);
+
+	// Add external field
+	for(int i = 0; i < AmOfMainElem; i++)
+	{
+		FieldArray[i] += ExternFieldArray[i];
+	}
 }
 
 //-------------------------------------------------------------------------

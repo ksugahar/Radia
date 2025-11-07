@@ -367,6 +367,8 @@ EXP int CALL RadObjCntSize(int* n, int cnt);
 */
 EXP int CALL RadObjCntStuf(int* Objs, int cnt);
 
+// Temporarily disabled - field source H-matrix (has API compatibility issues)
+/*
 /** Creates an H-matrix field source from a group of magnetic elements for fast field computation.
 @param n [out] reference number of the created H-matrix field source object
 @param grp [in] reference number of the group (container) object containing magnetic elements
@@ -378,6 +380,7 @@ EXP int CALL RadObjCntStuf(int* Objs, int cnt);
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 @author Radia Development Team
 */
+/*
 EXP int CALL RadObjHMatrix(int* n, int grp, double eps, int max_rank, int min_cluster_size, int use_openmp, int num_threads);
 
 /** Builds the H-matrix structure for fast field computation.
@@ -386,7 +389,18 @@ This function must be called after creating the H-matrix field source with RadOb
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 @author Radia Development Team
 */
+/*
 EXP int CALL RadHMatrixBuild(int hmat);
+*/
+
+// H-matrix solver acceleration
+EXP int CALL RadSolverHMatrixEnable(int enable, double eps, int max_rank);
+EXP int CALL RadSolverHMatrixDisable();
+
+// Accessor functions for global H-matrix solver settings
+bool RadSolverGetHMatrixEnabled();
+double RadSolverGetHMatrixEps();
+int RadSolverGetHMatrixMaxRank();
 
 /** Duplicates the object obj. 
 @param n [out] reference number of the object created

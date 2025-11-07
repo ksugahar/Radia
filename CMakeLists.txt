@@ -50,9 +50,10 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/radg3d.cpp
 	${CORE_DIR}/radg3dgr.cpp
 	${CORE_DIR}/radgroup.cpp
-	${CORE_DIR}/radhmat.cpp
+	# ${CORE_DIR}/radhmat.cpp  # Temporarily disabled - field source H-matrix (has API compatibility issues)
 	${CORE_DIR}/radinter.cpp
 	${CORE_DIR}/radintrc.cpp
+	${CORE_DIR}/radintrc_hmat.cpp
 	${CORE_DIR}/radiobuf.cpp
 	${CORE_DIR}/radmamet.cpp
 	${CORE_DIR}/radmater.cpp
