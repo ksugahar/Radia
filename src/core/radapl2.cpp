@@ -1183,6 +1183,30 @@ int radTApplication::PreRelax(int ElemKey, int SrcElemKey)
 
 //-------------------------------------------------------------------------
 
+int radTApplication::SetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether)
+{
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
+		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
+		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
+
+		TRelaxSubIntervalID SubIntervalID = (RelaxTogether != 0) ?
+			TRelaxSubIntervalID::RelaxTogether : TRelaxSubIntervalID::RelaxApart;
+
+		InteractPtr->AddRelaxSubInterval(StartNo, FinNo, SubIntervalID);
+
+		return 1;
+	}
+	catch (...)
+	{
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
 void radTApplication::ShowInteractMatrix(int InteractElemKey)
 {
 	radThg hg;
@@ -1219,14 +1243,14 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep); 
 		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
 
-		if(MethNo<0 || MethNo>4) { Send.ErrorMessage("Radia::Error028"); return 0;}
+		if(MethNo<0 || MethNo>5) { Send.ErrorMessage("Radia::Error028"); return 0;}
 		if(IterNumber<0) { Send.ErrorMessage("Radia::Error019"); return 0;}
 		if((RelaxParam<0.) || (RelaxParam>1.)) { Send.ErrorMessage("Radia::Error018"); return 0;}
 
 		switch(MethNo)
 		{
 		case 0:
-			{ 
+			{
 				InteractPtr->ResetM();
 			}
 			break;
@@ -1246,6 +1270,12 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 			{
 				radTRelaxationMethNo_3 RelaxationMethNo_3(InteractPtr);
 				RelaxationMethNo_3.MakeN_iter(IterNumber);
+			}
+			break;
+		case 4:
+			{
+				radTRelaxationMethNo_4 RelaxationMethNo_4(InteractPtr);
+				RelaxationMethNo_4.MakeN_iter(IterNumber);
 			}
 			break;
 		case 5:

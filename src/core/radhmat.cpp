@@ -35,7 +35,7 @@
 struct KernelData {
 	std::vector<hacapk::Point3D>* source_points;
 	std::vector<hacapk::Point3D>* target_points;
-	std::vector<TVector3d>* magnetic_moments;  // Magnetic moments (A·m²)
+	std::vector<TVector3d>* magnetic_moments;  // Magnetic moments (A*m^2)
 };
 
 //-------------------------------------------------------------------------
@@ -153,10 +153,10 @@ int radTHMatrixFieldSource::ExtractGeometry()
 			// Get magnetization
 			M = relaxable->Magn;
 
-			// Estimate center (simplified - proper implementation needed)
-			center = TVector3d(0, 0, 0);  // Should get actual center
+			// Get actual center from radTg3d::CentrPoint
+			center = elem->CentrPoint;
 
-			// Get volume (approximate)
+			// Get volume
 			volume = relaxable->Volume();
 
 			// Store data
@@ -164,7 +164,7 @@ int radTHMatrixFieldSource::ExtractGeometry()
 			element_positions.push_back(center.y);
 			element_positions.push_back(center.z);
 
-			// Magnetic moment = M * Volume (A·m²)
+			// Magnetic moment = M * Volume (A*m^2)
 			TVector3d moment = M * volume;
 			element_moments.push_back(moment.x);
 			element_moments.push_back(moment.y);
@@ -180,6 +180,43 @@ int radTHMatrixFieldSource::ExtractGeometry()
 	}
 
 	std::cout << "[HMatrix] Extracted geometry from " << extracted_count << " elements" << std::endl;
+
+	// Print statistics for verification
+	if(extracted_count > 0) {
+		// Calculate bounding box
+		double xmin = element_positions[0], xmax = element_positions[0];
+		double ymin = element_positions[1], ymax = element_positions[1];
+		double zmin = element_positions[2], zmax = element_positions[2];
+
+		for(int i = 0; i < extracted_count; i++) {
+			double x = element_positions[3*i];
+			double y = element_positions[3*i+1];
+			double z = element_positions[3*i+2];
+
+			if(x < xmin) xmin = x; if(x > xmax) xmax = x;
+			if(y < ymin) ymin = y; if(y > ymax) ymax = y;
+			if(z < zmin) zmin = z; if(z > zmax) zmax = z;
+		}
+
+		std::cout << "[HMatrix] Bounding box: "
+		          << "[" << xmin << "," << xmax << "] x "
+		          << "[" << ymin << "," << ymax << "] x "
+		          << "[" << zmin << "," << zmax << "] mm" << std::endl;
+
+		// Calculate average magnetization magnitude
+		double total_M = 0.0;
+		for(int i = 0; i < extracted_count; i++) {
+			double mx = element_moments[3*i];
+			double my = element_moments[3*i+1];
+			double mz = element_moments[3*i+2];
+			double M_mag = std::sqrt(mx*mx + my*my + mz*mz);
+			total_M += M_mag;
+		}
+		double avg_M = total_M / extracted_count;
+
+		std::cout << "[HMatrix] Average magnetic moment: " << avg_M << " A*m^2" << std::endl;
+	}
+
 	return 1;
 }
 
@@ -271,14 +308,14 @@ int radTHMatrixFieldSource::BuildHMatrix()
 				return 0.0;
 			}
 
-			// Biot-Savart law: B = (μ₀/4π) * (m × r) / r³
+			// Biot-Savart law: B = (mu0/4*pi) * (m x r) / r^3
 			// For simplicity, return scalar influence (magnitude)
 			// Full implementation should handle vector field
-			const double mu0_over_4pi = 1e-7;  // T·m/A
+			const double mu0_over_4pi = 1e-7;  // T*m/A
 			double r3 = r*r*r;
 
-			// Cross product: m × r
-			// For now, approximate with m·r term (simplified)
+			// Cross product: m x r
+			// For now, approximate with m*r term (simplified)
 			double influence = mu0_over_4pi / r3;
 
 			return influence;

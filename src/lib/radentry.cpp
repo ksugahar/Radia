@@ -93,6 +93,7 @@ void MvsH( int, char*, double,double,double );
 
 void PreRelax( int, int );
 void ShowInteractMatrix(int);
+void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
 void ManualRelax( int, int, int, double );
 //void AutoRelax( int, double, int, int );
@@ -1760,6 +1761,23 @@ double RadSolverGetHMatrixEps()
 int RadSolverGetHMatrixMaxRank()
 {
 	return g_SolverHMatrixMaxRank;
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey)
+{
+	PreRelax(ElemKey, SrcElemKey);
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether)
+{
+	SetRelaxSubInterval(InteractElemKey, StartNo, FinNo, RelaxTogether);
+	return ioBuffer.OutErrorStatus();
 }
 
 //-------------------------------------------------------------------------

@@ -22,6 +22,9 @@
 #include "radintrc.h"
 #include "radg3d.h"
 #include "radgroup.h"
+#include "../ext/HACApK_LH-Cimplm/hacapk.hpp"  // HACApK library
+#include <vector>
+#include <memory>
 
 //-------------------------------------------------------------------------
 // Forward declarations
@@ -59,8 +62,8 @@ struct radTHMatrixSolverConfig
 //-------------------------------------------------------------------------
 // H-Matrix-accelerated interaction matrix
 //
-// Purpose: Replaces dense N×N interaction matrix with H-matrix
-//          representation, providing O(N log N) operations instead of O(N²)
+// Purpose: Replaces dense NxN interaction matrix with H-matrix
+//          representation, providing O(N log N) operations instead of O(N^2)
 //
 // Usage:
 //   1. Create: radTHMatrixInteraction hmat(interaction_ptr, config);
@@ -79,8 +82,17 @@ public:
 	double* elem_coords;             // Element coordinates [3*n_elem]
 	radTg3dRelax** elem_ptrs;        // Pointers to element objects
 
-	// H-matrix data (simplified storage for now)
-	// We'll use direct storage since HACApK integration needs careful setup
+	// HACApK data structures
+	std::vector<hacapk::Point3D> points;  // Element center points
+	hacapk::ControlParams hacapk_params;  // HACApK parameters
+
+	// H-matrix storage for 3x3 tensor interaction matrix
+	// We store 9 scalar H-matrices, one for each tensor component
+	std::unique_ptr<hacapk::HMatrix> hmat[9];  // [0]=M[0][0], [1]=M[0][1], ..., [8]=M[2][2]
+
+	// Cached symmetry transformations for each element (for performance)
+	std::vector<std::vector<radTrans*>> cached_trans_vect;  // [j] = list of transformations for element j
+
 	bool is_built;                   // H-matrix built flag
 
 	// Statistics
@@ -96,7 +108,7 @@ public:
 	int BuildHMatrix();
 
 	// H-matrix-vector multiplication
-	// Computes: H_field = InteractMatrix × M_vector
+	// Computes: H_field = InteractMatrix * M_vector
 	// Input: M_in[n_elem] - magnetization vectors
 	// Output: H_out[n_elem] - field vectors (without external field)
 	void MatVec(const TVector3d* M_in, TVector3d* H_out);
@@ -111,8 +123,19 @@ private:
 	void ExtractElementData();
 
 	// Kernel function for interaction matrix computation
-	// Computes the 3×3 interaction matrix between elements i and j
+	// Computes the 3x3 interaction matrix between elements i and j
 	void ComputeInteractionKernel(int i, int j, TMatrix3df& result);
+
+	// Kernel function wrapper data (for HACApK callback)
+	struct KernelData
+	{
+		radTHMatrixInteraction* hmat_ptr;  // Pointer to this object
+		int tensor_row;                     // Tensor component row (0, 1, 2)
+		int tensor_col;                     // Tensor component col (0, 1, 2)
+	};
+
+	// Static kernel function for HACApK (extracts tensor component)
+	static double KernelFunction(int i, int j, void* user_data);
 };
 
 #endif

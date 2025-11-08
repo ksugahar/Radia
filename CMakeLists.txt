@@ -59,6 +59,8 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/radmater.cpp
 	${CORE_DIR}/radplnr1.cpp
 	${CORE_DIR}/radplnr2.cpp
+	${CORE_DIR}/radpoly_analytical.cpp
+	${CORE_DIR}/radhmat_field.cpp
 	${CORE_DIR}/radptrj.cpp
 	${CORE_DIR}/radrec.cpp
 	${CORE_DIR}/radrlmet.cpp
@@ -81,6 +83,7 @@ set(RADIA_EXT_SOURCES
 # Radia lib sources
 set(RADIA_LIB_SOURCES
 	${LIB_DIR}/radentry.cpp
+	${LIB_DIR}/radentry_hmat.cpp
 )
 
 # Triangle library (C source needs special handling)
@@ -312,44 +315,105 @@ message(STATUS "radia module configured")
 # ========================================
 
 # Test for radTHMatrixFieldSource (Phase 2 validation)
-add_executable(test_radhmat test_radhmat.cpp)
+# NOTE: Temporarily disabled - test_radhmat.cpp renamed to test_geometry_extraction.cpp
+# add_executable(test_radhmat test_radhmat.cpp)
+#
+# # Link with Radia core libraries
+# target_link_libraries(test_radhmat PRIVATE
+# 	triangle_lib
+# 	hacapk
+# )
+#
+# # Link with FFTW and system libraries
+# if(WIN32)
+# 	if(EXISTS ${FFTW_LIB})
+# 		target_link_libraries(test_radhmat PRIVATE ${FFTW_LIB})
+# 	endif()
+# 	target_link_libraries(test_radhmat PRIVATE version.lib)
+# endif()
+#
+# # Add Radia core source files directly to test (since radia is a Python module)
+# target_sources(test_radhmat PRIVATE
+# 	${RADIA_CORE_SOURCES}
+# 	${EXT_DIR}/auxparse/auxparse.cpp
+# 	${EXT_DIR}/genmath/gmfft.cpp
+# 	${EXT_DIR}/genmath/gmtrans.cpp
+# 	${RADIA_LIB_SOURCES}
+# )
+#
+# # Add include directories
+# target_include_directories(test_radhmat PRIVATE
+# 	${CORE_DIR}
+# 	${LIB_DIR}
+# 	${EXT_DIR}/auxparse
+# 	${EXT_DIR}/genmath
+# 	${EXT_DIR}/triangle
+# 	${EXT_DIR}/HACApK_LH-Cimplm
+# 	${FFTW_DIR}
+# )
+#
+# # Add compile definitions
+# target_compile_definitions(test_radhmat PRIVATE
+# 	ALPHA__LIB__
+# 	FFTW_ENABLE_FLOAT
+# 	NO_TIMER
+# 	ANSI_DECLARATORS
+# 	TRILIBRARY
+# 	_GM_WITHOUT_BASE
+# 	_CRT_SECURE_NO_WARNINGS
+# 	$<$<CONFIG:Debug>:_DEBUG>
+# 	$<$<CONFIG:Release>:NDEBUG>
+# 	$<$<PLATFORM_ID:Windows>:WIN32>
+# 	$<$<PLATFORM_ID:Windows>:_WINDOWS>
+# )
+#
+# # Compiler-specific flags
+# if(MSVC)
+# 	target_compile_options(test_radhmat PRIVATE
+# 		/wd4244  # Disable conversion warnings
+# 		/wd4267  # Disable size_t conversion warnings
+# 	)
+# elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+# 	target_compile_options(test_radhmat PRIVATE
+# 		-Wno-conversion
+# 		-Wno-sign-conversion
+# 		-Wno-unused-variable
+# 	)
+# elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+# 	target_compile_options(test_radhmat PRIVATE
+# 		-Wno-conversion
+# 		-Wno-sign-conversion
+# 		-Wno-unused-variable
+# 	)
+# endif()
+#
+# message(STATUS "test_radhmat executable configured")
 
-# Link with Radia core libraries
-target_link_libraries(test_radhmat PRIVATE
-	triangle_lib
-	hacapk
-)
+# Test for polygon field analytical formula
+add_executable(test_polygon_field test_polygon_field.cpp)
 
-# Link with FFTW and system libraries
+# Link with system libraries only (no Radia dependencies needed)
 if(WIN32)
-	if(EXISTS ${FFTW_LIB})
-		target_link_libraries(test_radhmat PRIVATE ${FFTW_LIB})
-	endif()
-	target_link_libraries(test_radhmat PRIVATE version.lib)
+	target_link_libraries(test_polygon_field PRIVATE version.lib)
 endif()
 
-# Add Radia core source files directly to test (since radia is a Python module)
-target_sources(test_radhmat PRIVATE
-	${RADIA_CORE_SOURCES}
-	${EXT_DIR}/auxparse/auxparse.cpp
-	${EXT_DIR}/genmath/gmfft.cpp
-	${EXT_DIR}/genmath/gmtrans.cpp
-	${RADIA_LIB_SOURCES}
+# Add necessary source files for polygon field test (including Radia comparison)
+# Only minimal files needed for radTPolygon::B_comp()
+target_sources(test_polygon_field PRIVATE
+	${CORE_DIR}/radpoly_analytical.cpp
+	${CORE_DIR}/radplnr2.cpp
+	${CORE_DIR}/radplnr1.cpp
 )
 
 # Add include directories
-target_include_directories(test_radhmat PRIVATE
+target_include_directories(test_polygon_field PRIVATE
 	${CORE_DIR}
-	${LIB_DIR}
-	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
-	${EXT_DIR}/triangle
-	${EXT_DIR}/HACApK_LH-Cimplm
-	${FFTW_DIR}
+	${EXT_DIR}/auxparse
 )
 
 # Add compile definitions
-target_compile_definitions(test_radhmat PRIVATE
+target_compile_definitions(test_polygon_field PRIVATE
 	ALPHA__LIB__
 	FFTW_ENABLE_FLOAT
 	NO_TIMER
@@ -365,22 +429,22 @@ target_compile_definitions(test_radhmat PRIVATE
 
 # Compiler-specific flags
 if(MSVC)
-	target_compile_options(test_radhmat PRIVATE
+	target_compile_options(test_polygon_field PRIVATE
 		/wd4244  # Disable conversion warnings
 		/wd4267  # Disable size_t conversion warnings
 	)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-	target_compile_options(test_radhmat PRIVATE
+	target_compile_options(test_polygon_field PRIVATE
 		-Wno-conversion
 		-Wno-sign-conversion
 		-Wno-unused-variable
 	)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	target_compile_options(test_radhmat PRIVATE
+	target_compile_options(test_polygon_field PRIVATE
 		-Wno-conversion
 		-Wno-sign-conversion
 		-Wno-unused-variable
 	)
 endif()
 
-message(STATUS "test_radhmat executable configured")
+message(STATUS "test_polygon_field executable configured")

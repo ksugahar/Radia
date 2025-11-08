@@ -402,6 +402,10 @@ bool RadSolverGetHMatrixEnabled();
 double RadSolverGetHMatrixEps();
 int RadSolverGetHMatrixMaxRank();
 
+// Relaxation sub-interval control for LU decomposition solver
+EXP int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey);
+EXP int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
+
 /** Duplicates the object obj. 
 @param n [out] reference number of the object created
 @param obj [in] reference number of the object to duplicate

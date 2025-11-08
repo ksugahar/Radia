@@ -285,6 +285,9 @@ void radTInteraction::CountMainRelaxElems(radTg3d* g3dPtr, radTlphgPtr* CurrList
 
 void radTInteraction::FillInRelaxSubIntervArray() // New
 {
+	// Reset and rebuild from scratch
+	AmOfRelaxSubInterv = 0;
+
 	if(RelaxSubIntervConstrVect.size() == 0) return;
 
 	int CurrentStartNo = 0;
@@ -302,10 +305,34 @@ void radTInteraction::FillInRelaxSubIntervArray() // New
 	}
 	if(CurrentStartNo != AmOfMainElem)
 		RelaxSubIntervArray[++PlainCount] = radTRelaxSubInterval(CurrentStartNo, AmOfMainElem-1, TRelaxSubIntervalID::RelaxApart);
-	
+
 	AmOfRelaxSubInterv = ++PlainCount;
 
-	RelaxSubIntervConstrVect.erase(RelaxSubIntervConstrVect.begin(), RelaxSubIntervConstrVect.end());
+	// Do NOT erase RelaxSubIntervConstrVect - keep it for future rebuilds
+	// RelaxSubIntervConstrVect.erase(RelaxSubIntervConstrVect.begin(), RelaxSubIntervConstrVect.end());
+}
+
+//-------------------------------------------------------------------------
+
+void radTInteraction::AddRelaxSubInterval(int StartNo, int FinNo, TRelaxSubIntervalID SubIntervalID)
+{
+	if(StartNo < 0 || FinNo < 0) return;
+	if(StartNo > FinNo) return;
+	if(FinNo >= AmOfMainElem) return;
+
+	radTRelaxSubInterval SubInterval(StartNo, FinNo, SubIntervalID);
+	RelaxSubIntervConstrVect.push_back(SubInterval);
+
+	// Reallocate RelaxSubIntervArray with sufficient size
+	int MaxSubIntervArraySize = 2 * ((int)(RelaxSubIntervConstrVect.size())) + 1;
+	if(MaxSubIntervArraySize > (int)vRelaxSubIntervArray.size())
+	{
+		vRelaxSubIntervArray.resize(MaxSubIntervArraySize);
+		RelaxSubIntervArray = vRelaxSubIntervArray.data();
+	}
+
+	// Rebuild RelaxSubIntervArray after adding new interval
+	FillInRelaxSubIntervArray();
 }
 
 //-------------------------------------------------------------------------

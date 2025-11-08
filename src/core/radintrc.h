@@ -239,6 +239,7 @@ public:
 	inline void DestroyMainTransPtrArray();
 
 	void FillInRelaxSubIntervArray(); //New
+	void AddRelaxSubInterval(int StartNo, int FinNo, TRelaxSubIntervalID SubIntervalID); //New
 
 	int NotEmpty() { return (AmOfMainElem==0)? 0 : 1;}
 	inline void Dump(std::ostream&, int =0); // Porting

@@ -208,4 +208,181 @@ private:
 
 //-------------------------------------------------------------------------
 
+/**
+ * H-matrix based field evaluator for arbitrary observation points
+ *
+ * This class accelerates rad.Fld() batch evaluation using H-matrix
+ * approximation. Achieves O((M+N)log(M+N)) complexity instead of O(M×N).
+ *
+ * Key features:
+ * - Caching for non-linear iterations
+ * - Automatic fallback for small problems (N<100)
+ * - Batch evaluation only (single points use direct calculation)
+ *
+ * Recommended for:
+ * - N ≥ 100 source elements
+ * - M ≥ 100 observation points
+ * - Non-linear iteration problems
+ */
+class radTHMatrixFieldEvaluator {
+public:
+	// Configuration
+	radTHMatrixConfig config;
+	bool is_built;
+
+	// Source geometry (from magnetic elements)
+	int num_sources;
+	std::vector<double> source_positions;   // Flattened [x,y,z,x,y,z,...]
+	std::vector<double> source_moments;     // Magnetic moments [Mx,My,Mz,...]
+
+	// H-matrix data structures (opaque pointers)
+	void* hmatrix_data;           // HACApK H-matrix
+	void* source_cluster_tree;    // Source cluster tree
+	void* target_cluster_tree;    // Observation point cluster tree
+
+	// Cache key for invalidation
+	size_t geometry_hash;
+
+	// Statistics
+	size_t memory_usage;          // Total memory (bytes)
+	double build_time;            // Construction time (seconds)
+	double last_eval_time;        // Last evaluation time (seconds)
+	int num_evaluations;          // Number of times reused
+
+public:
+	/**
+	 * Constructor
+	 */
+	radTHMatrixFieldEvaluator(const radTHMatrixConfig& cfg = radTHMatrixConfig());
+
+	/**
+	 * Destructor
+	 */
+	~radTHMatrixFieldEvaluator();
+
+	/**
+	 * Build H-matrix from source elements
+	 *
+	 * Extracts geometry from radTGroup and constructs cluster trees
+	 * and H-matrix for field evaluation.
+	 *
+	 * @param source_group Group containing magnetic elements
+	 * @return 1 on success, 0 on failure
+	 */
+	int Build(radTGroup* source_group);
+
+	/**
+	 * Evaluate field at multiple observation points (batch)
+	 *
+	 * This is the main interface for H-matrix accelerated field evaluation.
+	 *
+	 * Complexity: O((M+N)log(M+N)) instead of O(M×N)
+	 *
+	 * @param obs_points Vector of observation points (3D coordinates)
+	 * @param field_out Vector to store output field values (3D vectors)
+	 * @param field_type Field type: 'h'=H-field, 'b'=B-field, 'a'=vector potential
+	 * @return 1 on success, 0 on failure
+	 */
+	int EvaluateField(
+		const std::vector<TVector3d>& obs_points,
+		std::vector<TVector3d>& field_out,
+		char field_type = 'h'
+	);
+
+	/**
+	 * Check if H-matrix is valid for current geometry
+	 *
+	 * Compares stored geometry hash with current geometry.
+	 *
+	 * @param source_group Current source geometry
+	 * @return true if cache is valid
+	 */
+	bool IsValid(radTGroup* source_group);
+
+	/**
+	 * Clear H-matrix data and free memory
+	 */
+	void Clear();
+
+	/**
+	 * Get memory usage
+	 */
+	size_t GetMemoryUsage() const { return memory_usage; }
+
+	/**
+	 * Get build time
+	 */
+	double GetBuildTime() const { return build_time; }
+
+	/**
+	 * Get number of times H-matrix was reused
+	 */
+	int GetNumEvaluations() const { return num_evaluations; }
+
+private:
+	/**
+	 * Extract geometry from source group
+	 *
+	 * @param source_group Group containing elements
+	 * @return 1 on success
+	 */
+	int ExtractSourceGeometry(radTGroup* source_group);
+
+	/**
+	 * Build cluster tree for observation points
+	 *
+	 * @param obs_points Vector of observation points
+	 * @return 1 on success
+	 */
+	int BuildTargetClusterTree(const std::vector<TVector3d>& obs_points);
+
+	/**
+	 * Build H-matrix for field evaluation
+	 *
+	 * Constructs H-matrix representing field influence from sources to targets.
+	 *
+	 * @return 1 on success
+	 */
+	int BuildFieldHMatrix();
+
+	/**
+	 * Magnetic field kernel function
+	 *
+	 * Computes field at target i due to source j.
+	 * Kernel: H(r) = (3(m·r̂)r̂ - m) / (4π|r|³)
+	 *
+	 * @param i Target point index
+	 * @param j Source element index
+	 * @param kernel_data Pointer to kernel data structure
+	 * @return Kernel value
+	 */
+	static double FieldKernel(int i, int j, void* kernel_data);
+
+	/**
+	 * Compute geometry hash for cache validation
+	 *
+	 * @param source_group Source geometry
+	 * @return Hash value
+	 */
+	size_t ComputeGeometryHash(radTGroup* source_group);
+
+	/**
+	 * Fallback to direct calculation
+	 *
+	 * Used when H-matrix construction fails or for debugging.
+	 *
+	 * @param obs_points Observation points
+	 * @param field_out Output field values
+	 * @param field_type Field type
+	 * @return 1 on success
+	 */
+	int EvaluateFieldDirect(
+		const std::vector<TVector3d>& obs_points,
+		std::vector<TVector3d>& field_out,
+		char field_type
+	);
+};
+
+//-------------------------------------------------------------------------
+
 #endif

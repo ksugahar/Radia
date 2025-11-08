@@ -304,7 +304,7 @@ void aca_approximation(
 	int rank = 0;
 
 	// Debug: Print initial state
-	std::cout << "[DEBUG] ACA: m=" << m << ", n=" << n << ", max_rank=" << max_rank << ", eps=" << eps << std::endl;
+	// std::cout << "[DEBUG] ACA: m=" << m << ", n=" << n << ", max_rank=" << max_rank << ", eps=" << eps << std::endl;
 
 	for (int k = 0; k < max_rank; k++) {
 		// Find pivot row
@@ -339,10 +339,10 @@ void aca_approximation(
 			}
 		}
 
-		std::cout << "[DEBUG] ACA iter " << k << ": pivot_i=" << pivot_i << ", max_val=" << max_val << ", eps=" << eps << std::endl;
+		// std::cout << "[DEBUG] ACA iter " << k << ": pivot_i=" << pivot_i << ", max_val=" << max_val << ", eps=" << eps << std::endl;
 
 		if (max_val < eps) {
-			std::cout << "[DEBUG] ACA stopped: max_val < eps" << std::endl;
+			// std::cout << "[DEBUG] ACA stopped: max_val < eps" << std::endl;
 			break;
 		}
 
@@ -399,12 +399,12 @@ void aca_approximation(
 
 		// Check convergence
 		if (norm_R < eps * eps * norm_A) {
-			std::cout << "[DEBUG] ACA converged: norm_R=" << norm_R << ", eps^2*norm_A=" << (eps*eps*norm_A) << std::endl;
+			// std::cout << "[DEBUG] ACA converged: norm_R=" << norm_R << ", eps^2*norm_A=" << (eps*eps*norm_A) << std::endl;
 			break;
 		}
 	}
 
-	std::cout << "[DEBUG] ACA finished: rank=" << rank << std::endl;
+	// std::cout << "[DEBUG] ACA finished: rank=" << rank << std::endl;
 
 	// Store final result
 	block.kt = rank;

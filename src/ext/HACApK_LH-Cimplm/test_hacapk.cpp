@@ -171,8 +171,8 @@ bool test_admissibility() {
 	double eta = 2.0;
 	bool admissible = is_admissible(b1, b2, eta);
 
-	cout << "  Box 1: [0,1]³" << endl;
-	cout << "  Box 2: [10,11]³" << endl;
+	cout << "  Box 1: [0,1]^3" << endl;
+	cout << "  Box 2: [10,11]^3" << endl;
 	cout << "  Distance: " << bbox_distance(b1, b2) << endl;
 	cout << "  Eta parameter: " << eta << endl;
 	cout << "  Admissible: " << (admissible ? "Yes" : "No") << endl;
@@ -198,7 +198,7 @@ bool test_aca() {
 
 	double epsilon = 1e-3;
 
-	cout << "  Matrix size: " << block.ndl << " × " << block.ndt << endl;
+	cout << "  Matrix size: " << block.ndl << " x " << block.ndt << endl;
 	cout << "  Tolerance: " << epsilon << endl;
 
 	aca_approximation(block, kernel_1d, nullptr, epsilon);

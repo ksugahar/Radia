@@ -1001,6 +1001,53 @@ static PyObject* radia_SolverHMatrixDisable(PyObject* self, PyObject* args)
 	return oRes;
 }
 
+/************************************************************************//**
+ * Pre-compute relaxation interaction matrix
+ ***************************************************************************/
+static PyObject* radia_PreRelax(PyObject* self, PyObject* args)
+{
+	PyObject* oRes = 0;
+	try
+	{
+		int elemKey = 0, srcElemKey = 0;
+
+		if(!PyArg_ParseTuple(args, "ii:PreRelax", &elemKey, &srcElemKey))
+			throw CombErStr(strEr_BadFuncArg, ": PreRelax");
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadPreRelax(&ind, elemKey, srcElemKey));
+		oRes = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Set relaxation sub-interval for LU decomposition solver
+ ***************************************************************************/
+static PyObject* radia_SetRelaxSubInterval(PyObject* self, PyObject* args)
+{
+	PyObject* oRes = 0;
+	try
+	{
+		int interactKey = 0, startNo = 0, finNo = 0, relaxTogether = 1;
+
+		if(!PyArg_ParseTuple(args, "iii|i:SetRelaxSubInterval", &interactKey, &startNo, &finNo, &relaxTogether))
+			throw CombErStr(strEr_BadFuncArg, ": SetRelaxSubInterval");
+
+		g_pyParse.ProcRes(RadSetRelaxSubInterval(interactKey, startNo, finNo, relaxTogether));
+		oRes = Py_BuildValue("i", 1);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
 
 /************************************************************************//**
  * Magnetic Field Source: Container of Magnetic Field Sources
@@ -3380,6 +3427,9 @@ static PyObject* radia_UtiMPI(PyObject* self, PyObject* args)
  * Python C API stuff: module & method definition2, etc.
  ***************************************************************************/
 
+// H-Matrix field evaluation wrappers
+#include "radpy_hmat.h"
+
 static PyMethodDef radia_methods[] = {
 	{"ObjRecMag", radia_ObjRecMag, METH_VARARGS, "ObjRecMag([x,y,z],[wx,wy,wz],[mx,my,mz]:[0,0,0]) creates a rectangular parallelepiped block with center point [x,y,z], dimensions [wx,wy,wz], and magnetization [mx,my,mz]."},
 	{"ObjThckPgn", radia_ObjThckPgn, METH_VARARGS, "ObjThckPgn(x,lx,[[y1,z1],[y2,z2],...],a:'x',[mx,my,mz]:[0,0,0]) creates an extruded polygon block; x is the position of the block's center of gravity in the extrusion direction, lx is the thickness, [[y1,z1],[y2,z2],...] is a list of points describing the polygon in 2D; the extrusion direction is defined by the character a (which can be 'x', 'y' or 'z'), [mx,my,mz] is the block magnetization."},
@@ -3444,12 +3494,17 @@ static PyMethodDef radia_methods[] = {
 	{"MatMvsH", radia_MatMvsH, METH_VARARGS, "MatMvsH(obj,'mx|my|mz'|'',[hx,hy,hz]) computes magnetization from magnetic field strength vector [hx,hy,hz] for the material of the object obj; the magnetization components are specified by the second argument."},
 
 	{"RlxPre", radia_RlxPre, METH_VARARGS, "RlxPre(obj,srcobj:0) builds an interaction matrix for the object obj, treating the object srcobj as additional external field source."},
-	{"RlxMan", radia_RlxMan, METH_VARARGS, "RlxMan(intrc,meth,iternum,rlxpar) executes manual relaxation procedure for interaction matrix intrc using method number meth, by making iternum iterations with relaxation parameter value rlxpar."},
+	{"SetRelaxSubInterval", radia_SetRelaxSubInterval, METH_VARARGS, "SetRelaxSubInterval(intrc,start,fin,together:1) sets a relaxation sub-interval for interaction matrix intrc. Elements from index start to fin will be relaxed together (using LU decomposition) if together=1, or separately (using Gauss-Seidel) if together=0. This enables Method 5 solver with direct matrix inversion for groups of elements."},
+	{"RlxMan", radia_RlxMan, METH_VARARGS, "RlxMan(intrc,meth,iternum,rlxpar) executes manual relaxation procedure for interaction matrix intrc using method number meth (0-5), by making iternum iterations with relaxation parameter value rlxpar. Method 5 enables LU decomposition solver when used with SetRelaxSubInterval(intrc,start,fin,1)."},
 	{"RlxAuto", radia_RlxAuto, METH_VARARGS, "RlxAuto(intrc,prec,maxiter,meth:4,'ZeroM->True|False') executes automatic relaxation procedure with the interaction matrix intrc using the method number meth. Relaxation stops whenever the change in magnetization (averaged over all sub-elements) between two successive iterations is smaller than prec or the number of iterations is larger than maxiter. The option value 'ZeroM->True' (default) starts the relaxation by setting the magnetization values in all paricipating objects to zero; 'ZeroM->False' starts the relaxation with the existing magnetization values in the sub-volumes."},
 	{"RlxUpdSrc", radia_RlxUpdSrc, METH_VARARGS, "RlxUpdSrc(intrc) updates external field data for the relaxation (to take into account e.g. modification of currents in coils, if any) without rebuilding the interaction matrix."},
 	{"Solve", radia_Solve, METH_VARARGS, "Solve(obj,prec,maxiter,meth:4) solves a magnetostatic problem, i.e. builds an interaction matrix for the object obj and performs a relaxation procedure using the method number meth (default is 4). The relaxation stops whenever the change in magnetization (averaged over all sub-elements) between two successive iterations is smaller than prec or the number of iterations is larger than maxiter."},
 
 	{"Fld", radia_Fld, METH_VARARGS,  "Fld(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x,y,z]|[[x1,y1,z1],[x2,y2,z2],...]) computes magnetic field created by the object obj in point(s) {x,y,z} ({x1,y1,z1},{x2,y2,z2},...). The field component is specified by the second input variable. The function accepts a list of 3D points of arbitrary nestness: in this case it returns the corresponding list of magnetic field values."},
+	{"FldBatch", radia_FldBatch, METH_VARARGS,  "FldBatch(obj,'bx|by|bz|hx|hy|hz|b|h|a|m'|'',[[x1,y1,z1],[x2,y2,z2],...],use_hmatrix:0) computes magnetic field in batch mode at multiple observation points with optional H-matrix acceleration. use_hmatrix=0 (default) uses direct calculation, use_hmatrix=1 enables H-matrix acceleration if available."},
+	{"SetHMatrixFieldEval", radia_SetHMatrixFieldEval, METH_VARARGS,  "SetHMatrixFieldEval(enabled:0|1,eps:1e-6) enables (1) or disables (0) H-matrix acceleration for field evaluation. eps sets accuracy tolerance. Enables caching for non-linear iterations."},
+	{"ClearHMatrixCache", radia_ClearHMatrixCache, METH_VARARGS,  "ClearHMatrixCache() clears H-matrix field evaluation cache and frees memory. Call after geometry modifications."},
+	{"GetHMatrixStats", radia_GetHMatrixStats, METH_VARARGS,  "GetHMatrixStats() returns H-matrix statistics: [is_enabled, num_cached, total_memory_MB]."},
 	{"FldLst", radia_FldLst, METH_VARARGS,  "FldLst(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x1,y1,z1],[x2,y2,z2],np,'arg|noarg':'noarg',strt:0.) computes magnetic field created by object obj in np equidistant points along a line segment from [x1,y1,z1] to [x2,y2,z2]; the field component is specified by the second input variable; the 'arg|noarg' string variable specifies whether to output a longitudinal position for each point where the field is computed, and strt gives the start-value for the longitudinal position."},
 	{"FldInt", radia_FldInt, METH_VARARGS, "FldInt(obj,'inf|fin','ibx|iby|ibz'|'',[x1,y1,z1],[x2,y2,z2]) computes magnetic field induction integral produced by the object obj along a straight line specified by points [x1,y1,z1] and [x2,y2,z2]; depending on the second variable value, the integral is infinite ('inf') or finite from [x1,y1,z1] to [x2,y2,z2] ('fin'); the field integral component is specified by the third input variable. The units are Tesla x millimeters."},
 	{"FldPtcTrj", radia_FldPtcTrj, METH_VARARGS, "FldPtcTrj(obj,E,[x0,dxdy0,z0,dzdy0],[y0,y1],np) computes transverse coordinates and its derivatives (angles) of a relativistic charged particle trajectory in 3D magnetic field produced by the object obj, using the 4th order Runge-Kutta integration. The particle energy is E [GeV], initial transverse coordinates and derivatives are {x0,dxdy0,z0,dzdy0}; the longitudinal coordinate y is varied from y0 to y1 in np steps. All positions are in millimeters and angles in radians."},

@@ -178,3 +178,6 @@ file_format_documents/
 # - COPYRIGHT.txt
 #
 # Note: Build_PyPI_Package.ps1 is now ignored (merged into Publish_to_PyPI.ps1)
+
+# Reference repositories (local only)
+参考/

@@ -188,6 +188,7 @@ public:
 	//void OutMagnetizCompRes(char* MagnChar, TVector3d& M_vect);
 
 	int PreRelax(int ElemKey, int SrcElemKey);
+	int SetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
 	void ShowInteractMatrix(int InteractElemKey);
 	void ShowInteractVector(int InteractElemKey, char* FieldVectID);
 	int MakeManualRelax(int InteractElemKey, int MethNo, int IterNumber, double RelaxParam);

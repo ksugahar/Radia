@@ -17,6 +17,7 @@
 
 #include "radplnr.h"
 #include "radappl.h"
+#include "radpoly_analytical.h"
 
 //-------------------------------------------------------------------------
 
@@ -29,342 +30,101 @@ extern radTYield radYield;
 void radTPolygon::B_comp(radTField* FieldPtr)
 {
 // Orientation: The Polygon normal parallel to vertical ort !!!
+// NOTE: This function uses the analytical formula from radpoly_analytical.cpp
+//       for improved performance and simplicity.
+
 	const double PI = 3.14159265358979;
 	const double ConstForH = 1./4./PI;
 
-	const double Max_k = 1.E+09; //1.E+08; // To skip segments in general field computation loop.
+	// Check for multitasking
+	if(radYield.Check()==0) return;
 
-	radTVect2dVect::iterator BaseIter = EdgePointsVector.begin();
-	TVector2d& FirstPo2d = *BaseIter;
-
-	double AbsRandX = radCR.AbsRandMagnitude(FirstPo2d.x - CentrPoint.x);
-	double AbsRandY = radCR.AbsRandMagnitude(FirstPo2d.y - CentrPoint.y);
-	double AbsRandZ = radCR.AbsRandMagnitude(CoordZ);
-	if(AbsRandZ < AbsRandX) AbsRandZ = AbsRandX;
-	if(AbsRandZ < AbsRandY) AbsRandZ = AbsRandY;
-	double RelRandMagn = radCR.AbsRandMagnitude(1.);
-
-	if(radYield.Check()==0) return; // To allow multitasking on Mac: consider better places for this
-
+	// Get observation point
 	TVector3d& ObsPo = FieldPtr->P;
 
-	double z = CoordZ - ObsPo.z;  // If this is zero, we get error !
-// Artificial shift of an observation point a bit right of the block's border
-// if the point is exactly on the boarder (to avoid "divide by zero" error):
-	if(z==0.) 
-	{
-		z = AbsRandZ;
-		ObsPo.z -= AbsRandZ; //OC040504 test
-	}
-	double ze2 = z*z;
-	double absz = Abs(z);
-
-	TVector2d First2d(FirstPo2d.x - ObsPo.x, FirstPo2d.y - ObsPo.y);
-	TVector2d Vect2dToAdd(-ObsPo.x, -ObsPo.y);
-
-	double x1 = First2d.x;  // If this is zero, we get error ?
-	double y1 = First2d.y;  // If this is zero, we get error ?
-// Artificial shift of an observation point a bit right of the block's border
-// if the point is exactly on the boarder (to avoid "divide by zero" error):
-	if(x1==0.) 
-	{
-		x1 = AbsRandX;
-
-		First2d.x += AbsRandX; //OC040504 test
-		Vect2dToAdd.x += AbsRandX; //OC040504 test
-		ObsPo.x -= AbsRandX; //OC040504 test
-	}
-	if(y1==0.) 
-	{
-		y1 = AbsRandY;
-
-		First2d.y += AbsRandY; //OC040504 test
-		Vect2dToAdd.y += AbsRandY; //OC040504 test
-		ObsPo.y -= AbsRandY; //OC040504 test
-	}
-	double x1e2 = x1*x1, y1e2 = y1*y1;
-	double x2, y2, x2e2, y2e2;
-
+	// Check which field components are needed
 	short A_CompNeeded = FieldPtr->FieldKey.A_;
 	short B_orH_CompNeeded = FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_ || FieldPtr->FieldKey.PreRelax_;
 
-	int AmOfEdgePoints_mi_1 = AmOfEdgePoints - 1;
+	if(!A_CompNeeded && !B_orH_CompNeeded) return;
 
-	double Sx=0., Sy=0., Sz=0., AS=0.;
-	double ArgSumAtans1=0., PiMultSumAtans1=0.;
-	double ArgSumLogs2=1.;
-
-	for(int i=0; i<AmOfEdgePoints; i++)
+	// Handle singularity: if observation point is on polygon plane
+	double z = CoordZ - ObsPo.z;
+	TVector3d ObsPoOriginal = ObsPo;  // Save original
+	if(z == 0.)
 	{
-		++BaseIter;
-		if(i!=AmOfEdgePoints_mi_1)
-		{
-			TVector2d& BufPo2d = *BaseIter;
-			x2 = BufPo2d.x + Vect2dToAdd.x;  // If this is zero, we get error !
-			y2 = BufPo2d.y + Vect2dToAdd.y;  // If this is zero, we get error !
-		}
-		else
-		{
-			x2 = First2d.x;  // If this is zero, we get error !
-			y2 = First2d.y;  // If this is zero, we get error !
-		}
-
-		// Artificial shift of an observation point a bit right of the block's border
-		// if the point is exactly on the boarder (to avoid "divide by zero" error):
-		// Removing this may be dangerous for the Checking-If-Inside
-		if(x2==0.) 
-		{
-			x2 = AbsRandX;
-			
-			First2d.x += AbsRandX; //OC040504 test
-			Vect2dToAdd.x += AbsRandX; //OC040504 test
-			ObsPo.x -= AbsRandX; //OC040504 test
-		}
-		if(y2==0.) 
-		{
-			y2 = AbsRandY;
-
-			First2d.y += AbsRandY; //OC040504 test
-			Vect2dToAdd.y += AbsRandY; //OC040504 test
-			ObsPo.y -= AbsRandY; //OC040504 test
-		}
-
-		x2e2 = x2*x2; y2e2 = y2*y2;
-
-		double x2mx1 = x2-x1;
-		double y2my1 = y2-y1;
-		double abs_x2mx1 = Abs(x2mx1), abs_y2my1 = Abs(y2my1);
-
-		if(abs_x2mx1*Max_k > abs_y2my1)
-		{
-			double k = y2my1/x2mx1; // x2mx1 != 0 here
-			double b = y1 - k*x1;  // If b is zero, we get error !
-			if(b==0.) 
-			{
-				b = AbsRandY; //OC040504 test
-
-				y1 += AbsRandY;
-				y1e2 = y1*y1;
-				y2my1 -= AbsRandY;
-				abs_y2my1 = Abs(y2my1);
-				k = y2my1/x2mx1;
-
-				First2d.y += AbsRandY; //OC040504 test
-				Vect2dToAdd.y += AbsRandY; //OC040504 test
-				ObsPo.y -= AbsRandY; //OC040504 test
-			}
-
-			double bk = b*k, ke2 = k*k, be2 = b*b, twob = 2.*b;
-			double ke2p1 = ke2+1.;
-			if(ke2p1==0.) ke2p1 = RelRandMagn;
-			double sqrtke2p1 = sqrt(ke2p1);
-
-			double kx1 = k*x1, kx2 = k*x2;
-			double bpkx1 = y1, bpkx2 = y2;
-			double bpkx1e2 = bpkx1*bpkx1, bpkx2e2 = bpkx2*bpkx2;
-			double kx1mb = -b+kx1, kx2mb = -b+kx2; 
-			//double R1 = radCR.DoublePlus(sqrt(x1e2 + bpkx1e2 + ze2)), R2 = radCR.DoublePlus(sqrt(x2e2 + bpkx2e2 + ze2));
-			double R1 = sqrt(x1e2 + bpkx1e2 + ze2), R2 = sqrt(x2e2 + bpkx2e2 + ze2); //OC040504
-
-			double x1e2pze2 = x1e2+ze2, x2e2pze2 = x2e2+ze2;
-			double bkpx1pke2x1 = bk+ke2p1*x1, bkpx2pke2x2 = bk+ke2p1*x2;  // If this is zero, we get error !
-			double kze2 = k*ze2;
-			double ke2ze2 = k*kze2;
-			double ke2ze2mbe2 = ke2ze2-be2, ke2ze2pbe2 = ke2ze2+be2;
-			double bx1 = b*x1, bx2 = b*x2;
-			double R1pbpkx1 = bpkx1+R1, R2pbpkx2 = bpkx2+R2;
-
-			const double MaxRelTolToSwitch = 1.E-07; //1.E-05;
-			//double AbsRandR1 = 10.*radCR.AbsRandMagnitude(R1);
-			//double AbsRandR2 = 10.*radCR.AbsRandMagnitude(R2);
-
-			double AbsRandR2 = 100.*radCR.AbsRandMagnitude(R2);
-			double AbsRandR1 = 100.*radCR.AbsRandMagnitude(R1);
-			double MaxAbsRandR1 = MaxRelTolToSwitch*R1;
-			double MaxAbsRandR2 = MaxRelTolToSwitch*R2;
-			if(AbsRandR1 > MaxAbsRandR1) AbsRandR1 = MaxAbsRandR1;
-			if(AbsRandR2 > MaxAbsRandR2) AbsRandR2 = MaxAbsRandR2;
-			//double AbsRandR1 = MaxRelTolToSwitch*R1; //OC040504
-			//double AbsRandR2 = MaxRelTolToSwitch*R2; //OC040504
-
-			//if(R1pbpkx1 < AbsRandR1) R1pbpkx1 = 0.5*(x1e2 + ze2)/Abs(bpkx1);
-			//if(R2pbpkx2 < AbsRandR2) R2pbpkx2 = 0.5*(x2e2 + ze2)/Abs(bpkx2);
-			//if((R1pbpkx1 < AbsRandR1) && (bpkx1 != 0.)) R1pbpkx1 = 0.5*(x1e2 + ze2)/Abs(bpkx1); //OC040504
-			//if((R2pbpkx2 < AbsRandR2) && (bpkx2 != 0.)) R2pbpkx2 = 0.5*(x2e2 + ze2)/Abs(bpkx2); //OC040504
-			if((R1pbpkx1 < AbsRandR1) && (R1 > 100.*AbsRandR1) && ((x1e2 + ze2) < bpkx1e2*MaxRelTolToSwitch)) R1pbpkx1 = 0.5*(x1e2 + ze2)/Abs(bpkx1); //OC170504
-			if((R2pbpkx2 < AbsRandR2) && (R2 > 100.*AbsRandR2) && ((x2e2 + ze2) < bpkx2e2*MaxRelTolToSwitch)) R2pbpkx2 = 0.5*(x2e2 + ze2)/Abs(bpkx2); //OC170504
-
-			double FlpRep1ForSumAtans1 = 0.;
-
-			double four_be2ke2 = 4.*be2*ke2; 
-			double four_be2be2ke2 = be2*four_be2ke2;
-			double be2mke2ze2 = be2-ke2ze2, be2pke2ze2 = be2+ke2ze2;
-			double be2mke2ze2e2 = be2mke2ze2*be2mke2ze2, be2pke2ze2e2 = be2pke2ze2*be2pke2ze2;
-			double DFlipRepSumAtans1 = (be2+ke2p1*ze2)*(four_be2ke2*(be2+ke2ze2)-be2mke2ze2e2);
-			double BufDen = four_be2be2ke2-ke2p1*be2mke2ze2e2;
-
-			if((DFlipRepSumAtans1 >= 0.) && (BufDen != 0.))
-			{
-				double Buf1Num = bk*be2pke2ze2e2;
-				double Buf2Num = be2mke2ze2*sqrt(DFlipRepSumAtans1);
-				double xFlp1 = (Buf1Num - Buf2Num)/BufDen;
-				double xFlp2 = (Buf1Num + Buf2Num)/BufDen;
-
-				double xFlp = xFlp1;
-				if((x1<x2)? ((xFlp>x1) && (xFlp<x2)) : ((xFlp<x1) && (xFlp>x2)))
-				{
-					double xFlpe2 = xFlp*xFlp, kxFlp = k*xFlp;
-					double kxFlppb = kxFlp+b, kxFlpmb = kxFlp-b;
-					double kxFlppbe2 = kxFlppb*kxFlppb;
-					double SqRoot = sqrt(xFlpe2+kxFlppbe2+ze2);
-
-					if(Sign((xFlpe2+ze2)*(-be2mke2ze2) + (-be2+ke2*xFlpe2)*be2pke2ze2) == Sign(-kxFlpmb)) // RootIsReal?
-					{
-						double DenomDerivSign = Sign(-2.*xFlp*be2mke2ze2 + kxFlpmb*be2pke2ze2*(k+(bk+ke2p1*xFlp)/SqRoot) + k*be2pke2ze2*(kxFlppb + SqRoot));
-						//double DenomDerivSign = Sign(-2.*xFlp*be2mke2ze2*SqRoot + kxFlpmb*be2pke2ze2*(k*SqRoot + (bk+ke2p1*xFlp)) + k*be2pke2ze2*(kxFlppb + SqRoot)*SqRoot); //OC040504
-						
-						double NumSign = Sign((2.*bk*ze2*(xFlpe2+ze2) + (b*xFlp+kze2)*be2pke2ze2*(kxFlppb + SqRoot))/z);
-						//double NumSign = Sign((2.*bk*ze2*(xFlpe2+ze2) + (b*xFlp+kze2)*be2pke2ze2*(kxFlppb + SqRoot))*z); //OC040504
-						double Buf = -DenomDerivSign*NumSign*Sign(x2mx1);
-
-						FlpRep1ForSumAtans1 += Buf;
-					}
-				}
-				xFlp = xFlp2;
-				if((x1<x2)? ((xFlp>x1) && (xFlp<x2)) : ((xFlp<x1) && (xFlp>x2)))
-				{
-					double xFlpe2 = xFlp*xFlp, kxFlp = k*xFlp;
-					double kxFlppb = kxFlp+b, kxFlpmb = kxFlp-b;
-					double kxFlppbe2 = kxFlppb*kxFlppb;
-					double SqRoot = sqrt(xFlpe2+kxFlppbe2+ze2);
-					if(Sign((xFlpe2+ze2)*(-be2mke2ze2) + (-be2+ke2*xFlpe2)*be2pke2ze2) == Sign(-kxFlpmb))
-					{
-						double DenomDerivSign = Sign(-2.*xFlp*be2mke2ze2 + kxFlpmb*be2pke2ze2*(k+(bk+ke2p1*xFlp)/SqRoot) + k*be2pke2ze2*(kxFlppb + SqRoot));
-						//double DenomDerivSign = Sign(-2.*xFlp*be2mke2ze2*SqRoot + kxFlpmb*be2pke2ze2*(k*SqRoot + (bk+ke2p1*xFlp)) + k*be2pke2ze2*(kxFlppb + SqRoot)*SqRoot); //OC040504
-
-						double NumSign = Sign((2.*bk*ze2*(xFlpe2+ze2) + (b*xFlp+kze2)*be2pke2ze2*(kxFlppb + SqRoot))/z);
-						//double NumSign = Sign((2.*bk*ze2*(xFlpe2+ze2) + (b*xFlp+kze2)*be2pke2ze2*(kxFlppb + SqRoot))*z);
-						double Buf = -DenomDerivSign*NumSign*Sign(x2mx1);
-
-						FlpRep1ForSumAtans1 += Buf;
-					}
-				}
-			}
-
-			double Arg1ForSumAtans1 = -(ke2ze2pbe2*(bx1 + kze2)*R1pbpkx1 + kze2*twob*x1e2pze2);
-			double Arg2ForSumAtans1 = (ke2ze2pbe2*kx1mb*R1pbpkx1 + ke2ze2mbe2*x1e2pze2)*z;
-			double Arg3ForSumAtans1 = ke2ze2pbe2*(bx2 + kze2)*R2pbpkx2 + kze2*twob*x2e2pze2;
-			double Arg4ForSumAtans1 = (ke2ze2pbe2*kx2mb*R2pbpkx2 + ke2ze2mbe2*x2e2pze2)*z;
-
-			//OC18122019
-			if(Arg2ForSumAtans1 == 0.) Arg2ForSumAtans1 = 1.e-50; //?
-			if(Arg4ForSumAtans1 == 0.) Arg4ForSumAtans1 = 1.e-50; //?
-
-			double PiMult1=0., PiMult2=0.;
-			double CurArgSumAtans1 = TransAtans(Arg1ForSumAtans1/Arg2ForSumAtans1, Arg3ForSumAtans1/Arg4ForSumAtans1, PiMult1);
-
-			//double DivVal = Arg2ForSumAtans1*Arg4ForSumAtans1 - Arg1ForSumAtans1*Arg3ForSumAtans1; //OC040504
-			//if(DivVal == 0.) DivVal = 1.e-50; //OC040504
-			//double CurArgSumAtans1 = (Arg1ForSumAtans1*Arg4ForSumAtans1 + Arg3ForSumAtans1*Arg2ForSumAtans1)/DivVal; //OC040504
-			//if(Arg2ForSumAtans1*Arg4ForSumAtans1 != 0.) //OC040504
-			//{
-			//	double x = Arg1ForSumAtans1/Arg2ForSumAtans1, y = Arg3ForSumAtans1/Arg4ForSumAtans1;
-			//  double Buf = 1.-x*y;
-			//             PiMult1 = (((Buf > 0)? 0.:1.) * ((x < 0)? -1.:1.));
-			//}
-			//else //OC040504
-			//{
-			//	if(Arg1ForSumAtans1*Arg3ForSumAtans1 < 0)
-			//	{
-			//		PiMult1 = 0;
-			//	}
-			//	else
-			//	{
-			//      if(Arg2ForSumAtans1 < 0.)
-			//		{
-			//			if(Arg1ForSumAtans1 > 0.)
-			//			{
-			//                         PiMult1 = -1;
-			//			}
-			//			else PiMult1 = 1;
-			//		}
-			//		else
-			//		{
-			//			if(Arg1ForSumAtans1 > 0.)
-			//			{
-			//                         PiMult1 = 1;
-			//			}
-			//			else PiMult1 = -1;
-			//		}
-			//	}
-			//}
-
-			ArgSumAtans1 = TransAtans(ArgSumAtans1, CurArgSumAtans1, PiMult2);
-			PiMultSumAtans1 += PiMult1+PiMult2 + FlpRep1ForSumAtans1;
-
-			double bkpx1pke2x1dsqrtke2p1pR1 = bkpx1pke2x1/sqrtke2p1 + R1; // sqrtke2p1 > 0 always
-			double bkpx2pke2x2dsqrtke2p1pR2 = bkpx2pke2x2/sqrtke2p1 + R2; // sqrtke2p1 > 0 always
-			//if(bkpx1pke2x1dsqrtke2p1pR1 < AbsRandR1) bkpx1pke2x1dsqrtke2p1pR1 = 0.5*(be2 + ze2)/(Abs(x1)*sqrtke2p1);
-			//if(bkpx2pke2x2dsqrtke2p1pR2 < AbsRandR2) bkpx2pke2x2dsqrtke2p1pR2 = 0.5*(be2 + ze2)/(Abs(x2)*sqrtke2p1);
-			//if((bkpx1pke2x1dsqrtke2p1pR1 < AbsRandR1) && (x1 != 0.)) bkpx1pke2x1dsqrtke2p1pR1 = 0.5*(be2 + ze2)/(Abs(x1)*sqrtke2p1);
-			//if((bkpx2pke2x2dsqrtke2p1pR2 < AbsRandR2) && (x2 != 0.)) bkpx2pke2x2dsqrtke2p1pR2 = 0.5*(be2 + ze2)/(Abs(x2)*sqrtke2p1);
-
-			double be2pze2 = be2 + ze2;
-			if((bkpx1pke2x1dsqrtke2p1pR1 < AbsRandR1) && (R1 > 100.*AbsRandR1) && ((be2pze2 + 2*bk*x1) < x1e2*ke2p1*MaxRelTolToSwitch)) bkpx1pke2x1dsqrtke2p1pR1 = 0.5*be2pze2/(Abs(x1)*sqrtke2p1);
-			if((bkpx2pke2x2dsqrtke2p1pR2 < AbsRandR2) && (R2 > 100.*AbsRandR2) && ((be2pze2 + 2*bk*x2) < x2e2*ke2p1*MaxRelTolToSwitch)) bkpx2pke2x2dsqrtke2p1pR2 = 0.5*be2pze2/(Abs(x2)*sqrtke2p1);
-
-			if(bkpx1pke2x1dsqrtke2p1pR1 == 0.) bkpx1pke2x1dsqrtke2p1pR1 = 1.e-50; //OC040504
-			if(bkpx2pke2x2dsqrtke2p1pR2 == 0.) bkpx2pke2x2dsqrtke2p1pR2 = 1.e-50; //OC040504
-
-			double SumLogs1 = log(bkpx2pke2x2dsqrtke2p1pR2/bkpx1pke2x1dsqrtke2p1pR1);
-			double SumLogs1dsqrtke2p1 = SumLogs1/sqrtke2p1; // sqrtke2p1 > 0 always
-
-			if(B_orH_CompNeeded)
-			{
-				if(R1pbpkx1 == 0.) R1pbpkx1 = 1.e-50; //OC040504
-				ArgSumLogs2 *= (R2pbpkx2/R1pbpkx1);
-				
-				Sx += -k*SumLogs1dsqrtke2p1;
-				Sy += SumLogs1dsqrtke2p1;
-			}
-			if(A_CompNeeded)
-			{
-				if(R2pbpkx2 <= 0.) R2pbpkx2 = 1.e-50; //OC040504
-				if(R1pbpkx1 <= 0.) R1pbpkx1 = 1.e-50; //OC040504
-				AS += -b*SumLogs1dsqrtke2p1 - (x2*log(R2pbpkx2) - x1*log(R1pbpkx1));
-			}
-		}
-		x1 = x2; y1 = y2;
-		x1e2 = x2e2; y1e2 = y2e2;
+		// Shift observation point slightly
+		double AbsRandZ = radCR.AbsRandMagnitude(CoordZ);
+		if(AbsRandZ == 0.) AbsRandZ = 1.e-15;
+		z = AbsRandZ;
+		ObsPo.z -= AbsRandZ;
 	}
 
-	FieldPtr->PointIsInsideFrame = (z > 0.);
+	// ========================================================================
+	// Use analytical formula for field calculation
+	// ========================================================================
 
-	Sz = atan(ArgSumAtans1) + PiMultSumAtans1*PI;
+	// Setup local coordinate system (polygon is in XY plane at z=CoordZ)
+	TVector3d AA(1, 0, 0);  // Local X-axis
+	TVector3d BB(0, 1, 0);  // Local Y-axis
+	TVector3d CC(0, 0, 1);  // Normal (Z-axis)
+	TVector3d YY(0, 0, CoordZ);  // Reference point on polygon plane
+
+	// Prepare observation point in single-element vector
+	std::vector<TVector3d> obs_points(1, ObsPo);
+	std::vector<TVector3d> field_result(1, TVector3d(0, 0, 0));
+
+	// Magnetic charge density (from Magn.z)
+	double W = ConstForH * Magn.z;
+
+	// Call analytical formula
+	RadAnalyticalFieldFromPolygonCharge(
+		AA, BB, CC, YY,
+		EdgePointsVector,  // Polygon vertices in 2D
+		obs_points,
+		field_result,
+		W,
+		1,  // Element index (for error reporting)
+		AmOfEdgePoints
+	);
+
+	// Extract result
+	TVector3d& H_field = field_result[0];
+
+	// ========================================================================
+	// Apply results to FieldPtr
+	// ========================================================================
+
 	if(B_orH_CompNeeded)
 	{
-		if(ArgSumLogs2 <= 0.) ArgSumLogs2 = 1.e-50; //OC040504
-		Sx += log(ArgSumLogs2);
-
 		if(FieldPtr->FieldKey.PreRelax_)
 		{
-			TVector3d St0(0., 0., -ConstForH*Sx); 
-			TVector3d St1(0., 0., -ConstForH*Sy); 
-			TVector3d St2(0., 0., -ConstForH*Sz);
+			// Special handling for relaxation
+			TVector3d St0(0., 0., -H_field.x);
+			TVector3d St1(0., 0., -H_field.y);
+			TVector3d St2(0., 0., -H_field.z);
 			FieldPtr->B += St0;
 			FieldPtr->H += St1;
 			FieldPtr->A += St2;
-			return;
 		}
-		TVector3d BufH(Sx, Sy, Sz);
-		FieldPtr->H += (-ConstForH*Magn.z)*BufH; // Check if "-" is necessary
+		else
+		{
+			// Normal case: add to H field
+			FieldPtr->H += H_field;
+		}
 	}
+
 	if(A_CompNeeded)
 	{
-		AS += -z*Sz;
+		// Vector potential calculation
+		// A = -z * H_z in the direction perpendicular to Magn
+		double AS = -z * H_field.z;
 		TVector3d BufA(-Magn.y, Magn.x, 0.);
-		FieldPtr->A += (-AS*ConstForH)*BufA; // Check if "-" is necessary
+		FieldPtr->A += AS * BufA;
 	}
+
+	// Restore original observation point
+	ObsPo = ObsPoOriginal;
 }
 
 //-------------------------------------------------------------------------

@@ -93,6 +93,9 @@ void radTHMatrixInteraction::ExtractElementData()
 	elem_coords = new double[3 * n_elem];
 	elem_ptrs = new radTg3dRelax*[n_elem];
 
+	// Prepare HACApK point array
+	points.reserve(n_elem);
+
 	// Extract element centers and pointers
 	for(int i = 0; i < n_elem; i++)
 	{
@@ -109,11 +112,42 @@ void radTHMatrixInteraction::ExtractElementData()
 			center = trans->TrPoint(center);
 		}
 
-		// Store coordinates
+		// Store coordinates in legacy array
 		elem_coords[3*i + 0] = center.x;
 		elem_coords[3*i + 1] = center.y;
 		elem_coords[3*i + 2] = center.z;
+
+		// Store in HACApK Point3D array
+		points.emplace_back(center.x, center.y, center.z);
 	}
+
+	// Initialize HACApK parameters
+	hacapk_params.eps_aca = config.eps;
+	hacapk_params.leaf_size = config.min_cluster_size;
+	hacapk_params.eta = 0.8;  // Admissibility parameter
+	hacapk_params.aca_type = 2;  // Use ACA+ (improved version)
+	hacapk_params.nthr = config.num_threads;
+	if(hacapk_params.nthr <= 0)
+	{
+#ifdef _OPENMP
+		hacapk_params.nthr = omp_get_max_threads();
+#else
+		hacapk_params.nthr = 1;
+#endif
+	}
+	hacapk_params.print_level = 1;  // Standard output
+
+	// Cache symmetry transformations for each element (for performance)
+	// This avoids calling FillInTransPtrVectForElem() millions of times
+	std::cout << "Caching symmetry transformations for " << n_elem << " elements..." << std::endl;
+	cached_trans_vect.resize(n_elem);
+	for(int j = 0; j < n_elem; j++)
+	{
+		intrct_ptr->FillInTransPtrVectForElem(j, 'I');
+		cached_trans_vect[j] = intrct_ptr->TransPtrVect;  // Copy the vector
+		intrct_ptr->EmptyTransPtrVect();
+	}
+	std::cout << "Cached " << n_elem << " transformation lists" << std::endl;
 }
 
 //-------------------------------------------------------------------------
@@ -128,35 +162,106 @@ int radTHMatrixInteraction::BuildHMatrix()
 	try
 	{
 		std::cout << "\n========================================" << std::endl;
-		std::cout << "Building H-Matrix for Relaxation Solver" << std::endl;
+		std::cout << "Building True H-Matrix for Relaxation Solver" << std::endl;
 		std::cout << "========================================" << std::endl;
 		std::cout << "Number of elements: " << n_elem << std::endl;
-		std::cout << "ACA tolerance: " << config.eps << std::endl;
-		std::cout << "OpenMP enabled: " << (config.use_openmp ? "yes" : "no") << std::endl;
+		std::cout << "ACA tolerance: " << hacapk_params.eps_aca << std::endl;
+		std::cout << "Admissibility param: " << hacapk_params.eta << std::endl;
+		std::cout << "Min cluster size: " << hacapk_params.leaf_size << std::endl;
+		std::cout << "OpenMP threads: " << hacapk_params.nthr << std::endl;
 
-		// Phase 2: Simplified implementation using dense storage with OpenMP optimization
-		// Full HACApK integration would be more complex and is left for future work
-		// This implementation focuses on achieving 10x speedup through:
-		// 1. Efficient interaction matrix computation
-		// 2. OpenMP parallelization
-		// 3. Optimized storage
+		// Build 9 H-matrices for the 3x3 tensor interaction matrix
+		// Each H-matrix corresponds to one tensor component M[row][col]
+		std::cout << "\nBuilding 9 H-matrices (3x3 tensor components)";
+		if(config.use_openmp && n_elem > 100)
+		{
+			std::cout << " in parallel..." << std::endl;
+		}
+		else
+		{
+			std::cout << " sequentially..." << std::endl;
+		}
 
-		std::cout << "\nComputing interaction matrix..." << std::endl;
+		// Thread-safe memory accumulation (each component stores its own memory usage)
+		std::vector<size_t> memory_per_component(9);
+		memory_used = 0;
 
-		// The actual H-matrix construction would use HACApK library here
-		// For now, we mark it as built and the MatVec will handle computation
+		// Parallel construction of 9 H-matrices
+		// Use dynamic scheduling for load balancing (different components may have different ranks)
+		// Only parallelize for large problems (n_elem > 100) to avoid OpenMP overhead
+		#pragma omp parallel for schedule(dynamic) if(config.use_openmp && n_elem > 100)
+		for(int idx = 0; idx < 9; idx++)
+		{
+			int row = idx / 3;
+			int col = idx % 3;
+
+			// Thread-safe output (critical section)
+			#pragma omp critical
+			{
+				std::cout << "  Component [" << row << "][" << col << "]... " << std::flush;
+			}
+
+			// Prepare kernel data
+			KernelData kdata;
+			kdata.hmat_ptr = this;
+			kdata.tensor_row = row;
+			kdata.tensor_col = col;
+
+			// Build H-matrix for this tensor component
+			// Each thread builds its own H-matrix independently
+			hmat[idx] = hacapk::build_hmatrix(
+				points,             // Source points
+				points,             // Target points (same for self-interaction)
+				KernelFunction,     // Kernel function callback
+				&kdata,             // User data
+				hacapk_params       // Control parameters
+			);
+
+			if(!hmat[idx])
+			{
+				#pragma omp critical
+				{
+					std::cerr << "Failed to build H-matrix for component ["
+					          << row << "][" << col << "]" << std::endl;
+				}
+				throw std::runtime_error("Failed to build H-matrix for component ["
+				                         + std::to_string(row) + "][" + std::to_string(col) + "]");
+			}
+
+			// Store memory usage (thread-safe: each thread writes to different index)
+			memory_per_component[idx] = hmat[idx]->memory_usage();
+
+			// Thread-safe output (critical section)
+			#pragma omp critical
+			{
+				std::cout << "rank=" << hmat[idx]->ktmax
+				          << ", blocks=" << hmat[idx]->nlf
+				          << ", memory=" << (hmat[idx]->memory_usage() / 1024) << " KB" << std::endl;
+			}
+		}
+
+		// Sum up memory usage from all components (after parallel region)
+		for(int idx = 0; idx < 9; idx++)
+		{
+			memory_used += memory_per_component[idx];
+		}
+
 		is_built = true;
 
-		// Estimate memory
-		size_t dense_memory = (size_t)n_elem * (size_t)n_elem * 9 * sizeof(float);
-		memory_used = dense_memory / 10;  // Approximate compression
+		// Calculate compression ratio
+		size_t dense_memory = (size_t)n_elem * (size_t)n_elem * 9 * sizeof(double);
 		compression_ratio = (double)memory_used / (double)dense_memory;
 
 		auto t_end = std::chrono::high_resolution_clock::now();
 		construction_time = std::chrono::duration<double>(t_end - t_start).count();
 
+		std::cout << "\n========================================" << std::endl;
+		std::cout << "H-Matrix Construction Complete" << std::endl;
+		std::cout << "========================================" << std::endl;
 		std::cout << "Construction time: " << construction_time << " s" << std::endl;
-		std::cout << "Compression ratio: " << compression_ratio * 100 << "%" << std::endl;
+		std::cout << "Total memory used: " << (memory_used / 1024 / 1024) << " MB" << std::endl;
+		std::cout << "Dense would be: " << (dense_memory / 1024 / 1024) << " MB" << std::endl;
+		std::cout << "Compression ratio: " << (compression_ratio * 100) << "%" << std::endl;
 		std::cout << "========================================\n" << std::endl;
 
 		return 1; // Success
@@ -188,19 +293,15 @@ void radTHMatrixInteraction::ComputeInteractionKernel(int i, int j, TMatrix3df& 
 	// Get observation point at element i (StrNo in SetupInteractMatrix)
 	TVector3d InitObsPoiVect = intrct_ptr->MainTransPtrArray[i]->TrPoint(elem_ptrs[i]->ReturnCentrPoint());
 
-	// Apply symmetry transformations
-	// This uses the TransPtrVect that was filled by FillInTransPtrVectForElem
-	// For H-matrix, we need to access the transformation list directly
-	radTlphgPtr& Loc_lphgPtr = *(intrct_ptr->IntVectOfPtrToListsOfTransPtr[j]);
+	// Use cached symmetry transformations (avoid expensive FillInTransPtrVectForElem call)
+	const std::vector<radTrans*>& trans_vect = cached_trans_vect[j];
 
 	TMatrix3d SubMatrix(ZeroVect, ZeroVect, ZeroVect), BufSubMatrix;
 
 	// Loop over all symmetry transformations for element j
-	for(radTlphgPtr::iterator TrIter = Loc_lphgPtr.begin();
-	    TrIter != Loc_lphgPtr.end(); ++TrIter)
+	for(unsigned i_trans=0; i_trans < trans_vect.size(); i_trans++)
 	{
-		radTPair_int_hg* pPair = *TrIter;
-		radTrans* TransPtr = (radTrans*)(pPair->Handler_g.rep);
+		radTrans* TransPtr = trans_vect[i_trans];
 
 		TVector3d ObsPoiVect = TransPtr->TrPoint_inv(InitObsPoiVect);
 
@@ -224,8 +325,8 @@ void radTHMatrixInteraction::ComputeInteractionKernel(int i, int j, TMatrix3df& 
 }
 
 //-------------------------------------------------------------------------
-// Matrix-vector multiplication: H = InteractMatrix × M
-// Phase 3: OpenMP-optimized on-the-fly computation
+// Matrix-vector multiplication: H = InteractMatrix * M
+// True H-matrix implementation with O(N log N) complexity
 //-------------------------------------------------------------------------
 
 void radTHMatrixInteraction::MatVec(const TVector3d* M_in, TVector3d* H_out)
@@ -235,56 +336,56 @@ void radTHMatrixInteraction::MatVec(const TVector3d* M_in, TVector3d* H_out)
 		throw std::runtime_error("H-matrix solver: H-matrix not built yet");
 	}
 
-	// OpenMP-parallelized matrix-vector multiplication
-	// Strategy: Compute interactions on-the-fly to save memory
-	// This provides ~4-10x speedup through parallelization
-
-#ifdef _OPENMP
-	if(config.use_openmp && n_elem > 20)
+	// Convert input magnetization vectors to scalar arrays for HACApK
+	// M_in[i] = (Mx, My, Mz) -> M_x[i], M_y[i], M_z[i]
+	std::vector<double> M_x(n_elem), M_y(n_elem), M_z(n_elem);
+	for(int i = 0; i < n_elem; i++)
 	{
-		// Set number of threads
-		int num_threads = config.num_threads;
-		if(num_threads <= 0)
+		M_x[i] = M_in[i].x;
+		M_y[i] = M_in[i].y;
+		M_z[i] = M_in[i].z;
+	}
+
+	// Allocate result arrays for 9 H-matrix-vector products
+	// Result[row][col] = hmat[row*3+col] * M_col
+	std::vector<double> result[3][3];
+	for(int row = 0; row < 3; row++)
+	{
+		for(int col = 0; col < 3; col++)
 		{
-			num_threads = omp_get_max_threads();
-		}
-
-		#pragma omp parallel for num_threads(num_threads) schedule(dynamic)
-		for(int i = 0; i < n_elem; i++)
-		{
-			TVector3d H_sum(0., 0., 0.);
-
-			// Compute H[i] = sum_j InteractMatrix[i][j] * M[j]
-			for(int j = 0; j < n_elem; j++)
-			{
-				// Compute interaction kernel on-the-fly
-				TMatrix3df kernel;
-				ComputeInteractionKernel(i, j, kernel);
-
-				// Matrix-vector product for this entry
-				H_sum += kernel * M_in[j];
-			}
-
-			H_out[i] = H_sum;
+			result[row][col].resize(n_elem, 0.0);
 		}
 	}
-	else
-#endif
+
+	// Perform 9 H-matrix-vector multiplications using HACApK
+	// InteractMatrix is 3x3 tensor: H[row] = sum_col (M[row][col] * M_in[col])
+	for(int row = 0; row < 3; row++)
 	{
-		// Serial version
-		for(int i = 0; i < n_elem; i++)
-		{
-			TVector3d H_sum(0., 0., 0.);
+		// H[row].x = M[row][0]*M_x + M[row][1]*M_y + M[row][2]*M_z
+		int idx_0 = row * 3 + 0;  // M[row][0]
+		int idx_1 = row * 3 + 1;  // M[row][1]
+		int idx_2 = row * 3 + 2;  // M[row][2]
 
-			for(int j = 0; j < n_elem; j++)
-			{
-				TMatrix3df kernel;
-				ComputeInteractionKernel(i, j, kernel);
-				H_sum += kernel * M_in[j];
-			}
+		// result[row][0] = hmat[idx_0] * M_x
+		hacapk::hmatrix_matvec(*hmat[idx_0], M_x, result[row][0]);
 
-			H_out[i] = H_sum;
-		}
+		// result[row][1] = hmat[idx_1] * M_y
+		hacapk::hmatrix_matvec(*hmat[idx_1], M_y, result[row][1]);
+
+		// result[row][2] = hmat[idx_2] * M_z
+		hacapk::hmatrix_matvec(*hmat[idx_2], M_z, result[row][2]);
+	}
+
+	// Combine results into output field vectors
+	// H_out[i] = (H_x[i], H_y[i], H_z[i])
+	// H_x[i] = result[0][0][i] + result[0][1][i] + result[0][2][i]
+	// H_y[i] = result[1][0][i] + result[1][1][i] + result[1][2][i]
+	// H_z[i] = result[2][0][i] + result[2][1][i] + result[2][2][i]
+	for(int i = 0; i < n_elem; i++)
+	{
+		H_out[i].x = result[0][0][i] + result[0][1][i] + result[0][2][i];
+		H_out[i].y = result[1][0][i] + result[1][1][i] + result[1][2][i];
+		H_out[i].z = result[2][0][i] + result[2][1][i] + result[2][2][i];
 	}
 }
 
@@ -337,4 +438,88 @@ size_t radTHMatrixInteraction::EstimateMemoryUsage() const
 double radTHMatrixInteraction::GetCompressionRatio() const
 {
 	return compression_ratio;
+}
+
+//-------------------------------------------------------------------------
+// Kernel function wrapper for HACApK
+// Extracts a specific tensor component from the 3x3 interaction matrix
+//-------------------------------------------------------------------------
+
+double radTHMatrixInteraction::KernelFunction(int i, int j, void* user_data)
+{
+	// Extract kernel data
+	KernelData* kdata = static_cast<KernelData*>(user_data);
+	radTHMatrixInteraction* hmat = kdata->hmat_ptr;
+	int row = kdata->tensor_row;
+	int col = kdata->tensor_col;
+
+	// Get source element j
+	radTg3dRelax* elem_j = hmat->elem_ptrs[j];
+
+	// Save original magnetization
+	TVector3d originalMagn = elem_j->Magn;
+
+	// Set unit magnetization in the col direction
+	// This is critical because B_comp() uses the element's current magnetization
+	TVector3d unitMagn(0., 0., 0.);
+	switch(col)
+	{
+	case 0: unitMagn.x = 1.0; break;
+	case 1: unitMagn.y = 1.0; break;
+	case 2: unitMagn.z = 1.0; break;
+	}
+
+	// Result variable (must be declared outside critical section)
+	double result = 0.0;
+
+	// Temporarily set unit magnetization
+	// CRITICAL SECTION: This modification must be thread-safe
+#ifdef _OPENMP
+	#pragma omp critical(kernel_magn_access)
+	{
+#endif
+		elem_j->Magn = unitMagn;
+
+		// Compute full 3x3 interaction kernel with unit magnetization
+		TMatrix3df kernel;
+		hmat->ComputeInteractionKernel(i, j, kernel);
+
+		// Restore original magnetization
+		elem_j->Magn = originalMagn;
+
+		// Extract the requested tensor component
+		// TMatrix3df is stored as: Str0 = row 0, Str1 = row 1, Str2 = row 2
+		switch(row)
+		{
+		case 0:
+			switch(col)
+			{
+			case 0: result = kernel.Str0.x; break;
+			case 1: result = kernel.Str0.y; break;
+			case 2: result = kernel.Str0.z; break;
+			}
+			break;
+		case 1:
+			switch(col)
+			{
+			case 0: result = kernel.Str1.x; break;
+			case 1: result = kernel.Str1.y; break;
+			case 2: result = kernel.Str1.z; break;
+			}
+			break;
+		case 2:
+			switch(col)
+			{
+			case 0: result = kernel.Str2.x; break;
+			case 1: result = kernel.Str2.y; break;
+			case 2: result = kernel.Str2.z; break;
+			}
+			break;
+		}
+
+#ifdef _OPENMP
+	}  // End critical section
+#endif
+
+	return result;
 }
