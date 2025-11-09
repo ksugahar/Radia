@@ -33,15 +33,15 @@ set(EXT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/ext")
 set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/python")
 set(FFTW_DIR "${EXT_DIR}/fftw")
 
-# Radia core sources (explicit list from original CMakeLists.txt)
+# Radia core sources (organized by API functionality)
 set(RADIA_CORE_SOURCES
-	${CORE_DIR}/radapl1.cpp
-	${CORE_DIR}/radapl2.cpp
-	${CORE_DIR}/radapl3.cpp
-	${CORE_DIR}/radapl4.cpp
-	# ${CORE_DIR}/radapl5.cpp  # Removed: QD3D viewer (deprecated)
-	# ${CORE_DIR}/radapl6.cpp  # Removed: OpenGL 3D viewer (deprecated)
-	${CORE_DIR}/radapl7.cpp
+	${CORE_DIR}/radobj_creation.cpp      # Object creation (ObjRecMag, ObjCylMag, etc.)
+	${CORE_DIR}/radmaterial.cpp          # Materials (MatLin, MatStd, MatApl, etc.)
+	${CORE_DIR}/radtransform.cpp         # Transformations (TrfTrsl, TrfRot, etc.)
+	${CORE_DIR}/radfield_compute.cpp     # Field computation (Fld, FldLst, FldEnr, etc.)
+	# radapl5.cpp removed: QD3D viewer (deprecated)
+	# radapl6.cpp removed: OpenGL 3D viewer (deprecated)
+	${CORE_DIR}/radobj_subdivision.cpp   # Subdivision (ObjDivMag, multi-generation extrusion)
 	${CORE_DIR}/radarccu.cpp
 	${CORE_DIR}/radcffld.cpp
 	${CORE_DIR}/radcast.cpp

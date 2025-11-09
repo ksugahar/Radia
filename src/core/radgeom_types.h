@@ -1,22 +1,22 @@
 /*-------------------------------------------------------------------------
 *
-* File name:      radapl1.h
+* File name:      radgeom_types.h
 *
 * Project:        RADIA
 *
-* Description:    Wrapping RADIA application function calls
+* Description:    Geometric type definitions for polygons and vertices
 *
 * Author(s):      Oleg Chubar
 *
 * First release:  1997
-* 
+*
 * Copyright (C):  1997 by European Synchrotron Radiation Facility, France
 *                 All Rights Reserved
 *
 -------------------------------------------------------------------------*/
 
-#ifndef __RADAPL1_H
-#define __RADAPL1_H
+#ifndef __RADGEOM_TYPES_H
+#define __RADGEOM_TYPES_H
 
 #ifndef __GMVECT_H
 #include "gmvect.h"

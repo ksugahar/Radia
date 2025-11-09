@@ -28,7 +28,7 @@ using PyObject = _object;
 #include "radg3dgr.h"
 #include "radyield.h"
 #include "radcnvrg.h"
-#include "radapl1.h"
+#include "radgeom_types.h"
 #include "radauxst.h"
 
 #include <sstream> // Porting
