@@ -113,6 +113,9 @@ build.log
 *.h.bak
 *.py.bak
 *.old
+git_bisect_test.ps1
+git_bisect_wrapper.ps1
+bisect_test_temp.py
 
 # ============================================================================
 # Python Virtual Environments
