@@ -34,6 +34,7 @@
 
 int radTApplication::SetLinearMaterial(double* KsiArray, long lenKsiArray, double* RemMagnArray, long lenRemMagnArray)
 {
+	radTMaterial* MaterPtr = nullptr;
 	try
 	{
 		if(lenKsiArray != 2)
@@ -50,22 +51,24 @@ int radTApplication::SetLinearMaterial(double* KsiArray, long lenKsiArray, doubl
 			if((RemMagnVect.x==0) && (RemMagnVect.y==0) && (RemMagnVect.z==0) && (KsiArray[0]!=KsiArray[1]))
 			{ Send.ErrorMessage("Radia::Error023"); return 0;}
 		}
-		else if(lenRemMagnArray == 1) 
+		else if(lenRemMagnArray == 1)
 		{
 			EasyAxisDefined = 0;
 			RemMagnVect.x = *RemMagnArray;
 		}
 
-		radTMaterial* MaterPtr = new radTLinearAnisotropMaterial(KsiArray, RemMagnVect, EasyAxisDefined);
+		MaterPtr = new radTLinearAnisotropMaterial(KsiArray, RemMagnVect, EasyAxisDefined);
 		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 
 		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
 		int ElemKey = AddElementToContainer(hg);
 		if(SendingIsRequired) Send.Int(ElemKey);
 		return ElemKey;
 	}
 	catch(...)
 	{
+		if(MaterPtr) delete MaterPtr;  // Clean up if exception before radThg ownership transfer
 		Initialize(); return 0;
 	}
 }
@@ -99,19 +102,22 @@ int radTApplication::SetMaterialStd(char* MatName, double Mr)
 
 int radTApplication::SetNonlinearIsotropMaterial(double* Ms, long lenMs, double* ks, long len_ks)
 {
+	radTNonlinearIsotropMaterial* MaterPtr = nullptr;
 	try
 	{
 		if((lenMs != len_ks) || (lenMs > 3)) { Send.ErrorMessage("Radia::Error024"); return 0;}
 
-		radTNonlinearIsotropMaterial* MaterPtr = new radTNonlinearIsotropMaterial(Ms, ks, (int)len_ks);
+		MaterPtr = new radTNonlinearIsotropMaterial(Ms, ks, (int)len_ks);
 		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
 		int ElemKey = AddElementToContainer(hg);
 		if(SendingIsRequired) Send.Int(ElemKey);
 		return ElemKey;
 	}
 	catch(...)
 	{
+		if(MaterPtr) delete MaterPtr;  // Clean up if exception before radThg ownership transfer
 		Initialize(); return 0;
 	}
 }
@@ -120,19 +126,22 @@ int radTApplication::SetNonlinearIsotropMaterial(double* Ms, long lenMs, double*
 
 int radTApplication::SetNonlinearIsotropMaterial(TVector2d* ArrayHM, int LenArrayHM)
 {
+	radTNonlinearIsotropMaterial* MaterPtr = nullptr;
 	try
 	{
 		if(!ValidateIsotropMaterDescrByPoints(ArrayHM, LenArrayHM)) return 0;
 
-		radTNonlinearIsotropMaterial* MaterPtr = new radTNonlinearIsotropMaterial(ArrayHM, LenArrayHM);
+		MaterPtr = new radTNonlinearIsotropMaterial(ArrayHM, LenArrayHM);
 		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
 		int ElemKey = AddElementToContainer(hg);
 		if(SendingIsRequired) Send.Int(ElemKey);
 		return ElemKey;
 	}
 	catch(...)
 	{
+		if(MaterPtr) delete MaterPtr;  // Clean up if exception before radThg ownership transfer
 		Initialize(); return 0;
 	}
 }
@@ -170,16 +179,16 @@ int radTApplication::SetNonlinearLaminatedMaterial(TVector2d* ArrayOfPoints2d, i
 	if(lenArrayOfPoints2d <= 0) { Send.ErrorMessage("Radia::Error000"); return 0;}
 	if((PackFactor <= 0) || (PackFactor > 1)) { Send.ErrorMessage("Radia::Error074"); return 0;}
 
-	radTMaterial *MaterPtr = 0;
+	radTMaterial *MaterPtr = nullptr;
 
 	try
 	{
-		if(lenArrayOfPoints2d <= 3) 
+		if(lenArrayOfPoints2d <= 3)
 		{
 			double Ms[] = {0,0,0};
 			double Ks[] = {0,0,0};
 			int lenMs = lenArrayOfPoints2d;
-			for(int i=0; i<lenMs; i++) 
+			for(int i=0; i<lenMs; i++)
 			{
 				Ks[i] = ArrayOfPoints2d[i].x;
 				Ms[i] = ArrayOfPoints2d[i].y;
@@ -198,13 +207,15 @@ int radTApplication::SetNonlinearLaminatedMaterial(TVector2d* ArrayOfPoints2d, i
 
 		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error000"); return 0;}
 		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
 		int ElemKey = AddElementToContainer(hg);
 		if(SendingIsRequired) Send.Int(ElemKey);
 		return ElemKey;
 	}
 	catch(...)
 	{
-		Send.ErrorMessage("Radia::Error075"); 
+		if(MaterPtr) delete MaterPtr;  // Clean up if exception before radThg ownership transfer
+		Send.ErrorMessage("Radia::Error075");
 		return 0;
 	}
 }
@@ -214,9 +225,9 @@ int radTApplication::SetNonlinearLaminatedMaterial(TVector2d* ArrayOfPoints2d, i
 //int radTApplication::SetNonlinearAnisotropMaterial(double** Ksi, double** Ms, double* Hc, char* DependenceIsNonlinear)
 int radTApplication::SetNonlinearAnisotropMaterial(double** Ksi, double** Ms, double* Hc, int lenHc, char* DependenceIsNonlinear)
 {
+	radTMaterial* MaterPtr = nullptr;
 	try
 	{
-		radTMaterial* MaterPtr = 0;
 		char MaterialIsIsotropic = 1;
 		if(DependenceIsNonlinear[0] || DependenceIsNonlinear[1])
 		{
@@ -254,12 +265,14 @@ int radTApplication::SetNonlinearAnisotropMaterial(double** Ksi, double** Ms, do
 
 		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
 		int ElemKey = AddElementToContainer(hg);
 		if(SendingIsRequired) Send.Int(ElemKey);
 		return ElemKey;
 	}
 	catch(...)
 	{
+		if(MaterPtr) delete MaterPtr;  // Clean up if exception before radThg ownership transfer
 		Initialize(); return 0;
 	}
 }
@@ -268,9 +281,9 @@ int radTApplication::SetNonlinearAnisotropMaterial(double** Ksi, double** Ms, do
 
 int radTApplication::SetNonlinearAnisotropMaterial0(double* pDataPar, int lenDataPar, double* pDataPer, int lenDataPer)
 {
+	radTMaterial* MaterPtr = nullptr;
 	try
 	{
-		radTMaterial* MaterPtr = 0;
 		bool MaterialIsIsotropic = true;
 		char DependenceIsNonlinear[] = {(lenDataPar > 1), (lenDataPer > 1)};
 
@@ -374,12 +387,14 @@ int radTApplication::SetNonlinearAnisotropMaterial0(double* pDataPar, int lenDat
 
 		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
 		int ElemKey = AddElementToContainer(hg);
 		if(SendingIsRequired) Send.Int(ElemKey);
 		return ElemKey;
 	}
 	catch(...)
 	{
+		if(MaterPtr) delete MaterPtr;  // Clean up if exception before radThg ownership transfer
 		Initialize(); return 0;
 	}
 }
@@ -1001,6 +1016,7 @@ int radTApplication::RemoveDrawAttrFromElem_g3d(int ElemKey)
 
 int radTApplication::GraphicsForElem_g3d(int ElemKey, int InShowSymmetryChilds, const char** arOptionNames, const char** arOptionValues, int numOptions)
 {
+	radTg3dGraphPresent* g3dGraphPresentPtr = nullptr;
 	try
 	{
 		radThg hg;
@@ -1020,7 +1036,7 @@ int radTApplication::GraphicsForElem_g3d(int ElemKey, int InShowSymmetryChilds, 
 
 		Send.GenInitDraw();
 
-		radTg3dGraphPresent* g3dGraphPresentPtr = g3dPtr->CreateGraphPresent();
+		g3dGraphPresentPtr = g3dPtr->CreateGraphPresent();
 
 		g3dGraphPresentPtr->SetGraphPresOptions(InGraphPresOptions);
 		g3dGraphPresentPtr->MapOfDrawAttrPtr = &MapOfDrawAttr;
@@ -1029,10 +1045,12 @@ int radTApplication::GraphicsForElem_g3d(int ElemKey, int InShowSymmetryChilds, 
 		g3dGraphPresentPtr->GenDraw();
 
 		delete g3dGraphPresentPtr;
+		g3dGraphPresentPtr = nullptr;
 		return ElemKey;
 	}
 	catch(...)
 	{
+		if(g3dGraphPresentPtr) delete g3dGraphPresentPtr;
 		Initialize(); return 0;
 	}
 }
@@ -1041,6 +1059,7 @@ int radTApplication::GraphicsForElem_g3d(int ElemKey, int InShowSymmetryChilds, 
 
 int radTApplication::GraphicsForElem_g3d_VTK(int ElemKey, const char** OptionNames, const char** OptionValues, int OptionCount) //OC04112019 (from R. Nagler's radTApplication::GoObjGeometry)
 {
+	radTg3dGraphPresent* g3dGraphPresentPtr = nullptr;
 	try
 	{
 		radThg hg;
@@ -1057,7 +1076,7 @@ int radTApplication::GraphicsForElem_g3d_VTK(int ElemKey, const char** OptionNam
 		if(!DecodeViewingOptions(OptionNames, OptionValues, OptionCount, OptBits)) return 0;
 
 		radGraphPresOptions InGraphPresOptions(DoShowSymChilds);
-		radTg3dGraphPresent* g3dGraphPresentPtr = g3dPtr->CreateGraphPresent();
+		g3dGraphPresentPtr = g3dPtr->CreateGraphPresent();
 
 		char DrawFacilityInd = 2; // VTK export facility index
 		g3dGraphPresentPtr->DrawFacilityInd = DrawFacilityInd;
@@ -1074,10 +1093,12 @@ int radTApplication::GraphicsForElem_g3d_VTK(int ElemKey, const char** OptionNam
 		int keyGeomData = (radTg3dGraphPresent::Send).GeomDataToBuffer();
 
 		delete g3dGraphPresentPtr;
+		g3dGraphPresentPtr = nullptr;
 		return keyGeomData;
 	}
 	catch(...)
 	{
+		if(g3dGraphPresentPtr) delete g3dGraphPresentPtr;
 		Initialize(); return 0;
 	}
 }
@@ -1086,6 +1107,7 @@ int radTApplication::GraphicsForElem_g3d_VTK(int ElemKey, const char** OptionNam
 
 void radTApplication::GraphicsForAll_g3d(int InShowSymmetryChilds)
 {
+	radTg3dGraphPresent* g3dGraphPresentPtr = nullptr;
 	try
 	{
 		int TotalElem = (int)(GlobalMapOfHandlers.size());
@@ -1110,20 +1132,21 @@ void radTApplication::GraphicsForAll_g3d(int InShowSymmetryChilds)
 					KeyPtr[g3dPresElemCount++] = (*iter).first;
 				}
 		}
-		if(g3dPresElemCount != 0) 
+		if(g3dPresElemCount != 0)
 		{
 			Send.GenInitDraw();
 
 			Send.InitOutList(g3dPresElemCount);
 			for(int i = 0; i < g3dPresElemCount; i++)
 			{
-				radTg3dGraphPresent* g3dGraphPresentPtr = g3dPtrPtr[i]->CreateGraphPresent();
+				g3dGraphPresentPtr = g3dPtrPtr[i]->CreateGraphPresent();
 
 				g3dGraphPresentPtr->SetGraphPresOptions(InGraphPresOptions);
 				g3dGraphPresentPtr->MapOfDrawAttrPtr = &MapOfDrawAttr;
 				g3dGraphPresentPtr->RetrieveDrawAttr(KeyPtr[i]);
 				g3dGraphPresentPtr->GenDraw();
 				delete g3dGraphPresentPtr;
+				g3dGraphPresentPtr = nullptr;
 			}
 		}
 		else Send.ErrorMessage("Radia::Error101");
@@ -1131,6 +1154,7 @@ void radTApplication::GraphicsForAll_g3d(int InShowSymmetryChilds)
 	}
 	catch(...)
 	{
+		if(g3dGraphPresentPtr) delete g3dGraphPresentPtr;
 		Initialize(); return;
 	}
 }
@@ -1142,7 +1166,7 @@ int radTApplication::PreRelax(int ElemKey, int SrcElemKey)
 {
 	radThg hg;
 	if(!ValidateElemKey(ElemKey, hg)) return 0;
-	radTg3d* g3dPtr = Cast.g3dCast(hg.rep); 
+	radTg3d* g3dPtr = Cast.g3dCast(hg.rep);
 	if(g3dPtr==0) { Send.ErrorMessage("Radia::Error003"); return 0;}
 
 	radThg hgMoreExtSrc;
@@ -1153,23 +1177,26 @@ int radTApplication::PreRelax(int ElemKey, int SrcElemKey)
 		if(g3dPtr==0) { Send.ErrorMessage("Radia::Error003"); return 0;}
 	}
 
+	radTInteraction* InteractionPtr = nullptr;
 	try
 	{
 		char AllocateExtraArray = 1; //OC300504
 		char KeepTransData = 1; //OC240408 to enable update after scaling of currents
 
-		radTInteraction* InteractionPtr = new radTInteraction(hg, hgMoreExtSrc, CompCriterium, MemAllocForIntrctMatrTotAtOnce, AllocateExtraArray, KeepTransData, m_rankMPI, m_nProcMPI); //OC08012020
+		InteractionPtr = new radTInteraction(hg, hgMoreExtSrc, CompCriterium, MemAllocForIntrctMatrTotAtOnce, AllocateExtraArray, KeepTransData, m_rankMPI, m_nProcMPI); //OC08012020
 		//radTInteraction* InteractionPtr = new radTInteraction(hg, hgMoreExtSrc, CompCriterium, MemAllocForIntrctMatrTotAtOnce, AllocateExtraArray, KeepTransData);
 
-		if(InteractionPtr->SomethingIsWrong) 
-		{ 
-			delete InteractionPtr; 
+		if(InteractionPtr->SomethingIsWrong)
+		{
+			delete InteractionPtr;
+			InteractionPtr = nullptr;
 			return 0;
 		} // The message has already been sent
-		else if(!(InteractionPtr->NotEmpty())) { delete InteractionPtr; Send.ErrorMessage("Radia::Error102"); return 0;}
+		else if(!(InteractionPtr->NotEmpty())) { delete InteractionPtr; InteractionPtr = nullptr; Send.ErrorMessage("Radia::Error102"); return 0;}
 		else
 		{
 			radThg InteractHandle(InteractionPtr);
+			InteractionPtr = nullptr;  // Ownership transferred to radThg
 			int InteractElemKey = AddElementToContainer(InteractHandle);
 			if(SendingIsRequired) Send.Int(InteractElemKey);
 			return InteractElemKey;
@@ -1177,6 +1204,7 @@ int radTApplication::PreRelax(int ElemKey, int SrcElemKey)
 	}
 	catch (...)
 	{
+		if(InteractionPtr) delete InteractionPtr;
 		Initialize(); return 0;
 	}
 }
