@@ -79,7 +79,18 @@
       "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; cd tests; python test_simple.py\")",
       "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; cd tests; python test_simple.py; python test_radia.py\")",
       "Bash(\"C:/Program Files/Python312/python.exe\" -m pytest tests/ --tb=short)",
-      "Bash(\"C:/Program Files/Python312/python.exe\" -m twine check dist/*.tar.gz dist/*.whl)"
+      "Bash(\"C:/Program Files/Python312/python.exe\" -m twine check dist/*.tar.gz dist/*.whl)",
+      "Bash(git bisect reset:*)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -m pytest tests/ --tb=short -q)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -m twine check dist/radia-1.0.10*)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" examples/solver_benchmarks/benchmark_hmatrix_field.py)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" examples/solver_benchmarks/benchmark_solver_linear.py)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -c \"import sys; sys.path.insert(0, ''build/Release''); import radia as rad; mat = rad.MatSatIsoFrm([10000, 100], [0.1, 1000]); print(''Material ID:'', mat); print(''Type:'', type(mat))\")",
+      "Bash(\"C:/Program Files/Python312/python.exe\" examples/solver_benchmarks/benchmark_solver_nonlinear.py)",
+      "Bash(\"C:/Program Files/Python312/python.exe\":*)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" examples/solver_benchmarks/benchmark_solver_methods.py)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -c \"import sys; sys.path.insert(0, ''build/Release''); import radia as rad; help(rad.SolverHMatrixEnable)\")",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -c \"import sys; sys.path.insert(0, ''build/Release''); import radia as rad; help(rad.SolverHMatrixDisable)\")"
     ],
     "deny": [],
     "ask": []
