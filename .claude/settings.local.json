@@ -77,7 +77,9 @@
       "Bash(powershell.exe -ExecutionPolicy Bypass -File Build_PyPI_Package.ps1)",
       "Bash(powershell -Command \"cd tests; $env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; python test_simple.py; python test_radia.py\")",
       "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; cd tests; python test_simple.py\")",
-      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; cd tests; python test_simple.py; python test_radia.py\")"
+      "Bash(powershell -Command \"$env:PYTHONPATH=''S:\\Radia\\01_GitHub\\build\\Release''; cd tests; python test_simple.py; python test_radia.py\")",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -m pytest tests/ --tb=short)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -m twine check dist/*.tar.gz dist/*.whl)"
     ],
     "deny": [],
     "ask": []
