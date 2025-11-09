@@ -61,6 +61,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/radplnr2.cpp
 	${CORE_DIR}/radpoly_analytical.cpp
 	${CORE_DIR}/radhmat_field.cpp
+	${CORE_DIR}/radhmat_update.cpp
 	${CORE_DIR}/radptrj.cpp
 	${CORE_DIR}/radrec.cpp
 	${CORE_DIR}/radrlmet.cpp
@@ -185,6 +186,10 @@ endif()
 # Link Windows system libraries
 if(WIN32)
 	target_link_libraries(rad_ngsolve PRIVATE version.lib)
+	# Fix LIBCMT conflict warning
+	if(MSVC)
+		target_link_options(rad_ngsolve PRIVATE /NODEFAULTLIB:LIBCMT)
+	endif()
 endif()
 
 # Compiler-specific flags
@@ -283,6 +288,10 @@ endif()
 # Link Windows system libraries
 if(WIN32)
 	target_link_libraries(radia PRIVATE version.lib)
+	# Fix LIBCMT conflict warning
+	if(MSVC)
+		target_link_options(radia PRIVATE /NODEFAULTLIB:LIBCMT)
+	endif()
 endif()
 
 # Compiler-specific flags
@@ -389,62 +398,4 @@ message(STATUS "radia module configured")
 #
 # message(STATUS "test_radhmat executable configured")
 
-# Test for polygon field analytical formula
-add_executable(test_polygon_field test_polygon_field.cpp)
-
-# Link with system libraries only (no Radia dependencies needed)
-if(WIN32)
-	target_link_libraries(test_polygon_field PRIVATE version.lib)
-endif()
-
-# Add necessary source files for polygon field test (including Radia comparison)
-# Only minimal files needed for radTPolygon::B_comp()
-target_sources(test_polygon_field PRIVATE
-	${CORE_DIR}/radpoly_analytical.cpp
-	${CORE_DIR}/radplnr2.cpp
-	${CORE_DIR}/radplnr1.cpp
-)
-
-# Add include directories
-target_include_directories(test_polygon_field PRIVATE
-	${CORE_DIR}
-	${EXT_DIR}/genmath
-	${EXT_DIR}/auxparse
-)
-
-# Add compile definitions
-target_compile_definitions(test_polygon_field PRIVATE
-	ALPHA__LIB__
-	FFTW_ENABLE_FLOAT
-	NO_TIMER
-	ANSI_DECLARATORS
-	TRILIBRARY
-	_GM_WITHOUT_BASE
-	_CRT_SECURE_NO_WARNINGS
-	$<$<CONFIG:Debug>:_DEBUG>
-	$<$<CONFIG:Release>:NDEBUG>
-	$<$<PLATFORM_ID:Windows>:WIN32>
-	$<$<PLATFORM_ID:Windows>:_WINDOWS>
-)
-
-# Compiler-specific flags
-if(MSVC)
-	target_compile_options(test_polygon_field PRIVATE
-		/wd4244  # Disable conversion warnings
-		/wd4267  # Disable size_t conversion warnings
-	)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-	target_compile_options(test_polygon_field PRIVATE
-		-Wno-conversion
-		-Wno-sign-conversion
-		-Wno-unused-variable
-	)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	target_compile_options(test_polygon_field PRIVATE
-		-Wno-conversion
-		-Wno-sign-conversion
-		-Wno-unused-variable
-	)
-endif()
-
-message(STATUS "test_polygon_field executable configured")
+# test_polygon_field removed (no longer needed)

@@ -66,6 +66,16 @@ EXP int CALL RadClearHMatrixCache(void);
 */
 EXP int CALL RadGetHMatrixStats(double* stats, int* nstats);
 
+/** Update magnetization without rebuilding H-matrix
+*
+* Fast update for non-linear relaxation: updates magnetic moments while keeping
+* geometry (and H-matrix) fixed. Much faster than full rebuild.
+*
+* @param obj [in] object index (must have existing H-matrix)
+* @return integer error code (0: no error, -1: error, -2: H-matrix not built)
+*/
+EXP int CALL RadUpdateHMatrixMagnetization(int obj);
+
 #ifdef __cplusplus
 }
 #endif

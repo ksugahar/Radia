@@ -129,3 +129,33 @@ static PyObject* radia_GetHMatrixStats(PyObject* self, PyObject* args)
 }
 
 //-------------------------------------------------------------------------
+// UpdateHMatrixMagnetization - Fast magnetization update
+//-------------------------------------------------------------------------
+static PyObject* radia_UpdateHMatrixMagnetization(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int obj = 0;
+
+		if(!PyArg_ParseTuple(args, "i:UpdateHMatrixMagnetization", &obj))
+			throw CombErStr(strEr_BadFuncArg, ": UpdateHMatrixMagnetization");
+
+		int result = RadUpdateHMatrixMagnetization(obj);
+
+		if(result == -2) {
+			throw CombErStr("H-matrix not built yet. Call FldBatch with use_hmatrix=1 first.", "");
+		}
+		else if(result != 0) {
+			throw CombErStr("Failed to update magnetization", "");
+		}
+
+		Py_RETURN_NONE;
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+		return NULL;
+	}
+}
+
+//-------------------------------------------------------------------------

@@ -239,3 +239,45 @@ EXP int CALL RadGetHMatrixStats(double* stats, int* nstats)
 }
 
 //-------------------------------------------------------------------------
+
+EXP int CALL RadUpdateHMatrixMagnetization(int obj)
+{
+	try {
+		// Get object from application
+		radThg hg;
+		if(!rad.ValidateElemKey(obj, hg)) {
+			return -1;  // Error: invalid object
+		}
+
+		// Cast to radTGroup
+		radTCast Cast;
+		radTg3d* g3d = Cast.g3dCast(hg.rep);
+		if(!g3d) return -1;
+
+		radTGroup* group = Cast.GroupCast(g3d);
+		if(!group) {
+			// H-matrix only works with groups
+			return -1;
+		}
+
+		// Find cached evaluator
+		auto it = g_hmatrix_field_state.cache.find(obj);
+		if(it == g_hmatrix_field_state.cache.end()) {
+			// No cached H-matrix, nothing to update
+			return -2;  // Error: H-matrix not built yet
+		}
+
+		radTHMatrixFieldEvaluator* evaluator = it->second.get();
+		if(!evaluator) return -1;
+
+		// Update magnetization (fast, no H-matrix rebuild)
+		int result = evaluator->UpdateMagnetization(group);
+
+		return result ? 0 : -1;
+	}
+	catch(...) {
+		return -1;
+	}
+}
+
+//-------------------------------------------------------------------------

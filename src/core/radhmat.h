@@ -212,7 +212,7 @@ private:
  * H-matrix based field evaluator for arbitrary observation points
  *
  * This class accelerates rad.Fld() batch evaluation using H-matrix
- * approximation. Achieves O((M+N)log(M+N)) complexity instead of O(M×N).
+ * approximation. Achieves O((M+N)log(M+N)) complexity instead of O(M*N).
  *
  * Key features:
  * - Caching for non-linear iterations
@@ -220,8 +220,8 @@ private:
  * - Batch evaluation only (single points use direct calculation)
  *
  * Recommended for:
- * - N ≥ 100 source elements
- * - M ≥ 100 observation points
+ * - N >= 100 source elements
+ * - M >= 100 observation points
  * - Non-linear iteration problems
  */
 class radTHMatrixFieldEvaluator {
@@ -235,13 +235,22 @@ public:
 	std::vector<double> source_positions;   // Flattened [x,y,z,x,y,z,...]
 	std::vector<double> source_moments;     // Magnetic moments [Mx,My,Mz,...]
 
+	// Target geometry (observation points)
+	std::vector<double> target_points;      // Flattened [x,y,z,x,y,z,...]
+
 	// H-matrix data structures (opaque pointers)
-	void* hmatrix_data;           // HACApK H-matrix
+	void* hmatrix_data_x;         // HACApK H-matrix for Hx component
+	void* hmatrix_data_y;         // HACApK H-matrix for Hy component
+	void* hmatrix_data_z;         // HACApK H-matrix for Hz component
 	void* source_cluster_tree;    // Source cluster tree
 	void* target_cluster_tree;    // Observation point cluster tree
 
-	// Cache key for invalidation
-	size_t geometry_hash;
+	// Current component being built (0=x, 1=y, 2=z)
+	int current_component;
+
+	// Cache keys for invalidation
+	size_t geometry_hash;         // Hash of source geometry
+	size_t target_hash;           // Hash of observation points
 
 	// Statistics
 	size_t memory_usage;          // Total memory (bytes)
@@ -276,7 +285,7 @@ public:
 	 *
 	 * This is the main interface for H-matrix accelerated field evaluation.
 	 *
-	 * Complexity: O((M+N)log(M+N)) instead of O(M×N)
+	 * Complexity: O((M+N)log(M+N)) instead of O(M*N)
 	 *
 	 * @param obs_points Vector of observation points (3D coordinates)
 	 * @param field_out Vector to store output field values (3D vectors)
@@ -288,6 +297,17 @@ public:
 		std::vector<TVector3d>& field_out,
 		char field_type = 'h'
 	);
+
+	/**
+	 * Update magnetization without rebuilding H-matrix
+	 *
+	 * For non-linear relaxation: updates magnetic moments while keeping
+	 * geometry (and H-matrix) fixed. Much faster than full rebuild.
+	 *
+	 * @param source_group Group with updated magnetization
+	 * @return 1 on success, 0 on failure
+	 */
+	int UpdateMagnetization(radTGroup* source_group);
 
 	/**
 	 * Check if H-matrix is valid for current geometry
@@ -349,7 +369,7 @@ private:
 	 * Magnetic field kernel function
 	 *
 	 * Computes field at target i due to source j.
-	 * Kernel: H(r) = (3(m·r̂)r̂ - m) / (4π|r|³)
+	 * Kernel: H(r) = (3(m*r_hat)r_hat - m) / (4*pi*|r|^3)
 	 *
 	 * @param i Target point index
 	 * @param j Source element index
@@ -381,6 +401,17 @@ private:
 		std::vector<TVector3d>& field_out,
 		char field_type
 	);
+
+	/**
+	 * Recursively extract leaf elements (sub-elements)
+	 *
+	 * Traverses radTGroup containers recursively to extract all leaf sub-elements.
+	 * This ensures that element subdivisions are properly handled.
+	 *
+	 * @param g3d Element or group to extract
+	 * @param depth Recursion depth (for debugging)
+	 */
+	void ExtractLeafElements(radTg3d* g3d, int depth);
 };
 
 //-------------------------------------------------------------------------

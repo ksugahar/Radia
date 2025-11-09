@@ -83,7 +83,7 @@ public:
 
 /**
  * Low-rank matrix block (ACA approximation)
- * Represents: M ≈ U * V^T
+ * Represents: M approx U * V^T
  */
 struct LowRankBlock {
 	int ltmtx;          // Type: 1=low-rank, 2=full, 3=H-matrix, 4=block
@@ -92,8 +92,8 @@ struct LowRankBlock {
 	int nstrtl, ndl;    // Row start and size
 	int nstrtt, ndt;    // Column start and size
 
-	std::vector<double> a1;  // U matrix (ndl × kt)
-	std::vector<double> a2;  // V matrix (ndt × kt)
+	std::vector<double> a1;  // U matrix (ndl * kt)
+	std::vector<double> a2;  // V matrix (ndt * kt)
 
 	// For hierarchical blocks
 	std::vector<LowRankBlock> sublocks;

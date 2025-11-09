@@ -26,9 +26,9 @@
  * magnetic field from a planar polygon with uniform magnetic charge density.
  *
  * The formula is exact and based on solid angle integration:
- *   H = (σ/4π) ∮ dΩ
+ *   H = (sigma/4pi) integral dOmega
  *
- * where σ is the magnetic charge density and dΩ is the solid angle
+ * where sigma is the magnetic charge density and dOmega is the solid angle
  * subtended by each edge of the polygon.
  *
  * @param AA Local X-axis (tangent to polygon plane)

@@ -16,7 +16,7 @@ import shutil
 import sys
 
 # Read version from pyproject.toml
-version = "1.0.7"
+version = "1.0.8"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -53,7 +53,7 @@ if "sdist" not in sys.argv:
 	package_dir = prepare_package_data()
 
 setup(
-	name="radia-ngsolve",
+	name="radia",
 	version=version,
 	description="Radia 3D Magnetostatics with NGSolve Integration and OpenMP Parallelization",
 	long_description=long_description,

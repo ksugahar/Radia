@@ -52,8 +52,8 @@ inline double SQ2(double x, double y)
  * @param KAdo Number of polygon vertices (3 or 4)
  *
  * @note This function uses the analytical formula:
- *       H = (1/4π) * ∮ σ * dΩ
- *       where dΩ is the solid angle subtended by each edge
+ *       H = (1/4pi) * integral sigma * dOmega
+ *       where dOmega is the solid angle subtended by each edge
  */
 void RadAnalyticalFieldFromPolygonCharge(
 	const TVector3d& AA,
