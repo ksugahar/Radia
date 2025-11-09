@@ -175,7 +175,14 @@ private:
 
 public:
 
-	virtual ~RadiaFieldCF() {}
+	virtual ~RadiaFieldCF() {
+		// Acquire GIL before releasing Python objects to prevent memory leaks
+		// When NGSolve destroys this CoefficientFunction, we must ensure
+		// Python reference counting is done safely
+		py::gil_scoped_acquire acquire;
+		precision.release();
+		use_hmatrix.release();
+	}
 
 	// Scalar evaluation - not used for vector fields, return 0
 	virtual double Evaluate(const BaseMappedIntegrationPoint& mip) const override

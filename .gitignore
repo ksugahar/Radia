@@ -59,6 +59,7 @@ coverage.xml
 test_output/
 benchmark_results/
 *.csv
+test_radiafield_memory.py
 
 # ============================================================================
 # IDE and Editor Files
