@@ -50,7 +50,7 @@ void radTPolyhedron::MakeNormalPresentation(TVector3d** ArrayOfFaces, int* Array
 
 	OutArrayOfFaces = 0;
 	OutArrayOfFaces = new int*[AmOfFaces];
-	if(OutArrayOfFaces == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); DeleteAuxInputArrays(ArrayOfFaces); return;}
+	if(OutArrayOfFaces == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return;}
 
 	int PointsCount = 0;
 	for(int i=0; i<AmOfFaces; i++)
@@ -58,7 +58,7 @@ void radTPolyhedron::MakeNormalPresentation(TVector3d** ArrayOfFaces, int* Array
 		TVector3d* CurrentFace = ArrayOfFaces[i];
 
 		int* CurrentFaceInt = new int[ArrayOfLengths[i]];
-		if(CurrentFaceInt == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); DeleteAuxInputArrays(ArrayOfFaces); return;}
+		if(CurrentFaceInt == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return;}
 		OutArrayOfFaces[i] = CurrentFaceInt;
 
 		for(int k=0; k<ArrayOfLengths[i]; k++)
@@ -86,7 +86,7 @@ void radTPolyhedron::MakeNormalPresentation(TVector3d** ArrayOfFaces, int* Array
 	}
 	lenArrayOfPoints = PointsCount;
 	OutArrayOfPoints = new TVector3d[lenArrayOfPoints];
-	if(OutArrayOfPoints == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); DeleteAuxInputArrays(ArrayOfFaces); return;}
+	if(OutArrayOfPoints == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return;}
 	for(int j=0; j<lenArrayOfPoints; j++)
 	{
 		OutArrayOfPoints[j] = VectOfPoints[j];
