@@ -279,6 +279,7 @@ void radTApplication::ComputeFieldForce(int SourceElemKey, int ShapeElemKey)
 
 void radTApplication::ComputeFieldEnergy(int DestElemKey, int SourceElemKey, int* SubdivArray, long lenSubdivArray)
 {
+	radTStructForEnergyForceTorqueComp* StructForEnergyForceTorqueCompPtr = nullptr;
 	try
 	{
 		radThg hDest;
@@ -301,13 +302,14 @@ void radTApplication::ComputeFieldEnergy(int DestElemKey, int SourceElemKey, int
 		//double ActualSubdivisionArray[] = {SubdivArray[0], 1., SubdivArray[1], 1., SubdivArray[2], 1.};
 		double ActualSubdivisionArray[] = {(double)SubdivArray[0], 1., (double)SubdivArray[1], 1., (double)SubdivArray[2], 1.}; //OC101015
 
-		radTStructForEnergyForceTorqueComp* StructForEnergyForceTorqueCompPtr = new radTStructForEnergyForceTorqueComp();
+		StructForEnergyForceTorqueCompPtr = new radTStructForEnergyForceTorqueComp();
 		StructForEnergyForceTorqueCompPtr->hSource = hSource;
 		StructForEnergyForceTorqueCompPtr->hDest = hDest;
 		StructForEnergyForceTorqueCompPtr->radPtr = this;
 		StructForEnergyForceTorqueCompPtr->DestSubdivArray = ActualSubdivisionArray;
 		StructForEnergyForceTorqueCompPtr->AutoDestSubdivision = CheckForAutoDestSubdivision(ActualSubdivisionArray);
 		radTHandleStructForEnergyForceTorqueComp HandleStructForEnergyForceTorqueComp(StructForEnergyForceTorqueCompPtr);
+		StructForEnergyForceTorqueCompPtr = nullptr;  // Ownership transferred to handle
 
 		radTField Field(FieldKey, CompCriterium, HandleStructForEnergyForceTorqueComp);
 		DestPtr->EnergyForceTorqueComp(&Field);
@@ -315,8 +317,9 @@ void radTApplication::ComputeFieldEnergy(int DestElemKey, int SourceElemKey, int
 		if(Field.HandleEnergyForceTorqueCompData.rep->SomethingIsWrong) return;
 		if(SendingIsRequired) Send.Double(Field.Energy);
 	}
-	catch(...) 
-	{ 
+	catch(...)
+	{
+		if(StructForEnergyForceTorqueCompPtr) delete StructForEnergyForceTorqueCompPtr;  // Clean up if exception before handle ownership transfer
 		Initialize(); return;
 	}
 }
@@ -325,6 +328,7 @@ void radTApplication::ComputeFieldEnergy(int DestElemKey, int SourceElemKey, int
 
 void radTApplication::ComputeFieldForceThroughEnergy(int DestElemKey, int SourceElemKey, char* ForceComponID, int* SubdivArray, long lenSubdivArray)
 {
+	radTStructForEnergyForceTorqueComp* StructForEnergyForceTorqueCompPtr = nullptr;
 	try
 	{
 		radThg hDest;
@@ -349,13 +353,14 @@ void radTApplication::ComputeFieldForceThroughEnergy(int DestElemKey, int Source
 		//double ActualSubdivisionArray[] = {SubdivArray[0], 1., SubdivArray[1], 1., SubdivArray[2], 1.};
 		double ActualSubdivisionArray[] = {(double)SubdivArray[0], 1., (double)SubdivArray[1], 1., (double)SubdivArray[2], 1.}; //OC101015
 
-		radTStructForEnergyForceTorqueComp* StructForEnergyForceTorqueCompPtr = new radTStructForEnergyForceTorqueComp();
+		StructForEnergyForceTorqueCompPtr = new radTStructForEnergyForceTorqueComp();
 		StructForEnergyForceTorqueCompPtr->hSource = hSource;
 		StructForEnergyForceTorqueCompPtr->hDest = hDest;
 		StructForEnergyForceTorqueCompPtr->radPtr = this;
 		StructForEnergyForceTorqueCompPtr->DestSubdivArray = ActualSubdivisionArray;
 		StructForEnergyForceTorqueCompPtr->AutoDestSubdivision = CheckForAutoDestSubdivision(ActualSubdivisionArray);
 		radTHandleStructForEnergyForceTorqueComp HandleStructForEnergyForceTorqueComp(StructForEnergyForceTorqueCompPtr);
+		StructForEnergyForceTorqueCompPtr = nullptr;  // Ownership transferred to handle
 
 		radTField Field(FieldKey, CompCriterium, HandleStructForEnergyForceTorqueComp);
 		DestPtr->EnergyForceTorqueComp(&Field);
@@ -363,8 +368,9 @@ void radTApplication::ComputeFieldForceThroughEnergy(int DestElemKey, int Source
 		if(Field.HandleEnergyForceTorqueCompData.rep->SomethingIsWrong) return;
 		if(SendingIsRequired) Send.OutFieldForceOrTorqueThroughEnergyCompRes(ForceComponID, Field.Force, 'f');
 	}
-	catch(...) 
-	{ 
+	catch(...)
+	{
+		if(StructForEnergyForceTorqueCompPtr) delete StructForEnergyForceTorqueCompPtr;  // Clean up if exception before handle ownership transfer
 		Initialize(); return;
 	}
 }
@@ -373,6 +379,7 @@ void radTApplication::ComputeFieldForceThroughEnergy(int DestElemKey, int Source
 
 void radTApplication::ComputeFieldTorqueThroughEnergy(int DestElemKey, int SourceElemKey, char* TorqueComponID, int* SubdivArray, long lenSubdivArray, double* TorqueCenPo, long lenTorqueCenPo)
 {
+	radTStructForEnergyForceTorqueComp* StructForEnergyForceTorqueCompPtr = nullptr;
 	try
 	{
 		radThg hDest;
@@ -397,13 +404,14 @@ void radTApplication::ComputeFieldTorqueThroughEnergy(int DestElemKey, int Sourc
 		//double ActualSubdivisionArray[] = {SubdivArray[0], 1., SubdivArray[1], 1., SubdivArray[2], 1.};
 		double ActualSubdivisionArray[] = {(double)SubdivArray[0], 1., (double)SubdivArray[1], 1., (double)SubdivArray[2], 1.}; //OC101015
 
-		radTStructForEnergyForceTorqueComp* StructForEnergyForceTorqueCompPtr = new radTStructForEnergyForceTorqueComp();
+		StructForEnergyForceTorqueCompPtr = new radTStructForEnergyForceTorqueComp();
 		StructForEnergyForceTorqueCompPtr->hSource = hSource;
 		StructForEnergyForceTorqueCompPtr->hDest = hDest;
 		StructForEnergyForceTorqueCompPtr->radPtr = this;
 		StructForEnergyForceTorqueCompPtr->DestSubdivArray = ActualSubdivisionArray;
 		StructForEnergyForceTorqueCompPtr->AutoDestSubdivision = CheckForAutoDestSubdivision(ActualSubdivisionArray);
 		radTHandleStructForEnergyForceTorqueComp HandleStructForEnergyForceTorqueComp(StructForEnergyForceTorqueCompPtr);
+		StructForEnergyForceTorqueCompPtr = nullptr;  // Ownership transferred to handle
 
 		radTField Field(FieldKey, CompCriterium, HandleStructForEnergyForceTorqueComp);
 		if(!ValidateVector3d(TorqueCenPo, lenTorqueCenPo, &(Field.P))) return;
@@ -413,8 +421,9 @@ void radTApplication::ComputeFieldTorqueThroughEnergy(int DestElemKey, int Sourc
 		if(Field.HandleEnergyForceTorqueCompData.rep->SomethingIsWrong) return;
 		if(SendingIsRequired) Send.OutFieldForceOrTorqueThroughEnergyCompRes(TorqueComponID, Field.Torque, 't');
 	}
-	catch(...) 
-	{ 
+	catch(...)
+	{
+		if(StructForEnergyForceTorqueCompPtr) delete StructForEnergyForceTorqueCompPtr;  // Clean up if exception before handle ownership transfer
 		Initialize(); return;
 	}
 }
