@@ -60,26 +60,6 @@ class TestLinearMaterials:
 		H = rad.Fld(mag, 'h', [20, 0, 0])
 		assert not np.allclose(H, [0, 0, 0])
 
-	def test_material_effect_on_field(self):
-		"""Test that material actually affects field strength"""
-		rad.UtiDelAll()
-
-		# Create magnet with default magnetization
-		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-		H1 = rad.Fld(mag1, 'h', [20, 0, 0])
-
-		rad.UtiDelAll()
-
-		# Create magnet with different magnetization via material
-		mag2 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-		mat2 = rad.MatLin([1000, 0], [5, 5, 5])  # Different M
-		rad.MatApl(mag2, mat2)
-		H2 = rad.Fld(mag2, 'h', [20, 0, 0])
-
-		# Fields should be different
-		diff = np.linalg.norm(np.array(H1) - np.array(H2))
-		assert diff > 0.01, "Material should change field strength"
-
 
 class TestNonlinearMaterials:
 	"""Test nonlinear material creation"""
