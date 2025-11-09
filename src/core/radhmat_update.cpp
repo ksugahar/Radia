@@ -12,7 +12,7 @@
 *
 *------------------------------------------------------------------------*/
 
-#include "radhmat.h"
+#include "rad_hmatrix.h"
 #include "rad_group.h"
 #include "rad_geometry_3d.h"
 #include <iostream>

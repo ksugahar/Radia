@@ -13,7 +13,7 @@
 *
 -------------------------------------------------------------------------*/
 
-#include "radhmat.h"
+#include "rad_hmatrix.h"
 #include "rad_group.h"
 #include "rad_exception.h"
 #include "rad_rectangular_block.h"

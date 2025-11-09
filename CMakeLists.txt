@@ -51,7 +51,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_geometry_3d.cpp           # 3D geometry base class
 	${CORE_DIR}/rad_graphics_3d.cpp           # 3D graphics/visualization
 	${CORE_DIR}/rad_group.cpp                 # Container/group of field sources
-	${CORE_DIR}/radinter.cpp                  # C-style interface functions
+	${CORE_DIR}/rad_c_interface.cpp           # C-style interface functions
 	${CORE_DIR}/rad_interaction.cpp           # Magnetic interaction between objects
 	${CORE_DIR}/radintrc_hmat.cpp             # H-matrix acceleration for interaction
 	${CORE_DIR}/rad_io_buffer.cpp             # I/O buffer (errors and warnings)

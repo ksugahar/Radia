@@ -15,7 +15,7 @@
 #include "radentry.h"
 #include "radentry_hmat.h"
 #include "rad_application.h"
-#include "radhmat.h"
+#include "rad_hmatrix.h"
 #include "rad_group.h"
 #include "rad_geometry_base.h"
 #include "rad_type_cast.h"
