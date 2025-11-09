@@ -20,8 +20,8 @@
 #define __RADINTRC_HMAT_H
 
 #include "rad_interaction.h"
-#include "radg3d.h"
-#include "radgroup.h"
+#include "rad_geometry_3d.h"
+#include "rad_group.h"
 #include "../ext/HACApK_LH-Cimplm/hacapk.hpp"  // HACApK library
 #include <vector>
 #include <memory>

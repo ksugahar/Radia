@@ -18,7 +18,7 @@
 #ifndef __RADMATER_H
 #define __RADMATER_H
 
-#include "radsend.h"
+#include "rad_serialization.h"
 #include "gmvect.h"
 #include "rad_geometry_base.h"
 

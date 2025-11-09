@@ -18,7 +18,7 @@
 #ifndef __RADG3DA1_H
 #define __RADG3DA1_H
 
-#include "radg3d.h"
+#include "rad_geometry_3d.h"
 //#include "rad_transform_def.h"
 #include "gmtrans.h"
 

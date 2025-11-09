@@ -20,7 +20,7 @@
 #ifndef __RAD_RECTANGULAR_BLOCK_H
 #define __RAD_RECTANGULAR_BLOCK_H
 
-#include "radg3d.h"
+#include "rad_geometry_3d.h"
 
 #include "rad_polyhedron.h"
 #include "rad_convergence.h"

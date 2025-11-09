@@ -19,7 +19,7 @@
 #ifndef __RAD_SUBDIVIDED_EXTRUDED_POLYGON_H
 #define __RAD_SUBDIVIDED_EXTRUDED_POLYGON_H
 
-#include "radgroup.h"
+#include "rad_group.h"
 #include "rad_extruded_polygon.h"
 
 //-------------------------------------------------------------------------

@@ -16,9 +16,9 @@
 #include "radentry_hmat.h"
 #include "rad_application.h"
 #include "radhmat.h"
-#include "radgroup.h"
+#include "rad_group.h"
 #include "rad_geometry_base.h"
-#include "radcast.h"
+#include "rad_type_cast.h"
 #include "gmvect.h"
 #include <cstring>
 #include <map>

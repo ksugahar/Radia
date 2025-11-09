@@ -19,7 +19,7 @@
 #ifndef __RAD_SUBDIVIDED_POLYHEDRON_H
 #define __RAD_SUBDIVIDED_POLYHEDRON_H
 
-#include "radgroup.h"
+#include "rad_group.h"
 #include "rad_polyhedron.h"
 
 //-------------------------------------------------------------------------

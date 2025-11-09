@@ -14,7 +14,7 @@
 -------------------------------------------------------------------------*/
 
 #include "radhmat.h"
-#include "radgroup.h"
+#include "rad_group.h"
 #include "rad_exception.h"
 #include "rad_rectangular_block.h"
 #include <iostream>
@@ -26,7 +26,7 @@
 
 // Radia application includes
 #include "rad_application.h"
-#include "radsend.h"
+#include "rad_serialization.h"
 
 //-------------------------------------------------------------------------
 // Helper structures for kernel function

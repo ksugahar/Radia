@@ -17,7 +17,7 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_application.h"
-#include "radgroup.h"
+#include "rad_group.h"
 #include "rad_graphics_3d.h"
 #include "rad_geometry_3d_aux.h"
 

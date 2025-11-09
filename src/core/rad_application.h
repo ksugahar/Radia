@@ -22,9 +22,9 @@
 struct _object;
 using PyObject = _object;
 
-#include "radsend.h"
+#include "rad_serialization.h"
 #include "rad_geometry_base.h"
-#include "radcast.h"
+#include "rad_type_cast.h"
 #include "rad_graphics_3d.h"
 #include "rad_yield.h"
 #include "rad_convergence.h"

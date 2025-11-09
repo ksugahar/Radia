@@ -18,7 +18,7 @@
 #ifndef __RAD_EXTRUDED_POLYGON_H
 #define __RAD_EXTRUDED_POLYGON_H
 
-#include "radg3d.h"
+#include "rad_geometry_3d.h"
 #include "rad_planar_2d.h"
 #include "rad_transform_def.h"
 

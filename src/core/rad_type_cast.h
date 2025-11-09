@@ -18,15 +18,15 @@
 #ifndef __RADCAST_H
 #define __RADCAST_H
 
-#include "radsend.h"
+#include "rad_serialization.h"
 #include "rad_rectangular_block.h"
 #include "rad_extruded_polygon.h"
 #include "rad_polyhedron.h"
-#include "radgroup.h"
+#include "rad_group.h"
 #include "rad_planar_2d.h"
 #include "rad_filament.h"
 #include "rad_transform_def.h"
-#include "radmater.h"
+#include "rad_material_def.h"
 #include "rad_subdivided_rectangle.h"
 #include "rad_subdivided_extruded_polygon.h"
 #include "rad_subdivided_polyhedron.h"

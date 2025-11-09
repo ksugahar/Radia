@@ -14,7 +14,7 @@
 #include "gmtrans.h"
 #endif
 #ifndef __RADG3D_H
-#include "radg3d.h"
+#include "rad_geometry_3d.h"
 #endif
 
 //-------------------------------------------------------------------------

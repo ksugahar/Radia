@@ -16,8 +16,8 @@
 *-------------------------------------------------------------------------*/
 
 #include "radintrc_hmat.h"
-#include "radg3d.h"
-#include "radgroup.h"
+#include "rad_geometry_3d.h"
+#include "rad_group.h"
 #include "rad_transform_def.h"
 #include <cmath>
 #include <cstring>

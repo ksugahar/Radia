@@ -16,8 +16,8 @@
 #ifndef __RADHMAT_H
 #define __RADHMAT_H
 
-#include "radg3d.h"
-#include "radgroup.h"
+#include "rad_geometry_3d.h"
+#include "rad_group.h"
 #include <vector>
 #include <memory>
 

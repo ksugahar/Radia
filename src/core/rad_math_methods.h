@@ -18,7 +18,7 @@
 #ifndef __RAD_MATH_METHODS_H
 #define __RAD_MATH_METHODS_H
 
-#include "radsend.h"
+#include "rad_serialization.h"
 #include "gmvect.h"
 //#include "srercode.h"
 

@@ -25,7 +25,7 @@
 #ifndef __RADG3D_H
 #define __RADG3D_H
 
-#include "radmater.h"
+#include "rad_material_def.h"
 #include "rad_geometry_base.h"
 #include "gmvect.h"
 #include "rad_math_methods.h"

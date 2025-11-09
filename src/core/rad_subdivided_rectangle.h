@@ -18,7 +18,7 @@
 
 #ifndef __RAD_SUBDIVIDED_RECTANGLE_H
 #define __RAD_SUBDIVIDED_RECTANGLE_H
-#include "radgroup.h"
+#include "rad_group.h"
 #include "rad_rectangular_block.h"
 
 #include <vector>

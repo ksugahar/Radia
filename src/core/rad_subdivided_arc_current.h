@@ -19,7 +19,7 @@
 #ifndef __RAD_SUBDIVIDED_ARC_CURRENT_H
 #define __RAD_SUBDIVIDED_ARC_CURRENT_H
 
-#include "radgroup.h"
+#include "rad_group.h"
 #include "rad_arc_current.h"
 
 //-------------------------------------------------------------------------

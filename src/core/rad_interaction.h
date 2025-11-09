@@ -18,11 +18,11 @@
 #ifndef __RAD_INTERACTION_H
 #define __RAD_INTERACTION_H
 
-#include "radcast.h"
+#include "rad_type_cast.h"
 #include "gmvectf.h"
 //#include "rad_transform_def.h"
 #include "gmtrans.h"
-#include "radg3d.h"
+#include "rad_geometry_3d.h"
 
 #include <sstream>
 #include <vector>

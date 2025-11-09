@@ -19,7 +19,7 @@
 #include "rad_subdivided_rectangle.h"
 #include "rad_graphics_3d.h"
 #include "rad_math_methods.h"
-#include "radcast.h"
+#include "rad_type_cast.h"
 #include "rad_application.h"
 
 #include <math.h>

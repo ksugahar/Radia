@@ -21,7 +21,7 @@
 #include <time.h>
 
 #ifndef __RADSEND_H
-#include "radsend.h"
+#include "rad_serialization.h"
 #endif
 
 #if defined ALPHA__DLL__ || defined ALPHA__LIB__

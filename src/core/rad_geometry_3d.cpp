@@ -16,11 +16,11 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_application.h"
-#include "radg3d.h"
+#include "rad_geometry_3d.h"
 #include "rad_geometry_3d_aux.h"
 //#include "rad_transform_def.h"
 #include "gmtrans.h"
-#include "radcast.h"
+#include "rad_type_cast.h"
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------

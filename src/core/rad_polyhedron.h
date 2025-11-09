@@ -19,7 +19,7 @@
 #ifndef __RAD_POLYHEDRON_H
 #define __RAD_POLYHEDRON_H
 
-#include "radg3d.h"
+#include "rad_geometry_3d.h"
 #include "rad_planar_2d.h"
 #include "rad_transform_def.h"
 #include "rad_convergence.h"

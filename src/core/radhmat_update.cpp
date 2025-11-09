@@ -13,8 +13,8 @@
 *------------------------------------------------------------------------*/
 
 #include "radhmat.h"
-#include "radgroup.h"
-#include "radg3d.h"
+#include "rad_group.h"
+#include "rad_geometry_3d.h"
 #include <iostream>
 #include <functional>
 

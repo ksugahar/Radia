@@ -17,7 +17,7 @@
 
 #include "rad_graphics_3d.h"
 #include "rad_application.h"
-#include "radcast.h"
+#include "rad_type_cast.h"
 #include "rad_extruded_polygon.h"
 #include "rad_polyhedron.h"
 #include "rad_subdivided_extruded_polygon.h"

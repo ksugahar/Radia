@@ -14,7 +14,7 @@
 #ifndef __RAD_COEFFICIENT_FIELD_H
 #define __RAD_COEFFICIENT_FIELD_H
 
-#include "radg3d.h"
+#include "rad_geometry_3d.h"
 
 // Forward declaration to avoid Python.h dependency in header
 struct _object;

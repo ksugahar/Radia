@@ -18,7 +18,7 @@
 #ifndef __RAD_PARTICLE_TRAJECTORY_H
 #define __RAD_PARTICLE_TRAJECTORY_H
 
-#include "radg3d.h"
+#include "rad_geometry_3d.h"
 #include <math.h>
 
 //-------------------------------------------------------------------------

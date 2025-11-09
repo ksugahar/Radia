@@ -18,7 +18,7 @@
 #include "rad_application.h"
 #include "rad_geometry_3d_aux.h"
 #include "rad_interaction.h"
-#include "radmater.h"
+#include "rad_material_def.h"
 #include "rad_relaxation_methods.h"
 #include "rad_particle_trajectory.h"
 #include "rad_operation_names.h"

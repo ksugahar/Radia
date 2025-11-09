@@ -19,11 +19,11 @@
 #ifndef __RAD_GRAPHICS_3D_H
 #define __RAD_GRAPHICS_3D_H
 
-#include "radsend.h"
+#include "rad_serialization.h"
 #include "gmvect.h"
 #include "rad_rectangular_block.h"
 #include "rad_arc_current.h"
-#include "radgroup.h"
+#include "rad_group.h"
 #include "rad_filament.h"
 //#include "rad_transform_def.h"
 #include "gmtrans.h"

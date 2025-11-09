@@ -18,7 +18,7 @@
 #ifndef __RAD_FILAMENT_H
 #define __RAD_FILAMENT_H
 
-#include "radg3d.h"
+#include "rad_geometry_3d.h"
 #include "rad_transform_def.h"
 
 //-------------------------------------------------------------------------
