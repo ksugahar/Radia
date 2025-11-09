@@ -28,7 +28,7 @@ using PyObject = _object;
 #include "rad_graphics_3d.h"
 #include "rad_yield.h"
 #include "rad_convergence.h"
-#include "radgeom_types.h"
+#include "rad_geom_types.h"
 #include "rad_auxiliary_structures.h"
 
 #include <sstream> // Porting

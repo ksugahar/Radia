@@ -17,7 +17,7 @@
 
 #include "rad_interaction.h"
 #include "rad_subdivided_rectangle.h"
-#include "radintrc_hmat.h"
+#include "rad_intrc_hmat.h"
 #include "radentry.h"  // For RadSolverGetHMatrixEnabled()
 
 

@@ -15,7 +15,7 @@
 *
 *-------------------------------------------------------------------------*/
 
-#include "radintrc_hmat.h"
+#include "rad_intrc_hmat.h"
 #include "rad_geometry_3d.h"
 #include "rad_group.h"
 #include "rad_transform_def.h"

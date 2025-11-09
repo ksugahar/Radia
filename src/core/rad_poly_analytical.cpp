@@ -12,7 +12,7 @@
 *
 *-------------------------------------------------------------------------*/
 
-#include "radpoly_analytical.h"
+#include "rad_poly_analytical.h"
 #include <cmath>
 #include <algorithm>
 #include <iostream>

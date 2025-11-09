@@ -17,7 +17,7 @@
 
 #include "rad_planar_2d.h"
 #include "rad_application.h"
-#include "radpoly_analytical.h"
+#include "rad_poly_analytical.h"
 
 //-------------------------------------------------------------------------
 
