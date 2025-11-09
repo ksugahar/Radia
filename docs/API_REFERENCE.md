@@ -253,24 +253,44 @@ pieces = rad.ObjDivMag(magnet, [[3,1.5], [3,1.5], [3,1.5]])
 
 ### MatLin
 ```python
-material = rad.MatLin([ksi_parallel, ksi_perpendicular], remanence)
+material = rad.MatLin([ksi_parallel, ksi_perpendicular], mr)
 ```
 Creates a linear anisotropic magnetic material.
 
+**Usage**: For magnetic materials that respond to external fields. **NOT for permanent magnets** (which have fixed magnetization and don't need material properties).
+
 **Parameters**:
-- `[ksi_parallel, ksi_perpendicular]`: Susceptibilities parallel/perpendicular to easy axis
-- `remanence`: Scalar magnitude or `[Mx, My, Mz]` vector (T)
-  - Scalar: Easy axis set by object's magnetization direction
-  - Vector: Easy axis set explicitly
+- `[ksi_parallel, ksi_perpendicular]`: Susceptibilities parallel/perpendicular to easy magnetization axis
+- `mr`: Remanent magnetization - defines the easy magnetization axis (must be non-zero)
+  - **Scalar form**: `mr` = magnitude only (A/m)
+    - Easy axis direction taken from object's initial magnetization vector
+  - **Vector form**: `[mrx, mry, mrz]` = remanent magnetization vector (A/m)
+    - Easy axis direction explicitly defined by this vector
 
-**Example**:
+**Physical Meaning**:
+- `mr` (remanent magnetization) defines the **easy magnetization axis** (direction of parallel susceptibility)
+- Susceptibility parallel (ksi_parallel): Material response along easy axis
+- Susceptibility perpendicular (ksi_perpendicular): Material response perpendicular to easy axis
+
+**Examples**:
 ```python
-# Isotropic linear, no remanence (soft iron)
-mat = rad.MatLin([999, 999], [0, 0, 0])
+# Form 1: Scalar mr - easy axis from object's magnetization
+obj = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,1])  # Initial M in z-direction
+mat = rad.MatLin([0.06, 0.17], 100)  # Easy axis = z (from object), |Mr| = 100 A/m
+rad.MatApl(obj, mat)
 
-# Anisotropic with remanence in z
-mat = rad.MatLin([1000, 100], [0, 0, 1.2])
+# Form 2: Vector mr - easy axis explicitly defined
+mat = rad.MatLin([0.06, 0.17], [0, 0, 100])  # Easy axis in z, |Mr| = 100 A/m
+rad.MatApl(obj, mat)  # Applied to any object
+
+# Isotropic linear material (equal susceptibilities in all directions)
+mat = rad.MatLin([1000, 1000], [0, 0, 100])  # Mr still needed as reference
 ```
+
+**Important Notes**:
+- Permanent magnets: Use `rad.ObjRecMag([x,y,z], [dx,dy,dz], [mx,my,mz])` only - no material needed
+- Magnetic materials: Use MatLin or MatSatIsoFrm for materials responding to fields
+- `mr` must be non-zero (either as scalar magnitude or vector)
 
 ---
 
