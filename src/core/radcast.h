@@ -19,17 +19,17 @@
 #define __RADCAST_H
 
 #include "radsend.h"
-#include "radrec.h"
-#include "radexpgn.h"
-#include "radvlpgn.h"
+#include "rad_rectangular_block.h"
+#include "rad_extruded_polygon.h"
+#include "rad_polyhedron.h"
 #include "radgroup.h"
-#include "radplnr.h"
-#include "radflm.h"
+#include "rad_planar_2d.h"
+#include "rad_filament.h"
 #include "radtrans.h"
 #include "radmater.h"
-#include "radsbdrc.h"
-#include "radsbdep.h"
-#include "radsbdvp.h"
+#include "rad_subdivided_rectangle.h"
+#include "rad_subdivided_extruded_polygon.h"
+#include "rad_subdivided_polyhedron.h"
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------

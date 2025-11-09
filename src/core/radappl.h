@@ -25,7 +25,7 @@ using PyObject = _object;
 #include "radsend.h"
 #include "radg.h"
 #include "radcast.h"
-#include "radg3dgr.h"
+#include "rad_graphics_3d.h"
 #include "radyield.h"
 #include "radcnvrg.h"
 #include "radgeom_types.h"

@@ -17,10 +17,10 @@
 
 #include "radappl.h"
 #include "radg3da1.h"
-#include "radintrc.h"
+#include "rad_interaction.h"
 #include "radmater.h"
-#include "radrlmet.h"
-#include "radptrj.h"
+#include "rad_relaxation_methods.h"
+#include "rad_particle_trajectory.h"
 #include "radopnam.h"
 #include "radmtra1.h"
 #include "gmvbstr.h"

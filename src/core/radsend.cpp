@@ -34,9 +34,9 @@
 //extern radTSendToVBA gSendToVBA;
 //#endif
 
-#include "radiobuf.h"
+#include "rad_io_buffer.h"
 extern radTIOBuffer ioBuffer;
-#include "radg3dgr.h"
+#include "rad_graphics_3d.h"
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------

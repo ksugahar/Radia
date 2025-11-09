@@ -18,7 +18,7 @@
 #include "radcast.h"
 
 #ifndef __RADINTRC_H
-#include "radintrc.h"
+#include "rad_interaction.h"
 #endif
 
 //-------------------------------------------------------------------------

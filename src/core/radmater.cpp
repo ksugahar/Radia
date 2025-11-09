@@ -19,7 +19,7 @@
 #include "radmtra1.h"
 #include "radg3d.h"
 #include "auxparse.h"
-#include "radrlmet.h"
+#include "rad_relaxation_methods.h"
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------

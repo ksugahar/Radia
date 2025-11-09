@@ -28,7 +28,7 @@
 #include "radmater.h"
 #include "radg.h"
 #include "gmvect.h"
-#include "radmamet.h"
+#include "rad_math_methods.h"
 
 #include <list>
 

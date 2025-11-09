@@ -35,42 +35,42 @@ set(FFTW_DIR "${EXT_DIR}/fftw")
 
 # Radia core sources (organized by API functionality)
 set(RADIA_CORE_SOURCES
-	${CORE_DIR}/radobj_creation.cpp      # Object creation (ObjRecMag, ObjCylMag, etc.)
-	${CORE_DIR}/radmaterial.cpp          # Materials (MatLin, MatStd, MatApl, etc.)
-	${CORE_DIR}/radtransform.cpp         # Transformations (TrfTrsl, TrfRot, etc.)
-	${CORE_DIR}/radfield_compute.cpp     # Field computation (Fld, FldLst, FldEnr, etc.)
-	# radapl5.cpp removed: QD3D viewer (deprecated)
-	# radapl6.cpp removed: OpenGL 3D viewer (deprecated)
-	${CORE_DIR}/radobj_subdivision.cpp   # Subdivision (ObjDivMag, multi-generation extrusion)
-	${CORE_DIR}/radarccu.cpp
-	${CORE_DIR}/radcffld.cpp
-	${CORE_DIR}/radcast.cpp
-	${CORE_DIR}/radexpgn.cpp
-	${CORE_DIR}/radflm.cpp
-	${CORE_DIR}/radg3d.cpp
-	${CORE_DIR}/radg3dgr.cpp
-	${CORE_DIR}/radgroup.cpp
-	# ${CORE_DIR}/radhmat.cpp  # Temporarily disabled - field source H-matrix (has API compatibility issues)
-	${CORE_DIR}/radinter.cpp
-	${CORE_DIR}/radintrc.cpp
-	${CORE_DIR}/radintrc_hmat.cpp
-	${CORE_DIR}/radiobuf.cpp
-	${CORE_DIR}/radmamet.cpp
-	${CORE_DIR}/radmater.cpp
-	${CORE_DIR}/radplnr1.cpp
-	${CORE_DIR}/radplnr2.cpp
-	${CORE_DIR}/radpoly_analytical.cpp
-	${CORE_DIR}/radhmat_field.cpp
-	${CORE_DIR}/radhmat_update.cpp
-	${CORE_DIR}/radptrj.cpp
-	${CORE_DIR}/radrec.cpp
-	${CORE_DIR}/radrlmet.cpp
-	${CORE_DIR}/radsbdac.cpp
-	${CORE_DIR}/radsbdep.cpp
-	${CORE_DIR}/radsbdrc.cpp
-	${CORE_DIR}/radsbdvp.cpp
-	${CORE_DIR}/radsend.cpp
-	${CORE_DIR}/radvlpgn.cpp
+	# API-organized files (new naming convention)
+	${CORE_DIR}/radobj_creation.cpp           # Object creation (ObjRecMag, ObjCylMag, etc.)
+	${CORE_DIR}/radmaterial.cpp               # Materials (MatLin, MatStd, MatApl, etc.)
+	${CORE_DIR}/radtransform.cpp              # Transformations (TrfTrsl, TrfRot, etc.)
+	${CORE_DIR}/radfield_compute.cpp          # Field computation (Fld, FldLst, FldEnr, etc.)
+	${CORE_DIR}/radobj_subdivision.cpp        # Subdivision (ObjDivMag, multi-generation extrusion)
+
+	# Geometry files (descriptive names)
+	${CORE_DIR}/rad_arc_current.cpp           # Arc with azimuthal current
+	${CORE_DIR}/rad_coefficient_field.cpp     # CoefficientFunction-based field source
+	${CORE_DIR}/radcast.cpp                   # Dynamic type casting
+	${CORE_DIR}/rad_extruded_polygon.cpp      # Extruded polygon (prism)
+	${CORE_DIR}/rad_filament.cpp              # Filament conductor
+	${CORE_DIR}/radg3d.cpp                    # 3D geometry base class
+	${CORE_DIR}/rad_graphics_3d.cpp           # 3D graphics/visualization
+	${CORE_DIR}/radgroup.cpp                  # Container/group of field sources
+	${CORE_DIR}/radinter.cpp                  # C-style interface functions
+	${CORE_DIR}/rad_interaction.cpp           # Magnetic interaction between objects
+	${CORE_DIR}/radintrc_hmat.cpp             # H-matrix acceleration for interaction
+	${CORE_DIR}/rad_io_buffer.cpp             # I/O buffer (errors and warnings)
+	${CORE_DIR}/rad_math_methods.cpp          # Mathematical/numerical methods
+	${CORE_DIR}/radmater.cpp                  # Material relaxation auxiliary
+	${CORE_DIR}/rad_planar_2d_part1.cpp       # 2D planar objects (part 1)
+	${CORE_DIR}/rad_planar_2d_part2.cpp       # 2D planar objects (part 2)
+	${CORE_DIR}/radpoly_analytical.cpp        # Analytical polygon field formulas
+	${CORE_DIR}/radhmat_field.cpp             # H-matrix field evaluator
+	${CORE_DIR}/radhmat_update.cpp            # H-matrix magnetization update
+	${CORE_DIR}/rad_particle_trajectory.cpp   # Particle trajectory/dynamics
+	${CORE_DIR}/rad_rectangular_block.cpp     # Rectangular parallelepiped
+	${CORE_DIR}/rad_relaxation_methods.cpp    # Relaxation methods
+	${CORE_DIR}/rad_subdivided_arc_current.cpp        # Subdivided arc with current
+	${CORE_DIR}/rad_subdivided_extruded_polygon.cpp   # Subdivided extruded polygon
+	${CORE_DIR}/rad_subdivided_rectangle.cpp          # Subdivided rectangle
+	${CORE_DIR}/rad_subdivided_polyhedron.cpp         # Subdivided polyhedron
+	${CORE_DIR}/radsend.cpp                   # Interface functions
+	${CORE_DIR}/rad_polyhedron.cpp            # Polyhedron with magnetization
 )
 
 # Radia ext sources

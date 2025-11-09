@@ -19,7 +19,7 @@
 #ifndef __RADINTRC_HMAT_H
 #define __RADINTRC_HMAT_H
 
-#include "radintrc.h"
+#include "rad_interaction.h"
 #include "radg3d.h"
 #include "radgroup.h"
 #include "../ext/HACApK_LH-Cimplm/hacapk.hpp"  // HACApK library

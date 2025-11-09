@@ -16,7 +16,7 @@
 -------------------------------------------------------------------------*/
 
 #include "radappl.h"
-#include "radptrj.h"
+#include "rad_particle_trajectory.h"
 #include "radg3da1.h"
 #include "radopnam.h"
 

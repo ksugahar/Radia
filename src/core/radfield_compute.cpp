@@ -17,9 +17,9 @@
 
 #include "radappl.h"
 #include "radg3da1.h"
-#include "radrec.h"
-#include "radplnr.h"
-#include "radvlpgn.h"
+#include "rad_rectangular_block.h"
+#include "rad_planar_2d.h"
+#include "rad_polyhedron.h"
 #include "radcnvrg.h"
 #include "radopnam.h"
 

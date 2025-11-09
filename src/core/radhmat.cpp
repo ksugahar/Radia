@@ -16,7 +16,7 @@
 #include "radhmat.h"
 #include "radgroup.h"
 #include "radexcep.h"
-#include "radrec.h"
+#include "rad_rectangular_block.h"
 #include <iostream>
 #include <chrono>
 #include <cmath>

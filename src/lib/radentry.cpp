@@ -9,7 +9,7 @@
 //#endif
 
 #include "radentry.h"
-#include "radiobuf.h"
+#include "rad_io_buffer.h"
 
 //DEBUG
 //#include <mpi.h>

@@ -17,12 +17,12 @@
 
 #include "radappl.h"
 #include "radg3da1.h"
-#include "radrec.h"
-#include "radarccu.h"
-#include "radcffld.h"
-#include "radplnr.h"
-#include "radexpgn.h"
-#include "radvlpgn.h"
+#include "rad_rectangular_block.h"
+#include "rad_arc_current.h"
+#include "rad_coefficient_field.h"
+#include "rad_planar_2d.h"
+#include "rad_extruded_polygon.h"
+#include "rad_polyhedron.h"
 #include "radcnvrg.h"
 #include "radopnam.h"
 #include <Python.h>

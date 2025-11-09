@@ -21,7 +21,7 @@
 
 #include "radappl.h"
 #include "gmvect.h"
-#include "radiobuf.h"
+#include "rad_io_buffer.h"
 
 //-------------------------------------------------------------------------
 

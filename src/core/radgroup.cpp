@@ -18,7 +18,7 @@
 
 #include "radappl.h"
 #include "radgroup.h"
-#include "radg3dgr.h"
+#include "rad_graphics_3d.h"
 #include "radg3da1.h"
 
 //-------------------------------------------------------------------------
