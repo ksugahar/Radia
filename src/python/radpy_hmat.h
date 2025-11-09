@@ -11,7 +11,7 @@ static PyObject* radia_FldBatch(PyObject* self, PyObject* args)
 {
 	PyObject *oCmpnId=0, *oP=0, *oResB=0;
 	double *arCoord=0, *arB=0;
-	int use_hmatrix = 0;  // Default: direct calculation
+	int use_hmatrix = 1;  // Default: use H-matrix if globally enabled
 
 	try
 	{
@@ -61,12 +61,12 @@ static PyObject* radia_SetHMatrixFieldEval(PyObject* self, PyObject* args)
 	try
 	{
 		int enabled = 0;
-		double eps = 1e-6;
+		double tol = 1e-6;  // HACApK ACA tolerance
 
-		if(!PyArg_ParseTuple(args, "i|d:SetHMatrixFieldEval", &enabled, &eps))
+		if(!PyArg_ParseTuple(args, "i|d:SetHMatrixFieldEval", &enabled, &tol))
 			throw CombErStr(strEr_BadFuncArg, ": SetHMatrixFieldEval");
 
-		g_pyParse.ProcRes(RadSetHMatrixFieldEval(enabled, eps));
+		g_pyParse.ProcRes(RadSetHMatrixFieldEval(enabled, tol));
 
 		Py_RETURN_NONE;
 	}

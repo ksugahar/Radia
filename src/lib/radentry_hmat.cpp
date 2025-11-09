@@ -121,7 +121,7 @@ EXP int CALL RadFldBatch(double* B, int* nB, int obj, char* id, double* Coords, 
 		// Decide whether to use H-matrix
 		bool should_use_hmatrix = (use_hmatrix != 0) && g_hmatrix_field_state.enabled;
 
-		if(should_use_hmatrix && group && np >= 100) {
+		if(should_use_hmatrix && group) {
 			// Try H-matrix accelerated evaluation
 			radTHMatrixFieldEvaluator* evaluator = g_hmatrix_field_state.GetOrCreate(obj, group);
 
@@ -192,10 +192,10 @@ EXP int CALL RadFldBatch(double* B, int* nB, int obj, char* id, double* Coords, 
 
 //-------------------------------------------------------------------------
 
-EXP int CALL RadSetHMatrixFieldEval(int enabled, double eps)
+EXP int CALL RadSetHMatrixFieldEval(int enabled, double tol)
 {
 	g_hmatrix_field_state.enabled = (enabled != 0);
-	g_hmatrix_field_state.epsilon = (eps > 0) ? eps : 1e-6;
+	g_hmatrix_field_state.epsilon = (tol > 0) ? tol : 1e-6;
 
 	if(!g_hmatrix_field_state.enabled) {
 		g_hmatrix_field_state.Clear();

@@ -659,12 +659,7 @@ int radTHMatrixFieldEvaluator::EvaluateField(
 		return EvaluateFieldDirect(obs_points, field_out, field_type);
 	}
 
-	// Check if H-matrix acceleration is worthwhile
-	if(M < 100 || num_sources < 100) {
-		std::cout << "[HMatrix Field] Problem too small for H-matrix, using direct" << std::endl;
-		return EvaluateFieldDirect(obs_points, field_out, field_type);
-	}
-
+	// User explicitly enabled H-matrix, so use it regardless of problem size
 	num_evaluations++;
 
 	auto start_time = std::chrono::high_resolution_clock::now();

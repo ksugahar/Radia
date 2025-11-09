@@ -42,10 +42,10 @@ EXP int CALL RadFldBatch(double* B, int* nB, int obj, char* id, double* Coords, 
 * Enables caching for non-linear iterations.
 *
 * @param enabled [in] 0=disable, 1=enable H-matrix acceleration
-* @param eps [in] H-matrix accuracy tolerance (default: 1e-6)
+* @param tol [in] HACApK ACA tolerance (smaller = more accurate but slower) (default: 1e-6)
 * @return integer error code (0: no error, >0: error number, <0: warning number)
 */
-EXP int CALL RadSetHMatrixFieldEval(int enabled, double eps);
+EXP int CALL RadSetHMatrixFieldEval(int enabled, double tol);
 
 /** Clear H-matrix field evaluation cache
 *
