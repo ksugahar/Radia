@@ -322,33 +322,64 @@ Creates nonlinear anisotropic material with separate parallel/perpendicular char
 
 ---
 
-### MatStd
+### Common Material Configuration Examples
+
+Below are typical material parameters for common magnetic materials. These can be created using `MatLin` for permanent magnets or `MatSatIsoFrm` for soft magnetic materials.
+
+#### Permanent Magnet Materials (Linear Anisotropic)
+
+**NdFeB** (Neodymium-Iron-Boron):
 ```python
-material = rad.MatStd(name, mr)
+mat = rad.MatLin([0.06, 0.17], [0, 0, 1.2])  # ksi_par=0.06, ksi_perp=0.17, Mr=1.2 T
 ```
-Creates pre-defined magnetic material.
 
-**Parameters**:
-- `name`: Material identifier string
-  - `'NdFeB'`: NdFeB permanent magnet (default mr = 1.2 T)
-  - `'SmCo5'`: SmCo5 permanent magnet (default mr = 0.85 T)
-  - `'Sm2Co17'`: Sm2Co17 permanent magnet (default mr = 1.05 T)
-  - `'Ferrite'`: Ferrite permanent magnet (default mr = 0.35 T)
-  - `'Xc06'`: Low carbon steel C<0.06%
-  - `'Steel37'`: Steel C<0.13%
-  - `'Steel42'`: Steel C<0.19%
-  - `'AFK502'`: Vanadium Permendur (Fe:49%, Co:49%, V:2%)
-  - `'AFK1'`: FeCo alloy (Fe:74.2%, Co:25%)
-- `mr`: Optional remanent magnetization magnitude (T)
-
-**Example**:
+**SmCo5** (Samarium-Cobalt):
 ```python
-# NdFeB with default 1.2 T remanence
-mat = rad.MatStd('NdFeB')
-
-# Custom remanence
-mat = rad.MatStd('NdFeB', 1.4)
+mat = rad.MatLin([0.005, 0.04], [0, 0, 0.85])  # Mr=0.85 T
 ```
+
+**Sm2Co17** (Samarium-Cobalt 2:17):
+```python
+mat = rad.MatLin([0.005, 0.04], [0, 0, 1.05])  # Mr=1.05 T
+```
+
+**Ferrite**:
+```python
+mat = rad.MatLin([0.07, 0.2], [0, 0, 0.35])  # Mr=0.35 T
+```
+
+#### Soft Magnetic Materials (Nonlinear Isotropic)
+
+**Xc06** (Low Carbon Steel, C<0.06%):
+```python
+mat = rad.MatSatIsoFrm([2118., 1.362], [63.06, 0.2605], [17.138, 0.4917])
+```
+
+**Steel37** (C<0.13%):
+```python
+mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
+```
+
+**Steel42** (C<0.19%):
+```python
+mat = rad.MatSatIsoFrm([968.66, 1.441], [24.65, 0.2912], [8.3, 0.3316])
+```
+
+**AFK502** (Vanadium Permendur, Fe:49%, Co:49%, V:2%):
+```python
+mat = rad.MatSatIsoFrm([10485., 1.788], [241.5, 0.437], [7.43, 0.115])
+```
+
+**AFK1** (FeCo alloy, Fe:74.2%, Co:25%):
+```python
+mat = rad.MatSatIsoFrm([2001., 1.704], [38.56, 0.493], [1.24, 0.152])
+```
+
+**Note**: For soft magnetic materials, the magnetization is modeled as:
+```
+M(H) = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3)
+```
+where H is the magnitude of magnetic field strength in Tesla.
 
 ---
 

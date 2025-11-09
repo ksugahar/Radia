@@ -349,7 +349,7 @@ import radia as rad
 
 # Create Radia magnet
 magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1.2])
-rad.MatApl(magnet, rad.MatStd('NdFeB', 1.2))
+rad.MatApl(magnet, rad.MatLin([0.06, 0.17], [0, 0, 1.2]))  # NdFeB
 rad.Solve(magnet, 0.0001, 10000)
 
 # Create field CoefficientFunctions

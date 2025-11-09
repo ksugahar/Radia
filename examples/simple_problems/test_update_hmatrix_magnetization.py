@@ -18,9 +18,9 @@ try:
 	print(f"  OK: block={block}, container={g}")
 
 	# Step 2
-	print("\n[Step 2] Setting initial magnetization...")
-	rad.MatApl(g, rad.MatStd('NdFeB', 1000.0))
-	print("  OK: M = [0, 0, 1000] A/m")
+	print("\n[Step 2] Setting material...")
+	rad.MatApl(g, rad.MatLin([0.06, 0.17], [0, 0, 1.2]))  # NdFeB
+	print("  OK: Material applied")
 
 	# Step 3
 	print("\n[Step 3] Enabling H-matrix...")

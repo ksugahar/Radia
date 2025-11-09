@@ -37,7 +37,7 @@ set(FFTW_DIR "${EXT_DIR}/fftw")
 set(RADIA_CORE_SOURCES
 	# API-organized files (new naming convention)
 	${CORE_DIR}/rad_obj_creation.cpp          # Object creation (ObjRecMag, ObjCylMag, etc.)
-	${CORE_DIR}/rad_material_impl.cpp         # Materials (MatLin, MatStd, MatApl, etc.)
+	${CORE_DIR}/rad_material_impl.cpp         # Materials (MatLin, MatSatIsoFrm, MatApl, etc.)
 	${CORE_DIR}/rad_transform_impl.cpp        # Transformations (TrfTrsl, TrfRot, etc.)
 	${CORE_DIR}/rad_field_compute.cpp         # Field computation (Fld, FldLst, FldEnr, etc.)
 	${CORE_DIR}/rad_obj_subdivision.cpp       # Subdivision (ObjDivMag, multi-generation extrusion)

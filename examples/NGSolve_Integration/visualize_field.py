@@ -52,7 +52,7 @@ magnet_center = [0, 0, 0]
 magnet_size = [20, 20, 30]
 
 magnet = rad.ObjRecMag(magnet_center, magnet_size, [0, 0, 1.2])
-rad.MatApl(magnet, rad.MatStd('NdFeB', 1.2))
+rad.MatApl(magnet, rad.MatLin([0.06, 0.17], [0, 0, 1.2]))  # NdFeB
 rad.Solve(magnet, 0.0001, 10000)
 
 print(f"Magnet created: object #{magnet}")

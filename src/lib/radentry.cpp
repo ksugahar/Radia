@@ -78,7 +78,6 @@ void ApplySymmetry( int, int, int );
 
 void LinearMaterial( double,double, double,double,double );
 void LinearMaterial2( double,double, double );
-void MaterialStd( char*, double );
 
 void NonlinearIsotropMaterial2( double,double, double,double, double,double );
 void NonlinearIsotropMaterial3Opt( double**, long );
@@ -791,16 +790,6 @@ int CALL RadMatLin(int* n, double* pKsi, double* pMr, int LenMr)
 {
 	if(LenMr == 3) LinearMaterial(pKsi[0], pKsi[1], pMr[0] , pMr[1], pMr[2]);
 	else if(LenMr == 1) LinearMaterial2(pKsi[0], pKsi[1], pMr[0]);
-
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadMatStd(int* n, char* Name, double m)
-{
-	MaterialStd(Name, m);
 
 	*n = ioBuffer.OutInt();
 	return ioBuffer.OutErrorStatus();

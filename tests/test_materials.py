@@ -114,36 +114,6 @@ class TestNonlinearMaterials:
 		assert len(H) == 3
 
 
-class TestStandardMaterials:
-	"""Test standard predefined materials"""
-
-	def test_standard_material_steel(self):
-		"""Test standard steel material"""
-		rad.UtiDelAll()
-
-		try:
-			# Try to create standard steel material
-			# Note: May not be available in all builds
-			mat = rad.MatStd('Steel42')
-			assert mat > 0
-		except:
-			# If not available, that's okay
-			pytest.skip("Standard materials not available in this build")
-
-	def test_standard_material_permendur(self):
-		"""Test standard Permendur material"""
-		rad.UtiDelAll()
-
-		try:
-			mat = rad.MatStd('Permendur')
-			if mat > 0:
-				# Try applying it
-				mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [1, 0, 0])
-				rad.MatApl(mag, mat)
-		except:
-			pytest.skip("Standard materials not available")
-
-
 class TestMaterialOnGroups:
 	"""Test material application to groups"""
 

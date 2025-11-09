@@ -75,31 +75,6 @@ int radTApplication::SetLinearMaterial(double* KsiArray, long lenKsiArray, doubl
 
 //-------------------------------------------------------------------------
 
-int radTApplication::SetMaterialStd(char* MatName, double Mr)
-{
-	try
-	{
-		if(MatName == 0)
-		{
-			Send.ErrorMessage("Radia::Error072"); return 0;
-		}
-
-		radTMaterial* MaterPtr = radTMaterial::SetupStandardMater(MatName, Mr);
-		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error073"); return 0;}
-
-		radThg hg(MaterPtr);
-		int ElemKey = AddElementToContainer(hg);
-		if(SendingIsRequired) Send.Int(ElemKey);
-		return ElemKey;
-	}
-	catch(...)
-	{
-		Initialize(); return 0;
-	}
-}
-
-//-------------------------------------------------------------------------
-
 int radTApplication::SetNonlinearIsotropMaterial(double* Ms, long lenMs, double* ks, long len_ks)
 {
 	radTNonlinearIsotropMaterial* MaterPtr = nullptr;

@@ -2071,37 +2071,6 @@ static PyObject* radia_MatApl(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Materials: a pre-defined magnetic material (the material is identified by its name/formula, e.g. \"NdFeB\").
- ***************************************************************************/
-static PyObject* radia_MatStd(PyObject* self, PyObject* args)
-{
-	PyObject *oMatId=0, *oResInd=0;
-	try
-	{
-		double absM = -1; //OC02112019
-		//double absM = 0;
-		if(!PyArg_ParseTuple(args, "O|d:MatStd", &oMatId, &absM)) throw CombErStr(strEr_BadFuncArg, ": MatStd"); //OC02112019
-		//if(!PyArg_ParseTuple(args, "Od:MatStd", &oMatId, &absM)) throw CombErStr(strEr_BadFuncArg, ": MatStd");
-		if(oMatId == 0) throw CombErStr(strEr_BadFuncArg, ": MatStd");
-
-		char sMatId[256];
-		CPyParse::CopyPyStringToC(oMatId, sMatId, 256);
-
-		int indRes = 0;
-		g_pyParse.ProcRes(RadMatStd(&indRes, sMatId, absM));
-
-		oResInd = Py_BuildValue("i", indRes);
-		// Py_XINCREF removed - Py_BuildValue already returns new reference
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
-	}
-	return oResInd;
-}
-
-/************************************************************************//**
  * Magnetic Materials: a linear anisotropic magnetic material.
  ***************************************************************************/
 static PyObject* radia_MatLin(PyObject* self, PyObject* args)
@@ -3489,7 +3458,6 @@ static PyMethodDef radia_methods[] = {
 	{"MatSatLamFrm", radia_MatSatLamFrm, METH_VARARGS, "MatSatLamFrm([ksi1,ms1],[ksi2,ms2],[ksi3,ms3],p,[nx,ny,nz]) creates laminated nonlinear anisotropic magnetic material with packing factor p and the lamination planes perpendicular to the vector [nx,ny,nz]. The magnetization magnitude vs magnetic field strength for the corresponding isotropic material is defined by the formula M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3), where H is the magnitude of the magnetic field strength vector (in Tesla). The parameters [ksi3,ms3] and [ksi2,ms2] may be omitted; in such a case the corresponding terms in the formula will be omitted too."},
 	{"MatSatLamTab", radia_MatSatLamTab, METH_VARARGS, "MatSatLamTab([[H1,M1],[H2,M2],...],p,[nx,ny,nz]) creates laminated nonlinear anisotropic magnetic material with packing factor p and the lamination planes perpendicular to the vector [nx,ny,nz]. The magnetization magnitude vs magnetic field strength for the corresponding isotropic material is defined by pairs [[H1,M1],[H2,M2],...] in Tesla."},
 	{"MatSatAniso", radia_MatSatAniso, METH_VARARGS, "MatSatAniso(datapar,dataper) where datapar can be [[ksi1,ms1,hc1],[ksi2,ms2,hc2],[ksi3,ms3,hc3],[ksi0,hc0]] or ksi0, and dataper can be [[ksi1,ms1],[ksi2,ms2],[ksi3,ms3],ksi0] or ksi0 - creates a nonlinear anisotropic magnetic material. If the first argument is set to [[ksi1,ms1,hc1],[ksi2,ms2,hc2],[ksi3,ms3,hc3],[ksi0,hc0]], the magnetization vector component parallel to the easy axis is computed as ms1*tanh(ksi1*(hpa-hc1)/ms1) + ms2*tanh(ksi2*(hpa-hc2)/ms2) + ms3*tanh(ksi3*(hpa-hc3)/ms3) + ksi0*(hpa-hc0), where hpa is the field strength vector component parallel to the easy axis. If the second argument is set to [[ksi1,ms1],[ksi2,ms2],[ksi3,ms3],ksi0], the magnetization vector component perpendicular to the easy axis is computed as ms1*tanh(ksi1*hpe/ms1) + ms2*tanh(ksi2*hpe/ms2) + ms3*tanh(ksi3*hpe/ms3) + ksi0*hpe, where hpe is the field strength vector component perpendicular to the easy axis. If the first or second argument is set to ksi0, the magnetization component parallel (perpendicular) to the easy axis is computed by ksi0*hp, where hp is the corresponding component of field strength vector. At least one of the magnetization vector components should non-linearly depend on the field strength. The direction of the easy magnetisation axis is set up by the magnetization vector in the object to which the material is later applied."},
-	{"MatStd", radia_MatStd, METH_VARARGS, "MatStd(name,mr) creates a pre-defined magnetic material with an optional absolute remanent magnetization mr. The material is identified by its name/formula, which can be one of the following:\n'NdFeB' for NdFeB permanent magnet material (default mr = 1.2 T);\n'SmCo5' for SmCo5 permanent magnet material (default mr = 0.85 T);\n'Sm2Co17' for Sm2Co17 permanent magnet material (default mr = 1.05 T);\n'Ferrite' for Ferrite permanent magnet material (default mr = 0.35 T);\n'Xc06' for an inexpensive Low Carbon Steel with C<0.06% (AFNOR);\n'Steel37' for an inexpensive Steel with C<0.13%;\n'Steel42' for an inexpensive Steel with C<0.19%;\n'AFK502' for a Vanadium Permendur type material from MetalImphy (Fe:49%, Co:49%, V:2%) similar to Vacoflux50 from VacuumSchmelze;\n'AFK1' for an inexpensive FeCo alloy from MetalImphy (Fe:74.2%, Co:25%, Cr:0.3%, Mn:0.5%)."},
 	{"MatApl", radia_MatApl, METH_VARARGS, "MatApl(obj,mat) applies material mat to object obj."},
 	{"MatMvsH", radia_MatMvsH, METH_VARARGS, "MatMvsH(obj,'mx|my|mz'|'',[hx,hy,hz]) computes magnetization from magnetic field strength vector [hx,hy,hz] for the material of the object obj; the magnetization components are specified by the second argument."},
 

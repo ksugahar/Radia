@@ -1242,13 +1242,6 @@ void LinearMaterial2(double KsiPar, double KsiPer, double Mr)
 
 //-------------------------------------------------------------------------
 
-void MaterialStd(char* MatName, double Mr)
-{
-	rad.SetMaterialStd(MatName, Mr);
-}
-
-//-------------------------------------------------------------------------
-
 void NonlinearIsotropMaterial(double Ms1, double Ms2, double Ms3, 
 							  double ks1, double ks2, double ks3)
 {

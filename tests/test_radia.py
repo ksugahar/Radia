@@ -92,8 +92,9 @@ def test_material(rad):
 	print("Test 4: Material Definition")
 	print("=" * 60)
 	try:
-		# Create a material (Steel37 - valid material in database)
-		mat = rad.MatStd('Steel37', 2000)  # Saturation magnetization
+		# Create a material (Steel37 equivalent using MatSatIsoFrm)
+		# Steel37: C<0.13% steel with nonlinear magnetic properties
+		mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
 		print(f"[OK] SUCCESS: Created material")
 		print(f"  Material ID: {mat}")
 
@@ -145,7 +146,7 @@ def test_solve(rad):
 	try:
 		# Create a simple magnetic system
 		block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
-		mat = rad.MatStd('Steel37', 2000)
+		mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])  # Steel37 equivalent
 		rad.MatApl(block, mat)
 
 		# Solve the system

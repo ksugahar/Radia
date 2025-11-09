@@ -31,87 +31,23 @@ class radTMaterial;
 
 //-------------------------------------------------------------------------
 
-class radTMaterialDB {
-public:
-	char Name[50];
-
-	virtual radTMaterial* SetupMater(double InMr=0) { return 0;}
-};
-
-using radTHMatDB = radTHandle<radTMaterialDB>;
-using radTHMatDBVect = vector <radTHMatDB>;
-
-//-------------------------------------------------------------------------
-
-class radTLinearAnisotropMaterialDB : public radTMaterialDB {
-public:
-	double KsiPar, KsiPerp, Mr;
-
-	radTLinearAnisotropMaterialDB(const char* InName, double InKsiPar, double InKsiPerp, double InMr)
-	{
-		SetParam(InName, InKsiPar, InKsiPerp, InMr);
-	}
-	radTLinearAnisotropMaterialDB() {}
-
-	void SetParam(const char* InName, double InKsiPar, double InKsiPerp, double InMr)
-	{
-		strncpy(Name, InName, 49); Name[49] = '\0';
-		KsiPar = InKsiPar; KsiPerp = InKsiPerp; Mr = InMr;
-	}
-
-	radTMaterial* SetupMater(double InMr=0); //virtual
-};
-
-//-------------------------------------------------------------------------
-
-class radTNonlinearIsotropMaterialDB : public radTMaterialDB {
-public:
-	double ks[3], ms[3];
-
-	radTNonlinearIsotropMaterialDB(const char* InName, double ms0, double ms1, double ms2, double ks0, double ks1, double ks2)
-	{
-		SetParam(InName, ms0, ms1, ms2, ks0, ks1, ks2);
-	}
-	radTNonlinearIsotropMaterialDB() {}
-
-	void SetParam(const char* InName, double ms0, double ms1, double ms2, double ks0, double ks1, double ks2)
-	{
-		strncpy(Name, InName, 49); Name[49] = '\0';
-		ks[0] = ks0; ms[0] = ms0;
-		ks[1] = ks1; ms[1] = ms1;
-		ks[2] = ks2; ms[2] = ms2;
-	}
-
-	radTMaterial* SetupMater(double InMr=0); //virtual
-};
-
-//-------------------------------------------------------------------------
-//-------------------------------------------------------------------------
-
 class radTg3dRelax;
 
 //-------------------------------------------------------------------------
 
 class radTMaterial : public radTg {
-protected:
-	static radTHMatDBVect MaterDB;
-
 public:
 	TVector3d RemMagn; // Don't make it private nor protected
 	char EasyAxisDefined;
 
-	radTMaterial(const TVector3d& InRemMagn, char InEasyAxisDefined) 
-	{ 
+	radTMaterial(const TVector3d& InRemMagn, char InEasyAxisDefined)
+	{
 		RemMagn = InRemMagn; EasyAxisDefined = InEasyAxisDefined;
 	}
 	radTMaterial() { EasyAxisDefined = 0;}
 
 	int Type_g() { return 3;}
 	virtual int Type_Material() { return 0;}
-
-	static radTHMatDBVect SetupMaterDB();
-	static int GetMaterIndexDB(const char*);
-	static radTMaterial* SetupStandardMater(const char*, double Mr=0);
 
 	virtual TVector3d M(const TVector3d& H) { return 0.*H;}
 	virtual void DefineInstantKsiTensor(const TVector3d&, TMatrix3d&, TVector3d&) {}

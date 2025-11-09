@@ -174,7 +174,6 @@ public:
 	int ApplySymmetry(int g3dElemKey, int TransElemKey, int Multiplicity);
 
 	int SetLinearMaterial(double* KsiArray, long lenKsiArray, double* RemMagnArray, long lenRemMagnArray);
-	int SetMaterialStd(char* MatName, double Mr=0);
 
 	int SetNonlinearIsotropMaterial(double* Ms, long lenMs, double* ks, long len_ks);
 	int SetNonlinearIsotropMaterial(TVector2d* ArrayHM, int LenArrayArrayHM);
