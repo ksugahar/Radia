@@ -37,13 +37,14 @@ int radTApplication::SetUpPolyhedronsFromBaseFacePolygons(double zc, const char*
 	if((arPoints2d == 0) || (lenArPoints2d <= 0)) return 0;
 	if((arPtrTrfParInExtrSteps == 0) || (arStrTrfOrderInExtrSteps == 0) || (arNumTrfInExtrSteps == 0) || (NumSteps <= 0)) return 0;
 
+	radTPolygon *pBaseFacePgn1 = nullptr, *pBaseFacePgn2 = nullptr;
 	try
 	{
 		radTGroup* pGroup = new radTGroup();
 		if(pGroup == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 		radThg hgLoc(pGroup);
 
-		radTPolygon *pBaseFacePgn1 = new radTPolygon(arPoints2d, lenArPoints2d), *pBaseFacePgn2=0;
+		pBaseFacePgn1 = new radTPolygon(arPoints2d, lenArPoints2d);
 		//pBaseFacePgn1->CoordZ = zc;
 		pBaseFacePgn1->CoordZ = 0;
 
@@ -236,6 +237,9 @@ int radTApplication::SetUpPolyhedronsFromBaseFacePolygons(double zc, const char*
 	}
 	catch(...)
 	{
+		// Clean up memory if exception occurred before ownership transfer
+		if(pBaseFacePgn1) delete pBaseFacePgn1;
+		if(pBaseFacePgn2) delete pBaseFacePgn2;
 		Initialize(); return 0;
 	}
 }
@@ -438,6 +442,9 @@ int radTApplication::SetUpPolyhedronsFromLayerPolygons(TVector2d** LayerPolygons
 	radTVectVect3d VertexPointsVect;
 	radTVectIntPtrAndInt FacesVect;
 	radTPtrsToPgnAndVect2d PtrsToPgnAndVect2d[2];
+	// Initialize polygon pointers to nullptr for exception safety
+	PtrsToPgnAndVect2d[0].pPgn = nullptr;
+	PtrsToPgnAndVect2d[1].pPgn = nullptr;
 
 	double RelZeroToler = 1.E-09;
 	RelZeroToler = 10.*((RelZeroToler>radCR.RelRand)? RelZeroToler : radCR.RelRand);
@@ -500,6 +507,7 @@ int radTApplication::SetUpPolyhedronsFromLayerPolygons(TVector2d** LayerPolygons
 
 			if(PtrsToPgnAndVect2d->pPgn != 0) delete PtrsToPgnAndVect2d->pPgn;
 			*PtrsToPgnAndVect2d = PtrsToPgnAndVect2d_1;
+			PtrsToPgnAndVect2d_1.pPgn = nullptr; // Ownership transferred, prevent double-delete
 			*z1z2 = z1z2[1];
 		}
 		if(PtrsToPgnAndVect2d->pPgn != 0) delete PtrsToPgnAndVect2d->pPgn;
@@ -511,6 +519,9 @@ int radTApplication::SetUpPolyhedronsFromLayerPolygons(TVector2d** LayerPolygons
 	}
 	catch(...)
 	{
+		// Clean up memory if exception occurred before ownership transfer
+		if(PtrsToPgnAndVect2d[0].pPgn) delete PtrsToPgnAndVect2d[0].pPgn;
+		if(PtrsToPgnAndVect2d[1].pPgn) delete PtrsToPgnAndVect2d[1].pPgn;
 		Initialize(); return 0;
 	}
 }

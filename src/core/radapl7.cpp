@@ -56,7 +56,9 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 	trVorOut.edgelist = (int*) nullptr; //Needed only if -v switch used.
 	trVorOut.normlist = (REAL*) nullptr; //Needed only if -v switch used.
 
-	short PrevSendingIsRequired = SendingIsRequired; 
+	short PrevSendingIsRequired = SendingIsRequired;
+	radTGroup* pGroup = nullptr;
+	radTExtrPolygon* pExtrPgn = nullptr;
 	try
 	{
 		double CPoi[] = {0, 0, 0};
@@ -257,7 +259,7 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 			Send.ErrorMessage("Radia::Error119"); throw 0;
 		}
 
-		radTGroup* pGroup = new radTGroup();
+		pGroup = new radTGroup();
 		if(pGroup == 0) { Send.ErrorMessage("Radia::Error900"); throw 0;}
 
 		REAL *arVertexCoord = trOut.pointlist;
@@ -281,11 +283,11 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 			FirstPoiVect.y = trP1.x;
 			FirstPoiVect.z = trP1.y;
 
-			radTExtrPolygon* pExtrPgn = new radTExtrPolygon(FirstPoiVect, AxOrnt, Lx, arThreePts, 3, MagnVect);
+			pExtrPgn = new radTExtrPolygon(FirstPoiVect, AxOrnt, Lx, arThreePts, 3, MagnVect);
 			if(pExtrPgn == 0) { Send.ErrorMessage("Radia::Error900"); throw 0;}
 			if(((radTPolygon*)(pExtrPgn->BasePolygonHandle.rep))->SomethingIsWrong)
 			{
-				delete pExtrPgn; throw 0;
+				delete pExtrPgn; pExtrPgn = nullptr; throw 0;
 			}
 
 			radThg hPgn(pExtrPgn);
@@ -294,9 +296,11 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 			int pgnKey = AddElementToContainer(hPgn);
 			if(IndTr != 0) pgnKey = ApplySymmetry(pgnKey, IndTr, 1);
 			pGroup->AddElement(pgnKey, hPgn);
+			pExtrPgn = nullptr; // Ownership transferred to radThg, safe to nullify after all uses
 		}
 
 		radThg hGroup(pGroup);
+		pGroup = nullptr; // Ownership transferred to radThg
 		int resGrpKey = AddElementToContainer(hGroup);
 
 		SendingIsRequired = PrevSendingIsRequired;
@@ -325,6 +329,10 @@ int radTApplication::SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, 
 	}
 	catch(...)
 	{
+		// Clean up memory if exception occurred before ownership transfer
+		if(pGroup) delete pGroup;
+		if(pExtrPgn) delete pExtrPgn;
+
 		SendingIsRequired = PrevSendingIsRequired;
 
 		// RAII: vectors cleaned up automatically
