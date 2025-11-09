@@ -304,11 +304,12 @@ int radTPolyhedron::DetermineActualFacesNormals(TVector3d* ArrayOfPoints, int Am
 								Normal = (-1.)*Normal;
 							}
 							TVector3d SegmVect = ArrayOfPoints[NoOfSegmFiPo] - ArrayOfPoints[NoOfSegmStPo];
-							if(!CheckIfJunctionIsConvex(FirstNormal, SegmVect, ArrayOfFacesNormals[iii])) 
+							if(!CheckIfJunctionIsConvex(FirstNormal, SegmVect, ArrayOfFacesNormals[iii]))
 							{// Modify this if non-convex volumes are supported or treated specially
-								SomethingIsWrong = 1; 
-								Send.ErrorMessage("Radia::Error106"); 
-								DeleteAuxInputArrays(SegmentPassed); return 0;
+								SomethingIsWrong = 1;
+								Send.ErrorMessage("Radia::Error106");
+								// RAII: vSegmentPassed will be automatically cleaned up
+								return 0;
 							}
 							ThisSegmentAlreadyPassed = 1; break;
 						}
@@ -334,9 +335,7 @@ int radTPolyhedron::DetermineActualFacesNormals(TVector3d* ArrayOfPoints, int Am
 			ii = NextFaceNo;
 		}
 	}
-	DeleteAuxInputArrays(SegmentPassed);
-
-	// RAII: automatic cleanup via vGenFacesPassed and vPossibleNextFaces
+	// RAII: vSegmentPassed, vGenFacesPassed, and vPossibleNextFaces will be automatically cleaned up
 	return 1;
 }
 
