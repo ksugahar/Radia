@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.10] - 2025-11-10
+
+### Fixed
+- **H-matrix Implementation**
+  - Implemented full matrix block storage in HACApK library
+  - Implemented full matrix-vector multiplication
+  - Fixed kernel function to use accurate B_comp() instead of dipole approximation
+  - Achieved <1% accuracy for N=100 test (0.0119% max error)
+
+### Changed
+- **Test Suite**
+  - Fixed all test return values to use assert instead of return (pytest compliance)
+  - Fixed rad.Solve() return value checks (returns list, not int)
+  - Added material to relaxation performance test
+  - Adjusted transformation inversion test tolerance for numerical precision
+  - All 76 tests now passing (100%)
+
+### Removed
+- Removed temporary development and debug files
+- Removed old dipole approximation benchmark
+- Cleaned up plan and status documentation files
+
+### Added (2025-11-10)
+
+- **H-matrix Benchmarks**
+  - Added H-matrix field evaluation benchmark (examples/solver_benchmarks/)
+  - Demonstrates <1% accuracy with 100+ magnetic elements
+
+## [1.0.9] - 2025-11-02
+
 ### Changed (2025-11-02)
 
 - **Package Name Change**
