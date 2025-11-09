@@ -642,14 +642,23 @@ int radTHMatrixFieldSource::DuplicateItself(
 	radTApplication* radPtr,
 	char PutNewStuffIntoGenCont)
 {
-	radTHMatrixFieldSource* pNew = new radTHMatrixFieldSource(*this);
-	if(!pNew) {
+	radTHMatrixFieldSource* pNew = nullptr;
+	try {
+		pNew = new radTHMatrixFieldSource(*this);
+		if(!pNew) {
+			radTSend Send;
+			Send.ErrorMessage("Radia::Error900");
+			return 0;
+		}
+
+		return FinishDuplication(pNew, hg);
+	}
+	catch(...) {
+		if(pNew) delete pNew;  // Clean up if exception in FinishDuplication
 		radTSend Send;
 		Send.ErrorMessage("Radia::Error900");
 		return 0;
 	}
-
-	return FinishDuplication(pNew, hg);
 }
 
 //-------------------------------------------------------------------------
@@ -662,6 +671,7 @@ extern radTApplication* g_pRadApp; // Defined in radappl.cpp
 
 void CreateHMatrixFieldSource(int grpKey, double eps, int max_rank, int min_cluster_size, int use_openmp, int num_threads)
 {
+	radTHMatrixFieldSource* pHMat = nullptr;
 	try {
 		// Get group object
 		radThg hGroup;
@@ -683,7 +693,7 @@ void CreateHMatrixFieldSource(int grpKey, double eps, int max_rank, int min_clus
 		config.num_threads = num_threads;
 
 		// Create H-matrix field source
-		radTHMatrixFieldSource* pHMat = new radTHMatrixFieldSource(pGroup, config);
+		pHMat = new radTHMatrixFieldSource(pGroup, config);
 		if(!pHMat) {
 			throw std::runtime_error("H-matrix: Failed to create H-matrix field source");
 		}
@@ -691,20 +701,24 @@ void CreateHMatrixFieldSource(int grpKey, double eps, int max_rank, int min_clus
 		// Register in application
 		radThg hHMat;
 		hHMat.rep = pHMat;
+		pHMat = nullptr;  // Ownership transferred to handle
 		int newKey = g_pRadApp->AddElementToContainer(hHMat);
 
 		// Output key
 		g_pRadApp->OutInt(newKey);
 
 	} catch(const radTException& ex) {
+		if(pHMat) delete pHMat;  // Clean up if exception before handle ownership transfer
 		radTSend Send;
 		Send.ErrorMessage(ex.what());
 		g_pRadApp->OutInt(0);
 	} catch(const std::exception& ex) {
+		if(pHMat) delete pHMat;  // Clean up if exception before handle ownership transfer
 		radTSend Send;
 		Send.ErrorMessage(ex.what());
 		g_pRadApp->OutInt(0);
 	} catch(...) {
+		if(pHMat) delete pHMat;  // Clean up if exception before handle ownership transfer
 		radTSend Send;
 		Send.ErrorMessage("H-matrix: Unknown error");
 		g_pRadApp->OutInt(0);
