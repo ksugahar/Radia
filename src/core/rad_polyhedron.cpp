@@ -21,8 +21,8 @@
 #include <array>
 #include "rad_graphics_3d.h"
 #include "rad_subdivided_polyhedron.h"
-#include "radg3da1.h"
-#include "radappl.h"
+#include "rad_geometry_3d_aux.h"
+#include "rad_application.h"
 #include "auxparse.h"
 
 //-------------------------------------------------------------------------

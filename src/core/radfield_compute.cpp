@@ -15,13 +15,13 @@
 *
 -------------------------------------------------------------------------*/
 
-#include "radappl.h"
-#include "radg3da1.h"
+#include "rad_application.h"
+#include "rad_geometry_3d_aux.h"
 #include "rad_rectangular_block.h"
 #include "rad_planar_2d.h"
 #include "rad_polyhedron.h"
-#include "radcnvrg.h"
-#include "radopnam.h"
+#include "rad_convergence.h"
+#include "rad_operation_names.h"
 
 #include <math.h>
 

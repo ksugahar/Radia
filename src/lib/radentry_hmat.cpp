@@ -14,10 +14,10 @@
 
 #include "radentry.h"
 #include "radentry_hmat.h"
-#include "radappl.h"
+#include "rad_application.h"
 #include "radhmat.h"
 #include "radgroup.h"
-#include "radg.h"
+#include "rad_geometry_base.h"
 #include "radcast.h"
 #include "gmvect.h"
 #include <cstring>

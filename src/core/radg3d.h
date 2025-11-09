@@ -26,7 +26,7 @@
 #define __RADG3D_H
 
 #include "radmater.h"
-#include "radg.h"
+#include "rad_geometry_base.h"
 #include "gmvect.h"
 #include "rad_math_methods.h"
 
@@ -1005,7 +1005,7 @@ inline char radTg3d::AngleIsBetween(double Phi, double PhiSt, double PhiFi)
 
 //-------------------------------------------------------------------------
 
-#include "radtrans.h" //to allow making subsequent inline
+#include "rad_transform_def.h" //to allow making subsequent inline
 
 //-------------------------------------------------------------------------
 

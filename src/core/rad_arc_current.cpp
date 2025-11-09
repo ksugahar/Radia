@@ -16,7 +16,7 @@
 *
 -------------------------------------------------------------------------*/
 
-#include "radappl.h"
+#include "rad_application.h"
 #include "rad_arc_current.h"
 #include "rad_graphics_3d.h"
 #include "rad_subdivided_arc_current.h"

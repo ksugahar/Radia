@@ -20,7 +20,7 @@
 
 #include "radsend.h"
 #include "gmvect.h"
-#include "radg.h"
+#include "rad_geometry_base.h"
 
 #include <math.h>
 #include <sstream>

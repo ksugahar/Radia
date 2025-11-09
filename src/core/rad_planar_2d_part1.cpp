@@ -17,7 +17,7 @@
 
 #include "rad_planar_2d.h"
 #include "rad_graphics_3d.h"
-#include "radappl.h"
+#include "rad_application.h"
 
 //-------------------------------------------------------------------------
 

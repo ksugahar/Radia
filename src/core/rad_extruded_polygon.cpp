@@ -15,11 +15,11 @@
 *
 -------------------------------------------------------------------------*/
 
-#include "radappl.h"
+#include "rad_application.h"
 #include "rad_extruded_polygon.h"
 #include "rad_graphics_3d.h"
 #include "rad_subdivided_extruded_polygon.h"
-#include "radg3da1.h"
+#include "rad_geometry_3d_aux.h"
 
 //-------------------------------------------------------------------------
 

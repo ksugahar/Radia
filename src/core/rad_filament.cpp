@@ -15,7 +15,7 @@
 *
 -------------------------------------------------------------------------*/
 
-#include "radappl.h"
+#include "rad_application.h"
 #include "rad_filament.h"
 #include "rad_graphics_3d.h"
 

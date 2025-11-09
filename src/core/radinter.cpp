@@ -19,7 +19,7 @@
 #include <array>
 #include <Python.h>
 
-#include "radappl.h"
+#include "rad_application.h"
 #include "gmvect.h"
 #include "rad_io_buffer.h"
 

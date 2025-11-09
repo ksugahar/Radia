@@ -25,7 +25,7 @@
 #include "radgroup.h"
 #include "rad_planar_2d.h"
 #include "rad_filament.h"
-#include "radtrans.h"
+#include "rad_transform_def.h"
 #include "radmater.h"
 #include "rad_subdivided_rectangle.h"
 #include "rad_subdivided_extruded_polygon.h"

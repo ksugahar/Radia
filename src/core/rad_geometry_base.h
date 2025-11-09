@@ -18,8 +18,8 @@
 #ifndef __RADG_H
 #define __RADG_H
 
-#include "radhandl.h"
-#include "radauxst.h"
+#include "rad_handle.h"
+#include "rad_auxiliary_structures.h"
 #include "gmvbstr.h"
 
 //-------------------------------------------------------------------------

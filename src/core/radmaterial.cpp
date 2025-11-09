@@ -15,14 +15,14 @@
 *
 -------------------------------------------------------------------------*/
 
-#include "radappl.h"
-#include "radg3da1.h"
+#include "rad_application.h"
+#include "rad_geometry_3d_aux.h"
 #include "rad_interaction.h"
 #include "radmater.h"
 #include "rad_relaxation_methods.h"
 #include "rad_particle_trajectory.h"
-#include "radopnam.h"
-#include "radmtra1.h"
+#include "rad_operation_names.h"
+#include "rad_material_aux.h"
 #include "gmvbstr.h"
 
 #include <math.h>

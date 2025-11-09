@@ -21,8 +21,8 @@
 
 #include "radg3d.h"
 #include "rad_planar_2d.h"
-#include "radtrans.h"
-#include "radcnvrg.h"
+#include "rad_transform_def.h"
+#include "rad_convergence.h"
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------

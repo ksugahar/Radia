@@ -23,13 +23,13 @@ struct _object;
 using PyObject = _object;
 
 #include "radsend.h"
-#include "radg.h"
+#include "rad_geometry_base.h"
 #include "radcast.h"
 #include "rad_graphics_3d.h"
-#include "radyield.h"
-#include "radcnvrg.h"
+#include "rad_yield.h"
+#include "rad_convergence.h"
 #include "radgeom_types.h"
-#include "radauxst.h"
+#include "rad_auxiliary_structures.h"
 
 #include <sstream> // Porting
 

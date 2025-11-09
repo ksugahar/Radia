@@ -15,10 +15,10 @@
 *
 -------------------------------------------------------------------------*/
 
-#include "radappl.h"
+#include "rad_application.h"
 #include "rad_particle_trajectory.h"
-#include "radg3da1.h"
-#include "radopnam.h"
+#include "rad_geometry_3d_aux.h"
+#include "rad_operation_names.h"
 
 #include <math.h>
 #include <string.h>

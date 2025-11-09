@@ -16,7 +16,7 @@
 -------------------------------------------------------------------------*/
 
 #include "radmater.h"
-#include "radmtra1.h"
+#include "rad_material_aux.h"
 #include "radg3d.h"
 #include "auxparse.h"
 #include "rad_relaxation_methods.h"

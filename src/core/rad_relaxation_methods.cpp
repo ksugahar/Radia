@@ -16,7 +16,7 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_relaxation_methods.h"
-#include "radyield.h"
+#include "rad_yield.h"
 
 #include <time.h>
 

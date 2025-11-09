@@ -15,8 +15,8 @@
 *
 -------------------------------------------------------------------------*/
 
-#include "radappl.h"
-#include "radopnam.h"
+#include "rad_application.h"
+#include "rad_operation_names.h"
 #include "auxparse.h"
 
 #define REAL double

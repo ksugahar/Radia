@@ -15,7 +15,7 @@
 
 #include "radhmat.h"
 #include "radgroup.h"
-#include "radexcep.h"
+#include "rad_exception.h"
 #include "rad_rectangular_block.h"
 #include <iostream>
 #include <chrono>
@@ -25,7 +25,7 @@
 #include "hacapk.hpp"
 
 // Radia application includes
-#include "radappl.h"
+#include "rad_application.h"
 #include "radsend.h"
 
 //-------------------------------------------------------------------------

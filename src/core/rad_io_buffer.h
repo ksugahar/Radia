@@ -23,7 +23,7 @@
 #include <stdlib.h> //OC01052013
 #include <string.h> //OC01052013
 
-#include "radauxst.h"
+#include "rad_auxiliary_structures.h"
 
 //-------------------------------------------------------------------------
 

@@ -15,10 +15,10 @@
 *
 -------------------------------------------------------------------------*/
 
-#include "radappl.h"
+#include "rad_application.h"
 #include "radg3d.h"
-#include "radg3da1.h"
-//#include "radtrans.h"
+#include "rad_geometry_3d_aux.h"
+//#include "rad_transform_def.h"
 #include "gmtrans.h"
 #include "radcast.h"
 

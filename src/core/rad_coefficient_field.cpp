@@ -12,7 +12,7 @@
 *-------------------------------------------------------------------------*/
 
 #include "rad_coefficient_field.h"
-#include "radexcep.h"
+#include "rad_exception.h"
 #include <Python.h>
 #include <iostream>
 

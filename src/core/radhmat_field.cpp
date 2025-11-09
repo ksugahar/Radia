@@ -15,7 +15,7 @@
 
 #include "radhmat.h"
 #include "radgroup.h"
-#include "radexcep.h"
+#include "rad_exception.h"
 #include "rad_rectangular_block.h"
 #include "radsend.h"
 #include "radg3d.h"

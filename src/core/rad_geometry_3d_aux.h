@@ -19,7 +19,7 @@
 #define __RADG3DA1_H
 
 #include "radg3d.h"
-//#include "radtrans.h"
+//#include "rad_transform_def.h"
 #include "gmtrans.h"
 
 //-------------------------------------------------------------------------

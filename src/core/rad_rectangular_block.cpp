@@ -26,8 +26,8 @@
 #include "rad_rectangular_block.h"
 #include "rad_graphics_3d.h"
 #include "radgroup.h"
-#include "radappl.h"
-#include "radg3da1.h"
+#include "rad_application.h"
+#include "rad_geometry_3d_aux.h"
 
 #ifndef _INC_MATH
 #include <math.h>
