@@ -499,9 +499,10 @@ int radTApplication::SetPlanarPolygon(double CoordZ, TVector2d* ArrayOfPoints2d,
 	TVector3d MagnVect;
 	if(!ValidateVector3d(Magn, lenMagn, &MagnVect)) return 0;
 
+	radTPolygon* PgnPtr = nullptr;
 	try
 	{
-		radTPolygon* PgnPtr = new radTPolygon(CoordZ, ArrayOfPoints2d, int(lenArrayOfPoints2d), MagnVect);
+		PgnPtr = new radTPolygon(CoordZ, ArrayOfPoints2d, int(lenArrayOfPoints2d), MagnVect);
 
 		if(PgnPtr->SomethingIsWrong)
 		{
@@ -510,6 +511,7 @@ int radTApplication::SetPlanarPolygon(double CoordZ, TVector2d* ArrayOfPoints2d,
 		else
 		{
 			radThg hg(PgnPtr);
+			PgnPtr = nullptr;  // Ownership transferred to radThg
 			int ElemKey = AddElementToContainer(hg);
 			if(SendingIsRequired) Send.Int(ElemKey);
 			return ElemKey;
@@ -517,6 +519,7 @@ int radTApplication::SetPlanarPolygon(double CoordZ, TVector2d* ArrayOfPoints2d,
 	}
 	catch (...)
 	{
+		if(PgnPtr) delete PgnPtr;  // Clean up if exception before radThg ownership transfer
 		Initialize(); return 0;
 	}
 }
@@ -534,6 +537,7 @@ int radTApplication::SetPolyhedron1(TVector3d* ArrayOfPoints, int lenArrayOfPoin
 	if(!ValidateMatrix3d(arM_LinCoef, 9, &M_LinCoefMatr)) return 0; //arM_LinCoef is expected to contain matrix elements string by string 
 	if(!ValidateMatrix3d(arJ_LinCoef, 9, &J_LinCoefMatr)) return 0; //arJ_LinCoef is expected to contain matrix elements string by string 
 
+	radTPolyhedron* VolLimByPgnsPtr = nullptr;
 	try
 	{
 		radTOptionNames OptNam;
@@ -563,17 +567,19 @@ int radTApplication::SetPolyhedron1(TVector3d* ArrayOfPoints, int lenArrayOfPoin
 		//}
 
 		//radTPolyhedron* VolLimByPgnsPtr = new radTPolyhedron(ArrayOfPoints, lenArrayOfPoints, ArrayOfFaces, ArrayOfNumOfPoInFaces, lenArrayOfFaces, MagnVect);
-		radTPolyhedron* VolLimByPgnsPtr = new radTPolyhedron(ArrayOfPoints, lenArrayOfPoints, ArrayOfFaces, ArrayOfNumOfPoInFaces, lenArrayOfFaces, MagnVect, M_LinCoefMatr, J_Vect, J_LinCoefMatr, LinTreat);
+		VolLimByPgnsPtr = new radTPolyhedron(ArrayOfPoints, lenArrayOfPoints, ArrayOfFaces, ArrayOfNumOfPoInFaces, lenArrayOfFaces, MagnVect, M_LinCoefMatr, J_Vect, J_LinCoefMatr, LinTreat);
 		if(VolLimByPgnsPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 
 		if(VolLimByPgnsPtr->SomethingIsWrong) { delete VolLimByPgnsPtr; return 0;}
 		else
 		{
 			radThg hg(VolLimByPgnsPtr);
+			VolLimByPgnsPtr = nullptr;  // Ownership transferred to radThg
 			if(RecognizeRecMagsInPolyhedrons)
 			{
 				double RelAbsTol[] = { radCR.AbsRand, radCR.RelRand };
-				VolLimByPgnsPtr->CheckForSpecialShapes(VolLimByPgnsPtr->VectHandlePgnAndTrans, hg, RelAbsTol);
+				radTPolyhedron* pPolyhedron = static_cast<radTPolyhedron*>(static_cast<radTg3d*>(hg.rep));
+				pPolyhedron->CheckForSpecialShapes(pPolyhedron->VectHandlePgnAndTrans, hg, RelAbsTol);
 			}
 			int ElemKey = AddElementToContainer(hg);
 			if(SendingIsRequired) Send.Int(ElemKey);
@@ -582,6 +588,7 @@ int radTApplication::SetPolyhedron1(TVector3d* ArrayOfPoints, int lenArrayOfPoin
 	}
 	catch (...)
 	{
+		if(VolLimByPgnsPtr) delete VolLimByPgnsPtr;  // Clean up if exception before radThg ownership transfer
 		Initialize(); return 0;
 	}
 }
@@ -593,19 +600,22 @@ int radTApplication::SetPolyhedron2(TVector3d** ArrayOfFaces, int* ArrayOfNumOfP
 	TVector3d MagnVect;
 	if(!ValidateVector3d(Magn, lenMagn, &MagnVect)) return 0;
 
+	radTPolyhedron* VolLimByPgnsPtr = nullptr;
 	try
 	{
-		radTPolyhedron* VolLimByPgnsPtr = new radTPolyhedron(ArrayOfFaces, ArrayOfNumOfPoInFaces, lenArrayOfFaces, MagnVect);
+		VolLimByPgnsPtr = new radTPolyhedron(ArrayOfFaces, ArrayOfNumOfPoInFaces, lenArrayOfFaces, MagnVect);
 		if(VolLimByPgnsPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 
 		if(VolLimByPgnsPtr->SomethingIsWrong) { delete VolLimByPgnsPtr; return 0;}
 		else
 		{
 			radThg hg(VolLimByPgnsPtr);
+			VolLimByPgnsPtr = nullptr;  // Ownership transferred to radThg
 			if(RecognizeRecMagsInPolyhedrons)
 			{
 				double RelAbsTol[] = { radCR.AbsRand, radCR.RelRand };
-				VolLimByPgnsPtr->CheckForSpecialShapes(VolLimByPgnsPtr->VectHandlePgnAndTrans, hg, RelAbsTol);
+				radTPolyhedron* pPolyhedron = static_cast<radTPolyhedron*>(static_cast<radTg3d*>(hg.rep));
+				pPolyhedron->CheckForSpecialShapes(pPolyhedron->VectHandlePgnAndTrans, hg, RelAbsTol);
 			}
 			int ElemKey = AddElementToContainer(hg);
 			if(SendingIsRequired) Send.Int(ElemKey);
@@ -614,6 +624,7 @@ int radTApplication::SetPolyhedron2(TVector3d** ArrayOfFaces, int* ArrayOfNumOfP
 	}
 	catch (...)
 	{
+		if(VolLimByPgnsPtr) delete VolLimByPgnsPtr;  // Clean up if exception before radThg ownership transfer
 		Initialize(); return 0;
 	}
 }
