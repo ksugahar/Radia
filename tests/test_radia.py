@@ -5,6 +5,7 @@ Tests basic functionality of the radia.pyd module
 
 import sys
 import os
+import pytest
 
 # Set UTF-8 encoding for output
 if sys.platform == 'win32':
@@ -42,163 +43,126 @@ def test_import():
 		import radia as rad
 		print("[OK] SUCCESS: radia module imported successfully")
 		print(f"  Module location: {rad.__file__}")
-		return rad
+		# Module imported successfully - test passes
+		assert rad is not None
 	except ImportError as e:
 		print(f"[FAIL] FAILED: Cannot import radia module")
 		print(f"  Error: {e}")
 		print(f"  sys.path: {sys.path}")
-		return None
+		pytest.fail(f"Cannot import radia module: {e}")
 
-def test_version(rad):
+def test_version():
 	"""Test 2: Version information"""
+	import radia as rad
 	print("\n" + "=" * 60)
 	print("Test 2: Version Information")
 	print("=" * 60)
-	try:
-		version = rad.UtiVer()
-		print(f"[OK] SUCCESS: Radia version: {version}")
-		return True
-	except Exception as e:
-		print(f"[FAIL] FAILED: Cannot get version")
-		print(f"  Error: {e}")
-		return False
+	version = rad.UtiVer()
+	print(f"[OK] SUCCESS: Radia version: {version}")
+	assert version is not None
 
-def test_basic_geometry(rad):
+def test_basic_geometry():
 	"""Test 3: Basic geometry creation"""
+	import radia as rad
 	print("\n" + "=" * 60)
 	print("Test 3: Basic Geometry Creation")
 	print("=" * 60)
-	try:
-		# Create a simple rectangular block with magnetization
-		# Parameters: center point, dimensions
-		block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
-		print(f"[OK] SUCCESS: Created rectangular block")
-		print(f"  Block ID: {block}")
+	# Create a simple rectangular block with magnetization
+	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
+	print(f"[OK] SUCCESS: Created rectangular block")
+	print(f"  Block ID: {block}")
+	assert block > 0
 
-		# Set magnetization
-		magnetization = [0, 0, 1000]  # 1000 A/m in z-direction
-		rad.ObjSetM(block, magnetization)
-		print(f"[OK] SUCCESS: Set magnetization to {magnetization}")
+	# Set magnetization
+	magnetization = [0, 0, 1000]  # 1000 A/m in z-direction
+	rad.ObjSetM(block, magnetization)
+	print(f"[OK] SUCCESS: Set magnetization to {magnetization}")
 
-		return True
-	except Exception as e:
-		print(f"[FAIL] FAILED: Cannot create basic geometry")
-		print(f"  Error: {e}")
-		return False
-
-def test_material(rad):
+def test_material():
 	"""Test 4: Material definition"""
+	import radia as rad
 	print("\n" + "=" * 60)
 	print("Test 4: Material Definition")
 	print("=" * 60)
-	try:
-		# Create a material (Steel37 equivalent using MatSatIsoFrm)
-		# Steel37: C<0.13% steel with nonlinear magnetic properties
-		mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
-		print(f"[OK] SUCCESS: Created material")
-		print(f"  Material ID: {mat}")
+	# Create a material (Steel37 equivalent using MatSatIsoFrm)
+	mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
+	print(f"[OK] SUCCESS: Created material")
+	print(f"  Material ID: {mat}")
+	assert mat > 0
 
-		# Create object and apply material
-		block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
-		rad.MatApl(block, mat)
-		print(f"[OK] SUCCESS: Applied material to object")
+	# Create object and apply material
+	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
+	rad.MatApl(block, mat)
+	print(f"[OK] SUCCESS: Applied material to object")
 
-		return True
-	except Exception as e:
-		print(f"[FAIL] FAILED: Cannot create/apply material")
-		print(f"  Error: {e}")
-		return False
-
-def test_field_calculation(rad):
+def test_field_calculation():
 	"""Test 5: Magnetic field calculation"""
+	import radia as rad
 	print("\n" + "=" * 60)
 	print("Test 5: Magnetic Field Calculation")
 	print("=" * 60)
-	try:
-		# Create a simple magnet
-		block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
-		rad.ObjSetM(block, [0, 0, 1000])
+	# Create a simple magnet
+	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
+	rad.ObjSetM(block, [0, 0, 1000])
 
-		# Calculate field at a point
-		point = [0, 0, 20]  # 20mm above the magnet
-		field = rad.Fld(block, 'b', point)
-		print(f"[OK] SUCCESS: Calculated magnetic field")
-		print(f"  Point: {point} mm")
-		print(f"  Field: Bx={field[0]:.6f}, By={field[1]:.6f}, Bz={field[2]:.6f} T")
+	# Calculate field at a point
+	point = [0, 0, 20]  # 20mm above the magnet
+	field = rad.Fld(block, 'b', point)
+	print(f"[OK] SUCCESS: Calculated magnetic field")
+	print(f"  Point: {point} mm")
+	print(f"  Field: Bx={field[0]:.6f}, By={field[1]:.6f}, Bz={field[2]:.6f} T")
 
-		# Verify field is reasonable (should be positive in z-direction)
-		if field[2] > 0:
-			print(f"[OK] Field direction is correct (Bz > 0)")
-		else:
-			print(f"[WARN] Warning: Field direction unexpected")
+	# Verify field is reasonable (should be positive in z-direction)
+	assert field[2] > 0, "Field direction should be positive in z-direction"
+	print(f"[OK] Field direction is correct (Bz > 0)")
 
-		return True
-	except Exception as e:
-		print(f"[FAIL] FAILED: Cannot calculate field")
-		print(f"  Error: {e}")
-		return False
-
-def test_solve(rad):
+def test_solve():
 	"""Test 6: Relaxation/Solve"""
+	import radia as rad
 	print("\n" + "=" * 60)
 	print("Test 6: Relaxation Solver")
 	print("=" * 60)
-	try:
-		# Create a simple magnetic system
-		block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
-		mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])  # Steel37 equivalent
-		rad.MatApl(block, mat)
+	# Create a simple magnetic system
+	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
+	mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
+	rad.MatApl(block, mat)
 
-		# Solve the system
-		precision = 0.001
-		max_iter = 1000
-		result = rad.Solve(block, precision, max_iter)
-		print(f"[OK] SUCCESS: Solver completed")
-		print(f"  Result: {result}")
+	# Solve the system
+	precision = 0.001
+	max_iter = 1000
+	result = rad.Solve(block, precision, max_iter)
+	print(f"[OK] SUCCESS: Solver completed")
+	print(f"  Result: {result}")
+	# rad.Solve returns convergence data (list), not a single int
+	assert result is not None
 
-		return True
-	except Exception as e:
-		print(f"[FAIL] FAILED: Solver error")
-		print(f"  Error: {e}")
-		return False
-
-def test_transformation(rad):
+def test_transformation():
 	"""Test 7: Geometric transformation"""
+	import radia as rad
 	print("\n" + "=" * 60)
 	print("Test 7: Geometric Transformation")
 	print("=" * 60)
-	try:
-		# Create object
-		block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
+	# Create object
+	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
 
-		# Create translation transformation
-		trans = rad.TrfTrsl([10, 0, 0])
-		print(f"[OK] SUCCESS: Created translation transformation")
+	# Create translation transformation
+	trans = rad.TrfTrsl([10, 0, 0])
+	print(f"[OK] SUCCESS: Created translation transformation")
+	assert trans > 0
 
-		# Apply transformation
-		rad.TrfOrnt(block, trans)
-		print(f"[OK] SUCCESS: Applied transformation to object")
+	# Apply transformation
+	rad.TrfOrnt(block, trans)
+	print(f"[OK] SUCCESS: Applied transformation to object")
 
-		return True
-	except Exception as e:
-		print(f"[FAIL] FAILED: Transformation error")
-		print(f"  Error: {e}")
-		return False
-
-def test_cleanup(rad):
+def test_cleanup():
 	"""Test 8: Memory cleanup"""
+	import radia as rad
 	print("\n" + "=" * 60)
 	print("Test 8: Memory Cleanup")
 	print("=" * 60)
-	try:
-		# Delete all objects
-		rad.UtiDelAll()
-		print(f"[OK] SUCCESS: All objects deleted")
-		return True
-	except Exception as e:
-		print(f"[FAIL] FAILED: Cleanup error")
-		print(f"  Error: {e}")
-		return False
+	# Delete all objects
+	rad.UtiDelAll()
+	print(f"[OK] SUCCESS: All objects deleted")
 
 def main():
 	"""Run all tests"""

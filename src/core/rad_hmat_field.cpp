@@ -191,6 +191,7 @@ int radTHMatrixFieldEvaluator::ExtractSourceGeometry(radTGroup* source_group)
 	// Clear existing data
 	source_positions.clear();
 	source_moments.clear();
+	source_elements.clear();
 
 	// Recursively extract all sub-elements
 	for(auto& elem_pair : source_group->GroupMapOfHandlers) {
@@ -247,6 +248,7 @@ void radTHMatrixFieldEvaluator::ExtractLeafElements(radTg3d* g3d, int depth)
 		source_moments.push_back(moment.x);
 		source_moments.push_back(moment.y);
 		source_moments.push_back(moment.z);
+		source_elements.push_back(g3d);  // Store element pointer for B_comp()
 	}
 }
 
@@ -346,58 +348,33 @@ int radTHMatrixFieldEvaluator::EvaluateFieldDirect(
 
 	field_out.resize(M, TVector3d(0, 0, 0));
 
-	const double PI = 3.14159265358979;
-	const double MU0 = 4.0 * PI * 1e-7;  // H/m
-	const double C = 1.0 / (4.0 * PI);   // For H-field
+	const double MU0 = 4.0 * 3.14159265358979 * 1e-7;  // H/m
 
 	auto start_time = std::chrono::high_resolution_clock::now();
 
-	// Direct summation: H(r) = sum [3(m*r_hatr_hat- m] / (4pi|r|^3)
+	// Accurate direct calculation using B_comp()
 	#pragma omp parallel for if(M > 100)
 	for(int i = 0; i < M; i++) {
 		TVector3d H_total(0, 0, 0);
 		const TVector3d& obs = obs_points[i];
 
+		// Call B_comp() for each source element
 		for(int j = 0; j < N; j++) {
-			// Source position (mm)
-			double sx = source_positions[j*3 + 0];
-			double sy = source_positions[j*3 + 1];
-			double sz = source_positions[j*3 + 2];
+			radTg3d* source_elem = source_elements[j];
+			if(!source_elem) continue;
 
-			// Magnetic moment (A*m^2)
-			double mx = source_moments[j*3 + 0];
-			double my = source_moments[j*3 + 1];
-			double mz = source_moments[j*3 + 2];
+			// Setup field computation
+			radTFieldKey FieldKey;
+			FieldKey.B_ = FieldKey.H_ = 1;
+			TVector3d ZeroVect(0., 0., 0.);
 
-			// Vector from source to observation point (mm)
-			double rx = obs.x - sx;
-			double ry = obs.y - sy;
-			double rz = obs.z - sz;
+			radTField Field(FieldKey, obs, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 
-			// Distance (convert to meters)
-			double r_mm = std::sqrt(rx*rx + ry*ry + rz*rz);
-			if(r_mm < 1e-6) continue;  // Skip if too close
+			// Call accurate B_comp()
+			source_elem->B_comp(&Field);
 
-			double r_m = r_mm * 1e-3;  // mm to m
-			double r3 = r_m * r_m * r_m;
-			double r5 = r3 * r_m * r_m;
-
-			// Unit vector
-			double rx_m = rx * 1e-3;
-			double ry_m = ry * 1e-3;
-			double rz_m = rz * 1e-3;
-
-			// m * r
-			double m_dot_r = mx*rx_m + my*ry_m + mz*rz_m;
-
-			// H = (1/4pi) * [3(m*r_hatr_hat- m] / r^3
-			// = (1/4pi) * [3(m*r)r/r^5 - m/r^3]
-			double coeff1 = C * 3.0 * m_dot_r / r5;
-			double coeff2 = C / r3;
-
-			H_total.x += coeff1 * rx_m - coeff2 * mx;
-			H_total.y += coeff1 * ry_m - coeff2 * my;
-			H_total.z += coeff1 * rz_m - coeff2 * mz;
+			// Accumulate H-field
+			H_total += Field.H;
 		}
 
 		field_out[i] = H_total;
@@ -578,64 +555,37 @@ int radTHMatrixFieldEvaluator::BuildFieldHMatrix()
 
 double radTHMatrixFieldEvaluator::FieldKernel(int i, int j, void* kernel_data)
 {
-	// Magnetic dipole kernel for H-field calculation
-	// H(r) = (1/4pi) * [3(m*r_hatr_hat- m] / |r|^3
-	//
-	// For H-matrix, we return scalar kernel value for each component
-	// The actual vector field is assembled from 9 H-matrices (3x3 tensor)
+	// Accurate field kernel using Radia's exact B_comp() method
+	// This matches the approach used in rad_intrc_hmat.cpp for relaxation
 
 	auto* eval = static_cast<radTHMatrixFieldEvaluator*>(kernel_data);
 
-	// Target (observation) point position (mm)
-	double tx = eval->target_points[i*3 + 0];
-	double ty = eval->target_points[i*3 + 1];
-	double tz = eval->target_points[i*3 + 2];
+	// Observation point (target) in mm
+	TVector3d obs_point(
+		eval->target_points[i*3 + 0],
+		eval->target_points[i*3 + 1],
+		eval->target_points[i*3 + 2]
+	);
 
-	// Source position (mm)
-	double sx = eval->source_positions[j*3 + 0];
-	double sy = eval->source_positions[j*3 + 1];
-	double sz = eval->source_positions[j*3 + 2];
+	// Get source element
+	radTg3d* source_elem = eval->source_elements[j];
+	if(!source_elem) return 0.0;
 
-	// Magnetic moment (A*m^2)
-	double mx = eval->source_moments[j*3 + 0];
-	double my = eval->source_moments[j*3 + 1];
-	double mz = eval->source_moments[j*3 + 2];
+	// Setup field computation
+	radTFieldKey FieldKey;
+	FieldKey.B_ = FieldKey.H_ = 1;
+	TVector3d ZeroVect(0., 0., 0.);
 
-	// Vector from source to observation point (mm)
-	double rx = tx - sx;
-	double ry = ty - sy;
-	double rz = tz - sz;
+	radTField Field(FieldKey, obs_point, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 
-	// Distance (convert to meters for SI units)
-	double r_mm = std::sqrt(rx*rx + ry*ry + rz*rz);
-	if(r_mm < 1e-6) return 0.0;  // Singularity avoidance
-
-	double r_m = r_mm * 1e-3;  // mm to m
-	double r3 = r_m * r_m * r_m;
-	double r5 = r3 * r_m * r_m;
-
-	// Unit vector (dimensionless)
-	double rx_m = rx * 1e-3;
-	double ry_m = ry * 1e-3;
-	double rz_m = rz * 1e-3;
-
-	// m * r (A*m^3)
-	double m_dot_r = mx*rx_m + my*ry_m + mz*rz_m;
-
-	// Compute H = (1/4pi) * [3(m*r_hat)r_hat - m] / r^3
-	const double PI = 3.14159265358979;
-	const double C = 1.0 / (4.0 * PI);
-
-	// H-field components (A/m)
-	double Hx = C * (3.0 * m_dot_r * rx_m / r5 - mx / r3);
-	double Hy = C * (3.0 * m_dot_r * ry_m / r5 - my / r3);
-	double Hz = C * (3.0 * m_dot_r * rz_m / r5 - mz / r3);
+	// Call accurate B_comp()
+	source_elem->B_comp(&Field);
 
 	// Return component specified by current_component (0=x, 1=y, 2=z)
 	switch(eval->current_component) {
-		case 0: return Hx;
-		case 1: return Hy;
-		case 2: return Hz;
+		case 0: return Field.H.x;
+		case 1: return Field.H.y;
+		case 2: return Field.H.z;
 		default: return 0.0;
 	}
 }

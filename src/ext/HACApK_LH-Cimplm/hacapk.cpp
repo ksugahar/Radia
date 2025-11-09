@@ -468,10 +468,20 @@ void generate_leaf_blocks(
 				aca_approximation(block, kernel, kernel_data, params.eps_aca);
 			}
 		} else {
-			// Store as full matrix (not implemented yet)
+			// Store as full matrix
 			block.ltmtx = 2;
 			block.kt = 0;
-			// TODO: Store full matrix
+			int m = block.ndl;
+			int n = block.ndt;
+			block.a1.resize(m * n);
+
+			// Compute full matrix using kernel function
+			// Use same indexing as ACA
+			for (int i = 0; i < m; i++) {
+				for (int j = 0; j < n; j++) {
+					block.a1[i * n + j] = kernel(block.nstrtl + i, block.nstrtt + j, kernel_data);
+				}
+			}
 		}
 
 		hmat.blocks.push_back(block);
@@ -589,7 +599,30 @@ void hmatrix_matvec(
 				}
 			}
 		}
-		// TODO: Handle full matrix blocks
+		else if (block.is_full()) {
+			// Full matrix multiplication: y = A * x
+			// A[i,j] stored in row-major format
+			int m = block.ndl;
+			int n = block.ndt;
+
+			std::vector<double> y_local(y.size(), 0.0);
+
+			for (int i = 0; i < m; i++) {
+				double sum = 0.0;
+				for (int j = 0; j < n; j++) {
+					sum += block.a1[i * n + j] * x[block.nstrtt + j];
+				}
+				y_local[block.nstrtl + i] = sum;
+			}
+
+			// Add to global y (critical section)
+			#pragma omp critical
+			{
+				for (size_t i = 0; i < y.size(); i++) {
+					y[i] += y_local[i];
+				}
+			}
+		}
 	}
 }
 

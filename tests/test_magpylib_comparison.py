@@ -228,13 +228,14 @@ def test_cylindrical_magnet_comparison():
 		print(f"[PASS] Radia and magpylib agree within {tolerance_percent}% tolerance")
 		print(f"       Difference: {diff_percent:.2f}%")
 		print("=" * 70)
-		return True
 	else:
 		print(f"[FAIL] Radia and magpylib differ by {diff_percent:.2f}%")
 		print(f"       Exceeds {tolerance_percent}% tolerance")
 		print(f"       Check magnetization unit conversion!")
 		print("=" * 70)
-		return False
+
+	# Use assertion for pytest
+	assert passed, f"Radia and magpylib differ by {diff_percent:.2f}%, exceeds {tolerance_percent}% tolerance"
 
 def main():
 	"""Run the comparison test"""

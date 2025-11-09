@@ -234,6 +234,7 @@ public:
 	int num_sources;
 	std::vector<double> source_positions;   // Flattened [x,y,z,x,y,z,...]
 	std::vector<double> source_moments;     // Magnetic moments [Mx,My,Mz,...]
+	std::vector<radTg3d*> source_elements;  // Pointers to source elements for B_comp()
 
 	// Target geometry (observation points)
 	std::vector<double> target_points;      // Flattened [x,y,z,x,y,z,...]

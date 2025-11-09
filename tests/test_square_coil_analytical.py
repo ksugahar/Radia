@@ -220,12 +220,13 @@ def test_square_coil_analytical():
 		print(f"[PASS] Radia matches analytical solution within {tolerance_percent}% tolerance")
 		print(f"       Maximum error: {max_error_percent:.2f}%")
 		print("=" * 70)
-		return True
 	else:
 		print(f"[FAIL] Radia differs from analytical by {max_error_percent:.2f}%")
 		print(f"       Exceeds {tolerance_percent}% tolerance")
 		print("=" * 70)
-		return False
+
+	# Use assertion for pytest
+	assert passed, f"Radia differs from analytical by {max_error_percent:.2f}%, exceeds {tolerance_percent}% tolerance"
 
 def main():
 	"""Run the analytical validation test"""
