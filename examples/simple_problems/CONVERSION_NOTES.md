@@ -6,10 +6,10 @@
 
 | Wolfram Language | Python | Status | Notes |
 |-----------------|--------|------|------|
-| case0.wls | case0.py | ✓ Complete | Verified working |
-| case1.wls | case1.py | ✓ Complete | Verified working |
-| case2.wls | case2.py | ✓ Complete | g2 undefined issue commented out |
-| case3.wls | case3.py | ✓ Complete | g2 undefined issue commented out |
+| case0.wls | arc_current_with_magnet.py | ✓ Complete | Verified working |
+| case1.wls | arc_current_dual_magnets.py | ✓ Complete | Verified working |
+| case2.wls | chamfered_pole_piece.py | ✓ Complete | g2 undefined issue commented out |
+| case3.wls | cubic_polyhedron_magnet.py | ✓ Complete | g2 undefined issue commented out |
 
 ## Main Conversion Details
 
@@ -125,7 +125,7 @@ print("Note: Field calculation requires defining g2 object")
 
 ## Test Results
 
-### case0.py
+### arc_current_with_magnet.py
 ```
 Container object ID: 4
 Magnetic field at origin: Bx=0.000000e+00, By=0.000000e+00, Bz=0.000000e+00 T
@@ -133,7 +133,7 @@ Calculation complete. Field data saved to out.dat
 ```
 ✓ Working correctly
 
-### case1.py
+### arc_current_dual_magnets.py
 ```
 Container object ID: 6
 Magnetic field at origin: Bx=0.000000e+00, By=0.000000e+00, Bz=0.000000e+00 T
@@ -141,7 +141,7 @@ Calculation complete. Field data saved to out.dat
 ```
 ✓ Working correctly
 
-### case2.py
+### chamfered_pole_piece.py
 ```
 Object ID: 3
 Geometry created and subdivided successfully
@@ -149,7 +149,7 @@ Note: Field calculation requires defining g2 object
 ```
 ✓ Working correctly (with g2 undefined warning)
 
-### case3.py
+### cubic_polyhedron_magnet.py
 ```
 Polyhedron object ID: 1
 Cube polyhedron created successfully

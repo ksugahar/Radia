@@ -113,9 +113,11 @@ void radTCoefficientFunctionFieldSource::B_comp(radTField* FieldPtr)
 					Py_DECREF(bx); Py_DECREF(by); Py_DECREF(bz);
 
 					if(!PyErr_Occurred()) {
+						// B_from_cf is magnetic flux density in Tesla
 						TVector3d B_from_cf(Bx, By, Bz);
 						if(FieldPtr->FieldKey.B_) FieldPtr->B += B_from_cf;
-						if(FieldPtr->FieldKey.H_) FieldPtr->H += B_from_cf;
+						// Convert B to H using H = B/μ₀ where μ₀ = 1.25663706212e-6 T/(A/m)
+						if(FieldPtr->FieldKey.H_) FieldPtr->H += B_from_cf * 795774.715459;  // 1/μ₀
 					}
 				}
 			}
@@ -172,9 +174,11 @@ void radTCoefficientFunctionFieldSource::B_comp(radTField* FieldPtr)
 				return;
 			}
 
+			// B_from_cf is magnetic flux density in Tesla
 			TVector3d B_from_cf(Bx, By, Bz);
 			if(FieldPtr->FieldKey.B_) FieldPtr->B += B_from_cf;
-			if(FieldPtr->FieldKey.H_) FieldPtr->H += B_from_cf;
+			// Convert B to H using H = B/μ₀ where μ₀ = 1.25663706212e-6 T/(A/m)
+			if(FieldPtr->FieldKey.H_) FieldPtr->H += B_from_cf * 795774.715459;  // 1/μ₀
 
 			// For backward compatibility, A is not provided in list format
 		}

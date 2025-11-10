@@ -162,6 +162,23 @@ if __name__ == '__main__':
 		Bx, By, Bz = B[0] * 1000, B[1] * 1000, B[2] * 1000
 		print(f"  {pos}: B = [{Bx:.6f}, {By:.6f}, {Bz:.6f}] mT")
 
+	# VTK Export - Export geometry with same filename as script
+	try:
+		from radia_vtk_export import exportGeometryToVTK
+		import os
+
+		script_name = os.path.splitext(os.path.basename(__file__))[0]
+		vtk_filename = f"{script_name}.vtk"
+		vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+
+		exportGeometryToVTK(coil, vtk_path)
+		print(f"\n[VTK] Exported: {vtk_filename}")
+		print(f"      View with: paraview {vtk_filename}")
+	except ImportError:
+		print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+	except Exception as e:
+		print(f"\n[VTK] Warning: Export failed: {e}")
+
 	# Cleanup
 	rad.UtiDelAll()
 

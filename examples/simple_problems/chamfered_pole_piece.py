@@ -19,6 +19,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'dist'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'build', 'lib', 'Release'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "build", "Release"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'python'))
 
 import radia as rad
 
@@ -120,3 +121,21 @@ print("      The chamfer creates a smooth transition from narrow to full width")
 print("=" * 70)
 print("Calculation complete.")
 print("=" * 70)
+
+# VTK Export - Export geometry with same filename as script
+try:
+	from radia_vtk_export import exportGeometryToVTK
+
+	# Get script basename without extension
+	script_name = os.path.splitext(os.path.basename(__file__))[0]
+	vtk_filename = f"{script_name}.vtk"
+	vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+
+	# Export geometry
+	exportGeometryToVTK(g1, vtk_path)
+	print(f"\n[VTK] Exported: {vtk_filename}")
+	print(f"      View with: paraview {vtk_filename}")
+except ImportError:
+	print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+except Exception as e:
+	print(f"\n[VTK] Warning: Export failed: {e}")

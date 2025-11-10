@@ -1,29 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Comparison test between Radia and magpylib
-Tests circular (cylindrical) magnet field calculations
+Comparison between Radia and magpylib
+Cylindrical permanent magnet field calculation
+
+This example demonstrates field calculation accuracy by comparing
+Radia with magpylib, an independent magnetic field library.
 """
 
-# Add project root's build directory to path
 import sys
 import os
-from pathlib import Path
-
-# Find project root (works from any test subdirectory)
-current_file = Path(__file__).resolve()
-if 'tests' in current_file.parts:
-	# Find the 'tests' directory and go up one level
-	tests_index = current_file.parts.index('tests')
-	project_root = Path(*current_file.parts[:tests_index])
-else:
-	# Fallback
-	project_root = current_file.parent
 
 # Add build directory to path
-build_dir = project_root / 'build' / 'lib' / 'Release'
-if build_dir.exists():
-	sys.path.insert(0, str(build_dir))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
 import numpy as np
 import codecs
@@ -32,7 +22,7 @@ import codecs
 sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
 sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
-def test_cylindrical_magnet_comparison():
+def compare_cylindrical_magnet():
 	"""
 	Compare Radia and magpylib field calculations for a cylindrical magnet.
 
@@ -40,9 +30,9 @@ def test_cylindrical_magnet_comparison():
 	a uniformly magnetized cylindrical permanent magnet.
 	"""
 	print("=" * 70)
-	print("RADIA vs MAGPYLIB COMPARISON TEST")
+	print("RADIA vs MAGPYLIB COMPARISON")
 	print("=" * 70)
-	print("\nTest: Cylindrical permanent magnet field calculation\n")
+	print("\nCylindrical permanent magnet field calculation\n")
 
 	# Import libraries
 	try:
@@ -91,7 +81,7 @@ def test_cylindrical_magnet_comparison():
 	# Radia: ObjCylMag([x,y,z], radius, height, nseg, axis, [mx,my,mz])
 	# Magnetization in Tesla (default Radia units)
 	# Subdivide cylinder for better accuracy
-	n_phi = 32  # azimuthal subdivisions (32→0.5% error, 64→0.1%, 128→0.03%)
+	n_phi = 32  # azimuthal subdivisions (32->0.5% error, 64->0.1%, 128->0.03%)
 
 	radia_mag = rad.ObjCylMag([0, 0, 0], radius, height, n_phi, 'z', [0, 0, magnetization_T])
 	print(f"[OK] Radia cylindrical magnet created (ID: {radia_mag})")
@@ -196,11 +186,11 @@ def test_cylindrical_magnet_comparison():
 	print("=" * 70)
 	print(f"\nImportant: Unit systems:")
 	print(f"  - Radia: Uses Tesla for both magnetization and field (SI units)")
-	print(f"    → For permanent magnets: M = Br (in Tesla)")
-	print(f"    → Field output: B in Tesla")
+	print(f"    -> For permanent magnets: M = Br (in Tesla)")
+	print(f"    -> Field output: B in Tesla")
 	print(f"  - magpylib: Uses Tesla for polarization and field (SI units)")
-	print(f"    → Polarization = Br (in Tesla)")
-	print(f"    → Field output: B in Tesla")
+	print(f"    -> Polarization = Br (in Tesla)")
+	print(f"    -> Field output: B in Tesla")
 	print(f"\nBoth libraries use the same unit system and physical model.")
 	print(f"\nExpected agreement: Within a few percent")
 	if bz_mag_first > 0:
@@ -220,6 +210,24 @@ def test_cylindrical_magnet_comparison():
 	else:
 		passed = False
 
+	# VTK Export - Export geometry before cleanup
+	try:
+		from radia_vtk_export import exportGeometryToVTK
+
+		# Get script basename without extension
+		script_name = os.path.splitext(os.path.basename(__file__))[0]
+		vtk_filename = f"{script_name}.vtk"
+		vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+
+		# Export geometry
+		exportGeometryToVTK(radia_mag, vtk_path)
+		print(f"\n[VTK] Exported: {vtk_filename}")
+		print(f"      View with: paraview {vtk_filename}")
+	except ImportError:
+		print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+	except Exception as e:
+		print(f"\n[VTK] Warning: Export failed: {e}")
+
 	# Cleanup Radia
 	rad.UtiDelAll()
 
@@ -234,19 +242,19 @@ def test_cylindrical_magnet_comparison():
 		print(f"       Check magnetization unit conversion!")
 		print("=" * 70)
 
-	# Use assertion for pytest
-	assert passed, f"Radia and magpylib differ by {diff_percent:.2f}%, exceeds {tolerance_percent}% tolerance"
+	return passed
 
 def main():
-	"""Run the comparison test"""
-	result = test_cylindrical_magnet_comparison()
+	"""Run the comparison example"""
+	result = compare_cylindrical_magnet()
 
 	if result:
-		print("\n*** COMPARISON TEST PASSED ***\n")
-		sys.exit(0)
+		print("\n*** COMPARISON SUCCESSFUL ***\n")
+		return 0
 	else:
-		print("\n*** COMPARISON TEST FAILED ***\n")
-		sys.exit(1)
+		print("\n*** COMPARISON FAILED ***\n")
+		return 1
 
 if __name__ == '__main__':
-	main()
+	exit_code = main()
+	sys.exit(exit_code)

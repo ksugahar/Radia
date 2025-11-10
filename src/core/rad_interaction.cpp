@@ -477,7 +477,7 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 //void radTInteraction::SetupInteractMatrix()
 {
 	// Check if H-matrix should be used
-	if(use_hmatrix && AmOfMainElem > 50)
+	if(use_hmatrix)
 	{
 		return SetupInteractMatrix_HMatrix();
 	}

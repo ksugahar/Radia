@@ -381,9 +381,13 @@ inline void radTInteraction::ResetM()
 	{
 		radTg3dRelax* g3dRelaxPtr = g3dRelaxPtrVect[i];
 
+		// Initialize magnetization with remnant magnetization (usually zero for soft materials)
 		g3dRelaxPtr->Magn = ((radTMaterial*)(g3dRelaxPtrVect[i]->MaterHandle.rep))->RemMagn;
 		NewMagnArray[i] = g3dRelaxPtr->Magn;
-		NewFieldArray[i] = TVector3d(0.,0.,0.); // Or make it TVector3df
+
+		// Initialize field with external field (from ObjBckg or ObjBckgCF)
+		// This allows relaxation to iterate from external field as starting point
+		NewFieldArray[i] = ExternFieldArray[i];
 	}
 }
 

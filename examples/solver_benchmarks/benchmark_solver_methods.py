@@ -38,14 +38,16 @@ precision = 0.0001
 max_iter = 1000
 
 # Background field (uniform field applied to material)
-H_bg = [10000, 0, 0]  # 10000 A/m in X direction
+# Note: In Radia, ObjBckg() uses Tesla, and field values are in Radia's internal units
+# where H and B are numerically equal. Use value ~1.0 for moderate field.
+H_bg = [1.0, 0, 0]  # 1.0 T background field in X direction
 
 # Observation point
 obs_point = [0, 0, 50]  # 50mm above center
 
 print("\nProblem Setup:")
 print("  Material: Nonlinear (Steel37)")
-print("  Background field: [{}, {}, {}] A/m".format(*H_bg))
+print("  Background field: [{}, {}, {}] T".format(*H_bg))
 print("  Observation point: [{}, {}, {}] mm".format(*obs_point))
 print("  Solver precision: {}".format(precision))
 print("  Max iterations: {}".format(max_iter))
@@ -86,8 +88,9 @@ for test in test_cases:
 				rad.MatApl(elem, mat)
 				elements.append(elem)
 
-	container = rad.ObjCnt(elements)
-	rad.ObjBckg(H_bg)
+	# Add background field source to container
+	bg_field = rad.ObjBckg(H_bg)
+	container = rad.ObjCnt(elements + [bg_field])
 
 	print("  Elements: {} ({}×{}×{})".format(len(elements), n, n, n))
 
@@ -118,12 +121,14 @@ for test in test_cases:
 				x = -size/2 + (i + 0.5) * elem_size
 				y = -size/2 + (j + 0.5) * elem_size
 				z = -size/2 + (k + 0.5) * elem_size
-				elem = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size], [0, 0, 1000])
+				# No initial magnetization - pure soft magnetic material
+				elem = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size])
 				rad.MatApl(elem, mat)
 				elements.append(elem)
 
-	container = rad.ObjCnt(elements)
-	rad.ObjBckg(H_bg)
+	# Add background field source to container
+	bg_field = rad.ObjBckg(H_bg)
+	container = rad.ObjCnt(elements + [bg_field])
 
 	# Disable H-matrix for standard relaxation
 	rad.SolverHMatrixDisable()
@@ -158,12 +163,14 @@ for test in test_cases:
 				x = -size/2 + (i + 0.5) * elem_size
 				y = -size/2 + (j + 0.5) * elem_size
 				z = -size/2 + (k + 0.5) * elem_size
-				elem = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size], [0, 0, 1000])
+				# No initial magnetization - pure soft magnetic material
+				elem = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size])
 				rad.MatApl(elem, mat)
 				elements.append(elem)
 
-	container = rad.ObjCnt(elements)
-	rad.ObjBckg(H_bg)
+	# Add background field source to container
+	bg_field = rad.ObjBckg(H_bg)
+	container = rad.ObjCnt(elements + [bg_field])
 
 	# Enable H-matrix for relaxation
 	rad.SolverHMatrixEnable()

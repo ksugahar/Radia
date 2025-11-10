@@ -11,10 +11,12 @@
 - `case3.wls` - 多面体（立方体）
 
 ### 変換後ファイル (Python)
-- `case0.py` - アーク電流と矩形磁石
-- `case1.py` - アーク電流と2つの矩形磁石
-- `case2.py` - 面取り付き多重押出形状
-- `case3.py` - 多面体（立方体）
+- `arc_current_with_magnet.py` - アーク電流と矩形磁石
+- `arc_current_dual_magnets.py` - アーク電流と2つの矩形磁石
+- `chamfered_pole_piece.py` - 面取り付き多重押出形状
+- `cubic_polyhedron_magnet.py` - 多面体（立方体）
+- `compare_magpylib.py` - magpylibライブラリとの比較検証
+- `hmatrix_update_magnetization.py` - H行列の磁化更新テスト
 
 ## 実行方法
 
@@ -22,22 +24,22 @@
 
 ```bash
 cd examples/2019_11_29_Radia_練習
-python case0.py
-python case1.py
-python case2.py
-python case3.py
+python arc_current_with_magnet.py
+python arc_current_dual_magnets.py
+python chamfered_pole_piece.py
+python cubic_polyhedron_magnet.py
 ```
 
 または、Radiaモジュールのパスを明示的に指定する必要がある場合：
 
 ```bash
 export PYTHONPATH="../../dist:../../build/lib/Release:$PYTHONPATH"
-python case0.py
+python arc_current_with_magnet.py
 ```
 
 ## 例題の説明
 
-### case0.py - Arc Current with Rectangular Magnet
+### arc_current_with_magnet.py - Arc Current with Rectangular Magnet
 - アーク状の電流要素と矩形磁石を作成
 - 線形材料特性を適用
 - 原点での磁場を計算
@@ -49,7 +51,7 @@ python case0.py
 - `rad.MatApl()` - 材料の適用
 - `rad.Fld()` - 磁場計算
 
-### case1.py - Arc Current with Two Rectangular Magnets
+### arc_current_dual_magnets.py - Arc Current with Two Rectangular Magnets
 - アーク電流と2つの異なる位置の矩形磁石
 - 複数オブジェクトをコンテナで管理
 - 線形材料特性を適用
@@ -57,7 +59,7 @@ python case0.py
 **主要関数:**
 - `rad.ObjCnt()` - オブジェクトコンテナの作成
 
-### case2.py - Multiple Extrusion with Chamfer
+### chamfered_pole_piece.py - Multiple Extrusion with Chamfer
 - 面取りを含む複雑な押出形状
 - 複数の断面を定義して押出
 - 要素の分割
@@ -66,7 +68,7 @@ python case0.py
 - `rad.ObjMltExtRtg()` - 多重押出矩形の作成
 - `rad.ObjDivMag()` - 磁石の分割
 
-### case3.py - Polyhedron (Cube)
+### cubic_polyhedron_magnet.py - Polyhedron (Cube)
 - 頂点と面の定義から多面体を作成
 - 立方体の例
 

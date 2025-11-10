@@ -273,11 +273,11 @@ public:
 
 class radTBackgroundFieldSource : public radTg3d {
 public:
-	TVector3d BackgrB;
+	TVector3d BackgrB;  // Background magnetic flux density B in Tesla
 
 	radTBackgroundFieldSource(const TVector3d& InBackgrB)
 	{
-		BackgrB = InBackgrB;
+		BackgrB = InBackgrB;  // Input in Tesla
 	}
 
 	radTBackgroundFieldSource(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
@@ -295,8 +295,10 @@ public:
 
 	void B_comp(radTField* FieldPtr)
 	{
+		// BackgrB is magnetic flux density B in Tesla
 		if(FieldPtr->FieldKey.B_) FieldPtr->B += BackgrB;
-		if(FieldPtr->FieldKey.H_) FieldPtr->H += BackgrB;
+		// Convert B to H using H = B/μ₀ where μ₀ = 4π×10⁻⁷ H/m = 1.25663706212e-6 T/(A/m)
+		if(FieldPtr->FieldKey.H_) FieldPtr->H += BackgrB * 795774.715459;  // 1/μ₀ = 795774.715459 (A/m)/T
 		if(FieldPtr->FieldKey.A_) 
 		{
 			TVector3d BufA(FieldPtr->P.z*BackgrB.y, FieldPtr->P.x*BackgrB.z, FieldPtr->P.y*BackgrB.x);
@@ -308,9 +310,13 @@ public:
 		if(FieldPtr->FieldKey.FinInt_)
 		{
 			TVector3d D = FieldPtr->NextP - FieldPtr->P;
-			TVector3d BufIb = sqrt(D.x*D.x + D.y*D.y + D.z*D.z) * BackgrB;
+			double pathLength = sqrt(D.x*D.x + D.y*D.y + D.z*D.z);
+			// BackgrB is in Tesla, convert to appropriate units for integrals
+			TVector3d BufIb = pathLength * BackgrB;  // Ib: Integral of B
 			if(FieldPtr->FieldKey.Ib_) FieldPtr->Ib += BufIb;
-			if(FieldPtr->FieldKey.Ih_) FieldPtr->Ih += BufIb;
+			// Ih: Integral of H = Integral of (B/μ₀)
+			TVector3d BufIh = pathLength * BackgrB * 795774.715459;  // 1/μ₀
+			if(FieldPtr->FieldKey.Ih_) FieldPtr->Ih += BufIh;
 		}
 		// Infinite integral is set to zero (though, formally, its contribution is infinite)
 	}
