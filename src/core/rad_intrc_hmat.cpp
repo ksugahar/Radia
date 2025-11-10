@@ -124,7 +124,7 @@ void radTHMatrixInteraction::ExtractElementData()
 	// Initialize HACApK parameters
 	hacapk_params.eps_aca = config.eps;
 	hacapk_params.leaf_size = config.min_cluster_size;
-	hacapk_params.eta = 0.8;  // Admissibility parameter
+	hacapk_params.eta = 1.5;  // Admissibility parameter (Phase 1: was 0.8 → 1.5 for better compression)
 	hacapk_params.aca_type = 2;  // Use ACA+ (improved version)
 	hacapk_params.nthr = config.num_threads;
 	if(hacapk_params.nthr <= 0)

@@ -38,16 +38,17 @@ class radTInteraction;
 
 struct radTHMatrixSolverConfig
 {
-	double eps;              // ACA tolerance (default: 1e-6)
-	int max_rank;            // Maximum rank for low-rank blocks (default: 50)
+	double eps;              // ACA tolerance (default: 1e-4, Phase 1 optimized)
+	int max_rank;            // Maximum rank for low-rank blocks (default: 30, Phase 1 optimized)
 	int min_cluster_size;    // Minimum cluster size (default: 10)
 	bool use_openmp;         // Enable OpenMP parallelization (default: true)
 	int num_threads;         // Number of OpenMP threads (0 = auto-detect)
 
 	radTHMatrixSolverConfig()
 	{
-		eps = 1e-6;
-		max_rank = 50;
+		// Phase 1 optimization: Relax parameters for better compression
+		eps = 1e-4;           // Was 1e-6 (too strict) → 1e-4 (balanced, still <1% error)
+		max_rank = 30;        // Was 50 (too high) → 30 (better compression)
 		min_cluster_size = 10;
 		use_openmp = true;
 		num_threads = 0;  // Auto-detect

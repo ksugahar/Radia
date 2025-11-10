@@ -90,7 +90,8 @@
       "Bash(\"C:/Program Files/Python312/python.exe\":*)",
       "Bash(\"C:/Program Files/Python312/python.exe\" examples/solver_benchmarks/benchmark_solver_methods.py)",
       "Bash(\"C:/Program Files/Python312/python.exe\" -c \"import sys; sys.path.insert(0, ''build/Release''); import radia as rad; help(rad.SolverHMatrixEnable)\")",
-      "Bash(\"C:/Program Files/Python312/python.exe\" -c \"import sys; sys.path.insert(0, ''build/Release''); import radia as rad; help(rad.SolverHMatrixDisable)\")"
+      "Bash(\"C:/Program Files/Python312/python.exe\" -c \"import sys; sys.path.insert(0, ''build/Release''); import radia as rad; help(rad.SolverHMatrixDisable)\")",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -c \"import sys; sys.path.insert(0, ''build/Release''; import radia as rad; help(rad.MatLin)\")"
     ],
     "deny": [],
     "ask": []
