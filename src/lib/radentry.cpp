@@ -20,8 +20,8 @@
 //-------------------------------------------------------------------------
 
 static bool g_SolverHMatrixEnabled = false;
-static double g_SolverHMatrixEps = 1e-6;
-static int g_SolverHMatrixMaxRank = 50;
+static double g_SolverHMatrixEps = 1e-4;  // Phase 1: Relaxed from 1e-6 for better compression
+static int g_SolverHMatrixMaxRank = 30;   // Phase 1: Reduced from 50 for better compression
 
 //-------------------------------------------------------------------------
 

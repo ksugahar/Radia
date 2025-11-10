@@ -959,8 +959,8 @@ static PyObject* radia_SolverHMatrixEnable(PyObject* self, PyObject* args, PyObj
 {
 	PyObject *oRes=0;
 	int enable = 1;
-	double eps = 1e-6;
-	int max_rank = 50;
+	double eps = 1e-4;  // Phase 1: Relaxed from 1e-6 for better compression
+	int max_rank = 30;  // Phase 1: Reduced from 50 for better compression
 
 	static char *kwlist[] = {(char*)"enable", (char*)"eps", (char*)"max_rank", NULL};
 
