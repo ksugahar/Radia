@@ -116,3 +116,28 @@ python plot_benchmark_results.py
 
 **Author**: Claude Code
 **Date**: 2025-11-08
+
+## Maintenance Status (2025-11-11)
+
+**Recent Updates:**
+- Updated import paths to use relative paths (portable across systems)
+- Added VTK export to benchmark scripts for geometry visualization
+- Converted benchmarks to use permanent magnets (fixed magnetization)
+- Simplified test cases for field evaluation
+
+**Current Configuration:**
+- Benchmarks configured for permanent magnets (no material relaxation)
+- Magnetization: 795774.7 A/m (equivalent to 1 Tesla)
+- No `rad.Solve()` needed for permanent magnets
+
+**Future Work:**
+- Add benchmarks with soft magnetic materials (`MatSatIsoFrm`)
+- Add benchmarks with linear magnetic materials
+- Investigate execution stability for large element counts (N>125)
+
+**Files Updated:**
+- `benchmark_field_evaluation.py` - Field evaluation benchmark with VTK export
+- `verify_field_accuracy.py` - Field accuracy verification with dual VTK outputs
+- `benchmark_solver.py` - Import paths updated
+- `benchmark_parallel_construction.py` - Import paths updated
+

@@ -8,7 +8,9 @@ Date: 2025-11-08
 """
 
 import sys
-sys.path.insert(0, r"S:\Radia\01_GitHub\build\Release")
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
 import radia as rad
 import numpy as np
@@ -16,6 +18,7 @@ import numpy as np
 def create_magnet(n_per_side):
 	"""
 	Create a cubic magnet subdivided into n x n x n elements.
+	Permanent magnet with fixed magnetization (no relaxation needed).
 	"""
 	size = 20.0
 	elem_size = size / n_per_side
@@ -27,11 +30,10 @@ def create_magnet(n_per_side):
 				x = (i - n_per_side/2 + 0.5) * elem_size
 				y = (j - n_per_side/2 + 0.5) * elem_size
 				z = (k - n_per_side/2 + 0.5) * elem_size
-				block = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size], [0, 0, 1])
+				# Permanent magnet: magnetization = 1 T / mu_0 = 795774.7 A/m
+				block = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size], [0, 0, 795774.7])
 				rad.ObjAddToCnt(container, [block])
 
-	mat = rad.MatSatIsoFrm([2000, 2], [0.1, 2], [0.1, 2])
-	rad.MatApl(container, mat)
 	return container
 
 def main():
@@ -40,11 +42,10 @@ def main():
 	print("="*80)
 	print()
 
-	# Test 1: Small magnet (N=125, standard solver)
-	print("Test 1: Small magnet (N=125, standard solver)")
+	# Test 1: Small magnet (N=125, permanent magnet)
+	print("Test 1: Small magnet (N=125, permanent magnet)")
 	print("-" * 80)
 	magnet_small = create_magnet(5)
-	rad.Solve(magnet_small, 0.0001, 1000)
 
 	B_small_center = rad.Fld(magnet_small, 'b', [0, 0, 0])
 	B_small_outside = rad.Fld(magnet_small, 'b', [0, 0, 30])
@@ -52,11 +53,10 @@ def main():
 	print(f"  B at center [0,0,0]:    [{B_small_center[0]:.8f}, {B_small_center[1]:.8f}, {B_small_center[2]:.8f}] T")
 	print(f"  B outside [0,0,30mm]:   [{B_small_outside[0]:.8f}, {B_small_outside[1]:.8f}, {B_small_outside[2]:.8f}] T")
 
-	# Test 2: Medium magnet (N=343, H-matrix solver)
-	print("\nTest 2: Medium magnet (N=343, H-matrix solver)")
+	# Test 2: Medium magnet (N=343, permanent magnet)
+	print("\nTest 2: Medium magnet (N=343, permanent magnet)")
 	print("-" * 80)
 	magnet_medium = create_magnet(7)
-	rad.Solve(magnet_medium, 0.0001, 1000)
 
 	B_medium_center = rad.Fld(magnet_medium, 'b', [0, 0, 0])
 	B_medium_outside = rad.Fld(magnet_medium, 'b', [0, 0, 30])
@@ -177,6 +177,30 @@ def main():
 	print("  3. Expected speedup: 10-100x for large M_points")
 	print("  4. Implementation difficulty: HIGH (requires HACApK extension)")
 	print()
+
+	# VTK Export - Export geometry with same filename as script
+	try:
+		from radia_vtk_export import exportGeometryToVTK
+
+		script_name = os.path.splitext(os.path.basename(__file__))[0]
+
+		# Export small magnet
+		vtk_filename_small = f"{script_name}_small.vtk"
+		vtk_path_small = os.path.join(os.path.dirname(__file__), vtk_filename_small)
+		exportGeometryToVTK(magnet_small, vtk_path_small)
+		print(f"\n[VTK] Exported: {vtk_filename_small}")
+
+		# Export medium magnet
+		vtk_filename_medium = f"{script_name}_medium.vtk"
+		vtk_path_medium = os.path.join(os.path.dirname(__file__), vtk_filename_medium)
+		exportGeometryToVTK(magnet_medium, vtk_path_medium)
+		print(f"[VTK] Exported: {vtk_filename_medium}")
+
+		print(f"      View with: paraview {vtk_filename_small} {vtk_filename_medium}")
+	except ImportError:
+		print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+	except Exception as e:
+		print(f"\n[VTK] Warning: Export failed: {e}")
 
 if __name__ == "__main__":
 	main()

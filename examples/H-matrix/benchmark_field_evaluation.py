@@ -9,7 +9,9 @@ Date: 2025-11-08
 """
 
 import sys
-sys.path.insert(0, r"S:\Radia\01_GitHub\build\Release")
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
 import radia as rad
 import time
@@ -18,6 +20,7 @@ import numpy as np
 def create_simple_magnet():
 	"""
 	Create a simple cubic magnet for field evaluation tests.
+	Permanent magnet with fixed magnetization (no relaxation needed).
 	"""
 	# 20mm cube, subdivided into 5x5x5 = 125 elements
 	size = 20.0
@@ -33,15 +36,9 @@ def create_simple_magnet():
 				y = (j - n/2 + 0.5) * elem_size
 				z = (k - n/2 + 0.5) * elem_size
 
-				block = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size], [0, 0, 1])
+				# Permanent magnet: magnetization = 1 T / mu_0 = 795774.7 A/m
+				block = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size], [0, 0, 795774.7])
 				rad.ObjAddToCnt(container, [block])
-
-	# Set material
-	mat = rad.MatSatIsoFrm([2000, 2], [0.1, 2], [0.1, 2])
-	rad.MatApl(container, mat)
-
-	# Solve
-	rad.Solve(container, 0.0001, 1000)
 
 	return container
 
@@ -165,7 +162,7 @@ def main():
 	# Create magnet
 	print("Creating magnet (5x5x5 = 125 elements)...")
 	magnet = create_simple_magnet()
-	print("  [OK] Magnet created and solved")
+	print("  [OK] Magnet created (permanent magnet, no solve needed)")
 
 	# Test different point counts
 	point_counts = [100, 1000, 5000]
@@ -228,6 +225,22 @@ def main():
 	print("  - H-matrix is only used in rad.Solve() (solver phase)")
 	print("  - Batch evaluation is the only way to accelerate field evaluation")
 	print()
+
+	# VTK Export - Export geometry with same filename as script
+	try:
+		from radia_vtk_export import exportGeometryToVTK
+
+		script_name = os.path.splitext(os.path.basename(__file__))[0]
+		vtk_filename = f"{script_name}.vtk"
+		vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+
+		exportGeometryToVTK(magnet, vtk_path)
+		print(f"\n[VTK] Exported: {vtk_filename}")
+		print(f"      View with: paraview {vtk_filename}")
+	except ImportError:
+		print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+	except Exception as e:
+		print(f"\n[VTK] Warning: Export failed: {e}")
 
 if __name__ == "__main__":
 	main()

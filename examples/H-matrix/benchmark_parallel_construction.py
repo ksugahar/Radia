@@ -9,7 +9,9 @@ Date: 2025-11-08
 """
 
 import sys
-sys.path.insert(0, r"S:\Radia\01_GitHub\build\Release")
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
 import radia as rad
 import time
