@@ -251,7 +251,118 @@ pieces = rad.ObjDivMag(magnet, [[3,1.5], [3,1.5], [3,1.5]])
 
 ## Materials
 
-### MatLin
+### MatLin - Isotropic Linear Material ⭐ NEW API
+
+```python
+material = rad.MatLin(ksi)
+```
+
+Creates an **isotropic** linear magnetic material.
+
+**Parameters**:
+- `ksi` (float): Magnetic susceptibility (dimensionless)
+- Relative permeability: μᵣ = 1 + ksi
+
+**Example**:
+```python
+# Soft iron (μᵣ ≈ 1000)
+mat = rad.MatLin(999)
+block = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,0])
+rad.MatApl(block, mat)
+rad.Solve(block, 0.0001, 1000)
+```
+
+---
+
+### MatLin - Anisotropic Linear Material ⭐ NEW API
+
+```python
+material = rad.MatLin([ksi_par, ksi_perp], [ex, ey, ez])
+```
+
+Creates an **anisotropic** linear magnetic material.
+
+**Parameters**:
+- `[ksi_par, ksi_perp]`: Susceptibilities parallel/perpendicular to easy axis
+- `[ex, ey, ez]`: Easy magnetization axis direction
+
+**Example**:
+```python
+mat = rad.MatLin([1000, 10], [0, 0, 1])  # Easy axis: Z
+rad.MatApl(block, mat)
+```
+
+---
+
+### MatPM - Permanent Magnet with Demagnetization ⭐ NEW
+
+```python
+material = rad.MatPM(Br, Hc, [mx, my, mz])
+```
+
+Creates a permanent magnet material with linear demagnetization curve.
+
+**Parameters**:
+- `Br` (float): Residual flux density [Tesla]
+- `Hc` (float): Coercivity [A/m]
+- `[mx, my, mz]`: Easy magnetization axis direction
+
+**B-H Relationship**:
+```
+B = Br + μ₀ · μᵣₑc · H
+μᵣₑc = Br / (μ₀ · Hc)
+```
+
+**Typical Values**:
+| Material | Br [T] | Hc [kA/m] |
+|----------|--------|-----------|
+| NdFeB N52 | 1.43 | 876 |
+| NdFeB N42 | 1.32 | 876 |
+| SmCo | 1.10 | 800 |
+| Ferrite | 0.40 | 240 |
+
+**Example**:
+```python
+# NdFeB N52 magnet
+mat = rad.MatPM(1.43, 876000, [0, 0, 1])  # Br=1.43T, Hc=876kA/m
+magnet = rad.ObjRecMag([0,0,0], [20,20,10], [0,0,0])
+rad.MatApl(magnet, mat)
+rad.Solve(magnet, 0.0001, 1000)
+```
+
+---
+
+### MatPMLinear - Permanent Magnet with Recoil Permeability ⭐ NEW
+
+```python
+material = rad.MatPMLinear(Br, mu_rec, [mx, my, mz])
+```
+
+Creates a permanent magnet with explicit recoil permeability.
+
+**Parameters**:
+- `Br` (float): Residual flux density [Tesla]
+- `mu_rec` (float): Recoil permeability (relative, dimensionless)
+- `[mx, my, mz]`: Easy magnetization axis direction
+
+**B-H Relationship**:
+```
+B = Br + μ₀ · μᵣₑc · H
+Hc = Br / (μ₀ · μᵣₑc)  [derived]
+```
+
+**Example**:
+```python
+mat = rad.MatPMLinear(1.32, 1.05, [0, 0, 1])  # Br=1.32T, μ_rec=1.05
+magnet = rad.ObjRecMag([0,0,0], [20,20,10], [0,0,0])
+rad.MatApl(magnet, mat)
+rad.Solve(magnet, 0.0001, 1000)
+```
+
+---
+
+### MatLin - Legacy API ⚠️ DEPRECATED
+
 ```python
 material = rad.MatLin([ksi_parallel, ksi_perpendicular], mr)
 ```
@@ -291,6 +402,8 @@ mat = rad.MatLin([1000, 1000], [0, 0, 100])  # Mr still needed as reference
 - Permanent magnets: Use `rad.ObjRecMag([x,y,z], [dx,dy,dz], [mx,my,mz])` only - no material needed
 - Magnetic materials: Use MatLin or MatSatIsoFrm for materials responding to fields
 - `mr` must be non-zero (either as scalar magnitude or vector)
+
+**⚠️ DEPRECATED**: Use the new `MatLin(ksi)`, `MatLin([ksi_par, ksi_perp], [ex,ey,ez])`, `MatPM()`, or `MatPMLinear()` APIs instead.
 
 ---
 
