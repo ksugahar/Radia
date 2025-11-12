@@ -11,11 +11,28 @@ Date: 2025-11-08
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../dist'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
-import radia as rad
+# Check dependencies before importing
+try:
+	import radia as rad
+except ImportError as e:
+	print(f"ERROR: Failed to import radia module: {e}")
+	print("\nPlease build Radia first:")
+	print("  cd S:/Radia/01_GitHub")
+	print("  powershell.exe -ExecutionPolicy Bypass -File Build.ps1")
+	sys.exit(1)
+
+try:
+	import numpy as np
+except ImportError as e:
+	print(f"ERROR: NumPy is required but not installed: {e}")
+	print("\nPlease install NumPy:")
+	print("  pip install numpy")
+	sys.exit(1)
+
 import time
-import numpy as np
 
 def create_simple_magnet():
 	"""
@@ -226,21 +243,10 @@ def main():
 	print("  - Batch evaluation is the only way to accelerate field evaluation")
 	print()
 
-	# VTK Export - Export geometry with same filename as script
-	try:
-		from radia_vtk_export import exportGeometryToVTK
-
-		script_name = os.path.splitext(os.path.basename(__file__))[0]
-		vtk_filename = f"{script_name}.vtk"
-		vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
-
-		exportGeometryToVTK(magnet, vtk_path)
-		print(f"\n[VTK] Exported: {vtk_filename}")
-		print(f"      View with: paraview {vtk_filename}")
-	except ImportError:
-		print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
-	except Exception as e:
-		print(f"\n[VTK] Warning: Export failed: {e}")
+	# Note: VTK export skipped for benchmark scripts
+	# (125 elements would create a large VTK file not needed for benchmarking)
+	print("\n[INFO] VTK export skipped (benchmark script)")
+	print("="*80)
 
 if __name__ == "__main__":
 	main()

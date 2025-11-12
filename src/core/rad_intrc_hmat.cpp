@@ -157,6 +157,13 @@ void radTHMatrixInteraction::ExtractElementData()
 
 int radTHMatrixInteraction::BuildHMatrix()
 {
+	// Phase 2-A: Skip if already built
+	if(is_built)
+	{
+		std::cout << "\n[Phase 2-A] H-matrix already built, skipping reconstruction" << std::endl;
+		return 1;  // Success - already built
+	}
+
 	auto t_start = std::chrono::high_resolution_clock::now();
 
 	try

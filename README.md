@@ -216,7 +216,10 @@ See [tests/README.md](tests/README.md) for detailed testing documentation.
 
 ```python
 import sys
-sys.path.insert(0, 'S:/radia/01_GitHub/src/python')
+import os
+
+# Add src/python to path (adjust path as needed for your installation)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'python'))
 
 from radia_pyvista_viewer import view_radia_object
 
@@ -228,7 +231,10 @@ view_radia_object(mag)
 
 ```python
 import sys
-sys.path.insert(0, 'S:/radia/01_GitHub/src/python')
+import os
+
+# Add src/python to path (adjust path as needed for your installation)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'python'))
 
 from radia_vtk_export import export_geometry_to_vtk
 

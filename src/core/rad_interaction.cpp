@@ -475,10 +475,21 @@ int radTInteraction::CountRelaxElemsWithSym()
 int radTInteraction::SetupInteractMatrix() //OC26122019
 //void radTInteraction::SetupInteractMatrix()
 {
+	// Phase 2-A: Automatic threshold selection
+	const int HMATRIX_AUTO_THRESHOLD = 200;
+
 	// Check if H-matrix should be used
-	if(use_hmatrix)
+	if(use_hmatrix && AmOfMainElem >= HMATRIX_AUTO_THRESHOLD)
 	{
+		std::cout << "\n[Auto] Enabling H-matrix acceleration (N=" << AmOfMainElem
+		          << " >= " << HMATRIX_AUTO_THRESHOLD << ")" << std::endl;
 		return SetupInteractMatrix_HMatrix();
+	}
+	else if(use_hmatrix && AmOfMainElem < HMATRIX_AUTO_THRESHOLD)
+	{
+		std::cout << "\n[Auto] N=" << AmOfMainElem << " < " << HMATRIX_AUTO_THRESHOLD
+		          << " - using optimized dense solver instead" << std::endl;
+		use_hmatrix = false;  // Disable for small problems
 	}
 
 	radTFieldKey FieldKeyInteract; FieldKeyInteract.B_=FieldKeyInteract.H_=FieldKeyInteract.PreRelax_=1;
@@ -1448,15 +1459,17 @@ void radTInteraction::EnableHMatrix(bool enable, double eps, int max_rank)
 {
 	use_hmatrix = enable;
 
-	if(enable && AmOfMainElem > 50)  // Use H-matrix for N > 50
+	const int HMATRIX_AUTO_THRESHOLD = 200;  // Phase 2-A: Optimized threshold
+
+	if(enable && AmOfMainElem > HMATRIX_AUTO_THRESHOLD)
 	{
-		std::cout << "\nEnabling H-matrix acceleration for relaxation solver" << std::endl;
-		std::cout << "Number of elements: " << AmOfMainElem << std::endl;
+		std::cout << "\n[Auto] Enabling H-matrix acceleration (N=" << AmOfMainElem
+		          << " > " << HMATRIX_AUTO_THRESHOLD << ")" << std::endl;
 	}
 	else if(enable)
 	{
-		std::cout << "\nH-matrix requested but N=" << AmOfMainElem << " is too small (< 50)" << std::endl;
-		std::cout << "Using standard dense solver" << std::endl;
+		std::cout << "\n[Auto] N=" << AmOfMainElem << " < " << HMATRIX_AUTO_THRESHOLD
+		          << " - using optimized dense solver instead" << std::endl;
 		use_hmatrix = false;
 	}
 }
@@ -1467,6 +1480,14 @@ int radTInteraction::SetupInteractMatrix_HMatrix()
 {
 	try
 	{
+		// Phase 2-A: H-Matrix Reuse Optimization
+		// Check if H-matrix is already built and can be reused
+		if(hmat_interaction != nullptr && hmat_interaction->is_built)
+		{
+			std::cout << "[Phase 2-A] Reusing existing H-matrix (no reconstruction needed)" << std::endl;
+			return 1;  // Success - reuse existing H-matrix
+		}
+
 		// Create H-matrix configuration from global settings
 		radTHMatrixSolverConfig config;
 		config.eps = RadSolverGetHMatrixEps();
@@ -1475,10 +1496,13 @@ int radTInteraction::SetupInteractMatrix_HMatrix()
 		config.use_openmp = true;
 		config.num_threads = 0;  // Auto-detect
 
-		// Create H-matrix interaction object
-		hmat_interaction = new radTHMatrixInteraction(this, config);
+		// Create H-matrix interaction object (only if not exists)
+		if(hmat_interaction == nullptr)
+		{
+			hmat_interaction = new radTHMatrixInteraction(this, config);
+		}
 
-		// Build H-matrix
+		// Build H-matrix (BuildHMatrix has internal is_built check)
 		int result = hmat_interaction->BuildHMatrix();
 
 		if(result != 0)

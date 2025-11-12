@@ -333,7 +333,8 @@ All fields in Tesla (T).
 
 **Solution:** Build the project first:
 ```bash
-cd S:/Visual_Studio/02_Visual_Studio_2022_コマンドライン_コンパイル/04_Radia
+# Navigate to the project root directory
+cd <project_root>
 powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 ```
 
