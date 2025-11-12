@@ -19,6 +19,7 @@ This repository adds NGSolve integration and performance improvements while main
 
 ## Key Features
 
+- ✓ **H-matrix acceleration** - Fast hierarchical matrix solver using [HACApK](https://github.com/Post-Peta-Crest/ppOpenHPC/tree/MATH/HACApK)
 - ✓ OpenMP parallel field computation
 - ✓ NGSolve C++ CoefficientFunction integration
 - ✓ VTK export functionality (`rad.ObjDrwVTK`)
@@ -267,6 +268,7 @@ export_geometry_to_vtk(mag, 'geometry.vtk')
 - Python 2.7, 3.6, 3.7, 3.8 support
 
 ### Added Features
+- **H-matrix acceleration** - Hierarchical matrix solver using [HACApK library](https://github.com/Post-Peta-Crest/ppOpenHPC/tree/MATH/HACApK) (9-50x speedup for large problems)
 - OpenMP parallelization (2.7x speedup)
 - NGSolve C++ CoefficientFunction integration
 - PyVista viewer support

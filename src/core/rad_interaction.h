@@ -180,6 +180,7 @@ class radTInteraction : public radTg {
 	// H-matrix acceleration support
 	radTHMatrixInteraction* hmat_interaction;  // H-matrix representation
 	bool use_hmatrix;                          // Flag to use H-matrix
+	size_t geometry_hash;                      // Phase 2-B: Geometry hash for cache validation
 	char mKeepTransData;
 
 	int m_rankMPI; //21122019 (to set from Application?)
@@ -224,6 +225,7 @@ public:
 	// H-matrix support methods
 	void DefineFieldArray_HMatrix(const TVector3d* MagnArray, TVector3d* FieldArray);
 	void EnableHMatrix(bool enable, double eps=1e-6, int max_rank=50);
+	size_t ComputeGeometryHash();  // Phase 2-B: Compute hash of geometry for cache validation
 
 	inline void PushFrontNativeElemTransList(radTg3d*, radTlphgPtr*);
 	inline void EmptyVectOfPtrToListsOfTrans();

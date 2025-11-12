@@ -19,6 +19,11 @@
 #include "rad_intrc_hmat.h"
 #include "radentry.h"  // For RadSolverGetHMatrixEnabled()
 
+//-------------------------------------------------------------------------
+// Phase 2-B: Forward declaration
+//-------------------------------------------------------------------------
+
+static void OptimizeHMatrixParameters(int num_elements, double& eps, int& max_rank);
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -53,6 +58,7 @@ radTInteraction::radTInteraction()
 	// Initialize H-matrix support
 	hmat_interaction = nullptr;
 	use_hmatrix = false;
+	geometry_hash = 0;  // Phase 2-B: Initialize geometry hash
 
 	RelaxSubIntervArray = nullptr; // New
 	mKeepTransData = 0;
@@ -82,6 +88,7 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	// Initialize H-matrix support
 	hmat_interaction = nullptr;
 	use_hmatrix = RadSolverGetHMatrixEnabled();  // Read global setting
+	geometry_hash = 0;  // Phase 2-B: Initialize geometry hash
 
 	SourceHandle = In_hg;
 	CompCriterium = InCompCriterium;
@@ -1480,21 +1487,53 @@ int radTInteraction::SetupInteractMatrix_HMatrix()
 {
 	try
 	{
-		// Phase 2-A: H-Matrix Reuse Optimization
-		// Check if H-matrix is already built and can be reused
+		// Phase 2-B: Compute current geometry hash
+		size_t current_hash = ComputeGeometryHash();
+
+		// Phase 2-B: Check if geometry has changed
 		if(hmat_interaction != nullptr && hmat_interaction->is_built)
 		{
-			std::cout << "[Phase 2-A] Reusing existing H-matrix (no reconstruction needed)" << std::endl;
-			return 1;  // Success - reuse existing H-matrix
+			if(current_hash == geometry_hash)
+			{
+				// Geometry unchanged - reuse H-matrix
+				std::cout << "[Phase 2-B] Reusing H-matrix (geometry unchanged, hash="
+				          << std::hex << current_hash << std::dec << ")" << std::endl;
+				return 1;  // Success - reuse existing H-matrix
+			}
+			else
+			{
+				// Geometry changed - rebuild required
+				std::cout << "[Phase 2-B] Geometry changed (hash: "
+				          << std::hex << geometry_hash << " -> " << current_hash << std::dec
+				          << "), rebuilding H-matrix..." << std::endl;
+
+				// Delete old H-matrix
+				delete hmat_interaction;
+				hmat_interaction = nullptr;
+			}
 		}
 
-		// Create H-matrix configuration from global settings
+		// Phase 2-B: Adaptive parameter selection based on problem size
+		double optimized_eps;
+		int optimized_max_rank;
+		OptimizeHMatrixParameters(AmOfMainElem, optimized_eps, optimized_max_rank);
+
+		// Create H-matrix configuration
 		radTHMatrixSolverConfig config;
-		config.eps = RadSolverGetHMatrixEps();
-		config.max_rank = RadSolverGetHMatrixMaxRank();
+
+		// Use user-specified parameters if set, otherwise use optimized values
+		double user_eps = RadSolverGetHMatrixEps();
+		int user_max_rank = RadSolverGetHMatrixMaxRank();
+
+		config.eps = (user_eps > 0) ? user_eps : optimized_eps;
+		config.max_rank = (user_max_rank > 0) ? user_max_rank : optimized_max_rank;
 		config.min_cluster_size = 10;
 		config.use_openmp = true;
 		config.num_threads = 0;  // Auto-detect
+
+		std::cout << "[Phase 2-B] H-matrix parameters: eps=" << config.eps
+		          << ", max_rank=" << config.max_rank
+		          << " (N=" << AmOfMainElem << ")" << std::endl;
 
 		// Create H-matrix interaction object (only if not exists)
 		if(hmat_interaction == nullptr)
@@ -1508,6 +1547,7 @@ int radTInteraction::SetupInteractMatrix_HMatrix()
 		if(result != 0)
 		{
 			// H-matrix construction succeeded
+			geometry_hash = current_hash;  // Phase 2-B: Save geometry hash for future validation
 			hmat_interaction->PrintStatistics();
 			return 1;
 		}
@@ -1552,6 +1592,73 @@ void radTInteraction::DefineFieldArray_HMatrix(const TVector3d* MagnArray, TVect
 	{
 		FieldArray[i] += ExternFieldArray[i];
 	}
+}
+
+//-------------------------------------------------------------------------
+// Phase 2-B: Adaptive Parameter Selection
+//-------------------------------------------------------------------------
+
+static void OptimizeHMatrixParameters(int num_elements, double& eps, int& max_rank)
+{
+	// Automatically adjust H-matrix parameters based on problem size
+	// Trade-off: accuracy vs construction time
+
+	if(num_elements < 200)
+	{
+		// Don't use H-matrix (handled by threshold check)
+		eps = 1e-4;
+		max_rank = 30;
+	}
+	else if(num_elements < 500)
+	{
+		// Medium problems: Balanced accuracy/speed
+		eps = 1e-4;
+		max_rank = 30;
+	}
+	else if(num_elements < 1000)
+	{
+		// Large problems: Slightly favor speed
+		eps = 2e-4;  // 2x relaxed tolerance
+		max_rank = 25;
+	}
+	else
+	{
+		// Very large problems: Aggressive compression
+		eps = 5e-4;  // 5x relaxed tolerance
+		max_rank = 20;
+	}
+}
+
+//-------------------------------------------------------------------------
+// Phase 2-B: Geometry Hash for Cache Validation
+//-------------------------------------------------------------------------
+
+size_t radTInteraction::ComputeGeometryHash()
+{
+	// Compute geometry hash based on element count and positions
+	// This hash is used to detect geometry changes and invalidate H-matrix cache
+
+	size_t hash = static_cast<size_t>(AmOfMainElem);
+
+	if(AmOfMainElem == 0) return hash;
+
+	// Mix in element center positions using boost-style hash_combine
+	std::hash<double> double_hasher;
+
+	for(int i = 0; i < AmOfMainElem; i++)
+	{
+		if(g3dRelaxPtrVect[i])
+		{
+			TVector3d center = g3dRelaxPtrVect[i]->ReturnCentrPoint();
+
+			// Hash combine (boost::hash_combine style)
+			hash ^= double_hasher(center.x) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+			hash ^= double_hasher(center.y) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+			hash ^= double_hasher(center.z) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+		}
+	}
+
+	return hash;
 }
 
 //-------------------------------------------------------------------------
