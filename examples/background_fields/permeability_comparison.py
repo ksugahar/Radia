@@ -87,10 +87,9 @@ for mu_r in permeability_values:
 	cube = rd.ObjRecMag([0, 0, 0], [size, size, size])
 
 	# Use linear material with specified permeability
-	# MatLin([ksipar, ksiper], [mrx, mry, mrz]): defines easy axis explicitly
-	# For isotropic material: ksipar = ksiper = chi = mu_r - 1
-	# Magnetization vector [0, 0, 0.001] defines the easy axis (minimal remanence)
-	mat = rd.MatLin([chi, chi], [0, 0, 0.001])  # Isotropic linear material
+	# MatLin(ksi): defines isotropic linear material
+	# For isotropic material: ksi = chi = mu_r - 1
+	mat = rd.MatLin(chi)  # Isotropic linear material
 	rd.MatApl(cube, mat)
 	print(f"  Created {size}x{size}x{size} mm cube with linear material (mu_r={mu_r}, chi={chi})")
 

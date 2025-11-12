@@ -172,7 +172,7 @@ print(f"\n[Step 3] Applying Material and Background Field")
 print("-" * 70)
 
 # Apply linear magnetic material
-mat = rd.MatLin([chi, chi], 0.001)
+mat = rd.MatLin(chi)
 rd.MatApl(sphere, mat)
 print(f"  Material applied: mu_r = {mu_r}, chi = {chi}")
 

@@ -160,11 +160,11 @@ def create_yoke_from_nastran(nas_file, material_properties=None):
 			mat = rad.MatLin(mu_r, [0, 0, 1])
 			print(f"  Permeability: μx={mu_r[0]}, μy={mu_r[1]}")
 		else:
-			mat = rad.MatLin([mu_r, mu_r], [0, 0, 1])
+			mat = rad.MatLin(mu_r)
 			print(f"  Permeability: μr={mu_r}")
 	else:
 		# For future: nonlinear materials
-		mat = rad.MatLin([1000, 1000], [0, 0, 1])
+		mat = rad.MatLin(1000)
 		print(f"  Using default linear material")
 
 	rad.MatApl(yoke, mat)

@@ -23,10 +23,9 @@ class TestLinearMaterials:
 		"""Test linear isotropic material"""
 		rad.UtiDelAll()
 
-		# Create linear isotropic material: MatLin(ksi, M)
-		# ksi = [1000, 1000] for isotropic (same in all directions)
-		# M = [0, 0, 1] remanent magnetization
-		mat = rad.MatLin([1000, 1000], [0, 0, 1])
+		# Create linear isotropic material: MatLin(ksi)
+		# Single ksi value for isotropic (same in all directions)
+		mat = rad.MatLin(1000)
 		assert mat > 0, "Linear material should have valid index"
 
 	def test_linear_anisotropic_material(self):
@@ -41,8 +40,9 @@ class TestLinearMaterials:
 		"""Test linear material without remanent magnetization"""
 		rad.UtiDelAll()
 
-		# Soft iron: high permeability, no remanence
-		mat = rad.MatLin([5000, 5000], [0, 0, 0])
+		# Soft iron: high permeability, isotropic (no remanence)
+		# Use new isotropic API: MatLin(ksi)
+		mat = rad.MatLin(5000)
 		assert mat > 0
 
 	def test_material_application_to_magnet(self):
@@ -52,8 +52,8 @@ class TestLinearMaterials:
 		# Create magnet
 		mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
 
-		# Create and apply material
-		mat = rad.MatLin([1000, 0], [10, 10, 10])
+		# Create and apply material (anisotropic, easy axis [1,1,1])
+		mat = rad.MatLin([1000, 0], [1, 1, 1])
 		rad.MatApl(mag, mat)
 
 		# Compute field - should be non-zero
@@ -106,8 +106,8 @@ class TestMaterialOnGroups:
 		mag2 = rad.ObjRecMag([15, 0, 0], [10, 10, 10], [0, 0, 1])
 		group = rad.ObjCnt([mag1, mag2])
 
-		# Apply material to group
-		mat = rad.MatLin([1000, 0], [10, 10, 10])
+		# Apply material to group (anisotropic, easy axis [1,1,1])
+		mat = rad.MatLin([1000, 0], [1, 1, 1])
 		rad.MatApl(group, mat)
 
 		# Should compute field
@@ -120,11 +120,11 @@ class TestMaterialOnGroups:
 
 		# Create two magnets with different materials
 		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-		mat1 = rad.MatLin([1000, 0], [5, 5, 5])
+		mat1 = rad.MatLin([1000, 0], [1, 1, 1])  # Easy axis [1,1,1]
 		rad.MatApl(mag1, mat1)
 
 		mag2 = rad.ObjRecMag([20, 0, 0], [10, 10, 10], [0, 0, 1])
-		mat2 = rad.MatLin([2000, 0], [8, 8, 8])
+		mat2 = rad.MatLin([2000, 0], [1, 0, 0])  # Easy axis [1,0,0] (x-direction)
 		rad.MatApl(mag2, mat2)
 
 		# Group them

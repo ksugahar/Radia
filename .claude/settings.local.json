@@ -1,8 +1,27 @@
 {
   "permissions": {
     "allow": [
-      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build . --config Release --target radia --clean-first)",
-      "Bash(\"C:/Program Files/Python312/python.exe\" -c \"import sys; sys.path.insert(0, r''S:\\Radia\\01_GitHub\\build\\Release''); import radia as rad; print(''Testing H-matrix defaults...''); rad.UtiDelAll(); rad.SolverHMatrixEnable(); mat = rad.MatSatIsoFrm([10000, 100], [0.1, 1000]); elem = rad.ObjRecMag([0,0,0], [10,10,10]); rad.MatApl(elem, mat); print(''Enabled H-matrix, now testing solve...''); rad.ObjBckg([10000,0,0]); rad.Solve(elem, 0.0001, 100)\")"
+      "Bash(\"C:/Program Files/Python312/python.exe\" S:/Radia/01_GitHub/examples/NGSolve_Integration/rad.ObjBckgCF/test_objbckg_simple.py)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" S:/Radia/01_GitHub/examples/NGSolve_Integration/rad.ObjBckgCF/test_permeability_comparison.py)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" S:/Radia/01_GitHub/examples/simple_problems/compare_magpylib.py)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" examples/H-matrix/benchmark_field_evaluation.py)",
+      "Bash(\"/c/Program Files/Python312/python.exe\" --version)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" examples/H-matrix/verify_field_accuracy.py)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -c \"import sys, os; sys.path.insert(0, os.path.join(''S:/Radia/01_GitHub'', ''build/Release'')); import radia as rad; container = rad.ObjCnt([]); block = rad.ObjRecMag([0,0,0], [4,4,4], [0,0,795774.7]); rad.ObjAddToCnt(container, [block]); B = rad.Fld(container, ''b'', [0,0,10]); print(''B ='', B)\")",
+      "Bash(\"C:/Program Files/Python312/python.exe\" test_verify_simple.py)",
+      "Bash(find:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File Build.ps1)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe\" --build . --config Release --parallel)",
+      "Bash(tee:*)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -m pytest:*)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" test_new_material_api.py)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -m pytest tests/test_materials.py -v)",
+      "Bash(cat:*)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -m pytest tests/ -v)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" examples/solver_time_evaluation/benchmark_linear_material.py)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" examples/solver_time_evaluation/benchmark_lu_vs_gs.py)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" examples/solver_time_evaluation/benchmark_matrix_construction.py)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

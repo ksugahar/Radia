@@ -12,7 +12,6 @@
 * First release:  1997
 * 
 * Copyright (C):  1997 by European Synchrotron Radiation Facility, France
-*                 All Rights Reserved
 *
 -------------------------------------------------------------------------*/
 

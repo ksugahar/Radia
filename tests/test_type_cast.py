@@ -113,7 +113,7 @@ class TestTypeCasting:
 		mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
 
 		# Apply material (internally casts to appropriate type)
-		mat = rad.MatLin([1000, 0], [10, 10, 10])
+		mat = rad.MatLin([1000, 0], [1, 1, 1])  # Anisotropic, easy axis [1,1,1]
 		rad.MatApl(mag, mat)
 
 		# Field should be computed with material

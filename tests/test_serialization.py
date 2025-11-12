@@ -88,7 +88,7 @@ class TestObjectDuplication:
 
 		# Create magnet with material
 		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-		mat = rad.MatLin([1000, 0], [10, 10, 10])
+		mat = rad.MatLin([1000, 0], [1, 1, 1])  # Anisotropic, easy axis [1,1,1]
 		rad.MatApl(mag1, mat)
 
 		# Duplicate

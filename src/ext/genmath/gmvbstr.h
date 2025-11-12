@@ -5,7 +5,6 @@
  * First release: 2013
  *
  * Copyright (C) European Synchrotron Radiation Facility, Grenoble, France
- * All Rights Reserved
  *
  * @author O.Chubar
  * @version 1.0

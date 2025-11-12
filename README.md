@@ -110,7 +110,7 @@ import rad_ngsolve
 
 # Create Radia magnet
 magnet = rad.ObjRecMag([0,0,0], [20,20,20], [0,0,1.2])  # mm units
-rad.MatApl(magnet, rad.MatLin([0.06, 0.17], [0,0,1.2]))  # NdFeB
+rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0,0,1]))  # NdFeB permanent magnet
 rad.Solve(magnet, 0.0001, 10000)
 
 # Create NGSolve CoefficientFunction for different field types
@@ -271,15 +271,26 @@ export_geometry_to_vtk(mag, 'geometry.vtk')
 
 ## License
 
-This project is licensed under **LGPL-2.1** (to match NGSolve licensing).
+This project contains multiple components with different open-source licenses:
 
-The original RADIA code is licensed under a **BSD-style license** by the European Synchrotron Radiation Facility (ESRF), Copyright © 1997-2018.
+### RADIA Core
+Licensed under a **BSD-style license** by the European Synchrotron Radiation Facility (ESRF).
+- Copyright © 1997-2018, European Synchrotron Radiation Facility
+- Permits redistribution and modification with attribution
 
-Both licenses are included in the `LICENSE` file. The BSD-style license is compatible with and subsumed by the LGPL-2.1 license used for this derivative work.
+### HACApK_LH-Cimplm (H-matrix Library)
+Licensed under the **MIT License**.
+- Copyright © 2015, Akihiro Ida and Takeshi Iwashita
+- Location: `src/ext/HACApK_LH-Cimplm/`
+- ppOpen-HPC project
+
+Both licenses are permissive open-source licenses that allow free use, modification,
+and redistribution.
 
 See:
-- `LICENSE` - Complete license text (LGPL-2.1 + Original RADIA BSD-style)
-- `COPYRIGHT.txt` - Original RADIA copyright notice
+- `LICENSE` - Complete license text for both components
+- `COPYRIGHT.txt` - Original RADIA BSD-style license
+- `src/ext/HACApK_LH-Cimplm/LICENSE` - HACApK MIT license
 
 ## Credits
 

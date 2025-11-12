@@ -5,7 +5,6 @@
  * First release: 2002
  *
  * Copyright (C) Synchrotron SOLEIL, France
- * All Rights Reserved
  *
  * @author O.Chubar
  * @version 1.0

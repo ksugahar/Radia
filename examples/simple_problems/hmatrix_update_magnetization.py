@@ -19,8 +19,9 @@ try:
 	print(f"  OK: block={block}, container={g}")
 
 	# Step 2
-	print("\n[Step 2] Setting material...")
-	rad.MatApl(g, rad.MatLin([0.06, 0.17], [0, 0, 1.2]))  # NdFeB
+	print("\n[Step 2] Setting permanent magnet material...")
+	# NdFeB: Br=1.2T, Hc=900kA/m, magnetization axis in z-direction
+	rad.MatApl(g, rad.MatPM(1.2, 900000, [0, 0, 1]))
 	print("  OK: Material applied")
 
 	# Step 3
@@ -38,8 +39,10 @@ try:
 
 	# Step 5
 	print("\n[Step 5] Changing magnetization...")
-	rad.MatApl(g, rad.MatLin([1.0, 1.0, 1.0], [500, 0, 866]))
-	print("  OK: M = [500, 0, 866] A/m")
+	# Apply isotropic linear material (ksi=1.0) - for H-matrix update test
+	# Note: Previous step used permanent magnet, this uses soft magnetic material
+	rad.MatApl(g, rad.MatLin(1.0))
+	print("  OK: Changed to isotropic linear material (ksi=1.0)")
 
 	# Step 6
 	print("\n[Step 6] Updating H-matrix magnetization (fast, no rebuild)...")

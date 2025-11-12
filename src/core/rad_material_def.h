@@ -11,7 +11,6 @@
 * First release:  1997
 * 
 * Copyright (C):  1997 by European Synchrotron Radiation Facility, France
-*                 All Rights Reserved
 *
 -------------------------------------------------------------------------*/
 
@@ -683,6 +682,162 @@ inline void radTNonlinearIsotropMaterial::DumpBin(CAuxBinStrVect& oStr, vector<i
 	//double gMaxKsi;
 	oStr << gMaxKsi;
 }
+
+//-------------------------------------------------------------------------
+
+/**
+ * Permanent magnet material with demagnetization curve (Br/Hc model)
+ *
+ * Magnetic behavior:
+ *   B = Br + μ₀·μ_rec·H_parallel
+ *   M = B/μ₀ - H = (Br/μ₀) + (μ_rec - 1)·H_parallel
+ *
+ * where:
+ *   Br = residual flux density [T]
+ *   Hc = coercivity [A/m]
+ *   μ_rec = Br/(μ₀·Hc) = recoil permeability
+ *   H_parallel = component of H along easy axis
+ */
+class radTPermanentMagnet : public radTMaterial {
+	double Br;           // Residual flux density [T]
+	double Hc;           // Coercivity [A/m]
+	double mu_rec;       // Recoil permeability (calculated from Br/Hc)
+	TVector3d MagAxis;   // Easy magnetization axis (normalized)
+
+	static constexpr double mu_0 = 1.25663706212e-6;  // Permeability of free space [T/(A/m)]
+
+public:
+	radTPermanentMagnet(double InBr, double InHc, const TVector3d& InMagAxis)
+		: radTMaterial(TVector3d(0,0,0), 1)  // EasyAxisDefined = 1
+	{
+		Br = InBr;
+		Hc = InHc;
+		MagAxis = InMagAxis;
+
+		// Normalize easy axis
+		double AbsMagAxis = sqrt(MagAxis.x*MagAxis.x + MagAxis.y*MagAxis.y + MagAxis.z*MagAxis.z);
+		if(AbsMagAxis > 0) MagAxis = (1.0/AbsMagAxis) * MagAxis;
+
+		// Calculate recoil permeability: μ_rec = Br / (μ₀·Hc)
+		if(Hc > 0) mu_rec = Br / (mu_0 * Hc);
+		else mu_rec = 1.0;  // Default to vacuum permeability if Hc = 0
+
+		// Set remanent magnetization Mr = Br/μ₀
+		RemMagn = (Br / mu_0) * MagAxis;
+	}
+
+	radTPermanentMagnet(CAuxBinStrVect& inStr)
+	{
+		// Instantiates from string according to DumpBin
+		DumpBinParse_Material(inStr);
+
+		inStr >> Br;
+		inStr >> Hc;
+		inStr >> mu_rec;
+		inStr >> MagAxis;
+	}
+
+	radTPermanentMagnet() {}
+
+	int Type_Material() { return 101;}  // New type ID for permanent magnet
+
+	TVector3d M(const TVector3d& H)
+	{
+		// M = Mr + (μ_rec - 1)·H_parallel·MagAxis
+		double H_parallel = H.x*MagAxis.x + H.y*MagAxis.y + H.z*MagAxis.z;  // Dot product
+		TVector3d M_induced = (mu_rec - 1.0) * H_parallel * MagAxis;
+		return RemMagn + M_induced;
+	}
+
+	void DefineInstantKsiTensor(const TVector3d& InstantH, TMatrix3d& InstantKsiTensor, TVector3d& InstantMr)
+	{
+		// Susceptibility tensor for permanent magnet with demagnetization
+		// χ_parallel = μ_rec - 1 along easy axis
+		double ksi_par = mu_rec - 1.0;
+		double ksi_perp = 0.0;  // No response perpendicular to easy axis
+
+		// Construct anisotropic susceptibility tensor
+		TVector3d L = MagAxis;
+		double LxLx = L.x*L.x, LyLy = L.y*L.y, LzLz = L.z*L.z;
+		double DeltaKsi = ksi_par - ksi_perp;
+
+		TVector3d Str0(ksi_par*LxLx + ksi_perp*(LyLy+LzLz), DeltaKsi*L.x*L.y, DeltaKsi*L.x*L.z);
+		TVector3d Str1(Str0.y, ksi_par*LyLy + ksi_perp*(LxLx+LzLz), DeltaKsi*L.y*L.z);
+		TVector3d Str2(Str0.z, Str1.z, ksi_par*LzLz + ksi_perp*(LxLx+LyLy));
+
+		InstantKsiTensor.Str0 = Str0;
+		InstantKsiTensor.Str1 = Str1;
+		InstantKsiTensor.Str2 = Str2;
+		InstantMr = RemMagn;
+	}
+
+	void MultMatrByInstKsiAndMr(const TVector3d& InstantH, const TMatrix3d& Matr, TMatrix3d& MultByKsi, TVector3d& MultByMr)
+	{
+		TMatrix3d KsiTensor;
+		TVector3d InstantMr;
+		DefineInstantKsiTensor(InstantH, KsiTensor, InstantMr);
+
+		MultByKsi = Matr * KsiTensor;
+		MultByMr = Matr * RemMagn;
+	}
+
+	void FindNewH(TVector3d& H, const TMatrix3d& Matr, const TVector3d& H_Ext, double DesiredPrecOnMagnetizE2)
+	{
+		// Similar to anisotropic material, but using permanent magnet susceptibility
+		TMatrix3d KsiTensor;
+		TVector3d InstantMr;
+		DefineInstantKsiTensor(H, KsiTensor, InstantMr);
+
+		TVector3d ESt1(1.,0.,0.), ESt2(0.,1.,0.), ESt3(0.,0.,1.);
+		TMatrix3d E(ESt1, ESt2, ESt3);
+		TMatrix3d BufMatr = E - Matr*KsiTensor;
+		TMatrix3d InvBufMatr;
+		Matrix3d_inv(BufMatr, InvBufMatr);
+		H = InvBufMatr*(H_Ext + Matr*RemMagn);
+	}
+
+	int DuplicateItself(radThg& hg, radTApplication*, char)
+	{
+		return FinishDuplication(new radTPermanentMagnet(*this), hg);
+	}
+
+	void Dump(std::ostream& o, int ShortSign =0)
+	{
+		radTMaterial::Dump(o);
+		o << "Permanent magnet (Br/Hc)";
+
+		if(ShortSign==1) return;
+		o << endl;
+		o << "   Br= " << Br << " T, Hc= " << Hc << " A/m, mu_rec= " << mu_rec << endl;
+		o << "   Easy axis: {" << MagAxis.x << ',' << MagAxis.y << ',' << MagAxis.z << "}" << endl;
+		o << "   Remanent magnetization: {" << RemMagn.x << ',' << RemMagn.y << ',' << RemMagn.z << "} A/m" << endl;
+		o << "   Memory occupied: " << SizeOfThis() << " bytes";
+	}
+
+	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
+	{
+		vElemKeysOut.push_back(elemKey);
+		oStr << elemKey;
+
+		// Next 5 bytes define/encode element type
+		oStr << (char)Type_g();
+		oStr << (char)Type_Material();
+		oStr << (char)0;
+		oStr << (char)0;
+		oStr << (char)0;
+
+		// Members of radTMaterial
+		DumpBin_Material(oStr);
+
+		// Members of radTPermanentMagnet
+		oStr << Br;
+		oStr << Hc;
+		oStr << mu_rec;
+		oStr << MagAxis;
+	}
+
+	int SizeOfThis() { return sizeof(radTPermanentMagnet);}
+};
 
 //-------------------------------------------------------------------------
 

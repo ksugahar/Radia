@@ -11,7 +11,6 @@
 * First release:  1997
 *
 * Copyright (C):  1997 by European Synchrotron Radiation Facility, France
-*                 All Rights Reserved
 *
 -------------------------------------------------------------------------*/
 
@@ -104,6 +103,9 @@ void ApplySymmetry( int, int, int );
 
 void LinearMaterial( double,double, double,double,double );
 void LinearMaterial2( double,double, double );
+void LinearMaterialIsotropic( double );
+void LinearMaterialAnisotropic( double,double, double,double,double );
+void PermanentMagnet( double,double, double,double,double );
 void MaterialStd( char*, double );
 void NonlinearIsotropMaterial( double,double,double, double,double,double );
 void NonlinearIsotropMaterial2( double,double, double,double, double,double );
@@ -1242,7 +1244,31 @@ void LinearMaterial2(double KsiPar, double KsiPer, double Mr)
 
 //-------------------------------------------------------------------------
 
-void NonlinearIsotropMaterial(double Ms1, double Ms2, double Ms3, 
+void LinearMaterialIsotropic(double Ksi)
+{
+	rad.SetLinearIsotropicMaterial(Ksi);
+}
+
+//-------------------------------------------------------------------------
+
+void LinearMaterialAnisotropic(double KsiPar, double KsiPer, double Ex, double Ey, double Ez)
+{
+	double KsiArray[] = {KsiPar, KsiPer};
+	double EasyAxisArray[] = {Ex, Ey, Ez};
+	rad.SetLinearAnisotropicMaterial(KsiArray, 2, EasyAxisArray, 3);
+}
+
+//-------------------------------------------------------------------------
+
+void PermanentMagnet(double Br, double Hc, double Mx, double My, double Mz)
+{
+	double MagAxisArray[] = {Mx, My, Mz};
+	rad.SetPermanentMagnet(Br, Hc, MagAxisArray, 3);
+}
+
+//-------------------------------------------------------------------------
+
+void NonlinearIsotropMaterial(double Ms1, double Ms2, double Ms3,
 							  double ks1, double ks2, double ks3)
 {
 	double Ms[] = {Ms1, Ms2, Ms3};

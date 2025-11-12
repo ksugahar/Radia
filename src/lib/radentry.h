@@ -671,6 +671,33 @@ EXP int CALL RadMatApl(int* objout, int obj, int mat);
 */
 EXP int CALL RadMatLin(int* mat, double* Ksi, double* Mr, int nMr);
 
+/** Creates an isotropic linear magnetic material with single susceptibility.
+@param mat [out] reference number of the material created
+@param ksi [in] magnetic susceptibility (same in all directions)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author O.C.
+*/
+EXP int CALL RadMatLinIso(int* mat, double ksi);
+
+/** Creates an anisotropic linear magnetic material with easy axis.
+@param mat [out] reference number of the material created
+@param Ksi [in] array of 2 numbers specifying parallel and perpendicular susceptibilities [ksi_par, ksi_perp]
+@param EasyAxis [in] array of 3 numbers specifying easy magnetization axis direction [ex, ey, ez]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author O.C.
+*/
+EXP int CALL RadMatLinAniso(int* mat, double* Ksi, double* EasyAxis);
+
+/** Creates a permanent magnet material with demagnetization curve (Br/Hc model).
+@param mat [out] reference number of the material created
+@param Br [in] residual flux density [T]
+@param Hc [in] coercivity [A/m]
+@param MagAxis [in] array of 3 numbers specifying easy magnetization axis direction [mx, my, mz]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author O.C.
+*/
+EXP int CALL RadMatPM(int* mat, double Br, double Hc, double* MagAxis);
+
 /** Creates a pre-defined magnetic material.
 The material is identified by its name/formula (e.g. \"NdFeB\"). 
 @param mat [out] reference number of the material created

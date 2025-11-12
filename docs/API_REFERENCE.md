@@ -332,35 +332,6 @@ rad.Solve(magnet, 0.0001, 1000)
 
 ---
 
-### MatPMLinear - Permanent Magnet with Recoil Permeability ⭐ NEW
-
-```python
-material = rad.MatPMLinear(Br, mu_rec, [mx, my, mz])
-```
-
-Creates a permanent magnet with explicit recoil permeability.
-
-**Parameters**:
-- `Br` (float): Residual flux density [Tesla]
-- `mu_rec` (float): Recoil permeability (relative, dimensionless)
-- `[mx, my, mz]`: Easy magnetization axis direction
-
-**B-H Relationship**:
-```
-B = Br + μ₀ · μᵣₑc · H
-Hc = Br / (μ₀ · μᵣₑc)  [derived]
-```
-
-**Example**:
-```python
-mat = rad.MatPMLinear(1.32, 1.05, [0, 0, 1])  # Br=1.32T, μ_rec=1.05
-magnet = rad.ObjRecMag([0,0,0], [20,20,10], [0,0,0])
-rad.MatApl(magnet, mat)
-rad.Solve(magnet, 0.0001, 1000)
-```
-
----
-
 ### MatLin - Legacy API ⚠️ DEPRECATED
 
 ```python

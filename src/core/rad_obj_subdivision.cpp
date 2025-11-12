@@ -11,7 +11,6 @@
 * First release:  2007
 * 
 * Copyright (C):  2007 by Synchrotron SOLEIL & European Synchrotron Radiation Facility, France
-*                 All Rights Reserved
 *
 -------------------------------------------------------------------------*/
 

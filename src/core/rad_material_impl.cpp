@@ -11,7 +11,6 @@
 * First release:  1997
 * 
 * Copyright (C):  1997 by European Synchrotron Radiation Facility, France
-*                 All Rights Reserved
 *
 -------------------------------------------------------------------------*/
 
@@ -58,6 +57,114 @@ int radTApplication::SetLinearMaterial(double* KsiArray, long lenKsiArray, doubl
 		}
 
 		MaterPtr = new radTLinearAnisotropMaterial(KsiArray, RemMagnVect, EasyAxisDefined);
+		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+
+		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		if(MaterPtr) delete MaterPtr;  // Clean up if exception before radThg ownership transfer
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::SetLinearIsotropicMaterial(double Ksi)
+{
+	radTLinearIsotropMaterial* MaterPtr = nullptr;
+	try
+	{
+		MaterPtr = new radTLinearIsotropMaterial(Ksi);
+		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+
+		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		if(MaterPtr) delete MaterPtr;  // Clean up if exception before radThg ownership transfer
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::SetLinearAnisotropicMaterial(double* KsiArray, long lenKsiArray, double* EasyAxisArray, long lenEasyAxisArray)
+{
+	radTLinearAnisotropMaterial* MaterPtr = nullptr;
+	try
+	{
+		if(lenKsiArray != 2)
+		{
+			Send.ErrorMessage("Radia::Error022"); return 0;
+		}
+		if(lenEasyAxisArray != 3)
+		{
+			Send.ErrorMessage("Radia::Error102"); return 0;  // Easy axis must have 3 components
+		}
+
+		TVector3d EasyAxisVect;
+		if(!ValidateVector3d(EasyAxisArray, lenEasyAxisArray, &EasyAxisVect)) return 0;
+
+		// Normalize easy axis
+		double AbsEasyAxis = sqrt(EasyAxisVect.x*EasyAxisVect.x + EasyAxisVect.y*EasyAxisVect.y + EasyAxisVect.z*EasyAxisVect.z);
+		if(AbsEasyAxis < 1.E-10)
+		{
+			Send.ErrorMessage("Radia::Error103"); return 0;  // Easy axis cannot be zero vector
+		}
+		TVector3d RemMagnVect = (1.0/AbsEasyAxis) * EasyAxisVect;  // Use normalized easy axis as RemMagn
+
+		MaterPtr = new radTLinearAnisotropMaterial(KsiArray, RemMagnVect, 1);  // EasyAxisDefined = 1
+		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+
+		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		if(MaterPtr) delete MaterPtr;  // Clean up if exception before radThg ownership transfer
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::SetPermanentMagnet(double Br, double Hc, double* MagAxisArray, long lenMagAxisArray)
+{
+	radTPermanentMagnet* MaterPtr = nullptr;
+	try
+	{
+		if(lenMagAxisArray != 3)
+		{
+			Send.ErrorMessage("Radia::Error104"); return 0;  // Magnetization axis must have 3 components
+		}
+
+		TVector3d MagAxisVect;
+		if(!ValidateVector3d(MagAxisArray, lenMagAxisArray, &MagAxisVect)) return 0;
+
+		double AbsMagAxis = sqrt(MagAxisVect.x*MagAxisVect.x + MagAxisVect.y*MagAxisVect.y + MagAxisVect.z*MagAxisVect.z);
+		if(AbsMagAxis < 1.E-10)
+		{
+			Send.ErrorMessage("Radia::Error105"); return 0;  // Magnetization axis cannot be zero vector
+		}
+
+		if(Br <= 0 || Hc <= 0)
+		{
+			Send.ErrorMessage("Radia::Error106"); return 0;  // Br and Hc must be positive
+		}
+
+		MaterPtr = new radTPermanentMagnet(Br, Hc, MagAxisVect);
 		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 
 		radThg hg(MaterPtr);

@@ -11,7 +11,6 @@
 * First release:  1997
 * 
 * Copyright (C):  1997 by European Synchrotron Radiation Facility, France
-*                 All Rights Reserved
 *
 -------------------------------------------------------------------------*/
 
@@ -174,6 +173,9 @@ public:
 	int ApplySymmetry(int g3dElemKey, int TransElemKey, int Multiplicity);
 
 	int SetLinearMaterial(double* KsiArray, long lenKsiArray, double* RemMagnArray, long lenRemMagnArray);
+	int SetLinearIsotropicMaterial(double Ksi);
+	int SetLinearAnisotropicMaterial(double* KsiArray, long lenKsiArray, double* EasyAxisArray, long lenEasyAxisArray);
+	int SetPermanentMagnet(double Br, double Hc, double* MagAxisArray, long lenMagAxisArray);
 
 	int SetNonlinearIsotropMaterial(double* Ms, long lenMs, double* ks, long len_ks);
 	int SetNonlinearIsotropMaterial(TVector2d* ArrayHM, int LenArrayArrayHM);

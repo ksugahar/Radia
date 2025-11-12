@@ -47,7 +47,9 @@ python arc_current_with_magnet.py
 **主要関数:**
 - `rad.ObjArcCur()` - アーク電流要素の作成
 - `rad.ObjRecMag()` - 矩形磁石の作成
-- `rad.MatLin()` - 線形材料の定義
+- `rad.MatLin(ksi)` - 等方性線形材料の定義
+- `rad.MatLin([ksi_par, ksi_perp], [ex, ey, ez])` - 異方性線形材料の定義
+- `rad.MatPM(Br, Hc, [mx, my, mz])` - 永久磁石材料の定義（減磁曲線あり）
 - `rad.MatApl()` - 材料の適用
 - `rad.Fld()` - 磁場計算
 

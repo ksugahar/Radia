@@ -1,3 +1,39 @@
+/*
+!=====================================================================*
+!                                                                     *
+!   Software Name : HACApK                                            *
+!         Version : 1.3.0                                             *
+!                                                                     *
+!   License                                                           *
+!     This file is part of HACApK.                                    *
+!     HACApK is a free software, you can use it under the terms       *
+!     of The MIT License (MIT). See LICENSE file and User's guide     *
+!     for more details.                                               *
+!                                                                     *
+!   ppOpen-HPC project:                                               *
+!     Open Source Infrastructure for Development and Execution of     *
+!     Large-Scale Scientific Applications on Post-Peta-Scale          *
+!     Supercomputers with Automatic Tuning (AT).                      *
+!                                                                     *
+!   Sponsorship:                                                      *
+!     Japan Science and Technology Agency (JST), Basic Research       *
+!     Programs: CREST, Development of System Software Technologies    *
+!     for post-Peta Scale High Performance Computing.                 *
+!                                                                     *
+!   Copyright (c) 2015 <Akihiro Ida and Takeshi Iwashita>             *
+!                                                                     *
+!=====================================================================*
+!C**************************************************************************
+!C  This file includes basic routines for H-matrices
+!C  created by Akihiro Ida at Kyoto University on May 2012
+!C  added functions related to ACA+ to HACApK1.0.0 on Nov. 2016
+!C  corrected the allocation for st_ctl%lthr on Nov. 2016
+!C  added a function related to HACApK_view to HACApK1.1.0 on May 2017
+!C  added a function related to writing H-matrix to HACApK1.2.0 on May 2017
+!C  added functions related to Block clustering to HACApK1.2.0 on May 2017
+!C  translated to C language by Akihiro Ida and Kazuya Goto
+!C**************************************************************************
+*/
 #ifndef CHACAPK_BASE_H_INCLUDED
 #define CHACAPK_BASE_H_INCLUDED
 

@@ -2075,38 +2075,95 @@ static PyObject* radia_MatApl(PyObject* self, PyObject* args)
  ***************************************************************************/
 static PyObject* radia_MatLin(PyObject* self, PyObject* args)
 {
-	PyObject *oKsi=0, *oMr=0, *oResInd=0;
+	PyObject *oKsi=0, *oSecondArg=0, *oResInd=0;
 	try
 	{
-		if(!PyArg_ParseTuple(args, "OO:MatLin", &oKsi, &oMr)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
-		if((oKsi == 0) || (oMr == 0)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
+		// Try to parse arguments - can be 1 or 2 arguments
+		int nArgs = PyTuple_Size(args);
 
-		double arKsi[2];
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oKsi, 'd', arKsi, 2, CombErStr(strEr_BadFuncArg, ": MatLin, incorrect definition of susceptibility parameters"));
-
-		int nMr=0;
-		double arMr[3];
-		if(PyNumber_Check(oMr))
+		if(nArgs == 1)
 		{
-			*arMr = PyFloat_AsDouble(oMr);
-			nMr = 1;
+			// MatLin(ksi) - isotropic linear material
+			if(!PyArg_ParseTuple(args, "O:MatLin", &oKsi)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
+			if(oKsi == 0) throw CombErStr(strEr_BadFuncArg, ": MatLin");
+
+			// Check if single number
+			if(!PyNumber_Check(oKsi)) throw CombErStr(strEr_BadFuncArg, ": MatLin, single susceptibility value expected");
+
+			double ksi = PyFloat_AsDouble(oKsi);
+			int indRes=0;
+			g_pyParse.ProcRes(RadMatLinIso(&indRes, ksi));
+
+			oResInd = Py_BuildValue("i", indRes);
+		}
+		else if(nArgs == 2)
+		{
+			// MatLin([ksi_par, ksi_perp], second_arg)
+			if(!PyArg_ParseTuple(args, "OO:MatLin", &oKsi, &oSecondArg)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
+			if((oKsi == 0) || (oSecondArg == 0)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
+
+			double arKsi[2];
+			CPyParse::CopyPyListElemsToNumArrayKnownLen(oKsi, 'd', arKsi, 2, CombErStr(strEr_BadFuncArg, ": MatLin, two susceptibility values [ksi_par, ksi_perp] expected"));
+
+			// Check second argument type
+			if(PyNumber_Check(oSecondArg))
+			{
+				// Old API: MatLin([ksi_par, ksi_perp], Mr_scalar)
+				double Mr = PyFloat_AsDouble(oSecondArg);
+				int indRes=0;
+				g_pyParse.ProcRes(RadMatLin(&indRes, arKsi, &Mr, 1));
+				oResInd = Py_BuildValue("i", indRes);
+			}
+			else
+			{
+				// Try to parse as 3-element easy axis vector
+				double arSecond[3];
+				CPyParse::CopyPyListElemsToNumArrayKnownLen(oSecondArg, 'd', arSecond, 3, CombErStr(strEr_BadFuncArg, ": MatLin, easy axis must be 3-element vector [ex, ey, ez]"));
+
+				// MatLin([ksi_par, ksi_perp], [ex, ey, ez]) - NEW: easy axis
+				int indRes=0;
+				g_pyParse.ProcRes(RadMatLinAniso(&indRes, arKsi, arSecond));
+				oResInd = Py_BuildValue("i", indRes);
+			}
 		}
 		else
 		{
-			CPyParse::CopyPyListElemsToNumArrayKnownLen(oMr, 'd', arMr, 3, CombErStr(strEr_BadFuncArg, ": MatLin, incorrect definition of remanent magnetization"));
-			nMr = 3;
+			throw CombErStr(strEr_BadFuncArg, ": MatLin expects 1 or 2 arguments");
 		}
-
-		int indRes=0;
-		g_pyParse.ProcRes(RadMatLin(&indRes, arKsi, arMr, nMr));
-
-		oResInd = Py_BuildValue("i", indRes);
-		// Py_XINCREF removed - Py_BuildValue already returns new reference
 	}
 	catch (const char* erText)
 	{
 		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
+	}
+	return oResInd;
+}
+
+//-------------------------------------------------------------------------
+
+/************************************************************************//**
+ * Magnetic Materials: permanent magnet with demagnetization curve (Br/Hc model)
+ * API: MatPM(Br, Hc, [mx, my, mz])
+ ***************************************************************************/
+static PyObject* radia_MatPM(PyObject* self, PyObject* args)
+{
+	PyObject *oMagAxis=0, *oResInd=0;
+	double Br=0, Hc=0;
+	try
+	{
+		if(!PyArg_ParseTuple(args, "ddO:MatPM", &Br, &Hc, &oMagAxis)) throw CombErStr(strEr_BadFuncArg, ": MatPM");
+		if(oMagAxis == 0) throw CombErStr(strEr_BadFuncArg, ": MatPM");
+
+		double arMagAxis[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oMagAxis, 'd', arMagAxis, 3, CombErStr(strEr_BadFuncArg, ": MatPM, magnetization axis must be 3-element vector [mx, my, mz]"));
+
+		int indRes=0;
+		g_pyParse.ProcRes(RadMatPM(&indRes, Br, Hc, arMagAxis));
+
+		oResInd = Py_BuildValue("i", indRes);
+	}
+	catch (const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
 	}
 	return oResInd;
 }
@@ -3452,7 +3509,8 @@ static PyMethodDef radia_methods[] = {
 	{"TrfZerPara", radia_TrfZerPara, METH_VARARGS, "TrfZerPara(obj,[x,y,z],[nx,ny,nz]) creates an object mirror of obj with respect to the plane with normal [nx,ny,nz] and passing by the point [x,y,z]. The object mirror presents the same geometry as obj, but its magnetization and/or current densities are modified in such a way that the magnetic field produced by the obj and its mirror in the plane of mirroring is PERPENDICULAR to this plane."},
 	{"TrfZerPerp", radia_TrfZerPerp, METH_VARARGS, "TrfZerPerp(obj,[x,y,z],[nx,ny,nz]) creates an object mirror of obj with respect to the plane with normal [nx,ny,nz] and passing by the point [x,y,z]. The object mirror presents the same geometry as obj, but its magnetization and/or current densities are modified in such a way that the magnetic field produced by the obj and its mirror in the plane of mirroring is PARALLEL to this plane."},
 
-	{"MatLin", radia_MatLin, METH_VARARGS, "MatLin([ksipar,ksiper],mr) or MatLin([ksipar,ksiper],[mrx,mry,mrz]) creates a linear anisotropic magnetic material with susceptibilities parallel (perpendicular) to the easy magnetization axis given by ksipar (ksiper). In the first form of the function, mr is the magnitude of the remanent magnetization vector; the direction of the easy magnetisation axis is set up by the magnetization vector in the object to which the material is applied (the magnetization vector is specified at the object creation). In the second form, [mrx,mry,mrz] is the remanent magnetization vector explicitly defining the direction of the easy magnetization axis in any object to which the material is later applied."},
+	{"MatLin", radia_MatLin, METH_VARARGS, "MatLin(ksi) creates an isotropic linear magnetic material with single susceptibility ksi. MatLin([ksipar,ksiper],[ex,ey,ez]) creates an anisotropic linear magnetic material with susceptibilities parallel (perpendicular) to the easy magnetization axis [ex,ey,ez] given by ksipar (ksiper). MatLin([ksipar,ksiper],mr) or MatLin([ksipar,ksiper],[mrx,mry,mrz]) (deprecated forms) create an anisotropic material where mr or [mrx,mry,mrz] specifies remanent magnetization."},
+	{"MatPM", radia_MatPM, METH_VARARGS, "MatPM(Br,Hc,[mx,my,mz]) creates a permanent magnet material with demagnetization curve. Br is the residual flux density [T], Hc is the coercivity [A/m], and [mx,my,mz] defines the easy magnetization axis direction."},
 	{"MatSatIsoFrm", radia_MatSatIsoFrm, METH_VARARGS, "MatSatIsoFrm([ksi1,ms1],[ksi2,ms2],[ksi3,ms3]) creates a nonlinear isotropic magnetic material with the M versus H curve defined by the formula M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3), where H is the magnitude of the magnetic field strength vector (in Tesla). The parameters [ksi3,ms3] and [ksi2,ms2] may be omitted; in such a case the corresponding terms in the formula will be omitted too."},
 	{"MatSatIsoTab", radia_MatSatIsoTab, METH_VARARGS, "MatSatIsoTab([[H1,M1],[H2,M2],...]) creates a nonlinear isotropic magnetic material with the M versus H curve defined by the list of pairs [[H1,M1],[H2,M2],...] in Tesla."},
 	{"MatSatLamFrm", radia_MatSatLamFrm, METH_VARARGS, "MatSatLamFrm([ksi1,ms1],[ksi2,ms2],[ksi3,ms3],p,[nx,ny,nz]) creates laminated nonlinear anisotropic magnetic material with packing factor p and the lamination planes perpendicular to the vector [nx,ny,nz]. The magnetization magnitude vs magnetic field strength for the corresponding isotropic material is defined by the formula M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3), where H is the magnitude of the magnetic field strength vector (in Tesla). The parameters [ksi3,ms3] and [ksi2,ms2] may be omitted; in such a case the corresponding terms in the formula will be omitted too."},

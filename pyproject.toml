@@ -8,7 +8,7 @@ version = "1.0.10"
 description = "Radia 3D Magnetostatics with NGSolve Integration and OpenMP Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "LGPL-2.1"}
+license = {text = "BSD-style AND MIT"}
 authors = [
     {name = "Oleg Chubar", email = "chubar@bnl.gov"},
     {name = "Pascal Elleaume"},
@@ -20,6 +20,8 @@ keywords = ["magnetostatics", "magnetic field", "radia", "ngsolve", "fem", "sync
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: C++",
     "Topic :: Scientific/Engineering :: Physics",
