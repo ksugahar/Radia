@@ -95,9 +95,27 @@ public:
 	// Get cache directory
 	const std::string& GetCacheDir() const { return cache_dir; }
 
+	// Full H-matrix serialization (Phase 3B - v1.1.0)
+	bool EnableFullSerialization(bool enable = true);
+	bool IsFullSerializationEnabled() const { return full_serialization_enabled; }
+
+	bool SaveHMatrix(uint64_t hash, const class radTHMatrixInteraction* hmat);
+	class radTHMatrixInteraction* LoadHMatrix(uint64_t hash, class radTInteraction* intrct_ptr);
+
+	// Cache management
+	void SetMaxCacheSize(size_t max_mb = 1000);
+	size_t GetCurrentCacheSize() const;
+
 private:
 	// Ensure cache directory exists
 	bool EnsureCacheDirectory();
+
+	// Full serialization support
+	bool full_serialization_enabled;
+	size_t max_cache_size_mb;
+
+	std::string GetDataFilePath(uint64_t hash) const;
+	std::string GetDataDir() const;
 };
 
 // Global cache instance

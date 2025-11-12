@@ -1499,7 +1499,29 @@ int radTInteraction::SetupInteractMatrix_HMatrix()
 		// Phase 2-B: Compute current geometry hash
 		size_t current_hash = ComputeGeometryHash();
 
-		// Phase 3: Check disk cache for this geometry
+		// Phase 3B: Try to load full H-matrix from disk (v1.1.0)
+		if(g_hmatrix_cache.IsFullSerializationEnabled())
+		{
+			radTHMatrixInteraction* loaded = g_hmatrix_cache.LoadHMatrix(current_hash, this);
+			if(loaded != nullptr)
+			{
+				// Successfully loaded H-matrix from disk!
+				std::cout << "[Phase 3B] Loaded H-matrix from disk (instant startup!)" << std::endl;
+
+				// Replace existing H-matrix if any
+				if(hmat_interaction != nullptr)
+				{
+					delete hmat_interaction;
+				}
+
+				hmat_interaction = loaded;
+				geometry_hash = current_hash;
+				hmat_interaction->PrintStatistics();
+				return 1;  // Success - instant startup!
+			}
+		}
+
+		// Phase 3: Check disk cache for this geometry (metadata only)
 		const radTHMatrixCacheEntry* cache_entry = g_hmatrix_cache.Find(current_hash);
 		if(cache_entry)
 		{
@@ -1588,6 +1610,15 @@ int radTInteraction::SetupInteractMatrix_HMatrix()
 			g_hmatrix_cache.Save();
 
 			std::cout << "[Phase 3] Saved to cache (" << g_hmatrix_cache.GetCacheDir() << "/hmatrix_cache.bin)" << std::endl;
+
+			// Phase 3B: Save full H-matrix to disk (v1.1.0)
+			if(g_hmatrix_cache.IsFullSerializationEnabled())
+			{
+				if(g_hmatrix_cache.SaveHMatrix(current_hash, hmat_interaction))
+				{
+					std::cout << "[Phase 3B] Saved full H-matrix to disk (fast load on next startup)" << std::endl;
+				}
+			}
 
 			return 1;
 		}

@@ -397,6 +397,11 @@ EXP int CALL RadHMatrixBuild(int hmat);
 EXP int CALL RadSolverHMatrixEnable(int enable, double eps, int max_rank);
 EXP int CALL RadSolverHMatrixDisable();
 
+// Phase 3B: Full H-Matrix Serialization (v1.1.0)
+EXP int CALL RadSolverHMatrixCacheFull(int enable);
+EXP int CALL RadSolverHMatrixCacheSize(int max_mb);
+EXP int CALL RadSolverHMatrixCacheCleanup(int days);
+
 // Accessor functions for global H-matrix solver settings
 bool RadSolverGetHMatrixEnabled();
 double RadSolverGetHMatrixEps();

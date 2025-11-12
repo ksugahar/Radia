@@ -1002,6 +1002,78 @@ static PyObject* radia_SolverHMatrixDisable(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
+ * Enable/disable full H-Matrix serialization (v1.1.0)
+ ***************************************************************************/
+static PyObject* radia_SolverHMatrixCacheFull(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+
+	try
+	{
+		int enable = 1;
+		if(!PyArg_ParseTuple(args, "|i:SolverHMatrixCacheFull", &enable))
+			throw CombErStr(strEr_BadFuncArg, ": SolverHMatrixCacheFull");
+
+		g_pyParse.ProcRes(RadSolverHMatrixCacheFull(enable));
+
+		oRes = Py_BuildValue("i", 0);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Set maximum H-Matrix cache size in MB (v1.1.0)
+ ***************************************************************************/
+static PyObject* radia_SolverHMatrixCacheSize(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+
+	try
+	{
+		int max_mb = 1000;
+		if(!PyArg_ParseTuple(args, "|i:SolverHMatrixCacheSize", &max_mb))
+			throw CombErStr(strEr_BadFuncArg, ": SolverHMatrixCacheSize");
+
+		g_pyParse.ProcRes(RadSolverHMatrixCacheSize(max_mb));
+
+		oRes = Py_BuildValue("i", 0);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Cleanup old H-Matrix cache entries (v1.1.0)
+ ***************************************************************************/
+static PyObject* radia_SolverHMatrixCacheCleanup(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+
+	try
+	{
+		int days = 30;
+		if(!PyArg_ParseTuple(args, "|i:SolverHMatrixCacheCleanup", &days))
+			throw CombErStr(strEr_BadFuncArg, ": SolverHMatrixCacheCleanup");
+
+		g_pyParse.ProcRes(RadSolverHMatrixCacheCleanup(days));
+
+		oRes = Py_BuildValue("i", 0);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
  * Pre-compute relaxation interaction matrix
  ***************************************************************************/
 static PyObject* radia_PreRelax(PyObject* self, PyObject* args)
@@ -3479,6 +3551,9 @@ static PyMethodDef radia_methods[] = {
 	// {"HMatrixBuild", radia_HMatrixBuild, METH_VARARGS, "HMatrixBuild(hmat) builds the H-matrix structure for the H-matrix field source hmat. This must be called after creating the H-matrix object with ObjHMatrix. The building process constructs cluster trees and performs adaptive cross approximation (ACA) for fast field computation."},
 	{"SolverHMatrixEnable", (PyCFunction)radia_SolverHMatrixEnable, METH_VARARGS | METH_KEYWORDS, "SolverHMatrixEnable(enable=1, eps=1e-6, max_rank=50) enables H-matrix acceleration for the relaxation solver. The solver will automatically use OpenMP-parallelized H-matrix operations for systems with N > 50 elements, providing 4-10x speedup. Parameters: enable (1=on, 0=off), eps (ACA tolerance), max_rank (maximum rank for low-rank blocks)."},
 	{"SolverHMatrixDisable", radia_SolverHMatrixDisable, METH_VARARGS, "SolverHMatrixDisable() disables H-matrix acceleration for the relaxation solver, falling back to the standard dense solver."},
+	{"SolverHMatrixCacheFull", radia_SolverHMatrixCacheFull, METH_VARARGS, "SolverHMatrixCacheFull(enable=1) enables full H-matrix serialization to disk for 1000x speedup on program restart. Parameters: enable (1=on, 0=off). Cache files stored in ./.radia_cache/hmat/. Note: Increases disk usage (~10 MB per geometry). See also: SolverHMatrixCacheSize(), SolverHMatrixCacheCleanup()."},
+	{"SolverHMatrixCacheSize", radia_SolverHMatrixCacheSize, METH_VARARGS, "SolverHMatrixCacheSize(max_mb=1000) sets maximum H-matrix cache size in megabytes. Default: 1000 MB (1 GB). Automatically removes oldest entries when limit exceeded."},
+	{"SolverHMatrixCacheCleanup", radia_SolverHMatrixCacheCleanup, METH_VARARGS, "SolverHMatrixCacheCleanup(days=30) removes H-matrix cache entries older than specified number of days. Default: 30 days."},
 	{"ObjCnt", radia_ObjCnt, METH_VARARGS, "ObjCnt([obj1,obj2,...]) creates a container object for magnetic field source objects [obj1,obj2,...]."},
 	{"ObjAddToCnt", radia_ObjAddToCnt, METH_VARARGS, "ObjAddToCnt(cnt,[obj1,obj2,...]) adds objects [obj1,obj2,...] to the container object cnt."},
 	{"ObjCntStuf", radia_ObjCntStuf, METH_VARARGS, "ObjCntStuf(obj) returns list of general indexes of the objects present in container if obj is a container; or returns [obj] if obj is not a container."}, 

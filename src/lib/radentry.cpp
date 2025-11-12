@@ -10,6 +10,7 @@
 
 #include "radentry.h"
 #include "rad_io_buffer.h"
+#include "rad_hmatrix_cache.h"
 
 //DEBUG
 //#include <mpi.h>
@@ -1783,6 +1784,28 @@ double RadSolverGetHMatrixEps()
 int RadSolverGetHMatrixMaxRank()
 {
 	return g_SolverHMatrixMaxRank;
+}
+
+//-------------------------------------------------------------------------
+// Phase 3B: Full H-Matrix Serialization (v1.1.0)
+//-------------------------------------------------------------------------
+
+int CALL RadSolverHMatrixCacheFull(int enable)
+{
+	g_hmatrix_cache.EnableFullSerialization(enable != 0);
+	return 0;
+}
+
+int CALL RadSolverHMatrixCacheSize(int max_mb)
+{
+	g_hmatrix_cache.SetMaxCacheSize(max_mb);
+	return 0;
+}
+
+int CALL RadSolverHMatrixCacheCleanup(int days)
+{
+	g_hmatrix_cache.Cleanup(days);
+	return 0;
 }
 
 //-------------------------------------------------------------------------
