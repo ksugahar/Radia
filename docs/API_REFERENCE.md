@@ -272,6 +272,8 @@ rad.MatApl(block, mat)
 rad.Solve(block, 0.0001, 1000)
 ```
 
+**⚠️ Note**: MatLin is for magnetic materials that respond to external fields (soft iron, transformer cores, etc.). For permanent magnets, use `MatPM` instead.
+
 ---
 
 ### MatLin - Anisotropic Linear Material ⭐ NEW API
@@ -293,6 +295,8 @@ rad.MatApl(block, mat)
 ```
 
 ---
+
+**⚠️ Note**: MatLin is for magnetic materials that respond to external fields. For permanent magnets, use `MatPM` instead.
 
 ### MatPM - Permanent Magnet with Demagnetization ⭐ NEW
 
@@ -428,29 +432,39 @@ Creates nonlinear anisotropic material with separate parallel/perpendicular char
 
 ### Common Material Configuration Examples
 
-Below are typical material parameters for common magnetic materials. These can be created using `MatLin` for permanent magnets or `MatSatIsoFrm` for soft magnetic materials.
+Below are typical material parameters for common magnetic materials. Use **`MatPM`** for permanent magnets or **`MatSatIsoFrm`** for soft magnetic materials. For linear magnetic materials (non-permanent), use **`MatLin`**.
 
-#### Permanent Magnet Materials (Linear Anisotropic)
+#### Permanent Magnet Materials
 
-**NdFeB** (Neodymium-Iron-Boron):
+**Important**: For permanent magnets, use **`MatPM`** (NEW API) or create objects with fixed magnetization using `ObjRecMag` directly.
+
+**NdFeB N52** (Neodymium-Iron-Boron):
 ```python
-mat = rad.MatLin([0.06, 0.17], [0, 0, 1.2])  # ksi_par=0.06, ksi_perp=0.17, Mr=1.2 T
+# Method 1: Using MatPM (recommended for materials with demagnetization)
+mat = rad.MatPM(1.43, 876000, [0, 0, 1])  # Br=1.43T, Hc=876kA/m, easy axis=Z
+magnet = rad.ObjRecMag([0,0,0], [20,20,10], [0,0,0])
+rad.MatApl(magnet, mat)
+
+# Method 2: Fixed magnetization (for simple permanent magnets)
+magnet = rad.ObjRecMag([0,0,0], [20,20,10], [0,0,1.2])  # M=1.2T, no material needed
 ```
 
-**SmCo5** (Samarium-Cobalt):
+**NdFeB N42**:
 ```python
-mat = rad.MatLin([0.005, 0.04], [0, 0, 0.85])  # Mr=0.85 T
+mat = rad.MatPM(1.32, 876000, [0, 0, 1])  # Br=1.32T, Hc=876kA/m
 ```
 
-**Sm2Co17** (Samarium-Cobalt 2:17):
+**SmCo** (Samarium-Cobalt):
 ```python
-mat = rad.MatLin([0.005, 0.04], [0, 0, 1.05])  # Mr=1.05 T
+mat = rad.MatPM(1.10, 800000, [0, 0, 1])  # Br=1.10T, Hc=800kA/m
 ```
 
 **Ferrite**:
 ```python
-mat = rad.MatLin([0.07, 0.2], [0, 0, 0.35])  # Mr=0.35 T
+mat = rad.MatPM(0.40, 240000, [0, 0, 1])  # Br=0.40T, Hc=240kA/m
 ```
+
+**⚠️ IMPORTANT**: Do NOT use `MatLin` for permanent magnets. `MatLin` is only for linear magnetic materials that respond to external fields (soft iron, transformer cores, etc.).
 
 #### Soft Magnetic Materials (Nonlinear Isotropic)
 
