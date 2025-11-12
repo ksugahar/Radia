@@ -17,6 +17,7 @@
 #include "rad_interaction.h"
 #include "rad_subdivided_rectangle.h"
 #include "rad_intrc_hmat.h"
+#include "rad_hmatrix_cache.h"  // Phase 3: Disk cache
 #include "radentry.h"  // For RadSolverGetHMatrixEnabled()
 
 //-------------------------------------------------------------------------
@@ -1487,8 +1488,30 @@ int radTInteraction::SetupInteractMatrix_HMatrix()
 {
 	try
 	{
+		// Phase 3: Load cache on first use
+		static bool cache_loaded = false;
+		if(!cache_loaded)
+		{
+			g_hmatrix_cache.Load();
+			cache_loaded = true;
+		}
+
 		// Phase 2-B: Compute current geometry hash
 		size_t current_hash = ComputeGeometryHash();
+
+		// Phase 3: Check disk cache for this geometry
+		const radTHMatrixCacheEntry* cache_entry = g_hmatrix_cache.Find(current_hash);
+		if(cache_entry)
+		{
+			std::cout << "[Phase 3] Cache hit! (hash=" << std::hex << current_hash << std::dec << ")" << std::endl;
+			std::cout << "          Previous build: " << cache_entry->construction_time << "s";
+			std::cout << " (" << cache_entry->num_elements << " elements, ";
+			std::cout << "eps=" << cache_entry->eps << ", rank=" << cache_entry->max_rank << ")" << std::endl;
+		}
+		else
+		{
+			std::cout << "[Phase 3] Cache miss (new geometry, hash=" << std::hex << current_hash << std::dec << ")" << std::endl;
+		}
 
 		// Phase 2-B: Check if geometry has changed
 		if(hmat_interaction != nullptr && hmat_interaction->is_built)
@@ -1549,6 +1572,23 @@ int radTInteraction::SetupInteractMatrix_HMatrix()
 			// H-matrix construction succeeded
 			geometry_hash = current_hash;  // Phase 2-B: Save geometry hash for future validation
 			hmat_interaction->PrintStatistics();
+
+			// Phase 3: Save to disk cache
+			radTHMatrixCacheEntry entry;
+			entry.geometry_hash = current_hash;
+			entry.num_elements = AmOfMainElem;
+			entry.eps = config.eps;
+			entry.max_rank = config.max_rank;
+			entry.timestamp = std::time(nullptr);
+			entry.construction_time = hmat_interaction->construction_time;
+			entry.memory_used = hmat_interaction->memory_used;
+			entry.compression_ratio = hmat_interaction->compression_ratio;
+
+			g_hmatrix_cache.Add(entry);
+			g_hmatrix_cache.Save();
+
+			std::cout << "[Phase 3] Saved to cache (" << g_hmatrix_cache.GetCacheDir() << "/hmatrix_cache.bin)" << std::endl;
+
 			return 1;
 		}
 		else
