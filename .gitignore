@@ -185,3 +185,9 @@ file_format_documents/
 
 # Reference repositories (local only)
 参考/
+
+# Debug and development outputs
+debug/
+*_output.txt
+*_debug.txt
+benchmark_*.txt

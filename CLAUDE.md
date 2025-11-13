@@ -430,3 +430,143 @@ print("  Arrow: alpha -> 2.0")
 ---
 
 **Last Updated**: 2025-11-13
+
+## Development and Debug Files Organization
+
+### Requirement: Separate User-Facing and Development Files
+
+**Goal**: Keep the repository clean and organized by separating user-facing content from development/debug materials.
+
+**Policy**:
+- **User-facing files** (examples, documentation, tests) should remain in their standard locations
+- **Development/debug files** that users don't need should be organized in dedicated folders
+- Use clear, descriptive folder names that indicate the content is for development purposes
+
+**Recommended Folder Structure**:
+
+```
+project_root/
+├── examples/           # User-facing examples (keep clean)
+├── tests/              # User-facing test suite
+├── docs/               # User-facing documentation
+├── dev/                # Development notes and prototypes
+│   ├── notes/          # Development notes, meeting notes
+│   ├── prototypes/     # Experimental code, proof-of-concepts
+│   └── benchmarks/     # Development-only benchmarks
+├── debug/              # Debug outputs and temporary files
+│   ├── logs/           # Debug log files
+│   ├── output/         # Temporary output files
+│   └── cache/          # Debug cache files
+└── internal/           # Internal documentation not for end users
+    ├── design/         # Design documents, architecture notes
+    └── analysis/       # Performance analysis, profiling results
+```
+
+**File Types and Their Locations**:
+
+| File Type | Appropriate Location | Example |
+|-----------|---------------------|---------|
+| Benchmark results (published) | `examples/solver_benchmarks/BENCHMARK_RESULTS.md` | ✓ User-facing |
+| Benchmark output (debug) | `debug/output/benchmark_*.txt` | For developers only |
+| Example scripts | `examples/*/` | ✓ User-facing |
+| Development notes | `dev/notes/` | For developers only |
+| Design documents (internal) | `internal/design/` | For developers only |
+| Test output files | `debug/output/test_*.txt` | For developers only |
+| Cache files | `.radia_cache/` or `debug/cache/` | For developers only |
+| Meeting notes | `dev/notes/meetings/` | For developers only |
+| Profiling results | `internal/analysis/` | For developers only |
+
+**Naming Conventions**:
+
+1. **Development folders**: Use prefixes that clearly indicate non-user content
+   - `dev/` - Active development materials
+   - `debug/` - Debug outputs and temporary files
+   - `internal/` - Internal documentation
+   - `_archive/` - Archived materials (prefix with underscore)
+
+2. **Files to avoid in user-facing folders**:
+   - `output.txt`, `debug.log`, `temp_*.py`
+   - `test_manual_*.py` (unless part of test suite)
+   - `benchmark_results_raw_*.txt`
+   - `notes_*.md`, `TODO_*.md` (use issue tracker instead)
+
+**Rationale**:
+- **Clarity**: Users can easily find relevant examples and documentation
+- **Professionalism**: Repository looks organized and maintained
+- **Reduced confusion**: Clear separation between "what to use" and "how it was developed"
+- **Version control**: Development files can have different .gitignore rules
+
+**Implementation**:
+
+```bash
+# Create development folders
+mkdir -p dev/notes dev/prototypes
+mkdir -p debug/logs debug/output
+mkdir -p internal/design internal/analysis
+
+# Move development files
+mv benchmark_*_output.txt debug/output/
+mv notes_*.md dev/notes/
+mv DESIGN_*.md internal/design/
+```
+
+**Example .gitignore Rules**:
+
+```gitignore
+# Debug and development outputs (never commit)
+debug/
+*.log
+*_output.txt
+*_debug.txt
+
+# Development notes (optional - commit if useful for team)
+# dev/notes/
+
+# Internal documentation (commit - useful for maintainers)
+# internal/
+
+# User-facing content (always commit)
+examples/
+docs/
+tests/
+```
+
+**When to Use Each Folder**:
+
+1. **Use `examples/`** for:
+   - Scripts users should run
+   - Code users should learn from
+   - Production-ready demonstrations
+
+2. **Use `dev/`** for:
+   - Prototypes being developed
+   - Development meeting notes
+   - Experimental features
+   - "Work in progress" code
+
+3. **Use `debug/`** for:
+   - Temporary output files
+   - Debug logs
+   - Performance profiling outputs
+   - Files you'll delete later
+
+4. **Use `internal/`** for:
+   - Design documents for maintainers
+   - Architecture decisions
+   - Performance analysis reports
+   - Code review checklists
+
+**Migration Strategy**:
+
+When cleaning up an existing repository:
+
+1. **Identify files**: Find development/debug files in user-facing folders
+2. **Categorize**: Determine if files are dev/, debug/, or internal/
+3. **Move files**: Relocate to appropriate folders
+4. **Update references**: Fix any documentation or script paths
+5. **Update .gitignore**: Ensure debug/ is excluded
+6. **Commit changes**: Document the reorganization in commit message
+
+---
+
+**Last Updated**: 2025-11-13
