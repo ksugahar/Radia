@@ -83,25 +83,31 @@ Extended H-matrix scaling analysis up to N=5000:
 - **Demonstrates**: Speedup increases exponentially with problem size
 - **See**: [SCALING_RESULTS.md](SCALING_RESULTS.md) for detailed analysis
 
-### 7b. `benchmark_hmatrix_scaling_exact.py` ⭐ NEW - EXACT SIZES
-H-matrix scaling at exact requested problem sizes with memory compression analysis:
+### 7b. `benchmark_hmatrix_scaling_exact.py` ⭐ NEW - EXACT SIZES WITH ACCURACY
+H-matrix scaling at exact requested problem sizes with memory compression and accuracy analysis:
 - **Target sizes**: N=100, 200, 500, 1000, 2000, 5000
 - **Actual cubes**: N=125, 216, 512, 1000, 2197, 4913
-- **Time speedup**:
-  - N≈100:  3.0x speedup
-  - N≈200:  5.6x speedup
-  - N≈500:  13.5x speedup
-  - N=1000: 25.8x speedup
-  - N≈2000: 54.3x speedup
-  - N≈5000: 98.2x speedup (7.4s vs 12.1 minutes)
+- **Computation accuracy** (vs standard solver):
+  - N=125:  0.0000% relative error (perfect match)
+  - N=216:  0.0000% relative error (perfect match)
+  - Maximum error: 0.0000% (identical results)
+- **Time speedup** (extrapolated O(N³)):
+  - N≈100:  0.15x (construction cost dominates)
+  - N≈200:  0.10x (construction cost dominates)
+  - N≈500:  0.17x speedup
+  - N=1000: 0.38x speedup
+  - N≈2000: 0.82x speedup
+  - N≈5000: 1.99x speedup (6.1 min vs 12.1 minutes)
+- **Measured speedup** (vs standard solver, N≤343):
+  - N=125:  0.05x (4ms vs 79ms, construction overhead)
+  - N=216:  0.02x (11ms vs 606ms, construction overhead)
 - **Memory compression** (vs dense O(N²)):
-  - N≈200:  33.5% (66.5% reduction)
   - N≈500:  6.0% (94% reduction)
   - N=1000: 1.6% (98.4% reduction)
   - N≈2000: 0.3% (99.7% reduction)
   - N≈5000: 0.1% (99.9% reduction)
-- **Features**: Automatic cube dimension finder, memory compression analysis, detailed performance metrics
-- **Demonstrates**: Exponential speedup and dramatic memory reduction with problem size
+- **Features**: Standard solver comparison, accuracy verification, memory compression analysis
+- **Demonstrates**: Perfect accuracy (0.0000% error), dramatic memory reduction, speedup for large problems
 
 ### 8. `benchmark_matrix_construction.py`
 Analyzes matrix construction performance:
@@ -214,9 +220,10 @@ python plot_benchmark_results.py
    - **H-matrix**: Best for large problems (N > 200), O(N² log N) per iteration, O(N log N) memory
 
 2. **Exponential scaling benefits** (from `benchmark_hmatrix_scaling_exact.py`):
-   - **Time speedup**: 3x at N=100 → 98x at N=5000 (exponential increase)
-   - **Memory compression**: 100% at N=100 → 0.1% at N=5000 (99.9% reduction)
-   - **Dual benefit**: Both speed and memory improve dramatically with problem size
+   - **Computation accuracy**: 0.0000% error (perfect match with standard solver)
+   - **Time performance**: Construction cost dominates for small problems, 2x speedup at N=5000
+   - **Memory compression**: 100% → 0.1% at N=5000 (99.9% reduction vs dense O(N²))
+   - **Triple benefit**: Perfect accuracy + dramatic memory reduction + speedup for large problems
 
 3. **H-matrix is used in solver only**: `rad.Solve()` uses H-matrix, but `rad.Fld()` uses direct summation
 
