@@ -606,39 +606,21 @@ void hmatrix_matvec(
 	// OpenMP parallelized loop over blocks
 	int nblocks = hmat.blocks.size();
 
-	// OPTIMIZED VERSION: Use atomic operations instead of critical sections
-	// This eliminates serialization bottleneck and enables true parallelization
-	#pragma omp parallel for schedule(dynamic, 64)
+	#pragma omp parallel for
 	for (int b = 0; b < nblocks; b++) {
 		const LowRankBlock& block = hmat.blocks[b];
 
 		if (block.is_lowrank()) {
-			// Compute low-rank block contribution
-			// y_block = U * (V^T * x)
+			// Need temporary vector for thread safety
+			std::vector<double> y_local(y.size(), 0.0);
+			lowrank_matvec(block, x, y_local);
 
-			// Step 1: Compute V^T * x (rank-sized vector)
-			int rank = block.kt;
-			int ncol = block.ndt;
-			std::vector<double> temp(rank, 0.0);
-
-			for (int r = 0; r < rank; r++) {
-				double sum = 0.0;
-				for (int j = 0; j < ncol; j++) {
-					sum += block.a2[r * ncol + j] * x[block.nstrtt + j];
+			// Add to global y (critical section)
+			#pragma omp critical
+			{
+				for (size_t i = 0; i < y.size(); i++) {
+					y[i] += y_local[i];
 				}
-				temp[r] = sum;
-			}
-
-			// Step 2: Compute U * temp and accumulate directly with atomics
-			int nrow = block.ndl;
-			for (int i = 0; i < nrow; i++) {
-				double sum = 0.0;
-				for (int r = 0; r < rank; r++) {
-					sum += block.a1[i * rank + r] * temp[r];
-				}
-				// Atomic accumulation - no critical section needed!
-				#pragma omp atomic
-				y[block.nstrtl + i] += sum;
 			}
 		}
 		else if (block.is_full()) {
@@ -647,15 +629,22 @@ void hmatrix_matvec(
 			int m = block.ndl;
 			int n = block.ndt;
 
-			// Compute block contribution and accumulate directly with atomics
+			std::vector<double> y_local(y.size(), 0.0);
+
 			for (int i = 0; i < m; i++) {
 				double sum = 0.0;
 				for (int j = 0; j < n; j++) {
 					sum += block.a1[i * n + j] * x[block.nstrtt + j];
 				}
-				// Atomic accumulation - no critical section needed!
-				#pragma omp atomic
-				y[block.nstrtl + i] += sum;
+				y_local[block.nstrtl + i] = sum;
+			}
+
+			// Add to global y (critical section)
+			#pragma omp critical
+			{
+				for (size_t i = 0; i < y.size(); i++) {
+					y[i] += y_local[i];
+				}
 			}
 		}
 	}
