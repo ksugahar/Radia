@@ -6,7 +6,7 @@ This simulates restarting the program - geometry recreated, H-matrix loaded from
 
 import sys
 import os
-sys.path.insert(0, os.path.join('S:/Radia/01_GitHub', 'build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
 
 import radia as rad
 import time

@@ -5,10 +5,13 @@ Run all H-matrix benchmarks and generate summary report
 
 import sys
 import os
-sys.path.insert(0, os.path.join('S:/Radia/01_GitHub', 'build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
 
 import subprocess
 import time
+
+# Get project root directory (two levels up from this script)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
 print("="*70)
 print("H-MATRIX BENCHMARKS - COMPREHENSIVE TEST SUITE")
@@ -24,7 +27,7 @@ benchmarks = [
 results = []
 
 for name, script_path in benchmarks:
-    full_path = os.path.join('S:/Radia/01_GitHub', script_path)
+    full_path = os.path.join(PROJECT_ROOT, script_path)
 
     print(f"\n{'='*70}")
     print(f"RUNNING: {name}")
@@ -44,7 +47,7 @@ for name, script_path in benchmarks:
             capture_output=True,
             text=True,
             timeout=300,
-            cwd='S:/Radia/01_GitHub'
+            cwd=PROJECT_ROOT
         )
 
         elapsed = time.time() - start_time

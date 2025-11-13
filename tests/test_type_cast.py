@@ -8,7 +8,8 @@ Tests radTCast functionality:
 """
 
 import sys
-sys.path.insert(0, r"S:\Radia\01_GitHub\build\Release")
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../build/Release"))
 
 import pytest
 import radia as rad

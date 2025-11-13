@@ -191,3 +191,4 @@ debug/
 *_output.txt
 *_debug.txt
 benchmark_*.txt
+.radia_cache/

@@ -20,7 +20,7 @@ try:
 except ImportError as e:
 	print(f"ERROR: Failed to import radia module: {e}")
 	print("\nPlease build Radia first:")
-	print("  cd S:/Radia/01_GitHub")
+	print("  cd <project_root>")
 	print("  powershell.exe -ExecutionPolicy Bypass -File Build.ps1")
 	sys.exit(1)
 

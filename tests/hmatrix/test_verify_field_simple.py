@@ -4,7 +4,7 @@ Verify H-Matrix Field Accuracy (Simplified - No VTK)
 
 import sys
 import os
-sys.path.insert(0, os.path.join('S:/Radia/01_GitHub', 'build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
 
 import radia as rad
 import numpy as np
