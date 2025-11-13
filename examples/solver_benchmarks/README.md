@@ -84,18 +84,24 @@ Extended H-matrix scaling analysis up to N=5000:
 - **See**: [SCALING_RESULTS.md](SCALING_RESULTS.md) for detailed analysis
 
 ### 7b. `benchmark_hmatrix_scaling_exact.py` ⭐ NEW - EXACT SIZES
-H-matrix scaling at exact requested problem sizes:
+H-matrix scaling at exact requested problem sizes with memory compression analysis:
 - **Target sizes**: N=100, 200, 500, 1000, 2000, 5000
 - **Actual cubes**: N=125, 216, 512, 1000, 2197, 4913
-- **Key findings**:
-  - N≈100:  3.2x speedup
-  - N≈200:  6.1x speedup
-  - N≈500:  14.4x speedup
-  - N=1000: 28.5x speedup
-  - N≈2000: 59.2x speedup
-  - N≈5000: 127.5x speedup (6.2s vs 13.1 minutes)
-- **Features**: Automatic cube dimension finder, baseline comparison, speedup analysis
-- **Demonstrates**: Exponential speedup increase for user-requested problem sizes
+- **Time speedup**:
+  - N≈100:  3.0x speedup
+  - N≈200:  5.6x speedup
+  - N≈500:  13.5x speedup
+  - N=1000: 25.8x speedup
+  - N≈2000: 54.3x speedup
+  - N≈5000: 98.2x speedup (7.4s vs 12.1 minutes)
+- **Memory compression** (vs dense O(N²)):
+  - N≈200:  33.5% (66.5% reduction)
+  - N≈500:  6.0% (94% reduction)
+  - N=1000: 1.6% (98.4% reduction)
+  - N≈2000: 0.3% (99.7% reduction)
+  - N≈5000: 0.1% (99.9% reduction)
+- **Features**: Automatic cube dimension finder, memory compression analysis, detailed performance metrics
+- **Demonstrates**: Exponential speedup and dramatic memory reduction with problem size
 
 ### 8. `benchmark_matrix_construction.py`
 Analyzes matrix construction performance:
@@ -207,13 +213,16 @@ python plot_benchmark_results.py
    - **Gauss-Seidel**: Best for medium problems (100 < N < 200), O(N²) per iteration
    - **H-matrix**: Best for large problems (N > 200), O(N² log N) per iteration, O(N log N) memory
 
-2. **H-matrix is used in solver only**: `rad.Solve()` uses H-matrix, but `rad.Fld()` uses direct summation
+2. **Exponential scaling benefits** (from `benchmark_hmatrix_scaling_exact.py`):
+   - **Time speedup**: 3x at N=100 → 98x at N=5000 (exponential increase)
+   - **Memory compression**: 100% at N=100 → 0.1% at N=5000 (99.9% reduction)
+   - **Dual benefit**: Both speed and memory improve dramatically with problem size
 
-3. **Batch evaluation is critical**: Evaluating multiple points at once provides 4x speedup
+3. **H-matrix is used in solver only**: `rad.Solve()` uses H-matrix, but `rad.Fld()` uses direct summation
 
-4. **Parallel construction**: OpenMP parallelization provides 27x speedup for H-matrix construction
+4. **Batch evaluation is critical**: Evaluating multiple points at once provides 4x speedup
 
-5. **Memory efficiency**: H-matrix provides efficient memory usage for medium and large problems
+5. **Parallel construction**: OpenMP parallelization provides 27x speedup for H-matrix construction
 
 6. **H-matrix overhead**: For fast-converging problems (< 5 iterations), H-matrix construction overhead may dominate. However, for typical nonlinear problems requiring many iterations, the per-solve speedup (8-9x) outweighs construction cost.
 
