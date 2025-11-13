@@ -71,7 +71,7 @@ Analyzes solver performance scaling with problem size:
 - Crossover point analysis
 - Memory scaling analysis
 
-### 7. `benchmark_solver_scaling_extended.py` ⭐ NEW - EXTENDED RANGE
+### 7. `benchmark_solver_scaling_extended.py` ⭐ EXTENDED RANGE
 Extended H-matrix scaling analysis up to N=5000:
 - **Test range**: N=125, 343, 512, 1000, 1331, 2197, 4913
 - **Phase 2-B verification**: Correct methodology (solve-time only)
@@ -82,6 +82,20 @@ Extended H-matrix scaling analysis up to N=5000:
   - N=4913: 117.1x speedup (6.2s vs 12 minutes extrapolated)
 - **Demonstrates**: Speedup increases exponentially with problem size
 - **See**: [SCALING_RESULTS.md](SCALING_RESULTS.md) for detailed analysis
+
+### 7b. `benchmark_hmatrix_scaling_exact.py` ⭐ NEW - EXACT SIZES
+H-matrix scaling at exact requested problem sizes:
+- **Target sizes**: N=100, 200, 500, 1000, 2000, 5000
+- **Actual cubes**: N=125, 216, 512, 1000, 2197, 4913
+- **Key findings**:
+  - N≈100:  3.2x speedup
+  - N≈200:  6.1x speedup
+  - N≈500:  14.4x speedup
+  - N=1000: 28.5x speedup
+  - N≈2000: 59.2x speedup
+  - N≈5000: 127.5x speedup (6.2s vs 13.1 minutes)
+- **Features**: Automatic cube dimension finder, baseline comparison, speedup analysis
+- **Demonstrates**: Exponential speedup increase for user-requested problem sizes
 
 ### 8. `benchmark_matrix_construction.py`
 Analyzes matrix construction performance:
@@ -140,7 +154,8 @@ python benchmark_parallel_construction.py # Parallel H-matrix construction
 
 # Advanced analysis benchmarks
 python benchmark_solver_scaling.py        # Scaling analysis
-python benchmark_solver_scaling_extended.py  # Extended scaling (N up to 5000) ⭐ NEW
+python benchmark_solver_scaling_extended.py  # Extended scaling (N up to 5000)
+python benchmark_hmatrix_scaling_exact.py    # Exact sizes (N=100,200,500,1000,2000,5000) ⭐ NEW
 python benchmark_matrix_construction.py   # Matrix construction timing
 python benchmark_linear_material.py       # Linear material performance
 
