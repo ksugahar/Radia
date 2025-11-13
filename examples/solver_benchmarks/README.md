@@ -71,7 +71,19 @@ Analyzes solver performance scaling with problem size:
 - Crossover point analysis
 - Memory scaling analysis
 
-### 7. `benchmark_matrix_construction.py`
+### 7. `benchmark_solver_scaling_extended.py` ⭐ NEW - EXTENDED RANGE
+Extended H-matrix scaling analysis up to N=5000:
+- **Test range**: N=125, 343, 512, 1000, 1331, 2197, 4913
+- **Phase 2-B verification**: Correct methodology (solve-time only)
+- **Key findings**:
+  - N=343:   8.9x speedup
+  - N=1000: 25.6x speedup
+  - N=2197: 55.2x speedup
+  - N=4913: 117.1x speedup (6.2s vs 12 minutes extrapolated)
+- **Demonstrates**: Speedup increases exponentially with problem size
+- **See**: [SCALING_RESULTS.md](SCALING_RESULTS.md) for detailed analysis
+
+### 8. `benchmark_matrix_construction.py`
 Analyzes matrix construction performance:
 - Separates construction from solve time
 - Complexity verification (O(N²) expected)
@@ -128,6 +140,7 @@ python benchmark_parallel_construction.py # Parallel H-matrix construction
 
 # Advanced analysis benchmarks
 python benchmark_solver_scaling.py        # Scaling analysis
+python benchmark_solver_scaling_extended.py  # Extended scaling (N up to 5000) ⭐ NEW
 python benchmark_matrix_construction.py   # Matrix construction timing
 python benchmark_linear_material.py       # Linear material performance
 
