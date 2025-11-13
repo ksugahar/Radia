@@ -658,3 +658,180 @@ But ultimately: **User decides, code obeys**.
 ---
 
 **Last Updated**: 2025-11-13
+
+## PyPI Package Release Policy
+
+### Requirement: Manual PyPI Upload with Automated Version Management
+
+**Goal**: Ensure controlled, secure PyPI releases with automated version and metadata management by Claude Code.
+
+**Rationale**:
+- PyPI releases require human review and approval for security
+- Version numbers and metadata should be automatically maintained by Claude Code
+- Upload process uses standardized script with API token authentication
+- Separation of automated preparation (Claude) and manual approval (user)
+
+**Policy**:
+
+### 1. Version Management (Automated by Claude Code)
+
+**Claude Code is responsible for**:
+- Maintaining version numbers in `pyproject.toml`
+- Following semantic versioning (MAJOR.MINOR.PATCH)
+- Updating `CHANGELOG.md` with release notes
+- Ensuring version consistency across all files
+- Preparing release documentation
+
+**Version Update Workflow**:
+```toml
+# pyproject.toml - Claude updates this automatically
+[project]
+version = "1.1.1"  # Claude increments based on changes
+```
+
+**Semantic Versioning Rules**:
+- **MAJOR**: Breaking changes to API (e.g., 1.x.x → 2.0.0)
+- **MINOR**: New features, backward compatible (e.g., 1.1.x → 1.2.0)
+- **PATCH**: Bug fixes, backward compatible (e.g., 1.1.1 → 1.1.2)
+
+### 2. PyPI Upload Process (Manual by User)
+
+**User performs upload using**:
+```powershell
+# Set PyPI API token (keep secure, do not commit!)
+$env:PYPI_TOKEN = "pypi-AgEIcGl..."
+
+# Run standardized upload script
+powershell.exe -ExecutionPolicy Bypass -File Publish_to_PyPI.ps1
+```
+
+**Publish_to_PyPI.ps1 Script**:
+- Cleans old dist/ files
+- Builds source distribution (.tar.gz) and wheel (.whl)
+- Validates packages with twine check
+- Uploads to PyPI using API token authentication
+- Provides clear success/failure feedback
+
+**Security Requirements**:
+- **NEVER commit PyPI tokens** to repository
+- Use environment variable `$env:PYPI_TOKEN` for authentication
+- Tokens should have upload-only permissions (no admin access)
+- Rotate tokens periodically
+
+### 3. Pre-Release Checklist (Claude Code)
+
+Before requesting user to upload, Claude Code must:
+
+1. **Update version number**:
+   ```bash
+   # Edit pyproject.toml
+   version = "X.Y.Z"  # New version
+   ```
+
+2. **Update CHANGELOG.md**:
+   ```markdown
+   ## [X.Y.Z] - YYYY-MM-DD
+
+   ### Added
+   - New features...
+
+   ### Changed
+   - Modified features...
+
+   ### Fixed
+   - Bug fixes...
+   ```
+
+3. **Build and validate packages**:
+   ```bash
+   python -m build
+   python -m twine check dist/*
+   ```
+
+4. **Commit and push changes**:
+   ```bash
+   git add pyproject.toml CHANGELOG.md
+   git commit -m "Bump version to X.Y.Z"
+   git push
+   ```
+
+5. **Request user approval** for PyPI upload
+
+### 4. Upload Workflow
+
+**Claude Code**:
+1. Updates version and CHANGELOG
+2. Builds packages
+3. Validates packages
+4. Commits changes
+5. Says: "PyPI パッケージ準備完了。Publish_to_PyPI.ps1 でアップロードしてください。"
+
+**User**:
+1. Reviews changes and version number
+2. Sets `$env:PYPI_TOKEN`
+3. Runs `Publish_to_PyPI.ps1`
+4. Verifies upload success on https://pypi.org/project/radia/
+
+### 5. Files Maintained by Claude Code
+
+Claude Code automatically maintains:
+
+| File | Claude's Responsibility |
+|------|------------------------|
+| `pyproject.toml` | Version number, dependencies, metadata |
+| `CHANGELOG.md` | Release notes, version history |
+| `README.md` | Package description, installation instructions |
+| `LICENSE` | License text (verify before changes) |
+| `MANIFEST.in` | Package file inclusion rules |
+
+### 6. Example Release Workflow
+
+```
+User: "Release version 1.2.0 with new features"
+
+Claude:
+1. Updates pyproject.toml: version = "1.2.0"
+2. Updates CHANGELOG.md: ## [1.2.0] - 2025-11-13
+3. Builds packages: python -m build
+4. Validates: python -m twine check dist/*
+5. Commits: git commit -m "Bump version to 1.2.0"
+6. Pushes: git push
+7. Reports: "PyPI パッケージ準備完了 (1.2.0)。Publish_to_PyPI.ps1 でアップロードしてください。"
+
+User:
+1. Reviews: git log, CHANGELOG.md
+2. Sets token: $env:PYPI_TOKEN = "..."
+3. Uploads: powershell.exe -ExecutionPolicy Bypass -File Publish_to_PyPI.ps1
+4. Verifies: https://pypi.org/project/radia/1.2.0/
+```
+
+### 7. Emergency Rollback
+
+If a release has critical issues:
+
+1. **Do NOT delete from PyPI** (PyPI does not allow re-uploading same version)
+2. **Release a patch version** immediately (e.g., 1.2.0 → 1.2.1)
+3. **Update CHANGELOG.md** to mark problematic version
+4. **Document issue** in release notes
+
+### 8. TestPyPI for Testing
+
+For testing releases without affecting production:
+
+```powershell
+# Upload to TestPyPI instead
+python -m twine upload --repository testpypi dist/*
+
+# Test installation
+pip install --index-url https://test.pypi.org/simple/ radia==X.Y.Z
+```
+
+**When to use TestPyPI**:
+- Major version changes (1.x → 2.0)
+- Significant refactoring
+- New build system changes
+- First-time releases
+
+---
+
+**Last Updated**: 2025-11-13 (PyPI Release Policy)
