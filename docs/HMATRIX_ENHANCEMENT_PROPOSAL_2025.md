@@ -574,7 +574,7 @@ ACAと行列演算をGPUにオフロード、5-10x追加高速化
 4. `src/ext/HACApK_LH-Cimplm/` - HACApKライブラリ
 
 ### ベンチマーク
-1. `examples/H-matrix/benchmark_solver.py` - ソルバーベンチマーク
+1. `examples/solver_benchmarks/benchmark_solver.py` - ソルバーベンチマーク
 2. `examples/solver_benchmarks/` - 各種ベンチマーク
 3. `tests/benchmark_hmatrix.py` - 単体テスト
 

@@ -38,7 +38,7 @@ All H-matrix benchmarks have been successfully executed with **measured** perfor
 All benchmarks can be run individually:
 
 ```bash
-cd examples/H-matrix
+cd examples/solver_benchmarks
 
 # Individual benchmarks
 python benchmark_solver.py                # Solver performance

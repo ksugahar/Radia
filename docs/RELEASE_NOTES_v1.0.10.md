@@ -175,7 +175,7 @@ rad.SolverHMatrixEnable(enable, eps, max_rank)
 
 ### Updated Documents
 - `README.md` - Added HACApK library link and performance numbers
-- `examples/H-matrix/README.md` - Updated benchmarks and examples
+- `examples/solver_benchmarks/README.md` - Updated benchmarks and examples
 
 ## Implementation Files
 

@@ -16,9 +16,9 @@ print("Phase 3B: Full H-matrix serialization verification")
 print("="*70)
 
 benchmarks = [
-    ("Field Evaluation", "examples/H-matrix/benchmark_field_evaluation.py"),
-    ("Solver Performance", "examples/H-matrix/benchmark_solver.py"),
-    ("Parallel Construction", "examples/H-matrix/benchmark_parallel_construction.py"),
+    ("Field Evaluation", "examples/solver_benchmarks/benchmark_field_evaluation.py"),
+    ("Solver Performance", "examples/solver_benchmarks/benchmark_solver.py"),
+    ("Parallel Construction", "examples/solver_benchmarks/benchmark_parallel_construction.py"),
 ]
 
 results = []

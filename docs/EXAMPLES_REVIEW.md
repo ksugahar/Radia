@@ -262,7 +262,7 @@ Benchmark scripts tested during review:
 
 #### 1. benchmark_field_evaluation.py Exit Code 127 ✅ FIXED
 
-**Location:** `examples/H-matrix/benchmark_field_evaluation.py`
+**Location:** `examples/solver_benchmarks/benchmark_field_evaluation.py`
 
 **Issue:** Script exited with code 127 when run
 

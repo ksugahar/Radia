@@ -1,14 +1,22 @@
-# H-Matrix Performance Benchmarks
+# Magnetostatic Solver Benchmarks with H-Matrix Acceleration
 
-This directory contains benchmarks demonstrating the performance improvements from H-matrix acceleration in Radia.
+This directory contains comprehensive benchmarks for magnetostatic solver methods in Radia, with focus on H-matrix acceleration.
 
 ## Overview
 
-H-matrix (Hierarchical Matrix) is a technique for accelerating magnetostatic field computations by:
-1. **Solver acceleration**: O(N² log N) instead of O(N³) for the relaxation solver
+This benchmark suite compares three solver methods:
+
+1. **LU Decomposition**: Direct solver, O(N³) complexity, best for N < 100
+2. **Gauss-Seidel**: Standard relaxation, O(N²) per iteration, best for 100 < N < 200
+3. **H-matrix**: Fast relaxation with hierarchical matrices, O(N² log N) per iteration, best for N > 200
+
+### H-Matrix Acceleration Features
+
+H-matrix (Hierarchical Matrix) provides significant benefits for large problems:
+1. **Solver acceleration**: O(N² log N) instead of O(N³) for direct solvers
 2. **Memory reduction**: O(N log N) instead of O(N²) for interaction matrices
-3. **Parallel construction**: OpenMP parallelization of H-matrix blocks
-4. **Disk caching** (v1.1.0): Full H-matrix serialization for instant startup
+3. **Parallel construction**: OpenMP parallelization of H-matrix blocks (27x speedup)
+4. **Disk caching** (v1.1.0): Full H-matrix serialization for instant startup (10x speedup)
 
 ## Benchmark Files
 
@@ -94,7 +102,7 @@ Generates visualization plots:
 ## Quick Start
 
 ```bash
-cd examples/H-matrix
+cd examples/solver_benchmarks
 
 # New: Comprehensive solver comparison (LU vs GS vs H-matrix)
 python benchmark_solver_comparison.py
@@ -231,6 +239,7 @@ rad.RlxPre(geometry, 1)  # ~10x faster startup
 **Author**: Claude Code
 **Date**: 2025-11-13
 **Version**: 1.1.0
+**Folder**: `examples/solver_benchmarks/` (formerly `examples/H-matrix/`)
 
 ## Maintenance Status (2025-11-13)
 

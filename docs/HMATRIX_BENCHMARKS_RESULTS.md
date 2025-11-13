@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-All H-matrix examples in the `examples/H-matrix/` folder have been successfully executed, confirming that Phase 3B (full H-matrix serialization) is working correctly.
+All H-matrix examples in the `examples/solver_benchmarks/` folder have been successfully executed, confirming that Phase 3B (full H-matrix serialization) is working correctly.
 
 **Overall Results:**
 - **3/3 benchmarks PASSED** (100% success rate)
@@ -17,7 +17,7 @@ All H-matrix examples in the `examples/H-matrix/` folder have been successfully 
 
 ### 1. Field Evaluation Benchmark ✅
 
-**File**: `examples/H-matrix/benchmark_field_evaluation.py`
+**File**: `examples/solver_benchmarks/benchmark_field_evaluation.py`
 **Status**: PASS
 **Execution Time**: 0.60s
 
@@ -42,7 +42,7 @@ All H-matrix examples in the `examples/H-matrix/` folder have been successfully 
 
 ### 2. Solver Performance Benchmark ✅
 
-**File**: `examples/H-matrix/benchmark_solver.py`
+**File**: `examples/solver_benchmarks/benchmark_solver.py`
 **Status**: PASS
 **Execution Time**: 0.19s
 
@@ -67,7 +67,7 @@ All H-matrix examples in the `examples/H-matrix/` folder have been successfully 
 
 ### 3. Parallel Construction Benchmark ✅
 
-**File**: `examples/H-matrix/benchmark_parallel_construction.py`
+**File**: `examples/solver_benchmarks/benchmark_parallel_construction.py`
 **Status**: PASS
 **Execution Time**: 0.81s
 
@@ -143,7 +143,7 @@ Evidence:
 
 ### 1. verify_field_accuracy.py - VTK Export Crash ⚠️
 
-**File**: `examples/H-matrix/verify_field_accuracy.py`
+**File**: `examples/solver_benchmarks/verify_field_accuracy.py`
 **Status**: PARTIAL FAILURE (core functionality works, VTK export crashes)
 **Return Code**: 3221226356 (Windows heap corruption)
 
