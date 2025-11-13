@@ -22,29 +22,41 @@ H-matrix (Hierarchical Matrix) provides significant benefits for large problems:
 
 ### Core Performance Benchmarks
 
-### 1. `benchmark_solver_comparison.py` ⭐ NEW
-Comprehensive comparison of three solver methods:
+### 1. `benchmark_large_scale_comparison.py` ⭐ NEW - COMPREHENSIVE
+Large-scale three-way solver comparison across 10 problem sizes:
+- **Test range**: N=27 to N=10,648 elements
+- **Three methods**: LU Decomposition, Gauss-Seidel, H-matrix
+- **Detailed metrics**: Construction time, per-iteration time, memory usage, accuracy
+- **Scaling analysis**: Power law fits, complexity verification
+- **Key findings**:
+  - Crossover point: N=512 (H-matrix becomes optimal)
+  - Measured complexity: GS O(N^1.735), H-matrix O(N^1.645)
+  - Memory compression: 21.7% for N=10,648 (78% reduction)
+  - Performance: H-matrix 1.6% faster for largest problems
+
+### 2. `benchmark_solver_comparison.py`
+Quick comparison of three solver methods:
 - **LU Decomposition**: Direct solver, O(N³) complexity
 - **Gauss-Seidel**: Standard relaxation, O(N²) per iteration
 - **H-matrix**: Fast relaxation, O(N² log N) per iteration
 - Compares: per-iteration time, full solve time, memory usage, accuracy
 - **Demonstrates**: When each method is optimal (LU < 100, GS 100-200, H-matrix > 200)
 
-### 2. `benchmark_solver.py`
+### 3. `benchmark_solver.py`
 Compares solver performance with and without H-matrix:
 - Standard relaxation solver (no H-matrix, N=125)
 - H-matrix-accelerated relaxation solver (N=343)
 - Measures: solving time, memory usage, accuracy
 - **Demonstrates**: 6.6x speedup, 50% memory reduction
 
-### 3. `benchmark_field_evaluation.py`
+### 4. `benchmark_field_evaluation.py`
 Compares field evaluation methods:
 - Single-point evaluation loop
 - Batch evaluation (rad.Fld with multiple points)
 - NGSolve CoefficientFunction integration implications
 - **Demonstrates**: 4.0x speedup for 5000 points
 
-### 4. `benchmark_parallel_construction.py`
+### 5. `benchmark_parallel_construction.py`
 Tests parallel H-matrix construction:
 - Sequential construction (n_elem ≤ 100)
 - Parallel construction (n_elem > 100)
@@ -53,26 +65,26 @@ Tests parallel H-matrix construction:
 
 ### Advanced Analysis Benchmarks
 
-### 5. `benchmark_solver_scaling.py`
+### 6. `benchmark_solver_scaling.py`
 Analyzes solver performance scaling with problem size:
 - Tests multiple problem sizes (N = 27, 125, 343, 512, 1000)
 - Power law fits for complexity analysis
 - Crossover point analysis
 - Memory scaling analysis
 
-### 6. `benchmark_matrix_construction.py`
+### 7. `benchmark_matrix_construction.py`
 Analyzes matrix construction performance:
 - Separates construction from solve time
 - Complexity verification (O(N²) expected)
 - Overhead analysis
 
-### 7. `benchmark_linear_material.py`
+### 8. `benchmark_linear_material.py`
 Tests solver performance with linear materials:
 - Compares nonlinear vs linear material performance
 - Single-iteration convergence for linear problems
 - Matrix construction overhead analysis
 
-### 8. `benchmark_hmatrix_field.py`
+### 9. `benchmark_hmatrix_field.py`
 Tests H-matrix field evaluation (experimental):
 - Direct vs H-matrix field computation
 - Accuracy verification
@@ -80,19 +92,19 @@ Tests H-matrix field evaluation (experimental):
 
 ### Verification and Utilities
 
-### 9. `verify_field_accuracy.py`
+### 10. `verify_field_accuracy.py`
 Verifies field accuracy for different mesh refinements:
 - Compares N=125 vs N=343 element meshes
 - Maximum relative error: < 0.01%
 - Exports geometry to VTK for visualization
 
-### 10. `run_all_benchmarks.py`
+### 11. `run_all_benchmarks.py`
 Runs all benchmarks in sequence and generates a summary report.
 
-### 11. `run_all_hmatrix_benchmarks.py`
+### 12. `run_all_hmatrix_benchmarks.py`
 Comprehensive benchmark suite with detailed error reporting and timing analysis.
 
-### 12. `plot_benchmark_results.py`
+### 13. `plot_benchmark_results.py`
 Generates visualization plots:
 - Solver speedup vs number of elements
 - Field evaluation speedup vs number of points
@@ -104,7 +116,10 @@ Generates visualization plots:
 ```bash
 cd examples/solver_benchmarks
 
-# New: Comprehensive solver comparison (LU vs GS vs H-matrix)
+# New: Large-scale comprehensive benchmark (N=27 to N=10648)
+python benchmark_large_scale_comparison.py
+
+# Quick three-way solver comparison
 python benchmark_solver_comparison.py
 
 # Core performance benchmarks
