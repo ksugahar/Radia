@@ -12,40 +12,79 @@ H-matrix (Hierarchical Matrix) is a technique for accelerating magnetostatic fie
 
 ## Benchmark Files
 
-### 1. `benchmark_solver.py`
+### Core Performance Benchmarks
+
+### 1. `benchmark_solver_comparison.py` ⭐ NEW
+Comprehensive comparison of three solver methods:
+- **LU Decomposition**: Direct solver, O(N³) complexity
+- **Gauss-Seidel**: Standard relaxation, O(N²) per iteration
+- **H-matrix**: Fast relaxation, O(N² log N) per iteration
+- Compares: per-iteration time, full solve time, memory usage, accuracy
+- **Demonstrates**: When each method is optimal (LU < 100, GS 100-200, H-matrix > 200)
+
+### 2. `benchmark_solver.py`
 Compares solver performance with and without H-matrix:
 - Standard relaxation solver (no H-matrix, N=125)
 - H-matrix-accelerated relaxation solver (N=343)
 - Measures: solving time, memory usage, accuracy
 - **Demonstrates**: 6.6x speedup, 50% memory reduction
 
-### 2. `benchmark_field_evaluation.py`
+### 3. `benchmark_field_evaluation.py`
 Compares field evaluation methods:
 - Single-point evaluation loop
 - Batch evaluation (rad.Fld with multiple points)
 - NGSolve CoefficientFunction integration implications
 - **Demonstrates**: 4.0x speedup for 5000 points
 
-### 3. `benchmark_parallel_construction.py`
+### 4. `benchmark_parallel_construction.py`
 Tests parallel H-matrix construction:
 - Sequential construction (n_elem ≤ 100)
 - Parallel construction (n_elem > 100)
 - Speedup analysis on multi-core CPUs
 - **Demonstrates**: 27x speedup for construction phase
 
-### 4. `verify_field_accuracy.py`
+### Advanced Analysis Benchmarks
+
+### 5. `benchmark_solver_scaling.py`
+Analyzes solver performance scaling with problem size:
+- Tests multiple problem sizes (N = 27, 125, 343, 512, 1000)
+- Power law fits for complexity analysis
+- Crossover point analysis
+- Memory scaling analysis
+
+### 6. `benchmark_matrix_construction.py`
+Analyzes matrix construction performance:
+- Separates construction from solve time
+- Complexity verification (O(N²) expected)
+- Overhead analysis
+
+### 7. `benchmark_linear_material.py`
+Tests solver performance with linear materials:
+- Compares nonlinear vs linear material performance
+- Single-iteration convergence for linear problems
+- Matrix construction overhead analysis
+
+### 8. `benchmark_hmatrix_field.py`
+Tests H-matrix field evaluation (experimental):
+- Direct vs H-matrix field computation
+- Accuracy verification
+- Performance comparison
+
+### Verification and Utilities
+
+### 9. `verify_field_accuracy.py`
 Verifies field accuracy for different mesh refinements:
 - Compares N=125 vs N=343 element meshes
 - Maximum relative error: < 0.01%
 - Exports geometry to VTK for visualization
 
-### 5. `run_all_benchmarks.py`
+### 10. `run_all_benchmarks.py`
 Runs all benchmarks in sequence and generates a summary report.
 
-### 6. `run_all_hmatrix_benchmarks.py`
+### 11. `run_all_hmatrix_benchmarks.py`
 Comprehensive benchmark suite with detailed error reporting and timing analysis.
 
-### 7. `plot_benchmark_results.py`
+### 12. `plot_benchmark_results.py`
 Generates visualization plots:
 - Solver speedup vs number of elements
 - Field evaluation speedup vs number of points
@@ -57,13 +96,23 @@ Generates visualization plots:
 ```bash
 cd examples/H-matrix
 
-# Run individual benchmarks
-python benchmark_solver.py
-python benchmark_field_evaluation.py
-python benchmark_parallel_construction.py
-python verify_field_accuracy.py
+# New: Comprehensive solver comparison (LU vs GS vs H-matrix)
+python benchmark_solver_comparison.py
 
-# Or run all at once
+# Core performance benchmarks
+python benchmark_solver.py                # H-matrix vs standard solver
+python benchmark_field_evaluation.py      # Batch vs single-point evaluation
+python benchmark_parallel_construction.py # Parallel H-matrix construction
+
+# Advanced analysis benchmarks
+python benchmark_solver_scaling.py        # Scaling analysis
+python benchmark_matrix_construction.py   # Matrix construction timing
+python benchmark_linear_material.py       # Linear material performance
+
+# Verification
+python verify_field_accuracy.py          # Field accuracy verification
+
+# Run all at once
 python run_all_hmatrix_benchmarks.py
 
 # Generate visualization plots
@@ -132,11 +181,22 @@ rad.RlxPre(geometry, 1)  # ~10x faster startup
 
 ## Key Findings
 
-1. **H-matrix is used in solver only**: `rad.Solve()` uses H-matrix, but `rad.Fld()` uses direct summation
-2. **Batch evaluation is critical**: Evaluating multiple points at once provides 4x speedup
-3. **Parallel construction**: OpenMP parallelization provides 27x speedup for H-matrix construction
-4. **Memory efficiency**: H-matrix reduces memory by 50% for medium problems (N=343)
-5. **Disk caching** (v1.1.0): Full serialization provides 10x faster startup for repeated simulations
+1. **Solver method selection** (from `benchmark_solver_comparison.py`):
+   - **LU Decomposition**: Best for small problems (N < 100), O(N³) complexity, direct solve
+   - **Gauss-Seidel**: Best for medium problems (100 < N < 200), O(N²) per iteration
+   - **H-matrix**: Best for large problems (N > 200), O(N² log N) per iteration, O(N log N) memory
+
+2. **H-matrix is used in solver only**: `rad.Solve()` uses H-matrix, but `rad.Fld()` uses direct summation
+
+3. **Batch evaluation is critical**: Evaluating multiple points at once provides 4x speedup
+
+4. **Parallel construction**: OpenMP parallelization provides 27x speedup for H-matrix construction
+
+5. **Memory efficiency**: H-matrix reduces memory by 50% for medium problems (N=343)
+
+6. **Disk caching** (v1.1.0): Full serialization provides 10x faster startup for repeated simulations
+
+7. **H-matrix overhead**: For fast-converging problems (< 5 iterations), H-matrix construction overhead may dominate. Use disk caching (Phase 3B) to amortize construction cost across multiple runs.
 
 ## Performance Impact
 
