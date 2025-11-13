@@ -570,3 +570,91 @@ When cleaning up an existing repository:
 ---
 
 **Last Updated**: 2025-11-13
+
+## H-Matrix Solver Control Policy
+
+### Requirement: No Automatic Problem Size Threshold
+
+**Goal**: Users have full explicit control over H-matrix solver enable/disable. No automatic switching based on problem size (N < 200 vs N >= 200).
+
+**Rationale**:
+- Users should decide when H-matrix is appropriate for their use case
+- Small problems (N < 200) may still benefit from H-matrix in iterative workflows
+- Large problems (N >= 200) may not need H-matrix for single-shot calculations
+- Automatic threshold hides behavior and limits user control
+- Different applications have different performance trade-offs
+
+**Policy**:
+
+**✗ NO automatic threshold checking**:
+```cpp
+// WRONG - Don't do this
+if(use_hmatrix && AmOfMainElem >= 200) {
+    // Use H-matrix
+} else {
+    // Use dense solver
+    use_hmatrix = false;  // Override user's choice!
+}
+```
+
+**✓ User explicit control**:
+```cpp
+// CORRECT - Respect user's choice
+if(use_hmatrix) {
+    // Use H-matrix regardless of problem size
+    std::cout << "[Phase 2-B] Using H-matrix solver (N=" << AmOfMainElem << ")" << std::endl;
+    return SetupInteractMatrix_HMatrix();
+}
+```
+
+**Implementation**:
+
+1. **Remove all HMATRIX_AUTO_THRESHOLD checks** from code
+2. **Respect `use_hmatrix` flag** set by user via API
+3. **Print informational messages** showing N and parameters, but don't override
+4. **Document in user guide** when H-matrix is recommended (N > 200), but let user decide
+
+**API Behavior**:
+
+```python
+import radia as rad
+
+# User explicitly enables H-matrix
+rad.SolverHMatrixEnable(1, eps=1e-4, max_rank=30)
+
+# H-matrix will be used regardless of N
+# - N=50: H-matrix used (if user wants)
+# - N=500: H-matrix used (as expected)
+# - User controls when to use H-matrix
+
+# User explicitly disables H-matrix
+rad.SolverHMatrixEnable(0)
+
+# Dense solver will be used regardless of N
+# - N=50: Dense solver (as expected)
+# - N=5000: Dense solver (if user really wants)
+```
+
+**User Guidance** (in documentation, not code):
+
+Recommended usage:
+- **N < 100**: Dense solver typically faster
+- **N = 100-200**: Either method works, depends on use case
+- **N > 200**: H-matrix recommended for most cases
+- **Iterative workflows**: H-matrix beneficial even for small N (amortized construction cost)
+
+But ultimately: **User decides, code obeys**.
+
+**Files Modified**:
+- `src/core/rad_interaction.cpp`: Removed HMATRIX_AUTO_THRESHOLD checks
+  - `SetupInteractMatrix()`: No automatic threshold
+  - `EnableHMatrix()`: No automatic threshold
+
+**Verification**:
+- Small problem (N=50) with H-matrix enabled: Should use H-matrix
+- Large problem (N=500) with H-matrix disabled: Should use dense solver
+- No "[Auto] N=X < 200 - using optimized dense solver" messages
+
+---
+
+**Last Updated**: 2025-11-13
