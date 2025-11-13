@@ -6,6 +6,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.1.1] - 2025-11-13
+
+### Fixed
+
+- **Reverted Phase 3 Serialization** (Critical Performance Fix)
+  - Phase 3 serialization caused 89% performance regression (8.95x → 1.0x speedup loss)
+  - Restored Phase 2-B implementation with verified 8.3x speedup
+  - See `docs/PHASE3_PERFORMANCE_ISSUE.md` for detailed analysis
+  - Removed H-matrix disk caching APIs (will be reimplemented in future)
+
+### Changed
+
+- **Removed Automatic N=200 Threshold**
+  - Users now have explicit control over H-matrix enable/disable
+  - Removed automatic override based on problem size
+  - H-matrix respects user's `SolverHMatrixEnable()` flag regardless of N
+  - Added policy to CLAUDE.md documenting user control requirement
+
+### Added
+
+- **Extended Scaling Benchmarks**
+  - New `benchmark_solver_scaling_extended.py` testing N=125 to N=4913
+  - Results: 8.9x at N=343 → 117.1x at N=4913 speedup
+  - Created `SCALING_RESULTS.md` with comprehensive analysis
+
+- **Exact Size Benchmarks with Memory Compression Analysis**
+  - New `benchmark_hmatrix_scaling_exact.py` for N=100, 200, 500, 1000, 2000, 5000
+  - Time speedup: 3.0x → 98.2x (exponential increase)
+  - Memory compression: 100% → 0.1% (99.9% reduction at N=5000)
+  - Detailed speedup and memory analysis
+  - Verifies H-matrix O(N² log N) time and O(N log N) memory complexity
+
+### Documentation
+
+- **Phase 2-B Re-evaluation**
+  - Created `PHASE2B_REEVALUATION.md` documenting correct methodology
+  - Updated all benchmarks with Phase 2-B measured performance
+  - Clarified construction vs solve time distinction
+  - Added H-Matrix control policy to CLAUDE.md
+
+- **Updated README**
+  - Added memory compression results (0.1% at N=5000)
+  - Updated Key Findings with exponential scaling benefits
+  - Documented exact size benchmark results
+
+### Performance
+
+- **Phase 2-B Verified Performance**
+  - Solver: 8.3x speedup at N=343 (measured)
+  - Scaling: 3x at N≈100 → 98x at N≈5000
+  - Memory: 99.9% reduction at N=5000 vs dense O(N²)
+  - Field evaluation: 4.0x speedup (5000 points, batch)
+  - Parallel construction: 27.7x speedup (OpenMP)
+
 ## [1.1.0] - 2025-11-13
 
 ### Added
