@@ -482,21 +482,12 @@ int radTInteraction::CountRelaxElemsWithSym()
 int radTInteraction::SetupInteractMatrix() //OC26122019
 //void radTInteraction::SetupInteractMatrix()
 {
-	// Phase 2-A: Automatic threshold selection
-	const int HMATRIX_AUTO_THRESHOLD = 200;
-
-	// Check if H-matrix should be used
-	if(use_hmatrix && AmOfMainElem >= HMATRIX_AUTO_THRESHOLD)
+	// Phase 2-B: User controls H-matrix enable/disable explicitly
+	// No automatic threshold - user decides when to use H-matrix
+	if(use_hmatrix)
 	{
-		std::cout << "\n[Auto] Enabling H-matrix acceleration (N=" << AmOfMainElem
-		          << " >= " << HMATRIX_AUTO_THRESHOLD << ")" << std::endl;
+		std::cout << "\n[Phase 2-B] Using H-matrix solver (N=" << AmOfMainElem << ")" << std::endl;
 		return SetupInteractMatrix_HMatrix();
-	}
-	else if(use_hmatrix && AmOfMainElem < HMATRIX_AUTO_THRESHOLD)
-	{
-		std::cout << "\n[Auto] N=" << AmOfMainElem << " < " << HMATRIX_AUTO_THRESHOLD
-		          << " - using optimized dense solver instead" << std::endl;
-		use_hmatrix = false;  // Disable for small problems
 	}
 
 	radTFieldKey FieldKeyInteract; FieldKeyInteract.B_=FieldKeyInteract.H_=FieldKeyInteract.PreRelax_=1;
@@ -1466,18 +1457,12 @@ void radTInteraction::EnableHMatrix(bool enable, double eps, int max_rank)
 {
 	use_hmatrix = enable;
 
-	const int HMATRIX_AUTO_THRESHOLD = 200;  // Phase 2-A: Optimized threshold
-
-	if(enable && AmOfMainElem > HMATRIX_AUTO_THRESHOLD)
+	// Phase 2-B: No automatic threshold
+	// User explicitly controls H-matrix enable/disable
+	if(enable)
 	{
-		std::cout << "\n[Auto] Enabling H-matrix acceleration (N=" << AmOfMainElem
-		          << " > " << HMATRIX_AUTO_THRESHOLD << ")" << std::endl;
-	}
-	else if(enable)
-	{
-		std::cout << "\n[Auto] N=" << AmOfMainElem << " < " << HMATRIX_AUTO_THRESHOLD
-		          << " - using optimized dense solver instead" << std::endl;
-		use_hmatrix = false;
+		std::cout << "\n[Phase 2-B] H-matrix parameters: eps=" << eps
+		          << ", max_rank=" << max_rank << " (N=" << AmOfMainElem << ")" << std::endl;
 	}
 }
 
