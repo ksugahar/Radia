@@ -192,3 +192,16 @@ debug/
 *_debug.txt
 benchmark_*.txt
 .radia_cache/
+
+# Development folders
+dev/
+
+# NGSolve integration outputs
+*.ObjBckgCF/
+rad.ObjBckgCF/
+
+# HACApK development files
+*.pbf
+*.xcr
+bem-bb-config.txt
+hmat-assign.pl

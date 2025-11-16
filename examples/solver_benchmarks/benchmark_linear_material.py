@@ -5,9 +5,10 @@ Linear materials converge in 0-1 iterations, so only matrix construction is rele
 """
 
 import sys
+import os
 import numpy as np
 from time import perf_counter
-sys.path.insert(0, r"S:\Radia\01_GitHub\build\Release")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
 
 import radia as rad
 

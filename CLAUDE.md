@@ -835,3 +835,100 @@ pip install --index-url https://test.pypi.org/simple/ radia==X.Y.Z
 ---
 
 **Last Updated**: 2025-11-13 (PyPI Release Policy)
+
+## Python Script Path Import Policy
+
+### Requirement: Use Relative Paths for Module Imports
+
+**Goal**: Ensure all Python scripts in the repository use relative paths for importing the Radia module, making scripts portable across different development environments and user installations.
+
+**Rationale**:
+- Absolute paths (e.g., `S:\Radia\01_GitHub\build\Release`) only work on specific machines
+- Scripts with absolute paths fail when shared with other developers or users
+- Relative paths work regardless of installation location
+- Improves portability and collaboration
+
+**Policy**:
+
+**✗ NEVER use absolute paths**:
+```python
+# WRONG - Hard-coded absolute path
+import sys
+sys.path.insert(0, r"S:\Radia\01_GitHub\build\Release")
+import radia as rad
+```
+
+**✓ ALWAYS use relative paths**:
+```python
+# CORRECT - Relative path from script location
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+import radia as rad
+```
+
+### Path Calculation Pattern
+
+For scripts in different locations, use these patterns:
+
+**Examples folder** (`examples/*/script.py`):
+```python
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+```
+
+**Benchmarks folder** (`examples/solver_benchmarks/script.py`):
+```python
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+```
+
+**Tests folder** (`tests/script.py`):
+```python
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../build/Release'))
+```
+
+### Multiple Path Imports
+
+When importing from multiple locations (Radia module + Python utilities):
+```python
+import sys
+import os
+
+# Add Radia module path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+
+# Add Python utilities path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
+
+import radia as rad
+from radia_vtk_export import exportGeometryToVTK
+```
+
+### Benefits
+
+1. **Portability**: Scripts work on any machine without modification
+2. **Collaboration**: Other developers can run scripts immediately
+3. **Distribution**: Examples work for end users after installation
+4. **Maintenance**: No need to update paths when repository is moved
+
+### Files to Check
+
+When creating or modifying Python scripts:
+- All files in `examples/` folder
+- All files in `examples/solver_benchmarks/` folder
+- All files in `tests/` folder
+- Development scripts in `dev/` folder
+
+**Exception**: System-wide installed package (users install via `pip install radia`) don't need path manipulation:
+```python
+import radia as rad  # Works if radia is installed via pip
+```
+
+---
+
+**Last Updated**: 2025-11-17 (Python Script Path Import Policy)
