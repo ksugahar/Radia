@@ -6,6 +6,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2025-11-17
+
+### Added
+
+- **Test Suite Expansion**
+  - `test_magpylib_comparison.py` - Cross-validation with magpylib for cylindrical magnets
+  - `test_update_hmatrix_magnetization.py` - H-matrix magnetization update functionality test
+  - Tests use pytest.skip() for optional dependencies (magpylib)
+
+- **Benchmark Additions**
+  - `benchmark_solver_methods.py` - Comparison of Direct/Relaxation/H-matrix solver methods
+  - Demonstrates performance characteristics of each solver approach
+
+- **Documentation Improvements**
+  - `docs/README.md` - Comprehensive documentation index and navigation
+  - Organizes user documentation (API, H-matrix, NGSolve) and developer documentation
+  - Quick start guide for different user types
+
+### Changed
+
+- **Repository Organization**
+  - Moved development notes from `docs/` to `dev/notes/` (11 files)
+  - Organized by category: implementation, performance, releases
+  - Clearer separation between user-facing and development documentation
+  - Removed obsolete `examples/H-matrix/` folder (merged into solver_benchmarks)
+
+- **Code Quality Improvements**
+  - Fixed absolute paths to relative paths in 4 benchmark scripts
+  - Ensures portability across different development environments
+  - All Python scripts now use `os.path.join(os.path.dirname(__file__), ...)` pattern
+
+- **Development Policies**
+  - Added "Python Script Path Import Policy" to CLAUDE.md
+  - Mandates relative paths for all example and test scripts
+  - Improves collaboration and distribution
+
+### Fixed
+
+- Corrected path resolution in test scripts (tests/ folder structure)
+- Removed HACApK development files (bem-bb-config.txt, *.pbf, *.xcr, etc.)
+- Removed NGSolve temporary output folders (rad.ObjBckgCF/)
+- Updated .gitignore with rules for NGSolve and HACApK temporary files
+
+### Documentation
+
+- Updated README.md with computation accuracy analysis
+- Improved examples/simple_problems/README.md
+
 ## [1.1.1] - 2025-11-13
 
 ### Fixed
