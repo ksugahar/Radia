@@ -22,7 +22,7 @@ import radia as rad
 try:
 	from ngsolve import *
 	from netgen.occ import *
-	import rad_ngsolve
+	import radia_ngsolve
 	NGSOLVE_AVAILABLE = True
 except ImportError:
 	print("ERROR: NGSolve not available. This example requires NGSolve.")
@@ -109,8 +109,8 @@ for maxh in mesh_sizes:
 	print(f"    H(div) DOFs: {fes_hdiv.ndof}")
 
 	# Get CoefficientFunctions
-	A_cf = rad_ngsolve.RadiaField(bg_field, 'a')
-	B_cf = rad_ngsolve.RadiaField(bg_field, 'b')
+	A_cf = radia_ngsolve.RadiaField(bg_field, 'a')
+	B_cf = radia_ngsolve.RadiaField(bg_field, 'b')
 
 	# Project A to H(curl) space
 	A_gf = GridFunction(fes_hcurl)
@@ -228,8 +228,8 @@ fes_hcurl = HCurl(mesh, order=2)
 fes_hdiv = HDiv(mesh, order=2)
 fes_h1 = H1(mesh, order=2)
 
-A_cf = rad_ngsolve.RadiaField(bg_field, 'a')
-B_cf = rad_ngsolve.RadiaField(bg_field, 'b')
+A_cf = radia_ngsolve.RadiaField(bg_field, 'a')
+B_cf = radia_ngsolve.RadiaField(bg_field, 'b')
 
 A_gf = GridFunction(fes_hcurl)
 A_gf.Set(A_cf)

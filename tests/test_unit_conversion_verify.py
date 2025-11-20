@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'python'
 import numpy as np
 import radia as rad
 from ngsolve import *
-import rad_ngsolve
+import radia_ngsolve
 
 print("=" * 80)
 print("Unit Conversion Direction Verification Test")
@@ -50,7 +50,7 @@ B_direct_m = rad.Fld(magnet_m, 'b', [0.05, 0.05, 0.05])
 print(f"  rad.Fld([0.05, 0.05, 0.05] m) = [{B_direct_m[0]:.6f}, {B_direct_m[1]:.6f}, {B_direct_m[2]:.6f}] T")
 
 # NGSolve calculation with units='m'
-B_cf_m = rad_ngsolve.RadiaField(magnet_m, 'b', units='m')
+B_cf_m = radia_ngsolve.RadiaField(magnet_m, 'b', units='m')
 gf_m = GridFunction(fes)
 gf_m.Set(B_cf_m)
 B_ngsolve_m = gf_m(test_point_m)
@@ -75,7 +75,7 @@ B_direct_mm = rad.Fld(magnet_mm, 'b', [50, 50, 50])
 print(f"  rad.Fld([50, 50, 50] mm) = [{B_direct_mm[0]:.6f}, {B_direct_mm[1]:.6f}, {B_direct_mm[2]:.6f}] T")
 
 # NGSolve calculation with units='mm'
-B_cf_mm = rad_ngsolve.RadiaField(magnet_mm, 'b', units='mm')
+B_cf_mm = radia_ngsolve.RadiaField(magnet_mm, 'b', units='mm')
 gf_mm = GridFunction(fes)
 gf_mm.Set(B_cf_mm)
 B_ngsolve_mm = gf_mm(test_point_m)

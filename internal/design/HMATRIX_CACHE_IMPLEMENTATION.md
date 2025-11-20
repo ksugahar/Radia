@@ -1,4 +1,4 @@
-# H-Matrix Cache Implementation for rad_ngsolve
+# H-Matrix Cache Implementation for radia_ngsolve
 
 **Version**: 0.09
 **Date**: 2025-11-21
@@ -120,11 +120,11 @@ virtual void Evaluate(const BaseMappedIntegrationPoint &mip, FlatVector<> result
 ### Basic Workflow
 
 ```python
-import rad_ngsolve
+import radia_ngsolve
 from ngsolve import *
 
 # 1. Create Radia field CoefficientFunction
-A_cf = rad_ngsolve.RadiaField(bg_field, 'a')
+A_cf = radia_ngsolve.RadiaField(bg_field, 'a')
 
 # 2. Collect integration points from mesh
 all_points = []
@@ -267,7 +267,7 @@ The cache enables H-matrix acceleration by ensuring Radia evaluation uses large 
 ## Files Modified
 
 ### Core Implementation
-- `src/python/rad_ngsolve.cpp` - Complete cache implementation
+- `src/python/radia_ngsolve.cpp` - Complete cache implementation
   - Added `#include <unordered_map>`, `#include <array>`
   - Added cache member variables
   - Added `hash_point()`, `PrepareCache()`, `ClearCache()`, `GetCacheStats()`
@@ -282,7 +282,7 @@ The cache enables H-matrix acceleration by ensuring Radia evaluation uses large 
 - `examples/NGSolve_Integration/example_hmatrix_cache_usage.py` - Usage demonstration
 
 ### Build
-- `build/Release/rad_ngsolve.pyd` - Rebuilt with cache support
+- `build/Release/radia_ngsolve.pyd` - Rebuilt with cache support
 
 ## API Reference
 

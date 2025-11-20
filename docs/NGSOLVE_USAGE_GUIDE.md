@@ -6,8 +6,8 @@ There are two implementations for Radia and NGSolve integration:
 
 | Implementation | Status | Recommendation |
 |------|------|--------|
-| **Pure Python version** (`rad_ngsolve_py.py`) | ✓ Working | ⭐⭐⭐ Recommended |
-| **C++ version** (`rad_ngsolve.pyd`) | △ DLL issues | Conda environment only |
+| **Pure Python version** (`radia_ngsolve_py.py`) | ✓ Working | ⭐⭐⭐ Recommended |
+| **C++ version** (`radia_ngsolve.pyd`) | △ DLL issues | Conda environment only |
 
 ## Pure Python Version Usage (Recommended)
 
@@ -19,7 +19,7 @@ sys.path.insert(0, r"S:\radia\01_GitHub\src\python")
 sys.path.insert(0, r"S:\radia\01_GitHub\build\lib\Release")
 
 import radia as rad
-import rad_ngsolve_py as rad_ngsolve
+import radia_ngsolve_py as radia_ngsolve
 from ngsolve import *
 from netgen.csg import *
 
@@ -27,7 +27,7 @@ from netgen.csg import *
 magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1])
 
 # Create Radia field object
-B_radia = rad_ngsolve.RadBfield(magnet)
+B_radia = radia_ngsolve.RadBfield(magnet)
 
 # Generate mesh
 geo = CSGeometry()
@@ -85,10 +85,10 @@ import sys
 sys.path.insert(0, r"S:\radia\01_GitHub\build\Release")
 
 import radia as rad
-import rad_ngsolve  # C++ version
+import radia_ngsolve  # C++ version
 
 magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1])
-B = rad_ngsolve.RadBfield(magnet)
+B = radia_ngsolve.RadBfield(magnet)
 
 # Can be used directly in NGSolve (in theory)
 from ngsolve import *
@@ -127,7 +127,7 @@ Bz = B[2]
 
 ### Pure Python Version Mechanism
 
-`rad_ngsolve_py.py` works as follows:
+`radia_ngsolve_py.py` works as follows:
 
 1. `RadiaBFieldCF` class provides `Evaluate(x, y, z)` method
 2. Calls `rad.Fld()` to calculate Radia field
@@ -136,7 +136,7 @@ Bz = B[2]
 
 ### C++ Version Mechanism
 
-`rad_ngsolve.cpp` is implemented as follows:
+`radia_ngsolve.cpp` is implemented as follows:
 
 ```cpp
 class RadiaBFieldCF : public CoefficientFunction
@@ -170,7 +170,7 @@ This follows the same pattern as EMPY_Field's `B_MAGNET_CF`.
 
 ### Pure Python Version
 
-**Issue**: `No module named 'rad_ngsolve_py'`
+**Issue**: `No module named 'radia_ngsolve_py'`
 
 **Solution**:
 ```python
@@ -187,7 +187,7 @@ sys.path.insert(0, r"S:\radia\01_GitHub\build\lib\Release")
 
 ### C++ Version
 
-**Issue**: `DLL load failed while importing rad_ngsolve`
+**Issue**: `DLL load failed while importing radia_ngsolve`
 
 **Solution**: Use the Pure Python version or use a Conda environment.
 
@@ -196,10 +196,10 @@ sys.path.insert(0, r"S:\radia\01_GitHub\build\lib\Release")
 ### Example 1: Simple Field Evaluation
 
 ```python
-import rad_ngsolve_py as rad_ngsolve
+import radia_ngsolve_py as radia_ngsolve
 
 magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-B = rad_ngsolve.RadBfield(magnet)
+B = radia_ngsolve.RadBfield(magnet)
 
 # Evaluate at a point
 Bx, By, Bz = B.Evaluate(0, 0, 20)

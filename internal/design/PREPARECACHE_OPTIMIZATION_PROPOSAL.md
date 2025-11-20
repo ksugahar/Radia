@@ -143,8 +143,8 @@ for (size_t i = 0; i < npts; i++) {
 A_cf.PrepareCache(points)  # C++ implementation
 
 # New API (fast)
-import rad_ngsolve_fast
-rad_ngsolve_fast.prepare_cache(A_cf, points)  # Python implementation
+import radia_ngsolve_fast
+radia_ngsolve_fast.prepare_cache(A_cf, points)  # Python implementation
 ```
 
 ## Conclusion

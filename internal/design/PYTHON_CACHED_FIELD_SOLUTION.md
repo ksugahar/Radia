@@ -10,7 +10,7 @@ Successfully implemented a pure Python cached field evaluator that is **60,000x 
 
 ## Problem
 
-When using `rad_ngsolve` to set GridFunctions from Radia fields, element-by-element evaluation prevents H-matrix acceleration. The solution requires:
+When using `radia_ngsolve` to set GridFunctions from Radia fields, element-by-element evaluation prevents H-matrix acceleration. The solution requires:
 
 1. Collect all integration points at once
 2. Batch evaluate using Radia.Fld()
@@ -242,7 +242,7 @@ But current performance (~2 us/point) is already excellent for most use cases.
 - `docs/PYTHON_CACHED_FIELD_SOLUTION.md` - This document
 
 ### Modified
-- `src/python/rad_ngsolve.cpp` - Added (now obsolete) C++ cache implementation
+- `src/python/radia_ngsolve.cpp` - Added (now obsolete) C++ cache implementation
   - Note: C++ PrepareCache() can be removed or deprecated
   - Pure Python solution is recommended
 

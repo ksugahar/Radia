@@ -43,7 +43,7 @@ def setup_radia_path():
 	if dist_dir.exists():
 	    sys.path.insert(0, str(dist_dir))
 
-	# Add rad_ngsolve build directory (rad_ngsolve.pyd)
+	# Add rad_ngsolve build directory (radia_ngsolve.pyd)
 	ngsolve_build_dir = project_root / 'build' / 'Release'
 	if ngsolve_build_dir.exists():
 	    sys.path.insert(0, str(ngsolve_build_dir))

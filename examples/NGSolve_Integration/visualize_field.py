@@ -24,7 +24,7 @@ from ngsolve import *
 from netgen.csg import CSGeometry, OrthoBrick, Pnt
 import numpy as np
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 import argparse
 
 # Parse command line arguments
@@ -71,7 +71,7 @@ print(f"  Material: NdFeB, Br = 1.2 T")
 print("\n[Step 2] Creating NGSolve Coefficient Function")
 print("-" * 70)
 
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 print(f"B-field CoefficientFunction created: {type(B_cf).__name__}")
 
 # Test evaluation using Radia directly

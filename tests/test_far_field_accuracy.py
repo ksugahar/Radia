@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/python'))
 from ngsolve import *
 from netgen.occ import *
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 import numpy as np
 
 print("="*70)
@@ -65,7 +65,7 @@ regions = [
 
 # Test HDiv order=2 (best from previous tests)
 fes = HDiv(mesh, order=2)
-B_cf = rad_ngsolve.RadiaField(bg_field, 'b')
+B_cf = radia_ngsolve.RadiaField(bg_field, 'b')
 B_gf = GridFunction(fes)
 B_gf.Set(B_cf)
 

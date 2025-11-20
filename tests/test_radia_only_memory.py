@@ -186,7 +186,7 @@ if criterion1_pass and criterion2_pass:
     print("OVERALL: [PASS] No Radia core memory leak detected")
     print()
     print("Conclusion: Memory leak is in NGSolve integration, NOT in Radia core.")
-    print("The leak occurs in rad_ngsolve.cpp or NGSolve's GridFunction.Set().")
+    print("The leak occurs in radia_ngsolve.cpp or NGSolve's GridFunction.Set().")
 else:
     print("OVERALL: [FAIL] Memory leak detected in Radia core!")
     print()

@@ -9,7 +9,7 @@ Complete guide for building Radia Python modules on Windows, macOS, and Linux.
 ### Windows
 
 ```powershell
-# Build both radia and rad_ngsolve (recommended)
+# Build both radia and radia_ngsolve (recommended)
 .\Build.ps1
 
 # Build with tests
@@ -19,7 +19,7 @@ Complete guide for building Radia Python modules on Windows, macOS, and Linux.
 .\Build.ps1 -Clean
 ```
 
-**Outputs**: `build/Release/radia.pyd`, `build/Release/rad_ngsolve.pyd`
+**Outputs**: `build/Release/radia.pyd`, `build/Release/radia_ngsolve.pyd`
 
 ### macOS / Linux
 
@@ -42,7 +42,7 @@ make -j$(nproc)
 
 ### Build.ps1 - Build Both Modules
 
-Builds `radia.pyd` and `rad_ngsolve.pyd` in one command.
+Builds `radia.pyd` and `radia_ngsolve.pyd` in one command.
 
 **Parameters**:
 
@@ -112,7 +112,7 @@ Builds only `radia.pyd` (core Radia module).
 - **Python**: `sudo apt install python3-dev`
 - **FFTW**: `sudo apt install libfftw3-dev`
 
-### For rad_ngsolve (all platforms)
+### For radia_ngsolve (all platforms)
 
 - **NGSolve**: `pip install ngsolve`
 
@@ -178,9 +178,9 @@ field = rad.Fld(magnet, 'b', [10, 10, 10])
 print(f"B = {field} T")
 ```
 
-### rad_ngsolve - NGSolve Integration
+### radia_ngsolve - NGSolve Integration
 
-**Output**: `build/Release/rad_ngsolve.pyd` (Windows only currently)
+**Output**: `build/Release/radia_ngsolve.pyd` (Windows only currently)
 
 **Features**:
 - NGSolve CoefficientFunction interface
@@ -191,16 +191,16 @@ print(f"B = {field} T")
 **Usage**:
 ```python
 import ngsolve  # MUST import first
-import rad_ngsolve
+import radia_ngsolve
 import radia as rad
 
 # Create Radia magnet
 magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1.2])
 
 # Create NGSolve CoefficientFunction
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # Flux density
-H_cf = rad_ngsolve.RadiaField(magnet, 'h')  # Magnetic field
-A_cf = rad_ngsolve.RadiaField(magnet, 'a')  # Vector potential
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')  # Flux density
+H_cf = radia_ngsolve.RadiaField(magnet, 'h')  # Magnetic field
+A_cf = radia_ngsolve.RadiaField(magnet, 'a')  # Vector potential
 
 # Use in NGSolve mesh
 from netgen.occ import *
@@ -233,9 +233,9 @@ sys.path.insert(0, r'build\Release')
 import radia as rad
 print(rad.UtiVer())
 
-# If rad_ngsolve was built
+# If radia_ngsolve was built
 import ngsolve
-import rad_ngsolve
+import radia_ngsolve
 ```
 
 ### Unix
@@ -284,15 +284,15 @@ python --version  # Should match build version
 # Check architecture
 python -c "import struct; print(struct.calcsize('P')*8)"  # Should be 64
 
-# For rad_ngsolve
+# For radia_ngsolve
 python -c "import ngsolve; print(ngsolve.__version__)"
 ```
 
-#### "DLL load failed" (rad_ngsolve)
-**Solution**: Import ngsolve before rad_ngsolve:
+#### "DLL load failed" (radia_ngsolve)
+**Solution**: Import ngsolve before radia_ngsolve:
 ```python
 import ngsolve  # Load NGSolve dependencies first
-import rad_ngsolve  # Now this will work
+import radia_ngsolve  # Now this will work
 ```
 
 #### Build fails with linking errors
@@ -365,12 +365,12 @@ print(f"B = {B} T")
 - Vector potential (A) computation not implemented
 - Infinite integral uses simple trapezoidal rule
 
-### Coordinate Transformations (rad_ngsolve)
+### Coordinate Transformations (radia_ngsolve)
 
 Transform between global and local coordinate systems:
 
 ```python
-B_cf = rad_ngsolve.RadiaField(
+B_cf = radia_ngsolve.RadiaField(
     magnet, 'b',
     origin=[0.05, 0.05, 0.05],      # Translation (meters)
     u_axis=[1, 0, 0],                # Local x-axis
@@ -435,8 +435,8 @@ The following old scripts have been replaced:
 | Old Script | Replacement |
 |------------|-------------|
 | `Build_NGSolve.ps1` | `.\Build.ps1` |
-| `build_rad_ngsolve.bat` | `.\Build.ps1` |
-| `build_rad_ngsolve_full.bat` | `.\Build.ps1 -Clean` |
+| `build_radia_ngsolve.bat` | `.\Build.ps1` |
+| `build_radia_ngsolve_full.bat` | `.\Build.ps1 -Clean` |
 
 Old scripts are removed from the repository.
 

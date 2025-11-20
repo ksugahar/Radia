@@ -14,7 +14,7 @@ import radia as rad
 try:
 	from ngsolve import *
 	from netgen.occ import *
-	import rad_ngsolve
+	import radia_ngsolve
 except ImportError:
 	print("ERROR: NGSolve not available")
 	sys.exit(1)
@@ -67,7 +67,7 @@ print("\n" + "=" * 80)
 print("PERFORMANCE COMPARISON: Set() vs Interpolate()")
 print("=" * 80)
 
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 
 for config in mesh_configs:
 	h = config['h']

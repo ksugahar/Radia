@@ -2,7 +2,7 @@
 
 ## Summary
 
-PrepareCache() functionality has been successfully implemented in rad_ngsolve to enable H-matrix acceleration for GridFunction.Set().
+PrepareCache() functionality has been successfully implemented in radia_ngsolve to enable H-matrix acceleration for GridFunction.Set().
 
 **Date**: 2025-11-20
 **Status**: ✅ Implementation Complete - Ready for Build & Test
@@ -13,7 +13,7 @@ PrepareCache() functionality has been successfully implemented in rad_ngsolve to
 
 ### 1. Modified Files
 
-#### `src/python/rad_ngsolve.cpp`
+#### `src/python/radia_ngsolve.cpp`
 - ✅ Added `<unordered_map>` and `<array>` includes
 - ✅ Added cache infrastructure:
   - `point_cache_`: Hash map for cached field values
@@ -82,12 +82,12 @@ Based on analysis and design:
 
 ## Next Steps - BUILD & TEST
 
-### Step 1: Build rad_ngsolve Module
+### Step 1: Build radia_ngsolve Module
 
 ```powershell
-# Option A: Build only rad_ngsolve (faster)
+# Option A: Build only radia_ngsolve (faster)
 cd S:\radia\01_GitHub
-powershell.exe -Command "& { $vsDevCmd = 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat'; cmd /c `"`$vsDevCmd` && cd /d S:\radia\01_GitHub && cmake --build build --config Release --target rad_ngsolve`" }"
+powershell.exe -Command "& { $vsDevCmd = 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat'; cmd /c `"`$vsDevCmd` && cd /d S:\radia\01_GitHub && cmake --build build --config Release --target radia_ngsolve`" }"
 
 # Option B: Full rebuild (if issues)
 cmake --build build --config Release
@@ -154,7 +154,7 @@ PERFORMANCE SUMMARY
 
 ```python
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 from ngsolve import *
 from netgen.occ import *
 
@@ -169,7 +169,7 @@ box = Box((0.01, 0.01, 0.02), (0.06, 0.06, 0.08))
 mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.010))
 
 # Create RadiaField CoefficientFunction
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 
 # NEW: Pre-compute all field values (single H-matrix call)
 B_cf.PrepareCache(mesh)  # <-- This is the key step!
@@ -248,13 +248,13 @@ B_cf.PrintCacheStats()
 ## Files Modified
 
 ```
-src/python/rad_ngsolve.cpp          [MODIFIED] +180 lines
+src/python/radia_ngsolve.cpp          [MODIFIED] +180 lines
 tests/test_batch_evaluation.py      [NEW] 200 lines
 docs/BATCH_EVALUATION_PROPOSAL.md   [NEW] 250 lines
 docs/BATCH_IMPLEMENTATION_PLAN.md   [NEW] 400 lines
 ```
 
-**Backup created**: `src/python/rad_ngsolve.cpp.backup`
+**Backup created**: `src/python/radia_ngsolve.cpp.backup`
 
 ---
 

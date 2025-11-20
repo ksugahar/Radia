@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../build/Release'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/python'))
 
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 from ngsolve import *
 from netgen.occ import *
 import time
@@ -57,7 +57,7 @@ print("="*70)
 
 fes = HDiv(mesh, order=2)
 B_gf_standard = GridFunction(fes)
-B_cf_standard = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf_standard = radia_ngsolve.RadiaField(magnet, 'b')
 
 print(f"[Test 1] FE Space: HDiv order=2, {fes.ndof} DOFs")
 
@@ -73,7 +73,7 @@ print("TEST 2: Optimized GridFunction.Set() with PrepareCache()")
 print("="*70)
 
 B_gf_batch = GridFunction(fes)
-B_cf_batch = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf_batch = radia_ngsolve.RadiaField(magnet, 'b')
 
 print("[Test 2] Calling PrepareCache()...")
 t0 = time.time()

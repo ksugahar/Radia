@@ -4,7 +4,7 @@
 - Windows 10/11 (64-bit)
 - Visual Studio 2022 (Community or higher)
 - Python 3.12 (64-bit)
-- For rad_ngsolve: NGSolve (`pip install ngsolve`)
+- For radia_ngsolve: NGSolve (`pip install ngsolve`)
 
 ## Build Commands
 
@@ -12,7 +12,7 @@
 ```powershell
 .\Build.ps1
 ```
-Builds both `radia.pyd` and `rad_ngsolve.pyd`.
+Builds both `radia.pyd` and `radia_ngsolve.pyd`.
 
 ### Build with Tests
 ```powershell
@@ -28,17 +28,17 @@ Builds both `radia.pyd` and `rad_ngsolve.pyd`.
 
 | Script | Purpose | Output |
 |--------|---------|--------|
-| `Build.ps1` | **Build both modules** | `radia.pyd` + `rad_ngsolve.pyd` |
+| `Build.ps1` | **Build both modules** | `radia.pyd` + `radia_ngsolve.pyd` |
 
 ### Deprecated Scripts (Moved to *.old)
 - `build_ngsolve.ps1` → Use `Build.ps1`
-- `build_rad_ngsolve.bat` → Use `Build.ps1`
-- `build_rad_ngsolve_full.bat` → Use `Build.ps1 -Clean`
+- `build_radia_ngsolve.bat` → Use `Build.ps1`
+- `build_radia_ngsolve_full.bat` → Use `Build.ps1 -Clean`
 
 ## Output Location
 ```
 build/Release/radia.pyd
-build/Release/rad_ngsolve.pyd
+build/Release/radia_ngsolve.pyd
 ```
 
 ## Usage After Build
@@ -50,9 +50,9 @@ sys.path.insert(0, r'build\Release')
 import radia as rad
 print(rad.UtiVer())
 
-# Use rad_ngsolve (requires NGSolve)
+# Use radia_ngsolve (requires NGSolve)
 import ngsolve
-import rad_ngsolve
+import radia_ngsolve
 ```
 
 ## Troubleshooting
@@ -63,7 +63,7 @@ Install from [python.org](https://www.python.org/downloads/) (64-bit version)
 ### "CMake not found"
 Install CMake component via Visual Studio Installer
 
-### "NGSolve not found" (for rad_ngsolve)
+### "NGSolve not found" (for radia_ngsolve)
 ```bash
 pip install ngsolve
 ```

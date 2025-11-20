@@ -127,12 +127,12 @@ print("=" * 80)
 
 print("""
 If batch evaluation is supported:
-  - Can implement SIMD evaluation in rad_ngsolve.cpp
+  - Can implement SIMD evaluation in radia_ngsolve.cpp
   - Expected speedup: 2-10x for GridFunction.Set()
 
 If not supported:
   - Need to modify Radia Python bindings first
-  - Or implement batching at C++ level in rad_ngsolve.cpp
+  - Or implement batching at C++ level in radia_ngsolve.cpp
 """)
 
 print("=" * 80)

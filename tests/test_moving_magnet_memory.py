@@ -23,7 +23,7 @@ import numpy as np
 try:
     from ngsolve import *
     from netgen.occ import *
-    import rad_ngsolve
+    import radia_ngsolve
     NGSOLVE_AVAILABLE = True
 except ImportError:
     print("ERROR: NGSolve not available. This test requires NGSolve.")
@@ -104,7 +104,7 @@ for step in range(NUM_STEPS):
 
     # Create RadiaField CoefficientFunction for B field
     # This is where memory leak might occur - creating new CF each time
-    B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+    B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 
     # Create GridFunction and set field
     # This allocates memory and should be released
@@ -233,7 +233,7 @@ else:
     print("  4. pybind11 Python/C++ boundary issues")
     print()
     print("Recommended actions:")
-    print("  - Review rad_ngsolve.cpp for proper pybind11 lifetime management")
+    print("  - Review radia_ngsolve.cpp for proper pybind11 lifetime management")
     print("  - Check if PrepareCache() allocations are properly freed")
     print("  - Verify Radia's UtiDelAll() clears all internal caches")
 

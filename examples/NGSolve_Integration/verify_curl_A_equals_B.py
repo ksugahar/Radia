@@ -26,7 +26,7 @@ import radia as rad
 try:
 	from ngsolve import *
 	from netgen.occ import *
-	import rad_ngsolve
+	import radia_ngsolve
 	NGSOLVE_AVAILABLE = True
 except ImportError:
 	print("ERROR: NGSolve not available. This example requires NGSolve.")
@@ -131,11 +131,11 @@ print("\n[Step 4] Creating CoefficientFunctions")
 print("-" * 80)
 
 # Get vector potential A from Radia as CoefficientFunction
-A_cf = rad_ngsolve.RadiaField(bg_field, 'a')
+A_cf = radia_ngsolve.RadiaField(bg_field, 'a')
 print(f"  A_cf created: {type(A_cf)}")
 
 # Get B directly from Radia
-B_cf = rad_ngsolve.RadiaField(bg_field, 'b')
+B_cf = radia_ngsolve.RadiaField(bg_field, 'b')
 print(f"  B_cf created: {type(B_cf)}")
 
 # ============================================================================

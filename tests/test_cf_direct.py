@@ -5,7 +5,7 @@ from numpy import *
 from ngsolve import *
 from netgen.occ import *
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 
 # Set Radia to use meters (required for NGSolve integration)
 rad.FldUnits('m')
@@ -26,7 +26,7 @@ B_radia = rad.Fld(magnet_base, 'b', point)
 print(f"rad.Fld result:          {B_radia}")
 
 # 2. Create CoefficientFunction
-B_cf = rad_ngsolve.RadiaField(magnet_base, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet_base, 'b')
 print(f"CoefficientFunction created: {B_cf}")
 
 # 3. Try to evaluate CF at a point (this might not work directly)

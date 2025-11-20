@@ -22,7 +22,7 @@ import radia as rad
 try:
 	from ngsolve import *
 	from netgen.occ import *
-	import rad_ngsolve
+	import radia_ngsolve
 	NGSOLVE_AVAILABLE = True
 except ImportError:
 	print("ERROR: NGSolve not available. This benchmark requires NGSolve.")
@@ -133,7 +133,7 @@ for radia_cfg in radia_configs:
 
 			# Create CoefficientFunction
 			t_start = perf_counter()
-			cf_dense = rad_ngsolve.RadiaField(magnet, field_type, use_hmatrix=False)
+			cf_dense = radia_ngsolve.RadiaField(magnet, field_type, use_hmatrix=False)
 			t_create_dense = perf_counter() - t_start
 
 			# Create GridFunction and Set
@@ -153,7 +153,7 @@ for radia_cfg in radia_configs:
 
 			# Create CoefficientFunction
 			t_start = perf_counter()
-			cf_hmat = rad_ngsolve.RadiaField(magnet, field_type, use_hmatrix=True)
+			cf_hmat = radia_ngsolve.RadiaField(magnet, field_type, use_hmatrix=True)
 			t_create_hmat = perf_counter() - t_start
 
 			# Create GridFunction and Set

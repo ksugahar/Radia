@@ -460,7 +460,7 @@ Interpolate(): 443 ms (遅い...)
 
 ```python
 # Radiaの磁場をNGSolveメッシュに設定
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 fes = HCurl(mesh, order=1)
 gf = GridFunction(fes)
 
@@ -578,7 +578,7 @@ gf.Set(expensive_cf)
 
 # 複数のGridFunctionに設定する場合
 # CoefficientFunctionを再利用
-cf = rad_ngsolve.RadiaField(magnet, 'b')
+cf = radia_ngsolve.RadiaField(magnet, 'b')
 gf1.Set(cf)  # 1回目: キャッシュなし
 gf2.Set(cf)  # 2回目: 若干速い可能性
 ```

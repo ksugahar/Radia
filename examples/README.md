@@ -121,7 +121,7 @@ Multi-segment coils using the modern CoilBuilder API.
 
 ---
 
-### 5. [NGSolve_Integration/](NGSolve_Integration/) - rad_ngsolve Examples
+### 5. [NGSolve_Integration/](NGSolve_Integration/) - radia_ngsolve Examples
 **9 scripts** | **Level:** Intermediate to Advanced
 
 Coupling Radia magnetic fields with NGSolve finite element analysis.
@@ -134,7 +134,7 @@ Coupling Radia magnetic fields with NGSolve finite element analysis.
 - `verify_curl_A_equals_B.py` - Verify ∇×A = B mathematically
 
 **Topics Covered:**
-- NGSolve CoefficientFunction (`rad_ngsolve.RadiaField`)
+- NGSolve CoefficientFunction (`radia_ngsolve.RadiaField`)
 - Unit conversion (meters ↔ millimeters)
 - Field types: B (flux density), H (field), A (vector potential), M (magnetization)
 - GridFunction.Set() for field initialization
@@ -441,7 +441,7 @@ powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 - Download from Microsoft website
 - Both x86 and x64 versions may be needed
 
-### No module named 'rad_ngsolve'
+### No module named 'radia_ngsolve'
 
 **Solution:** Build NGSolve integration:
 ```bash

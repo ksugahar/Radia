@@ -227,7 +227,7 @@ paraview sphere_nastran_geometry.vtk sphere_nastran_field_mu10.vtu
 |---------|-------------------------------|---------------------|
 | Direction | Python → Radia | Radia → NGSolve |
 | Use Case | Add external fields to Radia | Use Radia fields in NGSolve FEM |
-| Function | `rd.ObjBckgCF()` | `rad_ngsolve.RadiaField()` |
+| Function | `rd.ObjBckgCF()` | `radia_ngsolve.RadiaField()` |
 | Input | Python callback | Radia object |
 | Output | Radia field source | NGSolve CoefficientFunction |
 | Location | `examples/background_fields/` | `examples/NGSolve_Integration/` |

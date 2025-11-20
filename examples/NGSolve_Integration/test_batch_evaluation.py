@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test batch evaluation in rad_ngsolve.RadiaField
+Test batch evaluation in radia_ngsolve.RadiaField
 
 Tests whether the new batch evaluation method improves GridFunction.Set() performance.
 """
@@ -13,7 +13,7 @@ import radia as rad
 try:
 	from ngsolve import *
 	from netgen.occ import *
-	import rad_ngsolve
+	import radia_ngsolve
 	NGSOLVE_AVAILABLE = True
 except ImportError:
 	print("ERROR: NGSolve not available")
@@ -23,7 +23,7 @@ import time
 import numpy as np
 
 print("=" * 80)
-print("Batch Evaluation Test for rad_ngsolve.RadiaField")
+print("Batch Evaluation Test for radia_ngsolve.RadiaField")
 print("=" * 80)
 
 # Create magnet
@@ -77,7 +77,7 @@ for config in mesh_configs:
 	print(f"  Mesh: {mesh.nv} vertices, {mesh.ne} elements")
 
 	# Create CoefficientFunction
-	B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+	B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 
 	# Create GridFunction
 	fes = HCurl(mesh, order=1)
@@ -112,7 +112,7 @@ for field_type, field_name in field_types:
 	print(f"\n{field_name} ('{field_type}')")
 	print("-" * 80)
 
-	cf = rad_ngsolve.RadiaField(magnet, field_type)
+	cf = radia_ngsolve.RadiaField(magnet, field_type)
 	gf = GridFunction(HCurl(mesh))
 
 	t_start = time.perf_counter()

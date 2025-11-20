@@ -4,7 +4,7 @@ Python utility modules for Radia visualization, data export, and NGSolve integra
 
 ## Files
 
-### rad_ngsolve.cpp
+### radia_ngsolve.cpp
 
 **C++ CoefficientFunction integration for NGSolve (recommended).**
 
@@ -27,7 +27,7 @@ cd S:\radia\01_GitHub
 ```python
 from ngsolve import *
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 
 # Create Radia magnet (mm)
 magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1.2])
@@ -37,13 +37,13 @@ rad.Solve(magnet, 0.0001, 10000)
 mesh = Mesh(...)
 
 # CoefficientFunction (exact)
-B_cf = rad_ngsolve.RadBfield(magnet)
+B_cf = radia_ngsolve.RadBfield(magnet)
 B = B_cf(mesh(0, 0, 0.02))  # Auto converts m->mm
 ```
 
 **See also:** `examples/ngsolve_integration/` for complete examples.
 
-### rad_ngsolve_py.py
+### radia_ngsolve_py.py
 
 **Pure Python implementation (alternative).**
 
@@ -130,8 +130,8 @@ view_radia_object(my_object)
 ### Option 3: NGSolve Integration
 For coupled FEM simulations.
 ```python
-import rad_ngsolve
-B_cf = rad_ngsolve.RadBfield(magnet)
+import radia_ngsolve
+B_cf = radia_ngsolve.RadBfield(magnet)
 ```
 
 ## References

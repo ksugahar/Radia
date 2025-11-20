@@ -45,14 +45,14 @@ Radia has two distinct computational phases:
 
 ```python
 gf = GridFunction(HCurl(mesh))
-cf = rad_ngsolve.RadiaField(magnet, 'b')
+cf = radia_ngsolve.RadiaField(magnet, 'b')
 gf.Set(cf)  # <--- This operation
 ```
 
 **Sequence**:
 1. NGSolve iterates over all mesh vertices (M vertices)
 2. For each vertex at position r:
-   - Call `cf.Evaluate(r)` → calls `rad_ngsolve::RadiaFieldCF::Evaluate()`
+   - Call `cf.Evaluate(r)` → calls `radia_ngsolve::RadiaFieldCF::Evaluate()`
    - This calls `rad.Fld(obj, field_type, r)` (Python call)
    - Radia computes field by summing N element contributions
 3. Total: M × N operations

@@ -32,7 +32,7 @@ import time
 try:
     from ngsolve import *
     from netgen.occ import *
-    import rad_ngsolve
+    import radia_ngsolve
 except ImportError:
     print("NGSolve not available")
     sys.exit(0)
@@ -87,7 +87,7 @@ print("="*70)
 
 # Standard GridFunction.Set() with H-matrix
 rad.SetHMatrixFieldEval(1, 1e-6)
-cf_standard = rad_ngsolve.RadiaField(magnet, 'b')
+cf_standard = radia_ngsolve.RadiaField(magnet, 'b')
 
 print(f"\n[3a] Measuring GridFunction.Set() with H-matrix...")
 print(f"     (Element-by-element: {mesh.ne} calls, ~{points_per_elem} points/call)")

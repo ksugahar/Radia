@@ -13,7 +13,7 @@ import tracemalloc
 import numpy as np
 import radia as rad
 from ngsolve import *
-import rad_ngsolve
+import radia_ngsolve
 
 print("=" * 80)
 print("NGSolve GridFunction Reuse Test")
@@ -54,7 +54,7 @@ for step in range(NUM_STEPS):
     magnet = rad.ObjRecMag(new_pos, [0.01, 0.01, 0.01], [0, 0, 1.0])
 
     # Create NEW CoefficientFunction each time
-    B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+    B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 
     # REUSE GridFunction - just call Set() again
     gf_B.Set(B_cf)

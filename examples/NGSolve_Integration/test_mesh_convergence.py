@@ -14,7 +14,7 @@ import radia as rad
 try:
 	from ngsolve import *
 	from netgen.occ import *
-	import rad_ngsolve
+	import radia_ngsolve
 except ImportError:
 	print("ERROR: NGSolve not available")
 	sys.exit(1)
@@ -40,8 +40,8 @@ def radia_field_with_A(coords):
 bg_field = rad.ObjBckgCF(radia_field_with_A)
 
 # Get CoefficientFunctions
-A_cf = rad_ngsolve.RadiaField(bg_field, 'a')
-B_cf = rad_ngsolve.RadiaField(bg_field, 'b')
+A_cf = radia_ngsolve.RadiaField(bg_field, 'a')
+B_cf = radia_ngsolve.RadiaField(bg_field, 'b')
 
 # Test points (in meters)
 test_points = [

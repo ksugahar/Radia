@@ -20,7 +20,7 @@ import numpy as np
 try:
     from ngsolve import *
     from netgen.occ import *
-    import rad_ngsolve
+    import radia_ngsolve
 except ImportError:
     print("ERROR: NGSolve not available")
     sys.exit(1)
@@ -62,7 +62,7 @@ def run_test(test_name, reuse_cf=False, reuse_gf=False, clear_cache=False):
     gf_B = None
 
     if reuse_cf:
-        B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+        B_cf = radia_ngsolve.RadiaField(magnet, 'b')
     if reuse_gf:
         gf_B = GridFunction(fes)
 
@@ -76,7 +76,7 @@ def run_test(test_name, reuse_cf=False, reuse_gf=False, clear_cache=False):
 
         # Create or reuse CF
         if not reuse_cf:
-            B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+            B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 
         # Create or reuse GridFunction
         if not reuse_gf:

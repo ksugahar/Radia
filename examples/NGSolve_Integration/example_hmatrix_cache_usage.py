@@ -22,7 +22,7 @@ import time
 try:
     from ngsolve import *
     from netgen.occ import *
-    import rad_ngsolve
+    import radia_ngsolve
 except ImportError as e:
     print(f"ERROR: {e}")
     sys.exit(1)
@@ -87,7 +87,7 @@ print()
 # ============================================================================
 print("[Step 4] Method 1: Standard GridFunction.Set() (no cache)...")
 
-A_cf = rad_ngsolve.RadiaField(bg_field, 'a')
+A_cf = radia_ngsolve.RadiaField(bg_field, 'a')
 
 # Check cache is disabled
 stats = A_cf.GetCacheStats()
@@ -129,7 +129,7 @@ print()
 # Prepare cache with single batch evaluation
 print("  [5b] Calling PrepareCache()...")
 
-A_cf_cached = rad_ngsolve.RadiaField(bg_field, 'a')
+A_cf_cached = radia_ngsolve.RadiaField(bg_field, 'a')
 
 t0 = time.time()
 A_cf_cached.PrepareCache(all_points)
@@ -223,7 +223,7 @@ print("SUMMARY: H-MATRIX CACHE USAGE")
 print("="*80)
 print()
 print("Cache workflow:")
-print("  1. Create CoefficientFunction: A_cf = rad_ngsolve.RadiaField(obj, 'a')")
+print("  1. Create CoefficientFunction: A_cf = radia_ngsolve.RadiaField(obj, 'a')")
 print("  2. Collect integration points from mesh")
 print("  3. Prepare cache: A_cf.PrepareCache(all_points)")
 print("  4. Set GridFunction: gf.Set(A_cf)  # Uses cached values")

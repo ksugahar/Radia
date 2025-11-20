@@ -21,7 +21,7 @@ This document describes custom extensions to the original ESRF Radia API.
 - [Performance Features](#performance-features)
   - [SolverHMatrixDisable/Enable](#solverhmatrixdisableenable)
 - [NGSolve Integration](#ngsolve-integration)
-  - [rad_ngsolve.RadiaField](#rad_ngsolveradiafield)
+  - [radia_ngsolve.RadiaField](#radia_ngsolveradiafield)
 
 ---
 
@@ -106,7 +106,7 @@ For use with NGSolve's CoefficientFunction:
 
 ```python
 import ngsolve as ngs
-import rad_ngsolve
+import radia_ngsolve
 
 # Create NGSolve coefficient function (in meters)
 def ngsolve_field_wrapper(x, y, z):
@@ -116,7 +116,7 @@ def ngsolve_field_wrapper(x, y, z):
 	return B
 
 # Create background field
-bg_cf = rad_ngsolve.BackgroundFieldCF(ngsolve_field_wrapper)
+bg_cf = radia_ngsolve.BackgroundFieldCF(ngsolve_field_wrapper)
 ```
 
 **Notes**:
@@ -436,18 +436,18 @@ rad.SolverHMatrixEnable()
 
 ## NGSolve Integration
 
-### rad_ngsolve.RadiaField
+### radia_ngsolve.RadiaField
 
 **Purpose**: Create NGSolve CoefficientFunction for Radia magnetic field with full control over computation accuracy and performance.
 
-**Module**: `rad_ngsolve` (C++ extension)
+**Module**: `radia_ngsolve` (C++ extension)
 
 **Syntax**:
 ```python
 from ngsolve import *
-import rad_ngsolve
+import radia_ngsolve
 
-cf = rad_ngsolve.RadiaField(
+cf = radia_ngsolve.RadiaField(
     radia_obj,
     field_type='b',
     origin=None,
@@ -512,13 +512,13 @@ Controls accuracy vs speed trade-off. Smaller values = more accurate but slower.
 
 ```python
 # High accuracy (slow)
-B_cf = rad_ngsolve.RadiaField(magnet, 'b', precision=1e-8)
+B_cf = radia_ngsolve.RadiaField(magnet, 'b', precision=1e-8)
 
 # Normal accuracy (default)
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # Uses Radia default
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')  # Uses Radia default
 
 # Fast evaluation (less accurate)
-B_cf = rad_ngsolve.RadiaField(magnet, 'b', precision=1e-4)
+B_cf = radia_ngsolve.RadiaField(magnet, 'b', precision=1e-4)
 ```
 
 **Internally calls**: `rad.FldCmpPrc()` with specified precision for B, H, A, M fields.
@@ -531,13 +531,13 @@ Controls H-matrix (hierarchical matrix) acceleration.
 
 ```python
 # Disable H-matrix (accurate for small N)
-B_cf = rad_ngsolve.RadiaField(magnet, 'b', use_hmatrix=False)
+B_cf = radia_ngsolve.RadiaField(magnet, 'b', use_hmatrix=False)
 
 # Enable H-matrix (fast for large N > 1000)
-B_cf = rad_ngsolve.RadiaField(magnet, 'b', use_hmatrix=True)
+B_cf = radia_ngsolve.RadiaField(magnet, 'b', use_hmatrix=True)
 
 # Keep current setting (default)
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # use_hmatrix=None
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')  # use_hmatrix=None
 ```
 
 **When to enable H-matrix**:
@@ -558,13 +558,13 @@ B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # use_hmatrix=None
 import radia as rad
 from ngsolve import *
 from netgen.occ import *
-import rad_ngsolve
+import radia_ngsolve
 
 # Create Radia magnet
 magnet = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,1.2])
 
 # Create NGSolve CoefficientFunction
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 
 # Use in NGSolve mesh
 mesh = Mesh(...)
@@ -583,7 +583,7 @@ u_axis = [np.cos(angle), np.sin(angle), 0]
 v_axis = [-np.sin(angle), np.cos(angle), 0]
 w_axis = [0, 0, 1]
 
-B_cf = rad_ngsolve.RadiaField(
+B_cf = radia_ngsolve.RadiaField(
     magnet, 'b',
     origin=origin,
     u_axis=u_axis,
@@ -607,7 +607,7 @@ for i in range(20):
 magnet_array = rad.ObjCnt(elements)  # 8000 elements
 
 # Use H-matrix for fast evaluation
-B_cf = rad_ngsolve.RadiaField(magnet_array, 'b', use_hmatrix=True)
+B_cf = radia_ngsolve.RadiaField(magnet_array, 'b', use_hmatrix=True)
 
 # Evaluate on large mesh
 mesh = Mesh(...)  # Large mesh
@@ -618,13 +618,13 @@ gf.Set(B_cf)  # Fast thanks to H-matrix
 **Vector potential with curl**:
 ```python
 # Get vector potential A
-A_cf = rad_ngsolve.RadiaField(magnet, 'a')
+A_cf = radia_ngsolve.RadiaField(magnet, 'a')
 
 # Compute B = curl(A)
 B_from_curl = Curl(A_cf)
 
 # Compare with direct B
-B_direct = rad_ngsolve.RadiaField(magnet, 'b')
+B_direct = radia_ngsolve.RadiaField(magnet, 'b')
 
 # Should match (within numerical precision)
 ```

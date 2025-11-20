@@ -265,7 +265,7 @@ void Interpolate(CoefficientFunction& cf)
 
 **仮説:**
 ```python
-# rad_ngsolve.RadiaFieldのInterpolate()での評価
+# radia_ngsolve.RadiaFieldのInterpolate()での評価
 # NGSolveが期待する形式と我々の実装が不一致
 
 # NGSolveが期待:
@@ -281,7 +281,7 @@ cf(point)  # ベクトル全体を返す
 
 **修正するには:**
 ```cpp
-// rad_ngsolve.cpp に以下を追加する必要がある
+// radia_ngsolve.cpp に以下を追加する必要がある
 virtual double Evaluate(const BaseMappedIntegrationPoint& mip) const override
 {
     // スカラー評価（成分インデックスなし）
@@ -355,7 +355,7 @@ virtual double Evaluate(const BaseMappedIntegrationPoint& mip) const override
 
 ```python
 # Radia magnetic field → NGSolve GridFunction
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 
 # HCurl空間（電磁場に適切）
 fes = HCurl(mesh, order=1)
@@ -576,7 +576,7 @@ Python呼び出しオーバーヘッド: 20 µs
 
 ```python
 # これが唯一の正しい方法
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 fes = HCurl(mesh, order=1)
 gf = GridFunction(fes)
 gf.Set(B_cf)  # ✅ Correct and optimal

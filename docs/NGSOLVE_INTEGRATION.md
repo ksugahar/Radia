@@ -2,21 +2,21 @@
 
 ## Overview
 
-This document describes the NGSolve integration module (`rad_ngsolve`) that provides CoefficientFunction wrappers for Radia magnetic field calculations.
+This document describes the NGSolve integration module (`radia_ngsolve`) that provides CoefficientFunction wrappers for Radia magnetic field calculations.
 
 ## Implementation Summary
 
 ### Files Created/Modified
 
 #### New Files
-1. **`src/python/rad_ngsolve.cpp`**
+1. **`src/python/radia_ngsolve.cpp`**
    - NGSolve CoefficientFunction wrappers for Radia
    - Implements `RadBfield`, `RadHfield`, and `RadAfield` classes
    - Uses pybind11 for Python bindings
 
-2. **`examples/ngsolve_integration/test_rad_ngsolve.py`**
+2. **`examples/ngsolve_integration/test_radia_ngsolve.py`**
    - Comprehensive test script
-   - Demonstrates all features of the rad_ngsolve module
+   - Demonstrates all features of the radia_ngsolve module
 
 3. **`examples/ngsolve_integration/README.md`**
    - User documentation
@@ -109,11 +109,11 @@ The NGSolve module is optional and built only if NGSolve is detected:
 find_package(NGSolve CONFIG QUIET)
 
 if(NGSolve_FOUND)
-	add_library(rad_ngsolve MODULE
+	add_library(radia_ngsolve MODULE
 	    ${RADIA_LIB_SOURCES}
 	    ${RADIA_NGSOLVE_SOURCES}
 	)
-	target_link_libraries(rad_ngsolve PRIVATE
+	target_link_libraries(radia_ngsolve PRIVATE
 	    Python3::Python
 	    NGSolve::ngsolve
 	)
@@ -133,7 +133,7 @@ endif()
 ```python
 import radia as rad
 from ngsolve import *
-import rad_ngsolve
+import radia_ngsolve
 
 # Create Radia geometry
 magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1000])
@@ -143,7 +143,7 @@ rad.Solve(magnet, 0.0001, 10000)
 mesh = Mesh(unit_cube.GenerateMesh(maxh=0.1))
 
 # Create coefficient function
-B = rad_ngsolve.RadBfield(magnet)
+B = radia_ngsolve.RadBfield(magnet)
 
 # Use in NGSolve
 B_integral = Integrate(B, mesh)
@@ -209,7 +209,7 @@ Each integration point evaluation calls `RadFld`:
 Run the comprehensive test:
 
 ```bash
-python examples/ngsolve_integration/test_rad_ngsolve.py
+python examples/ngsolve_integration/test_radia_ngsolve.py
 ```
 
 ### Test Coverage
@@ -224,7 +224,7 @@ The test script verifies:
 
 ## Comparison with EMPY_Field
 
-| Feature | EMPY_Field | rad_ngsolve |
+| Feature | EMPY_Field | radia_ngsolve |
 |---------|-----------|-------------|
 | Physics engine | Custom analytical | Radia (BEM) |
 | Field sources | Coils, magnets | Any Radia object |

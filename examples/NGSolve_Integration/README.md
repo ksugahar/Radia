@@ -2,7 +2,7 @@
 
 Complete examples demonstrating integration between Radia (3D magnetostatics) and NGSolve (finite element analysis).
 
-**Key Feature**: `rad_ngsolve.RadiaField` provides seamless conversion of Radia field sources to NGSolve CoefficientFunction with automatic unit conversion (mm ↔ m).
+**Key Feature**: `radia_ngsolve.RadiaField` provides seamless conversion of Radia field sources to NGSolve CoefficientFunction with automatic unit conversion (mm ↔ m).
 
 ---
 
@@ -31,14 +31,14 @@ Complete examples demonstrating integration between Radia (3D magnetostatics) an
 ```python
 import radia as rad
 from ngsolve import *
-import rad_ngsolve
+import radia_ngsolve
 
 # 1. Create Radia magnet (specify units!)
 rad.FldUnits('m')  # Use meters (recommended for NGSolve integration)
 magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 1.2])  # 10mm = 0.01m cube
 
 # 2. Create NGSolve CoefficientFunction (units='m' is default)
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # units='m' by default
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')  # units='m' by default
 
 # 3. Use in NGSolve mesh (always meters)
 mesh = Mesh(...)  # NGSolve mesh in meters
@@ -115,7 +115,7 @@ Tests coordinate transformation (translation + rotation) for moving/rotating mag
 ```python
 # Magnet rotated 45° around z-axis, translated to (0.1, 0, 0) m
 angle = np.pi/4
-B_cf = rad_ngsolve.RadiaField(
+B_cf = radia_ngsolve.RadiaField(
 	magnet, 'b',
 	origin=[0.1, 0, 0],
 	u_axis=[np.cos(angle), np.sin(angle), 0],
@@ -212,11 +212,11 @@ Studies convergence of NGSolve solution with mesh refinement when using Radia fi
 
 ## API Reference
 
-### rad_ngsolve.RadiaField
+### radia_ngsolve.RadiaField
 
 **Syntax**:
 ```python
-cf = rad_ngsolve.RadiaField(
+cf = radia_ngsolve.RadiaField(
 	radia_obj,           # Radia object ID
 	field_type='b',      # 'b', 'h', 'a', or 'm'
 	origin=None,         # [x, y, z] translation (m)
@@ -258,7 +258,7 @@ cf = rad_ngsolve.RadiaField(
 
 **How it works**:
 - NGSolve always uses **meters** for coordinates
-- The `units` parameter tells rad_ngsolve how to convert NGSolve's meters to your Radia model units:
+- The `units` parameter tells radia_ngsolve how to convert NGSolve's meters to your Radia model units:
   - `units='mm'`: NGSolve meters → Radia millimeters (multiply by 1000)
   - `units='m'`: NGSolve meters → Radia meters (no conversion)
 
@@ -269,7 +269,7 @@ rad.FldUnits('m')
 magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 1])  # 0.1m = 100mm cube
 
 # Create NGSolve interface - units='m' is default
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # No need to specify units='m'
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')  # No need to specify units='m'
 
 # NGSolve works in meters
 mesh = Mesh(...)  # Mesh with coordinates in meters
@@ -284,7 +284,7 @@ rad.FldUnits('mm')
 magnet = rad.ObjRecMag([0, 0, 0], [100, 100, 100], [0, 0, 1])  # 100mm cube
 
 # Create NGSolve interface - specify units='mm' explicitly
-B_cf = rad_ngsolve.RadiaField(magnet, 'b', units='mm')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b', units='mm')
 
 # NGSolve works in meters
 mesh = Mesh(...)  # Mesh with coordinates in meters
@@ -303,20 +303,20 @@ gf.Set(B_cf)  # NGSolve point [0.05, 0, 0] m → Radia point [50, 0, 0] mm (conv
 
 **High accuracy** (slow):
 ```python
-B_cf = rad_ngsolve.RadiaField(magnet, 'b',
+B_cf = radia_ngsolve.RadiaField(magnet, 'b',
                                precision=1e-8,
                                use_hmatrix=False)
 ```
 
 **High speed** (large N):
 ```python
-B_cf = rad_ngsolve.RadiaField(magnet, 'b',
+B_cf = radia_ngsolve.RadiaField(magnet, 'b',
                                use_hmatrix=True)
 ```
 
 **Balanced** (default):
 ```python
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 ```
 
 ---
@@ -334,7 +334,7 @@ u_axis = [np.cos(angle), np.sin(angle), 0]
 v_axis = [-np.sin(angle), np.cos(angle), 0]
 w_axis = [0, 0, 1]
 
-B_cf = rad_ngsolve.RadiaField(magnet, 'b',
+B_cf = radia_ngsolve.RadiaField(magnet, 'b',
                                origin=origin,
                                u_axis=u_axis,
                                v_axis=v_axis,
@@ -359,7 +359,7 @@ B_cf = rad_ngsolve.RadiaField(magnet, 'b',
 | Vector potential A | T·mm | T·m | ×0.001 (for curl) |
 | Magnetization M | T | A/m | (context dependent) |
 
-**Automatic conversion**: Handled internally by `rad_ngsolve.RadiaField`
+**Automatic conversion**: Handled internally by `radia_ngsolve.RadiaField`
 
 **curl(A) = B**: Vector potential **A** is scaled by 0.001 to ensure correct derivative with respect to meters.
 
@@ -392,14 +392,14 @@ NGSolve_Integration/
 
 ## Troubleshooting
 
-**Import error: `No module named 'rad_ngsolve'`**
+**Import error: `No module named 'radia_ngsolve'`**
 - Solution: Rebuild Radia with NGSolve support
-- Check: `import rad_ngsolve` in Python
+- Check: `import radia_ngsolve` in Python
 
 **Unit mismatch errors**
 - Radia uses millimeters (mm)
 - NGSolve uses meters (m)
-- `rad_ngsolve.RadiaField` handles conversion automatically
+- `radia_ngsolve.RadiaField` handles conversion automatically
 
 **Performance issues**
 - For large N (> 500): Use `use_hmatrix=True`

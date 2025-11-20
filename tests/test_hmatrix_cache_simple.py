@@ -17,7 +17,7 @@ import time
 try:
     from ngsolve import *
     from netgen.occ import *
-    import rad_ngsolve
+    import radia_ngsolve
 except ImportError as e:
     print(f"ERROR: {e}")
     sys.exit(1)
@@ -55,7 +55,7 @@ print()
 # ============================================================================
 print("[Test 1] Initial state (cache disabled)...")
 
-A_cf = rad_ngsolve.RadiaField(bg_field, 'a')
+A_cf = radia_ngsolve.RadiaField(bg_field, 'a')
 stats = A_cf.GetCacheStats()
 
 print(f"  Cache enabled: {stats['enabled']}")

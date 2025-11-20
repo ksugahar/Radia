@@ -404,7 +404,7 @@ GridFunction.Set() → NGSolve calls Evaluate() element-wise
 ### 10.2. Further Optimization: Not Worth It
 
 ❌ **Don't implement:**
-- SIMD vectorization in rad_ngsolve.cpp
+- SIMD vectorization in radia_ngsolve.cpp
 	- Benefit limited by Python-C++ boundary
 	- Complexity cost not justified for 5% improvement
 

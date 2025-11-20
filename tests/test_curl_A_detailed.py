@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/python'))
 from ngsolve import *
 from netgen.occ import *
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 import numpy as np
 
 print("="*70)
@@ -39,8 +39,8 @@ fes_hcurl = HCurl(mesh, order=2)
 fes_hdiv = HDiv(mesh, order=2)
 
 # CoefficientFunctions
-A_cf = rad_ngsolve.RadiaField(bg_field, 'a')
-B_cf = rad_ngsolve.RadiaField(bg_field, 'b')
+A_cf = radia_ngsolve.RadiaField(bg_field, 'a')
+B_cf = radia_ngsolve.RadiaField(bg_field, 'b')
 
 # Project A to HCurl
 A_gf = GridFunction(fes_hcurl)

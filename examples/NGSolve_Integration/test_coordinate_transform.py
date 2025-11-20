@@ -19,7 +19,7 @@ import radia as rad
 try:
 	from ngsolve import *
 	from netgen.occ import *
-	import rad_ngsolve
+	import radia_ngsolve
 	NGSOLVE_AVAILABLE = True
 except ImportError:
 	print("ERROR: NGSolve not available. This example requires NGSolve.")
@@ -61,8 +61,8 @@ print("\n" + "=" * 80)
 print("[Test 1] No transformation - magnet aligned with global x-axis")
 print("=" * 80)
 
-A_cf_identity = rad_ngsolve.RadiaField(dipole, 'a')
-B_cf_identity = rad_ngsolve.RadiaField(dipole, 'b')
+A_cf_identity = radia_ngsolve.RadiaField(dipole, 'a')
+B_cf_identity = radia_ngsolve.RadiaField(dipole, 'b')
 
 print(f"  use_transform: {A_cf_identity.use_transform}")
 
@@ -99,11 +99,11 @@ print(f"    u_axis = [{u_axis[0]:.4f}, {u_axis[1]:.4f}, {u_axis[2]:.4f}]")
 print(f"    v_axis = [{v_axis[0]:.4f}, {v_axis[1]:.4f}, {v_axis[2]:.4f}]")
 print(f"    w_axis = [{w_axis[0]:.4f}, {w_axis[1]:.4f}, {w_axis[2]:.4f}]")
 
-A_cf_rotated = rad_ngsolve.RadiaField(dipole, 'a',
+A_cf_rotated = radia_ngsolve.RadiaField(dipole, 'a',
                                        u_axis=u_axis,
                                        v_axis=v_axis,
                                        w_axis=w_axis)
-B_cf_rotated = rad_ngsolve.RadiaField(dipole, 'b',
+B_cf_rotated = radia_ngsolve.RadiaField(dipole, 'b',
                                        u_axis=u_axis,
                                        v_axis=v_axis,
                                        w_axis=w_axis)
@@ -137,12 +137,12 @@ print(f"  Rotation: 30° around z-axis")
 print(f"    u_axis = [{u_axis_30[0]:.4f}, {u_axis_30[1]:.4f}, {u_axis_30[2]:.4f}]")
 print(f"    v_axis = [{v_axis_30[0]:.4f}, {v_axis_30[1]:.4f}, {v_axis_30[2]:.4f}]")
 
-A_cf_combined = rad_ngsolve.RadiaField(dipole, 'a',
+A_cf_combined = radia_ngsolve.RadiaField(dipole, 'a',
                                         origin=origin,
                                         u_axis=u_axis_30,
                                         v_axis=v_axis_30,
                                         w_axis=w_axis_30)
-B_cf_combined = rad_ngsolve.RadiaField(dipole, 'b',
+B_cf_combined = radia_ngsolve.RadiaField(dipole, 'b',
                                         origin=origin,
                                         u_axis=u_axis_30,
                                         v_axis=v_axis_30,

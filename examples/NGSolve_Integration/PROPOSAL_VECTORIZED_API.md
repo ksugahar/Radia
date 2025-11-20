@@ -10,7 +10,7 @@
 Current performance bottleneck in `GridFunction.Set()`:
 
 ```python
-# Current implementation in rad_ngsolve.cpp
+# Current implementation in radia_ngsolve.cpp
 for each vertex in mesh:  # M iterations
     coords = [x*1000, y*1000, z*1000]
     field = rad.Fld(obj, 'b', coords)  # Python call each time!
@@ -49,7 +49,7 @@ int CALL RadFld(double* pB, int* pNb, int Obj, char* ID, double* pCoord, int Np)
 
 **The C API already supports batch evaluation!**
 
-#### 2. Modify rad_ngsolve.cpp
+#### 2. Modify radia_ngsolve.cpp
 
 Current implementation:
 ```cpp
@@ -139,7 +139,7 @@ points = [[10,0,0], [0,10,0], [0,0,10]]  # 3 points
 fields = rad.Fld(magnet, 'b', points)  # Does this work?
 ```
 
-### Step 2: Modify rad_ngsolve.cpp
+### Step 2: Modify radia_ngsolve.cpp
 
 Add SIMD evaluation method for batch processing.
 

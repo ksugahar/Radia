@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/python'))
 from ngsolve import *
 from netgen.occ import *
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 import numpy as np
 
 print("="*70)
@@ -30,8 +30,8 @@ mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.008))
 print(f"\nMesh: {mesh.ne} elements, {mesh.nv} vertices\n")
 
 # Get CoefficientFunctions
-A_cf = rad_ngsolve.RadiaField(bg_field, 'a')
-B_cf = rad_ngsolve.RadiaField(bg_field, 'b')
+A_cf = radia_ngsolve.RadiaField(bg_field, 'a')
+B_cf = radia_ngsolve.RadiaField(bg_field, 'b')
 
 # Test different approaches
 test_configs = [

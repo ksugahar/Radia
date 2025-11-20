@@ -4,7 +4,7 @@
 
 Implement `PrepareCache()` method in `RadiaFieldCF` class to enable H-matrix acceleration by batching all integration point evaluations.
 
-**Target file**: `src/python/rad_ngsolve.cpp`
+**Target file**: `src/python/radia_ngsolve.cpp`
 
 **Estimated time**: 4-5 hours total implementation + testing
 
@@ -14,7 +14,7 @@ Implement `PrepareCache()` method in `RadiaFieldCF` class to enable H-matrix acc
 
 ### 1.1 Add Cache Members to RadiaFieldCF Class
 
-**Location**: `src/python/rad_ngsolve.cpp`, `RadiaFieldCF` class definition
+**Location**: `src/python/radia_ngsolve.cpp`, `RadiaFieldCF` class definition
 
 **Add these member variables**:
 
@@ -224,12 +224,12 @@ void PrintCacheStats() const {
 
 ### 4.1 Add Python Bindings
 
-**Location**: End of `src/python/rad_ngsolve.cpp`, in `PYBIND11_MODULE` section
+**Location**: End of `src/python/radia_ngsolve.cpp`, in `PYBIND11_MODULE` section
 
 **Add these bindings**:
 
 ```cpp
-PYBIND11_MODULE(rad_ngsolve, m) {
+PYBIND11_MODULE(radia_ngsolve, m) {
     m.doc() = "Radia-NGSolve integration module";
 
     // Existing RadiaField binding
@@ -250,7 +250,7 @@ PYBIND11_MODULE(rad_ngsolve, m) {
              "  integration_order: Integration rule order (default: 2*element_order)\n"
              "\n"
              "Example:\n"
-             "  B_cf = rad_ngsolve.RadiaField(magnet, 'b')\n"
+             "  B_cf = radia_ngsolve.RadiaField(magnet, 'b')\n"
              "  B_cf.PrepareCache(mesh)\n"
              "  B_gf.Set(B_cf)  # Fast: uses cached values\n")
 
@@ -282,7 +282,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../build/Release'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/python'))
 
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 from ngsolve import *
 from netgen.occ import *
 import time
@@ -323,7 +323,7 @@ print("="*70)
 
 fes = HDiv(mesh, order=2)
 B_gf_standard = GridFunction(fes)
-B_cf_standard = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf_standard = radia_ngsolve.RadiaField(magnet, 'b')
 
 t0 = time.time()
 B_gf_standard.Set(B_cf_standard)
@@ -337,7 +337,7 @@ print("TEST 2: Optimized GridFunction.Set() with PrepareCache()")
 print("="*70)
 
 B_gf_batch = GridFunction(fes)
-B_cf_batch = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf_batch = radia_ngsolve.RadiaField(magnet, 'b')
 
 t0 = time.time()
 B_cf_batch.PrepareCache(mesh)
@@ -407,10 +407,10 @@ Create additional test with N=1000 elements to verify scalability.
 
 | Phase | Task | Estimated Time | Files Modified |
 |-------|------|----------------|----------------|
-| 1 | Add cache infrastructure | 30 min | `rad_ngsolve.cpp` |
-| 2 | Implement PrepareCache() | 1.5 hours | `rad_ngsolve.cpp` |
-| 3 | Modify Evaluate() | 1 hour | `rad_ngsolve.cpp` |
-| 4 | Add Python bindings | 30 min | `rad_ngsolve.cpp` |
+| 1 | Add cache infrastructure | 30 min | `radia_ngsolve.cpp` |
+| 2 | Implement PrepareCache() | 1.5 hours | `radia_ngsolve.cpp` |
+| 3 | Modify Evaluate() | 1 hour | `radia_ngsolve.cpp` |
+| 4 | Add Python bindings | 30 min | `radia_ngsolve.cpp` |
 | 5 | Testing and validation | 1.5 hours | `test_batch_evaluation.py` |
 | **Total** | | **~5 hours** | |
 

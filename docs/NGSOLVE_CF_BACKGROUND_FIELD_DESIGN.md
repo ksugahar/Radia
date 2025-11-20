@@ -649,9 +649,9 @@ radia.ObjBckgCF(callback)
 
 ## Related Work
 
-- **rad_ngsolve.cpp**: Opposite direction (Radia → NGSolve CF)
+- **radia_ngsolve.cpp**: Opposite direction (Radia → NGSolve CF)
 - **radTBackgroundFieldSource**: Existing uniform field implementation
-- **Python GIL**: Experience from rad_ngsolve.cpp callback
+- **Python GIL**: Experience from radia_ngsolve.cpp callback
 
 ## References
 

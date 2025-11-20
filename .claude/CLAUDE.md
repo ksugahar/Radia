@@ -933,17 +933,17 @@ import radia as rad  # Works if radia is installed via pip
 
 **Last Updated**: 2025-11-17 (Python Script Path Import Policy)
 
-## rad_ngsolve Result Matrix Indexing Fix
+## radia_ngsolve Result Matrix Indexing Fix
 
 ### Issue Summary (2025-11-20)
 
-**Problem**: GridFunction.Set() with rad_ngsolve.RadiaField produced incorrect field values (thousands of % error).
+**Problem**: GridFunction.Set() with radia_ngsolve.RadiaField produced incorrect field values (thousands of % error).
 
 **Root Cause**: In the batch evaluation function `Evaluate(const BaseMappedIntegrationRule& mir, BareSliceMatrix<> result)`, the result matrix indexing was inconsistent between normal path and error handling path:
 
 ```cpp
 // WRONG (before fix)
-// Normal path - src/python/rad_ngsolve.cpp:348-350
+// Normal path - src/python/radia_ngsolve.cpp:348-350
 result(0, i) = f_global[0] * scale;  // result(component, point)
 result(1, i) = f_global[1] * scale;
 result(2, i) = f_global[2] * scale;
@@ -980,8 +980,8 @@ Introduced in commit `ab77976` (Add H-matrix field evaluation and Python API) wh
 
 ### Files Modified
 
-- `src/python/rad_ngsolve.cpp` (lines 348-350)
-- Built module: `build/Release/rad_ngsolve.pyd`
+- `src/python/radia_ngsolve.cpp` (lines 348-350)
+- Built module: `build/Release/radia_ngsolve.pyd`
 
 ### Future Tasks
 
@@ -992,7 +992,7 @@ This indexing fix may affect H-matrix accelerated field evaluation:
 - Need to verify that H-matrix field evaluation still produces correct results
 - Test files:
   - `examples/ngsolve_integration/verify_curl_A_equals_B.py` (copied to `tests/`)
-  - `tests/test_rad_ngsolve_function.py`
+  - `tests/test_radia_ngsolve_function.py`
 - Verification criteria:
   - GridFunction.Set() with H-matrix enabled should match direct evaluation
   - curl(A) = B relationship should hold with H-matrix acceleration
@@ -1002,13 +1002,13 @@ This indexing fix may affect H-matrix accelerated field evaluation:
 
 ---
 
-**Last Updated**: 2025-11-20 (rad_ngsolve Result Matrix Indexing Fix)
+**Last Updated**: 2025-11-20 (radia_ngsolve Result Matrix Indexing Fix)
 
-## GridFunction Projection for rad_ngsolve (2025-11-20)
+## GridFunction Projection for radia_ngsolve (2025-11-20)
 
 ### Summary
 
-After fixing the result matrix indexing bug in `rad_ngsolve.cpp`, GridFunction projection accuracy was thoroughly investigated.
+After fixing the result matrix indexing bug in `radia_ngsolve.cpp`, GridFunction projection accuracy was thoroughly investigated.
 
 ### Key Findings
 
@@ -1045,7 +1045,7 @@ mesh = Mesh(geo.GenerateMesh(maxh=mesh_size))
 fes = HDiv(mesh, order=2)
 
 # 3. Project B to GridFunction
-B_cf = rad_ngsolve.RadiaField(radia_obj, 'b')
+B_cf = radia_ngsolve.RadiaField(radia_obj, 'b')
 B_gf = GridFunction(fes)
 B_gf.Set(B_cf)
 
@@ -1086,7 +1086,7 @@ The L2 norm error (~23-35%) is dominated by near-field regions where:
 ### Files Modified/Created
 
 **Modified**:
-- `src/python/rad_ngsolve.cpp`: Fixed result matrix indexing (lines 348-350)
+- `src/python/radia_ngsolve.cpp`: Fixed result matrix indexing (lines 348-350)
 
 **Test Scripts Created**:
 - `tests/verify_curl_A_equals_B_improved.py`: Proper FE space verification
@@ -1108,11 +1108,11 @@ The L2 norm error (~23-35%) is dominated by near-field regions where:
 
 ### Summary
 
-Verified that the result matrix indexing fix in `rad_ngsolve.cpp` (lines 348-350) works correctly with H-matrix accelerated field evaluation.
+Verified that the result matrix indexing fix in `radia_ngsolve.cpp` (lines 348-350) works correctly with H-matrix accelerated field evaluation.
 
 ### Test Configuration
 
-**Test file**: `tests/test_rad_ngsolve_hmatrix.py`
+**Test file**: `tests/test_radia_ngsolve_hmatrix.py`
 
 **Setup**:
 - Magnet: 5×5×5 = 125 elements (0.1m cube, boundaries at ±50mm)
@@ -1158,7 +1158,7 @@ For H-matrix verification tests:
 
 ### Implementation Notes
 
-**Bug fix location**: `src/python/rad_ngsolve.cpp:348-350`
+**Bug fix location**: `src/python/radia_ngsolve.cpp:348-350`
 
 **Before** (incorrect):
 ```cpp
@@ -1179,7 +1179,7 @@ This fix applies to both Direct and H-matrix modes, ensuring consistent and corr
 ---
 
 **Last Updated**: 2025-11-20
-**Test**: tests/test_rad_ngsolve_hmatrix.py
+**Test**: tests/test_radia_ngsolve_hmatrix.py
 **Status**: ✓ Verified
 
 ## NGSolve Integration Unit System Policy
@@ -1236,10 +1236,10 @@ field_value = rad.Fld(magnet, 'b', [0.02, 0.03, 0.04])  # all in meters
 ### Impact on Existing Code
 
 **Files to check when integrating with NGSolve**:
-- `src/python/rad_ngsolve.cpp` - RadiaField implementation
+- `src/python/radia_ngsolve.cpp` - RadiaField implementation
 - `src/python/radia_field_cached.py` - Cached field evaluator
 - `examples/NGSolve_Integration/*` - All NGSolve examples
-- `tests/test_rad_ngsolve_*.py` - All NGSolve integration tests
+- `tests/test_radia_ngsolve_*.py` - All NGSolve integration tests
 
 **Required changes**:
 1. Add `rad.FldUnits('m')` at the start of all NGSolve integration scripts
@@ -1319,7 +1319,7 @@ geo = OCCGeometry(box)
 mesh = Mesh(geo.GenerateMesh(maxh=0.015))
 
 # STEP 4: Create RadiaField (no scaling needed!)
-from rad_ngsolve import RadiaField
+from radia_ngsolve import RadiaField
 A_cf = RadiaField(magnet, 'a')  # Units already consistent
 
 # STEP 5: Set GridFunction
@@ -1347,7 +1347,7 @@ B_expected = RadiaField(magnet, 'b')
 
 **Current files**:
 - `src/python/radpy.cpp` - Python C API binding (NOT pybind11)
-- `src/python/rad_ngsolve.cpp` - pybind11 binding for NGSolve integration
+- `src/python/radia_ngsolve.cpp` - pybind11 binding for NGSolve integration
 
 **Naming convention**:
 - `*_pybind11.cpp` - Files using pybind11
@@ -1361,7 +1361,7 @@ B_expected = RadiaField(magnet, 'b')
 
 **Proposed renames**:
 - `src/python/radpy.cpp` → `src/python/radpy_pyapi.cpp` (uses Python C API)
-- Keep `src/python/rad_ngsolve.cpp` (already clear it's pybind11-based)
+- Keep `src/python/radia_ngsolve.cpp` (already clear it's pybind11-based)
 
 ---
 
@@ -1393,8 +1393,8 @@ rad.FldUnits('m')  # Use meters (SI units)
 magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 1])  # 0.1m = 100mm
 
 # For NGSolve integration
-import rad_ngsolve
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # units='m' by default
+import radia_ngsolve
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')  # units='m' by default
 ```
 
 ```python
@@ -1422,12 +1422,12 @@ magnet = rad.ObjRecMag([0, 0, 0], [100, 100, 100], [0, 0, 1])  # ✗ mm units
 # BEFORE (mm)
 rad.FldUnits('mm')
 magnet = rad.ObjRecMag([0, 0, 0], [100, 100, 100], [0, 0, 1.2])  # 100mm cube
-B_cf = rad_ngsolve.RadiaField(magnet, 'b', units='mm')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b', units='mm')
 
 # AFTER (m)
 rad.FldUnits('m')
 magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 1.2])  # 0.1m = 100mm cube
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # units='m' is default
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')  # units='m' is default
 ```
 
 ---

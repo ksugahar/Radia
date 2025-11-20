@@ -28,11 +28,11 @@ This creates `dist\radia.pyd`
 #### NGSolve Module (Optional)
 
 ```powershell
-# Build rad_ngsolve.pyd
+# Build radia_ngsolve.pyd
 .\Build_NGSolve.ps1
 ```
 
-This creates `build\Release\rad_ngsolve.pyd`
+This creates `build\Release\radia_ngsolve.pyd`
 
 ## Building and Uploading to PyPI
 
@@ -74,7 +74,7 @@ The distribution includes:
 radia/
 ├── src/python/
 │   ├── radia.pyd                    # Core C++ extension
-│   ├── rad_ngsolve.pyd              # NGSolve integration (optional)
+│   ├── radia_ngsolve.pyd              # NGSolve integration (optional)
 │   ├── radia_pyvista_viewer.py      # PyVista viewer utilities
 │   ├── radia_vtk_export.py          # VTK export utilities
 │   └── nastran_reader.py            # Nastran mesh reader

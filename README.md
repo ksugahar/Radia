@@ -46,12 +46,12 @@ pip install radia-ngsolve
 # 1. Build radia.pyd (core module)
 .\Build.ps1
 
-# 2. Build rad_ngsolve.pyd (optional, for NGSolve integration)
+# 2. Build radia_ngsolve.pyd (optional, for NGSolve integration)
 .\Build_NGSolve.ps1
 
 # Outputs:
 # - dist/radia.pyd
-# - build/Release/rad_ngsolve.pyd
+# - build/Release/radia_ngsolve.pyd
 ```
 
 See [README_BUILD.md](README_BUILD.md) for detailed build instructions.
@@ -75,12 +75,12 @@ print(f"Field: {field} T")
 
 ### NGSolve Integration
 
-The `rad_ngsolve` module provides a C++ CoefficientFunction interface for using Radia magnetic fields in NGSolve FEM analysis.
+The `radia_ngsolve` module provides a C++ CoefficientFunction interface for using Radia magnetic fields in NGSolve FEM analysis.
 
 **Function Specification:**
 
 ```python
-rad_ngsolve.RadiaField(radia_obj, field_type='b')
+radia_ngsolve.RadiaField(radia_obj, field_type='b')
 ```
 
 **Parameters:**
@@ -107,7 +107,7 @@ import ngsolve
 from ngsolve import Mesh, H1, GridFunction
 
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 
 # Create Radia magnet
 magnet = rad.ObjRecMag([0,0,0], [20,20,20], [0,0,1.2])  # mm units
@@ -115,10 +115,10 @@ rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0,0,1]))  # NdFeB permanent magnet
 rad.Solve(magnet, 0.0001, 10000)
 
 # Create NGSolve CoefficientFunction for different field types
-B_field = rad_ngsolve.RadiaField(magnet, 'b')  # Flux density [T]
-H_field = rad_ngsolve.RadiaField(magnet, 'h')  # Magnetic field [A/m]
-A_field = rad_ngsolve.RadiaField(magnet, 'a')  # Vector potential [T·m]
-M_field = rad_ngsolve.RadiaField(magnet, 'm')  # Magnetization [A/m]
+B_field = radia_ngsolve.RadiaField(magnet, 'b')  # Flux density [T]
+H_field = radia_ngsolve.RadiaField(magnet, 'h')  # Magnetic field [A/m]
+A_field = radia_ngsolve.RadiaField(magnet, 'a')  # Vector potential [T·m]
+M_field = radia_ngsolve.RadiaField(magnet, 'm')  # Magnetization [A/m]
 
 # Use in FEM analysis (NGSolve mesh in meters)
 gf = GridFunction(fes)
@@ -135,10 +135,10 @@ See [examples/Radia_to_NGSolve_CoefficientFunction/](examples/Radia_to_NGSolve_C
 - [docs/DIRECTORY_STRUCTURE.md](docs/DIRECTORY_STRUCTURE.md) - Project structure
 
 ### NGSolve Integration
-- [RAD_NGSOLVE_BUILD_SUCCESS.md](RAD_NGSOLVE_BUILD_SUCCESS.md) - Complete rad_ngsolve documentation
+- [RAD_NGSOLVE_BUILD_SUCCESS.md](RAD_NGSOLVE_BUILD_SUCCESS.md) - Complete radia_ngsolve documentation
 - [examples/Radia_to_NGSolve_CoefficientFunction/README.md](examples/Radia_to_NGSolve_CoefficientFunction/README.md) - NGSolve examples overview
 - [examples/Radia_to_NGSolve_CoefficientFunction/EXAMPLES_GUIDE.md](examples/Radia_to_NGSolve_CoefficientFunction/EXAMPLES_GUIDE.md) - Detailed usage guide
-- [tests/test_rad_ngsolve.py](tests/test_rad_ngsolve.py) - Integration tests
+- [tests/test_radia_ngsolve.py](tests/test_radia_ngsolve.py) - Integration tests
 
 ### Visualization
 - [docs/PYVISTA_VIEWER.md](examples/2024_02_03_振分電磁石/PYVISTA_VIEWER.md) - PyVista viewer guide
@@ -197,7 +197,7 @@ python tests/test_radia.py
 python tests/test_advanced.py
 
 # NGSolve integration test
-python tests/test_rad_ngsolve.py
+python tests/test_radia_ngsolve.py
 
 # OpenMP performance test
 python tests/test_parallel_performance.py
@@ -206,7 +206,7 @@ python tests/test_parallel_performance.py
 pytest tests/
 
 # Run specific test suite
-pytest tests/test_rad_ngsolve.py -v
+pytest tests/test_radia_ngsolve.py -v
 ```
 
 See [tests/README.md](tests/README.md) for detailed testing documentation.
@@ -254,7 +254,7 @@ export_geometry_to_vtk(mag, 'geometry.vtk')
 ### Runtime Requirements
 - Python 3.12
 - NumPy
-- NGSolve (optional, for FEM coupling via rad_ngsolve)
+- NGSolve (optional, for FEM coupling via radia_ngsolve)
 - PyVista (optional, for 3D visualization)
 
 ## Changes from Original Radia
@@ -306,7 +306,7 @@ See:
 
 **This Fork**:
 - OpenMP parallelization
-- NGSolve C++ integration (rad_ngsolve)
+- NGSolve C++ integration (radia_ngsolve)
 - Python 3.12 optimization
 - Build system modernization
 - PyVista integration

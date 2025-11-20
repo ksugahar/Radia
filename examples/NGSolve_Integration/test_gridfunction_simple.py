@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 from ngsolve import *
 from netgen.occ import *
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 import numpy as np
 
 print("="*70)
@@ -31,7 +31,7 @@ mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.001))
 print(f"\n[9] Created mesh: {mesh.ne} elements")
 
 # Create CoefficientFunction
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 print(f"\n[4] Created CoefficientFunction")
 
 # Test direct CF evaluation

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(rad_ngsolve C CXX)
+project(radia_ngsolve C CXX)
 
 # Find Python3 first to get the installation path
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
@@ -98,20 +98,20 @@ add_subdirectory(${EXT_DIR}/HACApK_LH-Cimplm)
 
 # Create NGSolve Python module using add_ngsolve_python_module
 # (following EMPY_Field pattern exactly)
-add_ngsolve_python_module(rad_ngsolve
+add_ngsolve_python_module(radia_ngsolve
 	${RADIA_CORE_SOURCES}
 	${EXT_DIR}/auxparse/auxparse.cpp
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp
 	${RADIA_LIB_SOURCES}
-	${PYTHON_DIR}/rad_ngsolve.cpp
+	${PYTHON_DIR}/radia_ngsolve.cpp
 )
 
 # Link triangle library and HACApK
-target_link_libraries(rad_ngsolve PRIVATE triangle_lib hacapk)
+target_link_libraries(radia_ngsolve PRIVATE triangle_lib hacapk)
 
 # Add include directories
-target_include_directories(rad_ngsolve PRIVATE
+target_include_directories(radia_ngsolve PRIVATE
 	${CORE_DIR}
 	${LIB_DIR}
 	${EXT_DIR}/auxparse
@@ -122,7 +122,7 @@ target_include_directories(rad_ngsolve PRIVATE
 )
 
 # Add compile definitions (from Radia)
-target_compile_definitions(rad_ngsolve PRIVATE
+target_compile_definitions(radia_ngsolve PRIVATE
 	ALPHA__LIB__
 	FFTW_ENABLE_FLOAT
 	NO_TIMER
@@ -140,7 +140,7 @@ if(WIN32)
 	# Windows: Look for precompiled FFTW library
 	set(FFTW_LIB ${FFTW_DIR}/fftw64_f.lib)
 	if(EXISTS ${FFTW_LIB})
-		target_link_libraries(rad_ngsolve PRIVATE ${FFTW_LIB})
+		target_link_libraries(radia_ngsolve PRIVATE ${FFTW_LIB})
 		message(STATUS "Found FFTW library: ${FFTW_LIB}")
 	else()
 		message(WARNING "FFTW library not found: ${FFTW_LIB}")
@@ -152,13 +152,13 @@ elseif(APPLE)
 		NO_DEFAULT_PATH
 	)
 	if(FFTW_LIBRARY)
-		target_link_libraries(rad_ngsolve PRIVATE ${FFTW_LIBRARY})
+		target_link_libraries(radia_ngsolve PRIVATE ${FFTW_LIBRARY})
 		find_path(FFTW_INCLUDE_DIR fftw3.h
 			PATHS /usr/local/include /opt/homebrew/include
 			NO_DEFAULT_PATH
 		)
 		if(FFTW_INCLUDE_DIR)
-			target_include_directories(rad_ngsolve PRIVATE ${FFTW_INCLUDE_DIR})
+			target_include_directories(radia_ngsolve PRIVATE ${FFTW_INCLUDE_DIR})
 		endif()
 		message(STATUS "Found FFTW library: ${FFTW_LIBRARY}")
 	else()
@@ -170,12 +170,12 @@ else()
 		PATHS /usr/lib /usr/local/lib /usr/lib/x86_64-linux-gnu
 	)
 	if(FFTW_LIBRARY)
-		target_link_libraries(rad_ngsolve PRIVATE ${FFTW_LIBRARY})
+		target_link_libraries(radia_ngsolve PRIVATE ${FFTW_LIBRARY})
 		find_path(FFTW_INCLUDE_DIR fftw3.h
 			PATHS /usr/include /usr/local/include
 		)
 		if(FFTW_INCLUDE_DIR)
-			target_include_directories(rad_ngsolve PRIVATE ${FFTW_INCLUDE_DIR})
+			target_include_directories(radia_ngsolve PRIVATE ${FFTW_INCLUDE_DIR})
 		endif()
 		message(STATUS "Found FFTW library: ${FFTW_LIBRARY}")
 	else()
@@ -185,37 +185,37 @@ endif()
 
 # Link Windows system libraries
 if(WIN32)
-	target_link_libraries(rad_ngsolve PRIVATE version.lib)
+	target_link_libraries(radia_ngsolve PRIVATE version.lib)
 	# Fix LIBCMT conflict warning
 	if(MSVC)
-		target_link_options(rad_ngsolve PRIVATE /NODEFAULTLIB:LIBCMT)
+		target_link_options(radia_ngsolve PRIVATE /NODEFAULTLIB:LIBCMT)
 	endif()
 endif()
 
 # Compiler-specific flags
 if(MSVC)
 	# MSVC (Visual Studio)
-	target_compile_options(rad_ngsolve PRIVATE
+	target_compile_options(radia_ngsolve PRIVATE
 		/wd4244  # Disable conversion warnings
 		/wd4267  # Disable size_t conversion warnings
 	)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	# GCC
-	target_compile_options(rad_ngsolve PRIVATE
+	target_compile_options(radia_ngsolve PRIVATE
 		-Wno-conversion
 		-Wno-sign-conversion
 		-Wno-unused-variable
 	)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	# Clang (including Apple Clang)
-	target_compile_options(rad_ngsolve PRIVATE
+	target_compile_options(radia_ngsolve PRIVATE
 		-Wno-conversion
 		-Wno-sign-conversion
 		-Wno-unused-variable
 	)
 endif()
 
-message(STATUS "rad_ngsolve module configured")
+message(STATUS "radia_ngsolve module configured")
 
 # ========================================
 # Radia Python Module (radia.pyd)
@@ -252,7 +252,7 @@ target_compile_definitions(radia PRIVATE
 	ANSI_DECLARATORS
 )
 
-# FFTW library - platform-specific detection (same as rad_ngsolve)
+# FFTW library - platform-specific detection (same as radia_ngsolve)
 if(WIN32)
 	# Windows: Look for precompiled FFTW library
 	if(EXISTS ${FFTW_LIB})

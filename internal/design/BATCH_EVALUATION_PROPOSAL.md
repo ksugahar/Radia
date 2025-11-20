@@ -1,8 +1,8 @@
-# Batch Evaluation for H-Matrix Acceleration in rad_ngsolve
+# Batch Evaluation for H-Matrix Acceleration in radia_ngsolve
 
 ## Problem Statement
 
-Current implementation of `GridFunction.Set(coefficient_function)` in rad_ngsolve:
+Current implementation of `GridFunction.Set(coefficient_function)` in radia_ngsolve:
 
 ### How it works now:
 1. NGSolve calls `RadiaFieldCF::Evaluate()` for **each mesh element**
@@ -25,7 +25,7 @@ Current implementation of `GridFunction.Set(coefficient_function)` in rad_ngsolv
 ```cpp
 // User code:
 rad.SetHMatrixFieldEval(1, 1e-6)  // Enable H-matrix
-cf = rad_ngsolve.RadiaField(magnet, 'b')
+cf = radia_ngsolve.RadiaField(magnet, 'b')
 cf.PrepareCache(mesh)  // NEW: Pre-compute all values
 gf.Set(cf)  // Fast: returns cached values
 ```
@@ -152,7 +152,7 @@ For larger problems (N >> 1000):
 import radia as rad
 from ngsolve import *
 from netgen.occ import *
-import rad_ngsolve
+import radia_ngsolve
 
 # Create Radia geometry (N=1000 elements)
 rad.FldUnits('m')
@@ -167,7 +167,7 @@ gf = GridFunction(fes)
 rad.SetHMatrixFieldEval(1, 1e-6)
 
 # Create CoefficientFunction
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 
 # SLOW way (current):
 # gf.Set(B_cf)  # 500 element calls, no H-matrix benefit, ~1000 ms

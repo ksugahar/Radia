@@ -9,7 +9,7 @@ import numpy as np
 try:
     from ngsolve import *
     from netgen.occ import *
-    import rad_ngsolve
+    import radia_ngsolve
     NGSOLVE_AVAILABLE = True
 except ImportError:
     print("NGSolve not available. Skipping test.")
@@ -85,8 +85,8 @@ rad.SetHMatrixFieldEval(0)
 print("\n[6a] H-matrix disabled")
 
 # Create CoefficientFunctions
-A_cf_direct = rad_ngsolve.RadiaField(bg_field, 'a')
-B_cf_direct = rad_ngsolve.RadiaField(bg_field, 'b')
+A_cf_direct = radia_ngsolve.RadiaField(bg_field, 'a')
+B_cf_direct = radia_ngsolve.RadiaField(bg_field, 'b')
 
 # Create GridFunctions
 fes_hcurl = HCurl(mesh, order=2)
@@ -126,8 +126,8 @@ rad.SetHMatrixFieldEval(1, 1e-6)
 print("\n[7a] H-matrix enabled (eps=1e-6)")
 
 # Create new CoefficientFunctions with H-matrix
-A_cf_hmat = rad_ngsolve.RadiaField(bg_field, 'a')
-B_cf_hmat = rad_ngsolve.RadiaField(bg_field, 'b')
+A_cf_hmat = radia_ngsolve.RadiaField(bg_field, 'a')
+B_cf_hmat = radia_ngsolve.RadiaField(bg_field, 'b')
 
 # Create new GridFunctions
 A_gf_hmat = GridFunction(fes_hcurl)

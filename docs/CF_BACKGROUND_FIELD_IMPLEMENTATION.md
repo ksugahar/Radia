@@ -242,7 +242,7 @@ python test_cf_background_field.py
 
 ### Prerequisites
 - Python 3.x with development headers
-- pybind11 (already used by rad_ngsolve)
+- pybind11 (already used by radia_ngsolve)
 - CMake 3.15+
 
 ### Build

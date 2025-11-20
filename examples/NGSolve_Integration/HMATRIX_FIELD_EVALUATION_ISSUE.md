@@ -142,12 +142,12 @@ for(long i=0; i<Np; i++)
 
 **問題点**:
 1. **Python overhead**: 各点でPython ↔ C++の呼び出し
-   - `rad.Fld()` が個別に呼ばれる（rad_ngsolve.cpp:220）
+   - `rad.Fld()` が個別に呼ばれる（radia_ngsolve.cpp:220）
    - 並列化はC++側でのみ有効（複数点を一度に渡した場合のみ）
 
 2. **NGSolveとの統合**:
    ```cpp
-   // rad_ngsolve.cpp: RadiaFieldCF::Evaluate()
+   // radia_ngsolve.cpp: RadiaFieldCF::Evaluate()
    py::object field_result = rad.attr("Fld")(radia_obj, field_type, coords);
    ```
    - 各NGSolveメッシュ頂点で個別にPython呼び出し
@@ -205,9 +205,9 @@ B_array = rad.FldVec(obj, 'b', vertices)  # 1回のPython call
 - OpenMP並列化が確実に有効
 - 既存のComputeField()が既に複数点対応
 
-**実装規模**: 小（rad_ngsolve.cppの修正のみ）
+**実装規模**: 小（radia_ngsolve.cppの修正のみ）
 
-### Option D: rad_ngsolveでのキャッシング
+### Option D: radia_ngsolveでのキャッシング
 
 **アイデア**: 粗いグリッドでフィールド計算 → 補間
 

@@ -563,7 +563,7 @@ py::list RadiaFld_Batch(int ElemKey, const std::string& FieldChar, py::list poin
 
 ### 5.2. NGSolve Integration
 
-**File**: `src/python/rad_ngsolve.cpp`
+**File**: `src/python/radia_ngsolve.cpp`
 
 Modify `Evaluate()` to use H-matrix batch evaluation:
 

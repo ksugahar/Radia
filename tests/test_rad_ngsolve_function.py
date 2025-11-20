@@ -6,7 +6,7 @@ from numpy import *
 from ngsolve import *
 from netgen.occ import *
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 
 
 # ========================================================================
@@ -41,7 +41,7 @@ mesh = air_region.GenerateMesh(maxh=mesh_maxh)
 
 # FIXED: Remove dim=3 - it was creating a 3x3 tensor field instead of 3D vector field
 fes = VectorH1(mesh, order=2)
-B_cf = rad_ngsolve.RadiaField(magnet_base, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet_base, 'b')
 gf_B = GridFunction(fes)
 gf_B.Set(B_cf)
 

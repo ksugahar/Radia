@@ -5,7 +5,7 @@ from numpy import *
 from ngsolve import *
 from netgen.occ import *
 import radia as rad
-import rad_ngsolve
+import radia_ngsolve
 
 # Create magnet
 magnet_size = 1.0  # mm
@@ -28,7 +28,7 @@ air_region = Box((-mesh_domain, -mesh_domain, -mesh_domain),
 mesh = air_region.GenerateMesh(maxh=1.0e-3)
 
 # Create CoefficientFunction (NO GridFunction!)
-B_cf = rad_ngsolve.RadiaField(magnet_base, 'b')
+B_cf = radia_ngsolve.RadiaField(magnet_base, 'b')
 
 print("="*70)
 print("Comparison: rad.Fld vs rad_ngsolve (Direct CF Evaluation)")

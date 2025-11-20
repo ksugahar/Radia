@@ -1,5 +1,5 @@
 /************************************************************************//**
- * File: rad_ngsolve.cpp
+ * File: radia_ngsolve.cpp
  * Description: NGSolve CoefficientFunction binding for Radia
  * Project: Radia
  * First release: October 2025
@@ -538,7 +538,7 @@ public:
 
 } // namespace ngfem
 
-PYBIND11_MODULE(rad_ngsolve, m) {
+PYBIND11_MODULE(radia_ngsolve, m) {
 	m.doc() = "NGSolve CoefficientFunction interface for Radia (with m->mm conversion and coordinate transformation)";
 
 	// Unified interface with coordinate transformation

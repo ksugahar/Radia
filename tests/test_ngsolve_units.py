@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'python'
 import numpy as np
 import radia as rad
 from ngsolve import *
-import rad_ngsolve
+import radia_ngsolve
 
 print("=" * 80)
 print("rad_ngsolve Unit Conversion Test")
@@ -43,7 +43,7 @@ print()
 
 # Test 1: Default units='mm' (should work correctly)
 print("[Test 1] units='mm' (default) - coordinates scaled by 1000")
-B_cf_mm = rad_ngsolve.RadiaField(magnet, 'b', units='mm')
+B_cf_mm = radia_ngsolve.RadiaField(magnet, 'b', units='mm')
 gf_mm = GridFunction(fes)
 gf_mm.Set(B_cf_mm)
 B_mm = gf_mm(test_point_m)
@@ -63,7 +63,7 @@ rad.UtiDelAll()
 rad.FldUnits('m')
 magnet_m = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 1.0])  # 0.01m = 10mm cube
 print("[Test 2] units='m' - coordinates scaled by 1")
-B_cf_m = rad_ngsolve.RadiaField(magnet_m, 'b', units='m')
+B_cf_m = radia_ngsolve.RadiaField(magnet_m, 'b', units='m')
 gf_m = GridFunction(fes)
 gf_m.Set(B_cf_m)
 B_m = gf_m(test_point_m)

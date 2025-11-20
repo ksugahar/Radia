@@ -34,7 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `test_curl_A_detailed.py` - Detailed curl(A) = B testing
   - `test_hcurl_vs_hdiv.py` - H(curl) vs H(div) comparison
   - `test_order1.py` - First-order element testing
-  - `test_rad_ngsolve_diagnostic.py` - NGSolve integration diagnostics
+  - `test_radia_ngsolve_diagnostic.py` - NGSolve integration diagnostics
   - `test_set_vs_interpolate.py` - GridFunction.Set() vs Interpolate()
   - `test_without_gridfunction.py` - Direct field evaluation without GridFunction
 
@@ -88,7 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - **H-Matrix Cache for Batch Field Evaluation**
-  - Implemented `PrepareCache()` method in `rad_ngsolve.RadiaField` for batch field evaluation
+  - Implemented `PrepareCache()` method in `radia_ngsolve.RadiaField` for batch field evaluation
   - Enables H-matrix acceleration when setting GridFunctions from Radia fields
   - Single batch Radia.Fld() call replaces element-by-element evaluation (~13,000 calls → 1 call)
   - Cache data structure using FNV-1a hash with O(1) lookup performance
@@ -103,7 +103,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- **rad_ngsolve.cpp Internal Structure**
+- **radia_ngsolve.cpp Internal Structure**
   - Added cache member variables: `point_cache_`, `use_cache_`, cache statistics
   - Modified `Evaluate()` methods to check cache before direct Radia evaluation
   - Added hash function for 3D point quantization (tolerance: 1e-10 meters)
@@ -144,8 +144,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
-- **rad_ngsolve GridFunction.Set() Bug Fix**
-  - Fixed result matrix indexing in batch evaluation function (`src/python/rad_ngsolve.cpp`)
+- **radia_ngsolve GridFunction.Set() Bug Fix**
+  - Fixed result matrix indexing in batch evaluation function (`src/python/radia_ngsolve.cpp`)
   - Changed from `result(component, point)` to `result(point, component)` (lines 348-350)
   - Bug was introduced in commit ab77976 (H-matrix implementation)
   - GridFunction.Set() now produces correct values matching direct CoefficientFunction evaluation
@@ -431,7 +431,7 @@ All NGSolve integration examples now use consistent meter-based units:
 
 ### Added (2025-11-01)
 
-- **rad_ngsolve Unified Interface**
+- **radia_ngsolve Unified Interface**
   - New unified `RadiaField` class supporting all field types
   - Field type selection: 'b' (flux density), 'h' (field), 'a' (vector potential), 'm' (magnetization)
   - Removed legacy interfaces (RadBfield, RadHfield, RadAfield) for cleaner API
@@ -461,7 +461,7 @@ All NGSolve integration examples now use consistent meter-based units:
   - Updated all Python and C++ files to follow new standards
   - Documented standards in `claude.md`
 
-- **rad_ngsolve API Simplification**
+- **radia_ngsolve API Simplification**
   - Single unified interface: `RadiaField(obj, field_type)`
   - Removed backward compatibility layer
   - Cleaner, more maintainable codebase
@@ -548,7 +548,7 @@ All NGSolve integration examples now use consistent meter-based units:
 
 ### Current (2025-11-01)
 ```
-rad_ngsolve tests: 4/4 passed (100%)
+radia_ngsolve tests: 4/4 passed (100%)
 radia core tests: 7/7 passed (100%)
 ```
 

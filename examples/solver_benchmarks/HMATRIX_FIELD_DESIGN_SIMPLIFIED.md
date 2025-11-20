@@ -479,9 +479,9 @@ for iteration in range(10):
 
 ## 5. NGSolve Integration
 
-### 5.1. Modified rad_ngsolve.cpp
+### 5.1. Modified radia_ngsolve.cpp
 
-**File**: `src/python/rad_ngsolve.cpp`
+**File**: `src/python/radia_ngsolve.cpp`
 
 ```cpp
 class RadiaFieldCF : public CoefficientFunction
@@ -546,7 +546,7 @@ m.def("RadiaField", [](int obj, std::string field_type, bool use_hmatrix) {
 ### 5.2. Python Usage with NGSolve
 
 ```python
-import rad_ngsolve
+import radia_ngsolve
 import ngsolve as ngs
 
 # Create Radia magnet
@@ -559,7 +559,7 @@ fes = ngs.HCurl(mesh)
 gf = ngs.GridFunction(fes)
 
 # Create Radia CoefficientFunction with H-matrix
-B_cf = rad_ngsolve.RadiaField(magnet, 'b', use_hmatrix=True)
+B_cf = radia_ngsolve.RadiaField(magnet, 'b', use_hmatrix=True)
 
 # Set GridFunction
 gf.Set(B_cf)  # H-matrix is cached and reused for all element evaluations!
@@ -762,7 +762,7 @@ Speedup: 5600 / 340 = 16.5x
 B = rad.Fld(magnet, 'b', points, use_hmatrix=True)
 
 # NGSolve: H-matrix enabled by default
-B_cf = rad_ngsolve.RadiaField(magnet, 'b', use_hmatrix=True)
+B_cf = radia_ngsolve.RadiaField(magnet, 'b', use_hmatrix=True)
 ```
 
 ### Decision 3: Minimum Problem Size
@@ -804,13 +804,13 @@ B = rad.Fld(magnet, 'b', [[0, 0, 0]], use_hmatrix=True)  # OK
 - [ ] Add use_hmatrix parameter to rad.Fld()
 - [ ] Implement RadiaFld_Batch_HMatrix()
 - [ ] Python bindings
-- [ ] Modify RadiaFieldCF in rad_ngsolve.cpp
+- [ ] Modify RadiaFieldCF in radia_ngsolve.cpp
 - [ ] Add use_hmatrix to RadiaField()
 
 ### Phase 3: Build & Test ✅
 - [ ] Uncomment radhmat.cpp in CMakeLists.txt
 - [ ] Build radia library
-- [ ] Build rad_ngsolve
+- [ ] Build radia_ngsolve
 - [ ] Run test suite
 - [ ] Fix any compilation/linking errors
 
