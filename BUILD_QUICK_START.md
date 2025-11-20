@@ -10,37 +10,30 @@
 
 ### Build Everything (Recommended)
 ```powershell
-.\build_all.ps1
+.\Build.ps1
 ```
 Builds both `radia.pyd` and `rad_ngsolve.pyd`.
 
-### Build Only Radia
-```powershell
-.\Build.ps1
-```
-Builds only `radia.pyd` (main Radia module).
-
 ### Build with Tests
 ```powershell
-.\build_all.ps1 -Test
+.\Build.ps1 -Test
 ```
 
 ### Clean Rebuild
 ```powershell
-.\build_all.ps1 -Clean
+.\Build.ps1 -Clean
 ```
 
 ## Build Scripts Organization
 
 | Script | Purpose | Output |
 |--------|---------|--------|
-| `build_all.ps1` | **Build both modules** | `radia.pyd` + `rad_ngsolve.pyd` |
-| `Build.ps1` | Build Radia only | `radia.pyd` |
+| `Build.ps1` | **Build both modules** | `radia.pyd` + `rad_ngsolve.pyd` |
 
 ### Deprecated Scripts (Moved to *.old)
-- `build_ngsolve.ps1` → Use `build_all.ps1`
-- `build_rad_ngsolve.bat` → Use `build_all.ps1`
-- `build_rad_ngsolve_full.bat` → Use `build_all.ps1 -Clean`
+- `build_ngsolve.ps1` → Use `Build.ps1`
+- `build_rad_ngsolve.bat` → Use `Build.ps1`
+- `build_rad_ngsolve_full.bat` → Use `Build.ps1 -Clean`
 
 ## Output Location
 ```
@@ -77,20 +70,20 @@ pip install ngsolve
 
 ### Build fails
 ```powershell
-.\build_all.ps1 -Clean  # Clean rebuild
+.\Build.ps1 -Clean  # Clean rebuild
 ```
 
 ## Development Workflow
 
 ```powershell
 # Initial build
-.\build_all.ps1 -Clean -Test
+.\Build.ps1 -Clean -Test
 
 # After code changes (incremental)
-.\build_all.ps1
+.\Build.ps1
 
 # Before commit
-.\build_all.ps1 -Test
+.\Build.ps1 -Test
 ```
 
 ---
