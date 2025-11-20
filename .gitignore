@@ -186,15 +186,18 @@ file_format_documents/
 # Reference repositories (local only)
 参考/
 
-# Debug and development outputs
+# Debug and development outputs (DO NOT COMMIT)
 debug/
 *_output.txt
 *_debug.txt
 benchmark_*.txt
 .radia_cache/
 
-# Development folders
+# Development folders (DO NOT COMMIT)
 dev/
+
+# Internal documentation (DO COMMIT - for maintainers)
+# internal/  <- Keep this commented, we want to commit internal/
 
 # NGSolve integration outputs
 *.ObjBckgCF/

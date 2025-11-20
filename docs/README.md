@@ -34,6 +34,11 @@ This folder contains the official documentation for Radia.
 
 ## Additional Resources
 
+### Internal Documentation (For Maintainers)
+Design documents and implementation analysis are in [../internal/](../internal/):
+- [design/](../internal/design/) - Architecture decisions, implementation proposals
+- [analysis/](../internal/analysis/) - Performance analysis, bottleneck investigations
+
 ### Development Notes
 Implementation notes, performance analysis, and troubleshooting are in [../dev/notes/](../dev/notes/):
 - Implementation details (directory structure, conversion reports)
