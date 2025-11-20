@@ -48,16 +48,18 @@ print()
 print("[Step 1] Creating Radia Magnet Geometry")
 print("-" * 70)
 
+rad.FldUnits('m')  # Set units to meters to match NGSolve
+
 magnet_center = [0, 0, 0]
-magnet_size = [20, 20, 30]
+magnet_size = [0.020, 0.020, 0.030]
 
 magnet = rad.ObjRecMag(magnet_center, magnet_size, [0, 0, 1.2])
 rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))  # NdFeB
 rad.Solve(magnet, 0.0001, 10000)
 
 print(f"Magnet created: object #{magnet}")
-print(f"  Center: {magnet_center} mm")
-print(f"  Size: {magnet_size} mm")
+print(f"  Center: {magnet_center} m")
+print(f"  Size: {magnet_size} m")
 print(f"  Material: NdFeB, Br = 1.2 T")
 
 # ============================================================================
@@ -104,9 +106,9 @@ print("\n[Step 4] Field Evaluation Comparison")
 print("-" * 70)
 
 test_mesh_points = [
-	(0.000, 0.000, 0.000),	# 0mm (inside magnet)
-	(0.000, 0.000, 0.020),  # 20mm (above magnet)
-	(0.000, 0.000, 0.040),  # 40mm (far from magnet)
+	(0.000, 0.000, 0.000),	# 0m (inside magnet)
+	(0.000, 0.000, 0.020),  # 0.020m (above magnet)
+	(0.000, 0.000, 0.040),  # 0.040m (far from magnet)
 ]
 
 # Prepare GridFunction if needed
@@ -125,8 +127,8 @@ print("Point-wise Evaluation")
 print("=" * 70)
 
 for pt in test_mesh_points:
-	pt_mm = [pt[0]*1000, pt[1]*1000, pt[2]*1000]
-	B_radia = rad.Fld(magnet, 'b', pt_mm)
+	pt_m = pt
+	B_radia = rad.Fld(magnet, 'b', pt_m)
 
 	print(f"\nPoint: {pt} m = {pt_mm} mm")
 	print(f"  Radia:  Bx={B_radia[0]:.6f}, By={B_radia[1]:.6f}, Bz={B_radia[2]:.6f} T")

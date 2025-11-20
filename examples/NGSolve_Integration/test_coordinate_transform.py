@@ -38,19 +38,20 @@ print("\n[Scenario] Dipole magnet rotated 45° around z-axis")
 print("-" * 80)
 
 rad.UtiDelAll()
+rad.FldUnits('m')  # Set units to meters
 
 # Create dipole magnet aligned with x-axis (in its local frame)
 dipole = rad.ObjRecMag(
-	[0, 0, 0],        # Center (mm)
-	[20, 10, 10],     # Dimensions (mm) - elongated along x
+	[0, 0, 0],        # Center (m)
+	[0.020, 0.010, 0.010],  # Dimensions (m) - elongated along x
 	[1.0, 0, 0]       # Magnetization along local x-axis (T)
 )
 
 print(f"  Magnet ID: {dipole}")
 print(f"  Local coordinate system:")
 print(f"    - Magnetization: along local x-axis")
-print(f"    - Long axis: local x (20mm)")
-print(f"    - Short axes: local y,z (10mm)")
+print(f"    - Long axis: local x (0.020m)")
+print(f"    - Short axes: local y,z (0.010m)")
 
 # ============================================================================
 # Test 1: No transformation (magnet aligned with global axes)
@@ -65,7 +66,7 @@ B_cf_identity = rad_ngsolve.RadiaField(dipole, 'b')
 print(f"  use_transform: {A_cf_identity.use_transform}")
 
 # Test point in global coordinates
-test_point = [0.015, 0.0, 0.0]  # 15mm from origin along x
+test_point = [0.015, 0.0, 0.0]  # 0.015m from origin along x
 test_point_mm = [p * 1000 for p in test_point]
 
 A_direct = rad.Fld(dipole, 'a', test_point_mm)
@@ -110,7 +111,7 @@ B_cf_rotated = rad_ngsolve.RadiaField(dipole, 'b',
 print(f"  use_transform: {A_cf_rotated.use_transform}")
 
 # Test point along rotated x-axis (45° from global x)
-# Global point: [15mm*cos(45°), 15mm*sin(45°), 0]
+# Global point: [0.015m*cos(45°), 15mm*sin(45°), 0]
 test_rotated = [0.015 * cos45, 0.015 * sin45, 0.0]
 test_rotated_mm = [p * 1000 for p in test_rotated]
 

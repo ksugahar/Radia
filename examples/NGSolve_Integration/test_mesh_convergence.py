@@ -27,7 +27,8 @@ print("=" * 80)
 
 # Create Radia magnet
 rad.UtiDelAll()
-magnet = rad.ObjRecMag([0, 0, 0], [40, 40, 60], [0, 0, 1.2])
+rad.FldUnits('m')  # Set units to meters
+magnet = rad.ObjRecMag([0, 0, 0], [0.040, 0.040, 0.060], [0, 0, 1.2])
 
 # Create background field
 def radia_field_with_A(coords):

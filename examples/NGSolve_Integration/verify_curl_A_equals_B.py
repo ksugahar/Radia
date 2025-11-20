@@ -63,7 +63,7 @@ print(f"  Magnetization: [0, 0, 1.2] T")
 # Calculate field at a reference point
 ref_point = [0, 0, 50]  # mm
 B_ref = rad.Fld(magnet, 'b', ref_point)
-print(f"  Reference B at [0, 0, 50] mm: [{B_ref[0]:.6f}, {B_ref[1]:.6f}, {B_ref[2]:.6f}] T")
+print(f"  Reference B at [0, 0, 0.050] m: [{B_ref[0]:.6f}, {B_ref[1]:.6f}, {B_ref[2]:.6f}] T")
 print(f"  |B| = {np.linalg.norm(B_ref):.6f} T")
 
 # ============================================================================
@@ -77,7 +77,7 @@ def radia_field_with_A(coords):
 	Callback that returns both B field and vector potential A from Radia
 
 	Args:
-		coords: [x, y, z] in mm
+		coords: [x, y, z] in meters
 
 	Returns:
 		dict: {'B': [Bx, By, Bz], 'A': [Ax, Ay, Az]}
@@ -97,12 +97,12 @@ bg_field = rad.ObjBckgCF(radia_field_with_A)
 print(f"  Background field ID: {bg_field}")
 
 # Test at a point to verify callback works
-test_point = [30, 20, 40]  # mm
+test_point = [0.030, 0.020, 0.040]  # m
 result = rad.Fld(bg_field, 'ba', test_point)
 B_test = np.array(result[0:3])
 A_test = np.array(result[3:6])
 
-print(f"  Callback test at [{test_point[0]}, {test_point[1]}, {test_point[2]}] mm:")
+print(f"  Callback test at [{test_point[0]}, {test_point[1]}, {test_point[2]}] m:")
 print(f"    B = [{B_test[0]:.6e}, {B_test[1]:.6e}, {B_test[2]:.6e}] T")
 print(f"    A = [{A_test[0]:.6e}, {A_test[1]:.6e}, {A_test[2]:.6e}] T*m")
 

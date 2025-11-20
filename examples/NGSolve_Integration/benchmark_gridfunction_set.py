@@ -81,8 +81,9 @@ for radia_cfg in radia_configs:
 
 	# Create Radia magnet geometry
 	rad.UtiDelAll()
+	rad.FldUnits('m')  # Set units to meters
 
-	cube_size = 100.0  # mm
+	cube_size = 0.100  # meters
 	elem_size = cube_size / n
 	mag_value = 1.2  # T
 
@@ -109,7 +110,7 @@ for radia_cfg in radia_configs:
 		print(f"  {'-'*76}")
 
 		# Create NGSolve mesh
-		box_size_m = cube_size * 2.0 / 1000  # mm to m
+		box_size_m = cube_size * 2.0  # meters
 		geo = Box(
 			Pnt(-box_size_m/2, -box_size_m/2, -box_size_m/2),
 			Pnt( box_size_m/2,  box_size_m/2,  box_size_m/2)

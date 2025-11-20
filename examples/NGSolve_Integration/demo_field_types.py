@@ -91,9 +91,9 @@ print("\n[Step 4] Field Evaluation at Test Points")
 print("-" * 70)
 
 test_points = [
-	(0.000, 0.000, 0.000),	# 0mm (center)
-	(0.000, 0.000, 0.020),  # 20mm (above magnet)
-	(0.000, 0.000, 0.040),  # 40mm (far from magnet)
+	(0.000, 0.000, 0.000),	# 0m (center)
+	(0.000, 0.000, 0.020),  # 0.020m (above magnet)
+	(0.000, 0.000, 0.040),  # 0.040m (far from magnet)
 ]
 
 print("\n" + "=" * 70)
@@ -101,7 +101,7 @@ print("Field Values at Different Points")
 print("=" * 70)
 
 for pt in test_points:
-	pt_mm = [pt[0]*1000, pt[1]*1000, pt[2]*1000]
+	pt_m = pt
 	mesh_pt = mesh(*pt)
 
 	print(f"\nPoint: {pt} m = {pt_mm} mm")
@@ -136,10 +136,10 @@ mesh_pt = mesh(0, 0, 0)
 print(f"\nAt center ({pt_mm} mm):")
 
 # Radia direct
-B_radia = rad.Fld(magnet, 'b', pt_mm)
-H_radia = rad.Fld(magnet, 'h', pt_mm)
-A_radia = rad.Fld(magnet, 'a', pt_mm)
-M_radia = rad.Fld(magnet, 'm', pt_mm)
+B_radia = rad.Fld(magnet, 'b', pt_m)
+H_radia = rad.Fld(magnet, 'h', pt_m)
+A_radia = rad.Fld(magnet, 'a', pt_m)
+M_radia = rad.Fld(magnet, 'm', pt_m)
 
 # NGSolve CoefficientFunction
 B_ngsolve = B_cf(mesh_pt)
