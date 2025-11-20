@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.1] - 2025-11-21
+
+### Added
+
+- **Pure Python Cached Field Implementation**
+  - New `radia_field_cached.py` module with `CachedRadiaField` class
+  - 60,000x faster than C++ PrepareCache() (500 points: 60s → 1ms)
+  - Linear O(N) scaling with ~2 us/point overhead
+  - Avoids pybind11 overhead by keeping all data operations in Python
+  - Helper function `collect_integration_points()` for NGSolve integration
+  - Documented in `docs/PYTHON_CACHED_FIELD_SOLUTION.md`
+
+- **NGSolve Integration Unit System Policy**
+  - Comprehensive policy in CLAUDE.md for `rad.FldUnits('m')` usage
+  - Ensures consistent meter units between Radia and NGSolve
+  - Verification checklist for all NGSolve integration code
+
+### Changed
+
+- **Unit System Consistency (Breaking Change)**
+  - All NGSolve integration examples now use `rad.FldUnits('m')`
+  - Magnet dimensions converted from mm to m (35 files updated)
+  - Removed manual coordinate scaling (×1000, ×0.001)
+  - Affects: tests/ and examples/NGSolve_Integration/ folders
+
+### Fixed
+
+- **profile_batch_performance.py**: Fixed ZeroDivisionError when measurement time < 0.01ms
+- **test_coordinate_transform.py**: Fixed UnicodeEncodeError (cp932) by replacing `·` with `*`
+- **test_vector_potential.py**: Added missing `src/python` path for radia module import
+
+### Documentation
+
+- Added `docs/PYTHON_CACHED_FIELD_SOLUTION.md` - Pure Python cached field implementation
+- Updated CLAUDE.md with NGSolve Integration Unit System Policy
+- Updated CLAUDE.md with Windows Console Encoding (cp932) compatibility policy
+
 ## [1.3.0] - 2025-11-21
 
 ### Added

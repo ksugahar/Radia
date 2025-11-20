@@ -16,8 +16,9 @@ Date: 2025-11-01
 """
 
 import sys
-sys.path.insert(0, r"S:\radia\01_GitHub\build\Release")
-sys.path.insert(0, r"S:\radia\01_GitHub\dist")
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
 from ngsolve import *
 from netgen.csg import CSGeometry, OrthoBrick, Pnt
@@ -29,6 +30,9 @@ print("=" * 70)
 print("Radia Field Types Demo")
 print("=" * 70)
 
+# Set Radia to use meters (required for NGSolve integration)
+rad.FldUnits('m')
+
 # ============================================================================
 # Step 1: Create Radia Magnet Geometry
 # ============================================================================
@@ -36,16 +40,16 @@ print("=" * 70)
 print("\n[Step 1] Creating Radia Magnet")
 print("-" * 70)
 
-magnet_center = [0, 0, 0]
-magnet_size = [20, 20, 30]
+magnet_center = [0, 0, 0]  # meters
+magnet_size = [0.020, 0.020, 0.030]  # meters (20mm x 20mm x 30mm)
 
 magnet = rad.ObjRecMag(magnet_center, magnet_size, [0, 0, 1.2])
 rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))  # NdFeB
 rad.Solve(magnet, 0.0001, 10000)
 
 print(f"Magnet created: object #{magnet}")
-print(f"  Center: {magnet_center} mm")
-print(f"  Size: {magnet_size} mm")
+print(f"  Center: {magnet_center} m")
+print(f"  Size: {magnet_size} m")
 print(f"  Material: NdFeB, Br = 1.2 T")
 
 # ============================================================================
@@ -104,7 +108,7 @@ for pt in test_points:
 	pt_m = pt
 	mesh_pt = mesh(*pt)
 
-	print(f"\nPoint: {pt} m = {pt_mm} mm")
+	print(f"\nPoint: {pt} m")
 
 	# B field (Tesla)
 	B_val = B_cf(mesh_pt)
@@ -130,10 +134,10 @@ print("\n" + "=" * 70)
 print("Comparison with Radia Direct Evaluation")
 print("=" * 70)
 
-pt_mm = [0, 0, 0]  # Center point in mm
+pt_m = [0, 0, 0]  # Center point in meters
 mesh_pt = mesh(0, 0, 0)
 
-print(f"\nAt center ({pt_mm} mm):")
+print(f"\nAt center ({pt_m} m):")
 
 # Radia direct
 B_radia = rad.Fld(magnet, 'b', pt_m)

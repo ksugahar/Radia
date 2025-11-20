@@ -38,9 +38,10 @@ print()
 print("[Step 1] Creating Radia magnet...")
 
 rad.UtiDelAll()
+rad.FldUnits('m')  # Set units to meters (required for NGSolve integration)
 
 # Simple rectangular magnet
-magnet = rad.ObjRecMag([0, 0, 0], [40, 40, 60], [0, 0, 1.2])
+magnet = rad.ObjRecMag([0, 0, 0], [0.040, 0.040, 0.060], [0, 0, 1.2])  # meters
 
 def radia_field_with_A(coords):
     x, y, z = coords
@@ -51,6 +52,7 @@ def radia_field_with_A(coords):
 bg_field = rad.ObjBckgCF(radia_field_with_A)
 
 print(f"  Magnet object: {magnet}")
+print(f"  Dimensions: [0.040, 0.040, 0.060] m")
 print(f"  Magnetization: [0, 0, 1.2] T")
 print()
 

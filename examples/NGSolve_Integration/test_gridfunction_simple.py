@@ -1,6 +1,7 @@
 import sys
-sys.path.insert(0, '../../src/python')
-sys.path.insert(0, '../../build/Release')
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
 from ngsolve import *
 from netgen.occ import *
@@ -12,12 +13,15 @@ print("="*70)
 print("Simple GridFunction.Set() Test")
 print("="*70)
 
+# Set Radia to use meters (required for NGSolve integration)
+rad.FldUnits('m')
+
 # Create simple magnet
-magnet = rad.ObjRecMag([0, 2, 0], [1, 1, 1], [0, 1, 0])
-print(f"\n[1] Created magnet at (0, 2, 0) mm, M=[0, 1, 0] T")
+magnet = rad.ObjRecMag([0, 0.002, 0], [0.001, 0.001, 0.001], [0, 1, 0])  # meters
+print(f"\n[1] Created magnet at (0, 0.002, 0) m, M=[0, 1, 0] T")
 
 # Test point
-point_m = [0, 2, 0]  # Magnet center
+point_m = [0, 0.002, 0]  # Magnet center in meters
 B_radia = rad.Fld(magnet, 'b', point_m)
 print(f"\n[2] rad.Fld at magnet center: {B_radia}")
 

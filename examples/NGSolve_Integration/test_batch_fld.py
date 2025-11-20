@@ -19,23 +19,24 @@ print("=" * 80)
 
 # Create simple magnet
 rad.UtiDelAll()
-magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 20], [0, 0, 1.2])
+rad.FldUnits('m')  # Set units to meters (required for NGSolve integration)
+magnet = rad.ObjRecMag([0, 0, 0], [0.020, 0.020, 0.020], [0, 0, 1.2])  # meters
 
 print("\n[Test 1] Single point evaluation")
 print("-" * 80)
 
-point = [10.0, 0.0, 0.0]
+point = [0.010, 0.0, 0.0]  # meters
 B_single = rad.Fld(magnet, 'b', point)
-print(f"  Point: {point} mm")
+print(f"  Point: {point} m")
 print(f"  B = {B_single} T")
 
 print("\n[Test 2] Try passing multiple points as list")
 print("-" * 80)
 
 points_list = [
-	[10.0, 0.0, 0.0],
-	[0.0, 10.0, 0.0],
-	[0.0, 0.0, 10.0],
+	[0.010, 0.0, 0.0],   # meters
+	[0.0, 0.010, 0.0],
+	[0.0, 0.0, 0.010],
 ]
 
 try:
@@ -49,7 +50,7 @@ try:
 			print("\n  [OK] SUCCESS: rad.Fld() supports batch evaluation!")
 			print(f"  Number of points evaluated: {len(result)}")
 			for i, (point, field) in enumerate(zip(points_list, result)):
-				print(f"    Point {i}: {point} mm -> B = {field} T")
+				print(f"    Point {i}: {point} m -> B = {field} T")
 		else:
 			print("\n  [FAIL] Result is single field vector, not batch")
 			print(f"    This means rad.Fld() interpreted the list as a single point")
@@ -81,11 +82,11 @@ print("-" * 80)
 N_points = 1000
 print(f"  Evaluating {N_points} points...")
 
-# Generate random points
+# Generate random points in meters
 np.random.seed(42)
-points = [[np.random.uniform(-10, 10),
-           np.random.uniform(-10, 10),
-           np.random.uniform(-10, 10)] for _ in range(N_points)]
+points = [[np.random.uniform(-0.010, 0.010),
+           np.random.uniform(-0.010, 0.010),
+           np.random.uniform(-0.010, 0.010)] for _ in range(N_points)]
 
 # Method 1: Loop (current approach)
 print("\n  Method 1: Loop over single point calls")

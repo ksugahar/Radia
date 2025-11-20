@@ -34,7 +34,10 @@ print("[Setup] Creating Radia magnet...")
 
 rad.UtiDelAll()
 
-magnet = rad.ObjRecMag([0, 0, 0], [40, 40, 60], [0, 0, 1.2])
+# Set Radia to use meters (required for NGSolve integration)
+rad.FldUnits('m')
+
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2])
 
 def radia_field_with_A(coords):
     x, y, z = coords

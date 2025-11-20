@@ -15,9 +15,9 @@ Date: 2025-11-01
 """
 
 import sys
-sys.path.insert(0, r"S:\radia\01_GitHub\build\Release")
-sys.path.insert(0, r"S:\radia\01_GitHub\dist")
-sys.path.insert(0, r"S:\radia\01_GitHub\src\python")
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
 import radia as rad
 from radia_vtk_export import exportGeometryToVTK
@@ -26,6 +26,9 @@ print("=" * 70)
 print("Radia Geometry Export to VTK")
 print("=" * 70)
 
+# Set Radia to use meters (required for NGSolve integration)
+rad.FldUnits('m')
+
 # ============================================================================
 # Step 1: Create Radia Magnet Geometry (from visualize_field.py)
 # ============================================================================
@@ -33,16 +36,16 @@ print("=" * 70)
 print("\n[Step 1] Creating Radia Magnet Geometry")
 print("-" * 70)
 
-magnet_center = [0, 0, 0]
-magnet_size = [20, 20, 30]
+magnet_center = [0, 0, 0]  # meters
+magnet_size = [0.020, 0.020, 0.030]  # meters (20mm x 20mm x 30mm)
 
 magnet = rad.ObjRecMag(magnet_center, magnet_size, [0, 0, 1.2])
 rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))  # NdFeB
 rad.Solve(magnet, 0.0001, 10000)
 
 print(f"Magnet created: object #{magnet}")
-print(f"  Center: {magnet_center} mm")
-print(f"  Size: {magnet_size} mm")
+print(f"  Center: {magnet_center} m")
+print(f"  Size: {magnet_size} m")
 print(f"  Material: NdFeB, Br = 1.2 T")
 
 # ============================================================================

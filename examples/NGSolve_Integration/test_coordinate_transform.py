@@ -12,6 +12,7 @@ Date: 2025-11-07
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "build", "Release"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src", "python"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "dist"))
 
 import radia as rad
@@ -67,13 +68,12 @@ print(f"  use_transform: {A_cf_identity.use_transform}")
 
 # Test point in global coordinates
 test_point = [0.015, 0.0, 0.0]  # 0.015m from origin along x
-test_point_mm = [p * 1000 for p in test_point]
 
-A_direct = rad.Fld(dipole, 'a', test_point_mm)
-B_direct = rad.Fld(dipole, 'b', test_point_mm)
+A_direct = rad.Fld(dipole, 'a', test_point)
+B_direct = rad.Fld(dipole, 'b', test_point)
 
-print(f"\nDirect Radia calculation at {test_point_mm} mm:")
-print(f"  A = [{A_direct[0]:.6e}, {A_direct[1]:.6e}, {A_direct[2]:.6e}] T·m")
+print(f"\nDirect Radia calculation at {test_point} m:")
+print(f"  A = [{A_direct[0]:.6e}, {A_direct[1]:.6e}, {A_direct[2]:.6e}] T*m")
 print(f"  B = [{B_direct[0]:.6e}, {B_direct[1]:.6e}, {B_direct[2]:.6e}] T")
 
 # ============================================================================
@@ -111,13 +111,11 @@ B_cf_rotated = rad_ngsolve.RadiaField(dipole, 'b',
 print(f"  use_transform: {A_cf_rotated.use_transform}")
 
 # Test point along rotated x-axis (45° from global x)
-# Global point: [0.015m*cos(45°), 15mm*sin(45°), 0]
+# Global point: [0.015m*cos(45°), 0.015m*sin(45°), 0]
 test_rotated = [0.015 * cos45, 0.015 * sin45, 0.0]
-test_rotated_mm = [p * 1000 for p in test_rotated]
 
 print(f"\nTest point in global coordinates: [{test_rotated[0]:.6f}, {test_rotated[1]:.6f}, {test_rotated[2]:.6f}] m")
-print(f"  = [{test_rotated_mm[0]:.3f}, {test_rotated_mm[1]:.3f}, {test_rotated_mm[2]:.3f}] mm")
-print(f"  This corresponds to [15, 0, 0] mm in local coordinates")
+print(f"  This corresponds to [0.015, 0, 0] m in local coordinates")
 
 # ============================================================================
 # Test 3: Translation + rotation
@@ -126,7 +124,7 @@ print("\n" + "=" * 80)
 print("[Test 3] Translation [10mm, 5mm, 0] + 30° rotation")
 print("=" * 80)
 
-origin = [0.010, 0.005, 0.0]  # 10mm, 5mm, 0mm
+origin = [0.010, 0.005, 0.0]  # meters
 cos30 = math.cos(math.radians(30))
 sin30 = math.sin(math.radians(30))
 
@@ -134,7 +132,7 @@ u_axis_30 = [cos30, sin30, 0]
 v_axis_30 = [-sin30, cos30, 0]
 w_axis_30 = [0, 0, 1]
 
-print(f"  Translation origin = [{origin[0]*1000:.1f}, {origin[1]*1000:.1f}, {origin[2]*1000:.1f}] mm")
+print(f"  Translation origin = [{origin[0]:.3f}, {origin[1]:.3f}, {origin[2]:.3f}] m")
 print(f"  Rotation: 30° around z-axis")
 print(f"    u_axis = [{u_axis_30[0]:.4f}, {u_axis_30[1]:.4f}, {u_axis_30[2]:.4f}]")
 print(f"    v_axis = [{v_axis_30[0]:.4f}, {v_axis_30[1]:.4f}, {v_axis_30[2]:.4f}]")

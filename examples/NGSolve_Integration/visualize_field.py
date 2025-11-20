@@ -16,8 +16,9 @@ Date: 2025-10-31
 """
 
 import sys
-sys.path.insert(0, r"S:\radia\01_GitHub\build\Release")
-sys.path.insert(0, r"S:\radia\01_GitHub\dist")
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
 from ngsolve import *
 from netgen.csg import CSGeometry, OrthoBrick, Pnt
@@ -41,6 +42,9 @@ print(f"Method: {args.method}")
 print(f"Mesh size: {args.maxh} m ({args.maxh*1000} mm)")
 print()
 
+# Set Radia to use meters (required for NGSolve integration)
+rad.FldUnits('m')
+
 # ============================================================================
 # Step 1: Create Radia Magnet Geometry
 # ============================================================================
@@ -48,10 +52,8 @@ print()
 print("[Step 1] Creating Radia Magnet Geometry")
 print("-" * 70)
 
-rad.FldUnits('m')  # Set units to meters to match NGSolve
-
-magnet_center = [0, 0, 0]
-magnet_size = [0.020, 0.020, 0.030]
+magnet_center = [0, 0, 0]  # meters
+magnet_size = [0.020, 0.020, 0.030]  # meters (20mm x 20mm x 30mm)
 
 magnet = rad.ObjRecMag(magnet_center, magnet_size, [0, 0, 1.2])
 rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))  # NdFeB
@@ -73,13 +75,13 @@ B_cf = rad_ngsolve.RadiaField(magnet, 'b')
 print(f"B-field CoefficientFunction created: {type(B_cf).__name__}")
 
 # Test evaluation using Radia directly
-test_points_mm = [[0, 0, 0], [0, 0, 20], [0, 0, 40]]
+test_points_m = [[0, 0, 0], [0, 0, 0.020], [0, 0, 0.040]]  # meters
 print(f"\nDirect Radia field evaluation (reference):")
 radia_values = {}
-for pt in test_points_mm:
+for pt in test_points_m:
 	B = rad.Fld(magnet, 'b', pt)
 	radia_values[tuple(pt)] = B
-	print(f"  {pt} mm: Bx={B[0]:.6f}, By={B[1]:.6f}, Bz={B[2]:.6f} T")
+	print(f"  {pt} m: Bx={B[0]:.6f}, By={B[1]:.6f}, Bz={B[2]:.6f} T")
 
 # ============================================================================
 # Step 3: Create 3D Mesh
@@ -130,7 +132,7 @@ for pt in test_mesh_points:
 	pt_m = pt
 	B_radia = rad.Fld(magnet, 'b', pt_m)
 
-	print(f"\nPoint: {pt} m = {pt_mm} mm")
+	print(f"\nPoint: {pt} m")
 	print(f"  Radia:  Bx={B_radia[0]:.6f}, By={B_radia[1]:.6f}, Bz={B_radia[2]:.6f} T")
 
 	mesh_pt = mesh(*pt)

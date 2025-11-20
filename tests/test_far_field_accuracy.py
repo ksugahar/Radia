@@ -14,7 +14,11 @@ print("="*70)
 
 # Create magnet at origin
 rad.UtiDelAll()
-magnet = rad.ObjRecMag([0, 0, 0], [40, 40, 60], [0, 0, 1.2])
+
+# Set Radia to use meters (required for NGSolve integration)
+rad.FldUnits('m')
+
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2])
 
 # Magnet boundaries: x=[-20,20], y=[-20,20], z=[-30,30] mm
 print("\nMagnet boundaries:")

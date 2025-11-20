@@ -1178,7 +1178,164 @@ This fix applies to both Direct and H-matrix modes, ensuring consistent and corr
 
 ---
 
-**Last Updated**: 2025-11-20  
-**Test**: tests/test_rad_ngsolve_hmatrix.py  
+**Last Updated**: 2025-11-20
+**Test**: tests/test_rad_ngsolve_hmatrix.py
 **Status**: ✓ Verified
+
+## NGSolve Integration Unit System Policy
+
+### Requirement: Always Use rad.FldUnits('m') for NGSolve Integration
+
+**Goal**: Maintain consistent unit system between Radia (default: mm) and NGSolve (SI units: meters) to prevent coordinate conversion errors and confusion.
+
+**Rationale**:
+- Radia default units: **millimeters (mm)** for length
+- NGSolve default units: **meters (m)** for length (SI units)
+- Without explicit unit conversion, coordinates are misinterpreted by 1000x
+- Manual scaling (multiply by 1000, divide by 1000) is error-prone and hard to maintain
+
+**Policy**:
+
+**✓ ALWAYS use rad.FldUnits('m') when working with NGSolve**:
+```python
+import radia as rad
+from ngsolve import *
+
+# Set Radia to use meters (same as NGSolve)
+rad.FldUnits('m')
+
+# Now all Radia operations use meters
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2])  # meters!
+field = rad.Fld(magnet, 'b', [0.02, 0.03, 0.04])  # coordinates in meters
+```
+
+**✗ NEVER manually scale coordinates**:
+```python
+# WRONG - Manual scaling is error-prone
+radia_points = [[x*1000, y*1000, z*1000] for x,y,z in points_meters]
+result = rad.Fld(magnet, 'a', radia_points)
+scaled_result = [r*0.001 for r in result]  # Manual scaling back
+```
+
+**Correct workflow**:
+```python
+# 1. Set Radia units to meters at the start
+rad.FldUnits('m')
+
+# 2. Create Radia geometry in meters
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2])
+
+# 3. Create NGSolve mesh in meters
+box = Box((0.01, 0.01, 0.02), (0.06, 0.06, 0.08))  # meters
+mesh = Mesh(geo.GenerateMesh(maxh=0.015))
+
+# 4. Evaluate fields directly - no scaling needed!
+field_value = rad.Fld(magnet, 'b', [0.02, 0.03, 0.04])  # all in meters
+```
+
+### Impact on Existing Code
+
+**Files to check when integrating with NGSolve**:
+- `src/python/rad_ngsolve.cpp` - RadiaField implementation
+- `src/python/radia_field_cached.py` - Cached field evaluator
+- `examples/NGSolve_Integration/*` - All NGSolve examples
+- `tests/test_rad_ngsolve_*.py` - All NGSolve integration tests
+
+**Required changes**:
+1. Add `rad.FldUnits('m')` at the start of all NGSolve integration scripts
+2. Remove manual coordinate scaling (×1000, ×0.001)
+3. Update geometry creation to use meters instead of millimeters
+4. Verify all examples and tests use consistent units
+
+### Unit System Reference
+
+| Quantity | Radia Default | Radia with FldUnit('m') | NGSolve | Consistent? |
+|----------|---------------|-------------------------|---------|-------------|
+| Length | mm | m | m | ✓ (with FldUnit) |
+| Magnetic Field (B) | T | T | T | ✓ Always |
+| Vector Potential (A) | T·mm | T·m | T·m | ✓ (with FldUnit) |
+| Magnetization (M) | T | T | T | ✓ Always |
+
+### Common Mistakes to Avoid
+
+**Mistake 1: Forgetting to set units**
+```python
+# WRONG
+magnet = rad.ObjRecMag([0, 0, 0], [40, 40, 60], [0, 0, 1.2])  # mm (Radia default)
+mesh = Mesh(...)  # m (NGSolve default)
+# Coordinates are off by 1000x!
+```
+
+**Mistake 2: Mixing unit systems**
+```python
+# WRONG
+rad.FldUnits('m')
+magnet = rad.ObjRecMag([0, 0, 0], [40, 40, 60], [0, 0, 1.2])  # Still thinking in mm!
+# Should be [0.04, 0.04, 0.06] in meters
+```
+
+**Mistake 3: Manual scaling with FldUnit set**
+```python
+# WRONG - Double scaling!
+rad.FldUnits('m')
+result = rad.Fld(magnet, 'a', [x, y, z])  # Already in meters
+scaled = [r * 0.001 for r in result]  # WRONG - no scaling needed!
+```
+
+### Verification Checklist
+
+Before submitting NGSolve integration code, verify:
+- [ ] `rad.FldUnits('m')` is called at script start
+- [ ] All Radia geometry dimensions are in meters (not mm)
+- [ ] No manual coordinate scaling (×1000 or ×0.001)
+- [ ] Test that field values match expected physical values
+- [ ] Check that curl(A) = B within tolerance (verifies units are correct)
+
+### Example: Correct NGSolve Integration
+
+```python
+#!/usr/bin/env python
+"""
+Example: Correct NGSolve + Radia integration with consistent units
+"""
+import radia as rad
+from ngsolve import *
+from netgen.occ import *
+
+# STEP 1: Set Radia to use meters (REQUIRED for NGSolve integration)
+rad.FldUnits('m')
+
+# STEP 2: Create Radia geometry in meters
+rad.UtiDelAll()
+magnet = rad.ObjRecMag(
+    [0, 0, 0],           # Center (m)
+    [0.04, 0.04, 0.06],  # Dimensions (m) - NOT [40, 40, 60]!
+    [0, 0, 1.2]          # Magnetization (T)
+)
+
+# STEP 3: Create NGSolve mesh in meters
+box = Box((0.01, 0.01, 0.02), (0.06, 0.06, 0.08))  # meters
+geo = OCCGeometry(box)
+mesh = Mesh(geo.GenerateMesh(maxh=0.015))
+
+# STEP 4: Create RadiaField (no scaling needed!)
+from rad_ngsolve import RadiaField
+A_cf = RadiaField(magnet, 'a')  # Units already consistent
+
+# STEP 5: Set GridFunction
+fes = HCurl(mesh, order=2)
+gf = GridFunction(fes)
+gf.Set(A_cf)  # Direct use - no scaling!
+
+# STEP 6: Verify curl(A) = B
+B_computed = curl(gf)
+B_expected = RadiaField(magnet, 'b')
+# Check consistency...
+```
+
+---
+
+**Last Updated**: 2025-11-21
+**Policy**: Always use `rad.FldUnits('m')` for NGSolve integration
+**Status**: MANDATORY for all NGSolve integration code
 

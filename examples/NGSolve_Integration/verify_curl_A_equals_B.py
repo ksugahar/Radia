@@ -46,22 +46,23 @@ print("\n[Step 1] Creating Radia rectangular magnet")
 print("-" * 80)
 
 rad.UtiDelAll()
+rad.FldUnits('m')  # Set units to meters (required for NGSolve integration)
 
 # Create a rectangular magnet with significant field
 # Using larger dimensions and magnetization for better SNR in verification
 magnet = rad.ObjRecMag(
-	[0, 0, 0],           # Center (mm)
-	[40, 40, 60],        # Dimensions (mm) - larger for stronger field
+	[0, 0, 0],           # Center (m)
+	[0.040, 0.040, 0.060],  # Dimensions (m) - larger for stronger field
 	[0, 0, 1.2]          # Magnetization (T) - NdFeB typical value
 )
 
 print(f"  Magnet ID: {magnet}")
-print(f"  Center: [0, 0, 0] mm")
-print(f"  Dimensions: [40, 40, 60] mm")
+print(f"  Center: [0, 0, 0] m")
+print(f"  Dimensions: [0.040, 0.040, 0.060] m")
 print(f"  Magnetization: [0, 0, 1.2] T")
 
 # Calculate field at a reference point
-ref_point = [0, 0, 50]  # mm
+ref_point = [0, 0, 0.050]  # m
 B_ref = rad.Fld(magnet, 'b', ref_point)
 print(f"  Reference B at [0, 0, 0.050] m: [{B_ref[0]:.6f}, {B_ref[1]:.6f}, {B_ref[2]:.6f}] T")
 print(f"  |B| = {np.linalg.norm(B_ref):.6f} T")
@@ -116,7 +117,7 @@ print("-" * 80)
 # Region: 10mm to 60mm in x,y,z (0.01m to 0.06m)
 box = Box((0.01, 0.01, 0.02), (0.06, 0.06, 0.08))  # meters
 geo = OCCGeometry(box)
-mesh = Mesh(geo.GenerateMesh(maxh=0.008))  # 8mm max element size
+mesh = Mesh(geo.GenerateMesh(maxh=0.008))  # 0.008m = 8mm max element size
 
 print(f"  Mesh created:")
 print(f"    Vertices: {mesh.nv}")

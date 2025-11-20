@@ -114,8 +114,11 @@ class TestRadNGSolve:
 	    import rad_ngsolve
 	    import radia as rad
 
+	    # Set Radia to use meters (required for NGSolve integration)
+	    rad.FldUnits('m')
+
 	    # Create a simple Radia magnet with permanent magnet material
-	    magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 0])
+	    magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
 	    # NdFeB: Br=1.2T, Hc=900kA/m, magnetization axis in z-direction
 	    rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
 	    rad.Solve(magnet, 0.0001, 10000)
@@ -147,8 +150,11 @@ class TestRadNGSolve:
 	    import rad_ngsolve
 	    import radia as rad
 
+	    # Set Radia to use meters (required for NGSolve integration)
+	    rad.FldUnits('m')
+
 	    # Create magnet with permanent magnet material
-	    magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 0])
+	    magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
 	    # NdFeB: Br=1.2T, Hc=900kA/m
 	    rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
 	    rad.Solve(magnet, 0.0001, 10000)
