@@ -33,19 +33,23 @@ import radia as rad
 from ngsolve import *
 import rad_ngsolve
 
-# 1. Create Radia magnet
-magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1.2])
+# 1. Create Radia magnet (specify units!)
+rad.FldUnits('m')  # Use meters (recommended for NGSolve integration)
+magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 1.2])  # 10mm = 0.01m cube
 
-# 2. Create NGSolve CoefficientFunction
-B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+# 2. Create NGSolve CoefficientFunction (units='m' is default)
+B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # units='m' by default
 
-# 3. Use in NGSolve mesh
-mesh = Mesh(...)
+# 3. Use in NGSolve mesh (always meters)
+mesh = Mesh(...)  # NGSolve mesh in meters
 gf = GridFunction(HCurl(mesh))
-gf.Set(B_cf)  # Evaluate Radia field on mesh
+gf.Set(B_cf)  # No conversion needed - both use meters
 ```
 
-**Unit conversion**: Automatic! Radia (mm) ↔ NGSolve (m)
+**Unit conversion**:
+- NGSolve always uses **meters**
+- **Recommended**: Use `rad.FldUnits('m')` for seamless integration (default `units='m'`)
+- For legacy mm models: Use `rad.FldUnits('mm')` and `units='mm'`
 
 ---
 
@@ -220,7 +224,8 @@ cf = rad_ngsolve.RadiaField(
 	v_axis=None,         # Local v-axis [vx, vy, vz]
 	w_axis=None,         # Local w-axis [wx, wy, wz]
 	precision=None,      # Computation precision (T)
-	use_hmatrix=None     # Enable H-matrix (True/False/None)
+	use_hmatrix=None,    # Enable H-matrix (True/False/None)
+	units='mm'           # Radia model units ('mm' or 'm')
 )
 ```
 
@@ -234,8 +239,63 @@ cf = rad_ngsolve.RadiaField(
 | `u_axis`, `v_axis`, `w_axis` | list[3] | Local coordinate axes (auto-normalized) |
 | `precision` | float | Computation precision in Tesla (None = Radia default) |
 | `use_hmatrix` | bool | H-matrix acceleration (True/False/None=keep current) |
+| `units` | str | Radia model units: `'m'` (default, recommended) or `'mm'` |
 
 **Returns**: NGSolve `CoefficientFunction` (vector, dim=3)
+
+---
+
+### Unit Conversion
+
+**Important**: The `units` parameter specifies the units used in your Radia model, NOT the units you want to use in NGSolve.
+
+**Rule**: Match `units` parameter to `rad.FldUnits()` setting:
+
+| Radia Model Units | `rad.FldUnits()` | `units` parameter | NGSolve Coordinates |
+|-------------------|------------------|-------------------|---------------------|
+| **Meters (recommended)** | `rad.FldUnits('m')` | `units='m'` (default) | Always meters |
+| Millimeters (legacy) | `rad.FldUnits('mm')` | `units='mm'` | Always meters |
+
+**How it works**:
+- NGSolve always uses **meters** for coordinates
+- The `units` parameter tells rad_ngsolve how to convert NGSolve's meters to your Radia model units:
+  - `units='mm'`: NGSolve meters → Radia millimeters (multiply by 1000)
+  - `units='m'`: NGSolve meters → Radia meters (no conversion)
+
+**Example 1: Radia model in meters (recommended)**
+```python
+# Define Radia model in meters
+rad.FldUnits('m')
+magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 1])  # 0.1m = 100mm cube
+
+# Create NGSolve interface - units='m' is default
+B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # No need to specify units='m'
+
+# NGSolve works in meters
+mesh = Mesh(...)  # Mesh with coordinates in meters
+gf = GridFunction(HCurl(mesh))
+gf.Set(B_cf)  # NGSolve point [0.05, 0, 0] m → Radia point [0.05, 0, 0] m (no conversion)
+```
+
+**Example 2: Radia model in millimeters (legacy)**
+```python
+# Define Radia model in millimeters
+rad.FldUnits('mm')
+magnet = rad.ObjRecMag([0, 0, 0], [100, 100, 100], [0, 0, 1])  # 100mm cube
+
+# Create NGSolve interface - specify units='mm' explicitly
+B_cf = rad_ngsolve.RadiaField(magnet, 'b', units='mm')
+
+# NGSolve works in meters
+mesh = Mesh(...)  # Mesh with coordinates in meters
+gf = GridFunction(HCurl(mesh))
+gf.Set(B_cf)  # NGSolve point [0.05, 0, 0] m → Radia point [50, 0, 0] mm (converted)
+```
+
+**Why this matters**:
+- Using wrong `units` parameter will cause 1000× error in field evaluation positions
+- Both examples above evaluate the field at the **same physical location** (50mm from origin)
+- The field values will be **identical** regardless of units (physics doesn't change!)
 
 ---
 
