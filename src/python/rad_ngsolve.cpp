@@ -29,6 +29,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <array>
 #include <fem.hpp>
 #include <python_ngstd.hpp>
 #include <pybind11/pybind11.h>
@@ -59,6 +61,13 @@ public:
 	py::object precision;  // Computation precision (None = use Radia default)
 	py::object use_hmatrix; // Use H-matrix acceleration (None = keep current setting)
 
+	// H-matrix cache for batch evaluation (v0.09)
+	mutable std::unordered_map<uint64_t, std::array<double,3>> point_cache_;
+	mutable bool use_cache_;
+	double cache_tolerance_;  // Tolerance for point hashing (meters)
+	mutable size_t cache_hits_;
+	mutable size_t cache_misses_;
+
 	RadiaFieldCF(int obj, const std::string& ftype = "b",
 	             py::object py_origin = py::none(),
 	             py::object py_u = py::none(),
@@ -67,7 +76,8 @@ public:
 	             py::object py_precision = py::none(),
 	             py::object py_use_hmatrix = py::none())
 	    : CoefficientFunction(3), radia_obj(obj), field_type(ftype), use_transform(false),
-	      precision(py_precision), use_hmatrix(py_use_hmatrix)
+	      precision(py_precision), use_hmatrix(py_use_hmatrix),
+	      use_cache_(false), cache_tolerance_(1e-10), cache_hits_(0), cache_misses_(0)
 	{
 		// Validate field type
 		if (field_type != "b" && field_type != "h" &&
@@ -173,7 +183,126 @@ private:
 		return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
 	}
 
+
+	// Hash function for 3D point (quantized to tolerance grid)
+	uint64_t hash_point(double x, double y, double z) const {
+		int64_t ix = static_cast<int64_t>(x / cache_tolerance_);
+		int64_t iy = static_cast<int64_t>(y / cache_tolerance_);
+		int64_t iz = static_cast<int64_t>(z / cache_tolerance_);
+
+		uint64_t hash = 14695981039346656037ULL;  // FNV offset basis
+		hash ^= static_cast<uint64_t>(ix);
+		hash *= 1099511628211ULL;  // FNV prime
+		hash ^= static_cast<uint64_t>(iy);
+		hash *= 1099511628211ULL;
+		hash ^= static_cast<uint64_t>(iz);
+		hash *= 1099511628211ULL;
+		return hash;
+	}
+
 public:
+
+	// Prepare cache by batch-evaluating all points
+	void PrepareCache(py::list points_list) {
+		py::gil_scoped_acquire acquire;
+
+		try {
+			size_t npts = points_list.size();
+			std::cout << "[PrepareCache] Caching " << npts << " points..." << std::endl;
+
+			point_cache_.clear();
+			cache_hits_ = 0;
+			cache_misses_ = 0;
+
+			if (npts == 0) {
+				use_cache_ = false;
+				return;
+			}
+
+			// Build Radia points list (mm)
+			py::list radia_points;
+			for (size_t i = 0; i < npts; i++) {
+				py::list pt = points_list[i].cast<py::list>();
+				double p_global[3] = {pt[0].cast<double>(), pt[1].cast<double>(), pt[2].cast<double>()};
+
+				double p_local[3];
+				if (use_transform) {
+					double p_t[3] = {p_global[0]-origin[0], p_global[1]-origin[1], p_global[2]-origin[2]};
+					p_local[0] = dot(u_axis, p_t);
+					p_local[1] = dot(v_axis, p_t);
+					p_local[2] = dot(w_axis, p_t);
+				} else {
+					p_local[0] = p_global[0];
+					p_local[1] = p_global[1];
+					p_local[2] = p_global[2];
+				}
+
+				py::list coords;
+				coords.append(p_local[0] * 1000.0);
+				coords.append(p_local[1] * 1000.0);
+				coords.append(p_local[2] * 1000.0);
+				radia_points.append(coords);
+			}
+
+			// Single batch call to Radia
+			py::module_ rad = py::module_::import("radia");
+			py::object results = rad.attr("Fld")(radia_obj, field_type, radia_points);
+			py::list results_list = results.cast<py::list>();
+
+			// Store in cache
+			double scale = (field_type == "a") ? 0.001 : 1.0;
+			for (size_t i = 0; i < npts; i++) {
+				py::list pt = points_list[i].cast<py::list>();
+				double x = pt[0].cast<double>();
+				double y = pt[1].cast<double>();
+				double z = pt[2].cast<double>();
+
+				py::list fld = results_list[i].cast<py::list>();
+				double f_local[3] = {fld[0].cast<double>(), fld[1].cast<double>(), fld[2].cast<double>()};
+
+				double f_global[3];
+				if (use_transform) {
+					f_global[0] = u_axis[0]*f_local[0] + v_axis[0]*f_local[1] + w_axis[0]*f_local[2];
+					f_global[1] = u_axis[1]*f_local[0] + v_axis[1]*f_local[1] + w_axis[1]*f_local[2];
+					f_global[2] = u_axis[2]*f_local[0] + v_axis[2]*f_local[1] + w_axis[2]*f_local[2];
+				} else {
+					f_global[0] = f_local[0];
+					f_global[1] = f_local[1];
+					f_global[2] = f_local[2];
+				}
+
+				uint64_t hash = hash_point(x, y, z);
+				point_cache_[hash] = {f_global[0]*scale, f_global[1]*scale, f_global[2]*scale};
+			}
+
+			use_cache_ = true;
+			std::cout << "[PrepareCache] Complete: " << point_cache_.size() << " entries" << std::endl;
+
+		} catch (std::exception &e) {
+			std::cerr << "[PrepareCache] Error: " << e.what() << std::endl;
+			point_cache_.clear();
+			use_cache_ = false;
+			throw;
+		}
+	}
+
+	void ClearCache() {
+		point_cache_.clear();
+		use_cache_ = false;
+		cache_hits_ = 0;
+		cache_misses_ = 0;
+	}
+
+	py::dict GetCacheStats() const {
+		py::dict stats;
+		stats["enabled"] = use_cache_;
+		stats["size"] = point_cache_.size();
+		stats["hits"] = cache_hits_;
+		stats["misses"] = cache_misses_;
+		double total = cache_hits_ + cache_misses_;
+		stats["hit_rate"] = (total > 0) ? (cache_hits_ / total) : 0.0;
+		return stats;
+	}
 
 	virtual ~RadiaFieldCF() {
 		// Acquire GIL before releasing Python objects to prevent memory leaks
@@ -205,6 +334,20 @@ public:
 	        p_global[0] = pnt[0];
 	        p_global[1] = (dim >= 2) ? pnt[1] : 0.0;
 	        p_global[2] = (dim >= 3) ? pnt[2] : 0.0;
+
+	        // Check cache first
+	        if (use_cache_) {
+	            uint64_t hash = hash_point(p_global[0], p_global[1], p_global[2]);
+	            auto it = point_cache_.find(hash);
+	            if (it != point_cache_.end()) {
+	                cache_hits_++;
+	                result(0) = it->second[0];
+	                result(1) = it->second[1];
+	                result(2) = it->second[2];
+	                return;
+	            }
+	            cache_misses_++;
+	        }
 
 	        // Apply coordinate transformation if enabled
 	        double p_local[3];
@@ -275,6 +418,30 @@ public:
 
 	    try {
 	        size_t npts = mir.Size();
+
+	        // Try cache first if enabled
+	        if (use_cache_) {
+	            bool all_cached = true;
+	            for (size_t i = 0; i < npts; i++) {
+	                auto pnt = mir[i].GetPoint();
+	                int dim = pnt.Size();
+	                double p[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
+
+	                uint64_t hash = hash_point(p[0], p[1], p[2]);
+	                auto it = point_cache_.find(hash);
+	                if (it != point_cache_.end()) {
+	                    cache_hits_++;
+	                    result(i,0) = it->second[0];
+	                    result(i,1) = it->second[1];
+	                    result(i,2) = it->second[2];
+	                } else {
+	                    cache_misses_++;
+	                    all_cached = false;
+	                    break;
+	                }
+	            }
+	            if (all_cached) return;
+	        }
 
 	        // Collect all points in a Python list of lists
 	        py::list points_list;
@@ -415,5 +582,11 @@ PYBIND11_MODULE(rad_ngsolve, m) {
 	    .def_readonly("field_type", &ngfem::RadiaFieldCF::field_type)
 	    .def_readonly("use_transform", &ngfem::RadiaFieldCF::use_transform)
 	    .def_readonly("precision", &ngfem::RadiaFieldCF::precision)
-	    .def_readonly("use_hmatrix", &ngfem::RadiaFieldCF::use_hmatrix);
+	    .def_readonly("use_hmatrix", &ngfem::RadiaFieldCF::use_hmatrix)
+	    .def("PrepareCache", &ngfem::RadiaFieldCF::PrepareCache, py::arg("points"),
+	         "Pre-cache field values for batch evaluation (enables H-matrix speedup)")
+	    .def("ClearCache", &ngfem::RadiaFieldCF::ClearCache,
+	         "Clear cached field values")
+	    .def("GetCacheStats", &ngfem::RadiaFieldCF::GetCacheStats,
+	         "Get cache statistics (enabled, size, hits, misses, hit_rate)");
 }
