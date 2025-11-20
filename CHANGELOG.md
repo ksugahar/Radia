@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.2] - 2025-11-21
+
+### Changed
+
+- **H-Matrix Solver Control (Breaking Change)**
+  - H-matrix acceleration now requires explicit enablement via `rad.SolverHMatrixEnable(1, eps=1e-4, max_rank=30)`
+  - Removed automatic enablement based on problem size (no more N > 200 threshold)
+  - Updated documentation in `radpy.cpp` to clarify explicit control requirement
+  - Updated benchmark scripts to use explicit H-matrix enable/disable calls
+  - Follows H-Matrix Solver Control Policy in CLAUDE.md
+
+### Added
+
+- **Documentation Organization**
+  - Created `internal/` folder for maintainer documentation
+    - `internal/design/` - Architecture decisions, implementation proposals
+    - `internal/analysis/` - Performance analysis, bottleneck investigations
+  - Moved development documents from `docs/` to `internal/`
+  - Updated `docs/README.md` with clear separation between user and maintainer docs
+
+- **NGSolve Integration Test Suite**
+  - `test_batch_evaluation.py` - Batch field evaluation testing
+  - `test_cf_direct.py` - Direct CoefficientFunction usage
+  - `test_convergence_hdiv.py` - H(div) space convergence analysis
+  - `test_curlA_equals_B.py` - Vector potential curl verification
+  - `test_curl_A_detailed.py` - Detailed curl(A) = B testing
+  - `test_hcurl_vs_hdiv.py` - H(curl) vs H(div) comparison
+  - `test_order1.py` - First-order element testing
+  - `test_rad_ngsolve_diagnostic.py` - NGSolve integration diagnostics
+  - `test_set_vs_interpolate.py` - GridFunction.Set() vs Interpolate()
+  - `test_without_gridfunction.py` - Direct field evaluation without GridFunction
+
+### Fixed
+
+- **.gitignore improvements**
+  - Added VTK output file patterns (*.vtu, *.vtk)
+  - Added Python development file patterns (experimental implementations)
+  - Added test file patterns for development tests
+  - Prevents committing temporary and experimental files
+
 ## [1.3.1] - 2025-11-21
 
 ### Added
