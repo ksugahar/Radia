@@ -174,7 +174,7 @@ for test in test_cases:
 	container = rad.ObjCnt(elements + [bg_field])
 
 	# Enable H-matrix for relaxation
-	rad.SolverHMatrixEnable()
+	rad.SolverHMatrixEnable(1, eps=1e-4, max_rank=30)
 
 	# Run relaxation solver with H-matrix
 	t0 = time.perf_counter()

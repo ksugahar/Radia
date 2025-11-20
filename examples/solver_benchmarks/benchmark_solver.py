@@ -106,12 +106,16 @@ def benchmark_hmatrix_solver(magnet, precision=0.0001, max_iter=1000):
 	tracemalloc.start()
 	mem_before = tracemalloc.get_traced_memory()[0]
 
+	# Explicitly enable H-matrix acceleration
+	rad.SolverHMatrixEnable(1, eps=1e-4, max_rank=30)
+
 	# Solve with H-matrix
-	# Note: H-matrix is automatically enabled for n_elem > 100
-	# The parallel construction was implemented in radintrc_hmat.cpp
 	start_time = time.time()
 	result = rad.Solve(magnet, precision, max_iter)
 	solve_time = time.time() - start_time
+
+	# Disable H-matrix after use
+	rad.SolverHMatrixDisable()
 
 	# Memory usage
 	mem_after, mem_peak = tracemalloc.get_traced_memory()
