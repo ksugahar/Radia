@@ -68,16 +68,21 @@ public:
 	mutable size_t cache_hits_;
 	mutable size_t cache_misses_;
 
+	// Unit conversion: NGSolve (meters) -> Radia (mm or m)
+	double coord_scale_;  // Scaling factor for coordinates (1.0 for meters, 1000.0 for mm)
+
 	RadiaFieldCF(int obj, const std::string& ftype = "b",
 	             py::object py_origin = py::none(),
 	             py::object py_u = py::none(),
 	             py::object py_v = py::none(),
 	             py::object py_w = py::none(),
 	             py::object py_precision = py::none(),
-	             py::object py_use_hmatrix = py::none())
+	             py::object py_use_hmatrix = py::none(),
+	             const std::string& units = "mm")
 	    : CoefficientFunction(3), radia_obj(obj), field_type(ftype), use_transform(false),
 	      precision(py_precision), use_hmatrix(py_use_hmatrix),
-	      use_cache_(false), cache_tolerance_(1e-10), cache_hits_(0), cache_misses_(0)
+	      use_cache_(false), cache_tolerance_(1e-10), cache_hits_(0), cache_misses_(0),
+	      coord_scale_(units == "m" ? 1.0 : 1000.0)
 	{
 		// Validate field type
 		if (field_type != "b" && field_type != "h" &&
@@ -238,9 +243,9 @@ public:
 				}
 
 				py::list coords;
-				coords.append(p_local[0] * 1000.0);
-				coords.append(p_local[1] * 1000.0);
-				coords.append(p_local[2] * 1000.0);
+				coords.append(p_local[0] * coord_scale_);
+				coords.append(p_local[1] * coord_scale_);
+				coords.append(p_local[2] * coord_scale_);
 				radia_points.append(coords);
 			}
 
@@ -368,9 +373,9 @@ public:
 
 	        // Convert m -> mm
 	        py::list coords;
-	        coords.append(p_local[0] * 1000.0);
-	        coords.append(p_local[1] * 1000.0);
-	        coords.append(p_local[2] * 1000.0);
+	        coords.append(p_local[0] * coord_scale_);
+	        coords.append(p_local[1] * coord_scale_);
+	        coords.append(p_local[2] * coord_scale_);
 
 	        py::module_ rad = py::module_::import("radia");
 	        py::object field_result = rad.attr("Fld")(radia_obj, field_type, coords);
@@ -475,9 +480,9 @@ public:
 
 	            // Convert m -> mm
 	            py::list coords;
-	            coords.append(p_local[0] * 1000.0);
-	            coords.append(p_local[1] * 1000.0);
-	            coords.append(p_local[2] * 1000.0);
+	            coords.append(p_local[0] * coord_scale_);
+	            coords.append(p_local[1] * coord_scale_);
+	            coords.append(p_local[2] * coord_scale_);
 
 	            points_list.append(coords);
 	        }
@@ -546,7 +551,7 @@ PYBIND11_MODULE(rad_ngsolve, m) {
 	         py::arg("radia_obj"), py::arg("field_type"),
 	         "Create Radia field CoefficientFunction\n"
 	         "field_type: 'b' (flux density), 'h' (field), 'a' (vector potential), 'm' (magnetization)")
-	    .def(py::init<int, const std::string&, py::object, py::object, py::object, py::object, py::object, py::object>(),
+	    .def(py::init<int, const std::string&, py::object, py::object, py::object, py::object, py::object, py::object, const std::string&>(),
 	         py::arg("radia_obj"),
 	         py::arg("field_type") = "b",
 	         py::arg("origin") = py::none(),
@@ -555,6 +560,7 @@ PYBIND11_MODULE(rad_ngsolve, m) {
 	         py::arg("w_axis") = py::none(),
 	         py::arg("precision") = py::none(),
 	         py::arg("use_hmatrix") = py::none(),
+	         py::arg("units") = "mm",
 	         "Create Radia field CoefficientFunction with full control\n\n"
 	         "Parameters:\n"
 	         "  radia_obj: Radia object ID\n"
@@ -564,7 +570,8 @@ PYBIND11_MODULE(rad_ngsolve, m) {
 	         "  v_axis: Local v-axis [vx, vy, vz] (default: [0, 1, 0]) - will be normalized\n"
 	         "  w_axis: Local w-axis [wx, wy, wz] (default: [0, 0, 1]) - will be normalized\n"
 	         "  precision: Computation precision in Tesla (default: None = Radia default)\n"
-	         "  use_hmatrix: Enable H-matrix acceleration (default: None = keep current setting)\n\n"
+	         "  use_hmatrix: Enable H-matrix acceleration (default: None = keep current setting)\n"
+	         "  units: Coordinate units - 'mm' (millimeters, default) or 'm' (meters)\n\n"
 	         "Coordinate transformation:\n"
 	         "  1. Global point p is translated by origin: p' = p - origin\n"
 	         "  2. p' is projected onto local axes: p_local = [u*p', v*p', w*p']\n"
