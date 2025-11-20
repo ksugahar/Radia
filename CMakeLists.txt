@@ -228,7 +228,7 @@ pybind11_add_module(radia
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp
 	${RADIA_LIB_SOURCES}
-	${PYTHON_DIR}/radpy.cpp
+	${PYTHON_DIR}/radpy_pyapi.cpp
 )
 
 # Link triangle library and HACApK

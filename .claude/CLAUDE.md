@@ -1339,3 +1339,99 @@ B_expected = RadiaField(magnet, 'b')
 **Policy**: Always use `rad.FldUnits('m')` for NGSolve integration
 **Status**: MANDATORY for all NGSolve integration code
 
+## Python Binding File Naming Convention
+
+### Policy: Use Descriptive Names for Python Binding Files
+
+**Goal**: Clearly indicate which Python binding technology is used in each file.
+
+**Current files**:
+- `src/python/radpy.cpp` - Python C API binding (NOT pybind11)
+- `src/python/rad_ngsolve.cpp` - pybind11 binding for NGSolve integration
+
+**Naming convention**:
+- `*_pybind11.cpp` - Files using pybind11
+- `*_pyapi.cpp` - Files using Python C API directly
+- No suffix - Legacy files (to be renamed gradually)
+
+**Rationale**:
+- Makes technology choice immediately visible
+- Helps developers understand binding approach
+- Facilitates maintenance and refactoring
+
+**Proposed renames**:
+- `src/python/radpy.cpp` → `src/python/radpy_pyapi.cpp` (uses Python C API)
+- Keep `src/python/rad_ngsolve.cpp` (already clear it's pybind11-based)
+
+---
+
+## Example Scripts Unit Policy
+
+### Requirement: Use `rad.FldUnits('m')` in All Example Scripts
+
+**Goal**: Standardize on meters (SI units) for all example scripts in the repository.
+
+**Policy**:
+- **All examples** in `examples/` folder MUST use `rad.FldUnits('m')`
+- **NGSolve integration** examples MUST use `units='m'` parameter (default)
+- **Legacy mm examples** should be migrated to meters
+- **Test scripts** that verify mm compatibility are exceptions
+
+**Rationale**:
+- **NGSolve compatibility**: NGSolve uses meters → seamless integration
+- **SI unit consistency**: More standard and scientific
+- **User confusion reduction**: No unit conversion needed
+- **Educational value**: Teaches best practices
+
+**Implementation**:
+
+```python
+# CORRECT - All examples should follow this pattern
+import radia as rad
+
+rad.FldUnits('m')  # Use meters (SI units)
+magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 1])  # 0.1m = 100mm
+
+# For NGSolve integration
+import rad_ngsolve
+B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # units='m' by default
+```
+
+```python
+# INCORRECT - Do not use mm in examples
+rad.FldUnits('mm')  # ✗ Do not use in examples
+magnet = rad.ObjRecMag([0, 0, 0], [100, 100, 100], [0, 0, 1])  # ✗ mm units
+```
+
+**Exceptions**:
+- Test scripts explicitly verifying mm compatibility (e.g., `test_unit_conversion_verify.py`)
+- Benchmark scripts comparing mm vs m performance
+- Legacy example files in process of migration (must have FIXME comment)
+
+**Migration checklist** for existing examples:
+1. Change `rad.FldUnits('mm')` → `rad.FldUnits('m')`
+2. Convert all dimensions from mm to m (divide by 1000)
+3. Convert all positions from mm to m (divide by 1000)
+4. Update comments to reflect meter units
+5. For NGSolve: Remove explicit `units='mm'` parameter (use default `units='m'`)
+6. Test example still produces same physical results
+
+**Example migration**:
+
+```python
+# BEFORE (mm)
+rad.FldUnits('mm')
+magnet = rad.ObjRecMag([0, 0, 0], [100, 100, 100], [0, 0, 1.2])  # 100mm cube
+B_cf = rad_ngsolve.RadiaField(magnet, 'b', units='mm')
+
+# AFTER (m)
+rad.FldUnits('m')
+magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 1.2])  # 0.1m = 100mm cube
+B_cf = rad_ngsolve.RadiaField(magnet, 'b')  # units='m' is default
+```
+
+---
+
+**Last Updated**: 2025-11-21
+**For**: Claude Code AI Assistant
+**Project**: Radia Magnetic Field Computation

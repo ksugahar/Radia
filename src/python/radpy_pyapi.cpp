@@ -1,6 +1,6 @@
 /************************************************************************//**
- * File: radpy.cpp
- * Description: Python binding
+ * File: radpy_pyapi.cpp
+ * Description: Python binding using Python C API
  * Project: Radia
  * First release: June 2018
  *
