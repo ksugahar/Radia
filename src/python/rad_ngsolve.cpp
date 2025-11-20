@@ -78,7 +78,7 @@ public:
 	             py::object py_w = py::none(),
 	             py::object py_precision = py::none(),
 	             py::object py_use_hmatrix = py::none(),
-	             const std::string& units = "mm")
+	             const std::string& units = "m")
 	    : CoefficientFunction(3), radia_obj(obj), field_type(ftype), use_transform(false),
 	      precision(py_precision), use_hmatrix(py_use_hmatrix),
 	      use_cache_(false), cache_tolerance_(1e-10), cache_hits_(0), cache_misses_(0),
@@ -560,7 +560,7 @@ PYBIND11_MODULE(rad_ngsolve, m) {
 	         py::arg("w_axis") = py::none(),
 	         py::arg("precision") = py::none(),
 	         py::arg("use_hmatrix") = py::none(),
-	         py::arg("units") = "mm",
+	         py::arg("units") = "m",
 	         "Create Radia field CoefficientFunction with full control\n\n"
 	         "Parameters:\n"
 	         "  radia_obj: Radia object ID\n"
@@ -571,7 +571,7 @@ PYBIND11_MODULE(rad_ngsolve, m) {
 	         "  w_axis: Local w-axis [wx, wy, wz] (default: [0, 0, 1]) - will be normalized\n"
 	         "  precision: Computation precision in Tesla (default: None = Radia default)\n"
 	         "  use_hmatrix: Enable H-matrix acceleration (default: None = keep current setting)\n"
-	         "  units: Coordinate units - 'mm' (millimeters, default) or 'm' (meters)\n\n"
+	         "  units: Coordinate units - 'm' (meters, default) or 'mm' (millimeters)\n\n"
 	         "Coordinate transformation:\n"
 	         "  1. Global point p is translated by origin: p' = p - origin\n"
 	         "  2. p' is projected onto local axes: p_local = [u*p', v*p', w*p']\n"
