@@ -932,3 +932,253 @@ import radia as rad  # Works if radia is installed via pip
 ---
 
 **Last Updated**: 2025-11-17 (Python Script Path Import Policy)
+
+## rad_ngsolve Result Matrix Indexing Fix
+
+### Issue Summary (2025-11-20)
+
+**Problem**: GridFunction.Set() with rad_ngsolve.RadiaField produced incorrect field values (thousands of % error).
+
+**Root Cause**: In the batch evaluation function `Evaluate(const BaseMappedIntegrationRule& mir, BareSliceMatrix<> result)`, the result matrix indexing was inconsistent between normal path and error handling path:
+
+```cpp
+// WRONG (before fix)
+// Normal path - src/python/rad_ngsolve.cpp:348-350
+result(0, i) = f_global[0] * scale;  // result(component, point)
+result(1, i) = f_global[1] * scale;
+result(2, i) = f_global[2] * scale;
+
+// Error path - lines 359-362
+result(i, 0) = 0.0;  // result(point, component) <- Inconsistent!
+result(i, 1) = 0.0;
+result(i, 2) = 0.0;
+```
+
+**Fix**: Corrected normal path to match error path indexing:
+
+```cpp
+// CORRECT (after fix)
+result(i, 0) = f_global[0] * scale;  // result(point, component)
+result(i, 1) = f_global[1] * scale;
+result(i, 2) = f_global[2] * scale;
+```
+
+### Origin of Bug
+
+Introduced in commit `ab77976` (Add H-matrix field evaluation and Python API) when batch evaluation was added.
+
+### Verification
+
+**Before fix**:
+- Direct CoefficientFunction evaluation: ✓ Correct
+- GridFunction.Set() evaluation: ✗ Wrong (thousands of % error)
+
+**After fix**:
+- Direct CoefficientFunction evaluation: ✓ Correct
+- GridFunction.Set() evaluation: ✓ Correct (6-8% L² projection error - normal)
+- curl(A) = B verification: ✓ Passed (max error < 0.015 T)
+
+### Files Modified
+
+- `src/python/rad_ngsolve.cpp` (lines 348-350)
+- Built module: `build/Release/rad_ngsolve.pyd`
+
+### Future Tasks
+
+**TODO: Verify H-matrix field evaluation impact**
+
+This indexing fix may affect H-matrix accelerated field evaluation:
+- H-matrix uses the same batch evaluation interface
+- Need to verify that H-matrix field evaluation still produces correct results
+- Test files:
+  - `examples/ngsolve_integration/verify_curl_A_equals_B.py` (copied to `tests/`)
+  - `tests/test_rad_ngsolve_function.py`
+- Verification criteria:
+  - GridFunction.Set() with H-matrix enabled should match direct evaluation
+  - curl(A) = B relationship should hold with H-matrix acceleration
+  - Performance should not degrade
+
+**Priority**: Medium (not urgent, but should verify before next release)
+
+---
+
+**Last Updated**: 2025-11-20 (rad_ngsolve Result Matrix Indexing Fix)
+
+## GridFunction Projection for rad_ngsolve (2025-11-20)
+
+### Summary
+
+After fixing the result matrix indexing bug in `rad_ngsolve.cpp`, GridFunction projection accuracy was thoroughly investigated.
+
+### Key Findings
+
+**1. Direct CoefficientFunction Evaluation**: Always accurate
+- B_cf(mip) matches rad.Fld() with <0.01% error
+- Recommended for maximum accuracy
+
+**2. GridFunction Projection Accuracy** (using Set() method):
+
+| Space          | Order | Pointwise Error | L2 Norm Error | Notes |
+|----------------|-------|-----------------|---------------|-------|
+| HDiv           | 2     | 0.36%           | 22.87%        | Best overall |
+| HCurl          | 2     | 0.32%           | 29.89%        | Good pointwise |
+| VectorH1       | 2     | 1.05%           | 34.47%        | Acceptable |
+
+**3. Region-Dependent Accuracy** (HDiv order=2, h=10mm):
+
+| Region                          | Distance from Surface | Mean Error | Max Error | Usability |
+|---------------------------------|----------------------|------------|-----------|-----------|
+| Near magnet surface             | 0-5mm                | >10%       | >50%      | ✗ Avoid   |
+| Near field (mesh-spacing away)  | >10mm (1 mesh cell) | **0.15%**  | 0.41%     | ✓ Excellent |
+| Mid field                       | >15mm                | 0.10%      | 0.30%     | ✓ Excellent |
+| Far field                       | >20mm                | <0.10%     | <0.20%    | ✓ Excellent |
+
+### Best Practices for NGSolve Applications
+
+**Recommended Configuration**:
+```python
+# 1. Create mesh with appropriate size
+mesh_size = 0.010  # 10mm in meters
+mesh = Mesh(geo.GenerateMesh(maxh=mesh_size))
+
+# 2. Use HDiv space, order=2
+fes = HDiv(mesh, order=2)
+
+# 3. Project B to GridFunction
+B_cf = rad_ngsolve.RadiaField(radia_obj, 'b')
+B_gf = GridFunction(fes)
+B_gf.Set(B_cf)
+
+# 4. Evaluate ONLY at distances > 1 mesh cell from magnet surface
+# For h=10mm mesh: evaluate at distances > 10mm from surface
+```
+
+**Evaluation Guidelines**:
+- ✓ **DO**: Evaluate GridFunction at distances > 1 mesh cell from magnet surface
+- ✓ **DO**: Use B_cf directly for maximum accuracy near boundaries
+- ✗ **DON'T**: Evaluate GridFunction within 1 mesh cell of magnet surface
+- ✗ **DON'T**: Rely on L2 norm error (dominated by near-field singularities)
+
+**curl(A) = B Verification**:
+```python
+# A in HCurl (mathematically correct)
+A_gf = GridFunction(HCurl(mesh, order=2))
+A_gf.Set(A_cf)
+
+# curl(A) in HDiv
+curl_A = curl(A_gf)
+
+# Compare with B_cf directly (not B_gf!)
+# Typical accuracy: <1% in far field, ~3% in near field
+```
+
+### Why L2 Norm Error is Large
+
+The L2 norm error (~23-35%) is dominated by near-field regions where:
+- Magnetic field has strong gradients
+- GridFunction.Set() performs L² projection via integration points
+- Local errors near boundaries contribute heavily to global L2 norm
+
+**This is normal and acceptable** for practical applications where:
+- Evaluation points are >1 mesh cell from boundaries
+- Pointwise accuracy (0.15-0.36%) is excellent in these regions
+
+### Files Modified/Created
+
+**Modified**:
+- `src/python/rad_ngsolve.cpp`: Fixed result matrix indexing (lines 348-350)
+
+**Test Scripts Created**:
+- `tests/verify_curl_A_equals_B_improved.py`: Proper FE space verification
+- `tests/test_far_field_accuracy.py`: Region-dependent accuracy test
+- `tests/test_hcurl_vs_hdiv.py`: Space comparison
+- `tests/test_all_spaces.py`: Comprehensive space evaluation
+
+**Recommended for Users**:
+- `tests/verify_curl_A_equals_B.py`: Copied from examples/ngsolve_integration/
+- Use HDiv order=2 for B projection in practical applications
+- Evaluate >1 mesh cell away from magnet surfaces
+
+---
+
+**Last Updated**: 2025-11-20 (GridFunction Projection Best Practices)
+
+
+## H-Matrix Field Evaluation Verification (2025-11-20)
+
+### Summary
+
+Verified that the result matrix indexing fix in `rad_ngsolve.cpp` (lines 348-350) works correctly with H-matrix accelerated field evaluation.
+
+### Test Configuration
+
+**Test file**: `tests/test_rad_ngsolve_hmatrix.py`
+
+**Setup**:
+- Magnet: 5×5×5 = 125 elements (0.1m cube, boundaries at ±50mm)
+- Mesh: 177 vertices, 508 elements, domain [15mm, 63mm]
+- FE Space: HCurl order=2 (6012 DOFs)
+- Test points: 3 points at safe distances (>10mm from magnet surface)
+
+**Methods tested**:
+1. Direct mode (H-matrix OFF)
+2. H-matrix mode (H-matrix ON, eps=1e-6)
+
+### Results
+
+| Mode | Mean curl(A)=B Error | GridFunction Consistency |
+|------|---------------------|--------------------------|
+| Direct (H-matrix OFF) | 1.5491% | - |
+| H-matrix (H-matrix ON) | 1.5491% | 0.0000% |
+
+**Key Findings**:
+
+1. **✓ GridFunction values identical**: Direct and H-matrix modes produce exactly the same GridFunction values (0.0000% difference)
+   - This confirms the result matrix indexing fix works correctly with H-matrix
+   
+2. **✓ curl(A) = B maintained**: Both modes show identical curl(A)=B accuracy (1.5491%)
+   - Projection error is consistent and acceptable (<2%)
+   
+3. **✓ H-matrix does not degrade accuracy**: H-matrix approximation does not introduce additional error in GridFunction.Set()
+
+### Verification Status
+
+**[SUCCESS]** H-matrix field evaluation verified!
+- GridFunction.Set() works correctly with H-matrix
+- curl(A) = B relationship maintained
+- Results consistent between Direct and H-matrix modes  
+- Result matrix indexing fix confirmed working with H-matrix
+
+### Acceptance Criteria
+
+For H-matrix verification tests:
+- curl(A) = B error < 2.0% (allows for L² projection error)
+- GridFunction consistency (Direct vs H-matrix) < 1.0%
+- All test points evaluated successfully
+
+### Implementation Notes
+
+**Bug fix location**: `src/python/rad_ngsolve.cpp:348-350`
+
+**Before** (incorrect):
+```cpp
+result(0, i) = f_global[0];  // component, point - WRONG
+result(1, i) = f_global[1];
+result(2, i) = f_global[2];
+```
+
+**After** (correct):
+```cpp
+result(i, 0) = f_global[0];  // point, component - CORRECT
+result(i, 1) = f_global[1];
+result(i, 2) = f_global[2];
+```
+
+This fix applies to both Direct and H-matrix modes, ensuring consistent and correct field evaluation.
+
+---
+
+**Last Updated**: 2025-11-20  
+**Test**: tests/test_rad_ngsolve_hmatrix.py  
+**Status**: ✓ Verified
+
