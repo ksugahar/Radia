@@ -1058,13 +1058,16 @@ int CALL RadFld(double* pB, int* pNb, int Obj, char* ID, double* pCoord, int Np)
 	int NumDims=0;
 	ioBuffer.OutMultiDimArrayOfDouble(pB, Dims, NumDims);
 
+	// Clear internal buffer to prevent memory accumulation
+	ioBuffer.EraseDoubleBufferMulti();
+
 	int TotLen = 0; //OC19012020
 	if(NumDims > 0)
 	{
-		TotLen = 1; 
+		TotLen = 1;
 		for(int k=0; k<NumDims; k++) TotLen *= Dims[k];
 	}
-	//int TotLen = 1; 
+	//int TotLen = 1;
 	//for(int k=0; k<NumDims; k++) TotLen *= Dims[k];
 	*pNb = TotLen;
 

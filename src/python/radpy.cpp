@@ -2619,7 +2619,7 @@ static PyObject* radia_Fld(PyObject* self, PyObject* args)
 
 		if(nB == 1) oResB = Py_BuildValue("d", *arB);
 		else if(nB > 1) oResB = CPyParse::SetDataListOfLists(arB, nB, nP);
-		if(oResB) Py_XINCREF(oResB);
+		// Do NOT increment reference count - SetDataListOfLists already returns a new reference
 	}
 	catch(const char* erText) 
 	{
@@ -2664,7 +2664,7 @@ static PyObject* radia_FldLst(PyObject* self, PyObject* args)
 
 		if(nB == 1) oResB = Py_BuildValue("d", *arB);
 		else if(nB > 1) oResB = CPyParse::SetDataListOfLists(arB, nB, nP);
-		if(oResB) Py_XINCREF(oResB);
+		// Do NOT increment reference count - SetDataListOfLists already returns a new reference
 	}
 	catch(const char* erText) 
 	{

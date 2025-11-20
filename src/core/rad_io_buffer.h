@@ -506,6 +506,27 @@ public:
 		strcat(ErrMesForMath, "\"");
 	}
 
+	void EraseIntBufferMulti()
+	{
+		// RAII: vIntBufferMulti and vDimsIntBufferMulti cleaned up automatically
+		vIntBufferMulti.clear();
+		IntBufferMulti = 0;
+		vDimsIntBufferMulti.clear();
+		DimsIntBufferMulti = 0;
+		NumDimsIntBufferMulti = 0;
+	}
+
+	void EraseDoubleBufferMulti()
+	{
+		// Force memory deallocation using swap trick (more reliable than shrink_to_fit)
+		// shrink_to_fit() is non-binding and may not actually free memory
+		std::vector<double>().swap(vDoubleBufferMulti);  // Deallocate all memory
+		std::vector<int>().swap(vDimsDoubleBufferMulti);  // Deallocate all memory
+		DoubleBufferMulti = 0;
+		DimsDoubleBufferMulti = 0;
+		NumDimsDoubleBufferMulti = 0;
+	}
+
 private:
 
 	int DecodeErrorIndex(const char* ErrorTitle)
@@ -557,25 +578,6 @@ private:
 		//{
 		//	if(WarNo == WarNos[i]) return i;
 		//}
-	}
-
-	void EraseIntBufferMulti()
-	{
-		// RAII: vIntBufferMulti and vDimsIntBufferMulti cleaned up automatically
-		vIntBufferMulti.clear();
-		IntBufferMulti = 0;
-		vDimsIntBufferMulti.clear();
-		DimsIntBufferMulti = 0;
-		NumDimsIntBufferMulti = 0;
-	}
-	void EraseDoubleBufferMulti()
-	{
-		// RAII: vDoubleBufferMulti and vDimsDoubleBufferMulti cleaned up automatically
-		vDoubleBufferMulti.clear();
-		DoubleBufferMulti = 0;
-		vDimsDoubleBufferMulti.clear();
-		DimsDoubleBufferMulti = 0;
-		NumDimsDoubleBufferMulti = 0;
 	}
 
 	const char* RemoveDecorFromErrWarnStr(const char* DecoratedStr)
