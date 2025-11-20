@@ -345,9 +345,9 @@ public:
 	                f_global[2] = f_local[2];
 	            }
 
-	            result(0, i) = f_global[0] * scale;
-	            result(1, i) = f_global[1] * scale;
-	            result(2, i) = f_global[2] * scale;
+	            result(i, 0) = f_global[0] * scale;
+	            result(i, 1) = f_global[1] * scale;
+	            result(i, 2) = f_global[2] * scale;
 	        }
 
 	    } catch (std::exception &e) {
