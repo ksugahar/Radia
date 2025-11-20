@@ -202,6 +202,20 @@ dev/
 # NGSolve integration outputs
 *.ObjBckgCF/
 rad.ObjBckgCF/
+*.vtu
+*.vtk
+
+# Python development files (experimental implementations)
+src/python/*_fast.py
+src/python/*_cached_wrapper.py
+src/python/*.patch
+src/python/.*[0-9a-f]*
+tests/test_*_debug.py
+tests/test_fast_*.py
+tests/test_minimal_*.py
+tests/test_preparecache_*.py
+tests/test_python_cached_*.py
+tests/verify_*.py
 
 # HACApK development files
 *.pbf
