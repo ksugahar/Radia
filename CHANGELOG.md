@@ -6,6 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2025-11-20
+
+### Fixed
+
+- **rad_ngsolve GridFunction.Set() Bug Fix**
+  - Fixed result matrix indexing in batch evaluation function (`src/python/rad_ngsolve.cpp`)
+  - Changed from `result(component, point)` to `result(point, component)` (lines 348-350)
+  - Bug was introduced in commit ab77976 (H-matrix implementation)
+  - GridFunction.Set() now produces correct values matching direct CoefficientFunction evaluation
+
+- **NGSolve Examples Unit Consistency**
+  - Added `rad.FldUnits('m')` to all 9 NGSolve integration examples
+  - Converted all Radia coordinates from millimeters to meters
+  - Ensures consistent unit handling between Radia (now meters) and NGSolve (meters)
+  - Updated comments and print statements to reflect meter units
+
+### Changed
+
+- **Test Suite Organization**
+  - Renamed `verify_curl_A_equals_B_improved.py` to `test_curlA_equals_B.py` in tests folder
+  - Added test acceptance criteria to `tests/README.md`
+  - Created comprehensive GridFunction projection best practices documentation in CLAUDE.md
+
+### Documentation
+
+- **GridFunction Projection Guidelines**
+  - Documented optimal finite element space selection: HDiv order=2 for B projection
+  - Region-dependent accuracy expectations: 0.15-0.36% at practical distances (>1 mesh cell)
+  - Evaluation guidelines: avoid GridFunction evaluation within 1 mesh cell of magnet surface
+  - Added extensive test results and best practices to CLAUDE.md
+
+### Examples Updated
+
+All NGSolve integration examples now use consistent meter-based units:
+- test_gridfunction_simple.py
+- verify_curl_A_equals_B.py
+- test_set_vs_interpolate.py
+- test_mesh_convergence.py
+- test_coordinate_transform.py
+- test_batch_evaluation.py
+- benchmark_gridfunction_set.py
+- visualize_field.py
+- demo_field_types.py
+
 ## [1.2.0] - 2025-11-17
 
 ### Added
