@@ -71,6 +71,9 @@ public:
 	// Unit conversion: NGSolve (meters) -> Radia (mm or m)
 	double coord_scale_;  // Scaling factor for coordinates (1.0 for meters, 1000.0 for mm)
 
+	// Cached Radia module to avoid repeated imports (memory optimization)
+	mutable py::module_ rad_module_;
+
 	RadiaFieldCF(int obj, const std::string& ftype = "b",
 	             py::object py_origin = py::none(),
 	             py::object py_u = py::none(),
@@ -127,15 +130,17 @@ public:
 
 		// Apply computation settings
 		py::gil_scoped_acquire acquire;
-		py::module_ rad = py::module_::import("radia");
+
+		// Cache Radia module import to avoid repeated imports (memory optimization)
+		rad_module_ = py::module_::import("radia");
 
 		// Set H-matrix usage if specified
 		if (!py_use_hmatrix.is_none()) {
 			bool enable_hmatrix = py_use_hmatrix.cast<bool>();
 			if (enable_hmatrix) {
-				rad.attr("SolverHMatrixEnable")();
+				rad_module_.attr("SolverHMatrixEnable")();
 			} else {
-				rad.attr("SolverHMatrixDisable")();
+				rad_module_.attr("SolverHMatrixDisable")();
 			}
 		}
 
@@ -147,7 +152,7 @@ public:
 			                       ",PrcA->" + std::to_string(prec) +
 			                       ",PrcH->" + std::to_string(prec) +
 			                       ",PrcM->" + std::to_string(prec);
-			rad.attr("FldCmpPrc")(prec_str);
+			rad_module_.attr("FldCmpPrc")(prec_str);
 		}
 	}
 
@@ -328,90 +333,96 @@ public:
 	virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
 	                     FlatVector<> result) const override
 	{
-	    py::gil_scoped_acquire acquire;
+	    // Get point coordinates first (no GIL needed)
+	    auto pnt = mip.GetPoint();
+	    int dim = pnt.Size();
 
-	    try {
-	        auto pnt = mip.GetPoint();
-	        int dim = pnt.Size();
+	    // Get global coordinates (NGSolve, in meters)
+	    double p_global[3];
+	    p_global[0] = pnt[0];
+	    p_global[1] = (dim >= 2) ? pnt[1] : 0.0;
+	    p_global[2] = (dim >= 3) ? pnt[2] : 0.0;
 
-	        // Get global coordinates (NGSolve, in meters)
-	        double p_global[3];
-	        p_global[0] = pnt[0];
-	        p_global[1] = (dim >= 2) ? pnt[1] : 0.0;
-	        p_global[2] = (dim >= 3) ? pnt[2] : 0.0;
-
-	        // Check cache first
-	        if (use_cache_) {
-	            uint64_t hash = hash_point(p_global[0], p_global[1], p_global[2]);
-	            auto it = point_cache_.find(hash);
-	            if (it != point_cache_.end()) {
-	                cache_hits_++;
-	                result(0) = it->second[0];
-	                result(1) = it->second[1];
-	                result(2) = it->second[2];
-	                return;
-	            }
-	            cache_misses_++;
+	    // Check cache first - NO GIL NEEDED for C++ cache lookup
+	    if (use_cache_) {
+	        uint64_t hash = hash_point(p_global[0], p_global[1], p_global[2]);
+	        auto it = point_cache_.find(hash);
+	        if (it != point_cache_.end()) {
+	            cache_hits_++;
+	            result(0) = it->second[0];
+	            result(1) = it->second[1];
+	            result(2) = it->second[2];
+	            return;  // Cache hit - no Python call needed!
 	        }
-
-	        // Apply coordinate transformation if enabled
-	        double p_local[3];
-	        if (use_transform) {
-	            double p_translated[3];
-	            p_translated[0] = p_global[0] - origin[0];
-	            p_translated[1] = p_global[1] - origin[1];
-	            p_translated[2] = p_global[2] - origin[2];
-
-	            p_local[0] = dot(u_axis, p_translated);
-	            p_local[1] = dot(v_axis, p_translated);
-	            p_local[2] = dot(w_axis, p_translated);
-	        } else {
-	            p_local[0] = p_global[0];
-	            p_local[1] = p_global[1];
-	            p_local[2] = p_global[2];
-	        }
-
-	        // Convert m -> mm
-	        py::list coords;
-	        coords.append(p_local[0] * coord_scale_);
-	        coords.append(p_local[1] * coord_scale_);
-	        coords.append(p_local[2] * coord_scale_);
-
-	        py::module_ rad = py::module_::import("radia");
-	        py::object field_result = rad.attr("Fld")(radia_obj, field_type, coords);
-
-	        py::list field_list = field_result.cast<py::list>();
-
-	        double f_local[3];
-	        f_local[0] = field_list[0].cast<double>();
-	        f_local[1] = field_list[1].cast<double>();
-	        f_local[2] = field_list[2].cast<double>();
-
-	        // Transform field back to global coordinate system
-	        double f_global[3];
-	        if (use_transform) {
-	            f_global[0] = u_axis[0]*f_local[0] + v_axis[0]*f_local[1] + w_axis[0]*f_local[2];
-	            f_global[1] = u_axis[1]*f_local[0] + v_axis[1]*f_local[1] + w_axis[1]*f_local[2];
-	            f_global[2] = u_axis[2]*f_local[0] + v_axis[2]*f_local[1] + w_axis[2]*f_local[2];
-	        } else {
-	            f_global[0] = f_local[0];
-	            f_global[1] = f_local[1];
-	            f_global[2] = f_local[2];
-	        }
-
-	        double scale = (field_type == "a") ? 0.001 : 1.0;
-
-	        result(0) = f_global[0] * scale;
-	        result(1) = f_global[1] * scale;
-	        result(2) = f_global[2] * scale;
-
-	    } catch (std::exception &e) {
-	        std::cerr << "[RadiaField] Single point error (" << field_type << "): "
-	                  << e.what() << std::endl;
-	        result(0) = 0.0;
-	        result(1) = 0.0;
-	        result(2) = 0.0;
+	        cache_misses_++;
 	    }
+
+	    // Apply coordinate transformation if enabled (no GIL needed)
+	    double p_local[3];
+	    if (use_transform) {
+	        double p_translated[3];
+	        p_translated[0] = p_global[0] - origin[0];
+	        p_translated[1] = p_global[1] - origin[1];
+	        p_translated[2] = p_global[2] - origin[2];
+
+	        p_local[0] = dot(u_axis, p_translated);
+	        p_local[1] = dot(v_axis, p_translated);
+	        p_local[2] = dot(w_axis, p_translated);
+	    } else {
+	        p_local[0] = p_global[0];
+	        p_local[1] = p_global[1];
+	        p_local[2] = p_global[2];
+	    }
+
+	    // Convert m -> mm (store in C++ variables)
+	    double coords_mm[3];
+	    coords_mm[0] = p_local[0] * coord_scale_;
+	    coords_mm[1] = p_local[1] * coord_scale_;
+	    coords_mm[2] = p_local[2] * coord_scale_;
+
+	    // Now acquire GIL only for Python call (minimum scope)
+	    double f_local[3];
+	    {
+	        py::gil_scoped_acquire acquire;
+	        try {
+	            // Create temporary py::list only when calling rad.Fld()
+	            py::list coords;
+	            coords.append(coords_mm[0]);
+	            coords.append(coords_mm[1]);
+	            coords.append(coords_mm[2]);
+
+	            py::object field_result = rad_module_.attr("Fld")(radia_obj, field_type, coords);
+	            f_local[0] = field_result[py::int_(0)].cast<double>();
+	            f_local[1] = field_result[py::int_(1)].cast<double>();
+	            f_local[2] = field_result[py::int_(2)].cast<double>();
+	            // field_result and coords go out of scope here, releasing Python objects
+	        } catch (std::exception &e) {
+	            std::cerr << "[RadiaField] Single point error (" << field_type << "): "
+	                      << e.what() << std::endl;
+	            result(0) = 0.0;
+	            result(1) = 0.0;
+	            result(2) = 0.0;
+	            return;
+	        }
+	    }  // GIL released here
+
+	    // Transform field back to global coordinate system (no GIL needed)
+	    double f_global[3];
+	    if (use_transform) {
+	        f_global[0] = u_axis[0]*f_local[0] + v_axis[0]*f_local[1] + w_axis[0]*f_local[2];
+	        f_global[1] = u_axis[1]*f_local[0] + v_axis[1]*f_local[1] + w_axis[1]*f_local[2];
+	        f_global[2] = u_axis[2]*f_local[0] + v_axis[2]*f_local[1] + w_axis[2]*f_local[2];
+	    } else {
+	        f_global[0] = f_local[0];
+	        f_global[1] = f_local[1];
+	        f_global[2] = f_local[2];
+	    }
+
+	    double scale = (field_type == "a") ? 0.001 : 1.0;
+
+	    result(0) = f_global[0] * scale;
+	    result(1) = f_global[1] * scale;
+	    result(2) = f_global[2] * scale;
 	}
 
 	// Batch evaluation: evaluate field at multiple points in one call
