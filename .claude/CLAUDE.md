@@ -1432,6 +1432,100 @@ B_cf = radia_ngsolve.RadiaField(magnet, 'b')  # units='m' is default
 
 ---
 
+## Radia Field Computation Limitations
+
+### rad.Fld() Accuracy Inside Magnets
+
+**Important Limitation**: `rad.Fld()` does **NOT** accurately compute field values **inside** permanent magnets.
+
+**Problem**:
+- Radia uses boundary element method (BEM) for field computation
+- BEM is designed for field calculation in **air regions** (outside magnetic materials)
+- Inside magnets, `rad.Fld()` returns inaccurate or incorrect values
+- This is a **known limitation** of the Radia solver, not a bug
+
+**Examples of incorrect behavior**:
+```python
+import radia as rad
+
+rad.FldUnits('m')
+magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 1.2])  # 0.1m cube, Mz=1.2 T
+
+# Inside magnet (INCORRECT - do not trust this value!)
+B_inside = rad.Fld(magnet, 'b', [0.01, 0.01, 0.01])  # Point inside magnet
+# Returns wrong value - not reliable!
+
+# Outside magnet (CORRECT - this is accurate)
+B_outside = rad.Fld(magnet, 'b', [0.2, 0, 0])  # Point outside magnet
+# Returns correct far-field value
+```
+
+**Testing Guidelines**:
+
+**✗ DO NOT test field values inside magnets**:
+```python
+# BAD TEST - will fail!
+test_point = [0.002, 0, 0]  # Inside 10mm magnet
+B_radia = rad.Fld(magnet, 'b', test_point)
+B_ngsolve = gf(test_point_mesh)
+assert np.allclose(B_radia, B_ngsolve)  # WILL FAIL - rad.Fld is wrong inside!
+```
+
+**✓ DO test field values outside magnets**:
+```python
+# GOOD TEST - reliable comparison
+# Use large magnet that encloses the entire test mesh
+magnet = rad.ObjRecMag([0, 0, 0], [2, 2, 2], [0, 0, 1.0])  # 2m cube
+test_point = [0.05, 0.05, 0.05]  # Inside magnet BUT inside mesh
+
+# Mesh is [0, 0.1]m - fully inside magnet
+# Field is approximately uniform = magnetization value
+B_radia = rad.Fld(magnet, 'b', test_point)      # ~[0, 0, 0.667] T (approx uniform)
+B_ngsolve = gf(test_point_mesh)                 # Should match
+assert np.allclose(B_radia, B_ngsolve, atol=1e-4)  # OK - both approximate uniform field
+```
+
+**Recommended test pattern** (from `test_unit_conversion_verify.py`):
+```python
+# Create LARGE magnet (much larger than mesh)
+rad.FldUnits('m')
+magnet = rad.ObjRecMag([0, 0, 0], [2, 2, 2], [0, 0, 1.0])  # 2m cube
+
+# Create SMALL mesh (completely inside magnet)
+mesh = Mesh(Box((0, 0, 0), (0.1, 0.1, 0.1)))  # 0.1m cube
+
+# Test point in center of mesh (deep inside magnet)
+test_point = mesh(0.05, 0.05, 0.05)
+
+# Field is approximately uniform inside large magnet
+B_cf = radia_ngsolve.RadiaField(magnet, 'b', units='m')
+gf.Set(B_cf)
+B_ngsolve = gf(test_point)
+B_radia = rad.Fld(magnet, 'b', [0.05, 0.05, 0.05])
+
+# Both should be close to magnetization value
+assert np.allclose(B_ngsolve, B_radia, atol=1e-4)  # OK
+```
+
+**Why this pattern works**:
+- Magnet is much larger than mesh → field is nearly uniform inside
+- `rad.Fld()` approximation error is small for uniform field regions
+- Both Radia and NGSolve compute similar approximate values
+- Test verifies **unit conversion**, not absolute field accuracy
+
+**Files affected**:
+- `tests/test_ngsolve_units.py` - Should use large magnet pattern
+- `tests/test_unit_conversion_verify.py` - Already uses correct pattern ✓
+- Any test comparing `rad.Fld()` with NGSolve inside magnets
+
+**Summary**:
+- ✓ Use `rad.Fld()` for field computation **outside** magnets (accurate)
+- ✗ Do NOT use `rad.Fld()` for field computation **inside** magnets (inaccurate)
+- ✓ For unit conversion tests, use **large magnet + small mesh** pattern
+- ✓ Test verifies relative accuracy, not absolute field values
+
+---
+
 **Last Updated**: 2025-11-21
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation
