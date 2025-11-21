@@ -166,6 +166,42 @@ public:
 
 This follows the same pattern as EMPY_Field's `B_MAGNET_CF`.
 
+## Important Limitations
+
+### ⚠️ Do NOT Use Inside Permanent Magnets
+
+**Critical Limitation**: Both Pure Python and C++ versions of `radia_ngsolve` should **NOT** be used for field calculations **inside** permanent magnets.
+
+**Reason**:
+- Both versions evaluate Radia field using `rad.Fld()`
+- `rad.Fld()` uses boundary element method (BEM) which is designed for **air regions** only
+- BEM is **inaccurate inside permanent magnets** - this is a fundamental limitation of Radia, not a bug
+- Therefore, using `radia_ngsolve` inside magnets will return incorrect field values
+
+**Valid Use Cases** (✓ OK):
+```python
+# GOOD - Mesh OUTSIDE magnet
+magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1])  # Magnet at origin
+mesh = Mesh(Box((50, 50, 50), (100, 100, 100)))  # Mesh far from magnet
+B = radia_ngsolve.RadBfield(magnet)
+# Field evaluation in air region - OK
+```
+
+**Invalid Use Cases** (✗ DO NOT DO):
+```python
+# BAD - Mesh overlaps with or inside magnet
+magnet = rad.ObjRecMag([0, 0, 0], [100, 100, 100], [0, 0, 1])  # Large magnet
+mesh = Mesh(Box((-50, -50, -50), (50, 50, 50)))  # Mesh inside magnet
+B = radia_ngsolve.RadBfield(magnet)
+# Field evaluation inside magnet - WRONG!
+```
+
+**Alternative for Interior Fields**:
+- Use direct NGSolve FEM solutions with proper material properties
+- Do NOT rely on `radia_ngsolve` for calculations inside magnetic materials
+
+---
+
 ## Troubleshooting
 
 ### Pure Python Version

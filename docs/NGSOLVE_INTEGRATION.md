@@ -172,6 +172,33 @@ gfu = GridFunction(fes)
 gfu.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
 ```
 
+## Important Limitations
+
+### ⚠️ Do NOT Use Inside Permanent Magnets
+
+**Critical Limitation**: `radia_ngsolve` should **NOT** be used for field calculations **inside** permanent magnets.
+
+**Reason**:
+- `radia_ngsolve` evaluates Radia field using `rad.Fld()`
+- `rad.Fld()` uses boundary element method (BEM) which is designed for **air regions** only
+- BEM is **inaccurate inside permanent magnets** - this is a fundamental limitation of Radia, not a bug
+- Therefore, using `radia_ngsolve.RadiaField()` inside magnets will return incorrect values
+
+**Valid Use Cases** (✓ OK):
+- Field evaluation **outside** permanent magnets (air regions)
+- Field evaluation in non-magnetic materials
+- Background field sources for FEM problems in air regions
+
+**Invalid Use Cases** (✗ DO NOT DO):
+- Field evaluation **inside** permanent magnets
+- NGSolve mesh overlapping with Radia magnet geometry
+
+**Alternative for Interior Fields**:
+- Use direct NGSolve FEM solutions with proper material properties
+- Do NOT rely on `radia_ngsolve` for calculations inside magnetic materials
+
+---
+
 ## Coordinate Systems and Units
 
 ### Radia
