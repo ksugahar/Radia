@@ -21,9 +21,9 @@ This guide explains how to use Radia's H-matrix acceleration feature for faster 
 
 ## Quick Start
 
-### Automatic Mode (Recommended)
+### Basic Usage (Manual Enable)
 
-H-matrix acceleration is **automatically enabled** for problems with 200+ elements. No configuration needed!
+**Important**: H-matrix acceleration must be **explicitly enabled** by the user. It is NOT automatic.
 
 ```python
 import radia as rad
@@ -34,43 +34,53 @@ cube = rad.ObjRecMag([0, 0, 0], [100, 100, 100], [0, 0, 0])
 rad.MatApl(cube, mat)
 rad.ObjDivMag(cube, [7, 7, 7])  # 343 elements
 
-# Solve - H-matrix automatically enabled!
+# Enable H-matrix explicitly (required!)
+rad.SolverHMatrixEnable(1, 1e-4, 30)  # enable=1, eps=1e-4, max_rank=30
+
+# Solve with H-matrix
 rad.Solve(cube, 0.0001, 1000)
 ```
 
 **Console Output:**
 ```
-[Auto] Enabling H-matrix acceleration (N=343 >= 200)
+[Phase 2-B] Using H-matrix solver (N=343)
 [Phase 3] Cache miss (new geometry, hash=e20cad57)
 Building True H-Matrix...
 Construction time: 1.26 s
 [Phase 3] Saved to cache (./.radia_cache/hmatrix_cache.bin)
 ```
 
-### Manual Configuration (Optional)
-
-For fine-grained control:
+### Disabling H-Matrix
 
 ```python
-# Enable H-matrix with custom parameters
-rad.SolverHMatrixEnable(1, 1e-4, 30)  # enable=1, eps=1e-4, max_rank=30
-
-# Solve with H-matrix
-rad.Solve(cube, 0.0001, 1000)
-
 # Disable H-matrix (use dense solver)
 rad.SolverHMatrixEnable(0)
+
+# Solve with dense solver
+rad.Solve(cube, 0.0001, 1000)
 ```
 
 ---
 
 ## When to Use H-Matrix
 
+### ⚠️ Important: Manual Enable Policy
+
+**Design Decision**: H-matrix is **intentionally NOT automatic**. Users must explicitly enable it.
+
+**Reasons**:
+1. **User control**: Different applications have different performance requirements
+2. **Small models**: H-matrix construction overhead can exceed benefits for N < 200
+3. **Explicit behavior**: No hidden automatic switching based on problem size
+4. **Predictable performance**: Users decide when to use H-matrix
+
+**Recommendation**: Enable H-matrix for **N ≥ 200** for best performance.
+
 ### ✅ Recommended For
 
 | Problem Type | Element Count | Expected Speedup | Notes |
 |--------------|---------------|------------------|-------|
-| **Large single solve** | N ≥ 200 | 10-100x | Automatic enabling |
+| **Large single solve** | N ≥ 200 | 10-100x | Enable explicitly |
 | **Iterative workflows** | N ≥ 100 | 25-350x | H-matrix reuse |
 | **Magnetization optimization** | Any N | 33x | Only M changes |
 | **Geometry exploration** | N ≥ 200 | 7-10x | Multiple geometries |
@@ -79,14 +89,16 @@ rad.SolverHMatrixEnable(0)
 
 | Problem Type | Reason | Alternative |
 |--------------|--------|-------------|
-| **Small problems** (N < 200) | H-matrix overhead > benefit | Automatic dense solver |
-| **Single small solve** (N < 100) | Construction time dominates | Use default solver |
+| **Small problems** (N < 200) | H-matrix overhead > benefit | Use dense solver (disable H-matrix) |
+| **Single small solve** (N < 100) | Construction time dominates | Use dense solver |
 | **Memory-constrained systems** | H-matrix uses more memory | Use dense solver |
+
+**Important**: For small models (N < 200), enabling H-matrix may **NOT improve performance** and can even be slower due to construction overhead. Always benchmark your specific use case.
 
 ### Performance Expectations
 
 ```
-Small problems (N=125):    4.8x faster
+Small problems (N=125):    May be slower (construction overhead)
 Large single solve (N=343): 33x faster
 100 solves (magnetization): 25x faster
 10 geometries × 10 solves:  7.9x faster
@@ -94,35 +106,67 @@ Large single solve (N=343): 33x faster
 
 ---
 
-## Automatic vs Manual Configuration
+## H-Matrix Enabled APIs
 
-### Automatic Mode (Default)
+H-matrix acceleration affects the following Radia operations when explicitly enabled via `rad.SolverHMatrixEnable(1)`:
 
-**Behavior:**
-1. **N < 200:** Uses dense solver (optimal for small problems)
-2. **N ≥ 200:** Enables H-matrix with adaptive parameters
-3. **Geometry unchanged:** Reuses existing H-matrix
-4. **Magnetization change:** Reuses H-matrix (33x speedup!)
+### 1. `rad.Solve()` - Relaxation Solver
 
-**Parameters (Adaptive):**
-- N < 200: Dense solver
-- 200 ≤ N < 500: eps=1e-4, max_rank=30
-- 500 ≤ N < 1000: eps=2e-4, max_rank=25
-- N ≥ 1000: eps=5e-4, max_rank=20
+**Affected**: Yes (primary use case)
 
-**Example:**
 ```python
-# No configuration needed - automatic optimization!
-rad.Solve(container, 0.0001, 1000)
+rad.SolverHMatrixEnable(1, 1e-4, 30)  # Enable H-matrix
+rad.Solve(container, 0.0001, 1000)    # Uses H-matrix for interaction matrix
 ```
 
-### Manual Mode (Advanced Users)
+**Performance Impact**: 10-350x speedup for N ≥ 200
 
-Override automatic behavior:
+### 2. `rad.Fld()` - Field Calculation
+
+**Affected**: No (H-matrix does NOT accelerate field evaluation)
 
 ```python
-# Force H-matrix for small problems
-rad.SolverHMatrixEnable(1, 1e-4, 30)
+rad.SolverHMatrixEnable(1, 1e-4, 30)  # Enable H-matrix
+rad.Solve(container, 0.0001, 1000)    # H-matrix used here
+
+# Field evaluation - H-matrix NOT used
+B = rad.Fld(container, 'b', [0, 0, 10])  # Direct calculation, no H-matrix
+```
+
+**Note**: Field evaluation always uses direct calculation, regardless of H-matrix setting.
+
+### 3. `radia_ngsolve.RadiaField()` - NGSolve Integration
+
+**Affected**: No (H-matrix does NOT accelerate field evaluation on NGSolve mesh)
+
+```python
+rad.SolverHMatrixEnable(1, 1e-4, 30)  # Enable H-matrix
+rad.Solve(container, 0.0001, 1000)    # H-matrix used for solving
+
+# NGSolve field evaluation - H-matrix NOT used
+B_cf = radia_ngsolve.RadiaField(container, 'b')  # Calls rad.Fld() per point
+gf.Set(B_cf)  # No H-matrix acceleration
+```
+
+**Note**: Each mesh point evaluation calls `rad.Fld()` which does not use H-matrix.
+
+### Summary Table
+
+| API | H-Matrix Used? | Performance Impact | Notes |
+|-----|----------------|-------------------|-------|
+| `rad.Solve()` | ✓ Yes | 10-350x speedup | Interaction matrix assembly |
+| `rad.Fld()` | ✗ No | No speedup | Direct field calculation |
+| `radia_ngsolve.RadiaField()` | ✗ No | No speedup | Calls `rad.Fld()` internally |
+
+---
+
+## Manual Configuration
+
+Users must explicitly configure H-matrix:
+
+```python
+# Enable H-matrix with custom parameters
+rad.SolverHMatrixEnable(1, 1e-4, 30)  # enable=1, eps=1e-4, max_rank=30
 
 # Use tighter tolerance for critical applications
 rad.SolverHMatrixEnable(1, 1e-6, 50)
@@ -130,14 +174,14 @@ rad.SolverHMatrixEnable(1, 1e-6, 50)
 # Use relaxed tolerance for faster construction
 rad.SolverHMatrixEnable(1, 5e-4, 20)
 
-# Disable H-matrix (use dense)
+# Disable H-matrix (use dense solver)
 rad.SolverHMatrixEnable(0)
 ```
 
-**When to use manual mode:**
-- Debugging: Compare H-matrix vs dense results
-- Performance tuning: Test different parameters
-- Special requirements: Accuracy vs speed trade-off
+**When to adjust parameters:**
+- Debugging: Compare H-matrix vs dense results (`enable=0` vs `enable=1`)
+- Performance tuning: Test different `eps` and `max_rank` values
+- Accuracy requirements: Trade-off between speed and precision
 
 ---
 
@@ -458,11 +502,14 @@ cube = rad.ObjRecMag([0, 0, 0], [100, 100, 100], [0, 0, 0])
 rad.MatApl(cube, mat)
 rad.ObjDivMag(cube, [7, 7, 7])
 
-# Solve (automatic H-matrix)
+# Enable H-matrix explicitly
+rad.SolverHMatrixEnable(1, 1e-4, 30)
+
+# Solve with H-matrix
 result = rad.Solve(cube, 0.0001, 1000)
 
 # Expected output:
-# [Auto] Enabling H-matrix acceleration (N=343 >= 200)
+# [Phase 2-B] Using H-matrix solver (N=343)
 # Building True H-Matrix... (1.2s)
 # Result: converged
 ```
@@ -472,6 +519,9 @@ result = rad.Solve(cube, 0.0001, 1000)
 ```python
 # Create geometry once
 cube = create_soft_iron_cube([7, 7, 7])
+
+# Enable H-matrix
+rad.SolverHMatrixEnable(1, 1e-4, 30)
 
 # First solve - builds H-matrix
 rad.Solve(cube, 0.0001, 1000)  # ~1000 ms
@@ -496,11 +546,14 @@ for M in magnetizations:
 # Create multiple geometries
 subdivisions = [5, 6, 7, 8]  # 125, 216, 343, 512 elements
 
+# Enable H-matrix (recommended for N >= 200)
+rad.SolverHMatrixEnable(1, 1e-4, 30)
+
 for n in subdivisions:
     rad.UtiDelAll()
     cube = create_cube_with_subdivision(n)
 
-    # First solve - builds H-matrix
+    # First solve - builds H-matrix (if N >= 200)
     t0 = time.time()
     rad.Solve(cube, 0.0001, 1000)
     print(f"N={n**3}: {(time.time()-t0)*1000:.1f} ms")
@@ -516,22 +569,28 @@ for n in subdivisions:
 ## FAQ
 
 **Q: Do I need to configure H-matrix manually?**
-A: No! Automatic mode (N ≥ 200) is optimal for most cases.
+A: **Yes!** H-matrix must be explicitly enabled via `rad.SolverHMatrixEnable(1)`. It is NOT automatic.
+
+**Q: Why isn't H-matrix automatic?**
+A: By design. This gives users full control and avoids hidden performance behavior. Small models (N < 200) may not benefit from H-matrix, so users should decide when to enable it.
 
 **Q: How do I know if H-matrix is being used?**
-A: Check console for "[Auto] Enabling H-matrix" or "[Phase 2-B]" messages.
+A: Check console for "[Phase 2-B] Using H-matrix solver" messages.
 
 **Q: Why is my first solve slow?**
 A: H-matrix construction takes ~1s for N=343. Subsequent solves are fast (~30 ms).
 
 **Q: Can I disable H-matrix?**
-A: Yes: `rad.SolverHMatrixEnable(0)`
+A: Yes: `rad.SolverHMatrixEnable(0)` (default is disabled)
 
 **Q: What's the cache file?**
 A: `./.radia_cache/hmatrix_cache.bin` stores metadata (not H-matrix data).
 
 **Q: Is H-matrix always faster?**
-A: For N ≥ 200, yes. For N < 200, dense solver is automatically used.
+A: No. For **N ≥ 200**, H-matrix is typically faster. For **N < 200**, enabling H-matrix may NOT improve performance due to construction overhead.
+
+**Q: Does H-matrix accelerate `rad.Fld()` or `radia_ngsolve`?**
+A: **No**. H-matrix only accelerates `rad.Solve()`. Field evaluation (`rad.Fld()`) and NGSolve integration always use direct calculation.
 
 **Q: How accurate is H-matrix?**
 A: Default: < 1% error. Adjustable with eps parameter.
