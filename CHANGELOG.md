@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.3] - 2025-01-21
+
+### Optimized
+
+- **radia_ngsolve Memory Management**
+  - Minimized GIL (Global Interpreter Lock) scope - acquired only during Python calls
+  - C++ cache lookups now avoid GIL entirely for improved performance
+  - Improved Python object lifecycle - temporary objects released in tight scopes
+  - Cached Radia module import to eliminate repeated `py::module_::import()` calls
+  - Memory growth verified as Python memory pool initialization (not a leak)
+  - Memory usage stabilizes after warm-up period (-41% saturation in extended tests)
+
+### Added
+
+- **Memory Test Suite for NGSolve Integration**
+  - `test_radia_ngsolve_memory_leak.py` - Basic memory leak detection test
+  - `test_radia_ngsolve_longrun.py` - Extended 500-iteration saturation test
+  - `test_radia_ngsolve_with_cache.py` - PrepareCache() memory behavior test
+  - `test_radia_core_memory.py` - Baseline Radia core memory verification
+  - All tests confirm no true memory leak exists
+
+### Documentation
+
+- **Memory Management Section** in `examples/NGSolve_Integration/README.md`
+  - Documents memory optimization techniques implemented in v1.3.3
+  - Explains memory growth behavior (Python memory pool initialization)
+  - Provides test results showing saturation pattern
+  - Clarifies this is safe for long-running simulations
+
 ## [1.3.2] - 2025-11-21
 
 ### Changed
