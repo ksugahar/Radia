@@ -108,55 +108,77 @@ Large single solve (N=343): 33x faster
 
 ## H-Matrix Enabled APIs
 
-H-matrix acceleration affects the following Radia operations when explicitly enabled via `rad.SolverHMatrixEnable(1)`:
+H-matrix acceleration is available for the following Radia operations:
 
 ### 1. `rad.Solve()` - Relaxation Solver
 
-**Affected**: Yes (primary use case)
+**H-Matrix Usage**: Interaction matrix assembly (global enable)
 
 ```python
-rad.SolverHMatrixEnable(1, 1e-4, 30)  # Enable H-matrix
+rad.SolverHMatrixEnable(1, 1e-4, 30)  # Enable H-matrix globally
 rad.Solve(container, 0.0001, 1000)    # Uses H-matrix for interaction matrix
 ```
 
 **Performance Impact**: 10-350x speedup for N ≥ 200
 
-### 2. `rad.Fld()` - Field Calculation
+**Enable Method**: `rad.SolverHMatrixEnable(1, eps, max_rank)`
 
-**Affected**: No (H-matrix does NOT accelerate field evaluation)
+---
+
+### 2. `rad.FldBatch()` - Batch Field Calculation
+
+**H-Matrix Usage**: Fast multi-point field evaluation (per-call enable)
 
 ```python
-rad.SolverHMatrixEnable(1, 1e-4, 30)  # Enable H-matrix
-rad.Solve(container, 0.0001, 1000)    # H-matrix used here
+# Enable H-matrix field evaluation (required first)
+rad.SetHMatrixFieldEval(1, 1e-6)
 
-# Field evaluation - H-matrix NOT used
-B = rad.Fld(container, 'b', [0, 0, 10])  # Direct calculation, no H-matrix
+# Batch field calculation with H-matrix
+obs_points = [[0, 0, 10], [0, 0, 20], [0, 0, 30], ...]  # 100+ points
+B_fields = rad.FldBatch(container, 'b', obs_points, use_hmatrix=1)
 ```
 
-**Note**: Field evaluation always uses direct calculation, regardless of H-matrix setting.
+**Performance Impact**: Significant speedup for **many observation points** (100+)
+
+**Enable Method**:
+1. `rad.SetHMatrixFieldEval(1, tol)` - Enable H-matrix field evaluation
+2. `rad.FldBatch(obj, 'b', points, use_hmatrix=1)` - Use H-matrix in batch call
+
+**Note**: Single-point `rad.Fld()` does NOT support H-matrix. Use `rad.FldBatch()` for batch evaluation.
+
+---
 
 ### 3. `radia_ngsolve.RadiaField()` - NGSolve Integration
 
-**Affected**: No (H-matrix does NOT accelerate field evaluation on NGSolve mesh)
+**H-Matrix Usage**: Field evaluation on NGSolve mesh (per-object enable)
 
 ```python
-rad.SolverHMatrixEnable(1, 1e-4, 30)  # Enable H-matrix
-rad.Solve(container, 0.0001, 1000)    # H-matrix used for solving
+# Enable H-matrix field evaluation (required first)
+rad.SetHMatrixFieldEval(1, 1e-6)
 
-# NGSolve field evaluation - H-matrix NOT used
-B_cf = radia_ngsolve.RadiaField(container, 'b')  # Calls rad.Fld() per point
-gf.Set(B_cf)  # No H-matrix acceleration
+# Create NGSolve field with H-matrix acceleration
+B_cf = radia_ngsolve.RadiaField(container, 'b', use_hmatrix=True)
+gf.Set(B_cf)  # Evaluates field at all mesh vertices using H-matrix
 ```
 
-**Note**: Each mesh point evaluation calls `rad.Fld()` which does not use H-matrix.
+**Performance Impact**: Significant speedup for **large meshes** (1000+ vertices)
+
+**Enable Method**:
+1. `rad.SetHMatrixFieldEval(1, tol)` - Enable H-matrix field evaluation
+2. `radia_ngsolve.RadiaField(obj, 'b', use_hmatrix=True)` - Use H-matrix
+
+**Note**: Internally calls `rad.FldBatch()` with H-matrix support.
+
+---
 
 ### Summary Table
 
-| API | H-Matrix Used? | Performance Impact | Notes |
-|-----|----------------|-------------------|-------|
-| `rad.Solve()` | ✓ Yes | 10-350x speedup | Interaction matrix assembly |
-| `rad.Fld()` | ✗ No | No speedup | Direct field calculation |
-| `radia_ngsolve.RadiaField()` | ✗ No | No speedup | Calls `rad.Fld()` internally |
+| API | H-Matrix Used? | Enable Method | Performance Impact | Notes |
+|-----|----------------|---------------|-------------------|-------|
+| `rad.Solve()` | ✓ Yes | `SolverHMatrixEnable(1)` | 10-350x speedup | Interaction matrix (N ≥ 200) |
+| `rad.Fld()` (single point) | ✗ No | N/A | No speedup | Use `FldBatch` instead |
+| `rad.FldBatch()` | ✓ Yes | `SetHMatrixFieldEval(1)` + `use_hmatrix=1` | Large speedup | Many points (100+) |
+| `radia_ngsolve.RadiaField()` | ✓ Yes | `SetHMatrixFieldEval(1)` + `use_hmatrix=True` | Large speedup | Large meshes (1000+ vertices) |
 
 ---
 
@@ -589,8 +611,11 @@ A: `./.radia_cache/hmatrix_cache.bin` stores metadata (not H-matrix data).
 **Q: Is H-matrix always faster?**
 A: No. For **N ≥ 200**, H-matrix is typically faster. For **N < 200**, enabling H-matrix may NOT improve performance due to construction overhead.
 
-**Q: Does H-matrix accelerate `rad.Fld()` or `radia_ngsolve`?**
-A: **No**. H-matrix only accelerates `rad.Solve()`. Field evaluation (`rad.Fld()`) and NGSolve integration always use direct calculation.
+**Q: Does H-matrix accelerate field evaluation?**
+A: **Yes**, but only for batch operations:
+- `rad.Fld()` (single point): **No** - always direct calculation
+- `rad.FldBatch()` (many points): **Yes** - use `SetHMatrixFieldEval(1)` + `use_hmatrix=1`
+- `radia_ngsolve.RadiaField()`: **Yes** - use `SetHMatrixFieldEval(1)` + `use_hmatrix=True`
 
 **Q: How accurate is H-matrix?**
 A: Default: < 1% error. Adjustable with eps parameter.
