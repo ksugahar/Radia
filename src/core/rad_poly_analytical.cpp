@@ -98,9 +98,9 @@ void RadAnalyticalFieldFromPolygonCharge(
 		double XS2 = XY[L].y - XY[J].y;
 
 		if(std::abs(XS1) < EPS) {
-			// Vertical edge - handle specially
-			std::cerr << "[Warning] RadAnalyticalFieldFromPolygonCharge: vertical edge in element "
-			          << NII << std::endl;
+			// Vertical edge - handle specially by replacing with small non-zero value
+			// This is a numerical stability measure for near-vertical edges in tetrahedral meshes
+			// Warning suppressed to avoid console spam (vertical edges are common in Netgen meshes)
 			XS1 = EPS;
 		}
 
