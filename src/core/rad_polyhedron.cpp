@@ -25,6 +25,7 @@
 #include "rad_geometry_3d_aux.h"
 #include "rad_application.h"
 #include "auxparse.h"
+#include "rad_poly_analytical.h"
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -698,6 +699,143 @@ void radTPolyhedron::B_comp_tetrahedron_centroid(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
+void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
+{
+	// Analytical method for tetrahedral elements
+	// Constructs basis vectors from face vertices and calls RadAnalyticalFieldFromPolygonCharge
+	// This ensures consistency with the standard polygon field calculation
+
+	const double PI = 3.14159265358979323846;
+	const double ConstForH = 1.0 / (4.0 * PI);
+	const double EPS = 1.0e-15;
+
+	radTFieldKey LocFieldKey = FieldPtr->FieldKey;
+	if(LocFieldKey.B_) LocFieldKey.H_ = 1;
+
+	TVector3d ObsPt = FieldPtr->P;
+	TVector3d M_global = Magn;
+	TVector3d H_total(0., 0., 0.);
+
+	// Prepare observation point vector for RadAnalyticalFieldFromPolygonCharge
+	std::vector<TVector3d> obs_points(1, ObsPt);
+	std::vector<TVector3d> field_result(1, TVector3d(0., 0., 0.));
+
+	// Loop over 4 triangular faces
+	for(int iface = 0; iface < AmOfFaces; iface++)
+	{
+		radTHandlePgnAndTrans HandlePgnAndTrans = VectHandlePgnAndTrans[iface];
+		radTPolygon* PgnPtr = HandlePgnAndTrans.PgnHndl.rep;
+		radTrans* TransPtr = HandlePgnAndTrans.TransHndl.rep;
+
+		// Get 3 face vertices in global coordinates
+		if(PgnPtr->AmOfEdgePoints != 3) continue;  // Must be triangle
+
+		TVector3d V0_local(PgnPtr->EdgePointsVector[0].x, PgnPtr->EdgePointsVector[0].y, 0.0);
+		TVector3d V1_local(PgnPtr->EdgePointsVector[1].x, PgnPtr->EdgePointsVector[1].y, 0.0);
+		TVector3d V2_local(PgnPtr->EdgePointsVector[2].x, PgnPtr->EdgePointsVector[2].y, 0.0);
+
+		TVector3d P1 = TransPtr->TrPoint(V0_local);
+		TVector3d P2 = TransPtr->TrPoint(V1_local);
+		TVector3d P3 = TransPtr->TrPoint(V2_local);
+
+		// Construct orthonormal basis from face vertices
+		// AA and BB are tangent to face, CC is normal
+		TVector3d AA = P2 - P1;
+		TVector3d BB_temp = P3 - P1;
+
+		// CC = AA x BB_temp (cross product, face normal)
+		TVector3d CC;
+		CC.x = AA.y * BB_temp.z - AA.z * BB_temp.y;
+		CC.y = AA.z * BB_temp.x - AA.x * BB_temp.z;
+		CC.z = AA.x * BB_temp.y - AA.y * BB_temp.x;
+
+		double CC_mag = sqrt(CC.x*CC.x + CC.y*CC.y + CC.z*CC.z);
+		if(CC_mag < EPS) continue;
+
+		// Normalize CC
+		CC.x /= CC_mag;
+		CC.y /= CC_mag;
+		CC.z /= CC_mag;
+
+		// Re-orthogonalize: BB = CC x AA
+		TVector3d BB;
+		BB.x = CC.y * AA.z - CC.z * AA.y;
+		BB.y = CC.z * AA.x - CC.x * AA.z;
+		BB.z = CC.x * AA.y - CC.y * AA.x;
+
+		double BB_mag = sqrt(BB.x*BB.x + BB.y*BB.y + BB.z*BB.z);
+		if(BB_mag < EPS) continue;
+
+		BB.x /= BB_mag;
+		BB.y /= BB_mag;
+		BB.z /= BB_mag;
+
+		// Complete orthonormal basis: AA = BB x CC
+		AA.x = BB.y * CC.z - BB.z * CC.y;
+		AA.y = BB.z * CC.x - BB.x * CC.z;
+		AA.z = BB.x * CC.y - BB.y * CC.x;
+
+		// Transform magnetization to local coordinate system
+		TVector3d M_local;
+		M_local.x = M_global.x*AA.x + M_global.y*AA.y + M_global.z*AA.z;
+		M_local.y = M_global.x*BB.x + M_global.y*BB.y + M_global.z*BB.z;
+		M_local.z = M_global.x*CC.x + M_global.y*CC.y + M_global.z*CC.z;
+
+		// Magnetic charge density (M_local.z is normal component)
+		double W = ConstForH * M_local.z;
+
+		if(fabs(W) < EPS) continue;
+
+		// Use YY as reference point (first vertex of triangle)
+		TVector3d YY = P1;
+
+		// Project the 3D triangle vertices onto the (AA, BB) plane
+		// P1 is the origin, so it maps to (0, 0)
+		std::vector<TVector2d> triangle_2d;
+
+		TVector3d D1 = P1 - YY;  // (0, 0, 0) relative to origin
+		triangle_2d.push_back(TVector2d(
+			D1.x*AA.x + D1.y*AA.y + D1.z*AA.z,
+			D1.x*BB.x + D1.y*BB.y + D1.z*BB.z
+		));
+
+		TVector3d D2 = P2 - YY;
+		triangle_2d.push_back(TVector2d(
+			D2.x*AA.x + D2.y*AA.y + D2.z*AA.z,
+			D2.x*BB.x + D2.y*BB.y + D2.z*BB.z
+		));
+
+		TVector3d D3 = P3 - YY;
+		triangle_2d.push_back(TVector2d(
+			D3.x*AA.x + D3.y*AA.y + D3.z*AA.z,
+			D3.x*BB.x + D3.y*BB.y + D3.z*BB.z
+		));
+
+		// Reset field result for this face
+		field_result[0] = TVector3d(0., 0., 0.);
+
+		// Call proven analytical formula
+		RadAnalyticalFieldFromPolygonCharge(
+			AA, BB, CC, YY,
+			triangle_2d,
+			obs_points,
+			field_result,
+			W,
+			iface + 1,  // Element index for error reporting
+			3           // Triangle has 3 vertices
+		);
+
+		// Accumulate contribution from this face
+		H_total += field_result[0];
+	}
+
+	// Add to field pointer
+	if(LocFieldKey.H_) FieldPtr->H += H_total;
+	if(LocFieldKey.B_) FieldPtr->B += H_total;
+}
+
+//-------------------------------------------------------------------------
+
 void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 //void radTPolyhedron::B_comp(radTField* FieldPtr)
 {
@@ -705,12 +843,21 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 	if(IsTetrahedron())
 	{
 		const char* method_env = std::getenv("RADIA_TETRA_METHOD");
-		if(method_env != nullptr && std::string(method_env) == "CENTROID")
+		if(method_env != nullptr)
 		{
-			B_comp_tetrahedron_centroid(FieldPtr);
-			return;
+			std::string method(method_env);
+			if(method == "ANALYTICAL")
+			{
+				B_comp_tetrahedron_analytical(FieldPtr);
+				return;
+			}
+			else if(method == "CENTROID")
+			{
+				B_comp_tetrahedron_centroid(FieldPtr);
+				return;
+			}
 		}
-		// Fall through to standard polygon method if not CENTROID
+		// Fall through to standard polygon method if not ANALYTICAL or CENTROID
 	}
 
 	// Use standard polygon-based computation for all polyhedra (including tetrahedra)
@@ -735,8 +882,14 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 		LocField.P = TransPtr->TrPoint_inv(SumLocField.P);
 		TVector3d PrevP = LocField.P;
 
-		if(!LocFieldKey.PreRelax_) PgnPtr->Magn = TransPtr->TrVectField_inv(Magn);
-		PgnPtr->B_comp(&LocField); //OC040504 test
+				if(!LocFieldKey.PreRelax_) PgnPtr->Magn = TransPtr->TrVectField_inv(Magn);
+		
+		// Extract basis vectors from transformation for correct tetrahedral field computation
+		TVector3d AA_global = TransPtr->TrVectField(TVector3d(1, 0, 0));
+		TVector3d BB_global = TransPtr->TrVectField(TVector3d(0, 1, 0));
+		TVector3d CC_global = TransPtr->TrVectField(TVector3d(0, 0, 1));
+		
+		PgnPtr->B_comp(&LocField, &AA_global, &BB_global, &CC_global);
 
 		if(LocField.P != PrevP)
 		{

@@ -273,9 +273,10 @@ public:
 	void B_intComp_frM(radTField*);
 	void B_intComp_frJ(radTField*);
 
-	// Tetrahedral mesh support (centroid charge method)
+	// Tetrahedral mesh support
 	bool IsTetrahedron() const { return AmOfFaces == 4; }
 	void B_comp_tetrahedron_centroid(radTField*);
+	void B_comp_tetrahedron_analytical(radTField*);
 
 	int CutItself(TVector3d*, radThg&, radTPair_int_hg&, radTPair_int_hg&, radTApplication*, radTSubdivOptions*);
 	int FindIntersectionWithFace(int, TVector3d*, radTVectOfPtrToVect3d&, radTVectHandlePgnAndTrans&, radTVectHandlePgnAndTrans&, char&, double*);
