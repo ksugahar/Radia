@@ -140,9 +140,6 @@ See [examples/Radia_to_NGSolve_CoefficientFunction/](examples/Radia_to_NGSolve_C
 - [examples/Radia_to_NGSolve_CoefficientFunction/EXAMPLES_GUIDE.md](examples/Radia_to_NGSolve_CoefficientFunction/EXAMPLES_GUIDE.md) - Detailed usage guide
 - [tests/test_radia_ngsolve.py](tests/test_radia_ngsolve.py) - Integration tests
 
-### Visualization
-- [docs/PYVISTA_VIEWER.md](examples/2024_02_03_振分電磁石/PYVISTA_VIEWER.md) - PyVista viewer guide
-
 ### Development
 - [docs/TAB_CONVERSION_REPORT.md](docs/TAB_CONVERSION_REPORT.md) - Code style conversion
 - [docs/CLAUDE.md](docs/CLAUDE.md) - Development notes
