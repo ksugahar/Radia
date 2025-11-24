@@ -251,52 +251,56 @@ pieces = rad.ObjDivMag(magnet, [[3,1.5], [3,1.5], [3,1.5]])
 
 ## Materials
 
-### MatLin - Isotropic Linear Material ⭐ NEW API
+### MatLin - Linear Magnetic Material (Soft Magnetics)
+
+`rad.MatLin()` defines **linear magnetic materials** - soft magnetic materials that respond to external fields.
+
+**IMPORTANT**: MatLin is for **linear materials ONLY** (soft iron, steel, mu-metal, ferrite, etc.). For permanent magnets, use `ObjRecMag()` with magnetization vector or `MatPM()` for demagnetization curves.
+
+#### Form 1: Isotropic Material
 
 ```python
 material = rad.MatLin(ksi)
 ```
 
-Creates an **isotropic** linear magnetic material.
-
 **Parameters**:
-- `ksi` (float): Magnetic susceptibility (dimensionless)
+- `ksi` (float): Magnetic susceptibility χ (dimensionless)
 - Relative permeability: μᵣ = 1 + ksi
 
 **Example**:
 ```python
 # Soft iron (μᵣ ≈ 1000)
-mat = rad.MatLin(999)
-block = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,0])
+mat = rad.MatLin(999)  # ksi = μᵣ - 1 = 999
+block = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,0])  # Zero initial magnetization
 rad.MatApl(block, mat)
 rad.Solve(block, 0.0001, 1000)
 ```
 
-**⚠️ Note**: MatLin is for magnetic materials that respond to external fields (soft iron, transformer cores, etc.). For permanent magnets, use `MatPM` instead.
-
----
-
-### MatLin - Anisotropic Linear Material ⭐ NEW API
+#### Form 2: Anisotropic Material with Easy Axis
 
 ```python
 material = rad.MatLin([ksi_par, ksi_perp], [ex, ey, ez])
 ```
 
-Creates an **anisotropic** linear magnetic material.
-
 **Parameters**:
-- `[ksi_par, ksi_perp]`: Susceptibilities parallel/perpendicular to easy axis
-- `[ex, ey, ez]`: Easy magnetization axis direction
+- `[ksi_par, ksi_perp]`: Susceptibilities parallel and perpendicular to easy axis
+- `[ex, ey, ez]`: Easy magnetization axis direction (does NOT need normalization)
 
 **Example**:
 ```python
-mat = rad.MatLin([1000, 10], [0, 0, 1])  # Easy axis: Z
+# Anisotropic material: easy axis in Z direction
+mat = rad.MatLin([5000, 100], [0, 0, 1])  # ksi_|| = 5000, ksi_⊥ = 100
+block = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,0])
 rad.MatApl(block, mat)
 ```
 
----
+**⚠️ Important Notes**:
+1. **Linear materials only**: MatLin is for soft magnetic materials (materials with susceptibility)
+2. **Zero initial magnetization**: Object must be created with `[0,0,0]` magnetization
+3. **Permanent magnets**: Do NOT use MatLin - use `ObjRecMag(..., [Mx, My, Mz])` or `MatPM()`
+4. **Relaxation required**: Must call `rad.Solve()` to compute induced magnetization
 
-**⚠️ Note**: MatLin is for magnetic materials that respond to external fields. For permanent magnets, use `MatPM` instead.
+---
 
 ### MatPM - Permanent Magnet with Demagnetization ⭐ NEW
 

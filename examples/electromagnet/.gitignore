@@ -1,0 +1,15 @@
+# Generated mesh files (from generate_yoke_mesh.py)
+York.bdf
+York_mesh.vtk
+
+# Generated geometry files (from main_electromagnet_simulation.py)
+coil_geometry.vtu
+yoke_geometry.vtu
+main_electromagnet_simulation.vtk
+
+# Generated field distribution
+field_distribution.vtk
+
+# Python cache
+__pycache__/
+*.pyc

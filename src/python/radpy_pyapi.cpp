@@ -1732,12 +1732,15 @@ static PyObject* radia_ObjDrwVTK(PyObject* self, PyObject* args) //OC03112019 (r
 
 		g_pyParse.ProcRes(RadObjDrwDataGetVTK(arCrdVP, arLenP, arColP, arCrdVL, arLenL, arColL, key));
 
+		PyObject* polygons_obj = ParseGeomDataDrwVTK(arCrdVP, nVertPgns, arLenP, arColP, nPgns);
+		PyObject* lines_obj = ParseGeomDataDrwVTK(arCrdVL, nVertLines, arLenL, arColL, nLines);
+
 		oRes = Py_BuildValue(
 			"{s:N,s:N}",
 			"polygons",
-			ParseGeomDataDrwVTK(arCrdVP, nVertPgns, arLenP, arColP, nPgns),
+			polygons_obj,
 			"lines",
-			ParseGeomDataDrwVTK(arCrdVL, nVertLines, arLenL, arColL, nLines)
+			lines_obj
 		);
 		if(oRes == NULL) throw strEr_MAF;
 		//TODO(robnagler) ref counts are invalid at this point,
@@ -2098,33 +2101,21 @@ static PyObject* radia_MatLin(PyObject* self, PyObject* args)
 		}
 		else if(nArgs == 2)
 		{
-			// MatLin([ksi_par, ksi_perp], second_arg)
+			// MatLin([ksi_par, ksi_perp], [ex, ey, ez]) - Linear material with easy axis
 			if(!PyArg_ParseTuple(args, "OO:MatLin", &oKsi, &oSecondArg)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
 			if((oKsi == 0) || (oSecondArg == 0)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
 
 			double arKsi[2];
 			CPyParse::CopyPyListElemsToNumArrayKnownLen(oKsi, 'd', arKsi, 2, CombErStr(strEr_BadFuncArg, ": MatLin, two susceptibility values [ksi_par, ksi_perp] expected"));
 
-			// Check second argument type
-			if(PyNumber_Check(oSecondArg))
-			{
-				// Old API: MatLin([ksi_par, ksi_perp], Mr_scalar)
-				double Mr = PyFloat_AsDouble(oSecondArg);
-				int indRes=0;
-				g_pyParse.ProcRes(RadMatLin(&indRes, arKsi, &Mr, 1));
-				oResInd = Py_BuildValue("i", indRes);
-			}
-			else
-			{
-				// Try to parse as 3-element easy axis vector
-				double arSecond[3];
-				CPyParse::CopyPyListElemsToNumArrayKnownLen(oSecondArg, 'd', arSecond, 3, CombErStr(strEr_BadFuncArg, ": MatLin, easy axis must be 3-element vector [ex, ey, ez]"));
+			// Parse easy axis vector (3-element)
+			double arEasyAxis[3];
+			CPyParse::CopyPyListElemsToNumArrayKnownLen(oSecondArg, 'd', arEasyAxis, 3, CombErStr(strEr_BadFuncArg, ": MatLin, easy axis must be 3-element vector [ex, ey, ez]"));
 
-				// MatLin([ksi_par, ksi_perp], [ex, ey, ez]) - NEW: easy axis
-				int indRes=0;
-				g_pyParse.ProcRes(RadMatLinAniso(&indRes, arKsi, arSecond));
-				oResInd = Py_BuildValue("i", indRes);
-			}
+			// MatLin([ksi_par, ksi_perp], [ex, ey, ez]) - for LINEAR MATERIALS only
+			int indRes=0;
+			g_pyParse.ProcRes(RadMatLinAniso(&indRes, arKsi, arEasyAxis));
+			oResInd = Py_BuildValue("i", indRes);
 		}
 		else
 		{

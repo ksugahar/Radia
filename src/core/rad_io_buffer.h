@@ -418,12 +418,12 @@ public:
 		m_IntBuffer.erase(key);
 	}
 
-	template<class T> static void OutBufferMulti(int key, map<int, T*, less<int> >& Buffer, map<int, vector<int>, less<int> >& DimsBuffer, T* arOut) //OC04112019
+	template<class T> static void OutBufferMulti(int key, map<int, T*, less<int> >& Buffer, map<int, vector<int>, less<int> >& DimsBuffer, map<int, vector<T>, less<int> >& VectBuffer, T* arOut) //OC04112019
 	{
 		if(Buffer.find(key) == Buffer.end()) return;
 		T *arStored = Buffer[key];
 		T *t_arStored = arStored, *t_arOut = arOut;
-		
+
 		if(DimsBuffer.find(key) == DimsBuffer.end()) return;
 		vector<int> vDims = DimsBuffer[key];
 
@@ -433,16 +433,18 @@ public:
 			for(int i=0; i<curDim; i++) *(t_arOut++) = *(t_arStored++);
 		}
 
-		delete[] arStored;
+		// DON'T delete[] - memory is owned by vector in VectBuffer
+		// delete[] arStored; // REMOVED - this was undefined behavior!
 		Buffer.erase(key);
 		DimsBuffer.erase(key);
+		VectBuffer.erase(key); // ADDED - cleanup the owning vector
 	}
 
 	void OutGeomPolygData(int key, double* arCrdVP, int* arLenP, float* arColP) //OC04112019
 	{
-		OutBufferMulti(key, m_DoubleBufferMulti, m_DimsDoubleBufferMulti, arCrdVP);
-		OutBufferMulti(key, m_IntBufferMulti, m_DimsIntBufferMulti, arLenP);
-		OutBufferMulti(key, m_FloatBufferMulti, m_DimsFloatBufferMulti, arColP);
+		OutBufferMulti(key, m_DoubleBufferMulti, m_DimsDoubleBufferMulti, m_VectDoubleBufferMulti, arCrdVP);
+		OutBufferMulti(key, m_IntBufferMulti, m_DimsIntBufferMulti, m_VectIntBufferMulti, arLenP);
+		OutBufferMulti(key, m_FloatBufferMulti, m_DimsFloatBufferMulti, m_VectFloatBufferMulti, arColP);
 	}
 
 	const char* DecodeErrorText(const char* ErrorTitle)
