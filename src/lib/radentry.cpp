@@ -1415,10 +1415,10 @@ int CALL RadObjDrwVTK(int* pNvp, int* pNp, int* pNvl, int* pNl, int* pKey, int o
 		char *SepStrArr[] = {(char*)";", (char*)","};
 		CAuxParse::StringSplit(opt, SepStrArr, 2, (char*)" ", AuxStrings);
 		int AmOfTokens = (int)AuxStrings.size();
-		if(AmOfTokens > 0) 
+		if(AmOfTokens > 0)
 		{
 			Opt1 = (AuxStrings[0]).c_str();
-			if(AmOfTokens > 1) 
+			if(AmOfTokens > 1)
 			{
 				Opt2 = (AuxStrings[1]).c_str();
 				if(AmOfTokens > 2) Opt3 = (AuxStrings[2]).c_str();
@@ -1428,6 +1428,7 @@ int CALL RadObjDrwVTK(int* pNvp, int* pNp, int* pNvl, int* pNl, int* pKey, int o
 
 	*pNvp = 0; *pNp = 0; *pNvl = 0; *pNl = 0;
 	*pKey = GraphicsForElemVTK(obj, Opt1, Opt2, Opt3);
+
 	if(*pKey != 0)
 	{
 		ioBuffer.OutGeomPolygLen(*pKey, pNvp, pNp);

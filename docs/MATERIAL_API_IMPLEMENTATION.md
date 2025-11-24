@@ -1,17 +1,30 @@
-# Material API Implementation Plan
+# Material API Implementation
 
-**Date**: 2025-11-11
-**Status**: In Progress
+**Date Created**: 2025-11-11
+**Last Updated**: 2025-11-23
+**Status**: ✅ Completed
 
 ---
 
 ## Overview
 
-Implementation plan for new material model APIs:
-1. `MatLin(ksi)` - Isotropic linear material
-2. `MatLin([ksi_par, ksi_perp], [ex, ey, ez])` - Anisotropic linear material
-3. `MatPM(Br, Hc, [mx, my, mz])` - Permanent magnet with demagnetization
-4. `MatPMLinear(Br, mu_rec, [mx, my, mz])` - PM with recoil permeability
+Material model APIs for linear materials and permanent magnets:
+
+### Implemented APIs ✅
+
+1. **`MatLin(ksi)`** - Isotropic linear material (soft magnetics)
+2. **`MatLin([ksi_par, ksi_perp], [ex, ey, ez])`** - Anisotropic linear material with easy axis
+3. **`MatPM(Br, Hc, [mx, my, mz])`** - Permanent magnet with demagnetization curve
+
+### Important Changes (2025-11-23)
+
+**Old API Removed**:
+- ❌ `MatLin([ksi_par, ksi_perp], Mr_scalar)` - DEPRECATED and removed
+- This form caused confusion between linear materials and permanent magnets
+
+**Clarification**:
+- **MatLin**: For **linear materials only** (soft iron, steel, mu-metal, ferrite)
+- **Permanent magnets**: Use `ObjRecMag([x,y,z], [dx,dy,dz], [Mx,My,Mz])` directly
 
 ---
 

@@ -1715,6 +1715,9 @@ void radTApplication::OutFieldCompRes(char* FieldChar, radTField* FieldArray, lo
 	double *TotOutArray = vTotOutArray.data();
 
 	int InnerCount=0;
+	// Magnetic constant (permeability of free space)
+	const double Mu0 = 4. * 3.1415926535897932 * 1.e-7; // T*m/A
+	
 	radTField* FieldPtr = FieldArray;
 	double *t = TotOutArray;
 	for(int i=0; i<Np; i++)
@@ -1725,10 +1728,10 @@ void radTApplication::OutFieldCompRes(char* FieldChar, radTField* FieldArray, lo
 			char* BufChar_p_1 = BufChar+1;
 			if(*(BufChar)=='B' || *(BufChar)=='b')
 			{
-				if(*BufChar_p_1=='x' || *BufChar_p_1=='X') { *(t++) = FieldPtr->B.x; InnerCount++;}
-				else if(*BufChar_p_1=='y' || *BufChar_p_1=='Y') { *(t++) = FieldPtr->B.y; InnerCount++;}
-				else if(*BufChar_p_1=='z' || *BufChar_p_1=='Z') { *(t++) = FieldPtr->B.z; InnerCount++;}
-				else { *(t++) = FieldPtr->B.x; *(t++) = FieldPtr->B.y; *(t++) = FieldPtr->B.z; InnerCount += 3;}
+				if(*BufChar_p_1=='x' || *BufChar_p_1=='X') { *(t++) = FieldPtr->B.x * Mu0; InnerCount++; } // Fix: Convert A/m to Tesla
+				else if(*BufChar_p_1=='y' || *BufChar_p_1=='Y') { *(t++) = FieldPtr->B.y * Mu0; InnerCount++; } // Fix: Convert A/m to Tesla
+				else if(*BufChar_p_1=='z' || *BufChar_p_1=='Z') { *(t++) = FieldPtr->B.z * Mu0; InnerCount++; } // Fix: Convert A/m to Tesla
+				else { *(t++) = FieldPtr->B.x * Mu0; *(t++) = FieldPtr->B.y * Mu0; *(t++) = FieldPtr->B.z * Mu0; InnerCount += 3;} // Fix: Convert A/m to Tesla
 			}
 			else if(*(BufChar)=='H' || *(BufChar)=='h')
 			{
@@ -1760,7 +1763,7 @@ void radTApplication::OutFieldCompRes(char* FieldChar, radTField* FieldArray, lo
 			}
 			else if(*(BufChar)=='Q' || *(BufChar)=='q') //OC161005
 			{
-				*(t++) = FieldPtr->B.x; *(t++) = FieldPtr->B.y; *(t++) = FieldPtr->B.z; InnerCount += 3;
+				*(t++) = FieldPtr->B.x * Mu0; *(t++) = FieldPtr->B.y * Mu0; *(t++) = FieldPtr->B.z * Mu0; InnerCount += 3; // Fix: Convert A/m to Tesla
 				*(t++) = FieldPtr->H.x; *(t++) = FieldPtr->H.y; *(t++) = FieldPtr->H.z; InnerCount += 3;
 				*(t++) = FieldPtr->A.x; *(t++) = FieldPtr->A.y; *(t++) = FieldPtr->A.z; InnerCount += 3;
 			}

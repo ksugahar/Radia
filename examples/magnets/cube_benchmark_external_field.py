@@ -2,23 +2,28 @@
 """
 Benchmark: Magnetic Cube in Uniform Field - External Field Comparison
 
-Compare Radia vs NGSolve for EXTERNAL field around magnetic cube.
+Compare Radia MMM vs NGSolve FEM for EXTERNAL field around magnetic cube.
 
-Problem:
-- Magnetic cube (1.5m side, mu_r=10) in uniform field H0 = [0, 1, 0] A/m
+Problem Setup:
+- Magnetic cube (1.5m side, μr=100) in uniform field H0 = [0, 0, 1] A/m
 - Evaluate field at points OUTSIDE the cube
-- Compare with NGSolve reference solution
+- Compare NGSolve (FEM) vs Radia (MMM) solutions
 
-Note: Changed from sphere to cube for better numerical stability with tetrahedral meshes.
+Key Features:
+- Independent mesh optimization for each solver:
+  * NGSolve: Finer mesh (maxh=0.6) for FEM accuracy
+  * Radia: Coarser mesh (maxh=1.0) for MMM stability
+- Direct tetrahedral mesh import to Radia (no manual conversion)
+- Validates both NGSolve H-formulation and Radia tetrahedral import
 
-Expected behavior:
+Expected Behavior:
 - Far from cube: H -> H0 (uniform background)
 - Near cube: H deviates due to magnetization
-- Inside cube: NOT validated (Radia BEM limitation)
+- Inside cube: NOT validated (Radia MMM limitation)
 
 Author: Radia Development Team
 Created: 2025-11-21
-Modified: 2025-11-22 (H-formulation corrected, mesh sharing validated)
+Modified: 2025-11-22 (μr=100, H0=z-direction, MMM terminology)
 """
 
 import sys
@@ -31,7 +36,7 @@ import radia as rad
 from netgen.occ import Sphere, Box, OCCGeometry, Glue
 from ngsolve import Mesh, H1, grad, BilinearForm, LinearForm, GridFunction, Preconditioner, solvers
 from ngsolve import CoefficientFunction, InnerProduct, specialcf, ds, dx
-from netgen_mesh_import import netgen_mesh_to_radia
+from radia_ngsolve_utils import create_radia_from_mesh, export_ngsolve_vtk, export_radia_vtk
 
 print("=" * 80)
 print("Benchmark: Magnetic Cube in Uniform Field")
@@ -39,10 +44,13 @@ print("           External Field Comparison (Radia vs NGSolve)")
 print("=" * 80)
 
 # Physical parameters
-mu_r_cube = 10.0
+mu_r_cube = 100.0  # Increased from 10 to avoid loop patterns
 mu_0 = 4 * np.pi * 1e-7  # T/(A/m)
-H0 = np.array([0, 1.0, 0])  # A/m (y-direction)
+H0 = np.array([0, 0, 1.0])  # A/m (z-direction)
 B0 = mu_0 * H0
+
+# Geometry
+cube_size = 1.5  # 1.5m cube
 
 print(f"\nProblem Setup:")
 print(f"  Cube size:           a = {cube_size} m")
@@ -131,49 +139,65 @@ finally:
 print(f"          [OK] Solution converged ({nit} iterations)" if isinstance(nit, int) else "          [OK] Solution converged")
 
 # H field: H = -grad(phi)
-# Note: phi represents perturbation potential due to magnetic material
-# Background field Hs is included in the formulation via the linear form
-# Total field = -grad(phi) where phi already accounts for Hs influence
+# Note: phi represents total potential (not perturbation)
+# Background field Hs is included via the weak form
 grad_phi = grad(gfu)
 H_ngsolve_cf = -grad_phi
+
+# Export NGSolve solution to VTK
+print("\n[Step 4] Exporting NGSolve solution to VTK...")
+ngsolve_vtk = export_ngsolve_vtk(mesh, gfu, 'cube_benchmark_ngsolve', 'phi')
+print(f"          NGSolve VTK: {os.path.basename(ngsolve_vtk)}")
 
 # ============================================================================
 # Part 2: Radia Solution
 # ============================================================================
 
 print("\n" + "=" * 80)
-print("Part 2: Radia BEM Solution")
+print("Part 2: Radia MMM Solution")
 print("=" * 80)
 
 rad.UtiDelAll()
 rad.FldUnits('m')
 
-# Import magnetic cube only
-print("\n[Step 1] Importing magnetic cube to Radia...")
+# Create separate mesh for Radia (independent from NGSolve mesh)
+print("\n[Step 1] Creating Radia mesh (independent from NGSolve)...")
 
-mag_cube = netgen_mesh_to_radia(
-    mesh,
+# Use coarser mesh for Radia MMM stability
+radia_mesh_size = 1.0  # Larger than NGSolve (maxh=0.6) for better MMM convergence
+radia_cube_geom = Box((-cube_size/2, -cube_size/2, -cube_size/2),
+                      (cube_size/2, cube_size/2, cube_size/2)).mat('magnetic')
+radia_geo = OCCGeometry(radia_cube_geom)
+radia_mesh = Mesh(radia_geo.GenerateMesh(maxh=radia_mesh_size))
+
+print(f"          NGSolve mesh: {mesh.nv} vertices, {mesh.ne} elements (maxh=0.6)")
+print(f"          Radia mesh:   {radia_mesh.nv} vertices, {radia_mesh.ne} elements (maxh={radia_mesh_size})")
+
+# Import Radia mesh to Radia (without VTK export yet)
+print("\n[Step 2] Importing Radia mesh to Radia MMM...")
+mag_cube = create_radia_from_mesh(
+    radia_mesh,
     material={'magnetization': [0, 0, 0]},
     units='m',
     combine=True,
-    verbose=True,
-    material_filter='magnetic'  # Import only cube
+    verbose=False,
+    vtk_filename=None  # Will export after solving
 )
 
 print(f"\n          [OK] Radia cube object: {mag_cube}")
 
 # Apply material
-print("\n[Step 2] Applying linear material...")
+print("\n[Step 3] Applying linear material...")
 chi = mu_r_cube - 1.0
 
-# IMPORTANT: Mr direction must match background field!
-mat = rad.MatLin([chi, chi], [0, H0[1], 0])  # Mr in y-direction (same as H0)
+# Isotropic linear material (no remanent magnetization)
+mat = rad.MatLin(chi, [0, 0, 1e-10])  # Isotropic, mr vector defines axis
 rad.MatApl(mag_cube, mat)
-print(f"          Material: MatLin([{chi}, {chi}], [0, {H0[1]}, 0])")
-print(f"          (Mr direction = H0 direction)")
+print(f"          Material: MatLin({chi}, [0, 0, 1e-10])")
+print(f"          (Isotropic linear material, mu_r = {mu_r_cube})")
 
 # Background field
-print("\n[Step 3] Creating background field...")
+print("\n[Step 4] Creating background field...")
 def uniform_field(pos):
     return [float(B0[0]), float(B0[1]), float(B0[2])]
 
@@ -181,9 +205,14 @@ background = rad.ObjBckgCF(uniform_field)
 system = rad.ObjCnt([mag_cube, background])
 
 # Solve
-print("\n[Step 4] Solving...")
+print("\n[Step 5] Solving...")
 result = rad.Solve(system, 0.0001, 10000)
 print(f"          Result: {result}")
+
+# Export Radia geometry to VTK
+print("\n[Step 6] Exporting Radia geometry to VTK...")
+radia_vtk = export_radia_vtk(system, 'cube_benchmark_radia')
+print(f"          Radia VTK: {os.path.basename(radia_vtk)}")
 
 # ============================================================================
 # Part 3: Comparison at External Points
@@ -269,13 +298,13 @@ if errors:
         print("       External field validation successful!")
     elif max_error < 0.25:
         print("[GOOD] Good agreement between Radia and NGSolve (< 25% error)")
-        print("       Minor deviations acceptable for BEM vs FEM comparison")
+        print("       Minor deviations acceptable for MMM vs FEM comparison")
     else:
         print("[WARNING] Large deviations detected")
         print(f"           Max error: {max_error*100:.1f}%")
         print("           Possible causes:")
         print("             1. Coarse mesh differences")
-        print("             2. BEM vs FEM method differences")
+        print("             2. MMM vs FEM method differences")
         print("             3. Material parameter mismatch")
 else:
     print("[ERROR] No valid comparison points")
@@ -283,6 +312,15 @@ else:
 print("=" * 80)
 
 print("\n[Note] Internal field (r < 1m) NOT validated")
-print("       Radia BEM has limited accuracy inside magnetizable regions")
+print("       Radia MMM has limited accuracy inside magnetizable regions")
+
+print("\n" + "=" * 80)
+print("VTK Output Files")
+print("=" * 80)
+print(f"\nNGSolve solution: {os.path.basename(ngsolve_vtk)}")
+print(f"Radia geometry:   {os.path.basename(radia_vtk)}")
+print("\nVisualize with ParaView:")
+print(f"  paraview {os.path.basename(ngsolve_vtk)} {os.path.basename(radia_vtk)}")
+print("=" * 80)
 
 sys.exit(0)

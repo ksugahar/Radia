@@ -4,7 +4,78 @@ Python utility modules for Radia visualization, data export, and NGSolve integra
 
 ## Files
 
-### radia_ngsolve.cpp
+### Mesh Import
+
+#### nastran_mesh_import.py
+
+**Unified Nastran mesh import for Radia.**
+
+Imports Nastran mesh files (.bdf, .nas, .dat) and creates Radia geometry.
+
+**Supported Element Types:**
+- **CHEXA** - 8-node hexahedron
+- **CPENTA** - 6-node wedge/prism
+- **CPYRAM** - 5-node pyramid
+- **CTETRA** - 4-node tetrahedron
+- **CTRIA3** - 3-node triangle (surface mesh, grouped by material ID)
+- **GRID/GRID*** - Node definitions (fixed-width format)
+
+**Usage:**
+```python
+from nastran_mesh_import import create_radia_from_nastran
+import radia as rad
+
+rad.FldUnits('mm')
+
+# Import mesh and create Radia objects
+mag_obj = create_radia_from_nastran(
+    'York.bdf',
+    material={'magnetization': [0, 0, 0]},
+    units='mm',
+    combine=True
+)
+
+# Apply material
+mat = rad.MatSatIsoFrm([20000, 2], [0.1, 2], [0.1, 2])
+rad.MatApl(mag_obj, mat)
+```
+
+**CTRIA3 Surface Meshes:**
+Surface triangles are automatically grouped by material ID (property ID).
+Each material ID creates one polyhedron from all its triangles.
+
+```python
+from nastran_mesh_import import import_nastran_mesh
+
+mesh_data = import_nastran_mesh('sphere.bdf', units='mm')
+tria_groups = mesh_data['tria_groups']
+# Format: {material_id: {'faces': [[n1,n2,n3], ...], 'node_ids': set(...)}}
+```
+
+**Migration from nastran_reader.py (removed 2025-11-23):**
+- `nastran_reader.py` has been removed and unified into `nastran_mesh_import.py`
+- Use `create_radia_from_nastran()` for direct Radia object creation
+- Face topologies (TETRA_FACES, WEDGE_FACES, etc.) are in `netgen_mesh_import.py`
+
+#### netgen_mesh_import.py
+
+**Import Netgen/NGSolve meshes to Radia.**
+
+Provides face topology constants and mesh conversion utilities.
+
+**Face Topology Constants:**
+```python
+from netgen_mesh_import import (
+    TETRA_FACES,    # Tetrahedron
+    HEX_FACES,      # Hexahedron
+    WEDGE_FACES,    # Wedge/Prism
+    PYRAMID_FACES   # Pyramid
+)
+```
+
+### NGSolve Integration
+
+#### radia_ngsolve.cpp
 
 **C++ CoefficientFunction integration for NGSolve (recommended).**
 

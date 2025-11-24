@@ -147,14 +147,14 @@ public:
 	int Type_Material() { return 1;}
 	
 	inline void SetupKsiTensor();
-	TVector3d M(const TVector3d& H) { return KsiTensor*H + RemMagn;}  // Should we add RemMagn here?
+	TVector3d M(const TVector3d& H) { return KsiTensor*H;}  // Pure linear response (no remanence)
 	void DefineInstantKsiTensor(const TVector3d& InstantH, TMatrix3d& InstantKsiTensor, TVector3d& InstantMr)
 	{
-		InstantKsiTensor = KsiTensor; InstantMr = RemMagn;
+		InstantKsiTensor = KsiTensor; InstantMr = TVector3d(0,0,0);  // No remanence for linear material
 	}
 	void MultMatrByInstKsiAndMr(const TVector3d& InstantH, const TMatrix3d& Matr, TMatrix3d& MultByKsi, TVector3d& MultByMr)
 	{
-		MultByKsi = Matr * KsiTensor; MultByMr = Matr * RemMagn;
+		MultByKsi = Matr * KsiTensor; MultByMr = TVector3d(0,0,0);  // No remanence for linear material
 	}
 	//void FindNewH(TVector3d& H, const TMatrix3d& Matr, const TVector3d& H_Ext, double DesiredPrecOnMagnetizE2, radTg3dRelax* pMag, void* p=0) //OC140103
 	void FindNewH(TVector3d& H, const TMatrix3d& Matr, const TVector3d& H_Ext, double DesiredPrecOnMagnetizE2)
@@ -164,7 +164,7 @@ public:
 		TMatrix3d BufMatr = E - Matr*KsiTensor;
 		TMatrix3d InvBufMatr;
 		Matrix3d_inv(BufMatr, InvBufMatr);
-		H = InvBufMatr*(H_Ext + Matr*RemMagn);
+		H = InvBufMatr*H_Ext;  // No remanence term for linear material
 	}
 
 	int FinishSetup(TVector3d& Magn)
@@ -177,7 +177,14 @@ public:
 			const double AbsTol = 1.E-10;
 			if(AbsLocMagn < AbsTol) { Send.ErrorMessage("Radia::Error107"); return 0;}
 
-			RemMagn = (RemMagn.x/AbsLocMagn)*Magn;
+			// For pure linear material (no remanence): RemMagn should stay zero
+			// Only rescale if RemMagn was explicitly set to non-zero value
+			double AbsRemMagn = sqrt(RemMagn.x*RemMagn.x + RemMagn.y*RemMagn.y + RemMagn.z*RemMagn.z);
+			if(AbsRemMagn > AbsTol) {
+				// RemMagn is non-zero - rescale to align with Magn direction
+				RemMagn = (RemMagn.x/AbsLocMagn)*Magn;
+			}
+			// If RemMagn is zero, leave it zero (pure linear material)
 			SetupKsiTensor();
 			EasyAxisDefined = 1;
 		}
@@ -279,11 +286,11 @@ public:
 
 	int Type_Material() { return 2;}
 
-	TVector3d M(const TVector3d& H) { return Ksi * H + RemMagn;} // Should not we add RemMagn here?
+	TVector3d M(const TVector3d& H) { return Ksi * H;} // Pure linear response (no remanence)
 	void DefineInstantKsiTensor(const TVector3d&, TMatrix3d&, TVector3d&);
 	void MultMatrByInstKsiAndMr(const TVector3d&, const TMatrix3d& Matr, TMatrix3d& MultByKsi, TVector3d& MultByMr)
 	{
-		MultByKsi = Ksi * Matr; MultByMr = Matr * RemMagn;
+		MultByKsi = Ksi * Matr; MultByMr = TVector3d(0,0,0);  // No remanence for linear material
 	}
 	//void FindNewH(TVector3d& H, const TMatrix3d& Matr, const TVector3d& H_Ext, double DesiredPrecOnMagnetizE2, radTg3dRelax* pMag, void* p=0) //OC140103
 	void FindNewH(TVector3d& H, const TMatrix3d& Matr, const TVector3d& H_Ext, double DesiredPrecOnMagnetizE2) //OC140103
@@ -293,7 +300,7 @@ public:
 		TMatrix3d BufMatr = E - Ksi*Matr;
 		TMatrix3d InvBufMatr;
 		Matrix3d_inv(BufMatr, InvBufMatr);
-		H = InvBufMatr*(H_Ext + Matr*RemMagn);
+		H = InvBufMatr*H_Ext;  // No remanence term for linear material
 	}
 
 	int DuplicateItself(radThg& hg, radTApplication*, char) 
@@ -343,7 +350,7 @@ inline void radTLinearIsotropMaterial::DefineInstantKsiTensor(const TVector3d& I
 {
 	TVector3d E_Str0(1.,0.,0.), E_Str1(0.,1.,0.), E_Str2(0.,0.,1.);
 	TMatrix3d E(E_Str0, E_Str1, E_Str2);
-	InstantKsiTensor = Ksi*E; InstantMr = RemMagn;
+	InstantKsiTensor = Ksi*E; InstantMr = TVector3d(0,0,0);  // No remanence for linear material
 }
 
 //-------------------------------------------------------------------------

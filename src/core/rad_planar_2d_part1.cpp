@@ -125,7 +125,7 @@ radTPolygon::radTPolygon(TVector2d* InEdgePointsArray, int InAmOfEdgePoints)
 	if(SomethingIsWrong) return;
 
 	IsConvex = CheckIfConvex();
-	if(!IsConvex) Send.WarningMessage("Radia::Warning011");
+	//if(!IsConvex) Send.WarningMessage("Radia::Warning011");  // Disabled: too strict for slightly non-planar hexahedral faces
 
 	short InsideBlock=1;
 	char PointsAreDifferent=1;
@@ -149,14 +149,14 @@ radTPolygon::radTPolygon(const radTVect2dVect& InEdgePointsVector)
 
 	radTSend Send;
 	IsConvex = CheckIfConvex();
-	if(!IsConvex) Send.WarningMessage("Radia::Warning011");
+	//if(!IsConvex) Send.WarningMessage("Radia::Warning011");  // Disabled: too strict for slightly non-planar hexahedral faces
 
 	short InsideBlock=1;
 	char PointsAreDifferent=1;
 	//SimpleComputeCentrPoint(InsideBlock); //OC 220902
 	SimpleComputeCentrPoint(InsideBlock, PointsAreDifferent); // Test!
 
-	if(!InsideBlock) Send.WarningMessage("Radia::Warning010");
+	//if(!InsideBlock) Send.WarningMessage("Radia::Warning010");  // Disabled: too strict for slightly non-planar faces
 	//if(!PointsAreDifferent) Send.WarningMessage("Radia::Warning016"); //OC 220902
 
 	SomethingIsWrong = 0;
@@ -179,14 +179,14 @@ radTPolygon::radTPolygon(double InCoordZ, TVector2d* InEdgePointsArray, int InAm
 	if(SomethingIsWrong) return;
 
 	IsConvex = CheckIfConvex();
-	if(!IsConvex) Send.WarningMessage("Radia::Warning011");
+	//if(!IsConvex) Send.WarningMessage("Radia::Warning011");  // Disabled: too strict for slightly non-planar hexahedral faces
 
 	short InsideBlock=1;
 	char PointsAreDifferent=1;
 	//SimpleComputeCentrPoint(InsideBlock); //OC 220902
 	SimpleComputeCentrPoint(InsideBlock, PointsAreDifferent); // Test!
 
-	if(!InsideBlock) Send.WarningMessage("Radia::Warning010");
+	//if(!InsideBlock) Send.WarningMessage("Radia::Warning010");  // Disabled: too strict for slightly non-planar faces
 	//if(!PointsAreDifferent) Send.WarningMessage("Radia::Warning016"); //OC 220902
 }
 
@@ -209,14 +209,14 @@ radTPolygon::radTPolygon(radTVect2dVect& InEdgePointsVector, double InZ, const T
 	if(SomethingIsWrong) return;
 
 	IsConvex = CheckIfConvex();
-	if(!IsConvex) Send.WarningMessage("Radia::Warning011");
+	//if(!IsConvex) Send.WarningMessage("Radia::Warning011");  // Disabled: too strict for slightly non-planar hexahedral faces
 
 	short InsideBlock=1;
 	char PointsAreDifferent=1;
 	//SimpleComputeCentrPoint(InsideBlock); //OC 220902
 	SimpleComputeCentrPoint(InsideBlock, PointsAreDifferent); // Test!
 
-	if(!InsideBlock) Send.WarningMessage("Radia::Warning010");
+	//if(!InsideBlock) Send.WarningMessage("Radia::Warning010");  // Disabled: too strict for slightly non-planar faces
 	//if(!PointsAreDifferent) Send.WarningMessage("Radia::Warning016"); //OC 220902
 
 	SomethingIsWrong = 0;

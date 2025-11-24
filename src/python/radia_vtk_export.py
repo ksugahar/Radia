@@ -7,7 +7,6 @@ Functions for exporting Radia geometry to VTK format for visualization
 in ParaView and other VTK-compatible tools.
 """
 
-import radia as rad
 import csv
 from itertools import accumulate
 
@@ -45,7 +44,8 @@ def exportGeometryToVTK(obj, fileName='radia_Geometry'):
 		>>> mag = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,1])
 		>>> exportGeometryToVTK(mag, 'my_magnet')
 	"""
-	
+	import radia as rad
+
 	vtkData = rad.ObjDrwVTK(obj, 'Axes->False')
 
 	lengths = vtkData['polygons']['lengths']
@@ -56,33 +56,40 @@ def exportGeometryToVTK(obj, fileName='radia_Geometry'):
 	nPnts = int(len(points)/3)
 
 	# format the points array to be floats rather than double
-	points = [round(num/1000.0, 8) for num in points]		
+	points = [round(num/1000.0, 8) for num in points]
 	# Note: Converted from mm (Radia units) to m
-	# define the connectivity list
-	conn = list(range(nPnts)) 
+
 	# define colours array
 	colors = vtkData['polygons']['colors']
 
 	# pre-process the output lists to have chunkLength items per line
-	chunkLength = 9 # this writes 9 numbers per line (9 is the number used in Paraview if data is saved as the VTK Legacy format)
-	offsets = list(chunks(offsets, chunkLength))
+	chunkLength = 9 # this writes 9 numbers per line
 	points = list(chunks(points, chunkLength))
-	conn = list(chunks(conn, chunkLength))
 	colors = list(chunks(colors, chunkLength))
 
-	# write the data to file
+	# write the data to file (VTK Legacy format - most compatible)
 	with open(fileName + ".vtk", "w", newline="") as f:
-		f.write('# vtk DataFile Version 5.1\n')
+		f.write('# vtk DataFile Version 3.0\n')
 		f.write('vtk output\nASCII\nDATASET POLYDATA\n')
 		f.write('POINTS ' + str(nPnts) + ' float\n')
 		writer = csv.writer(f, delimiter=" ")
 		writer.writerows(points)
 		f.write('\n')
-		f.write('POLYGONS ' + str(nPoly+1) + ' ' + str(nPnts) + '\n')
-		f.write('OFFSETS vtktypeint64\n')
-		writer.writerows(offsets)
-		f.write('CONNECTIVITY vtktypeint64\n')  
-		writer.writerows(conn)
+
+		# POLYGONS in classic format (most compatible with all ParaView versions)
+		# Format: nPoly totalSize
+		# Each line: nVertices v1 v2 v3 ...
+		total_size = sum(lengths) + nPoly  # sum of (nVertices + nVertices) for each polygon
+		f.write('POLYGONS ' + str(nPoly) + ' ' + str(total_size) + '\n')
+		for i in range(nPoly):
+			n_vertices = lengths[i]
+			start = offsets[i]
+			end = offsets[i+1]
+			f.write(str(n_vertices))
+			for j in range(start, end):
+				f.write(' ' + str(j))
+			f.write('\n')
+
 		f.write('\n')
 		f.write('CELL_DATA ' + str(nPoly) + '\n')
 		f.write('COLOR_SCALARS Radia_colours 3\n')
@@ -101,8 +108,9 @@ if __name__ == '__main__':
 	import os
 
 	# Add build directory to path
-	sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'build', 'lib', 'Release'))
-	sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'dist'))
+	sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'build', 'Release'))
+
+	import radia as rad
 
 	print("=" * 60)
 	print("Radia VTK Export Demo")
