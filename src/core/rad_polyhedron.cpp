@@ -18,6 +18,8 @@
 #include "rad_serialization.h"
 #include "rad_polyhedron.h"
 #include <array>
+#include <cstdlib>  // std::getenv
+#include <string>   // std::string
 #include "rad_graphics_3d.h"
 #include "rad_subdivided_polyhedron.h"
 #include "rad_geometry_3d_aux.h"
@@ -431,10 +433,287 @@ int radTPolyhedron::FillInTransAndFacesInLocFrames(TVector3d* ArrayOfPoints, int
 }
 
 //-------------------------------------------------------------------------
+// Tetrahedral mesh support
+//-------------------------------------------------------------------------
+
+void radTPolyhedron::B_comp_tetrahedron_centroid(radTField* FieldPtr)
+{
+	// Tetrahedral mesh support - Direct analytical formula with centroid charge cancellation
+	// Uses mesh orientation algorithm with point charge at centroid
+
+	const double PI = 3.14159265358979323846;
+	const double EPS = 1.0e-20;
+	const double EPSG_BASE = 1.0e-12;
+
+	TVector3d Zero(0.,0.,0.);
+	radTFieldKey LocFieldKey = FieldPtr->FieldKey;
+	if(LocFieldKey.B_) LocFieldKey.H_ = 1;
+
+	// Observation point in global coordinates
+	TVector3d ObsPt = FieldPtr->P;
+
+	// Magnetization in global coordinates
+	TVector3d M_global = Magn;
+
+	// Compute tetrahedron centroid (EEC) for orientation check
+	TVector3d EEC = CentrPoint;  // Use existing centroid
+
+	// Accumulator for total H field (global coordinates)
+	TVector3d H_total(0., 0., 0.);
+
+	// Track total magnetic charge for centroid cancellation
+	double total_magnetic_charge = 0.0;
+
+	// Process each triangular face
+	for(int iface = 0; iface < AmOfFaces; iface++)
+	{
+		radTHandlePgnAndTrans HandlePgnAndTrans = VectHandlePgnAndTrans[iface];
+		radTPolygon* PgnPtr = HandlePgnAndTrans.PgnHndl.rep;
+		radTrans* TransPtr = HandlePgnAndTrans.TransHndl.rep;
+
+		// Get face basis vectors in global coordinates
+		// AA, BB: tangent vectors in face plane
+		// CC: normal vector (perpendicular to face)
+		TVector3d AA(1, 0, 0);
+		TVector3d BB(0, 1, 0);
+		TVector3d CC(0, 0, 1);
+
+		AA = TransPtr->TrVectField(AA);
+		BB = TransPtr->TrVectField(BB);
+		CC = TransPtr->TrVectField(CC);
+
+		// Reference point on face (origin of local coordinates)
+		TVector3d YY(0, 0, PgnPtr->CoordZ);
+		YY = TransPtr->TrPoint(YY);
+
+		// Compute triangle area
+		// Get vertices in global coordinates
+		TVector3d V0_local(PgnPtr->EdgePointsVector[0].x, PgnPtr->EdgePointsVector[0].y, 0.0);
+		TVector3d V1_local(PgnPtr->EdgePointsVector[1].x, PgnPtr->EdgePointsVector[1].y, 0.0);
+		TVector3d V2_local(PgnPtr->EdgePointsVector[2].x, PgnPtr->EdgePointsVector[2].y, 0.0);
+		TVector3d V0 = TransPtr->TrPoint(V0_local);
+		TVector3d V1 = TransPtr->TrPoint(V1_local);
+		TVector3d V2 = TransPtr->TrPoint(V2_local);
+
+		// Edge vectors
+		TVector3d edge1 = V1 - V0;
+		TVector3d edge2 = V2 - V0;
+
+		// Cross product for area
+		TVector3d cross;
+		cross.x = edge1.y * edge2.z - edge1.z * edge2.y;
+		cross.y = edge1.z * edge2.x - edge1.x * edge2.z;
+		cross.z = edge1.x * edge2.y - edge1.y * edge2.x;
+		double cross_mag = sqrt(cross.x*cross.x + cross.y*cross.y + cross.z*cross.z);
+		double Area = 0.5 * cross_mag;
+
+		// Magnetic charge density: W = (M · n)
+		// Use just the normal component (no area factor here)
+		double M_dot_n = M_global.x * CC.x + M_global.y * CC.y + M_global.z * CC.z;
+		double W = M_dot_n;
+
+		// ========================================================================
+		// Mesh orientation check (centroid-based algorithm)
+		// ========================================================================
+		// Compute face centroid in global coordinates
+		TVector3d EE = (V0 + V1 + V2) / 3.0;  // Face centroid
+
+		// Vector from tetrahedron centroid to face centroid
+		TVector3d AA_check = EE - EEC;
+
+		// Dot product for orientation check
+		double orientation_check = CC.x * AA_check.x + CC.y * AA_check.y + CC.z * AA_check.z;
+
+		// If normal points inward (A < 0), flip sign of charge density
+		if(orientation_check < 0.0)
+		{
+			W = -W;  // Flip sign for inward-pointing normal
+		}
+		// ========================================================================
+
+		// Accumulate magnetic charge for centroid cancellation
+		total_magnetic_charge += W * Area;
+
+		if(fabs(W) < EPS) continue;  // Skip if no contribution
+
+		// Transform observation point to face local coordinates
+		TVector3d DD = ObsPt - YY;
+		double EE1 = DD.x*AA.x + DD.y*AA.y + DD.z*AA.z;  // X in local frame
+		double EE2 = DD.x*BB.x + DD.y*BB.y + DD.z*BB.z;  // Y in local frame
+		double EE3 = DD.x*CC.x + DD.y*CC.y + DD.z*CC.z;  // Z in local frame (height)
+
+		// Get face vertices in 2D local coordinates (XY plane)
+		int nvert = PgnPtr->AmOfEdgePoints;
+		if(nvert != 3) continue;  // Must be triangle
+
+		double XY[4][2];  // 2D coordinates (4th for wraparound)
+		double DS[4], AM[4], SM[4], XD[4], YD[4];
+
+		for(int j = 0; j < nvert; j++)
+		{
+			XY[j][0] = PgnPtr->EdgePointsVector[j].x;
+			XY[j][1] = PgnPtr->EdgePointsVector[j].y;
+		}
+
+		// Wraparound for edge calculations
+		XY[3][0] = XY[0][0];
+		XY[3][1] = XY[0][1];
+
+		// Compute edge parameters
+		double EPSG = 0.0;
+		for(int j = 0; j < nvert; j++)
+		{
+			int L = (j + 1) % nvert;
+			double XS1 = XY[L][0] - XY[j][0];
+			double XS2 = XY[L][1] - XY[j][1];
+
+			if(fabs(XS1) < EPS) XS1 = EPS;  // Prevent division by zero
+
+			DS[j] = sqrt(XS2*XS2 + XS1*XS1);
+			AM[j] = XS2 / XS1;
+			SM[j] = sqrt(AM[j]*AM[j] + 1.0);
+			XD[j] = -XS1 / DS[j];
+			YD[j] = XS2 / DS[j];
+			EPSG = (DS[j] > EPSG) ? DS[j] : EPSG;
+		}
+
+		EPSG *= EPSG_BASE;
+
+		// Dummy 4th edge (triangle has 3 edges)
+		DS[3] = 1.0;
+		AM[3] = 0.0;
+		SM[3] = 1.0e20;
+		XD[3] = 0.0;
+		YD[3] = 0.0;
+
+		// Compute field at observation point using analytical formula
+		double X1 = EE1 - XY[0][0];
+		double X2 = EE1 - XY[1][0];
+		double X3 = EE1 - XY[2][0];
+		double X4 = EE1 - XY[3][0];
+
+		double Y1 = EE2 - XY[0][1];
+		double Y2 = EE2 - XY[1][1];
+		double Y3 = EE2 - XY[2][1];
+		double Y4 = EE2 - XY[3][1];
+
+		double H1 = Y1 * X1;
+		double H2 = Y2 * X2;
+		double H3 = Y3 * X3;
+		double H4 = Y4 * X4;
+
+		double Z = EE3;
+		double Z2 = Z * Z;
+
+		double E1 = Z2 + X1*X1;
+		double E2 = Z2 + X2*X2;
+		double E3 = Z2 + X3*X3;
+		double E4 = Z2 + X4*X4;
+
+		double R1 = sqrt(X1*X1 + Y1*Y1 + Z2);
+		double R2 = sqrt(X2*X2 + Y2*Y2 + Z2);
+		double R3 = sqrt(X3*X3 + Y3*Y3 + Z2);
+		double R4 = sqrt(X4*X4 + Y4*Y4 + Z2);
+
+		double RM1 = R1 + R2 - DS[0];
+		double RM2 = R2 + R3 - DS[1];
+		double RM3 = R3 + R4 - DS[2];
+		double RM4 = R4 + R1 - DS[3];
+
+		double RP1 = R1 + R2 + DS[0];
+		double RP2 = R2 + R3 + DS[1];
+		double RP3 = R3 + R4 + DS[2];
+		double RP4 = R4 + R1 + DS[3];
+
+		double RR1 = (RM1 > EPS) ? (RM1 / RP1) : EPS;
+		double RR2 = (RM2 > EPS) ? (RM2 / RP2) : EPS;
+		double RR3 = (RM3 > EPS) ? (RM3 / RP3) : EPS;
+		double RR4 = (RM4 > EPS) ? (RM4 / RP4) : EPS;
+
+		double AL1 = log(RR1);
+		double AL2 = log(RR2);
+		double AL3 = log(RR3);
+		double AL4 = log(RR4);
+
+		// Field components in local frame
+		double HH1 = W * (-YD[0]*AL1 - YD[1]*AL2 - YD[2]*AL3 - YD[3]*AL4);
+		double HH2 = W * (-XD[0]*AL1 - XD[1]*AL2 - XD[2]*AL3 - XD[3]*AL4);
+		double HH3 = 0.0;
+
+		if(fabs(Z) > EPSG)
+		{
+			double ZR1 = Z * R1;
+			double ZR2 = Z * R2;
+			double ZR3 = Z * R3;
+			double ZR4 = Z * R4;
+
+			double AT1 = atan((AM[0]*E1 - H1) / ZR1);
+			double AT2 = atan((AM[1]*E2 - H2) / ZR2);
+			double AT3 = atan((AM[2]*E3 - H3) / ZR3);
+			double AT4 = 0.0;  // Triangle: 4th edge contribution is zero
+
+			double BT1 = atan((AM[0]*E2 - H2) / ZR2);
+			double BT2 = atan((AM[1]*E3 - H3) / ZR3);
+			double BT3 = atan((AM[2]*E4 - H4) / ZR4);
+			double BT4 = 0.0;  // Triangle: 4th edge contribution is zero
+
+			HH3 = W * (-AT1 - AT2 - AT3 - AT4 + BT1 + BT2 + BT3 + BT4);
+		}
+
+		// Transform field from local to global coordinates
+		TVector3d H_local(HH1, HH2, HH3);
+		TVector3d H_global;
+		H_global.x = H_local.x*AA.x + H_local.y*BB.x + H_local.z*CC.x;
+		H_global.y = H_local.x*AA.y + H_local.y*BB.y + H_local.z*CC.y;
+		H_global.z = H_local.x*AA.z + H_local.y*BB.z + H_local.z*CC.z;
+
+		H_total += H_global;
+	}
+
+	// ========================================================================
+	// Centroid point charge cancellation
+	// ========================================================================
+	// Place point charge at centroid to cancel interior face contributions
+	TVector3d R = ObsPt - EEC;  // Vector from centroid to observation point
+	double R_mag = sqrt(R.x*R.x + R.y*R.y + R.z*R.z);
+
+	if(R_mag > EPS)
+	{
+		// Point charge formula: H = Q / (4π r³) × r
+		// Q = sum of face charges (with area)
+		double factor = total_magnetic_charge / (4.0 * PI * R_mag * R_mag * R_mag);
+		TVector3d H_centroid;
+		H_centroid.x = factor * R.x;
+		H_centroid.y = factor * R.y;
+		H_centroid.z = factor * R.z;
+
+		// Subtract centroid contribution (cancels interior faces)
+		H_total -= H_centroid;
+	}
+
+	// Add to field pointer
+	if(LocFieldKey.H_) FieldPtr->H += H_total;
+	if(LocFieldKey.B_) FieldPtr->B += H_total;
+}
+
+//-------------------------------------------------------------------------
 
 void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 //void radTPolyhedron::B_comp(radTField* FieldPtr)
 {
+	// Tetrahedral method selection via environment variable
+	if(IsTetrahedron())
+	{
+		const char* method_env = std::getenv("RADIA_TETRA_METHOD");
+		if(method_env != nullptr && std::string(method_env) == "CENTROID")
+		{
+			B_comp_tetrahedron_centroid(FieldPtr);
+			return;
+		}
+		// Fall through to standard polygon method if not CENTROID
+	}
+
+	// Use standard polygon-based computation for all polyhedra (including tetrahedra)
 	TVector3d Zero(0.,0.,0.);
 	short PointIsInside = 1;
 
