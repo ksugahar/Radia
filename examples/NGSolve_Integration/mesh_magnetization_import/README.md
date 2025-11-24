@@ -14,23 +14,34 @@ This test suite verifies that all three methods produce consistent results when 
 
 ## Files
 
+### NGSolve Reference Solutions
+
+- `ngsolve_cube_uniform_field.py` - **High-precision NGSolve reference solution**
+  - H-formulation with perturbation potential method
+  - Magnetic cube (0.1m) with μᵣ = 100, H_ext = 1000 A/m
+  - Multi-region mesh (magnetic cube + inner air + outer air)
+  - Graded mesh refinement for accuracy
+  - Saves results to .npz file for comparison
+  - Based on: S:/ngsolve/NGSolve/2024_01_31_H-formulation/
+
+- `compare_radia_ngsolve_cube.py` - **Compare Radia with NGSolve reference**
+  - Loads NGSolve high-precision solution
+  - Evaluates Radia ANALYTICAL method at same points
+  - Reports field errors and convergence
+
+### Demonstration Scripts
+
+- `demo_tetrahedral_methods_comparison.py` - **NGSolve mesh import demo**
+  - Generate tetrahedral mesh with NGSolve/Netgen
+  - Import into Radia with ANALYTICAL method
+  - Compare with built-in hexahedral reference
+
 ### Mesh Generation
 
 - `generate_hex_mesh_cubit.py` - Generate hexahedral mesh using Cubit Python API
   - Creates 0.1m cube with 5×5×5 = 125 hex8 elements
   - Exports to Nastran (.bdf), Gmsh (.msh), VTK (.vtk) formats
   - Requires: Coreform Cubit 2025.3
-
-### Test Scripts
-
-- `test_mesh_import_comparison.py` - **Main comparison test**
-  - Tests all three mesh methods
-  - Applies MatLin + background field
-  - Compares field accuracy at far-field point
-  - Expected: <2% error for hex mesh, <10% error for tet mesh
-
-- `test_hex_mesh_import.py` - Legacy hex mesh test (deprecated, use comparison test)
-- `test_mesh_types_comparison.py` - Legacy comparison test (deprecated, use comparison test)
 
 ### Mesh Files (Generated)
 
@@ -41,10 +52,58 @@ This test suite verifies that all three methods produce consistent results when 
 
 ## Usage
 
-### 1. Generate Hexahedral Mesh (One-time Setup)
+### 1. Generate NGSolve High-Precision Reference Solution
 
 ```bash
-cd S:/Radia/01_GitHub/examples/ngsolve_integration/mesh_import
+cd S:/Radia/01_GitHub/examples/ngsolve_integration/mesh_magnetization_import
+python ngsolve_cube_uniform_field.py
+```
+
+**Requirements:**
+- NGSolve with Netgen installed
+- Python packages: numpy, ngsolve
+
+**Output:**
+- `ngsolve_cube_uniform_field_results.npz` - Saved field data at test points
+- Console output with field values and solver statistics
+
+**What it does:**
+- Creates 3D geometry: magnetic cube (μᵣ=100) + inner/outer air domains
+- Generates graded tetrahedral mesh (fine near cube, coarse in far field)
+- Solves H-formulation: ∇·(μ∇φ) = ∇·(μH_s) with perturbation potential
+- Evaluates total field H_total = H_s + H_pert at test points
+- Provides high-precision reference (CG solver with tol=1e-8)
+
+### 2. Compare Radia with NGSolve Reference
+
+```bash
+python compare_radia_ngsolve_cube.py
+```
+
+**Requirements:**
+- NGSolve reference solution must be generated first (step 1)
+- Radia built with ANALYTICAL method support
+- Environment: `RADIA_TETRA_METHOD='ANALYTICAL'` (set in script)
+
+**Output:**
+- Field comparison at identical test points
+- Error percentages for magnitude and components
+- Pass/fail assessment (target: <20% error)
+
+### 3. Run NGSolve Mesh Import Demo
+
+```bash
+python demo_tetrahedral_methods_comparison.py
+```
+
+**What it does:**
+- Generates tetrahedral mesh with NGSolve/Netgen
+- Imports into Radia using ANALYTICAL method
+- Compares with Radia's built-in hexahedral method
+
+### 4. Generate Hexahedral Mesh (Optional, for Cubit users)
+
+```bash
 python generate_hex_mesh_cubit.py
 ```
 
@@ -55,12 +114,6 @@ python generate_hex_mesh_cubit.py
 **Output:**
 - `cube_hex.bdf` (35KB) - 216 vertices, 125 hex elements
 - `cube_hex.msh`, `cube_hex.vtk`, `cube_hex.cub5`
-
-### 2. Run Mesh Import Comparison Test
-
-```bash
-python test_mesh_import_comparison.py
-```
 
 **Expected Results:**
 
