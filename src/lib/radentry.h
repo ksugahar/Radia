@@ -879,6 +879,13 @@ EXP int CALL RadFldUnits(char* OutStr);
 */
 EXP int CALL RadFldUnitsSize(int* size);
 
+/** Sets physical length units (mm or m).
+@param UnitStr [in] string containing "mm", "m", "millimeter", "meter", etc.
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author O.C.
+*/
+EXP int CALL RadFldUnitsSet(const char* UnitStr);
+
 /** Switches on or off the randomization of all the length values. The randomization magnitude can be set by the function radFldLenTol.
 @param n [out] dummy
 @param OnOrOff [in] string containing either "on" or "off"

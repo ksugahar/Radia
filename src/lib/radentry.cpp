@@ -119,6 +119,7 @@ void FieldInt( int, char*, char*, double,double,double, double,double,double );
 void CompCriterium( double, double, double, double, double,double );
 void CompPrecisionOpt( const char*, const char*, const char*, const char*, const char*, const char*, const char*, const char* );
 void PhysicalUnits();
+void PhysicalUnitsSet(const char*);
 void RandomizationOnOrOff( char* );
 void TolForConvergence( double, double, double );
 void ShimSignature( int, char*, double,double,double, double,double,double, double,double,double, int, double,double,double );
@@ -1370,6 +1371,17 @@ int CALL RadFldUnitsSize(int* OutSize)
 
 	*OutSize = (int)strlen(ioBuffer.OutStringPtr()); //27092018
 	//*OutSize = (int)strlen(ioBuffer.OutString());
+	ioBuffer.EraseStringBuffer();
+	return ErrStat;
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadFldUnitsSet(const char* UnitStr)
+{
+	PhysicalUnitsSet(UnitStr);
+
+	int ErrStat = ioBuffer.OutErrorStatus();
 	ioBuffer.EraseStringBuffer();
 	return ErrStat;
 }

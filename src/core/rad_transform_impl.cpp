@@ -893,11 +893,18 @@ int radTApplication::SetAndShowPhysUnits()
 {
 	try
 	{
-		// Implement mechanism for setting different units in future
-		char LengthUnitID[] = "mm";
+		// Use current length unit setting
+		const char* LengthUnitID = m_lengthUnitName;
 		char AngleUnitID[] = "radian";
 		char CurrentUnitID[] = "A";
-		char CurrentDensityUnitID[] = "A/mm^2";
+
+		// Current density depends on length unit
+		char CurrentDensityUnitID[32];
+		if (m_lengthUnitScale == 1.0) // mm
+			strcpy(CurrentDensityUnitID, "A/mm^2");
+		else // m
+			strcpy(CurrentDensityUnitID, "A/m^2");
+
 		char MagnetizationUnitID[] = "Tesla";
 		char FieldInductionUnitID[] = "Tesla";
 		char FieldStrengthUnitID[] = "Tesla";
@@ -933,6 +940,44 @@ int radTApplication::SetAndShowPhysUnits()
 	}
 	catch(...) 
 	{ 
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::SetPhysUnits(const char* unitStr)
+{
+	try
+	{
+		if (unitStr == NULL || strlen(unitStr) == 0)
+		{
+			// No argument - just show current units
+			return SetAndShowPhysUnits();
+		}
+
+		// Parse unit string
+		if (strcmp(unitStr, "mm") == 0 || strcmp(unitStr, "millimeter") == 0 || strcmp(unitStr, "millimeters") == 0)
+		{
+			m_lengthUnitScale = 1.0;
+			m_lengthUnitName = "mm";
+		}
+		else if (strcmp(unitStr, "m") == 0 || strcmp(unitStr, "meter") == 0 || strcmp(unitStr, "meters") == 0)
+		{
+			m_lengthUnitScale = 1000.0; // Conversion factor from mm to m
+			m_lengthUnitName = "m";
+		}
+		else
+		{
+			Send.ErrorMessage("Radia::Error999: Unknown length unit. Supported units: 'mm', 'm'");
+			return 0;
+		}
+
+		// Show updated units
+		return SetAndShowPhysUnits();
+	}
+	catch(...)
+	{
 		Initialize(); return 0;
 	}
 }
