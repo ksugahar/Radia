@@ -28,11 +28,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
 import radia as rad
 from nastran_mesh_import import create_radia_from_nastran
-from radia_vtk_export import exportGeometryToVTK
+from radia_vtk_export import exportGeometryToVTK, exportFieldToVTK
+
+# Set Radia unit system to millimeters (default, but explicit for clarity)
+rad.FldUnits('mm')
 
 print("=" * 70)
 print("ELECTROMAGNET SIMULATION WORKFLOW")
 print("=" * 70)
+print(f"Unit system: mm (millimeters)")
 
 # ========================================================================
 # Step 1: Import Yoke Mesh from Nastran
@@ -55,6 +59,9 @@ yoke = create_radia_from_nastran(nastran_file, material={'magnetization': [0, 0,
 yoke_mat = rad.MatSatIsoFrm([20000, 2], [0.1, 2], [0.1, 2])
 rad.MatApl(yoke, yoke_mat)
 
+# Set yoke color to cyan
+rad.ObjDrwAtr(yoke, [0, 1, 1])  # RGB: cyan
+
 print(f"  [OK] Yoke imported: ID={yoke}")
 
 # ========================================================================
@@ -70,6 +77,10 @@ coil = rad.ObjRaceTrk(
     3,               # nseg
     -2000/105/35     # current density (A/mm^2): -2000A total
 )
+
+# Set coil color to red
+rad.ObjDrwAtr(coil, [1, 0, 0])  # RGB: red
+
 print(f"  [OK] Coil created: ID={coil}")
 print(f"  Total current: -2000 A")
 
@@ -95,9 +106,11 @@ exportGeometryToVTK(g, radia_model_vtk)
 print("\n[Step 5/5] Calculating magnetic field distribution...")
 
 # Define field evaluation grid
-x_range = np.linspace(-100, 100, 21)  # 21 points in X
-y_range = np.linspace(0, 250, 31)     # 31 points in Y (along axis)
-z_range = np.linspace(-100, 100, 21)  # 21 points in Z
+# Combined geometry bbox: X[-40, 40], Y[-25, 193.8], Z[-52.5, 162.5] mm
+# Add 50mm margin around geometry
+x_range = np.linspace(-90, 90, 21)      # 21 points in X (mm)
+y_range = np.linspace(-75, 245, 31)     # 31 points in Y (mm, along axis)
+z_range = np.linspace(-105, 215, 21)    # 21 points in Z (mm)
 
 print(f"  Grid: {len(x_range)}x{len(y_range)}x{len(z_range)} = {len(x_range)*len(y_range)*len(z_range)} points")
 
@@ -123,38 +136,9 @@ obs_points = np.array(obs_points)
 
 print(f"  [OK] Field calculated at {len(obs_points)} points")
 
-# Export field_distribution.vtk
-field_vtk = os.path.join(script_dir, 'field_distribution.vtk')
-
-with open(field_vtk, 'w') as f:
-    # Header
-    f.write('# vtk DataFile Version 3.0\n')
-    f.write('Magnetic Field Distribution\n')
-    f.write('ASCII\n')
-    f.write('DATASET POLYDATA\n')
-
-    # Points
-    f.write(f'POINTS {len(obs_points)} float\n')
-    for pt in obs_points:
-        f.write(f'{pt[0]} {pt[1]} {pt[2]}\n')
-
-    # Point data (field vectors and magnitude)
-    f.write(f'\nPOINT_DATA {len(obs_points)}\n')
-
-    # Vector field
-    f.write('VECTORS B_field float\n')
-    for B in B_field:
-        f.write(f'{B[0]} {B[1]} {B[2]}\n')
-
-    # Scalar field (magnitude)
-    f.write('\nSCALARS B_magnitude float\n')
-    f.write('LOOKUP_TABLE default\n')
-    for B in B_field:
-        magnitude = np.sqrt(B[0]**2 + B[1]**2 + B[2]**2)
-        f.write(f'{magnitude}\n')
-
-print(f"  [OK] Exported: field_distribution.vtk")
-print(f"  Points: {len(obs_points)}")
+# Export field_distribution.vtk using radia_vtk_export
+field_vtk = os.path.join(script_dir, 'field_distribution')
+exportFieldToVTK(obs_points, B_field, field_vtk, 'B_field')
 
 # ========================================================================
 # Summary

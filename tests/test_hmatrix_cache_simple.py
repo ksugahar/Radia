@@ -154,11 +154,11 @@ print("[Test 6] Comparing cached vs direct evaluation...")
 # Prepare cache again
 A_cf.PrepareCache(test_points)
 
-# Evaluate directly with Radia
+# Evaluate directly with Radia (already using meters via rad.FldUnits('m'))
 pt = test_points[4]
-A_direct = rad.Fld(magnet, 'a', [pt[0]*1000, pt[1]*1000, pt[2]*1000])  # meters to mm
+A_direct = rad.Fld(magnet, 'a', [pt[0], pt[1], pt[2]])
 print(f"  Direct Radia evaluation: {A_direct}")
-print(f"  (Point: {pt})")
+print(f"  (Point: {pt} m)")
 
 # Check cache contains this value
 stats = A_cf.GetCacheStats()

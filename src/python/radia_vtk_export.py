@@ -100,6 +100,59 @@ def exportGeometryToVTK(obj, fileName='radia_Geometry'):
 	print(f"  Points: {nPnts}")
 
 
+def exportFieldToVTK(points, field_data, fileName='field_distribution', field_name='B_field'):
+	"""
+	Export magnetic field distribution to VTK Legacy format file.
+
+	Args:
+		points: List of observation points [[x, y, z], ...] in Radia units (mm)
+		field_data: List of field vectors [[Bx, By, Bz], ...] in Tesla
+		fileName: Output file name (without .vtk extension)
+		field_name: Name for the vector field in VTK file
+
+	Note:
+		Points are automatically converted from mm (Radia default) to m (VTK standard).
+		This function should only be called from radia_vtk_export module or trusted code.
+	"""
+	import numpy as np
+
+	points = np.array(points)
+	field_data = np.array(field_data)
+
+	if points.shape[0] != field_data.shape[0]:
+		raise ValueError(f"Points ({points.shape[0]}) and field data ({field_data.shape[0]}) must have same length")
+
+	if points.shape[1] != 3 or field_data.shape[1] != 3:
+		raise ValueError("Points and field data must be Nx3 arrays")
+
+	# Ensure .vtk extension
+	if not fileName.endswith('.vtk'):
+		fileName += '.vtk'
+
+	with open(fileName, 'w') as f:
+		# Header
+		f.write('# vtk DataFile Version 3.0\n')
+		f.write('Magnetic Field Distribution\n')
+		f.write('ASCII\n')
+		f.write('DATASET POLYDATA\n')
+
+		# Points (convert from mm to m for VTK standard)
+		f.write(f'POINTS {len(points)} float\n')
+		for pt in points:
+			# Convert mm to m (matches exportGeometryToVTK behavior)
+			f.write(f'{pt[0]/1000.0} {pt[1]/1000.0} {pt[2]/1000.0}\n')
+
+		# Point data (vector field)
+		f.write(f'\nPOINT_DATA {len(points)}\n')
+		f.write(f'VECTORS {field_name} float\n')
+		for B in field_data:
+			f.write(f'{B[0]} {B[1]} {B[2]}\n')
+
+	print(f"VTK field file exported: {fileName}")
+	print(f"  Points: {len(points)}")
+	print(f"  Field: {field_name}")
+
+
 if __name__ == '__main__':
 	"""
 	Demo: Export a simple Radia geometry to VTK format

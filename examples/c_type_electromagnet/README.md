@@ -14,35 +14,25 @@ This directory contains a complete electromagnet simulation workflow:
 
 ### Main Simulation
 
-- **`main_electromagnet_simulation.py`** - Main simulation script
+- **`main_simulation_workflow.py`** - Main simulation script
   - Creates racetrack coil geometry
   - Loads magnetic yoke from Nastran mesh
   - Solves magnetostatic problem
-  - Exports geometry (VTU) and field distribution (VTK)
+  - Exports geometry (VTK) and field distribution (VTK)
 
 ### Mesh Generation
 
-- **`York_cubit_mesh.py`** - Generate York.bdf from Cubit journal file
+- **`york_cubit_mesh.py`** - Generate York.bdf from Cubit journal file
   - Input: `york.jou` (Cubit journal file)
   - Output: `York.bdf` (Nastran format), `York.vtk` (visualization)
   - Creates hexahedral and pentahedral mesh for magnetic yoke
 
-- **`york.jou`** - Cubit journal file with yoke geometry definition
+- **`York.jou`** - Cubit journal file with yoke geometry definition
 
-### Component Models
+### Utilities (in `src/python/`)
 
-- **`racetrack_coil_model.py`** - Racetrack coil geometry
-  - `create_racetrack_coil()`: Create coil with specified current
-  - `get_coil_info()`: Get bounding box information
-
-- **`yoke_model.py`** - Magnetic yoke from Nastran mesh
-  - `create_yoke_from_nastran()`: Load and convert Nastran mesh to Radia
-
-### Utilities
-
-- **`nastran_reader.py`** - Low-level Nastran file parser (in `src/python/`)
-- **`radia_vtk_export.py`** - VTK Legacy format export (in `src/python/`)
-- **`radia_vtu_export.py`** - VTU (VTK XML) format export (in `src/python/`)
+- **`nastran_mesh_import.py`** - Nastran mesh import and conversion to Radia
+- **`radia_vtk_export.py`** - VTK Legacy format export
 
 ## Complete Workflow
 
@@ -52,7 +42,7 @@ This directory contains a complete electromagnet simulation workflow:
 cd examples/electromagnet
 
 # Generate Nastran mesh from Cubit journal
-python York_cubit_mesh.py
+python york_cubit_mesh.py
 ```
 
 **Output**:
@@ -68,61 +58,63 @@ python York_cubit_mesh.py
 
 ```bash
 # Run complete simulation
-python main_electromagnet_simulation.py
+python main_simulation_workflow.py
 ```
 
 **Output**:
 ```
 ======================================================================
-MAIN ELECTROMAGNET SIMULATION
+ELECTROMAGNET SIMULATION WORKFLOW
 ======================================================================
 
-Creating racetrack coil...
-  Current: -2000 A
-  Turns: 105
-  Current density: -0.544218 A/mm^2
-  [OK] Coil created
+[Step 1/5] Importing yoke mesh from York.bdf...
+[Nastran Import] Reading file: York.bdf
+                 Vertices: 569
+                 Hexahedral elements: 288
+                 Wedge elements: 8
+  [OK] Yoke imported: ID=297
 
-Creating magnetic yoke from Nastran mesh...
-  [OK] Created 288 polyhedra (240 hex + 48 penta)
+[Step 2/5] Creating racetrack coil...
+  [OK] Coil created: ID=600
+  Total current: -2000 A
 
-Solving magnetostatics...
-  [OK] Solver completed (iterations: 21)
+[Step 3/5] Combining coil + yoke...
+  [OK] Combined model: ID=605
 
-Calculating magnetic field...
-Position (mm)        Bx (mT)         By (mT)         Bz (mT)         |B| (mT)
-(0, 0, 0)            -8579.596      0.941           3351.036        9210.804
+[Step 4/5] Exporting Radia_model.vtk...
+  Polygons: 1848
+  Points: 7376
 
-Exporting geometries to VTU...
-  [OK] Created: coil_geometry.vtu (0.15s)
-  [OK] Created: yoke_geometry.vtu (1.23s)
-  [OK] Created: main_electromagnet_simulation.vtk (combined, 1.45s)
+[Step 5/5] Calculating magnetic field distribution...
+  Grid: 21x31x21 = 13671 points
+  Solving magnetostatics...
+  [OK] Solution converged
+  Calculating magnetic field...
+  [OK] Field calculated at 13671 points
+  [OK] Exported: field_distribution.vtk
 
-Calculating field distribution...
-  Grid resolution: 21 × 31 × 21 = 13671 points
-  [OK] Created: field_distribution.vtk
+======================================================================
+SIMULATION COMPLETE
 ======================================================================
 ```
 
 **Output Files**:
-- `coil_geometry.vtu` - Racetrack coil geometry (VTU format)
-- `yoke_geometry.vtu` - Magnetic yoke geometry (VTU format)
-- `main_electromagnet_simulation.vtk` - Combined geometry (VTK Legacy)
-- `field_distribution.vtk` - 3D magnetic field distribution
+- `Radia_model.vtk` - Combined geometry (coil + yoke) in VTK Legacy format
+- `field_distribution.vtk` - 3D magnetic field distribution with vectors
 
 ### Step 3: Visualize in ParaView
 
-#### Method 1: Open Individual Geometry Files
+#### Method 1: Open Combined Geometry
 
 ```bash
-# Open coil and yoke separately
-paraview coil_geometry.vtu yoke_geometry.vtu
+# Open combined geometry
+paraview Radia_model.vtk
 ```
 
 **In ParaView**:
-1. Click "Apply" for both geometries
+1. Click "Apply"
 2. Adjust colors using "Radia_colours" field
-3. Rotate view to inspect geometry
+3. Rotate view to inspect coil and yoke geometry
 
 #### Method 2: Open Field Distribution
 
@@ -204,31 +196,19 @@ Method: 4 (relaxation)
 
 ## File Formats
 
-### VTU (VTK XML Unstructured Grid)
-
-**Modern format** - Recommended for ParaView
-
-**Advantages**:
-- XML-based, robust parsing
-- Better support in modern ParaView
-- Separate files for coil and yoke
-
-**Files**:
-- `coil_geometry.vtu`
-- `yoke_geometry.vtu`
-
 ### VTK Legacy (ASCII)
 
-**Legacy format** - For compatibility
+**Current format** - Used for all outputs
 
 **Advantages**:
 - Human-readable ASCII
-- Compatible with older VTK tools
-- Single combined file
+- Compatible with all VTK tools and ParaView versions
+- Single combined file for geometry
+- Point data format for field distribution
 
 **Files**:
-- `main_electromagnet_simulation.vtk` (combined coil + yoke)
-- `field_distribution.vtk` (structured grid with vectors)
+- `Radia_model.vtk` - Combined coil + yoke geometry (POLYDATA)
+- `field_distribution.vtk` - Structured point cloud with vector field data (POLYDATA with VECTORS)
 
 ## Troubleshooting
 
@@ -236,14 +216,14 @@ Method: 4 (relaxation)
 
 **Solution**: Run mesh generation first:
 ```bash
-python York_cubit_mesh.py
+python york_cubit_mesh.py
 ```
 
 This will generate `York.bdf` from `york.jou` using Cubit.
 
-### "Cubit not found" (York_cubit_mesh.py)
+### "Cubit not found" (york_cubit_mesh.py)
 
-**Solution**: Install Coreform Cubit or adjust path in `York_cubit_mesh.py`:
+**Solution**: Install Coreform Cubit or adjust path in `york_cubit_mesh.py`:
 ```python
 sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")
 ```
@@ -262,11 +242,11 @@ sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")
 - Check coil and yoke bounding boxes overlap correctly
 - Verify material properties in `yoke_model.py`
 
-### VTU export fails
+### VTK export fails
 
-**Error**: `ModuleNotFoundError: No module named 'radia_vtu_export'`
+**Error**: `ModuleNotFoundError: No module named 'radia_vtk_export'`
 
-**Solution**: Ensure `src/python/radia_vtu_export.py` exists and path is correct:
+**Solution**: Ensure `src/python/radia_vtk_export.py` exists and path is correct:
 ```python
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 ```
@@ -275,9 +255,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
 **Issue**: 13,671 points × 3 components = ~40KB (normal size)
 
-If file is >10MB, grid resolution may be too high. Adjust in `main_electromagnet_simulation.py`:
+If file is >10MB, grid resolution may be too high. Adjust in `main_simulation_workflow.py`:
 ```python
-nx, ny, nz = 21, 31, 21  # Reduce these numbers
+x_range = np.linspace(-100, 100, 21)  # Reduce number of points
+y_range = np.linspace(0, 250, 31)
+z_range = np.linspace(-100, 100, 21)
 ```
 
 ## Coordinate System
@@ -292,10 +274,8 @@ All magnetic field values in **Tesla (T)**.
 
 ## Performance Notes
 
-**VTU export timing** (typical):
-- Coil geometry: ~0.1-0.2 seconds
-- Yoke geometry: ~1-2 seconds (288 elements)
-- Combined VTK: ~1.5-3 seconds
+**VTK export timing** (typical):
+- Radia_model.vtk: ~1-2 seconds (combined coil + yoke, 1848 polygons)
 
 **Field calculation timing**:
 - 13,671 points: ~5-10 seconds (depending on CPU)
@@ -303,8 +283,8 @@ All magnetic field values in **Tesla (T)**.
 ## Further Reading
 
 - [Radia Python API](../../README.md)
-- [VTK Export Utilities](../../src/python/README.md)
-- [Nastran Format Details](./nastran_reader.py)
+- [VTK Export Utilities](../../src/python/radia_vtk_export.py)
+- [Nastran Mesh Import](../../src/python/nastran_mesh_import.py)
 
 ## References
 
@@ -315,5 +295,6 @@ All magnetic field values in **Tesla (T)**.
 
 ---
 
-**Last Updated**: 2025-11-22
-**Workflow**: Cubit → Nastran → Radia → VTU/VTK → ParaView
+**Last Updated**: 2025-11-26
+**Workflow**: Cubit → Nastran → Radia → VTK → ParaView
+**Status**: ✓ Working - All bugs fixed (face duplication resolved)
