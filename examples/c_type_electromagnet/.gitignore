@@ -1,6 +1,9 @@
-# Generated geometry files (from main_simulation_workflow.py)
+# Generated output files (from main_simulation_workflow.py)
 Radia_model.vtk
 field_distribution.vtk
+
+# ParaView state files (user-specific)
+*.pvsm
 
 # Test files
 test_*.vtk
