@@ -421,16 +421,34 @@ field_m = field_mm / 1000.0  # ✗ DO NOT DO THIS
 - **Maintainability**: Changing units requires one line change, not searching for conversion factors
 - **Error prevention**: Hard-coded conversions cause bugs when unit system changes
 
-**Exceptions**:
+**Unit Detection**:
 
-Only the following locations may perform unit conversions:
+Use `rad.FldUnits()` without arguments to get current unit system:
 
-1. **`radia_vtk_export.py`**: Internal VTK export module (converts mm→m for VTK standard)
-2. **`radia_ngsolve.cpp`**: C++ binding with explicit `units` parameter
-3. **`radia_ngsolve_fast.py`**: Fast cache preparation (NGSolve uses meters, Radia uses mm)
-4. **`nastran_mesh_import.py`**: Mesh import with explicit `units` parameter
+```python
+import radia as rad
 
-All other code must respect the unit system set by `rad.FldUnits()`.
+# Get current units (returns multi-line string)
+units_str = rad.FldUnits()
+# Parse to detect length unit
+if 'Length:  mm' in units_str:
+    length_unit = 'mm'
+    length_scale = 1.0  # No conversion needed
+elif 'Length:  m' in units_str:
+    length_unit = 'm'
+    length_scale = 0.001  # mm to m
+else:
+    raise ValueError(f"Unknown length unit in: {units_str}")
+```
+
+**No Exceptions**:
+
+All code, including `radia_vtk_export.py`, `radia_ngsolve.cpp`, `nastran_mesh_import.py`, must:
+1. Query current unit system via `rad.FldUnits()`
+2. Convert based on detected units, not hard-coded assumptions
+3. Never assume Radia is using mm or m
+
+This ensures code works regardless of user's `rad.FldUnits()` setting.
 
 **Implementation Pattern**:
 
