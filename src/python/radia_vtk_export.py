@@ -10,6 +10,29 @@ in ParaView and other VTK-compatible tools.
 import csv
 from itertools import accumulate
 
+def _get_radia_length_unit():
+	"""
+	Get current Radia length unit by querying rad.FldUnits().
+
+	Returns:
+		tuple: (unit_name, scale_to_meters)
+		       ('mm', 0.001) if Radia is using millimeters
+		       ('m', 1.0) if Radia is using meters
+
+	Raises:
+		ValueError: If length unit cannot be determined
+	"""
+	import radia as rad
+
+	units_str = rad.FldUnits()
+
+	if 'Length:  mm' in units_str:
+		return ('mm', 0.001)
+	elif 'Length:  m' in units_str:
+		return ('m', 1.0)
+	else:
+		raise ValueError(f"Cannot determine Radia length unit from: {units_str}")
+
 def chunks(lst, n):
 	"""
 	Yield successive n-sized chunks from a list.
@@ -55,9 +78,9 @@ def exportGeometryToVTK(obj, fileName='radia_Geometry'):
 	points = vtkData['polygons']['vertices']
 	nPnts = int(len(points)/3)
 
-	# format the points array to be floats rather than double
-	points = [round(num/1000.0, 8) for num in points]
-	# Note: Converted from mm (Radia units) to m
+	# Get Radia's current length unit and convert to meters for VTK standard
+	unit_name, scale_to_meters = _get_radia_length_unit()
+	points = [round(num * scale_to_meters, 8) for num in points]
 
 	# define colours array
 	colors = vtkData['polygons']['colors']
@@ -105,14 +128,14 @@ def exportFieldToVTK(points, field_data, fileName='field_distribution', field_na
 	Export magnetic field distribution to VTK Legacy format file.
 
 	Args:
-		points: List of observation points [[x, y, z], ...] in Radia units (mm)
+		points: List of observation points [[x, y, z], ...] in Radia's current units
 		field_data: List of field vectors [[Bx, By, Bz], ...] in Tesla
 		fileName: Output file name (without .vtk extension)
 		field_name: Name for the vector field in VTK file
 
 	Note:
-		Points are automatically converted from mm (Radia default) to m (VTK standard).
-		This function should only be called from radia_vtk_export module or trusted code.
+		Points are automatically converted to meters (VTK standard) based on
+		Radia's current unit setting (queried via rad.FldUnits()).
 	"""
 	import numpy as np
 
@@ -125,6 +148,9 @@ def exportFieldToVTK(points, field_data, fileName='field_distribution', field_na
 	if points.shape[1] != 3 or field_data.shape[1] != 3:
 		raise ValueError("Points and field data must be Nx3 arrays")
 
+	# Get Radia's current length unit
+	unit_name, scale_to_meters = _get_radia_length_unit()
+
 	# Ensure .vtk extension
 	if not fileName.endswith('.vtk'):
 		fileName += '.vtk'
@@ -136,11 +162,11 @@ def exportFieldToVTK(points, field_data, fileName='field_distribution', field_na
 		f.write('ASCII\n')
 		f.write('DATASET POLYDATA\n')
 
-		# Points (convert from mm to m for VTK standard)
+		# Points (convert to meters for VTK standard)
 		f.write(f'POINTS {len(points)} float\n')
 		for pt in points:
-			# Convert mm to m (matches exportGeometryToVTK behavior)
-			f.write(f'{pt[0]/1000.0} {pt[1]/1000.0} {pt[2]/1000.0}\n')
+			# Convert to meters using detected unit scale
+			f.write(f'{pt[0]*scale_to_meters} {pt[1]*scale_to_meters} {pt[2]*scale_to_meters}\n')
 
 		# Point data (vector field)
 		f.write(f'\nPOINT_DATA {len(points)}\n')
