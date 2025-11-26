@@ -1,15 +1,13 @@
-# Generated mesh files (from generate_yoke_mesh.py)
-York.bdf
-York_mesh.vtk
-
-# Generated geometry files (from main_electromagnet_simulation.py)
-coil_geometry.vtu
-yoke_geometry.vtu
-main_electromagnet_simulation.vtk
-
-# Generated field distribution
+# Generated geometry files (from main_simulation_workflow.py)
+Radia_model.vtk
 field_distribution.vtk
+
+# Test files
+test_*.vtk
 
 # Python cache
 __pycache__/
 *.pyc
+
+# Claude working directory
+.claude/

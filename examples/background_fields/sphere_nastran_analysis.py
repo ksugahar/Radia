@@ -41,7 +41,7 @@ print("=" * 70)
 # Parameters
 # ============================================================================
 
-# Geometry (matches Cubit2Nastran.py)
+# Geometry (matches cubit_to_nastran.py)
 R = 10.0  # Sphere radius [mm]
 center = [0, 0, 0]  # Sphere center [mm]
 
@@ -73,7 +73,7 @@ nas_file = 'sphere.bdf'
 
 if not os.path.exists(nas_file):
 	print(f"  [ERROR] File not found: {nas_file}")
-	print(f"  Please run: python Cubit2Nastran.py")
+	print(f"  Please run: python cubit_to_nastran.py")
 	sys.exit(1)
 
 mesh = read_nastran_mesh(nas_file)

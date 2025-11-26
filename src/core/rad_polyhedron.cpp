@@ -2291,17 +2291,17 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 	radTVectOfPtrToVect3d::iterator VectOfPtrToVect3dIter = VectOfTwoPoints3d.begin();
 
 	std::array<TVector3d, 2>& firstPair = *VectOfPtrToVect3dIter;
-	TVector3d* P0Ptr = &firstPair[0];
-	TVector3d* P1Ptr = &firstPair[1];
+	TVector3d P0 = firstPair[0];  // Copy values instead of pointers
+	TVector3d P1 = firstPair[1];  // Copy values instead of pointers
 	++VectOfPtrToVect3dIter;
 
 	radTSend Send;
-	std::vector<TVector3d*> vNewFaceFirstList(AmOfEdgePoints);
-	std::vector<TVector3d*> vNewFaceSecondList(AmOfEdgePoints);
-	TVector3d** NewFaceFirstList = vNewFaceFirstList.data();
-	TVector3d** NewFaceSecondList = vNewFaceSecondList.data();
-	NewFaceSecondList[0] = P0Ptr;
-	NewFaceSecondList[1] = P1Ptr;
+	std::vector<TVector3d> vNewFaceFirstList(AmOfEdgePoints);   // Store TVector3d instead of TVector3d*
+	std::vector<TVector3d> vNewFaceSecondList(AmOfEdgePoints);  // Store TVector3d instead of TVector3d*
+	TVector3d* NewFaceFirstList = vNewFaceFirstList.data();
+	TVector3d* NewFaceSecondList = vNewFaceSecondList.data();
+	NewFaceSecondList[0] = P0;
+	NewFaceSecondList[1] = P1;
 
 		//DEBUG
 		//TVector3d &p00 = *(InVectOfTwoPoints3d[0]);
@@ -2327,43 +2327,34 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 		for(radTVectOfPtrToVect3d::iterator iter = VectOfPtrToVect3dIter; iter != VectOfTwoPoints3d.end(); ++iter)
 		{
 			std::array<TVector3d, 2>& testPair = *iter;
-			TVector3d* TestPoint0Ptr = &testPair[0];
-			TVector3d* TestPoint1Ptr = &testPair[1];
-			
-			//TVector3d BufVect00 = *TestPoint0Ptr - *P0Ptr;
-			//if(NormAbs(BufVect00) < AbsZeroToler) 
-			BufVect = *TestPoint0Ptr - *P0Ptr;
-			if(NormAbs(BufVect) < AbsZeroToler) 
+			TVector3d TestPoint0 = testPair[0];
+			TVector3d TestPoint1 = testPair[1];
+
+			BufVect = TestPoint0 - P0;
+			if(NormAbs(BufVect) < AbsZeroToler)
 			{
-				NewFaceFirstList[FirstCount++] = P0Ptr = TestPoint1Ptr;
+				NewFaceFirstList[FirstCount++] = P0 = TestPoint1;
 				neighbSegmFound = true;
 				VectOfTwoPoints3d.erase(iter); break;
 			}
-			//TVector3d BufVect01 = *TestPoint0Ptr - *P1Ptr;
-			//if(NormAbs(BufVect01) < AbsZeroToler)
-			BufVect = *TestPoint0Ptr - *P1Ptr;
+			BufVect = TestPoint0 - P1;
 			if(NormAbs(BufVect) < AbsZeroToler)
 			{
-				NewFaceSecondList[SecondCount++] = P1Ptr = TestPoint1Ptr;
+				NewFaceSecondList[SecondCount++] = P1 = TestPoint1;
 				neighbSegmFound = true;
 				VectOfTwoPoints3d.erase(iter); break;
 			}
-			//TVector3d BufVect10 = *TestPoint1Ptr - *P0Ptr;
-			//if(NormAbs(BufVect10) < AbsZeroToler)
-			BufVect = *TestPoint1Ptr - *P0Ptr;
+			BufVect = TestPoint1 - P0;
 			if(NormAbs(BufVect) < AbsZeroToler)
 			{
-				NewFaceFirstList[FirstCount++] = P0Ptr = TestPoint0Ptr;
+				NewFaceFirstList[FirstCount++] = P0 = TestPoint0;
 				neighbSegmFound = true;
 				VectOfTwoPoints3d.erase(iter); break;
 			}
-			//TVector3d BufVect11 = *TestPoint1Ptr - *P1Ptr;
-			//if(NormAbs(BufVect11) < AbsZeroToler)
-			//if(NormAbs(*TestPoint1Ptr - *P1Ptr) < AbsZeroToler)
-			BufVect = *TestPoint1Ptr - *P1Ptr;
+			BufVect = TestPoint1 - P1;
 			if(NormAbs(BufVect) < AbsZeroToler)
 			{
-				NewFaceSecondList[SecondCount++] = P1Ptr = TestPoint0Ptr;
+				NewFaceSecondList[SecondCount++] = P1 = TestPoint0;
 				neighbSegmFound = true;
 				VectOfTwoPoints3d.erase(iter); break;
 			}
@@ -2372,7 +2363,7 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 		if((!neighbSegmFound) && (VectOfTwoPoints3d.size() > 1)) //OC091008
 		{//processing rare case: no exactly "touching" segment(s) found; trying to find closest among remaining
 
-			TVector3d auxR = (*VectOfPtrToVect3dIter)[0] - *P0Ptr;
+			TVector3d auxR = (*VectOfPtrToVect3dIter)[0] - P0;
 			double curMinDistE2 = auxR.AmpE2();
 			double testDistE2 = curMinDistE2;
 			int choiceCase = 0;
@@ -2380,40 +2371,37 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 			for(radTVectOfPtrToVect3d::iterator iter = VectOfPtrToVect3dIter; iter != VectOfTwoPoints3d.end(); ++iter)
 			{
 				std::array<TVector3d, 2>& testPairAlt = *iter;
-				TVector3d* TestPoint0Ptr = &testPairAlt[0];
-				TVector3d* TestPoint1Ptr = &testPairAlt[1];
+				TVector3d TestPoint0 = testPairAlt[0];
+				TVector3d TestPoint1 = testPairAlt[1];
 
-				auxR = *TestPoint0Ptr - *P0Ptr; testDistE2 = auxR.AmpE2();
+				auxR = TestPoint0 - P0; testDistE2 = auxR.AmpE2();
 				if(curMinDistE2 > testDistE2) { curMinDistE2 = testDistE2; choiceCase = 0; iterClosest = iter;}
 
-				auxR = *TestPoint0Ptr - *P1Ptr; testDistE2 = auxR.AmpE2();
+				auxR = TestPoint0 - P1; testDistE2 = auxR.AmpE2();
 				if(curMinDistE2 > testDistE2) { curMinDistE2 = testDistE2; choiceCase = 1; iterClosest = iter;}
 
-				auxR = *TestPoint1Ptr - *P0Ptr; testDistE2 = auxR.AmpE2();
+				auxR = TestPoint1 - P0; testDistE2 = auxR.AmpE2();
 				if(curMinDistE2 > testDistE2) { curMinDistE2 = testDistE2; choiceCase = 2; iterClosest = iter;}
 
-				auxR = *TestPoint1Ptr - *P1Ptr; testDistE2 = auxR.AmpE2();
+				auxR = TestPoint1 - P1; testDistE2 = auxR.AmpE2();
 				if(curMinDistE2 > testDistE2) { curMinDistE2 = testDistE2; choiceCase = 3; iterClosest = iter;}
 			}
+			std::array<TVector3d, 2>& closestPair = *iterClosest;
 			if(choiceCase == 0)
 			{
-				std::array<TVector3d, 2>& closestPair = *iterClosest;
-				NewFaceFirstList[FirstCount++] = P0Ptr = &closestPair[1]; //TestPoint1Ptr;
+				NewFaceFirstList[FirstCount++] = P0 = closestPair[1];
 			}
 			else if(choiceCase == 1)
 			{
-				std::array<TVector3d, 2>& closestPair = *iterClosest;
-				NewFaceSecondList[SecondCount++] = P1Ptr = &closestPair[1]; //TestPoint1Ptr;
+				NewFaceSecondList[SecondCount++] = P1 = closestPair[1];
 			}
 			else if(choiceCase == 2)
 			{
-				std::array<TVector3d, 2>& closestPair = *iterClosest;
-				NewFaceFirstList[FirstCount++] = P0Ptr = &closestPair[0]; //TestPoint0Ptr;
+				NewFaceFirstList[FirstCount++] = P0 = closestPair[0];
 			}
 			else //if(choiceCase == 3)
 			{
-				std::array<TVector3d, 2>& closestPair = *iterClosest;
-				NewFaceSecondList[SecondCount++] = P1Ptr = &closestPair[0]; //TestPoint0Ptr;
+				NewFaceSecondList[SecondCount++] = P1 = closestPair[0];
 			}
 			VectOfTwoPoints3d.erase(iterClosest);
 		}
@@ -2422,21 +2410,20 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 	TVector3d** ArrayOf3dEdgePo = vArrayOf3dEdgePo.data();
 
 	//Filling-in the array of actual edge points of the new polygon
-	//TVector3d** TraversMain = &(ArrayOf3dEdgePo[FirstCount-1]);
-	//TVector3d** TraversBuf = &(NewFaceFirstList[0]);
-	//int j;
-	//for(j=0; j<FirstCount; j++) *(TraversMain--) = *(TraversBuf++);
 	int j;
-	TVector3d **TraversMain, **TraversBuf; //OC081008: modified because of observed crash at (FirstCount == 0)
+	// Copy from NewFaceFirstList in reverse order
 	if(FirstCount > 0)
 	{
-		TraversMain = &(ArrayOf3dEdgePo[FirstCount-1]);
-		TraversBuf = &(NewFaceFirstList[0]);
-		for(j=0; j<FirstCount; j++) *(TraversMain--) = *(TraversBuf++);
+		for(j=0; j<FirstCount; j++)
+		{
+			ArrayOf3dEdgePo[FirstCount-1-j] = &(NewFaceFirstList[j]);
+		}
 	}
-	TraversMain = &(ArrayOf3dEdgePo[FirstCount]);
-	TraversBuf = NewFaceSecondList;
-	for(j=0; j<SecondCount; j++) *(TraversMain++) = *(TraversBuf++);
+	// Copy from NewFaceSecondList in order
+	for(j=0; j<SecondCount; j++)
+	{
+		ArrayOf3dEdgePo[FirstCount+j] = &(NewFaceSecondList[j]);
+	}
 
 	//Determining "upper" and "lower" normal vectors to the new polygon
 	TVector3d& p0 = *(ArrayOf3dEdgePo[0]);

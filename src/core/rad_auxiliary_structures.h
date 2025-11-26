@@ -131,6 +131,32 @@ struct radTGeomPolygon {
 		ColRGB[0] = ColRGB[1] = ColRGB[2] = -1;
 	}
 
+	// Copy constructor - fix pointer after vector copy
+	radTGeomPolygon(const radTGeomPolygon& other)
+		: vVertCoords(other.vVertCoords), Nv(other.Nv)
+	{
+		// After vVertCoords is copied, update VertCoords to point to our own vector's data
+		VertCoords = vVertCoords.empty() ? nullptr : vVertCoords.data();
+		ColRGB[0] = other.ColRGB[0];
+		ColRGB[1] = other.ColRGB[1];
+		ColRGB[2] = other.ColRGB[2];
+	}
+
+	// Copy assignment operator
+	radTGeomPolygon& operator=(const radTGeomPolygon& other)
+	{
+		if (this != &other)
+		{
+			vVertCoords = other.vVertCoords;
+			VertCoords = vVertCoords.empty() ? nullptr : vVertCoords.data();
+			Nv = other.Nv;
+			ColRGB[0] = other.ColRGB[0];
+			ColRGB[1] = other.ColRGB[1];
+			ColRGB[2] = other.ColRGB[2];
+		}
+		return *this;
+	}
+
 	// Destructor to ensure cleanup (though vector handles it automatically)
 	~radTGeomPolygon()
 	{

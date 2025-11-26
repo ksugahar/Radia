@@ -384,6 +384,217 @@ mag_obj = create_radia_from_nastran(nas_file,
 
 ---
 
-**Last Updated**: 2025-11-23
+## Unit System Policy: No Hard-Coded Unit Conversions
+
+### Requirement: Centralized Unit Control via rad.FldUnits() and radia_ngsolve
+
+**Goal**: All unit conversions must be controlled through explicit API calls (`rad.FldUnits()` or `radia_ngsolve` constructor), never through hard-coded conversion factors in user code.
+
+**Policy**:
+
+**✓ ALLOWED - Explicit unit control**:
+```python
+# Method 1: Set Radia units globally
+import radia as rad
+rad.FldUnits('m')  # All Radia operations now use meters
+magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 1.2])  # 0.1m
+
+# Method 2: Specify units in radia_ngsolve constructor
+from radia_ngsolve import RadiaField
+B_cf = RadiaField(magnet, 'b', units='m')  # Explicitly use meters
+```
+
+**✗ FORBIDDEN - Hard-coded unit conversions**:
+```python
+# WRONG - Hard-coded mm to m conversion
+for pt in obs_points:
+    f.write(f'{pt[0]/1000.0} {pt[1]/1000.0} {pt[2]/1000.0}\n')  # ✗ DO NOT DO THIS
+
+# WRONG - Hard-coded scaling factors
+x_mm = x_m * 1000.0  # ✗ DO NOT DO THIS
+field_m = field_mm / 1000.0  # ✗ DO NOT DO THIS
+```
+
+**Rationale**:
+- **Single source of truth**: Units controlled by `rad.FldUnits()` only
+- **Consistency**: All code uses same unit system set at initialization
+- **Maintainability**: Changing units requires one line change, not searching for conversion factors
+- **Error prevention**: Hard-coded conversions cause bugs when unit system changes
+
+**Exceptions**:
+
+Only the following locations may perform unit conversions:
+
+1. **`radia_vtk_export.py`**: Internal VTK export module (converts mm→m for VTK standard)
+2. **`radia_ngsolve.cpp`**: C++ binding with explicit `units` parameter
+3. **`radia_ngsolve_fast.py`**: Fast cache preparation (NGSolve uses meters, Radia uses mm)
+4. **`nastran_mesh_import.py`**: Mesh import with explicit `units` parameter
+
+All other code must respect the unit system set by `rad.FldUnits()`.
+
+**Implementation Pattern**:
+
+```python
+# CORRECT - Use rad.FldUnits() to control units
+import radia as rad
+
+# Set unit system once at start
+rad.FldUnits('mm')  # or 'm' for NGSolve integration
+
+# All subsequent operations use this unit system
+magnet = rad.ObjRecMag([0, 0, 0], [100, 100, 100], [0, 0, 1.2])  # 100mm
+field = rad.Fld(magnet, 'b', [50, 50, 50])  # 50mm point
+
+# Export - automatically uses correct units
+from radia_vtk_export import exportGeometryToVTK
+exportGeometryToVTK(magnet, 'output.vtk')  # Handles units internally
+```
+
+**Migration Guidelines**:
+
+When removing hard-coded unit conversions:
+
+1. **Identify conversion factors**: Search for `/1000`, `*1000`, `0.001`, etc.
+2. **Determine intended unit system**: mm or m?
+3. **Add `rad.FldUnits()` at script start**: Set unit system explicitly
+4. **Remove conversion factors**: Use values directly in chosen unit system
+5. **Update comments**: Document which unit system is used
+
+**Files to Check**:
+
+When writing or modifying code:
+- ✓ Check for hard-coded `*1000`, `/1000`, `*0.001`, `/0.001`
+- ✓ Ensure `rad.FldUnits()` is called at script start
+- ✓ Verify no manual coordinate scaling
+- ✓ Use `radia_vtk_export.py` for VTK export (handles units)
+
+**Example - Corrected Code**:
+
+Before (hard-coded conversions):
+```python
+# BAD - Hard-coded unit conversion
+x_range = np.linspace(-90, 90, 21)  # mm
+for pt in obs_points:
+    f.write(f'{pt[0]/1000.0} {pt[1]/1000.0} {pt[2]/1000.0}\n')  # Manual mm->m
+```
+
+After (unit-aware):
+```python
+# GOOD - Use rad.FldUnits() and exportGeometryToVTK
+rad.FldUnits('m')  # Set to meters
+x_range = np.linspace(-0.09, 0.09, 21)  # m (no conversion needed)
+
+# Use radia_vtk_export for geometry
+from radia_vtk_export import exportGeometryToVTK
+exportGeometryToVTK(magnet, 'output.vtk')  # Automatic unit handling
+
+# For field data, use same unit system
+for pt in obs_points:
+    f.write(f'{pt[0]} {pt[1]} {pt[2]}\n')  # Already in meters
+```
+
+---
+
+## Example Script Naming Convention
+
+### Requirement: Consistent snake_case Naming with Functional Prefixes
+
+**Goal**: All example scripts in `examples/` folder must follow a consistent naming convention for easy identification and organization.
+
+**Policy**:
+
+**Naming pattern**: `<prefix>_<description>.py`
+
+- Use **snake_case** (all lowercase with underscores)
+- Use **functional prefix** to indicate script purpose
+- Use **descriptive names** that explain what the script does
+
+**Standard prefixes**:
+
+| Prefix | Purpose | Example |
+|--------|---------|---------|
+| `demo_` | Educational demonstration of a feature | `demo_batch_evaluation.py` |
+| `example_` | Complete working example | `example_hmatrix_cache_usage.py` |
+| `benchmark_` | Performance measurement script | `benchmark_solver_scaling.py` |
+| `test_` | Validation/verification script | `test_batch_evaluation.py` |
+| `verify_` | Correctness verification | `verify_curl_A_equals_B.py` |
+| `compare_` | Comparison between methods | `compare_radia_ngsolve_cube.py` |
+| `visualize_` | Visualization script | `visualize_field.py` |
+| `run_` | Runner/orchestrator script | `run_all_benchmarks.py` |
+| (none) | Descriptive physical model name | `sphere_in_quadrupole.py`, `arc_current_with_magnet.py` |
+
+**Naming rules**:
+
+1. **✓ CORRECT - snake_case**:
+   ```
+   sphere_in_quadrupole.py
+   benchmark_solver_scaling.py
+   demo_batch_evaluation.py
+   verify_curl_A_equals_B.py
+   ```
+
+2. **✗ INCORRECT - CamelCase or PascalCase**:
+   ```
+   Cubit2Nastran.py        # Should be: cubit_to_nastran.py
+   York_cubit_mesh.py      # Should be: york_cubit_mesh.py (already correct case, but York should be lowercase)
+   CompareResults.py       # Should be: compare_results.py
+   ```
+
+3. **✗ INCORRECT - No prefix for functional scripts**:
+   ```
+   accuracy.py             # Should be: verify_accuracy.py or benchmark_accuracy.py
+   plot.py                 # Should be: visualize_results.py or plot_benchmark_results.py
+   ```
+
+**Directory-specific guidelines**:
+
+| Directory | Typical Prefixes | Notes |
+|-----------|------------------|-------|
+| `examples/simple_problems/` | (none), `demo_` | Physical model names preferred |
+| `examples/solver_benchmarks/` | `benchmark_`, `run_`, `plot_`, `verify_` | Performance focus |
+| `examples/ngsolve_integration/` | `demo_`, `example_`, `test_`, `verify_` | Educational + validation |
+| `examples/background_fields/` | (none), `compare_` | Physical model names |
+| `examples/electromagnet/` | `main_`, `visualize_` | Workflow scripts |
+
+**Migration checklist**:
+
+When renaming files:
+1. Use `git mv` to preserve history: `git mv OldName.py new_name.py`
+2. Update imports in other files
+3. Update README.md references
+4. Update documentation
+5. Commit with clear message: `"Rename OldName.py to new_name.py (naming convention)"`
+
+**Examples of good names**:
+
+```
+# Physical models - descriptive, no prefix needed
+sphere_in_quadrupole.py           # Clear physics description
+arc_current_with_magnet.py        # Clear what it models
+cubic_polyhedron_magnet.py        # Clear geometry + physics
+
+# Functional scripts - prefix required
+demo_batch_evaluation.py          # Demo of batch feature
+benchmark_solver_scaling.py       # Benchmark solver performance
+verify_curl_A_equals_B.py         # Verify Maxwell equation
+compare_radia_ngsolve.py          # Compare two methods
+visualize_field.py                # Visualize field data
+run_all_benchmarks.py             # Orchestrator script
+```
+
+**Files to rename** (current violations):
+
+1. `background_fields/Cubit2Nastran.py` → `background_fields/cubit_to_nastran.py`
+2. `electromagnet/York_cubit_mesh.py` → `electromagnet/york_cubit_mesh.py`
+
+**Rationale**:
+- **Consistency**: Easy to scan and find scripts by purpose
+- **Clarity**: Prefix immediately indicates script type
+- **Python convention**: PEP 8 recommends snake_case for module names
+- **Sorting**: Related scripts group together alphabetically
+
+---
+
+**Last Updated**: 2025-11-26
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation
