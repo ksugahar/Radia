@@ -49,6 +49,10 @@ class radTApplication {
 
 	int m_nProcMPI, m_rankMPI; //OC01012020
 
+	// Physical units
+	double m_lengthUnitScale; // Scale factor: 1.0 for mm (default), 1000.0 for m
+	const char* m_lengthUnitName; // "mm" or "m"
+
 public:
 
 	short SendingIsRequired;
@@ -74,6 +78,10 @@ public:
 		MemAllocForIntrctMatrTotAtOnce = 0;
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
+
+		// Initialize to default units (mm)
+		m_lengthUnitScale = 1.0;
+		m_lengthUnitName = "mm";
 	}
 
 	int ValidateVector3d(double* ArrayToCheck, long LenArray, TVector3d* VectorPtr);
@@ -232,6 +240,9 @@ public:
 	int RandomizationOnOrOff(char* OnOrOff);
 
 	int SetAndShowPhysUnits();
+	int SetPhysUnits(const char* unitStr); // Set physical units (mm or m)
+	double GetLengthUnitScale() const { return m_lengthUnitScale; }
+	const char* GetLengthUnitName() const { return m_lengthUnitName; }
 
 	//void DumpElem(int ElemKey);
 	void DumpElem(int* arKeys, int nElem, const char* strFormat, bool arKeysAllocInMathLink=false);

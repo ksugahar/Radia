@@ -3079,6 +3079,17 @@ static PyObject* radia_FldUnits(PyObject* self, PyObject* args)
 	PyObject* oResUnits = 0;
 	try
 	{
+		// Check if unit string argument is provided
+		char* sUnitArg = 0;
+		if (!PyArg_ParseTuple(args, "|s", &sUnitArg)) return 0;
+
+		if (sUnitArg != 0)
+		{
+			// Set units
+			g_pyParse.ProcRes(RadFldUnitsSet(sUnitArg));
+		}
+
+		// Get/show current units
 		char sUnits[2048];
 		g_pyParse.ProcRes(RadFldUnits(sUnits));
 
@@ -3535,7 +3546,7 @@ static PyMethodDef radia_methods[] = {
 	{"FldFocKickPer", radia_FldFocKickPer, METH_VARARGS, "FldFocKickPer(obj,[x1,y1,z1],[nsx,nsy,nsz],per,nper,[n1x,n1y,n1z],r1,np1,r2,np2,com:'',[nh:1,nps:8,d1:0,d2:0],'T2m2|rad|microrad':'T2m2',en:1,'fix|tab':'fix') computes matrices of 2nd order kicks of trajectory of relativistic charged particle in periodic magnetic field produced by the object obj. The longitudinal integration along one period starts at point [x1,y1,z1] and is done along direction pointed by vector [nsx,nsy,nsz]; per is period length, nper is number of full periods; one direction of the transverse grid is pointed by vector [n1x,n1y,n1z], the other transverse direction is given by vector product of [n1x,n1y,n1z] and [nsx,nsy,nsz]; r1 and r2 are ranges of the transverse grid, np1 and np2 are corresponding numbers of points; com is arbitrary string comment; nh is maximum number of magnetic field harmonics to treat (default 1), nps is number of longitudinal points (default 8), d1 and d2 are steps of transverse differentiation (by default equal to the steps of the transverse grid); the 'T2m2|rad|microrad' string variable specifies the units for the resulting 2nd order kick values (default 'T2m2'); en is electron elergy in GeV (optional, required only if units are 'rad' or 'microrad'); the 'fix|tab' string variable specifies the format of the output data string (i.e. element [5] of the output list), 'fix' for fixed-width (default), 'tab' for tab-delimited. Returns list containing: [0]- matrix of kick values in the first transverse direction, [1]- matrix of kick values in the second transverse direction, [2]- matrix of longitudinally-integrated squared transverse magnetic field calculated on same transverse mesh as kicks, [3],[4]- lists of positions defining the transverse grid, [5]- formatted string containing the computed results (for saving into a text file)."},
 	{"FldCmpCrt", radia_FldCmpCrt, METH_VARARGS, "FldCmpCrt(prcB,prcA,prcBint,prcFrc,prcTrjCrd,prcTrjAng) sets general absolute accuracy levels for computation of field induction (prcB), vector potential (prcA), induction integrals along straight line (prcBint), field force (prcFrc), relativistic particle trajectory coordinates (prcTrjCrd) and angles (prcTrjAng)."},
 	{"FldCmpPrc", radia_FldCmpPrc, METH_VARARGS, "FldCmpPrc('PrcB->prb,PrcA->pra,PrcBInt->prbint,PrcForce->prfrc,PrcTorque->prtrq,PrcEnergy->pre,PrcCoord->prcrd,PrcAngle->prang') sets general absolute accuracy levels for computation of magnetic field induction, vector potential, induction integral along straight line, field force, torque, energy; relativistic charged particle trajectory coordinates and angles. The function works in line with the Mathematica mechanism of Options. PrcB, PrcA, PrcBInt, PrcForce, PrcTorque, PrcEnergy, PrcCoord, PrcAngle are names of the options; prb, pra, prbint, prfrc, prtrq, pre, prcrd, prang are the corresponding values (real numbers specifying the accuracy levels)."},
-	{"FldUnits", radia_FldUnits, METH_VARARGS, "FldUnits() shows the physical units currently in use."},
+	{"FldUnits", radia_FldUnits, METH_VARARGS, "FldUnits('mm'|'m') sets or shows the physical length units. Call without argument to show current units. Supported units: 'mm', 'm', 'millimeter', 'meter'."},
 	{"FldLenRndSw", radia_FldLenRndSw, METH_VARARGS, "FldLenRndSw('on|off') switches on or off the randomization of all the length values. The randomization magnitude can be set by the function FldLenTol."},
 	{"FldLenTol", radia_FldLenTol, METH_VARARGS, "FldLenTol(abs,rel,zero:0) sets absolute and relative randomization magnitudes for all the length values, including coordinates and dimensions of the objects producing magnetic field, and coordinates of points where the field is computed. Optimal values of the variables can be: rel=10^(-11), abs=L*rel, zero=abs, where L is the distance scale value (in mm) for the problem to be solved. Too small randomization magnitudes can result in run-time code errors."},
 	{"FldShimSig", radia_FldShimSig, METH_VARARGS, "FldShimSig(obj,'bx|by|bz|hx|hy|hz|ibx|iby|ibz'|'',[dx,dy,dz],[x1,y1,z1],[x2,y2,z2],np,[vix,viy,viz]:[0,0,0]) computes virtual 'shim signature', i.e. variation of magnetic field component defined by the second variable, introduced by displacement [dx,dy,dz] of magnetic field source object obj. The field variation is computed at np equidistant points along a line segment from [x1,y1,z1] to [x2,y2,z2]; the vector [vix,viy,viz] is taken into account if a field integral variation should be computed: in this case, it defines orientation of the integration line."},
