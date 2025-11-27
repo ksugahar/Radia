@@ -9,7 +9,7 @@
 * Author(s):      Oleg Chubar
 *
 * First release:  1997
-* 
+*
 * Copyright (C):  1997 by European Synchrotron Radiation Facility, France
 *
 -------------------------------------------------------------------------*/
@@ -26,11 +26,13 @@ extern radTYield radYield;
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-void radTPolygon::B_comp(radTField* FieldPtr, const TVector3d* AA_ptr, const TVector3d* BB_ptr, const TVector3d* CC_ptr)
+void radTPolygon::B_comp(radTField* FieldPtr)
 {
 // Orientation: The Polygon normal parallel to vertical ort !!!
 // NOTE: This function uses the analytical formula from radpoly_analytical.cpp
 //       for improved performance and simplicity.
+// IMPORTANT: This function computes field in LOCAL coordinates (polygon is in XY plane).
+//            The caller (B_comp_frM) is responsible for transforming to global coordinates.
 
 	const double PI = 3.14159265358979;
 	const double ConstForH = 1./4./PI;
@@ -60,31 +62,19 @@ void radTPolygon::B_comp(radTField* FieldPtr, const TVector3d* AA_ptr, const TVe
 	}
 
 	// ========================================================================
-	// Setup local coordinate system
+	// Use analytical formula for field calculation (in LOCAL coordinates)
 	// ========================================================================
-	// Use provided basis vectors if available (for tetrahedral faces),
-	// otherwise use default global axes (for axis-aligned polygons)
-	
-	TVector3d AA, BB, CC;
-	
-	if(AA_ptr != nullptr && BB_ptr != nullptr && CC_ptr != nullptr) {
-		// Use provided coordinate system (from radTTrans)
-		AA = *AA_ptr;
-		BB = *BB_ptr;
-		CC = *CC_ptr;
-	} else {
-		// Default: polygon is in XY plane at z=CoordZ
-		AA = TVector3d(1, 0, 0);  // Local X-axis
-		BB = TVector3d(0, 1, 0);  // Local Y-axis
-		CC = TVector3d(0, 0, 1);  // Normal (Z-axis)
-	}
-	
+
+	// Local coordinate system: polygon is in XY plane at z=CoordZ
+	TVector3d AA(1, 0, 0);  // Local X-axis
+	TVector3d BB(0, 1, 0);  // Local Y-axis
+	TVector3d CC(0, 0, 1);  // Normal (Z-axis)
 	TVector3d YY(0, 0, CoordZ);  // Reference point on polygon plane
-	
+
 	// Prepare observation point in single-element vector
 	std::vector<TVector3d> obs_points(1, ObsPo);
 	std::vector<TVector3d> field_result(1, TVector3d(0, 0, 0));
-	
+
 	// Magnetic charge density (Magn.z is normal component in local coordinates)
 	double W = ConstForH * Magn.z;  // Magn is already in local coordinates (z = normal component)
 
@@ -103,7 +93,7 @@ void radTPolygon::B_comp(radTField* FieldPtr, const TVector3d* AA_ptr, const TVe
 	TVector3d& H_field = field_result[0];
 
 	// ========================================================================
-	// Apply results to FieldPtr
+	// Apply results to FieldPtr (in LOCAL coordinates)
 	// ========================================================================
 
 	if(B_orH_CompNeeded)

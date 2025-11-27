@@ -280,7 +280,7 @@ public:
 	void CheckAndRearrangeEdgePoints(TVector2d*, int);
 	void CheckAndRearrangeEdgePoints(radTVect2dVect&);
 
-		void B_comp(radTField*, const TVector3d* AA_ptr = nullptr, const TVector3d* BB_ptr = nullptr, const TVector3d* CC_ptr = nullptr);
+		void B_comp(radTField*);
 	void B_intComp(radTField*);
 	void B_intCompSpecCases(radTField*, const TSpecCaseID&);
 
