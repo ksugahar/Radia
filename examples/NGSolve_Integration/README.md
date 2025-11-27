@@ -1,6 +1,6 @@
 # NGSolve Integration Examples
 
-Integration of Radia (boundary element method) with NGSolve (finite element method) for magnetostatic field computation.
+Integration of Radia (Magnetic Moment Method) with NGSolve (finite element method) for magnetostatic field computation.
 
 ## Directory Structure
 

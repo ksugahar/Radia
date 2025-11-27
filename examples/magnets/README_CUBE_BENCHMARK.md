@@ -318,7 +318,7 @@ TETRA_FACES = [
 ]
 ```
 
-This ensures outward-facing normals required by Radia BEM.
+This ensures outward-facing normals required by Radia MMM.
 
 ### Mesh Quality Impact
 

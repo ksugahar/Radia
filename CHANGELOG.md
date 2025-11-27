@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.4] - 2025-11-27
+
+### Added
+
+- **SolverTetraMethod() API**
+  - New API to control tetrahedral element field computation method
+  - `rad.SolverTetraMethod(0)`: Original Radia polygon method (default)
+  - `rad.SolverTetraMethod(1)`: Analytical method for high-permeability materials
+  - Replaces deprecated `RADIA_TETRA_METHOD` environment variable
+  - Both methods now produce identical results (verified 0.00% difference)
+
+### Fixed
+
+- **ANALYTICAL Method (SolverTetraMethod=1)**
+  - Fixed double coordinate transformation bug causing 59.64% error
+  - Root cause: `B_comp` was incorrectly receiving global basis vectors
+  - Solution: Reverted to LOCAL coordinate computation with identity basis
+  - Method 0 and Method 1 now produce identical results
+
+### Changed
+
+- **Documentation Updates**
+  - Updated `FldUnits` documentation with meter/millimeter setting examples
+  - Added NGSolve integration unit policy (`rad.FldUnits('m')` required)
+  - Corrected "BEM" terminology to "MMM" (Magnetic Moment Method) throughout
+  - Added `SolverTetraMethod` to API_REFERENCE.md and API_EXTENSIONS.md
+  - Updated NGSOLVE_USAGE_GUIDE.md and NGSOLVE_INTEGRATION.md
+
+### Documentation
+
+- **Unit System Policy**
+  - Enforced no hard-coded unit conversions policy
+  - All unit conversions via `rad.FldUnits()` only
+  - Updated all NGSolve examples to use `rad.FldUnits('m')`
+
 ## [1.3.3] - 2025-01-21
 
 ### Optimized
