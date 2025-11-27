@@ -23,6 +23,9 @@ static bool g_SolverHMatrixEnabled = false;
 static double g_SolverHMatrixEps = 1e-4;  // Phase 1: Relaxed from 1e-6 for better compression
 static int g_SolverHMatrixMaxRank = 30;   // Phase 1: Reduced from 50 for better compression
 
+// Tetrahedral element method
+static int g_TetrahedronMethod = 0;       // 0=original Radia method, 1=analytical method
+
 //-------------------------------------------------------------------------
 
 extern "C" {
@@ -120,6 +123,7 @@ void CompCriterium( double, double, double, double, double,double );
 void CompPrecisionOpt( const char*, const char*, const char*, const char*, const char*, const char*, const char*, const char* );
 void PhysicalUnits();
 void PhysicalUnitsSet(const char*);
+void TetrahedronMethodSet(int);
 void RandomizationOnOrOff( char* );
 void TolForConvergence( double, double, double );
 void ShimSignature( int, char*, double,double,double, double,double,double, double,double,double, int, double,double,double );
@@ -1799,6 +1803,26 @@ double RadSolverGetHMatrixEps()
 int RadSolverGetHMatrixMaxRank()
 {
 	return g_SolverHMatrixMaxRank;
+}
+
+//-------------------------------------------------------------------------
+// Tetrahedral Method Control
+//-------------------------------------------------------------------------
+
+int CALL RadSolverTetraMethod(int method)
+{
+	if(method < 0 || method > 1)
+	{
+		return -1;  // Invalid method
+	}
+
+	g_TetrahedronMethod = method;
+	return 0;
+}
+
+int RadSolverGetTetraMethod()
+{
+	return g_TetrahedronMethod;
 }
 
 //-------------------------------------------------------------------------

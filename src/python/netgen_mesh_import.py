@@ -337,8 +337,9 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
         Unit system: 'm' (meters) or 'mm' (millimeters).
         Must match rad.FldUnits() setting.
 
-        - If 'm': Coordinates used directly from Netgen (no scaling)
-        - If 'mm': Coordinates scaled from meters to millimeters (x1000)
+        Note: As of v1.3.4, coordinate scaling is handled automatically by
+        rad.FldUnits(). This parameter is kept for API compatibility but
+        the actual scaling is performed by Radia's unit conversion system.
 
     combine : bool, default=True
         If True, return rad.ObjCnt() container of all elements.
@@ -460,13 +461,12 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
         if skipped_count > 0:
             print(f"                Skipped: {skipped_count} elements (filtered by material)")
 
-    # Determine coordinate scaling
-    coord_scale = 1000.0 if units == 'mm' else 1.0
+    # Coordinate scaling is now handled by rad.FldUnits()
+    # No manual scaling needed - Radia automatically converts units
+    coord_scale = 1.0
 
-    if verbose and units == 'mm':
-        print(f"                Units: mm (scaling coordinates x1000)")
-    elif verbose:
-        print(f"                Units: m (no scaling)")
+    if verbose:
+        print(f"                Units: {units} (scaling handled by rad.FldUnits())")
 
     # Process material specification
     if material is None:

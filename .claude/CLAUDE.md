@@ -613,6 +613,79 @@ run_all_benchmarks.py             # Orchestrator script
 
 ---
 
-**Last Updated**: 2025-11-26
+## Tetrahedral Element Method Control
+
+### Requirement: Explicit API for Tetrahedral Field Computation Method
+
+**Goal**: Allow users to explicitly select tetrahedral element field computation method via API, not environment variables.
+
+**Rationale**:
+- Environment variables are not user-friendly and hard to discover
+- Explicit API makes method selection clear in code
+- Matches pattern of H-matrix solver control (`rad.SolverHMatrixEnable()`)
+
+**API**:
+
+```python
+import radia as rad
+
+# Set tetrahedral method
+rad.SolverTetraMethod(method)
+# method = 0: Original Radia method (default)
+# method = 1: Analytical method (for high-permeability materials)
+```
+
+**Implementation**:
+
+1. **Global variable** (`src/lib/radentry.cpp`):
+   ```cpp
+   static int g_TetrahedronMethod = 0;  // 0=original, 1=analytical
+   ```
+
+2. **C API** (`src/lib/radentry.cpp`, `src/lib/radentry.h`):
+   ```cpp
+   int CALL RadSolverTetraMethod(int method);
+   int RadSolverGetTetraMethod();
+   ```
+
+3. **Python binding** (`src/python/radpy_pyapi.cpp`):
+   ```python
+   rad.SolverTetraMethod(method)
+   ```
+
+**Usage Example**:
+
+```python
+import radia as rad
+from netgen_mesh_import import netgen_mesh_to_radia
+
+# Set tetrahedral method to analytical
+rad.SolverTetraMethod(1)
+
+# Import tetrahedral mesh
+mag_obj = netgen_mesh_to_radia(mesh,
+                                material={'magnetization': [0, 0, 12000]},
+                                units='m')
+
+# Solve
+rad.Solve(mag_obj, 0.0001, 10000)
+```
+
+**Method Details**:
+
+| Method | Name | Description | Use Case |
+|--------|------|-------------|----------|
+| 0 | Original | Radia's original tetrahedral method | Default, general purpose |
+| 1 | Analytical | Analytical method with basis vector extraction | High permeability materials (μr > 100) |
+
+**Notes**:
+- Default is method=0 (original Radia method)
+- Method setting is global and affects all tetrahedral elements
+- Must be set before calling `rad.Solve()`
+- Does not affect hexahedral or other element types
+
+---
+
+**Last Updated**: 2025-11-27
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation
