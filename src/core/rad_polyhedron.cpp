@@ -26,6 +26,7 @@
 #include "rad_application.h"
 #include "auxparse.h"
 #include "rad_poly_analytical.h"
+#include "radentry.h"  // For RadSolverGetTetraMethod()
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -839,25 +840,18 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 //void radTPolyhedron::B_comp(radTField* FieldPtr)
 {
-	// Tetrahedral method selection via environment variable
+	// Tetrahedral method selection via API
 	if(IsTetrahedron())
 	{
-		const char* method_env = std::getenv("RADIA_TETRA_METHOD");
-		if(method_env != nullptr)
+		int method = RadSolverGetTetraMethod();
+		if(method == 1)
 		{
-			std::string method(method_env);
-			if(method == "ANALYTICAL")
-			{
-				B_comp_tetrahedron_analytical(FieldPtr);
-				return;
-			}
-			else if(method == "CENTROID")
-			{
-				B_comp_tetrahedron_centroid(FieldPtr);
-				return;
-			}
+			// Analytical method
+			B_comp_tetrahedron_analytical(FieldPtr);
+			return;
 		}
-		// Fall through to standard polygon method if not ANALYTICAL or CENTROID
+		// method == 0: Use standard polygon method (original Radia method)
+		// Fall through to standard polygon-based computation
 	}
 
 	// Use standard polygon-based computation for all polyhedra (including tetrahedra)

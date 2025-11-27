@@ -1002,6 +1002,34 @@ static PyObject* radia_SolverHMatrixDisable(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
+ * Set tetrahedral element method
+ ***************************************************************************/
+static PyObject* radia_SolverTetraMethod(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+
+	try
+	{
+		int method = 0;
+		if(!PyArg_ParseTuple(args, "i:SolverTetraMethod", &method))
+			throw CombErStr(strEr_BadFuncArg, ": SolverTetraMethod");
+
+		int errStat = RadSolverTetraMethod(method);
+		if(errStat != 0)
+		{
+			throw "Radia::Error999: Invalid tetrahedral method (use 0 or 1)";
+		}
+
+		oRes = Py_BuildValue("i", 0);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
  * Pre-compute relaxation interaction matrix
  ***************************************************************************/
 static PyObject* radia_PreRelax(PyObject* self, PyObject* args)
@@ -3481,6 +3509,7 @@ static PyMethodDef radia_methods[] = {
 	// {"HMatrixBuild", radia_HMatrixBuild, METH_VARARGS, "HMatrixBuild(hmat) builds the H-matrix structure for the H-matrix field source hmat. This must be called after creating the H-matrix object with ObjHMatrix. The building process constructs cluster trees and performs adaptive cross approximation (ACA) for fast field computation."},
 	{"SolverHMatrixEnable", (PyCFunction)radia_SolverHMatrixEnable, METH_VARARGS | METH_KEYWORDS, "SolverHMatrixEnable(enable=1, eps=1e-4, max_rank=30) enables H-matrix acceleration for the relaxation solver. Users must explicitly enable H-matrix to use OpenMP-parallelized operations, providing 4-10x speedup for large systems (N > 200 recommended). Parameters: enable (1=on, 0=off), eps (ACA tolerance, default 1e-4), max_rank (maximum rank for low-rank blocks, default 30)."},
 	{"SolverHMatrixDisable", radia_SolverHMatrixDisable, METH_VARARGS, "SolverHMatrixDisable() disables H-matrix acceleration for the relaxation solver, falling back to the standard dense solver."},
+	{"SolverTetraMethod", radia_SolverTetraMethod, METH_VARARGS, "SolverTetraMethod(method) sets the tetrahedral element field computation method. method=0: original Radia method (default), method=1: analytical method."},
 	{"ObjCnt", radia_ObjCnt, METH_VARARGS, "ObjCnt([obj1,obj2,...]) creates a container object for magnetic field source objects [obj1,obj2,...]."},
 	{"ObjAddToCnt", radia_ObjAddToCnt, METH_VARARGS, "ObjAddToCnt(cnt,[obj1,obj2,...]) adds objects [obj1,obj2,...] to the container object cnt."},
 	{"ObjCntStuf", radia_ObjCntStuf, METH_VARARGS, "ObjCntStuf(obj) returns list of general indexes of the objects present in container if obj is a container; or returns [obj] if obj is not a container."}, 

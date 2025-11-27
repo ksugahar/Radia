@@ -158,6 +158,7 @@ void TolForConvergence( double, double, double );
 void RandomizationOnOrOff( char* );
 void PhysicalUnits();
 void PhysicalUnitsSet(const char*);
+void TetrahedronMethodSet(int);
 
 void GraphicsForElemWithoutSymChilds(int);
 //void GraphicsForElemWithSymChilds(int);
@@ -1847,6 +1848,19 @@ void PhysicalUnits()
 void PhysicalUnitsSet(const char* unitStr)
 {
 	rad.SetPhysUnits(unitStr);
+}
+
+//-------------------------------------------------------------------------
+
+void TetrahedronMethodSet(int method)
+{
+	if(method < 0 || method > 1)
+	{
+		rad.Send.ErrorMessage("Radia::Error999: Invalid tetrahedral method (use 0 or 1)");
+		return;
+	}
+	// Method is valid - this function is just a placeholder for validation
+	// Actual setting is done in RadSolverTetraMethod in radentry.cpp
 }
 
 //-------------------------------------------------------------------------

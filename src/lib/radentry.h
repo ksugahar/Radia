@@ -407,6 +407,10 @@ bool RadSolverGetHMatrixEnabled();
 double RadSolverGetHMatrixEps();
 int RadSolverGetHMatrixMaxRank();
 
+// Tetrahedral element method control
+EXP int CALL RadSolverTetraMethod(int method);
+int RadSolverGetTetraMethod();
+
 // Relaxation sub-interval control for LU decomposition solver
 EXP int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey);
 EXP int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
