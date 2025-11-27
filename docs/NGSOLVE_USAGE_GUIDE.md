@@ -9,6 +9,20 @@ There are two implementations for Radia and NGSolve integration:
 | **Pure Python version** (`radia_ngsolve_py.py`) | ✓ Working | ⭐⭐⭐ Recommended |
 | **C++ version** (`radia_ngsolve.pyd`) | △ DLL issues | Conda environment only |
 
+## Unit System (IMPORTANT)
+
+**CRITICAL**: NGSolve uses meters (m), Radia defaults to millimeters (mm).
+
+**Always set units at start of script**:
+```python
+import radia as rad
+rad.FldUnits('m')  # REQUIRED for NGSolve integration
+```
+
+Without this, coordinates will be off by 1000x!
+
+---
+
 ## Pure Python Version Usage (Recommended)
 
 ### Basic Usage
@@ -19,12 +33,13 @@ sys.path.insert(0, r"S:\radia\01_GitHub\src\python")
 sys.path.insert(0, r"S:\radia\01_GitHub\build\lib\Release")
 
 import radia as rad
+rad.FldUnits('m')  # IMPORTANT: Set to meters for NGSolve
 import radia_ngsolve_py as radia_ngsolve
 from ngsolve import *
 from netgen.csg import *
 
-# Create Radia geometry
-magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1])
+# Create Radia geometry (now in meters)
+magnet = rad.ObjRecMag([0, 0, 0], [0.02, 0.02, 0.03], [0, 0, 1])  # 20x20x30 mm
 
 # Create Radia field object
 B_radia = radia_ngsolve.RadBfield(magnet)
@@ -174,8 +189,8 @@ This follows the same pattern as EMPY_Field's `B_MAGNET_CF`.
 
 **Reason**:
 - Both versions evaluate Radia field using `rad.Fld()`
-- `rad.Fld()` uses boundary element method (BEM) which is designed for **air regions** only
-- BEM is **inaccurate inside permanent magnets** - this is a fundamental limitation of Radia, not a bug
+- `rad.Fld()` uses Magnetic Moment Method (MMM) which is designed for **air regions** only
+- MMM is **inaccurate inside permanent magnets** - this is a fundamental limitation of Radia, not a bug
 - Therefore, using `radia_ngsolve` inside magnets will return incorrect field values
 
 **Valid Use Cases** (✓ OK):

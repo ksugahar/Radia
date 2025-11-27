@@ -4,7 +4,7 @@ Complete reference for Radia Python API including original ESRF functions and cu
 
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
-**Date**: 2025-11-08
+**Date**: 2025-11-27
 
 ---
 
@@ -872,15 +872,41 @@ Sets computation precision for various field quantities.
 
 ### FldUnits
 ```python
-rad.FldUnits()
+# Get current units
+units_str = rad.FldUnits()
+
+# Set length unit to meters
+rad.FldUnits('m')
+
+# Set length unit to millimeters (default)
+rad.FldUnits('mm')
 ```
-Returns current units in use.
+Gets or sets the unit system.
+
+**Parameters** (for setting):
+- `'m'`: Use meters for length
+- `'mm'`: Use millimeters for length (default)
+
+**Returns** (for getting):
+- String describing current units
 
 **Default units**:
 - Length: millimeters (mm)
 - Magnetic flux density: Tesla (T)
 - Current: Amperes (A)
 - Force: Newtons (N)
+
+**IMPORTANT - NGSolve Integration**:
+```python
+# REQUIRED for NGSolve integration (NGSolve uses meters)
+import radia as rad
+rad.FldUnits('m')  # Set BEFORE creating any geometry
+
+# All coordinates now in meters
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2])
+```
+
+**Policy**: No hard-coded unit conversions in code. All conversions via `rad.FldUnits()`.
 
 ---
 
@@ -932,6 +958,44 @@ Controls hierarchical matrix acceleration.
 
 ---
 
+### SolverTetraMethod ⭐ NEW
+```python
+rad.SolverTetraMethod(method)
+```
+Sets the tetrahedral element field computation method.
+
+**Parameters**:
+- `method`: Integer selecting the computation method
+  - `0`: Original Radia method (default)
+  - `1`: Analytical method (for high-permeability materials)
+
+**Example**:
+```python
+import radia as rad
+from netgen_mesh_import import netgen_mesh_to_radia
+
+# Set tetrahedral method to analytical
+rad.SolverTetraMethod(1)
+
+# Import tetrahedral mesh
+mag_obj = netgen_mesh_to_radia(mesh,
+                                material={'magnetization': [0, 0, 12000]},
+                                units='m')
+
+# Solve
+rad.Solve(mag_obj, 0.0001, 10000)
+```
+
+**Notes**:
+- Default is method=0 (original Radia method)
+- Method setting is global and affects all tetrahedral elements
+- Must be set before calling `rad.Solve()`
+- Does not affect hexahedral or other element types
+
+**Documentation**: See [API_EXTENSIONS.md](API_EXTENSIONS.md#solvertetramethod)
+
+---
+
 ## Units Summary
 
 | Quantity | Units |
@@ -966,6 +1030,6 @@ Controls hierarchical matrix acceleration.
 
 ---
 
-**Last Updated**: 2025-11-08
+**Last Updated**: 2025-11-27
 **Maintained By**: Radia Development Team
 **License**: LGPL-2.1 (modifications), BSD-style (original RADIA from ESRF)

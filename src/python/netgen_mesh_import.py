@@ -271,7 +271,7 @@ def extract_elements(mesh, material_filter=None, allow_hex=False):
                 raise ValueError(
                     f"Element {el_idx} is hexahedral (ET.HEX). "
                     f"Hexahedral elements are not allowed by default. "
-                    f"Set allow_hex=True to enable (WARNING: may cause BEM issues)."
+                    f"Set allow_hex=True to enable (WARNING: may cause MMM issues)."
                 )
             else:
                 raise ValueError(

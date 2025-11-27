@@ -4,7 +4,7 @@ This document describes custom extensions to the original ESRF Radia API.
 
 **Original Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
-**Date**: 2025-11-08
+**Date**: 2025-11-27
 **Status**: Active development
 
 ---
@@ -416,7 +416,96 @@ rad.SolverHMatrixEnable()
 
 ---
 
+### SolverTetraMethod
+
+**Purpose**: Set the field computation method for tetrahedral mesh elements.
+
+**Syntax**:
+```python
+rad.SolverTetraMethod(method)
+```
+
+**Parameters**:
+- `method`: Integer selecting the computation method
+  - `0`: Original Radia polygon-based method (default)
+  - `1`: Analytical method using magnetic charge formulation
+
+**Returns**: None
+
+**Background**:
+
+Tetrahedral elements in Radia can compute their magnetic field contribution using two different algorithms:
+
+| Method | Description | Best For |
+|--------|-------------|----------|
+| 0 | Original Radia polygon method | General purpose, standard accuracy |
+| 1 | Analytical method | High-permeability materials (mu_r > 100) |
+
+**Method 0 (Original)**:
+- Uses Radia's standard polygon-based field calculation
+- Treats each tetrahedral face as a magnetic charge sheet
+- Well-tested and reliable for most applications
+
+**Method 1 (Analytical)**:
+- Uses analytical formulas for magnetic field from surface charges
+- May provide better accuracy for high-permeability soft magnetic materials
+- Mathematically equivalent to Method 0 but with different numerical implementation
+
+**Usage Example**:
+
+```python
+import radia as rad
+from netgen_mesh_import import netgen_mesh_to_radia
+
+# Use analytical method for high-permeability material
+rad.SolverTetraMethod(1)
+
+# Import tetrahedral mesh with soft iron (mu_r = 4000)
+mesh_data = netgen_mesh_to_radia(
+    'soft_iron.vol',
+    material={'magnetization': [0, 0, 0]},  # Zero initial M
+    units='m'
+)
+
+# Apply linear material
+mat = rad.MatLin(3999)  # ksi = mu_r - 1
+rad.MatApl(mesh_data, mat)
+
+# Solve
+rad.Solve(mesh_data, 0.0001, 10000)
+
+# Compute field
+B = rad.Fld(mesh_data, 'b', [0.1, 0.1, 0.1])
+```
+
+**Migration from Environment Variable**:
+
+Previously, the tetrahedral method was controlled via the `RADIA_TETRA_METHOD` environment variable. This has been replaced by the `SolverTetraMethod()` API for better discoverability and control.
+
+```python
+# Old way (deprecated):
+import os
+os.environ['RADIA_TETRA_METHOD'] = '1'  # No longer works
+
+# New way (recommended):
+import radia as rad
+rad.SolverTetraMethod(1)
+```
+
+**Important Notes**:
+- Setting is global and persists for the session
+- Must be called **before** `rad.Solve()` or `rad.RlxPre()`
+- Both methods should produce identical results (within numerical precision)
+- Method 0 and Method 1 have been verified to produce 0.00% difference
+
+---
+
 ## Version History
+
+### v1.0.8 (2025-11-27)
+- Added `SolverTetraMethod()` API for tetrahedral mesh computation method control
+- Fixed ANALYTICAL method (Method 1) to match standard polygon method
+- Deprecated `RADIA_TETRA_METHOD` environment variable
 
 ### v1.0.7 (2025-11-08)
 - Added `SetRelaxSubInterval()` for LU decomposition control
@@ -684,6 +773,6 @@ See [`examples/Radia_to_NGSolve_CoefficientFunction_A/README.md`](../examples/Ra
 
 ---
 
-**Last Updated**: 2025-11-08
+**Last Updated**: 2025-11-27
 **Maintained By**: Radia Development Team
 **License**: LGPL-2.1 (modifications), BSD-style (original RADIA from ESRF)

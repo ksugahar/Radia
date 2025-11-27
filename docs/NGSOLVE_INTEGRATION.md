@@ -180,8 +180,8 @@ gfu.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
 
 **Reason**:
 - `radia_ngsolve` evaluates Radia field using `rad.Fld()`
-- `rad.Fld()` uses boundary element method (BEM) which is designed for **air regions** only
-- BEM is **inaccurate inside permanent magnets** - this is a fundamental limitation of Radia, not a bug
+- `rad.Fld()` uses Magnetic Moment Method (MMM) which is designed for **air regions** only
+- MMM is **inaccurate inside permanent magnets** - this is a fundamental limitation of Radia, not a bug
 - Therefore, using `radia_ngsolve.RadiaField()` inside magnets will return incorrect values
 
 **Valid Use Cases** (✓ OK):
@@ -201,17 +201,27 @@ gfu.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
 
 ## Coordinate Systems and Units
 
-### Radia
-- **Length**: millimeters (mm)
+### Unit System Configuration
+
+**CRITICAL**: NGSolve typically uses meters (m), but Radia defaults to millimeters (mm).
+
+**Recommended approach**:
+```python
+import radia as rad
+rad.FldUnits('m')  # Set to meters for NGSolve integration
+```
+
+### Radia Default Units
+- **Length**: millimeters (mm) - can be changed with `rad.FldUnits('m')`
 - **Magnetization**: kA/m
 - **B-field**: Tesla (T)
 - **H-field**: A/m
 
 ### NGSolve
-- **Length**: user-defined (typically meters or millimeters)
+- **Length**: typically meters (m)
 - **Fields**: matches Radia units
 
-**Important**: Ensure coordinate system consistency between Radia geometry and NGSolve mesh.
+**Important**: Always call `rad.FldUnits('m')` at the start of your script when using NGSolve integration.
 
 ## Performance Considerations
 
@@ -253,7 +263,7 @@ The test script verifies:
 
 | Feature | EMPY_Field | radia_ngsolve |
 |---------|-----------|-------------|
-| Physics engine | Custom analytical | Radia (BEM) |
+| Physics engine | Custom analytical | Radia (MMM) |
 | Field sources | Coils, magnets | Any Radia object |
 | Template usage | Yes | No |
 | Object management | C++ objects | Integer indices |
