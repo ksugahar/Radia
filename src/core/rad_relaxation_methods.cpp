@@ -43,7 +43,7 @@ void radTIterativeRelaxMeth::ComputeRelaxStatusParam(const TVector3d* NewMagnArr
 	for(int i=0; i<IntrctPtr->AmOfMainElem; i++)
 	{
 		double LocalTestBufMaxModM = 0., LocalTestBufMaxModH = 0.;
-		if(RelStatParR.MisfitM >= 0.)
+		if(RelStatParR.MisfitM >= 0. && OldMagnArray != nullptr)
 		{
 			Mnew_mi_MoldVect = NewMagnArray[i] - OldMagnArray[i];
 			BufMisfitM += Mnew_mi_MoldVect.x*Mnew_mi_MoldVect.x + Mnew_mi_MoldVect.y*Mnew_mi_MoldVect.y
@@ -1751,3 +1751,635 @@ int radTRelaxationMethNo_7::FindSubMatrWithSmallestNumOfElem(radTvInt& VectIndPo
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
+
+//=========================================================================
+// Method 9: Direct LU solver for tetrahedral elements
+//=========================================================================
+
+int radTRelaxationMethNo_9::SolveLU(std::vector<std::vector<double>>& A, std::vector<double>& b, int n)
+{
+	// Gaussian elimination with partial pivoting
+	// Forward elimination
+	for(int k = 0; k < n - 1; k++)
+	{
+		// Find pivot
+		int maxRow = k;
+		double maxVal = std::abs(A[k][k]);
+		for(int i = k + 1; i < n; i++)
+		{
+			if(std::abs(A[i][k]) > maxVal)
+			{
+				maxVal = std::abs(A[i][k]);
+				maxRow = i;
+			}
+		}
+
+		// Check for singular matrix
+		if(maxVal < 1.0e-15)
+		{
+			return -1;  // Singular matrix
+		}
+
+		// Swap rows if needed
+		if(maxRow != k)
+		{
+			std::swap(A[k], A[maxRow]);
+			std::swap(b[k], b[maxRow]);
+		}
+
+		// Eliminate below pivot
+		for(int i = k + 1; i < n; i++)
+		{
+			double factor = A[i][k] / A[k][k];
+			A[i][k] = 0.0;
+			for(int j = k + 1; j < n; j++)
+			{
+				A[i][j] -= factor * A[k][j];
+			}
+			b[i] -= factor * b[k];
+		}
+	}
+
+	// Check last diagonal element
+	if(std::abs(A[n-1][n-1]) < 1.0e-15)
+	{
+		return -1;  // Singular matrix
+	}
+
+	// Back substitution
+	for(int i = n - 1; i >= 0; i--)
+	{
+		double sum = b[i];
+		for(int j = i + 1; j < n; j++)
+		{
+			sum -= A[i][j] * b[j];
+		}
+		b[i] = sum / A[i][i];
+	}
+
+	return 0;  // Success
+}
+
+int radTRelaxationMethNo_9::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
+{
+	if(IntrctPtr == nullptr) return 0;
+
+	// Reset magnetization if needed
+	if(!MagnResetIsNotNeeded)
+	{
+		IntrctPtr->ResetM();
+		IntrctPtr->ResetAuxParam();
+	}
+
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+	
+	// Debug: Check pointers and sizes
+	if(AmOfMainElem <= 0) return 0;
+	if(IntrctPtr->InteractMatrix == nullptr) return 0;
+	if(IntrctPtr->NewMagnArray == nullptr) return 0;
+	if(IntrctPtr->ExternFieldArray == nullptr) return 0;
+	if(IntrctPtr->NewFieldArray == nullptr) return 0;
+	if(IntrctPtr->g3dRelaxPtrVect.empty()) return 0;
+	int ndof = 3 * AmOfMainElem;  // 3 DOF per element (Mx, My, Mz)
+
+	// Get access to interaction matrix and field arrays
+	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix;
+	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
+	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
+	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
+
+	// Build system matrix using ELF-compatible form:
+	// (-N_physical + 1/chi) * M = H_ext
+	// where N_physical is the physical demagnetization tensor (H = N_physical * M)
+	//
+	// NOW (after fix): Radia stores N_stored = N_physical directly
+	// (both hexahedra and polygons use the same convention)
+	// N_physical is NEGATIVE for demagnetization (e.g., -1/3 for cube, -0.29 for tetra)
+	// Therefore: A = -N_stored + 1/chi = -N_physical + 1/chi (ELF form!)
+	//
+	// We use: A = -N_stored + diag(1/chi)
+	//         RHS = H_ext
+	
+	std::vector<std::vector<double>> SystemMatrix(ndof, std::vector<double>(ndof, 0.0));
+	std::vector<double> RHS(ndof, 0.0);
+
+	// Build matrix: A = -N_stored + 1/chi (N_stored is now N_physical, which is negative)
+	for(int i = 0; i < AmOfMainElem; i++)
+	{
+		radTg3dRelax* g3dRelaxPtr_i = IntrctPtr->g3dRelaxPtrVect[i];
+		if(g3dRelaxPtr_i == nullptr) return 0;
+		radTMaterial* MaterPtr_i = (radTMaterial*)(g3dRelaxPtr_i->MaterHandle.rep);
+		if(MaterPtr_i == nullptr) return 0;
+
+		// Get susceptibility tensor for this element
+		TVector3d InstH(0., 0., 0.);
+		TMatrix3d KsiTensor;
+		TVector3d MrVect;
+		MaterPtr_i->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
+		
+		// Build matrix rows for this element (3 rows: Mx, My, Mz)
+		for(int comp_i = 0; comp_i < 3; comp_i++)
+		{
+			int row = 3 * i + comp_i;
+
+			// Get chi for this component
+			double chi_val = 0.0;
+			if(comp_i == 0)      chi_val = KsiTensor.Str0.x;
+			else if(comp_i == 1) chi_val = KsiTensor.Str1.y;
+			else                 chi_val = KsiTensor.Str2.z;
+			
+			// Compute 1/chi (or large value if chi is very small)
+			double inv_chi = (chi_val > 1.0e-10) ? (1.0 / chi_val) : 1.0e10;
+
+			// Add N_stored contributions (N_stored = N_physical, which is NEGATIVE for demagnetization)
+			for(int j = 0; j < AmOfMainElem; j++)
+			{
+				TMatrix3df& Nij = IntrcMat[i][j];
+
+				for(int comp_j = 0; comp_j < 3; comp_j++)
+				{
+					int col = 3 * j + comp_j;
+
+					// Get N_ij component (stored value = N_physical from PreRelax)
+					double Nij_val = 0.0;
+					if(comp_i == 0)      Nij_val = (comp_j == 0) ? Nij.Str0.x : ((comp_j == 1) ? Nij.Str0.y : Nij.Str0.z);
+					else if(comp_i == 1) Nij_val = (comp_j == 0) ? Nij.Str1.x : ((comp_j == 1) ? Nij.Str1.y : Nij.Str1.z);
+					else                 Nij_val = (comp_j == 0) ? Nij.Str2.x : ((comp_j == 1) ? Nij.Str2.y : Nij.Str2.z);
+
+					// A = -N_stored + 1/chi (negate N_stored since it's N_physical = negative)
+					SystemMatrix[row][col] -= Nij_val;
+				}
+			}
+			
+			// Add 1/chi to diagonal
+			SystemMatrix[row][row] += inv_chi;
+
+			// RHS = H_ext + Mr/chi (ELF form: (-N + 1/chi)*M = H_ext + Mr/chi)
+			double Hext_comp = 0.0;
+			if(comp_i == 0)      Hext_comp = ExternFieldAr[i].x;
+			else if(comp_i == 1) Hext_comp = ExternFieldAr[i].y;
+			else                 Hext_comp = ExternFieldAr[i].z;
+
+			double Mr_comp = 0.0;
+			if(comp_i == 0)      Mr_comp = MrVect.x;
+			else if(comp_i == 1) Mr_comp = MrVect.y;
+			else                 Mr_comp = MrVect.z;
+
+			// ELF form: RHS = H_ext + Mr/chi
+			double Mr_over_chi = (chi_val > 1.0e-10) ? (Mr_comp / chi_val) : 0.0;
+			RHS[row] = Hext_comp + Mr_over_chi;
+		}
+	}
+
+	// Solve the linear system using LU decomposition
+	int ierr = SolveLU(SystemMatrix, RHS, ndof);
+
+	if(ierr != 0)
+	{
+		// Solver failed - singular matrix
+		return 0;
+	}
+
+	// Extract solution (M values) and update arrays
+	for(int i = 0; i < AmOfMainElem; i++)
+	{
+		MagnAr[i].x = RHS[3 * i + 0];
+		MagnAr[i].y = RHS[3 * i + 1];
+		MagnAr[i].z = RHS[3 * i + 2];
+
+		// Compute H from M using material relation
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
+		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+		// Update the object's magnetization
+		g3dRelaxPtr->Magn = MagnAr[i];
+
+		// H = M / chi (for linear material)
+		TVector3d InstH(0., 0., 0.);
+		TMatrix3d KsiTensor;
+		TVector3d MrVect;
+		MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
+
+		// H = (M - Mr) / chi
+		NewFieldAr[i].x = (KsiTensor.Str0.x > 1.e-10) ? (MagnAr[i].x - MrVect.x) / KsiTensor.Str0.x : 0.0;
+		NewFieldAr[i].y = (KsiTensor.Str1.y > 1.e-10) ? (MagnAr[i].y - MrVect.y) / KsiTensor.Str1.y : 0.0;
+		NewFieldAr[i].z = (KsiTensor.Str2.z > 1.e-10) ? (MagnAr[i].z - MrVect.z) / KsiTensor.Str2.z : 0.0;
+	}
+
+	// Update relaxation status
+	// Set MisfitM to -1 to skip old magnetization comparison (no OldMagnArray available for direct solver)
+	IntrctPtr->RelaxStatusParam.MisfitM = -1.0;
+	ComputeRelaxStatusParam(MagnAr, nullptr, NewFieldAr);
+	IntrctPtr->RelaxStatusParam.MisfitM = 0.0;  // Reset to 0 after (direct solver has no misfit)
+
+	return 1;  // Single "iteration" for direct solve
+}
+
+//=========================================================================
+// Method 10: BiCGSTAB with H-matrix acceleration
+//=========================================================================
+
+double radTRelaxationMethNo_10::Dot(const std::vector<double>& a, const std::vector<double>& b, int n)
+{
+	double sum = 0.0;
+	#pragma omp parallel for reduction(+:sum) if(n > 100)
+	for(int i = 0; i < n; i++)
+	{
+		sum += a[i] * b[i];
+	}
+	return sum;
+}
+
+double radTRelaxationMethNo_10::Norm2(const std::vector<double>& a, int n)
+{
+	return std::sqrt(Dot(a, a, n));
+}
+
+void radTRelaxationMethNo_10::Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n)
+{
+	#pragma omp parallel for if(n > 100)
+	for(int i = 0; i < n; i++)
+	{
+		y[i] += alpha * x[i];
+	}
+}
+
+void radTRelaxationMethNo_10::Copy(const std::vector<double>& src, std::vector<double>& dst, int n)
+{
+	#pragma omp parallel for if(n > 100)
+	for(int i = 0; i < n; i++)
+	{
+		dst[i] = src[i];
+	}
+}
+
+void radTRelaxationMethNo_10::Scale(double alpha, std::vector<double>& x, int n)
+{
+	#pragma omp parallel for if(n > 100)
+	for(int i = 0; i < n; i++)
+	{
+		x[i] *= alpha;
+	}
+}
+
+void radTRelaxationMethNo_10::GetDiagonalElements(std::vector<double>& diag, int n_elem)
+{
+	// Extract diagonal elements from interaction matrix for Jacobi preconditioner
+	// Diagonal block [i][i] is a 3x3 matrix, we extract the diagonal of that
+	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix;
+
+	for(int i = 0; i < n_elem; i++)
+	{
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
+		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+		TVector3d InstH(0., 0., 0.);
+		TMatrix3d KsiTensor;
+		TVector3d MrVect;
+		MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
+
+		// For each component
+		double chi_x = (KsiTensor.Str0.x > 1.0e-10) ? KsiTensor.Str0.x : 1.0e10;
+		double chi_y = (KsiTensor.Str1.y > 1.0e-10) ? KsiTensor.Str1.y : 1.0e10;
+		double chi_z = (KsiTensor.Str2.z > 1.0e-10) ? KsiTensor.Str2.z : 1.0e10;
+
+		// Diagonal of system matrix: A = -N + 1/chi
+		if(IntrcMat != nullptr)
+		{
+			// Nii is from InteractMatrix[i][i]
+			TMatrix3df& Nii = IntrcMat[i][i];
+			diag[3*i + 0] = -Nii.Str0.x + 1.0/chi_x;
+			diag[3*i + 1] = -Nii.Str1.y + 1.0/chi_y;
+			diag[3*i + 2] = -Nii.Str2.z + 1.0/chi_z;
+		}
+		else
+		{
+			// Fallback: just use 1/chi as diagonal (no N contribution)
+			diag[3*i + 0] = 1.0/chi_x;
+			diag[3*i + 1] = 1.0/chi_y;
+			diag[3*i + 2] = 1.0/chi_z;
+		}
+	}
+}
+
+void radTRelaxationMethNo_10::DenseMatVec(const std::vector<double>& x, std::vector<double>& y, int ndof)
+{
+	// Computes y = A * x where A = -N + 1/chi
+	// Uses H-matrix if available, otherwise dense matrix
+	int n_elem = ndof / 3;
+	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix;
+
+	// Initialize y to zero
+	std::fill(y.begin(), y.end(), 0.0);
+
+	// Check if H-matrix is available
+	if(IntrctPtr->use_hmatrix && IntrctPtr->hmat_interaction != nullptr)
+	{
+		// Use H-matrix for matrix-vector product
+		// Convert x to TVector3d array
+		std::vector<TVector3d> M_in(n_elem), H_out(n_elem);
+		for(int i = 0; i < n_elem; i++)
+		{
+			M_in[i].x = x[3*i + 0];
+			M_in[i].y = x[3*i + 1];
+			M_in[i].z = x[3*i + 2];
+		}
+
+		// H-matrix matvec: H_out = N * M_in
+		IntrctPtr->DefineFieldArray_HMatrix(M_in.data(), H_out.data());
+
+		// Build y = -N*x + (1/chi)*x
+		for(int i = 0; i < n_elem; i++)
+		{
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
+			radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+			TVector3d InstH(0., 0., 0.);
+			TMatrix3d KsiTensor;
+			TVector3d MrVect;
+			MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
+
+			double inv_chi_x = (KsiTensor.Str0.x > 1.0e-10) ? 1.0/KsiTensor.Str0.x : 1.0e10;
+			double inv_chi_y = (KsiTensor.Str1.y > 1.0e-10) ? 1.0/KsiTensor.Str1.y : 1.0e10;
+			double inv_chi_z = (KsiTensor.Str2.z > 1.0e-10) ? 1.0/KsiTensor.Str2.z : 1.0e10;
+
+			y[3*i + 0] = -H_out[i].x + inv_chi_x * x[3*i + 0];
+			y[3*i + 1] = -H_out[i].y + inv_chi_y * x[3*i + 1];
+			y[3*i + 2] = -H_out[i].z + inv_chi_z * x[3*i + 2];
+		}
+	}
+	else if(IntrcMat != nullptr)
+	{
+		// Dense matrix-vector product
+		#pragma omp parallel for if(n_elem > 50)
+		for(int i = 0; i < n_elem; i++)
+		{
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
+			radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+			TVector3d InstH(0., 0., 0.);
+			TMatrix3d KsiTensor;
+			TVector3d MrVect;
+			MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
+
+			double inv_chi_x = (KsiTensor.Str0.x > 1.0e-10) ? 1.0/KsiTensor.Str0.x : 1.0e10;
+			double inv_chi_y = (KsiTensor.Str1.y > 1.0e-10) ? 1.0/KsiTensor.Str1.y : 1.0e10;
+			double inv_chi_z = (KsiTensor.Str2.z > 1.0e-10) ? 1.0/KsiTensor.Str2.z : 1.0e10;
+
+			// y[i] = -sum(N[i][j] * x[j]) + (1/chi) * x[i]
+			double y0 = inv_chi_x * x[3*i + 0];
+			double y1 = inv_chi_y * x[3*i + 1];
+			double y2 = inv_chi_z * x[3*i + 2];
+
+			for(int j = 0; j < n_elem; j++)
+			{
+				TMatrix3df& Nij = IntrcMat[i][j];
+				double xj0 = x[3*j + 0];
+				double xj1 = x[3*j + 1];
+				double xj2 = x[3*j + 2];
+
+				y0 -= Nij.Str0.x*xj0 + Nij.Str0.y*xj1 + Nij.Str0.z*xj2;
+				y1 -= Nij.Str1.x*xj0 + Nij.Str1.y*xj1 + Nij.Str1.z*xj2;
+				y2 -= Nij.Str2.x*xj0 + Nij.Str2.y*xj1 + Nij.Str2.z*xj2;
+			}
+
+			y[3*i + 0] = y0;
+			y[3*i + 1] = y1;
+			y[3*i + 2] = y2;
+		}
+	}
+}
+
+int radTRelaxationMethNo_10::SolveBiCGSTAB_HMatrix(int ndof, double tol, int max_iter, double& residual)
+{
+	// BiCGSTAB with Jacobi preconditioner
+	// Reference: van der Vorst, SIAM J. Sci. Stat. Comput. 13 (1992)
+
+	int n_elem = ndof / 3;
+
+	// Allocate work vectors
+	std::vector<double> r(ndof), r0(ndof), p(ndof), v(ndof), s(ndof), t(ndof);
+	std::vector<double> p_hat(ndof), s_hat(ndof), diag_inv(ndof);
+
+	// Get RHS vector (H_external)
+	std::vector<double> rhs(ndof);
+	if(IntrctPtr->ExternFieldArray == nullptr) return 0;
+	for(int i = 0; i < n_elem; i++)
+	{
+		rhs[3*i + 0] = IntrctPtr->ExternFieldArray[i].x;
+		rhs[3*i + 1] = IntrctPtr->ExternFieldArray[i].y;
+		rhs[3*i + 2] = IntrctPtr->ExternFieldArray[i].z;
+	}
+
+	// Get initial guess (current magnetization)
+	std::vector<double> sol(ndof);
+	if(IntrctPtr->NewMagnArray == nullptr) return 0;
+	for(int i = 0; i < n_elem; i++)
+	{
+		sol[3*i + 0] = IntrctPtr->NewMagnArray[i].x;
+		sol[3*i + 1] = IntrctPtr->NewMagnArray[i].y;
+		sol[3*i + 2] = IntrctPtr->NewMagnArray[i].z;
+	}
+
+	// Build Jacobi preconditioner: M^{-1} = diag(A)^{-1}
+	GetDiagonalElements(diag_inv, n_elem);
+	for(int i = 0; i < ndof; i++)
+	{
+		if(std::abs(diag_inv[i]) > 1.0e-15)
+		{
+			diag_inv[i] = 1.0 / diag_inv[i];
+		}
+		else
+		{
+			diag_inv[i] = 1.0;  // Fallback for near-zero diagonal
+		}
+	}
+
+	// Initialize: r0 = b - A*x0
+	DenseMatVec(sol, v, ndof);  // v = A*x0
+	Copy(rhs, r, ndof);         // r = rhs
+	Axpy(-1.0, v, r, ndof);     // r = r - v
+
+	// Choose r0* = r0
+	Copy(r, r0, ndof);
+
+	// Initialize BiCGSTAB parameters
+	double rho = 1.0, alpha_bicg = 1.0, omega = 1.0;
+	std::fill(p.begin(), p.end(), 0.0);
+	std::fill(v.begin(), v.end(), 0.0);
+
+	// Compute ||b|| for relative residual
+	double rhs_norm = Norm2(rhs, ndof);
+	if(rhs_norm < 1.0e-30) rhs_norm = 1.0;
+
+	int iter;
+	for(iter = 1; iter <= max_iter; iter++)
+	{
+		double rho_old = rho;
+		rho = Dot(r0, r, ndof);
+
+		// Check for breakdown
+		if(std::abs(rho) < 1.0e-30)
+		{
+			residual = Norm2(r, ndof) / rhs_norm;
+			break;
+		}
+
+		if(iter == 1)
+		{
+			Copy(r, p, ndof);
+		}
+		else
+		{
+			if(std::abs(rho_old * omega) < 1.0e-30)
+			{
+				residual = Norm2(r, ndof) / rhs_norm;
+				break;
+			}
+			double beta = (rho / rho_old) * (alpha_bicg / omega);
+			Axpy(-omega, v, p, ndof);
+			Scale(beta, p, ndof);
+			Axpy(1.0, r, p, ndof);
+		}
+
+		// Apply preconditioner: p_hat = M^{-1} * p
+		for(int i = 0; i < ndof; i++)
+		{
+			p_hat[i] = diag_inv[i] * p[i];
+		}
+
+		// v = A * p_hat
+		DenseMatVec(p_hat, v, ndof);
+
+		// alpha_bicg = rho / (r0, v)
+		double r0_dot_v = Dot(r0, v, ndof);
+		if(std::abs(r0_dot_v) < 1.0e-30)
+		{
+			residual = Norm2(r, ndof) / rhs_norm;
+			break;
+		}
+		alpha_bicg = rho / r0_dot_v;
+
+		// s = r - alpha_bicg * v
+		Copy(r, s, ndof);
+		Axpy(-alpha_bicg, v, s, ndof);
+
+		// Check if s is small enough
+		double s_norm = Norm2(s, ndof);
+		if(s_norm / rhs_norm < tol)
+		{
+			Axpy(alpha_bicg, p_hat, sol, ndof);
+			residual = s_norm / rhs_norm;
+			break;
+		}
+
+		// Apply preconditioner: s_hat = M^{-1} * s
+		for(int i = 0; i < ndof; i++)
+		{
+			s_hat[i] = diag_inv[i] * s[i];
+		}
+
+		// t = A * s_hat
+		DenseMatVec(s_hat, t, ndof);
+
+		// omega = (t, s) / (t, t)
+		double t_dot_s = Dot(t, s, ndof);
+		double t_dot_t = Dot(t, t, ndof);
+		if(std::abs(t_dot_t) < 1.0e-30)
+		{
+			Axpy(alpha_bicg, p_hat, sol, ndof);
+			residual = s_norm / rhs_norm;
+			break;
+		}
+		omega = t_dot_s / t_dot_t;
+
+		// x = x + alpha_bicg * p_hat + omega * s_hat
+		Axpy(alpha_bicg, p_hat, sol, ndof);
+		Axpy(omega, s_hat, sol, ndof);
+
+		// r = s - omega * t
+		Copy(s, r, ndof);
+		Axpy(-omega, t, r, ndof);
+
+		// Check convergence
+		double r_norm = Norm2(r, ndof);
+		residual = r_norm / rhs_norm;
+		if(residual < tol)
+		{
+			break;
+		}
+
+		// Check for stagnation
+		if(std::abs(omega) < 1.0e-30)
+		{
+			break;
+		}
+	}
+
+	// Copy solution back to NewMagnArray
+	for(int i = 0; i < n_elem; i++)
+	{
+		IntrctPtr->NewMagnArray[i].x = sol[3*i + 0];
+		IntrctPtr->NewMagnArray[i].y = sol[3*i + 1];
+		IntrctPtr->NewMagnArray[i].z = sol[3*i + 2];
+	}
+
+	return iter;
+}
+
+int radTRelaxationMethNo_10::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
+{
+	if(IntrctPtr == nullptr) return 0;
+
+	// Reset magnetization if needed
+	if(!MagnResetIsNotNeeded)
+	{
+		IntrctPtr->ResetM();
+		IntrctPtr->ResetAuxParam();
+	}
+
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+	if(AmOfMainElem <= 0) return 0;
+
+	// Check required arrays
+	if(IntrctPtr->InteractMatrix == nullptr && !IntrctPtr->use_hmatrix) return 0;
+	if(IntrctPtr->NewMagnArray == nullptr) return 0;
+	if(IntrctPtr->ExternFieldArray == nullptr) return 0;
+	if(IntrctPtr->NewFieldArray == nullptr) return 0;
+	if(IntrctPtr->g3dRelaxPtrVect.empty()) return 0;
+
+	int ndof = 3 * AmOfMainElem;
+
+	// Solve using BiCGSTAB
+	double residual = 0.0;
+	int n_iter = SolveBiCGSTAB_HMatrix(ndof, PrecOnMagnetiz, MaxIterNumber, residual);
+
+	// Update object magnetizations and compute H-field
+	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
+	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
+
+	for(int i = 0; i < AmOfMainElem; i++)
+	{
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
+		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+		// Update the object's magnetization
+		g3dRelaxPtr->Magn = MagnAr[i];
+
+		// H = (M - Mr) / chi
+		TVector3d InstH(0., 0., 0.);
+		TMatrix3d KsiTensor;
+		TVector3d MrVect;
+		MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
+
+		NewFieldAr[i].x = (KsiTensor.Str0.x > 1.e-10) ? (MagnAr[i].x - MrVect.x) / KsiTensor.Str0.x : 0.0;
+		NewFieldAr[i].y = (KsiTensor.Str1.y > 1.e-10) ? (MagnAr[i].y - MrVect.y) / KsiTensor.Str1.y : 0.0;
+		NewFieldAr[i].z = (KsiTensor.Str2.z > 1.e-10) ? (MagnAr[i].z - MrVect.z) / KsiTensor.Str2.z : 0.0;
+	}
+
+	// Update relaxation status
+	IntrctPtr->RelaxStatusParam.MisfitM = residual;
+	ComputeRelaxStatusParam(MagnAr, nullptr, NewFieldAr);
+
+	return n_iter;
+}
