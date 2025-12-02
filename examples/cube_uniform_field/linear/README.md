@@ -114,14 +114,50 @@ For a linear magnetic material in uniform external field:
 - **Magnetization**: M = chi * H_int
 - **Exterior field**: Dipole field from magnetized cube
 
+## High Permeability Behavior (mu_r >= 100)
+
+### Convergence Characteristics
+
+| mu_r | Hex 4x4x4 | Hex 8x8x8 | Tet 5 | Notes |
+|------|-----------|-----------|-------|-------|
+| 100 | 404 iter | ~20k iter | 22 iter | Fine hex mesh slow to converge |
+| 500 | 2095 iter | N/C | 22 iter | |
+| 1000 | 3758 iter | N/C | 22 iter | |
+| 2000 | 844 iter | N/C | 20 iter | |
+| 4000 | 37k iter | N/C | 21 iter | Coarse mesh required |
+
+N/C = Not converged within 20,000 iterations
+
+### Key Observations
+
+1. **Coarse mesh converges faster**: Hex 4x4x4 converges while 8x8x8 may not
+2. **Tet single cell**: 5-element tetra always converges quickly (~20 iter)
+3. **Accuracy trade-off**: Coarser meshes converge but have lower spatial resolution
+
+### Recommendations for High mu_r
+
+1. Use coarser meshes (4x4x4 to 6x6x6 hex subdivisions)
+2. Increase iteration limit (50,000+) for fine meshes
+3. Use relaxed tolerance (0.001 instead of 0.0001)
+4. For tetrahedral: single 5-tetra cell provides fast convergence
+
 ## Known Limitations
 
-1. **High permeability**: For mu_r > 100, solver convergence may be slow
-2. **Adjacent tetrahedra**: Dense tetrahedral meshes may show numerical issues
-3. **Internal field**: `rad.Fld()` inside magnetic materials has limited accuracy
+1. **High permeability (mu_r > 100)**:
+   - Fine meshes may not converge within reasonable iteration limits
+   - Use coarser meshes for better convergence
+
+2. **Adjacent tetrahedra**:
+   - Dense tetrahedral meshes with many shared faces may show numerical instability
+   - Single 5-tetra cell decomposition is most stable
+
+3. **Internal field**:
+   - `rad.Fld()` inside magnetic materials has limited accuracy
+   - Always validate using external field points
 
 ## Notes
 
 1. **Unit System**: All examples use meters (`rad.FldUnits('m')`)
 2. **Material Definition**: Use isotropic `rad.MatLin(chi)` for best results
 3. **External field**: Evaluate at points outside the magnetic material for validation
+4. **Solver settings**: For high mu_r, use `rad.Solve(obj, 0.001, 50000)`
