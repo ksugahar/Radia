@@ -1353,7 +1353,7 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep); 
 		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
 
-		if(MethNo<0 || MethNo>5) { Send.ErrorMessage("Radia::Error028"); return 0;}
+		if(MethNo<0 || MethNo>10) { Send.ErrorMessage("Radia::Error028"); return 0;}
 		if(IterNumber<0) { Send.ErrorMessage("Radia::Error019"); return 0;}
 		if((RelaxParam<0.) || (RelaxParam>1.)) { Send.ErrorMessage("Radia::Error018"); return 0;}
 
@@ -1400,6 +1400,21 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 					radTRelaxationMethNo_a5 RelaxationMethNo_a5(InteractPtr);
 					RelaxationMethNo_a5.MakeN_iter(IterNumber);
 				}
+			}
+			break;
+		case 9:
+			{
+				// LU direct solver - solve linear system directly
+				radTRelaxationMethNo_9 RelaxMethNo_9(InteractPtr);
+				// For direct solver, precision is not used; just solve once
+				RelaxMethNo_9.AutoRelax(1.0e-6, 1);  // Dummy precision, single "iteration"
+			}
+			break;
+		case 10:
+			{
+				// BiCGSTAB with H-matrix acceleration
+				radTRelaxationMethNo_10 RelaxMethNo_10(InteractPtr);
+				RelaxMethNo_10.AutoRelax(RelaxParam, IterNumber);
 			}
 			break;
 		}
@@ -1491,6 +1506,19 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			{
 				radTRelaxationMethNo_8 RelaxMethNo_8(InteractPtr);
 				ActualIterNum = RelaxMethNo_8.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+			}
+			break;
+			case 9:
+			{
+				radTRelaxationMethNo_9 RelaxMethNo_9(InteractPtr);
+				ActualIterNum = RelaxMethNo_9.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+			}
+			break;
+			case 10:
+			{
+				// BiCGSTAB with H-matrix acceleration
+				radTRelaxationMethNo_10 RelaxMethNo_10(InteractPtr);
+				ActualIterNum = RelaxMethNo_10.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 			}
 			break;
 			}

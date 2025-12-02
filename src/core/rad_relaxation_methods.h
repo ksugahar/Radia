@@ -694,5 +694,92 @@ public:
 };
 
 //-------------------------------------------------------------------------
+//-------------------------------------------------------------------------
+
+/**
+ * Direct solver using LU decomposition (Gaussian elimination with partial pivoting)
+ * Method number 9
+ *
+ * This solver is required for tetrahedral elements with high permeability materials
+ * where iterative relaxation methods diverge due to large interaction coefficients.
+ *
+ * The system to solve is:
+ *   (I - chi*N) * M = chi * H_ext
+ * where N is the interaction matrix (demagnetization coefficients)
+ */
+class radTRelaxationMethNo_9 : public radTIterativeRelaxMeth {
+
+public:
+	radTRelaxationMethNo_9(radTInteraction* InInteractionPtr)
+	: radTIterativeRelaxMeth(InInteractionPtr)
+	{
+		IntrctPtr = InInteractionPtr;
+	}
+
+	~radTRelaxationMethNo_9() {}
+
+	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+
+private:
+	// Solve linear system Ax=b using LU decomposition with partial pivoting
+	// A is modified in place (contains LU factors after call)
+	// b is overwritten with solution x
+	// Returns 0 on success, non-zero on failure (singular matrix)
+	int SolveLU(std::vector<std::vector<double>>& A, std::vector<double>& b, int n);
+};
+
+//-------------------------------------------------------------------------
+//-------------------------------------------------------------------------
+
+/**
+ * BiCGSTAB iterative solver with H-matrix acceleration
+ * Method number 10
+ *
+ * This solver uses BiCGSTAB (Biconjugate Gradient Stabilized) with
+ * H-matrix (HACApK) for fast matrix-vector products, providing:
+ * - O(N log N) per iteration instead of O(N^2)
+ * - Jacobi (diagonal) preconditioning for faster convergence
+ * - Stable for high permeability materials
+ *
+ * Recommended for N > 100 elements where direct solver (Method 9)
+ * becomes too slow due to O(N^3) complexity.
+ *
+ * Reference: van der Vorst, SIAM J. Sci. Stat. Comput. 13 (1992)
+ */
+class radTRelaxationMethNo_10 : public radTIterativeRelaxMeth {
+
+public:
+	radTRelaxationMethNo_10(radTInteraction* InInteractionPtr)
+	: radTIterativeRelaxMeth(InInteractionPtr)
+	{
+		IntrctPtr = InInteractionPtr;
+	}
+
+	~radTRelaxationMethNo_10() {}
+
+	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+
+private:
+	// BiCGSTAB with H-matrix acceleration
+	// Solves: A*x = b using BiCGSTAB with Jacobi preconditioner
+	// Uses H-matrix for matrix-vector products
+	// Returns number of iterations (0 on failure)
+	int SolveBiCGSTAB_HMatrix(int ndof, double tol, int max_iter, double& residual);
+
+	// Dense matrix-vector product (fallback when H-matrix not available)
+	void DenseMatVec(const std::vector<double>& x, std::vector<double>& y, int ndof);
+
+	// Get diagonal elements for Jacobi preconditioner
+	void GetDiagonalElements(std::vector<double>& diag, int n_elem);
+
+	// BLAS-like operations
+	double Dot(const std::vector<double>& a, const std::vector<double>& b, int n);
+	double Norm2(const std::vector<double>& a, int n);
+	void Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n);
+	void Copy(const std::vector<double>& src, std::vector<double>& dst, int n);
+	void Scale(double alpha, std::vector<double>& x, int n);
+};
+
+//-------------------------------------------------------------------------
 
 #endif

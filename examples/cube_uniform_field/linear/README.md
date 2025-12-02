@@ -269,9 +269,49 @@ N/C = Not converged within iteration limit
 |--------|-----------------|--------|
 | Method 4 (iterative) | O(iter * N^2) | O(N^2) |
 | Method 9 (direct LU) | O(N^3) | O(N^2) |
+| Method 10 (BiCGSTAB) | O(iter * N^2) or O(iter * N log N) with H-matrix | O(N^2) |
 
 For N=512 (8x8x8 mesh), Method 9 takes ~0.7s regardless of mu_r.
 For N=64 (4x4x4 mesh), Method 9 takes ~2ms.
+
+### Method 10: BiCGSTAB Iterative Solver (New!)
+
+Radia now includes **Method 10**, a BiCGSTAB (Biconjugate Gradient Stabilized) iterative solver with Jacobi preconditioning:
+
+```python
+import radia as rad
+
+# Use Method 10 (BiCGSTAB) for iterative solving
+result = rad.Solve(system, 0.001, 100, 10)  # precision, max_iter, method=10
+```
+
+### Method 10 Features
+
+- **BiCGSTAB algorithm**: More stable than standard CG for non-symmetric systems
+- **Jacobi preconditioner**: Extracts diagonal for faster convergence
+- **H-matrix support**: Can use H-matrix for O(N log N) matrix-vector products
+- **OpenMP parallelization**: BLAS-like operations parallelized
+
+### Method 10 Benchmark Results (2025-12-02)
+
+| mu_r | Mesh | Method 4 | Method 9 | Method 10 | Status |
+|------|------|----------|----------|-----------|--------|
+| 100 | 4x4x4 | 404 iter | 1 iter | 6 iter | All OK |
+| 500 | 4x4x4 | 2095 iter | 1 iter | 6 iter | All OK |
+| 1000 | 4x4x4 | 3758 iter | 1 iter | 6 iter | All OK |
+
+### When to Use Method 10
+
+**Use Method 10** when:
+- Large problem sizes where Method 9 (LU) is too slow
+- H-matrix acceleration is enabled (`rad.SolverHMatrixEnable(1)`)
+- Moderate to high permeability materials
+- Memory is limited (avoids full matrix factorization)
+
+**Use Method 9** instead when:
+- Problem size is small (< 500 elements)
+- Need exact solution (no iteration tolerance)
+- High permeability where BiCGSTAB may not converge
 
 ## Notes
 

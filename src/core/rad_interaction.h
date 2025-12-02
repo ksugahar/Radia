@@ -281,6 +281,8 @@ public:
 	friend class radTRelaxationMethNo_a5;
 	friend class radTRelaxationMethNo_7;
 	friend class radTRelaxationMethNo_8;
+	friend class radTRelaxationMethNo_9;
+	friend class radTRelaxationMethNo_10;
 	friend class radTHMatrixInteraction;
 };
 
