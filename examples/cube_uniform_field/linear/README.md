@@ -155,6 +155,93 @@ N/C = Not converged within 20,000 iterations
    - `rad.Fld()` inside magnetic materials has limited accuracy
    - Always validate using external field points
 
+## Comparison with ELF/MAGIC Solver
+
+### Why ELF/MAGIC is Stable for High Permeability
+
+ELF/MAGIC uses a **direct LU decomposition solver** (LAPACK DGESV) instead of Radia's **iterative relaxation method**. This fundamental difference explains why ELF is stable for high permeability materials.
+
+### Solver Approaches
+
+| Aspect | Radia | ELF/MAGIC |
+|--------|-------|-----------|
+| **Method** | Iterative (successive substitution) | Direct (LU decomposition) |
+| **Implementation** | Gauss-Seidel relaxation | LAPACK DGESV |
+| **High mu_r** | Convergence issues | Always stable |
+| **Memory** | O(N^2) for matrix | O(N^2) for matrix |
+| **Time per solve** | O(iter * N^2) | O(N^3) |
+
+### Key Differences
+
+1. **Radia's Iterative Method** (`rad_relaxation_methods.cpp`):
+   - Uses successive substitution: `M_new = omega * M(H) + (1-omega) * M_old`
+   - Spectral radius of iteration matrix increases with mu_r
+   - For high permeability, |chi * N_diag| >> 1, causing slow/no convergence
+   - Multiple relaxation methods (0-4) but all iterative
+
+2. **ELF/MAGIC's Direct Method** (`m_dll_solver.f90`):
+   - Assembles full coefficient matrix: `[I + chi * N] * M = chi * H_ext`
+   - Solves directly using LAPACK DGESV (LU with partial pivoting)
+   - Stable regardless of permeability
+   - Also supports iterative (Gauss-Seidel) and H-matrix (BiCGSTAB) modes
+
+### Matrix Equation
+
+The MMM equation for linear materials:
+```
+[I + chi * N] * M = chi * H_external
+```
+
+Where:
+- `I` = identity matrix
+- `chi` = susceptibility (mu_r - 1)
+- `N` = demagnetization tensor (from element interactions)
+- `M` = magnetization vector (unknown)
+- `H_external` = applied field
+
+For high chi, the matrix `[I + chi * N]` becomes increasingly ill-conditioned for iterative methods, but LU decomposition handles it reliably.
+
+### ELF/MAGIC Code Reference
+
+From `S:\ELF_MAGIC\01_Github\src\dll\m_dll_solver.f90`:
+```fortran
+! Solve linear system using LU decomposition (LAPACK DGESV)
+subroutine solve_linear_system(A, b, x, n, ierr)
+    real(wp), intent(inout) :: A(:,:)  ! Will be overwritten by LU factors
+    real(wp), intent(in) :: b(:)
+    real(wp), intent(out) :: x(:)
+    integer, intent(in) :: n
+    integer, intent(out) :: ierr
+
+    integer :: ipiv(n)
+    real(wp) :: work_b(n)
+
+    work_b = b(1:n)
+    call dgesv(n, 1, A, n, ipiv, work_b, n, ierr)
+
+    if (ierr == 0) then
+        x(1:n) = work_b
+    end if
+end subroutine
+```
+
+### Implications for Radia
+
+To achieve ELF-like stability in Radia for high permeability:
+
+1. **Option A**: Add direct solver option
+   - Implement `rad.SolveDirect()` using LAPACK
+   - Trade-off: O(N^3) time complexity, but guaranteed convergence
+
+2. **Option B**: Use preconditioned iterative solver
+   - Add Jacobi/ILU preconditioning to reduce spectral radius
+   - Trade-off: More complex implementation
+
+3. **Current Workaround**:
+   - Use coarser meshes (fewer elements)
+   - Increase iteration limit significantly
+   - Use relaxation method 4 (adaptive omega)
+
 ## Notes
 
 1. **Unit System**: All examples use meters (`rad.FldUnits('m')`)
