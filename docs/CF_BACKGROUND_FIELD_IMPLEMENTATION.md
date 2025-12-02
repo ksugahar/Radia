@@ -405,19 +405,81 @@ create_analytical_field : For pure Python functions
 - Use uniform field approximation where possible
 - Consider direct C++ integration (future)
 
+## Bug Fixes
+
+### 2025-11-30: B Field Unit Conversion Fix
+
+**Issue**: `rad.Fld(bg, 'b', pt)` returned values ~10^6 times smaller than expected.
+
+**Root Cause**: `radTCoefficientFunctionFieldSource::B_comp()` was storing B field values in Tesla directly to `FieldPtr->B`, but Radia stores B internally in A/m units (H-like units) and multiplies by μ₀ on output.
+
+**Fix** (rad_coefficient_field.cpp lines 116-124):
+```cpp
+// B_from_cf is magnetic flux density in Tesla from user callback
+// Radia stores B internally in A/m units (will be multiplied by mu0 on output)
+// Convert Tesla to internal units: B_internal = B_tesla / mu0
+const double invMu0 = 795774.715459;  // 1/mu0 in A/(m*T)
+TVector3d B_internal(Bx * invMu0, By * invMu0, Bz * invMu0);
+if(FieldPtr->FieldKey.B_) FieldPtr->B += B_internal;
+// H = B/mu0 (same as B_internal)
+if(FieldPtr->FieldKey.H_) FieldPtr->H += B_internal;
+```
+
+### 2025-11-30: Solver Integration with ObjBckgCF
+
+**Issue**: `rad.Solve()` with container containing ObjBckgCF and soft material returned zero magnetization.
+
+**Root Cause**: Using `MatLin(chi, [0, 0, 1e-10])` creates an anisotropic material with a poorly defined susceptibility tensor. The small magnitude of the easy axis vector causes numerical issues in tensor setup.
+
+**Fix**: Use isotropic material form:
+```python
+# CORRECT - Isotropic material
+mat = rad.MatLin(chi)  # Single argument
+
+# INCORRECT - Anisotropic with bad easy axis
+mat = rad.MatLin(chi, [0, 0, 1e-10])  # Don't use small vectors!
+```
+
+**Working Example**:
+```python
+import radia as rad
+import numpy as np
+
+rad.UtiDelAll()
+rad.FldUnits('m')
+
+# Create soft iron
+cube = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 0])
+chi = 99.0  # mu_r = 100
+mat = rad.MatLin(chi)  # ISOTROPIC form
+rad.MatApl(cube, mat)
+
+# Background field (1 Tesla)
+def uniform_B(pos):
+    return [0, 0, 1.0]
+bg = rad.ObjBckgCF(uniform_B)
+
+# Solve
+system = rad.ObjCnt([cube, bg])
+result = rad.Solve(system, 0.0001, 1000)
+# Result shows M ~ 2.3 MA/m (correct for cube in 1T field with mu_r=100)
+```
+
 ## Conclusion
 
 Successfully implemented arbitrary background field capability for Radia with:
 - ✅ Clean Python API
-- ✅ Unit conversion handling
+- ✅ Unit conversion handling (fixed 2025-11-30)
 - ✅ Comprehensive test coverage
 - ✅ Utility functions for common field types
 - ✅ NGSolve CF integration path
+- ✅ Works with rad.Solve() for soft materials (requires isotropic MatLin)
 
 The implementation enables powerful coupling between Radia magnetostatics and NGSolve FEM for complex electromagnetic simulations.
 
 ---
 
 **Implementation Date**: 2025-10-31
+**Bug Fix Date**: 2025-11-30
 **Implemented By**: Claude Code
 **Status**: Ready for Production Use

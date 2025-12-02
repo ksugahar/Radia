@@ -113,11 +113,14 @@ void radTCoefficientFunctionFieldSource::B_comp(radTField* FieldPtr)
 					Py_DECREF(bx); Py_DECREF(by); Py_DECREF(bz);
 
 					if(!PyErr_Occurred()) {
-						// B_from_cf is magnetic flux density in Tesla
-						TVector3d B_from_cf(Bx, By, Bz);
-						if(FieldPtr->FieldKey.B_) FieldPtr->B += B_from_cf;
-						// Convert B to H using H = B/μ₀ where μ₀ = 1.25663706212e-6 T/(A/m)
-						if(FieldPtr->FieldKey.H_) FieldPtr->H += B_from_cf * 795774.715459;  // 1/μ₀
+						// B_from_cf is magnetic flux density in Tesla from user callback
+						// Radia stores B internally in A/m units (will be multiplied by mu0 on output)
+						// Convert Tesla to internal units: B_internal = B_tesla / mu0
+						const double invMu0 = 795774.715459;  // 1/mu0 in A/(m*T)
+						TVector3d B_internal(Bx * invMu0, By * invMu0, Bz * invMu0);
+						if(FieldPtr->FieldKey.B_) FieldPtr->B += B_internal;
+						// H = B/mu0 (same as B_internal)
+						if(FieldPtr->FieldKey.H_) FieldPtr->H += B_internal;
 					}
 				}
 			}
@@ -174,11 +177,14 @@ void radTCoefficientFunctionFieldSource::B_comp(radTField* FieldPtr)
 				return;
 			}
 
-			// B_from_cf is magnetic flux density in Tesla
-			TVector3d B_from_cf(Bx, By, Bz);
-			if(FieldPtr->FieldKey.B_) FieldPtr->B += B_from_cf;
-			// Convert B to H using H = B/μ₀ where μ₀ = 1.25663706212e-6 T/(A/m)
-			if(FieldPtr->FieldKey.H_) FieldPtr->H += B_from_cf * 795774.715459;  // 1/μ₀
+			// B_from_cf is magnetic flux density in Tesla from user callback
+			// Radia stores B internally in A/m units (will be multiplied by mu0 on output)
+			// Convert Tesla to internal units: B_internal = B_tesla / mu0
+			const double invMu0 = 795774.715459;  // 1/mu0 in A/(m*T)
+			TVector3d B_internal(Bx * invMu0, By * invMu0, Bz * invMu0);
+			if(FieldPtr->FieldKey.B_) FieldPtr->B += B_internal;
+			// H = B/mu0 (same as B_internal)
+			if(FieldPtr->FieldKey.H_) FieldPtr->H += B_internal;
 
 			// For backward compatibility, A is not provided in list format
 		}

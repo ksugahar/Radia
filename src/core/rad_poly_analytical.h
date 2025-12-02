@@ -87,4 +87,23 @@ void RadAnalyticalFieldFromQuadCharge(
 	double W,
 	int NII);
 
+/**
+ * Compute H field from triangular face using GLOBAL 3D coordinates directly
+ *
+ * This function computes the magnetic field from a triangular face with
+ * surface charge density sigma = M dot n, using global coordinates only.
+ * No local coordinate transformation is needed.
+ *
+ * @param V0, V1, V2  Triangle vertices in GLOBAL 3D coordinates
+ * @param M           Magnetization vector (in global coordinates)
+ * @param obsPoint    Observation point in GLOBAL 3D coordinates
+ * @return            H field at observation point (in global coordinates)
+ */
+TVector3d RadFieldFromTriangleFaceGlobal(
+	const TVector3d& V0,
+	const TVector3d& V1,
+	const TVector3d& V2,
+	const TVector3d& M,
+	const TVector3d& obsPoint);
+
 #endif

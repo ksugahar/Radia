@@ -53,15 +53,12 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_group.cpp                 # Container/group of field sources
 	${CORE_DIR}/rad_c_interface.cpp           # C-style interface functions
 	${CORE_DIR}/rad_interaction.cpp           # Magnetic interaction between objects
-	${CORE_DIR}/rad_intrc_hmat.cpp            # H-matrix acceleration for interaction
 	${CORE_DIR}/rad_io_buffer.cpp             # I/O buffer (errors and warnings)
 	${CORE_DIR}/rad_math_methods.cpp          # Mathematical/numerical methods
 	${CORE_DIR}/rad_material_def.cpp          # Material relaxation auxiliary
 	${CORE_DIR}/rad_planar_2d_part1.cpp       # 2D planar objects (part 1)
 	${CORE_DIR}/rad_planar_2d_part2.cpp       # 2D planar objects (part 2)
 	${CORE_DIR}/rad_poly_analytical.cpp       # Analytical polygon field formulas
-	${CORE_DIR}/rad_hmat_field.cpp            # H-matrix field evaluator
-	${CORE_DIR}/rad_hmat_update.cpp           # H-matrix magnetization update
 	${CORE_DIR}/rad_particle_trajectory.cpp   # Particle trajectory/dynamics
 	${CORE_DIR}/rad_rectangular_block.cpp     # Rectangular parallelepiped
 	${CORE_DIR}/rad_relaxation_methods.cpp    # Relaxation methods
@@ -84,7 +81,6 @@ set(RADIA_EXT_SOURCES
 # Radia lib sources
 set(RADIA_LIB_SOURCES
 	${LIB_DIR}/radentry.cpp
-	${LIB_DIR}/radentry_hmat.cpp
 )
 
 # Triangle library (C source needs special handling)
@@ -92,9 +88,6 @@ set(RADIA_LIB_SOURCES
 add_library(triangle_lib STATIC ${EXT_DIR}/triangle/triangle.c)
 target_compile_definitions(triangle_lib PRIVATE TRILIBRARY ANSI_DECLARATORS NO_TIMER)
 target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
-
-# HACApK library for H-matrix acceleration
-add_subdirectory(${EXT_DIR}/HACApK_LH-Cimplm)
 
 # Create NGSolve Python module using add_ngsolve_python_module
 # (following EMPY_Field pattern exactly)
@@ -107,8 +100,8 @@ add_ngsolve_python_module(radia_ngsolve
 	${PYTHON_DIR}/radia_ngsolve.cpp
 )
 
-# Link triangle library and HACApK
-target_link_libraries(radia_ngsolve PRIVATE triangle_lib hacapk)
+# Link triangle library
+target_link_libraries(radia_ngsolve PRIVATE triangle_lib)
 
 # Add include directories
 target_include_directories(radia_ngsolve PRIVATE
@@ -117,7 +110,6 @@ target_include_directories(radia_ngsolve PRIVATE
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
 	${EXT_DIR}/triangle
-	${EXT_DIR}/HACApK_LH-Cimplm
 	${PYTHON_DIR}
 )
 
@@ -231,8 +223,8 @@ pybind11_add_module(radia
 	${PYTHON_DIR}/radpy_pyapi.cpp
 )
 
-# Link triangle library and HACApK
-target_link_libraries(radia PRIVATE triangle_lib hacapk)
+# Link triangle library
+target_link_libraries(radia PRIVATE triangle_lib)
 
 # Add include directories
 target_include_directories(radia PRIVATE
@@ -240,7 +232,6 @@ target_include_directories(radia PRIVATE
 	${LIB_DIR}
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
-	${EXT_DIR}/HACApK_LH-Cimplm
 	${FFTW_DIR}
 )
 

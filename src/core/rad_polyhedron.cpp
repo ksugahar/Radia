@@ -702,80 +702,138 @@ void radTPolyhedron::B_comp_tetrahedron_centroid(radTField* FieldPtr)
 
 void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 {
-	// Analytical method for tetrahedral elements
-	// This method follows EXACTLY the same pattern as B_comp_frM:
-	// 1. Transform observation point to LOCAL face coordinates
-	// 2. Transform magnetization to LOCAL face coordinates
-	// 3. Compute field in LOCAL coordinates using RadAnalyticalFieldFromPolygonCharge
-	// 4. Transform result to GLOBAL coordinates using TransPtr->TrField()
+	// =========================================================================
+	// GLOBAL COORDINATE METHOD for tetrahedral elements
+	// =========================================================================
+	// This method computes fields using GLOBAL coordinates only.
+	// No local coordinate transformation is used, avoiding transformation errors.
 	//
-	// This ensures Method 0 and Method 1 produce IDENTICAL results.
+	// For each triangular face:
+	//   1. Get vertices in GLOBAL coordinates
+	//   2. Compute face normal in GLOBAL coordinates
+	//   3. Compute H field contribution using RadFieldFromTriangleFaceGlobal
+	//   4. Sum contributions from all 4 faces
+	//
+	// For PreRelax mode (interaction matrix construction):
+	//   - Diagonal (self-interaction): Set to 0.5
+	//   - Off-diagonal: Compute dH/dM directly in global coordinates
 
-	const double PI = 3.14159265358979323846;
-	const double ConstForH = 1.0 / (4.0 * PI);
+	radTFieldKey& FldKey = FieldPtr->FieldKey;
+	TVector3d& obsPoint = FieldPtr->P;
 
-	radTFieldKey LocFieldKey = FieldPtr->FieldKey;
-	if(LocFieldKey.B_) LocFieldKey.H_ = 1;
-
-	TVector3d Zero(0., 0., 0.);
-	radTField SumLocField(LocFieldKey, FieldPtr->CompCriterium, FieldPtr->P, Zero, Zero, Zero, Zero, Zero);
-
-	// Identity basis vectors for LOCAL computation
-	TVector3d AA_local(1, 0, 0);
-	TVector3d BB_local(0, 1, 0);
-	TVector3d CC_local(0, 0, 1);
-
-	// Loop over all faces (4 for tetrahedron)
-	for(int iface = 0; iface < AmOfFaces; iface++)
+	// Check for self-interaction (observation point at centroid)
+	bool isSelfInteraction = false;
 	{
-		radTHandlePgnAndTrans HandlePgnAndTrans = VectHandlePgnAndTrans[iface];
-		radTPolygon* PgnPtr = HandlePgnAndTrans.PgnHndl.rep;
-		radTrans* TransPtr = HandlePgnAndTrans.TransHndl.rep;
-
-		if(PgnPtr->AmOfEdgePoints != 3) continue;  // Must be triangle
-
-		// Transform observation point to LOCAL face coordinates (same as B_comp_frM)
-		TVector3d ObsPo_local = TransPtr->TrPoint_inv(SumLocField.P);
-
-		// Transform magnetization to LOCAL face coordinates (same as B_comp_frM)
-		TVector3d Magn_local = TransPtr->TrVectField_inv(Magn);
-
-		// Reference point in LOCAL coordinates (polygon is at z = CoordZ in local frame)
-		TVector3d YY_local(0, 0, PgnPtr->CoordZ);
-
-		// Magnetic charge density: Magn_local.z is the normal component in LOCAL coordinates
-		double W = ConstForH * Magn_local.z;
-
-		if(fabs(W) < 1.0e-15) continue;
-
-		// Prepare observation point in LOCAL coordinates
-		std::vector<TVector3d> obs_points(1, ObsPo_local);
-		std::vector<TVector3d> field_result(1, TVector3d(0., 0., 0.));
-
-		// Call analytical formula in LOCAL coordinates
-		// Input: obs_points in LOCAL, YY_local in LOCAL, AA/BB/CC are identity (LOCAL)
-		// Output: field_result in LOCAL coordinates
-		RadAnalyticalFieldFromPolygonCharge(
-			AA_local, BB_local, CC_local, YY_local,
-			PgnPtr->EdgePointsVector,  // 2D vertices in local face plane
-			obs_points,
-			field_result,
-			W,
-			iface + 1,
-			PgnPtr->AmOfEdgePoints
-		);
-
-		// Create a local field structure for transformation (same pattern as B_comp_frM)
-		radTField LocField(LocFieldKey, SumLocField.CompCriterium, Zero, Zero, Zero, Zero, Zero, Zero);
-		LocField.H = field_result[0];
-
-		// Transform LOCAL field to GLOBAL coordinates and accumulate (same as B_comp_frM)
-		SumLocField += TransPtr->TrField(LocField);
+		TVector3d diff = obsPoint - CentrPoint;
+		double distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+		// Estimate element size from face centers
+		double elemSizeSq = 0.0;
+		for(int i = 0; i < AmOfFaces; i++)
+		{
+			radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+			radTPolygon* pgn = hpt.PgnHndl.rep;
+			radTrans* tr = hpt.TransHndl.rep;
+			TVector3d faceCtr = tr->TrPoint(TVector3d(pgn->CentrPoint.x, pgn->CentrPoint.y, pgn->CoordZ));
+			TVector3d d = faceCtr - CentrPoint;
+			double dSq = d.x*d.x + d.y*d.y + d.z*d.z;
+			if(dSq > elemSizeSq) elemSizeSq = dSq;
+		}
+		double tol = elemSizeSq * 1.0e-10;
+		if(tol < 1.0e-20) tol = 1.0e-20;
+		isSelfInteraction = (distSq < tol);
 	}
 
-	// Add to field pointer
-	if(LocFieldKey.H_) FieldPtr->H += SumLocField.H;
-	if(LocFieldKey.B_) FieldPtr->B += SumLocField.H;
+	// NOTE: Self-interaction is computed by the formula below, not hardcoded.
+	// The geometry of the tetrahedron determines the actual demagnetization factors.
+	// Hardcoding 0.5 was incorrect - the formula gives correct values like ~0.1 for
+	// the diagonal elements (depends on tetrahedron shape).
+
+	// Get face vertices in GLOBAL coordinates
+	// For a tetrahedron, we have 4 triangular faces
+	std::vector<std::array<TVector3d, 3>> faceVertices(AmOfFaces);
+	for(int i = 0; i < AmOfFaces; i++)
+	{
+		radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+		radTPolygon* pgn = hpt.PgnHndl.rep;
+		radTrans* tr = hpt.TransHndl.rep;
+
+		// Get 2D vertices from polygon and transform to global 3D
+		const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+		if(verts2d.size() < 3) continue;
+
+		// Transform each vertex: local 2D (x, y, CoordZ) -> global 3D
+		faceVertices[i][0] = tr->TrPoint(TVector3d(verts2d[0].x, verts2d[0].y, pgn->CoordZ));
+		faceVertices[i][1] = tr->TrPoint(TVector3d(verts2d[1].x, verts2d[1].y, pgn->CoordZ));
+		faceVertices[i][2] = tr->TrPoint(TVector3d(verts2d[2].x, verts2d[2].y, pgn->CoordZ));
+	}
+
+	if(FldKey.PreRelax_)
+	{
+		// =====================================================================
+		// PreRelax mode: Compute interaction matrix coefficients
+		// =====================================================================
+		// We need to compute dH/dM for off-diagonal elements.
+		//
+		// For each unit magnetization direction (Mx=1, My=1, Mz=1), compute
+		// the H field contribution and store in the appropriate row.
+		//
+		// Store as: B.row = dH/dMx, H.row = dH/dMy, A.row = dH/dMz
+
+		TVector3d unit_Mx(1., 0., 0.);
+		TVector3d unit_My(0., 1., 0.);
+		TVector3d unit_Mz(0., 0., 1.);
+
+		TVector3d H_from_Mx(0., 0., 0.);
+		TVector3d H_from_My(0., 0., 0.);
+		TVector3d H_from_Mz(0., 0., 0.);
+
+		// Sum contributions from all faces
+		for(int i = 0; i < AmOfFaces; i++)
+		{
+			const TVector3d& V0 = faceVertices[i][0];
+			const TVector3d& V1 = faceVertices[i][1];
+			const TVector3d& V2 = faceVertices[i][2];
+
+			H_from_Mx += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mx, obsPoint);
+			H_from_My += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_My, obsPoint);
+			H_from_Mz += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mz, obsPoint);
+		}
+
+		// Store in the matrix format expected by Radia:
+		// B = row for dH/dMx (Hx, Hy, Hz when Mx=1)
+		// H = row for dH/dMy (Hx, Hy, Hz when My=1)
+		// A = row for dH/dMz (Hx, Hy, Hz when Mz=1)
+		// NOTE: Negate to match polygon PreRelax sign convention (which stores -H)
+		// This ensures consistency with Method 9 solver that uses N_stored = -N_physical
+		FieldPtr->B.x -= H_from_Mx.x;
+		FieldPtr->B.y -= H_from_Mx.y;
+		FieldPtr->B.z -= H_from_Mx.z;
+		FieldPtr->H.x -= H_from_My.x;
+		FieldPtr->H.y -= H_from_My.y;
+		FieldPtr->H.z -= H_from_My.z;
+		FieldPtr->A.x -= H_from_Mz.x;
+		FieldPtr->A.y -= H_from_Mz.y;
+		FieldPtr->A.z -= H_from_Mz.z;
+	}
+	else
+	{
+		// =====================================================================
+		// Normal mode: Compute actual H field from current magnetization
+		// =====================================================================
+		TVector3d H_total(0., 0., 0.);
+
+		for(int i = 0; i < AmOfFaces; i++)
+		{
+			const TVector3d& V0 = faceVertices[i][0];
+			const TVector3d& V1 = faceVertices[i][1];
+			const TVector3d& V2 = faceVertices[i][2];
+
+			H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint);
+		}
+
+		if(FldKey.H_) FieldPtr->H += H_total;
+		if(FldKey.B_) FieldPtr->B += H_total;
+	}
 }
 
 //-------------------------------------------------------------------------
@@ -783,6 +841,7 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 //void radTPolyhedron::B_comp(radTField* FieldPtr)
 {
+
 	// Tetrahedral method selection via API
 	if(IsTetrahedron())
 	{
@@ -799,10 +858,162 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 
 	// Use standard polygon-based computation for all polyhedra (including tetrahedra)
 	TVector3d Zero(0.,0.,0.);
+	
+	// Determine if observation point is inside polyhedron using geometric test
+	// For each face, compute face normal from vertices and check if point is on inside
 	short PointIsInside = 1;
+	if(FieldPtr->FieldKey.M_ || FieldPtr->FieldKey.B_)
+	{
+		TVector3d& P = FieldPtr->P;
+		for(int i = 0; i < AmOfFaces && PointIsInside; i++)
+		{
+			radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+			radTPolygon* pgn = hpt.PgnHndl.rep;
+			radTrans* tr = hpt.TransHndl.rep;
+			
+			// Get first 3 vertices of the polygon in GLOBAL coordinates
+			radTVect2dVect& verts2d = pgn->EdgePointsVector;
+			if(verts2d.size() < 3) continue;
+			
+			// Transform vertices from local (2D + CoordZ) to global
+			TVector3d v0 = tr->TrPoint(TVector3d(verts2d[0].x, verts2d[0].y, pgn->CoordZ));
+			TVector3d v1 = tr->TrPoint(TVector3d(verts2d[1].x, verts2d[1].y, pgn->CoordZ));
+			TVector3d v2 = tr->TrPoint(TVector3d(verts2d[2].x, verts2d[2].y, pgn->CoordZ));
+			
+			// Compute face normal from cross product
+			TVector3d edge1 = v1 - v0;
+			TVector3d edge2 = v2 - v0;
+			TVector3d faceNormal;
+			faceNormal.x = edge1.y * edge2.z - edge1.z * edge2.y;
+			faceNormal.y = edge1.z * edge2.x - edge1.x * edge2.z;
+			faceNormal.z = edge1.x * edge2.y - edge1.y * edge2.x;
+			
+			// Normalize
+			double normLen = sqrt(faceNormal.x*faceNormal.x + faceNormal.y*faceNormal.y + faceNormal.z*faceNormal.z);
+			if(normLen < 1e-15) continue;  // Degenerate face
+			faceNormal.x /= normLen;
+			faceNormal.y /= normLen;
+			faceNormal.z /= normLen;
+			
+			// Compute face center
+			TVector3d faceCenter;
+			faceCenter.x = faceCenter.y = faceCenter.z = 0;
+			for(size_t j = 0; j < verts2d.size(); j++)
+			{
+				TVector3d vj = tr->TrPoint(TVector3d(verts2d[j].x, verts2d[j].y, pgn->CoordZ));
+				faceCenter.x += vj.x;
+				faceCenter.y += vj.y;
+				faceCenter.z += vj.z;
+			}
+			faceCenter.x /= verts2d.size();
+			faceCenter.y /= verts2d.size();
+			faceCenter.z /= verts2d.size();
+			
+			// Ensure normal points outward (away from polyhedron centroid)
+			TVector3d toCenter = CentrPoint - faceCenter;
+			double dot_toCenter = toCenter.x*faceNormal.x + toCenter.y*faceNormal.y + toCenter.z*faceNormal.z;
+			if(dot_toCenter > 0) {
+				// Normal points toward center, flip it
+				faceNormal.x = -faceNormal.x;
+				faceNormal.y = -faceNormal.y;
+				faceNormal.z = -faceNormal.z;
+			}
+			
+			// Check if observation point is on inside of this face
+			// Inside means (P - faceCenter) dot normal < 0
+			TVector3d toP = P - faceCenter;
+			double dot_toP = toP.x*faceNormal.x + toP.y*faceNormal.y + toP.z*faceNormal.z;
+			
+			// Allow small tolerance for points on the surface
+			double faceDist = sqrt(toCenter.x*toCenter.x + toCenter.y*toCenter.y + toCenter.z*toCenter.z);
+			double tol = faceDist * 1e-6;  // Use larger tolerance
+			if(tol < 1e-10) tol = 1e-10;
+			
+			if(dot_toP > tol)
+			{
+				// Point is outside this face
+				PointIsInside = 0;
+			}
+		}
+	}
 
-	//TVector3d OrigP = FieldPtr->P; //OC090908
-	//FieldPtr->P -= CentrPoint; //OC090908
+	// =========================================================================
+	// For tetrahedra in PreRelax mode, use direct field computation
+	// =========================================================================
+	// DISABLED: Testing standard polygon path instead
+	if(false && FieldPtr->FieldKey.PreRelax_ && IsTetrahedron())
+	{
+		// Compute the full demagnetization matrix directly
+		// by evaluating H for each of the 3 unit magnetization directions
+		TVector3d saved_Magn = Magn;
+		TVector3d obsP = FieldPtr->P;
+		
+		// Compute H for Mx=1
+		Magn = TVector3d(1., 0., 0.);
+		TVector3d H_from_Mx(0., 0., 0.);
+		for(int i=0; i<AmOfFaces; i++)
+		{
+			radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+			radTPolygon* pgn = hpt.PgnHndl.rep;
+			radTrans* tr = hpt.TransHndl.rep;
+			
+			radTFieldKey key;
+			key.H_ = 1;
+			radTField fld(key, FieldPtr->CompCriterium, tr->TrPoint_inv(obsP), Zero, Zero, Zero, Zero, Zero);
+			pgn->Magn = tr->TrVectField_inv(Magn);
+			pgn->B_comp(&fld);
+			H_from_Mx += tr->TrVectField(fld.H);
+		}
+		
+		// Compute H for My=1
+		Magn = TVector3d(0., 1., 0.);
+		TVector3d H_from_My(0., 0., 0.);
+		for(int i=0; i<AmOfFaces; i++)
+		{
+			radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+			radTPolygon* pgn = hpt.PgnHndl.rep;
+			radTrans* tr = hpt.TransHndl.rep;
+			
+			radTFieldKey key;
+			key.H_ = 1;
+			radTField fld(key, FieldPtr->CompCriterium, tr->TrPoint_inv(obsP), Zero, Zero, Zero, Zero, Zero);
+			pgn->Magn = tr->TrVectField_inv(Magn);
+			pgn->B_comp(&fld);
+			H_from_My += tr->TrVectField(fld.H);
+		}
+		
+		// Compute H for Mz=1
+		Magn = TVector3d(0., 0., 1.);
+		TVector3d H_from_Mz(0., 0., 0.);
+		for(int i=0; i<AmOfFaces; i++)
+		{
+			radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+			radTPolygon* pgn = hpt.PgnHndl.rep;
+			radTrans* tr = hpt.TransHndl.rep;
+			
+			radTFieldKey key;
+			key.H_ = 1;
+			radTField fld(key, FieldPtr->CompCriterium, tr->TrPoint_inv(obsP), Zero, Zero, Zero, Zero, Zero);
+			pgn->Magn = tr->TrVectField_inv(Magn);
+			pgn->B_comp(&fld);
+			H_from_Mz += tr->TrVectField(fld.H);
+		}
+		
+		// Restore original magnetization
+		Magn = saved_Magn;
+		
+		// Store negated values (to match ELF convention: N_stored = -N_physical)
+		FieldPtr->B.x -= H_from_Mx.x;
+		FieldPtr->B.y -= H_from_Mx.y;
+		FieldPtr->B.z -= H_from_Mx.z;
+		FieldPtr->H.x -= H_from_My.x;
+		FieldPtr->H.y -= H_from_My.y;
+		FieldPtr->H.z -= H_from_My.z;
+		FieldPtr->A.x -= H_from_Mz.x;
+		FieldPtr->A.y -= H_from_Mz.y;
+		FieldPtr->A.z -= H_from_Mz.z;
+		return;
+	}
 
 	radTFieldKey LocFieldKey = FieldPtr->FieldKey;
 	if(LocFieldKey.B_) LocFieldKey.H_ = 1;
@@ -830,7 +1041,8 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 			SumLocField.P = TransPtr->TrPoint(LocField.P); //OC040504 test
 		}
 
-		if(!LocField.PointIsInsideFrame) PointIsInside = 0;
+		// Note: We no longer use LocField.PointIsInsideFrame for the inside check
+		// as it's unreliable. The geometric check above handles this.
 
 		if(!LocFieldKey.PreRelax_) SumLocField += TransPtr->TrField(LocField);
 		else
@@ -849,6 +1061,41 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 	radTFieldKey& FldKey = FieldPtr->FieldKey;
 	if(FldKey.PreRelax_)
 	{
+		// Add self-term for tetrahedral elements (ELF/MAGIC approach)
+		// Reference: ELF moment_method.f90 lines 341-343
+		// When observation point is at element centroid (self-interaction),
+		// add 0.5 to diagonal to stabilize the iterative solver.
+		if(IsTetrahedron())
+		{
+			TVector3d diff = FieldPtr->P - CentrPoint;
+			double distSq = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+			// Use element size for tolerance
+			double elemSizeSq = 0.0;
+			for(int ii = 0; ii < AmOfFaces; ii++)
+			{
+				radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[ii];
+				radTPolygon* pgn = hpt.PgnHndl.rep;
+				radTrans* tr = hpt.TransHndl.rep;
+				TVector3d faceCtr = tr->TrPoint(TVector3d(pgn->CentrPoint.x, pgn->CentrPoint.y, pgn->CoordZ));
+				TVector3d d = faceCtr - CentrPoint;
+				double dSq = d.x*d.x + d.y*d.y + d.z*d.z;
+				if(dSq > elemSizeSq) elemSizeSq = dSq;
+			}
+			double tol = elemSizeSq * 1.0e-10;
+			if(tol < 1.0e-20) tol = 1.0e-20;
+			
+			if(distSq < tol)
+			{
+				// Self-interaction: For direct solver (Method 9), no additional term needed.
+				// The surface integral already computes the correct self-demagnetization.
+				// The 0.5 was only needed for iterative solvers (MAGIC/ELF convention).
+				// const double SELF_TERM = 0.5;
+				// SumLocField.B.x += SELF_TERM;
+				// SumLocField.H.y += SELF_TERM;
+				// SumLocField.A.z += SELF_TERM;
+			}
+		}
+		
 		FieldPtr->B += SumLocField.B;
 		FieldPtr->H += SumLocField.H;
 		FieldPtr->A += SumLocField.A;

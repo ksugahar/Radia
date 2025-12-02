@@ -760,13 +760,12 @@ public:
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 
 private:
-	// BiCGSTAB with H-matrix acceleration
+	// BiCGSTAB iterative solver
 	// Solves: A*x = b using BiCGSTAB with Jacobi preconditioner
-	// Uses H-matrix for matrix-vector products
 	// Returns number of iterations (0 on failure)
-	int SolveBiCGSTAB_HMatrix(int ndof, double tol, int max_iter, double& residual);
+	int SolveBiCGSTAB(int ndof, double tol, int max_iter, double& residual);
 
-	// Dense matrix-vector product (fallback when H-matrix not available)
+	// Dense matrix-vector product
 	void DenseMatVec(const std::vector<double>& x, std::vector<double>& y, int ndof);
 
 	// Get diagonal elements for Jacobi preconditioner
