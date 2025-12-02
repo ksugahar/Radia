@@ -225,26 +225,57 @@ subroutine solve_linear_system(A, b, x, n, ierr)
 end subroutine
 ```
 
-### Implications for Radia
+### Radia Method 9: Direct LU Solver (Implemented!)
 
-To achieve ELF-like stability in Radia for high permeability:
+Radia now includes **Method 9**, a direct LU solver equivalent to ELF/MAGIC's approach:
 
-1. **Option A**: Add direct solver option
-   - Implement `rad.SolveDirect()` using LAPACK
-   - Trade-off: O(N^3) time complexity, but guaranteed convergence
+```python
+import radia as rad
 
-2. **Option B**: Use preconditioned iterative solver
-   - Add Jacobi/ILU preconditioning to reduce spectral radius
-   - Trade-off: More complex implementation
+# Use Method 9 (direct LU solver) for high permeability
+result = rad.Solve(system, 0.001, 1, 9)  # precision, max_iter, method=9
+```
 
-3. **Current Workaround**:
-   - Use coarser meshes (fewer elements)
-   - Increase iteration limit significantly
-   - Use relaxation method 4 (adaptive omega)
+### Method 9 Benchmark Results (2025-12-02)
+
+| mu_r | Mesh | Method 4 (iter) | Method 9 (LU) | Status |
+|------|------|-----------------|---------------|--------|
+| 100 | 4x4x4 | 404 iter, 0.01s | 1 iter, 0.002s | Both OK |
+| 500 | 4x4x4 | 2095 iter, 0.03s | 1 iter, 0.002s | Both OK |
+| 1000 | 4x4x4 | 3758 iter, 0.06s | 1 iter, 0.002s | Both OK |
+| 4000 | 4x4x4 | 37160 iter, 0.5s | 1 iter, 0.002s | Both OK |
+| 100 | 8x8x8 | N/C (20000 iter) | 1 iter, 0.7s | M9 OK |
+| 500 | 8x8x8 | N/C (20000 iter) | 1 iter, 0.7s | M9 OK |
+| 1000 | 8x8x8 | N/C (20000 iter) | 1 iter, 1.0s | M9 OK |
+
+N/C = Not converged within iteration limit
+
+### When to Use Method 9
+
+**Use Method 9** when:
+- High permeability materials (mu_r > 100)
+- Fine meshes where iterative methods don't converge
+- Small to medium problem sizes (< 1000 elements)
+- Linear materials (`rad.MatLin()`)
+
+**Use Method 4** (default) when:
+- Large problem sizes (> 1000 elements) - iterative is faster
+- Nonlinear materials (B-H curves)
+- Low permeability materials
+
+### Time Complexity
+
+| Method | Time Complexity | Memory |
+|--------|-----------------|--------|
+| Method 4 (iterative) | O(iter * N^2) | O(N^2) |
+| Method 9 (direct LU) | O(N^3) | O(N^2) |
+
+For N=512 (8x8x8 mesh), Method 9 takes ~0.7s regardless of mu_r.
+For N=64 (4x4x4 mesh), Method 9 takes ~2ms.
 
 ## Notes
 
 1. **Unit System**: All examples use meters (`rad.FldUnits('m')`)
 2. **Material Definition**: Use isotropic `rad.MatLin(chi)` for best results
 3. **External field**: Evaluate at points outside the magnetic material for validation
-4. **Solver settings**: For high mu_r, use `rad.Solve(obj, 0.001, 50000)`
+4. **Solver settings**: For high mu_r, use `rad.Solve(obj, 0.001, 1, 9)` (Method 9)
