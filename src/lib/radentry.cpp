@@ -16,12 +16,8 @@
 //#endif
 
 //-------------------------------------------------------------------------
-// Global H-matrix solver settings
+// Global solver settings
 //-------------------------------------------------------------------------
-
-static bool g_SolverHMatrixEnabled = false;
-static double g_SolverHMatrixEps = 1e-4;  // Phase 1: Relaxed from 1e-6 for better compression
-static int g_SolverHMatrixMaxRank = 30;   // Phase 1: Reduced from 50 for better compression
 
 // Tetrahedral element method
 static int g_TetrahedronMethod = 0;       // 0=original Radia method, 1=analytical method
@@ -1758,51 +1754,6 @@ int CALL RadUtiDataGet(char* pcData, const char typeData[3], long key) //OC04102
 
 	int ErrStat = ioBuffer.OutErrorStatus();
 	return ErrStat;
-}
-
-//-------------------------------------------------------------------------
-// H-Matrix Solver Acceleration Control
-//-------------------------------------------------------------------------
-
-int CALL RadSolverHMatrixEnable(int enable, double eps, int max_rank)
-{
-	g_SolverHMatrixEnabled = (enable != 0);
-	g_SolverHMatrixEps = eps;
-	g_SolverHMatrixMaxRank = max_rank;
-
-	if(g_SolverHMatrixEnabled)
-	{
-		// Note: Actual H-matrix will be created when Solve() is called
-		// and radTInteraction object is constructed
-	}
-
-	return 0;
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadSolverHMatrixDisable()
-{
-	g_SolverHMatrixEnabled = false;
-	return 0;
-}
-
-//-------------------------------------------------------------------------
-
-// Accessor functions for radTInteraction to read global settings
-bool RadSolverGetHMatrixEnabled()
-{
-	return g_SolverHMatrixEnabled;
-}
-
-double RadSolverGetHMatrixEps()
-{
-	return g_SolverHMatrixEps;
-}
-
-int RadSolverGetHMatrixMaxRank()
-{
-	return g_SolverHMatrixMaxRank;
 }
 
 //-------------------------------------------------------------------------

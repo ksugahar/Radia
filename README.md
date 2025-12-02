@@ -254,6 +254,82 @@ export_geometry_to_vtk(mag, 'geometry.vtk')
 - NGSolve (optional, for FEM coupling via radia_ngsolve)
 - PyVista (optional, for 3D visualization)
 
+## Linear Material with External Field (ObjBckgCF)
+
+Radia supports soft magnetic materials (linear materials) in external fields using `ObjBckgCF`.
+
+### Working Example
+
+```python
+import radia as rad
+import numpy as np
+
+rad.UtiDelAll()
+rad.FldUnits('m')  # Use SI units
+
+# Create soft iron cube (10cm side)
+cube = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 0])
+
+# Apply isotropic linear material (mu_r = 100)
+chi = 99.0  # chi = mu_r - 1
+mat = rad.MatLin(chi)  # IMPORTANT: Use single argument for isotropic
+rad.MatApl(cube, mat)
+
+# Create external field (1 Tesla in z-direction)
+def uniform_B(pos):
+    return [0, 0, 1.0]  # Returns B in Tesla
+bg = rad.ObjBckgCF(uniform_B)
+
+# Create system and solve
+system = rad.ObjCnt([cube, bg])
+result = rad.Solve(system, 0.0001, 1000)
+
+# Result: M ~ 2.3 MA/m (correct for cube with mu_r=100 in 1T field)
+M = rad.ObjM(cube)
+print(f"Magnetization: {M[1]} A/m")
+```
+
+### Important Notes
+
+1. **Isotropic materials**: Always use `MatLin(chi)` (single argument)
+   - Do NOT use `MatLin(chi, [0, 0, 1e-10])` - this creates a poorly defined anisotropic tensor
+
+2. **Callback returns B in Tesla**: The callback function for `ObjBckgCF` should return magnetic flux density B in Tesla
+
+3. **Units**: When using `rad.FldUnits('m')`, all coordinates are in meters
+
+4. **Tetrahedral elements**: Also works with `ObjPolyhdr` tetrahedral meshes
+
+### Supported Element Types
+
+| Element | API | External Field Support |
+|---------|-----|----------------------|
+| Hexahedron | `ObjRecMag` | Yes |
+| Tetrahedron | `ObjPolyhdr` | Yes |
+| Extruded Polygon | `ObjThckPgn` | Yes |
+
+## Tetrahedral Mesh Import from NGSolve/Netgen
+
+Radia can import tetrahedral meshes from NGSolve/Netgen for complex geometries.
+
+**Features:**
+- Direct Netgen/OCC mesh import to Radia MMM
+- Independent mesh optimization for FEM vs MMM
+- Nastran CTETRA face connectivity standard
+
+**Usage:** See `examples/cube_uniform_field/linear/` for examples.
+
+**Benchmark** (mu_r=100, B0=1T, 100mm cube):
+
+| Mesh | Elements | M_z (MA/m) | Error |
+|------|----------|------------|-------|
+| 1x1x1 hex | 1 | 2.3171 | 0.00% |
+| 2x2x2 hex | 8 | 2.4180 | 4.36% |
+| 5x5x5 hex | 125 | 2.6652 | 15.02% |
+
+Analytical: M = 2.3171 MA/m (N = 1/3 for cube)
+
+
 ## Changes from Original Radia
 
 ### Removed Components
@@ -337,5 +413,5 @@ See [examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/](examples/NG
 
 ---
 
-**Version**: 1.0 (OpenMP + NGSolve Edition)
-**Last Updated**: 2025-11-02
+**Version**: 1.3.4 (OpenMP + NGSolve Edition)
+**Last Updated**: 2025-11-30

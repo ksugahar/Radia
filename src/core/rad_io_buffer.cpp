@@ -51,7 +51,7 @@ string radTIOBuffer::err_ar[] = {
 	"Radia::Error025::::Incorrect input: Element with that key is neither Material nor 3D object with Material applied.\0",
 	"Radia::Error026::::Incorrect input: Magnetization identification string should contain either combination of characters M,m,X,x,Y,y,Z,z or nothing.\0",
 	"Radia::Error027::::Incorrect input: Material was not applied to that 3D object.\0",
-	"Radia::Error028::::Incorrect input: Method number should be 0 or 1 or 2 or 3.\0",
+	"Radia::Error028::::Incorrect input: Method number should be 0-9.\0",
 	"Radia::Error029::::Incorrect input: Racetrack straight part dimensions should be set up by two positive values {lx,ly}.\0",
 	"Radia::Error030::::Incorrect input: Absolute precision value should be positive.\0",
 	"Radia::Error031::::Incorrect input: Maximum number of iterations should be positive.\0",

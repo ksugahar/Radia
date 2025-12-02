@@ -882,125 +882,6 @@ static PyObject* radia_ObjBckgCF(PyObject* self, PyObject* args)
 	return oResInd;
 }
 
-// Temporarily disabled - field source H-matrix (has API compatibility issues)
-/*
-/************************************************************************//**
- * H-Matrix Field Source: Fast field computation using hierarchical matrices
- ***************************************************************************/
-/*
-static PyObject* radia_ObjHMatrix(PyObject* self, PyObject* args, PyObject* kwds)
-{
-	PyObject *oResInd=0;
-	int grp = 0;
-	double eps = 1e-6;
-	int max_rank = 50;
-	int min_cluster_size = 10;
-	int use_openmp = 1;
-	int num_threads = 0;
-
-	try
-	{
-		static char *kwlist[] = {(char*)"grp", (char*)"eps", (char*)"max_rank",
-		                         (char*)"min_cluster_size", (char*)"use_openmp",
-		                         (char*)"num_threads", NULL};
-
-		if(!PyArg_ParseTupleAndKeywords(args, kwds, "i|diiii:ObjHMatrix", kwlist,
-		                                 &grp, &eps, &max_rank, &min_cluster_size,
-		                                 &use_openmp, &num_threads))
-			throw CombErStr(strEr_BadFuncArg, ": ObjHMatrix");
-
-		if(grp <= 0)
-			throw CombErStr(strEr_BadFuncArg, ": ObjHMatrix requires valid group object");
-
-		int ind = 0;
-		g_pyParse.ProcRes(RadObjHMatrix(&ind, grp, eps, max_rank, min_cluster_size,
-		                                 use_openmp, num_threads));
-		oResInd = Py_BuildValue("i", ind);
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-	}
-	return oResInd;
-}
-
-/************************************************************************//**
- * Build H-Matrix structure for fast field computation
- ***************************************************************************/
-/*
-static PyObject* radia_HMatrixBuild(PyObject* self, PyObject* args)
-{
-	PyObject *oRes=0;
-	int hmat = 0;
-
-	try
-	{
-		if(!PyArg_ParseTuple(args, "i:HMatrixBuild", &hmat))
-			throw CombErStr(strEr_BadFuncArg, ": HMatrixBuild");
-
-		if(hmat <= 0)
-			throw CombErStr(strEr_BadFuncArg, ": HMatrixBuild requires valid H-matrix object");
-
-		g_pyParse.ProcRes(RadHMatrixBuild(hmat));
-		oRes = Py_BuildValue("i", 0);  // Return 0 on success
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-	}
-	return oRes;
-}
-*/
-
-/************************************************************************//**
- * Enable H-Matrix acceleration for relaxation solver
- ***************************************************************************/
-static PyObject* radia_SolverHMatrixEnable(PyObject* self, PyObject* args, PyObject* kwds)
-{
-	PyObject *oRes=0;
-	int enable = 1;
-	double eps = 1e-4;  // Phase 1: Relaxed from 1e-6 for better compression
-	int max_rank = 30;  // Phase 1: Reduced from 50 for better compression
-
-	static char *kwlist[] = {(char*)"enable", (char*)"eps", (char*)"max_rank", NULL};
-
-	try
-	{
-		if(!PyArg_ParseTupleAndKeywords(args, kwds, "|idi:SolverHMatrixEnable", kwlist,
-		                                &enable, &eps, &max_rank))
-			throw CombErStr(strEr_BadFuncArg, ": SolverHMatrixEnable");
-
-		g_pyParse.ProcRes(RadSolverHMatrixEnable(enable, eps, max_rank));
-
-		oRes = Py_BuildValue("i", 0);
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-	}
-	return oRes;
-}
-
-/************************************************************************//**
- * Disable H-Matrix acceleration for relaxation solver
- ***************************************************************************/
-static PyObject* radia_SolverHMatrixDisable(PyObject* self, PyObject* args)
-{
-	PyObject *oRes=0;
-
-	try
-	{
-		g_pyParse.ProcRes(RadSolverHMatrixDisable());
-
-		oRes = Py_BuildValue("i", 0);
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-	}
-	return oRes;
-}
-
 /************************************************************************//**
  * Set tetrahedral element method
  ***************************************************************************/
@@ -3483,9 +3364,6 @@ static PyObject* radia_UtiMPI(PyObject* self, PyObject* args)
  * Python C API stuff: module & method definition2, etc.
  ***************************************************************************/
 
-// H-Matrix field evaluation wrappers
-#include "radpy_hmat.h"
-
 static PyMethodDef radia_methods[] = {
 	{"ObjRecMag", radia_ObjRecMag, METH_VARARGS, "ObjRecMag([x,y,z],[wx,wy,wz],[mx,my,mz]:[0,0,0]) creates a rectangular parallelepiped block with center point [x,y,z], dimensions [wx,wy,wz], and magnetization [mx,my,mz]."},
 	{"ObjThckPgn", radia_ObjThckPgn, METH_VARARGS, "ObjThckPgn(x,lx,[[y1,z1],[y2,z2],...],a:'x',[mx,my,mz]:[0,0,0]) creates an extruded polygon block; x is the position of the block's center of gravity in the extrusion direction, lx is the thickness, [[y1,z1],[y2,z2],...] is a list of points describing the polygon in 2D; the extrusion direction is defined by the character a (which can be 'x', 'y' or 'z'), [mx,my,mz] is the block magnetization."},
@@ -3504,11 +3382,6 @@ static PyMethodDef radia_methods[] = {
 	{"ObjFlmCur", radia_ObjFlmCur, METH_VARARGS, "ObjFlmCur([[x1,y1,z1],[x2,y2,z2],...],i) creates a filament polygonal line conductor defined by the sequence of points [[x1,y1,z1],[x2,y2,z2],...] with current i."},
 	{"ObjBckg", radia_ObjBckg, METH_VARARGS, "ObjBckg([Bx,By,Bz]) creates a source of uniform background magnetic flux density B in Tesla. Returns object key that must be added to container with ObjCnt()."},
 	{"ObjBckgCF", radia_ObjBckgCF, METH_VARARGS, "ObjBckgCF(callback) creates a source of arbitrary background field. Callback should accept [x,y,z] in mm and return [Bx,By,Bz] in Tesla."},
-	// Temporarily disabled - field source H-matrix (has API compatibility issues)
-	// {"ObjHMatrix", (PyCFunction)radia_ObjHMatrix, METH_VARARGS | METH_KEYWORDS, "ObjHMatrix(grp, eps=1e-6, max_rank=50, min_cluster_size=10, use_openmp=1, num_threads=0) creates an H-matrix field source from group grp for fast field computation using hierarchical matrices and OpenMP parallelization. Parameters: grp (group object key), eps (ACA tolerance, default 1e-6), max_rank (maximum rank for low-rank blocks, default 50), min_cluster_size (minimum cluster size, default 10), use_openmp (enable OpenMP: 1=yes, 0=no, default 1), num_threads (number of threads, 0=automatic, default 0). Returns H-matrix object key."},
-	// {"HMatrixBuild", radia_HMatrixBuild, METH_VARARGS, "HMatrixBuild(hmat) builds the H-matrix structure for the H-matrix field source hmat. This must be called after creating the H-matrix object with ObjHMatrix. The building process constructs cluster trees and performs adaptive cross approximation (ACA) for fast field computation."},
-	{"SolverHMatrixEnable", (PyCFunction)radia_SolverHMatrixEnable, METH_VARARGS | METH_KEYWORDS, "SolverHMatrixEnable(enable=1, eps=1e-4, max_rank=30) enables H-matrix acceleration for the relaxation solver. Users must explicitly enable H-matrix to use OpenMP-parallelized operations, providing 4-10x speedup for large systems (N > 200 recommended). Parameters: enable (1=on, 0=off), eps (ACA tolerance, default 1e-4), max_rank (maximum rank for low-rank blocks, default 30)."},
-	{"SolverHMatrixDisable", radia_SolverHMatrixDisable, METH_VARARGS, "SolverHMatrixDisable() disables H-matrix acceleration for the relaxation solver, falling back to the standard dense solver."},
 	{"SolverTetraMethod", radia_SolverTetraMethod, METH_VARARGS, "SolverTetraMethod(method) sets the tetrahedral element field computation method. method=0: original Radia method (default), method=1: analytical method."},
 	{"ObjCnt", radia_ObjCnt, METH_VARARGS, "ObjCnt([obj1,obj2,...]) creates a container object for magnetic field source objects [obj1,obj2,...]."},
 	{"ObjAddToCnt", radia_ObjAddToCnt, METH_VARARGS, "ObjAddToCnt(cnt,[obj1,obj2,...]) adds objects [obj1,obj2,...] to the container object cnt."},
@@ -3558,11 +3431,6 @@ static PyMethodDef radia_methods[] = {
 	{"Solve", radia_Solve, METH_VARARGS, "Solve(obj,prec,maxiter,meth:4) solves a magnetostatic problem, i.e. builds an interaction matrix for the object obj and performs a relaxation procedure using the method number meth (default is 4). The relaxation stops whenever the change in magnetization (averaged over all sub-elements) between two successive iterations is smaller than prec or the number of iterations is larger than maxiter."},
 
 	{"Fld", radia_Fld, METH_VARARGS,  "Fld(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x,y,z]|[[x1,y1,z1],[x2,y2,z2],...]) computes magnetic field created by the object obj in point(s) {x,y,z} ({x1,y1,z1},{x2,y2,z2},...). The field component is specified by the second input variable. The function accepts a list of 3D points of arbitrary nestness: in this case it returns the corresponding list of magnetic field values."},
-	{"FldBatch", radia_FldBatch, METH_VARARGS,  "FldBatch(obj,'bx|by|bz|hx|hy|hz|b|h|a|m'|'',[[x1,y1,z1],[x2,y2,z2],...],use_hmatrix:1) computes magnetic field in batch mode at multiple observation points with optional H-matrix acceleration. use_hmatrix=1 (default) uses H-matrix if globally enabled, use_hmatrix=0 forces direct calculation."},
-	{"SetHMatrixFieldEval", radia_SetHMatrixFieldEval, METH_VARARGS,  "SetHMatrixFieldEval(enabled:0|1,tol:1e-6) enables (1) or disables (0) H-matrix acceleration for field evaluation. tol sets HACApK ACA tolerance (smaller = more accurate). Enables caching for non-linear iterations."},
-	{"ClearHMatrixCache", radia_ClearHMatrixCache, METH_VARARGS,  "ClearHMatrixCache() clears H-matrix field evaluation cache and frees memory. Call after geometry modifications."},
-	{"GetHMatrixStats", radia_GetHMatrixStats, METH_VARARGS,  "GetHMatrixStats() returns H-matrix statistics: [is_enabled, num_cached, total_memory_MB]."},
-	{"UpdateHMatrixMagnetization", radia_UpdateHMatrixMagnetization, METH_VARARGS,  "UpdateHMatrixMagnetization(obj) updates magnetization in cached H-matrix without rebuilding. For non-linear relaxation: much faster than rebuilding H-matrix. Must call FldBatch with use_hmatrix=1 first."},
 	{"FldLst", radia_FldLst, METH_VARARGS,  "FldLst(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x1,y1,z1],[x2,y2,z2],np,'arg|noarg':'noarg',strt:0.) computes magnetic field created by object obj in np equidistant points along a line segment from [x1,y1,z1] to [x2,y2,z2]; the field component is specified by the second input variable; the 'arg|noarg' string variable specifies whether to output a longitudinal position for each point where the field is computed, and strt gives the start-value for the longitudinal position."},
 	{"FldInt", radia_FldInt, METH_VARARGS, "FldInt(obj,'inf|fin','ibx|iby|ibz'|'',[x1,y1,z1],[x2,y2,z2]) computes magnetic field induction integral produced by the object obj along a straight line specified by points [x1,y1,z1] and [x2,y2,z2]; depending on the second variable value, the integral is infinite ('inf') or finite from [x1,y1,z1] to [x2,y2,z2] ('fin'); the field integral component is specified by the third input variable. The units are Tesla x millimeters."},
 	{"FldPtcTrj", radia_FldPtcTrj, METH_VARARGS, "FldPtcTrj(obj,E,[x0,dxdy0,z0,dzdy0],[y0,y1],np) computes transverse coordinates and its derivatives (angles) of a relativistic charged particle trajectory in 3D magnetic field produced by the object obj, using the 4th order Runge-Kutta integration. The particle energy is E [GeV], initial transverse coordinates and derivatives are {x0,dxdy0,z0,dzdy0}; the longitudinal coordinate y is varied from y0 to y1 in np steps. All positions are in millimeters and angles in radians."},

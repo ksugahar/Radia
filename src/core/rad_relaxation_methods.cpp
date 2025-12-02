@@ -105,23 +105,14 @@ void radTSimpleRelaxation::DefineNewMagnetizations()
 {
 	int LocAmOfMainElem = IntrctPtr->AmOfMainElem;
 
-	// Use H-matrix if available
-	if(IntrctPtr->use_hmatrix && IntrctPtr->hmat_interaction)
+	// Dense matrix-vector multiplication
+	for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
 	{
-		// H-matrix matrix-vector multiplication
-		IntrctPtr->DefineFieldArray_HMatrix(IntrctPtr->NewMagnArray, IntrctPtr->NewFieldArray);
-	}
-	else
-	{
-		// Dense matrix-vector multiplication (original code)
-		for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
-		{
-			TVector3d H_atElemStrNo(0.,0.,0.);
-			for(int ColNo=0; ColNo<LocAmOfMainElem; ColNo++)
-				H_atElemStrNo += (IntrctPtr->InteractMatrix[StrNo][ColNo])*(IntrctPtr->NewMagnArray[ColNo]);
+		TVector3d H_atElemStrNo(0.,0.,0.);
+		for(int ColNo=0; ColNo<LocAmOfMainElem; ColNo++)
+			H_atElemStrNo += (IntrctPtr->InteractMatrix[StrNo][ColNo])*(IntrctPtr->NewMagnArray[ColNo]);
 
-			IntrctPtr->NewFieldArray[StrNo] = H_atElemStrNo + IntrctPtr->ExternFieldArray[StrNo];
-		}
+		IntrctPtr->NewFieldArray[StrNo] = H_atElemStrNo + IntrctPtr->ExternFieldArray[StrNo];
 	}
 
 	double One_mi_RelaxParam = 1.- RelaxParam;
@@ -148,40 +139,17 @@ void radTRelaxationMethNo_2::DefineNewMagnetizations()
 	TVector3d* OldField = IntrctPtr->NewMagnArray;
 	TVector3d* NewField = IntrctPtr->NewFieldArray;
 
-	// Interaction matrix needed for diagonal correction later
 	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix; //OC250504
 
-	// Use H-matrix if available
-	if(IntrctPtr->use_hmatrix && IntrctPtr->hmat_interaction)
+	// Dense matrix multiplication
+	for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
 	{
-		// Store old fields
-		for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
-		{
-			OldField[StrNo] = NewField[StrNo];
-		}
+		TVector3d H_atElemStrNo(0.,0.,0.);
+		for(int ColNo=0; ColNo<LocAmOfMainElem; ColNo++)
+			H_atElemStrNo += (IntrcMat[StrNo][ColNo])*((IntrctPtr->g3dRelaxPtrVect[ColNo])->Magn);
 
-		// Get current magnetizations for matvec
-		std::vector<TVector3d> CurrentMagn(LocAmOfMainElem);
-		for(int i=0; i<LocAmOfMainElem; i++)
-		{
-			CurrentMagn[i] = (IntrctPtr->g3dRelaxPtrVect[i])->Magn;
-		}
-
-		// H-matrix matvec
-		IntrctPtr->DefineFieldArray_HMatrix(CurrentMagn.data(), NewField);
-	}
-	else
-	{
-		// Dense matrix (original code)
-		for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
-		{
-			TVector3d H_atElemStrNo(0.,0.,0.);
-			for(int ColNo=0; ColNo<LocAmOfMainElem; ColNo++)
-				H_atElemStrNo += (IntrcMat[StrNo][ColNo])*((IntrctPtr->g3dRelaxPtrVect[ColNo])->Magn);
-
-			OldField[StrNo] = NewField[StrNo];
-			NewField[StrNo] = H_atElemStrNo + IntrctPtr->ExternFieldArray[StrNo];
-	}
+		OldField[StrNo] = NewField[StrNo];
+		NewField[StrNo] = H_atElemStrNo + IntrctPtr->ExternFieldArray[StrNo];
 	}
 
 	TVector3d E_Str0(1.,0.,0.), E_Str1(0.,1.,0.), E_Str2(0.,0.,1.), MagnFromMaterRel, InstantMr; // The later is not actually used here
@@ -223,14 +191,6 @@ void radTRelaxationMethNo_3::DefineNewMagnetizations()
 	radTMaterial* MaterPtr = nullptr;
 
 	int LocAmOfMainElem = IntrctPtr->AmOfMainElem;
-
-	// Note: Method 3 treats diagonal separately, so H-matrix needs special handling
-	// For now, fall back to dense for this method
-	if(IntrctPtr->use_hmatrix && IntrctPtr->hmat_interaction)
-	{
-		// Method 3 is more complex - for now use dense
-		// Future: Implement diagonal extraction from H-matrix
-	}
 
 	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix; //OC250504
 	int AmOfMainElem_mi_One = LocAmOfMainElem - 1;
@@ -2072,43 +2032,7 @@ void radTRelaxationMethNo_10::DenseMatVec(const std::vector<double>& x, std::vec
 	// Initialize y to zero
 	std::fill(y.begin(), y.end(), 0.0);
 
-	// Check if H-matrix is available
-	if(IntrctPtr->use_hmatrix && IntrctPtr->hmat_interaction != nullptr)
-	{
-		// Use H-matrix for matrix-vector product
-		// Convert x to TVector3d array
-		std::vector<TVector3d> M_in(n_elem), H_out(n_elem);
-		for(int i = 0; i < n_elem; i++)
-		{
-			M_in[i].x = x[3*i + 0];
-			M_in[i].y = x[3*i + 1];
-			M_in[i].z = x[3*i + 2];
-		}
-
-		// H-matrix matvec: H_out = N * M_in
-		IntrctPtr->DefineFieldArray_HMatrix(M_in.data(), H_out.data());
-
-		// Build y = -N*x + (1/chi)*x
-		for(int i = 0; i < n_elem; i++)
-		{
-			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
-			radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
-
-			TVector3d InstH(0., 0., 0.);
-			TMatrix3d KsiTensor;
-			TVector3d MrVect;
-			MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
-
-			double inv_chi_x = (KsiTensor.Str0.x > 1.0e-10) ? 1.0/KsiTensor.Str0.x : 1.0e10;
-			double inv_chi_y = (KsiTensor.Str1.y > 1.0e-10) ? 1.0/KsiTensor.Str1.y : 1.0e10;
-			double inv_chi_z = (KsiTensor.Str2.z > 1.0e-10) ? 1.0/KsiTensor.Str2.z : 1.0e10;
-
-			y[3*i + 0] = -H_out[i].x + inv_chi_x * x[3*i + 0];
-			y[3*i + 1] = -H_out[i].y + inv_chi_y * x[3*i + 1];
-			y[3*i + 2] = -H_out[i].z + inv_chi_z * x[3*i + 2];
-		}
-	}
-	else if(IntrcMat != nullptr)
+	if(IntrcMat != nullptr)
 	{
 		// Dense matrix-vector product
 		#pragma omp parallel for if(n_elem > 50)
@@ -2150,7 +2074,7 @@ void radTRelaxationMethNo_10::DenseMatVec(const std::vector<double>& x, std::vec
 	}
 }
 
-int radTRelaxationMethNo_10::SolveBiCGSTAB_HMatrix(int ndof, double tol, int max_iter, double& residual)
+int radTRelaxationMethNo_10::SolveBiCGSTAB(int ndof, double tol, int max_iter, double& residual)
 {
 	// BiCGSTAB with Jacobi preconditioner
 	// Reference: van der Vorst, SIAM J. Sci. Stat. Comput. 13 (1992)
@@ -2342,7 +2266,7 @@ int radTRelaxationMethNo_10::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber,
 	if(AmOfMainElem <= 0) return 0;
 
 	// Check required arrays
-	if(IntrctPtr->InteractMatrix == nullptr && !IntrctPtr->use_hmatrix) return 0;
+	if(IntrctPtr->InteractMatrix == nullptr) return 0;
 	if(IntrctPtr->NewMagnArray == nullptr) return 0;
 	if(IntrctPtr->ExternFieldArray == nullptr) return 0;
 	if(IntrctPtr->NewFieldArray == nullptr) return 0;
@@ -2352,7 +2276,7 @@ int radTRelaxationMethNo_10::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber,
 
 	// Solve using BiCGSTAB
 	double residual = 0.0;
-	int n_iter = SolveBiCGSTAB_HMatrix(ndof, PrecOnMagnetiz, MaxIterNumber, residual);
+	int n_iter = SolveBiCGSTAB(ndof, PrecOnMagnetiz, MaxIterNumber, residual);
 
 	// Update object magnetizations and compute H-field
 	TVector3d* MagnAr = IntrctPtr->NewMagnArray;

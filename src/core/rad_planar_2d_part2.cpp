@@ -46,8 +46,12 @@ void radTPolygon::B_comp(radTField* FieldPtr)
 	// Check which field components are needed
 	short A_CompNeeded = FieldPtr->FieldKey.A_;
 	short B_orH_CompNeeded = FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_ || FieldPtr->FieldKey.PreRelax_;
+	short M_CompNeeded = FieldPtr->FieldKey.M_;
 
-	if(!A_CompNeeded && !B_orH_CompNeeded) return;
+	// For M field, we only need to determine PointIsInsideFrame
+	// The full field computation is not needed, but we still need to
+	// compute z to determine if point is inside the polyhedron
+	if(!A_CompNeeded && !B_orH_CompNeeded && !M_CompNeeded) return;
 
 	// Handle singularity: if observation point is on polygon plane
 	double z = CoordZ - ObsPo.z;
@@ -75,8 +79,18 @@ void radTPolygon::B_comp(radTField* FieldPtr)
 	std::vector<TVector3d> obs_points(1, ObsPo);
 	std::vector<TVector3d> field_result(1, TVector3d(0, 0, 0));
 
-	// Magnetic charge density (Magn.z is normal component in local coordinates)
-	double W = ConstForH * Magn.z;  // Magn is already in local coordinates (z = normal component)
+	// Magnetic charge density
+	// In PreRelax mode, use unit magnetization (Mz=1) to compute interaction matrix coefficients
+	// In normal mode, use actual magnetization Magn.z (already in local coordinates where z = normal)
+	double W;
+	if(FieldPtr->FieldKey.PreRelax_)
+	{
+		W = ConstForH * 1.0;  // Unit magnetization in normal direction
+	}
+	else
+	{
+		W = ConstForH * Magn.z;  // Actual magnetization
+	}
 
 	// Call analytical formula
 	RadAnalyticalFieldFromPolygonCharge(
@@ -96,14 +110,24 @@ void radTPolygon::B_comp(radTField* FieldPtr)
 	// Apply results to FieldPtr (in LOCAL coordinates)
 	// ========================================================================
 
+	// Set PointIsInsideFrame for polyhedron M-field computation
+	// The polygon normal points in the positive z direction (local frame)
+	// If observation point is below the polygon plane (z < 0), it's on the "inside" side
+	// Note: z = CoordZ - ObsPo.z, so z > 0 means ObsPo.z < CoordZ (inside)
+	// For polyhedra with outward normals, "inside" is the negative-z side
+	FieldPtr->PointIsInsideFrame = (z > 0) ? 1 : 0;
+
 	if(B_orH_CompNeeded)
 	{
 		if(FieldPtr->FieldKey.PreRelax_)
 		{
-			// Special handling for relaxation
-			TVector3d St0(0., 0., -H_field.x);
-			TVector3d St1(0., 0., -H_field.y);
-			TVector3d St2(0., 0., -H_field.z);
+			// Store interaction matrix coefficients (N_ij tensor)
+			// The hexahedra store N_physical directly (H = N * M relationship)
+			// For consistency, polygons should also store N_physical (NOT negated)
+			// This gives A = I - chi*N for iterative solver, which is stable when N < 0 (demagnetizing)
+			TVector3d St0(0., 0., H_field.x);  // No negation - store N_physical directly
+			TVector3d St1(0., 0., H_field.y);
+			TVector3d St2(0., 0., H_field.z);
 			FieldPtr->B += St0;
 			FieldPtr->H += St1;
 			FieldPtr->A += St2;

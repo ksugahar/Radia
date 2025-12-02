@@ -32,12 +32,6 @@
 using radTlphgPtr = list<radTPair_int_hg*>;
 
 //-------------------------------------------------------------------------
-// Forward declarations
-//-------------------------------------------------------------------------
-
-class radTHMatrixInteraction;
-
-//-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
 struct radTRelaxStatusParam {
@@ -176,11 +170,6 @@ class radTInteraction : public radTg {
 	radTSend Send;
 	radIdentTrans* IdentTransPtr;
 	short FillInMainTransOnly;
-
-	// H-matrix acceleration support
-	radTHMatrixInteraction* hmat_interaction;  // H-matrix representation
-	bool use_hmatrix;                          // Flag to use H-matrix
-	size_t geometry_hash;                      // Phase 2-B: Geometry hash for cache validation
 	char mKeepTransData;
 
 	int m_rankMPI; //21122019 (to set from Application?)
@@ -208,7 +197,6 @@ public:
 
 	int SetupInteractMatrix(); //OC26122019
 	//void SetupInteractMatrix();
-	int SetupInteractMatrix_HMatrix();  // H-matrix construction
 
 	void SetupExternFieldArray();
 	void AddExternFieldFromMoreExtSource();
@@ -221,11 +209,6 @@ public:
 	int CountRelaxElemsWithSym();
 	int OutAmOfRelaxObjs() { return AmOfMainElem;}
 	void FindMaxModMandH(double& MaxModM, double& MaxModH);
-
-	// H-matrix support methods
-	void DefineFieldArray_HMatrix(const TVector3d* MagnArray, TVector3d* FieldArray);
-	void EnableHMatrix(bool enable, double eps=1e-6, int max_rank=50);
-	size_t ComputeGeometryHash();  // Phase 2-B: Compute hash of geometry for cache validation
 
 	inline void PushFrontNativeElemTransList(radTg3d*, radTlphgPtr*);
 	inline void EmptyVectOfPtrToListsOfTrans();
@@ -283,7 +266,6 @@ public:
 	friend class radTRelaxationMethNo_8;
 	friend class radTRelaxationMethNo_9;
 	friend class radTRelaxationMethNo_10;
-	friend class radTHMatrixInteraction;
 };
 
 //-------------------------------------------------------------------------
