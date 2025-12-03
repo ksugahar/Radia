@@ -238,12 +238,12 @@ All example scripts should export VTK files with the same basename as the script
 **Policy**: Users have full explicit control - no automatic problem size threshold.
 
 ```cpp
-// ✓ CORRECT - Respect user's choice
+// CORRECT - Respect user's choice
 if(use_hmatrix) {
     return SetupInteractMatrix_HMatrix();
 }
 
-// ✗ WRONG - Don't override user's choice
+// WRONG - Don't override user's choice
 if(use_hmatrix && AmOfMainElem >= 200) {
     // Use H-matrix
 } else {
@@ -252,6 +252,26 @@ if(use_hmatrix && AmOfMainElem >= 200) {
 ```
 
 **Rationale**: User decides when H-matrix is appropriate for their use case.
+
+### H-Matrix Implementation Policy
+
+**IMPORTANT**: The current H-matrix implementation (`rad_hmatrix_aca.cpp/h`) is based on **HACApK concepts** and is the **only authorized H-matrix implementation** for Radia.
+
+**Policy**:
+- Do NOT implement alternative H-matrix libraries (HODLR, H2Lib, STRUMPACK, etc.)
+- Do NOT replace the current ACA-based implementation with other low-rank approximation methods
+- All H-matrix improvements must be made within the existing `radTHMatrixACA` class
+
+**Current Implementation Details**:
+- Based on HACApK (ppOpenHPC-MATH-HACApK) concepts from ELF_MAGIC
+- Uses Adaptive Cross Approximation (ACA+) for low-rank block compression
+- Parameters tuned for MMM: eta=2.0, min_cluster_size=15, eps=1e-5
+- Integrated with BiCGSTAB solver (Method 10)
+
+**Rationale**:
+- HACApK is proven to work with MMM (Magnetic Moment Method) in ELF_MAGIC
+- Single implementation reduces maintenance burden and complexity
+- Alternative H-matrix libraries would require significant testing and validation
 
 ---
 
