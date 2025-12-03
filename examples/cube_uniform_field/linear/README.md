@@ -11,35 +11,47 @@ This benchmark validates Radia's tetrahedral and hexahedral mesh solvers for **l
 
 **Important**: Radia MMM is designed for external field calculation. The proper validation metric is the field in air regions, not inside the magnetic material.
 
-## Benchmark Results (2025-12-02)
+## Benchmark Results (2025-12-03)
 
 ### External Field Comparison
 
-Reference: Hexahedral 8x8x8 mesh (512 elements)
+Reference: Hexahedral 10x10x10 mesh (1000 elements)
 
-| Mesh Type | Elements | Avg Error | Max Error | Notes |
-|-----------|----------|-----------|-----------|-------|
-| **Hexahedral Meshes** |
-| Hex 1x1x1 | 1 | 3.33% | 9.27% | Single element |
-| Hex 2x2x2 | 8 | 2.38% | 6.80% | |
-| Hex 3x3x3 | 27 | 1.17% | 3.53% | |
-| Hex 4x4x4 | 64 | 0.65% | 1.98% | |
-| Hex 5x5x5 | 125 | 0.37% | 1.12% | |
-| Hex 6x6x6 | 216 | 0.19% | 0.59% | Good convergence |
-| **Tetrahedral Meshes (Manual 5-tetra cells)** |
-| Tet 1^3x5 | 5 | 3.03% | 8.18% | Single cell |
-| Tet 2^3x5 | 40 | 0.43% | 0.87% | Good accuracy |
-| Tet 3^3x5 | 135 | 0.23% | 0.62% | Excellent |
-| **Tetrahedral Meshes (Netgen/NGSolve)** |
-| maxh=0.10 | 12 | 1.93% | 5.34% | |
-| maxh=0.06 | 28 | 0.20% | 0.49% | Best accuracy |
-| maxh=0.04 | 80 | 0.26% | 0.67% | |
+**Evaluation Points**: 11 points outside the cube (air region)
+- z-axis: z = 60, 80, 100, 150, 200, 300 mm
+- x-axis: x = 60, 80, 100, 150, 200 mm
+
+| Mesh Type | Elements | Avg Error | Max Error | Time | Notes |
+|-----------|----------|-----------|-----------|------|-------|
+| **Hexahedral Meshes (ObjDivMag)** |
+| Hex 4x4x4 | 64 | 1.36% | 5.70% | 0.006s | |
+| Hex 6x6x6 | 216 | 0.37% | 0.93% | 0.037s | Good convergence |
+| Hex 8x8x8 | 512 | 0.13% | 0.30% | 0.735s | |
+| Hex 10x10x10 | 1000 | (ref) | (ref) | 6.677s | Reference |
+| **Tetrahedral Meshes (Netgen import)** |
+| maxh=80mm | 12 | 6.91% | 49.43% | 0.001s | Too coarse |
+| maxh=60mm | 28 | 1.45% | 6.68% | 0.012s | |
+| maxh=40mm | 104 | 0.57% | 2.38% | 0.164s | Good accuracy |
+| maxh=30mm | 201 | 0.56% | 2.11% | 0.228s | Best tet accuracy |
+
+### Perturbation Field Bz_pert (mT) at External Points
+
+| Point | Hex 4x4x4 | Hex 10x10x10 | Tet 28 elem | Tet 201 elem |
+|-------|-----------|--------------|-------------|--------------|
+| z=60mm | -394.0 | -372.8 | -347.9 | -364.9 |
+| z=100mm | -650.8 | -653.8 | -647.0 | -650.0 |
+| z=200mm | -939.1 | -937.3 | -937.1 | -937.2 |
+| x=60mm | -1713.4 | -1760.9 | -1693.2 | -1777.5 |
+| x=100mm | -1249.8 | -1266.6 | -1262.1 | -1269.6 |
+
+Note: Bz_pert = Bz_total - B0 (perturbation from magnetized cube)
 
 ### Key Findings
 
 1. **Hexahedral mesh convergence**: Error decreases consistently with mesh refinement
 2. **Tetrahedral mesh accuracy**: Comparable to hexahedral at similar element counts
-3. **External field validation**: Proper metric for MMM validation
+3. **Coarse tetrahedral meshes**: Very coarse meshes (12 elements) show large errors (~49% max)
+4. **External field validation**: Proper metric for MMM validation
 
 ## Mesh Configurations
 
@@ -86,7 +98,8 @@ mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, unit
 
 | File | Description |
 |------|-------------|
-| `benchmark_external_field.py` | Main benchmark comparing hex/tet meshes |
+| `benchmark_tetra_vs_hex.py` | Main benchmark comparing hex/tet meshes (2025-12-03) |
+| `benchmark_external_field.py` | Alternative benchmark script |
 | `compare_external_field.py` | External field comparison with NGSolve |
 | `precision_evaluation.py` | Comprehensive precision evaluation |
 | `cube_benchmark_ngsolve.vtu` | NGSolve solution (VTU format) |
@@ -96,13 +109,13 @@ mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, unit
 
 ```bash
 cd examples/cube_uniform_field/linear
-python benchmark_external_field.py
+python benchmark_tetra_vs_hex.py
 ```
 
 Output will show:
-- Hexahedral mesh convergence study (1x1x1 to 6x6x6)
-- Tetrahedral mesh (manual 5-tetra decomposition)
-- Tetrahedral mesh (Netgen import)
+- Hexahedral mesh convergence study (4x4x4 to 10x10x10)
+- Tetrahedral mesh (Netgen import with various maxh settings)
+- Perturbation field values at external points
 - Summary table with error statistics
 
 ## Physics Background
