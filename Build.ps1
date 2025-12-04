@@ -52,6 +52,32 @@ Write-Host "  Build Complete" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
+# Copy .pyd files to src/radia for PyPI packaging
+Write-Host "Copying to src/radia for PyPI packaging..." -ForegroundColor Cyan
+
+$radiaSrc = "build\radia.cp312-win_amd64.pyd"
+$radiaDst = "srcadiaadia.pyd"
+if (Test-Path $radiaSrc) {
+    Copy-Item $radiaSrc $radiaDst -Force
+    Write-Host "  [OK] Copied radia.pyd to src/radia/" -ForegroundColor Green
+} else {
+    # Try alternative name
+    $radiaSrcAlt = "build\radia.pyd"
+    if (Test-Path $radiaSrcAlt) {
+        Copy-Item $radiaSrcAlt $radiaDst -Force
+        Write-Host "  [OK] Copied radia.pyd to src/radia/" -ForegroundColor Green
+    }
+}
+
+$ngSolveSrc = "build\radia_ngsolve.pyd"
+$ngSolveDst = "srcadiaadia_ngsolve.pyd"
+if (Test-Path $ngSolveSrc) {
+    Copy-Item $ngSolveSrc $ngSolveDst -Force
+    Write-Host "  [OK] Copied radia_ngsolve.pyd to src/radia/" -ForegroundColor Green
+}
+
+Write-Host ""
+
 # Show outputs
 Write-Host "Built modules:" -ForegroundColor Yellow
 
