@@ -26,6 +26,9 @@
 #include <sstream>
 #include <vector>
 
+// Forward declaration for H-matrix
+class radTHMatrixACA;
+
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
@@ -175,6 +178,18 @@ class radTInteraction : public radTg {
 	int m_rankMPI; //21122019 (to set from Application?)
 	int m_nProcMPI;
 
+	// H-matrix with ACA compression for fast matrix-vector products
+	radTHMatrixACA* m_hmatrix;  // Raw pointer (not unique_ptr) to maintain copyability
+	bool m_use_hmatrix;
+	double m_hmatrix_eps;
+	int m_hmatrix_max_rank;
+
+	// Dense interaction matrix for direct access (needed by H-matrix)
+	double* IntrcMat;  // Flat storage: [i*n+j]*9 + component
+
+	// Element center points for clustering
+	std::vector<TVector3d> MainElemCenPointsVect;
+
 public:
 
 	int AmOfRelaxSubInterv;
@@ -257,15 +272,16 @@ public:
 	template<class T> inline void SetRelaxObjMagnVals(T* arMagnVals); //OC02012020
 
 	friend class radTIterativeRelaxMeth;
-	friend class radTSimpleRelaxation;
-	friend class radTRelaxationMethNo_2;
-	friend class radTRelaxationMethNo_3;
-	friend class radTRelaxationMethNo_4;
-	friend class radTRelaxationMethNo_a5;
-	friend class radTRelaxationMethNo_7;
-	friend class radTRelaxationMethNo_8;
-	friend class radTRelaxationMethNo_9;
-	friend class radTRelaxationMethNo_10;
+	friend class radTRelaxationMethNo_8;   // Newton-Raphson for nonlinear materials
+	friend class radTRelaxationMethNo_9;   // LU direct solver
+	friend class radTRelaxationMethNo_10;  // BiCGSTAB
+	friend class radTHMatrixACA;
+
+	// H-matrix methods
+	void EnableHMatrix(bool enable, double eps = 1e-4, int max_rank = 50);
+	int SetupHMatrix();
+	void HMatrixMatVec(const double* x, double* y) const;
+	bool IsHMatrixEnabled() const { return m_use_hmatrix && m_hmatrix != nullptr; }
 };
 
 //-------------------------------------------------------------------------

@@ -371,6 +371,13 @@ EXP int CALL RadObjCntStuf(int* Objs, int cnt);
 EXP int CALL RadSolverTetraMethod(int method);
 int RadSolverGetTetraMethod();
 
+// H-Matrix solver control
+EXP int CALL RadSolverHMatrixEnable(int enable, double eps, int max_rank);
+EXP int CALL RadSolverHMatrixDisable();
+bool RadSolverGetHMatrixEnabled();
+double RadSolverGetHMatrixEps();
+int RadSolverGetHMatrixMaxRank();
+
 // Relaxation sub-interval control for LU decomposition solver
 EXP int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey);
 EXP int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
@@ -769,7 +776,7 @@ The relaxation stops whenever the change of magnetization (averaged over all sub
 @param intrc [in] an integer number referencing the interaction matrix
 @param prec [in] a real number specifying an absolute precision value for magnetization (in Tesla), to be reached by the end of the relaxation
 @param iter [in] maximum number of iterations permitted to reach the specified precision
-@param meth [in] an integer number specifying the method of relaxation to be used (values 0, 3 - 5 can be used; 0 means default method)
+@param meth [in] an integer number specifying the method of relaxation to be used (values 0, 3, 4, 5, 8, 9, 10; 0 means default method = 10 BiCGSTAB)
 @param opt [in] pointer to an option string, which can be "ResetM->True" (default) or "ResetM->False"
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 @author O.C.
@@ -790,10 +797,10 @@ The relaxation stops whenever the change of magnetization (averaged over all sub
 @param obj [in] an integer number specifying the object to solve for magnetization
 @param prec [in] a real number specifying an absolute precision value for magnetization (in Tesla), to be reached by the end of the relaxation
 @param iter [in] maximum number of iterations permitted to reach the specified precision
-@param meth [in] an integer number specifying the method of relaxation to be used (values 0, 3 - 5 can be used; 0 means default method)
+@param meth [in] an integer number specifying the method of relaxation to be used (values 0, 3, 4, 5, 8, 9, 10; 0 means default method = 10 BiCGSTAB)
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 @author P.E., O.C.
-*/ 
+*/
 EXP int CALL RadSolve(double* D, int* n, int obj, double prec, int iter, int meth);
 
 /** Computes magnetic field created by the object obj at one or many points.
