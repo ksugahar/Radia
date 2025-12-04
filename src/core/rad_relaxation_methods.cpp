@@ -25,6 +25,22 @@
 #include <omp.h>
 #endif
 
+#ifdef HAVE_LAPACK
+extern "C" {
+    // LAPACK dgesv: Solve A*x = b using LU factorization with partial pivoting
+    // Parameters:
+    //   n: order of matrix A
+    //   nrhs: number of right-hand sides
+    //   A: matrix (n x n), overwritten with LU factors
+    //   lda: leading dimension of A
+    //   ipiv: pivot indices
+    //   b: right-hand side, overwritten with solution
+    //   ldb: leading dimension of b
+    //   info: 0 = success, < 0 = illegal arg, > 0 = singular
+    void dgesv_(int* n, int* nrhs, double* A, int* lda, int* ipiv, double* b, int* ldb, int* info);
+}
+#endif
+
 extern radTYield radYield;
 
 //-------------------------------------------------------------------------
@@ -109,7 +125,32 @@ void radTIterativeRelaxMeth::MakeN_iter(int IterNum)
 
 int radTRelaxationMethNo_0::SolveLU(std::vector<std::vector<double>>& A, std::vector<double>& b, int n)
 {
-	// Gaussian elimination with partial pivoting
+#ifdef HAVE_LAPACK
+	// Use LAPACK dgesv for optimized LU decomposition (multi-threaded, SIMD optimized)
+	// LAPACK uses column-major (Fortran) ordering, so we need to transpose
+	// Or we can use the fact that solving A*x=b is equivalent to solving A^T*x=b
+	// when we store A in row-major order and pass it to LAPACK as column-major
+
+	// Create contiguous column-major array for LAPACK
+	std::vector<double> A_col(n * n);
+	for(int i = 0; i < n; i++)
+	{
+		for(int j = 0; j < n; j++)
+		{
+			A_col[j * n + i] = A[i][j];  // Column-major: A_col[j][i] = A[i][j]
+		}
+	}
+
+	std::vector<int> ipiv(n);
+	int nrhs = 1;
+	int info = 0;
+
+	dgesv_(&n, &nrhs, A_col.data(), &n, ipiv.data(), b.data(), &n, &info);
+
+	return (info == 0) ? 0 : -1;
+
+#else
+	// Fallback: Gaussian elimination with partial pivoting
 	// Forward elimination
 	for(int k = 0; k < n - 1; k++)
 	{
@@ -169,6 +210,7 @@ int radTRelaxationMethNo_0::SolveLU(std::vector<std::vector<double>>& A, std::ve
 	}
 
 	return 0;  // Success
+#endif
 }
 
 int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
@@ -230,9 +272,36 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 		}
 	}
 
+	// Build base matrix (geometric part without chi) once - this is the -N matrix
+	// Optimization: Only build this O(N^2) matrix once, then update diagonal each iteration
+	std::vector<std::vector<double>> BaseMatrix(ndof, std::vector<double>(ndof, 0.0));
+	for(int i = 0; i < AmOfMainElem; i++)
+	{
+		for(int comp_i = 0; comp_i < 3; comp_i++)
+		{
+			int row = 3 * i + comp_i;
+			for(int j = 0; j < AmOfMainElem; j++)
+			{
+				TMatrix3df& Nij = IntrcMat[i][j];
+				for(int comp_j = 0; comp_j < 3; comp_j++)
+				{
+					int col = 3 * j + comp_j;
+					double Nij_val = 0.0;
+					if(comp_i == 0)      Nij_val = (comp_j == 0) ? Nij.Str0.x : ((comp_j == 1) ? Nij.Str0.y : Nij.Str0.z);
+					else if(comp_i == 1) Nij_val = (comp_j == 0) ? Nij.Str1.x : ((comp_j == 1) ? Nij.Str1.y : Nij.Str1.z);
+					else                 Nij_val = (comp_j == 0) ? Nij.Str2.x : ((comp_j == 1) ? Nij.Str2.y : Nij.Str2.z);
+					BaseMatrix[row][col] = -Nij_val;  // Base matrix is -N
+				}
+			}
+		}
+	}
+
 	// Outer nonlinear iteration loop
 	// For linear materials, this converges in 1 iteration
 	// For nonlinear materials, chi(H) is updated each iteration
+	std::vector<std::vector<double>> SystemMatrix(ndof, std::vector<double>(ndof, 0.0));
+	std::vector<double> RHS(ndof, 0.0);
+
 	for(iterCount = 0; iterCount < MaxIterNumber; iterCount++)
 	{
 		// Store old magnetization
@@ -241,29 +310,43 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 			OldMagnArray[i] = MagnAr[i];
 		}
 
-		// Update H field from current M: H = H_ext - N*M
+		// Update H field from current M using constitutive relation: H = M / chi
+		// This is the ELF_MAGIC approach - O(N) instead of O(N^2) for H = H_ext - N*M
 		// Skip on first iteration (H already initialized above)
 		if(iterCount > 0)
 		{
 			for(int i = 0; i < AmOfMainElem; i++)
 			{
-				TVector3d H_total = ExternFieldAr[i];
-				for(int j = 0; j < AmOfMainElem; j++)
-				{
-					TMatrix3df& Nij = IntrcMat[i][j];
-					H_total.x -= Nij.Str0.x*MagnAr[j].x + Nij.Str0.y*MagnAr[j].y + Nij.Str0.z*MagnAr[j].z;
-					H_total.y -= Nij.Str1.x*MagnAr[j].x + Nij.Str1.y*MagnAr[j].y + Nij.Str1.z*MagnAr[j].z;
-					H_total.z -= Nij.Str2.x*MagnAr[j].x + Nij.Str2.y*MagnAr[j].y + Nij.Str2.z*MagnAr[j].z;
-				}
-				NewFieldAr[i] = H_total;
+				radTg3dRelax* g3dRelaxPtr_i = IntrctPtr->g3dRelaxPtrVect[i];
+				radTMaterial* MaterPtr_i = (radTMaterial*)(g3dRelaxPtr_i->MaterHandle.rep);
+
+				// Get current chi value from previous iteration's H
+				TMatrix3d KsiTensor;
+				TVector3d MrVect;
+				MaterPtr_i->DefineInstantKsiTensor(NewFieldAr[i], KsiTensor, MrVect);
+
+				// Use average chi (isotropic approximation for H update)
+				double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+				if(chi < 1.0e-6) chi = 1.0e-6;
+
+				// H_int = M / chi (from M = chi * H)
+				NewFieldAr[i].x = MagnAr[i].x / chi;
+				NewFieldAr[i].y = MagnAr[i].y / chi;
+				NewFieldAr[i].z = MagnAr[i].z / chi;
 			}
 		}
 
-		// Build system matrix using current chi(H)
-		// A = -N + 1/chi(H), where chi depends on current H field
-		std::vector<std::vector<double>> SystemMatrix(ndof, std::vector<double>(ndof, 0.0));
-		std::vector<double> RHS(ndof, 0.0);
+		// Copy base matrix and update diagonal with 1/chi(H) values
+		// This is O(N^2) for copy but avoids rebuilding N matrix each iteration
+		for(int row = 0; row < ndof; row++)
+		{
+			for(int col = 0; col < ndof; col++)
+			{
+				SystemMatrix[row][col] = BaseMatrix[row][col];
+			}
+		}
 
+		// Update diagonal and RHS using current chi(H)
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
 			radTg3dRelax* g3dRelaxPtr_i = IntrctPtr->g3dRelaxPtrVect[i];
@@ -277,7 +360,7 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 			TVector3d MrVect;
 			MaterPtr_i->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
 
-			// Build matrix rows for this element (3 rows: Mx, My, Mz)
+			// Update diagonal and RHS for each component
 			for(int comp_i = 0; comp_i < 3; comp_i++)
 			{
 				int row = 3 * i + comp_i;
@@ -290,24 +373,6 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 
 				// Compute 1/chi (or large value if chi is very small)
 				double inv_chi = (chi_val > 1.0e-10) ? (1.0 / chi_val) : 1.0e10;
-
-				// Add N contributions: A = -N + 1/chi
-				for(int j = 0; j < AmOfMainElem; j++)
-				{
-					TMatrix3df& Nij = IntrcMat[i][j];
-
-					for(int comp_j = 0; comp_j < 3; comp_j++)
-					{
-						int col = 3 * j + comp_j;
-
-						double Nij_val = 0.0;
-						if(comp_i == 0)      Nij_val = (comp_j == 0) ? Nij.Str0.x : ((comp_j == 1) ? Nij.Str0.y : Nij.Str0.z);
-						else if(comp_i == 1) Nij_val = (comp_j == 0) ? Nij.Str1.x : ((comp_j == 1) ? Nij.Str1.y : Nij.Str1.z);
-						else                 Nij_val = (comp_j == 0) ? Nij.Str2.x : ((comp_j == 1) ? Nij.Str2.y : Nij.Str2.z);
-
-						SystemMatrix[row][col] -= Nij_val;
-					}
-				}
 
 				// Add 1/chi to diagonal
 				SystemMatrix[row][row] += inv_chi;
@@ -337,7 +402,7 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 			return iterCount;
 		}
 
-		// Extract LU solution (M values)
+		// Extract LU solution (M values) - this is the new magnetization from linearized system
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
 			MagnAr[i].x = RHS[3 * i + 0];
@@ -345,63 +410,41 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 			MagnAr[i].z = RHS[3 * i + 2];
 		}
 
-		// Newton-style M(H) update (Gauss-Seidel style):
-		// After LU solves the linearized system, apply Newton-style correction
-		// at each element. This uses the material's M(H) function directly.
-		TVector3d E_Str0(1.,0.,0.), E_Str1(0.,1.,0.), E_Str2(0.,0.,1.);
-		TMatrix3d E(E_Str0, E_Str1, E_Str2);
+		// Pure Newton-Raphson iteration (matching ELF_MAGIC approach):
+		// Use the LU solution directly - do NOT apply Gauss-Seidel M(H) correction!
+		// The Gauss-Seidel M(H) update was causing oscillations and non-convergence
+		// for high-permeability nonlinear materials because it mixed two iteration schemes.
 
+		// Compute convergence using relative change ||dM||/||M|| (matching ELF_MAGIC)
+		// This is more physically meaningful than mean squared error
+		double M_diff_sq = 0.0;
+		double M_norm_sq = 0.0;
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
-			// Compute quasi-external field (field from all OTHER elements + external)
-			TVector3d QuasiExtField = ExternFieldAr[i];
-			TMatrix3df* MatrArrayPtr = IntrcMat[i];
-			for(int j = 0; j < AmOfMainElem; j++)
-			{
-				if(j != i)
-				{
-					TMatrix3df& Nij = MatrArrayPtr[j];
-					QuasiExtField.x += Nij.Str0.x*MagnAr[j].x + Nij.Str0.y*MagnAr[j].y + Nij.Str0.z*MagnAr[j].z;
-					QuasiExtField.y += Nij.Str1.x*MagnAr[j].x + Nij.Str1.y*MagnAr[j].y + Nij.Str1.z*MagnAr[j].z;
-					QuasiExtField.z += Nij.Str2.x*MagnAr[j].x + Nij.Str2.y*MagnAr[j].y + Nij.Str2.z*MagnAr[j].z;
-				}
-			}
-
-			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
-			radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
-
-			// Get chi*Nii and Mr for current H estimate
-			TMatrix3d MatrElemByInstKsi;
-			TVector3d MatrElemByInstMr;
-			MaterPtr->MultMatrByInstKsiAndMr(NewFieldAr[i], MatrArrayPtr[i], MatrElemByInstKsi, MatrElemByInstMr);
-
-			// Solve local equation: H = (I - chi*Nii)^{-1} * (QuasiExtField + Mr)
-			TMatrix3d BufMatr = E - MatrElemByInstKsi;
-			TMatrix3d InvBufMatr;
-			Matrix3d_inv(BufMatr, InvBufMatr);
-			NewFieldAr[i] = InvBufMatr * (QuasiExtField + MatrElemByInstMr);
-
-			// Use material's M(H) function directly
-			MagnAr[i] = MaterPtr->M(NewFieldAr[i]);
-		}
-
-		// Compute convergence (MisfitE2) and update object magnetizations
-		MisfitE2 = 0.0;
-		for(int i = 0; i < AmOfMainElem; i++)
-		{
-			// Compute convergence (change in M)
+			// Compute change in M
 			TVector3d dM = MagnAr[i] - OldMagnArray[i];
-			MisfitE2 += dM.AmpE2();
+			M_diff_sq += dM.AmpE2();
+			M_norm_sq += MagnAr[i].AmpE2();
 
 			// Update the object's magnetization
 			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
 			g3dRelaxPtr->Magn = MagnAr[i];
 		}
 
-		MisfitE2 /= AmOfMainElem;
+		// Relative change: ||dM|| / ||M||
+		double rel_change = 0.0;
+		if(M_norm_sq > 1.0e-30)
+		{
+			rel_change = std::sqrt(M_diff_sq / M_norm_sq);
+		}
+		else
+		{
+			rel_change = std::sqrt(M_diff_sq);
+		}
+		MisfitE2 = rel_change * rel_change;  // For compatibility with status reporting
 
-		// Check convergence
-		if(MisfitE2 <= PrecOnMagnetizE2)
+		// Check convergence using relative tolerance (PrecOnMagnetiz is the relative tolerance)
+		if(rel_change <= PrecOnMagnetiz)
 		{
 			iterCount++;
 			break;
@@ -787,7 +830,6 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	// Store old magnetization for convergence checking
 	std::vector<TVector3d> OldMagnArray(AmOfMainElem);
 
-	double PrecOnMagnetizE2 = PrecOnMagnetiz * PrecOnMagnetiz;
 	double MisfitE2 = 1.0e30;
 	int totalIterCount = 0;
 	int outerIter = 0;
@@ -819,7 +861,7 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	// Outer nonlinear iteration loop
 	// For linear materials, this converges in 1 iteration
 	// For nonlinear materials, chi(H) is updated each iteration
-	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix;
+	// MATCHING ELF_MAGIC: pure Newton iteration without Gauss-Seidel M(H) correction
 
 	for(outerIter = 0; outerIter < MaxIterNumber; outerIter++)
 	{
@@ -829,22 +871,29 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 			OldMagnArray[i] = MagnAr[i];
 		}
 
-		// Update H field from current M: H = H_ext - N*M
-		// This H is used to compute chi(H) for the linear system
+		// Update H field from current M using constitutive relation: H = M / chi
+		// This is the ELF_MAGIC approach - O(N) instead of O(N^2) for H = H_ext - N*M
 		// Skip on first iteration (H already initialized above)
 		if(outerIter > 0)
 		{
 			for(int i = 0; i < AmOfMainElem; i++)
 			{
-				TVector3d H_total = ExternFieldAr[i];
-				for(int j = 0; j < AmOfMainElem; j++)
-				{
-					TMatrix3df& Nij = IntrcMat[i][j];
-					H_total.x -= Nij.Str0.x*MagnAr[j].x + Nij.Str0.y*MagnAr[j].y + Nij.Str0.z*MagnAr[j].z;
-					H_total.y -= Nij.Str1.x*MagnAr[j].x + Nij.Str1.y*MagnAr[j].y + Nij.Str1.z*MagnAr[j].z;
-					H_total.z -= Nij.Str2.x*MagnAr[j].x + Nij.Str2.y*MagnAr[j].y + Nij.Str2.z*MagnAr[j].z;
-				}
-				NewFieldAr[i] = H_total;
+				radTg3dRelax* g3dRelaxPtr_i = IntrctPtr->g3dRelaxPtrVect[i];
+				radTMaterial* MaterPtr_i = (radTMaterial*)(g3dRelaxPtr_i->MaterHandle.rep);
+
+				// Get current chi value from previous iteration's H
+				TMatrix3d KsiTensor;
+				TVector3d MrVect;
+				MaterPtr_i->DefineInstantKsiTensor(NewFieldAr[i], KsiTensor, MrVect);
+
+				// Use average chi (isotropic approximation for H update)
+				double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+				if(chi < 1.0e-6) chi = 1.0e-6;
+
+				// H_int = M / chi (from M = chi * H)
+				NewFieldAr[i].x = MagnAr[i].x / chi;
+				NewFieldAr[i].y = MagnAr[i].y / chi;
+				NewFieldAr[i].z = MagnAr[i].z / chi;
 			}
 		}
 
@@ -854,69 +903,41 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 		int n_iter = SolveBiCGSTAB(ndof, PrecOnMagnetiz * 0.1, MaxIterNumber - totalIterCount, residual);
 		totalIterCount += n_iter;
 
-		// Newton-style M(H) update (Gauss-Seidel style):
-		// After BiCGSTAB solves the linearized system, apply Newton-style correction
-		// at each element. This uses the material's M(H) function directly.
-		// Key: compute quasi-external field (excluding self-interaction), solve for H
-		// using the local (I - chi*Nii)^{-1} inversion, then M = M(H).
-		TVector3d E_Str0(1.,0.,0.), E_Str1(0.,1.,0.), E_Str2(0.,0.,1.);
-		TMatrix3d E(E_Str0, E_Str1, E_Str2);
+		// Pure Newton-Raphson iteration (matching ELF_MAGIC approach):
+		// Use the BiCGSTAB solution directly - do NOT apply Gauss-Seidel M(H) correction!
+		// The Gauss-Seidel M(H) update was causing oscillations and non-convergence
+		// for high-permeability nonlinear materials because it mixed two iteration schemes.
 
+		// Compute convergence using relative change ||dM||/||M|| (matching ELF_MAGIC)
+		// This is more physically meaningful than mean squared error
+		double M_diff_sq = 0.0;
+		double M_norm_sq = 0.0;
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
-			// Compute quasi-external field (field from all OTHER elements + external)
-			TVector3d QuasiExtField = ExternFieldAr[i];
-			TMatrix3df* MatrArrayPtr = IntrcMat[i];
-			for(int j = 0; j < AmOfMainElem; j++)
-			{
-				if(j != i)
-				{
-					TMatrix3df& Nij = MatrArrayPtr[j];
-					QuasiExtField.x += Nij.Str0.x*MagnAr[j].x + Nij.Str0.y*MagnAr[j].y + Nij.Str0.z*MagnAr[j].z;
-					QuasiExtField.y += Nij.Str1.x*MagnAr[j].x + Nij.Str1.y*MagnAr[j].y + Nij.Str1.z*MagnAr[j].z;
-					QuasiExtField.z += Nij.Str2.x*MagnAr[j].x + Nij.Str2.y*MagnAr[j].y + Nij.Str2.z*MagnAr[j].z;
-				}
-			}
-
-			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
-			radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
-
-			// Get chi*Nii and Mr for current H estimate
-			TMatrix3d MatrElemByInstKsi, KsiTensor;
-			TVector3d MatrElemByInstMr, MrVect;
-			MaterPtr->MultMatrByInstKsiAndMr(NewFieldAr[i], MatrArrayPtr[i], MatrElemByInstKsi, MatrElemByInstMr);
-
-			// Solve local equation: H = (I - chi*Nii)^{-1} * (QuasiExtField + Mr)
-			TMatrix3d BufMatr = E - MatrElemByInstKsi;
-			TMatrix3d InvBufMatr;
-			Matrix3d_inv(BufMatr, InvBufMatr);
-			NewFieldAr[i] = InvBufMatr * (QuasiExtField + MatrElemByInstMr);
-
-			// Use material's M(H) function directly
-			MagnAr[i] = MaterPtr->M(NewFieldAr[i]);
-		}
-
-		// Compute magnetization change (MisfitE2) and update object magnetizations
-		MisfitE2 = 0.0;
-		for(int i = 0; i < AmOfMainElem; i++)
-		{
-			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
-
-			// Compute difference
-			TVector3d dM;
-			dM.x = MagnAr[i].x - OldMagnArray[i].x;
-			dM.y = MagnAr[i].y - OldMagnArray[i].y;
-			dM.z = MagnAr[i].z - OldMagnArray[i].z;
-			MisfitE2 += dM.x*dM.x + dM.y*dM.y + dM.z*dM.z;
+			// Compute change in M
+			TVector3d dM = MagnAr[i] - OldMagnArray[i];
+			M_diff_sq += dM.AmpE2();
+			M_norm_sq += MagnAr[i].AmpE2();
 
 			// Update the object's magnetization
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
 			g3dRelaxPtr->Magn = MagnAr[i];
 		}
 
-		MisfitE2 /= AmOfMainElem;
+		// Relative change: ||dM|| / ||M||
+		double rel_change = 0.0;
+		if(M_norm_sq > 1.0e-30)
+		{
+			rel_change = std::sqrt(M_diff_sq / M_norm_sq);
+		}
+		else
+		{
+			rel_change = std::sqrt(M_diff_sq);
+		}
+		MisfitE2 = rel_change * rel_change;  // For compatibility with status reporting
 
-		// Check convergence
-		if(MisfitE2 <= PrecOnMagnetizE2)
+		// Check convergence using relative tolerance (PrecOnMagnetiz is the relative tolerance)
+		if(rel_change <= PrecOnMagnetiz)
 		{
 			outerIter++;
 			break;

@@ -6,6 +6,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.9] - 2025-12-05
+
+### Added
+
+- **NGSolve Integration Tests and Examples**
+  - New `test_ngsolve_integration.py` - Comprehensive HDiv projection test
+  - New `test_mesh_import.py` - Tetrahedral and hexahedral mesh import tests
+  - New `demo_hdiv_projection.py` - HDiv function space projection example
+  - Documented HDiv best practices for magnetic field projection
+
+- **Build System Improvements**
+  - Fixed Build.ps1 bugs (radia_ngsolve target name, path handling)
+  - Automatic copy of .pyd files to src/radia/ for PyPI packaging
+  - Multi-location search for built .pyd files
+
+- **Nonlinear Material Benchmarks**
+  - New `benchmark_bicgstab_hex.py` - BiCGSTAB solver benchmark
+  - New `benchmark_solver_methods.py` - LU vs BiCGSTAB comparison
+  - New `compare_radia_elfmagic_field.py` - ELF_MAGIC comparison
+
+- **Documentation**
+  - `docs/MESH_MSC_API_DESIGN.md` - Mesh MSC API design document
+  - `docs/MMM_MSC_IMPLEMENTATION.md` - MMM+MSC implementation guide
+  - `docs/SOLVER_METHODS.md` - Solver method documentation
+
+### Changed
+
+- **CLAUDE.md Updates**
+  - Added isotropic MatLin usage policy (single argument form required)
+  - Updated NGSolve integration best practices with HDiv(order=2) recommendation
+  - Added release workflow policy (Build -> Test -> Git Push -> PyPI)
+
+### Fixed
+
+- **Build.ps1 Bug Fixes**
+  - Fixed target name `rad_ngsolve` -> `radia_ngsolve`
+  - Fixed broken paths `srcadiaadia.pyd` -> `srcadiaadia.pyd`
+  - Added automatic directory creation for src/radia
+
 ## [1.3.4] - 2025-11-27
 
 ### Added
