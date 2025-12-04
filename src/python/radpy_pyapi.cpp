@@ -21,9 +21,8 @@
 
 // Solver method constants (must match RadSolverMethod in rad_relaxation_methods.h)
 namespace SolverMethod {
-	constexpr int NEWTON    = 8;   // Newton-Raphson for nonlinear materials
-	constexpr int LU        = 9;   // LU direct solver
-	constexpr int BICGSTAB  = 10;  // BiCGSTAB iterative solver (default)
+	constexpr int LU        = 0;   // LU direct solver
+	constexpr int BICGSTAB  = 1;   // BiCGSTAB iterative solver (default)
 }
 
 /************************************************************************//**
@@ -2527,7 +2526,7 @@ static PyObject* radia_RlxUpdSrc(PyObject* self, PyObject* args)
 
 /************************************************************************//**
  * Magnetic Field Calculation Methods: Builds an interaction matrix and performs a relaxation procedure.
- * Accepts method as either integer (9=LU, 10=BiCGSTAB) or string ("lu", "bicgstab")
+ * Accepts method as either integer (0=LU, 1=BiCGSTAB) or string ("lu", "bicgstab")
  ***************************************************************************/
 static PyObject* radia_Solve(PyObject* self, PyObject* args)
 {
@@ -2558,14 +2557,12 @@ static PyObject* radia_Solve(PyObject* self, PyObject* args)
 					throw CombErStr(strEr_BadFuncArg, ": Solve: invalid method string");
 
 				// Convert method name to number (case-insensitive)
-				if(strcasecmp(methStr, "newton") == 0 || strcasecmp(methStr, "nonlinear") == 0)
-					meth = SolverMethod::NEWTON;
-				else if(strcasecmp(methStr, "lu") == 0 || strcasecmp(methStr, "direct") == 0)
+				if(strcasecmp(methStr, "lu") == 0 || strcasecmp(methStr, "direct") == 0)
 					meth = SolverMethod::LU;
 				else if(strcasecmp(methStr, "bicgstab") == 0 || strcasecmp(methStr, "iterative") == 0)
 					meth = SolverMethod::BICGSTAB;
 				else
-					throw "Radia::Error: Unknown solver method. Use 'newton' (or 'nonlinear') for nonlinear materials, 'lu' (or 'direct') for LU decomposition, 'bicgstab' (or 'iterative') for BiCGSTAB.";
+					throw "Radia::Error: Unknown solver method. Use 'lu' (or 'direct') for LU decomposition, 'bicgstab' (or 'iterative') for BiCGSTAB.";
 			}
 			else
 			{
@@ -2574,8 +2571,8 @@ static PyObject* radia_Solve(PyObject* self, PyObject* args)
 		}
 
 		// Validate method number
-		if(meth != SolverMethod::NEWTON && meth != SolverMethod::LU && meth != SolverMethod::BICGSTAB)
-			throw "Radia::Error: Invalid method number. Use 8 (Newton), 9 (LU), or 10 (BiCGSTAB), or string 'newton'/'lu'/'bicgstab'.";
+		if(meth != SolverMethod::LU && meth != SolverMethod::BICGSTAB)
+			throw "Radia::Error: Invalid method number. Use 0 (LU) or 1 (BiCGSTAB), or string 'lu'/'bicgstab'.";
 
 		double arResSolve[12];
 		int lenResSolve = 4;
