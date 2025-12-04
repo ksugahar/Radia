@@ -77,6 +77,21 @@ print(f"Field: {field} T")
 
 The `radia_ngsolve` module provides a C++ CoefficientFunction interface for using Radia magnetic fields in NGSolve FEM analysis.
 
+**Requirements:**
+- NGSolve must be installed separately: `pip install ngsolve`
+- **IMPORTANT**: NGSolve must be imported **before** `radia_ngsolve`
+- Current build is linked against **NGSolve 6.2.2406** (Windows Python 3.12)
+
+**Installation:**
+
+```bash
+# 1. Install NGSolve first
+pip install ngsolve
+
+# 2. Install Radia (includes radia_ngsolve.pyd)
+pip install radia
+```
+
 **Function Specification:**
 
 ```python
@@ -102,12 +117,12 @@ radia_ngsolve.RadiaField(radia_obj, field_type='b')
 **Example:**
 
 ```python
-# IMPORTANT: Import ngsolve first
+# IMPORTANT: Import ngsolve FIRST (required to load NGSolve DLLs)
 import ngsolve
-from ngsolve import Mesh, H1, GridFunction
+from ngsolve import Mesh, H1, GridFunction, HDiv
 
 import radia as rad
-import radia_ngsolve
+from radia import radia_ngsolve  # or: import radia_ngsolve
 
 # Create Radia magnet
 magnet = rad.ObjRecMag([0,0,0], [20,20,20], [0,0,1.2])  # mm units
