@@ -53,8 +53,8 @@ Example
 
 import os
 import radia as rad
-from netgen_mesh_import import netgen_mesh_to_radia
-from radia_vtk_export import exportGeometryToVTK
+from .netgen_mesh_import import netgen_mesh_to_radia
+from .radia_vtk_export import exportGeometryToVTK
 
 
 def create_radia_from_mesh(mesh, material=None, units='m', combine=True,

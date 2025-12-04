@@ -2,7 +2,7 @@
 # This module re-exports all symbols from the C++ extension module (radia.pyd)
 # so that 'import radia' works correctly when installed via pip
 
-__version__ = "1.3.8"
+__version__ = "1.3.9"
 
 # Import all symbols from the C++ extension module
 try:
