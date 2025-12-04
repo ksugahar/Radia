@@ -16,7 +16,7 @@ import shutil
 import sys
 
 # Read version from pyproject.toml
-version = "1.3.6"
+version = "1.3.8"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -25,8 +25,11 @@ long_description = readme_file.read_text(encoding="utf-8") if readme_file.exists
 def prepare_package_data():
 	"""
 	Prepare package data by copying built extension modules to the package directory
+
+	Note: Package directory is now src/radia (not src/python) so that
+	'import radia' works correctly after pip install.
 	"""
-	package_dir = Path(__file__).parent / "src" / "python"
+	package_dir = Path(__file__).parent / "src" / "radia"
 	package_dir.mkdir(parents=True, exist_ok=True)
 
 	# Copy radia.pyd from build/Release/ if it exists
@@ -86,7 +89,7 @@ setup(
 	packages=find_packages(where="src"),
 	package_dir={"": "src"},
 	package_data={
-		"python": [
+		"radia": [
 			"*.pyd",  # Include all .pyd files (radia.pyd, radia_ngsolve.pyd)
 			"*.py",   # Include all Python utility modules
 		],
