@@ -99,103 +99,15 @@ void radTIterativeRelaxMeth::MakeN_iter(int IterNum)
 }
 
 //-------------------------------------------------------------------------
-// Note: radTSimpleRelaxation (Method 1) implementation removed (deprecated)
-// Note: radTRelaxationMethNo_2 (Method 2) implementation removed (deprecated)
-//-------------------------------------------------------------------------
-// Note: radTSimpleRelaxation (Method 1) implementation removed (deprecated)
-// Note: radTRelaxationMethNo_2 (Method 2) implementation removed (deprecated)
-// Note: radTRelaxationMethNo_3 (Method 3) implementation removed (deprecated)
-// Note: radTRelaxationMethNo_4 (Method 4) implementation removed (deprecated)
-// Note: radTRelaxationMethNo_a5 (Method 5) implementation removed (deprecated)
-// Note: radTRelaxationMethNo_6 (Method 6) implementation removed (deprecated)
-// Note: radTRelaxationMethNo_7 (Method 7) implementation removed (deprecated)
+// Note: Legacy relaxation methods (Methods 1-8) have been removed
+// Newton-style M(H) update is now integrated into LU and BiCGSTAB solvers
 //-------------------------------------------------------------------------
 
 //=========================================================================
-// Method 8: Newton-Raphson for nonlinear materials
+// Method 0: LU Direct Solver
 //=========================================================================
 
-int radTRelaxationMethNo_8::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
-{
-	if(IntrctPtr == 0) return 0;
-	mDesiredPrecOnMagnetizE2 = PrecOnMagnetiz * PrecOnMagnetiz;
-
-	if(!MagnResetIsNotNeeded)
-	{
-		IntrctPtr->ResetM();
-		IntrctPtr->ResetAuxParam();
-	}
-
-	int ItCnt=0;
-	for(ItCnt=0; ItCnt<MaxIterNumber; ItCnt++)
-	{
-		DefineNewMagnetizations();
-
-		if(mInstMisfitMe2 <= mDesiredPrecOnMagnetizE2) break;
-
-		if(radYield.Check()==0) return 0; // To allow multitasking on Mac: consider better places for this
-	}
-
-	return ItCnt;
-}
-
-//-------------------------------------------------------------------------
-
-void radTRelaxationMethNo_8::DefineNewMagnetizations()
-{
-	TVector3d E_Str0(1.,0.,0.), E_Str1(0.,1.,0.), E_Str2(0.,0.,1.), MatrElemByInstMr, Mnew_mi_MoldVect;
-	TMatrix3d E(E_Str0, E_Str1, E_Str2), BufMatr, InvBufMatr, MatrElemByInstKsi;
-
-	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix;
-	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
-	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
-	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
-	radTg3dRelax* g3dRelaxPtr = nullptr;
-	radTMaterial* MaterPtr = nullptr;
-
-	int LocAmOfMainElem = IntrctPtr->AmOfMainElem;
-	double NormFact = 1./double(LocAmOfMainElem);
-	double BufMisfitM=0.;
-
-	for(int StrNo=0; StrNo<LocAmOfMainElem; StrNo++)
-	{
-		TVector3d QuasiExtFieldAtElemStrNo(0.,0.,0.);
-		TMatrix3df* MatrArrayPtr = IntrcMat[StrNo];
-
-		for(int ColNo=0; ColNo<LocAmOfMainElem; ColNo++)
-		{
-			if(ColNo!=StrNo) QuasiExtFieldAtElemStrNo += MatrArrayPtr[ColNo] * MagnAr[ColNo];
-		}
-		QuasiExtFieldAtElemStrNo += ExternFieldAr[StrNo];
-
-		g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[StrNo];
-		MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
-
-		TVector3d& InstantH = NewFieldAr[StrNo];
-		TVector3d& InstantM = MagnAr[StrNo];
-
-		MaterPtr->MultMatrByInstKsiAndMr(InstantH, MatrArrayPtr[StrNo], MatrElemByInstKsi, MatrElemByInstMr);
-
-		BufMatr = E - MatrElemByInstKsi;
-		Matrix3d_inv(BufMatr, InvBufMatr);
-		InstantH = InvBufMatr*(QuasiExtFieldAtElemStrNo + MatrElemByInstMr);
-
-		InstantM = MaterPtr->M(InstantH);
-
-		Mnew_mi_MoldVect = InstantM - g3dRelaxPtr->Magn;
-		double NewDifMe2 = Mnew_mi_MoldVect.AmpE2();
-		BufMisfitM += NewDifMe2;
-
-		g3dRelaxPtr->Magn = InstantM;
-	}
-	mInstMisfitMe2 = BufMisfitM*NormFact;
-}
-
-//=========================================================================
-// Method 9: Direct LU solver for tetrahedral elements
-//=========================================================================
-
-int radTRelaxationMethNo_9::SolveLU(std::vector<std::vector<double>>& A, std::vector<double>& b, int n)
+int radTRelaxationMethNo_0::SolveLU(std::vector<std::vector<double>>& A, std::vector<double>& b, int n)
 {
 	// Gaussian elimination with partial pivoting
 	// Forward elimination
@@ -259,7 +171,7 @@ int radTRelaxationMethNo_9::SolveLU(std::vector<std::vector<double>>& A, std::ve
 	return 0;  // Success
 }
 
-int radTRelaxationMethNo_9::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
+int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
 {
 	if(IntrctPtr == nullptr) return 0;
 
@@ -507,10 +419,10 @@ int radTRelaxationMethNo_9::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 }
 
 //=========================================================================
-// Method 10: BiCGSTAB with H-matrix acceleration
+// Method 1: BiCGSTAB Iterative Solver (default)
 //=========================================================================
 
-double radTRelaxationMethNo_10::Dot(const std::vector<double>& a, const std::vector<double>& b, int n)
+double radTRelaxationMethNo_1::Dot(const std::vector<double>& a, const std::vector<double>& b, int n)
 {
 	double sum = 0.0;
 	#pragma omp parallel for reduction(+:sum) if(n > 100)
@@ -521,12 +433,12 @@ double radTRelaxationMethNo_10::Dot(const std::vector<double>& a, const std::vec
 	return sum;
 }
 
-double radTRelaxationMethNo_10::Norm2(const std::vector<double>& a, int n)
+double radTRelaxationMethNo_1::Norm2(const std::vector<double>& a, int n)
 {
 	return std::sqrt(Dot(a, a, n));
 }
 
-void radTRelaxationMethNo_10::Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n)
+void radTRelaxationMethNo_1::Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n)
 {
 	#pragma omp parallel for if(n > 100)
 	for(int i = 0; i < n; i++)
@@ -535,7 +447,7 @@ void radTRelaxationMethNo_10::Axpy(double alpha, const std::vector<double>& x, s
 	}
 }
 
-void radTRelaxationMethNo_10::Copy(const std::vector<double>& src, std::vector<double>& dst, int n)
+void radTRelaxationMethNo_1::Copy(const std::vector<double>& src, std::vector<double>& dst, int n)
 {
 	#pragma omp parallel for if(n > 100)
 	for(int i = 0; i < n; i++)
@@ -544,7 +456,7 @@ void radTRelaxationMethNo_10::Copy(const std::vector<double>& src, std::vector<d
 	}
 }
 
-void radTRelaxationMethNo_10::Scale(double alpha, std::vector<double>& x, int n)
+void radTRelaxationMethNo_1::Scale(double alpha, std::vector<double>& x, int n)
 {
 	#pragma omp parallel for if(n > 100)
 	for(int i = 0; i < n; i++)
@@ -553,7 +465,7 @@ void radTRelaxationMethNo_10::Scale(double alpha, std::vector<double>& x, int n)
 	}
 }
 
-void radTRelaxationMethNo_10::GetDiagonalElements(std::vector<double>& diag, int n_elem)
+void radTRelaxationMethNo_1::GetDiagonalElements(std::vector<double>& diag, int n_elem)
 {
 	// Extract diagonal elements from interaction matrix for Jacobi preconditioner
 	// Diagonal block [i][i] is a 3x3 matrix, we extract the diagonal of that
@@ -596,7 +508,7 @@ void radTRelaxationMethNo_10::GetDiagonalElements(std::vector<double>& diag, int
 	}
 }
 
-void radTRelaxationMethNo_10::DenseMatVec(const std::vector<double>& x, std::vector<double>& y, int ndof)
+void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vector<double>& y, int ndof)
 {
 	// Computes y = A * x where A = -N + 1/chi
 	// Uses H-matrix if available, otherwise dense matrix
@@ -651,7 +563,7 @@ void radTRelaxationMethNo_10::DenseMatVec(const std::vector<double>& x, std::vec
 	}
 }
 
-int radTRelaxationMethNo_10::SolveBiCGSTAB(int ndof, double tol, int max_iter, double& residual)
+int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, double& residual)
 {
 	// BiCGSTAB with Jacobi preconditioner
 	// Reference: van der Vorst, SIAM J. Sci. Stat. Comput. 13 (1992)
@@ -846,7 +758,7 @@ int radTRelaxationMethNo_10::SolveBiCGSTAB(int ndof, double tol, int max_iter, d
 	return iter;
 }
 
-int radTRelaxationMethNo_10::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
+int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
 {
 	if(IntrctPtr == nullptr) return 0;
 

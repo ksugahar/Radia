@@ -25,9 +25,8 @@
 //-------------------------------------------------------------------------
 
 namespace RadSolverMethod {
-	constexpr int NEWTON    = 8;   // Newton-Raphson for nonlinear materials
-	constexpr int LU        = 9;   // LU direct solver
-	constexpr int BICGSTAB  = 10;  // BiCGSTAB iterative solver (default)
+	constexpr int LU        = 0;   // LU direct solver
+	constexpr int BICGSTAB  = 1;  // BiCGSTAB iterative solver (default)
 }
 
 //-------------------------------------------------------------------------
@@ -48,54 +47,14 @@ public:
 };
 
 //-------------------------------------------------------------------------
-// Note: radTSimpleRelaxation (Method 1) has been removed (deprecated)
-// Note: radTRelaxationMethNo_2 (Method 2) has been removed (deprecated)
-// Note: radTRelaxationMethNo_3 (Method 3) has been removed (deprecated)
-// Note: radTRelaxationMethNo_4 (Method 4) has been removed (deprecated)
-// Note: radTRelaxationMethNo_a5 (Method 5) has been removed (deprecated)
+// Note: Legacy relaxation methods (Methods 1-8) have been removed
+// Newton-style M(H) update is now integrated into LU and BiCGSTAB solvers
 //-------------------------------------------------------------------------
 
-//-------------------------------------------------------------------------
-// Note: radTRelaxationMethNo_6 (Method 6) has been removed (deprecated)
-// Note: radTRelaxationMethNo_7 (Method 7) has been removed (deprecated)
-//-------------------------------------------------------------------------
-
-/**
- * Newton-Raphson iterative solver for nonlinear materials
- * Method number 8
- *
- * This method uses Newton-Raphson iteration to solve nonlinear magnetic
- * problems with saturable materials (MatSatIso, MatSatIsoTab, etc.)
- *
- * Required for:
- * - Nonlinear (saturable) materials where M = M(H) is nonlinear
- * - Uses local Jacobian matrix for each element
- */
-class radTRelaxationMethNo_8 : public radTIterativeRelaxMeth {
-
-	double mInstMisfitMe2, mDesiredPrecOnMagnetizE2;
-
-public:
-
-	radTRelaxationMethNo_8(radTInteraction* InInteractionPtr) : radTIterativeRelaxMeth(InInteractionPtr)
-	{
-		double DesiredPrecOnMagnetiz = 1.E-03;
-		mDesiredPrecOnMagnetizE2 = DesiredPrecOnMagnetiz*DesiredPrecOnMagnetiz;
-		IntrctPtr = InInteractionPtr;
-		mInstMisfitMe2 = 1.E+23;
-	}
-
-	~radTRelaxationMethNo_8() {}
-
-	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
-	void DefineNewMagnetizations();
-};
-
-//-------------------------------------------------------------------------
 
 /**
  * Direct solver using LU decomposition (Gaussian elimination with partial pivoting)
- * Method number 9
+ * Method number 0
  *
  * This solver is required for tetrahedral elements with high permeability materials
  * where iterative relaxation methods diverge due to large interaction coefficients.
@@ -104,16 +63,16 @@ public:
  *   (I - chi*N) * M = chi * H_ext
  * where N is the interaction matrix (demagnetization coefficients)
  */
-class radTRelaxationMethNo_9 : public radTIterativeRelaxMeth {
+class radTRelaxationMethNo_0 : public radTIterativeRelaxMeth {
 
 public:
-	radTRelaxationMethNo_9(radTInteraction* InInteractionPtr)
+	radTRelaxationMethNo_0(radTInteraction* InInteractionPtr)
 	: radTIterativeRelaxMeth(InInteractionPtr)
 	{
 		IntrctPtr = InInteractionPtr;
 	}
 
-	~radTRelaxationMethNo_9() {}
+	~radTRelaxationMethNo_0() {}
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 
@@ -130,7 +89,7 @@ private:
 
 /**
  * BiCGSTAB iterative solver with H-matrix acceleration
- * Method number 10
+ * Method number 1
  *
  * This solver uses BiCGSTAB (Biconjugate Gradient Stabilized) with
  * H-matrix (HACApK) for fast matrix-vector products, providing:
@@ -138,21 +97,21 @@ private:
  * - Jacobi (diagonal) preconditioning for faster convergence
  * - Stable for high permeability materials
  *
- * Recommended for N > 100 elements where direct solver (Method 9)
+ * Recommended for N > 100 elements where direct solver (Method 0)
  * becomes too slow due to O(N^3) complexity.
  *
  * Reference: van der Vorst, SIAM J. Sci. Stat. Comput. 13 (1992)
  */
-class radTRelaxationMethNo_10 : public radTIterativeRelaxMeth {
+class radTRelaxationMethNo_1 : public radTIterativeRelaxMeth {
 
 public:
-	radTRelaxationMethNo_10(radTInteraction* InInteractionPtr)
+	radTRelaxationMethNo_1(radTInteraction* InInteractionPtr)
 	: radTIterativeRelaxMeth(InInteractionPtr)
 	{
 		IntrctPtr = InInteractionPtr;
 	}
 
-	~radTRelaxationMethNo_10() {}
+	~radTRelaxationMethNo_1() {}
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 

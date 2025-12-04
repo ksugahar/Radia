@@ -1581,7 +1581,8 @@ void UpdateSourcesForRelax(int InteractElemKey)
 
 void SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo)
 {
-	if(MethNo == 0) MethNo = 10; //Default method: BiCGSTAB (changed from Method 4)
+	// MethNo: 0=LU direct solver, 1=BiCGSTAB iterative solver (default)
+	// Note: Legacy methods 2-10 have been removed; only 0 and 1 are valid
 	rad.SolveGen(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
 }
 

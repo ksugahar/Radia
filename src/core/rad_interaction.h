@@ -272,9 +272,8 @@ public:
 	template<class T> inline void SetRelaxObjMagnVals(T* arMagnVals); //OC02012020
 
 	friend class radTIterativeRelaxMeth;
-	friend class radTRelaxationMethNo_8;   // Newton-Raphson for nonlinear materials
-	friend class radTRelaxationMethNo_9;   // LU direct solver
-	friend class radTRelaxationMethNo_10;  // BiCGSTAB
+	friend class radTRelaxationMethNo_0;   // LU direct solver
+	friend class radTRelaxationMethNo_1;   // BiCGSTAB
 	friend class radTHMatrixACA;
 
 	// H-matrix methods
