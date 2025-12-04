@@ -12,6 +12,19 @@
 #include "pyparse.h"
 #include "auxparse.h"
 #include <sstream>
+#include <cstring>
+
+// Platform-independent case-insensitive string comparison
+#ifdef _WIN32
+#define strcasecmp _stricmp
+#endif
+
+// Solver method constants (must match RadSolverMethod in rad_relaxation_methods.h)
+namespace SolverMethod {
+	constexpr int NEWTON    = 8;   // Newton-Raphson for nonlinear materials
+	constexpr int LU        = 9;   // LU direct solver
+	constexpr int BICGSTAB  = 10;  // BiCGSTAB iterative solver (default)
+}
 
 /************************************************************************//**
  * Error messages related to Python interface functions
@@ -899,6 +912,61 @@ static PyObject* radia_SolverTetraMethod(PyObject* self, PyObject* args)
 		if(errStat != 0)
 		{
 			throw "Radia::Error999: Invalid tetrahedral method (use 0 or 1)";
+		}
+
+		oRes = Py_BuildValue("i", 0);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Enable H-matrix solver for BiCGSTAB (Method 10)
+ ***************************************************************************/
+static PyObject* radia_SolverHMatrixEnable(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+
+	try
+	{
+		int enable = 1;
+		double eps = 1e-4;
+		int max_rank = 50;
+
+		if(!PyArg_ParseTuple(args, "|idi:SolverHMatrixEnable", &enable, &eps, &max_rank))
+			throw CombErStr(strEr_BadFuncArg, ": SolverHMatrixEnable");
+
+		int errStat = RadSolverHMatrixEnable(enable, eps, max_rank);
+		if(errStat != 0)
+		{
+			throw "Radia::Error999: Failed to enable H-matrix solver";
+		}
+
+		oRes = Py_BuildValue("i", 0);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Disable H-matrix solver
+ ***************************************************************************/
+static PyObject* radia_SolverHMatrixDisable(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+
+	try
+	{
+		int errStat = RadSolverHMatrixDisable();
+		if(errStat != 0)
+		{
+			throw "Radia::Error999: Failed to disable H-matrix solver";
 		}
 
 		oRes = Py_BuildValue("i", 0);
@@ -2459,17 +2527,55 @@ static PyObject* radia_RlxUpdSrc(PyObject* self, PyObject* args)
 
 /************************************************************************//**
  * Magnetic Field Calculation Methods: Builds an interaction matrix and performs a relaxation procedure.
+ * Accepts method as either integer (9=LU, 10=BiCGSTAB) or string ("lu", "bicgstab")
  ***************************************************************************/
 static PyObject* radia_Solve(PyObject* self, PyObject* args)
 {
 	PyObject *oRes=0;
 	try
 	{
-		int ind=0, numIt=1000, meth=4; //OC02112019
-		//int ind=0, numIt=1000, meth=0;
+		int ind=0, numIt=1000, meth=SolverMethod::BICGSTAB; // Default: BiCGSTAB
 		double prec=0.0001;
+		PyObject *oMeth = nullptr;
 
-		if(!PyArg_ParseTuple(args, "idi|i:Solve", &ind, &prec, &numIt, &meth)) throw CombErStr(strEr_BadFuncArg, ": Solve");
+		// Try parsing with optional method argument (int or string)
+		if(!PyArg_ParseTuple(args, "idi|O:Solve", &ind, &prec, &numIt, &oMeth))
+			throw CombErStr(strEr_BadFuncArg, ": Solve");
+
+		// Process method argument if provided
+		if(oMeth != nullptr)
+		{
+			if(PyLong_Check(oMeth))
+			{
+				// Integer method number
+				meth = (int)PyLong_AsLong(oMeth);
+			}
+			else if(PyUnicode_Check(oMeth))
+			{
+				// String method name
+				const char* methStr = PyUnicode_AsUTF8(oMeth);
+				if(methStr == nullptr)
+					throw CombErStr(strEr_BadFuncArg, ": Solve: invalid method string");
+
+				// Convert method name to number (case-insensitive)
+				if(strcasecmp(methStr, "newton") == 0 || strcasecmp(methStr, "nonlinear") == 0)
+					meth = SolverMethod::NEWTON;
+				else if(strcasecmp(methStr, "lu") == 0 || strcasecmp(methStr, "direct") == 0)
+					meth = SolverMethod::LU;
+				else if(strcasecmp(methStr, "bicgstab") == 0 || strcasecmp(methStr, "iterative") == 0)
+					meth = SolverMethod::BICGSTAB;
+				else
+					throw "Radia::Error: Unknown solver method. Use 'newton' (or 'nonlinear') for nonlinear materials, 'lu' (or 'direct') for LU decomposition, 'bicgstab' (or 'iterative') for BiCGSTAB.";
+			}
+			else
+			{
+				throw CombErStr(strEr_BadFuncArg, ": Solve: method must be int or string");
+			}
+		}
+
+		// Validate method number
+		if(meth != SolverMethod::NEWTON && meth != SolverMethod::LU && meth != SolverMethod::BICGSTAB)
+			throw "Radia::Error: Invalid method number. Use 8 (Newton), 9 (LU), or 10 (BiCGSTAB), or string 'newton'/'lu'/'bicgstab'.";
 
 		double arResSolve[12];
 		int lenResSolve = 4;
@@ -3383,6 +3489,8 @@ static PyMethodDef radia_methods[] = {
 	{"ObjBckg", radia_ObjBckg, METH_VARARGS, "ObjBckg([Bx,By,Bz]) creates a source of uniform background magnetic flux density B in Tesla. Returns object key that must be added to container with ObjCnt()."},
 	{"ObjBckgCF", radia_ObjBckgCF, METH_VARARGS, "ObjBckgCF(callback) creates a source of arbitrary background field. Callback should accept [x,y,z] in mm and return [Bx,By,Bz] in Tesla."},
 	{"SolverTetraMethod", radia_SolverTetraMethod, METH_VARARGS, "SolverTetraMethod(method) sets the tetrahedral element field computation method. method=0: original Radia method (default), method=1: analytical method."},
+	{"SolverHMatrixEnable", radia_SolverHMatrixEnable, METH_VARARGS, "SolverHMatrixEnable(enable=1, eps=1e-4, max_rank=50) enables H-matrix acceleration for BiCGSTAB solver (Method 10). eps is ACA tolerance, max_rank is maximum rank for low-rank blocks."},
+	{"SolverHMatrixDisable", radia_SolverHMatrixDisable, METH_VARARGS, "SolverHMatrixDisable() disables H-matrix acceleration."},
 	{"ObjCnt", radia_ObjCnt, METH_VARARGS, "ObjCnt([obj1,obj2,...]) creates a container object for magnetic field source objects [obj1,obj2,...]."},
 	{"ObjAddToCnt", radia_ObjAddToCnt, METH_VARARGS, "ObjAddToCnt(cnt,[obj1,obj2,...]) adds objects [obj1,obj2,...] to the container object cnt."},
 	{"ObjCntStuf", radia_ObjCntStuf, METH_VARARGS, "ObjCntStuf(obj) returns list of general indexes of the objects present in container if obj is a container; or returns [obj] if obj is not a container."}, 
@@ -3428,7 +3536,7 @@ static PyMethodDef radia_methods[] = {
 	{"RlxMan", radia_RlxMan, METH_VARARGS, "RlxMan(intrc,meth,iternum,rlxpar) executes manual relaxation procedure for interaction matrix intrc using method number meth (0-5), by making iternum iterations with relaxation parameter value rlxpar. Method 5 enables LU decomposition solver when used with SetRelaxSubInterval(intrc,start,fin,1)."},
 	{"RlxAuto", radia_RlxAuto, METH_VARARGS, "RlxAuto(intrc,prec,maxiter,meth:4,'ZeroM->True|False') executes automatic relaxation procedure with the interaction matrix intrc using the method number meth. Relaxation stops whenever the change in magnetization (averaged over all sub-elements) between two successive iterations is smaller than prec or the number of iterations is larger than maxiter. The option value 'ZeroM->True' (default) starts the relaxation by setting the magnetization values in all paricipating objects to zero; 'ZeroM->False' starts the relaxation with the existing magnetization values in the sub-volumes."},
 	{"RlxUpdSrc", radia_RlxUpdSrc, METH_VARARGS, "RlxUpdSrc(intrc) updates external field data for the relaxation (to take into account e.g. modification of currents in coils, if any) without rebuilding the interaction matrix."},
-	{"Solve", radia_Solve, METH_VARARGS, "Solve(obj,prec,maxiter,meth:4) solves a magnetostatic problem, i.e. builds an interaction matrix for the object obj and performs a relaxation procedure using the method number meth (default is 4). The relaxation stops whenever the change in magnetization (averaged over all sub-elements) between two successive iterations is smaller than prec or the number of iterations is larger than maxiter."},
+	{"Solve", radia_Solve, METH_VARARGS, "Solve(obj,prec,maxiter,meth) solves a magnetostatic problem by building an interaction matrix for the object obj and solving for the magnetization. Method can be specified as a number (8=Newton-Raphson, 9=LU direct, 10=BiCGSTAB) or string ('newton'/'nonlinear', 'lu'/'direct', 'bicgstab'/'iterative'). Default is 'bicgstab' (Method 10). Use 'newton' for nonlinear (saturable) materials. For iterative methods, relaxation stops when the change in magnetization is smaller than prec or the number of iterations exceeds maxiter."},
 
 	{"Fld", radia_Fld, METH_VARARGS,  "Fld(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x,y,z]|[[x1,y1,z1],[x2,y2,z2],...]) computes magnetic field created by the object obj in point(s) {x,y,z} ({x1,y1,z1},{x2,y2,z2},...). The field component is specified by the second input variable. The function accepts a list of 3D points of arbitrary nestness: in this case it returns the corresponding list of magnetic field values."},
 	{"FldLst", radia_FldLst, METH_VARARGS,  "FldLst(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x1,y1,z1],[x2,y2,z2],np,'arg|noarg':'noarg',strt:0.) computes magnetic field created by object obj in np equidistant points along a line segment from [x1,y1,z1] to [x2,y2,z2]; the field component is specified by the second input variable; the 'arg|noarg' string variable specifies whether to output a longitudinal position for each point where the field is computed, and strt gives the start-value for the longitudinal position."},

@@ -49,6 +49,13 @@ radTInteraction::radTInteraction()
 
 	RelaxSubIntervArray = nullptr; // New
 	mKeepTransData = 0;
+
+	// H-matrix initialization
+	m_hmatrix = nullptr;
+	m_use_hmatrix = false;
+	m_hmatrix_eps = 1e-4;
+	m_hmatrix_max_rank = 50;
+	IntrcMat = nullptr;
 }
 
 //-------------------------------------------------------------------------
@@ -71,6 +78,13 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 
 	RelaxSubIntervArray = nullptr; // New
 	AmOfRelaxSubInterv = 0; // New
+
+	// H-matrix initialization
+	m_hmatrix = nullptr;
+	m_use_hmatrix = false;
+	m_hmatrix_eps = 1e-4;
+	m_hmatrix_max_rank = 50;
+	IntrcMat = nullptr;
 
 	SourceHandle = In_hg;
 	CompCriterium = InCompCriterium;
@@ -163,6 +177,16 @@ void radTInteraction::DeallocateMemory() //OC27122019
 		EmptyVectOfPtrToListsOfTrans();
 	}
 	if(IdentTransPtr != nullptr) delete IdentTransPtr; //required by EmptyVectOfPtrToListsOfTrans();
+
+	// H-matrix cleanup
+	if(m_hmatrix != nullptr) {
+		delete m_hmatrix;
+		m_hmatrix = nullptr;
+	}
+	if(IntrcMat != nullptr) {
+		delete[] IntrcMat;
+		IntrcMat = nullptr;
+	}
 }
 
 //-------------------------------------------------------------------------
@@ -1414,6 +1438,88 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 
 	//short MemAllocTotAtOnce;
 	inStr >> MemAllocTotAtOnce;
+}
+
+//-------------------------------------------------------------------------
+// H-Matrix with ACA Compression
+//-------------------------------------------------------------------------
+
+#include "rad_hmatrix_aca.h"
+
+void radTInteraction::EnableHMatrix(bool enable, double eps, int max_rank)
+{
+	m_use_hmatrix = enable;
+	m_hmatrix_eps = eps;
+	m_hmatrix_max_rank = max_rank;
+
+	if(!enable && m_hmatrix != nullptr) {
+		delete m_hmatrix;
+		m_hmatrix = nullptr;
+	}
+}
+
+//-------------------------------------------------------------------------
+
+int radTInteraction::SetupHMatrix()
+{
+	if(!m_use_hmatrix) return 0;
+	if(AmOfMainElem <= 0) return -1;
+
+	// Build flat interaction matrix (IntrcMat) for H-matrix access
+	// This is a copy of InteractMatrix in flat format: [i*n+j]*9 + component
+	int n = AmOfMainElem;
+	IntrcMat = new double[n * n * 9];
+
+	for(int i = 0; i < n; ++i) {
+		for(int j = 0; j < n; ++j) {
+			TMatrix3df& mat = InteractMatrix[i][j];
+			int base = (i * n + j) * 9;
+			// Row 0
+			IntrcMat[base + 0] = mat.Str0.x;
+			IntrcMat[base + 1] = mat.Str0.y;
+			IntrcMat[base + 2] = mat.Str0.z;
+			// Row 1
+			IntrcMat[base + 3] = mat.Str1.x;
+			IntrcMat[base + 4] = mat.Str1.y;
+			IntrcMat[base + 5] = mat.Str1.z;
+			// Row 2
+			IntrcMat[base + 6] = mat.Str2.x;
+			IntrcMat[base + 7] = mat.Str2.y;
+			IntrcMat[base + 8] = mat.Str2.z;
+		}
+	}
+
+	// Store element center points for clustering
+	MainElemCenPointsVect.resize(n);
+	for(int i = 0; i < n; ++i) {
+		MainElemCenPointsVect[i] = MainTransPtrArray[i]->TrPoint(g3dRelaxPtrVect[i]->ReturnCentrPoint());
+	}
+
+	// Create and build H-matrix
+	m_hmatrix = new radTHMatrixACA(this, m_hmatrix_eps, m_hmatrix_max_rank);
+	int result = m_hmatrix->Build();
+
+	if(result != 0) {
+		delete m_hmatrix;
+		m_hmatrix = nullptr;
+		delete[] IntrcMat;
+		IntrcMat = nullptr;
+		return result;
+	}
+
+	// Print statistics
+	m_hmatrix->PrintStatistics();
+
+	return 0;
+}
+
+//-------------------------------------------------------------------------
+
+void radTInteraction::HMatrixMatVec(const double* x, double* y) const
+{
+	if(m_hmatrix) {
+		m_hmatrix->MatVec(x, y);
+	}
 }
 
 //-------------------------------------------------------------------------

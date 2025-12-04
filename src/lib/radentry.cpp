@@ -1777,6 +1777,43 @@ int RadSolverGetTetraMethod()
 }
 
 //-------------------------------------------------------------------------
+// H-Matrix Control
+//-------------------------------------------------------------------------
+
+static bool g_SolverHMatrixEnabled = false;
+static double g_SolverHMatrixEps = 1e-4;
+static int g_SolverHMatrixMaxRank = 50;
+
+int CALL RadSolverHMatrixEnable(int enable, double eps, int max_rank)
+{
+	g_SolverHMatrixEnabled = (enable != 0);
+	if(eps > 0.0) g_SolverHMatrixEps = eps;
+	if(max_rank > 0) g_SolverHMatrixMaxRank = max_rank;
+	return 0;
+}
+
+int CALL RadSolverHMatrixDisable()
+{
+	g_SolverHMatrixEnabled = false;
+	return 0;
+}
+
+bool RadSolverGetHMatrixEnabled()
+{
+	return g_SolverHMatrixEnabled;
+}
+
+double RadSolverGetHMatrixEps()
+{
+	return g_SolverHMatrixEps;
+}
+
+int RadSolverGetHMatrixMaxRank()
+{
+	return g_SolverHMatrixMaxRank;
+}
+
+//-------------------------------------------------------------------------
 
 int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey)
 {

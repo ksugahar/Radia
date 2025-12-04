@@ -33,6 +33,9 @@ set(EXT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/ext")
 set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/python")
 set(FFTW_DIR "${EXT_DIR}/fftw")
 
+# HACApK directory (for H-matrix ACA+ algorithm)
+set(HACAPK_DIR "${EXT_DIR}/HACApK_LH-Cimplm")
+
 # Radia core sources (organized by API functionality)
 set(RADIA_CORE_SOURCES
 	# API-organized files (new naming convention)
@@ -68,6 +71,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_subdivided_polyhedron.cpp         # Subdivided polyhedron
 	${CORE_DIR}/rad_serialization.cpp         # Interface functions
 	${CORE_DIR}/rad_polyhedron.cpp            # Polyhedron with magnetization
+	${CORE_DIR}/rad_hmatrix_aca.cpp           # H-matrix with ACA compression
 )
 
 # Radia ext sources
@@ -110,6 +114,7 @@ target_include_directories(radia_ngsolve PRIVATE
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
 	${EXT_DIR}/triangle
+	${HACAPK_DIR}
 	${PYTHON_DIR}
 )
 
@@ -232,6 +237,7 @@ target_include_directories(radia PRIVATE
 	${LIB_DIR}
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
+	${HACAPK_DIR}
 	${FFTW_DIR}
 )
 

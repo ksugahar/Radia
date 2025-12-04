@@ -1353,56 +1353,22 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep); 
 		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
 
-		if(MethNo<0 || MethNo>10) { Send.ErrorMessage("Radia::Error028"); return 0;}
+		// Valid methods: NEWTON (8), LU (9), BICGSTAB (10)
+		// Methods 0-7 have been removed (deprecated)
+		if(MethNo != RadSolverMethod::NEWTON && MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB) { Send.ErrorMessage("Radia::Error028"); return 0;}
 		if(IterNumber<0) { Send.ErrorMessage("Radia::Error019"); return 0;}
 		if((RelaxParam<0.) || (RelaxParam>1.)) { Send.ErrorMessage("Radia::Error018"); return 0;}
 
 		switch(MethNo)
 		{
-		case 0:
+		case RadSolverMethod::NEWTON:
 			{
-				InteractPtr->ResetM();
+				// Newton-Raphson for nonlinear materials
+				radTRelaxationMethNo_8 RelaxMethNo_8(InteractPtr);
+				RelaxMethNo_8.AutoRelax(RelaxParam, IterNumber);
 			}
 			break;
-		case 1:
-			{
-				radTSimpleRelaxation SimpleRelaxation(InteractPtr, RelaxParam);
-				SimpleRelaxation.MakeN_iter(IterNumber);
-			}
-			break;
-		case 2:
-			{
-				radTRelaxationMethNo_2 RelaxationMethNo_2(InteractPtr, RelaxParam);
-				RelaxationMethNo_2.MakeN_iter(IterNumber);
-			}
-			break;
-		case 3:
-			{
-				radTRelaxationMethNo_3 RelaxationMethNo_3(InteractPtr);
-				RelaxationMethNo_3.MakeN_iter(IterNumber);
-			}
-			break;
-		case 4:
-			{
-				radTRelaxationMethNo_4 RelaxationMethNo_4(InteractPtr);
-				RelaxationMethNo_4.MakeN_iter(IterNumber);
-			}
-			break;
-		case 5:
-			{
-				if(InteractPtr->AmOfRelaxSubInterv == 0)
-				{
-					radTRelaxationMethNo_3 RelaxationMethNo_3(InteractPtr);
-					RelaxationMethNo_3.MakeN_iter(IterNumber);
-				}
-				else
-				{
-					radTRelaxationMethNo_a5 RelaxationMethNo_a5(InteractPtr);
-					RelaxationMethNo_a5.MakeN_iter(IterNumber);
-				}
-			}
-			break;
-		case 9:
+		case RadSolverMethod::LU:
 			{
 				// LU direct solver - solve linear system directly
 				radTRelaxationMethNo_9 RelaxMethNo_9(InteractPtr);
@@ -1410,9 +1376,9 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 				RelaxMethNo_9.AutoRelax(1.0e-6, 1);  // Dummy precision, single "iteration"
 			}
 			break;
-		case 10:
+		case RadSolverMethod::BICGSTAB:
 			{
-				// BiCGSTAB with H-matrix acceleration
+				// BiCGSTAB with H-matrix acceleration (default)
 				radTRelaxationMethNo_10 RelaxMethNo_10(InteractPtr);
 				RelaxMethNo_10.AutoRelax(RelaxParam, IterNumber);
 			}
@@ -1452,8 +1418,9 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			if(PrecOnMagnetiz <= 0.) { Send.ErrorMessage("Radia::Error030"); return 0; }
 			if(MaxIterNumber <= 0) { Send.ErrorMessage("Radia::Error031"); return 0; }
 
-			//if((MethNo < 3) || (MethNo > 5)) { Send.ErrorMessage("Radia::Error041"); return 0;}
-			if(MethNo < 3) { Send.ErrorMessage("Radia::Error041"); return 0; }
+			// Valid methods for AutoRelax: NEWTON, LU, BICGSTAB
+			// Methods 0-7 have been removed (deprecated)
+			if(MethNo != RadSolverMethod::NEWTON && MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB) { Send.ErrorMessage("Radia::Error041"); return 0; }
 
 			radTOptionNames OptNam;
 			const char** BufNameString = arOptionNames;
@@ -1476,45 +1443,20 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			//int ActualIterNum = 0;
 			switch(MethNo)
 			{
-			case 3:
+			case RadSolverMethod::NEWTON:
 			{
-				radTRelaxationMethNo_3 RelaxMethNo_3(InteractPtr);
-				ActualIterNum = RelaxMethNo_3.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
-			}
-			break;
-			case 4:
-			{
-				radTRelaxationMethNo_4 RelaxMethNo_4(InteractPtr);
-				ActualIterNum = RelaxMethNo_4.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
-			}
-			break;
-			case 5:
-			{
-				if(InteractPtr->AmOfRelaxSubInterv == 0)
-				{
-					radTRelaxationMethNo_3 RelaxMethNo_3(InteractPtr);
-					ActualIterNum = RelaxMethNo_3.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
-				}
-				else
-				{
-					radTRelaxationMethNo_a5 RelaxMethNo_a5(InteractPtr);
-					ActualIterNum = RelaxMethNo_a5.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
-				}
-			}
-			break;
-			case 8:
-			{
+				// Newton-Raphson for nonlinear materials
 				radTRelaxationMethNo_8 RelaxMethNo_8(InteractPtr);
 				ActualIterNum = RelaxMethNo_8.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 			}
 			break;
-			case 9:
+			case RadSolverMethod::LU:
 			{
 				radTRelaxationMethNo_9 RelaxMethNo_9(InteractPtr);
 				ActualIterNum = RelaxMethNo_9.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 			}
 			break;
-			case 10:
+			case RadSolverMethod::BICGSTAB:
 			{
 				// BiCGSTAB with H-matrix acceleration
 				radTRelaxationMethNo_10 RelaxMethNo_10(InteractPtr);
@@ -1564,65 +1506,33 @@ int radTApplication::UpdateSourcesForRelax(int InteractElemKey)
 
 int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo)
 {
+	// Methods 6-7 have been removed (deprecated)
+	// All methods now go through the standard PreRelax + MakeAutoRelax path
 	long ActualIterNum = 0;
 	try
 	{
-		if((MethNo >= 6) && (MethNo <= 7))
+		short PrevSendingIsRequired = SendingIsRequired;
+		SendingIsRequired = 0;
+
+		int InteractElemKey = PreRelax(ObjKey, 0);
+		if(InteractElemKey <= 0) return 0;
+
+		SendingIsRequired = PrevSendingIsRequired;
+
+		try
 		{
-			radThg hg;
-			if(!ValidateElemKey(ObjKey, hg)) return 0;
-			radTg3d* g3dPtr = Cast.g3dCast(hg.rep); 
-			if(g3dPtr==0) { Send.ErrorMessage("Radia::Error003"); return 0;}
-			radTGroup* GroupPtr = Cast.GroupCast(g3dPtr); 
-			if(GroupPtr==0) { Send.ErrorMessage("Radia::Error091"); return 0;}
-
-			double RelaxStatusParamArray[3];
-
-			if(MethNo == 6)
-			{
-				radTRelaxationMethNo_6 SolveMethNo_6(hg, CompCriterium);
-				ActualIterNum = SolveMethNo_6.AutoRelax(PrecOnMagnetiz, MaxIterNumber, RelaxStatusParamArray);
-			}
-			else if(MethNo == 7)
-			{
-				radTRelaxationMethNo_7 SolveMethNo_7(hg, CompCriterium);
-				ActualIterNum = SolveMethNo_7.AutoRelax(PrecOnMagnetiz, MaxIterNumber, RelaxStatusParamArray);
-			}
-
-			if(ActualIterNum >= MaxIterNumber) 
-			{ 
-				Send.WarningMessage("Radia::Warning015");
-			}
-			if(SendingIsRequired) 
-			{
-				Send.OutRelaxResultsInfo(RelaxStatusParamArray, 3, ActualIterNum);
-			}
+			ActualIterNum = MakeAutoRelax(InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
 		}
-		else
+		catch(...)
 		{
-			short PrevSendingIsRequired = SendingIsRequired;
 			SendingIsRequired = 0;
-
-			int InteractElemKey = PreRelax(ObjKey, 0);
-			if(InteractElemKey <= 0) return 0;
-
-			SendingIsRequired = PrevSendingIsRequired;
-
-			try
-			{
-				ActualIterNum = MakeAutoRelax(InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
-			}
-			catch(...)
-			{
-				SendingIsRequired = 0;
-				DeleteElement(InteractElemKey);
-				throw 0;
-			}
-
-			PrevSendingIsRequired = SendingIsRequired; SendingIsRequired = 0;
 			DeleteElement(InteractElemKey);
-			SendingIsRequired = PrevSendingIsRequired;
+			throw 0;
 		}
+
+		PrevSendingIsRequired = SendingIsRequired; SendingIsRequired = 0;
+		DeleteElement(InteractElemKey);
+		SendingIsRequired = PrevSendingIsRequired;
 	}
 	catch(...) { Initialize(); return 0;}
 	return ActualIterNum;

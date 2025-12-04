@@ -1581,7 +1581,7 @@ void UpdateSourcesForRelax(int InteractElemKey)
 
 void SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo)
 {
-	if(MethNo == 0) MethNo = 4; //Default method
+	if(MethNo == 0) MethNo = 10; //Default method: BiCGSTAB (changed from Method 4)
 	rad.SolveGen(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
 }
 

@@ -16,7 +16,7 @@ import shutil
 import sys
 
 # Read version from pyproject.toml
-version = "1.1.0"
+version = "1.3.5"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -37,13 +37,13 @@ def prepare_package_data():
 	else:
 		print(f"Warning: {radia_pyd} not found. Run Build.ps1 first.")
 
-	# Copy rad_ngsolve.pyd from build/Release/ if it exists
-	rad_ngsolve_pyd = Path(__file__).parent / "build" / "Release" / "rad_ngsolve.pyd"
-	if rad_ngsolve_pyd.exists():
-		shutil.copy2(rad_ngsolve_pyd, package_dir / "rad_ngsolve.pyd")
-		print(f"Copied {rad_ngsolve_pyd} to {package_dir}")
+	# Copy radia_ngsolve.pyd from build/Release/ if it exists
+	radia_ngsolve_pyd = Path(__file__).parent / "build" / "Release" / "radia_ngsolve.pyd"
+	if radia_ngsolve_pyd.exists():
+		shutil.copy2(radia_ngsolve_pyd, package_dir / "radia_ngsolve.pyd")
+		print(f"Copied {radia_ngsolve_pyd} to {package_dir}")
 	else:
-		print(f"Info: {rad_ngsolve_pyd} not found. This is optional.")
+		print(f"Info: {radia_ngsolve_pyd} not found. This is optional.")
 
 	return package_dir
 
@@ -86,10 +86,12 @@ setup(
 	package_dir={"": "src"},
 	package_data={
 		"python": [
-			"*.pyd",  # Include all .pyd files (radia.pyd, rad_ngsolve.pyd)
+			"*.pyd",  # Include all .pyd files (radia.pyd, radia_ngsolve.pyd)
 			"radia_pyvista_viewer.py",
 			"radia_vtk_export.py",
-			"nastran_reader.py",
+			"nastran_mesh_import.py",
+			"netgen_mesh_import.py",
+			"radia_ngsolve.py",
 		],
 	},
 	include_package_data=True,
