@@ -16,7 +16,7 @@ import shutil
 import sys
 
 # Read version from pyproject.toml
-version = "1.3.5"
+version = "1.3.6"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -29,8 +29,9 @@ def prepare_package_data():
 	package_dir = Path(__file__).parent / "src" / "python"
 	package_dir.mkdir(parents=True, exist_ok=True)
 
-	# Copy radia.pyd from dist/ if it exists
-	radia_pyd = Path(__file__).parent / "dist" / "radia.pyd"
+	# Copy radia.pyd from build/Release/ if it exists
+	# Note: CMake builds radia.cp312-win_amd64.pyd, we copy it as radia.pyd
+	radia_pyd = Path(__file__).parent / "build" / "Release" / "radia.cp312-win_amd64.pyd"
 	if radia_pyd.exists():
 		shutil.copy2(radia_pyd, package_dir / "radia.pyd")
 		print(f"Copied {radia_pyd} to {package_dir}")
@@ -87,11 +88,7 @@ setup(
 	package_data={
 		"python": [
 			"*.pyd",  # Include all .pyd files (radia.pyd, radia_ngsolve.pyd)
-			"radia_pyvista_viewer.py",
-			"radia_vtk_export.py",
-			"nastran_mesh_import.py",
-			"netgen_mesh_import.py",
-			"radia_ngsolve.py",
+			"*.py",   # Include all Python utility modules
 		],
 	},
 	include_package_data=True,
