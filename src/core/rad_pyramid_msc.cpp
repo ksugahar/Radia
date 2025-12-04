@@ -409,21 +409,132 @@ int radTMSCMethod::Solve(double precision, int max_iter)
 
     if(n_elem == 0 || ndof == 0) return 0;
 
-    // Setup external field vector
-    m_external_field.resize(ndof);
-    // TODO: Fill external field from ObjBckg or ObjBckgCF
+    // MSC Formulation (from Yano & Sugahara paper):
+    // ========================================
+    // Unknown: sigma_n = surface magnetic charge density on face n
+    //
+    // At evaluation point (midpoint between face center and element center):
+    //   H_n = H_ext_n + H_ind_n
+    //
+    // where H_ind_n is the normal component of the field from all surface charges
+    // and point charges.
+    //
+    // Material relation for linear isotropic material:
+    //   B_n = mu_0 * mu_r * H_n
+    //   sigma_n = (B_n - mu_0*H_n) / mu_0 = (mu_r - 1) * H_n
+    //
+    // So: sigma_n = (mu_r - 1) * (H_ext_n + sum_j A_nj * sigma_j)
+    //     [I - chi * A] * sigma = chi * H_ext
+    // where chi = mu_r - 1 (susceptibility)
 
-    // Setup system matrix: (I - chi * A) * sigma = chi * H_ext_n
-    // where chi = (mu_r - 1) / (mu_r + 1) for MSC formulation
-    // (This is a simplification; actual relation depends on geometry)
+    // Build system matrix
+    std::vector<std::vector<double>> system_matrix(ndof, std::vector<double>(ndof, 0.0));
+    std::vector<double> rhs(ndof, 0.0);
+    std::vector<double> sigma_vec(ndof, 0.0);
 
-    // For linear materials with permeability mu_r:
-    // B_n = mu_0 * mu_r * H_n (inside material)
-    // sigma = B_n - mu_0 * H_n = mu_0 * (mu_r - 1) * H_n
+    // Fill system matrix and RHS
+    for(int i = 0; i < n_elem; i++)
+    {
+        double chi = m_mu_r.empty() ? 999.0 : (m_mu_r[i] - 1.0);
 
-    // TODO: Implement full LU or BiCGSTAB solve
-    // For now, return success
+        for(int f = 0; f < 6; f++)
+        {
+            int row = i * 6 + f;
+
+            // Diagonal: 1
+            system_matrix[row][row] = 1.0;
+
+            // Off-diagonal: -chi * A[row][col]
+            for(int col = 0; col < ndof; col++)
+            {
+                system_matrix[row][col] -= chi * m_interaction_matrix[row][col];
+            }
+
+            // RHS: chi * H_ext_n
+            rhs[row] = chi * (m_external_field.empty() ? 0.0 : m_external_field[row]);
+        }
+    }
+
+    // Solve using LU decomposition
+    int result = SolveLU(system_matrix, rhs, sigma_vec, ndof);
+    if(result != 0) return 0;
+
+    // Store solution
+    for(int i = 0; i < n_elem; i++)
+    {
+        for(int f = 0; f < 6; f++)
+        {
+            m_elements[i].sigma[f] = sigma_vec[i * 6 + f];
+        }
+        m_elements[i].UpdatePointCharges();
+    }
+
     return 1;
+}
+
+//-------------------------------------------------------------------------
+
+int radTMSCMethod::SolveLU(std::vector<std::vector<double>>& A,
+                           std::vector<double>& b,
+                           std::vector<double>& x,
+                           int n)
+{
+    // LU decomposition with partial pivoting
+    std::vector<int> pivot(n);
+    for(int i = 0; i < n; i++) pivot[i] = i;
+
+    for(int k = 0; k < n - 1; k++)
+    {
+        // Find pivot
+        double max_val = fabs(A[k][k]);
+        int max_row = k;
+        for(int i = k + 1; i < n; i++)
+        {
+            if(fabs(A[i][k]) > max_val)
+            {
+                max_val = fabs(A[i][k]);
+                max_row = i;
+            }
+        }
+
+        if(max_val < 1e-15) return -1;  // Singular
+
+        // Swap rows
+        if(max_row != k)
+        {
+            std::swap(pivot[k], pivot[max_row]);
+            std::swap(A[k], A[max_row]);
+            std::swap(b[k], b[max_row]);
+        }
+
+        // Elimination
+        for(int i = k + 1; i < n; i++)
+        {
+            double factor = A[i][k] / A[k][k];
+            A[i][k] = factor;
+            for(int j = k + 1; j < n; j++)
+            {
+                A[i][j] -= factor * A[k][j];
+            }
+            b[i] -= factor * b[k];
+        }
+    }
+
+    if(fabs(A[n-1][n-1]) < 1e-15) return -1;
+
+    // Back substitution
+    x.resize(n);
+    for(int i = n - 1; i >= 0; i--)
+    {
+        x[i] = b[i];
+        for(int j = i + 1; j < n; j++)
+        {
+            x[i] -= A[i][j] * x[j];
+        }
+        x[i] /= A[i][i];
+    }
+
+    return 0;
 }
 
 //-------------------------------------------------------------------------

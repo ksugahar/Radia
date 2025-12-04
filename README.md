@@ -413,5 +413,5 @@ See [examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/](examples/NG
 
 ---
 
-**Version**: 1.3.4 (OpenMP + NGSolve Edition)
-**Last Updated**: 2025-11-30
+**Version**: 1.3.9 (OpenMP + NGSolve Edition)
+**Last Updated**: 2025-12-05

@@ -171,6 +171,12 @@ private:
     TVector3d FieldFromChargedQuad(const TVector3d& obs,
                                     const std::array<TVector3d, 4>& vertices,
                                     double sigma) const;
+
+    // LU decomposition solver for MSC system
+    int SolveLU(std::vector<std::vector<double>>& A,
+                std::vector<double>& b,
+                std::vector<double>& x,
+                int n);
 };
 
 //-------------------------------------------------------------------------
