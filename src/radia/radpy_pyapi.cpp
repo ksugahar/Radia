@@ -11,6 +11,7 @@
 #include "radentry.h"
 #include "pyparse.h"
 #include "auxparse.h"
+#include "rad_hmatrix_aca.h"
 #include <sstream>
 #include <cstring>
 
@@ -923,7 +924,7 @@ static PyObject* radia_SolverTetraMethod(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Enable H-matrix solver for BiCGSTAB (Method 10)
+ * Enable H-matrix acceleration for BiCGSTAB solver
  ***************************************************************************/
 static PyObject* radia_SolverHMatrixEnable(PyObject* self, PyObject* args)
 {
@@ -931,19 +932,7 @@ static PyObject* radia_SolverHMatrixEnable(PyObject* self, PyObject* args)
 
 	try
 	{
-		int enable = 1;
-		double eps = 1e-4;
-		int max_rank = 50;
-
-		if(!PyArg_ParseTuple(args, "|idi:SolverHMatrixEnable", &enable, &eps, &max_rank))
-			throw CombErStr(strEr_BadFuncArg, ": SolverHMatrixEnable");
-
-		int errStat = RadSolverHMatrixEnable(enable, eps, max_rank);
-		if(errStat != 0)
-		{
-			throw "Radia::Error999: Failed to enable H-matrix solver";
-		}
-
+		RadSolverHMatrixEnable();
 		oRes = Py_BuildValue("i", 0);
 	}
 	catch(const char* erText)
@@ -954,7 +943,7 @@ static PyObject* radia_SolverHMatrixEnable(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Disable H-matrix solver
+ * Disable H-matrix acceleration for BiCGSTAB solver
  ***************************************************************************/
 static PyObject* radia_SolverHMatrixDisable(PyObject* self, PyObject* args)
 {
@@ -962,13 +951,27 @@ static PyObject* radia_SolverHMatrixDisable(PyObject* self, PyObject* args)
 
 	try
 	{
-		int errStat = RadSolverHMatrixDisable();
-		if(errStat != 0)
-		{
-			throw "Radia::Error999: Failed to disable H-matrix solver";
-		}
-
+		RadSolverHMatrixDisable();
 		oRes = Py_BuildValue("i", 0);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Check if H-matrix acceleration is enabled
+ ***************************************************************************/
+static PyObject* radia_SolverHMatrixIsEnabled(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+
+	try
+	{
+		bool enabled = RadSolverHMatrixIsEnabled();
+		oRes = Py_BuildValue("O", enabled ? Py_True : Py_False);
 	}
 	catch(const char* erText)
 	{
@@ -3486,8 +3489,9 @@ static PyMethodDef radia_methods[] = {
 	{"ObjBckg", radia_ObjBckg, METH_VARARGS, "ObjBckg([Bx,By,Bz]) creates a source of uniform background magnetic flux density B in Tesla. Returns object key that must be added to container with ObjCnt()."},
 	{"ObjBckgCF", radia_ObjBckgCF, METH_VARARGS, "ObjBckgCF(callback) creates a source of arbitrary background field. Callback should accept [x,y,z] in mm and return [Bx,By,Bz] in Tesla."},
 	{"SolverTetraMethod", radia_SolverTetraMethod, METH_VARARGS, "SolverTetraMethod(method) sets the tetrahedral element field computation method. method=0: original Radia method (default), method=1: analytical method."},
-	{"SolverHMatrixEnable", radia_SolverHMatrixEnable, METH_VARARGS, "SolverHMatrixEnable(enable=1, eps=1e-4, max_rank=50) enables H-matrix acceleration for BiCGSTAB solver (Method 10). eps is ACA tolerance, max_rank is maximum rank for low-rank blocks."},
-	{"SolverHMatrixDisable", radia_SolverHMatrixDisable, METH_VARARGS, "SolverHMatrixDisable() disables H-matrix acceleration."},
+	{"SolverHMatrixEnable", radia_SolverHMatrixEnable, METH_VARARGS, "SolverHMatrixEnable() enables H-matrix (hierarchical matrix) acceleration for the BiCGSTAB solver. H-matrix uses ACA+ low-rank approximation for far-field interactions."},
+	{"SolverHMatrixDisable", radia_SolverHMatrixDisable, METH_VARARGS, "SolverHMatrixDisable() disables H-matrix acceleration. The solver will use dense matrix-vector products."},
+	{"SolverHMatrixIsEnabled", radia_SolverHMatrixIsEnabled, METH_VARARGS, "SolverHMatrixIsEnabled() returns True if H-matrix acceleration is enabled, False otherwise."},
 	{"ObjCnt", radia_ObjCnt, METH_VARARGS, "ObjCnt([obj1,obj2,...]) creates a container object for magnetic field source objects [obj1,obj2,...]."},
 	{"ObjAddToCnt", radia_ObjAddToCnt, METH_VARARGS, "ObjAddToCnt(cnt,[obj1,obj2,...]) adds objects [obj1,obj2,...] to the container object cnt."},
 	{"ObjCntStuf", radia_ObjCntStuf, METH_VARARGS, "ObjCntStuf(obj) returns list of general indexes of the objects present in container if obj is a container; or returns [obj] if obj is not a container."}, 

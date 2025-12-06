@@ -161,6 +161,32 @@ Both LU and BiCGSTAB methods produce identical results:
    - Linear materials (MatLin): Any solver works; 'bicgstab' is fastest for large problems
    - Nonlinear materials (MatSatIso, MatSatIsoTab, MatLam): Any solver works; all produce identical results
 
+## Why BiCGSTAB and H-matrix are Efficient for Nonlinear Materials
+
+**Key insight: Nonlinearity only affects diagonal blocks (self-interaction terms N_ii).**
+
+In the MMM (Magnetic Moment Method) system equation:
+
+```
+M = chi(H) * (N * M + H_ext)
+```
+
+The interaction matrix N has a special structure:
+- **Off-diagonal blocks N_ij (i != j)**: Depend only on geometry - constant throughout solution
+- **Diagonal blocks N_ii (self-interaction)**: Only these terms interact with chi(H)
+
+This means:
+1. **H-matrix compression remains valid**: Off-diagonal blocks can still be compressed with ACA+
+2. **BiCGSTAB matvec is unchanged**: Same interaction matrix used for all iterations
+3. **Nonlinear update is O(N)**: Only chi * N_ii diagonal update is nonlinear, not O(N^2)
+
+**Practical implications:**
+- H-matrix acceleration works for nonlinear materials (same compression as linear case)
+- BiCGSTAB convergence is similar for linear and nonlinear materials
+- HACApK-BiCGSTAB combination is efficient for large nonlinear problems
+
+**Reference:** This property is well-known in computational electromagnetics and is exploited by many fast solvers including HACApK.
+
 ## Technical Details: Nonlinear Material Handling
 
 Both solvers use Newton-style M(H) updates for nonlinear materials:

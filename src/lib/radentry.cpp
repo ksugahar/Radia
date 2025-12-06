@@ -51,10 +51,6 @@ void Group( int*, long );
 void AddToGroup( int, int*, long );
 void OutGroupSize( int );
 void OutGroupSubObjectKeys( int );
-// Temporarily disabled - field source H-matrix (has API compatibility issues)
-// void CreateHMatrixFieldSource( int, double, int, int, int, int );
-// void BuildHMatrixFieldSource( int );
-
 void DuplicateElementG3DOpt( int, const char* );
 void CutElementG3DOpt( int, double,double,double, double,double,double, const char* );
 void SubdivideElementG3DOpt( int, double*, char, double*, int, const char*, const char*, const char* );
@@ -475,26 +471,6 @@ int CALL RadObjDpl(int* n, int Obj, char* Opt1)
 	return ioBuffer.OutErrorStatus();
 }
 
-//-------------------------------------------------------------------------
-// Temporarily disabled - field source H-matrix (has API compatibility issues)
-/*
-int CALL RadObjHMatrix(int* n, int grp, double eps, int max_rank, int min_cluster_size, int use_openmp, int num_threads)
-{
-	CreateHMatrixFieldSource(grp, eps, max_rank, min_cluster_size, use_openmp, num_threads);
-
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadHMatrixBuild(int hmat)
-{
-	BuildHMatrixFieldSource(hmat);
-
-	return ioBuffer.OutErrorStatus();
-}
-*/
 //-------------------------------------------------------------------------
 
 int CALL RadObjM(double* pM, int* arMesh, int Obj) //OC21092018
@@ -1774,43 +1750,6 @@ int CALL RadSolverTetraMethod(int method)
 int RadSolverGetTetraMethod()
 {
 	return g_TetrahedronMethod;
-}
-
-//-------------------------------------------------------------------------
-// H-Matrix Control
-//-------------------------------------------------------------------------
-
-static bool g_SolverHMatrixEnabled = false;
-static double g_SolverHMatrixEps = 1e-4;
-static int g_SolverHMatrixMaxRank = 50;
-
-int CALL RadSolverHMatrixEnable(int enable, double eps, int max_rank)
-{
-	g_SolverHMatrixEnabled = (enable != 0);
-	if(eps > 0.0) g_SolverHMatrixEps = eps;
-	if(max_rank > 0) g_SolverHMatrixMaxRank = max_rank;
-	return 0;
-}
-
-int CALL RadSolverHMatrixDisable()
-{
-	g_SolverHMatrixEnabled = false;
-	return 0;
-}
-
-bool RadSolverGetHMatrixEnabled()
-{
-	return g_SolverHMatrixEnabled;
-}
-
-double RadSolverGetHMatrixEps()
-{
-	return g_SolverHMatrixEps;
-}
-
-int RadSolverGetHMatrixMaxRank()
-{
-	return g_SolverHMatrixMaxRank;
 }
 
 //-------------------------------------------------------------------------

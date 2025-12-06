@@ -371,13 +371,6 @@ EXP int CALL RadObjCntStuf(int* Objs, int cnt);
 EXP int CALL RadSolverTetraMethod(int method);
 int RadSolverGetTetraMethod();
 
-// H-Matrix solver control
-EXP int CALL RadSolverHMatrixEnable(int enable, double eps, int max_rank);
-EXP int CALL RadSolverHMatrixDisable();
-bool RadSolverGetHMatrixEnabled();
-double RadSolverGetHMatrixEps();
-int RadSolverGetHMatrixMaxRank();
-
 // Relaxation sub-interval control for LU decomposition solver
 EXP int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey);
 EXP int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);

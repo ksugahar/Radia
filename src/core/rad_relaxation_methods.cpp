@@ -15,6 +15,7 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_relaxation_methods.h"
+#include "rad_hmatrix_aca.h"
 #include "rad_yield.h"
 
 #include <time.h>
@@ -274,7 +275,9 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 
 	// Build base matrix (geometric part without chi) once - this is the -N matrix
 	// Optimization: Only build this O(N^2) matrix once, then update diagonal each iteration
+	// OpenMP parallelization for matrix construction
 	std::vector<std::vector<double>> BaseMatrix(ndof, std::vector<double>(ndof, 0.0));
+	#pragma omp parallel for if(AmOfMainElem > 50)
 	for(int i = 0; i < AmOfMainElem; i++)
 	{
 		for(int comp_i = 0; comp_i < 3; comp_i++)
@@ -338,6 +341,8 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 
 		// Copy base matrix and update diagonal with 1/chi(H) values
 		// This is O(N^2) for copy but avoids rebuilding N matrix each iteration
+		// OpenMP parallelization for matrix copy
+		#pragma omp parallel for if(ndof > 100)
 		for(int row = 0; row < ndof; row++)
 		{
 			for(int col = 0; col < ndof; col++)
@@ -508,79 +513,63 @@ void radTRelaxationMethNo_1::Scale(double alpha, std::vector<double>& x, int n)
 	}
 }
 
-void radTRelaxationMethNo_1::GetDiagonalElements(std::vector<double>& diag, int n_elem)
+void radTRelaxationMethNo_1::GetDiagonalElements(std::vector<double>& diag, const std::vector<double>& inv_chi, int n_elem)
 {
 	// Extract diagonal elements from interaction matrix for Jacobi preconditioner
 	// Diagonal block [i][i] is a 3x3 matrix, we extract the diagonal of that
-	// For nonlinear materials, chi is computed from current H stored in NewFieldArray
+	// CRITICAL FIX: Use pre-computed 1/chi values that are FIXED for this BiCGSTAB solve
+	// (chi is only updated in the outer nonlinear iteration loop)
 	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix;
-	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
 
 	for(int i = 0; i < n_elem; i++)
 	{
-		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
-		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
-
-		// Use current H for chi(H) computation (important for nonlinear materials)
-		TVector3d InstH = (NewFieldAr != nullptr) ? NewFieldAr[i] : TVector3d(0., 0., 0.);
-		TMatrix3d KsiTensor;
-		TVector3d MrVect;
-		MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
-
-		// For each component
-		double chi_x = (KsiTensor.Str0.x > 1.0e-10) ? KsiTensor.Str0.x : 1.0e10;
-		double chi_y = (KsiTensor.Str1.y > 1.0e-10) ? KsiTensor.Str1.y : 1.0e10;
-		double chi_z = (KsiTensor.Str2.z > 1.0e-10) ? KsiTensor.Str2.z : 1.0e10;
+		// Use pre-computed 1/chi values (matching ELF_MAGIC approach)
+		double inv_chi_x = inv_chi[3*i + 0];
+		double inv_chi_y = inv_chi[3*i + 1];
+		double inv_chi_z = inv_chi[3*i + 2];
 
 		// Diagonal of system matrix: A = -N + 1/chi
 		if(IntrcMat != nullptr)
 		{
 			// Nii is from InteractMatrix[i][i]
 			TMatrix3df& Nii = IntrcMat[i][i];
-			diag[3*i + 0] = -Nii.Str0.x + 1.0/chi_x;
-			diag[3*i + 1] = -Nii.Str1.y + 1.0/chi_y;
-			diag[3*i + 2] = -Nii.Str2.z + 1.0/chi_z;
+			diag[3*i + 0] = -Nii.Str0.x + inv_chi_x;
+			diag[3*i + 1] = -Nii.Str1.y + inv_chi_y;
+			diag[3*i + 2] = -Nii.Str2.z + inv_chi_z;
 		}
 		else
 		{
 			// Fallback: just use 1/chi as diagonal (no N contribution)
-			diag[3*i + 0] = 1.0/chi_x;
-			diag[3*i + 1] = 1.0/chi_y;
-			diag[3*i + 2] = 1.0/chi_z;
+			diag[3*i + 0] = inv_chi_x;
+			diag[3*i + 1] = inv_chi_y;
+			diag[3*i + 2] = inv_chi_z;
 		}
 	}
 }
 
-void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vector<double>& y, int ndof)
+void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vector<double>& y,
+                                         const std::vector<double>& inv_chi, int ndof)
 {
 	// Computes y = A * x where A = -N + 1/chi
-	// Uses H-matrix if available, otherwise dense matrix
-	// For nonlinear materials, chi is computed from current H stored in NewFieldArray
+	// Uses dense matrix-vector product
+	// CRITICAL FIX: Use pre-computed 1/chi values that are FIXED for this BiCGSTAB solve
+	// (matching ELF_MAGIC approach - chi is only updated in the outer nonlinear iteration loop)
 	int n_elem = ndof / 3;
 	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix;
-	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
 
 	// Initialize y to zero
 	std::fill(y.begin(), y.end(), 0.0);
 
 	if(IntrcMat != nullptr)
 	{
-		// Dense matrix-vector product
+		// Dense matrix-vector product: O(N^2)
 		#pragma omp parallel for if(n_elem > 50)
 		for(int i = 0; i < n_elem; i++)
 		{
-			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
-			radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
-
-			// Use current H for chi(H) computation (important for nonlinear materials)
-			TVector3d InstH = (NewFieldAr != nullptr) ? NewFieldAr[i] : TVector3d(0., 0., 0.);
-			TMatrix3d KsiTensor;
-			TVector3d MrVect;
-			MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
-
-			double inv_chi_x = (KsiTensor.Str0.x > 1.0e-10) ? 1.0/KsiTensor.Str0.x : 1.0e10;
-			double inv_chi_y = (KsiTensor.Str1.y > 1.0e-10) ? 1.0/KsiTensor.Str1.y : 1.0e10;
-			double inv_chi_z = (KsiTensor.Str2.z > 1.0e-10) ? 1.0/KsiTensor.Str2.z : 1.0e10;
+			// Use pre-computed 1/chi values (matching ELF_MAGIC approach)
+			double inv_chi_x = inv_chi[3*i + 0];
+			double inv_chi_y = inv_chi[3*i + 1];
+			double inv_chi_z = inv_chi[3*i + 2];
 
 			// y[i] = -sum(N[i][j] * x[j]) + (1/chi) * x[i]
 			double y0 = inv_chi_x * x[3*i + 0];
@@ -606,11 +595,82 @@ void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vect
 	}
 }
 
+bool radTRelaxationMethNo_1::InitializeHMatrix()
+{
+	// Initialize H-matrix if enabled and not already initialized
+	if(!g_UseHMatrix)
+	{
+		return false;
+	}
+
+	if(m_hmatrix_initialized && m_hmatrix && m_hmatrix->IsInitialized())
+	{
+		return true;  // Already initialized
+	}
+
+	// Create new H-matrix
+	m_hmatrix = std::make_unique<radTHMatrixACA>();
+
+	// Set parameters (could be made configurable via API)
+	radTHMatrixParams params;
+	params.eta = 2.0;           // Admissibility parameter
+	params.eps = 1e-4;          // ACA+ tolerance
+	params.min_leaf_size = 32;  // Minimum cluster size
+	params.max_rank = 100;      // Maximum rank
+
+	// Initialize H-matrix
+	m_hmatrix_initialized = m_hmatrix->Initialize(IntrctPtr, params);
+
+	return m_hmatrix_initialized;
+}
+
+void radTRelaxationMethNo_1::HMatrixMatVec(const std::vector<double>& x, std::vector<double>& y,
+                                           const std::vector<double>& inv_chi, int ndof)
+{
+	// Computes y = A * x where A = -N + 1/chi
+	// Uses H-matrix for -N*x, then adds (1/chi)*x
+
+	int n_elem = ndof / 3;
+
+	// Use H-matrix for -N*x
+	// Note: H-matrix computes N*x (positive), we negate
+	std::vector<double> Nx(ndof, 0.0);
+	m_hmatrix->MatVec(x, Nx);
+
+	// Compute y = -N*x + (1/chi)*x
+	#pragma omp parallel for if(n_elem > 50)
+	for(int i = 0; i < n_elem; i++)
+	{
+		y[3*i + 0] = -Nx[3*i + 0] + inv_chi[3*i + 0] * x[3*i + 0];
+		y[3*i + 1] = -Nx[3*i + 1] + inv_chi[3*i + 1] * x[3*i + 1];
+		y[3*i + 2] = -Nx[3*i + 2] + inv_chi[3*i + 2] * x[3*i + 2];
+	}
+}
+
+void radTRelaxationMethNo_1::MatVec(const std::vector<double>& x, std::vector<double>& y,
+                                    const std::vector<double>& inv_chi, int ndof)
+{
+	// Select H-matrix or dense matvec based on global flag
+	if(g_UseHMatrix && m_hmatrix_initialized && m_hmatrix && m_hmatrix->IsInitialized())
+	{
+		HMatrixMatVec(x, y, inv_chi, ndof);
+	}
+	else
+	{
+		DenseMatVec(x, y, inv_chi, ndof);
+	}
+}
+
 int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, double& residual)
 {
 	// BiCGSTAB with Jacobi preconditioner
 	// Reference: van der Vorst, SIAM J. Sci. Stat. Comput. 13 (1992)
-	// For nonlinear materials, chi is computed from current H stored in NewFieldArray
+	//
+	// CRITICAL FIX (matching ELF_MAGIC):
+	// - Pre-compute 1/chi values ONCE at the start of this solve
+	// - Use these FIXED values throughout all BiCGSTAB iterations
+	// - chi is only updated in the OUTER nonlinear iteration loop
+	// - This ensures the linear system being solved is consistent
 
 	int n_elem = ndof / 3;
 
@@ -618,31 +678,38 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, do
 	std::vector<double> r(ndof), r0(ndof), p(ndof), v(ndof), s(ndof), t(ndof);
 	std::vector<double> p_hat(ndof), s_hat(ndof), diag_inv(ndof);
 
-	// Get RHS vector: b = H_external + Mr/chi(H)
-	// For linear materials, Mr = 0 so b = H_external
-	// For nonlinear materials with remanence, Mr/chi term is needed
+	// Pre-compute 1/chi values for ALL elements ONCE
+	// These values are FIXED for the entire BiCGSTAB solve
+	std::vector<double> inv_chi(ndof);
 	std::vector<double> rhs(ndof);
+
 	if(IntrctPtr->ExternFieldArray == nullptr) return 0;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
+
 	for(int i = 0; i < n_elem; i++)
 	{
 		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
 		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
 
-		// Use current H for chi(H) computation
+		// Use current H for chi(H) computation (from outer loop)
 		TVector3d InstH = (NewFieldAr != nullptr) ? NewFieldAr[i] : TVector3d(0., 0., 0.);
 		TMatrix3d KsiTensor;
 		TVector3d MrVect;
 		MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
 
-		// b = H_ext + Mr/chi
-		double inv_chi_x = (KsiTensor.Str0.x > 1.0e-10) ? 1.0/KsiTensor.Str0.x : 0.0;
-		double inv_chi_y = (KsiTensor.Str1.y > 1.0e-10) ? 1.0/KsiTensor.Str1.y : 0.0;
-		double inv_chi_z = (KsiTensor.Str2.z > 1.0e-10) ? 1.0/KsiTensor.Str2.z : 0.0;
+		// Pre-compute 1/chi values (FIXED for this solve)
+		inv_chi[3*i + 0] = (KsiTensor.Str0.x > 1.0e-10) ? 1.0/KsiTensor.Str0.x : 1.0e10;
+		inv_chi[3*i + 1] = (KsiTensor.Str1.y > 1.0e-10) ? 1.0/KsiTensor.Str1.y : 1.0e10;
+		inv_chi[3*i + 2] = (KsiTensor.Str2.z > 1.0e-10) ? 1.0/KsiTensor.Str2.z : 1.0e10;
 
-		rhs[3*i + 0] = IntrctPtr->ExternFieldArray[i].x + MrVect.x * inv_chi_x;
-		rhs[3*i + 1] = IntrctPtr->ExternFieldArray[i].y + MrVect.y * inv_chi_y;
-		rhs[3*i + 2] = IntrctPtr->ExternFieldArray[i].z + MrVect.z * inv_chi_z;
+		// Compute RHS: b = H_ext + Mr/chi (using pre-computed 1/chi)
+		double inv_chi_for_rhs_x = (KsiTensor.Str0.x > 1.0e-10) ? 1.0/KsiTensor.Str0.x : 0.0;
+		double inv_chi_for_rhs_y = (KsiTensor.Str1.y > 1.0e-10) ? 1.0/KsiTensor.Str1.y : 0.0;
+		double inv_chi_for_rhs_z = (KsiTensor.Str2.z > 1.0e-10) ? 1.0/KsiTensor.Str2.z : 0.0;
+
+		rhs[3*i + 0] = IntrctPtr->ExternFieldArray[i].x + MrVect.x * inv_chi_for_rhs_x;
+		rhs[3*i + 1] = IntrctPtr->ExternFieldArray[i].y + MrVect.y * inv_chi_for_rhs_y;
+		rhs[3*i + 2] = IntrctPtr->ExternFieldArray[i].z + MrVect.z * inv_chi_for_rhs_z;
 	}
 
 	// Get initial guess (current magnetization)
@@ -656,7 +723,8 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, do
 	}
 
 	// Build Jacobi preconditioner: M^{-1} = diag(A)^{-1}
-	GetDiagonalElements(diag_inv, n_elem);
+	// Uses pre-computed inv_chi values
+	GetDiagonalElements(diag_inv, inv_chi, n_elem);
 	for(int i = 0; i < ndof; i++)
 	{
 		if(std::abs(diag_inv[i]) > 1.0e-15)
@@ -670,9 +738,9 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, do
 	}
 
 	// Initialize: r0 = b - A*x0
-	DenseMatVec(sol, v, ndof);  // v = A*x0
-	Copy(rhs, r, ndof);         // r = rhs
-	Axpy(-1.0, v, r, ndof);     // r = r - v
+	MatVec(sol, v, inv_chi, ndof);  // v = A*x0 (uses pre-computed inv_chi)
+	Copy(rhs, r, ndof);                   // r = rhs
+	Axpy(-1.0, v, r, ndof);               // r = r - v
 
 	// Choose r0* = r0
 	Copy(r, r0, ndof);
@@ -717,13 +785,14 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, do
 		}
 
 		// Apply preconditioner: p_hat = M^{-1} * p
+		#pragma omp parallel for if(ndof > 100)
 		for(int i = 0; i < ndof; i++)
 		{
 			p_hat[i] = diag_inv[i] * p[i];
 		}
 
-		// v = A * p_hat
-		DenseMatVec(p_hat, v, ndof);
+		// v = A * p_hat (uses pre-computed inv_chi)
+		MatVec(p_hat, v, inv_chi, ndof);
 
 		// alpha_bicg = rho / (r0, v)
 		double r0_dot_v = Dot(r0, v, ndof);
@@ -748,13 +817,14 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, do
 		}
 
 		// Apply preconditioner: s_hat = M^{-1} * s
+		#pragma omp parallel for if(ndof > 100)
 		for(int i = 0; i < ndof; i++)
 		{
 			s_hat[i] = diag_inv[i] * s[i];
 		}
 
-		// t = A * s_hat
-		DenseMatVec(s_hat, t, ndof);
+		// t = A * s_hat (uses pre-computed inv_chi)
+		MatVec(s_hat, t, inv_chi, ndof);
 
 		// omega = (t, s) / (t, t)
 		double t_dot_s = Dot(t, s, ndof);
@@ -826,6 +896,12 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
+
+	// Initialize H-matrix if enabled
+	if(g_UseHMatrix && !m_hmatrix_initialized)
+	{
+		InitializeHMatrix();
+	}
 
 	// Store old magnetization for convergence checking
 	std::vector<TVector3d> OldMagnArray(AmOfMainElem);
