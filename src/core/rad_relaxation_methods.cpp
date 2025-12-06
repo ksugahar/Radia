@@ -910,7 +910,7 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 		// Solve linear system using BiCGSTAB with current chi(H)
 		// System: A*M = b where A = -N + 1/chi(H), b = H_ext + Mr/chi
 		double residual = 0.0;
-		int n_iter = SolveBiCGSTAB(ndof, PrecOnMagnetiz * 0.1, MaxIterNumber - totalIterCount, residual);
+		int n_iter = SolveBiCGSTAB(ndof, PrecOnMagnetiz, MaxIterNumber - totalIterCount, residual);
 		totalIterCount += n_iter;
 
 		// Pure Newton-Raphson iteration (matching ELF_MAGIC approach):
@@ -1642,7 +1642,7 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 		// Solve with BiCGSTAB
 		double residual = 0.0;
-		int n_iter = SolveBiCGSTAB_VariableDOF(totalDOF, PrecOnMagnetiz * 0.1, MaxIterNumber - totalIterCount, residual);
+		int n_iter = SolveBiCGSTAB_VariableDOF(totalDOF, PrecOnMagnetiz, MaxIterNumber - totalIterCount, residual);
 		totalIterCount += n_iter;
 
 		// Update element magnetization
