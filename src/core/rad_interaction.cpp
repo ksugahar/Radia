@@ -17,6 +17,13 @@
 #include "rad_interaction.h"
 #include "rad_subdivided_rectangle.h"
 
+// MSC (Magnetic Surface Charge) support is disabled until radTExtrPolygonMSC is refactored
+// To enable: uncomment the #define and the include below
+// #define RADIA_MSC_SUPPORT
+#ifdef RADIA_MSC_SUPPORT
+#include "rad_extruded_polygon_msc.h"
+#endif
+
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
@@ -521,6 +528,338 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 		//--EndNew
 	}
 	return 1; //OC26122019
+}
+
+//-------------------------------------------------------------------------
+//=========================================================================
+// Variable DOF support for hybrid MSC + standard element analysis
+// Reference: Yano & Sugahara, "MMM with MSC", J. Magn. Soc. Jpn., 2023
+//=========================================================================
+//-------------------------------------------------------------------------
+
+void radTInteraction::ComputeDOFOffsets()
+{
+	// Compute DOF offsets for each element
+	// This allows mixing elements with different DOF counts (3 for standard, 6 for MSC)
+
+	m_elemDOF.resize(AmOfMainElem);
+	m_elemDOFOffset.resize(AmOfMainElem + 1);  // +1 for end sentinel
+
+	m_totalDOF = 0;
+	m_hasVariableDOF = false;
+
+	for(int i = 0; i < AmOfMainElem; i++)
+	{
+		m_elemDOFOffset[i] = m_totalDOF;
+		int dof = g3dRelaxPtrVect[i]->NumberOfDegOfFreedom();
+		m_elemDOF[i] = dof;
+		m_totalDOF += dof;
+
+		// Check if any element has non-standard DOF
+		if(dof != 3)
+		{
+			m_hasVariableDOF = true;
+		}
+	}
+	m_elemDOFOffset[AmOfMainElem] = m_totalDOF;  // End sentinel
+}
+
+//-------------------------------------------------------------------------
+
+double* radTInteraction::GetInteractBlock(int row_elem, int col_elem)
+{
+	// Return pointer to interaction block (row_elem, col_elem) in flattened matrix
+	// Block is stored row-major starting at offset
+	if(m_flatInteractMatrix.empty()) return nullptr;
+
+	int offset_row = m_elemDOFOffset[row_elem];
+	int offset_col = m_elemDOFOffset[col_elem];
+
+	// Block starts at row offset_row, column offset_col in the totalDOF x totalDOF matrix
+	return &m_flatInteractMatrix[offset_row * m_totalDOF + offset_col];
+}
+
+const double* radTInteraction::GetInteractBlock(int row_elem, int col_elem) const
+{
+	if(m_flatInteractMatrix.empty()) return nullptr;
+
+	int offset_row = m_elemDOFOffset[row_elem];
+	int offset_col = m_elemDOFOffset[col_elem];
+
+	return &m_flatInteractMatrix[offset_row * m_totalDOF + offset_col];
+}
+
+//-------------------------------------------------------------------------
+
+int radTInteraction::SetupInteractMatrix_VariableDOF()
+{
+	// Build interaction matrix with variable DOF blocks
+	// This is called when m_hasVariableDOF is true
+
+	// First compute DOF offsets
+	ComputeDOFOffsets();
+
+	if(!m_hasVariableDOF)
+	{
+		// All elements have 3 DOF, use standard matrix setup
+		return SetupInteractMatrix();
+	}
+
+	// Allocate flattened interaction matrix
+	m_flatInteractMatrix.resize(m_totalDOF * m_totalDOF, 0.0);
+
+	// Allocate flattened field arrays
+	m_flatExternFieldArray.resize(m_totalDOF, 0.0);
+	m_flatMagnArray.resize(m_totalDOF, 0.0);
+	m_flatFieldArray.resize(m_totalDOF, 0.0);
+
+	radTFieldKey FieldKeyInteract;
+	FieldKeyInteract.B_ = FieldKeyInteract.H_ = FieldKeyInteract.PreRelax_ = 1;
+	TVector3d ZeroVect(0., 0., 0.);
+
+	int AmOfElemWithSym = CountRelaxElemsWithSym();
+
+	// Build interaction matrix with variable-size blocks
+	// For each pair (row_elem, col_elem), compute the interaction block
+	for(int col = 0; col < AmOfMainElem; col++)
+	{
+		FillInTransPtrVectForElem(col, 'I');
+		radTg3dRelax* elem_col = g3dRelaxPtrVect[col];
+		int dof_col = m_elemDOF[col];
+		int offset_col = m_elemDOFOffset[col];
+
+		for(int row = 0; row < AmOfMainElem; row++)
+		{
+			radTg3dRelax* elem_row = g3dRelaxPtrVect[row];
+			int dof_row = m_elemDOF[row];
+			int offset_row = m_elemDOFOffset[row];
+
+			// Get pointer to this block in the flattened matrix
+			double* block = &m_flatInteractMatrix[offset_row * m_totalDOF + offset_col];
+
+			// Compute the interaction block based on DOF types
+			// For now, only support 3x3 blocks (standard elements)
+			// TODO: Add support for 3x6, 6x3, 6x6 blocks for MSC elements
+
+			if(dof_row == 3 && dof_col == 3)
+			{
+				// Standard 3x3 interaction: use existing B_comp method
+				TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(elem_row->ReturnCentrPoint());
+
+				TMatrix3d SubMatrix(ZeroVect, ZeroVect, ZeroVect), BufSubMatrix;
+				for(unsigned i = 0; i < TransPtrVect.size(); i++)
+				{
+					TVector3d ObsPoiVect = TransPtrVect[i]->TrPoint_inv(InitObsPoiVect);
+
+					radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+					Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
+
+					elem_col->B_comp(&Field);
+
+					BufSubMatrix.Str0 = Field.B;
+					BufSubMatrix.Str1 = Field.H;
+					BufSubMatrix.Str2 = Field.A;
+
+					TransPtrVect[i]->TrMatrix(BufSubMatrix);
+					SubMatrix += BufSubMatrix;
+				}
+				MainTransPtrArray[row]->TrMatrix_inv(SubMatrix);
+
+				// Copy 3x3 matrix to flattened block (row-major)
+				block[0 * m_totalDOF + 0] = SubMatrix.Str0.x;
+				block[0 * m_totalDOF + 1] = SubMatrix.Str0.y;
+				block[0 * m_totalDOF + 2] = SubMatrix.Str0.z;
+				block[1 * m_totalDOF + 0] = SubMatrix.Str1.x;
+				block[1 * m_totalDOF + 1] = SubMatrix.Str1.y;
+				block[1 * m_totalDOF + 2] = SubMatrix.Str1.z;
+				block[2 * m_totalDOF + 0] = SubMatrix.Str2.x;
+				block[2 * m_totalDOF + 1] = SubMatrix.Str2.y;
+				block[2 * m_totalDOF + 2] = SubMatrix.Str2.z;
+			}
+#ifdef RADIA_MSC_SUPPORT
+			else if(dof_row == 3 && dof_col == 6)
+			{
+				// 3x6 block: Field at standard element (3 DOF) center from MSC element (6 DOF)
+				// For each sigma_j on face j of MSC element, compute field at standard element center
+				// N[row][col]_ij = component i of field at row's center due to unit sigma on col's face j
+
+				radTExtrPolygonMSC* msc_col = dynamic_cast<radTExtrPolygonMSC*>(elem_col);
+				if(msc_col)
+				{
+					TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(elem_row->ReturnCentrPoint());
+
+					for(int face_j = 0; face_j < 6; face_j++)
+					{
+						TVector3d H_total(0., 0., 0.);
+
+						for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
+						{
+							TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
+
+							// Field from unit sigma on face j
+							TVector3d H_face = msc_col->FieldFromSurfaceCharge(ObsPoiVect, msc_col->Faces[face_j], 1.0);
+
+							// Point charge contribution (m = -sigma * area)
+							double unit_point_charge = -1.0 * msc_col->Faces[face_j].area;
+							TVector3d H_point = msc_col->FieldFromPointCharge(ObsPoiVect, msc_col->CentrPoint, unit_point_charge);
+
+							TVector3d H_local;
+							H_local.x = H_face.x + H_point.x;
+							H_local.y = H_face.y + H_point.y;
+							H_local.z = H_face.z + H_point.z;
+
+							// Transform back
+							H_total.x += TransPtrVect[tr]->TrVectField(H_local).x;
+							H_total.y += TransPtrVect[tr]->TrVectField(H_local).y;
+							H_total.z += TransPtrVect[tr]->TrVectField(H_local).z;
+						}
+
+						// Transform by row's main transform (inverse)
+						TVector3d H_final = MainTransPtrArray[row]->TrVectField_inv(H_total);
+
+						// Store in block: row is component (0,1,2=x,y,z), col is face_j
+						block[0 * m_totalDOF + face_j] = H_final.x;
+						block[1 * m_totalDOF + face_j] = H_final.y;
+						block[2 * m_totalDOF + face_j] = H_final.z;
+					}
+				}
+			}
+			else if(dof_row == 6 && dof_col == 3)
+			{
+				// 6x3 block: Field at MSC element (6 DOF) eval points from standard element (3 DOF)
+				// For each eval point i on MSC element, compute field component from standard element
+				// N[row][col]_ij = H dot n_i at eval point i due to unit M_j
+
+				radTExtrPolygonMSC* msc_row = dynamic_cast<radTExtrPolygonMSC*>(elem_row);
+				if(msc_row)
+				{
+					for(int face_i = 0; face_i < 6; face_i++)
+					{
+						// Eval point for face i (midpoint between face center and element center)
+						TVector3d EvalPt;
+						EvalPt.x = 0.5 * (msc_row->Faces[face_i].center.x + msc_row->CentrPoint.x);
+						EvalPt.y = 0.5 * (msc_row->Faces[face_i].center.y + msc_row->CentrPoint.y);
+						EvalPt.z = 0.5 * (msc_row->Faces[face_i].center.z + msc_row->CentrPoint.z);
+
+						TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(EvalPt);
+
+						TMatrix3d SubMatrix(TVector3d(0., 0., 0.), TVector3d(0., 0., 0.), TVector3d(0., 0., 0.));
+						TMatrix3d BufSubMatrix;
+
+						for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
+						{
+							TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
+
+							radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, TVector3d(0., 0., 0.),
+							                TVector3d(0., 0., 0.), TVector3d(0., 0., 0.), TVector3d(0., 0., 0.), 0.);
+							Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
+
+							elem_col->B_comp(&Field);
+
+							BufSubMatrix.Str0 = Field.B;
+							BufSubMatrix.Str1 = Field.H;
+							BufSubMatrix.Str2 = Field.A;
+
+							TransPtrVect[tr]->TrMatrix(BufSubMatrix);
+							SubMatrix += BufSubMatrix;
+						}
+
+						MainTransPtrArray[row]->TrMatrix_inv(SubMatrix);
+
+						// Get face normal
+						TVector3d& n = msc_row->Faces[face_i].normal;
+
+						// H dot n for each magnetization component
+						// N[face_i][Mx] = (dHx/dMx*nx + dHy/dMx*ny + dHz/dMx*nz)
+						double H_dot_n_Mx = SubMatrix.Str1.x * n.x + SubMatrix.Str1.y * n.y + SubMatrix.Str1.z * n.z;
+						// Rows of SubMatrix correspond to: 0=Hx, 1=Hy, 2=Hz for unit magnetization
+						// But actually SubMatrix stores dB/dM, not dH/dM directly
+						// For now, use H = B/mu0 - M approximation for linear materials
+
+						// Store in block: row is face_i, col is component (0,1,2=Mx,My,Mz)
+						block[face_i * m_totalDOF + 0] = SubMatrix.Str1.x * n.x;
+						block[face_i * m_totalDOF + 1] = SubMatrix.Str1.y * n.y;
+						block[face_i * m_totalDOF + 2] = SubMatrix.Str1.z * n.z;
+					}
+				}
+			}
+			else if(dof_row == 6 && dof_col == 6)
+			{
+				// 6x6 block: Field at MSC element (6 DOF) eval points from MSC element (6 DOF)
+				// N[row][col]_ij = H dot n_i at eval point i due to unit sigma on face j
+
+				radTExtrPolygonMSC* msc_row = dynamic_cast<radTExtrPolygonMSC*>(elem_row);
+				radTExtrPolygonMSC* msc_col = dynamic_cast<radTExtrPolygonMSC*>(elem_col);
+
+				if(msc_row && msc_col)
+				{
+					for(int face_i = 0; face_i < 6; face_i++)
+					{
+						// Eval point for face i
+						TVector3d EvalPt;
+						EvalPt.x = 0.5 * (msc_row->Faces[face_i].center.x + msc_row->CentrPoint.x);
+						EvalPt.y = 0.5 * (msc_row->Faces[face_i].center.y + msc_row->CentrPoint.y);
+						EvalPt.z = 0.5 * (msc_row->Faces[face_i].center.z + msc_row->CentrPoint.z);
+
+						TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(EvalPt);
+
+						for(int face_j = 0; face_j < 6; face_j++)
+						{
+							double H_dot_n = 0.0;
+
+							for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
+							{
+								TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
+
+								// Field from unit sigma on face j
+								TVector3d H_face = msc_col->FieldFromSurfaceCharge(ObsPoiVect, msc_col->Faces[face_j], 1.0);
+
+								// Point charge contribution
+								double unit_point_charge = -1.0 * msc_col->Faces[face_j].area;
+								TVector3d H_point = msc_col->FieldFromPointCharge(ObsPoiVect, msc_col->CentrPoint, unit_point_charge);
+
+								TVector3d H_local;
+								H_local.x = H_face.x + H_point.x;
+								H_local.y = H_face.y + H_point.y;
+								H_local.z = H_face.z + H_point.z;
+
+								// Transform back
+								TVector3d H_global = TransPtrVect[tr]->TrVectField(H_local);
+								H_dot_n += H_global.x * msc_row->Faces[face_i].normal.x +
+								           H_global.y * msc_row->Faces[face_i].normal.y +
+								           H_global.z * msc_row->Faces[face_i].normal.z;
+							}
+
+							// Store in block: row is face_i, col is face_j
+							block[face_i * m_totalDOF + face_j] = H_dot_n;
+						}
+					}
+				}
+			}
+#endif // RADIA_MSC_SUPPORT
+			else
+			{
+				// Unknown DOF combination - zero out the block
+				for(int i = 0; i < dof_row; i++)
+				{
+					for(int j = 0; j < dof_col; j++)
+					{
+						block[i * m_totalDOF + j] = 0.0;
+					}
+				}
+			}
+		}
+		EmptyTransPtrVect();
+	}
+
+	// Update formal interaction member pointers
+	for(int ClNo = 0; ClNo < AmOfMainElem; ClNo++)
+	{
+		radTg3dRelax* g3dRelaxPtrClNo = g3dRelaxPtrVect[ClNo];
+		g3dRelaxPtrVect[ClNo] = g3dRelaxPtrClNo->FormalIntrctMemberPtr();
+	}
+
+	return 1;
 }
 
 //-------------------------------------------------------------------------

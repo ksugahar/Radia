@@ -1,9 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cmd /c \"dir s:\\Radia\\01_GitHub\\build\\Release\\*.pyd\")",
-      "Bash(cmd /c \"dir /b s:\\Radia\\01_GitHub\\build\\Release\\*.pyd 2>&1\")",
-      "Bash(git -C:*)"
+      "Bash(\"C:/Program Files/Python312/python.exe\":*)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" \"s:/Radia/01_GitHub/examples/cube_uniform_field/nonlinear/benchmark_hexa_unified.py\" --bicgstab 10 15)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" \"s:/Radia/01_GitHub/examples/cube_uniform_field/nonlinear/benchmark_hexa_unified.py\" --lu 20)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" \"s:/Radia/01_GitHub/examples/cube_uniform_field/nonlinear/benchmark_hexa_unified.py\" --bicgstab 20)",
+      "Bash(\"C:/Program Files/Python312/python.exe\" -c:*)"
     ],
     "deny": [],
     "ask": []

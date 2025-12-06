@@ -176,6 +176,25 @@ class radTInteraction : public radTg {
 	int m_rankMPI; //21122019 (to set from Application?)
 	int m_nProcMPI;
 
+	//-------------------------------------------------------------------------
+	// Variable DOF support for hybrid MSC + standard element analysis
+	// Reference: Yano & Sugahara, "MMM with MSC", J. Magn. Soc. Jpn., 2023
+	//-------------------------------------------------------------------------
+	int m_totalDOF;                           // Total degrees of freedom (sum of all element DOFs)
+	std::vector<int> m_elemDOF;               // DOF for each element (3 for standard, 6 for MSC hexahedra)
+	std::vector<int> m_elemDOFOffset;         // Starting offset in flattened arrays for each element
+	bool m_hasVariableDOF;                    // True if any element has DOF != 3
+
+	// Variable-size interaction matrix (row-major, dense)
+	// Size: m_totalDOF x m_totalDOF
+	// Used when m_hasVariableDOF is true
+	std::vector<double> m_flatInteractMatrix;
+
+	// Variable-size field arrays (used when m_hasVariableDOF is true)
+	std::vector<double> m_flatExternFieldArray;  // Size: m_totalDOF
+	std::vector<double> m_flatMagnArray;         // Size: m_totalDOF (M or sigma values)
+	std::vector<double> m_flatFieldArray;        // Size: m_totalDOF
+
 public:
 
 	int AmOfRelaxSubInterv;
@@ -198,6 +217,30 @@ public:
 
 	int SetupInteractMatrix(); //OC26122019
 	//void SetupInteractMatrix();
+
+	//-------------------------------------------------------------------------
+	// Variable DOF methods for hybrid MSC + standard element analysis
+	//-------------------------------------------------------------------------
+	void ComputeDOFOffsets();  // Compute DOF offsets for each element
+	int SetupInteractMatrix_VariableDOF();  // Build interaction matrix with variable DOF blocks
+
+	// DOF accessors (inline for performance)
+	int GetTotalDOF() const { return m_totalDOF; }
+	int GetElementDOF(int elemIdx) const { return m_elemDOF[elemIdx]; }
+	int GetElementDOFOffset(int elemIdx) const { return m_elemDOFOffset[elemIdx]; }
+	bool HasVariableDOF() const { return m_hasVariableDOF; }
+
+	// Flat matrix/array accessors for solvers
+	double* GetFlatInteractMatrix() { return m_flatInteractMatrix.data(); }
+	const double* GetFlatInteractMatrix() const { return m_flatInteractMatrix.data(); }
+	double* GetFlatMagnArray() { return m_flatMagnArray.data(); }
+	double* GetFlatFieldArray() { return m_flatFieldArray.data(); }
+	double* GetFlatExternFieldArray() { return m_flatExternFieldArray.data(); }
+
+	// Helper: Get pointer to interaction block (row_elem, col_elem)
+	// Block is stored row-major in m_flatInteractMatrix
+	double* GetInteractBlock(int row_elem, int col_elem);
+	const double* GetInteractBlock(int row_elem, int col_elem) const;
 
 	void SetupExternFieldArray();
 	void AddExternFieldFromMoreExtSource();

@@ -59,9 +59,8 @@ public:
 
 	// Computation settings
 	py::object precision;  // Computation precision (None = use Radia default)
-	py::object use_hmatrix; // Use H-matrix acceleration (None = keep current setting)
 
-	// H-matrix cache for batch evaluation (v0.09)
+	// Point cache for batch evaluation
 	mutable std::unordered_map<uint64_t, std::array<double,3>> point_cache_;
 	mutable bool use_cache_;
 	double cache_tolerance_;  // Tolerance for point hashing (meters)
@@ -80,10 +79,9 @@ public:
 	             py::object py_v = py::none(),
 	             py::object py_w = py::none(),
 	             py::object py_precision = py::none(),
-	             py::object py_use_hmatrix = py::none(),
 	             const std::string& units = "m")
 	    : CoefficientFunction(3), radia_obj(obj), field_type(ftype), use_transform(false),
-	      precision(py_precision), use_hmatrix(py_use_hmatrix),
+	      precision(py_precision),
 	      use_cache_(false), cache_tolerance_(1e-10), cache_hits_(0), cache_misses_(0),
 	      coord_scale_(units == "m" ? 1.0 : 1000.0)
 	{
@@ -133,16 +131,6 @@ public:
 
 		// Cache Radia module import to avoid repeated imports (memory optimization)
 		rad_module_ = py::module_::import("radia");
-
-		// Set H-matrix usage if specified
-		if (!py_use_hmatrix.is_none()) {
-			bool enable_hmatrix = py_use_hmatrix.cast<bool>();
-			if (enable_hmatrix) {
-				rad_module_.attr("SolverHMatrixEnable")();
-			} else {
-				rad_module_.attr("SolverHMatrixDisable")();
-			}
-		}
 
 		// Set precision if specified
 		if (!py_precision.is_none()) {
@@ -320,7 +308,6 @@ public:
 		// Python reference counting is done safely
 		py::gil_scoped_acquire acquire;
 		precision.release();
-		use_hmatrix.release();
 	}
 
 	// Scalar evaluation - not used for vector fields, return 0
@@ -562,7 +549,7 @@ PYBIND11_MODULE(radia_ngsolve, m) {
 	         py::arg("radia_obj"), py::arg("field_type"),
 	         "Create Radia field CoefficientFunction\n"
 	         "field_type: 'b' (flux density), 'h' (field), 'a' (vector potential), 'm' (magnetization)")
-	    .def(py::init<int, const std::string&, py::object, py::object, py::object, py::object, py::object, py::object, const std::string&>(),
+	    .def(py::init<int, const std::string&, py::object, py::object, py::object, py::object, py::object, const std::string&>(),
 	         py::arg("radia_obj"),
 	         py::arg("field_type") = "b",
 	         py::arg("origin") = py::none(),
@@ -570,7 +557,6 @@ PYBIND11_MODULE(radia_ngsolve, m) {
 	         py::arg("v_axis") = py::none(),
 	         py::arg("w_axis") = py::none(),
 	         py::arg("precision") = py::none(),
-	         py::arg("use_hmatrix") = py::none(),
 	         py::arg("units") = "m",
 	         "Create Radia field CoefficientFunction with full control\n\n"
 	         "Parameters:\n"
@@ -581,28 +567,21 @@ PYBIND11_MODULE(radia_ngsolve, m) {
 	         "  v_axis: Local v-axis [vx, vy, vz] (default: [0, 1, 0]) - will be normalized\n"
 	         "  w_axis: Local w-axis [wx, wy, wz] (default: [0, 0, 1]) - will be normalized\n"
 	         "  precision: Computation precision in Tesla (default: None = Radia default)\n"
-	         "  use_hmatrix: Enable H-matrix acceleration (default: None = keep current setting)\n"
 	         "  units: Coordinate units - 'm' (meters, default) or 'mm' (millimeters)\n\n"
 	         "Coordinate transformation:\n"
 	         "  1. Global point p is translated by origin: p' = p - origin\n"
 	         "  2. p' is projected onto local axes: p_local = [u*p', v*p', w*p']\n"
 	         "  3. Field is calculated in Radia's coordinate system\n"
 	         "  4. Field is transformed back to global: F = u*F_local[0] + v*F_local[1] + w*F_local[2]\n\n"
-	         "Performance control:\n"
-	         "  - precision: Controls accuracy vs speed trade-off (smaller = more accurate)\n"
-	         "  - use_hmatrix: True = fast for large N, False = accurate for small N\n\n"
 	         "Example:\n"
-	         "  # High accuracy, no H-matrix\n"
-	         "  B_cf = rad_ngsolve.RadiaField(magnet, 'b', precision=1e-6, use_hmatrix=False)\n\n"
-	         "  # Fast evaluation with H-matrix\n"
-	         "  B_cf = rad_ngsolve.RadiaField(magnet, 'b', use_hmatrix=True)")
+	         "  # High accuracy\n"
+	         "  B_cf = rad_ngsolve.RadiaField(magnet, 'b', precision=1e-6)")
 	    .def_readonly("radia_obj", &ngfem::RadiaFieldCF::radia_obj)
 	    .def_readonly("field_type", &ngfem::RadiaFieldCF::field_type)
 	    .def_readonly("use_transform", &ngfem::RadiaFieldCF::use_transform)
 	    .def_readonly("precision", &ngfem::RadiaFieldCF::precision)
-	    .def_readonly("use_hmatrix", &ngfem::RadiaFieldCF::use_hmatrix)
 	    .def("PrepareCache", &ngfem::RadiaFieldCF::PrepareCache, py::arg("points"),
-	         "Pre-cache field values for batch evaluation (enables H-matrix speedup)")
+	         "Pre-cache field values for batch evaluation")
 	    .def("ClearCache", &ngfem::RadiaFieldCF::ClearCache,
 	         "Clear cached field values")
 	    .def("GetCacheStats", &ngfem::RadiaFieldCF::GetCacheStats,

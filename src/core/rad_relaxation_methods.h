@@ -77,12 +77,18 @@ public:
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 
+	// Variable DOF version for hybrid MSC + standard element analysis
+	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+
 private:
 	// Solve linear system Ax=b using LU decomposition with partial pivoting
 	// A is modified in place (contains LU factors after call)
 	// b is overwritten with solution x
 	// Returns 0 on success, non-zero on failure (singular matrix)
 	int SolveLU(std::vector<std::vector<double>>& A, std::vector<double>& b, int n);
+
+	// Flat matrix version for variable DOF
+	int SolveLU_Flat(std::vector<double>& A, std::vector<double>& b, int n);
 };
 
 //-------------------------------------------------------------------------
@@ -114,11 +120,17 @@ public:
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 
+	// Variable DOF version for hybrid MSC + standard element analysis
+	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+
 private:
 	// BiCGSTAB iterative solver
 	// Solves: A*x = b using BiCGSTAB with Jacobi preconditioner
 	// Returns number of iterations (0 on failure)
 	int SolveBiCGSTAB(int ndof, double tol, int max_iter, double& residual);
+
+	// Variable DOF version of BiCGSTAB
+	int SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, int max_iter, double& residual);
 
 	// Matrix-vector product
 	// Computes: y = A * x where A = -N + diag(1/chi)
@@ -130,9 +142,16 @@ private:
 	void DenseMatVec(const std::vector<double>& x, std::vector<double>& y,
 	                 const std::vector<double>& inv_chi, int ndof);
 
+	// Variable DOF matrix-vector product using flat storage
+	void MatVec_VariableDOF(const std::vector<double>& x, std::vector<double>& y,
+	                        const std::vector<double>& inv_chi, int totalDOF);
+
 	// Get diagonal elements for Jacobi preconditioner
 	// IMPORTANT: Uses pre-computed inv_chi values that are FIXED during BiCGSTAB iterations
 	void GetDiagonalElements(std::vector<double>& diag, const std::vector<double>& inv_chi, int n_elem);
+
+	// Variable DOF version
+	void GetDiagonalElements_VariableDOF(std::vector<double>& diag, const std::vector<double>& inv_chi, int totalDOF);
 
 	// BLAS-like operations
 	double Dot(const std::vector<double>& a, const std::vector<double>& b, int n);

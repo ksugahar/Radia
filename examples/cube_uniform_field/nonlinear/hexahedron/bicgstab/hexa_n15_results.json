@@ -1,0 +1,17 @@
+{
+  "element_type": "hexa",
+  "mesh_description": "n_div=15",
+  "n_div": 15,
+  "n_elements": 3375,
+  "ndof": 10125,
+  "H_ext": 50000.0,
+  "t_mesh": 0.0,
+  "t_solve": 7.199123859405518,
+  "solver_method": 1,
+  "solver_name": "bicgstab",
+  "converged": true,
+  "residual": 17.96509622119872,
+  "nonl_iterations": 38,
+  "M_avg_z": 179970.7904001331,
+  "equiv_maxh": 0.06666666666666667
+}

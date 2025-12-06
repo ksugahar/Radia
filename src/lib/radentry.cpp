@@ -15,15 +15,6 @@
 //#include <mpi.h>
 //#endif
 
-//-------------------------------------------------------------------------
-// Global solver settings
-//-------------------------------------------------------------------------
-
-// Tetrahedral element method
-static int g_TetrahedronMethod = 0;       // 0=original Radia method, 1=analytical method
-
-//-------------------------------------------------------------------------
-
 extern "C" {
 
 void RecMag( double,double,double, double,double,double, double,double,double );
@@ -1731,28 +1722,6 @@ int CALL RadUtiDataGet(char* pcData, const char typeData[3], long key) //OC04102
 	int ErrStat = ioBuffer.OutErrorStatus();
 	return ErrStat;
 }
-
-//-------------------------------------------------------------------------
-// Tetrahedral Method Control
-//-------------------------------------------------------------------------
-
-int CALL RadSolverTetraMethod(int method)
-{
-	if(method < 0 || method > 1)
-	{
-		return -1;  // Invalid method
-	}
-
-	g_TetrahedronMethod = method;
-	return 0;
-}
-
-int RadSolverGetTetraMethod()
-{
-	return g_TetrahedronMethod;
-}
-
-//-------------------------------------------------------------------------
 
 int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey)
 {

@@ -954,12 +954,734 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 		}
 
 		// Allow multitasking
-		if(radYield.Check() == 0) return totalIterCount;
+		if(radYield.Check() == 0) return outerIter;
 	}
 
 	// Update relaxation status
 	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
 	ComputeRelaxStatusParam(MagnAr, OldMagnArray.data(), NewFieldAr);
 
-	return totalIterCount;
+	// Return nonlinear iteration count (outerIter), not BiCGSTAB total (totalIterCount)
+	// This matches ELF_MAGIC behavior for comparable benchmarking
+	return outerIter;
+}
+
+//=========================================================================
+// Variable DOF Solver Methods for Hybrid MSC + Standard Element Analysis
+// Reference: Yano & Sugahara, "MMM with MSC", J. Magn. Soc. Jpn., 2023
+//=========================================================================
+
+//-------------------------------------------------------------------------
+// LU solver with flat matrix for variable DOF
+//-------------------------------------------------------------------------
+
+int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<double>& b, int n)
+{
+#ifdef HAVE_LAPACK
+	// Use LAPACK dgesv for optimized LU decomposition
+	// A is stored row-major, need to transpose for LAPACK column-major
+	std::vector<double> A_col(n * n);
+	for(int i = 0; i < n; i++)
+	{
+		for(int j = 0; j < n; j++)
+		{
+			A_col[j * n + i] = A[i * n + j];  // Transpose: A_col[j][i] = A[i][j]
+		}
+	}
+
+	std::vector<int> ipiv(n);
+	int nrhs = 1;
+	int info = 0;
+
+	dgesv_(&n, &nrhs, A_col.data(), &n, ipiv.data(), b.data(), &n, &info);
+
+	return (info == 0) ? 0 : -1;
+#else
+	// Fallback: Gaussian elimination with partial pivoting
+	for(int k = 0; k < n - 1; k++)
+	{
+		// Find pivot
+		int maxRow = k;
+		double maxVal = std::abs(A[k * n + k]);
+		for(int i = k + 1; i < n; i++)
+		{
+			if(std::abs(A[i * n + k]) > maxVal)
+			{
+				maxVal = std::abs(A[i * n + k]);
+				maxRow = i;
+			}
+		}
+
+		if(maxVal < 1.0e-15) return -1;  // Singular
+
+		// Swap rows
+		if(maxRow != k)
+		{
+			for(int j = 0; j < n; j++)
+			{
+				std::swap(A[k * n + j], A[maxRow * n + j]);
+			}
+			std::swap(b[k], b[maxRow]);
+		}
+
+		// Eliminate
+		for(int i = k + 1; i < n; i++)
+		{
+			double factor = A[i * n + k] / A[k * n + k];
+			A[i * n + k] = 0.0;
+			for(int j = k + 1; j < n; j++)
+			{
+				A[i * n + j] -= factor * A[k * n + j];
+			}
+			b[i] -= factor * b[k];
+		}
+	}
+
+	if(std::abs(A[(n-1) * n + (n-1)]) < 1.0e-15) return -1;
+
+	// Back substitution
+	for(int i = n - 1; i >= 0; i--)
+	{
+		double sum = b[i];
+		for(int j = i + 1; j < n; j++)
+		{
+			sum -= A[i * n + j] * b[j];
+		}
+		b[i] = sum / A[i * n + i];
+	}
+
+	return 0;
+#endif
+}
+
+int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
+{
+	if(IntrctPtr == nullptr) return 0;
+
+	// Check if variable DOF is active
+	if(!IntrctPtr->HasVariableDOF())
+	{
+		// Fall back to standard solver
+		return AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+	}
+
+	// Reset if needed
+	if(!MagnResetIsNotNeeded)
+	{
+		IntrctPtr->ResetM();
+		IntrctPtr->ResetAuxParam();
+	}
+
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+	if(AmOfMainElem <= 0) return 0;
+
+	int totalDOF = IntrctPtr->GetTotalDOF();
+	if(totalDOF <= 0) return 0;
+
+	// Get flat arrays
+	double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
+	double* FlatMagn = IntrctPtr->GetFlatMagnArray();
+	double* FlatField = IntrctPtr->GetFlatFieldArray();
+	double* FlatExtern = IntrctPtr->GetFlatExternFieldArray();
+
+	if(FlatInteract == nullptr || FlatMagn == nullptr || FlatField == nullptr || FlatExtern == nullptr)
+		return 0;
+
+	// Build base matrix (geometric part without chi): -N
+	std::vector<double> BaseMatrix(totalDOF * totalDOF);
+	for(int i = 0; i < totalDOF * totalDOF; i++)
+	{
+		BaseMatrix[i] = -FlatInteract[i];
+	}
+
+	// Store old values for convergence check
+	std::vector<double> OldMagn(totalDOF);
+
+	double PrecOnMagnetizE2 = PrecOnMagnetiz * PrecOnMagnetiz;
+	double MisfitE2 = 1.0e30;
+	int iterCount = 0;
+
+	// Initialize H field
+	const double H_init_mag = 1000.0;
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+		// For MSC elements (6 DOF), initialize differently than standard (3 DOF)
+		if(dof == 3)
+		{
+			double H_ext_mag = 0.0;
+			for(int k = 0; k < 3; k++)
+			{
+				H_ext_mag += FlatExtern[offset + k] * FlatExtern[offset + k];
+			}
+			H_ext_mag = std::sqrt(H_ext_mag);
+			double scale = (H_ext_mag > 1.0e-10) ? std::min(1.0, H_init_mag / H_ext_mag) : 1.0;
+			for(int k = 0; k < 3; k++)
+			{
+				FlatField[offset + k] = FlatExtern[offset + k] * scale;
+			}
+		}
+		else
+		{
+			// MSC elements: initialize sigma to small values
+			for(int k = 0; k < dof; k++)
+			{
+				FlatField[offset + k] = FlatExtern[offset + k];
+			}
+		}
+	}
+
+	// Work arrays
+	std::vector<double> SystemMatrix(totalDOF * totalDOF);
+	std::vector<double> RHS(totalDOF);
+
+	for(iterCount = 0; iterCount < MaxIterNumber; iterCount++)
+	{
+		// Store old values
+		for(int i = 0; i < totalDOF; i++)
+		{
+			OldMagn[i] = FlatMagn[i];
+		}
+
+		// Update H from M if not first iteration
+		if(iterCount > 0)
+		{
+			for(int elem = 0; elem < AmOfMainElem; elem++)
+			{
+				int dof = IntrctPtr->GetElementDOF(elem);
+				int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+				if(dof == 3)
+				{
+					// Standard element: H = M / chi
+					radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+					radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+					TVector3d H_est(FlatField[offset], FlatField[offset+1], FlatField[offset+2]);
+					TMatrix3d KsiTensor;
+					TVector3d MrVect;
+					MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+
+					double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+					if(chi < 1.0e-6) chi = 1.0e-6;
+
+					for(int k = 0; k < 3; k++)
+					{
+						FlatField[offset + k] = FlatMagn[offset + k] / chi;
+					}
+				}
+				// MSC elements: TODO - implement sigma -> H conversion
+			}
+		}
+
+		// Copy base matrix and update diagonal with 1/chi
+		for(int i = 0; i < totalDOF * totalDOF; i++)
+		{
+			SystemMatrix[i] = BaseMatrix[i];
+		}
+
+		// Update diagonal and RHS
+		for(int elem = 0; elem < AmOfMainElem; elem++)
+		{
+			int dof = IntrctPtr->GetElementDOF(elem);
+			int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+			if(dof == 3)
+			{
+				// Standard element
+				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+				radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+				TVector3d H_est(FlatField[offset], FlatField[offset+1], FlatField[offset+2]);
+				TMatrix3d KsiTensor;
+				TVector3d MrVect;
+				MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+
+				double chi_vals[3] = {KsiTensor.Str0.x, KsiTensor.Str1.y, KsiTensor.Str2.z};
+				double Mr_vals[3] = {MrVect.x, MrVect.y, MrVect.z};
+
+				for(int k = 0; k < 3; k++)
+				{
+					int row = offset + k;
+					double chi = chi_vals[k];
+					double inv_chi = (chi > 1.0e-10) ? (1.0 / chi) : 1.0e10;
+
+					// Add 1/chi to diagonal
+					SystemMatrix[row * totalDOF + row] += inv_chi;
+
+					// RHS = H_ext + Mr/chi
+					double Mr_over_chi = (chi > 1.0e-10) ? (Mr_vals[k] / chi) : 0.0;
+					RHS[row] = FlatExtern[row] + Mr_over_chi;
+				}
+			}
+			else
+			{
+				// MSC element (6 DOF): TODO - implement proper MSC constitutive relation
+				// For now, use placeholder with large diagonal
+				for(int k = 0; k < dof; k++)
+				{
+					int row = offset + k;
+					SystemMatrix[row * totalDOF + row] += 1.0;  // Placeholder
+					RHS[row] = FlatExtern[row];
+				}
+			}
+		}
+
+		// Solve
+		int ierr = SolveLU_Flat(SystemMatrix, RHS, totalDOF);
+		if(ierr != 0) return iterCount;
+
+		// Extract solution
+		for(int i = 0; i < totalDOF; i++)
+		{
+			FlatMagn[i] = RHS[i];
+		}
+
+		// Compute convergence
+		double M_diff_sq = 0.0;
+		double M_norm_sq = 0.0;
+		for(int i = 0; i < totalDOF; i++)
+		{
+			double dM = FlatMagn[i] - OldMagn[i];
+			M_diff_sq += dM * dM;
+			M_norm_sq += FlatMagn[i] * FlatMagn[i];
+		}
+
+		// Update element magnetization from flat array
+		for(int elem = 0; elem < AmOfMainElem; elem++)
+		{
+			int dof = IntrctPtr->GetElementDOF(elem);
+			int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+			if(dof == 3)
+			{
+				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+				g3dRelaxPtr->Magn.x = FlatMagn[offset + 0];
+				g3dRelaxPtr->Magn.y = FlatMagn[offset + 1];
+				g3dRelaxPtr->Magn.z = FlatMagn[offset + 2];
+			}
+			// MSC elements: TODO - update sigma values in element
+		}
+
+		double rel_change = (M_norm_sq > 1.0e-30) ? std::sqrt(M_diff_sq / M_norm_sq) : std::sqrt(M_diff_sq);
+		MisfitE2 = rel_change * rel_change;
+
+		if(rel_change <= PrecOnMagnetiz)
+		{
+			iterCount++;
+			break;
+		}
+
+		if(radYield.Check() == 0) return iterCount;
+	}
+
+	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
+
+	return iterCount;
+}
+
+//-------------------------------------------------------------------------
+// BiCGSTAB solver variable DOF methods
+//-------------------------------------------------------------------------
+
+void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, std::vector<double>& y,
+                                                 const std::vector<double>& inv_chi, int totalDOF)
+{
+	// Computes y = A * x where A = -N + diag(1/chi)
+	// Uses flat interaction matrix with variable DOF blocks
+
+	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
+	if(FlatInteract == nullptr) return;
+
+	std::fill(y.begin(), y.end(), 0.0);
+
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+
+	#pragma omp parallel for if(AmOfMainElem > 50)
+	for(int row_elem = 0; row_elem < AmOfMainElem; row_elem++)
+	{
+		int dof_row = IntrctPtr->GetElementDOF(row_elem);
+		int offset_row = IntrctPtr->GetElementDOFOffset(row_elem);
+
+		// Diagonal contribution: (1/chi) * x
+		for(int k = 0; k < dof_row; k++)
+		{
+			y[offset_row + k] = inv_chi[offset_row + k] * x[offset_row + k];
+		}
+
+		// Off-diagonal: -N * x
+		for(int col_elem = 0; col_elem < AmOfMainElem; col_elem++)
+		{
+			int dof_col = IntrctPtr->GetElementDOF(col_elem);
+			int offset_col = IntrctPtr->GetElementDOFOffset(col_elem);
+
+			// Get block from flat matrix
+			const double* block = &FlatInteract[offset_row * totalDOF + offset_col];
+
+			// y_row -= N_block * x_col
+			for(int i = 0; i < dof_row; i++)
+			{
+				double sum = 0.0;
+				for(int j = 0; j < dof_col; j++)
+				{
+					sum += block[i * totalDOF + j] * x[offset_col + j];
+				}
+				y[offset_row + i] -= sum;
+			}
+		}
+	}
+}
+
+void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>& diag,
+                                                              const std::vector<double>& inv_chi, int totalDOF)
+{
+	// Extract diagonal elements for Jacobi preconditioner
+	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
+	if(FlatInteract == nullptr) return;
+
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+		// Get diagonal block
+		const double* diag_block = &FlatInteract[offset * totalDOF + offset];
+
+		for(int k = 0; k < dof; k++)
+		{
+			// Diagonal element: -N_ii + 1/chi
+			diag[offset + k] = -diag_block[k * totalDOF + k] + inv_chi[offset + k];
+		}
+	}
+}
+
+int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, int max_iter, double& residual)
+{
+	// BiCGSTAB with Jacobi preconditioner for variable DOF systems
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+
+	// Allocate work vectors
+	std::vector<double> r(totalDOF), r0(totalDOF), p(totalDOF), v(totalDOF), s(totalDOF), t(totalDOF);
+	std::vector<double> p_hat(totalDOF), s_hat(totalDOF), diag_inv(totalDOF);
+	std::vector<double> inv_chi(totalDOF);
+	std::vector<double> rhs(totalDOF);
+	std::vector<double> sol(totalDOF);
+
+	double* FlatMagn = IntrctPtr->GetFlatMagnArray();
+	double* FlatField = IntrctPtr->GetFlatFieldArray();
+	double* FlatExtern = IntrctPtr->GetFlatExternFieldArray();
+
+	if(FlatMagn == nullptr || FlatField == nullptr || FlatExtern == nullptr) return 0;
+
+	// Pre-compute 1/chi and RHS for all elements
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+		if(dof == 3)
+		{
+			// Standard element
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+			radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+			TVector3d InstH(FlatField[offset], FlatField[offset+1], FlatField[offset+2]);
+			TMatrix3d KsiTensor;
+			TVector3d MrVect;
+			MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
+
+			double chi_vals[3] = {KsiTensor.Str0.x, KsiTensor.Str1.y, KsiTensor.Str2.z};
+			double Mr_vals[3] = {MrVect.x, MrVect.y, MrVect.z};
+
+			for(int k = 0; k < 3; k++)
+			{
+				double chi = chi_vals[k];
+				inv_chi[offset + k] = (chi > 1.0e-10) ? (1.0 / chi) : 1.0e10;
+				double inv_chi_rhs = (chi > 1.0e-10) ? (1.0 / chi) : 0.0;
+				rhs[offset + k] = FlatExtern[offset + k] + Mr_vals[k] * inv_chi_rhs;
+			}
+		}
+		else
+		{
+			// MSC element: placeholder
+			for(int k = 0; k < dof; k++)
+			{
+				inv_chi[offset + k] = 1.0;
+				rhs[offset + k] = FlatExtern[offset + k];
+			}
+		}
+	}
+
+	// Initial guess
+	for(int i = 0; i < totalDOF; i++)
+	{
+		sol[i] = FlatMagn[i];
+	}
+
+	// Build Jacobi preconditioner
+	GetDiagonalElements_VariableDOF(diag_inv, inv_chi, totalDOF);
+	for(int i = 0; i < totalDOF; i++)
+	{
+		diag_inv[i] = (std::abs(diag_inv[i]) > 1.0e-15) ? (1.0 / diag_inv[i]) : 1.0;
+	}
+
+	// Initialize: r0 = b - A*x0
+	MatVec_VariableDOF(sol, v, inv_chi, totalDOF);
+	Copy(rhs, r, totalDOF);
+	Axpy(-1.0, v, r, totalDOF);
+	Copy(r, r0, totalDOF);
+
+	double rho = 1.0, alpha_bicg = 1.0, omega = 1.0;
+	std::fill(p.begin(), p.end(), 0.0);
+	std::fill(v.begin(), v.end(), 0.0);
+
+	double rhs_norm = Norm2(rhs, totalDOF);
+	if(rhs_norm < 1.0e-30) rhs_norm = 1.0;
+
+	int iter;
+	for(iter = 1; iter <= max_iter; iter++)
+	{
+		double rho_old = rho;
+		rho = Dot(r0, r, totalDOF);
+
+		if(std::abs(rho) < 1.0e-30)
+		{
+			residual = Norm2(r, totalDOF) / rhs_norm;
+			break;
+		}
+
+		if(iter == 1)
+		{
+			Copy(r, p, totalDOF);
+		}
+		else
+		{
+			if(std::abs(rho_old * omega) < 1.0e-30)
+			{
+				residual = Norm2(r, totalDOF) / rhs_norm;
+				break;
+			}
+			double beta = (rho / rho_old) * (alpha_bicg / omega);
+			Axpy(-omega, v, p, totalDOF);
+			Scale(beta, p, totalDOF);
+			Axpy(1.0, r, p, totalDOF);
+		}
+
+		// Apply preconditioner
+		#pragma omp parallel for if(totalDOF > 100)
+		for(int i = 0; i < totalDOF; i++)
+		{
+			p_hat[i] = diag_inv[i] * p[i];
+		}
+
+		MatVec_VariableDOF(p_hat, v, inv_chi, totalDOF);
+
+		double r0_dot_v = Dot(r0, v, totalDOF);
+		if(std::abs(r0_dot_v) < 1.0e-30)
+		{
+			residual = Norm2(r, totalDOF) / rhs_norm;
+			break;
+		}
+		alpha_bicg = rho / r0_dot_v;
+
+		Copy(r, s, totalDOF);
+		Axpy(-alpha_bicg, v, s, totalDOF);
+
+		double s_norm = Norm2(s, totalDOF);
+		if(s_norm / rhs_norm < tol)
+		{
+			Axpy(alpha_bicg, p_hat, sol, totalDOF);
+			residual = s_norm / rhs_norm;
+			break;
+		}
+
+		#pragma omp parallel for if(totalDOF > 100)
+		for(int i = 0; i < totalDOF; i++)
+		{
+			s_hat[i] = diag_inv[i] * s[i];
+		}
+
+		MatVec_VariableDOF(s_hat, t, inv_chi, totalDOF);
+
+		double t_dot_s = Dot(t, s, totalDOF);
+		double t_dot_t = Dot(t, t, totalDOF);
+		if(std::abs(t_dot_t) < 1.0e-30)
+		{
+			Axpy(alpha_bicg, p_hat, sol, totalDOF);
+			residual = s_norm / rhs_norm;
+			break;
+		}
+		omega = t_dot_s / t_dot_t;
+
+		Axpy(alpha_bicg, p_hat, sol, totalDOF);
+		Axpy(omega, s_hat, sol, totalDOF);
+
+		Copy(s, r, totalDOF);
+		Axpy(-omega, t, r, totalDOF);
+
+		double r_norm = Norm2(r, totalDOF);
+		residual = r_norm / rhs_norm;
+		if(residual < tol) break;
+
+		if(std::abs(omega) < 1.0e-30) break;
+	}
+
+	// Copy solution back to flat array
+	for(int i = 0; i < totalDOF; i++)
+	{
+		FlatMagn[i] = sol[i];
+	}
+
+	return iter;
+}
+
+int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
+{
+	if(IntrctPtr == nullptr) return 0;
+
+	// Check if variable DOF is active
+	if(!IntrctPtr->HasVariableDOF())
+	{
+		return AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+	}
+
+	if(!MagnResetIsNotNeeded)
+	{
+		IntrctPtr->ResetM();
+		IntrctPtr->ResetAuxParam();
+	}
+
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+	if(AmOfMainElem <= 0) return 0;
+
+	int totalDOF = IntrctPtr->GetTotalDOF();
+	if(totalDOF <= 0) return 0;
+
+	double* FlatMagn = IntrctPtr->GetFlatMagnArray();
+	double* FlatField = IntrctPtr->GetFlatFieldArray();
+	double* FlatExtern = IntrctPtr->GetFlatExternFieldArray();
+
+	if(FlatMagn == nullptr || FlatField == nullptr || FlatExtern == nullptr) return 0;
+
+	std::vector<double> OldMagn(totalDOF);
+	double MisfitE2 = 1.0e30;
+	int totalIterCount = 0;
+	int outerIter = 0;
+
+	// Initialize H field
+	const double H_init_mag = 1000.0;
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+		if(dof == 3)
+		{
+			double H_ext_mag = 0.0;
+			for(int k = 0; k < 3; k++)
+			{
+				H_ext_mag += FlatExtern[offset + k] * FlatExtern[offset + k];
+			}
+			H_ext_mag = std::sqrt(H_ext_mag);
+			double scale = (H_ext_mag > 1.0e-10) ? std::min(1.0, H_init_mag / H_ext_mag) : 1.0;
+			for(int k = 0; k < 3; k++)
+			{
+				FlatField[offset + k] = FlatExtern[offset + k] * scale;
+			}
+		}
+		else
+		{
+			for(int k = 0; k < dof; k++)
+			{
+				FlatField[offset + k] = FlatExtern[offset + k];
+			}
+		}
+	}
+
+	// Outer nonlinear iteration
+	for(outerIter = 0; outerIter < MaxIterNumber; outerIter++)
+	{
+		// Store old values
+		for(int i = 0; i < totalDOF; i++)
+		{
+			OldMagn[i] = FlatMagn[i];
+		}
+
+		// Update H from M
+		if(outerIter > 0)
+		{
+			for(int elem = 0; elem < AmOfMainElem; elem++)
+			{
+				int dof = IntrctPtr->GetElementDOF(elem);
+				int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+				if(dof == 3)
+				{
+					radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+					radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+					TVector3d H_est(FlatField[offset], FlatField[offset+1], FlatField[offset+2]);
+					TMatrix3d KsiTensor;
+					TVector3d MrVect;
+					MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+
+					double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+					if(chi < 1.0e-6) chi = 1.0e-6;
+
+					for(int k = 0; k < 3; k++)
+					{
+						FlatField[offset + k] = FlatMagn[offset + k] / chi;
+					}
+				}
+			}
+		}
+
+		// Solve with BiCGSTAB
+		double residual = 0.0;
+		int n_iter = SolveBiCGSTAB_VariableDOF(totalDOF, PrecOnMagnetiz * 0.1, MaxIterNumber - totalIterCount, residual);
+		totalIterCount += n_iter;
+
+		// Update element magnetization
+		double M_diff_sq = 0.0;
+		double M_norm_sq = 0.0;
+		for(int i = 0; i < totalDOF; i++)
+		{
+			double dM = FlatMagn[i] - OldMagn[i];
+			M_diff_sq += dM * dM;
+			M_norm_sq += FlatMagn[i] * FlatMagn[i];
+		}
+
+		for(int elem = 0; elem < AmOfMainElem; elem++)
+		{
+			int dof = IntrctPtr->GetElementDOF(elem);
+			int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+			if(dof == 3)
+			{
+				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+				g3dRelaxPtr->Magn.x = FlatMagn[offset + 0];
+				g3dRelaxPtr->Magn.y = FlatMagn[offset + 1];
+				g3dRelaxPtr->Magn.z = FlatMagn[offset + 2];
+			}
+		}
+
+		double rel_change = (M_norm_sq > 1.0e-30) ? std::sqrt(M_diff_sq / M_norm_sq) : std::sqrt(M_diff_sq);
+		MisfitE2 = rel_change * rel_change;
+
+		if(rel_change <= PrecOnMagnetiz)
+		{
+			outerIter++;
+			break;
+		}
+
+		if(radYield.Check() == 0) return outerIter;
+	}
+
+	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
+
+	return outerIter;
 }
