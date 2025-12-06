@@ -12,7 +12,6 @@ This folder contains the official documentation for Radia.
 
 #### H-Matrix Acceleration
 - [HMATRIX_USER_GUIDE.md](HMATRIX_USER_GUIDE.md) - User guide for H-matrix acceleration
-- [HMATRIX_BENCHMARKS_RESULTS.md](HMATRIX_BENCHMARKS_RESULTS.md) - Performance benchmarks
 - [HMATRIX_SERIALIZATION.md](HMATRIX_SERIALIZATION.md) - Disk cache feature
 
 #### NGSolve Integration
@@ -21,16 +20,16 @@ This folder contains the official documentation for Radia.
 
 ### Developer Documentation (Implementation Details)
 
-#### H-Matrix Implementation
-- [HMATRIX_IMPLEMENTATION_HISTORY.md](HMATRIX_IMPLEMENTATION_HISTORY.md) - Development history
-- [HMATRIX_ENHANCEMENT_PROPOSAL_2025.md](HMATRIX_ENHANCEMENT_PROPOSAL_2025.md) - Future enhancements
-- [hmatrix_field_design.md](hmatrix_field_design.md) - Field evaluation design
-- [ML_PARAMETER_TUNING.md](ML_PARAMETER_TUNING.md) - Machine learning parameter optimization
-
 #### Material and Field APIs
 - [MATERIAL_API_IMPLEMENTATION.md](MATERIAL_API_IMPLEMENTATION.md) - Material property implementation
 - [CF_BACKGROUND_FIELD_IMPLEMENTATION.md](CF_BACKGROUND_FIELD_IMPLEMENTATION.md) - Background field implementation
 - [NGSOLVE_CF_BACKGROUND_FIELD_DESIGN.md](NGSOLVE_CF_BACKGROUND_FIELD_DESIGN.md) - NGSolve CoefficientFunction design
+- [ML_PARAMETER_TUNING.md](ML_PARAMETER_TUNING.md) - Machine learning parameter optimization
+
+#### H-Matrix Implementation (in internal/design/)
+- [HMATRIX_IMPLEMENTATION_HISTORY.md](../internal/design/HMATRIX_IMPLEMENTATION_HISTORY.md) - Development history
+- [HMATRIX_ENHANCEMENT_PROPOSAL_2025.md](../internal/design/HMATRIX_ENHANCEMENT_PROPOSAL_2025.md) - Future enhancements
+- [HMATRIX_BENCHMARKS_RESULTS.md](../internal/design/HMATRIX_BENCHMARKS_RESULTS.md) - Performance benchmarks
 
 ## Additional Resources
 
@@ -59,7 +58,7 @@ Working code examples are in [../examples/](../examples/):
 1. **New users**: Start with [API_REFERENCE.md](API_REFERENCE.md) and [examples/simple_problems/](../examples/simple_problems/)
 2. **Performance optimization**: Read [HMATRIX_USER_GUIDE.md](HMATRIX_USER_GUIDE.md)
 3. **NGSolve users**: Read [NGSOLVE_USAGE_GUIDE.md](NGSOLVE_USAGE_GUIDE.md)
-4. **Contributors**: Review [HMATRIX_IMPLEMENTATION_HISTORY.md](HMATRIX_IMPLEMENTATION_HISTORY.md)
+4. **Contributors**: Review [internal/design/](../internal/design/) folder for implementation details
 
 ## See Also
 
