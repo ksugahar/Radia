@@ -15,7 +15,6 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_relaxation_methods.h"
-#include "rad_hmatrix_aca.h"
 #include "rad_yield.h"
 
 #include <time.h>
@@ -595,70 +594,11 @@ void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vect
 	}
 }
 
-bool radTRelaxationMethNo_1::InitializeHMatrix()
-{
-	// Initialize H-matrix if enabled and not already initialized
-	if(!g_UseHMatrix)
-	{
-		return false;
-	}
-
-	if(m_hmatrix_initialized && m_hmatrix && m_hmatrix->IsInitialized())
-	{
-		return true;  // Already initialized
-	}
-
-	// Create new H-matrix
-	m_hmatrix = std::make_unique<radTHMatrixACA>();
-
-	// Set parameters (could be made configurable via API)
-	radTHMatrixParams params;
-	params.eta = 2.0;           // Admissibility parameter
-	params.eps = 1e-4;          // ACA+ tolerance
-	params.min_leaf_size = 32;  // Minimum cluster size
-	params.max_rank = 100;      // Maximum rank
-
-	// Initialize H-matrix
-	m_hmatrix_initialized = m_hmatrix->Initialize(IntrctPtr, params);
-
-	return m_hmatrix_initialized;
-}
-
-void radTRelaxationMethNo_1::HMatrixMatVec(const std::vector<double>& x, std::vector<double>& y,
-                                           const std::vector<double>& inv_chi, int ndof)
-{
-	// Computes y = A * x where A = -N + 1/chi
-	// Uses H-matrix for -N*x, then adds (1/chi)*x
-
-	int n_elem = ndof / 3;
-
-	// Use H-matrix for -N*x
-	// Note: H-matrix computes N*x (positive), we negate
-	std::vector<double> Nx(ndof, 0.0);
-	m_hmatrix->MatVec(x, Nx);
-
-	// Compute y = -N*x + (1/chi)*x
-	#pragma omp parallel for if(n_elem > 50)
-	for(int i = 0; i < n_elem; i++)
-	{
-		y[3*i + 0] = -Nx[3*i + 0] + inv_chi[3*i + 0] * x[3*i + 0];
-		y[3*i + 1] = -Nx[3*i + 1] + inv_chi[3*i + 1] * x[3*i + 1];
-		y[3*i + 2] = -Nx[3*i + 2] + inv_chi[3*i + 2] * x[3*i + 2];
-	}
-}
-
 void radTRelaxationMethNo_1::MatVec(const std::vector<double>& x, std::vector<double>& y,
                                     const std::vector<double>& inv_chi, int ndof)
 {
-	// Select H-matrix or dense matvec based on global flag
-	if(g_UseHMatrix && m_hmatrix_initialized && m_hmatrix && m_hmatrix->IsInitialized())
-	{
-		HMatrixMatVec(x, y, inv_chi, ndof);
-	}
-	else
-	{
-		DenseMatVec(x, y, inv_chi, ndof);
-	}
+	// Use dense matvec (H-matrix support removed 2025-12-06)
+	DenseMatVec(x, y, inv_chi, ndof);
 }
 
 int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, double& residual)
@@ -896,12 +836,6 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
-
-	// Initialize H-matrix if enabled
-	if(g_UseHMatrix && !m_hmatrix_initialized)
-	{
-		InitializeHMatrix();
-	}
 
 	// Store old magnetization for convergence checking
 	std::vector<TVector3d> OldMagnArray(AmOfMainElem);

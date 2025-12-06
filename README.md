@@ -54,7 +54,7 @@ pip install radia-ngsolve
 # - build/Release/radia_ngsolve.pyd
 ```
 
-See [README_BUILD.md](README_BUILD.md) for detailed build instructions.
+See [BUILD.md](BUILD.md) for detailed build instructions.
 
 ### Basic Usage
 
@@ -140,24 +140,27 @@ gf = GridFunction(fes)
 gf.Set(B_field)  # Automatically converts mesh coordinates m → mm
 ```
 
-See [examples/Radia_to_NGSolve_CoefficientFunction/](examples/Radia_to_NGSolve_CoefficientFunction/) for complete examples.
+See [examples/ngsolve_integration/](examples/ngsolve_integration/) for complete examples.
 
 ## Documentation
 
-### Core
-- [README_BUILD.md](README_BUILD.md) - Build instructions
-- [docs/OPENMP_PERFORMANCE_REPORT.md](docs/OPENMP_PERFORMANCE_REPORT.md) - OpenMP benchmarks
-- [docs/DIRECTORY_STRUCTURE.md](docs/DIRECTORY_STRUCTURE.md) - Project structure
+### Build & Setup
+- [BUILD.md](BUILD.md) - Build instructions (Windows, macOS, Linux)
+
+### User Guides
+- [docs/API_REFERENCE.md](docs/API_REFERENCE.md) - Complete Python API reference
+- [docs/SOLVER_METHODS.md](docs/SOLVER_METHODS.md) - Solver methods (LU, BiCGSTAB, H-matrix)
+- [docs/HMATRIX_USER_GUIDE.md](docs/HMATRIX_USER_GUIDE.md) - H-matrix acceleration guide
 
 ### NGSolve Integration
-- [RAD_NGSOLVE_BUILD_SUCCESS.md](RAD_NGSOLVE_BUILD_SUCCESS.md) - Complete radia_ngsolve documentation
-- [examples/Radia_to_NGSolve_CoefficientFunction/README.md](examples/Radia_to_NGSolve_CoefficientFunction/README.md) - NGSolve examples overview
-- [examples/Radia_to_NGSolve_CoefficientFunction/EXAMPLES_GUIDE.md](examples/Radia_to_NGSolve_CoefficientFunction/EXAMPLES_GUIDE.md) - Detailed usage guide
-- [tests/test_radia_ngsolve.py](tests/test_radia_ngsolve.py) - Integration tests
+- [docs/NGSOLVE_USAGE_GUIDE.md](docs/NGSOLVE_USAGE_GUIDE.md) - How to use Radia with NGSolve
+- [docs/NGSOLVE_INTEGRATION.md](docs/NGSOLVE_INTEGRATION.md) - Integration overview
 
-### Development
-- [docs/TAB_CONVERSION_REPORT.md](docs/TAB_CONVERSION_REPORT.md) - Code style conversion
-- [docs/CLAUDE.md](docs/CLAUDE.md) - Development notes
+### Examples
+- [examples/ngsolve_integration/](examples/ngsolve_integration/) - NGSolve integration examples
+- [examples/magpylib_integration/](examples/magpylib_integration/) - magpylib background field examples
+- [examples/simple_problems/](examples/simple_problems/) - Basic magnet configurations
+- [tests/README.md](tests/README.md) - Test suite documentation
 
 ## Performance
 
@@ -170,7 +173,7 @@ OpenMP parallelization results (8-core system):
 | 4       | 3.57      | 3.27x   |
 | 8       | 4.33      | 2.70x   |
 
-See [docs/OPENMP_PERFORMANCE_REPORT.md](docs/OPENMP_PERFORMANCE_REPORT.md) for details.
+See [docs/SOLVER_METHODS.md](docs/SOLVER_METHODS.md) for solver performance details.
 
 ## Examples
 
@@ -178,12 +181,12 @@ Practical examples are available in the `examples/` directory:
 
 
 ### NGSolve Integration
-- `examples/Radia_to_NGSolve_CoefficientFunction/` - **Radia → NGSolve: Use Radia fields in FEM**
+- `examples/ngsolve_integration/` - **Radia → NGSolve: Use Radia fields in FEM**
   - `demo_field_types.py` - All field types demonstration
   - `visualize_field.py` - Field visualization and comparison
   - `export_radia_geometry.py` - Export geometry to VTK
 
-- `examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/` - **NGSolve → Radia: Background fields**
+- `examples/background_fields/` - **NGSolve → Radia: Background fields**
   - `test_sphere_in_quadrupole.py` - Magnetizable sphere in quadrupole field
   - Uses Python callbacks to define arbitrary background fields
 
@@ -407,7 +410,7 @@ See:
 
 This tool perfectly complements Radia_NGSolve by providing high-quality mesh generation:
 
-- **Nastran Format Export** - Compatible with Radia's `nastran_reader.py` module
+- **Nastran Format Export** - Compatible with Radia's `nastran_mesh_import.py` module
 - **Multiple Format Support** - Gmsh, MEG, VTK, and Nastran exports
 - **2D/3D Meshing** - Supports complex 3D geometries
 - **Second-Order Elements** - High-accuracy mesh generation
@@ -415,10 +418,10 @@ This tool perfectly complements Radia_NGSolve by providing high-quality mesh gen
 **Workflow Example:**
 1. Create complex geometry in Coreform Cubit
 2. Export to Nastran format using `Coreform_Cubit_Mesh_Export`
-3. Import into Radia using `nastran_reader.py`
+3. Import into Radia using `nastran_mesh_import.py`
 4. Couple with NGSolve for FEM analysis
 
-See [examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/](examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/) for Nastran mesh usage examples.
+See [examples/background_fields/](examples/background_fields/) for Nastran mesh usage examples.
 
 ## Links
 
