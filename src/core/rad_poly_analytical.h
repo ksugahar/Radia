@@ -94,16 +94,22 @@ void RadAnalyticalFieldFromQuadCharge(
  * surface charge density sigma = M dot n, using global coordinates only.
  * No local coordinate transformation is needed.
  *
- * @param V0, V1, V2  Triangle vertices in GLOBAL 3D coordinates
- * @param M           Magnetization vector (in global coordinates)
- * @param obsPoint    Observation point in GLOBAL 3D coordinates
- * @return            H field at observation point (in global coordinates)
+ * IMPORTANT: Following ELF_MAGIC convention, the function ensures the normal
+ * vector points OUTWARD from the element centroid. If the computed normal
+ * points inward, the surface charge sign is negated.
+ *
+ * @param V0, V1, V2    Triangle vertices in GLOBAL 3D coordinates
+ * @param M             Magnetization vector (in global coordinates)
+ * @param obsPoint      Observation point in GLOBAL 3D coordinates
+ * @param elemCentroid  Element (tetrahedron) centroid for outward normal check
+ * @return              H field at observation point (in global coordinates)
  */
 TVector3d RadFieldFromTriangleFaceGlobal(
 	const TVector3d& V0,
 	const TVector3d& V1,
 	const TVector3d& V2,
 	const TVector3d& M,
-	const TVector3d& obsPoint);
+	const TVector3d& obsPoint,
+	const TVector3d& elemCentroid);
 
 #endif

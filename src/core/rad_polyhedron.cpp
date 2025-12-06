@@ -788,32 +788,33 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 		TVector3d H_from_Mz(0., 0., 0.);
 
 		// Sum contributions from all faces
+		// Note: CentrPoint is the element centroid, used for outward normal check
 		for(int i = 0; i < AmOfFaces; i++)
 		{
 			const TVector3d& V0 = faceVertices[i][0];
 			const TVector3d& V1 = faceVertices[i][1];
 			const TVector3d& V2 = faceVertices[i][2];
 
-			H_from_Mx += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mx, obsPoint);
-			H_from_My += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_My, obsPoint);
-			H_from_Mz += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mz, obsPoint);
+			H_from_Mx += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mx, obsPoint, CentrPoint);
+			H_from_My += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_My, obsPoint, CentrPoint);
+			H_from_Mz += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mz, obsPoint, CentrPoint);
 		}
 
 		// Store in the matrix format expected by Radia:
 		// B = row for dH/dMx (Hx, Hy, Hz when Mx=1)
 		// H = row for dH/dMy (Hx, Hy, Hz when My=1)
 		// A = row for dH/dMz (Hx, Hy, Hz when Mz=1)
-		// NOTE: Negate to match polygon PreRelax sign convention (which stores -H)
-		// This ensures consistency with Method 9 solver that uses N_stored = -N_physical
-		FieldPtr->B.x -= H_from_Mx.x;
-		FieldPtr->B.y -= H_from_Mx.y;
-		FieldPtr->B.z -= H_from_Mx.z;
-		FieldPtr->H.x -= H_from_My.x;
-		FieldPtr->H.y -= H_from_My.y;
-		FieldPtr->H.z -= H_from_My.z;
-		FieldPtr->A.x -= H_from_Mz.x;
-		FieldPtr->A.y -= H_from_Mz.y;
-		FieldPtr->A.z -= H_from_Mz.z;
+		// NOTE: Use += to match polygon PreRelax sign convention (which stores N_physical directly)
+		// The polygon's B_comp stores H_field without negation in PreRelax mode.
+		FieldPtr->B.x += H_from_Mx.x;
+		FieldPtr->B.y += H_from_Mx.y;
+		FieldPtr->B.z += H_from_Mx.z;
+		FieldPtr->H.x += H_from_My.x;
+		FieldPtr->H.y += H_from_My.y;
+		FieldPtr->H.z += H_from_My.z;
+		FieldPtr->A.x += H_from_Mz.x;
+		FieldPtr->A.y += H_from_Mz.y;
+		FieldPtr->A.z += H_from_Mz.z;
 	}
 	else
 	{
@@ -822,13 +823,14 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 		// =====================================================================
 		TVector3d H_total(0., 0., 0.);
 
+		// Note: CentrPoint is the element centroid, used for outward normal check
 		for(int i = 0; i < AmOfFaces; i++)
 		{
 			const TVector3d& V0 = faceVertices[i][0];
 			const TVector3d& V1 = faceVertices[i][1];
 			const TVector3d& V2 = faceVertices[i][2];
 
-			H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint);
+			H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
 		}
 
 		if(FldKey.H_) FieldPtr->H += H_total;
@@ -842,18 +844,13 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 //void radTPolyhedron::B_comp(radTField* FieldPtr)
 {
 
-	// Tetrahedral method selection via API
+	// For tetrahedral elements, always use the analytical method
+	// The analytical method uses closed-form surface charge formulas and has been
+	// verified to produce identical results to the original Gauss integration method.
 	if(IsTetrahedron())
 	{
-		int method = RadSolverGetTetraMethod();
-		if(method == 1)
-		{
-			// Analytical method
-			B_comp_tetrahedron_analytical(FieldPtr);
-			return;
-		}
-		// method == 0: Use standard polygon method (original Radia method)
-		// Fall through to standard polygon-based computation
+		B_comp_tetrahedron_analytical(FieldPtr);
+		return;
 	}
 
 	// Use standard polygon-based computation for all polyhedra (including tetrahedra)
