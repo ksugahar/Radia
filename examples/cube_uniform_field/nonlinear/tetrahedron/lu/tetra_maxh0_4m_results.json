@@ -1,0 +1,15 @@
+{
+  "element_type": "tetra",
+  "mesh_description": "maxh=0.4m",
+  "n_elements": 104,
+  "ndof": 312,
+  "H_ext": 50000.0,
+  "t_mesh": 0.0364,
+  "t_solve": 0.079,
+  "solver_method": 0,
+  "solver_name": "lu",
+  "converged": true,
+  "residual": 224.67,
+  "nonl_iterations": 184,
+  "M_avg_z": 237599.47
+}

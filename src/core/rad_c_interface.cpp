@@ -1853,19 +1853,6 @@ void PhysicalUnitsSet(const char* unitStr)
 
 //-------------------------------------------------------------------------
 
-void TetrahedronMethodSet(int method)
-{
-	if(method < 0 || method > 1)
-	{
-		rad.Send.ErrorMessage("Radia::Error999: Invalid tetrahedral method (use 0 or 1)");
-		return;
-	}
-	// Method is valid - this function is just a placeholder for validation
-	// Actual setting is done in RadSolverTetraMethod in radentry.cpp
-}
-
-//-------------------------------------------------------------------------
-
 //void DumpElem(int ElemKey, char* strFormat)
 //{
 //	rad.DumpElem(ElemKey, strFormat);

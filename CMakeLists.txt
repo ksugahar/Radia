@@ -66,6 +66,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_particle_trajectory.cpp   # Particle trajectory/dynamics
 	${CORE_DIR}/rad_rectangular_block.cpp     # Rectangular parallelepiped
 	${CORE_DIR}/rad_pyramid_msc.cpp           # MMM with MSC (pyramid elements)
+	${CORE_DIR}/rad_extruded_polygon_msc.cpp  # MSC extruded polygon (6 DOF hexahedra)
 	${CORE_DIR}/rad_relaxation_methods.cpp    # Relaxation methods
 	${CORE_DIR}/rad_subdivided_arc_current.cpp        # Subdivided arc with current
 	${CORE_DIR}/rad_subdivided_extruded_polygon.cpp   # Subdivided extruded polygon

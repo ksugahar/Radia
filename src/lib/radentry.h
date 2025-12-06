@@ -367,10 +367,6 @@ EXP int CALL RadObjCntSize(int* n, int cnt);
 */
 EXP int CALL RadObjCntStuf(int* Objs, int cnt);
 
-// Tetrahedral element method control
-EXP int CALL RadSolverTetraMethod(int method);
-int RadSolverGetTetraMethod();
-
 // Relaxation sub-interval control for LU decomposition solver
 EXP int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey);
 EXP int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
