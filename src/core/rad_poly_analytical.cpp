@@ -261,32 +261,41 @@ void RadAnalyticalFieldFromQuadCharge(
  *
  * This function computes the magnetic field from a triangular face with
  * surface charge density sigma = M dot n, using global coordinates only.
- * No local coordinate transformation is needed.
  *
- * @param V0, V1, V2  Triangle vertices in GLOBAL 3D coordinates
- * @param M           Magnetization vector (in global coordinates)
- * @param obsPoint    Observation point in GLOBAL 3D coordinates
- * @return            H field at observation point (in global coordinates)
+ * FIXED 2025-12-06: Rewritten to use RadAnalyticalFieldFromPolygonCharge
+ * which is the proven analytical formula used by the standard polygon method.
  *
- * Formula: H = (sigma/4pi) * Omega  where Omega is the solid angle
+ * FIXED 2025-12-06: Added outward normal check following ELF_MAGIC convention.
+ * If the computed normal points inward (toward element centroid), the surface
+ * charge sign is negated to ensure correct field direction.
  *
- * Reference: Lindholm 1984, "Three-Dimensional Magnetostatic Fields from
- *            Point-Matched Integral Equations with Linearly Varying
- *            Scalar Sources on a Triangular Grid"
+ * @param V0, V1, V2    Triangle vertices in GLOBAL 3D coordinates
+ * @param M             Magnetization vector (in global coordinates)
+ * @param obsPoint      Observation point in GLOBAL 3D coordinates
+ * @param elemCentroid  Element (tetrahedron) centroid for outward normal check
+ * @return              H field at observation point (in global coordinates)
  */
 TVector3d RadFieldFromTriangleFaceGlobal(
 	const TVector3d& V0,
 	const TVector3d& V1,
 	const TVector3d& V2,
 	const TVector3d& M,
-	const TVector3d& obsPoint)
+	const TVector3d& obsPoint,
+	const TVector3d& elemCentroid)
 {
-	const double PI4 = 4.0 * 3.14159265358979323846;
+	// =========================================================================
+	// Rewritten to use RadAnalyticalFieldFromPolygonCharge for correctness
+	// This ensures consistency with the working standard polygon method.
+	// =========================================================================
+	const double PI = 3.14159265358979323846;
+	const double ConstForH = 1.0 / (4.0 * PI);
 	const double EPS = 1.0e-15;
 
-	// Compute face normal from cross product (V1-V0) x (V2-V0)
+	// Compute face edges
 	TVector3d e1 = V1 - V0;
 	TVector3d e2 = V2 - V0;
+
+	// Compute face normal from cross product (V1-V0) x (V2-V0)
 	TVector3d normal;
 	normal.x = e1.y * e2.z - e1.z * e2.y;
 	normal.y = e1.z * e2.x - e1.x * e2.z;
@@ -297,168 +306,99 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 		return TVector3d(0., 0., 0.);  // Degenerate triangle
 	}
 
-	// Normalize
-	normal.x /= normalLen;
-	normal.y /= normalLen;
-	normal.z /= normalLen;
+	// Normalize to get CC (local Z-axis = face normal)
+	TVector3d CC;
+	CC.x = normal.x / normalLen;
+	CC.y = normal.y / normalLen;
+	CC.z = normal.z / normalLen;
 
 	// Surface charge density: sigma = M dot n
-	double sigma = M.x * normal.x + M.y * normal.y + M.z * normal.z;
+	// Note: The sign of sigma will be corrected below based on normal direction
+	double sigma = M.x * CC.x + M.y * CC.y + M.z * CC.z;
+
+	// =========================================================================
+	// ELF_MAGIC outward normal check:
+	// Compute face center and check if normal points outward from element centroid
+	// If normal · (faceCenter - elemCentroid) < 0, the normal points inward
+	// In that case, we negate the surface charge (NOT the normal itself).
+	// The coordinate system stays as-is, but the charge sign is corrected.
+	// =========================================================================
+	TVector3d faceCenter;
+	faceCenter.x = (V0.x + V1.x + V2.x) / 3.0;
+	faceCenter.y = (V0.y + V1.y + V2.y) / 3.0;
+	faceCenter.z = (V0.z + V1.z + V2.z) / 3.0;
+
+	TVector3d outwardVec;
+	outwardVec.x = faceCenter.x - elemCentroid.x;
+	outwardVec.y = faceCenter.y - elemCentroid.y;
+	outwardVec.z = faceCenter.z - elemCentroid.z;
+
+	double dotProduct = CC.x * outwardVec.x + CC.y * outwardVec.y + CC.z * outwardVec.z;
+
+	// If normal points inward, negate the surface charge
+	// (Following ELF_MAGIC convention - don't flip the coordinate system)
+	if(dotProduct < 0.0) {
+		sigma = -sigma;
+	}
 	if(std::abs(sigma) < EPS) {
 		return TVector3d(0., 0., 0.);  // No surface charge
 	}
 
-	// Vectors from each vertex to observation point (IMPORTANT: direction matters for sign!)
-	TVector3d r0 = obsPoint - V0;
-	TVector3d r1 = obsPoint - V1;
-	TVector3d r2 = obsPoint - V2;
-
-	double R0 = std::sqrt(r0.x*r0.x + r0.y*r0.y + r0.z*r0.z);
-	double R1 = std::sqrt(r1.x*r1.x + r1.y*r1.y + r1.z*r1.z);
-	double R2 = std::sqrt(r2.x*r2.x + r2.y*r2.y + r2.z*r2.z);
-
-	// Check for observation point at vertex
-	if(R0 < EPS || R1 < EPS || R2 < EPS) {
-		// Point is at or very near a vertex - use regularized value
-		return TVector3d(0., 0., 0.);
+	// Build local coordinate system: AA (local X), BB (local Y), CC (local Z = normal)
+	double e1Len = std::sqrt(e1.x*e1.x + e1.y*e1.y + e1.z*e1.z);
+	if(e1Len < EPS) {
+		return TVector3d(0., 0., 0.);  // Degenerate triangle
 	}
 
-	// ====================================================================
-	// Compute solid angle using Van Oosterom & Strackee formula
-	// Omega = 2 * atan2(numerator, denominator)
-	// numerator = r0 . (r1 x r2)
-	// denominator = R0*R1*R2 + (r0.r1)*R2 + (r0.r2)*R1 + (r1.r2)*R0
-	// ====================================================================
+	TVector3d AA;
+	AA.x = e1.x / e1Len;
+	AA.y = e1.y / e1Len;
+	AA.z = e1.z / e1Len;
 
-	// Cross product r1 x r2
-	TVector3d r1xr2;
-	r1xr2.x = r1.y * r2.z - r1.z * r2.y;
-	r1xr2.y = r1.z * r2.x - r1.x * r2.z;
-	r1xr2.z = r1.x * r2.y - r1.y * r2.x;
+	// BB = CC x AA (right-hand system)
+	TVector3d BB;
+	BB.x = CC.y * AA.z - CC.z * AA.y;
+	BB.y = CC.z * AA.x - CC.x * AA.z;
+	BB.z = CC.x * AA.y - CC.y * AA.x;
 
-	// Triple product: r0 . (r1 x r2)
-	double tripleProduct = r0.x * r1xr2.x + r0.y * r1xr2.y + r0.z * r1xr2.z;
+	// Reference point YY = V0 (first vertex)
+	TVector3d YY = V0;
 
-	// Dot products
-	double r0_r1 = r0.x * r1.x + r0.y * r1.y + r0.z * r1.z;
-	double r0_r2 = r0.x * r2.x + r0.y * r2.y + r0.z * r2.z;
-	double r1_r2 = r1.x * r2.x + r1.y * r2.y + r1.z * r2.z;
+	// Convert triangle vertices to 2D local coordinates
+	TVector2d local_V0(0.0, 0.0);
 
-	double denom = R0*R1*R2 + r0_r1*R2 + r0_r2*R1 + r1_r2*R0;
+	TVector3d d1 = V1 - V0;
+	TVector2d local_V1(
+		d1.x*AA.x + d1.y*AA.y + d1.z*AA.z,
+		d1.x*BB.x + d1.y*BB.y + d1.z*BB.z
+	);
 
-	double Omega = 2.0 * std::atan2(tripleProduct, denom);
+	TVector3d d2 = V2 - V0;
+	TVector2d local_V2(
+		d2.x*AA.x + d2.y*AA.y + d2.z*AA.z,
+		d2.x*BB.x + d2.y*BB.y + d2.z*BB.z
+	);
 
-	// ====================================================================
-	// H field contribution from solid angle
-	// For a uniformly charged triangle, H = -(sigma/4pi) * grad(Omega)
-	// For observation point NOT on the triangle plane:
-	//   H = (sigma/4pi) * Omega * n  (along normal direction)
-	// This is the contribution to H from surface charge.
-	// ====================================================================
+	// Prepare observation point and output vectors
+	std::vector<TVector3d> obs_points(1, obsPoint);
+	std::vector<TVector3d> field_result(1, TVector3d(0., 0., 0.));
 
-	// However, the correct formula for H from surface charge is more complex.
-	// Let's use the edge contribution formula (Lindholm approach):
-	//
-	// For each edge of the triangle, compute:
-	//   contribution = (sigma/4pi) * ln((R_start + R_end + L)/(R_start + R_end - L)) * (edge x rho)
-	// where L is edge length and rho is perpendicular from obs point to edge
+	// Weight: sigma / (4*pi)
+	double W = ConstForH * sigma;
 
-	// Simpler approach: use the gradient of scalar potential
-	// phi = -(sigma/4pi) * Omega
-	// H = -grad(phi) = (sigma/4pi) * grad(Omega)
-	//
-	// For a planar triangle, grad(Omega) has components both in-plane and out-of-plane.
-	// The closed-form expression is:
-	//   grad(Omega) = sum over edges of: (1/|r_cross|^2) * (r_cross) * angle_contribution
-	//
-	// A simpler result from the paper:
-	//   H_n = (sigma/4pi) * Omega  (normal component)
-	// But we need the full 3D vector.
+	// Create 2D vertex array for the triangle
+	std::vector<TVector2d> XY = {local_V0, local_V1, local_V2};
 
-	// Use the edge sum formula from ELF:
-	TVector3d H(0., 0., 0.);
+	// Call the proven analytical formula
+	RadAnalyticalFieldFromPolygonCharge(
+		AA, BB, CC, YY,
+		XY,
+		obs_points,
+		field_result,
+		W,
+		1,   // Element index (for error reporting)
+		3    // Triangle has 3 vertices
+	);
 
-	// Edge 0: V0 -> V1
-	{
-		TVector3d edge = V1 - V0;
-		double L = std::sqrt(edge.x*edge.x + edge.y*edge.y + edge.z*edge.z);
-		if(L > EPS) {
-			double Rsum = R0 + R1;
-			if(std::abs(Rsum - L) > EPS && std::abs(Rsum + L) > EPS) {
-				double logArg = (Rsum + L) / (Rsum - L);
-				if(logArg > EPS) {
-					double logVal = std::log(logArg);
-					// Cross product: edge x r0 gives perpendicular direction
-					TVector3d edgeCrossR0;
-					edgeCrossR0.x = edge.y * r0.z - edge.z * r0.y;
-					edgeCrossR0.y = edge.z * r0.x - edge.x * r0.z;
-					edgeCrossR0.z = edge.x * r0.y - edge.y * r0.x;
-					double factor = logVal / (L * L);
-					H.x += factor * edgeCrossR0.x;
-					H.y += factor * edgeCrossR0.y;
-					H.z += factor * edgeCrossR0.z;
-				}
-			}
-		}
-	}
-
-	// Edge 1: V1 -> V2
-	{
-		TVector3d edge = V2 - V1;
-		double L = std::sqrt(edge.x*edge.x + edge.y*edge.y + edge.z*edge.z);
-		if(L > EPS) {
-			double Rsum = R1 + R2;
-			if(std::abs(Rsum - L) > EPS && std::abs(Rsum + L) > EPS) {
-				double logArg = (Rsum + L) / (Rsum - L);
-				if(logArg > EPS) {
-					double logVal = std::log(logArg);
-					TVector3d edgeCrossR1;
-					edgeCrossR1.x = edge.y * r1.z - edge.z * r1.y;
-					edgeCrossR1.y = edge.z * r1.x - edge.x * r1.z;
-					edgeCrossR1.z = edge.x * r1.y - edge.y * r1.x;
-					double factor = logVal / (L * L);
-					H.x += factor * edgeCrossR1.x;
-					H.y += factor * edgeCrossR1.y;
-					H.z += factor * edgeCrossR1.z;
-				}
-			}
-		}
-	}
-
-	// Edge 2: V2 -> V0
-	{
-		TVector3d edge = V0 - V2;
-		double L = std::sqrt(edge.x*edge.x + edge.y*edge.y + edge.z*edge.z);
-		if(L > EPS) {
-			double Rsum = R2 + R0;
-			if(std::abs(Rsum - L) > EPS && std::abs(Rsum + L) > EPS) {
-				double logArg = (Rsum + L) / (Rsum - L);
-				if(logArg > EPS) {
-					double logVal = std::log(logArg);
-					TVector3d edgeCrossR2;
-					edgeCrossR2.x = edge.y * r2.z - edge.z * r2.y;
-					edgeCrossR2.y = edge.z * r2.x - edge.x * r2.z;
-					edgeCrossR2.z = edge.x * r2.y - edge.y * r2.x;
-					double factor = logVal / (L * L);
-					H.x += factor * edgeCrossR2.x;
-					H.y += factor * edgeCrossR2.y;
-					H.z += factor * edgeCrossR2.z;
-				}
-			}
-		}
-	}
-
-	// Add normal component from solid angle
-	double HnormalMag = Omega;
-	H.x += HnormalMag * normal.x;
-	H.y += HnormalMag * normal.y;
-	H.z += HnormalMag * normal.z;
-
-	// Scale by sigma/(4*pi)
-	double scale = sigma / PI4;
-	H.x *= scale;
-	H.y *= scale;
-	H.z *= scale;
-
-	return H;
+	return field_result[0];
 }
