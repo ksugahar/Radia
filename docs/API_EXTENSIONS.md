@@ -201,7 +201,7 @@ rad.RlxMan(intrc, 5, 100, 1.0)
 - Must be called **after** `rad.RlxPre()` and **before** solver methods
 - Can be called multiple times to define different groups
 - Overlapping intervals: behavior is undefined (avoid)
-- See [benchmark results](../examples/solver_time_evaluation/README.md) for scaling analysis
+- See [benchmark results](../examples/solver_benchmarks/README.md) for scaling analysis
 
 ---
 
@@ -345,7 +345,7 @@ print(f"Gauss-Seidel: {t_solver*1000:.2f} ms")
 
 **Performance Comparison**:
 
-See detailed benchmark results in [`examples/solver_time_evaluation/README.md`](../examples/solver_time_evaluation/README.md).
+See detailed benchmark results in [`examples/solver_benchmarks/README.md`](../examples/solver_benchmarks/README.md).
 
 **Summary**:
 - **Small N (< 64)**: LU and GS comparable
@@ -361,7 +361,7 @@ See detailed benchmark results in [`examples/solver_time_evaluation/README.md`](
 
 **Related Documentation**:
 - Original ESRF Methods 0-4: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
-- Benchmark analysis: [`examples/solver_time_evaluation/README.md`](../examples/solver_time_evaluation/README.md)
+- Benchmark analysis: [`examples/solver_benchmarks/README.md`](../examples/solver_benchmarks/README.md)
 
 ---
 
@@ -722,7 +722,7 @@ B_direct = radia_ngsolve.RadiaField(magnet, 'b')
 
 #### Performance Comparison
 
-See [`examples/Radia_to_NGSolve_CoefficientFunction_A/README.md`](../examples/Radia_to_NGSolve_CoefficientFunction_A/README.md) for detailed benchmarks.
+See [`examples/ngsolve_integration/README.md`](../examples/ngsolve_integration/README.md) for detailed benchmarks.
 
 **Typical speedup with H-matrix** (N > 500):
 - Field evaluation: 2-10× faster
@@ -761,7 +761,7 @@ See [`examples/Radia_to_NGSolve_CoefficientFunction_A/README.md`](../examples/Ra
    https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
 2. **Benchmark Results**
-   [`examples/solver_time_evaluation/README.md`](../examples/solver_time_evaluation/README.md)
+   [`examples/solver_benchmarks/README.md`](../examples/solver_benchmarks/README.md)
 
 3. **NGSolve Integration Guide**
    [`docs/NGSOLVE_USAGE_GUIDE.md`](NGSOLVE_USAGE_GUIDE.md)

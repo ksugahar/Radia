@@ -1021,7 +1021,7 @@ rad.Solve(mag_obj, 0.0001, 10000)
    - [API_EXTENSIONS.md](API_EXTENSIONS.md) - Detailed documentation of custom extensions
 
 3. **Examples**
-   - [`examples/solver_time_evaluation/README.md`](../examples/solver_time_evaluation/README.md) - Solver benchmarks
+   - [`examples/solver_benchmarks/README.md`](../examples/solver_benchmarks/README.md) - Solver benchmarks
    - [`examples/simple_problems/`](../examples/simple_problems/) - Basic examples
    - [`examples/complex_coil_geometry/`](../examples/complex_coil_geometry/) - Complex geometries
 
