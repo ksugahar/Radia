@@ -269,6 +269,9 @@ void RadAnalyticalFieldFromQuadCharge(
  * If the computed normal points inward (toward element centroid), the surface
  * charge sign is negated to ensure correct field direction.
  *
+ * FIXED 2025-12-07: Basis vector construction now uses ELF_MAGIC triple cross
+ * product method to ensure consistent orthonormal basis across all triangles.
+ *
  * @param V0, V1, V2    Triangle vertices in GLOBAL 3D coordinates
  * @param M             Magnetization vector (in global coordinates)
  * @param obsPoint      Observation point in GLOBAL 3D coordinates
@@ -319,7 +322,7 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	// =========================================================================
 	// ELF_MAGIC outward normal check:
 	// Compute face center and check if normal points outward from element centroid
-	// If normal · (faceCenter - elemCentroid) < 0, the normal points inward
+	// If normal . (faceCenter - elemCentroid) < 0, the normal points inward
 	// In that case, we negate the surface charge (NOT the normal itself).
 	// The coordinate system stays as-is, but the charge sign is corrected.
 	// =========================================================================
@@ -336,7 +339,7 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	double dotProduct = CC.x * outwardVec.x + CC.y * outwardVec.y + CC.z * outwardVec.z;
 
 	// If normal points inward, negate the surface charge
-	// (Following ELF_MAGIC convention - don't flip the coordinate system)
+	// (Following ELF_MAGIC convention - do not flip the coordinate system)
 	if(dotProduct < 0.0) {
 		sigma = -sigma;
 	}
@@ -344,22 +347,66 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 		return TVector3d(0., 0., 0.);  // No surface charge
 	}
 
-	// Build local coordinate system: AA (local X), BB (local Y), CC (local Z = normal)
-	double e1Len = std::sqrt(e1.x*e1.x + e1.y*e1.y + e1.z*e1.z);
-	if(e1Len < EPS) {
+	// =========================================================================
+	// Build local coordinate system using ELF_MAGIC's triple cross product method
+	// This is the exact legacy formulation from moment_tetra_sum (lines 351-365)
+	//
+	// ELF_MAGIC constructs basis as follows:
+	//   vert_rel(2) = v2 - v1 (edge from v1 to v2)
+	//   vert_rel(3) = v3 - v1 (edge from v1 to v3)
+	//   basis_a = vert_rel(3)
+	//   basis_b = vert_rel(3) - vert_rel(2) * 0.5
+	//   Then triple cross product to orthonormalize:
+	//     basis_c = basis_a x basis_b (normalized)
+	//     basis_a = basis_b x basis_c (normalized)
+	//     basis_b = basis_c x basis_a (normalized)
+	// =========================================================================
+
+	// ELF_MAGIC formulation: basis_a = e2, basis_b = e2 - e1*0.5
+	TVector3d basis_a = e2;
+	TVector3d basis_b;
+	basis_b.x = e2.x - e1.x * 0.5;
+	basis_b.y = e2.y - e1.y * 0.5;
+	basis_b.z = e2.z - e1.z * 0.5;
+
+	// Triple cross product #1: basis_c = basis_a x basis_b (normalized)
+	TVector3d basis_c;
+	basis_c.x = basis_a.y * basis_b.z - basis_a.z * basis_b.y;
+	basis_c.y = basis_a.z * basis_b.x - basis_a.x * basis_b.z;
+	basis_c.z = basis_a.x * basis_b.y - basis_a.y * basis_b.x;
+	double cLen = std::sqrt(basis_c.x*basis_c.x + basis_c.y*basis_c.y + basis_c.z*basis_c.z);
+	if(cLen < EPS) {
 		return TVector3d(0., 0., 0.);  // Degenerate triangle
 	}
+	basis_c.x /= cLen; basis_c.y /= cLen; basis_c.z /= cLen;
 
-	TVector3d AA;
-	AA.x = e1.x / e1Len;
-	AA.y = e1.y / e1Len;
-	AA.z = e1.z / e1Len;
+	// Triple cross product #2: basis_a = basis_b x basis_c (normalized)
+	TVector3d new_basis_a;
+	new_basis_a.x = basis_b.y * basis_c.z - basis_b.z * basis_c.y;
+	new_basis_a.y = basis_b.z * basis_c.x - basis_b.x * basis_c.z;
+	new_basis_a.z = basis_b.x * basis_c.y - basis_b.y * basis_c.x;
+	double aLen = std::sqrt(new_basis_a.x*new_basis_a.x + new_basis_a.y*new_basis_a.y + new_basis_a.z*new_basis_a.z);
+	if(aLen < EPS) {
+		return TVector3d(0., 0., 0.);  // Degenerate triangle
+	}
+	new_basis_a.x /= aLen; new_basis_a.y /= aLen; new_basis_a.z /= aLen;
+	basis_a = new_basis_a;
 
-	// BB = CC x AA (right-hand system)
-	TVector3d BB;
-	BB.x = CC.y * AA.z - CC.z * AA.y;
-	BB.y = CC.z * AA.x - CC.x * AA.z;
-	BB.z = CC.x * AA.y - CC.y * AA.x;
+	// Triple cross product #3: basis_b = basis_c x basis_a (normalized)
+	TVector3d new_basis_b;
+	new_basis_b.x = basis_c.y * basis_a.z - basis_c.z * basis_a.y;
+	new_basis_b.y = basis_c.z * basis_a.x - basis_c.x * basis_a.z;
+	new_basis_b.z = basis_c.x * basis_a.y - basis_c.y * basis_a.x;
+	double bLen = std::sqrt(new_basis_b.x*new_basis_b.x + new_basis_b.y*new_basis_b.y + new_basis_b.z*new_basis_b.z);
+	if(bLen < EPS) {
+		return TVector3d(0., 0., 0.);  // Degenerate triangle
+	}
+	new_basis_b.x /= bLen; new_basis_b.y /= bLen; new_basis_b.z /= bLen;
+	basis_b = new_basis_b;
+
+	// AA = local X-axis, BB = local Y-axis
+	TVector3d AA = basis_a;
+	TVector3d BB = basis_b;
 
 	// Reference point YY = V0 (first vertex)
 	TVector3d YY = V0;
@@ -391,7 +438,7 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 
 	// Call the proven analytical formula
 	RadAnalyticalFieldFromPolygonCharge(
-		AA, BB, CC, YY,
+		AA, BB, basis_c, YY,
 		XY,
 		obs_points,
 		field_result,

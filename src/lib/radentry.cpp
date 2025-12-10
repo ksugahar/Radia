@@ -106,7 +106,6 @@ void CompCriterium( double, double, double, double, double,double );
 void CompPrecisionOpt( const char*, const char*, const char*, const char*, const char*, const char*, const char*, const char* );
 void PhysicalUnits();
 void PhysicalUnitsSet(const char*);
-void TetrahedronMethodSet(int);
 void RandomizationOnOrOff( char* );
 void TolForConvergence( double, double, double );
 void ShimSignature( int, char*, double,double,double, double,double,double, double,double,double, int, double,double,double );
@@ -154,6 +153,10 @@ extern radTIOBuffer ioBuffer;
 
 int (*pgRadYieldExternFunc)() = 0;
 
+//-------------------------------------------------------------------------
+// Note: Tetrahedral method selection was removed (2025-12-09).
+// Dipole-dipole method was found numerically unstable.
+// Surface charge (MSC) method is always used - same as ELF_MAGIC production.
 //-------------------------------------------------------------------------
 
 int CALL RadUtiYeldFuncSet(int (*pExtFunc)())

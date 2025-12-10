@@ -18,8 +18,9 @@
 #include "rad_serialization.h"
 #include "rad_polyhedron.h"
 #include <array>
-#include <cstdlib>  // std::getenv
-#include <string>   // std::string
+#include <cstdlib>    // std::getenv
+#include <string>     // std::string
+#include <stdexcept>  // std::runtime_error
 #include "rad_graphics_3d.h"
 #include "rad_subdivided_polyhedron.h"
 #include "rad_geometry_3d_aux.h"
@@ -840,11 +841,130 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
+void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
+{
+	// =========================================================================
+	// GLOBAL COORDINATE METHOD for hexahedral elements (6 quadrilateral faces)
+	// =========================================================================
+	// This method computes fields using GLOBAL coordinates only, following ELF_MAGIC.
+	// Each quadrilateral face is split into 2 triangles for computation.
+	//
+	// For each quadrilateral face with vertices [V0, V1, V2, V3]:
+	//   - Triangle 1: V0, V1, V2
+	//   - Triangle 2: V0, V2, V3
+	// This is the same diagonal split used by ELF_MAGIC.
+	//
+	// For PreRelax mode (interaction matrix construction):
+	//   - Compute dH/dM for all 3 unit magnetization directions
+	//
+	// For Normal mode:
+	//   - Compute H field from current magnetization
+
+	radTFieldKey& FldKey = FieldPtr->FieldKey;
+	TVector3d& obsPoint = FieldPtr->P;
+
+	// Get face vertices in GLOBAL coordinates
+	// For a hexahedron, we have 6 quadrilateral faces (4 vertices each)
+	std::vector<std::array<TVector3d, 4>> faceVertices(AmOfFaces);
+	for(int i = 0; i < AmOfFaces; i++)
+	{
+		radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+		radTPolygon* pgn = hpt.PgnHndl.rep;
+		radTrans* tr = hpt.TransHndl.rep;
+
+		// Get 2D vertices from polygon and transform to global 3D
+		const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+		if(verts2d.size() < 4) continue;  // Need 4 vertices for quad face
+
+		// Transform each vertex: local 2D (x, y, CoordZ) -> global 3D
+		faceVertices[i][0] = tr->TrPoint(TVector3d(verts2d[0].x, verts2d[0].y, pgn->CoordZ));
+		faceVertices[i][1] = tr->TrPoint(TVector3d(verts2d[1].x, verts2d[1].y, pgn->CoordZ));
+		faceVertices[i][2] = tr->TrPoint(TVector3d(verts2d[2].x, verts2d[2].y, pgn->CoordZ));
+		faceVertices[i][3] = tr->TrPoint(TVector3d(verts2d[3].x, verts2d[3].y, pgn->CoordZ));
+	}
+
+	if(FldKey.PreRelax_)
+	{
+		// =====================================================================
+		// PreRelax mode: Compute interaction matrix coefficients
+		// =====================================================================
+		TVector3d unit_Mx(1., 0., 0.);
+		TVector3d unit_My(0., 1., 0.);
+		TVector3d unit_Mz(0., 0., 1.);
+
+		TVector3d H_from_Mx(0., 0., 0.);
+		TVector3d H_from_My(0., 0., 0.);
+		TVector3d H_from_Mz(0., 0., 0.);
+
+		// Sum contributions from all faces (split each quad into 2 triangles)
+		for(int i = 0; i < AmOfFaces; i++)
+		{
+			const TVector3d& V0 = faceVertices[i][0];
+			const TVector3d& V1 = faceVertices[i][1];
+			const TVector3d& V2 = faceVertices[i][2];
+			const TVector3d& V3 = faceVertices[i][3];
+
+			// Triangle 1: V0, V1, V2
+			H_from_Mx += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mx, obsPoint, CentrPoint);
+			H_from_My += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_My, obsPoint, CentrPoint);
+			H_from_Mz += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mz, obsPoint, CentrPoint);
+
+			// Triangle 2: V0, V2, V3
+			H_from_Mx += RadFieldFromTriangleFaceGlobal(V0, V2, V3, unit_Mx, obsPoint, CentrPoint);
+			H_from_My += RadFieldFromTriangleFaceGlobal(V0, V2, V3, unit_My, obsPoint, CentrPoint);
+			H_from_Mz += RadFieldFromTriangleFaceGlobal(V0, V2, V3, unit_Mz, obsPoint, CentrPoint);
+		}
+
+		// Store in the matrix format expected by Radia
+		FieldPtr->B.x += H_from_Mx.x;
+		FieldPtr->B.y += H_from_Mx.y;
+		FieldPtr->B.z += H_from_Mx.z;
+		FieldPtr->H.x += H_from_My.x;
+		FieldPtr->H.y += H_from_My.y;
+		FieldPtr->H.z += H_from_My.z;
+		FieldPtr->A.x += H_from_Mz.x;
+		FieldPtr->A.y += H_from_Mz.y;
+		FieldPtr->A.z += H_from_Mz.z;
+	}
+	else
+	{
+		// =====================================================================
+		// Normal mode: Compute actual H field from current magnetization
+		// =====================================================================
+		TVector3d H_total(0., 0., 0.);
+
+		for(int i = 0; i < AmOfFaces; i++)
+		{
+			const TVector3d& V0 = faceVertices[i][0];
+			const TVector3d& V1 = faceVertices[i][1];
+			const TVector3d& V2 = faceVertices[i][2];
+			const TVector3d& V3 = faceVertices[i][3];
+
+			// Triangle 1: V0, V1, V2
+			H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
+			// Triangle 2: V0, V2, V3
+			H_total += RadFieldFromTriangleFaceGlobal(V0, V2, V3, Magn, obsPoint, CentrPoint);
+		}
+
+		if(FldKey.H_) FieldPtr->H += H_total;
+		if(FldKey.B_) FieldPtr->B += H_total;
+	}
+}
+
+//-------------------------------------------------------------------------
+
 void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 //void radTPolyhedron::B_comp(radTField* FieldPtr)
 {
+	// =========================================================================
+	// Dispatch to specialized MSC methods based on element type
+	// =========================================================================
+	// Supported element types:
+	// - Tetrahedron: 4 triangular faces (AmOfFaces == 4)
+	// - Hexahedron: 6 quadrilateral faces (AmOfFaces == 6)
+	// =========================================================================
 
-	// For tetrahedral elements, always use the analytical method
+	// For tetrahedral elements, use the analytical MSC method
 	// The analytical method uses closed-form surface charge formulas and has been
 	// verified to produce identical results to the original Gauss integration method.
 	if(IsTetrahedron())
@@ -852,6 +972,19 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 		B_comp_tetrahedron_analytical(FieldPtr);
 		return;
 	}
+
+	// For hexahedral elements (6 quadrilateral faces), use the MSC method
+	if(IsHexahedron())
+	{
+		B_comp_hexahedron_MSC(FieldPtr);
+		return;
+	}
+
+	// Unsupported polyhedron type - throw error
+	throw std::runtime_error("Unsupported polyhedron type: only tetrahedra (4 faces) and hexahedra (6 faces) are supported. AmOfFaces=" + std::to_string(AmOfFaces));
+
+	// NOTE: The following code is retained for backward compatibility but will not be reached
+	// for tetra/hexa elements. It may be needed for other polyhedron types in the future.
 
 	// Use standard polygon-based computation for all polyhedra (including tetrahedra)
 	TVector3d Zero(0.,0.,0.);
