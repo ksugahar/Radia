@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.10] - 2025-12-10
+
+### Added
+
+- **NGSolve Integration Documentation**
+  - Documented RadiaField coordinate transformation parameters (origin, u_axis, v_axis, w_axis)
+  - Added detailed Coordinate Transformation section to NGSOLVE_INTEGRATION.md
+  - Added Cache Methods documentation (PrepareCache, ClearCache, GetCacheStats)
+  - New example scripts:
+    - `demo_basic_field.py` - Basic RadiaField usage
+    - `demo_coordinate_transform.py` - Coordinate transformation examples
+    - `test_unit_conversion.py` - Unit conversion tests
+
+### Fixed
+
+- **Documentation Link Fixes**
+  - Fixed broken links: `solver_time_evaluation` -> `solver_benchmarks`
+  - Fixed broken links: `Radia_to_NGSolve_CoefficientFunction_A` -> `ngsolve_integration`
+  - Fixed broken links: `02_EMPY_Field` -> `examples/ngsolve_integration`
+  - Fixed file path: `src/python/radia_ngsolve.cpp` -> `src/radia/radia_ngsolve.cpp`
+
 ## [1.3.9] - 2025-12-05
 
 ### Added
