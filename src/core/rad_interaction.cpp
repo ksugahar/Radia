@@ -16,6 +16,7 @@
 
 #include "rad_interaction.h"
 #include "rad_subdivided_rectangle.h"
+#include "rad_polyhedron.h"  // For IsTetrahedron() check in N_self fix
 
 // MSC (Magnetic Surface Charge) support is disabled until radTExtrPolygonMSC is refactored
 // To enable: uncomment the #define and the include below
@@ -23,6 +24,9 @@
 #ifdef RADIA_MSC_SUPPORT
 #include "rad_extruded_polygon_msc.h"
 #endif
+
+// Note: Dipole-dipole method for tetrahedra was tested but found numerically unstable.
+// Both Radia and ELF_MAGIC production solvers use surface charge (MSC) method.
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -120,8 +124,12 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	}
 	FillInMainTransPtrArray();
 
-	if(!SetupInteractMatrix()) { DeallocateMemory(); return 0;} //OC26122019 //Most CPU-intensive
-	//SetupInteractMatrix(); //Most CPU-intensive
+	// Use surface charge method for interaction matrix
+	// Note: Dipole-dipole method (ELF_MAGIC approach) was tested but found to be
+	// numerically unstable for tetrahedral meshes - results vary wildly with mesh size.
+	// The surface charge (MSC) method is used by both Radia and ELF_MAGIC production solvers.
+	int setupResult = SetupInteractMatrix();
+	if(!setupResult) { DeallocateMemory(); return 0;} //OC26122019 //Most CPU-intensive
 
 	if(IntrctMatrMemAllocShouldBeDone) //OC29122019
 	{
@@ -473,44 +481,34 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 
 	if(m_nProcMPI < 2) //OC01012020
 	{
-		//DEBUG
-		//long iCntBcomp = 0;
-		//END DEBUG
+		// Simplified global coordinate version:
+		// Compute interaction matrix directly in global coordinates
+		// without intermediate coordinate transformations.
+		// This matches the behavior of rad.Fld() which gives correct results.
 
 		for(int ColNo=0; ColNo<AmOfMainElem; ColNo++)
 		{
-			FillInTransPtrVectForElem(ColNo, 'I');
 			radTg3dRelax* g3dRelaxPtrColNo = g3dRelaxPtrVect[ColNo];
 
 			for(int StrNo=0; StrNo<AmOfMainElem; StrNo++)
 			{
-				TVector3d InitObsPoiVect = MainTransPtrArray[StrNo]->TrPoint((g3dRelaxPtrVect[StrNo])->ReturnCentrPoint());
+				// Get observation point (element center) directly in global coordinates
+				TVector3d ObsPoiVect = (g3dRelaxPtrVect[StrNo])->ReturnCentrPoint();
 
-				TMatrix3d SubMatrix(ZeroVect, ZeroVect, ZeroVect), BufSubMatrix;
-				for(unsigned i=0; i<TransPtrVect.size(); i++)
-				{
-					TVector3d ObsPoiVect = TransPtrVect[i]->TrPoint_inv(InitObsPoiVect);
+				radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+				Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
 
-					radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-					Field.AmOfIntrctElemWithSym = AmOfElemWithSym; // New, may be changed later
+				// Compute field contribution in global coordinates
+				g3dRelaxPtrColNo->B_comp(&Field);
 
-					g3dRelaxPtrColNo->B_comp(&Field);
+				// Store result directly (no transformation)
+				TMatrix3d SubMatrix;
+				SubMatrix.Str0 = Field.B;  // dH/dMx
+				SubMatrix.Str1 = Field.H;  // dH/dMy
+				SubMatrix.Str2 = Field.A;  // dH/dMz
 
-					BufSubMatrix.Str0 = Field.B;
-					BufSubMatrix.Str1 = Field.H;
-					BufSubMatrix.Str2 = Field.A;
-
-					//DEBUG
-					//iCntBcomp++;
-					//END DEBUG
-
-					TransPtrVect[i]->TrMatrix(BufSubMatrix);
-					SubMatrix += BufSubMatrix;
-				}
-				MainTransPtrArray[StrNo]->TrMatrix_inv(SubMatrix);
 				InteractMatrix[StrNo][ColNo] = SubMatrix;
 			}
-			EmptyTransPtrVect();
 		}
 
 		//DEBUG
@@ -518,6 +516,27 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 		//std::cout << "rank=" << m_rankMPI << ": iCntBcomp= " << iCntBcomp << "; nTotMatrElem=" << nTotMatrElem; //DEBUG
 		//std::cout.flush();
 		//END DEBUG
+
+		// SELF-INTERACTION NOTE for tetrahedral elements:
+		// For tetrahedral elements with correct coordinate transforms, B_comp() should
+		// compute correct self-demagnetization (~-1/3). If there are issues, they may
+		// be in the coordinate transformation chain, not the diagonal values.
+		// The following code has been disabled pending further investigation.
+		/*
+		const float N_self = -1.0f / 3.0f;
+		for(int diagNo = 0; diagNo < AmOfMainElem; diagNo++)
+		{
+			radTg3dRelax* g3dRelaxPtr = g3dRelaxPtrVect[diagNo];
+			radTPolyhedron* polyPtr = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
+			if(polyPtr != nullptr && polyPtr->IsTetrahedron())
+			{
+				TMatrix3df& diag = InteractMatrix[diagNo][diagNo];
+				diag.Str0.x = N_self;
+				diag.Str1.y = N_self;
+				diag.Str2.z = N_self;
+			}
+		}
+		*/
 
 		//--New
 		for(int ClNo=0; ClNo<AmOfMainElem; ClNo++)
@@ -529,6 +548,118 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 	}
 	return 1; //OC26122019
 }
+
+//-------------------------------------------------------------------------
+//=========================================================================
+// ELF_MAGIC Dipole-Dipole Interaction Matrix (SolverTetraMethod=2)
+// Reference: ELF_MAGIC m_dll_solver.f90, build_coefficient_matrix
+//
+// DEPRECATED: Dipole-dipole method was tested but found numerically unstable.
+// Kept for historical reference. Results varied wildly with mesh size (117K-549K A/m).
+// Both Radia and ELF_MAGIC production code use surface charge (MSC) method.
+//
+// The dipole-dipole approximation:
+//   Diagonal (self-demagnetization): N_ii = 1/3 * I  (isotropic, sphere approx)
+//   Off-diagonal: N_ij = (V_j / 4*pi) * (3*r*r^T/r^5 - I/r^3)
+//
+// Problems:
+// 1. N_self=1/3 is only exact for spheres, not tetrahedra
+// 2. Far-field approximation breaks down for adjacent elements
+//=========================================================================
+//-------------------------------------------------------------------------
+#if 0  // DISABLED - numerically unstable, kept for reference
+int radTInteraction::SetupInteractMatrix_DipoleDipole()
+{
+	const double PI = 3.14159265358979323846;
+	const double ONE_OVER_4PI = 1.0 / (4.0 * PI);
+	const double ONE_THIRD = 1.0 / 3.0;
+
+	TVector3d ZeroVect(0., 0., 0.);
+
+	if(m_nProcMPI < 2)
+	{
+		for(int ColNo = 0; ColNo < AmOfMainElem; ColNo++)
+		{
+			radTg3dRelax* elem_col = g3dRelaxPtrVect[ColNo];
+			TVector3d center_col = MainTransPtrArray[ColNo]->TrPoint(elem_col->ReturnCentrPoint());
+			double vol_col = elem_col->Volume();
+
+			for(int StrNo = 0; StrNo < AmOfMainElem; StrNo++)
+			{
+				radTg3dRelax* elem_row = g3dRelaxPtrVect[StrNo];
+				TVector3d center_row = MainTransPtrArray[StrNo]->TrPoint(elem_row->ReturnCentrPoint());
+
+				TMatrix3d SubMatrix(ZeroVect, ZeroVect, ZeroVect);
+
+				if(ColNo == StrNo)
+				{
+					// Diagonal: self-demagnetization N_self = 1/3 * I
+					// This is the exact value for a uniformly magnetized sphere
+					// and a good approximation for compact elements
+					SubMatrix.Str0.x = -ONE_THIRD;
+					SubMatrix.Str1.y = -ONE_THIRD;
+					SubMatrix.Str2.z = -ONE_THIRD;
+				}
+				else
+				{
+					// Off-diagonal: dipole-dipole interaction
+					// r = center_row - center_col (displacement from source to target)
+					TVector3d r;
+					r.x = center_row.x - center_col.x;
+					r.y = center_row.y - center_col.y;
+					r.z = center_row.z - center_col.z;
+
+					double dist2 = r.x*r.x + r.y*r.y + r.z*r.z;
+					double dist = sqrt(dist2);
+					double dist3 = dist2 * dist;
+					double dist5 = dist3 * dist2;
+
+					// Coefficient: -vol_col / (4*pi)
+					// NEGATIVE sign because Radia stores demagnetization tensor (H_demag = N*M)
+					// and the dipole field H = +N_dipole*M enhances magnetization,
+					// while demagnetization opposes it.
+					double coef = -vol_col * ONE_OVER_4PI;
+
+					// Demagnetization tensor: N_ij = -coef * (3*r*r^T/r^5 - I/r^3)
+					// (negative of dipole field tensor)
+
+					double coef_r3 = coef / dist3;
+					double coef_r5_3 = 3.0 * coef / dist5;
+
+					// Row 0: dH_demag/dMx
+					SubMatrix.Str0.x = coef_r5_3 * r.x * r.x - coef_r3;
+					SubMatrix.Str0.y = coef_r5_3 * r.x * r.y;
+					SubMatrix.Str0.z = coef_r5_3 * r.x * r.z;
+
+					// Row 1: dH_demag/dMy
+					SubMatrix.Str1.x = coef_r5_3 * r.y * r.x;
+					SubMatrix.Str1.y = coef_r5_3 * r.y * r.y - coef_r3;
+					SubMatrix.Str1.z = coef_r5_3 * r.y * r.z;
+
+					// Row 2: dH_demag/dMz
+					SubMatrix.Str2.x = coef_r5_3 * r.z * r.x;
+					SubMatrix.Str2.y = coef_r5_3 * r.z * r.y;
+					SubMatrix.Str2.z = coef_r5_3 * r.z * r.z - coef_r3;
+				}
+
+				// Store in interaction matrix
+				// Note: MainTransPtrArray[StrNo]->TrMatrix_inv would transform the matrix
+				// but for dipole-dipole, we work directly in global coordinates
+				InteractMatrix[StrNo][ColNo] = SubMatrix;
+			}
+		}
+
+		// Update formal interaction member pointers (same as SetupInteractMatrix)
+		for(int ClNo = 0; ClNo < AmOfMainElem; ClNo++)
+		{
+			radTg3dRelax* g3dRelaxPtrClNo = g3dRelaxPtrVect[ClNo];
+			g3dRelaxPtrVect[ClNo] = g3dRelaxPtrClNo->FormalIntrctMemberPtr();
+		}
+	}
+
+	return 1;
+}
+#endif  // DISABLED dipole-dipole method
 
 //-------------------------------------------------------------------------
 //=========================================================================

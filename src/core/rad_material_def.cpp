@@ -617,6 +617,8 @@ void radTNonlinearIsotropMaterial::CheckAndCorrect_dMdH(TVector2d* ArrayHM, doub
 //double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH)
 double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH, TVector2d* ArrayHM, double* dMdH, int LenArrayHM)
 {
+	// Use LINEAR interpolation (like ELF_MAGIC) instead of cubic
+	// Cubic interpolation can cause overshoot/undershoot in nonlinear regions
 	TVector2d *tHM = ArrayHM;
 	int Indx = 0;
 	for(int i=0; i<LenArrayHM; i++)
@@ -624,10 +626,10 @@ double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH, TVector2d*
 		if(tHM->x > AbsH) break;
 		tHM++; Indx++;
 	}
-	tHM--; Indx--; 
+	tHM--; Indx--;
 
 	if(Indx < 0) return ArrayHM->y;
-	if(Indx >= (LenArrayHM - 1)) 
+	if(Indx >= (LenArrayHM - 1))
 	{
 		TVector2d *pHM = ArrayHM + (LenArrayHM - 1);
 
@@ -635,13 +637,11 @@ double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH, TVector2d*
 		return pHM->y + Arg*dMdH[LenArrayHM - 1];
 	}
 
-	double Arg = AbsH - tHM->x;
-	double Step = (tHM + 1)->x - tHM->x;
-	double f1 = tHM->y, f2 = (tHM + 1)->y;
-	double fpr1 = dMdH[Indx], fpr2 = dMdH[Indx + 1];
-	double a[4];
-	CubPln(Step, f1, f2, fpr1, fpr2, a);
-	return a[0] + Arg*(a[1] + Arg*(a[2] + Arg*a[3]));
+	// Linear interpolation: M = M1 + (M2 - M1) * (H - H1) / (H2 - H1)
+	double H1 = tHM->x, H2 = (tHM + 1)->x;
+	double M1 = tHM->y, M2 = (tHM + 1)->y;
+	double t = (AbsH - H1) / (H2 - H1);
+	return M1 + t * (M2 - M1);
 }
 
 //-------------------------------------------------------------------------
@@ -649,6 +649,8 @@ double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH, TVector2d*
 //double radTNonlinearIsotropMaterial::AbsHvsAbsM_Interpol(double AbsM)
 double radTNonlinearIsotropMaterial::AbsHvsAbsM_Interpol(double AbsM, TVector2d* ArrayHM, double* dMdH, int LenArrayHM)
 {
+	// Use LINEAR interpolation (like ELF_MAGIC) instead of cubic
+	// Cubic interpolation can cause overshoot/undershoot in nonlinear regions
 	TVector2d *tHM = ArrayHM;
 	int Indx = 0;
 	for(int i=0; i<LenArrayHM; i++)
@@ -656,19 +658,16 @@ double radTNonlinearIsotropMaterial::AbsHvsAbsM_Interpol(double AbsM, TVector2d*
 		if(tHM->y > AbsM) break;
 		tHM++; Indx++;
 	}
-	tHM--; Indx--; 
+	tHM--; Indx--;
 
 	if(Indx < 0) return ArrayHM->x;
 	if(Indx >= (LenArrayHM - 1)) return ArrayHM[LenArrayHM - 1].x;
 
-	double Arg = AbsM - tHM->y;
-	double Step = (tHM + 1)->y - tHM->y;
-	double f1 = tHM->x, f2 = (tHM + 1)->x;
-	double fpr1 = 1./dMdH[Indx], fpr2 = 1./dMdH[Indx + 1];
-
-	double a[4];
-	CubPln(Step, f1, f2, fpr1, fpr2, a);
-	return a[0] + Arg*(a[1] + Arg*(a[2] + Arg*a[3]));
+	// Linear interpolation: H = H1 + (H2 - H1) * (M - M1) / (M2 - M1)
+	double M1 = tHM->y, M2 = (tHM + 1)->y;
+	double H1 = tHM->x, H2 = (tHM + 1)->x;
+	double t = (AbsM - M1) / (M2 - M1);
+	return H1 + t * (H2 - H1);
 }
 
 //-------------------------------------------------------------------------
@@ -676,6 +675,8 @@ double radTNonlinearIsotropMaterial::AbsHvsAbsM_Interpol(double AbsM, TVector2d*
 //void radTNonlinearIsotropMaterial::AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, double& f, double& fDer)
 void radTNonlinearIsotropMaterial::AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, TVector2d* ArrayHM, double* dMdH, int LenArrayHM, double& f, double& fDer)
 {
+	// Use LINEAR interpolation (like ELF_MAGIC) instead of cubic
+	// Cubic interpolation can cause overshoot/undershoot in nonlinear regions
 	TVector2d *tHM = ArrayHM;
 	int Indx = 0;
 	for(int i=0; i<LenArrayHM; i++)
@@ -683,29 +684,28 @@ void radTNonlinearIsotropMaterial::AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, T
 		if(tHM->x > AbsH) break;
 		tHM++; Indx++;
 	}
-	tHM--; Indx--; 
+	tHM--; Indx--;
 
-	if(Indx < 0) 
+	if(Indx < 0)
 	{
 		f = ArrayHM->y;
 		fDer = *dMdH;
 		return;
 	}
-	if(Indx >= (LenArrayHM - 1)) 
+	if(Indx >= (LenArrayHM - 1))
 	{
 		f = ArrayHM[LenArrayHM - 1].y;
 		fDer = 0.;
 		return;
 	}
 
-	double Arg = AbsH - tHM->x;
-	double Step = (tHM + 1)->x - tHM->x;
-	double f1 = tHM->y, f2 = (tHM + 1)->y;
-	double fpr1 = dMdH[Indx], fpr2 = dMdH[Indx + 1];
-	double a[4];
-	CubPln(Step, f1, f2, fpr1, fpr2, a);
-	f = a[0] + Arg*(a[1] + Arg*(a[2] + Arg*a[3]));
-	fDer = a[1] + Arg*(2*a[2] + Arg*3*a[3]);
+	// Linear interpolation: M = M1 + (M2 - M1) * (H - H1) / (H2 - H1)
+	double H1 = tHM->x, H2 = (tHM + 1)->x;
+	double M1 = tHM->y, M2 = (tHM + 1)->y;
+	double t = (AbsH - H1) / (H2 - H1);
+	f = M1 + t * (M2 - M1);
+	// Derivative of linear interpolation: dM/dH = (M2 - M1) / (H2 - H1)
+	fDer = (M2 - M1) / (H2 - H1);
 }
 
 //-------------------------------------------------------------------------
