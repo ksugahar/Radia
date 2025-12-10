@@ -9,9 +9,10 @@ This document describes the NGSolve integration module (`radia_ngsolve`) that pr
 ### Files Created/Modified
 
 #### New Files
-1. **`src/python/radia_ngsolve.cpp`**
+1. **`src/radia/radia_ngsolve.cpp`**
    - NGSolve CoefficientFunction wrappers for Radia
-   - Implements `RadBfield`, `RadHfield`, and `RadAfield` classes
+   - Implements `RadiaField` unified interface (replaces legacy RadBfield/RadHfield/RadAfield)
+   - Supports coordinate transformation (origin, u/v/w axes)
    - Uses pybind11 for Python bindings
 
 2. **`examples/ngsolve_integration/test_radia_ngsolve.py`**
@@ -24,18 +25,13 @@ This document describes the NGSolve integration module (`radia_ngsolve`) that pr
    - Usage examples
 
 #### Modified Files
-1. **`src/python/radpy.cpp` → `src/python/rad_py.cpp`**
-   - Renamed for consistency with naming convention
-   - Updated file header comment
+1. **`src/lib/radpy_pyapi.cpp`**
+   - Python API bindings for Radia
+   - Updated to work with NGSolve integration
 
 2. **`CMakeLists.txt`**
-   - Updated reference from `radpy.cpp` to `rad_py.cpp`
    - Added optional NGSolve module build target
    - Detects NGSolve installation automatically
-
-3. **Documentation files**
-   - Updated references to `radpy.cpp` in all documentation
-   - Files: CHANGELOG.md, CODE_QUALITY_REPORT.md, docs/DIRECTORY_STRUCTURE.md, etc.
 
 ## Architecture
 
@@ -67,6 +63,72 @@ namespace ngfem {
 4. **Error handling**: Returns zero field on error to avoid exceptions during FEM integration.
 
 ## Function Signatures
+
+### RadiaField (Unified Interface - Recommended)
+
+```python
+RadiaField(radia_obj: int, field_type: str = 'b',
+           origin: list = None, u_axis: list = None,
+           v_axis: list = None, w_axis: list = None,
+           precision: float = None, units: str = 'm') -> CoefficientFunction
+```
+
+Creates a field coefficient function from a Radia object with optional coordinate transformation.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `radia_obj` | int | (required) | Radia object index |
+| `field_type` | str | `'b'` | Field type: `'b'` (flux density), `'h'` (H-field), `'a'` (vector potential), `'m'` (magnetization) |
+| `origin` | list[3] | `None` | Origin of local coordinate system `[x, y, z]` |
+| `u_axis` | list[3] | `None` | U-axis direction vector (will be normalized) |
+| `v_axis` | list[3] | `None` | V-axis direction vector (will be normalized) |
+| `w_axis` | list[3] | `None` | W-axis direction vector (will be normalized) |
+| `precision` | float | `None` | Radia field calculation precision |
+| `units` | str | `'m'` | Length unit: `'m'` (meters) or `'mm'` (millimeters) |
+
+**Returns:**
+- NGSolve CoefficientFunction representing 3D vector field
+
+**Coordinate Transformation:**
+
+When `origin` and axis vectors are specified, the field is evaluated in a local coordinate system:
+
+1. **Translation**: Point is translated by subtracting `origin`
+2. **Rotation**: Translated point is projected onto local axes (u, v, w)
+3. **Field Transform**: Computed field is transformed back to global coordinates
+
+Example:
+```python
+# Evaluate field in a rotated coordinate system
+# Origin at (1, 0, 0), local z-axis aligned with global x-axis
+B_local = radia_ngsolve.RadiaField(magnet, 'b',
+                                    origin=[1.0, 0.0, 0.0],
+                                    u_axis=[0, 1, 0],  # local x -> global y
+                                    v_axis=[0, 0, 1],  # local y -> global z
+                                    w_axis=[1, 0, 0])  # local z -> global x
+```
+
+### Cache Methods
+
+RadiaField supports caching for improved performance in repeated evaluations:
+
+```python
+# Prepare cache with evaluation points
+cf = radia_ngsolve.RadiaField(magnet, 'b')
+cf.PrepareCache(points)  # points: list of [x, y, z] coordinates
+
+# Get cache statistics
+stats = cf.GetCacheStats()  # Returns dict with 'size', 'hits', 'misses'
+
+# Clear cache
+cf.ClearCache()
+```
+
+### Legacy Functions (Deprecated)
+
+The following functions are deprecated. Use `RadiaField` instead:
 
 ### RadBfield
 
@@ -269,21 +331,28 @@ The test script verifies:
 | Object management | C++ objects | Integer indices |
 | Field types | B, H, A, Ω | B, H, A |
 
+## Implemented Features (v1.3+)
+
+Features implemented in the current version:
+
+1. **Field caching**: Cache field values at integration points (`PrepareCache`, `ClearCache`, `GetCacheStats`)
+2. **Batch evaluation**: Evaluate multiple points efficiently
+3. **Complex geometries**: Support for Radia groups and transformations via coordinate system parameters
+4. **Unit conversion**: Automatic mm<->m conversion via `units` parameter
+5. **Coordinate transformation**: Local coordinate system support (origin + u/v/w axes)
+
 ## Future Enhancements
 
 Potential improvements:
 
-1. **Field caching**: Cache field values at integration points
-2. **Batch evaluation**: Evaluate multiple points in single Radia call
-3. **Field derivatives**: Implement gradient computation
-4. **Complex geometries**: Support for Radia groups and transformations
-5. **Unit conversion**: Automatic mm↔m conversion
+1. **Field derivatives**: Implement gradient computation
+2. **Automatic precision**: Adaptive precision based on mesh size
 
 ## References
 
 - [NGSolve CoefficientFunction Documentation](https://docu.ngsolve.org/latest/i-tutorials/unit-2.1-coefficient/coefficientfunction.html)
 - [Radia Manual](https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia)
-- [EMPY_Field Implementation](../02_EMPY_Field/)
+- [NGSolve Integration Examples](../examples/ngsolve_integration/)
 
 ## Authors
 
