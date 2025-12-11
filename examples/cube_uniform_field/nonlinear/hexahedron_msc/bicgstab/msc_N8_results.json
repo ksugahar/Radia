@@ -1,0 +1,17 @@
+{
+  "element_type": "hexahedron_msc",
+  "mesh_description": "8x8x8",
+  "n_div": 8,
+  "n_elements": 512,
+  "ndof": 1536,
+  "H_ext": 50000.0,
+  "t_mesh": 0.0010008811950683594,
+  "t_solve": 0.12596654891967773,
+  "solver_method": 1,
+  "solver_name": "bicgstab",
+  "hmatrix_enabled": false,
+  "converged": true,
+  "residual": 48.183472916725094,
+  "nonl_iterations": 4,
+  "M_avg_z": 177468.19315545703
+}

@@ -1,0 +1,17 @@
+{
+  "element_type": "hexahedron_msc",
+  "mesh_description": "15x15x15",
+  "n_div": 15,
+  "n_elements": 3375,
+  "ndof": 10125,
+  "H_ext": 50000.0,
+  "t_mesh": 0.0059986114501953125,
+  "t_solve": 10.119930028915405,
+  "solver_method": 1,
+  "solver_name": "bicgstab_hmatrix",
+  "hmatrix_enabled": true,
+  "converged": true,
+  "residual": 128.16889322470763,
+  "nonl_iterations": 4,
+  "M_avg_z": 179979.05827435348
+}
