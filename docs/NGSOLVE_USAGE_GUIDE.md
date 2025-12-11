@@ -1,13 +1,32 @@
 # NGSolve Integration Usage Guide
 
+**Version:** 1.3.14
+**Date:** 2025-12-11
+
 ## Overview
 
-There are two implementations for Radia and NGSolve integration:
+The `radia_ngsolve` module provides NGSolve CoefficientFunction integration for Radia magnetic fields.
 
-| Implementation | Status | Recommendation |
-|------|------|--------|
-| **Pure Python version** (`radia_ngsolve_py.py`) | ✓ Working | ⭐⭐⭐ Recommended |
-| **C++ version** (`radia_ngsolve.pyd`) | △ DLL issues | Conda environment only |
+## Import Order (CRITICAL)
+
+**IMPORTANT**: When using `radia_ngsolve`, you **MUST** import modules in the correct order:
+
+```python
+# 1. Import radia first
+import radia as rad
+
+# 2. Import ngsolve BEFORE radia_ngsolve
+import ngsolve
+from ngsolve import *
+
+# 3. NOW import radia_ngsolve
+from radia import radia_ngsolve
+```
+
+**Why this order matters:**
+- `radia_ngsolve.pyd` depends on NGSolve DLLs
+- NGSolve must be loaded first so its DLLs are available
+- Importing in wrong order causes `ImportError: DLL load failed`
 
 ## Unit System (IMPORTANT)
 
@@ -23,20 +42,22 @@ Without this, coordinates will be off by 1000x!
 
 ---
 
-## Pure Python Version Usage (Recommended)
+## Basic Usage (pip install)
 
-### Basic Usage
+After installing via `pip install radia`:
 
 ```python
-import sys
-sys.path.insert(0, r"S:\radia\01_GitHub\src\python")
-sys.path.insert(0, r"S:\radia\01_GitHub\build\lib\Release")
-
+# Correct import order for radia_ngsolve
 import radia as rad
 rad.FldUnits('m')  # IMPORTANT: Set to meters for NGSolve
-import radia_ngsolve_py as radia_ngsolve
+
+# Import ngsolve BEFORE radia_ngsolve
+import ngsolve
 from ngsolve import *
 from netgen.csg import *
+
+# NOW import radia_ngsolve
+from radia import radia_ngsolve
 
 # Create Radia geometry (now in meters)
 magnet = rad.ObjRecMag([0, 0, 0], [0.02, 0.02, 0.03], [0, 0, 1])  # 20x20x30 mm
