@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.14] - 2025-12-11
+
+### Fixed
+
+- **PyPI Package DLL Loading Issue**
+  - Fixed "DLL load failed" error when importing radia from PyPI package
+  - Added `libopenblas.dll` to package distribution
+  - Added DLL directory to search path via `os.add_dll_directory()` on Windows
+  - Package now correctly loads OpenBLAS dependency
+
 ## [1.3.13] - 2025-12-11
 
 ### Performance

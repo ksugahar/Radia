@@ -4,8 +4,17 @@ This document describes custom extensions to the original ESRF Radia API.
 
 **Original Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
-**Date**: 2025-11-27
+**Date**: 2025-12-11
+**Version**: 1.3.13
 **Status**: Active development
+
+> **Note (v1.3.13):** The solver architecture was significantly updated in v1.3.13:
+> - **Recommended API**: Use `rad.Solve()` for all new code
+> - **Deprecated API**: `RlxPre()`, `RlxMan()`, `SetRelaxSubInterval()` are legacy
+> - **Solver Methods**: LU (Method 0) and BiCGSTAB (Method 1) replaced original Gauss-Seidel
+> - **H-matrix**: Under research, NOT available in v1.3.13
+>
+> See [SOLVER_METHODS.md](SOLVER_METHODS.md) for current solver documentation.
 
 ---
 
@@ -367,52 +376,23 @@ See detailed benchmark results in [`examples/solver_benchmarks/README.md`](../ex
 
 ## Performance Features
 
-### SolverHMatrixDisable/Enable
+### SolverHMatrixDisable/Enable (DEPRECATED)
 
-**Purpose**: Control H-matrix (hierarchical matrix) acceleration for field computation.
+> **NOT AVAILABLE in v1.3.13**
+>
+> H-matrix acceleration was evaluated and found to provide **NO benefit for typical Radia use cases**
+> (single compact objects). These APIs are not available in the current release.
+>
+> See [HMATRIX_EVALUATION.md](HMATRIX_EVALUATION.md) for evaluation results.
 
-**Syntax**:
+~~**Purpose**: Control H-matrix (hierarchical matrix) acceleration for field computation.~~
+
+~~**Syntax**:~~
 ```python
-rad.SolverHMatrixDisable()  # Disable H-matrix (use dense matrix)
-rad.SolverHMatrixEnable()   # Enable H-matrix (default)
+# NOT AVAILABLE in v1.3.13
+# rad.SolverHMatrixDisable()
+# rad.SolverHMatrixEnable()
 ```
-
-**Parameters**: None
-
-**Returns**: None
-
-**When to use**:
-
-**Disable H-matrix** (`SolverHMatrixDisable()`):
-- Small problems (N < 1000)
-- Benchmarking and testing
-- Debugging solver behavior
-- When H-matrix overhead exceeds benefit
-
-**Enable H-matrix** (`SolverHMatrixEnable()`):
-- Large problems (N > 1000)
-- Production runs
-- When memory is limited
-- Long-range field computations
-
-**Usage Example**:
-```python
-import radia as rad
-
-# For benchmarking - use dense matrix
-rad.SolverHMatrixDisable()
-
-intrc = rad.RlxPre(obj, obj)
-rad.RlxMan(intrc, 4, 100, 1.0)
-
-# For production - re-enable H-matrix
-rad.SolverHMatrixEnable()
-```
-
-**Notes**:
-- H-matrix is enabled by default
-- Setting persists for entire session until changed
-- Does not affect existing interaction matrices (only new ones)
 
 ---
 
@@ -517,9 +497,16 @@ rad.SolverTetraMethod(1)
 - Added `ObjBckgCF()` for arbitrary background fields
 - Improved NGSolve integration
 
+### v1.3.13 (2025-12-11)
+- **Major solver refactoring**: Replaced Implicit SS (Gauss-Seidel) with BiCGSTAB
+- Added `rad.Solve()` as recommended API
+- Deprecated `RlxPre()`, `RlxMan()`, `SetRelaxSubInterval()` (still available for legacy)
+- H-matrix APIs removed (under research)
+- Added OpenBLAS and OpenMP optimizations
+
 ### v1.0.5 (2025-10-30)
-- Added `SolverHMatrixDisable/Enable()` controls
-- Performance improvements for H-matrix
+- Added `SolverHMatrixDisable/Enable()` controls (REMOVED in v1.3.13)
+- Performance improvements for H-matrix (REMOVED in v1.3.13)
 
 ---
 
@@ -529,12 +516,24 @@ rad.SolverTetraMethod(1)
 
 **Purpose**: Create NGSolve CoefficientFunction for Radia magnetic field with full control over computation accuracy and performance.
 
-**Module**: `radia_ngsolve` (C++ extension)
+**Module**: `radia_ngsolve` (C++ extension, included in `radia` package)
+
+> **CRITICAL: Import Order**
+>
+> You **MUST** import modules in this exact order:
+> 1. `import radia` - Load radia first
+> 2. `import ngsolve` - Load NGSolve **BEFORE** radia_ngsolve
+> 3. `from radia import radia_ngsolve` - Load radia_ngsolve last
+>
+> Incorrect order causes `ImportError: DLL load failed`.
 
 **Syntax**:
 ```python
+# Correct import order
+import radia as rad
+import ngsolve
 from ngsolve import *
-import radia_ngsolve
+from radia import radia_ngsolve
 
 cf = radia_ngsolve.RadiaField(
     radia_obj,
@@ -773,6 +772,6 @@ See [`examples/ngsolve_integration/README.md`](../examples/ngsolve_integration/R
 
 ---
 
-**Last Updated**: 2025-11-27
+**Last Updated**: 2025-12-11
 **Maintained By**: Radia Development Team
 **License**: LGPL-2.1 (modifications), BSD-style (original RADIA from ESRF)

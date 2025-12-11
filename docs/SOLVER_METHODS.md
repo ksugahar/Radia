@@ -1,16 +1,45 @@
 # Radia Solver Methods
 
+**Version:** 1.3.13
+**Date:** 2025-12-11
+
 This document describes the available solver methods in Radia.
 
-## Available Methods (v1.3.7+)
+## Available Methods
 
-| Method | Name | Complexity | Linear | Nonlinear | Best For |
-|--------|------|------------|--------|-----------|----------|
-| **LU Direct** | `'lu'` or `'direct'` or `0` | O(N^3 * k) | Yes | Yes | Small problems (N < 500) |
-| **BiCGSTAB** (Default) | `'bicgstab'` or `'iterative'` or `1` | O(N^2 * k) | Yes | Yes | General purpose |
-| **BiCGSTAB + H-matrix** | `'bicgstab'` + `SolverHMatrixEnable()` | O(N log N * k) | Yes | Yes | Large problems (N > 1000) |
+| Method | Name | Complexity | Best For |
+|--------|------|------------|----------|
+| **LU Direct** | `'lu'` or `'direct'` or `0` | O(N^3) | Small problems (N < 500), guaranteed convergence |
+| **BiCGSTAB** (Default) | `'bicgstab'` or `'iterative'` or `1` | O(N^2 * k) | General purpose, large problems |
 
-**Note:** All solvers support both linear and nonlinear materials. The Newton-Raphson method (former Method 8) has been removed in v1.3.7 - Newton-style M(H) updates are now integrated into both LU and BiCGSTAB solvers.
+**Note:** Both solvers support linear and nonlinear materials. They use pure Newton-Raphson iteration for nonlinear convergence.
+
+## Solver Architecture (v1.3.13)
+
+### Historical Background
+
+- **Original Radia**: Used Implicit SS (Successive Substitution / Gauss-Seidel) method
+  - Slow convergence for high-permeability nonlinear materials
+  - Could require hundreds of iterations
+
+- **Current Radia (v1.3.13+)**: Replaced with modern solvers
+  - **BiCGSTAB** iterative solver for better convergence
+  - **LU direct** solver for guaranteed convergence
+  - Both use pure Newton-Raphson iteration (no Gauss-Seidel M(H) correction)
+
+### Performance (v1.3.13)
+
+After OpenBLAS and OpenMP optimization:
+
+| N_elem | LU Time | BiCGSTAB Time | Notes |
+|--------|---------|---------------|-------|
+| 104 | 0.13s | 0.13s | Linear material |
+| 200 | 0.44s | 0.43s | Linear material |
+| 390 | 1.72s | 1.71s | Linear material |
+
+**Comparison with ELF_MAGIC (nonlinear material):**
+- BiCGSTAB: **0.4x-0.6x** ratio (Radia is faster)
+- LU: 7-11x ratio (more iterations in Radia due to stricter tolerance)
 
 ## Usage
 
@@ -26,7 +55,7 @@ mat = rad.MatLin(999.0)  # mu_r = 1000
 rad.MatApl(cube, mat)
 
 # Apply external field
-ext_field = rad.ObjBckg([0, 0, 1.0])  # 1 T
+ext_field = rad.ObjBckg([0, 0, 1.0])  # 1 T in SI
 grp = rad.ObjCnt([cube, ext_field])
 
 # Solve using default method (BiCGSTAB)
@@ -34,192 +63,145 @@ res = rad.Solve(grp, 0.0001, 1000)
 
 # Or specify method by name
 res = rad.Solve(grp, 0.0001, 1000, 'bicgstab')    # BiCGSTAB (default)
-res = rad.Solve(grp, 0.0001, 1000, 'iterative')   # Same as 'bicgstab'
 res = rad.Solve(grp, 0.0001, 1000, 'lu')          # LU decomposition
-res = rad.Solve(grp, 0.0001, 1000, 'direct')      # Same as 'lu'
-
-# Or by number
-res = rad.Solve(grp, 0.0001, 1000, 0)  # LU Direct
-res = rad.Solve(grp, 0.0001, 1000, 1)  # BiCGSTAB
 ```
 
 ### Method Selection Guide
 
 ```
 Problem size?
-  |-- N < 500    --> 'lu' (LU Direct) or 'bicgstab' (default)
-  |-- N >= 500   --> 'bicgstab' (BiCGSTAB, default)
-  |-- N > 1000   --> 'bicgstab' + SolverHMatrixEnable()
+  |-- N < 500    --> Either method (LU is more robust)
+  |-- N >= 500   --> 'bicgstab' (faster)
 
 Material type?
   |-- Linear (MatLin)      --> Any solver works
-  |-- Nonlinear (MatSatIso, MatSatIsoTab, etc.) --> Any solver works
+  |-- Nonlinear (MatSatIso, etc.) --> Any solver works
 ```
-
-**Note:** Both solvers have outer nonlinear iteration loops with Newton-style M(H) updates, so they handle nonlinear materials correctly. The choice depends mainly on problem size.
 
 ## LU Direct Solver (Method 0)
 
-Direct solver using LU decomposition with partial pivoting. O(N^3) complexity per nonlinear iteration.
+Direct solver using LU decomposition with LAPACK `dgesv`.
 
 **Pros:**
 - Exact solution per nonlinear iteration
-- Always converges
+- Always converges (no divergence risk)
 - Stable for all materials
-- Supports both linear and nonlinear materials
 
 **Cons:**
-- O(N^3) time complexity - slow for large N
+- O(N^3) time complexity
 - O(N^2) memory usage
 
 **Best for:** Small problems (N < 500), validation/debugging
 
 ```python
 res = rad.Solve(grp, 0.0001, 100, 'lu')     # By name
-res = rad.Solve(grp, 0.0001, 100, 'direct') # Alias
 res = rad.Solve(grp, 0.0001, 100, 0)        # By number
 ```
 
-**Note:** For linear materials, LU converges in 1-2 outer iterations. For nonlinear materials, multiple outer iterations are needed for chi(H) to converge.
+## BiCGSTAB Solver (Method 1, Default)
 
-## BiCGSTAB (Method 1, Default)
-
-BiCGSTAB (Biconjugate Gradient Stabilized) is an iterative solver with O(N^2 * k) complexity where k is the number of iterations.
+BiCGSTAB (Biconjugate Gradient Stabilized) iterative solver with Jacobi preconditioning.
 
 **Pros:**
+- O(N^2 * k) time complexity (k = iterations)
 - Fast for medium to large problems
-- Stable for high permeability materials
-- Good convergence with Jacobi preconditioning
-- Supports both linear and nonlinear materials
+- Good convergence with preconditioning
 
 **Cons:**
 - May not converge for ill-conditioned problems
 
-**Best for:** General magnetostatic problems, tetrahedral meshes
+**Best for:** General magnetostatic problems, tetrahedral/hexahedral meshes
 
 ```python
 res = rad.Solve(grp, 0.0001, 1000)              # Default (BiCGSTAB)
 res = rad.Solve(grp, 0.0001, 1000, 'bicgstab')  # By name
-res = rad.Solve(grp, 0.0001, 1000, 'iterative') # Alias
 res = rad.Solve(grp, 0.0001, 1000, 1)           # By number
 ```
 
-## H-Matrix Acceleration
+## Convergence Tolerance
 
-Enable H-matrix with HACApK ACA+ algorithm for BiCGSTAB:
+The `PrecOnMagnetiz` parameter controls convergence:
 
 ```python
-# Enable H-matrix
-rad.SolverHMatrixEnable()
-res = rad.Solve(grp, 0.0001, 1000, 'bicgstab')
-
-# Disable H-matrix
-rad.SolverHMatrixDisable()
-
-# Check status
-status = rad.SolverHMatrixStatus()  # 1 if enabled, 0 if disabled
+rad.Solve(grp, tol, max_iter, method)
+#              ^^^
+#              Relative tolerance: ||dM||/||M||
 ```
 
-**Pros:**
-- O(N log N) per iteration instead of O(N^2)
-- Reduced memory for large problems
+**Comparison with ELF_MAGIC:**
+- ELF default: `0.01` (1%)
+- Radia benchmark: `0.0001` (0.01%)
 
-**Cons:**
-- Overhead for small problems
+**Recommendation:** Use `0.01` for typical applications, `0.0001` for high precision.
 
-**Best for:** Large problems (N > 1000)
+## H-Matrix Acceleration
 
-## Performance Benchmark
+**Status:** Under research (not available in v1.3.13)
 
-Results from 40mm soft iron cube (mu_r=1000) in 1T uniform field:
+H-matrix (HACApK) acceleration was evaluated but found to provide **no benefit for typical Radia use cases** (single compact objects). This is because:
 
-| N_elem | LU Time | BiCGSTAB Time | BiCGSTAB Iters |
-|--------|---------|---------------|----------------|
-| 27 | 0.005s | 0.0003s | 6 |
-| 125 | 0.010s | 0.005s | 12 |
-| 512 | 0.72s | 0.10s | 14 |
-| 1000 | 6.58s | 0.39s | 16 |
-| 1728 | 34.1s | 1.25s | 18 |
+1. All elements are spatially close together
+2. No blocks satisfy the admissibility criterion
+3. All blocks remain dense (no compression benefit)
 
-## Accuracy
+See [HMATRIX_EVALUATION.md](HMATRIX_EVALUATION.md) for details.
 
-Both LU and BiCGSTAB methods produce identical results:
+**Future:** H-matrix may be beneficial for:
+- Multiple well-separated magnetic objects
+- Large-scale problems with distributed geometry
 
-| N_elem | LU Bz (T) | BiCGSTAB Bz (T) | Difference |
-|--------|-----------|-----------------|------------|
-| 27 | 14.067658 | 14.067658 | 0.0000% |
-| 64 | 14.067658 | 14.067658 | 0.0000% |
-| 125 | 14.067658 | 14.067658 | 0.0000% |
+## Technical Details
 
-## Notes
+### System Equation
 
-1. **Simplified method numbering (v1.3.7):** Methods are now 0 (LU) and 1 (BiCGSTAB)
-2. **Newton-Raphson removed (v1.3.7):** Newton-style M(H) updates are integrated into both solvers
-3. **Default solver:** BiCGSTAB is the default
-4. **Tetrahedral meshes:** All methods work correctly with tetrahedral elements
-5. **Material types:**
-   - Linear materials (MatLin): Any solver works; 'bicgstab' is fastest for large problems
-   - Nonlinear materials (MatSatIso, MatSatIsoTab, MatLam): Any solver works; all produce identical results
-
-## Why BiCGSTAB and H-matrix are Efficient for Nonlinear Materials
-
-**Key insight: Nonlinearity only affects diagonal blocks (self-interaction terms N_ii).**
-
-In the MMM (Magnetic Moment Method) system equation:
+The MMM (Magnetic Moment Method) system equation:
 
 ```
-M = chi(H) * (N * M + H_ext)
+(1/chi - N) * M = H_ext
 ```
 
-The interaction matrix N has a special structure:
-- **Off-diagonal blocks N_ij (i != j)**: Depend only on geometry - constant throughout solution
-- **Diagonal blocks N_ii (self-interaction)**: Only these terms interact with chi(H)
+Where:
+- `chi`: Magnetic susceptibility tensor
+- `N`: Interaction matrix (demagnetization coefficients)
+- `M`: Magnetization vector
+- `H_ext`: External field
 
-This means:
-1. **H-matrix compression remains valid**: Off-diagonal blocks can still be compressed with ACA+
-2. **BiCGSTAB matvec is unchanged**: Same interaction matrix used for all iterations
-3. **Nonlinear update is O(N)**: Only chi * N_ii diagonal update is nonlinear, not O(N^2)
+### Nonlinear Iteration
 
-**Practical implications:**
-- H-matrix acceleration works for nonlinear materials (same compression as linear case)
-- BiCGSTAB convergence is similar for linear and nonlinear materials
-- HACApK-BiCGSTAB combination is efficient for large nonlinear problems
+For nonlinear materials, outer Newton-Raphson iteration:
 
-**Reference:** This property is well-known in computational electromagnetics and is exploited by many fast solvers including HACApK.
+1. Compute `chi(H)` from current field estimate
+2. Solve linear system with current `chi`
+3. Update magnetization: `M_new = solution`
+4. Check convergence: `||M_new - M_old|| / ||M_new|| < tol`
+5. Repeat until converged
 
-## Technical Details: Nonlinear Material Handling
+### BLAS/LAPACK Optimization (v1.3.13)
 
-Both solvers use Newton-style M(H) updates for nonlinear materials:
+- `cblas_ddot`, `cblas_dnrm2`, `cblas_daxpy`: Vector operations
+- `cblas_dgemv`: Matrix-vector product
+- `dgesv_`: LU decomposition with partial pivoting
 
-1. **Outer iteration loop**: After each linear system solve, apply Newton-style correction
-2. **Gauss-Seidel update**: For each element i:
-   - Compute quasi-external field: sum of contributions from all OTHER elements + external field
-   - Solve local equation: H = (I - chi*Nii)^{-1} * (QuasiExtField + Mr)
-   - Apply material's M(H) function directly: M = M(H)
-3. **Convergence check**: Monitor change in magnetization between iterations
+### OpenMP Parallelization (v1.3.13)
 
-This hybrid approach combines the efficiency of LU/BiCGSTAB with the accuracy of Newton-Raphson:
-- LU/BiCGSTAB provide a good initial guess for M
-- Newton-style M(H) update ensures correct nonlinear behavior
-- Both solvers produce identical results for both linear and nonlinear materials
+- Interaction matrix O(N^2) construction is parallelized
+- Speedup: Up to 240x for large problems
 
-**Solver Comparison** (v1.3.7+):
+## Migration Notes
 
-| Method | Number | Inner Method | Nonlinear Update | Best For |
-|--------|--------|--------------|------------------|----------|
-| LU | 0 | LU decomposition | M = M(H) | Small problems, validation |
-| BiCGSTAB | 1 | BiCGSTAB iteration | M = M(H) | General purpose, large problems |
+### From v1.3.6 or earlier
 
-Both solvers produce identical results for both linear and nonlinear materials.
-
-## Migration from v1.3.6
-
-If you were using method numbers 8, 9, or 10:
-
-| Old (v1.3.6) | New (v1.3.7+) | Notes |
-|--------------|---------------|-------|
-| `8` (Newton) | Removed | Use `0` (LU) or `1` (BiCGSTAB) - both have Newton-style M(H) updates |
+| Old Method | New Method | Notes |
+|------------|------------|-------|
+| `8` (Newton) | Removed | Use `0` (LU) or `1` (BiCGSTAB) |
 | `9` (LU) | `0` or `'lu'` | Same functionality |
-| `10` (BiCGSTAB) | `1` or `'bicgstab'` | Same functionality, now default |
+| `10` (BiCGSTAB) | `1` or `'bicgstab'` | Same functionality |
 
-**Recommended:** Use string names (`'lu'`, `'bicgstab'`, `'direct'`, `'iterative'`) for clarity.
+### From v1.3.12 (Implicit SS removal)
+
+Method 2 (Implicit SS / Gauss-Seidel) was removed due to slow convergence for nonlinear materials. Use BiCGSTAB (Method 1) instead.
+
+---
+
+**Last Updated:** 2025-12-11
+**Project:** Radia Magnetic Field Computation
