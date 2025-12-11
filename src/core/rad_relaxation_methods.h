@@ -26,8 +26,9 @@
 //-------------------------------------------------------------------------
 
 namespace RadSolverMethod {
-	constexpr int LU        = 0;   // LU direct solver
-	constexpr int BICGSTAB  = 1;  // BiCGSTAB iterative solver (default)
+	constexpr int LU         = 0;  // LU direct solver
+	constexpr int BICGSTAB   = 1;  // BiCGSTAB iterative solver (default)
+	constexpr int IMPLICIT_SS = 2;  // Implicit Successive Substitution (Gauss-Seidel)
 }
 
 //-------------------------------------------------------------------------
@@ -159,6 +160,56 @@ private:
 	void Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n);
 	void Copy(const std::vector<double>& src, std::vector<double>& dst, int n);
 	void Scale(double alpha, std::vector<double>& x, int n);
+};
+
+//-------------------------------------------------------------------------
+//-------------------------------------------------------------------------
+
+/**
+ * Implicit Successive Substitution (Gauss-Seidel) solver
+ * Method number 2
+ *
+ * This solver implements the original Radia Method No. 3 algorithm:
+ * - Sequential element updates (Gauss-Seidel style)
+ * - For each element i: solve (I - chi*N[i][i]) * H[i] = chi*Mr + QuasiExtField[i]
+ * - Immediately update M[i] = M(H[i]) before processing next element
+ *
+ * Benefits over BiCGSTAB:
+ * - No need to build or store full system matrix
+ * - O(N^2) per iteration instead of O(N^2) matvec per BiCGSTAB iteration
+ * - Better convergence for nonlinear materials
+ * - Under-relaxation support for stability
+ *
+ * Reference: Original Radia radTRelaxationMethNo_3 (ochubar/Radia)
+ */
+class radTRelaxationMethNo_2 : public radTIterativeRelaxMeth {
+
+public:
+	radTRelaxationMethNo_2(radTInteraction* InInteractionPtr)
+	: radTIterativeRelaxMeth(InInteractionPtr), InstMisfitM(1.0e30), Omega(0.3)
+	{
+		IntrctPtr = InInteractionPtr;
+	}
+
+	~radTRelaxationMethNo_2() {}
+
+	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+
+	// Variable DOF version for hybrid MSC + standard element analysis
+	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+
+	// Set under-relaxation parameter (default 0.3, range [0.1, 1.0])
+	void SetOmega(double omega) { Omega = (omega > 0.0 && omega <= 1.0) ? omega : 0.3; }
+
+private:
+	double InstMisfitM;  // Instantaneous misfit for convergence tracking
+	double Omega;        // Under-relaxation parameter (default 0.3)
+
+	// Perform one Gauss-Seidel sweep over all elements
+	void DefineNewMagnetizations();
+
+	// 3x3 matrix inversion
+	int Matrix3d_inv(const double A[3][3], double Ainv[3][3]);
 };
 
 //-------------------------------------------------------------------------
