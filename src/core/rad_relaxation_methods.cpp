@@ -242,8 +242,9 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
 
-	// Store old magnetization for convergence check
+	// Store old magnetization and H field for convergence check (matching ELF_MAGIC)
 	std::vector<TVector3d> OldMagnArray(AmOfMainElem);
+	std::vector<TVector3d> OldFieldArray(AmOfMainElem);  // H field from previous iteration
 
 	double PrecOnMagnetizE2 = PrecOnMagnetiz * PrecOnMagnetiz;
 	double MisfitE2 = 1.0e30;
@@ -320,10 +321,11 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 
 	for(iterCount = 0; iterCount < MaxIterNumber; iterCount++)
 	{
-		// Store old magnetization
+		// Store old magnetization and H field (matching ELF_MAGIC for dB calculation)
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
 			OldMagnArray[i] = MagnAr[i];
+			OldFieldArray[i] = NewFieldAr[i];  // Store H_old
 		}
 
 		// Update H field from current M using constitutive relation: H = M / chi
@@ -443,31 +445,49 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 		// The Gauss-Seidel M(H) update was causing oscillations and non-convergence
 		// for high-permeability nonlinear materials because it mixed two iteration schemes.
 
-		// Compute convergence using relative change ||dM||/||M|| (matching ELF_MAGIC)
-		// This is more physically meaningful than mean squared error
-		double M_diff_sq = 0.0;
-		double M_norm_sq = 0.0;
+		// Compute convergence using relative change ||dB||/||B|| (matching ELF_MAGIC exactly)
+		// ELF_MAGIC uses B field change, not M change, for convergence criterion
+		// B = mu0 * (H + M), where H is stored in NewFieldAr
+		const double mu0 = 1.2566370614359173e-6;  // mu0 in SI units
+		double B_diff_sq = 0.0;
+		double B_norm_sq = 0.0;
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
-			// Compute change in M
-			TVector3d dM = MagnAr[i] - OldMagnArray[i];
-			M_diff_sq += dM.AmpE2();
-			M_norm_sq += MagnAr[i].AmpE2();
+			// Compute B_new = mu0 * (H_new + M_new)
+			TVector3d B_new;
+			B_new.x = mu0 * (NewFieldAr[i].x + MagnAr[i].x);
+			B_new.y = mu0 * (NewFieldAr[i].y + MagnAr[i].y);
+			B_new.z = mu0 * (NewFieldAr[i].z + MagnAr[i].z);
+
+			// Compute B_old = mu0 * (H_old + M_old) - exact calculation matching ELF_MAGIC
+			TVector3d B_old;
+			B_old.x = mu0 * (OldFieldArray[i].x + OldMagnArray[i].x);
+			B_old.y = mu0 * (OldFieldArray[i].y + OldMagnArray[i].y);
+			B_old.z = mu0 * (OldFieldArray[i].z + OldMagnArray[i].z);
+
+			// dB = B_new - B_old
+			TVector3d dB;
+			dB.x = B_new.x - B_old.x;
+			dB.y = B_new.y - B_old.y;
+			dB.z = B_new.z - B_old.z;
+
+			B_diff_sq += dB.AmpE2();
+			B_norm_sq += B_new.AmpE2();
 
 			// Update the object's magnetization
 			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
 			g3dRelaxPtr->Magn = MagnAr[i];
 		}
 
-		// Relative change: ||dM|| / ||M||
+		// Relative change: ||dB|| / ||B|| (matching ELF_MAGIC)
 		double rel_change = 0.0;
-		if(M_norm_sq > 1.0e-30)
+		if(B_norm_sq > 1.0e-30)
 		{
-			rel_change = std::sqrt(M_diff_sq / M_norm_sq);
+			rel_change = std::sqrt(B_diff_sq / B_norm_sq);
 		}
 		else
 		{
-			rel_change = std::sqrt(M_diff_sq);
+			rel_change = std::sqrt(B_diff_sq);
 		}
 		MisfitE2 = rel_change * rel_change;  // For compatibility with status reporting
 
@@ -978,8 +998,9 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 
-	// Store old magnetization for convergence checking
+	// Store old magnetization and H field for convergence checking (matching ELF_MAGIC)
 	std::vector<TVector3d> OldMagnArray(AmOfMainElem);
+	std::vector<TVector3d> OldFieldArray(AmOfMainElem);  // H field from previous iteration
 
 	double MisfitE2 = 1.0e30;
 	int totalIterCount = 0;
@@ -1016,10 +1037,11 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 
 	for(outerIter = 0; outerIter < MaxIterNumber; outerIter++)
 	{
-		// Store old magnetization for convergence check
+		// Store old magnetization and H field (matching ELF_MAGIC for dB calculation)
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
 			OldMagnArray[i] = MagnAr[i];
+			OldFieldArray[i] = NewFieldAr[i];  // Store H_old
 		}
 
 		// Update H field from current M using constitutive relation: H = M / chi
@@ -1064,31 +1086,49 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 		// The Gauss-Seidel M(H) update was causing oscillations and non-convergence
 		// for high-permeability nonlinear materials because it mixed two iteration schemes.
 
-		// Compute convergence using relative change ||dM||/||M|| (matching ELF_MAGIC)
-		// This is more physically meaningful than mean squared error
-		double M_diff_sq = 0.0;
-		double M_norm_sq = 0.0;
+		// Compute convergence using relative change ||dB||/||B|| (matching ELF_MAGIC exactly)
+		// ELF_MAGIC uses B field change, not M change, for convergence criterion
+		// B = mu0 * (H + M), where H is stored in NewFieldAr
+		const double mu0 = 1.2566370614359173e-6;  // mu0 in SI units
+		double B_diff_sq = 0.0;
+		double B_norm_sq = 0.0;
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
-			// Compute change in M
-			TVector3d dM = MagnAr[i] - OldMagnArray[i];
-			M_diff_sq += dM.AmpE2();
-			M_norm_sq += MagnAr[i].AmpE2();
+			// Compute B_new = mu0 * (H_new + M_new)
+			TVector3d B_new;
+			B_new.x = mu0 * (NewFieldAr[i].x + MagnAr[i].x);
+			B_new.y = mu0 * (NewFieldAr[i].y + MagnAr[i].y);
+			B_new.z = mu0 * (NewFieldAr[i].z + MagnAr[i].z);
+
+			// Compute B_old = mu0 * (H_old + M_old) - exact calculation matching ELF_MAGIC
+			TVector3d B_old;
+			B_old.x = mu0 * (OldFieldArray[i].x + OldMagnArray[i].x);
+			B_old.y = mu0 * (OldFieldArray[i].y + OldMagnArray[i].y);
+			B_old.z = mu0 * (OldFieldArray[i].z + OldMagnArray[i].z);
+
+			// dB = B_new - B_old
+			TVector3d dB;
+			dB.x = B_new.x - B_old.x;
+			dB.y = B_new.y - B_old.y;
+			dB.z = B_new.z - B_old.z;
+
+			B_diff_sq += dB.AmpE2();
+			B_norm_sq += B_new.AmpE2();
 
 			// Update the object's magnetization
 			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
 			g3dRelaxPtr->Magn = MagnAr[i];
 		}
 
-		// Relative change: ||dM|| / ||M||
+		// Relative change: ||dB|| / ||B|| (matching ELF_MAGIC)
 		double rel_change = 0.0;
-		if(M_norm_sq > 1.0e-30)
+		if(B_norm_sq > 1.0e-30)
 		{
-			rel_change = std::sqrt(M_diff_sq / M_norm_sq);
+			rel_change = std::sqrt(B_diff_sq / B_norm_sq);
 		}
 		else
 		{
-			rel_change = std::sqrt(M_diff_sq);
+			rel_change = std::sqrt(B_diff_sq);
 		}
 		MisfitE2 = rel_change * rel_change;  // For compatibility with status reporting
 
