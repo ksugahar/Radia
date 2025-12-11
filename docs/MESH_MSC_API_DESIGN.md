@@ -27,16 +27,17 @@ Understanding the differences is critical for choosing the right approach.
 
 ### Method Comparison Table
 
-| Property | ObjRecMag (Analytical) | ObjPolyhdr Hex (MSC) | ObjPolyhdr Tet (MSC) |
-|----------|----------------------|---------------------|---------------------|
-| **Element Type** | Axis-aligned rectangular | General hexahedron | Tetrahedron |
-| **Implementation** | 8-vertex atan formula | 6-face surface integral | 4-face surface integral |
+| Property | ObjRecMag (Analytical) | ObjPolyhdr Hex (6-face MSC) | ObjPolyhdr Tet (4-face MSC) |
+|----------|----------------------|------------------------------|------------------------------|
+| **Element Type** | Axis-aligned rectangular | General hexahedron (6 quad faces) | Tetrahedron (4 triangular faces) |
+| **Implementation** | 8-vertex atan formula | 6-quad -> 12-tri surface integral | 4-face surface integral |
 | **Source File** | rad_rectangular_block.cpp | rad_polyhedron.cpp | rad_polyhedron.cpp |
 | **Geometry Constraint** | Axis-aligned only | Any convex hexahedron | Any tetrahedron |
 | **Speed** | Fastest | Medium | Medium |
-| **Accuracy** | Exact (analytical) | High (numerical) | High (numerical) |
-| **Mesh Import** | ObjDivMag only | External mesh | External mesh |
+| **Accuracy** | Exact (analytical) | High (MSC matching ELF_MAGIC) | High (MSC matching ELF_MAGIC) |
+| **Mesh Import** | ObjDivMag only | External mesh (6-face format) | External mesh (4-face format) |
 | **DOF per Element** | 3 (Mx, My, Mz) | 3 (Mx, My, Mz) | 3 (Mx, My, Mz) |
+| **Radia Face Format** | N/A | 1-indexed quad faces | 1-indexed triangular faces |
 
 ### Detailed Method Descriptions
 
@@ -657,5 +658,6 @@ The NGSolve integration benefits especially from:
 ---
 
 **Created**: 2025-12-05
+**Updated**: 2025-12-11 (6-face hexahedral MSC implementation)
 **Author**: Claude Code
 **Project**: Radia Magnetic Field Computation

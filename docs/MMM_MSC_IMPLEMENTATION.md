@@ -109,7 +109,7 @@ void radTPolygon::B_comp(radTField* FieldPtr)
 | **Method** | MMM with MSC | MMM with MSC |
 | **Rectangular elements** | Analytical formula (8-vertex atan) | MSC (6 quad faces -> 12 triangles) |
 | **Tetrahedral elements** | MSC (4 triangular faces) | MSC (4 triangular faces) |
-| **Hexahedral elements** | Analytical formula (radTRecMag) | MSC (6 quad faces) |
+| **Hexahedral elements** | Analytical (radTRecMag) or MSC (radTPolyhedron) | MSC (6 quad faces) |
 | **General polyhedra** | MSC (N polygon faces) | Not directly supported |
 | **Polygon field formula** | log + atan (same as ELF_MAGIC) | log + atan |
 | **Self-demagnetization** | Correct (N=1/3 for cube) | Correct (N=1/3 for cube) |
@@ -170,6 +170,6 @@ The performance difference comes from:
 
 ---
 
-**Last Updated**: 2025-12-05
+**Last Updated**: 2025-12-11 (6-face hexahedral MSC added)
 **Author**: Claude Code
 **Project**: Radia Magnetic Field Computation
