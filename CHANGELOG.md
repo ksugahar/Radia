@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.13] - 2025-12-11
+
+### Performance
+
+- **Major Performance Optimization with OpenBLAS and OpenMP**
+  - Replaced manual BLAS operations with OpenBLAS calls (cblas_ddot, cblas_dnrm2, cblas_daxpy, cblas_dcopy, cblas_dscal, cblas_dgemv)
+  - Added OpenMP parallelization to interaction matrix O(N^2) construction
+  - LU solver: Up to **240x faster** (e.g., 410s -> 1.7s for 390 elements)
+  - BiCGSTAB solver: Up to **17x faster** (e.g., 29s -> 1.7s for 390 elements)
+  - BiCGSTAB now **faster than ELF_MAGIC** for large problems (0.4x-0.6x ratio)
+
+### Changed
+
+- **Solver Architecture**
+  - Original Radia used Implicit SS (Successive Substitution/Gauss-Seidel) method which had slow convergence for high-permeability nonlinear materials
+  - Replaced with BiCGSTAB iterative solver (Method 1) for better convergence
+  - LU direct solver (Method 0) retained for small problems and guaranteed convergence
+  - Both solvers now use pure Newton-Raphson iteration without Gauss-Seidel M(H) correction
+
+### Technical Notes
+
+- Convergence tolerance: Radia uses relative change ||dM||/||M||
+- ELF_MAGIC default tolerance: 0.01 (1%), Radia benchmark used 0.0001 (0.01%)
+- With same tolerance (0.01), Radia converges in 6 iterations vs ELF's 9 iterations
+
 ## [1.3.12] - 2025-12-11
 
 ### Changed

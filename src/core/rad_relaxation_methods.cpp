@@ -26,6 +26,7 @@
 #endif
 
 #ifdef HAVE_LAPACK
+#include "cblas.h"
 extern "C" {
     // LAPACK dgesv: Solve A*x = b using LU factorization with partial pivoting
     // Parameters:
@@ -273,36 +274,49 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	}
 
 	// Build base matrix (geometric part without chi) once - this is the -N matrix
-	// Optimization: Only build this O(N^2) matrix once, then update diagonal each iteration
-	// OpenMP parallelization for matrix construction
-	std::vector<std::vector<double>> BaseMatrix(ndof, std::vector<double>(ndof, 0.0));
+	// OPTIMIZATION (2025-12-11): Use flat column-major array for LAPACK and fast copy
+	// Only diagonal elements are updated each iteration (matching ELF_MAGIC approach)
+	std::vector<double> BaseMatrix_flat(ndof * ndof, 0.0);
 	#pragma omp parallel for if(AmOfMainElem > 50)
 	for(int i = 0; i < AmOfMainElem; i++)
 	{
-		for(int comp_i = 0; comp_i < 3; comp_i++)
+		for(int j = 0; j < AmOfMainElem; j++)
 		{
-			int row = 3 * i + comp_i;
-			for(int j = 0; j < AmOfMainElem; j++)
-			{
-				TMatrix3df& Nij = IntrcMat[i][j];
-				for(int comp_j = 0; comp_j < 3; comp_j++)
-				{
-					int col = 3 * j + comp_j;
-					double Nij_val = 0.0;
-					if(comp_i == 0)      Nij_val = (comp_j == 0) ? Nij.Str0.x : ((comp_j == 1) ? Nij.Str0.y : Nij.Str0.z);
-					else if(comp_i == 1) Nij_val = (comp_j == 0) ? Nij.Str1.x : ((comp_j == 1) ? Nij.Str1.y : Nij.Str1.z);
-					else                 Nij_val = (comp_j == 0) ? Nij.Str2.x : ((comp_j == 1) ? Nij.Str2.y : Nij.Str2.z);
-					BaseMatrix[row][col] = -Nij_val;  // Base matrix is -N
-				}
-			}
+			TMatrix3df& Nij = IntrcMat[i][j];
+			int row_base = 3 * i;
+			int col_base = 3 * j;
+
+			// Column-major storage for LAPACK: A[row + col*lda]
+			// Row 0 of block (i,j): -Nij.Str0
+			BaseMatrix_flat[(row_base + 0) + (col_base + 0)*ndof] = -Nij.Str0.x;
+			BaseMatrix_flat[(row_base + 0) + (col_base + 1)*ndof] = -Nij.Str0.y;
+			BaseMatrix_flat[(row_base + 0) + (col_base + 2)*ndof] = -Nij.Str0.z;
+
+			// Row 1 of block (i,j): -Nij.Str1
+			BaseMatrix_flat[(row_base + 1) + (col_base + 0)*ndof] = -Nij.Str1.x;
+			BaseMatrix_flat[(row_base + 1) + (col_base + 1)*ndof] = -Nij.Str1.y;
+			BaseMatrix_flat[(row_base + 1) + (col_base + 2)*ndof] = -Nij.Str1.z;
+
+			// Row 2 of block (i,j): -Nij.Str2
+			BaseMatrix_flat[(row_base + 2) + (col_base + 0)*ndof] = -Nij.Str2.x;
+			BaseMatrix_flat[(row_base + 2) + (col_base + 1)*ndof] = -Nij.Str2.y;
+			BaseMatrix_flat[(row_base + 2) + (col_base + 2)*ndof] = -Nij.Str2.z;
 		}
+	}
+
+	// Store diagonal of base matrix (needed for efficient diagonal update)
+	std::vector<double> BaseMatrix_diag(ndof);
+	for(int i = 0; i < ndof; i++)
+	{
+		BaseMatrix_diag[i] = BaseMatrix_flat[i + i*ndof];
 	}
 
 	// Outer nonlinear iteration loop
 	// For linear materials, this converges in 1 iteration
 	// For nonlinear materials, chi(H) is updated each iteration
-	std::vector<std::vector<double>> SystemMatrix(ndof, std::vector<double>(ndof, 0.0));
+	std::vector<double> SystemMatrix_flat(ndof * ndof, 0.0);
 	std::vector<double> RHS(ndof, 0.0);
+	std::vector<int> ipiv(ndof);
 
 	for(iterCount = 0; iterCount < MaxIterNumber; iterCount++)
 	{
@@ -338,19 +352,18 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 			}
 		}
 
-		// Copy base matrix and update diagonal with 1/chi(H) values
-		// This is O(N^2) for copy but avoids rebuilding N matrix each iteration
-		// OpenMP parallelization for matrix copy
-		#pragma omp parallel for if(ndof > 100)
-		for(int row = 0; row < ndof; row++)
-		{
-			for(int col = 0; col < ndof; col++)
-			{
-				SystemMatrix[row][col] = BaseMatrix[row][col];
-			}
-		}
+		// OPTIMIZATION (2025-12-11): Use BLAS dcopy for fast matrix copy
+		// Copy base matrix to system matrix (flat arrays)
+#ifdef HAVE_LAPACK
+		cblas_dcopy(ndof * ndof, BaseMatrix_flat.data(), 1, SystemMatrix_flat.data(), 1);
+#else
+		std::copy(BaseMatrix_flat.begin(), BaseMatrix_flat.end(), SystemMatrix_flat.begin());
+#endif
 
 		// Update diagonal and RHS using current chi(H)
+		// OPTIMIZATION: Store 1/chi values for diagonal update
+		std::vector<double> inv_chi_diag(ndof);
+
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
 			radTg3dRelax* g3dRelaxPtr_i = IntrctPtr->g3dRelaxPtrVect[i];
@@ -364,41 +377,52 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 			TVector3d MrVect;
 			MaterPtr_i->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
 
-			// Update diagonal and RHS for each component
-			for(int comp_i = 0; comp_i < 3; comp_i++)
-			{
-				int row = 3 * i + comp_i;
+			// Compute 1/chi values for this element
+			double inv_chi_x = (KsiTensor.Str0.x > 1.0e-10) ? (1.0 / KsiTensor.Str0.x) : 1.0e10;
+			double inv_chi_y = (KsiTensor.Str1.y > 1.0e-10) ? (1.0 / KsiTensor.Str1.y) : 1.0e10;
+			double inv_chi_z = (KsiTensor.Str2.z > 1.0e-10) ? (1.0 / KsiTensor.Str2.z) : 1.0e10;
 
-				// Get chi for this component
-				double chi_val = 0.0;
-				if(comp_i == 0)      chi_val = KsiTensor.Str0.x;
-				else if(comp_i == 1) chi_val = KsiTensor.Str1.y;
-				else                 chi_val = KsiTensor.Str2.z;
+			inv_chi_diag[3*i + 0] = inv_chi_x;
+			inv_chi_diag[3*i + 1] = inv_chi_y;
+			inv_chi_diag[3*i + 2] = inv_chi_z;
 
-				// Compute 1/chi (or large value if chi is very small)
-				double inv_chi = (chi_val > 1.0e-10) ? (1.0 / chi_val) : 1.0e10;
+			// Update diagonal: A[k,k] = BaseMatrix[k,k] + 1/chi[k]
+			int k0 = 3*i + 0;
+			int k1 = 3*i + 1;
+			int k2 = 3*i + 2;
+			SystemMatrix_flat[k0 + k0*ndof] = BaseMatrix_diag[k0] + inv_chi_x;
+			SystemMatrix_flat[k1 + k1*ndof] = BaseMatrix_diag[k1] + inv_chi_y;
+			SystemMatrix_flat[k2 + k2*ndof] = BaseMatrix_diag[k2] + inv_chi_z;
 
-				// Add 1/chi to diagonal
-				SystemMatrix[row][row] += inv_chi;
+			// RHS = H_ext + Mr/chi
+			double Mr_over_chi_x = (KsiTensor.Str0.x > 1.0e-10) ? (MrVect.x / KsiTensor.Str0.x) : 0.0;
+			double Mr_over_chi_y = (KsiTensor.Str1.y > 1.0e-10) ? (MrVect.y / KsiTensor.Str1.y) : 0.0;
+			double Mr_over_chi_z = (KsiTensor.Str2.z > 1.0e-10) ? (MrVect.z / KsiTensor.Str2.z) : 0.0;
 
-				// RHS = H_ext + Mr/chi
-				double Hext_comp = 0.0;
-				if(comp_i == 0)      Hext_comp = ExternFieldAr[i].x;
-				else if(comp_i == 1) Hext_comp = ExternFieldAr[i].y;
-				else                 Hext_comp = ExternFieldAr[i].z;
-
-				double Mr_comp = 0.0;
-				if(comp_i == 0)      Mr_comp = MrVect.x;
-				else if(comp_i == 1) Mr_comp = MrVect.y;
-				else                 Mr_comp = MrVect.z;
-
-				double Mr_over_chi = (chi_val > 1.0e-10) ? (Mr_comp / chi_val) : 0.0;
-				RHS[row] = Hext_comp + Mr_over_chi;
-			}
+			RHS[3*i + 0] = ExternFieldAr[i].x + Mr_over_chi_x;
+			RHS[3*i + 1] = ExternFieldAr[i].y + Mr_over_chi_y;
+			RHS[3*i + 2] = ExternFieldAr[i].z + Mr_over_chi_z;
 		}
 
-		// Solve the linear system using LU decomposition
-		int ierr = SolveLU(SystemMatrix, RHS, ndof);
+		// Solve the linear system using LAPACK dgesv directly
+#ifdef HAVE_LAPACK
+		int n = ndof;
+		int nrhs = 1;
+		int info = 0;
+		dgesv_(&n, &nrhs, SystemMatrix_flat.data(), &n, ipiv.data(), RHS.data(), &n, &info);
+		int ierr = info;
+#else
+		// Fallback to old SolveLU (requires conversion to 2D array)
+		std::vector<std::vector<double>> SystemMatrix_2d(ndof, std::vector<double>(ndof));
+		for(int row = 0; row < ndof; row++)
+		{
+			for(int col = 0; col < ndof; col++)
+			{
+				SystemMatrix_2d[row][col] = SystemMatrix_flat[row + col*ndof];
+			}
+		}
+		int ierr = SolveLU(SystemMatrix_2d, RHS, ndof);
+#endif
 
 		if(ierr != 0)
 		{
@@ -471,6 +495,10 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 
 double radTRelaxationMethNo_1::Dot(const std::vector<double>& a, const std::vector<double>& b, int n)
 {
+#ifdef HAVE_LAPACK
+	// Use OpenBLAS cblas_ddot for optimized dot product
+	return cblas_ddot(n, a.data(), 1, b.data(), 1);
+#else
 	double sum = 0.0;
 	#pragma omp parallel for reduction(+:sum) if(n > 100)
 	for(int i = 0; i < n; i++)
@@ -478,38 +506,59 @@ double radTRelaxationMethNo_1::Dot(const std::vector<double>& a, const std::vect
 		sum += a[i] * b[i];
 	}
 	return sum;
+#endif
 }
 
 double radTRelaxationMethNo_1::Norm2(const std::vector<double>& a, int n)
 {
+#ifdef HAVE_LAPACK
+	// Use OpenBLAS cblas_dnrm2 for optimized norm
+	return cblas_dnrm2(n, a.data(), 1);
+#else
 	return std::sqrt(Dot(a, a, n));
+#endif
 }
 
 void radTRelaxationMethNo_1::Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n)
 {
+#ifdef HAVE_LAPACK
+	// Use OpenBLAS cblas_daxpy: y = alpha*x + y
+	cblas_daxpy(n, alpha, x.data(), 1, y.data(), 1);
+#else
 	#pragma omp parallel for if(n > 100)
 	for(int i = 0; i < n; i++)
 	{
 		y[i] += alpha * x[i];
 	}
+#endif
 }
 
 void radTRelaxationMethNo_1::Copy(const std::vector<double>& src, std::vector<double>& dst, int n)
 {
+#ifdef HAVE_LAPACK
+	// Use OpenBLAS cblas_dcopy for optimized copy
+	cblas_dcopy(n, src.data(), 1, dst.data(), 1);
+#else
 	#pragma omp parallel for if(n > 100)
 	for(int i = 0; i < n; i++)
 	{
 		dst[i] = src[i];
 	}
+#endif
 }
 
 void radTRelaxationMethNo_1::Scale(double alpha, std::vector<double>& x, int n)
 {
+#ifdef HAVE_LAPACK
+	// Use OpenBLAS cblas_dscal for optimized scale
+	cblas_dscal(n, alpha, x.data(), 1);
+#else
 	#pragma omp parallel for if(n > 100)
 	for(int i = 0; i < n; i++)
 	{
 		x[i] *= alpha;
 	}
+#endif
 }
 
 void radTRelaxationMethNo_1::GetDiagonalElements(std::vector<double>& diag, const std::vector<double>& inv_chi, int n_elem)
@@ -594,6 +643,75 @@ void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vect
 	}
 }
 
+void radTRelaxationMethNo_1::BuildFlatMatrix(std::vector<double>& A_flat, const std::vector<double>& inv_chi, int ndof)
+{
+	// Build flat matrix A = -N + diag(1/chi) for BLAS dgemv
+	// Stored in column-major order for BLAS compatibility
+	int n_elem = ndof / 3;
+	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix;
+
+	A_flat.resize(ndof * ndof, 0.0);
+
+	if(IntrcMat != nullptr)
+	{
+		#pragma omp parallel for if(n_elem > 50)
+		for(int i = 0; i < n_elem; i++)
+		{
+			for(int j = 0; j < n_elem; j++)
+			{
+				TMatrix3df& Nij = IntrcMat[i][j];
+
+				// Column-major: A[row + col*lda]
+				// A[3i+k, 3j+l] = -N[i][j].Str_k.{x,y,z}[l]
+				int row_base = 3*i;
+				int col_base = 3*j;
+
+				// Row 0 of block (i,j): -Nij.Str0
+				A_flat[(row_base + 0) + (col_base + 0)*ndof] = -Nij.Str0.x;
+				A_flat[(row_base + 0) + (col_base + 1)*ndof] = -Nij.Str0.y;
+				A_flat[(row_base + 0) + (col_base + 2)*ndof] = -Nij.Str0.z;
+
+				// Row 1 of block (i,j): -Nij.Str1
+				A_flat[(row_base + 1) + (col_base + 0)*ndof] = -Nij.Str1.x;
+				A_flat[(row_base + 1) + (col_base + 1)*ndof] = -Nij.Str1.y;
+				A_flat[(row_base + 1) + (col_base + 2)*ndof] = -Nij.Str1.z;
+
+				// Row 2 of block (i,j): -Nij.Str2
+				A_flat[(row_base + 2) + (col_base + 0)*ndof] = -Nij.Str2.x;
+				A_flat[(row_base + 2) + (col_base + 1)*ndof] = -Nij.Str2.y;
+				A_flat[(row_base + 2) + (col_base + 2)*ndof] = -Nij.Str2.z;
+			}
+
+			// Add diagonal 1/chi terms
+			A_flat[(3*i + 0) + (3*i + 0)*ndof] += inv_chi[3*i + 0];
+			A_flat[(3*i + 1) + (3*i + 1)*ndof] += inv_chi[3*i + 1];
+			A_flat[(3*i + 2) + (3*i + 2)*ndof] += inv_chi[3*i + 2];
+		}
+	}
+}
+
+void radTRelaxationMethNo_1::DenseMatVec_BLAS(const std::vector<double>& A_flat, const std::vector<double>& x,
+                                              std::vector<double>& y, int ndof)
+{
+#ifdef HAVE_LAPACK
+	// Use OpenBLAS cblas_dgemv: y = alpha*A*x + beta*y
+	// A is stored in column-major order
+	cblas_dgemv(CblasColMajor, CblasNoTrans, ndof, ndof,
+	            1.0, A_flat.data(), ndof, x.data(), 1,
+	            0.0, y.data(), 1);
+#else
+	// Fallback: manual matrix-vector multiply
+	std::fill(y.begin(), y.end(), 0.0);
+	for(int i = 0; i < ndof; i++)
+	{
+		for(int j = 0; j < ndof; j++)
+		{
+			y[i] += A_flat[i + j*ndof] * x[j];
+		}
+	}
+#endif
+}
+
 void radTRelaxationMethNo_1::MatVec(const std::vector<double>& x, std::vector<double>& y,
                                     const std::vector<double>& inv_chi, int ndof)
 {
@@ -611,6 +729,10 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, do
 	// - Use these FIXED values throughout all BiCGSTAB iterations
 	// - chi is only updated in the OUTER nonlinear iteration loop
 	// - This ensures the linear system being solved is consistent
+	//
+	// OPTIMIZATION (2025-12-11):
+	// - Build flat matrix ONCE for BLAS dgemv acceleration
+	// - Use OpenBLAS cblas_dgemv for matrix-vector products
 
 	int n_elem = ndof / 3;
 
@@ -677,10 +799,21 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, do
 		}
 	}
 
+#ifdef HAVE_LAPACK
+	// Build flat matrix ONCE for BLAS dgemv (significant speedup for large problems)
+	std::vector<double> A_flat;
+	BuildFlatMatrix(A_flat, inv_chi, ndof);
+
+	// Initialize: r0 = b - A*x0
+	DenseMatVec_BLAS(A_flat, sol, v, ndof);  // v = A*x0 (uses BLAS dgemv)
+	Copy(rhs, r, ndof);                       // r = rhs
+	Axpy(-1.0, v, r, ndof);                   // r = r - v
+#else
 	// Initialize: r0 = b - A*x0
 	MatVec(sol, v, inv_chi, ndof);  // v = A*x0 (uses pre-computed inv_chi)
 	Copy(rhs, r, ndof);                   // r = rhs
 	Axpy(-1.0, v, r, ndof);               // r = r - v
+#endif
 
 	// Choose r0* = r0
 	Copy(r, r0, ndof);
@@ -731,8 +864,12 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, do
 			p_hat[i] = diag_inv[i] * p[i];
 		}
 
-		// v = A * p_hat (uses pre-computed inv_chi)
+		// v = A * p_hat
+#ifdef HAVE_LAPACK
+		DenseMatVec_BLAS(A_flat, p_hat, v, ndof);
+#else
 		MatVec(p_hat, v, inv_chi, ndof);
+#endif
 
 		// alpha_bicg = rho / (r0, v)
 		double r0_dot_v = Dot(r0, v, ndof);
@@ -763,8 +900,12 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, do
 			s_hat[i] = diag_inv[i] * s[i];
 		}
 
-		// t = A * s_hat (uses pre-computed inv_chi)
+		// t = A * s_hat
+#ifdef HAVE_LAPACK
+		DenseMatVec_BLAS(A_flat, s_hat, t, ndof);
+#else
 		MatVec(s_hat, t, inv_chi, ndof);
+#endif
 
 		// omega = (t, s) / (t, t)
 		double t_dot_s = Dot(t, s, ndof);
@@ -909,8 +1050,13 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 
 		// Solve linear system using BiCGSTAB with current chi(H)
 		// System: A*M = b where A = -N + 1/chi(H), b = H_ext + Mr/chi
+		//
+		// IMPORTANT: Use stricter tolerance for inner BiCGSTAB (matching ELF_MAGIC approach)
+		// ELF uses separate tolerances: outer `tolerance` (e.g., 0.01) and inner `bicg_tol` (1e-6)
+		// Using loose outer tolerance for BiCGSTAB causes premature convergence
+		const double bicg_tol = 1.0e-6;  // Inner BiCGSTAB tolerance (matching ELF_MAGIC)
 		double residual = 0.0;
-		int n_iter = SolveBiCGSTAB(ndof, PrecOnMagnetiz, MaxIterNumber - totalIterCount, residual);
+		int n_iter = SolveBiCGSTAB(ndof, bicg_tol, MaxIterNumber - totalIterCount, residual);
 		totalIterCount += n_iter;
 
 		// Pure Newton-Raphson iteration (matching ELF_MAGIC approach):
