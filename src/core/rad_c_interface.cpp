@@ -158,7 +158,6 @@ void TolForConvergence( double, double, double );
 void RandomizationOnOrOff( char* );
 void PhysicalUnits();
 void PhysicalUnitsSet(const char*);
-void TetrahedronMethodSet(int);
 
 void GraphicsForElemWithoutSymChilds(int);
 //void GraphicsForElemWithSymChilds(int);

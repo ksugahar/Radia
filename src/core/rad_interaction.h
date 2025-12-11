@@ -303,7 +303,6 @@ public:
 	friend class radTIterativeRelaxMeth;
 	friend class radTRelaxationMethNo_0;   // LU direct solver
 	friend class radTRelaxationMethNo_1;   // BiCGSTAB
-	friend class radTRelaxationMethNo_2;   // Implicit SS (Gauss-Seidel)
 };
 
 //-------------------------------------------------------------------------
