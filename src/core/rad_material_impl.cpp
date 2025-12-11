@@ -1353,8 +1353,8 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep); 
 		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
 
-		// Valid methods: LU (0), BICGSTAB (1), IMPLICIT_SS (2)
-		if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB && MethNo != RadSolverMethod::IMPLICIT_SS) { Send.ErrorMessage("Radia::Error028"); return 0;}
+		// Valid methods: LU (0), BICGSTAB (1)
+		if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB) { Send.ErrorMessage("Radia::Error028"); return 0;}
 		if(IterNumber<0) { Send.ErrorMessage("Radia::Error019"); return 0;}
 		if((RelaxParam<0.) || (RelaxParam>1.)) { Send.ErrorMessage("Radia::Error018"); return 0;}
 
@@ -1370,16 +1370,9 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 			break;
 		case RadSolverMethod::BICGSTAB:
 			{
-				// BiCGSTAB with H-matrix acceleration (default)
+				// BiCGSTAB iterative solver (default)
 				radTRelaxationMethNo_1 RelaxMethNo_1(InteractPtr);
 				RelaxMethNo_1.AutoRelax(RelaxParam, IterNumber);
-			}
-			break;
-		case RadSolverMethod::IMPLICIT_SS:
-			{
-				// Implicit Successive Substitution (Gauss-Seidel)
-				radTRelaxationMethNo_2 RelaxMethNo_2(InteractPtr);
-				RelaxMethNo_2.AutoRelax(RelaxParam, IterNumber);
 			}
 			break;
 		}
@@ -1417,8 +1410,8 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			if(PrecOnMagnetiz <= 0.) { Send.ErrorMessage("Radia::Error030"); return 0; }
 			if(MaxIterNumber <= 0) { Send.ErrorMessage("Radia::Error031"); return 0; }
 
-			// Valid methods for AutoRelax: LU (0), BICGSTAB (1), IMPLICIT_SS (2)
-			if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB && MethNo != RadSolverMethod::IMPLICIT_SS) { Send.ErrorMessage("Radia::Error041"); return 0; }
+			// Valid methods for AutoRelax: LU (0), BICGSTAB (1)
+			if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB) { Send.ErrorMessage("Radia::Error041"); return 0; }
 
 			radTOptionNames OptNam;
 			const char** BufNameString = arOptionNames;
@@ -1449,16 +1442,9 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			break;
 			case RadSolverMethod::BICGSTAB:
 			{
-				// BiCGSTAB with H-matrix acceleration
+				// BiCGSTAB iterative solver
 				radTRelaxationMethNo_1 RelaxMethNo_1(InteractPtr);
 				ActualIterNum = RelaxMethNo_1.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
-			}
-			break;
-		case RadSolverMethod::IMPLICIT_SS:
-			{
-				// Implicit Successive Substitution (Gauss-Seidel)
-				radTRelaxationMethNo_2 RelaxMethNo_2(InteractPtr);
-				ActualIterNum = RelaxMethNo_2.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 			}
 			break;
 			}

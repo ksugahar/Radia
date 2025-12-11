@@ -23,7 +23,6 @@
 namespace SolverMethod {
 	constexpr int LU         = 0;   // LU direct solver
 	constexpr int BICGSTAB   = 1;   // BiCGSTAB iterative solver (default)
-	constexpr int IMPLICIT_SS = 2;   // Implicit Successive Substitution (Gauss-Seidel)
 }
 
 /************************************************************************//**
@@ -2476,7 +2475,7 @@ static PyObject* radia_RlxUpdSrc(PyObject* self, PyObject* args)
 
 /************************************************************************//**
  * Magnetic Field Calculation Methods: Builds an interaction matrix and performs a relaxation procedure.
- * Accepts method as either integer (0=LU, 1=BiCGSTAB, 2=Implicit SS) or string ("lu", "bicgstab", "implicit_ss")
+ * Accepts method as either integer (0=LU, 1=BiCGSTAB) or string ("lu", "bicgstab")
  ***************************************************************************/
 static PyObject* radia_Solve(PyObject* self, PyObject* args)
 {
@@ -2511,10 +2510,8 @@ static PyObject* radia_Solve(PyObject* self, PyObject* args)
 					meth = SolverMethod::LU;
 				else if(strcasecmp(methStr, "bicgstab") == 0 || strcasecmp(methStr, "iterative") == 0)
 					meth = SolverMethod::BICGSTAB;
-				else if(strcasecmp(methStr, "implicit_ss") == 0 || strcasecmp(methStr, "gauss_seidel") == 0 || strcasecmp(methStr, "gs") == 0)
-					meth = SolverMethod::IMPLICIT_SS;
 				else
-					throw "Radia::Error: Unknown solver method. Use 'lu', 'bicgstab', or 'implicit_ss' (or 'gs').";
+					throw "Radia::Error: Unknown solver method. Use 'lu' (or 'direct') or 'bicgstab' (or 'iterative').";
 			}
 			else
 			{
@@ -2523,8 +2520,8 @@ static PyObject* radia_Solve(PyObject* self, PyObject* args)
 		}
 
 		// Validate method number
-		if(meth != SolverMethod::LU && meth != SolverMethod::BICGSTAB && meth != SolverMethod::IMPLICIT_SS)
-			throw "Radia::Error: Invalid method number. Use 0 (LU), 1 (BiCGSTAB), or 2 (Implicit SS).";
+		if(meth != SolverMethod::LU && meth != SolverMethod::BICGSTAB)
+			throw "Radia::Error: Invalid method number. Use 0 (LU) or 1 (BiCGSTAB).";
 
 		double arResSolve[12];
 		int lenResSolve = 4;
