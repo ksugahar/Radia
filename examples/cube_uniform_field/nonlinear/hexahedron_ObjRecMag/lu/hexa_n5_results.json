@@ -1,0 +1,17 @@
+{
+  "element_type": "hexa",
+  "mesh_description": "n_div=5",
+  "n_div": 5,
+  "n_elements": 125,
+  "ndof": 375,
+  "H_ext": 50000.0,
+  "t_mesh": 0.013031721115112305,
+  "t_solve": 0.01599740982055664,
+  "solver_method": 0,
+  "solver_name": "lu",
+  "converged": true,
+  "residual": 169.84788677379717,
+  "nonl_iterations": 3,
+  "M_avg_z": 173400.16479253763,
+  "equiv_maxh": 0.2
+}
