@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.12] - 2025-12-11
+
+### Added
+
+- **Implicit Successive Substitution (SS) Solver (Method 2)**
+  - Implements Gauss-Seidel style iteration from original Radia (Method No. 3)
+  - Sequential element updates with immediate M_i use in subsequent calculations
+  - Algorithm: (I - chi*N_ii)^-1 * (chi*Mr + QuasiExtField) for each element
+  - Under-relaxation support (omega parameter, default 0.3) for stability
+  - Use via `rad.Solve(obj, prec, max_iter, 2)` or `rad.Solve(..., 'implicit_ss')`
+  - Also accepts string arguments: 'gauss_seidel', 'gs'
+  - Variable DOF version for hybrid MSC + standard element analysis
+
+### Documentation
+
+- Updated rad_relaxation_methods.h with Implicit SS class documentation
+- Updated error messages to include Method 2 in valid method list
+
 ## [1.3.11] - 2025-12-11
 
 ### Added

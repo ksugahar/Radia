@@ -64,7 +64,7 @@ string radTIOBuffer::err_ar[] = {
 	"Radia::Error038::::Incorrect input: (At present,) This Field Computation Method is implemented only for subdivision not higher than {3,3,3}.\0",
 	"Radia::Error039::::Incorrect input: Sub-element index out of subdivision limits.\0",
 	"Radia::Error040::::Incorrect input: No subdivided rectangular parallelepipeds (RecMags) present at the specified subdivision level.\0",
-	"Radia::Error041::::Incorrect input: Method number should be 0 (LU) or 1 (BiCGSTAB).\0",
+	"Radia::Error041::::Incorrect input: Method number should be 0 (LU), 1 (BiCGSTAB), or 2 (Implicit SS).\0",
 	"Radia::Error042::::Incorrect input: Number of points for Focusing Potential computation should be larger than 2.\0",
 	"Radia::Error043::::Incorrect input: The function input string should be  on  or  off .\0",
 	"Radia::Error044::::Incorrect input: Randomization type identification string should be  rel  or  abs .\0",
