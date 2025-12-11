@@ -17,20 +17,25 @@ This document contains development guidelines and refactoring policies for the R
 
 ---
 
-## Tetrahedral Element Field Computation
+## Polyhedral Element Field Computation (MSC)
 
-### Analytical Surface Charge Method
+### Magnetic Surface Charge (MSC) Method
 
-Tetrahedral elements use an **analytical surface charge method** for field computation. This method computes the magnetic field from each triangular face using closed-form formulas based on the surface magnetic charge density (sigma = M dot n).
+Both tetrahedral and hexahedral polyhedral elements use the **Magnetic Surface Charge (MSC)** method for field computation. This method computes the magnetic field from each triangular face using closed-form formulas based on the surface magnetic charge density (sigma = M dot n).
+
+**Supported Element Types**:
+- **Tetrahedra (4 faces)**: 4 triangular faces
+- **Hexahedra (6 faces)**: 6 quadrilateral faces, each split into 2 triangles
 
 **Key Features**:
 - Uses **global coordinates** directly (no local coordinate transformations)
 - Computes field using **solid angle integration** formula
 - Handles **outward normal orientation** following ELF_MAGIC convention
-- **Better performance** for small meshes (4x speedup for ~30 elements)
+- **ELF_MAGIC compatible**: Uses same 6-face hexahedral format (not 12-face triangular)
 
 **Implementation** (`src/core/rad_polyhedron.cpp`):
-- `B_comp_tetrahedron_analytical()`: Main field computation function
+- `B_comp_tetrahedron_MSC()`: 4-face tetrahedral field computation
+- `B_comp_hexahedron_MSC()`: 6-face hexahedral field computation (quad -> 2 triangles)
 - Uses `RadFieldFromTriangleFaceGlobal()` from `rad_poly_analytical.cpp`
 
 **Usage**:
@@ -41,7 +46,7 @@ from netgen_mesh_import import netgen_mesh_to_radia
 
 rad.FldUnits("m")
 
-# Import tetrahedral mesh (automatically uses analytical method)
+# Import tetrahedral mesh (automatically uses MSC method)
 mag_obj = netgen_mesh_to_radia(mesh,
                                 material={"magnetization": [0, 0, 0]},
                                 units="m")
@@ -53,12 +58,12 @@ rad.Solve(mag_obj, 0.0001, 1000)
 ```
 
 **Notes**:
-- Tetrahedral meshes converge correctly with both linear and nonlinear materials
-- LU solver (Method 0) and BiCGSTAB (Method 1) both work with tetrahedral elements
-- Hexahedral elements remain unaffected by tetrahedral implementation
+- Both tetrahedral and hexahedral meshes work with linear and nonlinear materials
+- LU solver (Method 0) and BiCGSTAB (Method 1) both work with polyhedral elements
+- Hexahedral MSC matches ELF_MAGIC results for single-element cases
 
 ---
 
-**Last Updated**: 2025-12-06
+**Last Updated**: 2025-12-11
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation

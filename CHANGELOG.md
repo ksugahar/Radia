@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.11] - 2025-12-11
+
+### Added
+
+- **6-Face Hexahedral MSC Method (ELF_MAGIC Compatible)**
+  - Implemented `B_comp_hexahedron_MSC()` for 6 quadrilateral faces
+  - Each quad face is split into 2 triangles using [V0,V1,V2] + [V0,V2,V3]
+  - Matches ELF_MAGIC face ordering and diagonal split convention
+  - Single element validation: 0.05% error vs ELF_MAGIC reference
+
+### Changed
+
+- **Polyhedron Element Support**
+  - Now only supports tetrahedra (4 faces) and hexahedra (6 faces)
+  - Removed 12-face triangular hexahedron support (throws error)
+  - Updated documentation to reflect 6-face MSC implementation
+
+### Documentation
+
+- Updated CLAUDE.md with 6-face hexahedral MSC details
+- Updated docs/MMM_MSC_IMPLEMENTATION.md
+- Updated docs/MESH_MSC_API_DESIGN.md
+
 ## [1.3.10] - 2025-12-10
 
 ### Added
