@@ -142,6 +142,14 @@ private:
 	void DenseMatVec(const std::vector<double>& x, std::vector<double>& y,
 	                 const std::vector<double>& inv_chi, int ndof);
 
+	// Build flat matrix for BLAS dgemv (row-major order)
+	// Matrix A = -N + diag(1/chi) stored in column-major for BLAS
+	void BuildFlatMatrix(std::vector<double>& A_flat, const std::vector<double>& inv_chi, int ndof);
+
+	// Dense matrix-vector product using BLAS dgemv
+	void DenseMatVec_BLAS(const std::vector<double>& A_flat, const std::vector<double>& x,
+	                      std::vector<double>& y, int ndof);
+
 	// Variable DOF matrix-vector product using flat storage
 	void MatVec_VariableDOF(const std::vector<double>& x, std::vector<double>& y,
 	                        const std::vector<double>& inv_chi, int totalDOF);

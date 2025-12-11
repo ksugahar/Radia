@@ -18,6 +18,10 @@
 #include "rad_subdivided_rectangle.h"
 #include "rad_polyhedron.h"  // For IsTetrahedron() check in N_self fix
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 // MSC (Magnetic Surface Charge) support is disabled until radTExtrPolygonMSC is refactored
 // To enable: uncomment the #define and the include below
 // #define RADIA_MSC_SUPPORT
@@ -485,7 +489,12 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 		// Compute interaction matrix directly in global coordinates
 		// without intermediate coordinate transformations.
 		// This matches the behavior of rad.Fld() which gives correct results.
+		//
+		// OPTIMIZATION (2025-12-11): OpenMP parallelization of O(N^2) matrix build
+		// Parallelize outer loop only (MSVC OpenMP 2.0 doesn't support collapse)
+		// Each ColNo iteration is independent, enabling parallel computation.
 
+		#pragma omp parallel for if(AmOfMainElem > 20)
 		for(int ColNo=0; ColNo<AmOfMainElem; ColNo++)
 		{
 			radTg3dRelax* g3dRelaxPtrColNo = g3dRelaxPtrVect[ColNo];
@@ -495,6 +504,7 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 				// Get observation point (element center) directly in global coordinates
 				TVector3d ObsPoiVect = (g3dRelaxPtrVect[StrNo])->ReturnCentrPoint();
 
+				// Create thread-local Field object to avoid race conditions
 				radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 				Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
 

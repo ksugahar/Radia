@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
 project(radia_ngsolve C CXX)
 
+# Find OpenMP for parallel matrix construction
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
+else()
+    message(WARNING "OpenMP not found - parallel matrix construction disabled")
+endif()
+
 # Find Python3 first to get the installation path
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 message("Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
@@ -190,6 +198,12 @@ if(WIN32)
 	endif()
 endif()
 
+# Link OpenMP for radia_ngsolve
+if(OpenMP_CXX_FOUND)
+	target_link_libraries(radia_ngsolve PRIVATE OpenMP::OpenMP_CXX)
+	message(STATUS "OpenMP enabled for radia_ngsolve")
+endif()
+
 # Compiler-specific flags
 if(MSVC)
 	# MSVC (Visual Studio)
@@ -302,6 +316,12 @@ if(WIN32)
 	if(MSVC)
 		target_link_options(radia PRIVATE /NODEFAULTLIB:LIBCMT)
 	endif()
+endif()
+
+# Link OpenMP for parallel matrix construction
+if(OpenMP_CXX_FOUND)
+	target_link_libraries(radia PRIVATE OpenMP::OpenMP_CXX)
+	message(STATUS "OpenMP enabled for radia")
 endif()
 
 # Compiler-specific flags
