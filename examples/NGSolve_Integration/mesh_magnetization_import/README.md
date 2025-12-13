@@ -1,274 +1,169 @@
-# Mesh Import Tests for Radia
+# NGSolve Magnetization Import
 
-This folder contains tests for importing external mesh files into Radia for magnetic field computation.
+This folder contains scripts for importing magnetization distributions into Radia
+tetrahedral meshes and evaluating magnetic fields.
 
-## Overview
+## NGSolve Version Requirement
 
-Radia supports three methods for creating magnetic geometry:
+**CRITICAL**: Use NGSolve **6.2.2405** only.
 
-1. **Built-in primitives** (`rad.ObjRecMag`, `rad.ObjCylMag`, etc.) - Fastest, most accurate
-2. **Tetrahedral mesh import** (from NGSolve/Netgen) - NGSolve integration
-3. **Hexahedral mesh import** (from Cubit, Nastran format) - Professional mesh tools
+```bash
+pip install ngsolve==6.2.2405
+```
 
-This test suite verifies that all three methods produce consistent results when combined with `rad.MatLin` (linear materials) and `rad.ObjBckgCF` (background fields).
+**Reason**: NGSolve 6.2.2406+ has a regression bug in Periodic Boundary Conditions.
+The `Identify()` information is lost during mesh generation with `Glue()`.
+
+**Reference**: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
+
+## Summary of Results
+
+### Key Findings
+
+1. **Radia tetrahedral MSC method is ACCURATE** (< 1% error vs analytical dipole)
+2. **NGSolve H-formulation with Kelvin transform is ACCURATE** (< 0.15% error with correct version)
+3. **Use `netgen_mesh_import` module** for correct Netgen -> Radia mesh transfer
+
+### Verified Test: Analytical Magnetization -> Radia
+
+| Metric | Result |
+|--------|--------|
+| Average Error | 0.98% |
+| Maximum Error | 1.03% |
+| Test Points | 12 (all outside sphere) |
+| Mesh Elements | 4496 tetrahedra |
+| Magnetization | Uniform M = [0, 0, 1000] A/m |
+
+**Conclusion**: Radia's MSC method correctly computes B field from tetrahedral meshes
+when given correct magnetization values.
+
+### NGSolve H-formulation with Kelvin Transform
+
+Using NGSolve 6.2.2405 with H-formulation and Kelvin transform for infinite domain:
+
+| Location | NGSolve | Analytical | Error |
+|----------|---------|------------|-------|
+| Origin (0,0,0) | -0.970587 A/m | -0.970588 A/m | **0.000%** |
+| (0.7, 0, 0) exterior | -0.353201 A/m | -0.353713 A/m | **0.145%** |
+
+| Region | Max Error | RMS Error |
+|--------|-----------|-----------|
+| Interior (|x| < 0.5 m) | 3.32e-05 A/m | **0.001%** |
+| Exterior (|x| >= 0.5 m) | 1.39e-03 A/m | 6.27e-04 A/m |
+
+**Test Configuration**:
+- Sphere radius: 0.5 m
+- Kelvin radius: 1.0 m
+- Relative permeability: mu_r = 100
+- Mesh elements: 1,370,773
+- DOFs: 6,310,708
+
+### NGSolve Version Comparison
+
+| Version | Origin Error | (0.7,0,0) Error | Status |
+|---------|--------------|-----------------|--------|
+| 6.2.2405 | 0.000% | 0.145% | **OK** |
+| 6.2.2406 | 3.030% | 182.713% | **BUG** |
+
+**Root Cause**: In 6.2.2406+, `Identify()` periodic BC information is lost during
+mesh generation with `Glue()`, causing incorrect coupling between interior and
+Kelvin-transformed exterior domains
 
 ## Files
 
-### NGSolve Reference Solutions
+### Working Scripts
 
-- `ngsolve_cube_uniform_field.py` - **High-precision NGSolve reference solution**
-  - H-formulation with perturbation potential method
-  - Magnetic cube (0.1m) with μᵣ = 100, H_ext = 1000 A/m
-  - Multi-region mesh (magnetic cube + inner air + outer air)
-  - Graded mesh refinement for accuracy
-  - Saves results to .npz file for comparison
-  - Based on: S:/ngsolve/NGSolve/2024_01_31_H-formulation/
+- **`sphere_analytical_to_radia.py`** - **VERIFIED: < 1% error**
+  - Creates sphere mesh with Netgen
+  - Assigns analytical uniform magnetization
+  - Compares Radia B field with dipole formula
+  - Uses `netgen_mesh_to_radia()` for correct mesh transfer
 
-- `compare_radia_ngsolve_cube.py` - **Compare Radia with NGSolve reference**
-  - Loads NGSolve high-precision solution
-  - Evaluates Radia ANALYTICAL method at same points
-  - Reports field errors and convergence
+### Reference Scripts
 
-### Demonstration Scripts
-
-- `demo_tetrahedral_methods_comparison.py` - **NGSolve mesh import demo**
-  - Generate tetrahedral mesh with NGSolve/Netgen
-  - Import into Radia with ANALYTICAL method
-  - Compare with built-in hexahedral reference
-
-### Mesh Generation
-
-- `generate_hex_mesh_cubit.py` - Generate hexahedral mesh using Cubit Python API
-  - Creates 0.1m cube with 5×5×5 = 125 hex8 elements
-  - Exports to Nastran (.bdf), Gmsh (.msh), VTK (.vtk) formats
-  - Requires: Coreform Cubit 2025.3
-
-### Mesh Files (Generated)
-
-- `cube_hex.bdf` - Nastran format hexahedral mesh (primary)
-- `cube_hex.msh` - Gmsh format (alternative)
-- `cube_hex.vtk` - VTK format (for ParaView visualization)
-- `cube_hex.cub5` - Cubit session file (for reference)
+- `ngsolve_cube_uniform_field.py` - NGSolve H-formulation reference
+- `verified_ngsolve_to_radia.py` - Full NGSolve -> Radia pipeline test
 
 ## Usage
 
-### 1. Generate NGSolve High-Precision Reference Solution
+### Verified Test (Analytical Magnetization)
 
 ```bash
-cd S:/Radia/01_GitHub/examples/ngsolve_integration/mesh_magnetization_import
-python ngsolve_cube_uniform_field.py
+cd examples/ngsolve_integration/mesh_magnetization_import
+python sphere_analytical_to_radia.py
 ```
 
-**Requirements:**
-- NGSolve with Netgen installed
-- Python packages: numpy, ngsolve
-
-**Output:**
-- `ngsolve_cube_uniform_field_results.npz` - Saved field data at test points
-- Console output with field values and solver statistics
-
-**What it does:**
-- Creates 3D geometry: magnetic cube (μᵣ=100) + inner/outer air domains
-- Generates graded tetrahedral mesh (fine near cube, coarse in far field)
-- Solves H-formulation: ∇·(μ∇φ) = ∇·(μH_s) with perturbation potential
-- Evaluates total field H_total = H_s + H_pert at test points
-- Provides high-precision reference (CG solver with tol=1e-8)
-
-### 2. Compare Radia with NGSolve Reference
-
-```bash
-python compare_radia_ngsolve_cube.py
+**Output**:
+```
+Field Comparison (Analytical dipole vs Radia MSC):
+  Average error: 0.9832%
+  Maximum error: 1.0311%
+  [PASS] Radia MSC matches analytical dipole field (< 5% error)
 ```
 
-**Requirements:**
-- NGSolve reference solution must be generated first (step 1)
-- Radia built with ANALYTICAL method support
-- Environment: `RADIA_TETRA_METHOD='ANALYTICAL'` (set in script)
+## Key Implementation Notes
 
-**Output:**
-- Field comparison at identical test points
-- Error percentages for magnitude and components
-- Pass/fail assessment (target: <20% error)
-
-### 3. Run NGSolve Mesh Import Demo
-
-```bash
-python demo_tetrahedral_methods_comparison.py
-```
-
-**What it does:**
-- Generates tetrahedral mesh with NGSolve/Netgen
-- Imports into Radia using ANALYTICAL method
-- Compares with Radia's built-in hexahedral method
-
-### 4. Generate Hexahedral Mesh (Optional, for Cubit users)
-
-```bash
-python generate_hex_mesh_cubit.py
-```
-
-**Requirements:**
-- Coreform Cubit 2025.3 installed
-- `S:/CoreformCubit/04_GitHub/cubit_mesh_export.py` available
-
-**Output:**
-- `cube_hex.bdf` (35KB) - 216 vertices, 125 hex elements
-- `cube_hex.msh`, `cube_hex.vtk`, `cube_hex.cub5`
-
-**Expected Results:**
-
-| Method | |H| (A/m) | Error vs Built-in | Status |
-|--------|----------|-------------------|--------|
-| Built-in primitive | ~0.990 | 0% (reference) | ✓ |
-| Hexahedral mesh | ~0.972 | ~2% | ✓ |
-| Tetrahedral mesh | ~1.056 | ~7% | ✓ |
-
-All three methods should produce similar field values, confirming that mesh import works correctly.
-
-## Test Physics
-
-### Problem Setup
-
-- **Geometry**: 0.1m × 0.1m × 0.1m cube centered at origin
-- **Material**: Linear magnetic material (μᵣ = 10, χ = 9)
-- **Background field**: H₀ = 1 A/m in z-direction (uniform)
-- **Test point**: [0.2, 0, 0] m (far field)
-
-### Expected Behavior
-
-Inside the cube:
-- H_inside ≈ H₀ / μᵣ ≈ 0.1 A/m (field screening by high permeability)
-
-Outside the cube:
-- H_outside ≈ H₀ + perturbation
-- Far field (~0.2m away): H ≈ 0.99 A/m (slight perturbation)
-
-### Mesh Discretization Effects
-
-- **Built-in**: Exact analytical geometry → most accurate
-- **Hexahedral mesh**: 5×5×5 structured grid → ~2% error (excellent)
-- **Tetrahedral mesh**: Unstructured mesh → ~7% error (acceptable)
-
-Errors are due to:
-1. Discretization of continuous geometry into finite elements
-2. Numerical integration over element faces
-3. Mesh resolution (finer mesh → better accuracy)
-
-## Technical Details
-
-### Hexahedral Mesh Import
-
-Uses `nastran_mesh_import.py` to parse Nastran .bdf files:
+### 1. Use `netgen_mesh_import` Module
 
 ```python
-from nastran_mesh_import import create_radia_from_nastran
+from netgen_mesh_import import netgen_mesh_to_radia
 
-cube = create_radia_from_nastran(
-    'cube_hex.bdf',
-    material={'magnetization': [0, 0, 0]},
-    units='m',
-    combine=True
-)
-```
+rad.FldUnits('m')  # REQUIRED for NGSolve integration
 
-**Supported formats:**
-- GRID/GRID* cards (node definitions, fixed-width and long format)
-- CHEXA cards (8-node hexahedral elements with continuation lines)
-- CTETRA cards (4-node tetrahedral elements)
-
-**Node ordering:**
-- Nastran CHEXA8 standard node ordering
-- Automatically mapped to Radia HEX_FACES topology
-
-### Tetrahedral Mesh Import
-
-Uses `netgen_mesh_import.py` with NGSolve mesh:
-
-```python
-from netgen.occ import Box, OCCGeometry
-from ngsolve import Mesh
-from netgen_mesh_import import create_radia_from_mesh
-
-geo = OCCGeometry(Box((-0.05, -0.05, -0.05), (0.05, 0.05, 0.05)))
-mesh = Mesh(geo.GenerateMesh(maxh=0.03))
-
-cube = create_radia_from_mesh(
+mag_obj = netgen_mesh_to_radia(
     mesh,
-    material={'magnetization': [0, 0, 0]},
-    combine=True
+    material={'magnetization': [0, 0, M_z]},
+    units='m',
+    material_filter='magnetic'
 )
 ```
 
-**Features:**
-- Direct integration with NGSolve mesh
-- Automatic face winding correction (outward normals)
-- Supports both tetrahedral and hexahedral NGSolve meshes
+### 2. Radia Magnetization is in A/m (NOT Tesla)
 
-## Troubleshooting
+```python
+# Correct: A/m
+magnetization = [0, 0, 1000.0]  # 1000 A/m
 
-### Error: "cube_hex.bdf not found"
-
-**Solution:** Run `generate_hex_mesh_cubit.py` first to create the mesh file.
-
-### Error: "Can not find at least three vertex points..."
-
-**Cause:** Duplicate vertices or incorrect node ordering in mesh file.
-
-**Solution:** Check that:
-1. GRID* long format is parsed correctly (16-character fields)
-2. Continuation lines are handled properly ('+' markers)
-3. All vertices are unique
-
-### Error: Cubit module not found
-
-**Cause:** Cubit Python API not in system path.
-
-**Solution:** Ensure `sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")` is correct.
-
-### Large errors (>20%)
-
-**Possible causes:**
-1. Face winding direction incorrect (check TETRA_FACES/HEX_FACES)
-2. Mesh too coarse (reduce `maxh` parameter)
-3. Units mismatch (ensure `rad.FldUnits('m')` for NGSolve integration)
-
-## Related Documentation
-
-- `src/python/nastran_mesh_import.py` - Nastran mesh parser
-- `src/python/netgen_mesh_import.py` - NGSolve mesh importer
-- `examples/ngsolve_integration/h_formulation/` - H-formulation comparison (planned)
-- `examples/ngsolve_integration/magnetization_import/` - Magnetization import (planned)
-
-## Development Notes
-
-### Nastran CHEXA8 Node Ordering
-
-Nastran standard (ISO/IEC 10303-238):
-```
-     7 ----------- 6
-    /|            /|
-   / |           / |
-  4 ----------- 5  |
-  |  |          |  |
-  |  3 ---------|--2
-  | /           | /
-  |/            |/
-  0 ----------- 1
+# Wrong: Tesla
+# magnetization = [0, 0, 1.2]  # This would be interpreted as 1.2 A/m
 ```
 
-Nodes 0-3: Bottom face (z-)
-Nodes 4-7: Top face (z+)
+### 3. Always Use `rad.FldUnits('m')` with NGSolve
 
-This ordering is automatically mapped to Radia's HEX_FACES topology by `nastran_mesh_import.py`.
+Netgen uses meters, Radia defaults to millimeters. Always set:
+```python
+rad.FldUnits('m')
+```
 
-### Version History
+## Physics
 
-- v0.1.0 (2025-11-22): Initial hexahedral mesh import support
-  - GRID* long format parsing
-  - CHEXA continuation line handling
-  - Cubit mesh generation script
+### Analytical Solution for Uniformly Magnetized Sphere
+
+Outside sphere (dipole field):
+```
+B = (mu_0/4pi) * (3(m*r)r/r^5 - m/r^3)
+where m = (4/3)*pi*a^3*M is the magnetic dipole moment
+```
+
+Inside sphere:
+```
+B = (2/3)*mu_0*M
+```
+
+### Radia MSC (Magnetic Surface Charge) Method
+
+Radia computes B field from surface charge density:
+```
+sigma = M dot n  (on each face)
+```
+Using closed-form solid angle integration for each triangular face.
+
+## Related Folders
+
+- `../../tetra_field_accuracy_evaluation/` - More tetrahedral accuracy tests
+- `../../cube_uniform_field/` - Radia solver benchmarks
 
 ---
 
-**Author**: Radia Development Team
-**Last Updated**: 2025-11-22
+**Date**: 2025-12-13
+**Version**: Radia v1.3.14+
