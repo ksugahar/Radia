@@ -1,1035 +1,594 @@
 # Radia Python API Reference
 
-Complete reference for Radia Python API including original ESRF functions and custom extensions.
+Complete reference for Radia Python API.
 
+**Version**: 1.3.14
+**Date**: 2025-12-15
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
-
-**Date**: 2025-11-27
 
 ---
 
 ## Table of Contents
 
+- [Quick Start](#quick-start)
+- [Supported Elements](#supported-elements)
 - [Geometry Objects](#geometry-objects)
-  - [Magnetized Objects](#magnetized-objects)
-  - [Current-Carrying Objects](#current-carrying-objects)
-  - [Field Source Objects](#field-source-objects)
-  - [Object Containers](#object-containers)
 - [Materials](#materials)
-- [Transformations](#transformations)
-- [Relaxation and Solving](#relaxation-and-solving)
+- [Solver](#solver)
 - [Field Computation](#field-computation)
+- [Mesh Import](#mesh-import)
+- [NGSolve Integration](#ngsolve-integration)
 - [Utilities](#utilities)
-- [Extensions](#extensions)
+
+---
+
+## Quick Start
+
+### Basic Example (Rectangular Elements)
+
+```python
+import radia as rad
+import numpy as np
+
+rad.FldUnits('m')  # Use meters (required for NGSolve)
+rad.UtiDelAll()
+
+# Create soft iron cube (1m x 1m x 1m)
+cube = rad.ObjRecMag([0, 0, 0], [1.0, 1.0, 1.0], [0, 0, 0])
+rad.ObjDivMag(cube, [5, 5, 5])  # 125 elements
+
+# Apply linear material (mu_r = 1000)
+mat = rad.MatLin(999)  # chi = mu_r - 1
+rad.MatApl(cube, mat)
+
+# External field (50,000 A/m in z-direction)
+MU_0 = 4 * np.pi * 1e-7
+ext = rad.ObjBckg([0, 0, MU_0 * 50000])
+grp = rad.ObjCnt([cube, ext])
+
+# Solve (Method 1 = BiCGSTAB)
+result = rad.Solve(grp, 0.001, 1000, 1)
+print(f'Converged in {int(result[3])} iterations')
+
+# Get field
+B = rad.Fld(grp, 'b', [0, 0, 0])
+print(f'B at center: {B}')
+```
+
+### MSC Hexahedral Example (ObjThckPgn)
+
+```python
+import radia as rad
+import numpy as np
+
+rad.FldUnits('m')
+rad.UtiDelAll()
+
+MU_0 = 4 * np.pi * 1e-7
+n_div = 5
+cube_size = 1.0
+elem_size = cube_size / n_div
+
+# Create 5x5x5 hexahedral mesh using ObjThckPgn
+elements = []
+for ix in range(n_div):
+    for iy in range(n_div):
+        for iz in range(n_div):
+            cx = (ix + 0.5) * elem_size - cube_size / 2
+            cy = (iy + 0.5) * elem_size - cube_size / 2
+            cz = (iz + 0.5) * elem_size - cube_size / 2
+            half = elem_size / 2
+
+            polygon = [[cx-half, cy-half], [cx+half, cy-half],
+                       [cx+half, cy+half], [cx-half, cy+half]]
+            obj = rad.ObjThckPgn(cz - half, elem_size, polygon, 'z', [0, 0, 0])
+            elements.append(obj)
+
+container = rad.ObjCnt(elements)
+mat = rad.MatLin(999)
+rad.MatApl(container, mat)
+
+ext = rad.ObjBckg([0, 0, MU_0 * 50000])
+grp = rad.ObjCnt([container, ext])
+rad.Solve(grp, 0.001, 1000, 1)
+```
+
+### Tetrahedral Mesh Example (Netgen)
+
+```python
+import radia as rad
+rad.FldUnits('m')
+
+# Import NGSolve BEFORE radia modules
+from netgen.occ import Box, Pnt, OCCGeometry
+from ngsolve import Mesh
+from netgen_mesh_import import netgen_mesh_to_radia
+
+# Create tetrahedral mesh
+cube = Box(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))
+cube.mat('magnetic')
+mesh = Mesh(OCCGeometry(cube).GenerateMesh(maxh=0.3))
+
+# Import to Radia
+mag_obj = netgen_mesh_to_radia(mesh,
+                                material={'magnetization': [0, 0, 0]},
+                                units='m',
+                                material_filter='magnetic')
+```
+
+---
+
+## Supported Elements
+
+| Element Type | API | Faces | DOF | Use Case |
+|--------------|-----|-------|-----|----------|
+| **Rectangular Block** | `ObjRecMag()` + `ObjDivMag()` | Axis-aligned | 3 | Fastest, structured grids |
+| **Hexahedron (MSC)** | `ObjThckPgn()` | 6 quad | **6** | 6-DOF MSC with center cancelling charge |
+| **Hexahedron (MSC)** | `ObjPolyhdr()` + `HEX_FACES` | 6 quad | 3 | Rotated/deformed grids |
+| **Tetrahedron (MSC)** | `ObjPolyhdr()` + `TETRA_FACES` | 4 tri | 3 | Complex curved geometry |
+| **Wedge/Prism (MSC)** | `ObjPolyhdr()` + `WEDGE_FACES` | 5 | 3 | Hybrid meshes |
+| **Pyramid (MSC)** | `ObjPolyhdr()` + `PYRAMID_FACES` | 5 | 3 | Mesh transitions |
+
+**DOF (Degrees of Freedom)**:
+- **3 DOF**: Mx, My, Mz (standard magnetization components)
+- **6 DOF**: Surface charge density sigma on each face (ObjThckPgn only)
+
+### 6-DOF MSC Method (ObjThckPgn)
+
+`ObjThckPgn` uses the **Magnetic Surface Charge (MSC)** method with 6 unknowns:
+- **Sigma[0..5]**: Surface charge density on each of the 6 hexahedral faces
+- **Center cancelling charge**: `PointCharge[f] = -Sigma[f] * Area[f]` at centroid
+
+This method places a point charge at the element centroid to cancel interior face contributions, improving field accuracy.
+
+**Implementation** ([rad_extruded_polygon_msc.h](../src/core/rad_extruded_polygon_msc.h)):
+```cpp
+std::array<double, 6> Sigma;          // Surface charge densities (unknowns)
+std::array<double, 6> PointCharges;   // Point charges at center (= -sigma * area)
+int NumberOfDegOfFreedom() { return 6; }
+```
+
+### Face Topology Constants
+
+```python
+from netgen_mesh_import import TETRA_FACES, HEX_FACES, WEDGE_FACES, PYRAMID_FACES
+
+# TETRA_FACES (1-indexed)
+[[1, 3, 2], [1, 2, 4], [2, 3, 4], [3, 1, 4]]
+
+# HEX_FACES (1-indexed)
+[[1, 4, 3, 2], [5, 6, 7, 8], [1, 2, 6, 5], [3, 4, 8, 7], [1, 5, 8, 4], [2, 3, 7, 6]]
+```
 
 ---
 
 ## Geometry Objects
 
-### Magnetized Objects
+### ObjRecMag - Rectangular Block
 
-#### ObjRecMag
 ```python
 obj = rad.ObjRecMag(center, dimensions, magnetization)
 ```
-Creates a rectangular parallelepiped with uniform magnetization.
 
-**Parameters**:
-- `center`: `[x, y, z]` - Center point (mm)
-- `dimensions`: `[dx, dy, dz]` - Dimensions (mm)
-- `magnetization`: `[Mx, My, Mz]` - Magnetization vector (T)
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `center` | [x, y, z] | Center point |
+| `dimensions` | [dx, dy, dz] | Dimensions |
+| `magnetization` | [Mx, My, Mz] | Initial magnetization (T or A/m) |
 
-**Example**:
 ```python
-# 10×10×10 mm cube centered at origin, magnetized in z-direction
-magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1.2])
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2])
 ```
 
----
+### ObjThckPgn - Thick Polygon (Extruded 2D)
 
-#### ObjThckPgn
 ```python
-obj = rad.ObjThckPgn(x, dx, points, axis, magnetization)
-```
-Creates an extruded polygon (prism) with uniform magnetization.
-
-**Parameters**:
-- `x`: Coordinate along extrusion axis (mm)
-- `dx`: Extrusion length (mm)
-- `points`: `[[x1,y1], [x2,y2], ...]` - Polygon vertices in 2D
-- `axis`: `'x'|'y'|'z'` - Extrusion axis direction
-- `magnetization`: `[Mx, My, Mz]` - Magnetization vector (T)
-
-**Example**:
-```python
-# Triangular prism
-points = [[0,0], [10,0], [5,8.66]]
-prism = rad.ObjThckPgn(0, 20, points, 'z', [0, 0, 1])
+obj = rad.ObjThckPgn(z_base, thickness, vertices_2d, axis, magnetization)
 ```
 
----
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `z_base` | float | Base position along extrusion axis |
+| `thickness` | float | Extrusion length |
+| `vertices_2d` | [[x,y], ...] | 2D polygon vertices (CCW) |
+| `axis` | str | Extrusion axis: `'x'`, `'y'`, or `'z'` |
+| `magnetization` | [Mx, My, Mz] | Initial magnetization |
 
-#### ObjMltExtRtg
 ```python
-obj = rad.ObjMltExtRtg([[x1,dx1], [x2,dx2], ...])
-```
-Creates a convex polyhedron by recursive rectangular extrusion.
-
-**Parameters**:
-- List of `[position, thickness]` pairs for nested extrusions
-
-**Example**:
-```python
-# Nested rectangular structure
-obj = rad.ObjMltExtRtg([[0,10], [0,10], [0,10]])
+polygon = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
+hex_elem = rad.ObjThckPgn(-0.5, 1.0, polygon, 'z', [0, 0, 0])
 ```
 
----
+### ObjPolyhdr - General Polyhedron
 
-#### ObjMltExtTri
 ```python
-obj = rad.ObjMltExtTri([[x1,dx1], [x2,dx2], ...])
-```
-Creates a polyhedron by recursive triangular extrusion.
-
----
-
-### Current-Carrying Objects
-
-#### ObjRaceTrk
-```python
-coil = rad.ObjRaceTrk(center, radii, heights, current, n_segments)
-```
-Creates a racetrack coil (rectangular with rounded ends).
-
-**Parameters**:
-- `center`: `[x, y, z]` - Center point (mm)
-- `radii`: `[r_straight, r_arc]` - Radii (mm)
-- `heights`: `[h_inner, h_outer]` - Heights (mm)
-- `current`: Current (A)
-- `n_segments`: Number of segments for arc discretization
-
-**Example**:
-```python
-# Racetrack coil: 30mm straight, 20mm arc radius, 1000A current
-coil = rad.ObjRaceTrk([0,0,20], [30,20], [5,5], 1000, 3)
+obj = rad.ObjPolyhdr(vertices, faces, magnetization)
 ```
 
----
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `vertices` | [[x,y,z], ...] | 3D vertex coordinates |
+| `faces` | [[v1,v2,...], ...] | Face vertex indices (**1-indexed!**) |
+| `magnetization` | [Mx, My, Mz] | Initial magnetization |
 
-#### ObjFlmCur
 ```python
-filament = rad.ObjFlmCur([[x1,y1,z1], [x2,y2,z2], ...], current)
-```
-Creates a filament polygonal line conductor.
-
-**Parameters**:
-- `points`: List of 3D points defining the path (mm)
-- `current`: Current (A)
-
-**Example**:
-```python
-# Rectangular loop
-points = [[0,0,0], [10,0,0], [10,10,0], [0,10,0], [0,0,0]]
-loop = rad.ObjFlmCur(points, 100)
+from netgen_mesh_import import TETRA_FACES
+vertices = [[0,0,0], [1,0,0], [0.5,1,0], [0.5,0.5,1]]
+tet = rad.ObjPolyhdr(vertices, TETRA_FACES, [0, 0, 1e6])
 ```
 
----
+### ObjBckg - Uniform Background Field
 
-### Field Source Objects
-
-#### ObjBckg ⭐ EXTENDED
 ```python
 field_src = rad.ObjBckg([Bx, By, Bz])
 ```
-Creates a source of uniform background magnetic field.
 
-**Parameters**:
-- `[Bx, By, Bz]`: Uniform field vector (T)
-
-**Example**:
 ```python
-# 0.5 T uniform field in z-direction
-bg = rad.ObjBckg([0, 0, 0.5])
+MU_0 = 4 * np.pi * 1e-7
+ext = rad.ObjBckg([0, 0, MU_0 * 50000])  # 50,000 A/m in z
 ```
 
-**Documentation**: See [API_EXTENSIONS.md](API_EXTENSIONS.md#objbckg)
+### ObjCnt - Container
 
----
-
-#### ObjBckgCF ⭐ EXTENDED
 ```python
-field_src = rad.ObjBckgCF(callback_function)
-```
-Creates a source of arbitrary spatially-varying background field.
-
-**Parameters**:
-- `callback_function`: Python function `f([x,y,z]) -> [Bx,By,Bz]`
-  - Input: Position in mm
-  - Output: Field in T
-
-**Example**:
-```python
-def gradient_field(pos):
-	x, y, z = pos
-	return [0.01*x, 0.01*y, 0.5]
-
-bg = rad.ObjBckgCF(gradient_field)
+group = rad.ObjCnt([obj1, obj2, ...])
 ```
 
-**Documentation**: See [API_EXTENSIONS.md](API_EXTENSIONS.md#objbckgcf)
+### ObjDivMag - Subdivide
 
----
-
-### Object Containers
-
-#### ObjCnt
 ```python
-group = rad.ObjCnt([obj1, obj2, obj3, ...])
-```
-Creates a container (group) of objects.
-
-**Parameters**:
-- List of object keys
-
-**Returns**:
-- Container object key
-
-**Example**:
-```python
-magnet1 = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,1])
-magnet2 = rad.ObjRecMag([20,0,0], [10,10,10], [0,0,1])
-group = rad.ObjCnt([magnet1, magnet2])
+rad.ObjDivMag(obj, [nx, ny, nz])
 ```
 
----
+### ObjRaceTrk - Racetrack Coil
 
-#### ObjCutMag
 ```python
-pieces = rad.ObjCutMag(obj, point, normal, option)
+coil = rad.ObjRaceTrk(center, radii, heights, current, n_segments)
 ```
-Cuts a magnetic object with a plane.
 
-**Parameters**:
-- `obj`: Object key to cut
-- `point`: `[x, y, z]` - Point on cutting plane (mm)
-- `normal`: `[nx, ny, nz]` - Plane normal vector
-- `option`: `'Frame->Lab'|'Frame->Loc'` - Coordinate frame
+### ObjFlmCur - Filament Conductor
 
-**Returns**:
-- List of resulting object keys
-
----
-
-#### ObjDivMag
 ```python
-pieces = rad.ObjDivMag(obj, subdivisions, option)
-```
-Subdivides a magnetic object.
-
-**Parameters**:
-- `obj`: Object key to subdivide
-- `subdivisions`: `[nx, ny, nz]` or `[[kx1,q1],[ky1,q2],[kz1,q3]]`
-  - Simple form: Number of divisions per axis
-  - Advanced form: `[ki, qi]` = ki subdivisions with ratio qi
-- `option`: Options string (e.g., `'Frame->Lab'`)
-
-**Returns**:
-- Container of subdivided elements
-
-**Example**:
-```python
-# Uniform 3×3×3 subdivision
-magnet = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,1])
-pieces = rad.ObjDivMag(magnet, [3, 3, 3])
-
-# Non-uniform subdivision with ratio
-pieces = rad.ObjDivMag(magnet, [[3,1.5], [3,1.5], [3,1.5]])
+filament = rad.ObjFlmCur([[x1,y1,z1], [x2,y2,z2], ...], current)
 ```
 
 ---
 
 ## Materials
 
-### MatLin - Linear Magnetic Material (Soft Magnetics)
-
-`rad.MatLin()` defines **linear magnetic materials** - soft magnetic materials that respond to external fields.
-
-**IMPORTANT**: MatLin is for **linear materials ONLY** (soft iron, steel, mu-metal, ferrite, etc.). For permanent magnets, use `ObjRecMag()` with magnetization vector or `MatPM()` for demagnetization curves.
-
-#### Form 1: Isotropic Material
+### MatLin - Linear Isotropic
 
 ```python
-material = rad.MatLin(ksi)
-```
-
-**Parameters**:
-- `ksi` (float): Magnetic susceptibility χ (dimensionless)
-- Relative permeability: μᵣ = 1 + ksi
-
-**Example**:
-```python
-# Soft iron (μᵣ ≈ 1000)
-mat = rad.MatLin(999)  # ksi = μᵣ - 1 = 999
-block = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,0])  # Zero initial magnetization
-rad.MatApl(block, mat)
-rad.Solve(block, 0.0001, 1000)
-```
-
-#### Form 2: Anisotropic Material with Easy Axis
-
-```python
-material = rad.MatLin([ksi_par, ksi_perp], [ex, ey, ez])
-```
-
-**Parameters**:
-- `[ksi_par, ksi_perp]`: Susceptibilities parallel and perpendicular to easy axis
-- `[ex, ey, ez]`: Easy magnetization axis direction (does NOT need normalization)
-
-**Example**:
-```python
-# Anisotropic material: easy axis in Z direction
-mat = rad.MatLin([5000, 100], [0, 0, 1])  # ksi_|| = 5000, ksi_⊥ = 100
-block = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,0])
-rad.MatApl(block, mat)
-```
-
-**⚠️ Important Notes**:
-1. **Linear materials only**: MatLin is for soft magnetic materials (materials with susceptibility)
-2. **Zero initial magnetization**: Object must be created with `[0,0,0]` magnetization
-3. **Permanent magnets**: Do NOT use MatLin - use `ObjRecMag(..., [Mx, My, Mz])` or `MatPM()`
-4. **Relaxation required**: Must call `rad.Solve()` to compute induced magnetization
-
----
-
-### MatPM - Permanent Magnet with Demagnetization ⭐ NEW
-
-```python
-material = rad.MatPM(Br, Hc, [mx, my, mz])
-```
-
-Creates a permanent magnet material with linear demagnetization curve.
-
-**Parameters**:
-- `Br` (float): Residual flux density [Tesla]
-- `Hc` (float): Coercivity [A/m]
-- `[mx, my, mz]`: Easy magnetization axis direction
-
-**B-H Relationship**:
-```
-B = Br + μ₀ · μᵣₑc · H
-μᵣₑc = Br / (μ₀ · Hc)
-```
-
-**Typical Values**:
-| Material | Br [T] | Hc [kA/m] |
-|----------|--------|-----------|
-| NdFeB N52 | 1.43 | 876 |
-| NdFeB N42 | 1.32 | 876 |
-| SmCo | 1.10 | 800 |
-| Ferrite | 0.40 | 240 |
-
-**Example**:
-```python
-# NdFeB N52 magnet
-mat = rad.MatPM(1.43, 876000, [0, 0, 1])  # Br=1.43T, Hc=876kA/m
-magnet = rad.ObjRecMag([0,0,0], [20,20,10], [0,0,0])
-rad.MatApl(magnet, mat)
-rad.Solve(magnet, 0.0001, 1000)
-```
-
----
-
-### MatLin - Legacy API ⚠️ DEPRECATED
-
-```python
-material = rad.MatLin([ksi_parallel, ksi_perpendicular], mr)
-```
-Creates a linear anisotropic magnetic material.
-
-**Usage**: For magnetic materials that respond to external fields. **NOT for permanent magnets** (which have fixed magnetization and don't need material properties).
-
-**Parameters**:
-- `[ksi_parallel, ksi_perpendicular]`: Susceptibilities parallel/perpendicular to easy magnetization axis
-- `mr`: Remanent magnetization - defines the easy magnetization axis (must be non-zero)
-  - **Scalar form**: `mr` = magnitude only (A/m)
-    - Easy axis direction taken from object's initial magnetization vector
-  - **Vector form**: `[mrx, mry, mrz]` = remanent magnetization vector (A/m)
-    - Easy axis direction explicitly defined by this vector
-
-**Physical Meaning**:
-- `mr` (remanent magnetization) defines the **easy magnetization axis** (direction of parallel susceptibility)
-- Susceptibility parallel (ksi_parallel): Material response along easy axis
-- Susceptibility perpendicular (ksi_perpendicular): Material response perpendicular to easy axis
-
-**Examples**:
-```python
-# Form 1: Scalar mr - easy axis from object's magnetization
-obj = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,1])  # Initial M in z-direction
-mat = rad.MatLin([0.06, 0.17], 100)  # Easy axis = z (from object), |Mr| = 100 A/m
+mat = rad.MatLin(chi)  # chi = mu_r - 1
 rad.MatApl(obj, mat)
-
-# Form 2: Vector mr - easy axis explicitly defined
-mat = rad.MatLin([0.06, 0.17], [0, 0, 100])  # Easy axis in z, |Mr| = 100 A/m
-rad.MatApl(obj, mat)  # Applied to any object
-
-# Isotropic linear material (equal susceptibilities in all directions)
-mat = rad.MatLin([1000, 1000], [0, 0, 100])  # Mr still needed as reference
 ```
 
-**Important Notes**:
-- Permanent magnets: Use `rad.ObjRecMag([x,y,z], [dx,dy,dz], [mx,my,mz])` only - no material needed
-- Magnetic materials: Use MatLin or MatSatIsoFrm for materials responding to fields
-- `mr` must be non-zero (either as scalar magnitude or vector)
-
-**⚠️ DEPRECATED**: Use the new `MatLin(ksi)`, `MatLin([ksi_par, ksi_perp], [ex,ey,ez])`, `MatPM()`, or `MatPMLinear()` APIs instead.
-
----
-
-### MatSatIsoFrm
 ```python
-material = rad.MatSatIsoFrm([ksi1,ms1], [ksi2,ms2], [ksi3,ms3])
+# Soft iron (mu_r = 1000)
+mat = rad.MatLin(999)
+rad.MatApl(cube, mat)
 ```
-Creates nonlinear isotropic material from formula.
 
-**Formula**: M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3)
+### MatLin - Linear Anisotropic
 
-**Parameters**:
-- `[ksi_i, ms_i]`: Susceptibility and saturation magnetization pairs (T)
-- Terms can be omitted (2nd and 3rd parameters optional)
-
----
-
-### MatSatIsoTab
 ```python
-material = rad.MatSatIsoTab([[H1,M1], [H2,M2], ...])
+mat = rad.MatLin([chi_par, chi_perp], [ex, ey, ez])
 ```
-Creates nonlinear isotropic material from M-H table.
 
-**Parameters**:
-- List of `[H, M]` pairs defining M(H) curve (T)
-
-**Example**:
 ```python
-# Soft iron M-H curve
-MH_data = [
-	[0, 0], [200, 0.7], [600, 1.2], [1200, 1.4],
-	[2000, 1.5], [3500, 1.54], [6000, 1.56], [12000, 1.57]
+# Easy axis in z-direction
+mat = rad.MatLin([5000, 100], [0, 0, 1])
+```
+
+### MatSatIsoTab - Nonlinear (B-H Table)
+
+```python
+mat = rad.MatSatIsoTab(HM_data)  # [[H, M], ...]
+```
+
+**Important**: Radia uses H-M format, not B-H. Convert using:
+
+```python
+MU_0 = 4 * np.pi * 1e-7
+
+# B-H curve: [H (A/m), B (T)]
+BH_DATA = [
+    [0.0, 0.0],
+    [100.0, 0.1],
+    [200.0, 0.3],
+    [500.0, 0.8],
+    [1000.0, 1.2],
+    [2000.0, 1.5],
+    [5000.0, 1.7],
+    [10000.0, 1.8],
+    [50000.0, 2.0],
+    [100000.0, 2.1],
 ]
-mat = rad.MatSatIsoTab(MH_data)
+
+# Convert to H-M: M = B/mu_0 - H
+HM_DATA = [[h, b/MU_0 - h] for h, b in BH_DATA]
+mat = rad.MatSatIsoTab(HM_DATA)
 ```
 
----
+### MatSatIsoFrm - Nonlinear (Formula)
 
-### MatSatLamFrm / MatSatLamTab
-Laminated materials (similar to `MatSatIsoFrm/Tab` with packing factor and lamination normal).
-
----
-
-### MatSatAniso
 ```python
-material = rad.MatSatAniso(data_parallel, data_perpendicular)
-```
-Creates nonlinear anisotropic material with separate parallel/perpendicular characteristics.
-
----
-
-### Common Material Configuration Examples
-
-Below are typical material parameters for common magnetic materials. Use **`MatPM`** for permanent magnets or **`MatSatIsoFrm`** for soft magnetic materials. For linear magnetic materials (non-permanent), use **`MatLin`**.
-
-#### Permanent Magnet Materials
-
-**Important**: For permanent magnets, use **`MatPM`** (NEW API) or create objects with fixed magnetization using `ObjRecMag` directly.
-
-**NdFeB N52** (Neodymium-Iron-Boron):
-```python
-# Method 1: Using MatPM (recommended for materials with demagnetization)
-mat = rad.MatPM(1.43, 876000, [0, 0, 1])  # Br=1.43T, Hc=876kA/m, easy axis=Z
-magnet = rad.ObjRecMag([0,0,0], [20,20,10], [0,0,0])
-rad.MatApl(magnet, mat)
-
-# Method 2: Fixed magnetization (for simple permanent magnets)
-magnet = rad.ObjRecMag([0,0,0], [20,20,10], [0,0,1.2])  # M=1.2T, no material needed
+mat = rad.MatSatIsoFrm([ksi1, ms1], [ksi2, ms2], [ksi3, ms3])
 ```
 
-**NdFeB N42**:
+Formula: `M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3)`
+
 ```python
-mat = rad.MatPM(1.32, 876000, [0, 0, 1])  # Br=1.32T, Hc=876kA/m
-```
-
-**SmCo** (Samarium-Cobalt):
-```python
-mat = rad.MatPM(1.10, 800000, [0, 0, 1])  # Br=1.10T, Hc=800kA/m
-```
-
-**Ferrite**:
-```python
-mat = rad.MatPM(0.40, 240000, [0, 0, 1])  # Br=0.40T, Hc=240kA/m
-```
-
-**⚠️ IMPORTANT**: Do NOT use `MatLin` for permanent magnets. `MatLin` is only for linear magnetic materials that respond to external fields (soft iron, transformer cores, etc.).
-
-#### Soft Magnetic Materials (Nonlinear Isotropic)
-
-**Xc06** (Low Carbon Steel, C<0.06%):
-```python
-mat = rad.MatSatIsoFrm([2118., 1.362], [63.06, 0.2605], [17.138, 0.4917])
-```
-
-**Steel37** (C<0.13%):
-```python
+# Steel37 (C<0.13%)
 mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
 ```
 
-**Steel42** (C<0.19%):
-```python
-mat = rad.MatSatIsoFrm([968.66, 1.441], [24.65, 0.2912], [8.3, 0.3316])
-```
+### MatApl - Apply Material
 
-**AFK502** (Vanadium Permendur, Fe:49%, Co:49%, V:2%):
-```python
-mat = rad.MatSatIsoFrm([10485., 1.788], [241.5, 0.437], [7.43, 0.115])
-```
-
-**AFK1** (FeCo alloy, Fe:74.2%, Co:25%):
-```python
-mat = rad.MatSatIsoFrm([2001., 1.704], [38.56, 0.493], [1.24, 0.152])
-```
-
-**Note**: For soft magnetic materials, the magnetization is modeled as:
-```
-M(H) = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3)
-```
-where H is the magnitude of magnetic field strength in Tesla.
-
----
-
-### MatApl
 ```python
 rad.MatApl(obj, material)
 ```
-Applies material to object.
-
-**Parameters**:
-- `obj`: Object key
-- `material`: Material key
-
-**Example**:
-```python
-magnet = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,0.1])
-mat = rad.MatSatIsoTab(MH_data)
-rad.MatApl(magnet, mat)
-```
 
 ---
 
-### MatMvsH
+## Solver
+
+### Solve - High-Level API (Recommended)
+
 ```python
-M = rad.MatMvsH(obj, 'mx|my|mz'|'', [Hx, Hy, Hz])
-```
-Computes magnetization from field strength for object's material.
-
-**Parameters**:
-- `obj`: Object with material
-- Component selector: `'mx'`, `'my'`, `'mz'`, or `''` (magnitude)
-- `[Hx, Hy, Hz]`: Field strength vector (T)
-
-**Returns**:
-- Magnetization component or magnitude (T)
-
----
-
-## Transformations
-
-### TrfTrsl
-```python
-obj_copy = rad.TrfTrsl(obj, [dx, dy, dz])
-```
-Translates (moves) an object.
-
-**Parameters**:
-- `obj`: Object key
-- `[dx, dy, dz]`: Translation vector (mm)
-
-**Returns**:
-- Transformed object key (same as input)
-
----
-
-### TrfRot
-```python
-obj_copy = rad.TrfRot(obj, [x, y, z], [nx, ny, nz], angle)
-```
-Rotates an object around an axis.
-
-**Parameters**:
-- `obj`: Object key
-- `[x, y, z]`: Point on rotation axis (mm)
-- `[nx, ny, nz]`: Axis direction vector
-- `angle`: Rotation angle (radians)
-
----
-
-### TrfOrnt
-```python
-obj_copy = rad.TrfOrnt(obj, [x, y, z], [nz_old, nx_old], [nz_new, nx_new])
-```
-Reorients an object by specifying old and new coordinate frame directions.
-
----
-
-### TrfMlt
-```python
-array = rad.TrfMlt(obj, transformation, n_copies)
-```
-Creates multiple copies with repeated transformation.
-
-**Parameters**:
-- `obj`: Object key to copy
-- `transformation`: Transformation key (from TrfTrsl, TrfRot, etc.)
-- `n_copies`: Number of copies
-
-**Returns**:
-- Container of copies
-
-**Example**:
-```python
-magnet = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,1])
-tr = rad.TrfTrsl(rad.ObjCnt([]), [15, 0, 0])  # Translation
-array = rad.TrfMlt(magnet, tr, 5)  # 5 copies, 15mm apart
+result = rad.Solve(obj, tolerance, max_iter, method=1)
 ```
 
----
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `obj` | int | Object or container |
+| `tolerance` | float | Convergence threshold (0.001 = 0.1%) |
+| `max_iter` | int | Maximum iterations |
+| `method` | int | `0` = LU, `1` = BiCGSTAB (default) |
 
-### TrfZerPara / TrfZerPerp
-```python
-mirror = rad.TrfZerPara(obj, [x,y,z], [nx,ny,nz])
-mirror = rad.TrfZerPerp(obj, [x,y,z], [nx,ny,nz])
-```
-Creates mirror symmetry with field perpendicular/parallel to mirror plane.
+| Returns | Description |
+|---------|-------------|
+| `result[0]` | Final residual |
+| `result[3]` | Number of iterations |
 
----
+### Solver Selection
 
-## Relaxation and Solving
+| Problem Size | Elements | Method | Code |
+|--------------|----------|--------|------|
+| Small | < 1,000 | LU | `rad.Solve(grp, 0.001, 100, 0)` |
+| Medium | 1,000-10,000 | BiCGSTAB | `rad.Solve(grp, 0.001, 1000, 1)` |
+| Large | > 10,000 | BiCGSTAB | `rad.Solve(grp, 0.001, 1000, 1)` |
 
-### RlxPre ⭐ EXTENDED
-```python
-intrc = rad.RlxPre(obj, srcobj=0)
-```
-Builds interaction matrix for relaxation.
+**Iteration counts**:
+- Linear materials: 1-2 iterations
+- Nonlinear materials: 3-6 iterations
 
-**Parameters**:
-- `obj`: Main object (magnetizable)
-- `srcobj`: Optional external field source (default=0)
+### Performance vs ELF_MAGIC
 
-**Returns**:
-- Interaction matrix key
+BiCGSTAB solver comparison (nonlinear BH curve):
 
-**Time Complexity**: O(N²) where N = number of elements
-
-**Example**:
-```python
-magnet = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,0.1])
-rad.MatApl(magnet, material)
-
-# Self-interaction only
-intrc = rad.RlxPre(magnet, magnet)
-
-# With external field source
-coil = rad.ObjRaceTrk([0,0,20], [30,20], [5,5], 1000, 3)
-intrc = rad.RlxPre(magnet, coil)
-```
-
-**Documentation**: See [API_EXTENSIONS.md](API_EXTENSIONS.md#rlxpre)
-
----
-
-### SetRelaxSubInterval ⭐ NEW
-```python
-rad.SetRelaxSubInterval(intrc, start_idx, end_idx, relax_together=1)
-```
-Configures element grouping for LU decomposition solver.
-
-**Parameters**:
-- `intrc`: Interaction matrix key
-- `start_idx`: Starting element index (0-based)
-- `end_idx`: Ending element index (0-based, inclusive)
-- `relax_together`: `1` = LU decomposition, `0` = Gauss-Seidel
-
-**Example**:
-```python
-intrc = rad.RlxPre(grp, grp)
-rad.SetRelaxSubInterval(intrc, 0, N-1, 1)  # All elements with LU
-rad.RlxMan(intrc, 5, 100, 1.0)  # Method 5
-```
-
-**Documentation**: See [API_EXTENSIONS.md](API_EXTENSIONS.md#setrelaxsubinterval)
-
----
-
-### RlxMan ⭐ EXTENDED
-```python
-rad.RlxMan(intrc, method, iter_num, relax_param)
-```
-Executes manual relaxation procedure.
-
-**Parameters**:
-- `intrc`: Interaction matrix key
-- `method`: Solver method (0-5) ⭐ **Extended to support Method 5**
-  - 0: Simple iteration
-  - 1: Over-relaxation
-  - 2: Under-relaxation
-  - 3: Gauss-Seidel
-  - 4: Gauss-Seidel
-  - **5: LU decomposition** ⭐ NEW (requires `SetRelaxSubInterval`)
-- `iter_num`: Number of iterations
-- `relax_param`: Relaxation parameter (typically 1.0)
-
-**Time Complexity**:
-- Methods 0-4: O(N²) per iteration
-- Method 5: O(N³) for LU decomposition
-
-**Example**:
-```python
-# Gauss-Seidel
-rad.RlxMan(intrc, 4, 100, 1.0)
-
-# LU decomposition
-rad.SetRelaxSubInterval(intrc, 0, N-1, 1)
-rad.RlxMan(intrc, 5, 100, 1.0)
-```
-
-**Documentation**: See [API_EXTENSIONS.md](API_EXTENSIONS.md#rlxman---method-5-support)
-
----
-
-### RlxAuto
-```python
-rad.RlxAuto(intrc, precision, max_iter, method=4, 'ZeroM->True|False')
-```
-Executes automatic relaxation with convergence criterion.
-
-**Parameters**:
-- `intrc`: Interaction matrix key
-- `precision`: Convergence threshold (change in M)
-- `max_iter`: Maximum iterations
-- `method`: Solver method (0-4, default=4)
-- `'ZeroM->True'`: Start with M=0 (default)
-- `'ZeroM->False'`: Start with existing M values
-
-**Example**:
-```python
-rad.RlxAuto(intrc, 0.001, 1000, 4)
-```
-
----
-
-### RlxUpdSrc
-```python
-rad.RlxUpdSrc(intrc)
-```
-Updates external field source data without rebuilding interaction matrix.
-
-**Use case**: When coil currents change but geometry is fixed.
-
----
-
-### Solve
-```python
-rad.Solve(obj, precision, max_iter, method=4)
-```
-High-level function combining matrix build and relaxation.
-
-**Parameters**:
-- `obj`: Object key
-- `precision`: Convergence threshold
-- `max_iter`: Maximum iterations
-- `method`: Solver method (0-4, default=4)
-
-**Equivalent to**:
-```python
-intrc = rad.RlxPre(obj, obj)
-rad.RlxAuto(intrc, precision, max_iter, method)
-```
+| Elements | Radia | ELF_MAGIC | Speedup |
+|----------|-------|-----------|---------|
+| 1,000 | 0.55s | 4.05s | **7.4x** |
+| 3,375 | 7.30s | 54.49s | **7.5x** |
+| 8,000 | 51.81s | 343.01s | **6.6x** |
 
 ---
 
 ## Field Computation
 
-### Fld
+### Fld - Field at Point(s)
+
 ```python
-field = rad.Fld(obj, component, point_or_points)
+field = rad.Fld(obj, component, point)
 ```
-Computes magnetic field at point(s).
 
-**Parameters**:
-- `obj`: Object key
-- `component`: Field component selector
-  - Magnetic flux density: `'bx'`, `'by'`, `'bz'`, `'b'` (magnitude)
-  - Magnetic field: `'hx'`, `'hy'`, `'hz'`, `'h'` (magnitude)
-  - Vector potential: `'ax'`, `'ay'`, `'az'`, `'a'` (magnitude)
-  - Magnetization: `'mx'`, `'my'`, `'mz'`, `'m'` (magnitude)
-- `point_or_points`: `[x,y,z]` or `[[x1,y1,z1], [x2,y2,z2], ...]` (mm)
+| Component | Description |
+|-----------|-------------|
+| `'bx'`, `'by'`, `'bz'`, `'b'` | Magnetic flux density B (T) |
+| `'hx'`, `'hy'`, `'hz'`, `'h'` | Magnetic field H (A/m) |
+| `'ax'`, `'ay'`, `'az'`, `'a'` | Vector potential A (T*m) |
+| `'mx'`, `'my'`, `'mz'`, `'m'` | Magnetization M |
 
-**Returns**:
-- Field value (T) or list of values
-
-**Example**:
 ```python
-# Single point
-Bz = rad.Fld(magnet, 'bz', [0, 0, 10])
+B = rad.Fld(magnet, 'b', [0, 0, 0.1])  # B vector at point
+Bz = rad.Fld(magnet, 'bz', [0, 0, 0.1])  # Bz component
+```
 
-# Multiple points
-points = [[0,0,0], [5,0,0], [10,0,0]]
-B_values = rad.Fld(magnet, 'bz', points)
+### FldLst - Field Along Line
+
+```python
+field_list = rad.FldLst(obj, component, p1, p2, n_points, 'arg')
+```
+
+### ObjM - Get Magnetization
+
+```python
+all_M = rad.ObjM(obj)  # Returns [[center, [Mx, My, Mz]], ...]
+```
+
+```python
+all_M = rad.ObjM(container)
+M_list = [m[1] for m in all_M]
+M_avg_z = np.mean([m[2] for m in M_list])
 ```
 
 ---
 
-### FldLst
+## Mesh Import
+
+### netgen_mesh_to_radia - Netgen Tetrahedral
+
 ```python
-field_list = rad.FldLst(obj, component, p1, p2, n_points, 'arg|noarg', start)
+from netgen_mesh_import import netgen_mesh_to_radia
+
+mag_obj = netgen_mesh_to_radia(mesh,
+                                material={'magnetization': [0, 0, 0]},
+                                units='m',
+                                material_filter='magnetic')
 ```
-Computes field along a line segment.
 
-**Parameters**:
-- `obj`: Object key
-- `component`: Field component selector
-- `p1`, `p2`: `[x,y,z]` - Start and end points (mm)
-- `n_points`: Number of points
-- `'arg'|'noarg'`: Include longitudinal position in output
-- `start`: Start value for longitudinal position (optional)
+### create_radia_from_nastran - Nastran Import
 
-**Returns**:
-- List of field values, or list of `[position, field]` pairs
+```python
+from nastran_mesh_import import create_radia_from_nastran
+
+mag_obj = create_radia_from_nastran('model.bdf',
+                                     material={'magnetization': [0, 0, 1e6]},
+                                     units='m')
+```
+
+**Supported Nastran elements**: CTETRA, CHEXA, CPENTA, CPYRAM, CTRIA3
 
 ---
 
-### FldInt
+## NGSolve Integration
+
+### Import Order (CRITICAL)
+
 ```python
-integral = rad.FldInt(obj, 'inf|fin', component, p1, p2)
-```
-Computes field integral along a line.
-
-**Parameters**:
-- `obj`: Object key
-- `'inf'|'fin'`: Infinite or finite integral
-- `component`: `'ibx'|'iby'|'ibz'` - Integral component
-- `p1`, `p2`: `[x,y,z]` - Start and end points (mm)
-
-**Returns**:
-- Field integral (T·mm)
-
----
-
-### FldPtcTrj
-```python
-trajectory = rad.FldPtcTrj(obj, energy, [x0,dxdy0,z0,dzdy0], [y0,y1], n_points)
-```
-Computes relativistic particle trajectory.
-
-**Parameters**:
-- `obj`: Object key (field source)
-- `energy`: Particle energy (GeV)
-- `[x0, dxdy0, z0, dzdy0]`: Initial transverse coordinates and angles
-- `[y0, y1]`: Longitudinal coordinate range (mm)
-- `n_points`: Number of integration steps
-
-**Returns**:
-- List of trajectory points
-
----
-
-### FldEnr / FldEnrFrc / FldEnrTrq
-```python
-energy = rad.FldEnr(obj_dst, obj_src)
-force = rad.FldEnrFrc(obj_dst, obj_src, 'fx|fy|fz')
-torque = rad.FldEnrTrq(obj_dst, obj_src, 'tx|ty|tz', [x,y,z])
-```
-Computes energy, force, or torque on obj_dst in field of obj_src.
-
-**Returns**:
-- Energy (J), force (N), or torque (N·mm)
-
----
-
-### FldCmpPrc
-```python
-rad.FldCmpPrc('PrcB->prb, PrcA->pra, ...')
-```
-Sets computation precision for various field quantities.
-
-**Options**:
-- `PrcB`: Magnetic flux density precision (T)
-- `PrcA`: Vector potential precision
-- `PrcBInt`: Field integral precision (T·mm)
-- `PrcForce`: Force precision (N)
-- `PrcTorque`: Torque precision (N·mm)
-- `PrcEnergy`: Energy precision (J)
-
----
-
-### FldUnits
-```python
-# Get current units
-units_str = rad.FldUnits()
-
-# Set length unit to meters
-rad.FldUnits('m')
-
-# Set length unit to millimeters (default)
-rad.FldUnits('mm')
-```
-Gets or sets the unit system.
-
-**Parameters** (for setting):
-- `'m'`: Use meters for length
-- `'mm'`: Use millimeters for length (default)
-
-**Returns** (for getting):
-- String describing current units
-
-**Default units**:
-- Length: millimeters (mm)
-- Magnetic flux density: Tesla (T)
-- Current: Amperes (A)
-- Force: Newtons (N)
-
-**IMPORTANT - NGSolve Integration**:
-```python
-# REQUIRED for NGSolve integration (NGSolve uses meters)
+# 1. Import radia first
 import radia as rad
-rad.FldUnits('m')  # Set BEFORE creating any geometry
+rad.FldUnits('m')  # REQUIRED: NGSolve uses meters
 
-# All coordinates now in meters
-magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2])
+# 2. Import ngsolve BEFORE radia_ngsolve
+import ngsolve
+from ngsolve import *
+
+# 3. NOW import radia_ngsolve
+from radia import radia_ngsolve
 ```
 
-**Policy**: No hard-coded unit conversions in code. All conversions via `rad.FldUnits()`.
+Wrong order causes `ImportError: DLL load failed`.
+
+### NGSolve Version Requirement
+
+**Use NGSolve 6.2.2405 only** (6.2.2406+ has Periodic BC bug).
+
+```bash
+pip install ngsolve==6.2.2405
+```
+
+### RadiaField - CoefficientFunction
+
+```python
+cf = radia_ngsolve.RadiaField(radia_obj, field_type='b')
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `radia_obj` | int | Radia object ID |
+| `field_type` | str | `'b'`, `'h'`, `'a'`, or `'m'` |
+
+```python
+# Create CoefficientFunction for B field
+B_cf = radia_ngsolve.RadiaField(magnet, 'b')
+
+# Use in NGSolve
+fes = HDiv(mesh, order=2)
+gf = GridFunction(fes)
+gf.Set(B_cf)
+```
 
 ---
 
 ## Utilities
 
-### UtiDel / UtiDelAll
+### FldUnits - Unit System
+
 ```python
-rad.UtiDel(obj)      # Delete one object
-rad.UtiDelAll()      # Delete all objects
+rad.FldUnits('m')   # Use meters (required for NGSolve)
+rad.FldUnits('mm')  # Use millimeters (default)
+rad.FldUnits()      # Get current units
 ```
-Removes objects from memory.
 
----
+### UtiDelAll - Clear Memory
 
-### UtiVer
+```python
+rad.UtiDelAll()
+```
+
+### UtiVer - Version
+
 ```python
 version = rad.UtiVer()
 ```
-Returns Radia library version string.
 
 ---
 
-### UtiDmp / UtiDmpPrs
-```python
-# Serialize object to string
-data = rad.UtiDmp(obj, 'asc'|'bin')
+## Transformations
 
-# Deserialize object from string
-obj = rad.UtiDmpPrs(data)
+### TrfTrsl - Translation
+
+```python
+rad.TrfTrsl(obj, [dx, dy, dz])
 ```
-Saves/loads objects to/from byte strings.
+
+### TrfRot - Rotation
+
+```python
+rad.TrfRot(obj, [x, y, z], [nx, ny, nz], angle)
+```
+
+### TrfMlt - Multiple Copies
+
+```python
+array = rad.TrfMlt(obj, transformation, n_copies)
+```
 
 ---
 
-## Extensions
+## Common Issues
 
-### SolverHMatrixDisable / SolverHMatrixEnable ⭐ NEW
+### 1. Coordinates Off by 1000x
+
+**Cause**: Unit mismatch (NGSolve uses meters, Radia defaults to mm)
+
+**Solution**:
 ```python
-rad.SolverHMatrixDisable()  # Use dense matrix
-rad.SolverHMatrixEnable()   # Use H-matrix (default)
+rad.FldUnits('m')  # Set at start of script
 ```
-Controls hierarchical matrix acceleration.
 
-**When to use**:
-- Disable: Small problems (N < 1000), benchmarking, debugging
-- Enable: Large problems (N > 1000), production
+### 2. DLL Load Failed
 
-**Documentation**: See [API_EXTENSIONS.md](API_EXTENSIONS.md#solverhmatrixdisableenable)
+**Cause**: Wrong import order
+
+**Solution**: Import ngsolve BEFORE radia_ngsolve
+
+### 3. ObjPolyhdr Face Error
+
+**Cause**: 0-indexed faces
+
+**Solution**: Use **1-indexed** faces (Radia convention)
+
+### 4. Solver Not Converging
+
+**Solutions**:
+1. Use BiCGSTAB (Method 1)
+2. Increase max iterations
+3. Check B-H data is monotonic
+4. Verify H-M conversion: `M = B/mu_0 - H`
 
 ---
 
-### SolverTetraMethod ⭐ NEW
-```python
-rad.SolverTetraMethod(method)
-```
-Sets the tetrahedral element field computation method.
+## Units
 
-**Parameters**:
-- `method`: Integer selecting the computation method
-  - `0`: Original Radia method (default)
-  - `1`: Analytical method (for high-permeability materials)
-
-**Example**:
-```python
-import radia as rad
-from netgen_mesh_import import netgen_mesh_to_radia
-
-# Set tetrahedral method to analytical
-rad.SolverTetraMethod(1)
-
-# Import tetrahedral mesh
-mag_obj = netgen_mesh_to_radia(mesh,
-                                material={'magnetization': [0, 0, 12000]},
-                                units='m')
-
-# Solve
-rad.Solve(mag_obj, 0.0001, 10000)
-```
-
-**Notes**:
-- Default is method=0 (original Radia method)
-- Method setting is global and affects all tetrahedral elements
-- Must be set before calling `rad.Solve()`
-- Does not affect hexahedral or other element types
-
-**Documentation**: See [API_EXTENSIONS.md](API_EXTENSIONS.md#solvertetramethod)
-
----
-
-## Units Summary
-
-| Quantity | Units |
-|----------|-------|
-| Length | millimeters (mm) |
-| Magnetic flux density B | Tesla (T) |
-| Magnetic field H | A/m |
-| Magnetization M | T |
-| Current | Amperes (A) |
-| Force | Newtons (N) |
-| Energy | Joules (J) |
-| Torque | Newton·millimeters (N·mm) |
+| Quantity | Unit |
+|----------|------|
+| Length | mm (default) or m with `FldUnits('m')` |
+| B (flux density) | Tesla (T) |
+| H (field) | A/m |
+| M (magnetization) | A/m |
+| Current | Ampere (A) |
 
 ---
 
 ## References
 
-1. **Original ESRF Radia**
-   - Website: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia.html
-   - Reference Guide: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
-
-2. **Extensions Documentation**
-   - [API_EXTENSIONS.md](API_EXTENSIONS.md) - Detailed documentation of custom extensions
-
-3. **Examples**
-   - [`examples/solver_benchmarks/README.md`](../examples/solver_benchmarks/README.md) - Solver benchmarks
-   - [`examples/simple_problems/`](../examples/simple_problems/) - Basic examples
-   - [`examples/complex_coil_geometry/`](../examples/complex_coil_geometry/) - Complex geometries
-
-4. **Integration**
-   - [NGSOLVE_USAGE_GUIDE.md](NGSOLVE_USAGE_GUIDE.md) - NGSolve integration
+1. [ESRF Radia Reference Guide](https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html)
+2. [examples/cube_uniform_field/](../examples/cube_uniform_field/) - Benchmark examples
 
 ---
 
-**Last Updated**: 2025-11-27
-**Maintained By**: Radia Development Team
+**Last Updated**: 2025-12-15
 **License**: LGPL-2.1 (modifications), BSD-style (original RADIA from ESRF)
