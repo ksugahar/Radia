@@ -22,15 +22,16 @@
 #include <omp.h>
 #endif
 
-// MSC (Magnetic Surface Charge) support is disabled until radTExtrPolygonMSC is refactored
-// To enable: uncomment the #define and the include below
-// #define RADIA_MSC_SUPPORT
+// MSC (Magnetic Surface Charge) support for 6 DOF hexahedra
+// radTPolyhedron hexahedra use 6 DOF MSC (surface charge on each face)
+#define RADIA_MSC_SUPPORT
 #ifdef RADIA_MSC_SUPPORT
-#include "rad_extruded_polygon_msc.h"
+// Note: radTPolyhedron is already included above (line 19)
+// radTExtrPolygonMSC is deprecated - use radTPolyhedron with 6 faces instead
 #endif
 
 // Note: Dipole-dipole method for tetrahedra was tested but found numerically unstable.
-// Both Radia and ELF_MAGIC production solvers use surface charge (MSC) method.
+// Radia production solver uses the surface charge (MSC) method.
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -128,11 +129,23 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	}
 	FillInMainTransPtrArray();
 
-	// Use surface charge method for interaction matrix
-	// Note: Dipole-dipole method (ELF_MAGIC approach) was tested but found to be
-	// numerically unstable for tetrahedral meshes - results vary wildly with mesh size.
-	// The surface charge (MSC) method is used by both Radia and ELF_MAGIC production solvers.
-	int setupResult = SetupInteractMatrix();
+	// Check if any element has variable DOF (e.g., 6 DOF MSC hexahedra)
+	// If so, use the variable DOF interaction matrix setup
+	ComputeDOFOffsets();
+
+	int setupResult;
+	if(m_hasVariableDOF)
+	{
+		// Use variable DOF interaction matrix for 6 DOF MSC hexahedra
+		// This provides better convergence for deformed/rotated hexahedra
+		setupResult = SetupInteractMatrix_VariableDOF();
+	}
+	else
+	{
+		// Use standard 3x3 interaction matrix for tetrahedra and standard elements
+		// The surface charge (MSC) method is used by both Radia and production solvers.
+		setupResult = SetupInteractMatrix();
+	}
 	if(!setupResult) { DeallocateMemory(); return 0;} //OC26122019 //Most CPU-intensive
 
 	if(IntrctMatrMemAllocShouldBeDone) //OC29122019
@@ -561,12 +574,11 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 
 //-------------------------------------------------------------------------
 //=========================================================================
-// ELF_MAGIC Dipole-Dipole Interaction Matrix (SolverTetraMethod=2)
-// Reference: ELF_MAGIC m_dll_solver.f90, build_coefficient_matrix
+// DEPRECATED: Dipole-Dipole Interaction Matrix
 //
-// DEPRECATED: Dipole-dipole method was tested but found numerically unstable.
+// This method was tested but found numerically unstable.
 // Kept for historical reference. Results varied wildly with mesh size (117K-549K A/m).
-// Both Radia and ELF_MAGIC production code use surface charge (MSC) method.
+// Radia production code uses surface charge (MSC) method.
 //
 // The dipole-dipole approximation:
 //   Diagonal (self-demagnetization): N_ii = 1/3 * I  (isotropic, sphere approx)
@@ -820,12 +832,12 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 #ifdef RADIA_MSC_SUPPORT
 			else if(dof_row == 3 && dof_col == 6)
 			{
-				// 3x6 block: Field at standard element (3 DOF) center from MSC element (6 DOF)
+				// 3x6 block: Field at standard element (3 DOF) center from MSC hexahedron (6 DOF)
 				// For each sigma_j on face j of MSC element, compute field at standard element center
 				// N[row][col]_ij = component i of field at row's center due to unit sigma on col's face j
 
-				radTExtrPolygonMSC* msc_col = dynamic_cast<radTExtrPolygonMSC*>(elem_col);
-				if(msc_col)
+				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
+				if(poly_col && poly_col->Use6DOF_MSC)
 				{
 					TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(elem_row->ReturnCentrPoint());
 
@@ -837,12 +849,12 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						{
 							TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
 
-							// Field from unit sigma on face j
-							TVector3d H_face = msc_col->FieldFromSurfaceCharge(ObsPoiVect, msc_col->Faces[face_j], 1.0);
+							// Field from unit sigma on face j (quad face + point charge)
+							TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
 
 							// Point charge contribution (m = -sigma * area)
-							double unit_point_charge = -1.0 * msc_col->Faces[face_j].area;
-							TVector3d H_point = msc_col->FieldFromPointCharge(ObsPoiVect, msc_col->CentrPoint, unit_point_charge);
+							double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
+							TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
 
 							TVector3d H_local;
 							H_local.x = H_face.x + H_point.x;
@@ -867,20 +879,20 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			}
 			else if(dof_row == 6 && dof_col == 3)
 			{
-				// 6x3 block: Field at MSC element (6 DOF) eval points from standard element (3 DOF)
+				// 6x3 block: Field at MSC hexahedron (6 DOF) eval points from standard element (3 DOF)
 				// For each eval point i on MSC element, compute field component from standard element
 				// N[row][col]_ij = H dot n_i at eval point i due to unit M_j
 
-				radTExtrPolygonMSC* msc_row = dynamic_cast<radTExtrPolygonMSC*>(elem_row);
-				if(msc_row)
+				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
+				if(poly_row && poly_row->Use6DOF_MSC)
 				{
 					for(int face_i = 0; face_i < 6; face_i++)
 					{
 						// Eval point for face i (midpoint between face center and element center)
 						TVector3d EvalPt;
-						EvalPt.x = 0.5 * (msc_row->Faces[face_i].center.x + msc_row->CentrPoint.x);
-						EvalPt.y = 0.5 * (msc_row->Faces[face_i].center.y + msc_row->CentrPoint.y);
-						EvalPt.z = 0.5 * (msc_row->Faces[face_i].center.z + msc_row->CentrPoint.z);
+						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
+						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
+						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
 
 						TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(EvalPt);
 
@@ -908,7 +920,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						MainTransPtrArray[row]->TrMatrix_inv(SubMatrix);
 
 						// Get face normal
-						TVector3d& n = msc_row->Faces[face_i].normal;
+						TVector3d& n = poly_row->FaceNormal[face_i];
 
 						// H dot n for each magnetization component
 						// N[face_i][Mx] = (dHx/dMx*nx + dHy/dMx*ny + dHz/dMx*nz)
@@ -926,38 +938,43 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			}
 			else if(dof_row == 6 && dof_col == 6)
 			{
-				// 6x6 block: Field at MSC element (6 DOF) eval points from MSC element (6 DOF)
-				// N[row][col]_ij = H dot n_i at eval point i due to unit sigma on face j
+				// 6x6 block: Field at MSC hexahedron (6 DOF) eval points from MSC hexahedron (6 DOF)
+				// K(face_i, face_j) = normal_i dot H_field(eval_pt_i, src_face_j)
+				// Store -K/(4*pi) in the matrix (4pi divisor applied here, not in field functions)
 
-				radTExtrPolygonMSC* msc_row = dynamic_cast<radTExtrPolygonMSC*>(elem_row);
-				radTExtrPolygonMSC* msc_col = dynamic_cast<radTExtrPolygonMSC*>(elem_col);
+				static const double PI_MSC = 3.14159265358979323846;
+				static const double INV_4PI_MSC = 1.0 / (4.0 * PI_MSC);
 
-				if(msc_row && msc_col)
+				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
+				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
+
+				if(poly_row && poly_row->Use6DOF_MSC && poly_col && poly_col->Use6DOF_MSC)
 				{
 					for(int face_i = 0; face_i < 6; face_i++)
 					{
-						// Eval point for face i
+						// Yano-Sugahara evaluation point: midpoint between face center and element center
 						TVector3d EvalPt;
-						EvalPt.x = 0.5 * (msc_row->Faces[face_i].center.x + msc_row->CentrPoint.x);
-						EvalPt.y = 0.5 * (msc_row->Faces[face_i].center.y + msc_row->CentrPoint.y);
-						EvalPt.z = 0.5 * (msc_row->Faces[face_i].center.z + msc_row->CentrPoint.z);
+						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
+						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
+						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
 
 						TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(EvalPt);
 
 						for(int face_j = 0; face_j < 6; face_j++)
 						{
-							double H_dot_n = 0.0;
+							double K_ij = 0.0;
 
 							for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
 							{
 								TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
 
-								// Field from unit sigma on face j
-								TVector3d H_face = msc_col->FieldFromSurfaceCharge(ObsPoiVect, msc_col->Faces[face_j], 1.0);
+								// Field from unit sigma on face j (quad face + point charge)
+								// FieldFromQuadFace and FieldFromPointCharge return values WITHOUT 4pi divisor
+								TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
 
-								// Point charge contribution
-								double unit_point_charge = -1.0 * msc_col->Faces[face_j].area;
-								TVector3d H_point = msc_col->FieldFromPointCharge(ObsPoiVect, msc_col->CentrPoint, unit_point_charge);
+								// Point charge contribution: m = -sigma * area (Yano-Sugahara MSC method)
+								double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
+								TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
 
 								TVector3d H_local;
 								H_local.x = H_face.x + H_point.x;
@@ -966,13 +983,13 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 								// Transform back
 								TVector3d H_global = TransPtrVect[tr]->TrVectField(H_local);
-								H_dot_n += H_global.x * msc_row->Faces[face_i].normal.x +
-								           H_global.y * msc_row->Faces[face_i].normal.y +
-								           H_global.z * msc_row->Faces[face_i].normal.z;
+								K_ij += H_global.x * poly_row->FaceNormal[face_i].x +
+								        H_global.y * poly_row->FaceNormal[face_i].y +
+								        H_global.z * poly_row->FaceNormal[face_i].z;
 							}
 
-							// Store in block: row is face_i, col is face_j
-							block[face_i * m_totalDOF + face_j] = H_dot_n;
+							// Store -K/(4*pi) in the matrix (MSC convention)
+							block[face_i * m_totalDOF + face_j] = -K_ij * INV_4PI_MSC;
 						}
 					}
 				}
@@ -1012,12 +1029,19 @@ void radTInteraction::SetupExternFieldArray()
 
 	for(int k=0; k<AmOfMainElem; k++) ExternFieldArray[k] = ZeroVect;
 
+	// Also zero m_flatExternFieldArray for variable DOF
+	if(m_hasVariableDOF && !m_flatExternFieldArray.empty())
+	{
+		for(size_t i = 0; i < m_flatExternFieldArray.size(); i++)
+			m_flatExternFieldArray[i] = 0.0;
+	}
+
 	for(int ExtElNo=0; ExtElNo<AmOfExtElem; ExtElNo++)
 	{
 		FillInTransPtrVectForElem(ExtElNo, 'E');
 		radTg3d* ExtElPtr = g3dExternPtrVect[ExtElNo];
 
-		for(int StrNo=0; StrNo<AmOfMainElem; StrNo++) 
+		for(int StrNo=0; StrNo<AmOfMainElem; StrNo++)
 		{
 			InitObsPoiVect = MainTransPtrArray[StrNo]->TrPoint((g3dRelaxPtrVect[StrNo])->CentrPoint);
 			TVector3d BufVect(0.,0.,0.);
@@ -1032,6 +1056,61 @@ void radTInteraction::SetupExternFieldArray()
 		}
 		EmptyTransPtrVect();
 	}
+
+	// Populate m_flatExternFieldArray for variable DOF elements
+	if(m_hasVariableDOF && !m_flatExternFieldArray.empty() && AmOfExtElem > 0)
+	{
+		for(int StrNo = 0; StrNo < AmOfMainElem; StrNo++)
+		{
+			int dof = m_elemDOF[StrNo];
+			int offset = m_elemDOFOffset[StrNo];
+			radTg3dRelax* elem = g3dRelaxPtrVect[StrNo];
+
+			if(dof == 3)
+			{
+				// Standard element: store H_ext components
+				TVector3d& H_ext = ExternFieldArray[StrNo];
+				m_flatExternFieldArray[offset + 0] += H_ext.x;
+				m_flatExternFieldArray[offset + 1] += H_ext.y;
+				m_flatExternFieldArray[offset + 2] += H_ext.z;
+			}
+			else if(dof == 6)
+			{
+				// MSC hexahedron: compute H_ext dot n at each face
+				radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
+				if(poly && poly->Use6DOF_MSC)
+				{
+					for(int face_i = 0; face_i < 6; face_i++)
+					{
+						// Eval point for face i (midpoint between face center and element center)
+						TVector3d EvalPt;
+						EvalPt.x = 0.5 * (poly->FaceCenter[face_i].x + poly->CentrPoint.x);
+						EvalPt.y = 0.5 * (poly->FaceCenter[face_i].y + poly->CentrPoint.y);
+						EvalPt.z = 0.5 * (poly->FaceCenter[face_i].z + poly->CentrPoint.z);
+
+						// Compute H_ext at eval point from all external sources
+						TVector3d H_total(0., 0., 0.);
+						for(int ExtElNo = 0; ExtElNo < AmOfExtElem; ExtElNo++)
+						{
+							radTg3d* ExtElPtr = g3dExternPtrVect[ExtElNo];
+							radTField Field(FieldKeyExtern, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+							ExtElPtr->B_comp(&Field);
+							H_total.x += Field.H.x;
+							H_total.y += Field.H.y;
+							H_total.z += Field.H.z;
+						}
+
+						// H_ext dot n_i
+						double H_dot_n = H_total.x * poly->FaceNormal[face_i].x +
+						                 H_total.y * poly->FaceNormal[face_i].y +
+						                 H_total.z * poly->FaceNormal[face_i].z;
+
+						m_flatExternFieldArray[offset + face_i] += H_dot_n;
+					}
+				}
+			}
+		}
+	}
 	//g3dExternPtrVect.erase(g3dExternPtrVect.begin(), g3dExternPtrVect.end()); //OC240408, to enable current scaling/update
 }
 
@@ -1044,7 +1123,7 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 		radTFieldKey FieldKeyExtern; FieldKeyExtern.H_=1;
 		TVector3d ZeroVect(0.,0.,0.), InitObsPoiVect(0.,0.,0.);
 
-		for(int StrNo=0; StrNo<AmOfMainElem; StrNo++) 
+		for(int StrNo=0; StrNo<AmOfMainElem; StrNo++)
 		{
 			radTrans* ATransPtr = MainTransPtrArray[StrNo];
 
@@ -1056,6 +1135,53 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 			//TVector3d BufVect = ExternFieldArray[StrNo];
 
 			ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrVectField_inv(Field.H);
+		}
+
+		// Also populate m_flatExternFieldArray for variable DOF elements
+		if(m_hasVariableDOF && !m_flatExternFieldArray.empty())
+		{
+			for(int StrNo = 0; StrNo < AmOfMainElem; StrNo++)
+			{
+				int dof = m_elemDOF[StrNo];
+				int offset = m_elemDOFOffset[StrNo];
+				radTg3dRelax* elem = g3dRelaxPtrVect[StrNo];
+
+				if(dof == 3)
+				{
+					// Standard element: store H_ext components
+					TVector3d& H_ext = ExternFieldArray[StrNo];
+					m_flatExternFieldArray[offset + 0] = H_ext.x;
+					m_flatExternFieldArray[offset + 1] = H_ext.y;
+					m_flatExternFieldArray[offset + 2] = H_ext.z;
+				}
+				else if(dof == 6)
+				{
+					// MSC hexahedron: compute H_ext dot n at each face
+					radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
+					if(poly && poly->Use6DOF_MSC)
+					{
+						for(int face_i = 0; face_i < 6; face_i++)
+						{
+							// Eval point for face i (midpoint between face center and element center)
+							TVector3d EvalPt;
+							EvalPt.x = 0.5 * (poly->FaceCenter[face_i].x + poly->CentrPoint.x);
+							EvalPt.y = 0.5 * (poly->FaceCenter[face_i].y + poly->CentrPoint.y);
+							EvalPt.z = 0.5 * (poly->FaceCenter[face_i].z + poly->CentrPoint.z);
+
+							// Compute H_ext at eval point
+							radTField Field(FieldKeyExtern, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+							(static_cast<radTg3d*>(MoreExtSourceHandle.rep))->B_genComp(&Field);
+
+							// H_ext dot n_i
+							double H_dot_n = Field.H.x * poly->FaceNormal[face_i].x +
+							                 Field.H.y * poly->FaceNormal[face_i].y +
+							                 Field.H.z * poly->FaceNormal[face_i].z;
+
+							m_flatExternFieldArray[offset + face_i] = H_dot_n;
+						}
+					}
+				}
+			}
 		}
 	}
 }

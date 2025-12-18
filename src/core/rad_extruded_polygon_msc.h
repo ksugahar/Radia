@@ -12,7 +12,7 @@
 *                 with the Idea of Magnetic Surface Charge Method"
 *                 J. Magn. Soc. Jpn., 2023
 *
-* Author(s):      Claude Code / ELF Corporation
+* Author(s):      Claude Code
 *
 * First release:  2025
 *

@@ -16,6 +16,7 @@
 
 #include "rad_relaxation_methods.h"
 #include "rad_yield.h"
+#include "rad_polyhedron.h"  // For radTPolyhedron in variable DOF solver
 
 #include <time.h>
 
@@ -218,6 +219,13 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 {
 	if(IntrctPtr == nullptr) return 0;
 
+	// Check if variable DOF is active (e.g., 6 DOF MSC hexahedra)
+	// If so, use the variable DOF solver for better convergence
+	if(IntrctPtr->HasVariableDOF())
+	{
+		return AutoRelax_VariableDOF(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+	}
+
 	// Reset magnetization if needed
 	if(!MagnResetIsNotNeeded)
 	{
@@ -242,7 +250,7 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
 
-	// Store old magnetization and H field for convergence check (matching ELF_MAGIC)
+	// Store old magnetization and H field for convergence check
 	std::vector<TVector3d> OldMagnArray(AmOfMainElem);
 	std::vector<TVector3d> OldFieldArray(AmOfMainElem);  // H field from previous iteration
 
@@ -276,7 +284,7 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 
 	// Build base matrix (geometric part without chi) once - this is the -N matrix
 	// OPTIMIZATION (2025-12-11): Use flat column-major array for LAPACK and fast copy
-	// Only diagonal elements are updated each iteration (matching ELF_MAGIC approach)
+	// Only diagonal elements are updated each iteration
 	std::vector<double> BaseMatrix_flat(ndof * ndof, 0.0);
 	#pragma omp parallel for if(AmOfMainElem > 50)
 	for(int i = 0; i < AmOfMainElem; i++)
@@ -321,7 +329,7 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 
 	for(iterCount = 0; iterCount < MaxIterNumber; iterCount++)
 	{
-		// Store old magnetization and H field (matching ELF_MAGIC for dB calculation)
+		// Store old magnetization and H field (for dB calculation)
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
 			OldMagnArray[i] = MagnAr[i];
@@ -329,7 +337,7 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 		}
 
 		// Update H field from current M using constitutive relation: H = M / chi
-		// This is the ELF_MAGIC approach - O(N) instead of O(N^2) for H = H_ext - N*M
+		// This approach is O(N) instead of O(N^2) for H = H_ext - N*M
 		// Skip on first iteration (H already initialized above)
 		if(iterCount > 0)
 		{
@@ -440,54 +448,40 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 			MagnAr[i].z = RHS[3 * i + 2];
 		}
 
-		// Pure Newton-Raphson iteration (matching ELF_MAGIC approach):
+		// Pure Newton-Raphson iteration:
 		// Use the LU solution directly - do NOT apply Gauss-Seidel M(H) correction!
 		// The Gauss-Seidel M(H) update was causing oscillations and non-convergence
 		// for high-permeability nonlinear materials because it mixed two iteration schemes.
 
-		// Compute convergence using relative change ||dB||/||B|| (matching ELF_MAGIC exactly)
-		// ELF_MAGIC uses B field change, not M change, for convergence criterion
-		// B = mu0 * (H + M), where H is stored in NewFieldAr
-		const double mu0 = 1.2566370614359173e-6;  // mu0 in SI units
-		double B_diff_sq = 0.0;
-		double B_norm_sq = 0.0;
+		// Compute convergence using relative change ||dM||/||M||
+		// This is the standard Radia convergence criterion
+		double M_diff_sq = 0.0;
+		double M_norm_sq = 0.0;
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
-			// Compute B_new = mu0 * (H_new + M_new)
-			TVector3d B_new;
-			B_new.x = mu0 * (NewFieldAr[i].x + MagnAr[i].x);
-			B_new.y = mu0 * (NewFieldAr[i].y + MagnAr[i].y);
-			B_new.z = mu0 * (NewFieldAr[i].z + MagnAr[i].z);
+			// dM = M_new - M_old
+			TVector3d dM;
+			dM.x = MagnAr[i].x - OldMagnArray[i].x;
+			dM.y = MagnAr[i].y - OldMagnArray[i].y;
+			dM.z = MagnAr[i].z - OldMagnArray[i].z;
 
-			// Compute B_old = mu0 * (H_old + M_old) - exact calculation matching ELF_MAGIC
-			TVector3d B_old;
-			B_old.x = mu0 * (OldFieldArray[i].x + OldMagnArray[i].x);
-			B_old.y = mu0 * (OldFieldArray[i].y + OldMagnArray[i].y);
-			B_old.z = mu0 * (OldFieldArray[i].z + OldMagnArray[i].z);
-
-			// dB = B_new - B_old
-			TVector3d dB;
-			dB.x = B_new.x - B_old.x;
-			dB.y = B_new.y - B_old.y;
-			dB.z = B_new.z - B_old.z;
-
-			B_diff_sq += dB.AmpE2();
-			B_norm_sq += B_new.AmpE2();
+			M_diff_sq += dM.AmpE2();
+			M_norm_sq += MagnAr[i].AmpE2();
 
 			// Update the object's magnetization
 			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
 			g3dRelaxPtr->Magn = MagnAr[i];
 		}
 
-		// Relative change: ||dB|| / ||B|| (matching ELF_MAGIC)
+		// Relative change: ||dM|| / ||M||
 		double rel_change = 0.0;
-		if(B_norm_sq > 1.0e-30)
+		if(M_norm_sq > 1.0e-30)
 		{
-			rel_change = std::sqrt(B_diff_sq / B_norm_sq);
+			rel_change = std::sqrt(M_diff_sq / M_norm_sq);
 		}
 		else
 		{
-			rel_change = std::sqrt(B_diff_sq);
+			rel_change = std::sqrt(M_diff_sq);
 		}
 		MisfitE2 = rel_change * rel_change;  // For compatibility with status reporting
 
@@ -591,7 +585,7 @@ void radTRelaxationMethNo_1::GetDiagonalElements(std::vector<double>& diag, cons
 
 	for(int i = 0; i < n_elem; i++)
 	{
-		// Use pre-computed 1/chi values (matching ELF_MAGIC approach)
+		// Use pre-computed 1/chi values
 		double inv_chi_x = inv_chi[3*i + 0];
 		double inv_chi_y = inv_chi[3*i + 1];
 		double inv_chi_z = inv_chi[3*i + 2];
@@ -621,7 +615,7 @@ void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vect
 	// Computes y = A * x where A = -N + 1/chi
 	// Uses dense matrix-vector product
 	// CRITICAL FIX: Use pre-computed 1/chi values that are FIXED for this BiCGSTAB solve
-	// (matching ELF_MAGIC approach - chi is only updated in the outer nonlinear iteration loop)
+	// (chi is only updated in the outer nonlinear iteration loop)
 	int n_elem = ndof / 3;
 	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix;
 
@@ -634,7 +628,7 @@ void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vect
 		#pragma omp parallel for if(n_elem > 50)
 		for(int i = 0; i < n_elem; i++)
 		{
-			// Use pre-computed 1/chi values (matching ELF_MAGIC approach)
+			// Use pre-computed 1/chi values
 			double inv_chi_x = inv_chi[3*i + 0];
 			double inv_chi_y = inv_chi[3*i + 1];
 			double inv_chi_z = inv_chi[3*i + 2];
@@ -744,7 +738,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB(int ndof, double tol, int max_iter, do
 	// BiCGSTAB with Jacobi preconditioner
 	// Reference: van der Vorst, SIAM J. Sci. Stat. Comput. 13 (1992)
 	//
-	// CRITICAL FIX (matching ELF_MAGIC):
+	// CRITICAL FIX:
 	// - Pre-compute 1/chi values ONCE at the start of this solve
 	// - Use these FIXED values throughout all BiCGSTAB iterations
 	// - chi is only updated in the OUTER nonlinear iteration loop
@@ -976,6 +970,13 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 {
 	if(IntrctPtr == nullptr) return 0;
 
+	// Check if variable DOF is active (e.g., 6 DOF MSC hexahedra)
+	// If so, use the variable DOF solver for better convergence
+	if(IntrctPtr->HasVariableDOF())
+	{
+		return AutoRelax_VariableDOF(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+	}
+
 	// Reset magnetization if needed
 	if(!MagnResetIsNotNeeded)
 	{
@@ -998,7 +999,7 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 
-	// Store old magnetization and H field for convergence checking (matching ELF_MAGIC)
+	// Store old magnetization and H field for convergence checking
 	std::vector<TVector3d> OldMagnArray(AmOfMainElem);
 	std::vector<TVector3d> OldFieldArray(AmOfMainElem);  // H field from previous iteration
 
@@ -1033,11 +1034,11 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	// Outer nonlinear iteration loop
 	// For linear materials, this converges in 1 iteration
 	// For nonlinear materials, chi(H) is updated each iteration
-	// MATCHING ELF_MAGIC: pure Newton iteration without Gauss-Seidel M(H) correction
+	// Pure Newton iteration without Gauss-Seidel M(H) correction
 
 	for(outerIter = 0; outerIter < MaxIterNumber; outerIter++)
 	{
-		// Store old magnetization and H field (matching ELF_MAGIC for dB calculation)
+		// Store old magnetization and H field (for dB calculation)
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
 			OldMagnArray[i] = MagnAr[i];
@@ -1045,7 +1046,7 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 		}
 
 		// Update H field from current M using constitutive relation: H = M / chi
-		// This is the ELF_MAGIC approach - O(N) instead of O(N^2) for H = H_ext - N*M
+		// This approach is O(N) instead of O(N^2) for H = H_ext - N*M
 		// Skip on first iteration (H already initialized above)
 		if(outerIter > 0)
 		{
@@ -1073,62 +1074,48 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 		// Solve linear system using BiCGSTAB with current chi(H)
 		// System: A*M = b where A = -N + 1/chi(H), b = H_ext + Mr/chi
 		//
-		// IMPORTANT: Use stricter tolerance for inner BiCGSTAB (matching ELF_MAGIC approach)
-		// ELF uses separate tolerances: outer `tolerance` (e.g., 0.01) and inner `bicg_tol` (1e-6)
+		// IMPORTANT: Use stricter tolerance for inner BiCGSTAB
+		// Separate tolerances: outer (e.g., 0.01) and inner bicg_tol (1e-6)
 		// Using loose outer tolerance for BiCGSTAB causes premature convergence
-		const double bicg_tol = 1.0e-6;  // Inner BiCGSTAB tolerance (matching ELF_MAGIC)
+		const double bicg_tol = 1.0e-6;  // Inner BiCGSTAB tolerance
 		double residual = 0.0;
 		int n_iter = SolveBiCGSTAB(ndof, bicg_tol, MaxIterNumber - totalIterCount, residual);
 		totalIterCount += n_iter;
 
-		// Pure Newton-Raphson iteration (matching ELF_MAGIC approach):
+		// Pure Newton-Raphson iteration:
 		// Use the BiCGSTAB solution directly - do NOT apply Gauss-Seidel M(H) correction!
 		// The Gauss-Seidel M(H) update was causing oscillations and non-convergence
 		// for high-permeability nonlinear materials because it mixed two iteration schemes.
 
-		// Compute convergence using relative change ||dB||/||B|| (matching ELF_MAGIC exactly)
-		// ELF_MAGIC uses B field change, not M change, for convergence criterion
-		// B = mu0 * (H + M), where H is stored in NewFieldAr
-		const double mu0 = 1.2566370614359173e-6;  // mu0 in SI units
-		double B_diff_sq = 0.0;
-		double B_norm_sq = 0.0;
+		// Compute convergence using relative change ||dM||/||M||
+		// This is the standard Radia convergence criterion
+		double M_diff_sq = 0.0;
+		double M_norm_sq = 0.0;
 		for(int i = 0; i < AmOfMainElem; i++)
 		{
-			// Compute B_new = mu0 * (H_new + M_new)
-			TVector3d B_new;
-			B_new.x = mu0 * (NewFieldAr[i].x + MagnAr[i].x);
-			B_new.y = mu0 * (NewFieldAr[i].y + MagnAr[i].y);
-			B_new.z = mu0 * (NewFieldAr[i].z + MagnAr[i].z);
+			// dM = M_new - M_old
+			TVector3d dM;
+			dM.x = MagnAr[i].x - OldMagnArray[i].x;
+			dM.y = MagnAr[i].y - OldMagnArray[i].y;
+			dM.z = MagnAr[i].z - OldMagnArray[i].z;
 
-			// Compute B_old = mu0 * (H_old + M_old) - exact calculation matching ELF_MAGIC
-			TVector3d B_old;
-			B_old.x = mu0 * (OldFieldArray[i].x + OldMagnArray[i].x);
-			B_old.y = mu0 * (OldFieldArray[i].y + OldMagnArray[i].y);
-			B_old.z = mu0 * (OldFieldArray[i].z + OldMagnArray[i].z);
-
-			// dB = B_new - B_old
-			TVector3d dB;
-			dB.x = B_new.x - B_old.x;
-			dB.y = B_new.y - B_old.y;
-			dB.z = B_new.z - B_old.z;
-
-			B_diff_sq += dB.AmpE2();
-			B_norm_sq += B_new.AmpE2();
+			M_diff_sq += dM.AmpE2();
+			M_norm_sq += MagnAr[i].AmpE2();
 
 			// Update the object's magnetization
 			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
 			g3dRelaxPtr->Magn = MagnAr[i];
 		}
 
-		// Relative change: ||dB|| / ||B|| (matching ELF_MAGIC)
+		// Relative change: ||dM|| / ||M||
 		double rel_change = 0.0;
-		if(B_norm_sq > 1.0e-30)
+		if(M_norm_sq > 1.0e-30)
 		{
-			rel_change = std::sqrt(B_diff_sq / B_norm_sq);
+			rel_change = std::sqrt(M_diff_sq / M_norm_sq);
 		}
 		else
 		{
-			rel_change = std::sqrt(B_diff_sq);
+			rel_change = std::sqrt(M_diff_sq);
 		}
 		MisfitE2 = rel_change * rel_change;  // For compatibility with status reporting
 
@@ -1148,7 +1135,7 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	ComputeRelaxStatusParam(MagnAr, OldMagnArray.data(), NewFieldAr);
 
 	// Return nonlinear iteration count (outerIter), not BiCGSTAB total (totalIterCount)
-	// This matches ELF_MAGIC behavior for comparable benchmarking
+	// Return nonlinear iteration count for consistent benchmarking
 	return outerIter;
 }
 
@@ -1273,11 +1260,43 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	if(FlatInteract == nullptr || FlatMagn == nullptr || FlatField == nullptr || FlatExtern == nullptr)
 		return 0;
 
-	// Build base matrix (geometric part without chi): -N
+	// Build base matrix (geometric part without chi)
+	// For 3 DOF elements (MMM): store -N (need to negate from interaction matrix)
+	// For 6 DOF elements (MSC): interaction matrix already stores -K/(4pi), copy directly
 	std::vector<double> BaseMatrix(totalDOF * totalDOF);
+
+	// First copy interaction matrix
 	for(int i = 0; i < totalDOF * totalDOF; i++)
 	{
-		BaseMatrix[i] = -FlatInteract[i];
+		BaseMatrix[i] = FlatInteract[i];
+	}
+
+	// Negate only the 3 DOF blocks (MMM method needs -N)
+	// MSC 6 DOF blocks already have correct sign (-K/(4pi))
+	for(int row_elem = 0; row_elem < AmOfMainElem; row_elem++)
+	{
+		int dof_row = IntrctPtr->GetElementDOF(row_elem);
+		int offset_row = IntrctPtr->GetElementDOFOffset(row_elem);
+
+		for(int col_elem = 0; col_elem < AmOfMainElem; col_elem++)
+		{
+			int dof_col = IntrctPtr->GetElementDOF(col_elem);
+			int offset_col = IntrctPtr->GetElementDOFOffset(col_elem);
+
+			// Only negate blocks where at least one element is 3 DOF (MMM)
+			// 6x6 blocks (both 6 DOF MSC) keep their sign
+			if(dof_row == 3 || dof_col == 3)
+			{
+				for(int i = 0; i < dof_row; i++)
+				{
+					for(int j = 0; j < dof_col; j++)
+					{
+						int idx = (offset_row + i) * totalDOF + (offset_col + j);
+						BaseMatrix[idx] = -BaseMatrix[idx];
+					}
+				}
+			}
+		}
 	}
 
 	// Store old values for convergence check
@@ -1363,6 +1382,8 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		}
 
 		// Copy base matrix and update diagonal with 1/chi
+		// Base matrix already contains -K/(4pi) for 6 DOF MSC elements
+		// Equation: (-K/(4pi) + 1/chi * I) * sigma = H_ext_n
 		for(int i = 0; i < totalDOF * totalDOF; i++)
 		{
 			SystemMatrix[i] = BaseMatrix[i];
@@ -1376,7 +1397,7 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 			if(dof == 3)
 			{
-				// Standard element
+				// Standard element (tetrahedron, 3 DOF MMM)
 				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
 				radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
 
@@ -1402,14 +1423,28 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					RHS[row] = FlatExtern[row] + Mr_over_chi;
 				}
 			}
-			else
+			else if(dof == 6)
 			{
-				// MSC element (6 DOF): TODO - implement proper MSC constitutive relation
-				// For now, use placeholder with large diagonal
-				for(int k = 0; k < dof; k++)
+				// MSC hexahedron (6 DOF): equation (-K/(4pi) + 1/chi * I) * sigma = H_ext_n
+				// Base matrix already contains -K/(4pi), just add 1/chi to diagonal
+				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+				radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+				// Get average chi from material (assume linear isotropic for now)
+				TVector3d H_est(0., 0., FlatExtern[offset]);  // Estimate H for material query
+				TMatrix3d KsiTensor;
+				TVector3d MrVect;
+				MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+				double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+				if(chi < 1.0e-6) chi = 1.0e-6;
+				double inv_chi = 1.0 / chi;
+
+				for(int k = 0; k < 6; k++)
 				{
 					int row = offset + k;
-					SystemMatrix[row * totalDOF + row] += 1.0;  // Placeholder
+					// Add 1/chi to diagonal for MSC constitutive relation
+					SystemMatrix[row * totalDOF + row] += inv_chi;
+					// RHS = H_ext dot n (already computed in m_flatExternFieldArray)
 					RHS[row] = FlatExtern[row];
 				}
 			}
@@ -1448,7 +1483,46 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				g3dRelaxPtr->Magn.y = FlatMagn[offset + 1];
 				g3dRelaxPtr->Magn.z = FlatMagn[offset + 2];
 			}
-			// MSC elements: TODO - update sigma values in element
+			else if(dof == 6)
+			{
+				// MSC hexahedron: update sigma values and compute effective magnetization
+				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+				radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
+				if(poly && poly->Use6DOF_MSC)
+				{
+					// Store sigma values
+					for(int k = 0; k < 6; k++)
+					{
+						poly->Sigma[k] = FlatMagn[offset + k];
+					}
+
+					// Compute effective magnetization from sigma using least-squares:
+					// For each face: sigma_i = M dot n_i
+					// Solve for M = [Mx, My, Mz] that best fits these constraints
+					// Using weighted average based on face normals
+					double Mx = 0.0, My = 0.0, Mz = 0.0;
+					double wx = 0.0, wy = 0.0, wz = 0.0;
+					for(int face = 0; face < 6; face++)
+					{
+						double sigma = poly->Sigma[face];
+						TVector3d& n = poly->FaceNormal[face];
+						double nx2 = n.x * n.x;
+						double ny2 = n.y * n.y;
+						double nz2 = n.z * n.z;
+						// Weighted contribution: sigma_i * n_i decomposes M
+						Mx += sigma * n.x;
+						My += sigma * n.y;
+						Mz += sigma * n.z;
+						wx += nx2;
+						wy += ny2;
+						wz += nz2;
+					}
+					// Normalize (each direction has 2 opposing faces with |n|=1)
+					if(wx > 1.0e-10) poly->Magn.x = Mx / wx;
+					if(wy > 1.0e-10) poly->Magn.y = My / wy;
+					if(wz > 1.0e-10) poly->Magn.z = Mz / wz;
+				}
+			}
 		}
 
 		double rel_change = (M_norm_sq > 1.0e-30) ? std::sqrt(M_diff_sq / M_norm_sq) : std::sqrt(M_diff_sq);
@@ -1475,8 +1549,13 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, std::vector<double>& y,
                                                  const std::vector<double>& inv_chi, int totalDOF)
 {
-	// Computes y = A * x where A = -N + diag(1/chi)
-	// Uses flat interaction matrix with variable DOF blocks
+	// Computes y = A * x where A = (base matrix) + diag(1/chi)
+	// For 3 DOF elements (MMM): base matrix stores N, equation is (-N + 1/chi) * M = H_ext
+	// For 6 DOF elements (MSC): base matrix stores -K/(4pi), equation is (-K/(4pi) + 1/chi) * sigma = H_ext_n
+	//
+	// Sign convention:
+	// - 3 DOF blocks: need to negate (y -= N*x)
+	// - 6 DOF blocks: already negative (y += (-K/(4pi))*x)
 
 	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
 	if(FlatInteract == nullptr) return;
@@ -1497,7 +1576,7 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 			y[offset_row + k] = inv_chi[offset_row + k] * x[offset_row + k];
 		}
 
-		// Off-diagonal: -N * x
+		// Matrix-vector product
 		for(int col_elem = 0; col_elem < AmOfMainElem; col_elem++)
 		{
 			int dof_col = IntrctPtr->GetElementDOF(col_elem);
@@ -1506,7 +1585,12 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 			// Get block from flat matrix
 			const double* block = &FlatInteract[offset_row * totalDOF + offset_col];
 
-			// y_row -= N_block * x_col
+			// Determine sign based on DOF types:
+			// - 3x3 block (both 3 DOF): stores N, need to negate → sign = -1
+			// - 6x6 block (both 6 DOF): stores -K/(4pi), use as-is → sign = +1
+			// - 3x6 or 6x3 blocks: stores N or -K, need to negate → sign = -1
+			double sign = (dof_row == 6 && dof_col == 6) ? 1.0 : -1.0;
+
 			for(int i = 0; i < dof_row; i++)
 			{
 				double sum = 0.0;
@@ -1514,7 +1598,7 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 				{
 					sum += block[i * totalDOF + j] * x[offset_col + j];
 				}
-				y[offset_row + i] -= sum;
+				y[offset_row + i] += sign * sum;
 			}
 		}
 	}
@@ -1524,6 +1608,8 @@ void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>
                                                               const std::vector<double>& inv_chi, int totalDOF)
 {
 	// Extract diagonal elements for Jacobi preconditioner
+	// For 3 DOF: interaction matrix stores N, diagonal = -N_ii + 1/chi
+	// For 6 DOF: interaction matrix stores -K/(4pi), diagonal = -K/(4pi) + 1/chi (use as-is)
 	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
 	if(FlatInteract == nullptr) return;
 
@@ -1537,10 +1623,13 @@ void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>
 		// Get diagonal block
 		const double* diag_block = &FlatInteract[offset * totalDOF + offset];
 
+		// Sign convention: negate for 3 DOF (MMM), use as-is for 6 DOF (MSC)
+		double sign = (dof == 6) ? 1.0 : -1.0;
+
 		for(int k = 0; k < dof; k++)
 		{
-			// Diagonal element: -N_ii + 1/chi
-			diag[offset + k] = -diag_block[k * totalDOF + k] + inv_chi[offset + k];
+			// Diagonal element: sign*matrix_ii + 1/chi
+			diag[offset + k] = sign * diag_block[k * totalDOF + k] + inv_chi[offset + k];
 		}
 	}
 }
@@ -1591,9 +1680,31 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 				rhs[offset + k] = FlatExtern[offset + k] + Mr_vals[k] * inv_chi_rhs;
 			}
 		}
+		else if(dof == 6)
+		{
+			// MSC hexahedron (6 DOF): equation (-K/(4pi) + 1/chi * I) * sigma = H_ext_n
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+			radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+			// Get average chi from material (assume linear isotropic for now)
+			TVector3d H_est(0., 0., FlatExtern[offset]);  // Estimate H for material query
+			TMatrix3d KsiTensor;
+			TVector3d MrVect;
+			MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+			double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+			if(chi < 1.0e-6) chi = 1.0e-6;
+			double inv_chi_val = 1.0 / chi;
+
+			for(int k = 0; k < 6; k++)
+			{
+				inv_chi[offset + k] = inv_chi_val;
+				// RHS = H_ext dot n (already computed in m_flatExternFieldArray)
+				rhs[offset + k] = FlatExtern[offset + k];
+			}
+		}
 		else
 		{
-			// MSC element: placeholder
+			// Fallback for unknown DOF types
 			for(int k = 0; k < dof; k++)
 			{
 				inv_chi[offset + k] = 1.0;
@@ -1852,6 +1963,41 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				g3dRelaxPtr->Magn.x = FlatMagn[offset + 0];
 				g3dRelaxPtr->Magn.y = FlatMagn[offset + 1];
 				g3dRelaxPtr->Magn.z = FlatMagn[offset + 2];
+			}
+			else if(dof == 6)
+			{
+				// MSC hexahedron: update sigma values and compute effective magnetization
+				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+				radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
+				if(poly && poly->Use6DOF_MSC)
+				{
+					// Store sigma values
+					for(int k = 0; k < 6; k++)
+					{
+						poly->Sigma[k] = FlatMagn[offset + k];
+					}
+
+					// Compute effective magnetization from sigma using weighted average
+					double Mx = 0.0, My = 0.0, Mz = 0.0;
+					double wx = 0.0, wy = 0.0, wz = 0.0;
+					for(int face = 0; face < 6; face++)
+					{
+						double sigma = poly->Sigma[face];
+						TVector3d& n = poly->FaceNormal[face];
+						double nx2 = n.x * n.x;
+						double ny2 = n.y * n.y;
+						double nz2 = n.z * n.z;
+						Mx += sigma * n.x;
+						My += sigma * n.y;
+						Mz += sigma * n.z;
+						wx += nx2;
+						wy += ny2;
+						wz += nz2;
+					}
+					if(wx > 1.0e-10) g3dRelaxPtr->Magn.x = Mx / wx;
+					if(wy > 1.0e-10) g3dRelaxPtr->Magn.y = My / wy;
+					if(wz > 1.0e-10) g3dRelaxPtr->Magn.z = Mz / wz;
+				}
 			}
 		}
 

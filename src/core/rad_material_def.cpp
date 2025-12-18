@@ -617,7 +617,7 @@ void radTNonlinearIsotropMaterial::CheckAndCorrect_dMdH(TVector2d* ArrayHM, doub
 //double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH)
 double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH, TVector2d* ArrayHM, double* dMdH, int LenArrayHM)
 {
-	// Use LINEAR interpolation (like ELF_MAGIC) instead of cubic
+	// Use LINEAR interpolation instead of cubic
 	// Cubic interpolation can cause overshoot/undershoot in nonlinear regions
 	TVector2d *tHM = ArrayHM;
 	int Indx = 0;
@@ -649,7 +649,7 @@ double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH, TVector2d*
 //double radTNonlinearIsotropMaterial::AbsHvsAbsM_Interpol(double AbsM)
 double radTNonlinearIsotropMaterial::AbsHvsAbsM_Interpol(double AbsM, TVector2d* ArrayHM, double* dMdH, int LenArrayHM)
 {
-	// Use LINEAR interpolation (like ELF_MAGIC) instead of cubic
+	// Use LINEAR interpolation instead of cubic
 	// Cubic interpolation can cause overshoot/undershoot in nonlinear regions
 	TVector2d *tHM = ArrayHM;
 	int Indx = 0;
@@ -675,7 +675,7 @@ double radTNonlinearIsotropMaterial::AbsHvsAbsM_Interpol(double AbsM, TVector2d*
 //void radTNonlinearIsotropMaterial::AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, double& f, double& fDer)
 void radTNonlinearIsotropMaterial::AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, TVector2d* ArrayHM, double* dMdH, int LenArrayHM, double& f, double& fDer)
 {
-	// Use LINEAR interpolation (like ELF_MAGIC) instead of cubic
+	// Use LINEAR interpolation instead of cubic
 	// Cubic interpolation can cause overshoot/undershoot in nonlinear regions
 	TVector2d *tHM = ArrayHM;
 	int Indx = 0;

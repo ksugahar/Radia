@@ -122,31 +122,18 @@ mag_obj = netgen_mesh_to_radia(mesh,
 
 | Element Type | API | Faces | DOF | Use Case |
 |--------------|-----|-------|-----|----------|
-| **Rectangular Block** | `ObjRecMag()` + `ObjDivMag()` | Axis-aligned | 3 | Fastest, structured grids |
-| **Hexahedron (MSC)** | `ObjThckPgn()` | 6 quad | **6** | 6-DOF MSC with center cancelling charge |
-| **Hexahedron (MSC)** | `ObjPolyhdr()` + `HEX_FACES` | 6 quad | 3 | Rotated/deformed grids |
+| **Rectangular Block** | `ObjRecMag()` + `ObjDivMag()` | Axis-aligned | 3 | Fastest, analytical formula |
+| **Extruded Polygon** | `ObjThckPgn()` | N-gon extruded | 3 | General prism shapes |
+| **Hexahedron (MSC)** | `ObjPolyhdr()` + `HEX_FACES` | 6 quad | **6** | Rotated/deformed grids |
 | **Tetrahedron (MSC)** | `ObjPolyhdr()` + `TETRA_FACES` | 4 tri | 3 | Complex curved geometry |
 | **Wedge/Prism (MSC)** | `ObjPolyhdr()` + `WEDGE_FACES` | 5 | 3 | Hybrid meshes |
 | **Pyramid (MSC)** | `ObjPolyhdr()` + `PYRAMID_FACES` | 5 | 3 | Mesh transitions |
 
 **DOF (Degrees of Freedom)**:
-- **3 DOF**: Mx, My, Mz (standard magnetization components)
-- **6 DOF**: Surface charge density sigma on each face (ObjThckPgn only)
+- **3 DOF**: Magnetization vector (Mx, My, Mz)
+- **6 DOF (Hexahedra only)**: Surface charge density (sigma) on each of 6 faces
 
-### 6-DOF MSC Method (ObjThckPgn)
-
-`ObjThckPgn` uses the **Magnetic Surface Charge (MSC)** method with 6 unknowns:
-- **Sigma[0..5]**: Surface charge density on each of the 6 hexahedral faces
-- **Center cancelling charge**: `PointCharge[f] = -Sigma[f] * Area[f]` at centroid
-
-This method places a point charge at the element centroid to cancel interior face contributions, improving field accuracy.
-
-**Implementation** ([rad_extruded_polygon_msc.h](../src/core/rad_extruded_polygon_msc.h)):
-```cpp
-std::array<double, 6> Sigma;          // Surface charge densities (unknowns)
-std::array<double, 6> PointCharges;   // Point charges at center (= -sigma * area)
-int NumberOfDegOfFreedom() { return 6; }
-```
+**Note (2025-12-16)**: Hexahedral elements use **6 DOF MSC method** with independent surface charge density on each face. This provides better accuracy for deformed/rotated hexahedra.
 
 ### Face Topology Constants
 
@@ -363,15 +350,15 @@ result = rad.Solve(obj, tolerance, max_iter, method=1)
 - Linear materials: 1-2 iterations
 - Nonlinear materials: 3-6 iterations
 
-### Performance vs ELF_MAGIC
+### BiCGSTAB Performance
 
-BiCGSTAB solver comparison (nonlinear BH curve):
+Typical solve times (nonlinear BH curve material):
 
-| Elements | Radia | ELF_MAGIC | Speedup |
-|----------|-------|-----------|---------|
-| 1,000 | 0.55s | 4.05s | **7.4x** |
-| 3,375 | 7.30s | 54.49s | **7.5x** |
-| 8,000 | 51.81s | 343.01s | **6.6x** |
+| Elements | Time | Iterations |
+|----------|------|------------|
+| 1,000 | 0.55s | 5-6 |
+| 3,375 | 7.30s | 5-6 |
+| 8,000 | 51.81s | 5-6 |
 
 ---
 

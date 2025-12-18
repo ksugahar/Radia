@@ -1,0 +1,21 @@
+{
+  "element_type": "hexa",
+  "mesh_description": "n_div=8",
+  "n_div": 8,
+  "n_elements": 512,
+  "ndof": 1536,
+  "H_ext": 50000.0,
+  "mu_r": 1000,
+  "chi": 999,
+  "t_mesh": 0.001967906951904297,
+  "t_solve": 0.13399839401245117,
+  "solver_method": 0,
+  "solver_name": "lu",
+  "converged": true,
+  "residual": 0.0,
+  "iterations": 2,
+  "M_avg_z": 177408.9107925492,
+  "M_analytical_z": 149550.8982035928,
+  "error_percent": 18.627780189612483,
+  "equiv_maxh": 0.125
+}

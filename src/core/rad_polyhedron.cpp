@@ -846,13 +846,13 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 	// =========================================================================
 	// GLOBAL COORDINATE METHOD for hexahedral elements (6 quadrilateral faces)
 	// =========================================================================
-	// This method computes fields using GLOBAL coordinates only, following ELF_MAGIC.
+	// This method computes fields using GLOBAL coordinates only.
 	// Each quadrilateral face is split into 2 triangles for computation.
 	//
 	// For each quadrilateral face with vertices [V0, V1, V2, V3]:
 	//   - Triangle 1: V0, V1, V2
 	//   - Triangle 2: V0, V2, V3
-	// This is the same diagonal split used by ELF_MAGIC.
+	// This is the standard diagonal split for quadrilateral faces.
 	//
 	// For PreRelax mode (interaction matrix construction):
 	//   - Compute dH/dM for all 3 unit magnetization directions
@@ -949,6 +949,305 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 		if(FldKey.H_) FieldPtr->H += H_total;
 		if(FldKey.B_) FieldPtr->B += H_total;
 	}
+}
+
+//-------------------------------------------------------------------------
+// 6 DOF MSC field computation methods for hexahedra
+//-------------------------------------------------------------------------
+
+static const double PI_6DOF = 3.14159265358979323846;
+static const double INV_4PI_6DOF = 1.0 / (4.0 * PI_6DOF);
+
+TVector3d radTPolyhedron::FieldFromChargedTriangle(const TVector3d& obs,
+                                                    const TVector3d& v0,
+                                                    const TVector3d& v1,
+                                                    const TVector3d& v2,
+                                                    double sigma) const
+{
+	// Analytic field from uniformly charged triangle
+	// Implements BOTH tangential (log terms) AND normal (atan terms) components
+	// Reference: van Oosterom & Strackee, "The Solid Angle of a Plane Triangle" (1983)
+	// Returns field WITHOUT 4pi divisor - applied in matrix assembly (-K/(4pi))
+
+	const double EPS = 1.0e-20;
+	const double BIG = 1.0e20;
+
+	// Build local coordinate system from triangle
+	TVector3d e1, e2;
+	e1.x = v1.x - v0.x; e1.y = v1.y - v0.y; e1.z = v1.z - v0.z;
+	e2.x = v2.x - v0.x; e2.y = v2.y - v0.y; e2.z = v2.z - v0.z;
+
+	// Normal = e1 x e2
+	TVector3d normal;
+	normal.x = e1.y * e2.z - e1.z * e2.y;
+	normal.y = e1.z * e2.x - e1.x * e2.z;
+	normal.z = e1.x * e2.y - e1.y * e2.x;
+
+	double normal_len = sqrt(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z);
+	if(normal_len < EPS) return TVector3d(0.0, 0.0, 0.0);
+
+	TVector3d CC;  // Local Z = face normal
+	CC.x = normal.x / normal_len;
+	CC.y = normal.y / normal_len;
+	CC.z = normal.z / normal_len;
+
+	// Build orthonormal basis (triple cross product method)
+	TVector3d basis_a = e2;
+	TVector3d basis_b;
+	basis_b.x = e2.x - e1.x * 0.5;
+	basis_b.y = e2.y - e1.y * 0.5;
+	basis_b.z = e2.z - e1.z * 0.5;
+
+	// basis_c = basis_a x basis_b
+	TVector3d basis_c;
+	basis_c.x = basis_a.y * basis_b.z - basis_a.z * basis_b.y;
+	basis_c.y = basis_a.z * basis_b.x - basis_a.x * basis_b.z;
+	basis_c.z = basis_a.x * basis_b.y - basis_a.y * basis_b.x;
+	double cLen = sqrt(basis_c.x*basis_c.x + basis_c.y*basis_c.y + basis_c.z*basis_c.z);
+	if(cLen < EPS) return TVector3d(0.0, 0.0, 0.0);
+	basis_c.x /= cLen; basis_c.y /= cLen; basis_c.z /= cLen;
+
+	// new_basis_a = basis_b x basis_c
+	TVector3d new_a;
+	new_a.x = basis_b.y * basis_c.z - basis_b.z * basis_c.y;
+	new_a.y = basis_b.z * basis_c.x - basis_b.x * basis_c.z;
+	new_a.z = basis_b.x * basis_c.y - basis_b.y * basis_c.x;
+	double aLen = sqrt(new_a.x*new_a.x + new_a.y*new_a.y + new_a.z*new_a.z);
+	if(aLen < EPS) return TVector3d(0.0, 0.0, 0.0);
+	new_a.x /= aLen; new_a.y /= aLen; new_a.z /= aLen;
+
+	// new_basis_b = basis_c x new_basis_a
+	TVector3d new_b;
+	new_b.x = basis_c.y * new_a.z - basis_c.z * new_a.y;
+	new_b.y = basis_c.z * new_a.x - basis_c.x * new_a.z;
+	new_b.z = basis_c.x * new_a.y - basis_c.y * new_a.x;
+	double bLen = sqrt(new_b.x*new_b.x + new_b.y*new_b.y + new_b.z*new_b.z);
+	if(bLen < EPS) return TVector3d(0.0, 0.0, 0.0);
+	new_b.x /= bLen; new_b.y /= bLen; new_b.z /= bLen;
+
+	TVector3d AA = new_a;  // Local X
+	TVector3d BB = new_b;  // Local Y
+
+	// Convert vertices to local 2D coordinates (v0 = origin)
+	double xy0_x = 0.0, xy0_y = 0.0;
+
+	double xy1_x = e1.x*AA.x + e1.y*AA.y + e1.z*AA.z;
+	double xy1_y = e1.x*BB.x + e1.y*BB.y + e1.z*BB.z;
+
+	double xy2_x = e2.x*AA.x + e2.y*AA.y + e2.z*AA.z;
+	double xy2_y = e2.x*BB.x + e2.y*BB.y + e2.z*BB.z;
+
+	// Edge parameters (3 edges for triangle)
+	double XY[3][2] = {{xy0_x, xy0_y}, {xy1_x, xy1_y}, {xy2_x, xy2_y}};
+	double DS[3], AM[3], SM[3], XD[3], YD[3];
+	double EPSG = 0.0;
+
+	for(int j = 0; j < 3; j++)
+	{
+		int l = (j + 1) % 3;
+		double dx = XY[l][0] - XY[j][0];
+		double dy = XY[l][1] - XY[j][1];
+		if(fabs(dx) < EPS) dx = (dx >= 0) ? EPS : -EPS;
+
+		DS[j] = sqrt(dx*dx + dy*dy);
+		AM[j] = dy / dx;
+		SM[j] = sqrt(AM[j]*AM[j] + 1.0);
+		XD[j] = -dx / DS[j];
+		YD[j] =  dy / DS[j];
+
+		if(DS[j] > EPSG) EPSG = DS[j];
+	}
+	EPSG *= 1.0e-12;
+
+	// Transform observation point to local coordinates
+	TVector3d d;
+	d.x = obs.x - v0.x;
+	d.y = obs.y - v0.y;
+	d.z = obs.z - v0.z;
+
+	double EE1 = d.x*AA.x + d.y*AA.y + d.z*AA.z;  // local X
+	double EE2 = d.x*BB.x + d.y*BB.y + d.z*BB.z;  // local Y
+	double EE3 = d.x*basis_c.x + d.y*basis_c.y + d.z*basis_c.z;  // local Z (height)
+
+	// Distances from observation point to vertices
+	double X[3], Y[3], H[3], E[3], R[3];
+	for(int j = 0; j < 3; j++)
+	{
+		X[j] = EE1 - XY[j][0];
+		Y[j] = EE2 - XY[j][1];
+		H[j] = Y[j] * X[j];
+		E[j] = EE3*EE3 + X[j]*X[j];
+		R[j] = sqrt(X[j]*X[j] + Y[j]*Y[j] + EE3*EE3);
+	}
+
+	double Z = EE3;
+
+	// Edge contributions
+	double RM[3], RP[3], RR[3], AL[3];
+	for(int j = 0; j < 3; j++)
+	{
+		int jp1 = (j + 1) % 3;
+		RM[j] = R[j] + R[jp1] - DS[j];
+		RP[j] = R[j] + R[jp1] + DS[j];
+		RR[j] = (RM[j] / RP[j] > EPS) ? (RM[j] / RP[j]) : EPS;
+		AL[j] = log(RR[j]);
+	}
+
+	// Field components in local frame
+	// Tangential components (log terms)
+	double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
+	double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
+	double HH3 = 0.0;
+
+	// Normal component (atan terms) - only if not on surface
+	if(fabs(Z) > EPSG)
+	{
+		double ZR[3];
+		for(int j = 0; j < 3; j++)
+		{
+			ZR[j] = Z * R[j];
+		}
+
+		double AT[3], BT[3];
+		for(int j = 0; j < 3; j++)
+		{
+			int jp1 = (j + 1) % 3;
+			AT[j] = (AM[j]*E[j] - H[j]) / ZR[j];
+			BT[j] = (AM[j]*E[jp1] - H[jp1]) / ZR[jp1];
+		}
+
+		HH3 = sigma * (-atan(AT[0]) - atan(AT[1]) - atan(AT[2])
+		               +atan(BT[0]) + atan(BT[1]) + atan(BT[2]));
+	}
+
+	// Transform back to global coordinates
+	TVector3d Hfield;
+	Hfield.x = HH1*AA.x + HH2*BB.x + HH3*basis_c.x;
+	Hfield.y = HH1*AA.y + HH2*BB.y + HH3*basis_c.y;
+	Hfield.z = HH1*AA.z + HH2*BB.z + HH3*basis_c.z;
+
+	return Hfield;
+}
+
+//-------------------------------------------------------------------------
+
+TVector3d radTPolyhedron::FieldFromQuadFace(const TVector3d& obs, int faceIdx, double sigma) const
+{
+	// Compute field from a single quadrilateral face with unit surface charge
+	// Yano-Sugahara MSC method:
+	// - Split quad into 2 triangles
+	// - For each triangle, check if normal points outward
+	// - Apply sign_factor to ensure outward-pointing normal
+	// - Returns field WITHOUT 4pi divisor (applied in matrix assembly)
+
+	// Get face vertices
+	radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[faceIdx];
+	radTPolygon* pgn = hpt.PgnHndl.rep;
+	radTrans* tr = hpt.TransHndl.rep;
+
+	const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+	if(verts2d.size() < 4) return TVector3d(0.0, 0.0, 0.0);
+
+	TVector3d V0 = tr->TrPoint(TVector3d(verts2d[0].x, verts2d[0].y, pgn->CoordZ));
+	TVector3d V1 = tr->TrPoint(TVector3d(verts2d[1].x, verts2d[1].y, pgn->CoordZ));
+	TVector3d V2 = tr->TrPoint(TVector3d(verts2d[2].x, verts2d[2].y, pgn->CoordZ));
+	TVector3d V3 = tr->TrPoint(TVector3d(verts2d[3].x, verts2d[3].y, pgn->CoordZ));
+
+	TVector3d H_total(0.0, 0.0, 0.0);
+
+	// Standard triangle split for quadrilateral
+	// Triangle 1: V0, V1, V2 (indices 0, 1, 2)
+	// Triangle 2: V0, V2, V3 (indices 0, 2, 3)
+	TVector3d tri_verts[2][3] = {
+		{V0, V1, V2},
+		{V0, V2, V3}
+	};
+
+	for(int iTri = 0; iTri < 2; iTri++)
+	{
+		const TVector3d& T0 = tri_verts[iTri][0];
+		const TVector3d& T1 = tri_verts[iTri][1];
+		const TVector3d& T2 = tri_verts[iTri][2];
+
+		// Compute triangle normal
+		TVector3d edge1, edge2, tri_normal;
+		edge1.x = T1.x - T0.x; edge1.y = T1.y - T0.y; edge1.z = T1.z - T0.z;
+		edge2.x = T2.x - T0.x; edge2.y = T2.y - T0.y; edge2.z = T2.z - T0.z;
+
+		tri_normal.x = edge1.y * edge2.z - edge1.z * edge2.y;
+		tri_normal.y = edge1.z * edge2.x - edge1.x * edge2.z;
+		tri_normal.z = edge1.x * edge2.y - edge1.y * edge2.x;
+
+		double norm_len = sqrt(tri_normal.x*tri_normal.x + tri_normal.y*tri_normal.y + tri_normal.z*tri_normal.z);
+		if(norm_len < 1e-20) continue;
+
+		// Normalize
+		tri_normal.x /= norm_len;
+		tri_normal.y /= norm_len;
+		tri_normal.z /= norm_len;
+
+		// Compute triangle center
+		TVector3d tri_center;
+		tri_center.x = (T0.x + T1.x + T2.x) / 3.0;
+		tri_center.y = (T0.y + T1.y + T2.y) / 3.0;
+		tri_center.z = (T0.z + T1.z + T2.z) / 3.0;
+
+		// Check if normal points outward (away from element center)
+		TVector3d to_center;
+		to_center.x = tri_center.x - CentrPoint.x;
+		to_center.y = tri_center.y - CentrPoint.y;
+		to_center.z = tri_center.z - CentrPoint.z;
+
+		double dot_prod = tri_normal.x * to_center.x + tri_normal.y * to_center.y + tri_normal.z * to_center.z;
+
+		// Sign factor: +1 if normal points outward, -1 if inward
+		double sign_factor = (dot_prod >= 0.0) ? 1.0 : -1.0;
+
+		// Compute field from this triangle with sign-corrected sigma
+		TVector3d H_tri = FieldFromChargedTriangle(obs, T0, T1, T2, sigma * sign_factor);
+
+		H_total.x += H_tri.x;
+		H_total.y += H_tri.y;
+		H_total.z += H_tri.z;
+	}
+
+	return H_total;
+}
+
+//-------------------------------------------------------------------------
+
+TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double charge) const
+{
+	// Magnetic field from point magnetic charge (monopole) at element center
+	// Yano-Sugahara MSC method: compensating point charge at centroid
+	// Returns: charge * r / r^3 (WITHOUT 4pi divisor)
+	// The 4pi divisor is applied in the matrix assembly (-K/(4pi))
+
+	TVector3d r_minus_p;
+	r_minus_p.x = obs.x - CentrPoint.x;
+	r_minus_p.y = obs.y - CentrPoint.y;
+	r_minus_p.z = obs.z - CentrPoint.z;
+
+	double r_mag_sq = r_minus_p.x * r_minus_p.x +
+	                  r_minus_p.y * r_minus_p.y +
+	                  r_minus_p.z * r_minus_p.z;
+
+	if(r_mag_sq < 1e-20)
+	{
+		return TVector3d(0.0, 0.0, 0.0);
+	}
+
+	double r_mag = sqrt(r_mag_sq);
+	double r_mag_cubed = r_mag_sq * r_mag;
+	// NO 4pi divisor - applied in matrix assembly
+	double coef = charge / r_mag_cubed;
+
+	TVector3d H;
+	H.x = coef * r_minus_p.x;
+	H.y = coef * r_minus_p.y;
+	H.z = coef * r_minus_p.z;
+
+	return H;
 }
 
 //-------------------------------------------------------------------------
@@ -1132,7 +1431,7 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 		// Restore original magnetization
 		Magn = saved_Magn;
 		
-		// Store negated values (to match ELF convention: N_stored = -N_physical)
+		// Store negated values (N_stored = -N_physical for interaction matrix)
 		FieldPtr->B.x -= H_from_Mx.x;
 		FieldPtr->B.y -= H_from_Mx.y;
 		FieldPtr->B.z -= H_from_Mx.z;
@@ -1191,10 +1490,10 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 	radTFieldKey& FldKey = FieldPtr->FieldKey;
 	if(FldKey.PreRelax_)
 	{
-		// Add self-term for tetrahedral elements (ELF/MAGIC approach)
-		// Reference: ELF moment_method.f90 lines 341-343
+		// Self-term handling for tetrahedral elements
 		// When observation point is at element centroid (self-interaction),
-		// add 0.5 to diagonal to stabilize the iterative solver.
+		// no additional term needed for direct solvers.
+		// The surface integral already computes the correct self-demagnetization.
 		if(IsTetrahedron())
 		{
 			TVector3d diff = FieldPtr->P - CentrPoint;
@@ -1213,16 +1512,11 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 			}
 			double tol = elemSizeSq * 1.0e-10;
 			if(tol < 1.0e-20) tol = 1.0e-20;
-			
+
 			if(distSq < tol)
 			{
-				// Self-interaction: For direct solver (Method 9), no additional term needed.
-				// The surface integral already computes the correct self-demagnetization.
-				// The 0.5 was only needed for iterative solvers (MAGIC/ELF convention).
-				// const double SELF_TERM = 0.5;
-				// SumLocField.B.x += SELF_TERM;
-				// SumLocField.H.y += SELF_TERM;
-				// SumLocField.A.z += SELF_TERM;
+				// Self-interaction: For direct solver, no additional term needed.
+				// The surface integral computes the correct self-demagnetization.
 			}
 		}
 		

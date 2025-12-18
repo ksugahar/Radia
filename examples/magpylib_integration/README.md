@@ -12,130 +12,82 @@ magpylib is an open-source Python library for magnetic field computation using a
 
 ## Requirements
 
-```bash
-pip install magpylib>=5.0
-pip install radia  # or build from source
-```
-
+\Requirement already satisfied: radia in c:\program files\python312\lib\site-packages (1.3.9)
+Requirement already satisfied: numpy>=1.20 in c:\program files\python312\lib\site-packages (from radia) (2.3.5)
 ## CRITICAL: ObjBckgCF Callback Unit Behavior
 
-**ObjBckgCF passes positions to the callback in Radia's internal units (millimeters), regardless of the `rad.FldUnits()` setting.**
+**ObjBckgCF passes positions to the callback in Radia's internal units (millimeters), regardless of the \ setting.**
 
 This is a critical detail that can cause ~1000x errors in field evaluation if not handled correctly.
 
 ### Correct Implementation
 
-```python
-# CORRECT - Always convert mm to m for magpylib
-def magpylib_field(pos):
-    """Callback for ObjBckgCF.
-
-    IMPORTANT: pos is ALWAYS in mm (Radia internal units),
-    regardless of FldUnits() setting. magpylib expects meters.
-    """
-    pos_m = [p * 0.001 for p in pos]  # mm -> m
-    B = magpy_source.getB(pos_m)
-    return [float(B[0]), float(B[1]), float(B[2])]
-```
-
 ### Incorrect Implementation (DO NOT USE)
 
-```python
-# WRONG - This assumes FldUnits() affects callback coordinates
-def magpylib_field(pos):
-    B = magpy_source.getB(pos)  # pos is in mm, magpylib expects m!
-    return [float(B[0]), float(B[1]), float(B[2])]
-```
-
-## Key Function: `magpylib_to_radia_callback()`
-
-The adapter function converts a magpylib source to a Radia `ObjBckgCF` callback:
-
-```python
-def magpylib_to_radia_callback(magpy_source):
-    """
-    Create a Radia ObjBckgCF callback from a magpylib source.
-
-    CRITICAL: ObjBckgCF passes positions in mm (Radia internal units),
-    regardless of the FldUnits() setting. magpylib expects meters.
-    This function handles the mm -> m conversion automatically.
-
-    Parameters:
-    - magpy_source: Any magpylib source (Cuboid, Circle, Collection, etc.)
-
-    Returns:
-    - Callback function: pos [mm] -> [Bx, By, Bz] in Tesla
-    """
-    def field_callback(pos):
-        pos_m = [p * 0.001 for p in pos]  # mm -> m conversion
-        B = magpy_source.getB(pos_m)
-        return [float(B[0]), float(B[1]), float(B[2])]
-
-    return field_callback
-```
-
-## Usage Example
-
-```python
-import radia as rad
-import magpylib as magpy
-import numpy as np
-
-rad.FldUnits('m')
-rad.UtiDelAll()
-
-# Create magpylib source (permanent magnet)
-magnet = magpy.magnet.Cuboid(
-    magnetization=(0, 0, 1e6),  # A/m (approximately 1.25 T remanence)
-    dimension=(0.05, 0.05, 0.02),  # 50x50x20 mm in meters
-    position=(0, 0, 0.05)  # 50mm above origin in meters
-)
-
-# Create callback with mm -> m conversion
-def field_callback(pos):
-    """ObjBckgCF callback - pos is in mm, convert to m for magpylib."""
-    pos_m = [p * 0.001 for p in pos]
-    B = magnet.getB(pos_m)
-    return [float(B[0]), float(B[1]), float(B[2])]
-
-bg_field = rad.ObjBckgCF(field_callback)
-
-# Create soft iron cube
-cube = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.04], [0, 0, 0])
-rad.ObjDivMag(cube, [4, 4, 4])
-
-# Apply material
-mat = rad.MatLin(999.0)  # mu_r = 1000
-rad.MatApl(cube, mat)
-
-# Solve
-system = rad.ObjCnt([cube, bg_field])
-rad.Solve(system, 0.0001, 1000)
-
-# Get results
-M = rad.ObjM(cube)
-```
+## Key Function: 
+The adapter function converts a magpylib source to a Radia \ callback:
 
 ## Examples
 
 ### demo_magpylib_integration.py
 
 Simple demo comparing ObjBckgCF (magpylib) with ObjBckg (uniform field).
+Verifies that the unit conversion fix produces correct results.
 
 ### sphere_in_halbach_cylinder.py
 
-Demonstrates three scenarios:
+Demonstrates three scenarios with cuboid magnets:
 1. Single permanent magnet above iron cube
 2. Helmholtz coil pair creating uniform field
 3. Quadrupole magnet configuration
+
+### cylinder_magnet_examples.py
+
+Comprehensive cylindrical magnet examples:
+
+1. **Axially Magnetized Cylinder** - Most common PM configuration
+   - Magnetization along cylinder axis
+   - Creates strong axial field on axis
+
+2. **Diametrically Magnetized Cylinder** - Transverse field
+   - Magnetization perpendicular to axis
+   - Used for magnetic couplings
+
+3. **Halbach Cylinder (k=2 Dipole)** - Strong uniform field in bore
+   - Creates ~0.66 T uniform field in center
+   - Minimal external field
+   - 12 CylinderSegment elements
+
+4. **Ring Magnet Pair** - Axial gradient field
+   - Two opposing ring magnets
+   - Zero field at center, strong gradient
+   - Used for magnetic levitation
+
+## Supported magpylib Sources
+
+All magpylib source types work with ObjBckgCF:
+
+| Source Type | magpylib Class | Use Case |
+|-------------|----------------|----------|
+| Cuboid | \ | Rectangular magnets |
+| Cylinder | \ | Axial/diametric magnets |
+| CylinderSegment | \ | Ring magnets, Halbach arrays |
+| Sphere | \ | Spherical magnets |
+| Circle (current) | \ | Coils, Helmholtz pairs |
+| Line (current) | \ | Wire segments |
+| Collection | \ | Combined sources |
+
+## Usage Example
 
 ## Notes
 
 1. **Unit Conversion**: ObjBckgCF always passes positions in mm. Always convert to meters for magpylib.
 
-2. **Return Type**: The callback must return Python native floats, not numpy.float64. Use `float()` conversion.
+2. **Return Type**: The callback must return Python native floats, not numpy.float64. Use \ conversion.
 
-3. **Field Evaluation**: Radia's `rad.Fld()` is most accurate OUTSIDE magnetic materials. Evaluate at external observation points.
+3. **Field Evaluation**: Radia's \ is most accurate OUTSIDE magnetic materials. Evaluate at external observation points.
+
+4. **Halbach Arrays**: Use \ with varying magnetization angles. More segments = more uniform field.
 
 ## License
 

@@ -30,6 +30,24 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../build/Release'))
 import radia as rad
 
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+
+
+def get_peak_memory_mb():
+    """Get peak memory usage in MB (Windows: peak_wset)"""
+    if not HAS_PSUTIL:
+        return None
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    if hasattr(mem_info, 'peak_wset'):
+        return mem_info.peak_wset / (1024 * 1024)  # MB
+    else:
+        return mem_info.rss / (1024 * 1024)  # MB (fallback)
+
 MU_0 = 4 * np.pi * 1e-7
 H_EXT = 50000.0  # 50,000 A/m (same as ELF_MAGIC)
 
@@ -155,6 +173,9 @@ def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
     result = rad.Solve(grp, 0.001, 1000, solver_method)
     t_solve = time.time() - t_solve_start
 
+    # Measure peak memory after solve
+    peak_memory_mb = get_peak_memory_mb()
+
     # Disable H-matrix after solve
     if hmatrix_enabled:
         try:
@@ -175,9 +196,11 @@ def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
     print(f'Iterations: {n_iter}')
     print(f'Converged: {converged}')
     print(f'M_avg_z: {M_avg_z:.0f} A/m')
+    if peak_memory_mb is not None:
+        print(f'Peak memory: {peak_memory_mb:.1f} MB')
     print()
 
-    return {
+    result_data = {
         'element_type': 'hexahedron_msc',
         'mesh_description': f'{n_div}x{n_div}x{n_div}',
         'n_div': n_div,
@@ -194,6 +217,9 @@ def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
         'nonl_iterations': n_iter,
         'M_avg_z': M_avg_z,
     }
+    if peak_memory_mb is not None:
+        result_data['peak_memory_mb'] = peak_memory_mb
+    return result_data
 
 
 def main():

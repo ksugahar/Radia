@@ -1,0 +1,21 @@
+{
+  "element_type": "tetra",
+  "mesh_description": "maxh=0.30m",
+  "maxh": 0.3,
+  "n_elements": 200,
+  "ndof": 600,
+  "H_ext": 50000.0,
+  "mu_r": 1000,
+  "chi": 999,
+  "t_mesh": 0.04704022407531738,
+  "t_solve": 0.5318830013275146,
+  "solver_method": 0,
+  "solver_name": "lu",
+  "converged": true,
+  "residual": 0.0,
+  "iterations": 2,
+  "M_avg_z": 187788.1731959162,
+  "M_analytical_z": 149550.8982035928,
+  "error_percent": 25.568067762634662,
+  "equiv_n_div": 3
+}

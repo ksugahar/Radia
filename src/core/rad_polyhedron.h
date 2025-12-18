@@ -101,7 +101,7 @@ struct iterator_traits <TVector3d**> {
 //-------------------------------------------------------------------------
 
 class radTPolyhedron : public radTg3dRelax {
-	
+
 	//const TMatrix3d* pJ_LinCoef;
 	TMatrix3d* pJ_LinCoef;
 	char mLinTreat; //0- treat as relative
@@ -116,7 +116,16 @@ public:
 	short SomethingIsWrong;
 	radTPairOfDouble AuxPairOfDouble; // Used for cylindrical subdivision
 
-	radTPolyhedron(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces, const TVector3d& InMagn) 
+	// 6 DOF MSC support for hexahedra (2025-12-15)
+	// For 6-face hexahedra, we use surface charge density (sigma) on each face
+	// instead of magnetization vector (Mx, My, Mz)
+	double Sigma[6];           // Surface charge densities for each face (6 DOF)
+	double FaceArea[6];        // Face areas
+	TVector3d FaceNormal[6];   // Face normals (outward)
+	TVector3d FaceCenter[6];   // Face centers
+	bool Use6DOF_MSC;          // Flag: true if hexahedron uses 6 DOF MSC
+
+	radTPolyhedron(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces, const TVector3d& InMagn)
 		: radTg3dRelax(InMagn)
 	{
 		//Magn = InMagn; AmOfFaces = lenArrayOfFaces; SomethingIsWrong = 0;
@@ -124,22 +133,49 @@ public:
 		pJ_LinCoef = 0; mLinTreat = 0;
 		J_IsNotZero = false;
 
+		// Initialize 6 DOF MSC data
+		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		Use6DOF_MSC = (AmOfFaces == 6);
+		for(int i = 0; i < 6; i++) {
+			Sigma[i] = 0.0;
+			FaceArea[i] = 0.0;
+			FaceNormal[i].x = FaceNormal[i].y = FaceNormal[i].z = 0.0;
+			FaceCenter[i].x = FaceCenter[i].y = FaceCenter[i].z = 0.0;
+		}
+
 		//DefineCentrPoint(ArrayOfPoints, lenArrayOfPoints); //OC090908
 		ShiftFacesNumeration(ArrayOfFaces, ArrayOfLengths);
 		FillInVectHandlePgnAndTrans(ArrayOfPoints, lenArrayOfPoints, ArrayOfFaces, ArrayOfLengths);
 		if(SomethingIsWrong) return;
 		DefineCentrPoint(ArrayOfPoints, lenArrayOfPoints);
+
+		// Setup face geometry for 6 DOF MSC
+		if(Use6DOF_MSC) SetupFaceGeometry();
 	}
-	radTPolyhedron(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces, 
-		const TVector3d& InMagn, TMatrix3d& InM_LinCoef, TVector3d& InJ, TMatrix3d& InJ_LinCoef, char LinTreat) 
+	radTPolyhedron(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces,
+		const TVector3d& InMagn, TMatrix3d& InM_LinCoef, TVector3d& InJ, TMatrix3d& InJ_LinCoef, char LinTreat)
 		: radTg3dRelax(InMagn, InM_LinCoef)
 	{
 		AmOfFaces = lenArrayOfFaces; SomethingIsWrong = 0;
+
+		// Initialize 6 DOF MSC data
+		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		Use6DOF_MSC = (AmOfFaces == 6);
+		for(int i = 0; i < 6; i++) {
+			Sigma[i] = 0.0;
+			FaceArea[i] = 0.0;
+			FaceNormal[i].x = FaceNormal[i].y = FaceNormal[i].z = 0.0;
+			FaceCenter[i].x = FaceCenter[i].y = FaceCenter[i].z = 0.0;
+		}
+
 		//DefineCentrPoint(ArrayOfPoints, lenArrayOfPoints); //OC090908
 		ShiftFacesNumeration(ArrayOfFaces, ArrayOfLengths);
 		FillInVectHandlePgnAndTrans(ArrayOfPoints, lenArrayOfPoints, ArrayOfFaces, ArrayOfLengths);
 		if(SomethingIsWrong) return;
 		DefineCentrPoint(ArrayOfPoints, lenArrayOfPoints);
+
+		// Setup face geometry for 6 DOF MSC
+		if(Use6DOF_MSC) SetupFaceGeometry();
 
 		J = InJ;
 		bool J_LinCoefIsNotZero = !InJ_LinCoef.isZero();
@@ -149,13 +185,24 @@ public:
 
 		mLinTreat = LinTreat;
 	}
-	radTPolyhedron(TVector3d** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces, const TVector3d& InMagn) 
+	radTPolyhedron(TVector3d** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces, const TVector3d& InMagn)
 		: radTg3dRelax(InMagn)
 	{
 		//Magn = InMagn; AmOfFaces = lenArrayOfFaces; SomethingIsWrong = 0;
 		AmOfFaces = lenArrayOfFaces; SomethingIsWrong = 0;
 		pJ_LinCoef = 0; mLinTreat = 0;
 		J_IsNotZero = false;
+
+		// Initialize 6 DOF MSC data
+		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		Use6DOF_MSC = (AmOfFaces == 6);
+		for(int i = 0; i < 6; i++) {
+			Sigma[i] = 0.0;
+			FaceArea[i] = 0.0;
+			FaceNormal[i].x = FaceNormal[i].y = FaceNormal[i].z = 0.0;
+			FaceCenter[i].x = FaceCenter[i].y = FaceCenter[i].z = 0.0;
+		}
+
 		TVector3d* OutArrayOfPoints;
 		int lenArrayOfPoints;
 		int** OutArrayOfFaces;
@@ -167,9 +214,12 @@ public:
 		if(SomethingIsWrong) { DeleteInputArrays(OutArrayOfPoints, OutArrayOfFaces); return;}
 		DefineCentrPoint(OutArrayOfPoints, lenArrayOfPoints);
 		DeleteInputArrays(OutArrayOfPoints, OutArrayOfFaces);
+
+		// Setup face geometry for 6 DOF MSC
+		if(Use6DOF_MSC) SetupFaceGeometry();
 	}
-	radTPolyhedron(const radTVectHandlePgnAndTrans& InVectHandlePgnAndTrans, 
-		const TVector3d* pInMagn, TMatrix3d* pInM_LinCoef, const radThg& InMatHandle, 
+	radTPolyhedron(const radTVectHandlePgnAndTrans& InVectHandlePgnAndTrans,
+		const TVector3d* pInMagn, TMatrix3d* pInM_LinCoef, const radThg& InMatHandle,
 		const TVector3d* pInJ, TMatrix3d* pInJ_LinCoef, char LinTreat, const TVector3d* pPrevLinRefP) //used at cutting / subdivision
 	//radTPolyhedron(const radTVectHandlePgnAndTrans& InVectHandlePgnAndTrans, const TVector3d& InMagn, const radThg& InMatHandle)
 	//radTPolyhedron(const radTVectHandlePgnAndTrans& InVectHandlePgnAndTrans, const TVector3d& InCentrPoint, const TVector3d& InMagn, const radThg& InMatHandle)
@@ -182,6 +232,19 @@ public:
 		for(int i=0; i<AmOfFaces; i++) VectHandlePgnAndTrans.push_back(InVectHandlePgnAndTrans[i]);
 		SomethingIsWrong = 0;
 		DefineCentrPoint();
+
+		// Initialize 6 DOF MSC data
+		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		Use6DOF_MSC = (AmOfFaces == 6);
+		for(int i = 0; i < 6; i++) {
+			Sigma[i] = 0.0;
+			FaceArea[i] = 0.0;
+			FaceNormal[i].x = FaceNormal[i].y = FaceNormal[i].z = 0.0;
+			FaceCenter[i].x = FaceCenter[i].y = FaceCenter[i].z = 0.0;
+		}
+
+		// Setup face geometry for 6 DOF MSC
+		if(Use6DOF_MSC) SetupFaceGeometry();
 
 		J_IsNotZero = false;
 		J.Zero();
@@ -218,11 +281,26 @@ public:
 	{//tries to generate a convex polyhedron from two base face polygons
 		SomethingIsWrong = 0;
 		mLinTreat = 0; J_IsNotZero = false;
-		J.x = J.y = J.z = 0.; pJ_LinCoef = 0; 
+		J.x = J.y = J.z = 0.; pJ_LinCoef = 0;
 		Magn.x = Magn.y = Magn.z = 0.; pM_LinCoef = 0;
+
+		// Initialize 6 DOF MSC data (will be updated after AmOfFaces is known)
+		Use6DOF_MSC = false;
+		for(int i = 0; i < 6; i++) {
+			Sigma[i] = 0.0;
+			FaceArea[i] = 0.0;
+			FaceNormal[i].x = FaceNormal[i].y = FaceNormal[i].z = 0.0;
+			FaceCenter[i].x = FaceCenter[i].y = FaceCenter[i].z = 0.0;
+		}
 
 		AttemptToCreateConvexPolyhedronFromTwoBaseFaces(inHandleBasePgnAndTrf1, inHandleBasePgnAndTrf2);
 		if(SomethingIsWrong) return;
+
+		// Now that AmOfFaces is set, update 6 DOF flag
+		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		Use6DOF_MSC = (AmOfFaces == 6);
+		if(Use6DOF_MSC) SetupFaceGeometry();
+
 		if(avgCur != 0)
 		{
 			SetCurrentDensityForConstCurrent(avgCur, 0, 1); //may set J and pJ_LinCoef
@@ -241,15 +319,39 @@ public:
 	}
 	radTPolyhedron(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
 	{
+		// Initialize 6 DOF MSC data before parsing
+		Use6DOF_MSC = false;
+		for(int i = 0; i < 6; i++) {
+			Sigma[i] = 0.0;
+			FaceArea[i] = 0.0;
+			FaceNormal[i].x = FaceNormal[i].y = FaceNormal[i].z = 0.0;
+			FaceCenter[i].x = FaceCenter[i].y = FaceCenter[i].z = 0.0;
+		}
+
 		DumpBinParse_g3d(inStr, mKeysOldNew, gMapOfHandlers);
 		DumpBinParse_g3dRelax(inStr, mKeysOldNew, gMapOfHandlers);
 		DumpBinParse_Polyhedron(inStr);
+
+		// Setup 6 DOF after parsing
+		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		Use6DOF_MSC = (AmOfFaces == 6);
+		if(Use6DOF_MSC) SetupFaceGeometry();
 	}
 	radTPolyhedron() : radTg3dRelax()
-	{ 
+	{
 		pJ_LinCoef = 0; mLinTreat = 0;
 		J_IsNotZero = false;
 		SomethingIsWrong = 0;
+
+		// Initialize 6 DOF MSC data
+		Use6DOF_MSC = false;
+		AmOfFaces = 0;
+		for(int i = 0; i < 6; i++) {
+			Sigma[i] = 0.0;
+			FaceArea[i] = 0.0;
+			FaceNormal[i].x = FaceNormal[i].y = FaceNormal[i].z = 0.0;
+			FaceCenter[i].x = FaceCenter[i].y = FaceCenter[i].z = 0.0;
+		}
 	}
 	~radTPolyhedron() 
 	{
@@ -257,7 +359,9 @@ public:
 	}
 
 	int Type_g3dRelax() { return 5;}
-	int NumberOfDegOfFreedom() { return 3;}
+	// DOF: 6 for hexahedra (sigma on each face), 3 for tetrahedra (Mx, My, Mz)
+	// Returns 0 if no material is applied (same behavior as radTRecMag)
+	int NumberOfDegOfFreedom() { return (MaterHandle.rep == 0) ? 0 : (Use6DOF_MSC ? 6 : 3); }
 
 	void FillInVectHandlePgnAndTrans(TVector3d*, int, int**, int*);
 	void MakeNormalPresentation(TVector3d**, int*, TVector3d*&, int&, int**&);
@@ -281,6 +385,67 @@ public:
 	void B_comp_tetrahedron_centroid(radTField*);
 	void B_comp_tetrahedron_analytical(radTField*);
 	void B_comp_hexahedron_MSC(radTField*);
+
+	// 6 DOF MSC field computation for hexahedra
+	TVector3d FieldFromChargedTriangle(const TVector3d& obs, const TVector3d& v0,
+	                                    const TVector3d& v1, const TVector3d& v2, double sigma) const;
+	TVector3d FieldFromQuadFace(const TVector3d& obs, int faceIdx, double sigma) const;
+	TVector3d FieldFromPointCharge(const TVector3d& obs, double charge) const;
+
+	// 6 DOF MSC setup for hexahedra
+	void SetupFaceGeometry()
+	{
+		// Compute face normals, areas, and centers for 6 DOF MSC
+		// This is called only for hexahedra (AmOfFaces == 6)
+		if(AmOfFaces != 6) return;
+
+		for(int i = 0; i < 6; i++)
+		{
+			radTHandlePgnAndTrans& hPgnTrans = VectHandlePgnAndTrans[i];
+			radTPolygon* pPgn = hPgnTrans.PgnHndl.rep;
+			radTrans* pTrans = hPgnTrans.TransHndl.rep;
+
+			// Get face center in local frame, then transform to global
+			TVector2d& locCP = pPgn->CentrPoint;
+			TVector3d localCenter(locCP.x, locCP.y, pPgn->CoordZ);
+			FaceCenter[i] = pTrans->TrBiPoint(localCenter);
+
+			// Face normal is the Z-axis of the local frame transformed to global
+			TVector3d localNormal(0.0, 0.0, 1.0);
+			FaceNormal[i] = pTrans->TrBiPoint(localNormal) - pTrans->TrBiPoint(TVector3d(0, 0, 0));
+			// Normalize
+			double normLen = sqrt(FaceNormal[i].x * FaceNormal[i].x +
+			                      FaceNormal[i].y * FaceNormal[i].y +
+			                      FaceNormal[i].z * FaceNormal[i].z);
+			if(normLen > 1e-15)
+			{
+				FaceNormal[i].x /= normLen;
+				FaceNormal[i].y /= normLen;
+				FaceNormal[i].z /= normLen;
+			}
+
+			// CRITICAL: Ensure normal points OUTWARD from element center
+			// Compute vector from element center to face center
+			TVector3d toFace;
+			toFace.x = FaceCenter[i].x - CentrPoint.x;
+			toFace.y = FaceCenter[i].y - CentrPoint.y;
+			toFace.z = FaceCenter[i].z - CentrPoint.z;
+
+			// If normal points inward (opposite to toFace), flip it
+			double dotProd = FaceNormal[i].x * toFace.x +
+			                 FaceNormal[i].y * toFace.y +
+			                 FaceNormal[i].z * toFace.z;
+			if(dotProd < 0.0)
+			{
+				FaceNormal[i].x = -FaceNormal[i].x;
+				FaceNormal[i].y = -FaceNormal[i].y;
+				FaceNormal[i].z = -FaceNormal[i].z;
+			}
+
+			// Compute face area from polygon
+			FaceArea[i] = pPgn->Area();
+		}
+	}
 
 	int CutItself(TVector3d*, radThg&, radTPair_int_hg&, radTPair_int_hg&, radTApplication*, radTSubdivOptions*);
 	int FindIntersectionWithFace(int, TVector3d*, radTVectOfPtrToVect3d&, radTVectHandlePgnAndTrans&, radTVectHandlePgnAndTrans&, char&, double*);
