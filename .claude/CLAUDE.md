@@ -135,6 +135,33 @@ for el in elements:
 
 ---
 
+## H-Matrix Policy: Do NOT Implement Custom Algorithms
+
+### Policy
+
+**CRITICAL**: Do NOT implement custom H-matrix algorithms (ACA, ACA+, or any low-rank approximation).
+
+**Rules**:
+1. **No custom H-matrix code**: Never write new ACA/H-matrix implementations
+2. **Use HACApK only**: If H-matrix is ever needed, use `src/ext/HACApK_LH-Cimplm/`
+3. **Removed implementations**: rad_hmatrix*.cpp/h files were deleted (2025-12-18)
+
+**Rationale**:
+- Custom implementations are prone to bugs and difficult to validate
+- HACApK is a proven, MIT-licensed library
+- Benchmarks showed NO speedup for typical Radia use cases (single compact objects)
+
+### radia_ngsolve.RadiaField
+
+The `radia_ngsolve.RadiaField` CoefficientFunction uses **direct rad.Fld() calls**:
+- Batch evaluation via `rad.Fld(obj, field_type, points_list)`
+- Point caching with `PrepareCache()` for repeated evaluations
+- **NO H-matrix acceleration** is implemented or planned
+
+**See**: Main `CLAUDE.md` for full H-matrix policy details.
+
+---
+
 **Last Updated**: 2025-12-19
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation
