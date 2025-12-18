@@ -93,6 +93,4 @@ For single compact objects like a subdivided cube, dense BiCGSTAB may be more ef
 
 ## Discovered By
 
-ELF_MAGIC benchmark comparison (2025-12-05)
-
-Bug report: `S:\ELF_MAGIC\01_GitHub\examples\cube_uniform_field\radia_comparison\RADIA_HMATRIX_BUG_REPORT.md`
+External benchmark comparison (2025-12-05)

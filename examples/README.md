@@ -150,57 +150,33 @@ Coupling Radia magnetic fields with NGSolve finite element analysis.
 
 ---
 
-### 6. [H-matrix/](H-matrix/) - H-matrix Benchmarks
-**5 scripts** | **Level:** Advanced
+### 6. [H-matrix/](H-matrix/) - H-matrix Benchmarks (ARCHIVED)
+**5 scripts** | **Level:** Advanced | **Status:** ARCHIVED
 
-Performance benchmarks for H-matrix accelerated computations.
+> **Note (v1.3.13):** H-matrix acceleration was evaluated and found to provide
+> **NO benefit for typical Radia use cases** (single compact objects).
+> These examples are kept for reference but are NOT recommended for use.
+> See [docs/HMATRIX_EVALUATION.md](../docs/HMATRIX_EVALUATION.md) for details.
 
-**Key Examples:**
-- `benchmark_solver.py` - H-matrix vs direct solver comparison
-- `verify_field_accuracy.py` - H-matrix field accuracy verification
-- `benchmark_parallel_construction.py` - OpenMP parallelization benchmarks
-- `benchmark_field_evaluation.py` - Single vs batch field evaluation
-- `run_all_benchmarks.py` - Automated benchmark suite
-
-**Topics Covered:**
-- H-matrix construction and accuracy
-- Low-rank approximation (ACA algorithm)
-- OpenMP parallel construction
-- Field evaluation acceleration
-- Accuracy vs performance trade-offs
-
-**Performance Results:**
-- H-matrix: O(N log N) complexity
-- Direct: O(N²) complexity
-- Accuracy: <1% error with ε=1e-6
-- Speedup: 10-100x for N>1000 elements
-
-**Best for:** Large-scale magnetostatics problems (1000+ elements)
+~~**Best for:** Large-scale magnetostatics problems (1000+ elements)~~
 
 ---
 
 ### 7. [solver_time_evaluation/](solver_time_evaluation/) - Solver Benchmarks
 **4 scripts** | **Level:** Intermediate
 
-Solver performance analysis and scaling studies.
+> **Note (v1.3.13):** Some benchmarks may reference the old Gauss-Seidel solver.
+> The current Radia uses **LU (Method 0)** and **BiCGSTAB (Method 1)** solvers.
+> See [docs/SOLVER_METHODS.md](../docs/SOLVER_METHODS.md) for current solver info.
 
-**Key Examples:**
-- `benchmark_linear_material.py` - Linear material solver scaling (O(N^1.15))
-- `benchmark_lu_vs_gs.py` - LU decomposition vs Gauss-Seidel comparison
-- `benchmark_matrix_construction.py` - Matrix assembly timing (O(N^1.44))
-- `benchmark_solver_scaling.py` - General solver scaling analysis
+Solver performance analysis and scaling studies.
 
 **Topics Covered:**
 - Solver complexity analysis
-- LU decomposition (exact, O(N^2.5))
-- Gauss-Seidel iteration (approximate, O(N^0.5))
+- LU decomposition (direct, O(N^3))
+- BiCGSTAB iteration (iterative, O(N^2 * k))
 - Matrix construction timing
 - Performance vs problem size
-
-**Key Findings:**
-- Gauss-Seidel preferred for N>27 elements
-- LU decomposition better for small problems (N<27)
-- Matrix construction: O(N^1.44) scaling
 
 **Best for:** Understanding solver performance characteristics
 
@@ -209,15 +185,12 @@ Solver performance analysis and scaling studies.
 ### 8. [solver_benchmarks/](solver_benchmarks/) - Additional Benchmarks
 **2 scripts** | **Level:** Intermediate
 
+> **Note (v1.3.13):** H-matrix benchmarks are for reference only (H-matrix not available).
+
 Additional solver method comparisons and performance tests.
 
-**Key Examples:**
-- `benchmark_hmatrix_field.py` - H-matrix field evaluation benchmark
-- `benchmark_solver_methods.py` - Comparison of solver methods
-
 **Topics Covered:**
-- H-matrix field evaluation
-- Solver method selection
+- Solver method selection (LU vs BiCGSTAB)
 - Performance comparison
 
 **Best for:** Choosing the right solver for your problem
@@ -360,8 +333,8 @@ paraview field_distribution.vtk
 | **Complex coils** | `complex_coil_geometry/` |
 | **External fields** | `background_fields/` |
 | **FEM coupling** | `NGSolve_Integration/` |
-| **Performance analysis** | `solver_time_evaluation/`, `H-matrix/` |
-| **Large problems (N>1000)** | `H-matrix/` |
+| **Performance analysis** | `solver_time_evaluation/`, `solver_benchmarks/` |
+| **Large problems (N>1000)** | Use BiCGSTAB solver (Method 1) |
 | **Material properties** | `background_fields/`, `solver_time_evaluation/` |
 
 ---
@@ -498,7 +471,8 @@ When adding new examples:
 
 ---
 
-**Last Updated:** 2025-11-12
+**Last Updated:** 2025-12-11
+**Version:** 1.3.13
 **Total Examples:** 41 Python scripts
 **Total Directories:** 9
 **Documentation:** 100% coverage (all directories have README.md)

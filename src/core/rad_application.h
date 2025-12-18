@@ -74,7 +74,7 @@ public:
 		CompCriterium.BasedOnPrecLevel = 0;
 		SendingIsRequired = 1;
 		TreatRecMagsAsExtrPolygons = TreatRecMagsAsPolyhedrons = TreatExtrPgnsAsPolyhedrons = 0;
-		RecognizeRecMagsInPolyhedrons = 1; // If possible, of course
+		RecognizeRecMagsInPolyhedrons = 0; // Disable: Keep hexahedra as polyhedra for 6 DOF MSC solver
 		MemAllocForIntrctMatrTotAtOnce = 0;
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020

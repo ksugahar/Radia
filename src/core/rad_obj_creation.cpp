@@ -323,7 +323,10 @@ int radTApplication::SetExtrudedPolygon(double* FirstPoi, long lenFirstPoi, doub
 		if(lenMagn != 3) { Send.ErrorMessage("Radia::Error000"); return 0;}
 		double Magn[] = { InMagn[0], InMagn[1], InMagn[2]}; //OC180210 to prevent InMagn from modification on output
 
-		if(CheckIfExtrudedPolygonIsRecMag(ArrayOfPoints2d, lenArrayOfPoints2d)) //OC190210
+		// Disabled auto-conversion to RecMag for transparency in research use (2025-12-15)
+		// Users should explicitly choose between ObjThckPgn (ExtrPolygon) and ObjRecMag
+		// if(CheckIfExtrudedPolygonIsRecMag(ArrayOfPoints2d, lenArrayOfPoints2d)) //OC190210
+		if(false) // Auto-conversion disabled - always use ExtrPolygon
 		{//code from void RecMag(double xc, double yc, double zc, double Lx, double Ly, double Lz, double Mx, double My, double Mz) in radinter.cpp
 			double J[] = {0.,0.,0.};
 			double CP[] = {0.,0.,0.}, Dims[] = {0.,0.,0.};

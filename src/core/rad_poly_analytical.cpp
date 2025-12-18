@@ -265,12 +265,12 @@ void RadAnalyticalFieldFromQuadCharge(
  * FIXED 2025-12-06: Rewritten to use RadAnalyticalFieldFromPolygonCharge
  * which is the proven analytical formula used by the standard polygon method.
  *
- * FIXED 2025-12-06: Added outward normal check following ELF_MAGIC convention.
- * If the computed normal points inward (toward element centroid), the surface
- * charge sign is negated to ensure correct field direction.
+ * FIXED 2025-12-06: Added outward normal check. If the computed normal points
+ * inward (toward element centroid), the surface charge sign is negated to
+ * ensure correct field direction.
  *
- * FIXED 2025-12-07: Basis vector construction now uses ELF_MAGIC triple cross
- * product method to ensure consistent orthonormal basis across all triangles.
+ * FIXED 2025-12-07: Basis vector construction uses triple cross product method
+ * to ensure consistent orthonormal basis across all triangles.
  *
  * @param V0, V1, V2    Triangle vertices in GLOBAL 3D coordinates
  * @param M             Magnetization vector (in global coordinates)
@@ -320,7 +320,7 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	double sigma = M.x * CC.x + M.y * CC.y + M.z * CC.z;
 
 	// =========================================================================
-	// ELF_MAGIC outward normal check:
+	// Outward normal check:
 	// Compute face center and check if normal points outward from element centroid
 	// If normal . (faceCenter - elemCentroid) < 0, the normal points inward
 	// In that case, we negate the surface charge (NOT the normal itself).
@@ -339,7 +339,7 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	double dotProduct = CC.x * outwardVec.x + CC.y * outwardVec.y + CC.z * outwardVec.z;
 
 	// If normal points inward, negate the surface charge
-	// (Following ELF_MAGIC convention - do not flip the coordinate system)
+	// (do not flip the coordinate system)
 	if(dotProduct < 0.0) {
 		sigma = -sigma;
 	}
@@ -348,10 +348,9 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	}
 
 	// =========================================================================
-	// Build local coordinate system using ELF_MAGIC's triple cross product method
-	// This is the exact legacy formulation from moment_tetra_sum (lines 351-365)
+	// Build local coordinate system using triple cross product method
 	//
-	// ELF_MAGIC constructs basis as follows:
+	// Basis construction:
 	//   vert_rel(2) = v2 - v1 (edge from v1 to v2)
 	//   vert_rel(3) = v3 - v1 (edge from v1 to v3)
 	//   basis_a = vert_rel(3)
@@ -362,7 +361,7 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	//     basis_b = basis_c x basis_a (normalized)
 	// =========================================================================
 
-	// ELF_MAGIC formulation: basis_a = e2, basis_b = e2 - e1*0.5
+	// Formulation: basis_a = e2, basis_b = e2 - e1*0.5
 	TVector3d basis_a = e2;
 	TVector3d basis_b;
 	basis_b.x = e2.x - e1.x * 0.5;

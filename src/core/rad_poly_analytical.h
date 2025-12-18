@@ -94,9 +94,9 @@ void RadAnalyticalFieldFromQuadCharge(
  * surface charge density sigma = M dot n, using global coordinates only.
  * No local coordinate transformation is needed.
  *
- * IMPORTANT: Following ELF_MAGIC convention, the function ensures the normal
- * vector points OUTWARD from the element centroid. If the computed normal
- * points inward, the surface charge sign is negated.
+ * IMPORTANT: The function ensures the normal vector points OUTWARD from the
+ * element centroid. If the computed normal points inward, the surface charge
+ * sign is negated.
  *
  * @param V0, V1, V2    Triangle vertices in GLOBAL 3D coordinates
  * @param M             Magnetization vector (in global coordinates)

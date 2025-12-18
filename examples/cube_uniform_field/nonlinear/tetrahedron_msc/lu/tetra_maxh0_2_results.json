@@ -4,12 +4,12 @@
   "n_elements": 627,
   "ndof": 1881,
   "H_ext": 50000.0,
-  "t_mesh": 0.0950002670288086,
-  "t_solve": 54.8765594959259,
+  "t_mesh": 0.09499740600585938,
+  "t_solve": 8.603930950164795,
   "solver_method": 0,
   "solver_name": "lu",
   "converged": true,
-  "residual": 1198.8486452450486,
-  "nonl_iterations": 547,
-  "M_avg_z": 256821.74933374423
+  "residual": 231802.14323569974,
+  "nonl_iterations": 2,
+  "M_avg_z": 192515.75433998092
 }

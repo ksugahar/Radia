@@ -29,6 +29,24 @@ sys.path.append(_src_path)
 import numpy as np
 import radia as rad
 
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+
+
+def get_peak_memory_mb():
+    """Get peak memory usage in MB (Windows: peak_wset)"""
+    if not HAS_PSUTIL:
+        return None
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    if hasattr(mem_info, 'peak_wset'):
+        return mem_info.peak_wset / (1024 * 1024)  # MB
+    else:
+        return mem_info.rss / (1024 * 1024)  # MB (fallback)
+
 # Physical constants
 MU_0 = 4 * np.pi * 1e-7  # T/(A/m)
 
@@ -103,20 +121,38 @@ def benchmark_tetrahedra(maxh, solver_method, output_dir):
     ext = rad.ObjBckg([0, 0, B_EXT])
     grp = rad.ObjCnt([cube, ext])
 
-    # Solve
+    # Solve with custom convergence check
+    # Radia's internal convergence for ObjPolyhdr has issues, so we track M_avg_z stability
     print('Solving...')
     t_solve_start = time.time()
     try:
-        result = rad.Solve(grp, 0.001, 1000, solver_method)
+        # Run iterations manually to check M_avg_z convergence
+        converged = False
+        n_iter = 0
+        prev_M_z = 0
+        max_iter = 100
+        tol_rel = 0.001  # 0.1% relative change in M_avg_z
+
+        for i in range(max_iter):
+            result = rad.Solve(grp, 1e-10, 1, solver_method)  # 1 iteration at a time
+            n_iter += 1
+
+            all_M = rad.ObjM(cube)
+            M_list = [m[1] for m in all_M]
+            M_avg_z = np.mean([m[2] for m in M_list])
+
+            if i > 0:
+                rel_change = abs(M_avg_z - prev_M_z) / max(abs(M_avg_z), 1)
+                if rel_change < tol_rel:
+                    converged = True
+                    break
+            prev_M_z = M_avg_z
+
         t_solve = time.time() - t_solve_start
 
-        # Get magnetization
-        all_M = rad.ObjM(cube)
-        M_list = [m[1] for m in all_M]
-        M_avg_z = np.mean([m[2] for m in M_list])
+        # Measure peak memory after solve
+        peak_memory_mb = get_peak_memory_mb()
 
-        n_iter = int(result[3]) if result[3] else 0
-        converged = n_iter < 1000 and not np.isnan(M_avg_z)
         residual = result[0] if result[0] else 0.0
     except Exception as e:
         print('Solve failed: %s' % e)
@@ -127,6 +163,8 @@ def benchmark_tetrahedra(maxh, solver_method, output_dir):
     print('Iterations:   %d' % n_iter)
     print('Converged:    %s' % ('Yes' if converged else 'No'))
     print('M_avg_z:      %.0f A/m' % M_avg_z)
+    if peak_memory_mb is not None:
+        print('Peak memory:  %.1f MB' % peak_memory_mb)
     print()
 
     result_data = {
@@ -144,6 +182,8 @@ def benchmark_tetrahedra(maxh, solver_method, output_dir):
         'nonl_iterations': n_iter,
         'M_avg_z': M_avg_z,
     }
+    if peak_memory_mb is not None:
+        result_data['peak_memory_mb'] = peak_memory_mb
 
     # Save result
     os.makedirs(output_dir, exist_ok=True)

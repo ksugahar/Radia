@@ -156,7 +156,7 @@ int (*pgRadYieldExternFunc)() = 0;
 //-------------------------------------------------------------------------
 // Note: Tetrahedral method selection was removed (2025-12-09).
 // Dipole-dipole method was found numerically unstable.
-// Surface charge (MSC) method is always used - same as ELF_MAGIC production.
+// Surface charge (MSC) method is always used.
 //-------------------------------------------------------------------------
 
 int CALL RadUtiYeldFuncSet(int (*pExtFunc)())

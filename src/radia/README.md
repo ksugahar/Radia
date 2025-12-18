@@ -66,12 +66,92 @@ Provides face topology constants and mesh conversion utilities.
 **Face Topology Constants:**
 ```python
 from netgen_mesh_import import (
-    TETRA_FACES,    # Tetrahedron
-    HEX_FACES,      # Hexahedron
-    WEDGE_FACES,    # Wedge/Prism
-    PYRAMID_FACES   # Pyramid
+    TETRA_FACES,    # Tetrahedron (4 faces, 1-indexed for Radia)
+    HEX_FACES,      # Hexahedron (6 faces)
+    WEDGE_FACES,    # Wedge/Prism (5 faces)
+    PYRAMID_FACES   # Pyramid (5 faces)
 )
 ```
+
+**TETRA_FACES の詳細:**
+
+`TETRA_FACES` は Radia の `ObjPolyhdr` 関数で使用するための 1-indexed の面定義です。
+面の向きは外向き法線を持つように調整されています。
+
+```python
+# Standard tetrahedral face topology (1-indexed for Radia)
+# Face winding REVERSED from Nastran CTETRA standard to ensure outward normals
+TETRA_FACES = [
+    [1, 3, 2],  # Face 0: v0-v2-v1
+    [1, 2, 4],  # Face 1: v0-v1-v3
+    [2, 3, 4],  # Face 2: v1-v2-v3
+    [3, 1, 4]   # Face 3: v2-v0-v3
+]
+```
+
+**使用例 (ObjPolyhdr で直接四面体を作成):**
+
+```python
+import radia as rad
+import numpy as np
+from netgen_mesh_import import TETRA_FACES
+
+rad.UtiDelAll()
+rad.FldUnits('m')  # メートル単位を使用
+
+# 四面体の頂点座標 (メートル単位)
+vertices = np.array([
+    [0.0, 0.0, 0.0],   # v0
+    [1.0, 0.0, 0.0],   # v1
+    [0.5, 0.866, 0.0], # v2
+    [0.5, 0.289, 0.816] # v3
+])
+
+# 四面体オブジェクトを作成
+obj = rad.ObjPolyhdr(vertices.tolist(), TETRA_FACES, [0, 0, 0])
+
+# 材料を適用
+chi = 999  # mu_r = 1000
+mat = rad.MatLin(chi)
+rad.MatApl(obj, mat)
+```
+
+**使用例 (netgen_mesh_to_radia で自動変換):**
+
+```python
+from netgen.occ import Box, Pnt, OCCGeometry
+from ngsolve import Mesh
+from netgen_mesh_import import netgen_mesh_to_radia
+import radia as rad
+
+rad.FldUnits('m')
+rad.UtiDelAll()
+
+# Netgen でメッシュを生成
+cube = Box(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))
+cube.mat('magnetic')
+geo = OCCGeometry(cube)
+mesh = Mesh(geo.GenerateMesh(maxh=0.3))
+
+# Radia オブジェクトに変換
+radia_obj = netgen_mesh_to_radia(
+    mesh,
+    material={'magnetization': [0, 0, 0]},
+    units='m',
+    material_filter='magnetic'
+)
+
+# 磁化を取得
+all_M = rad.ObjM(radia_obj)
+M_list = [m[1] for m in all_M]  # [[center, M], ...] から M を抽出
+M_avg_z = np.mean([m[2] for m in M_list])
+```
+
+**重要な注意事項:**
+
+1. **1-indexed**: Radia の `ObjPolyhdr` は **1-indexed** の面定義を要求します
+2. **単位**: `rad.FldUnits('m')` を使用する場合、座標もメートル単位にする
+3. **ObjM の戻り値**: コンテナに対する `ObjM` は `[[center1, M1], [center2, M2], ...]` を返す
 
 ### NGSolve Integration
 
