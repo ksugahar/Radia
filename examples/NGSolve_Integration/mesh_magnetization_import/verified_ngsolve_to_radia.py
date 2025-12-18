@@ -263,12 +263,12 @@ print("-" * 70)
 import radia as rad
 from netgen_mesh_import import TETRA_FACES
 
-# Get mesh points from ngmesh
+# Get mesh points from mesh.vertices (0-indexed)
 # NOTE: For Glue'd geometries, vertex coordinates may be in different domains!
 # We need to get vertex coordinates directly from element vertices, not from global index.
 mesh_points_raw = []
 for i in range(mesh.nv):
-    pt = mesh.ngmesh.Points()[i + 1]
+    pt = mesh.vertices[i].point
     mesh_points_raw.append([pt[0], pt[1], pt[2]])
 
 print("  Total mesh vertices: %d" % len(mesh_points_raw))
@@ -284,11 +284,12 @@ skipped_exterior = 0
 
 for el in mesh.Elements(VOL):
     if el.mat == "magnetic":
-        # Get vertex coordinates directly from mesh integration point
+        # Get vertex coordinates using mesh.vertices (0-indexed, unlike ngmesh.Points which is 1-indexed)
         vertices = []
         for v in el.vertices:
-            # Get the actual physical coordinates of this vertex
-            pt = mesh.ngmesh.Points()[v.nr]
+            # v.nr is 0-indexed, mesh.vertices is also 0-indexed
+            vertex = mesh.vertices[v.nr]
+            pt = vertex.point
             vertices.append([pt[0], pt[1], pt[2]])
 
         # Centroid

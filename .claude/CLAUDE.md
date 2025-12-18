@@ -30,8 +30,7 @@ Both tetrahedral and hexahedral polyhedral elements use the **Magnetic Surface C
 **Key Features**:
 - Uses **global coordinates** directly (no local coordinate transformations)
 - Computes field using **solid angle integration** formula
-- Handles **outward normal orientation** following ELF_MAGIC convention
-- **ELF_MAGIC compatible**: Uses same 6-face hexahedral format (not 12-face triangular)
+- Handles **outward normal orientation** per Radia convention
 
 **Implementation** (`src/core/rad_polyhedron.cpp`):
 - `B_comp_tetrahedron_MSC()`: 4-face tetrahedral field computation
@@ -60,10 +59,63 @@ rad.Solve(mag_obj, 0.0001, 1000)
 **Notes**:
 - Both tetrahedral and hexahedral meshes work with linear and nonlinear materials
 - LU solver (Method 0) and BiCGSTAB (Method 1) both work with polyhedral elements
-- Hexahedral MSC matches ELF_MAGIC results for single-element cases
 
 ---
 
-**Last Updated**: 2025-12-11
+## NGSolve Mesh Access Policy
+
+### Centralized Mesh Access via netgen_mesh_import.py
+
+**Policy**:
+- **All NGSolve mesh access** MUST use functions from `src/radia/netgen_mesh_import.py`
+- **NEVER** directly access `mesh.ngmesh.Points()`, `mesh.vertices[]`, or `el.vertices[].nr` in example scripts
+- **ALWAYS** import mesh handling functions from `netgen_mesh_import.py`
+
+**Rationale**:
+
+NGSolve has two different indexing schemes that cause off-by-one errors:
+
+| Access Method | Indexing | Notes |
+|--------------|----------|-------|
+| `mesh.ngmesh.Points()[i]` | **1-indexed** | Index 0 raises error, valid: 1 to nv |
+| `mesh.vertices[i]` | **0-indexed** | Valid: 0 to nv-1 |
+| `el.vertices[i].nr` | Returns value for **0-indexed** `mesh.vertices[]` | Use with `mesh.vertices[]` only |
+
+**Common Bug Pattern**:
+```python
+# WRONG - Using 0-indexed .nr with 1-indexed ngmesh.Points()
+for v in el.vertices:
+    pt = mesh.ngmesh.Points()[v.nr]  # Off-by-one error!
+
+# CORRECT - Use 0-indexed consistently
+for v in el.vertices:
+    vertex = mesh.vertices[v.nr]
+    pt = vertex.point
+```
+
+**Correct Usage**:
+
+```python
+# Import from centralized module
+from netgen_mesh_import import netgen_mesh_to_radia, extract_elements, TETRA_FACES
+
+# Option 1: Direct conversion to Radia (recommended)
+radia_obj = netgen_mesh_to_radia(mesh,
+                                  material={'magnetization': [0, 0, 0]},
+                                  units='m',
+                                  material_filter='magnetic')
+
+# Option 2: Extract elements for custom processing
+elements, _ = extract_elements(mesh, material_filter='magnetic')
+for el in elements:
+    vertices = el['vertices']  # Already extracted correctly
+    # ...
+```
+
+**Module Location**: `src/radia/netgen_mesh_import.py`
+
+---
+
+**Last Updated**: 2025-12-19
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation
