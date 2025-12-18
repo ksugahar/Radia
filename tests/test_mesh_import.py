@@ -24,17 +24,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
 
 import radia as rad
 
-# Import face topologies
-from netgen_mesh_import import TETRA_FACES, HEX_FACES
+# Import face topologies and mesh utilities
+from netgen_mesh_import import TETRA_FACES, HEX_FACES, extract_elements
 
-# Try to import Netgen
+# Try to import Netgen and NGSolve
 try:
     from netgen.occ import Box, Pnt, OCCGeometry
     from netgen.meshing import MeshingParameters
+    from ngsolve import Mesh as NGSolveMesh
     NETGEN_AVAILABLE = True
 except ImportError:
     NETGEN_AVAILABLE = False
-    print("Warning: Netgen not available, some tests will be skipped")
+    print("Warning: Netgen/NGSolve not available, some tests will be skipped")
 
 MU_0 = 4 * np.pi * 1e-7
 
@@ -130,19 +131,28 @@ def create_netgen_tet_mesh(center, size, maxh=0.3):
     # Generate mesh - need to wrap in OCCGeometry first
     geo = OCCGeometry(box)
     mp = MeshingParameters(maxh=maxh)
-    mesh = geo.GenerateMesh(mp)
+    netgen_mesh = geo.GenerateMesh(mp)
 
-    # Extract nodes
-    nodes = []
-    for p in mesh.Points():
-        nodes.append([p[0], p[1], p[2]])
+    # Wrap in NGSolve Mesh and use extract_elements for correct indexing
+    ngsolve_mesh = NGSolveMesh(netgen_mesh)
+    elements, _ = extract_elements(ngsolve_mesh)
 
-    # Extract tetrahedra
+    # Build nodes list from element vertices (deduplicated)
+    nodes_dict = {}
     tetrahedra = []
-    for el in mesh.Elements3D():
-        # Netgen uses 1-based indexing via .nr attribute
-        tet = [v.nr - 1 for v in el.vertices]
-        tetrahedra.append(tet)
+    for el_data in elements:
+        tet_indices = []
+        for v in el_data['vertices']:
+            v_tuple = tuple(v)
+            if v_tuple not in nodes_dict:
+                nodes_dict[v_tuple] = len(nodes_dict)
+            tet_indices.append(nodes_dict[v_tuple])
+        tetrahedra.append(tet_indices)
+
+    # Convert nodes dict to list
+    nodes = [None] * len(nodes_dict)
+    for v, idx in nodes_dict.items():
+        nodes[idx] = list(v)
 
     return nodes, tetrahedra
 

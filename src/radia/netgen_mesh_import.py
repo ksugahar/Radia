@@ -190,6 +190,27 @@ def create_radia_tetrahedron(vertices, magnetization=None):
         raise RuntimeError(f"Failed to create Radia tetrahedron: {e}")
 
 
+def compute_element_centroid(vertices):
+    """
+    Compute the centroid of an element from its vertices.
+
+    Parameters
+    ----------
+    vertices : list of list
+        List of vertex coordinates [[x1,y1,z1], [x2,y2,z2], ...]
+
+    Returns
+    -------
+    list
+        Centroid coordinates [cx, cy, cz]
+    """
+    n = len(vertices)
+    cx = sum(v[0] for v in vertices) / n
+    cy = sum(v[1] for v in vertices) / n
+    cz = sum(v[2] for v in vertices) / n
+    return [cx, cy, cz]
+
+
 def extract_elements(mesh, material_filter=None, allow_hex=False):
     """
     Extract volume elements (tetrahedra and optionally hexahedra) from NGSolve mesh.
@@ -563,6 +584,7 @@ __version__ = '0.2.0'
 __all__ = [
     'netgen_mesh_to_radia',
     'extract_elements',
+    'compute_element_centroid',
     'create_radia_tetrahedron',
     'create_radia_hexahedron',
     'TETRA_FACES',

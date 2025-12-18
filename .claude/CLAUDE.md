@@ -68,8 +68,14 @@ rad.Solve(mag_obj, 0.0001, 1000)
 
 **Policy**:
 - **All NGSolve mesh access** MUST use functions from `src/radia/netgen_mesh_import.py`
-- **NEVER** directly access `mesh.ngmesh.Points()`, `mesh.vertices[]`, or `el.vertices[].nr` in example scripts
+- **NEVER** directly access `mesh.ngmesh.Points()`, `mesh.vertices[]`, or `el.vertices[].nr` in any script
 - **ALWAYS** import mesh handling functions from `netgen_mesh_import.py`
+- **NO EXCEPTIONS**: This applies to all scripts including examples, tests, and debugging code
+
+**Enforcement**:
+- Direct mesh access is a bug source due to index confusion
+- All new code MUST use `extract_elements()` or `netgen_mesh_to_radia()`
+- Existing code with direct access MUST be refactored
 
 **Rationale**:
 
@@ -113,6 +119,19 @@ for el in elements:
 ```
 
 **Module Location**: `src/radia/netgen_mesh_import.py`
+
+**Available Functions**:
+- `netgen_mesh_to_radia()`: Convert entire mesh to Radia geometry (recommended)
+- `extract_elements()`: Extract element data for custom processing
+- `compute_element_centroid()`: Compute centroid from vertex list
+- `create_radia_tetrahedron()`: Create single Radia tetrahedron
+- `create_radia_hexahedron()`: Create single Radia hexahedron
+
+**Available Constants**:
+- `TETRA_FACES`: 1-indexed face topology for tetrahedra
+- `HEX_FACES`: 1-indexed face topology for hexahedra
+- `WEDGE_FACES`: 1-indexed face topology for wedges
+- `PYRAMID_FACES`: 1-indexed face topology for pyramids
 
 ---
 
