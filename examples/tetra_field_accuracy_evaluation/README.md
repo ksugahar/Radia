@@ -105,9 +105,36 @@ The tetrahedral field computation uses the Magnetic Surface Charge (MSC) method:
 3. Field computed using solid angle integration formula
 4. Implementation in `src/core/rad_polyhedron.cpp`
 
+### NGSolve Mesh Access Policy (MANDATORY)
+
+**CRITICAL**: All NGSolve mesh access MUST use functions from `netgen_mesh_import.py`.
+
+**Why?** NGSolve has two different indexing schemes that cause off-by-one errors:
+
+| Access Method | Indexing | Notes |
+|--------------|----------|-------|
+| `mesh.ngmesh.Points()[i]` | **1-indexed** | Index 0 raises error |
+| `mesh.vertices[i]` | **0-indexed** | Valid: 0 to nv-1 |
+| `el.vertices[i].nr` | Returns **0-indexed** | Use with `mesh.vertices[]` only |
+
+**Correct Usage:**
+```python
+from netgen_mesh_import import extract_elements, compute_element_centroid
+
+# Extract elements with correct indexing
+elements, _ = extract_elements(mesh, material_filter='magnetic')
+for el in elements:
+    vertices = el['vertices']  # Already correctly extracted
+    centroid = compute_element_centroid(vertices)
+```
+
+**NEVER** directly access `mesh.ngmesh.Points()`, `mesh.vertices[]`, or `el.vertices[].nr`.
+
 ### Face Topology (TETRA_FACES)
 
 ```python
+from netgen_mesh_import import TETRA_FACES
+
 TETRA_FACES = [
     [1, 3, 2],  # Face 0: v0-v2-v1
     [1, 2, 4],  # Face 1: v0-v1-v3
