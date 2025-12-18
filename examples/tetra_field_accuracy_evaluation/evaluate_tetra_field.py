@@ -217,29 +217,23 @@ def solve_ngsolve_h_formulation():
 def extract_magnetic_elements(mesh, M_cf):
     """
     Extract tetrahedral elements from magnetic region with their magnetization.
+
+    Uses netgen_mesh_import.extract_elements for correct mesh access.
     """
-    from ngsolve import VOL, ET
+    from netgen_mesh_import import extract_elements, compute_element_centroid
 
     print()
     print('Extracting magnetic elements...')
 
+    # Use centralized mesh extraction from netgen_mesh_import
+    raw_elements, _ = extract_elements(mesh, material_filter='magnetic')
+
     elements = []
-
-    for el_idx, el in enumerate(mesh.Elements(VOL)):
-        if el.mat != 'magnetic':
-            continue
-        if el.type != ET.TET:
-            continue
-
-        # Get vertices
-        vertices = []
-        for v_node in el.vertices:
-            v = mesh.vertices[v_node.nr]
-            pt = v.point
-            vertices.append([pt[0], pt[1], pt[2]])
+    for el_data in raw_elements:
+        vertices = el_data['vertices']
+        centroid = compute_element_centroid(vertices)
 
         # Evaluate M at centroid
-        centroid = np.mean(vertices, axis=0)
         try:
             mip = mesh(centroid[0], centroid[1], centroid[2])
             Mx = float(M_cf[0](mip))

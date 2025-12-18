@@ -261,78 +261,57 @@ print("[Step 5] Extracting magnetization from magnetic elements")
 print("-" * 70)
 
 import radia as rad
-from netgen_mesh_import import TETRA_FACES
+from netgen_mesh_import import extract_elements, compute_element_centroid, TETRA_FACES
 
-# Get mesh points from mesh.vertices (0-indexed)
-# NOTE: For Glue'd geometries, vertex coordinates may be in different domains!
-# We need to get vertex coordinates directly from element vertices, not from global index.
-mesh_points_raw = []
-for i in range(mesh.nv):
-    pt = mesh.vertices[i].point
-    mesh_points_raw.append([pt[0], pt[1], pt[2]])
+# Use centralized mesh extraction from netgen_mesh_import module
+# This ensures correct 0-indexed access to mesh.vertices
+raw_elements, skipped_by_filter = extract_elements(mesh, material_filter='magnetic')
+print("  Total mesh vertices: %d" % mesh.nv)
+print("  Elements with 'magnetic' material: %d" % len(raw_elements))
 
-print("  Total mesh vertices: %d" % len(mesh_points_raw))
-
-# Extract elements and magnetization
-# IMPORTANT: For Kelvin transform geometry, we must get vertex coordinates
-# directly from each element, not from global vertex index lookup.
-# This is because Glue() may share vertices between different domains.
-tetra_elements = []
-tetra_vertices = []  # Store actual vertex coordinates, not indices
+# Filter elements and compute magnetization
+tetra_vertices = []
 tetra_magnetization = []
 skipped_exterior = 0
 
-for el in mesh.Elements(VOL):
-    if el.mat == "magnetic":
-        # Get vertex coordinates using mesh.vertices (0-indexed, unlike ngmesh.Points which is 1-indexed)
-        vertices = []
-        for v in el.vertices:
-            # v.nr is 0-indexed, mesh.vertices is also 0-indexed
-            vertex = mesh.vertices[v.nr]
-            pt = vertex.point
-            vertices.append([pt[0], pt[1], pt[2]])
+for el_data in raw_elements:
+    vertices = el_data['vertices']
+    centroid = compute_element_centroid(vertices)
 
-        # Centroid
-        centroid = [0.0, 0.0, 0.0]
-        for v in vertices:
-            for i in range(3):
-                centroid[i] += v[i] / len(vertices)
+    # Skip elements whose centroid is outside the magnetic sphere
+    centroid_r = np.sqrt(centroid[0]**2 + centroid[1]**2 + centroid[2]**2)
+    if centroid_r > sphere_radius * 1.01:  # Allow 1% tolerance
+        skipped_exterior += 1
+        continue
 
-        # Skip elements whose centroid is outside the magnetic sphere
-        centroid_r = np.sqrt(centroid[0]**2 + centroid[1]**2 + centroid[2]**2)
-        if centroid_r > sphere_radius * 1.01:  # Allow 1% tolerance
-            skipped_exterior += 1
-            continue
+    # Also check if all vertices are within the sphere (with tolerance)
+    all_inside = True
+    for v in vertices:
+        v_r = np.sqrt(v[0]**2 + v[1]**2 + v[2]**2)
+        if v_r > sphere_radius * 1.05:  # 5% tolerance for surface vertices
+            all_inside = False
+            break
+    if not all_inside:
+        skipped_exterior += 1
+        continue
 
-        # Also check if all vertices are within the sphere (with tolerance)
-        all_inside = True
-        for v in vertices:
-            v_r = np.sqrt(v[0]**2 + v[1]**2 + v[2]**2)
-            if v_r > sphere_radius * 1.05:  # 5% tolerance for surface vertices
-                all_inside = False
-                break
-        if not all_inside:
-            skipped_exterior += 1
-            continue
+    tetra_vertices.append(vertices)
 
-        tetra_vertices.append(vertices)
-
-        # H_total at centroid -> M = chi * H
-        try:
-            mip = mesh(centroid[0], centroid[1], centroid[2])
-            Hx = H_total[0](mip)
-            Hy = H_total[1](mip)
-            Hz = H_total[2](mip)
-            tetra_magnetization.append([chi * Hx, chi * Hy, chi * Hz])
-        except:
-            tetra_magnetization.append([0.0, 0.0, M_z_analytical])
+    # H_total at centroid -> M = chi * H
+    try:
+        mip = mesh(centroid[0], centroid[1], centroid[2])
+        Hx = H_total[0](mip)
+        Hy = H_total[1](mip)
+        Hz = H_total[2](mip)
+        tetra_magnetization.append([chi * Hx, chi * Hy, chi * Hz])
+    except:
+        tetra_magnetization.append([0.0, 0.0, M_z_analytical])
 
 if skipped_exterior > 0:
     print("  WARNING: Skipped %d elements outside sphere (wrong material tag?)" % skipped_exterior)
 
 # For compatibility with later code
 tetra_elements = list(range(len(tetra_vertices)))  # Dummy indices
-mesh_points = None  # Not used anymore
 
 M_all = np.array(tetra_magnetization)
 M_avg = np.mean(M_all, axis=0)
@@ -408,29 +387,26 @@ M_radia_list = [m[1] for m in all_M_radia]
 M_radia_avg_z = np.mean([m[2] for m in M_radia_list])
 print("  Radia M_avg_z: %.4f (equivalent to A/m)" % M_radia_avg_z)
 
-# Debug: Test with a simple reference case
+# Debug: Test with a simple reference case using netgen_mesh_to_radia
 print()
 print("  DEBUG: Simple sphere test for comparison")
 from netgen.occ import Sphere as DebugSphere, Pnt as DebugPnt, OCCGeometry as DebugOCCGeo
+from netgen_mesh_import import netgen_mesh_to_radia
 debug_sphere = DebugSphere(DebugPnt(0, 0, 0), sphere_radius)
 debug_geo = DebugOCCGeo(debug_sphere)
-debug_mesh = debug_geo.GenerateMesh(maxh=0.15)  # Coarse for speed
-debug_points = [[p[0], p[1], p[2]] for p in debug_mesh.Points()]
-debug_elements = [[v.nr - 1 for v in el.vertices] for el in debug_mesh.Elements3D()]
+debug_ngmesh = Mesh(debug_geo.GenerateMesh(maxh=0.15))  # Coarse for speed
 
 rad.UtiDelAll()
 rad.FldUnits('m')
-debug_objs = []
-for tet_verts in debug_elements:
-    vertices = [debug_points[idx] for idx in tet_verts]
-    try:
-        tet = rad.ObjPolyhdr(vertices, TETRA_FACES, [0, 0, M_z_analytical])
-        debug_objs.append(tet)
-    except:
-        pass
-debug_container = rad.ObjCnt(debug_objs)
+# Use netgen_mesh_to_radia for correct mesh extraction
+debug_container = netgen_mesh_to_radia(
+    debug_ngmesh,
+    material={'magnetization': [0, 0, M_z_analytical]},
+    units='m',
+    verbose=False
+)
 debug_B = rad.Fld(debug_container, 'b', [0.7, 0, 0])
-print("    Simple sphere (%d elements): B at (0.7,0,0) = %.6e T" % (len(debug_objs), np.linalg.norm(debug_B)))
+print("    Simple sphere (%d elements): B at (0.7,0,0) = %.6e T" % (debug_ngmesh.ne, np.linalg.norm(debug_B)))
 print("    Expected (dipole): %.6e T" % (mu0/(4*np.pi) * (4/3*np.pi*sphere_radius**3*M_z_analytical) / 0.7**3))
 
 # Recreate the main container for comparison
