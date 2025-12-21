@@ -256,19 +256,23 @@ except ImportError:
 
 ### Material API
 
-All examples use the new Material API:
+All examples use the industry-standard Material API:
 
 ```python
-# Isotropic linear material (μr = 1000)
-mat = rad.MatLin(999)  # chi = μr - 1
+# Isotropic linear material (mu_r = 1000)
+mat = rad.MatLin(1000)  # relative permeability
 
 # Anisotropic linear material
-mat = rad.MatLin([0.06, 0.17], [0, 0, 1])  # [chi_par, chi_perp], easy_axis
+mat = rad.MatLin([1.06, 1.17], [0, 0, 1])  # [mu_r_par, mu_r_perp], easy_axis
 
 # Permanent magnet (NdFeB)
 mat = rad.MatPM(1.2, 900000, [0, 0, 1])  # Br, Hc, magnetization_direction
 
-# Saturating material (Steel37)
+# Nonlinear material (B-H curve)
+BH_DATA = [[0, 0], [100, 0.1], [1000, 1.2], [10000, 1.8]]  # [H (A/m), B (T)]
+mat = rad.MatSatIsoTab(BH_DATA)
+
+# Saturating material (Steel37 formula)
 mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
 
 # Apply material to object

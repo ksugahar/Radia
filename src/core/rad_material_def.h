@@ -360,11 +360,13 @@ class radTNonlinearIsotropMaterial : public radTMaterial {
 	double Ms[3], ks[3];
 	int lenMs_ks;
 
-	std::vector<TVector2d> vgArrayHM;
-	TVector2d* gArrayHM;
-	std::vector<double> vgdMdH;
-	double* gdMdH;
-	int gLenArrayHM;
+	// B-H curve storage (ELF-compatible approach)
+	// gArrayHB stores (H, B) pairs directly, NOT (H, M)
+	std::vector<TVector2d> vgArrayHB;
+	TVector2d* gArrayHB;          // gArrayHB[i].x = H, gArrayHB[i].y = B (not M!)
+	std::vector<double> vgdBdH;   // derivatives dB/dH
+	double* gdBdH;
+	int gLenArrayHB;
 
 	double gMaxKsi;
 
@@ -375,23 +377,23 @@ public:
 		lenMs_ks = In_lenMs_ks;
 		for(int i=0; i<lenMs_ks; i++) { Ms[i]=InMsArray[i]; ks[i]=In_ksArray[i]; gMaxKsi+=ks[i];}
 
-		gArrayHM = 0; gLenArrayHM = 0; gdMdH = 0;
+		gArrayHB = 0; gLenArrayHB = 0; gdBdH = 0;
 	}
-	radTNonlinearIsotropMaterial(TVector2d* InArrayHM, int InLenArrayHM)
+	radTNonlinearIsotropMaterial(TVector2d* InArrayHB, int InLenArrayHB)
 	{
-		gArrayHM = 0; gdMdH = 0; gLenArrayHM = 0;
+		gArrayHB = 0; gdBdH = 0; gLenArrayHB = 0;
 		double ZeroTol = 1e-10;
 		char PrependZero = 0;
-		if((InArrayHM->x > ZeroTol) && (InArrayHM->y > ZeroTol))
+		if((InArrayHB->x > ZeroTol) && (InArrayHB->y > ZeroTol))
 		{
-			InLenArrayHM++; PrependZero = 1;
+			InLenArrayHB++; PrependZero = 1;
 		}
 
-		gLenArrayHM = InLenArrayHM;
-		AllocateArrays(InLenArrayHM);
-		CopyArrayHM(gArrayHM, InArrayHM, InLenArrayHM, PrependZero);
-		//Compute_dMdH(gMaxKsi);
-		Compute_dMdH(gArrayHM, gdMdH, gLenArrayHM, gMaxKsi);
+		gLenArrayHB = InLenArrayHB;
+		AllocateArrays(InLenArrayHB);
+		CopyArrayHB(gArrayHB, InArrayHB, InLenArrayHB, PrependZero);
+		// Compute dB/dH derivatives for B-H curve
+		Compute_dBdH(gArrayHB, gdBdH, gLenArrayHB, gMaxKsi);
 	}
 	radTNonlinearIsotropMaterial(CAuxBinStrVect& inStr) //, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
 	{//Instantiates from string according to DumpBin
@@ -406,36 +408,36 @@ public:
 		//int lenMs_ks;
 		inStr >> lenMs_ks;
 
-		//int gLenArrayHM;
-		inStr >> gLenArrayHM;
+		//int gLenArrayHB;
+		inStr >> gLenArrayHB;
 
-		//TVector2d* gArrayHM;
-		gArrayHM = 0;
+		//TVector2d* gArrayHB;
+		gArrayHB = 0;
 		char cTest=0;
 		inStr >> cTest;
 		if(cTest > 0)
 		{
-			vgArrayHM.resize(gLenArrayHM);
-			gArrayHM = vgArrayHM.data();
-			TVector2d *t_gArrayHM = gArrayHM;
-			for(int i=0; i<gLenArrayHM; i++) inStr >> (*(t_gArrayHM++));
+			vgArrayHB.resize(gLenArrayHB);
+			gArrayHB = vgArrayHB.data();
+			TVector2d *t_gArrayHB = gArrayHB;
+			for(int i=0; i<gLenArrayHB; i++) inStr >> (*(t_gArrayHB++));
 		}
-		//double* gdMdH;
-		gdMdH = 0;
+		//double* gdBdH;
+		gdBdH = 0;
 		inStr >> cTest;
 		if(cTest > 0)
 		{
-			vgdMdH.resize(gLenArrayHM);
-			gdMdH = vgdMdH.data();
-			double *t_gdMdH = gdMdH;
-			for(int i=0; i<gLenArrayHM; i++) inStr >> (*(t_gdMdH++));
+			vgdBdH.resize(gLenArrayHB);
+			gdBdH = vgdBdH.data();
+			double *t_gdBdH = gdBdH;
+			for(int i=0; i<gLenArrayHB; i++) inStr >> (*(t_gdBdH++));
 		}
 
 		//double gMaxKsi;
 		inStr >> gMaxKsi;
 	}
 
-	radTNonlinearIsotropMaterial() { gArrayHM = 0; gLenArrayHM = 0; gdMdH = 0; gMaxKsi = 0;}
+	radTNonlinearIsotropMaterial() { gArrayHB = 0; gLenArrayHB = 0; gdBdH = 0; gMaxKsi = 0;}
 	~radTNonlinearIsotropMaterial() { DeallocateArrays();}
 
 	int Type_Material() { return 3;}
@@ -449,23 +451,47 @@ public:
 	inline void Dump(std::ostream& o, int ShortSign =0);
 	inline void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 
-	//void Compute_dMdH(double& MaxKsi);
-	static void Compute_dMdH(TVector2d* ArrayHM, double* dMdH, int LenArrayHM, double& MaxKsi);
+	// Compute dB/dH derivatives for B-H curve (renamed from Compute_dMdH)
+	static void Compute_dBdH(TVector2d* ArrayHB, double* dBdH, int LenArrayHB, double& MaxKsi);
 
-	//void CheckAndCorrect_dMdH();
-	static void CheckAndCorrect_dMdH(TVector2d* ArrayHM, double* dMdH, int LenArrayHM);
+	// Check and correct dB/dH derivatives (renamed from CheckAndCorrect_dMdH)
+	static void CheckAndCorrect_dBdH(TVector2d* ArrayHB, double* dBdH, int LenArrayHB);
 
 	static double Derivative5(TVector2d* f, int PoIndx);
 	static double Derivative3(TVector2d* f, int PoIndx);
 
-	//double AbsMvsAbsH_Interpol(double AbsH);
-	static double AbsMvsAbsH_Interpol(double AbsH, TVector2d* ArrayHM, double* dMdH, int LenArrayHM);
+	// ELF-compatible B(H) interpolation: returns M = B/mu_0 - H
+	static double AbsMvsAbsH_Interpol(double AbsH, TVector2d* ArrayHB, double* dBdH, int LenArrayHB);
 
-	//double AbsHvsAbsM_Interpol(double AbsM);
-	static double AbsHvsAbsM_Interpol(double AbsM, TVector2d* ArrayHM, double* dMdH, int LenArrayHM);
+	// ELF-compatible inverse: find H given M
+	static double AbsHvsAbsM_Interpol(double AbsM, TVector2d* ArrayHB, double* dBdH, int LenArrayHB);
 
-	//void AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, double& f, double& fDer);
-	static void AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, TVector2d* ArrayHM, double* dMdH, int LenArrayHM, double& f, double& fDer);
+	// ELF Method 2: H+B sum interpolation (CGS normalized)
+	// Given hb_sum = H/H_scale + B/B_scale, find H and B on BH curve
+	static void InterpolateBH_HBSum(double hb_sum_target, TVector2d* ArrayHB, int LenArrayHB,
+	                                double H_scale, double B_scale, double& H_out, double& B_out);
+
+	// ELF dual-method chi update: returns optimal chi using both methods
+	// Method 1: Standard mu = B(H)/(mu_0*H)
+	// Method 2: H+B sum interpolation
+	// Selects method with smaller |mu_new - mu_old|
+	double ComputeChiDualMethod(double H_mag, double mu_old) const;
+
+	// Public wrapper for inverse B-H lookup (used by relaxation methods)
+	double GetHfromM(double AbsM) const
+	{
+		if(gLenArrayHB > 0 && gArrayHB != nullptr && gdBdH != nullptr)
+		{
+			return AbsHvsAbsM_Interpol(AbsM, gArrayHB, gdBdH, gLenArrayHB);
+		}
+		// Fallback for analytical formula: use Newton iteration
+		return GetHfromM_Analytical(AbsM);
+	}
+
+	double GetHfromM_Analytical(double AbsM) const;
+
+	// ELF-compatible: returns M and dM/dH from B-H curve
+	static void AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, TVector2d* ArrayHB, double* dBdH, int LenArrayHB, double& f, double& fDer);
 	void DefineScalarM(double AbsInstantH, double& f, double& InstKsi);
 	void DefineScalarM_dMdH(double AbsInstantH, double& f, double& dfdH);
 
@@ -475,18 +501,18 @@ public:
 		return FuncNewAbsH(AbsH, Matr, H_Ext) - AbsH;
 	}
 
-	int DuplicateItself(radThg& hg, radTApplication*, char) 
+	int DuplicateItself(radThg& hg, radTApplication*, char)
 	{// Add more if new members!
 		radTSend Send;
 		radTNonlinearIsotropMaterial* pNewMater = 0;
-		if((gArrayHM != 0) && (gdMdH != 0) && (gLenArrayHM != 0))
+		if((gArrayHB != 0) && (gdBdH != 0) && (gLenArrayHB != 0))
 		{
 			pNewMater = new radTNonlinearIsotropMaterial();
 			if(pNewMater == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 
-			if(!pNewMater->AllocateArrays(gLenArrayHM)) { Send.ErrorMessage("Radia::Error900"); return 0;}
-			CopyArrayHM(pNewMater->gArrayHM, gArrayHM, gLenArrayHM, 0);
-			CopyArray_dMdH(pNewMater->gdMdH, gdMdH, gLenArrayHM);
+			if(!pNewMater->AllocateArrays(gLenArrayHB)) { Send.ErrorMessage("Radia::Error900"); return 0;}
+			CopyArrayHB(pNewMater->gArrayHB, gArrayHB, gLenArrayHB, 0);
+			CopyArray_dBdH(pNewMater->gdBdH, gdBdH, gLenArrayHB);
 		}
 		else pNewMater = new radTNonlinearIsotropMaterial(*this);
 		if(pNewMater == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
@@ -506,46 +532,46 @@ public:
 		InstantH = InvBufMatr*H_Ext;
 	}
 
-	int AllocateArrays(int InLenArrayHM)
+	int AllocateArrays(int InLenArrayHB)
 	{
 		DeallocateArrays();
-		gLenArrayHM = InLenArrayHM;
+		gLenArrayHB = InLenArrayHB;
 
-		vgArrayHM.resize(gLenArrayHM);
-		gArrayHM = vgArrayHM.data();
+		vgArrayHB.resize(gLenArrayHB);
+		gArrayHB = vgArrayHB.data();
 
-		vgdMdH.resize(gLenArrayHM);
-		gdMdH = vgdMdH.data();
+		vgdBdH.resize(gLenArrayHB);
+		gdBdH = vgdBdH.data();
 		return 1;
 	}
 	void DeallocateArrays()
 	{
-		// RAII: vgArrayHM and vgdMdH cleaned up automatically
-		vgArrayHM.clear();
-		gArrayHM = 0;
-		vgdMdH.clear();
-		gdMdH = 0;
-		gLenArrayHM = 0;
+		// RAII: vgArrayHB and vgdBdH cleaned up automatically
+		vgArrayHB.clear();
+		gArrayHB = 0;
+		vgdBdH.clear();
+		gdBdH = 0;
+		gLenArrayHB = 0;
 	}
 
-	static void CopyArrayHM(TVector2d* Dst, TVector2d* Src, int InLenArrayHM, char PrependZero)
+	static void CopyArrayHB(TVector2d* Dst, TVector2d* Src, int InLenArrayHB, char PrependZero)
 	{
-		if((Dst == 0) || (Src == 0) || (InLenArrayHM <= 0)) return;
+		if((Dst == 0) || (Src == 0) || (InLenArrayHB <= 0)) return;
 
-		TVector2d *tArrayHM = Dst, *tInArrayHM = Src;
+		TVector2d *tArrayHB = Dst, *tInArrayHB = Src;
 		if(PrependZero)
 		{
-			tArrayHM->x = 0.; (tArrayHM++)->y = 0.;
-			InLenArrayHM--;
+			tArrayHB->x = 0.; (tArrayHB++)->y = 0.;
+			InLenArrayHB--;
 		}
-		for(int i=0; i<InLenArrayHM; i++) *(tArrayHM++) = *(tInArrayHM++);
+		for(int i=0; i<InLenArrayHB; i++) *(tArrayHB++) = *(tInArrayHB++);
 	}
-	void CopyArray_dMdH(double* Dst, double* Src, int InLenArrayHM)
+	void CopyArray_dBdH(double* Dst, double* Src, int InLenArrayHB)
 	{
-		if((Dst == 0) || (Src == 0) || (InLenArrayHM <= 0)) return;
+		if((Dst == 0) || (Src == 0) || (InLenArrayHB <= 0)) return;
 
 		double *tDst = Dst, *tSrc = Src;
-		for(int i=0; i<InLenArrayHM; i++) *(tDst++) = *(tSrc++);
+		for(int i=0; i<InLenArrayHB; i++) *(tDst++) = *(tSrc++);
 	}
 	
 	static void CubPln(double Step, double f1, double f2, double fpr1, double fpr2, double* aa)
@@ -561,18 +587,23 @@ public:
 
 //-------------------------------------------------------------------------
 
-inline TVector3d radTNonlinearIsotropMaterial::M(const TVector3d& H) 
+inline TVector3d radTNonlinearIsotropMaterial::M(const TVector3d& H)
 {
 	double AbsH = sqrt(H.x*H.x + H.y*H.y + H.z*H.z);
 	double AbsM = 0.;
-	if(gLenArrayHM == 0)
+	if(gLenArrayHB == 0)
 	{
-		for(int i=0; i<lenMs_ks; i++) 
+		// Analytical formula (tanh model)
+		for(int i=0; i<lenMs_ks; i++)
 			if(Ms[i]!=0.) AbsM += Ms[i]*tanh(ks[i]*AbsH/Ms[i]);
 	}
-	else AbsM = AbsMvsAbsH_Interpol(AbsH, gArrayHM, gdMdH, gLenArrayHM);
+	else
+	{
+		// ELF-compatible: B-H curve interpolation, returns M = B/mu_0 - H
+		AbsM = AbsMvsAbsH_Interpol(AbsH, gArrayHB, gdBdH, gLenArrayHB);
+	}
 
-	if(AbsH!=0) return (AbsM/AbsH)*H + RemMagn;  // Should not we add RemMagn here?
+	if(AbsH!=0) return (AbsM/AbsH)*H + RemMagn;
 	else return RemMagn;
 }
 
@@ -585,7 +616,7 @@ inline void radTNonlinearIsotropMaterial::MultMatrByInstKsiAndMr(const TVector3d
 	double Der, f, InstKsi;
 	Der = f = InstKsi = 0.;
 
-	if(gLenArrayHM == 0)
+	if(gLenArrayHB == 0)
 	{
 		if(AbsInstantH==0.)
 		{
@@ -602,7 +633,7 @@ inline void radTNonlinearIsotropMaterial::MultMatrByInstKsiAndMr(const TVector3d
 	{
 		if(AbsInstantH == 0.) InstKsi = *gdMdH;
 		//else InstKsi = AbsMvsAbsH_Interpol(AbsInstantH)/AbsInstantH;
-		else InstKsi = AbsMvsAbsH_Interpol(AbsInstantH, gArrayHM, gdMdH, gLenArrayHM)/AbsInstantH;
+		else InstKsi = AbsMvsAbsH_Interpol(AbsInstantH, gArrayHB, gdMdH, gLenArrayHB)/AbsInstantH;
 	}
 	MultByKsi = InstKsi*Matr; MultByMr = Matr*RemMagn;
 **/
@@ -625,7 +656,7 @@ inline void radTNonlinearIsotropMaterial::Dump(std::ostream& o, int ShortSign) /
 	if(ShortSign==1) return;
 
 	o << endl;
-	if((gArrayHM == 0) || (gLenArrayHM == 0))
+	if((gArrayHB == 0) || (gLenArrayHB == 0))
 	{
 		o << "   {ms1,ms2,ms3}= {" << Ms[0] << ',' << Ms[1] << ',' << Ms[2] << "}" << endl;
 		o << "   {ks1,ks2,ks3}= {" << ks[0] << ',' << ks[1] << ',' << ks[2] << "}";
@@ -665,24 +696,24 @@ inline void radTNonlinearIsotropMaterial::DumpBin(CAuxBinStrVect& oStr, vector<i
 	//int lenMs_ks;
 	oStr << lenMs_ks;
 
-	//int gLenArrayHM;
-	oStr << gLenArrayHM;
+	//int gLenArrayHB;
+	oStr << gLenArrayHB;
 
-	//TVector2d* gArrayHM;
-	if((gLenArrayHM > 0) && (gArrayHM != 0))
+	//TVector2d* gArrayHB;
+	if((gLenArrayHB > 0) && (gArrayHB != 0))
 	{
 		oStr << (char)1;
-		TVector2d *t_gArrayHM = gArrayHM;
-		for(int i=0; i<gLenArrayHM; i++) oStr << (*(t_gArrayHM++));
+		TVector2d *t_gArrayHB = gArrayHB;
+		for(int i=0; i<gLenArrayHB; i++) oStr << (*(t_gArrayHB++));
 	}
 	else oStr << (char)0;
 
-	//double* gdMdH;
-	if((gLenArrayHM > 0) && (gdMdH != 0))
+	//double* gdBdH;
+	if((gLenArrayHB > 0) && (gdBdH != 0))
 	{
 		oStr << (char)1;
-		double *t_gdMdH = gdMdH;
-		for(int i=0; i<gLenArrayHM; i++) oStr << (*(t_gdMdH++));
+		double *t_gdBdH = gdBdH;
+		for(int i=0; i<gLenArrayHB; i++) oStr << (*(t_gdBdH++));
 	}
 	else oStr << (char)0;
 

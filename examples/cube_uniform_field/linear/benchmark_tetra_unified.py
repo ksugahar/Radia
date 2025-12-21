@@ -24,10 +24,8 @@ import json
 import argparse
 
 # Path setup
-_build_path = os.path.join(os.path.dirname(__file__), '../../../build/Release')
 _src_path = os.path.join(os.path.dirname(__file__), '../../../src/radia')
-sys.path.insert(0, _build_path)
-sys.path.append(_src_path)
+sys.path.insert(0, _src_path)
 
 import numpy as np
 import radia as rad
@@ -96,8 +94,8 @@ def benchmark_tetrahedra(maxh, solver_method, output_dir):
 
     print('Generated %d tetrahedral elements' % n_elements)
 
-    # Apply linear material
-    mat = rad.MatLin(CHI)
+    # Apply linear material (mu_r - industry standard)
+    mat = rad.MatLin(MU_R)
     rad.MatApl(cube, mat)
 
     # External field

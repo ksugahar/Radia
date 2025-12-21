@@ -28,11 +28,11 @@ protected:
 	double Ksi[2][4], Ms[2][3], Hci[4];
 	char DependenceIsNonlinear[2];
 
-	std::vector<TVector2d> vgArrayHM_Par, vgArrayHM_Perp;
-	TVector2d *gArrayHM_Par, *gArrayHM_Perp;
-	int gLenArrayHM_Par, gLenArrayHM_Perp;
-	std::vector<double> vgdMdH_Par, vgdMdH_Perp;
-	double *gdMdH_Par, *gdMdH_Perp;
+	std::vector<TVector2d> vgArrayHB_Par, vgArrayHB_Perp;
+	TVector2d *gArrayHB_Par, *gArrayHB_Perp;
+	int gLenArrayHB_Par, gLenArrayHB_Perp;
+	std::vector<double> vgdBdH_Par, vgdBdH_Perp;
+	double *gdBdH_Par, *gdBdH_Perp;
 	double gMaxKsi_Par, gMaxKsi_Perp;
 
 	TVector3d UnitEasyAxisVect;
@@ -41,9 +41,9 @@ public:
 
 	radTNonlinearAnisotropMaterial(double** InKsi, double** InMs, double* InHci, char* InDependenceIsNonlinear)
 	{
-		gLenArrayHM_Par = gLenArrayHM_Perp = 0;
-		gArrayHM_Par = gArrayHM_Perp = 0;
-		gdMdH_Par = gdMdH_Perp = 0;
+		gLenArrayHB_Par = gLenArrayHB_Perp = 0;
+		gArrayHB_Par = gArrayHB_Perp = 0;
+		gdBdH_Par = gdBdH_Perp = 0;
 
 		EasyAxisDefined = 0;
 		for(int k=0; k<2; k++)
@@ -75,9 +75,9 @@ public:
 
 	radTNonlinearAnisotropMaterial() 
 	{
-		gLenArrayHM_Par = gLenArrayHM_Perp = 0;
-		gArrayHM_Par = gArrayHM_Perp = 0;
-		gdMdH_Par = gdMdH_Perp = 0;
+		gLenArrayHB_Par = gLenArrayHB_Perp = 0;
+		gArrayHB_Par = gArrayHB_Perp = 0;
+		gdBdH_Par = gdBdH_Perp = 0;
 	}
 
 	int Type_Material() { return 4;}
@@ -121,42 +121,42 @@ public:
 
 	int SizeOfThis() { return sizeof(radTNonlinearAnisotropMaterial);}
 
-	int AllocateArrays(int InLenArrayHM_Par, int InLenArrayHM_Perp)
+	int AllocateArrays(int InLenArrayHB_Par, int InLenArrayHB_Perp)
 	{
 		DeallocateArrays();
-		if(InLenArrayHM_Par > 0)
+		if(InLenArrayHB_Par > 0)
 		{
-			vgArrayHM_Par.resize(InLenArrayHM_Par);
-			gArrayHM_Par = vgArrayHM_Par.data();
-			vgdMdH_Par.resize(InLenArrayHM_Par);
-			gdMdH_Par = vgdMdH_Par.data();
-			gLenArrayHM_Par = InLenArrayHM_Par;
+			vgArrayHB_Par.resize(InLenArrayHB_Par);
+			gArrayHB_Par = vgArrayHB_Par.data();
+			vgdBdH_Par.resize(InLenArrayHB_Par);
+			gdBdH_Par = vgdBdH_Par.data();
+			gLenArrayHB_Par = InLenArrayHB_Par;
 		}
-		if(InLenArrayHM_Perp > 0)
+		if(InLenArrayHB_Perp > 0)
 		{
-			vgArrayHM_Perp.resize(InLenArrayHM_Perp);
-			gArrayHM_Perp = vgArrayHM_Perp.data();
-			vgdMdH_Perp.resize(InLenArrayHM_Perp);
-			gdMdH_Perp = vgdMdH_Perp.data();
-			gLenArrayHM_Perp = InLenArrayHM_Perp;
+			vgArrayHB_Perp.resize(InLenArrayHB_Perp);
+			gArrayHB_Perp = vgArrayHB_Perp.data();
+			vgdBdH_Perp.resize(InLenArrayHB_Perp);
+			gdBdH_Perp = vgdBdH_Perp.data();
+			gLenArrayHB_Perp = InLenArrayHB_Perp;
 		}
 		return 1;
 	}
 	void DeallocateArrays()
 	{
-		// RAII: vgArrayHM_Par and vgdMdH_Par cleaned up automatically
-		vgArrayHM_Par.clear();
-		gArrayHM_Par = 0;
-		vgdMdH_Par.clear();
-		gdMdH_Par = 0;
-		gLenArrayHM_Par = 0;
+		// RAII: vgArrayHB_Par and vgdBdH_Par cleaned up automatically
+		vgArrayHB_Par.clear();
+		gArrayHB_Par = 0;
+		vgdBdH_Par.clear();
+		gdBdH_Par = 0;
+		gLenArrayHB_Par = 0;
 
-		// RAII: vgArrayHM_Perp and vgdMdH_Perp cleaned up automatically
-		vgArrayHM_Perp.clear();
-		gArrayHM_Perp = 0;
-		vgdMdH_Perp.clear(); 
-		gdMdH_Perp = 0;
-		gLenArrayHM_Perp = 0;
+		// RAII: vgArrayHB_Perp and vgdBdH_Perp cleaned up automatically
+		vgArrayHB_Perp.clear();
+		gArrayHB_Perp = 0;
+		vgdBdH_Perp.clear(); 
+		gdBdH_Perp = 0;
+		gLenArrayHB_Perp = 0;
 	}
 
 	void SetupEasyAxisIfPossible(double *pN)
@@ -295,7 +295,7 @@ inline double radTNonlinearAnisotropMaterial::ScalarInstantKsiAsForIsotropic(dou
 	const double AbsTol = 1.E-13;
 
 	double AbsInstantH = ::fabs(ScalarH);
-	if(gLenArrayHM_Par <= 0)
+	if(gLenArrayHB_Par <= 0)
 	{
 		//if(AbsInstantH < AbsTol) //OC
 		if(AbsInstantH == 0.) //OC
@@ -317,13 +317,13 @@ inline double radTNonlinearAnisotropMaterial::ScalarInstantKsiAsForIsotropic(dou
 	{
 		if(ParOrPerp == 0) //Par
 		{
-			if(AbsInstantH == 0.) InstKsi = *gdMdH_Par;
-			else InstKsi = radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(AbsInstantH, gArrayHM_Par, gdMdH_Par, gLenArrayHM_Par)/AbsInstantH;
+			if(AbsInstantH == 0.) InstKsi = *gdBdH_Par;
+			else InstKsi = radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(AbsInstantH, gArrayHB_Par, gdBdH_Par, gLenArrayHB_Par)/AbsInstantH;
 		}
 		else //Perp
 		{
-			if(AbsInstantH == 0.) InstKsi = *gdMdH_Perp;
-			else InstKsi = radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(AbsInstantH, gArrayHM_Perp, gdMdH_Perp, gLenArrayHM_Perp)/AbsInstantH;
+			if(AbsInstantH == 0.) InstKsi = *gdBdH_Perp;
+			else InstKsi = radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(AbsInstantH, gArrayHB_Perp, gdBdH_Perp, gLenArrayHB_Perp)/AbsInstantH;
 		}
 	}
 
@@ -464,41 +464,41 @@ inline void radTNonlinearAnisotropMaterial::DumpBin_NonlinearAnisotropMaterial(C
 	//char DependenceIsNonlinear[2];
 	oStr << DependenceIsNonlinear[0] << DependenceIsNonlinear[1];
 
-	//int gLenArrayHM_Par
-	oStr << gLenArrayHM_Par;
-	//TVector2d *gArrayHM_Par
-	if((gLenArrayHM_Par) && (gArrayHM_Par != 0))
+	//int gLenArrayHB_Par
+	oStr << gLenArrayHB_Par;
+	//TVector2d *gArrayHB_Par
+	if((gLenArrayHB_Par) && (gArrayHB_Par != 0))
 	{
 		oStr << (char)1;
-		TVector2d *t_gArrayHM_Par = gArrayHM_Par;
-		for(int i=0; i<gLenArrayHM_Par; i++) oStr << (*(t_gArrayHM_Par++));
+		TVector2d *t_gArrayHB_Par = gArrayHB_Par;
+		for(int i=0; i<gLenArrayHB_Par; i++) oStr << (*(t_gArrayHB_Par++));
 	}
 	else oStr << (char)0;
-	//double *gdMdH_Par
-	if((gLenArrayHM_Par) && (gdMdH_Par != 0))
+	//double *gdBdH_Par
+	if((gLenArrayHB_Par) && (gdBdH_Par != 0))
 	{
 		oStr << (char)1;
-		double *t_gdMdH_Par = gdMdH_Par;
-		for(int i=0; i<gLenArrayHM_Par; i++) oStr << (*(t_gdMdH_Par++));
+		double *t_gdBdH_Par = gdBdH_Par;
+		for(int i=0; i<gLenArrayHB_Par; i++) oStr << (*(t_gdBdH_Par++));
 	}
 	else oStr << (char)0;
 
-	//int gLenArrayHM_Perp;
-	oStr << gLenArrayHM_Par;
-	//TVector2d *gArrayHM_Perp;
-	if((gLenArrayHM_Perp) && (gArrayHM_Perp != 0))
+	//int gLenArrayHB_Perp;
+	oStr << gLenArrayHB_Par;
+	//TVector2d *gArrayHB_Perp;
+	if((gLenArrayHB_Perp) && (gArrayHB_Perp != 0))
 	{
 		oStr << (char)1;
-		TVector2d *t_gArrayHM_Perp = gArrayHM_Perp;
-		for(int i=0; i<gLenArrayHM_Perp; i++) oStr << (*(t_gArrayHM_Perp++));
+		TVector2d *t_gArrayHB_Perp = gArrayHB_Perp;
+		for(int i=0; i<gLenArrayHB_Perp; i++) oStr << (*(t_gArrayHB_Perp++));
 	}
 	else oStr << (char)0;
-	//double *gdMdH_Perp;
-	if((gLenArrayHM_Perp) && (gdMdH_Perp != 0))
+	//double *gdBdH_Perp;
+	if((gLenArrayHB_Perp) && (gdBdH_Perp != 0))
 	{
 		oStr << (char)1;
-		double *t_gdMdH_Perp = gdMdH_Perp;
-		for(int i=0; i<gLenArrayHM_Perp; i++) oStr << (*(t_gdMdH_Perp++));
+		double *t_gdBdH_Perp = gdBdH_Perp;
+		for(int i=0; i<gLenArrayHB_Perp; i++) oStr << (*(t_gdBdH_Perp++));
 	}
 	else oStr << (char)0;
 
@@ -531,47 +531,47 @@ inline void radTNonlinearAnisotropMaterial::DumpBinParse_NonlinearAnisotropMater
 	inStr >> DependenceIsNonlinear[0];
 	inStr >> DependenceIsNonlinear[1];
 
-	//int gLenArrayHM_Par
-	inStr >> gLenArrayHM_Par;
+	//int gLenArrayHB_Par
+	inStr >> gLenArrayHB_Par;
 	char cTest = 0;
 	inStr >> cTest;
-	//TVector2d *gArrayHM_Par
+	//TVector2d *gArrayHB_Par
 	if(cTest > 0)
 	{
-		vgArrayHM_Par.resize(gLenArrayHM_Par);
-		gArrayHM_Par = vgArrayHM_Par.data();
-		TVector2d *t_gArrayHM_Par = gArrayHM_Par;
-		for(int i=0; i<gLenArrayHM_Par; i++) inStr >> (*(t_gArrayHM_Par++));
+		vgArrayHB_Par.resize(gLenArrayHB_Par);
+		gArrayHB_Par = vgArrayHB_Par.data();
+		TVector2d *t_gArrayHB_Par = gArrayHB_Par;
+		for(int i=0; i<gLenArrayHB_Par; i++) inStr >> (*(t_gArrayHB_Par++));
 	}
-	//double *gdMdH_Par
+	//double *gdBdH_Par
 	inStr >> cTest;
 	if(cTest > 0)
 	{
-		vgdMdH_Par.resize(gLenArrayHM_Par);
-		gdMdH_Par = vgdMdH_Par.data();
-		double *t_gdMdH_Par = gdMdH_Par;
-		for(int i=0; i<gLenArrayHM_Par; i++) inStr >> (*(t_gdMdH_Par++));
+		vgdBdH_Par.resize(gLenArrayHB_Par);
+		gdBdH_Par = vgdBdH_Par.data();
+		double *t_gdBdH_Par = gdBdH_Par;
+		for(int i=0; i<gLenArrayHB_Par; i++) inStr >> (*(t_gdBdH_Par++));
 	}
 
-	//int gLenArrayHM_Perp;
-	inStr >> gLenArrayHM_Perp;
-	//TVector2d *gArrayHM_Perp;
+	//int gLenArrayHB_Perp;
+	inStr >> gLenArrayHB_Perp;
+	//TVector2d *gArrayHB_Perp;
 	inStr >> cTest;
 	if(cTest > 0)
 	{
-		vgArrayHM_Perp.resize(gLenArrayHM_Perp);
-		gArrayHM_Perp = vgArrayHM_Perp.data();
-		TVector2d *t_gArrayHM_Perp = gArrayHM_Perp;
-		for(int i=0; i<gLenArrayHM_Perp; i++) inStr >> (*(t_gArrayHM_Perp++));
+		vgArrayHB_Perp.resize(gLenArrayHB_Perp);
+		gArrayHB_Perp = vgArrayHB_Perp.data();
+		TVector2d *t_gArrayHB_Perp = gArrayHB_Perp;
+		for(int i=0; i<gLenArrayHB_Perp; i++) inStr >> (*(t_gArrayHB_Perp++));
 	}
-	//double *gdMdH_Perp;
+	//double *gdBdH_Perp;
 	inStr >> cTest;
 	if(cTest > 0)
 	{
-		vgdMdH_Perp.resize(gLenArrayHM_Perp);
-		gdMdH_Perp = vgdMdH_Perp.data();
-		double *t_gdMdH_Perp = gdMdH_Perp;
-		for(int i=0; i<gLenArrayHM_Perp; i++) inStr >> (*(t_gdMdH_Perp++));
+		vgdBdH_Perp.resize(gLenArrayHB_Perp);
+		gdBdH_Perp = vgdBdH_Perp.data();
+		double *t_gdBdH_Perp = gdBdH_Perp;
+		for(int i=0; i<gLenArrayHB_Perp; i++) inStr >> (*(t_gdBdH_Perp++));
 	}
 
 	//double gMaxKsi_Par, gMaxKsi_Perp;
@@ -634,29 +634,29 @@ public:
 		SetupEasyAxisIfPossible(pN);
 	}
 
-	radTNonlinearLaminatedMaterial(TVector2d* InArrayHM, int InLenArrayHM, double InPackFactor, double* pN)
+	radTNonlinearLaminatedMaterial(TVector2d* InArrayHB, int InLenArrayHB, double InPackFactor, double* pN)
 	{// This sets up isotropic data only. The anisotropic data is derived from isotropic ones at run time.
 	 // The isotropic data are stored in .._Par arrays of radTNonlinearAnisotropMaterial
 
-		if((InArrayHM == 0) || (InLenArrayHM <= 0) || (InPackFactor <= 0) || (InPackFactor > 1)) throw 0;
+		if((InArrayHB == 0) || (InLenArrayHB <= 0) || (InPackFactor <= 0) || (InPackFactor > 1)) throw 0;
 
-		gLenArrayHM_Par = gLenArrayHM_Perp = 0;
-		gArrayHM_Par = gArrayHM_Perp = 0;
-		gdMdH_Par = gdMdH_Perp = 0;
+		gLenArrayHB_Par = gLenArrayHB_Perp = 0;
+		gArrayHB_Par = gArrayHB_Perp = 0;
+		gdBdH_Par = gdBdH_Perp = 0;
 		gMaxKsi_Par = gMaxKsi_Perp = 0;
 
 		double ZeroTol = 1e-10;
 
 		char PrependZero = 0;
-		if((InArrayHM->x > ZeroTol) && (InArrayHM->y > ZeroTol))
+		if((InArrayHB->x > ZeroTol) && (InArrayHB->y > ZeroTol))
 		{
-			InLenArrayHM++; PrependZero = 1;
+			InLenArrayHB++; PrependZero = 1;
 		}
 
-		gLenArrayHM_Par = InLenArrayHM;
-		AllocateArrays(gLenArrayHM_Par, 0);
-		radTNonlinearIsotropMaterial::CopyArrayHM(gArrayHM_Par, InArrayHM, InLenArrayHM, PrependZero);
-		radTNonlinearIsotropMaterial::Compute_dMdH(gArrayHM_Par, gdMdH_Par, gLenArrayHM_Par, gMaxKsi_Par);
+		gLenArrayHB_Par = InLenArrayHB;
+		AllocateArrays(gLenArrayHB_Par, 0);
+		radTNonlinearIsotropMaterial::CopyArrayHB(gArrayHB_Par, InArrayHB, InLenArrayHB, PrependZero);
+		radTNonlinearIsotropMaterial::Compute_dBdH(gArrayHB_Par, gdBdH_Par, gLenArrayHB_Par, gMaxKsi_Par);
 
 		gPackFactor = InPackFactor;
 		SetupEasyAxisIfPossible(pN);
@@ -796,7 +796,7 @@ public:
 
 		o << "   Isotropic parameters:" << endl;
 
-		if((gArrayHM_Par == 0) || (gLenArrayHM_Par == 0))
+		if((gArrayHB_Par == 0) || (gLenArrayHB_Par == 0))
 		{
 			o << "      {ksi1,ms1}= {" << Ksi[0][0] << ',' << Ms[0][0] << "}" << endl;
 			o << "      {ksi2,ms2}= {" << Ksi[0][1] << ',' << Ms[0][1] << "}" << endl;

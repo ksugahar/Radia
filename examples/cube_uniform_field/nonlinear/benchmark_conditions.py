@@ -46,9 +46,12 @@ BH_DATA = [
     [100000.0, 2.1],
 ]
 
-# Convert B-H to H-M format for Radia's MatSatIsoTab
-# M = B/mu_0 - H
-HM_DATA = [[h, b/MU_0 - h] for h, b in BH_DATA]
+# NOTE: As of v1.3.14, Radia accepts B-H curves directly via MatSatIsoTab()
+# The conversion to M-H is done internally: M = B/mu_0 - H
+# Simply pass BH_DATA to rad.MatSatIsoTab(BH_DATA)
+
+# Legacy HM_DATA kept for reference (no longer needed)
+# HM_DATA = [[h, b/MU_0 - h] for h, b in BH_DATA]
 
 # =============================================================================
 # Solver Parameters

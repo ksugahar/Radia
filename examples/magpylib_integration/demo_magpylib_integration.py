@@ -73,7 +73,7 @@ def main():
 
     # Apply linear material (mu_r = 1000)
     mu_r = 1000
-    mat = rad.MatLin(mu_r - 1)  # chi = mu_r - 1
+    mat = rad.MatLin(mu_r)  # relative permeability
     rad.MatApl(cube, mat)
     print(f"   Material: mu_r = {mu_r}")
 
@@ -170,7 +170,7 @@ def main():
     # Recreate cube
     cube2 = rad.ObjRecMag([0, 0, 0], [cube_size, cube_size, cube_size], [0, 0, 0])
     rad.ObjDivMag(cube2, [n_div, n_div, n_div])
-    mat2 = rad.MatLin(mu_r - 1)
+    mat2 = rad.MatLin(mu_r)  # relative permeability
     rad.MatApl(cube2, mat2)
 
     # Use ObjBckg with the same field strength as magpylib gives at origin

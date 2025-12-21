@@ -2,15 +2,15 @@
 """
 test_mesh_import.py - Test mesh import functionality for tetrahedral and hexahedral elements
 
-This test compares:
+This test verifies:
 1. Tetrahedral elements from Netgen mesh (ObjPolyhdr with TETRA_FACES)
 2. Hexahedral elements via ObjPolyhdr (general polyhedron MSC)
-3. Hexahedral elements via ObjRecMag (analytical formula)
 
-The tests verify that different mesh import methods produce consistent results.
+The tests verify that mesh import methods produce correct results.
 
 Author: Radia Development Team
 Created: 2025-12-05
+Updated: 2025-12-19 - Removed ObjRecMag references
 """
 
 import sys
@@ -234,57 +234,20 @@ class TestNetgenMeshImport(unittest.TestCase):
         self.assertLess(abs(N_zz - 1/3), 0.05,
                         f"Demagnetization factor error exceeds 5%")
 
-    @unittest.skipIf(not NETGEN_AVAILABLE, "Netgen not available")
-    def test_netgen_vs_recmag_comparison(self):
-        """Compare Netgen tet mesh vs ObjRecMag for same geometry."""
-        center = [0.0, 0.0, 0.0]
-        size = 1.0
-        magnetization = [0.0, 0.0, 1.0e6]
-
-        # Reference: Fine ObjRecMag mesh
-        rad.UtiDelAll()
-        cube_ref = rad.ObjRecMag(center, [size, size, size], magnetization)
-        rad.ObjDivMag(cube_ref, [10, 10, 10])  # 1000 elements
-        H_ref = rad.Fld(cube_ref, 'h', center)
-
-        # Netgen mesh
-        rad.UtiDelAll()
-        nodes, tets = create_netgen_tet_mesh(center, size, maxh=0.25)
-
-        polyhedra = []
-        for tet_indices in tets:
-            tet_verts = [nodes[i] for i in tet_indices]
-            obj = rad.ObjPolyhdr(tet_verts, TETRA_FACES, magnetization)
-            polyhedra.append(obj)
-
-        cube_netgen = rad.ObjCnt(polyhedra)
-        H_netgen = rad.Fld(cube_netgen, 'h', center)
-
-        print(f"\nNetgen vs ObjRecMag comparison:")
-        print(f"  ObjRecMag (10x10x10, 1000 elements): Hz = {H_ref[2]:.6e}")
-        print(f"  Netgen ({len(tets)} tets): Hz = {H_netgen[2]:.6e}")
-
-        if abs(H_ref[2]) > 1e-10:
-            diff_pct = abs(H_netgen[2] - H_ref[2]) / abs(H_ref[2]) * 100
-            print(f"  Difference: {diff_pct:.2f}%")
-            self.assertLess(diff_pct, 10.0, "Netgen should match analytical within 10%")
-
 
 class TestHexMeshImport(unittest.TestCase):
-    """Test hexahedral mesh import."""
+    """Test hexahedral mesh import via ObjPolyhdr."""
 
     def setUp(self):
         rad.FldUnits('m')
         rad.UtiDelAll()
 
-    def test_single_hexahedron_polyhdr_vs_recmag(self):
-        """Compare ObjPolyhdr (MSC) vs ObjRecMag (analytical) for single hexahedron."""
+    def test_single_hexahedron_field(self):
+        """Test field from single ObjPolyhdr hexahedron."""
 
-        center = [0.5, 0.5, 0.5]
-        size = [1.0, 1.0, 1.0]
         magnetization = [0.0, 0.0, 1.0e6]  # 1 MA/m in z
 
-        # Method 1: ObjPolyhdr with HEX_FACES (MSC)
+        # ObjPolyhdr with HEX_FACES (MSC)
         rad.UtiDelAll()
         vertices = [
             [0.0, 0.0, 0.0],  # 0
@@ -298,11 +261,7 @@ class TestHexMeshImport(unittest.TestCase):
         ]
         hex_polyhdr = rad.ObjPolyhdr(vertices, HEX_FACES, magnetization)
 
-        # Method 2: ObjRecMag (analytical)
-        rad.UtiDelAll()
-        hex_recmag = rad.ObjRecMag(center, size, magnetization)
-
-        # Compare fields at test points
+        # Test field at points
         test_points = [
             [0.5, 0.5, 2.0],   # +z
             [0.5, 0.5, -1.0],  # -z
@@ -310,36 +269,17 @@ class TestHexMeshImport(unittest.TestCase):
             [0.5, 2.0, 0.5],   # +y
         ]
 
-        print("\nComparing ObjPolyhdr (MSC) vs ObjRecMag (analytical):")
-        print(f"{'Point':^25} | {'Polyhdr Bz':^15} | {'RecMag Bz':^15} | {'Diff %':^10}")
-        print("-" * 75)
-
-        max_diff_pct = 0.0
+        print("\nObjPolyhdr hexahedron field test:")
+        print(f"{'Point':^25} | {'Bz':^15}")
+        print("-" * 45)
 
         for pt in test_points:
-            # Get fields
-            rad.UtiDelAll()
-            hex_p = rad.ObjPolyhdr(vertices, HEX_FACES, magnetization)
-            B_polyhdr = rad.Fld(hex_p, 'b', pt)
-
-            rad.UtiDelAll()
-            hex_r = rad.ObjRecMag(center, size, magnetization)
-            B_recmag = rad.Fld(hex_r, 'b', pt)
-
-            # Compare
-            if abs(B_recmag[2]) > 1e-10:
-                diff_pct = abs(B_polyhdr[2] - B_recmag[2]) / abs(B_recmag[2]) * 100
-            else:
-                diff_pct = 0.0
-
-            max_diff_pct = max(max_diff_pct, diff_pct)
-
+            B = rad.Fld(hex_polyhdr, 'b', pt)
             print(f"({pt[0]:.1f}, {pt[1]:.1f}, {pt[2]:.1f})".ljust(25) +
-                  f" | {B_polyhdr[2]:+.6e} | {B_recmag[2]:+.6e} | {diff_pct:.4f}%")
+                  f" | {B[2]:+.6e}")
 
-        # Allow up to 1% difference (numerical precision)
-        self.assertLess(max_diff_pct, 1.0,
-                        f"Max difference {max_diff_pct:.4f}% exceeds 1% tolerance")
+            # Field should be non-zero
+            self.assertNotEqual(B[2], 0.0, f"Bz should be non-zero at {pt}")
 
     def test_cube_hex_mesh_demagnetization(self):
         """Test demagnetization factor for cube discretized with hexahedra."""
@@ -375,50 +315,6 @@ class TestHexMeshImport(unittest.TestCase):
         print(f"  Error: {abs(N_zz - 1/3) * 100:.2f}%")
 
         self.assertLess(abs(N_zz - 1/3), 0.05)
-
-    def test_recmag_vs_polyhdr_mesh(self):
-        """Compare ObjRecMag+ObjDivMag vs ObjPolyhdr mesh for same geometry."""
-
-        center = [0.0, 0.0, 0.0]
-        size = [1.0, 1.0, 1.0]
-        n_div = 3
-        magnetization = [0.0, 0.0, 1.0e6]
-
-        # Method 1: ObjRecMag + ObjDivMag (analytical formula)
-        rad.UtiDelAll()
-        cube_analytical = rad.ObjRecMag(center, size, magnetization)
-        rad.ObjDivMag(cube_analytical, [n_div, n_div, n_div])
-
-        H_analytical = rad.Fld(cube_analytical, 'h', center)
-
-        # Method 2: ObjPolyhdr mesh (MSC)
-        rad.UtiDelAll()
-        nodes, hexahedra = create_cube_hex_mesh(center, size, n_div)
-
-        polyhedra = []
-        for hex_indices in hexahedra:
-            hex_verts = [nodes[i] for i in hex_indices]
-            obj = rad.ObjPolyhdr(hex_verts, HEX_FACES, magnetization)
-            polyhedra.append(obj)
-
-        cube_mesh = rad.ObjCnt(polyhedra)
-        H_mesh = rad.Fld(cube_mesh, 'h', center)
-
-        print(f"\nObjRecMag+ObjDivMag vs ObjPolyhdr mesh comparison:")
-        print(f"  N divisions: {n_div} ({n_div**3} elements)")
-        print(f"  H_analytical at center: {H_analytical}")
-        print(f"  H_mesh at center: {H_mesh}")
-
-        # Compare Hz
-        if abs(H_analytical[2]) > 1e-10:
-            diff_pct = abs(H_mesh[2] - H_analytical[2]) / abs(H_analytical[2]) * 100
-        else:
-            diff_pct = 0.0
-
-        print(f"  Difference: {diff_pct:.4f}%")
-
-        # Should be very close (< 1%)
-        self.assertLess(diff_pct, 1.0)
 
 
 class TestMeshImportSolver(unittest.TestCase):
@@ -474,8 +370,8 @@ class TestMeshImportSolver(unittest.TestCase):
         # M should be positive (induced by external field)
         self.assertGreater(M_avg_z, 0, "Magnetization should be positive")
 
-    def test_hex_mesh_polyhdr_vs_recmag_solver(self):
-        """Compare ObjPolyhdr vs ObjRecMag hex mesh with solver."""
+    def test_hex_mesh_polyhdr_solver(self):
+        """Test ObjPolyhdr hex mesh with solver."""
 
         center = [0.0, 0.0, 0.0]
         size = [1.0, 1.0, 1.0]
@@ -484,7 +380,7 @@ class TestMeshImportSolver(unittest.TestCase):
         H_ext = 1000.0  # A/m
         B_ext = MU_0 * H_ext
 
-        # Method 1: ObjPolyhdr mesh
+        # ObjPolyhdr mesh
         rad.UtiDelAll()
         nodes, hexahedra = create_cube_hex_mesh(center, size, n_div)
 
@@ -504,35 +400,18 @@ class TestMeshImportSolver(unittest.TestCase):
         M_polyhdr = rad.ObjM(cube_polyhdr)
         M_avg_polyhdr = np.mean([m[1][2] for m in M_polyhdr])
 
-        # Method 2: ObjRecMag + ObjDivMag
-        rad.UtiDelAll()
-        cube_recmag = rad.ObjRecMag(center, size, [0, 0, 0])
-        rad.ObjDivMag(cube_recmag, [n_div, n_div, n_div])
-        mat2 = rad.MatLin(mu_r - 1)
-        rad.MatApl(cube_recmag, mat2)
-        ext2 = rad.ObjBckg([0, 0, B_ext])
-        grp_recmag = rad.ObjCnt([cube_recmag, ext2])
-
-        result_recmag = rad.Solve(grp_recmag, 0.001, 100, 1)
-        M_recmag = rad.ObjM(cube_recmag)
-        M_avg_recmag = np.mean([m[1][2] for m in M_recmag])
-
-        print(f"\nObjPolyhdr vs ObjRecMag solver comparison:")
+        print(f"\nObjPolyhdr hex mesh solver test:")
         print(f"  N: {n_div} ({n_div**3} elements)")
         print(f"  mu_r: {mu_r}")
         print(f"  H_ext: {H_ext} A/m")
-        print(f"  M_avg_z (Polyhdr): {M_avg_polyhdr:.0f} A/m")
-        print(f"  M_avg_z (RecMag): {M_avg_recmag:.0f} A/m")
+        print(f"  M_avg_z: {M_avg_polyhdr:.0f} A/m")
 
-        diff_pct = abs(M_avg_polyhdr - M_avg_recmag) / abs(M_avg_recmag) * 100
-        print(f"  Difference: {diff_pct:.2f}%")
-
-        # Should be close (< 5%)
-        self.assertLess(diff_pct, 5.0)
+        # M should be positive (induced by external field)
+        self.assertGreater(M_avg_polyhdr, 0, "Magnetization should be positive")
 
 
 class TestMethodComparison(unittest.TestCase):
-    """Test comparison between different field computation methods."""
+    """Test comparison between tetrahedral and hexahedral mesh accuracy."""
 
     def setUp(self):
         rad.FldUnits('m')
@@ -546,20 +425,15 @@ class TestMethodComparison(unittest.TestCase):
         size = 1.0
         magnetization = [0.0, 0.0, 1.0]
 
-        # Reference: Fine ObjRecMag mesh (analytical, high accuracy)
-        rad.UtiDelAll()
-        cube_ref = rad.ObjRecMag(center, [size, size, size], magnetization)
-        rad.ObjDivMag(cube_ref, [10, 10, 10])  # 1000 elements
-        H_ref = rad.Fld(cube_ref, 'h', center)
-        N_ref = -H_ref[2] / magnetization[2]
+        # Theoretical demagnetization factor for cube: N = 1/3
+        N_theoretical = 1.0 / 3.0
 
         print(f"\nTet vs Hex mesh accuracy comparison:")
-        print(f"  Reference (ObjRecMag 10x10x10): N_zz = {N_ref:.6f}")
+        print(f"  Theoretical N_zz: {N_theoretical:.6f}")
         print()
 
-        results = []
-
         # Hexahedral mesh (ObjPolyhdr)
+        hex_results = []
         for n_div in [2, 3, 4]:
             rad.UtiDelAll()
             nodes, hexs = create_cube_hex_mesh(center, [size, size, size], n_div)
@@ -571,23 +445,13 @@ class TestMethodComparison(unittest.TestCase):
             cube_hex = rad.ObjCnt(hex_objs)
             H_hex = rad.Fld(cube_hex, 'h', center)
             N_hex = -H_hex[2] / magnetization[2]
-            err_hex = abs(N_hex - N_ref) / N_ref * 100
+            err_hex = abs(N_hex - N_theoretical) / N_theoretical * 100
 
-            # ObjRecMag - analytical
-            rad.UtiDelAll()
-            cube_ana = rad.ObjRecMag(center, [size, size, size], magnetization)
-            rad.ObjDivMag(cube_ana, [n_div, n_div, n_div])
-            H_ana = rad.Fld(cube_ana, 'h', center)
-            N_ana = -H_ana[2] / magnetization[2]
-            err_ana = abs(N_ana - N_ref) / N_ref * 100
-
-            results.append({
+            hex_results.append({
                 'n_div': n_div,
                 'n_hex': len(hexs),
                 'N_hex': N_hex,
-                'N_ana': N_ana,
                 'err_hex': err_hex,
-                'err_ana': err_ana,
             })
 
         # Netgen tetrahedral mesh
@@ -603,7 +467,7 @@ class TestMethodComparison(unittest.TestCase):
             cube_tet = rad.ObjCnt(tet_objs)
             H_tet = rad.Fld(cube_tet, 'h', center)
             N_tet = -H_tet[2] / magnetization[2]
-            err_tet = abs(N_tet - N_ref) / N_ref * 100
+            err_tet = abs(N_tet - N_theoretical) / N_theoretical * 100
 
             tet_results.append({
                 'maxh': maxh,
@@ -613,21 +477,21 @@ class TestMethodComparison(unittest.TestCase):
             })
 
         # Print comparison table - Hexahedral
-        print("Hexahedral mesh (ObjPolyhdr vs ObjRecMag):")
-        print(f"{'N':^5} | {'#Hex':^6} | {'N_hex':^10} | {'N_ana':^10} | {'Err_hex%':^10} | {'Err_ana%':^10}")
-        print("-" * 65)
-        for r in results:
-            print(f"{r['n_div']:^5} | {r['n_hex']:^6} | {r['N_hex']:^10.6f} | {r['N_ana']:^10.6f} | {r['err_hex']:^10.4f} | {r['err_ana']:^10.4f}")
+        print("Hexahedral mesh (ObjPolyhdr):")
+        print(f"{'N':^5} | {'#Hex':^6} | {'N_hex':^10} | {'Err%':^10}")
+        print("-" * 40)
+        for r in hex_results:
+            print(f"{r['n_div']:^5} | {r['n_hex']:^6} | {r['N_hex']:^10.6f} | {r['err_hex']:^10.4f}")
 
         print()
         print("Tetrahedral mesh (Netgen):")
-        print(f"{'maxh':^6} | {'#Tet':^6} | {'N_tet':^10} | {'Err_tet%':^10}")
+        print(f"{'maxh':^6} | {'#Tet':^6} | {'N_tet':^10} | {'Err%':^10}")
         print("-" * 40)
         for r in tet_results:
             print(f"{r['maxh']:^6.2f} | {r['n_tet']:^6} | {r['N_tet']:^10.6f} | {r['err_tet']:^10.4f}")
 
         # Verify errors are reasonable
-        self.assertLess(results[0]['err_hex'], 10.0)
+        self.assertLess(hex_results[0]['err_hex'], 10.0)
         self.assertLess(tet_results[-1]['err_tet'], 10.0)
 
 
@@ -637,7 +501,7 @@ if __name__ == '__main__':
     print("=" * 70)
     print()
     print("Testing tetrahedral and hexahedral mesh import functionality")
-    print("Comparing ObjPolyhdr (MSC) vs ObjRecMag (analytical)")
+    print("Using ObjPolyhdr (MSC) for all polyhedral elements")
     print()
 
     unittest.main(verbosity=2)

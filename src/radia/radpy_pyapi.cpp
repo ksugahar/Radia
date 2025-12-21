@@ -21,8 +21,11 @@
 
 // Solver method constants (must match RadSolverMethod in rad_relaxation_methods.h)
 namespace SolverMethod {
-	constexpr int LU         = 0;   // LU direct solver
-	constexpr int BICGSTAB   = 1;   // BiCGSTAB iterative solver (default)
+	constexpr int LU                = 0;   // LU direct solver
+	constexpr int BICGSTAB          = 1;   // BiCGSTAB iterative solver (default)
+#ifdef RADIA_USE_HACAPK
+	constexpr int BICGSTAB_HMATRIX  = 2;   // BiCGSTAB with H-matrix (HACApK)
+#endif
 }
 
 /************************************************************************//**
@@ -113,49 +116,6 @@ static void ParseM(double arM[3], PyObject* oM, const char* sFuncName=0)
 	{
 		arM[0] = 0.; arM[1] = 0.; arM[2] = 0.;
 	}
-}
-
-/************************************************************************//**
- * Auxiliary function for parsing Subdivision Params, including eventual gradients
- ***************************************************************************/
-static void ParseSubdPar(double arSbdPar[6], PyObject* oSbdPar, const char* sFuncName=0)
-//static void ParseSubdPar(double arSbdPar[6], PyObject* oSbdPar, char* sFuncName=0)
-{//OC29022020
-	std::ostringstream ssErrMes;
-	ssErrMes << ": ";
-	if(sFuncName == 0) ssErrMes << "ObjDivMag";
-	else ssErrMes << sFuncName;
-	ssErrMes << ", incorrect subdivision parameters";
-	std::string sErrMes = ssErrMes.str();
-
-	if(oSbdPar == 0) throw CombErStr(strEr_BadFuncArg, sErrMes.c_str());
-
-	double arSbdParLoc[6];
-	double *pSbdParLoc = arSbdParLoc;
-	int nSbdParLoc = 6;
-	char resP = CPyParse::CopyPyNestedListElemsToNumAr(oSbdPar, 'd', pSbdParLoc, nSbdParLoc);
-	if(resP == 0) throw CombErStr(strEr_BadFuncArg, sErrMes.c_str());
-	
-	if(nSbdParLoc == 6)
-	{
-		for(int i=0; i<nSbdParLoc; i++) arSbdPar[i] = arSbdParLoc[i];
-		return;
-	}
-
-	int arLenSbdPar[6];
-	int *pLenSbdPar = arLenSbdPar;
-	int nLenSbdPar = 6;
-	CPyParse::FindLengthsOfElemListsOrArrays(oSbdPar, pLenSbdPar, nLenSbdPar, true);
-
-	vector<double> vSbdPar;
-	for(int i=0; i<nSbdParLoc; i++) vSbdPar.push_back(arSbdParLoc[i]);
-
-	for(int iLen=0; iLen<nLenSbdPar; iLen++)
-	{
-		if(arLenSbdPar[iLen] == 0) vSbdPar.insert(vSbdPar.begin() + (iLen*2 + 1), 1.);
-	}
-
-	for(int j=0; j<6; j++) arSbdPar[j] = vSbdPar[j];
 }
 
 /************************************************************************//**
@@ -618,50 +578,6 @@ static PyObject* radia_ObjCylMag(PyObject* self, PyObject* args)
 		// Py_XINCREF removed - Py_BuildValue already returns new reference
 	}
 	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
-	}
-	return oResInd;
-}
-
-/************************************************************************//**
- * Magnetic Field Source: Rectangular Parallelepiped with color {RGB[0],RGB[1],RGB[2]}.
- * The block is magnetized according to M[3] then subdivided according to K[3] and added into the container grp (grp should be defined in advance by calling RadObjCnt()).
- ***************************************************************************/
-static PyObject* radia_ObjFullMag(PyObject* self, PyObject* args)
-{
-	PyObject *oP=0, *oL=0, *oM=0, *oK=0, *oRGB=0, *oResInd=0;
-
-	try
-	{
-		int indGrp=0, indMat=0;
-		if(!PyArg_ParseTuple(args, "OOOOiiO:ObjFullMag", &oP, &oL, &oM, &oK, &indGrp, &indMat, &oRGB)) throw CombErStr(strEr_BadFuncArg, ": ObjFullMag");
-		if((oP == 0) || (oL == 0) || (oM == 0)) throw CombErStr(strEr_BadFuncArg, ": ObjFullMag");
-
-		double arP[3], arL[3], arM[3], arK[9], arRGB[3];
-		//bool lenIsSmall = false;
-		//int lenK = 9;
-		//double *p = arK;
-		//CPyParse::CopyPyListElemsToNumArray(oK, 'd', p, lenK, lenIsSmall);
-		//if(lenIsSmall) throw CombErStr(strEr_BadFuncArg, ": ObjFullMag, incorrect definition of subdivision parameters");
-		//CPyParse::CopyPyNestedListElemsToNumAr(oK, 'd', p, lenK); //OC27022020
-		//if((lenK != 3) && (lenK != 6)) throw CombErStr(strEr_BadFuncArg, ": ObjFullMag, incorrect definition of subdivision parameters");
-		ParseSubdPar(arK, oK, "ObjFullMag\0"); //OC29022020
-	
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oP, 'd', arP, 3, CombErStr(strEr_BadFuncArg, ": ObjFullMag, incorrect definition of center point"));
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oL, 'd', arL, 3, CombErStr(strEr_BadFuncArg, ": ObjFullMag, incorrect definition of dimensions"));
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oM, 'd', arM, 3, CombErStr(strEr_BadFuncArg, ": ObjFullMag, incorrect definition of magnetization vector"));
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oRGB, 'd', arRGB, 3, CombErStr(strEr_BadFuncArg, ": ObjFullMag, incorrect definition of RGB color"));
-
-		int ind = 0;
-		g_pyParse.ProcRes(RadObjFullMag(&ind, arP, arL, arM, arK, 6, indGrp, indMat, arRGB)); //OC29022020
-		//g_pyParse.ProcRes(RadObjFullMag(&ind, arP, arL, arM, arK, lenK, indGrp, indMat, arRGB));
-
-		oResInd = Py_BuildValue("i", ind);
-		// Py_XINCREF removed - Py_BuildValue already returns new reference
-	}
-	catch(const char* erText) 
 	{
 		PyErr_SetString(PyExc_RuntimeError, erText);
 		//PyErr_PrintEx(1);
@@ -1281,193 +1197,6 @@ static PyObject* radia_ObjCutMag(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Subdivides (segments) the object obj by 3 sets of parallel planes.
- ***************************************************************************/
-static PyObject* radia_ObjDivMagPln(PyObject* self, PyObject* args)
-{
-	PyObject *oSbdPar=0, *oN1=0, *oN2=0, *oN3=0, *oOpt=0, *oResInd=0;
-	try
-	{
-		int ind = 0;
-		if(!PyArg_ParseTuple(args, "iO|OOOO:ObjDivMagPln", &ind, &oSbdPar, &oN1, &oN2, &oN3, &oOpt)) throw CombErStr(strEr_BadFuncArg, ": ObjDivMagPln");
-		if(ind == 0) throw CombErStr(strEr_BadFuncArg, ": ObjDivMagPln");
-
-		if((oN1 != 0) && (oN2 == 0) && (oN3 == 0) && (oOpt == 0))
-		{//To suport call like: rad.ObjDivMagPln(mag01, [[2,0.5],[3,0.2],[4,0.1]], 'Frame->Lab')
-			oOpt = oN1; oN1 = 0;
-		}
-
-		double arSbdPar[6];
-		//double *pSbdPar = arSbdPar;
-		//int nSbdPar = 6;
-		//char resP = CPyParse::CopyPyNestedListElemsToNumAr(oSbdPar, 'd', pSbdPar, nSbdPar);
-		//if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": ObjDivMagPln, incorrect definition of cutting plane normal vectors");
-		ParseSubdPar(arSbdPar, oSbdPar, "ObjDivMagPln\0"); //OC29022020
-
-		double arN1N2N3[] = {1,0,0, 0,1,0, 0,0,1};
-		if(oN1 != 0)
-		{
-			CPyParse::CopyPyListElemsToNumArrayKnownLen(oN1, 'd', arN1N2N3, 3, CombErStr(strEr_BadFuncArg, ": ObjDivMagPln, incorrect definition of first cutting plane normal vector"));
-		}
-		if(oN2 != 0)
-		{
-			CPyParse::CopyPyListElemsToNumArrayKnownLen(oN2, 'd', arN1N2N3 + 3, 3, CombErStr(strEr_BadFuncArg, ": ObjDivMagPln, incorrect definition of second cutting plane normal vector"));
-		}
-		if(oN3 != 0)
-		{
-			CPyParse::CopyPyListElemsToNumArrayKnownLen(oN3, 'd', arN1N2N3 + 6, 3, CombErStr(strEr_BadFuncArg, ": ObjDivMagPln, incorrect definition of third cutting plane normal vector"));
-		}
-
-		char sOpt[1024]; *sOpt = '\0';
-		if(oOpt != 0) CPyParse::CopyPyStringToC(oOpt, sOpt, 1024);
-
-		int indNew = 0;
-		g_pyParse.ProcRes(RadObjDivMagPln(&indNew, ind, arSbdPar, 6, arN1N2N3, sOpt)); //OC29022020
-		//g_pyParse.ProcRes(RadObjDivMagPln(&indNew, ind, arSbdPar, nSbdPar, arN1N2N3, sOpt));
-
-		oResInd = Py_BuildValue("i", indNew);
-		// Py_XINCREF removed - Py_BuildValue already returns new reference
-	}
-	catch(const char* erText) 
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
-	}
-	return oResInd;
-}
-
-/************************************************************************//**
- * Subdivides (segments) the object obj by a set of coaxial elliptic cylinders. 
- ***************************************************************************/
-static PyObject* radia_ObjDivMagCyl(PyObject* self, PyObject* args)
-{
-	PyObject *oSbdPar=0, *oA=0, *oV=0, *oP=0, *oOpt=0, *oResInd=0;
-	try
-	{
-		int ind = 0;
-		double rat = 0;
-		if(!PyArg_ParseTuple(args, "iOOOOd|O:ObjDivMagCyl", &ind, &oSbdPar, &oA, &oV, &oP, &rat, &oOpt)) throw CombErStr(strEr_BadFuncArg, ": ObjDivMagCyl");
-		if(ind == 0) throw CombErStr(strEr_BadFuncArg, ": ObjDivMagCyl");
-
-		double arSbdPar[6];
-		//double *pSbdPar = arSbdPar;
-		//int nSbdPar = 6;
-		//char resP = CPyParse::CopyPyNestedListElemsToNumAr(oSbdPar, 'd', pSbdPar, nSbdPar);
-		//if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": ObjDivMagCyl");
-		ParseSubdPar(arSbdPar, oSbdPar, "ObjDivMagCyl\0"); //OC29022020
-
-		double arAVP[] = {0,0,0, 0,0,0, 0,0,0};
-		if(oA != 0)
-		{
-			CPyParse::CopyPyListElemsToNumArrayKnownLen(oA, 'd', arAVP, 3, CombErStr(strEr_BadFuncArg, ": ObjDivMagCyl, incorrect definition of point on cylinder axis"));
-		}
-		if(oV != 0)
-		{
-			CPyParse::CopyPyListElemsToNumArrayKnownLen(oV, 'd', arAVP + 3, 3, CombErStr(strEr_BadFuncArg, ": ObjDivMagCyl, incorrect definition of vector of cylinder axis"));
-		}
-		if(oP != 0)
-		{
-			CPyParse::CopyPyListElemsToNumArrayKnownLen(oP, 'd', arAVP + 6, 3, CombErStr(strEr_BadFuncArg, ": ObjDivMagCyl, incorrect definition of point in elliptical cylinder base"));
-		}
-
-		char sOpt[1024]; *sOpt = '\0';
-		if(oOpt != 0) CPyParse::CopyPyStringToC(oOpt, sOpt, 1024);
-
-		int indNew = 0;
-		g_pyParse.ProcRes(RadObjDivMagCyl(&indNew, ind, arSbdPar, 6, arAVP, rat, sOpt)); //OC29022020
-		//g_pyParse.ProcRes(RadObjDivMagCyl(&indNew, ind, arSbdPar, nSbdPar, arAVP, rat, sOpt));
-
-		oResInd = Py_BuildValue("i", indNew);
-		// Py_XINCREF removed - Py_BuildValue already returns new reference
-	}
-	catch(const char* erText) 
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
-	}
-	return oResInd;
-}
-
-/************************************************************************//**
- * Subdivides (segments) the object obj by a set of coaxial elliptic cylinders. 
- ***************************************************************************/
-static PyObject* radia_ObjDivMag(PyObject* self, PyObject* args)
-{
-	PyObject *oSbdPar=0, *oType=0, *oDir=0, *oOpt=0, *oResInd=0;
-	try
-	{
-		int ind = 0;
-		if(!PyArg_ParseTuple(args, "iO|OOO:ObjDivMag", &ind, &oSbdPar, &oType, &oDir, &oOpt)) throw CombErStr(strEr_BadFuncArg, ": ObjDivMag");
-		//if(!PyArg_ParseTuple(args, "iOOO|O:ObjDivMag", &ind, &oSbdPar, &oType, &oDir, &oOpt)) throw CombErStr(strEr_BadFuncArg, ": ObjDivMag");
-		if((ind == 0) || (oSbdPar == 0)) throw CombErStr(strEr_BadFuncArg, ": ObjDivMag");
-
-		double arSbdPar[6];
-		//double *pSbdPar = arSbdPar;
-		//int nSbdPar = 6;
-		//char resP = CPyParse::CopyPyNestedListElemsToNumAr(oSbdPar, 'd', pSbdPar, nSbdPar);
-		//if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": ObjDivMag");	
-		ParseSubdPar(arSbdPar, oSbdPar, "ObjDivMag\0"); //OC29022020
-
-		//char sType[1024];
-		//strcpy(sType, "pln\0");
-		char sOpt[1024]; *sOpt = '\0';
-		if((oType != 0) && (oDir == 0) && (oOpt == 0)) 
-		{//Treating the case like rad.ObjDivMag(u, ndiv, 'Frame->LabTot')
-			if(oType != 0) CPyParse::CopyPyStringToC(oType, sOpt, 1024);
-			char *pEndOptName = strrchr(sOpt, '>');
-			if(pEndOptName != 0)
-			{
-				if(*(--pEndOptName) == '-') oType = 0;
-			}
-		}
-
-		if(oOpt != 0) CPyParse::CopyPyStringToC(oOpt, sOpt, 1024);
-
-		//char sType[32]; *sType = '\0';
-		char sType[] = "pln";
-		if(oType != 0) CPyParse::CopyPyStringToC(oType, sType, 32);
-
-		int indNew = 0;
-		if((strcmp(sType, "pln") == 0) || (strcmp(sType, "Pln") == 0) || (strcmp(sType, "PLN") == 0))
-		{
-			double arN1N2N3[] = {1,0,0, 0,1,0, 0,0,1};
-			if(oDir != 0)
-			{
-				double *pN1N2N3 = arN1N2N3;
-				int nCrd = 6;
-				char resDir = CPyParse::CopyPyNestedListElemsToNumAr(oDir, 'd', pN1N2N3, nCrd);
-				if((resDir == 0) || (nCrd != 6)) throw CombErStr(strEr_BadFuncArg, ": ObjDivMag, incorrect definition of cutting plane normal vectors");
-			}
-			g_pyParse.ProcRes(RadObjDivMagPln(&indNew, ind, arSbdPar, 6, arN1N2N3, sOpt)); //OC29022020
-			//g_pyParse.ProcRes(RadObjDivMagPln(&indNew, ind, arSbdPar, nSbdPar, arN1N2N3, sOpt));
-		}
-		else if((strcmp(sType, "cyl") == 0) || (strcmp(sType, "Cyl") == 0) || (strcmp(sType, "CYL") == 0))
-		{
-			if(oDir == 0) throw CombErStr(strEr_BadFuncArg, ": ObjDivMag, incorrect definition of parameters for subdivision by elliptical cylinders");
-
-			double arAVPr[] = {0,0,0, 0,0,0, 0,0,0, 0};
-			double *pAVPr = arAVPr;
-			int nCrdAVPr = 10;
-			char resDir = CPyParse::CopyPyNestedListElemsToNumAr(oDir, 'd', pAVPr, nCrdAVPr);
-			if((resDir == 0) || (nCrdAVPr != 10)) throw CombErStr(strEr_BadFuncArg, ": ObjDivMag, incorrect definition of parameters for subdivision by elliptical cylinders");
-
-			g_pyParse.ProcRes(RadObjDivMagCyl(&indNew, ind, arSbdPar, 6, arAVPr, arAVPr[9], sOpt)); //OC29022020
-			//g_pyParse.ProcRes(RadObjDivMagCyl(&indNew, ind, arSbdPar, nSbdPar, arAVPr, arAVPr[9], sOpt));
-		}
-		else throw CombErStr(strEr_BadFuncArg, ": ObjDivMag, incorrect definition of subdivision (segmentation) type");
-
-		oResInd = Py_BuildValue("i", indNew);
-		// Py_XINCREF removed - Py_BuildValue already returns new reference
-	}
-	catch(const char* erText) 
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
-	}
-	return oResInd;
-}
-
-/************************************************************************//**
  * Computes geometrical volume of a 3D object.
  ***************************************************************************/
 static PyObject* radia_ObjGeoVol(PyObject* self, PyObject* args)
@@ -1999,11 +1728,16 @@ static PyObject* radia_MatApl(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Materials: a linear anisotropic magnetic material.
+ * Magnetic Materials: a linear isotropic/anisotropic magnetic material.
+ * API: MatLin(mu_r) - isotropic linear material (relative permeability)
+ * API: MatLin([mu_r_par, mu_r_perp], [ex, ey, ez]) - anisotropic with easy axis
+ *
+ * Industry Standard: Input is relative permeability mu_r (not susceptibility chi)
+ * Internal conversion: chi = mu_r - 1
  ***************************************************************************/
 static PyObject* radia_MatLin(PyObject* self, PyObject* args)
 {
-	PyObject *oKsi=0, *oSecondArg=0, *oResInd=0;
+	PyObject *oMuR=0, *oSecondArg=0, *oResInd=0;
 	try
 	{
 		// Try to parse arguments - can be 1 or 2 arguments
@@ -2011,14 +1745,22 @@ static PyObject* radia_MatLin(PyObject* self, PyObject* args)
 
 		if(nArgs == 1)
 		{
-			// MatLin(ksi) - isotropic linear material
-			if(!PyArg_ParseTuple(args, "O:MatLin", &oKsi)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
-			if(oKsi == 0) throw CombErStr(strEr_BadFuncArg, ": MatLin");
+			// MatLin(mu_r) - isotropic linear material
+			if(!PyArg_ParseTuple(args, "O:MatLin", &oMuR)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
+			if(oMuR == 0) throw CombErStr(strEr_BadFuncArg, ": MatLin");
 
 			// Check if single number
-			if(!PyNumber_Check(oKsi)) throw CombErStr(strEr_BadFuncArg, ": MatLin, single susceptibility value expected");
+			if(!PyNumber_Check(oMuR)) throw CombErStr(strEr_BadFuncArg, ": MatLin, single relative permeability value (mu_r) expected");
 
-			double ksi = PyFloat_AsDouble(oKsi);
+			double mu_r = PyFloat_AsDouble(oMuR);
+			if(mu_r < 1.0)
+			{
+				// Warning: mu_r < 1 is physically unusual (diamagnetic) but allowed
+				PySys_WriteStderr("Warning: MatLin(mu_r=%.6f) - relative permeability < 1.0 is unusual (diamagnetic material)\n", mu_r);
+			}
+
+			// Convert to susceptibility: chi = mu_r - 1
+			double ksi = mu_r - 1.0;
 			int indRes=0;
 			g_pyParse.ProcRes(RadMatLinIso(&indRes, ksi));
 
@@ -2026,18 +1768,26 @@ static PyObject* radia_MatLin(PyObject* self, PyObject* args)
 		}
 		else if(nArgs == 2)
 		{
-			// MatLin([ksi_par, ksi_perp], [ex, ey, ez]) - Linear material with easy axis
-			if(!PyArg_ParseTuple(args, "OO:MatLin", &oKsi, &oSecondArg)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
-			if((oKsi == 0) || (oSecondArg == 0)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
+			// MatLin([mu_r_par, mu_r_perp], [ex, ey, ez]) - Linear material with easy axis
+			if(!PyArg_ParseTuple(args, "OO:MatLin", &oMuR, &oSecondArg)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
+			if((oMuR == 0) || (oSecondArg == 0)) throw CombErStr(strEr_BadFuncArg, ": MatLin");
 
-			double arKsi[2];
-			CPyParse::CopyPyListElemsToNumArrayKnownLen(oKsi, 'd', arKsi, 2, CombErStr(strEr_BadFuncArg, ": MatLin, two susceptibility values [ksi_par, ksi_perp] expected"));
+			double arMuR[2];
+			CPyParse::CopyPyListElemsToNumArrayKnownLen(oMuR, 'd', arMuR, 2, CombErStr(strEr_BadFuncArg, ": MatLin, two relative permeability values [mu_r_par, mu_r_perp] expected"));
+
+			if(arMuR[0] < 1.0 || arMuR[1] < 1.0)
+			{
+				// Warning: mu_r < 1 is physically unusual (diamagnetic) but allowed
+				PySys_WriteStderr("Warning: MatLin([%.6f, %.6f], ...) - relative permeability < 1.0 is unusual (diamagnetic material)\n", arMuR[0], arMuR[1]);
+			}
 
 			// Parse easy axis vector (3-element)
 			double arEasyAxis[3];
 			CPyParse::CopyPyListElemsToNumArrayKnownLen(oSecondArg, 'd', arEasyAxis, 3, CombErStr(strEr_BadFuncArg, ": MatLin, easy axis must be 3-element vector [ex, ey, ez]"));
 
-			// MatLin([ksi_par, ksi_perp], [ex, ey, ez]) - for LINEAR MATERIALS only
+			// Convert to susceptibility: chi = mu_r - 1
+			double arKsi[2] = {arMuR[0] - 1.0, arMuR[1] - 1.0};
+
 			int indRes=0;
 			g_pyParse.ProcRes(RadMatLinAniso(&indRes, arKsi, arEasyAxis));
 			oResInd = Py_BuildValue("i", indRes);
@@ -2050,6 +1800,7 @@ static PyObject* radia_MatLin(PyObject* self, PyObject* args)
 	catch (const char* erText)
 	{
 		PyErr_SetString(PyExc_RuntimeError, erText);
+		return NULL;
 	}
 	return oResInd;
 }
@@ -2126,7 +1877,11 @@ static PyObject* radia_MatSatIsoFrm(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Materials: a nonlinear isotropic magnetic material with the M versus H curve defined by the list of pairs corresponding values of H and M (H1,M1,H2,M2,...)
+ * Magnetic Materials: a nonlinear isotropic magnetic material with the B versus H curve
+ * defined by the list of pairs [[H1,B1],[H2,B2],...] in SI units (A/m and Tesla).
+ *
+ * Industry Standard: Input is B-H curve (not M-H curve)
+ * ELF-compatible approach: B-H curve is stored directly, chi computed as B/(mu_0*H) - 1
  ***************************************************************************/
 static PyObject* radia_MatSatIsoTab(PyObject* self, PyObject* args)
 {
@@ -2141,6 +1896,10 @@ static PyObject* radia_MatSatIsoTab(PyObject* self, PyObject* args)
 		char resP = CPyParse::CopyPyNestedListElemsToNumAr(oMatData, 'd', arMatData, nDataTot);
 		if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": MatSatIsoTab");
 		int nDataP = (int)round(0.5 * nDataTot);
+
+		// Pass B-H curve directly to core (ELF-compatible approach)
+		// Core now stores B-H curve and computes chi = B/(mu_0*H) - 1
+		// No M-H conversion needed here
 
 		int indRes = 0;
 		g_pyParse.ProcRes(RadMatSatIsoTab(&indRes, arMatData, nDataP));
@@ -2510,8 +2269,15 @@ static PyObject* radia_Solve(PyObject* self, PyObject* args)
 					meth = SolverMethod::LU;
 				else if(strcasecmp(methStr, "bicgstab") == 0 || strcasecmp(methStr, "iterative") == 0)
 					meth = SolverMethod::BICGSTAB;
+#ifdef RADIA_USE_HACAPK
+				else if(strcasecmp(methStr, "hacapk") == 0 || strcasecmp(methStr, "hmatrix") == 0)
+					meth = SolverMethod::BICGSTAB_HMATRIX;
+				else
+					throw "Radia::Error: Unknown solver method. Use 'lu', 'bicgstab', or 'hacapk'.";
+#else
 				else
 					throw "Radia::Error: Unknown solver method. Use 'lu' (or 'direct') or 'bicgstab' (or 'iterative').";
+#endif
 			}
 			else
 			{
@@ -2520,8 +2286,13 @@ static PyObject* radia_Solve(PyObject* self, PyObject* args)
 		}
 
 		// Validate method number
+#ifdef RADIA_USE_HACAPK
+		if(meth != SolverMethod::LU && meth != SolverMethod::BICGSTAB && meth != SolverMethod::BICGSTAB_HMATRIX)
+			throw "Radia::Error: Invalid method number. Use 0 (LU), 1 (BiCGSTAB), or 2 (BiCGSTAB+HACApK).";
+#else
 		if(meth != SolverMethod::LU && meth != SolverMethod::BICGSTAB)
 			throw "Radia::Error: Invalid method number. Use 0 (LU) or 1 (BiCGSTAB).";
+#endif
 
 		double arResSolve[12];
 		int lenResSolve = 4;
@@ -2535,6 +2306,50 @@ static PyObject* radia_Solve(PyObject* self, PyObject* args)
 	{
 		PyErr_SetString(PyExc_RuntimeError, erText);
 		//PyErr_PrintEx(1);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Relaxation: Builds an interaction matrix and performs a relaxation procedure with specified nonlinear method.
+ * nonl_method: 0=mucal1 (chi-change), 1=mucal2 (B-change/Newton, default - faster convergence)
+ ***************************************************************************/
+static PyObject* radia_SolveNonl(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int ind=0, numIt=1000, meth=SolverMethod::BICGSTAB, nonl_meth=1; // Default: BiCGSTAB, mucal2
+		double prec=0.0001;
+
+		// Parse: obj, prec, iter, meth, nonl_method
+		if(!PyArg_ParseTuple(args, "idi|ii:SolveNonl", &ind, &prec, &numIt, &meth, &nonl_meth))
+			throw CombErStr(strEr_BadFuncArg, ": SolveNonl");
+
+		// Validate solver method
+#ifdef RADIA_USE_HACAPK
+		if(meth != SolverMethod::LU && meth != SolverMethod::BICGSTAB && meth != SolverMethod::BICGSTAB_HMATRIX)
+			throw "Radia::Error: Invalid method number. Use 0 (LU), 1 (BiCGSTAB), or 2 (BiCGSTAB+HACApK).";
+#else
+		if(meth != SolverMethod::LU && meth != SolverMethod::BICGSTAB)
+			throw "Radia::Error: Invalid method number. Use 0 (LU) or 1 (BiCGSTAB).";
+#endif
+
+		// Validate nonlinear method
+		if(nonl_meth != 0 && nonl_meth != 1)
+			throw "Radia::Error: Invalid nonl_method. Use 0 (mucal1/chi-change) or 1 (mucal2/B-change).";
+
+		double arResSolve[12];
+		int lenResSolve = 4;
+		g_pyParse.ProcRes(RadSolveNonl(arResSolve, &lenResSolve, ind, prec, numIt, meth, nonl_meth));
+
+		if(lenResSolve == 1) oRes = Py_BuildValue("d", *arResSolve);
+		else if(lenResSolve > 1) oRes = CPyParse::SetDataListOfLists(arResSolve, lenResSolve, 1);
+		if(oRes) Py_XINCREF(oRes);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
 	}
 	return oRes;
 }
@@ -3427,7 +3242,6 @@ static PyMethodDef radia_methods[] = {
 	{"ObjMltExtTri", radia_ObjMltExtTri, METH_VARARGS, "ObjMltExtTri(x,lx,[[y1,z1],[y2,z2],...],[[k1,q1],[k2,q2],...],a:'x',[mx,my,mz]:[0,0,0],Opt:'ki->Numb|Size,TriAngMin->...,TriAreaMax->...') creates triangulated extruded polygon block, i.e. a straight prism with its bases being (possibly non-convex) polygons subdivided by triangulation. x is the position of the block's center of gravity in the extrusion direction, lx is the thickness, [[y1,z1],[y2,z2],...] is a list of points describing the polygon in 2D; [[k1,q1],[k2,q2],...] are subdivision (triangulation) parameters for each segment of the base polygon border; the meaning of k1, k2,... depends on value of the option ki (to be defined in the string Opt): if ki->Numb (default), then k1, k2,... are subdivision numbers; if ki->Size, they are average sizes of sub-segments to be produced; q1, q2,... are ratios of the last-to-first sub-segment lengths; the extrusion direction is defined by the character a (which can be 'x', 'y' or 'z'); [mx,my,mz] is magnetization inside the block. The TriAngMin option defines minimal angle of triangles to be produced (in degrees, default is 20); the TriAreaMax option defines maximal area of traingles to be produced (in mm^2, not defined by default)."},
 	{"ObjArcPgnMag", radia_ObjArcPgnMag, METH_VARARGS, "ObjArcPgnMag([x,y],a,[[r1,z1],[r2,z2],...],[phimin,phimax],nseg,'sym|nosym':'nosym',[mx,my,mz]:[0,0,0]) creates a uniformly magnetized finite-length arc of polygonal cross-section with the position and orientation of the rotation axis defined by pair of coordinates {x,y} and character a (which can be 'x', 'y' or 'z'), the cross-section 2D polygon [[r1,z1],[r2,z2],...], initial and final rotation angles [phimin,phimax], number of sectors (segments) vs azimuth nseg, and magnetization vector [mx,my,mz]. Depending on the value of the 'sym|nosym' switch, the magnetization vectors in nseg sector polyhedrons are either assumed to satisfy rotational symmetry conditions ('sym'), or are assumed independent (i.e. will be allowed to vary independently at further relaxation)."},
 	{"ObjCylMag", radia_ObjCylMag, METH_VARARGS, "ObjCylMag([x,y,z],r,h,nseg,a:'z',[mx,my,mz]:[0,0,0]) creates a cylindrical magnet approximated by a straight prism with a right polygon in base with center point [x,y,z], base radius r, height h, number of segments nseg, orientation of the rotation axis defined by character a (which can be 'x', 'y' or 'z'), and magnetization vector [mx,my,mz]."},
-	{"ObjFullMag", radia_ObjFullMag, METH_VARARGS, "ObjFullMag([x,y,z],[wx,wy,wz],[mx,my,mz],[kx,ky,kz],cnt,mat,[r,g,b]) creates rectangular parallelepiped block with constant magnetizatiom over volume, center point [x,y,z], dimensions [wx,wy,wz] and color [r,g,b]. The block is magnetized according to [mx,my,mz], subdivided according to [kx,ky,kz] and added into the container cnt, that should be defined in advance by calling ObjCnt()."},
 	{"ObjRecCur", radia_ObjRecCur, METH_VARARGS, "ObjRecCur([x,y,z],[wx,wy,wz],[jx,jy,jz]) creates a current carrying rectangular parallelepiped block with center point [x,y,z], dimensions [wx,wy,wz], and current density [jx,jy,jz]."},
 	{"ObjArcCur", radia_ObjArcCur, METH_VARARGS, "ObjArcCur([x,y,z],[rmin,rmax],[phimin,phimax],h,nseg,j,'man|auto':'man',a:'z') creates a current carrying finite-length arc of rectangular cross-section, with center point [x,y,z], inner and outer radii [rmin,rmax], initial and final angles [phimin,phimax], height h, number of segments nseg, and azimuthal current density j. According to the value of the 'man|auto' switch, the field from the arc is computed based on the number of segments nseg ('man'), or on the general absolute precision level specified by the function FldCmpCrt ('auto'). The orientation of the rotation axis is defined by the character a (which can be either 'x', 'y' or 'z')."},
 	{"ObjRaceTrk", radia_ObjRaceTrk, METH_VARARGS, "ObjRaceTrk([x,y,z],[rmin,rmax],[lx,ly],h,nseg,j,'man|auto':'man',a:'z') creates a current carrying racetrack coil consisting of four 90-degree bents connected by four straight parts of rectangular straight section, center point [x,y,z], inner and outer bent radii [rmin,rmax], straight section lengths [lx,ly], height h, number of segments in bents nseg, and azimuthal current density j. According to the value of the 'man|auto' switch, the field from the bents is computed based on the number of segments nseg ('man'), or on the general absolute precision level specified by the function FldCmpCrt ('auto'). The orientation of the racetrack axis is defined by the character a (which can be either 'x', 'y' or 'z')."},
@@ -3442,9 +3256,6 @@ static PyMethodDef radia_methods[] = {
 	{"ObjCntStuf", radia_ObjCntStuf, METH_VARARGS, "ObjCntStuf(obj) returns list of general indexes of the objects present in container if obj is a container; or returns [obj] if obj is not a container."}, 
 	{"ObjCntSize", radia_ObjCntSize, METH_VARARGS, "ObjCntSize(cnt) calculates the number of objects in the container cnt."},
 	{"ObjCutMag", radia_ObjCutMag, METH_VARARGS, "ObjCutMag(obj,[x,y,z],[nx,ny,nz],'Frame->Loc|Lab|LabTot') cuts 3D object by a plane normal to the vector [nx,ny,nz] and passing through the point [x,y,z]. The 'Frame->Loc', 'Frame->Lab' or 'Frame->LabTot' option specifies whether the cuting plane is defined in the local frame of the object obj or in the laboratory frame (default). The actions of 'Frame->Lab' and 'Frame->LabTot' differ for containers only: 'Frame->Lab' means that each of the objects in the container is cut separately; 'Frame->LabTot' means that the objects in the container are cut as one object, by the same plane. The function returns a list of indexes of the objects produced by the cutting."},
-	{"ObjDivMag", radia_ObjDivMag, METH_VARARGS, "ObjDivMag(obj,[[k1,q1],[k2,q2],[k3,q3]],'pln|cyl',[[n1x,n1y,n1z],[n2x,n2y,n2z],[n3x,n3y,n3z]]|[[ax,ay,az],[vx,vy,vz],[px,py,pz],rat],'kxkykz->Numb|Size,Frame->Loc|Lab|LabTot') subdivides (segments) a 3D object obj. The main subdivision parameters are defined by the list [[k1,q1],[k2,q2],[k3,q3]] or [k1,k2,k3]. The meaning of k1, k2 and k3 depends on the value of the option kxkykz: if kxkykz->Numb (default), then k1, k2 and k3 are subdivision numbers; if kxkykz->Size, these are average sizes of the sub-objects to be produced. q1, q2 and q3 in any case are ratios of the last-to-first sub-object sizes (if these parameters are omitted, they are assumed to be equal to 1). The third string variable defines type of the subdivision. If it is not used, the subdivision is performed in directions X, Y and Z (by a set of parallel planes). If it is equal to 'pln', the function performs subdivision by three sets of parallel planes normal to the vectors [n1x,n1y,n1z], [n2x,n2y,n2z] and [n3x,n3y,n3z], that should be defined by the next list variable [[n1x,n1y,n1z],[n2x,n2y,n2z],[n3x,n3y,n3z]]. The distances between the parallel planes are defined by the parameters [k1,q1],[k2,q2] and [k3,q3]. If the third variable is equal to 'cyl', the function performs subdivision by a system of coaxial elliptic cylinders, with their parameters defined by the next list variable, [[ax,ay,az],[vx,vy,vz],[px,py,pz],rat]. The cylinder axis is defined by the point [ax,ay,az] and vector [vx,vy,vz]. One of two axes of the cylinder base ellipses is exactly the perpendicular from the point [px,py,pz] to the cylinder axis; rat is the ratio of the ellipse axes lengths. In the case of the subdivision by elliptic cylinders, the parameters [k1,q1],[k2,q2] and [k3,q3] correspond to radial, azimuthal, and axial directions respectively. If the option Frame is set to 'Frame->Loc' (default), the subdivision is performed in local frame(s) of the object(s); if it is set to 'Frame->Lab' or 'Frame->LabTot', the subdivision is performed in the laboratory frame. The actions of 'Frame->Lab' and 'Frame->LabTot' differ for containers only: 'Frame->Lab' means that each of the objects in the container is subdivided separately; 'Frame->LabTot' means that the objects in the container are subdivided as one object, by the same planes."},
-	{"ObjDivMagPln", radia_ObjDivMagPln, METH_VARARGS, "ObjDivMagPln(obj,[[k1,q1],[k2,q2],[k3,q3]],[n1x,n1y,n1z],[n2x,n2y,n2z],[n3x,n3y,n3z],'kxkykz->Numb|Size,Frame->Loc|Lab|LabTot') subdivides (segments) a 3D object by 3 sets of parallel planes. The main subdivision parameters are defined by the list [[k1,q1],[k2,q2],[k3,q3]] or [k1,k2,k3]. The meaning of k1, k2 and k3 depends on the value of the option kxkykz: if kxkykz->Numb (default), then k1, k2 and k3 are subdivision numbers; if kxkykz->Size, these are average sizes of the sub-objects to be produced. q1, q2 and q3 in any case are ratios of the last-to-first sub-object sizes (if these parameters are omitted, they are assumed to be equal to 1). The orientation of the three sets of parallel planes normal to the vectors [n1x,n1y,n1z], [n2x,n2y,n2z] and [n3x,n3y,n3z]. If these variables are not submitted, the subdivision is performed in directions X, Y and Z. The distances between the parallel planes are defined by the parameters [k1,q1],[k2,q2] and [k3,q3]. If the option Frame is set to 'Frame->Loc' (default), the subdivision is performed in local frame(s) of the object(s); if it is set to 'Frame->Lab' or 'Frame->LabTot', the subdivision is performed in the laboratory frame. The actions of 'Frame->Lab' and 'Frame->LabTot' differ for containers only: 'Frame->Lab' means that each of the objects in the container is subdivided separately; 'Frame->LabTot' means that the objects in the container are subdivided as one object, by the same planes."},
-	{"ObjDivMagCyl", radia_ObjDivMagCyl, METH_VARARGS, "ObjDivMagCyl(obj,[[k1,q1],[k2,q2],[k3,q3]],[ax,ay,az],[vx,vy,vz],[px,py,pz],rat,'kxkykz->Numb|Size,Frame->Loc|Lab|LabTot') subdivides (segments) a 3D object obj by a set of coaxial elliptical cylinders. The main subdivision parameters are defined by the list [[k1,q1],[k2,q2],[k3,q3]] or [k1,k2,k3]. The meaning of k1, k2 and k3 depends on the value of the option kxkykz: if kxkykz->Numb (default), then k1, k2 and k3 are subdivision numbers; if kxkykz->Size, these are average sizes of the sub-objects to be produced. q1, q2 and q3 in any case are ratios of the last-to-first sub-object sizes (if these parameters are omitted, they are assumed to be equal to 1). The cylinder axis is defined by the point [ax,ay,az] and vector [vx,vy,vz]. One of two axes of the cylinder base ellipses is exactly the perpendicular from the point [px,py,pz] to the cylinder axis; rat is the ratio of the ellipse axes lengths. The parameters [k1,q1],[k2,q2] and [k3,q3] correspond to radial, azimuthal, and axial directions respectively. If the option Frame is set to 'Frame->Loc' (default), the subdivision is performed in local frame(s) of the object(s); if it is set to 'Frame->Lab' or 'Frame->LabTot', the subdivision is performed in the laboratory frame. The actions of 'Frame->Lab' and 'Frame->LabTot' differ for containers only: 'Frame->Lab' means that each of the objects in the container is subdivided separately; 'Frame->LabTot' means that the objects in the container are subdivided as one object, by the same planes."},
 	{"ObjDpl", radia_ObjDpl, METH_VARARGS, "ObjDpl(obj,'FreeSym->False|True') duplicates 3D object obj. The option 'FreeSym->False|True' specifies whether the symmetries (transformations with multiplicity more than one) previously applied to the object obj should be simply copied at the duplication ('FreeSym->False', default), or a container of new independent objects should be created in place of any symmetry previously applied to the object obj. In both cases the final object created by the duplication has exactly the same geometry as the initial object obj."},
 	{"ObjGeoVol", radia_ObjGeoVol, METH_VARARGS, "ObjGeoVol(obj) computes geometrical volume of 3D object obj."},
 	{"ObjGeoLim", radia_ObjGeoLim, METH_VARARGS, "ObjGeoLim(obj) computes geometrical limits of 3D object obj in the laboratory frame. Returns [xmin, xmax, ymin, ymax, zmin, zmax]."},
@@ -3467,10 +3278,10 @@ static PyMethodDef radia_methods[] = {
 	{"TrfZerPara", radia_TrfZerPara, METH_VARARGS, "TrfZerPara(obj,[x,y,z],[nx,ny,nz]) creates an object mirror of obj with respect to the plane with normal [nx,ny,nz] and passing by the point [x,y,z]. The object mirror presents the same geometry as obj, but its magnetization and/or current densities are modified in such a way that the magnetic field produced by the obj and its mirror in the plane of mirroring is PERPENDICULAR to this plane."},
 	{"TrfZerPerp", radia_TrfZerPerp, METH_VARARGS, "TrfZerPerp(obj,[x,y,z],[nx,ny,nz]) creates an object mirror of obj with respect to the plane with normal [nx,ny,nz] and passing by the point [x,y,z]. The object mirror presents the same geometry as obj, but its magnetization and/or current densities are modified in such a way that the magnetic field produced by the obj and its mirror in the plane of mirroring is PARALLEL to this plane."},
 
-	{"MatLin", radia_MatLin, METH_VARARGS, "MatLin(ksi) creates an isotropic linear magnetic material with single susceptibility ksi. MatLin([ksipar,ksiper],[ex,ey,ez]) creates an anisotropic linear magnetic material with susceptibilities parallel (perpendicular) to the easy magnetization axis [ex,ey,ez] given by ksipar (ksiper). MatLin([ksipar,ksiper],mr) or MatLin([ksipar,ksiper],[mrx,mry,mrz]) (deprecated forms) create an anisotropic material where mr or [mrx,mry,mrz] specifies remanent magnetization."},
+	{"MatLin", radia_MatLin, METH_VARARGS, "MatLin(mu_r) creates an isotropic linear magnetic material with relative permeability mu_r. MatLin([mu_r_par,mu_r_perp],[ex,ey,ez]) creates an anisotropic linear magnetic material with relative permeabilities parallel (perpendicular) to the easy magnetization axis [ex,ey,ez] given by mu_r_par (mu_r_perp)."},
 	{"MatPM", radia_MatPM, METH_VARARGS, "MatPM(Br,Hc,[mx,my,mz]) creates a permanent magnet material with demagnetization curve. Br is the residual flux density [T], Hc is the coercivity [A/m], and [mx,my,mz] defines the easy magnetization axis direction."},
 	{"MatSatIsoFrm", radia_MatSatIsoFrm, METH_VARARGS, "MatSatIsoFrm([ksi1,ms1],[ksi2,ms2],[ksi3,ms3]) creates a nonlinear isotropic magnetic material with the M versus H curve defined by the formula M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3), where H is the magnitude of the magnetic field strength vector (in Tesla). The parameters [ksi3,ms3] and [ksi2,ms2] may be omitted; in such a case the corresponding terms in the formula will be omitted too."},
-	{"MatSatIsoTab", radia_MatSatIsoTab, METH_VARARGS, "MatSatIsoTab([[H1,M1],[H2,M2],...]) creates a nonlinear isotropic magnetic material with the M versus H curve defined by the list of pairs [[H1,M1],[H2,M2],...] in Tesla."},
+	{"MatSatIsoTab", radia_MatSatIsoTab, METH_VARARGS, "MatSatIsoTab([[H1,B1],[H2,B2],...]) creates a nonlinear isotropic magnetic material with the B versus H curve defined by the list of pairs [[H1,B1],[H2,B2],...] where H is in A/m and B is in Tesla."},
 	{"MatSatLamFrm", radia_MatSatLamFrm, METH_VARARGS, "MatSatLamFrm([ksi1,ms1],[ksi2,ms2],[ksi3,ms3],p,[nx,ny,nz]) creates laminated nonlinear anisotropic magnetic material with packing factor p and the lamination planes perpendicular to the vector [nx,ny,nz]. The magnetization magnitude vs magnetic field strength for the corresponding isotropic material is defined by the formula M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3), where H is the magnitude of the magnetic field strength vector (in Tesla). The parameters [ksi3,ms3] and [ksi2,ms2] may be omitted; in such a case the corresponding terms in the formula will be omitted too."},
 	{"MatSatLamTab", radia_MatSatLamTab, METH_VARARGS, "MatSatLamTab([[H1,M1],[H2,M2],...],p,[nx,ny,nz]) creates laminated nonlinear anisotropic magnetic material with packing factor p and the lamination planes perpendicular to the vector [nx,ny,nz]. The magnetization magnitude vs magnetic field strength for the corresponding isotropic material is defined by pairs [[H1,M1],[H2,M2],...] in Tesla."},
 	{"MatSatAniso", radia_MatSatAniso, METH_VARARGS, "MatSatAniso(datapar,dataper) where datapar can be [[ksi1,ms1,hc1],[ksi2,ms2,hc2],[ksi3,ms3,hc3],[ksi0,hc0]] or ksi0, and dataper can be [[ksi1,ms1],[ksi2,ms2],[ksi3,ms3],ksi0] or ksi0 - creates a nonlinear anisotropic magnetic material. If the first argument is set to [[ksi1,ms1,hc1],[ksi2,ms2,hc2],[ksi3,ms3,hc3],[ksi0,hc0]], the magnetization vector component parallel to the easy axis is computed as ms1*tanh(ksi1*(hpa-hc1)/ms1) + ms2*tanh(ksi2*(hpa-hc2)/ms2) + ms3*tanh(ksi3*(hpa-hc3)/ms3) + ksi0*(hpa-hc0), where hpa is the field strength vector component parallel to the easy axis. If the second argument is set to [[ksi1,ms1],[ksi2,ms2],[ksi3,ms3],ksi0], the magnetization vector component perpendicular to the easy axis is computed as ms1*tanh(ksi1*hpe/ms1) + ms2*tanh(ksi2*hpe/ms2) + ms3*tanh(ksi3*hpe/ms3) + ksi0*hpe, where hpe is the field strength vector component perpendicular to the easy axis. If the first or second argument is set to ksi0, the magnetization component parallel (perpendicular) to the easy axis is computed by ksi0*hp, where hp is the corresponding component of field strength vector. At least one of the magnetization vector components should non-linearly depend on the field strength. The direction of the easy magnetisation axis is set up by the magnetization vector in the object to which the material is later applied."},
@@ -3482,7 +3293,8 @@ static PyMethodDef radia_methods[] = {
 	{"RlxMan", radia_RlxMan, METH_VARARGS, "RlxMan(intrc,meth,iternum,rlxpar) executes manual relaxation procedure for interaction matrix intrc using method number meth (0-5), by making iternum iterations with relaxation parameter value rlxpar. Method 5 enables LU decomposition solver when used with SetRelaxSubInterval(intrc,start,fin,1)."},
 	{"RlxAuto", radia_RlxAuto, METH_VARARGS, "RlxAuto(intrc,prec,maxiter,meth:4,'ZeroM->True|False') executes automatic relaxation procedure with the interaction matrix intrc using the method number meth. Relaxation stops whenever the change in magnetization (averaged over all sub-elements) between two successive iterations is smaller than prec or the number of iterations is larger than maxiter. The option value 'ZeroM->True' (default) starts the relaxation by setting the magnetization values in all paricipating objects to zero; 'ZeroM->False' starts the relaxation with the existing magnetization values in the sub-volumes."},
 	{"RlxUpdSrc", radia_RlxUpdSrc, METH_VARARGS, "RlxUpdSrc(intrc) updates external field data for the relaxation (to take into account e.g. modification of currents in coils, if any) without rebuilding the interaction matrix."},
-	{"Solve", radia_Solve, METH_VARARGS, "Solve(obj,prec,maxiter,meth) solves a magnetostatic problem by building an interaction matrix for the object obj and solving for the magnetization. Method can be specified as a number (8=Newton-Raphson, 9=LU direct, 10=BiCGSTAB) or string ('newton'/'nonlinear', 'lu'/'direct', 'bicgstab'/'iterative'). Default is 'bicgstab' (Method 10). Use 'newton' for nonlinear (saturable) materials. For iterative methods, relaxation stops when the change in magnetization is smaller than prec or the number of iterations exceeds maxiter."},
+	{"Solve", radia_Solve, METH_VARARGS, "Solve(obj,prec,maxiter,meth) solves a magnetostatic problem by building an interaction matrix for the object obj and solving for the magnetization. Method can be specified as a number (0=LU direct, 1=BiCGSTAB) or string ('lu'/'direct', 'bicgstab'/'iterative'). Default is 'bicgstab' (Method 1). For iterative methods, relaxation stops when the change in magnetization is smaller than prec or the number of iterations exceeds maxiter."},
+	{"SolveNonl", radia_SolveNonl, METH_VARARGS, "SolveNonl(obj,prec,maxiter,meth,nonl_method) solves a magnetostatic problem with explicit control over nonlinear convergence criterion. meth: 0=LU, 1=BiCGSTAB. nonl_method: 0=mucal1 (chi-change, traditional), 1=mucal2 (B-change/Newton, faster convergence, default). Use mucal2 for faster convergence with nonlinear materials."},
 
 	{"Fld", radia_Fld, METH_VARARGS,  "Fld(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x,y,z]|[[x1,y1,z1],[x2,y2,z2],...]) computes magnetic field created by the object obj in point(s) {x,y,z} ({x1,y1,z1},{x2,y2,z2},...). The field component is specified by the second input variable. The function accepts a list of 3D points of arbitrary nestness: in this case it returns the corresponding list of magnetic field values."},
 	{"FldLst", radia_FldLst, METH_VARARGS,  "FldLst(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x1,y1,z1],[x2,y2,z2],np,'arg|noarg':'noarg',strt:0.) computes magnetic field created by object obj in np equidistant points along a line segment from [x1,y1,z1] to [x2,y2,z2]; the field component is specified by the second input variable; the 'arg|noarg' string variable specifies whether to output a longitudinal position for each point where the field is computed, and strt gives the start-value for the longitudinal position."},

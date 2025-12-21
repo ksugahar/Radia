@@ -37,13 +37,22 @@
 #include "cHACApK_base.h"
 #include "cHACApK_calc_entry_ij.h"
 #include "cHACApK_lib.h"
+#include "hacapk_log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <mpi.h>
+#include "mpi_stub.h"
 
 #ifdef _OPENMP
 #include <omp.h>
+#endif
+
+/* Windows defines min/max as macros - undefine to avoid conflicts */
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
 #endif
 
 //***cHACApK_generate_frame_blrleaf
@@ -961,23 +970,16 @@ void cHACApK_fill_leafmtx_hyp(
 
   mpinr=lpmd[3]; mpilog=lpmd[4]; nrank=lpmd[2]; icomm=lpmd[1];
   eps=param[71]; ACA_EPS=param[72]*eps; kparam=param[63];
-#pragma omp parallel default(none) \
-  shared(st_lf,lodl,i_bemv,znrmmat,lodt,lthr,param,mpilog,mpinr)       \
-  private(zab,zaa,kt,ith,ith1,nths,nthr,nthe,ltmtx,ierr,ndl,ndt,ns,nstrtl,nstrtt,ip,il,it,ill,itt) \
-  firstprivate(eps, ACA_EPS, kparam)
-  {
-    ith = omp_get_thread_num();
-    nthr = omp_get_num_threads();
-    if(nthr == 0) printf("%d %d\n",nthr,ith);
-#pragma omp barrier
-    ith1 = ith+1;
-    nths=lthr[ith]; nthe=lthr[ith1]-1;
-    if(param[1]>1) {
-#pragma omp critical
-      if(mpilog>0) printf("sub HACApK_fill_leafmtx_hyp; nths=%12d; nthe=%12d\n",nths,nthe);
-    }
-    ierr=0;
-    for (ip=nths; ip<=nthe; ip++) {
+
+  /* Force single thread - OpenMP completely disabled */
+  ith = 0;
+  nthr = 1;
+  ith1 = ith + 1;
+  nths = lthr[ith];
+  nthe = lthr[ith1] - 1;
+
+  ierr = 0;
+  for (ip = nths; ip <= nthe; ip++) {
       ndl   =st_lf[ip]->ndl   ; ndt   =st_lf[ip]->ndt   ; ns=ndl*ndt;
       nstrtl=st_lf[ip]->nstrtl; nstrtt=st_lf[ip]->nstrtt; ltmtx=st_lf[ip]->ltmtx;
       // write(mpilog,1000) 'sub HACApK_fill_leafmtx_hyp; ip=',ip,'; ndl=',ndl,'; ndt=',ndt,'; mpinr',mpinr
@@ -986,11 +988,8 @@ void cHACApK_fill_leafmtx_hyp(
         zab = (double *) calloc(ndt*kparam,sizeof(double *));
         zaa = (double *) calloc(ndl*kparam,sizeof(double *));
         if(zab == NULL || zaa == NULL) {
-#pragma omp critical
-          {
-            printf("sub cHACApK_fill_leafmtx_hyp; zab,zaa Memory allocation failed !\n");
-            printf("ip=%d ndt=%d ndl=%d kparam=%d\n",ip,ndt,ndl,kparam);
-          }
+          printf("sub cHACApK_fill_leafmtx_hyp; zab,zaa Memory allocation failed !\n");
+          printf("ip=%d ndt=%d ndl=%d kparam=%d\n",ip,ndt,ndl,kparam);
           exit(10);
         }
         if(param[60]==1) {
@@ -1017,11 +1016,8 @@ void cHACApK_fill_leafmtx_hyp(
         st_lf[ip]->a1 = (double *) calloc(ndt*kt,sizeof(double));
         st_lf[ip]->a2 = (double *) calloc(ndl*kt,sizeof(double));
         if(st_lf[ip]->a1 == NULL || st_lf[ip]->a2 == NULL) {
-#pragma omp critical
-          {
-            printf("sub cHACApK_fill_leafmtx_hyp; a1,a2 Memory allocation failed !\n");
-            printf("ip=%d ndt=%d ndl=%d kt=%d\n",ip,ndt,ndl,kt);
-          }
+          printf("sub cHACApK_fill_leafmtx_hyp; a1,a2 Memory allocation failed !\n");
+          printf("ip=%d ndt=%d ndl=%d kt=%d\n",ip,ndt,ndl,kt);
           exit(20);
         }
         for (il=0; il<ndt*kt; il++) st_lf[ip]->a1[il]=zab[il];
@@ -1030,25 +1026,21 @@ void cHACApK_fill_leafmtx_hyp(
       } else if(ltmtx==2) {
         st_lf[ip]->a1 = (double *) calloc(ndt*ndl,sizeof(double));
         if(st_lf[ip]->a1 == NULL) {
-#pragma omp critical
-          {
-            printf("sub cHACApK_fill_leafmtx_hyp; a1 Memory allocation failed !\n");
-            printf("ip=%d ndt=%d ndl=%d\n",ip,ndt,ndl);
-          }
+          printf("sub cHACApK_fill_leafmtx_hyp; a1 Memory allocation failed !\n");
+          printf("ip=%d ndt=%d ndl=%d\n",ip,ndt,ndl);
           exit(30);
         }
         for (il=0; il<ndl; il++) {
           ill=il+nstrtl;
           for (it=0; it<ndt; it++) {
             itt=it+nstrtt;
-            st_lf[ip]->a1[it+ndt*il]=cHACApK_entry_ij(lodl[ill],lodt[itt],i_bemv);
+            double val = cHACApK_entry_ij(lodl[ill],lodt[itt],i_bemv);
+            st_lf[ip]->a1[it+ndt*il] = val;
           }
         }
       } else {
-#pragma omp critical
         printf("HACApK_fill_leafmtx_hyp; ip=%d ltmtx=%d\n",ip,ltmtx);
       }
-    }
   }
   for (ip=1; ip<=nlf; ip++) {
     ndl=st_lf[ip]->ndl; nstrtl=st_lf[ip]->nstrtl;
@@ -1235,7 +1227,8 @@ void cHACApK_generate_blrleaf(
   ndpth=*p_ndpth;
 
   ndl=st_cltl->nsize*nffc; ndt=st_cltt->nsize*nffc;
-  nstrtl=st_cltl->nstrt; nstrtt=st_cltt->nstrt;
+  /* Convert element-based cluster start indices to DOF-based indices */
+  nstrtl=(st_cltl->nstrt-1)*nffc+1; nstrtt=(st_cltt->nstrt-1)*nffc+1;
   nnsonl=st_cltl->nnson; nnsont=st_cltt->nnson;
   // printf("%12d %12d %12d %12d\n",nnsonl,ndl,nnsont,ndt);
   nleaf=param[42]+1; nlmax=param[22]*nofc;
@@ -1329,7 +1322,8 @@ void cHACApK_count_lntmx(
   ndpth=*p_ndpth;
 
   ndl=st_cltl->nsize*nffc; ndt=st_cltt->nsize*nffc;
-  nstrtl=st_cltl->nstrt; nstrtt=st_cltt->nstrt;
+  /* Convert element-based cluster start indices to DOF-based indices */
+  nstrtl=(st_cltl->nstrt-1)*nffc+1; nstrtt=(st_cltt->nstrt-1)*nffc+1;
   nnsonl=st_cltl->nnson; nnsont=st_cltt->nnson;
   nleaf=param[21]+1; nlmax=param[22]*nofc;
 
@@ -1401,7 +1395,8 @@ void cHACApK_generate_leafmtx(
   ndpth=*p_ndpth;
 
   ndl=st_cltl->nsize*nffc; ndt=st_cltt->nsize*nffc;
-  nstrtl=st_cltl->nstrt; nstrtt=st_cltt->nstrt;
+  /* Convert element-based cluster start indices to DOF-based indices */
+  nstrtl=(st_cltl->nstrt-1)*nffc+1; nstrtt=(st_cltt->nstrt-1)*nffc+1;
   nnsonl=st_cltl->nnson; nnsont=st_cltt->nnson;
   // printf("%12d %12d %12d %12d\n",nnsonl,ndl,nnsont,ndt);
   nleaf=param[21]+1; nlmax=param[22]*nofc;

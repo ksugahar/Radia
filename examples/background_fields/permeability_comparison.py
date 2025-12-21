@@ -87,9 +87,8 @@ for mu_r in permeability_values:
 	cube = rd.ObjRecMag([0, 0, 0], [size, size, size])
 
 	# Use linear material with specified permeability
-	# MatLin(ksi): defines isotropic linear material
-	# For isotropic material: ksi = chi = mu_r - 1
-	mat = rd.MatLin(chi)  # Isotropic linear material
+	# MatLin(mu_r): defines isotropic linear material
+	mat = rd.MatLin(mu_r)  # Isotropic linear material
 	rd.MatApl(cube, mat)
 	print(f"  Created {size}x{size}x{size} mm cube with linear material (mu_r={mu_r}, chi={chi})")
 

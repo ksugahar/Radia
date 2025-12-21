@@ -17,8 +17,14 @@
 #include "rad_relaxation_methods.h"
 #include "rad_yield.h"
 #include "rad_polyhedron.h"  // For radTPolyhedron in variable DOF solver
+#include "rad_material_def.h"  // For radTNonlinearIsotropMaterial::GetHfromM
+#include "rad_application.h"  // For radTApplication::NonlinearMethod
 
 #include <time.h>
+#include <cstring>  // For std::memcpy
+
+// External access to radTApplication for NonlinearMethod setting
+extern radTApplication rad;
 
 //-------------------------------------------------------------------------
 
@@ -1271,8 +1277,11 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		BaseMatrix[i] = FlatInteract[i];
 	}
 
-	// Negate only the 3 DOF blocks (MMM method needs -N)
-	// MSC 6 DOF blocks already have correct sign (-K/(4pi))
+	// Sign convention for matrix equation:
+	// MMM (3 DOF): FlatInteract stores N, equation is (-N + I/chi)*M = H_ext → negate
+	// MSC (6 DOF): FlatInteract stores -K/(4pi), equation is (-K/(4pi) + I/chi)*sigma = H_ext.n → use as-is
+	//
+	// Only negate 3x3 blocks (MMM). 6x6 blocks (MSC) already have correct sign.
 	for(int row_elem = 0; row_elem < AmOfMainElem; row_elem++)
 	{
 		int dof_row = IntrctPtr->GetElementDOF(row_elem);
@@ -1283,8 +1292,8 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			int dof_col = IntrctPtr->GetElementDOF(col_elem);
 			int offset_col = IntrctPtr->GetElementDOFOffset(col_elem);
 
-			// Only negate blocks where at least one element is 3 DOF (MMM)
-			// 6x6 blocks (both 6 DOF MSC) keep their sign
+			// Only negate blocks involving 3 DOF elements (MMM)
+			// 6x6 blocks (both MSC) keep their sign (-K/(4pi))
 			if(dof_row == 3 || dof_col == 3)
 			{
 				for(int i = 0; i < dof_row; i++)
@@ -1301,13 +1310,16 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 	// Store old values for convergence check
 	std::vector<double> OldMagn(totalDOF);
+	// Store old chi values for MSC convergence check (ELF mucal1 style)
+	std::vector<double> OldChi(AmOfMainElem, 0.0);
 
 	double PrecOnMagnetizE2 = PrecOnMagnetiz * PrecOnMagnetiz;
 	double MisfitE2 = 1.0e30;
 	int iterCount = 0;
 
-	// Initialize H field
-	const double H_init_mag = 1000.0;
+	// Initialize H field (for chi(H) computation in nonlinear iteration)
+	// ELF uses H = 100 A/m for first iteration (mucal0 style)
+	const double H_init_mag = 100.0;
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
@@ -1328,9 +1340,24 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				FlatField[offset + k] = FlatExtern[offset + k] * scale;
 			}
 		}
+		else if(dof == 6)
+		{
+			// MSC elements: initialize FlatField and NewFieldArray
+			for(int k = 0; k < dof; k++)
+			{
+				FlatField[offset + k] = FlatExtern[offset + k];
+			}
+			// Initialize NewFieldArray with small H in z-direction (ELF mucal0 style)
+			if(IntrctPtr->NewFieldArray != nullptr)
+			{
+				IntrctPtr->NewFieldArray[elem].x = 0.0;
+				IntrctPtr->NewFieldArray[elem].y = 0.0;
+				IntrctPtr->NewFieldArray[elem].z = H_init_mag;
+			}
+		}
 		else
 		{
-			// MSC elements: initialize sigma to small values
+			// Other elements: copy external field
 			for(int k = 0; k < dof; k++)
 			{
 				FlatField[offset + k] = FlatExtern[offset + k];
@@ -1338,9 +1365,25 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		}
 	}
 
-	// Work arrays
+	// Work arrays - SystemMatrix needed because LU destroys the matrix
+	// Use memcpy for fast O(n^2) copy
 	std::vector<double> SystemMatrix(totalDOF * totalDOF);
 	std::vector<double> RHS(totalDOF);
+#ifdef HAVE_LAPACK
+	// Pre-allocate LAPACK work arrays to avoid per-iteration allocation
+	std::vector<double> A_col(totalDOF * totalDOF);  // Column-major for LAPACK
+	std::vector<int> ipiv(totalDOF);
+#endif
+
+	// Cache polyhedron pointers to avoid repeated dynamic_cast
+	std::vector<radTPolyhedron*> polyCache(AmOfMainElem, nullptr);
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		if(IntrctPtr->GetElementDOF(elem) == 6)
+		{
+			polyCache[elem] = dynamic_cast<radTPolyhedron*>(IntrctPtr->g3dRelaxPtrVect[elem]);
+		}
+	}
 
 	for(iterCount = 0; iterCount < MaxIterNumber; iterCount++)
 	{
@@ -1349,45 +1392,23 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		{
 			OldMagn[i] = FlatMagn[i];
 		}
-
-		// Update H from M if not first iteration
-		if(iterCount > 0)
+		// Store old chi for MSC convergence check
+		for(int elem = 0; elem < AmOfMainElem; elem++)
 		{
-			for(int elem = 0; elem < AmOfMainElem; elem++)
+			radTPolyhedron* poly = polyCache[elem];
+			if(poly && poly->Use6DOF_MSC)
 			{
-				int dof = IntrctPtr->GetElementDOF(elem);
-				int offset = IntrctPtr->GetElementDOFOffset(elem);
-
-				if(dof == 3)
-				{
-					// Standard element: H = M / chi
-					radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
-					radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
-
-					TVector3d H_est(FlatField[offset], FlatField[offset+1], FlatField[offset+2]);
-					TMatrix3d KsiTensor;
-					TVector3d MrVect;
-					MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
-
-					double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
-					if(chi < 1.0e-6) chi = 1.0e-6;
-
-					for(int k = 0; k < 3; k++)
-					{
-						FlatField[offset + k] = FlatMagn[offset + k] / chi;
-					}
-				}
-				// MSC elements: TODO - implement sigma -> H conversion
+				OldChi[elem] = poly->CurrentChi;
 			}
 		}
 
-		// Copy base matrix and update diagonal with 1/chi
+		// NOTE: H field is updated AFTER solve (using H = M / chi from the solve's chi)
+		// NewFieldArray is used as H_est for chi(H) computation in the next iteration
+
+		// Copy base matrix (O(n^2)) and prepare for LU solve
 		// Base matrix already contains -K/(4pi) for 6 DOF MSC elements
 		// Equation: (-K/(4pi) + 1/chi * I) * sigma = H_ext_n
-		for(int i = 0; i < totalDOF * totalDOF; i++)
-		{
-			SystemMatrix[i] = BaseMatrix[i];
-		}
+		std::memcpy(SystemMatrix.data(), BaseMatrix.data(), totalDOF * totalDOF * sizeof(double));
 
 		// Update diagonal and RHS
 		for(int elem = 0; elem < AmOfMainElem; elem++)
@@ -1429,15 +1450,45 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				// Base matrix already contains -K/(4pi), just add 1/chi to diagonal
 				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
 				radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+				radTPolyhedron* poly = polyCache[elem];  // Use cached pointer
 
-				// Get average chi from material (assume linear isotropic for now)
-				TVector3d H_est(0., 0., FlatExtern[offset]);  // Estimate H for material query
-				TMatrix3d KsiTensor;
-				TVector3d MrVect;
-				MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
-				double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+				double chi;
+				if(iterCount == 0)
+				{
+					// First iteration: use initial chi from low H
+					TVector3d H_est(0., 0., 100.0);
+					TMatrix3d KsiTensor;
+					TVector3d MrVect;
+					MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+					chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+				}
+				else
+				{
+					// Subsequent iterations: use H from previous solve
+					TVector3d H_est;
+					if(IntrctPtr->NewFieldArray != nullptr)
+					{
+						H_est = IntrctPtr->NewFieldArray[elem];
+					}
+					else
+					{
+						H_est = TVector3d(0., 0., FlatExtern[offset]);
+					}
+
+					// Standard chi update
+					TMatrix3d KsiTensor;
+					TVector3d MrVect;
+					MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+					chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+				}
 				if(chi < 1.0e-6) chi = 1.0e-6;
 				double inv_chi = 1.0 / chi;
+
+				// Store chi for post-solve H update
+				if(poly && poly->Use6DOF_MSC)
+				{
+					poly->CurrentChi = chi;
+				}
 
 				for(int k = 0; k < 6; k++)
 				{
@@ -1450,9 +1501,24 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			}
 		}
 
-		// Solve
+		// Solve using pre-allocated LAPACK arrays
+#ifdef HAVE_LAPACK
+		// Transpose to column-major for LAPACK
+		for(int i = 0; i < totalDOF; i++)
+		{
+			for(int j = 0; j < totalDOF; j++)
+			{
+				A_col[j * totalDOF + i] = SystemMatrix[i * totalDOF + j];
+			}
+		}
+		int nrhs = 1;
+		int info = 0;
+		dgesv_(&totalDOF, &nrhs, A_col.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
+		if(info != 0) return iterCount;
+#else
 		int ierr = SolveLU_Flat(SystemMatrix, RHS, totalDOF);
 		if(ierr != 0) return iterCount;
+#endif
 
 		// Extract solution
 		for(int i = 0; i < totalDOF; i++)
@@ -1486,8 +1552,7 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			else if(dof == 6)
 			{
 				// MSC hexahedron: update sigma values and compute effective magnetization
-				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
-				radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
+				radTPolyhedron* poly = polyCache[elem];  // Use cached pointer
 				if(poly && poly->Use6DOF_MSC)
 				{
 					// Store sigma values
@@ -1521,11 +1586,139 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					if(wx > 1.0e-10) poly->Magn.x = Mx / wx;
 					if(wy > 1.0e-10) poly->Magn.y = My / wy;
 					if(wz > 1.0e-10) poly->Magn.z = Mz / wz;
+
+					// ELF-compatible H update: H = M / chi
+					// Use the SAME chi that was used to build the matrix for this solve.
+					// This is the ELF mucal1 algorithm.
+					if(IntrctPtr->NewFieldArray != nullptr)
+					{
+						double chi_used = poly->CurrentChi;
+						if(chi_used < 1.0e-6) chi_used = 1.0e-6;
+
+						// H = M / chi (constitutive relation, same as ELF)
+						IntrctPtr->NewFieldArray[elem].x = poly->Magn.x / chi_used;
+						IntrctPtr->NewFieldArray[elem].y = poly->Magn.y / chi_used;
+						IntrctPtr->NewFieldArray[elem].z = poly->Magn.z / chi_used;
+					}
 				}
 			}
 		}
 
-		double rel_change = (M_norm_sq > 1.0e-30) ? std::sqrt(M_diff_sq / M_norm_sq) : std::sqrt(M_diff_sq);
+		// Compute convergence for 6DOF MSC elements
+		// NonlinearMethod: 0=mucal1 (chi-change), 1=mucal2 (B-change/Newton)
+		// For 3DOF MMM elements: use M change
+		double max_B_rel_change = 0.0;
+		double max_chi_rel_change = 0.0;
+		bool has_6dof_elements = false;
+		const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+
+		for(int elem = 0; elem < AmOfMainElem; elem++)
+		{
+			int dof = IntrctPtr->GetElementDOF(elem);
+			if(dof == 6)
+			{
+				has_6dof_elements = true;
+				radTPolyhedron* poly = polyCache[elem];  // Use cached pointer
+				if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
+				{
+					TVector3d H_new = IntrctPtr->NewFieldArray[elem];
+					TVector3d M_new = poly->Magn;
+					radTMaterial* MaterPtr = (radTMaterial*)(IntrctPtr->g3dRelaxPtrVect[elem]->MaterHandle.rep);
+
+					if(rad.NonlinearMethod == 1)
+					{
+						// mucal2: B-change convergence (Newton style, faster convergence)
+						double B_new_x = MU_0 * (H_new.x + M_new.x);
+						double B_new_y = MU_0 * (H_new.y + M_new.y);
+						double B_new_z = MU_0 * (H_new.z + M_new.z);
+						double B_new_norm = std::sqrt(B_new_x*B_new_x + B_new_y*B_new_y + B_new_z*B_new_z);
+
+						// Get B_saturation from material
+						double B_sat = 2.5;  // Default saturation ~2.5T
+						if(MaterPtr)
+						{
+							TMatrix3d KsiTensor;
+							TVector3d MrVect;
+							TVector3d H_high(0., 0., 200000.0);
+							MaterPtr->DefineInstantKsiTensor(H_high, KsiTensor, MrVect);
+							double chi_sat = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+							double M_sat = chi_sat * 200000.0;
+							B_sat = MU_0 * (200000.0 + M_sat);
+							if(B_sat < 0.1) B_sat = 2.5;
+						}
+
+						// Approximate old B from previous iteration
+						double M_new_norm = std::sqrt(M_new.x*M_new.x + M_new.y*M_new.y + M_new.z*M_new.z);
+						double B_old_norm = MU_0 * M_new_norm * 0.9;
+						if(iterCount > 0)
+						{
+							B_old_norm = poly->CurrentChi > 1.0 ? B_new_norm * poly->CurrentChi / (poly->CurrentChi + 1.0) : B_new_norm * 0.9;
+						}
+
+						// mucal2 convergence: |B_new - B_old| / B_sat
+						double B_change = std::fabs(B_new_norm - B_old_norm) / B_sat;
+						if(B_change > max_B_rel_change)
+							max_B_rel_change = B_change;
+					}
+					else
+					{
+						// ELF mucal1: permeability-change convergence
+						// Uses |mu_new - mu_old| / mu_old where mu = chi + 1
+						TMatrix3d KsiTensor;
+						TVector3d MrVect;
+						MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
+						double chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+						if(chi_new < 1.0e-6) chi_new = 1.0e-6;
+
+						double chi_current = poly->CurrentChi;
+						// ELF: mu_old = chi_old + 1, mu_new = chi_new + 1
+						// |mu_new - mu_old| / mu_old = |chi_new - chi_old| / (chi_old + 1)
+						double mu_old = chi_current + 1.0;
+						double mu_new = chi_new + 1.0;
+						if(mu_old > 1.0)
+						{
+							double mu_rel_change = std::fabs(mu_new - mu_old) / mu_old;
+							if(mu_rel_change > max_chi_rel_change)
+								max_chi_rel_change = mu_rel_change;
+						}
+						else
+						{
+							// First iteration: force max change to continue iteration
+							max_chi_rel_change = 1.0e10;
+						}
+					}
+
+					// Update chi for next iteration (standard method - no dual)
+					TMatrix3d KsiTensor;
+					TVector3d MrVect;
+					MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
+					double chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
+					poly->CurrentChi = chi_new;
+				}
+			}
+		}
+
+		double rel_change;
+		if(has_6dof_elements)
+		{
+			// Use the convergence criterion based on NonlinearMethod
+			if(rad.NonlinearMethod == 1)
+			{
+				// mucal2: B-change convergence
+				rel_change = max_B_rel_change;
+			}
+			else
+			{
+				// mucal1: chi-change convergence
+				rel_change = max_chi_rel_change;
+			}
+		}
+		else
+		{
+			// Use M change for convergence (original MMM style)
+			rel_change = (M_norm_sq > 1.0e-30) ? std::sqrt(M_diff_sq / M_norm_sq) : std::sqrt(M_diff_sq);
+		}
 		MisfitE2 = rel_change * rel_change;
 
 		if(rel_change <= PrecOnMagnetiz)
@@ -1550,12 +1743,9 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
                                                  const std::vector<double>& inv_chi, int totalDOF)
 {
 	// Computes y = A * x where A = (base matrix) + diag(1/chi)
-	// For 3 DOF elements (MMM): base matrix stores N, equation is (-N + 1/chi) * M = H_ext
-	// For 6 DOF elements (MSC): base matrix stores -K/(4pi), equation is (-K/(4pi) + 1/chi) * sigma = H_ext_n
-	//
 	// Sign convention:
-	// - 3 DOF blocks: need to negate (y -= N*x)
-	// - 6 DOF blocks: already negative (y += (-K/(4pi))*x)
+	// - MMM (3 DOF): FlatInteract stores N, equation is (-N + I/chi) → negate
+	// - MSC (6 DOF): FlatInteract stores -K/(4pi), equation is (-K/(4pi) + I/chi) → use as-is
 
 	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
 	if(FlatInteract == nullptr) return;
@@ -1585,10 +1775,7 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 			// Get block from flat matrix
 			const double* block = &FlatInteract[offset_row * totalDOF + offset_col];
 
-			// Determine sign based on DOF types:
-			// - 3x3 block (both 3 DOF): stores N, need to negate → sign = -1
-			// - 6x6 block (both 6 DOF): stores -K/(4pi), use as-is → sign = +1
-			// - 3x6 or 6x3 blocks: stores N or -K, need to negate → sign = -1
+			// Sign: negate for 3 DOF blocks, use as-is for 6x6 MSC blocks
 			double sign = (dof_row == 6 && dof_col == 6) ? 1.0 : -1.0;
 
 			for(int i = 0; i < dof_row; i++)
@@ -1608,8 +1795,9 @@ void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>
                                                               const std::vector<double>& inv_chi, int totalDOF)
 {
 	// Extract diagonal elements for Jacobi preconditioner
-	// For 3 DOF: interaction matrix stores N, diagonal = -N_ii + 1/chi
-	// For 6 DOF: interaction matrix stores -K/(4pi), diagonal = -K/(4pi) + 1/chi (use as-is)
+	// Sign convention matches MatVec_VariableDOF:
+	// - MMM (3 DOF): negate stored values
+	// - MSC (6 DOF): use as-is
 	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
 	if(FlatInteract == nullptr) return;
 
@@ -1623,7 +1811,7 @@ void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>
 		// Get diagonal block
 		const double* diag_block = &FlatInteract[offset * totalDOF + offset];
 
-		// Sign convention: negate for 3 DOF (MMM), use as-is for 6 DOF (MSC)
+		// Sign: negate for 3 DOF, use as-is for 6 DOF MSC
 		double sign = (dof == 6) ? 1.0 : -1.0;
 
 		for(int k = 0; k < dof; k++)
@@ -1685,15 +1873,51 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 			// MSC hexahedron (6 DOF): equation (-K/(4pi) + 1/chi * I) * sigma = H_ext_n
 			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
 			radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
 
-			// Get average chi from material (assume linear isotropic for now)
-			TVector3d H_est(0., 0., FlatExtern[offset]);  // Estimate H for material query
+			// ELF-compatible chi initialization and update:
+			// - First iteration: use small H (100 A/m) to start in linear region
+			// - Subsequent iterations: use H from previous iteration's constitutive relation
+			TVector3d H_est;
+			bool isFirstIter = false;
+			if(IntrctPtr->NewFieldArray != nullptr && IntrctPtr->ExternFieldArray != nullptr)
+			{
+				TVector3d& newField = IntrctPtr->NewFieldArray[elem];
+				TVector3d& extField = IntrctPtr->ExternFieldArray[elem];
+				if(std::abs(newField.x - extField.x) < 1.0e-10 &&
+				   std::abs(newField.y - extField.y) < 1.0e-10 &&
+				   std::abs(newField.z - extField.z) < 1.0e-10)
+				{
+					isFirstIter = true;
+				}
+			}
+
+			if(isFirstIter)
+			{
+				// First iteration: use H = 100 A/m (ELF mucal0 style)
+				H_est = TVector3d(0., 0., 100.0);
+			}
+			else if(IntrctPtr->NewFieldArray != nullptr)
+			{
+				H_est = IntrctPtr->NewFieldArray[elem];
+			}
+			else
+			{
+				H_est = TVector3d(0., 0., FlatExtern[offset]);
+			}
+
 			TMatrix3d KsiTensor;
 			TVector3d MrVect;
 			MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
 			double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 			if(chi < 1.0e-6) chi = 1.0e-6;
 			double inv_chi_val = 1.0 / chi;
+
+			// Store chi for post-solve H update (ELF uses same chi for solve and H=M/chi)
+			if(poly && poly->Use6DOF_MSC)
+			{
+				poly->CurrentChi = chi;
+			}
 
 			for(int k = 0; k < 6; k++)
 			{
@@ -1713,10 +1937,11 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		}
 	}
 
-	// Initial guess
+	// Initial guess: use zero for better stability
+	// (FlatMagn may contain garbage from previous failed iterations)
 	for(int i = 0; i < totalDOF; i++)
 	{
-		sol[i] = FlatMagn[i];
+		sol[i] = 0.0;
 	}
 
 	// Build Jacobi preconditioner
@@ -1821,8 +2046,16 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		Axpy(-omega, t, r, totalDOF);
 
 		double r_norm = Norm2(r, totalDOF);
+		double prev_residual = residual;
 		residual = r_norm / rhs_norm;
 		if(residual < tol) break;
+
+		// Detect divergence: if residual increases by more than 10x, stop
+		if(residual > 10.0 * prev_residual && prev_residual > 0.0 && iter > 5)
+		{
+			// BiCGSTAB is diverging, stop early
+			break;
+		}
 
 		if(std::abs(omega) < 1.0e-30) break;
 	}
@@ -1865,9 +2098,21 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	if(FlatMagn == nullptr || FlatField == nullptr || FlatExtern == nullptr) return 0;
 
 	std::vector<double> OldMagn(totalDOF);
+	// Store old chi values for MSC convergence check (ELF mucal1 style)
+	std::vector<double> OldChi_bicg(AmOfMainElem, 0.0);
 	double MisfitE2 = 1.0e30;
 	int totalIterCount = 0;
 	int outerIter = 0;
+
+	// Cache polyhedron pointers to avoid repeated dynamic_cast
+	std::vector<radTPolyhedron*> polyCache(AmOfMainElem, nullptr);
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		if(IntrctPtr->GetElementDOF(elem) == 6)
+		{
+			polyCache[elem] = dynamic_cast<radTPolyhedron*>(IntrctPtr->g3dRelaxPtrVect[elem]);
+		}
+	}
 
 	// Initialize H field
 	const double H_init_mag = 1000.0;
@@ -1907,6 +2152,15 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		{
 			OldMagn[i] = FlatMagn[i];
 		}
+		// Store old chi for MSC convergence check
+		for(int elem = 0; elem < AmOfMainElem; elem++)
+		{
+			radTPolyhedron* poly = polyCache[elem];  // Use cached pointer
+			if(poly && poly->Use6DOF_MSC)
+			{
+				OldChi_bicg[elem] = poly->CurrentChi;
+			}
+		}
 
 		// Update H from M
 		if(outerIter > 0)
@@ -1938,8 +2192,10 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		}
 
 		// Solve with BiCGSTAB
+		// Use tighter tolerance (1e-10) for 6DOF MSC to ensure proper convergence
 		double residual = 0.0;
-		int n_iter = SolveBiCGSTAB_VariableDOF(totalDOF, PrecOnMagnetiz, MaxIterNumber - totalIterCount, residual);
+		const double bicg_tol = 1.0e-10;
+		int n_iter = SolveBiCGSTAB_VariableDOF(totalDOF, bicg_tol, MaxIterNumber - totalIterCount, residual);
 		totalIterCount += n_iter;
 
 		// Update element magnetization
@@ -1967,7 +2223,738 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			else if(dof == 6)
 			{
 				// MSC hexahedron: update sigma values and compute effective magnetization
+				radTPolyhedron* poly = polyCache[elem];  // Use cached pointer
+				if(poly && poly->Use6DOF_MSC)
+				{
+					// Store sigma values
+					for(int k = 0; k < 6; k++)
+					{
+						poly->Sigma[k] = FlatMagn[offset + k];
+					}
+
+					// Compute effective magnetization from sigma using weighted average
+					double Mx = 0.0, My = 0.0, Mz = 0.0;
+					double wx = 0.0, wy = 0.0, wz = 0.0;
+					for(int face = 0; face < 6; face++)
+					{
+						double sigma = poly->Sigma[face];
+						TVector3d& n = poly->FaceNormal[face];
+						double nx2 = n.x * n.x;
+						double ny2 = n.y * n.y;
+						double nz2 = n.z * n.z;
+						Mx += sigma * n.x;
+						My += sigma * n.y;
+						Mz += sigma * n.z;
+						wx += nx2;
+						wy += ny2;
+						wz += nz2;
+					}
+					if(wx > 1.0e-10) poly->Magn.x = Mx / wx;
+					if(wy > 1.0e-10) poly->Magn.y = My / wy;
+					if(wz > 1.0e-10) poly->Magn.z = Mz / wz;
+
+					// ELF-compatible H update: H = M / chi
+					// Use the SAME chi that was used to build the matrix for this solve.
+					// This is the ELF mucal1 algorithm.
+					if(IntrctPtr->NewFieldArray != nullptr)
+					{
+						double chi_used = poly->CurrentChi;
+						if(chi_used < 1.0e-6) chi_used = 1.0e-6;
+
+						// H = M / chi (constitutive relation, same as ELF)
+						IntrctPtr->NewFieldArray[elem].x = poly->Magn.x / chi_used;
+						IntrctPtr->NewFieldArray[elem].y = poly->Magn.y / chi_used;
+						IntrctPtr->NewFieldArray[elem].z = poly->Magn.z / chi_used;
+					}
+				}
+			}
+		}
+
+		// Compute convergence for 6DOF MSC elements
+		// NonlinearMethod: 0=mucal1 (chi-change), 1=mucal2 (B-change/Newton)
+		// For 3DOF MMM elements: use M change
+		double max_chi_rel_change = 0.0;
+		double max_B_rel_change = 0.0;
+		bool has_6dof_elements = false;
+		const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+
+		for(int elem = 0; elem < AmOfMainElem; elem++)
+		{
+			int dof = IntrctPtr->GetElementDOF(elem);
+			if(dof == 6)
+			{
+				has_6dof_elements = true;
+				radTPolyhedron* poly = polyCache[elem];  // Use cached pointer
+				if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
+				{
+					radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+					TVector3d H_new = IntrctPtr->NewFieldArray[elem];
+					TVector3d M_new = g3dRelaxPtr->Magn;
+					radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+					// Get new chi from new H (standard method)
+					TMatrix3d KsiTensor;
+					TVector3d MrVect;
+					MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
+					double chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
+
+					if(rad.NonlinearMethod == 1)
+					{
+						// mucal2: B-change convergence (Newton style, faster convergence)
+						double B_new_x = MU_0 * (H_new.x + M_new.x);
+						double B_new_y = MU_0 * (H_new.y + M_new.y);
+						double B_new_z = MU_0 * (H_new.z + M_new.z);
+						double B_new_norm = std::sqrt(B_new_x*B_new_x + B_new_y*B_new_y + B_new_z*B_new_z);
+
+						// Get B_saturation from material
+						double B_sat = 2.5;  // Default saturation ~2.5T
+						if(MaterPtr)
+						{
+							TMatrix3d KsiTensor_sat;
+							TVector3d MrVect_sat;
+							TVector3d H_high(0., 0., 200000.0);
+							MaterPtr->DefineInstantKsiTensor(H_high, KsiTensor_sat, MrVect_sat);
+							double chi_sat = (KsiTensor_sat.Str0.x + KsiTensor_sat.Str1.y + KsiTensor_sat.Str2.z) / 3.0;
+							double M_sat = chi_sat * 200000.0;
+							B_sat = MU_0 * (200000.0 + M_sat);
+							if(B_sat < 0.1) B_sat = 2.5;
+						}
+
+						// Approximate old B from previous iteration
+						double M_new_norm = std::sqrt(M_new.x*M_new.x + M_new.y*M_new.y + M_new.z*M_new.z);
+						double B_old_norm = MU_0 * M_new_norm * 0.9;
+						if(outerIter > 0)
+						{
+							B_old_norm = poly->CurrentChi > 1.0 ? B_new_norm * poly->CurrentChi / (poly->CurrentChi + 1.0) : B_new_norm * 0.9;
+						}
+
+						// mucal2 convergence: |B_new - B_old| / B_sat
+						double B_change = std::fabs(B_new_norm - B_old_norm) / B_sat;
+						if(B_change > max_B_rel_change)
+							max_B_rel_change = B_change;
+					}
+					else
+					{
+						// ELF mucal1: permeability-change convergence
+						// Uses |mu_new - mu_old| / mu_old where mu = chi + 1
+						double chi_current = poly->CurrentChi;
+						double mu_old = chi_current + 1.0;
+						double mu_new = chi_new + 1.0;
+						if(mu_old > 1.0)
+						{
+							double mu_rel_change = std::fabs(mu_new - mu_old) / mu_old;
+							if(mu_rel_change > max_chi_rel_change)
+								max_chi_rel_change = mu_rel_change;
+						}
+						else
+						{
+							// First iteration: force max change to continue iteration
+							max_chi_rel_change = 1.0e10;
+						}
+					}
+				}
+			}
+		}
+
+		double rel_change;
+		if(has_6dof_elements)
+		{
+			// Use the convergence criterion based on NonlinearMethod
+			if(rad.NonlinearMethod == 1)
+			{
+				// mucal2: B-change convergence
+				rel_change = max_B_rel_change;
+			}
+			else
+			{
+				// ELF mucal1: permeability-change convergence
+				rel_change = max_chi_rel_change;
+			}
+		}
+		else
+		{
+			// Use M change for convergence (original MMM style)
+			rel_change = (M_norm_sq > 1.0e-30) ? std::sqrt(M_diff_sq / M_norm_sq) : std::sqrt(M_diff_sq);
+		}
+		MisfitE2 = rel_change * rel_change;
+
+		if(rel_change <= PrecOnMagnetiz)
+		{
+			outerIter++;
+			break;
+		}
+
+		if(radYield.Check() == 0) return outerIter;
+	}
+
+	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
+
+	return outerIter;
+}
+
+//=========================================================================
+// Method 2: BiCGSTAB with H-matrix (HACApK ACA+)
+// Conditionally compiled when RADIA_USE_HACAPK is defined
+//=========================================================================
+
+#ifdef RADIA_USE_HACAPK
+
+double radTRelaxationMethNo_2::Dot(const std::vector<double>& a, const std::vector<double>& b, int n)
+{
+#ifdef HAVE_LAPACK
+	return cblas_ddot(n, a.data(), 1, b.data(), 1);
+#else
+	double sum = 0.0;
+	#pragma omp parallel for reduction(+:sum) if(n > 100)
+	for(int i = 0; i < n; i++)
+	{
+		sum += a[i] * b[i];
+	}
+	return sum;
+#endif
+}
+
+double radTRelaxationMethNo_2::Norm2(const std::vector<double>& a, int n)
+{
+#ifdef HAVE_LAPACK
+	return cblas_dnrm2(n, a.data(), 1);
+#else
+	return std::sqrt(Dot(a, a, n));
+#endif
+}
+
+void radTRelaxationMethNo_2::Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n)
+{
+#ifdef HAVE_LAPACK
+	cblas_daxpy(n, alpha, x.data(), 1, y.data(), 1);
+#else
+	#pragma omp parallel for if(n > 100)
+	for(int i = 0; i < n; i++)
+	{
+		y[i] += alpha * x[i];
+	}
+#endif
+}
+
+void radTRelaxationMethNo_2::Copy(const std::vector<double>& src, std::vector<double>& dst, int n)
+{
+#ifdef HAVE_LAPACK
+	cblas_dcopy(n, src.data(), 1, dst.data(), 1);
+#else
+	#pragma omp parallel for if(n > 100)
+	for(int i = 0; i < n; i++)
+	{
+		dst[i] = src[i];
+	}
+#endif
+}
+
+void radTRelaxationMethNo_2::Scale(double alpha, std::vector<double>& x, int n)
+{
+#ifdef HAVE_LAPACK
+	cblas_dscal(n, alpha, x.data(), 1);
+#else
+	#pragma omp parallel for if(n > 100)
+	for(int i = 0; i < n; i++)
+	{
+		x[i] *= alpha;
+	}
+#endif
+}
+
+// NOTE: SolveBiCGSTAB_HMatrix (3DOF version) removed - HACApK only supports 6DOF MSC hexahedra
+// For 3DOF permanent magnets, use Method 0 (LU) or Method 1 (BiCGSTAB)
+
+int radTRelaxationMethNo_2::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
+{
+	// HACApK only supports 6DOF MSC hexahedra - redirect to AutoRelax_VariableDOF
+	return AutoRelax_VariableDOF(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+}
+
+//-------------------------------------------------------------------------
+// SolveBiCGSTAB_HMatrix_VariableDOF
+// BiCGSTAB with H-matrix for 6DOF MSC hexahedra only
+//-------------------------------------------------------------------------
+
+int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, double tol, int max_iter, double& residual)
+{
+	if (!m_hacapk || !m_hacapk->IsValid()) return 0;
+
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+
+	// Allocate work vectors
+	std::vector<double> r(totalDOF), r0(totalDOF), p(totalDOF), v(totalDOF), s(totalDOF), t(totalDOF);
+	std::vector<double> p_hat(totalDOF), s_hat(totalDOF), diag_inv(totalDOF);
+	std::vector<double> inv_chi(totalDOF);
+	std::vector<double> rhs(totalDOF);
+	std::vector<double> sol(totalDOF);
+
+	double* FlatMagn = IntrctPtr->GetFlatMagnArray();
+	double* FlatField = IntrctPtr->GetFlatFieldArray();
+	double* FlatExtern = IntrctPtr->GetFlatExternFieldArray();
+
+	if(FlatMagn == nullptr || FlatField == nullptr || FlatExtern == nullptr) return 0;
+
+	// Pre-compute 1/chi and RHS for all elements (6DOF hexahedra only)
+	// CRITICAL FIX (2025-12-20): Use current H field estimate from FlatField, not FlatExtern
+	// This matches the LU/BiCGSTAB solvers that use NewFieldAr[i] for chi computation
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+		if(dof != 6)
+		{
+			// HACApK only supports 6DOF MSC hexahedra
+			std::cerr << "[HACApK] Error: Element " << elem << " has " << dof
+			          << " DOF, expected 6 (6DOF MSC hexahedra only)" << std::endl;
+			return 0;
+		}
+
+		// MSC hexahedron (6 DOF)
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+		// FIX (2025-12-21): For first iteration, use small H (like ELF's mucal0)
+		// to get initial chi from the linear region of B-H curve.
+		// Detect first iteration by checking if NewFieldArray equals ExternFieldArray
+		TVector3d H_est;
+		bool isFirstIter = false;
+		if(IntrctPtr->NewFieldArray != nullptr && IntrctPtr->ExternFieldArray != nullptr)
+		{
+			TVector3d& newField = IntrctPtr->NewFieldArray[elem];
+			TVector3d& extField = IntrctPtr->ExternFieldArray[elem];
+			if(std::abs(newField.x - extField.x) < 1.0e-10 &&
+			   std::abs(newField.y - extField.y) < 1.0e-10 &&
+			   std::abs(newField.z - extField.z) < 1.0e-10)
+			{
+				isFirstIter = true;
+			}
+		}
+
+		if(isFirstIter)
+		{
+			// First iteration: use H = 100 A/m (small value, similar to ELF mucal0)
+			H_est = TVector3d(0., 0., 100.0);
+		}
+		else if(IntrctPtr->NewFieldArray != nullptr)
+		{
+			H_est = IntrctPtr->NewFieldArray[elem];
+		}
+		else
+		{
+			H_est = TVector3d(0., 0., FlatExtern[offset]);
+		}
+		TMatrix3d KsiTensor;
+		TVector3d MrVect;
+		MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+		double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+		if(chi < 1.0e-6) chi = 1.0e-6;
+		double inv_chi_val = 1.0 / chi;
+
+		for(int k = 0; k < 6; k++)
+		{
+			inv_chi[offset + k] = inv_chi_val;
+			rhs[offset + k] = FlatExtern[offset + k];
+		}
+	}
+
+	// Update H-matrix diagonal with current inv_chi
+	m_hacapk->UpdateDiagonal(inv_chi);
+
+	// Initial guess
+	for(int i = 0; i < totalDOF; i++)
+	{
+		sol[i] = FlatMagn[i];
+	}
+
+	// Build Jacobi preconditioner using H-matrix diagonal
+	GetDiagonalElements_HMatrix_VariableDOF(diag_inv, inv_chi, totalDOF);
+	for(int i = 0; i < totalDOF; i++)
+	{
+		diag_inv[i] = (std::abs(diag_inv[i]) > 1.0e-15) ? (1.0 / diag_inv[i]) : 1.0;
+	}
+
+	// Initialize: r0 = b - A*x0
+	m_hacapk->MatVec(sol, v);  // v = A*x0 using H-matrix
+	Copy(rhs, r, totalDOF);
+	Axpy(-1.0, v, r, totalDOF);
+	Copy(r, r0, totalDOF);
+
+	double rho = 1.0, alpha_bicg = 1.0, omega = 1.0;
+	std::fill(p.begin(), p.end(), 0.0);
+	std::fill(v.begin(), v.end(), 0.0);
+
+	double rhs_norm = Norm2(rhs, totalDOF);
+	if(rhs_norm < 1.0e-30) rhs_norm = 1.0;
+
+	int iter;
+	for(iter = 1; iter <= max_iter; iter++)
+	{
+		double rho_old = rho;
+		rho = Dot(r0, r, totalDOF);
+
+		if(std::abs(rho) < 1.0e-30)
+		{
+			residual = Norm2(r, totalDOF) / rhs_norm;
+			break;
+		}
+
+		if(iter == 1)
+		{
+			Copy(r, p, totalDOF);
+		}
+		else
+		{
+			if(std::abs(rho_old * omega) < 1.0e-30)
+			{
+				residual = Norm2(r, totalDOF) / rhs_norm;
+				break;
+			}
+			double beta = (rho / rho_old) * (alpha_bicg / omega);
+			Axpy(-omega, v, p, totalDOF);
+			Scale(beta, p, totalDOF);
+			Axpy(1.0, r, p, totalDOF);
+		}
+
+		// Apply preconditioner
+		#pragma omp parallel for if(totalDOF > 100)
+		for(int i = 0; i < totalDOF; i++)
+		{
+			p_hat[i] = diag_inv[i] * p[i];
+		}
+
+		// v = A * p_hat using H-matrix
+		m_hacapk->MatVec(p_hat, v);
+
+		double r0_dot_v = Dot(r0, v, totalDOF);
+		if(std::abs(r0_dot_v) < 1.0e-30)
+		{
+			residual = Norm2(r, totalDOF) / rhs_norm;
+			break;
+		}
+		alpha_bicg = rho / r0_dot_v;
+
+		Copy(r, s, totalDOF);
+		Axpy(-alpha_bicg, v, s, totalDOF);
+
+		double s_norm = Norm2(s, totalDOF);
+		if(s_norm / rhs_norm < tol)
+		{
+			Axpy(alpha_bicg, p_hat, sol, totalDOF);
+			residual = s_norm / rhs_norm;
+			break;
+		}
+
+		#pragma omp parallel for if(totalDOF > 100)
+		for(int i = 0; i < totalDOF; i++)
+		{
+			s_hat[i] = diag_inv[i] * s[i];
+		}
+
+		// t = A * s_hat using H-matrix
+		m_hacapk->MatVec(s_hat, t);
+
+		double t_dot_s = Dot(t, s, totalDOF);
+		double t_dot_t = Dot(t, t, totalDOF);
+		if(std::abs(t_dot_t) < 1.0e-30)
+		{
+			Axpy(alpha_bicg, p_hat, sol, totalDOF);
+			residual = s_norm / rhs_norm;
+			break;
+		}
+		omega = t_dot_s / t_dot_t;
+
+		Axpy(alpha_bicg, p_hat, sol, totalDOF);
+		Axpy(omega, s_hat, sol, totalDOF);
+
+		Copy(s, r, totalDOF);
+		Axpy(-omega, t, r, totalDOF);
+
+		double r_norm = Norm2(r, totalDOF);
+		residual = r_norm / rhs_norm;
+		if(residual < tol) break;
+
+		if(std::abs(omega) < 1.0e-30) break;
+	}
+
+	// Copy solution back to flat array
+	for(int i = 0; i < totalDOF; i++)
+	{
+		FlatMagn[i] = sol[i];
+	}
+
+	return iter;
+}
+
+//-------------------------------------------------------------------------
+// GetDiagonalElements_HMatrix_VariableDOF
+//-------------------------------------------------------------------------
+
+void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector<double>& diag,
+                                                                      const std::vector<double>& inv_chi,
+                                                                      int totalDOF)
+{
+	// Get diagonal elements A_ii = N_ii + 1/chi_i using H-matrix's on-demand computation
+	// GetInteractionMatrixElement() returns -K_ii/(4*pi) which already has correct sign
+	for(int i = 0; i < totalDOF; i++)
+	{
+		double N_ii = m_hacapk->GetInteractionMatrixElement(i, i);
+		diag[i] = N_ii + inv_chi[i];
+	}
+}
+
+//-------------------------------------------------------------------------
+// AutoRelax_VariableDOF (H-matrix version)
+//-------------------------------------------------------------------------
+
+int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
+{
+	if(IntrctPtr == nullptr) return 0;
+
+	// Check if variable DOF is active (required for 6DOF MSC hexahedra)
+	if(!IntrctPtr->HasVariableDOF())
+	{
+		return 0;
+	}
+
+	if(!MagnResetIsNotNeeded)
+	{
+		IntrctPtr->ResetM();
+		IntrctPtr->ResetAuxParam();
+	}
+
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+	if(AmOfMainElem <= 0) return 0;
+
+	int totalDOF = IntrctPtr->GetTotalDOF();
+	if(totalDOF <= 0) return 0;
+
+	double* FlatMagn = IntrctPtr->GetFlatMagnArray();
+	double* FlatField = IntrctPtr->GetFlatFieldArray();
+	double* FlatExtern = IntrctPtr->GetFlatExternFieldArray();
+
+	if(FlatMagn == nullptr || FlatField == nullptr || FlatExtern == nullptr) return 0;
+
+	// Build H-matrix - must match current geometry
+	// Delete old H-matrix if it was built for a different geometry
+	if(m_hacapk && m_hacapk->GetInteraction() != IntrctPtr)
+	{
+		delete m_hacapk;
+		m_hacapk = nullptr;
+	}
+
+	if(!m_hacapk)
+	{
+		m_hacapk = new RadHACApKManager(IntrctPtr);
+	}
+
+	if(!m_hacapk->IsValid())
+	{
+		if(!m_hacapk->BuildHMatrix(m_hacapk_params))
+		{
+			delete m_hacapk;
+			m_hacapk = nullptr;
+			return 0;
+		}
+	}
+
+	std::vector<double> OldMagn(totalDOF);
+	double MisfitE2 = 1.0e30;
+	int totalIterCount = 0;
+	int outerIter = 0;
+
+	// Initialize H field in NewFieldArray (used for chi(H) computation in nonlinear iteration)
+	// Also initialize FlatField for compatibility
+	const double H_init_mag = 1000.0;
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+		if(dof == 3)
+		{
+			double H_ext_mag = 0.0;
+			for(int k = 0; k < 3; k++)
+			{
+				H_ext_mag += FlatExtern[offset + k] * FlatExtern[offset + k];
+			}
+			H_ext_mag = std::sqrt(H_ext_mag);
+			double scale = (H_ext_mag > 1.0e-10) ? std::min(1.0, H_init_mag / H_ext_mag) : 1.0;
+			for(int k = 0; k < 3; k++)
+			{
+				FlatField[offset + k] = FlatExtern[offset + k] * scale;
+			}
+			// Initialize NewFieldArray for chi(H) computation
+			IntrctPtr->NewFieldArray[elem].x = FlatExtern[offset + 0] * scale;
+			IntrctPtr->NewFieldArray[elem].y = FlatExtern[offset + 1] * scale;
+			IntrctPtr->NewFieldArray[elem].z = FlatExtern[offset + 2] * scale;
+		}
+		else if(dof == 6)
+		{
+			// 6DOF MSC hexahedra: initialize FlatField and estimate H from external field
+			for(int k = 0; k < dof; k++)
+			{
+				FlatField[offset + k] = FlatExtern[offset + k];
+			}
+			// For 6DOF, estimate H from external field
+			// The external field in RHS is H_ext (uniform applied field)
+			// Estimate H direction from face normals weighted by sigma
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
+			if(poly && poly->Use6DOF_MSC)
+			{
+				// Estimate H from sigma pattern: H ~ sum(sigma_i * n_i) / sum(n_i dot n_i)
+				double Hx = 0.0, Hy = 0.0, Hz = 0.0;
+				double wx = 0.0, wy = 0.0, wz = 0.0;
+				for(int face = 0; face < 6; face++)
+				{
+					double sigma = FlatExtern[offset + face];
+					TVector3d& n = poly->FaceNormal[face];
+					Hx += sigma * n.x;
+					Hy += sigma * n.y;
+					Hz += sigma * n.z;
+					wx += n.x * n.x;
+					wy += n.y * n.y;
+					wz += n.z * n.z;
+				}
+				IntrctPtr->NewFieldArray[elem].x = (wx > 1.0e-10) ? Hx / wx : 0.0;
+				IntrctPtr->NewFieldArray[elem].y = (wy > 1.0e-10) ? Hy / wy : 0.0;
+				IntrctPtr->NewFieldArray[elem].z = (wz > 1.0e-10) ? Hz / wz : 0.0;
+			}
+			else
+			{
+				// Fallback: use H_init_mag in z-direction
+				IntrctPtr->NewFieldArray[elem].x = 0.0;
+				IntrctPtr->NewFieldArray[elem].y = 0.0;
+				IntrctPtr->NewFieldArray[elem].z = H_init_mag;
+			}
+		}
+		else
+		{
+			for(int k = 0; k < dof; k++)
+			{
+				FlatField[offset + k] = FlatExtern[offset + k];
+			}
+			// Initialize NewFieldArray with H_init_mag in z-direction (fallback)
+			IntrctPtr->NewFieldArray[elem].x = 0.0;
+			IntrctPtr->NewFieldArray[elem].y = 0.0;
+			IntrctPtr->NewFieldArray[elem].z = H_init_mag;
+		}
+	}
+
+	// Outer nonlinear iteration
+	for(outerIter = 0; outerIter < MaxIterNumber; outerIter++)
+	{
+		// Store old values
+		for(int i = 0; i < totalDOF; i++)
+		{
+			OldMagn[i] = FlatMagn[i];
+		}
+
+		// Update H from M for nonlinear materials
+		// For 6DOF MSC hexahedra: compute effective M from sigma, then H = M/chi
+		if(outerIter > 0)
+		{
+			for(int elem = 0; elem < AmOfMainElem; elem++)
+			{
+				int dof = IntrctPtr->GetElementDOF(elem);
+				int offset = IntrctPtr->GetElementDOFOffset(elem);
 				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+				radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+				if(dof == 3)
+				{
+					// 3DOF case: H = M / chi
+					TVector3d H_est = IntrctPtr->NewFieldArray[elem];
+					TMatrix3d KsiTensor;
+					TVector3d MrVect;
+					MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+
+					double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+					if(chi < 1.0e-6) chi = 1.0e-6;
+
+					IntrctPtr->NewFieldArray[elem].x = FlatMagn[offset + 0] / chi;
+					IntrctPtr->NewFieldArray[elem].y = FlatMagn[offset + 1] / chi;
+					IntrctPtr->NewFieldArray[elem].z = FlatMagn[offset + 2] / chi;
+				}
+				else if(dof == 6)
+				{
+					// 6DOF MSC hexahedra: compute effective M from sigma, then H = M/chi
+					radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
+					if(poly && poly->Use6DOF_MSC)
+					{
+						// Compute effective magnetization from sigma using weighted average
+						double Mx = 0.0, My = 0.0, Mz = 0.0;
+						double wx = 0.0, wy = 0.0, wz = 0.0;
+						for(int face = 0; face < 6; face++)
+						{
+							double sigma = FlatMagn[offset + face];
+							TVector3d& n = poly->FaceNormal[face];
+							double nx2 = n.x * n.x;
+							double ny2 = n.y * n.y;
+							double nz2 = n.z * n.z;
+							Mx += sigma * n.x;
+							My += sigma * n.y;
+							Mz += sigma * n.z;
+							wx += nx2;
+							wy += ny2;
+							wz += nz2;
+						}
+						double M_eff_x = (wx > 1.0e-10) ? Mx / wx : 0.0;
+						double M_eff_y = (wy > 1.0e-10) ? My / wy : 0.0;
+						double M_eff_z = (wz > 1.0e-10) ? Mz / wz : 0.0;
+
+						// Get chi from current H estimate
+						TVector3d H_est = IntrctPtr->NewFieldArray[elem];
+						TMatrix3d KsiTensor;
+						TVector3d MrVect;
+						MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+
+						double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+						if(chi < 1.0e-6) chi = 1.0e-6;
+
+						// Update H = M_eff / chi
+						IntrctPtr->NewFieldArray[elem].x = M_eff_x / chi;
+						IntrctPtr->NewFieldArray[elem].y = M_eff_y / chi;
+						IntrctPtr->NewFieldArray[elem].z = M_eff_z / chi;
+					}
+				}
+			}
+		}
+
+		// Solve with BiCGSTAB using H-matrix
+		double residual = 0.0;
+		const double bicg_tol = 1.0e-6;
+		int n_iter = SolveBiCGSTAB_HMatrix_VariableDOF(totalDOF, bicg_tol, MaxIterNumber - totalIterCount, residual);
+		totalIterCount += n_iter;
+
+		// Update element magnetization
+		double M_diff_sq = 0.0;
+		double M_norm_sq = 0.0;
+		for(int i = 0; i < totalDOF; i++)
+		{
+			double diff = FlatMagn[i] - OldMagn[i];
+			M_diff_sq += diff * diff;
+			M_norm_sq += FlatMagn[i] * FlatMagn[i];
+		}
+
+		// Sync magnetization to element objects
+		for(int elem = 0; elem < AmOfMainElem; elem++)
+		{
+			int dof = IntrctPtr->GetElementDOF(elem);
+			int offset = IntrctPtr->GetElementDOFOffset(elem);
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+
+			if(dof == 3)
+			{
+				g3dRelaxPtr->Magn.x = FlatMagn[offset];
+				g3dRelaxPtr->Magn.y = FlatMagn[offset + 1];
+				g3dRelaxPtr->Magn.z = FlatMagn[offset + 2];
+			}
+			else if(dof == 6)
+			{
 				radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
 				if(poly && poly->Use6DOF_MSC)
 				{
@@ -1997,6 +2984,25 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					if(wx > 1.0e-10) g3dRelaxPtr->Magn.x = Mx / wx;
 					if(wy > 1.0e-10) g3dRelaxPtr->Magn.y = My / wy;
 					if(wz > 1.0e-10) g3dRelaxPtr->Magn.z = Mz / wz;
+
+					// FIX (2025-12-21): Update NewFieldArray with H = M / chi
+					// This matches ELF's approach: H_int = M / chi (constitutive relation)
+					// The updated H is used in the next iteration for chi(H) computation.
+					if(IntrctPtr->NewFieldArray != nullptr)
+					{
+						radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+						TVector3d H_est = IntrctPtr->NewFieldArray[elem];
+						TMatrix3d KsiTensor;
+						TVector3d MrVect;
+						MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+						double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+						if(chi < 1.0e-6) chi = 1.0e-6;
+
+						// H = M / chi (constitutive relation)
+						IntrctPtr->NewFieldArray[elem].x = g3dRelaxPtr->Magn.x / chi;
+						IntrctPtr->NewFieldArray[elem].y = g3dRelaxPtr->Magn.y / chi;
+						IntrctPtr->NewFieldArray[elem].z = g3dRelaxPtr->Magn.z / chi;
+					}
 				}
 			}
 		}
@@ -2014,6 +3020,7 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	}
 
 	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
-
 	return outerIter;
 }
+
+#endif // RADIA_USE_HACAPK

@@ -124,6 +124,7 @@ public:
 	TVector3d FaceNormal[6];   // Face normals (outward)
 	TVector3d FaceCenter[6];   // Face centers
 	bool Use6DOF_MSC;          // Flag: true if hexahedron uses 6 DOF MSC
+	double CurrentChi;         // Chi used for current solve (for H = M/chi update)
 
 	radTPolyhedron(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces, const TVector3d& InMagn)
 		: radTg3dRelax(InMagn)
@@ -133,9 +134,9 @@ public:
 		pJ_LinCoef = 0; mLinTreat = 0;
 		J_IsNotZero = false;
 
-		// Initialize 6 DOF MSC data
-		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		// Initialize 6 DOF MSC data for hexahedra
 		Use6DOF_MSC = (AmOfFaces == 6);
+		CurrentChi = 1.0;  // Default chi
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
 			FaceArea[i] = 0.0;
@@ -158,9 +159,9 @@ public:
 	{
 		AmOfFaces = lenArrayOfFaces; SomethingIsWrong = 0;
 
-		// Initialize 6 DOF MSC data
-		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		// Initialize 6 DOF MSC data for hexahedra
 		Use6DOF_MSC = (AmOfFaces == 6);
+		CurrentChi = 1.0;  // Default chi
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
 			FaceArea[i] = 0.0;
@@ -193,8 +194,7 @@ public:
 		pJ_LinCoef = 0; mLinTreat = 0;
 		J_IsNotZero = false;
 
-		// Initialize 6 DOF MSC data
-		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		// Initialize 6 DOF MSC data for hexahedra
 		Use6DOF_MSC = (AmOfFaces == 6);
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
@@ -233,8 +233,7 @@ public:
 		SomethingIsWrong = 0;
 		DefineCentrPoint();
 
-		// Initialize 6 DOF MSC data
-		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		// Initialize 6 DOF MSC data for hexahedra
 		Use6DOF_MSC = (AmOfFaces == 6);
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
@@ -296,8 +295,7 @@ public:
 		AttemptToCreateConvexPolyhedronFromTwoBaseFaces(inHandleBasePgnAndTrf1, inHandleBasePgnAndTrf2);
 		if(SomethingIsWrong) return;
 
-		// Now that AmOfFaces is set, update 6 DOF flag
-		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		// Now that AmOfFaces is set, update 6 DOF flag for hexahedra
 		Use6DOF_MSC = (AmOfFaces == 6);
 		if(Use6DOF_MSC) SetupFaceGeometry();
 
@@ -332,8 +330,7 @@ public:
 		DumpBinParse_g3dRelax(inStr, mKeysOldNew, gMapOfHandlers);
 		DumpBinParse_Polyhedron(inStr);
 
-		// Setup 6 DOF after parsing
-		// Hexahedra (6 faces) use 6 DOF MSC, tetrahedra use 3 DOF
+		// Setup 6 DOF after parsing for hexahedra
 		Use6DOF_MSC = (AmOfFaces == 6);
 		if(Use6DOF_MSC) SetupFaceGeometry();
 	}
@@ -359,7 +356,7 @@ public:
 	}
 
 	int Type_g3dRelax() { return 5;}
-	// DOF: 6 for hexahedra (sigma on each face), 3 for tetrahedra (Mx, My, Mz)
+	// DOF: 6 for hexahedra (6 DOF MSC: sigma per face), 3 for tetrahedra (Mx, My, Mz)
 	// Returns 0 if no material is applied (same behavior as radTRecMag)
 	int NumberOfDegOfFreedom() { return (MaterHandle.rep == 0) ? 0 : (Use6DOF_MSC ? 6 : 3); }
 

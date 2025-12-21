@@ -42,8 +42,11 @@ set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/radia")
 set(FFTW_DIR "${EXT_DIR}/fftw")
 
 
-# OpenBLAS directory (for optimized LAPACK LU solver)
+# OpenBLAS directory and library (for optimized LAPACK LU solver)
 set(OPENBLAS_DIR "${EXT_DIR}/openblas")
+if(WIN32)
+	set(OPENBLAS_LIB ${OPENBLAS_DIR}/lib/libopenblas.lib)
+endif()
 
 # Radia core sources (organized by API functionality)
 set(RADIA_CORE_SOURCES
@@ -82,6 +85,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_subdivided_polyhedron.cpp         # Subdivided polyhedron
 	${CORE_DIR}/rad_serialization.cpp         # Interface functions
 	${CORE_DIR}/rad_polyhedron.cpp            # Polyhedron with magnetization
+	${CORE_DIR}/rad_hacapk.cpp                # HACApK H-matrix manager (Method 2)
 )
 
 # Radia ext sources
@@ -90,6 +94,15 @@ set(RADIA_EXT_SOURCES
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp
 	${EXT_DIR}/triangle/triangle.c
+)
+
+# HACApK sources (H-matrix with ACA+ compression)
+# Note: C files compiled as C (not C++) to avoid typedef struct * compatibility issues
+# Simplified for Radia: MPI replaced with stub (single-process), OpenMP only, unified logging
+set(HACAPK_SOURCES
+	${EXT_DIR}/HACApK_LH-Cimplm/cHACApK_base.c
+	${EXT_DIR}/HACApK_LH-Cimplm/cHACApK_lib.c
+	${EXT_DIR}/HACApK_LH-Cimplm/cHACApK_cpp_impl.c
 )
 
 # Radia lib sources
@@ -110,6 +123,7 @@ add_ngsolve_python_module(radia_ngsolve
 	${EXT_DIR}/auxparse/auxparse.cpp
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp
+	${HACAPK_SOURCES}
 	${RADIA_LIB_SOURCES}
 	${PYTHON_DIR}/radia_ngsolve.cpp
 )
@@ -124,6 +138,7 @@ target_include_directories(radia_ngsolve PRIVATE
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
 	${EXT_DIR}/triangle
+	${EXT_DIR}/HACApK_LH-Cimplm
 	${PYTHON_DIR}
 )
 
@@ -135,6 +150,8 @@ target_compile_definitions(radia_ngsolve PRIVATE
 	ANSI_DECLARATORS
 	TRILIBRARY
 	_GM_WITHOUT_BASE
+	RADIA_USE_HACAPK
+	HACAPK_RADIA_LOGGING
 	$<$<CONFIG:Debug>:_DEBUG>
 	$<$<CONFIG:Release>:NDEBUG>
 	$<$<PLATFORM_ID:Windows>:WIN32>
@@ -189,6 +206,16 @@ else()
 	endif()
 endif()
 
+# OpenBLAS library for radia_ngsolve (LAPACK for HACApK)
+if(WIN32)
+	if(EXISTS ${OPENBLAS_LIB})
+		target_link_libraries(radia_ngsolve PRIVATE ${OPENBLAS_LIB})
+		target_include_directories(radia_ngsolve PRIVATE ${OPENBLAS_DIR}/include)
+		target_compile_definitions(radia_ngsolve PRIVATE HAVE_LAPACK)
+		message(STATUS "Found OpenBLAS library for radia_ngsolve: ${OPENBLAS_LIB}")
+	endif()
+endif()
+
 # Link Windows system libraries
 if(WIN32)
 	target_link_libraries(radia_ngsolve PRIVATE version.lib)
@@ -239,6 +266,7 @@ pybind11_add_module(radia
 	${EXT_DIR}/auxparse/auxparse.cpp
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp
+	${HACAPK_SOURCES}
 	${RADIA_LIB_SOURCES}
 	${PYTHON_DIR}/radpy_pyapi.cpp
 )
@@ -252,6 +280,7 @@ target_include_directories(radia PRIVATE
 	${LIB_DIR}
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
+	${EXT_DIR}/HACApK_LH-Cimplm
 	${FFTW_DIR}
 )
 
@@ -261,6 +290,8 @@ target_compile_definitions(radia PRIVATE
 	_GM_WITHOUT_BASE
 	ALPHA__DLL__
 	ANSI_DECLARATORS
+	RADIA_USE_HACAPK
+	HACAPK_RADIA_LOGGING
 )
 
 # FFTW library - platform-specific detection (same as radia_ngsolve)
@@ -298,7 +329,6 @@ endif()
 
 # OpenBLAS library (LAPACK for fast LU decomposition)
 if(WIN32)
-	set(OPENBLAS_LIB ${OPENBLAS_DIR}/lib/libopenblas.lib)
 	if(EXISTS ${OPENBLAS_LIB})
 		target_link_libraries(radia PRIVATE ${OPENBLAS_LIB})
 		target_include_directories(radia PRIVATE ${OPENBLAS_DIR}/include)

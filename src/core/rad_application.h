@@ -62,6 +62,9 @@ public:
 	short TreatRecMagsAsExtrPolygons, TreatRecMagsAsPolyhedrons, RecognizeRecMagsInPolyhedrons, TreatExtrPgnsAsPolyhedrons;
 	short MemAllocForIntrctMatrTotAtOnce;
 
+	// Nonlinear solver method: 0=mucal1 (chi-change), 1=mucal2 (B-change/Newton)
+	int NonlinearMethod;
+
 	radTApplication()
 	{
 		Initialize();
@@ -73,9 +76,11 @@ public:
 		GlobalUniqueMapKey = 1;
 		CompCriterium.BasedOnPrecLevel = 0;
 		SendingIsRequired = 1;
-		TreatRecMagsAsExtrPolygons = TreatRecMagsAsPolyhedrons = TreatExtrPgnsAsPolyhedrons = 0;
+		TreatRecMagsAsExtrPolygons = TreatExtrPgnsAsPolyhedrons = 0;
+		TreatRecMagsAsPolyhedrons = 1;  // Default ON: ObjRecMag uses 6 DOF MSC hexahedron
 		RecognizeRecMagsInPolyhedrons = 0; // Disable: Keep hexahedra as polyhedra for 6 DOF MSC solver
 		MemAllocForIntrctMatrTotAtOnce = 0;
+		NonlinearMethod = 1;  // Default: mucal2 (B-change/Newton) for faster convergence
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
 
@@ -95,7 +100,7 @@ public:
 	int ValidateMagnChar(char* MagnChar);
 	int ValidateForceChar(char* ForceChar);
 	int ValidateTorqueChar(char* TorqueChar);
-	int ValidateIsotropMaterDescrByPoints(TVector2d* ArrayHM, int LenArrayArrayHM);
+	int ValidateIsotropMaterDescrByPoints(TVector2d* ArrayHB, int LenArrayArrayHB);
 
 	inline int AddElementToContainer(radThg& hg);
 
@@ -186,7 +191,7 @@ public:
 	int SetPermanentMagnet(double Br, double Hc, double* MagAxisArray, long lenMagAxisArray);
 
 	int SetNonlinearIsotropMaterial(double* Ms, long lenMs, double* ks, long len_ks);
-	int SetNonlinearIsotropMaterial(TVector2d* ArrayHM, int LenArrayArrayHM);
+	int SetNonlinearIsotropMaterial(TVector2d* ArrayHB, int LenArrayArrayHB);
 	int SetNonlinearLaminatedMaterial(TVector2d* ArrayOfPoints2d, int lenArrayOfPoints2d, double PackFactor, double* dN);
 
 	int SetNonlinearAnisotropMaterial(double** Ksi, double** Ms, double* Hc, int lenHc, char* DependenceIsNonlinear);
@@ -204,6 +209,7 @@ public:
 	int MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char** arOptionNames=0, const char** arOptionValues=0, int numOptions=0);
 	int UpdateSourcesForRelax(int InteractElemKey);
 	int SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo);
+	int SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod);
 
 	void ComputeField(int ElemKey, char* FieldChar, double* StObsPoi, long lenStObsPoi, double* FiObsPoi, long lenFiObsPoi, int Np, char* ShowArgFlag, double StrtArg);
 	void ComputeField(int ElemKey, char* FieldChar, radTVectorOfVector3d& VectorOfVector3d, radTVectInputCell& VectInputCell);

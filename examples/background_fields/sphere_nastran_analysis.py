@@ -177,9 +177,9 @@ print(f"\n[Step 3] Applying Material and Background Field")
 print("-" * 70)
 
 # Apply linear magnetic material
-mat = rd.MatLin(chi)
+mat = rd.MatLin(mu_r)  # relative permeability
 rd.MatApl(sphere, mat)
-print(f"  Material applied: mu_r = {mu_r}, chi = {chi}")
+print(f"  Material applied: mu_r = {mu_r}")
 
 # Create quadrupole background field using ObjBckgCF
 def quadrupole_field_callback(gradient):

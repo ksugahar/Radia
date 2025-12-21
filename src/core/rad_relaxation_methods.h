@@ -21,6 +21,12 @@
 #include "rad_math_methods.h"
 #include <memory>
 
+// HACApK support (Method 2) - currently disabled, requires C/C++ interface fix
+// #define RADIA_USE_HACAPK 1
+#ifdef RADIA_USE_HACAPK
+#include "rad_hacapk.h"
+#endif
+
 //-------------------------------------------------------------------------
 // Solver method constants
 //-------------------------------------------------------------------------
@@ -28,6 +34,7 @@
 namespace RadSolverMethod {
 	constexpr int LU         = 0;  // LU direct solver
 	constexpr int BICGSTAB   = 1;  // BiCGSTAB iterative solver (default)
+	constexpr int BICGSTAB_HMATRIX = 2;  // BiCGSTAB with H-matrix (HACApK ACA+)
 }
 
 //-------------------------------------------------------------------------
@@ -168,6 +175,78 @@ private:
 	void Copy(const std::vector<double>& src, std::vector<double>& dst, int n);
 	void Scale(double alpha, std::vector<double>& x, int n);
 };
+
+//-------------------------------------------------------------------------
+//-------------------------------------------------------------------------
+
+#ifdef RADIA_USE_HACAPK
+/**
+ * BiCGSTAB iterative solver with H-matrix acceleration (HACApK ACA+)
+ * Method number 2
+ *
+ * Uses HACApK library for O(N log N) matrix-vector products via ACA+ compression.
+ * Effective when elements are spatially well-separated (multiple objects).
+ * For single compact objects, Method 1 (dense BiCGSTAB) may be faster.
+ *
+ * Reference:
+ *   - HACApK: ppOpen-HPC project (MIT License)
+ *   - ACA+: Bebendorf & Rjasanow, Computing 70 (2003)
+ */
+class radTRelaxationMethNo_2 : public radTIterativeRelaxMeth {
+
+public:
+	radTRelaxationMethNo_2(radTInteraction* InInteractionPtr)
+	: radTIterativeRelaxMeth(InInteractionPtr)
+	, m_hacapk(nullptr)
+	{
+		IntrctPtr = InInteractionPtr;
+	}
+
+	~radTRelaxationMethNo_2() {
+		if (m_hacapk) {
+			delete m_hacapk;
+			m_hacapk = nullptr;
+		}
+	}
+
+	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+
+	// Variable DOF version for 6DOF MSC hexahedra
+	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+
+	// Get H-matrix statistics (for debugging/analysis)
+	const RadHACApKStats& GetHMatrixStats() const {
+		static RadHACApKStats empty_stats;
+		return m_hacapk ? m_hacapk->GetStats() : empty_stats;
+	}
+
+	// Set H-matrix parameters (call before AutoRelax)
+	void SetHACApKParams(const RadHACApKParams& params) { m_hacapk_params = params; }
+
+private:
+	// HACApK manager (owns the H-matrix)
+	RadHACApKManager* m_hacapk;
+	RadHACApKParams m_hacapk_params;
+
+	// BiCGSTAB with H-matrix for 6DOF MSC hexahedra
+	// Returns number of iterations (0 on failure)
+	int SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, double tol, int max_iter, double& residual);
+
+	// Matrix-vector product using H-matrix for 6DOF MSC hexahedra
+	void MatVec_HMatrix_VariableDOF(const std::vector<double>& x, std::vector<double>& y, int totalDOF);
+
+	// Get diagonal elements using H-matrix for 6DOF MSC hexahedra
+	void GetDiagonalElements_HMatrix_VariableDOF(std::vector<double>& diag,
+	                                              const std::vector<double>& inv_chi, int totalDOF);
+
+	// BLAS-like operations (same as radTRelaxationMethNo_1)
+	double Dot(const std::vector<double>& a, const std::vector<double>& b, int n);
+	double Norm2(const std::vector<double>& a, int n);
+	void Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n);
+	void Copy(const std::vector<double>& src, std::vector<double>& dst, int n);
+	void Scale(double alpha, std::vector<double>& x, int n);
+};
+#endif // RADIA_USE_HACAPK
 
 //-------------------------------------------------------------------------
 

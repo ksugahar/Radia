@@ -184,20 +184,60 @@ function Invoke-Build {
         Write-Info "Build time: $($buildDuration.ToString('mm\:ss'))"
         Write-Info "Configuration: $BuildType"
 
-        # Find and display output files
-        $pydFiles = Get-ChildItem -Path $BuildDir -Recurse -Filter "radia.pyd" -ErrorAction SilentlyContinue
+        # Find and display output files (search for *.pyd pattern including version-tagged names)
+        $pydFiles = Get-ChildItem -Path "$BuildDir\$BuildType" -Filter "radia*.pyd" -ErrorAction SilentlyContinue
 
         if ($pydFiles) {
             Write-Info "Output files:"
+            $destDir = Join-Path $ScriptDir "src\radia"
             foreach ($file in $pydFiles) {
                 $sizeMB = [math]::Round($file.Length / 1MB, 2)
                 Write-Host "  - $($file.FullName) ($sizeMB MB)" -ForegroundColor White
 
-                # Save the main output path
-                $script:OutputPydPath = $file.FullName
+                # Save the main radia output path (not radia_ngsolve)
+                if ($file.Name -match "^radia\.cp" -or $file.Name -eq "radia.pyd") {
+                    $script:OutputPydPath = $file.FullName
+                }
+            }
+
+            # CRITICAL: Copy .pyd files to src/radia with correct names
+            # This ensures the package uses the latest built binaries
+            if (Test-Path $destDir) {
+                Write-Step "Copying .pyd files to src/radia..."
+
+                foreach ($file in $pydFiles) {
+                    if ($file.Name -match "^radia\.cp\d+-win_amd64\.pyd$") {
+                        # Main radia module: rename to radia.pyd
+                        $destPath = Join-Path $destDir "radia.pyd"
+                        Copy-Item -Path $file.FullName -Destination $destPath -Force
+                        Write-Info "Copied $($file.Name) -> radia.pyd"
+                    }
+                    elseif ($file.Name -match "^radia_ngsolve") {
+                        # NGSolve module: keep original name pattern or rename
+                        $destPath = Join-Path $destDir "radia_ngsolve.pyd"
+                        Copy-Item -Path $file.FullName -Destination $destPath -Force
+                        Write-Info "Copied $($file.Name) -> radia_ngsolve.pyd"
+                    }
+                    else {
+                        # Other .pyd files: copy as-is
+                        Copy-Item -Path $file.FullName -Destination $destDir -Force
+                        Write-Info "Copied $($file.Name) to src\radia\"
+                    }
+                }
+
+                # Verify the copy
+                $radiaPyd = Join-Path $destDir "radia.pyd"
+                if (Test-Path $radiaPyd) {
+                    $pydInfo = Get-Item $radiaPyd
+                    Write-Info "Verified: src/radia/radia.pyd ($([math]::Round($pydInfo.Length / 1MB, 2)) MB, $($pydInfo.LastWriteTime))"
+                } else {
+                    Write-Warning "FAILED: radia.pyd not found in src/radia after copy!"
+                }
+            } else {
+                Write-Warning "Destination directory not found: $destDir"
             }
         } else {
-            Write-Warning "radia.pyd not found in build directory"
+            Write-Warning "radia*.pyd not found in build directory"
         }
 
         Write-Info "Log file: $LogFile"

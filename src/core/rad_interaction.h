@@ -129,7 +129,8 @@ struct iterator_traits <radTRelaxSubInterval*> {
 //-------------------------------------------------------------------------
 
 class radTInteraction : public radTg {
-	friend class radTHMatrixACA;  // Allow H-matrix to access interaction data
+	friend class radTHMatrixACA;    // Allow H-matrix to access interaction data
+	friend class RadHACApKManager;  // Allow HACApK manager to access interaction data
 
 	int AmOfMainElem;
 	int AmOfExtElem;
@@ -303,6 +304,10 @@ public:
 	friend class radTIterativeRelaxMeth;
 	friend class radTRelaxationMethNo_0;   // LU direct solver
 	friend class radTRelaxationMethNo_1;   // BiCGSTAB
+#ifdef RADIA_USE_HACAPK
+	friend class radTRelaxationMethNo_2;   // BiCGSTAB + HACApK
+	friend class RadHACApKManager;         // HACApK H-matrix manager
+#endif
 };
 
 //-------------------------------------------------------------------------

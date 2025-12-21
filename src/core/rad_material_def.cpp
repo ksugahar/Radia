@@ -70,6 +70,7 @@ void radTMaterial::SteerNewH(TVector3d& PrevH, TVector3d& InstantH, void* pvAuxR
 //void radTNonlinearIsotropMaterial::FindNewH(TVector3d& InstantH, const TMatrix3d& Matr, const TVector3d& H_Ext, double DesiredPrecOnMagnE2, radTg3dRelax* pMag, void* p) //OC140103
 void radTNonlinearIsotropMaterial::FindNewH(TVector3d& InstantH, const TMatrix3d& Matr, const TVector3d& H_Ext, double DesiredPrecOnMagnE2) //OC140103
 {
+	static const double mu_0 = 4.0e-7 * 3.14159265358979323846;  // 4*pi*1e-7
 	const double AbsHZeroTol = 1.E-10;
 	const double AbsMZeroTol = 1.E-10;
 	const int MaxIterToFindH = 15; //50; //15;
@@ -84,8 +85,9 @@ void radTNonlinearIsotropMaterial::FindNewH(TVector3d& InstantH, const TMatrix3d
 	for(int i=0; i<MaxIterToFindH; i++)
 	{
 		f=0.;
-		if(gLenArrayHM == 0)
+		if(gLenArrayHB == 0)
 		{
+			// Analytical formula (tanh model)
 			if(AbsInstantH <= AbsHZeroTol)
 			{
 				for(int j=0; j<lenMs_ks; j++) InstKsi += ks[j];
@@ -99,13 +101,25 @@ void radTNonlinearIsotropMaterial::FindNewH(TVector3d& InstantH, const TMatrix3d
 		}
 		else
 		{
-			if(AbsInstantH <= AbsHZeroTol) 
+			// ELF-compatible: B-H curve interpolation
+			if(AbsInstantH <= AbsHZeroTol)
 			{
-				InstKsi = *gdMdH; f = 0;
+				// ELF method: At H=0, use 2nd B-H point for initial chi
+				// chi = B[1] / (mu_0 * H[1]) - 1 (mucal0 style)
+				if(gLenArrayHB >= 2 && gArrayHB[1].x > 1.0e-15)
+				{
+					InstKsi = gArrayHB[1].y / (mu_0 * gArrayHB[1].x) - 1.0;
+				}
+				else
+				{
+					InstKsi = gdBdH[0] / mu_0 - 1.0;  // fallback
+				}
+				f = 0;
 			}
 			else
 			{
-				f = AbsMvsAbsH_Interpol(AbsInstantH, gArrayHM, gdMdH, gLenArrayHM);
+				// AbsMvsAbsH_Interpol now returns M = B/mu_0 - H from B-H curve
+				f = AbsMvsAbsH_Interpol(AbsInstantH, gArrayHB, gdBdH, gLenArrayHB);
 				InstKsi = f/AbsInstantH;
 			}
 		}
@@ -164,11 +178,13 @@ void radTNonlinearIsotropMaterial::FindNewH(TVector3d& InstantH, const TMatrix3d
 
 double radTNonlinearIsotropMaterial::FuncNewAbsH(double AbsH, const TMatrix3d& Matr, const TVector3d& H_Ext)
 {
+	static const double mu_0 = 4.0e-7 * 3.14159265358979323846;  // 4*pi*1e-7
 	const double AbsHZeroTol = 1.E-10;
 	double f=0., InstKsi=0.;
 
-	if(gLenArrayHM == 0)
+	if(gLenArrayHB == 0)
 	{
+		// Analytical formula (tanh model)
 		if(AbsH <= AbsHZeroTol)
 		{
 			for(int j=0; j<lenMs_ks; j++) InstKsi += ks[j];
@@ -182,13 +198,25 @@ double radTNonlinearIsotropMaterial::FuncNewAbsH(double AbsH, const TMatrix3d& M
 	}
 	else
 	{
-		if(AbsH <= AbsHZeroTol) 
+		// ELF-compatible: B-H curve interpolation
+		if(AbsH <= AbsHZeroTol)
 		{
-			InstKsi = *gdMdH; f = 0;
+			// ELF method: At H=0, use 2nd B-H point for initial chi
+			// chi = B[1] / (mu_0 * H[1]) - 1 (mucal0 style)
+			if(gLenArrayHB >= 2 && gArrayHB[1].x > 1.0e-15)
+			{
+				InstKsi = gArrayHB[1].y / (mu_0 * gArrayHB[1].x) - 1.0;
+			}
+			else
+			{
+				InstKsi = gdBdH[0] / mu_0 - 1.0;  // fallback
+			}
+			f = 0;
 		}
 		else
 		{
-			f = AbsMvsAbsH_Interpol(AbsH, gArrayHM, gdMdH, gLenArrayHM);
+			// AbsMvsAbsH_Interpol now returns M = B/mu_0 - H from B-H curve
+			f = AbsMvsAbsH_Interpol(AbsH, gArrayHB, gdBdH, gLenArrayHB);
 			InstKsi = f/AbsH;
 		}
 	}
@@ -248,7 +276,7 @@ void radTNonlinearIsotropMaterial::DefineInstantKsiTensor(const TVector3d& Insta
 	double Der, f, dInstKsi;
 	Der = f = dInstKsi = 0.;
 
-	if(gLenArrayHM == 0)
+	if(gLenArrayHB == 0)
 	{
 		if(H0 == 0.)
 		{
@@ -264,7 +292,7 @@ void radTNonlinearIsotropMaterial::DefineInstantKsiTensor(const TVector3d& Insta
 	else
 	{
 		if(H0 == 0.) dInstKsi = *gdMdH;
-		else dInstKsi = AbsMvsAbsH_Interpol(H0, gArrayHM, gdMdH, gLenArrayHM)/H0;
+		else dInstKsi = AbsMvsAbsH_Interpol(H0, gArrayHB, gdMdH, gLenArrayHB)/H0;
 	}
 
 	TVector3d Ksi_Str0(dInstKsi,0.,0.), Ksi_Str1(0.,dInstKsi,0.), Ksi_Str2(0.,0.,dInstKsi);
@@ -277,13 +305,15 @@ void radTNonlinearIsotropMaterial::DefineInstantKsiTensor(const TVector3d& Insta
 
 void radTNonlinearIsotropMaterial::DefineScalarM_dMdH(double AbsH, double& f, double& dfdH)
 {
+	static const double mu_0 = 4.0e-7 * 3.14159265358979323846;  // 4*pi*1e-7
 	double AbsZeroTolH = 1.e-10;
 	if(AbsH < 0.) AbsH = 0.;
 
 	f = dfdH = 0.;
-	if(gLenArrayHM == 0)
+	if(gLenArrayHB == 0)
 	{
-		for(int i=0; i<lenMs_ks; i++) 
+		// Analytical formula (tanh model)
+		for(int i=0; i<lenMs_ks; i++)
 		{
 			double ms_i = Ms[i], ks_i = ks[i];
 			if(ms_i == 0.) continue;
@@ -297,8 +327,22 @@ void radTNonlinearIsotropMaterial::DefineScalarM_dMdH(double AbsH, double& f, do
 	}
 	else
 	{
-		if(AbsH < AbsZeroTolH) { f = 0; dfdH = *gdMdH; return;}
-		AbsMvsAbsH_FuncAndDer_Interpol(AbsH, gArrayHM, gdMdH, gLenArrayHM, f, dfdH);
+		// ELF-compatible: B-H curve interpolation
+		if(AbsH < AbsZeroTolH)
+		{
+			f = 0;
+			// ELF method: use 2nd B-H point for initial chi
+			if(gLenArrayHB >= 2 && gArrayHB[1].x > 1.0e-15)
+			{
+				dfdH = gArrayHB[1].y / (mu_0 * gArrayHB[1].x) - 1.0;
+			}
+			else
+			{
+				dfdH = gdBdH[0] / mu_0 - 1.0;
+			}
+			return;
+		}
+		AbsMvsAbsH_FuncAndDer_Interpol(AbsH, gArrayHB, gdBdH, gLenArrayHB, f, dfdH);
 	}
 }
 
@@ -306,9 +350,11 @@ void radTNonlinearIsotropMaterial::DefineScalarM_dMdH(double AbsH, double& f, do
 
 void radTNonlinearIsotropMaterial::DefineScalarM(double AbsInstantH, double& f, double& InstKsi)
 {
+	static const double mu_0 = 4.0e-7 * 3.14159265358979323846;  // 4*pi*1e-7
 	const double AbsHZeroTol = 1.E-09;
-	if(gLenArrayHM == 0)
+	if(gLenArrayHB == 0)
 	{
+		// Analytical formula (tanh model)
 		if(AbsInstantH <= AbsHZeroTol)
 		{
 			for(int j=0; j<lenMs_ks; j++) InstKsi += ks[j];
@@ -322,14 +368,25 @@ void radTNonlinearIsotropMaterial::DefineScalarM(double AbsInstantH, double& f, 
 	}
 	else
 	{
-		if(AbsInstantH <= AbsHZeroTol) 
+		// ELF-compatible: B-H curve interpolation
+		if(AbsInstantH <= AbsHZeroTol)
 		{
-			InstKsi = *gdMdH; f = 0;
+			// ELF method: At H=0, use 2nd B-H point for initial chi
+			// chi = B[1] / (mu_0 * H[1]) - 1 (mucal0 style)
+			if(gLenArrayHB >= 2 && gArrayHB[1].x > 1.0e-15)
+			{
+				InstKsi = gArrayHB[1].y / (mu_0 * gArrayHB[1].x) - 1.0;
+			}
+			else
+			{
+				InstKsi = gdBdH[0] / mu_0 - 1.0;  // fallback
+			}
+			f = 0;
 		}
 		else
 		{
-			//f = AbsMvsAbsH_Interpol(AbsInstantH);
-			f = AbsMvsAbsH_Interpol(AbsInstantH, gArrayHM, gdMdH, gLenArrayHM);
+			// AbsMvsAbsH_Interpol now returns M = B/mu_0 - H from B-H curve
+			f = AbsMvsAbsH_Interpol(AbsInstantH, gArrayHB, gdBdH, gLenArrayHB);
 			InstKsi = f/AbsInstantH;
 		}
 	}
@@ -455,120 +512,123 @@ double radTNonlinearIsotropMaterial::Derivative3(TVector2d* f, int PoIndx)
 
 //-------------------------------------------------------------------------
 
-//void radTNonlinearIsotropMaterial::Compute_dMdH(double& MaxKsi)
-void radTNonlinearIsotropMaterial::Compute_dMdH(TVector2d* ArrayHM, double* dMdH, int LenArrayHM, double& MaxKsi)
+// Compute dB/dH derivatives for B-H curve (ELF-compatible)
+// Now processes B-H curve directly (ArrayHB stores H,B pairs)
+void radTNonlinearIsotropMaterial::Compute_dBdH(TVector2d* ArrayHB, double* dBdH, int LenArrayHB, double& MaxKsi)
 {
-	if((ArrayHM == 0) || (dMdH == 0) || (LenArrayHM <= 0)) return;
-	double *tdMdH = dMdH;
-	TVector2d *tHM = ArrayHM;
+	static const double mu_0 = 4.0e-7 * 3.14159265358979323846;  // 4*pi*1e-7
+
+	if((ArrayHB == 0) || (dBdH == 0) || (LenArrayHB <= 0)) return;
+	double *tdBdH = dBdH;
+	TVector2d *tHB = ArrayHB;
 
 	MaxKsi = 0;
 
-	int LenArrayHM_mi_4 = LenArrayHM - 4;
-	int LenArrayHM_mi_3 = LenArrayHM - 3;
-	int LenArrayHM_mi_2 = LenArrayHM - 2;
-	int LenArrayHM_mi_1 = LenArrayHM - 1;
+	int LenArrayHB_mi_4 = LenArrayHB - 4;
+	int LenArrayHB_mi_1 = LenArrayHB - 1;
 
-	*tdMdH = Derivative3(tHM, 0);
-	if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-	tdMdH++;
+	*tdBdH = Derivative3(tHB, 0);
+	double ksi = *tdBdH / mu_0 - 1.0;  // chi = dB/dH / mu_0 - 1
+	if(MaxKsi < ksi) MaxKsi = ksi;
+	tdBdH++;
 
-	*tdMdH = Derivative3(tHM, 1);
-	if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-	tdMdH++; tHM++;
+	*tdBdH = Derivative3(tHB, 1);
+	ksi = *tdBdH / mu_0 - 1.0;
+	if(MaxKsi < ksi) MaxKsi = ksi;
+	tdBdH++; tHB++;
 
-	*tdMdH = Derivative3(tHM, 1);
-	if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-	tdMdH++;
+	*tdBdH = Derivative3(tHB, 1);
+	ksi = *tdBdH / mu_0 - 1.0;
+	if(MaxKsi < ksi) MaxKsi = ksi;
+	tdBdH++;
 
-	for(int i=3; i<LenArrayHM_mi_4; i++)
+	for(int i=3; i<LenArrayHB_mi_4; i++)
 	{
-		*tdMdH = Derivative5(tHM, 2);
-		if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-		tdMdH++; tHM++;
+		*tdBdH = Derivative5(tHB, 2);
+		ksi = *tdBdH / mu_0 - 1.0;
+		if(MaxKsi < ksi) MaxKsi = ksi;
+		tdBdH++; tHB++;
 	}
 
-	if(LenArrayHM >= 7) //OC130604
+	if(LenArrayHB >= 7)
 	{
-		*tdMdH = Derivative5(tHM, 2);
-		if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-		tdMdH++; tHM += 2;
+		*tdBdH = Derivative5(tHB, 2);
+		ksi = *tdBdH / mu_0 - 1.0;
+		if(MaxKsi < ksi) MaxKsi = ksi;
+		tdBdH++; tHB += 2;
 
-		*tdMdH = Derivative3(tHM, 1);
-		if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-		tdMdH++; tHM++;
+		*tdBdH = Derivative3(tHB, 1);
+		ksi = *tdBdH / mu_0 - 1.0;
+		if(MaxKsi < ksi) MaxKsi = ksi;
+		tdBdH++; tHB++;
 
-		*tdMdH = Derivative3(tHM, 1);
-		if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-		tdMdH++; tHM++;
+		*tdBdH = Derivative3(tHB, 1);
+		ksi = *tdBdH / mu_0 - 1.0;
+		if(MaxKsi < ksi) MaxKsi = ksi;
+		tdBdH++; tHB++;
 
-		*tdMdH = ((tHM+1)->y - tHM->y)/((tHM+1)->x - tHM->x);
-		if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
+		*tdBdH = ((tHB+1)->y - tHB->y)/((tHB+1)->x - tHB->x);
+		ksi = *tdBdH / mu_0 - 1.0;
+		if(MaxKsi < ksi) MaxKsi = ksi;
 	}
-	else if(LenArrayHM >= 6)
+	else if(LenArrayHB >= 6)
 	{
-		*tdMdH = Derivative5(tHM, 2);
-		if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-		tdMdH++; tHM += 2;
+		*tdBdH = Derivative5(tHB, 2);
+		ksi = *tdBdH / mu_0 - 1.0;
+		if(MaxKsi < ksi) MaxKsi = ksi;
+		tdBdH++; tHB += 2;
 
-		*tdMdH = Derivative3(tHM, 1);
-		if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-		tdMdH++; tHM++;
+		*tdBdH = Derivative3(tHB, 1);
+		ksi = *tdBdH / mu_0 - 1.0;
+		if(MaxKsi < ksi) MaxKsi = ksi;
+		tdBdH++; tHB++;
 
-		*tdMdH = ((tHM+1)->y - tHM->y)/((tHM+1)->x - tHM->x);
-		if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
+		*tdBdH = ((tHB+1)->y - tHB->y)/((tHB+1)->x - tHB->x);
+		ksi = *tdBdH / mu_0 - 1.0;
+		if(MaxKsi < ksi) MaxKsi = ksi;
 	}
-	else if(LenArrayHM >= 5)
+	else if(LenArrayHB >= 5)
 	{
-		*tdMdH = Derivative3(tHM, 1);
-		if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-		tdMdH++; tHM++;
+		*tdBdH = Derivative3(tHB, 1);
+		ksi = *tdBdH / mu_0 - 1.0;
+		if(MaxKsi < ksi) MaxKsi = ksi;
+		tdBdH++; tHB++;
 
-		*tdMdH = ((tHM+1)->y - tHM->y)/((tHM+1)->x - tHM->x);
-		if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
+		*tdBdH = ((tHB+1)->y - tHB->y)/((tHB+1)->x - tHB->x);
+		ksi = *tdBdH / mu_0 - 1.0;
+		if(MaxKsi < ksi) MaxKsi = ksi;
 	}
-	else if(LenArrayHM >= 4)
+	else if(LenArrayHB >= 4)
 	{
-		*tdMdH = ((tHM+1)->y - tHM->y)/((tHM+1)->x - tHM->x);
-		if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
+		*tdBdH = ((tHB+1)->y - tHB->y)/((tHB+1)->x - tHB->x);
+		ksi = *tdBdH / mu_0 - 1.0;
+		if(MaxKsi < ksi) MaxKsi = ksi;
 	}
 
-	//*tdMdH = Derivative3(tHM, 1);
-	//if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-	//tdMdH++; tHM++;
-
-	//*tdMdH = Derivative3(tHM, 1);
-	//if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-	//tdMdH++; tHM++;
-
-	//*tdMdH = ((tHM+1)->y - tHM->y)/((tHM+1)->x - tHM->x);
-	//if(MaxKsi < *tdMdH) MaxKsi = *tdMdH;
-
-	//CheckAndCorrect_dMdH();
-	CheckAndCorrect_dMdH(ArrayHM, dMdH, LenArrayHM);
+	CheckAndCorrect_dBdH(ArrayHB, dBdH, LenArrayHB);
 }
 
 //-------------------------------------------------------------------------
 
-//void radTNonlinearIsotropMaterial::CheckAndCorrect_dMdH()
-void radTNonlinearIsotropMaterial::CheckAndCorrect_dMdH(TVector2d* ArrayHM, double* dMdH, int LenArrayHM)
+// Check and correct dB/dH derivatives for B-H curve (ELF-compatible)
+void radTNonlinearIsotropMaterial::CheckAndCorrect_dBdH(TVector2d* ArrayHB, double* dBdH, int LenArrayHB)
 {
-	if((ArrayHM == 0) || (dMdH == 0) || (LenArrayHM <= 0)) return;
+	if((ArrayHB == 0) || (dBdH == 0) || (LenArrayHB <= 0)) return;
 
-	int LenArrayHM_mi_1 = LenArrayHM - 1;
-	double *tdMdH = dMdH + LenArrayHM_mi_1;
-	TVector2d *tHM = ArrayHM + LenArrayHM_mi_1;
+	int LenArrayHB_mi_1 = LenArrayHB - 1;
+	double *tdBdH = dBdH + LenArrayHB_mi_1;
+	TVector2d *tHB = ArrayHB + LenArrayHB_mi_1;
 
-	for(int i=0; i<LenArrayHM_mi_1; i++)
+	for(int i=0; i<LenArrayHB_mi_1; i++)
 	{
-		tdMdH--; tHM--;
-		double x2 = (tHM+1)->x - tHM->x;
-		double f1 = tHM->y, f2 = (tHM+1)->y;
-		double fd1 = *tdMdH, fd2 = *(tdMdH+1);
+		tdBdH--; tHB--;
+		double x2 = (tHB+1)->x - tHB->x;
+		double f1 = tHB->y, f2 = (tHB+1)->y;  // B values
+		double fd1 = *tdBdH, fd2 = *(tdBdH+1);
 
 		double x2e2 = x2*x2, f1mif2 = f1 - f2;
 		double x2e3 = x2e2*x2;
-		
+
 		double a0 = f1;
 		double a1 = fd1;
 		double a2 = -((3*f1mif2 + (2*fd1 + fd2)*x2)/(x2e2));
@@ -606,7 +666,7 @@ void radTNonlinearIsotropMaterial::CheckAndCorrect_dMdH(TVector2d* ArrayHM, doub
 				double LocR = sqrt(LocD), LocBuf1 = 1./(2*x2e2), LocBuf2 = -x2*(6*f1mif2 + fd2*x2);
 				double fd1a = (LocBuf2 - LocR)*LocBuf1, fd1b = (LocBuf2 + LocR)*LocBuf1;
 				double ra = fabs(fd1 - fd1a), rb = fabs(fd1 - fd1b);
-				*tdMdH = (ra < rb)? fd1a : fd1b;
+				*tdBdH = (ra < rb)? fd1a : fd1b;
 			}
 		}
 	}
@@ -614,98 +674,376 @@ void radTNonlinearIsotropMaterial::CheckAndCorrect_dMdH(TVector2d* ArrayHM, doub
 
 //-------------------------------------------------------------------------
 
-//double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH)
-double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH, TVector2d* ArrayHM, double* dMdH, int LenArrayHM)
+// ELF-compatible B(H) interpolation approach
+// ArrayHB now stores (H, B) pairs directly, NOT (H, M)
+// Returns M = B/mu_0 - H computed from interpolated B value
+double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH, TVector2d* ArrayHB, double* dBdH, int LenArrayHB)
 {
-	// Use LINEAR interpolation instead of cubic
-	// Cubic interpolation can cause overshoot/undershoot in nonlinear regions
-	TVector2d *tHM = ArrayHM;
+	static const double mu_0 = 4.0e-7 * 3.14159265358979323846;  // 4*pi*1e-7
+
+	// Use LINEAR interpolation for B(H) - same as ELF
+	TVector2d *tHB = ArrayHB;  // Renamed to clarify: stores (H, B) not (H, M)
 	int Indx = 0;
-	for(int i=0; i<LenArrayHM; i++)
+	for(int i=0; i<LenArrayHB; i++)
 	{
-		if(tHM->x > AbsH) break;
-		tHM++; Indx++;
+		if(tHB->x > AbsH) break;
+		tHB++; Indx++;
 	}
-	tHM--; Indx--;
+	tHB--; Indx--;
 
-	if(Indx < 0) return ArrayHM->y;
-	if(Indx >= (LenArrayHM - 1))
+	double B;  // Interpolated B value
+
+	if(Indx < 0)
 	{
-		TVector2d *pHM = ArrayHM + (LenArrayHM - 1);
-
-		double Arg = AbsH - pHM->x;
-		return pHM->y + Arg*dMdH[LenArrayHM - 1];
+		// Below first point: linear extrapolation from origin
+		// For H=0, B=0, so B/H = initial slope
+		if(AbsH <= 1e-10) return 0.0;  // Avoid division by zero
+		B = ArrayHB->y * AbsH / ArrayHB->x;  // Linear from origin
+	}
+	else if(Indx >= (LenArrayHB - 1))
+	{
+		// Above last point: use last point's value (saturation)
+		TVector2d *pHB = ArrayHB + (LenArrayHB - 1);
+		B = pHB->y;  // Saturated B value
+	}
+	else
+	{
+		// Linear interpolation: B = B1 + (B2 - B1) * (H - H1) / (H2 - H1)
+		double H1 = tHB->x, H2 = (tHB + 1)->x;
+		double B1 = tHB->y, B2 = (tHB + 1)->y;
+		double t = (AbsH - H1) / (H2 - H1);
+		B = B1 + t * (B2 - B1);
 	}
 
-	// Linear interpolation: M = M1 + (M2 - M1) * (H - H1) / (H2 - H1)
-	double H1 = tHM->x, H2 = (tHM + 1)->x;
-	double M1 = tHM->y, M2 = (tHM + 1)->y;
-	double t = (AbsH - H1) / (H2 - H1);
-	return M1 + t * (M2 - M1);
+	// Convert B to M: M = B/mu_0 - H
+	double M = B / mu_0 - AbsH;
+	return M;
 }
 
 //-------------------------------------------------------------------------
 
-//double radTNonlinearIsotropMaterial::AbsHvsAbsM_Interpol(double AbsM)
-double radTNonlinearIsotropMaterial::AbsHvsAbsM_Interpol(double AbsM, TVector2d* ArrayHM, double* dMdH, int LenArrayHM)
+// ELF-compatible inverse interpolation: find H given M
+// ArrayHB stores (H, B) pairs, need to find H such that B/mu_0 - H = M
+double radTNonlinearIsotropMaterial::AbsHvsAbsM_Interpol(double AbsM, TVector2d* ArrayHB, double* dBdH, int LenArrayHB)
 {
-	// Use LINEAR interpolation instead of cubic
-	// Cubic interpolation can cause overshoot/undershoot in nonlinear regions
-	TVector2d *tHM = ArrayHM;
+	static const double mu_0 = 4.0e-7 * 3.14159265358979323846;  // 4*pi*1e-7
+
+	// Convert B-H array to M values for search
+	// M = B/mu_0 - H for each point
+	TVector2d *tHB = ArrayHB;
 	int Indx = 0;
-	for(int i=0; i<LenArrayHM; i++)
+
+	// Find interval where M falls
+	for(int i=0; i<LenArrayHB; i++)
 	{
-		if(tHM->y > AbsM) break;
-		tHM++; Indx++;
+		double M_i = tHB->y / mu_0 - tHB->x;  // M = B/mu_0 - H
+		if(M_i > AbsM) break;
+		tHB++; Indx++;
 	}
-	tHM--; Indx--;
+	tHB--; Indx--;
 
-	if(Indx < 0) return ArrayHM->x;
-	if(Indx >= (LenArrayHM - 1)) return ArrayHM[LenArrayHM - 1].x;
+	if(Indx < 0) return ArrayHB->x;
+	if(Indx >= (LenArrayHB - 1)) return ArrayHB[LenArrayHB - 1].x;
 
-	// Linear interpolation: H = H1 + (H2 - H1) * (M - M1) / (M2 - M1)
-	double M1 = tHM->y, M2 = (tHM + 1)->y;
-	double H1 = tHM->x, H2 = (tHM + 1)->x;
+	// Linear interpolation in H
+	double H1 = tHB->x, H2 = (tHB + 1)->x;
+	double B1 = tHB->y, B2 = (tHB + 1)->y;
+	double M1 = B1 / mu_0 - H1;
+	double M2 = B2 / mu_0 - H2;
 	double t = (AbsM - M1) / (M2 - M1);
 	return H1 + t * (H2 - H1);
 }
 
 //-------------------------------------------------------------------------
 
-//void radTNonlinearIsotropMaterial::AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, double& f, double& fDer)
-void radTNonlinearIsotropMaterial::AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, TVector2d* ArrayHM, double* dMdH, int LenArrayHM, double& f, double& fDer)
+// ELF Method 2: H+B sum interpolation (CGS normalized)
+// Given hb_sum = H/H_scale + B/B_scale, find H and B on BH curve
+// Note: ArrayHB stores (H, M) pairs - we compute B = mu_0 * (H + M)
+void radTNonlinearIsotropMaterial::InterpolateBH_HBSum(double hb_sum_target, TVector2d* ArrayHB, int LenArrayHB,
+                                                        double H_scale, double B_scale, double& H_out, double& B_out)
 {
-	// Use LINEAR interpolation instead of cubic
-	// Cubic interpolation can cause overshoot/undershoot in nonlinear regions
-	TVector2d *tHM = ArrayHM;
-	int Indx = 0;
-	for(int i=0; i<LenArrayHM; i++)
+	static const double mu_0 = 4.0e-7 * 3.14159265358979323846;
+
+	// Handle edge cases
+	if(LenArrayHB < 2 || ArrayHB == nullptr)
 	{
-		if(tHM->x > AbsH) break;
-		tHM++; Indx++;
+		// Linear material fallback
+		H_out = hb_sum_target * H_scale / 2.0;
+		B_out = mu_0 * H_out;
+		return;
 	}
-	tHM--; Indx--;
+
+	// Compute B from H, M: B = mu_0 * (H + M)
+	// Note: gArrayHB stores (H, B) pairs, not (H, M)!
+	// So just use B directly without conversion
+	auto getB = [](double H, double B) { return B; };  // B is stored directly
+
+	// Compute normalized H+B for first point
+	double B0 = getB(ArrayHB[0].x, ArrayHB[0].y);
+	double sum1 = ArrayHB[0].x / H_scale + B0 / B_scale;
+
+	// Below first point: extrapolate from origin
+	if(hb_sum_target <= sum1)
+	{
+		if(sum1 > 1.0e-10)
+		{
+			double t = hb_sum_target / sum1;
+			H_out = t * ArrayHB[0].x;
+			B_out = t * B0;
+		}
+		else
+		{
+			H_out = 0.0;
+			B_out = 0.0;
+		}
+		return;
+	}
+
+	// Compute normalized H+B for last point
+	int n = LenArrayHB;
+	double Bn = getB(ArrayHB[n-1].x, ArrayHB[n-1].y);
+	double sum2 = ArrayHB[n-1].x / H_scale + Bn / B_scale;
+
+	// Above last point: extrapolate with last slope
+	if(hb_sum_target >= sum2)
+	{
+		if(n >= 2)
+		{
+			double h1 = ArrayHB[n-2].x, h2 = ArrayHB[n-1].x;
+			double b1 = getB(h1, ArrayHB[n-2].y);
+			double b2 = getB(h2, ArrayHB[n-1].y);
+			double sum1_last = h1 / H_scale + b1 / B_scale;
+			double hs = h2 - h1;
+			double bs = b2 - b1;
+			double hbs = hs / H_scale + bs / B_scale;
+			if(std::fabs(hbs) > 1.0e-10)
+			{
+				double hd = hb_sum_target - sum1_last;
+				double hi = hd / hbs;
+				H_out = hs * hi + h1;
+				B_out = bs * hi + b1;
+			}
+			else
+			{
+				H_out = h2;
+				B_out = b2;
+			}
+		}
+		else
+		{
+			H_out = ArrayHB[n-1].x;
+			B_out = Bn;
+		}
+		return;
+	}
+
+	// Find interval for interpolation
+	for(int i = 0; i < n-1; i++)
+	{
+		double Bi = getB(ArrayHB[i].x, ArrayHB[i].y);
+		double Bip1 = getB(ArrayHB[i+1].x, ArrayHB[i+1].y);
+		double hb_sum_i = ArrayHB[i].x / H_scale + Bi / B_scale;
+		double hb_sum_ip1 = ArrayHB[i+1].x / H_scale + Bip1 / B_scale;
+
+		if(hb_sum_target >= hb_sum_i && hb_sum_target < hb_sum_ip1)
+		{
+			double h1 = ArrayHB[i].x, h2 = ArrayHB[i+1].x;
+			double b1 = Bi, b2 = Bip1;
+			double hs = h2 - h1;
+			double bs = b2 - b1;
+			double hbs = hs / H_scale + bs / B_scale;
+			if(std::fabs(hbs) > 1.0e-10)
+			{
+				double hd = hb_sum_target - hb_sum_i;
+				double hi = hd / hbs;
+				H_out = hs * hi + h1;
+				B_out = bs * hi + b1;
+			}
+			else
+			{
+				H_out = h1;
+				B_out = b1;
+			}
+			return;
+		}
+	}
+
+	// Fallback
+	H_out = hb_sum_target * H_scale / 2.0;
+	B_out = mu_0 * H_out;
+}
+
+//-------------------------------------------------------------------------
+
+// ELF dual-method chi update
+// Method 1: Standard mu = B(H)/(mu_0*H)
+// Method 2: H+B sum interpolation
+// Selects method with smaller |mu_new - mu_old|
+double radTNonlinearIsotropMaterial::ComputeChiDualMethod(double H_mag, double mu_old) const
+{
+	static const double mu_0 = 4.0e-7 * 3.14159265358979323846;
+
+	// CGS conversion factors (ELF uses CGS internally)
+	const double H_scale = 79.577;   // A/m per Oe
+	const double B_scale = 1.0e-4;   // T per Gauss
+
+	if(gLenArrayHB < 2 || gArrayHB == nullptr)
+	{
+		// Fallback for analytical or undefined material
+		return mu_old - 1.0;
+	}
+
+	double B_interp, dBdH_unused;
+
+	// Method 1: Standard H-based interpolation: mu = B(H) / (mu_0 * H)
+	double un1;
+	if(H_mag > 1.0e-10)
+	{
+		// Get B from BH curve
+		double M = AbsMvsAbsH_Interpol(H_mag, gArrayHB, gdBdH, gLenArrayHB);
+		B_interp = mu_0 * (M + H_mag);  // B = mu_0 * (M + H)
+		un1 = B_interp / (mu_0 * H_mag);
+	}
+	else
+	{
+		// Use 2nd BH point for initial chi (ELF mucal0 style)
+		// gArrayHB stores (H, B) pairs directly
+		double H1 = gArrayHB[1].x;
+		double B1 = gArrayHB[1].y;  // This is B, not M!
+		un1 = B1 / (mu_0 * H1);  // mu_r = B / (mu_0 * H)
+	}
+
+	// ELF Method 1 correction: hn = H + (bo - bn) / uo; unn = bn / hn; un = MAX(un, unn)
+	if(mu_old > 1.0 && H_mag > 1.0e-10)
+	{
+		double B_old = mu_0 * mu_old * H_mag;
+		double hn = H_mag + (B_old - B_interp) / (mu_0 * mu_old);
+		if(hn > 1.0e-10)
+		{
+			double unn = B_interp / (mu_0 * hn);
+			if(unn > un1) un1 = unn;
+		}
+	}
+
+	// Method 2: H+B sum interpolation
+	double B_old = mu_0 * mu_old * H_mag;
+	double hb_sum = H_mag / H_scale + B_old / B_scale;
+	double H_new, B_new;
+	InterpolateBH_HBSum(hb_sum, gArrayHB, gLenArrayHB, H_scale, B_scale, H_new, B_new);
+
+	double un2;
+	if(H_new > 1.0e-10)
+	{
+		un2 = B_new / (mu_0 * H_new);
+	}
+	else
+	{
+		un2 = un1;  // Fallback to Method 1
+	}
+
+	// Select method with smaller change from mu_old
+	double us1 = std::fabs(un1 - mu_old);
+	double us2 = std::fabs(un2 - mu_old);
+	double un = (us1 <= us2) ? un1 : un2;
+
+	// Ensure mu_r >= 1 (chi >= 0)
+	if(un < 1.0) un = 1.0;
+
+	double chi_new = un - 1.0;
+	if(chi_new < 1.0e-6) chi_new = 1.0e-6;
+
+	return chi_new;
+}
+
+//-------------------------------------------------------------------------
+
+// Get H from M using Newton iteration for analytical formula (tanh model)
+double radTNonlinearIsotropMaterial::GetHfromM_Analytical(double AbsM) const
+{
+	// For tanh model: M = sum(ms_i * tanh(ks_i * H / ms_i))
+	// Use Newton iteration to find H given M
+	const int MaxIter = 50;
+	const double Tol = 1.0e-8;
+
+	double H = AbsM / gMaxKsi;  // Initial guess using max susceptibility
+	if(H < 1.0e-6) H = 1.0e-6;
+
+	for(int iter = 0; iter < MaxIter; iter++)
+	{
+		double M_calc = 0.0;
+		double dMdH = 0.0;
+		for(int i = 0; i < lenMs_ks; i++)
+		{
+			if(Ms[i] == 0.) continue;
+			double arg = ks[i] * H / Ms[i];
+			double th = tanh(arg);
+			M_calc += Ms[i] * th;
+			double ch = cosh(arg);
+			dMdH += ks[i] / (ch * ch);
+		}
+
+		double dM = M_calc - AbsM;
+		if(fabs(dM) < Tol) break;
+		if(fabs(dMdH) < 1.0e-15) break;
+
+		H = H - dM / dMdH;
+		if(H < 0) H = 1.0e-6;
+	}
+
+	return H;
+}
+
+//-------------------------------------------------------------------------
+
+// ELF-compatible: returns M and dM/dH from B-H curve
+// ArrayHB stores (H, B) pairs, computes M = B/mu_0 - H and dM/dH = dB/dH/mu_0 - 1
+void radTNonlinearIsotropMaterial::AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, TVector2d* ArrayHB, double* dBdH, int LenArrayHB, double& f, double& fDer)
+{
+	static const double mu_0 = 4.0e-7 * 3.14159265358979323846;  // 4*pi*1e-7
+
+	TVector2d *tHB = ArrayHB;
+	int Indx = 0;
+	for(int i=0; i<LenArrayHB; i++)
+	{
+		if(tHB->x > AbsH) break;
+		tHB++; Indx++;
+	}
+	tHB--; Indx--;
+
+	double B, dB_dH;
 
 	if(Indx < 0)
 	{
-		f = ArrayHM->y;
-		fDer = *dMdH;
-		return;
+		// Below first point: linear extrapolation from origin
+		if(AbsH <= 1e-10) {
+			f = 0.0;
+			fDer = dBdH[0] / mu_0 - 1.0;
+			return;
+		}
+		B = ArrayHB->y * AbsH / ArrayHB->x;
+		dB_dH = ArrayHB->y / ArrayHB->x;  // Initial slope
 	}
-	if(Indx >= (LenArrayHM - 1))
+	else if(Indx >= (LenArrayHB - 1))
 	{
-		f = ArrayHM[LenArrayHM - 1].y;
-		fDer = 0.;
-		return;
+		// Above last point: saturation
+		B = ArrayHB[LenArrayHB - 1].y;
+		dB_dH = 0.0;  // Saturated
+	}
+	else
+	{
+		// Linear interpolation: B = B1 + (B2 - B1) * (H - H1) / (H2 - H1)
+		double H1 = tHB->x, H2 = (tHB + 1)->x;
+		double B1 = tHB->y, B2 = (tHB + 1)->y;
+		double t = (AbsH - H1) / (H2 - H1);
+		B = B1 + t * (B2 - B1);
+		dB_dH = (B2 - B1) / (H2 - H1);
 	}
 
-	// Linear interpolation: M = M1 + (M2 - M1) * (H - H1) / (H2 - H1)
-	double H1 = tHM->x, H2 = (tHM + 1)->x;
-	double M1 = tHM->y, M2 = (tHM + 1)->y;
-	double t = (AbsH - H1) / (H2 - H1);
-	f = M1 + t * (M2 - M1);
-	// Derivative of linear interpolation: dM/dH = (M2 - M1) / (H2 - H1)
-	fDer = (M2 - M1) / (H2 - H1);
+	// Convert to M and dM/dH
+	// M = B/mu_0 - H
+	// dM/dH = dB/dH / mu_0 - 1
+	f = B / mu_0 - AbsH;
+	fDer = dB_dH / mu_0 - 1.0;
 }
 
 //-------------------------------------------------------------------------

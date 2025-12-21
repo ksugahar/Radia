@@ -103,20 +103,53 @@ Field Comparison (Analytical dipole vs Radia MSC):
 
 ## Key Implementation Notes
 
-### 1. Use `netgen_mesh_import` Module
+### 1. Use `netgen_mesh_import` Module (MANDATORY)
 
+**CRITICAL POLICY**: All NGSolve mesh access MUST use functions from `netgen_mesh_import.py`.
+
+**Why?** NGSolve has TWO different indexing schemes that cause bugs:
+
+| Access Method | Indexing | Valid Range |
+|--------------|----------|-------------|
+| `mesh.ngmesh.Points()[i]` | **1-indexed** | 1 to nv |
+| `mesh.vertices[i]` | **0-indexed** | 0 to nv-1 |
+| `el.vertices[i].nr` | Returns **0-indexed** value | Use with `mesh.vertices[]` only |
+
+**Common Bug Pattern (DO NOT DO THIS):**
 ```python
-from netgen_mesh_import import netgen_mesh_to_radia
+# WRONG - Using 0-indexed .nr with 1-indexed ngmesh.Points()
+for v in el.vertices:
+    pt = mesh.ngmesh.Points()[v.nr]  # Off-by-one error!
+```
+
+**Correct Usage:**
+```python
+from netgen_mesh_import import netgen_mesh_to_radia, extract_elements, compute_element_centroid
 
 rad.FldUnits('m')  # REQUIRED for NGSolve integration
 
+# Option 1: Direct conversion (recommended)
 mag_obj = netgen_mesh_to_radia(
     mesh,
     material={'magnetization': [0, 0, M_z]},
     units='m',
     material_filter='magnetic'
 )
+
+# Option 2: Custom processing with extract_elements
+elements, _ = extract_elements(mesh, material_filter='magnetic')
+for el in elements:
+    vertices = el['vertices']  # Correctly extracted
+    centroid = compute_element_centroid(vertices)
 ```
+
+**Available Functions in `netgen_mesh_import.py`:**
+- `netgen_mesh_to_radia()`: Convert entire mesh to Radia geometry (recommended)
+- `extract_elements()`: Extract element data for custom processing
+- `compute_element_centroid()`: Compute centroid from vertex list
+- `create_radia_tetrahedron()`: Create single Radia tetrahedron
+- `create_radia_hexahedron()`: Create single Radia hexahedron
+- `TETRA_FACES`, `HEX_FACES`, `WEDGE_FACES`, `PYRAMID_FACES`: Face topology constants
 
 ### 2. Radia Magnetization is in A/m (NOT Tesla)
 

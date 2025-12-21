@@ -50,8 +50,8 @@ for nx, ny, nz in test_cases:
 	cube_size = 100.0
 	elem_size = cube_size / nx
 
-	# Linear material with high susceptibility (isotropic)
-	mat = rad.MatLin(999)
+	# Linear material with high permeability (isotropic)
+	mat = rad.MatLin(1000)  # mu_r = 1000
 
 	# Build geometry
 	elements = []

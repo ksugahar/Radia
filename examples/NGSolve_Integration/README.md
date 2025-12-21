@@ -111,9 +111,30 @@ from nastran_mesh_import import create_radia_from_nastran
 cube = create_radia_from_nastran('cube.bdf', units='m')
 
 # Tetrahedral mesh (NGSolve)
-from netgen_mesh_import import netgen_mesh_to_radia
+from netgen_mesh_import import netgen_mesh_to_radia, extract_elements, compute_element_centroid
 cube = netgen_mesh_to_radia(ngsolve_mesh, units='m')
+
+# Custom processing with extract_elements
+elements, _ = extract_elements(mesh, material_filter='magnetic')
+for el in elements:
+    vertices = el['vertices']  # Correctly extracted coordinates
+    centroid = compute_element_centroid(vertices)
 ```
+
+**CRITICAL POLICY - NGSolve Mesh Access**:
+
+| Rule | Description |
+|------|-------------|
+| **ALWAYS** | Use functions from `netgen_mesh_import.py` |
+| **NEVER** | Directly access `mesh.ngmesh.Points()`, `mesh.vertices[]`, or `el.vertices[].nr` |
+| **NO EXCEPTIONS** | Applies to all scripts including examples, tests, and debugging code |
+
+**Why?** NGSolve has TWO different indexing schemes:
+- `mesh.ngmesh.Points()[i]` is **1-indexed** (valid: 1 to nv)
+- `mesh.vertices[i]` is **0-indexed** (valid: 0 to nv-1)
+- `el.vertices[i].nr` returns **0-indexed** value (for use with `mesh.vertices[]` only)
+
+Mixing these causes off-by-one errors that are difficult to debug.
 
 **→ See: [mesh_import/README.md](mesh_import/README.md)**
 

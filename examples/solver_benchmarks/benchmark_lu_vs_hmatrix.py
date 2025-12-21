@@ -37,7 +37,7 @@ def benchmark_lu(subdiv, tol=1e-4, max_iter=1):
     rad.ObjDivMag(cube, subdiv)
 
     # Apply linear material (mu_r = 1000)
-    mat = rad.MatLin(999.0)
+    mat = rad.MatLin(1000.0)  # relative permeability
     rad.MatApl(cube, mat)
 
     # Add external field
@@ -83,7 +83,7 @@ def benchmark_bicgstab(subdiv, use_hmatrix=False, tol=1e-4, max_iter=1000):
     rad.ObjDivMag(cube, subdiv)
 
     # Apply linear material (mu_r = 1000)
-    mat = rad.MatLin(999.0)
+    mat = rad.MatLin(1000.0)  # relative permeability
     rad.MatApl(cube, mat)
 
     # Add external field

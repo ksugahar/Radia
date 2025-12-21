@@ -55,8 +55,8 @@ CUBE_SIZE = 1.0      # Cube edge length [m]
 CUBE_HALF = 0.5      # Half size
 
 # Material (Linear)
-MU_R = 1000          # Relative permeability
-CHI = MU_R - 1       # Magnetic susceptibility = 999
+MU_R = 1000          # Relative permeability (industry standard input)
+CHI = MU_R - 1       # For internal calculations
 
 # External field
 H_EXT = 50000.0      # External H field [A/m]
@@ -124,7 +124,7 @@ def create_hexa_solution(test_points):
     n_elements = HEXA_NDIV ** 3
 
     # Apply linear material
-    mat = rad.MatLin(CHI)
+    mat = rad.MatLin(MU_R)  # relative permeability
     rad.MatApl(cube, mat)
 
     # External field
@@ -204,7 +204,7 @@ def create_tetra_solution(test_points):
                                  verbose=False)
 
     # Apply linear material
-    mat = rad.MatLin(CHI)
+    mat = rad.MatLin(MU_R)  # relative permeability
     rad.MatApl(cube, mat)
 
     # External field
