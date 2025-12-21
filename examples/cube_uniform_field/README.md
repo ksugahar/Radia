@@ -42,7 +42,7 @@ Tests Radia's solver with constant permeability materials (MatLin).
 
 ### Key Results
 
-- **Mesh types**: Hexahedral (ObjDivMag) and Tetrahedral (Netgen import)
+- **Mesh types**: Hexahedral (ObjPolyhdr) and Tetrahedral (Netgen import)
 - **Solver methods**: Method 0 (LU), Method 1 (BiCGSTAB)
 - **Reference**: NGSolve FEM solution for validation
 - **Accuracy**: Tetrahedral achieves <1% error vs hexahedral reference

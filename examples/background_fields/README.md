@@ -84,8 +84,8 @@ background = rd.ObjBckgCF(quadrupole_field)
 
 # Create magnetizable object
 sphere = rd.ObjRecMag([0, 0, 0], [10, 10, 10])
-# Apply linear isotropic material (μr = 1000)
-mat = rd.MatLin(999)  # chi = mu_r - 1
+# Apply linear isotropic material (mu_r = 1000)
+mat = rd.MatLin(1000)  # relative permeability
 rd.MatApl(sphere, mat)
 # Or use saturating material (Steel37)
 # mat = rd.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])

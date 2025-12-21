@@ -25,8 +25,10 @@ CUBE_HALF = 0.5      # Half of cube edge [m]
 # =============================================================================
 # Material Parameters (Linear)
 # =============================================================================
-MU_R = 1000          # Relative permeability
-CHI = MU_R - 1       # Magnetic susceptibility (chi = mu_r - 1)
+MU_R = 1000          # Relative permeability (industry standard input)
+# Note: As of v1.3.14, rad.MatLin() accepts mu_r directly (not chi)
+# Internal conversion: chi = mu_r - 1
+CHI = MU_R - 1       # For reference/calculations only
 
 # =============================================================================
 # External Field

@@ -273,7 +273,7 @@ def run_example(name, magpy_source, description):
 
     # Apply material
     mu_r = 1000
-    mat = rad.MatLin(mu_r - 1)
+    mat = rad.MatLin(mu_r)  # relative permeability
     rad.MatApl(cube, mat)
     print(f"   Material: mu_r = {mu_r}")
 

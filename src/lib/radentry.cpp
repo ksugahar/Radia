@@ -88,6 +88,7 @@ void ManualRelax( int, int, int, double );
 void AutoRelaxOpt( int, double, int, int, const char* );
 void UpdateSourcesForRelax( int );
 void SolveGen( int, double, int, int );
+void SolveGenNonl( int, double, int, int, int );
 
 void FieldArbitraryPointsArray( long, const char*, double**, long );
 void Field( int, char*, double,double,double, double,double,double, int, char*, double );
@@ -540,97 +541,6 @@ int CALL RadObjCutMag(int* pIndexes, int* pAmOfIndexes, int Obj, double* pP, dou
 	ioBuffer.OutMultiDimArrayOfInt(pIndexes, Dims, NumDims);
 	*pAmOfIndexes = Dims[0];
 	return ErrStat;
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjDivMagPln(int* n, int Obj, double* pSbdPar, int nSbdPar, double* pFlatNormals, char* sOpt) //OC22092018
-//int CALL RadObjDivMagPln(int* n, int Obj, double* pSbdPar, int nSbdPar, double* pFlatNormals, char* Opt)
-{
-	const char *sOpt1=0, *sOpt2=0;
-	//const char *Opt1=0, *Opt2=0;
-	vector<string> AuxStrings;
-	if((sOpt != 0) && (strlen(sOpt) > 0)) //OC22092018
-	//if(Opt != 0)
-	{
-		//char *SepStrArr[] = {(char*)";", (char*)","}; //OC04082018 (to please GCC 4.9)
-		//CAuxParse::StringSplit(Opt, SepStrArr, 2, (char*)" ", AuxStrings);
-		//int AmOfTokens = (int)AuxStrings.size();
-		//if(AmOfTokens > 0) Opt1 = (AuxStrings[0]).c_str();
-		//if(AmOfTokens > 1) Opt2 = (AuxStrings[1]).c_str();
-		//OC22092018
-		int lenStrOpt = (int)strlen(sOpt);
-		char *sOptLoc = new char[lenStrOpt + 1];
-		CAuxParse::StringSymbolsRemove(sOpt, (char*)" ", sOptLoc);
-		CAuxParse::StringSplitNested(sOptLoc,";,", AuxStrings);
-		delete[] sOptLoc;
-		int AmOfTokens = (int)AuxStrings.size();
-		if(AmOfTokens > 0) 
-		{
-			sOpt1 = (AuxStrings[0]).c_str();
-			if(AmOfTokens > 1) 
-			{
-				sOpt2 = (AuxStrings[1]).c_str();
-			}
-		}
-	}
-
-	double AuxSbdPar[6];
-	if(nSbdPar == 3)
-	{
-		AuxSbdPar[0] = pSbdPar[0]; AuxSbdPar[1] = 1.;
-		AuxSbdPar[2] = pSbdPar[1]; AuxSbdPar[3] = 1.;
-		AuxSbdPar[4] = pSbdPar[2]; AuxSbdPar[5] = 1.;
-	}
-	else if(nSbdPar == 6)
-	{
-		for(int i=0; i<6; i++) AuxSbdPar[i] = pSbdPar[i];
-	}
-	char TypeExtraSpec = 2; //pln; = 1;//cyl
-	int LenExtraSpec = 9;
-
-	SubdivideElementG3DOpt(Obj, AuxSbdPar, TypeExtraSpec, pFlatNormals, LenExtraSpec, sOpt1, sOpt2, "\0");
-	//SubdivideElementG3DOpt(Obj, AuxSbdPar, TypeExtraSpec, pFlatNormals, LenExtraSpec, Opt1, Opt2, "\0");
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjDivMagCyl(int* n, int Obj, double* pSbdPar, int nSbdPar, double* pFlatCylDefPts, double Rat, char* Opt)
-{
-	const char *Opt1=0, *Opt2=0;
-	vector<string> AuxStrings;
-	if(Opt != 0)
-	{
-		//char *SepStrArr[] = {";", ","};
-		char *SepStrArr[] = {(char*)";", (char*)","};  //OC04082018 (to please GCC 4.9)
-		CAuxParse::StringSplit(Opt, SepStrArr, 2, (char*)" ", AuxStrings);
-		int AmOfTokens = (int)AuxStrings.size();
-		if(AmOfTokens > 0) Opt1 = (AuxStrings[0]).c_str();
-		if(AmOfTokens > 1) Opt2 = (AuxStrings[1]).c_str();
-	}
-
-	double AuxSbdPar[6];
-	if(nSbdPar == 3)
-	{
-		AuxSbdPar[0] = pSbdPar[0]; AuxSbdPar[1] = 1.;
-		AuxSbdPar[2] = pSbdPar[1]; AuxSbdPar[3] = 1.;
-		AuxSbdPar[4] = pSbdPar[2]; AuxSbdPar[5] = 1.;
-	}
-	else if(nSbdPar == 6)
-	{
-		for(int i=0; i<6; i++) AuxSbdPar[i] = pSbdPar[i];
-	}
-	char TypeExtraSpec = 1; //pln; = 1;//cyl
-	int LenExtraSpec = 10;
-	double AuxExtraSpec[10];
-	for(int i=0; i<(LenExtraSpec - 1); i++) AuxExtraSpec[i] = pFlatCylDefPts[i];
-	AuxExtraSpec[LenExtraSpec - 1] = Rat;
-
-	SubdivideElementG3DOpt(Obj, AuxSbdPar, TypeExtraSpec, AuxExtraSpec, LenExtraSpec, Opt1, Opt2, "\0");
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
 }
 
 //-------------------------------------------------------------------------
@@ -1684,34 +1594,18 @@ int CALL RadSolve(double* dOut, int* nOut, int obj, double prec, int iter, int m
 
 //-------------------------------------------------------------------------
 
-int CALL RadObjFullMag(int* n, double* pP, double* pL, double* pM, double* SbdPar, int nSbdPar, int grp, int mat, double* pRGB)
+int CALL RadSolveNonl(double* dOut, int* nOut, int obj, double prec, int iter, int meth, int nonl_method)
 {
-	int OutRes = 0, LocRes = 0;
+	SolveGenNonl(obj, prec, iter, meth, nonl_method);
 
-	if(LocRes = RadObjRecMag(n, pP, pL, pM)) return LocRes;
-	if(LocRes < 0) OutRes = LocRes;
+	int ErrStat = ioBuffer.OutErrorStatus();
+	if(ErrStat > 0) return ErrStat;
 
-	if(LocRes = RadObjDrwAtr(*n, pRGB, 0.001)) return LocRes;
-	if(LocRes < 0) OutRes = LocRes;
-
-	if(mat > 0)
-	{
-		if(LocRes = RadMatApl(n, *n, mat)) return LocRes;
-		if(LocRes < 0) OutRes = LocRes;
-	}
-
-	double FlatNorm[] = {1,0,0,0,1,0,0,0,1};
-	if(LocRes = RadObjDivMagPln(n, *n, SbdPar, nSbdPar, FlatNorm, 0)) return LocRes;
-	if(LocRes < 0) OutRes = LocRes;
-
-	if(grp > 0)
-	{
-		int KeysArr[] = {*n};
-		if(LocRes = RadObjAddToCnt(grp, KeysArr, 1)) return LocRes;
-		if(LocRes < 0) OutRes = LocRes;
-	}
-
-	return OutRes;
+	int Dims[20];
+	int NumDims;
+	ioBuffer.OutMultiDimArrayOfDouble(dOut, Dims, NumDims);
+	*nOut = Dims[0];
+	return ErrStat;
 }
 
 //-------------------------------------------------------------------------

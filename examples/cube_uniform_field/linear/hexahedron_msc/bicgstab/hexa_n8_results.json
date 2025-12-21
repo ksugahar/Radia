@@ -1,0 +1,13 @@
+{
+  "n_div": 8,
+  "n_elements": 512,
+  "ndof": 3072,
+  "solver": "bicgstab",
+  "t_mesh": 0.01602935791015625,
+  "t_solve": 4.181467294692993,
+  "iterations": 1,
+  "converged": true,
+  "M_avg_z": 178227.7075139291,
+  "M_analytical": 149550.8982035928,
+  "error_pct": 19.175283903207863
+}

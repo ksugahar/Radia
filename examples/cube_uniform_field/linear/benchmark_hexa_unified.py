@@ -1,177 +1,159 @@
 #!/usr/bin/env python
 """
-Hexahedral Benchmark using Unified Conditions (Linear Material)
+Hexahedral Benchmark - Linear Material (Unified Conditions)
 
-Generates benchmark results for hexahedron_msc/{lu,bicgstab}/ directories
-using Radia's ObjDivMag for hexahedral mesh generation.
-
-This script uses the same conditions as benchmark_tetra_unified.py
-for fair comparison between tetrahedral and hexahedral elements.
-
-Usage:
-    python benchmark_hexa_unified.py --lu 3 4 5 6 8 10
-    python benchmark_hexa_unified.py --bicgstab 3 4 5 6 8 10
-    python benchmark_hexa_unified.py 3 4 5 6 8 10  # runs both
+Benchmarks 6DOF MSC hexahedral elements with linear material,
+comparing LU and BiCGSTAB solvers.
 
 Author: Radia Development Team
-Date: 2025-12-12
+Date: 2025-12-20
 """
 
 import sys
 import os
-import time
 import json
-import argparse
-
-# Path setup
-_build_path = os.path.join(os.path.dirname(__file__), '../../../build/Release')
-_src_path = os.path.join(os.path.dirname(__file__), '../../../src/radia')
-sys.path.insert(0, _build_path)
-sys.path.append(_src_path)
-
+import time
 import numpy as np
+
+# Add Radia to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 import radia as rad
-
-try:
-    import psutil
-    HAS_PSUTIL = True
-except ImportError:
-    HAS_PSUTIL = False
-
-
-def get_peak_memory_mb():
-    """Get peak memory usage in MB (Windows: peak_wset)"""
-    if not HAS_PSUTIL:
-        return None
-    process = psutil.Process(os.getpid())
-    mem_info = process.memory_info()
-    if hasattr(mem_info, 'peak_wset'):
-        return mem_info.peak_wset / (1024 * 1024)  # MB
-    else:
-        return mem_info.rss / (1024 * 1024)  # MB (fallback)
 
 # Import unified benchmark conditions
 from benchmark_conditions import (
-    MU_0, CUBE_SIZE, H_EXT, B_EXT, CHI, MU_R,
-    SOLVER_TOLERANCE, MAX_ITERATIONS, n_div_to_maxh, M_ANALYTICAL_Z
+    MU_0, CUBE_SIZE, CUBE_HALF, H_EXT, B_EXT, CHI, MU_R,
+    SOLVER_TOLERANCE, MAX_ITERATIONS, M_ANALYTICAL_Z, STANDARD_N_DIVS
 )
 
+# Hexahedral face topology (1-indexed for Radia)
+HEX_FACES = [
+    [1, 4, 3, 2],  # Bottom face (z=0)
+    [5, 6, 7, 8],  # Top face (z=1)
+    [1, 2, 6, 5],  # Front face (y=0)
+    [3, 4, 8, 7],  # Back face (y=1)
+    [1, 5, 8, 4],  # Left face (x=0)
+    [2, 3, 7, 6]   # Right face (x=1)
+]
 
-def benchmark_hexahedra(n_div, solver_method, output_dir):
-    """Benchmark hexahedral mesh (ObjDivMag) with linear material."""
+
+def create_hex_mesh(n_div):
+    """Create hexahedral mesh using ObjPolyhdr."""
     rad.FldUnits('m')
     rad.UtiDelAll()
 
-    solver_name = 'lu' if solver_method == 0 else 'bicgstab'
-    n_elements = n_div ** 3
+    cube_size_elem = CUBE_SIZE / n_div
+    elements = []
 
-    print('=' * 70)
-    print('HEXAHEDRAL MESH: n_div=%d (%d elements), solver=%s' % (n_div, n_elements, solver_name))
-    print('=' * 70)
+    for ix in range(n_div):
+        for iy in range(n_div):
+            for iz in range(n_div):
+                x0 = ix * cube_size_elem - CUBE_HALF
+                y0 = iy * cube_size_elem - CUBE_HALF
+                z0 = iz * cube_size_elem - CUBE_HALF
 
-    # Create mesh
-    t_mesh_start = time.time()
-    cube = rad.ObjRecMag([0, 0, 0], [CUBE_SIZE, CUBE_SIZE, CUBE_SIZE], [0, 0, 0])
-    rad.ObjDivMag(cube, [n_div, n_div, n_div])
-    t_mesh = time.time() - t_mesh_start
+                vertices = [
+                    [x0, y0, z0],
+                    [x0 + cube_size_elem, y0, z0],
+                    [x0 + cube_size_elem, y0 + cube_size_elem, z0],
+                    [x0, y0 + cube_size_elem, z0],
+                    [x0, y0, z0 + cube_size_elem],
+                    [x0 + cube_size_elem, y0, z0 + cube_size_elem],
+                    [x0 + cube_size_elem, y0 + cube_size_elem, z0 + cube_size_elem],
+                    [x0, y0 + cube_size_elem, z0 + cube_size_elem]
+                ]
 
-    print('Generated %d hexahedral elements' % n_elements)
+                obj = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+                elements.append(obj)
 
-    # Apply linear material
-    mat = rad.MatLin(CHI)
+    cube = rad.ObjCnt(elements)
+    mat = rad.MatLin(MU_R)  # mu_r (industry standard)
     rad.MatApl(cube, mat)
 
-    # External field
     ext = rad.ObjBckg([0, 0, B_EXT])
     grp = rad.ObjCnt([cube, ext])
 
+    return grp, cube, len(elements)
+
+
+def get_avg_magnetization(cube):
+    """Get average z-magnetization."""
+    all_M = rad.ObjM(cube)
+    # Handle single vs multiple elements
+    if isinstance(all_M[0][0], (int, float)):
+        return all_M[1][2]
+    else:
+        M_z_values = [m[1][2] for m in all_M]
+        return np.mean(M_z_values)
+
+
+def run_benchmark(n_div, solver_method, solver_name):
+    """Run single benchmark case."""
+    print('=' * 70)
+    print('HEXAHEDRAL MESH: N=%d, solver=%s' % (n_div, solver_name))
+    print('=' * 70)
+
+    # Create mesh
+    t0 = time.time()
+    grp, cube, n_elements = create_hex_mesh(n_div)
+    t_mesh = time.time() - t0
+
+    print('Generated %d hexahedral elements' % n_elements)
+    print('DOF: %d' % (n_elements * 6))
+
     # Solve
     print('Solving...')
-    t_solve_start = time.time()
-    try:
-        result = rad.Solve(grp, SOLVER_TOLERANCE, MAX_ITERATIONS, solver_method)
-        t_solve = time.time() - t_solve_start
+    t0 = time.time()
+    result = rad.Solve(grp, SOLVER_TOLERANCE, MAX_ITERATIONS, solver_method)
+    t_solve = time.time() - t0
 
-        # Measure peak memory after solve
-        peak_memory_mb = get_peak_memory_mb()
+    # Get results
+    M_avg_z = get_avg_magnetization(cube)
+    n_iter = int(result[3])
+    converged = result[0] == 0.0
 
-        # Get magnetization
-        all_M = rad.ObjM(cube)
-        M_list = [m[1] for m in all_M]
-        M_avg_z = np.mean([m[2] for m in M_list])
+    # Calculate error vs analytical
+    error_pct = abs(M_avg_z - M_ANALYTICAL_Z) / M_ANALYTICAL_Z * 100
 
-        n_iter = int(result[3]) if result[3] else 0
-        converged = n_iter < MAX_ITERATIONS and not np.isnan(M_avg_z)
-        residual = result[0] if result[0] else 0.0
-    except Exception as e:
-        print('Solve failed: %s' % e)
-        return None
-
-    # Compare with analytical solution
-    error_vs_analytical = abs(M_avg_z - M_ANALYTICAL_Z) / M_ANALYTICAL_Z * 100
-
+    # Print results
     print('Mesh time:    %.4f s' % t_mesh)
     print('Solve time:   %.3f s' % t_solve)
     print('Iterations:   %d' % n_iter)
     print('Converged:    %s' % ('Yes' if converged else 'No'))
     print('M_avg_z:      %.0f A/m' % M_avg_z)
     print('Analytical:   %.0f A/m' % M_ANALYTICAL_Z)
-    print('Error:        %.2f%%' % error_vs_analytical)
-    if peak_memory_mb is not None:
-        print('Peak memory:  %.1f MB' % peak_memory_mb)
-    print()
+    print('Error:        %.2f%%' % error_pct)
 
-    result_data = {
-        'element_type': 'hexa',
-        'mesh_description': 'n_div=%d' % n_div,
+    # Save results
+    results = {
         'n_div': n_div,
         'n_elements': n_elements,
-        'ndof': n_elements * 3,
-        'H_ext': H_EXT,
-        'mu_r': MU_R,
-        'chi': CHI,
+        'ndof': n_elements * 6,
+        'solver': solver_name,
         't_mesh': t_mesh,
         't_solve': t_solve,
-        'solver_method': solver_method,
-        'solver_name': solver_name,
-        'converged': converged,
-        'residual': residual,
         'iterations': n_iter,
+        'converged': converged,
         'M_avg_z': M_avg_z,
-        'M_analytical_z': M_ANALYTICAL_Z,
-        'error_percent': error_vs_analytical,
-        # For comparison with tetra: approximate equivalent maxh
-        'equiv_maxh': n_div_to_maxh(n_div),
+        'M_analytical': M_ANALYTICAL_Z,
+        'error_pct': error_pct
     }
-    if peak_memory_mb is not None:
-        result_data['peak_memory_mb'] = peak_memory_mb
 
-    # Save result
-    os.makedirs(output_dir, exist_ok=True)
+    # Create output directory
+    out_dir = os.path.join(os.path.dirname(__file__), 'hexahedron_msc', solver_name)
+    os.makedirs(out_dir, exist_ok=True)
+
+    # Save JSON
     filename = 'hexa_n%d_results.json' % n_div
-    filepath = os.path.join(output_dir, filename)
-
+    filepath = os.path.join(out_dir, filename)
     with open(filepath, 'w') as f:
-        json.dump(result_data, f, indent=2)
+        json.dump(results, f, indent=2)
+    print()
     print('Saved: %s' % filepath)
 
-    return result_data
+    return results
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Hexahedral benchmark using unified conditions (linear material)')
-    parser.add_argument('--lu', action='store_true', help='Use LU solver (saves to hexahedron_msc/lu/)')
-    parser.add_argument('--bicgstab', action='store_true', help='Use BiCGSTAB solver (saves to hexahedron_msc/bicgstab/)')
-    parser.add_argument('n_div_values', nargs='*', type=int, default=[2, 3, 4, 5, 6, 8, 10],
-                       help='n_div values (subdivisions per edge, default: 2 3 4 5 6 8 10)')
-    args = parser.parse_args()
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # If neither --lu nor --bicgstab is specified, run both
-    run_lu = args.lu or (not args.lu and not args.bicgstab)
-    run_bicgstab = args.bicgstab or (not args.lu and not args.bicgstab)
-
     print('=' * 70)
     print('HEXAHEDRAL BENCHMARK - LINEAR MATERIAL (Unified Conditions)')
     print('=' * 70)
@@ -179,56 +161,46 @@ def main():
     print('mu_r: %d, chi: %d' % (MU_R, CHI))
     print('H_ext: %.0f A/m' % H_EXT)
     print('Analytical M_z: %.0f A/m' % M_ANALYTICAL_Z)
-    print('n_div values: %s' % args.n_div_values)
-    print()
-    print('Mesh correspondence (n_div -> approx maxh):')
-    for n in args.n_div_values:
-        print('  n_div=%d -> maxh ~= %.3fm, elements=%d' % (n, n_div_to_maxh(n), n**3))
+    print('N values: %s' % STANDARD_N_DIVS)
     print()
 
-    results_lu = []
-    results_bicgstab = []
+    all_results = []
 
-    for n_div in args.n_div_values:
-        if run_lu:
-            output_dir = os.path.join(script_dir, 'hexahedron_msc', 'lu')
-            r = benchmark_hexahedra(n_div, 0, output_dir)
-            if r:
-                results_lu.append(r)
+    # Parse command line arguments for solver selection
+    solvers = [(0, 'lu'), (1, 'bicgstab')]
+    if '--lu' in sys.argv:
+        solvers = [(0, 'lu')]
+    elif '--bicgstab' in sys.argv:
+        solvers = [(1, 'bicgstab')]
+    elif '--hacapk' in sys.argv:
+        solvers = [(2, 'hacapk')]
+    elif '--all' in sys.argv:
+        solvers = [(0, 'lu'), (1, 'bicgstab'), (2, 'hacapk')]
 
-        if run_bicgstab:
-            output_dir = os.path.join(script_dir, 'hexahedron_msc', 'bicgstab')
-            r = benchmark_hexahedra(n_div, 1, output_dir)
-            if r:
-                results_bicgstab.append(r)
+    for n_div in STANDARD_N_DIVS:
+        for solver_method, solver_name in solvers:
+            try:
+                result = run_benchmark(n_div, solver_method, solver_name)
+                all_results.append(result)
+            except Exception as e:
+                print('ERROR: %s' % e)
 
-    # Summary
+    # Print summary
+    print()
     print('=' * 70)
     print('SUMMARY')
     print('=' * 70)
+    print('%5s  %6s  %10s  %10s  %8s  %10s  %8s' %
+          ('N', 'Elems', 'DOF', 'Solver', 't_solve', 'M_avg_z', 'Error%'))
+    print('-' * 70)
 
-    if results_lu:
-        print('\nLU Solver (hexahedron_msc/lu/):\n')
-        print('%-10s %10s %10s %8s %12s %10s %8s' % ('n_div', 'Elements', 'Time (s)', 'Iter', 'M_avg_z', 'Error', 'Conv'))
-        print('-' * 75)
-        for r in results_lu:
-            print('%-10d %10d %10.3f %8d %12.0f %9.2f%% %8s' % (
-                r['n_div'], r['n_elements'], r['t_solve'],
-                r['iterations'], r['M_avg_z'], r['error_percent'],
-                'Yes' if r['converged'] else 'No'))
+    for r in all_results:
+        print('%5d  %6d  %10d  %10s  %8.3f  %10.0f  %8.2f' % (
+            r['n_div'], r['n_elements'], r['ndof'], r['solver'],
+            r['t_solve'], r['M_avg_z'], r['error_pct']))
 
-    if results_bicgstab:
-        print('\nBiCGSTAB Solver (hexahedron_msc/bicgstab/):\n')
-        print('%-10s %10s %10s %8s %12s %10s %8s' % ('n_div', 'Elements', 'Time (s)', 'Iter', 'M_avg_z', 'Error', 'Conv'))
-        print('-' * 75)
-        for r in results_bicgstab:
-            print('%-10d %10d %10.3f %8d %12.0f %9.2f%% %8s' % (
-                r['n_div'], r['n_elements'], r['t_solve'],
-                r['iterations'], r['M_avg_z'], r['error_percent'],
-                'Yes' if r['converged'] else 'No'))
-
-    print('=' * 70)
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

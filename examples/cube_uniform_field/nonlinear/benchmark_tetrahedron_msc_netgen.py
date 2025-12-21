@@ -1,14 +1,20 @@
 #!/usr/bin/env python
 """
-Tetrahedral Benchmark using Netgen mesh
+Tetrahedral Benchmark using Netgen mesh (MSC method)
 
 Generates benchmark results for tetrahedron_msc/{lu,bicgstab}/ directories
 using Netgen mesh with various maxh values.
 
+This script uses the same parameters as ELF_MAGIC for fair comparison.
+
+Solver types:
+  lu       - Dense LU decomposition (Method 0)
+  bicgstab - BiCGSTAB iterative solver (Method 1)
+
 Usage:
-    python benchmark_tetra_netgen.py --lu 0.4 0.3 0.25
-    python benchmark_tetra_netgen.py --bicgstab 0.4 0.3 0.25
-    python benchmark_tetra_netgen.py 0.4 0.3 0.25  # runs both
+    python benchmark_tetrahedron_msc_netgen.py --lu 0.4 0.3 0.25 0.2 0.15
+    python benchmark_tetrahedron_msc_netgen.py --bicgstab 0.4 0.3 0.25 0.2 0.15
+    python benchmark_tetrahedron_msc_netgen.py 0.4 0.3 0.25  # runs both
 
 Author: Radia Development Team
 Date: 2025-12-05
@@ -21,10 +27,8 @@ import json
 import argparse
 
 # Path setup
-_build_path = os.path.join(os.path.dirname(__file__), '../../../build/Release')
 _src_path = os.path.join(os.path.dirname(__file__), '../../../src/radia')
-sys.path.insert(0, _build_path)
-sys.path.append(_src_path)
+sys.path.insert(0, _src_path)
 
 import numpy as np
 import radia as rad
@@ -56,7 +60,9 @@ CUBE_HALF = 0.5      # half size
 H_EXT = 50000.0      # External field (A/m)
 B_EXT = MU_0 * H_EXT  # External B field (T)
 
-# B-H curve data: [H (A/m), B (T)]
+# B-H curve data (industry standard format)
+# Format: [[H (A/m), B (T)], ...]
+# Radia v1.3.14+ accepts B-H directly - internal conversion: M = B/mu_0 - H
 BH_DATA = [
     [0.0, 0.0],
     [100.0, 0.1],
@@ -69,9 +75,6 @@ BH_DATA = [
     [50000.0, 2.0],
     [100000.0, 2.1],
 ]
-
-# Convert B-H to H-M format: M = B/mu_0 - H
-HM_DATA = [[h, b/MU_0 - h] for h, b in BH_DATA]
 
 
 def benchmark_tetrahedra(maxh, solver_method, output_dir):
@@ -113,8 +116,8 @@ def benchmark_tetrahedra(maxh, solver_method, output_dir):
 
     print('Generated %d tetrahedral elements' % n_elements)
 
-    # Apply nonlinear material
-    mat = rad.MatSatIsoTab(HM_DATA)
+    # Apply nonlinear material (B-H curve input - industry standard)
+    mat = rad.MatSatIsoTab(BH_DATA)
     rad.MatApl(cube, mat)
 
     # External field
@@ -202,8 +205,8 @@ def main():
     parser = argparse.ArgumentParser(description='Tetrahedral benchmark using Netgen mesh')
     parser.add_argument('--lu', action='store_true', help='Use LU solver (saves to tetrahedron_msc/lu/)')
     parser.add_argument('--bicgstab', action='store_true', help='Use BiCGSTAB solver (saves to tetrahedron_msc/bicgstab/)')
-    parser.add_argument('maxh_values', nargs='*', type=float, default=[0.4, 0.3, 0.25],
-                       help='maxh values for Netgen mesh (default: 0.4 0.3 0.25)')
+    parser.add_argument('maxh_values', nargs='*', type=float, default=[0.4, 0.3, 0.25, 0.2, 0.15],
+                       help='maxh values for Netgen mesh (default: 0.4 0.3 0.25 0.2 0.15)')
     args = parser.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))

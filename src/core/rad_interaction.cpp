@@ -766,6 +766,15 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	m_flatMagnArray.resize(m_totalDOF, 0.0);
 	m_flatFieldArray.resize(m_totalDOF, 0.0);
 
+	// Also allocate standard arrays (NewFieldArray, NewMagnArray, ExternFieldArray)
+	// These are needed for chi update in nonlinear iteration
+	vNewMagnArray.resize(AmOfMainElem);
+	vNewFieldArray.resize(AmOfMainElem);
+	vExternFieldArray.resize(AmOfMainElem);
+	NewMagnArray = vNewMagnArray.data();
+	NewFieldArray = vNewFieldArray.data();
+	ExternFieldArray = vExternFieldArray.data();
+
 	radTFieldKey FieldKeyInteract;
 	FieldKeyInteract.B_ = FieldKeyInteract.H_ = FieldKeyInteract.PreRelax_ = 1;
 	TVector3d ZeroVect(0., 0., 0.);
@@ -940,7 +949,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			{
 				// 6x6 block: Field at MSC hexahedron (6 DOF) eval points from MSC hexahedron (6 DOF)
 				// K(face_i, face_j) = normal_i dot H_field(eval_pt_i, src_face_j)
-				// Store -K/(4*pi) in the matrix (4pi divisor applied here, not in field functions)
+				// Field functions return values WITHOUT 4pi divisor (ELF_MAGIC convention)
+				// Matrix stores: -K_ij / (4*pi)
 
 				static const double PI_MSC = 3.14159265358979323846;
 				static const double INV_4PI_MSC = 1.0 / (4.0 * PI_MSC);
@@ -969,7 +979,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 								TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
 
 								// Field from unit sigma on face j (quad face + point charge)
-								// FieldFromQuadFace and FieldFromPointCharge return values WITHOUT 4pi divisor
+								// Field functions return values WITHOUT 4pi divisor
 								TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
 
 								// Point charge contribution: m = -sigma * area (Yano-Sugahara MSC method)
@@ -988,7 +998,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 								        H_global.z * poly_row->FaceNormal[face_i].z;
 							}
 
-							// Store -K/(4*pi) in the matrix (MSC convention)
+							// Store -K_ij / (4*pi) - matches ELF_MAGIC convention
 							block[face_i * m_totalDOF + face_j] = -K_ij * INV_4PI_MSC;
 						}
 					}

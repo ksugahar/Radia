@@ -52,7 +52,6 @@ g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
 | `radObjDrwAtr[...]` | `rad.ObjDrwAtr(...)` | Set drawing attributes |
 | `radObjCnt[{...}]` | `rad.ObjCnt([...])` | Create container |
 | `radObjMltExtRtg[...]` | `rad.ObjMltExtRtg(...)` | Multiple extrusion |
-| `radObjDivMag[...]` | `rad.ObjDivMag(...)` | Subdivide magnet |
 | `radObjPolyhdr[...]` | `rad.ObjPolyhdr(...)` | Create polyhedron |
 | `radFld[obj, "bxbybz", pt]` | `rad.Fld(obj, 'b', pt)` | Calculate magnetic field |
 

@@ -26,6 +26,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <cstdio>
 
 
 //-------------------------------------------------------------------------
@@ -206,14 +207,14 @@ int radTApplication::SetNonlinearIsotropMaterial(double* Ms, long lenMs, double*
 
 //-------------------------------------------------------------------------
 
-int radTApplication::SetNonlinearIsotropMaterial(TVector2d* ArrayHM, int LenArrayHM)
+int radTApplication::SetNonlinearIsotropMaterial(TVector2d* ArrayHB, int LenArrayHB)
 {
 	radTNonlinearIsotropMaterial* MaterPtr = nullptr;
 	try
 	{
-		if(!ValidateIsotropMaterDescrByPoints(ArrayHM, LenArrayHM)) return 0;
+		if(!ValidateIsotropMaterDescrByPoints(ArrayHB, LenArrayHB)) return 0;
 
-		MaterPtr = new radTNonlinearIsotropMaterial(ArrayHM, LenArrayHM);
+		MaterPtr = new radTNonlinearIsotropMaterial(ArrayHB, LenArrayHB);
 		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 		radThg hg(MaterPtr);
 		MaterPtr = nullptr;  // Ownership transferred to radThg
@@ -230,21 +231,21 @@ int radTApplication::SetNonlinearIsotropMaterial(TVector2d* ArrayHM, int LenArra
 
 //-------------------------------------------------------------------------
 
-int radTApplication::ValidateIsotropMaterDescrByPoints(TVector2d* ArrayHM, int LenArrayHM)
+int radTApplication::ValidateIsotropMaterDescrByPoints(TVector2d* ArrayHB, int LenArrayHB)
 {
 	try
 	{
-		if((ArrayHM->x < 0.) || (ArrayHM->y < 0.)) { Send.ErrorMessage("Radia::Error071"); return 0;}
+		if((ArrayHB->x < 0.) || (ArrayHB->y < 0.)) { Send.ErrorMessage("Radia::Error071"); return 0;}
 
-		TVector2d* tArrayHM = ArrayHM;
+		TVector2d* tArrayHB = ArrayHB;
 		double Hprev = -1, Mprev = -1;
-		for(int i=0; i<LenArrayHM; i++)
+		for(int i=0; i<LenArrayHB; i++)
 		{
-			if(tArrayHM->x < Hprev) { Send.ErrorMessage("Radia::Error071"); return 0;}
-			if(tArrayHM->y < 0.95*Mprev) { Send.WarningMessage("Radia::Warning014");}
+			if(tArrayHB->x < Hprev) { Send.ErrorMessage("Radia::Error071"); return 0;}
+			if(tArrayHB->y < 0.95*Mprev) { Send.WarningMessage("Radia::Warning014");}
 
-			Hprev = tArrayHM->x; Mprev = tArrayHM->y;
-			tArrayHM++;
+			Hprev = tArrayHB->x; Mprev = tArrayHB->y;
+			tArrayHB++;
 		}
 		return 1;
 	}
@@ -1354,7 +1355,12 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
 
 		// Valid methods: LU (0), BICGSTAB (1)
+		// Note: BICGSTAB_HMATRIX (2) requires RADIA_USE_HACAPK to be defined
+#ifdef RADIA_USE_HACAPK
+		if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB && MethNo != RadSolverMethod::BICGSTAB_HMATRIX) { Send.ErrorMessage("Radia::Error028"); return 0;}
+#else
 		if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB) { Send.ErrorMessage("Radia::Error028"); return 0;}
+#endif
 		if(IterNumber<0) { Send.ErrorMessage("Radia::Error019"); return 0;}
 		if((RelaxParam<0.) || (RelaxParam>1.)) { Send.ErrorMessage("Radia::Error018"); return 0;}
 
@@ -1375,6 +1381,15 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 				RelaxMethNo_1.AutoRelax(RelaxParam, IterNumber);
 			}
 			break;
+#ifdef RADIA_USE_HACAPK
+		case RadSolverMethod::BICGSTAB_HMATRIX:
+			{
+				// BiCGSTAB with H-matrix (HACApK ACA+)
+				radTRelaxationMethNo_2 RelaxMethNo_2(InteractPtr);
+				RelaxMethNo_2.AutoRelax(RelaxParam, IterNumber);
+			}
+			break;
+#endif
 		}
 
 		int lenRelaxStatusParamArray = 3;
@@ -1411,7 +1426,12 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			if(MaxIterNumber <= 0) { Send.ErrorMessage("Radia::Error031"); return 0; }
 
 			// Valid methods for AutoRelax: LU (0), BICGSTAB (1)
+			// Note: BICGSTAB_HMATRIX (2) requires RADIA_USE_HACAPK to be defined
+#ifdef RADIA_USE_HACAPK
+			if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB && MethNo != RadSolverMethod::BICGSTAB_HMATRIX) { Send.ErrorMessage("Radia::Error041"); return 0; }
+#else
 			if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB) { Send.ErrorMessage("Radia::Error041"); return 0; }
+#endif
 
 			radTOptionNames OptNam;
 			const char** BufNameString = arOptionNames;
@@ -1432,6 +1452,7 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			}
 
 			//int ActualIterNum = 0;
+
 			switch(MethNo)
 			{
 						case RadSolverMethod::LU:
@@ -1447,6 +1468,15 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 				ActualIterNum = RelaxMethNo_1.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 			}
 			break;
+#ifdef RADIA_USE_HACAPK
+			case RadSolverMethod::BICGSTAB_HMATRIX:
+			{
+				// BiCGSTAB with H-matrix (HACApK ACA+)
+				radTRelaxationMethNo_2 RelaxMethNo_2(InteractPtr);
+				ActualIterNum = RelaxMethNo_2.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+			}
+			break;
+#endif
 			}
 
 			InteractPtr->OutRelaxStatusParam(RelaxStatusParamArray);
@@ -1520,6 +1550,23 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 	}
 	catch(...) { Initialize(); return 0;}
 	return ActualIterNum;
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod)
+{
+	// Set nonlinear method before calling SolveGen
+	// 0 = mucal1 (chi-change), 1 = mucal2 (B-change/Newton)
+	int OldNonlMethod = this->NonlinearMethod;
+	this->NonlinearMethod = NonlMethod;
+
+	int result = SolveGen(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
+
+	// Restore previous setting
+	this->NonlinearMethod = OldNonlMethod;
+
+	return result;
 }
 
 //-------------------------------------------------------------------------

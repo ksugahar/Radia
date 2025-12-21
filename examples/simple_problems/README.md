@@ -33,7 +33,7 @@ python cubic_polyhedron_magnet.py
 **Key Functions:**
 - `rad.ObjArcCur()` - Create arc current element
 - `rad.ObjRecMag()` - Create rectangular magnet
-- `rad.MatLin([ksi_par, ksi_perp], [mx,my,mz])` - Define anisotropic linear material
+- `rad.MatLin([mu_r_par, mu_r_perp], [mx,my,mz])` - Define anisotropic linear material
 - `rad.MatApl(obj, mat)` - Apply material to object
 - `rad.Fld(obj, 'b', [x,y,z])` - Calculate magnetic field
 
@@ -48,11 +48,9 @@ python cubic_polyhedron_magnet.py
 ### chamfered_pole_piece.py
 - Complex extrusion shape with chamfer
 - Defines multiple cross-sections and extrudes
-- Element subdivision
 
 **Key Functions:**
 - `rad.ObjMltExtRtg()` - Create multiple extrusion rectangle
-- `rad.ObjDivMag()` - Subdivide magnet
 
 ### cubic_polyhedron_magnet.py
 - Creates polyhedron from vertices and faces
@@ -79,8 +77,8 @@ python cubic_polyhedron_magnet.py
 
 3. **Material properties**
    ```python
-   # Anisotropic linear material: [ksi_parallel, ksi_perpendicular], magnetization vector
-   mat = rad.MatLin([0.06, 0.17], [0,0,1])
+   # Anisotropic linear material: [mu_r_parallel, mu_r_perpendicular], easy axis
+   mat = rad.MatLin([1.06, 1.17], [0,0,1])
    rad.MatApl(obj, mat)
    ```
 

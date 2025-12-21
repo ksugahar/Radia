@@ -25,6 +25,62 @@
 !=====================================================================*
 */
 #include "cHACApK_lib.h"
+#include <math.h>
+
+//***cHACApK_unrm_d
+// Compute the Euclidean norm of a vector
+double cHACApK_unrm_d(int n, double *vec) {
+  double norm = 0.0;
+  int i;
+  for (i = 0; i < n; i++) {
+    norm += vec[i] * vec[i];
+  }
+  return sqrt(norm);
+}
+
+//***cHACApK_maxabsvalloc_d
+// Find maximum absolute value and its location
+void cHACApK_maxabsvalloc_d(double *vec, double *maxval, int *loc, int n) {
+  int i;
+  *maxval = 0.0;
+  *loc = 0;
+  for (i = 0; i < n; i++) {
+    double absval = fabs(vec[i]);
+    if (absval > *maxval) {
+      *maxval = absval;
+      *loc = i;
+    }
+  }
+}
+
+//***cHACApK_minabsvalloc_d
+// Find minimum absolute value and its location
+void cHACApK_minabsvalloc_d(double *vec, double *minval, int *loc, int n) {
+  int i;
+  *minval = fabs(vec[0]);
+  *loc = 0;
+  for (i = 1; i < n; i++) {
+    double absval = fabs(vec[i]);
+    if (absval < *minval) {
+      *minval = absval;
+      *loc = i;
+    }
+  }
+}
+
+//***cHACApK_adotsub_dsm
+// Subtract the dot product of (zaa column k) and zz from vec
+// vec(1:ndl) = vec(1:ndl) - zaa(1:ndl, 1:k-1) * zz(1:k-1)
+void cHACApK_adotsub_dsm(double *vec, double *zaa, double *zz, int ndl, int k, int ldaa) {
+  int i, j;
+  for (i = 0; i < ndl; i++) {
+    double sum = 0.0;
+    for (j = 0; j < k; j++) {
+      sum += zaa[i + j * ldaa] * zz[j];
+    }
+    vec[i] -= sum;
+  }
+}
 
 //***cHACApK_med3
 int cHACApK_med3(

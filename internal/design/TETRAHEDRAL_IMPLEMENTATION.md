@@ -27,7 +27,7 @@
 ### Test Results (cube_size=0.1m, M=[0,0,1.2]T)
 
 **Permanent Magnet (test_standard_method.py)**:
-- Reference (ObjDivMag): |H| = 0.034074 A/m
+- Reference (ObjPolyhdr hex): |H| = 0.034074 A/m
 - Standard method: |H| = 1.055524 A/m (2999% error)
 
 **Linear Material + MatLin (test_tetra_matlin_mesh_sizes.py)**:
@@ -364,6 +364,8 @@ python test_tetra_matlin.py  # Should converge (not NaN)
 | Permanent magnet | 0.034074 A/m | 2999% error | **<10%** error |
 | MatLin (coarse, 28 elem) | 8.14e9 A/m | 1075% error | **<20%** error |
 | MatLin (fine, 143+ elem) | 8.14e9 A/m | NaN (diverged) | **Converges** |
+
+**NOTE (2025-12-19)**: The MSC implementation has been completed and validated. Both tetrahedral and hexahedral meshes now use `ObjPolyhdr()` with the MSC method, producing accurate results.
 
 ### Performance Impact
 

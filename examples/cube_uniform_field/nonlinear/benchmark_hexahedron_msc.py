@@ -2,21 +2,26 @@
 """
 Hexahedron MSC (Magnetic Surface Charge) Benchmark Script
 
-Benchmarks hexahedral elements using ObjThckPgn (thick polygon) which implements
-the MSC (Magnetic Surface Charge) method - equivalent to ELF_MAGIC's MSC implementation.
+Benchmarks hexahedral elements using ObjPolyhdr with 6 DOF (surface charges).
+Radia internally uses 6 DOF per hexahedron (one sigma per face), matching
+ELF_MAGIC's MSC implementation for hexahedral elements.
 
-This script tests three solver methods:
-- LU decomposition (Method 0)
-- BiCGSTAB (Method 1)
-- BiCGSTAB with H-matrix acceleration (Method 1 + HMatrix enabled)
+Note: Tetrahedra use 3 DOF (Mx, My, Mz), hexahedra use 6 DOF (sigma_1..sigma_6).
+
+This script uses the same parameters as ELF_MAGIC for fair comparison.
+
+Solver types:
+  lu       - Dense LU decomposition (Method 0)
+  bicgstab - BiCGSTAB iterative solver (Method 1)
 
 Usage:
-    python benchmark_hexahedron_msc.py [--lu] [--bicgstab] [--hmatrix] [--all] [N1 N2 ...]
+    python benchmark_hexahedron_msc.py --lu 5 10 15 20
+    python benchmark_hexahedron_msc.py --bicgstab 5 10 15 20
+    python benchmark_hexahedron_msc.py 5 10 15 20  # runs both
 
 Examples:
-    python benchmark_hexahedron_msc.py --all 10 15 20
-    python benchmark_hexahedron_msc.py --lu 10 15
-    python benchmark_hexahedron_msc.py --bicgstab 10 15 20
+    python benchmark_hexahedron_msc.py --lu 5 10 15 20
+    python benchmark_hexahedron_msc.py --bicgstab 5 10 15 20
 """
 
 import sys
@@ -27,7 +32,8 @@ import argparse
 import numpy as np
 
 # Add Radia to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../build/Release'))
+_src_path = os.path.join(os.path.dirname(__file__), '../../../src/radia')
+sys.path.insert(0, _src_path)
 import radia as rad
 
 try:
@@ -49,9 +55,12 @@ def get_peak_memory_mb():
         return mem_info.rss / (1024 * 1024)  # MB (fallback)
 
 MU_0 = 4 * np.pi * 1e-7
-H_EXT = 50000.0  # 50,000 A/m (same as ELF_MAGIC)
+H_EXT = 200000.0  # 200,000 A/m (same as ELF_MAGIC nonlinear benchmark)
 
-# B-H curve (same as ELF_MAGIC)
+# B-H curve data (industry standard format)
+# Format: [[H (A/m), B (T)], ...]
+# Radia MatSatIsoTab accepts B-H directly - internal conversion: M = B/mu_0 - H
+# This is the EXACT same B-H curve used in ELF benchmark
 BH_DATA = [
     [0.0, 0.0],
     [100.0, 0.1],
@@ -65,16 +74,25 @@ BH_DATA = [
     [100000.0, 2.1],
 ]
 
-# Convert to [H, M] format for Radia
-HM_DATA = [[h, b/MU_0 - h] for h, b in BH_DATA]
+# Hexahedral face topology (1-indexed for Radia) - 6 DOF MSC
+# Standard brick/hexahedron with 8 vertices
+# Each element has 6 DOF (surface charges sigma on each face)
+HEX_FACES = [
+    [1, 4, 3, 2],  # Bottom face (z=0)
+    [5, 6, 7, 8],  # Top face (z=1)
+    [1, 2, 6, 5],  # Front face (y=0)
+    [3, 4, 8, 7],  # Back face (y=1)
+    [1, 5, 8, 4],  # Left face (x=0)
+    [2, 3, 7, 6]   # Right face (x=1)
+]
 
 
 def create_hexahedron_msc_mesh(n_div):
     """
-    Create NxNxN hexahedral mesh using ObjThckPgn (MSC method).
+    Create NxNxN hexahedral mesh using ObjPolyhdr (6 DOF MSC method).
 
-    ObjThckPgn creates a thick polygon (extruded polygon) which uses
-    the Magnetic Surface Charge approach for field computation.
+    ObjPolyhdr with HEX_FACES creates hexahedral elements with 6 DOF
+    (surface charges on each face), matching ELF_MAGIC's implementation.
 
     Args:
         n_div: Number of divisions per edge
@@ -89,25 +107,26 @@ def create_hexahedron_msc_mesh(n_div):
     for ix in range(n_div):
         for iy in range(n_div):
             for iz in range(n_div):
-                # Center of this sub-cube
-                cx = (ix + 0.5) * cube_size - 0.5
-                cy = (iy + 0.5) * cube_size - 0.5
-                cz = (iz + 0.5) * cube_size - 0.5
+                # Corner of this sub-cube (minimum x, y, z)
+                x0 = ix * cube_size - 0.5
+                y0 = iy * cube_size - 0.5
+                z0 = iz * cube_size - 0.5
 
-                # ObjThckPgn: thick polygon (extruded rectangle)
-                # Arguments: center_xy, lx, ly, lz, magnetization
-                # For a cube: square base (lx x ly) extruded along z (lz)
-                # We need to create it at the correct z position
-                z_base = cz - half_size
-                polygon_vertices = [
-                    [cx - half_size, cy - half_size],
-                    [cx + half_size, cy - half_size],
-                    [cx + half_size, cy + half_size],
-                    [cx - half_size, cy + half_size],
+                # 8 vertices of hexahedron
+                # Vertex ordering: bottom face (0-3), top face (4-7)
+                vertices = [
+                    [x0, y0, z0],                          # v0: bottom-front-left
+                    [x0 + cube_size, y0, z0],              # v1: bottom-front-right
+                    [x0 + cube_size, y0 + cube_size, z0],  # v2: bottom-back-right
+                    [x0, y0 + cube_size, z0],              # v3: bottom-back-left
+                    [x0, y0, z0 + cube_size],              # v4: top-front-left
+                    [x0 + cube_size, y0, z0 + cube_size],  # v5: top-front-right
+                    [x0 + cube_size, y0 + cube_size, z0 + cube_size],  # v6: top-back-right
+                    [x0, y0 + cube_size, z0 + cube_size]   # v7: top-back-left
                 ]
 
-                # ObjThckPgn(vertices_2d, thickness_z, z_base, magnetization)
-                obj = rad.ObjThckPgn(z_base, cube_size, polygon_vertices, 'z', [0, 0, 0])
+                # ObjPolyhdr(vertices, faces, magnetization)
+                obj = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
                 elements.append(obj)
 
     return elements
@@ -147,8 +166,8 @@ def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
     # Create container
     container = rad.ObjCnt(elements)
 
-    # Apply nonlinear material
-    mat = rad.MatSatIsoTab(HM_DATA)
+    # Apply nonlinear material (B-H curve input - industry standard)
+    mat = rad.MatSatIsoTab(BH_DATA)
     rad.MatApl(container, mat)
 
     # External field
@@ -205,7 +224,7 @@ def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
         'mesh_description': f'{n_div}x{n_div}x{n_div}',
         'n_div': n_div,
         'n_elements': len(elements),
-        'ndof': len(elements) * 3,
+        'ndof': len(elements) * 6,  # 6 DOF per hexahedron
         'H_ext': H_EXT,
         't_mesh': t_mesh,
         't_solve': t_solve,
@@ -223,92 +242,95 @@ def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Hexahedron MSC benchmark')
+    parser = argparse.ArgumentParser(description='Hexahedron MSC benchmark (Radia)')
     parser.add_argument('--lu', action='store_true', help='Run LU solver benchmark')
     parser.add_argument('--bicgstab', action='store_true', help='Run BiCGSTAB solver benchmark')
-    parser.add_argument('--hmatrix', action='store_true', help='Run BiCGSTAB with H-matrix benchmark')
-    parser.add_argument('--all', action='store_true', help='Run all solver benchmarks')
-    parser.add_argument('sizes', nargs='*', type=int, default=[10, 15],
-                       help='Mesh sizes (N values)')
+    parser.add_argument('sizes', nargs='*', type=int, default=[5, 10, 15, 20],
+                       help='Mesh sizes (N values, default: 5 10 15 20)')
 
     args = parser.parse_args()
 
-    # Default to all if none specified
-    if not (args.lu or args.bicgstab or args.hmatrix or args.all):
-        args.all = True
+    # Default to both if none specified
+    any_solver = args.lu or args.bicgstab
+    run_lu = args.lu or not any_solver
+    run_bicgstab = args.bicgstab or not any_solver
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    all_results = []
+    print('=' * 70)
+    print('HEXAHEDRAL BENCHMARK (MSC) - Radia')
+    print('=' * 70)
+    print('Cube size: 1.0 m')
+    print('H_ext: %.0f A/m' % H_EXT)
+    print('N values: %s' % args.sizes)
+    print()
 
-    # LU Benchmark
-    if args.lu or args.all:
-        print('\n' + '=' * 70)
-        print('LU SOLVER BENCHMARK')
-        print('=' * 70 + '\n')
+    results_lu = []
+    results_bicgstab = []
 
-        output_dir = os.path.join(script_dir, 'hexahedron_msc', 'lu')
-        os.makedirs(output_dir, exist_ok=True)
+    for n in args.sizes:
+        # LU Benchmark
+        if run_lu:
+            print('\n' + '=' * 70)
+            print('LU SOLVER: N=%d' % n)
+            print('=' * 70 + '\n')
 
-        for n in args.sizes:
+            output_dir = os.path.join(script_dir, 'hexahedron_msc', 'lu')
+            os.makedirs(output_dir, exist_ok=True)
+
             result = benchmark_hexahedron_msc(n, solver_method=0, use_hmatrix=False)
-            all_results.append(result)
+            results_lu.append(result)
 
-            filename = f'msc_N{n}_results.json'
+            filename = 'msc_N%d_results.json' % n
             filepath = os.path.join(output_dir, filename)
             with open(filepath, 'w') as f:
                 json.dump(result, f, indent=2)
-            print(f'Saved: {filepath}\n')
+            print('Saved: %s\n' % filepath)
 
-    # BiCGSTAB Benchmark
-    if args.bicgstab or args.all:
-        print('\n' + '=' * 70)
-        print('BiCGSTAB SOLVER BENCHMARK')
-        print('=' * 70 + '\n')
+        # BiCGSTAB Benchmark
+        if run_bicgstab:
+            print('\n' + '=' * 70)
+            print('BiCGSTAB SOLVER: N=%d' % n)
+            print('=' * 70 + '\n')
 
-        output_dir = os.path.join(script_dir, 'hexahedron_msc', 'bicgstab')
-        os.makedirs(output_dir, exist_ok=True)
+            output_dir = os.path.join(script_dir, 'hexahedron_msc', 'bicgstab')
+            os.makedirs(output_dir, exist_ok=True)
 
-        for n in args.sizes:
             result = benchmark_hexahedron_msc(n, solver_method=1, use_hmatrix=False)
-            all_results.append(result)
+            results_bicgstab.append(result)
 
-            filename = f'msc_N{n}_results.json'
+            filename = 'msc_N%d_results.json' % n
             filepath = os.path.join(output_dir, filename)
             with open(filepath, 'w') as f:
                 json.dump(result, f, indent=2)
-            print(f'Saved: {filepath}\n')
-
-    # BiCGSTAB + H-matrix Benchmark
-    if args.hmatrix or args.all:
-        print('\n' + '=' * 70)
-        print('BiCGSTAB + H-MATRIX SOLVER BENCHMARK')
-        print('=' * 70 + '\n')
-
-        output_dir = os.path.join(script_dir, 'hexahedron_msc', 'hmatrix')
-        os.makedirs(output_dir, exist_ok=True)
-
-        for n in args.sizes:
-            result = benchmark_hexahedron_msc(n, solver_method=1, use_hmatrix=True)
-            all_results.append(result)
-
-            filename = f'msc_N{n}_results.json'
-            filepath = os.path.join(output_dir, filename)
-            with open(filepath, 'w') as f:
-                json.dump(result, f, indent=2)
-            print(f'Saved: {filepath}\n')
+            print('Saved: %s\n' % filepath)
 
     # Summary
-    if all_results:
-        print('\n' + '=' * 70)
-        print('SUMMARY')
-        print('=' * 70)
-        print(f'{"Solver":<20} {"N":<5} {"Elements":<10} {"Time (s)":<12} {"Iter":<8} {"M_avg_z (A/m)":<15} {"Conv"}')
-        print('-' * 80)
-        for r in all_results:
-            print(f'{r["solver_name"]:<20} {r["n_div"]:<5} {r["n_elements"]:<10} '
-                  f'{r["t_solve"]:<12.3f} {r["nonl_iterations"]:<8} {r["M_avg_z"]:<15.0f} '
-                  f'{"Yes" if r["converged"] else "No"}')
+    print('\n' + '=' * 70)
+    print('SUMMARY')
+    print('=' * 70)
+
+    if results_lu:
+        print('\nLU Solver (hexahedron_msc/lu/):\n')
+        print('%-10s %10s %10s %10s %12s %10s' % ('N', 'Elements', 'Time (s)', 'Nonl Iter', 'M_avg_z', 'Conv'))
+        print('-' * 70)
+        for r in results_lu:
+            print('%-10d %10d %10.3f %10d %12.0f %10s' % (
+                r['n_div'], r['n_elements'], r['t_solve'],
+                r['nonl_iterations'], r['M_avg_z'],
+                'Yes' if r['converged'] else 'No'))
+
+    if results_bicgstab:
+        print('\nBiCGSTAB Solver (hexahedron_msc/bicgstab/):\n')
+        print('%-10s %10s %10s %10s %12s %10s' % ('N', 'Elements', 'Time (s)', 'Nonl Iter', 'M_avg_z', 'Conv'))
+        print('-' * 70)
+        for r in results_bicgstab:
+            print('%-10d %10d %10.3f %10d %12.0f %10s' % (
+                r['n_div'], r['n_elements'], r['t_solve'],
+                r['nonl_iterations'], r['M_avg_z'],
+                'Yes' if r['converged'] else 'No'))
+
+    print('=' * 70)
 
 
 if __name__ == '__main__':

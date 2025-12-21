@@ -24,37 +24,6 @@ Complete reference for Radia Python API.
 
 ## Quick Start
 
-### Basic Example (Rectangular Elements)
-
-```python
-import radia as rad
-import numpy as np
-
-rad.FldUnits('m')  # Use meters (required for NGSolve)
-rad.UtiDelAll()
-
-# Create soft iron cube (1m x 1m x 1m)
-cube = rad.ObjRecMag([0, 0, 0], [1.0, 1.0, 1.0], [0, 0, 0])
-rad.ObjDivMag(cube, [5, 5, 5])  # 125 elements
-
-# Apply linear material (mu_r = 1000)
-mat = rad.MatLin(999)  # chi = mu_r - 1
-rad.MatApl(cube, mat)
-
-# External field (50,000 A/m in z-direction)
-MU_0 = 4 * np.pi * 1e-7
-ext = rad.ObjBckg([0, 0, MU_0 * 50000])
-grp = rad.ObjCnt([cube, ext])
-
-# Solve (Method 1 = BiCGSTAB)
-result = rad.Solve(grp, 0.001, 1000, 1)
-print(f'Converged in {int(result[3])} iterations')
-
-# Get field
-B = rad.Fld(grp, 'b', [0, 0, 0])
-print(f'B at center: {B}')
-```
-
 ### MSC Hexahedral Example (ObjThckPgn)
 
 ```python
@@ -85,7 +54,7 @@ for ix in range(n_div):
             elements.append(obj)
 
 container = rad.ObjCnt(elements)
-mat = rad.MatLin(999)
+mat = rad.MatLin(1000)  # mu_r = 1000
 rad.MatApl(container, mat)
 
 ext = rad.ObjBckg([0, 0, MU_0 * 50000])
@@ -122,18 +91,16 @@ mag_obj = netgen_mesh_to_radia(mesh,
 
 | Element Type | API | Faces | DOF | Use Case |
 |--------------|-----|-------|-----|----------|
-| **Rectangular Block** | `ObjRecMag()` + `ObjDivMag()` | Axis-aligned | 3 | Fastest, analytical formula |
 | **Extruded Polygon** | `ObjThckPgn()` | N-gon extruded | 3 | General prism shapes |
-| **Hexahedron (MSC)** | `ObjPolyhdr()` + `HEX_FACES` | 6 quad | **6** | Rotated/deformed grids |
-| **Tetrahedron (MSC)** | `ObjPolyhdr()` + `TETRA_FACES` | 4 tri | 3 | Complex curved geometry |
-| **Wedge/Prism (MSC)** | `ObjPolyhdr()` + `WEDGE_FACES` | 5 | 3 | Hybrid meshes |
-| **Pyramid (MSC)** | `ObjPolyhdr()` + `PYRAMID_FACES` | 5 | 3 | Mesh transitions |
+| **Hexahedron (MSC)** | `ObjRecMag()` or `ObjPolyhdr()` | 6 quad | 6 | Permanent magnets, soft iron |
+| **Tetrahedron** | `ObjPolyhdr()` + `TETRA_FACES` | 4 tri | 3 | Complex curved geometry |
+| **Wedge/Prism** | `ObjPolyhdr()` + `WEDGE_FACES` | 5 | 3 | Hybrid meshes |
+| **Pyramid** | `ObjPolyhdr()` + `PYRAMID_FACES` | 5 | 3 | Mesh transitions |
 
 **DOF (Degrees of Freedom)**:
-- **3 DOF**: Magnetization vector (Mx, My, Mz)
-- **6 DOF (Hexahedra only)**: Surface charge density (sigma) on each of 6 faces
-
-**Note (2025-12-16)**: Hexahedral elements use **6 DOF MSC method** with independent surface charge density on each face. This provides better accuracy for deformed/rotated hexahedra.
+- **Hexahedra (6 faces)**: 6 DOF - Surface charge density (sigma) per face (MSC method)
+- **Other elements (4-5 faces)**: 3 DOF - Magnetization vector (Mx, My, Mz)
+- `ObjRecMag()` automatically uses 6 DOF MSC hexahedron
 
 ### Face Topology Constants
 
@@ -150,22 +117,6 @@ from netgen_mesh_import import TETRA_FACES, HEX_FACES, WEDGE_FACES, PYRAMID_FACE
 ---
 
 ## Geometry Objects
-
-### ObjRecMag - Rectangular Block
-
-```python
-obj = rad.ObjRecMag(center, dimensions, magnetization)
-```
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `center` | [x, y, z] | Center point |
-| `dimensions` | [dx, dy, dz] | Dimensions |
-| `magnetization` | [Mx, My, Mz] | Initial magnetization (T or A/m) |
-
-```python
-magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2])
-```
 
 ### ObjThckPgn - Thick Polygon (Extruded 2D)
 
@@ -221,12 +172,6 @@ ext = rad.ObjBckg([0, 0, MU_0 * 50000])  # 50,000 A/m in z
 group = rad.ObjCnt([obj1, obj2, ...])
 ```
 
-### ObjDivMag - Subdivide
-
-```python
-rad.ObjDivMag(obj, [nx, ny, nz])
-```
-
 ### ObjRaceTrk - Racetrack Coil
 
 ```python
@@ -246,38 +191,37 @@ filament = rad.ObjFlmCur([[x1,y1,z1], [x2,y2,z2], ...], current)
 ### MatLin - Linear Isotropic
 
 ```python
-mat = rad.MatLin(chi)  # chi = mu_r - 1
+mat = rad.MatLin(mu_r)  # relative permeability
 rad.MatApl(obj, mat)
 ```
 
 ```python
 # Soft iron (mu_r = 1000)
-mat = rad.MatLin(999)
+mat = rad.MatLin(1000)
 rad.MatApl(cube, mat)
 ```
 
 ### MatLin - Linear Anisotropic
 
 ```python
-mat = rad.MatLin([chi_par, chi_perp], [ex, ey, ez])
+mat = rad.MatLin([mu_r_par, mu_r_perp], [ex, ey, ez])
 ```
 
 ```python
 # Easy axis in z-direction
-mat = rad.MatLin([5000, 100], [0, 0, 1])
+mat = rad.MatLin([5001, 101], [0, 0, 1])
 ```
 
 ### MatSatIsoTab - Nonlinear (B-H Table)
 
 ```python
-mat = rad.MatSatIsoTab(HM_data)  # [[H, M], ...]
+mat = rad.MatSatIsoTab(BH_data)  # [[H, B], ...] in A/m and Tesla
 ```
 
-**Important**: Radia uses H-M format, not B-H. Convert using:
+**Input Format**: Industry-standard B-H curve (H in A/m, B in Tesla).
+Radia internally converts to M-H using: M = B/mu_0 - H
 
 ```python
-MU_0 = 4 * np.pi * 1e-7
-
 # B-H curve: [H (A/m), B (T)]
 BH_DATA = [
     [0.0, 0.0],
@@ -292,9 +236,7 @@ BH_DATA = [
     [100000.0, 2.1],
 ]
 
-# Convert to H-M: M = B/mu_0 - H
-HM_DATA = [[h, b/MU_0 - h] for h, b in BH_DATA]
-mat = rad.MatSatIsoTab(HM_DATA)
+mat = rad.MatSatIsoTab(BH_DATA)
 ```
 
 ### MatSatIsoFrm - Nonlinear (Formula)

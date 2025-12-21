@@ -4,12 +4,13 @@
   "n_elements": 200,
   "ndof": 600,
   "H_ext": 50000.0,
-  "t_mesh": 0.04146456718444824,
-  "t_solve": 0.547590970993042,
+  "t_mesh": 0.038001060485839844,
+  "t_solve": 1.0470285415649414,
   "solver_method": 1,
   "solver_name": "bicgstab",
   "converged": true,
-  "residual": 269.37100454240687,
-  "nonl_iterations": 3,
-  "M_avg_z": 189361.28147609136
+  "residual": 161135.28798770276,
+  "nonl_iterations": 2,
+  "M_avg_z": 155999.27134358772,
+  "peak_memory_mb": 68.08203125
 }

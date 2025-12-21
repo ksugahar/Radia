@@ -966,69 +966,49 @@ TVector3d radTPolyhedron::FieldFromChargedTriangle(const TVector3d& obs,
 {
 	// Analytic field from uniformly charged triangle
 	// Implements BOTH tangential (log terms) AND normal (atan terms) components
-	// Reference: van Oosterom & Strackee, "The Solid Angle of a Plane Triangle" (1983)
-	// Returns field WITHOUT 4pi divisor - applied in matrix assembly (-K/(4pi))
+	// Returns field WITHOUT 4pi divisor (4pi is applied in matrix assembly)
+	// Matches ELF_MAGIC: m_legacy_surface.f90::calc_field_quad_tria
 
 	const double EPS = 1.0e-20;
-	const double BIG = 1.0e20;
 
-	// Build local coordinate system from triangle
+	// Build local coordinate system (ELF_MAGIC convention)
+	// basis_a = edge (v1-v0) normalized (local X)
+	// basis_c = face normal (local Z)
+	// basis_b = basis_c x basis_a (local Y)
+
 	TVector3d e1, e2;
 	e1.x = v1.x - v0.x; e1.y = v1.y - v0.y; e1.z = v1.z - v0.z;
 	e2.x = v2.x - v0.x; e2.y = v2.y - v0.y; e2.z = v2.z - v0.z;
 
-	// Normal = e1 x e2
-	TVector3d normal;
-	normal.x = e1.y * e2.z - e1.z * e2.y;
-	normal.y = e1.z * e2.x - e1.x * e2.z;
-	normal.z = e1.x * e2.y - e1.y * e2.x;
-
-	double normal_len = sqrt(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z);
-	if(normal_len < EPS) return TVector3d(0.0, 0.0, 0.0);
-
-	TVector3d CC;  // Local Z = face normal
-	CC.x = normal.x / normal_len;
-	CC.y = normal.y / normal_len;
-	CC.z = normal.z / normal_len;
-
-	// Build orthonormal basis (triple cross product method)
-	TVector3d basis_a = e2;
-	TVector3d basis_b;
-	basis_b.x = e2.x - e1.x * 0.5;
-	basis_b.y = e2.y - e1.y * 0.5;
-	basis_b.z = e2.z - e1.z * 0.5;
-
-	// basis_c = basis_a x basis_b
+	// Face normal = e1 x e2 (basis_c)
 	TVector3d basis_c;
-	basis_c.x = basis_a.y * basis_b.z - basis_a.z * basis_b.y;
-	basis_c.y = basis_a.z * basis_b.x - basis_a.x * basis_b.z;
-	basis_c.z = basis_a.x * basis_b.y - basis_a.y * basis_b.x;
+	basis_c.x = e1.y * e2.z - e1.z * e2.y;
+	basis_c.y = e1.z * e2.x - e1.x * e2.z;
+	basis_c.z = e1.x * e2.y - e1.y * e2.x;
+
 	double cLen = sqrt(basis_c.x*basis_c.x + basis_c.y*basis_c.y + basis_c.z*basis_c.z);
 	if(cLen < EPS) return TVector3d(0.0, 0.0, 0.0);
 	basis_c.x /= cLen; basis_c.y /= cLen; basis_c.z /= cLen;
 
-	// new_basis_a = basis_b x basis_c
-	TVector3d new_a;
-	new_a.x = basis_b.y * basis_c.z - basis_b.z * basis_c.y;
-	new_a.y = basis_b.z * basis_c.x - basis_b.x * basis_c.z;
-	new_a.z = basis_b.x * basis_c.y - basis_b.y * basis_c.x;
-	double aLen = sqrt(new_a.x*new_a.x + new_a.y*new_a.y + new_a.z*new_a.z);
+	// basis_a = e1 normalized (ELF: tri_verts(:,2) - tri_verts(:,1) = v1-v0 = e1)
+	TVector3d basis_a = e1;
+	double aLen = sqrt(basis_a.x*basis_a.x + basis_a.y*basis_a.y + basis_a.z*basis_a.z);
 	if(aLen < EPS) return TVector3d(0.0, 0.0, 0.0);
-	new_a.x /= aLen; new_a.y /= aLen; new_a.z /= aLen;
+	basis_a.x /= aLen; basis_a.y /= aLen; basis_a.z /= aLen;
 
-	// new_basis_b = basis_c x new_basis_a
-	TVector3d new_b;
-	new_b.x = basis_c.y * new_a.z - basis_c.z * new_a.y;
-	new_b.y = basis_c.z * new_a.x - basis_c.x * new_a.z;
-	new_b.z = basis_c.x * new_a.y - basis_c.y * new_a.x;
-	double bLen = sqrt(new_b.x*new_b.x + new_b.y*new_b.y + new_b.z*new_b.z);
+	// basis_b = basis_c x basis_a (ELF: normalize_cross_product(basis_c, basis_a, basis_b))
+	TVector3d basis_b;
+	basis_b.x = basis_c.y * basis_a.z - basis_c.z * basis_a.y;
+	basis_b.y = basis_c.z * basis_a.x - basis_c.x * basis_a.z;
+	basis_b.z = basis_c.x * basis_a.y - basis_c.y * basis_a.x;
+	double bLen = sqrt(basis_b.x*basis_b.x + basis_b.y*basis_b.y + basis_b.z*basis_b.z);
 	if(bLen < EPS) return TVector3d(0.0, 0.0, 0.0);
-	new_b.x /= bLen; new_b.y /= bLen; new_b.z /= bLen;
+	basis_b.x /= bLen; basis_b.y /= bLen; basis_b.z /= bLen;
 
-	TVector3d AA = new_a;  // Local X
-	TVector3d BB = new_b;  // Local Y
+	TVector3d AA = basis_a;  // Local X
+	TVector3d BB = basis_b;  // Local Y
 
-	// Convert vertices to local 2D coordinates (v0 = origin)
+	// Convert vertices to local 2D coordinates (v0 = origin, ELF: face_origin = tri_verts(:,1))
 	double xy0_x = 0.0, xy0_y = 0.0;
 
 	double xy1_x = e1.x*AA.x + e1.y*AA.y + e1.z*AA.z;
@@ -1093,8 +1073,9 @@ TVector3d radTPolyhedron::FieldFromChargedTriangle(const TVector3d& obs,
 		AL[j] = log(RR[j]);
 	}
 
-	// Field components in local frame
-	// Tangential components (log terms)
+	// Field components in local frame WITHOUT 4pi divisor
+	// (matches ELF_MAGIC convention - 4pi is applied in matrix assembly)
+	// Tangential components (log terms): H_tan = sigma * sum of log terms
 	double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
 	double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
 	double HH3 = 0.0;
@@ -1219,9 +1200,9 @@ TVector3d radTPolyhedron::FieldFromQuadFace(const TVector3d& obs, int faceIdx, d
 TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double charge) const
 {
 	// Magnetic field from point magnetic charge (monopole) at element center
-	// Yano-Sugahara MSC method: compensating point charge at centroid
-	// Returns: charge * r / r^3 (WITHOUT 4pi divisor)
-	// The 4pi divisor is applied in the matrix assembly (-K/(4pi))
+	// H = m * (r - p) / |r - p|^3
+	// Returns field WITHOUT 4pi divisor (matches ELF_MAGIC convention)
+	// 4pi is applied in matrix assembly
 
 	TVector3d r_minus_p;
 	r_minus_p.x = obs.x - CentrPoint.x;
@@ -1239,7 +1220,7 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 
 	double r_mag = sqrt(r_mag_sq);
 	double r_mag_cubed = r_mag_sq * r_mag;
-	// NO 4pi divisor - applied in matrix assembly
+	// No 4pi divisor here - matches ELF_MAGIC convention
 	double coef = charge / r_mag_cubed;
 
 	TVector3d H;

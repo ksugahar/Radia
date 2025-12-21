@@ -421,31 +421,6 @@ EXP int CALL RadObjSetM(int obj, double* M);
 */
 EXP int CALL RadObjCutMag(int* Objs, int* nobj, int obj, double* P, double* N, char* opt);
 
-/** Subdivides (segments) the object obj by 3 sets of parallel planes. 
-@param n [out] reference number of the object created (as a rule, this is a container object)
-@param obj [in] reference number of the object to subdivide
-@param SbdPar [in] array of 3 (k1,k2,k3) or 6 (k1,q1,k2,q2,k3,q3) subdivision parameters. The meaning of k1, k2 and k3 depends on the value of the option kxkykz: if kxkykz->Numb (default), then k1, k2 and k3 are subdivision numbers; if kxkykz->Size, they are average sizes of the sub-objects to be produced; q1, q2 and q3 are ratios of the last-to-first sub-object sizes.
-@param nSbdPar [in] number of subdivision parameters (length of the SbdPar array)
-@param FlatNorm [in] array of 9 numbers specifying cartesian coordinates of 3 vectors normal to the subdivision planes
-@param opt [in] pointer to options string, which can be "kxkykz->Numb" (default) or "kxkykz->Size" for the segmentation parameters to be interpreted as numbers of peices or their average dimensions; "Frame->Lab", "Frame->LabTot" or "Frame->Loc" for the subdivision to be performed in the laboratory frame or in local frame of the 3D object. The action of "Frame->Lab" and "Frame->LabTot" differs only for containers: "Frame->Lab" means that each of the objects in the container is subdivided separately; "Frame->LabTot" means that all objects in the container are subdivided as one object, by the same planes. opt can contain composition of these sub-strings separated by ";".
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjDivMagPln(int* n, int obj, double* SbdPar, int nSbdPar, double* FlatNorm, char* opt);
-
-/** Subdivides (segments) the object obj by a set of coaxial elliptic cylinders. 
-@param n [out] reference number of the object created (as a rule, this is a container object)
-@param obj [in] reference number of the object to subdivide
-@param SbdPar [in] array of 3 (k1,k2,k3) or 6 (k1,q1,k2,q2,k3,q3) subdivision parameters. The meaning of k1, k2 and k3 depends on the value of the option kxkykz: if kxkykz->Numb (default), then k1, k2 and k3 are subdivision numbers; if kxkykz->Size, they are average sizes of the sub-objects to be produced; q1, q2 and q3 are ratios of the last-to-first sub-object sizes. The parameters (k1,q1),(k2,q2) and (k3,q3) correspond to radial, azimuthal, and axial directions respectively.
-@param nSbdPar [in] number of subdivision parameters (length of the SbdPar array)
-@param FlatCylPar [in] array of 9 numbers (ax,ay,az,vx,vy,vz,px,py,pz) specifying positions of subdividing coaxial elliptic cylinders in space. The cylinders axis is defined by the point (ax,ay,az) and vector (vx,vy,vz). One of two axes of the cylinder base ellipses is exactly the perpendicular from the point (px,py,pz) to the cylinder axis.
-@param rat [in] the ratio of the ellipse axes lengths in the bases of subdividing coaxial elliptic cylinders
-@param opt [in] pointer to options string, which can be "kxkykz->Numb" (default) or "kxkykz->Size" for the segmentation parameters to be interpreted as numbers of peices or their average dimensions; "Frame->Lab", "Frame->LabTot" or "Frame->Loc" for the subdivision to be performed in the laboratory frame or in local frame of the 3D object. The action of "Frame->Lab" and "Frame->LabTot" differs only for containers: "Frame->Lab" means that each of the objects in the container is subdivided separately; "Frame->LabTot" means that all objects in the container are subdivided as one object, by the same planes. opt can contain composition of these sub-strings separated by ";".
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjDivMagCyl(int* n, int obj, double* SbdPar, int nSbdPar, double* FlatCylPar, double rat, char* opt);
-
 /** Computes geometrical volume of a 3D object.
 @param v [out] volume (in mm^3)
 @param obj [in] reference number of a 3D object
@@ -791,6 +766,20 @@ The relaxation stops whenever the change of magnetization (averaged over all sub
 @author P.E., O.C.
 */
 EXP int CALL RadSolve(double* D, int* n, int obj, double prec, int iter, int meth);
+
+/** Builds an interaction matrix and performs a relaxation procedure with nonlinear method selection.
+Similar to RadSolve but with additional nonlinear_method parameter for selecting convergence criterion.
+@param D [out] an array of four numbers specifying: [0] residual, [1] max M, [2] max H, [3] iterations
+@param n [out] length of array D
+@param obj [in] an integer number specifying the object to solve for magnetization
+@param prec [in] a real number specifying precision value for convergence
+@param iter [in] maximum number of iterations
+@param meth [in] linear solver method: 0=LU, 1=BiCGSTAB
+@param nonl_method [in] nonlinear convergence method: 0=mucal1 (chi-change), 1=mucal2 (B-change/Newton)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadSolveNonl(double* D, int* n, int obj, double prec, int iter, int meth, int nonl_method);
 
 /** Computes magnetic field created by the object obj at one or many points.
 @param B [out] flat array of all computed values of the magnetic field components (should be allocated by calling function)

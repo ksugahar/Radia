@@ -15,6 +15,15 @@
 
 #include <stddef.h>
 #include <string.h>
+#include <stdlib.h>
+
+/* Platform-specific time functions - must be included at file scope */
+#ifdef _WIN32
+/* Use chrono for C++ or fall back to simple clock() for portability */
+#include <time.h>
+#else
+#include <sys/time.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,6 +53,12 @@ typedef int MPI_Request;
 static inline MPI_Comm MPI_Comm_f2c(int fortran_comm) {
     (void)fortran_comm;
     return MPI_COMM_WORLD;
+}
+
+/* Convert C communicator to Fortran - just return the same value */
+static inline int MPI_Comm_c2f(MPI_Comm c_comm) {
+    (void)c_comm;
+    return 0;  /* Return Fortran-style communicator handle */
 }
 
 /* Get rank - always return 0 for single process */
@@ -196,13 +211,9 @@ static inline int MPI_Comm_free(MPI_Comm *comm) {
 /* Wtime - return wall clock time */
 static inline double MPI_Wtime(void) {
 #ifdef _WIN32
-    #include <windows.h>
-    LARGE_INTEGER freq, count;
-    QueryPerformanceFrequency(&freq);
-    QueryPerformanceCounter(&count);
-    return (double)count.QuadPart / (double)freq.QuadPart;
+    /* Use clock() for simplicity - avoids Windows.h include issues */
+    return (double)clock() / (double)CLOCKS_PER_SEC;
 #else
-    #include <sys/time.h>
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return tv.tv_sec + tv.tv_usec * 1e-6;

@@ -145,6 +145,7 @@ void AutoRelax();
 void AutoRelaxOpt( int, double, int, int, const char* );
 void UpdateSourcesForRelax( int );
 void SolveGen( int, double, int, int );
+void SolveGenNonl( int, double, int, int, int );
 void ParticleTrajectory( int, double, double,double,double,double, double,double, int );
 void FocusingPotential( int, double,double,double, double,double,double, int );
 //void FocusingKickPer( int, double,double,double, double,double,double, double,int, double,double,double, double,int,double,int, const char*, int,int,double,double, const char*, double );
@@ -1580,9 +1581,14 @@ void UpdateSourcesForRelax(int InteractElemKey)
 
 void SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo)
 {
-	// MethNo: 0=LU direct solver, 1=BiCGSTAB iterative solver (default)
-	// Note: Legacy methods 2-10 have been removed; only 0 and 1 are valid
 	rad.SolveGen(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
+}
+
+//-------------------------------------------------------------------------
+
+void SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod)
+{
+	rad.SolveGenNonl(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo, NonlMethod);
 }
 
 //-------------------------------------------------------------------------

@@ -1,0 +1,13 @@
+{
+  "n_div": 5,
+  "n_elements": 125,
+  "ndof": 750,
+  "solver": "hacapk",
+  "t_mesh": 0.0739748477935791,
+  "t_solve": 16.537049055099487,
+  "iterations": 2,
+  "converged": false,
+  "M_avg_z": 175474.97737439454,
+  "M_analytical": 149550.8982035928,
+  "error_pct": 17.33461950560116
+}
