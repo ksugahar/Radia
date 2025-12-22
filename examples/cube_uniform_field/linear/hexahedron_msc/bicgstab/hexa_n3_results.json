@@ -3,11 +3,11 @@
   "n_elements": 27,
   "ndof": 162,
   "solver": "bicgstab",
-  "t_mesh": 0.0010271072387695312,
-  "t_solve": 0.09197235107421875,
-  "iterations": 1,
+  "t_mesh": 0.01499795913696289,
+  "t_solve": 0.029999732971191406,
+  "iterations": 2,
   "converged": true,
-  "M_avg_z": 169705.66650991509,
+  "M_avg_z": 169705.66650991517,
   "M_analytical": 149550.8982035928,
-  "error_pct": 13.476862090713999
+  "error_pct": 13.476862090714055
 }

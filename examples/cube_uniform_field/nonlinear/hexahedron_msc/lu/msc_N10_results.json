@@ -1,0 +1,18 @@
+{
+  "element_type": "hexahedron_msc",
+  "mesh_description": "10x10x10",
+  "n_div": 10,
+  "n_elements": 1000,
+  "ndof": 6000,
+  "H_ext": 200000.0,
+  "t_mesh": 0.023999691009521484,
+  "t_solve": 53.583087682724,
+  "solver_method": 0,
+  "solver_name": "lu",
+  "hmatrix_enabled": false,
+  "converged": true,
+  "residual": 0.0009780874122655714,
+  "nonl_iterations": 13,
+  "M_avg_z": 716275.229873572,
+  "peak_memory_mb": 1173.72265625
+}

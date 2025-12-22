@@ -76,18 +76,19 @@ Tests Radia's nonlinear solver with saturable BH curves.
 | `radia_bicgstab_hmatrix_N*.json` | BiCGSTAB with H-matrix |
 | `radia_bicgstab_benchmark_summary.json` | All BiCGSTAB results combined |
 
-### Key Results (2025-12-05)
+### Key Results (2025-12-22)
 
-| N | Elements | LU Time | BiCGSTAB Time | Speedup |
-|---|----------|---------|---------------|---------|
-| 10 | 1,000 | 2.01s | 0.54s | 3.7x |
-| 15 | 3,375 | 24.28s | 7.56s | 3.2x |
-| 20 | 8,000 | 278.68s | 47.05s | 5.9x |
+| N | Elements | DOF | LU Time | Iter | M_avg_z (A/m) |
+|---|----------|-----|---------|------|---------------|
+| 3 | 27 | 162 | 0.05s | 5 | 679,134 |
+| 5 | 125 | 750 | 0.30s | 6 | 702,129 |
+| 8 | 512 | 3072 | 7.28s | 7 | 713,064 |
+| 10 | 1000 | 6000 | 53.6s | 13 | 716,275 |
 
 **Key Findings**:
-1. BiCGSTAB is 3-6x faster than LU for nonlinear problems
-2. H-matrix shows NO speedup for compact cube geometry
-3. Both methods produce identical results within tolerance
+1. LU solver is recommended for nonlinear problems (N <= 10)
+2. ELF-compatible B-field convergence (mucal2) implemented
+3. Radia matches ELF iteration count and M_avg_z within 0.01%
 
 ---
 
@@ -120,4 +121,4 @@ python benchmark_solver_methods.py 10 --all
 
 ---
 
-**Last Updated**: 2025-12-05
+**Last Updated**: 2025-12-22

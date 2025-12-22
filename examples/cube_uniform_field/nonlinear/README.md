@@ -6,13 +6,13 @@ Benchmark for Radia's nonlinear solver with saturable BH curves using MSC (Magne
 
 - **Geometry**: 1.0 m x 1.0 m x 1.0 m cube centered at origin
 - **Material**: Nonlinear BH curve (soft iron with saturation)
-- **External Field**: Hz = 50,000 A/m (uniform field along z-axis)
+- **External Field**: Hz = 200,000 A/m (uniform field along z-axis)
 
 ## Element Types
 
 | Element | Mesh Tool | DOF | Benchmark Script |
 |---------|-----------|-----|------------------|
-| Hexahedron MSC | ObjPolyhdr | 3 (Mx, My, Mz) | `benchmark_hexahedron_msc.py` |
+| Hexahedron MSC | ObjPolyhdr | 6 (sigma per face) | `benchmark_hexahedron_msc.py` |
 | Tetrahedron MSC | Netgen | 3 (Mx, My, Mz) | `benchmark_tetrahedron_msc_netgen.py` |
 
 ## BH Curve (Soft Iron)
@@ -38,29 +38,36 @@ H [A/m]     B [T]
 
 Results stored in `hexahedron_msc/{lu,bicgstab}/` directories.
 
-### LU Solver Results
+### LU Solver Results (H_ext = 200,000 A/m)
 
 | N | Elements | DOF | Time (s) | Iter | M_avg_z (A/m) |
 |---|----------|-----|----------|------|---------------|
-| 5 | 125 | 375 | 0.25 | 3 | 173,400 |
+| 3 | 27 | 162 | 0.049 | 5 | 679,134 |
+| 5 | 125 | 750 | 0.299 | 6 | 702,129 |
+| 8 | 512 | 3072 | 7.284 | 7 | 713,064 |
+| 10 | 1000 | 6000 | 53.58 | 13 | 716,275 |
 
-### BiCGSTAB Solver Results
+### BiCGSTAB Solver Results (H_ext = 200,000 A/m)
 
 | N | Elements | DOF | Time (s) | Iter | M_avg_z (A/m) |
 |---|----------|-----|----------|------|---------------|
-| 5 | 125 | 375 | 0.05 | 3 | 173,400 |
+| 3 | 27 | 162 | 0.036 | 4 | 678,577 |
+| 5 | 125 | 750 | 1.135 | 8 | 701,259 |
+
+**Note**: BiCGSTAB has convergence issues for N >= 8 with nonlinear materials.
 
 ## Tetrahedron MSC Benchmarks
 
 Results stored in `tetrahedron_msc/{lu,bicgstab}/` directories.
 
-### LU Solver Results
+### LU Solver Results (H_ext = 50,000 A/m)
 
 | maxh | Elements | DOF | Time (s) | Iter | M_avg_z (A/m) |
 |------|----------|-----|----------|------|---------------|
-| 0.40 | ~60 | ~180 | 0.2 | 2 | ~175,000 |
-| 0.30 | ~200 | ~600 | 1.5 | 2 | ~190,000 |
-| 0.25 | ~350 | ~1050 | 4.5 | 2 | ~185,000 |
+| 0.50 | 28 | 84 | 0.082 | 2 | 184,790 |
+| 0.40 | 104 | 312 | 0.385 | 2 | 193,230 |
+| 0.35 | 112 | 336 | 0.442 | 2 | 197,377 |
+| 0.30 | 200 | 600 | 0.950 | 2 | 190,594 |
 
 ---
 
@@ -91,5 +98,5 @@ res = rad.Solve(grp, 0.001, 1000, 1)
 
 ---
 
-**Last Updated**: 2025-12-06
+**Last Updated**: 2025-12-22
 **Author**: Claude Code
