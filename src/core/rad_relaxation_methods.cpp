@@ -22,6 +22,8 @@
 
 #include <time.h>
 #include <cstring>  // For std::memcpy
+#include <cstdio>   // For fprintf in debug logging
+#include <cstdlib>  // For getenv
 
 // External access to radTApplication for NonlinearMethod setting
 extern radTApplication rad;
@@ -224,6 +226,16 @@ int radTRelaxationMethNo_0::SolveLU(std::vector<std::vector<double>>& A, std::ve
 int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
 {
 	if(IntrctPtr == nullptr) return 0;
+
+	// Debug: write to log file to trace execution path
+	FILE* path_log = std::fopen("S:/Radia/01_GitHub/radia_path.log", "a");
+	if(path_log)
+	{
+		std::fprintf(path_log, "AutoRelax called: HasVariableDOF=%d, AmOfMainElem=%d\n",
+		            IntrctPtr->HasVariableDOF() ? 1 : 0, IntrctPtr->AmOfMainElem);
+		std::fflush(path_log);
+		std::fclose(path_log);
+	}
 
 	// Check if variable DOF is active (e.g., 6 DOF MSC hexahedra)
 	// If so, use the variable DOF solver for better convergence
@@ -1312,6 +1324,8 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	std::vector<double> OldMagn(totalDOF);
 	// Store old chi values for MSC convergence check (ELF mucal1 style)
 	std::vector<double> OldChi(AmOfMainElem, 0.0);
+	// Store old B-field norms for ELF mucal2 (B-field) convergence check
+	std::vector<double> OldBnorm(AmOfMainElem, 0.0);
 
 	double PrecOnMagnetizE2 = PrecOnMagnetiz * PrecOnMagnetiz;
 	double MisfitE2 = 1.0e30;
@@ -1385,6 +1399,19 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		}
 	}
 
+	// Debug logging: always write to hardcoded path
+	FILE* debug_log = std::fopen("S:/Radia/01_GitHub/radia_iter.log", "w");
+	if(debug_log)
+	{
+		std::fprintf(debug_log, "# Radia LU Solver AutoRelax_VariableDOF\n");
+		std::fprintf(debug_log, "# AmOfMainElem=%d, totalDOF=%d\n", AmOfMainElem, totalDOF);
+		std::fprintf(debug_log, "# iter, rel_change, M_avg_z, max_chi, min_chi\n");
+		std::fflush(debug_log);
+	}
+
+	// Track previous iteration's average Mz for ELF-style convergence
+	double prev_M_avg_z = 0.0;
+
 	for(iterCount = 0; iterCount < MaxIterNumber; iterCount++)
 	{
 		// Store old values
@@ -1392,13 +1419,22 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		{
 			OldMagn[i] = FlatMagn[i];
 		}
-		// Store old chi for MSC convergence check
+		// Store old chi and B-field for MSC convergence check
+		const double MU_0_iter = 4.0 * 3.14159265358979323846 * 1.0e-7;
 		for(int elem = 0; elem < AmOfMainElem; elem++)
 		{
 			radTPolyhedron* poly = polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
 			{
 				OldChi[elem] = poly->CurrentChi;
+				// Store old B-field norm: B = mu_0 * (H + M) = mu_0 * mu_r * H
+				// For ELF mucal2 convergence check
+				TVector3d M = poly->Magn;
+				double chi = poly->CurrentChi;
+				if(chi < 1.0e-6) chi = 1.0e-6;
+				TVector3d H(M.x / chi, M.y / chi, M.z / chi);  // H = M / chi
+				TVector3d B(MU_0_iter * (H.x + M.x), MU_0_iter * (H.y + M.y), MU_0_iter * (H.z + M.z));
+				OldBnorm[elem] = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
 			}
 		}
 
@@ -1455,32 +1491,43 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				double chi;
 				if(iterCount == 0)
 				{
-					// First iteration: use initial chi from low H
-					TVector3d H_est(0., 0., 100.0);
-					TMatrix3d KsiTensor;
-					TVector3d MrVect;
-					MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
-					chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
-				}
-				else
-				{
-					// Subsequent iterations: use H from previous solve
-					TVector3d H_est;
-					if(IntrctPtr->NewFieldArray != nullptr)
+					// First iteration: use initial chi from BH curve 2nd point (ELF mucal0 style)
+					// This gives chi = B2/(mu0*H2) - 1 where (H2, B2) is the 2nd data point
+					radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
+					if(NonlinMater != nullptr)
 					{
-						H_est = IntrctPtr->NewFieldArray[elem];
+						double chi_init = NonlinMater->GetInitialChi_ELF_Style();
+						if(chi_init > 0)
+						{
+							chi = chi_init;
+						}
+						else
+						{
+							// Fallback: use DefineInstantKsiTensor at H=100
+							TVector3d H_est(0., 0., 100.0);
+							TMatrix3d KsiTensor;
+							TVector3d MrVect;
+							MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+							chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+						}
 					}
 					else
 					{
-						H_est = TVector3d(0., 0., FlatExtern[offset]);
+						// For non-nonlinear materials, use DefineInstantKsiTensor
+						TVector3d H_est(0., 0., 100.0);
+						TMatrix3d KsiTensor;
+						TVector3d MrVect;
+						MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+						chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 					}
-
-					// Standard chi update
-					TMatrix3d KsiTensor;
-					TVector3d MrVect;
-					MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
-					chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 				}
+				else
+				{
+					// Subsequent iterations: use chi from CurrentChi (updated after previous solve)
+					// This ensures consistency between matrix build and chi update
+					chi = (poly && poly->Use6DOF_MSC) ? poly->CurrentChi : 1.0;
+				}
+
 				if(chi < 1.0e-6) chi = 1.0e-6;
 				double inv_chi = 1.0 / chi;
 
@@ -1526,7 +1573,7 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			FlatMagn[i] = RHS[i];
 		}
 
-		// Compute convergence
+		// Compute convergence (sigma-based for comparison, M-based computed later)
 		double M_diff_sq = 0.0;
 		double M_norm_sq = 0.0;
 		for(int i = 0; i < totalDOF; i++)
@@ -1535,6 +1582,12 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			M_diff_sq += dM * dM;
 			M_norm_sq += FlatMagn[i] * FlatMagn[i];
 		}
+
+		// For 6DOF MSC: track actual M change (not sigma change)
+		double M_sum_old_norm = 0.0;
+		double M_sum_diff_sq = 0.0;
+		double M_sum_new_z = 0.0;    // For average Mz
+		double M_sum_diff_z = 0.0;   // For average dMz
 
 		// Update element magnetization from flat array
 		for(int elem = 0; elem < AmOfMainElem; elem++)
@@ -1555,6 +1608,9 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				radTPolyhedron* poly = polyCache[elem];  // Use cached pointer
 				if(poly && poly->Use6DOF_MSC)
 				{
+					// Store old M for convergence check
+					TVector3d M_old = poly->Magn;
+
 					// Store sigma values
 					for(int k = 0; k < 6; k++)
 					{
@@ -1587,6 +1643,17 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					if(wy > 1.0e-10) poly->Magn.y = My / wy;
 					if(wz > 1.0e-10) poly->Magn.z = Mz / wz;
 
+					// Compute M change for convergence (ELF uses |dM|/|M_new|)
+					double dMx = poly->Magn.x - M_old.x;
+					double dMy = poly->Magn.y - M_old.y;
+					double dMz = poly->Magn.z - M_old.z;
+					double M_new_norm = poly->Magn.x*poly->Magn.x + poly->Magn.y*poly->Magn.y + poly->Magn.z*poly->Magn.z;
+					M_sum_old_norm += M_new_norm;
+					M_sum_diff_sq += dMx*dMx + dMy*dMy + dMz*dMz;
+					// For average-based convergence (ELF style)
+					M_sum_new_z += std::fabs(poly->Magn.z);
+					M_sum_diff_z += std::fabs(dMz);
+
 					// ELF-compatible H update: H = M / chi
 					// Use the SAME chi that was used to build the matrix for this solve.
 					// This is the ELF mucal1 algorithm.
@@ -1609,6 +1676,10 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		// For 3DOF MMM elements: use M change
 		double max_B_rel_change = 0.0;
 		double max_chi_rel_change = 0.0;
+		double sum_chi_rel_change = 0.0;  // For ELF-style average convergence
+		double sum_dmu = 0.0;             // Sum of |mu_new - mu_old|
+		double sum_mu = 0.0;              // Sum of mu_new
+		int n_6dof_elements = 0;          // Count for average
 		bool has_6dof_elements = false;
 		const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
 
@@ -1622,104 +1693,136 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
 				{
 					TVector3d H_new = IntrctPtr->NewFieldArray[elem];
-					TVector3d M_new = poly->Magn;
 					radTMaterial* MaterPtr = (radTMaterial*)(IntrctPtr->g3dRelaxPtrVect[elem]->MaterHandle.rep);
 
-					if(rad.NonlinearMethod == 1)
+					// Get chi used for this iteration's matrix build
+					double chi_matrix = poly->CurrentChi;
+					double mu_old = chi_matrix + 1.0;
+
+					// Use ELF-style dual-method chi update:
+					// Method 1: Standard mu = B(H)/(mu_0*H) with Newton correction
+					// Method 2: H+B sum interpolation (physics-based)
+					// Selects method with smaller |mu_new - mu_old|
+					double H_mag = std::sqrt(H_new.x*H_new.x + H_new.y*H_new.y + H_new.z*H_new.z);
+
+					// Try to cast to radTNonlinearIsotropMaterial to use ComputeChiDualMethod
+					radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
+					double chi_new;
+					if(NonlinMater != nullptr)
 					{
-						// mucal2: B-change convergence (Newton style, faster convergence)
-						double B_new_x = MU_0 * (H_new.x + M_new.x);
-						double B_new_y = MU_0 * (H_new.y + M_new.y);
-						double B_new_z = MU_0 * (H_new.z + M_new.z);
-						double B_new_norm = std::sqrt(B_new_x*B_new_x + B_new_y*B_new_y + B_new_z*B_new_z);
-
-						// Get B_saturation from material
-						double B_sat = 2.5;  // Default saturation ~2.5T
-						if(MaterPtr)
+						// Use ELF-style dual-method chi update
+						chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old);
+						// Debug: write first element's chi update
+						if(debug_log && elem == 0 && iterCount < 10)
 						{
-							TMatrix3d KsiTensor;
-							TVector3d MrVect;
-							TVector3d H_high(0., 0., 200000.0);
-							MaterPtr->DefineInstantKsiTensor(H_high, KsiTensor, MrVect);
-							double chi_sat = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
-							double M_sat = chi_sat * 200000.0;
-							B_sat = MU_0 * (200000.0 + M_sat);
-							if(B_sat < 0.1) B_sat = 2.5;
+							std::fprintf(debug_log, "  iter%d elem0: H_mag=%.0f, chi_matrix=%.1f, mu_old=%.1f, chi_new=%.1f\n",
+							            iterCount+1, H_mag, chi_matrix, mu_old, chi_new);
 						}
-
-						// Approximate old B from previous iteration
-						double M_new_norm = std::sqrt(M_new.x*M_new.x + M_new.y*M_new.y + M_new.z*M_new.z);
-						double B_old_norm = MU_0 * M_new_norm * 0.9;
-						if(iterCount > 0)
-						{
-							B_old_norm = poly->CurrentChi > 1.0 ? B_new_norm * poly->CurrentChi / (poly->CurrentChi + 1.0) : B_new_norm * 0.9;
-						}
-
-						// mucal2 convergence: |B_new - B_old| / B_sat
-						double B_change = std::fabs(B_new_norm - B_old_norm) / B_sat;
-						if(B_change > max_B_rel_change)
-							max_B_rel_change = B_change;
 					}
 					else
 					{
-						// ELF mucal1: permeability-change convergence
-						// Uses |mu_new - mu_old| / mu_old where mu = chi + 1
+						// Fallback: use DefineInstantKsiTensor for other material types
 						TMatrix3d KsiTensor;
 						TVector3d MrVect;
 						MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
-						double chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+						chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 						if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-
-						double chi_current = poly->CurrentChi;
-						// ELF: mu_old = chi_old + 1, mu_new = chi_new + 1
-						// |mu_new - mu_old| / mu_old = |chi_new - chi_old| / (chi_old + 1)
-						double mu_old = chi_current + 1.0;
-						double mu_new = chi_new + 1.0;
-						if(mu_old > 1.0)
+						// Debug: write first element for fallback case
+						if(debug_log && elem == 0 && iterCount < 10)
 						{
-							double mu_rel_change = std::fabs(mu_new - mu_old) / mu_old;
-							if(mu_rel_change > max_chi_rel_change)
-								max_chi_rel_change = mu_rel_change;
-						}
-						else
-						{
-							// First iteration: force max change to continue iteration
-							max_chi_rel_change = 1.0e10;
+							std::fprintf(debug_log, "  iter%d elem0 (FALLBACK): H_mag=%.0f, chi_matrix=%.1f, chi_new=%.1f\n",
+							            iterCount+1, H_mag, chi_matrix, chi_new);
 						}
 					}
 
-					// Update chi for next iteration (standard method - no dual)
-					TMatrix3d KsiTensor;
-					TVector3d MrVect;
-					MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
-					double chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
-					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
+					// Update chi for next iteration
 					poly->CurrentChi = chi_new;
+
+					// ELF mucal2 (Newton-Raphson) convergence: use B-field change
+					// B = mu_0 * (H + M) = mu_0 * mu_r * H
+					// ELF uses: rel_change = |B_new - B_old| / B_sat
+					TVector3d M_new = poly->Magn;
+					double chi_for_B = chi_new;
+					if(chi_for_B < 1.0e-6) chi_for_B = 1.0e-6;
+					TVector3d H_for_B(M_new.x / chi_for_B, M_new.y / chi_for_B, M_new.z / chi_for_B);
+					TVector3d B_new_vec(MU_0 * (H_for_B.x + M_new.x),
+					                    MU_0 * (H_for_B.y + M_new.y),
+					                    MU_0 * (H_for_B.z + M_new.z));
+					double B_new_norm = std::sqrt(B_new_vec.x*B_new_vec.x + B_new_vec.y*B_new_vec.y + B_new_vec.z*B_new_vec.z);
+
+					// Get B_sat from BH curve (ELF uses B_max from last point)
+					double B_sat = 1.0;  // fallback
+					if(NonlinMater != nullptr)
+					{
+						B_sat = NonlinMater->GetBsaturation();
+						if(B_sat < 1.0e-10) B_sat = 1.0;  // fallback
+					}
+
+					// B-field convergence: |B_new - B_old| / B_sat
+					double B_old_norm = OldBnorm[elem];
+					double B_rel_change = std::fabs(B_new_norm - B_old_norm) / B_sat;
+					if(B_rel_change > max_B_rel_change)
+						max_B_rel_change = B_rel_change;
+
+					// Also track chi change for debugging
+					double mu_matrix = chi_matrix + 1.0;
+					double mu_new_val = chi_new + 1.0;
+					double mu_rel_change = std::fabs(mu_new_val - mu_matrix) / mu_matrix;
+					if(mu_rel_change > max_chi_rel_change)
+						max_chi_rel_change = mu_rel_change;
+
+					n_6dof_elements++;
 				}
 			}
 		}
 
+		// Convergence criterion depends on element type:
+		// - 3DOF MMM elements: use M change (FlatMagn is M)
+		// - 6DOF MSC elements: use B-field change (ELF mucal2/Newton-Raphson style)
 		double rel_change;
 		if(has_6dof_elements)
 		{
-			// Use the convergence criterion based on NonlinearMethod
-			if(rad.NonlinearMethod == 1)
-			{
-				// mucal2: B-change convergence
-				rel_change = max_B_rel_change;
-			}
-			else
-			{
-				// mucal1: chi-change convergence
-				rel_change = max_chi_rel_change;
-			}
+			// For 6DOF MSC: use ELF-style B-field change (mucal2)
+			// rel_change = MAX over all elements of |B_new - B_old| / B_sat
+			rel_change = max_B_rel_change;
 		}
 		else
 		{
-			// Use M change for convergence (original MMM style)
+			// For 3DOF MMM: use M change (original Radia style)
 			rel_change = (M_norm_sq > 1.0e-30) ? std::sqrt(M_diff_sq / M_norm_sq) : std::sqrt(M_diff_sq);
 		}
 		MisfitE2 = rel_change * rel_change;
+
+		// Debug logging - write to file
+		if(debug_log)
+		{
+			double M_sum_z = 0.0;
+			double max_chi = 0.0;
+			double min_chi = 1.0e20;
+			int n_6dof = 0;
+			for(int elem = 0; elem < AmOfMainElem; elem++)
+			{
+				int dof = IntrctPtr->GetElementDOF(elem);
+				if(dof == 6)
+				{
+					radTPolyhedron* poly = polyCache[elem];
+					if(poly && poly->Use6DOF_MSC)
+					{
+						M_sum_z += poly->Magn.z;
+						if(poly->CurrentChi > max_chi) max_chi = poly->CurrentChi;
+						if(poly->CurrentChi < min_chi) min_chi = poly->CurrentChi;
+						n_6dof++;
+					}
+				}
+			}
+			double M_avg_z = (n_6dof > 0) ? M_sum_z / n_6dof : 0.0;
+			// Also compute M-based convergence (sqrt(M_diff_sq / M_norm_sq))
+			double M_rel_change = (M_norm_sq > 1.0e-30) ? std::sqrt(M_diff_sq / M_norm_sq) : 0.0;
+			// Log: rel_change is now B-field based for 6DOF, show both B and chi
+			std::fprintf(debug_log, "%d, B_rel=%.6e, chi_rel=%.6e, M_avg_z=%.0f, max_chi=%.1f, min_chi=%.1f\n",
+			            iterCount + 1, max_B_rel_change, max_chi_rel_change, M_avg_z, max_chi, min_chi);
+			std::fflush(debug_log);
+		}
 
 		if(rel_change <= PrecOnMagnetiz)
 		{
@@ -1727,9 +1830,14 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			break;
 		}
 
-		if(radYield.Check() == 0) return iterCount;
+		if(radYield.Check() == 0)
+		{
+			if(debug_log) std::fclose(debug_log);
+			return iterCount;
+		}
 	}
 
+	if(debug_log) std::fclose(debug_log);
 	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
 
 	return iterCount;
@@ -2100,6 +2208,7 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	std::vector<double> OldMagn(totalDOF);
 	// Store old chi values for MSC convergence check (ELF mucal1 style)
 	std::vector<double> OldChi_bicg(AmOfMainElem, 0.0);
+	std::vector<double> OldBnorm_bicg(AmOfMainElem, 0.0);  // For ELF mucal2 B-field convergence
 	double MisfitE2 = 1.0e30;
 	int totalIterCount = 0;
 	int outerIter = 0;
@@ -2144,6 +2253,9 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		}
 	}
 
+	// Track previous iteration's average Mz for ELF-style convergence
+	double prev_M_avg_z_bicg = 0.0;
+
 	// Outer nonlinear iteration
 	for(outerIter = 0; outerIter < MaxIterNumber; outerIter++)
 	{
@@ -2153,12 +2265,20 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			OldMagn[i] = FlatMagn[i];
 		}
 		// Store old chi for MSC convergence check
+		const double MU_0_bicg = 4.0 * 3.14159265358979323846 * 1.0e-7;
 		for(int elem = 0; elem < AmOfMainElem; elem++)
 		{
 			radTPolyhedron* poly = polyCache[elem];  // Use cached pointer
 			if(poly && poly->Use6DOF_MSC)
 			{
 				OldChi_bicg[elem] = poly->CurrentChi;
+				// Store old B-field norm for ELF mucal2 convergence
+				TVector3d M = poly->Magn;
+				double chi = poly->CurrentChi;
+				if(chi < 1.0e-6) chi = 1.0e-6;
+				TVector3d H(M.x / chi, M.y / chi, M.z / chi);
+				TVector3d B(MU_0_bicg * (H.x + M.x), MU_0_bicg * (H.y + M.y), MU_0_bicg * (H.z + M.z));
+				OldBnorm_bicg[elem] = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
 			}
 		}
 
@@ -2208,6 +2328,10 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			M_norm_sq += FlatMagn[i] * FlatMagn[i];
 		}
 
+		// For 6DOF MSC: track actual Mz for ELF-style convergence
+		double M_sum_new_z_bicg = 0.0;
+		int n_6dof_elems = 0;
+
 		for(int elem = 0; elem < AmOfMainElem; elem++)
 		{
 			int dof = IntrctPtr->GetElementDOF(elem);
@@ -2253,6 +2377,10 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					if(wy > 1.0e-10) poly->Magn.y = My / wy;
 					if(wz > 1.0e-10) poly->Magn.z = Mz / wz;
 
+					// Track Mz for ELF-style convergence
+					M_sum_new_z_bicg += std::fabs(poly->Magn.z);
+					n_6dof_elems++;
+
 					// ELF-compatible H update: H = M / chi
 					// Use the SAME chi that was used to build the matrix for this solve.
 					// This is the ELF mucal1 algorithm.
@@ -2274,6 +2402,10 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		// NonlinearMethod: 0=mucal1 (chi-change), 1=mucal2 (B-change/Newton)
 		// For 3DOF MMM elements: use M change
 		double max_chi_rel_change = 0.0;
+		double sum_chi_rel_change = 0.0;  // For ELF-style average convergence
+		double sum_dmu = 0.0;             // Sum of |mu_new - mu_old|
+		double sum_mu = 0.0;              // Sum of mu_new
+		int n_6dof_elements = 0;          // Count for average
 		double max_B_rel_change = 0.0;
 		bool has_6dof_elements = false;
 		const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
@@ -2287,94 +2419,83 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				radTPolyhedron* poly = polyCache[elem];  // Use cached pointer
 				if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
 				{
-					radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
 					TVector3d H_new = IntrctPtr->NewFieldArray[elem];
-					TVector3d M_new = g3dRelaxPtr->Magn;
-					radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+					radTMaterial* MaterPtr = (radTMaterial*)(IntrctPtr->g3dRelaxPtrVect[elem]->MaterHandle.rep);
 
-					// Get new chi from new H (standard method)
-					TMatrix3d KsiTensor;
-					TVector3d MrVect;
-					MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
-					double chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
-					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
+					// Get chi used for this iteration's matrix build
+					double chi_matrix = poly->CurrentChi;
+					double mu_old = chi_matrix + 1.0;
 
-					if(rad.NonlinearMethod == 1)
+					// Use ELF-style dual-method chi update
+					double H_mag = std::sqrt(H_new.x*H_new.x + H_new.y*H_new.y + H_new.z*H_new.z);
+					radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
+					double chi_new;
+					if(NonlinMater != nullptr)
 					{
-						// mucal2: B-change convergence (Newton style, faster convergence)
-						double B_new_x = MU_0 * (H_new.x + M_new.x);
-						double B_new_y = MU_0 * (H_new.y + M_new.y);
-						double B_new_z = MU_0 * (H_new.z + M_new.z);
-						double B_new_norm = std::sqrt(B_new_x*B_new_x + B_new_y*B_new_y + B_new_z*B_new_z);
-
-						// Get B_saturation from material
-						double B_sat = 2.5;  // Default saturation ~2.5T
-						if(MaterPtr)
-						{
-							TMatrix3d KsiTensor_sat;
-							TVector3d MrVect_sat;
-							TVector3d H_high(0., 0., 200000.0);
-							MaterPtr->DefineInstantKsiTensor(H_high, KsiTensor_sat, MrVect_sat);
-							double chi_sat = (KsiTensor_sat.Str0.x + KsiTensor_sat.Str1.y + KsiTensor_sat.Str2.z) / 3.0;
-							double M_sat = chi_sat * 200000.0;
-							B_sat = MU_0 * (200000.0 + M_sat);
-							if(B_sat < 0.1) B_sat = 2.5;
-						}
-
-						// Approximate old B from previous iteration
-						double M_new_norm = std::sqrt(M_new.x*M_new.x + M_new.y*M_new.y + M_new.z*M_new.z);
-						double B_old_norm = MU_0 * M_new_norm * 0.9;
-						if(outerIter > 0)
-						{
-							B_old_norm = poly->CurrentChi > 1.0 ? B_new_norm * poly->CurrentChi / (poly->CurrentChi + 1.0) : B_new_norm * 0.9;
-						}
-
-						// mucal2 convergence: |B_new - B_old| / B_sat
-						double B_change = std::fabs(B_new_norm - B_old_norm) / B_sat;
-						if(B_change > max_B_rel_change)
-							max_B_rel_change = B_change;
+						// Use ELF-style dual-method chi update
+						chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old);
 					}
 					else
 					{
-						// ELF mucal1: permeability-change convergence
-						// Uses |mu_new - mu_old| / mu_old where mu = chi + 1
-						double chi_current = poly->CurrentChi;
-						double mu_old = chi_current + 1.0;
-						double mu_new = chi_new + 1.0;
-						if(mu_old > 1.0)
-						{
-							double mu_rel_change = std::fabs(mu_new - mu_old) / mu_old;
-							if(mu_rel_change > max_chi_rel_change)
-								max_chi_rel_change = mu_rel_change;
-						}
-						else
-						{
-							// First iteration: force max change to continue iteration
-							max_chi_rel_change = 1.0e10;
-						}
+						// Fallback: use DefineInstantKsiTensor
+						TMatrix3d KsiTensor;
+						TVector3d MrVect;
+						MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
+						chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+						if(chi_new < 1.0e-6) chi_new = 1.0e-6;
 					}
+
+					// Update chi for next iteration
+					poly->CurrentChi = chi_new;
+
+					// ELF mucal2 (Newton-Raphson) convergence: use B-field change
+					TVector3d M_new = poly->Magn;
+					double chi_for_B = chi_new;
+					if(chi_for_B < 1.0e-6) chi_for_B = 1.0e-6;
+					TVector3d H_for_B(M_new.x / chi_for_B, M_new.y / chi_for_B, M_new.z / chi_for_B);
+					TVector3d B_new_vec(MU_0_bicg * (H_for_B.x + M_new.x),
+					                    MU_0_bicg * (H_for_B.y + M_new.y),
+					                    MU_0_bicg * (H_for_B.z + M_new.z));
+					double B_new_norm = std::sqrt(B_new_vec.x*B_new_vec.x + B_new_vec.y*B_new_vec.y + B_new_vec.z*B_new_vec.z);
+
+					// Get B_sat from BH curve
+					double B_sat = 1.0;
+					if(NonlinMater != nullptr)
+					{
+						B_sat = NonlinMater->GetBsaturation();
+						if(B_sat < 1.0e-10) B_sat = 1.0;
+					}
+
+					// B-field convergence: |B_new - B_old| / B_sat
+					double B_old_norm = OldBnorm_bicg[elem];
+					double B_rel_change = std::fabs(B_new_norm - B_old_norm) / B_sat;
+					if(B_rel_change > max_B_rel_change)
+						max_B_rel_change = B_rel_change;
+
+					// Also track chi change for debugging
+					double mu_matrix = chi_matrix + 1.0;
+					double mu_new_val = chi_new + 1.0;
+					double mu_rel_change = std::fabs(mu_new_val - mu_matrix) / mu_matrix;
+					if(mu_rel_change > max_chi_rel_change)
+						max_chi_rel_change = mu_rel_change;
+
+					n_6dof_elements++;
 				}
 			}
 		}
 
+		// Convergence criterion depends on element type:
+		// - 3DOF MMM elements: use M change (FlatMagn is M)
+		// - 6DOF MSC elements: use B-field change (ELF mucal2/Newton-Raphson style)
 		double rel_change;
 		if(has_6dof_elements)
 		{
-			// Use the convergence criterion based on NonlinearMethod
-			if(rad.NonlinearMethod == 1)
-			{
-				// mucal2: B-change convergence
-				rel_change = max_B_rel_change;
-			}
-			else
-			{
-				// ELF mucal1: permeability-change convergence
-				rel_change = max_chi_rel_change;
-			}
+			// For 6DOF MSC: use ELF-style B-field change (mucal2)
+			rel_change = max_B_rel_change;
 		}
 		else
 		{
-			// Use M change for convergence (original MMM style)
+			// For 3DOF MMM: use M change (original Radia style)
 			rel_change = (M_norm_sq > 1.0e-30) ? std::sqrt(M_diff_sq / M_norm_sq) : std::sqrt(M_diff_sq);
 		}
 		MisfitE2 = rel_change * rel_change;

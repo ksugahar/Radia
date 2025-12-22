@@ -36,18 +36,20 @@ The method uses the **MMM (Magnetic Moment Method)** with MSC field computation.
 | Analytical M_z | 149,850 A/m |
 | Solver tolerance | 0.0001 |
 
-### Hexahedral Results (ObjDivMag + 6DOF MSC)
+### Hexahedral Results (ObjPolyhdr + 6DOF MSC)
 
 | N | Elements | DOF | Solver | Time (s) | Iter | M_avg_z (A/m) | Error |
 |---|----------|-----|--------|----------|------|---------------|-------|
-| 3 | 27 | 162 | LU | 0.03 | 2 | 169,706 | 13.5% |
-| 4 | 64 | 384 | LU | 0.06 | 2 | 173,431 | 16.0% |
-| 5 | 125 | 750 | LU | 0.18 | 2 | 175,475 | 17.3% |
-| 6 | 216 | 1296 | LU | 0.45 | 2 | 176,749 | 18.2% |
-| 7 | 343 | 2058 | LU | 1.97 | 2 | 177,610 | 18.8% |
-| 8 | 512 | 3072 | LU | 4.75 | 2 | 178,228 | 19.2% |
+| 3 | 27 | 162 | LU | 0.057 | 2 | 169,706 | 13.5% |
+| 4 | 64 | 384 | LU | 0.095 | 2 | 173,431 | 16.0% |
+| 5 | 125 | 750 | LU | 0.296 | 2 | 175,475 | 17.3% |
+| 6 | 216 | 1296 | LU | 0.833 | 2 | 176,749 | 18.2% |
+| 7 | 343 | 2058 | LU | 2.146 | 2 | 177,610 | 18.8% |
+| 8 | 512 | 3072 | LU | 5.214 | 2 | 178,228 | 19.2% |
 
 **Note**: Error vs analytical is expected due to edge effects in MMM/MSC method.
+
+**Last Updated**: 2025-12-22
 
 ### Tetrahedral Results (Netgen + MSC)
 

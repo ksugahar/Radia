@@ -1,0 +1,16 @@
+{
+  "element_type": "tetra",
+  "mesh_description": "maxh=0.50m",
+  "n_elements": 28,
+  "ndof": 84,
+  "H_ext": 50000.0,
+  "t_mesh": 0.034000396728515625,
+  "t_solve": 0.08199787139892578,
+  "solver_method": 0,
+  "solver_name": "lu",
+  "converged": true,
+  "residual": 206029.65029976759,
+  "nonl_iterations": 2,
+  "M_avg_z": 184789.5655029871,
+  "peak_memory_mb": 63.61328125
+}

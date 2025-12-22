@@ -490,6 +490,43 @@ public:
 
 	double GetHfromM_Analytical(double AbsM) const;
 
+	// ELF mucal0 style: get initial chi from 2nd point of B-H curve
+	// Returns chi = B2/(mu0*H2) - 1 where (H2, B2) is the 2nd data point
+	// Returns -1 if B-H table is not available or has fewer than 2 points
+	double GetInitialChi_ELF_Style() const
+	{
+		if(gLenArrayHB >= 2 && gArrayHB != nullptr)
+		{
+			double H2 = gArrayHB[1].x;  // H value at 2nd point (index 1)
+			double B2 = gArrayHB[1].y;  // B value at 2nd point
+			const double MU_0_local = 4.0 * 3.14159265358979323846 * 1.0e-7;
+			if(H2 > 1.0e-10)
+			{
+				// chi = B/(mu0*H) - 1 = mu_r - 1
+				return B2 / (MU_0_local * H2) - 1.0;
+			}
+		}
+		return -1.0;  // Indicate failure
+	}
+
+	// Get B saturation value from BH curve (ELF-compatible)
+	// ELF uses: B_sat = B(last) - H(last)
+	// Note: In Radia's BH curve, gArrayHB[i].x = H, gArrayHB[i].y = B
+	// ELF subtracts H from B for normalization (though dimensionally unusual)
+	double GetBsaturation() const
+	{
+		if(gLenArrayHB >= 1 && gArrayHB != nullptr)
+		{
+			// ELF-compatible: B_sat = B(last) - H(last)
+			double B_last = gArrayHB[gLenArrayHB - 1].y;
+			double H_last = gArrayHB[gLenArrayHB - 1].x;
+			double B_sat = B_last - H_last;
+			if(B_sat < 1.0e-10) return 1.0;  // Fallback
+			return B_sat;
+		}
+		return 1.0;  // Fallback: 1 Tesla
+	}
+
 	// ELF-compatible: returns M and dM/dH from B-H curve
 	static void AbsMvsAbsH_FuncAndDer_Interpol(double AbsH, TVector2d* ArrayHB, double* dBdH, int LenArrayHB, double& f, double& fDer);
 	void DefineScalarM(double AbsInstantH, double& f, double& InstKsi);
