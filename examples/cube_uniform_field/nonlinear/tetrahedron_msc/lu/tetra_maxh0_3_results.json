@@ -1,16 +1,17 @@
 {
   "element_type": "tetra",
   "mesh_description": "maxh=0.30m",
+  "maxh": 0.3,
   "n_elements": 200,
   "ndof": 600,
-  "H_ext": 50000.0,
-  "t_mesh": 0.03799843788146973,
-  "t_solve": 0.9499952793121338,
+  "H_ext": 200000.0,
+  "t_mesh": 0.042967796325683594,
+  "t_solve": 4.420987129211426,
   "solver_method": 0,
   "solver_name": "lu",
-  "converged": true,
-  "residual": 239342.9325133622,
-  "nonl_iterations": 2,
-  "M_avg_z": 190593.78205157578,
-  "peak_memory_mb": 72.7734375
+  "converged": false,
+  "residual": 760410.4259431639,
+  "nonl_iterations": 1000,
+  "M_avg_z": 658737.7224368434,
+  "peak_memory_mb": 71.9375
 }

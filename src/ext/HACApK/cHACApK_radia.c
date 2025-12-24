@@ -278,8 +278,9 @@ int HACApK_build(
     /* param[71]: ACA tolerance */
     p_ctl->param[71] = config->aca_eps;
 
-    /* param[72]: ACA_EPS multiplier */
-    p_ctl->param[72] = 1.0;
+    /* param[72]: ACA_EPS multiplier (HACApK standard: 1.0e-3, LatticeH: 1.0e-9) */
+    /* ELF uses standard HACApK (not LatticeH), so use 1.0e-3 */
+    p_ctl->param[72] = 1.0e-3;
 
     /* param[41], [42], [43]: block clustering parameters */
     p_ctl->param[41] = 1;  /* npgl = 1 for single process */

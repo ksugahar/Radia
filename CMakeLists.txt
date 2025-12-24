@@ -98,11 +98,12 @@ set(RADIA_EXT_SOURCES
 
 # HACApK sources (H-matrix with ACA+ compression)
 # Note: C files compiled as C (not C++) to avoid typedef struct * compatibility issues
-# Simplified for Radia: MPI replaced with stub (single-process), OpenMP only, unified logging
+# Using standard HACApK 1.0.0 (same ACA+ implementation as ELF)
+# MPI replaced with stub (single-process), OpenMP only, unified logging
 set(HACAPK_SOURCES
-	${EXT_DIR}/HACApK_LH-Cimplm/cHACApK_base.c
-	${EXT_DIR}/HACApK_LH-Cimplm/cHACApK_lib.c
-	${EXT_DIR}/HACApK_LH-Cimplm/cHACApK_cpp_impl.c
+	${EXT_DIR}/HACApK/cHACApK_base.c
+	${EXT_DIR}/HACApK/cHACApK_lib.c
+	${EXT_DIR}/HACApK/cHACApK_cpp_impl.c
 )
 
 # Radia lib sources
@@ -138,7 +139,7 @@ target_include_directories(radia_ngsolve PRIVATE
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
 	${EXT_DIR}/triangle
-	${EXT_DIR}/HACApK_LH-Cimplm
+	${EXT_DIR}/HACApK
 	${PYTHON_DIR}
 )
 
@@ -280,7 +281,7 @@ target_include_directories(radia PRIVATE
 	${LIB_DIR}
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
-	${EXT_DIR}/HACApK_LH-Cimplm
+	${EXT_DIR}/HACApK
 	${FFTW_DIR}
 )
 
@@ -351,7 +352,11 @@ endif()
 # Link OpenMP for parallel matrix construction
 if(OpenMP_CXX_FOUND)
 	target_link_libraries(radia PRIVATE OpenMP::OpenMP_CXX)
-	message(STATUS "OpenMP enabled for radia")
+	message(STATUS "OpenMP enabled for radia (C++)")
+endif()
+if(OpenMP_C_FOUND)
+	target_link_libraries(radia PRIVATE OpenMP::OpenMP_C)
+	message(STATUS "OpenMP enabled for radia (C)")
 endif()
 
 # Compiler-specific flags
@@ -417,7 +422,7 @@ message(STATUS "radia module configured")
 # 	${EXT_DIR}/auxparse
 # 	${EXT_DIR}/genmath
 # 	${EXT_DIR}/triangle
-# 	${EXT_DIR}/HACApK_LH-Cimplm
+# 	${EXT_DIR}/HACApK
 # 	${FFTW_DIR}
 # )
 #

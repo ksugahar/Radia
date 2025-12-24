@@ -1,0 +1,10 @@
+--- a/src/ext/HACApK_LH-Cimplm/cHACApK_base.c
++++ b/src/ext/HACApK_LH-Cimplm/cHACApK_base.c
+@@ -1667,6 +1667,7 @@ void cHACApK_generate_cbitree(
+   // if(i>26) stop
+   // printf("\n");
+   // printf("nsrt=%12d nd=%12d\n",nsrt,nd);
++  printf("[DEBUG] cbitree: nd=%d, minsz=%d, ndpth=%d\n", nd, minsz, ndpth);
+   if(nd <= minsz) {
+     nson=0;
+     // nclst=nclst+1;

@@ -146,6 +146,14 @@ void AutoRelaxOpt( int, double, int, int, const char* );
 void UpdateSourcesForRelax( int );
 void SolveGen( int, double, int, int );
 void SolveGenNonl( int, double, int, int, int );
+#ifdef RADIA_USE_HACAPK
+void SetHACApKParams( double, int, double );
+void GetHACApKStats( double*, int* );
+#endif
+void SetBiCGSTABTolerance( double );
+double GetBiCGSTABTolerance();
+void SetRelaxParam( double );
+double GetRelaxParam();
 void ParticleTrajectory( int, double, double,double,double,double, double,double, int );
 void FocusingPotential( int, double,double,double, double,double,double, int );
 //void FocusingKickPer( int, double,double,double, double,double,double, double,int, double,double,double, double,int,double,int, const char*, int,int,double,double, const char*, double );
@@ -1589,6 +1597,47 @@ void SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo)
 void SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod)
 {
 	rad.SolveGenNonl(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo, NonlMethod);
+}
+
+//-------------------------------------------------------------------------
+
+#ifdef RADIA_USE_HACAPK
+void SetHACApKParams(double eps, int leaf_size, double eta)
+{
+	rad.SetHACApKParams(eps, leaf_size, eta);
+}
+
+void GetHACApKStats(double* dOut, int* nOut)
+{
+	rad.GetHACApKStats(dOut, nOut);
+}
+#endif
+
+//-------------------------------------------------------------------------
+
+void SetBiCGSTABTolerance(double tol)
+{
+	rad.m_bicg_tol = tol;
+}
+
+double GetBiCGSTABTolerance()
+{
+	return rad.m_bicg_tol;
+}
+
+//-------------------------------------------------------------------------
+
+void SetRelaxParam(double relax)
+{
+	if(relax >= 0.0 && relax <= 1.0)
+	{
+		rad.m_relax = relax;
+	}
+}
+
+double GetRelaxParam()
+{
+	return rad.m_relax;
 }
 
 //-------------------------------------------------------------------------

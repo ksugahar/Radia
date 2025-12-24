@@ -1,0 +1,23 @@
+{
+  "element_type": "hexahedron_msc",
+  "mesh_description": "5x5x5",
+  "n_div": 5,
+  "n_elements": 125,
+  "ndof": 750,
+  "H_ext": 200000.0,
+  "t_mesh": 0.010996103286743164,
+  "t_solve": 0.2839643955230713,
+  "solver_method": 1,
+  "solver_name": "bicgstab",
+  "nonl_tol": 0.001,
+  "bicg_tol": 0.0001,
+  "hmat_eps": null,
+  "leaf_size": null,
+  "eta": null,
+  "hmatrix_enabled": false,
+  "converged": true,
+  "residual": 0.0009431676105555731,
+  "nonl_iterations": 8,
+  "M_avg_z": 702127.6786129393,
+  "peak_memory_mb": 34.5
+}

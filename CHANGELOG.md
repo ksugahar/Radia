@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.15] - 2025-12-22
+
+### Added
+
+- **B-field Based Convergence (mucal2)**
+  - Implemented industry-standard B-field convergence criterion for nonlinear materials
+  - Formula: `rel_change = |B_new - B_old| / B_sat`
+  - B_sat automatically calculated from BH curve (B_last - H_last)
+  - Matches Newton-Raphson convergence behavior of reference solvers
+
+### Changed
+
+- **Nonlinear Solver Convergence**
+  - Replaced chi-based (mucal1) convergence with B-field based (mucal2) convergence
+  - Provides faster and more reliable convergence for saturable materials
+  - Iteration count now matches reference solver exactly (e.g., 6 iterations for N=5 cube)
+
+- **Permeability Calculation from BH Curve**
+  - Changed from chi (susceptibility) based to mu_r (relative permeability) based calculation
+  - mu_r = B / (mu_0 * H) directly from BH curve interpolation
+  - More numerically stable for high-permeability materials
+  - Consistent with industry-standard magnetostatic solvers
+
+- **BH Curve Storage Format**
+  - Internally uses B-H representation (B as function of H)
+  - Supports both linear interpolation and spline interpolation
+  - GetBsaturation() method added for automatic B_sat extraction
+
+### Validation
+
+- N=5 hexahedron benchmark (125 elements, H_ext = 200,000 A/m):
+  - Radia: 6 iterations, M_avg_z = 702,129.2 A/m
+  - Reference: 6 iterations, M_avg_z = 702,131.9 A/m
+  - Difference: 0.0004%
+
 ## [1.3.14] - 2025-12-11
 
 ### Fixed

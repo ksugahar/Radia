@@ -33,7 +33,7 @@ CHI = MU_R - 1       # For reference/calculations only
 # =============================================================================
 # External Field
 # =============================================================================
-H_EXT = 50000.0      # External H field magnitude [A/m]
+H_EXT = 200000.0     # External H field magnitude [A/m] (same as nonlinear benchmark)
 B_EXT = MU_0 * H_EXT  # External B field magnitude [T]
 
 # =============================================================================
@@ -49,8 +49,8 @@ MAX_ITERATIONS = 1000       # Maximum iterations
 # Tetrahedron: maxh = CUBE_SIZE / n_div (approximate correspondence)
 
 # Standard mesh sizes for comparison
-STANDARD_N_DIVS = [3, 4, 5, 6, 7, 8]
-STANDARD_MAXH = [0.5, 0.4, 0.35, 0.3, 0.25, 0.2]
+STANDARD_N_DIVS = [5, 10, 15]
+STANDARD_MAXH = [0.35, 0.25, 0.2, 0.15, 0.1]
 
 def n_div_to_maxh(n_div):
     """Convert hexahedron n_div to approximate tetrahedral maxh."""

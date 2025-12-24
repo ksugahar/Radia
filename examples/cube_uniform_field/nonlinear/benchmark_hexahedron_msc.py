@@ -17,11 +17,13 @@ Solver types:
 Usage:
     python benchmark_hexahedron_msc.py --lu 5 10 15 20
     python benchmark_hexahedron_msc.py --bicgstab 5 10 15 20
-    python benchmark_hexahedron_msc.py 5 10 15 20  # runs both
+    python benchmark_hexahedron_msc.py --hacapk 5 10 15 20
+    python benchmark_hexahedron_msc.py --hacapk --eps 1e-3 5 10 15  # custom ACA tolerance
 
 Examples:
     python benchmark_hexahedron_msc.py --lu 5 10 15 20
     python benchmark_hexahedron_msc.py --bicgstab 5 10 15 20
+    python benchmark_hexahedron_msc.py --hacapk --eps 1e-4 5 10 15  # ELF-compatible default
 """
 
 import sys
@@ -132,14 +134,18 @@ def create_hexahedron_msc_mesh(n_div):
     return elements
 
 
-def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
+def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False,
+                             hmat_eps=1e-4, leaf_size=10, eta=2.0, relax=0.0):
     """
     Benchmark hexahedral MSC mesh with specified solver.
 
     Args:
         n_div: Number of divisions per edge
-        solver_method: 0=LU, 1=BiCGSTAB
+        solver_method: 0=LU, 1=BiCGSTAB, 2=HACApK
         use_hmatrix: Enable H-matrix acceleration (BiCGSTAB only)
+        hmat_eps: ACA tolerance for HACApK solver (default: 1e-4)
+        leaf_size: Minimum cluster size in elements (default: 10)
+        eta: Admissibility parameter (default: 2.0)
     """
     rad.FldUnits('m')
     rad.UtiDelAll()
@@ -147,6 +153,8 @@ def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
     # Determine solver name
     if solver_method == 0:
         solver_name = 'lu'
+    elif solver_method == 2:
+        solver_name = 'hacapk'
     elif use_hmatrix:
         solver_name = 'bicgstab_hmatrix'
     else:
@@ -175,30 +183,52 @@ def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
     ext = rad.ObjBckg([0, 0, B_ext])
     grp = rad.ObjCnt([container, ext])
 
-    # Configure H-matrix if requested
-    # Note: H-matrix API may vary - check if available
+    # Configure H-matrix if using HACApK (method=2)
     hmatrix_enabled = False
-    if use_hmatrix and solver_method == 1:
+    hmatrix_stats = None
+    if solver_method == 2:
         try:
-            rad.SolverHMatrixEnable()
+            # Set HACApK parameters
+            # eps: ACA tolerance (lower = more accurate, higher = faster)
+            # leaf_size: minimum cluster size in elements
+            # eta: admissibility parameter
+            rad.SetHACApKParams(hmat_eps, leaf_size, eta)
             hmatrix_enabled = True
-            print('H-matrix: Enabled')
+            print(f'H-matrix: Enabled (eps={hmat_eps:.0e}, leaf_size={leaf_size}, eta={eta})')
         except AttributeError:
             print('H-matrix: Not available (API not found)')
 
+    # Tolerance parameters (all explicitly set for reproducibility)
+    NONL_TOL = 0.001     # Nonlinear iteration tolerance (outer loop)
+    BICG_TOL = 1e-4      # BiCGSTAB inner loop tolerance (Method 1 and 2)
+    MAX_ITER = 100       # Maximum nonlinear iterations
+
+    # Set BiCGSTAB inner loop tolerance explicitly (ELF-compatible default)
+    rad.SetBiCGSTABTol(BICG_TOL)
+
+    # Set under-relaxation coefficient (0.0 = full step, 0.0-1.0 = under-relaxation)
+    rad.SetRelaxParam(relax)
+
     # Solve
-    print(f'Solving...')
+    relax_str = f', relax={relax:.1f}' if relax > 0 else ''
+    print(f'Solving... (nonl_tol={NONL_TOL:.0e}, bicg_tol={BICG_TOL:.0e}{relax_str})')
     t_solve_start = time.time()
-    result = rad.Solve(grp, 0.001, 1000, solver_method)
+    result = rad.Solve(grp, NONL_TOL, MAX_ITER, solver_method)
     t_solve = time.time() - t_solve_start
 
     # Measure peak memory after solve
     peak_memory_mb = get_peak_memory_mb()
 
-    # Disable H-matrix after solve
+    # Get H-matrix statistics if HACApK was used
     if hmatrix_enabled:
         try:
-            rad.SolverHMatrixDisable()
+            hmatrix_stats = rad.GetHACApKStats()
+            if hmatrix_stats:
+                print(f'H-matrix stats:')
+                print(f'  Leaf nodes: {hmatrix_stats["n_leaves"]} (low-rank: {hmatrix_stats["n_lowrank"]}, dense: {hmatrix_stats["n_dense"]})')
+                print(f'  Max rank: {hmatrix_stats["max_rank"]}')
+                print(f'  Compression: {hmatrix_stats["compression"]:.4f}')
+                print(f'  Build time: {hmatrix_stats["build_time"]:.4f} s')
         except AttributeError:
             pass
 
@@ -208,7 +238,7 @@ def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
     M_avg_z = np.mean([m[2] for m in M_list]) if M_list else 0.0
 
     n_iter = int(result[3]) if result[3] else 0
-    converged = n_iter < 1000
+    converged = n_iter < MAX_ITER
     residual = result[0] if result[0] else 0.0
 
     print(f'Time: {t_solve:.3f} s')
@@ -230,6 +260,13 @@ def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
         't_solve': t_solve,
         'solver_method': solver_method,
         'solver_name': solver_name,
+        # Tolerance parameters (all explicitly recorded)
+        'nonl_tol': NONL_TOL,        # Nonlinear iteration tolerance (outer loop)
+        'bicg_tol': BICG_TOL,        # BiCGSTAB inner loop tolerance
+        # H-matrix parameters (Method 2 only)
+        'hmat_eps': hmat_eps if solver_method == 2 else None,
+        'leaf_size': leaf_size if solver_method == 2 else None,
+        'eta': eta if solver_method == 2 else None,
         'hmatrix_enabled': hmatrix_enabled,
         'converged': converged,
         'residual': residual,
@@ -238,6 +275,23 @@ def benchmark_hexahedron_msc(n_div, solver_method=1, use_hmatrix=False):
     }
     if peak_memory_mb is not None:
         result_data['peak_memory_mb'] = peak_memory_mb
+    if hmatrix_stats is not None:
+        hmatrix_data = {
+            'n_lowrank': hmatrix_stats['n_lowrank'],
+            'n_dense': hmatrix_stats['n_dense'],
+            'max_rank': hmatrix_stats['max_rank'],
+            'compression_ratio': hmatrix_stats['compression'],
+            'build_time': hmatrix_stats['build_time'],
+            'nlf': hmatrix_stats['n_leaves'],
+        }
+        # Add timing statistics if available (v1.3.16+)
+        if 't_hmatrix_build' in hmatrix_stats:
+            hmatrix_data['t_hmatrix_build'] = hmatrix_stats['t_hmatrix_build']
+        if 't_linear_solve' in hmatrix_stats:
+            hmatrix_data['t_linear_solve'] = hmatrix_stats['t_linear_solve']
+        if 'linear_iterations' in hmatrix_stats:
+            hmatrix_data['linear_iterations'] = hmatrix_stats['linear_iterations']
+        result_data['hmatrix'] = hmatrix_data
     return result_data
 
 
@@ -245,15 +299,25 @@ def main():
     parser = argparse.ArgumentParser(description='Hexahedron MSC benchmark (Radia)')
     parser.add_argument('--lu', action='store_true', help='Run LU solver benchmark')
     parser.add_argument('--bicgstab', action='store_true', help='Run BiCGSTAB solver benchmark')
+    parser.add_argument('--hacapk', action='store_true', help='Run HACApK (H-matrix) solver benchmark')
+    parser.add_argument('--eps', type=float, default=1e-4,
+                       help='ACA tolerance for HACApK (default: 1e-4, lower=accurate, higher=fast)')
+    parser.add_argument('--leaf_size', type=int, default=10,
+                       help='Minimum cluster size in elements (default: 10)')
+    parser.add_argument('--eta', type=float, default=2.0,
+                       help='Admissibility parameter (default: 2.0)')
+    parser.add_argument('--relax', type=float, default=0.0,
+                       help='Under-relaxation coefficient (default: 0.0 = full step, 0.0-1.0)')
     parser.add_argument('sizes', nargs='*', type=int, default=[5, 10, 15, 20],
                        help='Mesh sizes (N values, default: 5 10 15 20)')
 
     args = parser.parse_args()
 
-    # Default to both if none specified
-    any_solver = args.lu or args.bicgstab
+    # Default to LU only if none specified
+    any_solver = args.lu or args.bicgstab or args.hacapk
     run_lu = args.lu or not any_solver
-    run_bicgstab = args.bicgstab or not any_solver
+    run_bicgstab = args.bicgstab
+    run_hacapk = args.hacapk
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -263,10 +327,15 @@ def main():
     print('Cube size: 1.0 m')
     print('H_ext: %.0f A/m' % H_EXT)
     print('N values: %s' % args.sizes)
+    if args.relax > 0:
+        print('Relaxation: %.2f (under-relaxation)' % args.relax)
+    if run_hacapk:
+        print('HACApK: eps=%.0e, leaf_size=%d, eta=%.1f' % (args.eps, args.leaf_size, args.eta))
     print()
 
     results_lu = []
     results_bicgstab = []
+    results_hacapk = []
 
     for n in args.sizes:
         # LU Benchmark
@@ -278,7 +347,7 @@ def main():
             output_dir = os.path.join(script_dir, 'hexahedron_msc', 'lu')
             os.makedirs(output_dir, exist_ok=True)
 
-            result = benchmark_hexahedron_msc(n, solver_method=0, use_hmatrix=False)
+            result = benchmark_hexahedron_msc(n, solver_method=0, use_hmatrix=False, relax=args.relax)
             results_lu.append(result)
 
             filename = 'msc_N%d_results.json' % n
@@ -296,8 +365,27 @@ def main():
             output_dir = os.path.join(script_dir, 'hexahedron_msc', 'bicgstab')
             os.makedirs(output_dir, exist_ok=True)
 
-            result = benchmark_hexahedron_msc(n, solver_method=1, use_hmatrix=False)
+            result = benchmark_hexahedron_msc(n, solver_method=1, use_hmatrix=False, relax=args.relax)
             results_bicgstab.append(result)
+
+            filename = 'msc_N%d_results.json' % n
+            filepath = os.path.join(output_dir, filename)
+            with open(filepath, 'w') as f:
+                json.dump(result, f, indent=2)
+            print('Saved: %s\n' % filepath)
+
+        # HACApK Benchmark (Method 2)
+        if run_hacapk:
+            print('\n' + '=' * 70)
+            print('HACApK SOLVER: N=%d (eps=%.0e, leaf=%d, eta=%.1f)' % (n, args.eps, args.leaf_size, args.eta))
+            print('=' * 70 + '\n')
+
+            output_dir = os.path.join(script_dir, 'hexahedron_msc', 'hacapk')
+            os.makedirs(output_dir, exist_ok=True)
+
+            result = benchmark_hexahedron_msc(n, solver_method=2, use_hmatrix=False,
+                                              hmat_eps=args.eps, leaf_size=args.leaf_size, eta=args.eta, relax=args.relax)
+            results_hacapk.append(result)
 
             filename = 'msc_N%d_results.json' % n
             filepath = os.path.join(output_dir, filename)
@@ -328,6 +416,21 @@ def main():
             print('%-10d %10d %10.3f %10d %12.0f %10s' % (
                 r['n_div'], r['n_elements'], r['t_solve'],
                 r['nonl_iterations'], r['M_avg_z'],
+                'Yes' if r['converged'] else 'No'))
+
+    if results_hacapk:
+        print('\nHACApK Solver (hexahedron_msc/hacapk/):\n')
+        print('%-6s %8s %10s %8s %10s %10s %8s %10s' % (
+            'N', 'Elements', 'Time (s)', 'Nonl It', 'M_avg_z', 'Compress', 'Leaves', 'Conv'))
+        print('-' * 85)
+        for r in results_hacapk:
+            hm = r.get('hmatrix', {})
+            compression = hm.get('compression_ratio', 0.0)
+            n_leaves = hm.get('nlf', 0)
+            print('%-6d %8d %10.3f %8d %10.0f %10.4f %8d %10s' % (
+                r['n_div'], r['n_elements'], r['t_solve'],
+                r['nonl_iterations'], r['M_avg_z'],
+                compression, n_leaves,
                 'Yes' if r['converged'] else 'No'))
 
     print('=' * 70)

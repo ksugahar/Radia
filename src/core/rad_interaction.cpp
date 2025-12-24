@@ -36,11 +36,11 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-radTInteraction::radTInteraction(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char ExtraExternFieldArrayIsNeeded, char KeepTransData, int rankMPI, int nProcMPI) //OC08012020
+radTInteraction::radTInteraction(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char ExtraExternFieldArrayIsNeeded, char KeepTransData, int rankMPI, int nProcMPI, char skipDenseMatrix) //OC08012020 + skipDenseMatrix
 //radTInteraction::radTInteraction(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char ExtraExternFieldArrayIsNeeded, char KeepTransData)
 {
-	if(!Setup(In_hg, In_hgMoreExtSrc, InCompCriterium, InMemAllocTotAtOnce, ExtraExternFieldArrayIsNeeded, KeepTransData, rankMPI, nProcMPI)) //OC08012020
-	//if(!Setup(In_hg, In_hgMoreExtSrc, InCompCriterium, InMemAllocTotAtOnce, ExtraExternFieldArrayIsNeeded, KeepTransData)) 
+	if(!Setup(In_hg, In_hgMoreExtSrc, InCompCriterium, InMemAllocTotAtOnce, ExtraExternFieldArrayIsNeeded, KeepTransData, rankMPI, nProcMPI, skipDenseMatrix)) //OC08012020 + skipDenseMatrix
+	//if(!Setup(In_hg, In_hgMoreExtSrc, InCompCriterium, InMemAllocTotAtOnce, ExtraExternFieldArrayIsNeeded, KeepTransData))
 	{
 		SomethingIsWrong = 1;
 		Send.ErrorMessage("Radia::Error118");
@@ -69,7 +69,7 @@ radTInteraction::radTInteraction()
 
 //-------------------------------------------------------------------------
 
-int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char AuxOldMagnArrayIsNeeded, char KeepTransData, int rankMPI, int nProcMPI) //OC08012020
+int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char AuxOldMagnArrayIsNeeded, char KeepTransData, int rankMPI, int nProcMPI, char skipDenseMatrix) //OC08012020 + skipDenseMatrix
 //int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char AuxOldMagnArrayIsNeeded, char KeepTransData)
 {
 	SomethingIsWrong = 0;
@@ -133,18 +133,42 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	// If so, use the variable DOF interaction matrix setup
 	ComputeDOFOffsets();
 
-	int setupResult;
-	if(m_hasVariableDOF)
+	int setupResult = 1;
+	if(skipDenseMatrix)
 	{
-		// Use variable DOF interaction matrix for 6 DOF MSC hexahedra
-		// This provides better convergence for deformed/rotated hexahedra
-		setupResult = SetupInteractMatrix_VariableDOF();
+		// Skip dense matrix construction for H-matrix solver (HACApK)
+		// H-matrix builds its own compressed matrix, no need for dense matrix
+		// Just allocate the auxiliary arrays needed for nonlinear iteration
+		if(m_hasVariableDOF)
+		{
+			// Allocate flat arrays for variable DOF (needed for chi update)
+			m_flatExternFieldArray.resize(m_totalDOF, 0.0);
+			m_flatMagnArray.resize(m_totalDOF, 0.0);
+			m_flatFieldArray.resize(m_totalDOF, 0.0);
+		}
+		// Allocate standard arrays (needed for chi update in nonlinear iteration)
+		vNewMagnArray.resize(AmOfMainElem);
+		vNewFieldArray.resize(AmOfMainElem);
+		vExternFieldArray.resize(AmOfMainElem);
+		NewMagnArray = vNewMagnArray.data();
+		NewFieldArray = vNewFieldArray.data();
+		ExternFieldArray = vExternFieldArray.data();
 	}
 	else
 	{
-		// Use standard 3x3 interaction matrix for tetrahedra and standard elements
-		// The surface charge (MSC) method is used by both Radia and production solvers.
-		setupResult = SetupInteractMatrix();
+		// Build full dense interaction matrix (for LU/BiCGSTAB solvers)
+		if(m_hasVariableDOF)
+		{
+			// Use variable DOF interaction matrix for 6 DOF MSC hexahedra
+			// This provides better convergence for deformed/rotated hexahedra
+			setupResult = SetupInteractMatrix_VariableDOF();
+		}
+		else
+		{
+			// Use standard 3x3 interaction matrix for tetrahedra and standard elements
+			// The surface charge (MSC) method is used by both Radia and production solvers.
+			setupResult = SetupInteractMatrix();
+		}
 	}
 	if(!setupResult) { DeallocateMemory(); return 0;} //OC26122019 //Most CPU-intensive
 
@@ -410,6 +434,46 @@ void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded)
 	//{
 	//	Send.ErrorMessage("Radia::Error999"); return;
 	//}
+}
+
+//-------------------------------------------------------------------------
+
+void radTInteraction::AllocateInteractMatrix()
+{
+	// Allocate only InteractMatrix (for HACApK 3DOF case where Setup was called with skipDenseMatrix=1)
+	// This is needed when HACApK needs to use pre-computed interaction matrix for 3DOF tetrahedra
+
+	if(AmOfMainElem <= 0) return;
+	if(InteractMatrix != nullptr && vInteractMatrixPtrs.size() > 0 && vInteractMatrixPtrs[0] != nullptr)
+	{
+		// Already allocated
+		return;
+	}
+
+	vInteractMatrixPtrs.resize(AmOfMainElem, nullptr);
+	InteractMatrix = vInteractMatrixPtrs.data();
+
+	if(MemAllocTotAtOnce)
+	{
+		vGenMatrStorage.resize(AmOfMainElem * AmOfMainElem);
+		TMatrix3df* GenMatrPtr = vGenMatrStorage.data();
+
+		for(int i=0; i<AmOfMainElem; i++)
+		{
+			InteractMatrix[i] = &(GenMatrPtr[i*AmOfMainElem]);
+			vInteractMatrixPtrs[i] = InteractMatrix[i];
+		}
+	}
+	else
+	{
+		vInteractMatrix.resize(AmOfMainElem);
+		for(int i=0; i<AmOfMainElem; i++)
+		{
+			vInteractMatrix[i].resize(AmOfMainElem);
+			InteractMatrix[i] = vInteractMatrix[i].data();
+			vInteractMatrixPtrs[i] = InteractMatrix[i];
+		}
+	}
 }
 
 //-------------------------------------------------------------------------
@@ -722,14 +786,15 @@ void radTInteraction::ComputeDOFOffsets()
 double* radTInteraction::GetInteractBlock(int row_elem, int col_elem)
 {
 	// Return pointer to interaction block (row_elem, col_elem) in flattened matrix
-	// Block is stored row-major starting at offset
+	// Matrix is COLUMN-MAJOR: A(i,j) at index [j * m_totalDOF + i]
 	if(m_flatInteractMatrix.empty()) return nullptr;
 
 	int offset_row = m_elemDOFOffset[row_elem];
 	int offset_col = m_elemDOFOffset[col_elem];
 
 	// Block starts at row offset_row, column offset_col in the totalDOF x totalDOF matrix
-	return &m_flatInteractMatrix[offset_row * m_totalDOF + offset_col];
+	// Column-major: element at (row, col) is at index [col * m_totalDOF + row]
+	return &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
 }
 
 const double* radTInteraction::GetInteractBlock(int row_elem, int col_elem) const
@@ -739,7 +804,37 @@ const double* radTInteraction::GetInteractBlock(int row_elem, int col_elem) cons
 	int offset_row = m_elemDOFOffset[row_elem];
 	int offset_col = m_elemDOFOffset[col_elem];
 
-	return &m_flatInteractMatrix[offset_row * m_totalDOF + offset_col];
+	// Column-major: element at (row, col) is at index [col * m_totalDOF + row]
+	return &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
+}
+
+//-------------------------------------------------------------------------
+
+void radTInteraction::SetupVariableDOFArrays()
+{
+	// Set up flat arrays for HACApK solver without building interaction matrix
+	// This is used when all elements are 3DOF (tetrahedra) but HACApK is requested
+	// HACApK computes matrix elements on-demand using callbacks
+
+	if(m_totalDOF <= 0)
+	{
+		// Need to compute DOF offsets first
+		ComputeDOFOffsets();
+	}
+
+	// Allocate flattened field arrays (NOT the interaction matrix)
+	m_flatExternFieldArray.resize(m_totalDOF, 0.0);
+	m_flatMagnArray.resize(m_totalDOF, 0.0);
+	m_flatFieldArray.resize(m_totalDOF, 0.0);
+
+	// Also allocate standard arrays (NewFieldArray, NewMagnArray, ExternFieldArray)
+	// These are needed for chi update in nonlinear iteration
+	vNewMagnArray.resize(AmOfMainElem);
+	vNewFieldArray.resize(AmOfMainElem);
+	vExternFieldArray.resize(AmOfMainElem);
+	NewMagnArray = vNewMagnArray.data();
+	NewFieldArray = vNewFieldArray.data();
+	ExternFieldArray = vExternFieldArray.data();
 }
 
 //-------------------------------------------------------------------------
@@ -797,7 +892,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			int offset_row = m_elemDOFOffset[row];
 
 			// Get pointer to this block in the flattened matrix
-			double* block = &m_flatInteractMatrix[offset_row * m_totalDOF + offset_col];
+			// COLUMN-MAJOR: A(row, col) at index [col * m_totalDOF + row]
+			double* block = &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
 
 			// Compute the interaction block based on DOF types
 			// For now, only support 3x3 blocks (standard elements)
@@ -827,16 +923,17 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				}
 				MainTransPtrArray[row]->TrMatrix_inv(SubMatrix);
 
-				// Copy 3x3 matrix to flattened block (row-major)
-				block[0 * m_totalDOF + 0] = SubMatrix.Str0.x;
-				block[0 * m_totalDOF + 1] = SubMatrix.Str0.y;
-				block[0 * m_totalDOF + 2] = SubMatrix.Str0.z;
-				block[1 * m_totalDOF + 0] = SubMatrix.Str1.x;
-				block[1 * m_totalDOF + 1] = SubMatrix.Str1.y;
-				block[1 * m_totalDOF + 2] = SubMatrix.Str1.z;
-				block[2 * m_totalDOF + 0] = SubMatrix.Str2.x;
-				block[2 * m_totalDOF + 1] = SubMatrix.Str2.y;
-				block[2 * m_totalDOF + 2] = SubMatrix.Str2.z;
+				// Copy 3x3 matrix to flattened block (COLUMN-MAJOR)
+				// A(i,j) at [j * stride + i] where stride = m_totalDOF
+				block[0 * m_totalDOF + 0] = SubMatrix.Str0.x;  // (0,0)
+				block[0 * m_totalDOF + 1] = SubMatrix.Str1.x;  // (1,0)
+				block[0 * m_totalDOF + 2] = SubMatrix.Str2.x;  // (2,0)
+				block[1 * m_totalDOF + 0] = SubMatrix.Str0.y;  // (0,1)
+				block[1 * m_totalDOF + 1] = SubMatrix.Str1.y;  // (1,1)
+				block[1 * m_totalDOF + 2] = SubMatrix.Str2.y;  // (2,1)
+				block[2 * m_totalDOF + 0] = SubMatrix.Str0.z;  // (0,2)
+				block[2 * m_totalDOF + 1] = SubMatrix.Str1.z;  // (1,2)
+				block[2 * m_totalDOF + 2] = SubMatrix.Str2.z;  // (2,2)
 			}
 #ifdef RADIA_MSC_SUPPORT
 			else if(dof_row == 3 && dof_col == 6)
@@ -879,10 +976,11 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						// Transform by row's main transform (inverse)
 						TVector3d H_final = MainTransPtrArray[row]->TrVectField_inv(H_total);
 
-						// Store in block: row is component (0,1,2=x,y,z), col is face_j
-						block[0 * m_totalDOF + face_j] = H_final.x;
-						block[1 * m_totalDOF + face_j] = H_final.y;
-						block[2 * m_totalDOF + face_j] = H_final.z;
+						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
+						// Here: row is component (0,1,2=x,y,z), col is face_j
+						block[face_j * m_totalDOF + 0] = H_final.x;  // (0, face_j)
+						block[face_j * m_totalDOF + 1] = H_final.y;  // (1, face_j)
+						block[face_j * m_totalDOF + 2] = H_final.z;  // (2, face_j)
 					}
 				}
 			}
@@ -938,10 +1036,11 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						// But actually SubMatrix stores dB/dM, not dH/dM directly
 						// For now, use H = B/mu0 - M approximation for linear materials
 
-						// Store in block: row is face_i, col is component (0,1,2=Mx,My,Mz)
-						block[face_i * m_totalDOF + 0] = SubMatrix.Str1.x * n.x;
-						block[face_i * m_totalDOF + 1] = SubMatrix.Str1.y * n.y;
-						block[face_i * m_totalDOF + 2] = SubMatrix.Str1.z * n.z;
+						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
+						// row is face_i, col is component (0,1,2=Mx,My,Mz)
+						block[0 * m_totalDOF + face_i] = SubMatrix.Str1.x * n.x;  // (face_i, 0)
+						block[1 * m_totalDOF + face_i] = SubMatrix.Str1.y * n.y;  // (face_i, 1)
+						block[2 * m_totalDOF + face_i] = SubMatrix.Str1.z * n.z;  // (face_i, 2)
 					}
 				}
 			}
@@ -998,8 +1097,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 								        H_global.z * poly_row->FaceNormal[face_i].z;
 							}
 
-							// Store -K_ij / (4*pi) - matches ELF_MAGIC convention
-							block[face_i * m_totalDOF + face_j] = -K_ij * INV_4PI_MSC;
+							// Store -K_ij / (4*pi) (COLUMN-MAJOR): A(i,j) at [j * stride + i]
+							block[face_j * m_totalDOF + face_i] = -K_ij * INV_4PI_MSC;
 						}
 					}
 				}
@@ -1007,12 +1106,12 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 #endif // RADIA_MSC_SUPPORT
 			else
 			{
-				// Unknown DOF combination - zero out the block
+				// Unknown DOF combination - zero out the block (COLUMN-MAJOR)
 				for(int i = 0; i < dof_row; i++)
 				{
 					for(int j = 0; j < dof_col; j++)
 					{
-						block[i * m_totalDOF + j] = 0.0;
+						block[j * m_totalDOF + i] = 0.0;
 					}
 				}
 			}

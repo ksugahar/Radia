@@ -2354,6 +2354,230 @@ static PyObject* radia_SolveNonl(PyObject* self, PyObject* args)
 	return oRes;
 }
 
+#ifdef RADIA_USE_HACAPK
+/************************************************************************//**
+ * HACApK: Sets parameters for H-matrix solver (BiCGSTAB+HACApK)
+ * eps: ACA+ compression tolerance (default: 1e-4, use 1e-8 for high accuracy)
+ * leaf_size: minimum cluster size in elements (default: 32, ELF uses 10)
+ * eta: admissibility parameter (default: 2.0)
+ ***************************************************************************/
+static PyObject* radia_SetHACApKParams(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		double eps = 1.0e-4;
+		int leaf_size = 32;
+		double eta = 2.0;
+
+		if(!PyArg_ParseTuple(args, "|did:SetHACApKParams", &eps, &leaf_size, &eta))
+			throw CombErStr(strEr_BadFuncArg, ": SetHACApKParams");
+
+		int n = 0;
+		g_pyParse.ProcRes(RadSetHACApKParams(&n, eps, leaf_size, eta));
+
+		oRes = Py_BuildValue("i", n);
+		if(oRes) Py_XINCREF(oRes);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * HACApK: Sets only the H-matrix ACA epsilon (tolerance)
+ * ELF-compatible: magic.set_hmatrix_epsilon(eps)
+ * eps: ACA+ compression tolerance (default: 1e-4, use 1e-8 for high accuracy)
+ ***************************************************************************/
+static PyObject* radia_SetHMatrixEpsilon(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		double eps = 1.0e-4;
+
+		if(!PyArg_ParseTuple(args, "d:SetHMatrixEpsilon", &eps))
+			throw CombErStr(strEr_BadFuncArg, ": SetHMatrixEpsilon");
+
+		int n = 0;
+		g_pyParse.ProcRes(RadSetHMatrixEpsilon(&n, eps));
+
+		oRes = Py_BuildValue("i", n);
+		if(oRes) Py_XINCREF(oRes);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * HACApK: Gets statistics from last H-matrix solve
+ * Returns dict with:
+ *   - n_lowrank: Number of low-rank blocks
+ *   - n_dense: Number of dense blocks
+ *   - max_rank: Maximum rank among low-rank blocks
+ *   - n_leaves: Number of leaf clusters (nlf)
+ *   - n_dof: Total degrees of freedom
+ *   - compression: Compression ratio (memory_hmatrix / memory_dense)
+ *   - build_time: H-matrix construction time [s] (from HACApK internal timer)
+ *   - t_hmatrix_build: H-matrix construction time [s] (wall clock)
+ *   - t_linear_solve: Total BiCGSTAB solve time [s]
+ *   - linear_iterations: Total BiCGSTAB iterations (cumulative over all nonlinear iterations)
+ ***************************************************************************/
+static PyObject* radia_GetHACApKStats(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		double dOut[12];
+		int nOut = 0;
+
+		g_pyParse.ProcRes(RadGetHACApKStats(dOut, &nOut));
+
+		if(nOut == 0)
+		{
+			// No stats available
+			Py_INCREF(Py_None);
+			return Py_None;
+		}
+
+		// Return as dictionary for easy Python access
+		// nOut >= 10 means new timing stats are available
+		if(nOut >= 10)
+		{
+			oRes = Py_BuildValue("{s:i,s:i,s:i,s:i,s:i,s:d,s:d,s:d,s:d,s:i}",
+				"n_lowrank", (int)dOut[0],
+				"n_dense", (int)dOut[1],
+				"max_rank", (int)dOut[2],
+				"n_leaves", (int)dOut[3],
+				"n_dof", (int)dOut[4],
+				"compression", dOut[5],
+				"build_time", dOut[6],
+				"t_hmatrix_build", dOut[7],
+				"t_linear_solve", dOut[8],
+				"linear_iterations", (int)dOut[9]);
+		}
+		else
+		{
+			// Legacy format (without timing stats)
+			oRes = Py_BuildValue("{s:i,s:i,s:i,s:i,s:i,s:d,s:d}",
+				"n_lowrank", (int)dOut[0],
+				"n_dense", (int)dOut[1],
+				"max_rank", (int)dOut[2],
+				"n_leaves", (int)dOut[3],
+				"n_dof", (int)dOut[4],
+				"compression", dOut[5],
+				"build_time", dOut[6]);
+		}
+
+		if(oRes) Py_XINCREF(oRes);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+#endif
+
+/************************************************************************//**
+ * BiCGSTAB: Sets inner loop tolerance for iterative solvers (Method 1 and 2)
+ * Default: 1e-4 (ELF-compatible). Lower values give higher accuracy but slower convergence.
+ ***************************************************************************/
+static PyObject* radia_SetBiCGSTABTol(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		double tol = 1.0e-4;
+
+		if(!PyArg_ParseTuple(args, "d:SetBiCGSTABTol", &tol))
+			throw CombErStr(strEr_BadFuncArg, ": SetBiCGSTABTol");
+
+		int n = 0;
+		g_pyParse.ProcRes(RadSetBiCGSTABTol(&n, tol));
+
+		oRes = Py_BuildValue("i", n);
+		if(oRes) Py_XINCREF(oRes);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * BiCGSTAB: Gets current inner loop tolerance
+ ***************************************************************************/
+static PyObject* radia_GetBiCGSTABTol(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		double tol = 0.0;
+		g_pyParse.ProcRes(RadGetBiCGSTABTol(&tol));
+
+		oRes = Py_BuildValue("d", tol);
+		if(oRes) Py_XINCREF(oRes);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * SetRelaxParam: Sets under-relaxation coefficient for nonlinear iteration
+ ***************************************************************************/
+static PyObject* radia_SetRelaxParam(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		double relax = 0.0;
+		if(!PyArg_ParseTuple(args, "d:SetRelaxParam", &relax))
+			throw CombErStr(strEr_BadFuncArg, ": SetRelaxParam");
+
+		int n = 0;
+		g_pyParse.ProcRes(RadSetRelaxParam(&n, relax));
+
+		oRes = Py_BuildValue("i", n);
+		if(oRes) Py_XINCREF(oRes);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * GetRelaxParam: Gets current under-relaxation coefficient
+ ***************************************************************************/
+static PyObject* radia_GetRelaxParam(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		double relax = 0.0;
+		g_pyParse.ProcRes(RadGetRelaxParam(&relax));
+
+		oRes = Py_BuildValue("d", relax);
+		if(oRes) Py_XINCREF(oRes);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
 /************************************************************************//**
  * Magnetic Field Calculation Methods: Computes field created by the object obj at one or many points
  ***************************************************************************/
@@ -3295,6 +3519,15 @@ static PyMethodDef radia_methods[] = {
 	{"RlxUpdSrc", radia_RlxUpdSrc, METH_VARARGS, "RlxUpdSrc(intrc) updates external field data for the relaxation (to take into account e.g. modification of currents in coils, if any) without rebuilding the interaction matrix."},
 	{"Solve", radia_Solve, METH_VARARGS, "Solve(obj,prec,maxiter,meth) solves a magnetostatic problem by building an interaction matrix for the object obj and solving for the magnetization. Method can be specified as a number (0=LU direct, 1=BiCGSTAB) or string ('lu'/'direct', 'bicgstab'/'iterative'). Default is 'bicgstab' (Method 1). For iterative methods, relaxation stops when the change in magnetization is smaller than prec or the number of iterations exceeds maxiter."},
 	{"SolveNonl", radia_SolveNonl, METH_VARARGS, "SolveNonl(obj,prec,maxiter,meth,nonl_method) solves a magnetostatic problem with explicit control over nonlinear convergence criterion. meth: 0=LU, 1=BiCGSTAB. nonl_method: 0=mucal1 (chi-change, traditional), 1=mucal2 (B-change/Newton, faster convergence, default). Use mucal2 for faster convergence with nonlinear materials."},
+#ifdef RADIA_USE_HACAPK
+	{"SetHACApKParams", radia_SetHACApKParams, METH_VARARGS, "SetHACApKParams(eps,leaf_size,eta) sets parameters for H-matrix solver (method=2). eps: ACA+ compression tolerance (default: 1e-4, use 1e-8 for high accuracy). leaf_size: minimum cluster size in elements (default: 32, ELF uses 10). eta: admissibility parameter (default: 2.0). Call before Solve() with method=2."},
+	{"SetHMatrixEpsilon", radia_SetHMatrixEpsilon, METH_VARARGS, "SetHMatrixEpsilon(eps) sets only the H-matrix ACA epsilon (tolerance). ELF-compatible: magic.set_hmatrix_epsilon(eps). eps: ACA+ compression tolerance (default: 1e-4, use 1e-8 for high accuracy). Other HACApK parameters (leaf_size, eta) are unchanged."},
+	{"GetHACApKStats", radia_GetHACApKStats, METH_VARARGS, "GetHACApKStats() returns H-matrix statistics from last solve with method=2. Returns dict with: n_lowrank, n_dense, max_rank, n_leaves (nlf), n_dof, compression, build_time (HACApK internal), t_hmatrix_build (wall clock), t_linear_solve (BiCGSTAB total time), linear_iterations (BiCGSTAB total iterations). Returns None if no H-matrix solve has been performed."},
+#endif
+	{"SetBiCGSTABTol", radia_SetBiCGSTABTol, METH_VARARGS, "SetBiCGSTABTol(tol) sets BiCGSTAB inner loop tolerance for iterative solvers (Method 1 and 2). Default: 1e-4 (ELF-compatible). Lower values give higher accuracy but slower convergence. Call before Solve()."},
+	{"GetBiCGSTABTol", radia_GetBiCGSTABTol, METH_VARARGS, "GetBiCGSTABTol() returns current BiCGSTAB inner loop tolerance."},
+	{"SetRelaxParam", radia_SetRelaxParam, METH_VARARGS, "SetRelaxParam(relax) sets under-relaxation coefficient for nonlinear iteration. relax=0.0 (default) means full Newton step. relax=0.0-1.0 applies damping: chi_new = chi_new*(1-relax) + chi_old*relax. Use under-relaxation (e.g., 0.3) if convergence is slow or oscillating. Call before Solve()."},
+	{"GetRelaxParam", radia_GetRelaxParam, METH_VARARGS, "GetRelaxParam() returns current under-relaxation coefficient."},
 
 	{"Fld", radia_Fld, METH_VARARGS,  "Fld(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x,y,z]|[[x1,y1,z1],[x2,y2,z2],...]) computes magnetic field created by the object obj in point(s) {x,y,z} ({x1,y1,z1},{x2,y2,z2},...). The field component is specified by the second input variable. The function accepts a list of 3D points of arbitrary nestness: in this case it returns the corresponding list of magnetic field values."},
 	{"FldLst", radia_FldLst, METH_VARARGS,  "FldLst(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x1,y1,z1],[x2,y2,z2],np,'arg|noarg':'noarg',strt:0.) computes magnetic field created by object obj in np equidistant points along a line segment from [x1,y1,z1] to [x2,y2,z2]; the field component is specified by the second input variable; the 'arg|noarg' string variable specifies whether to output a longitudinal position for each point where the field is computed, and strt gives the start-value for the longitudinal position."},
