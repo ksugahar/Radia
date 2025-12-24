@@ -21,6 +21,7 @@
 #include "rad_polyhedron.h"  // For radTPolyhedron 6DOF MSC support
 #include <vector>
 #include <functional>
+#include <unordered_map>
 
 // HACApK uses opaque void* pointers to avoid C/C++ struct compatibility issues
 // Actual structures are defined in cHACApK_cpp.h and managed by cHACApK_cpp_impl.c
@@ -154,6 +155,30 @@ public:
      */
     double GetInteractionMatrixElement(int dof_i, int dof_j) const;
 
+    /**
+     * Get cached diagonal elements of interaction matrix N_ii
+     * These are computed once during BuildHMatrix for efficiency
+     * @return Reference to cached diagonal vector (size = n_dof)
+     */
+    const std::vector<double>& GetDiagonalN() const { return m_diag_N; }
+
+    /**
+     * Check if diagonal elements are cached
+     */
+    bool IsDiagonalCached() const { return m_diag_cached; }
+
+    /**
+     * Check if flat N storage is ready (for 3DOF tetrahedra)
+     */
+    bool IsFlatNReady() const { return m_flat_N_ready; }
+
+    /**
+     * Flatten InteractMatrix for 3DOF tetrahedra (O(1) access)
+     * Must be called AFTER InteractMatrix is computed
+     * Safe to call multiple times (no-op if already ready)
+     */
+    void PrecomputeFlatInteractMatrix();
+
 private:
     // Pointer to Radia interaction (not owned)
     radTInteraction* m_interaction;
@@ -190,24 +215,65 @@ private:
     // Element coordinates for clustering
     std::vector<double> m_coordinates;  // [n_elem * 3]
 
-    // 6x6 block LRU cache (ELF-style optimization)
-    static const int BLOCK_CACHE_SIZE = 64;
-    struct BlockCacheEntry {
-        int elem_i;
-        int elem_j;
-        double K_mat[36];  // 6x6 block (row-major)
-        int access_count;
-        BlockCacheEntry() : elem_i(-1), elem_j(-1), access_count(0) {}
-    };
-    mutable std::vector<BlockCacheEntry> m_block_cache;
-    mutable int m_cache_access_counter;
+    // ========================================================================
+    // ELF-style pre-computed geometry (for 6DOF hexahedra)
+    // ========================================================================
+    // Pre-computed geometry avoids dynamic_cast and scattered memory access
+    // during matrix element computation (major performance optimization)
+
+    // Pre-computed element centers [n_elem * 3]
+    std::vector<double> m_elem_centers;
+
+    // Pre-computed vertices [n_elem * 8 * 3] (8 vertices per hexa, 3 coords each)
+    std::vector<double> m_elem_vertices;
+
+    // Pre-computed face centers [n_elem * 6 * 3] (6 faces per hexa)
+    std::vector<double> m_face_centers;
+
+    // Pre-computed face normals [n_elem * 6 * 3]
+    std::vector<double> m_face_normals;
+
+    // Pre-computed face areas [n_elem * 6]
+    std::vector<double> m_face_areas;
+
+    // Pre-computed quad face vertices [n_elem * 6 * 4 * 3] (6 faces, 4 verts, 3 coords)
+    std::vector<double> m_face_vertices;
+
+    // Flag: geometry has been pre-computed
+    bool m_geometry_ready;
+
+    // Cached diagonal elements of interaction matrix N_ii (for Jacobi preconditioner)
+    // Computed once during BuildHMatrix, reused in every BiCGSTAB iteration
+    std::vector<double> m_diag_N;
+    bool m_diag_cached;
+
+    // ========================================================================
+    // Flat interaction matrix storage (for 3DOF tetrahedra)
+    // ========================================================================
+    // Pre-computed flat array for O(1) access to N_ij elements
+    // Layout: m_flat_N[elem_i * n_elem + elem_j] = 3x3 block starting index
+    // Actual data: m_flat_N_data[(elem_i * n_elem + elem_j) * 9 + row * 3 + col]
+    std::vector<double> m_flat_N_data;  // size = n_elem * n_elem * 9
+    bool m_flat_N_ready;
 
     // Private methods
     void FreeResources();
     void ExtractElementCoordinates();
     void BuildDOFLookupTable();
+    void PrecomputeGeometry();  // ELF-style pre-computation for 6DOF hexahedra
+
+    // 6DOF hexahedron methods
     double GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const;
     void Compute6x6Block(int elem_i, int elem_j, double* K_mat) const;
+    void Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const;  // Uses pre-computed geometry
+
+    // 3DOF tetrahedron methods
+    double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
+    void Compute3x3Block(int elem_i, int elem_j, double* N_mat) const;
+
+    // Field computation from pre-computed face vertices
+    void FieldFromQuadFaceFast(int elem, int face, const double* obs, double sigma, double* H_out) const;
+    void FieldFromChargedTriangleFast(const double* obs, const double* v0, const double* v1, const double* v2, double sigma, double* H_out) const;
 
     // Disable copy
     RadHACApKManager(const RadHACApKManager&) = delete;

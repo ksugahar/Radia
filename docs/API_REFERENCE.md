@@ -290,7 +290,129 @@ result = rad.Solve(obj, tolerance, max_iter, method=1)
 
 **Iteration counts**:
 - Linear materials: 1-2 iterations
-- Nonlinear materials: 3-6 iterations
+- Nonlinear materials: 3-6 iterations (with B-field convergence)
+
+### Nonlinear Convergence (v1.3.15+)
+
+Radia uses **B-field based convergence** (mucal2) for nonlinear materials:
+
+```
+rel_change = |B_new - B_old| / B_sat
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `B_sat` | Saturation magnetization from BH curve |
+| `tolerance` | Default 0.0001 (0.01% relative change) |
+
+This method provides fast Newton-Raphson convergence and matches industry-standard solvers.
+
+### Solver Tolerance Parameters
+
+Radia provides three tolerance parameters for controlling solver behavior:
+
+```python
+# 1. Nonlinear iteration tolerance (outer loop)
+#    Set via Solve() - controls when Newton-Raphson iterations stop
+rad.Solve(obj, nonl_tol, max_iter, method)  # nonl_tol = 0.001 recommended
+
+# 2. BiCGSTAB inner loop tolerance
+#    Set via SetBiCGSTABTol() BEFORE Solve() - controls linear system accuracy
+rad.SetBiCGSTABTol(bicg_tol)  # Default: 1e-4
+
+# 3. H-matrix ACA tolerance (Method 2 only)
+#    Set via SetHACApKParams() BEFORE Solve() - controls low-rank approximation
+rad.SetHACApKParams(hmat_eps, leaf_size, eta)  # Default: 1e-4, 10, 2.0
+```
+
+| Parameter | API | Default | Description |
+|-----------|-----|---------|-------------|
+| `nonl_tol` | `rad.Solve(obj, nonl_tol, ...)` | 0.001 | Nonlinear convergence threshold |
+| `bicg_tol` | `rad.SetBiCGSTABTol(tol)` | 1e-4 | BiCGSTAB relative residual tolerance |
+| `hmat_eps` | `rad.SetHACApKParams(eps, ...)` | 1e-4 | H-matrix ACA compression tolerance |
+
+**Example - Full solver configuration:**
+
+```python
+import radia as rad
+
+# Configure tolerances BEFORE Solve()
+rad.SetBiCGSTABTol(1e-4)           # BiCGSTAB tolerance
+rad.SetHACApKParams(1e-4, 10, 2.0) # H-matrix: eps=1e-4, leaf=10, eta=2.0
+
+# Solve with nonlinear tolerance
+rad.Solve(grp, 0.001, 100, 2)      # nonl_tol=0.001, max_iter=100, method=2 (HACApK)
+```
+
+### SetBiCGSTABTol - BiCGSTAB Inner Loop Tolerance
+
+```python
+rad.SetBiCGSTABTol(tol)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `tol` | float | 1e-4 | Relative residual tolerance for BiCGSTAB |
+
+**Notes:**
+- Affects Method 1 (BiCGSTAB) and Method 2 (HACApK)
+- Lower values = higher accuracy but more iterations
+- Call BEFORE `rad.Solve()`
+
+### SetHACApKParams - H-Matrix Parameters (Method 2)
+
+```python
+rad.SetHACApKParams(eps, leaf_size, eta)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `eps` | float | 1e-4 | ACA+ compression tolerance |
+| `leaf_size` | int | 10 | Minimum cluster size in elements |
+| `eta` | float | 2.0 | Admissibility parameter |
+
+**Notes:**
+- Only affects Method 2 (HACApK H-matrix solver)
+- Lower `eps` = higher accuracy, larger ranks, more memory
+- Call BEFORE `rad.Solve()`
+
+**Parameter Rationale:**
+
+| Parameter | Default | Rationale |
+|-----------|---------|-----------|
+| `eps` | 1e-4 | Balance between accuracy and compression. Lower values (1e-6, 1e-8) for higher accuracy, higher values (1e-3) for faster computation. |
+| `leaf_size` | 10 | Minimum cluster size. Smaller values allow deeper tree but increase H-matrix overhead. 10 provides good balance for typical element counts. ELF-compatible default. |
+| `eta` | 2.0 | Standard admissibility criterion: clusters are "well-separated" when `dist(c1,c2) >= eta * max(diam(c1), diam(c2))`. eta=2.0 is conservative, ensuring accurate low-rank approximations. Lower values (1.0) allow more aggressive compression but may reduce accuracy. |
+
+### SetRelaxParam - Under-Relaxation Coefficient
+
+```python
+rad.SetRelaxParam(relax)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `relax` | float | 0.0 | Under-relaxation coefficient (0.0-1.0) |
+
+**Notes:**
+- Affects all solver methods (0=LU, 1=BiCGSTAB, 2=HACApK)
+- `relax=0.0`: Full Newton step (default, fastest convergence when stable)
+- `relax>0.0`: Damped update: `chi_new = chi_new*(1-relax) + chi_old*relax`
+- Use under-relaxation (e.g., 0.2-0.5) when:
+  - Convergence is slow or oscillating
+  - Material has steep B-H curve
+  - Problem is highly nonlinear
+- Call BEFORE `rad.Solve()`
+
+**Example:**
+```python
+# For difficult nonlinear problems, use under-relaxation
+rad.SetRelaxParam(0.3)  # 30% damping
+rad.Solve(container, 0.001, 100, 1)
+
+# Reset to full step for normal cases
+rad.SetRelaxParam(0.0)
+```
 
 ### BiCGSTAB Performance
 

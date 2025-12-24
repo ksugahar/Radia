@@ -1108,6 +1108,74 @@ EXP int CALL RadUtiMPI(int* arPar, char* OnOrOff, double* arData=0, long* pnData
 
 EXP int CALL RadUtiYeldFuncSet(int (*pExtFunc)());
 
-#ifdef __cplusplus  
+#ifdef RADIA_USE_HACAPK
+/** Sets HACApK (H-matrix) parameters for BiCGSTAB solver with H-matrix acceleration.
+These parameters control the H-matrix construction and compression.
+Must be called before RadSolve with method=2 (BiCGSTAB+HACApK).
+@param n [out] dummy output
+@param eps [in] ACA+ compression tolerance (default: 1e-4, use 1e-8 for high accuracy)
+@param leaf_size [in] minimum cluster size in elements (default: 32, ELF uses 10)
+@param eta [in] admissibility parameter (default: 2.0)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadSetHACApKParams(int* n, double eps, int leaf_size, double eta);
+
+/** Sets only the H-matrix ACA epsilon (tolerance) for HACApK solver.
+ELF-compatible API: magic.set_hmatrix_epsilon(eps)
+@param n [out] dummy output
+@param eps [in] ACA+ compression tolerance (default: 1e-4, use 1e-8 for high accuracy)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadSetHMatrixEpsilon(int* n, double eps);
+
+/** Gets HACApK (H-matrix) statistics after a solve with method=2.
+Returns information about the H-matrix structure and performance.
+@param dOut [out] array of 7 doubles: [0] n_lowrank, [1] n_dense, [2] max_rank,
+                  [3] n_leaves, [4] n_dof, [5] compression_ratio, [6] build_time_sec
+@param nOut [out] number of values written to dOut (7)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadGetHACApKStats(double* dOut, int* nOut);
+#endif
+
+/** Sets BiCGSTAB inner loop tolerance for iterative solvers (Method 1 and 2).
+Default: 1e-4 (ELF-compatible). Lower values give higher accuracy but slower convergence.
+@param n [out] dummy output
+@param tol [in] BiCGSTAB tolerance (default: 1e-4)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadSetBiCGSTABTol(int* n, double tol);
+
+/** Gets current BiCGSTAB inner loop tolerance.
+@param tol [out] current BiCGSTAB tolerance
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadGetBiCGSTABTol(double* tol);
+
+/** Sets under-relaxation coefficient for nonlinear iteration.
+@param n [out] dummy output (set to 1)
+@param relax [in] relaxation coefficient (0.0 = full step, 0.0-1.0 = under-relaxation)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+
+Formula: chi_new = chi_new*(1-relax) + chi_old*relax
+- relax=0.0: full Newton step (default, fastest convergence)
+- relax>0.0: damped Newton step (improves stability for difficult cases)
+*/
+EXP int CALL RadSetRelaxParam(int* n, double relax);
+
+/** Gets current under-relaxation coefficient.
+@param relax [out] current relaxation coefficient
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadGetRelaxParam(double* relax);
+
+#ifdef __cplusplus
 }
 #endif

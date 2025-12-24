@@ -24,8 +24,14 @@
 
 // Include C++ compatible HACApK wrapper header
 extern "C" {
-#include "../ext/HACApK_LH-Cimplm/cHACApK_cpp.h"
+#include "../ext/HACApK/cHACApK_cpp.h"
 }
+
+//=========================================================================
+// Constants for 6DOF MSC field computation
+//=========================================================================
+static const double PI_HACAPK = 3.14159265358979323846;
+static const double INV_4PI_HACAPK = 1.0 / (4.0 * PI_HACAPK);
 
 //=========================================================================
 // Global callback state (required by HACApK C interface)
@@ -128,10 +134,11 @@ RadHACApKManager::RadHACApKManager(radTInteraction* interaction)
     , m_n_elem(0)
     , m_nffc(3)
     , m_is_6dof(false)
-    , m_cache_access_counter(0)
+    , m_geometry_ready(false)
+    , m_diag_cached(false)
+    , m_flat_N_ready(false)
 {
-    // Initialize block cache
-    m_block_cache.resize(BLOCK_CACHE_SIZE);
+    // Hash-based cache is initialized automatically
 }
 
 RadHACApKManager::~RadHACApKManager() {
@@ -155,49 +162,60 @@ void RadHACApKManager::FreeResources() {
 
 void RadHACApKManager::ExtractElementCoordinates() {
     // Extract element center coordinates for clustering
-    // HACApK is only supported for 6DOF MSC hexahedra
+    // Supports both 3DOF tetrahedra and 6DOF MSC hexahedra
     if (!m_interaction) return;
 
     m_n_elem = m_interaction->AmOfMainElem;
     m_coordinates.resize(m_n_elem * 3);
     m_dof_offset.resize(m_n_elem + 1);
 
-    // Verify all elements are 6DOF MSC hexahedra
+    // Check if using variable DOF (6DOF hexahedra) or uniform 3DOF (tetrahedra)
     bool has_variable_dof = m_interaction->HasVariableDOF();
 
-    if (!has_variable_dof) {
-        // Standard 3DOF elements - HACApK not supported
-        std::cerr << "[HACApK] Error: HACApK is only supported for 6DOF MSC hexahedra, not 3DOF elements" << std::endl;
-        m_ndof = 0;
-        m_nffc = 0;
-        m_is_6dof = false;
-        return;
-    }
-
-    // Check each element is 6DOF
     int total_dof = 0;
-    int n_hex = 0;
+    int n_3dof = 0;
+    int n_6dof = 0;
 
     for (int i = 0; i < m_n_elem; i++) {
         m_dof_offset[i] = total_dof;
         int elem_dof = m_interaction->GetElementDOF(i);
         total_dof += elem_dof;
 
-        if (elem_dof == 6) {
-            n_hex++;
+        if (elem_dof == 3) {
+            n_3dof++;
+        } else if (elem_dof == 6) {
+            n_6dof++;
         } else {
             std::cerr << "[HACApK] Error: Element " << i << " has " << elem_dof
-                      << " DOF, expected 6 (6DOF MSC hexahedra only)" << std::endl;
+                      << " DOF, expected 3 or 6" << std::endl;
             m_ndof = 0;
             m_nffc = 0;
             m_is_6dof = false;
             return;
         }
     }
+
+    // Verify uniform DOF (either all 3DOF or all 6DOF)
+    if (n_3dof > 0 && n_6dof > 0) {
+        std::cerr << "[HACApK] Error: Mixed DOF elements not supported. "
+                  << "Found " << n_3dof << " tetrahedra (3DOF) and "
+                  << n_6dof << " hexahedra (6DOF)" << std::endl;
+        m_ndof = 0;
+        m_nffc = 0;
+        m_is_6dof = false;
+        return;
+    }
+
     m_dof_offset[m_n_elem] = total_dof;
     m_ndof = total_dof;
-    m_nffc = 6;
-    m_is_6dof = true;
+
+    if (n_6dof > 0) {
+        m_nffc = 6;
+        m_is_6dof = true;
+    } else {
+        m_nffc = 3;
+        m_is_6dof = false;
+    }
 
     // Get element centers from g3dRelaxPtrVect
     for (int i = 0; i < m_n_elem; i++) {
@@ -234,6 +252,389 @@ void RadHACApKManager::BuildDOFLookupTable() {
     }
 }
 
+//=========================================================================
+// PrecomputeGeometry: ELF-style pre-computed geometry for fast matrix access
+// Extracts all hexahedron vertices and face geometry into contiguous arrays
+//=========================================================================
+
+void RadHACApKManager::PrecomputeGeometry() {
+    if (m_geometry_ready || m_n_elem == 0 || !m_interaction) return;
+
+    // Allocate arrays
+    m_elem_centers.resize(m_n_elem * 3);
+    m_face_centers.resize(m_n_elem * 6 * 3);
+    m_face_normals.resize(m_n_elem * 6 * 3);
+    m_face_areas.resize(m_n_elem * 6);
+    m_face_vertices.resize(m_n_elem * 6 * 4 * 3);  // 6 faces, 4 vertices each, 3 coords
+
+    for (int e = 0; e < m_n_elem; e++) {
+        radTg3dRelax* elem = m_interaction->g3dRelaxPtrVect[e];
+        if (!elem) continue;
+
+        radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
+        if (!poly || !poly->Use6DOF_MSC) continue;
+
+        // Store element center
+        int cIdx = e * 3;
+        m_elem_centers[cIdx + 0] = poly->CentrPoint.x;
+        m_elem_centers[cIdx + 1] = poly->CentrPoint.y;
+        m_elem_centers[cIdx + 2] = poly->CentrPoint.z;
+
+        // Store face data for each of the 6 faces
+        for (int f = 0; f < 6; f++) {
+            int fcIdx = (e * 6 + f) * 3;
+            int aIdx = e * 6 + f;
+
+            // Face center
+            m_face_centers[fcIdx + 0] = poly->FaceCenter[f].x;
+            m_face_centers[fcIdx + 1] = poly->FaceCenter[f].y;
+            m_face_centers[fcIdx + 2] = poly->FaceCenter[f].z;
+
+            // Face normal
+            m_face_normals[fcIdx + 0] = poly->FaceNormal[f].x;
+            m_face_normals[fcIdx + 1] = poly->FaceNormal[f].y;
+            m_face_normals[fcIdx + 2] = poly->FaceNormal[f].z;
+
+            // Face area
+            m_face_areas[aIdx] = poly->FaceArea[f];
+
+            // Get 4 vertices of this face from polygon
+            radTHandlePgnAndTrans hpt = poly->VectHandlePgnAndTrans[f];
+            radTPolygon* pgn = hpt.PgnHndl.rep;
+            radTrans* tr = hpt.TransHndl.rep;
+
+            const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+            int fvIdx = (e * 6 + f) * 4 * 3;  // Starting index for this face's vertices
+
+            for (int v = 0; v < 4 && v < (int)verts2d.size(); v++) {
+                TVector3d V = tr->TrPoint(TVector3d(verts2d[v].x, verts2d[v].y, pgn->CoordZ));
+                m_face_vertices[fvIdx + v * 3 + 0] = V.x;
+                m_face_vertices[fvIdx + v * 3 + 1] = V.y;
+                m_face_vertices[fvIdx + v * 3 + 2] = V.z;
+            }
+        }
+    }
+
+    m_geometry_ready = true;
+}
+
+//=========================================================================
+// PrecomputeFlatInteractMatrix: Flatten InteractMatrix for 3DOF tetrahedra
+// Converts 2D pointer array TMatrix3df** to contiguous double array
+// This eliminates pointer chasing during matrix element access
+//=========================================================================
+
+void RadHACApKManager::PrecomputeFlatInteractMatrix() {
+    if (m_flat_N_ready || m_n_elem == 0 || !m_interaction) return;
+    if (!m_interaction->InteractMatrix) {
+        std::cout << "[HACApK] PrecomputeFlatInteractMatrix: InteractMatrix is NULL, skipping" << std::endl;
+        return;
+    }
+
+    auto t_start = std::chrono::high_resolution_clock::now();
+
+    // Debug: Check if InteractMatrix has non-zero values
+    double max_val = 0.0;
+    for (int i = 0; i < std::min(5, m_n_elem); i++) {
+        for (int j = 0; j < std::min(5, m_n_elem); j++) {
+            const TMatrix3df& M = m_interaction->InteractMatrix[i][j];
+            double v = std::abs(M.Str0.x) + std::abs(M.Str0.y) + std::abs(M.Str0.z) +
+                       std::abs(M.Str1.x) + std::abs(M.Str1.y) + std::abs(M.Str1.z) +
+                       std::abs(M.Str2.x) + std::abs(M.Str2.y) + std::abs(M.Str2.z);
+            if (v > max_val) max_val = v;
+        }
+    }
+    std::cout << "[HACApK] InteractMatrix sample max value: " << max_val << std::endl;
+
+    // Allocate flat storage: n_elem * n_elem * 9 doubles (3x3 block per element pair)
+    int64_t total_size = (int64_t)m_n_elem * m_n_elem * 9;
+    m_flat_N_data.resize(total_size);
+
+    // Copy from InteractMatrix[i][j] to flat array with sign flip (-N)
+    // The system matrix is A = -N + diag(1/chi), so we store -N
+    //
+    // MATRIX LAYOUT FIX (2025-12-24):
+    // InteractMatrix[i][j] stores TMatrix3df where:
+    //   Str0 = dH/dMx = (dHx/dMx, dHy/dMx, dHz/dMx) <- COLUMN vector (response to Mx)
+    //   Str1 = dH/dMy = (dHx/dMy, dHy/dMy, dHz/dMy) <- COLUMN vector (response to My)
+    //   Str2 = dH/dMz = (dHx/dMz, dHy/dMz, dHz/dMz) <- COLUMN vector (response to Mz)
+    //
+    // For row k of the 3x3 block, we need N[i][j] element (k, l) = dH_k/dM_l
+    // This requires transposed access: row k gets Str0[k], Str1[k], Str2[k]
+    #pragma omp parallel for collapse(2)
+    for (int i = 0; i < m_n_elem; i++) {
+        for (int j = 0; j < m_n_elem; j++) {
+            const TMatrix3df& M = m_interaction->InteractMatrix[i][j];
+            int64_t base_idx = ((int64_t)i * m_n_elem + j) * 9;
+
+            // Row 0 (Hx response): -dHx/dMx, -dHx/dMy, -dHx/dMz
+            m_flat_N_data[base_idx + 0] = -static_cast<double>(M.Str0.x);  // -dHx/dMx
+            m_flat_N_data[base_idx + 1] = -static_cast<double>(M.Str1.x);  // -dHx/dMy
+            m_flat_N_data[base_idx + 2] = -static_cast<double>(M.Str2.x);  // -dHx/dMz
+            // Row 1 (Hy response): -dHy/dMx, -dHy/dMy, -dHy/dMz
+            m_flat_N_data[base_idx + 3] = -static_cast<double>(M.Str0.y);  // -dHy/dMx
+            m_flat_N_data[base_idx + 4] = -static_cast<double>(M.Str1.y);  // -dHy/dMy
+            m_flat_N_data[base_idx + 5] = -static_cast<double>(M.Str2.y);  // -dHy/dMz
+            // Row 2 (Hz response): -dHz/dMx, -dHz/dMy, -dHz/dMz
+            m_flat_N_data[base_idx + 6] = -static_cast<double>(M.Str0.z);  // -dHz/dMx
+            m_flat_N_data[base_idx + 7] = -static_cast<double>(M.Str1.z);  // -dHz/dMy
+            m_flat_N_data[base_idx + 8] = -static_cast<double>(M.Str2.z);  // -dHz/dMz
+        }
+    }
+
+    m_flat_N_ready = true;
+
+    auto t_end = std::chrono::high_resolution_clock::now();
+    double t_flat = std::chrono::duration<double>(t_end - t_start).count();
+    std::cout << "[HACApK] PrecomputeFlatInteractMatrix: " << t_flat << " s (n_elem=" << m_n_elem << ", size=" << (total_size * 8 / 1024 / 1024) << " MB)" << std::endl;
+}
+
+//=========================================================================
+// FieldFromChargedTriangleFast: Triangle field using edge-based log/atan formula
+// Pure array-based computation (no object access)
+// Returns field WITHOUT 4pi divisor (matches radTPolyhedron::FieldFromChargedTriangle)
+//=========================================================================
+
+void RadHACApKManager::FieldFromChargedTriangleFast(const double* obs, const double* v0, const double* v1, const double* v2, double sigma, double* H_out) const {
+    // Analytic field from uniformly charged triangle using edge-based log/atan formula
+    // Returns field WITHOUT 4pi divisor (4pi is applied once in matrix assembly)
+    // Matches radTPolyhedron::FieldFromChargedTriangle implementation
+
+    const double EPS = 1.0e-20;
+
+    // Build local coordinate system
+    double e1[3] = {v1[0]-v0[0], v1[1]-v0[1], v1[2]-v0[2]};
+    double e2[3] = {v2[0]-v0[0], v2[1]-v0[1], v2[2]-v0[2]};
+
+    // Face normal = e1 x e2 (basis_c)
+    double basis_c[3];
+    basis_c[0] = e1[1]*e2[2] - e1[2]*e2[1];
+    basis_c[1] = e1[2]*e2[0] - e1[0]*e2[2];
+    basis_c[2] = e1[0]*e2[1] - e1[1]*e2[0];
+
+    double cLen = sqrt(basis_c[0]*basis_c[0] + basis_c[1]*basis_c[1] + basis_c[2]*basis_c[2]);
+    if (cLen < EPS) { H_out[0] = H_out[1] = H_out[2] = 0.0; return; }
+    basis_c[0] /= cLen; basis_c[1] /= cLen; basis_c[2] /= cLen;
+
+    // basis_a = e1 normalized
+    double basis_a[3] = {e1[0], e1[1], e1[2]};
+    double aLen = sqrt(basis_a[0]*basis_a[0] + basis_a[1]*basis_a[1] + basis_a[2]*basis_a[2]);
+    if (aLen < EPS) { H_out[0] = H_out[1] = H_out[2] = 0.0; return; }
+    basis_a[0] /= aLen; basis_a[1] /= aLen; basis_a[2] /= aLen;
+
+    // basis_b = basis_c x basis_a
+    double basis_b[3];
+    basis_b[0] = basis_c[1]*basis_a[2] - basis_c[2]*basis_a[1];
+    basis_b[1] = basis_c[2]*basis_a[0] - basis_c[0]*basis_a[2];
+    basis_b[2] = basis_c[0]*basis_a[1] - basis_c[1]*basis_a[0];
+    double bLen = sqrt(basis_b[0]*basis_b[0] + basis_b[1]*basis_b[1] + basis_b[2]*basis_b[2]);
+    if (bLen < EPS) { H_out[0] = H_out[1] = H_out[2] = 0.0; return; }
+    basis_b[0] /= bLen; basis_b[1] /= bLen; basis_b[2] /= bLen;
+
+    // Convert vertices to local 2D coordinates (v0 = origin)
+    double xy0_x = 0.0, xy0_y = 0.0;
+    double xy1_x = e1[0]*basis_a[0] + e1[1]*basis_a[1] + e1[2]*basis_a[2];
+    double xy1_y = e1[0]*basis_b[0] + e1[1]*basis_b[1] + e1[2]*basis_b[2];
+    double xy2_x = e2[0]*basis_a[0] + e2[1]*basis_a[1] + e2[2]*basis_a[2];
+    double xy2_y = e2[0]*basis_b[0] + e2[1]*basis_b[1] + e2[2]*basis_b[2];
+
+    double XY[3][2] = {{xy0_x, xy0_y}, {xy1_x, xy1_y}, {xy2_x, xy2_y}};
+    double DS[3], AM[3], SM[3], XD[3], YD[3];
+    double EPSG = 0.0;
+
+    for (int j = 0; j < 3; j++) {
+        int l = (j + 1) % 3;
+        double dx = XY[l][0] - XY[j][0];
+        double dy = XY[l][1] - XY[j][1];
+        if (fabs(dx) < EPS) dx = (dx >= 0) ? EPS : -EPS;
+
+        DS[j] = sqrt(dx*dx + dy*dy);
+        AM[j] = dy / dx;
+        SM[j] = sqrt(AM[j]*AM[j] + 1.0);
+        XD[j] = -dx / DS[j];
+        YD[j] =  dy / DS[j];
+
+        if (DS[j] > EPSG) EPSG = DS[j];
+    }
+    EPSG *= 1.0e-12;
+
+    // Transform observation point to local coordinates
+    double d[3] = {obs[0]-v0[0], obs[1]-v0[1], obs[2]-v0[2]};
+    double EE1 = d[0]*basis_a[0] + d[1]*basis_a[1] + d[2]*basis_a[2];
+    double EE2 = d[0]*basis_b[0] + d[1]*basis_b[1] + d[2]*basis_b[2];
+    double EE3 = d[0]*basis_c[0] + d[1]*basis_c[1] + d[2]*basis_c[2];
+
+    double X[3], Y[3], H[3], E[3], R[3];
+    for (int j = 0; j < 3; j++) {
+        X[j] = EE1 - XY[j][0];
+        Y[j] = EE2 - XY[j][1];
+        H[j] = Y[j] * X[j];
+        E[j] = EE3*EE3 + X[j]*X[j];
+        R[j] = sqrt(X[j]*X[j] + Y[j]*Y[j] + EE3*EE3);
+    }
+
+    double Z = EE3;
+
+    // Edge contributions
+    double RM[3], RP[3], RR[3], AL[3];
+    for (int j = 0; j < 3; j++) {
+        int jp1 = (j + 1) % 3;
+        RM[j] = R[j] + R[jp1] - DS[j];
+        RP[j] = R[j] + R[jp1] + DS[j];
+        RR[j] = (RM[j] / RP[j] > EPS) ? (RM[j] / RP[j]) : EPS;
+        AL[j] = log(RR[j]);
+    }
+
+    // Field components in local frame WITHOUT 4pi divisor
+    double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
+    double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
+    double HH3 = 0.0;
+
+    // Normal component (atan terms) - only if not on surface
+    if (fabs(Z) > EPSG) {
+        double ZR[3];
+        for (int j = 0; j < 3; j++) {
+            ZR[j] = Z * R[j];
+        }
+
+        double AT[3], BT[3];
+        for (int j = 0; j < 3; j++) {
+            int jp1 = (j + 1) % 3;
+            AT[j] = (AM[j]*E[j] - H[j]) / ZR[j];
+            BT[j] = (AM[j]*E[jp1] - H[jp1]) / ZR[jp1];
+        }
+
+        HH3 = sigma * (-atan(AT[0]) - atan(AT[1]) - atan(AT[2])
+                       +atan(BT[0]) + atan(BT[1]) + atan(BT[2]));
+    }
+
+    // Transform back to global coordinates
+    H_out[0] = HH1*basis_a[0] + HH2*basis_b[0] + HH3*basis_c[0];
+    H_out[1] = HH1*basis_a[1] + HH2*basis_b[1] + HH3*basis_c[1];
+    H_out[2] = HH1*basis_a[2] + HH2*basis_b[2] + HH3*basis_c[2];
+}
+
+//=========================================================================
+// FieldFromQuadFaceFast: Quad face field using pre-computed vertices
+// Split quad into 2 triangles, sum contributions
+//=========================================================================
+
+void RadHACApKManager::FieldFromQuadFaceFast(int elem, int face, const double* obs, double sigma, double* H_out) const {
+    // Get pre-computed vertices for this face
+    int fvIdx = (elem * 6 + face) * 4 * 3;
+    const double* V0 = &m_face_vertices[fvIdx + 0];
+    const double* V1 = &m_face_vertices[fvIdx + 3];
+    const double* V2 = &m_face_vertices[fvIdx + 6];
+    const double* V3 = &m_face_vertices[fvIdx + 9];
+
+    // Get element center for normal orientation check
+    const double* center = &m_elem_centers[elem * 3];
+
+    H_out[0] = H_out[1] = H_out[2] = 0.0;
+
+    // Triangle 1: V0, V1, V2
+    double H_tri[3];
+
+    // Check normal orientation for triangle 1
+    double tc1[3] = {(V0[0]+V1[0]+V2[0])/3.0, (V0[1]+V1[1]+V2[1])/3.0, (V0[2]+V1[2]+V2[2])/3.0};
+    double e1_1[3] = {V1[0]-V0[0], V1[1]-V0[1], V1[2]-V0[2]};
+    double e2_1[3] = {V2[0]-V0[0], V2[1]-V0[1], V2[2]-V0[2]};
+    double n1[3] = {e1_1[1]*e2_1[2]-e1_1[2]*e2_1[1], e1_1[2]*e2_1[0]-e1_1[0]*e2_1[2], e1_1[0]*e2_1[1]-e1_1[1]*e2_1[0]};
+    double to_c1[3] = {tc1[0]-center[0], tc1[1]-center[1], tc1[2]-center[2]};
+    double dot1 = n1[0]*to_c1[0] + n1[1]*to_c1[1] + n1[2]*to_c1[2];
+    double sign1 = (dot1 >= 0.0) ? 1.0 : -1.0;
+
+    FieldFromChargedTriangleFast(obs, V0, V1, V2, sigma * sign1, H_tri);
+    H_out[0] += H_tri[0]; H_out[1] += H_tri[1]; H_out[2] += H_tri[2];
+
+    // Triangle 2: V0, V2, V3
+    double tc2[3] = {(V0[0]+V2[0]+V3[0])/3.0, (V0[1]+V2[1]+V3[1])/3.0, (V0[2]+V2[2]+V3[2])/3.0};
+    double e1_2[3] = {V2[0]-V0[0], V2[1]-V0[1], V2[2]-V0[2]};
+    double e2_2[3] = {V3[0]-V0[0], V3[1]-V0[1], V3[2]-V0[2]};
+    double n2[3] = {e1_2[1]*e2_2[2]-e1_2[2]*e2_2[1], e1_2[2]*e2_2[0]-e1_2[0]*e2_2[2], e1_2[0]*e2_2[1]-e1_2[1]*e2_2[0]};
+    double to_c2[3] = {tc2[0]-center[0], tc2[1]-center[1], tc2[2]-center[2]};
+    double dot2 = n2[0]*to_c2[0] + n2[1]*to_c2[1] + n2[2]*to_c2[2];
+    double sign2 = (dot2 >= 0.0) ? 1.0 : -1.0;
+
+    FieldFromChargedTriangleFast(obs, V0, V2, V3, sigma * sign2, H_tri);
+    H_out[0] += H_tri[0]; H_out[1] += H_tri[1]; H_out[2] += H_tri[2];
+}
+
+//=========================================================================
+// Compute6x6BlockFast: ELF-style fast 6x6 block computation
+// Uses only pre-computed geometry arrays (no object access)
+//=========================================================================
+
+void RadHACApKManager::Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const {
+    if (!m_geometry_ready) {
+        std::memset(K_mat, 0, 36 * sizeof(double));
+        return;
+    }
+
+    // Pre-computed row element data
+    const double* row_center = &m_elem_centers[elem_i * 3];
+
+    // Pre-compute evaluation points for all 6 faces of row element
+    double eval_pts[6][3];
+    for (int fi = 0; fi < 6; fi++) {
+        const double* fc = &m_face_centers[(elem_i * 6 + fi) * 3];
+        eval_pts[fi][0] = 0.5 * (fc[0] + row_center[0]);
+        eval_pts[fi][1] = 0.5 * (fc[1] + row_center[1]);
+        eval_pts[fi][2] = 0.5 * (fc[2] + row_center[2]);
+    }
+
+    // Pre-load row normals
+    double row_normals[6][3];
+    for (int fi = 0; fi < 6; fi++) {
+        const double* fn = &m_face_normals[(elem_i * 6 + fi) * 3];
+        row_normals[fi][0] = fn[0];
+        row_normals[fi][1] = fn[1];
+        row_normals[fi][2] = fn[2];
+    }
+
+    // Get col element center for point charge
+    const double* col_center = &m_elem_centers[elem_j * 3];
+
+    // Compute all 36 elements
+    for (int fj = 0; fj < 6; fj++) {
+        double col_area = m_face_areas[elem_j * 6 + fj];
+        double unit_point_charge = -1.0 * col_area;
+
+        for (int fi = 0; fi < 6; fi++) {
+            // Field from quad face with unit sigma
+            double H_face[3];
+            FieldFromQuadFaceFast(elem_j, fj, eval_pts[fi], 1.0, H_face);
+
+            // Field from point charge at element center
+            // Note: Field is computed WITHOUT 4pi divisor to match Compute6x6Block
+            // The 4pi divisor is applied once at the end (K_mat[...] = -K_ij * INV_4PI)
+            double r[3] = {eval_pts[fi][0] - col_center[0],
+                           eval_pts[fi][1] - col_center[1],
+                           eval_pts[fi][2] - col_center[2]};
+            double dist = sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
+            double H_point[3] = {0.0, 0.0, 0.0};
+            if (dist > 1e-15) {
+                double scale = unit_point_charge / (dist * dist * dist);  // NO 4pi here
+                H_point[0] = r[0] * scale;
+                H_point[1] = r[1] * scale;
+                H_point[2] = r[2] * scale;
+            }
+
+            double H_total[3] = {H_face[0] + H_point[0],
+                                  H_face[1] + H_point[1],
+                                  H_face[2] + H_point[2]};
+
+            // K_ij = H_total dot normal_i
+            double K_ij = H_total[0] * row_normals[fi][0] +
+                          H_total[1] * row_normals[fi][1] +
+                          H_total[2] * row_normals[fi][2];
+
+            // Store -K_ij / (4*pi) in row-major order
+            K_mat[fi * 6 + fj] = -K_ij * INV_4PI_HACAPK;
+        }
+    }
+}
+
 bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     FreeResources();
 
@@ -255,14 +656,21 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     RadHACApKCallback::SetInteraction(m_interaction, m_n_elem, m_nffc);
     RadHACApKCallback::SetCurrentManager(this);
 
-    // Verify 6DOF was configured correctly
-    if (!m_is_6dof || m_ndof == 0) {
-        std::cerr << "[HACApK] Error: HACApK requires 6DOF MSC hexahedral elements" << std::endl;
+    // Verify DOF was configured correctly (3DOF or 6DOF)
+    if (m_ndof == 0 || (m_nffc != 3 && m_nffc != 6)) {
+        std::cerr << "[HACApK] Error: Invalid DOF configuration (nffc=" << m_nffc << ")" << std::endl;
         return false;
     }
 
+    // ELF-style pre-computation for 6DOF hexahedra
+    if (m_is_6dof) {
+        PrecomputeGeometry();
+    } else {
+        // Flatten InteractMatrix for 3DOF tetrahedra
+        PrecomputeFlatInteractMatrix();
+    }
+
     // Initialize inverse susceptibility with current values
-    // 6DOF MSC: all 6 DOF per element use the same chi value
     m_inv_chi.resize(m_ndof);
 
     double* FlatField = m_interaction->GetFlatFieldArray();
@@ -282,8 +690,9 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
         if (chi < 1.0e-6) chi = 1.0e-6;
         double inv_chi_val = 1.0 / chi;
 
-        // All 6 DOF use the same 1/chi
-        for (int k = 0; k < 6; k++) {
+        // All DOF per element use the same 1/chi
+        int elem_dof = m_dof_offset[i + 1] - offset;
+        for (int k = 0; k < elem_dof; k++) {
             m_inv_chi[offset + k] = inv_chi_val;
         }
     }
@@ -303,6 +712,7 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     // m_nffc: 3 for tetrahedra (Mx, My, Mz), 6 for hexahedra (sigma per face)
     int ndim = 3;  // Spatial dimension
 
+    auto t_hmatrix_start = std::chrono::high_resolution_clock::now();
     int result = HACApK_build_hmatrix_wrapper(
         m_leafmtxp,
         m_control,
@@ -315,6 +725,11 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
         params.eta,
         params.print_level
     );
+    auto t_hmatrix_end = std::chrono::high_resolution_clock::now();
+    double t_hmatrix = std::chrono::duration<double>(t_hmatrix_end - t_hmatrix_start).count();
+    if (params.print_level > 0) {
+        std::cout << "[HACApK] HACApK_build_hmatrix_wrapper: " << t_hmatrix << " s" << std::endl;
+    }
 
     if (result != 0) {
         std::cerr << "[HACApK] Error: H-matrix build failed with code " << result << std::endl;
@@ -359,6 +774,14 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
                   << std::endl;
     }
 
+    // Cache diagonal elements N_ii for Jacobi preconditioner
+    // This is computed once and reused in every BiCGSTAB iteration
+    m_diag_N.resize(m_ndof);
+    #pragma omp parallel for
+    for (int i = 0; i < m_ndof; i++) {
+        m_diag_N[i] = GetInteractionMatrixElement(i, i);
+    }
+    m_diag_cached = true;
 
     m_valid = true;
     return true;
@@ -381,12 +804,16 @@ void RadHACApKManager::UpdateDiagonal(const std::vector<double>& inv_chi) {
     m_inv_chi = inv_chi;
     RadHACApKCallback::SetInvChi(inv_chi);
 
-    // Update dense diagonal blocks in H-matrix
-    // This follows ELF_MAGIC's HACApK_update_diagonal_omp pattern:
-    // - Only dense diagonal blocks (ltmtx==2 && nstrtl==nstrtt) are recomputed
-    // - Low-rank off-diagonal blocks remain unchanged (geometry doesn't change)
-    // - The callback function cHACApK_entry_ij will use the updated inv_chi values
-    HACApK_update_diagonal_wrapper(m_leafmtxp, m_control, cHACApK_entry_ij);
+    // OPTIMIZATION: Use fast diagonal update
+    // Only updates true diagonal entries (i==j) using pre-computed N_ii values
+    // This is O(ndof) instead of O(block_size^2 * n_diag_blocks)
+    if (m_diag_cached && m_diag_N.size() == (size_t)m_ndof) {
+        HACApK_update_diagonal_fast_wrapper(m_leafmtxp, m_control,
+                                             m_diag_N.data(), inv_chi.data(), m_ndof);
+    } else {
+        // Fallback to slow method (recomputes all entries in diagonal blocks)
+        HACApK_update_diagonal_wrapper(m_leafmtxp, m_control, cHACApK_entry_ij);
+    }
 }
 
 //=========================================================================
@@ -401,10 +828,6 @@ void RadHACApKManager::UpdateDiagonal(const std::vector<double>& inv_chi) {
 // - HACApK uses ACA+ which only needs a subset of matrix elements
 // - Pre-computing the full dense matrix would defeat the O(N log N) purpose
 //=========================================================================
-
-// Constants for 6DOF MSC field computation
-static const double PI_HACAPK = 3.14159265358979323846;
-static const double INV_4PI_HACAPK = 1.0 / (4.0 * PI_HACAPK);
 
 //=========================================================================
 // Compute6x6Block: Calculate full 6x6 interaction block (ELF-style)
@@ -447,6 +870,8 @@ void RadHACApKManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) co
     }
 
     // Compute all 36 elements (source face outer loop for cache locality)
+    // IMPORTANT: K_mat indexing must match GetCached6x6Element access pattern
+    // K_mat[fi * 6 + fj] stores K(face_i, face_j) = normal_i dot H(eval_pt_i, src_face_j)
     for (int fj = 0; fj < 6; fj++) {
         double unit_point_charge = -1.0 * poly_col->FaceArea[fj];
 
@@ -465,85 +890,108 @@ void RadHACApKManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) co
                           H_total.y * poly_row->FaceNormal[fi].y +
                           H_total.z * poly_row->FaceNormal[fi].z;
 
-            // Store -K_ij / (4*pi) in row-major order
+            // Store -K_ij / (4*pi) in row-major order: K_mat[row * 6 + col]
             K_mat[fi * 6 + fj] = -K_ij * INV_4PI_HACAPK;
         }
     }
 }
 
 //=========================================================================
-// GetCached6x6Element: LRU cache lookup for 6x6 blocks (ELF-style)
-// Thread-safe implementation for OpenMP parallelization in HACApK
+// GetCached6x6Element: ELF-style thread-local LRU cache (NO locking!)
+//
+// ELF pattern from m_ppohBEM_user_func_hex.f90:
+// - Single-entry cache checked first (most common case)
+// - Thread-local LRU cache (32 entries) with !$omp threadprivate
+// - NO global cache, NO critical sections
+//
+// This is THE key optimization: no locking = linear scaling with threads
 //=========================================================================
 
+// Thread-local LRU cache size (matches ELF's hex_lru_cache_size = 64)
+static constexpr int TL_CACHE_SIZE = 64;
+
 double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const {
-    // TEMPORARY: Bypass cache completely for debugging
-    {
-        double K_mat[36];
-        Compute6x6Block(elem_i, elem_j, K_mat);
-        return K_mat[face_i * 6 + face_j];
-    }
+    // Thread-local single-entry cache (most common case: same block accessed multiple times)
+    static thread_local int tl_single_elem_i = -1;
+    static thread_local int tl_single_elem_j = -1;
+    static thread_local double tl_single_K_mat[36];
 
-#if 0  // Cache disabled for debugging
-    // Ensure cache is initialized
-    if (m_block_cache.empty()) {
-        // Cannot resize const vector, compute directly
-        double K_mat[36];
-        Compute6x6Block(elem_i, elem_j, K_mat);
-        return K_mat[face_i * 6 + face_j];
-    }
+    // Thread-local LRU cache (32 entries, no locking!)
+    static thread_local int tl_cache_elem_i[TL_CACHE_SIZE];
+    static thread_local int tl_cache_elem_j[TL_CACHE_SIZE];
+    static thread_local double tl_cache_K_mat[TL_CACHE_SIZE][36];
+    static thread_local int tl_cache_access[TL_CACHE_SIZE];
+    static thread_local int tl_access_counter = 0;
+    static thread_local bool tl_initialized = false;
 
-    double result = 0.0;
-    bool found = false;
-
-    // Critical section for thread-safe cache access
-    #pragma omp critical(hacapk_cache)
-    {
-        // Search cache
-        int cache_size = (int)m_block_cache.size();
-        for (int c = 0; c < cache_size; c++) {
-            if (m_block_cache[c].elem_i == elem_i && m_block_cache[c].elem_j == elem_j) {
-                // Cache hit
-                m_cache_access_counter++;
-                m_block_cache[c].access_count = m_cache_access_counter;
-                result = m_block_cache[c].K_mat[face_i * 6 + face_j];
-                found = true;
-                break;
-            }
+    // Initialize thread-local cache on first access
+    if (!tl_initialized) {
+        for (int i = 0; i < TL_CACHE_SIZE; i++) {
+            tl_cache_elem_i[i] = -1;
+            tl_cache_elem_j[i] = -1;
+            tl_cache_access[i] = 0;
         }
+        tl_initialized = true;
+    }
 
-        if (!found) {
-            // Cache miss - find LRU slot
-            int lru_slot = 0;
-            int min_access = m_block_cache[0].access_count;
-            for (int c = 1; c < cache_size; c++) {
-                if (m_block_cache[c].elem_i < 0) {
-                    lru_slot = c;
-                    break;
-                }
-                if (m_block_cache[c].access_count < min_access) {
-                    min_access = m_block_cache[c].access_count;
-                    lru_slot = c;
-                }
-            }
+    // Check single-entry cache first (fastest path)
+    if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j) {
+        return tl_single_K_mat[face_i * 6 + face_j];
+    }
 
-            // Compute and cache
-            Compute6x6Block(elem_i, elem_j, m_block_cache[lru_slot].K_mat);
-            m_block_cache[lru_slot].elem_i = elem_i;
-            m_block_cache[lru_slot].elem_j = elem_j;
-            m_cache_access_counter++;
-            m_block_cache[lru_slot].access_count = m_cache_access_counter;
+    // Search thread-local LRU cache (no locking needed!)
+    for (int k = 0; k < TL_CACHE_SIZE; k++) {
+        if (tl_cache_elem_i[k] == elem_i && tl_cache_elem_j[k] == elem_j) {
+            // Cache hit - update access count and copy to single-entry cache
+            tl_access_counter++;
+            tl_cache_access[k] = tl_access_counter;
 
-            result = m_block_cache[lru_slot].K_mat[face_i * 6 + face_j];
+            // Copy to single-entry cache for repeated access
+            std::memcpy(tl_single_K_mat, tl_cache_K_mat[k], 36 * sizeof(double));
+            tl_single_elem_i = elem_i;
+            tl_single_elem_j = elem_j;
+
+            return tl_single_K_mat[face_i * 6 + face_j];
         }
     }
 
-    return result;
-#endif  // Cache disabled for debugging
+    // Cache miss - compute the block using pre-computed geometry
+    if (m_geometry_ready) {
+        Compute6x6BlockFast(elem_i, elem_j, tl_single_K_mat);
+    } else {
+        Compute6x6Block(elem_i, elem_j, tl_single_K_mat);
+    }
+    tl_single_elem_i = elem_i;
+    tl_single_elem_j = elem_j;
+
+    // Find LRU slot (either empty or least recently used)
+    int lru_slot = 0;
+    int min_access = tl_cache_access[0];
+    for (int k = 1; k < TL_CACHE_SIZE; k++) {
+        if (tl_cache_elem_i[k] < 0) {
+            // Empty slot - use immediately
+            lru_slot = k;
+            break;
+        }
+        if (tl_cache_access[k] < min_access) {
+            min_access = tl_cache_access[k];
+            lru_slot = k;
+        }
+    }
+
+    // Insert into LRU cache
+    tl_access_counter++;
+    tl_cache_elem_i[lru_slot] = elem_i;
+    tl_cache_elem_j[lru_slot] = elem_j;
+    std::memcpy(tl_cache_K_mat[lru_slot], tl_single_K_mat, 36 * sizeof(double));
+    tl_cache_access[lru_slot] = tl_access_counter;
+
+    return tl_single_K_mat[face_i * 6 + face_j];
 }
 
 //=========================================================================
 // GetInteractionMatrixElement: Optimized with O(1) lookup and LRU cache
+// Supports both 3DOF tetrahedra and 6DOF hexahedra
 //=========================================================================
 
 double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const {
@@ -559,17 +1007,96 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
 
     // O(1) DOF-to-element lookup (ELF-style optimization)
     int elem_i = m_dof_to_elem[dof_i];
-    int face_i = m_dof_to_local[dof_i];
+    int local_i = m_dof_to_local[dof_i];
     int elem_j = m_dof_to_elem[dof_j];
-    int face_j = m_dof_to_local[dof_j];
+    int local_j = m_dof_to_local[dof_j];
 
     // Safety check for element indices
     if (elem_i < 0 || elem_i >= m_n_elem || elem_j < 0 || elem_j >= m_n_elem) {
         return 0.0;
     }
 
-    // Get cached 6x6 block element
-    return GetCached6x6Element(elem_i, elem_j, face_i, face_j);
+    // Dispatch based on DOF type
+    if (m_is_6dof) {
+        // 6DOF hexahedra: face-to-face interaction
+        return GetCached6x6Element(elem_i, elem_j, local_i, local_j);
+    } else {
+        // 3DOF tetrahedra: component-to-component interaction
+        return GetCached3x3Element(elem_i, elem_j, local_i, local_j);
+    }
+}
+
+//=========================================================================
+// GetCached3x3Element: O(1) flat array access for 3DOF tetrahedra
+// Uses pre-computed flat storage for maximum performance
+//=========================================================================
+
+double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const {
+    // If flat storage is ready, use O(1) direct access
+    if (m_flat_N_ready) {
+        int64_t base_idx = ((int64_t)elem_i * m_n_elem + elem_j) * 9;
+        double val = m_flat_N_data[base_idx + comp_i * 3 + comp_j];
+        // Debug: Check first few accesses
+        static int debug_count = 0;
+        if (debug_count < 3 && elem_i == 0 && elem_j == 0) {
+            std::cout << "[HACApK] GetCached3x3Element(0,0," << comp_i << "," << comp_j << ") = " << val << " [flat]" << std::endl;
+            debug_count++;
+        }
+        return val;
+    }
+
+    // Fallback to original Compute3x3Block (should not happen in normal usage)
+    std::cout << "[HACApK] WARNING: Using Compute3x3Block fallback (flat storage not ready)" << std::endl;
+    double N_mat[9];
+    Compute3x3Block(elem_i, elem_j, N_mat);
+    return N_mat[comp_i * 3 + comp_j];
+}
+
+//=========================================================================
+// Compute3x3Block: Compute 3x3 interaction block for tetrahedra
+// N_ij = interaction matrix element between magnetization components
+// Uses existing radTInteraction::InteractMatrix
+//=========================================================================
+
+void RadHACApKManager::Compute3x3Block(int elem_i, int elem_j, double* N_mat) const {
+    // InteractMatrix[elem_i][elem_j] returns TMatrix3df (3x3 float matrix)
+    //
+    // MATRIX LAYOUT FIX (2025-12-24):
+    // InteractMatrix[i][j] stores TMatrix3df where:
+    //   Str0 = dH/dMx = (dHx/dMx, dHy/dMx, dHz/dMx) <- COLUMN vector (response to Mx)
+    //   Str1 = dH/dMy = (dHx/dMy, dHy/dMy, dHz/dMy) <- COLUMN vector (response to My)
+    //   Str2 = dH/dMz = (dHx/dMz, dHy/dMz, dHz/dMz) <- COLUMN vector (response to Mz)
+    //
+    // For row k of the 3x3 block, we need N[i][j] element (k, l) = dH_k/dM_l
+    // This requires transposed access: row k gets Str0[k], Str1[k], Str2[k]
+    //
+    // IMPORTANT: Radia's InteractMatrix stores positive N, but the system matrix is:
+    //   A = -N + diag(1/chi)
+    // The LU solver uses: BaseMatrix = -Nij
+    // For HACApK, GetInteractionMatrixElement should return -N to match.
+
+    if (!m_interaction || !m_interaction->InteractMatrix) {
+        std::memset(N_mat, 0, 9 * sizeof(double));
+        return;
+    }
+
+    // Get the 3x3 block for element pair (i, j)
+    // InteractMatrix is indexed by element indices, not DOF indices
+    const TMatrix3df& M = m_interaction->InteractMatrix[elem_i][elem_j];
+
+    // Extract to row-major double array with sign flip (-N) and transpose
+    // Row 0 (Hx response): -dHx/dMx, -dHx/dMy, -dHx/dMz
+    N_mat[0] = -static_cast<double>(M.Str0.x);  // -dHx/dMx
+    N_mat[1] = -static_cast<double>(M.Str1.x);  // -dHx/dMy
+    N_mat[2] = -static_cast<double>(M.Str2.x);  // -dHx/dMz
+    // Row 1 (Hy response): -dHy/dMx, -dHy/dMy, -dHy/dMz
+    N_mat[3] = -static_cast<double>(M.Str0.y);  // -dHy/dMx
+    N_mat[4] = -static_cast<double>(M.Str1.y);  // -dHy/dMy
+    N_mat[5] = -static_cast<double>(M.Str2.y);  // -dHy/dMz
+    // Row 2 (Hz response): -dHz/dMx, -dHz/dMy, -dHz/dMz
+    N_mat[6] = -static_cast<double>(M.Str0.z);  // -dHz/dMx
+    N_mat[7] = -static_cast<double>(M.Str1.z);  // -dHz/dMy
+    N_mat[8] = -static_cast<double>(M.Str2.z);  // -dHz/dMz
 }
 
 //=========================================================================

@@ -1,0 +1,26 @@
+{
+  "element_type": "hexahedron_msc",
+  "mesh_description": "3x3x3",
+  "n_div": 3,
+  "n_elements": 27,
+  "ndof": 162,
+  "H_ext": 200000.0,
+  "t_mesh": 0.0009992122650146484,
+  "t_solve": 0.03899741172790527,
+  "solver_method": 2,
+  "solver_name": "hacapk",
+  "hmatrix_enabled": true,
+  "converged": true,
+  "residual": 0.0001375888306085482,
+  "nonl_iterations": 4,
+  "M_avg_z": 678857.6063037916,
+  "peak_memory_mb": 29.71484375,
+  "hmatrix": {
+    "n_lowrank": 0,
+    "n_dense": 10,
+    "max_rank": 0,
+    "compression_ratio": 0.09754610577655845,
+    "build_time": 0.005187,
+    "nlf": 10
+  }
+}

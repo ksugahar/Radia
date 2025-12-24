@@ -25,7 +25,7 @@ CUBE_HALF = 0.5      # Half of cube edge [m]
 # =============================================================================
 # External Field
 # =============================================================================
-H_EXT = 50000.0      # External H field magnitude [A/m]
+H_EXT = 200000.0     # External H field magnitude [A/m] (unified with linear benchmark)
 B_EXT = MU_0 * H_EXT  # External B field magnitude [T]
 
 # =============================================================================

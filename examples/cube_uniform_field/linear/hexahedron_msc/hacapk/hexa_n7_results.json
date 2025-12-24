@@ -3,11 +3,11 @@
   "n_elements": 343,
   "ndof": 2058,
   "solver": "hacapk",
-  "t_mesh": 0.008969306945800781,
-  "t_solve": 51.92958045005798,
-  "iterations": 2,
+  "t_mesh": 0.008997678756713867,
+  "t_solve": 0.4129977226257324,
+  "iterations": 3,
   "converged": false,
-  "M_avg_z": 177610.32620155855,
-  "M_analytical": 149550.8982035928,
-  "error_pct": 18.76246036300412
+  "M_avg_z": 710443.3734260389,
+  "M_analytical": 598203.5928143712,
+  "error_pct": 18.762806168316818
 }

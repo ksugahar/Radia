@@ -5,8 +5,8 @@
   "n_elements": 512,
   "ndof": 3072,
   "H_ext": 200000.0,
-  "t_mesh": 0.012999534606933594,
-  "t_solve": 7.283782958984375,
+  "t_mesh": 0.01296687126159668,
+  "t_solve": 6.8340747356414795,
   "solver_method": 0,
   "solver_name": "lu",
   "hmatrix_enabled": false,
@@ -14,5 +14,5 @@
   "residual": 0.0006621663536829914,
   "nonl_iterations": 7,
   "M_avg_z": 713064.3996879613,
-  "peak_memory_mb": 332.1484375
+  "peak_memory_mb": 331.94140625
 }

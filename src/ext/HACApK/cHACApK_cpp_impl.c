@@ -22,6 +22,27 @@
 #include <omp.h>
 #endif
 
+/*=========================================================================
+ * BLAS declarations (using LAPACK/OpenBLAS conventions)
+ * These are provided by the system BLAS library linked via CMake
+ *=========================================================================*/
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* BLAS Level 2: Matrix-vector multiply
+ * y = alpha * A * x + beta * y  (trans='N')
+ * y = alpha * A^T * x + beta * y  (trans='T')
+ */
+void dgemv_(const char *trans, const int *m, const int *n,
+            const double *alpha, const double *a, const int *lda,
+            const double *x, const int *incx,
+            const double *beta, double *y, const int *incy);
+
+#ifdef __cplusplus
+}
+#endif
+
 /*
  * Note: This file is compiled as C (not C++)
  * The struct types here use the original HACApK typedefs.
@@ -32,12 +53,61 @@
 
 /* Helper to get number of threads */
 static int get_num_threads(void) {
-/* TEMPORARY: Force single thread for debugging */
-#if 0 && defined(_OPENMP)
+#ifdef _OPENMP
     return omp_get_max_threads();
 #else
     return 1;
 #endif
+}
+
+/*=========================================================================
+ * Persistent work arrays for matvec (avoid repeated allocation)
+ * ELF-style: allocate once, reuse across multiple matvec calls
+ *=========================================================================*/
+static double *g_x_perm = NULL;      /* Permuted input vector */
+static double *g_y_perm = NULL;      /* Permuted output vector */
+static double **g_y_thread = NULL;   /* Thread-local y arrays */
+static double **g_tmp_vec = NULL;    /* Thread-local tmp vectors */
+static int g_matvec_nd = 0;          /* Size of allocated arrays */
+static int g_matvec_nthr = 0;        /* Number of threads */
+static int g_matvec_ktmax = 0;       /* Max rank for tmp_vec */
+
+/* Initialize persistent matvec buffers */
+static void init_matvec_buffers(int nd, int nthr, int ktmax) {
+    int i;
+    if (g_matvec_nd != nd || g_matvec_nthr != nthr || g_matvec_ktmax < ktmax) {
+        /* Free old buffers */
+        if (g_x_perm) { free(g_x_perm); g_x_perm = NULL; }
+        if (g_y_perm) { free(g_y_perm); g_y_perm = NULL; }
+        if (g_y_thread) {
+            for (i = 0; i < g_matvec_nthr; i++) {
+                if (g_y_thread[i]) free(g_y_thread[i]);
+            }
+            free(g_y_thread);
+            g_y_thread = NULL;
+        }
+        if (g_tmp_vec) {
+            for (i = 0; i < g_matvec_nthr; i++) {
+                if (g_tmp_vec[i]) free(g_tmp_vec[i]);
+            }
+            free(g_tmp_vec);
+            g_tmp_vec = NULL;
+        }
+
+        /* Allocate new buffers */
+        g_x_perm = (double*)malloc(sizeof(double) * nd);
+        g_y_perm = (double*)malloc(sizeof(double) * nd);
+        g_y_thread = (double**)malloc(sizeof(double*) * nthr);
+        g_tmp_vec = (double**)malloc(sizeof(double*) * nthr);
+        for (i = 0; i < nthr; i++) {
+            g_y_thread[i] = (double*)malloc(sizeof(double) * nd);
+            g_tmp_vec[i] = (double*)malloc(sizeof(double) * (ktmax > 0 ? ktmax : 1));
+        }
+
+        g_matvec_nd = nd;
+        g_matvec_nthr = nthr;
+        g_matvec_ktmax = ktmax;
+    }
 }
 
 /*=========================================================================
@@ -112,8 +182,11 @@ int HACApK_build_hmatrix_wrapper(
     ctl->param[61] = 1;                     /* ACA norm (MREM) */
     ctl->param[62] = (double)200;          /* Max rank initial */
     ctl->param[63] = (double)200;          /* Max rank */
+    ctl->param[64] = 1;                     /* Min rank (ELF uses 1) */
     ctl->param[71] = eps;                   /* ACA tolerance */
-    ctl->param[72] = 1.0e-3 * eps;          /* Relative tolerance */
+    /* param[72]: ACA_EPS multiplier (HACApK standard: 1.0e-3, LatticeH: 1.0e-9) */
+    /* ELF uses standard HACApK (not LatticeH), so use 1.0e-3 for compatibility */
+    ctl->param[72] = 1.0e-3;
 
     /* MPI stub setup (single process) */
     ctl->lpmd[1] = MPI_COMM_WORLD;   /* Communicator */
@@ -151,6 +224,7 @@ int HACApK_build_hmatrix_wrapper(
      *=========================================================================*/
     ndpth = 0;
     nclst = 0;
+
     cHACApK_generate_cbitree(&st_clt, gmid_t, ctl->param, ctl->lpmd, lodfc,
                               &ndpth, 0, 1, nofc, nofc, ndim, &nclst);
 
@@ -294,6 +368,7 @@ int HACApK_build_hmatrix_wrapper(
 
 /*=========================================================================
  * Matrix-vector product: y = A * x using H-matrix
+ * Optimized version using BLAS dgemv, persistent buffers, no atomic ops
  *=========================================================================*/
 
 void HACApK_matvec_wrapper(
@@ -308,77 +383,102 @@ void HACApK_matvec_wrapper(
     int *lod = ctl->lod;
     int nlf = leafmtxp->nlf;
     st_cHACApK_leafmtx *st_lf = leafmtxp->st_lf;
-    double *x_perm, *y_perm;
-    int il, it, ip, k;
+    int il, ip, t;
+    int ktmax = leafmtxp->ktmax;
+    int nthr = 1;
 
-    /* Allocate permuted vectors */
-    x_perm = (double*)malloc(sizeof(double) * nd);
-    y_perm = (double*)calloc(nd, sizeof(double));
+    /* BLAS constants */
+    const double d_one = 1.0;
+    const double d_zero = 0.0;
+    const int i_one = 1;
 
-    /* Pre-permute input vector */
-    for (il = 1; il <= nd; il++) {
-        x_perm[il - 1] = x[lod[il] - 1];
+#ifdef _OPENMP
+    nthr = omp_get_max_threads();
+#endif
+
+    /* Initialize persistent buffers (only allocates if size changed) */
+    init_matvec_buffers(nd, nthr, ktmax);
+
+    /* Zero thread-local y arrays */
+    #pragma omp parallel for
+    for (il = 0; il < nthr; il++) {
+        memset(g_y_thread[il], 0, sizeof(double) * nd);
     }
 
-    /* H-matrix matrix-vector product (single-threaded) */
-    for (ip = 1; ip <= nlf; ip++) {
-        st_cHACApK_leafmtx leaf = st_lf[ip];
-        int ndl = leaf->ndl;
-        int ndt = leaf->ndt;
-        int nstrtl = leaf->nstrtl;
-        int nstrtt = leaf->nstrtt;
-        double *a1 = leaf->a1;
-        double *a2 = leaf->a2;
+    /* Pre-permute input vector (parallelized) */
+    #pragma omp parallel for
+    for (il = 1; il <= nd; il++) {
+        g_x_perm[il - 1] = x[lod[il] - 1];
+    }
 
-        if (leaf->ltmtx == 1) {
-            /* Low-rank block: y += U * (V^T * x)
-             * Storage: a1 = V (ndt x kt), a2 = U (ndl x kt)
-             */
-            int kt = leaf->kt;
-            double *V = a1;
-            double *U = a2;
-            double *tmp = (double*)calloc(kt, sizeof(double));
+    /* H-matrix matrix-vector product with OpenMP parallelization
+     * Using BLAS dgemv for dense blocks and thread-local y arrays
+     */
+    #pragma omp parallel
+    {
+        int tid = 0;
+#ifdef _OPENMP
+        tid = omp_get_thread_num();
+#endif
+        double *y_local = g_y_thread[tid];
+        double *tmp_vec = g_tmp_vec[tid];
 
-            /* Compute tmp = V^T * x_perm */
-            for (k = 0; k < kt; k++) {
-                double sum = 0.0;
-                for (it = 0; it < ndt; it++) {
-                    sum += V[it + ndt * k] * x_perm[nstrtt - 1 + it];
-                }
-                tmp[k] = sum;
-            }
+        #pragma omp for schedule(dynamic, 32)
+        for (ip = 1; ip <= nlf; ip++) {
+            st_cHACApK_leafmtx leaf = st_lf[ip];
+            int ndl = leaf->ndl;
+            int ndt = leaf->ndt;
+            int nstrtl = leaf->nstrtl;
+            int nstrtt = leaf->nstrtt;
+            double *a1 = leaf->a1;
+            double *a2 = leaf->a2;
 
-            /* Compute y_perm += U * tmp */
-            for (il = 0; il < ndl; il++) {
-                double sum = 0.0;
-                for (k = 0; k < kt; k++) {
-                    sum += U[il + ndl * k] * tmp[k];
-                }
-                y_perm[nstrtl - 1 + il] += sum;
-            }
+            if (leaf->ltmtx == 1) {
+                /* Low-rank block: y += U * (V^T * x)
+                 * Storage: a1 = V (ndt x kt), a2 = U (ndl x kt)
+                 * V is stored column-major: V[i,k] = a1[i + ndt*k]
+                 * U is stored column-major: U[i,k] = a2[i + ndl*k]
+                 */
+                int kt = leaf->kt;
 
-            free(tmp);
-        } else {
-            /* Dense block: y += A * x
-             * Storage: a1[it + ndt * il] = A[il, it] (row-major)
-             */
-            for (il = 0; il < ndl; il++) {
-                double sum = 0.0;
-                for (it = 0; it < ndt; it++) {
-                    sum += a1[it + ndt * il] * x_perm[nstrtt - 1 + it];
-                }
-                y_perm[nstrtl - 1 + il] += sum;
+                /* tmp_vec = V^T * x_sub  using BLAS dgemv
+                 * V is ndt x kt, stored column-major
+                 * trans='T': tmp_vec(kt) = V^T(kt x ndt) * x_sub(ndt)
+                 */
+                dgemv_("T", &ndt, &kt, &d_one, a1, &ndt,
+                       &g_x_perm[nstrtt - 1], &i_one,
+                       &d_zero, tmp_vec, &i_one);
+
+                /* y_local += U * tmp_vec  using BLAS dgemv
+                 * U is ndl x kt, stored column-major
+                 * trans='N': y_local(ndl) += U(ndl x kt) * tmp_vec(kt)
+                 */
+                dgemv_("N", &ndl, &kt, &d_one, a2, &ndl,
+                       tmp_vec, &i_one,
+                       &d_one, &y_local[nstrtl - 1], &i_one);
+            } else {
+                /* Dense block: y += A * x
+                 * Storage: a1[it + ndt * il] = A[il, it]
+                 * This is column-major with ndt rows, ndl cols
+                 * We need y_local(ndl) += A(ndl x ndt) * x_sub(ndt)
+                 * But A is stored as A^T (ndt x ndl), so use trans='T'
+                 */
+                dgemv_("T", &ndt, &ndl, &d_one, a1, &ndt,
+                       &g_x_perm[nstrtt - 1], &i_one,
+                       &d_one, &y_local[nstrtl - 1], &i_one);
             }
         }
     }
 
-    /* Inverse permutation: y(lod(i)) = y_perm(i) */
+    /* Reduce thread-local y arrays and apply inverse permutation */
+    #pragma omp parallel for
     for (il = 1; il <= nd; il++) {
-        y[lod[il] - 1] = y_perm[il - 1];
+        double sum = 0.0;
+        for (t = 0; t < nthr; t++) {
+            sum += g_y_thread[t][il - 1];
+        }
+        y[lod[il] - 1] = sum;
     }
-
-    free(x_perm);
-    free(y_perm);
 }
 
 /*=========================================================================
@@ -523,7 +623,69 @@ void HACApK_update_diagonal_wrapper(
         }
     }
 
-#if 0  /* Debug output - disabled */
-    printf("[HACApK] Updated %d dense diagonal blocks out of %d total leaves\n", n_diag_updated, leafmtxp->nlf);
+#if 0  /* Debug output - disabled for production */
+    static int update_count = 0;
+    if (update_count < 3) {
+        printf("[HACApK] Updated %d dense diagonal blocks out of %d total leaves\n", n_diag_updated, leafmtxp->nlf);
+        update_count++;
+    }
 #endif
+}
+
+/*=========================================================================
+ * Fast diagonal update: only update true diagonal elements (i==j)
+ *
+ * This is MUCH faster than HACApK_update_diagonal_wrapper because:
+ * - Only iterates over diagonal entries in diagonal blocks
+ * - Uses pre-computed N_ii values instead of calling entry_func
+ * - O(ndof) instead of O(block_size^2 * n_diag_blocks)
+ *
+ * For a 1000-element problem (6000 DOF), this reduces from:
+ * - Old: ~180 diagonal blocks * 32*32 entries * expensive entry_func call
+ * - New: 6000 diagonal entries * simple array lookup
+ *=========================================================================*/
+
+void HACApK_update_diagonal_fast_wrapper(
+    void *leafmtxp_void,
+    void *ctl_void,
+    const double *diag_N,
+    const double *inv_chi,
+    int ndof)
+{
+    st_cHACApK_leafmtxp leafmtxp = (st_cHACApK_leafmtxp)leafmtxp_void;
+    st_cHACApK_lcontrol ctl = (st_cHACApK_lcontrol)ctl_void;
+    int ip, il;
+    int *lod;
+
+    if (!leafmtxp || !ctl || !diag_N || !inv_chi) return;
+
+    lod = ctl->lod;
+    if (!lod) return;
+
+    /* Iterate over all leaf blocks */
+    for (ip = 1; ip <= leafmtxp->nlf; ip++) {
+        st_cHACApK_leafmtx leaf = leafmtxp->st_lf[ip];
+
+        if (!leaf) continue;
+
+        /* Only process dense diagonal blocks (ltmtx==2 && nstrtl==nstrtt) */
+        if (leaf->ltmtx == 2 && leaf->nstrtl == leaf->nstrtt) {
+            int ndl = leaf->ndl;
+            int ndt = leaf->ndt;
+            int nstrtl = leaf->nstrtl;
+            double *a1 = leaf->a1;
+
+            /* Only update true diagonal entries (il == it) */
+            /* This is the key optimization: O(ndl) instead of O(ndl * ndt) */
+            for (il = 0; il < ndl && il < ndt; il++) {
+                int global_idx = lod[nstrtl + il] - 1;  /* Convert 1-based to 0-based */
+
+                if (global_idx >= 0 && global_idx < ndof) {
+                    /* A_ii = N_ii + 1/chi_i */
+                    /* Storage: a1[it + ndt * il] where it==il for diagonal */
+                    a1[il + ndt * il] = diag_N[global_idx] + inv_chi[global_idx];
+                }
+            }
+        }
+    }
 }

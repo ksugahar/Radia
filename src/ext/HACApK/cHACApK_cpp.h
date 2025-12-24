@@ -249,6 +249,27 @@ void HACApK_update_diagonal_wrapper(
     void *ctl,                 /* st_cHACApK_lcontrol* */
     HACApK_entry_func entry_func);
 
+/**
+ * Fast diagonal update: only update true diagonal elements (i==j)
+ *
+ * This is much faster than HACApK_update_diagonal_wrapper because:
+ * - Only updates diagonal entries, not entire blocks
+ * - Uses pre-computed N_ii values (passed as diag_N array)
+ * - Just adds new inv_chi[i] to stored N_ii values
+ *
+ * @param leafmtxp  H-matrix leaf pointer
+ * @param ctl       H-matrix control structure
+ * @param diag_N    Pre-computed diagonal N values (size = ndof)
+ * @param inv_chi   New inverse susceptibility values (size = ndof)
+ * @param ndof      Total degrees of freedom
+ */
+void HACApK_update_diagonal_fast_wrapper(
+    void *leafmtxp,
+    void *ctl,
+    const double *diag_N,
+    const double *inv_chi,
+    int ndof);
+
 #ifdef __cplusplus
 }
 #endif

@@ -925,7 +925,8 @@ double radTNonlinearIsotropMaterial::ComputeChiDualMethod(double H_mag, double m
 		}
 	}
 
-	// Method 2: H+B sum interpolation
+	// Method 2: H+B sum interpolation (ELF update_chi_from_bh_fast)
+	// ELF uses CGS units (Oe, Gauss) where H and B are comparable.
 	double B_old = mu_0 * mu_old * H_mag;
 	double hb_sum = H_mag / H_scale + B_old / B_scale;
 	double H_new, B_new;

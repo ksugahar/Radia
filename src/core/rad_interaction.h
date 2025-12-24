@@ -186,8 +186,9 @@ class radTInteraction : public radTg {
 	std::vector<int> m_elemDOFOffset;         // Starting offset in flattened arrays for each element
 	bool m_hasVariableDOF;                    // True if any element has DOF != 3
 
-	// Variable-size interaction matrix (row-major, dense)
+	// Variable-size interaction matrix (COLUMN-MAJOR for LAPACK compatibility)
 	// Size: m_totalDOF x m_totalDOF
+	// A(i,j) is stored at index [j * m_totalDOF + i] (Fortran/LAPACK convention)
 	// Used when m_hasVariableDOF is true
 	std::vector<double> m_flatInteractMatrix;
 
@@ -203,13 +204,13 @@ public:
 	short SomethingIsWrong;
 	short MemAllocTotAtOnce;
 
-	radTInteraction(const radThg&, const radThg&, const radTCompCriterium&, short =0, char =0, char =0, int =-1, int =0); //OC08012020
+	radTInteraction(const radThg&, const radThg&, const radTCompCriterium&, short =0, char =0, char =0, int =-1, int =0, char =0); //OC08012020 + skipDenseMatrix
 	//radTInteraction(const radThg&, const radThg&, const radTCompCriterium&, short =0, char =0, char =0);
 	radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers);
 	radTInteraction();
 	~radTInteraction();
 
-	int Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char AuxOldMagnArrayIsNeeded, char KeepTransData, int rankMPI=-1, int nProcMPI=0); //OC08012020
+	int Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char AuxOldMagnArrayIsNeeded, char KeepTransData, int rankMPI=-1, int nProcMPI=0, char skipDenseMatrix=0); //OC08012020 + skipDenseMatrix
 	//int Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char AuxOldMagnArrayIsNeeded, char KeepTransData);
 
 	void CountMainRelaxElems(radTg3d*, radTlphgPtr*);
@@ -218,12 +219,14 @@ public:
 
 	int SetupInteractMatrix(); //OC26122019
 	//void SetupInteractMatrix();
+	void AllocateInteractMatrix();  // Allocate InteractMatrix only (for HACApK 3DOF case)
 
 	//-------------------------------------------------------------------------
 	// Variable DOF methods for hybrid MSC + standard element analysis
 	//-------------------------------------------------------------------------
 	void ComputeDOFOffsets();  // Compute DOF offsets for each element
 	int SetupInteractMatrix_VariableDOF();  // Build interaction matrix with variable DOF blocks
+	void SetupVariableDOFArrays();  // Set up flat arrays only (without building interaction matrix)
 
 	// DOF accessors (inline for performance)
 	int GetTotalDOF() const { return m_totalDOF; }
@@ -239,7 +242,7 @@ public:
 	double* GetFlatExternFieldArray() { return m_flatExternFieldArray.data(); }
 
 	// Helper: Get pointer to interaction block (row_elem, col_elem)
-	// Block is stored row-major in m_flatInteractMatrix
+	// Matrix is stored COLUMN-MAJOR for LAPACK compatibility
 	double* GetInteractBlock(int row_elem, int col_elem);
 	const double* GetInteractBlock(int row_elem, int col_elem) const;
 

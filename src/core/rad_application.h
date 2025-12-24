@@ -65,6 +65,38 @@ public:
 	// Nonlinear solver method: 0=mucal1 (chi-change), 1=mucal2 (B-change/Newton)
 	int NonlinearMethod;
 
+	// BiCGSTAB inner loop tolerance (default: 1e-4, ELF-compatible)
+	// Can be set via Python API: rad.SolverPar("bicg_tol", value)
+	double m_bicg_tol;
+
+	// Relaxation coefficient for nonlinear iteration (default: 0.0 = full step)
+	// 0.0 = full step (no under-relaxation)
+	// 0.0-1.0 = under-relaxation: chi_new = chi_new*(1-relax) + chi_old*relax
+	// Can be set via Python API: rad.SetRelaxParam(value)
+	double m_relax;
+
+#ifdef RADIA_USE_HACAPK
+	// HACApK parameters for H-matrix solver
+	double m_hacapk_eps;       // ACA+ compression tolerance (default: 1e-4)
+	int m_hacapk_leaf_size;    // Minimum cluster size (default: 32)
+	double m_hacapk_eta;       // Admissibility parameter (default: 2.0)
+
+	// HACApK statistics from last solve
+	int m_hacapk_n_lowrank;
+	int m_hacapk_n_dense;
+	int m_hacapk_max_rank;
+	int m_hacapk_n_leaves;
+	int m_hacapk_n_dof;
+	double m_hacapk_compression;
+	double m_hacapk_build_time;
+	bool m_hacapk_stats_valid;
+
+	// Detailed timing statistics (ELF-compatible)
+	double m_timing_hmatrix_build;   // H-matrix construction time
+	double m_timing_linear_solve;    // Total BiCGSTAB solve time
+	int m_linear_iterations;         // Total BiCGSTAB iterations (cumulative)
+#endif
+
 	radTApplication()
 	{
 		Initialize();
@@ -81,12 +113,32 @@ public:
 		RecognizeRecMagsInPolyhedrons = 0; // Disable: Keep hexahedra as polyhedra for 6 DOF MSC solver
 		MemAllocForIntrctMatrTotAtOnce = 0;
 		NonlinearMethod = 1;  // Default: mucal2 (B-change/Newton) for faster convergence
+		m_bicg_tol = 1.0e-4;  // Default: 1e-4 (ELF-compatible)
+		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
 
 		// Initialize to default units (mm)
 		m_lengthUnitScale = 1.0;
 		m_lengthUnitName = "mm";
+
+#ifdef RADIA_USE_HACAPK
+		// HACApK default parameters
+		m_hacapk_eps = 1.0e-4;
+		m_hacapk_leaf_size = 32;
+		m_hacapk_eta = 2.0;
+		m_hacapk_stats_valid = false;
+		m_hacapk_n_lowrank = 0;
+		m_hacapk_n_dense = 0;
+		m_hacapk_max_rank = 0;
+		m_hacapk_n_leaves = 0;
+		m_hacapk_n_dof = 0;
+		m_hacapk_compression = 1.0;
+		m_timing_hmatrix_build = 0.0;
+		m_timing_linear_solve = 0.0;
+		m_linear_iterations = 0;
+		m_hacapk_build_time = 0.0;
+#endif
 	}
 
 	int ValidateVector3d(double* ArrayToCheck, long LenArray, TVector3d* VectorPtr);
@@ -201,7 +253,7 @@ public:
 	void ComputeMvsH(int g3dRelaxOrMaterElemKey, char* MagnChar, double* H, long lenH);
 	//void OutMagnetizCompRes(char* MagnChar, TVector3d& M_vect);
 
-	int PreRelax(int ElemKey, int SrcElemKey);
+	int PreRelax(int ElemKey, int SrcElemKey, char skipDenseMatrix=0);
 	int SetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
 	void ShowInteractMatrix(int InteractElemKey);
 	void ShowInteractVector(int InteractElemKey, char* FieldVectID);
@@ -210,6 +262,12 @@ public:
 	int UpdateSourcesForRelax(int InteractElemKey);
 	int SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo);
 	int SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod);
+
+#ifdef RADIA_USE_HACAPK
+	// HACApK parameter setting and statistics retrieval
+	void SetHACApKParams(double eps, int leaf_size, double eta);
+	void GetHACApKStats(double* dOut, int* nOut);
+#endif
 
 	void ComputeField(int ElemKey, char* FieldChar, double* StObsPoi, long lenStObsPoi, double* FiObsPoi, long lenFiObsPoi, int Np, char* ShowArgFlag, double StrtArg);
 	void ComputeField(int ElemKey, char* FieldChar, radTVectorOfVector3d& VectorOfVector3d, radTVectInputCell& VectInputCell);

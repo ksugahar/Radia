@@ -26,6 +26,22 @@
 */#ifndef CHACAPK_LIB_H_INCLUDED
 #define CHACAPK_LIB_H_INCLUDED
 
+/* Vector norm computation (BLAS dnrm2 optimized) */
+extern double cHACApK_unrm_d(int n, double *vec);
+
+/* Extract column with stride access (BLAS dcopy optimized) */
+extern void cHACApK_extract_col(double *dst, const double *src, int row, int ldsrc, int k);
+
+/* Find maximum absolute value and location */
+extern void cHACApK_maxabsvalloc_d(double *vec, double *maxval, int *loc, int n);
+
+/* Find minimum absolute value and location */
+extern void cHACApK_minabsvalloc_d(double *vec, double *minval, int *loc, int n);
+
+/* Dot product subtraction: vec -= zaa * zz */
+extern void cHACApK_adotsub_dsm(double *vec, double *zaa, double *zz, int ndl, int k, int ldaa);
+
+/* Median of three */
 extern int cHACApK_med3(
   int nl,
   int nr,

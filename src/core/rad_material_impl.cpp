@@ -1245,7 +1245,7 @@ void radTApplication::GraphicsForAll_g3d(int InShowSymmetryChilds)
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-int radTApplication::PreRelax(int ElemKey, int SrcElemKey)
+int radTApplication::PreRelax(int ElemKey, int SrcElemKey, char skipDenseMatrix)
 {
 	radThg hg;
 	if(!ValidateElemKey(ElemKey, hg)) return 0;
@@ -1266,7 +1266,7 @@ int radTApplication::PreRelax(int ElemKey, int SrcElemKey)
 		char AllocateExtraArray = 1; //OC300504
 		char KeepTransData = 1; //OC240408 to enable update after scaling of currents
 
-		InteractionPtr = new radTInteraction(hg, hgMoreExtSrc, CompCriterium, MemAllocForIntrctMatrTotAtOnce, AllocateExtraArray, KeepTransData, m_rankMPI, m_nProcMPI); //OC08012020
+		InteractionPtr = new radTInteraction(hg, hgMoreExtSrc, CompCriterium, MemAllocForIntrctMatrTotAtOnce, AllocateExtraArray, KeepTransData, m_rankMPI, m_nProcMPI, skipDenseMatrix); //OC08012020 + skipDenseMatrix
 		//radTInteraction* InteractionPtr = new radTInteraction(hg, hgMoreExtSrc, CompCriterium, MemAllocForIntrctMatrTotAtOnce, AllocateExtraArray, KeepTransData);
 
 		if(InteractionPtr->SomethingIsWrong)
@@ -1386,7 +1386,27 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 			{
 				// BiCGSTAB with H-matrix (HACApK ACA+)
 				radTRelaxationMethNo_2 RelaxMethNo_2(InteractPtr);
+
+				// Set HACApK parameters from application settings
+				RadHACApKParams hacapk_params;
+				hacapk_params.aca_eps = m_hacapk_eps;
+				hacapk_params.leaf_size = m_hacapk_leaf_size;
+				hacapk_params.eta = m_hacapk_eta;
+				hacapk_params.print_level = 1;  // Standard output
+				RelaxMethNo_2.SetHACApKParams(hacapk_params);
+
 				RelaxMethNo_2.AutoRelax(RelaxParam, IterNumber);
+
+				// Store statistics for later retrieval
+				const RadHACApKStats& stats = RelaxMethNo_2.GetHMatrixStats();
+				m_hacapk_n_lowrank = stats.n_lowrank;
+				m_hacapk_n_dense = stats.n_dense;
+				m_hacapk_max_rank = stats.max_rank;
+				m_hacapk_n_leaves = stats.n_leaves;
+				m_hacapk_n_dof = stats.n_dof;
+				m_hacapk_compression = stats.compression;
+				m_hacapk_build_time = stats.build_time;
+				m_hacapk_stats_valid = true;
 			}
 			break;
 #endif
@@ -1409,11 +1429,21 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 
 int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char** arOptionNames, const char** arOptionValues, int numOptions)
 {
+	// Debug: write to log file
+	FILE* debug_log = std::fopen("S:/Radia/01_GitHub/makeautorelax.log", "a");
+	if(debug_log)
+	{
+		std::fprintf(debug_log, "MakeAutoRelax called: key=%d, prec=%g, maxiter=%d, method=%d\n",
+		            InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
+		std::fflush(debug_log);
+		std::fclose(debug_log);
+	}
+
 	try
 	{
 		radThg hg;
 		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
-		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep); 
+		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
 		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
 
 		int ActualIterNum = 0; //OC02012020
@@ -1473,7 +1503,27 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			{
 				// BiCGSTAB with H-matrix (HACApK ACA+)
 				radTRelaxationMethNo_2 RelaxMethNo_2(InteractPtr);
+
+				// Set HACApK parameters from application settings
+				RadHACApKParams hacapk_params;
+				hacapk_params.aca_eps = m_hacapk_eps;
+				hacapk_params.leaf_size = m_hacapk_leaf_size;
+				hacapk_params.eta = m_hacapk_eta;
+				hacapk_params.print_level = 1;  // Standard output
+				RelaxMethNo_2.SetHACApKParams(hacapk_params);
+
 				ActualIterNum = RelaxMethNo_2.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+
+				// Store statistics for later retrieval
+				const RadHACApKStats& stats = RelaxMethNo_2.GetHMatrixStats();
+				m_hacapk_n_lowrank = stats.n_lowrank;
+				m_hacapk_n_dense = stats.n_dense;
+				m_hacapk_max_rank = stats.max_rank;
+				m_hacapk_n_leaves = stats.n_leaves;
+				m_hacapk_n_dof = stats.n_dof;
+				m_hacapk_compression = stats.compression;
+				m_hacapk_build_time = stats.build_time;
+				m_hacapk_stats_valid = true;
 			}
 			break;
 #endif
@@ -1528,7 +1578,17 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		short PrevSendingIsRequired = SendingIsRequired;
 		SendingIsRequired = 0;
 
-		int InteractElemKey = PreRelax(ObjKey, 0);
+		// For HACApK solver (method 2), skip dense matrix construction
+		// HACApK builds its own H-matrix, dense matrix is unnecessary overhead
+		char skipDenseMatrix = 0;
+#ifdef RADIA_USE_HACAPK
+		if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
+		{
+			skipDenseMatrix = 1;
+		}
+#endif
+
+		int InteractElemKey = PreRelax(ObjKey, 0, skipDenseMatrix);
 		if(InteractElemKey <= 0) return 0;
 
 		SendingIsRequired = PrevSendingIsRequired;
@@ -2081,5 +2141,47 @@ int radTApplication::RandomizationOnOrOff(char* OnOrOff)
 	if(SendingIsRequired) Send.Int(int(SwitchOn));
 	return 1;
 }
+
+//-------------------------------------------------------------------------
+
+#ifdef RADIA_USE_HACAPK
+void radTApplication::SetHACApKParams(double eps, int leaf_size, double eta)
+{
+	// Update only if positive value provided (-1 means keep current)
+	// This allows SetHMatrixEpsilon to change only eps
+	if(eps > 0) m_hacapk_eps = eps;
+	if(leaf_size > 0) m_hacapk_leaf_size = leaf_size;
+	if(eta > 0) m_hacapk_eta = eta;
+	// Invalidate previous statistics when parameters change
+	m_hacapk_stats_valid = false;
+
+	if(SendingIsRequired) Send.Int(1);
+}
+
+void radTApplication::GetHACApKStats(double* dOut, int* nOut)
+{
+	if(!m_hacapk_stats_valid)
+	{
+		*nOut = 0;
+		return;
+	}
+
+	// H-matrix structure statistics
+	dOut[0] = (double)m_hacapk_n_lowrank;
+	dOut[1] = (double)m_hacapk_n_dense;
+	dOut[2] = (double)m_hacapk_max_rank;
+	dOut[3] = (double)m_hacapk_n_leaves;
+	dOut[4] = (double)m_hacapk_n_dof;
+	dOut[5] = m_hacapk_compression;
+	dOut[6] = m_hacapk_build_time;
+
+	// Timing statistics (ELF-compatible)
+	dOut[7] = m_timing_hmatrix_build;   // H-matrix construction time [s]
+	dOut[8] = m_timing_linear_solve;    // Total BiCGSTAB solve time [s]
+	dOut[9] = (double)m_linear_iterations;  // Total BiCGSTAB iterations
+
+	*nOut = 10;
+}
+#endif
 
 //-------------------------------------------------------------------------
