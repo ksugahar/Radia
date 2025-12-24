@@ -2265,7 +2265,8 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 	// Initialize H field and NewFieldArray for chi(H) computation
 	// FIX (2025-12-24): Initialize NewFieldArray for 6DOF elements too
-	const double H_init_mag = 1000.0;
+	// Use same H_init_mag as LU solver (100 A/m) for consistent chi initialization
+	const double H_init_mag = 100.0;
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
