@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.16] - 2025-12-24
+
+### Fixed
+
+- **BiCGSTAB Convergence Dramatically Improved**
+  - Changed initial guess from zero to previous solution (FlatMagn)
+  - This matches ELF's approach and significantly accelerates convergence
+  - N=10 benchmark: 50 iterations -> 5 iterations (was 10x slower than ELF)
+  - N=5 benchmark: 8 iterations -> 3 iterations
+
+### Changed
+
+- **Debug Logging Policy**
+  - Removed C++ file-based debug logging (policy: debug info via Python only)
+  - All debug information should be managed through Python scripts
+
+### Validation
+
+- N=10 hexahedron benchmark (1000 elements, H_ext = 200,000 A/m):
+  - BiCGSTAB: 5 iterations, M_avg_z = 716,316 A/m (ELF: 4 iterations)
+  - LU: 13 iterations, M_avg_z = 716,281 A/m (matches ELF exactly)
+  - HACApK: 5 iterations, M_avg_z = 715,885 A/m
+
 ## [1.3.15] - 2025-12-22
 
 ### Added

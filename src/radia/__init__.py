@@ -2,7 +2,7 @@
 # This module re-exports all symbols from the C++ extension module (radia.pyd)
 # so that 'import radia' works correctly when installed via pip
 
-__version__ = "1.3.15"
+__version__ = "1.3.16"
 
 # Add package directory to DLL search path (Windows)
 # This is needed for finding libopenblas.dll
