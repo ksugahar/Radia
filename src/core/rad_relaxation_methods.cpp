@@ -1438,16 +1438,6 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		}
 	}
 
-	// Debug logging: always write to hardcoded path
-	FILE* debug_log = std::fopen("S:/Radia/01_GitHub/radia_iter.log", "w");
-	if(debug_log)
-	{
-		std::fprintf(debug_log, "# Radia LU Solver AutoRelax_VariableDOF\n");
-		std::fprintf(debug_log, "# AmOfMainElem=%d, totalDOF=%d\n", AmOfMainElem, totalDOF);
-		std::fprintf(debug_log, "# iter, rel_change, M_avg_z, max_chi, min_chi\n");
-		std::fflush(debug_log);
-	}
-
 	// Track previous iteration's average Mz for ELF-style convergence
 	double prev_M_avg_z = 0.0;
 
@@ -1755,12 +1745,6 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					{
 						// Use ELF-style dual-method chi update
 						chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old);
-						// Debug: write first element's chi update
-						if(debug_log && elem == 0 && iterCount < 10)
-						{
-							std::fprintf(debug_log, "  iter%d elem0: H_mag=%.0f, chi_matrix=%.1f, mu_old=%.1f, chi_new=%.1f\n",
-							            iterCount+1, H_mag, chi_matrix, mu_old, chi_new);
-						}
 					}
 					else
 					{
@@ -1770,12 +1754,6 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 						MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
 						chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 						if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-						// Debug: write first element for fallback case
-						if(debug_log && elem == 0 && iterCount < 10)
-						{
-							std::fprintf(debug_log, "  iter%d elem0 (FALLBACK): H_mag=%.0f, chi_matrix=%.1f, chi_new=%.1f\n",
-							            iterCount+1, H_mag, chi_matrix, chi_new);
-						}
 					}
 
 					// Update chi for next iteration with optional under-relaxation
@@ -1842,37 +1820,6 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		}
 		MisfitE2 = rel_change * rel_change;
 
-		// Debug logging - write to file
-		if(debug_log)
-		{
-			double M_sum_z = 0.0;
-			double max_chi = 0.0;
-			double min_chi = 1.0e20;
-			int n_6dof = 0;
-			for(int elem = 0; elem < AmOfMainElem; elem++)
-			{
-				int dof = IntrctPtr->GetElementDOF(elem);
-				if(dof == 6)
-				{
-					radTPolyhedron* poly = polyCache[elem];
-					if(poly && poly->Use6DOF_MSC)
-					{
-						M_sum_z += poly->Magn.z;
-						if(poly->CurrentChi > max_chi) max_chi = poly->CurrentChi;
-						if(poly->CurrentChi < min_chi) min_chi = poly->CurrentChi;
-						n_6dof++;
-					}
-				}
-			}
-			double M_avg_z = (n_6dof > 0) ? M_sum_z / n_6dof : 0.0;
-			// Also compute M-based convergence (sqrt(M_diff_sq / M_norm_sq))
-			double M_rel_change = (M_norm_sq > 1.0e-30) ? std::sqrt(M_diff_sq / M_norm_sq) : 0.0;
-			// Log: rel_change is now B-field based for 6DOF, show both B and chi
-			std::fprintf(debug_log, "%d, B_rel=%.6e, chi_rel=%.6e, M_avg_z=%.0f, max_chi=%.1f, min_chi=%.1f\n",
-			            iterCount + 1, max_B_rel_change, max_chi_rel_change, M_avg_z, max_chi, min_chi);
-			std::fflush(debug_log);
-		}
-
 		if(rel_change <= PrecOnMagnetiz)
 		{
 			iterCount++;
@@ -1881,12 +1828,10 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 		if(radYield.Check() == 0)
 		{
-			if(debug_log) std::fclose(debug_log);
 			return iterCount;
 		}
 	}
 
-	if(debug_log) std::fclose(debug_log);
 	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
 
 	return iterCount;
@@ -2060,11 +2005,11 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		}
 	}
 
-	// Initial guess: use zero for better stability
-	// (FlatMagn may contain garbage from previous failed iterations)
+	// Initial guess: use current magnetization (ELF-compatible)
+	// Using the previous solution as initial guess significantly speeds up convergence
 	for(int i = 0; i < totalDOF; i++)
 	{
-		sol[i] = 0.0;
+		sol[i] = FlatMagn[i];
 	}
 
 	// Build Jacobi preconditioner
