@@ -1,0 +1,31 @@
+{
+  "element_type": "tetra",
+  "mesh_description": "maxh=0.30m",
+  "n_elements": 200,
+  "ndof": 600,
+  "H_ext": 200000.0,
+  "nonl_tol": 0.001,
+  "bicg_tol": 0.0001,
+  "hmat_eps": null,
+  "t_mesh": 0.04300212860107422,
+  "t_solve": 1.1749882698059082,
+  "solver_method": 1,
+  "solver_name": "bicgstab",
+  "converged": false,
+  "residual": 0.7347056530738979,
+  "nonl_iterations": 100,
+  "linear_iterations": 0,
+  "M_avg_z": 639257.7638650003,
+  "peak_memory_mb": 65.65234375,
+  "timing": {
+    "t_matrix_build": 0.0,
+    "t_lu_decomp": 0.0,
+    "t_hmatrix_build": 0.0,
+    "t_hmatrix_cluster": 0.0,
+    "t_hmatrix_frame": 0.0,
+    "t_hmatrix_fill": 0.0,
+    "t_linear_solve": 0.0,
+    "t_total": 1.1749882698059082
+  },
+  "maxh": 0.3
+}

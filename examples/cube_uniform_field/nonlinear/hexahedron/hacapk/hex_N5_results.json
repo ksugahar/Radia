@@ -1,0 +1,40 @@
+{
+  "element_type": "hex",
+  "mesh_description": "N=5",
+  "n_elements": 125,
+  "ndof": 750,
+  "H_ext": 200000.0,
+  "nonl_tol": 0.001,
+  "bicg_tol": 0.0001,
+  "hmat_eps": 0.0001,
+  "t_mesh": 0.0029990673065185547,
+  "t_solve": 0.25699710845947266,
+  "solver_method": 2,
+  "solver_name": "hacapk",
+  "converged": true,
+  "residual": 2.541341270578812e-05,
+  "nonl_iterations": 4,
+  "linear_iterations": 0,
+  "M_avg_z": 701751.1682110905,
+  "peak_memory_mb": 32.703125,
+  "timing": {
+    "t_matrix_build": 0.0,
+    "t_lu_decomp": 0.0,
+    "t_hmatrix_build": 0.0,
+    "t_hmatrix_cluster": 0.0,
+    "t_hmatrix_frame": 0.0,
+    "t_hmatrix_fill": 0.0,
+    "t_linear_solve": 0.0,
+    "t_total": 0.25699710845947266
+  },
+  "hmatrix": {
+    "n_lowrank": 26,
+    "n_dense": 158,
+    "max_rank": 46,
+    "compression_ratio": 0.021504,
+    "build_time": 0.2511753,
+    "memory_mb": 0.0,
+    "nlf": 184
+  },
+  "n_div": 5
+}

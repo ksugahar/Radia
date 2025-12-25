@@ -1,0 +1,40 @@
+{
+  "element_type": "tetra",
+  "mesh_description": "maxh=0.20m",
+  "n_elements": 627,
+  "ndof": 1881,
+  "H_ext": 200000.0,
+  "nonl_tol": 0.001,
+  "bicg_tol": 0.0001,
+  "hmat_eps": 0.0001,
+  "t_mesh": 0.11100053787231445,
+  "t_solve": 8.416931629180908,
+  "solver_method": 2,
+  "solver_name": "hacapk",
+  "converged": false,
+  "residual": 0.6050296605677804,
+  "nonl_iterations": 100,
+  "linear_iterations": 0,
+  "M_avg_z": 659157.4228910084,
+  "peak_memory_mb": 70.3671875,
+  "timing": {
+    "t_matrix_build": 0.0,
+    "t_lu_decomp": 0.0,
+    "t_hmatrix_build": 0.0,
+    "t_hmatrix_cluster": 0.0,
+    "t_hmatrix_frame": 0.0,
+    "t_hmatrix_fill": 0.0,
+    "t_linear_solve": 0.0,
+    "t_total": 8.416931629180908
+  },
+  "hmatrix": {
+    "n_lowrank": 554,
+    "n_dense": 1544,
+    "max_rank": 41,
+    "compression_ratio": 0.0,
+    "build_time": 0.19369740000000002,
+    "memory_mb": 0.0,
+    "nlf": 2098
+  },
+  "maxh": 0.2
+}
