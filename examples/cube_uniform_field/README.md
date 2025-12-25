@@ -1,124 +1,207 @@
 # Cube in Uniform Field Benchmark
 
-This folder contains benchmark examples for validating Radia's magnetostatic solver using a soft iron cube in a uniform external magnetic field.
+Radia magnetostatic solver benchmark for a soft iron cube in uniform external field.
 
-## Subfolder Structure
+## Folder Structure
 
 ```
 cube_uniform_field/
-  linear/       - Linear material (constant mu_r)
-  nonlinear/    - Nonlinear material (BH curve with saturation)
+├── linear/                  # Linear material (constant mu_r)
+│   ├── hexahedron/          # Hexahedral benchmark
+│   │   ├── benchmark_hex.py # Benchmark script
+│   │   ├── lu/              # Dense LU results
+│   │   ├── bicgstab/        # Dense BiCGSTAB results
+│   │   └── hacapk/          # H-matrix results
+│   └── tetrahedron/         # Tetrahedral benchmark
+│       ├── benchmark_tetra.py
+│       ├── lu/
+│       ├── bicgstab/
+│       └── hacapk/
+├── nonlinear/               # Nonlinear material (saturation BH curve)
+│   ├── benchmark_common.py  # Shared benchmark functions
+│   ├── generate_readme.py   # README generation script
+│   ├── hexahedron/          # Hexahedral benchmark
+│   │   ├── benchmark_hex.py
+│   │   ├── lu/
+│   │   ├── bicgstab/
+│   │   └── hacapk/
+│   └── tetrahedron/         # Tetrahedral benchmark
+│       ├── benchmark_tetra.py
+│       ├── lu/
+│       ├── bicgstab/
+│       └── hacapk/
+└── README.md                # This file
 ```
 
 ## Problem Description
 
-A soft iron cube is placed in a uniform external magnetic field H0 along the z-axis. This is a classic magnetostatic problem with known analytical solutions for the limiting cases.
+- **Geometry**: 1.0 m x 1.0 m x 1.0 m soft iron cube (centered at origin)
+- **External field**: H_z = 200,000 A/m
+- **Material**:
+  - Linear: Constant permeability mu_r = 1000 (chi = 999)
+  - Nonlinear: Saturation BH curve (soft iron)
+
+### Unified Parameters
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| H_ext | 200,000 A/m | External field |
+| hmat_eps | 1e-4 | ACA+ compression tolerance |
+| bicg_tol | 1e-4 | BiCGSTAB convergence |
+| nonl_tol | 0.001 | Nonlinear convergence |
 
 ---
 
-## Linear Material (`linear/`)
+## Nonlinear Benchmark Results (2025-12-26)
 
-Tests Radia's solver with constant permeability materials (MatLin).
+### Hexahedral Benchmark (Nonlinear)
 
-### Files
+#### N=5 (125 elements, 750 DOF)
 
-| File | Description |
-|------|-------------|
-| `benchmark_external_field.py` | Main benchmark: hex vs tet mesh comparison |
-| `benchmark_mesh_convergence.py` | Mesh refinement convergence study |
-| `benchmark_solver_methods.py` | Method 0 vs Method 1 comparison |
-| `benchmark_tetra_vs_hex.py` | Tetrahedral vs hexahedral accuracy |
-| `benchmark_tetra_vs_ngsolve.py` | Radia vs NGSolve FEM reference |
-| `benchmark_high_mu.py` | High permeability (mu_r > 1000) tests |
-| `compare_external_field.py` | Field comparison at external points |
-| `evaluate_perturbation_field.py` | Perturbation field analysis |
-| `precision_evaluation.py` | Numerical precision evaluation |
-| `test_method9_high_mu.py` | Method 9 high-mu validation |
-| `test_method9_fine_mesh.py` | Method 9 fine mesh validation |
-| `cube_benchmark_external_field.py` | Legacy benchmark script |
-| `cube_benchmark_radia.vtk` | VTK output for visualization |
-| `README.md` | Detailed documentation |
-| `README_CUBE_BENCHMARK.md` | Legacy benchmark documentation |
+| M_avg_z | Solver | Memory | Nonl | Time |
+|--------:|--------|-------:|-----:|-----:|
+| 702,132 | Dense LU | 34 MB | 6 | 0.69s |
+| 702,114 | Dense BiCGSTAB | 32 MB | 3 | 0.23s |
+| 701,751 | H-matrix | 33 MB | 4 | 0.26s |
 
-### Key Results
+#### N=10 (1,000 elements, 6,000 DOF)
 
-- **Mesh types**: Hexahedral (ObjPolyhdr) and Tetrahedral (Netgen import)
-- **Solver methods**: Method 0 (LU), Method 1 (BiCGSTAB)
-- **Reference**: NGSolve FEM solution for validation
-- **Accuracy**: Tetrahedral achieves <1% error vs hexahedral reference
+| M_avg_z | Solver | Memory | Nonl | Time |
+|--------:|--------|-------:|-----:|-----:|
+| 716,281 | Dense LU | 61 MB | 13 | 18.5s |
+| 716,318 | Dense BiCGSTAB | 37 MB | 5 | 13.2s |
+| 715,883 | H-matrix | 39 MB | 5 | 5.0s |
 
----
+#### N=15 (3,375 elements, 20,250 DOF)
 
-## Nonlinear Material (`nonlinear/`)
+| M_avg_z | Solver | Memory | Nonl | Time |
+|--------:|--------|-------:|-----:|-----:|
+| 719,832 | Dense LU | 124 MB | 35 | 1021s |
+| 719,875 | Dense BiCGSTAB | 53 MB | 29 | 348s |
+| 719,399 | H-matrix | 59 MB | 26 | **36s** |
 
-Tests Radia's nonlinear solver with saturable BH curves.
+#### N=20 (8,000 elements, 48,000 DOF)
 
-### Files
+| M_avg_z | Solver | Memory | Nonl | Time |
+|--------:|--------|-------:|-----:|-----:|
+| - | Dense LU | OOM | - | - |
+| - | Dense BiCGSTAB | OOM | - | - |
+| 720,829 | H-matrix | 95 MB | 25 | **121s** |
 
-| File | Description |
-|------|-------------|
-| `benchmark_solver_methods.py` | LU vs BiCGSTAB solver comparison |
-| `benchmark_bicgstab_hex.py` | BiCGSTAB with/without H-matrix |
-| `benchmark_nonlinear_tetra_vs_hex.py` | Tetra vs hex for nonlinear materials |
-| `compare_radia_elfmagic_field.py` | Radia vs ELF/MAGIC comparison |
-| `README.md` | Detailed documentation with benchmark results |
+### Tetrahedral Benchmark (Nonlinear, Netgen mesh)
 
-### Result Files (JSON)
+**Note**: Only LU converges. BiCGSTAB and HACApK do not converge within 100 iterations.
 
-| File | Description |
-|------|-------------|
-| `radia_lu_N10_results.json` | LU solver, 10x10x10 mesh |
-| `radia_lu_N15_results.json` | LU solver, 15x15x15 mesh |
-| `radia_lu_N20_results.json` | LU solver, 20x20x20 mesh |
-| `radia_bicgstab_N10_results.json` | BiCGSTAB, 10x10x10 mesh |
-| `radia_bicgstab_N15_results.json` | BiCGSTAB, 15x15x15 mesh |
-| `radia_bicgstab_N20_results.json` | BiCGSTAB, 20x20x20 mesh |
-| `radia_bicgstab_hmatrix_N*.json` | BiCGSTAB with H-matrix |
-| `radia_bicgstab_benchmark_summary.json` | All BiCGSTAB results combined |
+#### maxh=0.30m (200 elements, 600 DOF)
 
-### Key Results (2025-12-22)
+| M_avg_z | Solver | Memory | Nonl | Time | Converged |
+|--------:|--------|-------:|-----:|-----:|-----------|
+| 726,577 | Dense LU | 66 MB | 14 | 0.87s | Yes |
+| 639,258 | Dense BiCGSTAB | 66 MB | 100 | 1.18s | No |
+| 715,943 | H-matrix | 67 MB | 100 | 1.30s | No |
 
-| N | Elements | DOF | LU Time | Iter | M_avg_z (A/m) |
-|---|----------|-----|---------|------|---------------|
-| 3 | 27 | 162 | 0.05s | 5 | 679,134 |
-| 5 | 125 | 750 | 0.30s | 6 | 702,129 |
-| 8 | 512 | 3072 | 7.28s | 7 | 713,064 |
-| 10 | 1000 | 6000 | 53.6s | 13 | 716,275 |
+#### maxh=0.15m (2,211 elements, 6,633 DOF)
 
-**Key Findings**:
-1. LU solver is recommended for nonlinear problems (N <= 10)
-2. ELF-compatible B-field convergence (mucal2) implemented
-3. Radia matches ELF iteration count and M_avg_z within 0.01%
+| M_avg_z | Solver | Memory | Nonl | Time | Converged |
+|--------:|--------|-------:|-----:|-----:|-----------|
+| 730,715 | Dense LU | 92 MB | 29 | 181s | Yes |
+| 710,935 | Dense BiCGSTAB | 76 MB | 100 | 415s | No |
+| 706,867 | H-matrix | 82 MB | 100 | 119s | No |
+
+#### maxh=0.10m (4,994 elements, 14,982 DOF)
+
+| M_avg_z | Solver | Memory | Nonl | Time | Converged |
+|--------:|--------|-------:|-----:|-----:|-----------|
+| 730,996 | Dense LU | 104 MB | 39 | 1813s | Yes |
+| - | Dense BiCGSTAB | - | 100 | - | No |
+| 691,313 | H-matrix | 95 MB | 100 | 421s | No |
 
 ---
 
-## Quick Start
+## Key Findings
 
-```python
-import radia as rad
-rad.FldUnits('m')  # Required for NGSolve compatibility
+### Hexahedral Elements (Good Convergence)
 
-# Linear material benchmark
-cd examples/cube_uniform_field/linear
-python benchmark_external_field.py
+1. **All solvers converge**: LU, BiCGSTAB, HACApK all work
+2. **H-matrix is fastest**: 28x faster than LU at N=15, 10x faster than BiCGSTAB
+3. **N=20 requires H-matrix**: Dense solvers run out of memory
 
-# Nonlinear material benchmark
-cd examples/cube_uniform_field/nonlinear
-python benchmark_solver_methods.py 10 --all
+### Tetrahedral Elements (Convergence Issues)
+
+1. **Only LU converges**: BiCGSTAB and HACApK fail to converge
+2. **Different behavior from ELF**: ELF converges with all solvers
+3. **Under investigation**: Radia tetrahedral nonlinear solver needs debugging
+
+### Solver Recommendations
+
+| Element Type | Problem Size | Recommended Solver |
+|--------------|--------------|-------------------|
+| Hexahedral | DOF < 6,000 | BiCGSTAB |
+| Hexahedral | DOF 6,000-20,000 | HACApK |
+| Hexahedral | DOF > 20,000 | **HACApK required** |
+| Tetrahedral | All sizes | **LU only** (temporary) |
+
+---
+
+## Computational Complexity
+
+| Solver | Time | Memory |
+|--------|------|--------|
+| Dense LU | O(N^3) | O(N^2) |
+| Dense BiCGSTAB | O(N^2)/iter | O(N^2) |
+| BiCGSTAB+H-matrix | **O(N log N)** | **O(N log N)** |
+
+---
+
+## H-matrix Statistics (Hexahedral)
+
+| N | DOF | lowrank | dense | max_rank | leaves |
+|---|-----|---------|-------|----------|--------|
+| 5 | 750 | 26 | 158 | 46 | 184 |
+| 10 | 6,000 | 1,166 | 2,024 | 90 | 3,190 |
+| 15 | 20,250 | 8,262 | 9,124 | 79 | 17,386 |
+| 20 | 48,000 | 17,976 | 20,656 | 99 | 38,632 |
+
+---
+
+## BH Curve (Nonlinear Material)
+
+```
+H [A/m]     B [T]     Notes
+0           0.0
+100         0.1       Initial mu_r ~ 800
+200         0.3
+500         0.8
+1000        1.2
+2000        1.5       Saturation begins
+5000        1.7
+10000       1.8
+50000       2.0       Strong saturation
+100000      2.1
 ```
 
-## Related Examples
+---
 
-- `examples/electromagnet/` - Electromagnet with iron yoke
-- `examples/simple_problems/` - Basic magnetostatic problems
-- `examples/solver_benchmarks/` - H-matrix and solver performance tests
+## Usage
 
-## References
+### Hexahedral Benchmark
 
-1. Chubar, O., Elleaume, P. "Accurate and Efficient Computation of Synchrotron Radiation in the Near Field Region". EPAC98.
-2. ELF/MAGIC - Magnetostatic Analysis using Generalized Integral Computations
-3. HACApK - Lattice H-matrix Approximation on Parallel Kernel (reference implementation)
+```bash
+cd nonlinear/hexahedron
+python benchmark_hex.py --lu 5 10 15
+python benchmark_hex.py --bicgstab 5 10 15
+python benchmark_hex.py --hacapk 5 10 15 20
+```
+
+### Tetrahedral Benchmark
+
+```bash
+cd nonlinear/tetrahedron
+python benchmark_tetra.py --lu 0.30 0.25 0.20 0.15 0.10
+python benchmark_tetra.py --bicgstab 0.30 0.25 0.20 0.15 0.10
+python benchmark_tetra.py --hacapk 0.30 0.25 0.20 0.15 0.10
+```
 
 ---
 
-**Last Updated**: 2025-12-22
+**Last Updated**: 2025-12-26

@@ -1,0 +1,31 @@
+{
+  "element_type": "hex",
+  "mesh_description": "N=15",
+  "n_elements": 3375,
+  "ndof": 20250,
+  "H_ext": 200000.0,
+  "nonl_tol": 0.001,
+  "bicg_tol": 0.0001,
+  "hmat_eps": null,
+  "t_mesh": 0.08899593353271484,
+  "t_solve": 347.9088325500488,
+  "solver_method": 1,
+  "solver_name": "bicgstab",
+  "converged": true,
+  "residual": 0.0008228580683269371,
+  "nonl_iterations": 29,
+  "linear_iterations": 0,
+  "M_avg_z": 719874.8702311856,
+  "peak_memory_mb": 52.80859375,
+  "timing": {
+    "t_matrix_build": 0.0,
+    "t_lu_decomp": 0.0,
+    "t_hmatrix_build": 0.0,
+    "t_hmatrix_cluster": 0.0,
+    "t_hmatrix_frame": 0.0,
+    "t_hmatrix_fill": 0.0,
+    "t_linear_solve": 0.0,
+    "t_total": 347.9088325500488
+  },
+  "n_div": 15
+}
