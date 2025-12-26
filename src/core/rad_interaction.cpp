@@ -139,13 +139,11 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 		// Skip dense matrix construction for H-matrix solver (HACApK)
 		// H-matrix builds its own compressed matrix, no need for dense matrix
 		// Just allocate the auxiliary arrays needed for nonlinear iteration
-		if(m_hasVariableDOF)
-		{
-			// Allocate flat arrays for variable DOF (needed for chi update)
-			m_flatExternFieldArray.resize(m_totalDOF, 0.0);
-			m_flatMagnArray.resize(m_totalDOF, 0.0);
-			m_flatFieldArray.resize(m_totalDOF, 0.0);
-		}
+		// Allocate flat arrays (always needed now for unified solver)
+		// Note: ComputeDOFOffsets() already called above at line 134
+		m_flatExternFieldArray.resize(m_totalDOF, 0.0);
+		m_flatMagnArray.resize(m_totalDOF, 0.0);
+		m_flatFieldArray.resize(m_totalDOF, 0.0);
 		// Allocate standard arrays (needed for chi update in nonlinear iteration)
 		vNewMagnArray.resize(AmOfMainElem);
 		vNewFieldArray.resize(AmOfMainElem);
@@ -157,18 +155,9 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	else
 	{
 		// Build full dense interaction matrix (for LU/BiCGSTAB solvers)
-		if(m_hasVariableDOF)
-		{
-			// Use variable DOF interaction matrix for 6 DOF MSC hexahedra
-			// This provides better convergence for deformed/rotated hexahedra
-			setupResult = SetupInteractMatrix_VariableDOF();
-		}
-		else
-		{
-			// Use standard 3x3 interaction matrix for tetrahedra and standard elements
-			// The surface charge (MSC) method is used by both Radia and production solvers.
-			setupResult = SetupInteractMatrix();
-		}
+		// Always use VariableDOF matrix format for unified nonlinear solver
+		// This works for both 3DOF (tetrahedra) and 6DOF (hexahedra) elements
+		setupResult = SetupInteractMatrix_VariableDOF();
 	}
 	if(!setupResult) { DeallocateMemory(); return 0;} //OC26122019 //Most CPU-intensive
 
@@ -842,16 +831,14 @@ void radTInteraction::SetupVariableDOFArrays()
 int radTInteraction::SetupInteractMatrix_VariableDOF()
 {
 	// Build interaction matrix with variable DOF blocks
-	// This is called when m_hasVariableDOF is true
+	// This function now builds flat matrix format for BOTH 3DOF and 6DOF elements
+	// This enables using the unified nonlinear solver for all element types
 
 	// First compute DOF offsets
 	ComputeDOFOffsets();
 
-	if(!m_hasVariableDOF)
-	{
-		// All elements have 3 DOF, use standard matrix setup
-		return SetupInteractMatrix();
-	}
+	// Note: We no longer redirect to SetupInteractMatrix() for 3DOF-only cases
+	// The flat matrix format is needed for the unified VariableDOF solver
 
 	// Allocate flattened interaction matrix
 	m_flatInteractMatrix.resize(m_totalDOF * m_totalDOF, 0.0);
@@ -1138,8 +1125,8 @@ void radTInteraction::SetupExternFieldArray()
 
 	for(int k=0; k<AmOfMainElem; k++) ExternFieldArray[k] = ZeroVect;
 
-	// Also zero m_flatExternFieldArray for variable DOF
-	if(m_hasVariableDOF && !m_flatExternFieldArray.empty())
+	// Also zero m_flatExternFieldArray (always used now with unified solver)
+	if(!m_flatExternFieldArray.empty())
 	{
 		for(size_t i = 0; i < m_flatExternFieldArray.size(); i++)
 			m_flatExternFieldArray[i] = 0.0;
@@ -1166,8 +1153,8 @@ void radTInteraction::SetupExternFieldArray()
 		EmptyTransPtrVect();
 	}
 
-	// Populate m_flatExternFieldArray for variable DOF elements
-	if(m_hasVariableDOF && !m_flatExternFieldArray.empty() && AmOfExtElem > 0)
+	// Populate m_flatExternFieldArray (always used now with unified solver)
+	if(!m_flatExternFieldArray.empty() && AmOfExtElem > 0)
 	{
 		for(int StrNo = 0; StrNo < AmOfMainElem; StrNo++)
 		{
@@ -1246,8 +1233,8 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 			ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrVectField_inv(Field.H);
 		}
 
-		// Also populate m_flatExternFieldArray for variable DOF elements
-		if(m_hasVariableDOF && !m_flatExternFieldArray.empty())
+		// Also populate m_flatExternFieldArray (always used now with unified solver)
+		if(!m_flatExternFieldArray.empty())
 		{
 			for(int StrNo = 0; StrNo < AmOfMainElem; StrNo++)
 			{

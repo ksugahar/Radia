@@ -86,6 +86,8 @@ def run_nonlinear_benchmark(
     nonl_tol: float = 0.001,
     bicg_tol: float = 1e-4,
     hmat_eps: float = 1e-4,
+    hmat_leaf_size: int = 10,
+    hmat_eta: float = 2.0,
     extra_data: Optional[Dict[str, Any]] = None
 ) -> Optional[Dict[str, Any]]:
     """Run nonlinear benchmark with specified solver.
@@ -98,9 +100,11 @@ def run_nonlinear_benchmark(
         element_type: 'hex' or 'tetra'
         mesh_description: Human-readable mesh description (e.g., 'N=10' or 'maxh=0.35m')
         t_mesh: Mesh generation time in seconds
-        nonl_tol: Nonlinear iteration convergence tolerance
-        bicg_tol: BiCGSTAB convergence tolerance
-        hmat_eps: ACA tolerance for H-matrix
+        nonl_tol: Nonlinear iteration convergence tolerance (ELF default: 0.001)
+        bicg_tol: BiCGSTAB convergence tolerance (ELF default: 1e-4)
+        hmat_eps: ACA tolerance for H-matrix (ELF default: 1e-4)
+        hmat_leaf_size: H-matrix leaf size (ELF default: 10)
+        hmat_eta: H-matrix admissibility parameter (ELF default: 2.0)
         extra_data: Additional data to include in result JSON
 
     Returns:
@@ -127,9 +131,9 @@ def run_nonlinear_benchmark(
     hmatrix_enabled = False
     if solver_method == 2:
         try:
-            rad.SetHACApKParams(hmat_eps, 10, 2.0)
+            rad.SetHACApKParams(hmat_eps, hmat_leaf_size, hmat_eta)
             hmatrix_enabled = True
-            print('H-matrix: Enabled (eps=%.0e, leaf_size=10, eta=2.0)' % hmat_eps)
+            print('H-matrix: Enabled (eps=%.0e, leaf_size=%d, eta=%.1f)' % (hmat_eps, hmat_leaf_size, hmat_eta))
         except AttributeError:
             print('H-matrix: Not available (API not found)')
 
@@ -198,17 +202,24 @@ def run_nonlinear_benchmark(
         'n_elements': n_elements,
         'ndof': ndof,
         'H_ext': H_EXT,
+        # Solver parameters (ELF-compatible)
         'nonl_tol': nonl_tol,
         'bicg_tol': bicg_tol if solver_type in ['bicgstab', 'hacapk'] else None,
         'hmat_eps': hmat_eps if solver_type == 'hacapk' else None,
+        'hmat_leaf_size': hmat_leaf_size if solver_type == 'hacapk' else None,
+        'hmat_eta': hmat_eta if solver_type == 'hacapk' else None,
+        # Timing
         't_mesh': t_mesh,
         't_solve': t_solve,
+        # Solver identification
         'solver_method': solver_method,
         'solver_name': solver_type,
+        # Convergence
         'converged': converged,
         'residual': residual,
         'nonl_iterations': n_iter,
         'linear_iterations': n_linear_iter,
+        # Results
         'M_avg_z': M_avg_z,
     }
 
@@ -236,7 +247,12 @@ def run_nonlinear_benchmark(
             'compression_ratio': hmat_info.get('compression', 0.0),
             'build_time': hmat_info.get('build_time', 0.0),
             'memory_mb': hmat_info.get('memory_mb', 0.0),
+            'dense_memory_mb': hmat_info.get('dense_memory_mb', 0.0),
             'nlf': hmat_info.get('n_leaves', 0),
+            # Solver parameters used
+            'hmat_eps': hmat_eps,
+            'leaf_size': hmat_leaf_size,
+            'eta': hmat_eta,
         }
 
     # Add extra data if provided

@@ -2433,7 +2433,7 @@ static PyObject* radia_GetHACApKStats(PyObject* self, PyObject* args)
 	PyObject *oRes=0;
 	try
 	{
-		double dOut[12];
+		double dOut[14];
 		int nOut = 0;
 
 		g_pyParse.ProcRes(RadGetHACApKStats(dOut, &nOut));
@@ -2446,9 +2446,26 @@ static PyObject* radia_GetHACApKStats(PyObject* self, PyObject* args)
 		}
 
 		// Return as dictionary for easy Python access
-		// nOut >= 10 means new timing stats are available
-		if(nOut >= 10)
+		// nOut >= 12 means memory stats are available
+		if(nOut >= 12)
 		{
+			oRes = Py_BuildValue("{s:i,s:i,s:i,s:i,s:i,s:d,s:d,s:d,s:d,s:i,s:d,s:d}",
+				"n_lowrank", (int)dOut[0],
+				"n_dense", (int)dOut[1],
+				"max_rank", (int)dOut[2],
+				"n_leaves", (int)dOut[3],
+				"n_dof", (int)dOut[4],
+				"compression", dOut[5],
+				"build_time", dOut[6],
+				"t_hmatrix_build", dOut[7],
+				"t_linear_solve", dOut[8],
+				"linear_iterations", (int)dOut[9],
+				"memory_mb", dOut[10],
+				"dense_memory_mb", dOut[11]);
+		}
+		else if(nOut >= 10)
+		{
+			// Format with timing stats but without memory
 			oRes = Py_BuildValue("{s:i,s:i,s:i,s:i,s:i,s:d,s:d,s:d,s:d,s:i}",
 				"n_lowrank", (int)dOut[0],
 				"n_dense", (int)dOut[1],
@@ -2570,6 +2587,66 @@ static PyObject* radia_GetRelaxParam(PyObject* self, PyObject* args)
 
 		oRes = Py_BuildValue("d", relax);
 		if(oRes) Py_XINCREF(oRes);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * GetSolveStats: Gets solve statistics from last Solve() call
+ * Returns a dictionary with:
+ *   - t_matrix_build: Interaction matrix construction time [s]
+ *   - t_linear_solve: Total linear solver time [s] (LU or BiCGSTAB)
+ *   - linear_iterations: Total linear iterations (BiCGSTAB only, 0 for LU)
+ *   - nonl_iterations: Total nonlinear iterations
+ ***************************************************************************/
+static PyObject* radia_GetSolveStats(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		double dOut[8];
+		int nOut = 0;
+
+		g_pyParse.ProcRes(RadGetSolveStats(dOut, &nOut));
+
+		if(nOut == 0)
+		{
+			// No stats available
+			Py_INCREF(Py_None);
+			return Py_None;
+		}
+
+		// Return as dictionary for easy Python access
+		oRes = PyDict_New();
+		if(oRes == 0) throw "Failed to create dictionary";
+
+		PyDict_SetItemString(oRes, "t_matrix_build", PyFloat_FromDouble(dOut[0]));
+		PyDict_SetItemString(oRes, "t_linear_solve", PyFloat_FromDouble(dOut[1]));
+		PyDict_SetItemString(oRes, "linear_iterations", PyLong_FromLong((long)dOut[2]));
+		PyDict_SetItemString(oRes, "nonl_iterations", PyLong_FromLong((long)dOut[3]));
+
+		// OpenMP status (if available)
+		if(nOut >= 6)
+		{
+			PyDict_SetItemString(oRes, "openmp_enabled", PyBool_FromLong((long)dOut[4]));
+			PyDict_SetItemString(oRes, "openmp_max_threads", PyLong_FromLong((long)dOut[5]));
+		}
+
+		// LU decomposition time (if available)
+		if(nOut >= 7)
+		{
+			PyDict_SetItemString(oRes, "t_lu_decomp", PyFloat_FromDouble(dOut[6]));
+		}
+
+		// H-matrix build time (if available, Method 2 only)
+		if(nOut >= 8)
+		{
+			PyDict_SetItemString(oRes, "t_hmatrix_build", PyFloat_FromDouble(dOut[7]));
+		}
 	}
 	catch(const char* erText)
 	{
@@ -3528,6 +3605,7 @@ static PyMethodDef radia_methods[] = {
 	{"GetBiCGSTABTol", radia_GetBiCGSTABTol, METH_VARARGS, "GetBiCGSTABTol() returns current BiCGSTAB inner loop tolerance."},
 	{"SetRelaxParam", radia_SetRelaxParam, METH_VARARGS, "SetRelaxParam(relax) sets under-relaxation coefficient for nonlinear iteration. relax=0.0 (default) means full Newton step. relax=0.0-1.0 applies damping: chi_new = chi_new*(1-relax) + chi_old*relax. Use under-relaxation (e.g., 0.3) if convergence is slow or oscillating. Call before Solve()."},
 	{"GetRelaxParam", radia_GetRelaxParam, METH_VARARGS, "GetRelaxParam() returns current under-relaxation coefficient."},
+	{"GetSolveStats", radia_GetSolveStats, METH_VARARGS, "GetSolveStats() returns solve statistics from last Solve() call. Returns dict with: t_matrix_build (interaction matrix construction time [s]), t_linear_solve (total linear solver time [s]), linear_iterations (BiCGSTAB iterations, 0 for LU), nonl_iterations (nonlinear iterations). Returns None if no solve has been performed."},
 
 	{"Fld", radia_Fld, METH_VARARGS,  "Fld(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x,y,z]|[[x1,y1,z1],[x2,y2,z2],...]) computes magnetic field created by the object obj in point(s) {x,y,z} ({x1,y1,z1},{x2,y2,z2},...). The field component is specified by the second input variable. The function accepts a list of 3D points of arbitrary nestness: in this case it returns the corresponding list of magnetic field values."},
 	{"FldLst", radia_FldLst, METH_VARARGS,  "FldLst(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x1,y1,z1],[x2,y2,z2],np,'arg|noarg':'noarg',strt:0.) computes magnetic field created by object obj in np equidistant points along a line segment from [x1,y1,z1] to [x2,y2,z2]; the field component is specified by the second input variable; the 'arg|noarg' string variable specifies whether to output a longitudinal position for each point where the field is computed, and strt gives the start-value for the longitudinal position."},

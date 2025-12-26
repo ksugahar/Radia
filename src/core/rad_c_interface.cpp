@@ -150,6 +150,7 @@ void SolveGenNonl( int, double, int, int, int );
 void SetHACApKParams( double, int, double );
 void GetHACApKStats( double*, int* );
 #endif
+void GetSolveStats( double*, int* );
 void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
@@ -1612,6 +1613,13 @@ void GetHACApKStats(double* dOut, int* nOut)
 	rad.GetHACApKStats(dOut, nOut);
 }
 #endif
+
+//-------------------------------------------------------------------------
+
+void GetSolveStats(double* dOut, int* nOut)
+{
+	rad.GetSolveStats(dOut, nOut);
+}
 
 //-------------------------------------------------------------------------
 

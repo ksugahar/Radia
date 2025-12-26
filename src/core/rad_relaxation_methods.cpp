@@ -1255,27 +1255,18 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 
 		if(dof == 3)
 		{
-			// Standard 3DOF element: use isotropic chi from elemChiArray (same as LU solver)
-			// This ensures consistent behavior with LU and proper nonlinear convergence
-			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
-			radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
-
+			// 3DOF MMM element: use SAME equation as LU solver
+			// Equation: (-N + I/chi) * M = H_ext
 			// Use isotropic chi from elemChiArray (computed in outer loop)
 			double chi = elemChiArray[elem];
 			if(chi < 1.0e-6) chi = 1.0e-6;
 			double inv_chi_val = 1.0 / chi;
 
-			// Get Mr for RHS (remanent magnetization for permanent magnet materials)
-			TVector3d InstH(FlatField[offset], FlatField[offset+1], FlatField[offset+2]);
-			TMatrix3d KsiTensor;
-			TVector3d MrVect;
-			MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
-			double Mr_vals[3] = {MrVect.x, MrVect.y, MrVect.z};
-
 			for(int k = 0; k < 3; k++)
 			{
 				inv_chi[offset + k] = inv_chi_val;  // Same chi for all 3 components
-				rhs[offset + k] = FlatExtern[offset + k] + Mr_vals[k] * inv_chi_val;
+				// RHS = H_ext (same as LU solver, no Mr term for nonlinear isotropic materials)
+				rhs[offset + k] = FlatExtern[offset + k];
 			}
 		}
 		else if(dof == 6)
@@ -1919,6 +1910,9 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
 
+	// Set statistics for GetSolveStats
+	rad.m_solve_linear_iterations = totalIterCount;
+
 	return outerIter;
 }
 
@@ -2043,27 +2037,23 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, doub
 
 		if(dof == 3)
 		{
-			// Standard 3DOF element: use isotropic chi from elemChiArray (same as LU/BiCGSTAB)
+			// 3DOF MMM element: use SAME equation as LU solver
+			// Equation: (-N + I/chi) * M = H_ext
+			// Use isotropic chi from elemChiArray (computed in outer loop)
 			double chi = elemChiArray[elem];
 			if(chi < 1.0e-6) chi = 1.0e-6;
 			double inv_chi_val = 1.0 / chi;
 
-			// Get Mr for RHS (remanent magnetization for permanent magnet materials)
-			TVector3d InstH(FlatField[offset], FlatField[offset+1], FlatField[offset+2]);
-			TMatrix3d KsiTensor;
-			TVector3d MrVect;
-			MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
-			double Mr_vals[3] = {MrVect.x, MrVect.y, MrVect.z};
-
 			for(int k = 0; k < 3; k++)
 			{
 				inv_chi[offset + k] = inv_chi_val;  // Same chi for all 3 components
-				rhs[offset + k] = FlatExtern[offset + k] + Mr_vals[k] * inv_chi_val;
+				// RHS = H_ext (same as LU solver, no Mr term for nonlinear isotropic materials)
+				rhs[offset + k] = FlatExtern[offset + k];
 			}
 		}
 		else if(dof == 6)
 		{
-			// For 6DOF: use isotropic chi from poly->CurrentChi (same as BiCGSTAB)
+			// For 6DOF MSC: use isotropic chi from poly->CurrentChi (same as BiCGSTAB)
 			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
 			double chi = (poly && poly->Use6DOF_MSC && poly->CurrentChi > 1.0e-6)
 			           ? poly->CurrentChi : 1.0;
@@ -2770,6 +2760,12 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	}
 
 	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
+
+	// Set statistics for GetSolveStats (ELF-compatible)
+	rad.m_solve_linear_iterations = rad.m_linear_iterations;  // Copy from HACApK-specific counter
+	rad.m_solve_t_linear_solve = rad.m_timing_linear_solve;   // Copy linear solve time
+	rad.m_solve_t_matrix_build = rad.m_timing_hmatrix_build;  // H-matrix build time as matrix build
+
 	return outerIter;
 }
 
