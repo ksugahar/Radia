@@ -131,13 +131,10 @@ public:
 	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 
 private:
-	// BiCGSTAB iterative solver
-	// Solves: A*x = b using BiCGSTAB with Jacobi preconditioner
-	// Returns number of iterations (0 on failure)
-	int SolveBiCGSTAB(int ndof, double tol, int max_iter, double& residual);
-
 	// Variable DOF version of BiCGSTAB
-	int SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, int max_iter, double& residual);
+	// elemChiArray: isotropic chi for each element (3DOF elements use this, 6DOF uses poly->CurrentChi)
+	int SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, int max_iter, double& residual,
+	                              const std::vector<double>& elemChiArray);
 
 	// Matrix-vector product
 	// Computes: y = A * x where A = -N + diag(1/chi)
