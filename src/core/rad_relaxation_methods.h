@@ -227,7 +227,9 @@ private:
 
 	// BiCGSTAB with H-matrix for 6DOF MSC hexahedra
 	// Returns number of iterations (0 on failure)
-	int SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, double tol, int max_iter, double& residual);
+	// elemChiArray: isotropic chi for each element (3DOF elements use this, 6DOF uses poly->CurrentChi)
+	int SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, double tol, int max_iter, double& residual,
+	                                       const std::vector<double>& elemChiArray);
 
 	// Matrix-vector product using H-matrix for 6DOF MSC hexahedra
 	void MatVec_HMatrix_VariableDOF(const std::vector<double>& x, std::vector<double>& y, int totalDOF);
