@@ -728,12 +728,6 @@ void radTApplication::DumpElem(int* arKeys, int nElem, const char* strFormat, bo
 			if(nDrwAttrFound > 0) oStr.setFromPos(drwAttrOfst, nDrwAttrFound);
 
 			Send.ByteString(reinterpret_cast<const unsigned char*>(oStr.data()), (long)oStr.size());
-
-			//DEBUG
-			//CAuxBinStrVect inStr(reinterpret_cast<const unsigned char*>(oStr.data()), (long)oStr.size());
-			//int i0, i1, i2, i3, i4, i5, i6;
-			//inStr >> i0; inStr >> i1; inStr >> i2; inStr >> i3; inStr >> i4; inStr >> i5; inStr >> i6;
-			//END DEBUG
 		}
 		else 
 		{

@@ -587,12 +587,6 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 			}
 		}
 
-		//DEBUG
-		//long long nTotMatrElem = ((long long)AmOfMainElem)*((long long)AmOfMainElem);
-		//std::cout << "rank=" << m_rankMPI << ": iCntBcomp= " << iCntBcomp << "; nTotMatrElem=" << nTotMatrElem; //DEBUG
-		//std::cout.flush();
-		//END DEBUG
-
 		// SELF-INTERACTION NOTE for tetrahedral elements:
 		// For tetrahedral elements with correct coordinate transforms, B_comp() should
 		// compute correct self-demagnetization (~-1/3). If there are issues, they may
@@ -624,117 +618,6 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 	}
 	return 1; //OC26122019
 }
-
-//-------------------------------------------------------------------------
-//=========================================================================
-// DEPRECATED: Dipole-Dipole Interaction Matrix
-//
-// This method was tested but found numerically unstable.
-// Kept for historical reference. Results varied wildly with mesh size (117K-549K A/m).
-// Radia production code uses surface charge (MSC) method.
-//
-// The dipole-dipole approximation:
-//   Diagonal (self-demagnetization): N_ii = 1/3 * I  (isotropic, sphere approx)
-//   Off-diagonal: N_ij = (V_j / 4*pi) * (3*r*r^T/r^5 - I/r^3)
-//
-// Problems:
-// 1. N_self=1/3 is only exact for spheres, not tetrahedra
-// 2. Far-field approximation breaks down for adjacent elements
-//=========================================================================
-//-------------------------------------------------------------------------
-#if 0  // DISABLED - numerically unstable, kept for reference
-int radTInteraction::SetupInteractMatrix_DipoleDipole()
-{
-	const double PI = 3.14159265358979323846;
-	const double ONE_OVER_4PI = 1.0 / (4.0 * PI);
-	const double ONE_THIRD = 1.0 / 3.0;
-
-	TVector3d ZeroVect(0., 0., 0.);
-
-	if(m_nProcMPI < 2)
-	{
-		for(int ColNo = 0; ColNo < AmOfMainElem; ColNo++)
-		{
-			radTg3dRelax* elem_col = g3dRelaxPtrVect[ColNo];
-			TVector3d center_col = MainTransPtrArray[ColNo]->TrPoint(elem_col->ReturnCentrPoint());
-			double vol_col = elem_col->Volume();
-
-			for(int StrNo = 0; StrNo < AmOfMainElem; StrNo++)
-			{
-				radTg3dRelax* elem_row = g3dRelaxPtrVect[StrNo];
-				TVector3d center_row = MainTransPtrArray[StrNo]->TrPoint(elem_row->ReturnCentrPoint());
-
-				TMatrix3d SubMatrix(ZeroVect, ZeroVect, ZeroVect);
-
-				if(ColNo == StrNo)
-				{
-					// Diagonal: self-demagnetization N_self = 1/3 * I
-					// This is the exact value for a uniformly magnetized sphere
-					// and a good approximation for compact elements
-					SubMatrix.Str0.x = -ONE_THIRD;
-					SubMatrix.Str1.y = -ONE_THIRD;
-					SubMatrix.Str2.z = -ONE_THIRD;
-				}
-				else
-				{
-					// Off-diagonal: dipole-dipole interaction
-					// r = center_row - center_col (displacement from source to target)
-					TVector3d r;
-					r.x = center_row.x - center_col.x;
-					r.y = center_row.y - center_col.y;
-					r.z = center_row.z - center_col.z;
-
-					double dist2 = r.x*r.x + r.y*r.y + r.z*r.z;
-					double dist = sqrt(dist2);
-					double dist3 = dist2 * dist;
-					double dist5 = dist3 * dist2;
-
-					// Coefficient: -vol_col / (4*pi)
-					// NEGATIVE sign because Radia stores demagnetization tensor (H_demag = N*M)
-					// and the dipole field H = +N_dipole*M enhances magnetization,
-					// while demagnetization opposes it.
-					double coef = -vol_col * ONE_OVER_4PI;
-
-					// Demagnetization tensor: N_ij = -coef * (3*r*r^T/r^5 - I/r^3)
-					// (negative of dipole field tensor)
-
-					double coef_r3 = coef / dist3;
-					double coef_r5_3 = 3.0 * coef / dist5;
-
-					// Row 0: dH_demag/dMx
-					SubMatrix.Str0.x = coef_r5_3 * r.x * r.x - coef_r3;
-					SubMatrix.Str0.y = coef_r5_3 * r.x * r.y;
-					SubMatrix.Str0.z = coef_r5_3 * r.x * r.z;
-
-					// Row 1: dH_demag/dMy
-					SubMatrix.Str1.x = coef_r5_3 * r.y * r.x;
-					SubMatrix.Str1.y = coef_r5_3 * r.y * r.y - coef_r3;
-					SubMatrix.Str1.z = coef_r5_3 * r.y * r.z;
-
-					// Row 2: dH_demag/dMz
-					SubMatrix.Str2.x = coef_r5_3 * r.z * r.x;
-					SubMatrix.Str2.y = coef_r5_3 * r.z * r.y;
-					SubMatrix.Str2.z = coef_r5_3 * r.z * r.z - coef_r3;
-				}
-
-				// Store in interaction matrix
-				// Note: MainTransPtrArray[StrNo]->TrMatrix_inv would transform the matrix
-				// but for dipole-dipole, we work directly in global coordinates
-				InteractMatrix[StrNo][ColNo] = SubMatrix;
-			}
-		}
-
-		// Update formal interaction member pointers (same as SetupInteractMatrix)
-		for(int ClNo = 0; ClNo < AmOfMainElem; ClNo++)
-		{
-			radTg3dRelax* g3dRelaxPtrClNo = g3dRelaxPtrVect[ClNo];
-			g3dRelaxPtrVect[ClNo] = g3dRelaxPtrClNo->FormalIntrctMemberPtr();
-		}
-	}
-
-	return 1;
-}
-#endif  // DISABLED dipole-dipole method
 
 //-------------------------------------------------------------------------
 //=========================================================================
@@ -925,9 +808,12 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 #ifdef RADIA_MSC_SUPPORT
 			else if(dof_row == 3 && dof_col == 6)
 			{
-				// 3x6 block: Field at standard element (3 DOF) center from MSC hexahedron (6 DOF)
-				// For each sigma_j on face j of MSC element, compute field at standard element center
-				// N[row][col]_ij = component i of field at row's center due to unit sigma on col's face j
+				// 3x6 block: Field at tetrahedron (3 DOF) center from MSC hexahedron (6 DOF)
+				// K(Mk, face_j) = H_field_k at tetra center due to unit sigma on hex face j
+				// (Following ELF_MAGIC convention: compute_K_mat_tetra_hex)
+
+				static const double PI_MSC = 3.14159265358979323846;
+				static const double INV_4PI_MSC = 1.0 / (4.0 * PI_MSC);
 
 				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
 				if(poly_col && poly_col->Use6DOF_MSC)
@@ -945,7 +831,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							// Field from unit sigma on face j (quad face + point charge)
 							TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
 
-							// Point charge contribution (m = -sigma * area)
+							// Point charge contribution (m = -sigma * area) - Yano-Sugahara MSC method
 							double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
 							TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
 
@@ -954,7 +840,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							H_local.y = H_face.y + H_point.y;
 							H_local.z = H_face.z + H_point.z;
 
-							// Transform back
+							// Transform back to global
 							H_total.x += TransPtrVect[tr]->TrVectField(H_local).x;
 							H_total.y += TransPtrVect[tr]->TrVectField(H_local).y;
 							H_total.z += TransPtrVect[tr]->TrVectField(H_local).z;
@@ -964,25 +850,30 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						TVector3d H_final = MainTransPtrArray[row]->TrVectField_inv(H_total);
 
 						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
-						// Here: row is component (0,1,2=x,y,z), col is face_j
-						block[face_j * m_totalDOF + 0] = H_final.x;  // (0, face_j)
-						block[face_j * m_totalDOF + 1] = H_final.y;  // (1, face_j)
-						block[face_j * m_totalDOF + 2] = H_final.z;  // (2, face_j)
+						// row is component (0,1,2 = Mx,My,Mz), col is face_j
+						// Sign convention: +K/(4*pi) for tetra-hex (following ELF)
+						block[face_j * m_totalDOF + 0] = H_final.x * INV_4PI_MSC;  // (Mx, face_j)
+						block[face_j * m_totalDOF + 1] = H_final.y * INV_4PI_MSC;  // (My, face_j)
+						block[face_j * m_totalDOF + 2] = H_final.z * INV_4PI_MSC;  // (Mz, face_j)
 					}
 				}
 			}
 			else if(dof_row == 6 && dof_col == 3)
 			{
-				// 6x3 block: Field at MSC hexahedron (6 DOF) eval points from standard element (3 DOF)
-				// For each eval point i on MSC element, compute field component from standard element
-				// N[row][col]_ij = H dot n_i at eval point i due to unit M_j
+				// 6x3 block: Field at MSC hexahedron (6 DOF) eval points from tetrahedron (3 DOF)
+				// K(face_i, Mj) = normal_i · N_mat(:, j) where N_mat is the demagnetization tensor
+				// from the tetrahedron source element at the evaluation point
+				// (Following ELF_MAGIC convention: compute_K_mat_hex_tetra)
+
+				static const double PI_MSC = 3.14159265358979323846;
+				static const double INV_4PI_MSC = 1.0 / (4.0 * PI_MSC);
 
 				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
 				if(poly_row && poly_row->Use6DOF_MSC)
 				{
 					for(int face_i = 0; face_i < 6; face_i++)
 					{
-						// Eval point for face i (midpoint between face center and element center)
+						// Yano-Sugahara evaluation point: midpoint between face center and element center
 						TVector3d EvalPt;
 						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
 						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
@@ -990,6 +881,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 						TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(EvalPt);
 
+						// N_mat stores the 3x3 demagnetization tensor: H = -N*M/(4*pi)
+						// SubMatrix.Str0 = column 0 (response to Mx)
+						// SubMatrix.Str1 = column 1 (response to My)
+						// SubMatrix.Str2 = column 2 (response to Mz)
 						TMatrix3d SubMatrix(TVector3d(0., 0., 0.), TVector3d(0., 0., 0.), TVector3d(0., 0., 0.));
 						TMatrix3d BufSubMatrix;
 
@@ -1013,21 +908,24 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 						MainTransPtrArray[row]->TrMatrix_inv(SubMatrix);
 
-						// Get face normal
+						// Get face normal (outward)
 						TVector3d& n = poly_row->FaceNormal[face_i];
 
-						// H dot n for each magnetization component
-						// N[face_i][Mx] = (dHx/dMx*nx + dHy/dMx*ny + dHz/dMx*nz)
-						double H_dot_n_Mx = SubMatrix.Str1.x * n.x + SubMatrix.Str1.y * n.y + SubMatrix.Str1.z * n.z;
-						// Rows of SubMatrix correspond to: 0=Hx, 1=Hy, 2=Hz for unit magnetization
-						// But actually SubMatrix stores dB/dM, not dH/dM directly
-						// For now, use H = B/mu0 - M approximation for linear materials
+						// K(face_i, Mj) = normal · N_mat(:, j) / (4*pi)
+						// SubMatrix stores the 3x3 demagnetization response
+						// Str0 = [dHx/dMx, dHy/dMx, dHz/dMx] (column for Mx)
+						// Str1 = [dHx/dMy, dHy/dMy, dHz/dMy] (column for My)
+						// Str2 = [dHx/dMz, dHy/dMz, dHz/dMz] (column for Mz)
+						double K_face_Mx = n.x * SubMatrix.Str0.x + n.y * SubMatrix.Str0.y + n.z * SubMatrix.Str0.z;
+						double K_face_My = n.x * SubMatrix.Str1.x + n.y * SubMatrix.Str1.y + n.z * SubMatrix.Str1.z;
+						double K_face_Mz = n.x * SubMatrix.Str2.x + n.y * SubMatrix.Str2.y + n.z * SubMatrix.Str2.z;
 
 						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
-						// row is face_i, col is component (0,1,2=Mx,My,Mz)
-						block[0 * m_totalDOF + face_i] = SubMatrix.Str1.x * n.x;  // (face_i, 0)
-						block[1 * m_totalDOF + face_i] = SubMatrix.Str1.y * n.y;  // (face_i, 1)
-						block[2 * m_totalDOF + face_i] = SubMatrix.Str1.z * n.z;  // (face_i, 2)
+						// row is face_i (0-5), col is component (0,1,2 = Mx,My,Mz)
+						// Sign convention: +K/(4*pi) for hex-tetra (following ELF)
+						block[0 * m_totalDOF + face_i] = K_face_Mx * INV_4PI_MSC;  // (face_i, Mx)
+						block[1 * m_totalDOF + face_i] = K_face_My * INV_4PI_MSC;  // (face_i, My)
+						block[2 * m_totalDOF + face_i] = K_face_Mz * INV_4PI_MSC;  // (face_i, Mz)
 					}
 				}
 			}

@@ -111,7 +111,6 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_poly_analytical.cpp       # Analytical polygon field formulas
 	${CORE_DIR}/rad_particle_trajectory.cpp   # Particle trajectory/dynamics
 	${CORE_DIR}/rad_rectangular_block.cpp     # Rectangular parallelepiped
-	${CORE_DIR}/rad_pyramid_msc.cpp           # MMM with MSC (pyramid elements)
 	${CORE_DIR}/rad_extruded_polygon_msc.cpp  # MSC extruded polygon (6 DOF hexahedra)
 	${CORE_DIR}/rad_relaxation_methods.cpp    # Relaxation methods
 	${CORE_DIR}/rad_subdivided_arc_current.cpp        # Subdivided arc with current
@@ -188,6 +187,7 @@ target_compile_definitions(radia_ngsolve PRIVATE
 	_GM_WITHOUT_BASE
 	RADIA_USE_HACAPK
 	HACAPK_RADIA_LOGGING
+	RADIA_MSC_SUPPORT
 	$<$<CONFIG:Debug>:_DEBUG>
 	$<$<CONFIG:Release>:NDEBUG>
 	$<$<PLATFORM_ID:Windows>:WIN32>
@@ -340,6 +340,7 @@ target_compile_definitions(radia PRIVATE
 	ANSI_DECLARATORS
 	RADIA_USE_HACAPK
 	HACAPK_RADIA_LOGGING
+	RADIA_MSC_SUPPORT
 )
 
 # FFTW library - platform-specific detection (same as radia_ngsolve)

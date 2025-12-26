@@ -168,8 +168,7 @@ public:
 	void StoreByteString(const char* cByteString, long len)
 	{
 		string byteStr;
-		//byteStr.append(cByteString, 0, len); //to test: make sure that it doesn't at \0 (as for C string)!
-		byteStr.insert(0, cByteString, len); //to test: make sure that it doesn't at \0 (as for C string)!
+		byteStr.insert(0, cByteString, len);
 		StringBuffer.push_back(byteStr);
 	}
 

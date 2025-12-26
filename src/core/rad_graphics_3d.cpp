@@ -1020,14 +1020,6 @@ void radTPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 		AmOfFacesToDraw = AmOfNonInternalFaces;
 	}
 
-			//test
-			//char ErrorMesTitle[] = "SRW Debug";
-			//char ErrorStr[100];
-			//int j = sprintf(ErrorStr, "Polyhedron: AmOfFacesToDraw: %d", AmOfFacesToDraw);
-			//UINT DlgStyle = MB_OK | MB_ICONSTOP | MB_DEFBUTTON1 | MB_SYSTEMMODAL;
-			//int MesBoxInf = MessageBox(nullptr, ErrorStr, ErrorMesTitle, DlgStyle); 
-			//end test
-
 	if(AmOfFacesToDraw > 0)
 	{
 		Send.InitOutList(AmOfFacesToDraw, DrawFacilityInd);
@@ -1360,14 +1352,6 @@ void radTGroupGraphPresent::Draw(radTrans* BaseTransPtr)
 		}
 	}
 
-		//test
-		//char ErrorMesTitle[] = "SRW Debug";
-		//char ErrorStr[100];
-		//int j = sprintf(ErrorStr, "AmOfElemToDraw: %d", AmOfElemToDraw);
-		//UINT DlgStyle = MB_OK | MB_ICONSTOP | MB_DEFBUTTON1 | MB_SYSTEMMODAL;
-		//int MesBoxInf = MessageBox(nullptr, ErrorStr, ErrorMesTitle, DlgStyle); 
-		//end test
-
 	if(AmOfElemToDraw > 0)
 	{
 		Send.InitOutList(AmOfElemToDraw, DrawFacilityInd);
@@ -1578,21 +1562,10 @@ void radTSubdivRecMagGraphPresent::DrawSubdivisionLines(radTSubdividedRecMag* Su
 {
 	SetCurrentColorInStack(SbdLineColor);
 
-	//double SmallDist = 1.E-05;
-
 	TVector3d CornPoi = BasicVect3dArray[0];
 	TVector3d CornVect_x = BasicVect3dArray[1];
 	TVector3d CornVect_y = BasicVect3dArray[2];
 	TVector3d CornVect_z = BasicVect3dArray[3];
-
-// To remove?
-	//TVector3d UnitDiagVect = CornVect_x + CornVect_y + CornVect_z;
-	//UnitDiagVect = (1./sqrt(UnitDiagVect.x*UnitDiagVect.x + UnitDiagVect.y*UnitDiagVect.y + UnitDiagVect.z*UnitDiagVect.z))*UnitDiagVect;
-	//CornPoi = CornPoi - SmallDist*UnitDiagVect;
-	//CornVect_x = (1. + 2.*SmallDist/SubdividedRecMagP->Dimensions.x)*CornVect_x;
-	//CornVect_y = (1. + 2.*SmallDist/SubdividedRecMagP->Dimensions.y)*CornVect_y;
-	//CornVect_z = (1. + 2.*SmallDist/SubdividedRecMagP->Dimensions.z)*CornVect_z;
-// End To remove?
 
 	radTDrawAttr LocDrawAttr;
 	LocDrawAttr.RGB_col.Red = LocDrawAttr.RGB_col.Green = LocDrawAttr.RGB_col.Blue = 0.;
@@ -2036,14 +2009,6 @@ void radTSubdivPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 		ItemIsNotFullyInternal[ElemCount++] = CurrentItemIsNotInternal;
 		AmOfElemToDraw += CurrentItemIsNotInternal;
 	}
-
-			//test
-			//char ErrorMesTitle[] = "SRW Debug";
-			//char ErrorStr[100];
-			//int j = sprintf(ErrorStr, "SubdivPolyhedron: AmOfElemToDraw: %d", AmOfElemToDraw);
-			//UINT DlgStyle = MB_OK | MB_ICONSTOP | MB_DEFBUTTON1 | MB_SYSTEMMODAL;
-			//int MesBoxInf = MessageBox(nullptr, ErrorStr, ErrorMesTitle, DlgStyle); 
-			//end test
 
 	if(AmOfElemToDraw > 0)
 	{
