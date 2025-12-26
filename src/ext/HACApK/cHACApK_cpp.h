@@ -216,6 +216,20 @@ int HACApK_build_hmatrix_wrapper(
     double eta,                /* Admissibility parameter */
     int print_level);
 
+/* Build H-matrix with variable DOF per element (for mixed hex+tetra meshes) */
+int HACApK_build_hmatrix_varDOF_wrapper(
+    void *leafmtxp,            /* Allocated by HACApK_alloc_leafmtxp() */
+    void *ctl,                 /* Allocated by HACApK_alloc_lcontrol() */
+    double *coordinates,       /* [n_elem * ndim], row-major */
+    int n_elem,
+    int *dof_offset,           /* [n_elem + 1], cumulative DOF offset (0-based) */
+    int total_dof,             /* Total DOF count = dof_offset[n_elem] */
+    int ndim,                  /* Spatial dimension (3) */
+    double eps,                /* ACA+ tolerance */
+    int leaf_size,             /* Minimum cluster size */
+    double eta,                /* Admissibility parameter */
+    int print_level);
+
 /* Matrix-vector product: y = A * x using H-matrix */
 void HACApK_matvec_wrapper(
     void *leafmtxp,
@@ -235,6 +249,29 @@ int HACApK_leafmtxp_get_nlf(void *ptr);
 int HACApK_leafmtxp_get_nlfkt(void *ptr);
 int HACApK_leafmtxp_get_ktmax(void *ptr);
 int* HACApK_lcontrol_get_lod(void *ptr);
+
+/**
+ * Calculate actual H-matrix memory usage (ELF-compatible)
+ *
+ * Returns memory in bytes by iterating over all leaf blocks:
+ * - Low-rank (ltmtx=1): (ndl + ndt) * kt * sizeof(double)
+ * - Dense (ltmtx=2):    ndl * ndt * sizeof(double)
+ *
+ * @param leafmtxp        H-matrix leaf pointer
+ * @param hmat_bytes_out  Output: actual H-matrix memory [bytes]
+ * @param dense_bytes_out Output: equivalent dense memory [bytes]
+ */
+void HACApK_get_memory_stats(void *leafmtxp,
+                              int64_t *hmat_bytes_out,
+                              int64_t *dense_bytes_out);
+
+/* Accessor functions for current lod array during H-matrix build
+ * These are set by HACApK_build_hmatrix_varDOF_wrapper before fill and
+ * cleared after fill, allowing the C++ callback to access permutation info.
+ * lod[permuted_1based] = original_1based
+ */
+int* HACApK_get_current_lod(void);
+int HACApK_get_current_lod_size(void);
 
 /*
  * Update dense diagonal blocks for nonlinear iteration
