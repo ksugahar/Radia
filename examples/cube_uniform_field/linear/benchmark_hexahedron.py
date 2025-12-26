@@ -2,7 +2,7 @@
 """
 Hexahedral Benchmark - Linear Material (Radia)
 
-Generates benchmark results for {lu,bicgstab,hacapk}/ directories
+Generates benchmark results for hexahedron/{lu,bicgstab,hacapk}/ directories
 using hexahedral cube mesh with various N divisions.
 
 This structure matches the ELF benchmark for consistent organization.
@@ -13,10 +13,10 @@ Solver types:
   hacapk   - BiCGSTAB with H-matrix acceleration (Method 2)
 
 Usage:
-    python benchmark_hex.py --lu 5 10 15
-    python benchmark_hex.py --bicgstab 5 10 15
-    python benchmark_hex.py --hacapk 5 10 15 20
-    python benchmark_hex.py 5 10 15  # runs lu only
+    python benchmark_hexahedron.py --lu 5 10 15
+    python benchmark_hexahedron.py --bicgstab 5 10 15
+    python benchmark_hexahedron.py --hacapk 5 10 15 20
+    python benchmark_hexahedron.py 5 10 15  # runs lu only
 """
 
 import sys
@@ -29,7 +29,7 @@ import json
 import numpy as np
 
 # Add paths for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 import radia as rad
 
@@ -264,7 +264,7 @@ def run_single_benchmark(n_div, solver_type, script_dir, args):
         return None
 
     # Read result from JSON file
-    output_dir = os.path.join(script_dir, solver_type)
+    output_dir = os.path.join(script_dir, 'hexahedron', solver_type)
     filename = 'hex_N%d_results.json' % n_div
     filepath = os.path.join(output_dir, filename)
     if os.path.exists(filepath):
@@ -294,7 +294,7 @@ def main():
     if args.single:
         n_div = int(args.single[0])
         solver_type = args.single[1]
-        output_dir = os.path.join(script_dir, solver_type)
+        output_dir = os.path.join(script_dir, 'hexahedron', solver_type)
         benchmark_hexahedra(n_div, solver_type, output_dir,
                            hmat_eps=args.hmat_eps, bicg_tol=args.bicg_tol)
         return

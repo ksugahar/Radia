@@ -1,0 +1,29 @@
+{
+  "element_type": "hex",
+  "mesh_description": "N=15",
+  "n_div": 15,
+  "n_elements": 3375,
+  "ndof": 20250,
+  "H_ext": 200000.0,
+  "mu_r": 1000,
+  "chi": 999,
+  "t_mesh": 0.08102655410766602,
+  "t_solve": 27.995274305343628,
+  "solver_method": 2,
+  "solver_name": "hacapk",
+  "converged": true,
+  "iterations": 2,
+  "linear_iterations": 0,
+  "M_avg_z": 720185.7437087242,
+  "M_analytical_z": 598203.5928143712,
+  "error_percent": 20.391410609966908,
+  "peak_memory_mb": 57.875,
+  "hmatrix": {
+    "n_lowrank": 8262,
+    "n_dense": 9124,
+    "max_rank": 79,
+    "compression_ratio": 0.0032056576741350405,
+    "build_time": 26.512740500000003,
+    "nlf": 17386
+  }
+}
