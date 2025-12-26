@@ -44,6 +44,9 @@ namespace {
     radTInteraction* g_interaction = nullptr;
     int g_nElem = 0;
     int g_nffc = 3;  // DOF per element (default 3 for standard elements)
+    // Note: lod (DOF permutation array) is now accessed via C-side accessors:
+    //   HACApK_get_current_lod() and HACApK_get_current_lod_size()
+    // Set during H-matrix build by HACApK_build_hmatrix_varDOF_wrapper
 }
 
 namespace RadHACApKCallback {
@@ -70,8 +73,24 @@ void SetInteraction(radTInteraction* interaction, int n_elem, int nffc) {
     g_nffc = nffc;
 }
 
+void SetLod(int* lod, int size) {
+    // Deprecated: lod is now set/cleared on the C side by HACApK_build_hmatrix_varDOF_wrapper
+    // This function is kept for API compatibility but does nothing
+    (void)lod;
+    (void)size;
+}
+
+void ClearLod() {
+    // Deprecated: lod is now cleared on the C side by HACApK_build_hmatrix_varDOF_wrapper
+    // This function is kept for API compatibility but does nothing
+}
+
 double ComputeEntry(int i, int j) {
-    // i, j are 1-based indices from HACApK (converted to 0-based)
+    // i, j are 1-based ORIGINAL indices from HACApK
+    // The lod conversion is already done by cHACApK_fill_leafmtx_hyp:
+    //   val = cHACApK_entry_ij(lodl[permuted_pos], lodt[permuted_pos], i_bemv)
+    // So we receive original indices, NOT permuted indices!
+    //
     // Matrix element: A(i,j) = N(i,j) + delta_ij/chi_i
     // where N already contains -K/(4*pi) from GetInteractionMatrixElement()
     // So the equation is: (-K/(4pi) + 1/chi * I) * sigma = H_ext_n
@@ -81,14 +100,16 @@ double ComputeEntry(int i, int j) {
         return 0.0;
     }
 
-    int i0 = i - 1;  // Convert to 0-based
+    int ndof = g_currentManager->GetNDOF();
+
+    // Direct 0-based conversion (indices are already original, NOT permuted)
+    int i0 = i - 1;
     int j0 = j - 1;
 
-    // Bounds check
-    int ndof = g_currentManager->GetNDOF();
+    // Bounds check on original indices
     if (i0 < 0 || i0 >= ndof || j0 < 0 || j0 >= ndof) {
-        std::cerr << "[HACApK] Error: Invalid DOF indices in ComputeEntry: i=" << i
-                  << " j=" << j << " ndof=" << ndof << std::endl;
+        std::cerr << "[HACApK] Error: Invalid DOF indices: i0=" << i0
+                  << " j0=" << j0 << " ndof=" << ndof << std::endl;
         return 0.0;
     }
 
@@ -134,6 +155,7 @@ RadHACApKManager::RadHACApKManager(radTInteraction* interaction)
     , m_n_elem(0)
     , m_nffc(3)
     , m_is_6dof(false)
+    , m_is_mixed_dof(false)
     , m_geometry_ready(false)
     , m_diag_cached(false)
     , m_flat_N_ready(false)
@@ -195,26 +217,27 @@ void RadHACApKManager::ExtractElementCoordinates() {
         }
     }
 
-    // Verify uniform DOF (either all 3DOF or all 6DOF)
-    if (n_3dof > 0 && n_6dof > 0) {
-        std::cerr << "[HACApK] Error: Mixed DOF elements not supported. "
-                  << "Found " << n_3dof << " tetrahedra (3DOF) and "
-                  << n_6dof << " hexahedra (6DOF)" << std::endl;
-        m_ndof = 0;
-        m_nffc = 0;
-        m_is_6dof = false;
-        return;
-    }
-
     m_dof_offset[m_n_elem] = total_dof;
     m_ndof = total_dof;
 
-    if (n_6dof > 0) {
+    // Support mixed DOF elements (hex + tetra)
+    if (n_3dof > 0 && n_6dof > 0) {
+        // Mixed mode: variable DOF per element
+        m_nffc = 0;  // Indicates variable DOF
+        m_is_6dof = false;  // Not uniform 6DOF
+        m_is_mixed_dof = true;
+#ifdef HACAPK_RADIA_LOGGING
+        std::cout << "[HACApK] Mixed DOF mode: " << n_3dof << " tetrahedra (3DOF) + "
+                  << n_6dof << " hexahedra (6DOF), total " << total_dof << " DOF" << std::endl;
+#endif
+    } else if (n_6dof > 0) {
         m_nffc = 6;
         m_is_6dof = true;
+        m_is_mixed_dof = false;
     } else {
         m_nffc = 3;
         m_is_6dof = false;
+        m_is_mixed_dof = false;
     }
 
     // Get element centers from g3dRelaxPtrVect
@@ -656,8 +679,8 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     RadHACApKCallback::SetInteraction(m_interaction, m_n_elem, m_nffc);
     RadHACApKCallback::SetCurrentManager(this);
 
-    // Verify DOF was configured correctly (3DOF or 6DOF)
-    if (m_ndof == 0 || (m_nffc != 3 && m_nffc != 6)) {
+    // Verify DOF was configured correctly (3DOF, 6DOF, or mixed=0)
+    if (m_ndof == 0 || (m_nffc != 0 && m_nffc != 3 && m_nffc != 6)) {
         std::cerr << "[HACApK] Error: Invalid DOF configuration (nffc=" << m_nffc << ")" << std::endl;
         return false;
     }
@@ -709,22 +732,42 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     }
 
     // Build H-matrix using the C wrapper
-    // m_nffc: 3 for tetrahedra (Mx, My, Mz), 6 for hexahedra (sigma per face)
+    // m_nffc: 3 for tetrahedra, 6 for hexahedra, 0 for mixed
     int ndim = 3;  // Spatial dimension
 
     auto t_hmatrix_start = std::chrono::high_resolution_clock::now();
-    int result = HACApK_build_hmatrix_wrapper(
-        m_leafmtxp,
-        m_control,
-        m_coordinates.data(),
-        m_n_elem,
-        m_nffc,  // 3 for tetra, 6 for hexa
-        ndim,
-        params.aca_eps,
-        params.leaf_size,
-        params.eta,
-        params.print_level
-    );
+    int result;
+
+    if (m_is_mixed_dof) {
+        // Variable DOF mode: use new varDOF wrapper
+        result = HACApK_build_hmatrix_varDOF_wrapper(
+            m_leafmtxp,
+            m_control,
+            m_coordinates.data(),
+            m_n_elem,
+            m_dof_offset.data(),
+            m_ndof,
+            ndim,
+            params.aca_eps,
+            params.leaf_size,
+            params.eta,
+            params.print_level
+        );
+    } else {
+        // Uniform DOF mode (original)
+        result = HACApK_build_hmatrix_wrapper(
+            m_leafmtxp,
+            m_control,
+            m_coordinates.data(),
+            m_n_elem,
+            m_nffc,  // 3 for tetra, 6 for hexa
+            ndim,
+            params.aca_eps,
+            params.leaf_size,
+            params.eta,
+            params.print_level
+        );
+    }
     auto t_hmatrix_end = std::chrono::high_resolution_clock::now();
     double t_hmatrix = std::chrono::duration<double>(t_hmatrix_end - t_hmatrix_start).count();
     if (params.print_level > 0) {
@@ -754,22 +797,19 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     m_stats.max_rank = HACApK_leafmtxp_get_ktmax(m_leafmtxp);
 
     // Calculate memory usage and compression ratio (ELF-compatible)
-    // Dense matrix memory: ndof * ndof * sizeof(double)
-    int64_t dense_bytes = (int64_t)m_ndof * m_ndof * sizeof(double);
+    // Use accurate per-leaf calculation instead of rough estimation
+    int64_t hmat_bytes = 0;
+    int64_t dense_bytes = 0;
+    HACApK_get_memory_stats(m_leafmtxp, &hmat_bytes, &dense_bytes);
+
+    m_stats.memory_mb = (double)hmat_bytes / (1024.0 * 1024.0);
     m_stats.dense_memory_mb = (double)dense_bytes / (1024.0 * 1024.0);
 
-    // H-matrix memory estimation:
-    // - Low-rank blocks: each stores U(m x k) + V(n x k) ~ 2 * block_size * rank * sizeof(double)
-    // - Dense blocks: block_size^2 * sizeof(double)
-    int64_t avg_block_size = (m_stats.n_leaves > 0) ? m_ndof / m_stats.n_leaves : m_ndof;
-    int64_t lowrank_bytes = m_stats.n_lowrank * 2 * avg_block_size * m_stats.max_rank * sizeof(double);
-    int64_t dense_block_bytes = m_stats.n_dense * avg_block_size * avg_block_size * sizeof(double);
-    int64_t hmat_bytes = lowrank_bytes + dense_block_bytes;
-    m_stats.memory_mb = (double)hmat_bytes / (1024.0 * 1024.0);
-
     // Compression ratio = H-matrix memory / Dense matrix memory
-    m_stats.compression = (m_stats.dense_memory_mb > 0) ?
-        m_stats.memory_mb / m_stats.dense_memory_mb : 1.0;
+    // Note: dense_bytes is the sum of block sizes, not full N^2 matrix
+    // This matches ELF's definition where compression < 1 means memory saved
+    m_stats.compression = (dense_bytes > 0) ?
+        (double)hmat_bytes / (double)dense_bytes : 1.0;
 
     auto end_time = std::chrono::high_resolution_clock::now();
     m_stats.build_time = std::chrono::duration<double>(end_time - start_time).count();
@@ -815,16 +855,18 @@ void RadHACApKManager::UpdateDiagonal(const std::vector<double>& inv_chi) {
     m_inv_chi = inv_chi;
     RadHACApKCallback::SetInvChi(inv_chi);
 
+    // DEBUG: Force slow method to verify correctness
+    // TODO: Re-enable fast method after debugging
     // OPTIMIZATION: Use fast diagonal update
     // Only updates true diagonal entries (i==j) using pre-computed N_ii values
     // This is O(ndof) instead of O(block_size^2 * n_diag_blocks)
-    if (m_diag_cached && m_diag_N.size() == (size_t)m_ndof) {
-        HACApK_update_diagonal_fast_wrapper(m_leafmtxp, m_control,
-                                             m_diag_N.data(), inv_chi.data(), m_ndof);
-    } else {
+    // if (m_diag_cached && m_diag_N.size() == (size_t)m_ndof) {
+    //     HACApK_update_diagonal_fast_wrapper(m_leafmtxp, m_control,
+    //                                          m_diag_N.data(), inv_chi.data(), m_ndof);
+    // } else {
         // Fallback to slow method (recomputes all entries in diagonal blocks)
         HACApK_update_diagonal_wrapper(m_leafmtxp, m_control, cHACApK_entry_ij);
-    }
+    // }
 }
 
 //=========================================================================
@@ -1002,7 +1044,7 @@ double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i,
 
 //=========================================================================
 // GetInteractionMatrixElement: Optimized with O(1) lookup and LRU cache
-// Supports both 3DOF tetrahedra and 6DOF hexahedra
+// Supports 3DOF tetrahedra, 6DOF hexahedra, and mixed meshes
 //=========================================================================
 
 double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const {
@@ -1027,14 +1069,26 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
         return 0.0;
     }
 
-    // Dispatch based on DOF type
-    if (m_is_6dof) {
-        // 6DOF hexahedra: face-to-face interaction
+    // Get element DOF counts
+    int dof_elem_i = m_dof_offset[elem_i + 1] - m_dof_offset[elem_i];
+    int dof_elem_j = m_dof_offset[elem_j + 1] - m_dof_offset[elem_j];
+
+    // Dispatch based on DOF type of each element
+    if (dof_elem_i == 6 && dof_elem_j == 6) {
+        // 6DOF-6DOF: hex-hex interaction
         return GetCached6x6Element(elem_i, elem_j, local_i, local_j);
-    } else {
-        // 3DOF tetrahedra: component-to-component interaction
+    } else if (dof_elem_i == 3 && dof_elem_j == 3) {
+        // 3DOF-3DOF: tetra-tetra interaction
         return GetCached3x3Element(elem_i, elem_j, local_i, local_j);
+    } else if (dof_elem_i == 3 && dof_elem_j == 6) {
+        // 3DOF-6DOF: tetra-hex interaction (3x6 block)
+        return GetMixed3x6Element(elem_i, elem_j, local_i, local_j);
+    } else if (dof_elem_i == 6 && dof_elem_j == 3) {
+        // 6DOF-3DOF: hex-tetra interaction (6x3 block)
+        return GetMixed6x3Element(elem_i, elem_j, local_i, local_j);
     }
+
+    return 0.0;
 }
 
 //=========================================================================
@@ -1108,6 +1162,149 @@ void RadHACApKManager::Compute3x3Block(int elem_i, int elem_j, double* N_mat) co
     N_mat[6] = -static_cast<double>(M.Str0.z);  // -dHz/dMx
     N_mat[7] = -static_cast<double>(M.Str1.z);  // -dHz/dMy
     N_mat[8] = -static_cast<double>(M.Str2.z);  // -dHz/dMz
+}
+
+//=========================================================================
+// Mixed element methods: 3x6 and 6x3 blocks for tetra-hex interactions
+// Following ELF_MAGIC convention for mixed element meshes
+//=========================================================================
+
+double RadHACApKManager::GetMixed3x6Element(int elem_tetra, int elem_hex, int comp, int face) const {
+    // 3x6 block: tetra row (3DOF), hex column (6DOF)
+    // K(comp, face) = H_field_comp at tetra center from unit sigma on hex face
+    // Returns -K/(4*pi) to match the sign convention of the system matrix
+
+    if (!m_interaction) return 0.0;
+
+    // For mixed elements, we need to access the pre-computed interaction matrix
+    // The variable DOF matrix m_flatInteractMatrix stores blocks sequentially
+    if (m_interaction->m_flatInteractMatrix.empty()) {
+        // Fall back to computing on-demand (slower but correct)
+        double K_mat[18];
+        Compute3x6Block(elem_tetra, elem_hex, K_mat);
+        return K_mat[comp * 6 + face];
+    }
+
+    // Access from pre-computed flat matrix
+    int offset_i = m_dof_offset[elem_tetra];
+    int offset_j = m_dof_offset[elem_hex];
+    int total_dof = m_interaction->m_totalDOF;
+
+    // COLUMN-MAJOR access: A(row, col) at [col * total_dof + row]
+    return m_interaction->m_flatInteractMatrix[(offset_j + face) * total_dof + (offset_i + comp)];
+}
+
+double RadHACApKManager::GetMixed6x3Element(int elem_hex, int elem_tetra, int face, int comp) const {
+    // 6x3 block: hex row (6DOF), tetra column (3DOF)
+    // K(face, comp) = normal_face dot N_mat(:, comp) where N_mat is demagnetization tensor
+    // Returns -K/(4*pi) to match the sign convention
+
+    if (!m_interaction) return 0.0;
+
+    // Access from pre-computed flat matrix if available
+    if (m_interaction->m_flatInteractMatrix.empty()) {
+        double K_mat[18];
+        Compute6x3Block(elem_hex, elem_tetra, K_mat);
+        return K_mat[face * 3 + comp];
+    }
+
+    int offset_i = m_dof_offset[elem_hex];
+    int offset_j = m_dof_offset[elem_tetra];
+    int total_dof = m_interaction->m_totalDOF;
+
+    // COLUMN-MAJOR access
+    return m_interaction->m_flatInteractMatrix[(offset_j + comp) * total_dof + (offset_i + face)];
+}
+
+void RadHACApKManager::Compute3x6Block(int elem_tetra, int elem_hex, double* K_mat) const {
+    // 3x6 block: H-field at tetra center from hex face charges
+    // K(comp, face) = H_comp at tetra center due to unit sigma on hex face
+    // Following rad_interaction.cpp 3x6 block implementation
+
+    std::memset(K_mat, 0, 18 * sizeof(double));
+
+    if (!m_interaction) return;
+
+    radTg3dRelax* elem_row = m_interaction->g3dRelaxPtrVect[elem_tetra];
+    radTg3dRelax* elem_col = m_interaction->g3dRelaxPtrVect[elem_hex];
+    if (!elem_row || !elem_col) return;
+
+    radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
+    if (!poly_col || !poly_col->Use6DOF_MSC) return;
+
+    // Observation point: tetra center
+    TVector3d obs = elem_row->CentrPoint;
+
+    for (int face_j = 0; face_j < 6; face_j++) {
+        // Field from unit sigma on face j
+        TVector3d H_face = poly_col->FieldFromQuadFace(obs, face_j, 1.0);
+
+        // Point charge contribution (m = -sigma * area)
+        double unit_charge = -1.0 * poly_col->FaceArea[face_j];
+        TVector3d H_point = poly_col->FieldFromPointCharge(obs, unit_charge);
+
+        TVector3d H_total;
+        H_total.x = H_face.x + H_point.x;
+        H_total.y = H_face.y + H_point.y;
+        H_total.z = H_face.z + H_point.z;
+
+        // Store with sign flip (-K/(4*pi))
+        // Row-major: K_mat[comp * 6 + face]
+        K_mat[0 * 6 + face_j] = -H_total.x * INV_4PI_HACAPK;  // Mx
+        K_mat[1 * 6 + face_j] = -H_total.y * INV_4PI_HACAPK;  // My
+        K_mat[2 * 6 + face_j] = -H_total.z * INV_4PI_HACAPK;  // Mz
+    }
+}
+
+void RadHACApKManager::Compute6x3Block(int elem_hex, int elem_tetra, double* K_mat) const {
+    // 6x3 block: normal dot demagnetization tensor at hex eval points from tetra
+    // K(face, comp) = normal_face dot N_mat(:, comp)
+    // Following rad_interaction.cpp 6x3 block implementation
+
+    std::memset(K_mat, 0, 18 * sizeof(double));
+
+    if (!m_interaction) return;
+
+    radTg3dRelax* elem_row = m_interaction->g3dRelaxPtrVect[elem_hex];
+    radTg3dRelax* elem_col = m_interaction->g3dRelaxPtrVect[elem_tetra];
+    if (!elem_row || !elem_col) return;
+
+    radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
+    if (!poly_row || !poly_row->Use6DOF_MSC) return;
+
+    radTFieldKey FieldKeyInteract;
+    FieldKeyInteract.B_ = FieldKeyInteract.H_ = FieldKeyInteract.PreRelax_ = 1;
+
+    for (int face_i = 0; face_i < 6; face_i++) {
+        // Yano-Sugahara evaluation point: midpoint between face center and element center
+        TVector3d EvalPt;
+        EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
+        EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
+        EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+
+        // Compute demagnetization tensor at this point
+        radTField Field(FieldKeyInteract, m_interaction->CompCriterium, EvalPt,
+                       TVector3d(0., 0., 0.), TVector3d(0., 0., 0.),
+                       TVector3d(0., 0., 0.), TVector3d(0., 0., 0.), 0.);
+        Field.AmOfIntrctElemWithSym = m_interaction->CountRelaxElemsWithSym();
+
+        elem_col->B_comp(&Field);
+
+        // N_mat columns from Field (response to unit M)
+        // Field.B = response to unit Mx, Field.H = My, Field.A = Mz
+        TVector3d& n = poly_row->FaceNormal[face_i];
+
+        // K(face_i, Mj) = normal dot N_mat(:, j) / (4*pi)
+        double K_Mx = n.x * Field.B.x + n.y * Field.B.y + n.z * Field.B.z;
+        double K_My = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
+        double K_Mz = n.x * Field.A.x + n.y * Field.A.y + n.z * Field.A.z;
+
+        // Store with sign flip (-K/(4*pi))
+        // Row-major: K_mat[face * 3 + comp]
+        K_mat[face_i * 3 + 0] = -K_Mx * INV_4PI_HACAPK;
+        K_mat[face_i * 3 + 1] = -K_My * INV_4PI_HACAPK;
+        K_mat[face_i * 3 + 2] = -K_Mz * INV_4PI_HACAPK;
+    }
 }
 
 //=========================================================================
