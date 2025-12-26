@@ -72,7 +72,8 @@ def generate_cube_mesh(n_div: int, size: float = 1.0):
 
 
 def benchmark_hexahedra(n_div, solver_type, output_dir, hmat_eps=1e-4,
-                        bicg_tol=1e-4, nonl_tol=0.001):
+                        bicg_tol=1e-4, nonl_tol=0.001,
+                        hmat_leaf_size=10, hmat_eta=2.0):
     """Benchmark hexahedral mesh with Radia.
 
     Args:
@@ -82,6 +83,8 @@ def benchmark_hexahedra(n_div, solver_type, output_dir, hmat_eps=1e-4,
         hmat_eps: ACA tolerance for H-matrix (only used with hacapk)
         bicg_tol: BiCGSTAB convergence tolerance
         nonl_tol: Nonlinear iteration convergence tolerance
+        hmat_leaf_size: H-matrix leaf size (ELF default: 10)
+        hmat_eta: H-matrix admissibility parameter (ELF default: 2.0)
     """
     rad.FldUnits('m')
     rad.UtiDelAll()
@@ -123,6 +126,8 @@ def benchmark_hexahedra(n_div, solver_type, output_dir, hmat_eps=1e-4,
         nonl_tol=nonl_tol,
         bicg_tol=bicg_tol,
         hmat_eps=hmat_eps,
+        hmat_leaf_size=hmat_leaf_size,
+        hmat_eta=hmat_eta,
         extra_data={'n_div': n_div}
     )
 
@@ -137,6 +142,8 @@ def run_single_benchmark(n_div, solver_type, script_dir, args):
         '--hmat_eps', str(args.hmat_eps),
         '--bicg_tol', str(args.bicg_tol),
         '--nonl_tol', str(args.nonl_tol),
+        '--hmat_leaf_size', str(args.hmat_leaf_size),
+        '--hmat_eta', str(args.hmat_eta),
     ]
 
     result = subprocess.run(cmd, capture_output=False)
@@ -164,6 +171,10 @@ def main():
                        help='BiCGSTAB convergence tolerance (default: 1e-4)')
     parser.add_argument('--nonl_tol', type=float, default=0.001,
                        help='Nonlinear iteration tolerance (default: 0.001)')
+    parser.add_argument('--hmat_leaf_size', type=int, default=10,
+                       help='H-matrix leaf size (default: 10, ELF-compatible)')
+    parser.add_argument('--hmat_eta', type=float, default=2.0,
+                       help='H-matrix admissibility eta (default: 2.0)')
     parser.add_argument('--single', nargs=2, metavar=('N', 'SOLVER'),
                        help='Run single benchmark (internal use)')
     parser.add_argument('n_values', nargs='*', type=int, default=[5, 10],
@@ -179,7 +190,8 @@ def main():
         output_dir = os.path.join(script_dir, solver_type)
         benchmark_hexahedra(n_div, solver_type, output_dir,
                            hmat_eps=args.hmat_eps, bicg_tol=args.bicg_tol,
-                           nonl_tol=args.nonl_tol)
+                           nonl_tol=args.nonl_tol,
+                           hmat_leaf_size=args.hmat_leaf_size, hmat_eta=args.hmat_eta)
         return
 
     # If no solver is specified, run lu only

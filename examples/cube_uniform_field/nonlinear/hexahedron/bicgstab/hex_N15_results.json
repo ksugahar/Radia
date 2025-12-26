@@ -7,16 +7,18 @@
   "nonl_tol": 0.001,
   "bicg_tol": 0.0001,
   "hmat_eps": null,
-  "t_mesh": 0.08899593353271484,
-  "t_solve": 347.9088325500488,
+  "hmat_leaf_size": null,
+  "hmat_eta": null,
+  "t_mesh": 0.28099608421325684,
+  "t_solve": 371.56897497177124,
   "solver_method": 1,
   "solver_name": "bicgstab",
   "converged": true,
   "residual": 0.0008228580683269371,
   "nonl_iterations": 29,
-  "linear_iterations": 0,
+  "linear_iterations": 87,
   "M_avg_z": 719874.8702311856,
-  "peak_memory_mb": 52.80859375,
+  "peak_memory_mb": 52.64453125,
   "timing": {
     "t_matrix_build": 0.0,
     "t_lu_decomp": 0.0,
@@ -24,8 +26,8 @@
     "t_hmatrix_cluster": 0.0,
     "t_hmatrix_frame": 0.0,
     "t_hmatrix_fill": 0.0,
-    "t_linear_solve": 0.0,
-    "t_total": 347.9088325500488
+    "t_linear_solve": 278.55026720000006,
+    "t_total": 371.56897497177124
   },
   "n_div": 15
 }

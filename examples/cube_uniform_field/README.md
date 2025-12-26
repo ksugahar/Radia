@@ -114,6 +114,42 @@ Where N_demag = 1/3 for a cube.
 
 ## Nonlinear Benchmark Results (2025-12-26)
 
+### Hexahedral Benchmark (Nonlinear)
+
+**All solvers converge** for hexahedral nonlinear problems.
+
+#### N=5 (125 elements, 750 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
+| 702,132 | LU | 34 MB | - | 0 | 6 | 0 | 0.562s | - | 0.562s | 0.72s |
+| 702,114 | BiCGSTAB | 33 MB | - | 21 | 3 | 0 | - | - | 0.027s | 0.16s |
+| 702,107 | HACApK | 33 MB | 2.15% | 21 | 3 | 0.092s | - | 0.092s | 0.004s | 0.10s |
+
+#### N=10 (1,000 elements, 6,000 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
+| 716,281 | LU | 60 MB | - | 0 | 13 | 0 | 9.19s | - | 9.19s | 18.1s |
+| 716,318 | BiCGSTAB | 38 MB | - | 41 | 5 | 0 | - | - | 4.83s | 13.2s |
+| 716,362 | HACApK | 41 MB | 0.59% | 31 | 4 | 4.03s | - | 4.03s | 0.31s | 4.37s |
+
+#### N=15 (3,375 elements, 20,250 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
+| 719,832 | LU | 124 MB | - | 0 | 35 | 0 | 991s | - | 991s | 1098s |
+| 719,875 | BiCGSTAB | 53 MB | - | 87 | 29 | 0 | - | - | 279s | 372s |
+| 719,926 | HACApK | 58 MB | 0.32% | 83 | 27 | 26.8s | - | 26.8s | 5.40s | 33.0s |
+
+#### N=20 (8,000 elements, 48,000 DOF) - HACApK only
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
+| 721,317 | HACApK | 95 MB | 0.16% | 111 | 31 | 91.7s | - | 91.7s | 21.9s | 118s |
+
+---
+
 ### Tetrahedral Benchmark (Nonlinear, Netgen mesh)
 
 **All solvers converge** for tetrahedral nonlinear problems.
@@ -129,7 +165,7 @@ Where N_demag = 1/3 for a cube.
 #### maxh=0.30m (200 elements, 600 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|--------:|---------:|------:|
 | 726,577 | LU | 66 MB | - | 0 | 14 | 0 | 0.052s | - | 0.052s | 1.89s |
 | 726,721 | BiCGSTAB | 66 MB | - | 171 | 12 | 0 | - | - | 0.063s | 0.62s |
 | 726,810 | HACApK | 66 MB | 0.85% | 105 | 9 | 0.006s | - | 0.006s | 0.010s | 0.66s |
@@ -170,13 +206,15 @@ Where N_demag = 1/3 for a cube.
 
 ## Key Findings
 
-### Linear Material (Tetrahedral)
+### Hexahedral Elements (Nonlinear)
 
 1. **All solvers converge**: LU, BiCGSTAB, HACApK all work
-2. **H-matrix speedup modest**: At maxh=0.10 (15k DOF), HACApK is ~10% faster than LU
-3. **H-matrix build time scales well**: 1.17s for 15k DOF
+2. **HACApK is 33x faster than LU at N=15**: 33s vs 1098s
+3. **HACApK is 11x faster than BiCGSTAB at N=15**: 33s vs 372s
+4. **N=20 solved only by HACApK**: 118s for 48,000 DOF
+5. **M_avg_z consistent**: ~720,000 A/m across all solvers
 
-### Nonlinear Material (Tetrahedral)
+### Tetrahedral Elements (Nonlinear)
 
 1. **All solvers converge**: LU, BiCGSTAB, HACApK all work
 2. **HACApK is fastest at large scale**: 4.1x faster than LU at maxh=0.10 (441s vs 1823s)
@@ -187,7 +225,9 @@ Where N_demag = 1/3 for a cube.
 
 | Element Type | Material | Problem Size | Recommended Solver |
 |--------------|----------|--------------|-------------------|
-| Tetrahedral | Linear | All sizes | BiCGSTAB or HACApK |
+| Hexahedral | Nonlinear | DOF < 1,000 | Any solver |
+| Hexahedral | Nonlinear | DOF 1,000-10,000 | BiCGSTAB or HACApK |
+| Hexahedral | Nonlinear | DOF > 10,000 | **HACApK** (33x faster) |
 | Tetrahedral | Nonlinear | DOF < 2,000 | Any solver |
 | Tetrahedral | Nonlinear | DOF 2,000-10,000 | BiCGSTAB or HACApK |
 | Tetrahedral | Nonlinear | DOF > 10,000 | **HACApK** (4x faster) |
@@ -195,6 +235,15 @@ Where N_demag = 1/3 for a cube.
 ---
 
 ## H-matrix Statistics Summary
+
+### Hexahedral Elements (6 DOF per element)
+
+| N | Elements | DOF | lowrank | dense | max_rank | leaves | build [s] | compression |
+|---|----------|-----|--------:|------:|---------:|-------:|----------:|------------:|
+| 5 | 125 | 750 | 26 | 158 | 46 | 184 | 0.09 | 2.15% |
+| 10 | 1,000 | 6,000 | 1,166 | 2,024 | 90 | 3,190 | 4.03 | 0.59% |
+| 15 | 3,375 | 20,250 | 8,262 | 9,124 | 79 | 17,386 | 26.8 | 0.32% |
+| 20 | 8,000 | 48,000 | 17,976 | 20,656 | 99 | 38,632 | 91.7 | 0.16% |
 
 ### Tetrahedral Elements (3 DOF per element)
 
@@ -249,6 +298,10 @@ python benchmark_tetrahedron.py --lu --bicgstab --hacapk 0.35 0.30 0.25 0.20 0.1
 ### Nonlinear Benchmarks
 
 ```bash
+cd nonlinear/hexahedron
+python benchmark_hex.py --lu --bicgstab --hacapk 5 10 15
+python benchmark_hex.py --hacapk 20
+
 cd nonlinear/tetrahedron
 python benchmark_tetra.py --lu --bicgstab --hacapk 0.35 0.30 0.25 0.20 0.15 0.10
 ```
