@@ -2686,13 +2686,6 @@ void radTPolyhedron::IntrsctOfTwoLines(const TVector2d& V1, const TVector2d& R01
 		IntrsctPo.x = -(-R01.y*V1.x*V2.x + R02.y*V1.x*V2.x + R01.x*V1yV2x - R02.x*V1xV2y)/D;
 		IntrsctPo.y = -(R02.y*V1yV2x - R01.y*V1xV2y + R01.x*V1.y*V2.y - R02.x*V1.y*V2.y)/D;
 		double t_Intrsct = (Abs(V2.x) > V_Toler)? (IntrsctPo.x - R02.x)/V2.x : (IntrsctPo.y - R02.y)/V2.y;
-		//IntrsctCase = ((t_Intrsct > t_Toler) && (t_Intrsct + t_Toler < 1.))? TLinesIntrsctCase::PointWithinBound : (((Abs(t_Intrsct) < t_Toler) || (Abs(t_Intrsct-1.) < t_Toler))? TLinesIntrsctCase::PointOnBoundEdge : TLinesIntrsctCase::PointOutsideBound);
-
-			//DEBUG test
-			//TVector2d V2u = V2, V1u = V1;
-			//V2u.Normalize(); V1u.Normalize();
-			//double t_IntrsctTest = ((R02.y - R01.y)*V1u.x - (R02.x - R01.x)*V1u.y)/(-V1u.x*V2u.y + V1u.y*V2u.x);
-			//END DEBUG test
 
 		if((t_Intrsct > t_Toler) && (t_Intrsct + t_Toler < 1.))
 		{
@@ -2828,14 +2821,6 @@ int radTPolyhedron::SetUpUpperAndLowerPolygon(
 		if(PolygonPtr == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
 		radTHandle<radTPolygon> LowerPgnHndl(PolygonPtr);
 
-		//DEBUG
-		//radTVect2dVect TestVect = EdgePoVect[LowerPgnNo];
-		//TVector2d *Arr = 0;
-		//if(TestVect.size() > 0) 
-		//{
-		//	Arr = new TVector2d[TestVect.size()];
-		//	for(int i=0; i<(int)(TestVect.size()); i++) Arr[i] = TestVect[i];
-		//}
 		LowerNewHandlePgnAndTrans.PgnHndl = LowerPgnHndl;
 		LowerNewHandlePgnAndTrans.TransHndl = FacePgnAndTrans.TransHndl;
 		LowerNewHandlePgnAndTrans.FaceIsInternalAfterCut = FacePgnAndTrans.FaceIsInternalAfterCut;
@@ -2853,9 +2838,6 @@ int radTPolyhedron::SetUpUpperAndLowerPolygon(
 		UpperNewHandlePgnAndTrans.FaceIsInternalAfterCut = FacePgnAndTrans.FaceIsInternalAfterCut;
 		UpperNewVectPgnAndTrans.push_back(UpperNewHandlePgnAndTrans);
 	}
-
-	//DEBUG
-	//if(Arr != 0) delete[] Arr;
 
 	return 1;
 }
@@ -2888,17 +2870,6 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 	TVector3d* NewFaceSecondList = vNewFaceSecondList.data();
 	NewFaceSecondList[0] = P0;
 	NewFaceSecondList[1] = P1;
-
-		//DEBUG
-		//TVector3d &p00 = *(InVectOfTwoPoints3d[0]);
-		//TVector3d &p01 = *(InVectOfTwoPoints3d[0] + 1);
-		//TVector3d &p10 = *(InVectOfTwoPoints3d[1]);
-		//TVector3d &p11 = *(InVectOfTwoPoints3d[1] + 1);
-		//TVector3d &p20 = *(InVectOfTwoPoints3d[2]);
-		//TVector3d &p21 = *(InVectOfTwoPoints3d[2] + 1);
-		//TVector3d &p30 = *(InVectOfTwoPoints3d[3]);
-		//TVector3d &p31 = *(InVectOfTwoPoints3d[3] + 1);
-		//END DEBUG
 
 	int FirstCount = 0, SecondCount = 2;
 	TVector3d BufVect;
@@ -3073,11 +3044,7 @@ int radTPolyhedron::FillInNewHandlePgnAndTransFrom3d(
 
 	radTVect2dVect Vect2dVect;
 
-	//TVector2d *TestArr = new TVector2d[AmOfEdgePo]; //DEBUG
-
 	double LocCoordZ;
-	//double AbsTol = RelAbsTol[1]; //OC170902
-	//TVector2d FirstP2d, PrevP2d; //OC170902
 
 	int AmOfEdgePo_mi_1 = AmOfEdgePo - 1;
 	for(int k=0; k<AmOfEdgePo; k++)
@@ -3086,29 +3053,10 @@ int radTPolyhedron::FillInNewHandlePgnAndTransFrom3d(
 		TVector3d P_loc = RotationPtr->TrPoint(P);
 		TVector2d P2d(P_loc.x, P_loc.y);
 
-		//if(k == 0) 
-		//{
-		//	FirstP2d = P2d; //OC170902
-		//}
-		//else 
-		//{
-		//	//if((Abs(P2d.x - PrevP2d.x) < AbsTol) && (Abs(P2d.y - PrevP2d.y) < AbsTol)) continue;
-		//	//if(k == AmOfEdgePo_mi_1)  //OC281003
-		//	//{
-		//	//	if((Abs(P2d.x - FirstP2d.x) < AbsTol) && (Abs(P2d.y - FirstP2d.y) < AbsTol)) break;
-		//	//}
-		//}
-
 		Vect2dVect.push_back(P2d);
-		//PrevP2d = P2d; //OC281003
 
 		LocCoordZ = P_loc.z;
-
-		//TestArr[k] = P2d; //DEBUG
 	}
-
-	//int ActAmOfEdgePts = Vect2dVect.size(); //OC281003
-	//if(ActAmOfEdgePts <= 2) return 1; //OC281003
 
 	TVector3d LocMagn = RotationPtr->TrVectField(Magn);
 	RotationPtr->Invert();
@@ -3120,8 +3068,6 @@ int radTPolyhedron::FillInNewHandlePgnAndTransFrom3d(
 
 	aHandlePgnAndTrans.PgnHndl = HandlePgn;
 	aHandlePgnAndTrans.TransHndl = HandleRotat;
-
-	//delete[] TestArr; //Debug
 
 	return 1;
 }
