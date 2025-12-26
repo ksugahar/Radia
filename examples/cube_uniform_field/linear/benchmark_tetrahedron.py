@@ -146,6 +146,18 @@ def benchmark_tetrahedra(maxh, solver_type, output_dir, hmat_eps=1e-4,
     n_iter = stats.get('nonl_iterations', 0)
     n_linear_iter = stats.get('linear_iterations', 0)
 
+    # Extract timing info
+    timing = {
+        't_matrix_build': stats.get('t_matrix_build', 0.0),
+        't_lu_decomp': stats.get('t_lu_decomp', 0.0),
+        't_hmatrix_build': stats.get('t_hmatrix_build', 0.0),
+        't_hmatrix_cluster': stats.get('t_hmatrix_cluster', 0.0),
+        't_hmatrix_frame': stats.get('t_hmatrix_frame', 0.0),
+        't_hmatrix_fill': stats.get('t_hmatrix_fill', 0.0),
+        't_linear_solve': stats.get('t_linear_solve', 0.0),
+        't_total': t_solve,
+    }
+
     # Measure memory
     peak_memory_mb = get_rss_memory_mb()
 
@@ -201,6 +213,9 @@ def benchmark_tetrahedra(maxh, solver_type, output_dir, hmat_eps=1e-4,
 
     if peak_memory_mb is not None:
         result_data['peak_memory_mb'] = peak_memory_mb
+
+    # Add timing info
+    result_data['timing'] = timing
 
     # H-matrix stats
     if hmat_info:
