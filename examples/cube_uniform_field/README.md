@@ -58,69 +58,21 @@ Where N_demag = 1/3 for a cube.
 
 ---
 
-## Linear Benchmark Results (2025-12-26)
+## Benchmark Results
 
-### Tetrahedral Benchmark (Linear, Netgen mesh)
+### 1. Hexahedral Linear Benchmark
 
-#### maxh=0.35m (112 elements, 336 DOF)
-
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 908,535 | LU | 65 MB | - | 0 | 2 | 0 | 0.208s | - | 0.208s | 0.40s |
-| 908,291 | BiCGSTAB | 65 MB | - | 30 | 2 | 0 | - | - | 0.170s | 0.73s |
-| 908,290 | HACApK | 65 MB | 0.29% | 30 | 2 | 0.179s | - | 0.179s | 0.010s | 0.39s |
-
-#### maxh=0.30m (200 elements, 600 DOF)
-
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 751,153 | LU | 66 MB | - | 0 | 2 | 0 | 0.219s | - | 0.219s | 1.88s |
-| 751,162 | BiCGSTAB | 66 MB | - | 45 | 3 | 0 | - | - | 0.172s | 0.81s |
-| 751,189 | HACApK | 66 MB | 0.85% | 30 | 3 | 0.007s | - | 0.007s | 0.002s | 0.95s |
-
-#### maxh=0.25m (390 elements, 1,170 DOF)
-
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 765,437 | LU | 69 MB | - | 0 | 2 | 0 | 0.257s | - | 0.257s | 2.63s |
-| 765,444 | BiCGSTAB | 66 MB | - | 29 | 4 | 0 | - | - | 0.223s | 2.64s |
-| 765,454 | HACApK | 68 MB | 1.59% | 29 | 4 | 0.158s | - | 0.158s | 0.014s | 3.20s |
-
-#### maxh=0.20m (627 elements, 1,881 DOF)
-
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 816,133 | LU | 72 MB | - | 0 | 2 | 0 | 0.388s | - | 0.388s | 6.54s |
-| 816,056 | BiCGSTAB | 67 MB | - | 31 | 3 | 0 | - | - | 0.392s | 6.61s |
-| 816,165 | HACApK | 70 MB | 0% | 31 | 3 | 0.175s | - | 0.175s | 0.047s | 4.65s |
-
-#### maxh=0.15m (2,211 elements, 6,633 DOF)
-
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 748,693 | LU | 90 MB | - | 0 | 2 | 0 | 6.78s | - | 6.78s | 87.0s |
-| 748,677 | BiCGSTAB | 76 MB | - | 31 | 6 | 0 | - | - | 6.28s | 86.7s |
-| 748,712 | HACApK | 82 MB | 0% | 31 | 6 | 0.397s | - | 0.397s | 0.476s | 57.5s |
-
-#### maxh=0.10m (4,994 elements, 14,982 DOF)
-
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 754,617 | LU | 103 MB | - | 0 | 2 | 0 | 73.2s | - | 73.2s | 674s |
-| 754,466 | BiCGSTAB | 88 MB | - | 37 | 6 | 0 | - | - | 154.5s | 562s |
-| 754,618 | HACApK | 93 MB | 0% | 36 | 5 | 1.19s | - | 1.19s | 1.73s | 557s |
+*(Results to be added)*
 
 ---
 
-## Nonlinear Benchmark Results (2025-12-26)
-
-### Hexahedral Benchmark (Nonlinear)
+### 2. Hexahedral Nonlinear Benchmark (2025-12-26)
 
 **All solvers converge** for hexahedral nonlinear problems.
 
 #### N=5 (125 elements, 750 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 702,132 | LU | 34 MB | - | 0 | 6 | 0 | 0.562s | - | 0.562s | 0.72s |
 | 702,114 | BiCGSTAB | 33 MB | - | 21 | 3 | 0 | - | - | 0.027s | 0.16s |
@@ -128,7 +80,7 @@ Where N_demag = 1/3 for a cube.
 
 #### N=10 (1,000 elements, 6,000 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 716,281 | LU | 60 MB | - | 0 | 13 | 0 | 9.19s | - | 9.19s | 18.1s |
 | 716,318 | BiCGSTAB | 38 MB | - | 41 | 5 | 0 | - | - | 4.83s | 13.2s |
@@ -136,7 +88,7 @@ Where N_demag = 1/3 for a cube.
 
 #### N=15 (3,375 elements, 20,250 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 719,832 | LU | 124 MB | - | 0 | 35 | 0 | 991s | - | 991s | 1098s |
 | 719,875 | BiCGSTAB | 53 MB | - | 87 | 29 | 0 | - | - | 279s | 372s |
@@ -144,19 +96,71 @@ Where N_demag = 1/3 for a cube.
 
 #### N=20 (8,000 elements, 48,000 DOF) - HACApK only
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 721,317 | HACApK | 95 MB | **~10%** | 111 | 31 | 91.7s | - | 91.7s | 21.9s | 118s |
 
 ---
 
-### Tetrahedral Benchmark (Nonlinear, Netgen mesh)
+### 3. Tetrahedral Linear Benchmark (2025-12-26)
+
+#### maxh=0.35m (112 elements, 336 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
+| 908,535 | LU | 65 MB | - | 0 | 2 | 0 | 0.208s | - | 0.208s | 0.40s |
+| 908,291 | BiCGSTAB | 65 MB | - | 30 | 2 | 0 | - | - | 0.170s | 0.73s |
+| 908,290 | HACApK | 65 MB | 0.29% | 30 | 2 | 0.179s | - | 0.179s | 0.010s | 0.39s |
+
+#### maxh=0.30m (200 elements, 600 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
+| 751,153 | LU | 66 MB | - | 0 | 2 | 0 | 0.219s | - | 0.219s | 1.88s |
+| 751,162 | BiCGSTAB | 66 MB | - | 45 | 3 | 0 | - | - | 0.172s | 0.81s |
+| 751,189 | HACApK | 66 MB | 0.85% | 30 | 3 | 0.007s | - | 0.007s | 0.002s | 0.95s |
+
+#### maxh=0.25m (390 elements, 1,170 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
+| 765,437 | LU | 69 MB | - | 0 | 2 | 0 | 0.257s | - | 0.257s | 2.63s |
+| 765,444 | BiCGSTAB | 66 MB | - | 29 | 4 | 0 | - | - | 0.223s | 2.64s |
+| 765,454 | HACApK | 68 MB | 1.59% | 29 | 4 | 0.158s | - | 0.158s | 0.014s | 3.20s |
+
+#### maxh=0.20m (627 elements, 1,881 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
+| 816,133 | LU | 72 MB | - | 0 | 2 | 0 | 0.388s | - | 0.388s | 6.54s |
+| 816,056 | BiCGSTAB | 67 MB | - | 31 | 3 | 0 | - | - | 0.392s | 6.61s |
+| 816,165 | HACApK | 70 MB | 0% | 31 | 3 | 0.175s | - | 0.175s | 0.047s | 4.65s |
+
+#### maxh=0.15m (2,211 elements, 6,633 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
+| 748,693 | LU | 90 MB | - | 0 | 2 | 0 | 6.78s | - | 6.78s | 87.0s |
+| 748,677 | BiCGSTAB | 76 MB | - | 31 | 6 | 0 | - | - | 6.28s | 86.7s |
+| 748,712 | HACApK | 82 MB | 0% | 31 | 6 | 0.397s | - | 0.397s | 0.476s | 57.5s |
+
+#### maxh=0.10m (4,994 elements, 14,982 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
+| 754,617 | LU | 103 MB | - | 0 | 2 | 0 | 73.2s | - | 73.2s | 674s |
+| 754,466 | BiCGSTAB | 88 MB | - | 37 | 6 | 0 | - | - | 154.5s | 562s |
+| 754,618 | HACApK | 93 MB | 0% | 36 | 5 | 1.19s | - | 1.19s | 1.73s | 557s |
+
+---
+
+### 4. Tetrahedral Nonlinear Benchmark (2025-12-26)
 
 **All solvers converge** for tetrahedral nonlinear problems.
 
 #### maxh=0.35m (112 elements, 336 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 760,858 | LU | 64 MB | - | 0 | 15 | 0 | 0.299s | - | 0.299s | 0.94s |
 | 760,861 | BiCGSTAB | 65 MB | - | 136 | 18 | 0 | - | - | 0.029s | 0.20s |
@@ -164,7 +168,7 @@ Where N_demag = 1/3 for a cube.
 
 #### maxh=0.30m (200 elements, 600 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|--------:|---------:|------:|
 | 726,577 | LU | 66 MB | - | 0 | 14 | 0 | 0.052s | - | 0.052s | 1.89s |
 | 726,721 | BiCGSTAB | 66 MB | - | 171 | 12 | 0 | - | - | 0.063s | 0.62s |
@@ -172,7 +176,7 @@ Where N_demag = 1/3 for a cube.
 
 #### maxh=0.25m (390 elements, 1,170 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 727,050 | LU | 69 MB | - | 0 | 15 | 0 | 0.081s | - | 0.081s | 2.58s |
 | 727,454 | BiCGSTAB | 66 MB | - | 93 | 7 | 0 | - | - | 0.131s | 2.43s |
@@ -180,7 +184,7 @@ Where N_demag = 1/3 for a cube.
 
 #### maxh=0.20m (627 elements, 1,881 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 748,822 | LU | 72 MB | - | 0 | 20 | 0 | 0.169s | - | 0.169s | 7.81s |
 | 748,869 | BiCGSTAB | 68 MB | - | 118 | 14 | 0 | - | - | 0.346s | 6.70s |
@@ -188,7 +192,7 @@ Where N_demag = 1/3 for a cube.
 
 #### maxh=0.15m (2,211 elements, 6,633 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 730,715 | LU | 91 MB | - | 0 | 29 | 0 | 5.66s | - | 5.66s | 174.5s |
 | 730,591 | BiCGSTAB | 77 MB | - | 134 | 36 | 0 | - | - | 2.10s | 101.5s |
@@ -196,7 +200,7 @@ Where N_demag = 1/3 for a cube.
 
 #### maxh=0.10m (4,994 elements, 14,982 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU分解 | H-matrix | LinSolve | Total |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 730,996 | LU | 104 MB | - | 0 | 39 | 0 | 1435s | - | 1435s | 1823s |
 | 731,003 | BiCGSTAB | 90 MB | - | 217 | 41 | 0 | - | - | 507s | 875s |
@@ -294,6 +298,7 @@ H [A/m]     B [T]     Notes
 
 ```bash
 cd linear
+python benchmark_hexahedron.py --lu --bicgstab --hacapk 5 10 15
 python benchmark_tetrahedron.py --lu --bicgstab --hacapk 0.35 0.30 0.25 0.20 0.15 0.10
 ```
 
