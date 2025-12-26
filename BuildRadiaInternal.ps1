@@ -1,7 +1,25 @@
 #==============================================================================
-# Radia Python 3.12 Module (.pyd) Build Script for Visual Studio 2022
-# This script builds ONLY the Python 3.12 extension module (64-bit)
+# Radia Python 3.12 Module (.pyd) Build Script
+# DEPRECATED: Use BuildWithIntel.ps1 instead for optimal performance
+#
+# This script uses MSVC which is NO LONGER SUPPORTED.
+# Intel oneAPI compiler is REQUIRED for Radia builds.
 #==============================================================================
+
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Red
+Write-Host "  DEPRECATED: Use BuildWithIntel.ps1" -ForegroundColor Red
+Write-Host "========================================" -ForegroundColor Red
+Write-Host ""
+Write-Host "MSVC compiler is no longer supported for Radia builds." -ForegroundColor Yellow
+Write-Host "Please use Intel oneAPI compiler instead:" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  powershell.exe -ExecutionPolicy Bypass -File BuildWithIntel.ps1" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "For clean rebuild:" -ForegroundColor Yellow
+Write-Host "  powershell.exe -ExecutionPolicy Bypass -File BuildWithIntel.ps1 -Rebuild" -ForegroundColor Cyan
+Write-Host ""
+exit 1
 
 param(
     [ValidateSet("Release", "Debug", "RelWithDebInfo")]

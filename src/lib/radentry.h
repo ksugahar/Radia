@@ -781,6 +781,14 @@ Similar to RadSolve but with additional nonlinear_method parameter for selecting
 */
 EXP int CALL RadSolveNonl(double* D, int* n, int obj, double prec, int iter, int meth, int nonl_method);
 
+/** Returns solve statistics from the last Solve() call.
+@param dOut [out] array of statistics: [t_matrix_build, t_linear_solve, linear_iterations, nonl_iterations, openmp_enabled, openmp_max_threads]
+@param nOut [out] number of statistics returned (0 if no solve has been performed)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadGetSolveStats(double* dOut, int* nOut);
+
 /** Computes magnetic field created by the object obj at one or many points.
 @param B [out] flat array of all computed values of the magnetic field components (should be allocated by calling function)
 @param nB [out] total number of calculated magnetic field component values

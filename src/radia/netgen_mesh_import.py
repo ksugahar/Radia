@@ -36,14 +36,14 @@ from ngsolve import VOL, ET
 
 
 # Standard tetrahedral face topology (1-indexed for Radia)
-# Face winding REVERSED from Nastran CTETRA standard to ensure outward normals
-# This correction was identified through test_face_winding.py (2025-11-22)
-# Vertices: v0, v1, v2, v3 (0-indexed) -> 1, 2, 3, 4 (Radia 1-indexed)
+# Face winding from ELF/MAGIC KK4T definition for compatibility
+# Netgen vertices: v0, v1, v2, v3 (0-indexed) -> 1, 2, 3, 4 (Radia 1-indexed)
+# Each face is a triangle opposite to one vertex
 TETRA_FACES = [
-    [1, 3, 2],  # Face 0: v0-v2-v1
-    [1, 2, 4],  # Face 1: v0-v1-v3
-    [2, 3, 4],  # Face 2: v1-v2-v3
-    [3, 1, 4]   # Face 3: v2-v0-v3
+    [1, 2, 4],  # Face 0: opposite to v2 (triangle v0-v1-v3)
+    [2, 3, 4],  # Face 1: opposite to v0 (triangle v1-v2-v3)
+    [3, 1, 4],  # Face 2: opposite to v1 (triangle v2-v0-v3)
+    [1, 3, 2],  # Face 3: opposite to v3 (triangle v0-v2-v1)
 ]
 
 # Hexahedral face topology (1-indexed for Radia)

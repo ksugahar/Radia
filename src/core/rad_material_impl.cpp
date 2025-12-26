@@ -28,6 +28,10 @@
 #include <string.h>
 #include <cstdio>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -1406,6 +1410,8 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 				m_hacapk_n_dof = stats.n_dof;
 				m_hacapk_compression = stats.compression;
 				m_hacapk_build_time = stats.build_time;
+				m_hacapk_memory_mb = stats.memory_mb;
+				m_hacapk_dense_memory_mb = stats.dense_memory_mb;
 				m_hacapk_stats_valid = true;
 			}
 			break;
@@ -1429,15 +1435,12 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 
 int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char** arOptionNames, const char** arOptionValues, int numOptions)
 {
-	// Debug: write to log file
-	FILE* debug_log = std::fopen("S:/Radia/01_GitHub/makeautorelax.log", "a");
-	if(debug_log)
-	{
-		std::fprintf(debug_log, "MakeAutoRelax called: key=%d, prec=%g, maxiter=%d, method=%d\n",
-		            InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
-		std::fflush(debug_log);
-		std::fclose(debug_log);
-	}
+	// Initialize solve statistics
+	m_solve_stats_valid = false;
+	m_solve_t_matrix_build = 0.0;
+	m_solve_t_linear_solve = 0.0;
+	m_solve_linear_iterations = 0;
+	m_solve_nonl_iterations = 0;
 
 	try
 	{
@@ -1523,6 +1526,8 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 				m_hacapk_n_dof = stats.n_dof;
 				m_hacapk_compression = stats.compression;
 				m_hacapk_build_time = stats.build_time;
+				m_hacapk_memory_mb = stats.memory_mb;
+				m_hacapk_dense_memory_mb = stats.dense_memory_mb;
 				m_hacapk_stats_valid = true;
 			}
 			break;
@@ -1532,6 +1537,9 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			InteractPtr->OutRelaxStatusParam(RelaxStatusParamArray);
 		}
 
+		// Set solve statistics
+		m_solve_nonl_iterations = ActualIterNum;
+		m_solve_stats_valid = true;
 
 		if(ActualIterNum >= MaxIterNumber) { Send.WarningMessage("Radia::Warning015");}
 		if(SendingIsRequired) Send.OutRelaxResultsInfo(RelaxStatusParamArray, lenRelaxStatusParamArray, ActualIterNum);
@@ -2180,8 +2188,49 @@ void radTApplication::GetHACApKStats(double* dOut, int* nOut)
 	dOut[8] = m_timing_linear_solve;    // Total BiCGSTAB solve time [s]
 	dOut[9] = (double)m_linear_iterations;  // Total BiCGSTAB iterations
 
-	*nOut = 10;
+	// Memory statistics (ELF-compatible)
+	dOut[10] = m_hacapk_memory_mb;       // H-matrix memory [MB]
+	dOut[11] = m_hacapk_dense_memory_mb; // Dense matrix memory [MB]
+
+	*nOut = 12;
 }
 #endif
+
+//-------------------------------------------------------------------------
+
+void radTApplication::GetSolveStats(double* dOut, int* nOut)
+{
+	if(!m_solve_stats_valid)
+	{
+		*nOut = 0;
+		return;
+	}
+
+	// Solve statistics
+	dOut[0] = m_solve_t_matrix_build;   // Interaction matrix build time [s]
+	dOut[1] = m_solve_t_linear_solve;   // Total linear solver time [s]
+	dOut[2] = (double)m_solve_linear_iterations;  // Total linear iterations
+	dOut[3] = (double)m_solve_nonl_iterations;    // Total nonlinear iterations
+
+	// OpenMP status
+#ifdef _OPENMP
+	dOut[4] = 1.0;  // OpenMP enabled
+	dOut[5] = (double)omp_get_max_threads();
+#else
+	dOut[4] = 0.0;  // OpenMP disabled
+	dOut[5] = 1.0;
+#endif
+
+	// LU decomposition time (Method 0 only)
+	dOut[6] = m_solve_t_lu_decomp;
+
+#ifdef RADIA_USE_HACAPK
+	// H-matrix timing (Method 2 only) - ELF-compatible
+	dOut[7] = m_timing_hmatrix_build;   // H-matrix construction time [s]
+	*nOut = 8;
+#else
+	*nOut = 7;
+#endif
+}
 
 //-------------------------------------------------------------------------

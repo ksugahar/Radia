@@ -93,6 +93,7 @@ void SolveGenNonl( int, double, int, int, int );
 void SetHACApKParams( double, int, double );
 void GetHACApKStats( double*, int* );
 #endif
+void GetSolveStats( double*, int* );
 void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
@@ -1668,6 +1669,14 @@ int CALL RadGetHACApKStats(double* dOut, int* nOut)
 	return ioBuffer.OutErrorStatus();
 }
 #endif
+
+//-------------------------------------------------------------------------
+
+int CALL RadGetSolveStats(double* dOut, int* nOut)
+{
+	GetSolveStats(dOut, nOut);
+	return ioBuffer.OutErrorStatus();
+}
 
 //-------------------------------------------------------------------------
 

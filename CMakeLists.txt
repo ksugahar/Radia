@@ -1,12 +1,19 @@
 cmake_minimum_required(VERSION 3.21)
 project(radia_ngsolve C CXX)
 
+# Option to disable OpenMP (for debugging)
+option(RADIA_ENABLE_OPENMP "Enable OpenMP parallelization" ON)
+
 # Find OpenMP for parallel matrix construction
-find_package(OpenMP)
-if(OpenMP_CXX_FOUND)
-    message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
+if(RADIA_ENABLE_OPENMP)
+    find_package(OpenMP)
+    if(OpenMP_CXX_FOUND)
+        message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
+    else()
+        message(WARNING "OpenMP not found - parallel matrix construction disabled")
+    endif()
 else()
-    message(WARNING "OpenMP not found - parallel matrix construction disabled")
+    message(STATUS "OpenMP disabled by RADIA_ENABLE_OPENMP=OFF")
 endif()
 
 # Find Python3 first to get the installation path
@@ -42,10 +49,38 @@ set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/radia")
 set(FFTW_DIR "${EXT_DIR}/fftw")
 
 
-# OpenBLAS directory and library (for optimized LAPACK LU solver)
-set(OPENBLAS_DIR "${EXT_DIR}/openblas")
+# BLAS/LAPACK: Intel MKL only (OpenBLAS dropped)
+# Requires Intel oneAPI to be installed
+
+# Detect Intel compiler
+if(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM" OR CMAKE_C_COMPILER_ID MATCHES "IntelLLVM")
+	set(USING_INTEL_COMPILER TRUE)
+	message(STATUS "Intel oneAPI compiler detected (icx/icx-cl)")
+else()
+	set(USING_INTEL_COMPILER FALSE)
+endif()
+
 if(WIN32)
-	set(OPENBLAS_LIB ${OPENBLAS_DIR}/lib/libopenblas.lib)
+	# Intel oneAPI MKL (required)
+	set(MKL_DIR "C:/Program Files (x86)/Intel/oneAPI/mkl/latest")
+	set(MKL_INCLUDE_DIR "${MKL_DIR}/include")
+	set(MKL_LIB_DIR "${MKL_DIR}/lib")
+	set(MKL_BIN_DIR "${MKL_DIR}/bin")
+
+	# Intel compiler runtime directory
+	set(INTEL_COMPILER_DIR "C:/Program Files (x86)/Intel/oneAPI/compiler/latest")
+	set(INTEL_COMPILER_BIN "${INTEL_COMPILER_DIR}/bin")
+
+	# Use mkl_rt.lib (dynamic linking) - works with both Intel and MSVC compilers
+	set(MKL_LIB "${MKL_LIB_DIR}/mkl_rt.lib")
+	if(EXISTS ${MKL_LIB})
+		message(STATUS "Intel MKL found: ${MKL_LIB}")
+		set(BLAS_LIB ${MKL_LIB})
+		set(BLAS_INCLUDE_DIR ${MKL_INCLUDE_DIR})
+		set(USE_MKL_FOUND TRUE)
+	else()
+		message(FATAL_ERROR "Intel MKL not found. Please install Intel oneAPI Base Toolkit.")
+	endif()
 endif()
 
 # Radia core sources (organized by API functionality)
@@ -207,14 +242,12 @@ else()
 	endif()
 endif()
 
-# OpenBLAS library for radia_ngsolve (LAPACK for HACApK)
-if(WIN32)
-	if(EXISTS ${OPENBLAS_LIB})
-		target_link_libraries(radia_ngsolve PRIVATE ${OPENBLAS_LIB})
-		target_include_directories(radia_ngsolve PRIVATE ${OPENBLAS_DIR}/include)
-		target_compile_definitions(radia_ngsolve PRIVATE HAVE_LAPACK)
-		message(STATUS "Found OpenBLAS library for radia_ngsolve: ${OPENBLAS_LIB}")
-	endif()
+# Intel MKL for radia_ngsolve (required)
+if(WIN32 AND USE_MKL_FOUND)
+	target_link_libraries(radia_ngsolve PRIVATE ${BLAS_LIB})
+	target_include_directories(radia_ngsolve PRIVATE ${BLAS_INCLUDE_DIR})
+	target_compile_definitions(radia_ngsolve PRIVATE HAVE_LAPACK)
+	message(STATUS "Using Intel MKL for radia_ngsolve: ${BLAS_LIB}")
 endif()
 
 # Link Windows system libraries
@@ -227,18 +260,32 @@ if(WIN32)
 endif()
 
 # Link OpenMP for radia_ngsolve
-if(OpenMP_CXX_FOUND)
+if(RADIA_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
 	target_link_libraries(radia_ngsolve PRIVATE OpenMP::OpenMP_CXX)
 	message(STATUS "OpenMP enabled for radia_ngsolve")
 endif()
 
 # Compiler-specific flags
-if(MSVC)
-	# MSVC (Visual Studio)
-	target_compile_options(radia_ngsolve PRIVATE
-		/wd4244  # Disable conversion warnings
-		/wd4267  # Disable size_t conversion warnings
+# POLICY: Intel oneAPI compiler is REQUIRED on Windows for optimal performance
+if(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+	# Intel oneAPI compiler (icx-cl) - REQUIRED
+	set(RADIA_NGSOLVE_INTEL_FLAGS
+		/O3                # Maximum optimization
+		/Qipo              # Interprocedural optimization
+		/fp:fast           # Fast floating-point model
+		/W0                # Disable warnings
 	)
+	if(RADIA_ENABLE_OPENMP)
+		list(APPEND RADIA_NGSOLVE_INTEL_FLAGS /Qopenmp)  # Enable OpenMP (Intel style)
+	endif()
+	target_compile_options(radia_ngsolve PRIVATE ${RADIA_NGSOLVE_INTEL_FLAGS})
+	if(RADIA_ENABLE_OPENMP)
+		target_link_options(radia_ngsolve PRIVATE /Qopenmp)
+	endif()
+elseif(MSVC)
+	# MSVC is NOT supported - use Intel oneAPI instead
+	message(FATAL_ERROR "MSVC compiler is not supported. Please use Intel oneAPI compiler (icx-cl).\n"
+		"Build with: powershell.exe -ExecutionPolicy Bypass -File BuildWithIntel.ps1")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	# GCC
 	target_compile_options(radia_ngsolve PRIVATE
@@ -328,16 +375,12 @@ else()
 	endif()
 endif()
 
-# OpenBLAS library (LAPACK for fast LU decomposition)
-if(WIN32)
-	if(EXISTS ${OPENBLAS_LIB})
-		target_link_libraries(radia PRIVATE ${OPENBLAS_LIB})
-		target_include_directories(radia PRIVATE ${OPENBLAS_DIR}/include)
-		target_compile_definitions(radia PRIVATE HAVE_LAPACK)
-		message(STATUS "Found OpenBLAS library: ${OPENBLAS_LIB}")
-	else()
-		message(WARNING "OpenBLAS library not found: ${OPENBLAS_LIB}")
-	endif()
+# Intel MKL for radia (required for fast LU decomposition and matrix operations)
+if(WIN32 AND USE_MKL_FOUND)
+	target_link_libraries(radia PRIVATE ${BLAS_LIB})
+	target_include_directories(radia PRIVATE ${BLAS_INCLUDE_DIR})
+	target_compile_definitions(radia PRIVATE HAVE_LAPACK)
+	message(STATUS "Using Intel MKL for radia: ${BLAS_LIB}")
 endif()
 
 # Link Windows system libraries
@@ -350,22 +393,38 @@ if(WIN32)
 endif()
 
 # Link OpenMP for parallel matrix construction
-if(OpenMP_CXX_FOUND)
+if(RADIA_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
 	target_link_libraries(radia PRIVATE OpenMP::OpenMP_CXX)
 	message(STATUS "OpenMP enabled for radia (C++)")
 endif()
-if(OpenMP_C_FOUND)
+if(RADIA_ENABLE_OPENMP AND OpenMP_C_FOUND)
 	target_link_libraries(radia PRIVATE OpenMP::OpenMP_C)
 	message(STATUS "OpenMP enabled for radia (C)")
 endif()
 
 # Compiler-specific flags
-if(MSVC)
-	# MSVC (Visual Studio)
-	target_compile_options(radia PRIVATE
-		/wd4244  # Disable conversion warnings
-		/wd4267  # Disable size_t conversion warnings
+# POLICY: Intel oneAPI compiler is REQUIRED on Windows for optimal performance
+if(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+	# Intel oneAPI compiler (icx-cl) - REQUIRED
+	set(RADIA_INTEL_FLAGS
+		/O3                # Maximum optimization
+		/Qipo              # Interprocedural optimization
+		/fp:fast           # Fast floating-point model
+		/Qopt-report:2     # Optimization report
+		/W0                # Disable warnings
 	)
+	if(RADIA_ENABLE_OPENMP)
+		list(APPEND RADIA_INTEL_FLAGS /Qopenmp)  # Enable OpenMP (Intel style)
+	endif()
+	target_compile_options(radia PRIVATE ${RADIA_INTEL_FLAGS})
+	# Link with Intel OpenMP
+	if(RADIA_ENABLE_OPENMP)
+		target_link_options(radia PRIVATE /Qopenmp)
+	endif()
+elseif(MSVC)
+	# MSVC is NOT supported - use Intel oneAPI instead
+	message(FATAL_ERROR "MSVC compiler is not supported. Please use Intel oneAPI compiler (icx-cl).\n"
+		"Build with: powershell.exe -ExecutionPolicy Bypass -File BuildWithIntel.ps1")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	# GCC
 	target_compile_options(radia PRIVATE
@@ -383,6 +442,27 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 message(STATUS "radia module configured")
+
+# Post-build: Copy required DLLs for distribution
+if(WIN32 AND USE_MKL_FOUND)
+	# Copy MKL runtime DLL
+	add_custom_command(TARGET radia POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${MKL_BIN_DIR}/mkl_rt.2.dll"
+			"$<TARGET_FILE_DIR:radia>"
+		COMMENT "Copying mkl_rt.2.dll for distribution"
+	)
+
+	# Copy Intel OpenMP runtime if available
+	if(EXISTS "${INTEL_COMPILER_BIN}/libiomp5md.dll")
+		add_custom_command(TARGET radia POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${INTEL_COMPILER_BIN}/libiomp5md.dll"
+				"$<TARGET_FILE_DIR:radia>"
+			COMMENT "Copying libiomp5md.dll for distribution"
+		)
+	endif()
+endif()
 
 # ========================================
 # Test Programs

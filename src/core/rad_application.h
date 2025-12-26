@@ -75,6 +75,14 @@ public:
 	// Can be set via Python API: rad.SetRelaxParam(value)
 	double m_relax;
 
+	// Solve statistics (always available)
+	double m_solve_t_matrix_build;   // Interaction matrix build time [s]
+	double m_solve_t_lu_decomp;      // LU decomposition time [s] (Method 0 only)
+	double m_solve_t_linear_solve;   // Total linear solver time [s]
+	int m_solve_linear_iterations;   // Total linear iterations (BiCGSTAB only)
+	int m_solve_nonl_iterations;     // Total nonlinear iterations
+	bool m_solve_stats_valid;        // Whether stats are available
+
 #ifdef RADIA_USE_HACAPK
 	// HACApK parameters for H-matrix solver
 	double m_hacapk_eps;       // ACA+ compression tolerance (default: 1e-4)
@@ -89,6 +97,8 @@ public:
 	int m_hacapk_n_dof;
 	double m_hacapk_compression;
 	double m_hacapk_build_time;
+	double m_hacapk_memory_mb;        // H-matrix memory usage [MB]
+	double m_hacapk_dense_memory_mb;  // Dense matrix memory [MB]
 	bool m_hacapk_stats_valid;
 
 	// Detailed timing statistics (ELF-compatible)
@@ -116,6 +126,14 @@ public:
 		m_bicg_tol = 1.0e-4;  // Default: 1e-4 (ELF-compatible)
 		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
 
+		// Solve statistics init
+		m_solve_t_matrix_build = 0.0;
+		m_solve_t_lu_decomp = 0.0;
+		m_solve_t_linear_solve = 0.0;
+		m_solve_linear_iterations = 0;
+		m_solve_nonl_iterations = 0;
+		m_solve_stats_valid = false;
+
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
 
 		// Initialize to default units (mm)
@@ -134,10 +152,12 @@ public:
 		m_hacapk_n_leaves = 0;
 		m_hacapk_n_dof = 0;
 		m_hacapk_compression = 1.0;
+		m_hacapk_build_time = 0.0;
+		m_hacapk_memory_mb = 0.0;
+		m_hacapk_dense_memory_mb = 0.0;
 		m_timing_hmatrix_build = 0.0;
 		m_timing_linear_solve = 0.0;
 		m_linear_iterations = 0;
-		m_hacapk_build_time = 0.0;
 #endif
 	}
 
@@ -268,6 +288,9 @@ public:
 	void SetHACApKParams(double eps, int leaf_size, double eta);
 	void GetHACApKStats(double* dOut, int* nOut);
 #endif
+
+	// Solve statistics retrieval (always available)
+	void GetSolveStats(double* dOut, int* nOut);
 
 	void ComputeField(int ElemKey, char* FieldChar, double* StObsPoi, long lenStObsPoi, double* FiObsPoi, long lenFiObsPoi, int Np, char* ShowArgFlag, double StrtArg);
 	void ComputeField(int ElemKey, char* FieldChar, radTVectorOfVector3d& VectorOfVector3d, radTVectInputCell& VectInputCell);
