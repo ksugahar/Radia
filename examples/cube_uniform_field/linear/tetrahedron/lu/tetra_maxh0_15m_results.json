@@ -7,8 +7,8 @@
   "H_ext": 200000.0,
   "mu_r": 1000,
   "chi": 999,
-  "t_mesh": 0.24403023719787598,
-  "t_solve": 79.22050714492798,
+  "t_mesh": 0.265918493270874,
+  "t_solve": 84.66825366020203,
   "solver_method": 0,
   "solver_name": "lu",
   "converged": true,
@@ -17,5 +17,5 @@
   "M_avg_z": 748692.6044152601,
   "M_analytical_z": 598203.5928143712,
   "error_percent": 25.156821759107554,
-  "peak_memory_mb": 90.05078125
+  "peak_memory_mb": 90.11328125
 }

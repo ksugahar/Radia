@@ -42,7 +42,8 @@ from benchmark_common import (
 
 
 def benchmark_tetrahedra(maxh, solver_type, output_dir, hmat_eps=1e-4,
-                         bicg_tol=1e-4, nonl_tol=0.001):
+                         bicg_tol=1e-4, nonl_tol=0.001,
+                         hmat_leaf_size=10, hmat_eta=2.0):
     """Benchmark tetrahedral mesh (Netgen + Radia).
 
     Args:
@@ -52,6 +53,8 @@ def benchmark_tetrahedra(maxh, solver_type, output_dir, hmat_eps=1e-4,
         hmat_eps: ACA tolerance for H-matrix (only used with hacapk)
         bicg_tol: BiCGSTAB convergence tolerance
         nonl_tol: Nonlinear iteration convergence tolerance
+        hmat_leaf_size: H-matrix leaf size (ELF default: 10)
+        hmat_eta: H-matrix admissibility parameter (ELF default: 2.0)
     """
     try:
         from netgen.occ import Box, Pnt, OCCGeometry
@@ -100,6 +103,8 @@ def benchmark_tetrahedra(maxh, solver_type, output_dir, hmat_eps=1e-4,
         nonl_tol=nonl_tol,
         bicg_tol=bicg_tol,
         hmat_eps=hmat_eps,
+        hmat_leaf_size=hmat_leaf_size,
+        hmat_eta=hmat_eta,
         extra_data={'maxh': maxh}
     )
 
@@ -114,6 +119,8 @@ def run_single_benchmark(maxh, solver_type, script_dir, args):
         '--hmat_eps', str(args.hmat_eps),
         '--bicg_tol', str(args.bicg_tol),
         '--nonl_tol', str(args.nonl_tol),
+        '--hmat_leaf_size', str(args.hmat_leaf_size),
+        '--hmat_eta', str(args.hmat_eta),
     ]
 
     result = subprocess.run(cmd, capture_output=False)
@@ -142,6 +149,10 @@ def main():
                        help='BiCGSTAB convergence tolerance (default: 1e-4)')
     parser.add_argument('--nonl_tol', type=float, default=0.001,
                        help='Nonlinear iteration tolerance (default: 0.001)')
+    parser.add_argument('--hmat_leaf_size', type=int, default=10,
+                       help='H-matrix leaf size (default: 10, ELF-compatible)')
+    parser.add_argument('--hmat_eta', type=float, default=2.0,
+                       help='H-matrix admissibility eta (default: 2.0)')
     parser.add_argument('--single', nargs=2, metavar=('MAXH', 'SOLVER'),
                        help='Run single benchmark (internal use)')
     parser.add_argument('maxh_values', nargs='*', type=float, default=[0.4, 0.3, 0.25],
@@ -157,7 +168,8 @@ def main():
         output_dir = os.path.join(script_dir, solver_type)
         benchmark_tetrahedra(maxh, solver_type, output_dir,
                             hmat_eps=args.hmat_eps, bicg_tol=args.bicg_tol,
-                            nonl_tol=args.nonl_tol)
+                            nonl_tol=args.nonl_tol,
+                            hmat_leaf_size=args.hmat_leaf_size, hmat_eta=args.hmat_eta)
         return
 
     # If no solver is specified, run lu only
