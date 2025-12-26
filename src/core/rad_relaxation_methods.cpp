@@ -2003,7 +2003,8 @@ int radTRelaxationMethNo_2::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 // BiCGSTAB with H-matrix for both 3DOF tetrahedra and 6DOF hexahedra
 //-------------------------------------------------------------------------
 
-int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, double tol, int max_iter, double& residual)
+int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, double tol, int max_iter, double& residual,
+                                                               const std::vector<double>& elemChiArray)
 {
 	if (!m_hacapk || !m_hacapk->IsValid()) return 0;
 
@@ -2023,9 +2024,7 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, doub
 	if(FlatMagn == nullptr || FlatField == nullptr || FlatExtern == nullptr) return 0;
 
 	// Pre-compute 1/chi and RHS for all elements
-	// Supports both 3DOF tetrahedra and 6DOF hexahedra
-	// CRITICAL FIX (2025-12-20): Use current H field estimate from FlatField, not FlatExtern
-	// This matches the LU/BiCGSTAB solvers that use NewFieldAr[i] for chi computation
+	// FIX (2025-12-26): Use isotropic chi from elemChiArray for 3DOF elements (same as BiCGSTAB)
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
@@ -2042,68 +2041,36 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, doub
 		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
 		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
 
-		// FIX (2025-12-21): For first iteration, use small H (like ELF's mucal0)
-		// to get initial chi from the linear region of B-H curve.
-		// Detect first iteration by checking if NewFieldArray equals ExternFieldArray
-		TVector3d H_est;
-		bool isFirstIter = false;
-		if(IntrctPtr->NewFieldArray != nullptr && IntrctPtr->ExternFieldArray != nullptr)
-		{
-			TVector3d& newField = IntrctPtr->NewFieldArray[elem];
-			TVector3d& extField = IntrctPtr->ExternFieldArray[elem];
-			if(std::abs(newField.x - extField.x) < 1.0e-10 &&
-			   std::abs(newField.y - extField.y) < 1.0e-10 &&
-			   std::abs(newField.z - extField.z) < 1.0e-10)
-			{
-				isFirstIter = true;
-			}
-		}
-
-		if(isFirstIter)
-		{
-			// First iteration: use H = 1000 A/m (same as LU solver line 284)
-			H_est = TVector3d(0., 0., 1000.0);
-		}
-		else if(IntrctPtr->NewFieldArray != nullptr)
-		{
-			H_est = IntrctPtr->NewFieldArray[elem];
-		}
-		else
-		{
-			H_est = TVector3d(0., 0., FlatExtern[offset]);
-		}
-		TMatrix3d KsiTensor;
-		TVector3d MrVect;
-		MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
-
 		if(dof == 3)
 		{
-			// For 3DOF: use anisotropic chi (same as LU solver lines 410-412)
-			double inv_chi_x = (KsiTensor.Str0.x > 1.0e-10) ? (1.0 / KsiTensor.Str0.x) : 1.0e10;
-			double inv_chi_y = (KsiTensor.Str1.y > 1.0e-10) ? (1.0 / KsiTensor.Str1.y) : 1.0e10;
-			double inv_chi_z = (KsiTensor.Str2.z > 1.0e-10) ? (1.0 / KsiTensor.Str2.z) : 1.0e10;
-
-			inv_chi[offset + 0] = inv_chi_x;
-			inv_chi[offset + 1] = inv_chi_y;
-			inv_chi[offset + 2] = inv_chi_z;
-
-			// RHS = H_ext + Mr/chi (same as LU solver lines 427-433)
-			double Mr_over_chi_x = (KsiTensor.Str0.x > 1.0e-10) ? (MrVect.x / KsiTensor.Str0.x) : 0.0;
-			double Mr_over_chi_y = (KsiTensor.Str1.y > 1.0e-10) ? (MrVect.y / KsiTensor.Str1.y) : 0.0;
-			double Mr_over_chi_z = (KsiTensor.Str2.z > 1.0e-10) ? (MrVect.z / KsiTensor.Str2.z) : 0.0;
-
-			rhs[offset + 0] = FlatExtern[offset + 0] + Mr_over_chi_x;
-			rhs[offset + 1] = FlatExtern[offset + 1] + Mr_over_chi_y;
-			rhs[offset + 2] = FlatExtern[offset + 2] + Mr_over_chi_z;
-		}
-		else
-		{
-			// For 6DOF: use isotropic chi (original behavior)
-			double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+			// Standard 3DOF element: use isotropic chi from elemChiArray (same as LU/BiCGSTAB)
+			double chi = elemChiArray[elem];
 			if(chi < 1.0e-6) chi = 1.0e-6;
 			double inv_chi_val = 1.0 / chi;
 
-			for(int k = 0; k < dof; k++)
+			// Get Mr for RHS (remanent magnetization for permanent magnet materials)
+			TVector3d InstH(FlatField[offset], FlatField[offset+1], FlatField[offset+2]);
+			TMatrix3d KsiTensor;
+			TVector3d MrVect;
+			MaterPtr->DefineInstantKsiTensor(InstH, KsiTensor, MrVect);
+			double Mr_vals[3] = {MrVect.x, MrVect.y, MrVect.z};
+
+			for(int k = 0; k < 3; k++)
+			{
+				inv_chi[offset + k] = inv_chi_val;  // Same chi for all 3 components
+				rhs[offset + k] = FlatExtern[offset + k] + Mr_vals[k] * inv_chi_val;
+			}
+		}
+		else if(dof == 6)
+		{
+			// For 6DOF: use isotropic chi from poly->CurrentChi (same as BiCGSTAB)
+			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
+			double chi = (poly && poly->Use6DOF_MSC && poly->CurrentChi > 1.0e-6)
+			           ? poly->CurrentChi : 1.0;
+			if(chi < 1.0e-6) chi = 1.0e-6;
+			double inv_chi_val = 1.0 / chi;
+
+			for(int k = 0; k < 6; k++)
 			{
 				inv_chi[offset + k] = inv_chi_val;
 				rhs[offset + k] = FlatExtern[offset + k];
@@ -2377,13 +2344,15 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	}
 
 	std::vector<double> OldMagn(totalDOF);
+	// Store current isotropic chi for ALL elements (unified 3DOF/6DOF handling, same as LU/BiCGSTAB)
+	std::vector<double> CurrentChiArray_hacapk(AmOfMainElem, 1.0);
 	double MisfitE2 = 1.0e30;
 	int totalIterCount = 0;
 	int outerIter = 0;
 
 	// Initialize H field in NewFieldArray (used for chi(H) computation in nonlinear iteration)
 	// Also initialize FlatField for compatibility
-	const double H_init_mag = 1000.0;
+	const double H_init_mag = 100.0;  // Same as LU/BiCGSTAB (100 A/m)
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
@@ -2468,28 +2437,41 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		polyCache[elem] = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
 	}
 
-	// Initialize CurrentChi with ELF-style initial value (same as LU solver lines 1494-1522)
-	// This uses BH curve's 2nd point: chi = B2/(mu0*H2) - 1
-	// Without this, CurrentChi starts at 1.0 causing slow convergence
+	// Initialize CurrentChi with ELF-style initial value (same as LU/BiCGSTAB)
+	// FIX (2025-12-26): Initialize for BOTH 3DOF and 6DOF elements
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+		// Get initial chi (ELF mucal0 style - from BH curve 2nd point)
+		double chi_init = 1.0;
+		radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
+		if(NonlinMater != nullptr)
+		{
+			chi_init = NonlinMater->GetInitialChi_ELF_Style();
+			if(chi_init <= 0) chi_init = 1.0;
+		}
+		else
+		{
+			// Fallback for linear materials: use DefineInstantKsiTensor
+			TVector3d H_est(0., 0., H_init_mag);
+			TMatrix3d KsiTensor;
+			TVector3d MrVect;
+			MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+			chi_init = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+			if(chi_init < 1.0e-6) chi_init = 1.0e-6;
+		}
+		CurrentChiArray_hacapk[elem] = chi_init;
+
+		// For 6DOF elements, also store in poly->CurrentChi
 		if(dof == 6)
 		{
 			radTPolyhedron* poly = polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
 			{
-				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
-				radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
-				radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
-				if(NonlinMater != nullptr)
-				{
-					double chi_init = NonlinMater->GetInitialChi_ELF_Style();
-					if(chi_init > 0)
-					{
-						poly->CurrentChi = chi_init;
-					}
-				}
+				poly->CurrentChi = chi_init;
 			}
 		}
 	}
@@ -2508,11 +2490,24 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			OldMagn[i] = FlatMagn[i];
 		}
 
-		// Store old B norm for convergence check (same as LU solver)
+		// Store old B norm for convergence check (same as LU/BiCGSTAB)
 		for(int elem = 0; elem < AmOfMainElem; elem++)
 		{
 			int dof = IntrctPtr->GetElementDOF(elem);
-			if(dof == 6)
+			int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+			if(dof == 3)
+			{
+				// 3DOF element: store chi and compute B-field norm
+				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+				TVector3d M = g3dRelaxPtr->Magn;
+				double chi = CurrentChiArray_hacapk[elem];
+				if(chi < 1.0e-6) chi = 1.0e-6;
+				TVector3d H(M.x / chi, M.y / chi, M.z / chi);
+				TVector3d B(MU_0 * (H.x + M.x), MU_0 * (H.y + M.y), MU_0 * (H.z + M.z));
+				OldBnorm[elem] = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
+			}
+			else if(dof == 6)
 			{
 				radTPolyhedron* poly = polyCache[elem];
 				if(poly && poly->Use6DOF_MSC)
@@ -2537,7 +2532,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 		// Time BiCGSTAB solve
 		auto t_bicg_start = std::chrono::high_resolution_clock::now();
-		int n_iter = SolveBiCGSTAB_HMatrix_VariableDOF(totalDOF, bicg_tol, bicg_max_iter, residual);
+		int n_iter = SolveBiCGSTAB_HMatrix_VariableDOF(totalDOF, bicg_tol, bicg_max_iter, residual, CurrentChiArray_hacapk);
 		auto t_bicg_end = std::chrono::high_resolution_clock::now();
 		rad.m_timing_linear_solve += std::chrono::duration<double>(t_bicg_end - t_bicg_start).count();
 		rad.m_linear_iterations += n_iter;
@@ -2567,23 +2562,19 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				g3dRelaxPtr->Magn.y = FlatMagn[offset + 1];
 				g3dRelaxPtr->Magn.z = FlatMagn[offset + 2];
 
-				// Compute H_new = M / chi_current for 3DOF (same as LU solver)
-				// This is needed for chi(H) update in nonlinear iteration
+				// Update H field: H = M / chi (same as LU/BiCGSTAB)
+				double chi = CurrentChiArray_hacapk[elem];
+				if(chi < 1.0e-6) chi = 1.0e-6;
+				for(int k = 0; k < 3; k++)
+				{
+					FlatField[offset + k] = FlatMagn[offset + k] / chi;
+				}
+				// Also update NewFieldArray for chi(H) computation
 				if(IntrctPtr->NewFieldArray != nullptr)
 				{
-					radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
-					if(MaterPtr != nullptr)
-					{
-						TVector3d& H_old = IntrctPtr->NewFieldArray[elem];
-						TMatrix3d KsiTensor;
-						TVector3d MrVect;
-						MaterPtr->DefineInstantKsiTensor(H_old, KsiTensor, MrVect);
-						double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
-						if(chi < 1.0e-6) chi = 1.0e-6;
-						IntrctPtr->NewFieldArray[elem].x = g3dRelaxPtr->Magn.x / chi;
-						IntrctPtr->NewFieldArray[elem].y = g3dRelaxPtr->Magn.y / chi;
-						IntrctPtr->NewFieldArray[elem].z = g3dRelaxPtr->Magn.z / chi;
-					}
+					IntrctPtr->NewFieldArray[elem].x = FlatField[offset];
+					IntrctPtr->NewFieldArray[elem].y = FlatField[offset + 1];
+					IntrctPtr->NewFieldArray[elem].z = FlatField[offset + 2];
 				}
 			}
 			else if(dof == 6)
@@ -2631,14 +2622,73 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			}
 		}
 
-		// Compute convergence and update chi (same structure as LU solver lines 1686-1793)
+		// Compute convergence and update chi (same structure as LU/BiCGSTAB)
 		double max_B_rel_change = 0.0;
 		bool has_6dof_elements = false;
 
 		for(int elem = 0; elem < AmOfMainElem; elem++)
 		{
 			int dof = IntrctPtr->GetElementDOF(elem);
-			if(dof == 6)
+			int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+			if(dof == 3)
+			{
+				// 3DOF element: update chi using ELF-style dual method (same as LU/BiCGSTAB)
+				radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+				radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+				// Get H from updated FlatField (H = M / chi)
+				TVector3d H_new(FlatField[offset], FlatField[offset+1], FlatField[offset+2]);
+				double H_mag = std::sqrt(H_new.x*H_new.x + H_new.y*H_new.y + H_new.z*H_new.z);
+
+				// Chi update using ELF-style dual-method
+				double chi_matrix = CurrentChiArray_hacapk[elem];
+				double mu_old = chi_matrix + 1.0;
+
+				radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
+				double chi_new;
+				if(NonlinMater != nullptr)
+				{
+					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old);
+				}
+				else
+				{
+					// Fallback for linear materials
+					TMatrix3d KsiTensor;
+					TVector3d MrVect;
+					MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
+					chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
+				}
+
+				// Apply under-relaxation
+				double relax_hacapk = rad.m_relax;
+				if(relax_hacapk > 0.0 && relax_hacapk <= 1.0)
+				{
+					chi_new = chi_new * (1.0 - relax_hacapk) + chi_matrix * relax_hacapk;
+				}
+				CurrentChiArray_hacapk[elem] = chi_new;
+
+				// B-field convergence (ELF mucal2 style) for 3DOF elements
+				TVector3d M_new = g3dRelaxPtr->Magn;
+				TVector3d B_new_vec(MU_0 * (H_new.x + M_new.x),
+				                    MU_0 * (H_new.y + M_new.y),
+				                    MU_0 * (H_new.z + M_new.z));
+				double B_new_norm = std::sqrt(B_new_vec.x*B_new_vec.x + B_new_vec.y*B_new_vec.y + B_new_vec.z*B_new_vec.z);
+
+				double B_sat = 1.0;
+				if(NonlinMater != nullptr)
+				{
+					B_sat = NonlinMater->GetBsaturation();
+					if(B_sat < 1.0e-10) B_sat = 1.0;
+				}
+
+				double B_old_norm = OldBnorm[elem];
+				double B_rel_change = std::fabs(B_new_norm - B_old_norm) / B_sat;
+				if(B_rel_change > max_B_rel_change)
+					max_B_rel_change = B_rel_change;
+			}
+			else if(dof == 6)
 			{
 				has_6dof_elements = true;
 				radTPolyhedron* poly = polyCache[elem];
@@ -2647,14 +2697,14 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					TVector3d H_new = IntrctPtr->NewFieldArray[elem];
 					radTMaterial* MaterPtr = (radTMaterial*)(IntrctPtr->g3dRelaxPtrVect[elem]->MaterHandle.rep);
 
-					// Get chi used for this iteration's matrix (same as LU line 1699)
+					// Get chi used for this iteration's matrix
 					double chi_matrix = poly->CurrentChi;
 					double mu_old = chi_matrix + 1.0;
 
 					// Compute H magnitude for chi update
 					double H_mag = std::sqrt(H_new.x*H_new.x + H_new.y*H_new.y + H_new.z*H_new.z);
 
-					// Use ELF-style dual-method chi update (same as LU lines 1708-1736)
+					// Use ELF-style dual-method chi update
 					radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
 					double chi_new;
 					if(NonlinMater != nullptr)
@@ -2672,7 +2722,6 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
 
 					// Update chi for next iteration with optional under-relaxation
-					// relax=0: full step, relax>0: chi = chi_new*(1-relax) + chi_old*relax
 					double relax_hacapk = rad.m_relax;
 					if(relax_hacapk > 0.0 && relax_hacapk <= 1.0)
 					{
@@ -2680,7 +2729,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					}
 					poly->CurrentChi = chi_new;
 
-					// B-field convergence (same as LU lines 1741-1765)
+					// B-field convergence
 					TVector3d& M_new = poly->Magn;
 					double chi_for_B = chi_new;
 					if(chi_for_B < 1.0e-6) chi_for_B = 1.0e-6;
@@ -2690,7 +2739,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					                    MU_0 * (H_for_B.z + M_new.z));
 					double B_new_norm = std::sqrt(B_new_vec.x*B_new_vec.x + B_new_vec.y*B_new_vec.y + B_new_vec.z*B_new_vec.z);
 
-					// Get B_sat from BH curve (same as LU lines 1753-1759)
+					// Get B_sat from BH curve
 					double B_sat = 1.0;
 					if(NonlinMater != nullptr)
 					{
@@ -2698,7 +2747,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 						if(B_sat < 1.0e-10) B_sat = 1.0;
 					}
 
-					// B-field convergence: |B_new - B_old| / B_sat (same as LU lines 1761-1765)
+					// B-field convergence: |B_new - B_old| / B_sat
 					double B_old_norm = OldBnorm[elem];
 					double B_rel_change = std::fabs(B_new_norm - B_old_norm) / B_sat;
 					if(B_rel_change > max_B_rel_change)
@@ -2707,18 +2756,8 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			}
 		}
 
-		// Convergence criterion (same as LU lines 1779-1794)
-		double rel_change;
-		if(has_6dof_elements)
-		{
-			// For 6DOF MSC: use ELF-style B-field change (mucal2)
-			rel_change = max_B_rel_change;
-		}
-		else
-		{
-			// For 3DOF MMM: use M change
-			rel_change = (M_norm_sq > 1.0e-30) ? std::sqrt(M_diff_sq / M_norm_sq) : std::sqrt(M_diff_sq);
-		}
+		// Convergence criterion: use B-field change for both 3DOF and 6DOF (same as LU/BiCGSTAB)
+		double rel_change = max_B_rel_change;
 		MisfitE2 = rel_change * rel_change;
 
 		if(rel_change <= PrecOnMagnetiz)

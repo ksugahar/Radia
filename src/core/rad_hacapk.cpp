@@ -753,12 +753,23 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     m_stats.n_dense = m_stats.n_leaves - m_stats.n_lowrank;
     m_stats.max_rank = HACApK_leafmtxp_get_ktmax(m_leafmtxp);
 
-    // Estimate compression ratio
-    int64_t full_size = (int64_t)m_ndof * m_ndof;
-    // Rough estimate: assume average rank and block size
-    int64_t hmat_size = m_stats.n_lowrank * (m_ndof / m_stats.n_leaves) * m_stats.max_rank * 2;
-    hmat_size += m_stats.n_dense * (m_ndof / m_stats.n_leaves) * (m_ndof / m_stats.n_leaves);
-    m_stats.compression = (full_size > 0) ? (double)hmat_size / (double)full_size : 1.0;
+    // Calculate memory usage and compression ratio (ELF-compatible)
+    // Dense matrix memory: ndof * ndof * sizeof(double)
+    int64_t dense_bytes = (int64_t)m_ndof * m_ndof * sizeof(double);
+    m_stats.dense_memory_mb = (double)dense_bytes / (1024.0 * 1024.0);
+
+    // H-matrix memory estimation:
+    // - Low-rank blocks: each stores U(m x k) + V(n x k) ~ 2 * block_size * rank * sizeof(double)
+    // - Dense blocks: block_size^2 * sizeof(double)
+    int64_t avg_block_size = (m_stats.n_leaves > 0) ? m_ndof / m_stats.n_leaves : m_ndof;
+    int64_t lowrank_bytes = m_stats.n_lowrank * 2 * avg_block_size * m_stats.max_rank * sizeof(double);
+    int64_t dense_block_bytes = m_stats.n_dense * avg_block_size * avg_block_size * sizeof(double);
+    int64_t hmat_bytes = lowrank_bytes + dense_block_bytes;
+    m_stats.memory_mb = (double)hmat_bytes / (1024.0 * 1024.0);
+
+    // Compression ratio = H-matrix memory / Dense matrix memory
+    m_stats.compression = (m_stats.dense_memory_mb > 0) ?
+        m_stats.memory_mb / m_stats.dense_memory_mb : 1.0;
 
     auto end_time = std::chrono::high_resolution_clock::now();
     m_stats.build_time = std::chrono::duration<double>(end_time - start_time).count();

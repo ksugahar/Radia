@@ -56,12 +56,15 @@ struct RadHACApKStats {
     int max_rank;        // Maximum rank among low-rank blocks
     int n_leaves;        // Total number of leaf blocks
     int n_dof;           // Total degrees of freedom
-    double compression;  // Compression ratio (memory used / full matrix)
+    double compression;  // Compression ratio (H-matrix memory / dense memory)
     double build_time;   // Time to build H-matrix (seconds)
+    double memory_mb;    // Actual H-matrix memory usage [MB]
+    double dense_memory_mb;  // Full dense matrix memory [MB]
 
     RadHACApKStats() :
         n_lowrank(0), n_dense(0), max_rank(0), n_leaves(0),
-        n_dof(0), compression(1.0), build_time(0.0)
+        n_dof(0), compression(1.0), build_time(0.0),
+        memory_mb(0.0), dense_memory_mb(0.0)
     {}
 };
 
