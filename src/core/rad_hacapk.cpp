@@ -157,6 +157,7 @@ RadHACApKManager::RadHACApKManager(radTInteraction* interaction)
     , m_is_6dof(false)
     , m_is_mixed_dof(false)
     , m_geometry_ready(false)
+    , m_geometry_3dof_ready(false)
     , m_diag_cached(false)
     , m_flat_N_ready(false)
 {
@@ -342,6 +343,91 @@ void RadHACApKManager::PrecomputeGeometry() {
 }
 
 //=========================================================================
+// PrecomputeGeometry3DOF: ELF-style pre-computed geometry for 3DOF tetrahedra
+// Extracts all tetrahedron vertices and face geometry into contiguous arrays
+// This avoids calling B_comp() which has significant overhead during H-matrix build
+//=========================================================================
+
+void RadHACApKManager::PrecomputeGeometry3DOF() {
+    if (m_geometry_3dof_ready || m_n_elem == 0 || !m_interaction) return;
+
+    // Allocate arrays for tetrahedra (4 triangular faces, 3 vertices each)
+    m_tetra_centers.resize(m_n_elem * 3);
+    m_tetra_face_vertices.resize(m_n_elem * 4 * 3 * 3);  // 4 faces, 3 vertices, 3 coords
+    m_tetra_face_normals.resize(m_n_elem * 4 * 3);       // 4 faces, 3 coords (outward normals)
+    m_tetra_face_areas.resize(m_n_elem * 4);              // 4 faces
+
+    for (int e = 0; e < m_n_elem; e++) {
+        radTg3dRelax* elem = m_interaction->g3dRelaxPtrVect[e];
+        if (!elem) continue;
+
+        radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
+        if (!poly || poly->AmOfFaces != 4) continue;  // Skip non-tetrahedra
+
+        // Store element center
+        int cIdx = e * 3;
+        m_tetra_centers[cIdx + 0] = poly->CentrPoint.x;
+        m_tetra_centers[cIdx + 1] = poly->CentrPoint.y;
+        m_tetra_centers[cIdx + 2] = poly->CentrPoint.z;
+
+        // Store face data for each of the 4 triangular faces
+        for (int f = 0; f < 4; f++) {
+            radTHandlePgnAndTrans hpt = poly->VectHandlePgnAndTrans[f];
+            radTPolygon* pgn = hpt.PgnHndl.rep;
+            radTrans* tr = hpt.TransHndl.rep;
+
+            // Get 3 vertices of this triangular face
+            const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+            if (verts2d.size() < 3) continue;
+
+            int fvIdx = (e * 4 + f) * 3 * 3;  // Starting index for this face's vertices
+            TVector3d V[3];
+            for (int v = 0; v < 3; v++) {
+                V[v] = tr->TrPoint(TVector3d(verts2d[v].x, verts2d[v].y, pgn->CoordZ));
+                m_tetra_face_vertices[fvIdx + v * 3 + 0] = V[v].x;
+                m_tetra_face_vertices[fvIdx + v * 3 + 1] = V[v].y;
+                m_tetra_face_vertices[fvIdx + v * 3 + 2] = V[v].z;
+            }
+
+            // Compute face normal (outward pointing)
+            TVector3d e1 = {V[1].x - V[0].x, V[1].y - V[0].y, V[1].z - V[0].z};
+            TVector3d e2 = {V[2].x - V[0].x, V[2].y - V[0].y, V[2].z - V[0].z};
+            TVector3d n = {e1.y*e2.z - e1.z*e2.y, e1.z*e2.x - e1.x*e2.z, e1.x*e2.y - e1.y*e2.x};
+            double nLen = sqrt(n.x*n.x + n.y*n.y + n.z*n.z);
+
+            // Face area = 0.5 * |cross product|
+            m_tetra_face_areas[e * 4 + f] = 0.5 * nLen;
+
+            // Normalize and check orientation (outward from centroid)
+            if (nLen > 1e-20) {
+                n.x /= nLen; n.y /= nLen; n.z /= nLen;
+
+                // Face center
+                TVector3d fc = {(V[0].x + V[1].x + V[2].x) / 3.0,
+                                (V[0].y + V[1].y + V[2].y) / 3.0,
+                                (V[0].z + V[1].z + V[2].z) / 3.0};
+                // Vector from centroid to face center
+                TVector3d toFace = {fc.x - poly->CentrPoint.x,
+                                    fc.y - poly->CentrPoint.y,
+                                    fc.z - poly->CentrPoint.z};
+                // If normal points inward, flip it
+                if (n.x*toFace.x + n.y*toFace.y + n.z*toFace.z < 0) {
+                    n.x = -n.x; n.y = -n.y; n.z = -n.z;
+                }
+            }
+
+            // Store normalized outward normal
+            int fnIdx = (e * 4 + f) * 3;
+            m_tetra_face_normals[fnIdx + 0] = n.x;
+            m_tetra_face_normals[fnIdx + 1] = n.y;
+            m_tetra_face_normals[fnIdx + 2] = n.z;
+        }
+    }
+
+    m_geometry_3dof_ready = true;
+}
+
+//=========================================================================
 // PrecomputeFlatInteractMatrix: Flatten InteractMatrix for 3DOF tetrahedra
 // Converts 2D pointer array TMatrix3df** to contiguous double array
 // This eliminates pointer chasing during matrix element access
@@ -350,24 +436,8 @@ void RadHACApKManager::PrecomputeGeometry() {
 void RadHACApKManager::PrecomputeFlatInteractMatrix() {
     if (m_flat_N_ready || m_n_elem == 0 || !m_interaction) return;
     if (!m_interaction->InteractMatrix) {
-        std::cout << "[HACApK] PrecomputeFlatInteractMatrix: InteractMatrix is NULL, skipping" << std::endl;
-        return;
+        return;  // InteractMatrix not computed
     }
-
-    auto t_start = std::chrono::high_resolution_clock::now();
-
-    // Debug: Check if InteractMatrix has non-zero values
-    double max_val = 0.0;
-    for (int i = 0; i < std::min(5, m_n_elem); i++) {
-        for (int j = 0; j < std::min(5, m_n_elem); j++) {
-            const TMatrix3df& M = m_interaction->InteractMatrix[i][j];
-            double v = std::abs(M.Str0.x) + std::abs(M.Str0.y) + std::abs(M.Str0.z) +
-                       std::abs(M.Str1.x) + std::abs(M.Str1.y) + std::abs(M.Str1.z) +
-                       std::abs(M.Str2.x) + std::abs(M.Str2.y) + std::abs(M.Str2.z);
-            if (v > max_val) max_val = v;
-        }
-    }
-    std::cout << "[HACApK] InteractMatrix sample max value: " << max_val << std::endl;
 
     // Allocate flat storage: n_elem * n_elem * 9 doubles (3x3 block per element pair)
     int64_t total_size = (int64_t)m_n_elem * m_n_elem * 9;
@@ -406,10 +476,6 @@ void RadHACApKManager::PrecomputeFlatInteractMatrix() {
     }
 
     m_flat_N_ready = true;
-
-    auto t_end = std::chrono::high_resolution_clock::now();
-    double t_flat = std::chrono::duration<double>(t_end - t_start).count();
-    std::cout << "[HACApK] PrecomputeFlatInteractMatrix: " << t_flat << " s (n_elem=" << m_n_elem << ", size=" << (total_size * 8 / 1024 / 1024) << " MB)" << std::endl;
 }
 
 //=========================================================================
@@ -688,32 +754,48 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     // ELF-style pre-computation for 6DOF hexahedra
     if (m_is_6dof) {
         PrecomputeGeometry();
-    } else {
-        // Flatten InteractMatrix for 3DOF tetrahedra
+    }
+    // ELF-style pre-computation for 3DOF tetrahedra (2025-12-26)
+    // PrecomputeGeometry3DOF extracts face vertices/normals for direct field computation
+    // This allows on-demand matrix element computation without O(N^2) SetupInteractMatrix()
+    if (!m_is_6dof && !m_is_mixed_dof) {
+        PrecomputeGeometry3DOF();
+    }
+    // FIX (2025-12-26): For 3DOF tetrahedra, use PrecomputeFlatInteractMatrix()
+    // if InteractMatrix was already computed (fallback path)
+    // This provides O(1) matrix element access during H-matrix construction
+    if (!m_is_6dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
         PrecomputeFlatInteractMatrix();
     }
 
-    // Initialize inverse susceptibility with current values
+    // Initialize inverse susceptibility with ELF-style initial chi from BH curve point 2
+    // This matches ELF's initialize_chi_from_bh() which uses:
+    //   chi = B2/(mu0*H2) - 1 (from 2nd point of BH curve)
     m_inv_chi.resize(m_ndof);
-
-    double* FlatField = m_interaction->GetFlatFieldArray();
 
     for (int i = 0; i < m_n_elem; i++) {
         radTg3dRelax* g3dRelaxPtr = m_interaction->g3dRelaxPtrVect[i];
         radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
 
-        // Estimate H from field array
-        int offset = m_dof_offset[i];
-        TVector3d H_est(0., 0., FlatField ? FlatField[offset] : 0.);
-        TMatrix3d KsiTensor;
-        TVector3d MrVect;
-        MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
-
-        double chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+        // Use ELF-style initial chi from BH curve point 2 (matches initialize_chi_from_bh)
+        double chi = 1.0;
+        radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
+        if (NonlinMater != nullptr) {
+            chi = NonlinMater->GetInitialChi_ELF_Style();
+            if (chi <= 0) chi = 1.0;
+        } else {
+            // Fallback for linear materials: use DefineInstantKsiTensor with H=0
+            TMatrix3d KsiTensor;
+            TVector3d MrVect;
+            TVector3d H_zero(0., 0., 0.);
+            MaterPtr->DefineInstantKsiTensor(H_zero, KsiTensor, MrVect);
+            chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+        }
         if (chi < 1.0e-6) chi = 1.0e-6;
         double inv_chi_val = 1.0 / chi;
 
         // All DOF per element use the same 1/chi
+        int offset = m_dof_offset[i];
         int elem_dof = m_dof_offset[i + 1] - offset;
         for (int k = 0; k < elem_dof; k++) {
             m_inv_chi[offset + k] = inv_chi_val;
@@ -1092,28 +1174,98 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
 }
 
 //=========================================================================
-// GetCached3x3Element: O(1) flat array access for 3DOF tetrahedra
-// Uses pre-computed flat storage for maximum performance
+// GetCached3x3Element: On-demand 3x3 block computation with thread-local LRU cache
+// Similar to GetCached6x6Element for 6DOF hexahedra
 //=========================================================================
 
+// Thread-local LRU cache size for 3x3 blocks (matches 6DOF cache size)
+static constexpr int TL_CACHE_SIZE_3DOF = 64;
+
 double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const {
-    // If flat storage is ready, use O(1) direct access
+    // If flat storage is ready (pre-computed), use O(1) direct access
     if (m_flat_N_ready) {
         int64_t base_idx = ((int64_t)elem_i * m_n_elem + elem_j) * 9;
         double val = m_flat_N_data[base_idx + comp_i * 3 + comp_j];
-        // Debug: Check first few accesses
-        static int debug_count = 0;
-        if (debug_count < 3 && elem_i == 0 && elem_j == 0) {
-            std::cout << "[HACApK] GetCached3x3Element(0,0," << comp_i << "," << comp_j << ") = " << val << " [flat]" << std::endl;
-            debug_count++;
-        }
         return val;
     }
 
-    // Fallback to original Compute3x3Block (should not happen in normal usage)
-    std::cout << "[HACApK] WARNING: Using Compute3x3Block fallback (flat storage not ready)" << std::endl;
+    // On-demand computation with thread-local LRU cache (ELF-style)
+    // This path is used when SetupInteractMatrix() is NOT called (HACApK optimization)
+
+    // Thread-local single-entry cache (most common case: same block accessed multiple times)
+    static thread_local int tl_single_elem_i = -1;
+    static thread_local int tl_single_elem_j = -1;
+    static thread_local double tl_single_N_mat[9];
+
+    // Thread-local LRU cache (no locking!)
+    static thread_local int tl_cache_elem_i[TL_CACHE_SIZE_3DOF];
+    static thread_local int tl_cache_elem_j[TL_CACHE_SIZE_3DOF];
+    static thread_local double tl_cache_N_mat[TL_CACHE_SIZE_3DOF][9];
+    static thread_local int tl_cache_access[TL_CACHE_SIZE_3DOF];
+    static thread_local int tl_access_counter = 0;
+    static thread_local bool tl_initialized = false;
+
+    // Initialize thread-local cache on first access
+    if (!tl_initialized) {
+        for (int i = 0; i < TL_CACHE_SIZE_3DOF; i++) {
+            tl_cache_elem_i[i] = -1;
+            tl_cache_elem_j[i] = -1;
+            tl_cache_access[i] = 0;
+        }
+        tl_initialized = true;
+    }
+
+    // Check single-entry cache first (fastest path)
+    if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j) {
+        return tl_single_N_mat[comp_i * 3 + comp_j];
+    }
+
+    // Search thread-local LRU cache (no locking needed!)
+    for (int k = 0; k < TL_CACHE_SIZE_3DOF; k++) {
+        if (tl_cache_elem_i[k] == elem_i && tl_cache_elem_j[k] == elem_j) {
+            // Cache hit - update access count and copy to single-entry cache
+            tl_access_counter++;
+            tl_cache_access[k] = tl_access_counter;
+
+            // Copy to single-entry cache for repeated access
+            std::memcpy(tl_single_N_mat, tl_cache_N_mat[k], 9 * sizeof(double));
+            tl_single_elem_i = elem_i;
+            tl_single_elem_j = elem_j;
+
+            return tl_single_N_mat[comp_i * 3 + comp_j];
+        }
+    }
+
+    // Cache miss - compute the 3x3 block on-demand
+    // Use fast method with pre-computed geometry if available
     double N_mat[9];
-    Compute3x3Block(elem_i, elem_j, N_mat);
+    if (m_geometry_3dof_ready) {
+        Compute3x3BlockFast(elem_i, elem_j, N_mat);
+    } else {
+        Compute3x3Block_OnDemand(elem_i, elem_j, N_mat);
+    }
+
+    // Update single-entry cache
+    std::memcpy(tl_single_N_mat, N_mat, 9 * sizeof(double));
+    tl_single_elem_i = elem_i;
+    tl_single_elem_j = elem_j;
+
+    // Find LRU slot and update cache
+    int lru_slot = 0;
+    int min_access = tl_cache_access[0];
+    for (int k = 1; k < TL_CACHE_SIZE_3DOF; k++) {
+        if (tl_cache_access[k] < min_access) {
+            min_access = tl_cache_access[k];
+            lru_slot = k;
+        }
+    }
+
+    tl_cache_elem_i[lru_slot] = elem_i;
+    tl_cache_elem_j[lru_slot] = elem_j;
+    std::memcpy(tl_cache_N_mat[lru_slot], N_mat, 9 * sizeof(double));
+    tl_access_counter++;
+    tl_cache_access[lru_slot] = tl_access_counter;
+
     return N_mat[comp_i * 3 + comp_j];
 }
 
@@ -1162,6 +1314,200 @@ void RadHACApKManager::Compute3x3Block(int elem_i, int elem_j, double* N_mat) co
     N_mat[6] = -static_cast<double>(M.Str0.z);  // -dHz/dMx
     N_mat[7] = -static_cast<double>(M.Str1.z);  // -dHz/dMy
     N_mat[8] = -static_cast<double>(M.Str2.z);  // -dHz/dMz
+}
+
+//=========================================================================
+// Compute3x3Block_OnDemand: On-demand 3x3 interaction block computation
+// Computes interaction directly using B_comp() without pre-computed matrix
+// This is used by HACApK to avoid O(N^2) matrix pre-computation
+//=========================================================================
+
+void RadHACApKManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const {
+    // Compute interaction from element j to observation at element i center
+    // using B_comp() directly (same approach as SetupInteractMatrix)
+    //
+    // IMPORTANT: Returns -N to match system matrix A = -N + diag(1/chi)
+
+    std::memset(N_mat, 0, 9 * sizeof(double));
+
+    if (!m_interaction || elem_i < 0 || elem_i >= m_n_elem ||
+        elem_j < 0 || elem_j >= m_n_elem) {
+        return;
+    }
+
+    radTg3dRelax* elem_row = m_interaction->g3dRelaxPtrVect[elem_i];
+    radTg3dRelax* elem_col = m_interaction->g3dRelaxPtrVect[elem_j];
+    if (!elem_row || !elem_col) return;
+
+    // Get observation point (center of element i) in global coordinates
+    TVector3d ObsPoiVect = elem_row->ReturnCentrPoint();
+
+    // Set up field computation with interaction keys
+    radTFieldKey FieldKeyInteract;
+    FieldKeyInteract.B_ = FieldKeyInteract.H_ = FieldKeyInteract.PreRelax_ = 1;
+
+    TVector3d ZeroVect(0., 0., 0.);
+    radTField Field(FieldKeyInteract, m_interaction->CompCriterium, ObsPoiVect,
+                   ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+    Field.AmOfIntrctElemWithSym = m_interaction->CountRelaxElemsWithSym();
+
+    // Compute field contribution from element j
+    elem_col->B_comp(&Field);
+
+    // Field.B = response to unit Mx (dH/dMx)
+    // Field.H = response to unit My (dH/dMy)
+    // Field.A = response to unit Mz (dH/dMz)
+    //
+    // For the system matrix, we need -N:
+    // N_mat[row * 3 + col] = -dH_row/dM_col
+
+    // Row 0 (Hx response): -dHx/dMx, -dHx/dMy, -dHx/dMz
+    N_mat[0] = -Field.B.x;  // -dHx/dMx
+    N_mat[1] = -Field.H.x;  // -dHx/dMy
+    N_mat[2] = -Field.A.x;  // -dHx/dMz
+    // Row 1 (Hy response): -dHy/dMx, -dHy/dMy, -dHy/dMz
+    N_mat[3] = -Field.B.y;  // -dHy/dMx
+    N_mat[4] = -Field.H.y;  // -dHy/dMy
+    N_mat[5] = -Field.A.y;  // -dHy/dMz
+    // Row 2 (Hz response): -dHz/dMx, -dHz/dMy, -dHz/dMz
+    N_mat[6] = -Field.B.z;  // -dHz/dMx
+    N_mat[7] = -Field.H.z;  // -dHz/dMy
+    N_mat[8] = -Field.A.z;  // -dHz/dMz
+}
+
+//=========================================================================
+// Compute3x3BlockFast: ELF-style fast 3x3 block computation for tetrahedra
+// Uses pre-computed geometry arrays (no object access, no B_comp overhead)
+//
+// The 3x3 interaction matrix N[i][j] represents how magnetization M_j creates
+// demagnetizing field H at element i's center:
+//   H(r_i) = sum_faces [ sigma_f * integral_triangle H_field dA ] / (4*pi)
+// where sigma_f = M_j dot n_f (surface charge density)
+//
+// For PreRelax mode, we compute dH/dM for each unit M direction.
+//=========================================================================
+
+void RadHACApKManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const {
+    std::memset(N_mat, 0, 9 * sizeof(double));
+
+    if (!m_geometry_3dof_ready || elem_i < 0 || elem_i >= m_n_elem ||
+        elem_j < 0 || elem_j >= m_n_elem) {
+        return;
+    }
+
+    // Observation point: center of element i
+    const double* obs = &m_tetra_centers[elem_i * 3];
+
+    // Column element center (for point charge cancellation)
+    const double* col_center = &m_tetra_centers[elem_j * 3];
+
+    // Unit magnetization vectors
+    const double M_x[3] = {1.0, 0.0, 0.0};
+    const double M_y[3] = {0.0, 1.0, 0.0};
+    const double M_z[3] = {0.0, 0.0, 1.0};
+
+    // Accumulate H field for each unit M direction
+    double H_from_Mx[3] = {0.0, 0.0, 0.0};
+    double H_from_My[3] = {0.0, 0.0, 0.0};
+    double H_from_Mz[3] = {0.0, 0.0, 0.0};
+
+    // Track total magnetic charge for centroid cancellation
+    double total_charge_Mx = 0.0;
+    double total_charge_My = 0.0;
+    double total_charge_Mz = 0.0;
+
+    // Process each of the 4 triangular faces
+    for (int f = 0; f < 4; f++) {
+        int fnIdx = (elem_j * 4 + f) * 3;
+        const double* n_f = &m_tetra_face_normals[fnIdx];
+
+        // Surface charge density sigma = M dot n for each unit M
+        double sigma_Mx = M_x[0]*n_f[0] + M_x[1]*n_f[1] + M_x[2]*n_f[2];
+        double sigma_My = M_y[0]*n_f[0] + M_y[1]*n_f[1] + M_y[2]*n_f[2];
+        double sigma_Mz = M_z[0]*n_f[0] + M_z[1]*n_f[1] + M_z[2]*n_f[2];
+
+        // Accumulate total charge for each M direction
+        double area = m_tetra_face_areas[elem_j * 4 + f];
+        total_charge_Mx += sigma_Mx * area;
+        total_charge_My += sigma_My * area;
+        total_charge_Mz += sigma_Mz * area;
+
+        // Get face vertices
+        int fvIdx = (elem_j * 4 + f) * 3 * 3;
+        const double* V0 = &m_tetra_face_vertices[fvIdx + 0];
+        const double* V1 = &m_tetra_face_vertices[fvIdx + 3];
+        const double* V2 = &m_tetra_face_vertices[fvIdx + 6];
+
+        // Compute H field from this face (using shared triangle formula)
+        // FieldFromChargedTriangleFast returns field WITHOUT 4pi divisor
+        double H_f[3];
+
+        // H from Mx contribution
+        if (fabs(sigma_Mx) > 1e-20) {
+            FieldFromChargedTriangleFast(obs, V0, V1, V2, sigma_Mx, H_f);
+            H_from_Mx[0] += H_f[0];
+            H_from_Mx[1] += H_f[1];
+            H_from_Mx[2] += H_f[2];
+        }
+
+        // H from My contribution
+        if (fabs(sigma_My) > 1e-20) {
+            FieldFromChargedTriangleFast(obs, V0, V1, V2, sigma_My, H_f);
+            H_from_My[0] += H_f[0];
+            H_from_My[1] += H_f[1];
+            H_from_My[2] += H_f[2];
+        }
+
+        // H from Mz contribution
+        if (fabs(sigma_Mz) > 1e-20) {
+            FieldFromChargedTriangleFast(obs, V0, V1, V2, sigma_Mz, H_f);
+            H_from_Mz[0] += H_f[0];
+            H_from_Mz[1] += H_f[1];
+            H_from_Mz[2] += H_f[2];
+        }
+    }
+
+    // Add point charge cancellation at centroid
+    // H_point = Q * r / (4*pi * |r|^3) where Q = -total_charge (to cancel far-field)
+    double r[3] = {obs[0] - col_center[0], obs[1] - col_center[1], obs[2] - col_center[2]};
+    double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+    double dist = sqrt(dist_sq);
+
+    if (dist > 1e-15) {
+        double inv_dist3 = 1.0 / (dist * dist_sq);  // NO 4pi here (applied at end)
+
+        // Point charge Q = -total_charge cancels far-field
+        double H_pt_Mx = -total_charge_Mx * inv_dist3;
+        double H_pt_My = -total_charge_My * inv_dist3;
+        double H_pt_Mz = -total_charge_Mz * inv_dist3;
+
+        H_from_Mx[0] += H_pt_Mx * r[0];
+        H_from_Mx[1] += H_pt_Mx * r[1];
+        H_from_Mx[2] += H_pt_Mx * r[2];
+
+        H_from_My[0] += H_pt_My * r[0];
+        H_from_My[1] += H_pt_My * r[1];
+        H_from_My[2] += H_pt_My * r[2];
+
+        H_from_Mz[0] += H_pt_Mz * r[0];
+        H_from_Mz[1] += H_pt_Mz * r[1];
+        H_from_Mz[2] += H_pt_Mz * r[2];
+    }
+
+    // Apply 1/(4*pi) factor and sign flip (system matrix uses -N)
+    // N_mat[row * 3 + col] = -dH_row/dM_col / (4*pi)
+    // Row 0 (Hx response): -dHx/dMx, -dHx/dMy, -dHx/dMz
+    N_mat[0] = -H_from_Mx[0] * INV_4PI_HACAPK;  // -dHx/dMx
+    N_mat[1] = -H_from_My[0] * INV_4PI_HACAPK;  // -dHx/dMy
+    N_mat[2] = -H_from_Mz[0] * INV_4PI_HACAPK;  // -dHx/dMz
+    // Row 1 (Hy response): -dHy/dMx, -dHy/dMy, -dHy/dMz
+    N_mat[3] = -H_from_Mx[1] * INV_4PI_HACAPK;  // -dHy/dMx
+    N_mat[4] = -H_from_My[1] * INV_4PI_HACAPK;  // -dHy/dMy
+    N_mat[5] = -H_from_Mz[1] * INV_4PI_HACAPK;  // -dHy/dMz
+    // Row 2 (Hz response): -dHz/dMx, -dHz/dMy, -dHz/dMz
+    N_mat[6] = -H_from_Mx[2] * INV_4PI_HACAPK;  // -dHz/dMx
+    N_mat[7] = -H_from_My[2] * INV_4PI_HACAPK;  // -dHz/dMy
+    N_mat[8] = -H_from_Mz[2] * INV_4PI_HACAPK;  // -dHz/dMz
 }
 
 //=========================================================================

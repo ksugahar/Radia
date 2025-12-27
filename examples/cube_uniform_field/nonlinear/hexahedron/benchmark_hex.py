@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 """
 Hexahedral Benchmark for Radia
 
@@ -19,7 +19,7 @@ Usage:
     python benchmark_hex.py --lu 5 10
     python benchmark_hex.py --bicgstab 5 10
     python benchmark_hex.py --hacapk 5 10
-    python benchmark_hex.py --hacapk --hmat_eps 1e-4 5
+    python benchmark_hex.py --hacapk --hmat_eps 1e-5 5
     python benchmark_hex.py 5 10  # runs lu only
 """
 
@@ -80,7 +80,7 @@ def benchmark_hexahedra(n_div, solver_type, output_dir, hmat_eps=1e-4,
         n_div: Number of divisions per cube edge
         solver_type: 'lu', 'bicgstab', or 'hacapk'
         output_dir: Directory to save results
-        hmat_eps: ACA tolerance for H-matrix (only used with hacapk)
+        hmat_eps: ACA tolerance for H-matrix (default: 1e-5, matches ELF eps=1e-4)
         bicg_tol: BiCGSTAB convergence tolerance
         nonl_tol: Nonlinear iteration convergence tolerance
         hmat_leaf_size: H-matrix leaf size (ELF default: 10)

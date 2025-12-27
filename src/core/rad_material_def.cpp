@@ -879,7 +879,8 @@ void radTNonlinearIsotropMaterial::InterpolateBH_HBSum(double hb_sum_target, TVe
 // Method 1: Standard mu = B(H)/(mu_0*H)
 // Method 2: H+B sum interpolation
 // Selects method with smaller |mu_new - mu_old|
-double radTNonlinearIsotropMaterial::ComputeChiDualMethod(double H_mag, double mu_old) const
+// relax: under-relaxation parameter (0.0 = full step, >0 = under-relaxation)
+double radTNonlinearIsotropMaterial::ComputeChiDualMethod(double H_mag, double mu_old, double relax) const
 {
 	static const double mu_0 = 4.0e-7 * 3.14159265358979323846;
 
@@ -893,7 +894,7 @@ double radTNonlinearIsotropMaterial::ComputeChiDualMethod(double H_mag, double m
 		return mu_old - 1.0;
 	}
 
-	double B_interp, dBdH_unused;
+	double B_interp = 0.0;
 
 	// Method 1: Standard H-based interpolation: mu = B(H) / (mu_0 * H)
 	double un1;
@@ -911,18 +912,30 @@ double radTNonlinearIsotropMaterial::ComputeChiDualMethod(double H_mag, double m
 		double H1 = gArrayHB[1].x;
 		double B1 = gArrayHB[1].y;  // This is B, not M!
 		un1 = B1 / (mu_0 * H1);  // mu_r = B / (mu_0 * H)
+		B_interp = B1;
 	}
 
-	// ELF Method 1 correction: hn = H + (bo - bn) / uo; unn = bn / hn; un = MAX(un, unn)
-	if(mu_old > 1.0 && H_mag > 1.0e-10)
+	// ELF Method 1 correction: ONLY when relax=0 (no under-relaxation)
+	// hn = H + (bo - bn) / uo; unn = bn / hn; un = MAX(un, unn)
+	// This prevents overshooting by considering B change
+	if(relax <= 1.0e-10)
 	{
-		double B_old = mu_0 * mu_old * H_mag;
-		double hn = H_mag + (B_old - B_interp) / (mu_0 * mu_old);
-		if(hn > 1.0e-10)
+		// No under-relaxation: apply Method 1 correction
+		if(mu_old > 1.0 && H_mag > 1.0e-10)
 		{
-			double unn = B_interp / (mu_0 * hn);
-			if(unn > un1) un1 = unn;
+			double B_old = mu_0 * mu_old * H_mag;
+			double hn = H_mag + (B_old - B_interp) / (mu_0 * mu_old);
+			if(hn > 1.0e-10)
+			{
+				double unn = B_interp / (mu_0 * hn);
+				if(unn > un1) un1 = unn;
+			}
 		}
+	}
+	else
+	{
+		// Apply under-relaxation to Method 1: un = un*(1-relax) + uo*relax
+		un1 = un1 * (1.0 - relax) + mu_old * relax;
 	}
 
 	// Method 2: H+B sum interpolation (ELF update_chi_from_bh_fast)
@@ -941,6 +954,9 @@ double radTNonlinearIsotropMaterial::ComputeChiDualMethod(double H_mag, double m
 	{
 		un2 = un1;  // Fallback to Method 1
 	}
+
+	// Apply under-relaxation to Method 2 (ELF always applies this)
+	un2 = un2 * (1.0 - relax) + mu_old * relax;
 
 	// Select method with smaller change from mu_old
 	double us1 = std::fabs(un1 - mu_old);

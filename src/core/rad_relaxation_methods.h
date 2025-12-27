@@ -225,6 +225,9 @@ private:
 	RadHACApKManager* m_hacapk;
 	RadHACApKParams m_hacapk_params;
 
+	// NOTE: Jacobi preconditioner is now recomputed every iteration (FIX 2025-12-27)
+	// No longer cached. See SolveBiCGSTAB_HMatrix_VariableDOF for details.
+
 	// BiCGSTAB with H-matrix for 6DOF MSC hexahedra
 	// Returns number of iterations (0 on failure)
 	// elemChiArray: isotropic chi for each element (3DOF elements use this, 6DOF uses poly->CurrentChi)

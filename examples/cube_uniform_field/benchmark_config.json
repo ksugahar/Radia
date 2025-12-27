@@ -11,7 +11,7 @@
     "tetrahedron": {
       "script": "nonlinear/tetrahedron/benchmark_tetra.py",
       "solvers": ["lu", "bicgstab", "hacapk"],
-      "maxh": [0.35, 0.30, 0.25, 0.20, 0.15, 0.10]
+      "maxh": [0.30, 0.25, 0.20, 0.15, 0.10]
     }
   },
 
@@ -24,7 +24,7 @@
     "tetrahedron": {
       "script": "linear/benchmark_tetrahedron.py",
       "solvers": ["lu", "bicgstab", "hacapk"],
-      "maxh": [0.35, 0.30, 0.25, 0.20, 0.15, 0.10]
+      "maxh": [0.30, 0.25, 0.20, 0.15, 0.10]
     }
   },
 
@@ -51,7 +51,7 @@
   "default_params": {
     "nonl_tol": 0.001,
     "bicg_tol": 1e-4,
-    "hmat_eps": 1e-4,
+    "hmat_eps": 1e-5,
     "hmat_leaf_size": 10,
     "hmat_eta": 2.0
   }

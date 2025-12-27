@@ -55,7 +55,7 @@ HEX_FACES = [
 
 
 def get_current_memory_mb() -> Optional[float]:
-    """Get current memory usage in MB."""
+    """Get current memory usage in MB (RSS)."""
     if not HAS_PSUTIL:
         return None
     process = psutil.Process(os.getpid())
@@ -64,15 +64,32 @@ def get_current_memory_mb() -> Optional[float]:
 
 
 def get_peak_memory_mb() -> Optional[float]:
-    """Get peak memory usage in MB (Windows: peak_wset)"""
+    """Get peak memory usage in MB (Windows: peak_wset, Linux: max_rss)."""
     if not HAS_PSUTIL:
         return None
     process = psutil.Process(os.getpid())
     mem_info = process.memory_info()
     if hasattr(mem_info, 'peak_wset'):
-        return mem_info.peak_wset / (1024 * 1024)  # MB
+        return mem_info.peak_wset / (1024 * 1024)  # Windows
     else:
-        return mem_info.rss / (1024 * 1024)  # MB (fallback)
+        return mem_info.rss / (1024 * 1024)  # Linux/Mac fallback
+
+
+# Baseline memory at module load (before solver operations)
+# When run in subprocess, this captures memory after Python+Radia load
+_BASELINE_MEMORY_MB = get_current_memory_mb()
+
+
+def get_solver_memory_mb() -> Optional[float]:
+    """Get memory used by solver operations (current - baseline).
+
+    This provides more accurate memory measurement when run in subprocess,
+    as it excludes Python interpreter and Radia module load overhead.
+    """
+    current = get_current_memory_mb()
+    if current is None or _BASELINE_MEMORY_MB is None:
+        return None
+    return max(0.0, current - _BASELINE_MEMORY_MB)
 
 
 def run_nonlinear_benchmark(
@@ -153,10 +170,8 @@ def run_nonlinear_benchmark(
 
     # Measure memory after solve
     mem_after = get_current_memory_mb()
-    if mem_before is not None and mem_after is not None:
-        solver_memory_mb = mem_after
-    else:
-        solver_memory_mb = get_peak_memory_mb()
+    solver_memory_mb = get_solver_memory_mb()  # Memory used by solver (excluding baseline)
+    peak_memory_mb = get_peak_memory_mb()  # Peak memory (total process)
 
     # Get solve statistics
     stats = rad.GetSolveStats()
@@ -185,8 +200,23 @@ def run_nonlinear_benchmark(
     print('Linear iter:     %d' % n_linear_iter)
     print('Converged:       %s' % ('Yes' if converged else 'No'))
     print('M_avg_z:         %.0f A/m' % M_avg_z)
+    if peak_memory_mb is not None:
+        print('Peak memory:     %.1f MB' % peak_memory_mb)
     if solver_memory_mb is not None:
-        print('Memory (RSS):    %.1f MB' % solver_memory_mb)
+        print('Solver memory:   %.1f MB (excluding baseline)' % solver_memory_mb)
+
+    # Print H-matrix statistics if available
+    if hmat_info:
+        print('--- H-matrix ---')
+        print('  lowrank:       %d' % hmat_info.get('n_lowrank', 0))
+        print('  dense:         %d' % hmat_info.get('n_dense', 0))
+        print('  max_rank:      %d' % hmat_info.get('max_rank', 0))
+        hmat_mem = hmat_info.get('memory_mb', 0.0)
+        dense_mem = hmat_info.get('dense_memory_mb', 0.0)
+        compression = hmat_info.get('compression', 0.0)
+        print('  H-mat memory:  %.2f MB' % hmat_mem)
+        print('  Dense memory:  %.2f MB' % dense_mem)
+        print('  Compression:   %.1f%%' % (compression * 100))
     print()
 
     # Build result dictionary (matching ELF format exactly)
@@ -223,8 +253,10 @@ def run_nonlinear_benchmark(
         'M_avg_z': M_avg_z,
     }
 
+    if peak_memory_mb is not None:
+        result_data['peak_memory_mb'] = peak_memory_mb
     if solver_memory_mb is not None:
-        result_data['peak_memory_mb'] = solver_memory_mb
+        result_data['solver_memory_mb'] = solver_memory_mb
 
     # Add detailed timing (matching ELF format)
     result_data['timing'] = {

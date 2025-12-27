@@ -989,9 +989,12 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 				radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
 				double chi_new;
+				double relax = rad.m_relax;
 				if(NonlinMater != nullptr)
 				{
-					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old);
+					// ELF-style dual-method with relax parameter
+					// Under-relaxation is applied inside ComputeChiDualMethod
+					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, relax);
 				}
 				else
 				{
@@ -1001,13 +1004,11 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
 					chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-				}
-
-				// Apply under-relaxation
-				double relax = rad.m_relax;
-				if(relax > 0.0 && relax <= 1.0)
-				{
-					chi_new = chi_new * (1.0 - relax) + chi_matrix * relax;
+					// Apply under-relaxation for linear materials
+					if(relax > 0.0 && relax <= 1.0)
+					{
+						chi_new = chi_new * (1.0 - relax) + chi_matrix * relax;
+					}
 				}
 				CurrentChiArray[elem] = chi_new;
 
@@ -1052,10 +1053,12 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					// Try to cast to radTNonlinearIsotropMaterial to use ComputeChiDualMethod
 					radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
 					double chi_new;
+					double relax = rad.m_relax;
 					if(NonlinMater != nullptr)
 					{
-						// Use ELF-style dual-method chi update
-						chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old);
+						// Use ELF-style dual-method chi update with relax parameter
+						// Under-relaxation is applied inside ComputeChiDualMethod
+						chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, relax);
 					}
 					else
 					{
@@ -1065,14 +1068,11 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 						MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
 						chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 						if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-					}
-
-					// Update chi for next iteration with optional under-relaxation
-					// relax=0: full step, relax>0: chi = chi_new*(1-relax) + chi_old*relax
-					double relax = rad.m_relax;
-					if(relax > 0.0 && relax <= 1.0)
-					{
-						chi_new = chi_new * (1.0 - relax) + chi_matrix * relax;
+						// Apply under-relaxation for linear materials
+						if(relax > 0.0 && relax <= 1.0)
+						{
+							chi_new = chi_new * (1.0 - relax) + chi_matrix * relax;
+						}
 					}
 					poly->CurrentChi = chi_new;
 
@@ -1776,9 +1776,11 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 				radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
 				double chi_new;
+				double relax_bicg = rad.m_relax;
 				if(NonlinMater != nullptr)
 				{
-					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old);
+					// ELF-style dual-method with relax parameter
+					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, relax_bicg);
 				}
 				else
 				{
@@ -1788,13 +1790,11 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
 					chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-				}
-
-				// Apply under-relaxation
-				double relax_bicg = rad.m_relax;
-				if(relax_bicg > 0.0 && relax_bicg <= 1.0)
-				{
-					chi_new = chi_new * (1.0 - relax_bicg) + chi_matrix * relax_bicg;
+					// Apply under-relaxation for linear materials
+					if(relax_bicg > 0.0 && relax_bicg <= 1.0)
+					{
+						chi_new = chi_new * (1.0 - relax_bicg) + chi_matrix * relax_bicg;
+					}
 				}
 				CurrentChiArray_bicg[elem] = chi_new;
 
@@ -1834,10 +1834,11 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					double H_mag = std::sqrt(H_new.x*H_new.x + H_new.y*H_new.y + H_new.z*H_new.z);
 					radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
 					double chi_new;
+					double relax_bicg = rad.m_relax;
 					if(NonlinMater != nullptr)
 					{
-						// Use ELF-style dual-method chi update
-						chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old);
+						// ELF-style dual-method with relax parameter
+						chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, relax_bicg);
 					}
 					else
 					{
@@ -1847,14 +1848,11 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 						MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
 						chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 						if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-					}
-
-					// Update chi for next iteration with optional under-relaxation
-					// relax=0: full step, relax>0: chi = chi_new*(1-relax) + chi_old*relax
-					double relax_bicg = rad.m_relax;
-					if(relax_bicg > 0.0 && relax_bicg <= 1.0)
-					{
-						chi_new = chi_new * (1.0 - relax_bicg) + chi_matrix * relax_bicg;
+						// Apply under-relaxation for linear materials
+						if(relax_bicg > 0.0 && relax_bicg <= 1.0)
+						{
+							chi_new = chi_new * (1.0 - relax_bicg) + chi_matrix * relax_bicg;
+						}
 					}
 					poly->CurrentChi = chi_new;
 
@@ -2078,6 +2076,13 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, doub
 	}
 
 	// Build Jacobi preconditioner using H-matrix diagonal
+	// FIX (2025-12-27): Recompute diagonal EVERY iteration (not cached)
+	// Reason: ELF extracts diagonal from updated H-matrix blocks via HACApK_extract_diagonal_omp,
+	// which includes the current inv_chi values. Radia was caching the diagonal computed with
+	// INITIAL inv_chi, causing slower convergence (17 iter vs 14 iter).
+	//
+	// The fix is to recompute diag_inv = 1/(N_ii + inv_chi[i]) each iteration.
+	// This is O(N) and uses cached N_ii values, so it's cheap.
 	GetDiagonalElements_HMatrix_VariableDOF(diag_inv, inv_chi, totalDOF);
 	for(int i = 0; i < totalDOF; i++)
 	{
@@ -2264,23 +2269,16 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 	if(FlatMagn == nullptr || FlatField == nullptr || FlatExtern == nullptr) return 0;
 
-	// For 3DOF tetrahedra, we need the pre-computed InteractMatrix for element callbacks
-	// This is because 3DOF uses component-to-component interaction which is expensive to compute on-demand
-	// 6DOF hexahedra use on-demand computation (Yano-Sugahara MSC method)
-	//
-	// NOTE: This is currently O(N^2) and dominates the solve time for large 3DOF problems.
-	// TODO: Implement on-demand 3x3 block computation to avoid full matrix pre-computation.
-	bool need_precompute_matrix = !IntrctPtr->HasVariableDOF();  // uniform 3DOF
-	if(need_precompute_matrix)
-	{
-		// First allocate InteractMatrix memory (may have been skipped when skipDenseMatrix=1)
-		IntrctPtr->AllocateInteractMatrix();
-		// Then compute the interaction matrix values
-		IntrctPtr->SetupInteractMatrix();
-	}
+	// OPTIMIZATION (2025-12-26): Removed O(N^2) SetupInteractMatrix() for 3DOF tetrahedra
+	// PrecomputeGeometry3DOF() + Compute3x3BlockFast() provides on-demand matrix computation
+	// using pre-computed face vertices. This is much faster than SetupInteractMatrix() because:
+	// - HACApK ACA+ only needs a subset of matrix elements (not all N^2)
+	// - Face geometry is pre-computed once, then reused for all matrix element computations
+	// - Thread-local LRU cache avoids redundant computation for nearby elements
+	bool is_uniform_3dof = !IntrctPtr->HasVariableDOF();  // uniform 3DOF
 
 	// For 3DOF tetrahedra, initialize FlatExtern from ExternFieldArray
-	if(need_precompute_matrix && IntrctPtr->ExternFieldArray != nullptr)
+	if(is_uniform_3dof && IntrctPtr->ExternFieldArray != nullptr)
 	{
 		for(int elem = 0; elem < AmOfMainElem; elem++)
 		{
@@ -2323,15 +2321,13 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 		auto t_hmat_end = std::chrono::high_resolution_clock::now();
 		rad.m_timing_hmatrix_build = std::chrono::duration<double>(t_hmat_end - t_hmat_start).count();
+
+		// NOTE: No longer caching Jacobi preconditioner (FIX 2025-12-27)
+		// We recompute diag_inv = 1/(N_ii + inv_chi[i]) each iteration
 	}
 
-	// For 3DOF tetrahedra: ensure flat N storage is ready after InteractMatrix is computed
-	// This must happen AFTER InteractMatrix is set up (above) and AFTER BuildHMatrix
-	// because BuildHMatrix may have returned early if InteractMatrix was NULL at that time
-	if(need_precompute_matrix && !m_hacapk->IsFlatNReady())
-	{
-		m_hacapk->PrecomputeFlatInteractMatrix();
-	}
+	// NOTE: 3DOF tetrahedra use PrecomputeFlatInteractMatrix() for fast O(1) access
+	// 6DOF hexahedra use PrecomputeGeometry() + Compute6x6BlockFast()
 
 	std::vector<double> OldMagn(totalDOF);
 	// Store current isotropic chi for ALL elements (unified 3DOF/6DOF handling, same as LU/BiCGSTAB)
@@ -2637,9 +2633,11 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 
 				radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
 				double chi_new;
+				double relax_hacapk = rad.m_relax;
 				if(NonlinMater != nullptr)
 				{
-					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old);
+					// ELF-style dual-method with relax parameter
+					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, relax_hacapk);
 				}
 				else
 				{
@@ -2649,13 +2647,11 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
 					chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-				}
-
-				// Apply under-relaxation
-				double relax_hacapk = rad.m_relax;
-				if(relax_hacapk > 0.0 && relax_hacapk <= 1.0)
-				{
-					chi_new = chi_new * (1.0 - relax_hacapk) + chi_matrix * relax_hacapk;
+					// Apply under-relaxation for linear materials
+					if(relax_hacapk > 0.0 && relax_hacapk <= 1.0)
+					{
+						chi_new = chi_new * (1.0 - relax_hacapk) + chi_matrix * relax_hacapk;
+					}
 				}
 				CurrentChiArray_hacapk[elem] = chi_new;
 
@@ -2697,9 +2693,11 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					// Use ELF-style dual-method chi update
 					radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
 					double chi_new;
+					double relax_hacapk = rad.m_relax;
 					if(NonlinMater != nullptr)
 					{
-						chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old);
+						// ELF-style dual-method with relax parameter
+						chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, relax_hacapk);
 					}
 					else
 					{
@@ -2708,14 +2706,12 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 						TVector3d MrVect;
 						MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
 						chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
-					}
-					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-
-					// Update chi for next iteration with optional under-relaxation
-					double relax_hacapk = rad.m_relax;
-					if(relax_hacapk > 0.0 && relax_hacapk <= 1.0)
-					{
-						chi_new = chi_new * (1.0 - relax_hacapk) + chi_matrix * relax_hacapk;
+						if(chi_new < 1.0e-6) chi_new = 1.0e-6;
+						// Apply under-relaxation for linear materials
+						if(relax_hacapk > 0.0 && relax_hacapk <= 1.0)
+						{
+							chi_new = chi_new * (1.0 - relax_hacapk) + chi_matrix * relax_hacapk;
+						}
 					}
 					poly->CurrentChi = chi_new;
 
