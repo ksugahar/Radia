@@ -92,7 +92,7 @@ mag_obj = netgen_mesh_to_radia(mesh,
 | Element Type | API | Faces | DOF | Use Case |
 |--------------|-----|-------|-----|----------|
 | **Extruded Polygon** | `ObjThckPgn()` | N-gon extruded | 3 | General prism shapes |
-| **Hexahedron (MSC)** | `ObjRecMag()` or `ObjPolyhdr()` | 6 quad | 6 | Permanent magnets, soft iron |
+| **Hexahedron (MSC)** | `ObjPolyhdr()` + `HEX_FACES` | 6 quad | 6 | Permanent magnets, soft iron |
 | **Tetrahedron** | `ObjPolyhdr()` + `TETRA_FACES` | 4 tri | 3 | Complex curved geometry |
 | **Wedge/Prism** | `ObjPolyhdr()` + `WEDGE_FACES` | 5 | 3 | Hybrid meshes |
 | **Pyramid** | `ObjPolyhdr()` + `PYRAMID_FACES` | 5 | 3 | Mesh transitions |
@@ -100,7 +100,7 @@ mag_obj = netgen_mesh_to_radia(mesh,
 **DOF (Degrees of Freedom)**:
 - **Hexahedra (6 faces)**: 6 DOF - Surface charge density (sigma) per face (MSC method)
 - **Other elements (4-5 faces)**: 3 DOF - Magnetization vector (Mx, My, Mz)
-- `ObjRecMag()` automatically uses 6 DOF MSC hexahedron
+- All meshes are expected to be generated externally (Netgen, GMSH, Cubit, etc.)
 
 ### Face Topology Constants
 

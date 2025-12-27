@@ -678,6 +678,34 @@ EXP int CALL RadMatSatIsoFrm(int* mat, double* KsiMs1, double* KsiMs2, double* K
 */
 EXP int CALL RadMatSatIsoTab(int* mat, double* MatData, int np);
 
+/** Creates a fixed magnetization permanent magnet material (no demagnetization).
+The magnetization is constant and does not change during Solve.
+@param mat [out] reference number of the material created
+@param Magn [in] array of 3 numbers specifying the magnetization vector [Mx, My, Mz] in A/m
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadMatMagFixed(int* mat, double* Magn);
+
+/** Creates a linear demagnetization permanent magnet material (Br/Hc model).
+Note: Current implementation behaves as fixed magnetization (no demagnetization).
+@param mat [out] reference number of the material created
+@param Br [in] residual flux density in Tesla
+@param Hc [in] coercivity in A/m
+@param MagAxis [in] array of 3 numbers specifying the easy magnetization axis direction
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadMatMagLinear(int* mat, double Br, double Hc, double* MagAxis);
+
+/** Creates a user-defined demagnetization curve permanent magnet material.
+Note: Current implementation behaves as fixed magnetization (no demagnetization).
+@param mat [out] reference number of the material created
+@param CurveData [in] flat array of B-H curve data points (H1,B1,H2,B2,...) where H is in A/m and B is in Tesla
+@param np [in] number of data points in the curve
+@param MagAxis [in] array of 3 numbers specifying the easy magnetization axis direction
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadMatMagCurve(int* mat, double* CurveData, int np, double* MagAxis);
+
 /** Creates laminated nonlinear anisotropic magnetic material with packing factor p and the lamination planes perpendicular to the vector N. The magnetization magnitude vs magnetic field strength for the corresponding isotropic material is defined by the formula M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3), where H is the magnitude of the magnetic field strength vector (in Tesla); ksi1, ms1, ksi2, ms2, ksi3, ms3 constants are given by parameters KsiMs1, KsiMs2, KsiMs3.
 @param mat [out] reference number of the material created
 @param KsiMs1 [in] array of 2 numbers specifying the parameters ms1 and ksi1 (see the formula above)
