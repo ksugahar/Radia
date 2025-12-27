@@ -168,44 +168,52 @@ try {
     }
 
     # Copy Intel MKL DLLs for distribution
-    # mkl_rt.2.dll is SDL (Single Dynamic Library) that loads other DLLs at runtime
-    $INTEL_MKL_DLLS = @(
-        "$INTEL_MKL\bin\mkl_rt.2.dll",            # MKL SDL runtime
-        "$INTEL_MKL\bin\mkl_core.2.dll",          # MKL core
-        "$INTEL_MKL\bin\mkl_intel_thread.2.dll",  # MKL threading (Intel OpenMP)
-        "$INTEL_MKL\bin\mkl_def.2.dll",           # Default CPU kernels
-        "$INTEL_MKL\bin\mkl_avx2.2.dll",          # AVX2 optimized kernels
-        "$INTEL_MKL\bin\mkl_vml_def.2.dll",       # Vector math library (default)
-        "$INTEL_MKL\bin\mkl_vml_avx2.2.dll"       # Vector math library (AVX2)
-    )
-
-    # Intel OpenMP and compiler runtime DLLs
-    $INTEL_COMPILER = "$INTEL_ONEAPI\compiler\latest"
-    $INTEL_RUNTIME_DLLS = @(
-        "$INTEL_COMPILER\bin\libiomp5md.dll",     # Intel OpenMP runtime
-        "$INTEL_COMPILER\bin\libmmd.dll",         # Intel math library
-        "$INTEL_COMPILER\bin\svml_dispmd.dll"     # Intel short vector math library
-    )
+    # mkl_rt.X.dll is SDL (Single Dynamic Library) that loads other DLLs at runtime
+    # Use wildcard patterns to be version-agnostic (e.g., mkl_rt.2.dll, mkl_rt.3.dll)
 
     Write-Host "Copying Intel MKL DLLs..." -ForegroundColor Cyan
-    foreach ($dll in $INTEL_MKL_DLLS) {
-        if (Test-Path $dll) {
-            $dllName = Split-Path -Leaf $dll
-            Copy-Item $dll "$PROJECT_DIR\src\radia\" -Force
-            Write-Host "  Copied $dllName" -ForegroundColor Green
+
+    # MKL DLL patterns (version-agnostic)
+    $MKL_DLL_PATTERNS = @(
+        "mkl_rt.*.dll",            # MKL SDL runtime
+        "mkl_core.*.dll",          # MKL core
+        "mkl_intel_thread.*.dll",  # MKL threading (Intel OpenMP)
+        "mkl_def.*.dll",           # Default CPU kernels
+        "mkl_avx2.*.dll",          # AVX2 optimized kernels
+        "mkl_vml_def.*.dll",       # Vector math library (default)
+        "mkl_vml_avx2.*.dll"       # Vector math library (AVX2)
+    )
+
+    foreach ($pattern in $MKL_DLL_PATTERNS) {
+        $dlls = Get-ChildItem -Path "$INTEL_MKL\bin" -Filter $pattern -ErrorAction SilentlyContinue
+        if ($dlls) {
+            foreach ($dll in $dlls) {
+                Copy-Item $dll.FullName "$PROJECT_DIR\src\radia\" -Force
+                Write-Host "  Copied $($dll.Name)" -ForegroundColor Green
+            }
         } else {
-            Write-Host "  WARNING: DLL not found: $dll" -ForegroundColor Yellow
+            Write-Host "  WARNING: No DLL matching $pattern found" -ForegroundColor Yellow
         }
     }
 
+    # Intel OpenMP and compiler runtime DLLs
+    $INTEL_COMPILER = "$INTEL_ONEAPI\compiler\latest"
+    $RUNTIME_DLL_PATTERNS = @(
+        "libiomp5md.dll",     # Intel OpenMP runtime
+        "libmmd.dll",         # Intel math library
+        "svml_dispmd.dll"     # Intel short vector math library
+    )
+
     Write-Host "Copying Intel compiler runtime DLLs..." -ForegroundColor Cyan
-    foreach ($dll in $INTEL_RUNTIME_DLLS) {
-        if (Test-Path $dll) {
-            $dllName = Split-Path -Leaf $dll
-            Copy-Item $dll "$PROJECT_DIR\src\radia\" -Force
-            Write-Host "  Copied $dllName" -ForegroundColor Green
+    foreach ($pattern in $RUNTIME_DLL_PATTERNS) {
+        $dlls = Get-ChildItem -Path "$INTEL_COMPILER\bin" -Filter $pattern -ErrorAction SilentlyContinue
+        if ($dlls) {
+            foreach ($dll in $dlls) {
+                Copy-Item $dll.FullName "$PROJECT_DIR\src\radia\" -Force
+                Write-Host "  Copied $($dll.Name)" -ForegroundColor Green
+            }
         } else {
-            Write-Host "  WARNING: DLL not found: $dll" -ForegroundColor Yellow
+            Write-Host "  WARNING: No DLL matching $pattern found" -ForegroundColor Yellow
         }
     }
 
