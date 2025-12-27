@@ -338,4 +338,54 @@ python benchmark_tetra.py --lu --bicgstab --hacapk 0.30 0.25 0.20 0.15 0.10
 
 ---
 
+---
+
+## Unit System Notes
+
+### Radia Internal Unit System
+
+**IMPORTANT**: Radia ALWAYS uses millimeters (mm) internally, regardless of `FldUnits()` setting.
+
+| Setting | Coordinate Input | Field Output | Internal Storage |
+|---------|------------------|--------------|------------------|
+| `FldUnits('mm')` | mm | T (for B), A/m (for H) | mm |
+| `FldUnits('m')` | m (scaled to mm internally) | T, A/m | mm |
+
+### Vector Potential A Unit Conversion
+
+When using `FldUnits('m')` for NGSolve integration:
+
+- **B field**: Returned correctly in Tesla (no scaling needed)
+- **H field**: Returned correctly in A/m (no scaling needed)
+- **A field**: Returned in T*mm (needs conversion for curl(A) = B in meters)
+
+**Why A needs scaling:**
+
+1. Radia computes A using mm-based geometry internally
+2. A is dimensionally [T*length], so A_internal = T*mm
+3. NGSolve differentiates in meters: `curl(A) = dA/dx_m`
+4. For correct B = curl(A): `A_m = A_mm / 1000`
+
+**In radia_ngsolve:**
+
+```cpp
+// Vector potential A unit scaling (in radia_ngsolve.cpp)
+// Radia ALWAYS uses mm internally, so A is always in T*mm
+// NGSolve differentiates in meters: curl(A) = dA/dx_m
+// To get correct B = curl(A), we scale A by 0.001:
+double scale = (field_type == "a") ? 0.001 : 1.0;
+```
+
+### Maxwell Relation Verification
+
+The test `examples/ngsolve_integration/verify_curl_A_equals_B/` verifies:
+
+```
+B = curl(A)
+```
+
+With proper A field scaling, the `|curl(A)|/|B|` ratio should be ~1.0.
+
+---
+
 **Last Updated**: 2025-12-27
