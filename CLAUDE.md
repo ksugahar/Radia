@@ -65,6 +65,41 @@ powershell.exe -ExecutionPolicy Bypass -File "BuildMSVC.ps1" -Rebuild
 
 ---
 
+## OpenMP Policy: Intel OpenMP Only
+
+### Use Intel OpenMP Instead of MSVC OpenMP (2025-12-28)
+
+**Policy**: Radia uses **Intel OpenMP (libiomp5md.dll)** only. **MSVC OpenMP (vcomp140.dll) is NOT used**.
+
+**Rationale**:
+1. **Intel MKL Compatibility**: Intel MKL uses Intel OpenMP internally; mixing with MSVC OpenMP causes conflicts
+2. **Performance**: Intel OpenMP provides better threading performance on Intel CPUs
+3. **Consistency**: Single OpenMP runtime avoids DLL conflicts and undefined behavior
+
+**CMake Configuration**:
+- Use standard `/openmp` compiler flag for MSVC
+- Link against `libiomp5md.lib` directly instead of CMake's `OpenMP::OpenMP_CXX`
+- CMake detects Intel OpenMP and links it instead of MSVC's vcomp140.dll
+
+**Required DLLs** (auto-copied by BuildMSVC.ps1):
+- `libiomp5md.dll` - Intel OpenMP runtime (from Intel oneAPI compiler directory)
+
+**Verification**:
+After building, verify only Intel OpenMP is loaded:
+```python
+import psutil, os
+process = psutil.Process(os.getpid())
+for dll in process.memory_maps():
+    if 'omp' in dll.path.lower():
+        print(dll.path)
+# Should show: libiomp5md.dll
+# Should NOT show: vcomp140.dll
+```
+
+**Note**: If both `libiomp5md.dll` and `vcomp140.dll` are loaded, there is a configuration error that will cause OpenMP parallelization to malfunction.
+
+---
+
 ## Radia Solver Methods: MMM and MSC
 
 Radia supports two solver methods:
