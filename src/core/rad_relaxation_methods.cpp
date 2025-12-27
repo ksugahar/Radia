@@ -1155,9 +1155,71 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
 	if(FlatInteract == nullptr) return;
 
-	std::fill(y.begin(), y.end(), 0.0);
-
 	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+
+#ifdef HAVE_LAPACK
+	// FAST PATH: Use Intel MKL cblas_dgemv for uniform DOF systems
+	// This is O(N^2) with highly optimized BLAS instead of manual loops
+
+	if(!IntrctPtr->HasVariableDOF())
+	{
+		// Pure 3 DOF system (tetrahedra only) - use single BLAS call with alpha=-1.0
+		// y = -1.0 * A * x + 0.0 * y
+		// Then add diagonal: y[i] += inv_chi[i] * x[i]
+
+		// Intel MKL cblas_dgemv:
+		// y := alpha*A*x + beta*y (for CblasNoTrans)
+		// A is m x n, x is n, y is m
+		// For column-major (CblasColMajor): lda = leading dimension = m = totalDOF
+		cblas_dgemv(CblasColMajor, CblasNoTrans,
+		            totalDOF, totalDOF,      // m, n (matrix dimensions)
+		            -1.0,                     // alpha = -1.0 (negate for 3DOF)
+		            FlatInteract, totalDOF,   // A, lda
+		            x.data(), 1,              // x, incx
+		            0.0,                      // beta
+		            y.data(), 1);             // y, incy
+
+		// Add diagonal contribution: y[i] += inv_chi[i] * x[i]
+		// This is element-wise multiplication and addition
+		#pragma omp parallel for if(totalDOF > 1000)
+		for(int i = 0; i < totalDOF; i++)
+		{
+			y[i] += inv_chi[i] * x[i];
+		}
+		return;
+	}
+
+	// Check if pure 6 DOF system (all hexahedra MSC)
+	bool allMSC = true;
+	for(int elem = 0; elem < AmOfMainElem && allMSC; elem++)
+	{
+		if(IntrctPtr->GetElementDOF(elem) != 6) allMSC = false;
+	}
+
+	if(allMSC)
+	{
+		// Pure 6 DOF MSC system - use single BLAS call with alpha=+1.0
+		cblas_dgemv(CblasColMajor, CblasNoTrans,
+		            totalDOF, totalDOF,
+		            1.0,                      // alpha = +1.0 (no negation for MSC)
+		            FlatInteract, totalDOF,
+		            x.data(), 1,
+		            0.0,
+		            y.data(), 1);
+
+		// Add diagonal contribution
+		#pragma omp parallel for if(totalDOF > 1000)
+		for(int i = 0; i < totalDOF; i++)
+		{
+			y[i] += inv_chi[i] * x[i];
+		}
+		return;
+	}
+#endif
+
+	// SLOW PATH: Mixed DOF system (rare) - use block-wise loops
+	// This handles the case where 3DOF and 6DOF elements are mixed
+	std::fill(y.begin(), y.end(), 0.0);
 
 	#pragma omp parallel for if(AmOfMainElem > 50)
 	for(int row_elem = 0; row_elem < AmOfMainElem; row_elem++)
