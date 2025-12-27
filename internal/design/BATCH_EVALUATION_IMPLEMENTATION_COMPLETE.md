@@ -161,8 +161,11 @@ from netgen.occ import *
 # Enable H-matrix
 rad.SetHMatrixFieldEval(1, 1e-6)
 
-# Create Radia magnet
-magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2])
+# Create Radia hexahedral magnet
+from netgen_mesh_import import HEX_FACES
+vertices = [[-0.02,-0.02,-0.03], [0.02,-0.02,-0.03], [0.02,0.02,-0.03], [-0.02,0.02,-0.03],
+            [-0.02,-0.02,0.03], [0.02,-0.02,0.03], [0.02,0.02,0.03], [-0.02,0.02,0.03]]
+magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2])
 
 # Create NGSolve mesh
 box = Box((0.01, 0.01, 0.02), (0.06, 0.06, 0.08))

@@ -23,11 +23,14 @@ This script demonstrates the concept and measures potential speedup.
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
 import numpy as np
 import time
+
+# Import HEX_FACES for ObjPolyhdr hexahedra
+from netgen_mesh_import import HEX_FACES
 
 try:
     from ngsolve import *
@@ -55,11 +58,29 @@ elements = []
 for i in range(n):
     for j in range(n):
         for k in range(n):
-            x = (i - n/2 + 0.5) * elem_size
-            y = (j - n/2 + 0.5) * elem_size
-            z = (k - n/2 + 0.5) * elem_size
-            elem = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size],
-                                 [0, 0, 1.2])
+            # Element center
+            cx = (i - n/2 + 0.5) * elem_size
+            cy = (j - n/2 + 0.5) * elem_size
+            cz = (k - n/2 + 0.5) * elem_size
+
+            # Element half-dimensions
+            hdx = elem_size / 2
+            hdy = elem_size / 2
+            hdz = elem_size / 2
+
+            # Hexahedron vertices centered at [cx, cy, cz] with dimensions [elem_size, elem_size, elem_size]
+            vertices = [
+                [cx - hdx, cy - hdy, cz - hdz],  # vertex 1
+                [cx + hdx, cy - hdy, cz - hdz],  # vertex 2
+                [cx + hdx, cy + hdy, cz - hdz],  # vertex 3
+                [cx - hdx, cy + hdy, cz - hdz],  # vertex 4
+                [cx - hdx, cy - hdy, cz + hdz],  # vertex 5
+                [cx + hdx, cy - hdy, cz + hdz],  # vertex 6
+                [cx + hdx, cy + hdy, cz + hdz],  # vertex 7
+                [cx - hdx, cy + hdy, cz + hdz],  # vertex 8
+            ]
+
+            elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2])
             elements.append(elem)
 
 magnet = rad.ObjCnt(elements)

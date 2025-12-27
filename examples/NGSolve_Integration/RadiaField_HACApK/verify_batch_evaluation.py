@@ -33,6 +33,9 @@ os.chdir(_script_dir)
 import numpy as np
 import radia as rad
 
+# Import HEX_FACES for ObjPolyhdr hexahedra
+from netgen_mesh_import import HEX_FACES
+
 try:
     from ngsolve import *
     from netgen.occ import Box, Pnt, OCCGeometry
@@ -57,12 +60,22 @@ print('-' * 70)
 rad.UtiDelAll()
 rad.FldUnits('m')
 
-# Create rectangular magnet
-magnet = rad.ObjRecMag(
-    [0, 0, 0],              # Center (m)
-    [0.04, 0.04, 0.06],     # Dimensions (m)
-    [0, 0, 1.2]             # Magnetization (T)
-)
+# Create rectangular magnet using ObjPolyhdr
+# Center: [0, 0, 0], Dimensions: [0.04, 0.04, 0.06] m
+cx, cy, cz = 0, 0, 0
+dx, dy, dz = 0.02, 0.02, 0.03  # Half-dimensions
+vertices = [
+    [cx - dx, cy - dy, cz - dz],  # vertex 1
+    [cx + dx, cy - dy, cz - dz],  # vertex 2
+    [cx + dx, cy + dy, cz - dz],  # vertex 3
+    [cx - dx, cy + dy, cz - dz],  # vertex 4
+    [cx - dx, cy - dy, cz + dz],  # vertex 5
+    [cx + dx, cy - dy, cz + dz],  # vertex 6
+    [cx + dx, cy + dy, cz + dz],  # vertex 7
+    [cx - dx, cy + dy, cz + dz],  # vertex 8
+]
+
+magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2])
 
 print('  Magnet created')
 print('  Center: [0, 0, 0] m')

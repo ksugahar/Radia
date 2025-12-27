@@ -15,9 +15,11 @@ Tests magnetizable sphere in quadrupole background field with:
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
 import radia as rd
+from netgen_mesh_import import HEX_FACES
 
 print("=" * 80)
 print("Permeability Comparison - Analytical Solution Test")
@@ -82,9 +84,15 @@ for mu_r in permeability_values:
 
 	rd.UtiDelAll()  # Clear all previous objects
 
-	# Simple cubic approximation of sphere
+	# Simple cubic approximation of sphere: 10mm cube centered at origin
 	size = 2 * R_sphere  # 10mm cube
-	cube = rd.ObjRecMag([0, 0, 0], [size, size, size])
+	half = size / 2
+	# Hexahedron vertices for cube centered at [0, 0, 0] with dimensions [10, 10, 10] mm
+	vertices = [
+		[-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
+		[-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
+	]
+	cube = rd.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
 
 	# Use linear material with specified permeability
 	# MatLin(mu_r): defines isotropic linear material
@@ -176,7 +184,7 @@ for mu_r in permeability_values:
 
 	# VTK Export - Export geometry for this permeability value
 	try:
-		sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
+		sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 		from radia_vtk_export import exportGeometryToVTK
 
 		script_name = os.path.splitext(os.path.basename(__file__))[0]

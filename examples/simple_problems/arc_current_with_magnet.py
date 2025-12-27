@@ -13,9 +13,10 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'dist'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'build', 'lib', 'Release'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'build', 'Release'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'python'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'radia'))
 
 import radia as rad
+from netgen_mesh_import import HEX_FACES
 
 # Clear all objects
 rad.UtiDelAll()
@@ -32,10 +33,13 @@ j = 10
 # Create arc with current
 g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
 
-# Create rectangular magnet with magnetization [0,0,1.0] T
+# Create hexahedral magnet with magnetization [0,0,1.0] T
 # Note: Radia magnetization unit is Tesla (T), not A/m
 # For permanent magnets, set magnetization directly (no material needed)
-g2 = rad.ObjRecMag([0, 0, -50], [300, 300, 5], [0, 0, 1.0])
+# 300x300x5 mm centered at [0, 0, -50]
+vertices = [[-150, -150, -52.5], [150, -150, -52.5], [150, 150, -52.5], [-150, 150, -52.5],
+            [-150, -150, -47.5], [150, -150, -47.5], [150, 150, -47.5], [-150, 150, -47.5]]
+g2 = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.0])
 
 # Note: Material properties (MatLin, MatSatIso) are for soft magnetic materials
 # like iron yokes, NOT for permanent magnets with fixed magnetization

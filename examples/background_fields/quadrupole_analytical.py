@@ -10,10 +10,11 @@ converted to H field internally.
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
 import radia as rd
+from netgen_mesh_import import HEX_FACES
 
 print("=" * 70)
 print("ObjBckgCF B→H Conversion Test")
@@ -70,9 +71,15 @@ print(f"  ObjBckgCF created with quadrupole field")
 print(f"\n[Test 2] Create Simple Cubic Element")
 print("-" * 70)
 
-# Small cube at center
+# Small cube at center: 10mm cube centered at origin
 size = 10.0  # mm
-cube = rd.ObjRecMag([0, 0, 0], [size, size, size])
+half = size / 2
+# Hexahedron vertices for cube centered at [0, 0, 0] with dimensions [10, 10, 10] mm
+vertices = [
+	[-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
+	[-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
+]
+cube = rd.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
 # Use MatSatIsoFrm for isotropic saturable material
 # For soft iron-like material with high permeability
 mat = rd.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
@@ -200,7 +207,7 @@ print("=" * 70)
 # ============================================================================
 
 try:
-	sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
+	sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 	from radia_vtk_export import exportGeometryToVTK
 
 	script_name = os.path.splitext(os.path.basename(__file__))[0]

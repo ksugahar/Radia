@@ -180,9 +180,12 @@ from ngsolve import *
 import radia as rad
 import radia_ngsolve
 
-# Create Radia magnet (mm)
-magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1.2])
-rad.Solve(magnet, 0.0001, 10000)
+# Create Radia hexahedral magnet (mm)
+HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+vertices = [[-10,-10,-15], [10,-10,-15], [10,10,-15], [-10,10,-15],
+            [-10,-10,15], [10,-10,15], [10,10,15], [-10,10,15]]
+Mr = 1.2 / (4 * 3.14159 * 1e-7)  # Br=1.2T -> A/m
+magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, Mr])
 
 # Create mesh (m)
 mesh = Mesh(...)
@@ -238,8 +241,12 @@ Export Radia geometry to VTK Legacy format.
 **Usage:**
 ```python
 from radia_vtk_export import exportGeometryToVTK
+from netgen_mesh_import import HEX_FACES
 
-mag = rad.ObjRecMag([0,0,0], [30,30,10], [0,0,1])
+# Create hexahedral magnet (30x30x10 mm, magnetization 1 T in z)
+vertices = [[-15,-15,-5], [15,-15,-5], [15,15,-5], [-15,15,-5],
+            [-15,-15,5], [15,-15,5], [15,15,5], [-15,15,5]]
+mag = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1])
 exportGeometryToVTK(mag, 'my_magnet')
 ```
 
@@ -257,8 +264,12 @@ pip install pyvista
 **Usage:**
 ```python
 from radia_pyvista_viewer import view_radia_object
+from netgen_mesh_import import HEX_FACES
 
-mag = rad.ObjRecMag([0,0,0], [30,30,10], [0,0,1])
+# Create hexahedral magnet (30x30x10 mm, magnetization 1 T in z)
+vertices = [[-15,-15,-5], [15,-15,-5], [15,15,-5], [-15,15,-5],
+            [-15,-15,5], [15,-15,5], [15,15,5], [-15,15,5]]
+mag = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1])
 view_radia_object(mag)
 ```
 

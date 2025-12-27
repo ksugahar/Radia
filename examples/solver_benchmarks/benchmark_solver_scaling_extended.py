@@ -16,11 +16,23 @@ Date: 2025-11-13
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
 import time
 import tracemalloc
+from netgen_mesh_import import HEX_FACES
+
+
+def hex_vertices(cx, cy, cz, dx, dy, dz):
+	"""Generate hexahedron vertices from center and dimensions."""
+	hx, hy, hz = dx/2, dy/2, dz/2
+	return [
+		[cx-hx, cy-hy, cz-hz], [cx+hx, cy-hy, cz-hz],
+		[cx+hx, cy+hy, cz-hz], [cx-hx, cy+hy, cz-hz],
+		[cx-hx, cy-hy, cz+hz], [cx+hx, cy-hy, cz+hz],
+		[cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz]
+	]
 
 def create_magnet(n_per_side):
 	"""
@@ -50,8 +62,9 @@ def create_magnet(n_per_side):
 				y = (j - n_per_side/2 + 0.5) * elem_size
 				z = (k - n_per_side/2 + 0.5) * elem_size
 
-				# Create element with magnetization
-				block = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size], [0, 0, 1])
+				# Create element with magnetization (elem_size x elem_size x elem_size)
+				vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
+				block = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1])
 				rad.ObjAddToCnt(container, [block])
 
 	creation_time = time.time() - start_time

@@ -127,7 +127,10 @@ Points     Time (ms)    us/point     Cache Size   Status
   A_cf = CachedRadiaField(bg_field, 'a')
 
   # FAST (500 points in 1ms)
-  magnet = rad.ObjRecMag([0,0,0], [40,40,60], [0,0,1.2])
+  from netgen_mesh_import import HEX_FACES
+  vertices = [[-20,-20,-30], [20,-20,-30], [20,20,-30], [-20,20,-30],
+              [-20,-20,30], [20,-20,30], [20,20,30], [-20,20,30]]
+  magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2])
   A_cf = CachedRadiaField(magnet, 'a')
   ```
 
@@ -148,7 +151,10 @@ rad.FldUnits('m')
 
 # STEP 2: Create Radia geometry in meters (not mm!)
 rad.UtiDelAll()
-magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2])
+from netgen_mesh_import import HEX_FACES
+vertices = [[-0.02,-0.02,-0.03], [0.02,-0.02,-0.03], [0.02,0.02,-0.03], [-0.02,0.02,-0.03],
+            [-0.02,-0.02,0.03], [0.02,-0.02,0.03], [0.02,0.02,0.03], [-0.02,0.02,0.03]]
+magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2])
 
 # Create mesh
 box = Box((0.01, 0.01, 0.02), (0.06, 0.06, 0.08))

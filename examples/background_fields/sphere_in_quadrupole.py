@@ -11,9 +11,11 @@ at points outside the sphere.
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
 import radia as rd
+from netgen_mesh_import import HEX_FACES
 
 print("=" * 80)
 print("Quadrupole Field - Analytical Solution Comparison")
@@ -38,9 +40,15 @@ print(f"  Magnetic susceptibility: {chi}")
 print(f"\n[Step 1] Creating Geometry")
 print("-" * 80)
 
-# Simple cubic approximation of sphere
+# Simple cubic approximation of sphere: 10mm cube centered at origin
 size = 2 * R_sphere  # 10mm cube
-cube = rd.ObjRecMag([0, 0, 0], [size, size, size])
+half = size / 2
+# Hexahedron vertices for cube centered at [0, 0, 0] with dimensions [10, 10, 10] mm
+vertices = [
+	[-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
+	[-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
+]
+cube = rd.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
 mat = rd.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
 rd.MatApl(cube, mat)
 print(f"  Created {size}x{size}x{size} mm cube (approximates sphere)")
@@ -226,7 +234,7 @@ print("=" * 80)
 # ============================================================================
 
 try:
-	sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
+	sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 	from radia_vtk_export import exportGeometryToVTK
 
 	script_name = os.path.splitext(os.path.basename(__file__))[0]

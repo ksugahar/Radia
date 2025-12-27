@@ -37,8 +37,8 @@ Basic Radia functionality including magnets, coils, materials, and field calcula
 - `hmatrix_update_magnetization.py` - H-matrix magnetization updates
 
 **Topics Covered:**
-- Object creation (`ObjRecMag`, `ObjArcCur`, `ObjPolyhdr`)
-- Material properties (`MatLin`, `MatPM`)
+- Object creation (`ObjPolyhdr`, `ObjArcCur`)
+- Material properties (`MatLin`, `MatSatIsoTab`)
 - Field computation (`Fld`)
 - VTK export for visualization
 

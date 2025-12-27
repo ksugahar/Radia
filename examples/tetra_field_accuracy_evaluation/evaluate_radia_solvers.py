@@ -43,7 +43,7 @@ except ImportError as e:
     print('NGSolve/Netgen not available: %s' % e)
     NETGEN_AVAILABLE = False
 
-from netgen_mesh_import import netgen_mesh_to_radia
+from netgen_mesh_import import netgen_mesh_to_radia, HEX_FACES
 
 # =============================================================================
 # Parameters (matching cube_uniform_field/linear benchmarks)
@@ -116,8 +116,14 @@ def create_hexa_solution(test_points):
     print()
     print('Creating hexahedral mesh (n_div=%d)...' % HEXA_NDIV)
 
-    # Create cube with initial zero magnetization
-    cube = rad.ObjRecMag([0, 0, 0], [CUBE_SIZE, CUBE_SIZE, CUBE_SIZE], [0, 0, 0])
+    # Create cube with initial zero magnetization: 1m side, centered at origin
+    half = CUBE_SIZE / 2
+    # Hexahedron vertices for cube centered at [0, 0, 0] with dimensions [1.0, 1.0, 1.0]
+    vertices = [
+        [-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
+        [-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
+    ]
+    cube = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
 
     # Subdivide into hexahedra
     rad.ObjDivMag(cube, [HEXA_NDIV, HEXA_NDIV, HEXA_NDIV])

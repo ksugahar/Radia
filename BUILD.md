@@ -169,9 +169,12 @@ Examples:
 **Usage**:
 ```python
 import radia as rad
+from netgen_mesh_import import HEX_FACES
 
-# Create magnet
-magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1.2])
+# Create hexahedral magnet (20x20x30 mm, magnetization 1.2 T in z)
+vertices = [[-10,-10,-15], [10,-10,-15], [10,10,-15], [-10,10,-15],
+            [-10,-10,15], [10,-10,15], [10,10,15], [-10,10,15]]
+magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2])
 
 # Compute field
 field = rad.Fld(magnet, 'b', [10, 10, 10])
@@ -193,9 +196,12 @@ print(f"B = {field} T")
 import ngsolve  # MUST import first
 import radia_ngsolve
 import radia as rad
+from netgen_mesh_import import HEX_FACES
 
-# Create Radia magnet
-magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 30], [0, 0, 1.2])
+# Create hexahedral magnet (20x20x30 mm, magnetization 1.2 T in z)
+vertices = [[-10,-10,-15], [10,-10,-15], [10,10,-15], [-10,10,-15],
+            [-10,-10,15], [10,-10,15], [10,10,15], [-10,10,15]]
+magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2])
 
 # Create NGSolve CoefficientFunction
 B_cf = radia_ngsolve.RadiaField(magnet, 'b')  # Flux density
