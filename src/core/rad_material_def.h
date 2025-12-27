@@ -475,7 +475,8 @@ public:
 	// Method 1: Standard mu = B(H)/(mu_0*H)
 	// Method 2: H+B sum interpolation
 	// Selects method with smaller |mu_new - mu_old|
-	double ComputeChiDualMethod(double H_mag, double mu_old) const;
+	// relax: under-relaxation parameter (0.0 = full step, >0 = under-relaxation)
+	double ComputeChiDualMethod(double H_mag, double mu_old, double relax = 0.0) const;
 
 	// Public wrapper for inverse B-H lookup (used by relaxation methods)
 	double GetHfromM(double AbsM) const

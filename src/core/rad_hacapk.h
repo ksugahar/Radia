@@ -243,8 +243,30 @@ private:
     // Pre-computed quad face vertices [n_elem * 6 * 4 * 3] (6 faces, 4 verts, 3 coords)
     std::vector<double> m_face_vertices;
 
-    // Flag: geometry has been pre-computed
+    // Flag: geometry has been pre-computed (6DOF hexahedra)
     bool m_geometry_ready;
+
+    // ========================================================================
+    // Pre-computed geometry for 3DOF tetrahedra (ELF-style optimization)
+    // ========================================================================
+    // Pre-computed tetrahedron face vertices for direct field computation
+    // Avoids calling B_comp() which has significant overhead
+
+    // Pre-computed tetrahedron centers [n_elem * 3]
+    std::vector<double> m_tetra_centers;
+
+    // Pre-computed tetrahedron face vertices [n_elem * 4 * 3 * 3]
+    // (4 faces, 3 vertices per face, 3 coords)
+    std::vector<double> m_tetra_face_vertices;
+
+    // Pre-computed tetrahedron face normals [n_elem * 4 * 3] (outward normals)
+    std::vector<double> m_tetra_face_normals;
+
+    // Pre-computed tetrahedron face areas [n_elem * 4]
+    std::vector<double> m_tetra_face_areas;
+
+    // Flag: tetrahedron geometry has been pre-computed
+    bool m_geometry_3dof_ready;
 
     // Cached diagonal elements of interaction matrix N_ii (for Jacobi preconditioner)
     // Computed once during BuildHMatrix, reused in every BiCGSTAB iteration
@@ -264,7 +286,8 @@ private:
     void FreeResources();
     void ExtractElementCoordinates();
     void BuildDOFLookupTable();
-    void PrecomputeGeometry();  // ELF-style pre-computation for 6DOF hexahedra
+    void PrecomputeGeometry();      // ELF-style pre-computation for 6DOF hexahedra
+    void PrecomputeGeometry3DOF();  // ELF-style pre-computation for 3DOF tetrahedra
 
     // 6DOF hexahedron methods
     double GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const;
@@ -274,6 +297,11 @@ private:
     // 3DOF tetrahedron methods
     double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
     void Compute3x3Block(int elem_i, int elem_j, double* N_mat) const;
+    void Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const;  // On-demand without pre-computed matrix
+    void Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const;  // Uses pre-computed geometry
+
+    // Field computation from pre-computed tetrahedron faces
+    void FieldFromTetraFace(int elem, int face, const double* obs, const double* M_unit, double& H_n) const;
 
     // Mixed element methods (3DOF tetra + 6DOF hexa)
     double GetMixed3x6Element(int elem_tetra, int elem_hex, int comp, int face) const;

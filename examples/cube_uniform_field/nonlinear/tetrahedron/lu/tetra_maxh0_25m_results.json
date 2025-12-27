@@ -9,8 +9,8 @@
   "hmat_eps": null,
   "hmat_leaf_size": null,
   "hmat_eta": null,
-  "t_mesh": 0.0689995288848877,
-  "t_solve": 2.58101487159729,
+  "t_mesh": 0.07503223419189453,
+  "t_solve": 2.7850043773651123,
   "solver_method": 0,
   "solver_name": "lu",
   "converged": true,
@@ -18,16 +18,17 @@
   "nonl_iterations": 15,
   "linear_iterations": 0,
   "M_avg_z": 727049.6053230128,
-  "peak_memory_mb": 68.9453125,
+  "peak_memory_mb": 116.2578125,
+  "solver_memory_mb": 41.6640625,
   "timing": {
     "t_matrix_build": 0.0,
-    "t_lu_decomp": 0.37119500000000005,
+    "t_lu_decomp": 0.5781149,
     "t_hmatrix_build": 0.0,
     "t_hmatrix_cluster": 0.0,
     "t_hmatrix_frame": 0.0,
     "t_hmatrix_fill": 0.0,
-    "t_linear_solve": 0.37119500000000005,
-    "t_total": 2.58101487159729
+    "t_linear_solve": 0.5781149,
+    "t_total": 2.7850043773651123
   },
   "maxh": 0.25
 }

@@ -60,13 +60,37 @@ Where N_demag = 1/3 for a cube.
 
 ## Benchmark Results
 
-### 1. Hexahedral Linear Benchmark
+### 1. Hexahedral Linear Benchmark (2025-12-27)
 
-*(Results to be added)*
+**M_analytical = 598,204 A/m** (mu_r = 1000, N_demag = 1/3)
+
+#### N=5 (125 elements, 750 DOF)
+
+| M_avg_z | Solver | Memory | Time (s) | Iter | Error |
+|--------:|--------|-------:|---------:|-----:|------:|
+| 701,900 | LU | 34 MB | 0.85 | 2 | 17.3% |
+| 701,904 | BiCGSTAB | 33 MB | 0.16 | 3 | 17.3% |
+| 701,897 | HACApK | 33 MB | 0.11 | 3 | 17.3% |
+
+#### N=10 (1,000 elements, 6,000 DOF)
+
+| M_avg_z | Solver | Memory | Time (s) | Iter | Error |
+|--------:|--------|-------:|---------:|-----:|------:|
+| 716,184 | LU | 61 MB | 10.2 | 2 | 19.7% |
+| 716,200 | BiCGSTAB | 38 MB | 10.2 | 3 | 19.7% |
+| 716,192 | HACApK | 41 MB | 4.28 | 2 | 19.7% |
+
+#### N=15 (3,375 elements, 20,250 DOF)
+
+| M_avg_z | Solver | Memory | Time (s) | Iter | Error |
+|--------:|--------|-------:|---------:|-----:|------:|
+| 720,157 | LU | 123 MB | 155.8 | 2 | 20.4% |
+| 720,159 | BiCGSTAB | 52 MB | 132.6 | 2 | 20.4% |
+| 720,186 | HACApK | 57 MB | 27.9 | 2 | 20.4% |
 
 ---
 
-### 2. Hexahedral Nonlinear Benchmark (2025-12-26)
+### 2. Hexahedral Nonlinear Benchmark (2025-12-27)
 
 **All solvers converge** for hexahedral nonlinear problems.
 
@@ -76,7 +100,7 @@ Where N_demag = 1/3 for a cube.
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 702,132 | LU | 34 MB | - | 0 | 6 | 0 | 0.562s | - | 0.562s | 0.72s |
 | 702,114 | BiCGSTAB | 33 MB | - | 21 | 3 | 0 | - | - | 0.027s | 0.16s |
-| 702,107 | HACApK | 33 MB | 95% | 21 | 3 | 0.58s | - | 0.58s | 0.03s | 0.61s |
+| 702,107 | HACApK | 38 MB | 95% | 21 | 3 | 0.55s | - | 0.55s | 0.03s | 0.59s |
 
 #### N=10 (1,000 elements, 6,000 DOF)
 
@@ -84,7 +108,7 @@ Where N_demag = 1/3 for a cube.
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 716,281 | LU | 60 MB | - | 0 | 13 | 0 | 9.19s | - | 9.19s | 18.1s |
 | 716,318 | BiCGSTAB | 38 MB | - | 41 | 5 | 0 | - | - | 4.83s | 13.2s |
-| 716,362 | HACApK | 41 MB | **47%** | 31 | 4 | 4.05s | - | 4.05s | 0.54s | 4.62s |
+| 716,362 | HACApK | 211 MB | **48%** | 31 | 4 | 4.02s | - | 4.02s | 0.57s | 4.59s |
 
 #### N=15 (3,375 elements, 20,250 DOF)
 
@@ -92,13 +116,13 @@ Where N_demag = 1/3 for a cube.
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 719,832 | LU | 124 MB | - | 0 | 35 | 0 | 991s | - | 991s | 1098s |
 | 719,875 | BiCGSTAB | 53 MB | - | 87 | 29 | 0 | - | - | 279s | 372s |
-| 719,902 | HACApK | 58 MB | **25%** | 88 | 29 | 25.9s | - | 25.9s | 11.7s | 38.5s |
+| 719,916 | HACApK | 1246 MB | **25%** | 84 | 28 | 26.1s | - | 26.1s | 12.1s | 38.3s |
 
 #### N=20 (8,000 elements, 48,000 DOF) - HACApK only
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 721,317 | HACApK | 95 MB | **~10%** | 111 | 31 | 91.7s | - | 91.7s | 21.9s | 118s |
+| 721,323 | HACApK | 4798 MB | **14%** | 110 | 30 | 87.8s | - | 87.8s | 40.7s | 128s |
 
 ---
 
@@ -154,17 +178,9 @@ Where N_demag = 1/3 for a cube.
 
 ---
 
-### 4. Tetrahedral Nonlinear Benchmark (2025-12-26)
+### 4. Tetrahedral Nonlinear Benchmark (2025-12-27)
 
 **All solvers converge** for tetrahedral nonlinear problems.
-
-#### maxh=0.35m (112 elements, 336 DOF)
-
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 760,858 | LU | 64 MB | - | 0 | 15 | 0 | 0.299s | - | 0.299s | 0.94s |
-| 760,861 | BiCGSTAB | 65 MB | - | 136 | 18 | 0 | - | - | 0.029s | 0.20s |
-| 761,295 | HACApK | 65 MB | 0.29% | 113 | 11 | 0.008s | - | 0.008s | 0.005s | 0.26s |
 
 #### maxh=0.30m (200 elements, 600 DOF)
 
@@ -172,7 +188,7 @@ Where N_demag = 1/3 for a cube.
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|--------:|---------:|------:|
 | 726,577 | LU | 66 MB | - | 0 | 14 | 0 | 0.052s | - | 0.052s | 1.89s |
 | 726,721 | BiCGSTAB | 66 MB | - | 171 | 12 | 0 | - | - | 0.063s | 0.62s |
-| 726,810 | HACApK | 66 MB | 0.85% | 105 | 9 | 0.006s | - | 0.006s | 0.010s | 0.66s |
+| 726,810 | HACApK | 70 MB | 104% | 105 | 9 | 0.20s | - | 0.20s | 0.04s | 0.24s |
 
 #### maxh=0.25m (390 elements, 1,170 DOF)
 
@@ -180,7 +196,7 @@ Where N_demag = 1/3 for a cube.
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 727,050 | LU | 69 MB | - | 0 | 15 | 0 | 0.081s | - | 0.081s | 2.58s |
 | 727,454 | BiCGSTAB | 66 MB | - | 93 | 7 | 0 | - | - | 0.131s | 2.43s |
-| 727,463 | HACApK | 68 MB | 2.50% | 95 | 7 | 0.017s | - | 0.017s | 0.025s | 2.26s |
+| 727,463 | HACApK | 83 MB | 98% | 95 | 7 | 0.07s | - | 0.07s | 0.07s | 0.15s |
 
 #### maxh=0.20m (627 elements, 1,881 DOF)
 
@@ -188,7 +204,7 @@ Where N_demag = 1/3 for a cube.
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 748,822 | LU | 72 MB | - | 0 | 20 | 0 | 0.169s | - | 0.169s | 7.81s |
 | 748,869 | BiCGSTAB | 68 MB | - | 118 | 14 | 0 | - | - | 0.346s | 6.70s |
-| 748,856 | HACApK | 71 MB | 2.64% | 129 | 18 | 0.035s | - | 0.035s | 0.064s | 5.77s |
+| 748,858 | HACApK | 106 MB | 83% | 128 | 17 | 0.19s | - | 0.19s | 0.33s | 0.53s |
 
 #### maxh=0.15m (2,211 elements, 6,633 DOF)
 
@@ -196,7 +212,7 @@ Where N_demag = 1/3 for a cube.
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 730,715 | LU | 91 MB | - | 0 | 29 | 0 | 5.66s | - | 5.66s | 174.5s |
 | 730,591 | BiCGSTAB | 77 MB | - | 134 | 36 | 0 | - | - | 2.10s | 101.5s |
-| 730,615 | HACApK | 81 MB | 2.20% | 134 | 36 | 0.43s | - | 0.43s | 0.64s | 111.9s |
+| 730,616 | HACApK | 438 MB | **54%** | 134 | 36 | 1.97s | - | 1.97s | 3.08s | 5.17s |
 
 #### maxh=0.10m (4,994 elements, 14,982 DOF)
 
@@ -204,41 +220,49 @@ Where N_demag = 1/3 for a cube.
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
 | 730,996 | LU | 104 MB | - | 0 | 39 | 0 | 1435s | - | 1435s | 1823s |
 | 731,003 | BiCGSTAB | 90 MB | - | 217 | 41 | 0 | - | - | 507s | 875s |
-| 731,060 | HACApK | 96 MB | 3.31% | 202 | 35 | 1.17s | - | 1.17s | 10.1s | 441s |
+| 731,054 | HACApK | 1575 MB | **35%** | 205 | 38 | 7.08s | - | 7.08s | 12.5s | 20.2s |
 
 ---
 
 ## Key Findings
 
+### Hexahedral Elements (Linear)
+
+1. **All solvers converge**: LU, BiCGSTAB, HACApK all work
+2. **HACApK is 5.6x faster than LU at N=15**: 27.9s vs 155.8s
+3. **HACApK is 4.7x faster than BiCGSTAB at N=15**: 27.9s vs 132.6s
+
 ### Hexahedral Elements (Nonlinear)
 
 1. **All solvers converge**: LU, BiCGSTAB, HACApK all work
-2. **HACApK is 33x faster than LU at N=15**: 33s vs 1098s
-3. **HACApK is 11x faster than BiCGSTAB at N=15**: 33s vs 372s
-4. **N=20 solved only by HACApK**: 118s for 48,000 DOF
+2. **HACApK is 29x faster than LU at N=15**: 38.3s vs 1098s
+3. **HACApK is 10x faster than BiCGSTAB at N=15**: 38.3s vs 372s
+4. **N=20 solved only by HACApK**: 128s for 48,000 DOF
 5. **M_avg_z consistent**: ~720,000 A/m across all solvers
 
 ### Tetrahedral Elements (Nonlinear)
 
 1. **All solvers converge**: LU, BiCGSTAB, HACApK all work
-2. **HACApK is fastest at large scale**: 4.1x faster than LU at maxh=0.10 (441s vs 1823s)
-3. **BiCGSTAB is 2.1x faster than LU**: 875s vs 1823s at maxh=0.10
+2. **HACApK is fastest at large scale**: 90x faster than LU at maxh=0.10 (20.2s vs 1823s)
+3. **HACApK is 43x faster than BiCGSTAB**: 20.2s vs 875s at maxh=0.10
 4. **M_avg_z consistent**: ~731,000 A/m across all solvers
 
 ### Solver Recommendations
 
 | Element Type | Material | Problem Size | Recommended Solver |
 |--------------|----------|--------------|-------------------|
+| Hexahedral | Linear | DOF < 6,000 | Any solver |
+| Hexahedral | Linear | DOF > 6,000 | **HACApK** (5x faster) |
 | Hexahedral | Nonlinear | DOF < 1,000 | Any solver |
 | Hexahedral | Nonlinear | DOF 1,000-10,000 | BiCGSTAB or HACApK |
-| Hexahedral | Nonlinear | DOF > 10,000 | **HACApK** (33x faster) |
+| Hexahedral | Nonlinear | DOF > 10,000 | **HACApK** (29x faster) |
 | Tetrahedral | Nonlinear | DOF < 2,000 | Any solver |
-| Tetrahedral | Nonlinear | DOF 2,000-10,000 | BiCGSTAB or HACApK |
-| Tetrahedral | Nonlinear | DOF > 10,000 | **HACApK** (4x faster) |
+| Tetrahedral | Nonlinear | DOF 2,000-10,000 | HACApK |
+| Tetrahedral | Nonlinear | DOF > 10,000 | **HACApK** (90x faster) |
 
 ---
 
-## H-matrix Statistics Summary (2025-12-26 Updated)
+## H-matrix Statistics Summary (2025-12-27 Updated)
 
 **Note**: Compression ratio = H-matrix memory / Dense memory. Lower is better.
 
@@ -247,20 +271,19 @@ Where N_demag = 1/3 for a cube.
 | N | Elements | DOF | lowrank | dense | max_rank | H-mat [MB] | Dense [MB] | Compression |
 |---|----------|-----|--------:|------:|---------:|-----------:|-----------:|------------:|
 | 5 | 125 | 750 | 26 | 158 | 46 | 4.1 | 4.3 | 95% |
-| 10 | 1,000 | 6,000 | 1,166 | 2,024 | 90 | 130 | 275 | **47%** |
+| 10 | 1,000 | 6,000 | 1,166 | 2,024 | 90 | 130 | 275 | **48%** |
 | 15 | 3,375 | 20,250 | 8,262 | 9,124 | 79 | 766 | 3,129 | **25%** |
-| 20 | 8,000 | 48,000 | 17,976 | 20,656 | 99 | ~1,800 | ~17,500 | **~10%** |
+| 20 | 8,000 | 48,000 | 17,976 | 20,656 | 99 | 2,429 | 17,578 | **14%** |
 
 ### Tetrahedral Elements (3 DOF per element)
 
 | maxh | Elements | DOF | lowrank | dense | max_rank | H-mat [MB] | Dense [MB] | Compression |
 |------|----------|-----|--------:|------:|---------:|-----------:|-----------:|------------:|
-| 0.35 | 112 | 336 | 2 | 254 | 19 | 0.8 | 0.9 | 97% |
-| 0.30 | 200 | 600 | 40 | 414 | 33 | 2.5 | 2.7 | 93% |
-| 0.25 | 390 | 1,170 | 290 | 869 | 36 | 8.5 | 10.4 | 82% |
-| 0.20 | 627 | 1,881 | 554 | 1,544 | 41 | 20 | 27 | 75% |
-| 0.15 | 2,211 | 6,633 | 3,160 | 11,226 | 46 | 190 | 334 | **57%** |
-| 0.10 | 4,994 | 14,982 | 12,074 | 24,401 | 52 | 620 | 1,704 | **36%** |
+| 0.30 | 200 | 600 | 40 | 414 | 33 | 2.9 | 2.8 | 104% |
+| 0.25 | 390 | 1,170 | 290 | 869 | 36 | 10.3 | 10.4 | 98% |
+| 0.20 | 627 | 1,881 | 554 | 1,544 | 41 | 22 | 27 | 83% |
+| 0.15 | 2,211 | 6,633 | 3,160 | 11,226 | 46 | 180 | 336 | **54%** |
+| 0.10 | 4,994 | 14,982 | 12,074 | 24,401 | 52 | 597 | 1,712 | **35%** |
 
 ---
 
@@ -299,7 +322,7 @@ H [A/m]     B [T]     Notes
 ```bash
 cd linear
 python benchmark_hexahedron.py --lu --bicgstab --hacapk 5 10 15
-python benchmark_tetrahedron.py --lu --bicgstab --hacapk 0.35 0.30 0.25 0.20 0.15 0.10
+python benchmark_tetrahedron.py --lu --bicgstab --hacapk 0.30 0.25 0.20 0.15 0.10
 ```
 
 ### Nonlinear Benchmarks
@@ -310,9 +333,9 @@ python benchmark_hex.py --lu --bicgstab --hacapk 5 10 15
 python benchmark_hex.py --hacapk 20
 
 cd nonlinear/tetrahedron
-python benchmark_tetra.py --lu --bicgstab --hacapk 0.35 0.30 0.25 0.20 0.15 0.10
+python benchmark_tetra.py --lu --bicgstab --hacapk 0.30 0.25 0.20 0.15 0.10
 ```
 
 ---
 
-**Last Updated**: 2025-12-26
+**Last Updated**: 2025-12-27

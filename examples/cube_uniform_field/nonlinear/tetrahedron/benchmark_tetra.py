@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 """
 Tetrahedral Benchmark using Netgen mesh for Radia
 
@@ -16,7 +16,7 @@ Usage:
     python benchmark_tetra.py --lu 0.4 0.3 0.25
     python benchmark_tetra.py --bicgstab 0.4 0.3 0.25
     python benchmark_tetra.py --hacapk 0.15
-    python benchmark_tetra.py --hacapk --hmat_eps 1e-4 0.15
+    python benchmark_tetra.py --hacapk --hmat_eps 1e-5 0.15
     python benchmark_tetra.py 0.4 0.3 0.25  # runs lu only
 """
 
@@ -50,7 +50,7 @@ def benchmark_tetrahedra(maxh, solver_type, output_dir, hmat_eps=1e-4,
         maxh: Maximum element size for Netgen mesh
         solver_type: 'lu', 'bicgstab', or 'hacapk'
         output_dir: Directory to save results
-        hmat_eps: ACA tolerance for H-matrix (only used with hacapk)
+        hmat_eps: ACA tolerance for H-matrix (default: 1e-5, matches ELF eps=1e-4)
         bicg_tol: BiCGSTAB convergence tolerance
         nonl_tol: Nonlinear iteration convergence tolerance
         hmat_leaf_size: H-matrix leaf size (ELF default: 10)
