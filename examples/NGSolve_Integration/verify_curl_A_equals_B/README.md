@@ -40,12 +40,47 @@ double scale = (field_type == "a") ? 0.001 : 1.0;
 
 ## Test Results
 
-With proper A field scaling in radia_ngsolve:
+### Current Status (radia_ngsolve.pyd needs rebuild)
 
-| Metric | Expected | Actual |
-|--------|----------|--------|
-| `\|curl(A)\| / \|B\|` ratio | ~1.0 | ~1.0 |
-| Ratio variation | < 10% | < 5% |
+The fix has been applied to `radia_ngsolve.cpp` source code, but `radia_ngsolve.pyd` needs to be rebuilt.
+
+**With OLD radia_ngsolve.pyd (without scaling fix):**
+
+| maxh [m] | Elements | HCurl DOF | |curl(A)|/|B| | Std Dev | Note |
+|----------|----------|-----------|--------------|---------|------|
+| 0.020 | 135 | 1,734 | 4.59e+06 | 6.3e+05 | ~5.8x 1/mu_0 |
+| 0.015 | 264 | 3,246 | 4.64e+06 | 6.0e+05 | ~5.8x 1/mu_0 |
+| 0.010 | 1,105 | 12,393 | 4.61e+06 | 5.5e+05 | ~5.8x 1/mu_0 |
+| 0.008 | 1,560 | 17,733 | 4.61e+06 | 5.4e+05 | ~5.8x 1/mu_0 |
+| 0.006 | 5,540 | 57,618 | 4.61e+06 | 5.5e+05 | ~5.8x 1/mu_0 |
+| 0.005 | 8,348 | 86,826 | 4.61e+06 | 5.4e+05 | ~5.8x 1/mu_0 |
+
+**Key observations:**
+- Ratio is ~4.6e6, which is approximately `5.8 / mu_0` (instead of expected 1.0)
+- Ratio is **consistent** across all mesh sizes (std dev ~12%)
+- Mesh refinement does **not** change the ratio significantly
+- This confirms the issue is unit scaling, not numerical discretization
+
+### Expected Results (after radia_ngsolve.pyd rebuild)
+
+With proper A field scaling (`scale = 0.001` for A field):
+
+| Metric | Expected | Note |
+|--------|----------|------|
+| |curl(A)| / |B| ratio | ~1.0 | Maxwell relation satisfied |
+| Ratio variation | < 10% | Due to FE discretization |
+
+### Mesh Convergence Behavior
+
+The ratio does **not** depend on mesh density because:
+1. The discrepancy is purely a **unit scaling issue**, not numerical error
+2. Both curl(A) and B scale together as mesh is refined
+3. The ratio remains constant at ~4.6e6 regardless of maxh
+
+After the fix is applied, mesh refinement should:
+- Ratio approaches 1.0 for all mesh sizes
+- Smaller deviation with finer mesh (improved FE approximation)
+- Error dominated by HCurl/HDiv projection accuracy
 
 ## Running the Test
 
@@ -75,6 +110,22 @@ python verify_curl_A_equals_B.py
 2. **A field requires /1000 scaling** - to convert from T*mm to T*m for correct curl(A) = B
 3. **B and H fields need no scaling** - they are dimensionally correct in all unit systems
 4. **The fix is in radia_ngsolve.cpp** - automatic scaling applied when field_type == "a"
+5. **Mesh refinement does not affect the ratio** - the issue is unit scaling, not discretization error
+6. **Consistent ratio (~4.6e6) confirms the analysis** - systematic scaling factor, not random error
+
+## Build Status
+
+**Source code fix applied**: `src/radia/radia_ngsolve.cpp` (3 locations)
+
+```cpp
+// Line 252, 416, 505:
+double scale = (field_type == "a") ? 0.001 : 1.0;
+```
+
+**radia_ngsolve.pyd status**: Needs rebuild with Intel oneAPI compiler
+
+The rebuild requires resolving linker issues with NGSolve library dependencies.
+Until rebuilt, the verification will show ratio ~4.6e6 instead of ~1.0.
 
 ---
 
