@@ -168,17 +168,44 @@ try {
     }
 
     # Copy Intel MKL DLLs for distribution
-    $INTEL_DLLS = @(
-        "$INTEL_MKL\bin\mkl_rt.2.dll"         # Intel MKL runtime
+    # mkl_rt.2.dll is SDL (Single Dynamic Library) that loads other DLLs at runtime
+    $INTEL_MKL_DLLS = @(
+        "$INTEL_MKL\bin\mkl_rt.2.dll",            # MKL SDL runtime
+        "$INTEL_MKL\bin\mkl_core.2.dll",          # MKL core
+        "$INTEL_MKL\bin\mkl_intel_thread.2.dll",  # MKL threading (Intel OpenMP)
+        "$INTEL_MKL\bin\mkl_def.2.dll",           # Default CPU kernels
+        "$INTEL_MKL\bin\mkl_avx2.2.dll",          # AVX2 optimized kernels
+        "$INTEL_MKL\bin\mkl_vml_def.2.dll",       # Vector math library (default)
+        "$INTEL_MKL\bin\mkl_vml_avx2.2.dll"       # Vector math library (AVX2)
     )
 
-    foreach ($dll in $INTEL_DLLS) {
+    # Intel OpenMP and compiler runtime DLLs
+    $INTEL_COMPILER = "$INTEL_ONEAPI\compiler\latest"
+    $INTEL_RUNTIME_DLLS = @(
+        "$INTEL_COMPILER\bin\libiomp5md.dll",     # Intel OpenMP runtime
+        "$INTEL_COMPILER\bin\libmmd.dll",         # Intel math library
+        "$INTEL_COMPILER\bin\svml_dispmd.dll"     # Intel short vector math library
+    )
+
+    Write-Host "Copying Intel MKL DLLs..." -ForegroundColor Cyan
+    foreach ($dll in $INTEL_MKL_DLLS) {
         if (Test-Path $dll) {
             $dllName = Split-Path -Leaf $dll
             Copy-Item $dll "$PROJECT_DIR\src\radia\" -Force
-            Write-Host "Copied $dllName to src/radia/" -ForegroundColor Green
+            Write-Host "  Copied $dllName" -ForegroundColor Green
         } else {
-            Write-Host "WARNING: DLL not found: $dll" -ForegroundColor Yellow
+            Write-Host "  WARNING: DLL not found: $dll" -ForegroundColor Yellow
+        }
+    }
+
+    Write-Host "Copying Intel compiler runtime DLLs..." -ForegroundColor Cyan
+    foreach ($dll in $INTEL_RUNTIME_DLLS) {
+        if (Test-Path $dll) {
+            $dllName = Split-Path -Leaf $dll
+            Copy-Item $dll "$PROJECT_DIR\src\radia\" -Force
+            Write-Host "  Copied $dllName" -ForegroundColor Green
+        } else {
+            Write-Host "  WARNING: DLL not found: $dll" -ForegroundColor Yellow
         }
     }
 
