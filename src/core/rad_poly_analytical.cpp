@@ -425,127 +425,26 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 		d2.x*BB.x + d2.y*BB.y + d2.z*BB.z
 	);
 
-	// =========================================================================
-	// Inline computation of RadAnalyticalFieldFromPolygonCharge for KAdo=3
-	// Uses fixed-size arrays to avoid std::vector heap allocation (OpenMP safe)
-	// =========================================================================
+	// Prepare observation point and output vectors
+	std::vector<TVector3d> obs_points(1, obsPoint);
+	std::vector<TVector3d> field_result(1, TVector3d(0., 0., 0.));
 
 	// Weight: sigma / (4*pi)
 	double W = ConstForH * sigma;
 
-	// Triangle vertices in 2D local coordinates
-	TVector2d XY[3] = {local_V0, local_V1, local_V2};
+	// Create 2D vertex array for the triangle
+	std::vector<TVector2d> XY = {local_V0, local_V1, local_V2};
 
-	const double ONE = 1.0;
-	const double ZER = 0.0;
-	const double EPS_F = 1.0e-20;
-	const int KAdo = 3;
+	// Call the proven analytical formula
+	RadAnalyticalFieldFromPolygonCharge(
+		AA, BB, basis_c, YY,
+		XY,
+		obs_points,
+		field_result,
+		W,
+		1,   // Element index (for error reporting)
+		3    // Triangle has 3 vertices
+	);
 
-	// Compute edge properties for 3 edges
-	double DS[4], AM[4], SM[4], XD[4], YD[4];
-	double EPSG = 0.0;
-
-	for(int J = 0; J < KAdo; J++) {
-		int L = (J + 1) % KAdo;
-		double XS1 = XY[L].x - XY[J].x;
-		double XS2 = XY[L].y - XY[J].y;
-
-		if(std::abs(XS1) < EPS_F) XS1 = EPS_F;
-
-		DS[J] = std::sqrt(XS2*XS2 + XS1*XS1);
-		AM[J] = XS2 / XS1;
-		SM[J] = std::sqrt(AM[J]*AM[J] + ONE);
-		XD[J] = -XS1 / DS[J];
-		YD[J] =  XS2 / DS[J];
-
-		if(DS[J] > EPSG) EPSG = DS[J];
-	}
-	EPSG = EPSG * 1.0e-12;
-
-	// For triangle, set 4th edge to dummy values
-	DS[3] = ONE;
-	AM[3] = ZER;
-	SM[3] = 1.0e20;  // BIG
-	XD[3] = ZER;
-	YD[3] = ZER;
-
-	// Transform observation point to local coordinates
-	TVector3d DD;
-	DD.x = obsPoint.x - YY.x;
-	DD.y = obsPoint.y - YY.y;
-	DD.z = obsPoint.z - YY.z;
-
-	double EE1 = DD.x*AA.x + DD.y*AA.y + DD.z*AA.z;  // X in local frame
-	double EE2 = DD.x*BB.x + DD.y*BB.y + DD.z*BB.z;  // Y in local frame
-	double EE3 = DD.x*basis_c.x + DD.y*basis_c.y + DD.z*basis_c.z;  // Z in local frame
-
-	// Compute distances from observation point to vertices
-	double X[4], Y[4], H[4], E[4], R[4];
-
-	for(int J = 0; J < KAdo; J++) {
-		X[J] = EE1 - XY[J].x;
-		Y[J] = EE2 - XY[J].y;
-		H[J] = Y[J] * X[J];
-	}
-	// For triangles, set element [3] = element [0] for edge connectivity
-	X[3] = X[0];
-	Y[3] = Y[0];
-	H[3] = H[0];
-
-	double Z = EE3;
-	double Z2 = Z * Z;
-
-	for(int J = 0; J < 4; J++) {
-		E[J] = Z2 + X[J]*X[J];
-		R[J] = std::sqrt(X[J]*X[J] + Y[J]*Y[J] + Z*Z);
-	}
-
-	// Compute edge contributions
-	double RM[4], RP[4], RR[4], AL[4];
-
-	for(int J = 0; J < 4; J++) {
-		int JP1 = (J + 1) % 4;
-
-		RM[J] = R[J] + R[JP1] - DS[J];
-		RP[J] = R[J] + R[JP1] + DS[J];
-		RR[J] = (RM[J] / RP[J] > EPS_F) ? (RM[J] / RP[J]) : EPS_F;
-		AL[J] = std::log(RR[J]);
-	}
-
-	// Compute field components in local frame
-	double HH1 = W * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2] - YD[3]*AL[3]);
-	double HH2 = W * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2] - XD[3]*AL[3]);
-	double HH3 = ZER;
-
-	// Z-component (solid angle contribution)
-	if(std::abs(Z) > EPSG) {
-		double ZR[4], AT[4], BT[4];
-
-		for(int J = 0; J < 4; J++) {
-			ZR[J] = Z * R[J];
-		}
-
-		// Compute arctan terms
-		for(int J = 0; J < 4; J++) {
-			int JP1 = (J + 1) % 4;
-
-			AT[J] = (AM[J]*E[J] - H[J]) / ZR[J];
-			BT[J] = (AM[J]*E[JP1] - H[JP1]) / ZR[JP1];
-		}
-
-		// Special handling for triangle (4th term) - multiply by ZONE=0
-		AT[3] = 0.0;
-		BT[3] = 0.0;
-
-		HH3 = W * (-std::atan(AT[0]) - std::atan(AT[1]) - std::atan(AT[2]) - std::atan(AT[3])
-		          + std::atan(BT[0]) + std::atan(BT[1]) + std::atan(BT[2]) + std::atan(BT[3]));
-	}
-
-	// Transform field back to global coordinates
-	TVector3d H_result;
-	H_result.x = HH1*AA.x + HH2*BB.x + HH3*basis_c.x;
-	H_result.y = HH1*AA.y + HH2*BB.y + HH3*basis_c.y;
-	H_result.z = HH1*AA.z + HH2*BB.z + HH3*basis_c.z;
-
-	return H_result;
+	return field_result[0];
 }
