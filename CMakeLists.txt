@@ -163,6 +163,22 @@ add_ngsolve_python_module(radia_ngsolve
 	${PYTHON_DIR}/radia_ngsolve.cpp
 )
 
+# Disable IPO/LTO for Intel compiler (produces LLVM bitcode, not COFF objects)
+# This is required when linking with MSVC-compiled NGSolve libraries
+if(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+	set_target_properties(radia_ngsolve PROPERTIES
+		INTERPROCEDURAL_OPTIMIZATION OFF
+	)
+	# Force object file format to COFF (disable LLVM bitcode)
+	# $<$<COMPILE_LANGUAGE:CXX>:-fno-lto> for C++ only
+	# $<$<COMPILE_LANGUAGE:C>:-fno-lto> for C only
+	target_compile_options(radia_ngsolve PRIVATE
+		$<$<COMPILE_LANGUAGE:CXX>:-fno-lto>
+		$<$<COMPILE_LANGUAGE:C>:-fno-lto>
+	)
+	message(STATUS "IPO/LTO disabled for radia_ngsolve (Intel compiler)")
+endif()
+
 # Link triangle library
 target_link_libraries(radia_ngsolve PRIVATE triangle_lib)
 
@@ -265,27 +281,36 @@ if(RADIA_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
 	message(STATUS "OpenMP enabled for radia_ngsolve")
 endif()
 
-# Compiler-specific flags
-# POLICY: Intel oneAPI compiler is REQUIRED on Windows for optimal performance
-if(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-	# Intel oneAPI compiler (icx-cl) - REQUIRED
+# Compiler-specific flags for radia_ngsolve
+# MSVC is preferred for radia_ngsolve due to NGSolve library compatibility
+if(MSVC)
+	# MSVC with Intel MKL (required for NGSolve compatibility)
+	target_compile_options(radia_ngsolve PRIVATE
+		/O2                # Optimization
+		/fp:fast           # Fast floating-point
+		/W0                # Disable warnings
+		/wd4244            # Disable conversion warnings
+		/wd4267            # Disable size_t conversion warnings
+	)
+	if(RADIA_ENABLE_OPENMP)
+		target_compile_options(radia_ngsolve PRIVATE /openmp)
+	endif()
+	message(STATUS "Using MSVC compiler with Intel MKL for radia_ngsolve")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+	# Intel oneAPI compiler - may have ABI issues with MSVC-compiled NGSolve
 	set(RADIA_NGSOLVE_INTEL_FLAGS
 		/O3                # Maximum optimization
-		/Qipo              # Interprocedural optimization
 		/fp:fast           # Fast floating-point model
 		/W0                # Disable warnings
 	)
 	if(RADIA_ENABLE_OPENMP)
-		list(APPEND RADIA_NGSOLVE_INTEL_FLAGS /Qopenmp)  # Enable OpenMP (Intel style)
+		list(APPEND RADIA_NGSOLVE_INTEL_FLAGS /Qopenmp)
 	endif()
 	target_compile_options(radia_ngsolve PRIVATE ${RADIA_NGSOLVE_INTEL_FLAGS})
 	if(RADIA_ENABLE_OPENMP)
 		target_link_options(radia_ngsolve PRIVATE /Qopenmp)
 	endif()
-elseif(MSVC)
-	# MSVC is NOT supported - use Intel oneAPI instead
-	message(FATAL_ERROR "MSVC compiler is not supported. Please use Intel oneAPI compiler (icx-cl).\n"
-		"Build with: powershell.exe -ExecutionPolicy Bypass -File BuildWithIntel.ps1")
+	message(STATUS "Using Intel compiler for radia_ngsolve (may have ABI issues)")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	# GCC
 	target_compile_options(radia_ngsolve PRIVATE
@@ -403,10 +428,23 @@ if(RADIA_ENABLE_OPENMP AND OpenMP_C_FOUND)
 	message(STATUS "OpenMP enabled for radia (C)")
 endif()
 
-# Compiler-specific flags
-# POLICY: Intel oneAPI compiler is REQUIRED on Windows for optimal performance
-if(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-	# Intel oneAPI compiler (icx-cl) - REQUIRED
+# Compiler-specific flags for radia
+# MSVC with Intel MKL or Intel oneAPI compiler
+if(MSVC)
+	# MSVC with Intel MKL
+	target_compile_options(radia PRIVATE
+		/O2                # Optimization
+		/fp:fast           # Fast floating-point
+		/W0                # Disable warnings
+		/wd4244            # Disable conversion warnings
+		/wd4267            # Disable size_t conversion warnings
+	)
+	if(RADIA_ENABLE_OPENMP)
+		target_compile_options(radia PRIVATE /openmp)
+	endif()
+	message(STATUS "Using MSVC compiler with Intel MKL for radia")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+	# Intel oneAPI compiler (icx-cl) - optimal performance
 	set(RADIA_INTEL_FLAGS
 		/O3                # Maximum optimization
 		/Qipo              # Interprocedural optimization
@@ -422,10 +460,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
 	if(RADIA_ENABLE_OPENMP)
 		target_link_options(radia PRIVATE /Qopenmp)
 	endif()
-elseif(MSVC)
-	# MSVC is NOT supported - use Intel oneAPI instead
-	message(FATAL_ERROR "MSVC compiler is not supported. Please use Intel oneAPI compiler (icx-cl).\n"
-		"Build with: powershell.exe -ExecutionPolicy Bypass -File BuildWithIntel.ps1")
+	message(STATUS "Using Intel oneAPI compiler for radia (optimal performance)")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	# GCC
 	target_compile_options(radia PRIVATE

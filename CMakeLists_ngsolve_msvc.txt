@@ -1,0 +1,225 @@
+# CMakeLists_ngsolve_msvc.txt - Build radia_ngsolve with MSVC
+#
+# This separate CMake file is used to build radia_ngsolve.pyd with MSVC,
+# which is required because NGSolve libraries are compiled with MSVC.
+#
+# Intel compiler cannot be used for radia_ngsolve due to ABI incompatibility
+# with MSVC-compiled NGSolve libraries.
+#
+# Usage:
+#   cmake -B build-ngsolve-msvc -S . -G "Visual Studio 17 2022" -A x64 ^
+#         -DCMAKE_TOOLCHAIN_FILE=CMakeLists_ngsolve_msvc.txt
+#   cmake --build build-ngsolve-msvc --config Release --target radia_ngsolve
+
+cmake_minimum_required(VERSION 3.21)
+project(radia_ngsolve_msvc C CXX)
+
+# Option to disable OpenMP (for debugging)
+option(RADIA_ENABLE_OPENMP "Enable OpenMP parallelization" ON)
+
+# Find OpenMP for parallel matrix construction
+if(RADIA_ENABLE_OPENMP)
+    find_package(OpenMP)
+    if(OpenMP_CXX_FOUND)
+        message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
+    else()
+        message(WARNING "OpenMP not found - parallel matrix construction disabled")
+    endif()
+else()
+    message(STATUS "OpenMP disabled by RADIA_ENABLE_OPENMP=OFF")
+endif()
+
+# Find Python3 first to get the installation path
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
+message("Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
+
+# Get Python's site-packages directory
+execute_process(
+	COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('purelib'))"
+	OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+message("Python site-packages: ${PYTHON_SITE_PACKAGES}")
+
+# Set pybind11 directory
+set(pybind11_DIR ${PYTHON_SITE_PACKAGES}/pybind11/share/cmake/pybind11)
+
+message("Finding pybind11...")
+find_package(pybind11 REQUIRED)
+
+# Set NGSolve and Netgen directories
+set(NGSolve_DIR ${PYTHON_SITE_PACKAGES}/ngsolve/cmake)
+set(Netgen_DIR ${PYTHON_SITE_PACKAGES}/netgen/cmake)
+
+# Find NGSolve
+find_package(NGSolve CONFIG REQUIRED)
+
+# Radia source directories
+set(CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/core")
+set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/lib")
+set(EXT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/ext")
+set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/radia")
+set(FFTW_DIR "${EXT_DIR}/fftw")
+
+# BLAS/LAPACK: Intel MKL (works with MSVC too via mkl_rt.lib)
+if(WIN32)
+	set(MKL_DIR "C:/Program Files (x86)/Intel/oneAPI/mkl/latest")
+	set(MKL_INCLUDE_DIR "${MKL_DIR}/include")
+	set(MKL_LIB_DIR "${MKL_DIR}/lib")
+	set(MKL_BIN_DIR "${MKL_DIR}/bin")
+
+	# Use mkl_rt.lib (dynamic linking) - works with both Intel and MSVC compilers
+	set(MKL_LIB "${MKL_LIB_DIR}/mkl_rt.lib")
+	if(EXISTS ${MKL_LIB})
+		message(STATUS "Intel MKL found: ${MKL_LIB}")
+		set(BLAS_LIB ${MKL_LIB})
+		set(BLAS_INCLUDE_DIR ${MKL_INCLUDE_DIR})
+		set(USE_MKL_FOUND TRUE)
+	else()
+		message(FATAL_ERROR "Intel MKL not found. Please install Intel oneAPI Base Toolkit.")
+	endif()
+endif()
+
+# Radia core sources
+set(RADIA_CORE_SOURCES
+	${CORE_DIR}/rad_obj_creation.cpp
+	${CORE_DIR}/rad_material_impl.cpp
+	${CORE_DIR}/rad_transform_impl.cpp
+	${CORE_DIR}/rad_field_compute.cpp
+	${CORE_DIR}/rad_obj_subdivision.cpp
+	${CORE_DIR}/rad_arc_current.cpp
+	${CORE_DIR}/rad_coefficient_field.cpp
+	${CORE_DIR}/rad_type_cast.cpp
+	${CORE_DIR}/rad_extruded_polygon.cpp
+	${CORE_DIR}/rad_filament.cpp
+	${CORE_DIR}/rad_geometry_3d.cpp
+	${CORE_DIR}/rad_graphics_3d.cpp
+	${CORE_DIR}/rad_group.cpp
+	${CORE_DIR}/rad_c_interface.cpp
+	${CORE_DIR}/rad_interaction.cpp
+	${CORE_DIR}/rad_io_buffer.cpp
+	${CORE_DIR}/rad_math_methods.cpp
+	${CORE_DIR}/rad_material_def.cpp
+	${CORE_DIR}/rad_planar_2d_part1.cpp
+	${CORE_DIR}/rad_planar_2d_part2.cpp
+	${CORE_DIR}/rad_poly_analytical.cpp
+	${CORE_DIR}/rad_particle_trajectory.cpp
+	${CORE_DIR}/rad_rectangular_block.cpp
+	${CORE_DIR}/rad_extruded_polygon_msc.cpp
+	${CORE_DIR}/rad_relaxation_methods.cpp
+	${CORE_DIR}/rad_subdivided_arc_current.cpp
+	${CORE_DIR}/rad_subdivided_extruded_polygon.cpp
+	${CORE_DIR}/rad_subdivided_rectangle.cpp
+	${CORE_DIR}/rad_subdivided_polyhedron.cpp
+	${CORE_DIR}/rad_serialization.cpp
+	${CORE_DIR}/rad_polyhedron.cpp
+	${CORE_DIR}/rad_hacapk.cpp
+)
+
+# HACApK sources
+set(HACAPK_SOURCES
+	${EXT_DIR}/HACApK/cHACApK_base.c
+	${EXT_DIR}/HACApK/cHACApK_lib.c
+	${EXT_DIR}/HACApK/cHACApK_cpp_impl.c
+)
+
+# Radia lib sources
+set(RADIA_LIB_SOURCES
+	${LIB_DIR}/radentry.cpp
+)
+
+# Triangle library
+add_library(triangle_lib STATIC ${EXT_DIR}/triangle/triangle.c)
+target_compile_definitions(triangle_lib PRIVATE TRILIBRARY ANSI_DECLARATORS NO_TIMER)
+target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
+
+# Create NGSolve Python module
+add_ngsolve_python_module(radia_ngsolve
+	${RADIA_CORE_SOURCES}
+	${EXT_DIR}/auxparse/auxparse.cpp
+	${EXT_DIR}/genmath/gmfft.cpp
+	${EXT_DIR}/genmath/gmtrans.cpp
+	${HACAPK_SOURCES}
+	${RADIA_LIB_SOURCES}
+	${PYTHON_DIR}/radia_ngsolve.cpp
+)
+
+# Link triangle library
+target_link_libraries(radia_ngsolve PRIVATE triangle_lib)
+
+# Add include directories
+target_include_directories(radia_ngsolve PRIVATE
+	${CORE_DIR}
+	${LIB_DIR}
+	${EXT_DIR}/auxparse
+	${EXT_DIR}/genmath
+	${EXT_DIR}/triangle
+	${EXT_DIR}/HACApK
+	${PYTHON_DIR}
+)
+
+# Add compile definitions
+target_compile_definitions(radia_ngsolve PRIVATE
+	ALPHA__LIB__
+	FFTW_ENABLE_FLOAT
+	NO_TIMER
+	ANSI_DECLARATORS
+	TRILIBRARY
+	_GM_WITHOUT_BASE
+	RADIA_USE_HACAPK
+	HACAPK_RADIA_LOGGING
+	RADIA_MSC_SUPPORT
+	$<$<CONFIG:Debug>:_DEBUG>
+	$<$<CONFIG:Release>:NDEBUG>
+	$<$<PLATFORM_ID:Windows>:WIN32>
+	$<$<PLATFORM_ID:Windows>:_WINDOWS>
+)
+
+# FFTW library
+if(WIN32)
+	set(FFTW_LIB ${FFTW_DIR}/fftw64_f.lib)
+	if(EXISTS ${FFTW_LIB})
+		target_link_libraries(radia_ngsolve PRIVATE ${FFTW_LIB})
+		message(STATUS "Found FFTW library: ${FFTW_LIB}")
+	else()
+		message(WARNING "FFTW library not found: ${FFTW_LIB}")
+	endif()
+endif()
+
+# Intel MKL (works with MSVC)
+if(WIN32 AND USE_MKL_FOUND)
+	target_link_libraries(radia_ngsolve PRIVATE ${BLAS_LIB})
+	target_include_directories(radia_ngsolve PRIVATE ${BLAS_INCLUDE_DIR})
+	target_compile_definitions(radia_ngsolve PRIVATE HAVE_LAPACK)
+	message(STATUS "Using Intel MKL for radia_ngsolve: ${BLAS_LIB}")
+endif()
+
+# Link Windows system libraries
+if(WIN32)
+	target_link_libraries(radia_ngsolve PRIVATE version.lib)
+	if(MSVC)
+		target_link_options(radia_ngsolve PRIVATE /NODEFAULTLIB:LIBCMT)
+	endif()
+endif()
+
+# Link OpenMP
+if(RADIA_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
+	target_link_libraries(radia_ngsolve PRIVATE OpenMP::OpenMP_CXX)
+	message(STATUS "OpenMP enabled for radia_ngsolve")
+endif()
+
+# MSVC compiler flags (optimized)
+if(MSVC)
+	target_compile_options(radia_ngsolve PRIVATE
+		/O2                # Optimization
+		/fp:fast           # Fast floating-point
+		/W0                # Disable warnings
+		/wd4244            # Disable conversion warnings
+		/wd4267            # Disable size_t conversion warnings
+	)
+	if(RADIA_ENABLE_OPENMP)
+		target_compile_options(radia_ngsolve PRIVATE /openmp)
+	endif()
+endif()
+
+message(STATUS "radia_ngsolve module configured (MSVC build)")
