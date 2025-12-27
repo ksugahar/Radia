@@ -9,8 +9,21 @@ import os
 import numpy as np
 from time import perf_counter
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
+from netgen_mesh_import import HEX_FACES
+
+
+def hex_vertices(cx, cy, cz, dx, dy, dz):
+	"""Generate hexahedron vertices from center and dimensions."""
+	hx, hy, hz = dx/2, dy/2, dz/2
+	return [
+		[cx-hx, cy-hy, cz-hz], [cx+hx, cy-hy, cz-hz],
+		[cx+hx, cy+hy, cz-hz], [cx-hx, cy+hy, cz-hz],
+		[cx-hx, cy-hy, cz+hz], [cx+hx, cy-hy, cz+hz],
+		[cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz]
+	]
 
 print("=" * 70)
 print("Matrix Construction Benchmark")
@@ -61,7 +74,9 @@ for nx, ny, nz in test_cases:
 				y = (j - ny/2 + 0.5) * elem_size
 				z = (k - nz/2 + 0.5) * elem_size
 
-				elem = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size], [0, 0, 0.1])
+				# Element with dimensions elem_size x elem_size x elem_size
+				vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
+				elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0.1])
 				rad.MatApl(elem, mat)
 				elements.append(elem)
 

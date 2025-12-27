@@ -61,11 +61,14 @@ See [BUILD.md](BUILD.md) for detailed build instructions.
 ```python
 import radia as rad
 
-# Create a rectangular magnet
-mag = rad.ObjRecMag([0,0,0], [10,10,10], [0,0,1])
+# Create a hexahedral magnet using ObjPolyhdr
+HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+vertices = [[-5,-5,-5], [5,-5,-5], [5,5,-5], [-5,5,-5],
+            [-5,-5,5], [5,-5,5], [5,5,5], [-5,5,5]]
+mag = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1])  # magnetization in A/m
 
-# Calculate field
-field = rad.Fld(mag, 'b', [0,0,20])
+# Calculate field at external point
+field = rad.Fld(mag, 'b', [0, 0, 20])
 print(f"Field: {field} T")
 ```
 
@@ -99,7 +102,7 @@ radia_ngsolve.RadiaField(radia_obj, field_type='b')
 ```
 
 **Parameters:**
-- `radia_obj` (int): Radia object handle returned by `rad.ObjRecMag()`, `rad.ObjThckPgn()`, etc.
+- `radia_obj` (int): Radia object handle returned by `rad.ObjPolyhdr()`, `rad.ObjThckPgn()`, etc.
 - `field_type` (str, optional): Field type to compute. Default: `'b'`
   - `'b'`: Magnetic flux density [Tesla]
   - `'h'`: Magnetic field [A/m]
@@ -124,10 +127,12 @@ from ngsolve import Mesh, H1, GridFunction, HDiv
 import radia as rad
 from radia import radia_ngsolve  # or: import radia_ngsolve
 
-# Create Radia magnet
-magnet = rad.ObjRecMag([0,0,0], [20,20,20], [0,0,1.2])  # mm units
-rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0,0,1]))  # NdFeB permanent magnet
-rad.Solve(magnet, 0.0001, 10000)
+# Create Radia hexahedral magnet using ObjPolyhdr
+HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+vertices = [[-10,-10,-10], [10,-10,-10], [10,10,-10], [-10,10,-10],
+            [-10,-10,10], [10,-10,10], [10,10,10], [-10,10,10]]  # mm units
+Mr = 1.2 / (4 * 3.14159 * 1e-7)  # Br=1.2T -> Mr in A/m
+magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, Mr])
 
 # Create NGSolve CoefficientFunction for different field types
 B_field = radia_ngsolve.RadiaField(magnet, 'b')  # Flux density [T]
@@ -285,8 +290,11 @@ import numpy as np
 rad.UtiDelAll()
 rad.FldUnits('m')  # Use SI units
 
-# Create soft iron cube (10cm side)
-cube = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 0])
+# Create soft iron cube (10cm side) using ObjPolyhdr
+HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+vertices = [[-0.05,-0.05,-0.05], [0.05,-0.05,-0.05], [0.05,0.05,-0.05], [-0.05,0.05,-0.05],
+            [-0.05,-0.05,0.05], [0.05,-0.05,0.05], [0.05,0.05,0.05], [-0.05,0.05,0.05]]
+cube = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
 
 # Apply isotropic linear material (mu_r = 100)
 chi = 99.0  # chi = mu_r - 1
@@ -322,8 +330,8 @@ print(f"Magnetization: {M[1]} A/m")
 
 | Element | API | External Field Support |
 |---------|-----|----------------------|
-| Hexahedron | `ObjRecMag` | Yes |
-| Tetrahedron | `ObjPolyhdr` | Yes |
+| Hexahedron | `ObjPolyhdr` + `HEX_FACES` | Yes |
+| Tetrahedron | `ObjPolyhdr` + `TETRA_FACES` | Yes |
 | Extruded Polygon | `ObjThckPgn` | Yes |
 
 ## Tetrahedral Mesh Import from NGSolve/Netgen

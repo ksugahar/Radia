@@ -43,7 +43,7 @@ except ImportError as e:
     NGSOLVE_AVAILABLE = False
     sys.exit(1)
 
-from netgen_mesh_import import netgen_mesh_to_radia, TETRA_FACES
+from netgen_mesh_import import netgen_mesh_to_radia, TETRA_FACES, HEX_FACES
 
 # =============================================================================
 # Parameters
@@ -99,8 +99,14 @@ def compute_hexa_solution(test_points):
     rad.UtiDelAll()
     rad.FldUnits('m')
 
-    # Create uniformly magnetized cube
-    cube = rad.ObjRecMag([0, 0, 0], [CUBE_SIZE, CUBE_SIZE, CUBE_SIZE], MAGNETIZATION)
+    # Create uniformly magnetized cube: 1m side, centered at origin
+    half = CUBE_SIZE / 2
+    # Hexahedron vertices for cube centered at [0, 0, 0] with dimensions [1.0, 1.0, 1.0]
+    vertices = [
+        [-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
+        [-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
+    ]
+    cube = rad.ObjPolyhdr(vertices, HEX_FACES, MAGNETIZATION)
 
     # Subdivide into hexahedra
     rad.ObjDivMag(cube, [HEXA_NDIV, HEXA_NDIV, HEXA_NDIV])

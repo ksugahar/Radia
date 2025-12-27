@@ -18,6 +18,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import numpy as np
 import radia as rad
 
+# Import HEX_FACES for ObjPolyhdr hexahedra
+from netgen_mesh_import import HEX_FACES
+
 # Set units to meters for NGSolve compatibility
 rad.FldUnits('m')
 
@@ -25,12 +28,26 @@ print("="*70)
 print("NGSolve Integration Demo: Coordinate Transformation")
 print("="*70)
 
-# Create a simple rectangular magnet at origin
-# Magnetization in z-direction
-magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2e6])
+# Create a simple rectangular magnet at origin using ObjPolyhdr
+# Center: [0, 0, 0], Dimensions: [0.04, 0.04, 0.06] m, Magnetization in z-direction
+cx, cy, cz = 0, 0, 0
+dx, dy, dz = 0.02, 0.02, 0.03  # Half-dimensions
+vertices = [
+    [cx - dx, cy - dy, cz - dz],  # vertex 1
+    [cx + dx, cy - dy, cz - dz],  # vertex 2
+    [cx + dx, cy + dy, cz - dz],  # vertex 3
+    [cx - dx, cy + dy, cz - dz],  # vertex 4
+    [cx - dx, cy - dy, cz + dz],  # vertex 5
+    [cx + dx, cy - dy, cz + dz],  # vertex 6
+    [cx + dx, cy + dy, cz + dz],  # vertex 7
+    [cx - dx, cy + dy, cz + dz],  # vertex 8
+]
+
+magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2e6])
 rad.Solve(magnet, 0.0001, 1000)
 
 print("\nRadia magnet created at origin")
+print("  Size: 40mm x 40mm x 60mm")
 print("  Magnetization: 1.2 T in z-direction")
 
 # Test point in global coordinates

@@ -24,8 +24,10 @@ import numpy as np
 
 # Add build directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
+from netgen_mesh_import import HEX_FACES
 
 # Check magpylib availability
 try:
@@ -262,9 +264,15 @@ def run_example(name, magpy_source, description):
     field_callback = magpylib_to_radia_callback(magpy_source)
     bg_field = rad.ObjBckgCF(field_callback)
 
-    # Create soft iron cube
+    # Create soft iron cube: 40mm side, centered at origin
     cube_size = 0.04  # 40mm
-    cube = rad.ObjRecMag([0, 0, 0], [cube_size, cube_size, cube_size], [0, 0, 0])
+    half = cube_size / 2
+    # Hexahedron vertices for cube centered at [0, 0, 0] with dimensions [0.04, 0.04, 0.04]
+    vertices = [
+        [-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
+        [-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
+    ]
+    cube = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
 
     # Subdivide
     n_div = 4

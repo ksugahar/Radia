@@ -29,9 +29,12 @@ Date: 2025-12-05
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
+
+# Import HEX_FACES for ObjPolyhdr hexahedra
+from netgen_mesh_import import HEX_FACES
 
 # Check NGSolve availability
 try:
@@ -75,7 +78,21 @@ magnet_center = [0, 0, 0]  # meters
 magnet_size = [0.020, 0.020, 0.030]  # 20mm x 20mm x 30mm in meters
 magnetization = [0, 0, 1.2]  # 1.2 T in z-direction (NdFeB typical)
 
-magnet = rad.ObjRecMag(magnet_center, magnet_size, magnetization)
+# Create hexahedron vertices centered at [0, 0, 0] with dimensions [0.020, 0.020, 0.030] m
+cx, cy, cz = magnet_center
+dx, dy, dz = magnet_size[0] / 2, magnet_size[1] / 2, magnet_size[2] / 2
+vertices = [
+    [cx - dx, cy - dy, cz - dz],  # vertex 1
+    [cx + dx, cy - dy, cz - dz],  # vertex 2
+    [cx + dx, cy + dy, cz - dz],  # vertex 3
+    [cx - dx, cy + dy, cz - dz],  # vertex 4
+    [cx - dx, cy - dy, cz + dz],  # vertex 5
+    [cx + dx, cy - dy, cz + dz],  # vertex 6
+    [cx + dx, cy + dy, cz + dz],  # vertex 7
+    [cx - dx, cy + dy, cz + dz],  # vertex 8
+]
+
+magnet = rad.ObjPolyhdr(vertices, HEX_FACES, magnetization)
 rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))  # NdFeB material
 rad.Solve(magnet, 0.0001, 10000)
 
