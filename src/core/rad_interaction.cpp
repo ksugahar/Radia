@@ -817,6 +817,157 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 		return 1;
 	}
 
+	// MEDIUM PATH: MSC hexahedra without symmetry - uses OpenMP
+	// This is faster than slow path but handles 6x6 blocks correctly
+	if(!hasSymmetry && hasMSCElements)
+	{
+		static const double PI_MSC = 3.14159265358979323846;
+		static const double INV_4PI_MSC = 1.0 / (4.0 * PI_MSC);
+
+		#pragma omp parallel for schedule(dynamic) if(AmOfMainElem > 20)
+		for(int col = 0; col < AmOfMainElem; col++)
+		{
+			radTg3dRelax* elem_col = g3dRelaxPtrVect[col];
+			int dof_col = m_elemDOF[col];
+			int offset_col = m_elemDOFOffset[col];
+
+			// Check if source is MSC hexahedron
+			radTPolyhedron* poly_col = nullptr;
+			if(dof_col == 6)
+			{
+				poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
+			}
+
+			for(int row = 0; row < AmOfMainElem; row++)
+			{
+				radTg3dRelax* elem_row = g3dRelaxPtrVect[row];
+				int dof_row = m_elemDOF[row];
+				int offset_row = m_elemDOFOffset[row];
+
+				double* block = &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
+
+				// Check if target is MSC hexahedron
+				radTPolyhedron* poly_row = nullptr;
+				if(dof_row == 6)
+				{
+					poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
+				}
+
+				if(dof_row == 3 && dof_col == 3)
+				{
+					// 3x3 block: tetrahedron to tetrahedron
+					TVector3d ObsPoiVect = elem_row->ReturnCentrPoint();
+					radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+					Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
+					elem_col->B_comp(&Field);
+
+					block[0 * m_totalDOF + 0] = Field.B.x;
+					block[0 * m_totalDOF + 1] = Field.H.x;
+					block[0 * m_totalDOF + 2] = Field.A.x;
+					block[1 * m_totalDOF + 0] = Field.B.y;
+					block[1 * m_totalDOF + 1] = Field.H.y;
+					block[1 * m_totalDOF + 2] = Field.A.y;
+					block[2 * m_totalDOF + 0] = Field.B.z;
+					block[2 * m_totalDOF + 1] = Field.H.z;
+					block[2 * m_totalDOF + 2] = Field.A.z;
+				}
+				else if(dof_row == 6 && dof_col == 6 && poly_row && poly_col)
+				{
+					// 6x6 block: MSC hexahedron to MSC hexahedron
+					for(int face_i = 0; face_i < 6; face_i++)
+					{
+						// Yano-Sugahara evaluation point: midpoint between face center and element center
+						TVector3d EvalPt;
+						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
+						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
+						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+
+						for(int face_j = 0; face_j < 6; face_j++)
+						{
+							// Field from unit sigma on face j
+							TVector3d H_face = poly_col->FieldFromQuadFace(EvalPt, face_j, 1.0);
+
+							// Point charge contribution: m = -sigma * area
+							double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
+							TVector3d H_point = poly_col->FieldFromPointCharge(EvalPt, unit_point_charge);
+
+							TVector3d H_total;
+							H_total.x = H_face.x + H_point.x;
+							H_total.y = H_face.y + H_point.y;
+							H_total.z = H_face.z + H_point.z;
+
+							// K_ij = normal_i dot H_total
+							double K_ij = H_total.x * poly_row->FaceNormal[face_i].x +
+							              H_total.y * poly_row->FaceNormal[face_i].y +
+							              H_total.z * poly_row->FaceNormal[face_i].z;
+
+							block[face_j * m_totalDOF + face_i] = -K_ij * INV_4PI_MSC;
+						}
+					}
+				}
+				else if(dof_row == 3 && dof_col == 6 && poly_col)
+				{
+					// 3x6 block: tetrahedron from MSC hexahedron
+					TVector3d ObsPoiVect = elem_row->ReturnCentrPoint();
+
+					for(int face_j = 0; face_j < 6; face_j++)
+					{
+						TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
+						double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
+						TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
+
+						TVector3d H_total;
+						H_total.x = H_face.x + H_point.x;
+						H_total.y = H_face.y + H_point.y;
+						H_total.z = H_face.z + H_point.z;
+
+						block[face_j * m_totalDOF + 0] = H_total.x * INV_4PI_MSC;
+						block[face_j * m_totalDOF + 1] = H_total.y * INV_4PI_MSC;
+						block[face_j * m_totalDOF + 2] = H_total.z * INV_4PI_MSC;
+					}
+				}
+				else if(dof_row == 6 && dof_col == 3 && poly_row)
+				{
+					// 6x3 block: MSC hexahedron from tetrahedron
+					for(int face_i = 0; face_i < 6; face_i++)
+					{
+						// Yano-Sugahara evaluation point
+						TVector3d EvalPt;
+						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
+						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
+						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+
+						radTField Field(FieldKeyInteract, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+						Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
+						elem_col->B_comp(&Field);
+
+						// K(face_i, Mj) = normal · N_mat(:, j)
+						TVector3d& n = poly_row->FaceNormal[face_i];
+						double K_Mx = n.x * Field.B.x + n.y * Field.B.y + n.z * Field.B.z;
+						double K_My = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
+						double K_Mz = n.x * Field.A.x + n.y * Field.A.y + n.z * Field.A.z;
+
+						block[0 * m_totalDOF + face_i] = K_Mx * INV_4PI_MSC;
+						block[1 * m_totalDOF + face_i] = K_My * INV_4PI_MSC;
+						block[2 * m_totalDOF + face_i] = K_Mz * INV_4PI_MSC;
+					}
+				}
+				else
+				{
+					// Zero out unknown blocks
+					for(int i = 0; i < dof_row; i++)
+					{
+						for(int j = 0; j < dof_col; j++)
+						{
+							block[j * m_totalDOF + i] = 0.0;
+						}
+					}
+				}
+			}
+		}
+		return 1;
+	}
+
 	// SLOW PATH: With symmetry transformations (original code)
 	for(int col = 0; col < AmOfMainElem; col++)
 	{
