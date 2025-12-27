@@ -29,7 +29,7 @@
 
 /* BLAS dgemv for optimized matrix-vector operations */
 #ifdef HAVE_LAPACK
-/* OpenBLAS/MKL CBLAS interface */
+/* Intel MKL CBLAS interface */
 #ifdef __cplusplus
 extern "C" {
 #endif

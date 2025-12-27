@@ -142,7 +142,7 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 double radTRelaxationMethNo_1::Dot(const std::vector<double>& a, const std::vector<double>& b, int n)
 {
 #ifdef HAVE_LAPACK
-	// Use OpenBLAS cblas_ddot for optimized dot product
+	// Use Intel MKL CBLAS cblas_ddot for optimized dot product
 	return cblas_ddot(n, a.data(), 1, b.data(), 1);
 #else
 	double sum = 0.0;
@@ -158,7 +158,7 @@ double radTRelaxationMethNo_1::Dot(const std::vector<double>& a, const std::vect
 double radTRelaxationMethNo_1::Norm2(const std::vector<double>& a, int n)
 {
 #ifdef HAVE_LAPACK
-	// Use OpenBLAS cblas_dnrm2 for optimized norm
+	// Use Intel MKL CBLAS cblas_dnrm2 for optimized norm
 	return cblas_dnrm2(n, a.data(), 1);
 #else
 	return std::sqrt(Dot(a, a, n));
@@ -168,7 +168,7 @@ double radTRelaxationMethNo_1::Norm2(const std::vector<double>& a, int n)
 void radTRelaxationMethNo_1::Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n)
 {
 #ifdef HAVE_LAPACK
-	// Use OpenBLAS cblas_daxpy: y = alpha*x + y
+	// Use Intel MKL CBLAS cblas_daxpy: y = alpha*x + y
 	cblas_daxpy(n, alpha, x.data(), 1, y.data(), 1);
 #else
 	#pragma omp parallel for if(n > 100)
@@ -182,7 +182,7 @@ void radTRelaxationMethNo_1::Axpy(double alpha, const std::vector<double>& x, st
 void radTRelaxationMethNo_1::Copy(const std::vector<double>& src, std::vector<double>& dst, int n)
 {
 #ifdef HAVE_LAPACK
-	// Use OpenBLAS cblas_dcopy for optimized copy
+	// Use Intel MKL CBLAS cblas_dcopy for optimized copy
 	cblas_dcopy(n, src.data(), 1, dst.data(), 1);
 #else
 	#pragma omp parallel for if(n > 100)
@@ -196,7 +196,7 @@ void radTRelaxationMethNo_1::Copy(const std::vector<double>& src, std::vector<do
 void radTRelaxationMethNo_1::Scale(double alpha, std::vector<double>& x, int n)
 {
 #ifdef HAVE_LAPACK
-	// Use OpenBLAS cblas_dscal for optimized scale
+	// Use Intel MKL CBLAS cblas_dscal for optimized scale
 	cblas_dscal(n, alpha, x.data(), 1);
 #else
 	#pragma omp parallel for if(n > 100)
@@ -365,7 +365,7 @@ void radTRelaxationMethNo_1::DenseMatVec_BLAS(const std::vector<double>& A_flat,
                                               std::vector<double>& y, int ndof)
 {
 #ifdef HAVE_LAPACK
-	// Use OpenBLAS cblas_dgemv: y = alpha*A*x + beta*y
+	// Use Intel MKL CBLAS cblas_dgemv: y = alpha*A*x + beta*y
 	// A is stored in column-major order
 	cblas_dgemv(CblasColMajor, CblasNoTrans, ndof, ndof,
 	            1.0, A_flat.data(), ndof, x.data(), 1,
