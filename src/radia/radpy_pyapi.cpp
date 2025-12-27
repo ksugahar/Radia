@@ -1836,6 +1836,125 @@ static PyObject* radia_MatPM(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
+ * Permanent Magnet Materials: Fixed magnetization (no demagnetization)
+ * API: MatMagFixed([Mx, My, Mz])
+ *
+ * The magnetization is fixed and does not change with the external field.
+ * This is suitable for permanent magnets where demagnetization effects are negligible.
+ *
+ * Parameters:
+ *   [Mx, My, Mz] - Magnetization vector in A/m
+ *
+ * Note: This is different from MatPM (which includes demagnetization curve).
+ * Use ObjPolyhdr for geometry definition (not ObjRecMag).
+ ***************************************************************************/
+static PyObject* radia_MatMagFixed(PyObject* self, PyObject* args)
+{
+	PyObject *oMagn=0, *oResInd=0;
+	try
+	{
+		if(!PyArg_ParseTuple(args, "O:MatMagFixed", &oMagn)) throw CombErStr(strEr_BadFuncArg, ": MatMagFixed");
+		if(oMagn == 0) throw CombErStr(strEr_BadFuncArg, ": MatMagFixed");
+
+		double arMagn[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oMagn, 'd', arMagn, 3, CombErStr(strEr_BadFuncArg, ": MatMagFixed, magnetization must be 3-element vector [Mx, My, Mz]"));
+
+		int indRes=0;
+		g_pyParse.ProcRes(RadMatMagFixed(&indRes, arMagn));
+
+		oResInd = Py_BuildValue("i", indRes);
+	}
+	catch (const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Permanent Magnet Materials: Linear demagnetization (Br/Hc model)
+ * API: MatMagLinear(Br, Hc, [mx, my, mz])
+ *
+ * Models linear demagnetization: B = Br + mu_0 * mu_rec * H
+ * where mu_rec = Br / (mu_0 * Hc) is the recoil permeability.
+ *
+ * Parameters:
+ *   Br - Residual flux density [T]
+ *   Hc - Coercivity [A/m]
+ *   [mx, my, mz] - Easy magnetization axis direction (will be normalized)
+ *
+ * Note: Currently behaves as fixed magnetization (demagnetization not yet implemented).
+ ***************************************************************************/
+static PyObject* radia_MatMagLinear(PyObject* self, PyObject* args)
+{
+	PyObject *oMagAxis=0, *oResInd=0;
+	double Br=0, Hc=0;
+	try
+	{
+		if(!PyArg_ParseTuple(args, "ddO:MatMagLinear", &Br, &Hc, &oMagAxis)) throw CombErStr(strEr_BadFuncArg, ": MatMagLinear");
+		if(oMagAxis == 0) throw CombErStr(strEr_BadFuncArg, ": MatMagLinear");
+
+		double arMagAxis[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oMagAxis, 'd', arMagAxis, 3, CombErStr(strEr_BadFuncArg, ": MatMagLinear, magnetization axis must be 3-element vector [mx, my, mz]"));
+
+		int indRes=0;
+		g_pyParse.ProcRes(RadMatMagLinear(&indRes, Br, Hc, arMagAxis));
+
+		oResInd = Py_BuildValue("i", indRes);
+	}
+	catch (const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Permanent Magnet Materials: User-defined demagnetization curve
+ * API: MatMagCurve([[H1,B1],[H2,B2],...], [mx, my, mz])
+ *
+ * Defines a permanent magnet material with a user-specified B-H demagnetization curve.
+ * The curve should be defined in the second quadrant (H < 0, B > 0).
+ *
+ * Parameters:
+ *   [[H1,B1],[H2,B2],...] - B-H curve data points (H in A/m, B in T)
+ *   [mx, my, mz] - Easy magnetization axis direction (will be normalized)
+ *
+ * Note: Currently behaves as fixed magnetization (demagnetization not yet implemented).
+ ***************************************************************************/
+static PyObject* radia_MatMagCurve(PyObject* self, PyObject* args)
+{
+	PyObject *oCurveData=0, *oMagAxis=0, *oResInd=0;
+	double *arCurveData=0;
+	try
+	{
+		if(!PyArg_ParseTuple(args, "OO:MatMagCurve", &oCurveData, &oMagAxis)) throw CombErStr(strEr_BadFuncArg, ": MatMagCurve");
+		if(oCurveData == 0 || oMagAxis == 0) throw CombErStr(strEr_BadFuncArg, ": MatMagCurve");
+
+		int nElem = 0;
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oCurveData, 'd', arCurveData, nElem))
+			throw CombErStr(strEr_BadFuncArg, ": MatMagCurve, B-H curve data [[H1,B1],[H2,B2],...] expected");
+
+		int np = nElem / 2;  // Number of data points
+		if(np < 2) throw CombErStr(strEr_BadFuncArg, ": MatMagCurve, at least 2 data points required");
+
+		double arMagAxis[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oMagAxis, 'd', arMagAxis, 3, CombErStr(strEr_BadFuncArg, ": MatMagCurve, magnetization axis must be 3-element vector [mx, my, mz]"));
+
+		int indRes=0;
+		g_pyParse.ProcRes(RadMatMagCurve(&indRes, arCurveData, np, arMagAxis));
+
+		oResInd = Py_BuildValue("i", indRes);
+	}
+	catch (const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arCurveData != 0) delete[] arCurveData;
+	return oResInd;
+}
+
+/************************************************************************//**
  * Magnetic Materials: a nonlinear isotropic magnetic material with the magnetization magnitude equal M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3), where H is the magnitude of the magnetic field strength vector (in Tesla).
  ***************************************************************************/
 static PyObject* radia_MatSatIsoFrm(PyObject* self, PyObject* args)
@@ -3581,6 +3700,9 @@ static PyMethodDef radia_methods[] = {
 
 	{"MatLin", radia_MatLin, METH_VARARGS, "MatLin(mu_r) creates an isotropic linear magnetic material with relative permeability mu_r. MatLin([mu_r_par,mu_r_perp],[ex,ey,ez]) creates an anisotropic linear magnetic material with relative permeabilities parallel (perpendicular) to the easy magnetization axis [ex,ey,ez] given by mu_r_par (mu_r_perp)."},
 	{"MatPM", radia_MatPM, METH_VARARGS, "MatPM(Br,Hc,[mx,my,mz]) creates a permanent magnet material with demagnetization curve. Br is the residual flux density [T], Hc is the coercivity [A/m], and [mx,my,mz] defines the easy magnetization axis direction."},
+	{"MatMagFixed", radia_MatMagFixed, METH_VARARGS, "MatMagFixed([Mx,My,Mz]) creates a permanent magnet material with fixed magnetization [A/m]. The magnetization does not change with external field (no demagnetization)."},
+	{"MatMagLinear", radia_MatMagLinear, METH_VARARGS, "MatMagLinear(Br,Hc,[mx,my,mz]) creates a permanent magnet material with linear demagnetization. Br is residual flux density [T], Hc is coercivity [A/m], [mx,my,mz] is easy axis. Currently behaves as fixed magnetization."},
+	{"MatMagCurve", radia_MatMagCurve, METH_VARARGS, "MatMagCurve([[H1,B1],[H2,B2],...],[mx,my,mz]) creates a permanent magnet material with user-defined B-H demagnetization curve. Currently behaves as fixed magnetization."},
 	{"MatSatIsoFrm", radia_MatSatIsoFrm, METH_VARARGS, "MatSatIsoFrm([ksi1,ms1],[ksi2,ms2],[ksi3,ms3]) creates a nonlinear isotropic magnetic material with the M versus H curve defined by the formula M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3), where H is the magnitude of the magnetic field strength vector (in Tesla). The parameters [ksi3,ms3] and [ksi2,ms2] may be omitted; in such a case the corresponding terms in the formula will be omitted too."},
 	{"MatSatIsoTab", radia_MatSatIsoTab, METH_VARARGS, "MatSatIsoTab([[H1,B1],[H2,B2],...]) creates a nonlinear isotropic magnetic material with the B versus H curve defined by the list of pairs [[H1,B1],[H2,B2],...] where H is in A/m and B is in Tesla."},
 	{"MatSatLamFrm", radia_MatSatLamFrm, METH_VARARGS, "MatSatLamFrm([ksi1,ms1],[ksi2,ms2],[ksi3,ms3],p,[nx,ny,nz]) creates laminated nonlinear anisotropic magnetic material with packing factor p and the lamination planes perpendicular to the vector [nx,ny,nz]. The magnetization magnitude vs magnetic field strength for the corresponding isotropic material is defined by the formula M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3), where H is the magnitude of the magnetic field strength vector (in Tesla). The parameters [ksi3,ms3] and [ksi2,ms2] may be omitted; in such a case the corresponding terms in the formula will be omitted too."},

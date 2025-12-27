@@ -106,6 +106,9 @@ void LinearMaterial2( double,double, double );
 void LinearMaterialIsotropic( double );
 void LinearMaterialAnisotropic( double,double, double,double,double );
 void PermanentMagnet( double,double, double,double,double );
+void MagFixed( double,double,double );
+void MagLinear( double,double, double,double,double );
+void MagCurve( double*, int, double,double,double );
 void MaterialStd( char*, double );
 void NonlinearIsotropMaterial( double,double,double, double,double,double );
 void NonlinearIsotropMaterial2( double,double, double,double, double,double );
@@ -1308,6 +1311,30 @@ void PermanentMagnet(double Br, double Hc, double Mx, double My, double Mz)
 {
 	double MagAxisArray[] = {Mx, My, Mz};
 	rad.SetPermanentMagnet(Br, Hc, MagAxisArray, 3);
+}
+
+//-------------------------------------------------------------------------
+
+void MagFixed(double Mx, double My, double Mz)
+{
+	double MagnArray[] = {Mx, My, Mz};
+	rad.SetMagFixed(MagnArray, 3);
+}
+
+//-------------------------------------------------------------------------
+
+void MagLinear(double Br, double Hc, double Ex, double Ey, double Ez)
+{
+	double MagAxisArray[] = {Ex, Ey, Ez};
+	rad.SetMagLinear(Br, Hc, MagAxisArray, 3);
+}
+
+//-------------------------------------------------------------------------
+
+void MagCurve(double* pCurveData, int numPoints, double Ex, double Ey, double Ez)
+{
+	double MagAxisArray[] = {Ex, Ey, Ez};
+	rad.SetMagCurve(pCurveData, numPoints, MagAxisArray, 3);
 }
 
 //-------------------------------------------------------------------------

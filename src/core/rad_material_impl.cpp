@@ -187,6 +187,129 @@ int radTApplication::SetPermanentMagnet(double Br, double Hc, double* MagAxisArr
 
 //-------------------------------------------------------------------------
 
+int radTApplication::SetMagFixed(double* MagnArray, long lenMagnArray)
+{
+	radTMagFixed* MaterPtr = nullptr;
+	try
+	{
+		if(lenMagnArray != 3)
+		{
+			Send.ErrorMessage("Radia::Error104"); return 0;  // Magnetization must have 3 components
+		}
+
+		TVector3d MagnVect;
+		if(!ValidateVector3d(MagnArray, lenMagnArray, &MagnVect)) return 0;
+
+		MaterPtr = new radTMagFixed(MagnVect);
+		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+
+		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		if(MaterPtr) delete MaterPtr;
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::SetMagLinear(double Br, double Hc, double* MagAxisArray, long lenMagAxisArray)
+{
+	radTMagLinear* MaterPtr = nullptr;
+	try
+	{
+		if(lenMagAxisArray != 3)
+		{
+			Send.ErrorMessage("Radia::Error104"); return 0;  // Magnetization axis must have 3 components
+		}
+
+		TVector3d MagAxisVect;
+		if(!ValidateVector3d(MagAxisArray, lenMagAxisArray, &MagAxisVect)) return 0;
+
+		double AbsMagAxis = sqrt(MagAxisVect.x*MagAxisVect.x + MagAxisVect.y*MagAxisVect.y + MagAxisVect.z*MagAxisVect.z);
+		if(AbsMagAxis < 1.E-10)
+		{
+			Send.ErrorMessage("Radia::Error105"); return 0;  // Magnetization axis cannot be zero vector
+		}
+
+		if(Br <= 0 || Hc <= 0)
+		{
+			Send.ErrorMessage("Radia::Error106"); return 0;  // Br and Hc must be positive
+		}
+
+		MaterPtr = new radTMagLinear(Br, Hc, MagAxisVect);
+		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+
+		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		if(MaterPtr) delete MaterPtr;
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::SetMagCurve(double* pCurveData, int numPoints, double* MagAxisArray, long lenMagAxisArray)
+{
+	radTMagCurve* MaterPtr = nullptr;
+	try
+	{
+		if(lenMagAxisArray != 3)
+		{
+			Send.ErrorMessage("Radia::Error104"); return 0;
+		}
+
+		TVector3d MagAxisVect;
+		if(!ValidateVector3d(MagAxisArray, lenMagAxisArray, &MagAxisVect)) return 0;
+
+		double AbsMagAxis = sqrt(MagAxisVect.x*MagAxisVect.x + MagAxisVect.y*MagAxisVect.y + MagAxisVect.z*MagAxisVect.z);
+		if(AbsMagAxis < 1.E-10)
+		{
+			Send.ErrorMessage("Radia::Error105"); return 0;
+		}
+
+		if(numPoints < 2)
+		{
+			Send.ErrorMessage("Radia::Error024"); return 0;  // Need at least 2 points
+		}
+
+		// Convert flat array to TVector2d array
+		std::vector<TVector2d> vCurve(numPoints);
+		for(int i = 0; i < numPoints; i++)
+		{
+			vCurve[i].x = pCurveData[2*i];     // H value
+			vCurve[i].y = pCurveData[2*i + 1]; // B value
+		}
+
+		MaterPtr = new radTMagCurve(vCurve.data(), numPoints, MagAxisVect);
+		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+
+		radThg hg(MaterPtr);
+		MaterPtr = nullptr;
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		if(MaterPtr) delete MaterPtr;
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
 int radTApplication::SetNonlinearIsotropMaterial(double* Ms, long lenMs, double* ks, long len_ks)
 {
 	radTNonlinearIsotropMaterial* MaterPtr = nullptr;

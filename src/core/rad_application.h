@@ -262,6 +262,11 @@ public:
 	int SetLinearAnisotropicMaterial(double* KsiArray, long lenKsiArray, double* EasyAxisArray, long lenEasyAxisArray);
 	int SetPermanentMagnet(double Br, double Hc, double* MagAxisArray, long lenMagAxisArray);
 
+	// Permanent magnet materials
+	int SetMagFixed(double* MagnArray, long lenMagnArray);
+	int SetMagLinear(double Br, double Hc, double* MagAxisArray, long lenMagAxisArray);
+	int SetMagCurve(double* pCurveData, int numPoints, double* MagAxisArray, long lenMagAxisArray);
+
 	int SetNonlinearIsotropMaterial(double* Ms, long lenMs, double* ks, long len_ks);
 	int SetNonlinearIsotropMaterial(TVector2d* ArrayHB, int LenArrayArrayHB);
 	int SetNonlinearLaminatedMaterial(TVector2d* ArrayOfPoints2d, int lenArrayOfPoints2d, double PackFactor, double* dN);
