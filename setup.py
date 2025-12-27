@@ -16,7 +16,7 @@ import shutil
 import sys
 
 # Read version from pyproject.toml
-version = "1.3.14"
+version = "1.3.16"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -91,7 +91,7 @@ setup(
 	package_data={
 		"radia": [
 			"*.pyd",  # Include all .pyd files (radia.pyd, radia_ngsolve.pyd)
-			"*.dll",  # Include Intel MKL DLL (mkl_rt.2.dll)
+			"*.dll",  # Include Intel MKL DLLs (mkl_rt.2.dll, mkl_core.2.dll, libiomp5md.dll, etc.)
 			"*.py",   # Include all Python utility modules
 		],
 	},
