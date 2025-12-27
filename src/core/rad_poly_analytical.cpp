@@ -425,26 +425,108 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 		d2.x*BB.x + d2.y*BB.y + d2.z*BB.z
 	);
 
-	// Prepare observation point and output vectors
-	std::vector<TVector3d> obs_points(1, obsPoint);
-	std::vector<TVector3d> field_result(1, TVector3d(0., 0., 0.));
-
 	// Weight: sigma / (4*pi)
 	double W = ConstForH * sigma;
 
-	// Create 2D vertex array for the triangle
-	std::vector<TVector2d> XY = {local_V0, local_V1, local_V2};
+	// =========================================================================
+	// Inline computation of the analytical field (avoid function call overhead)
+	// This is the same formula as RadAnalyticalFieldFromPolygonCharge for KAdo=3
+	// but optimized to avoid std::vector allocation for OpenMP thread safety.
+	// =========================================================================
 
-	// Call the proven analytical formula
-	RadAnalyticalFieldFromPolygonCharge(
-		AA, BB, basis_c, YY,
-		XY,
-		obs_points,
-		field_result,
-		W,
-		1,   // Element index (for error reporting)
-		3    // Triangle has 3 vertices
-	);
+	const double ONE = 1.0;
+	const double ZER = 0.0;
+	const double EPS_F = 1.0e-20;
 
-	return field_result[0];
+	// 2D local vertices: local_V0 = (0,0), local_V1, local_V2
+	TVector2d XY[3] = {local_V0, local_V1, local_V2};
+
+	// Edge properties for 3 edges
+	double DS[3], AM[3], SM[3], XD[3], YD[3];
+	double EPSG = 0.0;
+
+	for(int J = 0; J < 3; J++) {
+		int L = (J + 1) % 3;
+		double XS1 = XY[L].x - XY[J].x;
+		double XS2 = XY[L].y - XY[J].y;
+
+		if(std::abs(XS1) < EPS_F) XS1 = EPS_F;
+
+		DS[J] = std::sqrt(XS2*XS2 + XS1*XS1);
+		AM[J] = XS2 / XS1;
+		SM[J] = std::sqrt(AM[J]*AM[J] + ONE);
+		XD[J] = -XS1 / DS[J];
+		YD[J] =  XS2 / DS[J];
+
+		if(DS[J] > EPSG) EPSG = DS[J];
+	}
+	EPSG = EPSG * 1.0e-12;
+
+	// Transform observation point to local coordinates
+	TVector3d DD;
+	DD.x = obsPoint.x - YY.x;
+	DD.y = obsPoint.y - YY.y;
+	DD.z = obsPoint.z - YY.z;
+
+	double EE1 = DD.x*AA.x + DD.y*AA.y + DD.z*AA.z;
+	double EE2 = DD.x*BB.x + DD.y*BB.y + DD.z*BB.z;
+	double EE3 = DD.x*basis_c.x + DD.y*basis_c.y + DD.z*basis_c.z;
+
+	// Distances from obs point to vertices
+	double X[3], Y[3], H[3], E[3], R[3];
+	for(int J = 0; J < 3; J++) {
+		X[J] = EE1 - XY[J].x;
+		Y[J] = EE2 - XY[J].y;
+		H[J] = Y[J] * X[J];
+	}
+
+	double ZZ3 = EE3 * EE3;
+	for(int J = 0; J < 3; J++) {
+		E[J] = X[J]*X[J] + ZZ3;
+		R[J] = std::sqrt(E[J] + Y[J]*Y[J]);
+	}
+
+	// Handle z=0 case
+	if(std::abs(EE3) < EPSG) EE3 = EPSG;
+
+	// Compute field contribution from each edge
+	double FG1 = ZER, FG2 = ZER, FG3 = ZER;
+
+	for(int J = 0; J < 3; J++) {
+		int JP1 = (J + 1) % 3;
+
+		double S1 = Y[J] - AM[J]*X[J];
+		double S2 = Y[JP1] - AM[J]*X[JP1];
+
+		// QQ = atan2(EE3 * S1, ZZ3 + D1 * R[J]) - atan2(EE3 * S2, ZZ3 + D2 * R[JP1])
+		double D1 = std::sqrt(S1*S1 + ZZ3);
+		double D2 = std::sqrt(S2*S2 + ZZ3);
+
+		double QQ = std::atan2(EE3 * S1, ZZ3 + D1 * R[J]) - std::atan2(EE3 * S2, ZZ3 + D2 * R[JP1]);
+
+		// PP = ln[(S1 + R[J]) / (S2 + R[JP1])]
+		double PP = ZER;
+		double denom = S2 + R[JP1];
+		double numer = S1 + R[J];
+		if(std::abs(denom) > EPS_F && std::abs(numer) > EPS_F) {
+			PP = std::log(std::abs(numer / denom));
+		}
+
+		FG1 -= QQ;
+		double contrib = (PP * AM[J] * SM[J] + QQ * EE3) / SM[J];
+		FG2 += XD[J] * contrib;
+		FG3 += YD[J] * contrib;
+	}
+
+	// Scale by weight W and transform back to global coordinates
+	FG1 *= W;
+	FG2 *= W;
+	FG3 *= W;
+
+	TVector3d H_result;
+	H_result.x = FG2 * AA.x + FG3 * BB.x + FG1 * basis_c.x;
+	H_result.y = FG2 * AA.y + FG3 * BB.y + FG1 * basis_c.y;
+	H_result.z = FG2 * AA.z + FG3 * BB.z + FG1 * basis_c.z;
+
+	return H_result;
 }

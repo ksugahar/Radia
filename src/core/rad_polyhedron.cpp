@@ -750,9 +750,11 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 	// the diagonal elements (depends on tetrahedron shape).
 
 	// Get face vertices in GLOBAL coordinates
-	// For a tetrahedron, we have 4 triangular faces
-	std::vector<std::array<TVector3d, 3>> faceVertices(AmOfFaces);
-	for(int i = 0; i < AmOfFaces; i++)
+	// For a tetrahedron, we have exactly 4 triangular faces
+	// Use fixed-size array to avoid dynamic memory allocation (OpenMP thread-safe)
+	TVector3d faceVertices[4][3];  // 4 faces, 3 vertices each
+	int numFaces = (AmOfFaces <= 4) ? AmOfFaces : 4;
+	for(int i = 0; i < numFaces; i++)
 	{
 		radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
 		radTPolygon* pgn = hpt.PgnHndl.rep;
@@ -790,7 +792,7 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 
 		// Sum contributions from all faces
 		// Note: CentrPoint is the element centroid, used for outward normal check
-		for(int i = 0; i < AmOfFaces; i++)
+		for(int i = 0; i < numFaces; i++)
 		{
 			const TVector3d& V0 = faceVertices[i][0];
 			const TVector3d& V1 = faceVertices[i][1];
@@ -825,7 +827,7 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 		TVector3d H_total(0., 0., 0.);
 
 		// Note: CentrPoint is the element centroid, used for outward normal check
-		for(int i = 0; i < AmOfFaces; i++)
+		for(int i = 0; i < numFaces; i++)
 		{
 			const TVector3d& V0 = faceVertices[i][0];
 			const TVector3d& V1 = faceVertices[i][1];
@@ -948,6 +950,168 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 
 		if(FldKey.H_) FieldPtr->H += H_total;
 		if(FldKey.B_) FieldPtr->B += H_total;
+
+		// =====================================================================
+		// Vector potential A computation for hexahedral permanent magnets
+		// =====================================================================
+		// For a uniformly magnetized hexahedron (permanent magnet), compute the
+		// vector potential A using the analytical formula.
+		//
+		// Formula: A(r) = (1/4pi) * (M x BufVect)
+		// where BufVect is computed from corner distances using atan and log terms.
+		//
+		// This implementation treats the hexahedron as an axis-aligned rectangular
+		// parallelepiped, which is valid for hexahedra created with HEX_FACES topology.
+		// =====================================================================
+		if(FldKey.A_ && (Magn.x != 0. || Magn.y != 0. || Magn.z != 0.))
+		{
+			// Extract unique vertices from faces to determine bounding box
+			double minX = 1e30, minY = 1e30, minZ = 1e30;
+			double maxX = -1e30, maxY = -1e30, maxZ = -1e30;
+
+			for(int i = 0; i < AmOfFaces; i++)
+			{
+				for(int j = 0; j < 4; j++)
+				{
+					const TVector3d& V = faceVertices[i][j];
+					if(V.x < minX) minX = V.x;
+					if(V.y < minY) minY = V.y;
+					if(V.z < minZ) minZ = V.z;
+					if(V.x > maxX) maxX = V.x;
+					if(V.y > maxY) maxY = V.y;
+					if(V.z > maxZ) maxZ = V.z;
+				}
+			}
+
+			// Hexahedron dimensions and center
+			TVector3d HalfDim(0.5*(maxX - minX), 0.5*(maxY - minY), 0.5*(maxZ - minZ));
+			TVector3d BoxCenter(0.5*(maxX + minX), 0.5*(maxY + minY), 0.5*(maxZ + minZ));
+
+			// Observation point relative to box center
+			TVector3d P_min_C = obsPoint - BoxCenter;
+
+			// Setup corner coordinates (following rad_rectangular_block.cpp pattern)
+			double x0 = -P_min_C.x - HalfDim.x;
+			double x1 = -P_min_C.x + HalfDim.x;
+			double y0 = -P_min_C.y - HalfDim.y;
+			double y1 = -P_min_C.y + HalfDim.y;
+			double z0 = -P_min_C.z - HalfDim.z;
+			double z1 = -P_min_C.z + HalfDim.z;
+
+			// Avoid singularities at boundaries
+			const double smallShift = 1e-14;
+			if(fabs(x0) < smallShift) x0 = (x0 >= 0) ? smallShift : -smallShift;
+			if(fabs(x1) < smallShift) x1 = (x1 >= 0) ? smallShift : -smallShift;
+			if(fabs(y0) < smallShift) y0 = (y0 >= 0) ? smallShift : -smallShift;
+			if(fabs(y1) < smallShift) y1 = (y1 >= 0) ? smallShift : -smallShift;
+			if(fabs(z0) < smallShift) z0 = (z0 >= 0) ? smallShift : -smallShift;
+			if(fabs(z1) < smallShift) z1 = (z1 >= 0) ? smallShift : -smallShift;
+
+			// Squared coordinates
+			double x0e2 = x0*x0, x1e2 = x1*x1;
+			double y0e2 = y0*y0, y1e2 = y1*y1;
+			double z0e2 = z0*z0, z1e2 = z1*z1;
+
+			// Corner distances D[i][j][k] = sqrt(xi^2 + yj^2 + zk^2)
+			double D000 = sqrt(x0e2 + y0e2 + z0e2);
+			double D001 = sqrt(x0e2 + y0e2 + z1e2);
+			double D010 = sqrt(x0e2 + y1e2 + z0e2);
+			double D011 = sqrt(x0e2 + y1e2 + z1e2);
+			double D100 = sqrt(x1e2 + y0e2 + z0e2);
+			double D101 = sqrt(x1e2 + y0e2 + z1e2);
+			double D110 = sqrt(x1e2 + y1e2 + z0e2);
+			double D111 = sqrt(x1e2 + y1e2 + z1e2);
+
+			// Atan terms T0, T1 (solid angle contributions)
+			double T0x = atan(y0*z0/(x0*D000)) - atan(y1*z0/(x0*D010))
+			           - atan(y0*z1/(x0*D001)) + atan(y1*z1/(x0*D011));
+			double T1x = atan(y0*z0/(x1*D100)) - atan(y1*z0/(x1*D110))
+			           - atan(y0*z1/(x1*D101)) + atan(y1*z1/(x1*D111));
+			double T0y = atan(x0*z0/(y0*D000)) - atan(x1*z0/(y0*D100))
+			           - atan(x0*z1/(y0*D001)) + atan(x1*z1/(y0*D101));
+			double T1y = atan(x0*z0/(y1*D010)) - atan(x1*z0/(y1*D110))
+			           - atan(x0*z1/(y1*D011)) + atan(x1*z1/(y1*D111));
+			double T0z = atan(x0*y0/(z0*D000)) - atan(x1*y0/(z0*D100))
+			           - atan(x0*y1/(z0*D010)) + atan(x1*y1/(z0*D110));
+			double T1z = atan(x0*y0/(z1*D001)) - atan(x1*y0/(z1*D101))
+			           - atan(x0*y1/(z1*D011)) + atan(x1*y1/(z1*D111));
+
+			TVector3d T0(T0x, T0y, T0z);
+			TVector3d T1(T1x, T1y, T1z);
+
+			// Ratio terms for log computations (with singularity protection)
+			double eps_ratio = 1e-30;
+			double z0plD100 = z0 + D100; if(fabs(z0plD100) < eps_ratio) z0plD100 = eps_ratio;
+			double z1plD101 = z1 + D101; if(fabs(z1plD101) < eps_ratio) z1plD101 = eps_ratio;
+			double z1plD001 = z1 + D001; if(fabs(z1plD001) < eps_ratio) z1plD001 = eps_ratio;
+			double z0plD000 = z0 + D000; if(fabs(z0plD000) < eps_ratio) z0plD000 = eps_ratio;
+			double z0plD010 = z0 + D010; if(fabs(z0plD010) < eps_ratio) z0plD010 = eps_ratio;
+			double z1plD011 = z1 + D011; if(fabs(z1plD011) < eps_ratio) z1plD011 = eps_ratio;
+			double z1plD111 = z1 + D111; if(fabs(z1plD111) < eps_ratio) z1plD111 = eps_ratio;
+			double z0plD110 = z0 + D110; if(fabs(z0plD110) < eps_ratio) z0plD110 = eps_ratio;
+
+			double y0plD100 = y0 + D100; if(fabs(y0plD100) < eps_ratio) y0plD100 = eps_ratio;
+			double y1plD110 = y1 + D110; if(fabs(y1plD110) < eps_ratio) y1plD110 = eps_ratio;
+			double y1plD010 = y1 + D010; if(fabs(y1plD010) < eps_ratio) y1plD010 = eps_ratio;
+			double y0plD000 = y0 + D000; if(fabs(y0plD000) < eps_ratio) y0plD000 = eps_ratio;
+			double y0plD001 = y0 + D001; if(fabs(y0plD001) < eps_ratio) y0plD001 = eps_ratio;
+			double y1plD011 = y1 + D011; if(fabs(y1plD011) < eps_ratio) y1plD011 = eps_ratio;
+			double y1plD111 = y1 + D111; if(fabs(y1plD111) < eps_ratio) y1plD111 = eps_ratio;
+			double y0plD101 = y0 + D101; if(fabs(y0plD101) < eps_ratio) y0plD101 = eps_ratio;
+
+			double x0plD010 = x0 + D010; if(fabs(x0plD010) < eps_ratio) x0plD010 = eps_ratio;
+			double x1plD110 = x1 + D110; if(fabs(x1plD110) < eps_ratio) x1plD110 = eps_ratio;
+			double x1plD100 = x1 + D100; if(fabs(x1plD100) < eps_ratio) x1plD100 = eps_ratio;
+			double x0plD000 = x0 + D000; if(fabs(x0plD000) < eps_ratio) x0plD000 = eps_ratio;
+			double x0plD001 = x0 + D001; if(fabs(x0plD001) < eps_ratio) x0plD001 = eps_ratio;
+			double x1plD101 = x1 + D101; if(fabs(x1plD101) < eps_ratio) x1plD101 = eps_ratio;
+			double x1plD111 = x1 + D111; if(fabs(x1plD111) < eps_ratio) x1plD111 = eps_ratio;
+			double x0plD011 = x0 + D011; if(fabs(x0plD011) < eps_ratio) x0plD011 = eps_ratio;
+
+			// Log terms
+			double ln_z0plD100_di_z1plD101 = log(fabs(z0plD100/z1plD101));
+			double ln_z1plD001_di_z0plD000 = log(fabs(z1plD001/z0plD000));
+			double ln_z0plD010_di_z1plD011 = log(fabs(z0plD010/z1plD011));
+			double ln_z1plD111_di_z0plD110 = log(fabs(z1plD111/z0plD110));
+			double ln_y0plD100_di_y1plD110 = log(fabs(y0plD100/y1plD110));
+			double ln_y1plD010_di_y0plD000 = log(fabs(y1plD010/y0plD000));
+			double ln_y0plD001_di_y1plD011 = log(fabs(y0plD001/y1plD011));
+			double ln_y1plD111_di_y0plD101 = log(fabs(y1plD111/y0plD101));
+			double ln_x0plD010_di_x1plD110 = log(fabs(x0plD010/x1plD110));
+			double ln_x1plD100_di_x0plD000 = log(fabs(x1plD100/x0plD000));
+			double ln_x0plD001_di_x1plD101 = log(fabs(x0plD001/x1plD101));
+			double ln_x1plD111_di_x0plD011 = log(fabs(x1plD111/x0plD011));
+
+			// BufVect computation (following rad_rectangular_block.cpp exactly)
+			TVector3d BufVect(
+				x0*T0.x + x1*T1.x
+				+ y0*(ln_z0plD100_di_z1plD101 + ln_z1plD001_di_z0plD000)
+				+ y1*(ln_z0plD010_di_z1plD011 + ln_z1plD111_di_z0plD110)
+				+ z0*(ln_y0plD100_di_y1plD110 + ln_y1plD010_di_y0plD000)
+				+ z1*(ln_y0plD001_di_y1plD011 + ln_y1plD111_di_y0plD101),
+
+				y0*T0.y + y1*T1.y
+				+ x0*(ln_z0plD010_di_z1plD011 + ln_z1plD001_di_z0plD000)
+				+ x1*(ln_z0plD100_di_z1plD101 + ln_z1plD111_di_z0plD110)
+				+ z0*(ln_x0plD010_di_x1plD110 + ln_x1plD100_di_x0plD000)
+				+ z1*(ln_x0plD001_di_x1plD101 + ln_x1plD111_di_x0plD011),
+
+				z0*T0.z + z1*T1.z
+				+ y0*(ln_x0plD001_di_x1plD101 + ln_x1plD100_di_x0plD000)
+				+ y1*(ln_x0plD010_di_x1plD110 + ln_x1plD111_di_x0plD011)
+				+ x0*(ln_y0plD001_di_y1plD011 + ln_y1plD010_di_y0plD000)
+				+ x1*(ln_y0plD100_di_y1plD110 + ln_y1plD111_di_y0plD101)
+			);
+
+			// A = (1/4pi) * (M x BufVect)
+			const double dConst2 = 1.0 / (4.0 * 3.14159265358979323846);
+			TVector3d BufForA(
+				Magn.y*BufVect.z - Magn.z*BufVect.y,
+				Magn.z*BufVect.x - Magn.x*BufVect.z,
+				Magn.x*BufVect.y - Magn.y*BufVect.x
+			);
+			FieldPtr->A += dConst2 * BufForA;
+		}
 	}
 }
 
