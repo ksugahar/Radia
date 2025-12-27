@@ -364,7 +364,48 @@ With proper A field scaling, the `|curl(A)|/|B|` ratio should be ~1.0.
 
 ---
 
-**Note**: Memory values updated 2025-12-27 to use Windows peak_wset (accurate peak memory).
-Previous values used RSS (current memory after solve) which significantly underestimated peak usage.
+## Memory Measurement Notes
 
-**Last Updated**: 2025-12-27
+### Windows: peak_wset (Peak Working Set)
+
+Memory measurements in this benchmark use Windows `peak_wset` via `psutil.Process().memory_info().peak_wset`.
+
+**What peak_wset measures:**
+- **Process-wide peak memory**: Maximum physical memory used by the entire Python process
+- **Includes**: Python interpreter, imported modules (numpy, netgen, radia), and solver allocations
+- **Timing**: Captures peak across entire process lifetime, not just during solve
+
+**Baseline overhead (approximate):**
+- Python 3.12 + numpy + radia: ~50-80 MB
+- With NGSolve/Netgen: ~100-150 MB additional
+
+**Interpretation:**
+- For large problems (DOF > 10,000), solver memory dominates and peak_wset is accurate
+- For small problems (DOF < 1,000), baseline overhead may be significant fraction of reported memory
+- To estimate pure solver memory: `solver_memory ≈ peak_wset - baseline`
+
+**Alternative: RSS (Resident Set Size)**
+- `memory_info().rss` shows current memory at measurement time
+- After solve completes, most temporary allocations are freed
+- RSS underestimates peak memory usage during LU decomposition
+
+**Dense matrix reference (for comparison):**
+- Dense matrix memory = N² × 8 bytes (double precision)
+- N=6,000 DOF: 275 MB dense matrix
+- N=20,250 DOF: 3,129 MB dense matrix
+- N=48,000 DOF: 17,578 MB dense matrix
+
+### H-matrix Compression Ratio
+
+The "Compression" column shows: **H-matrix memory / Dense matrix memory × 100%**
+
+- **< 50%**: Good compression, H-matrix is beneficial
+- **50-80%**: Moderate compression
+- **> 80%**: Poor compression (small problems, H-matrix overhead dominates)
+- **> 100%**: H-matrix larger than dense (problem too small for H-matrix)
+
+Compression ratio is obtained from `rad.GetHACApKStats()['compression']`.
+
+---
+
+**Last Updated**: 2025-12-28
