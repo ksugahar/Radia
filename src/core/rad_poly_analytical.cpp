@@ -425,28 +425,28 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 		d2.x*BB.x + d2.y*BB.y + d2.z*BB.z
 	);
 
+	// =========================================================================
+	// Inline computation of RadAnalyticalFieldFromPolygonCharge for KAdo=3
+	// Uses fixed-size arrays to avoid std::vector heap allocation (OpenMP safe)
+	// =========================================================================
+
 	// Weight: sigma / (4*pi)
 	double W = ConstForH * sigma;
 
-	// =========================================================================
-	// Inline computation of the analytical field (avoid function call overhead)
-	// This is the same formula as RadAnalyticalFieldFromPolygonCharge for KAdo=3
-	// but optimized to avoid std::vector allocation for OpenMP thread safety.
-	// =========================================================================
+	// Triangle vertices in 2D local coordinates
+	TVector2d XY[3] = {local_V0, local_V1, local_V2};
 
 	const double ONE = 1.0;
 	const double ZER = 0.0;
 	const double EPS_F = 1.0e-20;
+	const int KAdo = 3;
 
-	// 2D local vertices: local_V0 = (0,0), local_V1, local_V2
-	TVector2d XY[3] = {local_V0, local_V1, local_V2};
-
-	// Edge properties for 3 edges
-	double DS[3], AM[3], SM[3], XD[3], YD[3];
+	// Compute edge properties for 3 edges
+	double DS[4], AM[4], SM[4], XD[4], YD[4];
 	double EPSG = 0.0;
 
-	for(int J = 0; J < 3; J++) {
-		int L = (J + 1) % 3;
+	for(int J = 0; J < KAdo; J++) {
+		int L = (J + 1) % KAdo;
 		double XS1 = XY[L].x - XY[J].x;
 		double XS2 = XY[L].y - XY[J].y;
 
@@ -462,71 +462,90 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	}
 	EPSG = EPSG * 1.0e-12;
 
+	// For triangle, set 4th edge to dummy values
+	DS[3] = ONE;
+	AM[3] = ZER;
+	SM[3] = 1.0e20;  // BIG
+	XD[3] = ZER;
+	YD[3] = ZER;
+
 	// Transform observation point to local coordinates
 	TVector3d DD;
 	DD.x = obsPoint.x - YY.x;
 	DD.y = obsPoint.y - YY.y;
 	DD.z = obsPoint.z - YY.z;
 
-	double EE1 = DD.x*AA.x + DD.y*AA.y + DD.z*AA.z;
-	double EE2 = DD.x*BB.x + DD.y*BB.y + DD.z*BB.z;
-	double EE3 = DD.x*basis_c.x + DD.y*basis_c.y + DD.z*basis_c.z;
+	double EE1 = DD.x*AA.x + DD.y*AA.y + DD.z*AA.z;  // X in local frame
+	double EE2 = DD.x*BB.x + DD.y*BB.y + DD.z*BB.z;  // Y in local frame
+	double EE3 = DD.x*basis_c.x + DD.y*basis_c.y + DD.z*basis_c.z;  // Z in local frame
 
-	// Distances from obs point to vertices
-	double X[3], Y[3], H[3], E[3], R[3];
-	for(int J = 0; J < 3; J++) {
+	// Compute distances from observation point to vertices
+	double X[4], Y[4], H[4], E[4], R[4];
+
+	for(int J = 0; J < KAdo; J++) {
 		X[J] = EE1 - XY[J].x;
 		Y[J] = EE2 - XY[J].y;
 		H[J] = Y[J] * X[J];
 	}
+	// For triangles, set element [3] = element [0] for edge connectivity
+	X[3] = X[0];
+	Y[3] = Y[0];
+	H[3] = H[0];
 
-	double ZZ3 = EE3 * EE3;
-	for(int J = 0; J < 3; J++) {
-		E[J] = X[J]*X[J] + ZZ3;
-		R[J] = std::sqrt(E[J] + Y[J]*Y[J]);
+	double Z = EE3;
+	double Z2 = Z * Z;
+
+	for(int J = 0; J < 4; J++) {
+		E[J] = Z2 + X[J]*X[J];
+		R[J] = std::sqrt(X[J]*X[J] + Y[J]*Y[J] + Z*Z);
 	}
 
-	// Handle z=0 case
-	if(std::abs(EE3) < EPSG) EE3 = EPSG;
+	// Compute edge contributions
+	double RM[4], RP[4], RR[4], AL[4];
 
-	// Compute field contribution from each edge
-	double FG1 = ZER, FG2 = ZER, FG3 = ZER;
+	for(int J = 0; J < 4; J++) {
+		int JP1 = (J + 1) % 4;
 
-	for(int J = 0; J < 3; J++) {
-		int JP1 = (J + 1) % 3;
+		RM[J] = R[J] + R[JP1] - DS[J];
+		RP[J] = R[J] + R[JP1] + DS[J];
+		RR[J] = (RM[J] / RP[J] > EPS_F) ? (RM[J] / RP[J]) : EPS_F;
+		AL[J] = std::log(RR[J]);
+	}
 
-		double S1 = Y[J] - AM[J]*X[J];
-		double S2 = Y[JP1] - AM[J]*X[JP1];
+	// Compute field components in local frame
+	double HH1 = W * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2] - YD[3]*AL[3]);
+	double HH2 = W * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2] - XD[3]*AL[3]);
+	double HH3 = ZER;
 
-		// QQ = atan2(EE3 * S1, ZZ3 + D1 * R[J]) - atan2(EE3 * S2, ZZ3 + D2 * R[JP1])
-		double D1 = std::sqrt(S1*S1 + ZZ3);
-		double D2 = std::sqrt(S2*S2 + ZZ3);
+	// Z-component (solid angle contribution)
+	if(std::abs(Z) > EPSG) {
+		double ZR[4], AT[4], BT[4];
 
-		double QQ = std::atan2(EE3 * S1, ZZ3 + D1 * R[J]) - std::atan2(EE3 * S2, ZZ3 + D2 * R[JP1]);
-
-		// PP = ln[(S1 + R[J]) / (S2 + R[JP1])]
-		double PP = ZER;
-		double denom = S2 + R[JP1];
-		double numer = S1 + R[J];
-		if(std::abs(denom) > EPS_F && std::abs(numer) > EPS_F) {
-			PP = std::log(std::abs(numer / denom));
+		for(int J = 0; J < 4; J++) {
+			ZR[J] = Z * R[J];
 		}
 
-		FG1 -= QQ;
-		double contrib = (PP * AM[J] * SM[J] + QQ * EE3) / SM[J];
-		FG2 += XD[J] * contrib;
-		FG3 += YD[J] * contrib;
+		// Compute arctan terms
+		for(int J = 0; J < 4; J++) {
+			int JP1 = (J + 1) % 4;
+
+			AT[J] = (AM[J]*E[J] - H[J]) / ZR[J];
+			BT[J] = (AM[J]*E[JP1] - H[JP1]) / ZR[JP1];
+		}
+
+		// Special handling for triangle (4th term) - multiply by ZONE=0
+		AT[3] = 0.0;
+		BT[3] = 0.0;
+
+		HH3 = W * (-std::atan(AT[0]) - std::atan(AT[1]) - std::atan(AT[2]) - std::atan(AT[3])
+		          + std::atan(BT[0]) + std::atan(BT[1]) + std::atan(BT[2]) + std::atan(BT[3]));
 	}
 
-	// Scale by weight W and transform back to global coordinates
-	FG1 *= W;
-	FG2 *= W;
-	FG3 *= W;
-
+	// Transform field back to global coordinates
 	TVector3d H_result;
-	H_result.x = FG2 * AA.x + FG3 * BB.x + FG1 * basis_c.x;
-	H_result.y = FG2 * AA.y + FG3 * BB.y + FG1 * basis_c.y;
-	H_result.z = FG2 * AA.z + FG3 * BB.z + FG1 * basis_c.z;
+	H_result.x = HH1*AA.x + HH2*BB.x + HH3*basis_c.x;
+	H_result.y = HH1*AA.y + HH2*BB.y + HH3*basis_c.y;
+	H_result.z = HH1*AA.z + HH2*BB.z + HH3*basis_c.z;
 
 	return H_result;
 }
