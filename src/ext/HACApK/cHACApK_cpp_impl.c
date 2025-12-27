@@ -23,7 +23,7 @@
 #endif
 
 /*=========================================================================
- * BLAS declarations (using LAPACK/OpenBLAS conventions)
+ * BLAS declarations (using Intel MKL LAPACK conventions)
  * These are provided by the system BLAS library linked via CMake
  *=========================================================================*/
 #ifdef __cplusplus
