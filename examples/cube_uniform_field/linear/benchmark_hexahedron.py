@@ -171,6 +171,12 @@ def benchmark_hexahedra(n_div, solver_type, output_dir, hmat_eps=1e-4,
     n_iter = stats.get('nonl_iterations', 0)
     n_linear_iter = stats.get('linear_iterations', 0)
 
+    # Get timing breakdown from GetSolveStats
+    t_matrix_build = stats.get('t_matrix_build', 0.0)
+    t_lu_decomp = stats.get('t_lu_decomp', 0.0)
+    t_hmatrix_build = stats.get('t_hmatrix_build', 0.0)
+    t_linear_solve = stats.get('t_linear_solve', 0.0)
+
     # Measure memory
     peak_memory_mb = get_rss_memory_mb()
 
@@ -193,6 +199,10 @@ def benchmark_hexahedra(n_div, solver_type, output_dir, hmat_eps=1e-4,
     # Print results
     print('Mesh time:       %.4f s' % t_mesh)
     print('Solve time:      %.4f s' % t_solve)
+    print('  Matrix build:  %.4f s' % t_matrix_build)
+    print('  LU decomp:     %.4f s' % t_lu_decomp)
+    print('  H-matrix:      %.4f s' % t_hmatrix_build)
+    print('  Linear solve:  %.4f s' % t_linear_solve)
     print('Iterations:      %d' % n_iter)
     print('Linear iter:     %d' % n_linear_iter)
     print('M_avg_z:         %.2f A/m' % M_avg_z)
@@ -226,6 +236,14 @@ def benchmark_hexahedra(n_div, solver_type, output_dir, hmat_eps=1e-4,
 
     if peak_memory_mb is not None:
         result_data['peak_memory_mb'] = peak_memory_mb
+
+    # Timing breakdown
+    result_data['timing'] = {
+        't_matrix_build': t_matrix_build,
+        't_lu_decomp': t_lu_decomp,
+        't_hmatrix_build': t_hmatrix_build,
+        't_linear_solve': t_linear_solve,
+    }
 
     # H-matrix stats
     if hmat_info:
