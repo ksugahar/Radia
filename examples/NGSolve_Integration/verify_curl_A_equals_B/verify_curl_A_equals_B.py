@@ -12,8 +12,14 @@ This script verifies the Maxwell relation B = curl(A) by:
 This demonstrates the correct usage of radia_ngsolve for vector potential
 and magnetic field evaluation in NGSolve finite element spaces.
 
+IMPORTANT LIMITATION (2025-12-27):
+The vector potential A field is NOT currently implemented for ObjPolyhdr
+(MSC method). This script is retained as a framework for future implementation.
+Currently, rad.Fld(obj, 'a', point) returns [0, 0, 0] for ObjPolyhdr objects.
+
 Author: Radia Development Team
 Date: 2025-12-13
+Updated: 2025-12-27 (Added limitation note, migrated to ObjPolyhdr)
 """
 import sys
 import os
@@ -52,17 +58,41 @@ print('-' * 70)
 rad.UtiDelAll()
 rad.FldUnits('m')
 
-# Create rectangular magnet
-magnet = rad.ObjRecMag(
-    [0, 0, 0],              # Center (m)
-    [0.04, 0.04, 0.06],     # Dimensions (m)
-    [0, 0, 1.2]             # Magnetization (T) - NdFeB
-)
+# Define hexahedral magnet using ObjPolyhdr
+# Center: [0, 0, 0], Dimensions: [0.04, 0.04, 0.06] m
+dx, dy, dz = 0.02, 0.02, 0.03  # Half-dimensions
+vertices = [
+    [-dx, -dy, -dz],  # vertex 1
+    [ dx, -dy, -dz],  # vertex 2
+    [ dx,  dy, -dz],  # vertex 3
+    [-dx,  dy, -dz],  # vertex 4
+    [-dx, -dy,  dz],  # vertex 5
+    [ dx, -dy,  dz],  # vertex 6
+    [ dx,  dy,  dz],  # vertex 7
+    [-dx,  dy,  dz],  # vertex 8
+]
+
+# HEX_FACES: 1-indexed face topology for hexahedra
+HEX_FACES = [
+    [1, 4, 3, 2],  # bottom (z = -dz)
+    [5, 6, 7, 8],  # top (z = +dz)
+    [1, 2, 6, 5],  # front (y = -dy)
+    [3, 4, 8, 7],  # back (y = +dy)
+    [1, 5, 8, 4],  # left (x = -dx)
+    [2, 3, 7, 6],  # right (x = +dx)
+]
+
+# Magnetization: 1.2 T = 1.2 / mu_0 A/m = 954930 A/m
+MU_0 = 4 * np.pi * 1e-7
+Br = 1.2  # T
+Mr = Br / MU_0  # A/m
+
+magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, Mr])
 
 print('  Magnet ID: %d' % magnet)
 print('  Center: [0, 0, 0] m')
 print('  Dimensions: [0.04, 0.04, 0.06] m')
-print('  Magnetization: [0, 0, 1.2] T')
+print('  Magnetization: [0, 0, %.0f] A/m (Br = 1.2 T)' % Mr)
 
 # Reference field at a test point
 ref_point = [0.03, 0.02, 0.05]
@@ -72,6 +102,14 @@ A_ref = rad.Fld(magnet, 'a', ref_point)
 print('  Reference point: %s m' % ref_point)
 print('  B = [%.6f, %.6f, %.6f] T' % tuple(B_ref))
 print('  A = [%.6e, %.6e, %.6e] T*m' % tuple(A_ref))
+
+# Check if A field is available
+if abs(A_ref[0]) < 1e-15 and abs(A_ref[1]) < 1e-15 and abs(A_ref[2]) < 1e-15:
+    print()
+    print('  WARNING: Vector potential A is zero.')
+    print('           A field computation is NOT implemented for ObjPolyhdr (MSC method).')
+    print('           This script will complete but curl(A) = 0 != B.')
+    print()
 
 # =============================================================================
 # Step 2: Create NGSolve mesh
@@ -281,16 +319,19 @@ print('=' * 70)
 print('Summary')
 print('=' * 70)
 print()
-print('This script verified the Maxwell relation B = curl(A) using:')
+print('This script attempted to verify the Maxwell relation B = curl(A) using:')
 print('  - RadiaField to get A (vector potential) as CoefficientFunction')
 print('  - RadiaField to get B (magnetic field) as CoefficientFunction')
 print('  - HCurl space projection for A')
 print('  - HDiv space projection for B')
 print('  - NGSolve curl() operator to compute curl(A)')
 print()
-print('The comparison shows that the radia_ngsolve integration correctly')
-print('evaluates both A and B fields, and curl(A) matches B within')
-print('numerical tolerance.')
+print('CURRENT STATUS (2025-12-27):')
+print('  The vector potential A computation is NOT yet implemented for')
+print('  ObjPolyhdr (MSC method). rad.Fld(obj, "a", point) returns [0,0,0].')
+print('  This is a known limitation of the current Radia implementation.')
+print()
+print('  The B field computation works correctly for all element types.')
 print()
 print('=' * 70)
 
