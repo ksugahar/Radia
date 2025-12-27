@@ -68,7 +68,7 @@ Where N_demag = 1/3 for a cube.
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 716,184 | LU | 60 MB | - | 0 | 2 | 12.2s | 1.9s | - | 1.9s | 14.4s |
+| 716,184 | LU | **1193 MB** | - | 0 | 2 | 12.4s | 1.9s | - | 1.9s | 14.5s |
 | 716,200 | BiCGSTAB | 38 MB | - | 16 | 3 | 12.2s | - | - | 2.0s | 14.2s |
 | 716,192 | HACApK | 42 MB | **47%** | 12 | 2 | 0.01s | - | 5.98s | 0.28s | 6.3s |
 
@@ -76,7 +76,7 @@ Where N_demag = 1/3 for a cube.
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 720,157 | LU | 123 MB | - | 0 | 2 | 136.7s | 51.6s | - | 51.6s | 191.0s |
+| 720,157 | LU | **13029 MB** | - | 0 | 2 | 137.7s | 51.1s | - | 51.1s | 191.6s |
 | 720,159 | BiCGSTAB | 52 MB | - | 11 | 2 | 136.7s | - | - | 20.0s | 156.7s |
 | 720,186 | HACApK | 59 MB | **24%** | 12 | 2 | 0.12s | - | 35.7s | 1.3s | 37.3s |
 
@@ -363,5 +363,8 @@ B = curl(A)
 With proper A field scaling, the `|curl(A)|/|B|` ratio should be ~1.0.
 
 ---
+
+**Note**: Memory values updated 2025-12-27 to use Windows peak_wset (accurate peak memory).
+Previous values used RSS (current memory after solve) which significantly underestimated peak usage.
 
 **Last Updated**: 2025-12-27
