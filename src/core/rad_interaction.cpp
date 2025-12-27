@@ -766,7 +766,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	{
 		// FAST PATH: No symmetry - compute directly in global coordinates with OpenMP
 		// This matches the fast path in SetupInteractMatrix() (lines 563-588)
-		#pragma omp parallel for if(AmOfMainElem > 20)
+		#pragma omp parallel for schedule(dynamic) if(AmOfMainElem > 20)
 		for(int col = 0; col < AmOfMainElem; col++)
 		{
 			radTg3dRelax* elem_col = g3dRelaxPtrVect[col];
