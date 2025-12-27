@@ -91,7 +91,7 @@ setup(
 	package_data={
 		"radia": [
 			"*.pyd",  # Include all .pyd files (radia.pyd, radia_ngsolve.pyd)
-			"*.dll",  # Include OpenBLAS DLL (libopenblas.dll)
+			"*.dll",  # Include Intel MKL DLL (mkl_rt.2.dll)
 			"*.py",   # Include all Python utility modules
 		],
 	},

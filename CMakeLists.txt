@@ -49,7 +49,7 @@ set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/radia")
 set(FFTW_DIR "${EXT_DIR}/fftw")
 
 
-# BLAS/LAPACK: Intel MKL only (OpenBLAS dropped)
+# BLAS/LAPACK: Intel MKL only
 # Requires Intel oneAPI to be installed
 
 # Detect Intel compiler

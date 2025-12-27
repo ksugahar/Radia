@@ -5,7 +5,7 @@
 __version__ = "1.3.16"
 
 # Add package directory to DLL search path (Windows)
-# This is needed for finding libopenblas.dll
+# This is needed for finding Intel MKL DLL (mkl_rt.2.dll)
 import os
 import sys
 
