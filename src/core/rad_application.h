@@ -83,6 +83,12 @@ public:
 	int m_solve_nonl_iterations;     // Total nonlinear iterations
 	bool m_solve_stats_valid;        // Whether stats are available
 
+	// Interaction matrix cache for avoiding rebuild on repeated Solve() calls
+	// The interaction matrix N only depends on geometry, not on material properties (chi)
+	// Caching avoids the expensive O(N^2) matrix construction on every Solve()
+	int m_cached_interact_key;       // Key of cached interaction object (0 = no cache)
+	int m_cached_obj_key;            // Geometry key that the cache is valid for
+
 #ifdef RADIA_USE_HACAPK
 	// HACApK parameters for H-matrix solver
 	double m_hacapk_eps;       // ACA+ compression tolerance (default: 1e-4)
@@ -133,6 +139,10 @@ public:
 		m_solve_linear_iterations = 0;
 		m_solve_nonl_iterations = 0;
 		m_solve_stats_valid = false;
+
+		// Interaction matrix cache init
+		m_cached_interact_key = 0;
+		m_cached_obj_key = 0;
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
 

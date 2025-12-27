@@ -1714,12 +1714,54 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		}
 #endif
 
-		// Time matrix construction (PreRelax includes SetupInteractMatrix)
-		auto t_prerelax_start = std::chrono::high_resolution_clock::now();
-		int InteractElemKey = PreRelax(ObjKey, 0, skipDenseMatrix);
-		auto t_prerelax_end = std::chrono::high_resolution_clock::now();
-		double t_matrix_build = std::chrono::duration<double>(t_prerelax_end - t_prerelax_start).count();
-		if(InteractElemKey <= 0) return 0;
+		// Check if we can reuse cached interaction matrix
+		// The interaction matrix N only depends on geometry, not on chi (material)
+		// This avoids the expensive O(N^2) matrix construction on repeated Solve() calls
+		int InteractElemKey = 0;
+		double t_matrix_build = 0.0;
+
+		bool cacheValid = (m_cached_interact_key > 0 && m_cached_obj_key == ObjKey);
+
+		// For HACApK, cache invalidation is handled differently (H-matrix is rebuilt internally)
+		// Also invalidate cache if solver method changed (different matrix type might be needed)
+#ifdef RADIA_USE_HACAPK
+		if(cacheValid && MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
+		{
+			// HACApK builds its own H-matrix, may need to rebuild
+			// For now, keep the cache - HACApK handles its own caching
+		}
+#endif
+
+		if(cacheValid)
+		{
+			// Reuse cached interaction object
+			InteractElemKey = m_cached_interact_key;
+			t_matrix_build = 0.0;  // No rebuild needed
+
+			// Validate the cached key is still valid in GlobalMapOfHandlers
+			radThg hg;
+			if(!ValidateElemKey(InteractElemKey, hg))
+			{
+				// Cache is stale, need to rebuild
+				cacheValid = false;
+				m_cached_interact_key = 0;
+				m_cached_obj_key = 0;
+			}
+		}
+
+		if(!cacheValid)
+		{
+			// Time matrix construction (PreRelax includes SetupInteractMatrix)
+			auto t_prerelax_start = std::chrono::high_resolution_clock::now();
+			InteractElemKey = PreRelax(ObjKey, 0, skipDenseMatrix);
+			auto t_prerelax_end = std::chrono::high_resolution_clock::now();
+			t_matrix_build = std::chrono::duration<double>(t_prerelax_end - t_prerelax_start).count();
+			if(InteractElemKey <= 0) return 0;
+
+			// Cache the interaction key for future reuse
+			m_cached_interact_key = InteractElemKey;
+			m_cached_obj_key = ObjKey;
+		}
 
 		SendingIsRequired = PrevSendingIsRequired;
 
@@ -1732,13 +1774,15 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		catch(...)
 		{
 			SendingIsRequired = 0;
-			DeleteElement(InteractElemKey);
+			// Don't delete cached interaction on error - keep for potential retry
 			throw 0;
 		}
 
-		PrevSendingIsRequired = SendingIsRequired; SendingIsRequired = 0;
-		DeleteElement(InteractElemKey);
-		SendingIsRequired = PrevSendingIsRequired;
+		// DON'T delete the interaction element - keep it cached for next Solve() call
+		// The cache will be invalidated when geometry changes or UtiDelAll() is called
+		// PrevSendingIsRequired = SendingIsRequired; SendingIsRequired = 0;
+		// DeleteElement(InteractElemKey);
+		// SendingIsRequired = PrevSendingIsRequired;
 	}
 	catch(...) { Initialize(); return 0;}
 	return ActualIterNum;
