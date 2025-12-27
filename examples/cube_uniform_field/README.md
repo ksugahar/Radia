@@ -68,17 +68,17 @@ Where N_demag = 1/3 for a cube.
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 716,184 | LU | 61 MB | - | 0 | 2 | - | - | - | - | 10.2s |
-| 716,200 | BiCGSTAB | 38 MB | - | 16 | 3 | - | - | - | - | 10.2s |
-| 716,192 | HACApK | 41 MB | **47%** | 12 | 2 | 4.01s | - | 4.01s | - | 4.28s |
+| 716,184 | LU | 60 MB | - | 0 | 2 | 12.2s | 1.9s | - | 1.9s | 14.4s |
+| 716,200 | BiCGSTAB | 38 MB | - | 16 | 3 | 12.2s | - | - | 2.0s | 14.2s |
+| 716,192 | HACApK | 42 MB | **47%** | 12 | 2 | 0.01s | - | 5.98s | 0.28s | 6.3s |
 
 #### N=15 (3,375 elements, 20,250 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LU | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|-------:|---------:|---------:|------:|
-| 720,157 | LU | 123 MB | - | 0 | 2 | - | - | - | - | 155.8s |
-| 720,159 | BiCGSTAB | 52 MB | - | 11 | 2 | - | - | - | - | 132.6s |
-| 720,186 | HACApK | 57 MB | **24%** | 11 | 2 | 26.0s | - | 26.0s | - | 27.9s |
+| 720,157 | LU | 123 MB | - | 0 | 2 | 136.7s | 51.6s | - | 51.6s | 191.0s |
+| 720,159 | BiCGSTAB | 52 MB | - | 11 | 2 | 136.7s | - | - | 20.0s | 156.7s |
+| 720,186 | HACApK | 59 MB | **24%** | 12 | 2 | 0.12s | - | 35.7s | 1.3s | 37.3s |
 
 ---
 
@@ -205,8 +205,9 @@ Where N_demag = 1/3 for a cube.
 ### Hexahedral Elements (Linear)
 
 1. **All solvers converge**: LU, BiCGSTAB, HACApK all work
-2. **HACApK is 5.6x faster than LU at N=15**: 27.9s vs 155.8s
-3. **HACApK is 4.7x faster than BiCGSTAB at N=15**: 27.9s vs 132.6s
+2. **HACApK is 5.1x faster than LU at N=15**: 37.3s vs 191.0s
+3. **HACApK is 4.2x faster than BiCGSTAB at N=15**: 37.3s vs 156.7s
+4. **Matrix build is the bottleneck**: 136.7s for N=15 (71% of total LU time)
 
 ### Hexahedral Elements (Nonlinear)
 
