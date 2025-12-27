@@ -276,9 +276,24 @@ if(WIN32)
 endif()
 
 # Link OpenMP for radia_ngsolve
-if(RADIA_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
-	target_link_libraries(radia_ngsolve PRIVATE OpenMP::OpenMP_CXX)
-	message(STATUS "OpenMP enabled for radia_ngsolve")
+# Use Intel OpenMP (libiomp5md.dll) for better performance with Intel MKL
+if(RADIA_ENABLE_OPENMP)
+	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+		# MSVC: Link Intel OpenMP directly instead of using OpenMP::OpenMP_CXX
+		# OpenMP::OpenMP_CXX would link to vcomp140.dll (MSVC OpenMP)
+		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
+		if(EXISTS ${INTEL_OPENMP_LIB})
+			target_link_libraries(radia_ngsolve PRIVATE ${INTEL_OPENMP_LIB})
+			target_compile_definitions(radia_ngsolve PRIVATE _OPENMP)
+			message(STATUS "OpenMP enabled for radia_ngsolve (Intel OpenMP: ${INTEL_OPENMP_LIB})")
+		elseif(OpenMP_CXX_FOUND)
+			target_link_libraries(radia_ngsolve PRIVATE OpenMP::OpenMP_CXX)
+			message(STATUS "OpenMP enabled for radia_ngsolve (MSVC OpenMP - fallback)")
+		endif()
+	elseif(OpenMP_CXX_FOUND)
+		target_link_libraries(radia_ngsolve PRIVATE OpenMP::OpenMP_CXX)
+		message(STATUS "OpenMP enabled for radia_ngsolve")
+	endif()
 endif()
 
 # Compiler-specific flags for radia_ngsolve
@@ -293,6 +308,8 @@ if(MSVC)
 		/wd4267            # Disable size_t conversion warnings
 	)
 	if(RADIA_ENABLE_OPENMP)
+		# Use standard /openmp flag - Intel OpenMP runtime is linked separately
+		# The libiomp5md.lib is linked via target_link_libraries above
 		target_compile_options(radia_ngsolve PRIVATE /openmp)
 	endif()
 	message(STATUS "Using MSVC compiler with Intel MKL for radia_ngsolve")
@@ -419,13 +436,30 @@ if(WIN32)
 endif()
 
 # Link OpenMP for parallel matrix construction
-if(RADIA_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
-	target_link_libraries(radia PRIVATE OpenMP::OpenMP_CXX)
-	message(STATUS "OpenMP enabled for radia (C++)")
-endif()
-if(RADIA_ENABLE_OPENMP AND OpenMP_C_FOUND)
-	target_link_libraries(radia PRIVATE OpenMP::OpenMP_C)
-	message(STATUS "OpenMP enabled for radia (C)")
+# Use Intel OpenMP (libiomp5md.dll) for better performance with Intel MKL
+if(RADIA_ENABLE_OPENMP)
+	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+		# MSVC: Link Intel OpenMP directly instead of using OpenMP::OpenMP_CXX
+		# OpenMP::OpenMP_CXX would link to vcomp140.dll (MSVC OpenMP)
+		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
+		if(EXISTS ${INTEL_OPENMP_LIB})
+			target_link_libraries(radia PRIVATE ${INTEL_OPENMP_LIB})
+			target_compile_definitions(radia PRIVATE _OPENMP)
+			message(STATUS "OpenMP enabled for radia (Intel OpenMP: ${INTEL_OPENMP_LIB})")
+		elseif(OpenMP_CXX_FOUND)
+			target_link_libraries(radia PRIVATE OpenMP::OpenMP_CXX)
+			message(STATUS "OpenMP enabled for radia (MSVC OpenMP - fallback)")
+		endif()
+	else()
+		if(OpenMP_CXX_FOUND)
+			target_link_libraries(radia PRIVATE OpenMP::OpenMP_CXX)
+			message(STATUS "OpenMP enabled for radia (C++)")
+		endif()
+		if(OpenMP_C_FOUND)
+			target_link_libraries(radia PRIVATE OpenMP::OpenMP_C)
+			message(STATUS "OpenMP enabled for radia (C)")
+		endif()
+	endif()
 endif()
 
 # Compiler-specific flags for radia
@@ -440,6 +474,8 @@ if(MSVC)
 		/wd4267            # Disable size_t conversion warnings
 	)
 	if(RADIA_ENABLE_OPENMP)
+		# Use standard /openmp flag - Intel OpenMP runtime is linked separately
+		# The libiomp5md.lib is linked via target_link_libraries above
 		target_compile_options(radia PRIVATE /openmp)
 	endif()
 	message(STATUS "Using MSVC compiler with Intel MKL for radia")
