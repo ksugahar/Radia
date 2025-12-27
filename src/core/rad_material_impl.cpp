@@ -27,6 +27,7 @@
 #include <math.h>
 #include <string.h>
 #include <cstdio>
+#include <chrono>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -1713,7 +1714,11 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		}
 #endif
 
+		// Time matrix construction (PreRelax includes SetupInteractMatrix)
+		auto t_prerelax_start = std::chrono::high_resolution_clock::now();
 		int InteractElemKey = PreRelax(ObjKey, 0, skipDenseMatrix);
+		auto t_prerelax_end = std::chrono::high_resolution_clock::now();
+		double t_matrix_build = std::chrono::duration<double>(t_prerelax_end - t_prerelax_start).count();
 		if(InteractElemKey <= 0) return 0;
 
 		SendingIsRequired = PrevSendingIsRequired;
@@ -1721,6 +1726,8 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		try
 		{
 			ActualIterNum = MakeAutoRelax(InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
+			// Store matrix build time (MakeAutoRelax resets m_solve_t_matrix_build to 0)
+			m_solve_t_matrix_build = t_matrix_build;
 		}
 		catch(...)
 		{
