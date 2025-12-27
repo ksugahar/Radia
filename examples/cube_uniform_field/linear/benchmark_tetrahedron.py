@@ -56,13 +56,24 @@ N_DEMAG = 1.0 / 3.0
 M_ANALYTICAL_Z = CHI * H_EXT / (1 + CHI * N_DEMAG)
 
 
-def get_rss_memory_mb():
-    """Get current RSS memory usage in MB."""
+def get_peak_memory_mb():
+    """Get peak memory usage in MB (Windows: peak_wset, Linux: max RSS)."""
     if not HAS_PSUTIL:
         return None
     process = psutil.Process(os.getpid())
     mem_info = process.memory_info()
-    return mem_info.rss / (1024 * 1024)
+    # Windows: peak_wset = peak working set size (accurate peak)
+    # Linux/Mac: Use peak RSS from resource module if available
+    if hasattr(mem_info, 'peak_wset'):
+        return mem_info.peak_wset / (1024 * 1024)
+    else:
+        # Fallback for Linux - try resource module
+        try:
+            import resource
+            # ru_maxrss is in KB on Linux
+            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+        except (ImportError, AttributeError):
+            return mem_info.rss / (1024 * 1024)  # Last resort fallback
 
 
 def benchmark_tetrahedra(maxh, solver_type, output_dir, hmat_eps=1e-4,
@@ -158,8 +169,8 @@ def benchmark_tetrahedra(maxh, solver_type, output_dir, hmat_eps=1e-4,
         't_total': t_solve,
     }
 
-    # Measure memory
-    peak_memory_mb = get_rss_memory_mb()
+    # Measure peak memory (after solve completes)
+    peak_memory_mb = get_peak_memory_mb()
 
     # Get average magnetization
     all_M = rad.ObjM(cube)
