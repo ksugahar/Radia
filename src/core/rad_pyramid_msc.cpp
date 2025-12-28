@@ -19,13 +19,18 @@
 
 #include "rad_pyramid_msc.h"
 #include "rad_polyhedron.h"
+#include "rad_constants.h"  // Unified mathematical/physical constants
 #include <cmath>
 #include <algorithm>
 
-// Physical constants
-static const double PI = 3.14159265358979323846;
-static const double MU_0 = 4.0 * PI * 1e-7;  // Permeability of free space [H/m]
-static const double INV_4PI = 1.0 / (4.0 * PI);
+//-------------------------------------------------------------------------
+// Constants - using unified values from rad_constants.h
+//-------------------------------------------------------------------------
+
+// Local aliases for unified constants
+static const double PI = RadConst::PI;
+static const double MU_0 = RadConst::MU_0;
+static const double INV_4PI = RadConst::INV_FOUR_PI;
 
 //-------------------------------------------------------------------------
 // radTMSCMethod implementation

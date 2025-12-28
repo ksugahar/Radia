@@ -28,6 +28,7 @@
 #include "auxparse.h"
 #include "rad_poly_analytical.h"
 #include "radentry.h"  // For RadSolverGetTetraMethod()
+#include "rad_constants.h"  // Unified mathematical/physical constants
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -953,10 +954,9 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 // 6 DOF MSC field computation methods for hexahedra
+// Note: 1/(4*pi) factor is applied in matrix assembly (rad_interaction.cpp),
+// not in these field computation functions. Use RadConst::INV_FOUR_PI.
 //-------------------------------------------------------------------------
-
-static const double PI_6DOF = 3.14159265358979323846;
-static const double INV_4PI_6DOF = 1.0 / (4.0 * PI_6DOF);
 
 TVector3d radTPolyhedron::FieldFromChargedTriangle(const TVector3d& obs,
                                                     const TVector3d& v0,
