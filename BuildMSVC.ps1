@@ -242,21 +242,86 @@ finally {
 
 # Test import if requested
 if ($Test) {
-    Write-Host "Testing import..." -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "  Running Tests" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    # First, test basic import
+    Write-Host "Testing radia import..." -ForegroundColor Cyan
     python -c "import sys; sys.path.insert(0, r'$PROJECT_DIR\src\radia'); import radia; print(f'radia version: {radia.__version__}')"
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "radia import test passed!" -ForegroundColor Green
     } else {
         Write-Host "radia import test failed!" -ForegroundColor Red
+        exit 1
     }
 
+    Write-Host "Testing radia_ngsolve import..." -ForegroundColor Cyan
     python -c "import sys; sys.path.insert(0, r'$PROJECT_DIR\src\radia'); import radia_ngsolve; print('radia_ngsolve import OK')"
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "radia_ngsolve import test passed!" -ForegroundColor Green
     } else {
-        Write-Host "radia_ngsolve import test failed!" -ForegroundColor Red
+        Write-Host "radia_ngsolve import test failed!" -ForegroundColor Yellow
+        Write-Host "(NGSolve may not be installed - continuing)" -ForegroundColor Gray
+    }
+
+    Write-Host ""
+
+    # Run pytest on basic tests (fast tests only by default)
+    Write-Host "Running pytest (basic tests)..." -ForegroundColor Cyan
+    Write-Host ""
+
+    # Check if pytest is available
+    $pytestCheck = python -c "import pytest; print('ok')" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "pytest not installed. Install with: pip install pytest" -ForegroundColor Yellow
+        Write-Host "Skipping pytest..." -ForegroundColor Gray
+    } else {
+        # Run pytest with basic marker (fast tests only)
+        # Use -m "basic" to run only basic tests, or -m "not slow and not benchmark" for quick tests
+        Push-Location $PROJECT_DIR
+        try {
+            python -m pytest tests/ -m "basic" -v --tb=short
+            $TestResult = $LASTEXITCODE
+
+            if ($TestResult -eq 0) {
+                Write-Host ""
+                Write-Host "========================================" -ForegroundColor Green
+                Write-Host "  All Tests Passed!" -ForegroundColor Green
+                Write-Host "========================================" -ForegroundColor Green
+            } elseif ($TestResult -eq 5) {
+                # Exit code 5 means no tests were collected (no tests matched the marker)
+                Write-Host ""
+                Write-Host "No tests with 'basic' marker found. Running quick tests..." -ForegroundColor Yellow
+                python -m pytest tests/test_radia.py -v --tb=short
+                $TestResult = $LASTEXITCODE
+                if ($TestResult -eq 0) {
+                    Write-Host ""
+                    Write-Host "========================================" -ForegroundColor Green
+                    Write-Host "  All Tests Passed!" -ForegroundColor Green
+                    Write-Host "========================================" -ForegroundColor Green
+                } else {
+                    Write-Host ""
+                    Write-Host "========================================" -ForegroundColor Red
+                    Write-Host "  Some Tests Failed!" -ForegroundColor Red
+                    Write-Host "========================================" -ForegroundColor Red
+                    exit $TestResult
+                }
+            } else {
+                Write-Host ""
+                Write-Host "========================================" -ForegroundColor Red
+                Write-Host "  Some Tests Failed!" -ForegroundColor Red
+                Write-Host "========================================" -ForegroundColor Red
+                exit $TestResult
+            }
+        }
+        finally {
+            Pop-Location
+        }
     }
     Write-Host ""
 }
