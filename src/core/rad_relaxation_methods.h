@@ -38,6 +38,72 @@ namespace RadSolverMethod {
 }
 
 //-------------------------------------------------------------------------
+// Nonlinear Iteration Context (shared across all solver methods)
+//
+// Phase 1 of unification: Encapsulates common state for Newton-Raphson iteration
+// Reference: internal/design/NONLINEAR_ITERATION_UNIFICATION_PLAN.md
+//-------------------------------------------------------------------------
+
+// Forward declaration
+class radTg3dRelax;
+class radTPolyhedron;
+
+/**
+ * Shared context for nonlinear magnetostatic iteration.
+ *
+ * This struct encapsulates all state vectors and parameters that are
+ * IDENTICAL across LU, BiCGSTAB, and HACApK solvers. By extracting
+ * this common state, we eliminate ~1200 lines of duplicated code.
+ *
+ * The Newton-Raphson iteration solves:
+ *   (I - chi*N) * M = chi * H_ext
+ * where chi is updated each iteration based on the B-H curve.
+ */
+struct NonlinearContext {
+	// Problem dimensions
+	int totalDOF;           // Total degrees of freedom (sum of element DOFs)
+	int AmOfMainElem;       // Number of magnetic elements
+
+	// Pointers to interaction matrix data (owned by IntrctPtr, DO NOT delete)
+	double* FlatMagn;       // Magnetization array [totalDOF]
+	double* FlatField;      // Field array [totalDOF]
+	double* FlatExtern;     // External field array [totalDOF]
+
+	// State vectors for Newton-Raphson iteration
+	std::vector<double> OldMagn;           // Previous iteration magnetization [totalDOF]
+	std::vector<double> OldChi;            // Previous iteration chi [AmOfMainElem]
+	std::vector<double> OldBnorm;          // Previous iteration |B| [AmOfMainElem]
+	std::vector<double> CurrentChiArray;   // Current chi values [AmOfMainElem]
+	std::vector<double> NewFieldArray;     // Computed field after linear solve [totalDOF]
+
+	// Element cache (avoid repeated virtual calls)
+	std::vector<radTPolyhedron*> polyCache;  // Polyhedron pointers [AmOfMainElem]
+
+	// Flags
+	bool all_materials_linear;  // True if all materials are linear (converge in 1 iteration)
+
+	// Convergence tracking
+	double B_sat;               // Saturation B for relative convergence check
+	double max_B_rel_change;    // Maximum relative B change this iteration
+
+	// Under-relaxation parameter (0 = full step, 0.5 = 50% damping)
+	double relax_param;
+
+	// Constructor
+	NonlinearContext()
+		: totalDOF(0)
+		, AmOfMainElem(0)
+		, FlatMagn(nullptr)
+		, FlatField(nullptr)
+		, FlatExtern(nullptr)
+		, all_materials_linear(true)
+		, B_sat(1.0)
+		, max_B_rel_change(0.0)
+		, relax_param(0.0)
+	{}
+};
+
+//-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
 class radTIterativeRelaxMeth {

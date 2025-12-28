@@ -7,29 +7,29 @@
   "H_ext": 200000.0,
   "mu_r": 1000,
   "chi": 999,
-  "t_mesh": 0.1008448600769043,
-  "t_solve": 36.919740438461304,
+  "t_mesh": 0.10222744941711426,
+  "t_solve": 35.28396391868591,
   "solver_method": 2,
   "solver_name": "hacapk",
   "converged": true,
-  "iterations": 2,
-  "linear_iterations": 12,
-  "M_avg_z": 720195.7588093075,
+  "iterations": 1,
+  "linear_iterations": 10,
+  "M_avg_z": 21605.887538392217,
   "M_analytical_z": 598203.5928143712,
-  "error_percent": 20.393084805960314,
-  "peak_memory_mb": 1243.71484375,
+  "error_percent": 96.38820498607458,
+  "peak_memory_mb": 1243.83203125,
   "timing": {
-    "t_matrix_build": 0.1120198,
+    "t_matrix_build": 0.1122037,
     "t_lu_decomp": 0.0,
-    "t_hmatrix_build": 35.4166308,
-    "t_linear_solve": 1.3101850000000002
+    "t_hmatrix_build": 34.1838459,
+    "t_linear_solve": 0.8973552
   },
   "hmatrix": {
     "n_lowrank": 8202,
     "n_dense": 9442,
     "max_rank": 82,
     "compression_ratio": 0.244683178783722,
-    "build_time": 35.408186400000005,
+    "build_time": 34.1754702,
     "nlf": 17644
   }
 }

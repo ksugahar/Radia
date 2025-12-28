@@ -1,0 +1,89 @@
+{
+  "date": "2025-12-28 18:15:11",
+  "tests": [
+    {
+      "type": "hex",
+      "n": 5,
+      "solver": "LU",
+      "method": 0,
+      "iterations": 6,
+      "M_avg_z": 702131.9450429794,
+      "residual": 0.00026961309516737586
+    },
+    {
+      "type": "hex",
+      "n": 5,
+      "solver": "BiCGSTAB",
+      "method": 1,
+      "iterations": 3,
+      "M_avg_z": 702114.4455605252,
+      "residual": 0.00010107442633189301
+    },
+    {
+      "type": "hex",
+      "n": 5,
+      "solver": "HACApK",
+      "method": 2,
+      "iterations": 3,
+      "M_avg_z": 702107.4748783034,
+      "residual": 0.00010090603404799836
+    },
+    {
+      "type": "hex",
+      "n": 10,
+      "solver": "LU",
+      "method": 0,
+      "iterations": 13,
+      "M_avg_z": 716281.0404007438,
+      "residual": 0.0009195502811196743
+    },
+    {
+      "type": "hex",
+      "n": 10,
+      "solver": "BiCGSTAB",
+      "method": 1,
+      "iterations": 5,
+      "M_avg_z": 716317.1911518011,
+      "residual": 0.00022335516575422432
+    },
+    {
+      "type": "hex",
+      "n": 10,
+      "solver": "HACApK",
+      "method": 2,
+      "iterations": 4,
+      "M_avg_z": 716362.3621196125,
+      "residual": 0.00019893243934854254
+    },
+    {
+      "type": "tetra",
+      "maxh": 0.25,
+      "n_elem": 390,
+      "solver": "LU",
+      "method": 0,
+      "iterations": 15,
+      "M_avg_z": 727049.6053230136,
+      "residual": 0.0008732412051017935
+    },
+    {
+      "type": "tetra",
+      "maxh": 0.25,
+      "n_elem": 390,
+      "solver": "BiCGSTAB",
+      "method": 1,
+      "iterations": 7,
+      "M_avg_z": 727454.090323561,
+      "residual": 0.0008973139108432449
+    },
+    {
+      "type": "tetra",
+      "maxh": 0.25,
+      "n_elem": 390,
+      "solver": "HACApK",
+      "method": 2,
+      "iterations": 7,
+      "M_avg_z": 727462.648371397,
+      "residual": 0.0009033472812016718
+    }
+  ]
+}
