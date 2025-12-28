@@ -287,13 +287,12 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	const TVector3d& elemCentroid)
 {
 	// =========================================================================
-	// OPTIMIZED INLINE VERSION - No heap allocations (2025-12-28)
-	// Uses fixed-size arrays for OpenMP parallelization efficiency
+	// Rewritten to use RadAnalyticalFieldFromPolygonCharge for correctness
+	// This ensures consistency with the working standard polygon method.
 	// =========================================================================
 	const double PI = 3.14159265358979323846;
 	const double ConstForH = 1.0 / (4.0 * PI);
 	const double EPS = 1.0e-15;
-	const double EPS_EDGE = 1.0e-20;
 
 	// Compute face edges
 	TVector3d e1 = V1 - V0;
@@ -317,9 +316,16 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	CC.z = normal.z / normalLen;
 
 	// Surface charge density: sigma = M dot n
+	// Note: The sign of sigma will be corrected below based on normal direction
 	double sigma = M.x * CC.x + M.y * CC.y + M.z * CC.z;
 
-	// Outward normal check
+	// =========================================================================
+	// Outward normal check:
+	// Compute face center and check if normal points outward from element centroid
+	// If normal . (faceCenter - elemCentroid) < 0, the normal points inward
+	// In that case, we negate the surface charge (NOT the normal itself).
+	// The coordinate system stays as-is, but the charge sign is corrected.
+	// =========================================================================
 	TVector3d faceCenter;
 	faceCenter.x = (V0.x + V1.x + V2.x) / 3.0;
 	faceCenter.y = (V0.y + V1.y + V2.y) / 3.0;
@@ -332,14 +338,30 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 
 	double dotProduct = CC.x * outwardVec.x + CC.y * outwardVec.y + CC.z * outwardVec.z;
 
+	// If normal points inward, negate the surface charge
+	// (do not flip the coordinate system)
 	if(dotProduct < 0.0) {
 		sigma = -sigma;
 	}
 	if(std::abs(sigma) < EPS) {
-		return TVector3d(0., 0., 0.);
+		return TVector3d(0., 0., 0.);  // No surface charge
 	}
 
+	// =========================================================================
 	// Build local coordinate system using triple cross product method
+	//
+	// Basis construction:
+	//   vert_rel(2) = v2 - v1 (edge from v1 to v2)
+	//   vert_rel(3) = v3 - v1 (edge from v1 to v3)
+	//   basis_a = vert_rel(3)
+	//   basis_b = vert_rel(3) - vert_rel(2) * 0.5
+	//   Then triple cross product to orthonormalize:
+	//     basis_c = basis_a x basis_b (normalized)
+	//     basis_a = basis_b x basis_c (normalized)
+	//     basis_b = basis_c x basis_a (normalized)
+	// =========================================================================
+
+	// Formulation: basis_a = e2, basis_b = e2 - e1*0.5
 	TVector3d basis_a = e2;
 	TVector3d basis_b;
 	basis_b.x = e2.x - e1.x * 0.5;
@@ -353,7 +375,7 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	basis_c.z = basis_a.x * basis_b.y - basis_a.y * basis_b.x;
 	double cLen = std::sqrt(basis_c.x*basis_c.x + basis_c.y*basis_c.y + basis_c.z*basis_c.z);
 	if(cLen < EPS) {
-		return TVector3d(0., 0., 0.);
+		return TVector3d(0., 0., 0.);  // Degenerate triangle
 	}
 	basis_c.x /= cLen; basis_c.y /= cLen; basis_c.z /= cLen;
 
@@ -403,115 +425,26 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 		d2.x*BB.x + d2.y*BB.y + d2.z*BB.z
 	);
 
-	// =========================================================================
-	// INLINE ANALYTICAL FORMULA - No heap allocations
-	// Adapted from RadAnalyticalFieldFromPolygonCharge for triangle case (KAdo=3)
-	// =========================================================================
+	// Prepare observation point and output vectors
+	std::vector<TVector3d> obs_points(1, obsPoint);
+	std::vector<TVector3d> field_result(1, TVector3d(0., 0., 0.));
 
 	// Weight: sigma / (4*pi)
 	double W = ConstForH * sigma;
 
-	// Fixed-size arrays for triangle (3 vertices + 1 wrap-around)
-	double XY_x[4], XY_y[4];
-	XY_x[0] = local_V0.x; XY_y[0] = local_V0.y;
-	XY_x[1] = local_V1.x; XY_y[1] = local_V1.y;
-	XY_x[2] = local_V2.x; XY_y[2] = local_V2.y;
-	XY_x[3] = local_V0.x; XY_y[3] = local_V0.y;  // Wrap-around for edge loop
+	// Create 2D vertex array for the triangle
+	std::vector<TVector2d> XY = {local_V0, local_V1, local_V2};
 
-	// Edge properties (3 edges for triangle, 4th is dummy)
-	double DS[4], AM[4], SM[4], XD[4], YD[4];
-	double EPSG = 0.0;
+	// Call the proven analytical formula
+	RadAnalyticalFieldFromPolygonCharge(
+		AA, BB, basis_c, YY,
+		XY,
+		obs_points,
+		field_result,
+		W,
+		1,   // Element index (for error reporting)
+		3    // Triangle has 3 vertices
+	);
 
-	for(int J = 0; J < 3; J++) {
-		int L = J + 1;  // Next vertex (0->1, 1->2, 2->3 where 3 wraps to 0)
-		double XS1 = XY_x[L] - XY_x[J];
-		double XS2 = XY_y[L] - XY_y[J];
-
-		if(std::abs(XS1) < EPS_EDGE) {
-			XS1 = EPS_EDGE;  // Handle vertical edge
-		}
-
-		DS[J] = std::sqrt(XS2*XS2 + XS1*XS1);
-		AM[J] = XS2 / XS1;
-		SM[J] = std::sqrt(AM[J]*AM[J] + 1.0);
-		XD[J] = -XS1 / DS[J];
-		YD[J] =  XS2 / DS[J];
-
-		EPSG = std::max(EPSG, DS[J]);
-	}
-	// Dummy 4th edge for triangle
-	DS[3] = 1.0; AM[3] = 0.0; SM[3] = 1.0e20; XD[3] = 0.0; YD[3] = 0.0;
-
-	EPSG = EPSG * 1.0e-12;
-
-	// Transform observation point to local coordinates
-	TVector3d DD;
-	DD.x = obsPoint.x - YY.x;
-	DD.y = obsPoint.y - YY.y;
-	DD.z = obsPoint.z - YY.z;
-
-	double EE1 = DD.x*AA.x + DD.y*AA.y + DD.z*AA.z;  // X in local frame
-	double EE2 = DD.x*BB.x + DD.y*BB.y + DD.z*BB.z;  // Y in local frame
-	double EE3 = DD.x*basis_c.x + DD.y*basis_c.y + DD.z*basis_c.z;  // Z (height)
-
-	// Distances from observation point to vertices
-	double X[4], Y[4], H[4], E[4], R[4];
-	for(int J = 0; J < 3; J++) {
-		X[J] = EE1 - XY_x[J];
-		Y[J] = EE2 - XY_y[J];
-		H[J] = Y[J] * X[J];
-	}
-	// Wrap-around for edge connectivity
-	X[3] = X[0]; Y[3] = Y[0]; H[3] = H[0];
-
-	double Z = EE3;
-	double Z2 = Z * Z;
-
-	for(int J = 0; J < 4; J++) {
-		E[J] = Z2 + X[J]*X[J];
-		R[J] = std::sqrt(X[J]*X[J] + Y[J]*Y[J] + Z2);
-	}
-
-	// Edge contributions
-	double RM[4], RP[4], RR[4], AL[4];
-	for(int J = 0; J < 4; J++) {
-		int JP1 = (J + 1) & 3;  // Fast modulo 4
-		RM[J] = R[J] + R[JP1] - DS[J];
-		RP[J] = R[J] + R[JP1] + DS[J];
-		RR[J] = RM[J] / RP[J];
-		if(RR[J] < EPS_EDGE) RR[J] = EPS_EDGE;
-		AL[J] = std::log(RR[J]);
-	}
-
-	// Field components in local frame
-	double HH1 = W * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2] - YD[3]*AL[3]);
-	double HH2 = W * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2] - XD[3]*AL[3]);
-	double HH3 = 0.0;
-
-	// Z-component (solid angle contribution)
-	if(std::abs(Z) > EPSG) {
-		double ZR[4], AT[4], BT[4];
-		for(int J = 0; J < 4; J++) {
-			ZR[J] = Z * R[J];
-		}
-
-		for(int J = 0; J < 3; J++) {  // Only 3 edges for triangle
-			int JP1 = J + 1;
-			AT[J] = (AM[J]*E[J] - H[J]) / ZR[J];
-			BT[J] = (AM[J]*E[JP1] - H[JP1]) / ZR[JP1];
-		}
-		// 4th term is zero for triangle (ZONE = 0)
-		AT[3] = 0.0; BT[3] = 0.0;
-
-		HH3 = W * (-std::atan(AT[0]) - std::atan(AT[1]) - std::atan(AT[2]) - std::atan(AT[3])
-		          + std::atan(BT[0]) + std::atan(BT[1]) + std::atan(BT[2]) + std::atan(BT[3]));
-	}
-
-	// Transform field back to global coordinates
-	TVector3d result;
-	result.x = HH1*AA.x + HH2*BB.x + HH3*basis_c.x;
-	result.y = HH1*AA.y + HH2*BB.y + HH3*basis_c.y;
-	result.z = HH1*AA.z + HH2*BB.z + HH3*basis_c.z;
-
-	return result;
+	return field_result[0];
 }

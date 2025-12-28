@@ -246,6 +246,47 @@ public:
 	double* GetInteractBlock(int row_elem, int col_elem);
 	const double* GetInteractBlock(int row_elem, int col_elem) const;
 
+	//-------------------------------------------------------------------------
+	// Nonlinear iteration helpers (unified across LU, BiCGSTAB, HACApK solvers)
+	// Reference: ELF mucal0/mucal1/mucal2 pattern (Modern Fortran implementation)
+	//-------------------------------------------------------------------------
+
+	// Initialize chi array for all elements using ELF mucal0 style
+	// Returns: true if all materials are linear (single solve suffices)
+	// polyCache: output vector of cached radTPolyhedron* for 6DOF elements
+	// chiArray: output chi value for each element
+	bool InitializeChiArray(std::vector<double>& chiArray,
+	                        std::vector<radTPolyhedron*>& polyCache);
+
+	// Initialize H field for first iteration (ELF mucal0 style)
+	// Uses H_init_mag as initial field magnitude
+	void InitializeHField(double H_init_mag = 100.0);
+
+	// Store old B-field norms for convergence check (ELF mucal2 style)
+	// Also stores old magnetization values in OldMagn
+	// chiArray: current chi for each element (from InitializeChiArray or UpdateChiAndCheckConvergence)
+	void StoreOldBnorm(std::vector<double>& OldBnorm,
+	                   const std::vector<double>& chiArray,
+	                   const std::vector<radTPolyhedron*>& polyCache);
+
+	// Update element magnetization from FlatMagn (after linear solve)
+	// Copies FlatMagn to element Magn fields (3DOF) or poly->FaceSigma (6DOF)
+	// Also updates FlatField with H = M / chi for chi update loop
+	void UpdateElementMagnetization(const std::vector<radTPolyhedron*>& polyCache,
+	                                const std::vector<double>& chiArray);
+
+	// Update chi from H and check B-field convergence (ELF mucal1+mucal2 combined)
+	// chiArray: input/output chi values (updated with new chi)
+	// OldBnorm: input old B-field norms (from StoreOldBnorm)
+	// relax: under-relaxation parameter (0.0 = full step, 0.0-1.0 damping)
+	// max_B_rel_change: output max |B_new - B_old| / B_sat across all elements
+	// Returns: true if converged (max_B_rel_change < tolerance)
+	void UpdateChiAndCheckConvergence(std::vector<double>& chiArray,
+	                                   const std::vector<double>& OldBnorm,
+	                                   const std::vector<radTPolyhedron*>& polyCache,
+	                                   double relax,
+	                                   double& max_B_rel_change);
+
 	void SetupExternFieldArray();
 	void AddExternFieldFromMoreExtSource();
 	void AddMoreExternField(const radThg& hExtraExtSrc);
