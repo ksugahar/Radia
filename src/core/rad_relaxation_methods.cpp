@@ -568,6 +568,10 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	std::vector<double> OldBnorm(AmOfMainElem, 0.0);
 	// Store current chi for all elements (unified 3DOF/6DOF handling)
 	std::vector<double> CurrentChiArray(AmOfMainElem, 1.0);
+
+	// Linear material detection: If ALL materials are linear (MatLin),
+	// chi is constant and no Newton iteration is needed - converge in 1 iteration
+	bool all_materials_linear = true;
 	// Cache polyhedron pointers to avoid repeated dynamic_cast (moved up from later)
 	std::vector<radTPolyhedron*> polyCache(AmOfMainElem, nullptr);
 	for(int elem = 0; elem < AmOfMainElem; elem++)
@@ -599,6 +603,7 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		{
 			chi_init = NonlinMater->GetInitialChi_ELF_Style();
 			if(chi_init <= 0) chi_init = 1.0;
+			all_materials_linear = false;  // At least one nonlinear material found
 		}
 		else
 		{
@@ -998,17 +1003,12 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				}
 				else
 				{
-					// Fallback for linear materials
-					TMatrix3d KsiTensor;
-					TVector3d MrVect;
-					MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
-					chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
-					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-					// Apply under-relaxation for linear materials
-					if(relax > 0.0 && relax <= 1.0)
-					{
-						chi_new = chi_new * (1.0 - relax) + chi_matrix * relax;
-					}
+					// Linear materials: chi is constant, no update needed
+					// ELF pattern: "if (.not. mat%is_nonlinear) cycle" - skip permeability update
+					// For linear materials, chi from DefineInstantKsiTensor is constant,
+					// so we don't need to recompute or apply under-relaxation.
+					// This allows linear materials to converge in 1 iteration.
+					chi_new = chi_matrix;  // Keep current chi (already correct from initialization)
 				}
 				CurrentChiArray[elem] = chi_new;
 
@@ -1062,17 +1062,12 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					}
 					else
 					{
-						// Fallback: use DefineInstantKsiTensor for other material types
-						TMatrix3d KsiTensor;
-						TVector3d MrVect;
-						MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
-						chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
-						if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-						// Apply under-relaxation for linear materials
-						if(relax > 0.0 && relax <= 1.0)
-						{
-							chi_new = chi_new * (1.0 - relax) + chi_matrix * relax;
-						}
+						// Linear materials: chi is constant, no update needed
+						// ELF pattern: "if (.not. mat%is_nonlinear) cycle" - skip permeability update
+						// For linear materials, chi from DefineInstantKsiTensor is constant,
+						// so we don't need to recompute or apply under-relaxation.
+						// This allows linear materials to converge in 1 iteration.
+						chi_new = chi_matrix;  // Keep current chi (already correct from initialization)
 					}
 					poly->CurrentChi = chi_new;
 
@@ -1119,6 +1114,15 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		// rel_change = MAX over all elements of |B_new - B_old| / B_sat
 		double rel_change = max_B_rel_change;
 		MisfitE2 = rel_change * rel_change;
+
+		// Linear materials: converge in exactly 1 iteration (chi is constant, no Newton needed)
+		// ELF pattern: linear materials don't need permeability update - solution is exact
+		// Check BEFORE normal convergence to ensure single iteration
+		if(all_materials_linear)
+		{
+			iterCount++;
+			break;
+		}
 
 		if(rel_change <= PrecOnMagnetiz)
 		{
@@ -1529,6 +1533,9 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	int totalIterCount = 0;
 	int outerIter = 0;
 
+	// Linear material detection: if all materials are linear, converge in 1 iteration
+	bool all_materials_linear = true;
+
 	// Cache polyhedron pointers to avoid repeated dynamic_cast
 	// Cache ALL elements (not just DOF==6) so we can access them during chi initialization
 	std::vector<radTPolyhedron*> polyCache(AmOfMainElem, nullptr);
@@ -1556,6 +1563,7 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		{
 			chi_init = NonlinMater->GetInitialChi_ELF_Style();
 			if(chi_init <= 0) chi_init = 1.0;
+			all_materials_linear = false;  // At least one nonlinear material found
 		}
 		else
 		{
@@ -1958,6 +1966,15 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		// This is the same as LU solver and provides consistent convergence behavior
 		double rel_change = max_B_rel_change;
 		MisfitE2 = rel_change * rel_change;
+
+		// Linear materials: converge in exactly 1 iteration (chi is constant, no Newton needed)
+		// ELF pattern: linear materials don't need permeability update - solution is exact
+		// Check BEFORE normal convergence to ensure single iteration
+		if(all_materials_linear)
+		{
+			outerIter++;
+			break;
+		}
 
 		if(rel_change <= PrecOnMagnetiz)
 		{
@@ -2398,6 +2415,9 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	int totalIterCount = 0;
 	int outerIter = 0;
 
+	// Linear material detection: if all materials are linear, converge in 1 iteration
+	bool all_materials_linear = true;
+
 	// Initialize H field in NewFieldArray (used for chi(H) computation in nonlinear iteration)
 	// Also initialize FlatField for compatibility
 	const double H_init_mag = 100.0;  // Same as LU/BiCGSTAB (100 A/m)
@@ -2500,6 +2520,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		{
 			chi_init = NonlinMater->GetInitialChi_ELF_Style();
 			if(chi_init <= 0) chi_init = 1.0;
+			all_materials_linear = false;  // At least one nonlinear material found
 		}
 		else
 		{
@@ -2807,6 +2828,15 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		// Convergence criterion: use B-field change for both 3DOF and 6DOF (same as LU/BiCGSTAB)
 		double rel_change = max_B_rel_change;
 		MisfitE2 = rel_change * rel_change;
+
+		// Linear materials: converge in exactly 1 iteration (chi is constant, no Newton needed)
+		// ELF pattern: linear materials don't need permeability update - solution is exact
+		// Check BEFORE normal convergence to ensure single iteration
+		if(all_materials_linear)
+		{
+			outerIter++;
+			break;
+		}
 
 		if(rel_change <= PrecOnMagnetiz)
 		{
