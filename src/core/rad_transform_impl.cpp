@@ -1485,6 +1485,10 @@ int radTApplication::DeleteAllElements(int DeletionMethNo)
 
 		MapOfDrawAttr.erase(MapOfDrawAttr.begin(), MapOfDrawAttr.end());
 
+		// Reset solve cache - interaction object keys are now invalid
+		m_cached_interact_key = 0;
+		m_cached_obj_key = 0;
+
 		if(SendingIsRequired) Send.Int(0);
 		return 1;
 	}
