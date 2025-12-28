@@ -7,15 +7,21 @@
   "H_ext": 200000.0,
   "mu_r": 1000,
   "chi": 999,
-  "t_mesh": 0.008998394012451172,
-  "t_solve": 0.8489935398101807,
+  "t_mesh": 0.015625715255737305,
+  "t_solve": 0.17194294929504395,
   "solver_method": 0,
   "solver_name": "lu",
   "converged": true,
-  "iterations": 2,
+  "iterations": 1,
   "linear_iterations": 0,
-  "M_avg_z": 701899.9094975783,
+  "M_avg_z": 701899.9094975782,
   "M_analytical_z": 598203.5928143712,
-  "error_percent": 17.334619505601182,
-  "peak_memory_mb": 33.84375
+  "error_percent": 17.33461950560116,
+  "peak_memory_mb": 50.515625,
+  "timing": {
+    "t_matrix_build": 0.09419730000000001,
+    "t_lu_decomp": 0.0683468,
+    "t_hmatrix_build": 0.0,
+    "t_linear_solve": 0.0683468
+  }
 }
