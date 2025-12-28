@@ -56,14 +56,6 @@ cube_uniform_field/
 
 ### 1. Hexahedral Linear Benchmark (2025-12-29)
 
-#### N=5 (125 elements, 750 DOF)
-
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 701,899 | LU | 50 MB | - | 0 | 1 | 0.09s | - | 0.07s | 0.17s |
-| 701,903 | BiCGSTAB | 32 MB | - | 18 | 3 | - | - | - | 0.16s |
-| 701,896 | HACApK | 33 MB | 95% | 18 | 3 | - | - | - | 0.11s |
-
 #### N=10 (1,000 elements, 6,000 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
@@ -91,14 +83,6 @@ cube_uniform_field/
 ### 2. Hexahedral Nonlinear Benchmark (2025-12-29)
 
 **All solvers converge** for hexahedral nonlinear problems.
-
-#### N=5 (125 elements, 750 DOF)
-
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 702,131 | LU | 50 MB | - | 0 | 6 | 0.09s | - | 0.47s | 0.56s |
-| 702,114 | BiCGSTAB | 41 MB | - | 0 | 3 | 0.09s | - | 0.41s | 0.50s |
-| 702,107 | HACApK | 37 MB | 95% | 21 | 3 | 0.55s | 0.55s | 0.03s | 0.59s |
 
 #### N=10 (1,000 elements, 6,000 DOF)
 
@@ -247,7 +231,6 @@ cube_uniform_field/
 
 | N | Elements | DOF | lowrank | dense | max_rank | H-mat [MB] | Dense [MB] | Compression |
 |---|----------|-----|--------:|------:|---------:|-----------:|-----------:|------------:|
-| 5 | 125 | 750 | 26 | 158 | 46 | 4 | 4 | 95% |
 | 10 | 1,000 | 6,000 | 1,166 | 2,024 | 90 | 130 | 274 | **47%** |
 | 15 | 3,375 | 20,250 | 8,202 | 9,442 | 82 | 765 | 3,128 | **24%** |
 | 20 | 8,000 | 48,000 | 19,216 | 20,610 | 92 | 2,440 | 17,578 | **13%** |
@@ -297,7 +280,7 @@ H [A/m]     B [T]     Notes
 
 ```bash
 cd linear
-python benchmark_hexahedron.py --lu --bicgstab --hacapk 5 10 15
+python benchmark_hexahedron.py --lu --bicgstab --hacapk 10 15
 python benchmark_tetrahedron.py --lu --bicgstab --hacapk 0.20 0.15 0.10
 ```
 
@@ -305,7 +288,7 @@ python benchmark_tetrahedron.py --lu --bicgstab --hacapk 0.20 0.15 0.10
 
 ```bash
 cd nonlinear/hexahedron
-python benchmark_hex.py --lu --bicgstab --hacapk 5 10 15
+python benchmark_hex.py --lu --bicgstab --hacapk 10 15
 python benchmark_hex.py --hacapk 20
 
 cd nonlinear/tetrahedron
