@@ -16,6 +16,7 @@
 
 #include "rad_hacapk.h"
 #include "rad_interaction.h"
+#include "rad_constants.h"
 #include <cmath>
 #include <cstring>
 #include <cstdio>
@@ -29,9 +30,8 @@ extern "C" {
 
 //=========================================================================
 // Constants for 6DOF MSC field computation
+// Now using unified constants from rad_constants.h
 //=========================================================================
-static const double PI_HACAPK = 3.14159265358979323846;
-static const double INV_4PI_HACAPK = 1.0 / (4.0 * PI_HACAPK);
 
 //=========================================================================
 // Global callback state (required by HACApK C interface)
@@ -719,7 +719,7 @@ void RadHACApKManager::Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat
                           H_total[2] * row_normals[fi][2];
 
             // Store -K_ij / (4*pi) in row-major order
-            K_mat[fi * 6 + fj] = -K_ij * INV_4PI_HACAPK;
+            K_mat[fi * 6 + fj] = -K_ij * RadConst::INV_FOUR_PI;
         }
     }
 }
@@ -1026,7 +1026,7 @@ void RadHACApKManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) co
                           H_total.z * poly_row->FaceNormal[fi].z;
 
             // Store -K_ij / (4*pi) in row-major order: K_mat[row * 6 + col]
-            K_mat[fi * 6 + fj] = -K_ij * INV_4PI_HACAPK;
+            K_mat[fi * 6 + fj] = -K_ij * RadConst::INV_FOUR_PI;
         }
     }
 }
@@ -1497,17 +1497,17 @@ void RadHACApKManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat
     // Apply 1/(4*pi) factor and sign flip (system matrix uses -N)
     // N_mat[row * 3 + col] = -dH_row/dM_col / (4*pi)
     // Row 0 (Hx response): -dHx/dMx, -dHx/dMy, -dHx/dMz
-    N_mat[0] = -H_from_Mx[0] * INV_4PI_HACAPK;  // -dHx/dMx
-    N_mat[1] = -H_from_My[0] * INV_4PI_HACAPK;  // -dHx/dMy
-    N_mat[2] = -H_from_Mz[0] * INV_4PI_HACAPK;  // -dHx/dMz
+    N_mat[0] = -H_from_Mx[0] * RadConst::INV_FOUR_PI;  // -dHx/dMx
+    N_mat[1] = -H_from_My[0] * RadConst::INV_FOUR_PI;  // -dHx/dMy
+    N_mat[2] = -H_from_Mz[0] * RadConst::INV_FOUR_PI;  // -dHx/dMz
     // Row 1 (Hy response): -dHy/dMx, -dHy/dMy, -dHy/dMz
-    N_mat[3] = -H_from_Mx[1] * INV_4PI_HACAPK;  // -dHy/dMx
-    N_mat[4] = -H_from_My[1] * INV_4PI_HACAPK;  // -dHy/dMy
-    N_mat[5] = -H_from_Mz[1] * INV_4PI_HACAPK;  // -dHy/dMz
+    N_mat[3] = -H_from_Mx[1] * RadConst::INV_FOUR_PI;  // -dHy/dMx
+    N_mat[4] = -H_from_My[1] * RadConst::INV_FOUR_PI;  // -dHy/dMy
+    N_mat[5] = -H_from_Mz[1] * RadConst::INV_FOUR_PI;  // -dHy/dMz
     // Row 2 (Hz response): -dHz/dMx, -dHz/dMy, -dHz/dMz
-    N_mat[6] = -H_from_Mx[2] * INV_4PI_HACAPK;  // -dHz/dMx
-    N_mat[7] = -H_from_My[2] * INV_4PI_HACAPK;  // -dHz/dMy
-    N_mat[8] = -H_from_Mz[2] * INV_4PI_HACAPK;  // -dHz/dMz
+    N_mat[6] = -H_from_Mx[2] * RadConst::INV_FOUR_PI;  // -dHz/dMx
+    N_mat[7] = -H_from_My[2] * RadConst::INV_FOUR_PI;  // -dHz/dMy
+    N_mat[8] = -H_from_Mz[2] * RadConst::INV_FOUR_PI;  // -dHz/dMz
 }
 
 //=========================================================================
@@ -1596,9 +1596,9 @@ void RadHACApKManager::Compute3x6Block(int elem_tetra, int elem_hex, double* K_m
 
         // Store with sign flip (-K/(4*pi))
         // Row-major: K_mat[comp * 6 + face]
-        K_mat[0 * 6 + face_j] = -H_total.x * INV_4PI_HACAPK;  // Mx
-        K_mat[1 * 6 + face_j] = -H_total.y * INV_4PI_HACAPK;  // My
-        K_mat[2 * 6 + face_j] = -H_total.z * INV_4PI_HACAPK;  // Mz
+        K_mat[0 * 6 + face_j] = -H_total.x * RadConst::INV_FOUR_PI;  // Mx
+        K_mat[1 * 6 + face_j] = -H_total.y * RadConst::INV_FOUR_PI;  // My
+        K_mat[2 * 6 + face_j] = -H_total.z * RadConst::INV_FOUR_PI;  // Mz
     }
 }
 
@@ -1647,9 +1647,9 @@ void RadHACApKManager::Compute6x3Block(int elem_hex, int elem_tetra, double* K_m
 
         // Store with sign flip (-K/(4*pi))
         // Row-major: K_mat[face * 3 + comp]
-        K_mat[face_i * 3 + 0] = -K_Mx * INV_4PI_HACAPK;
-        K_mat[face_i * 3 + 1] = -K_My * INV_4PI_HACAPK;
-        K_mat[face_i * 3 + 2] = -K_Mz * INV_4PI_HACAPK;
+        K_mat[face_i * 3 + 0] = -K_Mx * RadConst::INV_FOUR_PI;
+        K_mat[face_i * 3 + 1] = -K_My * RadConst::INV_FOUR_PI;
+        K_mat[face_i * 3 + 2] = -K_Mz * RadConst::INV_FOUR_PI;
     }
 }
 

@@ -15,6 +15,7 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_application.h"
+#include "rad_constants.h"  // Unified mathematical/physical constants
 #include "rad_extruded_polygon.h"
 #include "rad_graphics_3d.h"
 #include "rad_subdivided_extruded_polygon.h"
@@ -24,6 +25,9 @@
 
 extern radTYield radYield;
 extern radTConvergRepair& radCR;
+
+// Local alias for PI constant (using unified constant from rad_constants.h)
+static const double PI = RadConst::PI;
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -156,11 +160,11 @@ radTg3dGraphPresent* radTExtrPolygon::CreateGraphPresent()
 
 //-------------------------------------------------------------------------
 
-void radTExtrPolygon::B_comp(radTField* FieldPtr) 
+void radTExtrPolygon::B_comp(radTField* FieldPtr)
 {
 	// Orientation: The prism exis parallel to X !!!
-	const double PI = 3.14159265358979;
-	const double ConstForH = 1./4./PI;
+	// Uses RadConst::INV_FOUR_PI for 1/(4*pi) factor
+	const double ConstForH = RadConst::INV_FOUR_PI;
 
 	const double Max_k = 1.E+08; // To skip segments in general field computation loop.
 
@@ -704,8 +708,8 @@ void radTExtrPolygon::B_intComp(radTField* FieldPtr)
 
 	if(FieldPtr->FieldKey.FinInt_) { B_intCompFinNum(FieldPtr); return;}
 
-	const double PI = 3.14159265358979;
-	const double ConstForH = 1./4./PI;
+	// Uses RadConst::INV_FOUR_PI for 1/(4*pi) factor
+	const double ConstForH = RadConst::INV_FOUR_PI;
 
 	const double Max_k = 1.E+08;
 
@@ -960,8 +964,8 @@ void radTExtrPolygon::B_intComp(radTField* FieldPtr)
 
 void radTExtrPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID& SpecCaseID)
 {
-	const double PI = 3.14159265358979;
-	const double ConstForH = 1./4./PI;
+	// Uses RadConst::INV_FOUR_PI for 1/(4*pi) factor
+	const double ConstForH = RadConst::INV_FOUR_PI;
 
 	const double Max_k = 1.E+08;
 

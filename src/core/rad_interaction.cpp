@@ -17,6 +17,7 @@
 #include "rad_interaction.h"
 #include "rad_subdivided_rectangle.h"
 #include "rad_polyhedron.h"  // For IsTetrahedron() check in N_self fix
+#include "rad_constants.h"   // For RadConst::INV_FOUR_PI
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -821,8 +822,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	// This is faster than slow path but handles 6x6 blocks correctly
 	if(!hasSymmetry && hasMSCElements)
 	{
-		static const double PI_MSC = 3.14159265358979323846;
-		static const double INV_4PI_MSC = 1.0 / (4.0 * PI_MSC);
+		// Use unified 1/(4*pi) constant for all MSC interactions
+		// (Following ELF convention: all matrix elements use -K_ij / (4*pi))
 
 		#pragma omp parallel for schedule(dynamic) if(AmOfMainElem > 20)
 		for(int col = 0; col < AmOfMainElem; col++)
@@ -901,7 +902,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							              H_total.y * poly_row->FaceNormal[face_i].y +
 							              H_total.z * poly_row->FaceNormal[face_i].z;
 
-							block[face_j * m_totalDOF + face_i] = -K_ij * INV_4PI_MSC;
+							block[face_j * m_totalDOF + face_i] = -K_ij * RadConst::INV_FOUR_PI;
 						}
 					}
 				}
@@ -921,9 +922,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						H_total.y = H_face.y + H_point.y;
 						H_total.z = H_face.z + H_point.z;
 
-						block[face_j * m_totalDOF + 0] = H_total.x * INV_4PI_MSC;
-						block[face_j * m_totalDOF + 1] = H_total.y * INV_4PI_MSC;
-						block[face_j * m_totalDOF + 2] = H_total.z * INV_4PI_MSC;
+						block[face_j * m_totalDOF + 0] = H_total.x * RadConst::INV_FOUR_PI;
+						block[face_j * m_totalDOF + 1] = H_total.y * RadConst::INV_FOUR_PI;
+						block[face_j * m_totalDOF + 2] = H_total.z * RadConst::INV_FOUR_PI;
 					}
 				}
 				else if(dof_row == 6 && dof_col == 3 && poly_row)
@@ -947,9 +948,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						double K_My = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
 						double K_Mz = n.x * Field.A.x + n.y * Field.A.y + n.z * Field.A.z;
 
-						block[0 * m_totalDOF + face_i] = K_Mx * INV_4PI_MSC;
-						block[1 * m_totalDOF + face_i] = K_My * INV_4PI_MSC;
-						block[2 * m_totalDOF + face_i] = K_Mz * INV_4PI_MSC;
+						block[0 * m_totalDOF + face_i] = K_Mx * RadConst::INV_FOUR_PI;
+						block[1 * m_totalDOF + face_i] = K_My * RadConst::INV_FOUR_PI;
+						block[2 * m_totalDOF + face_i] = K_Mz * RadConst::INV_FOUR_PI;
 					}
 				}
 				else
@@ -1031,10 +1032,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			{
 				// 3x6 block: Field at tetrahedron (3 DOF) center from MSC hexahedron (6 DOF)
 				// K(Mk, face_j) = H_field_k at tetra center due to unit sigma on hex face j
-				// (Following ELF_MAGIC convention: compute_K_mat_tetra_hex)
-
-				static const double PI_MSC = 3.14159265358979323846;
-				static const double INV_4PI_MSC = 1.0 / (4.0 * PI_MSC);
+				// Matrix stores: -H_field(k) / (4*pi) (following ELF convention)
 
 				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
 				if(poly_col && poly_col->Use6DOF_MSC)
@@ -1073,9 +1071,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
 						// row is component (0,1,2 = Mx,My,Mz), col is face_j
 						// Sign convention: +K/(4*pi) for tetra-hex (following ELF)
-						block[face_j * m_totalDOF + 0] = H_final.x * INV_4PI_MSC;  // (Mx, face_j)
-						block[face_j * m_totalDOF + 1] = H_final.y * INV_4PI_MSC;  // (My, face_j)
-						block[face_j * m_totalDOF + 2] = H_final.z * INV_4PI_MSC;  // (Mz, face_j)
+						block[face_j * m_totalDOF + 0] = H_final.x * RadConst::INV_FOUR_PI;  // (Mx, face_j)
+						block[face_j * m_totalDOF + 1] = H_final.y * RadConst::INV_FOUR_PI;  // (My, face_j)
+						block[face_j * m_totalDOF + 2] = H_final.z * RadConst::INV_FOUR_PI;  // (Mz, face_j)
 					}
 				}
 			}
@@ -1084,10 +1082,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				// 6x3 block: Field at MSC hexahedron (6 DOF) eval points from tetrahedron (3 DOF)
 				// K(face_i, Mj) = normal_i · N_mat(:, j) where N_mat is the demagnetization tensor
 				// from the tetrahedron source element at the evaluation point
-				// (Following ELF_MAGIC convention: compute_K_mat_hex_tetra)
-
-				static const double PI_MSC = 3.14159265358979323846;
-				static const double INV_4PI_MSC = 1.0 / (4.0 * PI_MSC);
+				// Matrix stores: -dot_val / (4*pi) (following ELF convention)
 
 				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
 				if(poly_row && poly_row->Use6DOF_MSC)
@@ -1144,9 +1139,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
 						// row is face_i (0-5), col is component (0,1,2 = Mx,My,Mz)
 						// Sign convention: +K/(4*pi) for hex-tetra (following ELF)
-						block[0 * m_totalDOF + face_i] = K_face_Mx * INV_4PI_MSC;  // (face_i, Mx)
-						block[1 * m_totalDOF + face_i] = K_face_My * INV_4PI_MSC;  // (face_i, My)
-						block[2 * m_totalDOF + face_i] = K_face_Mz * INV_4PI_MSC;  // (face_i, Mz)
+						block[0 * m_totalDOF + face_i] = K_face_Mx * RadConst::INV_FOUR_PI;  // (face_i, Mx)
+						block[1 * m_totalDOF + face_i] = K_face_My * RadConst::INV_FOUR_PI;  // (face_i, My)
+						block[2 * m_totalDOF + face_i] = K_face_Mz * RadConst::INV_FOUR_PI;  // (face_i, Mz)
 					}
 				}
 			}
@@ -1154,11 +1149,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			{
 				// 6x6 block: Field at MSC hexahedron (6 DOF) eval points from MSC hexahedron (6 DOF)
 				// K(face_i, face_j) = normal_i dot H_field(eval_pt_i, src_face_j)
-				// Field functions return values WITHOUT 4pi divisor (ELF_MAGIC convention)
-				// Matrix stores: -K_ij / (4*pi)
-
-				static const double PI_MSC = 3.14159265358979323846;
-				static const double INV_4PI_MSC = 1.0 / (4.0 * PI_MSC);
+				// Field functions return values WITHOUT 4pi divisor
+				// Matrix stores: -K_ij / (4*pi) (following ELF convention)
 
 				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
 				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
@@ -1204,7 +1196,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							}
 
 							// Store -K_ij / (4*pi) (COLUMN-MAJOR): A(i,j) at [j * stride + i]
-							block[face_j * m_totalDOF + face_i] = -K_ij * INV_4PI_MSC;
+							block[face_j * m_totalDOF + face_i] = -K_ij * RadConst::INV_FOUR_PI;
 						}
 					}
 				}

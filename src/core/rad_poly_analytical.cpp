@@ -16,6 +16,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include "rad_constants.h"  // Unified mathematical/physical constants
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -289,9 +290,8 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	// =========================================================================
 	// Rewritten to use RadAnalyticalFieldFromPolygonCharge for correctness
 	// This ensures consistency with the working standard polygon method.
+	// Uses RadConst::INV_FOUR_PI for 1/(4*pi) factor.
 	// =========================================================================
-	const double PI = 3.14159265358979323846;
-	const double ConstForH = 1.0 / (4.0 * PI);
 	const double EPS = 1.0e-15;
 
 	// Compute face edges
@@ -430,7 +430,7 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	std::vector<TVector3d> field_result(1, TVector3d(0., 0., 0.));
 
 	// Weight: sigma / (4*pi)
-	double W = ConstForH * sigma;
+	double W = RadConst::INV_FOUR_PI * sigma;
 
 	// Create 2D vertex array for the triangle
 	std::vector<TVector2d> XY = {local_V0, local_V1, local_V2};

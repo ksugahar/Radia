@@ -17,6 +17,7 @@
 #include "rad_planar_2d.h"
 #include "rad_application.h"
 #include "rad_poly_analytical.h"
+#include "rad_constants.h"  // Unified mathematical/physical constants
 
 //-------------------------------------------------------------------------
 
@@ -34,8 +35,8 @@ void radTPolygon::B_comp(radTField* FieldPtr)
 // IMPORTANT: This function computes field in LOCAL coordinates (polygon is in XY plane).
 //            The caller (B_comp_frM) is responsible for transforming to global coordinates.
 
-	const double PI = 3.14159265358979;
-	const double ConstForH = 1./4./PI;
+	const double PI = RadConst::PI;
+	const double ConstForH = RadConst::INV_FOUR_PI;
 
 	// Check for multitasking
 	if(radYield.Check()==0) return;
@@ -162,8 +163,8 @@ void radTPolygon::B_intComp(radTField* FieldPtr)
 
 	if(FieldPtr->FieldKey.FinInt_) { B_intCompFinNum(FieldPtr); return;}
 
-	const double PI = 3.14159265358979;
-	const double ConstForH = 1./4./PI;
+	const double PI = RadConst::PI;
+	const double ConstForH = RadConst::INV_FOUR_PI;
 	const double Max_k = 1.E+08; // To skip segments in general field int. computation loop.
 	const double ZeroToler = 1.E-06; // This is to switch to Special Cases
 	const double SmallestRelTolerV = 1.E-12; // Relative tolerance to repair trapping V.i to zero in general case
@@ -311,8 +312,8 @@ void radTPolygon::B_intComp(radTField* FieldPtr)
 
 void radTPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID& SpecCaseID)
 {
-	const double PI = 3.14159265358979;
-	const double ConstForH = 1./4./PI;
+	const double PI = RadConst::PI;
+	const double ConstForH = RadConst::INV_FOUR_PI;
 
 	const double Max_k = 1.E+08;
 
