@@ -183,8 +183,8 @@ cube_uniform_field/
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
 | 730,996 | LU | 7811 MB | - | 0 | 39 | 168s | - | 1382s | 1572s |
-| 731,003 | BiCGSTAB | 90 MB | - | 217 | 41 | - | - | 507s | 875s |
-| 731,054 | HACApK | 1575 MB | **34%** | 205 | 38 | 7.1s | 7.1s | 12.5s | 20.2s |
+| 731,003 | BiCGSTAB | 4373 MB | - | 0 | 41 | 219s | - | 42s | 263s |
+| 731,055 | HACApK | 1576 MB | **35%** | 204 | 38 | 0.25s | 9.7s | 13.3s | 23.4s |
 
 ---
 
@@ -217,8 +217,8 @@ cube_uniform_field/
 ### Tetrahedral Elements (Nonlinear)
 
 1. **All solvers converge**: LU, BiCGSTAB, HACApK all work
-2. **HACApK is fastest at large scale**: 90x faster than LU at maxh=0.10 (20.2s vs 1823s)
-3. **HACApK is 43x faster than BiCGSTAB**: 20.2s vs 875s at maxh=0.10
+2. **HACApK is fastest at large scale**: 67x faster than LU at maxh=0.10 (23.4s vs 1572s)
+3. **HACApK is 11x faster than BiCGSTAB**: 23.4s vs 263s at maxh=0.10
 4. **M_avg_z consistent**: ~731,000 A/m across all solvers
 
 ### Solver Recommendations
@@ -235,7 +235,7 @@ cube_uniform_field/
 | Tetrahedral | Linear | DOF > 15,000 | **HACApK** (7.6x faster) |
 | Tetrahedral | Nonlinear | DOF < 2,000 | Any solver |
 | Tetrahedral | Nonlinear | DOF 2,000-10,000 | HACApK |
-| Tetrahedral | Nonlinear | DOF > 10,000 | **HACApK** (90x faster) |
+| Tetrahedral | Nonlinear | DOF > 10,000 | **HACApK** (67x faster) |
 
 ---
 
