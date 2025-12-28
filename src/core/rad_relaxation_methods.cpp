@@ -571,9 +571,8 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 {
 	if(IntrctPtr == nullptr) return 0;
 
-	// Use unified VariableDOF solver for both 3DOF (tetra) and 6DOF (hex)
-	// This ensures consistent nonlinear iteration behavior
-	return AutoRelax_VariableDOF(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+	// Use unified nonlinear iteration with LU linear solve
+	return AutoRelax_Unified(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 }
 
 //=========================================================================
@@ -835,8 +834,8 @@ int radTRelaxationMethNo_1::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 {
 	if(IntrctPtr == nullptr) return 0;
 
-	// Use unified VariableDOF solver for both 3DOF (tetra) and 6DOF (hex)
-	return AutoRelax_VariableDOF(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+	// Use unified nonlinear iteration with BiCGSTAB linear solve
+	return AutoRelax_Unified(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 }
 
 //=========================================================================
