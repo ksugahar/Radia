@@ -412,13 +412,20 @@ inline int radTApplication::DeleteElement(int ElemKey)
 	radTmhg::iterator iter = GlobalMapOfHandlers.find(ElemKey);
 	if(iter == GlobalMapOfHandlers.end())
 	{
-		if(SendingIsRequired) Send.ErrorMessage("Radia::Error002"); 
+		if(SendingIsRequired) Send.ErrorMessage("Radia::Error002");
 		return 0;
 	}
 	GlobalMapOfHandlers.erase(iter);
 
 	radTMapOfDrawAttr::iterator iterDrawAttr = MapOfDrawAttr.find(ElemKey);
 	if(iterDrawAttr != MapOfDrawAttr.end()) MapOfDrawAttr.erase(iterDrawAttr);
+
+	// Invalidate solve cache if the deleted element is the cached geometry or interaction
+	if(ElemKey == m_cached_obj_key || ElemKey == m_cached_interact_key)
+	{
+		m_cached_interact_key = 0;
+		m_cached_obj_key = 0;
+	}
 
 	if(SendingIsRequired) Send.Int(0);
 	return 1;
