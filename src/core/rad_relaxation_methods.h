@@ -226,9 +226,6 @@ public:
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 
-	// Variable DOF version for hybrid MSC + standard element analysis
-	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
-
 protected:
 	// Override: LU direct solver for linear step
 	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
@@ -272,9 +269,6 @@ public:
 	~radTRelaxationMethNo_1() {}
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
-
-	// Variable DOF version for hybrid MSC + standard element analysis
-	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 
 protected:
 	// Override: BiCGSTAB iterative solver for linear step
