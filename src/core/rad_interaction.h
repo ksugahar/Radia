@@ -132,6 +132,13 @@ class radTInteraction : public radTg {
 	friend class radTHMatrixACA;    // Allow H-matrix to access interaction data
 	friend class RadHACApKManager;  // Allow HACApK manager to access interaction data
 
+	// Allow unified nonlinear iteration helpers to access interaction data
+	friend bool InitializeNonlinearContext(struct NonlinearContext&, radTInteraction*, bool);
+	friend void BuildBaseMatrix(struct NonlinearContext&, radTInteraction*);
+	friend void StoreOldValuesAndComputeBnorm(struct NonlinearContext&, radTInteraction*);
+	friend void UpdateMagnAndComputeH(struct NonlinearContext&, radTInteraction*);
+	friend double UpdateChiAndCheckConvergence(struct NonlinearContext&, radTInteraction*);
+
 	int AmOfMainElem;
 	int AmOfExtElem;
 	radThg SourceHandle;

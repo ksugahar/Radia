@@ -89,6 +89,9 @@ struct NonlinearContext {
 	// Under-relaxation parameter (0 = full step, 0.5 = 50% damping)
 	double relax_param;
 
+	// Base matrix for linear system (geometric part without chi)
+	std::vector<double> BaseMatrix;
+
 	// Constructor
 	NonlinearContext()
 		: totalDOF(0)
@@ -102,6 +105,60 @@ struct NonlinearContext {
 		, relax_param(0.0)
 	{}
 };
+
+//-------------------------------------------------------------------------
+// Helper functions for unified nonlinear iteration
+// These functions encapsulate common logic shared across LU/BiCGSTAB/HACApK
+//-------------------------------------------------------------------------
+
+/**
+ * Initialize NonlinearContext with problem dimensions, arrays, and initial chi.
+ * Called once at the start of AutoRelax.
+ *
+ * @param ctx Output context to initialize
+ * @param IntrctPtr Interaction data (provides geometry, materials, arrays)
+ * @param MagnResetIsNotNeeded If false, reset magnetization before solving
+ * @return true if initialization successful, false if problem is empty/invalid
+ */
+bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPtr, bool MagnResetIsNotNeeded);
+
+/**
+ * Build base matrix with correct sign convention for MMM/MSC elements.
+ * MMM (3DOF): negate interaction matrix (stores N, need -N)
+ * MSC (6DOF): use as-is (stores -K/(4pi))
+ *
+ * @param ctx Context with BaseMatrix to fill
+ * @param IntrctPtr Interaction data
+ */
+void BuildBaseMatrix(NonlinearContext& ctx, radTInteraction* IntrctPtr);
+
+/**
+ * Store old values (M, chi, B-norm) before linear solve for convergence check.
+ * Called at the start of each nonlinear iteration.
+ *
+ * @param ctx Context with OldMagn, OldChi, OldBnorm to update
+ * @param IntrctPtr Interaction data
+ */
+void StoreOldValuesAndComputeBnorm(NonlinearContext& ctx, radTInteraction* IntrctPtr);
+
+/**
+ * Update element magnetization from flat array and compute H = M/chi.
+ * Called after linear solve to sync element state.
+ *
+ * @param ctx Context with FlatMagn (solution)
+ * @param IntrctPtr Interaction data
+ */
+void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr);
+
+/**
+ * Update chi using ELF-style dual method and check convergence.
+ * Returns max relative B-field change (ELF mucal2 criterion).
+ *
+ * @param ctx Context with CurrentChiArray to update
+ * @param IntrctPtr Interaction data
+ * @return Maximum relative B-field change across all elements
+ */
+double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* IntrctPtr);
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------

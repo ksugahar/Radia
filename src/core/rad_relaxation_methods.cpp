@@ -123,6 +123,384 @@ void radTIterativeRelaxMeth::MakeN_iter(int IterNum)
 //-------------------------------------------------------------------------
 
 //=========================================================================
+// Unified Nonlinear Iteration Helper Functions
+// These functions encapsulate the common logic shared across all solvers
+//=========================================================================
+
+bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPtr, bool MagnResetIsNotNeeded)
+{
+	if(IntrctPtr == nullptr) return false;
+
+	// Reset if needed
+	if(!MagnResetIsNotNeeded)
+	{
+		IntrctPtr->ResetM();
+		IntrctPtr->ResetAuxParam();
+	}
+
+	ctx.AmOfMainElem = IntrctPtr->AmOfMainElem;
+	if(ctx.AmOfMainElem <= 0) return false;
+
+	ctx.totalDOF = IntrctPtr->GetTotalDOF();
+	if(ctx.totalDOF <= 0) return false;
+
+	// Get flat arrays (owned by IntrctPtr)
+	ctx.FlatMagn = IntrctPtr->GetFlatMagnArray();
+	ctx.FlatField = IntrctPtr->GetFlatFieldArray();
+	ctx.FlatExtern = IntrctPtr->GetFlatExternFieldArray();
+
+	if(ctx.FlatMagn == nullptr || ctx.FlatField == nullptr || ctx.FlatExtern == nullptr)
+		return false;
+
+	// Allocate state vectors
+	ctx.OldMagn.resize(ctx.totalDOF);
+	ctx.OldChi.resize(ctx.AmOfMainElem, 0.0);
+	ctx.OldBnorm.resize(ctx.AmOfMainElem, 0.0);
+	ctx.CurrentChiArray.resize(ctx.AmOfMainElem, 1.0);
+	ctx.NewFieldArray.resize(ctx.totalDOF);
+	ctx.polyCache.resize(ctx.AmOfMainElem, nullptr);
+
+	// Initialize flags
+	ctx.all_materials_linear = true;
+	ctx.relax_param = rad.m_relax;
+
+	// Cache polyhedron pointers
+	for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
+	{
+		ctx.polyCache[elem] = dynamic_cast<radTPolyhedron*>(IntrctPtr->g3dRelaxPtrVect[elem]);
+	}
+
+	// Initialize chi and H field (ELF mucal0 style)
+	const double H_init_mag = 100.0;
+	for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+		// Get initial chi (ELF style - from BH curve 2nd point)
+		double chi_init = 1.0;
+		radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
+		if(NonlinMater != nullptr)
+		{
+			chi_init = NonlinMater->GetInitialChi_ELF_Style();
+			if(chi_init <= 0) chi_init = 1.0;
+			ctx.all_materials_linear = false;
+			ctx.B_sat = NonlinMater->GetBsaturation();
+			if(ctx.B_sat < 1.0e-10) ctx.B_sat = 1.0;
+		}
+		else
+		{
+			// Linear material: use DefineInstantKsiTensor
+			TVector3d H_est(0., 0., H_init_mag);
+			TMatrix3d KsiTensor;
+			TVector3d MrVect;
+			MaterPtr->DefineInstantKsiTensor(H_est, KsiTensor, MrVect);
+			chi_init = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+			if(chi_init < 1.0e-6) chi_init = 1.0e-6;
+		}
+		ctx.CurrentChiArray[elem] = chi_init;
+
+		// Store in poly->CurrentChi for 6DOF elements
+		if(dof == 6)
+		{
+			radTPolyhedron* poly = ctx.polyCache[elem];
+			if(poly && poly->Use6DOF_MSC)
+			{
+				poly->CurrentChi = chi_init;
+			}
+		}
+
+		// Initialize H field
+		if(dof == 3)
+		{
+			double H_ext_mag = 0.0;
+			for(int k = 0; k < 3; k++)
+			{
+				H_ext_mag += ctx.FlatExtern[offset + k] * ctx.FlatExtern[offset + k];
+			}
+			H_ext_mag = std::sqrt(H_ext_mag);
+			double scale = (H_ext_mag > 1.0e-10) ? std::min(1.0, H_init_mag / H_ext_mag) : 1.0;
+			for(int k = 0; k < 3; k++)
+			{
+				ctx.FlatField[offset + k] = ctx.FlatExtern[offset + k] * scale;
+			}
+		}
+		else if(dof == 6)
+		{
+			for(int k = 0; k < dof; k++)
+			{
+				ctx.FlatField[offset + k] = ctx.FlatExtern[offset + k];
+			}
+			if(IntrctPtr->NewFieldArray != nullptr)
+			{
+				IntrctPtr->NewFieldArray[elem].x = 0.0;
+				IntrctPtr->NewFieldArray[elem].y = 0.0;
+				IntrctPtr->NewFieldArray[elem].z = H_init_mag;
+			}
+		}
+		else
+		{
+			for(int k = 0; k < dof; k++)
+			{
+				ctx.FlatField[offset + k] = ctx.FlatExtern[offset + k];
+			}
+		}
+	}
+
+	return true;
+}
+
+//-------------------------------------------------------------------------
+
+void BuildBaseMatrix(NonlinearContext& ctx, radTInteraction* IntrctPtr)
+{
+	double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
+	if(FlatInteract == nullptr) return;
+
+	ctx.BaseMatrix.resize(ctx.totalDOF * ctx.totalDOF);
+
+	// Copy interaction matrix
+	std::memcpy(ctx.BaseMatrix.data(), FlatInteract, ctx.totalDOF * ctx.totalDOF * sizeof(double));
+
+	// Sign convention:
+	// MMM (3DOF): FlatInteract stores N, need -N -> negate
+	// MSC (6DOF): FlatInteract stores -K/(4pi) -> use as-is
+	for(int row_elem = 0; row_elem < ctx.AmOfMainElem; row_elem++)
+	{
+		int dof_row = IntrctPtr->GetElementDOF(row_elem);
+		int offset_row = IntrctPtr->GetElementDOFOffset(row_elem);
+
+		for(int col_elem = 0; col_elem < ctx.AmOfMainElem; col_elem++)
+		{
+			int dof_col = IntrctPtr->GetElementDOF(col_elem);
+			int offset_col = IntrctPtr->GetElementDOFOffset(col_elem);
+
+			// Negate blocks involving 3DOF (MMM) elements
+			if(dof_row == 3 || dof_col == 3)
+			{
+				for(int i = 0; i < dof_row; i++)
+				{
+					for(int j = 0; j < dof_col; j++)
+					{
+						// Column-major: (row, col) = [col * totalDOF + row]
+						int idx = (offset_col + j) * ctx.totalDOF + (offset_row + i);
+						ctx.BaseMatrix[idx] = -ctx.BaseMatrix[idx];
+					}
+				}
+			}
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+
+void StoreOldValuesAndComputeBnorm(NonlinearContext& ctx, radTInteraction* IntrctPtr)
+{
+	const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+
+	// Store old magnetization
+	for(int i = 0; i < ctx.totalDOF; i++)
+	{
+		ctx.OldMagn[i] = ctx.FlatMagn[i];
+	}
+
+	// Store old chi and B-norm for each element
+	for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+		if(dof == 3)
+		{
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+			TVector3d M = g3dRelaxPtr->Magn;
+			TVector3d H(ctx.FlatField[offset], ctx.FlatField[offset+1], ctx.FlatField[offset+2]);
+			TVector3d B(MU_0 * (H.x + M.x), MU_0 * (H.y + M.y), MU_0 * (H.z + M.z));
+			ctx.OldBnorm[elem] = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
+		}
+		else if(dof == 6)
+		{
+			radTPolyhedron* poly = ctx.polyCache[elem];
+			if(poly && poly->Use6DOF_MSC)
+			{
+				ctx.OldChi[elem] = poly->CurrentChi;
+				TVector3d M = poly->Magn;
+				double chi = poly->CurrentChi;
+				if(chi < 1.0e-6) chi = 1.0e-6;
+				TVector3d H(M.x / chi, M.y / chi, M.z / chi);
+				TVector3d B(MU_0 * (H.x + M.x), MU_0 * (H.y + M.y), MU_0 * (H.z + M.z));
+				ctx.OldBnorm[elem] = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
+			}
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+
+void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr)
+{
+	for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+		if(dof == 3)
+		{
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+			g3dRelaxPtr->Magn.x = ctx.FlatMagn[offset + 0];
+			g3dRelaxPtr->Magn.y = ctx.FlatMagn[offset + 1];
+			g3dRelaxPtr->Magn.z = ctx.FlatMagn[offset + 2];
+
+			// H = M / chi
+			double chi = ctx.CurrentChiArray[elem];
+			if(chi < 1.0e-6) chi = 1.0e-6;
+			for(int k = 0; k < 3; k++)
+			{
+				ctx.FlatField[offset + k] = ctx.FlatMagn[offset + k] / chi;
+			}
+		}
+		else if(dof == 6)
+		{
+			radTPolyhedron* poly = ctx.polyCache[elem];
+			if(poly && poly->Use6DOF_MSC)
+			{
+				// Store sigma values
+				for(int k = 0; k < 6; k++)
+				{
+					poly->Sigma[k] = ctx.FlatMagn[offset + k];
+				}
+
+				// Compute effective magnetization from sigma
+				double Mx = 0.0, My = 0.0, Mz = 0.0;
+				double wx = 0.0, wy = 0.0, wz = 0.0;
+				for(int face = 0; face < 6; face++)
+				{
+					double sigma = poly->Sigma[face];
+					TVector3d& n = poly->FaceNormal[face];
+					Mx += sigma * n.x;
+					My += sigma * n.y;
+					Mz += sigma * n.z;
+					wx += n.x * n.x;
+					wy += n.y * n.y;
+					wz += n.z * n.z;
+				}
+				if(wx > 1.0e-10) poly->Magn.x = Mx / wx;
+				if(wy > 1.0e-10) poly->Magn.y = My / wy;
+				if(wz > 1.0e-10) poly->Magn.z = Mz / wz;
+
+				// H = M / chi
+				if(IntrctPtr->NewFieldArray != nullptr)
+				{
+					double chi_used = poly->CurrentChi;
+					if(chi_used < 1.0e-6) chi_used = 1.0e-6;
+					IntrctPtr->NewFieldArray[elem].x = poly->Magn.x / chi_used;
+					IntrctPtr->NewFieldArray[elem].y = poly->Magn.y / chi_used;
+					IntrctPtr->NewFieldArray[elem].z = poly->Magn.z / chi_used;
+				}
+			}
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+
+double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* IntrctPtr)
+{
+	const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+	double max_B_rel_change = 0.0;
+
+	for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+		radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
+
+		double chi_matrix = ctx.CurrentChiArray[elem];
+		double mu_old = chi_matrix + 1.0;
+		double chi_new;
+
+		if(dof == 3)
+		{
+			TVector3d H_new(ctx.FlatField[offset], ctx.FlatField[offset+1], ctx.FlatField[offset+2]);
+			double H_mag = std::sqrt(H_new.x*H_new.x + H_new.y*H_new.y + H_new.z*H_new.z);
+
+			if(NonlinMater != nullptr)
+			{
+				chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, ctx.relax_param);
+			}
+			else
+			{
+				chi_new = chi_matrix;  // Linear: keep constant
+			}
+			ctx.CurrentChiArray[elem] = chi_new;
+
+			// B-field convergence
+			TVector3d M_new = g3dRelaxPtr->Magn;
+			TVector3d B_new(MU_0 * (H_new.x + M_new.x), MU_0 * (H_new.y + M_new.y), MU_0 * (H_new.z + M_new.z));
+			double B_new_norm = std::sqrt(B_new.x*B_new.x + B_new.y*B_new.y + B_new.z*B_new.z);
+
+			double B_sat = ctx.B_sat;
+			if(NonlinMater != nullptr)
+			{
+				B_sat = NonlinMater->GetBsaturation();
+				if(B_sat < 1.0e-10) B_sat = 1.0;
+			}
+
+			double B_rel_change = std::fabs(B_new_norm - ctx.OldBnorm[elem]) / B_sat;
+			if(B_rel_change > max_B_rel_change)
+				max_B_rel_change = B_rel_change;
+		}
+		else if(dof == 6)
+		{
+			radTPolyhedron* poly = ctx.polyCache[elem];
+			if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
+			{
+				TVector3d H_new = IntrctPtr->NewFieldArray[elem];
+				double H_mag = std::sqrt(H_new.x*H_new.x + H_new.y*H_new.y + H_new.z*H_new.z);
+
+				if(NonlinMater != nullptr)
+				{
+					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, ctx.relax_param);
+				}
+				else
+				{
+					chi_new = chi_matrix;
+				}
+				poly->CurrentChi = chi_new;
+				ctx.CurrentChiArray[elem] = chi_new;
+
+				// B-field convergence
+				TVector3d M_new = poly->Magn;
+				double chi_for_B = chi_new;
+				if(chi_for_B < 1.0e-6) chi_for_B = 1.0e-6;
+				TVector3d H_for_B(M_new.x / chi_for_B, M_new.y / chi_for_B, M_new.z / chi_for_B);
+				TVector3d B_new(MU_0 * (H_for_B.x + M_new.x), MU_0 * (H_for_B.y + M_new.y), MU_0 * (H_for_B.z + M_new.z));
+				double B_new_norm = std::sqrt(B_new.x*B_new.x + B_new.y*B_new.y + B_new.z*B_new.z);
+
+				double B_sat = ctx.B_sat;
+				if(NonlinMater != nullptr)
+				{
+					B_sat = NonlinMater->GetBsaturation();
+					if(B_sat < 1.0e-10) B_sat = 1.0;
+				}
+
+				double B_rel_change = std::fabs(B_new_norm - ctx.OldBnorm[elem]) / B_sat;
+				if(B_rel_change > max_B_rel_change)
+					max_B_rel_change = B_rel_change;
+			}
+		}
+	}
+
+	ctx.max_B_rel_change = max_B_rel_change;
+	return max_B_rel_change;
+}
+
+//=========================================================================
 // Method 0: LU Direct Solver (Entry Point)
 //=========================================================================
 
