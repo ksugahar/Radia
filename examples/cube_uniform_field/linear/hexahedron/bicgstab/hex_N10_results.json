@@ -7,21 +7,21 @@
   "H_ext": 200000.0,
   "mu_r": 1000,
   "chi": 999,
-  "t_mesh": 0.031029701232910156,
-  "t_solve": 3.744999885559082,
+  "t_mesh": 0.04347085952758789,
+  "t_solve": 3.7896227836608887,
   "solver_method": 1,
   "solver_name": "bicgstab",
   "converged": true,
   "iterations": 1,
-  "linear_iterations": 10,
+  "linear_iterations": 0,
   "M_avg_z": 716109.923600153,
   "M_analytical_z": 598203.5928143712,
   "error_percent": 19.710067308534086,
-  "peak_memory_mb": 346.75390625,
+  "peak_memory_mb": 621.4296875,
   "timing": {
-    "t_matrix_build": 3.5107228000000004,
+    "t_matrix_build": 3.3833181000000003,
     "t_lu_decomp": 0.0,
     "t_hmatrix_build": 0.0,
-    "t_linear_solve": 0.2327873
+    "t_linear_solve": 0.33798520000000004
   }
 }

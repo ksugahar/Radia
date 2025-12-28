@@ -60,85 +60,131 @@ Where N_demag = 1/3 for a cube.
 
 ## Benchmark Results
 
-### 1. Hexahedral Linear Benchmark (2025-12-28)
+### 1. Hexahedral Linear Benchmark (2025-12-29)
 
 **M_analytical = 598,204 A/m** (mu_r = 1000, N_demag = 1/3)
 
+#### N=5 (125 elements, 750 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
+| 701,899 | LU | 50 MB | - | 0 | 1 | 0.09s | - | 0.07s | 0.17s |
+| 701,903 | BiCGSTAB | 32 MB | - | 18 | 3 | - | - | - | 0.16s |
+| 701,896 | HACApK | 33 MB | 95% | 18 | 3 | - | - | - | 0.11s |
+
 #### N=10 (1,000 elements, 6,000 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 716,184 | LU | 1193 MB | - | 0 | 1 | 3.46s | - | 1.88s | 5.6s |
-| 716,110 | BiCGSTAB | 347 MB | - | 10 | 1 | 3.46s | - | 0.41s | 3.9s |
-| 716,192 | HACApK | 210 MB | **47%** | 11 | 1 | 0.01s | 5.43s | 0.28s | 5.7s |
+| 716,183 | LU | 1192 MB | - | 0 | 1 | 3.4s | - | 1.2s | 4.7s |
+| 716,109 | BiCGSTAB | 621 MB | - | 0 | 1 | 3.4s | - | 0.34s | 3.8s |
+| 716,191 | HACApK | 210 MB | **47%** | 11 | 1 | 0.01s | 5.4s | 0.18s | 5.6s |
 
 #### N=15 (3,375 elements, 20,250 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 720,157 | LU | 13029 MB | - | 0 | 2 | 38.5s | - | 52.7s | 93.8s |
-| 720,159 | BiCGSTAB | 3574 MB | - | 11 | 2 | 37.9s | - | 3.2s | 41.1s |
-| 720,196 | HACApK | 1244 MB | **24%** | 12 | 2 | 0.11s | 35.4s | 1.3s | 36.9s |
+| 720,156 | LU | 13029 MB | - | 0 | 1 | 37.4s | - | 25.0s | 64.3s |
+| 720,158 | BiCGSTAB | 6703 MB | - | 0 | 1 | 37.5s | - | 2.7s | 40.9s |
+| 720,196 | HACApK | 1244 MB | **24%** | 10 | 1 | 0.11s | 33.9s | 0.85s | 35.0s |
+
+#### N=20 (8,000 elements, 48,000 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
+| 722,035 | HACApK | 4809 MB | **13%** | 22 | 1 | 0.60s | 118s | 4.4s | 123s |
 
 ---
 
-### 2. Hexahedral Nonlinear Benchmark (2025-12-27)
+### 2. Hexahedral Nonlinear Benchmark (2025-12-29)
 
 **All solvers converge** for hexahedral nonlinear problems.
+
+#### N=5 (125 elements, 750 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
+| 702,131 | LU | 50 MB | - | 0 | 6 | 0.09s | - | 0.47s | 0.56s |
+| 702,114 | BiCGSTAB | 41 MB | - | 0 | 3 | 0.09s | - | 0.41s | 0.50s |
+| 702,107 | HACApK | 37 MB | 95% | 21 | 3 | 0.55s | 0.55s | 0.03s | 0.59s |
 
 #### N=10 (1,000 elements, 6,000 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 716,281 | LU | 60 MB | - | 0 | 13 | 0 | - | 9.19s | 18.1s |
-| 716,318 | BiCGSTAB | 38 MB | - | 41 | 5 | 0 | - | 4.83s | 13.2s |
-| 716,362 | HACApK | 211 MB | **48%** | 31 | 4 | 4.02s | 4.02s | 0.57s | 4.59s |
+| 716,281 | LU | 1193 MB | - | 0 | 13 | 3.4s | - | 9.7s | 14.1s |
+| 716,307 | BiCGSTAB | 621 MB | - | 0 | 6 | 3.4s | - | 0.99s | 4.4s |
+| 716,362 | HACApK | 210 MB | **47%** | 31 | 4 | 0.01s | 5.5s | 0.61s | 6.1s |
 
 #### N=15 (3,375 elements, 20,250 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 719,832 | LU | 124 MB | - | 0 | 35 | 0 | - | 991s | 1098s |
-| 719,875 | BiCGSTAB | 53 MB | - | 87 | 29 | 0 | - | 279s | 372s |
-| 719,916 | HACApK | 1246 MB | **25%** | 84 | 28 | 26.1s | 26.1s | 12.1s | 38.3s |
+| 719,832 | LU | 13030 MB | - | 0 | 35 | 37.5s | - | 870s | 943s |
+| 719,888 | BiCGSTAB | 6704 MB | - | 0 | 28 | 37.4s | - | 21.5s | 59.6s |
+| 719,906 | HACApK | 1244 MB | **24%** | 90 | 30 | 0.11s | 34.0s | 14.1s | 48.3s |
 
 #### N=20 (8,000 elements, 48,000 DOF) - HACApK only
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 721,323 | HACApK | 4798 MB | **14%** | 110 | 30 | 87.8s | 87.8s | 40.7s | 128s |
+| 721,344 | HACApK | 4813 MB | **13%** | 129 | 33 | 0.59s | 118s | 45.2s | 164s |
 
 ---
 
-### 3. Tetrahedral Linear Benchmark (2025-12-28)
+### 3. Tetrahedral Linear Benchmark (2025-12-29)
+
+**M_analytical = 598,204 A/m** (mu_r = 1000, N_demag = 1/3)
+
+#### maxh=0.30m (200 elements, 600 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
+| 751,152 | LU | 66 MB | - | 0 | 2 | - | - | 0.22s | 1.9s |
+| 751,162 | BiCGSTAB | 65 MB | - | 45 | 3 | - | - | 0.17s | 0.81s |
+| 751,188 | HACApK | 65 MB | **0%** | 30 | 3 | 7ms | 7ms | 2ms | 0.95s |
+
+#### maxh=0.25m (390 elements, 1,170 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
+| 765,436 | LU | 116 MB | - | 0 | 2 | 3.3s | - | 0.26s | 3.6s |
+| 765,443 | BiCGSTAB | 65 MB | - | 29 | 4 | - | - | 0.22s | 2.6s |
+| 765,453 | HACApK | 68 MB | **1%** | 29 | 4 | 0.16s | 0.16s | 0.01s | 3.2s |
 
 #### maxh=0.20m (627 elements, 1,881 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 816,133 | LU | 194 MB | - | 0 | 1 | 2.70s | - | 0.21s | 2.96s |
-| 816,080 | BiCGSTAB | 108 MB | - | 29 | 1 | 2.71s | - | 0.08s | 2.79s |
-| 816,190 | HACApK | 106 MB | **83%** | 29 | 1 | 0.004s | 0.26s | 0.05s | 0.32s |
+| 816,133 | LU | 193 MB | - | 0 | 1 | 2.6s | - | 0.31s | 2.9s |
+| 816,080 | BiCGSTAB | 134 MB | - | 0 | 1 | 2.5s | - | 0.23s | 2.8s |
+| 816,189 | HACApK | 105 MB | 82% | 29 | 1 | 8ms | 0.28s | 0.05s | 0.34s |
 
 #### maxh=0.15m (2,211 elements, 6,633 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 748,693 | LU | 1601 MB | - | 0 | 1 | 3.01s | - | 6.96s | 10.1s |
-| 748,677 | BiCGSTAB | 580 MB | - | 31 | 1 | 3.05s | - | 1.16s | 4.2s |
-| 748,713 | HACApK | 436 MB | **83%** | 31 | 1 | 0.004s | 2.70s | 0.75s | 3.5s |
+| 748,692 | LU | 1601 MB | - | 0 | 1 | 23.8s | - | 3.4s | 27.5s |
+| 748,682 | BiCGSTAB | 915 MB | - | 0 | 1 | 50.9s | - | 1.0s | 52.2s |
+| 748,718 | HACApK | 435 MB | 53% | 25 | 1 | 0.05s | 2.7s | 0.38s | 3.1s |
 
 #### maxh=0.10m (4,994 elements, 14,982 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 754,617 | LU | 7810 MB | - | 0 | 1 | 15.6s | - | 73.0s | 90.7s |
-| 754,466 | BiCGSTAB | 2659 MB | - | 37 | 1 | 15.1s | - | 6.44s | 22.4s |
-| 754,618 | HACApK | 1573 MB | **67%** | 36 | 1 | 0.01s | 9.43s | 2.39s | 11.9s |
+| 754,617 | LU | 7810 MB | - | 0 | 1 | 170s | - | 35.3s | 209s |
+| 754,393 | BiCGSTAB | 4371 MB | - | 0 | 1 | 122s | - | 5.0s | 130s |
+| 754,533 | HACApK | 1573 MB | **34%** | 29 | 1 | 0.23s | 9.3s | 1.4s | 11.0s |
+
+#### maxh=0.07m (15,116 elements, 45,348 DOF)
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
+| 739,990 | HACApK | 10803 MB | **17%** | 26 | 1 | 2.1s | 46.4s | 5.4s | 54.5s |
 
 ---
 
-### 4. Tetrahedral Nonlinear Benchmark (2025-12-27)
+### 4. Tetrahedral Nonlinear Benchmark (2025-12-29)
 
 **All solvers converge** for tetrahedral nonlinear problems.
 
@@ -146,41 +192,41 @@ Where N_demag = 1/3 for a cube.
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 726,577 | LU | 66 MB | - | 0 | 14 | 0 | - | 0.052s | 1.89s |
-| 726,721 | BiCGSTAB | 66 MB | - | 171 | 12 | 0 | - | 0.063s | 0.62s |
-| 726,810 | HACApK | 70 MB | 104% | 105 | 9 | 0.20s | 0.20s | 0.04s | 0.24s |
+| 726,576 | LU | 66 MB | - | 0 | 14 | - | - | 0.05s | 1.9s |
+| 726,721 | BiCGSTAB | 65 MB | - | 171 | 12 | - | - | 0.06s | 0.62s |
+| 726,810 | HACApK | 69 MB | 103% | 105 | 9 | 0.20s | 0.20s | 0.04s | 0.24s |
 
 #### maxh=0.25m (390 elements, 1,170 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 727,050 | LU | 69 MB | - | 0 | 15 | 0 | - | 0.081s | 2.58s |
-| 727,454 | BiCGSTAB | 66 MB | - | 93 | 7 | 0 | - | 0.131s | 2.43s |
-| 727,463 | HACApK | 83 MB | 98% | 95 | 7 | 0.07s | 0.07s | 0.07s | 0.15s |
+| 727,049 | LU | 116 MB | - | 0 | 15 | - | - | 0.58s | 2.8s |
+| 727,454 | BiCGSTAB | 81 MB | - | 93 | 7 | - | - | 0.37s | 2.6s |
+| 727,462 | HACApK | 83 MB | 98% | 95 | 7 | 0.07s | 0.07s | 0.07s | 0.15s |
 
 #### maxh=0.20m (627 elements, 1,881 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 748,822 | LU | 72 MB | - | 0 | 20 | 0 | - | 0.169s | 7.81s |
-| 748,869 | BiCGSTAB | 68 MB | - | 118 | 14 | 0 | - | 0.346s | 6.70s |
-| 748,858 | HACApK | 106 MB | 83% | 128 | 17 | 0.19s | 0.19s | 0.33s | 0.53s |
+| 748,822 | LU | 193 MB | - | 0 | 20 | 2.6s | - | 2.0s | 4.7s |
+| 748,869 | BiCGSTAB | 134 MB | - | 0 | 14 | 2.9s | - | 0.51s | 3.4s |
+| 748,858 | HACApK | 106 MB | 82% | 128 | 17 | 0.19s | 0.19s | 0.32s | 0.52s |
 
 #### maxh=0.15m (2,211 elements, 6,633 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 730,715 | LU | 91 MB | - | 0 | 29 | 0 | - | 5.66s | 174.5s |
-| 730,591 | BiCGSTAB | 77 MB | - | 134 | 36 | 0 | - | 2.10s | 101.5s |
-| 730,616 | HACApK | 438 MB | **54%** | 134 | 36 | 1.97s | 1.97s | 3.08s | 5.17s |
+| 730,715 | LU | 1602 MB | - | 0 | 29 | 48.0s | - | 92.7s | 144s |
+| 730,759 | BiCGSTAB | 916 MB | - | 0 | 21 | 33.6s | - | 4.5s | 38.4s |
+| 730,615 | HACApK | 438 MB | 53% | 134 | 36 | 2.0s | 2.0s | 3.1s | 5.2s |
 
 #### maxh=0.10m (4,994 elements, 14,982 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 730,996 | LU | 104 MB | - | 0 | 39 | 0 | - | 1435s | 1823s |
-| 731,003 | BiCGSTAB | 90 MB | - | 217 | 41 | 0 | - | 507s | 875s |
-| 731,054 | HACApK | 1575 MB | **35%** | 205 | 38 | 7.08s | 7.08s | 12.5s | 20.2s |
+| 730,996 | LU | 7811 MB | - | 0 | 39 | 168s | - | 1382s | 1572s |
+| 731,003 | BiCGSTAB | 90 MB | - | 217 | 41 | - | - | 507s | 875s |
+| 731,054 | HACApK | 1575 MB | **34%** | 205 | 38 | 7.1s | 7.1s | 12.5s | 20.2s |
 
 ---
 
@@ -235,7 +281,7 @@ Where N_demag = 1/3 for a cube.
 
 ---
 
-## H-matrix Statistics Summary (2025-12-28 Updated)
+## H-matrix Statistics Summary (2025-12-29 Updated)
 
 **Note**: Compression ratio = H-matrix memory / Dense memory. Lower is better.
 
@@ -243,17 +289,21 @@ Where N_demag = 1/3 for a cube.
 
 | N | Elements | DOF | lowrank | dense | max_rank | H-mat [MB] | Dense [MB] | Compression |
 |---|----------|-----|--------:|------:|---------:|-----------:|-----------:|------------:|
-| 10 | 1,000 | 6,000 | 1,166 | 2,024 | 90 | 130 | 275 | **48%** |
-| 15 | 3,375 | 20,250 | 8,262 | 9,124 | 79 | 766 | 3,129 | **25%** |
-| 20 | 8,000 | 48,000 | 17,976 | 20,656 | 99 | 2,429 | 17,578 | **14%** |
+| 5 | 125 | 750 | 26 | 158 | 46 | 4 | 4 | 95% |
+| 10 | 1,000 | 6,000 | 1,166 | 2,024 | 90 | 130 | 274 | **47%** |
+| 15 | 3,375 | 20,250 | 8,202 | 9,442 | 82 | 765 | 3,128 | **24%** |
+| 20 | 8,000 | 48,000 | 19,216 | 20,610 | 92 | 2,440 | 17,578 | **13%** |
 
 ### Tetrahedral Elements (3 DOF per element) - Linear Material
 
 | maxh | Elements | DOF | lowrank | dense | max_rank | H-mat [MB] | Dense [MB] | Compression |
 |------|----------|-----|--------:|------:|---------:|-----------:|-----------:|------------:|
-| 0.20 | 627 | 1,881 | 554 | 1,544 | 41 | 22 | 27 | 83% |
-| 0.15 | 2,211 | 6,633 | 3,160 | 11,226 | 46 | 286 | 336 | **83%** |
-| 0.10 | 4,994 | 14,982 | 12,074 | 24,401 | 52 | 1,156 | 1,712 | **67%** |
+| 0.30 | 200 | 600 | 40 | 414 | 33 | 0 | 2 | **0%** |
+| 0.25 | 390 | 1,170 | 290 | 869 | 36 | 0 | 10 | **1%** |
+| 0.20 | 627 | 1,881 | 554 | 1,544 | 41 | 22 | 26 | 82% |
+| 0.15 | 2,211 | 6,633 | 3,160 | 11,226 | 46 | 179 | 335 | 53% |
+| 0.10 | 4,994 | 14,982 | 12,074 | 24,401 | 52 | 597 | 1,712 | **34%** |
+| 0.07 | 15,116 | 45,348 | 44,966 | 89,195 | 53 | 2,685 | 15,689 | **17%** |
 
 ---
 
@@ -402,4 +452,4 @@ Compression ratio is obtained from `rad.GetHACApKStats()['compression']`.
 
 ---
 
-**Last Updated**: 2025-12-28 (Linear hex/tetra benchmarks updated with matrix caching)
+**Last Updated**: 2025-12-29 (All benchmark results updated from JSON files)
