@@ -501,6 +501,69 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 }
 
 //=========================================================================
+// Unified Nonlinear Iteration (base class implementation)
+// Calls virtual SolveLinearStep which is overridden by each solver
+//=========================================================================
+
+int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
+{
+	if(IntrctPtr == nullptr) return 0;
+
+	// Initialize context
+	NonlinearContext ctx;
+	if(!InitializeNonlinearContext(ctx, IntrctPtr, MagnResetIsNotNeeded))
+		return 0;
+
+	// Build base matrix (geometric part without chi)
+	BuildBaseMatrix(ctx, IntrctPtr);
+
+	int iterCount = 0;
+	double MisfitE2 = 1.0e30;
+
+	// Nonlinear iteration loop
+	for(iterCount = 0; iterCount < MaxIterNumber; iterCount++)
+	{
+		// Store old values for convergence check
+		StoreOldValuesAndComputeBnorm(ctx, IntrctPtr);
+
+		// Solve linear system (virtual - overridden by LU, BiCGSTAB, HACApK)
+		int linearIter = SolveLinearStep(ctx, iterCount);
+		(void)linearIter;  // May be used for statistics
+
+		// Update element magnetization from solution
+		UpdateMagnAndComputeH(ctx, IntrctPtr);
+
+		// Update chi and check convergence
+		double rel_change = UpdateChiAndCheckConvergence(ctx, IntrctPtr);
+		MisfitE2 = rel_change * rel_change;
+
+		// Linear materials: converge in exactly 1 iteration
+		if(ctx.all_materials_linear)
+		{
+			iterCount++;
+			break;
+		}
+
+		// Check convergence
+		if(rel_change <= PrecOnMagnetiz)
+		{
+			iterCount++;
+			break;
+		}
+
+		// Check for user abort
+		if(radYield.Check() == 0)
+		{
+			return iterCount;
+		}
+	}
+
+	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
+
+	return iterCount;
+}
+
+//=========================================================================
 // Method 0: LU Direct Solver (Entry Point)
 //=========================================================================
 
@@ -862,6 +925,92 @@ int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<dou
 
 	return 0;
 #endif
+}
+
+//-------------------------------------------------------------------------
+// LU Solver: SolveLinearStep override
+// Builds system matrix with current chi, solves with LU, stores result
+//-------------------------------------------------------------------------
+
+int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount)
+{
+	int totalDOF = ctx.totalDOF;
+	int AmOfMainElem = ctx.AmOfMainElem;
+
+	// Build system matrix: copy base matrix and add diagonal terms
+	std::vector<double> SystemMatrix(totalDOF * totalDOF);
+	std::memcpy(SystemMatrix.data(), ctx.BaseMatrix.data(), totalDOF * totalDOF * sizeof(double));
+
+	// Build RHS vector
+	std::vector<double> RHS(totalDOF);
+
+	// Update diagonal and RHS based on current chi
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+		double chi = ctx.CurrentChiArray[elem];
+		if(chi < 1.0e-6) chi = 1.0e-6;
+		double inv_chi = 1.0 / chi;
+
+		// Add 1/chi to diagonal and set RHS
+		for(int k = 0; k < dof; k++)
+		{
+			int row = offset + k;
+			// Column-major: diagonal is at [row * totalDOF + row]
+			SystemMatrix[row * totalDOF + row] += inv_chi;
+			RHS[row] = ctx.FlatExtern[row];
+		}
+
+		// Update poly->CurrentChi for 6DOF elements
+		if(dof == 6)
+		{
+			radTPolyhedron* poly = ctx.polyCache[elem];
+			if(poly && poly->Use6DOF_MSC)
+			{
+				poly->CurrentChi = chi;
+			}
+		}
+	}
+
+	// Solve using LAPACK LU
+	auto t_lu_start = std::chrono::high_resolution_clock::now();
+#ifdef HAVE_LAPACK
+	std::vector<double> A_col(totalDOF * totalDOF);
+	std::vector<int> ipiv(totalDOF);
+
+	// SystemMatrix is column-major, copy directly for LAPACK
+	std::memcpy(A_col.data(), SystemMatrix.data(), totalDOF * totalDOF * sizeof(double));
+
+	int nrhs = 1;
+	int info = 0;
+	dgesv_(&totalDOF, &nrhs, A_col.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
+	if(info != 0) return -1;  // Singular matrix
+#else
+	// Fallback: transpose to row-major and use SolveLU_Flat
+	for(int i = 0; i < totalDOF; i++)
+	{
+		for(int j = i + 1; j < totalDOF; j++)
+		{
+			std::swap(SystemMatrix[i * totalDOF + j], SystemMatrix[j * totalDOF + i]);
+		}
+	}
+	int ierr = SolveLU_Flat(SystemMatrix, RHS, totalDOF);
+	if(ierr != 0) return -1;
+#endif
+	auto t_lu_end = std::chrono::high_resolution_clock::now();
+	double t_lu = std::chrono::duration<double>(t_lu_end - t_lu_start).count();
+	rad.m_solve_t_lu_decomp += t_lu;
+	rad.m_solve_t_linear_solve += t_lu;
+
+	// Copy solution to FlatMagn
+	for(int i = 0; i < totalDOF; i++)
+	{
+		ctx.FlatMagn[i] = RHS[i];
+	}
+
+	return 0;  // LU is direct solver, no iterations
 }
 
 int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
@@ -1874,6 +2023,43 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 	}
 
 	return iter;
+}
+
+//-------------------------------------------------------------------------
+// BiCGSTAB Solver: SolveLinearStep override
+// Uses BiCGSTAB iterative solver with Jacobi preconditioner
+//-------------------------------------------------------------------------
+
+int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount)
+{
+	int totalDOF = ctx.totalDOF;
+	int AmOfMainElem = ctx.AmOfMainElem;
+
+	// Update poly->CurrentChi for 6DOF elements before BiCGSTAB
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		if(dof == 6)
+		{
+			radTPolyhedron* poly = ctx.polyCache[elem];
+			if(poly && poly->Use6DOF_MSC)
+			{
+				poly->CurrentChi = ctx.CurrentChiArray[elem];
+			}
+		}
+	}
+
+	// Call BiCGSTAB solver
+	double residual = 0.0;
+	const double bicg_tol = rad.m_bicg_tol;
+	const int bicg_max_iter = 10000;
+
+	auto t_bicg_start = std::chrono::high_resolution_clock::now();
+	int n_iter = SolveBiCGSTAB_VariableDOF(totalDOF, bicg_tol, bicg_max_iter, residual, ctx.CurrentChiArray);
+	auto t_bicg_end = std::chrono::high_resolution_clock::now();
+	rad.m_solve_t_linear_solve += std::chrono::duration<double>(t_bicg_end - t_bicg_start).count();
+
+	return n_iter;
 }
 
 int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)

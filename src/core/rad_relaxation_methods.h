@@ -172,9 +172,28 @@ public:
 	radTIterativeRelaxMeth() { IntrctPtr = 0;}
 
 	virtual void DefineNewMagnetizations() {}
-	
+
 	void MakeN_iter(int);
 	void ComputeRelaxStatusParam(const TVector3d*, const TVector3d*, const TVector3d*);
+
+	/**
+	 * Unified nonlinear iteration using helper functions.
+	 * Calls virtual SolveLinearStep which is overridden by each solver.
+	 *
+	 * @return Number of nonlinear iterations performed
+	 */
+	int AutoRelax_Unified(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded = 0);
+
+protected:
+	/**
+	 * Build system matrix and RHS, then solve the linear system.
+	 * This is the ONLY part that differs between LU, BiCGSTAB, and HACApK.
+	 *
+	 * @param ctx Nonlinear context with BaseMatrix, CurrentChiArray, FlatExtern
+	 * @param iterCount Current nonlinear iteration number (0 for first)
+	 * @return Number of linear iterations (0 for direct solvers like LU)
+	 */
+	virtual int SolveLinearStep(NonlinearContext& ctx, int iterCount) { return 0; }
 };
 
 //-------------------------------------------------------------------------
@@ -209,6 +228,10 @@ public:
 
 	// Variable DOF version for hybrid MSC + standard element analysis
 	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+
+protected:
+	// Override: LU direct solver for linear step
+	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
 
 private:
 	// Solve linear system Ax=b using LU decomposition with partial pivoting
@@ -252,6 +275,10 @@ public:
 
 	// Variable DOF version for hybrid MSC + standard element analysis
 	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+
+protected:
+	// Override: BiCGSTAB iterative solver for linear step
+	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
 
 private:
 	// Variable DOF version of BiCGSTAB
