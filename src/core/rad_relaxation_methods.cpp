@@ -582,10 +582,6 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	double MisfitE2 = 1.0e30;
 	int iterCount = 0;
 
-	// Detect if all materials are linear (no nonlinear materials)
-	// For linear-only problems, chi is constant so 1 solve gives exact solution
-	bool allLinearMaterials = true;
-
 	// Initialize chi and H field for all elements (ELF mucal0 style)
 	// First iteration uses chi from BH curve 2nd point
 	const double H_init_mag = 100.0;
@@ -601,7 +597,6 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
 		if(NonlinMater != nullptr)
 		{
-			allLinearMaterials = false;  // Found a nonlinear material
 			chi_init = NonlinMater->GetInitialChi_ELF_Style();
 			if(chi_init <= 0) chi_init = 1.0;
 		}
@@ -1125,14 +1120,6 @@ int radTRelaxationMethNo_0::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		double rel_change = max_B_rel_change;
 		MisfitE2 = rel_change * rel_change;
 
-		// For linear materials only: 1 solve gives exact solution (chi is constant)
-		// Skip convergence check and exit after first iteration
-		if(allLinearMaterials)
-		{
-			iterCount++;
-			break;
-		}
-
 		if(rel_change <= PrecOnMagnetiz)
 		{
 			iterCount++;
@@ -1173,9 +1160,8 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 #ifdef HAVE_LAPACK
 	// FAST PATH: Use Intel MKL cblas_dgemv for uniform DOF systems
 	// This is O(N^2) with highly optimized BLAS instead of manual loops
-	// Use cached DOF type to avoid per-call loop through elements
 
-	if(m_cachedDOFType == 1)
+	if(!IntrctPtr->HasVariableDOF())
 	{
 		// Pure 3 DOF system (tetrahedra only) - use single BLAS call with alpha=-1.0
 		// y = -1.0 * A * x + 0.0 * y
@@ -1203,7 +1189,14 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 		return;
 	}
 
-	if(m_cachedDOFType == 2)
+	// Check if pure 6 DOF system (all hexahedra MSC)
+	bool allMSC = true;
+	for(int elem = 0; elem < AmOfMainElem && allMSC; elem++)
+	{
+		if(IntrctPtr->GetElementDOF(elem) != 6) allMSC = false;
+	}
+
+	if(allMSC)
 	{
 		// Pure 6 DOF MSC system - use single BLAS call with alpha=+1.0
 		cblas_dgemv(CblasColMajor, CblasNoTrans,
@@ -1266,45 +1259,6 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 	}
 }
 
-void radTRelaxationMethNo_1::EnsureWorkVectors(int totalDOF)
-{
-	// Resize cached work vectors only when DOF changes (avoids repeated allocation)
-	if(m_cachedDOF == totalDOF) return;
-
-	m_r.resize(totalDOF);
-	m_r0.resize(totalDOF);
-	m_p.resize(totalDOF);
-	m_v.resize(totalDOF);
-	m_s.resize(totalDOF);
-	m_t.resize(totalDOF);
-	m_p_hat.resize(totalDOF);
-	m_s_hat.resize(totalDOF);
-	m_diag_inv.resize(totalDOF);
-	m_inv_chi.resize(totalDOF);
-	m_rhs.resize(totalDOF);
-	m_sol.resize(totalDOF);
-
-	// Cache DOF type for fast MatVec path selection
-	// This avoids per-call loop through all elements
-	int AmOfMainElem = IntrctPtr->AmOfMainElem;
-	if(!IntrctPtr->HasVariableDOF())
-	{
-		m_cachedDOFType = 1;  // Pure 3DOF (tetrahedra)
-	}
-	else
-	{
-		// Check if all elements are 6DOF MSC
-		bool allMSC = true;
-		for(int elem = 0; elem < AmOfMainElem && allMSC; elem++)
-		{
-			if(IntrctPtr->GetElementDOF(elem) != 6) allMSC = false;
-		}
-		m_cachedDOFType = allMSC ? 2 : 3;  // 2 = pure 6DOF, 3 = mixed
-	}
-
-	m_cachedDOF = totalDOF;
-}
-
 void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>& diag,
                                                               const std::vector<double>& inv_chi, int totalDOF)
 {
@@ -1340,25 +1294,14 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
                                                        const std::vector<double>& elemChiArray)
 {
 	// BiCGSTAB with Jacobi preconditioner for variable DOF systems
-	// Uses cached work vectors to avoid repeated allocation overhead
 	int AmOfMainElem = IntrctPtr->AmOfMainElem;
 
-	// Ensure cached work vectors are properly sized (only reallocates if DOF changed)
-	EnsureWorkVectors(totalDOF);
-
-	// Use cached vectors (aliases for readability)
-	std::vector<double>& r = m_r;
-	std::vector<double>& r0 = m_r0;
-	std::vector<double>& p = m_p;
-	std::vector<double>& v = m_v;
-	std::vector<double>& s = m_s;
-	std::vector<double>& t = m_t;
-	std::vector<double>& p_hat = m_p_hat;
-	std::vector<double>& s_hat = m_s_hat;
-	std::vector<double>& diag_inv = m_diag_inv;
-	std::vector<double>& inv_chi = m_inv_chi;
-	std::vector<double>& rhs = m_rhs;
-	std::vector<double>& sol = m_sol;
+	// Allocate work vectors
+	std::vector<double> r(totalDOF), r0(totalDOF), p(totalDOF), v(totalDOF), s(totalDOF), t(totalDOF);
+	std::vector<double> p_hat(totalDOF), s_hat(totalDOF), diag_inv(totalDOF);
+	std::vector<double> inv_chi(totalDOF);
+	std::vector<double> rhs(totalDOF);
+	std::vector<double> sol(totalDOF);
 
 	double* FlatMagn = IntrctPtr->GetFlatMagnArray();
 	double* FlatField = IntrctPtr->GetFlatFieldArray();
@@ -1421,11 +1364,13 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 
 	// Initial guess: use current magnetization (ELF-compatible)
 	// Using the previous solution as initial guess significantly speeds up convergence
-	std::memcpy(sol.data(), FlatMagn, totalDOF * sizeof(double));
+	for(int i = 0; i < totalDOF; i++)
+	{
+		sol[i] = FlatMagn[i];
+	}
 
 	// Build Jacobi preconditioner
 	GetDiagonalElements_VariableDOF(diag_inv, inv_chi, totalDOF);
-	#pragma omp parallel for if(totalDOF > 100)
 	for(int i = 0; i < totalDOF; i++)
 	{
 		diag_inv[i] = (std::abs(diag_inv[i]) > 1.0e-15) ? (1.0 / diag_inv[i]) : 1.0;
@@ -1438,8 +1383,8 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 	Copy(r, r0, totalDOF);
 
 	double rho = 1.0, alpha_bicg = 1.0, omega = 1.0;
-	std::memset(p.data(), 0, totalDOF * sizeof(double));
-	std::memset(v.data(), 0, totalDOF * sizeof(double));
+	std::fill(p.begin(), p.end(), 0.0);
+	std::fill(v.begin(), v.end(), 0.0);
 
 	double rhs_norm = Norm2(rhs, totalDOF);
 	if(rhs_norm < 1.0e-30) rhs_norm = 1.0;
@@ -1473,7 +1418,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 			Axpy(1.0, r, p, totalDOF);
 		}
 
-		// Apply preconditioner: p_hat = diag_inv * p
+		// Apply preconditioner
 		#pragma omp parallel for if(totalDOF > 100)
 		for(int i = 0; i < totalDOF; i++)
 		{
@@ -1501,7 +1446,6 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 			break;
 		}
 
-		// Apply preconditioner: s_hat = diag_inv * s
 		#pragma omp parallel for if(totalDOF > 100)
 		for(int i = 0; i < totalDOF; i++)
 		{
@@ -1542,7 +1486,10 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 	}
 
 	// Copy solution back to flat array
-	std::memcpy(FlatMagn, sol.data(), totalDOF * sizeof(double));
+	for(int i = 0; i < totalDOF; i++)
+	{
+		FlatMagn[i] = sol[i];
+	}
 
 	return iter;
 }
@@ -1582,10 +1529,6 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	int totalIterCount = 0;
 	int outerIter = 0;
 
-	// Detect if all materials are linear (no nonlinear materials)
-	// For linear-only problems, chi is constant so 1 solve gives exact solution
-	bool allLinearMaterials = true;
-
 	// Cache polyhedron pointers to avoid repeated dynamic_cast
 	// Cache ALL elements (not just DOF==6) so we can access them during chi initialization
 	std::vector<radTPolyhedron*> polyCache(AmOfMainElem, nullptr);
@@ -1611,7 +1554,6 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
 		if(NonlinMater != nullptr)
 		{
-			allLinearMaterials = false;  // Found a nonlinear material
 			chi_init = NonlinMater->GetInitialChi_ELF_Style();
 			if(chi_init <= 0) chi_init = 1.0;
 		}
@@ -2016,14 +1958,6 @@ int radTRelaxationMethNo_1::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		// This is the same as LU solver and provides consistent convergence behavior
 		double rel_change = max_B_rel_change;
 		MisfitE2 = rel_change * rel_change;
-
-		// For linear materials only: 1 solve gives exact solution (chi is constant)
-		// Skip convergence check and exit after first iteration
-		if(allLinearMaterials)
-		{
-			outerIter++;
-			break;
-		}
 
 		if(rel_change <= PrecOnMagnetiz)
 		{
@@ -2464,10 +2398,6 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	int totalIterCount = 0;
 	int outerIter = 0;
 
-	// Detect if all materials are linear (no nonlinear materials)
-	// For linear-only problems, chi is constant so 1 solve gives exact solution
-	bool allLinearMaterials = true;
-
 	// Initialize H field in NewFieldArray (used for chi(H) computation in nonlinear iteration)
 	// Also initialize FlatField for compatibility
 	const double H_init_mag = 100.0;  // Same as LU/BiCGSTAB (100 A/m)
@@ -2568,7 +2498,6 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
 		if(NonlinMater != nullptr)
 		{
-			allLinearMaterials = false;  // Found a nonlinear material
 			chi_init = NonlinMater->GetInitialChi_ELF_Style();
 			if(chi_init <= 0) chi_init = 1.0;
 		}
@@ -2878,14 +2807,6 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		// Convergence criterion: use B-field change for both 3DOF and 6DOF (same as LU/BiCGSTAB)
 		double rel_change = max_B_rel_change;
 		MisfitE2 = rel_change * rel_change;
-
-		// For linear materials only: 1 solve gives exact solution (chi is constant)
-		// Skip convergence check and exit after first iteration
-		if(allLinearMaterials)
-		{
-			outerIter++;
-			break;
-		}
 
 		if(rel_change <= PrecOnMagnetiz)
 		{
