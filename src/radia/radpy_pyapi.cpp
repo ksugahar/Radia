@@ -2775,6 +2775,120 @@ static PyObject* radia_GetSolveStats(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
+ * Point Classification for FMM: Classifies evaluation points as inside/near/far
+ ***************************************************************************/
+static PyObject* radia_ClassifyPoints(PyObject* self, PyObject* args)
+{
+	PyObject *oPoints=0, *oRes=0;
+	double *arPoints=0;
+	int *arClass=0, *arNearest=0;
+	try
+	{
+		int container_handle=0;
+		double near_threshold=3.0;
+		if(!PyArg_ParseTuple(args, "iO|d:ClassifyPoints", &container_handle, &oPoints, &near_threshold))
+			throw CombErStr(strEr_BadFuncArg, ": ClassifyPoints");
+		if((container_handle == 0) || (oPoints == 0))
+			throw CombErStr(strEr_BadFuncArg, ": ClassifyPoints");
+
+		int nCoord = 0;
+		char resP = CPyParse::CopyPyNestedListElemsToNumAr(oPoints, 'd', arPoints, nCoord);
+		if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": ClassifyPoints: array / list of points");
+
+		int n_points = nCoord / 3;
+		if(n_points * 3 != nCoord) throw CombErStr(strEr_BadFuncArg, ": ClassifyPoints: array / list of points");
+
+		arClass = new int[n_points];
+		arNearest = new int[n_points];
+
+		g_pyParse.ProcRes(RadClassifyPoints(arClass, arNearest, n_points, arPoints, container_handle, near_threshold));
+
+		// Return dict with classification and nearest_elem arrays
+		oRes = PyDict_New();
+		PyObject* oClass = PyList_New(n_points);
+		PyObject* oNearest = PyList_New(n_points);
+		for(int i = 0; i < n_points; ++i)
+		{
+			PyList_SetItem(oClass, i, PyLong_FromLong(arClass[i]));
+			PyList_SetItem(oNearest, i, PyLong_FromLong(arNearest[i]));
+		}
+		PyDict_SetItemString(oRes, "classification", oClass);
+		PyDict_SetItemString(oRes, "nearest_elem", oNearest);
+		Py_DECREF(oClass);
+		Py_DECREF(oNearest);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arPoints != 0) delete[] arPoints;
+	if(arClass != 0) delete[] arClass;
+	if(arNearest != 0) delete[] arNearest;
+	return oRes;
+}
+
+/************************************************************************//**
+ * Batch Field Computation: Computes B and H fields at multiple points
+ ***************************************************************************/
+static PyObject* radia_FldBatch(PyObject* self, PyObject* args)
+{
+	PyObject *oPoints=0, *oRes=0;
+	double *arPoints=0, *arB=0, *arH=0;
+	try
+	{
+		int container_handle=0;
+		int method=0;  // 0 = direct, 1 = FMM (future)
+		if(!PyArg_ParseTuple(args, "iO|i:FldBatch", &container_handle, &oPoints, &method))
+			throw CombErStr(strEr_BadFuncArg, ": FldBatch");
+		if((container_handle == 0) || (oPoints == 0))
+			throw CombErStr(strEr_BadFuncArg, ": FldBatch");
+
+		int nCoord = 0;
+		char resP = CPyParse::CopyPyNestedListElemsToNumAr(oPoints, 'd', arPoints, nCoord);
+		if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": FldBatch: array / list of points");
+
+		int n_points = nCoord / 3;
+		if(n_points * 3 != nCoord) throw CombErStr(strEr_BadFuncArg, ": FldBatch: array / list of points");
+
+		arB = new double[n_points * 3];
+		arH = new double[n_points * 3];
+
+		g_pyParse.ProcRes(RadFldBatch(arB, arH, n_points, arPoints, container_handle, method));
+
+		// Return dict with B and H arrays
+		oRes = PyDict_New();
+
+		// Create B array as list of [Bx, By, Bz] lists
+		PyObject* oB = PyList_New(n_points);
+		PyObject* oH = PyList_New(n_points);
+		for(int i = 0; i < n_points; ++i)
+		{
+			PyObject* oBi = PyList_New(3);
+			PyObject* oHi = PyList_New(3);
+			for(int j = 0; j < 3; ++j)
+			{
+				PyList_SetItem(oBi, j, PyFloat_FromDouble(arB[i*3 + j]));
+				PyList_SetItem(oHi, j, PyFloat_FromDouble(arH[i*3 + j]));
+			}
+			PyList_SetItem(oB, i, oBi);
+			PyList_SetItem(oH, i, oHi);
+		}
+		PyDict_SetItemString(oRes, "B", oB);
+		PyDict_SetItemString(oRes, "H", oH);
+		Py_DECREF(oB);
+		Py_DECREF(oH);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arPoints != 0) delete[] arPoints;
+	if(arB != 0) delete[] arB;
+	if(arH != 0) delete[] arH;
+	return oRes;
+}
+
+/************************************************************************//**
  * Magnetic Field Calculation Methods: Computes field created by the object obj at one or many points
  ***************************************************************************/
 static PyObject* radia_Fld(PyObject* self, PyObject* args)
@@ -3728,6 +3842,9 @@ static PyMethodDef radia_methods[] = {
 	{"SetRelaxParam", radia_SetRelaxParam, METH_VARARGS, "SetRelaxParam(relax) sets under-relaxation coefficient for nonlinear iteration. relax=0.0 (default) means full Newton step. relax=0.0-1.0 applies damping: chi_new = chi_new*(1-relax) + chi_old*relax. Use under-relaxation (e.g., 0.3) if convergence is slow or oscillating. Call before Solve()."},
 	{"GetRelaxParam", radia_GetRelaxParam, METH_VARARGS, "GetRelaxParam() returns current under-relaxation coefficient."},
 	{"GetSolveStats", radia_GetSolveStats, METH_VARARGS, "GetSolveStats() returns solve statistics from last Solve() call. Returns dict with: t_matrix_build (interaction matrix construction time [s]), t_linear_solve (total linear solver time [s]), linear_iterations (BiCGSTAB iterations, 0 for LU), nonl_iterations (nonlinear iterations). Returns None if no solve has been performed."},
+
+	{"ClassifyPoints", radia_ClassifyPoints, METH_VARARGS, "ClassifyPoints(obj, points, near_threshold=3.0) classifies evaluation points relative to mesh elements. Returns dict with 'classification' (0=inside, 1=near, 2=far) and 'nearest_elem' (index of nearest element). Used for FMM field computation."},
+	{"FldBatch", radia_FldBatch, METH_VARARGS, "FldBatch(obj, points, method=0) computes B and H fields at multiple points. Returns dict with 'B' and 'H' arrays. method: 0=direct, 1=FMM (future). More efficient than calling Fld() in a loop."},
 
 	{"Fld", radia_Fld, METH_VARARGS,  "Fld(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x,y,z]|[[x1,y1,z1],[x2,y2,z2],...]) computes magnetic field created by the object obj in point(s) {x,y,z} ({x1,y1,z1},{x2,y2,z2},...). The field component is specified by the second input variable. The function accepts a list of 3D points of arbitrary nestness: in this case it returns the corresponding list of magnetic field values."},
 	{"FldLst", radia_FldLst, METH_VARARGS,  "FldLst(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x1,y1,z1],[x2,y2,z2],np,'arg|noarg':'noarg',strt:0.) computes magnetic field created by object obj in np equidistant points along a line segment from [x1,y1,z1] to [x2,y2,z2]; the field component is specified by the second input variable; the 'arg|noarg' string variable specifies whether to output a longitudinal position for each point where the field is computed, and strt gives the start-value for the longitudinal position."},
