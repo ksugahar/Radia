@@ -4,8 +4,9 @@
  */
 
 #include "rad_point_classify.h"
-#include "rad_handle.h"
+#include "rad_polyhedron.h"
 #include "rad_group.h"
+#include "rad_application.h"
 #include <cmath>
 #include <algorithm>
 #include <limits>
@@ -13,6 +14,9 @@
 #ifdef _OPENMP
 #include <omp.h>
 #endif
+
+// Access to global Radia application
+extern radTApplication rad;
 
 namespace RadPointClassify {
 
@@ -143,7 +147,7 @@ double ComputeElementSize(const TVector3d* vertices, int n_verts)
 //-----------------------------------------------------------------------------
 void ClassifyPoints(int n_points,
                     const double* points,
-                    const std::vector<radTPolygon>& elements,
+                    const std::vector<ElementData>& elements,
                     double near_threshold,
                     std::vector<ClassifyResult>& results)
 {
@@ -159,51 +163,28 @@ void ClassifyPoints(int n_points,
         return;
     }
 
-    // Compute global AABB and average element size
+    // Compute global AABB
     TVector3d global_min, global_max;
     global_min.x = global_min.y = global_min.z = std::numeric_limits<double>::max();
     global_max.x = global_max.y = global_max.z = std::numeric_limits<double>::lowest();
 
     double total_size = 0.0;
-    std::vector<TVector3d> elem_centers(elements.size());
-    std::vector<double> elem_sizes(elements.size());
-
     for (size_t e = 0; e < elements.size(); ++e) {
-        const radTPolygon& elem = elements[e];
-        int nv = static_cast<int>(elem.VertCoords.size());
+        const ElementData& elem = elements[e];
 
-        if (nv < 4) continue;
+        if (!elem.vertices.empty()) {
+            TVector3d emin, emax;
+            ComputeElementAABB(elem.vertices.data(), static_cast<int>(elem.vertices.size()), emin, emax);
 
-        // Compute element center
-        TVector3d center = {0, 0, 0};
-        for (int v = 0; v < nv; ++v) {
-            center.x += elem.VertCoords[v].x;
-            center.y += elem.VertCoords[v].y;
-            center.z += elem.VertCoords[v].z;
+            global_min.x = std::min(global_min.x, emin.x);
+            global_min.y = std::min(global_min.y, emin.y);
+            global_min.z = std::min(global_min.z, emin.z);
+            global_max.x = std::max(global_max.x, emax.x);
+            global_max.y = std::max(global_max.y, emax.y);
+            global_max.z = std::max(global_max.z, emax.z);
         }
-        center.x /= nv;
-        center.y /= nv;
-        center.z /= nv;
-        elem_centers[e] = center;
 
-        // Compute element AABB
-        TVector3d emin, emax;
-        ComputeElementAABB(elem.VertCoords.data(), nv, emin, emax);
-
-        global_min.x = std::min(global_min.x, emin.x);
-        global_min.y = std::min(global_min.y, emin.y);
-        global_min.z = std::min(global_min.z, emin.z);
-        global_max.x = std::max(global_max.x, emax.x);
-        global_max.y = std::max(global_max.y, emax.y);
-        global_max.z = std::max(global_max.z, emax.z);
-
-        // Compute element size
-        double dx = emax.x - emin.x;
-        double dy = emax.y - emin.y;
-        double dz = emax.z - emin.z;
-        double size = std::cbrt(dx * dy * dz);
-        elem_sizes[e] = size;
-        total_size += size;
+        total_size += elem.size;
     }
 
     double avg_size = total_size / elements.size();
@@ -236,9 +217,9 @@ void ClassifyPoints(int n_points,
         int best_eid = -1;
 
         for (size_t e = 0; e < elements.size(); ++e) {
-            double dx = pt.x - elem_centers[e].x;
-            double dy = pt.y - elem_centers[e].y;
-            double dz = pt.z - elem_centers[e].z;
+            double dx = pt.x - elements[e].center.x;
+            double dy = pt.y - elements[e].center.y;
+            double dz = pt.z - elements[e].center.z;
             double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
 
             if (dist < min_dist) {
@@ -252,36 +233,36 @@ void ClassifyPoints(int n_points,
         results[i].nearest_elem_id = best_eid;
         results[i].distance = min_dist;
 
-        double elem_size = elem_sizes[best_eid];
+        double elem_size = elements[best_eid].size;
 
         // Step 3: Check if inside any nearby element
         if (min_dist < elem_size * 0.6) {
             double search_radius = elem_size * 1.5;
 
             for (size_t e = 0; e < elements.size(); ++e) {
-                double dx = pt.x - elem_centers[e].x;
-                double dy = pt.y - elem_centers[e].y;
-                double dz = pt.z - elem_centers[e].z;
+                double dx = pt.x - elements[e].center.x;
+                double dy = pt.y - elements[e].center.y;
+                double dz = pt.z - elements[e].center.z;
                 double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
 
                 if (dist > search_radius) continue;
 
-                const radTPolygon& elem = elements[e];
-                int nv = static_cast<int>(elem.VertCoords.size());
+                const ElementData& elem = elements[e];
+                int nv = static_cast<int>(elem.vertices.size());
 
                 bool is_inside = false;
 
-                if (nv == 4) {
+                if (nv == 4 && elem.num_faces == 4) {
                     // Tetrahedron
                     is_inside = PointInTetrahedron(pt,
-                        elem.VertCoords[0], elem.VertCoords[1],
-                        elem.VertCoords[2], elem.VertCoords[3]);
+                        elem.vertices[0], elem.vertices[1],
+                        elem.vertices[2], elem.vertices[3]);
                 }
-                else if (nv == 8) {
+                else if (nv == 8 && elem.num_faces == 6) {
                     // Hexahedron
                     TVector3d verts[8];
                     for (int v = 0; v < 8; ++v) {
-                        verts[v] = elem.VertCoords[v];
+                        verts[v] = elem.vertices[v];
                     }
                     is_inside = PointInHexahedron(pt, verts);
                 }
@@ -307,6 +288,63 @@ void ClassifyPoints(int n_points,
 }
 
 //-----------------------------------------------------------------------------
+// Extract element data from radTPolyhedron
+//-----------------------------------------------------------------------------
+static void ExtractElementData(radTPolyhedron* poly, ElementData& data)
+{
+    // Get center point
+    data.center = poly->CentrPoint;
+
+    // Get number of faces
+    data.num_faces = poly->AmOfFaces;
+
+    // Get vertices
+    radTVectorOfVector3d vertices;
+    poly->VerticesInLocFrame(vertices, true);  // true = ensure unique vertices
+
+    data.vertices.clear();
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        data.vertices.push_back(vertices[i]);
+    }
+
+    // Compute size
+    if (!data.vertices.empty()) {
+        data.size = ComputeElementSize(data.vertices.data(), static_cast<int>(data.vertices.size()));
+    } else {
+        data.size = 0.0;
+    }
+}
+
+//-----------------------------------------------------------------------------
+// Helper: Recursively extract elements from group
+//-----------------------------------------------------------------------------
+static void ExtractElementsFromGroup(radTGroup* grp, std::vector<ElementData>& elements)
+{
+    for (radTmhg::iterator iter = grp->GroupMapOfHandlers.begin();
+         iter != grp->GroupMapOfHandlers.end(); ++iter)
+    {
+        radTg* g = iter->second.rep;
+
+        // Try as polyhedron
+        radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g);
+        if (poly) {
+            ElementData data;
+            ExtractElementData(poly, data);
+            if (!data.vertices.empty()) {
+                elements.push_back(data);
+            }
+            continue;
+        }
+
+        // Try as nested group
+        radTGroup* nested_grp = dynamic_cast<radTGroup*>(g);
+        if (nested_grp) {
+            ExtractElementsFromGroup(nested_grp, elements);
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------
 // Classify points from Radia handle
 //-----------------------------------------------------------------------------
 void ClassifyPointsFromHandle(int n_points,
@@ -317,11 +355,12 @@ void ClassifyPointsFromHandle(int n_points,
                               int* nearest_elem)
 {
     // Get element list from container
-    std::vector<radTPolygon> elements;
+    std::vector<ElementData> elements;
 
     // Access Radia handle system
-    radTHandle<radTg> hndl;
-    if (!RadiaHandle.Get(container_handle, hndl)) {
+    radThg hg;
+    int valid = rad.ValidateElemKey(container_handle, hg);
+    if (!valid || hg.rep == nullptr) {
         // Invalid handle: all points are FAR
         for (int i = 0; i < n_points; ++i) {
             classification[i] = FAR;
@@ -330,25 +369,22 @@ void ClassifyPointsFromHandle(int n_points,
         return;
     }
 
-    radTg* g = hndl.rep;
+    radTg* g = hg.rep;
 
     // Try to get as group
     radTGroup* grp = dynamic_cast<radTGroup*>(g);
     if (grp) {
-        // Iterate over group members
-        for (auto it = grp->GroupMembers.begin(); it != grp->GroupMembers.end(); ++it) {
-            radTHandle<radTg> memberHndl = *it;
-            radTPolygon* poly = dynamic_cast<radTPolygon*>(memberHndl.rep);
-            if (poly) {
-                elements.push_back(*poly);
-            }
-        }
+        ExtractElementsFromGroup(grp, elements);
     }
     else {
-        // Try as single polygon
-        radTPolygon* poly = dynamic_cast<radTPolygon*>(g);
+        // Try as single polyhedron
+        radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g);
         if (poly) {
-            elements.push_back(*poly);
+            ElementData data;
+            ExtractElementData(poly, data);
+            if (!data.vertices.empty()) {
+                elements.push_back(data);
+            }
         }
     }
 
