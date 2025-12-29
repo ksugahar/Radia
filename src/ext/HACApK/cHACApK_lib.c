@@ -135,6 +135,23 @@ void cHACApK_minabsvalloc_d(double *vec, double *minval, int *loc, int n) {
   }
 }
 
+//***cHACApK_maxabsvallocm_d
+// Find maximum absolute value and its location, with mask
+// Skip elements where lmask[i]==1
+void cHACApK_maxabsvallocm_d(double *vec, double *maxval, int *loc, int n, int *lmask) {
+  int i;
+  *maxval = 0.0;
+  *loc = 0;
+  for (i = 0; i < n; i++) {
+    if (lmask[i] == 1) continue;  /* Skip masked elements */
+    double absval = fabs(vec[i]);
+    if (absval > *maxval) {
+      *maxval = absval;
+      *loc = i;
+    }
+  }
+}
+
 //***cHACApK_adotsub_dsm
 // Subtract the dot product of (zaa column k) and zz from vec
 // vec(1:ndl) = vec(1:ndl) - zaa(1:ndl, 1:k) * zz(1:k)

@@ -703,6 +703,123 @@ void cHACApK_calc_vec(
   }
 }
 
+//***cHACApK_aca
+// Basic Adaptive Cross Approximation (ACA) - simpler and faster than ACA+
+// Based on the Fortran implementation from HACApK
+int cHACApK_aca(
+  double *zaa, // zaa(ndl,kmax) - output left factor
+  double *zab, // zab(ndt,kmax) - output right factor
+  double *param,
+  int ndl,
+  int ndt,
+  int nstrtl,
+  int nstrtt,
+  int *lod,
+  int i_bemv,
+  int kmax,
+  double eps,
+  double znrmmat,
+  double pACA_EPS)
+{
+  int *lrow_msk, *lcol_msk;
+  double *prow, *pcol;
+  double *workspace;
+
+  double znrm, ACA_EPS, col_maxval, row_maxval, zdltinv, zeps;
+  int krank, kstop, k, ist, jst, istn, lstop_aca;
+  int il, it;
+
+  krank = (ndl < ndt) ? ndl : ndt;  /* min(ndl, ndt) */
+  znrm = znrmmat * sqrt((double)ndl * (double)ndt);
+
+  if ((int)param[61] == 1) ACA_EPS = pACA_EPS;
+  else if ((int)param[61] == 2 || (int)param[61] == 3) ACA_EPS = pACA_EPS * znrm;
+  else ACA_EPS = pACA_EPS;
+
+  lrow_msk = (int *) calloc(ndl, sizeof(int));
+  lcol_msk = (int *) calloc(ndt, sizeof(int));
+  if (lrow_msk == NULL || lcol_msk == NULL) {
+    fprintf(stderr, "Error: cHACApK_aca: malloc lrow_msk lcol_msk\n");
+    goto error;
+  }
+
+  /* Pre-allocate workspace for cHACApK_calc_vec */
+  workspace = (double *) calloc(kmax, sizeof(double));
+  if (workspace == NULL) {
+    fprintf(stderr, "Error: cHACApK_aca: malloc workspace\n");
+    goto error;
+  }
+
+  k = 0;  /* 0-indexed (Fortran uses 1-indexed) */
+  lstop_aca = 0;
+  kstop = (kmax < krank) ? kmax : krank;
+
+  /* Initial row index selection */
+  if (nstrtl > nstrtt) {
+    ist = 0;  /* 0-indexed */
+  } else {
+    ist = ndl - 1;  /* 0-indexed */
+  }
+
+  while (k < kstop && lstop_aca == 0) {
+    pcol = zaa + ndl * k;  /* k-th column of zaa */
+    prow = zab + ndt * k;  /* k-th column of zab */
+
+    /* Compute row: prow = A(ist, :) - approximation */
+    cHACApK_calc_vec(zab, zaa, ndt, ndl, k, ist, prow, nstrtl, nstrtt, lod, i_bemv, lcol_msk, 0, workspace);
+
+    /* Find max abs value in prow (with mask) */
+    cHACApK_maxabsvallocm_d(prow, &row_maxval, &jst, ndt, lcol_msk);
+
+    /* Scale row by pivot */
+    if (fabs(prow[jst]) > 1.0e-20) {
+      zdltinv = 1.0 / prow[jst];
+      for (it = 0; it < ndt; it++) prow[it] *= zdltinv;
+    } else {
+      /* Pivot too small, stop */
+      break;
+    }
+
+    /* Compute column: pcol = A(:, jst) - approximation */
+    cHACApK_calc_vec(zaa, zab, ndl, ndt, k, jst, pcol, nstrtl, nstrtt, lod, i_bemv, lrow_msk, 1, workspace);
+
+    /* Mark used indices */
+    lrow_msk[ist] = 1;
+    lcol_msk[jst] = 1;
+
+    /* Find next row index (max abs in pcol with mask) */
+    cHACApK_maxabsvallocm_d(pcol, &col_maxval, &istn, ndl, lrow_msk);
+
+    /* Check stopping criterion */
+    if (fabs(row_maxval) < ACA_EPS && fabs(col_maxval) < ACA_EPS && k >= (int)param[64]) {
+      lstop_aca = 1;
+      break;
+    }
+
+    /* Compute approximation norm */
+    zeps = cHACApK_unrm_d(ndl, pcol) * cHACApK_unrm_d(ndt, prow);
+    if (k == 0 && (int)param[61] == 1) znrm = zeps;
+    zeps = zeps / znrm;
+
+    if (zeps < eps || k == kstop - 1) lstop_aca = 1;
+    if (lstop_aca == 1 && k >= (int)param[64]) {
+      k++;
+      break;
+    }
+
+    ist = istn;  /* Next row index */
+    k++;
+  }
+
+  free(lrow_msk);
+  free(lcol_msk);
+  free(workspace);
+  return k;
+
+error:
+  exit(EXIT_FAILURE);
+}
+
 //***cHACApK_acaplus
 int cHACApK_acaplus(
   double *zaa, // zaa(ndl,kmax)
@@ -1004,8 +1121,10 @@ void cHACApK_fill_leafmtx_hyp(
 
       int kt = 0;
       if(param[60]==1) {
-        // kt=HACApK_aca(...)
+        /* Basic ACA - simpler and faster */
+        kt=cHACApK_aca(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
       } else if(param[60]==2) {
+        /* ACA+ - more robust but slower */
         kt=cHACApK_acaplus(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
       } else if(param[60]==3) {
         kt=cHACApK_SVD(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);

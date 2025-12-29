@@ -38,6 +38,9 @@ extern void cHACApK_maxabsvalloc_d(double *vec, double *maxval, int *loc, int n)
 /* Find minimum absolute value and location */
 extern void cHACApK_minabsvalloc_d(double *vec, double *minval, int *loc, int n);
 
+/* Find maximum absolute value and location with mask (skip where lmask[i]==1) */
+extern void cHACApK_maxabsvallocm_d(double *vec, double *maxval, int *loc, int n, int *lmask);
+
 /* Dot product subtraction: vec -= zaa * zz */
 extern void cHACApK_adotsub_dsm(double *vec, double *zaa, double *zz, int ndl, int k, int ldaa);
 
