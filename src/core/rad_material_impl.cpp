@@ -1968,6 +1968,12 @@ void radTApplication::OutFieldCompRes(char* FieldChar, radTField* FieldArray, lo
 				else if(*BufChar_p_1=='z' || *BufChar_p_1=='Z') { *(t++) = FieldPtr->J.z; InnerCount++;}
 				else { *(t++) = FieldPtr->J.x; *(t++) = FieldPtr->J.y; *(t++) = FieldPtr->J.z; InnerCount += 3;}
 			}
+			else if(*(BufChar)=='P' || *(BufChar)=='p')
+			{
+				// Scalar potential phi_m (units: Ampere)
+				// Reference: ELF_MAGIC implementation (src/dll/m_fmm3d.f90)
+				*(t++) = FieldPtr->Phi; InnerCount++;
+			}
 			else if(*(BufChar)=='Q' || *(BufChar)=='q') //OC161005
 			{
 				*(t++) = FieldPtr->B.x * Mu0; *(t++) = FieldPtr->B.y * Mu0; *(t++) = FieldPtr->B.z * Mu0; InnerCount += 3; // Fix: Convert A/m to Tesla
