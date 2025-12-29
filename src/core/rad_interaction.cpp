@@ -120,7 +120,10 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 
 	if(IntrctMatrMemAllocShouldBeDone) //OC20122019
 	{
-		AllocateMemory(AuxOldMagnArrayIsNeeded); //In case of MPI-parallelization, this has to be executed by master only
+		// For HACApK solver (skipDenseMatrix=1), skip InteractMatrix allocation
+		// because HACApK builds its own H-matrix, dense matrix is unnecessary overhead
+		// and would consume O(N^2) memory which exceeds available memory for large N
+		AllocateMemory(AuxOldMagnArrayIsNeeded, skipDenseMatrix); //In case of MPI-parallelization, this has to be executed by master only
 
 		if(SomethingIsWrong)
 		{
@@ -364,7 +367,7 @@ void radTInteraction::AddRelaxSubInterval(int StartNo, int FinNo, TRelaxSubInter
 
 //-------------------------------------------------------------------------
 
-void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded)
+void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded, char skipInteractMatrix)
 {
 	vExternFieldArray.resize(AmOfMainElem);
 	ExternFieldArray = vExternFieldArray.data();
@@ -382,28 +385,65 @@ void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded)
 	NewMagnArray = vNewMagnArray.data();
 	NewFieldArray = vNewFieldArray.data();
 
-	vInteractMatrixPtrs.resize(AmOfMainElem, nullptr);
-	InteractMatrix = vInteractMatrixPtrs.data();
-
-	if(MemAllocTotAtOnce)
+	// Skip InteractMatrix allocation for HACApK solver
+	// HACApK builds its own H-matrix, dense matrix is unnecessary overhead
+	// For 100k DOF, dense matrix would require ~80 GB of memory
+	if(skipInteractMatrix)
 	{
-		vGenMatrStorage.resize(AmOfMainElem * AmOfMainElem);
-		TMatrix3df* GenMatrPtr = vGenMatrStorage.data();
-
-		for(int i=0; i<AmOfMainElem; i++)
-		{
-			InteractMatrix[i] = &(GenMatrPtr[i*AmOfMainElem]);
-			vInteractMatrixPtrs[i] = InteractMatrix[i];
-		}
+		// Just initialize pointers to nullptr
+		vInteractMatrixPtrs.resize(AmOfMainElem, nullptr);
+		InteractMatrix = vInteractMatrixPtrs.data();
 	}
 	else
 	{
-		vInteractMatrix.resize(AmOfMainElem);
-		for(int i=0; i<AmOfMainElem; i++)
+		// Check memory requirements before allocation (LU/BiCGSTAB need dense matrix)
+		// Dense matrix requires N^2 * sizeof(TMatrix3df) = N^2 * 36 bytes
+		size_t matrix_size = (size_t)AmOfMainElem * (size_t)AmOfMainElem;
+		size_t required_bytes = matrix_size * sizeof(TMatrix3df);
+		const size_t MAX_DENSE_MATRIX_BYTES = 8ULL * 1024 * 1024 * 1024;  // 8 GB limit
+
+		if(required_bytes > MAX_DENSE_MATRIX_BYTES)
 		{
-			vInteractMatrix[i].resize(AmOfMainElem);
-			InteractMatrix[i] = vInteractMatrix[i].data();
-			vInteractMatrixPtrs[i] = InteractMatrix[i];
+			std::cerr << "[Radia] Error: Dense matrix too large for LU/BiCGSTAB solver." << std::endl;
+			std::cerr << "[Radia] Elements=" << AmOfMainElem << ", required memory="
+			          << (required_bytes / (1024*1024*1024)) << " GB" << std::endl;
+			std::cerr << "[Radia] Use HACApK solver (method 2) for large problems." << std::endl;
+			std::cerr.flush();
+			SomethingIsWrong = 1;
+			return;
+		}
+
+		vInteractMatrixPtrs.resize(AmOfMainElem, nullptr);
+		InteractMatrix = vInteractMatrixPtrs.data();
+
+		try {
+			if(MemAllocTotAtOnce)
+			{
+				vGenMatrStorage.resize(AmOfMainElem * AmOfMainElem);
+				TMatrix3df* GenMatrPtr = vGenMatrStorage.data();
+
+				for(int i=0; i<AmOfMainElem; i++)
+				{
+					InteractMatrix[i] = &(GenMatrPtr[i*AmOfMainElem]);
+					vInteractMatrixPtrs[i] = InteractMatrix[i];
+				}
+			}
+			else
+			{
+				vInteractMatrix.resize(AmOfMainElem);
+				for(int i=0; i<AmOfMainElem; i++)
+				{
+					vInteractMatrix[i].resize(AmOfMainElem);
+					InteractMatrix[i] = vInteractMatrix[i].data();
+					vInteractMatrixPtrs[i] = InteractMatrix[i];
+				}
+			}
+		} catch(const std::bad_alloc&) {
+			std::cerr << "[Radia] Error: Memory allocation failed for dense interaction matrix." << std::endl;
+			std::cerr << "[Radia] Use HACApK solver (method 2) for large problems." << std::endl;
+			std::cerr.flush();
+			SomethingIsWrong = 1;
+			return;
 		}
 	}
 
@@ -724,8 +764,33 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	// Note: We no longer redirect to SetupInteractMatrix() for 3DOF-only cases
 	// The flat matrix format is needed for the unified VariableDOF solver
 
+	// Check memory requirements before allocation
+	// Dense matrix requires N^2 doubles = N^2 * 8 bytes
+	// For 100k DOF, this is ~80 GB which exceeds typical system memory
+	size_t matrix_size = (size_t)m_totalDOF * (size_t)m_totalDOF;
+	size_t required_bytes = matrix_size * sizeof(double);
+	const size_t MAX_DENSE_MATRIX_BYTES = 8ULL * 1024 * 1024 * 1024;  // 8 GB limit
+
+	if(required_bytes > MAX_DENSE_MATRIX_BYTES)
+	{
+		std::cerr << "[Radia] Error: Dense matrix too large for LU/BiCGSTAB solver." << std::endl;
+		std::cerr << "[Radia] DOF=" << m_totalDOF << ", required memory="
+		          << (required_bytes / (1024*1024*1024)) << " GB" << std::endl;
+		std::cerr << "[Radia] Use HACApK solver (method 2) for large problems (>50,000 DOF)." << std::endl;
+		std::cerr.flush();
+		return 0;  // Signal failure
+	}
+
 	// Allocate flattened interaction matrix
-	m_flatInteractMatrix.resize(m_totalDOF * m_totalDOF, 0.0);
+	try {
+		m_flatInteractMatrix.resize(m_totalDOF * m_totalDOF, 0.0);
+	} catch(const std::bad_alloc&) {
+		std::cerr << "[Radia] Error: Memory allocation failed for dense interaction matrix." << std::endl;
+		std::cerr << "[Radia] DOF=" << m_totalDOF << ", required memory="
+		          << (required_bytes / (1024*1024*1024)) << " GB" << std::endl;
+		std::cerr << "[Radia] Use HACApK solver (method 2) for large problems." << std::endl;
+		return 0;  // Signal failure
+	}
 
 	// Allocate flattened field arrays
 	m_flatExternFieldArray.resize(m_totalDOF, 0.0);

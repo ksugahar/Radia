@@ -299,15 +299,28 @@ int HACApK_build_hmatrix_wrapper(
     for (il = 0; il < 5; il++) lnmtx[il] = 0;
     ndpth = 0;
     nlf = 0;
+    if (print_level > 0) {
+        printf("[HACApK] Generating leaf matrix structure...\n");
+        fflush(stdout);
+    }
     cHACApK_generate_leafmtx(st_leafmtx, st_clt, st_clt, ctl->param, ctl->lpmd,
                               lnmtx, nofc, nffc, &nlf, &ndpth);
 
     if (print_level > 0) {
         printf("[HACApK] Generated %d leaf matrices\n", nlf);
+        fflush(stdout);
     }
 
     /* Sort leaves for efficient traversal */
+    if (print_level > 0) {
+        printf("[HACApK] Sorting leaf matrices...\n");
+        fflush(stdout);
+    }
     cHACApK_sort_leafmtx(st_leafmtx, nlf);
+    if (print_level > 0) {
+        printf("[HACApK] Sort completed\n");
+        fflush(stdout);
+    }
 
     /*=========================================================================
      * Fill leaf matrices with values using ACA+
@@ -341,9 +354,18 @@ int HACApK_build_hmatrix_wrapper(
         }
 
         /* Fill leaf matrices using ACA+ */
+        if (print_level > 0) {
+            printf("[HACApK] Starting ACA+ fill: nlf=%d, kparam=%d, nd=%d\n",
+                   nlf, (int)ctl->param[63], nd);
+            fflush(stdout);
+        }
         cHACApK_fill_leafmtx_hyp(st_leafmtx, i_bemv, ctl->param, znrmmat,
                                   ctl->lpmd, lnmtx, ctl->lod, ctl->lod, nd, nlf,
                                   lnps, lnpe, ctl->lthr);
+        if (print_level > 0) {
+            printf("[HACApK] ACA+ fill completed\n");
+            fflush(stdout);
+        }
 
         free(lnps);
         free(lnpe);

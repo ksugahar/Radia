@@ -1641,6 +1641,8 @@ error:
 }
 
 //***cHACApK_generate_cbitree
+// ITERATIVE VERSION: Uses explicit stack instead of recursion
+// to avoid stack overflow for large problems (>30,000 elements)
 void cHACApK_generate_cbitree(
   st_cHACApK_cluster *p_st_clt,
   double **zgmid_t, // 2D array [ndim+1][md+1]
@@ -1655,78 +1657,171 @@ void cHACApK_generate_cbitree(
   int ndim,
   int *p_nclst)
 {
-  st_cHACApK_cluster st_clt;
-  double *zlmin,*zlmax;
-  int ndpth,nclst,minsz,nson,id,il,ncut,nl,nr,nh,nsrt1,nd1;
-  double zdiff,zlmid,zg,zidiff;
+  // Stack frame structure for iterative traversal
+  typedef struct {
+    st_cHACApK_cluster *p_result;  // Where to store the cluster
+    int *lod_ptr;                   // Pointer into lod array
+    int nsrt;                       // Start index
+    int nd;                         // Number of elements
+    int ndpth;                      // Current depth
+    int phase;                      // 0=process, 1=after left, 2=after right
+    st_cHACApK_cluster parent_clt;  // Parent cluster for storing result
+    int nl;                         // Split position (saved for phase 1->2)
+  } StackFrame;
 
-  ndpth=*p_ndpth;
-  nclst=*p_nclst;
+  int minsz = param[21];
+  int nclst = *p_nclst;
+  int ndpth_init = *p_ndpth;
 
-  minsz=param[21];
-  // minsz=param[21]/4+1:
-  ndpth=ndpth+1;
-  // ndscd=ndscd+1:
-  // if(i>26) stop
-  // printf("\n");
-  // printf("nsrt=%12d nd=%12d\n",nsrt,nd);
-  if(nd <= minsz) {
-    nson=0;
-    // nclst=nclst+1;
-    st_clt=cHACApK_generate_cluster(&nclst,ndpth,nsrt,nd,ndim,nson);
-  } else {
-    zlmin = (double *) malloc(sizeof(double)*(ndim+1));
-    zlmax = (double *) malloc(sizeof(double)*(ndim+1));
-    if(zlmin==NULL || zlmax==NULL) {
-      fprintf(stderr, "Error: cHACApK_generate_cbitree: malloc zlmin zlmax\n");
-      goto error;
-    }
-    for(id=1; id<=ndim; id++) {
-      zlmin[id]=zgmid_t[id][lod[1]]; zlmax[id]=zlmin[id];
-      for(il=2; il<=nd; il++) {
-        zg=zgmid_t[id][lod[il]];
-        if     (zg<zlmin[id]) { zlmin[id]=zg; }
-        else if(zlmax[id]<zg) { zlmax[id]=zg; }
-      }
-    }
-    // printf("zlmin=%21.6lf\n",zlmin);
-    // printf("zlmax=%21.6lf\n",zlmax);
+  // Estimate max depth: log2(nd/minsz) + safety margin
+  int max_depth = 64;  // Should be enough for billions of elements
 
-    zdiff=zlmax[1]-zlmin[1]; ncut = 1;
-    for(id=1; id<=ndim; id++) {
-      zidiff=zlmax[id]-zlmin[id];
-      if(zidiff>zdiff) {
-        zdiff =zidiff; ncut=id;
-      }
-    }
-    zlmid= (zlmax[ncut]+zlmin[ncut])/2;
-    // printf("ncut=%12d; zlmid=%21.6lf\n",ncut,zlmid);
-
-    nl = 1; nr = nd;
-    while(nl < nr) {
-      while(nl < nd && zgmid_t[ncut][lod[nl]] <= zlmid) { nl=nl+1; }
-      while(nr >= 0 && zgmid_t[ncut][lod[nr]] > zlmid) { nr=nr-1; }
-      if(nl < nr) { nh = lod[nl]; lod[nl] = lod[nr]; lod[nr] = nh; }
-    }
-
-    // printf("nd=%12d;ncut=%12d; nsrt=%12d; nl=%12d\n",nd,ncut,nsrt,nl);
-
-    nson=2;
-    st_clt=cHACApK_generate_cluster(&nclst,ndpth,nsrt,nd,ndim,nson);
-    nsrt1=nsrt; nd1=nl-1;
-    cHACApK_generate_cbitree(&(st_clt->pc_sons[1]),zgmid_t,param,lpmd,lod,&ndpth,ndscd,nsrt1,nd1,md,ndim,&nclst);
-    ndpth=ndpth-1;
-    // ndscd=ndscd+st_clt->pc_sons[1].ndscd;
-    nsrt1=nsrt+nl-1; nd1=nd-nl+1;
-    cHACApK_generate_cbitree(&(st_clt->pc_sons[2]),zgmid_t,param,lpmd,&(lod[nl-1]),&ndpth,ndscd,nsrt1,nd1,md,ndim,&nclst);
-    ndpth=ndpth-1;
-    // ndscd=ndscd+st_clt->pc_sons[2].ndscd;
+  // Allocate stack
+  StackFrame *stack = (StackFrame*)malloc(sizeof(StackFrame) * max_depth);
+  if (!stack) {
+    fprintf(stderr, "Error: cHACApK_generate_cbitree: malloc stack failed\n");
+    exit(EXIT_FAILURE);
   }
-  st_clt->ndscd=nd;
-  *p_st_clt=st_clt;
-  *p_ndpth=ndpth;
-  *p_nclst=nclst;
-  return;
-error:
-  exit(EXIT_FAILURE);
+
+  // Allocate reusable min/max arrays (avoid malloc per call)
+  double *zlmin = (double*)malloc(sizeof(double) * (ndim + 1));
+  double *zlmax = (double*)malloc(sizeof(double) * (ndim + 1));
+  if (!zlmin || !zlmax) {
+    fprintf(stderr, "Error: cHACApK_generate_cbitree: malloc zlmin/zlmax failed\n");
+    free(stack);
+    exit(EXIT_FAILURE);
+  }
+
+  // Initialize stack with root node
+  int sp = 0;
+  stack[sp].p_result = p_st_clt;
+  stack[sp].lod_ptr = lod;
+  stack[sp].nsrt = nsrt;
+  stack[sp].nd = nd;
+  stack[sp].ndpth = ndpth_init;
+  stack[sp].phase = 0;
+  stack[sp].parent_clt = NULL;
+  stack[sp].nl = 0;
+  sp++;
+
+  while (sp > 0) {
+    sp--;
+    StackFrame *f = &stack[sp];
+
+    if (f->phase == 0) {
+      // Phase 0: Process this node
+      int cur_ndpth = f->ndpth + 1;
+      int cur_nd = f->nd;
+      int cur_nsrt = f->nsrt;
+      int *cur_lod = f->lod_ptr;
+
+      if (cur_nd <= minsz) {
+        // Leaf node
+        st_cHACApK_cluster st_clt = cHACApK_generate_cluster(&nclst, cur_ndpth, cur_nsrt, cur_nd, ndim, 0);
+        st_clt->ndscd = cur_nd;
+        *(f->p_result) = st_clt;
+        // Done with this node, continue to next
+      } else {
+        // Internal node: need to split
+        // Find bounding box
+        int id, il;
+        for (id = 1; id <= ndim; id++) {
+          zlmin[id] = zgmid_t[id][cur_lod[1]];
+          zlmax[id] = zlmin[id];
+          for (il = 2; il <= cur_nd; il++) {
+            double zg = zgmid_t[id][cur_lod[il]];
+            if (zg < zlmin[id]) zlmin[id] = zg;
+            else if (zlmax[id] < zg) zlmax[id] = zg;
+          }
+        }
+
+        // Find split dimension (largest extent)
+        double zdiff = zlmax[1] - zlmin[1];
+        int ncut = 1;
+        for (id = 1; id <= ndim; id++) {
+          double zidiff = zlmax[id] - zlmin[id];
+          if (zidiff > zdiff) {
+            zdiff = zidiff;
+            ncut = id;
+          }
+        }
+        double zlmid = (zlmax[ncut] + zlmin[ncut]) / 2.0;
+
+        // Partition lod array
+        int nl = 1, nr = cur_nd;
+        while (nl < nr) {
+          while (nl < cur_nd && zgmid_t[ncut][cur_lod[nl]] <= zlmid) nl++;
+          while (nr >= 0 && zgmid_t[ncut][cur_lod[nr]] > zlmid) nr--;
+          if (nl < nr) {
+            int nh = cur_lod[nl];
+            cur_lod[nl] = cur_lod[nr];
+            cur_lod[nr] = nh;
+          }
+        }
+
+        // Create parent cluster
+        st_cHACApK_cluster st_clt = cHACApK_generate_cluster(&nclst, cur_ndpth, cur_nsrt, cur_nd, ndim, 2);
+        st_clt->ndscd = cur_nd;
+        *(f->p_result) = st_clt;
+
+        // Save state for returning after children
+        f->phase = 1;
+        f->parent_clt = st_clt;
+        f->nl = nl;
+        f->ndpth = cur_ndpth;
+        sp++;  // Push this frame back
+
+        // Check stack overflow
+        if (sp >= max_depth - 2) {
+          fprintf(stderr, "Error: cHACApK_generate_cbitree: stack overflow (depth=%d)\n", sp);
+          free(zlmin);
+          free(zlmax);
+          free(stack);
+          exit(EXIT_FAILURE);
+        }
+
+        // Push left child
+        stack[sp].p_result = &(st_clt->pc_sons[1]);
+        stack[sp].lod_ptr = cur_lod;
+        stack[sp].nsrt = cur_nsrt;
+        stack[sp].nd = nl - 1;
+        stack[sp].ndpth = cur_ndpth;
+        stack[sp].phase = 0;
+        stack[sp].parent_clt = NULL;
+        stack[sp].nl = 0;
+        sp++;
+      }
+    } else if (f->phase == 1) {
+      // Phase 1: After left child, now push right child
+      f->phase = 2;
+      sp++;  // Push this frame back
+
+      st_cHACApK_cluster parent = f->parent_clt;
+      int nl = f->nl;
+      int cur_ndpth = f->ndpth;
+      int cur_nd = f->nd;
+      int cur_nsrt = f->nsrt;
+      int *cur_lod = f->lod_ptr;
+
+      // Push right child
+      stack[sp].p_result = &(parent->pc_sons[2]);
+      stack[sp].lod_ptr = &(cur_lod[nl - 1]);
+      stack[sp].nsrt = cur_nsrt + nl - 1;
+      stack[sp].nd = cur_nd - nl + 1;
+      stack[sp].ndpth = cur_ndpth;
+      stack[sp].phase = 0;
+      stack[sp].parent_clt = NULL;
+      stack[sp].nl = 0;
+      sp++;
+    }
+    // Phase 2: After right child, just continue (parent already set)
+  }
+
+  // Cleanup
+  free(zlmin);
+  free(zlmax);
+  free(stack);
+
+  *p_nclst = nclst;
+  *p_ndpth = ndpth_init;  // Restore original depth (caller expects this)
 }

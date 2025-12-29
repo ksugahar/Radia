@@ -221,7 +221,7 @@ public:
 	//int Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char AuxOldMagnArrayIsNeeded, char KeepTransData);
 
 	void CountMainRelaxElems(radTg3d*, radTlphgPtr*);
-	void AllocateMemory(char ExtraExternFieldArrayIsNeeded);
+	void AllocateMemory(char ExtraExternFieldArrayIsNeeded, char skipInteractMatrix = 0);
 	void DeallocateMemory(); //OC27122019
 
 	int SetupInteractMatrix(); //OC26122019
