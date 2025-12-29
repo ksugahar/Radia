@@ -214,6 +214,19 @@ class radTInteraction : public radTg {
 	std::vector<double> m_tetraFaceNormals;       // n_elem * 4 * 3: outward face normals
 	std::vector<double> m_tetraFaceAreas;         // n_elem * 4: face areas
 
+	//-------------------------------------------------------------------------
+	// Pre-computed hexahedron geometry for fast 6x6 block computation
+	// Hexahedron faces are quads split into 2 triangles each
+	//-------------------------------------------------------------------------
+	bool m_hexaGeomReady;                         // True if geometry is pre-computed
+	std::vector<double> m_hexaCenters;            // n_hex * 3: element centers
+	std::vector<double> m_hexaEvalPoints;         // n_hex * 6 * 3: Yano-Sugahara eval points per face
+	std::vector<double> m_hexaFaceNormals;        // n_hex * 6 * 3: outward face normals
+	std::vector<double> m_hexaFaceAreas;          // n_hex * 6: face areas
+	std::vector<double> m_hexaTriVertices;        // n_hex * 6 * 2 * 3 * 3: 2 triangles per face, 3 verts, xyz
+	std::vector<double> m_hexaTriSigns;           // n_hex * 6 * 2: sign correction for each triangle
+	std::vector<int> m_hexaElemIndices;           // Maps hex index to element index
+
 public:
 
 	int AmOfRelaxSubInterv;
@@ -309,6 +322,12 @@ public:
 	//-------------------------------------------------------------------------
 	void PrecomputeTetraGeometry();  // Pre-compute face vertices/normals/areas
 	void Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const;  // Fast 3x3 block
+
+	//-------------------------------------------------------------------------
+	// Fast hexahedron matrix build (avoiding FieldFromQuadFace overhead)
+	//-------------------------------------------------------------------------
+	void PrecomputeHexaGeometry();  // Pre-compute face triangles/normals/eval points
+	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
 
 	void SetupExternFieldArray();
 	void AddExternFieldFromMoreExtSource();

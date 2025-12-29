@@ -67,8 +67,9 @@ radTInteraction::radTInteraction()
 	RelaxSubIntervArray = nullptr; // New
 	mKeepTransData = 0;
 
-	// Tetrahedron geometry cache
+	// Tetrahedron/Hexahedron geometry cache
 	m_tetraGeomReady = false;
+	m_hexaGeomReady = false;
 }
 
 //-------------------------------------------------------------------------
@@ -92,8 +93,9 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	RelaxSubIntervArray = nullptr; // New
 	AmOfRelaxSubInterv = 0; // New
 
-	// Tetrahedron geometry cache
+	// Tetrahedron/Hexahedron geometry cache
 	m_tetraGeomReady = false;
+	m_hexaGeomReady = false;
 
 	SourceHandle = In_hg;
 	CompCriterium = InCompCriterium;
@@ -929,8 +931,56 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 		return 1;
 	}
 
+	// Check if all elements are hexahedra (for ultra-fast pure-hexa path)
+	bool allHex = hasMSCElements;
+	for(int i = 0; i < AmOfMainElem && allHex; i++)
+	{
+		if(m_elemDOF[i] != 6) allHex = false;
+	}
+
+	// ULTRA-FAST PATH: Pure hexahedra without symmetry
+	if(!hasSymmetry && allHex)
+	{
+		PrecomputeHexaGeometry();
+		if(m_hexaGeomReady)
+		{
+			int nHex = (int)m_hexaElemIndices.size();
+
+			#pragma omp parallel for schedule(dynamic) if(nHex > 20)
+			for(int hex_col = 0; hex_col < nHex; hex_col++)
+			{
+				int col = m_hexaElemIndices[hex_col];
+				int offset_col = m_elemDOFOffset[col];
+
+				for(int hex_row = 0; hex_row < nHex; hex_row++)
+				{
+					int row = m_hexaElemIndices[hex_row];
+					int offset_row = m_elemDOFOffset[row];
+
+					double K_block[36];
+					Compute6x6BlockFast(hex_row, hex_col, K_block);
+
+					// Copy to column-major flat matrix (transpose from row-major)
+					double* block = &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
+					for(int i = 0; i < 6; i++)
+					{
+						for(int j = 0; j < 6; j++)
+						{
+							// K_block is row-major: K[i][j] at i*6+j
+							// block is column-major: block[j*stride+i]
+							block[j * m_totalDOF + i] = K_block[i * 6 + j];
+						}
+					}
+				}
+			}
+
+			return 1;
+		}
+		// Fall through to MEDIUM PATH if geometry precompute failed
+	}
+
 	// MEDIUM PATH: MSC hexahedra without symmetry - uses OpenMP
-	// This is faster than slow path but handles 6x6 blocks correctly
+	// This handles mixed hex/tetra meshes with 6x6 blocks
 	if(!hasSymmetry && hasMSCElements)
 	{
 		// Use unified 1/(4*pi) constant for all MSC interactions
@@ -2703,6 +2753,222 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 	N_mat[6] = H_from_Mx[2] * RadConst::INV_FOUR_PI;  // Hz/Mx / 4pi
 	N_mat[7] = H_from_My[2] * RadConst::INV_FOUR_PI;  // Hz/My / 4pi
 	N_mat[8] = H_from_Mz[2] * RadConst::INV_FOUR_PI;  // Hz/Mz / 4pi
+}
+
+//=========================================================================
+// PrecomputeHexaGeometry: Pre-compute hexahedron face geometry
+// Hexahedra have 6 quadrilateral faces, each split into 2 triangles
+// Reference: Yano-Sugahara MSC method for hexahedral elements
+//=========================================================================
+
+void radTInteraction::PrecomputeHexaGeometry()
+{
+	if(m_hexaGeomReady || AmOfMainElem == 0) return;
+
+	// Count hexahedra and build index map
+	int nHex = 0;
+	m_hexaElemIndices.clear();
+	for(int e = 0; e < AmOfMainElem; e++)
+	{
+		if(m_elemDOF[e] == 6)
+		{
+			m_hexaElemIndices.push_back(e);
+			nHex++;
+		}
+	}
+	if(nHex == 0) return;
+
+	// Allocate arrays
+	m_hexaCenters.resize(nHex * 3);
+	m_hexaEvalPoints.resize(nHex * 6 * 3);  // 6 faces, xyz
+	m_hexaFaceNormals.resize(nHex * 6 * 3); // 6 faces, xyz
+	m_hexaFaceAreas.resize(nHex * 6);       // 6 faces
+	m_hexaTriVertices.resize(nHex * 6 * 2 * 3 * 3);  // 6 faces, 2 tris, 3 verts, xyz
+	m_hexaTriSigns.resize(nHex * 6 * 2);    // 6 faces, 2 tris
+
+	for(int h = 0; h < nHex; h++)
+	{
+		int elemIdx = m_hexaElemIndices[h];
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
+		if(!poly || poly->AmOfFaces != 6) continue;
+
+		// Store element center
+		int cIdx = h * 3;
+		m_hexaCenters[cIdx + 0] = poly->CentrPoint.x;
+		m_hexaCenters[cIdx + 1] = poly->CentrPoint.y;
+		m_hexaCenters[cIdx + 2] = poly->CentrPoint.z;
+
+		// Process each of the 6 faces
+		for(int f = 0; f < 6; f++)
+		{
+			// Store face normal (already computed in poly->FaceNormal)
+			int fnIdx = (h * 6 + f) * 3;
+			m_hexaFaceNormals[fnIdx + 0] = poly->FaceNormal[f].x;
+			m_hexaFaceNormals[fnIdx + 1] = poly->FaceNormal[f].y;
+			m_hexaFaceNormals[fnIdx + 2] = poly->FaceNormal[f].z;
+
+			// Store face area
+			m_hexaFaceAreas[h * 6 + f] = poly->FaceArea[f];
+
+			// Store Yano-Sugahara evaluation point: midpoint(face_center, element_center)
+			int epIdx = (h * 6 + f) * 3;
+			m_hexaEvalPoints[epIdx + 0] = 0.5 * (poly->FaceCenter[f].x + poly->CentrPoint.x);
+			m_hexaEvalPoints[epIdx + 1] = 0.5 * (poly->FaceCenter[f].y + poly->CentrPoint.y);
+			m_hexaEvalPoints[epIdx + 2] = 0.5 * (poly->FaceCenter[f].z + poly->CentrPoint.z);
+
+			// Get face vertices and split into 2 triangles
+			radTHandlePgnAndTrans hpt = poly->VectHandlePgnAndTrans[f];
+			radTPolygon* pgn = hpt.PgnHndl.rep;
+			radTrans* tr = hpt.TransHndl.rep;
+
+			const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+			if(verts2d.size() < 4) continue;
+
+			TVector3d V[4];
+			for(int v = 0; v < 4; v++)
+			{
+				V[v] = tr->TrPoint(TVector3d(verts2d[v].x, verts2d[v].y, pgn->CoordZ));
+			}
+
+			// Triangle 1: V0, V1, V2
+			// Triangle 2: V0, V2, V3
+			TVector3d tri_verts[2][3] = {
+				{V[0], V[1], V[2]},
+				{V[0], V[2], V[3]}
+			};
+
+			for(int t = 0; t < 2; t++)
+			{
+				const TVector3d& T0 = tri_verts[t][0];
+				const TVector3d& T1 = tri_verts[t][1];
+				const TVector3d& T2 = tri_verts[t][2];
+
+				// Store triangle vertices
+				int tvIdx = ((h * 6 + f) * 2 + t) * 3 * 3;
+				m_hexaTriVertices[tvIdx + 0] = T0.x;
+				m_hexaTriVertices[tvIdx + 1] = T0.y;
+				m_hexaTriVertices[tvIdx + 2] = T0.z;
+				m_hexaTriVertices[tvIdx + 3] = T1.x;
+				m_hexaTriVertices[tvIdx + 4] = T1.y;
+				m_hexaTriVertices[tvIdx + 5] = T1.z;
+				m_hexaTriVertices[tvIdx + 6] = T2.x;
+				m_hexaTriVertices[tvIdx + 7] = T2.y;
+				m_hexaTriVertices[tvIdx + 8] = T2.z;
+
+				// Compute triangle normal and sign correction
+				TVector3d e1 = {T1.x - T0.x, T1.y - T0.y, T1.z - T0.z};
+				TVector3d e2 = {T2.x - T0.x, T2.y - T0.y, T2.z - T0.z};
+				TVector3d tri_n = {e1.y*e2.z - e1.z*e2.y,
+				                   e1.z*e2.x - e1.x*e2.z,
+				                   e1.x*e2.y - e1.y*e2.x};
+				double nLen = sqrt(tri_n.x*tri_n.x + tri_n.y*tri_n.y + tri_n.z*tri_n.z);
+
+				double sign = 1.0;
+				if(nLen > 1e-20)
+				{
+					tri_n.x /= nLen; tri_n.y /= nLen; tri_n.z /= nLen;
+
+					// Triangle center
+					TVector3d tc = {(T0.x + T1.x + T2.x) / 3.0,
+					                (T0.y + T1.y + T2.y) / 3.0,
+					                (T0.z + T1.z + T2.z) / 3.0};
+					// Vector from element center to triangle center
+					TVector3d toTri = {tc.x - poly->CentrPoint.x,
+					                   tc.y - poly->CentrPoint.y,
+					                   tc.z - poly->CentrPoint.z};
+					// Sign: +1 if normal points outward, -1 if inward
+					double dot = tri_n.x*toTri.x + tri_n.y*toTri.y + tri_n.z*toTri.z;
+					sign = (dot >= 0) ? 1.0 : -1.0;
+				}
+				m_hexaTriSigns[(h * 6 + f) * 2 + t] = sign;
+			}
+		}
+	}
+
+	m_hexaGeomReady = true;
+}
+
+//=========================================================================
+// Compute6x6BlockFast: Fast 6x6 interaction block for hexahedra
+// Uses pre-computed geometry (avoiding FieldFromQuadFace overhead)
+// Reference: Yano-Sugahara MSC method
+//=========================================================================
+
+void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const
+{
+	std::memset(K_mat, 0, 36 * sizeof(double));
+
+	if(!m_hexaGeomReady) return;
+
+	int nHex = (int)m_hexaElemIndices.size();
+	if(hex_i < 0 || hex_i >= nHex || hex_j < 0 || hex_j >= nHex) return;
+
+	// Source element center (for point charge)
+	const double* src_center = &m_hexaCenters[hex_j * 3];
+
+	// For each target face i
+	for(int face_i = 0; face_i < 6; face_i++)
+	{
+		// Yano-Sugahara evaluation point for target face
+		int epIdx = (hex_i * 6 + face_i) * 3;
+		const double obs[3] = {m_hexaEvalPoints[epIdx + 0],
+		                       m_hexaEvalPoints[epIdx + 1],
+		                       m_hexaEvalPoints[epIdx + 2]};
+
+		// Target face normal
+		int fnIdx_i = (hex_i * 6 + face_i) * 3;
+		const double n_i[3] = {m_hexaFaceNormals[fnIdx_i + 0],
+		                       m_hexaFaceNormals[fnIdx_i + 1],
+		                       m_hexaFaceNormals[fnIdx_i + 2]};
+
+		// For each source face j
+		for(int face_j = 0; face_j < 6; face_j++)
+		{
+			// Field from unit sigma on source face j
+			double H_total[3] = {0.0, 0.0, 0.0};
+
+			// Sum contributions from 2 triangles of face j
+			for(int t = 0; t < 2; t++)
+			{
+				int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
+				const double* V0 = &m_hexaTriVertices[tvIdx + 0];
+				const double* V1 = &m_hexaTriVertices[tvIdx + 3];
+				const double* V2 = &m_hexaTriVertices[tvIdx + 6];
+				double sign = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
+
+				double H_tri[3];
+				FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign, H_tri);
+				H_total[0] += H_tri[0];
+				H_total[1] += H_tri[1];
+				H_total[2] += H_tri[2];
+			}
+
+			// Point charge contribution: m = -sigma * area
+			// H_point = -area * (r - p) / |r - p|^3
+			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
+			double r[3] = {obs[0] - src_center[0],
+			               obs[1] - src_center[1],
+			               obs[2] - src_center[2]};
+			double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+
+			if(dist_sq > 1e-30)
+			{
+				double dist = sqrt(dist_sq);
+				double inv_dist3 = 1.0 / (dist * dist_sq);
+				double coef = -area_j * inv_dist3;
+				H_total[0] += coef * r[0];
+				H_total[1] += coef * r[1];
+				H_total[2] += coef * r[2];
+			}
+
+			// K_ij = -n_i dot H_total / (4*pi)
+			double K_ij = -(n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
+			              * RadConst::INV_FOUR_PI;
+
+			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
+			K_mat[face_i * 6 + face_j] = K_ij;
+		}
+	}
 }
 
 //-------------------------------------------------------------------------
