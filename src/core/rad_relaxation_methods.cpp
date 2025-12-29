@@ -937,13 +937,17 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	int AmOfMainElem = ctx.AmOfMainElem;
 
 	// Build system matrix: copy base matrix and add diagonal terms
+	// LAPACK dgesv destroys the matrix, so we need a working copy
+	// Only one copy is needed - dgesv works directly on this
 	std::vector<double> SystemMatrix(totalDOF * totalDOF);
 	std::memcpy(SystemMatrix.data(), ctx.BaseMatrix.data(), totalDOF * totalDOF * sizeof(double));
 
-	// Build RHS vector
+	// Build RHS vector (will be overwritten with solution by dgesv)
 	std::vector<double> RHS(totalDOF);
 
 	// Update diagonal and RHS based on current chi
+	// Matrix is COLUMN-MAJOR: A(i,j) at [j * totalDOF + i]
+	// Diagonal element A(k,k) is at [k * totalDOF + k] = [k * (totalDOF + 1)]
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
@@ -957,8 +961,8 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		for(int k = 0; k < dof; k++)
 		{
 			int row = offset + k;
-			// Column-major: diagonal is at [row * totalDOF + row]
-			SystemMatrix[row * totalDOF + row] += inv_chi;
+			// Column-major diagonal: A(row,row) at index [row * (totalDOF + 1)]
+			SystemMatrix[row * (totalDOF + 1)] += inv_chi;
 			RHS[row] = ctx.FlatExtern[row];
 		}
 
@@ -973,18 +977,16 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		}
 	}
 
-	// Solve using LAPACK LU
+	// Solve using LAPACK LU (dgesv solves A*x = b in-place)
 	auto t_lu_start = std::chrono::high_resolution_clock::now();
 #ifdef HAVE_LAPACK
-	std::vector<double> A_col(totalDOF * totalDOF);
 	std::vector<int> ipiv(totalDOF);
-
-	// SystemMatrix is column-major, copy directly for LAPACK
-	std::memcpy(A_col.data(), SystemMatrix.data(), totalDOF * totalDOF * sizeof(double));
-
 	int nrhs = 1;
 	int info = 0;
-	dgesv_(&totalDOF, &nrhs, A_col.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
+
+	// dgesv overwrites SystemMatrix with LU factors and RHS with solution
+	// No need for extra copy - pass SystemMatrix directly
+	dgesv_(&totalDOF, &nrhs, SystemMatrix.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
 	if(info != 0) return -1;  // Singular matrix
 #else
 	// Fallback: transpose to row-major and use SolveLU_Flat
