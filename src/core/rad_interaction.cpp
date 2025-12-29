@@ -70,6 +70,7 @@ radTInteraction::radTInteraction()
 	// Tetrahedron/Hexahedron geometry cache
 	m_tetraGeomReady = false;
 	m_hexaGeomReady = false;
+	m_hexaTriDataReady = false;
 }
 
 //-------------------------------------------------------------------------
@@ -96,6 +97,7 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	// Tetrahedron/Hexahedron geometry cache
 	m_tetraGeomReady = false;
 	m_hexaGeomReady = false;
+	m_hexaTriDataReady = false;
 
 	SourceHandle = In_hg;
 	CompCriterium = InCompCriterium;
@@ -2886,6 +2888,213 @@ void radTInteraction::PrecomputeHexaGeometry()
 	}
 
 	m_hexaGeomReady = true;
+
+	// Also pre-compute triangle local coordinate systems
+	const_cast<radTInteraction*>(this)->PrecomputeHexaTriangleData();
+}
+
+//=========================================================================
+// PrecomputeHexaTriangleData: Pre-compute triangle local coordinate systems
+// Eliminates redundant sqrt/div operations during field computation
+// Each hexahedron has 12 triangles (6 faces * 2 triangles)
+//=========================================================================
+
+void radTInteraction::PrecomputeHexaTriangleData()
+{
+	if(m_hexaTriDataReady || !m_hexaGeomReady) return;
+
+	const double EPS = 1.0e-20;
+	int nHex = (int)m_hexaElemIndices.size();
+	if(nHex == 0) return;
+
+	// Allocate: 12 triangles per hex, TRI_DATA_SIZE doubles per triangle
+	m_hexaTriData.resize(nHex * TRIS_PER_HEX_ELEM * TRI_DATA_SIZE);
+
+	for(int h = 0; h < nHex; h++)
+	{
+		const double* center = &m_hexaCenters[h * 3];
+
+		for(int f = 0; f < 6; f++)
+		{
+			for(int t = 0; t < 2; t++)
+			{
+				int tri_idx = h * TRIS_PER_HEX_ELEM + f * 2 + t;
+				double* data = &m_hexaTriData[tri_idx * TRI_DATA_SIZE];
+
+				// Get triangle vertices from m_hexaTriVertices
+				int tvIdx = ((h * 6 + f) * 2 + t) * 3 * 3;
+				const double* v0 = &m_hexaTriVertices[tvIdx + 0];
+				const double* v1 = &m_hexaTriVertices[tvIdx + 3];
+				const double* v2 = &m_hexaTriVertices[tvIdx + 6];
+
+				// Build local coordinate system
+				double e1[3] = {v1[0]-v0[0], v1[1]-v0[1], v1[2]-v0[2]};
+				double e2[3] = {v2[0]-v0[0], v2[1]-v0[1], v2[2]-v0[2]};
+
+				// basis_c = e1 x e2 (face normal)
+				double* basis_c = data + 6;
+				basis_c[0] = e1[1]*e2[2] - e1[2]*e2[1];
+				basis_c[1] = e1[2]*e2[0] - e1[0]*e2[2];
+				basis_c[2] = e1[0]*e2[1] - e1[1]*e2[0];
+
+				double cLen = sqrt(basis_c[0]*basis_c[0] + basis_c[1]*basis_c[1] + basis_c[2]*basis_c[2]);
+				if(cLen < EPS) {
+					std::memset(data, 0, TRI_DATA_SIZE * sizeof(double));
+					continue;
+				}
+				basis_c[0] /= cLen; basis_c[1] /= cLen; basis_c[2] /= cLen;
+
+				// basis_a = e1 normalized
+				double* basis_a = data;
+				basis_a[0] = e1[0]; basis_a[1] = e1[1]; basis_a[2] = e1[2];
+				double aLen = sqrt(basis_a[0]*basis_a[0] + basis_a[1]*basis_a[1] + basis_a[2]*basis_a[2]);
+				if(aLen < EPS) {
+					std::memset(data, 0, TRI_DATA_SIZE * sizeof(double));
+					continue;
+				}
+				basis_a[0] /= aLen; basis_a[1] /= aLen; basis_a[2] /= aLen;
+
+				// basis_b = basis_c x basis_a
+				double* basis_b = data + 3;
+				basis_b[0] = basis_c[1]*basis_a[2] - basis_c[2]*basis_a[1];
+				basis_b[1] = basis_c[2]*basis_a[0] - basis_c[0]*basis_a[2];
+				basis_b[2] = basis_c[0]*basis_a[1] - basis_c[1]*basis_a[0];
+
+				// origin = v0
+				double* origin = data + 9;
+				origin[0] = v0[0]; origin[1] = v0[1]; origin[2] = v0[2];
+
+				// 2D coordinates (v0 = origin)
+				double* XY = data + 12;  // 6 doubles: {x0,y0, x1,y1, x2,y2}
+				XY[0] = 0.0; XY[1] = 0.0;  // v0
+				XY[2] = e1[0]*basis_a[0] + e1[1]*basis_a[1] + e1[2]*basis_a[2];
+				XY[3] = e1[0]*basis_b[0] + e1[1]*basis_b[1] + e1[2]*basis_b[2];
+				XY[4] = e2[0]*basis_a[0] + e2[1]*basis_a[1] + e2[2]*basis_a[2];
+				XY[5] = e2[0]*basis_b[0] + e2[1]*basis_b[1] + e2[2]*basis_b[2];
+
+				// Edge parameters
+				double* DS = data + 18;  // 3 doubles
+				double* AM = data + 21;  // 3 doubles
+				double* XD = data + 24;  // 3 doubles
+				double* YD = data + 27;  // 3 doubles
+				double EPSG = 0.0;
+
+				for(int j = 0; j < 3; j++)
+				{
+					int l = (j + 1) % 3;
+					double dx = XY[l*2] - XY[j*2];
+					double dy = XY[l*2+1] - XY[j*2+1];
+					if(fabs(dx) < EPS) dx = (dx >= 0) ? EPS : -EPS;
+
+					DS[j] = sqrt(dx*dx + dy*dy);
+					AM[j] = dy / dx;
+					XD[j] = -dx / DS[j];
+					YD[j] = dy / DS[j];
+
+					if(DS[j] > EPSG) EPSG = DS[j];
+				}
+
+				// Store EPSG and sign
+				data[30] = EPSG * 1.0e-12;  // EPSG
+
+				// Get pre-computed sign from m_hexaTriSigns
+				data[31] = m_hexaTriSigns[(h * 6 + f) * 2 + t];
+			}
+		}
+	}
+
+	m_hexaTriDataReady = true;
+}
+
+//=========================================================================
+// FieldFromTrianglePrecomputed: Ultra-fast field using pre-computed data
+// Uses pre-computed basis vectors and edge parameters (no sqrt/div)
+// Returns field WITHOUT 4pi divisor
+//=========================================================================
+
+void radTInteraction::FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const
+{
+	const double EPS = 1.0e-20;
+
+	// Get pre-computed data
+	int global_tri_idx = hex_idx * TRIS_PER_HEX_ELEM + tri_idx;
+	const double* data = &m_hexaTriData[global_tri_idx * TRI_DATA_SIZE];
+
+	const double* basis_a = data;       // [0..2]
+	const double* basis_b = data + 3;   // [3..5]
+	const double* basis_c = data + 6;   // [6..8]
+	const double* origin = data + 9;    // [9..11]
+	const double* XY = data + 12;       // [12..17] = {x0,y0, x1,y1, x2,y2}
+	const double* DS = data + 18;       // [18..20]
+	const double* AM = data + 21;       // [21..23]
+	const double* XD = data + 24;       // [24..26]
+	const double* YD = data + 27;       // [27..29]
+	double EPSG = data[30];
+	double sign = data[31];
+
+	// Apply sign to sigma
+	sigma *= sign;
+
+	// Transform observation point to local coordinates
+	double d[3] = {obs[0] - origin[0], obs[1] - origin[1], obs[2] - origin[2]};
+	double EE1 = d[0]*basis_a[0] + d[1]*basis_a[1] + d[2]*basis_a[2];
+	double EE2 = d[0]*basis_b[0] + d[1]*basis_b[1] + d[2]*basis_b[2];
+	double EE3 = d[0]*basis_c[0] + d[1]*basis_c[1] + d[2]*basis_c[2];
+
+	// Vertex-relative coordinates
+	double X[3], Y[3], H[3], E[3], R[3];
+	for(int j = 0; j < 3; j++)
+	{
+		X[j] = EE1 - XY[j*2];
+		Y[j] = EE2 - XY[j*2+1];
+		H[j] = Y[j] * X[j];
+		E[j] = EE3*EE3 + X[j]*X[j];
+		R[j] = sqrt(X[j]*X[j] + Y[j]*Y[j] + EE3*EE3);
+	}
+
+	double Z = EE3;
+
+	// Edge contributions (log terms)
+	double AL[3];
+	for(int j = 0; j < 3; j++)
+	{
+		int jp1 = (j + 1) % 3;
+		double RM = R[j] + R[jp1] - DS[j];
+		double RP = R[j] + R[jp1] + DS[j];
+		double RR = (RM / RP > EPS) ? (RM / RP) : EPS;
+		AL[j] = log(RR);
+	}
+
+	// Tangential field components
+	double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
+	double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
+	double HH3 = 0.0;
+
+	// Normal component (atan terms) - only if not on surface
+	if(fabs(Z) > EPSG)
+	{
+		double ZR[3];
+		for(int j = 0; j < 3; j++)
+		{
+			ZR[j] = Z * R[j];
+		}
+
+		double AT[3], BT[3];
+		for(int j = 0; j < 3; j++)
+		{
+			int jp1 = (j + 1) % 3;
+			AT[j] = (AM[j]*E[j] - H[j]) / ZR[j];
+			BT[j] = (AM[j]*E[jp1] - H[jp1]) / ZR[jp1];
+		}
+
+		HH3 = sigma * (-atan(AT[0]) - atan(AT[1]) - atan(AT[2])
+		               +atan(BT[0]) + atan(BT[1]) + atan(BT[2]));
+	}
+
+	// Transform back to global coordinates
+	H_out[0] = HH1*basis_a[0] + HH2*basis_b[0] + HH3*basis_c[0];
+	H_out[1] = HH1*basis_a[1] + HH2*basis_b[1] + HH3*basis_c[1];
+	H_out[2] = HH1*basis_a[2] + HH2*basis_b[2] + HH3*basis_c[2];
 }
 
 //=========================================================================
@@ -2905,6 +3114,9 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 
 	// Source element center (for point charge)
 	const double* src_center = &m_hexaCenters[hex_j * 3];
+
+	// Check if pre-computed triangle data is available
+	const bool usePrecomputed = m_hexaTriDataReady;
 
 	// For each target face i
 	for(int face_i = 0; face_i < 6; face_i++)
@@ -2930,14 +3142,25 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 			// Sum contributions from 2 triangles of face j
 			for(int t = 0; t < 2; t++)
 			{
-				int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
-				const double* V0 = &m_hexaTriVertices[tvIdx + 0];
-				const double* V1 = &m_hexaTriVertices[tvIdx + 3];
-				const double* V2 = &m_hexaTriVertices[tvIdx + 6];
-				double sign = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
-
 				double H_tri[3];
-				FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign, H_tri);
+
+				if(usePrecomputed)
+				{
+					// Use pre-computed triangle data (fast path)
+					int tri_idx = face_j * 2 + t;
+					FieldFromTrianglePrecomputed(hex_j, tri_idx, obs, 1.0, H_tri);
+				}
+				else
+				{
+					// Fallback: compute on the fly
+					int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
+					const double* V0 = &m_hexaTriVertices[tvIdx + 0];
+					const double* V1 = &m_hexaTriVertices[tvIdx + 3];
+					const double* V2 = &m_hexaTriVertices[tvIdx + 6];
+					double sign = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
+					FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign, H_tri);
+				}
+
 				H_total[0] += H_tri[0];
 				H_total[1] += H_tri[1];
 				H_total[2] += H_tri[2];

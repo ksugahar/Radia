@@ -17,6 +17,7 @@
 #include "rad_hacapk.h"
 #include "rad_interaction.h"
 #include "rad_constants.h"
+#include "rad_poly_analytical.h"
 #include <cmath>
 #include <cstring>
 #include <cstdio>
@@ -156,8 +157,6 @@ RadHACApKManager::RadHACApKManager(radTInteraction* interaction)
     , m_nffc(3)
     , m_is_6dof(false)
     , m_is_mixed_dof(false)
-    , m_tri_precomputed(false)
-    , m_geometry_ready(false)
     , m_geometry_3dof_ready(false)
     , m_diag_cached(false)
     , m_flat_N_ready(false)
@@ -275,194 +274,6 @@ void RadHACApKManager::BuildDOFLookupTable() {
             m_dof_to_local[offset + d] = d;
         }
     }
-}
-
-//=========================================================================
-// PrecomputeGeometry: ELF-style pre-computed geometry for fast matrix access
-// Extracts all hexahedron vertices and face geometry into contiguous arrays
-//=========================================================================
-
-void RadHACApKManager::PrecomputeGeometry() {
-    if (m_geometry_ready || m_n_elem == 0 || !m_interaction) return;
-
-    // Allocate arrays
-    m_elem_centers.resize(m_n_elem * 3);
-    m_face_centers.resize(m_n_elem * 6 * 3);
-    m_face_normals.resize(m_n_elem * 6 * 3);
-    m_face_areas.resize(m_n_elem * 6);
-    m_face_vertices.resize(m_n_elem * 6 * 4 * 3);  // 6 faces, 4 vertices each, 3 coords
-
-    for (int e = 0; e < m_n_elem; e++) {
-        radTg3dRelax* elem = m_interaction->g3dRelaxPtrVect[e];
-        if (!elem) continue;
-
-        radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
-        if (!poly || !poly->Use6DOF_MSC) continue;
-
-        // Store element center
-        int cIdx = e * 3;
-        m_elem_centers[cIdx + 0] = poly->CentrPoint.x;
-        m_elem_centers[cIdx + 1] = poly->CentrPoint.y;
-        m_elem_centers[cIdx + 2] = poly->CentrPoint.z;
-
-        // Store face data for each of the 6 faces
-        for (int f = 0; f < 6; f++) {
-            int fcIdx = (e * 6 + f) * 3;
-            int aIdx = e * 6 + f;
-
-            // Face center
-            m_face_centers[fcIdx + 0] = poly->FaceCenter[f].x;
-            m_face_centers[fcIdx + 1] = poly->FaceCenter[f].y;
-            m_face_centers[fcIdx + 2] = poly->FaceCenter[f].z;
-
-            // Face normal
-            m_face_normals[fcIdx + 0] = poly->FaceNormal[f].x;
-            m_face_normals[fcIdx + 1] = poly->FaceNormal[f].y;
-            m_face_normals[fcIdx + 2] = poly->FaceNormal[f].z;
-
-            // Face area
-            m_face_areas[aIdx] = poly->FaceArea[f];
-
-            // Get 4 vertices of this face from polygon
-            radTHandlePgnAndTrans hpt = poly->VectHandlePgnAndTrans[f];
-            radTPolygon* pgn = hpt.PgnHndl.rep;
-            radTrans* tr = hpt.TransHndl.rep;
-
-            const radTVect2dVect& verts2d = pgn->EdgePointsVector;
-            int fvIdx = (e * 6 + f) * 4 * 3;  // Starting index for this face's vertices
-
-            for (int v = 0; v < 4 && v < (int)verts2d.size(); v++) {
-                TVector3d V = tr->TrPoint(TVector3d(verts2d[v].x, verts2d[v].y, pgn->CoordZ));
-                m_face_vertices[fvIdx + v * 3 + 0] = V.x;
-                m_face_vertices[fvIdx + v * 3 + 1] = V.y;
-                m_face_vertices[fvIdx + v * 3 + 2] = V.z;
-            }
-        }
-    }
-
-    m_geometry_ready = true;
-
-    // Also pre-compute triangle local coordinate systems
-    PrecomputeTriangleData();
-}
-
-//=========================================================================
-// PrecomputeTriangleData: Pre-compute triangle local coordinate systems
-// Eliminates redundant sqrt/div operations during field computation
-// Each hexahedron face is split into 2 triangles = 12 triangles per element
-//=========================================================================
-
-void RadHACApKManager::PrecomputeTriangleData() {
-    if (m_tri_precomputed || m_n_elem == 0 || !m_geometry_ready) return;
-
-    const double EPS = 1.0e-20;
-
-    // Allocate: 12 triangles per element, 32 doubles per triangle
-    m_tri_data.resize(m_n_elem * TRIS_PER_ELEM * TRI_DATA_SIZE);
-
-    // Triangle split indices for quad face: [0,1,2], [0,2,3]
-    const int tri_split[2][3] = {{0, 1, 2}, {0, 2, 3}};
-
-    for (int e = 0; e < m_n_elem; e++) {
-        const double* center = &m_elem_centers[e * 3];
-
-        for (int f = 0; f < 6; f++) {
-            // Get quad vertices
-            int fvIdx = (e * 6 + f) * 4 * 3;
-            const double* V[4];
-            for (int v = 0; v < 4; v++) {
-                V[v] = &m_face_vertices[fvIdx + v * 3];
-            }
-
-            for (int t = 0; t < 2; t++) {
-                int tri_idx = e * TRIS_PER_ELEM + f * 2 + t;
-                double* data = &m_tri_data[tri_idx * TRI_DATA_SIZE];
-
-                // Get triangle vertices
-                const double* v0 = V[tri_split[t][0]];
-                const double* v1 = V[tri_split[t][1]];
-                const double* v2 = V[tri_split[t][2]];
-
-                // Build local coordinate system
-                double e1[3] = {v1[0]-v0[0], v1[1]-v0[1], v1[2]-v0[2]};
-                double e2[3] = {v2[0]-v0[0], v2[1]-v0[1], v2[2]-v0[2]};
-
-                // basis_c = e1 x e2 (face normal)
-                double* basis_c = data + 6;
-                basis_c[0] = e1[1]*e2[2] - e1[2]*e2[1];
-                basis_c[1] = e1[2]*e2[0] - e1[0]*e2[2];
-                basis_c[2] = e1[0]*e2[1] - e1[1]*e2[0];
-
-                double cLen = sqrt(basis_c[0]*basis_c[0] + basis_c[1]*basis_c[1] + basis_c[2]*basis_c[2]);
-                if (cLen < EPS) {
-                    std::memset(data, 0, TRI_DATA_SIZE * sizeof(double));
-                    continue;
-                }
-                basis_c[0] /= cLen; basis_c[1] /= cLen; basis_c[2] /= cLen;
-
-                // basis_a = e1 normalized
-                double* basis_a = data;
-                basis_a[0] = e1[0]; basis_a[1] = e1[1]; basis_a[2] = e1[2];
-                double aLen = sqrt(basis_a[0]*basis_a[0] + basis_a[1]*basis_a[1] + basis_a[2]*basis_a[2]);
-                if (aLen < EPS) {
-                    std::memset(data, 0, TRI_DATA_SIZE * sizeof(double));
-                    continue;
-                }
-                basis_a[0] /= aLen; basis_a[1] /= aLen; basis_a[2] /= aLen;
-
-                // basis_b = basis_c x basis_a
-                double* basis_b = data + 3;
-                basis_b[0] = basis_c[1]*basis_a[2] - basis_c[2]*basis_a[1];
-                basis_b[1] = basis_c[2]*basis_a[0] - basis_c[0]*basis_a[2];
-                basis_b[2] = basis_c[0]*basis_a[1] - basis_c[1]*basis_a[0];
-
-                // origin = v0
-                double* origin = data + 9;
-                origin[0] = v0[0]; origin[1] = v0[1]; origin[2] = v0[2];
-
-                // 2D coordinates (v0 = origin)
-                double* XY = data + 12;  // 6 doubles: XY[0..5] = {x0,y0, x1,y1, x2,y2}
-                XY[0] = 0.0; XY[1] = 0.0;  // v0
-                XY[2] = e1[0]*basis_a[0] + e1[1]*basis_a[1] + e1[2]*basis_a[2];
-                XY[3] = e1[0]*basis_b[0] + e1[1]*basis_b[1] + e1[2]*basis_b[2];
-                XY[4] = e2[0]*basis_a[0] + e2[1]*basis_a[1] + e2[2]*basis_a[2];
-                XY[5] = e2[0]*basis_b[0] + e2[1]*basis_b[1] + e2[2]*basis_b[2];
-
-                // Edge parameters
-                double* DS = data + 18;  // 3 doubles
-                double* AM = data + 21;  // 3 doubles
-                double* XD = data + 24;  // 3 doubles
-                double* YD = data + 27;  // 3 doubles
-                double EPSG = 0.0;
-
-                for (int j = 0; j < 3; j++) {
-                    int l = (j + 1) % 3;
-                    double dx = XY[l*2] - XY[j*2];
-                    double dy = XY[l*2+1] - XY[j*2+1];
-                    if (fabs(dx) < EPS) dx = (dx >= 0) ? EPS : -EPS;
-
-                    DS[j] = sqrt(dx*dx + dy*dy);
-                    AM[j] = dy / dx;
-                    XD[j] = -dx / DS[j];
-                    YD[j] = dy / DS[j];
-
-                    if (DS[j] > EPSG) EPSG = DS[j];
-                }
-
-                // Store EPSG and sign
-                data[30] = EPSG * 1.0e-12;  // EPSG
-
-                // Normal orientation sign (outward from center)
-                double tc[3] = {(v0[0]+v1[0]+v2[0])/3.0 - center[0],
-                                (v0[1]+v1[1]+v2[1])/3.0 - center[1],
-                                (v0[2]+v1[2]+v2[2])/3.0 - center[2]};
-                double dot = basis_c[0]*tc[0] + basis_c[1]*tc[1] + basis_c[2]*tc[2];
-                data[31] = (dot >= 0.0) ? 1.0 : -1.0;  // sign
-            }
-        }
-    }
-
-    m_tri_precomputed = true;
 }
 
 //=========================================================================
@@ -602,348 +413,19 @@ void RadHACApKManager::PrecomputeFlatInteractMatrix() {
 }
 
 //=========================================================================
-// FieldFromChargedTriangleFast: Triangle field using edge-based log/atan formula
-// Pure array-based computation (no object access)
-// Returns field WITHOUT 4pi divisor (matches radTPolyhedron::FieldFromChargedTriangle)
-//=========================================================================
-
-void RadHACApKManager::FieldFromChargedTriangleFast(const double* obs, const double* v0, const double* v1, const double* v2, double sigma, double* H_out) const {
-    // Analytic field from uniformly charged triangle using edge-based log/atan formula
-    // Returns field WITHOUT 4pi divisor (4pi is applied once in matrix assembly)
-    // Matches radTPolyhedron::FieldFromChargedTriangle implementation
-
-    const double EPS = 1.0e-20;
-
-    // Build local coordinate system
-    double e1[3] = {v1[0]-v0[0], v1[1]-v0[1], v1[2]-v0[2]};
-    double e2[3] = {v2[0]-v0[0], v2[1]-v0[1], v2[2]-v0[2]};
-
-    // Face normal = e1 x e2 (basis_c)
-    double basis_c[3];
-    basis_c[0] = e1[1]*e2[2] - e1[2]*e2[1];
-    basis_c[1] = e1[2]*e2[0] - e1[0]*e2[2];
-    basis_c[2] = e1[0]*e2[1] - e1[1]*e2[0];
-
-    double cLen = sqrt(basis_c[0]*basis_c[0] + basis_c[1]*basis_c[1] + basis_c[2]*basis_c[2]);
-    if (cLen < EPS) { H_out[0] = H_out[1] = H_out[2] = 0.0; return; }
-    basis_c[0] /= cLen; basis_c[1] /= cLen; basis_c[2] /= cLen;
-
-    // basis_a = e1 normalized
-    double basis_a[3] = {e1[0], e1[1], e1[2]};
-    double aLen = sqrt(basis_a[0]*basis_a[0] + basis_a[1]*basis_a[1] + basis_a[2]*basis_a[2]);
-    if (aLen < EPS) { H_out[0] = H_out[1] = H_out[2] = 0.0; return; }
-    basis_a[0] /= aLen; basis_a[1] /= aLen; basis_a[2] /= aLen;
-
-    // basis_b = basis_c x basis_a
-    double basis_b[3];
-    basis_b[0] = basis_c[1]*basis_a[2] - basis_c[2]*basis_a[1];
-    basis_b[1] = basis_c[2]*basis_a[0] - basis_c[0]*basis_a[2];
-    basis_b[2] = basis_c[0]*basis_a[1] - basis_c[1]*basis_a[0];
-    double bLen = sqrt(basis_b[0]*basis_b[0] + basis_b[1]*basis_b[1] + basis_b[2]*basis_b[2]);
-    if (bLen < EPS) { H_out[0] = H_out[1] = H_out[2] = 0.0; return; }
-    basis_b[0] /= bLen; basis_b[1] /= bLen; basis_b[2] /= bLen;
-
-    // Convert vertices to local 2D coordinates (v0 = origin)
-    double xy0_x = 0.0, xy0_y = 0.0;
-    double xy1_x = e1[0]*basis_a[0] + e1[1]*basis_a[1] + e1[2]*basis_a[2];
-    double xy1_y = e1[0]*basis_b[0] + e1[1]*basis_b[1] + e1[2]*basis_b[2];
-    double xy2_x = e2[0]*basis_a[0] + e2[1]*basis_a[1] + e2[2]*basis_a[2];
-    double xy2_y = e2[0]*basis_b[0] + e2[1]*basis_b[1] + e2[2]*basis_b[2];
-
-    double XY[3][2] = {{xy0_x, xy0_y}, {xy1_x, xy1_y}, {xy2_x, xy2_y}};
-    double DS[3], AM[3], SM[3], XD[3], YD[3];
-    double EPSG = 0.0;
-
-    for (int j = 0; j < 3; j++) {
-        int l = (j + 1) % 3;
-        double dx = XY[l][0] - XY[j][0];
-        double dy = XY[l][1] - XY[j][1];
-        if (fabs(dx) < EPS) dx = (dx >= 0) ? EPS : -EPS;
-
-        DS[j] = sqrt(dx*dx + dy*dy);
-        AM[j] = dy / dx;
-        SM[j] = sqrt(AM[j]*AM[j] + 1.0);
-        XD[j] = -dx / DS[j];
-        YD[j] =  dy / DS[j];
-
-        if (DS[j] > EPSG) EPSG = DS[j];
-    }
-    EPSG *= 1.0e-12;
-
-    // Transform observation point to local coordinates
-    double d[3] = {obs[0]-v0[0], obs[1]-v0[1], obs[2]-v0[2]};
-    double EE1 = d[0]*basis_a[0] + d[1]*basis_a[1] + d[2]*basis_a[2];
-    double EE2 = d[0]*basis_b[0] + d[1]*basis_b[1] + d[2]*basis_b[2];
-    double EE3 = d[0]*basis_c[0] + d[1]*basis_c[1] + d[2]*basis_c[2];
-
-    double X[3], Y[3], H[3], E[3], R[3];
-    for (int j = 0; j < 3; j++) {
-        X[j] = EE1 - XY[j][0];
-        Y[j] = EE2 - XY[j][1];
-        H[j] = Y[j] * X[j];
-        E[j] = EE3*EE3 + X[j]*X[j];
-        R[j] = sqrt(X[j]*X[j] + Y[j]*Y[j] + EE3*EE3);
-    }
-
-    double Z = EE3;
-
-    // Edge contributions
-    double RM[3], RP[3], RR[3], AL[3];
-    for (int j = 0; j < 3; j++) {
-        int jp1 = (j + 1) % 3;
-        RM[j] = R[j] + R[jp1] - DS[j];
-        RP[j] = R[j] + R[jp1] + DS[j];
-        RR[j] = (RM[j] / RP[j] > EPS) ? (RM[j] / RP[j]) : EPS;
-        AL[j] = log(RR[j]);
-    }
-
-    // Field components in local frame WITHOUT 4pi divisor
-    double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
-    double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
-    double HH3 = 0.0;
-
-    // Normal component (atan terms) - only if not on surface
-    if (fabs(Z) > EPSG) {
-        double ZR[3];
-        for (int j = 0; j < 3; j++) {
-            ZR[j] = Z * R[j];
-        }
-
-        double AT[3], BT[3];
-        for (int j = 0; j < 3; j++) {
-            int jp1 = (j + 1) % 3;
-            AT[j] = (AM[j]*E[j] - H[j]) / ZR[j];
-            BT[j] = (AM[j]*E[jp1] - H[jp1]) / ZR[jp1];
-        }
-
-        HH3 = sigma * (-atan(AT[0]) - atan(AT[1]) - atan(AT[2])
-                       +atan(BT[0]) + atan(BT[1]) + atan(BT[2]));
-    }
-
-    // Transform back to global coordinates
-    H_out[0] = HH1*basis_a[0] + HH2*basis_b[0] + HH3*basis_c[0];
-    H_out[1] = HH1*basis_a[1] + HH2*basis_b[1] + HH3*basis_c[1];
-    H_out[2] = HH1*basis_a[2] + HH2*basis_b[2] + HH3*basis_c[2];
-}
-
-//=========================================================================
-// FieldFromTrianglePrecomputed: Ultra-fast field using pre-computed data
-// Uses pre-computed basis vectors and edge parameters (no sqrt/div)
-// Returns field WITHOUT 4pi divisor
-//=========================================================================
-
-void RadHACApKManager::FieldFromTrianglePrecomputed(int tri_idx, const double* obs, double sigma, double* H_out) const {
-    const double EPS = 1.0e-20;
-
-    // Get pre-computed data
-    const double* data = &m_tri_data[tri_idx * TRI_DATA_SIZE];
-
-    const double* basis_a = data;       // [0..2]
-    const double* basis_b = data + 3;   // [3..5]
-    const double* basis_c = data + 6;   // [6..8]
-    const double* origin = data + 9;    // [9..11]
-    const double* XY = data + 12;       // [12..17] = {x0,y0, x1,y1, x2,y2}
-    const double* DS = data + 18;       // [18..20]
-    const double* AM = data + 21;       // [21..23]
-    const double* XD = data + 24;       // [24..26]
-    const double* YD = data + 27;       // [27..29]
-    double EPSG = data[30];
-    double sign = data[31];
-
-    // Apply sign to sigma
-    sigma *= sign;
-
-    // Transform observation point to local coordinates
-    double d[3] = {obs[0] - origin[0], obs[1] - origin[1], obs[2] - origin[2]};
-    double EE1 = d[0]*basis_a[0] + d[1]*basis_a[1] + d[2]*basis_a[2];
-    double EE2 = d[0]*basis_b[0] + d[1]*basis_b[1] + d[2]*basis_b[2];
-    double EE3 = d[0]*basis_c[0] + d[1]*basis_c[1] + d[2]*basis_c[2];
-
-    // Vertex-relative coordinates
-    double X[3], Y[3], H[3], E[3], R[3];
-    for (int j = 0; j < 3; j++) {
-        X[j] = EE1 - XY[j*2];
-        Y[j] = EE2 - XY[j*2+1];
-        H[j] = Y[j] * X[j];
-        E[j] = EE3*EE3 + X[j]*X[j];
-        R[j] = sqrt(X[j]*X[j] + Y[j]*Y[j] + EE3*EE3);
-    }
-
-    double Z = EE3;
-
-    // Edge contributions (log terms)
-    double AL[3];
-    for (int j = 0; j < 3; j++) {
-        int jp1 = (j + 1) % 3;
-        double RM = R[j] + R[jp1] - DS[j];
-        double RP = R[j] + R[jp1] + DS[j];
-        double RR = (RM / RP > EPS) ? (RM / RP) : EPS;
-        AL[j] = log(RR);
-    }
-
-    // Tangential field components
-    double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
-    double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
-    double HH3 = 0.0;
-
-    // Normal component (atan terms) - only if not on surface
-    if (fabs(Z) > EPSG) {
-        double ZR[3];
-        for (int j = 0; j < 3; j++) {
-            ZR[j] = Z * R[j];
-        }
-
-        double AT[3], BT[3];
-        for (int j = 0; j < 3; j++) {
-            int jp1 = (j + 1) % 3;
-            AT[j] = (AM[j]*E[j] - H[j]) / ZR[j];
-            BT[j] = (AM[j]*E[jp1] - H[jp1]) / ZR[jp1];
-        }
-
-        HH3 = sigma * (-atan(AT[0]) - atan(AT[1]) - atan(AT[2])
-                       +atan(BT[0]) + atan(BT[1]) + atan(BT[2]));
-    }
-
-    // Transform back to global coordinates
-    H_out[0] = HH1*basis_a[0] + HH2*basis_b[0] + HH3*basis_c[0];
-    H_out[1] = HH1*basis_a[1] + HH2*basis_b[1] + HH3*basis_c[1];
-    H_out[2] = HH1*basis_a[2] + HH2*basis_b[2] + HH3*basis_c[2];
-}
-
-//=========================================================================
-// FieldFromQuadFaceFast: Quad face field using pre-computed vertices
-// Split quad into 2 triangles, sum contributions
-//=========================================================================
-
-void RadHACApKManager::FieldFromQuadFaceFast(int elem, int face, const double* obs, double sigma, double* H_out) const {
-    H_out[0] = H_out[1] = H_out[2] = 0.0;
-
-    // Use pre-computed triangle data if available (much faster)
-    if (m_tri_precomputed) {
-        double H_tri[3];
-
-        // Triangle 1: indices [0,1,2] of quad
-        int tri_idx1 = elem * TRIS_PER_ELEM + face * 2 + 0;
-        FieldFromTrianglePrecomputed(tri_idx1, obs, sigma, H_tri);
-        H_out[0] += H_tri[0]; H_out[1] += H_tri[1]; H_out[2] += H_tri[2];
-
-        // Triangle 2: indices [0,2,3] of quad
-        int tri_idx2 = elem * TRIS_PER_ELEM + face * 2 + 1;
-        FieldFromTrianglePrecomputed(tri_idx2, obs, sigma, H_tri);
-        H_out[0] += H_tri[0]; H_out[1] += H_tri[1]; H_out[2] += H_tri[2];
-
-        return;
-    }
-
-    // Fallback: compute on-the-fly (for cases where precomputation wasn't done)
-    int fvIdx = (elem * 6 + face) * 4 * 3;
-    const double* V0 = &m_face_vertices[fvIdx + 0];
-    const double* V1 = &m_face_vertices[fvIdx + 3];
-    const double* V2 = &m_face_vertices[fvIdx + 6];
-    const double* V3 = &m_face_vertices[fvIdx + 9];
-
-    const double* center = &m_elem_centers[elem * 3];
-
-    double H_tri[3];
-
-    // Triangle 1: V0, V1, V2
-    double tc1[3] = {(V0[0]+V1[0]+V2[0])/3.0, (V0[1]+V1[1]+V2[1])/3.0, (V0[2]+V1[2]+V2[2])/3.0};
-    double e1_1[3] = {V1[0]-V0[0], V1[1]-V0[1], V1[2]-V0[2]};
-    double e2_1[3] = {V2[0]-V0[0], V2[1]-V0[1], V2[2]-V0[2]};
-    double n1[3] = {e1_1[1]*e2_1[2]-e1_1[2]*e2_1[1], e1_1[2]*e2_1[0]-e1_1[0]*e2_1[2], e1_1[0]*e2_1[1]-e1_1[1]*e2_1[0]};
-    double to_c1[3] = {tc1[0]-center[0], tc1[1]-center[1], tc1[2]-center[2]};
-    double dot1 = n1[0]*to_c1[0] + n1[1]*to_c1[1] + n1[2]*to_c1[2];
-    double sign1 = (dot1 >= 0.0) ? 1.0 : -1.0;
-
-    FieldFromChargedTriangleFast(obs, V0, V1, V2, sigma * sign1, H_tri);
-    H_out[0] += H_tri[0]; H_out[1] += H_tri[1]; H_out[2] += H_tri[2];
-
-    // Triangle 2: V0, V2, V3
-    double tc2[3] = {(V0[0]+V2[0]+V3[0])/3.0, (V0[1]+V2[1]+V3[1])/3.0, (V0[2]+V2[2]+V3[2])/3.0};
-    double e1_2[3] = {V2[0]-V0[0], V2[1]-V0[1], V2[2]-V0[2]};
-    double e2_2[3] = {V3[0]-V0[0], V3[1]-V0[1], V3[2]-V0[2]};
-    double n2[3] = {e1_2[1]*e2_2[2]-e1_2[2]*e2_2[1], e1_2[2]*e2_2[0]-e1_2[0]*e2_2[2], e1_2[0]*e2_2[1]-e1_2[1]*e2_2[0]};
-    double to_c2[3] = {tc2[0]-center[0], tc2[1]-center[1], tc2[2]-center[2]};
-    double dot2 = n2[0]*to_c2[0] + n2[1]*to_c2[1] + n2[2]*to_c2[2];
-    double sign2 = (dot2 >= 0.0) ? 1.0 : -1.0;
-
-    FieldFromChargedTriangleFast(obs, V0, V2, V3, sigma * sign2, H_tri);
-    H_out[0] += H_tri[0]; H_out[1] += H_tri[1]; H_out[2] += H_tri[2];
-}
-
-//=========================================================================
-// Compute6x6BlockFast: ELF-style fast 6x6 block computation
-// Uses only pre-computed geometry arrays (no object access)
+// Compute6x6BlockFast: Delegates to radTInteraction for unified implementation
+// 6DOF hexahedra use radTInteraction::Compute6x6BlockFast (shared with LU/BiCGSTAB)
 //=========================================================================
 
 void RadHACApKManager::Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const {
-    if (!m_geometry_ready) {
-        std::memset(K_mat, 0, 36 * sizeof(double));
+    // Use radTInteraction's unified implementation (shared with LU/BiCGSTAB)
+    if (m_interaction && m_interaction->IsHexaTriDataReady()) {
+        m_interaction->Compute6x6BlockFast(elem_i, elem_j, K_mat);
         return;
     }
 
-    // Pre-computed row element data
-    const double* row_center = &m_elem_centers[elem_i * 3];
-
-    // Pre-compute evaluation points for all 6 faces of row element
-    double eval_pts[6][3];
-    for (int fi = 0; fi < 6; fi++) {
-        const double* fc = &m_face_centers[(elem_i * 6 + fi) * 3];
-        eval_pts[fi][0] = 0.5 * (fc[0] + row_center[0]);
-        eval_pts[fi][1] = 0.5 * (fc[1] + row_center[1]);
-        eval_pts[fi][2] = 0.5 * (fc[2] + row_center[2]);
-    }
-
-    // Pre-load row normals
-    double row_normals[6][3];
-    for (int fi = 0; fi < 6; fi++) {
-        const double* fn = &m_face_normals[(elem_i * 6 + fi) * 3];
-        row_normals[fi][0] = fn[0];
-        row_normals[fi][1] = fn[1];
-        row_normals[fi][2] = fn[2];
-    }
-
-    // Get col element center for point charge
-    const double* col_center = &m_elem_centers[elem_j * 3];
-
-    // Compute all 36 elements
-    for (int fj = 0; fj < 6; fj++) {
-        double col_area = m_face_areas[elem_j * 6 + fj];
-        double unit_point_charge = -1.0 * col_area;
-
-        for (int fi = 0; fi < 6; fi++) {
-            // Field from quad face with unit sigma
-            double H_face[3];
-            FieldFromQuadFaceFast(elem_j, fj, eval_pts[fi], 1.0, H_face);
-
-            // Field from point charge at element center
-            // Note: Field is computed WITHOUT 4pi divisor to match Compute6x6Block
-            // The 4pi divisor is applied once at the end (K_mat[...] = -K_ij * INV_4PI)
-            double r[3] = {eval_pts[fi][0] - col_center[0],
-                           eval_pts[fi][1] - col_center[1],
-                           eval_pts[fi][2] - col_center[2]};
-            double dist = sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
-            double H_point[3] = {0.0, 0.0, 0.0};
-            if (dist > 1e-15) {
-                double scale = unit_point_charge / (dist * dist * dist);  // NO 4pi here
-                H_point[0] = r[0] * scale;
-                H_point[1] = r[1] * scale;
-                H_point[2] = r[2] * scale;
-            }
-
-            double H_total[3] = {H_face[0] + H_point[0],
-                                  H_face[1] + H_point[1],
-                                  H_face[2] + H_point[2]};
-
-            // K_ij = H_total dot normal_i
-            double K_ij = H_total[0] * row_normals[fi][0] +
-                          H_total[1] * row_normals[fi][1] +
-                          H_total[2] * row_normals[fi][2];
-
-            // Store -K_ij / (4*pi) in row-major order
-            K_mat[fi * 6 + fj] = -K_ij * RadConst::INV_FOUR_PI;
-        }
-    }
+    // Error: radTInteraction geometry not ready
+    std::memset(K_mat, 0, 36 * sizeof(double));
 }
 
 bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
@@ -974,8 +456,11 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     }
 
     // ELF-style pre-computation for 6DOF hexahedra
+    // Use radTInteraction's unified precomputation (shared with LU/BiCGSTAB)
     if (m_is_6dof) {
-        PrecomputeGeometry();
+        // Ensure radTInteraction has precomputed geometry
+        // HACApK delegates all 6DOF computation to radTInteraction::Compute6x6BlockFast
+        m_interaction->PrecomputeHexaGeometry();
     }
     // ELF-style pre-computation for 3DOF tetrahedra (2025-12-26)
     // PrecomputeGeometry3DOF extracts face vertices/normals for direct field computation
@@ -1306,8 +791,8 @@ double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i,
         return tl_single_K_mat[face_i * 6 + face_j];
     }
 
-    // Cache miss - compute the block using pre-computed geometry
-    if (m_geometry_ready) {
+    // Cache miss - compute the block using radTInteraction's precomputed geometry
+    if (m_interaction && m_interaction->IsHexaTriDataReady()) {
         Compute6x6BlockFast(elem_i, elem_j, tl_single_K_mat);
     } else {
         Compute6x6Block(elem_i, elem_j, tl_single_K_mat);
@@ -1580,118 +1065,58 @@ void RadHACApKManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat
     }
 
     // Observation point: center of element i
-    const double* obs = &m_tetra_centers[elem_i * 3];
+    const double* obs_ptr = &m_tetra_centers[elem_i * 3];
+    TVector3d obsPoint(obs_ptr[0], obs_ptr[1], obs_ptr[2]);
 
-    // Column element center (for point charge cancellation)
+    // Column element centroid (for normal orientation check)
     const double* col_center = &m_tetra_centers[elem_j * 3];
+    TVector3d elemCentroid(col_center[0], col_center[1], col_center[2]);
 
     // Unit magnetization vectors
-    const double M_x[3] = {1.0, 0.0, 0.0};
-    const double M_y[3] = {0.0, 1.0, 0.0};
-    const double M_z[3] = {0.0, 0.0, 1.0};
+    TVector3d unit_Mx(1.0, 0.0, 0.0);
+    TVector3d unit_My(0.0, 1.0, 0.0);
+    TVector3d unit_Mz(0.0, 0.0, 1.0);
 
     // Accumulate H field for each unit M direction
-    double H_from_Mx[3] = {0.0, 0.0, 0.0};
-    double H_from_My[3] = {0.0, 0.0, 0.0};
-    double H_from_Mz[3] = {0.0, 0.0, 0.0};
-
-    // Track total magnetic charge for centroid cancellation
-    double total_charge_Mx = 0.0;
-    double total_charge_My = 0.0;
-    double total_charge_Mz = 0.0;
+    TVector3d H_from_Mx(0.0, 0.0, 0.0);
+    TVector3d H_from_My(0.0, 0.0, 0.0);
+    TVector3d H_from_Mz(0.0, 0.0, 0.0);
 
     // Process each of the 4 triangular faces
+    // Use RadFieldFromTriangleFaceGlobal which handles normal orientation and 1/(4pi) factor
     for (int f = 0; f < 4; f++) {
-        int fnIdx = (elem_j * 4 + f) * 3;
-        const double* n_f = &m_tetra_face_normals[fnIdx];
-
-        // Surface charge density sigma = M dot n for each unit M
-        double sigma_Mx = M_x[0]*n_f[0] + M_x[1]*n_f[1] + M_x[2]*n_f[2];
-        double sigma_My = M_y[0]*n_f[0] + M_y[1]*n_f[1] + M_y[2]*n_f[2];
-        double sigma_Mz = M_z[0]*n_f[0] + M_z[1]*n_f[1] + M_z[2]*n_f[2];
-
-        // Accumulate total charge for each M direction
-        double area = m_tetra_face_areas[elem_j * 4 + f];
-        total_charge_Mx += sigma_Mx * area;
-        total_charge_My += sigma_My * area;
-        total_charge_Mz += sigma_Mz * area;
-
         // Get face vertices
         int fvIdx = (elem_j * 4 + f) * 3 * 3;
-        const double* V0 = &m_tetra_face_vertices[fvIdx + 0];
-        const double* V1 = &m_tetra_face_vertices[fvIdx + 3];
-        const double* V2 = &m_tetra_face_vertices[fvIdx + 6];
+        const double* V0_ptr = &m_tetra_face_vertices[fvIdx + 0];
+        const double* V1_ptr = &m_tetra_face_vertices[fvIdx + 3];
+        const double* V2_ptr = &m_tetra_face_vertices[fvIdx + 6];
 
-        // Compute H field from this face (using shared triangle formula)
-        // FieldFromChargedTriangleFast returns field WITHOUT 4pi divisor
-        double H_f[3];
+        TVector3d V0(V0_ptr[0], V0_ptr[1], V0_ptr[2]);
+        TVector3d V1(V1_ptr[0], V1_ptr[1], V1_ptr[2]);
+        TVector3d V2(V2_ptr[0], V2_ptr[1], V2_ptr[2]);
 
-        // H from Mx contribution
-        if (fabs(sigma_Mx) > 1e-20) {
-            FieldFromChargedTriangleFast(obs, V0, V1, V2, sigma_Mx, H_f);
-            H_from_Mx[0] += H_f[0];
-            H_from_Mx[1] += H_f[1];
-            H_from_Mx[2] += H_f[2];
-        }
-
-        // H from My contribution
-        if (fabs(sigma_My) > 1e-20) {
-            FieldFromChargedTriangleFast(obs, V0, V1, V2, sigma_My, H_f);
-            H_from_My[0] += H_f[0];
-            H_from_My[1] += H_f[1];
-            H_from_My[2] += H_f[2];
-        }
-
-        // H from Mz contribution
-        if (fabs(sigma_Mz) > 1e-20) {
-            FieldFromChargedTriangleFast(obs, V0, V1, V2, sigma_Mz, H_f);
-            H_from_Mz[0] += H_f[0];
-            H_from_Mz[1] += H_f[1];
-            H_from_Mz[2] += H_f[2];
-        }
+        // Compute H field from this face for each unit M
+        // RadFieldFromTriangleFaceGlobal returns H field including 1/(4pi) and sign
+        H_from_Mx += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mx, obsPoint, elemCentroid);
+        H_from_My += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_My, obsPoint, elemCentroid);
+        H_from_Mz += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mz, obsPoint, elemCentroid);
     }
 
-    // Add point charge cancellation at centroid
-    // H_point = Q * r / (4*pi * |r|^3) where Q = -total_charge (to cancel far-field)
-    double r[3] = {obs[0] - col_center[0], obs[1] - col_center[1], obs[2] - col_center[2]};
-    double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
-    double dist = sqrt(dist_sq);
-
-    if (dist > 1e-15) {
-        double inv_dist3 = 1.0 / (dist * dist_sq);  // NO 4pi here (applied at end)
-
-        // Point charge Q = -total_charge cancels far-field
-        double H_pt_Mx = -total_charge_Mx * inv_dist3;
-        double H_pt_My = -total_charge_My * inv_dist3;
-        double H_pt_Mz = -total_charge_Mz * inv_dist3;
-
-        H_from_Mx[0] += H_pt_Mx * r[0];
-        H_from_Mx[1] += H_pt_Mx * r[1];
-        H_from_Mx[2] += H_pt_Mx * r[2];
-
-        H_from_My[0] += H_pt_My * r[0];
-        H_from_My[1] += H_pt_My * r[1];
-        H_from_My[2] += H_pt_My * r[2];
-
-        H_from_Mz[0] += H_pt_Mz * r[0];
-        H_from_Mz[1] += H_pt_Mz * r[1];
-        H_from_Mz[2] += H_pt_Mz * r[2];
-    }
-
-    // Apply 1/(4*pi) factor and sign flip (system matrix uses -N)
-    // N_mat[row * 3 + col] = -dH_row/dM_col / (4*pi)
+    // Build N matrix: N_mat[row * 3 + col] = dH_row/dM_col
+    // RadFieldFromTriangleFaceGlobal already includes 1/(4pi) factor
+    // System matrix uses -N, so negate here
     // Row 0 (Hx response): -dHx/dMx, -dHx/dMy, -dHx/dMz
-    N_mat[0] = -H_from_Mx[0] * RadConst::INV_FOUR_PI;  // -dHx/dMx
-    N_mat[1] = -H_from_My[0] * RadConst::INV_FOUR_PI;  // -dHx/dMy
-    N_mat[2] = -H_from_Mz[0] * RadConst::INV_FOUR_PI;  // -dHx/dMz
+    N_mat[0] = -H_from_Mx.x;  // -dHx/dMx
+    N_mat[1] = -H_from_My.x;  // -dHx/dMy
+    N_mat[2] = -H_from_Mz.x;  // -dHx/dMz
     // Row 1 (Hy response): -dHy/dMx, -dHy/dMy, -dHy/dMz
-    N_mat[3] = -H_from_Mx[1] * RadConst::INV_FOUR_PI;  // -dHy/dMx
-    N_mat[4] = -H_from_My[1] * RadConst::INV_FOUR_PI;  // -dHy/dMy
-    N_mat[5] = -H_from_Mz[1] * RadConst::INV_FOUR_PI;  // -dHy/dMz
+    N_mat[3] = -H_from_Mx.y;  // -dHy/dMx
+    N_mat[4] = -H_from_My.y;  // -dHy/dMy
+    N_mat[5] = -H_from_Mz.y;  // -dHy/dMz
     // Row 2 (Hz response): -dHz/dMx, -dHz/dMy, -dHz/dMz
-    N_mat[6] = -H_from_Mx[2] * RadConst::INV_FOUR_PI;  // -dHz/dMx
-    N_mat[7] = -H_from_My[2] * RadConst::INV_FOUR_PI;  // -dHz/dMy
-    N_mat[8] = -H_from_Mz[2] * RadConst::INV_FOUR_PI;  // -dHz/dMz
+    N_mat[6] = -H_from_Mx.z;  // -dHz/dMx
+    N_mat[7] = -H_from_My.z;  // -dHz/dMy
+    N_mat[8] = -H_from_Mz.z;  // -dHz/dMz
 }
 
 //=========================================================================

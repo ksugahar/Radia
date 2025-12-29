@@ -220,54 +220,11 @@ private:
     std::vector<double> m_coordinates;  // [n_elem * 3]
 
     // ========================================================================
-    // ELF-style pre-computed geometry (for 6DOF hexahedra)
+    // 6DOF hexahedra: Use radTInteraction's unified precomputation
     // ========================================================================
-    // Pre-computed geometry avoids dynamic_cast and scattered memory access
-    // during matrix element computation (major performance optimization)
-
-    // Pre-computed element centers [n_elem * 3]
-    std::vector<double> m_elem_centers;
-
-    // Pre-computed vertices [n_elem * 8 * 3] (8 vertices per hexa, 3 coords each)
-    std::vector<double> m_elem_vertices;
-
-    // Pre-computed face centers [n_elem * 6 * 3] (6 faces per hexa)
-    std::vector<double> m_face_centers;
-
-    // Pre-computed face normals [n_elem * 6 * 3]
-    std::vector<double> m_face_normals;
-
-    // Pre-computed face areas [n_elem * 6]
-    std::vector<double> m_face_areas;
-
-    // Pre-computed quad face vertices [n_elem * 6 * 4 * 3] (6 faces, 4 verts, 3 coords)
-    std::vector<double> m_face_vertices;
-
-    // ========================================================================
-    // Pre-computed triangle local coordinate systems (for fast field computation)
-    // ========================================================================
-    // Each hexahedron face is split into 2 triangles = 12 triangles per element
-    // Pre-computing basis vectors and edge parameters eliminates redundant sqrt/div
-    //
-    // Layout per triangle (26 doubles):
-    //   basis_a[3], basis_b[3], basis_c[3]  - local coordinate system (9)
-    //   origin[3]                           - triangle origin (v0) (3)
-    //   XY[3][2]                            - 2D vertex coordinates (6)
-    //   DS[3], AM[3], XD[3], YD[3]          - edge parameters (12)
-    //   EPSG                                - geometric epsilon (1)
-    //   sign                                - normal orientation sign (1)
-    // Total: 32 doubles per triangle, 384 doubles per element
-
-    // Pre-computed triangle data [n_elem * 12 * 32]
-    std::vector<double> m_tri_data;
-    static constexpr int TRI_DATA_SIZE = 32;  // doubles per triangle
-    static constexpr int TRIS_PER_ELEM = 12;  // triangles per hexahedron
-
-    // Flag: triangle pre-computation ready
-    bool m_tri_precomputed;
-
-    // Flag: geometry has been pre-computed (6DOF hexahedra)
-    bool m_geometry_ready;
+    // radTInteraction::PrecomputeHexaGeometry() provides all geometry data
+    // radTInteraction::Compute6x6BlockFast() provides fast block computation
+    // No local geometry storage needed - delegated to radTInteraction
 
     // ========================================================================
     // Pre-computed geometry for 3DOF tetrahedra (ELF-style optimization)
@@ -309,14 +266,13 @@ private:
     void FreeResources();
     void ExtractElementCoordinates();
     void BuildDOFLookupTable();
-    void PrecomputeGeometry();      // ELF-style pre-computation for 6DOF hexahedra
     void PrecomputeGeometry3DOF();  // ELF-style pre-computation for 3DOF tetrahedra
-    void PrecomputeTriangleData();  // Pre-compute triangle local coord systems
 
     // 6DOF hexahedron methods
+    // Note: Uses radTInteraction::Compute6x6BlockFast() for unified implementation
     double GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const;
     void Compute6x6Block(int elem_i, int elem_j, double* K_mat) const;
-    void Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const;  // Uses pre-computed geometry
+    void Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const;  // Delegates to radTInteraction
 
     // 3DOF tetrahedron methods
     double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
@@ -332,13 +288,6 @@ private:
     double GetMixed6x3Element(int elem_hex, int elem_tetra, int face, int comp) const;
     void Compute3x6Block(int elem_tetra, int elem_hex, double* K_mat) const;
     void Compute6x3Block(int elem_hex, int elem_tetra, double* K_mat) const;
-
-    // Field computation from pre-computed face vertices
-    void FieldFromQuadFaceFast(int elem, int face, const double* obs, double sigma, double* H_out) const;
-    void FieldFromChargedTriangleFast(const double* obs, const double* v0, const double* v1, const double* v2, double sigma, double* H_out) const;
-
-    // Ultra-fast field computation using pre-computed triangle data
-    void FieldFromTrianglePrecomputed(int tri_idx, const double* obs, double sigma, double* H_out) const;
 
     // Disable copy
     RadHACApKManager(const RadHACApKManager&) = delete;
