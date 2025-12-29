@@ -204,6 +204,16 @@ class radTInteraction : public radTg {
 	std::vector<double> m_flatMagnArray;         // Size: m_totalDOF (M or sigma values)
 	std::vector<double> m_flatFieldArray;        // Size: m_totalDOF
 
+	//-------------------------------------------------------------------------
+	// Pre-computed tetrahedron geometry for fast 3x3 block computation
+	// Reference: ELF-style optimization avoiding B_comp() overhead
+	//-------------------------------------------------------------------------
+	bool m_tetraGeomReady;                        // True if geometry is pre-computed
+	std::vector<double> m_tetraCenters;           // n_elem * 3: element centers
+	std::vector<double> m_tetraFaceVertices;      // n_elem * 4 * 3 * 3: face vertices (4 faces, 3 verts, xyz)
+	std::vector<double> m_tetraFaceNormals;       // n_elem * 4 * 3: outward face normals
+	std::vector<double> m_tetraFaceAreas;         // n_elem * 4: face areas
+
 public:
 
 	int AmOfRelaxSubInterv;
@@ -293,6 +303,12 @@ public:
 	                                   const std::vector<radTPolyhedron*>& polyCache,
 	                                   double relax,
 	                                   double& max_B_rel_change);
+
+	//-------------------------------------------------------------------------
+	// Fast tetrahedron matrix build (avoiding B_comp overhead)
+	//-------------------------------------------------------------------------
+	void PrecomputeTetraGeometry();  // Pre-compute face vertices/normals/areas
+	void Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const;  // Fast 3x3 block
 
 	void SetupExternFieldArray();
 	void AddExternFieldFromMoreExtSource();
