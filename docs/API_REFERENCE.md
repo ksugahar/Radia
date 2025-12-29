@@ -2,8 +2,8 @@
 
 Complete reference for Radia Python API.
 
-**Version**: 1.3.14
-**Date**: 2025-12-15
+**Version**: 1.3.16
+**Date**: 2025-12-30
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
 ---
@@ -444,6 +444,98 @@ field = rad.Fld(obj, component, point)
 ```python
 B = rad.Fld(magnet, 'b', [0, 0, 0.1])  # B vector at point
 Bz = rad.Fld(magnet, 'bz', [0, 0, 0.1])  # Bz component
+H = rad.Fld(magnet, 'h', [0, 0, 0.1])  # H vector at point
+```
+
+### FldBatch - Batch Field Computation (v1.3.16+)
+
+```python
+result = rad.FldBatch(obj, points, method=0)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `obj` | int | Object or container |
+| `points` | [[x,y,z], ...] | List of evaluation points |
+| `method` | int | `0` = direct (default), `1` = FMM (future) |
+
+| Returns | Description |
+|---------|-------------|
+| `result['B']` | List of [Bx, By, Bz] values (T) |
+| `result['H']` | List of [Hx, Hy, Hz] values (A/m) |
+
+```python
+points = [[0, 0, 0.1], [0, 0, 0.2], [0, 0, 0.3]]
+result = rad.FldBatch(magnet, points)
+B_list = result['B']  # [[Bx1,By1,Bz1], [Bx2,By2,Bz2], ...]
+H_list = result['H']  # [[Hx1,Hy1,Hz1], [Hx2,Hy2,Hz2], ...]
+```
+
+**Note**: More efficient than calling `Fld()` in a loop for many points.
+
+### FldPhi - Scalar Potential Batch (v1.3.16+)
+
+```python
+phi = rad.FldPhi(obj, points)
+```
+
+Computes magnetic scalar potential phi_m at multiple points.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `obj` | int | Object or container |
+| `points` | [[x,y,z], ...] | List of evaluation points |
+
+| Returns | Description |
+|---------|-------------|
+| `phi` | List of scalar values (A) |
+
+**Limitation**: Currently returns zero for ObjPolyhdr elements (MSC method).
+For single-point phi, use `rad.Fld(obj, 'phi', point)` instead.
+
+### FldA - Vector Potential Batch (v1.3.16+)
+
+```python
+A = rad.FldA(obj, points)
+```
+
+Computes magnetic vector potential A at multiple points.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `obj` | int | Object or container |
+| `points` | [[x,y,z], ...] | List of evaluation points |
+
+| Returns | Description |
+|---------|-------------|
+| `A` | List of [Ax, Ay, Az] values (T*m) |
+
+**Limitation**: Currently returns zero for ObjPolyhdr elements (MSC method).
+For single-point A, use `rad.Fld(obj, 'a', point)` instead.
+
+### ClassifyPoints - Point Classification (v1.3.16+)
+
+```python
+result = rad.ClassifyPoints(obj, points, near_threshold=3.0)
+```
+
+Classifies evaluation points relative to mesh elements (for FMM field computation).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `obj` | int | | Object or container |
+| `points` | [[x,y,z], ...] | | List of evaluation points |
+| `near_threshold` | float | 3.0 | Near zone multiplier |
+
+| Returns | Description |
+|---------|-------------|
+| `result['classification']` | List of int: 0=inside, 1=near, 2=far |
+| `result['nearest_elem']` | List of int: index of nearest element |
+
+```python
+points = [[0, 0, 0], [0, 0, 0.1], [0, 0, 1.0]]
+result = rad.ClassifyPoints(magnet, points)
+# classification: [0, 1, 2] = [inside, near, far]
 ```
 
 ### FldLst - Field Along Line
@@ -726,5 +818,5 @@ See `examples/ngsolve_integration/verify_curl_A_equals_B/` for a complete verifi
 
 ---
 
-**Last Updated**: 2025-12-15
+**Last Updated**: 2025-12-30
 **License**: LGPL-2.1 (modifications), BSD-style (original RADIA from ESRF)
