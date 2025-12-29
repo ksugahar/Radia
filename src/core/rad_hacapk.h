@@ -243,6 +243,29 @@ private:
     // Pre-computed quad face vertices [n_elem * 6 * 4 * 3] (6 faces, 4 verts, 3 coords)
     std::vector<double> m_face_vertices;
 
+    // ========================================================================
+    // Pre-computed triangle local coordinate systems (for fast field computation)
+    // ========================================================================
+    // Each hexahedron face is split into 2 triangles = 12 triangles per element
+    // Pre-computing basis vectors and edge parameters eliminates redundant sqrt/div
+    //
+    // Layout per triangle (26 doubles):
+    //   basis_a[3], basis_b[3], basis_c[3]  - local coordinate system (9)
+    //   origin[3]                           - triangle origin (v0) (3)
+    //   XY[3][2]                            - 2D vertex coordinates (6)
+    //   DS[3], AM[3], XD[3], YD[3]          - edge parameters (12)
+    //   EPSG                                - geometric epsilon (1)
+    //   sign                                - normal orientation sign (1)
+    // Total: 32 doubles per triangle, 384 doubles per element
+
+    // Pre-computed triangle data [n_elem * 12 * 32]
+    std::vector<double> m_tri_data;
+    static constexpr int TRI_DATA_SIZE = 32;  // doubles per triangle
+    static constexpr int TRIS_PER_ELEM = 12;  // triangles per hexahedron
+
+    // Flag: triangle pre-computation ready
+    bool m_tri_precomputed;
+
     // Flag: geometry has been pre-computed (6DOF hexahedra)
     bool m_geometry_ready;
 
@@ -288,6 +311,7 @@ private:
     void BuildDOFLookupTable();
     void PrecomputeGeometry();      // ELF-style pre-computation for 6DOF hexahedra
     void PrecomputeGeometry3DOF();  // ELF-style pre-computation for 3DOF tetrahedra
+    void PrecomputeTriangleData();  // Pre-compute triangle local coord systems
 
     // 6DOF hexahedron methods
     double GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const;
@@ -312,6 +336,9 @@ private:
     // Field computation from pre-computed face vertices
     void FieldFromQuadFaceFast(int elem, int face, const double* obs, double sigma, double* H_out) const;
     void FieldFromChargedTriangleFast(const double* obs, const double* v0, const double* v1, const double* v2, double sigma, double* H_out) const;
+
+    // Ultra-fast field computation using pre-computed triangle data
+    void FieldFromTrianglePrecomputed(int tri_idx, const double* obs, double sigma, double* H_out) const;
 
     // Disable copy
     RadHACApKManager(const RadHACApKManager&) = delete;

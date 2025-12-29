@@ -156,6 +156,7 @@ RadHACApKManager::RadHACApKManager(radTInteraction* interaction)
     , m_nffc(3)
     , m_is_6dof(false)
     , m_is_mixed_dof(false)
+    , m_tri_precomputed(false)
     , m_geometry_ready(false)
     , m_geometry_3dof_ready(false)
     , m_diag_cached(false)
@@ -340,6 +341,128 @@ void RadHACApKManager::PrecomputeGeometry() {
     }
 
     m_geometry_ready = true;
+
+    // Also pre-compute triangle local coordinate systems
+    PrecomputeTriangleData();
+}
+
+//=========================================================================
+// PrecomputeTriangleData: Pre-compute triangle local coordinate systems
+// Eliminates redundant sqrt/div operations during field computation
+// Each hexahedron face is split into 2 triangles = 12 triangles per element
+//=========================================================================
+
+void RadHACApKManager::PrecomputeTriangleData() {
+    if (m_tri_precomputed || m_n_elem == 0 || !m_geometry_ready) return;
+
+    const double EPS = 1.0e-20;
+
+    // Allocate: 12 triangles per element, 32 doubles per triangle
+    m_tri_data.resize(m_n_elem * TRIS_PER_ELEM * TRI_DATA_SIZE);
+
+    // Triangle split indices for quad face: [0,1,2], [0,2,3]
+    const int tri_split[2][3] = {{0, 1, 2}, {0, 2, 3}};
+
+    for (int e = 0; e < m_n_elem; e++) {
+        const double* center = &m_elem_centers[e * 3];
+
+        for (int f = 0; f < 6; f++) {
+            // Get quad vertices
+            int fvIdx = (e * 6 + f) * 4 * 3;
+            const double* V[4];
+            for (int v = 0; v < 4; v++) {
+                V[v] = &m_face_vertices[fvIdx + v * 3];
+            }
+
+            for (int t = 0; t < 2; t++) {
+                int tri_idx = e * TRIS_PER_ELEM + f * 2 + t;
+                double* data = &m_tri_data[tri_idx * TRI_DATA_SIZE];
+
+                // Get triangle vertices
+                const double* v0 = V[tri_split[t][0]];
+                const double* v1 = V[tri_split[t][1]];
+                const double* v2 = V[tri_split[t][2]];
+
+                // Build local coordinate system
+                double e1[3] = {v1[0]-v0[0], v1[1]-v0[1], v1[2]-v0[2]};
+                double e2[3] = {v2[0]-v0[0], v2[1]-v0[1], v2[2]-v0[2]};
+
+                // basis_c = e1 x e2 (face normal)
+                double* basis_c = data + 6;
+                basis_c[0] = e1[1]*e2[2] - e1[2]*e2[1];
+                basis_c[1] = e1[2]*e2[0] - e1[0]*e2[2];
+                basis_c[2] = e1[0]*e2[1] - e1[1]*e2[0];
+
+                double cLen = sqrt(basis_c[0]*basis_c[0] + basis_c[1]*basis_c[1] + basis_c[2]*basis_c[2]);
+                if (cLen < EPS) {
+                    std::memset(data, 0, TRI_DATA_SIZE * sizeof(double));
+                    continue;
+                }
+                basis_c[0] /= cLen; basis_c[1] /= cLen; basis_c[2] /= cLen;
+
+                // basis_a = e1 normalized
+                double* basis_a = data;
+                basis_a[0] = e1[0]; basis_a[1] = e1[1]; basis_a[2] = e1[2];
+                double aLen = sqrt(basis_a[0]*basis_a[0] + basis_a[1]*basis_a[1] + basis_a[2]*basis_a[2]);
+                if (aLen < EPS) {
+                    std::memset(data, 0, TRI_DATA_SIZE * sizeof(double));
+                    continue;
+                }
+                basis_a[0] /= aLen; basis_a[1] /= aLen; basis_a[2] /= aLen;
+
+                // basis_b = basis_c x basis_a
+                double* basis_b = data + 3;
+                basis_b[0] = basis_c[1]*basis_a[2] - basis_c[2]*basis_a[1];
+                basis_b[1] = basis_c[2]*basis_a[0] - basis_c[0]*basis_a[2];
+                basis_b[2] = basis_c[0]*basis_a[1] - basis_c[1]*basis_a[0];
+
+                // origin = v0
+                double* origin = data + 9;
+                origin[0] = v0[0]; origin[1] = v0[1]; origin[2] = v0[2];
+
+                // 2D coordinates (v0 = origin)
+                double* XY = data + 12;  // 6 doubles: XY[0..5] = {x0,y0, x1,y1, x2,y2}
+                XY[0] = 0.0; XY[1] = 0.0;  // v0
+                XY[2] = e1[0]*basis_a[0] + e1[1]*basis_a[1] + e1[2]*basis_a[2];
+                XY[3] = e1[0]*basis_b[0] + e1[1]*basis_b[1] + e1[2]*basis_b[2];
+                XY[4] = e2[0]*basis_a[0] + e2[1]*basis_a[1] + e2[2]*basis_a[2];
+                XY[5] = e2[0]*basis_b[0] + e2[1]*basis_b[1] + e2[2]*basis_b[2];
+
+                // Edge parameters
+                double* DS = data + 18;  // 3 doubles
+                double* AM = data + 21;  // 3 doubles
+                double* XD = data + 24;  // 3 doubles
+                double* YD = data + 27;  // 3 doubles
+                double EPSG = 0.0;
+
+                for (int j = 0; j < 3; j++) {
+                    int l = (j + 1) % 3;
+                    double dx = XY[l*2] - XY[j*2];
+                    double dy = XY[l*2+1] - XY[j*2+1];
+                    if (fabs(dx) < EPS) dx = (dx >= 0) ? EPS : -EPS;
+
+                    DS[j] = sqrt(dx*dx + dy*dy);
+                    AM[j] = dy / dx;
+                    XD[j] = -dx / DS[j];
+                    YD[j] = dy / DS[j];
+
+                    if (DS[j] > EPSG) EPSG = DS[j];
+                }
+
+                // Store EPSG and sign
+                data[30] = EPSG * 1.0e-12;  // EPSG
+
+                // Normal orientation sign (outward from center)
+                double tc[3] = {(v0[0]+v1[0]+v2[0])/3.0 - center[0],
+                                (v0[1]+v1[1]+v2[1])/3.0 - center[1],
+                                (v0[2]+v1[2]+v2[2])/3.0 - center[2]};
+                double dot = basis_c[0]*tc[0] + basis_c[1]*tc[1] + basis_c[2]*tc[2];
+                data[31] = (dot >= 0.0) ? 1.0 : -1.0;  // sign
+            }
+        }
+    }
+
+    m_tri_precomputed = true;
 }
 
 //=========================================================================
@@ -604,27 +727,126 @@ void RadHACApKManager::FieldFromChargedTriangleFast(const double* obs, const dou
 }
 
 //=========================================================================
+// FieldFromTrianglePrecomputed: Ultra-fast field using pre-computed data
+// Uses pre-computed basis vectors and edge parameters (no sqrt/div)
+// Returns field WITHOUT 4pi divisor
+//=========================================================================
+
+void RadHACApKManager::FieldFromTrianglePrecomputed(int tri_idx, const double* obs, double sigma, double* H_out) const {
+    const double EPS = 1.0e-20;
+
+    // Get pre-computed data
+    const double* data = &m_tri_data[tri_idx * TRI_DATA_SIZE];
+
+    const double* basis_a = data;       // [0..2]
+    const double* basis_b = data + 3;   // [3..5]
+    const double* basis_c = data + 6;   // [6..8]
+    const double* origin = data + 9;    // [9..11]
+    const double* XY = data + 12;       // [12..17] = {x0,y0, x1,y1, x2,y2}
+    const double* DS = data + 18;       // [18..20]
+    const double* AM = data + 21;       // [21..23]
+    const double* XD = data + 24;       // [24..26]
+    const double* YD = data + 27;       // [27..29]
+    double EPSG = data[30];
+    double sign = data[31];
+
+    // Apply sign to sigma
+    sigma *= sign;
+
+    // Transform observation point to local coordinates
+    double d[3] = {obs[0] - origin[0], obs[1] - origin[1], obs[2] - origin[2]};
+    double EE1 = d[0]*basis_a[0] + d[1]*basis_a[1] + d[2]*basis_a[2];
+    double EE2 = d[0]*basis_b[0] + d[1]*basis_b[1] + d[2]*basis_b[2];
+    double EE3 = d[0]*basis_c[0] + d[1]*basis_c[1] + d[2]*basis_c[2];
+
+    // Vertex-relative coordinates
+    double X[3], Y[3], H[3], E[3], R[3];
+    for (int j = 0; j < 3; j++) {
+        X[j] = EE1 - XY[j*2];
+        Y[j] = EE2 - XY[j*2+1];
+        H[j] = Y[j] * X[j];
+        E[j] = EE3*EE3 + X[j]*X[j];
+        R[j] = sqrt(X[j]*X[j] + Y[j]*Y[j] + EE3*EE3);
+    }
+
+    double Z = EE3;
+
+    // Edge contributions (log terms)
+    double AL[3];
+    for (int j = 0; j < 3; j++) {
+        int jp1 = (j + 1) % 3;
+        double RM = R[j] + R[jp1] - DS[j];
+        double RP = R[j] + R[jp1] + DS[j];
+        double RR = (RM / RP > EPS) ? (RM / RP) : EPS;
+        AL[j] = log(RR);
+    }
+
+    // Tangential field components
+    double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
+    double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
+    double HH3 = 0.0;
+
+    // Normal component (atan terms) - only if not on surface
+    if (fabs(Z) > EPSG) {
+        double ZR[3];
+        for (int j = 0; j < 3; j++) {
+            ZR[j] = Z * R[j];
+        }
+
+        double AT[3], BT[3];
+        for (int j = 0; j < 3; j++) {
+            int jp1 = (j + 1) % 3;
+            AT[j] = (AM[j]*E[j] - H[j]) / ZR[j];
+            BT[j] = (AM[j]*E[jp1] - H[jp1]) / ZR[jp1];
+        }
+
+        HH3 = sigma * (-atan(AT[0]) - atan(AT[1]) - atan(AT[2])
+                       +atan(BT[0]) + atan(BT[1]) + atan(BT[2]));
+    }
+
+    // Transform back to global coordinates
+    H_out[0] = HH1*basis_a[0] + HH2*basis_b[0] + HH3*basis_c[0];
+    H_out[1] = HH1*basis_a[1] + HH2*basis_b[1] + HH3*basis_c[1];
+    H_out[2] = HH1*basis_a[2] + HH2*basis_b[2] + HH3*basis_c[2];
+}
+
+//=========================================================================
 // FieldFromQuadFaceFast: Quad face field using pre-computed vertices
 // Split quad into 2 triangles, sum contributions
 //=========================================================================
 
 void RadHACApKManager::FieldFromQuadFaceFast(int elem, int face, const double* obs, double sigma, double* H_out) const {
-    // Get pre-computed vertices for this face
+    H_out[0] = H_out[1] = H_out[2] = 0.0;
+
+    // Use pre-computed triangle data if available (much faster)
+    if (m_tri_precomputed) {
+        double H_tri[3];
+
+        // Triangle 1: indices [0,1,2] of quad
+        int tri_idx1 = elem * TRIS_PER_ELEM + face * 2 + 0;
+        FieldFromTrianglePrecomputed(tri_idx1, obs, sigma, H_tri);
+        H_out[0] += H_tri[0]; H_out[1] += H_tri[1]; H_out[2] += H_tri[2];
+
+        // Triangle 2: indices [0,2,3] of quad
+        int tri_idx2 = elem * TRIS_PER_ELEM + face * 2 + 1;
+        FieldFromTrianglePrecomputed(tri_idx2, obs, sigma, H_tri);
+        H_out[0] += H_tri[0]; H_out[1] += H_tri[1]; H_out[2] += H_tri[2];
+
+        return;
+    }
+
+    // Fallback: compute on-the-fly (for cases where precomputation wasn't done)
     int fvIdx = (elem * 6 + face) * 4 * 3;
     const double* V0 = &m_face_vertices[fvIdx + 0];
     const double* V1 = &m_face_vertices[fvIdx + 3];
     const double* V2 = &m_face_vertices[fvIdx + 6];
     const double* V3 = &m_face_vertices[fvIdx + 9];
 
-    // Get element center for normal orientation check
     const double* center = &m_elem_centers[elem * 3];
 
-    H_out[0] = H_out[1] = H_out[2] = 0.0;
-
-    // Triangle 1: V0, V1, V2
     double H_tri[3];
 
-    // Check normal orientation for triangle 1
+    // Triangle 1: V0, V1, V2
     double tc1[3] = {(V0[0]+V1[0]+V2[0])/3.0, (V0[1]+V1[1]+V2[1])/3.0, (V0[2]+V1[2]+V2[2])/3.0};
     double e1_1[3] = {V1[0]-V0[0], V1[1]-V0[1], V1[2]-V0[2]};
     double e2_1[3] = {V2[0]-V0[0], V2[1]-V0[1], V2[2]-V0[2]};
