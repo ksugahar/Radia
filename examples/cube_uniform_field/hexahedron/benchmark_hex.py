@@ -1,14 +1,9 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 """
 Hexahedral Benchmark for Radia
 
-Generates benchmark results for {lu,bicgstab,hacapk}/ directories
+Generates benchmark results for linear/ and nonlinear/ subdirectories
 using hexahedral cube mesh with various N divisions.
-
-This structure matches the ELF benchmark for consistent organization.
-
-Each benchmark is run in a separate subprocess to ensure accurate memory
-measurement (memory is not shared between runs).
 
 Solver types:
   lu       - Dense LU decomposition (Method 0)
@@ -16,11 +11,12 @@ Solver types:
   hacapk   - BiCGSTAB with H-matrix acceleration (Method 2)
 
 Usage:
-    python benchmark_hex.py --lu 5 10
-    python benchmark_hex.py --bicgstab 5 10
-    python benchmark_hex.py --hacapk 5 10
-    python benchmark_hex.py --hacapk --hmat_eps 1e-5 5
-    python benchmark_hex.py 5 10  # runs lu only
+    python benchmark_hex.py --lu 5 10 15
+    python benchmark_hex.py --bicgstab 5 10 15
+    python benchmark_hex.py --hacapk 5 10 15 20
+    python benchmark_hex.py --linear --lu 5 10 15
+    python benchmark_hex.py --nonlinear --bicgstab 5 10 15
+    python benchmark_hex.py 5 10 15  # runs lu, nonlinear by default
 """
 
 import sys
@@ -30,74 +26,48 @@ import argparse
 import subprocess
 import json
 
-import numpy as np
-
-# Add paths for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../../src/radia'))
+# Add parent directory for benchmark_common
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 import radia as rad
-
 from benchmark_common import (
-    run_nonlinear_benchmark, print_summary,
-    CUBE_SIZE, H_EXT, HEX_FACES, get_peak_memory_mb
+    run_benchmark, print_summary, generate_hex_mesh,
+    CUBE_SIZE, H_EXT, MU_R, M_ANALYTICAL_Z, HEX_FACES
 )
 
 
-def generate_cube_mesh(n_div: int, size: float = 1.0):
-    """Generate cubic mesh with n_div divisions per edge"""
-    vertices_list = []
-    dx = size / n_div
-    offset = size / 2
-
-    for iz in range(n_div):
-        for iy in range(n_div):
-            for ix in range(n_div):
-                x0 = ix * dx - offset
-                y0 = iy * dx - offset
-                z0 = iz * dx - offset
-                verts = [
-                    [x0, y0, z0],
-                    [x0 + dx, y0, z0],
-                    [x0 + dx, y0 + dx, z0],
-                    [x0, y0 + dx, z0],
-                    [x0, y0, z0 + dx],
-                    [x0 + dx, y0, z0 + dx],
-                    [x0 + dx, y0 + dx, z0 + dx],
-                    [x0, y0 + dx, z0 + dx]
-                ]
-                vertices_list.append(verts)
-
-    return vertices_list
-
-
-def benchmark_hexahedra(n_div, solver_type, output_dir, hmat_eps=1e-4,
-                        bicg_tol=1e-4, nonl_tol=0.001,
+def benchmark_hexahedra(n_div, solver_type, output_dir, is_linear=False,
+                        hmat_eps=1e-4, bicg_tol=1e-4, nonl_tol=0.001,
                         hmat_leaf_size=10, hmat_eta=2.0):
-    """Benchmark hexahedral mesh with Radia.
+    """Benchmark hexahedral mesh.
 
     Args:
         n_div: Number of divisions per cube edge
         solver_type: 'lu', 'bicgstab', or 'hacapk'
         output_dir: Directory to save results
-        hmat_eps: ACA tolerance for H-matrix (default: 1e-5, matches ELF eps=1e-4)
+        is_linear: True for linear material, False for nonlinear
+        hmat_eps: ACA tolerance for H-matrix
         bicg_tol: BiCGSTAB convergence tolerance
-        nonl_tol: Nonlinear iteration convergence tolerance
-        hmat_leaf_size: H-matrix leaf size (ELF default: 10)
-        hmat_eta: H-matrix admissibility parameter (ELF default: 2.0)
+        nonl_tol: Nonlinear iteration tolerance
+        hmat_leaf_size: H-matrix leaf size
+        hmat_eta: H-matrix admissibility parameter
     """
     rad.FldUnits('m')
     rad.UtiDelAll()
 
     n_elements = n_div ** 3
+    ndof = n_elements * 6
+    material_type = 'linear' if is_linear else 'nonlinear'
 
     print('=' * 70)
-    print('HEXAHEDRAL MESH: N=%d (%d elements), solver=%s' % (n_div, n_elements, solver_type))
+    print('HEXAHEDRAL MESH: N=%d (%d elements), solver=%s, material=%s' % (
+        n_div, n_elements, solver_type, material_type))
     print('=' * 70)
 
     # Generate mesh
     t_mesh_start = time.time()
-    mesh = generate_cube_mesh(n_div, size=CUBE_SIZE)
+    mesh = generate_hex_mesh(n_div, CUBE_SIZE)
 
     # Create Radia polyhedra
     hex_objs = []
@@ -110,12 +80,8 @@ def benchmark_hexahedra(n_div, solver_type, output_dir, hmat_eps=1e-4,
 
     print('Generated %d hexahedral elements' % n_elements)
 
-    if not hex_objs:
-        print('ERROR: No hexahedra created!')
-        return None
-
-    # Run benchmark using common function
-    result = run_nonlinear_benchmark(
+    # Run benchmark
+    result = run_benchmark(
         radia_obj=container,
         n_elements=n_elements,
         solver_type=solver_type,
@@ -123,6 +89,7 @@ def benchmark_hexahedra(n_div, solver_type, output_dir, hmat_eps=1e-4,
         element_type='hex',
         mesh_description='N=%d' % n_div,
         t_mesh=t_mesh,
+        is_linear=is_linear,
         nonl_tol=nonl_tol,
         bicg_tol=bicg_tol,
         hmat_eps=hmat_eps,
@@ -145,13 +112,18 @@ def run_single_benchmark(n_div, solver_type, script_dir, args):
         '--hmat_leaf_size', str(args.hmat_leaf_size),
         '--hmat_eta', str(args.hmat_eta),
     ]
+    if args.linear:
+        cmd.append('--linear')
+    else:
+        cmd.append('--nonlinear')
 
     result = subprocess.run(cmd, capture_output=False)
     if result.returncode != 0:
         return None
 
     # Read result from JSON file
-    output_dir = os.path.join(script_dir, solver_type)
+    material_dir = 'linear' if args.linear else 'nonlinear'
+    output_dir = os.path.join(script_dir, material_dir, solver_type)
     filename = 'hex_N%d_results.json' % n_div
     filepath = os.path.join(output_dir, filename)
     if os.path.exists(filepath):
@@ -165,6 +137,8 @@ def main():
     parser.add_argument('--lu', action='store_true', help='Use LU solver')
     parser.add_argument('--bicgstab', action='store_true', help='Use BiCGSTAB solver')
     parser.add_argument('--hacapk', action='store_true', help='Use HACApK solver')
+    parser.add_argument('--linear', action='store_true', help='Use linear material (mu_r=1000)')
+    parser.add_argument('--nonlinear', action='store_true', help='Use nonlinear material (BH curve)')
     parser.add_argument('--hmat_eps', type=float, default=1e-4,
                        help='ACA tolerance for H-matrix (default: 1e-4)')
     parser.add_argument('--bicg_tol', type=float, default=1e-4,
@@ -172,23 +146,29 @@ def main():
     parser.add_argument('--nonl_tol', type=float, default=0.001,
                        help='Nonlinear iteration tolerance (default: 0.001)')
     parser.add_argument('--hmat_leaf_size', type=int, default=10,
-                       help='H-matrix leaf size (default: 10, ELF-compatible)')
+                       help='H-matrix leaf size (default: 10)')
     parser.add_argument('--hmat_eta', type=float, default=2.0,
                        help='H-matrix admissibility eta (default: 2.0)')
     parser.add_argument('--single', nargs=2, metavar=('N', 'SOLVER'),
                        help='Run single benchmark (internal use)')
-    parser.add_argument('n_values', nargs='*', type=int, default=[5, 10],
-                       help='N values for mesh divisions (default: 5 10)')
+    parser.add_argument('n_values', nargs='*', type=int, default=[5, 10, 15],
+                       help='N values for mesh divisions (default: 5 10 15)')
     args = parser.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Default to nonlinear if neither specified
+    if not args.linear and not args.nonlinear:
+        args.nonlinear = True
 
     # Single benchmark mode (called by subprocess)
     if args.single:
         n_div = int(args.single[0])
         solver_type = args.single[1]
-        output_dir = os.path.join(script_dir, solver_type)
+        material_dir = 'linear' if args.linear else 'nonlinear'
+        output_dir = os.path.join(script_dir, material_dir, solver_type)
         benchmark_hexahedra(n_div, solver_type, output_dir,
+                           is_linear=args.linear,
                            hmat_eps=args.hmat_eps, bicg_tol=args.bicg_tol,
                            nonl_tol=args.nonl_tol,
                            hmat_leaf_size=args.hmat_leaf_size, hmat_eta=args.hmat_eta)
@@ -200,11 +180,16 @@ def main():
     run_bicgstab = args.bicgstab
     run_hacapk = args.hacapk
 
+    material_type = 'LINEAR' if args.linear else 'NONLINEAR'
+
     print('=' * 70)
-    print('HEXAHEDRAL BENCHMARK - Radia')
+    print('HEXAHEDRAL BENCHMARK - %s MATERIAL (Radia)' % material_type)
     print('=' * 70)
     print('Cube size: %.1f m' % CUBE_SIZE)
     print('H_ext: %.0f A/m' % H_EXT)
+    if args.linear:
+        print('mu_r: %d' % MU_R)
+        print('M_analytical: %.2f A/m' % M_ANALYTICAL_Z)
     print('N values: %s' % args.n_values)
     print()
 
