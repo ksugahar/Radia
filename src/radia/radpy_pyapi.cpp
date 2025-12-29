@@ -2889,6 +2889,95 @@ static PyObject* radia_FldBatch(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
+ * Scalar Potential Computation: Computes magnetic scalar potential at multiple points
+ ***************************************************************************/
+static PyObject* radia_FldPhi(PyObject* self, PyObject* args)
+{
+	PyObject *oPoints=0, *oRes=0;
+	double *arPoints=0, *arPhi=0;
+	try
+	{
+		int container_handle=0;
+		if(!PyArg_ParseTuple(args, "iO:FldPhi", &container_handle, &oPoints))
+			throw CombErStr(strEr_BadFuncArg, ": FldPhi");
+		if((container_handle == 0) || (oPoints == 0))
+			throw CombErStr(strEr_BadFuncArg, ": FldPhi");
+
+		int nCoord = 0;
+		char resP = CPyParse::CopyPyNestedListElemsToNumAr(oPoints, 'd', arPoints, nCoord);
+		if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": FldPhi: array / list of points");
+
+		int n_points = nCoord / 3;
+		if(n_points * 3 != nCoord) throw CombErStr(strEr_BadFuncArg, ": FldPhi: array / list of points");
+
+		arPhi = new double[n_points];
+
+		g_pyParse.ProcRes(RadFldPhi(arPhi, n_points, arPoints, container_handle));
+
+		// Return list of scalar potential values
+		oRes = PyList_New(n_points);
+		for(int i = 0; i < n_points; ++i)
+		{
+			PyList_SetItem(oRes, i, PyFloat_FromDouble(arPhi[i]));
+		}
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arPoints != 0) delete[] arPoints;
+	if(arPhi != 0) delete[] arPhi;
+	return oRes;
+}
+
+/************************************************************************//**
+ * Vector Potential Computation: Computes magnetic vector potential at multiple points
+ ***************************************************************************/
+static PyObject* radia_FldA(PyObject* self, PyObject* args)
+{
+	PyObject *oPoints=0, *oRes=0;
+	double *arPoints=0, *arA=0;
+	try
+	{
+		int container_handle=0;
+		if(!PyArg_ParseTuple(args, "iO:FldA", &container_handle, &oPoints))
+			throw CombErStr(strEr_BadFuncArg, ": FldA");
+		if((container_handle == 0) || (oPoints == 0))
+			throw CombErStr(strEr_BadFuncArg, ": FldA");
+
+		int nCoord = 0;
+		char resP = CPyParse::CopyPyNestedListElemsToNumAr(oPoints, 'd', arPoints, nCoord);
+		if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": FldA: array / list of points");
+
+		int n_points = nCoord / 3;
+		if(n_points * 3 != nCoord) throw CombErStr(strEr_BadFuncArg, ": FldA: array / list of points");
+
+		arA = new double[n_points * 3];
+
+		g_pyParse.ProcRes(RadFldA(arA, n_points, arPoints, container_handle));
+
+		// Return list of [Ax, Ay, Az] lists
+		oRes = PyList_New(n_points);
+		for(int i = 0; i < n_points; ++i)
+		{
+			PyObject* oAi = PyList_New(3);
+			for(int j = 0; j < 3; ++j)
+			{
+				PyList_SetItem(oAi, j, PyFloat_FromDouble(arA[i*3 + j]));
+			}
+			PyList_SetItem(oRes, i, oAi);
+		}
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arPoints != 0) delete[] arPoints;
+	if(arA != 0) delete[] arA;
+	return oRes;
+}
+
+/************************************************************************//**
  * Magnetic Field Calculation Methods: Computes field created by the object obj at one or many points
  ***************************************************************************/
 static PyObject* radia_Fld(PyObject* self, PyObject* args)
@@ -3845,6 +3934,8 @@ static PyMethodDef radia_methods[] = {
 
 	{"ClassifyPoints", radia_ClassifyPoints, METH_VARARGS, "ClassifyPoints(obj, points, near_threshold=3.0) classifies evaluation points relative to mesh elements. Returns dict with 'classification' (0=inside, 1=near, 2=far) and 'nearest_elem' (index of nearest element). Used for FMM field computation."},
 	{"FldBatch", radia_FldBatch, METH_VARARGS, "FldBatch(obj, points, method=0) computes B and H fields at multiple points. Returns dict with 'B' and 'H' arrays. method: 0=direct, 1=FMM (future). More efficient than calling Fld() in a loop."},
+	{"FldPhi", radia_FldPhi, METH_VARARGS, "FldPhi(obj, points) computes magnetic scalar potential phi_m at multiple points. Returns list of scalar values. phi_m = (1/4pi) * integral(M . r / r^3) dV. Units: Ampere (A)."},
+	{"FldA", radia_FldA, METH_VARARGS, "FldA(obj, points) computes magnetic vector potential A at multiple points. Returns list of [Ax, Ay, Az] values. Note: Currently returns zero for ObjPolyhdr (MSC method) - implementation in progress."},
 
 	{"Fld", radia_Fld, METH_VARARGS,  "Fld(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x,y,z]|[[x1,y1,z1],[x2,y2,z2],...]) computes magnetic field created by the object obj in point(s) {x,y,z} ({x1,y1,z1},{x2,y2,z2},...). The field component is specified by the second input variable. The function accepts a list of 3D points of arbitrary nestness: in this case it returns the corresponding list of magnetic field values."},
 	{"FldLst", radia_FldLst, METH_VARARGS,  "FldLst(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x1,y1,z1],[x2,y2,z2],np,'arg|noarg':'noarg',strt:0.) computes magnetic field created by object obj in np equidistant points along a line segment from [x1,y1,z1] to [x2,y2,z2]; the field component is specified by the second input variable; the 'arg|noarg' string variable specifies whether to output a longitudinal position for each point where the field is computed, and strt gives the start-value for the longitudinal position."},

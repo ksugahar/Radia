@@ -312,6 +312,10 @@ public:
 	                    double* points, int container_handle, double near_threshold);
 	void ComputeFieldBatch(double* B_out, double* H_out, int n_points,
 	                       double* points, int container_handle, int method);
+	void ComputeScalarPotentialBatch(double* phi_out, int n_points,
+	                                 double* points, int container_handle);
+	void ComputeVectorPotentialBatch(double* A_out, int n_points,
+	                                 double* points, int container_handle);
 
 	void ComputeField(int ElemKey, char* FieldChar, double* StObsPoi, long lenStObsPoi, double* FiObsPoi, long lenFiObsPoi, int Np, char* ShowArgFlag, double StrtArg);
 	void ComputeField(int ElemKey, char* FieldChar, radTVectorOfVector3d& VectorOfVector3d, radTVectInputCell& VectInputCell);
