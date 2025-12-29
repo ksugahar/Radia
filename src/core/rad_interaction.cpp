@@ -66,6 +66,9 @@ radTInteraction::radTInteraction()
 
 	RelaxSubIntervArray = nullptr; // New
 	mKeepTransData = 0;
+
+	// Tetrahedron geometry cache
+	m_tetraGeomReady = false;
 }
 
 //-------------------------------------------------------------------------
@@ -88,6 +91,9 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 
 	RelaxSubIntervArray = nullptr; // New
 	AmOfRelaxSubInterv = 0; // New
+
+	// Tetrahedron geometry cache
+	m_tetraGeomReady = false;
 
 	SourceHandle = In_hg;
 	CompCriterium = InCompCriterium;
@@ -830,8 +836,48 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	// FAST PATH: Only for pure tetrahedra meshes (no MSC hexahedra) without symmetry
 	if(!hasSymmetry && !hasMSCElements)
 	{
-		// FAST PATH: No symmetry - compute directly in global coordinates with OpenMP
-		// This matches the fast path in SetupInteractMatrix() (lines 563-588)
+		// Pre-compute tetrahedron geometry for fast block computation
+		// This caches face vertices, normals, and areas to avoid B_comp overhead
+		PrecomputeTetraGeometry();
+
+		if(m_tetraGeomReady)
+		{
+			// ULTRA-FAST PATH: Use pre-computed geometry
+			// Compute3x3BlockFast uses cached geometry arrays (no B_comp overhead)
+			#pragma omp parallel for schedule(dynamic) if(AmOfMainElem > 20)
+			for(int col = 0; col < AmOfMainElem; col++)
+			{
+				int offset_col = m_elemDOFOffset[col];
+
+				for(int row = 0; row < AmOfMainElem; row++)
+				{
+					int offset_row = m_elemDOFOffset[row];
+
+					// Get pointer to this block in the flattened matrix
+					// COLUMN-MAJOR: A(row, col) at index [col * m_totalDOF + row]
+					double* block = &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
+
+					// Compute 3x3 block using cached geometry
+					double N_mat[9];
+					Compute3x3BlockFast(row, col, N_mat);
+
+					// Copy to flat matrix (Compute3x3BlockFast returns row-major)
+					// Need to transpose to column-major for LAPACK
+					block[0 * m_totalDOF + 0] = N_mat[0];  // (0,0)
+					block[0 * m_totalDOF + 1] = N_mat[3];  // (1,0)
+					block[0 * m_totalDOF + 2] = N_mat[6];  // (2,0)
+					block[1 * m_totalDOF + 0] = N_mat[1];  // (0,1)
+					block[1 * m_totalDOF + 1] = N_mat[4];  // (1,1)
+					block[1 * m_totalDOF + 2] = N_mat[7];  // (2,1)
+					block[2 * m_totalDOF + 0] = N_mat[2];  // (0,2)
+					block[2 * m_totalDOF + 1] = N_mat[5];  // (1,2)
+					block[2 * m_totalDOF + 2] = N_mat[8];  // (2,2)
+				}
+			}
+			return 1;
+		}
+
+		// Fallback: FAST PATH without geometry cache (original B_comp method)
 		#pragma omp parallel for schedule(dynamic) if(AmOfMainElem > 20)
 		for(int col = 0; col < AmOfMainElem; col++)
 		{
@@ -2292,6 +2338,371 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 
 	//short MemAllocTotAtOnce;
 	inStr >> MemAllocTotAtOnce;
+}
+
+//=========================================================================
+// PrecomputeTetraGeometry: Pre-compute tetrahedron face geometry
+// Extracts vertices, normals, and areas for fast 3x3 block computation
+// Reference: ELF-style optimization (same as RadHACApKManager::PrecomputeGeometry3DOF)
+//=========================================================================
+
+void radTInteraction::PrecomputeTetraGeometry()
+{
+	if(m_tetraGeomReady || AmOfMainElem == 0) return;
+
+	// Check if all elements are 3DOF tetrahedra
+	bool allTetra = true;
+	for(int e = 0; e < AmOfMainElem; e++)
+	{
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[e]);
+		if(!poly || poly->AmOfFaces != 4)
+		{
+			allTetra = false;
+			break;
+		}
+	}
+	if(!allTetra) return;
+
+	// Allocate arrays
+	m_tetraCenters.resize(AmOfMainElem * 3);
+	m_tetraFaceVertices.resize(AmOfMainElem * 4 * 3 * 3);
+	m_tetraFaceNormals.resize(AmOfMainElem * 4 * 3);
+	m_tetraFaceAreas.resize(AmOfMainElem * 4);
+
+	for(int e = 0; e < AmOfMainElem; e++)
+	{
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[e]);
+		if(!poly) continue;
+
+		// Store element center
+		int cIdx = e * 3;
+		m_tetraCenters[cIdx + 0] = poly->CentrPoint.x;
+		m_tetraCenters[cIdx + 1] = poly->CentrPoint.y;
+		m_tetraCenters[cIdx + 2] = poly->CentrPoint.z;
+
+		// Store face data for each of the 4 triangular faces
+		for(int f = 0; f < 4; f++)
+		{
+			radTHandlePgnAndTrans hpt = poly->VectHandlePgnAndTrans[f];
+			radTPolygon* pgn = hpt.PgnHndl.rep;
+			radTrans* tr = hpt.TransHndl.rep;
+
+			// Get 3 vertices of this triangular face
+			const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+			if(verts2d.size() < 3) continue;
+
+			int fvIdx = (e * 4 + f) * 3 * 3;
+			TVector3d V[3];
+			for(int v = 0; v < 3; v++)
+			{
+				V[v] = tr->TrPoint(TVector3d(verts2d[v].x, verts2d[v].y, pgn->CoordZ));
+				m_tetraFaceVertices[fvIdx + v * 3 + 0] = V[v].x;
+				m_tetraFaceVertices[fvIdx + v * 3 + 1] = V[v].y;
+				m_tetraFaceVertices[fvIdx + v * 3 + 2] = V[v].z;
+			}
+
+			// Compute face normal (outward pointing)
+			TVector3d e1 = {V[1].x - V[0].x, V[1].y - V[0].y, V[1].z - V[0].z};
+			TVector3d e2 = {V[2].x - V[0].x, V[2].y - V[0].y, V[2].z - V[0].z};
+			TVector3d n = {e1.y*e2.z - e1.z*e2.y, e1.z*e2.x - e1.x*e2.z, e1.x*e2.y - e1.y*e2.x};
+			double nLen = sqrt(n.x*n.x + n.y*n.y + n.z*n.z);
+
+			// Face area = 0.5 * |cross product|
+			m_tetraFaceAreas[e * 4 + f] = 0.5 * nLen;
+
+			// Normalize and check orientation (outward from centroid)
+			if(nLen > 1e-20)
+			{
+				n.x /= nLen; n.y /= nLen; n.z /= nLen;
+
+				// Face center
+				TVector3d fc = {(V[0].x + V[1].x + V[2].x) / 3.0,
+				                (V[0].y + V[1].y + V[2].y) / 3.0,
+				                (V[0].z + V[1].z + V[2].z) / 3.0};
+				// Vector from centroid to face center
+				TVector3d toFace = {fc.x - poly->CentrPoint.x,
+				                    fc.y - poly->CentrPoint.y,
+				                    fc.z - poly->CentrPoint.z};
+				// If normal points inward, flip it
+				if(n.x*toFace.x + n.y*toFace.y + n.z*toFace.z < 0)
+				{
+					n.x = -n.x; n.y = -n.y; n.z = -n.z;
+				}
+			}
+
+			// Store normalized outward normal
+			int fnIdx = (e * 4 + f) * 3;
+			m_tetraFaceNormals[fnIdx + 0] = n.x;
+			m_tetraFaceNormals[fnIdx + 1] = n.y;
+			m_tetraFaceNormals[fnIdx + 2] = n.z;
+		}
+	}
+
+	m_tetraGeomReady = true;
+}
+
+//=========================================================================
+// FieldFromChargedTriangleLocal: Compute H field from charged triangle
+// Uses analytic formula (van Oosterom & Strackee, 1983)
+// Returns field WITHOUT 4pi divisor
+//=========================================================================
+
+static void FieldFromChargedTriangleLocal(const double* obs,
+                                          const double* v0, const double* v1, const double* v2,
+                                          double sigma, double* H_out)
+{
+	const double EPS = 1.0e-20;
+
+	// Triangle edges
+	double e1[3] = {v1[0]-v0[0], v1[1]-v0[1], v1[2]-v0[2]};
+	double e2[3] = {v2[0]-v0[0], v2[1]-v0[1], v2[2]-v0[2]};
+
+	// Orthonormal basis: a = e1/|e1|, c = e1 x e2 / |e1 x e2|, b = c x a
+	double e1_len = sqrt(e1[0]*e1[0] + e1[1]*e1[1] + e1[2]*e1[2]);
+	if(e1_len < EPS)
+	{
+		H_out[0] = H_out[1] = H_out[2] = 0.0;
+		return;
+	}
+
+	double basis_a[3] = {e1[0]/e1_len, e1[1]/e1_len, e1[2]/e1_len};
+
+	// c = e1 x e2 (normal direction)
+	double c[3] = {e1[1]*e2[2] - e1[2]*e2[1],
+	               e1[2]*e2[0] - e1[0]*e2[2],
+	               e1[0]*e2[1] - e1[1]*e2[0]};
+	double c_len = sqrt(c[0]*c[0] + c[1]*c[1] + c[2]*c[2]);
+	if(c_len < EPS)
+	{
+		H_out[0] = H_out[1] = H_out[2] = 0.0;
+		return;
+	}
+	double basis_c[3] = {c[0]/c_len, c[1]/c_len, c[2]/c_len};
+
+	// b = c x a
+	double basis_b[3] = {basis_c[1]*basis_a[2] - basis_c[2]*basis_a[1],
+	                     basis_c[2]*basis_a[0] - basis_c[0]*basis_a[2],
+	                     basis_c[0]*basis_a[1] - basis_c[1]*basis_a[0]};
+
+	// Local coordinates of triangle vertices (v0 at origin in local frame)
+	double xy0_x = 0.0, xy0_y = 0.0;
+	double xy1_x = e1_len, xy1_y = 0.0;
+	double xy2_x = e2[0]*basis_a[0] + e2[1]*basis_a[1] + e2[2]*basis_a[2];
+	double xy2_y = e2[0]*basis_b[0] + e2[1]*basis_b[1] + e2[2]*basis_b[2];
+
+	double XY[3][2] = {{xy0_x, xy0_y}, {xy1_x, xy1_y}, {xy2_x, xy2_y}};
+	double DS[3], AM[3], XD[3], YD[3];
+	double EPSG = 0.0;
+
+	for(int j = 0; j < 3; j++)
+	{
+		int l = (j + 1) % 3;
+		double dx = XY[l][0] - XY[j][0];
+		double dy = XY[l][1] - XY[j][1];
+		if(fabs(dx) < EPS) dx = (dx >= 0) ? EPS : -EPS;
+
+		DS[j] = sqrt(dx*dx + dy*dy);
+		AM[j] = dy / dx;
+		XD[j] = -dx / DS[j];
+		YD[j] =  dy / DS[j];
+
+		if(DS[j] > EPSG) EPSG = DS[j];
+	}
+	EPSG *= 1.0e-12;
+
+	// Transform observation point to local coordinates
+	double d[3] = {obs[0]-v0[0], obs[1]-v0[1], obs[2]-v0[2]};
+	double EE1 = d[0]*basis_a[0] + d[1]*basis_a[1] + d[2]*basis_a[2];
+	double EE2 = d[0]*basis_b[0] + d[1]*basis_b[1] + d[2]*basis_b[2];
+	double EE3 = d[0]*basis_c[0] + d[1]*basis_c[1] + d[2]*basis_c[2];
+
+	double X[3], Y[3], H[3], E[3], R[3];
+	for(int j = 0; j < 3; j++)
+	{
+		X[j] = EE1 - XY[j][0];
+		Y[j] = EE2 - XY[j][1];
+		H[j] = Y[j] * X[j];
+		E[j] = EE3*EE3 + X[j]*X[j];
+		R[j] = sqrt(X[j]*X[j] + Y[j]*Y[j] + EE3*EE3);
+	}
+
+	double Z = EE3;
+
+	// Edge contributions
+	double RM[3], RP[3], RR[3], AL[3];
+	for(int j = 0; j < 3; j++)
+	{
+		int jp1 = (j + 1) % 3;
+		RM[j] = R[j] + R[jp1] - DS[j];
+		RP[j] = R[j] + R[jp1] + DS[j];
+		RR[j] = (RM[j] / RP[j] > EPS) ? (RM[j] / RP[j]) : EPS;
+		AL[j] = log(RR[j]);
+	}
+
+	// Field components in local frame WITHOUT 4pi divisor
+	double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
+	double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
+	double HH3 = 0.0;
+
+	// Normal component (atan terms)
+	if(fabs(Z) > EPSG)
+	{
+		double ZR[3];
+		for(int j = 0; j < 3; j++)
+		{
+			ZR[j] = Z * R[j];
+		}
+
+		double AT[3], BT[3];
+		for(int j = 0; j < 3; j++)
+		{
+			int jp1 = (j + 1) % 3;
+			AT[j] = (AM[j]*E[j] - H[j]) / ZR[j];
+			BT[j] = (AM[j]*E[jp1] - H[jp1]) / ZR[jp1];
+		}
+
+		HH3 = sigma * (-atan(AT[0]) - atan(AT[1]) - atan(AT[2])
+		               +atan(BT[0]) + atan(BT[1]) + atan(BT[2]));
+	}
+
+	// Transform back to global coordinates
+	H_out[0] = HH1*basis_a[0] + HH2*basis_b[0] + HH3*basis_c[0];
+	H_out[1] = HH1*basis_a[1] + HH2*basis_b[1] + HH3*basis_c[1];
+	H_out[2] = HH1*basis_a[2] + HH2*basis_b[2] + HH3*basis_c[2];
+}
+
+//=========================================================================
+// Compute3x3BlockFast: Fast 3x3 interaction block for tetrahedra
+// Uses pre-computed geometry (no B_comp overhead)
+// Reference: ELF-style optimization (same as RadHACApKManager::Compute3x3BlockFast)
+//=========================================================================
+
+void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const
+{
+	std::memset(N_mat, 0, 9 * sizeof(double));
+
+	if(!m_tetraGeomReady || elem_i < 0 || elem_i >= AmOfMainElem ||
+	   elem_j < 0 || elem_j >= AmOfMainElem)
+	{
+		return;
+	}
+
+	// Observation point: center of element i
+	const double* obs = &m_tetraCenters[elem_i * 3];
+
+	// Column element center (for point charge cancellation)
+	const double* col_center = &m_tetraCenters[elem_j * 3];
+
+	// Unit magnetization vectors
+	const double M_x[3] = {1.0, 0.0, 0.0};
+	const double M_y[3] = {0.0, 1.0, 0.0};
+	const double M_z[3] = {0.0, 0.0, 1.0};
+
+	// Accumulate H field for each unit M direction
+	double H_from_Mx[3] = {0.0, 0.0, 0.0};
+	double H_from_My[3] = {0.0, 0.0, 0.0};
+	double H_from_Mz[3] = {0.0, 0.0, 0.0};
+
+	// Track total magnetic charge for centroid cancellation
+	double total_charge_Mx = 0.0;
+	double total_charge_My = 0.0;
+	double total_charge_Mz = 0.0;
+
+	// Process each of the 4 triangular faces
+	for(int f = 0; f < 4; f++)
+	{
+		int fnIdx = (elem_j * 4 + f) * 3;
+		const double* n_f = &m_tetraFaceNormals[fnIdx];
+
+		// Surface charge density sigma = M dot n for each unit M
+		double sigma_Mx = M_x[0]*n_f[0] + M_x[1]*n_f[1] + M_x[2]*n_f[2];
+		double sigma_My = M_y[0]*n_f[0] + M_y[1]*n_f[1] + M_y[2]*n_f[2];
+		double sigma_Mz = M_z[0]*n_f[0] + M_z[1]*n_f[1] + M_z[2]*n_f[2];
+
+		// Accumulate total charge for each M direction
+		double area = m_tetraFaceAreas[elem_j * 4 + f];
+		total_charge_Mx += sigma_Mx * area;
+		total_charge_My += sigma_My * area;
+		total_charge_Mz += sigma_Mz * area;
+
+		// Get face vertices
+		int fvIdx = (elem_j * 4 + f) * 3 * 3;
+		const double* V0 = &m_tetraFaceVertices[fvIdx + 0];
+		const double* V1 = &m_tetraFaceVertices[fvIdx + 3];
+		const double* V2 = &m_tetraFaceVertices[fvIdx + 6];
+
+		double H_f[3];
+
+		// H from Mx contribution
+		if(fabs(sigma_Mx) > 1e-20)
+		{
+			FieldFromChargedTriangleLocal(obs, V0, V1, V2, sigma_Mx, H_f);
+			H_from_Mx[0] += H_f[0];
+			H_from_Mx[1] += H_f[1];
+			H_from_Mx[2] += H_f[2];
+		}
+
+		// H from My contribution
+		if(fabs(sigma_My) > 1e-20)
+		{
+			FieldFromChargedTriangleLocal(obs, V0, V1, V2, sigma_My, H_f);
+			H_from_My[0] += H_f[0];
+			H_from_My[1] += H_f[1];
+			H_from_My[2] += H_f[2];
+		}
+
+		// H from Mz contribution
+		if(fabs(sigma_Mz) > 1e-20)
+		{
+			FieldFromChargedTriangleLocal(obs, V0, V1, V2, sigma_Mz, H_f);
+			H_from_Mz[0] += H_f[0];
+			H_from_Mz[1] += H_f[1];
+			H_from_Mz[2] += H_f[2];
+		}
+	}
+
+	// Add point charge cancellation at centroid
+	double r[3] = {obs[0] - col_center[0], obs[1] - col_center[1], obs[2] - col_center[2]};
+	double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+	double dist = sqrt(dist_sq);
+
+	if(dist > 1e-15)
+	{
+		double inv_dist3 = 1.0 / (dist * dist_sq);
+
+		// Point charge H = -Q * r / |r|^3 (Q = total surface charge)
+		double H_point_Mx[3] = {-total_charge_Mx * r[0] * inv_dist3,
+		                        -total_charge_Mx * r[1] * inv_dist3,
+		                        -total_charge_Mx * r[2] * inv_dist3};
+		double H_point_My[3] = {-total_charge_My * r[0] * inv_dist3,
+		                        -total_charge_My * r[1] * inv_dist3,
+		                        -total_charge_My * r[2] * inv_dist3};
+		double H_point_Mz[3] = {-total_charge_Mz * r[0] * inv_dist3,
+		                        -total_charge_Mz * r[1] * inv_dist3,
+		                        -total_charge_Mz * r[2] * inv_dist3};
+
+		H_from_Mx[0] += H_point_Mx[0]; H_from_Mx[1] += H_point_Mx[1]; H_from_Mx[2] += H_point_Mx[2];
+		H_from_My[0] += H_point_My[0]; H_from_My[1] += H_point_My[1]; H_from_My[2] += H_point_My[2];
+		H_from_Mz[0] += H_point_Mz[0]; H_from_Mz[1] += H_point_Mz[1]; H_from_Mz[2] += H_point_Mz[2];
+	}
+
+	// Store in ROW-MAJOR format (different from COLUMN-MAJOR flat matrix!)
+	// N[i][j] = H_i due to unit M_j (i = Hx,Hy,Hz; j = Mx,My,Mz)
+	// Row 0: Hx from Mx, Hx from My, Hx from Mz
+	// Row 1: Hy from Mx, Hy from My, Hy from Mz
+	// Row 2: Hz from Mx, Hz from My, Hz from Mz
+	//
+	// NOTE: B_comp returns H * INV_FOUR_PI (no negation) for PreRelax mode
+	// To match B_comp output, we apply INV_FOUR_PI without negation
+	N_mat[0] = H_from_Mx[0] * RadConst::INV_FOUR_PI;  // Hx/Mx / 4pi
+	N_mat[1] = H_from_My[0] * RadConst::INV_FOUR_PI;  // Hx/My / 4pi
+	N_mat[2] = H_from_Mz[0] * RadConst::INV_FOUR_PI;  // Hx/Mz / 4pi
+	N_mat[3] = H_from_Mx[1] * RadConst::INV_FOUR_PI;  // Hy/Mx / 4pi
+	N_mat[4] = H_from_My[1] * RadConst::INV_FOUR_PI;  // Hy/My / 4pi
+	N_mat[5] = H_from_Mz[1] * RadConst::INV_FOUR_PI;  // Hy/Mz / 4pi
+	N_mat[6] = H_from_Mx[2] * RadConst::INV_FOUR_PI;  // Hz/Mx / 4pi
+	N_mat[7] = H_from_My[2] * RadConst::INV_FOUR_PI;  // Hz/My / 4pi
+	N_mat[8] = H_from_Mz[2] * RadConst::INV_FOUR_PI;  // Hz/Mz / 4pi
 }
 
 //-------------------------------------------------------------------------
