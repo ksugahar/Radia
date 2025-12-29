@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <iostream>
 #include <chrono>
+#include <atomic>
 
 // Include C++ compatible HACApK wrapper header
 extern "C" {
@@ -47,6 +48,11 @@ namespace {
     // Note: lod (DOF permutation array) is now accessed via C-side accessors:
     //   HACApK_get_current_lod() and HACApK_get_current_lod_size()
     // Set during H-matrix build by HACApK_build_hmatrix_varDOF_wrapper
+
+    // Profiling counters (thread-safe with atomic)
+    std::atomic<int64_t> g_entry_ij_call_count{0};
+    std::atomic<int64_t> g_entry_ij_flat_hits{0};
+    std::atomic<int64_t> g_entry_ij_cache_hits{0};
 }
 
 namespace RadHACApKCallback {
@@ -86,6 +92,9 @@ void ClearLod() {
 }
 
 double ComputeEntry(int i, int j) {
+    // Profiling counter
+    g_entry_ij_call_count.fetch_add(1, std::memory_order_relaxed);
+
     // i, j are 1-based ORIGINAL indices from HACApK
     // The lod conversion is already done by cHACApK_fill_leafmtx_hyp:
     //   val = cHACApK_entry_ij(lodl[permuted_pos], lodt[permuted_pos], i_bemv)
@@ -428,52 +437,80 @@ void RadHACApKManager::PrecomputeGeometry3DOF() {
 }
 
 //=========================================================================
-// PrecomputeFlatInteractMatrix: Flatten InteractMatrix for 3DOF tetrahedra
-// Converts 2D pointer array TMatrix3df** to contiguous double array
-// This eliminates pointer chasing during matrix element access
+// PrecomputeFlatInteractMatrix: Pre-compute all 3x3 interaction blocks
+// for O(1) matrix element access during ACA.
+// This eliminates the slow on-demand computation bottleneck (ELF-style optimization).
 //=========================================================================
 
 void RadHACApKManager::PrecomputeFlatInteractMatrix() {
     if (m_flat_N_ready || m_n_elem == 0 || !m_interaction) return;
-    if (!m_interaction->InteractMatrix) {
-        return;  // InteractMatrix not computed
-    }
+
+    auto start_time = std::chrono::high_resolution_clock::now();
 
     // Allocate flat storage: n_elem * n_elem * 9 doubles (3x3 block per element pair)
     int64_t total_size = (int64_t)m_n_elem * m_n_elem * 9;
     m_flat_N_data.resize(total_size);
 
-    // Copy from InteractMatrix[i][j] to flat array with sign flip (-N)
-    // The system matrix is A = -N + diag(1/chi), so we store -N
-    //
-    // MATRIX LAYOUT FIX (2025-12-24):
-    // InteractMatrix[i][j] stores TMatrix3df where:
-    //   Str0 = dH/dMx = (dHx/dMx, dHy/dMx, dHz/dMx) <- COLUMN vector (response to Mx)
-    //   Str1 = dH/dMy = (dHx/dMy, dHy/dMy, dHz/dMy) <- COLUMN vector (response to My)
-    //   Str2 = dH/dMz = (dHx/dMz, dHy/dMz, dHz/dMz) <- COLUMN vector (response to Mz)
-    //
-    // For row k of the 3x3 block, we need N[i][j] element (k, l) = dH_k/dM_l
-    // This requires transposed access: row k gets Str0[k], Str1[k], Str2[k]
-    #pragma omp parallel for collapse(2)
-    for (int i = 0; i < m_n_elem; i++) {
-        for (int j = 0; j < m_n_elem; j++) {
-            const TMatrix3df& M = m_interaction->InteractMatrix[i][j];
-            int64_t base_idx = ((int64_t)i * m_n_elem + j) * 9;
+    // Path 1: If InteractMatrix already exists, copy from it (fastest)
+    if (m_interaction->InteractMatrix) {
+        // Copy from InteractMatrix[i][j] to flat array with sign flip (-N)
+        // The system matrix is A = -N + diag(1/chi), so we store -N
+        #pragma omp parallel for collapse(2)
+        for (int i = 0; i < m_n_elem; i++) {
+            for (int j = 0; j < m_n_elem; j++) {
+                const TMatrix3df& M = m_interaction->InteractMatrix[i][j];
+                int64_t base_idx = ((int64_t)i * m_n_elem + j) * 9;
 
-            // Row 0 (Hx response): -dHx/dMx, -dHx/dMy, -dHx/dMz
-            m_flat_N_data[base_idx + 0] = -static_cast<double>(M.Str0.x);  // -dHx/dMx
-            m_flat_N_data[base_idx + 1] = -static_cast<double>(M.Str1.x);  // -dHx/dMy
-            m_flat_N_data[base_idx + 2] = -static_cast<double>(M.Str2.x);  // -dHx/dMz
-            // Row 1 (Hy response): -dHy/dMx, -dHy/dMy, -dHy/dMz
-            m_flat_N_data[base_idx + 3] = -static_cast<double>(M.Str0.y);  // -dHy/dMx
-            m_flat_N_data[base_idx + 4] = -static_cast<double>(M.Str1.y);  // -dHy/dMy
-            m_flat_N_data[base_idx + 5] = -static_cast<double>(M.Str2.y);  // -dHy/dMz
-            // Row 2 (Hz response): -dHz/dMx, -dHz/dMy, -dHz/dMz
-            m_flat_N_data[base_idx + 6] = -static_cast<double>(M.Str0.z);  // -dHz/dMx
-            m_flat_N_data[base_idx + 7] = -static_cast<double>(M.Str1.z);  // -dHz/dMy
-            m_flat_N_data[base_idx + 8] = -static_cast<double>(M.Str2.z);  // -dHz/dMz
+                // Row 0 (Hx response): -dHx/dMx, -dHx/dMy, -dHx/dMz
+                m_flat_N_data[base_idx + 0] = -static_cast<double>(M.Str0.x);
+                m_flat_N_data[base_idx + 1] = -static_cast<double>(M.Str1.x);
+                m_flat_N_data[base_idx + 2] = -static_cast<double>(M.Str2.x);
+                // Row 1 (Hy response): -dHy/dMx, -dHy/dMy, -dHy/dMz
+                m_flat_N_data[base_idx + 3] = -static_cast<double>(M.Str0.y);
+                m_flat_N_data[base_idx + 4] = -static_cast<double>(M.Str1.y);
+                m_flat_N_data[base_idx + 5] = -static_cast<double>(M.Str2.y);
+                // Row 2 (Hz response): -dHz/dMx, -dHz/dMy, -dHz/dMz
+                m_flat_N_data[base_idx + 6] = -static_cast<double>(M.Str0.z);
+                m_flat_N_data[base_idx + 7] = -static_cast<double>(M.Str1.z);
+                m_flat_N_data[base_idx + 8] = -static_cast<double>(M.Str2.z);
+            }
         }
     }
+    // Path 2: If geometry is pre-computed, use Compute3x3BlockFast
+    else if (m_geometry_3dof_ready) {
+        #pragma omp parallel for collapse(2)
+        for (int i = 0; i < m_n_elem; i++) {
+            for (int j = 0; j < m_n_elem; j++) {
+                int64_t base_idx = ((int64_t)i * m_n_elem + j) * 9;
+                Compute3x3BlockFast(i, j, &m_flat_N_data[base_idx]);
+            }
+        }
+    }
+    // Path 3: Fallback to on-demand computation (slowest, but always works)
+    else {
+        #pragma omp parallel for collapse(2)
+        for (int i = 0; i < m_n_elem; i++) {
+            for (int j = 0; j < m_n_elem; j++) {
+                int64_t base_idx = ((int64_t)i * m_n_elem + j) * 9;
+                Compute3x3Block_OnDemand(i, j, &m_flat_N_data[base_idx]);
+            }
+        }
+    }
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    double elapsed = std::chrono::duration<double>(end_time - start_time).count();
+
+    // Find max value for verification
+    double max_val = 0.0;
+    for (int64_t k = 0; k < total_size; k++) {
+        double abs_val = std::fabs(m_flat_N_data[k]);
+        if (abs_val > max_val) max_val = abs_val;
+    }
+    std::cout << "[HACApK] InteractMatrix sample max value: " << max_val << std::endl;
+
+    int64_t size_mb = (total_size * sizeof(double)) / (1024 * 1024);
+    std::cout << "[HACApK] PrecomputeFlatInteractMatrix: " << elapsed
+              << " s (n_elem=" << m_n_elem << ", size=" << size_mb << " MB)" << std::endl;
 
     m_flat_N_ready = true;
 }
@@ -761,10 +798,14 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     if (!m_is_6dof && !m_is_mixed_dof) {
         PrecomputeGeometry3DOF();
     }
-    // FIX (2025-12-26): For 3DOF tetrahedra, use PrecomputeFlatInteractMatrix()
-    // if InteractMatrix was already computed (fallback path)
-    // This provides O(1) matrix element access during H-matrix construction
-    if (!m_is_6dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
+
+    // ELF-style optimization (2025-12-29): Pre-compute flat interaction matrix
+    // for O(1) matrix element access during ACA.
+    // This eliminates the slow on-demand computation bottleneck that was causing
+    // 2.7x slower performance vs ELF Fortran.
+    // Memory cost: O(N^2 * 9) doubles = 72*N^2 bytes
+    // For N=627 elements: 627^2 * 9 * 8 = 28 MB
+    if (!m_is_6dof && !m_is_mixed_dof) {
         PrecomputeFlatInteractMatrix();
     }
 
@@ -905,6 +946,24 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
                   << ", maxrank=" << m_stats.max_rank
                   << ", time=" << m_stats.build_time << "s"
                   << std::endl;
+
+        // Profiling output
+        int64_t total_calls = g_entry_ij_call_count.load();
+        int64_t flat_hits = g_entry_ij_flat_hits.load();
+        int64_t cache_hits = g_entry_ij_cache_hits.load();
+        int64_t cache_misses = total_calls - flat_hits - cache_hits;
+        double hit_rate = (total_calls > 0) ? 100.0 * (flat_hits + cache_hits) / total_calls : 0.0;
+        std::cout << "[HACApK] entry_ij profile: calls=" << total_calls
+                  << ", flat_hits=" << flat_hits
+                  << ", cache_hits=" << cache_hits
+                  << ", cache_misses=" << cache_misses
+                  << " (hit_rate=" << hit_rate << "%)"
+                  << std::endl;
+
+        // Reset counters for next build
+        g_entry_ij_call_count.store(0);
+        g_entry_ij_flat_hits.store(0);
+        g_entry_ij_cache_hits.store(0);
     }
 
     // Cache diagonal elements N_ii for Jacobi preconditioner
@@ -1184,6 +1243,7 @@ static constexpr int TL_CACHE_SIZE_3DOF = 64;
 double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const {
     // If flat storage is ready (pre-computed), use O(1) direct access
     if (m_flat_N_ready) {
+        g_entry_ij_flat_hits.fetch_add(1, std::memory_order_relaxed);
         int64_t base_idx = ((int64_t)elem_i * m_n_elem + elem_j) * 9;
         double val = m_flat_N_data[base_idx + comp_i * 3 + comp_j];
         return val;
@@ -1217,6 +1277,7 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
 
     // Check single-entry cache first (fastest path)
     if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j) {
+        g_entry_ij_cache_hits.fetch_add(1, std::memory_order_relaxed);
         return tl_single_N_mat[comp_i * 3 + comp_j];
     }
 
@@ -1224,6 +1285,7 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
     for (int k = 0; k < TL_CACHE_SIZE_3DOF; k++) {
         if (tl_cache_elem_i[k] == elem_i && tl_cache_elem_j[k] == elem_j) {
             // Cache hit - update access count and copy to single-entry cache
+            g_entry_ij_cache_hits.fetch_add(1, std::memory_order_relaxed);
             tl_access_counter++;
             tl_cache_access[k] = tl_access_counter;
 
