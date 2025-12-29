@@ -1107,8 +1107,8 @@ void HACApK_update_diagonal_wrapper(
     lod = ctl->lod;
     if (!lod) return;
 
-    /* Iterate over all leaf blocks (single-threaded for debugging) */
-    /* #pragma omp parallel for schedule(dynamic, 16) reduction(+:n_diag_updated) */
+    /* Iterate over all leaf blocks with OpenMP parallelization */
+    #pragma omp parallel for schedule(dynamic, 16) reduction(+:n_diag_updated)
     for (ip = 1; ip <= leafmtxp->nlf; ip++) {
         st_cHACApK_leafmtx leaf = leafmtxp->st_lf[ip];
 

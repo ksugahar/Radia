@@ -644,18 +644,17 @@ void RadHACApKManager::UpdateDiagonal(const std::vector<double>& inv_chi) {
     m_inv_chi = inv_chi;
     RadHACApKCallback::SetInvChi(inv_chi);
 
-    // DEBUG: Force slow method to verify correctness
-    // TODO: Re-enable fast method after debugging
-    // OPTIMIZATION: Use fast diagonal update
+    // OPTIMIZATION: Use fast diagonal update (2025-12-30)
     // Only updates true diagonal entries (i==j) using pre-computed N_ii values
     // This is O(ndof) instead of O(block_size^2 * n_diag_blocks)
-    // if (m_diag_cached && m_diag_N.size() == (size_t)m_ndof) {
-    //     HACApK_update_diagonal_fast_wrapper(m_leafmtxp, m_control,
-    //                                          m_diag_N.data(), inv_chi.data(), m_ndof);
-    // } else {
+    // Performance: ELF 0.39s vs old Radia 4.6s (12x slower due to slow method)
+    if (m_diag_cached && m_diag_N.size() == (size_t)m_ndof) {
+        HACApK_update_diagonal_fast_wrapper(m_leafmtxp, m_control,
+                                             m_diag_N.data(), inv_chi.data(), m_ndof);
+    } else {
         // Fallback to slow method (recomputes all entries in diagonal blocks)
         HACApK_update_diagonal_wrapper(m_leafmtxp, m_control, cHACApK_entry_ij);
-    // }
+    }
 }
 
 //=========================================================================
