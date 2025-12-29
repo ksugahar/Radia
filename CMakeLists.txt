@@ -272,6 +272,9 @@ if(WIN32)
 	# Fix LIBCMT conflict warning
 	if(MSVC)
 		target_link_options(radia_ngsolve PRIVATE /NODEFAULTLIB:LIBCMT)
+		# Increase stack size to 16MB for deep HACApK cluster tree recursion
+		# Default is 1MB which causes stack overflow at ~30,000+ elements
+		target_link_options(radia_ngsolve PRIVATE /STACK:16777216)
 	endif()
 endif()
 
@@ -432,6 +435,9 @@ if(WIN32)
 	# Fix LIBCMT conflict warning
 	if(MSVC)
 		target_link_options(radia PRIVATE /NODEFAULTLIB:LIBCMT)
+		# Increase stack size to 16MB for deep HACApK cluster tree recursion
+		# Default is 1MB which causes stack overflow at ~30,000+ elements
+		target_link_options(radia PRIVATE /STACK:16777216)
 	endif()
 endif()
 
