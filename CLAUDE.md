@@ -676,6 +676,35 @@ python benchmark_hexahedron_msc.py --hacapk --eps 1e-3 5 10 15
 - **中規模 (500<N<2000)**: BiCGSTAB推奨 (最速)
 - **大規模 (N>2000)**: HACApK推奨 (メモリ効率、O(N log N))
 
+### Known Performance Issue: Tetrahedron HACApK (2025-12-30)
+
+**問題**: TetrahedronメッシュでHACApKがELFより4-7倍遅い
+
+| メッシュ | ELF (s) | Radia (s) | Radia/ELF |
+|---------|---------|-----------|-----------|
+| maxh=0.10 (4994要素) | 19.5 | 80.3 | **4.1x遅い** |
+| maxh=0.15 (2211要素) | 3.8 | 25.6 | **6.7x遅い** |
+
+**ボトルネック分析** (maxh=0.10):
+
+| 項目 | ELF (s) | Radia (s) | Radia/ELF |
+|------|---------|-----------|-----------|
+| H-matrix構築 | 6.1 | 68.9 | **11.3x遅い** |
+| 線形ソルブ | 13.4 | 11.2 | 0.84x (Radia高速) |
+
+**原因**:
+- H-matrix構築 (ACA+ fill) がTetrahedronで特に遅い
+- ELFはFortran + OpenMPで高度に最適化
+- Radiaの三角形積分計算がTetraで重い
+
+**TODO (次の改善項目)**:
+1. [ ] TetrahedronのACA+ fill並列化の最適化
+2. [ ] 三角形積分のキャッシュ効率改善
+3. [ ] `radTInteraction::B_comp_tetrahedron_MSC()` のプロファイリング
+4. [ ] ELFの実装との比較調査
+
+**Note**: HexahedronではRadiaはELFと同等以上の性能を達成済み。
+
 ---
 
 ## NGSolve Integration Best Practices
