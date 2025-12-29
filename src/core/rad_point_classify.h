@@ -15,8 +15,7 @@
  *   2 = FAR: Point is far from all elements (FMM dipole approximation is accurate)
  */
 
-#include "rad_polyhedron.h"
-#include "rad_geom_types.h"
+#include "gmvect.h"
 #include <vector>
 
 namespace RadPointClassify {
@@ -33,6 +32,14 @@ struct ClassifyResult {
     PointClass classification;  ///< INSIDE, NEAR, or FAR
     int nearest_elem_id;        ///< Index of nearest element (0-based)
     double distance;            ///< Distance to nearest element center
+};
+
+/// Element data for point classification
+struct ElementData {
+    TVector3d center;           ///< Element centroid
+    double size;                ///< Characteristic element size
+    std::vector<TVector3d> vertices;  ///< Element vertices (4 for tet, 8 for hex)
+    int num_faces;              ///< Number of faces (4 for tet, 6 for hex)
 };
 
 /**
@@ -91,23 +98,15 @@ void ComputeElementAABB(const TVector3d* vertices, int n_verts,
  * - NEAR: Point is within near_threshold * elem_size of nearest element
  * - FAR: Point is outside the near zone of all elements
  *
- * Algorithm:
- * 1. Compute global AABB and average element size
- * 2. For each point:
- *    a. Quick rejection if outside global AABB + margin
- *    b. Find nearest element by center distance
- *    c. Check if inside any nearby element
- *    d. Classify as near/far based on distance threshold
- *
  * @param n_points Number of evaluation points
- * @param points Array of evaluation points [n_points][3]
- * @param elements Vector of element data (vertices, centers)
+ * @param points Array of evaluation points [n_points * 3]
+ * @param elements Vector of element data
  * @param near_threshold Near zone multiplier (typically 3.0)
  * @param results Output: classification results for each point
  */
 void ClassifyPoints(int n_points,
                     const double* points,
-                    const std::vector<radTPolygon>& elements,
+                    const std::vector<ElementData>& elements,
                     double near_threshold,
                     std::vector<ClassifyResult>& results);
 
