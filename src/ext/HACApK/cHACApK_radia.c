@@ -263,6 +263,9 @@ int HACApK_build(
     /* param[51]: admissibility parameter eta */
     p_ctl->param[51] = config->eta;
 
+    /* param[60]: Low-rank approximation method (1=ACA, 2=ACA+, 3=SVD, 5=RRQR) */
+    p_ctl->param[60] = 2;  /* Use ACA+ (ELF uses ACA+ despite param(60)=1 setting) */
+
     /* param[61]: ACA mode (1=relative, 2=absolute, 3=scaled) */
     p_ctl->param[61] = 1;
 

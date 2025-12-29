@@ -227,6 +227,22 @@ class radTInteraction : public radTg {
 	std::vector<double> m_hexaTriSigns;           // n_hex * 6 * 2: sign correction for each triangle
 	std::vector<int> m_hexaElemIndices;           // Maps hex index to element index
 
+	//-------------------------------------------------------------------------
+	// Pre-computed triangle local coordinate systems (for fast field computation)
+	// Eliminates redundant sqrt/div operations during FieldFromChargedTriangle
+	// Layout per triangle (32 doubles):
+	//   basis_a[3], basis_b[3], basis_c[3]  - local coordinate system (9)
+	//   origin[3]                           - triangle origin (v0) (3)
+	//   XY[3][2]                            - 2D vertex coordinates (6)
+	//   DS[3], AM[3], XD[3], YD[3]          - edge parameters (12)
+	//   EPSG                                - geometric epsilon (1)
+	//   sign                                - normal orientation sign (1)
+	//-------------------------------------------------------------------------
+	static constexpr int TRI_DATA_SIZE = 32;      // doubles per triangle
+	static constexpr int TRIS_PER_HEX_ELEM = 12;  // 6 faces * 2 triangles per hexahedron
+	std::vector<double> m_hexaTriData;            // n_hex * 12 * 32: pre-computed triangle data
+	bool m_hexaTriDataReady;                      // True if triangle data is pre-computed
+
 public:
 
 	int AmOfRelaxSubInterv;
@@ -263,6 +279,11 @@ public:
 	int GetElementDOF(int elemIdx) const { return m_elemDOF[elemIdx]; }
 	int GetElementDOFOffset(int elemIdx) const { return m_elemDOFOffset[elemIdx]; }
 	bool HasVariableDOF() const { return m_hasVariableDOF; }
+
+	// Triangle precomputation accessors (for HACApK sharing)
+	const double* GetHexaTriData() const { return m_hexaTriData.data(); }
+	bool IsHexaTriDataReady() const { return m_hexaTriDataReady; }
+	int GetNumHexElements() const { return (int)m_hexaElemIndices.size(); }
 
 	// Flat matrix/array accessors for solvers
 	double* GetFlatInteractMatrix() { return m_flatInteractMatrix.data(); }
@@ -327,7 +348,9 @@ public:
 	// Fast hexahedron matrix build (avoiding FieldFromQuadFace overhead)
 	//-------------------------------------------------------------------------
 	void PrecomputeHexaGeometry();  // Pre-compute face triangles/normals/eval points
+	void PrecomputeHexaTriangleData();  // Pre-compute triangle local coordinate systems
 	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
+	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 
 	void SetupExternFieldArray();
 	void AddExternFieldFromMoreExtSource();
