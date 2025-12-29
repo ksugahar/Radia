@@ -307,6 +307,12 @@ public:
 	// Solve statistics retrieval (always available)
 	void GetSolveStats(double* dOut, int* nOut);
 
+	// Point classification and batch field computation for FMM
+	void ClassifyPoints(int* classification, int* nearest_elem, int n_points,
+	                    double* points, int container_handle, double near_threshold);
+	void ComputeFieldBatch(double* B_out, double* H_out, int n_points,
+	                       double* points, int container_handle, int method);
+
 	void ComputeField(int ElemKey, char* FieldChar, double* StObsPoi, long lenStObsPoi, double* FiObsPoi, long lenFiObsPoi, int Np, char* ShowArgFlag, double StrtArg);
 	void ComputeField(int ElemKey, char* FieldChar, radTVectorOfVector3d& VectorOfVector3d, radTVectInputCell& VectInputCell);
 	void ComputeField(int ElemKey, char* FieldChar, double** Points, long LenPoints);

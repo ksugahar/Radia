@@ -26,8 +26,10 @@
 
 #include <math.h>
 #include <string.h>
+#include <cstring>
 #include <cstdio>
 #include <chrono>
+#include <cmath>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -2399,6 +2401,221 @@ void radTApplication::GetSolveStats(double* dOut, int* nOut)
 #else
 	*nOut = 7;
 #endif
+}
+
+//-------------------------------------------------------------------------
+
+void radTApplication::ClassifyPoints(int* classification, int* nearest_elem, int n_points,
+                                     double* points, int container_handle, double near_threshold)
+{
+	try
+	{
+		// Validate handle and get 3D object pointer
+		radThg hg;
+		if(!ValidateElemKey(container_handle, hg))
+		{
+			Send.ErrorMessage("Radia::Error003");
+			return;
+		}
+		radTg3d* g3dPtr = Cast.g3dCast(hg.rep);
+		if(g3dPtr == 0)
+		{
+			Send.ErrorMessage("Radia::Error003");
+			return;
+		}
+
+		// Note: Coordinates are used directly (same as rad.Fld() API)
+		// Units are controlled via rad.FldUnits()
+
+		// Collect element centers from the container
+		std::vector<TVector3d> elem_centers;
+		std::vector<double> elem_sizes;
+
+		radTGroup* pGroup = Cast.GroupCast(g3dPtr);
+
+		if(pGroup != NULL)
+		{
+			for(radTmhg::const_iterator iter = pGroup->GroupMapOfHandlers.begin();
+				iter != pGroup->GroupMapOfHandlers.end(); ++iter)
+			{
+				radTg3d* pMember = Cast.g3dCast((*iter).second.rep);
+				if(pMember != NULL)
+				{
+					elem_centers.push_back(pMember->CentrPoint);
+					// Estimate element size (will improve later with actual element bounds)
+					elem_sizes.push_back(0.1);
+				}
+			}
+		}
+		else
+		{
+			elem_centers.push_back(g3dPtr->CentrPoint);
+			elem_sizes.push_back(0.1);
+		}
+
+		if(elem_centers.empty())
+		{
+			for(int i = 0; i < n_points; ++i)
+			{
+				classification[i] = 2;  // FAR
+				nearest_elem[i] = -1;
+			}
+			return;
+		}
+
+		// Compute global AABB from element centers
+		TVector3d global_min = elem_centers[0];
+		TVector3d global_max = elem_centers[0];
+		double total_size = 0.0;
+
+		for(size_t e = 0; e < elem_centers.size(); ++e)
+		{
+			if(elem_centers[e].x < global_min.x) global_min.x = elem_centers[e].x;
+			if(elem_centers[e].y < global_min.y) global_min.y = elem_centers[e].y;
+			if(elem_centers[e].z < global_min.z) global_min.z = elem_centers[e].z;
+			if(elem_centers[e].x > global_max.x) global_max.x = elem_centers[e].x;
+			if(elem_centers[e].y > global_max.y) global_max.y = elem_centers[e].y;
+			if(elem_centers[e].z > global_max.z) global_max.z = elem_centers[e].z;
+			total_size += elem_sizes[e];
+		}
+
+		double avg_size = total_size / elem_centers.size();
+		double margin = avg_size * near_threshold;
+
+		// Classify each point
+		#ifdef _OPENMP
+		#pragma omp parallel for schedule(dynamic)
+		#endif
+		for(int i = 0; i < n_points; ++i)
+		{
+			TVector3d pt;
+			pt.x = points[i * 3 + 0];
+			pt.y = points[i * 3 + 1];
+			pt.z = points[i * 3 + 2];
+
+			classification[i] = 2;  // FAR
+			nearest_elem[i] = -1;
+
+			// Quick rejection using global AABB
+			if(pt.x < global_min.x - margin || pt.x > global_max.x + margin ||
+			   pt.y < global_min.y - margin || pt.y > global_max.y + margin ||
+			   pt.z < global_min.z - margin || pt.z > global_max.z + margin)
+			{
+				continue;
+			}
+
+			// Find nearest element
+			double min_dist = 1e30;
+			int best_eid = -1;
+
+			for(size_t e = 0; e < elem_centers.size(); ++e)
+			{
+				double dx = pt.x - elem_centers[e].x;
+				double dy = pt.y - elem_centers[e].y;
+				double dz = pt.z - elem_centers[e].z;
+				double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+
+				if(dist < min_dist)
+				{
+					min_dist = dist;
+					best_eid = (int)e;
+				}
+			}
+
+			if(best_eid < 0) continue;
+
+			nearest_elem[i] = best_eid;
+			double elem_size = elem_sizes[best_eid];
+
+			// Near/Far classification
+			if(min_dist < elem_size * near_threshold)
+			{
+				classification[i] = 1;  // NEAR
+			}
+			else
+			{
+				classification[i] = 2;  // FAR
+			}
+		}
+	}
+	catch(...)
+	{
+		Send.ErrorMessage("Radia::Error000");
+	}
+}
+
+//-------------------------------------------------------------------------
+
+void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_points,
+                                        double* points, int container_handle, int method)
+{
+	try
+	{
+		// Validate handle and get 3D object pointer
+		radThg hg;
+		if(!ValidateElemKey(container_handle, hg))
+		{
+			Send.ErrorMessage("Radia::Error003");
+			return;
+		}
+		radTg3d* g3dPtr = Cast.g3dCast(hg.rep);
+		if(g3dPtr == 0)
+		{
+			Send.ErrorMessage("Radia::Error003");
+			return;
+		}
+
+		// Initialize output arrays to zero
+		std::memset(B_out, 0, n_points * 3 * sizeof(double));
+		std::memset(H_out, 0, n_points * 3 * sizeof(double));
+
+		// Magnetic constant (permeability of free space)
+		// B field is stored internally in A/m (same as H), needs conversion to Tesla
+		const double Mu0 = 4. * 3.1415926535897932 * 1.e-7; // T*m/A
+
+		// Apply unit scaling: convert user units to internal mm
+		// Same as rad_c_interface.cpp Field() function
+		double scale = GetLengthUnitScale();
+
+		// Create field key for B and H computation
+		radTFieldKey FieldKey;
+		FieldKey.B_ = true;
+		FieldKey.H_ = true;
+
+		TVector3d ZeroVect(0., 0., 0.);
+
+		// Compute field at each point
+		// method: 0 = direct, 1 = FMM (not yet implemented)
+		#ifdef _OPENMP
+		#pragma omp parallel for schedule(dynamic) if(n_points > 100)
+		#endif
+		for(int i = 0; i < n_points; ++i)
+		{
+			TVector3d pt;
+			pt.x = points[i * 3 + 0] * scale;
+			pt.y = points[i * 3 + 1] * scale;
+			pt.z = points[i * 3 + 2] * scale;
+
+			// Constructor: (FieldKey, CompCriterium, P, B, H, A, M, J=0. -> TVector3d(0,0,0))
+			// Use same param count as ComputeField in rad_transform_impl.cpp line 60
+			radTField Field(FieldKey, CompCriterium, pt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+			g3dPtr->B_genComp(&Field);
+
+			// Convert B from A/m to Tesla (multiply by Mu0)
+			B_out[i * 3 + 0] = Field.B.x * Mu0;
+			B_out[i * 3 + 1] = Field.B.y * Mu0;
+			B_out[i * 3 + 2] = Field.B.z * Mu0;
+
+			// H is already in A/m
+			H_out[i * 3 + 0] = Field.H.x;
+			H_out[i * 3 + 1] = Field.H.y;
+			H_out[i * 3 + 2] = Field.H.z;
+		}
+	}
+	catch(...)
+	{
+		Send.ErrorMessage("Radia::Error000");
+	}
 }
 
 //-------------------------------------------------------------------------
