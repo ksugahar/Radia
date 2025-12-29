@@ -837,6 +837,87 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 
 		if(FldKey.H_) FieldPtr->H += H_total;
 		if(FldKey.B_) FieldPtr->B += H_total;
+
+		// =====================================================================
+		// Scalar potential (phi) and vector potential (A) computation
+		// =====================================================================
+		// Uses dipole approximation: m = M * V (dipole moment = magnetization * volume)
+		//
+		// Scalar potential: phi_m(r) = (1/4pi) * (m . r) / |r|^3
+		//                   H = -grad(phi_m)
+		//
+		// Vector potential: A(r) = (mu_0/4pi) * (m x r) / |r|^3
+		//                   B = curl(A)
+		//
+		// Reference: ELF_MAGIC implementation (src/dll/m_fmm3d.f90)
+		// =====================================================================
+		if(FldKey.Phi_ || FldKey.A_)
+		{
+			// ---------------------------------------------------------------
+			// Unit conversion: Radia internal units are mm, formulas require m
+			// ---------------------------------------------------------------
+			// Radia internal: coordinates in mm, magnetization M in A/m
+			// Formula: phi = (1/4pi) * (m . r) / r^3, where m = M * V
+			// For correct SI units: V must be in m^3, r in m
+			//
+			// Conversion factor: 1 mm = 1e-3 m
+			// - V (mm^3 -> m^3): multiply by (1e-3)^3 = 1e-9
+			// - r (mm -> m): multiply by 1e-3
+			// - r^3 (mm^3 -> m^3): multiply by 1e-9
+			// - m*r (A*m^2 * m = A*m^3) / r^3 (m^3) = A (correct units)
+			//
+			// Net effect for phi: (m_mm * r_mm) / r_mm^3
+			//   = (M * V_mm * r_mm) / r_mm^3
+			//   = (M * V_m * 1e9 * r_m * 1e3) / (r_m^3 * 1e9)
+			//   = (M * V_m * r_m) / r_m^3 * 1e3
+			// So we need to divide by 1e3 to get correct SI units.
+			// ---------------------------------------------------------------
+			constexpr double MM_TO_M = 1e-3;  // mm to m conversion
+			constexpr double MM3_TO_M3 = MM_TO_M * MM_TO_M * MM_TO_M;  // 1e-9
+
+			// Compute dipole moment: m = M * V (convert V from mm^3 to m^3)
+			double V = Volume() * MM3_TO_M3;  // V in m^3
+			TVector3d dipole_mom;
+			dipole_mom.x = Magn.x * V;
+			dipole_mom.y = Magn.y * V;
+			dipole_mom.z = Magn.z * V;
+
+			// Distance vector: r = obs - source (convert from mm to m)
+			TVector3d r_vec;
+			r_vec.x = (obsPoint.x - CentrPoint.x) * MM_TO_M;
+			r_vec.y = (obsPoint.y - CentrPoint.y) * MM_TO_M;
+			r_vec.z = (obsPoint.z - CentrPoint.z) * MM_TO_M;
+			double r_mag_sq = r_vec.x*r_vec.x + r_vec.y*r_vec.y + r_vec.z*r_vec.z;
+			double r_mag = sqrt(r_mag_sq);
+
+			if(r_mag > RadConst::EPSILON)
+			{
+				double r_mag3 = r_mag * r_mag_sq;
+
+				// Scalar potential: phi = (1/4pi) * (m . r) / r^3
+				// Units: [A*m^2 * m / m^3] = [A] (correct)
+				if(FldKey.Phi_)
+				{
+					double m_dot_r = dipole_mom.x*r_vec.x + dipole_mom.y*r_vec.y + dipole_mom.z*r_vec.z;
+					FieldPtr->Phi += RadConst::INV_FOUR_PI * m_dot_r / r_mag3;
+				}
+
+				// Vector potential: A = (mu_0/4pi) * (m x r) / r^3
+				// Units: [H/m * A*m^2 * m / m^3] = [H*A/m] = [T*m] (correct)
+				if(FldKey.A_)
+				{
+					TVector3d m_cross_r;
+					m_cross_r.x = dipole_mom.y * r_vec.z - dipole_mom.z * r_vec.y;
+					m_cross_r.y = dipole_mom.z * r_vec.x - dipole_mom.x * r_vec.z;
+					m_cross_r.z = dipole_mom.x * r_vec.y - dipole_mom.y * r_vec.x;
+
+					double factor = RadConst::MU_0_OVER_FOUR_PI / r_mag3;
+					FieldPtr->A.x += factor * m_cross_r.x;
+					FieldPtr->A.y += factor * m_cross_r.y;
+					FieldPtr->A.z += factor * m_cross_r.z;
+				}
+			}
+		}
 	}
 }
 
@@ -949,6 +1030,70 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 
 		if(FldKey.H_) FieldPtr->H += H_total;
 		if(FldKey.B_) FieldPtr->B += H_total;
+
+		// =====================================================================
+		// Scalar potential (phi) and vector potential (A) computation
+		// =====================================================================
+		// Uses dipole approximation: m = M * V (dipole moment = magnetization * volume)
+		//
+		// Scalar potential: phi_m(r) = (1/4pi) * (m . r) / |r|^3
+		//                   H = -grad(phi_m)
+		//
+		// Vector potential: A(r) = (mu_0/4pi) * (m x r) / |r|^3
+		//                   B = curl(A)
+		//
+		// Reference: ELF_MAGIC implementation (src/dll/m_fmm3d.f90)
+		// Note: ELF uses meters internally, Radia uses millimeters
+		// =====================================================================
+		if(FldKey.Phi_ || FldKey.A_)
+		{
+			// Unit conversion: Radia internal units are mm, formulas require m
+			constexpr double MM_TO_M = 1e-3;  // mm to m conversion
+			constexpr double MM3_TO_M3 = MM_TO_M * MM_TO_M * MM_TO_M;  // 1e-9
+
+			// Compute dipole moment: m = M * V (convert V from mm^3 to m^3)
+			double V = Volume() * MM3_TO_M3;  // V in m^3
+			TVector3d dipole_mom;
+			dipole_mom.x = Magn.x * V;
+			dipole_mom.y = Magn.y * V;
+			dipole_mom.z = Magn.z * V;
+
+			// Distance vector: r = obs - source (convert from mm to m)
+			TVector3d r_vec;
+			r_vec.x = (obsPoint.x - CentrPoint.x) * MM_TO_M;
+			r_vec.y = (obsPoint.y - CentrPoint.y) * MM_TO_M;
+			r_vec.z = (obsPoint.z - CentrPoint.z) * MM_TO_M;
+			double r_mag_sq = r_vec.x*r_vec.x + r_vec.y*r_vec.y + r_vec.z*r_vec.z;
+			double r_mag = sqrt(r_mag_sq);
+
+			if(r_mag > RadConst::EPSILON)
+			{
+				double r_mag3 = r_mag * r_mag_sq;
+
+				// Scalar potential: phi = (1/4pi) * (m . r) / r^3
+				// Units: [A*m^2 * m / m^3] = [A] (correct)
+				if(FldKey.Phi_)
+				{
+					double m_dot_r = dipole_mom.x*r_vec.x + dipole_mom.y*r_vec.y + dipole_mom.z*r_vec.z;
+					FieldPtr->Phi += RadConst::INV_FOUR_PI * m_dot_r / r_mag3;
+				}
+
+				// Vector potential: A = (mu_0/4pi) * (m x r) / r^3
+				// Units: [H/m * A*m^2 * m / m^3] = [H*A/m] = [T*m] (correct)
+				if(FldKey.A_)
+				{
+					TVector3d m_cross_r;
+					m_cross_r.x = dipole_mom.y * r_vec.z - dipole_mom.z * r_vec.y;
+					m_cross_r.y = dipole_mom.z * r_vec.x - dipole_mom.x * r_vec.z;
+					m_cross_r.z = dipole_mom.x * r_vec.y - dipole_mom.y * r_vec.x;
+
+					double factor = RadConst::MU_0_OVER_FOUR_PI / r_mag3;
+					FieldPtr->A.x += factor * m_cross_r.x;
+					FieldPtr->A.y += factor * m_cross_r.y;
+					FieldPtr->A.z += factor * m_cross_r.z;
+				}
+			}
+		}
 	}
 }
 
