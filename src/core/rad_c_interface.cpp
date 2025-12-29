@@ -160,6 +160,8 @@ void SetRelaxParam( double );
 double GetRelaxParam();
 void ClassifyPoints( int*, int*, int, double*, int, double );
 void ComputeFieldBatch( double*, double*, int, double*, int, int );
+void ComputeScalarPotentialBatch( double*, int, double*, int );
+void ComputeVectorPotentialBatch( double*, int, double*, int );
 void ParticleTrajectory( int, double, double,double,double,double, double,double, int );
 void FocusingPotential( int, double,double,double, double,double,double, int );
 //void FocusingKickPer( int, double,double,double, double,double,double, double,int, double,double,double, double,int,double,int, const char*, int,int,double,double, const char*, double );
@@ -2132,6 +2134,22 @@ void ComputeFieldBatch(double* B_out, double* H_out, int n_points,
                        double* points, int container_handle, int method)
 {
 	rad.ComputeFieldBatch(B_out, H_out, n_points, points, container_handle, method);
+}
+
+//-------------------------------------------------------------------------
+
+void ComputeScalarPotentialBatch(double* phi_out, int n_points,
+                                 double* points, int container_handle)
+{
+	rad.ComputeScalarPotentialBatch(phi_out, n_points, points, container_handle);
+}
+
+//-------------------------------------------------------------------------
+
+void ComputeVectorPotentialBatch(double* A_out, int n_points,
+                                 double* points, int container_handle)
+{
+	rad.ComputeVectorPotentialBatch(A_out, n_points, points, container_handle);
 }
 
 //-------------------------------------------------------------------------

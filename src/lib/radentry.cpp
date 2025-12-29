@@ -103,6 +103,8 @@ void SetRelaxParam( double );
 double GetRelaxParam();
 void ClassifyPoints( int*, int*, int, double*, int, double );
 void ComputeFieldBatch( double*, double*, int, double*, int, int );
+void ComputeScalarPotentialBatch( double*, int, double*, int );
+void ComputeVectorPotentialBatch( double*, int, double*, int );
 
 void FieldArbitraryPointsArray( long, const char*, double**, long );
 void Field( int, char*, double,double,double, double,double,double, int, char*, double );
@@ -1763,6 +1765,22 @@ int CALL RadFldBatch(double* B_out, double* H_out, int n_points,
                      double* points, int container_handle, int method)
 {
 	ComputeFieldBatch(B_out, H_out, n_points, points, container_handle, method);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadFldPhi(double* phi_out, int n_points, double* points, int container_handle)
+{
+	ComputeScalarPotentialBatch(phi_out, n_points, points, container_handle);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle)
+{
+	ComputeVectorPotentialBatch(A_out, n_points, points, container_handle);
 	return ioBuffer.OutErrorStatus();
 }
 
