@@ -664,6 +664,7 @@ error:
 //***cHACApK_calc_vec
 // ld==0: row direction, ld==1: column direction
 // Optimized with BLAS dcopy for strided column extraction
+// workspace: pre-allocated buffer of size >= kmax to avoid malloc in hot path
 void cHACApK_calc_vec(
   double *zaa,
   double *zab,
@@ -677,9 +678,9 @@ void cHACApK_calc_vec(
   int *lod,
   int i_bemv,
   int *lmsk,
-  int ld)
+  int ld,
+  double *workspace)  /* Pre-allocated workspace of size >= k */
 {
-  double *zz;
   int ii,ill,itt,il;
 
   for (ii=0; ii<ndp; ii++) {
@@ -693,19 +694,13 @@ void cHACApK_calc_vec(
     }
   }
   if(k==0) return;
-  zz = (double *) calloc(k,sizeof(double));
-  if(zz == NULL) {
-#pragma omp critical
-    printf("sub cHACApK_calc_vec; zz allocation failed !\n");
-    exit(EXIT_FAILURE);
-  }
+  /* Use pre-allocated workspace instead of malloc/free */
   /* Extract column with stride using BLAS dcopy (optimized strided access) */
-  cHACApK_extract_col(zz, zab, ip, ndt, k);
-  cHACApK_adotsub_dsm(vec,zaa,zz,ndp,k,ndp);
+  cHACApK_extract_col(workspace, zab, ip, ndt, k);
+  cHACApK_adotsub_dsm(vec,zaa,workspace,ndp,k,ndp);
   for (il=0; il<ndp; il++) {
     if(lmsk[il]==1) vec[il]=0.0;
   }
-  free(zz);
 }
 
 //***cHACApK_acaplus
@@ -727,6 +722,7 @@ int cHACApK_acaplus(
   int *lrow_msk,*lcol_msk;
   double *pa_ref,*pb_ref;
   double *prow,*pcol;
+  double *workspace;  /* Pre-allocated workspace for cHACApK_calc_vec */
 
   const double za_ACA_EPS=1.0e-30;
   double znrm,ACA_EPS,colnorm,rownorm,apxnorm,col_maxval,row_maxval,zinvmax,blknorm;
@@ -743,6 +739,14 @@ int cHACApK_acaplus(
     fprintf(stderr, "Error: cHACApK_acaplus: malloc lrow_msk lcol_msk\n");
     goto error;
   }
+
+  /* Pre-allocate workspace for cHACApK_calc_vec to avoid malloc/free in hot path */
+  workspace = (double *) calloc(kmax, sizeof(double));
+  if(workspace==NULL) {
+    fprintf(stderr, "Error: cHACApK_acaplus: malloc workspace\n");
+    goto error;
+  }
+
   k = 0;
 
   j_ref=0; // arbitrary j_ref
@@ -752,7 +756,7 @@ int cHACApK_acaplus(
     goto error;
   }
 
-  cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j_ref,pa_ref,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1);
+  cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j_ref,pa_ref,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1,workspace);
   //  print*,'pa_ref=',pa_ref
   colnorm = cHACApK_unrm_d(ndl,pa_ref);
 
@@ -763,7 +767,7 @@ int cHACApK_acaplus(
     fprintf(stderr, "Error: cHACApK_acaplus: malloc pb_ref\n");
     goto error;
   }
-  cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i_ref,pb_ref,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0);
+  cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i_ref,pb_ref,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0,workspace);
   //  print*,'pb_ref=',pb_ref
   rownorm=cHACApK_unrm_d(ndt,pb_ref);
 
@@ -780,17 +784,17 @@ int cHACApK_acaplus(
 
     if(row_maxval>col_maxval) {
       if(j!=j_ref) {
-        cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j,pcol,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1);
+        cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j,pcol,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1,workspace);
       } else {
         for (il=0; il<ndl; il++) pcol[il]=pa_ref[il];
       }
       cHACApK_maxabsvalloc_d(pcol,&col_maxval,&i,ndl);
 
       if(col_maxval < ACA_EPS && k>=param[64]) {
-        lstop_aca = 1; 
+        lstop_aca = 1;
         //         print*,'2***************lstop_aca==1***********************2'
       } else {
-        cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i,prow,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0);
+        cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i,prow,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0,workspace);
         if(fabs(pcol[i])>1.0e-20) {
           zinvmax=1.0/pcol[i];
         } else {
@@ -805,9 +809,9 @@ int cHACApK_acaplus(
       }
     } else {
       if(i!=i_ref) {
-        cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i,prow,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0);
+        cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i,prow,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0,workspace);
       } else {
-        for (it=0; it<ndt; it++) prow[it]=pb_ref[it];  
+        for (it=0; it<ndt; it++) prow[it]=pb_ref[it];
       }
       cHACApK_maxabsvalloc_d(prow,&row_maxval,&j,ndt);
 
@@ -815,7 +819,7 @@ int cHACApK_acaplus(
         lstop_aca = 1;
         //         print*,'3***************lstop_aca==1***********************3'
       } else {
-        cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j,pcol,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1);
+        cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j,pcol,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1,workspace);
         if(fabs(prow[j])>1.0e-20) {
           zinvmax=1.0/prow[j];
         } else {
@@ -846,7 +850,7 @@ int cHACApK_acaplus(
           //          print*,'i=',i,' ii=',mod((i_ref+ndl-2),ndl)+1
           if(lrow_msk[i]==0) {
             //            write(6,1000) 'i=',i
-            cHACApK_calc_vec(zab,zaa,ndt,ndl,k+1,i,pb_ref,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0);
+            cHACApK_calc_vec(zab,zaa,ndt,ndl,k+1,i,pb_ref,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0,workspace);
             rownorm = cHACApK_unrm_d(ndt,pb_ref);
             if(rownorm<ACA_EPS) lrow_msk[i] = 1;
             ntries_row--;
@@ -872,7 +876,7 @@ int cHACApK_acaplus(
         //        print*,'lcol_msk',lcol_msk
         while(j!=(j_ref+ndt-1)%ndt && colnorm<za_ACA_EPS && ntries_col>0) {
           if(lcol_msk[j]==0) {
-            cHACApK_calc_vec(zaa,zab,ndl,ndt,k+1,j,pa_ref,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1);
+            cHACApK_calc_vec(zaa,zab,ndl,ndt,k+1,j,pa_ref,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1,workspace);
             colnorm = cHACApK_unrm_d(ndl,pa_ref);
             if(colnorm<ACA_EPS) lcol_msk[j]=1;
             ntries_col--;
@@ -937,7 +941,7 @@ int cHACApK_acaplus(
       //    stop
     }
   }
-  free(lrow_msk); free(lcol_msk); free(pa_ref); free(pb_ref);
+  free(lrow_msk); free(lcol_msk); free(pa_ref); free(pb_ref); free(workspace);
   kacaplus=k;
   //  print*,'HACApK_acaplus=',HACApK_acaplus
   //  write(6,2000) 'blknorm=',blknorm/apxnorm,' colnorm=',colnorm/apxnorm,' rownorm=',rownorm/apxnorm
@@ -948,8 +952,8 @@ error:
 }
 
 //***cHACApK_fill_leafmtx_hyp
-// ELF-compatible OpenMP parallelization: parallelize over leaf blocks directly
-// with schedule(dynamic, 8) for better load balancing
+// OpenMP parallelization over leaf blocks with dynamic scheduling
+// Dynamic scheduling provides better load balancing for variable-size ACA+ operations
 void cHACApK_fill_leafmtx_hyp(
   st_cHACApK_leafmtx *st_lf,
   int i_bemv,
@@ -963,7 +967,7 @@ void cHACApK_fill_leafmtx_hyp(
   int nlf,
   int *lnps,
   int *lnpe,
-  int *lthr) // [0:]
+  int *lthr) // [0:nthr] - thread-to-block assignment array (unused with dynamic)
 {
   int mpinr,mpilog,nrank,icomm,kparam;
   int ip;
@@ -972,8 +976,9 @@ void cHACApK_fill_leafmtx_hyp(
   mpinr=lpmd[3]; mpilog=lpmd[4]; nrank=lpmd[2]; icomm=lpmd[1];
   eps=param[71]; ACA_EPS=param[72]*eps; kparam=(int)param[63];
 
-  /* ELF-compatible: Parallelize over leaf blocks directly with schedule(dynamic, 8) */
-#pragma omp parallel for schedule(dynamic, 8) default(none) \
+  /* Dynamic scheduling with chunk size 1 for best load balancing
+   * Each ACA+ operation has variable work depending on rank achieved */
+#pragma omp parallel for schedule(dynamic, 1) default(none) \
   shared(st_lf, nlf, kparam, eps, ACA_EPS, znrmmat, param, lodl, lodt, i_bemv) private(ip)
   for (ip = 1; ip <= nlf; ip++) {
     int ndl   = st_lf[ip]->ndl;
