@@ -1135,14 +1135,6 @@ void HACApK_update_diagonal_wrapper(
             n_diag_updated++;
         }
     }
-
-#if 0  /* Debug output - disabled for production */
-    static int update_count = 0;
-    if (update_count < 3) {
-        printf("[HACApK] Updated %d dense diagonal blocks out of %d total leaves\n", n_diag_updated, leafmtxp->nlf);
-        update_count++;
-    }
-#endif
 }
 
 /*=========================================================================
