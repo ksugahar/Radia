@@ -204,6 +204,19 @@ class radTInteraction : public radTg {
 	std::vector<double> m_flatMagnArray;         // Size: m_totalDOF (M or sigma values)
 	std::vector<double> m_flatFieldArray;        // Size: m_totalDOF
 
+	//-------------------------------------------------------------------------
+	// Precomputed tetrahedron geometry for fast matrix build
+	// Eliminates repeated coordinate transformations in B_comp()
+	//-------------------------------------------------------------------------
+	bool m_tetraGeomCached;                        // True if geometry is cached
+	std::vector<double> m_tetraCenters;            // [n_elem * 3] Element centroids (x,y,z)
+	std::vector<double> m_tetraFaceVerts;          // [n_elem * 4 * 9] Face vertices (4 faces × 3 verts × 3 coords)
+	std::vector<double> m_tetraFaceNormals;        // [n_elem * 4 * 3] Outward face normals (4 faces × 3 coords)
+	std::vector<double> m_tetraFaceAreas;          // [n_elem * 4] Face areas
+
+	void CacheTetrahedronGeometry();               // Cache geometry for all tetrahedra
+	void ComputeTetraBlock3x3(int row, int col, double* block);  // Compute 3x3 block using cached geometry
+
 public:
 
 	int AmOfRelaxSubInterv;
