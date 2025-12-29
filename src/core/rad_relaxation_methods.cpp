@@ -254,12 +254,18 @@ bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPt
 
 //-------------------------------------------------------------------------
 
-void BuildBaseMatrix(NonlinearContext& ctx, radTInteraction* IntrctPtr)
+bool BuildBaseMatrix(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 {
 	double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
-	if(FlatInteract == nullptr) return;
+	if(FlatInteract == nullptr) return false;
 
-	ctx.BaseMatrix.resize(ctx.totalDOF * ctx.totalDOF);
+	try {
+		ctx.BaseMatrix.resize(ctx.totalDOF * ctx.totalDOF);
+	} catch (const std::bad_alloc&) {
+		double required_gb = (double)(ctx.totalDOF) * ctx.totalDOF * 8 / (1024.0 * 1024.0 * 1024.0);
+		fprintf(stderr, "Radia::Solve> Matrix requires %.1f GB memory for DOF=%d. Problem too large.\n", required_gb, ctx.totalDOF);
+		return false;
+	}
 
 	// Copy interaction matrix
 	std::memcpy(ctx.BaseMatrix.data(), FlatInteract, ctx.totalDOF * ctx.totalDOF * sizeof(double));
@@ -292,6 +298,7 @@ void BuildBaseMatrix(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 			}
 		}
 	}
+	return true;
 }
 
 //-------------------------------------------------------------------------
@@ -515,7 +522,8 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 		return 0;
 
 	// Build base matrix (geometric part without chi)
-	BuildBaseMatrix(ctx, IntrctPtr);
+	if(!BuildBaseMatrix(ctx, IntrctPtr))
+		return 0;  // Memory allocation failed
 
 	int iterCount = 0;
 	double MisfitE2 = 1.0e30;
@@ -939,7 +947,15 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	// Build system matrix: copy base matrix and add diagonal terms
 	// LAPACK dgesv destroys the matrix, so we need a working copy
 	// Only one copy is needed - dgesv works directly on this
-	std::vector<double> SystemMatrix(totalDOF * totalDOF);
+	std::vector<double> SystemMatrix;
+	try {
+		SystemMatrix.resize(totalDOF * totalDOF);
+	} catch (const std::bad_alloc&) {
+		// Memory allocation failed - likely DOF is too large for LU
+		double required_gb = (double)(totalDOF) * totalDOF * 8 / (1024.0 * 1024.0 * 1024.0);
+		fprintf(stderr, "Radia::Solve> LU solver requires %.1f GB memory for DOF=%d. Use BiCGSTAB (method 1) or HACApK (method 2) for large problems.\n", required_gb, totalDOF);
+		return -2;  // Memory allocation failure
+	}
 	std::memcpy(SystemMatrix.data(), ctx.BaseMatrix.data(), totalDOF * totalDOF * sizeof(double));
 
 	// Build RHS vector (will be overwritten with solution by dgesv)

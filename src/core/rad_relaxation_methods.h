@@ -129,8 +129,9 @@ bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPt
  *
  * @param ctx Context with BaseMatrix to fill
  * @param IntrctPtr Interaction data
+ * @return true on success, false on memory allocation failure
  */
-void BuildBaseMatrix(NonlinearContext& ctx, radTInteraction* IntrctPtr);
+bool BuildBaseMatrix(NonlinearContext& ctx, radTInteraction* IntrctPtr);
 
 /**
  * Store old values (M, chi, B-norm) before linear solve for convergence check.

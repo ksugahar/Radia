@@ -134,7 +134,7 @@ class radTInteraction : public radTg {
 
 	// Allow unified nonlinear iteration helpers to access interaction data
 	friend bool InitializeNonlinearContext(struct NonlinearContext&, radTInteraction*, bool);
-	friend void BuildBaseMatrix(struct NonlinearContext&, radTInteraction*);
+	friend bool BuildBaseMatrix(struct NonlinearContext&, radTInteraction*);
 	friend void StoreOldValuesAndComputeBnorm(struct NonlinearContext&, radTInteraction*);
 	friend void UpdateMagnAndComputeH(struct NonlinearContext&, radTInteraction*);
 	friend double UpdateChiAndCheckConvergence(struct NonlinearContext&, radTInteraction*);
