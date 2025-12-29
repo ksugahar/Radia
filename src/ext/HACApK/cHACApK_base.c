@@ -1093,9 +1093,9 @@ void cHACApK_fill_leafmtx_hyp(
   mpinr=lpmd[3]; mpilog=lpmd[4]; nrank=lpmd[2]; icomm=lpmd[1];
   eps=param[71]; ACA_EPS=param[72]*eps; kparam=(int)param[63];
 
-  /* Dynamic scheduling with chunk size 1 for best load balancing
-   * Each ACA+ operation has variable work depending on rank achieved */
-#pragma omp parallel for schedule(dynamic, 1) default(none) \
+  /* Dynamic scheduling with chunk size 8 to reduce scheduling overhead
+   * (ELF uses chunk size 8 which is ~3x faster than chunk size 1) */
+#pragma omp parallel for schedule(dynamic, 8) default(none) \
   shared(st_lf, nlf, kparam, eps, ACA_EPS, znrmmat, param, lodl, lodt, i_bemv) private(ip)
   for (ip = 1; ip <= nlf; ip++) {
     int ndl   = st_lf[ip]->ndl;

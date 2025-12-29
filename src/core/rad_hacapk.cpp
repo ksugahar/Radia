@@ -1032,18 +1032,19 @@ void RadHACApKManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) co
 }
 
 //=========================================================================
-// GetCached6x6Element: ELF-style thread-local LRU cache (NO locking!)
+// GetCached6x6Element: ELF-style hash-based thread-local cache (NO locking!)
 //
-// ELF pattern from m_ppohBEM_user_func_hex.f90:
+// ELF pattern from m_ppohBEM_user_func_unified.f90:
 // - Single-entry cache checked first (most common case)
-// - Thread-local LRU cache (32 entries) with !$omp threadprivate
+// - Hash-based cache (O(1) lookup, no LRU search)
 // - NO global cache, NO critical sections
 //
-// This is THE key optimization: no locking = linear scaling with threads
+// This is THE key optimization: hash lookup + no locking = fast scaling
 //=========================================================================
 
-// Thread-local LRU cache size (matches ELF's hex_lru_cache_size = 64)
-static constexpr int TL_CACHE_SIZE = 64;
+// Hash-based cache size (must be power of 2 for fast modulo)
+static constexpr int TL_HASH_SIZE = 1024;
+static constexpr int TL_HASH_MASK = TL_HASH_SIZE - 1;
 
 double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const {
     // Thread-local single-entry cache (most common case: same block accessed multiple times)
@@ -1051,20 +1052,17 @@ double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i,
     static thread_local int tl_single_elem_j = -1;
     static thread_local double tl_single_K_mat[36];
 
-    // Thread-local LRU cache (32 entries, no locking!)
-    static thread_local int tl_cache_elem_i[TL_CACHE_SIZE];
-    static thread_local int tl_cache_elem_j[TL_CACHE_SIZE];
-    static thread_local double tl_cache_K_mat[TL_CACHE_SIZE][36];
-    static thread_local int tl_cache_access[TL_CACHE_SIZE];
-    static thread_local int tl_access_counter = 0;
+    // Thread-local hash-based cache (O(1) lookup, no locking!)
+    static thread_local int tl_cache_elem_i[TL_HASH_SIZE];
+    static thread_local int tl_cache_elem_j[TL_HASH_SIZE];
+    static thread_local double tl_cache_K_mat[TL_HASH_SIZE][36];
     static thread_local bool tl_initialized = false;
 
     // Initialize thread-local cache on first access
     if (!tl_initialized) {
-        for (int i = 0; i < TL_CACHE_SIZE; i++) {
+        for (int i = 0; i < TL_HASH_SIZE; i++) {
             tl_cache_elem_i[i] = -1;
             tl_cache_elem_j[i] = -1;
-            tl_cache_access[i] = 0;
         }
         tl_initialized = true;
     }
@@ -1074,20 +1072,16 @@ double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i,
         return tl_single_K_mat[face_i * 6 + face_j];
     }
 
-    // Search thread-local LRU cache (no locking needed!)
-    for (int k = 0; k < TL_CACHE_SIZE; k++) {
-        if (tl_cache_elem_i[k] == elem_i && tl_cache_elem_j[k] == elem_j) {
-            // Cache hit - update access count and copy to single-entry cache
-            tl_access_counter++;
-            tl_cache_access[k] = tl_access_counter;
+    // Compute hash index (ELF-style hash function)
+    int hash_idx = ((elem_i * 73856093) ^ (elem_j * 19349663)) & TL_HASH_MASK;
 
-            // Copy to single-entry cache for repeated access
-            std::memcpy(tl_single_K_mat, tl_cache_K_mat[k], 36 * sizeof(double));
-            tl_single_elem_i = elem_i;
-            tl_single_elem_j = elem_j;
-
-            return tl_single_K_mat[face_i * 6 + face_j];
-        }
+    // Check hash cache (O(1) lookup!)
+    if (tl_cache_elem_i[hash_idx] == elem_i && tl_cache_elem_j[hash_idx] == elem_j) {
+        // Cache hit - copy to single-entry cache for repeated access
+        std::memcpy(tl_single_K_mat, tl_cache_K_mat[hash_idx], 36 * sizeof(double));
+        tl_single_elem_i = elem_i;
+        tl_single_elem_j = elem_j;
+        return tl_single_K_mat[face_i * 6 + face_j];
     }
 
     // Cache miss - compute the block using pre-computed geometry
@@ -1099,27 +1093,10 @@ double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i,
     tl_single_elem_i = elem_i;
     tl_single_elem_j = elem_j;
 
-    // Find LRU slot (either empty or least recently used)
-    int lru_slot = 0;
-    int min_access = tl_cache_access[0];
-    for (int k = 1; k < TL_CACHE_SIZE; k++) {
-        if (tl_cache_elem_i[k] < 0) {
-            // Empty slot - use immediately
-            lru_slot = k;
-            break;
-        }
-        if (tl_cache_access[k] < min_access) {
-            min_access = tl_cache_access[k];
-            lru_slot = k;
-        }
-    }
-
-    // Insert into LRU cache
-    tl_access_counter++;
-    tl_cache_elem_i[lru_slot] = elem_i;
-    tl_cache_elem_j[lru_slot] = elem_j;
-    std::memcpy(tl_cache_K_mat[lru_slot], tl_single_K_mat, 36 * sizeof(double));
-    tl_cache_access[lru_slot] = tl_access_counter;
+    // Insert into hash cache (overwrites any existing entry at this slot)
+    tl_cache_elem_i[hash_idx] = elem_i;
+    tl_cache_elem_j[hash_idx] = elem_j;
+    std::memcpy(tl_cache_K_mat[hash_idx], tl_single_K_mat, 36 * sizeof(double));
 
     return tl_single_K_mat[face_i * 6 + face_j];
 }
@@ -1174,12 +1151,14 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
 }
 
 //=========================================================================
-// GetCached3x3Element: On-demand 3x3 block computation with thread-local LRU cache
+// GetCached3x3Element: On-demand 3x3 block computation with thread-local hash cache
 // Similar to GetCached6x6Element for 6DOF hexahedra
+// Uses O(1) hash lookup instead of O(n) LRU search
 //=========================================================================
 
-// Thread-local LRU cache size for 3x3 blocks (matches 6DOF cache size)
-static constexpr int TL_CACHE_SIZE_3DOF = 64;
+// Hash-based cache size for 3DOF (must be power of 2 for fast modulo)
+static constexpr int TL_HASH_SIZE_3DOF = 1024;
+static constexpr int TL_HASH_MASK_3DOF = TL_HASH_SIZE_3DOF - 1;
 
 double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const {
     // If flat storage is ready (pre-computed), use O(1) direct access
@@ -1189,7 +1168,7 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
         return val;
     }
 
-    // On-demand computation with thread-local LRU cache (ELF-style)
+    // On-demand computation with thread-local hash cache
     // This path is used when SetupInteractMatrix() is NOT called (HACApK optimization)
 
     // Thread-local single-entry cache (most common case: same block accessed multiple times)
@@ -1197,20 +1176,17 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
     static thread_local int tl_single_elem_j = -1;
     static thread_local double tl_single_N_mat[9];
 
-    // Thread-local LRU cache (no locking!)
-    static thread_local int tl_cache_elem_i[TL_CACHE_SIZE_3DOF];
-    static thread_local int tl_cache_elem_j[TL_CACHE_SIZE_3DOF];
-    static thread_local double tl_cache_N_mat[TL_CACHE_SIZE_3DOF][9];
-    static thread_local int tl_cache_access[TL_CACHE_SIZE_3DOF];
-    static thread_local int tl_access_counter = 0;
+    // Thread-local hash cache (O(1) lookup, no locking needed!)
+    static thread_local int tl_cache_elem_i[TL_HASH_SIZE_3DOF];
+    static thread_local int tl_cache_elem_j[TL_HASH_SIZE_3DOF];
+    static thread_local double tl_cache_N_mat[TL_HASH_SIZE_3DOF][9];
     static thread_local bool tl_initialized = false;
 
     // Initialize thread-local cache on first access
     if (!tl_initialized) {
-        for (int i = 0; i < TL_CACHE_SIZE_3DOF; i++) {
+        for (int i = 0; i < TL_HASH_SIZE_3DOF; i++) {
             tl_cache_elem_i[i] = -1;
             tl_cache_elem_j[i] = -1;
-            tl_cache_access[i] = 0;
         }
         tl_initialized = true;
     }
@@ -1220,20 +1196,17 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
         return tl_single_N_mat[comp_i * 3 + comp_j];
     }
 
-    // Search thread-local LRU cache (no locking needed!)
-    for (int k = 0; k < TL_CACHE_SIZE_3DOF; k++) {
-        if (tl_cache_elem_i[k] == elem_i && tl_cache_elem_j[k] == elem_j) {
-            // Cache hit - update access count and copy to single-entry cache
-            tl_access_counter++;
-            tl_cache_access[k] = tl_access_counter;
+    // Compute hash index (same hash function as 6DOF cache)
+    int hash_idx = ((elem_i * 73856093) ^ (elem_j * 19349663)) & TL_HASH_MASK_3DOF;
 
-            // Copy to single-entry cache for repeated access
-            std::memcpy(tl_single_N_mat, tl_cache_N_mat[k], 9 * sizeof(double));
-            tl_single_elem_i = elem_i;
-            tl_single_elem_j = elem_j;
+    // Check hash cache (O(1) lookup!)
+    if (tl_cache_elem_i[hash_idx] == elem_i && tl_cache_elem_j[hash_idx] == elem_j) {
+        // Cache hit - copy to single-entry cache for repeated access
+        std::memcpy(tl_single_N_mat, tl_cache_N_mat[hash_idx], 9 * sizeof(double));
+        tl_single_elem_i = elem_i;
+        tl_single_elem_j = elem_j;
 
-            return tl_single_N_mat[comp_i * 3 + comp_j];
-        }
+        return tl_single_N_mat[comp_i * 3 + comp_j];
     }
 
     // Cache miss - compute the 3x3 block on-demand
@@ -1250,21 +1223,10 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
     tl_single_elem_i = elem_i;
     tl_single_elem_j = elem_j;
 
-    // Find LRU slot and update cache
-    int lru_slot = 0;
-    int min_access = tl_cache_access[0];
-    for (int k = 1; k < TL_CACHE_SIZE_3DOF; k++) {
-        if (tl_cache_access[k] < min_access) {
-            min_access = tl_cache_access[k];
-            lru_slot = k;
-        }
-    }
-
-    tl_cache_elem_i[lru_slot] = elem_i;
-    tl_cache_elem_j[lru_slot] = elem_j;
-    std::memcpy(tl_cache_N_mat[lru_slot], N_mat, 9 * sizeof(double));
-    tl_access_counter++;
-    tl_cache_access[lru_slot] = tl_access_counter;
+    // Store in hash cache (overwrites any existing entry at this hash index)
+    tl_cache_elem_i[hash_idx] = elem_i;
+    tl_cache_elem_j[hash_idx] = elem_j;
+    std::memcpy(tl_cache_N_mat[hash_idx], N_mat, 9 * sizeof(double));
 
     return N_mat[comp_i * 3 + comp_j];
 }
