@@ -194,7 +194,7 @@ int HACApK_build_hmatrix_wrapper(
     ctl->param[42] = 0;                     /* Block size (auto) */
     ctl->param[43] = 1.0;                   /* Block division factor */
     ctl->param[51] = eta;                   /* Admissibility (eta) */
-    ctl->param[60] = 2;                     /* ACA mode (2=ACA+) */
+    ctl->param[60] = 1;                     /* ACA mode (1=ACA, 2=ACA+) */
     ctl->param[61] = 1;                     /* ACA norm (MREM) */
     ctl->param[62] = (double)200;          /* Max rank initial */
     ctl->param[63] = (double)200;          /* Max rank */
@@ -643,7 +643,7 @@ int HACApK_build_hmatrix_varDOF_wrapper(
     ctl->param[42] = 0;
     ctl->param[43] = 1.0;
     ctl->param[51] = eta;
-    ctl->param[60] = 2;
+    ctl->param[60] = 1;  /* ACA mode (1=ACA, 2=ACA+) */
     ctl->param[61] = 1;
     ctl->param[62] = (double)200;
     ctl->param[63] = (double)200;
