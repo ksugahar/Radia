@@ -20,7 +20,8 @@
 param(
     [switch]$Rebuild,
     [switch]$Test,
-    [switch]$NoOpenMP   # Disable OpenMP (for debugging)
+    [switch]$NoOpenMP,     # Disable OpenMP (for debugging)
+    [switch]$EnableExaFMM  # Enable ExaFMM library for fast field computation
 )
 
 $ErrorActionPreference = "Stop"
@@ -88,6 +89,15 @@ if ($NoOpenMP) {
     Write-Host "OpenMP: ENABLED" -ForegroundColor Green
 }
 
+# ExaFMM flag
+if ($EnableExaFMM) {
+    $EXAFMM_FLAG = "ON"
+    Write-Host "ExaFMM: ENABLED" -ForegroundColor Green
+} else {
+    $EXAFMM_FLAG = "OFF"
+    Write-Host "ExaFMM: DISABLED" -ForegroundColor Gray
+}
+
 # Create batch file to run with Visual Studio environment
 $BatchContent = @"
 @echo off
@@ -107,7 +117,8 @@ echo Configuring CMake with MSVC...
     -DCMAKE_C_COMPILER=cl ^
     -DCMAKE_CXX_COMPILER=cl ^
     -DCMAKE_BUILD_TYPE=Release ^
-    -DRADIA_ENABLE_OPENMP=$OPENMP_FLAG
+    -DRADIA_ENABLE_OPENMP=$OPENMP_FLAG ^
+    -DRADIA_ENABLE_EXAFMM=$EXAFMM_FLAG
 
 if errorlevel 1 exit /b 1
 

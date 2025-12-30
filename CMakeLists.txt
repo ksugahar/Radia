@@ -83,9 +83,9 @@ if(WIN32)
 	endif()
 endif()
 
-# Option to enable FMM3D acceleration
-# Note: FMM3D library requires Fortran compilation - temporarily OFF until library is built
-option(RADIA_ENABLE_FMM3D "Enable FMM3D library for fast field computation" OFF)
+# Option to enable ExaFMM acceleration for fast dipole field computation
+# ExaFMM-t is a pure C++ FMM library (no Fortran dependency)
+option(RADIA_ENABLE_EXAFMM "Enable ExaFMM library for fast field computation" OFF)
 
 # Radia core sources (organized by API functionality)
 set(RADIA_CORE_SOURCES
@@ -95,7 +95,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_transform_impl.cpp        # Transformations (TrfTrsl, TrfRot, etc.)
 	${CORE_DIR}/rad_field_compute.cpp         # Field computation (Fld, FldLst, FldEnr, etc.)
 	${CORE_DIR}/rad_obj_subdivision.cpp       # Subdivision (ObjDivMag, multi-generation extrusion)
-	${CORE_DIR}/rad_fmm3d.cpp                 # FMM3D wrapper for fast multipole acceleration
+	${CORE_DIR}/rad_exafmm.cpp                # ExaFMM wrapper for fast multipole acceleration
 	${CORE_DIR}/rad_point_classify.cpp        # Point classification for FMM near/far
 
 	# Geometry files (descriptive names)
@@ -196,7 +196,7 @@ target_include_directories(radia_ngsolve PRIVATE
 	${EXT_DIR}/genmath
 	${EXT_DIR}/triangle
 	${EXT_DIR}/HACApK
-	${EXT_DIR}/fmm3d/c
+	${CMAKE_CURRENT_SOURCE_DIR}/external/exafmm-t/include
 	${PYTHON_DIR}
 )
 
@@ -211,7 +211,7 @@ target_compile_definitions(radia_ngsolve PRIVATE
 	RADIA_USE_HACAPK
 	HACAPK_RADIA_LOGGING
 	RADIA_MSC_SUPPORT
-	$<$<BOOL:${RADIA_ENABLE_FMM3D}>:RADIA_FMM3D_ENABLED>
+	$<$<BOOL:${RADIA_ENABLE_EXAFMM}>:RADIA_USE_EXAFMM>
 	$<$<CONFIG:Debug>:_DEBUG>
 	$<$<CONFIG:Release>:NDEBUG>
 	$<$<PLATFORM_ID:Windows>:WIN32>
@@ -274,15 +274,9 @@ if(WIN32 AND USE_MKL_FOUND)
 	message(STATUS "Using Intel MKL for radia_ngsolve: ${BLAS_LIB}")
 endif()
 
-# FMM3D library for fast multipole method (optional)
-if(RADIA_ENABLE_FMM3D)
-	set(FMM3D_LIB "${EXT_DIR}/fmm3d/lib/fmm3d.lib")
-	if(WIN32 AND EXISTS ${FMM3D_LIB})
-		target_link_libraries(radia_ngsolve PRIVATE ${FMM3D_LIB})
-		message(STATUS "FMM3D enabled for radia_ngsolve: ${FMM3D_LIB}")
-	else()
-		message(STATUS "FMM3D library not found for radia_ngsolve, using direct computation fallback")
-	endif()
+# ExaFMM is header-only, no library linking needed
+if(RADIA_ENABLE_EXAFMM)
+	message(STATUS "ExaFMM enabled for radia_ngsolve (header-only library)")
 endif()
 
 # Link Windows system libraries
@@ -393,7 +387,7 @@ target_include_directories(radia PRIVATE
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
 	${EXT_DIR}/HACApK
-	${EXT_DIR}/fmm3d/c
+	${CMAKE_CURRENT_SOURCE_DIR}/external/exafmm-t/include
 	${FFTW_DIR}
 )
 
@@ -406,7 +400,7 @@ target_compile_definitions(radia PRIVATE
 	RADIA_USE_HACAPK
 	HACAPK_RADIA_LOGGING
 	RADIA_MSC_SUPPORT
-	$<$<BOOL:${RADIA_ENABLE_FMM3D}>:RADIA_FMM3D_ENABLED>
+	$<$<BOOL:${RADIA_ENABLE_EXAFMM}>:RADIA_USE_EXAFMM>
 )
 
 # FFTW library - platform-specific detection (same as radia_ngsolve)
@@ -450,17 +444,9 @@ if(WIN32 AND USE_MKL_FOUND)
 	message(STATUS "Using Intel MKL for radia: ${BLAS_LIB}")
 endif()
 
-# FMM3D library for fast multipole method (optional)
-if(RADIA_ENABLE_FMM3D)
-	set(FMM3D_LIB "${EXT_DIR}/fmm3d/lib/fmm3d.lib")
-	if(WIN32 AND EXISTS ${FMM3D_LIB})
-		target_link_libraries(radia PRIVATE ${FMM3D_LIB})
-		# FMM3D requires Intel Fortran runtime
-		# These are linked via MKL and Intel compiler runtime
-		message(STATUS "FMM3D enabled for radia: ${FMM3D_LIB}")
-	else()
-		message(STATUS "FMM3D library not found, using direct computation fallback")
-	endif()
+# ExaFMM is header-only, no library linking needed
+if(RADIA_ENABLE_EXAFMM)
+	message(STATUS "ExaFMM enabled for radia (header-only library)")
 endif()
 
 # Link Windows system libraries
