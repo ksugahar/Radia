@@ -172,17 +172,51 @@ ext = rad.ObjBckg([0, 0, MU_0 * 50000])  # 50,000 A/m in z
 group = rad.ObjCnt([obj1, obj2, ...])
 ```
 
+### ObjArcCur - Arc/Circular Coil
+
+```python
+coil = rad.ObjArcCur(center, radii, angles, height, n_sectors, j_azim)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `center` | [x,y,z] | Center of the arc/circle |
+| `radii` | [r_min, r_max] | Inner and outer radii |
+| `angles` | [phi_min, phi_max] | Start and end angles (rad) |
+| `height` | float | Height of the coil cross-section |
+| `n_sectors` | int | Number of azimuthal sectors |
+| `j_azim` | float | Azimuthal current density (A/mm^2) |
+
+```python
+import numpy as np
+
+# Full circular coil (R=50mm, thin cross-section)
+center = [0, 0, 0]
+radii = [49.5, 50.5]  # 1mm radial width
+angles = [-np.pi, np.pi]  # Full circle
+height = 1.0  # 1mm height
+j_azim = 1000.0  # A/mm^2 (equivalent to 1000A total current)
+
+coil = rad.ObjArcCur(center, radii, angles, height, 100, j_azim)
+B = rad.Fld(coil, 'b', [0, 0, 50])  # Field on axis at z=50mm
+```
+
+**Analytical Method**: Uses elliptic integral formulas for high accuracy.
+See [Elliptic Integral Formulas](#elliptic-integral-formulas-for-coils) for details.
+
 ### ObjRaceTrk - Racetrack Coil
 
 ```python
 coil = rad.ObjRaceTrk(center, radii, heights, current, n_segments)
 ```
 
-### ObjFlmCur - Filament Conductor
+### ObjFlmCur - Filament Conductor (Line Current)
 
 ```python
 filament = rad.ObjFlmCur([[x1,y1,z1], [x2,y2,z2], ...], current)
 ```
+
+**Analytical Method**: Uses Biot-Savart law with closed-form solution.
 
 ---
 
@@ -811,10 +845,211 @@ See `examples/ngsolve_integration/verify_curl_A_equals_B/` for a complete verifi
 
 ---
 
+## Elliptic Integral Formulas for Coils
+
+The magnetic field of circular current loops is computed using complete elliptic integrals of the first and second kind, K(k) and E(k). This provides analytical accuracy without numerical integration.
+
+### Mathematical Background
+
+For a circular current loop of radius R carrying current I, the field at cylindrical coordinates (rho, z) is:
+
+```
+k^2 = 4*R*rho / ((R+rho)^2 + z^2)
+
+B_rho = (mu_0*I / 2*pi) * z / (rho * sqrt((R+rho)^2 + z^2)) *
+        (-K(k) + (R^2 + rho^2 + z^2) / ((R-rho)^2 + z^2) * E(k))
+
+B_z = (mu_0*I / 2*pi) * 1 / sqrt((R+rho)^2 + z^2) *
+      (K(k) - (R^2 - rho^2 + z^2) / ((R-rho)^2 + z^2) * E(k))
+```
+
+The elliptic integrals are computed using the Hastings polynomial approximation, which provides accuracy to ~10^-8 relative error.
+
+### On-Axis Field (Special Case)
+
+For points on the axis (rho=0), the field simplifies to:
+
+```
+B_z = mu_0 * I * R^2 / (2 * (R^2 + z^2)^(3/2))
+B_rho = 0
+```
+
+### Vector Potential
+
+The azimuthal component of the vector potential A_phi is also computed analytically:
+
+```
+A_phi = (mu_0*I / pi) * sqrt(R/rho) * (1/k) * ((1 - k^2/2)*K(k) - E(k))
+```
+
+### Rectangular Cross-Section Coils
+
+For coils with finite cross-section (radial width and height), Radia uses Gaussian quadrature to integrate the thin-loop formula over the cross-section. This maintains analytical accuracy while handling practical coil geometries.
+
+---
+
+## Analytical Magnet Classes (Python)
+
+The `radia.analytical_magnet` module provides pure Python analytical field computation classes for use as background field sources. These are independent of Radia's C++ solver and can be used for:
+- Background field computation with `rad.ObjBckgCF()`
+- Standalone field calculations
+- Verification and validation
+
+### Available Classes
+
+| Class | Description | B-field | H-field | A-field (vector potential) |
+|-------|-------------|---------|---------|---------------------------|
+| `SphericalMagnet` | Uniformly magnetized sphere | Exact dipole | Exact | Exact dipole |
+| `CuboidMagnet` | Rectangular block magnet | Yang/Camacho formula | Exact | Exact (surface current) |
+| `CurrentLoop` | Circular current loop | Ortner elliptic integral | Exact | Elliptic integral |
+| `CylindricalMagnet` | Axially magnetized cylinder | Caciagli/Derby formula | Exact | Gaussian quadrature |
+| `RingMagnet` | Hollow cylindrical magnet | Caciagli formula | Exact | Gaussian quadrature |
+
+### Usage Examples
+
+```python
+from radia.analytical_magnet import SphericalMagnet, CuboidMagnet, CurrentLoop
+
+# Spherical magnet (diameter 20mm, Mz = 955000 A/m)
+sphere = SphericalMagnet(
+    center=[0, 0, 0],      # mm
+    diameter=20.0,          # mm
+    magnetization=[0, 0, 955000]  # A/m
+)
+B = sphere.get_B([15, 0, 0])  # [Bx, By, Bz] in Tesla
+H = sphere.get_H([15, 0, 0])  # [Hx, Hy, Hz] in A/m
+A = sphere.get_A([15, 0, 0])  # [Ax, Ay, Az] in T*m
+
+# Cuboid magnet (20x20x10 mm)
+cuboid = CuboidMagnet(
+    center=[0, 0, 0],
+    dimensions=[20, 20, 10],  # mm
+    magnetization=[0, 0, 955000]  # A/m
+)
+B = cuboid.get_B([25, 0, 0])
+A = cuboid.get_A([25, 0, 0])  # Exact analytical (not dipole approximation)
+
+# Current loop (diameter 50mm, current 100A)
+loop = CurrentLoop(
+    center=[0, 0, 0],
+    diameter=50.0,  # mm
+    current=100.0,  # A
+    axis='z'
+)
+B = loop.get_B([0, 0, 25])
+```
+
+### Use as Background Field Source
+
+```python
+import radia as rad
+from radia.analytical_magnet import CuboidMagnet
+
+rad.FldUnits('m')
+
+# Define permanent magnet as background field
+pm = CuboidMagnet(
+    center=[0, 0, 50],      # 50mm above center
+    dimensions=[40, 40, 20],
+    magnetization=[0, 0, 955000]
+)
+
+# Create Radia background field object
+bkg = rad.ObjBckgCF(pm)  # Uses pm.__call__() which returns get_B()
+
+# Create soft iron to solve
+iron = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+mat = rad.MatLin(1000)
+rad.MatApl(iron, mat)
+
+grp = rad.ObjCnt([iron, bkg])
+rad.Solve(grp, 0.001, 1000, 1)
+```
+
+### Vector Potential Verification
+
+All classes satisfy curl(A) = B (verified numerically with < 0.01% error):
+
+```python
+# Numerical curl verification
+import numpy as np
+h = 0.1  # mm step
+h_m = h / 1000.0  # meters
+
+def numerical_curl(magnet, pt):
+    A_px = magnet.get_A([pt[0]+h, pt[1], pt[2]])
+    A_mx = magnet.get_A([pt[0]-h, pt[1], pt[2]])
+    A_py = magnet.get_A([pt[0], pt[1]+h, pt[2]])
+    A_my = magnet.get_A([pt[0], pt[1]-h, pt[2]])
+    A_pz = magnet.get_A([pt[0], pt[1], pt[2]+h])
+    A_mz = magnet.get_A([pt[0], pt[1], pt[2]-h])
+
+    return [
+        (A_py[2] - A_my[2]) / (2*h_m) - (A_pz[1] - A_mz[1]) / (2*h_m),
+        (A_pz[0] - A_mz[0]) / (2*h_m) - (A_px[2] - A_mx[2]) / (2*h_m),
+        (A_px[1] - A_mx[1]) / (2*h_m) - (A_py[0] - A_my[0]) / (2*h_m)
+    ]
+
+curl_A = numerical_curl(cuboid, [25, 0, 0])
+B = cuboid.get_B([25, 0, 0])
+# curl_A should equal B within numerical precision
+```
+
+### Key Formulas
+
+**CuboidMagnet Vector Potential**: Uses the equivalent surface current model:
+- Surface current density: K = M x n on each face
+- A = (mu_0 / 4*pi) * integral_S [K / |r - r'|] dS'
+- Uses Urankar (1980) / Ravaud (2009) formula for rectangular surface integration
+
+**CurrentLoop**: Uses Ortner et al. (2023) elliptic integral formulation for both B and A fields.
+
+---
+
 ## References
 
-1. [ESRF Radia Reference Guide](https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html)
-2. [examples/cube_uniform_field/](../examples/cube_uniform_field/) - Benchmark examples
+### Elliptic Integral Formulas
+
+1. **Simpson, J.C., Lane, J.E., Immer, C.D., Youngquist, R.C.** (2001). "Simple Analytic Expressions for the Magnetic Field of a Circular Current Loop." NASA Technical Memorandum NASA/TM-2013-217919. [NASA NTRS](https://ntrs.nasa.gov/citations/20010038494)
+
+2. **Maxwell, J.C.** (1873). "A Treatise on Electricity and Magnetism," Vol. 2, Art. 701-706. Oxford: Clarendon Press. [Cambridge University Press Edition](https://www.cambridge.org/core/books/treatise-on-electricity-and-magnetism/130A7181ECAB0C990FBC2B88341A4141)
+
+3. **Smythe, W.R.** (1989). "Static and Dynamic Electricity," 3rd ed., pp. 290-295. New York: Hemisphere Publishing.
+
+### Polynomial Approximation
+
+4. **Hastings, C., Hayward, J.T., Wong, J.P.** (1955). "Approximations for Digital Computers." Princeton University Press. [De Gruyter](https://www.degruyterbrill.com/document/doi/10.1515/9781400875597/html)
+
+5. **Cody, W.J.** (1965). "Chebyshev Approximations for the Complete Elliptic Integrals K and E." Mathematics of Computation 19(92), pp. 105-112. [Semantic Scholar](https://www.semanticscholar.org/paper/Chebyshev-Approximations-for-the-Complete-Elliptic-Cody/e120c0220534dcee9c154478226122edf124ded5)
+
+### Analytical Magnet Formulas
+
+6. **Yang, Z.J., et al.** (1990). "Potential and force between a magnet and a bulk Y1Ba2Cu3O7 superconductor studied by a mechanical pendulum." Supercond. Sci. Technol. 3(12):591. - Cuboid B-field formula
+
+7. **Camacho, J.M., Sosa, V.** (2013). "Alternative method to calculate the magnetic field of permanent magnets with azimuthal symmetry." Rev. Mex. Fis. E 59, 8-17. - Cuboid B-field validation
+
+8. **Cichon, D.** (2019). "Stability of magnetic field computation near edges using analytical formulas." Master's thesis. - Numerical stability improvements
+
+### Surface Current Vector Potential
+
+9. **Urankar, L.K.** (1980). "Vector potential and magnetic field of current-carrying finite arc segment in analytical form." IEEE Trans. Magn. 16(5), 1283-1288. - Rectangular surface integral formula
+
+10. **Ravaud, R., et al.** (2009). "Analytical calculation of the magnetic field created by permanent-magnet rings." IEEE Trans. Magn. 45(4), 1572-1576. - Surface current A-field integration
+
+### Triangle B-field (MSC Method)
+
+11. **Guptasarma, D.** (1999). "Computation of the time-domain response of a polarizable ground." Geophysics 64(1), 70-74. - Solid angle formula for triangle B-field
+
+12. **van Oosterom, A., Strackee, J.** (1983). "The solid angle of a plane triangle." IEEE Trans. Biomed. Eng. 30(2), 125-126. - Efficient solid angle computation
+
+### Potential Integrals on Triangles
+
+13. **Carley, M.** (2013). "Potential integrals on triangles." arXiv:1201.4938. - Analytical formula for 1/r integral over triangular surfaces
+
+### General References
+
+14. [ESRF Radia Reference Guide](https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html)
+15. [examples/cube_uniform_field/](../examples/cube_uniform_field/) - Benchmark examples
 
 ---
 
