@@ -6,6 +6,77 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.4.1] - 2025-12-31
+
+### Performance
+
+- **Tetra HACApK 12.9x Speedup**
+  - Implemented ELF-style face basis caching for tetrahedral H-matrix construction
+  - Pre-compute face basis ONCE per face, reuse for all 3 magnetization directions
+  - Pre-compute edge parameters (DS, AM, XD, YD) in RadTriangleFaceBasis struct
+  - Reduces coordinate transformation overhead from 12x to 4x per element pair
+
+### Benchmark Results (maxh=0.15, 2211 elements, 6633 DOF)
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| H-matrix build | 23.96s | 1.86s | **12.9x** |
+| Total solve | 24.33s | 2.24s | **10.9x** |
+
+### Comparison
+
+- Tetra HACApK is now **faster than ELF** (2.24s vs 3.8s)
+- Tetra HACApK is more efficient than Hex HACApK for similar DOF counts
+
+## [1.4.0] - 2025-12-31
+
+### Major Release Highlights
+
+This is a major feature release with significant new APIs, performance improvements, and OpenMP thread-safe batch field evaluation.
+
+### Added
+
+- **Simplified Element Creation APIs**
+  - `ObjTetrahedron(vertices, magnetization)` - Create tetrahedron from 4 vertices (face topology auto-generated)
+  - `ObjHexahedron(vertices, magnetization)` - Create hexahedron from 8 vertices (face topology auto-generated)
+  - No longer need to specify `TETRA_FACES` or `HEX_FACES` constants
+  - Both APIs accept optional magnetization parameter (defaults to [0,0,0])
+
+- **Batch Field Evaluation APIs with OpenMP Parallelization**
+  - `FldBatch(obj, points, method)` - Compute B and H fields at multiple points efficiently
+  - `FldPhi(obj, points)` - Compute magnetic scalar potential at multiple points
+  - `FldA(obj, points)` - Compute magnetic vector potential at multiple points
+  - `ClassifyPoints(obj, points, threshold)` - Classify points as inside/near/far from elements
+  - **OpenMP parallelization enabled** for n_points > 100 (thread-safe implementation)
+
+- **FMM Field Evaluation Example**
+  - New example directory: `examples/fmm_field_evaluation/`
+  - `demo_fldbatch.py` - Demonstrates batch field evaluation
+
+### Fixed
+
+- **FldBatch OpenMP Thread Safety**
+  - Fixed `radTHandle` reference count data race in parallel regions
+  - Changed `radTHandlePgnAndTrans` from value copy to const reference
+  - Changed `std::vector` to `std::array` for stack allocation in B_comp functions
+  - Added GIL release (`Py_BEGIN_ALLOW_THREADS`) for proper Python/C++ threading
+  - Verified working with 20,000+ points and 4 threads
+
+### Changed
+
+- **Documentation Updates**
+  - Updated all README files to use new `ObjTetrahedron`/`ObjHexahedron` APIs
+  - Added comprehensive API documentation for batch field evaluation
+  - Updated `docs/API_REFERENCE.md` with new API signatures
+
+### Performance
+
+- **Batch Field Evaluation**
+  - 1,000 points: ~20ms (4 threads)
+  - 10,000 points: ~93ms (4 threads)
+  - 20,000 points: ~206ms (4 threads)
+  - Linear scaling with point count
+
 ## [1.3.16] - 2025-12-24
 
 ### Fixed
