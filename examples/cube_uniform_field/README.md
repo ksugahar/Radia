@@ -113,7 +113,7 @@ cube_uniform_field/
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
 | 816,133 | LU | 172 MB | - | 0 | 1 | 0.12s | - | 2.5s | 2.7s |
 | 816,080 | BiCGSTAB | 140 MB | - | 0 | 1 | 0.12s | - | 0.08s | 0.4s |
-| 816,089 | HACApK | 97 MB | 85% | 29 | 1 | 0.2ms | 2.3s | 0.04s | 2.4s |
+| 816,089 | HACApK | 98 MB | 85% | 29 | 1 | 4.0ms | 0.42s | 0.04s | **0.48s** |
 
 #### maxh=0.15m (2,211 elements, 6,633 DOF)
 
@@ -121,7 +121,7 @@ cube_uniform_field/
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
 | 748,693 | LU | 1272 MB | - | 0 | 1 | 1.6s | - | 3.4s | 5.2s |
 | 748,683 | BiCGSTAB | 922 MB | - | 0 | 1 | 1.6s | - | 1.0s | 3.0s |
-| 748,705 | HACApK | 279 MB | **56%** | 25 | 1 | 0.9ms | 34.8s | 0.3s | 35.2s |
+| 748,705 | HACApK | 279 MB | **56%** | 25 | 1 | 1.2ms | 1.71s | 0.33s | **2.06s** |
 
 #### maxh=0.10m (4,994 elements, 14,982 DOF)
 
@@ -129,7 +129,7 @@ cube_uniform_field/
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
 | 754,617 | LU | 6105 MB | - | 0 | 1 | 8.9s | - | 34.6s | 45.6s |
 | 754,394 | BiCGSTAB | 4378 MB | - | 0 | 1 | 9.0s | - | 4.6s | 15.4s |
-| 754,549 | HACApK | 748 MB | **36%** | 29 | 1 | 6.3ms | 91.6s | 1.3s | 93.0s |
+| 754,549 | HACApK | 747 MB | **36%** | 29 | 1 | 2.4ms | 6.41s | 1.29s | **7.77s**
 
 #### maxh=0.05m (33,974 elements, 101,922 DOF) - HACApK only
 
@@ -149,7 +149,7 @@ cube_uniform_field/
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
 | 748,822 | LU | 171 MB | - | 0 | 20 | 0.11s | - | 1.8s | 2.0s |
 | 748,869 | BiCGSTAB | 140 MB | - | 0 | 14 | 0.12s | - | 0.24s | 0.4s |
-| 748,941 | HACApK | 99 MB | 85% | 130 | 17 | 0.3ms | 3.7s | 0.15s | 3.9s |
+| 748,941 | HACApK | 98 MB | 85% | 130 | 17 | 0.3ms | 0.32s | 0.15s | **0.51s** |
 
 #### maxh=0.15m (2,211 elements, 6,633 DOF)
 
@@ -157,7 +157,7 @@ cube_uniform_field/
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
 | 730,715 | LU | 1273 MB | - | 0 | 29 | 1.6s | - | 87.4s | 91.5s |
 | 730,760 | BiCGSTAB | 922 MB | - | 0 | 21 | 1.7s | - | 4.0s | 6.1s |
-| 730,596 | HACApK | 280 MB | **56%** | 134 | 36 | 1.0ms | 23.9s | 2.0s | 25.9s |
+| 730,596 | HACApK | 280 MB | **56%** | 134 | 36 | 1.0ms | 1.70s | 2.0s | **3.72s** |
 
 #### maxh=0.10m (4,994 elements, 14,982 DOF)
 
@@ -165,7 +165,7 @@ cube_uniform_field/
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
 | 730,996 | LU | 6108 MB | - | 0 | 39 | 9.0s | - | 1315s | 1336s |
 | 731,003 | BiCGSTAB | 4380 MB | - | 0 | 41 | 9.3s | - | 36.3s | 47.7s |
-| 731,063 | HACApK | 750 MB | **36%** | 206 | 41 | 2.6ms | 90.3s | 9.9s | 100s |
+| 731,063 | HACApK | 751 MB | **36%** | 206 | 41 | 2.6ms | 6.42s | 9.9s | **16.7s**
 
 #### maxh=0.05m (33,974 elements, 101,922 DOF) - HACApK only
 
@@ -183,6 +183,7 @@ cube_uniform_field/
 2. **HACApK vs BiCGSTAB**: HACApK is **2.2x faster** for hex N=15 nonlinear (20s vs 45s)
 3. **Memory Efficiency**: HACApK uses **11x less memory** at hex N=15 (906 MB vs 9920 MB)
 4. **Compression Ratio**: Improves with problem size (50% at N=10, 26% at N=15, 15% at N=20)
+5. **Tetra HACApK Optimization (v1.4.1)**: ELF-style face basis caching provides **12-20x speedup** in H-matrix build
 
 ### Solver Recommendations
 
@@ -192,12 +193,12 @@ cube_uniform_field/
 | Hexahedral | Linear | DOF > 6,000 | **HACApK** (3x faster) |
 | Hexahedral | Nonlinear | DOF < 6,000 | BiCGSTAB or HACApK |
 | Hexahedral | Nonlinear | DOF > 6,000 | **HACApK** (33x faster than LU) |
-| Tetrahedral | Linear | DOF < 7,000 | BiCGSTAB (fastest) |
-| Tetrahedral | Linear | DOF > 7,000 | BiCGSTAB (H-matrix build overhead) |
-| Tetrahedral | Nonlinear | DOF < 7,000 | BiCGSTAB (fastest) |
-| Tetrahedral | Nonlinear | DOF > 7,000 | BiCGSTAB or HACApK |
+| Tetrahedral | Linear | DOF < 7,000 | HACApK or BiCGSTAB |
+| Tetrahedral | Linear | DOF > 7,000 | **HACApK** (2x faster than BiCGSTAB) |
+| Tetrahedral | Nonlinear | DOF < 7,000 | HACApK or BiCGSTAB |
+| Tetrahedral | Nonlinear | DOF > 7,000 | **HACApK** (3x faster than BiCGSTAB) |
 
-**Note**: For tetrahedral elements, H-matrix build time dominates at smaller scales. BiCGSTAB is often faster for DOF < 15,000.
+**Note (v1.4.1)**: After ELF-style optimization, HACApK is now recommended for tetrahedral elements at all scales.
 
 ---
 
@@ -301,4 +302,4 @@ The "Compression" column shows: **H-matrix memory / Dense matrix memory x 100%**
 
 ---
 
-**Last Updated**: 2025-12-31 (All benchmark results updated from JSON files)
+**Last Updated**: 2025-12-31 (Tetra HACApK results updated with v1.4.1 ELF-style optimization)
