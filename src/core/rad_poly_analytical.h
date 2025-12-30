@@ -112,4 +112,95 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	const TVector3d& obsPoint,
 	const TVector3d& elemCentroid);
 
+//-------------------------------------------------------------------------
+// ELF-style optimized functions for HACApK 3DOF tetrahedra
+// These functions compute the full 3x3 demagnetization tensor in one pass
+// by reusing coordinate transformations across all 3 magnetization directions.
+//-------------------------------------------------------------------------
+
+/**
+ * Pre-computed face basis for fast 3x3 tensor computation
+ * Stores all geometric data needed for field computation
+ *
+ * ELF-style optimization: pre-compute edge parameters (DS, AM, XD, YD)
+ * to avoid recomputing them for each magnetization direction.
+ */
+struct RadTriangleFaceBasis {
+	TVector3d basis_a;        // Local X-axis (normalized)
+	TVector3d basis_b;        // Local Y-axis (normalized)
+	TVector3d basis_c;        // Local Z-axis = face normal (normalized)
+	TVector3d face_origin;    // Reference point (V0)
+	TVector2d local_v[3];     // Vertices in local 2D coordinates
+	double charge_sign;       // +1 if outward normal, -1 if inward
+	bool valid;               // True if face is non-degenerate
+
+	// Pre-computed edge parameters (ELF optimization)
+	double DS[4];             // Edge lengths
+	double AM[4];             // Edge slopes (dy/dx)
+	double XD[4];             // Edge direction X
+	double YD[4];             // Edge direction Y
+	double EPSG;              // Tolerance for z=0 check
+};
+
+/**
+ * Compute face basis for a triangular face (ELF-style)
+ *
+ * This function computes all geometric data needed for field computation
+ * from a triangular face. The basis is computed ONCE per face and can be
+ * reused for all 3 magnetization directions.
+ *
+ * @param V0, V1, V2    Triangle vertices in GLOBAL 3D coordinates
+ * @param elemCentroid  Element centroid for outward normal determination
+ * @param basis         Output: pre-computed face basis
+ */
+void RadComputeTriangleFaceBasis(
+	const TVector3d& V0,
+	const TVector3d& V1,
+	const TVector3d& V2,
+	const TVector3d& elemCentroid,
+	RadTriangleFaceBasis& basis);
+
+/**
+ * Compute H field from a triangular face using pre-computed basis (ELF-style)
+ *
+ * This function computes the H field at an observation point from a
+ * triangular face with given surface charge density, using a pre-computed
+ * face basis. This is faster than RadFieldFromTriangleFaceGlobal when
+ * computing fields for multiple charge densities (e.g., 3x3 tensor).
+ *
+ * @param basis         Pre-computed face basis from RadComputeTriangleFaceBasis
+ * @param sigma         Surface charge density (M dot n, with sign correction)
+ * @param obsPoint      Observation point in GLOBAL 3D coordinates
+ * @return              H field at observation point (in global coordinates)
+ */
+TVector3d RadFieldFromTriangleFaceWithBasis(
+	const RadTriangleFaceBasis& basis,
+	double sigma,
+	const TVector3d& obsPoint);
+
+/**
+ * Compute full 3x3 demagnetization tensor from a tetrahedron (ELF-style optimized)
+ *
+ * This function computes the 3x3 demagnetization tensor N such that:
+ *   H = -N * M / (4*pi)
+ *
+ * It is optimized to compute all 9 tensor elements in one pass by:
+ * 1. Computing face basis ONCE per face (4 faces total)
+ * 2. Computing field for all 3 magnetization directions using the same basis
+ *
+ * This is 3x faster than calling RadFieldFromTriangleFaceGlobal 12 times.
+ *
+ * @param face_vertices Array of 4 faces, each with 3 vertices (12 TVector3d total)
+ *                      face_vertices[f*3+v] = vertex v of face f
+ * @param elemCentroid  Tetrahedron centroid for outward normal determination
+ * @param obsPoint      Observation point (typically element center)
+ * @param N_mat         Output: 3x3 demagnetization tensor in row-major order
+ *                      N_mat[i*3+j] = dH_i/dM_j
+ */
+void RadDemagTensorFromTetrahedron(
+	const TVector3d* face_vertices,  // 4 faces * 3 vertices = 12 vertices
+	const TVector3d& elemCentroid,
+	const TVector3d& obsPoint,
+	double* N_mat);
+
 #endif

@@ -1047,6 +1047,10 @@ void RadHACApKManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* 
 // Compute3x3BlockFast: ELF-style fast 3x3 block computation for tetrahedra
 // Uses pre-computed geometry arrays (no object access, no B_comp overhead)
 //
+// OPTIMIZATION (2025-12-31): Rewritten to compute face basis ONCE per face
+// and reuse it for all 3 magnetization directions. This reduces coordinate
+// transformation overhead from 12x to 4x per element pair.
+//
 // The 3x3 interaction matrix N[i][j] represents how magnetization M_j creates
 // demagnetizing field H at element i's center:
 //   H(r_i) = sum_faces [ sigma_f * integral_triangle H_field dA ] / (4*pi)
@@ -1072,19 +1076,16 @@ void RadHACApKManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat
     TVector3d elemCentroid(col_center[0], col_center[1], col_center[2]);
 
     // Unit magnetization vectors
-    TVector3d unit_Mx(1.0, 0.0, 0.0);
-    TVector3d unit_My(0.0, 1.0, 0.0);
-    TVector3d unit_Mz(0.0, 0.0, 1.0);
-
-    // Accumulate H field for each unit M direction
-    TVector3d H_from_Mx(0.0, 0.0, 0.0);
-    TVector3d H_from_My(0.0, 0.0, 0.0);
-    TVector3d H_from_Mz(0.0, 0.0, 0.0);
+    const TVector3d unit_M[3] = {
+        TVector3d(1.0, 0.0, 0.0),
+        TVector3d(0.0, 1.0, 0.0),
+        TVector3d(0.0, 0.0, 1.0)
+    };
 
     // Process each of the 4 triangular faces
-    // Use RadFieldFromTriangleFaceGlobal which handles normal orientation and 1/(4pi) factor
+    // ELF-style optimization: compute face basis ONCE per face, reuse for all 3 M directions
     for (int f = 0; f < 4; f++) {
-        // Get face vertices
+        // Get face vertices from pre-computed geometry
         int fvIdx = (elem_j * 4 + f) * 3 * 3;
         const double* V0_ptr = &m_tetra_face_vertices[fvIdx + 0];
         const double* V1_ptr = &m_tetra_face_vertices[fvIdx + 3];
@@ -1094,28 +1095,41 @@ void RadHACApKManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat
         TVector3d V1(V1_ptr[0], V1_ptr[1], V1_ptr[2]);
         TVector3d V2(V2_ptr[0], V2_ptr[1], V2_ptr[2]);
 
-        // Compute H field from this face for each unit M
-        // RadFieldFromTriangleFaceGlobal returns H field including 1/(4pi) and sign
-        H_from_Mx += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mx, obsPoint, elemCentroid);
-        H_from_My += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_My, obsPoint, elemCentroid);
-        H_from_Mz += RadFieldFromTriangleFaceGlobal(V0, V1, V2, unit_Mz, obsPoint, elemCentroid);
-    }
+        // Compute face basis ONCE (ELF optimization - saves 2 basis computations per face)
+        RadTriangleFaceBasis basis;
+        RadComputeTriangleFaceBasis(V0, V1, V2, elemCentroid, basis);
 
-    // Build N matrix: N_mat[row * 3 + col] = dH_row/dM_col
-    // RadFieldFromTriangleFaceGlobal already includes 1/(4pi) factor
-    // System matrix uses -N, so negate here
-    // Row 0 (Hx response): -dHx/dMx, -dHx/dMy, -dHx/dMz
-    N_mat[0] = -H_from_Mx.x;  // -dHx/dMx
-    N_mat[1] = -H_from_My.x;  // -dHx/dMy
-    N_mat[2] = -H_from_Mz.x;  // -dHx/dMz
-    // Row 1 (Hy response): -dHy/dMx, -dHy/dMy, -dHy/dMz
-    N_mat[3] = -H_from_Mx.y;  // -dHy/dMx
-    N_mat[4] = -H_from_My.y;  // -dHy/dMy
-    N_mat[5] = -H_from_Mz.y;  // -dHy/dMz
-    // Row 2 (Hz response): -dHz/dMx, -dHz/dMy, -dHz/dMz
-    N_mat[6] = -H_from_Mx.z;  // -dHz/dMx
-    N_mat[7] = -H_from_My.z;  // -dHz/dMy
-    N_mat[8] = -H_from_Mz.z;  // -dHz/dMz
+        if (!basis.valid) continue;
+
+        // Get face normal for surface charge computation
+        // Use pre-computed values from m_tetra_face_normals
+        int fnIdx = (elem_j * 4 + f) * 3;
+        TVector3d faceNormal(
+            m_tetra_face_normals[fnIdx + 0],
+            m_tetra_face_normals[fnIdx + 1],
+            m_tetra_face_normals[fnIdx + 2]
+        );
+
+        // Compute H field for each unit magnetization direction
+        // Reuse the same face basis for all 3 directions
+        for (int j = 0; j < 3; j++) {
+            // Surface charge: sigma = M dot n * sign_correction
+            double sigma = (unit_M[j].x * faceNormal.x +
+                           unit_M[j].y * faceNormal.y +
+                           unit_M[j].z * faceNormal.z) * basis.charge_sign;
+
+            if (std::abs(sigma) < 1.0e-15) continue;
+
+            // Compute field using pre-computed basis (fast path)
+            TVector3d H = RadFieldFromTriangleFaceWithBasis(basis, sigma, obsPoint);
+
+            // Accumulate into tensor: N_mat[i*3+j] = dH_i / dM_j
+            // System matrix uses -N, so negate here
+            N_mat[0*3 + j] -= H.x;
+            N_mat[1*3 + j] -= H.y;
+            N_mat[2*3 + j] -= H.z;
+        }
+    }
 }
 
 //=========================================================================
