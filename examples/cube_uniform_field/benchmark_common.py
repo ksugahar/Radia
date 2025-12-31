@@ -15,6 +15,10 @@ import time
 import json
 from typing import List, Dict, Any, Optional
 
+# Set OpenMP threads BEFORE importing radia (must be done before MKL/OpenMP init)
+os.environ['OMP_NUM_THREADS'] = '8'
+os.environ['MKL_NUM_THREADS'] = '8'
+
 # Add Radia to path
 _src_path = os.path.join(os.path.dirname(__file__), '../../src/radia')
 sys.path.insert(0, _src_path)
