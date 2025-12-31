@@ -71,7 +71,7 @@ FMMResult ComputeDipoleField(
 );
 
 /**
- * Direct O(N*M) computation of dipole field
+ * Direct O(N*M) computation of dipole field (H-field and scalar potential)
  *
  * Always available. OpenMP parallelized.
  *
@@ -81,7 +81,7 @@ FMMResult ComputeDipoleField(
  * @param targets     Target positions [x1,y1,z1, ...]
  * @param ntarget     Number of targets
  * @param thresh      Distance threshold (skip contribution if |r| < thresh)
- * @return            FMMResult with potential and gradient
+ * @return            FMMResult with potential (phi) and gradient (Hx, Hy, Hz)
  */
 FMMResult ComputeDipoleFieldDirect(
     const double* sources,
@@ -90,6 +90,50 @@ FMMResult ComputeDipoleFieldDirect(
     const double* targets,
     int64_t ntarget,
     double thresh = 1e-15
+);
+
+/**
+ * Direct O(N*M) computation of vector potential A from dipoles
+ *
+ * A = (mu_0/4*pi) * sum_j [ m_j x (r - r_j) / |r - r_j|^3 ]
+ *
+ * @param sources     Source positions [x1,y1,z1, ...] in meters
+ * @param dipoles     Dipole moments [mx1,my1,mz1, ...] in A*m^2
+ * @param nsource     Number of sources
+ * @param targets     Target positions [x1,y1,z1, ...] in meters
+ * @param ntarget     Number of targets
+ * @param thresh      Distance threshold (skip contribution if |r| < thresh)
+ * @return            FMMResult with Ax, Ay, Az in gradx, grady, gradz [T*m]
+ */
+FMMResult ComputeDipoleVectorPotentialDirect(
+    const double* sources,
+    const double* dipoles,
+    int64_t nsource,
+    const double* targets,
+    int64_t ntarget,
+    double thresh = 1e-15
+);
+
+/**
+ * Compute vector potential A at target points from magnetic dipoles
+ *
+ * Uses direct O(N*M) computation with OpenMP parallelization.
+ *
+ * @param eps         FMM tolerance (currently unused, for future FMM support)
+ * @param sources     Source positions [x1,y1,z1, x2,y2,z2, ...] in meters
+ * @param dipoles     Dipole moments [mx1,my1,mz1, ...] in A*m^2
+ * @param nsource     Number of sources
+ * @param targets     Target positions [x1,y1,z1, x2,y2,z2, ...] in meters
+ * @param ntarget     Number of targets
+ * @return            FMMResult with Ax, Ay, Az in gradx, grady, gradz [T*m]
+ */
+FMMResult ComputeDipoleVectorPotential(
+    double eps,
+    const double* sources,
+    const double* dipoles,
+    int64_t nsource,
+    const double* targets,
+    int64_t ntarget
 );
 
 /**

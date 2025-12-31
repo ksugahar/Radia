@@ -15,7 +15,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
 import time
-from netgen_mesh_import import HEX_FACES
 
 
 def hex_vertices(cx, cy, cz, dx, dy, dz):
@@ -46,7 +45,7 @@ def create_magnet(n_per_side):
 
 				# Element with dimensions elem_size x elem_size x elem_size
 				vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-				block = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1])
+				block = rad.ObjHexahedron(vertices, [0, 0, 1])
 				rad.ObjAddToCnt(container, [block])
 
 	# Set material

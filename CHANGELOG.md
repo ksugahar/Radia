@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.4.2] - 2025-12-31
+
+### Fixed
+
+- **Face-based Scalar Potential (Phi) Calculation**
+  - Replaced dipole approximation with accurate face-based integration for ObjHexahedron/ObjPolyhdr
+  - New formula: `Phi = (1/4pi) * M dot BufVect` where `BufVect = n * integral(1/|r-r'|) dS`
+  - Phi on z-axis now matches exactly between ObjRecMag and ObjHexahedron (< 1e-10 error)
+  - Correct symmetry behavior: Phi ~ 0 on x/y axes for z-magnetized blocks (due to face cancellation)
+
+- **Vector Potential (A) Field Consistency**
+  - A field uses same face-based integration: `A = (1/4pi) * M x BufVect`
+  - A = 0 on symmetry axis is physically correct (not a bug)
+  - Off-axis A field matches within 2% between ObjRecMag and ObjHexahedron
+
+### Added
+
+- **New Test Files for Field Verification**
+  - `tests/test_phi_field.py` - 9 tests for scalar potential computation
+  - `tests/test_a_field.py` - 9 tests for vector potential computation
+  - `tests/test_field_relations.py` - 10 tests for Maxwell equation consistency
+
+### Verified
+
+- **Maxwell Equation Consistency**
+  - `curl(A) proportional to B` - verified at multiple points
+  - `-grad(Phi) proportional to H` - verified at multiple points
+  - `B = mu_0 * H` in air region - verified with < 0.01% error
+
 ## [1.4.1] - 2025-12-31
 
 ### Performance

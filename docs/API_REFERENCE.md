@@ -2,7 +2,7 @@
 
 Complete reference for Radia Python API.
 
-**Version**: 1.3.16
+**Version**: 1.3.17
 **Date**: 2025-12-30
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
@@ -92,25 +92,43 @@ mag_obj = netgen_mesh_to_radia(mesh,
 | Element Type | API | Faces | DOF | Use Case |
 |--------------|-----|-------|-----|----------|
 | **Extruded Polygon** | `ObjThckPgn()` | N-gon extruded | 3 | General prism shapes |
-| **Hexahedron (MSC)** | `ObjPolyhdr()` + `HEX_FACES` | 6 quad | 6 | Permanent magnets, soft iron |
-| **Tetrahedron** | `ObjPolyhdr()` + `TETRA_FACES` | 4 tri | 3 | Complex curved geometry |
+| **Hexahedron (MSC)** | `ObjHexahedron()` | 6 quad | 6 | Permanent magnets, soft iron |
+| **Tetrahedron** | `ObjTetrahedron()` | 4 tri | 3 | Complex curved geometry |
 | **Wedge/Prism** | `ObjPolyhdr()` + `WEDGE_FACES` | 5 | 3 | Hybrid meshes |
 | **Pyramid** | `ObjPolyhdr()` + `PYRAMID_FACES` | 5 | 3 | Mesh transitions |
+| **General** | `ObjPolyhdr()` | custom | 3-6 | Arbitrary polyhedra |
 
 **DOF (Degrees of Freedom)**:
 - **Hexahedra (6 faces)**: 6 DOF - Surface charge density (sigma) per face (MSC method)
 - **Other elements (4-5 faces)**: 3 DOF - Magnetization vector (Mx, My, Mz)
 - All meshes are expected to be generated externally (Netgen, GMSH, Cubit, etc.)
 
-### Face Topology Constants
+### Simplified APIs (Recommended)
+
+```python
+import radia as rad
+
+# Tetrahedron: just provide 4 vertices (faces auto-generated)
+tet_vertices = [[0,0,0], [1,0,0], [0.5,0.866,0], [0.5,0.289,0.816]]
+tetra = rad.ObjTetrahedron(tet_vertices, [0, 0, 1e6])
+
+# Hexahedron: just provide 8 vertices (faces auto-generated)
+hex_vertices = [
+    [-0.5,-0.5,-0.5], [0.5,-0.5,-0.5], [0.5,0.5,-0.5], [-0.5,0.5,-0.5],  # bottom
+    [-0.5,-0.5,0.5], [0.5,-0.5,0.5], [0.5,0.5,0.5], [-0.5,0.5,0.5]       # top
+]
+hexa = rad.ObjHexahedron(hex_vertices, [0, 0, 1e6])
+```
+
+### Face Topology Constants (for advanced usage)
 
 ```python
 from netgen_mesh_import import TETRA_FACES, HEX_FACES, WEDGE_FACES, PYRAMID_FACES
 
-# TETRA_FACES (1-indexed)
-[[1, 3, 2], [1, 2, 4], [2, 3, 4], [3, 1, 4]]
+# TETRA_FACES (1-indexed) - used internally by ObjTetrahedron
+[[1, 2, 3], [1, 4, 2], [2, 4, 3], [3, 4, 1]]
 
-# HEX_FACES (1-indexed)
+# HEX_FACES (1-indexed) - used internally by ObjHexahedron
 [[1, 4, 3, 2], [5, 6, 7, 8], [1, 2, 6, 5], [3, 4, 8, 7], [1, 5, 8, 4], [2, 3, 7, 6]]
 ```
 
@@ -137,6 +155,71 @@ polygon = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
 hex_elem = rad.ObjThckPgn(-0.5, 1.0, polygon, 'z', [0, 0, 0])
 ```
 
+### ObjTetrahedron - Tetrahedral Element (Recommended)
+
+```python
+obj = rad.ObjTetrahedron(vertices, magnetization)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `vertices` | [[x,y,z], ...] | 4 vertex coordinates |
+| `magnetization` | [Mx, My, Mz] | Initial magnetization (optional, default [0,0,0]) |
+
+Creates a tetrahedron with face topology auto-generated internally.
+
+```python
+vertices = [[0,0,0], [1,0,0], [0.5,0.866,0], [0.5,0.289,0.816]]
+tet = rad.ObjTetrahedron(vertices, [0, 0, 1e6])
+
+# Without magnetization (for soft magnetic materials)
+tet2 = rad.ObjTetrahedron(vertices)
+```
+
+**Vertex ordering**:
+- v1, v2, v3: Base triangle (counter-clockwise from below)
+- v4: Apex (top vertex)
+
+### ObjHexahedron - Hexahedral Element (Recommended)
+
+```python
+obj = rad.ObjHexahedron(vertices, magnetization)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `vertices` | [[x,y,z], ...] | 8 vertex coordinates |
+| `magnetization` | [Mx, My, Mz] | Initial magnetization (optional, default [0,0,0]) |
+
+Creates a hexahedron with face topology auto-generated internally.
+
+```python
+s = 0.5
+vertices = [
+    [-s,-s,-s], [s,-s,-s], [s,s,-s], [-s,s,-s],  # bottom face
+    [-s,-s,s], [s,-s,s], [s,s,s], [-s,s,s]        # top face
+]
+hex_obj = rad.ObjHexahedron(vertices, [0, 0, 1e6])
+
+# Without magnetization (for soft magnetic materials)
+hex2 = rad.ObjHexahedron(vertices)
+```
+
+**Vertex ordering**:
+```
+       v8--------v7
+      /|        /|
+     / |       / |
+    v5--------v6 |
+    |  v4-----|--v3
+    | /       | /
+    |/        |/
+    v1--------v2
+
+Bottom (v1-v4): counter-clockwise from below
+Top (v5-v8): directly above bottom vertices
+```
+
 ### ObjPolyhdr - General Polyhedron
 
 ```python
@@ -149,10 +232,12 @@ obj = rad.ObjPolyhdr(vertices, faces, magnetization)
 | `faces` | [[v1,v2,...], ...] | Face vertex indices (**1-indexed!**) |
 | `magnetization` | [Mx, My, Mz] | Initial magnetization |
 
+Use `ObjPolyhdr` for wedge, pyramid, or custom polyhedra. For tetrahedra and hexahedra, prefer `ObjTetrahedron` and `ObjHexahedron`.
+
 ```python
-from netgen_mesh_import import TETRA_FACES
-vertices = [[0,0,0], [1,0,0], [0.5,1,0], [0.5,0.5,1]]
-tet = rad.ObjPolyhdr(vertices, TETRA_FACES, [0, 0, 1e6])
+from netgen_mesh_import import WEDGE_FACES
+vertices = [[0,0,0], [1,0,0], [0.5,0.866,0], [0,0,1], [1,0,1], [0.5,0.866,1]]
+wedge = rad.ObjPolyhdr(vertices, WEDGE_FACES, [0, 0, 1e6])
 ```
 
 ### ObjBckg - Uniform Background Field
@@ -958,7 +1043,7 @@ pm = CuboidMagnet(
 bkg = rad.ObjBckgCF(pm)  # Uses pm.__call__() which returns get_B()
 
 # Create soft iron to solve
-iron = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+iron = rad.ObjHexahedron(vertices, [0, 0, 0])
 mat = rad.MatLin(1000)
 rad.MatApl(iron, mat)
 

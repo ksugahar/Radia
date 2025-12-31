@@ -13,6 +13,8 @@ Build_PyPI_Package.ps1
 # Build Directories
 # ============================================================================
 build/
+build-msvc/
+build-intel/
 dist/
 *.egg-info/
 .eggs/

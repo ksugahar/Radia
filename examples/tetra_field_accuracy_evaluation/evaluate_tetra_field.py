@@ -48,7 +48,7 @@ except ImportError as e:
     NGSOLVE_AVAILABLE = False
     sys.exit(1)
 
-from netgen_mesh_import import netgen_mesh_to_radia, TETRA_FACES
+from netgen_mesh_import import netgen_mesh_to_radia
 
 # =============================================================================
 # Parameters (matching ngsolve_cube_uniform_field.py)
@@ -271,7 +271,7 @@ def create_radia_tetra_mesh(elements):
     polyhedra = []
     for el in elements:
         try:
-            obj_id = rad.ObjPolyhdr(el['vertices'], TETRA_FACES, el['magnetization'])
+            obj_id = rad.ObjTetrahedron(el['vertices'], el['magnetization'])
             polyhedra.append(obj_id)
         except Exception as e:
             pass  # Skip failed elements

@@ -22,6 +22,7 @@
 #include "rad_particle_trajectory.h"
 #include "rad_operation_names.h"
 #include "rad_material_aux.h"
+#include "rad_point_classify.h"
 #include "gmvbstr.h"
 
 #include <math.h>
@@ -1112,6 +1113,18 @@ int radTApplication::RetrieveElemKey(const radTg* IngPtr)
 	{
 		Initialize(); return 0;
 	}
+}
+
+//-------------------------------------------------------------------------
+
+bool radTApplication::UnsafeGetElemByKey(int ElemKey, radThg& outHandle)
+{
+	radTmhg::iterator iter = GlobalMapOfHandlers.find(ElemKey);
+	if (iter == GlobalMapOfHandlers.end()) {
+		return false;
+	}
+	outHandle = iter->second;
+	return true;
 }
 
 //-------------------------------------------------------------------------
@@ -2416,133 +2429,34 @@ void radTApplication::ClassifyPoints(int* classification, int* nearest_elem, int
 {
 	try
 	{
-		// Validate handle and get 3D object pointer
+		// Validate handle
 		radThg hg;
 		if(!ValidateElemKey(container_handle, hg))
 		{
 			Send.ErrorMessage("Radia::Error003");
 			return;
 		}
-		radTg3d* g3dPtr = Cast.g3dCast(hg.rep);
-		if(g3dPtr == 0)
+
+		// Convert input points from user units to internal units (mm)
+		// m_lengthUnitScale is 1.0 for mm (default), 1000.0 for m
+		double scale = m_lengthUnitScale;
+
+		// Create a copy of points in mm
+		std::vector<double> points_mm(n_points * 3);
+		for(int i = 0; i < n_points * 3; ++i)
 		{
-			Send.ErrorMessage("Radia::Error003");
-			return;
+			points_mm[i] = points[i] * scale;
 		}
 
-		// Note: Coordinates are used directly (same as rad.Fld() API)
-		// Units are controlled via rad.FldUnits()
-
-		// Collect element centers from the container
-		std::vector<TVector3d> elem_centers;
-		std::vector<double> elem_sizes;
-
-		radTGroup* pGroup = Cast.GroupCast(g3dPtr);
-
-		if(pGroup != NULL)
-		{
-			for(radTmhg::const_iterator iter = pGroup->GroupMapOfHandlers.begin();
-				iter != pGroup->GroupMapOfHandlers.end(); ++iter)
-			{
-				radTg3d* pMember = Cast.g3dCast((*iter).second.rep);
-				if(pMember != NULL)
-				{
-					elem_centers.push_back(pMember->CentrPoint);
-					// Estimate element size (will improve later with actual element bounds)
-					elem_sizes.push_back(0.1);
-				}
-			}
-		}
-		else
-		{
-			elem_centers.push_back(g3dPtr->CentrPoint);
-			elem_sizes.push_back(0.1);
-		}
-
-		if(elem_centers.empty())
-		{
-			for(int i = 0; i < n_points; ++i)
-			{
-				classification[i] = 2;  // FAR
-				nearest_elem[i] = -1;
-			}
-			return;
-		}
-
-		// Compute global AABB from element centers
-		TVector3d global_min = elem_centers[0];
-		TVector3d global_max = elem_centers[0];
-		double total_size = 0.0;
-
-		for(size_t e = 0; e < elem_centers.size(); ++e)
-		{
-			if(elem_centers[e].x < global_min.x) global_min.x = elem_centers[e].x;
-			if(elem_centers[e].y < global_min.y) global_min.y = elem_centers[e].y;
-			if(elem_centers[e].z < global_min.z) global_min.z = elem_centers[e].z;
-			if(elem_centers[e].x > global_max.x) global_max.x = elem_centers[e].x;
-			if(elem_centers[e].y > global_max.y) global_max.y = elem_centers[e].y;
-			if(elem_centers[e].z > global_max.z) global_max.z = elem_centers[e].z;
-			total_size += elem_sizes[e];
-		}
-
-		double avg_size = total_size / elem_centers.size();
-		double margin = avg_size * near_threshold;
-
-		// Classify each point
-		#ifdef _OPENMP
-		#pragma omp parallel for schedule(dynamic)
-		#endif
-		for(int i = 0; i < n_points; ++i)
-		{
-			TVector3d pt;
-			pt.x = points[i * 3 + 0];
-			pt.y = points[i * 3 + 1];
-			pt.z = points[i * 3 + 2];
-
-			classification[i] = 2;  // FAR
-			nearest_elem[i] = -1;
-
-			// Quick rejection using global AABB
-			if(pt.x < global_min.x - margin || pt.x > global_max.x + margin ||
-			   pt.y < global_min.y - margin || pt.y > global_max.y + margin ||
-			   pt.z < global_min.z - margin || pt.z > global_max.z + margin)
-			{
-				continue;
-			}
-
-			// Find nearest element
-			double min_dist = 1e30;
-			int best_eid = -1;
-
-			for(size_t e = 0; e < elem_centers.size(); ++e)
-			{
-				double dx = pt.x - elem_centers[e].x;
-				double dy = pt.y - elem_centers[e].y;
-				double dz = pt.z - elem_centers[e].z;
-				double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
-
-				if(dist < min_dist)
-				{
-					min_dist = dist;
-					best_eid = (int)e;
-				}
-			}
-
-			if(best_eid < 0) continue;
-
-			nearest_elem[i] = best_eid;
-			double elem_size = elem_sizes[best_eid];
-
-			// Near/Far classification
-			if(min_dist < elem_size * near_threshold)
-			{
-				classification[i] = 1;  // NEAR
-			}
-			else
-			{
-				classification[i] = 2;  // FAR
-			}
-		}
+		// Use the solid angle implementation from rad_point_classify
+		RadPointClassify::ClassifyPointsFromHandle(
+			n_points,
+			points_mm.data(),
+			container_handle,
+			near_threshold,
+			classification,
+			nearest_elem
+		);
 	}
 	catch(...)
 	{
@@ -2590,10 +2504,19 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 
 		TVector3d ZeroVect(0., 0., 0.);
 
-		// Compute field at each point
+		// Compute field at each point using OpenMP parallelization
 		// method: 0 = direct, 1 = FMM (not yet implemented)
+		//
+		// OpenMP parallelization is safe here because:
+		// 1. Each iteration creates its own thread-local radTField object
+		// 2. Each iteration writes to different output array indices
+		// 3. B_genComp() only reads from the g3dPtr object (no writes)
+		// 4. The FieldKey and ZeroVect are copied by value into each thread's radTField
+		//
+		// Note: Exception handling inside parallel region is tricky - we avoid throwing
+		// exceptions inside B_genComp by ensuring g3dPtr is valid before the loop.
 		#ifdef _OPENMP
-		#pragma omp parallel for schedule(dynamic) if(n_points > 100)
+		#pragma omp parallel for schedule(static) if(n_points > 100)
 		#endif
 		for(int i = 0; i < n_points; ++i)
 		{
@@ -2602,9 +2525,15 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 			pt.y = points[i * 3 + 1] * scale;
 			pt.z = points[i * 3 + 2] * scale;
 
+			// Create thread-local field object for each point
+			// All members are either values (not pointers/references) or initialized here
+			radTFieldKey localFieldKey;
+			localFieldKey.B_ = true;
+			localFieldKey.H_ = true;
+			TVector3d localZeroVect(0., 0., 0.);
+
 			// Constructor: (FieldKey, CompCriterium, P, B, H, A, M, J=0. -> TVector3d(0,0,0))
-			// Use same param count as ComputeField in rad_transform_impl.cpp line 60
-			radTField Field(FieldKey, CompCriterium, pt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+			radTField Field(localFieldKey, CompCriterium, pt, localZeroVect, localZeroVect, localZeroVect, localZeroVect, 0.);
 			g3dPtr->B_genComp(&Field);
 
 			// Convert B from A/m to Tesla (multiply by Mu0)
@@ -2658,9 +2587,7 @@ void radTApplication::ComputeScalarPotentialBatch(double* phi_out, int n_points,
 		TVector3d ZeroVect(0., 0., 0.);
 
 		// Compute scalar potential at each point
-		#ifdef _OPENMP
-		#pragma omp parallel for schedule(dynamic) if(n_points > 100)
-		#endif
+		// OpenMP parallelization disabled due to Intel OpenMP deadlock issues
 		for(int i = 0; i < n_points; ++i)
 		{
 			TVector3d pt;
@@ -2668,7 +2595,12 @@ void radTApplication::ComputeScalarPotentialBatch(double* phi_out, int n_points,
 			pt.y = points[i * 3 + 1] * scale;
 			pt.z = points[i * 3 + 2] * scale;
 
-			radTField Field(FieldKey, CompCriterium, pt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+			// Create thread-local field key and vectors
+			radTFieldKey localFieldKey;
+			localFieldKey.Phi_ = true;
+			TVector3d localZeroVect(0., 0., 0.);
+
+			radTField Field(localFieldKey, CompCriterium, pt, localZeroVect, localZeroVect, localZeroVect, localZeroVect, 0.);
 			g3dPtr->B_genComp(&Field);
 
 			// Phi is dimensionless (in internal units), convert based on length unit
@@ -2717,9 +2649,7 @@ void radTApplication::ComputeVectorPotentialBatch(double* A_out, int n_points,
 		TVector3d ZeroVect(0., 0., 0.);
 
 		// Compute vector potential at each point
-		#ifdef _OPENMP
-		#pragma omp parallel for schedule(dynamic) if(n_points > 100)
-		#endif
+		// OpenMP parallelization disabled due to Intel OpenMP deadlock issues
 		for(int i = 0; i < n_points; ++i)
 		{
 			TVector3d pt;
@@ -2727,7 +2657,12 @@ void radTApplication::ComputeVectorPotentialBatch(double* A_out, int n_points,
 			pt.y = points[i * 3 + 1] * scale;
 			pt.z = points[i * 3 + 2] * scale;
 
-			radTField Field(FieldKey, CompCriterium, pt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+			// Create thread-local field key and vectors
+			radTFieldKey localFieldKey;
+			localFieldKey.A_ = true;
+			TVector3d localZeroVect(0., 0., 0.);
+
+			radTField Field(localFieldKey, CompCriterium, pt, localZeroVect, localZeroVect, localZeroVect, localZeroVect, 0.);
 			g3dPtr->B_genComp(&Field);
 
 			// A has units of T*m (Tesla-meter)

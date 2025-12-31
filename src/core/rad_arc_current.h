@@ -109,11 +109,10 @@ public:
 		if(FieldPtr->FieldKey.J_) J_comp(FieldPtr);
 		if(!(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_ || FieldPtr->FieldKey.A_ || FieldPtr->FieldKey.PreRelax_)) return;
 
-		if(BasedOnPrecLevel) B_compWithNewtonCotes4(FieldPtr);
-		else B_compWithTrapeth(FieldPtr);
+		// Use analytical elliptic integral method
+		B_compElliptic(FieldPtr);
 	}
-	void B_compWithNewtonCotes4(radTField*);
-	void B_compWithTrapeth(radTField*);
+	void B_compElliptic(radTField*);  // Analytical method using elliptic integrals
 
 	void J_comp(radTField* FieldPtr)
 	{

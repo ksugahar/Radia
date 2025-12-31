@@ -15,7 +15,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
 import radia as rd
-from netgen_mesh_import import HEX_FACES
 
 print("=" * 80)
 print("Quadrupole Field - Analytical Solution Comparison")
@@ -48,7 +47,7 @@ vertices = [
 	[-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
 	[-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
 ]
-cube = rd.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+cube = rd.ObjHexahedron(vertices, [0, 0, 0])
 mat = rd.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
 rd.MatApl(cube, mat)
 print(f"  Created {size}x{size}x{size} mm cube (approximates sphere)")

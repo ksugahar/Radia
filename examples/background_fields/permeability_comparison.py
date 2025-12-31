@@ -19,7 +19,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
 import radia as rd
-from netgen_mesh_import import HEX_FACES
 
 print("=" * 80)
 print("Permeability Comparison - Analytical Solution Test")
@@ -92,7 +91,7 @@ for mu_r in permeability_values:
 		[-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
 		[-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
 	]
-	cube = rd.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+	cube = rd.ObjHexahedron(vertices, [0, 0, 0])
 
 	# Use linear material with specified permeability
 	# MatLin(mu_r): defines isotropic linear material

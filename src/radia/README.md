@@ -73,48 +73,35 @@ from netgen_mesh_import import (
 )
 ```
 
-**TETRA_FACES の詳細:**
+**ObjTetrahedron API (推奨):**
 
-`TETRA_FACES` は Radia の `ObjPolyhdr` 関数で使用するための 1-indexed の面定義です。
-面の向きは外向き法線を持つように調整されています。
-
-```python
-# Standard tetrahedral face topology (1-indexed for Radia)
-# Face winding REVERSED from Nastran CTETRA standard to ensure outward normals
-TETRA_FACES = [
-    [1, 3, 2],  # Face 0: v0-v2-v1
-    [1, 2, 4],  # Face 1: v0-v1-v3
-    [2, 3, 4],  # Face 2: v1-v2-v3
-    [3, 1, 4]   # Face 3: v2-v0-v3
-]
-```
-
-**使用例 (ObjPolyhdr で直接四面体を作成):**
+v1.4.0以降、`ObjTetrahedron` を使用すると面定義を省略できます。
 
 ```python
 import radia as rad
 import numpy as np
-from netgen_mesh_import import TETRA_FACES
 
 rad.UtiDelAll()
 rad.FldUnits('m')  # メートル単位を使用
 
 # 四面体の頂点座標 (メートル単位)
-vertices = np.array([
+vertices = [
     [0.0, 0.0, 0.0],   # v0
     [1.0, 0.0, 0.0],   # v1
     [0.5, 0.866, 0.0], # v2
     [0.5, 0.289, 0.816] # v3
-])
+]
 
-# 四面体オブジェクトを作成
-obj = rad.ObjPolyhdr(vertices.tolist(), TETRA_FACES, [0, 0, 0])
+# 四面体オブジェクトを作成 (面は自動生成)
+obj = rad.ObjTetrahedron(vertices, [0, 0, 0])
 
 # 材料を適用
 chi = 999  # mu_r = 1000
 mat = rad.MatLin(chi)
 rad.MatApl(obj, mat)
 ```
+
+**Note:** 内部的には `TETRA_FACES = [[1,3,2], [1,2,4], [2,3,4], [3,1,4]]` が自動的に適用されます。
 
 **使用例 (netgen_mesh_to_radia で自動変換):**
 
@@ -181,11 +168,11 @@ import radia as rad
 import radia_ngsolve
 
 # Create Radia hexahedral magnet (mm)
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+# ObjHexahedron auto-generates face topology from 8 vertices
 vertices = [[-10,-10,-15], [10,-10,-15], [10,10,-15], [-10,10,-15],
             [-10,-10,15], [10,-10,15], [10,10,15], [-10,10,15]]
 Mr = 1.2 / (4 * 3.14159 * 1e-7)  # Br=1.2T -> A/m
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, Mr])
+magnet = rad.ObjHexahedron(vertices, [0, 0, Mr])
 
 # Create mesh (m)
 mesh = Mesh(...)
@@ -241,12 +228,13 @@ Export Radia geometry to VTK Legacy format.
 **Usage:**
 ```python
 from radia_vtk_export import exportGeometryToVTK
-from netgen_mesh_import import HEX_FACES
+import radia as rad
 
 # Create hexahedral magnet (30x30x10 mm, magnetization 1 T in z)
+# ObjHexahedron auto-generates face topology from 8 vertices
 vertices = [[-15,-15,-5], [15,-15,-5], [15,15,-5], [-15,15,-5],
             [-15,-15,5], [15,-15,5], [15,15,5], [-15,15,5]]
-mag = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1])
+mag = rad.ObjHexahedron(vertices, [0, 0, 1])
 exportGeometryToVTK(mag, 'my_magnet')
 ```
 
@@ -264,12 +252,13 @@ pip install pyvista
 **Usage:**
 ```python
 from radia_pyvista_viewer import view_radia_object
-from netgen_mesh_import import HEX_FACES
+import radia as rad
 
 # Create hexahedral magnet (30x30x10 mm, magnetization 1 T in z)
+# ObjHexahedron auto-generates face topology from 8 vertices
 vertices = [[-15,-15,-5], [15,-15,-5], [15,15,-5], [-15,15,-5],
             [-15,-15,5], [15,-15,5], [15,15,5], [-15,15,5]]
-mag = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1])
+mag = rad.ObjHexahedron(vertices, [0, 0, 1])
 view_radia_object(mag)
 ```
 

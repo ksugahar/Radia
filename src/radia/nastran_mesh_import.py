@@ -327,8 +327,8 @@ def create_radia_from_nastran(nas_file, material=None, units='m',
     else:
         raise ValueError("material must be dict with 'magnetization' key")
 
-    # Import face topologies
-    from netgen_mesh_import import HEX_FACES, WEDGE_FACES, PYRAMID_FACES, TETRA_FACES
+    # Import face topologies (only for wedge and pyramid - hex/tetra use new APIs)
+    from netgen_mesh_import import WEDGE_FACES, PYRAMID_FACES
 
     # Create Radia objects
     radia_objects = []
@@ -339,7 +339,7 @@ def create_radia_from_nastran(nas_file, material=None, units='m',
 
     for i, elem_verts in enumerate(hex_elements):
         elem_coords = [vertices[vi] for vi in elem_verts]
-        obj_id = rad.ObjPolyhdr(elem_coords, HEX_FACES, magnetization)
+        obj_id = rad.ObjHexahedron(elem_coords, magnetization)
         radia_objects.append(obj_id)
 
         if verbose and (i + 1) % 25 == 0:
@@ -384,7 +384,7 @@ def create_radia_from_nastran(nas_file, material=None, units='m',
 
     for i, elem_verts in enumerate(tet_elements):
         elem_coords = [vertices[vi] for vi in elem_verts]
-        obj_id = rad.ObjPolyhdr(elem_coords, TETRA_FACES, magnetization)
+        obj_id = rad.ObjTetrahedron(elem_coords, magnetization)
         radia_objects.append(obj_id)
 
         if verbose and (i + 1) % 100 == 0:

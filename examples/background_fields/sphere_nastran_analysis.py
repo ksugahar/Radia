@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../dist'))
 
 import numpy as np
 import radia as rd
-from nastran_reader import read_nastran_mesh, TETRA_FACES
+from nastran_reader import read_nastran_mesh
 from radia_vtk_export import exportGeometryToVTK
 
 print("=" * 70)
@@ -146,7 +146,7 @@ elif len(tetra_elements_data) > 0:
 
 		try:
 			# Tetrahedra are always convex - perfect for Radia
-			poly = rd.ObjPolyhdr(coords, TETRA_FACES, [0, 0, 0.001])
+			poly = rd.ObjTetrahedron(coords, [0, 0, 0.001])
 			all_polyhedra.append(poly)
 		except Exception as e:
 			print(f"\n  Warning: Failed to create tetra {i+1}: {e}")

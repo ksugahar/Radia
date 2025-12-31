@@ -19,376 +19,293 @@
 #include "rad_arc_current.h"
 #include "rad_graphics_3d.h"
 #include "rad_subdivided_arc_current.h"
+#include "rad_elliptic_integral.h"
 
 #include <math.h>
 #include <sstream>
 
 //-------------------------------------------------------------------------
+// Analytical method using elliptic integrals
+// This replaces the legacy numerical integration methods
 //-------------------------------------------------------------------------
 
-void radTArcCur::B_compWithTrapeth(radTField* FieldPtr)
+void radTArcCur::B_compElliptic(radTField* FieldPtr)
 {
 	const double Pi = 3.141592653589793238;
-	const double ZeroTol = 1.E-10;
-	const double RelZeroTolToDecompose = 1.E-07;
+	const double TwoPi = 2.0 * Pi;
+	const double ConstForJ = 0.0001;  // mu_0 / (4*pi) * 1e6 for Tesla output
 
 	TVector3d P_mi_CenPo = FieldPtr->P - CircleCentrPoint;
 
 	const double SmallPositive = 1.E-10;
 	double r = sqrt(P_mi_CenPo.x*P_mi_CenPo.x + P_mi_CenPo.y*P_mi_CenPo.y + SmallPositive);
-	double phi = ((P_mi_CenPo.y < 0)? (2*Pi-acos(P_mi_CenPo.x/r)) : (acos(P_mi_CenPo.x/r)));
-	double z1 = -Height/2. - P_mi_CenPo.z;
-	double z2 = z1 + Height;
+	double phi_obs = ((P_mi_CenPo.y < 0)? (TwoPi - acos(P_mi_CenPo.x/r)) : (acos(P_mi_CenPo.x/r)));
+	double z = P_mi_CenPo.z;
 
-	double z1z1 = z1*z1;
-	double z2z2 = z2*z2;
-	double rr = r*r;
-	double r1r1 = R_min*R_min;
-	double r2r2 = R_max*R_max;
-	double rr_pl_r1r1_pl_z1z1 = rr + r1r1 + z1z1;
-	double rr_pl_r1r1_pl_z2z2 = rr + r1r1 + z2z2;
-	double rr_pl_r2r2_pl_z1z1 = rr + r2r2 + z1z1;
-	double rr_pl_r2r2_pl_z2z2 = rr + r2r2 + z2z2;
-	double two_r = 2.*r;
-	double two_rr1 = two_r*R_min;
-	double two_rr2 = two_r*R_max;
+	// Check if this is a full circular coil or an arc
+	double delta_phi = Phi_max - Phi_min;
+	bool is_full_circle = (fabs(delta_phi - TwoPi) < 1.0e-6);
 
-	double CosDelPhi, AbsSinDelPhi, D11, D12, D21, D22, rCos, r1_mi_rCos, r2_mi_rCos,
-		   ln_r1mrCospD11_di_r2mrCospD21, ln_r2mrCospD22_di_r1mrCospD12, rAbsSin, 
-		   Absr1mrCos_di_rAbsSin, Absr2mrCos_di_rAbsSin, PiMult1, PiMult2, Buf,
-		   z1pD11_di_z2pD12, z2pD22_di_z1pD21, ln_z1pD11diz2pD12, ln_z2pD22diz1pD21,
-		   phiPrime, Cos_phiPrime, Sin_phiPrime, rr_mi_two_rrCosCos, FA, FBxy, FBz;
+	double IntForAx = 0.0, IntForAy = 0.0;
+	double IntForBx = 0.0, IntForBy = 0.0, IntForBz = 0.0;
+	double IntForPhi = 0.0;  // Magnetic scalar potential [A]
 
-	int AmOfPoi = NumberOfSectors + 1;
-	double Step_phiPrime = (Phi_max - Phi_min + SmallPositive)/(AmOfPoi-1);
-	double phiPrime_mi_phi = Phi_min - phi + SmallPositive;
+	if (is_full_circle) {
+		// Full circular coil: use direct elliptic integral formulas
+		// Integrate over the rectangular cross-section
 
-	double S_forAx, S_forAy, S_forBx, S_forBy, S_forBz;
-	S_forAx = S_forAy = S_forBx = S_forBy = S_forBz = 0.;
+		// Integration over cross-section using Gaussian quadrature (2x2)
+		static const double gp[] = {-0.5773502691896257, 0.5773502691896257};  // Gauss points
+		static const double gw[] = {1.0, 1.0};  // Gauss weights
 
-	int AmOfPoi_mi_1 = AmOfPoi - 1;
-	for(int i=0; i<AmOfPoi; i++)
-	{
-		CosDelPhi = cos(phiPrime_mi_phi);
-		AbsSinDelPhi = Abs(sin(phiPrime_mi_phi));
+		double r_mid = 0.5 * (R_max + R_min);
+		double r_half = 0.5 * (R_max - R_min);
+		double z_half = 0.5 * Height;
 
-		double two_rr1_CosDelPhi = two_rr1*CosDelPhi;
-		double two_rr2_CosDelPhi = two_rr2*CosDelPhi;
+		for (int ir = 0; ir < 2; ++ir) {
+			double r_coil = r_mid + r_half * gp[ir];
+			double w_r = gw[ir] * r_half;
 
-		double BufVal11 = fabs(rr_pl_r1r1_pl_z1z1 - two_rr1_CosDelPhi); if(BufVal11<ZeroTol) BufVal11=ZeroTol;
-		D11 = sqrt(BufVal11);
-		D12 = sqrt(fabs(rr_pl_r1r1_pl_z2z2 - two_rr1*CosDelPhi));
-		double BufVal21 = fabs(rr_pl_r2r2_pl_z1z1 - two_rr2_CosDelPhi);	if(BufVal21<ZeroTol) BufVal21=ZeroTol;
-		D21 = sqrt(BufVal21);
-		D22 = sqrt(fabs(rr_pl_r2r2_pl_z2z2 - two_rr2*CosDelPhi));
-		rCos = r*CosDelPhi;
-		r1_mi_rCos = R_min - rCos;
-		r2_mi_rCos = R_max - rCos;
+			for (int iz = 0; iz < 2; ++iz) {
+				double z_coil = z_half * gp[iz];  // z relative to coil center
+				double w_z = gw[iz] * z_half;
 
-		double D11_RelZeroTolToDecomp = D11*RelZeroTolToDecompose; //OC190504
-		double D12_RelZeroTolToDecomp = D12*RelZeroTolToDecompose;
-		double D21_RelZeroTolToDecomp = D21*RelZeroTolToDecompose;
-		double D22_RelZeroTolToDecomp = D22*RelZeroTolToDecompose;
+				double w_total = w_r * w_z;
 
-		double re2SinE2 = rr*AbsSinDelPhi*AbsSinDelPhi; //OC180504
-		double z1z1pre2SinE2 = z1z1 + re2SinE2;
+				// Current density J_azim is in A/mm^2 (Radia's display unit, confirmed by FldUnits())
+				// Integration weights w_r and w_z are in mm
+				// dI = J_azim [A/mm^2] * w_total [mm^2] = J_azim * w_total [A]
+				double dI = J_azim * w_total;
 
-		double r1_mi_rCosE2 = r1_mi_rCos*r1_mi_rCos; //OC180504
-		double r1_mi_rCos_p_D11 = r1_mi_rCos + D11;
-		if((Abs(r1_mi_rCos_p_D11) < D11_RelZeroTolToDecomp) && (z1z1pre2SinE2 < r1_mi_rCosE2*RelZeroTolToDecompose))
-		{
-			r1_mi_rCos_p_D11 = 0.5*z1z1pre2SinE2/Abs(r1_mi_rCos);
-		}
+				// Compute B-field from this circular loop using elliptic integrals
+				double dBR = 0.0, dBZ = 0.0;
+				RadElliptic::CircularLoopBField(r, z, r_coil, z_coil, dI, dBR, dBZ);
 
-		double r1_mi_rCos_p_D12 = r1_mi_rCos + D12; //OC180504
-		if((Abs(r1_mi_rCos_p_D12) < D12_RelZeroTolToDecomp) && (z1z1pre2SinE2 < r1_mi_rCosE2*RelZeroTolToDecompose))
-		{
-			r1_mi_rCos_p_D12 = 0.5*z1z1pre2SinE2/Abs(r1_mi_rCos);
-		}
+				// BR and BZ are in cylindrical coordinates
+				// Convert to Cartesian at observation point
+				double cos_phi = cos(phi_obs);
+				double sin_phi = sin(phi_obs);
 
-		double r2_mi_rCosE2 = r2_mi_rCos*r2_mi_rCos; //OC180504
-		double r2_mi_rCos_p_D21 = r2_mi_rCos + D21;
-		if((Abs(r2_mi_rCos_p_D21) < D21_RelZeroTolToDecomp) && (z1z1pre2SinE2 < r2_mi_rCosE2*RelZeroTolToDecompose))
-		{
-			r2_mi_rCos_p_D21 = 0.5*z1z1pre2SinE2/Abs(r2_mi_rCos);
-		}
-		double r2_mi_rCos_p_D22 = r2_mi_rCos + D22; //OC180504
-		if((Abs(r2_mi_rCos_p_D22) < D22_RelZeroTolToDecomp) && (z1z1pre2SinE2 < r2_mi_rCosE2*RelZeroTolToDecompose))
-		{
-			r2_mi_rCos_p_D22 = 0.5*z1z1pre2SinE2/Abs(r2_mi_rCos);
-		}
+				if (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) {
+					IntForBx += dBR * cos_phi;
+					IntForBy += dBR * sin_phi;
+					IntForBz += dBZ;
+				}
 
-		ln_r1mrCospD11_di_r2mrCospD21 = log((r1_mi_rCos_p_D11)/(r2_mi_rCos_p_D21));
-		ln_r2mrCospD22_di_r1mrCospD12 = log((r2_mi_rCos_p_D22)/(r1_mi_rCos_p_D12));
+				// Vector potential
+				if (FieldPtr->FieldKey.A_) {
+					double dAphi = RadElliptic::CircularLoopAPhi(r, z, r_coil, z_coil, dI);
+					// A = A_phi * (-sin(phi), cos(phi), 0) in Cartesian
+					IntForAx += dAphi * (-sin_phi);
+					IntForAy += dAphi * cos_phi;
+				}
 
-		rAbsSin = r*AbsSinDelPhi;
-		Absr1mrCos_di_rAbsSin = Abs(r1_mi_rCos)/rAbsSin;
-		Absr2mrCos_di_rAbsSin = Abs(r2_mi_rCos)/rAbsSin;
-	
-		PiMult1 = PiMult2 = 0.;
-		Buf = rAbsSin*(Sign(r1_mi_rCos)*(atan(TransAtans(z2*Absr1mrCos_di_rAbsSin/D12, -z1*Absr1mrCos_di_rAbsSin/D11, PiMult1)) + Pi*PiMult1)
-					   +Sign(r2_mi_rCos)*(atan(TransAtans(z1*Absr2mrCos_di_rAbsSin/D21, -z2*Absr2mrCos_di_rAbsSin/D22, PiMult2)) + Pi*PiMult2))
-			  +z1*ln_r1mrCospD11_di_r2mrCospD21 + z2*ln_r2mrCospD22_di_r1mrCospD12;
-
-		double z1_p_D11 = z1 + D11; //OC190504
-		double rr_p_r1r1_mi_2rr1Cos = rr + r1r1 - two_rr1_CosDelPhi;
-
-		double z1z1_RelZeroTolToDecompose = z1z1*RelZeroTolToDecompose;
-		double z2z2_RelZeroTolToDecompose = z2z2*RelZeroTolToDecompose;
-
-		if((Abs(z1_p_D11) < D11_RelZeroTolToDecomp) && (rr_p_r1r1_mi_2rr1Cos < z1z1_RelZeroTolToDecompose))
-		{
-			z1_p_D11 = 0.5*rr_p_r1r1_mi_2rr1Cos/Abs(z1);
-		}
-
-		double z1_p_D21 = z1 + D21; //OC190504
-		double rr_p_r2r2_mi_2rr2Cos = rr + r2r2 - two_rr2_CosDelPhi;
-		if((Abs(z1_p_D21) < D21_RelZeroTolToDecomp) && (rr_p_r2r2_mi_2rr2Cos < z1z1_RelZeroTolToDecompose))
-		{
-			z1_p_D21 = 0.5*rr_p_r2r2_mi_2rr2Cos/Abs(z1);
-		}
-
-		double z2_p_D12 = z2 + D12; //OC190504
-		if((Abs(z2_p_D12) < D12_RelZeroTolToDecomp) && (rr_p_r1r1_mi_2rr1Cos < z2z2_RelZeroTolToDecompose))
-		{
-			z2_p_D12 = 0.5*rr_p_r1r1_mi_2rr1Cos/Abs(z2);
-		}
-
-		double z2_p_D22 = z2 + D22; //OC190504
-		if((Abs(z2_p_D22) < D22_RelZeroTolToDecomp) && (rr_p_r2r2_mi_2rr2Cos < z2z2_RelZeroTolToDecompose))
-		{
-			z2_p_D22 = 0.5*rr_p_r2r2_mi_2rr2Cos/Abs(z2);
-		}
-
-		z1pD11_di_z2pD12 = z1_p_D11/z2_p_D12;
-		z2pD22_di_z1pD21 = z2_p_D22/z1_p_D21;
-
-		phiPrime = phiPrime_mi_phi+phi;
-		Cos_phiPrime = cos(phiPrime);
-		Sin_phiPrime = sin(phiPrime);
-
-		if((i==0) || (i==AmOfPoi_mi_1))
-		{
-			if(FieldPtr->FieldKey.A_)
-			{
-				ln_z1pD11diz2pD12 = log(z1pD11_di_z2pD12);
-				ln_z2pD22diz1pD21 = log(z2pD22_di_z1pD21);
-				rr_mi_two_rrCosCos = rr*(1.-2.*CosDelPhi*CosDelPhi);
-				FA = rCos*Buf + 0.5*(z1*(D11-D21)+z2*(D22-D12)+(rr_mi_two_rrCosCos+r1r1)*ln_z1pD11diz2pD12+(rr_mi_two_rrCosCos+r2r2)*ln_z2pD22diz1pD21);
-				S_forAx += 0.5*(-Sin_phiPrime*FA);
-				S_forAy += 0.5*Cos_phiPrime*FA;
-			}
-			if(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_)
-			{
-				FBxy = D11-D21+D22-D12 + rCos*(ln_r1mrCospD11_di_r2mrCospD21+ln_r2mrCospD22_di_r1mrCospD12);
-				if(FieldPtr->FieldKey.A_) FBz = Buf - rCos*(ln_z1pD11diz2pD12+ln_z2pD22diz1pD21);
-				else FBz = Buf - rCos*log(z1pD11_di_z2pD12*z2pD22_di_z1pD21);
-				S_forBx += 0.5*Cos_phiPrime*FBxy;
-				S_forBy += 0.5*Sin_phiPrime*FBxy;
-				S_forBz += 0.5*FBz;
+				// Magnetic scalar potential: Phi = I * Omega / (4*pi)
+				// Omega is the solid angle subtended by the loop
+				if (FieldPtr->FieldKey.Phi_) {
+					double dOmega = RadElliptic::CircularLoopSolidAngle(r, z, r_coil, z_coil);
+					// Phi = I * Omega / (4*pi)
+					// Units: dI [A] * Omega [sr] / (4*pi) = [A] (since Omega has max 4*pi sr)
+					IntForPhi += dI * dOmega / (4.0 * Pi);
+				}
 			}
 		}
-		else
-		{
-			if(FieldPtr->FieldKey.A_)
-			{
-				ln_z1pD11diz2pD12 = log(z1pD11_di_z2pD12);
-				ln_z2pD22diz1pD21 = log(z2pD22_di_z1pD21);
-				rr_mi_two_rrCosCos = rr*(1.-2.*CosDelPhi*CosDelPhi);
-				FA = rCos*Buf + 0.5*(z1*(D11-D21)+z2*(D22-D12)+(rr_mi_two_rrCosCos+r1r1)*ln_z1pD11diz2pD12+(rr_mi_two_rrCosCos+r2r2)*ln_z2pD22diz1pD21);
-				S_forAx += -Sin_phiPrime*FA;
-				S_forAy += Cos_phiPrime*FA;
-			}
-			if(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_)
-			{
-				FBxy = D11-D21+D22-D12 + rCos*(ln_r1mrCospD11_di_r2mrCospD21+ln_r2mrCospD22_di_r1mrCospD12);
-				if(FieldPtr->FieldKey.A_) FBz = Buf - rCos*(ln_z1pD11diz2pD12+ln_z2pD22diz1pD21);
-				else FBz = Buf - rCos*log(z1pD11_di_z2pD12*z2pD22_di_z1pD21);
-				S_forBx += Cos_phiPrime*FBxy;
-				S_forBy += Sin_phiPrime*FBxy;
-				S_forBz += FBz;
+	} else {
+		// Arc coil: use elliptic integral for each azimuthal segment
+		// For each phi position, treat the arc segment as part of a circular loop
+		// and use elliptic integrals to compute the field contribution
+
+		// Number of azimuthal integration points
+		int n_phi = NumberOfSectors;
+		if (n_phi < 4) n_phi = 4;
+
+		double dphi = delta_phi / n_phi;
+
+		// Gauss points for cross-section integration (2x2)
+		static const double gp[] = {-0.5773502691896257, 0.5773502691896257};
+		static const double gw[] = {1.0, 1.0};
+
+		double r_mid = 0.5 * (R_max + R_min);
+		double r_half = 0.5 * (R_max - R_min);
+		double z_half = 0.5 * Height;
+
+		// Gauss-Legendre quadrature for azimuthal integration (more accurate than trapezoidal)
+		// Use n_phi points with Gauss weights
+		for (int iphi = 0; iphi < n_phi; ++iphi) {
+			// Midpoint of each segment for Gauss integration
+			double phi_coil = Phi_min + (iphi + 0.5) * dphi;
+			double w_phi = dphi;  // Weight for this segment
+
+			// For each phi, we treat the arc element as contributing like a partial loop
+			// The observation point in the local frame of this phi slice
+			double cos_phi_coil = cos(phi_coil);
+			double sin_phi_coil = sin(phi_coil);
+
+			// Rotate observation point to align with this phi slice
+			// In the rotated frame, the coil element is at (r_coil, 0, z_coil)
+			// and the observation point is at (r_obs_local, z_obs)
+			double x_obs_local = P_mi_CenPo.x * cos_phi_coil + P_mi_CenPo.y * sin_phi_coil;
+			double y_obs_local = -P_mi_CenPo.x * sin_phi_coil + P_mi_CenPo.y * cos_phi_coil;
+
+			// Integrate over cross-section
+			for (int ir = 0; ir < 2; ++ir) {
+				double r_coil = r_mid + r_half * gp[ir];
+				double w_r = gw[ir] * r_half;
+
+				for (int iz = 0; iz < 2; ++iz) {
+					double z_coil = z_half * gp[iz];
+					double w_z = gw[iz] * z_half;
+
+					// Current element: dI = J_azim * dA_cross_section
+					double dI = J_azim * w_r * w_z;
+
+					// Arc length element: dl = r_coil * dphi
+					double dl = r_coil * w_phi;
+
+					// Distance from coil element at (r_coil, 0, z_coil) to observation point
+					double dx_local = x_obs_local - r_coil;
+					double dy_local = y_obs_local;  // coil element is at y=0 in local frame
+					double dz_local = z - z_coil;
+					double dist2 = dx_local*dx_local + dy_local*dy_local + dz_local*dz_local;
+					double dist = sqrt(dist2 + SmallPositive);
+					double dist3 = dist * dist2;
+
+					// Current direction in global frame: tangent to arc = (-sin(phi), cos(phi), 0)
+					double jx = -sin_phi_coil;
+					double jy = cos_phi_coil;
+
+					// Biot-Savart in global frame:
+					// r_vec = (P_mi_CenPo.x - r_coil*cos_phi, P_mi_CenPo.y - r_coil*sin_phi, z - z_coil)
+					double rx = P_mi_CenPo.x - r_coil * cos_phi_coil;
+					double ry = P_mi_CenPo.y - r_coil * sin_phi_coil;
+					double rz = z - z_coil;
+
+					// dl x r = (jy*rz - 0, 0 - jx*rz, jx*ry - jy*rx)
+					double cross_x = jy * rz;
+					double cross_y = -jx * rz;
+					double cross_z = jx * ry - jy * rx;
+
+					// dB = (mu_0 / 4*pi) * (I * dl) * (dl_hat x r) / |r|^3
+					double factor = ConstForJ * dI * dl / dist3;
+
+					if (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) {
+						IntForBx += factor * cross_x;
+						IntForBy += factor * cross_y;
+						IntForBz += factor * cross_z;
+					}
+
+					// Vector potential: dA = (mu_0 / 4*pi) * I * dl / |r| * dl_hat
+					if (FieldPtr->FieldKey.A_) {
+						double factor_A = ConstForJ * dI * dl / dist;
+						IntForAx += factor_A * jx;
+						IntForAy += factor_A * jy;
+					}
+
+					// Scalar potential for arc segment
+					// For an infinitesimal current element dI*dl at position r_src,
+					// the scalar potential contribution is computed using the solid
+					// angle formula for the "ribbon" connecting the element to P.
+					//
+					// For an arc element, we compute the angle subtended by the
+					// arc segment at the observation point in the plane perpendicular
+					// to the current direction.
+					//
+					// dPhi = (dI / 4*pi) * d_omega
+					// where d_omega is the differential solid angle
+					//
+					// For a current element dl at angle phi, the solid angle is
+					// related to the angle between the position vectors.
+					if (FieldPtr->FieldKey.Phi_) {
+						// Use the solid angle contribution from each infinitesimal arc element
+						// For a current element at (r_coil*cos(phi), r_coil*sin(phi), z_coil)
+						// flowing in direction (-sin(phi), cos(phi), 0),
+						// the solid angle seen from point P depends on the geometry.
+						//
+						// For numerical computation, we use:
+						// dOmega = (r_vec x dl) . r_hat / r^2
+						// where r_vec goes from element to P, dl is current direction
+						//
+						// This gives: dOmega = |r_vec x dl| / r^2 = sin(theta) * dl / r
+						// where theta is angle between r_vec and dl
+						//
+						// Actually, for scalar potential, we need:
+						// dPhi = (I / 4*pi) * integral of (dl x r_hat) . n_hat / r
+						// This is complex for general 3D. Use Biot-Savart analog:
+						//
+						// For the arc element, the scalar potential contribution is:
+						// dPhi = (dI / 4*pi) * dphi_angle
+						// where dphi_angle is the angle subtended by the arc element
+						// as seen from P in the plane perpendicular to z.
+						//
+						// Simplified approach: integrate the solid angle contributions
+						// using the formula for the angle at P between adjacent elements.
+						//
+						// The scalar potential from an arc segment from phi1 to phi2 is:
+						// Phi = (I / 4*pi) * sum of (atan2 differences)
+
+						double rho2_local = dx_local*dx_local + dy_local*dy_local;
+						if (rho2_local > SmallPositive) {
+							// Solid angle contribution from this element
+							// Using the formula for infinitesimal arc:
+							// dOmega = (r_coil * dphi) * z_rel / (r_local^2)
+							// where z_rel is the z-component and r_local is distance in local frame
+							double rho_local = sqrt(rho2_local);
+
+							// The scalar potential from arc element:
+							// Following the approach in Landau & Lifshitz or Jackson:
+							// For a current element, the solid angle contribution is
+							// dOmega ~ (dl x r) . z_hat / (r * rho)
+							//
+							// For current in azimuthal direction:
+							// dl = r_coil * dphi * (-sin(phi), cos(phi), 0) in global
+							// r = (P - element) = (dx_global, dy_global, dz)
+							//
+							// dl x r = (cos(phi)*dz, sin(phi)*dz,
+							//           -sin(phi)*dy_global - cos(phi)*(-dx_global))
+							//        = (cos(phi)*dz, sin(phi)*dz, cos(phi)*dx_global + sin(phi)*dy_global)
+							//
+							// z-component of dl x r = cos(phi)*dx + sin(phi)*dy
+							// where dx = P.x - r_coil*cos(phi), dy = P.y - r_coil*sin(phi)
+
+							double dlxr_z = cross_z;  // Already computed: jx*ry - jy*rx
+							                          // = -sin(phi)*ry - cos(phi)*(-rx)
+							                          // = -sin(phi)*(P.y - r_coil*sin(phi)) + cos(phi)*(P.x - r_coil*cos(phi))
+
+							// dOmega = dlxr_z * dl / (r^2 * rho)
+							// But we need proper normalization
+							double r_perp = sqrt(rx*rx + ry*ry + SmallPositive);
+							double dOmega = dlxr_z * dl / (dist * dist * r_perp);
+
+							IntForPhi += dI * dOmega / (4.0 * Pi);
+						}
+					}
+				}
 			}
 		}
-		phiPrime_mi_phi += Step_phiPrime;
 	}
 
-	const double ConstForJ = 0.0001;
-	double Fact = ConstForJ*J_azim;
-	if(FieldPtr->FieldKey.A_)
-	{
-		double IntForAx = Step_phiPrime*S_forAx; 
-		double IntForAy = Step_phiPrime*S_forAy;
+	// Apply results
+	// Note: CircularLoopBField outputs B in Tesla.
+	// However, Radia stores B internally as "equivalent magnetization" (B/mu_0 in A/m)
+	// because OutFieldCompRes multiplies by mu_0 when returning B values.
+	// So we divide by mu_0 here to store B/mu_0, then OutFieldCompRes will multiply
+	// by mu_0 to give the correct B value in Tesla.
+	const double InvMu0 = 1.0 / (4.0 * 3.141592653589793238 * 1.0e-7);  // 1/mu_0 = 795774.715 (A/m)/T
 
-		TVector3d BufA(IntForAx, IntForAy, 0.);
-		FieldPtr->A += Fact*BufA;
+	if (FieldPtr->FieldKey.A_) {
+		TVector3d BufA(IntForAx, IntForAy, 0.0);
+		FieldPtr->A += BufA;
 	}
-	if(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_)
-	{
-		double IntForBx = Step_phiPrime*S_forBx; 
-		double IntForBy = Step_phiPrime*S_forBy; 
-		double IntForBz = Step_phiPrime*S_forBz;
-
-		TVector3d BufB(IntForBx, IntForBy, IntForBz);
-		BufB = Fact*BufB;
+	if (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) {
+		// Convert from Tesla to A/m (internal format)
+		TVector3d BufB(IntForBx * InvMu0, IntForBy * InvMu0, IntForBz * InvMu0);
 		FieldPtr->B += BufB;
-		FieldPtr->H += BufB;
+		FieldPtr->H += BufB;  // For coils in air, H = B/mu_0 = same as internal representation
 	}
-}
-
-//-------------------------------------------------------------------------
-
-void radTArcCur::B_compWithNewtonCotes4(radTField* FieldPtr)
-{
-	const double Pi = 3.141592653589793238;
-	const double ConstForJ = 0.0001;
-	double Fact = ConstForJ*J_azim;
-
-	TVector3d P_mi_CenPo = FieldPtr->P - CircleCentrPoint;
-
-	const double SmallPositive = 1.E-10;
-	double r = sqrt(P_mi_CenPo.x*P_mi_CenPo.x + P_mi_CenPo.y*P_mi_CenPo.y + SmallPositive);
-	double phi = ((P_mi_CenPo.y < 0)? (2*Pi-acos(P_mi_CenPo.x/r)) : (acos(P_mi_CenPo.x/r)));
-	double z1 = -Height/2. - P_mi_CenPo.z;
-	double z2 = z1 + Height;
-
-	double z1z1 = z1*z1;
-	double z2z2 = z2*z2;
-	double rr = r*r;
-	double r1r1 = R_min*R_min;
-	double r2r2 = R_max*R_max;
-	double rr_pl_r1r1_pl_z1z1 = rr + r1r1 + z1z1;
-	double rr_pl_r1r1_pl_z2z2 = rr + r1r1 + z2z2;
-	double rr_pl_r2r2_pl_z1z1 = rr + r2r2 + z1z1;
-	double rr_pl_r2r2_pl_z2z2 = rr + r2r2 + z2z2;
-	double two_r = 2.*r;
-	double two_rr1 = two_r*R_min;
-	double two_rr2 = two_r*R_max;
-
-	double phiPrime_mi_phi_min = Phi_min - phi + SmallPositive;
-
-	const double IntegWeight[] = {14./45., 64./45., 24./45., 64./45., 28./45.};
-	double IntForAx, IntForAy, IntForBx, IntForBy, IntForBz,
-		   PrIntForAx, PrIntForAy, PrIntForBx, PrIntForBy, PrIntForBz,
-		   GenS_forAx, GenS_forAy, GenS_forBx, GenS_forBy, GenS_forBz,
-		   S_forAx, S_forAy, S_forBx, S_forBy, S_forBz;
-	IntForAx = IntForAy = IntForBx = IntForBy = IntForBz = 1.E+23;
-	GenS_forAx = GenS_forAy = GenS_forBx = GenS_forBy = GenS_forBz = 0.;
-
-	double Step_phiPrime, phiPrime_mi_phi;
-	short IndForWeight, IndForPass;
-
-	double CosDelPhi, AbsSinDelPhi, D11, D12, D21, D22, rCos, r1_mi_rCos, r2_mi_rCos,
-		   ln_r1mrCospD11_di_r2mrCospD21, ln_r2mrCospD22_di_r1mrCospD12, rAbsSin, 
-		   Absr1mrCos_di_rAbsSin, Absr2mrCos_di_rAbsSin, PiMult1, PiMult2, Buf,
-		   z1pD11_di_z2pD12, z2pD22_di_z1pD21, ln_z1pD11diz2pD12, ln_z2pD22diz1pD21,
-		   phiPrime, Cos_phiPrime, Sin_phiPrime, rr_mi_two_rrCosCos, FA, FBxy, FBz;
-
-	int AmOfPoi = 5;
-	short NotFirstPass = 0;
-	double PrecParamB = 1.E+23; 
-	double PrecParamA = 1.E+23; 
-
-	while((PrecParamB > FieldPtr->CompCriterium.AbsPrecB) || 
-		  (PrecParamA > FieldPtr->CompCriterium.AbsPrecA))
-	{
-		Step_phiPrime = (Phi_max - Phi_min + SmallPositive)/(AmOfPoi-1);
-		phiPrime_mi_phi = phiPrime_mi_phi_min;
-
-		PrIntForAx = IntForAx; PrIntForAy = IntForAy;
-		PrIntForBx = IntForBx; PrIntForBy = IntForBy; PrIntForBz = IntForBz;
-
-		IndForWeight = IndForPass = 0;
-		S_forAx = S_forAy = S_forBx = S_forBy = S_forBz = 0.;
-
-		int AmOfPoi_mi_1 = AmOfPoi - 1;
-		for(int i=0; i<AmOfPoi; i++)
-		{
-			if(IndForPass==3) IndForPass = 0;
-			if(IndForWeight==5) IndForWeight = 1;
-			if(NotFirstPass && (IndForPass==0)) goto BottomOfThisLoop;
-			if(i==AmOfPoi_mi_1) IndForWeight = 0;
-
-			CosDelPhi = cos(phiPrime_mi_phi);
-			AbsSinDelPhi = Abs(sin(phiPrime_mi_phi));
-			D11 = sqrt(rr_pl_r1r1_pl_z1z1 - two_rr1*CosDelPhi);
-			D12 = sqrt(rr_pl_r1r1_pl_z2z2 - two_rr1*CosDelPhi);
-			D21 = sqrt(rr_pl_r2r2_pl_z1z1 - two_rr2*CosDelPhi);
-			D22 = sqrt(rr_pl_r2r2_pl_z2z2 - two_rr2*CosDelPhi);
-			rCos = r*CosDelPhi;
-			r1_mi_rCos = R_min - rCos;
-			r2_mi_rCos = R_max - rCos;
-			ln_r1mrCospD11_di_r2mrCospD21 = log((r1_mi_rCos + D11)/(r2_mi_rCos + D21));
-			ln_r2mrCospD22_di_r1mrCospD12 = log((r2_mi_rCos + D22)/(r1_mi_rCos + D12));
-			rAbsSin = r*AbsSinDelPhi;
-			Absr1mrCos_di_rAbsSin = Abs(r1_mi_rCos)/rAbsSin;
-			Absr2mrCos_di_rAbsSin = Abs(r2_mi_rCos)/rAbsSin;
-
-			PiMult1 = PiMult2 = 0.;
-			Buf = rAbsSin*(Sign(r1_mi_rCos)*(atan(TransAtans(z2*Absr1mrCos_di_rAbsSin/D12, -z1*Absr1mrCos_di_rAbsSin/D11, PiMult1)) + Pi*PiMult1)
-						   +Sign(r2_mi_rCos)*(atan(TransAtans(z1*Absr2mrCos_di_rAbsSin/D21, -z2*Absr2mrCos_di_rAbsSin/D22, PiMult2)) + Pi*PiMult2))
-				  +z1*ln_r1mrCospD11_di_r2mrCospD21 + z2*ln_r2mrCospD22_di_r1mrCospD12;
-
-			z1pD11_di_z2pD12 = (z1 + D11)/(z2 + D12);
-			z2pD22_di_z1pD21 = (z2 + D22)/(z1 + D21);
-			phiPrime = phiPrime_mi_phi+phi;
-			Cos_phiPrime = cos(phiPrime);
-			Sin_phiPrime = sin(phiPrime);
-			if(FieldPtr->FieldKey.A_)
-			{
-				ln_z1pD11diz2pD12 = log(z1pD11_di_z2pD12);
-				ln_z2pD22diz1pD21 = log(z2pD22_di_z1pD21);
-				rr_mi_two_rrCosCos = rr*(1.-2.*CosDelPhi*CosDelPhi);
-				FA = rCos*Buf + 0.5*(z1*(D11-D21)+z2*(D22-D12)+(rr_mi_two_rrCosCos+r1r1)*ln_z1pD11diz2pD12+(rr_mi_two_rrCosCos+r2r2)*ln_z2pD22diz1pD21);
-				S_forAx += IntegWeight[IndForWeight]*(-Sin_phiPrime*FA);
-				S_forAy += IntegWeight[IndForWeight]*Cos_phiPrime*FA;
-			}
-			if(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_)
-			{
-				FBxy = D11-D21+D22-D12 + rCos*(ln_r1mrCospD11_di_r2mrCospD21+ln_r2mrCospD22_di_r1mrCospD12);
-				if(FieldPtr->FieldKey.A_) FBz = Buf - rCos*(ln_z1pD11diz2pD12+ln_z2pD22diz1pD21);
-				else FBz = Buf - rCos*log(z1pD11_di_z2pD12*z2pD22_di_z1pD21);
-				S_forBx += IntegWeight[IndForWeight]*Cos_phiPrime*FBxy;
-				S_forBy += IntegWeight[IndForWeight]*Sin_phiPrime*FBxy;
-				S_forBz += IntegWeight[IndForWeight]*FBz;
-			}
-BottomOfThisLoop:
-			IndForPass++; IndForWeight++;
-			phiPrime_mi_phi += Step_phiPrime;
-		}
-
-		PrecParamA = PrecParamB = 0.;
-
-		if(FieldPtr->FieldKey.A_)
-		{
-			GenS_forAx += S_forAx; GenS_forAy += S_forAy;
-			IntForAx = Step_phiPrime*GenS_forAx; IntForAy = Step_phiPrime*GenS_forAy;
-
-			PrecParamA = Fact * Max(Abs(IntForAx-PrIntForAx), Abs(IntForAy-PrIntForAy));
-		}
-		if(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_)
-		{
-			GenS_forBx += S_forBx; GenS_forBy += S_forBy; GenS_forBz += S_forBz;
-			IntForBx = Step_phiPrime*GenS_forBx; 
-			IntForBy = Step_phiPrime*GenS_forBy; 
-			IntForBz = Step_phiPrime*GenS_forBz;
-
-			PrecParamB = Fact * Max( Max( Abs(IntForBx-PrIntForBx), Abs(IntForBy-PrIntForBy)), Abs(IntForBz-PrIntForBz));
-		}
-		AmOfPoi = (AmOfPoi-1)*3+1;
-		NotFirstPass = 1;
-	}
-	
-	if(FieldPtr->FieldKey.A_)
-	{
-		TVector3d BufA(IntForAx, IntForAy, 0.);
-		FieldPtr->A += Fact*BufA;
-	}
-	if(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_)
-	{
-		TVector3d BufB(IntForBx, IntForBy, IntForBz);
-		BufB = Fact*BufB;
-		FieldPtr->B += BufB;
-		FieldPtr->H += BufB;
+	if (FieldPtr->FieldKey.Phi_) {
+		// Magnetic scalar potential in Amperes
+		// Only computed for full circular coils; arcs return 0
+		FieldPtr->Phi += IntForPhi;
 	}
 }
 

@@ -85,9 +85,9 @@ Use `evaluate_radia_solvers.py` for Radia solver comparison.
    - Field error < 5% compared to hexahedral reference
    - Mesh discretization causes small differences in magnetization
 
-3. **Both tetrahedral (Netgen) and hexahedral (ObjPolyhdr) are validated**
-   - Tetrahedral: Use `netgen_mesh_import.netgen_mesh_to_radia()`
-   - Hexahedral: Use `rad.ObjPolyhdr()` with HEX_FACES for simple geometries
+3. **Both tetrahedral (Netgen) and hexahedral (ObjHexahedron) are validated**
+   - Tetrahedral: Use `rad.ObjTetrahedron()` or `netgen_mesh_import.netgen_mesh_to_radia()`
+   - Hexahedral: Use `rad.ObjHexahedron()` for simple geometries
 
 ## Related Benchmarks
 
