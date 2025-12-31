@@ -13,8 +13,8 @@ This demonstrates the correct usage of radia_ngsolve for vector potential
 and magnetic field evaluation in NGSolve finite element spaces.
 
 IMPLEMENTATION STATUS (2025-12-31):
-Vector potential A is now implemented for ALL ObjPolyhdr elements (tetrahedra
-and hexahedra) using FACE INTEGRATION (not dipole approximation).
+Vector potential A is now implemented for ALL ObjHexahedron/ObjTetrahedron elements
+using FACE INTEGRATION (not dipole approximation).
 
 The implementation computes:
   A = (1/4pi) * M x BufVect
@@ -37,7 +37,7 @@ due to Radia's internal coordinate handling).
 
 Author: Radia Development Team
 Date: 2025-12-13
-Updated: 2025-12-31 (Implemented face-based A field for all ObjPolyhdr elements)
+Updated: 2025-12-31 (Implemented face-based A field for all ObjHexahedron/ObjTetrahedron elements)
 """
 import sys
 import os
@@ -76,7 +76,7 @@ print('-' * 70)
 rad.UtiDelAll()
 rad.FldUnits('m')
 
-# Define hexahedral magnet using ObjPolyhdr
+# Define hexahedral magnet using ObjHexahedron
 # Center: [0, 0, 0], Dimensions: [0.04, 0.04, 0.06] m
 dx, dy, dz = 0.02, 0.02, 0.03  # Half-dimensions
 vertices = [
@@ -335,10 +335,10 @@ print('  - HDiv space projection for B')
 print('  - NGSolve curl() operator to compute curl(A)')
 print()
 print('IMPLEMENTATION STATUS (2025-12-27):')
-print('  Vector potential A is now implemented for ObjPolyhdr hexahedral')
+print('  Vector potential A is now implemented for ObjHexahedron/ObjTetrahedron')
 print('  permanent magnets using the analytical formula from radTRecMag.')
 print()
-print('  The A values are correctly computed for ObjPolyhdr hexahedra.')
+print('  The A values are correctly computed for ObjHexahedron.')
 print('  The |curl(A)|/|B| ratio is consistent, indicating correct implementation.')
 print()
 print('  Note: Radia uses an internal unit system where A = (1/4pi)*(M x BufVect)')

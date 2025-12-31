@@ -132,7 +132,7 @@ def compute_hexa_solution(test_points):
 
 def compute_tetra_solution(test_points):
     """
-    Compute B field using Radia tetrahedral (ObjPolyhdr) method.
+    Compute B field using Radia tetrahedral (ObjTetrahedron) method.
     Uses Netgen for mesh generation with uniform magnetization.
     """
     rad.UtiDelAll()
@@ -168,7 +168,7 @@ def compute_tetra_solution(test_points):
             B_values.append([np.nan, np.nan, np.nan])
 
     return {
-        'method': 'tetrahedral (ObjPolyhdr MSC)',
+        'method': 'tetrahedral (ObjTetrahedron MSC)',
         'n_elements': n_elements,
         'maxh': TETRA_MAXH,
         'B_values': B_values

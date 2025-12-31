@@ -5,7 +5,7 @@ Verification script for the Maxwell relation B = curl(A) using Radia and NGSolve
 ## Purpose
 
 This script verifies that:
-1. Vector potential A is correctly computed by Radia for ObjPolyhdr hexahedral permanent magnets
+1. Vector potential A is correctly computed by Radia for ObjHexahedron permanent magnets
 2. The Maxwell relation B = curl(A) holds when proper unit conversion is applied
 3. The radia_ngsolve integration correctly handles A field scaling
 
@@ -96,7 +96,7 @@ python verify_curl_A_equals_B.py
 
 ## Workflow
 
-1. Create hexahedral permanent magnet using ObjPolyhdr
+1. Create hexahedral permanent magnet using ObjHexahedron
 2. Create NGSolve mesh in air region outside magnet
 3. Project A onto HCurl space using RadiaField
 4. Compute curl(A) using NGSolve curl() operator

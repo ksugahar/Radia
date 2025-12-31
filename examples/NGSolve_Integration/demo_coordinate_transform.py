@@ -26,7 +26,7 @@ print("="*70)
 print("NGSolve Integration Demo: Coordinate Transformation")
 print("="*70)
 
-# Create a simple rectangular magnet at origin using ObjPolyhdr
+# Create a simple rectangular magnet at origin using ObjHexahedron
 # Center: [0, 0, 0], Dimensions: [0.04, 0.04, 0.06] m, Magnetization in z-direction
 cx, cy, cz = 0, 0, 0
 dx, dy, dz = 0.02, 0.02, 0.03  # Half-dimensions

@@ -192,8 +192,14 @@ void radTRecMag::B_comp(radTField* FieldPtr)
 	double x0plD001_di_x1plD101 = x0plD001/x1plD101;
 	double x1plD111_di_x0plD011 = x1plD111/x0plD011;
 
-	const double dConst2 = 1./4./Pi;
-	const double ConstForJ = 0.0001;
+	const double dConst2 = 1./4./Pi;  // For Phi: H = -grad(Phi), so Phi uses 1/(4*pi)
+	// For A: B = curl(A), so A uses mu_0/(4*pi) = 1e-7 H/m
+	// Radia uses SI units (B in Tesla, H in A/m), so A should be in T*m
+	const double dConstA = 1.0e-7;  // mu_0/(4*pi)
+	// ConstForJ: Biot-Savart constant for current density
+	// B = (mu_0/4*pi) * integral(J x r / r^3) dV
+	// For SI units (J in A/m^2, B in T): ConstForJ = mu_0/(4*pi) = 1e-7
+	const double ConstForJ = 1.0e-7;
 
 	double ln_z0plD100_di_z1plD101, ln_z1plD001_di_z0plD000, ln_z0plD010_di_z1plD011, ln_z1plD111_di_z0plD110,
 		   ln_y0plD100_di_y1plD110, ln_y1plD010_di_y0plD000, ln_y0plD001_di_y1plD011, ln_y1plD111_di_y0plD101,
@@ -233,10 +239,10 @@ void radTRecMag::B_comp(radTField* FieldPtr)
 		{
 			if(FieldPtr->FieldKey.A_)
 			{
-				TVector3d BufForA(Magn.y*BufVect.z-Magn.z*BufVect.y, 
-								  Magn.z*BufVect.x-Magn.x*BufVect.z, 
+				TVector3d BufForA(Magn.y*BufVect.z-Magn.z*BufVect.y,
+								  Magn.z*BufVect.x-Magn.x*BufVect.z,
 								  Magn.x*BufVect.y-Magn.y*BufVect.x);
-				FieldPtr->A += dConst2*BufForA;
+				FieldPtr->A += dConstA*BufForA;  // A uses mu_0/(4*pi) for curl(A) = B
 			}
 			if(FieldPtr->FieldKey.Phi_)	FieldPtr->Phi += dConst2*(Magn*BufVect);
 		}
@@ -244,30 +250,88 @@ void radTRecMag::B_comp(radTField* FieldPtr)
 		{
 			if(FieldPtr->FieldKey.A_)
 			{
-				FieldPtr->A +=(ConstForJ
-							  *((x0*x0*T0.x+x1*x1*T1.x
-							   +y0*y0*T0.y+y1*y1*T1.y
-							   +z0*z0*T0.z+z1*z1*T1.z)/2.
-							   +x0*y0*ln_z1plD001_di_z0plD000
-							   +x1*y0*ln_z0plD100_di_z1plD101
-							   +x0*y1*ln_z0plD010_di_z1plD011
-							   +x1*y1*ln_z1plD111_di_z0plD110
-							   +x0*z0*ln_y1plD010_di_y0plD000
-							   +x1*z0*ln_y0plD100_di_y1plD110
-							   +x0*z1*ln_y0plD001_di_y1plD011
-							   +x1*z1*ln_y1plD111_di_y0plD101
-							   +y0*z0*ln_x1plD100_di_x0plD000
-							   +y1*z0*ln_x0plD010_di_x1plD110
-							   +y0*z1*ln_x0plD001_di_x1plD101
-							   +y1*z1*ln_x1plD111_di_x0plD011))*J;
+				// Vector potential A from uniform current density J:
+				// A = (mu_0 / 4*pi) * J * integral(1/|r-r'|) dV'
+				//
+				// For a rectangular parallelepiped, the integral has the form (Durand):
+				// I = -sum over 8 corners of (+/-) * f(X,Y,Z)
+				// where f(X,Y,Z) = X*Y*asinh(Z/sqrt(X^2+Y^2)) + Y*Z*asinh(X/sqrt(Y^2+Z^2)) + Z*X*asinh(Y/sqrt(Z^2+X^2))
+				//                  - X^2/2*atan(YZ/XR) - Y^2/2*atan(ZX/YR) - Z^2/2*atan(XY/ZR)
+				// with R = sqrt(X^2 + Y^2 + Z^2)
+				//
+				// Note: asinh(z/sqrt(x^2+y^2)) = ln((z+R)/sqrt(x^2+y^2)), which differs from ln(|z|+R)
+				//
+				// Corners are at (x0,y0,z0), (x1,y0,z0), (x0,y1,z0), (x1,y1,z0),
+				//                (x0,y0,z1), (x1,y0,z1), (x0,y1,z1), (x1,y1,z1)
+				// with signs: +, -, -, +, -, +, +, -
+
+				// Small epsilon to avoid division by zero
+				const double eps = 1e-30;
+
+				// Helper function macro for asinh terms
+				// asinh(z/sqrt(x^2+y^2)) where we need to handle the sqrt carefully
+				#define ASINH_TERM(x,y,z) ((x)*(y)*asinh((z)/(sqrt((x)*(x)+(y)*(y)+eps))))
+				#define ATAN_TERM(x,y,z,R) ((x)*(x)/2.*atan((y)*(z)/((x)*(R)+eps)))
+
+				// Compute f(X,Y,Z) for each corner using asinh form
+				// f = X*Y*asinh(Z/sqrt(X^2+Y^2)) + Y*Z*asinh(X/sqrt(Y^2+Z^2)) + Z*X*asinh(Y/sqrt(Z^2+X^2))
+				//     - X^2/2*atan(YZ/XR) - Y^2/2*atan(ZX/YR) - Z^2/2*atan(XY/ZR)
+
+				// Corner 000: (x0, y0, z0), sign = +1
+				double f000 = ASINH_TERM(x0,y0,z0) + ASINH_TERM(y0,z0,x0) + ASINH_TERM(z0,x0,y0)
+				            - ATAN_TERM(x0,y0,z0,D000) - ATAN_TERM(y0,z0,x0,D000) - ATAN_TERM(z0,x0,y0,D000);
+
+				// Corner 100: (x1, y0, z0), sign = -1
+				double f100 = ASINH_TERM(x1,y0,z0) + ASINH_TERM(y0,z0,x1) + ASINH_TERM(z0,x1,y0)
+				            - ATAN_TERM(x1,y0,z0,D100) - ATAN_TERM(y0,z0,x1,D100) - ATAN_TERM(z0,x1,y0,D100);
+
+				// Corner 010: (x0, y1, z0), sign = -1
+				double f010 = ASINH_TERM(x0,y1,z0) + ASINH_TERM(y1,z0,x0) + ASINH_TERM(z0,x0,y1)
+				            - ATAN_TERM(x0,y1,z0,D010) - ATAN_TERM(y1,z0,x0,D010) - ATAN_TERM(z0,x0,y1,D010);
+
+				// Corner 110: (x1, y1, z0), sign = +1
+				double f110 = ASINH_TERM(x1,y1,z0) + ASINH_TERM(y1,z0,x1) + ASINH_TERM(z0,x1,y1)
+				            - ATAN_TERM(x1,y1,z0,D110) - ATAN_TERM(y1,z0,x1,D110) - ATAN_TERM(z0,x1,y1,D110);
+
+				// Corner 001: (x0, y0, z1), sign = -1
+				double f001 = ASINH_TERM(x0,y0,z1) + ASINH_TERM(y0,z1,x0) + ASINH_TERM(z1,x0,y0)
+				            - ATAN_TERM(x0,y0,z1,D001) - ATAN_TERM(y0,z1,x0,D001) - ATAN_TERM(z1,x0,y0,D001);
+
+				// Corner 101: (x1, y0, z1), sign = +1
+				double f101 = ASINH_TERM(x1,y0,z1) + ASINH_TERM(y0,z1,x1) + ASINH_TERM(z1,x1,y0)
+				            - ATAN_TERM(x1,y0,z1,D101) - ATAN_TERM(y0,z1,x1,D101) - ATAN_TERM(z1,x1,y0,D101);
+
+				// Corner 011: (x0, y1, z1), sign = +1
+				double f011 = ASINH_TERM(x0,y1,z1) + ASINH_TERM(y1,z1,x0) + ASINH_TERM(z1,x0,y1)
+				            - ATAN_TERM(x0,y1,z1,D011) - ATAN_TERM(y1,z1,x0,D011) - ATAN_TERM(z1,x0,y1,D011);
+
+				// Corner 111: (x1, y1, z1), sign = -1
+				double f111 = ASINH_TERM(x1,y1,z1) + ASINH_TERM(y1,z1,x1) + ASINH_TERM(z1,x1,y1)
+				            - ATAN_TERM(x1,y1,z1,D111) - ATAN_TERM(y1,z1,x1,D111) - ATAN_TERM(z1,x1,y1,D111);
+
+				#undef ASINH_TERM
+				#undef ATAN_TERM
+
+				// Sum with alternating signs, then negate (from derivation matching scipy)
+				// I = -(f000 - f100 - f010 + f110 - f001 + f101 + f011 - f111)
+				double scalarIntegral = -(f000 - f100 - f010 + f110 - f001 + f101 + f011 - f111);
+
+				// A = (mu_0 / 4*pi) * J * scalarIntegral
+				FieldPtr->A += ConstForJ * scalarIntegral * J;
 			}
 			if(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_)
 			{
-				TVector3d BufForB(J.y*BufVect.z-J.z*BufVect.y, 
-								  J.z*BufVect.x-J.x*BufVect.z, 
+				// B = (mu_0/4*pi) * (J x BufVect) in Tesla
+				// But Radia stores B internally as B/mu_0 (in A/m), and OutFieldCompRes
+				// multiplies by mu_0 on output. So we need to divide by mu_0 here.
+				// ConstForJ = mu_0/(4*pi) = 1e-7, and 1/mu_0 = 1/(4*pi*1e-7) = 1/(ConstForJ * 4)
+				// So: B_internal = (1/mu_0) * ConstForJ * (J x BufVect) = (J x BufVect) / (4*pi)
+				const double dConst2 = 1./4./Pi;  // 1/(4*pi)
+				TVector3d BufForB(J.y*BufVect.z-J.z*BufVect.y,
+								  J.z*BufVect.x-J.x*BufVect.z,
 								  J.x*BufVect.y-J.y*BufVect.x);
-				FieldPtr->B += ConstForJ*BufForB;
-				FieldPtr->H += ConstForJ*BufForB;
+				FieldPtr->B += dConst2*BufForB;
+				FieldPtr->H += dConst2*BufForB;
 			}
 		}
 	}

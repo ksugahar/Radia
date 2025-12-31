@@ -50,7 +50,10 @@ class radTApplication {
 	int m_nProcMPI, m_rankMPI; //OC01012020
 
 	// Physical units
-	double m_lengthUnitScale; // Scale factor: 1.0 for mm (default), 1000.0 for m
+	// Radia v1.4.3+: Internal unit system is SI (meters), matching ELF
+	// m_lengthUnitScale converts user input to internal meters
+	// Default: m (scale = 1.0), for mm input: scale = 0.001
+	double m_lengthUnitScale;
 	const char* m_lengthUnitName; // "mm" or "m"
 
 public:
@@ -146,9 +149,10 @@ public:
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
 
-		// Initialize to default units (mm)
+		// Initialize to default units (SI: meters)
+		// Radia v1.4.3+: Default is meters (matching ELF)
 		m_lengthUnitScale = 1.0;
-		m_lengthUnitName = "mm";
+		m_lengthUnitName = "m";
 
 #ifdef RADIA_USE_HACAPK
 		// HACApK default parameters

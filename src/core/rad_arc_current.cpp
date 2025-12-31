@@ -33,7 +33,10 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 {
 	const double Pi = 3.141592653589793238;
 	const double TwoPi = 2.0 * Pi;
-	const double ConstForJ = 0.0001;  // mu_0 / (4*pi) * 1e6 for Tesla output
+	// Biot-Savart constant: B = (mu_0/4*pi) * integral(I dl x r / r^3)
+	// Radia now uses SI units (meters) internally, matching ELF.
+	// ConstForJ = mu_0/(4*pi) = 1e-7 H/m
+	const double ConstForJ = 1.0e-7;
 
 	TVector3d P_mi_CenPo = FieldPtr->P - CircleCentrPoint;
 
@@ -72,9 +75,9 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 
 				double w_total = w_r * w_z;
 
-				// Current density J_azim is in A/mm^2 (Radia's display unit, confirmed by FldUnits())
-				// Integration weights w_r and w_z are in mm
-				// dI = J_azim [A/mm^2] * w_total [mm^2] = J_azim * w_total [A]
+				// Current density J_azim is in A/m^2 (SI units)
+				// Integration weights w_r and w_z are in meters
+				// dI = J_azim [A/m^2] * w_total [m^2] = J_azim * w_total [A]
 				double dI = J_azim * w_total;
 
 				// Compute B-field from this circular loop using elliptic integrals

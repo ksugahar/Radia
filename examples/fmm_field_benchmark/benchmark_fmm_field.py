@@ -67,7 +67,7 @@ def get_memory_mb():
 
 
 def create_hex_mesh(n_div, size=1.0):
-    """Create hexahedral mesh for a cube using Radia ObjPolyhdr."""
+    """Create hexahedral mesh for a cube using Radia ObjHexahedron."""
     rad.UtiDelAll()
     rad.FldUnits('m')
 

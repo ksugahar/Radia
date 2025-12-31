@@ -31,7 +31,7 @@ Usage:
 
     # Use as background field with Radia
     import radia as rad
-    bckg = rad.ObjBckgCF(cyl.get_B)
+    bckg = rad.ObjBckg(cyl.get_B)
 """
 
 import numpy as np
@@ -634,7 +634,7 @@ class CylindricalMagnet:
 
     def __call__(self, point: List[float]) -> List[float]:
         """
-        Callable interface for use with rad.ObjBckgCF().
+        Callable interface for use with rad.ObjBckg().
 
         Parameters:
             point: [x, y, z] observation point in mm

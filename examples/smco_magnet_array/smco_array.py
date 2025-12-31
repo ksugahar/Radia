@@ -132,18 +132,9 @@ def create_meshed_disk(R, H, n_radial, n_angular, n_z=1, x0=0, y0=0, z0=0):
 						[x2_inner, y2_inner, z_top],     # 8: top inner2
 					]
 
-					# Hexahedron faces (standard ordering)
-					faces = [
-						[1, 2, 3, 4],      # Bottom
-						[5, 6, 7, 8],      # Top
-						[1, 2, 6, 5],      # Inner radial side
-						[2, 3, 7, 6],      # Outer angular side
-						[3, 4, 8, 7],      # Outer radial side
-						[4, 1, 5, 8],      # Inner angular side
-					]
-
-				# Create polyhedron (no magnetization for iron base plate)
-				hex_elem = rad.ObjPolyhdr(points, faces)
+					# Create hexahedron (no magnetization for iron base plate)
+				# ObjHexahedron auto-generates standard face topology
+				hex_elem = rad.ObjHexahedron(points)
 				hex_elements.append(hex_elem)
 
 	# Combine into container

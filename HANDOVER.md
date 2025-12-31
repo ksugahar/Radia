@@ -148,11 +148,10 @@ import radia as rad
 
 rad.FldUnits('m')
 
-# Create hexahedral magnet
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+# Create hexahedral magnet using ObjHexahedron (auto-generates faces)
 vertices = [[-0.05,-0.05,-0.05], [0.05,-0.05,-0.05], [0.05,0.05,-0.05], [-0.05,0.05,-0.05],
             [-0.05,-0.05,0.05], [0.05,-0.05,0.05], [0.05,0.05,0.05], [-0.05,0.05,0.05]]
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 954930])
+magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])
 
 # Test phi/A
 phi = rad.Fld(magnet, 'p', [0, 0, 0.1])

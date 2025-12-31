@@ -351,7 +351,7 @@ class TestMeshImportSolver(unittest.TestCase):
         # External field
         H_ext = 1000.0  # A/m
         B_ext = MU_0 * H_ext
-        ext_field = rad.ObjBckg([0, 0, B_ext])
+        ext_field = rad.ObjBckg(lambda p: [0, 0, B_ext])
         grp = rad.ObjCnt([container, ext_field])
 
         # Solve
@@ -393,7 +393,7 @@ class TestMeshImportSolver(unittest.TestCase):
         cube_hex = rad.ObjCnt(polyhedra)
         mat = rad.MatLin(mu_r - 1)
         rad.MatApl(cube_hex, mat)
-        ext = rad.ObjBckg([0, 0, B_ext])
+        ext = rad.ObjBckg(lambda p: [0, 0, B_ext])
         grp_hex = rad.ObjCnt([cube_hex, ext])
 
         result_hex = rad.Solve(grp_hex, 0.001, 100, 1)

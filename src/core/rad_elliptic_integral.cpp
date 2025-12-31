@@ -176,8 +176,8 @@ int PerfectEllipticIntegral(double k2, double kd2, double* K, double* E)
 //-------------------------------------------------------------------------
 // Circular loop B-field using elliptic integrals (from EMPY bring0_)
 //
-// IMPORTANT: This function works in Radia's internal units (mm).
-// All coordinates (R, Z, CR, CZ) are in mm, CI is in Amperes.
+// Radia now uses SI units (meters) internally, matching ELF.
+// All coordinates (R, Z, CR, CZ) are in meters, CI is in Amperes.
 // Output is in Tesla.
 //
 // Formula based on:
@@ -189,13 +189,9 @@ int PerfectEllipticIntegral(double k2, double kd2, double* K, double* E)
 void CircularLoopBField(double R, double Z, double CR, double CZ, double CI,
                         double& BR, double& BZ)
 {
-    // SI formula: AA = mu_0/pi * I = 4e-7 * I [T*m]
+    // SI formula: AA = mu_0/pi * I = 4e-7 * I [T*m/A * A = T*m]
     // Then AA / (2*sqrt(S+P)) gives [T] when S+P is in m^2
-    //
-    // For coordinates in mm:
-    // - S_mm = S_m * 1e6, so sqrt(S_mm) = sqrt(S_m) * 1e3
-    // - To compensate, multiply AA by 1e3: AA_mm = 4e-7 * 1e3 * I = 4e-4 * I
-    double AA = 4.0e-4 * CI;
+    double AA = 4.0e-7 * CI;
 
     // On-axis case (R = 0)
     double R_check = R + 1.0;
@@ -272,34 +268,16 @@ double CircularLoopAPhi(double R, double Z, double CR, double CZ, double CI)
     // Using the flux function approach (from EMPY):
     //   psi = (mu_0 * I / pi) * sqrt(P) / k * ((1 - k^2/2)*K - E)
     //   where P = CR * R (in mm^2), so sqrt(P) is in mm
-    //   psi has units of T*m * mm = T*mm*m (flux function in mixed units)
-    //   A_phi = psi / R = T*mm*m / mm = T*m (SI)
+    // Radia now uses SI units (meters) internally, matching ELF.
     //
-    // To output A_phi in T*mm (Radia convention), multiply by 1e3
-    //
-    // Actually, looking at CircularLoopBField which uses 4e-4 = 4e-7 * 1e3
-    // for mm coordinates, we should use the same convention here.
-    // But for A, the formula is different.
-    //
-    // Let's derive from scratch:
-    //   A_phi(SI) = (mu_0 * I / pi) * sqrt(CR_m * R_m) / k * (...) / R_m
-    //   where CR_m = CR * 1e-3, R_m = R * 1e-3 (convert mm to m)
-    //   sqrt(CR_m * R_m) = sqrt(CR * R) * 1e-3 (mm * 1e-3 = m)
-    //   A_phi(SI) = (mu_0 * I / pi) * sqrt(CR * R) * 1e-3 / k * (...) / (R * 1e-3)
-    //             = (mu_0 * I / pi) * sqrt(CR * R) / k * (...) / R
-    //   This is dimensionless * sqrt(mm^2) / mm = dimensionless (WRONG!)
-    //
-    // Correct derivation:
-    //   A_phi(SI) [T*m] = (mu_0/pi) * I * sqrt(CR_m/R_m) * (1/k) * f(K,E)
+    // Derivation for SI units:
+    //   A_phi(SI) [T*m] = (mu_0/pi) * I * sqrt(CR/R) * (1/k) * f(K,E)
     //   where f(K,E) = (1 - k^2/2)*K - E is dimensionless
-    //   sqrt(CR_m/R_m) is dimensionless
+    //   sqrt(CR/R) is dimensionless (ratio of radii)
     //   mu_0/pi = 4e-7 [T*m/A], I [A]
     //   So A_phi(SI) = 4e-7 * I * sqrt(CR/R) * (1/k) * f(K,E) [T*m]
-    //
-    // For Radia output in T*mm, multiply by 1e3:
-    //   A_phi(Radia) = 4e-4 * I * sqrt(CR/R) * (1/k) * f(K,E) [T*mm]
 
-    double UM = 4.0e-4 * CI;  // mu_0 * I / pi * 1e3 for T*mm output
+    double UM = 4.0e-7 * CI;  // mu_0 * I / pi for SI units (T*m)
     double dz = CZ - Z;
     double S = CR * CR + R * R + dz * dz;
     double P = CR * R;
@@ -323,8 +301,8 @@ double CircularLoopAPhi(double R, double Z, double CR, double CZ, double CI)
 //-------------------------------------------------------------------------
 // Circular loop solid angle for magnetic scalar potential calculation
 //
-// IMPORTANT: This function works in Radia's internal units (mm).
-// All coordinates (R, Z, CR, CZ) are in mm.
+// Radia now uses SI units (meters) internally, matching ELF.
+// All coordinates (R, Z, CR, CZ) are in meters.
 // Output is in steradians [sr].
 //
 // The magnetic scalar potential is related to solid angle by:

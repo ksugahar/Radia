@@ -248,7 +248,7 @@ def create_tetra_solution(test_points):
             B_values.append([np.nan, np.nan, np.nan])
 
     return {
-        'method': 'tetrahedral (Netgen + ObjPolyhdr)',
+        'method': 'tetrahedral (Netgen + ObjTetrahedron)',
         'n_elements': n_elements,
         'maxh': TETRA_MAXH,
         't_solve': t_solve,

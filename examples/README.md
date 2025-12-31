@@ -37,7 +37,7 @@ Basic Radia functionality including magnets, coils, materials, and field calcula
 - `hmatrix_update_magnetization.py` - H-matrix magnetization updates
 
 **Topics Covered:**
-- Object creation (`ObjPolyhdr`, `ObjArcCur`)
+- Object creation (`ObjHexahedron`, `ObjTetrahedron`, `ObjArcCur`)
 - Material properties (`MatLin`, `MatSatIsoTab`)
 - Field computation (`Fld`)
 - VTK export for visualization
@@ -53,12 +53,12 @@ Using external background fields with magnetizable materials.
 
 **Key Examples:**
 - `quadrupole_analytical.py` - Analytical quadrupole field with magnetizable sphere
-- `sphere_in_quadrupole.py` - Python callback background field (rad.ObjBckgCF)
+- `sphere_in_quadrupole.py` - Python callback background field (rad.ObjBckg)
 - `permeability_comparison.py` - Material permeability analysis
 - `sphere_nastran_analysis.py` - Nastran mesh with background field
 
 **Topics Covered:**
-- Background field specification (`ObjBckgCF`)
+- Background field specification (`ObjBckg`)
 - Python callback functions for custom fields
 - Magnetizable materials in external fields
 - Nastran mesh import for complex geometries

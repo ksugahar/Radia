@@ -160,7 +160,10 @@ public:
 
 	void SimpleEnergyComp(radTField* FieldPtr)
 	{
-		const double ConstForJ = -1.E-06;
+		// Energy: E = -integral(J . A) dV
+		// Radia now uses SI units (meters) internally, matching ELF.
+		// J in A/m^2, A in T*m, Volume in m^3 -> Energy in Joules
+		const double ConstForJ = -1.0;
 		radTFieldKey LocFieldKey; LocFieldKey.A_ = 1;
 		radTField LocField(LocFieldKey, FieldPtr->CompCriterium); LocField.P = CentrPoint;
 		((radTg3d*)(FieldPtr->HandleEnergyForceTorqueCompData.rep->hSource.rep))->B_genComp(&LocField);

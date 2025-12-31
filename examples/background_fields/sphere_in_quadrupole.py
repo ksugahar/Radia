@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Analytical Solution Comparison for Quadrupole Field with ObjBckgCF
+Analytical Solution Comparison for Quadrupole Field with ObjBckg
 
 Tests magnetizable sphere in quadrupole background field.
 Compares Radia numerical solution with analytical quadrupole field
@@ -69,7 +69,7 @@ def quadrupole_field(pos):
 	Bz = 0.0
 	return [Bx, By, Bz]
 
-bckg_cf = rd.ObjBckgCF(quadrupole_field)
+bckg_cf = rd.ObjBckg(quadrupole_field)
 print(f"  Quadrupole field created: Bx = g*y, By = g*x")
 
 # Container with cube and background field
@@ -212,7 +212,7 @@ print("\n" + "=" * 80)
 print("Summary")
 print("=" * 80)
 
-print(f"\n1. ObjBckgCF successfully implements quadrupole background field")
+print(f"\n1. ObjBckg successfully implements quadrupole background field")
 print(f"2. Radia numerical solution compared with analytical quadrupole at {len(test_points)} points")
 print(f"3. Average error: {errors_arr.mean():.4f}%")
 print(f"4. Far-field agreement (r=30mm): {errors_arr[-4:].mean():.4f}%")

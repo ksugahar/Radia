@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-01-01
+
+### Changed
+
+- **API Cleanup: ObjHexahedron/ObjTetrahedron Standardization**
+  - Updated all examples and documentation to use high-level Python APIs
+  - `ObjHexahedron(vertices, magnetization)` for 8-vertex hexahedral elements
+  - `ObjTetrahedron(vertices, magnetization)` for 4-vertex tetrahedral elements
+  - These APIs auto-generate face topology - no need to specify face indices
+  - `ObjPolyhdr` is now internal API only (used for wedge/pyramid/surface meshes)
+
+### Cleaned
+
+- **Repository Cleanup**
+  - Removed 30+ debug/diagnostic scripts from `examples/ngsolve_integration/`
+  - Removed 25+ debug test files from `tests/`
+  - Removed internal design documents (historical info preserved in git)
+  - Removed benchmark result JSON and VTK output files
+
+### Documentation
+
+- **Updated API Examples**
+  - All Python examples now use `ObjHexahedron`/`ObjTetrahedron` consistently
+  - Updated CLAUDE.md, README.md, API_REFERENCE.md
+  - Updated example READMEs with correct API usage
+
 ## [1.4.3] - 2025-12-31
 
 ### Fixed
@@ -25,7 +51,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 - **Face-based Scalar Potential (Phi) Calculation**
-  - Replaced dipole approximation with accurate face-based integration for ObjHexahedron/ObjPolyhdr
+  - Replaced dipole approximation with accurate face-based integration for ObjHexahedron/ObjTetrahedron
   - New formula: `Phi = (1/4pi) * M dot BufVect` where `BufVect = n * integral(1/|r-r'|) dS`
   - Phi on z-axis now matches exactly between ObjRecMag and ObjHexahedron (< 1e-10 error)
   - Correct symmetry behavior: Phi ~ 0 on x/y axes for z-magnetized blocks (due to face cancellation)

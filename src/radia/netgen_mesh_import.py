@@ -438,7 +438,7 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
     - Supports tetrahedral (ET.TET) and optionally hexahedral (ET.HEX) elements
     - Vertex coordinates are extracted in Netgen's native units (meters)
     - Scaling applied automatically if units='mm'
-    - All tetrahedra are convex, suitable for rad.ObjPolyhdr()
+    - All tetrahedra are convex, suitable for rad.ObjTetrahedron()
     - Hexahedra may be concave (avoid except for structured cubic grids)
     - Progress printed every 100 elements if verbose=True
     """

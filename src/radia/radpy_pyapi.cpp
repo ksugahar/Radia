@@ -807,48 +807,25 @@ static PyObject* radia_ObjScaleCur(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
-* Creates a source of uniform background magnetic field.
+* Creates a source of background magnetic field from callable.
+* Callable should accept [x, y, z] in current units and return [Bx, By, Bz] in Tesla.
+* For uniform field, use: ObjBckg(lambda p: [Bx, By, Bz])
 ***************************************************************************/
 static PyObject* radia_ObjBckg(PyObject* self, PyObject* args)
-{
-	PyObject *oB=0, *oResInd=0;
-	try
-	{
-		if(!PyArg_ParseTuple(args, "O:ObjBckg", &oB)) throw CombErStr(strEr_BadFuncArg, ": ObjBckg");
-		if(oB == 0) throw CombErStr(strEr_BadFuncArg, ": ObjBckg");
-
-		double arB[3];
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oB, 'd', arB, 3, CombErStr(strEr_BadFuncArg, ": ObjBckg, incorrect definition of magnetic field strength"));
-
-		int ind = 0;
-		g_pyParse.ProcRes(RadObjBckg(&ind, arB));
-		oResInd = Py_BuildValue("i", ind);
-		// Py_XINCREF removed - Py_BuildValue already returns new reference
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
-	}
-	return oResInd;
-}
-/************************************************************************//**
-* Creates a source of arbitrary background field from callable.
-* Callable should accept [x, y, z] in mm and return [Bx, By, Bz] in Tesla.
-***************************************************************************/
-static PyObject* radia_ObjBckgCF(PyObject* self, PyObject* args)
 {
 	PyObject *oCallback=0, *oResInd=0;
 	try
 	{
-		if(!PyArg_ParseTuple(args, "O:ObjBckgCF", &oCallback))
-			throw CombErStr(strEr_BadFuncArg, ": ObjBckgCF");
+		if(!PyArg_ParseTuple(args, "O:ObjBckg", &oCallback))
+			throw CombErStr(strEr_BadFuncArg, ": ObjBckg");
 		if(oCallback == 0)
-			throw CombErStr(strEr_BadFuncArg, ": ObjBckgCF");
+			throw CombErStr(strEr_BadFuncArg, ": ObjBckg");
 
 		if(!PyCallable_Check(oCallback))
 			throw CombErStr(strEr_BadFuncArg,
-				": ObjBckgCF requires callable (CF or function)");
+				": ObjBckg requires callable (function or lambda). "
+				"Legacy ObjBckg([Bx,By,Bz]) array form is NOT supported. "
+				"Use ObjBckg(lambda p: [Bx, By, Bz]) instead.");
 
 		int ind = 0;
 		g_pyParse.ProcRes(RadObjBckgCF(&ind, oCallback));
@@ -3921,8 +3898,7 @@ static PyMethodDef radia_methods[] = {
 	{"ObjArcCur", radia_ObjArcCur, METH_VARARGS, "ObjArcCur([x,y,z],[rmin,rmax],[phimin,phimax],h,nseg,j,'man|auto':'man',a:'z') creates a current carrying finite-length arc of rectangular cross-section, with center point [x,y,z], inner and outer radii [rmin,rmax], initial and final angles [phimin,phimax], height h, number of segments nseg, and azimuthal current density j. According to the value of the 'man|auto' switch, the field from the arc is computed based on the number of segments nseg ('man'), or on the general absolute precision level specified by the function FldCmpCrt ('auto'). The orientation of the rotation axis is defined by the character a (which can be either 'x', 'y' or 'z')."},
 	{"ObjRaceTrk", radia_ObjRaceTrk, METH_VARARGS, "ObjRaceTrk([x,y,z],[rmin,rmax],[lx,ly],h,nseg,j,'man|auto':'man',a:'z') creates a current carrying racetrack coil consisting of four 90-degree bents connected by four straight parts of rectangular straight section, center point [x,y,z], inner and outer bent radii [rmin,rmax], straight section lengths [lx,ly], height h, number of segments in bents nseg, and azimuthal current density j. According to the value of the 'man|auto' switch, the field from the bents is computed based on the number of segments nseg ('man'), or on the general absolute precision level specified by the function FldCmpCrt ('auto'). The orientation of the racetrack axis is defined by the character a (which can be either 'x', 'y' or 'z')."},
 	{"ObjFlmCur", radia_ObjFlmCur, METH_VARARGS, "ObjFlmCur([[x1,y1,z1],[x2,y2,z2],...],i) creates a filament polygonal line conductor defined by the sequence of points [[x1,y1,z1],[x2,y2,z2],...] with current i."},
-	{"ObjBckg", radia_ObjBckg, METH_VARARGS, "ObjBckg([Bx,By,Bz]) creates a source of uniform background magnetic flux density B in Tesla. Returns object key that must be added to container with ObjCnt()."},
-	{"ObjBckgCF", radia_ObjBckgCF, METH_VARARGS, "ObjBckgCF(callback) creates a source of arbitrary background field. Callback should accept [x,y,z] in mm and return [Bx,By,Bz] in Tesla."},
+	{"ObjBckg", radia_ObjBckg, METH_VARARGS, "ObjBckg(callback) creates a source of background magnetic field. Callback should accept [x,y,z] in current units and return [Bx,By,Bz] in Tesla. For uniform field, use: ObjBckg(lambda p: [Bx, By, Bz]). Returns object key that must be added to container with ObjCnt()."},
 	{"SolverHMatrixEnable", radia_SolverHMatrixEnable, METH_VARARGS, "SolverHMatrixEnable() enables H-matrix (hierarchical matrix) acceleration for the BiCGSTAB solver. H-matrix uses ACA+ low-rank approximation for far-field interactions."},
 	{"SolverHMatrixDisable", radia_SolverHMatrixDisable, METH_VARARGS, "SolverHMatrixDisable() disables H-matrix acceleration. The solver will use dense matrix-vector products."},
 	{"SolverHMatrixIsEnabled", radia_SolverHMatrixIsEnabled, METH_VARARGS, "SolverHMatrixIsEnabled() returns True if H-matrix acceleration is enabled, False otherwise."},

@@ -842,7 +842,83 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 		}
 
 		if(FldKey.H_) FieldPtr->H += H_total;
-		if(FldKey.B_) FieldPtr->B += H_total;
+
+		// For B field, check if observation point is inside the tetrahedron
+		// If inside, B = mu_0 * (H + M), so we add M to B
+		if(FldKey.B_)
+		{
+			FieldPtr->B += H_total;
+
+			// Extract 4 unique vertices from face vertices for inside test
+			// Each face shares vertices with other faces, so we collect unique ones
+			TVector3d tetraVerts[4];
+			tetraVerts[0] = faceVertices[0][0];
+			tetraVerts[1] = faceVertices[0][1];
+			tetraVerts[2] = faceVertices[0][2];
+			// The 4th vertex is on face 1, 2, or 3 but not on face 0
+			// Face 1 shares 2 vertices with face 0, so one vertex is new
+			for(int j = 0; j < 3; j++) {
+				const TVector3d& v = faceVertices[1][j];
+				bool isNew = true;
+				for(int k = 0; k < 3; k++) {
+					TVector3d diff;
+					diff.x = v.x - tetraVerts[k].x;
+					diff.y = v.y - tetraVerts[k].y;
+					diff.z = v.z - tetraVerts[k].z;
+					if(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z < 1e-20) {
+						isNew = false;
+						break;
+					}
+				}
+				if(isNew) {
+					tetraVerts[3] = v;
+					break;
+				}
+			}
+
+			// Check if observation point is inside the tetrahedron
+			bool pointInside = RadPointClassify::PointInTetrahedronSolidAngle(
+				obsPoint, tetraVerts[0], tetraVerts[1], tetraVerts[2], tetraVerts[3]);
+
+			if(pointInside) {
+				// B = mu_0 * (H + M), H_total is H, so add M to B
+				FieldPtr->B += Magn;
+			}
+		}
+
+		// M field (magnetization at observation point)
+		if(FldKey.M_)
+		{
+			TVector3d tetraVerts[4];
+			tetraVerts[0] = faceVertices[0][0];
+			tetraVerts[1] = faceVertices[0][1];
+			tetraVerts[2] = faceVertices[0][2];
+			for(int j = 0; j < 3; j++) {
+				const TVector3d& v = faceVertices[1][j];
+				bool isNew = true;
+				for(int k = 0; k < 3; k++) {
+					TVector3d diff;
+					diff.x = v.x - tetraVerts[k].x;
+					diff.y = v.y - tetraVerts[k].y;
+					diff.z = v.z - tetraVerts[k].z;
+					if(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z < 1e-20) {
+						isNew = false;
+						break;
+					}
+				}
+				if(isNew) {
+					tetraVerts[3] = v;
+					break;
+				}
+			}
+
+			bool pointInside = RadPointClassify::PointInTetrahedronSolidAngle(
+				obsPoint, tetraVerts[0], tetraVerts[1], tetraVerts[2], tetraVerts[3]);
+
+			if(pointInside) {
+				FieldPtr->M += Magn;
+			}
+		}
 
 		// =====================================================================
 		// Scalar potential (phi) and vector potential (A) computation
@@ -1011,7 +1087,70 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 		}
 
 		if(FldKey.H_) FieldPtr->H += H_total;
-		if(FldKey.B_) FieldPtr->B += H_total;
+
+		// For B field, check if observation point is inside the hexahedron
+		// If inside, B = mu_0 * (H + M), so we add M to B
+		if(FldKey.B_)
+		{
+			FieldPtr->B += H_total;
+
+			// Check if observation point is inside the hexahedron using solid angle
+			// Sum solid angles from all face triangles (each quad split into 2 triangles)
+			// Inside: |total_solid_angle| = 4*pi
+			// Outside: |total_solid_angle| = 0
+			const double PI = 3.14159265358979323846;
+			const double FOUR_PI = 4.0 * PI;
+			const double tolerance = 0.1;
+
+			double total_solid_angle = 0.0;
+			for(int i = 0; i < nFaces; i++)
+			{
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+				const TVector3d& V3 = faceVertices[i][3];
+
+				// Triangle 1: V0, V1, V2
+				total_solid_angle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V1, V2);
+				// Triangle 2: V0, V2, V3
+				total_solid_angle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V2, V3);
+			}
+
+			// Check for both winding conventions (inward or outward normals)
+			bool pointInside = std::fabs(std::fabs(total_solid_angle) - FOUR_PI) < FOUR_PI * tolerance;
+			if(pointInside)
+			{
+				// B = mu_0 * (H + M), H_total is H, so add M to B
+				FieldPtr->B += Magn;
+			}
+		}
+
+		// M field (magnetization at observation point)
+		if(FldKey.M_)
+		{
+			// Check if observation point is inside the hexahedron using solid angle
+			const double PI = 3.14159265358979323846;
+			const double FOUR_PI = 4.0 * PI;
+			const double tolerance = 0.1;
+
+			double total_solid_angle = 0.0;
+			for(int i = 0; i < nFaces; i++)
+			{
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+				const TVector3d& V3 = faceVertices[i][3];
+
+				total_solid_angle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V1, V2);
+				total_solid_angle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V2, V3);
+			}
+
+			bool pointInside = std::fabs(std::fabs(total_solid_angle) - FOUR_PI) < FOUR_PI * tolerance;
+			if(pointInside)
+			{
+				FieldPtr->M += Magn;
+			}
+		}
 
 		// =====================================================================
 		// Scalar potential (phi) and vector potential (A) computation
@@ -1847,7 +1986,10 @@ void radTPolyhedron::B_comp_frJ(radTField* pField)
 		}
 	}
 
-	const double ConstForJ = 0.0001;
+	// Biot-Savart constant: B = (mu_0/4*pi) * integral(J x r / r^3) dV
+	// Radia now uses SI units (meters) internally, matching ELF.
+	// ConstForJ = mu_0/(4*pi) = 1e-7 H/m
+	const double ConstForJ = 1.0e-7;
 	TVector3d Jmain = J;
 	if((mLinTreat == 0) && (pJ_LinCoef != 0)) //treat as being relative 
 	{
@@ -2216,7 +2358,10 @@ void radTPolyhedron::B_intComp_frJ(radTField* pField)
 
 		vResLocIB += signZ_FaceNorm*vFaceContribIB;
 	}
-	const double ConstForJ = 0.0002;
+	// Biot-Savart constant: B = (mu_0/4*pi) * integral(J x r / r^3) dV
+	// Radia now uses SI units (meters) internally, matching ELF.
+	// Note: This uses 2e-7 (= 2 * mu_0/(4*pi)) for specific integral formula
+	const double ConstForJ = 2.0e-7;
 	vResLocIB *= ConstForJ;
 	TVector3d vResIB = trIntAxis2Ez.TrVectField_inv(vResLocIB);
 	

@@ -136,7 +136,7 @@ M_avg_z = np.mean([m[2] for m in M_list])
 
 **重要な注意事項:**
 
-1. **1-indexed**: Radia の `ObjPolyhdr` は **1-indexed** の面定義を要求します
+1. **1-indexed**: Radia の内部 `ObjPolyhdr` API は **1-indexed** の面定義を要求します (Python では `ObjHexahedron`/`ObjTetrahedron` を使用)
 2. **単位**: `rad.FldUnits('m')` を使用する場合、座標もメートル単位にする
 3. **ObjM の戻り値**: コンテナに対する `ObjM` は `[[center1, M1], [center2, M2], ...]` を返す
 

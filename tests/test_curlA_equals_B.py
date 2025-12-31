@@ -71,7 +71,7 @@ def radia_field_with_A(coords):
 	A = rad.Fld(magnet, 'a', [x, y, z])
 	return {'B': list(B), 'A': list(A)}
 
-bg_field = rad.ObjBckgCF(radia_field_with_A)
+bg_field = rad.ObjBckg(radia_field_with_A)
 print(f"  Background field ID: {bg_field}")
 
 # ============================================================================
