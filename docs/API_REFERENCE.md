@@ -2,8 +2,8 @@
 
 Complete reference for Radia Python API.
 
-**Version**: 1.3.17
-**Date**: 2025-12-30
+**Version**: 1.4.2
+**Date**: 2025-12-31
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
 ---
@@ -558,13 +558,22 @@ field = rad.Fld(obj, component, point)
 | `'bx'`, `'by'`, `'bz'`, `'b'` | Magnetic flux density B (T) |
 | `'hx'`, `'hy'`, `'hz'`, `'h'` | Magnetic field H (A/m) |
 | `'ax'`, `'ay'`, `'az'`, `'a'` | Vector potential A (T*m) |
+| `'p'`, `'phi'` | Scalar potential Phi (A) |
 | `'mx'`, `'my'`, `'mz'`, `'m'` | Magnetization M |
 
 ```python
-B = rad.Fld(magnet, 'b', [0, 0, 0.1])  # B vector at point
+B = rad.Fld(magnet, 'b', [0, 0, 0.1])    # B vector at point
 Bz = rad.Fld(magnet, 'bz', [0, 0, 0.1])  # Bz component
-H = rad.Fld(magnet, 'h', [0, 0, 0.1])  # H vector at point
+H = rad.Fld(magnet, 'h', [0, 0, 0.1])    # H vector at point
+A = rad.Fld(magnet, 'a', [0, 0, 0.1])    # Vector potential A
+Phi = rad.Fld(magnet, 'p', [0, 0, 0.1])  # Scalar potential Phi
 ```
+
+**Potential Field Notes (v1.4.2+)**:
+- **A (Vector Potential)**: Uses face-based integration `A = (1/4pi) * M x BufVect`
+- **Phi (Scalar Potential)**: Uses face-based integration `Phi = (1/4pi) * M . BufVect`
+- Both A and Phi are computed accurately for ObjHexahedron/ObjTetrahedron
+- Maxwell relations verified: `curl(A) ∝ B`, `-grad(Phi) ∝ H`
 
 ### FldBatch - Batch Field Computation (v1.3.16+)
 
@@ -609,8 +618,7 @@ Computes magnetic scalar potential phi_m at multiple points.
 |---------|-------------|
 | `phi` | List of scalar values (A) |
 
-**Limitation**: Currently returns zero for ObjPolyhdr elements (MSC method).
-For single-point phi, use `rad.Fld(obj, 'phi', point)` instead.
+**Note**: Uses face-based integration for accurate scalar potential computation (v1.4.2+).
 
 ### FldA - Vector Potential Batch (v1.3.16+)
 
@@ -629,8 +637,7 @@ Computes magnetic vector potential A at multiple points.
 |---------|-------------|
 | `A` | List of [Ax, Ay, Az] values (T*m) |
 
-**Limitation**: Currently returns zero for ObjPolyhdr elements (MSC method).
-For single-point A, use `rad.Fld(obj, 'a', point)` instead.
+**Note**: Uses face-based integration for accurate vector potential computation (v1.4.2+).
 
 ### ClassifyPoints - Point Classification (v1.3.16+)
 
