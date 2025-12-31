@@ -14,7 +14,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
 import radia as rd
-from netgen_mesh_import import HEX_FACES
 
 print("=" * 70)
 print("ObjBckgCF B→H Conversion Test")
@@ -79,7 +78,7 @@ vertices = [
 	[-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
 	[-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
 ]
-cube = rd.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+cube = rd.ObjHexahedron(vertices, [0, 0, 0])
 # Use MatSatIsoFrm for isotropic saturable material
 # For soft iron-like material with high permeability
 mat = rd.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])

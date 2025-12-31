@@ -127,20 +127,19 @@ def create_radia_hexahedron(vertices, magnetization=None):
 
     Notes
     -----
-    Face topology uses HEX_FACES constant (see module level definition)
+    Uses rad.ObjHexahedron() which auto-generates face topology internally.
     """
     if magnetization is None:
         magnetization = [0, 0, 0]
 
     try:
-        # Create polyhedron with hexahedral faces
-        poly_id = rad.ObjPolyhdr(vertices, HEX_FACES, magnetization)
+        # Create hexahedron using new API (auto-generates faces)
+        poly_id = rad.ObjHexahedron(vertices, magnetization)
         return poly_id
     except Exception as e:
         raise RuntimeError(
             f"Failed to create Radia hexahedron: {e}\n"
-            f"Vertices: {vertices}\n"
-            f"Faces: {HEX_FACES}"
+            f"Vertices: {vertices}"
         )
 
 
@@ -169,12 +168,7 @@ def create_radia_tetrahedron(vertices, magnetization=None):
 
     Notes
     -----
-    Face topology (1-indexed):
-        [1, 3, 2],  # Bottom face
-        [1, 2, 4],  # Front face
-        [1, 4, 3],  # Left face
-        [2, 3, 4]   # Back face
-
+    Uses rad.ObjTetrahedron() which auto-generates face topology internally.
     Tetrahedra are always convex, making them ideal for Radia polyhedra.
     """
     if magnetization is None:
@@ -184,7 +178,7 @@ def create_radia_tetrahedron(vertices, magnetization=None):
         raise ValueError(f"Tetrahedron must have exactly 4 vertices, got {len(vertices)}")
 
     try:
-        obj_id = rad.ObjPolyhdr(vertices, TETRA_FACES, magnetization)
+        obj_id = rad.ObjTetrahedron(vertices, magnetization)
         return obj_id
     except Exception as e:
         raise RuntimeError(f"Failed to create Radia tetrahedron: {e}")

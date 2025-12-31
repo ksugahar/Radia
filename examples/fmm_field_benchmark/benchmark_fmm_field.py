@@ -56,9 +56,6 @@ BH_DATA = [
     [1000000.0, MU_R * MU_0 * 1000000.0]
 ]
 
-# Face definitions
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
-TETRA_FACES = [[1,2,3], [1,4,2], [2,4,3], [3,4,1]]
 
 
 def get_memory_mb():
@@ -96,7 +93,7 @@ def create_hex_mesh(n_div, size=1.0):
                     [x0, y0 + dx, z0 + dx]
                 ]
 
-                elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
                 elements.append(elem)
 
     return elements
@@ -124,7 +121,7 @@ def create_tetra_mesh(maxh, size=1.0):
     for el in mesh.Elements3D():
         node_ids = [v.nr for v in el.vertices]
         verts = [list(vertices_np[i]) for i in node_ids]
-        elem = rad.ObjPolyhdr(verts, TETRA_FACES, [0, 0, 0])
+        elem = rad.ObjTetrahedron(verts, [0, 0, 0])
         elements.append(elem)
 
     return elements

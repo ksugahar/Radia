@@ -28,6 +28,7 @@
 #include "auxparse.h"
 #include "rad_poly_analytical.h"
 #include "radentry.h"  // For RadSolverGetTetraMethod()
+#include "rad_point_classify.h"  // For solid angle point-in-polyhedron test
 #include "rad_constants.h"  // Unified mathematical/physical constants
 
 //-------------------------------------------------------------------------
@@ -732,7 +733,8 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 		double elemSizeSq = 0.0;
 		for(int i = 0; i < AmOfFaces; i++)
 		{
-			radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+			// Use const reference to avoid radTHandle copy (important for OpenMP thread safety)
+			const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[i];
 			radTPolygon* pgn = hpt.PgnHndl.rep;
 			radTrans* tr = hpt.TransHndl.rep;
 			TVector3d faceCtr = tr->TrPoint(TVector3d(pgn->CentrPoint.x, pgn->CentrPoint.y, pgn->CoordZ));
@@ -752,10 +754,14 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 
 	// Get face vertices in GLOBAL coordinates
 	// For a tetrahedron, we have 4 triangular faces
-	std::vector<std::array<TVector3d, 3>> faceVertices(AmOfFaces);
-	for(int i = 0; i < AmOfFaces; i++)
+	// Use fixed-size array to avoid heap allocation (important for OpenMP thread safety)
+	std::array<std::array<TVector3d, 3>, 4> faceVertices;  // Max 4 faces for tetrahedron
+	int nFaces = (AmOfFaces <= 4) ? AmOfFaces : 4;
+	for(int i = 0; i < nFaces; i++)
 	{
-		radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+		// Use const reference to avoid radTHandle copy (which modifies reference count)
+		// This is critical for OpenMP thread safety
+		const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[i];
 		radTPolygon* pgn = hpt.PgnHndl.rep;
 		radTrans* tr = hpt.TransHndl.rep;
 
@@ -791,7 +797,7 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 
 		// Sum contributions from all faces
 		// Note: CentrPoint is the element centroid, used for outward normal check
-		for(int i = 0; i < AmOfFaces; i++)
+		for(int i = 0; i < nFaces; i++)
 		{
 			const TVector3d& V0 = faceVertices[i][0];
 			const TVector3d& V1 = faceVertices[i][1];
@@ -826,7 +832,7 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 		TVector3d H_total(0., 0., 0.);
 
 		// Note: CentrPoint is the element centroid, used for outward normal check
-		for(int i = 0; i < AmOfFaces; i++)
+		for(int i = 0; i < nFaces; i++)
 		{
 			const TVector3d& V0 = faceVertices[i][0];
 			const TVector3d& V1 = faceVertices[i][1];
@@ -841,82 +847,54 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 		// =====================================================================
 		// Scalar potential (phi) and vector potential (A) computation
 		// =====================================================================
-		// Uses dipole approximation: m = M * V (dipole moment = magnetization * volume)
+		// Uses FACE INTEGRATION (not dipole approximation)
 		//
-		// Scalar potential: phi_m(r) = (1/4pi) * (m . r) / |r|^3
-		//                   H = -grad(phi_m)
-		//
-		// Vector potential: A(r) = (mu_0/4pi) * (m x r) / |r|^3
+		// Vector potential: A(r) = (mu_0/4pi) * integral_S (M x n) / |r-r'| dS
 		//                   B = curl(A)
 		//
-		// Reference: ELF_MAGIC implementation (src/dll/m_fmm3d.f90)
+		// Each triangular face contributes to the total vector potential.
+		//
+		// NOTE: On symmetry axes, the face-based integration may give A=0 due to
+		// symmetric cancellation. This differs from ObjRecMag which uses an
+		// 8-corner BufVect formula that doesn't cancel. This is mathematically
+		// correct behavior for the face-based approach.
 		// =====================================================================
-		if(FldKey.Phi_ || FldKey.A_)
+		if(FldKey.A_)
 		{
-			// ---------------------------------------------------------------
-			// Unit conversion: Radia internal units are mm, formulas require m
-			// ---------------------------------------------------------------
-			// Radia internal: coordinates in mm, magnetization M in A/m
-			// Formula: phi = (1/4pi) * (m . r) / r^3, where m = M * V
-			// For correct SI units: V must be in m^3, r in m
-			//
-			// Conversion factor: 1 mm = 1e-3 m
-			// - V (mm^3 -> m^3): multiply by (1e-3)^3 = 1e-9
-			// - r (mm -> m): multiply by 1e-3
-			// - r^3 (mm^3 -> m^3): multiply by 1e-9
-			// - m*r (A*m^2 * m = A*m^3) / r^3 (m^3) = A (correct units)
-			//
-			// Net effect for phi: (m_mm * r_mm) / r_mm^3
-			//   = (M * V_mm * r_mm) / r_mm^3
-			//   = (M * V_m * 1e9 * r_m * 1e3) / (r_m^3 * 1e9)
-			//   = (M * V_m * r_m) / r_m^3 * 1e3
-			// So we need to divide by 1e3 to get correct SI units.
-			// ---------------------------------------------------------------
-			constexpr double MM_TO_M = 1e-3;  // mm to m conversion
-			constexpr double MM3_TO_M3 = MM_TO_M * MM_TO_M * MM_TO_M;  // 1e-9
+			TVector3d A_total(0., 0., 0.);
 
-			// Compute dipole moment: m = M * V (convert V from mm^3 to m^3)
-			double V = Volume() * MM3_TO_M3;  // V in m^3
-			TVector3d dipole_mom;
-			dipole_mom.x = Magn.x * V;
-			dipole_mom.y = Magn.y * V;
-			dipole_mom.z = Magn.z * V;
-
-			// Distance vector: r = obs - source (convert from mm to m)
-			TVector3d r_vec;
-			r_vec.x = (obsPoint.x - CentrPoint.x) * MM_TO_M;
-			r_vec.y = (obsPoint.y - CentrPoint.y) * MM_TO_M;
-			r_vec.z = (obsPoint.z - CentrPoint.z) * MM_TO_M;
-			double r_mag_sq = r_vec.x*r_vec.x + r_vec.y*r_vec.y + r_vec.z*r_vec.z;
-			double r_mag = sqrt(r_mag_sq);
-
-			if(r_mag > RadConst::EPSILON)
+			// Sum contributions from all triangular faces
+			for(int i = 0; i < nFaces; i++)
 			{
-				double r_mag3 = r_mag * r_mag_sq;
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
 
-				// Scalar potential: phi = (1/4pi) * (m . r) / r^3
-				// Units: [A*m^2 * m / m^3] = [A] (correct)
-				if(FldKey.Phi_)
-				{
-					double m_dot_r = dipole_mom.x*r_vec.x + dipole_mom.y*r_vec.y + dipole_mom.z*r_vec.z;
-					FieldPtr->Phi += RadConst::INV_FOUR_PI * m_dot_r / r_mag3;
-				}
-
-				// Vector potential: A = (mu_0/4pi) * (m x r) / r^3
-				// Units: [H/m * A*m^2 * m / m^3] = [H*A/m] = [T*m] (correct)
-				if(FldKey.A_)
-				{
-					TVector3d m_cross_r;
-					m_cross_r.x = dipole_mom.y * r_vec.z - dipole_mom.z * r_vec.y;
-					m_cross_r.y = dipole_mom.z * r_vec.x - dipole_mom.x * r_vec.z;
-					m_cross_r.z = dipole_mom.x * r_vec.y - dipole_mom.y * r_vec.x;
-
-					double factor = RadConst::MU_0_OVER_FOUR_PI / r_mag3;
-					FieldPtr->A.x += factor * m_cross_r.x;
-					FieldPtr->A.y += factor * m_cross_r.y;
-					FieldPtr->A.z += factor * m_cross_r.z;
-				}
+				A_total += RadVectorPotentialFromTriangleFaceGlobal(
+					V0, V1, V2, Magn, obsPoint, CentrPoint);
 			}
+
+			FieldPtr->A += A_total;
+		}
+
+		// Scalar potential (phi) using face-based integration (no dipole approximation)
+		// Phi = (1/4pi) * M dot BufVect, where BufVect = sum(n * integral(1/|r-r'|) dS)
+		if(FldKey.Phi_)
+		{
+			double Phi_total = 0.0;
+
+			// Sum contributions from all triangular faces
+			for(int i = 0; i < nFaces; i++)
+			{
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+
+				Phi_total += RadScalarPotentialFromTriangleFaceGlobal(
+					V0, V1, V2, Magn, obsPoint, CentrPoint);
+			}
+
+			FieldPtr->Phi += Phi_total;
 		}
 	}
 }
@@ -947,10 +925,14 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 
 	// Get face vertices in GLOBAL coordinates
 	// For a hexahedron, we have 6 quadrilateral faces (4 vertices each)
-	std::vector<std::array<TVector3d, 4>> faceVertices(AmOfFaces);
-	for(int i = 0; i < AmOfFaces; i++)
+	// Use fixed-size array to avoid heap allocation (better for OpenMP)
+	std::array<std::array<TVector3d, 4>, 8> faceVertices;  // Max 8 faces
+	int nFaces = (AmOfFaces <= 8) ? AmOfFaces : 8;
+	for(int i = 0; i < nFaces; i++)
 	{
-		radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+		// Use const reference to avoid radTHandle copy (which modifies reference count)
+		// This is critical for OpenMP thread safety
+		const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[i];
 		radTPolygon* pgn = hpt.PgnHndl.rep;
 		radTrans* tr = hpt.TransHndl.rep;
 
@@ -979,7 +961,7 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 		TVector3d H_from_Mz(0., 0., 0.);
 
 		// Sum contributions from all faces (split each quad into 2 triangles)
-		for(int i = 0; i < AmOfFaces; i++)
+		for(int i = 0; i < nFaces; i++)
 		{
 			const TVector3d& V0 = faceVertices[i][0];
 			const TVector3d& V1 = faceVertices[i][1];
@@ -1015,7 +997,7 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 		// =====================================================================
 		TVector3d H_total(0., 0., 0.);
 
-		for(int i = 0; i < AmOfFaces; i++)
+		for(int i = 0; i < nFaces; i++)
 		{
 			const TVector3d& V0 = faceVertices[i][0];
 			const TVector3d& V1 = faceVertices[i][1];
@@ -1034,65 +1016,63 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 		// =====================================================================
 		// Scalar potential (phi) and vector potential (A) computation
 		// =====================================================================
-		// Uses dipole approximation: m = M * V (dipole moment = magnetization * volume)
+		// Uses FACE INTEGRATION (not dipole approximation)
 		//
-		// Scalar potential: phi_m(r) = (1/4pi) * (m . r) / |r|^3
-		//                   H = -grad(phi_m)
-		//
-		// Vector potential: A(r) = (mu_0/4pi) * (m x r) / |r|^3
+		// Vector potential: A(r) = (mu_0/4pi) * integral_S (M x n) / |r-r'| dS
 		//                   B = curl(A)
 		//
-		// Reference: ELF_MAGIC implementation (src/dll/m_fmm3d.f90)
-		// Note: ELF uses meters internally, Radia uses millimeters
+		// Each quadrilateral face is split into 2 triangles for integration.
+		//
+		// NOTE: On symmetry axes, the face-based integration may give A=0 due to
+		// symmetric cancellation. This differs from ObjRecMag which uses an
+		// 8-corner BufVect formula that doesn't cancel. For rectangular blocks,
+		// use ObjRecMag instead for consistent A field on symmetry axes.
 		// =====================================================================
-		if(FldKey.Phi_ || FldKey.A_)
+		if(FldKey.A_)
 		{
-			// Unit conversion: Radia internal units are mm, formulas require m
-			constexpr double MM_TO_M = 1e-3;  // mm to m conversion
-			constexpr double MM3_TO_M3 = MM_TO_M * MM_TO_M * MM_TO_M;  // 1e-9
+			TVector3d A_total(0., 0., 0.);
 
-			// Compute dipole moment: m = M * V (convert V from mm^3 to m^3)
-			double V = Volume() * MM3_TO_M3;  // V in m^3
-			TVector3d dipole_mom;
-			dipole_mom.x = Magn.x * V;
-			dipole_mom.y = Magn.y * V;
-			dipole_mom.z = Magn.z * V;
-
-			// Distance vector: r = obs - source (convert from mm to m)
-			TVector3d r_vec;
-			r_vec.x = (obsPoint.x - CentrPoint.x) * MM_TO_M;
-			r_vec.y = (obsPoint.y - CentrPoint.y) * MM_TO_M;
-			r_vec.z = (obsPoint.z - CentrPoint.z) * MM_TO_M;
-			double r_mag_sq = r_vec.x*r_vec.x + r_vec.y*r_vec.y + r_vec.z*r_vec.z;
-			double r_mag = sqrt(r_mag_sq);
-
-			if(r_mag > RadConst::EPSILON)
+			for(int i = 0; i < nFaces; i++)
 			{
-				double r_mag3 = r_mag * r_mag_sq;
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+				const TVector3d& V3 = faceVertices[i][3];
 
-				// Scalar potential: phi = (1/4pi) * (m . r) / r^3
-				// Units: [A*m^2 * m / m^3] = [A] (correct)
-				if(FldKey.Phi_)
-				{
-					double m_dot_r = dipole_mom.x*r_vec.x + dipole_mom.y*r_vec.y + dipole_mom.z*r_vec.z;
-					FieldPtr->Phi += RadConst::INV_FOUR_PI * m_dot_r / r_mag3;
-				}
-
-				// Vector potential: A = (mu_0/4pi) * (m x r) / r^3
-				// Units: [H/m * A*m^2 * m / m^3] = [H*A/m] = [T*m] (correct)
-				if(FldKey.A_)
-				{
-					TVector3d m_cross_r;
-					m_cross_r.x = dipole_mom.y * r_vec.z - dipole_mom.z * r_vec.y;
-					m_cross_r.y = dipole_mom.z * r_vec.x - dipole_mom.x * r_vec.z;
-					m_cross_r.z = dipole_mom.x * r_vec.y - dipole_mom.y * r_vec.x;
-
-					double factor = RadConst::MU_0_OVER_FOUR_PI / r_mag3;
-					FieldPtr->A.x += factor * m_cross_r.x;
-					FieldPtr->A.y += factor * m_cross_r.y;
-					FieldPtr->A.z += factor * m_cross_r.z;
-				}
+				// Triangle 1: V0, V1, V2
+				A_total += RadVectorPotentialFromTriangleFaceGlobal(
+					V0, V1, V2, Magn, obsPoint, CentrPoint);
+				// Triangle 2: V0, V2, V3
+				A_total += RadVectorPotentialFromTriangleFaceGlobal(
+					V0, V2, V3, Magn, obsPoint, CentrPoint);
 			}
+
+			FieldPtr->A += A_total;
+		}
+
+		// Scalar potential (phi) using face-based integration (no dipole approximation)
+		// Phi = (1/4pi) * M dot BufVect, where BufVect = sum(n * integral(1/|r-r'|) dS)
+		// Each quad face is split into 2 triangles for integration.
+		if(FldKey.Phi_)
+		{
+			double Phi_total = 0.0;
+
+			for(int i = 0; i < nFaces; i++)
+			{
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+				const TVector3d& V3 = faceVertices[i][3];
+
+				// Triangle 1: V0, V1, V2
+				Phi_total += RadScalarPotentialFromTriangleFaceGlobal(
+					V0, V1, V2, Magn, obsPoint, CentrPoint);
+				// Triangle 2: V0, V2, V3
+				Phi_total += RadScalarPotentialFromTriangleFaceGlobal(
+					V0, V2, V3, Magn, obsPoint, CentrPoint);
+			}
+
+			FieldPtr->Phi += Phi_total;
 		}
 	}
 }

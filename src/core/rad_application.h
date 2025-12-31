@@ -390,6 +390,10 @@ public:
 
 	int ProcMPI(const char* OnOrOff, double* arData=0, long* pnData=0, long* pRankFrom=0, long* pRankTo=0); //OC19032020
 	//int ProcMPI(const char* OnOrOff);
+
+	// Get element handle by key (for FMM dipole collection)
+	// Returns true if element found, false otherwise
+	bool UnsafeGetElemByKey(int ElemKey, radThg& outHandle);
 };
 
 //-------------------------------------------------------------------------

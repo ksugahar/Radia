@@ -112,6 +112,61 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	const TVector3d& obsPoint,
 	const TVector3d& elemCentroid);
 
+/**
+ * Compute vector potential A from a triangular face using face integration
+ *
+ * This function computes the vector potential from a uniformly magnetized
+ * volume element using face integration (NOT dipole approximation).
+ *
+ * Formula:
+ *   A(r) = (mu_0 / 4*pi) * integral_S (M x n) / |r-r'| dS
+ *
+ * The integral over each face uses the Wilton et al. formula with edge
+ * logarithms and solid angle terms.
+ *
+ * @param V0, V1, V2    Triangle vertices in GLOBAL 3D coordinates
+ * @param M             Magnetization vector (in global coordinates)
+ * @param obsPoint      Observation point in GLOBAL 3D coordinates
+ * @param elemCentroid  Element centroid for outward normal check
+ * @return              A field at observation point (in global coordinates)
+ */
+TVector3d RadVectorPotentialFromTriangleFaceGlobal(
+	const TVector3d& V0,
+	const TVector3d& V1,
+	const TVector3d& V2,
+	const TVector3d& M,
+	const TVector3d& obsPoint,
+	const TVector3d& elemCentroid);
+
+/**
+ * Compute scalar potential Phi from a triangular face using face integration
+ *
+ * This function computes the scalar potential from a uniformly magnetized
+ * volume element using face integration (NOT dipole approximation).
+ *
+ * Formula:
+ *   Phi(r) = (1 / 4*pi) * integral_S (M dot n) / |r-r'| dS
+ *          = (1 / 4*pi) * M dot BufVect
+ *
+ * where BufVect = n * integral_face(1/|r-r'|) dS
+ *
+ * The integral over each face uses the Wilton et al. formula with edge
+ * logarithms and solid angle terms.
+ *
+ * @param V0, V1, V2    Triangle vertices in GLOBAL 3D coordinates
+ * @param M             Magnetization vector (in global coordinates)
+ * @param obsPoint      Observation point in GLOBAL 3D coordinates
+ * @param elemCentroid  Element centroid for outward normal check
+ * @return              Phi field at observation point (scalar)
+ */
+double RadScalarPotentialFromTriangleFaceGlobal(
+	const TVector3d& V0,
+	const TVector3d& V1,
+	const TVector3d& V2,
+	const TVector3d& M,
+	const TVector3d& obsPoint,
+	const TVector3d& elemCentroid);
+
 //-------------------------------------------------------------------------
 // ELF-style optimized functions for HACApK 3DOF tetrahedra
 // These functions compute the full 3x3 demagnetization tensor in one pass

@@ -31,8 +31,6 @@ except ImportError:
 import numpy as np
 from time import perf_counter
 
-# Import HEX_FACES for ObjPolyhdr hexahedra
-from netgen_mesh_import import HEX_FACES
 
 print("=" * 80)
 print("GridFunction.Set() Performance Benchmark")
@@ -116,7 +114,7 @@ for radia_cfg in radia_configs:
 					[cx - hdx, cy + hdy, cz + hdz],  # vertex 8
 				]
 
-				elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, mag_value])
+				elem = rad.ObjHexahedron(vertices, [0, 0, mag_value])
 				elements.append(elem)
 
 	magnet = rad.ObjCnt(elements)

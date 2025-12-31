@@ -122,6 +122,60 @@ void radTFlmLinCur::B_comp(radTField* FieldPtr)
 		TVector3d BufA(ComMult, 0., 0.);
 		FieldPtr->A += NativeRotation.TrVectPoten(BufA);
 	}
+	if(FieldPtr->FieldKey.Phi_)
+	{
+		// Magnetic scalar potential from a line current segment
+		// For a line current along x from x=0 to x=L (in local coordinates),
+		// the solid angle subtended at point (x0, y0, z0) is computed as:
+		//
+		// The scalar potential of a finite line segment is:
+		//   Phi = (I / 4*pi) * Omega
+		// where Omega is the "solid angle" of the ribbon connecting the
+		// line segment to the observation point.
+		//
+		// For numerical stability, we use:
+		//   Phi = (I / 4*pi) * [atan2(y*z, r0*|x0|) - atan2(y*z, r1*|x1|)]
+		//       when the point is not on the current axis
+		//
+		// Reference: J.D. Jackson, "Classical Electrodynamics", 3rd ed.
+		//
+		// Note: In the local frame, the wire is along x-axis from x=0 to x=Length.
+		// V0 = StartPoint - P gives vector from P to StartPoint (x=0).
+		// V0.x is negative of x-coordinate of P relative to start.
+		// So x0 = -V0.x (distance from P to start along x)
+		// x1 = -(V0.x + Length) = -x1_local
+
+		const double Pi = 3.141592653589793238;
+		double rho2 = y0y0_p_z0z0;  // y^2 + z^2
+
+		if(rho2 > SmallPositive) {
+			// General case: point is not on the wire axis
+			// Use the solid angle formula for a line segment
+			//
+			// The solid angle subtended by a line segment from point A to B
+			// at observation point P is related to the angles at P.
+			//
+			// For a wire along x-axis, the scalar potential is:
+			//   Phi = (I / 4*pi) * [atan(x0*y / (rho*r0)) - atan(x1*y / (rho*r1))]
+			// where rho = sqrt(y^2 + z^2), r0 = |P - Start|, r1 = |P - End|
+			//
+			// Simplified form using signed angles:
+			double x0 = -V0.x;  // x-coordinate relative to start point
+			double x1_loc = x0 - Length;  // x-coordinate relative to end point
+			double rho = sqrt(rho2);
+
+			// Angles: atan2(y, x) gives angle from x-axis
+			// For solid angle, we need the angle in the perpendicular plane
+			double angle0 = atan2(V0.y * x0, rho * SqRt0);
+			double angle1 = atan2(V0.y * x1_loc, rho * SqRt1);
+
+			double Omega = angle0 - angle1;
+			double Phi = I * Omega / (4.0 * Pi);
+			FieldPtr->Phi += Phi;
+		}
+		// If on the wire axis (rho = 0), the potential is undefined/multivalued
+		// We leave Phi unchanged (effectively 0 contribution)
+	}
 }
 
 //-------------------------------------------------------------------------

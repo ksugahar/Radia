@@ -165,6 +165,72 @@ rad.Solve(container, 0.001, 100, 0)  # Method 0 = LU
 
 ---
 
+## Field Calculation Methods: Surface Current vs Surface Charge
+
+### ObjRecMag - Surface Current Model (Rectangular Blocks Only)
+
+`ObjRecMag` uses the **surface current approximation** for field calculations:
+
+- **Applicable to**: Rectangular blocks (parallelepipeds) only
+- **B/H field**: 8-corner analytical formula with arctangent and logarithm integrals
+- **A field (vector potential)**: Uses unified BufVect formula: `A = (1/4π) * M × BufVect`
+- **Phi field (scalar potential)**: Uses `Phi = (1/4π) * M · BufVect`
+
+**Key advantage**: The 8-corner BufVect formula is computationally efficient and does NOT cancel on symmetry axes.
+
+```python
+import radia as rad
+rad.FldUnits('m')
+
+# Create rectangular permanent magnet
+rec_mag = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 954930])
+
+# All field types work correctly
+B = rad.Fld(rec_mag, 'b', [0.05, 0, 0])  # Magnetic field
+A = rad.Fld(rec_mag, 'a', [0, 0, 0.05])  # Vector potential (non-zero on axis)
+```
+
+### ObjHexahedron/ObjPolyhdr - Surface Charge Model (General Polyhedra)
+
+`ObjHexahedron` (created via `ObjPolyhdr` with 8 vertices) uses **surface charge integration**:
+
+- **Applicable to**: Arbitrary hexahedra (6 quadrilateral faces) and tetrahedra (4 triangular faces)
+- **B/H field**: Face-based solid angle integration: `H = (1/4π) * Σ σ_i * Ω_i`
+- **A field (vector potential)**: Face-based integration: `A = (1/4π) * Σ (M × n_i) * I_i`
+
+**Limitation**: On symmetry axes, face-based A integration gives A=0 due to symmetric cancellation. This is mathematically correct for the face-based formula but differs from ObjRecMag.
+
+```python
+import radia as rad
+rad.FldUnits('m')
+
+# Create hexahedral magnet (arbitrary shape)
+vertices = [
+    [-0.02, -0.02, -0.03], [0.02, -0.02, -0.03],
+    [0.02, 0.02, -0.03], [-0.02, 0.02, -0.03],
+    [-0.02, -0.02, 0.03], [0.02, -0.02, 0.03],
+    [0.02, 0.02, 0.03], [-0.02, 0.02, 0.03],
+]
+hex_mag = rad.ObjHexahedron(vertices, [0, 0, 954930])
+
+# B/H fields work correctly everywhere
+B = rad.Fld(hex_mag, 'b', [0.05, 0, 0])
+
+# A field: May be zero on symmetry axes (mathematical cancellation)
+A = rad.Fld(hex_mag, 'a', [0, 0, 0.05])  # Could be ~0 on z-axis
+```
+
+### API Visibility Policy (2025-12-31)
+
+**ObjPolyhdr is NOT exposed to users** as a public API. Users should use:
+- `ObjRecMag(center, dimensions, magnetization)` for rectangular magnets
+- `ObjHexahedron(vertices, magnetization)` for arbitrary hexahedra
+- Mesh import functions (`netgen_mesh_to_radia`, `create_radia_from_nastran`) for complex geometries
+
+The internal `ObjPolyhdr` function is used by mesh import utilities but is not documented as a user-facing API.
+
+---
+
 ## Memory Management
 
 ### Exception Safety
@@ -246,24 +312,35 @@ magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 954930])  # meters, A/m
 - X **Avoid**: Direct comparison of `rad.Fld()` inside magnets
 - OK **Use**: Large magnet with small mesh region (field approximately uniform)
 
-### Vector Potential A Field Limitation (2025-12-27)
+### Vector Potential A Field Implementation (2025-12-31)
 
-**Important Limitation**: `rad.Fld(obj, 'a', point)` returns `[0, 0, 0]` for `ObjPolyhdr` (MSC method).
+**Status**: Vector potential A is now **IMPLEMENTED** for all ObjPolyhdr elements (tetrahedra and hexahedra).
 
-**Current Status**:
-- Vector potential A computation is **NOT implemented** for ObjPolyhdr/MSC elements
-- B and H field computation works correctly for all element types
-- A field returns zero for both hexahedral and tetrahedral ObjPolyhdr elements
+**Implementation Details**:
+- Uses **face integration** (not dipole approximation) for accurate results
+- Formula: `A = (1/4pi) * M x BufVect` where BufVect is the surface integral vector
+- Matches the analytical formula used in radTRecMag for rectangular blocks
+- Extended to arbitrary triangular and quadrilateral faces using the Wilton et al. formula
 
-**Affected Scripts**:
-- `examples/ngsolve_integration/verify_curl_A_equals_B/` - Currently fails (curl(A) = 0)
+**Usage**:
+```python
+import radia as rad
+rad.FldUnits('m')
 
-**Future Implementation**:
-The vector potential A can be computed from magnetization M using:
+# Create hexahedral magnet
+vertices = [[-0.02,-0.02,-0.03], [0.02,-0.02,-0.03], ...]  # 8 vertices
+magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])
+
+# Get vector potential A at a point
+A = rad.Fld(magnet, 'a', [0.03, 0.02, 0.05])  # Returns [Ax, Ay, Az]
 ```
-A(r) = (mu_0 / 4*pi) * integral( M(r') x (r - r') / |r - r'|^3 ) dV'
-```
-This requires volume integration over the magnetized element.
+
+**Unit System Note**:
+Radia uses internal units where A = (1/4pi) * (M x BufVect) without the mu_0 factor.
+In SI units: A_SI = mu_0 * A_Radia, so curl(A_SI) = B.
+
+**Verification Script**:
+- `examples/ngsolve_integration/verify_curl_A_equals_B/` - Now works correctly
 
 ---
 

@@ -683,6 +683,356 @@ TVector3d RadFieldFromTriangleFaceWithBasis(
 	return result;
 }
 
+//-------------------------------------------------------------------------
+/**
+ * Compute vector potential A from a triangular face using face integration
+ *
+ * This function computes the vector potential from a uniformly magnetized
+ * volume element using face integration (NOT dipole approximation).
+ *
+ * Formula (matching radTRecMag::B_comp):
+ *   A(r) = (1/4pi) * M x BufVect
+ *
+ * where BufVect = integral_S n/|r-r'| dS is the surface integral vector.
+ *
+ * Note: This follows Radia's internal convention which does NOT include
+ * the mu_0 factor. The relation B = curl(A) uses Radia's internal units.
+ *
+ * @param V0, V1, V2     Triangle vertices in GLOBAL 3D coordinates
+ * @param M              Magnetization vector (in global coordinates)
+ * @param obsPoint       Observation point in GLOBAL 3D coordinates
+ * @param elemCentroid   Element centroid for outward normal check
+ * @return               A field at observation point (in global coordinates)
+ */
+TVector3d RadVectorPotentialFromTriangleFaceGlobal(
+	const TVector3d& V0,
+	const TVector3d& V1,
+	const TVector3d& V2,
+	const TVector3d& M,
+	const TVector3d& obsPoint,
+	const TVector3d& elemCentroid)
+{
+	const double EPS = 1.0e-15;
+	const double dConst2 = RadConst::INV_FOUR_PI;  // 1/(4*pi) - matching radTRecMag
+
+	// Compute face edges
+	TVector3d e1 = V1 - V0;
+	TVector3d e2 = V2 - V0;
+
+	// Compute face normal from cross product
+	TVector3d normal;
+	normal.x = e1.y * e2.z - e1.z * e2.y;
+	normal.y = e1.z * e2.x - e1.x * e2.z;
+	normal.z = e1.x * e2.y - e1.y * e2.x;
+
+	double normalLen = std::sqrt(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z);
+	if(normalLen < EPS) {
+		return TVector3d(0., 0., 0.);  // Degenerate triangle
+	}
+
+	// Normalize
+	normal.x /= normalLen;
+	normal.y /= normalLen;
+	normal.z /= normalLen;
+
+	// Check if normal points outward
+	TVector3d faceCenter;
+	faceCenter.x = (V0.x + V1.x + V2.x) / 3.0;
+	faceCenter.y = (V0.y + V1.y + V2.y) / 3.0;
+	faceCenter.z = (V0.z + V1.z + V2.z) / 3.0;
+
+	TVector3d outwardVec = faceCenter - elemCentroid;
+	double dotProduct = normal.x * outwardVec.x + normal.y * outwardVec.y + normal.z * outwardVec.z;
+	double signFactor = (dotProduct < 0.0) ? -1.0 : 1.0;
+
+	// Build local coordinate system using face edge (same as FieldFromChargedTriangle)
+	// basis_a = e1 normalized (local X)
+	// basis_c = face normal (local Z)
+	// basis_b = basis_c x basis_a (local Y)
+
+	TVector3d basis_c = normal;
+	if(signFactor < 0.0) {
+		// Flip normal to point outward
+		basis_c.x = -basis_c.x;
+		basis_c.y = -basis_c.y;
+		basis_c.z = -basis_c.z;
+	}
+
+	TVector3d basis_a = e1;
+	double aLen = std::sqrt(basis_a.x*basis_a.x + basis_a.y*basis_a.y + basis_a.z*basis_a.z);
+	if(aLen < EPS) return TVector3d(0., 0., 0.);
+	basis_a.x /= aLen; basis_a.y /= aLen; basis_a.z /= aLen;
+
+	TVector3d basis_b;
+	basis_b.x = basis_c.y * basis_a.z - basis_c.z * basis_a.y;
+	basis_b.y = basis_c.z * basis_a.x - basis_c.x * basis_a.z;
+	basis_b.z = basis_c.x * basis_a.y - basis_c.y * basis_a.x;
+	double bLen = std::sqrt(basis_b.x*basis_b.x + basis_b.y*basis_b.y + basis_b.z*basis_b.z);
+	if(bLen < EPS) return TVector3d(0., 0., 0.);
+	basis_b.x /= bLen; basis_b.y /= bLen; basis_b.z /= bLen;
+
+	TVector3d AA = basis_a;  // Local X
+	TVector3d BB = basis_b;  // Local Y
+	TVector3d CC = basis_c;  // Local Z (outward normal)
+
+	// Transform vertices to local 2D coordinates (V0 = origin)
+	double xy0_x = 0.0, xy0_y = 0.0;
+	double xy1_x = e1.x*AA.x + e1.y*AA.y + e1.z*AA.z;
+	double xy1_y = e1.x*BB.x + e1.y*BB.y + e1.z*BB.z;
+	double xy2_x = e2.x*AA.x + e2.y*AA.y + e2.z*AA.z;
+	double xy2_y = e2.x*BB.x + e2.y*BB.y + e2.z*BB.z;
+
+	// Transform observation point to local coordinates
+	TVector3d DD = obsPoint - V0;
+	double X = DD.x*AA.x + DD.y*AA.y + DD.z*AA.z;
+	double Y = DD.x*BB.x + DD.y*BB.y + DD.z*BB.z;
+	double Z = DD.x*CC.x + DD.y*CC.y + DD.z*CC.z;
+
+	// Distance from observation point to each vertex
+	double x0 = X - xy0_x, y0 = Y - xy0_y;
+	double x1 = X - xy1_x, y1 = Y - xy1_y;
+	double x2 = X - xy2_x, y2 = Y - xy2_y;
+
+	double R0 = std::sqrt(x0*x0 + y0*y0 + Z*Z);
+	double R1 = std::sqrt(x1*x1 + y1*y1 + Z*Z);
+	double R2 = std::sqrt(x2*x2 + y2*y2 + Z*Z);
+
+	// Compute BufVect contribution from this face
+	// BufVect = n * integral_face 1/|r-r'| dS
+	//
+	// The scalar integral over a triangle is computed using:
+	// I = sum over edges [ L * ln((R_i + R_j + L)/(R_i + R_j - L)) ]
+	//   + |Z| * omega (solid angle term)
+
+	double I_scalar = 0.0;
+
+	// Edge lengths
+	double L01 = std::sqrt((xy1_x-xy0_x)*(xy1_x-xy0_x) + (xy1_y-xy0_y)*(xy1_y-xy0_y));
+	double L12 = std::sqrt((xy2_x-xy1_x)*(xy2_x-xy1_x) + (xy2_y-xy1_y)*(xy2_y-xy1_y));
+	double L20 = std::sqrt((xy0_x-xy2_x)*(xy0_x-xy2_x) + (xy0_y-xy2_y)*(xy0_y-xy2_y));
+
+	// Edge contributions (log terms)
+	if(L01 > EPS) {
+		double Rplus = R0 + R1 + L01;
+		double Rminus = R0 + R1 - L01;
+		if(Rminus < EPS) Rminus = EPS;
+		I_scalar += L01 * std::log(Rplus / Rminus);
+	}
+	if(L12 > EPS) {
+		double Rplus = R1 + R2 + L12;
+		double Rminus = R1 + R2 - L12;
+		if(Rminus < EPS) Rminus = EPS;
+		I_scalar += L12 * std::log(Rplus / Rminus);
+	}
+	if(L20 > EPS) {
+		double Rplus = R2 + R0 + L20;
+		double Rminus = R2 + R0 - L20;
+		if(Rminus < EPS) Rminus = EPS;
+		I_scalar += L20 * std::log(Rplus / Rminus);
+	}
+
+	// Solid angle contribution (when observation point is above/below face plane)
+	double absZ = std::abs(Z);
+	if(absZ > EPS) {
+		// van Oosterom & Strackee solid angle formula
+		TVector3d r0(x0, y0, Z);
+		TVector3d r1(x1, y1, Z);
+		TVector3d r2(x2, y2, Z);
+
+		double num = r0.x*(r1.y*r2.z - r1.z*r2.y)
+		           - r0.y*(r1.x*r2.z - r1.z*r2.x)
+		           + r0.z*(r1.x*r2.y - r1.y*r2.x);
+		double denom = R0*R1*R2 + R0*(r1.x*r2.x + r1.y*r2.y + r1.z*r2.z)
+		             + R1*(r0.x*r2.x + r0.y*r2.y + r0.z*r2.z)
+		             + R2*(r0.x*r1.x + r0.y*r1.y + r0.z*r1.z);
+
+		if(std::abs(denom) > EPS) {
+			double omega = 2.0 * std::atan2(num, denom);
+			I_scalar += absZ * omega;
+		}
+	}
+
+	// BufVect = n * I_scalar (contribution from this face)
+	// where n is the outward normal (basis_c after sign correction)
+	TVector3d BufVect;
+	BufVect.x = CC.x * I_scalar;
+	BufVect.y = CC.y * I_scalar;
+	BufVect.z = CC.z * I_scalar;
+
+	// A = (1/4pi) * (M x BufVect) - matching radTRecMag::B_comp formula
+	TVector3d MxBuf;
+	MxBuf.x = M.y * BufVect.z - M.z * BufVect.y;
+	MxBuf.y = M.z * BufVect.x - M.x * BufVect.z;
+	MxBuf.z = M.x * BufVect.y - M.y * BufVect.x;
+
+	TVector3d A;
+	A.x = dConst2 * MxBuf.x;
+	A.y = dConst2 * MxBuf.y;
+	A.z = dConst2 * MxBuf.z;
+
+	return A;
+}
+
+//-------------------------------------------------------------------------
+/**
+ * Compute scalar potential Phi from a triangular face using face integration
+ *
+ * Same as RadVectorPotentialFromTriangleFaceGlobal but computes:
+ *   Phi = (1/4pi) * (M dot BufVect)
+ * instead of:
+ *   A = (1/4pi) * (M x BufVect)
+ */
+double RadScalarPotentialFromTriangleFaceGlobal(
+	const TVector3d& V0,
+	const TVector3d& V1,
+	const TVector3d& V2,
+	const TVector3d& M,
+	const TVector3d& obsPoint,
+	const TVector3d& elemCentroid)
+{
+	const double EPS = 1.0e-15;
+	const double dConst2 = RadConst::INV_FOUR_PI;  // 1/(4*pi) - matching radTRecMag
+
+	// Compute face edges
+	TVector3d e1 = V1 - V0;
+	TVector3d e2 = V2 - V0;
+
+	// Compute face normal from cross product
+	TVector3d normal;
+	normal.x = e1.y * e2.z - e1.z * e2.y;
+	normal.y = e1.z * e2.x - e1.x * e2.z;
+	normal.z = e1.x * e2.y - e1.y * e2.x;
+
+	double normalLen = std::sqrt(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z);
+	if(normalLen < EPS) {
+		return 0.0;  // Degenerate triangle
+	}
+
+	// Normalize
+	normal.x /= normalLen;
+	normal.y /= normalLen;
+	normal.z /= normalLen;
+
+	// Check if normal points outward
+	TVector3d faceCenter;
+	faceCenter.x = (V0.x + V1.x + V2.x) / 3.0;
+	faceCenter.y = (V0.y + V1.y + V2.y) / 3.0;
+	faceCenter.z = (V0.z + V1.z + V2.z) / 3.0;
+
+	TVector3d outwardVec = faceCenter - elemCentroid;
+	double dotProduct = normal.x * outwardVec.x + normal.y * outwardVec.y + normal.z * outwardVec.z;
+	double signFactor = (dotProduct < 0.0) ? -1.0 : 1.0;
+
+	// Build local coordinate system using face edge (same as FieldFromChargedTriangle)
+	TVector3d basis_c = normal;
+	if(signFactor < 0.0) {
+		// Flip normal to point outward
+		basis_c.x = -basis_c.x;
+		basis_c.y = -basis_c.y;
+		basis_c.z = -basis_c.z;
+	}
+
+	TVector3d basis_a = e1;
+	double aLen = std::sqrt(basis_a.x*basis_a.x + basis_a.y*basis_a.y + basis_a.z*basis_a.z);
+	if(aLen < EPS) return 0.0;
+	basis_a.x /= aLen; basis_a.y /= aLen; basis_a.z /= aLen;
+
+	TVector3d basis_b;
+	basis_b.x = basis_c.y * basis_a.z - basis_c.z * basis_a.y;
+	basis_b.y = basis_c.z * basis_a.x - basis_c.x * basis_a.z;
+	basis_b.z = basis_c.x * basis_a.y - basis_c.y * basis_a.x;
+	double bLen = std::sqrt(basis_b.x*basis_b.x + basis_b.y*basis_b.y + basis_b.z*basis_b.z);
+	if(bLen < EPS) return 0.0;
+	basis_b.x /= bLen; basis_b.y /= bLen; basis_b.z /= bLen;
+
+	TVector3d AA = basis_a;  // Local X
+	TVector3d BB = basis_b;  // Local Y
+	TVector3d CC = basis_c;  // Local Z (outward normal)
+
+	// Transform vertices to local 2D coordinates (V0 = origin)
+	double xy0_x = 0.0, xy0_y = 0.0;
+	double xy1_x = e1.x*AA.x + e1.y*AA.y + e1.z*AA.z;
+	double xy1_y = e1.x*BB.x + e1.y*BB.y + e1.z*BB.z;
+	double xy2_x = e2.x*AA.x + e2.y*AA.y + e2.z*AA.z;
+	double xy2_y = e2.x*BB.x + e2.y*BB.y + e2.z*BB.z;
+
+	// Transform observation point to local coordinates
+	TVector3d DD = obsPoint - V0;
+	double X = DD.x*AA.x + DD.y*AA.y + DD.z*AA.z;
+	double Y = DD.x*BB.x + DD.y*BB.y + DD.z*BB.z;
+	double Z = DD.x*CC.x + DD.y*CC.y + DD.z*CC.z;
+
+	// Distance from observation point to each vertex
+	double x0 = X - xy0_x, y0 = Y - xy0_y;
+	double x1 = X - xy1_x, y1 = Y - xy1_y;
+	double x2 = X - xy2_x, y2 = Y - xy2_y;
+
+	double R0 = std::sqrt(x0*x0 + y0*y0 + Z*Z);
+	double R1 = std::sqrt(x1*x1 + y1*y1 + Z*Z);
+	double R2 = std::sqrt(x2*x2 + y2*y2 + Z*Z);
+
+	// Compute BufVect contribution from this face
+	// BufVect = n * integral_face 1/|r-r'| dS
+	double I_scalar = 0.0;
+
+	// Edge lengths
+	double L01 = std::sqrt((xy1_x-xy0_x)*(xy1_x-xy0_x) + (xy1_y-xy0_y)*(xy1_y-xy0_y));
+	double L12 = std::sqrt((xy2_x-xy1_x)*(xy2_x-xy1_x) + (xy2_y-xy1_y)*(xy2_y-xy1_y));
+	double L20 = std::sqrt((xy0_x-xy2_x)*(xy0_x-xy2_x) + (xy0_y-xy2_y)*(xy0_y-xy2_y));
+
+	// Edge contributions (log terms)
+	if(L01 > EPS) {
+		double Rplus = R0 + R1 + L01;
+		double Rminus = R0 + R1 - L01;
+		if(Rminus < EPS) Rminus = EPS;
+		I_scalar += L01 * std::log(Rplus / Rminus);
+	}
+	if(L12 > EPS) {
+		double Rplus = R1 + R2 + L12;
+		double Rminus = R1 + R2 - L12;
+		if(Rminus < EPS) Rminus = EPS;
+		I_scalar += L12 * std::log(Rplus / Rminus);
+	}
+	if(L20 > EPS) {
+		double Rplus = R2 + R0 + L20;
+		double Rminus = R2 + R0 - L20;
+		if(Rminus < EPS) Rminus = EPS;
+		I_scalar += L20 * std::log(Rplus / Rminus);
+	}
+
+	// Solid angle contribution
+	double absZ = std::abs(Z);
+	if(absZ > EPS) {
+		// van Oosterom & Strackee solid angle formula
+		TVector3d r0(x0, y0, Z);
+		TVector3d r1(x1, y1, Z);
+		TVector3d r2(x2, y2, Z);
+
+		double num = r0.x*(r1.y*r2.z - r1.z*r2.y)
+		           - r0.y*(r1.x*r2.z - r1.z*r2.x)
+		           + r0.z*(r1.x*r2.y - r1.y*r2.x);
+		double denom = R0*R1*R2 + R0*(r1.x*r2.x + r1.y*r2.y + r1.z*r2.z)
+		             + R1*(r0.x*r2.x + r0.y*r2.y + r0.z*r2.z)
+		             + R2*(r0.x*r1.x + r0.y*r1.y + r0.z*r1.z);
+
+		if(std::abs(denom) > EPS) {
+			double omega = 2.0 * std::atan2(num, denom);
+			I_scalar += absZ * omega;
+		}
+	}
+
+	// BufVect = n * I_scalar (contribution from this face)
+	TVector3d BufVect;
+	BufVect.x = CC.x * I_scalar;
+	BufVect.y = CC.y * I_scalar;
+	BufVect.z = CC.z * I_scalar;
+
+	// Phi = (1/4pi) * (M dot BufVect) - same formula as radTRecMag but with dot product
+	double M_dot_BufVect = M.x * BufVect.x + M.y * BufVect.y + M.z * BufVect.z;
+
+	return dConst2 * M_dot_BufVect;
+}
+
 void RadDemagTensorFromTetrahedron(
 	const TVector3d* face_vertices,
 	const TVector3d& elemCentroid,

@@ -18,8 +18,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import numpy as np
 import radia as rad
 
-# Import HEX_FACES for ObjPolyhdr hexahedra
-from netgen_mesh_import import HEX_FACES
 
 # Set units to meters for NGSolve compatibility
 rad.FldUnits('m')
@@ -43,7 +41,7 @@ vertices = [
     [cx - dx, cy + dy, cz + dz],  # vertex 8
 ]
 
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2e6])
+magnet = rad.ObjHexahedron(vertices, [0, 0, 1.2e6])
 
 # Solve the magnetization problem (for soft magnetic materials)
 # For permanent magnets this is optional but doesn't hurt

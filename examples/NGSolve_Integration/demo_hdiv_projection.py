@@ -33,8 +33,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
 
-# Import HEX_FACES for ObjPolyhdr hexahedra
-from netgen_mesh_import import HEX_FACES
 
 # Check NGSolve availability
 try:
@@ -92,7 +90,7 @@ vertices = [
     [cx - dx, cy + dy, cz + dz],  # vertex 8
 ]
 
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, magnetization)
+magnet = rad.ObjHexahedron(vertices, magnetization)
 rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))  # NdFeB material
 rad.Solve(magnet, 0.0001, 10000)
 

@@ -37,8 +37,6 @@ BH_DATA = [
     [200000.0, 2.0],
 ]
 
-TETRA_FACES = [[1, 3, 2], [1, 2, 4], [1, 4, 3], [2, 3, 4]]
-
 def create_tetra_mesh():
     """Create tetrahedral mesh using Netgen"""
     rad.FldUnits('m')
@@ -60,7 +58,7 @@ def create_tetra_mesh():
     for el in mesh.Elements(VOL):
         v_indices = [v.nr for v in el.vertices]
         tet_verts = [vertices[i] for i in v_indices]
-        tet = rad.ObjPolyhdr(tet_verts, TETRA_FACES, [0, 0, 0])
+        tet = rad.ObjTetrahedron(tet_verts, [0, 0, 0])
         rad.ObjAddToCnt(container, [tet])
 
     return container, len(list(mesh.Elements(VOL)))

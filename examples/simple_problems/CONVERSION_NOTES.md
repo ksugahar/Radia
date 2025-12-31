@@ -45,7 +45,7 @@ g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
 |-----------------|--------|------|
 | `radUtiDelAll[]` | `rad.UtiDelAll()` | Delete all objects |
 | `radObjArcCur[...]` | `rad.ObjArcCur(...)` | Create arc current |
-| `radObjRecMag[...]` | `rad.ObjPolyhdr(...)` | Create hexahedral magnet (use ObjPolyhdr + HEX_FACES) |
+| `radObjRecMag[...]` | `rad.ObjHexahedron(...)` | Create hexahedral magnet (faces auto-generated) |
 | `radMatLin[...]` | `rad.MatLin(...)` | Define linear material |
 | `radMatSatIso[...]` | `rad.MatSatIso(...)` | Nonlinear isotropic material |
 | `radMatApl[obj, mat]` | `rad.MatApl(obj, mat)` | Apply material |

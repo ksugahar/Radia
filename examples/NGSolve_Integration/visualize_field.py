@@ -27,8 +27,6 @@ import radia as rad
 import radia_ngsolve
 import argparse
 
-# Import HEX_FACES for ObjPolyhdr hexahedra
-from netgen_mesh_import import HEX_FACES
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Radia field visualization')
@@ -72,7 +70,7 @@ vertices = [
     [cx - dx, cy + dy, cz + dz],  # vertex 8
 ]
 
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2])
+magnet = rad.ObjHexahedron(vertices, [0, 0, 1.2])
 rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))  # NdFeB
 rad.Solve(magnet, 0.0001, 10000)
 

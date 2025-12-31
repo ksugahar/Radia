@@ -85,7 +85,7 @@ endif()
 
 # Option to enable ExaFMM acceleration for fast dipole field computation
 # ExaFMM-t is a pure C++ FMM library (no Fortran dependency)
-option(RADIA_ENABLE_EXAFMM "Enable ExaFMM library for fast field computation" OFF)
+option(RADIA_ENABLE_EXAFMM "Enable ExaFMM library for fast field computation" ON)
 
 # Radia core sources (organized by API functionality)
 set(RADIA_CORE_SOURCES
@@ -97,9 +97,11 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_obj_subdivision.cpp       # Subdivision (ObjDivMag, multi-generation extrusion)
 	${CORE_DIR}/rad_exafmm.cpp                # ExaFMM wrapper for fast multipole acceleration
 	${CORE_DIR}/rad_point_classify.cpp        # Point classification for FMM near/far
+	${CORE_DIR}/rad_dipole_collect.cpp        # Collect dipoles from Radia for FMM
 
 	# Geometry files (descriptive names)
 	${CORE_DIR}/rad_arc_current.cpp           # Arc with azimuthal current
+	${CORE_DIR}/rad_elliptic_integral.cpp     # Elliptic integrals for coil field
 	${CORE_DIR}/rad_coefficient_field.cpp     # CoefficientFunction-based field source
 	${CORE_DIR}/rad_type_cast.cpp             # Dynamic type casting
 	${CORE_DIR}/rad_extruded_polygon.cpp      # Extruded polygon (prism)

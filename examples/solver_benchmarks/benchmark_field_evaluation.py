@@ -33,7 +33,6 @@ except ImportError as e:
 	sys.exit(1)
 
 import time
-from netgen_mesh_import import HEX_FACES
 
 
 def hex_vertices(cx, cy, cz, dx, dy, dz):
@@ -68,7 +67,7 @@ def create_simple_magnet():
 				# Permanent magnet: magnetization = 1 T / mu_0 = 795774.7 A/m
 				# Element with dimensions elem_size x elem_size x elem_size
 				vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-				block = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 795774.7])
+				block = rad.ObjHexahedron(vertices, [0, 0, 795774.7])
 				rad.ObjAddToCnt(container, [block])
 
 	return container

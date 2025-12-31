@@ -85,27 +85,141 @@ bool PointInHexahedron(const TVector3d& pt, const TVector3d verts[8])
     // 5. (1, 3, 4, 6) - central tetrahedron
 
     // Tet 1: vertices 0, 1, 3, 4
-    if (PointInTetrahedron(pt, verts[0], verts[1], verts[3], verts[4]))
+    if (PointInTetrahedronSolidAngle(pt, verts[0], verts[1], verts[3], verts[4]))
         return true;
 
     // Tet 2: vertices 1, 2, 3, 6
-    if (PointInTetrahedron(pt, verts[1], verts[2], verts[3], verts[6]))
+    if (PointInTetrahedronSolidAngle(pt, verts[1], verts[2], verts[3], verts[6]))
         return true;
 
     // Tet 3: vertices 1, 4, 5, 6
-    if (PointInTetrahedron(pt, verts[1], verts[4], verts[5], verts[6]))
+    if (PointInTetrahedronSolidAngle(pt, verts[1], verts[4], verts[5], verts[6]))
         return true;
 
     // Tet 4: vertices 3, 4, 6, 7
-    if (PointInTetrahedron(pt, verts[3], verts[4], verts[6], verts[7]))
+    if (PointInTetrahedronSolidAngle(pt, verts[3], verts[4], verts[6], verts[7]))
         return true;
 
     // Tet 5: vertices 1, 3, 4, 6 (central)
-    if (PointInTetrahedron(pt, verts[1], verts[3], verts[4], verts[6]))
+    if (PointInTetrahedronSolidAngle(pt, verts[1], verts[3], verts[4], verts[6]))
         return true;
 
     return false;
 }
+
+//=============================================================================
+// Solid Angle Method (Rigorous, ELF-compatible)
+//=============================================================================
+
+double ComputeTriangleSolidAngle(const TVector3d& obs,
+                                  const TVector3d& v0,
+                                  const TVector3d& v1,
+                                  const TVector3d& v2)
+{
+    TVector3d r0, r1, r2;
+    r0.x = v0.x - obs.x; r0.y = v0.y - obs.y; r0.z = v0.z - obs.z;
+    r1.x = v1.x - obs.x; r1.y = v1.y - obs.y; r1.z = v1.z - obs.z;
+    r2.x = v2.x - obs.x; r2.y = v2.y - obs.y; r2.z = v2.z - obs.z;
+
+    double R0 = std::sqrt(r0.x*r0.x + r0.y*r0.y + r0.z*r0.z);
+    double R1 = std::sqrt(r1.x*r1.x + r1.y*r1.y + r1.z*r1.z);
+    double R2 = std::sqrt(r2.x*r2.x + r2.y*r2.y + r2.z*r2.z);
+
+    const double eps = 1e-15;
+    if (R0 < eps || R1 < eps || R2 < eps) {
+        return 0.0;
+    }
+
+    TVector3d r1_cross_r2;
+    r1_cross_r2.x = r1.y * r2.z - r1.z * r2.y;
+    r1_cross_r2.y = r1.z * r2.x - r1.x * r2.z;
+    r1_cross_r2.z = r1.x * r2.y - r1.y * r2.x;
+
+    double numerator = r0.x * r1_cross_r2.x + r0.y * r1_cross_r2.y + r0.z * r1_cross_r2.z;
+    double r0_dot_r1 = r0.x*r1.x + r0.y*r1.y + r0.z*r1.z;
+    double r0_dot_r2 = r0.x*r2.x + r0.y*r2.y + r0.z*r2.z;
+    double r1_dot_r2 = r1.x*r2.x + r1.y*r2.y + r1.z*r2.z;
+    double denominator = R0*R1*R2 + R2*r0_dot_r1 + R1*r0_dot_r2 + R0*r1_dot_r2;
+
+    return 2.0 * std::atan2(numerator, denominator);
+}
+
+bool PointInPolyhedronSolidAngle(const TVector3d& pt,
+                                  const std::vector<TVector3d>& vertices,
+                                  const std::vector<std::vector<int>>& faces)
+{
+    const double PI = 3.14159265358979323846;
+    const double FOUR_PI = 4.0 * PI;
+    const double tolerance = 0.1;
+
+    double total_solid_angle = 0.0;
+
+    for (size_t f = 0; f < faces.size(); ++f) {
+        const std::vector<int>& face = faces[f];
+        int n_verts = static_cast<int>(face.size());
+        if (n_verts < 3) continue;
+
+        const TVector3d& v0 = vertices[face[0]];
+        for (int i = 1; i < n_verts - 1; ++i) {
+            const TVector3d& v1 = vertices[face[i]];
+            const TVector3d& v2 = vertices[face[i + 1]];
+            total_solid_angle += ComputeTriangleSolidAngle(pt, v0, v1, v2);
+        }
+    }
+
+    // Check for both winding conventions:
+    // - Inward normals: sum = -4*pi for inside
+    // - Outward normals: sum = +4*pi for inside
+    return std::fabs(std::fabs(total_solid_angle) - FOUR_PI) < FOUR_PI * tolerance;
+}
+
+bool PointInTetrahedronSolidAngle(const TVector3d& pt,
+                                   const TVector3d& v0, const TVector3d& v1,
+                                   const TVector3d& v2, const TVector3d& v3)
+{
+    const double PI = 3.14159265358979323846;
+    const double FOUR_PI = 4.0 * PI;
+    const double tolerance = 0.1;
+
+    double total_solid_angle = 0.0;
+    total_solid_angle += ComputeTriangleSolidAngle(pt, v0, v2, v1);
+    total_solid_angle += ComputeTriangleSolidAngle(pt, v0, v1, v3);
+    total_solid_angle += ComputeTriangleSolidAngle(pt, v0, v3, v2);
+    total_solid_angle += ComputeTriangleSolidAngle(pt, v1, v2, v3);
+
+    return std::fabs(total_solid_angle + FOUR_PI) < FOUR_PI * tolerance;
+}
+
+bool PointInHexahedronSolidAngle(const TVector3d& pt, const TVector3d verts[8])
+{
+    const double PI = 3.14159265358979323846;
+    const double FOUR_PI = 4.0 * PI;
+    const double tolerance = 0.1;
+
+    double total_solid_angle = 0.0;
+
+    // Face 0 (bottom): 0, 1, 2, 3
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[0], verts[1], verts[2]);
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[0], verts[2], verts[3]);
+    // Face 1 (top): 4, 7, 6, 5
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[4], verts[7], verts[6]);
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[4], verts[6], verts[5]);
+    // Face 2 (front): 0, 4, 5, 1
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[0], verts[4], verts[5]);
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[0], verts[5], verts[1]);
+    // Face 3 (back): 2, 6, 7, 3
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[2], verts[6], verts[7]);
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[2], verts[7], verts[3]);
+    // Face 4 (left): 0, 3, 7, 4
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[0], verts[3], verts[7]);
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[0], verts[7], verts[4]);
+    // Face 5 (right): 1, 5, 6, 2
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[1], verts[5], verts[6]);
+    total_solid_angle += ComputeTriangleSolidAngle(pt, verts[1], verts[6], verts[2]);
+
+    return std::fabs(total_solid_angle + FOUR_PI) < FOUR_PI * tolerance;
+}
+
 
 //-----------------------------------------------------------------------------
 // Compute element AABB
@@ -248,23 +362,12 @@ void ClassifyPoints(int n_points,
                 if (dist > search_radius) continue;
 
                 const ElementData& elem = elements[e];
-                int nv = static_cast<int>(elem.vertices.size());
 
+                // Use general solid angle method with actual face topology
                 bool is_inside = false;
 
-                if (nv == 4 && elem.num_faces == 4) {
-                    // Tetrahedron
-                    is_inside = PointInTetrahedron(pt,
-                        elem.vertices[0], elem.vertices[1],
-                        elem.vertices[2], elem.vertices[3]);
-                }
-                else if (nv == 8 && elem.num_faces == 6) {
-                    // Hexahedron
-                    TVector3d verts[8];
-                    for (int v = 0; v < 8; ++v) {
-                        verts[v] = elem.vertices[v];
-                    }
-                    is_inside = PointInHexahedron(pt, verts);
+                if (!elem.faces.empty() && !elem.vertices.empty()) {
+                    is_inside = PointInPolyhedronSolidAngle(pt, elem.vertices, elem.faces);
                 }
 
                 if (is_inside) {
@@ -298,13 +401,53 @@ static void ExtractElementData(radTPolyhedron* poly, ElementData& data)
     // Get number of faces
     data.num_faces = poly->AmOfFaces;
 
-    // Get vertices
-    radTVectorOfVector3d vertices;
-    poly->VerticesInLocFrame(vertices, true);  // true = ensure unique vertices
-
+    // Collect all vertices and build face topology
+    // We need to track vertex indices properly for the solid angle method
     data.vertices.clear();
-    for (size_t i = 0; i < vertices.size(); ++i) {
-        data.vertices.push_back(vertices[i]);
+    data.faces.clear();
+
+    const double AbsTol = 1e-10;
+    const double AbsTolE2 = AbsTol * AbsTol;
+
+    // Helper lambda to find or add a vertex
+    auto findOrAddVertex = [&data, AbsTolE2](const TVector3d& v) -> int {
+        for (size_t i = 0; i < data.vertices.size(); ++i) {
+            TVector3d dp;
+            dp.x = data.vertices[i].x - v.x;
+            dp.y = data.vertices[i].y - v.y;
+            dp.z = data.vertices[i].z - v.z;
+            if ((dp.x*dp.x + dp.y*dp.y + dp.z*dp.z) <= AbsTolE2) {
+                return static_cast<int>(i);
+            }
+        }
+        data.vertices.push_back(v);
+        return static_cast<int>(data.vertices.size() - 1);
+    };
+
+    // Iterate through faces and extract vertices with correct topology
+    for (int f = 0; f < poly->AmOfFaces; ++f) {
+        radTHandlePgnAndTrans& hPgnTrans = poly->VectHandlePgnAndTrans[f];
+        radTPolygon* pgn = hPgnTrans.PgnHndl.rep;
+        radTrans* trans = hPgnTrans.TransHndl.rep;
+
+        std::vector<int> face_indices;
+        double locZ = pgn->CoordZ;
+
+        for (auto& p2d : pgn->EdgePointsVector) {
+            TVector3d p3d(p2d.x, p2d.y, locZ);
+            p3d = trans->TrPoint(p3d);
+
+            // Transform to global coordinates
+            TVector3d global_vertex;
+            global_vertex.x = p3d.x + data.center.x;
+            global_vertex.y = p3d.y + data.center.y;
+            global_vertex.z = p3d.z + data.center.z;
+
+            int idx = findOrAddVertex(global_vertex);
+            face_indices.push_back(idx);
+        }
+
+        data.faces.push_back(face_indices);
     }
 
     // Compute size

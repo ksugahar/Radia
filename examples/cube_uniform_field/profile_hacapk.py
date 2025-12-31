@@ -47,8 +47,6 @@ def create_mesh():
 
 def create_radia_elements(mesh):
     """Create Radia tetrahedral elements from NGSolve mesh."""
-    from netgen_mesh_import import TETRA_FACES
-
     # Extract vertices
     vertices = []
     for v in mesh.vertices:
@@ -60,7 +58,7 @@ def create_radia_elements(mesh):
     for el in mesh.Elements(VOL):
         v_indices = [v.nr for v in el.vertices]
         tet_verts = [vertices[i] for i in v_indices]
-        tet = rad.ObjPolyhdr(tet_verts, TETRA_FACES, [0, 0, 0])
+        tet = rad.ObjTetrahedron(tet_verts, [0, 0, 0])
         rad.ObjAddToCnt(container, [tet])
 
     return container

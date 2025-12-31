@@ -33,8 +33,6 @@ os.chdir(_script_dir)
 import numpy as np
 import radia as rad
 
-# Import HEX_FACES for ObjPolyhdr hexahedra
-from netgen_mesh_import import HEX_FACES
 
 try:
     from ngsolve import *
@@ -75,7 +73,7 @@ vertices = [
     [cx - dx, cy + dy, cz + dz],  # vertex 8
 ]
 
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2])
+magnet = rad.ObjHexahedron(vertices, [0, 0, 1.2])
 
 print('  Magnet created')
 print('  Center: [0, 0, 0] m')

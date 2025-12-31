@@ -61,11 +61,10 @@ See [BUILD.md](BUILD.md) for detailed build instructions.
 ```python
 import radia as rad
 
-# Create a hexahedral magnet using ObjPolyhdr
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+# Create a hexahedral magnet using ObjHexahedron (8 vertices, faces auto-generated)
 vertices = [[-5,-5,-5], [5,-5,-5], [5,5,-5], [-5,5,-5],
             [-5,-5,5], [5,-5,5], [5,5,5], [-5,5,5]]
-mag = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1])  # magnetization in A/m
+mag = rad.ObjHexahedron(vertices, [0, 0, 1])  # magnetization in A/m
 
 # Calculate field at external point
 field = rad.Fld(mag, 'b', [0, 0, 20])
@@ -127,12 +126,11 @@ from ngsolve import Mesh, H1, GridFunction, HDiv
 import radia as rad
 from radia import radia_ngsolve  # or: import radia_ngsolve
 
-# Create Radia hexahedral magnet using ObjPolyhdr
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+# Create Radia hexahedral magnet using ObjHexahedron (faces auto-generated)
 vertices = [[-10,-10,-10], [10,-10,-10], [10,10,-10], [-10,10,-10],
             [-10,-10,10], [10,-10,10], [10,10,10], [-10,10,10]]  # mm units
 Mr = 1.2 / (4 * 3.14159 * 1e-7)  # Br=1.2T -> Mr in A/m
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, Mr])
+magnet = rad.ObjHexahedron(vertices, [0, 0, Mr])
 
 # Create NGSolve CoefficientFunction for different field types
 B_field = radia_ngsolve.RadiaField(magnet, 'b')  # Flux density [T]
@@ -290,11 +288,10 @@ import numpy as np
 rad.UtiDelAll()
 rad.FldUnits('m')  # Use SI units
 
-# Create soft iron cube (10cm side) using ObjPolyhdr
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+# Create soft iron cube (10cm side) using ObjHexahedron (faces auto-generated)
 vertices = [[-0.05,-0.05,-0.05], [0.05,-0.05,-0.05], [0.05,0.05,-0.05], [-0.05,0.05,-0.05],
             [-0.05,-0.05,0.05], [0.05,-0.05,0.05], [0.05,0.05,0.05], [-0.05,0.05,0.05]]
-cube = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+cube = rad.ObjHexahedron(vertices, [0, 0, 0])
 
 # Apply isotropic linear material (mu_r = 100)
 chi = 99.0  # chi = mu_r - 1
@@ -324,14 +321,14 @@ print(f"Magnetization: {M[1]} A/m")
 
 3. **Units**: When using `rad.FldUnits('m')`, all coordinates are in meters
 
-4. **Tetrahedral elements**: Also works with `ObjPolyhdr` tetrahedral meshes
+4. **Tetrahedral elements**: Also works with `ObjTetrahedron` tetrahedral meshes
 
 ### Supported Element Types
 
 | Element | API | External Field Support |
 |---------|-----|----------------------|
-| Hexahedron | `ObjPolyhdr` + `HEX_FACES` | Yes |
-| Tetrahedron | `ObjPolyhdr` + `TETRA_FACES` | Yes |
+| Hexahedron | `ObjHexahedron` | Yes |
+| Tetrahedron | `ObjTetrahedron` | Yes |
 | Extruded Polygon | `ObjThckPgn` | Yes |
 
 ## Tetrahedral Mesh Import from NGSolve/Netgen

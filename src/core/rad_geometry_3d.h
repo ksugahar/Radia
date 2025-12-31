@@ -907,7 +907,7 @@ inline void radTg3d::EraseAllTransformations()
 inline void radTg3d::B_genComp(radTField* FieldPtr)
 {
 	radTFieldKey& FieldKey = FieldPtr->FieldKey;
-	if(g3dListOfTransform.empty()) 
+	if(g3dListOfTransform.empty())
 	{
 		if(FieldKey.Ib_ || FieldKey.Ih_) B_intComp(FieldPtr);
 		else if(FieldKey.Force_) IntOverShape(FieldPtr);

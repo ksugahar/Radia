@@ -49,7 +49,7 @@ namespace RadExaFMM {
  * phi_m = (1/4*pi) * (m . r) / r^3
  * H = -grad(phi_m) = (1/4*pi) * [3*(m.r)*r/r^5 - m/r^3]
  */
-inline void ComputeSingleDipole(
+inline void ComputeSingleDipoleH(
     double sx, double sy, double sz,
     double mx, double my, double mz,
     double tx, double ty, double tz,
@@ -82,6 +82,47 @@ inline void ComputeSingleDipole(
     gx += coeff * rx - mx / r3;
     gy += coeff * ry - my / r3;
     gz += coeff * rz - mz / r3;
+}
+
+/**
+ * Compute vector potential A from a single dipole at one target point
+ *
+ * A = (mu_0/4*pi) * (m x r) / r^3
+ *
+ * where m is the magnetic dipole moment [A*m^2] and r is the vector
+ * from the dipole to the observation point.
+ *
+ * Units: A has units of [T*m] = [kg/(A*s^2)] when:
+ *   - mu_0 = 4*pi*10^-7 [H/m]
+ *   - m is in [A*m^2]
+ *   - r is in [m]
+ */
+inline void ComputeSingleDipoleA(
+    double sx, double sy, double sz,
+    double mx, double my, double mz,
+    double tx, double ty, double tz,
+    double& Ax, double& Ay, double& Az,
+    double thresh = 1e-15
+) {
+    // Vector from source to target
+    double rx = tx - sx;
+    double ry = ty - sy;
+    double rz = tz - sz;
+
+    double r2 = rx*rx + ry*ry + rz*rz;
+
+    if (r2 < thresh * thresh) {
+        return;  // Too close - skip
+    }
+
+    double r = std::sqrt(r2);
+    double r3 = r2 * r;
+
+    // A = (m x r) / r^3 (mu_0/4*pi applied at end)
+    // m x r = [my*rz - mz*ry, mz*rx - mx*rz, mx*ry - my*rx]
+    Ax += (my*rz - mz*ry) / r3;
+    Ay += (mz*rx - mx*rz) / r3;
+    Az += (mx*ry - my*rx) / r3;
 }
 
 FMMResult ComputeDipoleFieldDirect(
@@ -127,8 +168,8 @@ FMMResult ComputeDipoleFieldDirect(
             double my = dipoles[j * 3 + 1];
             double mz = dipoles[j * 3 + 2];
 
-            ComputeSingleDipole(sx, sy, sz, mx, my, mz, tx, ty, tz,
-                                pot, gx, gy, gz, thresh);
+            ComputeSingleDipoleH(sx, sy, sz, mx, my, mz, tx, ty, tz,
+                                 pot, gx, gy, gz, thresh);
         }
 
         // Apply 1/(4*pi) factor
@@ -136,6 +177,74 @@ FMMResult ComputeDipoleFieldDirect(
         result.gradx[i] = gx * RadConst::INV_FOUR_PI;
         result.grady[i] = gy * RadConst::INV_FOUR_PI;
         result.gradz[i] = gz * RadConst::INV_FOUR_PI;
+    }
+
+    return result;
+}
+
+/**
+ * Compute vector potential A from dipoles (direct O(N*M) method)
+ *
+ * A = (mu_0/4*pi) * sum_j [ m_j x (r - r_j) / |r - r_j|^3 ]
+ *
+ * @param sources   Dipole positions (3*nsource doubles)
+ * @param dipoles   Dipole moments (3*nsource doubles) in A*m^2
+ * @param nsource   Number of source dipoles
+ * @param targets   Target positions (3*ntarget doubles)
+ * @param ntarget   Number of target points
+ * @param thresh    Distance threshold for skipping (default 1e-15)
+ * @return          FMMResult with Ax, Ay, Az in gradx, grady, gradz
+ */
+FMMResult ComputeDipoleVectorPotentialDirect(
+    const double* sources,
+    const double* dipoles,
+    int64_t nsource,
+    const double* targets,
+    int64_t ntarget,
+    double thresh
+) {
+    FMMResult result;
+    result.error_code = 0;
+
+    if (nsource <= 0 || ntarget <= 0) {
+        result.error_code = -1;
+        return result;
+    }
+
+    // Allocate output arrays (Ax, Ay, Az stored in gradx, grady, gradz)
+    result.pot.resize(ntarget, 0.0);    // Not used for A
+    result.gradx.resize(ntarget, 0.0);  // Ax
+    result.grady.resize(ntarget, 0.0);  // Ay
+    result.gradz.resize(ntarget, 0.0);  // Az
+
+    // Direct O(N*M) computation with OpenMP parallelization
+    #ifdef _OPENMP
+    #pragma omp parallel for schedule(dynamic, 64)
+    #endif
+    for (int64_t i = 0; i < ntarget; ++i) {
+        double tx = targets[i * 3 + 0];
+        double ty = targets[i * 3 + 1];
+        double tz = targets[i * 3 + 2];
+
+        double Ax = 0.0, Ay = 0.0, Az = 0.0;
+
+        for (int64_t j = 0; j < nsource; ++j) {
+            double sx = sources[j * 3 + 0];
+            double sy = sources[j * 3 + 1];
+            double sz = sources[j * 3 + 2];
+
+            double mx = dipoles[j * 3 + 0];
+            double my = dipoles[j * 3 + 1];
+            double mz = dipoles[j * 3 + 2];
+
+            ComputeSingleDipoleA(sx, sy, sz, mx, my, mz, tx, ty, tz,
+                                 Ax, Ay, Az, thresh);
+        }
+
+        // Apply mu_0/(4*pi) = 1e-7 factor
+        result.gradx[i] = Ax * RadConst::MU_0_OVER_FOUR_PI;
+        result.grady[i] = Ay * RadConst::MU_0_OVER_FOUR_PI;
+        result.gradz[i] = Az * RadConst::MU_0_OVER_FOUR_PI;
     }
 
     return result;
@@ -299,5 +408,22 @@ const char* GetVersion() {
 }
 
 #endif // RADIA_USE_EXAFMM
+
+//-------------------------------------------------------------------------
+// Unified wrapper for vector potential A computation
+// (Works with or without ExaFMM)
+//-------------------------------------------------------------------------
+
+FMMResult ComputeDipoleVectorPotential(
+    double eps,
+    const double* sources,
+    const double* dipoles,
+    int64_t nsource,
+    const double* targets,
+    int64_t ntarget
+) {
+    (void)eps;  // Currently unused (FMM for A not implemented yet)
+    return ComputeDipoleVectorPotentialDirect(sources, dipoles, nsource, targets, ntarget);
+}
 
 } // namespace RadExaFMM

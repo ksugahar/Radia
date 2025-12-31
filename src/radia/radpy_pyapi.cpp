@@ -205,84 +205,135 @@ static PyObject* radia_ObjThckPgn(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
-* Creates a uniformly magnetized polyhedron (closed volume limited by planes).
+* Creates a uniformly magnetized tetrahedron from 4 vertices.
+* Vertices: [v1, v2, v3, v4] where v1-v3 are base (counter-clockwise from below)
+* and v4 is the apex. Uses 3 DOF magnetization model (MMM method).
 ***************************************************************************/
-static PyObject* radia_ObjPolyhdr(PyObject* self, PyObject* args)
+static PyObject* radia_ObjTetrahedron(PyObject* self, PyObject* args)
 {
-	PyObject *oVerts=0, *oFaces=0, *oM=0, *odMdr=0, *oJ=0, *odJdr=0, *oRelAbs=0, *oResInd=0;
+	PyObject *oVerts=0, *oM=0, *oResInd=0;
 	double *arCrd=0;
 	int *arFaceInds=0, *arFaceLens=0;
-	double *arM=0, *ar_dMdr=0, *arJ=0, *ar_dJdr=0;
+	double *arM=0;
 
 	try
 	{
-		if(!PyArg_ParseTuple(args, "OO|OOOOO:ObjPolyhdr", &oVerts, &oFaces, &oM, &odMdr, &oJ, &odJdr, &oRelAbs)) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr");
-		if((oVerts == 0) || (oFaces == 0)) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr");
-		if((!PyList_Check(oVerts)) || (!PyList_Check(oFaces))) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr");
+		if(!PyArg_ParseTuple(args, "O|O:ObjTetrahedron", &oVerts, &oM)) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron");
+		if(oVerts == 0) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron");
+		if(!PyList_Check(oVerts)) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron");
 
 		int nVerts = (int)PyList_Size(oVerts);
-		if(nVerts < 4) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, number of vertices should be >= 4");
-
-		int nFaces=0;
-		CPyParse::FindLengthsOfElemListsOrArrays(oFaces, arFaceLens, nFaces);
-		if(nFaces < 4) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, number of faces should be >= 4");
+		if(nVerts != 4) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron, exactly 4 vertices required");
 
 		int nCrd=0;
-		if(!(CPyParse::CopyPyNestedListElemsToNumAr(oVerts, 'd', arCrd, nCrd))) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of vertices");
-		if(nCrd != nVerts*3) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of vertices (each vertex point should be defined by 3 cartesian coordinates)");
+		if(!(CPyParse::CopyPyNestedListElemsToNumAr(oVerts, 'd', arCrd, nCrd))) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron, incorrect definition of vertices");
+		if(nCrd != 12) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron, each vertex must have 3 coordinates");
 
-		int nFaceInds=0;
-		if(!(CPyParse::CopyPyNestedListElemsToNumAr(oFaces, 'i', arFaceInds, nFaceInds))) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of faces");
+		// Standard tetrahedron faces (1-indexed): [[1,2,3], [1,4,2], [2,4,3], [3,4,1]]
+		const int nFaces = 4;
+		arFaceLens = new int[nFaces];
+		arFaceLens[0] = 3; arFaceLens[1] = 3; arFaceLens[2] = 3; arFaceLens[3] = 3;
 
-		int len3 = 3, len9 = 9;
+		arFaceInds = new int[12];
+		// Face 1: bottom [1,2,3]
+		arFaceInds[0] = 1; arFaceInds[1] = 2; arFaceInds[2] = 3;
+		// Face 2: side [1,4,2]
+		arFaceInds[3] = 1; arFaceInds[4] = 4; arFaceInds[5] = 2;
+		// Face 3: side [2,4,3]
+		arFaceInds[6] = 2; arFaceInds[7] = 4; arFaceInds[8] = 3;
+		// Face 4: side [3,4,1]
+		arFaceInds[9] = 3; arFaceInds[10] = 4; arFaceInds[11] = 1;
+
+		int len3 = 3;
 		bool lenIsSmall = false;
 		if(oM != 0)
 		{
 			CPyParse::CopyPyListElemsToNumArray(oM, 'd', arM, len3, lenIsSmall);
-			if((arM == 0) || (len3 != 3) || lenIsSmall) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of magnetization vector");
-		}
-		if(odMdr != 0)
-		{
-			if(!(CPyParse::CopyPyNestedListElemsToNumAr(odMdr, 'd', ar_dMdr, len9))) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of magnetization linear coefficients");
-			if((ar_dMdr == 0) || (len9 != 9)) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of magnetization linear coefficients");
-		}
-		if(oJ != 0)
-		{
-			CPyParse::CopyPyListElemsToNumArray(oJ, 'd', arJ, len3, lenIsSmall);
-			if((arJ == 0) || (len3 != 3) || lenIsSmall) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of magnetization vector");
-		}
-		if(odJdr != 0)
-		{
-			if(!(CPyParse::CopyPyNestedListElemsToNumAr(odJdr, 'd', ar_dJdr, len9))) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of current density linear coefficients");
-			if((ar_dJdr == 0) || (len9 != 9)) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of current density linear coefficients");
-		}
-
-		char sRelAbs[1024]; 
-		strcpy(sRelAbs, "rel");
-		if(oRelAbs != 0)
-		{
-			CPyParse::CopyPyStringToC(oRelAbs, sRelAbs, 1024);
+			if((arM == 0) || (len3 != 3) || lenIsSmall) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron, incorrect definition of magnetization vector");
 		}
 
 		int ind = 0;
-		g_pyParse.ProcRes(RadObjPolyhdr(&ind, arCrd, nVerts, arFaceInds, arFaceLens, nFaces, arM, ar_dMdr, arJ, ar_dJdr));
-		//to add sRelAbs to the end of RadObjPolyhdr!
+		g_pyParse.ProcRes(RadObjPolyhdr(&ind, arCrd, nVerts, arFaceInds, arFaceLens, nFaces, arM, 0, 0, 0));
 
- 		oResInd = Py_BuildValue("i", ind);
-		// Py_XINCREF removed - Py_BuildValue already returns new reference
+		oResInd = Py_BuildValue("i", ind);
 	}
 	catch(const char* erText)
 	{
 		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
 	}
 	if(arCrd != 0) delete[] arCrd;
 	if(arFaceInds != 0) delete[] arFaceInds;
 	if(arFaceLens != 0) delete[] arFaceLens;
 	if(arM != 0) delete[] arM;
-	if(ar_dMdr != 0) delete[] ar_dMdr;
-	if(arJ != 0) delete[] arJ;
-	if(ar_dJdr != 0) delete[] ar_dJdr;
+	return oResInd;
+}
+
+/************************************************************************//**
+* Creates a uniformly magnetized hexahedron from 8 vertices.
+* Vertices: [v1,v2,v3,v4,v5,v6,v7,v8] where v1-v4 are bottom face (CCW from below)
+* and v5-v8 are top face (directly above v1-v4). Uses 6 DOF surface charge model (MSC).
+***************************************************************************/
+static PyObject* radia_ObjHexahedron(PyObject* self, PyObject* args)
+{
+	PyObject *oVerts=0, *oM=0, *oResInd=0;
+	double *arCrd=0;
+	int *arFaceInds=0, *arFaceLens=0;
+	double *arM=0;
+
+	try
+	{
+		if(!PyArg_ParseTuple(args, "O|O:ObjHexahedron", &oVerts, &oM)) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron");
+		if(oVerts == 0) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron");
+		if(!PyList_Check(oVerts)) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron");
+
+		int nVerts = (int)PyList_Size(oVerts);
+		if(nVerts != 8) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron, exactly 8 vertices required");
+
+		int nCrd=0;
+		if(!(CPyParse::CopyPyNestedListElemsToNumAr(oVerts, 'd', arCrd, nCrd))) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron, incorrect definition of vertices");
+		if(nCrd != 24) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron, each vertex must have 3 coordinates");
+
+		// Standard hexahedron faces (1-indexed):
+		// [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+		const int nFaces = 6;
+		arFaceLens = new int[nFaces];
+		for(int i = 0; i < nFaces; i++) arFaceLens[i] = 4;
+
+		arFaceInds = new int[24];
+		// Face 1: bottom (-Z) [1,4,3,2]
+		arFaceInds[0] = 1; arFaceInds[1] = 4; arFaceInds[2] = 3; arFaceInds[3] = 2;
+		// Face 2: top (+Z) [5,6,7,8]
+		arFaceInds[4] = 5; arFaceInds[5] = 6; arFaceInds[6] = 7; arFaceInds[7] = 8;
+		// Face 3: front (-Y) [1,2,6,5]
+		arFaceInds[8] = 1; arFaceInds[9] = 2; arFaceInds[10] = 6; arFaceInds[11] = 5;
+		// Face 4: back (+Y) [3,4,8,7]
+		arFaceInds[12] = 3; arFaceInds[13] = 4; arFaceInds[14] = 8; arFaceInds[15] = 7;
+		// Face 5: left (-X) [1,5,8,4]
+		arFaceInds[16] = 1; arFaceInds[17] = 5; arFaceInds[18] = 8; arFaceInds[19] = 4;
+		// Face 6: right (+X) [2,3,7,6]
+		arFaceInds[20] = 2; arFaceInds[21] = 3; arFaceInds[22] = 7; arFaceInds[23] = 6;
+
+		int len3 = 3;
+		bool lenIsSmall = false;
+		if(oM != 0)
+		{
+			CPyParse::CopyPyListElemsToNumArray(oM, 'd', arM, len3, lenIsSmall);
+			if((arM == 0) || (len3 != 3) || lenIsSmall) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron, incorrect definition of magnetization vector");
+		}
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadObjPolyhdr(&ind, arCrd, nVerts, arFaceInds, arFaceLens, nFaces, arM, 0, 0, 0));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arCrd != 0) delete[] arCrd;
+	if(arFaceInds != 0) delete[] arFaceInds;
+	if(arFaceLens != 0) delete[] arFaceLens;
+	if(arM != 0) delete[] arM;
 	return oResInd;
 }
 
@@ -3857,7 +3908,8 @@ static PyObject* radia_UtiMPI(PyObject* self, PyObject* args)
 static PyMethodDef radia_methods[] = {
 	{"ObjRecMag", radia_ObjRecMag, METH_VARARGS, "ObjRecMag([x,y,z],[wx,wy,wz],[mx,my,mz]:[0,0,0]) creates a rectangular parallelepiped block with center point [x,y,z], dimensions [wx,wy,wz], and magnetization [mx,my,mz]."},
 	{"ObjThckPgn", radia_ObjThckPgn, METH_VARARGS, "ObjThckPgn(x,lx,[[y1,z1],[y2,z2],...],a:'x',[mx,my,mz]:[0,0,0]) creates an extruded polygon block; x is the position of the block's center of gravity in the extrusion direction, lx is the thickness, [[y1,z1],[y2,z2],...] is a list of points describing the polygon in 2D; the extrusion direction is defined by the character a (which can be 'x', 'y' or 'z'), [mx,my,mz] is the block magnetization."},
-	{"ObjPolyhdr", radia_ObjPolyhdr, METH_VARARGS, "ObjPolyhdr([[x1,y1,z1],[x2,y2,z2],...],[[f1i1,f1i2,...],[f2i1,f2i2,...],...],[mx,my,mz]:[0,0,0],J:[jx,jy,jz]|[[jx,jy,jz],[[djxdy,djxdy,djxdz],[djydy,djydy,djydz],[djzdy,djzdy,djzdz]]],Lin:'Rel') creates a uniformly magnetized polyhedron (closed volume limited by planes). [[x1,y1,z1],[x2,y2,z2],...] is a list of the polyhedron vertex points, [[f1n1,f1n2,...],[f2n1,f2n2,...],...] is a list of lists of indexes of vertex points defining the polyhedron faces, [mx,my,mz] is magnetization inside the polyhedron. The optional parameter J can be used to define constant [jx,jy,jz] or linearly-varying current density vector inside the polyhedron; the linear dependence can be defined through 3x3 matrix of coefficients [[djxdy,djxdy,djxdz],[djydy,djydy,djydz],[djzdy,djzdy,djzdz]]; depending on the value of the optional parameter Lin this linear dependence is treated with respect to the polyhedron center (Lin='Rel', default) or with respect to the origin of the Cartesian frame (Lin='Abs')."},
+	{"ObjTetrahedron", radia_ObjTetrahedron, METH_VARARGS, "ObjTetrahedron([[x1,y1,z1],[x2,y2,z2],[x3,y3,z3],[x4,y4,z4]],[mx,my,mz]:[0,0,0]) creates a uniformly magnetized tetrahedron from 4 vertices. Vertices 1-3 define the base triangle (counter-clockwise when viewed from below), vertex 4 is the apex. Uses 3 DOF magnetization model (MMM method)."},
+	{"ObjHexahedron", radia_ObjHexahedron, METH_VARARGS, "ObjHexahedron([[x1,y1,z1],...,[x8,y8,z8]],[mx,my,mz]:[0,0,0]) creates a uniformly magnetized hexahedron from 8 vertices. Vertices 1-4 define the bottom face (counter-clockwise when viewed from below), vertices 5-8 are directly above vertices 1-4. Uses 6 DOF surface charge model (MSC method)."},
 	{"ObjMltExtPgn", radia_ObjMltExtPgn, METH_VARARGS, "ObjMltExtPgn([[[[x11,y11],[x12,y12],...],z1],[[[x21,y21],[x22,y22],...],z2],...],[mx,my,mz]:[0,0,0]) attempts to create one uniformly magnetized convex polyhedron or a set of convex polyhedrons based on slices. The slice polygons are defined by the nested list [[[[x11,y11],[x12,y12],...],z1],[[[x21,y21],[x22,y22],...],z2],...], with [[x11,y11],[x12,y12],...],... describing the polygons in 2D, and z1, z2,... giving their attitudes (vertical coordinates). [mx,my,mz] is the magnetization inside the polyhedron(s) created."},
 	//{"ObjMltExtPgnCur", radia_ObjMltExtPgnCur, METH_VARARGS, "ObjMltExtPgnCur(z:0,a:\"z\",{{{x1,y1},{x2,y2},...},{{R1,T1,H1},{R2,T2,H2},...}},I,Frame->Loc|Lab) attempts to create a set of current-carrying convex polyhedron objects by applying a generalized extrusion to the initial planar convex polygon. The initial polygon is defined for the \"attitude\" z (0 by default) by the list of 2D points {{x1,y1},{x2,y2},...}, with the  a  character specifying orientation of this polygon normal in 3D space: if a = \"z\" (default orientation), the polygon is assumed to be parallel to XY plane of the laboratory frame (\"y\" for ZX plane, \"x\" for YZ plane). The extrusion can consist of a number of \"steps\", with each step creating one convex polyhedron defined optionally by one (or combination of) rotation(s), and/or translation(s), and/or one homothety: {Rk,Tk,Hk}, k = 1,2,..., applied to the base polygon (i.e. either the initial base polygon, or the polygon obtained by previous extrusion step). In case if k-th extrusion step contains one rotation Rk about an axis, it is defined as {{xRk,yRk,zRk},{vxRk,vyRk,vzRk},phRk}}, where {xRk,yRk,zRk} and {vxRk,vyRk,vzRk} are respectively 3D coordinates of a point and a vector difining the rotation axis, and phRk the rotation angle in radians; in case if Rk is a combination of \"atomic\" rotations about different axes, it should be defined as list: {Rk1,Rk2,...}. If k-th extrusion step includes translation Tk, it must be defined by vector {vxTk,vyTk,vzTk}; optional homothety with respect to the base polygon center of gravity should be defined either by two different coefficients {pxHk,pyHk} with respect to two orthogonal axes of the base polygon local frame, or by nested list {{pxHk,pyHk},phHk}, where phHk is rotation angle of the two homothety axes in radians. A real number I defines average current in Amperes along the extrusion path. The Frame->Loc or Frame->Lab option specifies whether the transformations at each step of the extrusion path are defined in the frame of the previous base polygon (Frame->Loc, default), or all the transformations are defined in the laboratory frame (Frame->Lab)."},
 	//{"ObjMltExtPgnMag", radia_ObjMltExtPgnMag, METH_VARARGS, "ObjMltExtPgnMag(z:0,a:\"z\",{{{x1,y1},{x2,y2},...},{{k1,q1},{k2,q2},...}:{{1,1},{1,1},...},{{R1,T1,H1},{R2,T2,H2},...}},{{mx1,my1,mz1},{mx2,my2,mz2},...}:{{0,0,0},{0,0,0},...},Frame->Loc|Lab,ki->Numb|Size,TriAngMin->...,TriAreaMax->...,TriExtOpt->\"...\") attempts to create a set of uniformly magnetized polyhedron objects by applying a generalized extrusion to the initial planar convex polygon. The initial polygon is defined for the \"altitude\" z (0 by default) by the list of 2D points {{x1,y1},{x2,y2},...}, with the  a  character specifying orientation of this polygon normal in 3D space: if a = \"z\" (default orientation), the polygon is assumed to be parallel to XY plane of the laboratory frame (\"y\" for ZX plane, \"x\" for YZ plane). The extrusion can consist of a number of \"steps\", with each step creating one convex polyhedron defined optionally by one (or combination of) rotation(s), and/or translation(s), and/or one homothety: {Rk,Tk,Hk}, k = 1,2,..., applied to the base polygon (i.e. either the initial base polygon, or the polygon obtained by previous extrusion step). In case if k-th extrusion step contains one rotation Rk about an axis, it is defined as {{xRk,yRk,zRk},{vxRk,vyRk,vzRk},phRk}}, where {xRk,yRk,zRk} and {vxRk,vyRk,vzRk} are respectively 3D coordinates of a point and a vector difining the rotation axis, and phRk the rotation angle in radians; in case if Rk is a combination of \"atomic\" rotations about different axes, it should be defined as a list: {Rk1,Rk2,...}. If k-th extrusion step includes translation Tk, it must be defined by vector {vxTk,vyTk,vzTk}; optional homothety with respect to the base polygon center of gravity should be defined either by two different coefficients {pxHk,pyHk} with respect to two orthogonal axes of the base polygon local frame, or by nested list {{pxHk,pyHk},phHk}, where phHk is rotation angle of the two homothety axes in radians. Optional list {{mx1,my1,mz1},{mx2,my2,mz2},...} defines magnetization vectors in each of polyhedrons to be created. The Frame->Loc or Frame->Lab option specifies whether the transformations at each step of the extrusion path are defined in the frame of the previous base polygon (Frame->Loc, default), or all the transformations are defined in the laboratory frame (Frame->Lab). Optionally, the object can be subdivided by (extruded) triangulation at its creation; this occurs if {{k1,q1},{k2,q2},...} subdivision (triangulation) parameters for each segment of the base polygon border are defined; the meaning of k1, k2,... depends on value of the option ki: if ki->Numb (default), then k1, k2,... are subdivision numbers; if ki->Size, they are average sizes of sub-segments to be produced; q1, q2,... are ratios of the last-to-first sub-segment lengths; the TriAngMin option defines minimal angle of triangles to be produced (in degrees, default is 20); the TriAreaMax option defines maximal area of traingles to be produced (in mm^2, not defined by default); the ExtOpt option allows to specify additional parameters for triangulation function in a string." },
