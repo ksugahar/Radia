@@ -259,16 +259,18 @@ bool BuildBaseMatrix(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 	double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
 	if(FlatInteract == nullptr) return false;
 
+	// CRITICAL: Use size_t to avoid int32 overflow for DOF > 46340
+	size_t matrix_size = (size_t)ctx.totalDOF * (size_t)ctx.totalDOF;
 	try {
-		ctx.BaseMatrix.resize(ctx.totalDOF * ctx.totalDOF);
+		ctx.BaseMatrix.resize(matrix_size);
 	} catch (const std::bad_alloc&) {
-		double required_gb = (double)(ctx.totalDOF) * ctx.totalDOF * 8 / (1024.0 * 1024.0 * 1024.0);
+		double required_gb = (double)matrix_size * 8 / (1024.0 * 1024.0 * 1024.0);
 		fprintf(stderr, "Radia::Solve> Matrix requires %.1f GB memory for DOF=%d. Problem too large.\n", required_gb, ctx.totalDOF);
 		return false;
 	}
 
 	// Copy interaction matrix
-	std::memcpy(ctx.BaseMatrix.data(), FlatInteract, ctx.totalDOF * ctx.totalDOF * sizeof(double));
+	std::memcpy(ctx.BaseMatrix.data(), FlatInteract, matrix_size * sizeof(double));
 
 	// Sign convention:
 	// MMM (3DOF): FlatInteract stores N, need -N -> negate
@@ -291,7 +293,8 @@ bool BuildBaseMatrix(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 					for(int j = 0; j < dof_col; j++)
 					{
 						// Column-major: (row, col) = [col * totalDOF + row]
-						int idx = (offset_col + j) * ctx.totalDOF + (offset_row + i);
+						// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+						size_t idx = (size_t)(offset_col + j) * ctx.totalDOF + (offset_row + i);
 						ctx.BaseMatrix[idx] = -ctx.BaseMatrix[idx];
 					}
 				}
@@ -770,7 +773,8 @@ void radTRelaxationMethNo_1::BuildFlatMatrix(std::vector<double>& A_flat, const 
 	int n_elem = ndof / 3;
 	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix;
 
-	A_flat.resize(ndof * ndof, 0.0);
+	// CRITICAL: Use size_t to avoid int32 overflow for DOF > 46340
+	A_flat.resize((size_t)ndof * (size_t)ndof, 0.0);
 
 	if(IntrcMat != nullptr)
 	{
@@ -947,16 +951,18 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	// Build system matrix: copy base matrix and add diagonal terms
 	// LAPACK dgesv destroys the matrix, so we need a working copy
 	// Only one copy is needed - dgesv works directly on this
+	// CRITICAL: Use size_t to avoid int32 overflow for DOF > 46340
+	size_t matrix_size = (size_t)totalDOF * (size_t)totalDOF;
 	std::vector<double> SystemMatrix;
 	try {
-		SystemMatrix.resize(totalDOF * totalDOF);
+		SystemMatrix.resize(matrix_size);
 	} catch (const std::bad_alloc&) {
 		// Memory allocation failed - likely DOF is too large for LU
-		double required_gb = (double)(totalDOF) * totalDOF * 8 / (1024.0 * 1024.0 * 1024.0);
+		double required_gb = (double)matrix_size * 8 / (1024.0 * 1024.0 * 1024.0);
 		fprintf(stderr, "Radia::Solve> LU solver requires %.1f GB memory for DOF=%d. Use BiCGSTAB (method 1) or HACApK (method 2) for large problems.\n", required_gb, totalDOF);
 		return -2;  // Memory allocation failure
 	}
-	std::memcpy(SystemMatrix.data(), ctx.BaseMatrix.data(), totalDOF * totalDOF * sizeof(double));
+	std::memcpy(SystemMatrix.data(), ctx.BaseMatrix.data(), matrix_size * sizeof(double));
 
 	// Build RHS vector (will be overwritten with solution by dgesv)
 	std::vector<double> RHS(totalDOF);
@@ -1010,7 +1016,8 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	{
 		for(int j = i + 1; j < totalDOF; j++)
 		{
-			std::swap(SystemMatrix[i * totalDOF + j], SystemMatrix[j * totalDOF + i]);
+			// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+			std::swap(SystemMatrix[(size_t)i * totalDOF + j], SystemMatrix[(size_t)j * totalDOF + i]);
 		}
 	}
 	int ierr = SolveLU_Flat(SystemMatrix, RHS, totalDOF);
@@ -1133,18 +1140,20 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 			int offset_col = IntrctPtr->GetElementDOFOffset(col_elem);
 
 			// Get block from flat matrix - COLUMN-MAJOR: block starts at [col * totalDOF + row]
-			const double* block = &FlatInteract[offset_col * totalDOF + offset_row];
+			// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+			const double* block = &FlatInteract[(size_t)offset_col * totalDOF + offset_row];
 
 			// Sign: negate for 3 DOF blocks, use as-is for 6x6 MSC blocks
 			double sign = (dof_row == 6 && dof_col == 6) ? 1.0 : -1.0;
 
 			// Column-major block access: element (i, j) within block is at [j * totalDOF + i]
+			// CRITICAL: Use size_t cast for indexing with totalDOF
 			for(int i = 0; i < dof_row; i++)
 			{
 				double sum = 0.0;
 				for(int j = 0; j < dof_col; j++)
 				{
-					sum += block[j * totalDOF + i] * x[offset_col + j];
+					sum += block[(size_t)j * totalDOF + i] * x[offset_col + j];
 				}
 				y[offset_row + i] += sign * sum;
 			}
@@ -1170,7 +1179,8 @@ void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>
 		int offset = IntrctPtr->GetElementDOFOffset(elem);
 
 		// Get diagonal block
-		const double* diag_block = &FlatInteract[offset * totalDOF + offset];
+		// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+		const double* diag_block = &FlatInteract[(size_t)offset * totalDOF + offset];
 
 		// Sign: negate for 3 DOF, use as-is for 6 DOF MSC
 		double sign = (dof == 6) ? 1.0 : -1.0;
@@ -1178,7 +1188,8 @@ void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>
 		for(int k = 0; k < dof; k++)
 		{
 			// Diagonal element: sign*matrix_ii + 1/chi
-			diag[offset + k] = sign * diag_block[k * totalDOF + k] + inv_chi[offset + k];
+			// CRITICAL: Use size_t cast for indexing with totalDOF
+			diag[offset + k] = sign * diag_block[(size_t)k * totalDOF + k] + inv_chi[offset + k];
 		}
 	}
 }

@@ -410,7 +410,7 @@ void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded, char skipInte
 		// Dense matrix requires N^2 * sizeof(TMatrix3df) = N^2 * 36 bytes
 		size_t matrix_size = (size_t)AmOfMainElem * (size_t)AmOfMainElem;
 		size_t required_bytes = matrix_size * sizeof(TMatrix3df);
-		const size_t MAX_DENSE_MATRIX_BYTES = 8ULL * 1024 * 1024 * 1024;  // 8 GB limit
+		const size_t MAX_DENSE_MATRIX_BYTES = 100ULL * 1024 * 1024 * 1024;  // 100 GB limit
 
 		if(required_bytes > MAX_DENSE_MATRIX_BYTES)
 		{
@@ -717,7 +717,8 @@ double* radTInteraction::GetInteractBlock(int row_elem, int col_elem)
 
 	// Block starts at row offset_row, column offset_col in the totalDOF x totalDOF matrix
 	// Column-major: element at (row, col) is at index [col * m_totalDOF + row]
-	return &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
+	// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+	return &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
 }
 
 const double* radTInteraction::GetInteractBlock(int row_elem, int col_elem) const
@@ -728,7 +729,8 @@ const double* radTInteraction::GetInteractBlock(int row_elem, int col_elem) cons
 	int offset_col = m_elemDOFOffset[col_elem];
 
 	// Column-major: element at (row, col) is at index [col * m_totalDOF + row]
-	return &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
+	// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+	return &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
 }
 
 //-------------------------------------------------------------------------
@@ -779,21 +781,22 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	// For 100k DOF, this is ~80 GB which exceeds typical system memory
 	size_t matrix_size = (size_t)m_totalDOF * (size_t)m_totalDOF;
 	size_t required_bytes = matrix_size * sizeof(double);
-	const size_t MAX_DENSE_MATRIX_BYTES = 8ULL * 1024 * 1024 * 1024;  // 8 GB limit
+	const size_t MAX_DENSE_MATRIX_BYTES = 100ULL * 1024 * 1024 * 1024;  // 100 GB limit
 
 	if(required_bytes > MAX_DENSE_MATRIX_BYTES)
 	{
 		std::cerr << "[Radia] Error: Dense matrix too large for LU/BiCGSTAB solver." << std::endl;
 		std::cerr << "[Radia] DOF=" << m_totalDOF << ", required memory="
 		          << (required_bytes / (1024*1024*1024)) << " GB" << std::endl;
-		std::cerr << "[Radia] Use HACApK solver (method 2) for large problems (>50,000 DOF)." << std::endl;
+		std::cerr << "[Radia] Use HACApK solver (method 2) for large problems (>100,000 DOF)." << std::endl;
 		std::cerr.flush();
 		return 0;  // Signal failure
 	}
 
 	// Allocate flattened interaction matrix
+	// CRITICAL: Use size_t to avoid int32 overflow for DOF > 46340 (sqrt(INT32_MAX))
 	try {
-		m_flatInteractMatrix.resize(m_totalDOF * m_totalDOF, 0.0);
+		m_flatInteractMatrix.resize(matrix_size, 0.0);
 	} catch(const std::bad_alloc&) {
 		std::cerr << "[Radia] Error: Memory allocation failed for dense interaction matrix." << std::endl;
 		std::cerr << "[Radia] DOF=" << m_totalDOF << ", required memory="
@@ -859,7 +862,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 					// Get pointer to this block in the flattened matrix
 					// COLUMN-MAJOR: A(row, col) at index [col * m_totalDOF + row]
-					double* block = &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
+					// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+					double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
 
 					// Compute 3x3 block using cached geometry
 					double N_mat[9];
@@ -867,15 +871,16 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 					// Copy to flat matrix (Compute3x3BlockFast returns row-major)
 					// Need to transpose to column-major for LAPACK
-					block[0 * m_totalDOF + 0] = N_mat[0];  // (0,0)
-					block[0 * m_totalDOF + 1] = N_mat[3];  // (1,0)
-					block[0 * m_totalDOF + 2] = N_mat[6];  // (2,0)
-					block[1 * m_totalDOF + 0] = N_mat[1];  // (0,1)
-					block[1 * m_totalDOF + 1] = N_mat[4];  // (1,1)
-					block[1 * m_totalDOF + 2] = N_mat[7];  // (2,1)
-					block[2 * m_totalDOF + 0] = N_mat[2];  // (0,2)
-					block[2 * m_totalDOF + 1] = N_mat[5];  // (1,2)
-					block[2 * m_totalDOF + 2] = N_mat[8];  // (2,2)
+					// CRITICAL: Use size_t cast for all indexing with m_totalDOF
+					block[(size_t)0 * m_totalDOF + 0] = N_mat[0];  // (0,0)
+					block[(size_t)0 * m_totalDOF + 1] = N_mat[3];  // (1,0)
+					block[(size_t)0 * m_totalDOF + 2] = N_mat[6];  // (2,0)
+					block[(size_t)1 * m_totalDOF + 0] = N_mat[1];  // (0,1)
+					block[(size_t)1 * m_totalDOF + 1] = N_mat[4];  // (1,1)
+					block[(size_t)1 * m_totalDOF + 2] = N_mat[7];  // (2,1)
+					block[(size_t)2 * m_totalDOF + 0] = N_mat[2];  // (0,2)
+					block[(size_t)2 * m_totalDOF + 1] = N_mat[5];  // (1,2)
+					block[(size_t)2 * m_totalDOF + 2] = N_mat[8];  // (2,2)
 				}
 			}
 			return 1;
@@ -897,7 +902,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 				// Get pointer to this block in the flattened matrix
 				// COLUMN-MAJOR: A(row, col) at index [col * m_totalDOF + row]
-				double* block = &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
+				// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+				double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
 
 				// Compute the interaction block based on DOF types
 				// FAST PATH: Only for 3x3 blocks (tetrahedra)
@@ -916,15 +922,16 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					elem_col->B_comp(&Field);
 
 					// Store result directly (no transformation)
-					block[0 * m_totalDOF + 0] = Field.B.x;  // (0,0)
-					block[0 * m_totalDOF + 1] = Field.H.x;  // (1,0)
-					block[0 * m_totalDOF + 2] = Field.A.x;  // (2,0)
-					block[1 * m_totalDOF + 0] = Field.B.y;  // (0,1)
-					block[1 * m_totalDOF + 1] = Field.H.y;  // (1,1)
-					block[1 * m_totalDOF + 2] = Field.A.y;  // (2,1)
-					block[2 * m_totalDOF + 0] = Field.B.z;  // (0,2)
-					block[2 * m_totalDOF + 1] = Field.H.z;  // (1,2)
-					block[2 * m_totalDOF + 2] = Field.A.z;  // (2,2)
+					// CRITICAL: Use size_t cast for all indexing with m_totalDOF
+					block[(size_t)0 * m_totalDOF + 0] = Field.B.x;  // (0,0)
+					block[(size_t)0 * m_totalDOF + 1] = Field.H.x;  // (1,0)
+					block[(size_t)0 * m_totalDOF + 2] = Field.A.x;  // (2,0)
+					block[(size_t)1 * m_totalDOF + 0] = Field.B.y;  // (0,1)
+					block[(size_t)1 * m_totalDOF + 1] = Field.H.y;  // (1,1)
+					block[(size_t)1 * m_totalDOF + 2] = Field.A.y;  // (2,1)
+					block[(size_t)2 * m_totalDOF + 0] = Field.B.z;  // (0,2)
+					block[(size_t)2 * m_totalDOF + 1] = Field.H.z;  // (1,2)
+					block[(size_t)2 * m_totalDOF + 2] = Field.A.z;  // (2,2)
 				}
 				// Note: MSC blocks (3x6, 6x3, 6x6) not handled in fast path
 				// They will fall through and be computed in slow path below
@@ -963,14 +970,15 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					Compute6x6BlockFast(hex_row, hex_col, K_block);
 
 					// Copy to column-major flat matrix (transpose from row-major)
-					double* block = &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
+					// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+					double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
 					for(int i = 0; i < 6; i++)
 					{
 						for(int j = 0; j < 6; j++)
 						{
 							// K_block is row-major: K[i][j] at i*6+j
 							// block is column-major: block[j*stride+i]
-							block[j * m_totalDOF + i] = K_block[i * 6 + j];
+							block[(size_t)j * m_totalDOF + i] = K_block[i * 6 + j];
 						}
 					}
 				}
@@ -1008,7 +1016,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				int dof_row = m_elemDOF[row];
 				int offset_row = m_elemDOFOffset[row];
 
-				double* block = &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
+				// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+				double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
 
 				// Check if target is MSC hexahedron
 				radTPolyhedron* poly_row = nullptr;
@@ -1025,15 +1034,16 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
 					elem_col->B_comp(&Field);
 
-					block[0 * m_totalDOF + 0] = Field.B.x;
-					block[0 * m_totalDOF + 1] = Field.H.x;
-					block[0 * m_totalDOF + 2] = Field.A.x;
-					block[1 * m_totalDOF + 0] = Field.B.y;
-					block[1 * m_totalDOF + 1] = Field.H.y;
-					block[1 * m_totalDOF + 2] = Field.A.y;
-					block[2 * m_totalDOF + 0] = Field.B.z;
-					block[2 * m_totalDOF + 1] = Field.H.z;
-					block[2 * m_totalDOF + 2] = Field.A.z;
+					// CRITICAL: Use size_t cast for all indexing with m_totalDOF
+					block[(size_t)0 * m_totalDOF + 0] = Field.B.x;
+					block[(size_t)0 * m_totalDOF + 1] = Field.H.x;
+					block[(size_t)0 * m_totalDOF + 2] = Field.A.x;
+					block[(size_t)1 * m_totalDOF + 0] = Field.B.y;
+					block[(size_t)1 * m_totalDOF + 1] = Field.H.y;
+					block[(size_t)1 * m_totalDOF + 2] = Field.A.y;
+					block[(size_t)2 * m_totalDOF + 0] = Field.B.z;
+					block[(size_t)2 * m_totalDOF + 1] = Field.H.z;
+					block[(size_t)2 * m_totalDOF + 2] = Field.A.z;
 				}
 				else if(dof_row == 6 && dof_col == 6 && poly_row && poly_col)
 				{
@@ -1065,7 +1075,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							              H_total.y * poly_row->FaceNormal[face_i].y +
 							              H_total.z * poly_row->FaceNormal[face_i].z;
 
-							block[face_j * m_totalDOF + face_i] = -K_ij * RadConst::INV_FOUR_PI;
+							// CRITICAL: Use size_t cast for indexing with m_totalDOF
+							block[(size_t)face_j * m_totalDOF + face_i] = -K_ij * RadConst::INV_FOUR_PI;
 						}
 					}
 				}
@@ -1085,9 +1096,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						H_total.y = H_face.y + H_point.y;
 						H_total.z = H_face.z + H_point.z;
 
-						block[face_j * m_totalDOF + 0] = H_total.x * RadConst::INV_FOUR_PI;
-						block[face_j * m_totalDOF + 1] = H_total.y * RadConst::INV_FOUR_PI;
-						block[face_j * m_totalDOF + 2] = H_total.z * RadConst::INV_FOUR_PI;
+						// CRITICAL: Use size_t cast for indexing with m_totalDOF
+						block[(size_t)face_j * m_totalDOF + 0] = H_total.x * RadConst::INV_FOUR_PI;
+						block[(size_t)face_j * m_totalDOF + 1] = H_total.y * RadConst::INV_FOUR_PI;
+						block[(size_t)face_j * m_totalDOF + 2] = H_total.z * RadConst::INV_FOUR_PI;
 					}
 				}
 				else if(dof_row == 6 && dof_col == 3 && poly_row)
@@ -1111,9 +1123,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						double K_My = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
 						double K_Mz = n.x * Field.A.x + n.y * Field.A.y + n.z * Field.A.z;
 
-						block[0 * m_totalDOF + face_i] = K_Mx * RadConst::INV_FOUR_PI;
-						block[1 * m_totalDOF + face_i] = K_My * RadConst::INV_FOUR_PI;
-						block[2 * m_totalDOF + face_i] = K_Mz * RadConst::INV_FOUR_PI;
+						// CRITICAL: Use size_t cast for indexing with m_totalDOF
+						block[(size_t)0 * m_totalDOF + face_i] = K_Mx * RadConst::INV_FOUR_PI;
+						block[(size_t)1 * m_totalDOF + face_i] = K_My * RadConst::INV_FOUR_PI;
+						block[(size_t)2 * m_totalDOF + face_i] = K_Mz * RadConst::INV_FOUR_PI;
 					}
 				}
 				else
@@ -1123,7 +1136,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					{
 						for(int j = 0; j < dof_col; j++)
 						{
-							block[j * m_totalDOF + i] = 0.0;
+							// CRITICAL: Use size_t cast for indexing with m_totalDOF
+							block[(size_t)j * m_totalDOF + i] = 0.0;
 						}
 					}
 				}
@@ -1148,7 +1162,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 			// Get pointer to this block in the flattened matrix
 			// COLUMN-MAJOR: A(row, col) at index [col * m_totalDOF + row]
-			double* block = &m_flatInteractMatrix[offset_col * m_totalDOF + offset_row];
+			// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+			double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
 
 			// Compute the interaction block based on DOF types
 			// For now, only support 3x3 blocks (standard elements)
@@ -1180,15 +1195,16 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 				// Copy 3x3 matrix to flattened block (COLUMN-MAJOR)
 				// A(i,j) at [j * stride + i] where stride = m_totalDOF
-				block[0 * m_totalDOF + 0] = SubMatrix.Str0.x;  // (0,0)
-				block[0 * m_totalDOF + 1] = SubMatrix.Str1.x;  // (1,0)
-				block[0 * m_totalDOF + 2] = SubMatrix.Str2.x;  // (2,0)
-				block[1 * m_totalDOF + 0] = SubMatrix.Str0.y;  // (0,1)
-				block[1 * m_totalDOF + 1] = SubMatrix.Str1.y;  // (1,1)
-				block[1 * m_totalDOF + 2] = SubMatrix.Str2.y;  // (2,1)
-				block[2 * m_totalDOF + 0] = SubMatrix.Str0.z;  // (0,2)
-				block[2 * m_totalDOF + 1] = SubMatrix.Str1.z;  // (1,2)
-				block[2 * m_totalDOF + 2] = SubMatrix.Str2.z;  // (2,2)
+				// CRITICAL: Use size_t cast for indexing with m_totalDOF
+				block[(size_t)0 * m_totalDOF + 0] = SubMatrix.Str0.x;  // (0,0)
+				block[(size_t)0 * m_totalDOF + 1] = SubMatrix.Str1.x;  // (1,0)
+				block[(size_t)0 * m_totalDOF + 2] = SubMatrix.Str2.x;  // (2,0)
+				block[(size_t)1 * m_totalDOF + 0] = SubMatrix.Str0.y;  // (0,1)
+				block[(size_t)1 * m_totalDOF + 1] = SubMatrix.Str1.y;  // (1,1)
+				block[(size_t)1 * m_totalDOF + 2] = SubMatrix.Str2.y;  // (2,1)
+				block[(size_t)2 * m_totalDOF + 0] = SubMatrix.Str0.z;  // (0,2)
+				block[(size_t)2 * m_totalDOF + 1] = SubMatrix.Str1.z;  // (1,2)
+				block[(size_t)2 * m_totalDOF + 2] = SubMatrix.Str2.z;  // (2,2)
 			}
 #ifdef RADIA_MSC_SUPPORT
 			else if(dof_row == 3 && dof_col == 6)
@@ -1234,9 +1250,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
 						// row is component (0,1,2 = Mx,My,Mz), col is face_j
 						// Sign convention: +K/(4*pi) for tetra-hex (following ELF)
-						block[face_j * m_totalDOF + 0] = H_final.x * RadConst::INV_FOUR_PI;  // (Mx, face_j)
-						block[face_j * m_totalDOF + 1] = H_final.y * RadConst::INV_FOUR_PI;  // (My, face_j)
-						block[face_j * m_totalDOF + 2] = H_final.z * RadConst::INV_FOUR_PI;  // (Mz, face_j)
+						// CRITICAL: Use size_t cast for indexing with m_totalDOF
+						block[(size_t)face_j * m_totalDOF + 0] = H_final.x * RadConst::INV_FOUR_PI;  // (Mx, face_j)
+						block[(size_t)face_j * m_totalDOF + 1] = H_final.y * RadConst::INV_FOUR_PI;  // (My, face_j)
+						block[(size_t)face_j * m_totalDOF + 2] = H_final.z * RadConst::INV_FOUR_PI;  // (Mz, face_j)
 					}
 				}
 			}
@@ -1302,9 +1319,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
 						// row is face_i (0-5), col is component (0,1,2 = Mx,My,Mz)
 						// Sign convention: +K/(4*pi) for hex-tetra (following ELF)
-						block[0 * m_totalDOF + face_i] = K_face_Mx * RadConst::INV_FOUR_PI;  // (face_i, Mx)
-						block[1 * m_totalDOF + face_i] = K_face_My * RadConst::INV_FOUR_PI;  // (face_i, My)
-						block[2 * m_totalDOF + face_i] = K_face_Mz * RadConst::INV_FOUR_PI;  // (face_i, Mz)
+						// CRITICAL: Use size_t cast for indexing with m_totalDOF
+						block[(size_t)0 * m_totalDOF + face_i] = K_face_Mx * RadConst::INV_FOUR_PI;  // (face_i, Mx)
+						block[(size_t)1 * m_totalDOF + face_i] = K_face_My * RadConst::INV_FOUR_PI;  // (face_i, My)
+						block[(size_t)2 * m_totalDOF + face_i] = K_face_Mz * RadConst::INV_FOUR_PI;  // (face_i, Mz)
 					}
 				}
 			}
@@ -1359,7 +1377,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							}
 
 							// Store -K_ij / (4*pi) (COLUMN-MAJOR): A(i,j) at [j * stride + i]
-							block[face_j * m_totalDOF + face_i] = -K_ij * RadConst::INV_FOUR_PI;
+							// CRITICAL: Use size_t cast for indexing with m_totalDOF
+							block[(size_t)face_j * m_totalDOF + face_i] = -K_ij * RadConst::INV_FOUR_PI;
 						}
 					}
 				}
@@ -1372,7 +1391,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				{
 					for(int j = 0; j < dof_col; j++)
 					{
-						block[j * m_totalDOF + i] = 0.0;
+						// CRITICAL: Use size_t cast for indexing with m_totalDOF
+						block[(size_t)j * m_totalDOF + i] = 0.0;
 					}
 				}
 			}
