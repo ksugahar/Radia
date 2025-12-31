@@ -83,9 +83,9 @@ cube_uniform_field/
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 722,213 | LU | 55218 MB | - | 0 | 1 | 113.3s | - | 316.0s | **437.5s** |
-| 721,938 | BiCGSTAB | 37478 MB | - | 0 | 1 | 114.2s | - | 13.5s | **131.7s** |
-| 721,979 | HACApK | 2788 MB | **15%** | 16 | 1 | 5.6ms | 55.3s | 3.0s | **58.6s** |
+| - | LU | - | - | - | - | - | - | - | **(~7min estimated)** |
+| 721,938 | BiCGSTAB | 37481 MB | - | 0 | 1 | 57.7s | - | 24.9s | **82.6s** |
+| 721,979 | HACApK | 2796 MB | **15%** | 16 | 1 | 6.3ms | 31.7s | 3.4s | **35.2s** |
 
 #### N=25 (15,625 elements, 93,750 DOF) - HACApK only
 
@@ -123,13 +123,13 @@ cube_uniform_field/
 | 719,902 | BiCGSTAB | 6724 MB | - | 0 | 27 | 10.5s | - | 24s | **34s** |
 | 719,883 | HACApK | 912 MB | **26%** | 85 | 29 | 1.9ms | 8.7s | 5.5s | **14s** |
 
-#### N=20 (8,000 elements, 48,000 DOF) - Not run (too slow)
+#### N=20 (8,000 elements, 48,000 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
 | - | LU | - | - | - | - | - | - | - | **(~4h estimated)** |
-| - | BiCGSTAB | - | - | - | - | - | - | - | **(not run)** |
-| - | HACApK | - | - | - | - | - | - | - | **(not run)** |
+| 721,269 | BiCGSTAB | 37485 MB | - | 0 | 30 | 57.8s | - | 166s | **224s** |
+| 721,299 | HACApK | 2799 MB | **15%** | 120 | 30 | 6.5ms | 32.1s | 24.6s | **57s** |
 
 ---
 
@@ -208,8 +208,8 @@ cube_uniform_field/
 ### Performance Summary
 
 1. **HACApK vs LU**: HACApK is **43x faster** for hex N=15 nonlinear (14s vs 598s)
-2. **HACApK vs BiCGSTAB**: HACApK is **2.4x faster** for hex N=15 nonlinear (14s vs 34s)
-3. **Memory Efficiency**: HACApK uses **11x less memory** at hex N=15 (912 MB vs 9926 MB)
+2. **HACApK vs BiCGSTAB**: HACApK is **3.9x faster** for hex N=20 nonlinear (57s vs 224s)
+3. **Memory Efficiency**: HACApK uses **13x less memory** at hex N=20 (2.8 GB vs 37.5 GB)
 4. **Compression Ratio**: Improves with problem size (50% at N=10, 26% at N=15, 15% at N=20)
 5. **Tetra HACApK Optimization (v1.4.1)**: ELF-style face basis caching provides **12-20x speedup** in H-matrix build
 
@@ -332,4 +332,4 @@ The "Compression" column shows: **H-matrix memory / Dense matrix memory x 100%**
 
 ---
 
-**Last Updated**: 2025-12-31 (8-thread verified benchmark: N=5, N=10, N=15 all solvers)
+**Last Updated**: 2025-12-31 (8-thread verified benchmark: N=5, N=10, N=15, N=20)
