@@ -2,6 +2,17 @@
 
 Radia magnetostatic solver benchmark for a soft iron cube in uniform external field.
 
+## Test Environment
+
+| Item | Specification |
+|------|---------------|
+| **CPU** | Intel Core i7-10700 (8 cores, 8 threads @ 2.90 GHz) |
+| **Memory** | 64 GB DDR4 |
+| **OS** | Windows 10/11 |
+| **OpenMP** | OMP_NUM_THREADS=8, MKL_NUM_THREADS=8 |
+| **Compiler** | MSVC 2022 + Intel MKL |
+| **Python** | 3.12 |
+
 ## Folder Structure
 
 ```
@@ -49,9 +60,26 @@ cube_uniform_field/
 
 ---
 
-## Benchmark Results (2025-12-31, 8-thread)
+## Column Definitions
 
-**System**: 8-core CPU, OMP_NUM_THREADS=8, MKL_NUM_THREADS=8
+| Column | Description |
+|--------|-------------|
+| **M_avg_z** | Average magnetization in z-direction [A/m] |
+| **Solver** | Solver method: LU, BiCGSTAB, or HACApK |
+| **Memory** | Peak working set memory (Windows peak_wset) |
+| **Compress** | H-matrix compression ratio (H-mat memory / Dense memory) |
+| **Linear** | Number of linear (BiCGSTAB) iterations |
+| **Nonl** | Number of nonlinear iterations |
+| **MatBuild** | Dense interaction matrix construction time (LU/BiCGSTAB only) |
+| **H-matrix** | H-matrix construction time including ACA+ fill (**HACApK only**) |
+| **LinSolve** | Linear system solve time |
+| **Total** | Total solve time |
+
+**Note**: "H-matrix" column shows the H-matrix build time for HACApK solver only. LU and BiCGSTAB use dense matrices, so this column shows "-" for those solvers.
+
+---
+
+## Benchmark Results (2025-12-31, 8-thread)
 
 ### 1. Hexahedral Linear Benchmark
 
@@ -169,7 +197,7 @@ cube_uniform_field/
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 737,397 | HACApK | 8715 MB | **10%** | 26 | 1 | 24ms | 2158s | 14.6s | 2175s |
+| 737,397 | HACApK | 8758 MB | **10%** | 26 | 1 | 22ms | 71.1s | 17.4s | **90.7s** |
 
 ---
 
@@ -205,7 +233,7 @@ cube_uniform_field/
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 727,285 | HACApK | 8734 MB | **10%** | 256 | 69 | 23ms | 2204s | 152s | 2357s |
+| 727,285 | HACApK | 8772 MB | **10%** | 256 | 69 | 23ms | 64.9s | 172.8s | **240s** |
 
 ---
 
@@ -268,6 +296,62 @@ cube_uniform_field/
 | Dense LU | O(N^3) | O(N^2) |
 | Dense BiCGSTAB | O(N^2) per iter | O(N^2) |
 | BiCGSTAB+H-matrix | **O(N log N)** per iter | **O(N log N)** |
+
+---
+
+## H-Matrix and ACA+ Algorithm
+
+### Hierarchical Matrix (H-Matrix)
+
+The H-matrix approach partitions the interaction matrix into a hierarchy of blocks. Blocks representing well-separated clusters are approximated as low-rank matrices, while nearby interactions are stored as dense blocks.
+
+**Cluster Tree Construction**:
+1. Build binary space partitioning tree of element centroids
+2. Leaf nodes contain at most `leaf_size` elements (default: 10)
+3. Block admissibility: cluster pair (i,j) is low-rank if `dist(i,j) >= eta * max(diam(i), diam(j))` (eta=2.0)
+
+### ACA+ (Adaptive Cross Approximation with Pivoting)
+
+ACA+ is used to construct low-rank approximations of admissible blocks. It approximates a matrix A as:
+
+```
+A ~ U * V^T,  where U is m x k and V is n x k
+```
+
+**ACA+ Algorithm with Partial Pivoting**:
+
+1. **Initialization**: Set residual R = A, rank k = 0
+2. **Row Selection (Pivoting)**: Find row index i with maximum residual norm
+3. **Column Selection**: In row i, find column j with maximum absolute value
+4. **Update**:
+   - u_k = R(:, j) / R(i, j)  (column vector)
+   - v_k = R(i, :)^T         (row vector)
+   - R = R - u_k * v_k^T     (rank-1 update)
+5. **Convergence Check**: If ||u_k|| * ||v_k|| < eps * ||A||_F, stop
+6. **Increment**: k = k + 1, goto step 2
+
+**Key Features**:
+- **Partial Pivoting**: Selects the row with largest residual norm, ensuring numerical stability
+- **Adaptive Rank**: Automatically determines the rank needed to achieve tolerance `eps`
+- **Efficiency**: O(k * (m + n)) operations per rank-1 update
+- **No Full Matrix Required**: Only accesses matrix elements as needed
+
+**Parameters**:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `eps` | 1e-4 | ACA+ tolerance (convergence criterion) |
+| `leaf_size` | 10 | Maximum elements per leaf cluster |
+| `eta` | 2.0 | Admissibility parameter (higher = more low-rank blocks) |
+
+**Typical Compression Results**:
+
+| DOF | Compression | Memory Savings |
+|-----|-------------|----------------|
+| 6,000 | 50% | 2x |
+| 20,000 | 26% | 4x |
+| 48,000 | 15% | 7x |
+| 94,000 | 9% | 11x |
 
 ---
 
@@ -338,4 +422,4 @@ The "Compression" column shows: **H-matrix memory / Dense matrix memory x 100%**
 
 ---
 
-**Last Updated**: 2025-12-31 (8-thread verified benchmark: N=5, N=10, N=15, N=20, N=25)
+**Last Updated**: 2025-12-31 (Added ACA+ algorithm documentation, test environment specs, column definitions)
