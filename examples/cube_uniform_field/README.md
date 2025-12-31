@@ -67,15 +67,14 @@ cube_uniform_field/
 | **M_avg_z** | Average magnetization in z-direction [A/m] |
 | **Solver** | Solver method: LU, BiCGSTAB, or HACApK |
 | **Memory** | Peak working set memory (Windows peak_wset) |
-| **Compress** | H-matrix compression ratio (H-mat memory / Dense memory) |
+| **Compress** | H-matrix compression ratio (H-mat memory / Dense memory, HACApK only) |
 | **Linear** | Number of linear (BiCGSTAB) iterations |
 | **Nonl** | Number of nonlinear iterations |
-| **MatBuild** | Dense interaction matrix construction time (LU/BiCGSTAB only) |
-| **H-matrix** | H-matrix construction time including ACA+ fill (**HACApK only**) |
+| **MatBuild** | Matrix construction time: Dense matrix (LU/BiCGSTAB) or H-matrix with ACA+ (HACApK) |
 | **LinSolve** | Linear system solve time |
 | **Total** | Total solve time |
 
-**Note**: "H-matrix" column shows the H-matrix build time for HACApK solver only. LU and BiCGSTAB use dense matrices, so this column shows "-" for those solvers.
+**Note**: For HACApK solver, "MatBuild" shows H-matrix construction time (including ACA+ fill). For LU/BiCGSTAB, it shows dense interaction matrix construction time.
 
 ---
 
@@ -85,41 +84,41 @@ cube_uniform_field/
 
 #### N=5 (125 elements, 750 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 701,878 | LU | 51 MB | - | 0 | 1 | 0.07s | - | 0.40s | **0.48s** |
-| 701,878 | BiCGSTAB | 46 MB | - | 0 | 1 | 0.03s | - | 3ms | **0.04s** |
-| 701,878 | HACApK | 41 MB | 97% | 11 | 1 | 0.1ms | 0.03s | 3ms | **0.04s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 701,878 | LU | 51 MB | - | 0 | 1 | 0.07s | 0.40s | **0.48s** |
+| 701,878 | BiCGSTAB | 46 MB | - | 0 | 1 | 0.03s | 3ms | **0.04s** |
+| 701,878 | HACApK | 41 MB | 97% | 11 | 1 | 0.03s | 3ms | **0.04s** |
 
 #### N=10 (1,000 elements, 6,000 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 716,184 | LU | 933 MB | - | 0 | 1 | 1.0s | - | 1.0s | **2.1s** |
-| 716,110 | BiCGSTAB | 632 MB | - | 0 | 1 | 1.0s | - | 0.2s | **1.3s** |
-| 716,183 | HACApK | 193 MB | **50%** | 11 | 1 | 0.6ms | 1.3s | 0.1s | **1.4s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 716,184 | LU | 933 MB | - | 0 | 1 | 1.0s | 1.0s | **2.1s** |
+| 716,110 | BiCGSTAB | 632 MB | - | 0 | 1 | 1.0s | 0.2s | **1.3s** |
+| 716,183 | HACApK | 193 MB | **50%** | 11 | 1 | 1.3s | 0.1s | **1.4s** |
 
 #### N=15 (3,375 elements, 20,250 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 720,157 | LU | 9924 MB | - | 0 | 1 | 10.3s | - | 18.9s | **29.2s** |
-| 720,159 | BiCGSTAB | 6723 MB | - | 0 | 1 | 10.2s | - | 4.7s | **15.0s** |
-| 720,169 | HACApK | 911 MB | **26%** | 10 | 1 | 1.9ms | 8.3s | 0.6s | **9.0s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 720,157 | LU | 9924 MB | - | 0 | 1 | 10.3s | 18.9s | **29.2s** |
+| 720,159 | BiCGSTAB | 6723 MB | - | 0 | 1 | 10.2s | 4.7s | **15.0s** |
+| 720,169 | HACApK | 911 MB | **26%** | 10 | 1 | 8.3s | 0.6s | **9.0s** |
 
 #### N=20 (8,000 elements, 48,000 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| - | LU | - | - | - | - | - | - | - | **(~7min estimated)** |
-| 721,938 | BiCGSTAB | 37481 MB | - | 0 | 1 | 57.7s | - | 24.9s | **82.6s** |
-| 721,979 | HACApK | 2796 MB | **15%** | 16 | 1 | 6.3ms | 31.7s | 3.4s | **35.2s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| - | LU | - | - | - | - | - | - | **(~7min estimated)** |
+| 721,938 | BiCGSTAB | 37481 MB | - | 0 | 1 | 57.7s | 24.9s | **82.6s** |
+| 721,979 | HACApK | 2796 MB | **15%** | 16 | 1 | 31.7s | 3.4s | **35.2s** |
 
 #### N=25 (15,625 elements, 93,750 DOF) - HACApK only
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 723,047 | HACApK | 6300 MB | **9%** | 23 | 1 | 14.7ms | 77.4s | 10.9s | **88.4s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 723,047 | HACApK | 6300 MB | **9%** | 23 | 1 | 77.4s | 10.9s | **88.4s** |
 
 ---
 
@@ -129,41 +128,41 @@ cube_uniform_field/
 
 #### N=5 (125 elements, 750 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 702,114 | LU | 51 MB | - | 0 | 6 | 0.07s | - | 0.42s | **0.49s** |
-| 702,114 | BiCGSTAB | 46 MB | - | 0 | 3 | 0.03s | - | 0.01s | **0.03s** |
-| 702,114 | HACApK | 42 MB | 97% | 21 | 3 | 0.1ms | 0.03s | 3ms | **0.04s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 702,114 | LU | 51 MB | - | 0 | 6 | 0.07s | 0.42s | **0.49s** |
+| 702,114 | BiCGSTAB | 46 MB | - | 0 | 3 | 0.03s | 0.01s | **0.03s** |
+| 702,114 | HACApK | 42 MB | 97% | 21 | 3 | 0.03s | 3ms | **0.04s** |
 
 #### N=10 (1,000 elements, 6,000 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 716,281 | LU | 933 MB | - | 0 | 13 | 1.1s | - | 5.7s | **7.7s** |
-| 716,316 | BiCGSTAB | 632 MB | - | 0 | 5 | 1.0s | - | 0.9s | **2.0s** |
-| 716,353 | HACApK | 193 MB | **50%** | 31 | 4 | 0.6ms | 1.3s | 0.3s | **1.6s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 716,281 | LU | 933 MB | - | 0 | 13 | 1.1s | 5.7s | **7.7s** |
+| 716,316 | BiCGSTAB | 632 MB | - | 0 | 5 | 1.0s | 0.9s | **2.0s** |
+| 716,353 | HACApK | 193 MB | **50%** | 31 | 4 | 1.3s | 0.3s | **1.6s** |
 
 #### N=15 (3,375 elements, 20,250 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 719,832 | LU | 9926 MB | - | 0 | 35 | 10.7s | - | 587s | **598s** |
-| 719,902 | BiCGSTAB | 6724 MB | - | 0 | 27 | 10.5s | - | 24s | **34s** |
-| 719,883 | HACApK | 912 MB | **26%** | 85 | 29 | 1.9ms | 8.7s | 5.5s | **14s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 719,832 | LU | 9926 MB | - | 0 | 35 | 10.7s | 587s | **598s** |
+| 719,902 | BiCGSTAB | 6724 MB | - | 0 | 27 | 10.5s | 24s | **34s** |
+| 719,883 | HACApK | 912 MB | **26%** | 85 | 29 | 8.7s | 5.5s | **14s** |
 
 #### N=20 (8,000 elements, 48,000 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| - | LU | - | - | - | - | - | - | - | **(~4h estimated)** |
-| 721,269 | BiCGSTAB | 37485 MB | - | 0 | 30 | 57.8s | - | 166s | **224s** |
-| 721,299 | HACApK | 2799 MB | **15%** | 120 | 30 | 6.5ms | 32.1s | 24.6s | **57s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| - | LU | - | - | - | - | - | - | **(~4h estimated)** |
+| 721,269 | BiCGSTAB | 37485 MB | - | 0 | 30 | 57.8s | 166s | **224s** |
+| 721,299 | HACApK | 2799 MB | **15%** | 120 | 30 | 32.1s | 24.6s | **57s** |
 
 #### N=25 (15,625 elements, 93,750 DOF) - HACApK only
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 722,114 | HACApK | 6310 MB | **9%** | 152 | 29 | 14.8ms | 78.3s | 70.4s | **149s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 722,114 | HACApK | 6310 MB | **9%** | 152 | 29 | 78.3s | 70.4s | **149s** |
 
 ---
 
@@ -171,33 +170,33 @@ cube_uniform_field/
 
 #### maxh=0.20m (627 elements, 1,881 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 816,133 | LU | 172 MB | - | 0 | 1 | 0.12s | - | 2.5s | 2.7s |
-| 816,080 | BiCGSTAB | 140 MB | - | 0 | 1 | 0.12s | - | 0.08s | 0.4s |
-| 816,089 | HACApK | 98 MB | 85% | 29 | 1 | 4.0ms | 0.42s | 0.04s | **0.48s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 816,133 | LU | 172 MB | - | 0 | 1 | 0.12s | 2.5s | 2.7s |
+| 816,080 | BiCGSTAB | 140 MB | - | 0 | 1 | 0.12s | 0.08s | 0.4s |
+| 816,089 | HACApK | 98 MB | 85% | 29 | 1 | 0.42s | 0.04s | **0.48s** |
 
 #### maxh=0.15m (2,211 elements, 6,633 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 748,693 | LU | 1272 MB | - | 0 | 1 | 1.6s | - | 3.4s | 5.2s |
-| 748,683 | BiCGSTAB | 922 MB | - | 0 | 1 | 1.6s | - | 1.0s | 3.0s |
-| 748,705 | HACApK | 279 MB | **56%** | 25 | 1 | 1.2ms | 1.71s | 0.33s | **2.06s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 748,693 | LU | 1272 MB | - | 0 | 1 | 1.6s | 3.4s | 5.2s |
+| 748,683 | BiCGSTAB | 922 MB | - | 0 | 1 | 1.6s | 1.0s | 3.0s |
+| 748,705 | HACApK | 279 MB | **56%** | 25 | 1 | 1.71s | 0.33s | **2.06s** |
 
 #### maxh=0.10m (4,994 elements, 14,982 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 754,617 | LU | 6105 MB | - | 0 | 1 | 8.9s | - | 34.6s | 45.6s |
-| 754,394 | BiCGSTAB | 4378 MB | - | 0 | 1 | 9.0s | - | 4.6s | 15.4s |
-| 754,549 | HACApK | 747 MB | **36%** | 29 | 1 | 2.4ms | 6.41s | 1.29s | **7.77s**
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 754,617 | LU | 6105 MB | - | 0 | 1 | 8.9s | 34.6s | 45.6s |
+| 754,394 | BiCGSTAB | 4378 MB | - | 0 | 1 | 9.0s | 4.6s | 15.4s |
+| 754,549 | HACApK | 747 MB | **36%** | 29 | 1 | 6.41s | 1.29s | **7.77s** |
 
 #### maxh=0.05m (33,974 elements, 101,922 DOF) - HACApK only
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 737,397 | HACApK | 8758 MB | **10%** | 26 | 1 | 22ms | 71.1s | 17.4s | **90.7s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 737,397 | HACApK | 8758 MB | **10%** | 26 | 1 | 71.1s | 17.4s | **90.7s** |
 
 ---
 
@@ -207,33 +206,33 @@ cube_uniform_field/
 
 #### maxh=0.20m (627 elements, 1,881 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 748,822 | LU | 171 MB | - | 0 | 20 | 0.11s | - | 1.8s | 2.0s |
-| 748,869 | BiCGSTAB | 140 MB | - | 0 | 14 | 0.12s | - | 0.24s | 0.4s |
-| 748,941 | HACApK | 98 MB | 85% | 130 | 17 | 0.3ms | 0.32s | 0.15s | **0.51s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 748,822 | LU | 171 MB | - | 0 | 20 | 0.11s | 1.8s | 2.0s |
+| 748,869 | BiCGSTAB | 140 MB | - | 0 | 14 | 0.12s | 0.24s | 0.4s |
+| 748,941 | HACApK | 98 MB | 85% | 130 | 17 | 0.32s | 0.15s | **0.51s** |
 
 #### maxh=0.15m (2,211 elements, 6,633 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 730,715 | LU | 1273 MB | - | 0 | 29 | 1.6s | - | 87.4s | 91.5s |
-| 730,760 | BiCGSTAB | 922 MB | - | 0 | 21 | 1.7s | - | 4.0s | 6.1s |
-| 730,596 | HACApK | 280 MB | **56%** | 134 | 36 | 1.0ms | 1.70s | 2.0s | **3.72s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 730,715 | LU | 1273 MB | - | 0 | 29 | 1.6s | 87.4s | 91.5s |
+| 730,760 | BiCGSTAB | 922 MB | - | 0 | 21 | 1.7s | 4.0s | 6.1s |
+| 730,596 | HACApK | 280 MB | **56%** | 134 | 36 | 1.70s | 2.0s | **3.72s** |
 
 #### maxh=0.10m (4,994 elements, 14,982 DOF)
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 730,996 | LU | 6108 MB | - | 0 | 39 | 9.0s | - | 1315s | 1336s |
-| 731,003 | BiCGSTAB | 4380 MB | - | 0 | 41 | 9.3s | - | 36.3s | 47.7s |
-| 731,063 | HACApK | 751 MB | **36%** | 206 | 41 | 2.6ms | 6.42s | 9.9s | **16.7s**
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 730,996 | LU | 6108 MB | - | 0 | 39 | 9.0s | 1315s | 1336s |
+| 731,003 | BiCGSTAB | 4380 MB | - | 0 | 41 | 9.3s | 36.3s | 47.7s |
+| 731,063 | HACApK | 751 MB | **36%** | 206 | 41 | 6.42s | 9.9s | **16.7s** |
 
 #### maxh=0.05m (33,974 elements, 101,922 DOF) - HACApK only
 
-| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
-|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 727,285 | HACApK | 8772 MB | **10%** | 256 | 69 | 23ms | 64.9s | 172.8s | **240s** |
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
+| 727,285 | HACApK | 8772 MB | **10%** | 256 | 69 | 64.9s | 172.8s | **240s** |
 
 ---
 
