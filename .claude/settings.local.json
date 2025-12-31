@@ -440,7 +440,11 @@
       "Bash(powershell.exe -ExecutionPolicy Bypass -File \"S:\\\\Radia\\\\01_GitHub\\\\BuildMSVC.ps1\" -Rebuild)",
       "Bash(del debug_phi_face.py verify_phi_analytical.py verify_phi_analytical2.py test_phi_comparison.py)",
       "Bash(powershell -Command \"Get-ChildItem ''S:\\\\Radia\\\\01_GitHub\\\\dist\\\\'' | Format-Table Name, Length\")",
-      "Bash(powershell -Command \"Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::OpenRead\\(''S:\\\\Radia\\\\01_GitHub\\\\dist\\\\radia-1.4.2-py3-none-any.whl''\\).Entries | Where-Object { $_FullName -like ''radia/*'' } | Select-Object FullName, Length | Format-Table -AutoSize\")"
+      "Bash(powershell -Command \"Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::OpenRead\\(''S:\\\\Radia\\\\01_GitHub\\\\dist\\\\radia-1.4.2-py3-none-any.whl''\\).Entries | Where-Object { $_FullName -like ''radia/*'' } | Select-Object FullName, Length | Format-Table -AutoSize\")",
+      "Bash(powershell -Command \"Get-ChildItem ''build-msvc'' -Filter ''*.pyd'' -Recurse | Select-Object FullName, Length, LastWriteTime\")",
+      "Bash(del:*)",
+      "Bash(git -C \"S:\\\\Radia\\\\01_GitHub\" status --short)",
+      "Bash(git -C \"S:\\\\Radia\\\\01_GitHub\" add -A)"
     ],
     "deny": [],
     "ask": []

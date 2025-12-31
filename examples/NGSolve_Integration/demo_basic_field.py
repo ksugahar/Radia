@@ -26,7 +26,7 @@ print("="*70)
 print("NGSolve Integration Demo: Basic Field Evaluation")
 print("="*70)
 
-# Create a simple rectangular magnet using ObjPolyhdr
+# Create a simple rectangular magnet using ObjHexahedron
 # Size: 40mm x 40mm x 60mm (0.04 x 0.04 x 0.06 m), magnetization 1.2 T in z-direction
 cx, cy, cz = 0, 0, 0
 dx, dy, dz = 0.02, 0.02, 0.03  # Half-dimensions

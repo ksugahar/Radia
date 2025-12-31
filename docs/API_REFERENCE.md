@@ -2,7 +2,7 @@
 
 Complete reference for Radia Python API.
 
-**Version**: 1.4.2
+**Version**: 1.4.3
 **Date**: 2025-12-31
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
@@ -865,11 +865,11 @@ rad.FldUnits('m')  # Set at start of script
 
 **Solution**: Import ngsolve BEFORE radia_ngsolve
 
-### 3. ObjPolyhdr Face Error
+### 3. ObjPolyhdr Face Error (Internal API)
 
-**Cause**: 0-indexed faces
+**Cause**: 0-indexed faces when using internal ObjPolyhdr API
 
-**Solution**: Use **1-indexed** faces (Radia convention)
+**Solution**: Use **1-indexed** faces (Radia convention). For Python users, prefer `ObjHexahedron` and `ObjTetrahedron` which auto-generate faces.
 
 ### 4. Solver Not Converging
 
@@ -883,53 +883,62 @@ rad.FldUnits('m')  # Set at start of script
 
 ## Units
 
-| Quantity | Unit |
-|----------|------|
-| Length | mm (default) or m with `FldUnits('m')` |
-| B (flux density) | Tesla (T) |
-| H (field) | A/m |
-| M (magnetization) | A/m |
-| A (vector potential) | T*m (when using `FldUnits('m')`) |
-| Current | Ampere (A) |
+### Unit System (v1.4.3+)
 
-### Internal Unit System
+**IMPORTANT**: Starting from v1.4.3, Radia uses SI units (meters) internally, matching ELF.
 
-**IMPORTANT**: Radia ALWAYS uses millimeters (mm) internally, regardless of `FldUnits()` setting.
+| Quantity | Unit | Notes |
+|----------|------|-------|
+| Length | m (default) or mm with `FldUnits('mm')` | User-selectable |
+| B (flux density) | Tesla (T) | **Fixed to SI** |
+| H (field) | A/m | **Fixed to SI** |
+| M (magnetization) | A/m | **Fixed to SI** |
+| A (vector potential) | T*m | **Fixed to SI** |
+| Current | Ampere (A) | **Fixed to SI** |
+| Current density | A/m^2 (or A/mm^2) | Depends on length unit |
 
-| Setting | Coordinate Input | B, H Output | A Output | Internal |
-|---------|------------------|-------------|----------|----------|
-| `FldUnits('mm')` | mm | T, A/m | T*mm | mm |
-| `FldUnits('m')` | m (scaled x1000) | T, A/m | **T*mm** (needs /1000) | mm |
+### Design Principles
 
-### Vector Potential A Unit Conversion
+1. **Length unit only**: `FldUnits()` controls **only the length unit** (m or mm)
+2. **Field values are always SI**: B, H, and A are always in SI units (T, A/m, T*m)
+3. **No field scaling**: Changing length unit does NOT change B, H, or A values
 
-When using NGSolve integration with `FldUnits('m')`:
+| Setting | Coordinate Input | B, H Output | A Output |
+|---------|------------------|-------------|----------|
+| `FldUnits('m')` (default) | meters | T, A/m | T*m |
+| `FldUnits('mm')` | millimeters | T, A/m | T*m |
 
-- **B, H fields**: Returned correctly in SI units (no conversion needed)
-- **A field**: Returned in T*mm (requires scaling for curl(A) = B verification)
+### Maxwell Relation: B = curl(A)
 
-**Why A needs special handling:**
+With the new SI internal units, the Maxwell relation `B = curl(A)` is satisfied without any unit conversion:
 
-1. A is dimensionally [T*length] = [Wb/m] = [V*s/m]
-2. Radia computes A using mm-based geometry: A_radia = T*mm
-3. NGSolve differentiates in meters: `curl(A) = dA/dx [m^-1]`
-4. For B = curl(A) to hold: `A_SI = A_radia / 1000`
+```python
+import radia as rad
+import numpy as np
 
-**In radia_ngsolve.cpp:**
+rad.FldUnits('m')  # Default: meters
 
-```cpp
-// Vector potential A unit scaling:
-// Radia ALWAYS uses mm internally, so A is always in T*mm
-// NGSolve differentiates in meters: curl(A) = dA/dx_m
-// To get correct B = curl(A), we scale A by 0.001:
-double scale = (field_type == "a") ? 0.001 : 1.0;
+# Create magnet
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 954930])
+
+# Get fields
+point = [0.05, 0.03, 0.04]
+B = rad.Fld(magnet, 'b', point)  # Tesla
+A = rad.Fld(magnet, 'a', point)  # T*m
+
+# Numerical curl
+h = 1e-6
+A_xp = rad.Fld(magnet, 'a', [point[0]+h, point[1], point[2]])
+A_xm = rad.Fld(magnet, 'a', [point[0]-h, point[1], point[2]])
+# ... (compute full curl)
+# Result: |curl(A)| / |B| should be approximately 1.0
 ```
 
 ### Maxwell Relation Verification
 
 See `examples/ngsolve_integration/verify_curl_A_equals_B/` for a complete verification script that:
 
-1. Creates a permanent magnet using ObjPolyhdr
+1. Creates a permanent magnet using ObjHexahedron
 2. Projects A onto HCurl space
 3. Computes curl(A) using NGSolve
 4. Compares with B projected onto HDiv space

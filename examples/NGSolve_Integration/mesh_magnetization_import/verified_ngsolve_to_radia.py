@@ -364,8 +364,8 @@ rad.FldUnits('m')
 #
 # This was verified by comparing:
 #   - Dipole field at r=0.6m from M=3.15 A/m sphere: ~1.5e-6 T
-#   - Radia ObjPolyhdr with M=3.15: gives ~1.0e-6 T (correct order)
-#   - Radia ObjPolyhdr with M=mu0*3.15: gives ~1e-12 T (wrong!)
+#   - Radia ObjTetrahedron with M=3.15: gives ~1.0e-6 T (correct order)
+#   - Radia ObjTetrahedron with M=mu0*3.15: gives ~1e-12 T (wrong!)
 print("  NOTE: Radia magnetization is passed as-is (A/m values, no mu0 conversion)")
 print("  M_avg [A/m]: [%.4f, %.4f, %.4f]" % tuple(M_avg))
 

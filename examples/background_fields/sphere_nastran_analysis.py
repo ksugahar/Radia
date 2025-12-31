@@ -13,7 +13,7 @@ This script is kept for historical reference only. For new projects, use:
 This script:
 1. Reads surface triangle mesh from sphere.bdf (CTRIA3 elements)
 2. Creates Radia model from surface representation
-3. Applies quadrupole background field using ObjBckgCF
+3. Applies quadrupole background field using ObjBckg
 4. Solves magnetostatic problem
 5. Compares Radia solution with analytical solution
 6. Exports geometry and field distribution to VTK
@@ -181,9 +181,9 @@ mat = rd.MatLin(mu_r)  # relative permeability
 rd.MatApl(sphere, mat)
 print(f"  Material applied: mu_r = {mu_r}")
 
-# Create quadrupole background field using ObjBckgCF
+# Create quadrupole background field using ObjBckg
 def quadrupole_field_callback(gradient):
-	"""Create quadrupole field callback for rd.ObjBckgCF"""
+	"""Create quadrupole field callback for rd.ObjBckg"""
 	def field(pos):
 		x, y, z = pos  # Position in mm
 		# Convert to meters
@@ -197,8 +197,8 @@ def quadrupole_field_callback(gradient):
 	return field
 
 quad_field = quadrupole_field_callback(gradient)
-bckg = rd.ObjBckgCF(quad_field)
-print(f"  Quadrupole background field created (ObjBckgCF)")
+bckg = rd.ObjBckg(quad_field)
+print(f"  Quadrupole background field created (ObjBckg)")
 
 # Create container with sphere and background field
 container = rd.ObjCnt([sphere, bckg])

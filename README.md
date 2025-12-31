@@ -101,7 +101,7 @@ radia_ngsolve.RadiaField(radia_obj, field_type='b')
 ```
 
 **Parameters:**
-- `radia_obj` (int): Radia object handle returned by `rad.ObjPolyhdr()`, `rad.ObjThckPgn()`, etc.
+- `radia_obj` (int): Radia object handle returned by `rad.ObjHexahedron()`, `rad.ObjTetrahedron()`, `rad.ObjThckPgn()`, etc.
 - `field_type` (str, optional): Field type to compute. Default: `'b'`
   - `'b'`: Magnetic flux density [Tesla]
   - `'h'`: Magnetic field [A/m]

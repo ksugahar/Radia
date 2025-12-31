@@ -109,9 +109,15 @@ public:
 
 	void SimpleEnergyComp(radTField* FieldPtr)
 	{
+		// Energy computation in SI units (Radia now uses meters internally, matching ELF)
+		// E_M = -integral(M . B) dV = -M . B * Volume (for uniform M, B)
+		// E_J = -integral(J . A) dV = -J . A * Volume (for uniform J, A)
+		// M in A/m, B in T -> M.B in T*A/m = J/m^3
+		// J in A/m^2, A in T*m -> J.A in T*A/m = J/m^3
+		// Volume in m^3 -> Energy in Joules
 		const double PI = 3.14159265358979;
-		const double ConstForM = -1./(4.*PI*100.);
-		const double ConstForJ = -1.E-06;
+		const double ConstForM = -1.0;  // SI units: -M . B * Volume
+		const double ConstForJ = -1.0;  // SI units: -J . A * Volume
 		const double MagnCurDensTol = 1.E-09;
 		char LocJ_IsNotZero = Abs(J.x)>MagnCurDensTol || Abs(J.y)>MagnCurDensTol || Abs(J.z)>MagnCurDensTol || J_IsNotZero;
 		char LocM_IsNotZero = Abs(Magn.x)>MagnCurDensTol || Abs(Magn.y)>MagnCurDensTol || Abs(Magn.z)>MagnCurDensTol;

@@ -2437,21 +2437,22 @@ void radTApplication::ClassifyPoints(int* classification, int* nearest_elem, int
 			return;
 		}
 
-		// Convert input points from user units to internal units (mm)
-		// m_lengthUnitScale is 1.0 for mm (default), 1000.0 for m
+		// Convert input points from user units to internal SI units (meters)
+		// Radia v1.4.3+: Internal unit system is SI (meters), matching ELF
+		// m_lengthUnitScale is 1.0 for m (default), 0.001 for mm
 		double scale = m_lengthUnitScale;
 
-		// Create a copy of points in mm
-		std::vector<double> points_mm(n_points * 3);
+		// Create a copy of points in meters (internal SI units)
+		std::vector<double> points_internal(n_points * 3);
 		for(int i = 0; i < n_points * 3; ++i)
 		{
-			points_mm[i] = points[i] * scale;
+			points_internal[i] = points[i] * scale;
 		}
 
 		// Use the solid angle implementation from rad_point_classify
 		RadPointClassify::ClassifyPointsFromHandle(
 			n_points,
-			points_mm.data(),
+			points_internal.data(),
 			container_handle,
 			near_threshold,
 			classification,

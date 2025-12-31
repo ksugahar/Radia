@@ -178,7 +178,7 @@ class SphericalMagnet:
         return list(A)
 
     def __call__(self, point: List[float]) -> List[float]:
-        """Callable interface for use with rad.ObjBckgCF()."""
+        """Callable interface for use with rad.ObjBckg()."""
         return self.get_B(point)
 
 
@@ -669,7 +669,7 @@ class CuboidMagnet:
         return Az, Ax
 
     def __call__(self, point: List[float]) -> List[float]:
-        """Callable interface for use with rad.ObjBckgCF()."""
+        """Callable interface for use with rad.ObjBckg()."""
         return self.get_B(point)
 
 
@@ -966,7 +966,7 @@ class CurrentLoop:
         return [Ax, Ay, Az]
 
     def __call__(self, point: List[float]) -> List[float]:
-        """Callable interface for use with rad.ObjBckgCF()."""
+        """Callable interface for use with rad.ObjBckg()."""
         return self.get_B(point)
 
 

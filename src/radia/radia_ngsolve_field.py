@@ -110,7 +110,7 @@ def create_cf_field_source(cf, unit='m'):
 	            print("Returning zero field. Consider using create_analytical_field() instead.")
 	            return [0.0, 0.0, 0.0]
 
-	    return rad.ObjBckgCF(cf_wrapper)
+	    return rad.ObjBckg(cf_wrapper)
 
 	elif callable(cf):
 	    # Python callable
@@ -132,7 +132,7 @@ def create_cf_field_source(cf, unit='m'):
 	        else:  # unit == 'mm'
 	            return cf(coords[0], coords[1], coords[2])
 
-	    return rad.ObjBckgCF(wrapper)
+	    return rad.ObjBckg(wrapper)
 
 	else:
 	    raise TypeError("cf must be NGSolve CoefficientFunction or Python callable")
@@ -200,7 +200,7 @@ def create_analytical_field(field_func, unit='mm'):
 	        z_m = coords[2] / 1000.0
 	        return field_func(x_m, y_m, z_m)
 
-	return rad.ObjBckgCF(wrapper)
+	return rad.ObjBckg(wrapper)
 
 
 def create_uniform_field(Bx, By, Bz):

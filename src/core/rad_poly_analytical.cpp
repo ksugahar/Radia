@@ -713,7 +713,9 @@ TVector3d RadVectorPotentialFromTriangleFaceGlobal(
 	const TVector3d& elemCentroid)
 {
 	const double EPS = 1.0e-15;
-	const double dConst2 = RadConst::INV_FOUR_PI;  // 1/(4*pi) - matching radTRecMag
+	// Vector potential: A = (mu_0/4pi) * (M x BufVect)
+	// Radia uses SI units (B in Tesla, H in A/m), so A should be in T*m
+	const double dConst2 = 1.0e-7;  // mu_0/(4*pi)
 
 	// Compute face edges
 	TVector3d e1 = V1 - V0;
@@ -797,59 +799,80 @@ TVector3d RadVectorPotentialFromTriangleFaceGlobal(
 	double R1 = std::sqrt(x1*x1 + y1*y1 + Z*Z);
 	double R2 = std::sqrt(x2*x2 + y2*y2 + Z*Z);
 
-	// Compute BufVect contribution from this face
-	// BufVect = n * integral_face 1/|r-r'| dS
+	// Compute I_scalar = integral_face 1/|r-r'| dS using Wilton formula
+	// Reference: Wilton, Rao, Glisson, IEEE Trans. AP, Vol. 32, No. 3, March 1984
 	//
-	// The scalar integral over a triangle is computed using:
-	// I = sum over edges [ L * ln((R_i + R_j + L)/(R_i + R_j - L)) ]
-	//   + |Z| * omega (solid angle term)
+	// For each edge from vertex A to vertex B:
+	//   I_edge = P0 * log((R_plus + s_plus)/(R_minus + s_minus))
+	//          - |z| * [atan2(P0*s_plus, R0^2 + |z|*R_plus)
+	//                 - atan2(P0*s_minus, R0^2 + |z|*R_minus)]
+	// where:
+	//   P0 = perpendicular distance from obs projection to edge (positive INWARD)
+	//   R0 = sqrt(P0^2 + z^2)
+	//   s_plus/s_minus = projections along edge direction
+	//   R_plus/R_minus = 3D distances to edge vertices
 
 	double I_scalar = 0.0;
-
-	// Edge lengths
-	double L01 = std::sqrt((xy1_x-xy0_x)*(xy1_x-xy0_x) + (xy1_y-xy0_y)*(xy1_y-xy0_y));
-	double L12 = std::sqrt((xy2_x-xy1_x)*(xy2_x-xy1_x) + (xy2_y-xy1_y)*(xy2_y-xy1_y));
-	double L20 = std::sqrt((xy0_x-xy2_x)*(xy0_x-xy2_x) + (xy0_y-xy2_y)*(xy0_y-xy2_y));
-
-	// Edge contributions (log terms)
-	if(L01 > EPS) {
-		double Rplus = R0 + R1 + L01;
-		double Rminus = R0 + R1 - L01;
-		if(Rminus < EPS) Rminus = EPS;
-		I_scalar += L01 * std::log(Rplus / Rminus);
-	}
-	if(L12 > EPS) {
-		double Rplus = R1 + R2 + L12;
-		double Rminus = R1 + R2 - L12;
-		if(Rminus < EPS) Rminus = EPS;
-		I_scalar += L12 * std::log(Rplus / Rminus);
-	}
-	if(L20 > EPS) {
-		double Rplus = R2 + R0 + L20;
-		double Rminus = R2 + R0 - L20;
-		if(Rminus < EPS) Rminus = EPS;
-		I_scalar += L20 * std::log(Rplus / Rminus);
-	}
-
-	// Solid angle contribution (when observation point is above/below face plane)
 	double absZ = std::abs(Z);
-	if(absZ > EPS) {
-		// van Oosterom & Strackee solid angle formula
-		TVector3d r0(x0, y0, Z);
-		TVector3d r1(x1, y1, Z);
-		TVector3d r2(x2, y2, Z);
+	double z2 = Z * Z;
 
-		double num = r0.x*(r1.y*r2.z - r1.z*r2.y)
-		           - r0.y*(r1.x*r2.z - r1.z*r2.x)
-		           + r0.z*(r1.x*r2.y - r1.y*r2.x);
-		double denom = R0*R1*R2 + R0*(r1.x*r2.x + r1.y*r2.y + r1.z*r2.z)
-		             + R1*(r0.x*r2.x + r0.y*r2.y + r0.z*r2.z)
-		             + R2*(r0.x*r1.x + r0.y*r1.y + r0.z*r1.z);
+	// Define 2D vertices array for edge loop
+	double verts_x[3] = {xy0_x, xy1_x, xy2_x};
+	double verts_y[3] = {xy0_y, xy1_y, xy2_y};
+	double R_verts[3] = {R0, R1, R2};
 
-		if(std::abs(denom) > EPS) {
-			double omega = 2.0 * std::atan2(num, denom);
-			I_scalar += absZ * omega;
+	for(int i = 0; i < 3; i++) {
+		int j = (i + 1) % 3;
+
+		// Edge from vertex i to vertex j
+		double edge_x = verts_x[j] - verts_x[i];
+		double edge_y = verts_y[j] - verts_y[i];
+		double L = std::sqrt(edge_x*edge_x + edge_y*edge_y);
+		if(L < EPS) continue;
+
+		// Unit tangent along edge
+		double tx = edge_x / L;
+		double ty = edge_y / L;
+
+		// Inward normal (LEFT perpendicular for CCW vertices)
+		double mx = -ty;
+		double my = tx;
+
+		// P0 = perpendicular distance from obs to edge line (positive = inward side)
+		double P0 = (X - verts_x[i]) * mx + (Y - verts_y[i]) * my;
+
+		// R0_edge = perpendicular distance from obs point to edge LINE (in 3D)
+		double R0_edge = std::sqrt(P0*P0 + z2);
+
+		// s_plus = projection of (obs - vertex_i) onto edge direction
+		double s_plus = (X - verts_x[i]) * tx + (Y - verts_y[i]) * ty;
+
+		// s_minus = projection of (obs - vertex_j) onto edge direction
+		double s_minus = (X - verts_x[j]) * tx + (Y - verts_y[j]) * ty;
+
+		// R_plus = |obs - vertex_i| in 3D, R_minus = |obs - vertex_j| in 3D
+		double R_plus = R_verts[i];
+		double R_minus = R_verts[j];
+
+		// Log term: P0 * log((R_plus + s_plus) / (R_minus + s_minus))
+		double log_term = 0.0;
+		double num = R_plus + s_plus;
+		double den = R_minus + s_minus;
+		if(std::abs(num) > EPS && std::abs(den) > EPS) {
+			log_term = P0 * std::log(std::abs(num / den));
 		}
+
+		// Arctan term: |z| * [atan2(...) - atan2(...)]
+		double atan_term = 0.0;
+		if(absZ > EPS && std::abs(R0_edge) > EPS) {
+			double R0_sq = R0_edge * R0_edge;
+			double atan_plus = std::atan2(P0 * s_plus, R0_sq + absZ * R_plus);
+			double atan_minus = std::atan2(P0 * s_minus, R0_sq + absZ * R_minus);
+			atan_term = absZ * (atan_plus - atan_minus);
+		}
+
+		// Edge contribution
+		I_scalar += log_term - atan_term;
 	}
 
 	// BufVect = n * I_scalar (contribution from this face)
@@ -971,54 +994,80 @@ double RadScalarPotentialFromTriangleFaceGlobal(
 	double R1 = std::sqrt(x1*x1 + y1*y1 + Z*Z);
 	double R2 = std::sqrt(x2*x2 + y2*y2 + Z*Z);
 
-	// Compute BufVect contribution from this face
-	// BufVect = n * integral_face 1/|r-r'| dS
+	// Compute I_scalar = integral_face 1/|r-r'| dS using Wilton formula
+	// Reference: Wilton, Rao, Glisson, IEEE Trans. AP, Vol. 32, No. 3, March 1984
+	//
+	// For each edge from vertex A to vertex B:
+	//   I_edge = P0 * log((R_plus + s_plus)/(R_minus + s_minus))
+	//          - |z| * [atan2(P0*s_plus, R0^2 + |z|*R_plus)
+	//                 - atan2(P0*s_minus, R0^2 + |z|*R_minus)]
+	// where:
+	//   P0 = perpendicular distance from obs projection to edge (positive INWARD)
+	//   R0 = sqrt(P0^2 + z^2)
+	//   s_plus/s_minus = projections along edge direction
+	//   R_plus/R_minus = 3D distances to edge vertices
+
 	double I_scalar = 0.0;
-
-	// Edge lengths
-	double L01 = std::sqrt((xy1_x-xy0_x)*(xy1_x-xy0_x) + (xy1_y-xy0_y)*(xy1_y-xy0_y));
-	double L12 = std::sqrt((xy2_x-xy1_x)*(xy2_x-xy1_x) + (xy2_y-xy1_y)*(xy2_y-xy1_y));
-	double L20 = std::sqrt((xy0_x-xy2_x)*(xy0_x-xy2_x) + (xy0_y-xy2_y)*(xy0_y-xy2_y));
-
-	// Edge contributions (log terms)
-	if(L01 > EPS) {
-		double Rplus = R0 + R1 + L01;
-		double Rminus = R0 + R1 - L01;
-		if(Rminus < EPS) Rminus = EPS;
-		I_scalar += L01 * std::log(Rplus / Rminus);
-	}
-	if(L12 > EPS) {
-		double Rplus = R1 + R2 + L12;
-		double Rminus = R1 + R2 - L12;
-		if(Rminus < EPS) Rminus = EPS;
-		I_scalar += L12 * std::log(Rplus / Rminus);
-	}
-	if(L20 > EPS) {
-		double Rplus = R2 + R0 + L20;
-		double Rminus = R2 + R0 - L20;
-		if(Rminus < EPS) Rminus = EPS;
-		I_scalar += L20 * std::log(Rplus / Rminus);
-	}
-
-	// Solid angle contribution
 	double absZ = std::abs(Z);
-	if(absZ > EPS) {
-		// van Oosterom & Strackee solid angle formula
-		TVector3d r0(x0, y0, Z);
-		TVector3d r1(x1, y1, Z);
-		TVector3d r2(x2, y2, Z);
+	double z2 = Z * Z;
 
-		double num = r0.x*(r1.y*r2.z - r1.z*r2.y)
-		           - r0.y*(r1.x*r2.z - r1.z*r2.x)
-		           + r0.z*(r1.x*r2.y - r1.y*r2.x);
-		double denom = R0*R1*R2 + R0*(r1.x*r2.x + r1.y*r2.y + r1.z*r2.z)
-		             + R1*(r0.x*r2.x + r0.y*r2.y + r0.z*r2.z)
-		             + R2*(r0.x*r1.x + r0.y*r1.y + r0.z*r1.z);
+	// Define 2D vertices array for edge loop
+	double verts_x[3] = {xy0_x, xy1_x, xy2_x};
+	double verts_y[3] = {xy0_y, xy1_y, xy2_y};
+	double R_verts[3] = {R0, R1, R2};
 
-		if(std::abs(denom) > EPS) {
-			double omega = 2.0 * std::atan2(num, denom);
-			I_scalar += absZ * omega;
+	for(int i = 0; i < 3; i++) {
+		int j = (i + 1) % 3;
+
+		// Edge from vertex i to vertex j
+		double edge_x = verts_x[j] - verts_x[i];
+		double edge_y = verts_y[j] - verts_y[i];
+		double L = std::sqrt(edge_x*edge_x + edge_y*edge_y);
+		if(L < EPS) continue;
+
+		// Unit tangent along edge
+		double tx = edge_x / L;
+		double ty = edge_y / L;
+
+		// Inward normal (LEFT perpendicular for CCW vertices)
+		double mx = -ty;
+		double my = tx;
+
+		// P0 = perpendicular distance from obs to edge line (positive = inward side)
+		double P0 = (X - verts_x[i]) * mx + (Y - verts_y[i]) * my;
+
+		// R0 = perpendicular distance from obs point to edge LINE (in 3D)
+		double R0_edge = std::sqrt(P0*P0 + z2);
+
+		// s_plus = projection of (obs - vertex_i) onto edge direction
+		double s_plus = (X - verts_x[i]) * tx + (Y - verts_y[i]) * ty;
+
+		// s_minus = projection of (obs - vertex_j) onto edge direction
+		double s_minus = (X - verts_x[j]) * tx + (Y - verts_y[j]) * ty;
+
+		// R_plus = |obs - vertex_i| in 3D, R_minus = |obs - vertex_j| in 3D
+		double R_plus = R_verts[i];
+		double R_minus = R_verts[j];
+
+		// Log term: P0 * log((R_plus + s_plus) / (R_minus + s_minus))
+		double log_term = 0.0;
+		double num = R_plus + s_plus;
+		double den = R_minus + s_minus;
+		if(std::abs(num) > EPS && std::abs(den) > EPS) {
+			log_term = P0 * std::log(std::abs(num / den));
 		}
+
+		// Arctan term: |z| * [atan2(...) - atan2(...)]
+		double atan_term = 0.0;
+		if(absZ > EPS && std::abs(R0_edge) > EPS) {
+			double R0_sq = R0_edge * R0_edge;
+			double atan_plus = std::atan2(P0 * s_plus, R0_sq + absZ * R_plus);
+			double atan_minus = std::atan2(P0 * s_minus, R0_sq + absZ * R_minus);
+			atan_term = absZ * (atan_plus - atan_minus);
+		}
+
+		// Edge contribution
+		I_scalar += log_term - atan_term;
 	}
 
 	// BufVect = n * I_scalar (contribution from this face)

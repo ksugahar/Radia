@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """
-Case 3: Polyhedron (Cube) Magnet with Field Calculation
+Case 3: Hexahedron (Cube) Magnet with Field Calculation
 Converted from Mathematica/Wolfram Language to Python
 
 This example demonstrates:
-- Creating a cubic magnet using ObjPolyhdr
-- Applying magnetization to a polyhedron
+- Creating a cubic magnet using ObjHexahedron
+- Applying magnetization to a hexahedron
 - Calculating magnetic field at various points
 """
 
@@ -15,10 +15,7 @@ import math
 import numpy as np
 
 # Add parent directory to path to import radia
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'dist'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'build', 'lib', 'Release'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "build", "Release"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'python'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'radia'))
 
 import radia as rad
 
@@ -41,31 +38,20 @@ p6 = [size, -size, size]    # Top front-right
 p7 = [size, size, size]     # Top back-right
 p8 = [-size, size, size]    # Top back-left
 
-# Define vertices list
+# Define vertices list (8 vertices for hexahedron)
 vertices = [p1, p2, p3, p4, p5, p6, p7, p8]
 
-# Define faces using 1-based indexing (Radia convention)
-# Each face is defined by vertex indices
-faces = [
-	[1, 4, 3, 2],  # Bottom face (-Z)
-	[5, 6, 7, 8],  # Top face (+Z)
-	[1, 2, 6, 5],  # Front face (-Y)
-	[2, 3, 7, 6],  # Right face (+X)
-	[3, 4, 8, 7],  # Back face (+Y)
-	[4, 1, 5, 8]   # Left face (-X)
-]
-
-# Create polyhedron with magnetization [0, 0, 1.2] T (NdFeB typical value)
+# Create hexahedron with magnetization [0, 0, 1.2] T (NdFeB typical value)
+# ObjHexahedron automatically generates the correct face topology
 # Magnetization in Z direction
 magnetization = [0, 0, 1.2]  # Tesla
-g1 = rad.ObjPolyhdr(vertices, faces, magnetization)
+g1 = rad.ObjHexahedron(vertices, magnetization)
 
 print(f"\nCube magnet created:")
 print(f"  Object ID: {g1}")
 print(f"  Size: {2*size} x {2*size} x {2*size} mm")
 print(f"  Magnetization: {magnetization} T")
 print(f"  Vertices: {len(vertices)}")
-print(f"  Faces: {len(faces)}")
 
 # Set drawing attributes (blue color)
 rad.ObjDrwAtr(g1, [0, 0, 1], 0.001)

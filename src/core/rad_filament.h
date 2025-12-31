@@ -60,7 +60,10 @@ public:
 
 	void SimpleEnergyComp(radTField* FieldPtr)
 	{
-		const double ConstForJ = -1.E-06;
+		// Energy: E = -integral(I dl . A) = -I * (EndPoint - StartPoint) . A
+		// Radia now uses SI units (meters) internally, matching ELF.
+		// I in Amperes, dl in meters, A in T*m -> Energy in Joules
+		const double ConstForJ = -1.0;
 		radTFieldKey LocFieldKey; LocFieldKey.A_ = 1;
 		radTField LocField(LocFieldKey, FieldPtr->CompCriterium);
 		LocField.P = 0.5*(StartPoint + EndPoint);

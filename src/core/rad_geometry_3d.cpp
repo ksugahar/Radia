@@ -328,7 +328,10 @@ void radTg3d::NormStressTensor(radTField* FieldPtr)
 
 	(static_cast<radTg3d*>(FieldPtr->ShapeIntDataPtr->HandleOfSource.rep))->B_genComp(FieldPtr);
 
-	const double ConForStrTensInSI = 1.E-06/(4*3.14159265358979*1.E-07); // (10^(-3))^2/mu0
+	// Maxwell stress tensor: T = (1/mu_0) * (B B - 0.5 |B|^2 I)
+	// Radia now uses SI units (meters) internally, matching ELF.
+	// ConForStrTensInSI = 1/mu_0 = 1/(4*pi*1e-7) [m/H]
+	const double ConForStrTensInSI = 1.0/(4*3.14159265358979*1.E-07);
 	TVector3d LocB = FieldPtr->B;
 
 	//Out normal projection of the Maxwell Stress Tensor

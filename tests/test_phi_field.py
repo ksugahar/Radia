@@ -169,9 +169,9 @@ class TestPhiFieldSymmetry:
                 f"Phi should decay: |Phi({distances[i]})| = {Phi_values[i]} <= |Phi({distances[i+1]})| = {Phi_values[i+1]}"
 
 
-# Note: ObjPolyhdr is not exposed to users (internal API only).
-# Tetrahedral elements are created via netgen_mesh_import.py
-# which uses ObjPolyhdr internally.
+# Note: Use ObjTetrahedron and ObjHexahedron for creating elements.
+# For mesh import, use netgen_mesh_import.py which creates elements
+# using the internal ObjPolyhdr API.
 
 
 class TestPhiFieldConsistency:

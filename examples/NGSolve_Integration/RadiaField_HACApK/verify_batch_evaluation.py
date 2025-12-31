@@ -58,7 +58,7 @@ print('-' * 70)
 rad.UtiDelAll()
 rad.FldUnits('m')
 
-# Create rectangular magnet using ObjPolyhdr
+# Create rectangular magnet using ObjHexahedron
 # Center: [0, 0, 0], Dimensions: [0.04, 0.04, 0.06] m
 cx, cy, cz = 0, 0, 0
 dx, dy, dz = 0.02, 0.02, 0.03  # Half-dimensions

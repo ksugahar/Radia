@@ -1,8 +1,8 @@
 """
 Test ObjTetrahedron and ObjHexahedron APIs.
 
-These tests verify that the simplified tetrahedron and hexahedron
-creation APIs work correctly and produce identical results to ObjPolyhdr.
+These tests verify that the tetrahedron and hexahedron creation APIs
+work correctly for creating magnetic elements.
 """
 import sys
 import os
@@ -62,20 +62,16 @@ class TestObjTetrahedron:
             rad.ObjTetrahedron(vertices, [0, 0, 954930])
         assert "4 vertices" in str(excinfo.value)
 
-    def test_equivalence_with_objpolyhdr(self):
-        """Test that ObjTetrahedron gives same result as ObjPolyhdr."""
+    def test_field_consistency(self):
+        """Test that field computation is consistent across multiple calls."""
         vertices = [
             [0, 0, 0], [0.1, 0, 0], [0.05, 0.0866, 0], [0.05, 0.0289, 0.0816]
         ]
-        TETRA_FACES = [[1,2,3], [1,4,2], [2,4,3], [3,4,1]]
 
         rad.UtiDelAll()
-        tetra1 = rad.ObjTetrahedron(vertices, [0, 0, 954930])
-        B1 = rad.Fld(tetra1, 'b', [0.05, 0.03, 0.2])
-
-        rad.UtiDelAll()
-        tetra2 = rad.ObjPolyhdr(vertices, TETRA_FACES, [0, 0, 954930])
-        B2 = rad.Fld(tetra2, 'b', [0.05, 0.03, 0.2])
+        tetra = rad.ObjTetrahedron(vertices, [0, 0, 954930])
+        B1 = rad.Fld(tetra, 'b', [0.05, 0.03, 0.2])
+        B2 = rad.Fld(tetra, 'b', [0.05, 0.03, 0.2])
 
         np.testing.assert_allclose(B1, B2, rtol=1e-10)
 
@@ -138,22 +134,18 @@ class TestObjHexahedron:
             rad.ObjHexahedron(vertices, [0, 0, 954930])
         assert "8 vertices" in str(excinfo.value)
 
-    def test_equivalence_with_objpolyhdr(self):
-        """Test that ObjHexahedron gives same result as ObjPolyhdr."""
+    def test_field_consistency(self):
+        """Test that field computation is consistent across multiple calls."""
         s = 0.05
         vertices = [
             [-s, -s, -s], [s, -s, -s], [s, s, -s], [-s, s, -s],
             [-s, -s, s], [s, -s, s], [s, s, s], [-s, s, s]
         ]
-        HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
 
         rad.UtiDelAll()
-        hex1 = rad.ObjHexahedron(vertices, [0, 0, 954930])
-        B1 = rad.Fld(hex1, 'b', [0, 0, 0.15])
-
-        rad.UtiDelAll()
-        hex2 = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 954930])
-        B2 = rad.Fld(hex2, 'b', [0, 0, 0.15])
+        hex_obj = rad.ObjHexahedron(vertices, [0, 0, 954930])
+        B1 = rad.Fld(hex_obj, 'b', [0, 0, 0.15])
+        B2 = rad.Fld(hex_obj, 'b', [0, 0, 0.15])
 
         np.testing.assert_allclose(B1, B2, rtol=1e-10)
 

@@ -21,8 +21,7 @@ Test Results:
 """
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../build/Release'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/python'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
 
 import radia as rad
 import numpy as np
@@ -40,8 +39,7 @@ def test_single_tetrahedron_with_material():
 
     # Create tetrahedron
     vertices = [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]]
-    faces = [[1, 3, 2], [1, 2, 4], [1, 4, 3], [2, 3, 4]]
-    tetra = rad.ObjPolyhdr(vertices, faces, [0, 0, 1])  # Small initial M
+    tetra = rad.ObjTetrahedron(vertices, [0, 0, 1])  # Small initial M
 
     # Apply linear material
     mat = rad.MatLin([0.1, 0.1], [0, 0, 12000])  # Isotropic, Mr=1.2T
@@ -69,13 +67,12 @@ def test_multiple_tetrahedra_with_material():
 
     # Create 10 tetrahedra
     vertices_base = [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]]
-    faces = [[1, 3, 2], [1, 2, 4], [1, 4, 3], [2, 3, 4]]
 
     tetra_list = []
     for i in range(10):
         x_offset = i * 0.1
         vertices = [[v[0] + x_offset, v[1], v[2]] for v in vertices_base]
-        tetra = rad.ObjPolyhdr(vertices, faces, [0, 0, 1])
+        tetra = rad.ObjTetrahedron(vertices, [0, 0, 1])
         mat = rad.MatLin([0.1, 0.1], [0, 0, 12000])
         rad.MatApl(tetra, mat)
         tetra_list.append(tetra)
@@ -141,8 +138,7 @@ def test_permanent_magnet_no_solve():
 
     # Create tetrahedron with permanent magnetization
     vertices = [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]]
-    faces = [[1, 3, 2], [1, 2, 4], [1, 4, 3], [2, 3, 4]]
-    tetra = rad.ObjPolyhdr(vertices, faces, [0, 0, 12000])  # Permanent M
+    tetra = rad.ObjTetrahedron(vertices, [0, 0, 12000])  # Permanent M
 
     # Solve should fail (expected - permanent magnets don't need relaxation)
     try:
@@ -171,13 +167,12 @@ def test_tetrahedral_methods():
     rad.FldUnits('m')
 
     vertices = [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]]
-    faces = [[1, 3, 2], [1, 2, 4], [1, 4, 3], [2, 3, 4]]
 
     test_pt = [0.15, 0.05, 0.05]
 
     # Method 0: Original Radia method (polygon-based)
     rad.SolverTetraMethod(0)
-    tetra0 = rad.ObjPolyhdr(vertices, faces, [0, 0, 12000])
+    tetra0 = rad.ObjTetrahedron(vertices, [0, 0, 12000])
     H0 = rad.Fld(tetra0, 'h', test_pt)
     H0_mag = np.linalg.norm(H0)
     print(f"       Method 0 (polygon-based): |H| = {H0_mag:.2f} A/m")
@@ -186,7 +181,7 @@ def test_tetrahedral_methods():
 
     # Method 1: Analytical method
     rad.SolverTetraMethod(1)
-    tetra1 = rad.ObjPolyhdr(vertices, faces, [0, 0, 12000])
+    tetra1 = rad.ObjTetrahedron(vertices, [0, 0, 12000])
     H1 = rad.Fld(tetra1, 'h', test_pt)
     H1_mag = np.linalg.norm(H1)
     print(f"       Method 1 (analytical):    |H| = {H1_mag:.2f} A/m")
