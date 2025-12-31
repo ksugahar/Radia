@@ -835,8 +835,45 @@ Claude Code is responsible for:
 
 **Workflow**:
 1. Claude Code prepares the release (version bump, CHANGELOG, commit, push)
-2. Claude Code runs `python -m build` to verify package builds correctly
-3. **User manually executes** `Publish_to_PyPI.ps1` with their API token
+2. **CRITICAL: Run `BuildMSVC.ps1` BEFORE `python -m build`** to ensure latest .pyd files
+3. Claude Code runs `python -m build` to create wheel package
+4. **CRITICAL: Verify wheel contains correct .pyd** (see verification below)
+5. **User manually executes** `Publish_to_PyPI.ps1` with their API token
+
+### Wheel Verification (MANDATORY before PyPI upload)
+
+**ALWAYS verify the wheel contains the latest .pyd before upload!**
+
+```python
+# Verification script - run BEFORE PyPI upload
+import zipfile
+import os
+from datetime import datetime
+
+whl_path = 'dist/radia-X.Y.Z-py3-none-any.whl'  # Update version
+whl = zipfile.ZipFile(whl_path)
+
+# Get wheel .pyd info
+for info in whl.infolist():
+    if info.filename == 'radia/radia.pyd':
+        print(f'Wheel radia.pyd: {info.file_size} bytes, {info.date_time}')
+        break
+
+# Compare with build-msvc .pyd
+msvc_pyd = 'build-msvc/radia.cp312-win_amd64.pyd'
+if os.path.exists(msvc_pyd):
+    stat = os.stat(msvc_pyd)
+    print(f'Build radia.pyd: {stat.st_size} bytes, {datetime.fromtimestamp(stat.st_mtime)}')
+
+# SIZES MUST MATCH! If wheel is smaller, it's using old .pyd
+```
+
+**Common mistake**: `python -m build` uses sdist which may contain old .pyd.
+Solution: Always run `BuildMSVC.ps1` immediately before `python -m build`.
+
+**Build Path Priority** (setup.py):
+1. `build-msvc/` (MSVC + Intel MKL - PREFERRED)
+2. `build/Release/` (legacy CMake - fallback)
 
 ```powershell
 # Set PyPI API token (keep secure!)
