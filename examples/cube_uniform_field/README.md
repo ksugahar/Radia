@@ -91,7 +91,7 @@ cube_uniform_field/
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
-| 723,047 | HACApK | 6286 MB | **9%** | 23 | 1 | 14.2ms | 136.3s | 9.3s | **146.7s** |
+| 723,047 | HACApK | 6300 MB | **9%** | 23 | 1 | 14.7ms | 77.4s | 10.9s | **88.4s** |
 
 ---
 
@@ -130,6 +130,12 @@ cube_uniform_field/
 | - | LU | - | - | - | - | - | - | - | **(~4h estimated)** |
 | 721,269 | BiCGSTAB | 37485 MB | - | 0 | 30 | 57.8s | - | 166s | **224s** |
 | 721,299 | HACApK | 2799 MB | **15%** | 120 | 30 | 6.5ms | 32.1s | 24.6s | **57s** |
+
+#### N=25 (15,625 elements, 93,750 DOF) - HACApK only
+
+| M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | H-matrix | LinSolve | Total |
+|--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|---------:|------:|
+| 722,114 | HACApK | 6310 MB | **9%** | 152 | 29 | 14.8ms | 78.3s | 70.4s | **149s** |
 
 ---
 
@@ -332,4 +338,4 @@ The "Compression" column shows: **H-matrix memory / Dense matrix memory x 100%**
 
 ---
 
-**Last Updated**: 2025-12-31 (8-thread verified benchmark: N=5, N=10, N=15, N=20)
+**Last Updated**: 2025-12-31 (8-thread verified benchmark: N=5, N=10, N=15, N=20, N=25)
