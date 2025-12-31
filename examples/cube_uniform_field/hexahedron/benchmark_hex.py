@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia')
 import radia as rad
 from benchmark_common import (
     run_benchmark, print_summary, generate_hex_mesh,
-    CUBE_SIZE, H_EXT, MU_R, M_ANALYTICAL_Z, HEX_FACES
+    CUBE_SIZE, H_EXT, MU_R, M_ANALYTICAL_Z
 )
 
 
@@ -69,10 +69,10 @@ def benchmark_hexahedra(n_div, solver_type, output_dir, is_linear=False,
     t_mesh_start = time.time()
     mesh = generate_hex_mesh(n_div, CUBE_SIZE)
 
-    # Create Radia polyhedra
+    # Create Radia hexahedra
     hex_objs = []
     for verts in mesh:
-        obj = rad.ObjPolyhdr(verts, HEX_FACES, [0, 0, 0])
+        obj = rad.ObjHexahedron(verts, [0, 0, 0])
         hex_objs.append(obj)
 
     container = rad.ObjCnt(hex_objs)
