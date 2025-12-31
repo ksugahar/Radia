@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.4.3] - 2025-12-31
+
+### Fixed
+
+- **PyPI Wheel Build Path**
+  - Fixed setup.py to check `build-msvc/` first, then fall back to `build/Release/`
+  - Ensures wheel contains the latest .pyd built with MSVC + Intel MKL
+
+### Added
+
+- **Wheel Verification Policy**
+  - Added mandatory wheel verification steps to CLAUDE.md
+  - Prevents shipping outdated .pyd files in PyPI packages
+
 ## [1.4.2] - 2025-12-31
 
 ### Fixed
