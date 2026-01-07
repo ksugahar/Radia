@@ -1359,6 +1359,30 @@ EXP int CALL RadCndSetFormulation(int cond, const char* formulation);
 */
 EXP int CALL RadCndSetFrequency(int cond, double frequency);
 
+/** Sets voltage excitation for a conductor.
+@param cond [in] conductor reference number
+@param V_real [in] real part of voltage [V]
+@param V_imag [in] imaginary part of voltage [V]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSetVoltage(int cond, double V_real, double V_imag);
+
+/** Sets current excitation for a conductor.
+@param cond [in] conductor reference number
+@param I_real [in] real part of current [A]
+@param I_imag [in] imaginary part of current [A]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSetCurrent(int cond, double I_real, double I_imag);
+
+/** Gets total current through conductor after solve.
+@param I_real [out] real part of current [A]
+@param I_imag [out] imaginary part of current [A]
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndGetTotalCurrent(double* I_real, double* I_imag, int cond);
+
 /** Enables or disables pFFT acceleration.
 @param cond [in] conductor reference number
 @param enable [in] 1 to enable, 0 to disable

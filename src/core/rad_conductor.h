@@ -273,6 +273,43 @@ public:
      */
     std::complex<double> GetPortImpedance() const { return portImpedance_; }
 
+    // ========== Excitation settings ==========
+
+    /**
+     * @brief Set voltage excitation at port
+     * @param V_real Real part of voltage [V]
+     * @param V_imag Imaginary part of voltage [V]
+     */
+    void SetVoltageExcitation(double V_real, double V_imag);
+
+    /**
+     * @brief Set current excitation at port
+     * @param I_real Real part of current [A]
+     * @param I_imag Imaginary part of current [A]
+     */
+    void SetCurrentExcitation(double I_real, double I_imag);
+
+    /**
+     * @brief Get excitation type
+     * @return 0=none, 1=voltage, 2=current
+     */
+    int GetExcitationType() const { return excitationType_; }
+
+    /**
+     * @brief Get excitation value (voltage or current)
+     */
+    std::complex<double> GetExcitationValue() const { return excitationValue_; }
+
+    /**
+     * @brief Get total current through conductor (after solve)
+     */
+    std::complex<double> GetTotalCurrent() const { return totalCurrent_; }
+
+    /**
+     * @brief Set total current (used by solver)
+     */
+    void SetTotalCurrent(std::complex<double> I) { totalCurrent_ = I; }
+
 private:
     // Material properties
     double conductivity_;     // [S/m]
@@ -292,6 +329,11 @@ private:
     std::vector<int> portTerminal1_;
     std::vector<int> portTerminal2_;
     std::complex<double> portImpedance_;
+
+    // Excitation settings
+    int excitationType_;                    // 0=none, 1=voltage, 2=current
+    std::complex<double> excitationValue_;  // V or I depending on type
+    std::complex<double> totalCurrent_;     // Total current after solve
 
     // Helper methods
     void GenerateRectangularFacePanels(const TVector3d& corner,

@@ -4,7 +4,6 @@
 #include <cassert>
 #include <cmath>
 #include <complex>
-#include <fftw3.h>
 #include <iostream>
 #include <omp.h>
 #include <set>
@@ -13,42 +12,30 @@
 #include "args.h"
 #include "vec.h"
 
+// Use Intel MKL DFTI instead of FFTW3
+// MKL provides FFTW3-compatible wrappers in mkl/include/fftw/fftw3.h
+#include <mkl_dfti.h>
+
+// M_PI may not be defined on MSVC without _USE_MATH_DEFINES
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 namespace exafmm_t {
   const int MEM_ALIGN = 64;
   const int CACHE_SIZE = 512;
   const int NCHILD = 8;
 
-#if FLOAT
-  typedef float real_t;                       //!< Real number type
-  const real_t EPS = 1e-8f;
-  typedef fftwf_complex fft_complex;
-  typedef fftwf_plan fft_plan;
-#define fft_plan_dft fftwf_plan_dft
-#define fft_plan_many_dft fftwf_plan_many_dft
-#define fft_execute_dft fftwf_execute_dft
-#define fft_plan_dft_r2c fftwf_plan_dft_r2c
-#define fft_plan_many_dft_r2c fftwf_plan_many_dft_r2c
-#define fft_plan_many_dft_c2r fftwf_plan_many_dft_c2r
-#define fft_execute_dft_r2c fftwf_execute_dft_r2c
-#define fft_execute_dft_c2r fftwf_execute_dft_c2r
-#define fft_destroy_plan fftwf_destroy_plan
-#define fft_flops fftwf_flops
-#else
+  // Always use double precision (single precision dropped per user request)
   typedef double real_t;                       //!< Real number type
   const real_t EPS = 1e-16;
-  typedef fftw_complex fft_complex;
-  typedef fftw_plan fft_plan;
-#define fft_plan_dft fftw_plan_dft
-#define fft_plan_many_dft fftw_plan_many_dft
-#define fft_execute_dft fftw_execute_dft
-#define fft_plan_dft_r2c fftw_plan_dft_r2c
-#define fft_plan_many_dft_r2c fftw_plan_many_dft_r2c
-#define fft_plan_many_dft_c2r fftw_plan_many_dft_c2r
-#define fft_execute_dft_r2c fftw_execute_dft_r2c
-#define fft_execute_dft_c2r fftw_execute_dft_c2r
-#define fft_destroy_plan fftw_destroy_plan
-#define fft_flops fftw_flops
-#endif
+
+  // MKL DFTI types for FFT operations
+  // We use MKL DFTI directly instead of FFTW3 wrappers for better control
+  typedef DFTI_DESCRIPTOR_HANDLE fft_plan;
+
+  // Complex type compatible with MKL
+  typedef struct { double real; double imag; } fft_complex;
 
   const real_t PI = M_PI;
   typedef std::complex<real_t> complex_t;       //!< Complex number type
@@ -76,7 +63,7 @@ namespace exafmm_t {
 
   /**
    * @brief Structure of bodies.
-   * 
+   *
    * @tparam T Value type of sources and targets (real or complex).
    */
   template <typename T>
@@ -91,7 +78,7 @@ namespace exafmm_t {
 
   /**
    * @brief Structure of nodes.
-   * 
+   *
    * @tparam Value type of sources and targets (real or complex).
    */
   template <typename T>
@@ -121,7 +108,7 @@ namespace exafmm_t {
     std::vector<T> up_equiv;                    //!< Upward check potentials / Upward equivalent densities
     std::vector<T> dn_equiv;                    //!< Downward check potentials / Downward equivalent densites
   };
-  
+
   // alias template
   template <typename T> using Nodes = std::vector<Node<T>>;        //!< Vector of nodes
   template <typename T> using NodePtrs = std::vector<Node<T>*>;    //!< Vector of Node pointers
@@ -140,5 +127,45 @@ namespace exafmm_t {
   std::vector<std::vector<ivec3>> REL_COORD;  //!< Vector of possible relative coordinates (inner) of each interaction type (outer)
   std::vector<std::vector<int>> HASH_LUT;     //!< Vector of hash Lookup tables (inner) of relative positions for each interaction type (outer)
   std::vector<std::vector<int>> M2L_INDEX_MAP;  //!< [M2L_relpos_idx][octant] -> M2L_Helper_relpos_idx
+
+  // ========================================================================
+  // MKL DFTI FFT wrapper functions (replacing FFTW3 calls)
+  // ========================================================================
+
+  inline fft_plan fft_plan_dft(int rank, const int* n, fft_complex* in, fft_complex* out, int sign, unsigned flags) {
+    (void)flags;  // Unused
+    DFTI_DESCRIPTOR_HANDLE handle = nullptr;
+    MKL_LONG dims[3];
+    for (int i = 0; i < rank; i++) dims[i] = n[i];
+
+    DftiCreateDescriptor(&handle, DFTI_DOUBLE, DFTI_COMPLEX, rank, dims);
+    if (in == out) {
+      DftiSetValue(handle, DFTI_PLACEMENT, DFTI_INPLACE);
+    } else {
+      DftiSetValue(handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE);
+    }
+    DftiCommitDescriptor(handle);
+    return handle;
+  }
+
+  inline void fft_execute_dft(fft_plan plan, fft_complex* in, fft_complex* out) {
+    if (in == out) {
+      DftiComputeForward(plan, in);
+    } else {
+      DftiComputeForward(plan, in, out);
+    }
+  }
+
+  inline void fft_destroy_plan(fft_plan plan) {
+    if (plan) DftiFreeDescriptor(&plan);
+  }
+
+  inline void fft_flops(fft_plan plan, double* add, double* mul, double* fma) {
+    // MKL doesn't provide flop counts, so we set to 0
+    (void)plan;
+    *add = 0;
+    *mul = 0;
+    *fma = 0;
+  }
 }
 #endif

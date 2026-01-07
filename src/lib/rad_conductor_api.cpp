@@ -309,6 +309,68 @@ void CndSetPfft(int cond, int enable)
 }
 
 //=========================================================================
+// Excitation Functions
+//=========================================================================
+
+void CndSetVoltage(int cond, double V_real, double V_imag)
+{
+    try {
+        auto conductor = GetConductor(cond);
+        if (!conductor) {
+            ioBuffer.StoreErrorMessage("Invalid conductor handle");
+            return;
+        }
+
+        conductor->SetVoltageExcitation(V_real, V_imag);
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndSetCurrent(int cond, double I_real, double I_imag)
+{
+    try {
+        auto conductor = GetConductor(cond);
+        if (!conductor) {
+            ioBuffer.StoreErrorMessage("Invalid conductor handle");
+            return;
+        }
+
+        conductor->SetCurrentExcitation(I_real, I_imag);
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndGetTotalCurrent(double* I_real, double* I_imag, int cond)
+{
+    try {
+        auto conductor = GetConductor(cond);
+        if (!conductor) {
+            ioBuffer.StoreErrorMessage("Invalid conductor handle");
+            *I_real = 0;
+            *I_imag = 0;
+            return;
+        }
+
+        std::complex<double> I = conductor->GetTotalCurrent();
+        *I_real = I.real();
+        *I_imag = I.imag();
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+        *I_real = 0;
+        *I_imag = 0;
+    }
+}
+
+//=========================================================================
 // Port Definition Functions
 //=========================================================================
 

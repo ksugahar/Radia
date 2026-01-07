@@ -36,6 +36,14 @@
 #include <omp.h>
 #endif
 
+// ExaFMM-t headers must be included OUTSIDE of any namespace
+// to avoid std:: namespace conflicts with MSVC
+#ifdef RADIA_USE_EXAFMM
+#include "dipole.h"
+#include "build_tree.h"
+#include "build_list.h"
+#endif
+
 namespace RadExaFMM {
 
 //-------------------------------------------------------------------------
@@ -255,10 +263,6 @@ FMMResult ComputeDipoleVectorPotentialDirect(
 //-------------------------------------------------------------------------
 // ExaFMM-t library integration (when available)
 //-------------------------------------------------------------------------
-
-#include "dipole.h"
-#include "build_tree.h"
-#include "build_list.h"
 
 FMMResult ComputeDipoleField(
     double eps,

@@ -2,14 +2,30 @@
 #define vec_h
 #include <ostream>
 
-#if __MIC__ | __AVX512F__
+// SIMD detection for different compilers
+// MSVC uses different macros than GCC/Clang
+#if defined(__MIC__) || defined(__AVX512F__)
 const int SIMD_BYTES = 64;
-#elif __AVX__
+#elif defined(__AVX__) || defined(__AVX2__)
 const int SIMD_BYTES = 32;
-#elif __SSE__
+#elif defined(__SSE__) || defined(__SSE2__)
+const int SIMD_BYTES = 16;
+#elif defined(_MSC_VER)
+// MSVC: Check for AVX/SSE via predefined macros or assume SSE2 (available on all x64)
+#if defined(__AVX512F__)
+const int SIMD_BYTES = 64;
+#elif defined(__AVX__) || defined(__AVX2__) || _M_IX86_FP >= 2
+const int SIMD_BYTES = 32;
+#elif defined(_M_X64) || _M_IX86_FP >= 1
+// x64 always has SSE2, x86 with /arch:SSE or higher
 const int SIMD_BYTES = 16;
 #else
-#error no SIMD
+// Fallback: assume SSE2 on modern Windows
+const int SIMD_BYTES = 16;
+#endif
+#else
+// Fallback for unknown compilers
+const int SIMD_BYTES = 16;
 #endif
 
 #ifndef EXAFMM_RSQRT_APPROX

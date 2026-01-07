@@ -4,8 +4,32 @@
 #include <iostream>
 #include <map>
 #include <string>
+
+// Platform-specific time handling
+#ifdef _WIN32
+#include <windows.h>
+// Windows implementation of gettimeofday
+struct timeval {
+    long tv_sec;
+    long tv_usec;
+};
+inline int gettimeofday(struct timeval* tp, void* tzp) {
+    (void)tzp;
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    ULARGE_INTEGER uli;
+    uli.LowPart = ft.dwLowDateTime;
+    uli.HighPart = ft.dwHighDateTime;
+    // Convert from 100-nanosecond intervals to microseconds
+    ULONGLONG us = uli.QuadPart / 10ULL - 11644473600000000ULL;
+    tp->tv_sec = (long)(us / 1000000ULL);
+    tp->tv_usec = (long)(us % 1000000ULL);
+    return 0;
+}
+#else
 #include <sys/time.h>
 #include <unistd.h>
+#endif
 
 namespace exafmm_t {
   static const int stringLength = 20;           //!< Length of formatted string

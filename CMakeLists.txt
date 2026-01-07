@@ -4,6 +4,9 @@ project(radia_ngsolve C CXX)
 # Option to disable OpenMP (for debugging)
 option(RADIA_ENABLE_OPENMP "Enable OpenMP parallelization" ON)
 
+# FFTW is replaced by Intel MKL DFTI (direct integration in fftw.h)
+# No FFTW library linking required - MKL DFTI provides FFT functionality
+
 # Find OpenMP for parallel matrix construction
 if(RADIA_ENABLE_OPENMP)
     find_package(OpenMP)
@@ -46,7 +49,7 @@ set(CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/core")
 set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/lib")
 set(EXT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/ext")
 set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/radia")
-set(FFTW_DIR "${EXT_DIR}/fftw")
+# FFTW directory removed - using MKL DFTI via fftw.h compatibility layer
 
 
 # BLAS/LAPACK: Intel MKL only
@@ -77,6 +80,8 @@ if(WIN32)
 		message(STATUS "Intel MKL found: ${MKL_LIB}")
 		set(BLAS_LIB ${MKL_LIB})
 		set(BLAS_INCLUDE_DIR ${MKL_INCLUDE_DIR})
+		# MKL FFTW3 wrapper for ExaFMM-t compatibility
+		set(MKL_FFTW3_INCLUDE_DIR "${MKL_INCLUDE_DIR}/fftw")
 		set(USE_MKL_FOUND TRUE)
 	else()
 		message(FATAL_ERROR "Intel MKL not found. Please install Intel oneAPI Base Toolkit.")
@@ -208,6 +213,7 @@ target_include_directories(radia_ngsolve PRIVATE
 	${EXT_DIR}/HACApK
 	${CMAKE_CURRENT_SOURCE_DIR}/external/exafmm-t/include
 	${PYTHON_DIR}
+	${MKL_FFTW3_INCLUDE_DIR}
 )
 
 # Add compile definitions (from Radia)
@@ -228,53 +234,9 @@ target_compile_definitions(radia_ngsolve PRIVATE
 	$<$<PLATFORM_ID:Windows>:_WINDOWS>
 )
 
-# FFTW library - platform-specific detection
-if(WIN32)
-	# Windows: Look for precompiled FFTW library
-	set(FFTW_LIB ${FFTW_DIR}/fftw64_f.lib)
-	if(EXISTS ${FFTW_LIB})
-		target_link_libraries(radia_ngsolve PRIVATE ${FFTW_LIB})
-		message(STATUS "Found FFTW library: ${FFTW_LIB}")
-	else()
-		message(WARNING "FFTW library not found: ${FFTW_LIB}")
-	endif()
-elseif(APPLE)
-	# macOS: Try to find FFTW via pkg-config or Homebrew
-	find_library(FFTW_LIBRARY NAMES fftw3f fftw3
-		PATHS /usr/local/lib /opt/homebrew/lib
-		NO_DEFAULT_PATH
-	)
-	if(FFTW_LIBRARY)
-		target_link_libraries(radia_ngsolve PRIVATE ${FFTW_LIBRARY})
-		find_path(FFTW_INCLUDE_DIR fftw3.h
-			PATHS /usr/local/include /opt/homebrew/include
-			NO_DEFAULT_PATH
-		)
-		if(FFTW_INCLUDE_DIR)
-			target_include_directories(radia_ngsolve PRIVATE ${FFTW_INCLUDE_DIR})
-		endif()
-		message(STATUS "Found FFTW library: ${FFTW_LIBRARY}")
-	else()
-		message(WARNING "FFTW library not found. Install with: brew install fftw")
-	endif()
-else()
-	# Linux: Try to find FFTW via pkg-config
-	find_library(FFTW_LIBRARY NAMES fftw3f fftw3
-		PATHS /usr/lib /usr/local/lib /usr/lib/x86_64-linux-gnu
-	)
-	if(FFTW_LIBRARY)
-		target_link_libraries(radia_ngsolve PRIVATE ${FFTW_LIBRARY})
-		find_path(FFTW_INCLUDE_DIR fftw3.h
-			PATHS /usr/include /usr/local/include
-		)
-		if(FFTW_INCLUDE_DIR)
-			target_include_directories(radia_ngsolve PRIVATE ${FFTW_INCLUDE_DIR})
-		endif()
-		message(STATUS "Found FFTW library: ${FFTW_LIBRARY}")
-	else()
-		message(WARNING "FFTW library not found. Install with: sudo apt-get install libfftw3-dev")
-	endif()
-endif()
+# FFT functionality provided by Intel MKL DFTI (via fftw.h compatibility layer)
+# No external FFTW library required - MKL is already linked for BLAS/LAPACK
+message(STATUS "Using Intel MKL DFTI for FFT operations (radia_ngsolve)")
 
 # Intel MKL for radia_ngsolve (required)
 if(WIN32 AND USE_MKL_FOUND)
@@ -398,7 +360,7 @@ target_include_directories(radia PRIVATE
 	${EXT_DIR}/genmath
 	${EXT_DIR}/HACApK
 	${CMAKE_CURRENT_SOURCE_DIR}/external/exafmm-t/include
-	${FFTW_DIR}
+	${MKL_FFTW3_INCLUDE_DIR}
 )
 
 # Add preprocessor definitions
@@ -413,38 +375,9 @@ target_compile_definitions(radia PRIVATE
 	$<$<BOOL:${RADIA_ENABLE_EXAFMM}>:RADIA_USE_EXAFMM>
 )
 
-# FFTW library - platform-specific detection (same as radia_ngsolve)
-if(WIN32)
-	# Windows: Look for precompiled FFTW library
-	if(EXISTS ${FFTW_LIB})
-		target_link_libraries(radia PRIVATE ${FFTW_LIB})
-		message(STATUS "Found FFTW library for radia: ${FFTW_LIB}")
-	else()
-		message(WARNING "FFTW library not found for radia: ${FFTW_LIB}")
-	endif()
-elseif(APPLE)
-	# macOS: Try to find FFTW via pkg-config or Homebrew
-	if(FFTW_LIBRARY)
-		target_link_libraries(radia PRIVATE ${FFTW_LIBRARY})
-		if(FFTW_INCLUDE_DIR)
-			target_include_directories(radia PRIVATE ${FFTW_INCLUDE_DIR})
-		endif()
-		message(STATUS "Found FFTW library for radia: ${FFTW_LIBRARY}")
-	else()
-		message(WARNING "FFTW library not found for radia. Install with: brew install fftw")
-	endif()
-else()
-	# Linux: Try to find FFTW via pkg-config
-	if(FFTW_LIBRARY)
-		target_link_libraries(radia PRIVATE ${FFTW_LIBRARY})
-		if(FFTW_INCLUDE_DIR)
-			target_include_directories(radia PRIVATE ${FFTW_INCLUDE_DIR})
-		endif()
-		message(STATUS "Found FFTW library for radia: ${FFTW_LIBRARY}")
-	else()
-		message(WARNING "FFTW library not found for radia. Install with: sudo apt-get install libfftw3-dev")
-	endif()
-endif()
+# FFT functionality provided by Intel MKL DFTI (via fftw.h compatibility layer)
+# No external FFTW library required - MKL is already linked for BLAS/LAPACK
+message(STATUS "Using Intel MKL DFTI for FFT operations (radia)")
 
 # Intel MKL for radia (required for fast LU decomposition and matrix operations)
 if(WIN32 AND USE_MKL_FOUND)

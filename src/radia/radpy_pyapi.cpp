@@ -3242,6 +3242,73 @@ static PyObject* radia_CndSetFormulation(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
+ * Sets voltage excitation for conductor
+ ***************************************************************************/
+static PyObject* radia_CndSetVoltage(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		double V_real = 0, V_imag = 0;
+		if(!PyArg_ParseTuple(args, "idd:CndSetVoltage", &cond, &V_real, &V_imag))
+			throw CombErStr(strEr_BadFuncArg, ": CndSetVoltage");
+
+		g_pyParse.ProcRes(RadCndSetVoltage(cond, V_real, V_imag));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets current excitation for conductor
+ ***************************************************************************/
+static PyObject* radia_CndSetCurrent(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		double I_real = 0, I_imag = 0;
+		if(!PyArg_ParseTuple(args, "idd:CndSetCurrent", &cond, &I_real, &I_imag))
+			throw CombErStr(strEr_BadFuncArg, ": CndSetCurrent");
+
+		g_pyParse.ProcRes(RadCndSetCurrent(cond, I_real, I_imag));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Gets total current after solve
+ ***************************************************************************/
+static PyObject* radia_CndGetTotalCurrent(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndGetTotalCurrent", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndGetTotalCurrent");
+
+		double I_real = 0, I_imag = 0;
+		g_pyParse.ProcRes(RadCndGetTotalCurrent(&I_real, &I_imag, cond));
+
+		// Return as complex number
+		oRes = PyComplex_FromDoubles(I_real, I_imag);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
  * Solves conductor system
  ***************************************************************************/
 static PyObject* radia_CndSolve(PyObject* self, PyObject* args)
@@ -4415,6 +4482,9 @@ static PyMethodDef radia_methods[] = {
 	{"CndWire", radia_CndWire, METH_VARARGS, "CndWire([[x1,y1,z1],[x2,y2,z2],...],cross_section,width,height,sigma,num_panels_around) creates a wire conductor along path points. cross_section: 'r'=rectangular, 'c'=circular. Default sigma=5.8e7 (copper)."},
 	{"CndSpiral", radia_CndSpiral, METH_VARARGS, "CndSpiral([x,y,z],inner_radius,outer_radius,pitch,num_turns,[ax,ay,az],cross_section,wire_width,wire_height,sigma,num_panels_around) creates a spiral conductor. Pitch is the height gain per turn."},
 	{"CndSetFrequency", radia_CndSetFrequency, METH_VARARGS, "CndSetFrequency(cond,freq) sets frequency [Hz] for conductor cond. Must be called before CndSolve."},
+	{"CndSetVoltage", radia_CndSetVoltage, METH_VARARGS, "CndSetVoltage(cond,V_real,V_imag) sets voltage excitation [V] for conductor. Use before CndSolve for voltage-driven analysis."},
+	{"CndSetCurrent", radia_CndSetCurrent, METH_VARARGS, "CndSetCurrent(cond,I_real,I_imag) sets current excitation [A] for conductor. Use before CndSolve for current-driven analysis."},
+	{"CndGetTotalCurrent", radia_CndGetTotalCurrent, METH_VARARGS, "CndGetTotalCurrent(cond) returns total current [A] through conductor after solve. Returns complex number."},
 	{"CndSolve", radia_CndSolve, METH_VARARGS, "CndSolve(cond) solves the EFIE + charge continuity equations for conductor cond using FastImp pFFT method."},
 	{"CndGetImpedance", radia_CndGetImpedance, METH_VARARGS, "CndGetImpedance(cond) returns complex impedance Z = R + jX [Ohm] as a complex number."},
 	{"CndImpedanceSweep", radia_CndImpedanceSweep, METH_VARARGS, "CndImpedanceSweep(cond,[f1,f2,...]) computes impedance at multiple frequencies. Returns list of complex impedances."},
