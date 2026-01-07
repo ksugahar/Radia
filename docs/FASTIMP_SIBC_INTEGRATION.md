@@ -199,12 +199,14 @@ Magnetic -> Coil: H field from magnetization affects coil impedance
    - Z(s) -> continued fraction expansion -> L-C ladder
    - Physically meaningful equivalent circuit
    - Passive and stable by construction
-   - Challenge: May fail for complex impedance characteristics
+   - **Requirement: Symmetric impedance matrix**
+   - Challenge: May fail for coupled systems with non-symmetric cross terms
 
-2. **Arnoldi-based Model Order Reduction**
+2. **Arnoldi-based Model Order Reduction** (Likely choice)
    - Krylov subspace projection
    - PRIMA (Passive Reduced-order Interconnect Macromodeling Algorithm)
-   - Mathematically robust
+   - **Works with non-symmetric matrices**
+   - Mathematically robust for coupled multi-physics systems
    - Challenge: Less physical interpretation
 
 3. **Vector Fitting**
@@ -216,6 +218,11 @@ Magnetic -> Coil: H field from magnetization affects coil impedance
 - Which method works best for electromagnetic systems with eddy currents?
 - Where does each method break down?
 - How to handle nonlinear magnetic materials in time domain?
+
+**Matrix Symmetry Consideration**:
+- Single-physics blocks (Z_cc, Z_mm, Z_ss): Symmetric (reciprocity)
+- Cross-coupling blocks (Z_cm, Z_mc, etc.): May be non-symmetric
+- For coupled multi-physics systems, **Arnoldi-based methods are likely required**
 
 **Note**: This phase requires further research to determine the optimal approach.
 The choice between CLN, Arnoldi, or other methods depends on the specific
