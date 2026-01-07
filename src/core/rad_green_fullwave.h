@@ -15,17 +15,19 @@
 #ifndef RAD_GREEN_FULLWAVE_H
 #define RAD_GREEN_FULLWAVE_H
 
-#include "rad_geom_types.h"
+#include "gmvect.h"
+#include "rad_constants.h"
 #include <complex>
 #include <cmath>
 
 namespace radia {
 
-// Physical constants
-constexpr double CONST_C0 = 299792458.0;           // Speed of light [m/s]
-constexpr double CONST_MU0 = 4.0e-7 * M_PI;        // Permeability of free space [H/m]
-constexpr double CONST_EPS0 = 8.854187817e-12;     // Permittivity of free space [F/m]
-constexpr double CONST_ETA0 = 376.730313668;       // Intrinsic impedance of free space [Ohm]
+// Physical constants (using RadConst from rad_constants.h)
+constexpr double CONST_C0 = 299792458.0;                       // Speed of light [m/s]
+constexpr double CONST_MU0 = RadConst::MU_0;                   // Permeability of free space [H/m]
+constexpr double CONST_EPS0 = 8.854187817e-12;                 // Permittivity of free space [F/m]
+constexpr double CONST_ETA0 = 376.730313668;                   // Intrinsic impedance of free space [Ohm]
+constexpr double CONST_INV_FOUR_PI = RadConst::INV_FOUR_PI;    // 1/(4*pi)
 
 /**
  * @brief Green's function calculator for electromagnetic analysis

@@ -16,14 +16,21 @@
 #ifndef RAD_CONDUCTOR_H
 #define RAD_CONDUCTOR_H
 
-#include "rad_geom_types.h"
+#include "gmvect.h"
 #include "rad_pfft.h"
+#include "rad_constants.h"
 #include <vector>
+#include <array>
 #include <complex>
 #include <memory>
 #include <functional>
 
 namespace radia {
+
+// Physical constants for conductor analysis
+constexpr double MU_0 = RadConst::MU_0;               // Permeability of free space [H/m]
+constexpr double EPS_0 = 8.854187817e-12;             // Permittivity of free space [F/m]
+constexpr double INV_FOUR_PI = RadConst::INV_FOUR_PI; // 1/(4*pi)
 
 // Forward declarations
 class radTg3d;

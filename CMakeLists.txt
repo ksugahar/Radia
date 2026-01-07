@@ -128,6 +128,13 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_serialization.cpp         # Interface functions
 	${CORE_DIR}/rad_polyhedron.cpp            # Polyhedron with magnetization
 	${CORE_DIR}/rad_hacapk.cpp                # HACApK H-matrix manager (Method 2)
+
+	# FastImp + SIBC integration (Phase 1-3)
+	${CORE_DIR}/rad_pfft.cpp                  # pFFT acceleration with MKL DFTI
+	${CORE_DIR}/rad_conductor.cpp             # FastImp conductor formulation
+	${CORE_DIR}/rad_green_fullwave.cpp        # Green's functions (DC/MQS/Full-wave)
+	${CORE_DIR}/rad_coupled_solver.cpp        # Coupled conductor-magnetic solver
+	${CORE_DIR}/rad_sibc.cpp                  # Nonlocal SIBC for conductive magnetic materials
 )
 
 # Radia ext sources
@@ -151,6 +158,7 @@ set(HACAPK_SOURCES
 # Radia lib sources
 set(RADIA_LIB_SOURCES
 	${LIB_DIR}/radentry.cpp
+	${LIB_DIR}/rad_conductor_api.cpp
 )
 
 # Triangle library (C source needs special handling)

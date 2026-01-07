@@ -90,7 +90,7 @@ void radTCrossTerms::ComputeConductorToMagnetic(std::vector<Complex>& Z_cm) {
     Z_cm.resize(nMagn * nCond, Complex(0, 0));
 
     // Physical parameters
-    double omega = 2.0 * PI * frequency_;
+    double omega = 2.0 * RadConst::PI * frequency_;
 
     // For each magnetic element evaluation point...
     #pragma omp parallel for schedule(dynamic)

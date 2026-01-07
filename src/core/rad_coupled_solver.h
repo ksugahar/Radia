@@ -24,7 +24,8 @@
 
 #include "rad_conductor.h"
 #include "rad_green_fullwave.h"
-#include "rad_geom_types.h"
+#include "gmvect.h"
+#include "rad_interaction.h"
 #include <vector>
 #include <complex>
 #include <memory>
@@ -32,8 +33,7 @@
 
 namespace radia {
 
-// Forward declarations
-class radTInteraction;
+// Forward declaration
 class radTg3dRelax;
 
 /**

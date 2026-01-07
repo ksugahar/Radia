@@ -1254,6 +1254,262 @@ EXP int CALL RadFldPhi(double* phi_out, int n_points, double* points, int contai
 */
 EXP int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle);
 
+//=========================================================================
+// Conductor Analysis API (FastImp-based)
+// For AC/RF impedance extraction and field computation
+//=========================================================================
+
+/** Creates a conductor from a rectangular block.
+@param n [out] reference number of the conductor created
+@param P [in] array of 3 cartesian coordinates of the block center
+@param L [in] array of 3 dimensions of the block [Lx, Ly, Lz]
+@param sigma [in] electrical conductivity [S/m]
+@param num_panels [in] number of panels per face direction (default: 4)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndRecBlock(int* n, double* P, double* L, double sigma, int num_panels);
+
+/** Creates a conductor from hexahedron vertices.
+@param n [out] reference number of the conductor created
+@param FlatVert [in] flat array of 8 vertex coordinates (24 doubles: x1,y1,z1,...,x8,y8,z8)
+@param sigma [in] electrical conductivity [S/m]
+@param num_panels [in] number of panels per face direction (default: 4)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndHexahedron(int* n, double* FlatVert, double sigma, int num_panels);
+
+/** Creates a wire conductor along a path.
+@param n [out] reference number of the conductor created
+@param FlatPath [in] flat array of path point coordinates (3*np doubles)
+@param np [in] number of path points
+@param cross_section [in] cross-section type: 'c' for circular, 'r' for rectangular
+@param width [in] wire width (or diameter for circular)
+@param height [in] wire height (ignored for circular, use 0)
+@param sigma [in] electrical conductivity [S/m]
+@param num_panels_around [in] number of panels around circumference (default: 8)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndWire(int* n, double* FlatPath, int np, char cross_section,
+                        double width, double height, double sigma, int num_panels_around);
+
+/** Creates a circular loop conductor.
+@param n [out] reference number of the conductor created
+@param center [in] array of 3 cartesian coordinates of loop center
+@param radius [in] loop radius
+@param normal [in] array of 3 components of loop normal direction
+@param cross_section [in] cross-section type: 'c' for circular, 'r' for rectangular
+@param wire_width [in] wire width (or diameter for circular)
+@param wire_height [in] wire height (ignored for circular, use 0)
+@param sigma [in] electrical conductivity [S/m]
+@param num_panels_around [in] number of panels around wire circumference (default: 8)
+@param num_panels_loop [in] number of panels along loop (default: 30)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndLoop(int* n, double* center, double radius, double* normal,
+                        char cross_section, double wire_width, double wire_height,
+                        double sigma, int num_panels_around, int num_panels_loop);
+
+/** Creates a spiral coil conductor.
+@param n [out] reference number of the conductor created
+@param center [in] array of 3 cartesian coordinates of spiral center
+@param inner_radius [in] inner radius of spiral
+@param outer_radius [in] outer radius of spiral
+@param pitch [in] axial distance per turn
+@param num_turns [in] number of turns
+@param axis [in] array of 3 components of spiral axis direction
+@param cross_section [in] cross-section type: 'c' for circular, 'r' for rectangular
+@param wire_width [in] wire width (or diameter for circular)
+@param wire_height [in] wire height (ignored for circular, use 0)
+@param sigma [in] electrical conductivity [S/m]
+@param num_panels_around [in] number of panels around wire circumference (default: 8)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSpiral(int* n, double* center, double inner_radius, double outer_radius,
+                          double pitch, int num_turns, double* axis,
+                          char cross_section, double wire_width, double wire_height,
+                          double sigma, int num_panels_around);
+
+/** Creates a conductor container.
+@param n [out] reference number of the container created
+@param Conds [in] array of conductor reference numbers
+@param ncond [in] number of conductors
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndCnt(int* n, int* Conds, int ncond);
+
+/** Adds conductors to an existing container.
+@param cnt [in] reference number of the container
+@param Conds [in] array of conductor reference numbers to add
+@param ncond [in] number of conductors to add
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndCntAdd(int cnt, int* Conds, int ncond);
+
+/** Sets the analysis formulation for a conductor.
+@param cond [in] conductor reference number
+@param formulation [in] formulation type: "dc", "mqs", "emqs", "fullwave"
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSetFormulation(int cond, const char* formulation);
+
+/** Sets the analysis frequency for a conductor.
+@param cond [in] conductor reference number
+@param frequency [in] frequency in Hz (0 for DC)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSetFrequency(int cond, double frequency);
+
+/** Enables or disables pFFT acceleration.
+@param cond [in] conductor reference number
+@param enable [in] 1 to enable, 0 to disable
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSetPfft(int cond, int enable);
+
+/** Defines port terminals for impedance extraction.
+@param cond [in] conductor reference number
+@param terminal1 [in] array of panel indices for terminal 1 (NULL for auto)
+@param n1 [in] number of panels in terminal 1
+@param terminal2 [in] array of panel indices for terminal 2 (NULL for auto)
+@param n2 [in] number of panels in terminal 2
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndDefinePort(int cond, int* terminal1, int n1, int* terminal2, int n2);
+
+/** Auto-detects port terminals for wire/loop conductors.
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndDefinePortAuto(int cond);
+
+/** Solves the conductor system at the current frequency.
+@param cond [in] conductor (or container) reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSolve(int cond);
+
+/** Gets the port impedance after solve.
+@param Z_real [out] real part of impedance [Ohm]
+@param Z_imag [out] imaginary part of impedance [Ohm]
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndGetImpedance(double* Z_real, double* Z_imag, int cond);
+
+/** Performs frequency sweep and returns impedances.
+@param Z_real [out] real parts of impedances (nfreq values)
+@param Z_imag [out] imaginary parts of impedances (nfreq values)
+@param cond [in] conductor reference number
+@param freqs [in] array of frequencies [Hz]
+@param nfreq [in] number of frequencies
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndImpedanceSweep(double* Z_real, double* Z_imag, int cond,
+                                   double* freqs, int nfreq);
+
+/** Computes B field from conductor at a point.
+@param B_real [out] real part of B field [Bx, By, Bz]
+@param B_imag [out] imaginary part of B field [Bx, By, Bz]
+@param cond [in] conductor reference number
+@param point [in] evaluation point [x, y, z]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFldB(double* B_real, double* B_imag, int cond, double* point);
+
+/** Computes E field from conductor at a point.
+@param E_real [out] real part of E field [Ex, Ey, Ez]
+@param E_imag [out] imaginary part of E field [Ex, Ey, Ez]
+@param cond [in] conductor reference number
+@param point [in] evaluation point [x, y, z]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFldE(double* E_real, double* E_imag, int cond, double* point);
+
+/** Batch computation of B field from conductor at multiple points.
+@param B_real [out] real parts of B fields (npts * 3)
+@param B_imag [out] imaginary parts of B fields (npts * 3)
+@param cond [in] conductor reference number
+@param points [in] evaluation points (npts * 3)
+@param npts [in] number of evaluation points
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFldBBatch(double* B_real, double* B_imag, int cond,
+                              double* points, int npts);
+
+/** Gets surface current density K from solved conductor.
+@param K_real [out] real parts of K vectors (npanels * 3)
+@param K_imag [out] imaginary parts of K vectors (npanels * 3)
+@param npanels [out] number of panels
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndGetSurfaceCurrent(double* K_real, double* K_imag, int* npanels, int cond);
+
+/** Gets surface charge density sigma from solved conductor.
+@param sigma_real [out] real parts of sigma values (npanels)
+@param sigma_imag [out] imaginary parts of sigma values (npanels)
+@param npanels [out] number of panels
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndGetSurfaceCharge(double* sigma_real, double* sigma_imag, int* npanels, int cond);
+
+/** Gets number of panels in conductor.
+@param npanels [out] number of panels
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndNumPanels(int* npanels, int cond);
+
+/** Gets panel centers and areas.
+@param centers [out] panel center coordinates (npanels * 3)
+@param areas [out] panel areas (npanels)
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndGetPanelInfo(double* centers, double* areas, int cond);
+
+//=========================================================================
+// Coupled Conductor-Magnetic Solver API
+//=========================================================================
+
+/** Solves the coupled conductor-magnetic system.
+@param cond_cnt [in] conductor container reference number
+@param mag_cnt [in] magnetic container reference number
+@param precision [in] convergence precision
+@param max_iter [in] maximum iterations
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCoupledSolve(int cond_cnt, int mag_cnt, double precision, int max_iter);
+
+//=========================================================================
+// SIBC Material API (Surface Impedance Boundary Condition)
+//=========================================================================
+
+/** Creates a conductive magnetic material with SIBC.
+@param mat [out] material reference number
+@param sigma [in] electrical conductivity [S/m]
+@param mu_r [in] relative permeability
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadMatSIBC(int* mat, double sigma, double mu_r);
+
+/** Sets SIBC type (local or nonlocal).
+@param mat [in] material reference number
+@param sibc_type [in] "local" or "nonlocal"
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadSIBCSetType(int mat, const char* sibc_type);
+
+/** Sets cross-section for nonlocal SIBC.
+@param mat [in] material reference number
+@param shape [in] "rectangle" or "circle"
+@param params [in] parameters: [width, height] for rectangle, [radius] for circle
+@param nparams [in] number of parameters (2 for rectangle, 1 for circle)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadSIBCSetCrossSection(int mat, const char* shape, double* params, int nparams);
+
 #ifdef __cplusplus
 }
 #endif
