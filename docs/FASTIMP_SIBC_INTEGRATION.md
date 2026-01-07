@@ -189,6 +189,38 @@ Magnetic -> Coil: H field from magnetization affects coil impedance
 4. Resonance finding
 5. Documentation and examples
 
+### Phase 5: Transient Analysis (Future Work)
+
+**Goal**: Convert frequency-domain Z(s) to time-domain response
+
+**Candidate Methods**:
+
+1. **Cauer Ladder Network (CLN) Method**
+   - Z(s) -> continued fraction expansion -> L-C ladder
+   - Physically meaningful equivalent circuit
+   - Passive and stable by construction
+   - Challenge: May fail for complex impedance characteristics
+
+2. **Arnoldi-based Model Order Reduction**
+   - Krylov subspace projection
+   - PRIMA (Passive Reduced-order Interconnect Macromodeling Algorithm)
+   - Mathematically robust
+   - Challenge: Less physical interpretation
+
+3. **Vector Fitting**
+   - Rational function approximation of Z(s)
+   - Widely used in signal integrity
+   - Can be converted to state-space or SPICE model
+
+**Open Questions**:
+- Which method works best for electromagnetic systems with eddy currents?
+- Where does each method break down?
+- How to handle nonlinear magnetic materials in time domain?
+
+**Note**: This phase requires further research to determine the optimal approach.
+The choice between CLN, Arnoldi, or other methods depends on the specific
+characteristics of the impedance function Z(s) obtained from the IE solver.
+
 ## API Design (Preliminary)
 
 ```python
