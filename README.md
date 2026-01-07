@@ -1,30 +1,76 @@
-# Radia - Python Edition with OpenMP
+# Radia - Integrated Electromagnetic Field Environment
 
-3D Magnetostatics Computer Code - Optimized for Python 3.12 with OpenMP Parallelization
+3D Magnetostatics and Conductor Analysis - Python 3.12 with OpenMP Parallelization
 
 ## Overview
 
-This is a modernized version of [Radia](https://github.com/ochubar/Radia) focusing on Python integration with performance optimizations:
+This is more than a simple MMM (Magnetic Moment Method) solver. **Radia provides an integrated electromagnetic field environment** that combines multiple field sources and analysis methods:
 
-- **Python 3.12 only** - Streamlined for modern Python
-- **OpenMP 2.0 parallelization** - 2.7x speedup on 8-core systems
-- **NGSolve integration** - C++ CoefficientFunction for FEM coupling
-- **CMake build system** - Modern, cross-platform build
-- **Tab indentation** - Consistent code style throughout
-- **PyVista viewer** - Modern 3D visualization alternative
+### Integrated Field Sources
+
+| Source Type | Method | Frequency Range | Use Case |
+|-------------|--------|-----------------|----------|
+| **Permanent Magnets** | Analytical (surface charge) | DC | NdFeB, SmCo magnets |
+| **Soft Iron** | MMM with demagnetization | DC | Yokes, pole pieces |
+| **Coil Currents** | Biot-Savart analytical | DC | Electromagnets, coils |
+| **Conductor Analysis** | FastImp (SIBC/pFFT) | AC (kHz-GHz) | Impedance extraction |
+
+### Key Capabilities
+
+1. **Analytical Field Solutions**
+   - Permanent magnets: Surface charge method with solid angle integration
+   - Current loops/coils: Biot-Savart law implementation
+   - Arc currents: Analytical formulas for arc segments
+
+2. **MMM Demagnetization Solver**
+   - Self-consistent solution for soft magnetic materials
+   - Supports nonlinear B-H curves (`MatSatIsoTab`)
+   - H-matrix acceleration for large problems (HACApK)
+
+3. **NGSolve Integration (Reduced Potential Formulation)**
+   - Radia fields as `CoefficientFunction` source terms
+   - Enables: `curl(curl(A)) = mu_0 * J` with Radia providing J
+   - Magnetizable regions computed via FEM with Radia background field
+
+4. **High-Frequency Conductor Analysis (FastImp)**
+   - Surface integral equation (EFIE) with pFFT acceleration
+   - MQS/EMQS/Full-wave formulations
+   - Impedance extraction for interconnects and coils
+
+### Frequency-Dependent Workflow
+
+```
+DC Analysis:
+  Magnets + Coils ─→ Radia Analytical ─→ NGSolve (reduced potential)
+                                         └─→ Current distribution (FEM)
+
+AC Analysis (kHz-GHz):
+  Conductors ─→ FastImp (SIBC/pFFT) ─→ Impedance, skin effect
+```
 
 **For Radia usage and API documentation**, please refer to the [original Radia repository](https://github.com/ochubar/Radia) and [ESRF Radia documentation](https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia).
 
-This repository adds NGSolve integration and performance improvements while maintaining full compatibility with the original Radia API.
+This repository adds NGSolve integration, FastImp conductor analysis, and performance improvements while maintaining compatibility with the original Radia API.
 
 ## Key Features
 
+### Magnetostatics
 - ✓ **H-matrix acceleration** - Fast hierarchical matrix solver using [HACApK](https://github.com/Post-Peta-Crest/ppOpenHPC/tree/MATH/HACApK)
 - ✓ OpenMP parallel field computation
+- ✓ Analytical Biot-Savart for coils and arc currents
+- ✓ Surface charge method for permanent magnets
+- ✓ MMM demagnetization for soft iron
+
+### Conductor Analysis (FastImp)
+- ✓ **pFFT-accelerated BEM** - O(N log N) matrix-vector products
+- ✓ Surface discretization: rectangular blocks, loops, wires, spirals
+- ✓ DC/MQS/EMQS/Full-wave formulations
+- ✓ Impedance extraction with port definition
+
+### Integration & Visualization
 - ✓ NGSolve C++ CoefficientFunction integration
 - ✓ VTK export functionality (`rad.ObjDrwVTK`)
 - ✓ PyVista-based 3D viewer (replaces OpenGL viewer)
-- ✓ All hexahedron tests passing
 - ✓ Comprehensive test suite and benchmarks
 - ✓ Removed legacy components (Igor, Mathematica, GLUT, MPI)
 
@@ -154,6 +200,11 @@ See [examples/ngsolve_integration/](examples/ngsolve_integration/) for complete 
 - [docs/API_REFERENCE.md](docs/API_REFERENCE.md) - Complete Python API reference
 - [docs/SOLVER_METHODS.md](docs/SOLVER_METHODS.md) - Solver methods (LU, BiCGSTAB, H-matrix)
 - [docs/HMATRIX_USER_GUIDE.md](docs/HMATRIX_USER_GUIDE.md) - H-matrix acceleration guide
+
+### Conductor Analysis (FastImp)
+- [docs/FASTIMP_SIBC_INTEGRATION.md](docs/FASTIMP_SIBC_INTEGRATION.md) - FastImp integration guide
+- Conductor APIs: `CndRecBlock`, `CndLoop`, `CndWire`, `CndSpiral`
+- Frequency range: DC to GHz (MQS/EMQS/Full-wave)
 
 ### NGSolve Integration
 - [docs/NGSOLVE_USAGE_GUIDE.md](docs/NGSOLVE_USAGE_GUIDE.md) - How to use Radia with NGSolve
@@ -364,9 +415,11 @@ Analytical: M = 2.3171 MA/m (N = 1/3 for cube)
 - Python 2.7, 3.6, 3.7, 3.8 support
 
 ### Added Features
+- **Integrated electromagnetic environment** - Multiple field sources (magnets, coils, conductors)
+- **FastImp conductor analysis** - pFFT-accelerated BEM for impedance extraction
 - **H-matrix acceleration** - Hierarchical matrix solver using [HACApK library](https://github.com/Post-Peta-Crest/ppOpenHPC/tree/MATH/HACApK) (9-50x speedup for large problems)
 - OpenMP parallelization (2.7x speedup)
-- NGSolve C++ CoefficientFunction integration
+- NGSolve C++ CoefficientFunction integration (reduced potential formulation support)
 - PyVista viewer support
 - Modern CMake build system
 - Comprehensive test suite (including NGSolve tests)
@@ -436,5 +489,5 @@ See [examples/background_fields/](examples/background_fields/) for Nastran mesh 
 
 ---
 
-**Version**: 1.3.9 (OpenMP + NGSolve Edition)
-**Last Updated**: 2025-12-05
+**Version**: 1.4.4 (Integrated EM Environment)
+**Last Updated**: 2026-01-08
