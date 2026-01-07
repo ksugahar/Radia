@@ -1,7 +1,7 @@
 # FastImp + SIBC Integration Design Document
 
 **Date**: 2026-01-08
-**Status**: Planning
+**Status**: Implementation In Progress (Phase 1-3 Complete)
 
 ## Overview
 
@@ -341,3 +341,69 @@ For N surface elements:
 - NGSolve: LGPL (dynamic linking OK)
 
 **Result**: No GPL contamination, compatible with Radia's license.
+
+## Implementation Status
+
+### Completed Files (Phase 1-3)
+
+| File | Description | Status |
+|------|-------------|--------|
+| `src/core/rad_pfft.h` | pFFT acceleration header | Complete |
+| `src/core/rad_pfft.cpp` | pFFT with MKL DFTI implementation | Complete |
+| `src/core/rad_conductor.h` | Conductor element classes | Complete |
+| `src/core/rad_conductor.cpp` | FastImp formulation implementation | Complete |
+| `src/core/rad_green_fullwave.h` | Green's function header | Complete |
+| `src/core/rad_green_fullwave.cpp` | DC/MQS/Full-wave Green's functions | Complete |
+| `src/core/rad_coupled_solver.h` | Coupled solver header | Complete |
+| `src/core/rad_coupled_solver.cpp` | Cross-term computation (Z_cm, Z_mc) | Complete |
+| `src/core/rad_sibc.h` | Nonlocal SIBC header | Complete |
+| `src/core/rad_sibc.cpp` | 2D FEM + SIBC implementation | Complete |
+
+### Key Classes Implemented
+
+1. **radTConductor**: Conductor element with Radia-compatible geometry input
+   - CreateFromRecBlock(), CreateFromHexahedron()
+   - CreateWire(), CreateLoop(), CreateSpiral()
+   - Surface panel discretization
+
+2. **radTConductorSolver**: FastImp-based IE solver
+   - DC/MQS/EMQS/FullWave formulation selection
+   - EFIE + charge continuity equation
+   - pFFT acceleration for large problems
+
+3. **radTPfft**: Precorrected FFT acceleration
+   - MKL DFTI backend (GPL-free)
+   - Toeplitz->Circulant embedding
+   - Near-field correction
+
+4. **radTGreenFunction**: Scalar/Vector Green's functions
+   - DC: 1/(4πr)
+   - Full-wave: exp(-jkr)/(4πr)
+   - Dyadic Green's function for EFIE
+
+5. **radTCrossTerms**: Conductor-Magnetic coupling
+   - Z_cm: Conductor current → Magnetic H field
+   - Z_mc: Magnetization → Conductor E field
+
+6. **radTCoupledSolver**: Unified coupled solver
+   - Direct block LU factorization
+   - Iterative coupling option
+   - Automatic subsystem detection
+
+7. **radTCrossSection2DFEM**: 2D FEM for SIBC
+   - Rectangle/Circle mesh generation
+   - Helmholtz equation: ∇²E - jωμσE = 0
+   - LU factorization for efficient multi-RHS solve
+
+8. **radTNonlocalSIBC**: Nonlocal impedance operator
+   - Z{.} operator from 2D FEM
+   - Local vs nonlocal comparison
+   - Skin depth calculation
+
+### Remaining Work (Phase 4+)
+
+1. **Python API binding** (rad_api.cpp)
+2. **CMake integration** for new source files
+3. **Test cases and validation**
+4. **Documentation and examples**
+5. **Phase 5: Transient analysis** (CLN/Arnoldi methods)
