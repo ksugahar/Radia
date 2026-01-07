@@ -23,6 +23,9 @@ radTConductor::radTConductor()
     , frequency_(0)
     , formulation_(ConductorFormulation::DC)
     , portImpedance_(0, 0)
+    , excitationType_(0)
+    , excitationValue_(0, 0)
+    , totalCurrent_(0, 0)
 {
 }
 
@@ -695,6 +698,16 @@ void radTConductor::DefinePort(const std::vector<int>& terminal1,
     portTerminal2_ = terminal2;
 }
 
+void radTConductor::SetVoltageExcitation(double V_real, double V_imag) {
+    excitationType_ = 1;  // Voltage excitation
+    excitationValue_ = std::complex<double>(V_real, V_imag);
+}
+
+void radTConductor::SetCurrentExcitation(double I_real, double I_imag) {
+    excitationType_ = 2;  // Current excitation
+    excitationValue_ = std::complex<double>(I_real, I_imag);
+}
+
 void radTConductor::ComputeB(const TVector3d& point,
                               std::complex<double>& Bx,
                               std::complex<double>& By,
@@ -1040,14 +1053,71 @@ void radTConductorSolver::BuildSystemMatrix() {
     }
 
     // Setup RHS from port excitation
-    // Find port terminals and apply voltage source
+    // Support both voltage and current excitation modes
+    int panelOffset = 0;
     for (size_t c = 0; c < conductors_.size(); ++c) {
-        // Apply 1V excitation at port terminals
-        // This will be refined based on actual port definition
-        if (!conductors_[c]->GetPanels().empty()) {
-            // Apply voltage at first few panels as source
-            rhs_[0] = std::complex<double>(1.0, 0);  // 1V source
+        auto& cond = conductors_[c];
+        int nPanels = cond->NumPanels();
+
+        if (nPanels == 0) continue;
+
+        int excType = cond->GetExcitationType();
+        std::complex<double> excValue = cond->GetExcitationValue();
+
+        if (excType == 1) {
+            // Voltage excitation: apply voltage across conductor
+            // V_applied appears in the EFIE equation
+            // For a wire conductor, voltage is applied at the port
+
+            // Distribute voltage source across first few panels (port terminals)
+            int numPortPanels = std::min(nPanels, 4);  // Port size
+            std::complex<double> V_per_panel = excValue / static_cast<double>(numPortPanels);
+
+            for (int i = 0; i < numPortPanels; ++i) {
+                rhs_[panelOffset + i] = V_per_panel;
+            }
+
+        } else if (excType == 2) {
+            // Current excitation: impose total current constraint
+            // This modifies the system to enforce I_total = I_specified
+
+            // For current-driven analysis, we add a constraint equation
+            // Sum of currents across a cross-section equals I_specified
+
+            // Get total cross-sectional area for normalization
+            double totalArea = 0;
+            const auto& panels = cond->GetPanels();
+            for (int i = 0; i < nPanels; ++i) {
+                totalArea += panels[i].area;
+            }
+
+            // Distribute current source: J = I / A
+            // The current density K [A/m] on each panel contributes to total current
+            // For a wire, I_total = integral(K * dl) around circumference
+            // Simplified: distribute uniformly
+
+            std::complex<double> K_avg = excValue / std::sqrt(totalArea);  // Approximate uniform distribution
+
+            // Set as Dirichlet-like constraint on surface current
+            for (int i = 0; i < nPanels; ++i) {
+                // Modify matrix to enforce current level
+                // Add penalty term to enforce average current
+                int idx = panelOffset + i;
+                systemMatrix_[idx * (2*N) + idx] += std::complex<double>(1e6, 0);  // Strong penalty
+                rhs_[idx] = K_avg * std::complex<double>(1e6, 0);
+            }
+
+            // Store excitation current for later retrieval
+            cond->SetTotalCurrent(excValue);
+
+        } else {
+            // No excitation: apply default 1V for impedance calculation
+            if (nPanels > 0) {
+                rhs_[panelOffset] = std::complex<double>(1.0, 0);
+            }
         }
+
+        panelOffset += nPanels;
     }
 }
 

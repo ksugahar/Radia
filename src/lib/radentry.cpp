@@ -1798,6 +1798,9 @@ void CndCnt(int* Conds, int ncond);
 void CndCntAdd(int cnt, int* Conds, int ncond);
 void CndSetFormulation(int cond, const char* formulation);
 void CndSetFrequency(int cond, double frequency);
+void CndSetVoltage(int cond, double V_real, double V_imag);
+void CndSetCurrent(int cond, double I_real, double I_imag);
+void CndGetTotalCurrent(double* I_real, double* I_imag, int cond);
 void CndSetPfft(int cond, int enable);
 void CndDefinePort(int cond, int* terminal1, int n1, int* terminal2, int n2);
 void CndDefinePortAuto(int cond);
@@ -1899,6 +1902,30 @@ int CALL RadCndSetFormulation(int cond, const char* formulation)
 int CALL RadCndSetFrequency(int cond, double frequency)
 {
 	CndSetFrequency(cond, frequency);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndSetVoltage(int cond, double V_real, double V_imag)
+{
+	CndSetVoltage(cond, V_real, V_imag);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndSetCurrent(int cond, double I_real, double I_imag)
+{
+	CndSetCurrent(cond, I_real, I_imag);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndGetTotalCurrent(double* I_real, double* I_imag, int cond)
+{
+	CndGetTotalCurrent(I_real, I_imag, cond);
 	return ioBuffer.OutErrorStatus();
 }
 
