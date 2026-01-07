@@ -364,8 +364,88 @@ void radTConductor::CreateWire(const std::vector<TVector3d>& path,
                     panels_.push_back(panel);
                 }
             } else {
-                // Rectangular cross-section
-                // TODO: Generate 4 faces of rectangular wire
+                // Rectangular cross-section: 4 faces (top, bottom, left, right)
+                double hw = width / 2.0;   // half width
+                double hh = height / 2.0;  // half height
+
+                // Face offsets in local (perp1, perp2) coordinates
+                // Face 0: +perp1 direction (right face)
+                // Face 1: -perp1 direction (left face)
+                // Face 2: +perp2 direction (top face)
+                // Face 3: -perp2 direction (bottom face)
+
+                struct FaceInfo {
+                    double offset1, offset2;  // offset in perp1, perp2
+                    double dir1, dir2;        // normal direction in perp1, perp2
+                    double faceWidth;         // face width
+                };
+
+                FaceInfo faces[4] = {
+                    { hw, 0, 1, 0, height},   // +perp1 (right)
+                    {-hw, 0,-1, 0, height},   // -perp1 (left)
+                    { 0, hh, 0, 1, width},    // +perp2 (top)
+                    { 0,-hh, 0,-1, width}     // -perp2 (bottom)
+                };
+
+                for (int face = 0; face < 4; ++face) {
+                    const FaceInfo& fi = faces[face];
+
+                    SurfacePanel panel;
+                    panel.type = SurfacePanel::Quadrilateral;
+                    panel.vertices.resize(4);
+
+                    // Face center offset
+                    double offsetX = fi.offset1 * perp1.x + fi.offset2 * perp2.x;
+                    double offsetY = fi.offset1 * perp1.y + fi.offset2 * perp2.y;
+                    double offsetZ = fi.offset1 * perp1.z + fi.offset2 * perp2.z;
+
+                    // Width direction (perpendicular to normal and tangent)
+                    TVector3d widthDir;
+                    if (face < 2) {
+                        // Left/right faces: width along perp2
+                        widthDir = perp2;
+                    } else {
+                        // Top/bottom faces: width along perp1
+                        widthDir = perp1;
+                    }
+
+                    double halfFaceWidth = fi.faceWidth / 2.0;
+
+                    // 4 corners: (c0, -halfWidth), (c1, -halfWidth), (c1, +halfWidth), (c0, +halfWidth)
+                    panel.vertices[0].x = c0.x + offsetX - halfFaceWidth * widthDir.x;
+                    panel.vertices[0].y = c0.y + offsetY - halfFaceWidth * widthDir.y;
+                    panel.vertices[0].z = c0.z + offsetZ - halfFaceWidth * widthDir.z;
+
+                    panel.vertices[1].x = c1.x + offsetX - halfFaceWidth * widthDir.x;
+                    panel.vertices[1].y = c1.y + offsetY - halfFaceWidth * widthDir.y;
+                    panel.vertices[1].z = c1.z + offsetZ - halfFaceWidth * widthDir.z;
+
+                    panel.vertices[2].x = c1.x + offsetX + halfFaceWidth * widthDir.x;
+                    panel.vertices[2].y = c1.y + offsetY + halfFaceWidth * widthDir.y;
+                    panel.vertices[2].z = c1.z + offsetZ + halfFaceWidth * widthDir.z;
+
+                    panel.vertices[3].x = c0.x + offsetX + halfFaceWidth * widthDir.x;
+                    panel.vertices[3].y = c0.y + offsetY + halfFaceWidth * widthDir.y;
+                    panel.vertices[3].z = c0.z + offsetZ + halfFaceWidth * widthDir.z;
+
+                    // Center
+                    panel.center.x = 0.25 * (panel.vertices[0].x + panel.vertices[1].x +
+                                             panel.vertices[2].x + panel.vertices[3].x);
+                    panel.center.y = 0.25 * (panel.vertices[0].y + panel.vertices[1].y +
+                                             panel.vertices[2].y + panel.vertices[3].y);
+                    panel.center.z = 0.25 * (panel.vertices[0].z + panel.vertices[1].z +
+                                             panel.vertices[2].z + panel.vertices[3].z);
+
+                    // Normal (outward from wire center)
+                    panel.normal.x = fi.dir1 * perp1.x + fi.dir2 * perp2.x;
+                    panel.normal.y = fi.dir1 * perp1.y + fi.dir2 * perp2.y;
+                    panel.normal.z = fi.dir1 * perp1.z + fi.dir2 * perp2.z;
+
+                    // Area
+                    panel.area = fi.faceWidth * dl;
+
+                    panels_.push_back(panel);
+                }
             }
         }
     }
