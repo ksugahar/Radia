@@ -69,9 +69,9 @@ void radTCrossSection2DFEM::MeshRectangle(double width, double height, int nX, i
             int n11 = n01 + 1;
 
             // Lower-left triangle
-            cs_.triangles.push_back({n00, n10, n01});
+            cs_.triangles.push_back(std::array<int, 3>{{n00, n10, n01}});
             // Upper-right triangle
-            cs_.triangles.push_back({n10, n11, n01});
+            cs_.triangles.push_back(std::array<int, 3>{{n10, n11, n01}});
         }
     }
 
@@ -128,7 +128,7 @@ void radTCrossSection2DFEM::MeshCircle(double radius, int nRadial, int nAngular)
     for (int ir = 1; ir <= nRadial; ++ir) {
         double r = radius * ir / nRadial;
         for (int ia = 0; ia < nAngular; ++ia) {
-            double theta = 2.0 * PI * ia / nAngular;
+            double theta = 2.0 * RadConst::PI * ia / nAngular;
             cs_.nodeX.push_back(r * std::cos(theta));
             cs_.nodeY.push_back(r * std::sin(theta));
         }
@@ -139,7 +139,7 @@ void radTCrossSection2DFEM::MeshCircle(double radius, int nRadial, int nAngular)
         int n0 = 0;  // Center
         int n1 = 1 + ia;
         int n2 = 1 + (ia + 1) % nAngular;
-        cs_.triangles.push_back({n0, n1, n2});
+        cs_.triangles.push_back(std::array<int, 3>{{n0, n1, n2}});
     }
 
     // Triangles: ring to ring
@@ -153,8 +153,8 @@ void radTCrossSection2DFEM::MeshCircle(double radius, int nRadial, int nAngular)
             int n10 = ringStart2 + ia;
             int n11 = ringStart2 + (ia + 1) % nAngular;
 
-            cs_.triangles.push_back({n00, n10, n01});
-            cs_.triangles.push_back({n10, n11, n01});
+            cs_.triangles.push_back(std::array<int, 3>{{n00, n10, n01}});
+            cs_.triangles.push_back(std::array<int, 3>{{n10, n11, n01}});
         }
     }
 
@@ -184,7 +184,7 @@ void radTCrossSection2DFEM::MeshCircle(double radius, int nRadial, int nAngular)
 
 void radTCrossSection2DFEM::SetFrequency(double frequency) {
     frequency_ = frequency;
-    omega_ = 2.0 * PI * frequency;
+    omega_ = 2.0 * RadConst::PI * frequency;
 
     // Update skin depth
     if (cs_.conductivity > 0 && omega_ > 0) {
@@ -479,7 +479,7 @@ void radTNonlocalSIBC::SetMaterial(double conductivity, double relPermeability) 
 
 void radTNonlocalSIBC::SetFrequency(double frequency) {
     frequency_ = frequency;
-    omega_ = 2.0 * PI * frequency;
+    omega_ = 2.0 * RadConst::PI * frequency;
     fem2D_->SetFrequency(frequency);
     impedanceComputed_ = false;
     UpdateSkinDepth();
@@ -569,7 +569,7 @@ double radTNonlocalSIBC::GetDCResistance() const {
     // R_DC = 1 / (σ * A)
     double area;
     if (crossSectionType_ == "circular") {
-        area = PI * (width_ / 2) * (width_ / 2);
+        area = RadConst::PI * (width_ / 2) * (width_ / 2);
     } else {
         area = width_ * height_;
     }
@@ -582,7 +582,7 @@ double radTNonlocalSIBC::GetInternalInductance() const {
     double mu = MU_0 * relPermeability_;
 
     if (crossSectionType_ == "circular") {
-        return mu / (8 * PI);
+        return mu / (8 * RadConst::PI);
     } else {
         // Approximate for rectangular
         return mu * width_ / (4 * height_);

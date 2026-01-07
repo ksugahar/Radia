@@ -3005,6 +3005,424 @@ static PyObject* radia_FldA(PyObject* self, PyObject* args)
 	return oRes;
 }
 
+//=========================================================================
+// Conductor Analysis API (FastImp-based)
+//=========================================================================
+
+/************************************************************************//**
+ * Creates a conductor from a rectangular block
+ ***************************************************************************/
+static PyObject* radia_CndRecBlock(PyObject* self, PyObject* args)
+{
+	PyObject *oP=0, *oL=0, *oResInd=0;
+	try
+	{
+		double sigma = 5.8e7;  // Default: copper
+		int num_panels = 4;
+		if(!PyArg_ParseTuple(args, "OO|di:CndRecBlock", &oP, &oL, &sigma, &num_panels))
+			throw CombErStr(strEr_BadFuncArg, ": CndRecBlock");
+		if((oP == 0) || (oL == 0)) throw CombErStr(strEr_BadFuncArg, ": CndRecBlock");
+
+		double arP[3], arL[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oP, 'd', arP, 3,
+			CombErStr(strEr_BadFuncArg, ": CndRecBlock, incorrect definition of center point"));
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oL, 'd', arL, 3,
+			CombErStr(strEr_BadFuncArg, ": CndRecBlock, incorrect definition of dimensions"));
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadCndRecBlock(&ind, arP, arL, sigma, num_panels));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Creates a conductor from hexahedron vertices
+ ***************************************************************************/
+static PyObject* radia_CndHexahedron(PyObject* self, PyObject* args)
+{
+	PyObject *oVerts=0, *oResInd=0;
+	double *arCrd=0;
+	try
+	{
+		double sigma = 5.8e7;  // Default: copper
+		int num_panels = 4;
+		if(!PyArg_ParseTuple(args, "O|di:CndHexahedron", &oVerts, &sigma, &num_panels))
+			throw CombErStr(strEr_BadFuncArg, ": CndHexahedron");
+		if(oVerts == 0) throw CombErStr(strEr_BadFuncArg, ": CndHexahedron");
+
+		int nCrd = 0;
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oVerts, 'd', arCrd, nCrd))
+			throw CombErStr(strEr_BadFuncArg, ": CndHexahedron, incorrect vertex definition");
+		if(nCrd != 24) throw CombErStr(strEr_BadFuncArg, ": CndHexahedron, requires 8 vertices");
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadCndHexahedron(&ind, arCrd, sigma, num_panels));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arCrd != 0) delete[] arCrd;
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Creates a circular loop conductor
+ ***************************************************************************/
+static PyObject* radia_CndLoop(PyObject* self, PyObject* args)
+{
+	PyObject *oCenter=0, *oNormal=0, *oCrossSection=0, *oResInd=0;
+	try
+	{
+		double radius = 0, wire_width = 0, wire_height = 0, sigma = 5.8e7;
+		int num_panels_around = 8, num_panels_loop = 30;
+
+		if(!PyArg_ParseTuple(args, "OdOOd|ddii:CndLoop", &oCenter, &radius, &oNormal,
+		                     &oCrossSection, &wire_width, &wire_height, &sigma,
+		                     &num_panels_around, &num_panels_loop))
+			throw CombErStr(strEr_BadFuncArg, ": CndLoop");
+
+		double arCenter[3], arNormal[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oCenter, 'd', arCenter, 3,
+			CombErStr(strEr_BadFuncArg, ": CndLoop, incorrect center point"));
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oNormal, 'd', arNormal, 3,
+			CombErStr(strEr_BadFuncArg, ": CndLoop, incorrect normal vector"));
+
+		char sCS[64]; *sCS = '\0';
+		CPyParse::CopyPyStringToC(oCrossSection, sCS, 64);
+		char cs_char = (sCS[0] == 'c' || sCS[0] == 'C') ? 'c' : 'r';
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadCndLoop(&ind, arCenter, radius, arNormal, cs_char,
+		                              wire_width, wire_height, sigma,
+		                              num_panels_around, num_panels_loop));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Creates a wire conductor from path points
+ ***************************************************************************/
+static PyObject* radia_CndWire(PyObject* self, PyObject* args)
+{
+	PyObject *oPath=0, *oCrossSection=0, *oResInd=0;
+	double *arPath=0;
+	try
+	{
+		double width = 0, height = 0, sigma = 5.8e7;
+		int num_panels_around = 8;
+
+		if(!PyArg_ParseTuple(args, "OOdd|di:CndWire", &oPath, &oCrossSection,
+		                     &width, &height, &sigma, &num_panels_around))
+			throw CombErStr(strEr_BadFuncArg, ": CndWire");
+
+		int nPath = 0;
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oPath, 'd', arPath, nPath))
+			throw CombErStr(strEr_BadFuncArg, ": CndWire, incorrect path definition");
+		if(nPath < 6 || (nPath % 3) != 0)
+			throw CombErStr(strEr_BadFuncArg, ": CndWire, path must have at least 2 points");
+
+		char sCS[64]; *sCS = '\0';
+		CPyParse::CopyPyStringToC(oCrossSection, sCS, 64);
+		char cs_char = (sCS[0] == 'c' || sCS[0] == 'C') ? 'c' : 'r';
+
+		int np = nPath / 3;
+		int ind = 0;
+		g_pyParse.ProcRes(RadCndWire(&ind, arPath, np, cs_char, width, height, sigma, num_panels_around));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arPath != 0) delete[] arPath;
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Creates a spiral conductor
+ ***************************************************************************/
+static PyObject* radia_CndSpiral(PyObject* self, PyObject* args)
+{
+	PyObject *oCenter=0, *oAxis=0, *oCrossSection=0, *oResInd=0;
+	try
+	{
+		double inner_radius = 0, outer_radius = 0, pitch = 0;
+		int num_turns = 0;
+		double wire_width = 0, wire_height = 0, sigma = 5.8e7;
+		int num_panels_around = 8;
+
+		if(!PyArg_ParseTuple(args, "OdddiOOdd|di:CndSpiral", &oCenter, &inner_radius,
+		                     &outer_radius, &pitch, &num_turns, &oAxis, &oCrossSection,
+		                     &wire_width, &wire_height, &sigma, &num_panels_around))
+			throw CombErStr(strEr_BadFuncArg, ": CndSpiral");
+
+		double arCenter[3], arAxis[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oCenter, 'd', arCenter, 3,
+			CombErStr(strEr_BadFuncArg, ": CndSpiral, incorrect center point"));
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oAxis, 'd', arAxis, 3,
+			CombErStr(strEr_BadFuncArg, ": CndSpiral, incorrect axis vector"));
+
+		char sCS[64]; *sCS = '\0';
+		CPyParse::CopyPyStringToC(oCrossSection, sCS, 64);
+		char cs_char = (sCS[0] == 'c' || sCS[0] == 'C') ? 'c' : 'r';
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadCndSpiral(&ind, arCenter, inner_radius, outer_radius,
+		                                pitch, num_turns, arAxis, cs_char,
+		                                wire_width, wire_height, sigma, num_panels_around));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Sets analysis frequency for conductor
+ ***************************************************************************/
+static PyObject* radia_CndSetFrequency(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		double frequency = 0;
+		if(!PyArg_ParseTuple(args, "id:CndSetFrequency", &cond, &frequency))
+			throw CombErStr(strEr_BadFuncArg, ": CndSetFrequency");
+
+		g_pyParse.ProcRes(RadCndSetFrequency(cond, frequency));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets analysis formulation for conductor
+ ***************************************************************************/
+static PyObject* radia_CndSetFormulation(PyObject* self, PyObject* args)
+{
+	PyObject *oForm=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "iO:CndSetFormulation", &cond, &oForm))
+			throw CombErStr(strEr_BadFuncArg, ": CndSetFormulation");
+
+		char sForm[64]; *sForm = '\0';
+		CPyParse::CopyPyStringToC(oForm, sForm, 64);
+
+		g_pyParse.ProcRes(RadCndSetFormulation(cond, sForm));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Solves conductor system
+ ***************************************************************************/
+static PyObject* radia_CndSolve(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndSolve", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndSolve");
+
+		g_pyParse.ProcRes(RadCndSolve(cond));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Gets port impedance after solve
+ ***************************************************************************/
+static PyObject* radia_CndGetImpedance(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndGetImpedance", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndGetImpedance");
+
+		double Z_real = 0, Z_imag = 0;
+		g_pyParse.ProcRes(RadCndGetImpedance(&Z_real, &Z_imag, cond));
+
+		// Return as complex number
+		oRes = PyComplex_FromDoubles(Z_real, Z_imag);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Performs frequency sweep
+ ***************************************************************************/
+static PyObject* radia_CndImpedanceSweep(PyObject* self, PyObject* args)
+{
+	PyObject *oFreqs=0, *oRes=0;
+	double *arFreqs=0, *arZ_real=0, *arZ_imag=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "iO:CndImpedanceSweep", &cond, &oFreqs))
+			throw CombErStr(strEr_BadFuncArg, ": CndImpedanceSweep");
+
+		int nFreq = 0;
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oFreqs, 'd', arFreqs, nFreq))
+			throw CombErStr(strEr_BadFuncArg, ": CndImpedanceSweep, incorrect frequency list");
+
+		arZ_real = new double[nFreq];
+		arZ_imag = new double[nFreq];
+
+		g_pyParse.ProcRes(RadCndImpedanceSweep(arZ_real, arZ_imag, cond, arFreqs, nFreq));
+
+		// Return list of complex numbers
+		oRes = PyList_New(nFreq);
+		for(int i = 0; i < nFreq; i++)
+		{
+			PyList_SetItem(oRes, i, PyComplex_FromDoubles(arZ_real[i], arZ_imag[i]));
+		}
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arFreqs != 0) delete[] arFreqs;
+	if(arZ_real != 0) delete[] arZ_real;
+	if(arZ_imag != 0) delete[] arZ_imag;
+	return oRes;
+}
+
+/************************************************************************//**
+ * Computes B field from conductor at a point
+ ***************************************************************************/
+static PyObject* radia_CndFld(PyObject* self, PyObject* args)
+{
+	PyObject *oFldType=0, *oPoint=0, *oRes=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "iOO:CndFld", &cond, &oFldType, &oPoint))
+			throw CombErStr(strEr_BadFuncArg, ": CndFld");
+
+		char sFldType[64]; *sFldType = '\0';
+		CPyParse::CopyPyStringToC(oFldType, sFldType, 64);
+
+		double arPoint[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oPoint, 'd', arPoint, 3,
+			CombErStr(strEr_BadFuncArg, ": CndFld, incorrect point"));
+
+		double Fld_real[3], Fld_imag[3];
+
+		if(sFldType[0] == 'b' || sFldType[0] == 'B')
+		{
+			g_pyParse.ProcRes(RadCndFldB(Fld_real, Fld_imag, cond, arPoint));
+		}
+		else if(sFldType[0] == 'e' || sFldType[0] == 'E')
+		{
+			g_pyParse.ProcRes(RadCndFldE(Fld_real, Fld_imag, cond, arPoint));
+		}
+		else
+		{
+			throw CombErStr(strEr_BadFuncArg, ": CndFld, field type must be 'b' or 'e'");
+		}
+
+		// Return list of 3 complex numbers
+		oRes = PyList_New(3);
+		for(int i = 0; i < 3; i++)
+		{
+			PyList_SetItem(oRes, i, PyComplex_FromDoubles(Fld_real[i], Fld_imag[i]));
+		}
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Gets number of panels in conductor
+ ***************************************************************************/
+static PyObject* radia_CndNumPanels(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndNumPanels", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndNumPanels");
+
+		int npanels = 0;
+		g_pyParse.ProcRes(RadCndNumPanels(&npanels, cond));
+
+		oRes = Py_BuildValue("i", npanels);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Creates SIBC material
+ ***************************************************************************/
+static PyObject* radia_MatSIBC(PyObject* self, PyObject* args)
+{
+	PyObject *oResInd=0;
+	try
+	{
+		double sigma = 0, mu_r = 1;
+		if(!PyArg_ParseTuple(args, "dd:MatSIBC", &sigma, &mu_r))
+			throw CombErStr(strEr_BadFuncArg, ": MatSIBC");
+
+		int mat = 0;
+		g_pyParse.ProcRes(RadMatSIBC(&mat, sigma, mu_r));
+
+		oResInd = Py_BuildValue("i", mat);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
+}
+
+//=========================================================================
+
 /************************************************************************//**
  * Magnetic Field Calculation Methods: Computes field created by the object obj at one or many points
  ***************************************************************************/
@@ -3989,6 +4407,20 @@ static PyMethodDef radia_methods[] = {
 	{"UtiDelAll", radia_UtiDelAll, METH_VARARGS, "UtiDelAll() deletes all previously created elements."},
 	{"UtiVer", radia_UtiVer, METH_VARARGS, "UtiVer() returns version number of the Radia library."},
 	{"UtiMPI", radia_UtiMPI, METH_VARARGS, "UtiMPI('on|off|share',data,rankFrom,rankTo) initializes (if argument is 'on') or finalizes (in argument is 'off') the Message Passing Inteface (MPI) for parallel calculations and returns list of basic MPI process parameters (in the case of initialization): rank of a process and total number of processes. In the case of first argument is 'share', the function will send data (list or array) from rankFrom (by default 0) to all processes (by default) of to rankTo."},
+
+	// Conductor (FastImp) functions
+	{"CndRecBlock", radia_CndRecBlock, METH_VARARGS, "CndRecBlock([x,y,z],[Lx,Ly,Lz],sigma,num_panels) creates a conductor from rectangular block with center [x,y,z], dimensions [Lx,Ly,Lz], conductivity sigma [S/m], and num_panels per face. Default sigma=5.8e7 (copper)."},
+	{"CndHexahedron", radia_CndHexahedron, METH_VARARGS, "CndHexahedron([[x1,y1,z1],...,[x8,y8,z8]],sigma,num_panels) creates a conductor from hexahedral vertices. Returns conductor handle."},
+	{"CndLoop", radia_CndLoop, METH_VARARGS, "CndLoop([x,y,z],radius,[nx,ny,nz],cross_section,wire_width,wire_height,sigma,num_panels_around,num_panels_loop) creates a circular loop conductor. cross_section: 'r'=rectangular, 'c'=circular."},
+	{"CndWire", radia_CndWire, METH_VARARGS, "CndWire([[x1,y1,z1],[x2,y2,z2],...],cross_section,width,height,sigma,num_panels_around) creates a wire conductor along path points. cross_section: 'r'=rectangular, 'c'=circular. Default sigma=5.8e7 (copper)."},
+	{"CndSpiral", radia_CndSpiral, METH_VARARGS, "CndSpiral([x,y,z],inner_radius,outer_radius,pitch,num_turns,[ax,ay,az],cross_section,wire_width,wire_height,sigma,num_panels_around) creates a spiral conductor. Pitch is the height gain per turn."},
+	{"CndSetFrequency", radia_CndSetFrequency, METH_VARARGS, "CndSetFrequency(cond,freq) sets frequency [Hz] for conductor cond. Must be called before CndSolve."},
+	{"CndSolve", radia_CndSolve, METH_VARARGS, "CndSolve(cond) solves the EFIE + charge continuity equations for conductor cond using FastImp pFFT method."},
+	{"CndGetImpedance", radia_CndGetImpedance, METH_VARARGS, "CndGetImpedance(cond) returns complex impedance Z = R + jX [Ohm] as a complex number."},
+	{"CndImpedanceSweep", radia_CndImpedanceSweep, METH_VARARGS, "CndImpedanceSweep(cond,[f1,f2,...]) computes impedance at multiple frequencies. Returns list of complex impedances."},
+	{"CndFld", radia_CndFld, METH_VARARGS, "CndFld(cond,'b'|'e'|'a',[x,y,z]) computes field from conductor at point. Returns complex [Fx,Fy,Fz] for AC field."},
+	{"CndNumPanels", radia_CndNumPanels, METH_VARARGS, "CndNumPanels(cond) returns the number of panels in the conductor discretization."},
+	{"MatSIBC", radia_MatSIBC, METH_VARARGS, "MatSIBC(sigma,mu_r) creates a Surface Impedance Boundary Condition material. sigma: conductivity [S/m], mu_r: relative permeability. For high-conductivity regions in magnetic materials."},
 
 	{NULL, NULL}
 };

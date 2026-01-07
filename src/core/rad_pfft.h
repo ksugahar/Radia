@@ -13,12 +13,12 @@
 #ifndef RAD_PFFT_H
 #define RAD_PFFT_H
 
-#include <mkl_dfti.h>
+#include <mkl.h>
 #include <complex>
 #include <vector>
 #include <functional>
 #include <stdexcept>
-#include "rad_geom_types.h"
+#include "gmvect.h"
 
 namespace radia {
 

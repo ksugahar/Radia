@@ -26,8 +26,10 @@
 #ifndef RAD_SIBC_H
 #define RAD_SIBC_H
 
-#include "rad_geom_types.h"
+#include "gmvect.h"
+#include "rad_constants.h"
 #include <vector>
+#include <array>
 #include <complex>
 #include <memory>
 #include <functional>
@@ -36,6 +38,9 @@ namespace radia {
 
 // Complex type alias
 using Complex = std::complex<double>;
+
+// Physical constants for SIBC
+constexpr double MU_0 = RadConst::MU_0;  // Permeability of free space [H/m]
 
 /**
  * @brief 2D cross-section mesh for SIBC calculation

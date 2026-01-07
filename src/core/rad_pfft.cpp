@@ -15,6 +15,9 @@
 
 namespace radia {
 
+// Local constants
+constexpr double INV_FOUR_PI = RadConst::INV_FOUR_PI;
+
 radTPfft::radTPfft()
     : nx_(0), ny_(0), nz_(0)
     , nx2_(0), ny2_(0), nz2_(0)
@@ -80,10 +83,10 @@ void radTPfft::InitializeMKLFFT() {
         throw std::runtime_error("DftiSetValue DFTI_BACKWARD_SCALE failed");
     }
 
-    status = DftiCommit(fftHandle_);
+    status = DftiCommitDescriptor(fftHandle_);
     if (status != DFTI_NO_ERROR) {
         DftiFreeDescriptor(&fftHandle_);
-        throw std::runtime_error("DftiCommit failed");
+        throw std::runtime_error("DftiCommitDescriptor failed");
     }
 
     fftInitialized_ = true;
@@ -397,7 +400,7 @@ void radTPfft::SetupKernelMQS() {
 
 void radTPfft::SetupKernelFullWave(double frequency, double eps, double mu) {
     // Full-wave: G(r) = exp(-jkr) / (4*pi*r)
-    double omega = 2.0 * PI * frequency;
+    double omega = 2.0 * RadConst::PI * frequency;
     double k = omega * std::sqrt(eps * mu);
 
     SetupKernel([k](double r) -> Complex {

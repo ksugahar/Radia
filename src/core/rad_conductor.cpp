@@ -256,7 +256,7 @@ void radTConductor::CreateWire(const std::vector<TVector3d>& path,
             double dz = path[i].z - path[i-1].z;
             totalLength += std::sqrt(dx*dx + dy*dy + dz*dz);
         }
-        double avgPanelSize = (isCircular ? PI * width : 2*(width + height)) / numPanelsAround;
+        double avgPanelSize = (isCircular ? RadConst::PI * width : 2*(width + height)) / numPanelsAround;
         numPanelsAlongLength = std::max(1, static_cast<int>(totalLength / avgPanelSize));
     }
 
@@ -324,8 +324,8 @@ void radTConductor::CreateWire(const std::vector<TVector3d>& path,
                 // Circular cross-section
                 double radius = width / 2.0;
                 for (int iAround = 0; iAround < numPanelsAround; ++iAround) {
-                    double theta0 = 2.0 * PI * iAround / numPanelsAround;
-                    double theta1 = 2.0 * PI * (iAround + 1) / numPanelsAround;
+                    double theta0 = 2.0 * RadConst::PI * iAround / numPanelsAround;
+                    double theta1 = 2.0 * RadConst::PI * (iAround + 1) / numPanelsAround;
 
                     SurfacePanel panel;
                     panel.type = SurfacePanel::Quadrilateral;
@@ -412,7 +412,7 @@ void radTConductor::CreateLoop(const TVector3d& center,
     v.z = n.x * u.y - n.y * u.x;
 
     for (int i = 0; i <= numPanelsLoop; ++i) {
-        double theta = 2.0 * PI * i / numPanelsLoop;
+        double theta = 2.0 * RadConst::PI * i / numPanelsLoop;
         double cosT = std::cos(theta);
         double sinT = std::sin(theta);
 
@@ -466,7 +466,7 @@ void radTConductor::CreateSpiral(const TVector3d& center,
 
     for (int i = 0; i < totalPoints; ++i) {
         double t = static_cast<double>(i) / (totalPoints - 1);
-        double theta = 2.0 * PI * numTurns * t;
+        double theta = 2.0 * RadConst::PI * numTurns * t;
         double r = innerRadius + (outerRadius - innerRadius) * t;
         double z = pitch * numTurns * t;
 
@@ -599,7 +599,7 @@ std::complex<double> radTConductor::GreenFunction(double r) const {
         case ConductorFormulation::EMQS:
         case ConductorFormulation::FullWave: {
             // G(r) = exp(-jkr) / (4*pi*r)
-            double omega = 2.0 * PI * frequency_;
+            double omega = 2.0 * RadConst::PI * frequency_;
             double k = omega * std::sqrt(MU_0 * EPS_0);
             std::complex<double> jkr(0, k * r);
             return std::exp(-jkr) * INV_FOUR_PI / r;
@@ -671,7 +671,7 @@ void radTConductor::ComputeE(const TVector3d& point,
 
     // E = -grad(phi) - j*omega*A
     // For now, simplified implementation
-    double omega = 2.0 * PI * frequency_;
+    double omega = 2.0 * RadConst::PI * frequency_;
 
     for (size_t i = 0; i < panels_.size(); ++i) {
         const auto& panel = panels_[i];
@@ -688,9 +688,9 @@ void radTConductor::ComputeE(const TVector3d& point,
 
         // -grad(phi) contribution from charges
         double r3 = r * r * r;
-        Ex += sigma * dx / (4.0 * PI * EPS_0 * r3) * panel.area;
-        Ey += sigma * dy / (4.0 * PI * EPS_0 * r3) * panel.area;
-        Ez += sigma * dz / (4.0 * PI * EPS_0 * r3) * panel.area;
+        Ex += sigma * dx / (4.0 * RadConst::PI * EPS_0 * r3) * panel.area;
+        Ey += sigma * dy / (4.0 * RadConst::PI * EPS_0 * r3) * panel.area;
+        Ez += sigma * dz / (4.0 * RadConst::PI * EPS_0 * r3) * panel.area;
     }
 }
 
@@ -815,7 +815,7 @@ void radTConductorSolver::BuildSystemMatrix() {
     }
 
     // Physical parameters
-    double omega = 2.0 * PI * frequency_;
+    double omega = 2.0 * RadConst::PI * frequency_;
     std::complex<double> jOmega(0, omega);
     std::complex<double> jOmegaMu = jOmega * MU_0;
     std::complex<double> invJOmegaEps = (omega > 1e-10) ?
@@ -883,7 +883,7 @@ void radTConductorSolver::BuildSystemMatrix() {
 
             if (r < 1e-12) {
                 // Self-term: use analytical approximation
-                double R_eff = std::sqrt(panelJ.area / PI);
+                double R_eff = std::sqrt(panelJ.area / RadConst::PI);
                 G = std::complex<double>(R_eff * (2.0 * std::log(2.0) - 1.0) * INV_FOUR_PI, 0);
                 dGdr = std::complex<double>(0, 0);
             } else {

@@ -28,7 +28,7 @@ radTGreenFunction::radTGreenFunction()
     , sigma_(0.0)
     , k_(0.0, 0.0)
     , skinDepth_(1e30)
-    , invFourPi_(1.0 / (4.0 * M_PI))
+    , invFourPi_(RadConst::INV_FOUR_PI)
     , jOmegaMu_(0.0, 0.0)
     , invJOmegaEps_(0.0, 0.0)
 {
@@ -39,7 +39,7 @@ radTGreenFunction::~radTGreenFunction() {
 
 void radTGreenFunction::SetFrequency(double frequency) {
     frequency_ = frequency;
-    omega_ = 2.0 * M_PI * frequency;
+    omega_ = 2.0 * RadConst::PI * frequency;
     UpdateDerivedQuantities();
 }
 
@@ -218,9 +218,9 @@ radTGreenFunction::EFIEKernel radTGreenFunction::ComputeEFIEKernel(
     if (r < 1e-15) {
         // Self-term: use analytical approximation
         // For circular panel of area A: self-term ~ A / (4*pi) * (ln(A/pi)/2 - 1)
-        double effective_radius = std::sqrt(src_area / M_PI);
+        double effective_radius = std::sqrt(src_area / RadConst::PI);
         kernel.L_self = jOmegaMu_ * invFourPi_ * src_area *
-                        (0.5 * std::log(src_area / M_PI) - 1.0);
+                        (0.5 * std::log(src_area / RadConst::PI) - 1.0);
         kernel.L_mutual = Complex(0.0, 0.0);
     } else {
         // Mutual term
@@ -511,11 +511,11 @@ radTPanelInteraction::Complex radTPanelInteraction::TriangleSelf(
     // More accurate: use average distance from centroid
 
     // Effective radius
-    double R_eff = std::sqrt(area / M_PI);
+    double R_eff = std::sqrt(area / RadConst::PI);
 
     // Self-term approximation (regularized)
     // For circular panel: I = R_eff * (2*ln(2) - 1) / (4*pi)
-    double I_real = R_eff * (2.0 * std::log(2.0) - 1.0) / (4.0 * M_PI);
+    double I_real = R_eff * (2.0 * std::log(2.0) - 1.0) / (4.0 * RadConst::PI);
 
     Complex g_self(I_real, 0.0);
 
@@ -523,7 +523,7 @@ radTPanelInteraction::Complex radTPanelInteraction::TriangleSelf(
     if (std::abs(green_->GetWaveNumber()) > 1e-15) {
         Complex k = green_->GetWaveNumber();
         // First-order correction
-        g_self -= Complex(0.0, 1.0) * k * area / (4.0 * M_PI);
+        g_self -= Complex(0.0, 1.0) * k * area / (4.0 * RadConst::PI);
     }
 
     return g_self;
@@ -539,14 +539,14 @@ radTPanelInteraction::Complex radTPanelInteraction::QuadSelf(
     ComputeQuadGeometry(vertices, centroid, normal, area);
 
     // Similar to triangle self-term
-    double R_eff = std::sqrt(area / M_PI);
-    double I_real = R_eff * (2.0 * std::log(2.0) - 1.0) / (4.0 * M_PI);
+    double R_eff = std::sqrt(area / RadConst::PI);
+    double I_real = R_eff * (2.0 * std::log(2.0) - 1.0) / (4.0 * RadConst::PI);
 
     Complex g_self(I_real, 0.0);
 
     if (std::abs(green_->GetWaveNumber()) > 1e-15) {
         Complex k = green_->GetWaveNumber();
-        g_self -= Complex(0.0, 1.0) * k * area / (4.0 * M_PI);
+        g_self -= Complex(0.0, 1.0) * k * area / (4.0 * RadConst::PI);
     }
 
     return g_self;
