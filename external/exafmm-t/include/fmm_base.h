@@ -82,7 +82,7 @@ namespace exafmm_t {
     void P2P(NodePtrs<T>& leafs) {
       NodePtrs<T>& targets = leafs;
 #pragma omp parallel for
-      for (size_t i=0; i<targets.size(); i++) {
+      for (int i=0; i<static_cast<int>(targets.size()); i++) {
         Node<T>* target = targets[i];
         NodePtrs<T>& sources = target->P2P_list;
         for (size_t j=0; j<sources.size(); j++) {
@@ -104,7 +104,7 @@ namespace exafmm_t {
         up_equiv_surf[level] = surface(p, r0, level, c, 1.05);
       }
 #pragma omp parallel for
-      for (size_t i=0; i<targets.size(); i++) {
+      for (int i=0; i<static_cast<int>(targets.size()); i++) {
         Node<T>* target = targets[i];
         NodePtrs<T>& sources = target->M2P_list;
         for (size_t j=0; j<sources.size(); j++) {
@@ -134,7 +134,7 @@ namespace exafmm_t {
         dn_check_surf[level] = surface(p, r0, level, c, 1.05);
       }
 #pragma omp parallel for
-      for (size_t i=0; i<targets.size(); i++) {
+      for (int i=0; i<static_cast<int>(targets.size()); i++) {
         Node<T>* target = &targets[i];
         NodePtrs<T>& sources = target->P2L_list;
         for (size_t j=0; j<sources.size(); j++) {
@@ -221,7 +221,7 @@ namespace exafmm_t {
 
       Nodes<T> targets2 = targets;    // target2 is used for direct summation
 #pragma omp parallel for
-      for (size_t i=0; i<targets2.size(); i++) {
+      for (int i=0; i<static_cast<int>(targets2.size()); i++) {
         Node<T>* target = &targets2[i];
         std::fill(target->trg_value.begin(), target->trg_value.end(), 0.);
         for (size_t j=0; j<leafs.size(); j++) {

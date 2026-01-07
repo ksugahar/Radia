@@ -256,7 +256,7 @@ namespace exafmm_t {
     unordered_map<uint64_t, size_t> key2id = get_key2id(nodes);
     unordered_set<uint64_t> leaf_keys = get_leaf_keys(nodes);
 #pragma omp parallel for schedule(dynamic)
-    for (size_t i=0; i<nodes.size(); i++) {
+    for (int i=0; i<static_cast<int>(nodes.size()); i++) {
       Node<T>* node = &nodes[i];
       build_M2L_list(node, nodes, key2id);
       build_other_list(node, nodes, fmm, leaf_keys, key2id);

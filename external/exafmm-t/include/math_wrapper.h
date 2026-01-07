@@ -1,5 +1,13 @@
 #ifndef math_wrapper_h
 #define math_wrapper_h
+
+// Prevent Windows min/max macro conflicts with std::min/std::max
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
 #include <complex>
 #include "exafmm_t.h"
 #include "timer.h"

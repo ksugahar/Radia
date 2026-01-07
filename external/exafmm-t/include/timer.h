@@ -4,41 +4,24 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <chrono>
 
-// Platform-specific time handling
-#ifdef _WIN32
-#include <windows.h>
-// Windows implementation of gettimeofday
-struct timeval {
-    long tv_sec;
-    long tv_usec;
-};
-inline int gettimeofday(struct timeval* tp, void* tzp) {
-    (void)tzp;
-    FILETIME ft;
-    GetSystemTimeAsFileTime(&ft);
-    ULARGE_INTEGER uli;
-    uli.LowPart = ft.dwLowDateTime;
-    uli.HighPart = ft.dwHighDateTime;
-    // Convert from 100-nanosecond intervals to microseconds
-    ULONGLONG us = uli.QuadPart / 10ULL - 11644473600000000ULL;
-    tp->tv_sec = (long)(us / 1000000ULL);
-    tp->tv_usec = (long)(us % 1000000ULL);
-    return 0;
-}
-#else
-#include <sys/time.h>
-#include <unistd.h>
-#endif
+// Use C++ chrono for cross-platform timing (no sys/time.h dependency)
+// This avoids Windows timeval conflicts with winsock.h
 
 namespace exafmm_t {
   static const int stringLength = 20;           //!< Length of formatted string
   static const int decimal = 7;                 //!< Decimal precision
   static const int wait = 100;                  //!< Waiting time between output of different ranks
   static const int dividerLength = stringLength + decimal + 9;  // length of output section divider
+
+  // Use chrono time_point instead of timeval
+  using clock_type = std::chrono::high_resolution_clock;
+  using time_point = clock_type::time_point;
+
   long long flop = 0;
-  timeval time;
-  std::map<std::string, timeval> timer;
+  time_point current_time;
+  std::map<std::string, time_point> timer;
 
   void print(std::string s) {
     // if (!VERBOSE | (MPIRANK != 0)) return;
@@ -61,25 +44,25 @@ namespace exafmm_t {
   void print_divider(std::string s) {
     s.insert(0, " ");
     s.append(" ");
-    int halfLength = (dividerLength - s.length()) / 2;
+    int halfLength = (dividerLength - static_cast<int>(s.length())) / 2;
     std::cout << std::string(halfLength, '-') << s
-              << std::string(dividerLength-halfLength-s.length(), '-') << std::endl;
+              << std::string(dividerLength-halfLength-static_cast<int>(s.length()), '-') << std::endl;
   }
 
   void add_flop(long long n) {
-#pragma omp atomic update
+#pragma omp atomic
     flop += n;
   }
 
   void start(std::string event) {
-    gettimeofday(&time, NULL);
-    timer[event] = time;
+    current_time = clock_type::now();
+    timer[event] = current_time;
   }
 
   double stop(std::string event, bool verbose=true) {
-    gettimeofday(&time, NULL);
-    double eventTime = time.tv_sec - timer[event].tv_sec +
-      (time.tv_usec - timer[event].tv_usec) * 1e-6;
+    current_time = clock_type::now();
+    std::chrono::duration<double> elapsed = current_time - timer[event];
+    double eventTime = elapsed.count();
     if (verbose)
       print(event, eventTime);
     return eventTime;

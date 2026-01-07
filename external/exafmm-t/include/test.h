@@ -31,7 +31,7 @@ namespace exafmm_t {
     //! Dummy P2M operator.
     void P2M(NodePtrs<T>& leafs) {
 #pragma omp parallel for
-      for(size_t i=0; i<leafs.size(); ++i) {
+      for(int i=0; i<static_cast<int>(leafs.size()); ++i) {
         Node<T>* leaf = leafs[i];
         leaf->up_equiv[0] += leaf->nsrcs;
       }
@@ -40,12 +40,16 @@ namespace exafmm_t {
     //! Dummy M2M operator.
     void M2M(Node<T>* node) {
       if(node->is_leaf) return;
-      for(int octant=0; octant<8; ++octant) {  
+      for(int octant=0; octant<8; ++octant) {
         if(node->children[octant])
+#ifndef EXAFMM_NO_OMP_TASKS
 #pragma omp task untied
+#endif
           M2M(node->children[octant]);
       }
+#ifndef EXAFMM_NO_OMP_TASKS
 #pragma omp taskwait
+#endif
       for(int octant=0; octant<8; octant++) {
         if(node->children[octant]) {
           Node<T>* child = node->children[octant];
@@ -57,7 +61,7 @@ namespace exafmm_t {
     //! Dummy M2L operator.
     void M2L(NodePtrs<T>& nonleafs) {
 #pragma omp parallel for schedule(dynamic)
-      for (size_t i=0; i<nonleafs.size(); ++i) {
+      for (int i=0; i<static_cast<int>(nonleafs.size()); ++i) {
         Node<T>* trg_parent = nonleafs[i];
         NodePtrs<T>& M2L_list = trg_parent->M2L_list;
         for (size_t j=0; j<M2L_list.size(); ++j) {
@@ -80,7 +84,7 @@ namespace exafmm_t {
     //! Dummy P2L operator.
     void P2L(Nodes<T>& nodes) {
 #pragma omp parallel for schedule(dynamic)
-      for(size_t i=0; i<nodes.size(); ++i) {
+      for(int i=0; i<static_cast<int>(nodes.size()); ++i) {
         NodePtrs<T>& P2L_list = nodes[i].P2L_list;
         for(size_t j=0; j<P2L_list.size(); ++j) {
           nodes[i].dn_equiv[0] += P2L_list[j]->nsrcs;
@@ -91,7 +95,7 @@ namespace exafmm_t {
     //! Dummy M2P operator.
     void M2P(NodePtrs<T>& leafs) {
 #pragma omp parallel for schedule(dynamic)
-      for(size_t i=0; i<leafs.size(); ++i) {
+      for(int i=0; i<static_cast<int>(leafs.size()); ++i) {
         if (leafs[i]->ntrgs == 0) continue;
         NodePtrs<T>& M2P_list = leafs[i]->M2P_list;
         for (size_t j=0; j<M2P_list.size(); ++j) {
@@ -111,16 +115,20 @@ namespace exafmm_t {
       }
       for(int octant=0; octant<8; ++octant) {
         if(node->children[octant])
+#ifndef EXAFMM_NO_OMP_TASKS
 #pragma omp task untied
+#endif
           L2L(node->children[octant]);
       }
+#ifndef EXAFMM_NO_OMP_TASKS
 #pragma omp taskwait
+#endif
     }
 
     //! Dummy L2P operator.
     void L2P(NodePtrs<T>& leafs) {
 #pragma omp parallel for
-      for(size_t i=0; i<leafs.size(); ++i) {
+      for(int i=0; i<static_cast<int>(leafs.size()); ++i) {
         Node<T>* leaf = leafs[i];
         if (leaf->ntrgs==0) continue;
         leaf->trg_value[0] += leaf->dn_equiv[0];
@@ -130,7 +138,7 @@ namespace exafmm_t {
     //! Dummy P2P operator.
     void P2P(NodePtrs<T>& leafs) {
 #pragma omp parallel for schedule(dynamic)
-      for(size_t i=0; i<leafs.size(); ++i) {
+      for(int i=0; i<static_cast<int>(leafs.size()); ++i) {
         Node<T>* leaf = leafs[i];
         if (leaf->ntrgs==0) continue;
         NodePtrs<T>& P2P_list = leaf->P2P_list;

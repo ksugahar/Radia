@@ -1,5 +1,13 @@
 #ifndef exafmm_t_h
 #define exafmm_t_h
+
+// Prevent Windows min/max macro conflicts
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -12,13 +20,25 @@
 #include "args.h"
 #include "vec.h"
 
-// Use Intel MKL DFTI instead of FFTW3
-// MKL provides FFTW3-compatible wrappers in mkl/include/fftw/fftw3.h
+// Intel MKL DFTI for FFT operations (replacing FFTW3)
 #include <mkl_dfti.h>
 
 // M_PI may not be defined on MSVC without _USE_MATH_DEFINES
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
+#endif
+
+// FFTW3-compatible constants
+#define FFTW_FORWARD (-1)
+#define FFTW_BACKWARD (+1)
+#define FFTW_ESTIMATE (1U << 6)
+#define FFTW_MEASURE (0U)
+
+// OpenMP tasking support detection
+// MSVC's standard OpenMP doesn't support tasks without -openmp:llvm flag
+// To avoid build errors, we disable tasking on MSVC unless explicitly enabled
+#if defined(_MSC_VER) && !defined(EXAFMM_ENABLE_OMP_TASKS)
+#define EXAFMM_NO_OMP_TASKS
 #endif
 
 namespace exafmm_t {
@@ -31,10 +51,9 @@ namespace exafmm_t {
   const real_t EPS = 1e-16;
 
   // MKL DFTI types for FFT operations
-  // We use MKL DFTI directly instead of FFTW3 wrappers for better control
   typedef DFTI_DESCRIPTOR_HANDLE fft_plan;
 
-  // Complex type compatible with MKL
+  // Complex type compatible with MKL (interleaved real/imag)
   typedef struct { double real; double imag; } fft_complex;
 
   const real_t PI = M_PI;
@@ -130,10 +149,13 @@ namespace exafmm_t {
 
   // ========================================================================
   // MKL DFTI FFT wrapper functions (replacing FFTW3 calls)
+  // Direct MKL integration - no FFTW3 wrapper dependency
   // ========================================================================
 
+  // Complex-to-Complex FFT plan
   inline fft_plan fft_plan_dft(int rank, const int* n, fft_complex* in, fft_complex* out, int sign, unsigned flags) {
-    (void)flags;  // Unused
+    (void)sign;   // MKL handles direction in execute call
+    (void)flags;  // MKL doesn't use planning flags
     DFTI_DESCRIPTOR_HANDLE handle = nullptr;
     MKL_LONG dims[3];
     for (int i = 0; i < rank; i++) dims[i] = n[i];
@@ -148,6 +170,94 @@ namespace exafmm_t {
     return handle;
   }
 
+  // Real-to-Complex FFT plan (R2C)
+  inline fft_plan fft_plan_dft_r2c(int rank, const int* n, real_t* in, fft_complex* out, unsigned flags) {
+    (void)in;
+    (void)out;
+    (void)flags;
+    DFTI_DESCRIPTOR_HANDLE handle = nullptr;
+    MKL_LONG dims[3];
+    for (int i = 0; i < rank; i++) dims[i] = n[i];
+
+    DftiCreateDescriptor(&handle, DFTI_DOUBLE, DFTI_REAL, rank, dims);
+    DftiSetValue(handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE);
+    DftiSetValue(handle, DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX);
+    DftiCommitDescriptor(handle);
+    return handle;
+  }
+
+  // Batched Complex-to-Complex FFT plan
+  inline fft_plan fft_plan_many_dft(int rank, const int* n, int howmany,
+                                     fft_complex* in, const int* inembed, int istride, int idist,
+                                     fft_complex* out, const int* onembed, int ostride, int odist,
+                                     int sign, unsigned flags) {
+    (void)in; (void)out;
+    (void)inembed; (void)onembed;
+    (void)istride; (void)ostride;
+    (void)sign; (void)flags;
+
+    DFTI_DESCRIPTOR_HANDLE handle = nullptr;
+    MKL_LONG dims[3];
+    for (int i = 0; i < rank; i++) dims[i] = n[i];
+
+    DftiCreateDescriptor(&handle, DFTI_DOUBLE, DFTI_COMPLEX, rank, dims);
+    DftiSetValue(handle, DFTI_NUMBER_OF_TRANSFORMS, (MKL_LONG)howmany);
+    DftiSetValue(handle, DFTI_INPUT_DISTANCE, (MKL_LONG)idist);
+    DftiSetValue(handle, DFTI_OUTPUT_DISTANCE, (MKL_LONG)odist);
+    DftiSetValue(handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE);
+    DftiCommitDescriptor(handle);
+    return handle;
+  }
+
+  // Batched Real-to-Complex FFT plan (R2C)
+  inline fft_plan fft_plan_many_dft_r2c(int rank, const int* n, int howmany,
+                                         real_t* in, const int* inembed, int istride, int idist,
+                                         fft_complex* out, const int* onembed, int ostride, int odist,
+                                         unsigned flags) {
+    (void)in; (void)out;
+    (void)inembed; (void)onembed;
+    (void)istride; (void)ostride;
+    (void)flags;
+
+    DFTI_DESCRIPTOR_HANDLE handle = nullptr;
+    MKL_LONG dims[3];
+    for (int i = 0; i < rank; i++) dims[i] = n[i];
+
+    DftiCreateDescriptor(&handle, DFTI_DOUBLE, DFTI_REAL, rank, dims);
+    DftiSetValue(handle, DFTI_NUMBER_OF_TRANSFORMS, (MKL_LONG)howmany);
+    DftiSetValue(handle, DFTI_INPUT_DISTANCE, (MKL_LONG)idist);
+    DftiSetValue(handle, DFTI_OUTPUT_DISTANCE, (MKL_LONG)odist);
+    DftiSetValue(handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE);
+    DftiSetValue(handle, DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX);
+    DftiCommitDescriptor(handle);
+    return handle;
+  }
+
+  // Batched Complex-to-Real FFT plan (C2R)
+  inline fft_plan fft_plan_many_dft_c2r(int rank, const int* n, int howmany,
+                                         fft_complex* in, const int* inembed, int istride, int idist,
+                                         real_t* out, const int* onembed, int ostride, int odist,
+                                         unsigned flags) {
+    (void)in; (void)out;
+    (void)inembed; (void)onembed;
+    (void)istride; (void)ostride;
+    (void)flags;
+
+    DFTI_DESCRIPTOR_HANDLE handle = nullptr;
+    MKL_LONG dims[3];
+    for (int i = 0; i < rank; i++) dims[i] = n[i];
+
+    DftiCreateDescriptor(&handle, DFTI_DOUBLE, DFTI_REAL, rank, dims);
+    DftiSetValue(handle, DFTI_NUMBER_OF_TRANSFORMS, (MKL_LONG)howmany);
+    DftiSetValue(handle, DFTI_INPUT_DISTANCE, (MKL_LONG)idist);
+    DftiSetValue(handle, DFTI_OUTPUT_DISTANCE, (MKL_LONG)odist);
+    DftiSetValue(handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE);
+    DftiSetValue(handle, DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX);
+    DftiCommitDescriptor(handle);
+    return handle;
+  }
+
+  // Execute Complex-to-Complex FFT (forward)
   inline void fft_execute_dft(fft_plan plan, fft_complex* in, fft_complex* out) {
     if (in == out) {
       DftiComputeForward(plan, in);
@@ -156,16 +266,29 @@ namespace exafmm_t {
     }
   }
 
+  // Execute Real-to-Complex FFT (forward)
+  inline void fft_execute_dft_r2c(fft_plan plan, real_t* in, fft_complex* out) {
+    DftiComputeForward(plan, in, out);
+  }
+
+  // Execute Complex-to-Real FFT (backward/inverse)
+  inline void fft_execute_dft_c2r(fft_plan plan, fft_complex* in, real_t* out) {
+    DftiComputeBackward(plan, in, out);
+  }
+
+  // Destroy FFT plan
   inline void fft_destroy_plan(fft_plan plan) {
     if (plan) DftiFreeDescriptor(&plan);
   }
 
+  // Get FFT flop count (MKL doesn't provide this, return 0)
   inline void fft_flops(fft_plan plan, double* add, double* mul, double* fma) {
-    // MKL doesn't provide flop counts, so we set to 0
     (void)plan;
     *add = 0;
     *mul = 0;
     *fma = 0;
   }
-}
-#endif
+
+}  // namespace exafmm_t
+
+#endif  // exafmm_t_h
