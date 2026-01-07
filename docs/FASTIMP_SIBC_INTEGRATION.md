@@ -13,6 +13,15 @@ This document describes the design for integrating FastImp-based conductor model
 2. **Magnetic material**: Use existing ELF/Radia MSC formulation
 3. **Conductive magnetic material**: Implement Nonlocal SIBC for materials with both conductivity and permeability
 
+## Target Applications
+
+- **Accelerator magnets**: Insertion devices, undulators, wigglers
+- **Kicker magnets**: Fast pulsed magnets for beam injection/extraction (eddy currents in vacuum chamber)
+- **WPT (Wireless Power Transfer)**: Coil impedance and resonance analysis
+- **On-chip inductors**: High-frequency parasitic extraction
+- **Transformers**: Core losses and winding impedance
+- **Electromagnetic shielding**: Eddy current shielding effectiveness
+
 ## Architecture
 
 ```
@@ -261,11 +270,29 @@ For N surface elements:
 
 ## References
 
-1. Bilicz S, Badics Z, Pavo J. "Wide-band nonlocal impedance boundary condition model for high-conductivity regions in integral equation framework", December 2023.
+### Nonlocal SIBC (Primary Reference)
 
-2. Zhu Z, Song B, White JK. "Algorithms in FastImp: a fast and wide-band impedance extraction program for complicated 3-D geometries", IEEE Trans. CAD, 2003.
+[1] S. Bilicz, Z. Badics, and J. Pávó, "Wide-band nonlocal impedance boundary condition model for high-conductivity regions in integral equation framework," presented at ISEM 2023 (International Symposium on Electromagnetic Fields in Mechatronics, Electrical and Electronic Engineering), December 2023.
+- Affiliation: Budapest University of Technology and Economics, Hungary; Tensor Research, LLC, USA
+- ORCID: S. Bilicz (0000-0003-4995-6698), Z. Badics (0000-0001-6176-3675), J. Pávó (0000-0002-9501-7176)
+- Funding: Hungarian Scientific Research Fund, Grant K-135307
 
-3. FastImp source code: https://github.com/ediloren/FastImp
+[2] S. Bilicz, Z. Badics, S. Gyimóthy, and J. Pávó, "A Full-Wave Integral Equation Method Including Accurate Wide-Frequency-Band Wire Models for WPT Coils," IEEE Transactions on Magnetics, vol. 54, no. 3, pp. 1-4, March 2018.
+- DOI: 10.1109/TMAG.2017.2771366
+
+### FastImp
+
+[3] Z. Zhu, B. Song, and J. K. White, "Algorithms in FastImp: a fast and wide-band impedance extraction program for complicated 3-D geometries," IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems, vol. 24, no. 7, pp. 981-998, July 2005.
+- DOI: 10.1109/TCAD.2005.850814
+- Affiliation: Massachusetts Institute of Technology
+
+[4] FastImp source code: https://github.com/ediloren/FastImp (MIT License)
+
+### Related Work
+
+[5] M. Al-Qedra, J. Aronsson, and V. Okhmatovski, "A Novel Skin-Effect Based Surface Impedance Formulation for Broadband Modeling of 3-D Interconnects With Electric Field Integral Equation," IEEE Transactions on Microwave Theory and Techniques, vol. 58, no. 12, pp. 3872-3881, December 2010.
+
+[6] W. C. Gibson, "The Method of Moments in Electromagnetics," Boca Raton: Chapman & Hall/CRC, 2008.
 
 ## License Considerations
 
