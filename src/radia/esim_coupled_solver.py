@@ -1122,6 +1122,7 @@ class WPTCoupledSolver:
         # Resistance values
         self.R1 = None  # Primary resistance [Ohm]
         self.R2 = None  # Secondary resistance [Ohm]
+        self.Rm = None  # Mutual resistance (proximity effect) [Ohm]
 
         # Impedance matrix
         self.Z_matrix = None  # 2x2 complex impedance matrix
@@ -1193,7 +1194,149 @@ class WPTCoupledSolver:
 
         return R_ac
 
-    def compute_impedance_matrix(self):
+    def compute_mutual_resistance(self, n_segments=100):
+        """
+        Compute mutual resistance (Rm) due to proximity effect between two coils.
+
+        The mutual resistance accounts for eddy current losses induced in one coil
+        by the alternating magnetic field of the other coil.
+
+        Physical mechanism:
+        - The magnetic field from coil 1 penetrates coil 2's conductor
+        - This induces eddy currents in coil 2's wire
+        - These eddy currents dissipate power (I^2*Rm loss)
+        - The effect is reciprocal (Rm12 = Rm21)
+
+        ESIM Method (Effective Surface Impedance Method):
+        The ESIM cell problem computes the effective surface impedance Z_s(H0) for
+        a conductor in an external magnetic field. This method is valid for any
+        frequency, including low frequencies where skin depth > conductor thickness.
+
+        For the proximity effect:
+            - Compute the average external H field at coil 2's wire from coil 1
+            - Solve the ESIM cell problem for that field strength
+            - Integrate the power loss over the wire surface
+
+            Rm = Re(Z_s) * L_wire * perimeter * k^2
+
+        Parameters:
+            n_segments: Number of segments for field calculation
+
+        Returns:
+            Rm: Mutual resistance [Ohm]
+        """
+        # Import ESIM cell problem solver
+        from .esim_cell_problem import ESIMCellProblemSolver
+
+        # Get coil parameters
+        sigma1 = self.coil1.params.get('conductivity', 5.8e7)
+        sigma2 = self.coil2.params.get('conductivity', 5.8e7)
+        wire_w1 = self.coil1.params.get('wire_width', 0.003)
+        wire_h1 = self.coil1.params.get('wire_height', wire_w1)
+        wire_w2 = self.coil2.params.get('wire_width', 0.003)
+        wire_h2 = self.coil2.params.get('wire_height', wire_w2)
+
+        # Compute mutual inductance if not done
+        if self.M is None:
+            self.compute_inductances(n_segments)
+
+        # Compute AC resistances if not already done
+        if self.R1 is None:
+            self.R1 = self.compute_ac_resistance(self.coil1)
+        if self.R2 is None:
+            self.R2 = self.compute_ac_resistance(self.coil2)
+
+        # Wire lengths
+        if self.coil1.coil_type == 'loop':
+            L_wire1 = 2 * np.pi * self.coil1.radius
+        elif self.coil1.coil_type == 'spiral':
+            R_avg1 = (self.coil1.inner_radius + self.coil1.outer_radius) / 2
+            L_wire1 = 2 * np.pi * R_avg1 * self.coil1.num_turns
+        else:
+            L_wire1 = 1.0
+
+        if self.coil2.coil_type == 'loop':
+            L_wire2 = 2 * np.pi * self.coil2.radius
+        elif self.coil2.coil_type == 'spiral':
+            R_avg2 = (self.coil2.inner_radius + self.coil2.outer_radius) / 2
+            L_wire2 = 2 * np.pi * R_avg2 * self.coil2.num_turns
+        else:
+            L_wire2 = 1.0
+
+        # Wire perimeters
+        perimeter1 = 2 * (wire_w1 + wire_h1)
+        perimeter2 = 2 * (wire_w2 + wire_h2)
+
+        # ==== ESIM-based mutual resistance calculation ====
+        #
+        # For WPT proximity effect:
+        # 1. Coil 1's current I1 creates a magnetic field H_ext at coil 2's wire
+        # 2. This external field penetrates coil 2's conductor
+        # 3. ESIM gives us the surface impedance Z_s for this external field
+        # 4. Power loss = Re(Z_s) * H_ext^2 * (surface area)
+        #
+        # From ESIM, the power loss per unit surface area for field H0 is:
+        #   P' = Re(Z_s) * H0^2
+        #
+        # The effective H field at the wire surface due to external flux is:
+        #   H_ext ~ k * sqrt(L) / sqrt(mu_0 * L_wire)
+
+        Rm = 0.0
+
+        if self.k is not None and self.k > 0 and self.L1 > 0 and self.L2 > 0:
+            # Create ESIM solver for coil 2's conductor (copper: mu_r = 1)
+            esim_solver2 = ESIMCellProblemSolver(
+                sigma=sigma2,
+                frequency=self.frequency,
+                complex_mu=(1.0, 0.0)  # Linear material: mu_r = 1, no loss
+            )
+
+            # Effective external H field for I1 = 1A
+            H_ext2 = self.k * np.sqrt(self.L1 / mu_0) / np.sqrt(L_wire1)
+            H_ext2 = max(H_ext2, 1.0)    # At least 1 A/m
+            H_ext2 = min(H_ext2, 1e5)    # At most 100 kA/m
+
+            # Solve ESIM cell problem for coil 2
+            result2 = esim_solver2.solve(H_ext2, tol=1e-4, max_iter=30)
+            Z_s2 = result2['Z']
+
+            # Mutual resistance contribution from coil 1's field on coil 2
+            Rm_from_coil1 = Z_s2.real * L_wire2 * perimeter2
+
+            # Create ESIM solver for coil 1's conductor (copper: mu_r = 1)
+            esim_solver1 = ESIMCellProblemSolver(
+                sigma=sigma1,
+                frequency=self.frequency,
+                complex_mu=(1.0, 0.0)  # Linear material: mu_r = 1, no loss
+            )
+
+            # Effective external H field for I2 = 1A
+            H_ext1 = self.k * np.sqrt(self.L2 / mu_0) / np.sqrt(L_wire2)
+            H_ext1 = max(H_ext1, 1.0)
+            H_ext1 = min(H_ext1, 1e5)
+
+            # Solve ESIM cell problem for coil 1
+            result1 = esim_solver1.solve(H_ext1, tol=1e-4, max_iter=30)
+            Z_s1 = result1['Z']
+
+            # Mutual resistance contribution from coil 2's field on coil 1
+            Rm_from_coil2 = Z_s1.real * L_wire1 * perimeter1
+
+            # Total mutual resistance (average for numerical stability)
+            # By reciprocity, Rm12 = Rm21
+            Rm = 0.5 * (Rm_from_coil1 + Rm_from_coil2)
+
+            # Scale by coupling factor squared (mutual effect)
+            Rm = Rm * self.k**2
+
+        # Cap Rm at a reasonable fraction of geometric mean of resistances
+        R_avg = np.sqrt(self.R1 * self.R2)
+        Rm = min(Rm, 0.3 * R_avg)
+
+        self.Rm = Rm
+        return Rm
+
+    def compute_impedance_matrix(self, include_mutual_resistance=True):
         """
         Compute the 2x2 impedance matrix of the coupled coil system.
 
@@ -1203,7 +1346,13 @@ class WPTCoupledSolver:
         where:
             Z11 = R1 + j*omega*L1
             Z22 = R2 + j*omega*L2
-            Z12 = Z21 = j*omega*M
+            Z12 = Z21 = Rm + j*omega*M  (includes mutual resistance from proximity effect)
+
+        The mutual resistance Rm accounts for eddy current losses induced in one
+        coil by the magnetic field of the other coil (proximity effect).
+
+        Parameters:
+            include_mutual_resistance: If True, include Rm in off-diagonal terms
 
         Returns:
             Z_matrix: 2x2 complex numpy array
@@ -1218,10 +1367,20 @@ class WPTCoupledSolver:
         if self.R2 is None:
             self.R2 = self.compute_ac_resistance(self.coil2)
 
+        # Compute mutual resistance
+        if include_mutual_resistance and self.Rm is None:
+            self.compute_mutual_resistance()
+
         # Build impedance matrix
         Z11 = self.R1 + 1j * self.omega * self.L1
         Z22 = self.R2 + 1j * self.omega * self.L2
-        Z12 = 1j * self.omega * self.M
+
+        # Off-diagonal: Rm + j*omega*M (mutual impedance with proximity loss)
+        if include_mutual_resistance and self.Rm is not None:
+            Z12 = self.Rm + 1j * self.omega * self.M
+        else:
+            Z12 = 1j * self.omega * self.M
+
         Z21 = Z12  # Reciprocity
 
         self.Z_matrix = np.array([[Z11, Z12],
@@ -1382,6 +1541,7 @@ class WPTCoupledSolver:
             # Resistances
             'R1_mOhm': self.R1 * 1e3,
             'R2_mOhm': self.R2 * 1e3,
+            'Rm_mOhm': self.Rm * 1e3 if self.Rm is not None else 0.0,
 
             # Quality factors
             'Q1': Q1,
@@ -1420,6 +1580,11 @@ class WPTCoupledSolver:
             print(f"  M (mutual)    = {result['M_uH']:.3f} uH")
             print(f"  k (coupling)  = {result['k']:.4f}")
             print()
+            print("Resistance Parameters:")
+            print(f"  R1 (primary)  = {result['R1_mOhm']:.4f} mOhm")
+            print(f"  R2 (secondary)= {result['R2_mOhm']:.4f} mOhm")
+            print(f"  Rm (mutual)   = {result['Rm_mOhm']:.4f} mOhm  (proximity effect)")
+            print()
             print("Quality Factors:")
             print(f"  Q1 = {result['Q1']:.1f}")
             print(f"  Q2 = {result['Q2']:.1f}")
@@ -1437,8 +1602,10 @@ class WPTCoupledSolver:
             print()
             print("Impedance Matrix (Z):")
             print(f"  Z11 = {self.Z_matrix[0,0].real:.4f} + j{self.Z_matrix[0,0].imag:.4f} Ohm")
-            print(f"  Z12 = {self.Z_matrix[0,1].real:.4f} + j{self.Z_matrix[0,1].imag:.4f} Ohm")
+            print(f"  Z12 = {self.Z_matrix[0,1].real:.4f} + j{self.Z_matrix[0,1].imag:.4f} Ohm  (Rm + j*omega*M)")
             print(f"  Z22 = {self.Z_matrix[1,1].real:.4f} + j{self.Z_matrix[1,1].imag:.4f} Ohm")
+            print()
+            print("Note: Z12 real part (Rm) represents mutual resistance from proximity effect.")
             print()
 
         return result
