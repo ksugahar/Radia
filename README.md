@@ -23,6 +23,23 @@ Unlike general-purpose FEM tools optimized for motors (rotating machinery) with 
 ### Future Scope & Active Development
 We are actively expanding the framework to cover:
 *   **ESIM (Equivalent Source Integral Method)**: Currently prioritizing the implementation of ESIM for advanced source modeling.
+*   **Application Library Expansion**: We are currently building a comprehensive set of reference examples for MagLev, WPT, and Accelerator magnets to serve as starting points for new users.
+
+---
+
+## 💎 Strategic Value: Solving What FEM Cannot
+
+**Closing the Gap in Computational Electromagnetics.**
+
+Commercially available Finite Element Method (FEM) tools are powerful, but they face inherent limitations when dealing with open regions and moving parts. Radia provides a **Complementary Framework** based on **Integral Methods (Green's Functions / Kernels)** to solve these specific classes of problems effectively.
+
+*   **The "Open Boundary" Problem**: FEM requires truncating the universe with artificial boundaries (or expensive infinite elements).
+    *   *Our Solution*: Integral methods naturally satisfy the condition at infinity. No air mesh is needed.
+*   **The "Moving Source" Problem**: Moving a coil or magnet in FEM requires complex re-meshing or sliding interfaces, introducing numerical noise.
+    *   *Our Solution*: Sources are analytical objects. Moving them is a simple coordinate transformation, free of discretization error.
+
+**We do not replace FEM; We complete it.**
+By handling the "Sources" with Integral Methods and the "Materials" with FEM (NGSolve), we provide a hybrid workflow that overcomes the structural weaknesses of using FEM alone.
 
 ---
 
@@ -44,20 +61,64 @@ We solve the physics exactly where it happens: **On the Surface.**
 
 **Result**: Simulations that took hours with FEM finish in minutes, with perfect geometric fidelity for Litz wires and complex coils.
 
+## 🦁 Academic Heritage & Citations
+
+Radia is not a new invention; it is the **Modern Evolution** of battle-tested scientific codes developed at world-leading research institutes.
+We stand on the shoulders of giants:
+
+*   **Radia (ESRF)**: Developed by **O. Chubar, P. Elleaume, et al.** at the European Synchrotron Radiation Facility. The standard for undulator design for decades.
+    *   *Ref*: O. Chubar, P. Elleaume, J. Chavanne, "A 3D Magnetostatics Computer Code for Insertion Devices", J. Synchrotron Rad. (1998).
+*   **FastImp (MIT)**: Developed by **J. White, et al.** at MIT. The pioneer of pFFT-accelerated Surface Integral Equation methods.
+    *   *Ref*: Z. Zhu, B. Song, J. White, "Algorithms in FastImp: A Fast and Wide-Band Impedance Extraction Program", DAC (2003).
+
 ---
 
-## 🧘 Philosophy: Physics-First in a Multi-Physics World
+## 📐 Mathematical Foundations: The Power of Analytical Kernels
 
-We believe in **"The Right Tool for the Right Physics"**.
+The core advantage of **Integral Element Method (IEM)** is the use of **Analytical Integration** over source volumes and surfaces, eliminating discretization error.
 
-While Integral Methods (Radia) are superior for open-boundary magnetics, we recognize that modern engineering requires **Multi-Physics** (Thermal, Structural, Fluid). The world is not just magnetic; iron saturates, coils heat up, and structures deform.
+### 1. Analytical Sources (Radia Kernels)
+Instead of approximating a coil as a bundle of sticks, we analytically integrate the Bio-Savart law:
 
-**Our Vision**: Radia does not try to do everything. Instead, it acts as the **Precision Field Generator** within a larger Multi-Physics workflow.
+$$ \vec{B}(\vec{r}) = \frac{\mu_0 I}{4\pi} \int_{Volume} \vec{J}(\vec{r}') \times \frac{\vec{r} - \vec{r}'}{|\vec{r} - \vec{r}'|^3} dV' $$
 
-*   **Radia**: Generates the exact electromagnetic sources (Coils, Magnets) analytically.
-*   **NGSolve (FEM)**: Handles the multi-physics material response (Heat, Stress, Non-linear Saturation).
+For specific geometries, this yields **Exact Closed-Form Solutions**:
+*   **Polygonal Coils**: Exact integration of straight segments.
+*   **Arc Segments**: Exact integration of circular arcs.
+*   **Cylindrical Magnets**: Exact field formulas involving elliptic integrals.
+*   **Polyhedral Magnets**: Exact surface charge integration ($\sigma_m = \vec{M} \cdot \vec{n}$).
 
-By coupling these dedicated solvers, we achieve a system that is both **Faster** (efficient algorithms) and **More Accurate** (no air mesh errors) than monolithic FEM approaches.
+### 2. Method of Magnetized Methods (MMM) with MSC
+For iron saturation, we employ the **Magnetic Surface Charge (MSC)** formulation. The magnetization $\vec{M}$ inside a volume $\Omega$ creates an equivalent surface charge density:
+
+$$ \phi_m(\vec{r}) = \frac{1}{4\pi} \oint_{\partial \Omega} \frac{\vec{M} \cdot \vec{n}'}{|\vec{r} - \vec{r}'|} dS' - \frac{1}{4\pi} \int_{\Omega} \frac{\nabla' \cdot \vec{M}}{|\vec{r} - \vec{r}'|} dV' $$
+
+### 3. Surface Impedance & FastImp Kernels
+For high-frequency conductors, we solve the Surface Integral Equation (SIE) using the oscillatory Green's function kernel:
+
+$$ G(\vec{r}, \vec{r}') = \frac{e^{ik|\vec{r} - \vec{r}'|}}{|\vec{r} - \vec{r}'|} $$
+
+Combined with **SIBC**, this reduces the volumetric skin-effect problem to a purely surface-based boundary element problem.
+
+---
+
+## 🧘 Philosophy: Integration over Re-invention
+
+**We do not aim to build new solvers from scratch.**
+Instead, our mission is to provide a **Unified Integrated Environment** that orchestrates the world's best open-source physics engines into a single design workflow.
+
+We bridge the gap between distinct mathematical communities:
+*   **Integral Codes**: Radia (ESRF) & FastImp (MIT) $\rightarrow$ *The Heritage of Synchrotron/Chip Design.*
+*   **Finite Element Codes**: NGSolve (Vienna) $\rightarrow$ *The Modern Standard for PDE Solving.*
+
+**Breathing New Life into Proven Physics**:
+Both Radia and FastImp are "dormant" projects—development has slowed, but their physics engines remain robust and unmatched for their specific niches.
+**The unique value of this framework lies in "Integration as Resurrection".**
+By wrapping these legacy engines in a modern Python ecosystem, we unlock their potential for a new generation of engineers who might otherwise find them inaccessible.
+
+**The Framework's Role**:
+We provide the **High-Performance Bridge**—the Python API, the memory exchange (C++ Coupling), and the coordinate transformations—that allows these disparate solvers to talk to each other as if they were one.
+This allows researchers to focus on **System Design** rather than solver implementation.
 
 ---
 
@@ -80,14 +141,17 @@ Instead of clicking through nested menus to find a "Halbach Array" button, you s
 
 ---
 
-## 💡 Architecture: The "Best of Both Worlds"
+## 💡 Architecture: The "IEM + FEM" Framework
 
-We combine two powerful mathematical approaches into a single cohesive framework:
+We define our unique approach as a hybrid of **Integral Element Method (IEM)** and **Finite Element Method (FEM)**.
 
-| Layer | Technology | Role | Advantage |
+**What is "Integral Element Method (IEM)"?**
+Unlike FEM, which uses uniform element formulations, IEM allows the combination of elements with **different integration kernels** (e.g., $1/r$ for monopoles, $\vec{J} \times \vec{r}/r^3$ for Biot-Savart, $e^{ikr}/r$ for wave kernels) into a single system.
+
+| Layer | Method | Role & Kernels | Advantage |
 | :--- | :--- | :--- | :--- |
-| **Source Layer** | **Radia** (Integral Method) | Defines Coils, Magnets, Current paths. | **Zero Meshing of Air.** Infinite boundaries are handled analytically. Perfect representation of curves. |
-| **Material Layer** | **NGSolve** (FEM) | Defines Iron Yokes, Shields, Conductors. | Handles non-linear saturation (B-H curves) and eddy currents using **Reduced Scalar Potential**. Combined with **Kelvin Transformation**, it efficiently handles open boundaries for the reaction field. |
+| **Source Layer** | **IEM** (Integral Element Method) | **Diverse Kernels for Diverse Physics.** <br> • **Radia**: Magnetostatic Kernels (Volume Magnets, Coils). <br> • **FastImp**: Oscillatory Kernels (SIBC Surfaces). | **Composable Physics.** <br> You can mix-and-match analytical coils, volume magnets, and surface conductors freely. The interaction is handled by the appropriate Green's functions. |
+| **Material Layer** | **FEM** (Finite Element Method) | **NGSolve**: Differential Operators ($\nabla \cdot \mu \nabla$) | **Non-Linear & Multi-Physics.** <br> Handles complex material responses (Saturation, Hysteresis, Heat) where kernels become computationally expensive. |
 
 **The Workflow:**
 1.  **Radia**: Computes the source field ($H_s$ or $T_s$) analytically.
@@ -144,6 +208,28 @@ To handle complex field sources efficiently, the framework employs state-of-the-
 *   **PyVista Viewer**: Modern, interactive 3D visualization within Python/Jupyter.
 *   **VTK Export**: Compatibile with ParaView.
 *   **Nastran/Step**: Interoperability with CAD tools via [Coreform Cubit integration](https://github.com/ksugahar/Coreform_Cubit_Mesh_Export).
+
+---
+
+### 4. MagLev Specific Capabilities
+We provide built-in formulations for the unique physics of magnetic levitation:
+
+*   **EDS (Electrodynamic Suspension)**:
+    *   **Drag & Lift Forces**: Accurate computation of velocity-dependent forces on moving magnets over conductive plates (using `rad.ObjMpl` or FastImp).
+    *   **Inductrack**: Simulation of Halbach arrays moving over passive coils or litz-wire tracks.
+*   **EMS (Electromagnetic Suspension)**:
+    *   **Control Inductances**: Fast extraction of differential inductance matrices ($L_{ij}$) for control loop design (differentiate Flux $\Phi$ w.r.t current $I$).
+    *   **Force-Gap Characteristics**: High-precision force vs. air-gap curves for nonlinear controller tuning.
+
+## ⚖️ Workflow Comparison: Why Switch?
+
+| Feature | Traditional FEM (Commercial) | **Radia Framework (IEM + FEM)** |
+| :--- | :--- | :--- |
+| **Air Mesh** | **Required.** Must mesh the "nothingness" around the device. | **None.** Air is handled analytically. |
+| **Moving Parts** | **Hard.** Mesh deformation, sliding interfaces, re-meshing noise. | **Trivial.** Just apply a coordinate transform `rad.Trsf`. |
+| **Coil Geometry** | **Approximated.** Step-files or coarse filaments. | **Exact.** Analytical arcs, straight segments, and volumes. |
+| **Skin Effect** | **Heavy.** Requires dense volume mesh inside conductors. | **Light.** SIBC solves it on the surface only. |
+| **Optimization** | **Blackbox.** Slow parameters sweeps via GUI. | **Transparent.** Fast, gradient-friendly Python execution. |
 
 ---
 
