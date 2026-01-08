@@ -46,6 +46,11 @@ namespace exafmm_t {
     vec(const vec &v) {
       for (int i=0; i<N; i++) data[i] = v[i];
     }
+    // Strided gather constructor for SIMD-like operations on non-contiguous data
+    vec(const T* a, const int size) {
+      int offset = size / (int)sizeof(T);
+      for (int i=0; i<N; i++) data[i] = *(a + i * offset);
+    }
     ~vec(){}
     const vec &operator=(const T v) {
       for (int i=0; i<N; i++) data[i] = v;
@@ -75,12 +80,19 @@ namespace exafmm_t {
       for (int i=0; i<N; i++) data[i] <= v;
       return *this;
     }
+    // Bitwise AND for mask operation (used for conditional selection)
+    // For floating-point types, treat non-zero as true mask, zero as false
     const vec &operator&=(const T v) {
-      for (int i=0; i<N; i++) data[i] &= v;
+      for (int i=0; i<N; i++) data[i] = (v != T(0)) ? data[i] : T(0);
+      return *this;
+    }
+    // Bitwise AND with another vec (element-wise mask)
+    const vec &operator&=(const vec & v) {
+      for (int i=0; i<N; i++) data[i] = (v[i] != T(0)) ? data[i] : T(0);
       return *this;
     }
     const vec &operator|=(const T v) {
-      for (int i=0; i<N; i++) data[i] |= v;
+      for (int i=0; i<N; i++) data[i] = (data[i] != T(0) || v != T(0)) ? T(1) : T(0);
       return *this;
     }
     const vec &operator=(const vec & v) {
@@ -103,12 +115,9 @@ namespace exafmm_t {
       for (int i=0; i<N; i++) data[i] /= v[i];
       return *this;
     }
-    const vec &operator&=(const vec & v) {
-      for (int i=0; i<N; i++) data[i] &= v[i];
-      return *this;
-    }
+    // Note: operator&= for vec already defined above (mask operation)
     const vec &operator|=(const vec & v) {
-      for (int i=0; i<N; i++) data[i] |= v[i];
+      for (int i=0; i<N; i++) data[i] = (data[i] != T(0) || v[i] != T(0)) ? T(1) : T(0);
       return *this;
     }
     vec operator+(const T v) const {
@@ -241,6 +250,12 @@ namespace exafmm_t {
     friend vec exp(const vec & v) {
       vec temp;
       for (int i=0; i<N; i++) temp[i] = exp(v[i]);
+      return temp;
+    }
+    // Generic rsqrt (reciprocal square root) for scalar fallback
+    friend vec rsqrt(const vec & v) {
+      vec temp;
+      for (int i=0; i<N; i++) temp[i] = T(1) / std::sqrt(v[i]);
       return temp;
     }
     friend int wrap(vec & v, const vec & w) {

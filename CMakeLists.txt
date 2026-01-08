@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.21)
 project(radia_ngsolve C CXX)
 
+# C++17 required for inline variables in header-only ExaFMM library
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Option to disable OpenMP (for debugging)
 option(RADIA_ENABLE_OPENMP "Enable OpenMP parallelization" ON)
 
@@ -142,6 +146,14 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_sibc.cpp                  # Nonlocal SIBC for conductive magnetic materials
 )
 
+# FMM conductor source (only when ExaFMM is enabled)
+set(RADIA_FMM_CONDUCTOR_SOURCES "")
+if(RADIA_ENABLE_EXAFMM)
+	set(RADIA_FMM_CONDUCTOR_SOURCES
+		${CORE_DIR}/rad_conductor_fmm.cpp     # FMM-accelerated conductor field computation
+	)
+endif()
+
 # Radia ext sources
 set(RADIA_EXT_SOURCES
 	${EXT_DIR}/auxparse/auxparse.cpp
@@ -176,6 +188,7 @@ target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
 # (following EMPY_Field pattern exactly)
 add_ngsolve_python_module(radia_ngsolve
 	${RADIA_CORE_SOURCES}
+	${RADIA_FMM_CONDUCTOR_SOURCES}
 	${EXT_DIR}/auxparse/auxparse.cpp
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp
@@ -341,6 +354,7 @@ message(STATUS "radia_ngsolve module configured")
 # Create radia Python module using pybind11
 pybind11_add_module(radia
 	${RADIA_CORE_SOURCES}
+	${RADIA_FMM_CONDUCTOR_SOURCES}
 	${EXT_DIR}/auxparse/auxparse.cpp
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp

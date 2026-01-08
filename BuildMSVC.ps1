@@ -13,15 +13,17 @@
 #   powershell.exe -ExecutionPolicy Bypass -File BuildMSVC.ps1 -Test
 #
 # Options:
-#   -Rebuild  Clean build directory before building
-#   -Test     Run import test after build
+#   -Rebuild   Clean build directory before building
+#   -Test      Run import test after build
+#   -NoOpenMP  Disable OpenMP (for debugging)
+#   -NoExaFMM  Disable ExaFMM (for debugging, ExaFMM is ON by default)
 #==============================================================================
 
 param(
     [switch]$Rebuild,
     [switch]$Test,
     [switch]$NoOpenMP,     # Disable OpenMP (for debugging)
-    [switch]$EnableExaFMM  # Enable ExaFMM library for fast field computation
+    [switch]$NoExaFMM      # Disable ExaFMM (for debugging, ExaFMM is enabled by default)
 )
 
 $ErrorActionPreference = "Stop"
@@ -89,13 +91,13 @@ if ($NoOpenMP) {
     Write-Host "OpenMP: ENABLED" -ForegroundColor Green
 }
 
-# ExaFMM flag
-if ($EnableExaFMM) {
+# ExaFMM flag (enabled by default for FMM-accelerated conductor field computation)
+if ($NoExaFMM) {
+    $EXAFMM_FLAG = "OFF"
+    Write-Host "ExaFMM: DISABLED (debug mode)" -ForegroundColor Yellow
+} else {
     $EXAFMM_FLAG = "ON"
     Write-Host "ExaFMM: ENABLED" -ForegroundColor Green
-} else {
-    $EXAFMM_FLAG = "OFF"
-    Write-Host "ExaFMM: DISABLED" -ForegroundColor Gray
 }
 
 # Create batch file to run with Visual Studio environment

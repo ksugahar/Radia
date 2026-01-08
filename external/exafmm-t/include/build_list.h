@@ -61,7 +61,7 @@ namespace exafmm_t {
    *
    * @return Hilbert index with level offset.
    */
-	uint64_t find_key(const ivec3& iX, int level, const unordered_set<uint64_t>& leaf_keys) {
+	inline uint64_t find_key(const ivec3& iX, int level, const unordered_set<uint64_t>& leaf_keys) {
     uint64_t orig_key = getKey(iX, level, true);
     uint64_t curr_key = orig_key;
 		while (level>0) {
@@ -80,7 +80,7 @@ namespace exafmm_t {
    *
    * @param key_a, key_b Hilbert keys with level offset.
    */
-  bool is_adjacent(uint64_t key_a, uint64_t key_b) {
+  inline bool is_adjacent(uint64_t key_a, uint64_t key_b) {
     int level_a = getLevel(key_a);
     int level_b = getLevel(key_b);
     int max_level = max(level_a, level_b);

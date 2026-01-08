@@ -787,6 +787,63 @@ void radTConductor::ComputeE(const TVector3d& point,
     }
 }
 
+void radTConductor::ComputeA(const TVector3d& point,
+                              std::complex<double>& Ax,
+                              std::complex<double>& Ay,
+                              std::complex<double>& Az) const {
+    Ax = Ay = Az = std::complex<double>(0, 0);
+
+    // Vector potential: A = mu_0/(4*pi) * integral{ K / |r - r'| } dA'
+    // Using Green's function: G(r) = 1/(4*pi*r) for DC/MQS, exp(-jkr)/(4*pi*r) for full-wave
+    for (size_t i = 0; i < panels_.size(); ++i) {
+        const auto& panel = panels_[i];
+
+        double dx = point.x - panel.center.x;
+        double dy = point.y - panel.center.y;
+        double dz = point.z - panel.center.z;
+        double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+
+        if (r < 1e-15) continue;
+
+        // Get surface current at this panel (3 components)
+        std::complex<double> Kx = surfaceCurrent_[3*i];
+        std::complex<double> Ky = surfaceCurrent_[3*i + 1];
+        std::complex<double> Kz = surfaceCurrent_[3*i + 2];
+
+        // A = mu_0 * G(r) * K * dA
+        std::complex<double> G = GreenFunction(r);
+        std::complex<double> coeff = MU_0 * G * panel.area;
+
+        Ax += coeff * Kx;
+        Ay += coeff * Ky;
+        Az += coeff * Kz;
+    }
+}
+
+std::complex<double> radTConductor::ComputePhi(const TVector3d& point) const {
+    std::complex<double> phi(0, 0);
+
+    // Scalar potential: Phi = 1/(4*pi*eps_0) * integral{ sigma / |r - r'| } dA'
+    for (size_t i = 0; i < panels_.size(); ++i) {
+        const auto& panel = panels_[i];
+
+        double dx = point.x - panel.center.x;
+        double dy = point.y - panel.center.y;
+        double dz = point.z - panel.center.z;
+        double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+
+        if (r < 1e-15) continue;
+
+        std::complex<double> sigma = surfaceCharge_[i];
+        std::complex<double> G = GreenFunction(r);
+
+        // Phi = sigma / eps_0 * G(r) * dA
+        phi += sigma / EPS_0 * G * panel.area;
+    }
+
+    return phi;
+}
+
 // ============================================================================
 // radTConductorSolver implementation
 // ============================================================================

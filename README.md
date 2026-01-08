@@ -1,493 +1,199 @@
-# Radia - Integrated Electromagnetic Field Environment
+# Radia - Electromagnetic Simulation Framework for Magnetic Levitation Systems
 
-3D Magnetostatics and Conductor Analysis - Python 3.12 with OpenMP Parallelization
+**A Python-native environment designed for the age of AI-driven Engineering.**
 
-## Overview
+## 🚀 Mission: The Design Tool for Open-Space Magnetics
 
-This is more than a simple MMM (Magnetic Moment Method) solver. **Radia provides an integrated electromagnetic field environment** that combines multiple field sources and analysis methods:
+**Radia** is a specialized simulation framework developed as a **Design Tool** targeting:
 
-### Integrated Field Sources
+*   **Magnetic Levitation (MagLev)**
+*   **Wireless Power Transfer (WPT)**
+*   **Induction Heating**
+*   **Particle Accelerators & Beamlines**
 
-| Source Type | Method | Frequency Range | Use Case |
-|-------------|--------|-----------------|----------|
-| **Permanent Magnets** | Analytical (surface charge) | DC | NdFeB, SmCo magnets |
-| **Soft Iron** | MMM with demagnetization | DC | Yokes, pole pieces |
-| **Coil Currents** | Biot-Savart analytical | DC | Electromagnets, coils |
-| **Conductor Analysis** | FastImp (SIBC/pFFT) | AC (kHz-GHz) | Impedance extraction |
+Unlike general-purpose FEM tools optimized for motors (rotating machinery) with narrow gaps and sliding meshes, Radia addresses the unique challenges of **Open-Space Magnetics**:
 
-### Key Capabilities
+*   **Large Air Gaps**: Solves open boundary problems exactly without meshing the air.
+*   **Moving Permanent Magnets**: Dynamic simulation of moving magnets (levitation, undulators) is trivial and noise-free because there is no air mesh to distort or regenerate.
+*   **Complex Source Geometries**: Models race-track coils, helical undulators, and Halbach arrays analytically with perfect geometric fidelity.
+*   **System Level Simulation**: Designed for systems where the field source topology (coils/magnets) defines the performance.
 
-1. **Analytical Field Solutions**
-   - Permanent magnets: Surface charge method with solid angle integration
-   - Current loops/coils: Biot-Savart law implementation
-   - Arc currents: Analytical formulas for arc segments
+**This is not just a solver; it is a Framework.** We provide the architecture to build specific solvers for your unique magnetic systems.
 
-2. **MMM Demagnetization Solver**
-   - Self-consistent solution for soft magnetic materials
-   - Supports nonlinear B-H curves (`MatSatIsoTab`)
-   - H-matrix acceleration for large problems (HACApK)
-
-3. **NGSolve Integration (Reduced Potential Formulation)**
-   - Radia fields as `CoefficientFunction` source terms
-   - Enables: `curl(curl(A)) = mu_0 * J` with Radia providing J
-   - Magnetizable regions computed via FEM with Radia background field
-
-4. **High-Frequency Conductor Analysis (FastImp)**
-   - Surface integral equation (EFIE) with pFFT acceleration
-   - MQS/EMQS/Full-wave formulations
-   - Impedance extraction for interconnects and coils
-
-### Frequency-Dependent Workflow
-
-```
-DC Analysis:
-  Magnets + Coils ─→ Radia Analytical ─→ NGSolve (reduced potential)
-                                         └─→ Current distribution (FEM)
-
-AC Analysis (kHz-GHz):
-  Conductors ─→ FastImp (SIBC/pFFT) ─→ Impedance, skin effect
-```
-
-**For Radia usage and API documentation**, please refer to the [original Radia repository](https://github.com/ochubar/Radia) and [ESRF Radia documentation](https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia).
-
-This repository adds NGSolve integration, FastImp conductor analysis, and performance improvements while maintaining compatibility with the original Radia API.
-
-## Key Features
-
-### Magnetostatics
-- ✓ **H-matrix acceleration** - Fast hierarchical matrix solver using [HACApK](https://github.com/Post-Peta-Crest/ppOpenHPC/tree/MATH/HACApK)
-- ✓ OpenMP parallel field computation
-- ✓ Analytical Biot-Savart for coils and arc currents
-- ✓ Surface charge method for permanent magnets
-- ✓ MMM demagnetization for soft iron
-
-### Conductor Analysis (FastImp)
-- ✓ **pFFT-accelerated BEM** - O(N log N) matrix-vector products
-- ✓ Surface discretization: rectangular blocks, loops, wires, spirals
-- ✓ DC/MQS/EMQS/Full-wave formulations
-- ✓ Impedance extraction with port definition
-
-### Integration & Visualization
-- ✓ NGSolve C++ CoefficientFunction integration
-- ✓ VTK export functionality (`rad.ObjDrwVTK`)
-- ✓ PyVista-based 3D viewer (replaces OpenGL viewer)
-- ✓ Comprehensive test suite and benchmarks
-- ✓ Removed legacy components (Igor, Mathematica, GLUT, MPI)
-
-## Quick Start
-
-### Installation from PyPI
-
-```bash
-pip install radia-ngsolve
-```
-
-**Note**: The PyPI package includes pre-built binaries for Windows Python 3.12.
-
-### Build from Source
-
-```bash
-# Windows (PowerShell)
-
-# 1. Build radia.pyd (core module)
-.\Build.ps1
-
-# 2. Build radia_ngsolve.pyd (optional, for NGSolve integration)
-.\Build_NGSolve.ps1
-
-# Outputs:
-# - dist/radia.pyd
-# - build/Release/radia_ngsolve.pyd
-```
-
-See [BUILD.md](BUILD.md) for detailed build instructions.
-
-### Basic Usage
-
-```python
-import radia as rad
-
-# Create a hexahedral magnet using ObjHexahedron (8 vertices, faces auto-generated)
-vertices = [[-5,-5,-5], [5,-5,-5], [5,5,-5], [-5,5,-5],
-            [-5,-5,5], [5,-5,5], [5,5,5], [-5,5,5]]
-mag = rad.ObjHexahedron(vertices, [0, 0, 1])  # magnetization in A/m
-
-# Calculate field at external point
-field = rad.Fld(mag, 'b', [0, 0, 20])
-print(f"Field: {field} T")
-```
-
-**Note:** This example uses the standard Radia API. For complete Radia API documentation and examples, see:
-- [Original Radia repository](https://github.com/ochubar/Radia)
-- [ESRF Radia Manual](https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia)
-
-### NGSolve Integration
-
-The `radia_ngsolve` module provides a C++ CoefficientFunction interface for using Radia magnetic fields in NGSolve FEM analysis.
-
-**Requirements:**
-- NGSolve must be installed separately: `pip install ngsolve`
-- **IMPORTANT**: NGSolve must be imported **before** `radia_ngsolve`
-- Current build is linked against **NGSolve 6.2.2406** (Windows Python 3.12)
-
-**Installation:**
-
-```bash
-# 1. Install NGSolve first
-pip install ngsolve
-
-# 2. Install Radia (includes radia_ngsolve.pyd)
-pip install radia
-```
-
-**Function Specification:**
-
-```python
-radia_ngsolve.RadiaField(radia_obj, field_type='b')
-```
-
-**Parameters:**
-- `radia_obj` (int): Radia object handle returned by `rad.ObjHexahedron()`, `rad.ObjTetrahedron()`, `rad.ObjThckPgn()`, etc.
-- `field_type` (str, optional): Field type to compute. Default: `'b'`
-  - `'b'`: Magnetic flux density [Tesla]
-  - `'h'`: Magnetic field [A/m]
-  - `'a'`: Vector potential [T·m]
-  - `'m'`: Magnetization [A/m]
-
-**Returns:**
-- NGSolve CoefficientFunction (3D vector field)
-
-**Unit Conversion:**
-- NGSolve uses **meters**, Radia uses **millimeters**
-- Automatic conversion: coordinates are multiplied by 1000 (m → mm)
-- Field values remain in SI units (no conversion needed)
-
-**Example:**
-
-```python
-# IMPORTANT: Import ngsolve FIRST (required to load NGSolve DLLs)
-import ngsolve
-from ngsolve import Mesh, H1, GridFunction, HDiv
-
-import radia as rad
-from radia import radia_ngsolve  # or: import radia_ngsolve
-
-# Create Radia hexahedral magnet using ObjHexahedron (faces auto-generated)
-vertices = [[-10,-10,-10], [10,-10,-10], [10,10,-10], [-10,10,-10],
-            [-10,-10,10], [10,-10,10], [10,10,10], [-10,10,10]]  # mm units
-Mr = 1.2 / (4 * 3.14159 * 1e-7)  # Br=1.2T -> Mr in A/m
-magnet = rad.ObjHexahedron(vertices, [0, 0, Mr])
-
-# Create NGSolve CoefficientFunction for different field types
-B_field = radia_ngsolve.RadiaField(magnet, 'b')  # Flux density [T]
-H_field = radia_ngsolve.RadiaField(magnet, 'h')  # Magnetic field [A/m]
-A_field = radia_ngsolve.RadiaField(magnet, 'a')  # Vector potential [T·m]
-M_field = radia_ngsolve.RadiaField(magnet, 'm')  # Magnetization [A/m]
-
-# Use in FEM analysis (NGSolve mesh in meters)
-gf = GridFunction(fes)
-gf.Set(B_field)  # Automatically converts mesh coordinates m → mm
-```
-
-See [examples/ngsolve_integration/](examples/ngsolve_integration/) for complete examples.
-
-## Documentation
-
-### Build & Setup
-- [BUILD.md](BUILD.md) - Build instructions (Windows, macOS, Linux)
-
-### User Guides
-- [docs/API_REFERENCE.md](docs/API_REFERENCE.md) - Complete Python API reference
-- [docs/SOLVER_METHODS.md](docs/SOLVER_METHODS.md) - Solver methods (LU, BiCGSTAB, H-matrix)
-- [docs/HMATRIX_USER_GUIDE.md](docs/HMATRIX_USER_GUIDE.md) - H-matrix acceleration guide
-
-### Conductor Analysis (FastImp)
-- [docs/FASTIMP_SIBC_INTEGRATION.md](docs/FASTIMP_SIBC_INTEGRATION.md) - FastImp integration guide
-- Conductor APIs: `CndRecBlock`, `CndLoop`, `CndWire`, `CndSpiral`
-- Frequency range: DC to GHz (MQS/EMQS/Full-wave)
-
-### NGSolve Integration
-- [docs/NGSOLVE_USAGE_GUIDE.md](docs/NGSOLVE_USAGE_GUIDE.md) - How to use Radia with NGSolve
-- [docs/NGSOLVE_INTEGRATION.md](docs/NGSOLVE_INTEGRATION.md) - Integration overview
-
-### Examples
-- [examples/ngsolve_integration/](examples/ngsolve_integration/) - NGSolve integration examples
-- [examples/magpylib_integration/](examples/magpylib_integration/) - magpylib background field examples
-- [examples/simple_problems/](examples/simple_problems/) - Basic magnet configurations
-- [tests/README.md](tests/README.md) - Test suite documentation
-
-## Performance
-
-OpenMP parallelization results (8-core system):
-
-| Threads | Time (sec) | Speedup |
-|---------|-----------|---------|
-| 1       | 11.67     | 1.00x   |
-| 2       | 6.18      | 1.89x   |
-| 4       | 3.57      | 3.27x   |
-| 8       | 4.33      | 2.70x   |
-
-See [docs/SOLVER_METHODS.md](docs/SOLVER_METHODS.md) for solver performance details.
-
-## Examples
-
-Practical examples are available in the `examples/` directory:
-
-
-### NGSolve Integration
-- `examples/ngsolve_integration/` - **Radia → NGSolve: Use Radia fields in FEM**
-  - `demo_field_types.py` - All field types demonstration
-  - `visualize_field.py` - Field visualization and comparison
-  - `export_radia_geometry.py` - Export geometry to VTK
-
-- `examples/background_fields/` - **NGSolve → Radia: Background fields**
-  - `test_sphere_in_quadrupole.py` - Magnetizable sphere in quadrupole field
-  - Uses Python callbacks to define arbitrary background fields
-
-### Magnetostatics
-- `examples/simple_problems/` - Basic magnet configurations
-- `examples/electromagnet/` - Electromagnet designs
-- `examples/complex_coil_geometry/` - Advanced coil geometries
-
-### Legacy Examples
-- `examples/2024_02_03_振分電磁石/` - Septum magnet simulation
-- `examples/2024_03_02_Rdaiaの6面隊が動作しない調査(要素)/` - Hexahedron tests
-
-## Testing
-
-```bash
-# Quick basic test
-python tests/test_simple.py
-
-# Comprehensive test suite
-python tests/test_radia.py
-
-# Advanced features test
-python tests/test_advanced.py
-
-# NGSolve integration test
-python tests/test_radia_ngsolve.py
-
-# OpenMP performance test
-python tests/test_parallel_performance.py
-
-# Or use pytest to run all tests
-pytest tests/
-
-# Run specific test suite
-pytest tests/test_radia_ngsolve.py -v
-```
-
-See [tests/README.md](tests/README.md) for detailed testing documentation.
-
-## Visualization
-
-### PyVista Viewer (Recommended)
-
-```python
-import sys
-import os
-
-# Add src/python to path (adjust path as needed for your installation)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'python'))
-
-from radia_pyvista_viewer import view_radia_object
-
-# View Radia object
-view_radia_object(mag)
-```
-
-### VTK Export
-
-```python
-import sys
-import os
-
-# Add src/python to path (adjust path as needed for your installation)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'python'))
-
-from radia_vtk_export import export_geometry_to_vtk
-
-# Export to VTK file for Paraview
-export_geometry_to_vtk(mag, 'geometry.vtk')
-```
-
-## System Requirements
-
-### Build Requirements
-- Visual Studio 2022 (MSVC 19.44 or later)
-- CMake 3.15 or later
-- Python 3.12
-- OpenMP 2.0
-
-### Runtime Requirements
-- Python 3.12
-- NumPy
-- NGSolve (optional, for FEM coupling via radia_ngsolve)
-- PyVista (optional, for 3D visualization)
-
-## Linear Material with External Field (ObjBckgCF)
-
-Radia supports soft magnetic materials (linear materials) in external fields using `ObjBckgCF`.
-
-### Working Example
-
-```python
-import radia as rad
-import numpy as np
-
-rad.UtiDelAll()
-rad.FldUnits('m')  # Use SI units
-
-# Create soft iron cube (10cm side) using ObjHexahedron (faces auto-generated)
-vertices = [[-0.05,-0.05,-0.05], [0.05,-0.05,-0.05], [0.05,0.05,-0.05], [-0.05,0.05,-0.05],
-            [-0.05,-0.05,0.05], [0.05,-0.05,0.05], [0.05,0.05,0.05], [-0.05,0.05,0.05]]
-cube = rad.ObjHexahedron(vertices, [0, 0, 0])
-
-# Apply isotropic linear material (mu_r = 100)
-chi = 99.0  # chi = mu_r - 1
-mat = rad.MatLin(chi)  # IMPORTANT: Use single argument for isotropic
-rad.MatApl(cube, mat)
-
-# Create external field (1 Tesla in z-direction)
-def uniform_B(pos):
-    return [0, 0, 1.0]  # Returns B in Tesla
-bg = rad.ObjBckgCF(uniform_B)
-
-# Create system and solve
-system = rad.ObjCnt([cube, bg])
-result = rad.Solve(system, 0.0001, 1000)
-
-# Result: M ~ 2.3 MA/m (correct for cube with mu_r=100 in 1T field)
-M = rad.ObjM(cube)
-print(f"Magnetization: {M[1]} A/m")
-```
-
-### Important Notes
-
-1. **Isotropic materials**: Always use `MatLin(chi)` (single argument)
-   - Do NOT use `MatLin(chi, [0, 0, 1e-10])` - this creates a poorly defined anisotropic tensor
-
-2. **Callback returns B in Tesla**: The callback function for `ObjBckgCF` should return magnetic flux density B in Tesla
-
-3. **Units**: When using `rad.FldUnits('m')`, all coordinates are in meters
-
-4. **Tetrahedral elements**: Also works with `ObjTetrahedron` tetrahedral meshes
-
-### Supported Element Types
-
-| Element | API | External Field Support |
-|---------|-----|----------------------|
-| Hexahedron | `ObjHexahedron` | Yes |
-| Tetrahedron | `ObjTetrahedron` | Yes |
-| Extruded Polygon | `ObjThckPgn` | Yes |
-
-## Tetrahedral Mesh Import from NGSolve/Netgen
-
-Radia can import tetrahedral meshes from NGSolve/Netgen for complex geometries.
-
-**Features:**
-- Direct Netgen/OCC mesh import to Radia MMM
-- Independent mesh optimization for FEM vs MMM
-- Nastran CTETRA face connectivity standard
-
-**Usage:** See `examples/cube_uniform_field/linear/` for examples.
-
-**Benchmark** (mu_r=100, B0=1T, 100mm cube):
-
-| Mesh | Elements | M_z (MA/m) | Error |
-|------|----------|------------|-------|
-| 1x1x1 hex | 1 | 2.3171 | 0.00% |
-| 2x2x2 hex | 8 | 2.4180 | 4.36% |
-| 5x5x5 hex | 125 | 2.6652 | 15.02% |
-
-Analytical: M = 2.3171 MA/m (N = 1/3 for cube)
-
-
-## Changes from Original Radia
-
-### Removed Components
-- Igor Pro integration
-- Mathematica/Wolfram Language integration
-- GLUT OpenGL viewer
-- MPI support
-- C client
-- Python 2.7, 3.6, 3.7, 3.8 support
-
-### Added Features
-- **Integrated electromagnetic environment** - Multiple field sources (magnets, coils, conductors)
-- **FastImp conductor analysis** - pFFT-accelerated BEM for impedance extraction
-- **H-matrix acceleration** - Hierarchical matrix solver using [HACApK library](https://github.com/Post-Peta-Crest/ppOpenHPC/tree/MATH/HACApK) (9-50x speedup for large problems)
-- OpenMP parallelization (2.7x speedup)
-- NGSolve C++ CoefficientFunction integration (reduced potential formulation support)
-- PyVista viewer support
-- Modern CMake build system
-- Comprehensive test suite (including NGSolve tests)
-- Performance benchmarks
-- Updated documentation
-
-## License
-
-This project contains multiple components with different open-source licenses:
-
-### RADIA Core
-Licensed under a **BSD-style license** by the European Synchrotron Radiation Facility (ESRF).
-- Copyright © 1997-2018, European Synchrotron Radiation Facility
-- Permits redistribution and modification with attribution
-
-### HACApK_LH-Cimplm (H-matrix Library)
-Licensed under the **MIT License**.
-- Copyright © 2015, Akihiro Ida and Takeshi Iwashita
-- Location: `src/ext/HACApK_LH-Cimplm/`
-- ppOpen-HPC project
-
-Both licenses are permissive open-source licenses that allow free use, modification,
-and redistribution.
-
-See:
-- `LICENSE` - Complete license text for both components
-- `COPYRIGHT.txt` - Original RADIA BSD-style license
-- `src/ext/HACApK_LH-Cimplm/LICENSE` - HACApK MIT license
-
-## Credits
-
-**Original Radia**: Pascal Elleaume, Oleg Chubar, and others at ESRF
-
-**This Fork**:
-- OpenMP parallelization
-- NGSolve C++ integration (radia_ngsolve)
-- Python 3.12 optimization
-- Build system modernization
-- PyVista integration
-- Documentation updates
-
-## Related Tools
-
-### Coreform Cubit Mesh Export
-[**Coreform_Cubit_Mesh_Export**](https://github.com/ksugahar/Coreform_Cubit_Mesh_Export) - Python library for exporting Coreform Cubit meshes to multiple formats
-
-This tool perfectly complements Radia_NGSolve by providing high-quality mesh generation:
-
-- **Nastran Format Export** - Compatible with Radia's `nastran_mesh_import.py` module
-- **Multiple Format Support** - Gmsh, MEG, VTK, and Nastran exports
-- **2D/3D Meshing** - Supports complex 3D geometries
-- **Second-Order Elements** - High-accuracy mesh generation
-
-**Workflow Example:**
-1. Create complex geometry in Coreform Cubit
-2. Export to Nastran format using `Coreform_Cubit_Mesh_Export`
-3. Import into Radia using `nastran_mesh_import.py`
-4. Couple with NGSolve for FEM analysis
-
-See [examples/background_fields/](examples/background_fields/) for Nastran mesh usage examples.
-
-## Links
-
-- Original Radia: https://github.com/ochubar/Radia
-- ESRF Radia Page: https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia
-- Coreform Cubit: https://coreform.com/products/coreform-cubit/
+### Future Scope & Active Development
+We are actively expanding the framework to cover:
+*   **ESIM (Equivalent Source Integral Method)**: Currently prioritizing the implementation of ESIM for advanced source modeling.
 
 ---
 
-**Version**: 1.4.4 (Integrated EM Environment)
-**Last Updated**: 2026-01-08
+## ⚡ Paradigm Shift: Surface-Based Physics
+
+**Volume Meshing is Obsolete for Conductors.**
+
+For high-frequency applications (WPT, Induction Heating, Accelerators), traditional FEM struggles with the **Multi-Scale Challenge**:
+*   **Macro Scale**: Large air gaps (meters)
+*   **Micro Scale**: Skin depth (microns)
+
+Attempting to mesh both simultaneously results in massive element counts and slow convergence. **We reject this approach.**
+
+**The Radia/FastImp Solution: SIBC + pFFT**
+We solve the physics exactly where it happens: **On the Surface.**
+
+1.  **SIBC (Surface Impedance Boundary Condition)**: Mathematical modeling of skin effect physics directly on the boundary. No internal mesh is required inside the conductor.
+2.  **pFFT (Precorrected-FFT)**: Accelerates the dense matrix interactions to $O(N \log N)$.
+
+**Result**: Simulations that took hours with FEM finish in minutes, with perfect geometric fidelity for Litz wires and complex coils.
+
+---
+
+## 🧘 Philosophy: Physics-First in a Multi-Physics World
+
+We believe in **"The Right Tool for the Right Physics"**.
+
+While Integral Methods (Radia) are superior for open-boundary magnetics, we recognize that modern engineering requires **Multi-Physics** (Thermal, Structural, Fluid). The world is not just magnetic; iron saturates, coils heat up, and structures deform.
+
+**Our Vision**: Radia does not try to do everything. Instead, it acts as the **Precision Field Generator** within a larger Multi-Physics workflow.
+
+*   **Radia**: Generates the exact electromagnetic sources (Coils, Magnets) analytically.
+*   **NGSolve (FEM)**: Handles the multi-physics material response (Heat, Stress, Non-linear Saturation).
+
+By coupling these dedicated solvers, we achieve a system that is both **Faster** (efficient algorithms) and **More Accurate** (no air mesh errors) than monolithic FEM approaches.
+
+---
+
+## 🤖 LLM-Agent Ready & Python Native
+
+**"No GUI? No Problem."**
+
+We believe that **Natural Language is the ultimate User Interface** for complex design.
+Instead of clicking through nested menus to find a "Halbach Array" button, you simply describe what you want.
+
+*   **Code-First Modeling**: Geometry and physics are defined in pure, human-readable Python.
+*   **The "Nanobanana" Vision**: By combining Radia with modern AI, we turn text prompts into rigorous engineering models.
+    *   *Prompt*: "Create a Halbach array for a MagLev slider with 12 periods, optimized for 5mm levitation gap."
+    *   *Result*: An Agent generates the complete executable Radia script, including geometric parameters and material definitions.
+
+> [!TIP]
+> **Why Python?** GUI-based tools are excellent for standard tasks, but they limit you to what the developer imagined. Python + Radia limits you only by Python's endless ecosystem.
+
+*   **Ecosystem Integration**: Seamlessly integrates with the rich Python scientific stack (NumPy, SciPy, PyVista, NGSolve) and modern version control (Git).
+
+---
+
+## 💡 Architecture: The "Best of Both Worlds"
+
+We combine two powerful mathematical approaches into a single cohesive framework:
+
+| Layer | Technology | Role | Advantage |
+| :--- | :--- | :--- | :--- |
+| **Source Layer** | **Radia** (Integral Method) | Defines Coils, Magnets, Current paths. | **Zero Meshing of Air.** Infinite boundaries are handled analytically. Perfect representation of curves. |
+| **Material Layer** | **NGSolve** (FEM) | Defines Iron Yokes, Shields, Conductors. | Handles non-linear saturation (B-H curves) and eddy currents using **Reduced Scalar Potential**. Combined with **Kelvin Transformation**, it efficiently handles open boundaries for the reaction field. |
+
+**The Workflow:**
+1.  **Radia**: Computes the source field ($H_s$ or $T_s$) analytically.
+2.  **NGSolve**: Solves for the reaction potential ($\phi$) in the iron regions using FEM.
+    *   $\nabla \cdot (\mu \nabla \phi) = -\nabla \cdot (\mu H_s)$
+    *   **Frequency Range**: Primarily targets **Low Frequency** (Magnetostatics / Eddy Currents), shielding, and extending up to the **Darwin Regime** (ignoring radiation, but including displacement currents if needed).
+3.  **Result**: Superposition of Source Field + Reaction Field.
+
+> [!NOTE]
+> **Limitation**: Strong coupling with FEM is **not currently supported**. The integration is presently one-Way (Radia Sources $\rightarrow$ NGSolve).
+
+### NGSolve Integration Details (Weak Coupling Mechanism)
+The `radia_ngsolve` module implements a high-performance **Weak Coupling** bridge using a native C++ `CoefficientFunction`. This allows Radia fields to be evaluated directly during NGSolve's finite element assembly process.
+
+**Implementation Architecture:**
+*   **Native C++ Shim**: A `RadiaFieldCF` class (inheriting from `ngfem::CoefficientFunction`) sits between NGSolve and Radia.
+*   **Three-Tier Evaluation Strategy**:
+    1.  **Fast FMM (C++)**: For `B`, `H`, and `A` fields, dipoles are extracted from Radia and evaluated using a C++ Fast Multipole Method (FMM) solver. This **bypasses the Python Global Interpreter Lock (GIL)** entirely, enabling maximum performance during massive parallel FEM assembly.
+    2.  **Cached Evaluation**: A coordinate-hash cache prevents redundant re-calculation of fields at the same integration points.
+    3.  **Python Fallback**: For complex material responses (Magnetization `M`, Scalar Potential `Phi`), it safely acquires the GIL and calls the Radia Python kernel.
+
+### NGSolve Primer for Radia Users
+*   **CoefficientFunction (CF)**: A generic function that can be evaluated anywhere in the 3D domain. Radia provides the source Magnetic Field ($H_s$) as a C++ `CoefficientFunction`. This means NGSolve can "query" Radia for the field value at any coordinate during matrix assembly **without needing to store values on a mesh** or interpolate from a grid.
+*   **GridFunction (GF)**: A field defined on the finite element mesh (stored as vectors of coefficients). This typically represents the *solution* (like the Magnetic Potential $\phi$) or the *material property distribution* (like Permeability $\mu$) in the FEM model.
+
+---
+
+## Key Capabilities
+
+### 1. Integrated Field Sources
+Instead of simple "boundary conditions", Radia provides rich physical sources:
+
+*   **Permanent Magnets**: Analytical surface charge method (Polyhedrons, Extrusions).
+*   **Moving Magnets & Coils**: Sources can have arbitrary position and orientation transformations applied dynamically.
+    *   *Development Status*: Comprehensive dynamic simulation examples and animation workflows are currently being developed.
+*   **Coils & Current Loops**: Biot-Savart integration for arbitrary paths.
+*   **Distributed Currents**: Arc segments, race-tracks, and helical filaments.
+*   **Analytical Precision**: To eliminate source errors, **fully analytical formulas** are used wherever possible (e.g., exact integration for straight/arc segments, analytical surface charges) rather than approximate numerical integration.
+*   **Versatile Field Types**: Supports computation of **A** (Vector Potential), **Phi** (Scalar Potential), **B** (Flux Density), and **H** (Field Intensity) to drive various FEM formulations ($A$-formulation, Reduced-Scalar-Potential, etc.).
+
+
+### 2. High-Performance Solvers & Acceleration
+To handle complex field sources efficiently, the framework employs state-of-the-art acceleration algorithms:
+
+*   **Solver Acceleration (Source Definition)**:
+    *   **H-Matrix**: Used for Magnetostatics (MMM). Compresses dense interaction matrices to $O(N \log N)$, enabling large-scale iron/magnet simulations.
+    *   **pFFT & SIBC**: Used for Conductor Analysis (FastImp). **Surface Impedance Boundary Conditions (SIBC)** combined with Precorrected-FFT allow extremely fast impedance extraction by modeling skin depth effects as surface properties.
+*   **Field Evaluation Acceleration**:
+    *   **FMM (Fast Multipole Method)**: Used for rapidly computing fields ($B, H, A$) from massive numbers of source elements. This is critical for the `CoefficientFunction` interface to NGSolve.
+*   **Hybrid FEM**: Reduced Potential coupling with NGSolve.
+
+
+### 3. Visualization & Export
+*   **PyVista Viewer**: Modern, interactive 3D visualization within Python/Jupyter.
+*   **VTK Export**: Compatibile with ParaView.
+*   **Nastran/Step**: Interoperability with CAD tools via [Coreform Cubit integration](https://github.com/ksugahar/Coreform_Cubit_Mesh_Export).
+
+---
+
+## Quick Start
+
+### Installation
+
+```bash
+# Windows (Python 3.12)
+pip install radia-ngsolve
+```
+
+*Prerequisites for FEM features: `pip install ngsolve`*
+
+### Example: The "Agentic" Way
+
+Modeling a complex coil doesn't require a GUI. It requires expressive code:
+
+```python
+import radia as rad
+
+# Define a Race-Track Coil automatically
+# An LLM can easily tweak parameters like 'current', 'radius', 'turns'
+coil = rad.ObjRaceTrk(
+    [0,0,0],       # Center
+    [10, 30],      # Inner Radii (R_min, R_max)
+    [20, 100],     # Straight section lengths (Lx, Ly)
+    10.0,          # Height
+    3.0,           # Curvature radius
+    1000.0,        # Current [A]
+    'man'          # Manually defined rectangular cross-section
+)
+
+# Visualize clearly
+rad.ObjDrwVTK(coil, "coil_geometry.vtk")
+```
+
+---
+
+## Documentation & Resources
+
+*   **[Installation Guide](BUILD.md)**: Build from source (Windows/Linux/macOS).
+*   **[API Reference](docs/API_REFERENCE.md)**: Full Python API documentation.
+*   **[NGSolve Integration](docs/NGSOLVE_INTEGRATION.md)**: Theory and usage of the hybrid FEM-Integral method.
+*   **[Original Radia](https://github.com/ochubar/Radia)**: The core physics engine developed at ESRF.
+
+## License
+
+*   **Radia Core**: BSD-style (ESRF)
+*   **H-Matrix Library**: MIT (ppOpen-HPC)
+
+---
+*Radia: Empowering the next generation of magnetic system design.*

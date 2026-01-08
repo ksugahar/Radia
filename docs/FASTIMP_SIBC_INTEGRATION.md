@@ -884,3 +884,476 @@ analysis example that generates:
 3. **Nonlocal SIBC is essential** when skin depth is comparable to core dimension
 4. **Local SIBC is sufficient** when skin depth is small but not negligible
 5. **FastImp (surface current)** is appropriate when skin depth << dimension
+
+---
+
+## ESIM (Effective Surface Impedance Method) for Nonlinear Materials
+
+### Overview
+
+This section describes the implementation of ESIM based on Karl Hollaus's paper for analyzing induction heating workpieces with nonlinear ferromagnetic materials.
+
+**Reference**:
+- K. Hollaus, M. Kaltenbacher, J. Schöberl, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025, DOI: 10.1109/TMAG.2025.3613932
+
+### Why ESIM?
+
+| Method | Linear Materials | Nonlinear Materials | Computational Cost |
+|--------|-----------------|---------------------|-------------------|
+| Full ECP (3D FEM) | ✓ | ✓ | Very High |
+| Local SIBC | ✓ | ✗ | Low |
+| Nonlocal SIBC | ✓ | ✗ | Medium |
+| **ESIM** | ✓ | **✓** | **Low** |
+
+**Key Advantages**:
+- Supports nonlinear BH-curve materials (electrical steel, iron)
+- <1% error compared to full Eddy Current Problem (ECP)
+- 20-30x speedup compared to full 3D FEM
+- Uses 1D Cell Problem instead of full 3D eddy current calculation
+
+### Physical Model
+
+For induction heating, the workpiece is a conductive ferromagnetic material:
+
+```
+┌─────────────────────────────────────────────────┐
+│         Induction Heating Coil                   │
+│                                                 │
+│   ╭───────────────────────────────────╮         │
+│   │  Spiral Coil (FastImp)            │         │
+│   ╰───────────────────────────────────╯         │
+│                    ↓ B field                     │
+│   ┌───────────────────────────────────┐         │
+│   │    ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■  │ ← Skin layer │
+│   │    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │         │
+│   │    ░░░░░ Workpiece ░░░░░░░░░░░░  │         │
+│   │    ░░░░ (Steel, Fe) ░░░░░░░░░░░  │         │
+│   │    ░░░ σ~10^6, μr(H)~1000 ░░░░░  │         │
+│   │    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │         │
+│   └───────────────────────────────────┘         │
+│                                                 │
+│   Properties:                                    │
+│   - Conductivity: σ ~ 10^6 S/m                  │
+│   - Permeability: μr(|H|) ~ 100-5000 (nonlinear)│
+│   - Skin depth: δ ~ 0.1-1 mm at 10-100 kHz     │
+└─────────────────────────────────────────────────┘
+```
+
+### Mathematical Foundation
+
+#### The Cell Problem (1D FEM)
+
+The key insight of ESIM is solving a 1D boundary value problem on a half-infinite domain to compute the effective surface impedance:
+
+**Strong Form (Eq. 4 in paper)**:
+```
+ρ ∂²H/∂s² + jωμ(|H|)H = 0    for s ∈ [0, ∞)
+
+Boundary conditions:
+  H(0) = H₀         (surface tangential field)
+  H(∞) = 0          (field vanishes at infinity)
+```
+
+Where:
+- `s`: Depth coordinate (normal to surface, into the material)
+- `ρ = 1/σ`: Resistivity [Ω·m]
+- `μ(|H|)`: Nonlinear permeability from BH-curve
+- `ω = 2πf`: Angular frequency
+- `H₀`: Tangential magnetic field at surface (complex amplitude)
+
+**Weak Form** (for FEM implementation):
+```
+∫[ρ(∂H/∂s)(∂v/∂s) - jωμ(|H|)Hv] ds = 0
+```
+
+#### Effective Surface Impedance
+
+From the Cell Problem solution, compute specific losses (Eq. 5):
+```
+P'(H₀) = (1/2) ∫₀^∞ E · J* ds    (active power loss per unit area)
+Q'(H₀) = (ω/2) ∫₀^∞ H · B* ds    (reactive power per unit area)
+```
+
+The Effective Surface Impedance (Eq. 7):
+```
+Z(H₀) = 2(P' + jQ') / |H₀|²
+```
+
+For **linear materials** (μ = const), this reduces to the classical local SIBC:
+```
+Z_linear = (1 + j) / (σδ)
+where δ = √(2ρ/(ωμ)) is the skin depth
+```
+
+#### Fixed-Point Iteration for Nonlinear Solver
+
+The 3D problem uses Z(H₀) as a lookup table with fixed-point iteration (Eq. 15):
+
+```
+Z_FP^{(k)} = Z(|H_t^{(k)}|)     (lookup from Cell Problem table)
+H_t^{(k+1)} = solve 3D problem with Z_FP^{(k)}
+repeat until ||H_t^{(k+1)} - H_t^{(k)}|| < tolerance
+```
+
+### Implementation Plan
+
+#### Phase 1: Cell Problem Solver (NGSolve 1D FEM)
+
+**File**: `src/python/esim_cell_problem.py`
+
+```python
+from ngsolve import *
+import numpy as np
+
+class ESIMCellProblemSolver:
+    """
+    Solves the 1D Cell Problem for ESIM using NGSolve.
+
+    Reference: Hollaus et al., IEEE Trans. Mag. 2025, Eq. 4
+    """
+
+    def __init__(self, bh_curve, sigma, frequency, domain_depth=10.0):
+        """
+        Parameters:
+            bh_curve: [[H1, B1], [H2, B2], ...] BH curve data
+            sigma: Conductivity [S/m]
+            frequency: Operating frequency [Hz]
+            domain_depth: Domain depth in skin depths (default: 10δ)
+        """
+        self.bh_curve = np.array(bh_curve)
+        self.sigma = sigma
+        self.frequency = frequency
+        self.omega = 2 * np.pi * frequency
+        self.rho = 1.0 / sigma  # Resistivity
+
+        # Create 1D mesh
+        self._create_mesh(domain_depth)
+
+        # Setup FEM space
+        self._setup_fem()
+
+    def _interpolate_mu(self, H_abs):
+        """Interpolate μ(|H|) from BH curve."""
+        # B = μ₀μᵣH → μᵣ = B/(μ₀H)
+        # Use cubic spline interpolation
+        H_data = self.bh_curve[:, 0]
+        B_data = self.bh_curve[:, 1]
+
+        # Avoid division by zero
+        H_abs = max(H_abs, 1e-10)
+
+        # Interpolate B at given H
+        B = np.interp(H_abs, H_data, B_data)
+
+        # μ = B / H
+        mu = B / H_abs
+        return mu
+
+    def solve(self, H0):
+        """
+        Solve Cell Problem for given surface field H₀.
+
+        Parameters:
+            H0: Surface tangential field amplitude [A/m]
+
+        Returns:
+            Z: Complex effective surface impedance [Ω]
+            P_prime: Active power loss per unit area [W/m²]
+            Q_prime: Reactive power per unit area [var/m²]
+        """
+        # Nonlinear iteration with Picard method
+        # ...
+        pass
+
+    def generate_esi_table(self, H0_values):
+        """
+        Generate ESI table for a range of H₀ values.
+
+        Parameters:
+            H0_values: List of surface field amplitudes [A/m]
+
+        Returns:
+            table: [[H0, Z_real, Z_imag, P', Q'], ...]
+        """
+        table = []
+        for H0 in H0_values:
+            Z, P_prime, Q_prime = self.solve(H0)
+            table.append([H0, Z.real, Z.imag, P_prime, Q_prime])
+        return np.array(table)
+```
+
+#### Phase 2: ESI Table Generation
+
+**Workflow**:
+1. Define BH-curve for workpiece material (e.g., steel at operating temperature)
+2. Solve Cell Problem for H₀ = [0.1, 1, 10, 100, ..., 10000] A/m
+3. Store Z(H₀), P'(H₀), Q'(H₀) as lookup table
+4. Use cubic spline interpolation during 3D solve
+
+**Table Format**:
+```
+# ESIM Table: Steel @ 10 kHz, σ = 2e6 S/m
+# H0 [A/m]    Re(Z) [Ω]    Im(Z) [Ω]    P' [W/m²]    Q' [var/m²]
+1.0e+00       1.234e-03    1.567e-03    6.17e-01     7.84e-01
+1.0e+01       1.245e-03    1.589e-03    6.23e+01     7.95e+01
+1.0e+02       1.456e-03    1.823e-03    7.28e+03     9.12e+03
+1.0e+03       2.345e-03    2.789e-03    1.17e+06     1.39e+06
+...
+```
+
+#### Phase 3: ESIM Surface Integration
+
+**Integration with FastImp**:
+
+```python
+class ESIMWorkpiece:
+    """
+    ESIM-based workpiece for induction heating analysis.
+
+    Uses pre-computed ESI table for nonlinear ferromagnetic material.
+    """
+
+    def __init__(self, geometry, esi_table):
+        """
+        Parameters:
+            geometry: Surface mesh (from FastImp panel generation)
+            esi_table: ESI lookup table from Cell Problem
+        """
+        self.geometry = geometry
+        self.esi_table = esi_table
+        self._setup_interpolator()
+
+    def get_surface_impedance(self, H_tangential):
+        """
+        Get local surface impedance for given tangential field.
+
+        Parameters:
+            H_tangential: Complex tangential field [A/m]
+
+        Returns:
+            Z: Complex surface impedance [Ω]
+        """
+        H_abs = abs(H_tangential)
+        return self._interpolate_Z(H_abs)
+
+    def compute_power_loss(self, H_distribution):
+        """
+        Compute total power loss over workpiece surface.
+
+        Parameters:
+            H_distribution: Dict of {panel_id: H_tangential}
+
+        Returns:
+            P_total: Total active power [W]
+            Q_total: Total reactive power [var]
+        """
+        P_total = 0.0
+        Q_total = 0.0
+
+        for panel_id, H_t in H_distribution.items():
+            H_abs = abs(H_t)
+            P_prime = self._interpolate_P_prime(H_abs)
+            Q_prime = self._interpolate_Q_prime(H_abs)
+            area = self.geometry.panel_area(panel_id)
+
+            P_total += P_prime * area
+            Q_total += Q_prime * area
+
+        return P_total, Q_total
+```
+
+#### Phase 4: Fixed-Point Nonlinear Solver
+
+**Algorithm**:
+
+```python
+def solve_esim_nonlinear(coil, workpiece, frequency, tol=1e-4, max_iter=50):
+    """
+    Solve induction heating problem with ESIM.
+
+    Parameters:
+        coil: FastImp coil object
+        workpiece: ESIMWorkpiece object
+        frequency: Operating frequency [Hz]
+        tol: Convergence tolerance
+        max_iter: Maximum iterations
+
+    Returns:
+        H_solution: Surface field distribution
+        P_loss: Total power loss [W]
+        converged: True if converged
+    """
+    # Initial guess: use linear SIBC (μr = initial value)
+    Z_current = workpiece.get_initial_impedance()
+
+    for k in range(max_iter):
+        # Solve 3D problem with current Z
+        H_new = solve_3d_coupled(coil, workpiece, Z_current, frequency)
+
+        # Update Z from ESI table
+        Z_new = {}
+        for panel_id, H_t in H_new.items():
+            Z_new[panel_id] = workpiece.get_surface_impedance(H_t)
+
+        # Check convergence
+        error = compute_relative_error(Z_new, Z_current)
+        if error < tol:
+            P_loss, Q_loss = workpiece.compute_power_loss(H_new)
+            return H_new, P_loss, True
+
+        # Relaxation for stability
+        alpha = 0.5  # Under-relaxation parameter
+        Z_current = blend(Z_current, Z_new, alpha)
+
+    return H_new, P_loss, False  # Did not converge
+```
+
+#### Phase 5: Python API
+
+**Proposed API**:
+
+```python
+import radia as rad
+
+# 1. Define BH curve for workpiece material
+bh_curve_steel = [
+    [0, 0],
+    [100, 0.2],
+    [250, 0.5],
+    [500, 0.9],
+    [1000, 1.3],
+    [2500, 1.6],
+    [5000, 1.8],
+    [10000, 1.95],
+    [50000, 2.1],
+]
+
+# 2. Generate ESI table from Cell Problem
+sigma_steel = 2e6  # S/m (hot steel)
+freq = 50000  # 50 kHz
+esi_table = rad.CndESIFromBHCurve(bh_curve_steel, sigma_steel, freq)
+
+# 3. Create ESIM workpiece
+workpiece = rad.CndESIMBlock(
+    center=[0, 0, -0.01],
+    dimensions=[0.2, 0.2, 0.05],  # 200mm x 200mm x 50mm slab
+    esi_table=esi_table,
+    panels_per_side=10
+)
+
+# 4. Create induction coil (FastImp)
+coil = rad.CndSpiral(
+    center=[0, 0, 0.01],
+    inner_radius=0.03,
+    outer_radius=0.08,
+    pitch=0.005,
+    num_turns=5,
+    axis=[0, 0, 1],
+    cross_section='rectangular',
+    wire_width=0.003,
+    wire_height=0.002,
+    conductivity=5.8e7
+)
+
+# 5. Set excitation
+rad.CndSetFrequency(coil, freq)
+rad.CndSetCurrent(coil, 100)  # 100 A peak
+
+# 6. Solve coupled problem
+result = rad.CndSolveESIM(coil, workpiece, tol=1e-4, max_iter=50)
+
+# 7. Get results
+print(f"Converged: {result['converged']}")
+print(f"Iterations: {result['iterations']}")
+print(f"Power loss: {result['P_loss']:.1f} W")
+print(f"Coil impedance: {result['Z_coil']:.4f} Ω")
+
+# 8. Field distribution
+H_surface = result['H_surface']  # Dict of panel_id -> H_tangential
+```
+
+### Validation Plan
+
+1. **Linear material test**: Compare ESIM with analytical local SIBC (should match)
+2. **Nonlinear material test**: Compare with full ECP (3D FEM with NGSolve)
+3. **Induction heating test**: Compare heating power with analytical/experimental data
+
+### Expected Performance
+
+Based on Hollaus paper (Table I):
+
+| Problem | Full ECP (3D FEM) | ESIM | Error |
+|---------|-------------------|------|-------|
+| Transformer core | 100% | 3.5% | < 1% |
+| Induction heating | 100% | 4.2% | < 1% |
+
+**Speedup**: 20-30x compared to full 3D eddy current calculation
+
+### Files Created (Status: Complete)
+
+| File | Description | Status |
+|------|-------------|--------|
+| `src/radia/esim_cell_problem.py` | 1D FEM Cell Problem solver (scipy FD) | Complete |
+| `src/radia/esim_workpiece.py` | ESIM workpiece class with block/cylinder | Complete |
+| `src/radia/esim_coupled_solver.py` | Coupled solver with fixed-point iteration | Complete |
+| `src/radia/esim_vtk_export.py` | VTK export (NGSolve-style ESIMVTKOutput class) | Complete |
+| `examples/induction_heating/esim_demo.py` | Cell Problem demo script | Complete |
+| `examples/induction_heating/esim_induction_heating_demo.py` | Full coupled solver demo | Complete |
+| `examples/induction_heating/test_esim_integration.py` | Integration tests (7 tests) | Complete |
+
+### Implementation Status
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Cell Problem Solver (scipy finite differences) | **Complete** |
+| 2 | ESI Table generation + interpolation | **Complete** |
+| 3 | ESIM Workpiece (block/cylinder geometry) | **Complete** |
+| 4 | Coupled Solver with fixed-point iteration | **Complete** |
+| 5 | Python API + demo scripts | **Complete** |
+| 6 | VTK export for visualization (NGSolve-style) | **Complete** |
+| 7 | Integration with FastImp coil impedance | Pending |
+
+### Usage Example
+
+```python
+import sys
+sys.path.insert(0, 'src/radia')
+
+from esim_coupled_solver import InductionHeatingCoil, ESIMCoupledSolver
+from esim_workpiece import create_esim_block
+
+# Steel BH curve
+bh_curve = [
+    [0, 0], [100, 0.2], [500, 0.9], [1000, 1.3],
+    [5000, 1.8], [50000, 2.1],
+]
+
+# Create coil (Biot-Savart analytical model)
+coil = InductionHeatingCoil(
+    coil_type='spiral',
+    center=[0, 0, 0.02],
+    inner_radius=0.03,
+    outer_radius=0.05,
+    pitch=0.005,
+    num_turns=3,
+    axis=[0, 0, 1],
+)
+coil.set_current(100)
+
+# Create ESIM workpiece
+workpiece = create_esim_block(
+    center=[0, 0, -0.01],
+    dimensions=[0.08, 0.08, 0.02],
+    bh_curve=bh_curve,
+    sigma=2e6,  # S/m
+    frequency=50000,  # Hz
+    panels_per_side=5
+)
+
+# Solve coupled problem
+solver = ESIMCoupledSolver(coil, workpiece, frequency=50000)
+result = solver.solve(tol=1e-4, max_iter=20, verbose=True)
+
+print(f"Power: P = {result['P_total']:.1f} W")
+print(f"Max power density: {result['max_P_density']/1e3:.2f} kW/m^2")
+```

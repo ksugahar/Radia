@@ -40,3 +40,34 @@ except ImportError:
             "Ensure the package was built correctly with Build.ps1 before installation. "
             f"Package directory: {_package_dir}"
         ) from e
+
+# ESIM (Effective Surface Impedance Method) for induction heating analysis
+# Import convenience functions for ESIM workpiece creation
+try:
+    from .esim_cell_problem import (
+        ESIMCellProblemSolver,
+        BHCurveInterpolator,
+        ESITable,
+        generate_esi_table_from_bh_curve,
+    )
+    from .esim_workpiece import (
+        ESIMWorkpiece,
+        SurfacePanel,
+        create_esim_block,
+        create_esim_cylinder,
+    )
+    from .esim_coupled_solver import (
+        InductionHeatingCoil,
+        ESIMCoupledSolver,
+        solve_induction_heating,
+    )
+    from .esim_vtk_export import (
+        ESIMVTKOutput,
+        export_esim_workpiece_vtk,
+        export_esim_coil_field_vtk,
+        export_esim_combined_vtk,
+    )
+    ESIM_AVAILABLE = True
+except ImportError:
+    # ESIM requires scipy, which may not be installed
+    ESIM_AVAILABLE = False

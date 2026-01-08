@@ -19,11 +19,12 @@ namespace exafmm_t {
   using clock_type = std::chrono::high_resolution_clock;
   using time_point = clock_type::time_point;
 
-  long long flop = 0;
-  time_point current_time;
-  std::map<std::string, time_point> timer;
+  // C++17 inline variables to prevent multiple definitions
+  inline long long flop = 0;
+  inline time_point current_time;
+  inline std::map<std::string, time_point> timer;
 
-  void print(std::string s) {
+  inline void print(std::string s) {
     // if (!VERBOSE | (MPIRANK != 0)) return;
     s += " ";
     std::cout << "--- " << std::setw(stringLength) << std::left
@@ -32,7 +33,7 @@ namespace exafmm_t {
   }
 
   template<typename T>
-  void print(std::string s, T v, bool fixed=true) {
+  inline void print(std::string s, T v, bool fixed=true) {
     std::cout << std::setw(stringLength) << std::left << s << " : ";
     if(fixed)
       std::cout << std::setprecision(decimal) << std::fixed << std::scientific;
@@ -41,7 +42,7 @@ namespace exafmm_t {
     std::cout << v << std::endl;
   }
 
-  void print_divider(std::string s) {
+  inline void print_divider(std::string s) {
     s.insert(0, " ");
     s.append(" ");
     int halfLength = (dividerLength - static_cast<int>(s.length())) / 2;
@@ -49,17 +50,17 @@ namespace exafmm_t {
               << std::string(dividerLength-halfLength-static_cast<int>(s.length()), '-') << std::endl;
   }
 
-  void add_flop(long long n) {
+  inline void add_flop(long long n) {
 #pragma omp atomic
     flop += n;
   }
 
-  void start(std::string event) {
+  inline void start(std::string event) {
     current_time = clock_type::now();
     timer[event] = current_time;
   }
 
-  double stop(std::string event, bool verbose=true) {
+  inline double stop(std::string event, bool verbose=true) {
     current_time = clock_type::now();
     std::chrono::duration<double> elapsed = current_time - timer[event];
     double eventTime = elapsed.count();

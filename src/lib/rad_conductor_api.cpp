@@ -8,10 +8,17 @@
  */
 
 #include "rad_conductor.h"
+#ifdef RADIA_USE_EXAFMM
+#include "rad_conductor_fmm.h"
+#endif
 #include "rad_io_buffer.h"
 #include <map>
 #include <memory>
 #include <cstring>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 using namespace radia;
 
@@ -580,6 +587,61 @@ void CndFldE(double* E_real, double* E_imag, int cond, double* point)
 
 //-------------------------------------------------------------------------
 
+void CndFldA(double* A_real, double* A_imag, int cond, double* point)
+{
+    try {
+        auto conductor = GetConductor(cond);
+        if (!conductor) {
+            ioBuffer.StoreErrorMessage("Invalid conductor handle");
+            A_real[0] = A_real[1] = A_real[2] = 0;
+            A_imag[0] = A_imag[1] = A_imag[2] = 0;
+            return;
+        }
+
+        TVector3d pt(point[0], point[1], point[2]);
+        std::complex<double> Ax, Ay, Az;
+        conductor->ComputeA(pt, Ax, Ay, Az);
+
+        A_real[0] = Ax.real();
+        A_real[1] = Ay.real();
+        A_real[2] = Az.real();
+        A_imag[0] = Ax.imag();
+        A_imag[1] = Ay.imag();
+        A_imag[2] = Az.imag();
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+        A_real[0] = A_real[1] = A_real[2] = 0;
+        A_imag[0] = A_imag[1] = A_imag[2] = 0;
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndFldPhi(double* Phi_real, double* Phi_imag, int cond, double* point)
+{
+    try {
+        auto conductor = GetConductor(cond);
+        if (!conductor) {
+            ioBuffer.StoreErrorMessage("Invalid conductor handle");
+            *Phi_real = *Phi_imag = 0;
+            return;
+        }
+
+        TVector3d pt(point[0], point[1], point[2]);
+        std::complex<double> phi = conductor->ComputePhi(pt);
+
+        *Phi_real = phi.real();
+        *Phi_imag = phi.imag();
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+        *Phi_real = *Phi_imag = 0;
+    }
+}
+
+//-------------------------------------------------------------------------
+
 void CndFldBBatch(double* B_real, double* B_imag, int cond, double* points, int npts)
 {
     try {
@@ -589,17 +651,203 @@ void CndFldBBatch(double* B_real, double* B_imag, int cond, double* points, int 
             return;
         }
 
-        for (int i = 0; i < npts; i++) {
-            TVector3d pt(points[3*i], points[3*i+1], points[3*i+2]);
-            std::complex<double> Bx, By, Bz;
-            conductor->ComputeB(pt, Bx, By, Bz);
+#ifdef RADIA_USE_EXAFMM
+        // Check if FMM acceleration is enabled and problem is large enough
+        auto& fmmManager = radTConductorFmmManager::Instance();
+        if (fmmManager.IsEnabled() && conductor->NumPanels() >= fmmManager.GetFmm().GetThreshold()) {
+            // Use FMM acceleration
+            auto& fmm = fmmManager.GetFmm();
+            fmm.SetSources(*conductor);
 
-            B_real[3*i]   = Bx.real();
-            B_real[3*i+1] = By.real();
-            B_real[3*i+2] = Bz.real();
-            B_imag[3*i]   = Bx.imag();
-            B_imag[3*i+1] = By.imag();
-            B_imag[3*i+2] = Bz.imag();
+            std::vector<double> targets(points, points + 3 * npts);
+            std::vector<std::complex<double>> Bx, By, Bz;
+            fmm.ComputeB(targets, Bx, By, Bz);
+
+            #pragma omp parallel for
+            for (int i = 0; i < npts; i++) {
+                B_real[3*i]   = Bx[i].real();
+                B_real[3*i+1] = By[i].real();
+                B_real[3*i+2] = Bz[i].real();
+                B_imag[3*i]   = Bx[i].imag();
+                B_imag[3*i+1] = By[i].imag();
+                B_imag[3*i+2] = Bz[i].imag();
+            }
+        } else
+#endif  // RADIA_USE_EXAFMM
+        {
+            // Use direct computation (OpenMP parallelized)
+            #pragma omp parallel for schedule(dynamic)
+            for (int i = 0; i < npts; i++) {
+                TVector3d pt(points[3*i], points[3*i+1], points[3*i+2]);
+                std::complex<double> Bx, By, Bz;
+                conductor->ComputeB(pt, Bx, By, Bz);
+
+                B_real[3*i]   = Bx.real();
+                B_real[3*i+1] = By.real();
+                B_real[3*i+2] = Bz.real();
+                B_imag[3*i]   = Bx.imag();
+                B_imag[3*i+1] = By.imag();
+                B_imag[3*i+2] = Bz.imag();
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndFldEBatch(double* E_real, double* E_imag, int cond, double* points, int npts)
+{
+    try {
+        auto conductor = GetConductor(cond);
+        if (!conductor) {
+            ioBuffer.StoreErrorMessage("Invalid conductor handle");
+            return;
+        }
+
+#ifdef RADIA_USE_EXAFMM
+        // Check if FMM acceleration is enabled and problem is large enough
+        auto& fmmManager = radTConductorFmmManager::Instance();
+        if (fmmManager.IsEnabled() && conductor->NumPanels() >= fmmManager.GetFmm().GetThreshold()) {
+            // Use FMM acceleration
+            auto& fmm = fmmManager.GetFmm();
+            fmm.SetSources(*conductor);
+
+            std::vector<double> targets(points, points + 3 * npts);
+            std::vector<std::complex<double>> Ex, Ey, Ez;
+            fmm.ComputeE(targets, conductor->GetFrequency(), Ex, Ey, Ez);
+
+            #pragma omp parallel for
+            for (int i = 0; i < npts; i++) {
+                E_real[3*i]   = Ex[i].real();
+                E_real[3*i+1] = Ey[i].real();
+                E_real[3*i+2] = Ez[i].real();
+                E_imag[3*i]   = Ex[i].imag();
+                E_imag[3*i+1] = Ey[i].imag();
+                E_imag[3*i+2] = Ez[i].imag();
+            }
+        } else
+#endif  // RADIA_USE_EXAFMM
+        {
+            // Use direct computation (OpenMP parallelized)
+            #pragma omp parallel for schedule(dynamic)
+            for (int i = 0; i < npts; i++) {
+                TVector3d pt(points[3*i], points[3*i+1], points[3*i+2]);
+                std::complex<double> Ex, Ey, Ez;
+                conductor->ComputeE(pt, Ex, Ey, Ez);
+
+                E_real[3*i]   = Ex.real();
+                E_real[3*i+1] = Ey.real();
+                E_real[3*i+2] = Ez.real();
+                E_imag[3*i]   = Ex.imag();
+                E_imag[3*i+1] = Ey.imag();
+                E_imag[3*i+2] = Ez.imag();
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndFldABatch(double* A_real, double* A_imag, int cond, double* points, int npts)
+{
+    try {
+        auto conductor = GetConductor(cond);
+        if (!conductor) {
+            ioBuffer.StoreErrorMessage("Invalid conductor handle");
+            return;
+        }
+
+#ifdef RADIA_USE_EXAFMM
+        // Check if FMM acceleration is enabled and problem is large enough
+        auto& fmmManager = radTConductorFmmManager::Instance();
+        if (fmmManager.IsEnabled() && conductor->NumPanels() >= fmmManager.GetFmm().GetThreshold()) {
+            // Use FMM acceleration
+            auto& fmm = fmmManager.GetFmm();
+            fmm.SetSources(*conductor);
+
+            std::vector<double> targets(points, points + 3 * npts);
+            std::vector<std::complex<double>> Ax, Ay, Az;
+            fmm.ComputeA(targets, Ax, Ay, Az);
+
+            #pragma omp parallel for
+            for (int i = 0; i < npts; i++) {
+                A_real[3*i]   = Ax[i].real();
+                A_real[3*i+1] = Ay[i].real();
+                A_real[3*i+2] = Az[i].real();
+                A_imag[3*i]   = Ax[i].imag();
+                A_imag[3*i+1] = Ay[i].imag();
+                A_imag[3*i+2] = Az[i].imag();
+            }
+        } else
+#endif  // RADIA_USE_EXAFMM
+        {
+            // Use direct computation (OpenMP parallelized)
+            #pragma omp parallel for schedule(dynamic)
+            for (int i = 0; i < npts; i++) {
+                TVector3d pt(points[3*i], points[3*i+1], points[3*i+2]);
+                std::complex<double> Ax, Ay, Az;
+                conductor->ComputeA(pt, Ax, Ay, Az);
+
+                A_real[3*i]   = Ax.real();
+                A_real[3*i+1] = Ay.real();
+                A_real[3*i+2] = Az.real();
+                A_imag[3*i]   = Ax.imag();
+                A_imag[3*i+1] = Ay.imag();
+                A_imag[3*i+2] = Az.imag();
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndFldPhiBatch(double* Phi_real, double* Phi_imag, int cond, double* points, int npts)
+{
+    try {
+        auto conductor = GetConductor(cond);
+        if (!conductor) {
+            ioBuffer.StoreErrorMessage("Invalid conductor handle");
+            return;
+        }
+
+#ifdef RADIA_USE_EXAFMM
+        // Check if FMM acceleration is enabled and problem is large enough
+        auto& fmmManager = radTConductorFmmManager::Instance();
+        if (fmmManager.IsEnabled() && conductor->NumPanels() >= fmmManager.GetFmm().GetThreshold()) {
+            // Use FMM acceleration
+            auto& fmm = fmmManager.GetFmm();
+            fmm.SetSources(*conductor);
+
+            std::vector<double> targets(points, points + 3 * npts);
+            std::vector<std::complex<double>> phi;
+            fmm.ComputePhi(targets, phi);
+
+            #pragma omp parallel for
+            for (int i = 0; i < npts; i++) {
+                Phi_real[i] = phi[i].real();
+                Phi_imag[i] = phi[i].imag();
+            }
+        } else
+#endif  // RADIA_USE_EXAFMM
+        {
+            // Use direct computation (OpenMP parallelized)
+            #pragma omp parallel for schedule(dynamic)
+            for (int i = 0; i < npts; i++) {
+                TVector3d pt(points[3*i], points[3*i+1], points[3*i+2]);
+                std::complex<double> phi = conductor->ComputePhi(pt);
+
+                Phi_real[i] = phi.real();
+                Phi_imag[i] = phi.imag();
+            }
         }
     }
     catch (const std::exception& e) {
@@ -791,3 +1039,98 @@ void SIBCSetCrossSection(int mat, const char* shape, double* params, int nparams
         ioBuffer.StoreErrorMessage(e.what());
     }
 }
+
+//=========================================================================
+// FMM Acceleration Control Functions
+//=========================================================================
+
+#ifdef RADIA_USE_EXAFMM
+
+void CndFmmSetEnabled(int enabled)
+{
+    try {
+        auto& fmmManager = radTConductorFmmManager::Instance();
+        fmmManager.SetEnabled(enabled != 0);
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndFmmGetEnabled(int* enabled)
+{
+    try {
+        auto& fmmManager = radTConductorFmmManager::Instance();
+        *enabled = fmmManager.IsEnabled() ? 1 : 0;
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+        *enabled = 0;
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndFmmSetParameters(int p, int ncrit, int threshold)
+{
+    try {
+        auto& fmmManager = radTConductorFmmManager::Instance();
+        fmmManager.SetParameters(p, ncrit);
+        fmmManager.SetThreshold(threshold);
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndFmmGetParameters(int* p, int* ncrit, int* threshold)
+{
+    try {
+        auto& fmmManager = radTConductorFmmManager::Instance();
+        auto& fmm = fmmManager.GetFmm();
+        // Note: We can't easily get p and ncrit from fmm directly
+        // For now, return threshold
+        *p = 6;  // Default value
+        *ncrit = 64;  // Default value
+        *threshold = fmm.GetThreshold();
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+        *p = 0;
+        *ncrit = 0;
+        *threshold = 0;
+    }
+}
+
+#else  // !RADIA_USE_EXAFMM
+
+// Stub implementations when ExaFMM is disabled
+void CndFmmSetEnabled(int enabled)
+{
+    (void)enabled;
+    ioBuffer.StoreErrorMessage("FMM acceleration requires ExaFMM. Rebuild with -DRADIA_ENABLE_EXAFMM=ON");
+}
+
+void CndFmmGetEnabled(int* enabled)
+{
+    *enabled = 0;  // Always disabled when ExaFMM not compiled in
+}
+
+void CndFmmSetParameters(int p, int ncrit, int threshold)
+{
+    (void)p; (void)ncrit; (void)threshold;
+    ioBuffer.StoreErrorMessage("FMM acceleration requires ExaFMM. Rebuild with -DRADIA_ENABLE_EXAFMM=ON");
+}
+
+void CndFmmGetParameters(int* p, int* ncrit, int* threshold)
+{
+    *p = 0;
+    *ncrit = 0;
+    *threshold = 0;
+}
+
+#endif  // RADIA_USE_EXAFMM

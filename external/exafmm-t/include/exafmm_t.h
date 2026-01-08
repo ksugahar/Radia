@@ -142,10 +142,10 @@ namespace exafmm_t {
     std::vector<size_t> interaction_count_offset;
   };
 
-  // Relative coordinates and interaction lists
-  std::vector<std::vector<ivec3>> REL_COORD;  //!< Vector of possible relative coordinates (inner) of each interaction type (outer)
-  std::vector<std::vector<int>> HASH_LUT;     //!< Vector of hash Lookup tables (inner) of relative positions for each interaction type (outer)
-  std::vector<std::vector<int>> M2L_INDEX_MAP;  //!< [M2L_relpos_idx][octant] -> M2L_Helper_relpos_idx
+  // Relative coordinates and interaction lists (C++17 inline variables)
+  inline std::vector<std::vector<ivec3>> REL_COORD;  //!< Vector of possible relative coordinates (inner) of each interaction type (outer)
+  inline std::vector<std::vector<int>> HASH_LUT;     //!< Vector of hash Lookup tables (inner) of relative positions for each interaction type (outer)
+  inline std::vector<std::vector<int>> M2L_INDEX_MAP;  //!< [M2L_relpos_idx][octant] -> M2L_Helper_relpos_idx
 
   // ========================================================================
   // MKL DFTI FFT wrapper functions (replacing FFTW3 calls)

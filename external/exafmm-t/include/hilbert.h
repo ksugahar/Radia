@@ -22,7 +22,7 @@ namespace exafmm_t {
    * @param i Hilbert key.
    * @return int Level.
    */
-  int getLevel(uint64_t i) {
+  inline int getLevel(uint64_t i) {
     int level = -1;
     uint64_t offset = 0;
     while (i >= offset) {
@@ -38,7 +38,7 @@ namespace exafmm_t {
    * @param i Hilbert key of a node with level offset.
    * @return uint64_t Parent's Hilbert key.
    */
-  uint64_t getParent(uint64_t i) {
+  inline uint64_t getParent(uint64_t i) {
     int level = getLevel(i);
     return (i - levelOffset(level)) / 8 + levelOffset(level-1);
   }
@@ -49,7 +49,7 @@ namespace exafmm_t {
    * @param i Hilbert key of a node with level offset.
    * @return uint64_t First child's Hilbert key.
    */
-  uint64_t getChild(uint64_t i) {
+  inline uint64_t getChild(uint64_t i) {
     int level = getLevel(i);
     return (i - levelOffset(level)) * 8 + levelOffset(level+1);
   }
@@ -61,8 +61,8 @@ namespace exafmm_t {
    * @param offset Whether the key contains level offset, default to true.
    * @return int Octant.
    */
-  //! 
-  int getOctant(uint64_t key, bool offset=true) {
+  //!
+  inline int getOctant(uint64_t key, bool offset=true) {
     int level = getLevel(key);
     if (offset) key -= levelOffset(level);
     return key & 7;
@@ -76,7 +76,7 @@ namespace exafmm_t {
    * @param offset Whether to add level offset to the key, default to true.
    * @return uint64_t Hilbert key.
    */
-  uint64_t getKey(ivec3 iX, int level, bool offset=true) {
+  inline uint64_t getKey(ivec3 iX, int level, bool offset=true) {
 #if EXAFMM_HILBERT
     int M = 1 << (level - 1);
     for (int Q=M; Q>1; Q>>=1) {
@@ -112,7 +112,7 @@ namespace exafmm_t {
    * @param i Hilbert key with level offset.
    * @return ivec3 3D index, an integer triplet.
    */
-  ivec3 get3DIndex(uint64_t i) {
+  inline ivec3 get3DIndex(uint64_t i) {
     int level = getLevel(i);
     i -= levelOffset(level);
     ivec3 iX = 0;
@@ -148,7 +148,7 @@ namespace exafmm_t {
    * @param level Level.
    * @return ivec3 3D index, an integer triplet.
    */
-  ivec3 get3DIndex(uint64_t i, int level) {
+  inline ivec3 get3DIndex(uint64_t i, int level) {
     ivec3 iX = 0;
     for (int l=0; l<level; l++) {
       iX[2] |= (i & (uint64_t)1 << 3*l) >> 2*l;
@@ -184,7 +184,7 @@ namespace exafmm_t {
    * @param r0 Half of the side length of the bounding box.
    * @return ivec3 3D index, an integer triplet.
    */
-  ivec3 get3DIndex(vec3 X, int level, vec3 x0, real_t r0) {
+  inline ivec3 get3DIndex(vec3 X, int level, vec3 x0, real_t r0) {
     vec3 Xmin = x0 - r0;
     real_t dx = 2 * r0 / (1 << level);
     ivec3 iX;
@@ -203,7 +203,7 @@ namespace exafmm_t {
    * @param r0 Half of the side length of the bounding box.
    * @return vec3 3D coordinates.
    */
-  vec3 getCoordinates(ivec3 iX, int level, vec3 x0, real_t r0) {
+  inline vec3 getCoordinates(ivec3 iX, int level, vec3 x0, real_t r0) {
     vec3 Xmin = x0 - r0;
     real_t dx = 2 * r0 / (1 << level);
     vec3 X;

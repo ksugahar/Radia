@@ -5,7 +5,7 @@
 #include <type_traits>  // std::is_same
 #include "fmm_base.h"
 #include "intrinsics.h"
-#include "math_wrapper.h"
+#include "mkl_wrapper.h"
 
 namespace exafmm_t {
   template <typename T>

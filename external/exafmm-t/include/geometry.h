@@ -16,9 +16,9 @@ namespace exafmm_t {
    *              Use 2.95 for upward check and downward equivalent surface,
    *              use 1.05 for upward equivalent and downward check surface.
    * 
-   * @return Vector of coordinates of surface points. 
+   * @return Vector of coordinates of surface points.
    */
-  RealVec surface(int p, real_t r0, int level, real_t * c, real_t alpha) {
+  inline RealVec surface(int p, real_t r0, int level, real_t * c, real_t alpha) {
     int n = 6*(p-1)*(p-1) + 2;
     RealVec coord(n*3);
     coord[0] = -1.0;
@@ -72,7 +72,7 @@ namespace exafmm_t {
    *
    * @return Vector of coordinates of convolution grid.
    */
-  RealVec convolution_grid(int p, real_t r0, int level, real_t * c) {
+  inline RealVec convolution_grid(int p, real_t r0, int level, real_t * c) {
     real_t d = 2 * r0 * powf(0.5, level);
     real_t a = d * 1.05;  // side length of upward equivalent/downward check box
     int n1 = p * 2;
@@ -98,7 +98,7 @@ namespace exafmm_t {
    * 
    * @return A mapping from upward equivalent surface point index to convolution grid index.
    */
-  std::vector<int> generate_surf2conv_up(int p) {
+  inline std::vector<int> generate_surf2conv_up(int p) {
     int n1 = 2*p;
     real_t c[3];
     for (int d=0; d<3; d++) c[d] = 0.5*(p-1);
@@ -119,7 +119,7 @@ namespace exafmm_t {
    * 
    * @return A mapping from downward check surface point index to convolution grid index.
    */
-  std::vector<int> generate_surf2conv_dn(int p) {
+  inline std::vector<int> generate_surf2conv_dn(int p) {
     int n1 = 2*p;
     real_t c[3];
     for (int d=0; d<3; d++) c[d] = 0.5*(p-1);
@@ -140,7 +140,7 @@ namespace exafmm_t {
    *
    * @return Hash value of the relative position (x + 10y + 100z + 555).
    */
-  int hash(ivec3& coord) {
+  inline int hash(ivec3& coord) {
     const int n = 5;
     return ((coord[2]+n) * (2*n) + (coord[1]+n)) *(2*n) + (coord[0]+n);
   }
@@ -153,7 +153,7 @@ namespace exafmm_t {
    * @param step Step.
    * @param t Operator type (e.g. M2M, M2L)
    */
-  void init_rel_coord(int max_r, int min_r, int step, Precompute_Type t) {
+  inline void init_rel_coord(int max_r, int min_r, int step, Precompute_Type t) {
     const int max_hash = 2000;
     HASH_LUT[t].resize(max_hash, -1);
     for (int k=-max_r; k<=max_r; k+=step) {
@@ -173,7 +173,7 @@ namespace exafmm_t {
   }
 
   //! Generate a map that maps indices of M2L_Type to indices of M2L_Helper_Type
-  void generate_M2L_index_map() {
+  inline void generate_M2L_index_map() {
     int npos = REL_COORD[M2L_Type].size();   // number of relative coords for M2L_Type
     M2L_INDEX_MAP.resize(npos, std::vector<int>(NCHILD*NCHILD));
 #pragma omp parallel for
@@ -195,7 +195,7 @@ namespace exafmm_t {
   }
   
   //! Compute the relative positions for all operators and generate M2L index mapping.
-  void init_rel_coord() {
+  inline void init_rel_coord() {
     static bool is_initialized = false;
     if (!is_initialized) {
       REL_COORD.resize(Type_Count);
