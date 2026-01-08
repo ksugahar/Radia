@@ -6,27 +6,31 @@ Complete guide for building Radia Python modules on Windows, macOS, and Linux.
 
 ## Quick Start
 
-### Windows
+### Windows (Recommended: MSVC + Intel MKL)
 
 ```powershell
 # Build both radia and radia_ngsolve (recommended)
-.\Build.ps1
-
-# Build with tests
-.\Build.ps1 -Test
+.\BuildMSVC.ps1
 
 # Clean rebuild
-.\Build.ps1 -Clean
+.\BuildMSVC.ps1 -Rebuild
 ```
 
-**Outputs**: `build/Release/radia.pyd`, `build/Release/radia_ngsolve.pyd`
+**Outputs**: `build-msvc/radia.pyd`, `build-msvc/radia_ngsolve.pyd`
+
+**Requirements**:
+- Visual Studio 2022 (MSVC compiler)
+- Intel oneAPI Base Toolkit (for Intel MKL)
 
 ### macOS / Linux
 
 ```bash
-# Install dependencies
-brew install cmake fftw python3          # macOS
-sudo apt install cmake libfftw3-dev python3-dev  # Linux
+# Install Intel oneAPI Base Toolkit (recommended)
+# Download from: https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html
+
+# Source Intel environment
+source /opt/intel/oneapi/setvars.sh        # Linux
+source /opt/intel/oneapi/setvars.sh        # macOS (Intel)
 
 # Build
 mkdir build && cd build
@@ -40,61 +44,50 @@ make -j$(nproc)
 
 ## Build Scripts (Windows)
 
-### Build.ps1 - Build Both Modules
+### BuildMSVC.ps1 - Primary Build Script (Recommended)
 
-Builds `radia.pyd` and `radia_ngsolve.pyd` in one command.
-
-**Parameters**:
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `-BuildType` | `Release`, `Debug` | `Release` | Build configuration |
-| `-Clean` | switch | false | Clean before build |
-| `-Test` | switch | false | Run import tests |
-
-**Examples**:
-
-```powershell
-.\Build.ps1                  # Standard build
-.\Build.ps1 -Clean -Test     # Clean rebuild with tests
-.\Build.ps1 -BuildType Debug # Debug build
-```
-
-### Build.ps1 - Build Radia Module Only
-
-Builds only `radia.pyd` (core Radia module).
+Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 
 **Parameters**:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `-BuildType` | `Release`, `Debug`, `RelWithDebInfo` | `Release` | Build configuration |
-| `-Clean` | switch | false | Clean before build |
 | `-Rebuild` | switch | false | Clean + Configure + Build |
 | `-Verbose` | switch | false | Detailed output |
-| `-Install` | switch | false | Install to site-packages |
 
 **Examples**:
 
 ```powershell
-.\Build.ps1                      # Standard build
-.\Build.ps1 -Rebuild             # Clean rebuild
-.\Build.ps1 -BuildType Debug     # Debug build
-.\Build.ps1 -Install             # Build and install
+.\BuildMSVC.ps1                  # Standard build
+.\BuildMSVC.ps1 -Rebuild         # Clean rebuild
 ```
+
+**Features**:
+- Uses MSVC compiler for NGSolve ABI compatibility
+- Links Intel MKL for BLAS/LAPACK operations
+- Uses Intel OpenMP (`libiomp5md.dll`) for parallelization
+- Automatically copies required DLLs to output directory
 
 ---
 
 ## System Requirements
 
-### Windows
+### Windows (Primary Platform)
 
 - **OS**: Windows 10/11 (64-bit)
 - **Compiler**: Visual Studio 2022 (Community or higher)
   - C++ Desktop Development workload
   - CMake tools component
 - **Python**: 3.8+ (64-bit)
-- **FFTW**: Included in `src/ext/fftw/fftw64_f.lib`
+- **Intel oneAPI Base Toolkit**: Required for Intel MKL
+  - Download from [Intel oneAPI](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html)
+  - Provides: Intel MKL (BLAS/LAPACK/FFT), Intel OpenMP
+
+**Required Intel Components**:
+| Component | Purpose |
+|-----------|---------|
+| Intel MKL | BLAS, LAPACK, DFTI (FFT) operations |
+| Intel OpenMP (`libiomp5md.dll`) | Thread parallelization |
 
 ### macOS
 
@@ -102,7 +95,9 @@ Builds only `radia.pyd` (core Radia module).
 - **Tools**: Xcode Command Line Tools
 - **CMake**: `brew install cmake`
 - **Python**: 3.8+
-- **FFTW**: `brew install fftw`
+- **Intel oneAPI Base Toolkit**: For Intel MKL and OpenMP
+  - Download from [Intel oneAPI](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html)
+  - Note: Apple Silicon (arm64) requires Rosetta 2 for Intel MKL
 
 ### Linux (Ubuntu/Debian)
 
@@ -110,11 +105,14 @@ Builds only `radia.pyd` (core Radia module).
 - **Compiler**: GCC/G++ 9+
 - **CMake**: `sudo apt install cmake`
 - **Python**: `sudo apt install python3-dev`
-- **FFTW**: `sudo apt install libfftw3-dev`
+- **Intel oneAPI Base Toolkit**: For Intel MKL and OpenMP
+  - Add Intel APT repository and install: `sudo apt install intel-oneapi-mkl-devel`
+  - Or download from [Intel oneAPI](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html)
 
 ### For radia_ngsolve (all platforms)
 
-- **NGSolve**: `pip install ngsolve`
+- **NGSolve**: `pip install ngsolve==6.2.2405`
+- **Note**: NGSolve 6.2.2405 is required (later versions have periodic BC regression)
 
 ---
 
@@ -158,13 +156,15 @@ Examples:
 
 ### radia - Core Python Module
 
-**Output**: `build/Release/radia.pyd` (Windows) or `radia.cpXX-<platform>.so` (Unix)
+**Output**: `build-msvc/radia.pyd` (Windows) or `build/radia.cpXX-<platform>.so` (Unix)
 
 **Features**:
-- Complete Radia API
-- Magnetic field computation
-- Python callback for custom fields (`ObjBckgCF`)
-- Cross-platform support
+- Complete Radia API for magnetic field computation
+- Magnetostatic solver with LU, BiCGSTAB, and HACApK methods
+- FastImp Conductor module for eddy current analysis (SIBC)
+- ExaFMM-t Fast Multipole Method acceleration
+- Python callback for custom background fields
+- Cross-platform support (Windows primary)
 
 **Usage**:
 ```python
@@ -183,7 +183,7 @@ print(f"B = {field} T")
 
 ### radia_ngsolve - NGSolve Integration
 
-**Output**: `build/Release/radia_ngsolve.pyd` (Windows only currently)
+**Output**: `build-msvc/radia_ngsolve.pyd` (Windows only currently)
 
 **Features**:
 - NGSolve CoefficientFunction interface
@@ -234,7 +234,7 @@ B_gf.Set(B_cf)
 
 ```python
 import sys
-sys.path.insert(0, r'build\Release')
+sys.path.insert(0, r'build-msvc')
 
 import radia as rad
 print(rad.UtiVer())
@@ -254,15 +254,18 @@ import radia as rad
 print(rad.UtiVer())
 ```
 
-### Install to Site-Packages
+### Install via pip (Recommended)
+
+```bash
+pip install radia
+```
+
+Or build and install locally:
 
 ```powershell
-# Windows
-.\Build.ps1 -Install
-
-# Unix
-cd build
-sudo make install
+# Windows - build wheel and install
+python -m build
+pip install dist/radia-*.whl
 ```
 
 ---
@@ -301,21 +304,47 @@ import ngsolve  # Load NGSolve dependencies first
 import radia_ngsolve  # Now this will work
 ```
 
+#### "DLL load failed" (Intel MKL)
+**Cause**: Intel MKL DLLs not found
+**Solution**: Ensure Intel oneAPI is installed and DLLs are copied:
+```powershell
+# BuildMSVC.ps1 automatically copies required DLLs
+.\BuildMSVC.ps1 -Rebuild
+```
+
+#### OpenMP issues (two OpenMP runtimes)
+**Symptom**: Random crashes or incorrect parallel execution
+**Cause**: Both `libiomp5md.dll` (Intel) and `vcomp140.dll` (MSVC) loaded
+**Solution**: Verify only Intel OpenMP is loaded:
+```python
+import psutil, os
+process = psutil.Process(os.getpid())
+for dll in process.memory_maps():
+    if 'omp' in dll.path.lower():
+        print(dll.path)
+# Should show: libiomp5md.dll
+# Should NOT show: vcomp140.dll
+```
+
 #### Build fails with linking errors
 ```powershell
 # Clean rebuild
-.\Build.ps1 -Clean
+.\BuildMSVC.ps1 -Rebuild
 
 # Or full clean
-Remove-Item -Recurse -Force build
-.\Build.ps1
+Remove-Item -Recurse -Force build-msvc
+.\BuildMSVC.ps1
 ```
 
 ### macOS
 
-#### "FFTW not found"
+#### Intel MKL not found
 ```bash
-brew install fftw
+# Install Intel oneAPI Base Toolkit
+# Download from: https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html
+
+# Source environment before building
+source /opt/intel/oneapi/setvars.sh
 ```
 
 #### Python.h not found
@@ -329,7 +358,16 @@ brew install python@3.12
 #### Missing dependencies
 ```bash
 sudo apt update
-sudo apt install build-essential cmake python3-dev libfftw3-dev
+sudo apt install build-essential cmake python3-dev
+
+# Install Intel MKL
+# Option 1: APT repository (Ubuntu/Debian)
+wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | sudo gpg --dearmor -o /usr/share/keyrings/oneapi-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+sudo apt update
+sudo apt install intel-oneapi-mkl-devel
+
+# Option 2: Download installer from Intel website
 ```
 
 #### Permission denied during install
@@ -385,14 +423,54 @@ B_cf = radia_ngsolve.RadiaField(
 )
 ```
 
-### Parallel Builds
+### FastImp Conductor Module (Eddy Currents)
 
-```powershell
-# Build multiple configurations in parallel
-Start-Job {.\Build.ps1 -BuildType Release}
-Start-Job {.\Build.ps1 -BuildType Debug}
-Get-Job | Wait-Job | Receive-Job
+Analyze eddy currents in conductors using Surface Impedance Boundary Condition (SIBC):
+
+```python
+import radia as rad
+
+# Create conductor block (center, dimensions, conductivity, panels)
+cond = rad.CndRecBlock([0, 0, 0], [0.01, 0.01, 0.001], 5.8e7, 4)
+
+# Set operating frequency
+rad.CndSetFrequency(cond, 1e6)  # 1 MHz
+
+# Solve and compute field
+rad.CndSolve(cond)
+B = rad.CndFld(cond, 'b', [0.02, 0, 0])  # Complex B-field [Bx_re, By_re, Bz_re, Bx_im, By_im, Bz_im]
 ```
+
+**Available Conductor Types**:
+- `CndRecBlock`: Rectangular block conductor
+- `CndLoop`: Circular loop conductor
+- `CndWire`: Arbitrary wire path
+- `CndSpiral`: Spiral coil conductor
+
+### ExaFMM-t Fast Multipole Method
+
+For large conductor problems, enable FMM acceleration:
+
+```python
+import radia as rad
+
+# Check FMM status
+print(rad.CndFmmGetEnabled())  # Returns True if FMM is enabled
+
+# Configure FMM parameters
+rad.CndFmmSetParameters(6, 64, 1.0, True)  # (order, ncrit, theta, verbose)
+
+# FMM is automatically used when enabled
+rad.CndSolve(cond)
+```
+
+**FMM Parameters**:
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `order` | Multipole expansion order | 6 |
+| `ncrit` | Max particles per leaf | 64 |
+| `theta` | Multipole acceptance criterion | 1.0 |
+| `verbose` | Print FMM statistics | False |
 
 ### CI/CD Integration
 
@@ -401,36 +479,50 @@ Get-Job | Wait-Job | Receive-Job
 - name: Build Radia
   shell: pwsh
   run: |
-    .\Build.ps1 -Test
+    .\BuildMSVC.ps1
 
 - name: Upload artifacts
   uses: actions/upload-artifact@v3
   with:
     name: radia-modules
-    path: build/Release/*.pyd
+    path: build-msvc/*.pyd
 ```
 
 ---
 
 ## Platform-Specific Notes
 
-### Windows
+### Windows (Primary Platform)
 
-- FFTW library is **bundled** in `src/ext/fftw/fftw64_f.lib`
-- No external FFTW installation needed
+- **Intel MKL** for all BLAS/LAPACK/FFT operations
+- **Intel OpenMP** (`libiomp5md.dll`) for parallelization
+- **MSVC** compiler for NGSolve ABI compatibility
+- BuildMSVC.ps1 automatically copies required DLLs
 - Supports both cmd.exe and PowerShell
+
+**Required DLLs** (auto-copied by BuildMSVC.ps1):
+| DLL | Purpose |
+|-----|---------|
+| `mkl_rt.2.dll` | MKL runtime (single dynamic library) |
+| `mkl_core.2.dll` | MKL core |
+| `mkl_intel_thread.2.dll` | MKL threading |
+| `mkl_def.2.dll`, `mkl_avx2.dll` | CPU-specific kernels |
+| `libiomp5md.dll` | Intel OpenMP runtime |
 
 ### macOS
 
-- Both Intel (x86_64) and Apple Silicon (arm64) supported
-- FFTW must be installed via Homebrew
-- Universal binaries not yet supported (build for specific architecture)
+- Intel (x86_64) fully supported with Intel MKL
+- Apple Silicon (arm64) requires Rosetta 2 for Intel MKL
+- Uses Intel OpenMP (`libiomp5`) for parallelization
+- Source `setvars.sh` before building: `source /opt/intel/oneapi/setvars.sh`
 
 ### Linux
 
 - Tested on Ubuntu 20.04+ and Debian 11+
-- FFTW available via package manager
-- May need to adjust `LD_LIBRARY_PATH` if FFTW is in non-standard location
+- Uses Intel MKL for BLAS/LAPACK/FFT operations
+- Uses Intel OpenMP (`libiomp5`) for parallelization
+- Source `setvars.sh` before building: `source /opt/intel/oneapi/setvars.sh`
+- May need to set `LD_LIBRARY_PATH` for Intel libraries
 
 ---
 
@@ -440,9 +532,10 @@ The following old scripts have been replaced:
 
 | Old Script | Replacement |
 |------------|-------------|
-| `Build_NGSolve.ps1` | `.\Build.ps1` |
-| `build_radia_ngsolve.bat` | `.\Build.ps1` |
-| `build_radia_ngsolve_full.bat` | `.\Build.ps1 -Clean` |
+| `Build.ps1` | `.\BuildMSVC.ps1` |
+| `Build_NGSolve.ps1` | `.\BuildMSVC.ps1` |
+| `build_radia_ngsolve.bat` | `.\BuildMSVC.ps1` |
+| `build_radia_ngsolve_full.bat` | `.\BuildMSVC.ps1 -Rebuild` |
 
 Old scripts are removed from the repository.
 
@@ -452,16 +545,17 @@ Old scripts are removed from the repository.
 
 ```powershell
 # Initial setup
-.\Build.ps1 -Clean -Test
+.\BuildMSVC.ps1 -Rebuild
 
 # During development (incremental builds)
-.\Build.ps1
+.\BuildMSVC.ps1
 
-# Before committing
-.\Build.ps1 -Test
+# Test import
+python -c "import sys; sys.path.insert(0, 'build-msvc'); import radia; print(radia.UtiVer())"
 
 # Clean everything
-Remove-Item -Recurse -Force build
+Remove-Item -Recurse -Force build-msvc
+.\BuildMSVC.ps1
 ```
 
 ---
@@ -475,7 +569,9 @@ Remove-Item -Recurse -Force build
 
 ---
 
-**Last Updated**: 2025-11-20
-**Build System**: CMake 3.21+ with Visual Studio 2022 / GCC / Clang
-**Supported Platforms**: Windows, macOS, Linux
+**Last Updated**: 2026-01-08
+**Build System**: CMake 3.21+ with MSVC / GCC / Clang
+**Primary Platform**: Windows with Intel MKL + Intel OpenMP
+**Supported Platforms**: Windows (primary), macOS, Linux
 **Supported Python**: 3.8, 3.9, 3.10, 3.11, 3.12
+**C++ Standard**: C++17 (required for ExaFMM-t inline variables)

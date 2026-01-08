@@ -3416,21 +3416,45 @@ static PyObject* radia_CndFld(PyObject* self, PyObject* args)
 		if(sFldType[0] == 'b' || sFldType[0] == 'B')
 		{
 			g_pyParse.ProcRes(RadCndFldB(Fld_real, Fld_imag, cond, arPoint));
+			// Return list of 3 complex numbers
+			oRes = PyList_New(3);
+			for(int i = 0; i < 3; i++)
+			{
+				PyList_SetItem(oRes, i, PyComplex_FromDoubles(Fld_real[i], Fld_imag[i]));
+			}
 		}
 		else if(sFldType[0] == 'e' || sFldType[0] == 'E')
 		{
 			g_pyParse.ProcRes(RadCndFldE(Fld_real, Fld_imag, cond, arPoint));
+			// Return list of 3 complex numbers
+			oRes = PyList_New(3);
+			for(int i = 0; i < 3; i++)
+			{
+				PyList_SetItem(oRes, i, PyComplex_FromDoubles(Fld_real[i], Fld_imag[i]));
+			}
+		}
+		else if(sFldType[0] == 'a' || sFldType[0] == 'A')
+		{
+			g_pyParse.ProcRes(RadCndFldA(Fld_real, Fld_imag, cond, arPoint));
+			// Return list of 3 complex numbers (Ax, Ay, Az)
+			oRes = PyList_New(3);
+			for(int i = 0; i < 3; i++)
+			{
+				PyList_SetItem(oRes, i, PyComplex_FromDoubles(Fld_real[i], Fld_imag[i]));
+			}
+		}
+		else if((sFldType[0] == 'p' || sFldType[0] == 'P') &&
+		        (sFldType[1] == 'h' || sFldType[1] == 'H'))
+		{
+			// 'phi' or 'Phi' - scalar potential
+			double Phi_real, Phi_imag;
+			g_pyParse.ProcRes(RadCndFldPhi(&Phi_real, &Phi_imag, cond, arPoint));
+			// Return single complex number
+			oRes = PyComplex_FromDoubles(Phi_real, Phi_imag);
 		}
 		else
 		{
-			throw CombErStr(strEr_BadFuncArg, ": CndFld, field type must be 'b' or 'e'");
-		}
-
-		// Return list of 3 complex numbers
-		oRes = PyList_New(3);
-		for(int i = 0; i < 3; i++)
-		{
-			PyList_SetItem(oRes, i, PyComplex_FromDoubles(Fld_real[i], Fld_imag[i]));
+			throw CombErStr(strEr_BadFuncArg, ": CndFld, field type must be 'b', 'e', 'a', or 'phi'");
 		}
 	}
 	catch(const char* erText)
@@ -3486,6 +3510,86 @@ static PyObject* radia_MatSIBC(PyObject* self, PyObject* args)
 		PyErr_SetString(PyExc_RuntimeError, erText);
 	}
 	return oResInd;
+}
+
+/************************************************************************//**
+ * Enables or disables FMM acceleration for conductor field computation
+ ***************************************************************************/
+static PyObject* radia_CndFmmSetEnabled(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int enabled = 1;
+		if(!PyArg_ParseTuple(args, "i:CndFmmSetEnabled", &enabled))
+			throw CombErStr(strEr_BadFuncArg, ": CndFmmSetEnabled");
+
+		g_pyParse.ProcRes(RadCndFmmSetEnabled(enabled));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+		return NULL;
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Gets current FMM enabled status
+ ***************************************************************************/
+static PyObject* radia_CndFmmGetEnabled(PyObject* self, PyObject* /*args*/)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int enabled = 0;
+		g_pyParse.ProcRes(RadCndFmmGetEnabled(&enabled));
+		oRes = Py_BuildValue("i", enabled);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Sets FMM parameters
+ ***************************************************************************/
+static PyObject* radia_CndFmmSetParameters(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int p = 6, ncrit = 64, threshold = 500;
+		if(!PyArg_ParseTuple(args, "|iii:CndFmmSetParameters", &p, &ncrit, &threshold))
+			throw CombErStr(strEr_BadFuncArg, ": CndFmmSetParameters");
+
+		g_pyParse.ProcRes(RadCndFmmSetParameters(p, ncrit, threshold));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+		return NULL;
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Gets current FMM parameters
+ ***************************************************************************/
+static PyObject* radia_CndFmmGetParameters(PyObject* self, PyObject* /*args*/)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int p = 0, ncrit = 0, threshold = 0;
+		g_pyParse.ProcRes(RadCndFmmGetParameters(&p, &ncrit, &threshold));
+		oRes = Py_BuildValue("(iii)", p, ncrit, threshold);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
 }
 
 //=========================================================================
@@ -4491,6 +4595,12 @@ static PyMethodDef radia_methods[] = {
 	{"CndFld", radia_CndFld, METH_VARARGS, "CndFld(cond,'b'|'e'|'a',[x,y,z]) computes field from conductor at point. Returns complex [Fx,Fy,Fz] for AC field."},
 	{"CndNumPanels", radia_CndNumPanels, METH_VARARGS, "CndNumPanels(cond) returns the number of panels in the conductor discretization."},
 	{"MatSIBC", radia_MatSIBC, METH_VARARGS, "MatSIBC(sigma,mu_r) creates a Surface Impedance Boundary Condition material. sigma: conductivity [S/m], mu_r: relative permeability. For high-conductivity regions in magnetic materials."},
+
+	// FMM (Fast Multipole Method) acceleration functions
+	{"CndFmmSetEnabled", radia_CndFmmSetEnabled, METH_VARARGS, "CndFmmSetEnabled(enabled) enables (1) or disables (0) FMM acceleration for conductor field computation."},
+	{"CndFmmGetEnabled", radia_CndFmmGetEnabled, METH_NOARGS, "CndFmmGetEnabled() returns current FMM enabled status (1=enabled, 0=disabled)."},
+	{"CndFmmSetParameters", radia_CndFmmSetParameters, METH_VARARGS, "CndFmmSetParameters(p,ncrit,threshold) sets FMM parameters: p=expansion order (default 6), ncrit=particles per leaf (default 64), threshold=min problem size for FMM (default 500)."},
+	{"CndFmmGetParameters", radia_CndFmmGetParameters, METH_NOARGS, "CndFmmGetParameters() returns tuple (p, ncrit, threshold) of current FMM parameters."},
 
 	{NULL, NULL}
 };

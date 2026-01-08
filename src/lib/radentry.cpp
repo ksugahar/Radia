@@ -1809,7 +1809,12 @@ void CndGetImpedance(double* Z_real, double* Z_imag, int cond);
 void CndImpedanceSweep(double* Z_real, double* Z_imag, int cond, double* freqs, int nfreq);
 void CndFldB(double* B_real, double* B_imag, int cond, double* point);
 void CndFldE(double* E_real, double* E_imag, int cond, double* point);
+void CndFldA(double* A_real, double* A_imag, int cond, double* point);
+void CndFldPhi(double* Phi_real, double* Phi_imag, int cond, double* point);
 void CndFldBBatch(double* B_real, double* B_imag, int cond, double* points, int npts);
+void CndFldEBatch(double* E_real, double* E_imag, int cond, double* points, int npts);
+void CndFldABatch(double* A_real, double* A_imag, int cond, double* points, int npts);
+void CndFldPhiBatch(double* Phi_real, double* Phi_imag, int cond, double* points, int npts);
 void CndGetSurfaceCurrent(double* K_real, double* K_imag, int* npanels, int cond);
 void CndGetSurfaceCharge(double* sigma_real, double* sigma_imag, int* npanels, int cond);
 void CndNumPanels(int* npanels, int cond);
@@ -1818,6 +1823,10 @@ void CoupledSolve(int cond_cnt, int mag_cnt, double precision, int max_iter);
 void MatSIBC(double sigma, double mu_r);
 void SIBCSetType(int mat, const char* sibc_type);
 void SIBCSetCrossSection(int mat, const char* shape, double* params, int nparams);
+void CndFmmSetEnabled(int enabled);
+void CndFmmGetEnabled(int* enabled);
+void CndFmmSetParameters(int p, int ncrit, int threshold);
+void CndFmmGetParameters(int* p, int* ncrit, int* threshold);
 
 //-------------------------------------------------------------------------
 
@@ -1996,10 +2005,53 @@ int CALL RadCndFldE(double* E_real, double* E_imag, int cond, double* point)
 
 //-------------------------------------------------------------------------
 
+int CALL RadCndFldA(double* A_real, double* A_imag, int cond, double* point)
+{
+	CndFldA(A_real, A_imag, cond, point);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFldPhi(double* Phi_real, double* Phi_imag, int cond, double* point)
+{
+	CndFldPhi(Phi_real, Phi_imag, cond, point);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
 int CALL RadCndFldBBatch(double* B_real, double* B_imag, int cond,
                           double* points, int npts)
 {
 	CndFldBBatch(B_real, B_imag, cond, points, npts);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFldEBatch(double* E_real, double* E_imag, int cond,
+                          double* points, int npts)
+{
+	CndFldEBatch(E_real, E_imag, cond, points, npts);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFldABatch(double* A_real, double* A_imag, int cond,
+                          double* points, int npts)
+{
+	CndFldABatch(A_real, A_imag, cond, points, npts);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFldPhiBatch(double* Phi_real, double* Phi_imag, int cond,
+                            double* points, int npts)
+{
+	CndFldPhiBatch(Phi_real, Phi_imag, cond, points, npts);
 	return ioBuffer.OutErrorStatus();
 }
 
@@ -2065,6 +2117,38 @@ int CALL RadSIBCSetType(int mat, const char* sibc_type)
 int CALL RadSIBCSetCrossSection(int mat, const char* shape, double* params, int nparams)
 {
 	SIBCSetCrossSection(mat, shape, params, nparams);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFmmSetEnabled(int enabled)
+{
+	CndFmmSetEnabled(enabled);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFmmGetEnabled(int* enabled)
+{
+	CndFmmGetEnabled(enabled);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFmmSetParameters(int p, int ncrit, int threshold)
+{
+	CndFmmSetParameters(p, ncrit, threshold);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFmmGetParameters(int* p, int* ncrit, int* threshold)
+{
+	CndFmmGetParameters(p, ncrit, threshold);
 	return ioBuffer.OutErrorStatus();
 }
 

@@ -258,6 +258,25 @@ public:
                   std::complex<double>& Ey,
                   std::complex<double>& Ez) const;
 
+    /**
+     * @brief Compute vector potential A at a point
+     * A = mu_0/(4*pi) * integral{ K / |r - r'| } dA'
+     * @param point Evaluation point
+     * @param Ax, Ay, Az Output vector potential components [T*m]
+     */
+    void ComputeA(const TVector3d& point,
+                  std::complex<double>& Ax,
+                  std::complex<double>& Ay,
+                  std::complex<double>& Az) const;
+
+    /**
+     * @brief Compute scalar potential Phi at a point
+     * Phi = 1/(4*pi*eps_0) * integral{ sigma / |r - r'| } dA'
+     * @param point Evaluation point
+     * @return Scalar electric potential [V]
+     */
+    std::complex<double> ComputePhi(const TVector3d& point) const;
+
     // ========== Port definition (for impedance calculation) ==========
 
     /**

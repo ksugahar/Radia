@@ -1449,7 +1449,31 @@ EXP int CALL RadCndFldB(double* B_real, double* B_imag, int cond, double* point)
 */
 EXP int CALL RadCndFldE(double* E_real, double* E_imag, int cond, double* point);
 
-/** Batch computation of B field from conductor at multiple points.
+/** Computes vector potential A from conductor at a point.
+Vector potential A is computed from surface current K using:
+  A = mu_0/(4*pi) * integral{ K / |r - r'| } dA'
+Uses Lorenz gauge.
+@param A_real [out] real part of A [Ax, Ay, Az] in T*m
+@param A_imag [out] imaginary part of A [Ax, Ay, Az]
+@param cond [in] conductor reference number
+@param point [in] evaluation point [x, y, z]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFldA(double* A_real, double* A_imag, int cond, double* point);
+
+/** Computes scalar potential Phi from conductor at a point.
+Scalar potential Phi is computed from surface charge sigma using:
+  Phi = 1/(4*pi*eps_0) * integral{ sigma / |r - r'| } dA'
+Uses Lorenz gauge.
+@param Phi_real [out] real part of Phi in Volts
+@param Phi_imag [out] imaginary part of Phi
+@param cond [in] conductor reference number
+@param point [in] evaluation point [x, y, z]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFldPhi(double* Phi_real, double* Phi_imag, int cond, double* point);
+
+/** Batch computation of B field from conductor at multiple points (OpenMP parallelized).
 @param B_real [out] real parts of B fields (npts * 3)
 @param B_imag [out] imaginary parts of B fields (npts * 3)
 @param cond [in] conductor reference number
@@ -1459,6 +1483,39 @@ EXP int CALL RadCndFldE(double* E_real, double* E_imag, int cond, double* point)
 */
 EXP int CALL RadCndFldBBatch(double* B_real, double* B_imag, int cond,
                               double* points, int npts);
+
+/** Batch computation of E field from conductor at multiple points (OpenMP parallelized).
+@param E_real [out] real parts of E fields (npts * 3)
+@param E_imag [out] imaginary parts of E fields (npts * 3)
+@param cond [in] conductor reference number
+@param points [in] evaluation points (npts * 3)
+@param npts [in] number of evaluation points
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFldEBatch(double* E_real, double* E_imag, int cond,
+                              double* points, int npts);
+
+/** Batch computation of vector potential A from conductor at multiple points (OpenMP parallelized).
+@param A_real [out] real parts of A (npts * 3) in T*m
+@param A_imag [out] imaginary parts of A (npts * 3)
+@param cond [in] conductor reference number
+@param points [in] evaluation points (npts * 3)
+@param npts [in] number of evaluation points
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFldABatch(double* A_real, double* A_imag, int cond,
+                              double* points, int npts);
+
+/** Batch computation of scalar potential Phi from conductor at multiple points (OpenMP parallelized).
+@param Phi_real [out] real parts of Phi (npts) in Volts
+@param Phi_imag [out] imaginary parts of Phi (npts)
+@param cond [in] conductor reference number
+@param points [in] evaluation points (npts * 3)
+@param npts [in] number of evaluation points
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFldPhiBatch(double* Phi_real, double* Phi_imag, int cond,
+                                double* points, int npts);
 
 /** Gets surface current density K from solved conductor.
 @param K_real [out] real parts of K vectors (npanels * 3)
@@ -1533,6 +1590,38 @@ EXP int CALL RadSIBCSetType(int mat, const char* sibc_type);
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 */
 EXP int CALL RadSIBCSetCrossSection(int mat, const char* shape, double* params, int nparams);
+
+//=========================================================================
+// FMM (Fast Multipole Method) Acceleration API
+//=========================================================================
+
+/** Enables or disables FMM acceleration for conductor field computation.
+@param enabled [in] 1 to enable, 0 to disable
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFmmSetEnabled(int enabled);
+
+/** Gets current FMM enabled status.
+@param enabled [out] 1 if enabled, 0 if disabled
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFmmGetEnabled(int* enabled);
+
+/** Sets FMM parameters.
+@param p [in] expansion order (accuracy, default 6)
+@param ncrit [in] particles per leaf node (default 64)
+@param threshold [in] minimum problem size to use FMM (default 500)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFmmSetParameters(int p, int ncrit, int threshold);
+
+/** Gets current FMM parameters.
+@param p [out] expansion order
+@param ncrit [out] particles per leaf node
+@param threshold [out] minimum problem size for FMM
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFmmGetParameters(int* p, int* ncrit, int* threshold);
 
 #ifdef __cplusplus
 }
