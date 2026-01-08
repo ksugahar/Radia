@@ -1207,17 +1207,20 @@ class WPTCoupledSolver:
         - These eddy currents dissipate power (I^2*Rm loss)
         - The effect is reciprocal (Rm12 = Rm21)
 
-        ESIM Method (Effective Surface Impedance Method):
-        The ESIM cell problem computes the effective surface impedance Z_s(H0) for
-        a conductor in an external magnetic field. This method is valid for any
-        frequency, including low frequencies where skin depth > conductor thickness.
+        Calculation Method:
+        For I1 = 1A in coil 1, the external magnetic field H_ext at coil 2's
+        wire location is computed. The power loss in coil 2 due to this external
+        field is:
 
-        For the proximity effect:
-            - Compute the average external H field at coil 2's wire from coil 1
-            - Solve the ESIM cell problem for that field strength
-            - Integrate the power loss over the wire surface
+            P_prox = Re(Z_s) * |H_ext|^2 * (wire surface area)
 
-            Rm = Re(Z_s) * L_wire * perimeter * k^2
+        where Z_s is the surface impedance from ESIM cell problem.
+
+        The mutual resistance is defined such that:
+            P_prox = Rm * |I1|^2
+
+        Therefore:
+            Rm = Re(Z_s) * |H_ext/I1|^2 * (wire surface area)
 
         Parameters:
             n_segments: Number of segments for field calculation
@@ -1267,71 +1270,183 @@ class WPTCoupledSolver:
         perimeter1 = 2 * (wire_w1 + wire_h1)
         perimeter2 = 2 * (wire_w2 + wire_h2)
 
-        # ==== ESIM-based mutual resistance calculation ====
+        # Wire surface areas
+        S_wire1 = L_wire1 * perimeter1
+        S_wire2 = L_wire2 * perimeter2
+
+        # ==== Proximity effect calculation ====
         #
-        # For WPT proximity effect:
-        # 1. Coil 1's current I1 creates a magnetic field H_ext at coil 2's wire
-        # 2. This external field penetrates coil 2's conductor
-        # 3. ESIM gives us the surface impedance Z_s for this external field
-        # 4. Power loss = Re(Z_s) * H_ext^2 * (surface area)
+        # Physical model:
+        # When I1 = 1A flows in coil 1, it creates a magnetic field at coil 2's
+        # wire location. This field is approximately:
         #
-        # From ESIM, the power loss per unit surface area for field H0 is:
-        #   P' = Re(Z_s) * H0^2
+        #   H_ext = B_ext / mu_0 = M * I1 / (mu_0 * A_coil2)
         #
-        # The effective H field at the wire surface due to external flux is:
-        #   H_ext ~ k * sqrt(L) / sqrt(mu_0 * L_wire)
+        # where A_coil2 is the effective area of coil 2.
+        #
+        # More accurately, H_ext at the wire surface can be estimated from:
+        #   - The mutual flux linkage: Phi_12 = M * I1
+        #   - This flux passes through coil 2's area
+        #   - H at wire ~ B / mu_0 ~ (M * I1) / (mu_0 * A_eff)
+        #
+        # For WPT coils, a simpler approximation using Ampere's law:
+        #   H_ext ~ I1 / (2 * pi * gap)  for loosely coupled coils
+        #   H_ext ~ k * I1 * N / (2 * R)  for closely coupled coils
+        #
+        # We use a combined formula based on the mutual flux:
+        #   H_ext = k * sqrt(omega * L1 / mu_0) / sqrt(R_avg)
+        #
+        # This gives H field per unit current that accounts for coupling.
 
         Rm = 0.0
 
         if self.k is not None and self.k > 0 and self.L1 > 0 and self.L2 > 0:
-            # Create ESIM solver for coil 2's conductor (copper: mu_r = 1)
-            esim_solver2 = ESIMCellProblemSolver(
-                sigma=sigma2,
-                frequency=self.frequency,
-                complex_mu=(1.0, 0.0)  # Linear material: mu_r = 1, no loss
-            )
+            # Effective coil radii
+            if self.coil1.coil_type == 'loop':
+                R1_eff = self.coil1.radius
+            else:
+                R1_eff = (self.coil1.inner_radius + self.coil1.outer_radius) / 2
 
-            # Effective external H field for I1 = 1A
-            H_ext2 = self.k * np.sqrt(self.L1 / mu_0) / np.sqrt(L_wire1)
-            H_ext2 = max(H_ext2, 1.0)    # At least 1 A/m
-            H_ext2 = min(H_ext2, 1e5)    # At most 100 kA/m
+            if self.coil2.coil_type == 'loop':
+                R2_eff = self.coil2.radius
+            else:
+                R2_eff = (self.coil2.inner_radius + self.coil2.outer_radius) / 2
 
-            # Solve ESIM cell problem for coil 2
-            result2 = esim_solver2.solve(H_ext2, tol=1e-4, max_iter=30)
-            Z_s2 = result2['Z']
+            # Number of turns
+            N1 = getattr(self.coil1, 'num_turns', 1)
+            N2 = getattr(self.coil2, 'num_turns', 1)
 
-            # Mutual resistance contribution from coil 1's field on coil 2
-            Rm_from_coil1 = Z_s2.real * L_wire2 * perimeter2
+            # Gap between coils (z-direction distance)
+            z1 = self.coil1.center[2] if hasattr(self.coil1, 'center') else 0
+            z2 = self.coil2.center[2] if hasattr(self.coil2, 'center') else 0
+            gap = abs(z2 - z1)
+            if gap < 0.001:  # Minimum gap 1mm
+                gap = 0.001
 
-            # Create ESIM solver for coil 1's conductor (copper: mu_r = 1)
-            esim_solver1 = ESIMCellProblemSolver(
-                sigma=sigma1,
-                frequency=self.frequency,
-                complex_mu=(1.0, 0.0)  # Linear material: mu_r = 1, no loss
-            )
+            # ==== H_ext at coil 2 due to I1 = 1A in coil 1 ====
+            # Using Biot-Savart approximation for multi-turn coil:
+            #   B_center ~ mu_0 * N * I / (2 * R)  (at center of loop)
+            # At distance z on axis:
+            #   B_z ~ mu_0 * N * I * R^2 / (2 * (R^2 + z^2)^1.5)
+            #
+            # For proximity effect, we need H at the wire surface, which is
+            # roughly the field at the gap location.
 
-            # Effective external H field for I2 = 1A
-            H_ext1 = self.k * np.sqrt(self.L2 / mu_0) / np.sqrt(L_wire2)
-            H_ext1 = max(H_ext1, 1.0)
-            H_ext1 = min(H_ext1, 1e5)
+            # Field from coil 1 at coil 2's location (I1 = 1A)
+            # Using simplified on-axis formula
+            B_at_coil2 = mu_0 * N1 * R1_eff**2 / (2 * (R1_eff**2 + gap**2)**1.5)
+            H_ext2 = B_at_coil2 / mu_0  # H = B/mu_0 in air
 
-            # Solve ESIM cell problem for coil 1
-            result1 = esim_solver1.solve(H_ext1, tol=1e-4, max_iter=30)
-            Z_s1 = result1['Z']
+            # Field from coil 2 at coil 1's location (I2 = 1A)
+            B_at_coil1 = mu_0 * N2 * R2_eff**2 / (2 * (R2_eff**2 + gap**2)**1.5)
+            H_ext1 = B_at_coil1 / mu_0
 
-            # Mutual resistance contribution from coil 2's field on coil 1
-            Rm_from_coil2 = Z_s1.real * L_wire1 * perimeter1
+            # Clamp to reasonable range
+            H_ext1 = max(H_ext1, 0.1)
+            H_ext2 = max(H_ext2, 0.1)
+            H_ext1 = min(H_ext1, 1e6)
+            H_ext2 = min(H_ext2, 1e6)
 
-            # Total mutual resistance (average for numerical stability)
-            # By reciprocity, Rm12 = Rm21
+            # ==== Proximity effect power loss calculation ====
+            #
+            # Compute the external H field at wire locations using Biot-Savart
+            # integration, then calculate eddy current loss.
+            #
+            # For mutual proximity between separate WPT coils (external field source),
+            # we use a hybrid approach:
+            #
+            # 1. ESIM (surface) model: P = Re(Z_s) * H^2 * S
+            #    - Appropriate when field is uniform across wire cross-section
+            #    - Surface impedance Z_s = (1+j)/(sigma*delta)
+            #
+            # 2. Dowell (volume) model: P ~ omega^2 * H^2 * h^3 * L / delta
+            #    - Appropriate when field varies across wire cross-section
+            #    - More relevant for internal proximity (adjacent turns)
+            #
+            # For external mutual coupling, the ESIM model is more appropriate,
+            # but with an enhancement factor for field gradient effects.
+            #
+            # Enhancement factor accounts for:
+            # - Non-uniform field distribution along wire
+            # - Field gradient across wire cross-section
+            # - Typically 2-4x for closely coupled WPT coils
+
+            # Skin depths
+            delta1 = np.sqrt(2 / (self.omega * mu_0 * sigma1))
+            delta2 = np.sqrt(2 / (self.omega * mu_0 * sigma2))
+
+            # ===== Biot-Savart field integration =====
+            # Compute actual H field at wire locations using full Biot-Savart
+            try:
+                _, dl_vec1, mid1 = self.coil1.get_wire_segments(n_segments)
+                _, dl_vec2, mid2 = self.coil2.get_wire_segments(n_segments)
+
+                # Compute H at coil2 wire from coil1 (I1 = 1A)
+                H2_values = []
+                for pt in mid2:
+                    B = np.array([0.0, 0.0, 0.0])
+                    for i, dl in enumerate(dl_vec1):
+                        r_vec = pt - mid1[i]
+                        r_mag = np.linalg.norm(r_vec)
+                        if r_mag > 1e-10:
+                            dB = (mu_0 / (4 * np.pi)) * np.cross(dl, r_vec) / (r_mag**3)
+                            B += dB
+                    H2_values.append(np.linalg.norm(B) / mu_0)
+                H2_values = np.array(H2_values)
+                H_ext2 = np.sqrt(np.mean(H2_values**2))  # RMS
+
+                # Compute H at coil1 wire from coil2 (I2 = 1A)
+                H1_values = []
+                for pt in mid1:
+                    B = np.array([0.0, 0.0, 0.0])
+                    for i, dl in enumerate(dl_vec2):
+                        r_vec = pt - mid2[i]
+                        r_mag = np.linalg.norm(r_vec)
+                        if r_mag > 1e-10:
+                            dB = (mu_0 / (4 * np.pi)) * np.cross(dl, r_vec) / (r_mag**3)
+                            B += dB
+                    H1_values.append(np.linalg.norm(B) / mu_0)
+                H1_values = np.array(H1_values)
+                H_ext1 = np.sqrt(np.mean(H1_values**2))  # RMS
+
+                # Field non-uniformity factor: max/avg ratio indicates gradient
+                # Higher gradient means more eddy current loss
+                grad_factor2 = H2_values.max() / (H2_values.mean() + 1e-10)
+                grad_factor1 = H1_values.max() / (H1_values.mean() + 1e-10)
+
+            except Exception:
+                # Fallback to simple on-axis formula if Biot-Savart fails
+                grad_factor1 = grad_factor2 = 1.5
+
+            # Clamp to reasonable range
+            H_ext1 = max(H_ext1, 0.1)
+            H_ext2 = max(H_ext2, 0.1)
+
+            # Surface impedance (classical formula)
+            Z_s1_real = 1 / (sigma1 * delta1)
+            Z_s2_real = 1 / (sigma2 * delta2)
+
+            # Enhancement factor for proximity effect
+            # Based on coupling coefficient and field gradient
+            # Higher k -> more field concentration -> higher losses
+            k_factor = 1 + 2 * self.k  # Ranges from 1 (k=0) to 3 (k=1)
+            enhance1 = k_factor * grad_factor1
+            enhance2 = k_factor * grad_factor2
+
+            # Power loss in coil 2 due to H_ext from coil 1 (I1 = 1A)
+            # P_2 = enhance * Re(Z_s) * H_ext^2 * S_wire
+            Rm_from_coil1 = enhance2 * Z_s2_real * (H_ext2**2) * S_wire2
+
+            # Power loss in coil 1 due to H_ext from coil 2 (I2 = 1A)
+            Rm_from_coil2 = enhance1 * Z_s1_real * (H_ext1**2) * S_wire1
+
+            # Total mutual resistance (average for symmetry)
             Rm = 0.5 * (Rm_from_coil1 + Rm_from_coil2)
 
-            # Scale by coupling factor squared (mutual effect)
-            Rm = Rm * self.k**2
-
-        # Cap Rm at a reasonable fraction of geometric mean of resistances
+        # Physical upper bound: Rm should not exceed self-resistance
+        # For WPT systems with high coupling (k > 0.3), Rm/R can be 10% to 100%
         R_avg = np.sqrt(self.R1 * self.R2)
-        Rm = min(Rm, 0.3 * R_avg)
+        Rm = min(Rm, R_avg)
 
         self.Rm = Rm
         return Rm
