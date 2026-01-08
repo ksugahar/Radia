@@ -70,10 +70,12 @@ class BHCurveInterpolator:
             self.H_data = np.insert(self.H_data, 0, 0)
             self.B_data = np.insert(self.B_data, 0, 0)
 
-        # Create B(H) interpolator with cubic spline
+        # Create B(H) interpolator
+        # Use cubic if enough points, otherwise linear
+        interp_kind = 'cubic' if len(self.H_data) >= 4 else 'linear'
         self._B_interp = interp1d(
             self.H_data, self.B_data,
-            kind='cubic',
+            kind=interp_kind,
             fill_value='extrapolate',
             bounds_error=False
         )
@@ -141,6 +143,199 @@ class BHCurveInterpolator:
         return (B2 - B1) / dH
 
 
+class ComplexPermeabilityInterpolator:
+    """
+    Interpolator for complex permeability mu = mu' - j*mu".
+
+    This class handles materials with magnetic losses where the permeability
+    is complex: mu = mu' - j*mu"
+    - mu' (real part): Energy storage (reactive)
+    - mu" (imaginary part): Energy loss (hysteresis, eddy current in grains, etc.)
+
+    The loss tangent is defined as: tan(delta_m) = mu" / mu'
+
+    Complex permeability affects:
+    1. Skin depth: delta = sqrt(2*rho / (omega * |mu|))
+    2. Surface impedance: Z_s = sqrt(j*omega*mu / sigma)
+    3. Power loss: Both ohmic (J^2/sigma) and magnetic (omega*mu"*H^2)
+    """
+
+    def __init__(self, mu_data, frequency=None):
+        """
+        Initialize complex permeability interpolator.
+
+        Parameters:
+            mu_data: Permeability data in one of these formats:
+                Format 1: [[H, mu'_r, mu"_r], ...] - H-dependent complex permeability
+                Format 2: [[f, mu'_r, mu"_r], ...] - Frequency-dependent (for linear materials)
+                Format 3: (mu'_r, mu"_r) - Constant complex permeability
+                Format 4: dict with 'mu_prime' and 'mu_double_prime' arrays
+
+            frequency: Operating frequency [Hz] (required for Format 2)
+
+        Units:
+            - H in A/m
+            - f in Hz
+            - mu'_r, mu"_r are relative (dimensionless)
+        """
+        self.frequency = frequency
+
+        if isinstance(mu_data, tuple) and len(mu_data) == 2:
+            # Format 3: Constant permeability (mu'_r, mu"_r)
+            self.mode = 'constant'
+            self.mu_prime_r = float(mu_data[0])
+            self.mu_double_prime_r = float(mu_data[1])
+            self.mu_initial = mu_0 * complex(self.mu_prime_r, -self.mu_double_prime_r)
+
+        elif isinstance(mu_data, dict):
+            # Format 4: Dictionary with arrays
+            self.mode = 'H_dependent'
+            self._setup_H_dependent(
+                mu_data.get('H', np.array([0, 1e6])),
+                mu_data.get('mu_prime', np.array([1000, 100])),
+                mu_data.get('mu_double_prime', np.array([100, 10]))
+            )
+
+        elif isinstance(mu_data, (list, np.ndarray)):
+            mu_array = np.array(mu_data)
+
+            if mu_array.shape[1] == 3:
+                # Format 1 or 2: [x, mu'_r, mu"_r]
+                # Assume H-dependent if first column spans typical H range
+                x_data = mu_array[:, 0]
+                if x_data[-1] > 1e4:  # Likely H values (A/m)
+                    self.mode = 'H_dependent'
+                    self._setup_H_dependent(x_data, mu_array[:, 1], mu_array[:, 2])
+                else:  # Likely frequency values (Hz)
+                    self.mode = 'f_dependent'
+                    self._setup_f_dependent(x_data, mu_array[:, 1], mu_array[:, 2])
+            else:
+                raise ValueError("mu_data must have 3 columns: [x, mu'_r, mu\"_r]")
+        else:
+            raise ValueError("Invalid mu_data format")
+
+    def _setup_H_dependent(self, H_data, mu_prime_r, mu_double_prime_r):
+        """Setup H-dependent permeability interpolation."""
+        self.H_data = np.array(H_data)
+        self.mu_prime_r_data = np.array(mu_prime_r)
+        self.mu_double_prime_r_data = np.array(mu_double_prime_r)
+
+        # Ensure data starts from H=0
+        if self.H_data[0] != 0:
+            self.H_data = np.insert(self.H_data, 0, 0)
+            self.mu_prime_r_data = np.insert(self.mu_prime_r_data, 0, self.mu_prime_r_data[0])
+            self.mu_double_prime_r_data = np.insert(self.mu_double_prime_r_data, 0, self.mu_double_prime_r_data[0])
+
+        # Create interpolators
+        self._mu_prime_interp = interp1d(
+            self.H_data, self.mu_prime_r_data,
+            kind='linear', fill_value='extrapolate', bounds_error=False
+        )
+        self._mu_double_prime_interp = interp1d(
+            self.H_data, self.mu_double_prime_r_data,
+            kind='linear', fill_value='extrapolate', bounds_error=False
+        )
+
+        # Initial permeability at H=0
+        self.mu_initial = mu_0 * complex(self.mu_prime_r_data[0], -self.mu_double_prime_r_data[0])
+
+    def _setup_f_dependent(self, f_data, mu_prime_r, mu_double_prime_r):
+        """Setup frequency-dependent permeability interpolation."""
+        self.f_data = np.array(f_data)
+        self.mu_prime_r_f_data = np.array(mu_prime_r)
+        self.mu_double_prime_r_f_data = np.array(mu_double_prime_r)
+
+        # Use log-frequency interpolation
+        self._mu_prime_f_interp = interp1d(
+            np.log10(self.f_data + 1), self.mu_prime_r_f_data,
+            kind='linear', fill_value='extrapolate', bounds_error=False
+        )
+        self._mu_double_prime_f_interp = interp1d(
+            np.log10(self.f_data + 1), self.mu_double_prime_r_f_data,
+            kind='linear', fill_value='extrapolate', bounds_error=False
+        )
+
+        # Initial permeability at given frequency
+        if self.frequency is not None:
+            mu_p = float(self._mu_prime_f_interp(np.log10(self.frequency + 1)))
+            mu_pp = float(self._mu_double_prime_f_interp(np.log10(self.frequency + 1)))
+            self.mu_initial = mu_0 * complex(mu_p, -mu_pp)
+        else:
+            self.mu_initial = mu_0 * complex(self.mu_prime_r_f_data[0], -self.mu_double_prime_r_f_data[0])
+
+    def mu(self, H_abs):
+        """
+        Get complex permeability mu = mu' - j*mu" for given |H|.
+
+        Parameters:
+            H_abs: Absolute value of magnetic field [A/m]
+
+        Returns:
+            mu: Complex permeability [H/m]
+        """
+        if self.mode == 'constant':
+            return mu_0 * complex(self.mu_prime_r, -self.mu_double_prime_r)
+
+        elif self.mode == 'H_dependent':
+            mu_p = float(self._mu_prime_interp(H_abs))
+            mu_pp = float(self._mu_double_prime_interp(H_abs))
+            return mu_0 * complex(mu_p, -mu_pp)
+
+        elif self.mode == 'f_dependent':
+            if self.frequency is None:
+                raise ValueError("Frequency must be set for f-dependent permeability")
+            mu_p = float(self._mu_prime_f_interp(np.log10(self.frequency + 1)))
+            mu_pp = float(self._mu_double_prime_f_interp(np.log10(self.frequency + 1)))
+            return mu_0 * complex(mu_p, -mu_pp)
+
+    def mu_r(self, H_abs):
+        """
+        Get complex relative permeability mu_r = mu/mu_0.
+
+        Parameters:
+            H_abs: Absolute value of magnetic field [A/m]
+
+        Returns:
+            mu_r: Complex relative permeability (dimensionless)
+        """
+        return self.mu(H_abs) / mu_0
+
+    def mu_prime(self, H_abs):
+        """Get real part of permeability mu' [H/m]."""
+        return self.mu(H_abs).real
+
+    def mu_double_prime(self, H_abs):
+        """Get imaginary part magnitude |mu"| [H/m] (returned as positive value)."""
+        return abs(self.mu(H_abs).imag)
+
+    def loss_tangent(self, H_abs):
+        """
+        Get magnetic loss tangent tan(delta_m) = mu" / mu'.
+
+        Parameters:
+            H_abs: Absolute value of magnetic field [A/m]
+
+        Returns:
+            tan_delta: Magnetic loss tangent (dimensionless)
+        """
+        mu_complex = self.mu(H_abs)
+        mu_p = mu_complex.real
+        mu_pp = abs(mu_complex.imag)
+
+        if abs(mu_p) < 1e-20:
+            return 0.0
+
+        return mu_pp / mu_p
+
+    def set_frequency(self, frequency):
+        """Set operating frequency [Hz]."""
+        self.frequency = frequency
+        if self.mode == 'f_dependent':
+            mu_p = float(self._mu_prime_f_interp(np.log10(frequency + 1)))
+            mu_pp = float(self._mu_double_prime_f_interp(np.log10(frequency + 1)))
+            self.mu_initial = mu_0 * complex(mu_p, -mu_pp)
+
+
 class ESIMCellProblemSolver:
     """
     Solves the 1D Cell Problem for ESIM using finite differences.
@@ -151,25 +346,36 @@ class ESIMCellProblemSolver:
 
     This implementation uses a finite difference method with geometric mesh
     grading for accuracy near the surface, where field gradients are largest.
+
+    Supports both real and complex permeability:
+    - Real mu: From BH curve (nonlinear saturation)
+    - Complex mu = mu' - j*mu": Includes magnetic losses (hysteresis, etc.)
     """
 
-    def __init__(self, bh_curve, sigma, frequency,
-                 num_skin_depths=10, n_nodes=100):
+    def __init__(self, bh_curve=None, sigma=None, frequency=None,
+                 num_skin_depths=10, n_nodes=100, complex_mu=None):
         """
         Initialize the Cell Problem solver.
 
         Parameters:
             bh_curve: BH curve data as [[H1, B1], [H2, B2], ...]
-                      H in A/m, B in Tesla
+                      H in A/m, B in Tesla (for real permeability)
             sigma: Electrical conductivity [S/m]
             frequency: Operating frequency [Hz]
             num_skin_depths: Domain depth in skin depths (default: 10)
             n_nodes: Number of mesh nodes (default: 100)
+            complex_mu: Complex permeability data (alternative to bh_curve)
+                       Can be:
+                       - (mu'_r, mu"_r) tuple for constant complex permeability
+                       - [[H, mu'_r, mu"_r], ...] for H-dependent complex permeability
+                       - dict with 'H', 'mu_prime', 'mu_double_prime' arrays
         """
         if not SCIPY_AVAILABLE:
             raise ImportError("Scipy is required for ESIM Cell Problem solver")
 
-        self.bh_interp = BHCurveInterpolator(bh_curve)
+        if sigma is None or frequency is None:
+            raise ValueError("sigma and frequency are required parameters")
+
         self.sigma = sigma
         self.frequency = frequency
         self.omega = 2 * np.pi * frequency
@@ -178,8 +384,26 @@ class ESIMCellProblemSolver:
         self.num_skin_depths = num_skin_depths
         self.n_nodes = n_nodes
 
+        # Setup permeability model
+        self.use_complex_mu = complex_mu is not None
+
+        if self.use_complex_mu:
+            # Use complex permeability model
+            self.mu_interp = ComplexPermeabilityInterpolator(complex_mu, frequency)
+            self.bh_interp = None  # Not used
+            mu_initial = self.mu_interp.mu_initial
+        else:
+            # Use real BH curve model
+            if bh_curve is None:
+                raise ValueError("Either bh_curve or complex_mu must be provided")
+            self.bh_interp = BHCurveInterpolator(bh_curve)
+            self.mu_interp = None  # Not used
+            mu_initial = self.bh_interp.mu_initial
+
         # Estimate initial skin depth using initial permeability
-        self.delta_initial = np.sqrt(2 * self.rho / (self.omega * self.bh_interp.mu_initial))
+        # For complex mu, use |mu| for skin depth estimation
+        mu_abs = abs(mu_initial)
+        self.delta_initial = np.sqrt(2 * self.rho / (self.omega * mu_abs))
 
         # Domain length
         self.L = self.num_skin_depths * self.delta_initial
@@ -215,6 +439,28 @@ class ESIMCellProblemSolver:
         """Calculate skin depth for given permeability."""
         return np.sqrt(2 * self.rho / (self.omega * mu))
 
+    def _get_mu(self, H_abs):
+        """
+        Get permeability for given |H|, handling both real and complex mu.
+
+        Parameters:
+            H_abs: Absolute value of magnetic field [A/m]
+
+        Returns:
+            mu: Permeability [H/m] (real or complex)
+        """
+        if self.use_complex_mu:
+            return self.mu_interp.mu(H_abs)
+        else:
+            return self.bh_interp.mu(H_abs)
+
+    def _get_mu_initial(self):
+        """Get initial permeability (at H=0)."""
+        if self.use_complex_mu:
+            return self.mu_interp.mu_initial
+        else:
+            return self.bh_interp.mu_initial
+
     def solve(self, H0, tol=1e-6, max_iter=50, relaxation=0.5):
         """
         Solve the Cell Problem for given surface field H0.
@@ -224,6 +470,10 @@ class ESIMCellProblemSolver:
 
         The governing equation:
             rho * d^2H/ds^2 + j*omega*mu(|H|)*H = 0
+
+        For complex mu = mu' - j*mu":
+            rho * d^2H/ds^2 + j*omega*(mu' - j*mu")*H = 0
+            rho * d^2H/ds^2 + (j*omega*mu' + omega*mu")*H = 0
 
         Discretized using central differences:
             rho * (H_{i+1} - 2*H_i + H_{i-1}) / h^2 + j*omega*mu_i*H_i = 0
@@ -239,6 +489,7 @@ class ESIMCellProblemSolver:
                 'Z': Complex effective surface impedance [Ohm]
                 'P_prime': Active power loss per unit area [W/m^2]
                 'Q_prime': Reactive power per unit area [var/m^2]
+                'P_magnetic': Magnetic power loss per unit area [W/m^2] (for complex mu)
                 'H_solution': Array with H(s) distribution
                 'converged': True if converged
                 'iterations': Number of iterations
@@ -247,8 +498,9 @@ class ESIMCellProblemSolver:
         delta = self.delta_initial
         H = H0 * np.exp(-self.mesh_points / delta) * np.exp(-1j * self.mesh_points / delta)
 
-        # Initial permeability distribution (constant)
-        mu_dist = np.full(self.n_nodes, self.bh_interp.mu_initial)
+        # Initial permeability distribution (constant, may be complex)
+        mu_initial = self._get_mu_initial()
+        mu_dist = np.full(self.n_nodes, mu_initial, dtype=complex)
 
         converged = False
 
@@ -257,12 +509,12 @@ class ESIMCellProblemSolver:
             H_new = self._solve_linear_system(H0, mu_dist)
 
             # Update permeability based on |H| distribution
-            mu_new = np.array([self.bh_interp.mu(abs(h)) for h in H_new])
+            mu_new = np.array([self._get_mu(abs(h)) for h in H_new], dtype=complex)
 
-            # Check convergence (relative change in mu)
+            # Check convergence (relative change in |mu|)
             rel_change = np.max(np.abs(mu_new - mu_dist)) / np.max(np.abs(mu_dist))
 
-            # Under-relaxation
+            # Under-relaxation (for complex mu, apply to both real and imag parts)
             mu_dist = (1 - relaxation) * mu_dist + relaxation * mu_new
             H = H_new
 
@@ -271,23 +523,26 @@ class ESIMCellProblemSolver:
                 break
 
         # Compute power losses and impedance
-        P_prime, Q_prime = self._compute_power_losses(H, mu_dist)
+        P_prime, Q_prime, P_magnetic = self._compute_power_losses(H, mu_dist)
 
         # Effective surface impedance: Z = 2*(P' + j*Q') / |H0|^2
+        # For complex mu, P' includes both ohmic and magnetic losses
         Z = 2 * (P_prime + 1j * Q_prime) / (H0 ** 2)
 
         # Average final permeability (for reporting)
-        mu_final = np.mean(mu_dist[:10])  # Average near surface
+        mu_final = np.mean(mu_dist[:10])  # Average near surface (complex)
 
         return {
             'Z': Z,
             'P_prime': P_prime,
             'Q_prime': Q_prime,
+            'P_magnetic': P_magnetic,
             'H_solution': H,
             'mesh_points': self.mesh_points,
             'converged': converged,
             'iterations': iteration + 1,
-            'mu_final': mu_final
+            'mu_final': mu_final,
+            'use_complex_mu': self.use_complex_mu
         }
 
     def _solve_linear_system(self, H0, mu_dist):
@@ -363,24 +618,30 @@ class ESIMCellProblemSolver:
         """
         Compute specific power losses from the Cell Problem solution.
 
-        P' = (1/2) * integral{ rho * |dH/ds|^2 } ds
-             (from E = -rho * dH/ds, J = -dH/ds, P = (1/2)*Re(E*J*))
+        For real permeability:
+            P' = (1/2) * integral{ rho * |dH/ds|^2 } ds  (ohmic loss)
+            Q' = (omega/2) * integral{ mu * |H|^2 } ds   (reactive power)
 
-        Q' = (omega/2) * integral{ mu * |H|^2 } ds
-             (from reactive power in magnetic field)
+        For complex permeability mu = mu' - j*mu":
+            P_ohmic = (1/2) * integral{ rho * |dH/ds|^2 } ds
+            P_magnetic = (omega/2) * integral{ mu" * |H|^2 } ds  (magnetic loss from mu")
+            P' = P_ohmic + P_magnetic  (total active power)
+            Q' = (omega/2) * integral{ mu' * |H|^2 } ds  (reactive power from mu')
 
         Parameters:
             H: Solution array H(s)
-            mu_dist: Permeability distribution
+            mu_dist: Permeability distribution (may be complex)
 
         Returns:
-            P_prime: Active power loss per unit area [W/m^2]
+            P_prime: Total active power loss per unit area [W/m^2]
             Q_prime: Reactive power per unit area [var/m^2]
+            P_magnetic: Magnetic power loss per unit area [W/m^2] (from mu")
         """
         s = self.mesh_points
         n = self.n_nodes
 
-        P_prime = 0.0
+        P_ohmic = 0.0
+        P_magnetic = 0.0
         Q_prime = 0.0
 
         # Trapezoidal integration
@@ -394,13 +655,32 @@ class ESIMCellProblemSolver:
             H_mid = 0.5 * (H[i] + H[i + 1])
             mu_mid = 0.5 * (mu_dist[i] + mu_dist[i + 1])
 
-            # Active power: P' = (1/2) * rho * |dH/ds|^2
-            P_prime += 0.5 * self.rho * np.abs(dHds) ** 2 * ds
+            # |H|^2 at midpoint
+            H_sq = np.abs(H_mid) ** 2
 
-            # Reactive power: Q' = (omega/2) * mu * |H|^2
-            Q_prime += 0.5 * self.omega * mu_mid * np.abs(H_mid) ** 2 * ds
+            # Ohmic power loss: P_ohmic = (1/2) * rho * |dH/ds|^2
+            P_ohmic += 0.5 * self.rho * np.abs(dHds) ** 2 * ds
 
-        return float(P_prime), float(Q_prime)
+            if self.use_complex_mu:
+                # For complex mu = mu' - j*mu":
+                # mu' = Re(mu), mu" = -Im(mu) (note: mu = mu' - j*mu")
+                mu_prime = mu_mid.real
+                mu_double_prime = -mu_mid.imag  # mu" is positive
+
+                # Magnetic power loss: P_mag = (omega/2) * mu" * |H|^2
+                P_magnetic += 0.5 * self.omega * mu_double_prime * H_sq * ds
+
+                # Reactive power: Q' = (omega/2) * mu' * |H|^2
+                Q_prime += 0.5 * self.omega * mu_prime * H_sq * ds
+            else:
+                # For real mu: no magnetic loss, full mu contributes to Q'
+                # Reactive power: Q' = (omega/2) * mu * |H|^2
+                Q_prime += 0.5 * self.omega * mu_mid.real * H_sq * ds
+
+        # Total active power = ohmic + magnetic
+        P_prime = P_ohmic + P_magnetic
+
+        return float(P_prime), float(Q_prime), float(P_magnetic)
 
     def generate_esi_table(self, H0_values, tol=1e-6, max_iter=50):
         """
@@ -433,28 +713,51 @@ class ESIMCellProblemSolver:
 
         return np.array(table)
 
-    def get_linear_sibc(self, mu_r=None):
+    def get_linear_sibc(self, mu_r=None, complex_mu_r=None):
         """
         Get classical local SIBC impedance for comparison.
 
-        For linear materials: Z = (1+j) / (sigma * delta)
-        where delta = sqrt(2*rho / (omega*mu))
+        For real linear materials:
+            Z = (1+j) / (sigma * delta)
+            where delta = sqrt(2*rho / (omega*mu))
+
+        For complex permeability mu = mu' - j*mu":
+            Z = sqrt(j*omega*mu / sigma)
+            This gives both resistive and reactive components that
+            depend on the complex mu.
 
         Parameters:
-            mu_r: Relative permeability (optional, uses initial if not given)
+            mu_r: Real relative permeability (optional, uses initial if not given)
+            complex_mu_r: Complex relative permeability (mu'_r, mu"_r) tuple
 
         Returns:
             Z_local: Complex local surface impedance [Ohm]
         """
-        if mu_r is None:
-            mu = self.bh_interp.mu_initial
+        if complex_mu_r is not None:
+            # Complex permeability case
+            mu_p_r, mu_pp_r = complex_mu_r
+            mu = mu_0 * complex(mu_p_r, -mu_pp_r)  # mu = mu' - j*mu"
+            # Z = sqrt(j*omega*mu / sigma)
+            Z_local = np.sqrt(1j * self.omega * mu / self.sigma)
+            return Z_local
+
+        elif self.use_complex_mu:
+            # Use the complex mu from initialization
+            mu = self._get_mu_initial()
+            Z_local = np.sqrt(1j * self.omega * mu / self.sigma)
+            return Z_local
+
         else:
-            mu = mu_0 * mu_r
+            # Real permeability case
+            if mu_r is None:
+                mu = self.bh_interp.mu_initial
+            else:
+                mu = mu_0 * mu_r
 
-        delta = np.sqrt(2 * self.rho / (self.omega * mu))
-        Z_local = (1 + 1j) / (self.sigma * delta)
+            delta = np.sqrt(2 * self.rho / (self.omega * mu))
+            Z_local = (1 + 1j) / (self.sigma * delta)
 
-        return Z_local
+            return Z_local
 
 
 class ESITable:
@@ -478,6 +781,11 @@ class ESITable:
             sigma: Conductivity [S/m] (for generation)
             frequency: Frequency [Hz] (for generation)
         """
+        # Store parameters (may be None if using pre-computed table)
+        self.bh_curve = bh_curve
+        self.sigma = sigma
+        self.frequency = frequency
+
         if table_data is not None:
             self._load_table(table_data)
         elif bh_curve is not None and sigma is not None and frequency is not None:
@@ -487,12 +795,16 @@ class ESITable:
 
     def _load_table(self, table_data):
         """Load pre-computed table."""
-        self.table = np.array(table_data)
-        self.H0_values = self.table[:, 0]
-        self.Z_real = self.table[:, 1]
-        self.Z_imag = self.table[:, 2]
-        self.P_prime = self.table[:, 3]
-        self.Q_prime = self.table[:, 4]
+        # Convert to real values (discard any imaginary parts from numerical noise)
+        table_array = np.array(table_data)
+        if np.iscomplexobj(table_array):
+            table_array = table_array.real
+        self.table = np.ascontiguousarray(table_array, dtype=np.float64)
+        self.H0_values = np.ascontiguousarray(self.table[:, 0].copy())
+        self.Z_real = np.ascontiguousarray(self.table[:, 1].copy())
+        self.Z_imag = np.ascontiguousarray(self.table[:, 2].copy())
+        self.P_prime = np.ascontiguousarray(self.table[:, 3].copy())
+        self.Q_prime = np.ascontiguousarray(self.table[:, 4].copy())
 
         # Ensure P_prime and Q_prime are positive for log interpolation
         # Use absolute value and store sign for Q_prime (can be negative in some cases)
@@ -500,7 +812,7 @@ class ESITable:
         Q_prime_safe = np.maximum(np.abs(self.Q_prime), 1e-20)
 
         # Create interpolators (log-H for better accuracy over wide range)
-        log_H0 = np.log10(self.H0_values + 1e-20)
+        log_H0 = np.ascontiguousarray(np.log10(self.H0_values + 1e-20))
 
         self._Z_real_interp = interp1d(
             log_H0, self.Z_real,
@@ -610,12 +922,18 @@ def generate_esi_table_from_bh_curve(bh_curve, sigma, frequency, n_points=50):
     # Generate table
     table = solver.generate_esi_table(H0_values)
 
-    return ESITable(table_data=table)
+    # Create ESITable with parameters stored
+    esi_table = ESITable(table_data=table)
+    esi_table.bh_curve = bh_curve
+    esi_table.sigma = sigma
+    esi_table.frequency = frequency
+
+    return esi_table
 
 
 # Example usage and test
 if __name__ == "__main__":
-    # Test with typical steel BH curve
+    # Test with typical steel BH curve (real permeability)
     bh_curve_steel = [
         [0, 0],
         [100, 0.2],
@@ -632,39 +950,151 @@ if __name__ == "__main__":
     freq = 50000  # 50 kHz
 
     print("ESIM Cell Problem Solver Test")
-    print("=" * 50)
+    print("=" * 60)
+
+    # ==========================================================
+    # Test 1: Real permeability (BH curve)
+    # ==========================================================
+    print("\n" + "=" * 60)
+    print("Test 1: Real Permeability (BH Curve)")
+    print("=" * 60)
     print(f"Material: Steel (sigma = {sigma_steel/1e6:.1f} MS/m)")
     print(f"Frequency: {freq/1000:.1f} kHz")
     print()
 
-    if NGSOLVE_AVAILABLE:
-        # Create solver
-        solver = ESIMCellProblemSolver(bh_curve_steel, sigma_steel, freq)
+    # Create solver with BH curve
+    solver = ESIMCellProblemSolver(bh_curve=bh_curve_steel, sigma=sigma_steel, frequency=freq)
 
-        print(f"Initial skin depth: {solver.delta_initial*1e3:.3f} mm")
-        print(f"Domain length: {solver.L*1e3:.1f} mm")
-        print(f"Number of elements: {solver.n_elements}")
-        print()
+    print(f"Initial skin depth: {solver.delta_initial*1e3:.3f} mm")
+    print(f"Domain length: {solver.L*1e3:.1f} mm")
+    print(f"Number of elements: {solver.n_elements}")
+    print()
 
-        # Solve for different H0 values
-        H0_test = [10, 100, 1000, 10000]
+    # Solve for different H0 values
+    H0_test = [10, 100, 1000, 10000]
 
-        print("Cell Problem Solutions:")
-        print("-" * 70)
-        print(f"{'H0 [A/m]':>12} {'Re(Z) [mOhm]':>14} {'Im(Z) [mOhm]':>14} {'P [kW/m^2]':>14}")
-        print("-" * 70)
+    print("Cell Problem Solutions:")
+    print("-" * 70)
+    print(f"{'H0 [A/m]':>12} {'Re(Z) [mOhm]':>14} {'Im(Z) [mOhm]':>14} {'P [kW/m^2]':>14}")
+    print("-" * 70)
 
-        for H0 in H0_test:
-            result = solver.solve(H0)
-            Z = result['Z']
-            P = result['P_prime']
+    for H0 in H0_test:
+        result = solver.solve(H0)
+        Z = result['Z']
+        P = result['P_prime']
 
-            print(f"{H0:>12.0f} {Z.real*1e3:>14.4f} {Z.imag*1e3:>14.4f} {P/1e3:>14.2f}")
+        print(f"{H0:>12.0f} {Z.real*1e3:>14.4f} {Z.imag*1e3:>14.4f} {P/1e3:>14.2f}")
 
-        print()
+    print()
 
-        # Compare with linear SIBC
-        Z_linear = solver.get_linear_sibc()
-        print(f"Linear SIBC (mu_r_initial): Z = {Z_linear.real*1e3:.4f} + j{Z_linear.imag*1e3:.4f} mOhm")
-    else:
-        print("NGSolve not available. Skipping test.")
+    # Compare with linear SIBC
+    Z_linear = solver.get_linear_sibc()
+    print(f"Linear SIBC (mu_r_initial): Z = {Z_linear.real*1e3:.4f} + j{Z_linear.imag*1e3:.4f} mOhm")
+
+    # ==========================================================
+    # Test 2: Complex permeability (constant)
+    # ==========================================================
+    print("\n" + "=" * 60)
+    print("Test 2: Complex Permeability (Constant)")
+    print("=" * 60)
+
+    # Typical ferrite at 50 kHz: mu'_r = 2000, mu"_r = 200 (loss tangent = 0.1)
+    mu_prime_r = 2000
+    mu_double_prime_r = 200
+    sigma_ferrite = 1e-2  # S/m (ferrite is nearly insulating)
+
+    print(f"Material: Ferrite (mu'_r = {mu_prime_r}, mu\"_r = {mu_double_prime_r})")
+    print(f"Loss tangent: tan(delta_m) = {mu_double_prime_r/mu_prime_r:.3f}")
+    print(f"Conductivity: sigma = {sigma_ferrite} S/m")
+    print(f"Frequency: {freq/1000:.1f} kHz")
+    print()
+
+    # Create solver with complex permeability
+    solver_complex = ESIMCellProblemSolver(
+        sigma=sigma_ferrite,
+        frequency=freq,
+        complex_mu=(mu_prime_r, mu_double_prime_r)
+    )
+
+    print(f"Initial skin depth: {solver_complex.delta_initial*1e3:.3f} mm")
+    print(f"Domain length: {solver_complex.L*1e3:.1f} mm")
+    print()
+
+    # Solve for different H0 values
+    print("Cell Problem Solutions with Complex mu:")
+    print("-" * 85)
+    print(f"{'H0 [A/m]':>12} {'Re(Z) [mOhm]':>14} {'Im(Z) [mOhm]':>14} {'P_total [W/m^2]':>16} {'P_mag [W/m^2]':>14}")
+    print("-" * 85)
+
+    for H0 in H0_test:
+        result = solver_complex.solve(H0)
+        Z = result['Z']
+        P = result['P_prime']
+        P_mag = result['P_magnetic']
+
+        print(f"{H0:>12.0f} {Z.real*1e3:>14.4f} {Z.imag*1e3:>14.4f} {P:>16.2f} {P_mag:>14.2f}")
+
+    print()
+
+    # Compare with analytical SIBC for complex mu
+    Z_linear_complex = solver_complex.get_linear_sibc()
+    print(f"Linear SIBC (complex mu): Z = {Z_linear_complex.real*1e3:.4f} + j{Z_linear_complex.imag*1e3:.4f} mOhm")
+
+    # ==========================================================
+    # Test 3: H-dependent complex permeability
+    # ==========================================================
+    print("\n" + "=" * 60)
+    print("Test 3: H-Dependent Complex Permeability")
+    print("=" * 60)
+
+    # H-dependent complex permeability (saturation and loss variation)
+    # [H, mu'_r, mu"_r]
+    complex_mu_data = [
+        [0, 2000, 200],        # Low H: high permeability
+        [100, 1800, 180],
+        [500, 1500, 150],
+        [1000, 1000, 100],
+        [5000, 500, 50],
+        [10000, 200, 20],
+        [50000, 50, 5],        # High H: saturated
+    ]
+
+    sigma_test = 1e6  # S/m
+
+    print(f"Material: H-dependent ferromagnetic")
+    print(f"Conductivity: sigma = {sigma_test/1e6:.1f} MS/m")
+    print(f"Frequency: {freq/1000:.1f} kHz")
+    print()
+    print("H-dependent mu' and mu\":")
+    print(f"  H [A/m]    mu'_r     mu\"_r")
+    for row in complex_mu_data:
+        print(f"  {row[0]:>8.0f}  {row[1]:>6.0f}  {row[2]:>6.0f}")
+    print()
+
+    # Create solver with H-dependent complex permeability
+    solver_Hdep = ESIMCellProblemSolver(
+        sigma=sigma_test,
+        frequency=freq,
+        complex_mu=complex_mu_data
+    )
+
+    print(f"Initial skin depth: {solver_Hdep.delta_initial*1e3:.3f} mm")
+    print()
+
+    # Solve for different H0 values
+    print("Cell Problem Solutions (H-dependent complex mu):")
+    print("-" * 100)
+    print(f"{'H0 [A/m]':>12} {'Re(Z) [mOhm]':>14} {'Im(Z) [mOhm]':>14} {'P_total [kW/m^2]':>18} {'P_mag [kW/m^2]':>16} {'Iter':>6}")
+    print("-" * 100)
+
+    for H0 in H0_test:
+        result = solver_Hdep.solve(H0)
+        Z = result['Z']
+        P = result['P_prime']
+        P_mag = result['P_magnetic']
+        iters = result['iterations']
+
+        print(f"{H0:>12.0f} {Z.real*1e3:>14.4f} {Z.imag*1e3:>14.4f} {P/1e3:>18.2f} {P_mag/1e3:>16.2f} {iters:>6}")
+
+    print()
+    print("Test completed!")

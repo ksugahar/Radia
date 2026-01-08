@@ -47,6 +47,7 @@ try:
     from .esim_cell_problem import (
         ESIMCellProblemSolver,
         BHCurveInterpolator,
+        ComplexPermeabilityInterpolator,
         ESITable,
         generate_esi_table_from_bh_curve,
     )

@@ -12,6 +12,10 @@
 #include <algorithm>
 #include <stdexcept>
 
+#ifdef HAVE_LAPACK
+#include <mkl_lapacke.h>
+#endif
+
 namespace radia {
 
 // ============================================================================
@@ -852,6 +856,10 @@ radTConductorSolver::radTConductorSolver()
     : frequency_(0)
     , formulation_(ConductorFormulation::MQS)
     , usePfft_(true)
+    , useLoopStar_(false)  // Disabled by default for now
+    , directImpedanceMode_(false)
+    , numLoops_(0)
+    , numStars_(0)
 {
 }
 
@@ -912,42 +920,40 @@ std::vector<std::complex<double>> radTConductorSolver::ImpedanceSweep(
 }
 
 void radTConductorSolver::BuildSystemMatrix() {
-    // Count total unknowns
+    // ==========================================================================
+    // Segment-Based Inductance Calculation (Darwin Approximation)
+    // ==========================================================================
+    //
+    // For wire-type conductors (loops, spirals), we use segment-based unknowns:
+    //
+    // 1. Divide wire into N_seg segments (N_seg = nPanels / nPanelsAround)
+    // 2. Unknown: I_seg (segment current), NOT K_panel (surface current density)
+    // 3. Matrix size: N_seg x N_seg (much smaller than N_panels x N_panels)
+    //
+    // Self inductance of segment (partial self-inductance):
+    //   L_self = (μ₀/2π) * l * [ln(2l/GMD) - 1]
+    //   where GMD = geometric mean distance of wire cross-section
+    //
+    // Mutual inductance between segments (Neumann formula):
+    //   M_ij = (μ₀/4π) * ∮∮ (dl_i · dl_j) / r_ij
+    //   Simplified for short segments: M_ij ≈ (μ₀/4π) * l_i * l_j * cos(θ) / r_ij
+    //
+    // Matrix equation: (jωL + R) * I = V
+    //   where L is N_seg x N_seg inductance matrix
+    //         R is diagonal resistance matrix
+    //         I is segment current vector
+    //         V is voltage excitation
+    //
+    // Total loop inductance: L_total = Σ_i Σ_j L_ij (all segments connected in series)
+    // ==========================================================================
+
+    // Count total panels and determine segment structure
     int totalPanels = 0;
     for (const auto& cond : conductors_) {
         totalPanels += cond->NumPanels();
     }
 
     if (totalPanels == 0) return;
-
-    // FastImp formulation: EFIE + continuity equation
-    // Unknowns per panel: scalar surface current magnitude + charge
-    // For each panel i:
-    //   - K_i: tangential surface current density [A/m]
-    //   - sigma_i: surface charge density [C/m^2]
-    //
-    // Equations:
-    // 1. EFIE on conductor surface: E_tan = 0 (PEC) or E_tan = Z_s * K (impedance BC)
-    //    n x (E_inc + E_scat) = n x (Z_s * K)
-    //    where E_scat = -j*omega*A - grad(Phi)
-    //
-    // 2. Charge conservation: div_s(K) + j*omega*sigma = 0
-    //
-    // Matrix structure (simplified scalar formulation):
-    // [L + R   P  ] [K    ]   [V_inc]
-    // [D      C  ] [sigma] = [0    ]
-    //
-    // L: inductance matrix from A potential
-    // R: resistance matrix (skin effect)
-    // P: gradient of scalar potential
-    // D: surface divergence
-    // C: capacitance matrix from charge
-
-    int nDOF = 2 * totalPanels;  // K and sigma for each panel
-
-    systemMatrix_.resize(nDOF * nDOF, std::complex<double>(0, 0));
-    rhs_.resize(nDOF, std::complex<double>(0, 0));
-    solution_.resize(nDOF, std::complex<double>(0, 0));
 
     // Collect all panels
     std::vector<SurfacePanel> allPanels;
@@ -967,218 +973,301 @@ void radTConductorSolver::BuildSystemMatrix() {
     // Physical parameters
     double omega = 2.0 * RadConst::PI * frequency_;
     std::complex<double> jOmega(0, omega);
-    std::complex<double> jOmegaMu = jOmega * MU_0;
-    std::complex<double> invJOmegaEps = (omega > 1e-10) ?
-        1.0 / (jOmega * EPS_0) : std::complex<double>(0, 0);
 
-    // Build matrix using pFFT if enabled and beneficial
-    bool usePfftAccel = usePfft_ && totalPanels > 100;
+    // ==========================================================================
+    // Determine segment structure from panel geometry
+    // ==========================================================================
+    // For CreateLoop/CreateWire: panels are arranged around wire circumference
+    // nPanelsAround = number of panels forming the wire cross-section perimeter
+    // nSegments = number of segments along the wire length
 
-    if (usePfftAccel) {
-        std::vector<TVector3d> allCenters;
-        std::vector<double> allAreas;
+    int nPanelsAround = 8;  // Typical value from CreateLoop/CreateWire
+    int nSegments = totalPanels / nPanelsAround;
+    if (nSegments < 1) nSegments = 1;
 
-        for (const auto& panel : allPanels) {
-            allCenters.push_back(panel.center);
-            allAreas.push_back(panel.area);
-        }
+    // Compute geometric properties from panels
+    double totalArea = 0;
+    for (const auto& p : allPanels) totalArea += p.area;
+    double avgPanelArea = totalArea / totalPanels;
 
-        pfft_ = std::make_unique<radTPfft>();
-        pfft_->Initialize(allCenters, allAreas);
+    // Estimate panel dimensions from geometry
+    // Panels are quadrilaterals: we need to distinguish circumferential vs axial dimension
+    // Method: compute average edge lengths to detect aspect ratio
 
-        if (formulation_ == ConductorFormulation::FullWave ||
-            formulation_ == ConductorFormulation::EMQS) {
-            pfft_->SetupKernelFullWave(frequency_, EPS_0, MU_0);
-        } else {
-            pfft_->SetupKernelMQS();
+    double avgCircumEdge = 0;  // Edge in circumferential direction (around wire)
+    double avgAxialEdge = 0;   // Edge in axial direction (along wire)
+    int edgeCount = 0;
+
+    for (const auto& p : allPanels) {
+        if (p.vertices.size() >= 4) {
+            // Compute 4 edge lengths
+            double edges[4];
+            for (int e = 0; e < 4; ++e) {
+                int e1 = (e + 1) % 4;
+                double dx = p.vertices[e1].x - p.vertices[e].x;
+                double dy = p.vertices[e1].y - p.vertices[e].y;
+                double dz = p.vertices[e1].z - p.vertices[e].z;
+                edges[e] = std::sqrt(dx*dx + dy*dy + dz*dz);
+            }
+            // Opposite edges should be similar; shorter pair is circumferential
+            double avgEdge01 = (edges[0] + edges[2]) / 2.0;  // edges 0 and 2
+            double avgEdge12 = (edges[1] + edges[3]) / 2.0;  // edges 1 and 3
+            if (avgEdge01 < avgEdge12) {
+                avgCircumEdge += avgEdge01;
+                avgAxialEdge += avgEdge12;
+            } else {
+                avgCircumEdge += avgEdge12;
+                avgAxialEdge += avgEdge01;
+            }
+            edgeCount++;
         }
     }
 
-    // Fill system matrix
-    // Row ordering: [K_0, sigma_0, K_1, sigma_1, ...]
-    // Or block form: [K_0..K_N, sigma_0..sigma_N]
+    if (edgeCount > 0) {
+        avgCircumEdge /= edgeCount;
+        avgAxialEdge /= edgeCount;
+    }
 
-    // Using block form for clarity
-    // Block (0,0): L + R (N x N) - inductance + resistance
-    // Block (0,1): P (N x N) - scalar potential gradient
-    // Block (1,0): D (N x N) - surface divergence
-    // Block (1,1): C (N x N) - capacitance
+    // Wire perimeter from circumferential panel edge
+    double wirePerimeter = nPanelsAround * avgCircumEdge;
 
-    int N = totalPanels;
+    // Wire cross-section area (circular wire)
+    double wireArea = wirePerimeter * wirePerimeter / (4.0 * RadConst::PI);
+
+    // Wire radius (equivalent circular)
+    double wireRadius = wirePerimeter / (2.0 * RadConst::PI);
+
+    // GMD for circular wire: GMD = r * exp(-1/4) ≈ 0.7788 * r
+    double GMD = 0.7788 * wireRadius;
+
+    // Total wire length from axial panel edge
+    double wireLength = nSegments * avgAxialEdge;
+
+    // Segment length
+    double segLength = avgAxialEdge;
+
+    // ==========================================================================
+    // Build segment data structures
+    // ==========================================================================
+    struct Segment {
+        TVector3d center;       // Segment center point
+        TVector3d direction;    // Unit tangent direction
+        double length;          // Segment length
+        double conductivity;    // Material conductivity
+    };
+
+    std::vector<Segment> segments(nSegments);
+
+    // First pass: compute all segment centers
+    for (int seg = 0; seg < nSegments; ++seg) {
+        TVector3d center(0, 0, 0);
+        int startPanel = seg * nPanelsAround;
+        int endPanel = std::min(startPanel + nPanelsAround, totalPanels);
+        int nInRing = endPanel - startPanel;
+
+        for (int p = startPanel; p < endPanel; ++p) {
+            center.x += allPanels[p].center.x;
+            center.y += allPanels[p].center.y;
+            center.z += allPanels[p].center.z;
+        }
+        if (nInRing > 0) {
+            center.x /= nInRing;
+            center.y /= nInRing;
+            center.z /= nInRing;
+        }
+
+        segments[seg].center = center;
+        segments[seg].length = segLength;
+        segments[seg].conductivity = allConductivities[startPanel];
+    }
+
+    // Second pass: compute segment directions from centers
+    for (int seg = 0; seg < nSegments; ++seg) {
+        TVector3d dir(0, 0, 0);
+
+        if (nSegments == 1) {
+            // Single segment: use default direction
+            dir = TVector3d(1, 0, 0);
+        } else if (seg == 0) {
+            // First segment: use direction to next
+            dir.x = segments[1].center.x - segments[0].center.x;
+            dir.y = segments[1].center.y - segments[0].center.y;
+            dir.z = segments[1].center.z - segments[0].center.z;
+        } else if (seg == nSegments - 1) {
+            // Last segment: use direction from previous
+            dir.x = segments[seg].center.x - segments[seg-1].center.x;
+            dir.y = segments[seg].center.y - segments[seg-1].center.y;
+            dir.z = segments[seg].center.z - segments[seg-1].center.z;
+        } else {
+            // Middle segment: use direction from prev to next (central difference)
+            dir.x = segments[seg+1].center.x - segments[seg-1].center.x;
+            dir.y = segments[seg+1].center.y - segments[seg-1].center.y;
+            dir.z = segments[seg+1].center.z - segments[seg-1].center.z;
+        }
+
+        // Normalize
+        double len = std::sqrt(dir.x*dir.x + dir.y*dir.y + dir.z*dir.z);
+        if (len > 1e-12) {
+            dir.x /= len;
+            dir.y /= len;
+            dir.z /= len;
+        } else {
+            dir = TVector3d(1, 0, 0);  // Fallback
+        }
+
+        segments[seg].direction = dir;
+    }
+
+    // ==========================================================================
+    // Build N_seg x N_seg inductance matrix
+    // ==========================================================================
+    int N = nSegments;  // Unknown: segment currents I_seg
+
+    systemMatrix_.resize(N * N, std::complex<double>(0, 0));
+    rhs_.resize(N, std::complex<double>(0, 0));
+    solution_.resize(N, std::complex<double>(0, 0));
 
     #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < N; ++i) {
-        const SurfacePanel& panelI = allPanels[i];
-        double sigmaI = allConductivities[i];
+        const Segment& segI = segments[i];
+        double l_i = segI.length;
 
-        // Surface impedance (skin effect)
-        double Rs = 0;
-        if (frequency_ > 0 && sigmaI > 0) {
-            double skinDepth = std::sqrt(2.0 / (omega * MU_0 * sigmaI));
-            Rs = 1.0 / (sigmaI * skinDepth);  // DC + skin effect
+        // Resistance of segment: R = l / (sigma * A)
+        double R_seg = 0;
+        if (segI.conductivity > 0) {
+            if (frequency_ > 0) {
+                // AC resistance with skin effect
+                double skinDepth = std::sqrt(2.0 / (omega * MU_0 * segI.conductivity));
+                // Effective area for skin effect (approximate)
+                double effectiveArea = wirePerimeter * skinDepth;
+                if (effectiveArea > wireArea) effectiveArea = wireArea;  // DC limit
+                R_seg = l_i / (segI.conductivity * effectiveArea);
+            } else {
+                // DC resistance
+                R_seg = l_i / (segI.conductivity * wireArea);
+            }
         }
 
         for (int j = 0; j < N; ++j) {
-            const SurfacePanel& panelJ = allPanels[j];
+            const Segment& segJ = segments[j];
+            double l_j = segJ.length;
 
-            // Distance between panel centers
-            double dx = panelI.center.x - panelJ.center.x;
-            double dy = panelI.center.y - panelJ.center.y;
-            double dz = panelI.center.z - panelJ.center.z;
-            double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            std::complex<double> L_ij;
 
-            // Green's function
-            std::complex<double> G;
-            std::complex<double> dGdr;
-
-            if (r < 1e-12) {
-                // Self-term: use analytical approximation
-                double R_eff = std::sqrt(panelJ.area / RadConst::PI);
-                G = std::complex<double>(R_eff * (2.0 * std::log(2.0) - 1.0) * INV_FOUR_PI, 0);
-                dGdr = std::complex<double>(0, 0);
+            if (i == j) {
+                // Self-inductance of segment (partial self-inductance)
+                // L_self = (μ₀/2π) * l * [ln(2l/GMD) - 1]
+                double ln_term = std::log(2.0 * l_i / GMD);
+                if (ln_term < 0.25) ln_term = 0.25;  // Prevent negative for short segments
+                double L_self = (MU_0 / (2.0 * RadConst::PI)) * l_i * (ln_term - 1.0);
+                if (L_self < 0) L_self = (MU_0 / (2.0 * RadConst::PI)) * l_i * 0.25;  // Minimum
+                L_ij = std::complex<double>(L_self, 0);
             } else {
+                // Mutual inductance between segments (Neumann formula)
+                // M_ij = (μ₀/4π) * l_i * l_j * cos(θ_ij) / r_ij
+
+                // Distance between segment centers
+                double dx = segI.center.x - segJ.center.x;
+                double dy = segI.center.y - segJ.center.y;
+                double dz = segI.center.z - segJ.center.z;
+                double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+
+                // Prevent division by zero
+                if (r < 0.001 * l_i) r = 0.001 * l_i;
+
+                // cos(θ) = dot product of unit tangent vectors
+                double cos_theta = segI.direction.x * segJ.direction.x +
+                                   segI.direction.y * segJ.direction.y +
+                                   segI.direction.z * segJ.direction.z;
+
+                // Mutual inductance
+                // M = (μ₀/4π) * l_i * l_j * cos(θ) / r
+                double M_ij = (MU_0 * INV_FOUR_PI) * l_i * l_j * cos_theta / r;
+
+                // For full-wave, add phase factor exp(-jkr)
                 if (formulation_ == ConductorFormulation::FullWave ||
                     formulation_ == ConductorFormulation::EMQS) {
-                    // Full-wave Green's function
                     double k = omega * std::sqrt(MU_0 * EPS_0);
-                    std::complex<double> jkr(0, k * r);
-                    std::complex<double> expjkr = std::exp(-jkr);
-                    G = expjkr * INV_FOUR_PI / r;
-                    dGdr = -expjkr * (1.0 + jkr) * INV_FOUR_PI / (r * r);
+                    std::complex<double> phase = std::exp(std::complex<double>(0, -k * r));
+                    L_ij = M_ij * phase;
                 } else {
-                    // MQS Green's function
-                    G = std::complex<double>(INV_FOUR_PI / r, 0);
-                    dGdr = std::complex<double>(-INV_FOUR_PI / (r * r), 0);
+                    L_ij = std::complex<double>(M_ij, 0);
                 }
             }
 
-            // L matrix: inductance from vector potential
-            // L_ij = mu * integral{ G(r,r') } dS_j
-            std::complex<double> L_ij = MU_0 * G * panelJ.area;
-
-            // R matrix: resistance (diagonal only for simplified model)
-            std::complex<double> R_ij = (i == j) ?
-                std::complex<double>(Rs * panelI.area, 0) : std::complex<double>(0, 0);
-
-            // Block (0,0): jOmega*L + R
-            int idx00 = i * (2*N) + j;
-            systemMatrix_[idx00] = jOmega * L_ij + R_ij;
-
-            // P matrix: scalar potential gradient
-            // P_ij = (1/eps) * integral{ grad(G) . n } dS_j
-            // Simplified: use centroid approximation
-            double n_dot_r = 0;
-            if (r > 1e-12) {
-                n_dot_r = (panelI.normal.x * dx + panelI.normal.y * dy +
-                           panelI.normal.z * dz) / r;
-            }
-            std::complex<double> P_ij = dGdr * n_dot_r * panelJ.area / EPS_0;
-
-            // Block (0,1): scalar potential contribution
-            int idx01 = i * (2*N) + (N + j);
-            systemMatrix_[idx01] = -P_ij;  // E = -grad(Phi)
-
-            // D matrix: surface divergence (connectivity)
-            // div_s(K) relates currents between adjacent panels
-            // Simplified: use area ratio for neighboring panels
-            std::complex<double> D_ij;
+            // Matrix element: Z_ij = jωL_ij + R*δ_ij
+            std::complex<double> Z_ij = jOmega * L_ij;
             if (i == j) {
-                D_ij = std::complex<double>(1.0 / panelI.area, 0);
-            } else {
-                // Off-diagonal: check if panels are neighbors
-                // For now, use simple geometric proximity
-                double charSize = std::sqrt(panelI.area);
-                if (r < 2.0 * charSize) {
-                    D_ij = std::complex<double>(-1.0 / (2.0 * N * panelJ.area), 0);
-                } else {
-                    D_ij = std::complex<double>(0, 0);
-                }
+                Z_ij += std::complex<double>(R_seg, 0);
             }
 
-            // Block (1,0): divergence operator
-            int idx10 = (N + i) * (2*N) + j;
-            systemMatrix_[idx10] = D_ij;
-
-            // C matrix: capacitance from charge
-            // C_ij = integral{ G(r,r') } dS_j
-            std::complex<double> C_ij = G * panelJ.area;
-
-            // Block (1,1): jOmega * C (from continuity: div_s(K) + jOmega*sigma = 0)
-            int idx11 = (N + i) * (2*N) + (N + j);
-            systemMatrix_[idx11] = jOmega * C_ij;
+            systemMatrix_[i * N + j] = Z_ij;
         }
     }
 
-    // Setup RHS from port excitation
-    // Support both voltage and current excitation modes
-    int panelOffset = 0;
+    // ==========================================================================
+    // For series-connected loop coil: Direct impedance calculation
+    // ==========================================================================
+    //
+    // For a loop coil, all segments are in series carrying the same current I.
+    // The total impedance is:
+    //
+    //   Z_total = Σ_i Σ_j Z_ij = Σ_i Σ_j (jωL_ij + R_i*δ_ij)
+    //
+    // This is equivalent to solving the scalar equation:
+    //   Z_total * I = V
+    //
+    // Rather than solving an N x N system (which would give different I_i),
+    // we directly compute Z_total by summing all matrix elements.
+    //
+    // Note: This approach is correct for single-path conductors (loops, spirals).
+    // For complex topologies with parallel branches, the full matrix solve is needed.
+
+    // Compute total impedance by summing all matrix elements
+    std::complex<double> Z_total(0, 0);
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) {
+            Z_total += systemMatrix_[i * N + j];
+        }
+    }
+
+    // Store in solution vector for ComputePortImpedance to retrieve
+    // We use a special format: solution_[0] = Z_total (impedance directly)
+    // and set a flag to indicate direct impedance mode
+
+    // For voltage excitation, compute current: I = V / Z_total
+    std::complex<double> V_applied(1.0, 0);  // Default 1V
     for (size_t c = 0; c < conductors_.size(); ++c) {
         auto& cond = conductors_[c];
-        int nPanels = cond->NumPanels();
-
-        if (nPanels == 0) continue;
-
-        int excType = cond->GetExcitationType();
-        std::complex<double> excValue = cond->GetExcitationValue();
-
-        if (excType == 1) {
-            // Voltage excitation: apply voltage across conductor
-            // V_applied appears in the EFIE equation
-            // For a wire conductor, voltage is applied at the port
-
-            // Distribute voltage source across first few panels (port terminals)
-            int numPortPanels = std::min(nPanels, 4);  // Port size
-            std::complex<double> V_per_panel = excValue / static_cast<double>(numPortPanels);
-
-            for (int i = 0; i < numPortPanels; ++i) {
-                rhs_[panelOffset + i] = V_per_panel;
-            }
-
-        } else if (excType == 2) {
-            // Current excitation: impose total current constraint
-            // This modifies the system to enforce I_total = I_specified
-
-            // For current-driven analysis, we add a constraint equation
-            // Sum of currents across a cross-section equals I_specified
-
-            // Get total cross-sectional area for normalization
-            double totalArea = 0;
-            const auto& panels = cond->GetPanels();
-            for (int i = 0; i < nPanels; ++i) {
-                totalArea += panels[i].area;
-            }
-
-            // Distribute current source: J = I / A
-            // The current density K [A/m] on each panel contributes to total current
-            // For a wire, I_total = integral(K * dl) around circumference
-            // Simplified: distribute uniformly
-
-            std::complex<double> K_avg = excValue / std::sqrt(totalArea);  // Approximate uniform distribution
-
-            // Set as Dirichlet-like constraint on surface current
-            for (int i = 0; i < nPanels; ++i) {
-                // Modify matrix to enforce current level
-                // Add penalty term to enforce average current
-                int idx = panelOffset + i;
-                systemMatrix_[idx * (2*N) + idx] += std::complex<double>(1e6, 0);  // Strong penalty
-                rhs_[idx] = K_avg * std::complex<double>(1e6, 0);
-            }
-
-            // Store excitation current for later retrieval
-            cond->SetTotalCurrent(excValue);
-
-        } else {
-            // No excitation: apply default 1V for impedance calculation
-            if (nPanels > 0) {
-                rhs_[panelOffset] = std::complex<double>(1.0, 0);
-            }
+        if (cond->GetExcitationType() == 1) {
+            V_applied = cond->GetExcitationValue();
         }
-
-        panelOffset += nPanels;
     }
+
+    // Store impedance and current in solution
+    // solution_[0] = current I = V / Z_total
+    if (std::abs(Z_total) > 1e-30) {
+        std::complex<double> I = V_applied / Z_total;
+        for (int i = 0; i < N; ++i) {
+            solution_[i] = I;  // All segments have same current
+        }
+    }
+
+    // RHS is not used for direct solve, but set for consistency
+    for (int i = 0; i < N; ++i) {
+        rhs_[i] = V_applied / static_cast<double>(N);
+    }
+
+    // Set flag to skip SolveLinearSystem (solution already computed)
+    directImpedanceMode_ = true;
 }
 
 void radTConductorSolver::SolveLinearSystem() {
+    // Skip if using direct impedance mode (solution already computed in BuildSystemMatrix)
+    if (directImpedanceMode_) {
+        return;
+    }
+
     int nDOF = static_cast<int>(rhs_.size());
     if (nDOF == 0) return;
 
@@ -1190,7 +1279,7 @@ void radTConductorSolver::SolveLinearSystem() {
     std::vector<int> ipiv(nDOF);
 
     // Use MKL LAPACK
-    #ifdef USE_MKL
+    #ifdef HAVE_LAPACK
     lapack_int info = LAPACKE_zgesv(LAPACK_COL_MAJOR, nDOF, 1,
                                      reinterpret_cast<lapack_complex_double*>(A.data()),
                                      nDOF,
@@ -1244,8 +1333,8 @@ void radTConductorSolver::SolveLinearSystem() {
 }
 
 void radTConductorSolver::ExtractSolution() {
-    // Extract K and sigma from solution vector
-    // Solution ordering: [K_0..K_N, sigma_0..sigma_N]
+    // Darwin approximation: only K unknowns (no charge σ)
+    // Solution ordering: [K_0, K_1, ..., K_N]
 
     int totalPanels = 0;
     for (const auto& cond : conductors_) {
@@ -1254,7 +1343,6 @@ void radTConductorSolver::ExtractSolution() {
 
     if (totalPanels == 0) return;
 
-    int N = totalPanels;
     int panelOffset = 0;
 
     for (auto& cond : conductors_) {
@@ -1264,10 +1352,18 @@ void radTConductorSolver::ExtractSolution() {
 
         const auto& panels = cond->GetPanels();
 
+        // Resize storage if needed
+        if (static_cast<int>(K.size()) != 3 * nPanels) {
+            K.resize(3 * nPanels);
+        }
+        if (static_cast<int>(sigma.size()) != nPanels) {
+            sigma.resize(nPanels);
+        }
+
         for (int i = 0; i < nPanels; ++i) {
             int globalIdx = panelOffset + i;
 
-            // Get scalar current magnitude
+            // Get scalar current magnitude from solution
             std::complex<double> K_mag = solution_[globalIdx];
 
             // Convert to vector current (along tangent direction)
@@ -1276,46 +1372,309 @@ void radTConductorSolver::ExtractSolution() {
             const auto& panel = panels[i];
 
             // Simple model: current flows perpendicular to normal
-            // For more accuracy, track wire direction
+            // Project onto tangent plane: K_vec = K_mag * (I - n⊗n) · e_x
+            // This gives current flowing in x-direction projected onto surface
             K[3*i] = K_mag * (1.0 - panel.normal.x * panel.normal.x);
             K[3*i + 1] = K_mag * (-panel.normal.x * panel.normal.y);
             K[3*i + 2] = K_mag * (-panel.normal.x * panel.normal.z);
 
-            // Get charge density
-            sigma[i] = solution_[N + globalIdx];
+            // Darwin approximation: σ not directly computed
+            // Set to zero (can be estimated from div(K) if needed)
+            sigma[i] = std::complex<double>(0, 0);
         }
 
         panelOffset += nPanels;
     }
 
     // Compute port impedance
-    // Z = V / I, where V = 1V (applied), I = integral of K over port
     ComputePortImpedance();
 }
 
 void radTConductorSolver::ComputePortImpedance() {
-    // Compute impedance from port terminals
-    for (auto& cond : conductors_) {
-        // Sum current at port terminals
-        std::complex<double> I_total(0, 0);
-        const auto& K = cond->SurfaceCurrent();
-        const auto& panels = cond->GetPanels();
+    // ==========================================================================
+    // Compute impedance from segment-based solution
+    // ==========================================================================
+    //
+    // For segment-based solution:
+    //   solution_[i] = I_seg (segment current in Amperes)
+    //   Matrix equation: [Z_mat] I = V
+    //   where Z_mat = jωL + R (N_seg x N_seg)
+    //
+    // Impedance calculation:
+    //   Z = V_total / I (for series-connected segments, I is same for all)
+    //
+    // Since segments are in series for a single coil:
+    //   - Total voltage: V_total = applied voltage
+    //   - Current: I = I_seg (same in all segments)
+    //   - Impedance: Z = V / I
+    //
+    // Verification via energy method:
+    //   Complex power: P = V · I*
+    //   Impedance: Z = V² / P* = V / I
 
-        // Simple model: sum all currents (for single port)
-        for (size_t i = 0; i < panels.size(); ++i) {
-            double Kx = std::abs(K[3*i]);
-            double Ky = std::abs(K[3*i + 1]);
-            double Kz = std::abs(K[3*i + 2]);
-            double K_mag = std::sqrt(Kx*Kx + Ky*Ky + Kz*Kz);
-            I_total += std::complex<double>(K_mag * panels[i].area, 0);
+    int nSegments = static_cast<int>(solution_.size());
+
+    for (auto& cond : conductors_) {
+        int nPanels = cond->NumPanels();
+        if (nPanels == 0) continue;
+
+        // Get excitation voltage
+        std::complex<double> V_applied(1.0, 0);  // Default 1V
+        if (cond->GetExcitationType() == 1) {
+            V_applied = cond->GetExcitationValue();
         }
 
-        // Z = V / I (V = 1V applied)
-        if (std::abs(I_total) > 1e-15) {
-            // Store in conductor's port impedance
-            // Note: This is simplified; proper port extraction needs more work
+        // For series-connected segments, current should be same in all segments
+        // Use average of segment currents (should all be equal for proper solution)
+        std::complex<double> I_avg(0, 0);
+        if (nSegments > 0) {
+            for (int i = 0; i < nSegments; ++i) {
+                I_avg += solution_[i];
+            }
+            I_avg /= static_cast<double>(nSegments);
+        }
+
+        // Impedance: Z = V / I
+        std::complex<double> Z(0, 0);
+        if (std::abs(I_avg) > 1e-30) {
+            Z = V_applied / I_avg;
+        }
+
+        // Store results
+        cond->SetPortImpedance(Z);
+        cond->SetTotalCurrent(I_avg);
+    }
+}
+
+// ============================================================================
+// Loop-Star Decomposition Implementation
+// ============================================================================
+//
+// Loop-Star decomposition separates the current into solenoidal (loop) and
+// non-solenoidal (star) components:
+//   J = J_loop + J_star
+//
+// where:
+//   div(J_loop) = 0     (solenoidal, no charge contribution)
+//   curl(J_star) = 0    (irrotational, contributes to charge)
+//
+// This decomposition improves low-frequency stability because:
+//   - Loop basis: Only contributes to L matrix (inductance)
+//   - Star basis: Only contributes to P matrix (capacitance/charge)
+//
+// For wire-type conductors (loops, spirals), the current is mostly solenoidal,
+// so we use a simplified approach based on the wire path connectivity.
+
+void radTConductorSolver::BuildEdgeConnectivity() {
+    // Build edge connectivity for all panels
+    // This identifies shared edges between adjacent panels
+
+    edges_.clear();
+
+    // Collect all panels
+    std::vector<SurfacePanel> allPanels;
+    for (const auto& cond : conductors_) {
+        const auto& panels = cond->GetPanels();
+        for (const auto& panel : panels) {
+            allPanels.push_back(panel);
         }
     }
+
+    int N = static_cast<int>(allPanels.size());
+    if (N == 0) return;
+
+    // Tolerance for vertex matching
+    double tol = 1e-10;
+
+    // For each panel, extract edges and find matching edges in other panels
+    for (int i = 0; i < N; ++i) {
+        const auto& panelI = allPanels[i];
+        int nVertI = static_cast<int>(panelI.vertices.size());
+
+        for (int ei = 0; ei < nVertI; ++ei) {
+            // Edge from vertex ei to vertex (ei+1) mod nVertI
+            TVector3d v1 = panelI.vertices[ei];
+            TVector3d v2 = panelI.vertices[(ei + 1) % nVertI];
+
+            // Check if this edge already exists in edges_ list
+            bool found = false;
+            for (auto& edge : edges_) {
+                if (edge.panel1 == i && edge.localIdx1 == ei) {
+                    found = true;
+                    break;
+                }
+                if (edge.panel2 == i && edge.localIdx2 == ei) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (found) continue;
+
+            // Search for matching edge in other panels
+            int matchPanel = -1;
+            int matchEdge = -1;
+
+            for (int j = i + 1; j < N; ++j) {
+                const auto& panelJ = allPanels[j];
+                int nVertJ = static_cast<int>(panelJ.vertices.size());
+
+                for (int ej = 0; ej < nVertJ; ++ej) {
+                    TVector3d u1 = panelJ.vertices[ej];
+                    TVector3d u2 = panelJ.vertices[(ej + 1) % nVertJ];
+
+                    // Check if edges match (same vertices, possibly reversed)
+                    TVector3d d1a = v1 - u1;
+                    TVector3d d1b = v2 - u2;
+                    TVector3d d2a = v1 - u2;
+                    TVector3d d2b = v2 - u1;
+                    double dist1 = d1a.Abs() + d1b.Abs();
+                    double dist2 = d2a.Abs() + d2b.Abs();
+
+                    if (dist1 < tol || dist2 < tol) {
+                        matchPanel = j;
+                        matchEdge = ej;
+                        break;
+                    }
+                }
+
+                if (matchPanel >= 0) break;
+            }
+
+            // Create edge entry
+            Edge edge;
+            edge.panel1 = i;
+            edge.localIdx1 = ei;
+            edge.panel2 = matchPanel;
+            edge.localIdx2 = matchEdge;
+            edge.midpoint = TVector3d(
+                0.5 * (v1.x + v2.x),
+                0.5 * (v1.y + v2.y),
+                0.5 * (v1.z + v2.z)
+            );
+            TVector3d dir = v2 - v1;
+            edge.length = dir.Abs();
+            if (edge.length > 1e-15) {
+                edge.direction = TVector3d(
+                    dir.x / edge.length,
+                    dir.y / edge.length,
+                    dir.z / edge.length
+                );
+            } else {
+                edge.direction = TVector3d(1, 0, 0);
+            }
+
+            edges_.push_back(edge);
+        }
+    }
+}
+
+void radTConductorSolver::BuildLoopStarBasis() {
+    // Build Loop and Star basis functions
+    //
+    // For a mesh with N panels and E edges:
+    //   - Number of internal edges: E_int (edges shared by 2 panels)
+    //   - Number of boundary edges: E_bnd (edges on mesh boundary)
+    //   - Number of vertices: V
+    //
+    // By Euler's formula for planar graphs:
+    //   V - E + F = 2  (for simply connected surface)
+    //
+    // Loop basis dimension: N_loop = E_int - N + 1 (independent loops)
+    // Star basis dimension: N_star = N - 1 (tree edges connecting panels)
+    //
+    // For wire-type conductors (closed loop):
+    //   - One global loop (current flowing around the wire)
+    //   - N-1 "star" basis (local current redistribution)
+
+    // Count internal and boundary edges
+    int numInternal = 0;
+    int numBoundary = 0;
+
+    for (const auto& edge : edges_) {
+        if (edge.panel2 >= 0) {
+            numInternal++;
+        } else {
+            numBoundary++;
+        }
+    }
+
+    int N = 0;
+    for (const auto& cond : conductors_) {
+        N += cond->NumPanels();
+    }
+
+    // For simply connected surface:
+    // N_loop = E_int - N + 1
+    // N_star = N - 1
+
+    numLoops_ = numInternal - N + 1;
+    if (numLoops_ < 0) numLoops_ = 0;
+    numStars_ = N - 1;
+    if (numStars_ < 0) numStars_ = 0;
+
+    // Simplified approach for wire-type conductors:
+    // Assume the primary current mode is a single loop around the wire
+    // Additional modes are local perturbations
+
+    // Initialize basis matrices
+    loopBasis_.clear();
+    starBasis_.clear();
+
+    // For now, use identity basis (no decomposition)
+    // This maintains compatibility with the current solver
+    // Full Loop-Star implementation requires:
+    // 1. Graph-based loop detection (cycle finding)
+    // 2. Spanning tree construction for star basis
+
+    // Placeholder: Use panel-based basis
+    loopBasis_.resize(N, std::vector<double>(N, 0.0));
+    starBasis_.resize(N, std::vector<double>(N, 0.0));
+
+    for (int i = 0; i < N; ++i) {
+        loopBasis_[i][i] = 1.0;  // Identity for now
+        starBasis_[i][i] = 1.0;
+    }
+}
+
+void radTConductorSolver::BuildSystemMatrixLoopStar() {
+    // Build system matrix with Loop-Star decomposition
+    //
+    // The standard EFIE:
+    //   [jωL + R + (1/jω)P] J = E_inc
+    //
+    // With Loop-Star decomposition:
+    //   J = T_L * J_L + T_S * J_S
+    //
+    // where T_L and T_S are transformation matrices
+    //
+    // The decomposed system:
+    //   [T_L^T * (jωL + R) * T_L    T_L^T * (jωL + R) * T_S  ] [J_L]   [T_L^T * E_inc]
+    //   [T_S^T * (jωL + R) * T_L    T_S^T * (jωL + R + P/jω) * T_S] [J_S] = [T_S^T * E_inc]
+    //
+    // Key insight: P matrix only affects Star-Star block
+    // This improves conditioning at low frequency
+
+    // For now, fall back to standard Darwin approximation
+    // Full Loop-Star requires proper T_L and T_S matrices
+
+    // Build edge connectivity if not done
+    if (edges_.empty()) {
+        BuildEdgeConnectivity();
+    }
+
+    // Build Loop-Star basis
+    BuildLoopStarBasis();
+
+    // Fall back to standard method until full implementation
+    // (The Loop-Star basis construction is complex and requires
+    // graph algorithms for cycle detection)
+
+    // For wire-type conductors at low frequency, the Darwin approximation
+    // with proper self-term handling should be sufficient
+
+    // Call standard BuildSystemMatrix
+    BuildSystemMatrix();
 }
 
 } // namespace radia
