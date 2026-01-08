@@ -1,12 +1,16 @@
 """
-ESIM Coupled Solver for Induction Heating Analysis
+ESIM Coupled Solver for Induction Heating and WPT Analysis
 
-This module implements the coupled solver that combines:
+This module implements coupled solvers that combine:
 1. FastImp coil (conductor model with eddy currents)
 2. ESIM workpiece (nonlinear ferromagnetic material)
+3. WPT (Wireless Power Transfer) multi-coil coupling analysis
 
-The solver uses fixed-point iteration to handle the nonlinear material behavior
-where the surface impedance Z depends on the tangential field magnitude |H_t|.
+Key Features:
+- Fixed-point iteration for nonlinear material (ESIM)
+- Neumann integral for mutual inductance calculation
+- Coupling coefficient k = M / sqrt(L1*L2)
+- Two-coil WPT impedance matrix analysis
 
 Reference:
     K. Hollaus, M. Kaltenbacher, J. Schoberl, "A Nonlinear Effective Surface
@@ -280,6 +284,151 @@ class InductionHeatingCoil:
         if self._rad is not None and self.handle is not None:
             return self._rad.CndNumPanels(self.handle)
         return 0
+
+    def get_wire_segments(self, n_segments=100):
+        """
+        Get discretized wire segments for Neumann integral calculation.
+
+        Parameters:
+            n_segments: Number of segments to discretize each turn
+
+        Returns:
+            segments: List of [start_point, end_point] for each segment
+            dl_vectors: List of dl vectors (end - start)
+            midpoints: List of segment midpoints
+        """
+        segments = []
+        dl_vectors = []
+        midpoints = []
+
+        if self.coil_type == 'loop':
+            # Single circular loop
+            R = self.radius
+            center = self.center
+            normal = self.normal
+
+            # Create local coordinate system
+            if abs(normal[2]) < 0.9:
+                u = np.cross(normal, [0, 0, 1])
+            else:
+                u = np.cross(normal, [1, 0, 0])
+            u = u / np.linalg.norm(u)
+            v = np.cross(normal, u)
+
+            # Discretize loop
+            dphi = 2 * np.pi / n_segments
+            for i in range(n_segments):
+                phi1 = i * dphi
+                phi2 = (i + 1) * dphi
+
+                p1 = center + R * (np.cos(phi1) * u + np.sin(phi1) * v)
+                p2 = center + R * (np.cos(phi2) * u + np.sin(phi2) * v)
+
+                segments.append([p1, p2])
+                dl_vectors.append(p2 - p1)
+                midpoints.append((p1 + p2) / 2)
+
+        elif self.coil_type == 'spiral':
+            # Multi-turn spiral coil
+            N = self.num_turns
+            R_inner = self.inner_radius
+            R_outer = self.outer_radius
+            pitch = self.pitch
+            center = self.center
+            axis = self.axis
+
+            # Create local coordinate system
+            if abs(axis[2]) < 0.9:
+                u = np.cross(axis, [0, 0, 1])
+            else:
+                u = np.cross(axis, [1, 0, 0])
+            u = u / np.linalg.norm(u)
+            v = np.cross(axis, u)
+
+            # Total angle for all turns
+            total_angle = 2 * np.pi * N
+            n_total_segments = n_segments * N
+            dphi = total_angle / n_total_segments
+
+            for i in range(n_total_segments):
+                # Parameter along spiral (0 to N turns)
+                t1 = i / n_total_segments
+                t2 = (i + 1) / n_total_segments
+
+                phi1 = t1 * total_angle
+                phi2 = t2 * total_angle
+
+                # Radius varies linearly from inner to outer
+                R1 = R_inner + t1 * (R_outer - R_inner)
+                R2 = R_inner + t2 * (R_outer - R_inner)
+
+                # Height along axis
+                z1 = t1 * N * pitch
+                z2 = t2 * N * pitch
+
+                # 3D positions
+                p1 = center + R1 * (np.cos(phi1) * u + np.sin(phi1) * v) + z1 * axis
+                p2 = center + R2 * (np.cos(phi2) * u + np.sin(phi2) * v) + z2 * axis
+
+                segments.append([p1, p2])
+                dl_vectors.append(p2 - p1)
+                midpoints.append((p1 + p2) / 2)
+
+        return segments, dl_vectors, midpoints
+
+    def compute_self_inductance_neumann(self, n_segments=100):
+        """
+        Compute self-inductance using Neumann integral with GMD correction.
+
+        For self-inductance, the Neumann integral diverges when segments overlap.
+        We use the Geometric Mean Distance (GMD) correction for the diagonal terms.
+
+        L = (mu_0 / 4*pi) * SUM_i SUM_j (dl_i . dl_j) / R_ij
+
+        where R_ij = |r_i - r_j| for i != j, and R_ii = GMD for i == j.
+
+        Parameters:
+            n_segments: Number of segments for discretization
+
+        Returns:
+            L: Self-inductance [H]
+        """
+        segments, dl_vectors, midpoints = self.get_wire_segments(n_segments)
+        n = len(segments)
+
+        if n == 0:
+            return 0.0
+
+        # Wire dimensions for GMD calculation
+        wire_w = self.params.get('wire_width', 0.003)
+        wire_h = self.params.get('wire_height', wire_w)
+
+        # GMD for rectangular cross-section (approximate)
+        # GMD ~ 0.2235 * (w + h) for square
+        # GMD ~ exp(-1/4) * sqrt(w*h) for rectangle
+        a_eff = np.exp(-0.25) * np.sqrt(wire_w * wire_h)
+
+        L = 0.0
+        for i in range(n):
+            for j in range(n):
+                dl_i = dl_vectors[i]
+                dl_j = dl_vectors[j]
+                dot_product = np.dot(dl_i, dl_j)
+
+                if i == j:
+                    # Self term: use GMD
+                    # For a segment of length l, self-inductance contribution
+                    # L_self = (mu_0 / 4*pi) * l * (ln(2*l/a) - 1)
+                    l_seg = np.linalg.norm(dl_i)
+                    if l_seg > a_eff:
+                        L += (mu_0 / (4 * np.pi)) * l_seg * (np.log(2 * l_seg / a_eff) - 1)
+                else:
+                    # Mutual term: standard Neumann
+                    r_ij = np.linalg.norm(midpoints[i] - midpoints[j])
+                    if r_ij > 1e-15:
+                        L += (mu_0 / (4 * np.pi)) * dot_product / r_ij
+
+        return L
 
 
 class ESIMCoupledSolver:
@@ -826,6 +975,491 @@ def solve_induction_heating(coil_params, workpiece_params, frequency,
     result['field_distribution'] = solver.get_field_distribution()
 
     return result
+
+
+def compute_mutual_inductance(coil1, coil2, n_segments=100):
+    """
+    Compute mutual inductance between two coils using Neumann integral.
+
+    M = (mu_0 / 4*pi) * oint oint (dl_1 . dl_2) / |r_12|
+
+    This is the fundamental formula for mutual inductance calculation
+    that accounts for arbitrary coil geometries.
+
+    Parameters:
+        coil1: First InductionHeatingCoil object
+        coil2: Second InductionHeatingCoil object
+        n_segments: Number of segments per turn for discretization
+
+    Returns:
+        M: Mutual inductance [H]
+    """
+    # Get wire segments for both coils
+    _, dl1_vectors, midpoints1 = coil1.get_wire_segments(n_segments)
+    _, dl2_vectors, midpoints2 = coil2.get_wire_segments(n_segments)
+
+    n1 = len(midpoints1)
+    n2 = len(midpoints2)
+
+    if n1 == 0 or n2 == 0:
+        return 0.0
+
+    # Compute Neumann integral
+    M = 0.0
+    for i in range(n1):
+        for j in range(n2):
+            dl1 = dl1_vectors[i]
+            dl2 = dl2_vectors[j]
+            r12 = np.linalg.norm(midpoints1[i] - midpoints2[j])
+
+            if r12 > 1e-15:
+                dot_product = np.dot(dl1, dl2)
+                M += dot_product / r12
+
+    M *= mu_0 / (4 * np.pi)
+
+    return M
+
+
+def compute_coupling_coefficient(coil1, coil2, n_segments=100,
+                                  L1=None, L2=None, M=None):
+    """
+    Compute coupling coefficient k between two coils.
+
+    k = M / sqrt(L1 * L2)
+
+    where:
+        M = mutual inductance
+        L1, L2 = self-inductances of coil1 and coil2
+
+    Parameters:
+        coil1: First InductionHeatingCoil object
+        coil2: Second InductionHeatingCoil object
+        n_segments: Number of segments for discretization
+        L1: Pre-computed self-inductance of coil1 (optional)
+        L2: Pre-computed self-inductance of coil2 (optional)
+        M: Pre-computed mutual inductance (optional)
+
+    Returns:
+        k: Coupling coefficient (0 <= k <= 1)
+        L1: Self-inductance of coil1 [H]
+        L2: Self-inductance of coil2 [H]
+        M: Mutual inductance [H]
+    """
+    # Compute self-inductances if not provided
+    if L1 is None:
+        L1 = coil1.compute_self_inductance_neumann(n_segments)
+
+    if L2 is None:
+        L2 = coil2.compute_self_inductance_neumann(n_segments)
+
+    # Compute mutual inductance if not provided
+    if M is None:
+        M = compute_mutual_inductance(coil1, coil2, n_segments)
+
+    # Compute coupling coefficient
+    if L1 > 0 and L2 > 0:
+        k = abs(M) / np.sqrt(L1 * L2)
+    else:
+        k = 0.0
+
+    # Clip to physical range [0, 1]
+    k = min(k, 1.0)
+
+    return k, L1, L2, M
+
+
+class WPTCoupledSolver:
+    """
+    Wireless Power Transfer (WPT) coupled solver for two-coil systems.
+
+    This solver computes the electrical characteristics of a two-coil WPT system:
+    - Mutual inductance M via Neumann integral
+    - Coupling coefficient k = M / sqrt(L1 * L2)
+    - Impedance matrix [Z11, Z12; Z21, Z22]
+    - Power transfer efficiency and optimal load
+
+    Impedance Matrix:
+        V1 = Z11*I1 + Z12*I2
+        V2 = Z21*I1 + Z22*I2
+
+        where:
+            Z11 = R1 + j*omega*L1  (primary self-impedance)
+            Z22 = R2 + j*omega*L2  (secondary self-impedance)
+            Z12 = Z21 = j*omega*M  (mutual impedance)
+
+    Resonant Topologies:
+        - S-S: Series-Series (both sides series capacitors)
+        - S-P: Series-Primary, Parallel-Secondary
+        - P-S: Parallel-Primary, Series-Secondary
+        - P-P: Parallel-Parallel
+    """
+
+    def __init__(self, coil_primary, coil_secondary, frequency):
+        """
+        Initialize the WPT coupled solver.
+
+        Parameters:
+            coil_primary: Primary (transmitter) InductionHeatingCoil
+            coil_secondary: Secondary (receiver) InductionHeatingCoil
+            frequency: Operating frequency [Hz]
+        """
+        self.coil1 = coil_primary
+        self.coil2 = coil_secondary
+        self.frequency = frequency
+        self.omega = 2 * np.pi * frequency
+
+        # Set frequency on coils
+        self.coil1.set_frequency(frequency)
+        self.coil2.set_frequency(frequency)
+
+        # Inductance values
+        self.L1 = None  # Primary self-inductance [H]
+        self.L2 = None  # Secondary self-inductance [H]
+        self.M = None   # Mutual inductance [H]
+        self.k = None   # Coupling coefficient
+
+        # Resistance values
+        self.R1 = None  # Primary resistance [Ohm]
+        self.R2 = None  # Secondary resistance [Ohm]
+
+        # Impedance matrix
+        self.Z_matrix = None  # 2x2 complex impedance matrix
+
+    def compute_inductances(self, n_segments=100):
+        """
+        Compute all inductance values using Neumann integral.
+
+        Parameters:
+            n_segments: Segments per turn for discretization
+
+        Returns:
+            L1, L2, M, k: Inductances [H] and coupling coefficient
+        """
+        # Self-inductances
+        self.L1 = self.coil1.compute_self_inductance_neumann(n_segments)
+        self.L2 = self.coil2.compute_self_inductance_neumann(n_segments)
+
+        # Mutual inductance
+        self.M = compute_mutual_inductance(self.coil1, self.coil2, n_segments)
+
+        # Coupling coefficient
+        if self.L1 > 0 and self.L2 > 0:
+            self.k = abs(self.M) / np.sqrt(self.L1 * self.L2)
+        else:
+            self.k = 0.0
+
+        return self.L1, self.L2, self.M, self.k
+
+    def compute_ac_resistance(self, coil, wire_length=None):
+        """
+        Compute AC resistance of a coil including skin effect.
+
+        Parameters:
+            coil: InductionHeatingCoil object
+            wire_length: Wire length [m] (computed if not provided)
+
+        Returns:
+            R_ac: AC resistance [Ohm]
+        """
+        sigma = coil.params.get('conductivity', 5.8e7)
+        wire_w = coil.params.get('wire_width', 0.003)
+        wire_h = coil.params.get('wire_height', wire_w)
+
+        # Skin depth
+        delta = np.sqrt(2 / (self.omega * mu_0 * sigma))
+
+        # Wire length (approximate)
+        if wire_length is None:
+            if coil.coil_type == 'loop':
+                wire_length = 2 * np.pi * coil.radius
+            elif coil.coil_type == 'spiral':
+                R_avg = (coil.inner_radius + coil.outer_radius) / 2
+                wire_length = 2 * np.pi * R_avg * coil.num_turns
+            else:
+                wire_length = 1.0
+
+        # DC resistance
+        A_wire = wire_w * wire_h
+        R_dc = wire_length / (sigma * A_wire)
+
+        # AC resistance with skin effect
+        if delta < min(wire_w, wire_h) / 2:
+            perimeter = 2 * (wire_w + wire_h)
+            A_eff = perimeter * delta
+            R_ac = wire_length / (sigma * A_eff)
+        else:
+            R_ac = R_dc
+
+        return R_ac
+
+    def compute_impedance_matrix(self):
+        """
+        Compute the 2x2 impedance matrix of the coupled coil system.
+
+        Z = [Z11, Z12]
+            [Z21, Z22]
+
+        where:
+            Z11 = R1 + j*omega*L1
+            Z22 = R2 + j*omega*L2
+            Z12 = Z21 = j*omega*M
+
+        Returns:
+            Z_matrix: 2x2 complex numpy array
+        """
+        # Compute inductances if not done
+        if self.L1 is None or self.L2 is None or self.M is None:
+            self.compute_inductances()
+
+        # Compute resistances
+        if self.R1 is None:
+            self.R1 = self.compute_ac_resistance(self.coil1)
+        if self.R2 is None:
+            self.R2 = self.compute_ac_resistance(self.coil2)
+
+        # Build impedance matrix
+        Z11 = self.R1 + 1j * self.omega * self.L1
+        Z22 = self.R2 + 1j * self.omega * self.L2
+        Z12 = 1j * self.omega * self.M
+        Z21 = Z12  # Reciprocity
+
+        self.Z_matrix = np.array([[Z11, Z12],
+                                   [Z21, Z22]], dtype=complex)
+
+        return self.Z_matrix
+
+    def compute_resonant_capacitors(self, topology='SS'):
+        """
+        Compute resonant capacitors for the given topology.
+
+        Parameters:
+            topology: 'SS', 'SP', 'PS', or 'PP'
+
+        Returns:
+            C1, C2: Capacitances [F] for primary and secondary
+        """
+        if self.L1 is None or self.L2 is None:
+            self.compute_inductances()
+
+        omega = self.omega
+
+        if topology == 'SS':
+            # Series-Series: C = 1 / (omega^2 * L)
+            C1 = 1 / (omega**2 * self.L1)
+            C2 = 1 / (omega**2 * self.L2)
+        elif topology == 'SP':
+            # Series-Primary, Parallel-Secondary
+            C1 = 1 / (omega**2 * self.L1)
+            # For parallel: C2 = 1/(omega^2 * L2) * (1 - k^2)
+            C2 = 1 / (omega**2 * self.L2 * (1 - self.k**2)) if self.k < 1 else np.inf
+        elif topology == 'PS':
+            # Parallel-Primary, Series-Secondary
+            C1 = 1 / (omega**2 * self.L1 * (1 - self.k**2)) if self.k < 1 else np.inf
+            C2 = 1 / (omega**2 * self.L2)
+        elif topology == 'PP':
+            # Parallel-Parallel
+            C1 = 1 / (omega**2 * self.L1 * (1 - self.k**2)) if self.k < 1 else np.inf
+            C2 = 1 / (omega**2 * self.L2 * (1 - self.k**2)) if self.k < 1 else np.inf
+        else:
+            raise ValueError(f"Unknown topology: {topology}")
+
+        return C1, C2
+
+    def compute_transfer_efficiency(self, R_load):
+        """
+        Compute power transfer efficiency for a given load resistance.
+
+        For S-S topology at resonance:
+            eta = k^2 * Q1 * Q2 / (1 + k^2 * Q1 * Q2) * R_load / (R2 + R_load)
+
+        Parameters:
+            R_load: Load resistance [Ohm]
+
+        Returns:
+            eta: Transfer efficiency (0 to 1)
+            P_load: Power delivered to load [W] (for I1 = 1A)
+            P_total: Total input power [W]
+        """
+        if self.L1 is None or self.R1 is None:
+            self.compute_impedance_matrix()
+
+        # Quality factors
+        Q1 = self.omega * self.L1 / self.R1
+        Q2 = self.omega * self.L2 / self.R2
+
+        # For S-S resonant at omega_0:
+        # Input impedance: Z_in = R1 + (omega*M)^2 / (R2 + R_load)
+        # Reflected resistance: R_ref = (omega*M)^2 / (R2 + R_load)
+
+        omega_M = self.omega * self.M
+        R_ref = (omega_M)**2 / (self.R2 + R_load)
+        Z_in = self.R1 + R_ref
+
+        # For primary current I1 = 1A:
+        P_in = abs(Z_in)  # Input power (real part * I1^2)
+
+        # Secondary current at resonance:
+        I2_mag = omega_M / (self.R2 + R_load)  # |I2/I1|
+
+        # Power to load
+        P_load = I2_mag**2 * R_load
+
+        # Efficiency
+        eta = P_load / (self.R1 + R_ref) if (self.R1 + R_ref) > 0 else 0
+
+        return eta, P_load, P_in
+
+    def compute_optimal_load(self):
+        """
+        Compute the optimal load resistance for maximum efficiency.
+
+        For S-S topology:
+            R_load_opt = R2 * sqrt(1 + k^2 * Q1 * Q2)
+
+        Returns:
+            R_load_opt: Optimal load resistance [Ohm]
+            eta_max: Maximum efficiency
+        """
+        if self.L1 is None or self.R1 is None:
+            self.compute_impedance_matrix()
+
+        Q1 = self.omega * self.L1 / self.R1
+        Q2 = self.omega * self.L2 / self.R2
+
+        # Optimal load for maximum efficiency
+        R_load_opt = self.R2 * np.sqrt(1 + self.k**2 * Q1 * Q2)
+
+        # Maximum efficiency
+        kQ = self.k * np.sqrt(Q1 * Q2)
+        eta_max = kQ**2 / (1 + np.sqrt(1 + kQ**2))**2
+
+        return R_load_opt, eta_max
+
+    def analyze(self, n_segments=100, R_load=None, topology='SS', verbose=True):
+        """
+        Perform complete WPT system analysis.
+
+        Parameters:
+            n_segments: Segments for inductance calculation
+            R_load: Load resistance [Ohm] (uses optimal if None)
+            topology: Resonant topology ('SS', 'SP', 'PS', 'PP')
+            verbose: Print results
+
+        Returns:
+            result: Dict with all analysis results
+        """
+        # Compute inductances
+        self.compute_inductances(n_segments)
+
+        # Compute impedance matrix
+        self.compute_impedance_matrix()
+
+        # Compute resonant capacitors
+        C1, C2 = self.compute_resonant_capacitors(topology)
+
+        # Compute optimal load
+        R_load_opt, eta_max = self.compute_optimal_load()
+
+        # Use specified or optimal load
+        if R_load is None:
+            R_load = R_load_opt
+
+        # Compute efficiency at operating point
+        eta, P_load, P_in = self.compute_transfer_efficiency(R_load)
+
+        # Quality factors
+        Q1 = self.omega * self.L1 / self.R1
+        Q2 = self.omega * self.L2 / self.R2
+
+        result = {
+            # Inductances
+            'L1_uH': self.L1 * 1e6,
+            'L2_uH': self.L2 * 1e6,
+            'M_uH': self.M * 1e6,
+            'k': self.k,
+
+            # Resistances
+            'R1_mOhm': self.R1 * 1e3,
+            'R2_mOhm': self.R2 * 1e3,
+
+            # Quality factors
+            'Q1': Q1,
+            'Q2': Q2,
+
+            # Resonant capacitors
+            'C1_nF': C1 * 1e9,
+            'C2_nF': C2 * 1e9,
+
+            # Efficiency
+            'R_load_opt_Ohm': R_load_opt,
+            'R_load_Ohm': R_load,
+            'eta_max': eta_max,
+            'eta': eta,
+
+            # Power (for I1 = 1A)
+            'P_in_W': P_in,
+            'P_load_W': P_load,
+
+            # Impedance matrix
+            'Z_matrix': self.Z_matrix,
+        }
+
+        if verbose:
+            print()
+            print("=" * 60)
+            print("WPT System Analysis Results")
+            print("=" * 60)
+            print()
+            print(f"Frequency: {self.frequency/1000:.1f} kHz")
+            print(f"Topology: {topology}")
+            print()
+            print("Inductance Parameters:")
+            print(f"  L1 (primary)  = {result['L1_uH']:.3f} uH")
+            print(f"  L2 (secondary)= {result['L2_uH']:.3f} uH")
+            print(f"  M (mutual)    = {result['M_uH']:.3f} uH")
+            print(f"  k (coupling)  = {result['k']:.4f}")
+            print()
+            print("Quality Factors:")
+            print(f"  Q1 = {result['Q1']:.1f}")
+            print(f"  Q2 = {result['Q2']:.1f}")
+            print()
+            print("Resonant Capacitors:")
+            print(f"  C1 = {result['C1_nF']:.2f} nF")
+            print(f"  C2 = {result['C2_nF']:.2f} nF")
+            print()
+            print("Efficiency Analysis:")
+            print(f"  Optimal load:  R_load = {result['R_load_opt_Ohm']:.2f} Ohm")
+            print(f"  Max efficiency: eta_max = {result['eta_max']*100:.1f}%")
+            print(f"  At R_load = {result['R_load_Ohm']:.2f} Ohm:")
+            print(f"    Efficiency: eta = {result['eta']*100:.1f}%")
+            print(f"    Power (I1=1A): P_load = {result['P_load_W']:.2f} W")
+            print()
+            print("Impedance Matrix (Z):")
+            print(f"  Z11 = {self.Z_matrix[0,0].real:.4f} + j{self.Z_matrix[0,0].imag:.4f} Ohm")
+            print(f"  Z12 = {self.Z_matrix[0,1].real:.4f} + j{self.Z_matrix[0,1].imag:.4f} Ohm")
+            print(f"  Z22 = {self.Z_matrix[1,1].real:.4f} + j{self.Z_matrix[1,1].imag:.4f} Ohm")
+            print()
+
+        return result
+
+
+def analyze_coil_coupling(coil1, coil2, frequency, n_segments=100, verbose=True):
+    """
+    Convenience function to analyze coupling between two coils.
+
+    Parameters:
+        coil1: First InductionHeatingCoil
+        coil2: Second InductionHeatingCoil
+        frequency: Operating frequency [Hz]
+        n_segments: Segments for Neumann integral
+        verbose: Print results
+
+    Returns:
+        result: Dict with coupling analysis results
+    """
+    solver = WPTCoupledSolver(coil1, coil2, frequency)
+    return solver.analyze(n_segments=n_segments, verbose=verbose)
 
 
 # Example usage and test

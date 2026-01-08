@@ -61,6 +61,11 @@ try:
         InductionHeatingCoil,
         ESIMCoupledSolver,
         solve_induction_heating,
+        # WPT (Wireless Power Transfer) analysis
+        WPTCoupledSolver,
+        compute_mutual_inductance,
+        compute_coupling_coefficient,
+        analyze_coil_coupling,
     )
     from .esim_vtk_export import (
         ESIMVTKOutput,
