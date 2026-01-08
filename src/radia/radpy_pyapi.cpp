@@ -3354,6 +3354,56 @@ static PyObject* radia_CndGetImpedance(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
+ * Defines port terminals for conductor
+ ***************************************************************************/
+static PyObject* radia_CndDefinePort(PyObject* self, PyObject* args)
+{
+	PyObject *oT1=0, *oT2=0;
+	int *arT1=0, *arT2=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "iOO:CndDefinePort", &cond, &oT1, &oT2))
+			throw CombErStr(strEr_BadFuncArg, ": CndDefinePort");
+
+		int n1 = 0, n2 = 0;
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oT1, 'i', arT1, n1))
+			throw CombErStr(strEr_BadFuncArg, ": CndDefinePort, incorrect terminal1 list");
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oT2, 'i', arT2, n2))
+			throw CombErStr(strEr_BadFuncArg, ": CndDefinePort, incorrect terminal2 list");
+
+		g_pyParse.ProcRes(RadCndDefinePort(cond, arT1, n1, arT2, n2));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arT1 != 0) delete[] arT1;
+	if(arT2 != 0) delete[] arT2;
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Auto-defines port terminals for conductor (first and last panels)
+ ***************************************************************************/
+static PyObject* radia_CndDefinePortAuto(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndDefinePortAuto", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndDefinePortAuto");
+
+		g_pyParse.ProcRes(RadCndDefinePortAuto(cond));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
  * Performs frequency sweep
  ***************************************************************************/
 static PyObject* radia_CndImpedanceSweep(PyObject* self, PyObject* args)
@@ -4591,6 +4641,8 @@ static PyMethodDef radia_methods[] = {
 	{"CndGetTotalCurrent", radia_CndGetTotalCurrent, METH_VARARGS, "CndGetTotalCurrent(cond) returns total current [A] through conductor after solve. Returns complex number."},
 	{"CndSolve", radia_CndSolve, METH_VARARGS, "CndSolve(cond) solves the EFIE + charge continuity equations for conductor cond using FastImp pFFT method."},
 	{"CndGetImpedance", radia_CndGetImpedance, METH_VARARGS, "CndGetImpedance(cond) returns complex impedance Z = R + jX [Ohm] as a complex number."},
+	{"CndDefinePort", radia_CndDefinePort, METH_VARARGS, "CndDefinePort(cond,[t1_panels],[t2_panels]) defines port terminals for impedance calculation. t1_panels and t2_panels are lists of panel indices."},
+	{"CndDefinePortAuto", radia_CndDefinePortAuto, METH_VARARGS, "CndDefinePortAuto(cond) auto-defines port using first and last panels (for wire-like conductors)."},
 	{"CndImpedanceSweep", radia_CndImpedanceSweep, METH_VARARGS, "CndImpedanceSweep(cond,[f1,f2,...]) computes impedance at multiple frequencies. Returns list of complex impedances."},
 	{"CndFld", radia_CndFld, METH_VARARGS, "CndFld(cond,'b'|'e'|'a',[x,y,z]) computes field from conductor at point. Returns complex [Fx,Fy,Fz] for AC field."},
 	{"CndNumPanels", radia_CndNumPanels, METH_VARARGS, "CndNumPanels(cond) returns the number of panels in the conductor discretization."},

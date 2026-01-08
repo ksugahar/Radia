@@ -1357,3 +1357,113 @@ result = solver.solve(tol=1e-4, max_iter=20, verbose=True)
 print(f"Power: P = {result['P_total']:.1f} W")
 print(f"Max power density: {result['max_P_density']/1e3:.2f} kW/m^2")
 ```
+
+---
+
+## FastImp Impedance Calculation: Current Status and Known Issues (2026-01-08)
+
+### Current Status: Alpha/Prototype
+
+The FastImp conductor impedance calculation is in **alpha/prototype stage**. The core functionality is implemented but produces unreliable results.
+
+### Working Features
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `CndRecBlock()` | ✓ Working | Creates conductor from rectangular block |
+| `CndLoop()` | ✓ Working | Creates circular loop conductor |
+| `CndSpiral()` | ✓ Working | Creates spiral coil conductor |
+| `CndWire()` | ✓ Working | Creates wire along path |
+| `CndNumPanels()` | ✓ Working | Returns panel count |
+| `CndSetFrequency()` | ✓ Working | Sets analysis frequency |
+| `CndDefinePortAuto()` | ✓ Working | Auto-defines port terminals |
+| `CndSetVoltage()` | ✓ Working | Sets voltage excitation |
+| `CndSetCurrent()` | ✓ Working | Sets current excitation |
+| `CndSolve()` | ⚠ Runs but results unreliable | Linear system solves but impedance is incorrect |
+| `CndGetImpedance()` | ⚠ Returns non-physical values | Impedance values are not realistic |
+| `CndFld()` | ⚠ Very small field values | Field computation returns near-zero values |
+
+### Known Issues
+
+1. **Impedance values are non-physical**
+   - Example: 1V excitation on loop coil returns Z ~ 10^13 Ohm instead of ~mOhm range
+   - Cause: Surface current solution vector contains very small values (~10^-38 A/m)
+
+2. **Linear solver produces near-zero solution**
+   - LAPACK zgesv executes without error
+   - But the solution vector is essentially zero
+   - Indicates RHS vector or system matrix is improperly scaled
+
+3. **BuildSystemMatrix issues**
+   - The EFIE+continuity equation discretization may have scaling issues
+   - RHS voltage distribution formula needs verification
+   - Self-term (diagonal) computation may be missing proper singularity handling
+
+### Technical Root Cause
+
+The FastImp implementation follows the EFIE (Electric Field Integral Equation) formulation:
+```
+n × (-jωA - ∇Φ) = n × (Zs · K)   (on conductor surface)
+div_s(K) + jωσ = 0               (charge continuity)
+```
+
+The matrix assembly in `BuildSystemMatrix()` computes:
+- L matrix: μ₀ * G(r,r') * dS (inductance from vector potential)
+- R matrix: Surface resistance Zs = (1+j)/(σδ) on diagonal
+- P matrix: (1/ε₀) * ∂G/∂n * dS (scalar potential gradient)
+- D matrix: Surface divergence operator
+- C matrix: G(r,r') * dS (capacitance)
+
+**Issue**: The current implementation uses a simplified scalar formulation instead of the full vector EFIE. This causes the solution to be numerically unstable.
+
+### Required Improvements
+
+1. **Vector EFIE implementation**: Replace scalar K with tangential vector surface current K_t
+2. **Proper self-term computation**: Use analytical or semi-analytical integration for panel self-terms
+3. **Better RHS scaling**: Scale voltage excitation to match system matrix magnitude
+4. **Validation tests**: Compare with analytical solutions for canonical geometries
+
+### Alternative Approach for Coil Impedance
+
+Until FastImp is fully implemented, the ESIM coupled solver can use:
+
+1. **Biot-Savart analytical model** for coil field (already implemented in `esim_coupled_solver.py`)
+2. **Simple analytical formulas** for coil inductance:
+   - Circular loop: L = μ₀R[ln(8R/a) - 2] where R=radius, a=wire radius
+   - Solenoid: L = μ₀N²A/l where N=turns, A=cross-section, l=length
+
+Example using analytical model:
+```python
+from esim_coupled_solver import InductionHeatingCoil
+
+# Create coil with analytical Biot-Savart field calculation
+coil = InductionHeatingCoil(
+    coil_type='spiral',
+    center=[0, 0, 0.02],
+    inner_radius=0.03,
+    outer_radius=0.05,
+    num_turns=5,
+    axis=[0, 0, 1],
+)
+coil.set_current(100)
+
+# Compute B field at a point (uses Biot-Savart, no FastImp needed)
+B = coil.compute_field([0, 0, 0])
+print(f"B at center: {B} T")
+```
+
+### Roadmap for FastImp Completion
+
+| Priority | Task | Estimated Effort |
+|----------|------|------------------|
+| High | Fix BuildSystemMatrix scaling | 2-3 days |
+| High | Implement proper self-term integration | 2-3 days |
+| Medium | Vector EFIE formulation | 1 week |
+| Medium | Validation against analytical solutions | 2-3 days |
+| Low | pFFT acceleration tuning | 3-5 days |
+
+### References for Implementation
+
+1. Z. Zhu et al., "Algorithms in FastImp", IEEE TCAD 2005 - Core algorithm description
+2. R.F. Harrington, "Field Computation by Moment Methods" - EFIE fundamentals
+3. S.M. Rao, D.R. Wilton, A.W. Glisson, "Electromagnetic scattering by surfaces of arbitrary shape", IEEE TAP 1982 - RWG basis functions

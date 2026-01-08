@@ -292,6 +292,11 @@ public:
      */
     std::complex<double> GetPortImpedance() const { return portImpedance_; }
 
+    /**
+     * @brief Set port impedance (used by solver)
+     */
+    void SetPortImpedance(std::complex<double> Z) { portImpedance_ = Z; }
+
     // ========== Excitation settings ==========
 
     /**
@@ -416,11 +421,19 @@ public:
      */
     void EnablePfft(bool enable = true) { usePfft_ = enable; }
 
+    /**
+     * @brief Enable Loop-Star decomposition for low-frequency stability
+     * @param enable True to enable (default: true for f < 1 MHz)
+     */
+    void EnableLoopStar(bool enable = true) { useLoopStar_ = enable; }
+
 private:
     std::vector<std::shared_ptr<radTConductor>> conductors_;
     double frequency_;
     ConductorFormulation formulation_;
     bool usePfft_;
+    bool useLoopStar_;
+    bool directImpedanceMode_;  // True when impedance computed directly (skip SolveLinearSystem)
 
     // pFFT accelerator
     std::unique_ptr<radTPfft> pfft_;
@@ -430,7 +443,27 @@ private:
     std::vector<std::complex<double>> rhs_;
     std::vector<std::complex<double>> solution_;
 
+    // Loop-Star decomposition data
+    // Edge-based connectivity for RWG-like basis
+    struct Edge {
+        int panel1, panel2;     // Adjacent panels (-1 if boundary)
+        int localIdx1, localIdx2; // Local edge index in each panel
+        TVector3d midpoint;     // Edge midpoint
+        TVector3d direction;    // Edge direction (normalized)
+        double length;          // Edge length
+    };
+    std::vector<Edge> edges_;
+
+    // Loop-Star transformation matrices
+    std::vector<std::vector<double>> loopBasis_;   // Loop (solenoidal) basis
+    std::vector<std::vector<double>> starBasis_;   // Star (non-solenoidal) basis
+    int numLoops_;
+    int numStars_;
+
     void BuildSystemMatrix();
+    void BuildSystemMatrixLoopStar();  // Loop-Star version
+    void BuildEdgeConnectivity();       // Build edge topology
+    void BuildLoopStarBasis();          // Construct Loop and Star bases
     void SolveLinearSystem();
     void ExtractSolution();
     void ComputePortImpedance();

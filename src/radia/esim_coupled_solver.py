@@ -296,6 +296,17 @@ class ESIMCoupledSolver:
     3. Look up Z(|H_t|) from ESI table
     4. Update workpiece impedance
     5. Repeat until convergence
+
+    Impedance Calculation:
+    The total coil impedance seen from the power source includes:
+    - Z_coil = R_coil + j*omega*L_coil  (coil self-impedance)
+    - Z_reflected = k^2 * Z_workpiece    (reflected from workpiece)
+
+    where:
+    - R_coil: Coil AC resistance (including skin effect)
+    - L_coil: Coil self-inductance
+    - k: Coupling coefficient between coil and workpiece
+    - Z_workpiece: Effective workpiece impedance from ESIM
     """
 
     def __init__(self, coil, workpiece, frequency):
@@ -310,6 +321,7 @@ class ESIMCoupledSolver:
         self.coil = coil
         self.workpiece = workpiece
         self.frequency = frequency
+        self.omega = 2 * np.pi * frequency
 
         # Set frequency on coil
         self.coil.set_frequency(frequency)
@@ -318,6 +330,15 @@ class ESIMCoupledSolver:
         self.converged = False
         self.iterations = 0
         self.residual_history = []
+
+        # Impedance calculation results
+        self.Z_coil_self = None       # Coil self-impedance [Ohm]
+        self.Z_reflected = None       # Reflected impedance from workpiece [Ohm]
+        self.Z_total = None           # Total impedance [Ohm]
+        self.coupling_factor = None   # Coupling coefficient k
+        self.L_coil = None            # Coil self-inductance [H]
+        self.R_coil = None            # Coil AC resistance [Ohm]
+        self.M_mutual = None          # Mutual inductance [H]
 
     def compute_coil_field_on_workpiece(self):
         """
@@ -420,6 +441,12 @@ class ESIMCoupledSolver:
         # Final power computation
         P_total, Q_total = self.workpiece.compute_power_losses()
 
+        # Compute impedances
+        self.compute_coil_self_impedance()
+        self.compute_reflected_impedance(P_total, Q_total)
+        self.compute_total_impedance()
+        impedance_summary = self.get_impedance_summary()
+
         # Get summary
         summary = self.workpiece.get_summary()
 
@@ -434,6 +461,11 @@ class ESIMCoupledSolver:
             'residual_history': self.residual_history,
             'H_tangential': H_tangential,
             'B_fields': B_fields,
+            # Impedance results
+            'impedance': impedance_summary,
+            'Z_coil_self': self.Z_coil_self,
+            'Z_reflected': self.Z_reflected,
+            'Z_total': self.Z_total,
         }
 
         if verbose:
@@ -443,6 +475,15 @@ class ESIMCoupledSolver:
             print(f"  Total power: P = {P_total:.1f} W, Q = {Q_total:.1f} var")
             print(f"  Power factor: {result['power_factor']:.3f}")
             print(f"  Max power density: {summary['max_P_density']/1e3:.2f} kW/m^2")
+            print()
+            print("Impedance Analysis:")
+            print(f"  Coil: L = {impedance_summary['L_coil_uH']:.3f} uH, "
+                  f"R = {impedance_summary['R_coil_mOhm']:.3f} mOhm")
+            print(f"  Z_coil_self = {self.Z_coil_self.real*1e3:.3f} + j{self.Z_coil_self.imag*1e3:.3f} mOhm")
+            print(f"  Z_reflected = {self.Z_reflected.real*1e3:.3f} + j{self.Z_reflected.imag*1e3:.3f} mOhm")
+            print(f"  Z_total     = {self.Z_total.real*1e3:.3f} + j{self.Z_total.imag*1e3:.3f} mOhm")
+            print(f"  |Z_total|   = {abs(self.Z_total)*1e3:.3f} mOhm, phase = {np.angle(self.Z_total, deg=True):.1f} deg")
+            print(f"  Efficiency (P_wp/P_total): {impedance_summary['efficiency']*100:.1f}%")
 
         return result
 
@@ -472,6 +513,260 @@ class ESIMCoupledSolver:
                 'Z_surface': complex(panel.Z_surface),
             })
         return field_data
+
+    def compute_coil_self_impedance(self):
+        """
+        Compute the coil self-impedance Z_coil = R_coil + j*omega*L_coil.
+
+        For spiral coil:
+            L = mu_0 * N^2 * R_avg^2 / (2 * R_avg)  (simplified formula)
+            L = mu_0 * N^2 * R_avg * (ln(8*R_avg/a) - 2)  (more accurate)
+
+        For loop coil:
+            L = mu_0 * R * (ln(8*R/a) - 2)  (Neumann formula for thin ring)
+
+        where:
+            N = number of turns
+            R_avg = average radius
+            a = effective wire radius
+
+        Returns:
+            Z_coil: Complex coil self-impedance [Ohm]
+        """
+        if self.coil.coil_type == 'loop':
+            R = self.coil.radius
+            wire_w = self.coil.params.get('wire_width', 0.003)
+            wire_h = self.coil.params.get('wire_height', wire_w)
+
+            # Effective wire radius (geometric mean for rectangular)
+            a_eff = np.sqrt(wire_w * wire_h) / 2
+
+            # Neumann formula for self-inductance of circular loop
+            if R > a_eff:
+                L = mu_0 * R * (np.log(8 * R / a_eff) - 2)
+            else:
+                L = mu_0 * R  # Fallback for very thick wire
+
+            N = 1
+
+        elif self.coil.coil_type == 'spiral':
+            N = self.coil.num_turns
+            R_inner = self.coil.inner_radius
+            R_outer = self.coil.outer_radius
+            R_avg = (R_inner + R_outer) / 2
+            wire_w = self.coil.params.get('wire_width', 0.003)
+            wire_h = self.coil.params.get('wire_height', wire_w)
+
+            # Effective wire radius
+            a_eff = np.sqrt(wire_w * wire_h) / 2
+
+            # Wheeler's formula for planar spiral (approximate)
+            # L = mu_0 * N^2 * R_avg / 2 * (ln(8*R_avg/a) - 2)
+            # More accurate: use modified Wheeler formula
+            c = (R_outer - R_inner) / 2  # Coil width
+            rho = (R_outer - R_inner) / (R_outer + R_inner)  # Fill factor
+
+            if rho < 0.9:
+                # Wheeler's formula for flat spiral
+                # L = 31.33 * mu_0 * N^2 * R_avg^2 / (8*R_avg + 11*c)  [in SI]
+                # Simplified: L = K * mu_0 * N^2 * R_avg
+                K = 1.0  # Geometry factor
+                L = mu_0 * N**2 * R_avg * K * (np.log(8 * R_avg / a_eff) - 2)
+            else:
+                # Thin solenoid approximation
+                L = mu_0 * N**2 * np.pi * R_avg**2 / (N * self.coil.pitch)
+
+        else:
+            # Unknown type, use simple estimate
+            R_avg = 0.05
+            N = 1
+            L = mu_0 * N**2 * R_avg
+
+        # Store inductance
+        self.L_coil = L
+
+        # Compute AC resistance (includes skin effect)
+        sigma_coil = self.coil.params.get('conductivity', 5.8e7)
+        wire_w = self.coil.params.get('wire_width', 0.003)
+        wire_h = self.coil.params.get('wire_height', wire_w)
+
+        # Skin depth in copper
+        delta = np.sqrt(2 / (self.omega * mu_0 * sigma_coil))
+
+        # Wire length
+        if self.coil.coil_type == 'loop':
+            wire_length = 2 * np.pi * self.coil.radius
+        elif self.coil.coil_type == 'spiral':
+            # Approximate spiral length
+            R_avg = (self.coil.inner_radius + self.coil.outer_radius) / 2
+            wire_length = 2 * np.pi * R_avg * self.coil.num_turns
+        else:
+            wire_length = 1.0
+
+        # DC resistance
+        A_wire = wire_w * wire_h
+        R_dc = wire_length / (sigma_coil * A_wire)
+
+        # AC resistance factor (skin effect)
+        # For rectangular conductor, Rac/Rdc ~ (w + h) / (4 * delta) for delta << w, h
+        if delta < min(wire_w, wire_h) / 2:
+            # High frequency: current flows in skin layer
+            perimeter = 2 * (wire_w + wire_h)
+            A_eff = perimeter * delta  # Effective area for skin current
+            R_ac = wire_length / (sigma_coil * A_eff)
+        else:
+            # Low frequency: uniform current
+            R_ac = R_dc
+
+        self.R_coil = R_ac
+
+        # Total self-impedance
+        self.Z_coil_self = R_ac + 1j * self.omega * L
+
+        return self.Z_coil_self
+
+    def compute_reflected_impedance(self, P_workpiece, Q_workpiece):
+        """
+        Compute the reflected impedance from workpiece to coil.
+
+        The reflected impedance represents the loading effect of the workpiece
+        on the coil. It is computed from the power balance:
+
+            Z_reflected = (P + jQ) / I^2
+
+        where P and Q are the real and reactive power absorbed by the workpiece.
+
+        Alternative formulation using coupling coefficient:
+            Z_reflected = omega^2 * M^2 / Z_workpiece
+                        = k^2 * omega * L_coil * omega * L_workpiece / Z_workpiece
+
+        Parameters:
+            P_workpiece: Real power absorbed by workpiece [W]
+            Q_workpiece: Reactive power (inductive) [var]
+
+        Returns:
+            Z_reflected: Complex reflected impedance [Ohm]
+        """
+        I = self.coil.current
+
+        if abs(I) < 1e-20:
+            self.Z_reflected = 0j
+            return self.Z_reflected
+
+        # Impedance from power balance
+        # P = Re(Z) * I^2, Q = Im(Z) * I^2
+        R_reflected = P_workpiece / (I**2)
+        X_reflected = Q_workpiece / (I**2)
+
+        self.Z_reflected = R_reflected + 1j * X_reflected
+
+        # Estimate mutual inductance and coupling factor
+        if self.L_coil is not None and self.L_coil > 0:
+            # From Q_reflected = omega * M^2 / L_workpiece_eff
+            # Approximate L_workpiece_eff from workpiece geometry
+            # For a slab: L_eff ~ mu_0 * A / delta where A is area, delta is skin depth
+
+            # Total workpiece area
+            A_workpiece = sum(p.area for p in self.workpiece.panels)
+
+            # Average skin depth (from first panel's Z_surface)
+            if self.workpiece.panels:
+                Z_avg = np.mean([abs(p.Z_surface) for p in self.workpiece.panels])
+                sigma = self.workpiece.esi_table.sigma
+                # Z_s = (1+j) * rho / delta = (1+j) / (sigma * delta)
+                # |Z_s| = sqrt(2) / (sigma * delta)
+                # delta = sqrt(2) / (sigma * |Z_s|)
+                if Z_avg > 1e-20:
+                    delta_est = np.sqrt(2) / (sigma * Z_avg)
+                else:
+                    delta_est = 0.001  # Default 1mm
+            else:
+                delta_est = 0.001
+
+            # Effective workpiece inductance (very rough estimate)
+            # L_workpiece_eff ~ mu_0 * A / (pi * delta) for induced currents
+            L_workpiece_eff = mu_0 * A_workpiece / (np.pi * delta_est)
+
+            # Mutual inductance from reflected reactance
+            # X_reflected = omega * M^2 / L_workpiece_eff
+            if abs(X_reflected) > 1e-20 and L_workpiece_eff > 1e-20:
+                M_squared = X_reflected * L_workpiece_eff / self.omega
+                if M_squared > 0:
+                    self.M_mutual = np.sqrt(M_squared)
+                    self.coupling_factor = self.M_mutual / np.sqrt(self.L_coil * L_workpiece_eff)
+                else:
+                    self.M_mutual = 0
+                    self.coupling_factor = 0
+            else:
+                self.M_mutual = 0
+                self.coupling_factor = 0
+
+        return self.Z_reflected
+
+    def compute_total_impedance(self):
+        """
+        Compute total system impedance seen from the power source.
+
+        Z_total = Z_coil + Z_reflected
+                = (R_coil + R_reflected) + j*(omega*L_coil + X_reflected)
+
+        The real part represents total power dissipation (coil + workpiece).
+        The imaginary part represents total reactive power (coil inductance + workpiece).
+
+        Returns:
+            Z_total: Complex total impedance [Ohm]
+        """
+        if self.Z_coil_self is None:
+            self.compute_coil_self_impedance()
+
+        if self.Z_reflected is None:
+            # Use current power values
+            P_total, Q_total = self.workpiece.compute_power_losses()
+            self.compute_reflected_impedance(P_total, Q_total)
+
+        self.Z_total = self.Z_coil_self + self.Z_reflected
+
+        return self.Z_total
+
+    def get_impedance_summary(self):
+        """
+        Get a summary of all impedance values.
+
+        Returns:
+            summary: Dict with impedance information
+        """
+        # Ensure impedances are computed
+        if self.Z_total is None:
+            self.compute_total_impedance()
+
+        summary = {
+            # Coil self-impedance
+            'L_coil_uH': self.L_coil * 1e6 if self.L_coil else 0,
+            'R_coil_mOhm': self.R_coil * 1e3 if self.R_coil else 0,
+            'Z_coil_self': self.Z_coil_self,
+
+            # Reflected impedance
+            'Z_reflected': self.Z_reflected,
+            'R_reflected_mOhm': self.Z_reflected.real * 1e3 if self.Z_reflected else 0,
+            'X_reflected_mOhm': self.Z_reflected.imag * 1e3 if self.Z_reflected else 0,
+
+            # Total impedance
+            'Z_total': self.Z_total,
+            'R_total_mOhm': self.Z_total.real * 1e3 if self.Z_total else 0,
+            'X_total_mOhm': self.Z_total.imag * 1e3 if self.Z_total else 0,
+            'Z_total_magnitude_mOhm': abs(self.Z_total) * 1e3 if self.Z_total else 0,
+            'phase_deg': np.angle(self.Z_total, deg=True) if self.Z_total else 0,
+
+            # Coupling
+            'M_mutual_uH': self.M_mutual * 1e6 if self.M_mutual else 0,
+            'coupling_factor': self.coupling_factor if self.coupling_factor else 0,
+
+            # Efficiency estimate (P_workpiece / P_total)
+            'efficiency': (self.Z_reflected.real / self.Z_total.real
+                          if self.Z_total and self.Z_total.real > 0 else 0),
+        }
+
+        return summary
 
 
 def solve_induction_heating(coil_params, workpiece_params, frequency,
