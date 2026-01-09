@@ -1845,6 +1845,165 @@ def get_peak_memory_mb():
 
 ---
 
-**Last Updated**: 2025-12-21 (Added logging policy, DOF documentation: Tetra=3, Hexa=6)
+## RWG-EFIE Conductor Solver Policy
+
+### Target Application: Power Electronics (2026-01-09)
+
+**Policy**: The RWG-EFIE conductor solver is designed for **power electronics applications** (DC to ~1 MHz).
+
+**Target Applications**:
+- **Induction heating**: 1 kHz - 500 kHz
+- **Wireless power transfer (WPT)**: 6.78 MHz, 13.56 MHz (industrial standards)
+- **Power electronics**: DC - 1 MHz (inverters, converters, transformers)
+- **Eddy current analysis**: Low to medium frequency
+
+**NOT Designed For**:
+- RF/Microwave applications (> 10 MHz)
+- Antenna design
+- High-frequency EMC/EMI analysis
+
+**Rationale**: For RF applications, specialized tools (HFSS, CST, FEKO) are more appropriate. Radia focuses on power-frequency electromagnetics where quasi-static approximations are valid.
+
+### Loop-Star Decomposition: Mandatory (No Option to Disable)
+
+**Policy (2026-01-09)**: Loop-Star decomposition is **mandatory** for all RWG-EFIE solves. The legacy direct RWG solver has been **removed**.
+
+**Implementation** (in `RWGEFIESolver`):
+```cpp
+// Constructor - Loop-Star is always used
+useMQS_ = true;  // MQS mode enabled by default for power electronics
+
+// Solve() always calls SolveLoopStar()
+// Legacy SolveLinearSystem() has been REMOVED
+```
+
+**Rationale**:
+1. **Target frequency range**: Power electronics (DC - 1 MHz) requires Loop-Star
+2. **Low-frequency stability**: Eliminates EFIE low-frequency breakdown (jωL → 0)
+3. **MQS validity**: At power frequencies, displacement current is negligible (div J ≈ 0)
+4. **Reduced DOF**: MQS mode solves only Loop equations (fewer unknowns)
+5. **Code simplicity**: Single solver path, no conditional branching
+
+**MQS Mode Control**:
+- `useMQS_ = true` (default): Solve Loop equations only (I_S = 0)
+- `useMQS_ = false`: Solve full Loop-Star system (for higher frequencies where capacitive effects matter)
+
+### Loop-Star Technical Details
+
+**Basis Transformation**:
+```
+RWG basis → Loop (solenoidal) + Star (irrotational)
+
+Loop functions: Formed from co-tree edges (create closed current loops)
+Star functions: Formed from tree edges (create divergent currents)
+```
+
+**MQS Mode** (useMQS_ = true):
+- Solves only Loop equations: `Z_LL * I_L = V_L`
+- Sets Star currents to zero: `I_S = 0`
+- Valid when: `ω * ε << σ` (conduction dominates displacement)
+
+**Full EFIE Mode** (useMQS_ = false):
+- Solves coupled system:
+  ```
+  [Z_LL  Z_LS] [I_L]   [V_L]
+  [Z_SL  Z_SS] [I_S] = [V_S]
+  ```
+- Required when capacitive effects are significant
+
+**Performance Impact**:
+
+| Mode | DOF Reduction | Accuracy (f < 1MHz) | Overhead |
+|------|---------------|---------------------|----------|
+| MQS (Loop-only) | ~50% | Excellent | Minimal |
+| Full Loop-Star | 0% | Exact | ~10% matrix transform |
+| No Loop-Star | 0% | Poor at low-f | None |
+
+---
+
+## Complex Permeability and ESIM Policy
+
+### Complex Permeability Support (2026-01-09)
+
+Radia SIBC (Surface Impedance Boundary Condition) supports **complex permeability**:
+
+```
+μ = μ' - jμ"
+```
+
+Where:
+- **μ'** (real part): Energy storage, determines reactive power
+- **μ"** (imaginary part): Energy loss from magnetic hysteresis/eddy currents in grains
+- **Loss tangent**: tan(δ_m) = μ" / μ'
+
+**Physical Effects**:
+
+| Component | Physical Meaning | Power |
+|-----------|------------------|-------|
+| μ' | Magnetic energy storage | Reactive: Q' = (ω/2) * μ' * |H|^2 |
+| μ" | Magnetic loss | Active: P_mag = (ω/2) * μ" * |H|^2 |
+
+**API Usage**:
+
+```python
+from esim_cell_problem import ESIMCellProblemSolver
+
+# Constant complex permeability (ferrite at 50 kHz)
+solver = ESIMCellProblemSolver(
+    sigma=0.01,           # S/m (ferrite is nearly insulating)
+    frequency=50000,      # Hz
+    complex_mu=(2000, 200)  # (μ'_r, μ"_r)
+)
+
+# H-dependent complex permeability (saturable ferromagnetic)
+complex_mu_data = [
+    [0, 2000, 200],      # [H (A/m), μ'_r, μ"_r]
+    [1000, 1000, 100],
+    [10000, 200, 20],
+]
+solver = ESIMCellProblemSolver(
+    sigma=2e6,
+    frequency=50000,
+    complex_mu=complex_mu_data
+)
+```
+
+### ESIM (Effective Surface Impedance Method)
+
+**Policy**: ESIM is the recommended method for nonlinear magnetic materials in conductor problems.
+
+**What ESIM Does**:
+1. Solves 1D Cell Problem in depth direction for each surface H-field value
+2. Computes effective surface impedance Z(H0) that accounts for:
+   - Skin effect (nonuniform current distribution)
+   - Magnetic saturation (H-dependent μ)
+   - Magnetic losses (complex μ = μ' - jμ")
+3. Builds lookup table for fast 3D solver iteration
+
+**When to Use ESIM**:
+- Induction heating (workpiece heating analysis)
+- Nonlinear iron cores in transformers/motors
+- Lossy ferrite components at high frequency
+- Any case where μ(H) varies significantly
+
+**ESIM vs Standard SIBC**:
+
+| Aspect | Standard SIBC | ESIM |
+|--------|---------------|------|
+| μ assumption | Constant | H-dependent |
+| Magnetic loss | Optional (μ") | Included via μ"(H) |
+| Accuracy in saturation | Poor | Good |
+| Computational cost | Low | Higher (1D solve per H0) |
+
+**Reference Implementation**:
+- `src/radia/esim_cell_problem.py`: Cell problem solver with complex μ
+- `src/radia/esim_coupled_solver.py`: 3D coupled solver using ESIM
+
+**Literature Reference**:
+K. Hollaus, M. Kaltenbacher, J. Schoberl, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025.
+
+---
+
+**Last Updated**: 2026-01-09 (Added complex permeability and ESIM policy)
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation

@@ -1431,91 +1431,11 @@ EXP int CALL RadCndGetImpedance(double* Z_real, double* Z_imag, int cond);
 EXP int CALL RadCndImpedanceSweep(double* Z_real, double* Z_imag, int cond,
                                    double* freqs, int nfreq);
 
-/** Computes B field from conductor at a point.
-@param B_real [out] real part of B field [Bx, By, Bz]
-@param B_imag [out] imaginary part of B field [Bx, By, Bz]
-@param cond [in] conductor reference number
-@param point [in] evaluation point [x, y, z]
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+/* NOTE: CndFld functions have been removed.
+   Use rad.Fld(cond, field_type, point) for conductor field computation.
+   The unified Fld() API automatically detects conductor objects and returns
+   complex fields [Fx_re, Fy_re, Fz_re, Fx_im, Fy_im, Fz_im] for AC analysis.
 */
-EXP int CALL RadCndFldB(double* B_real, double* B_imag, int cond, double* point);
-
-/** Computes E field from conductor at a point.
-@param E_real [out] real part of E field [Ex, Ey, Ez]
-@param E_imag [out] imaginary part of E field [Ex, Ey, Ez]
-@param cond [in] conductor reference number
-@param point [in] evaluation point [x, y, z]
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-*/
-EXP int CALL RadCndFldE(double* E_real, double* E_imag, int cond, double* point);
-
-/** Computes vector potential A from conductor at a point.
-Vector potential A is computed from surface current K using:
-  A = mu_0/(4*pi) * integral{ K / |r - r'| } dA'
-Uses Lorenz gauge.
-@param A_real [out] real part of A [Ax, Ay, Az] in T*m
-@param A_imag [out] imaginary part of A [Ax, Ay, Az]
-@param cond [in] conductor reference number
-@param point [in] evaluation point [x, y, z]
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-*/
-EXP int CALL RadCndFldA(double* A_real, double* A_imag, int cond, double* point);
-
-/** Computes scalar potential Phi from conductor at a point.
-Scalar potential Phi is computed from surface charge sigma using:
-  Phi = 1/(4*pi*eps_0) * integral{ sigma / |r - r'| } dA'
-Uses Lorenz gauge.
-@param Phi_real [out] real part of Phi in Volts
-@param Phi_imag [out] imaginary part of Phi
-@param cond [in] conductor reference number
-@param point [in] evaluation point [x, y, z]
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-*/
-EXP int CALL RadCndFldPhi(double* Phi_real, double* Phi_imag, int cond, double* point);
-
-/** Batch computation of B field from conductor at multiple points (OpenMP parallelized).
-@param B_real [out] real parts of B fields (npts * 3)
-@param B_imag [out] imaginary parts of B fields (npts * 3)
-@param cond [in] conductor reference number
-@param points [in] evaluation points (npts * 3)
-@param npts [in] number of evaluation points
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-*/
-EXP int CALL RadCndFldBBatch(double* B_real, double* B_imag, int cond,
-                              double* points, int npts);
-
-/** Batch computation of E field from conductor at multiple points (OpenMP parallelized).
-@param E_real [out] real parts of E fields (npts * 3)
-@param E_imag [out] imaginary parts of E fields (npts * 3)
-@param cond [in] conductor reference number
-@param points [in] evaluation points (npts * 3)
-@param npts [in] number of evaluation points
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-*/
-EXP int CALL RadCndFldEBatch(double* E_real, double* E_imag, int cond,
-                              double* points, int npts);
-
-/** Batch computation of vector potential A from conductor at multiple points (OpenMP parallelized).
-@param A_real [out] real parts of A (npts * 3) in T*m
-@param A_imag [out] imaginary parts of A (npts * 3)
-@param cond [in] conductor reference number
-@param points [in] evaluation points (npts * 3)
-@param npts [in] number of evaluation points
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-*/
-EXP int CALL RadCndFldABatch(double* A_real, double* A_imag, int cond,
-                              double* points, int npts);
-
-/** Batch computation of scalar potential Phi from conductor at multiple points (OpenMP parallelized).
-@param Phi_real [out] real parts of Phi (npts) in Volts
-@param Phi_imag [out] imaginary parts of Phi (npts)
-@param cond [in] conductor reference number
-@param points [in] evaluation points (npts * 3)
-@param npts [in] number of evaluation points
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-*/
-EXP int CALL RadCndFldPhiBatch(double* Phi_real, double* Phi_imag, int cond,
-                                double* points, int npts);
 
 /** Gets surface current density K from solved conductor.
 @param K_real [out] real parts of K vectors (npanels * 3)

@@ -47,6 +47,12 @@ constexpr double MU_0 = RadConst::MU_0;  // Permeability of free space [H/m]
  *
  * Represents the interior cross-section of a conductor.
  * Used for solving the 2D Helmholtz equation.
+ *
+ * Supports complex permeability μ = μ' - jμ" for materials with magnetic losses:
+ * - μ' (real part): Energy storage (reactive)
+ * - μ" (imaginary part): Energy loss (hysteresis, eddy currents in grains, etc.)
+ *
+ * The loss tangent is: tan(δ_m) = μ" / μ'
  */
 struct CrossSection2D {
     // Node coordinates (x, y in local 2D system)
@@ -73,7 +79,33 @@ struct CrossSection2D {
 
     // Material properties
     double conductivity;   // σ [S/m]
-    double permeability;   // μ = μ0 * μr [H/m]
+
+    // Complex permeability: μ = μ' - jμ" [H/m]
+    // Note: Convention uses μ = μ' - jμ" (negative imaginary for lossy materials)
+    // - permeability_real = μ' = μ0 * μ'_r (real part, energy storage)
+    // - permeability_imag = μ" = μ0 * μ"_r (imaginary part magnitude, energy loss)
+    double permeability_real;   // μ' [H/m] (real part)
+    double permeability_imag;   // μ" [H/m] (imaginary part, stored as positive value)
+
+    // Convenience method to get complex permeability
+    Complex GetComplexPermeability() const {
+        // μ = μ' - jμ" (negative imaginary for lossy materials)
+        return Complex(permeability_real, -permeability_imag);
+    }
+
+    // Convenience method to get absolute permeability |μ|
+    double GetAbsolutePermeability() const {
+        return std::sqrt(permeability_real * permeability_real +
+                         permeability_imag * permeability_imag);
+    }
+
+    // Convenience method to get loss tangent tan(δ_m) = μ" / μ'
+    double GetLossTangent() const {
+        if (permeability_real > 1e-20) {
+            return permeability_imag / permeability_real;
+        }
+        return 0.0;
+    }
 
     CrossSection2D()
         : type(Type::Rectangular)
@@ -81,7 +113,8 @@ struct CrossSection2D {
         , height(0)
         , radius(0)
         , conductivity(1e7)
-        , permeability(4e-7 * 3.14159265358979)  // μ0
+        , permeability_real(4e-7 * 3.14159265358979)  // μ0
+        , permeability_imag(0)  // No magnetic loss by default
     {}
 };
 
@@ -126,11 +159,31 @@ public:
     void SetFrequency(double frequency);
 
     /**
-     * @brief Set material properties
+     * @brief Set material properties with real permeability
      * @param conductivity σ [S/m]
-     * @param relativePermeability μr
+     * @param relativePermeability μr (real, for lossless materials)
      */
     void SetMaterial(double conductivity, double relativePermeability);
+
+    /**
+     * @brief Set material properties with complex permeability
+     *
+     * For materials with magnetic losses (ferrites, laminated steel, etc.),
+     * the permeability is complex: μ = μ' - jμ"
+     *
+     * Physical interpretation:
+     * - μ' (real): Energy storage, determines reactive power
+     * - μ" (imaginary): Energy loss, determines magnetic power dissipation
+     * - Loss tangent: tan(δ_m) = μ"/μ'
+     *
+     * The power loss per unit volume from magnetic hysteresis is:
+     *   P_mag = (ω/2) * μ" * |H|^2 [W/m^3]
+     *
+     * @param conductivity σ [S/m]
+     * @param mu_prime_r Relative permeability real part μ'_r (> 0)
+     * @param mu_double_prime_r Relative permeability imaginary part μ"_r (>= 0)
+     */
+    void SetComplexMaterial(double conductivity, double mu_prime_r, double mu_double_prime_r);
 
     /**
      * @brief Assemble FEM system matrix
@@ -233,11 +286,23 @@ public:
                                double width, double height = 0);
 
     /**
-     * @brief Set material properties
+     * @brief Set material properties with real permeability
      * @param conductivity σ [S/m]
-     * @param relativePermeability μr
+     * @param relativePermeability μr (real, for lossless materials)
      */
     void SetMaterial(double conductivity, double relativePermeability);
+
+    /**
+     * @brief Set material properties with complex permeability
+     *
+     * For materials with magnetic losses (ferrites, laminated steel, etc.),
+     * the permeability is complex: μ = μ' - jμ"
+     *
+     * @param conductivity σ [S/m]
+     * @param mu_prime_r Relative permeability real part μ'_r (> 0)
+     * @param mu_double_prime_r Relative permeability imaginary part μ"_r (>= 0)
+     */
+    void SetComplexMaterial(double conductivity, double mu_prime_r, double mu_double_prime_r);
 
     /**
      * @brief Set operating frequency
@@ -300,7 +365,9 @@ private:
 
     // Material
     double conductivity_;
-    double relPermeability_;
+    double relPermeability_real_;      // μ'_r (real part)
+    double relPermeability_imag_;      // μ"_r (imaginary part, stored positive)
+    bool useComplexPermeability_;      // True if μ" != 0
 
     // Frequency
     double frequency_;
@@ -316,6 +383,11 @@ private:
     bool impedanceComputed_;
 
     void UpdateSkinDepth();
+
+    // Helper to get complex relative permeability
+    Complex GetComplexRelPermeability() const {
+        return Complex(relPermeability_real_, -relPermeability_imag_);
+    }
 };
 
 /**

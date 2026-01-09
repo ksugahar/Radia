@@ -962,11 +962,62 @@ EXP int CALL RadRlxUpdSrc(int intrc)
 
 //-------------------------------------------------------------------------
 
+// Forward declarations for conductor field computation (defined in rad_conductor_api.cpp)
+bool IsConductorHandle(int handle);
+bool ComputeConductorField(double* pB, int* pNb, int cond, const char* fieldId, double* pCoord);
+
 int CALL RadFld(double* pB, int* pNb, int Obj, char* ID, double* pCoord, int Np)
 {
+	//=========================================================================
+	// Check if object is a conductor - dispatch to conductor field computation
+	//=========================================================================
+	if(IsConductorHandle(Obj))
+	{
+		// Conductor field computation (AC analysis)
+		// For single point, compute directly
+		// For multiple points, loop and concatenate results
+		if(Np == 1)
+		{
+			if(ComputeConductorField(pB, pNb, Obj, ID, pCoord))
+			{
+				return 0;  // Success
+			}
+			// Fall through to magnetic object handling if conductor computation fails
+		}
+		else
+		{
+			// Multiple points: batch computation
+			int totalNb = 0;
+			double* pOut = pB;
+
+			for(int i = 0; i < Np; i++)
+			{
+				int nb = 0;
+				double tempB[14];  // Max field components
+				double* pPt = pCoord + i * 3;
+
+				if(ComputeConductorField(tempB, &nb, Obj, ID, pPt))
+				{
+					for(int j = 0; j < nb; j++)
+					{
+						pOut[j] = tempB[j];
+					}
+					pOut += nb;
+					if(i == 0) totalNb = nb;  // Set size from first point
+				}
+			}
+
+			*pNb = totalNb * Np;
+			return 0;  // Success
+		}
+	}
+
+	//=========================================================================
+	// Standard magnetic object field computation
+	//=========================================================================
 	double **PointsArray = new double*[Np];
-	if(PointsArray == 0) 
-	{ 
+	if(PointsArray == 0)
+	{
 		ioBuffer.StoreErrorMessage("Radia::Error900"); return ioBuffer.OutErrorStatus();
 	}
 	double **tPointsArray = PointsArray;
@@ -978,7 +1029,7 @@ int CALL RadFld(double* pB, int* pNb, int Obj, char* ID, double* pCoord, int Np)
 	}
 
 	FieldArbitraryPointsArray((long)Obj, ID, PointsArray, (long)Np);
-	
+
 	int ErrStat = ioBuffer.OutErrorStatus();
 	if(ErrStat > 0)
 	{
@@ -1807,14 +1858,7 @@ void CndDefinePortAuto(int cond);
 void CndSolve(int cond);
 void CndGetImpedance(double* Z_real, double* Z_imag, int cond);
 void CndImpedanceSweep(double* Z_real, double* Z_imag, int cond, double* freqs, int nfreq);
-void CndFldB(double* B_real, double* B_imag, int cond, double* point);
-void CndFldE(double* E_real, double* E_imag, int cond, double* point);
-void CndFldA(double* A_real, double* A_imag, int cond, double* point);
-void CndFldPhi(double* Phi_real, double* Phi_imag, int cond, double* point);
-void CndFldBBatch(double* B_real, double* B_imag, int cond, double* points, int npts);
-void CndFldEBatch(double* E_real, double* E_imag, int cond, double* points, int npts);
-void CndFldABatch(double* A_real, double* A_imag, int cond, double* points, int npts);
-void CndFldPhiBatch(double* Phi_real, double* Phi_imag, int cond, double* points, int npts);
+// NOTE: IsConductorHandle and ComputeConductorField declared before RadFld()
 void CndGetSurfaceCurrent(double* K_real, double* K_imag, int* npanels, int cond);
 void CndGetSurfaceCharge(double* sigma_real, double* sigma_imag, int* npanels, int cond);
 void CndNumPanels(int* npanels, int cond);
@@ -1987,73 +2031,7 @@ int CALL RadCndImpedanceSweep(double* Z_real, double* Z_imag, int cond,
 	return ioBuffer.OutErrorStatus();
 }
 
-//-------------------------------------------------------------------------
-
-int CALL RadCndFldB(double* B_real, double* B_imag, int cond, double* point)
-{
-	CndFldB(B_real, B_imag, cond, point);
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadCndFldE(double* E_real, double* E_imag, int cond, double* point)
-{
-	CndFldE(E_real, E_imag, cond, point);
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadCndFldA(double* A_real, double* A_imag, int cond, double* point)
-{
-	CndFldA(A_real, A_imag, cond, point);
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadCndFldPhi(double* Phi_real, double* Phi_imag, int cond, double* point)
-{
-	CndFldPhi(Phi_real, Phi_imag, cond, point);
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadCndFldBBatch(double* B_real, double* B_imag, int cond,
-                          double* points, int npts)
-{
-	CndFldBBatch(B_real, B_imag, cond, points, npts);
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadCndFldEBatch(double* E_real, double* E_imag, int cond,
-                          double* points, int npts)
-{
-	CndFldEBatch(E_real, E_imag, cond, points, npts);
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadCndFldABatch(double* A_real, double* A_imag, int cond,
-                          double* points, int npts)
-{
-	CndFldABatch(A_real, A_imag, cond, points, npts);
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadCndFldPhiBatch(double* Phi_real, double* Phi_imag, int cond,
-                            double* points, int npts)
-{
-	CndFldPhiBatch(Phi_real, Phi_imag, cond, points, npts);
-	return ioBuffer.OutErrorStatus();
-}
+// NOTE: RadCndFld* functions removed - use unified RadFld() API with conductor detection
 
 //-------------------------------------------------------------------------
 

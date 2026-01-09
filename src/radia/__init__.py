@@ -73,7 +73,29 @@ try:
         export_esim_coil_field_vtk,
         export_esim_combined_vtk,
     )
+    # RWG-EFIE solver for 3D surface element analysis
+    from .rwg_efie_solver import (
+        RWGMesh,
+        RWGTriangle,
+        RWGEdge,
+        RWGEFIESolver,
+        CoupledEFIESolver,
+        NonlinearCoupledEFIESolver,
+        pFFTAccelerator,
+        pFFTEFIESolver,
+        HybridPEECRWGSolver,
+        InductionHeatingSolver,
+        create_induction_heating_model,
+        create_nonlinear_solver,
+        create_induction_heating_model_with_esim,
+        create_hybrid_solver,
+        # Loop-Star decomposition for low-frequency stability
+        LoopStarDecomposition,
+        LoopStarEFIESolver,
+    )
     ESIM_AVAILABLE = True
+    RWG_EFIE_AVAILABLE = True
 except ImportError:
     # ESIM requires scipy, which may not be installed
     ESIM_AVAILABLE = False
+    RWG_EFIE_AVAILABLE = False

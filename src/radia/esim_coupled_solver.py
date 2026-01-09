@@ -155,17 +155,21 @@ class InductionHeatingCoil:
             B: Complex B field [Bx, By, Bz] in Tesla
         """
         if self._rad is not None and self.handle is not None:
-            # Use FastImp for field computation
-            B_complex = self._rad.CndFld(self.handle, 'b', point)
-            # CndFld returns [Bx_re, By_re, Bz_re, Bx_im, By_im, Bz_im]
-            if len(B_complex) == 6:
+            # Use unified rad.Fld() for field computation
+            # For conductor objects, Fld() returns 6 values:
+            # [Bx_re, By_re, Bz_re, Bx_im, By_im, Bz_im]
+            B_result = self._rad.Fld(self.handle, 'b', point)
+            if hasattr(B_result, '__len__') and len(B_result) == 6:
                 return np.array([
-                    B_complex[0] + 1j * B_complex[3],
-                    B_complex[1] + 1j * B_complex[4],
-                    B_complex[2] + 1j * B_complex[5]
+                    B_result[0] + 1j * B_result[3],
+                    B_result[1] + 1j * B_result[4],
+                    B_result[2] + 1j * B_result[5]
                 ])
+            elif hasattr(B_result, '__len__') and len(B_result) == 3:
+                # Static field (real only)
+                return np.array(B_result[:3], dtype=complex)
             else:
-                return np.array(B_complex[:3])
+                return np.array([0, 0, 0], dtype=complex)
         else:
             # Use analytical model
             return self._compute_field_analytical(point)

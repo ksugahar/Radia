@@ -19,6 +19,7 @@
 #include "gmvect.h"
 #include "rad_pfft.h"
 #include "rad_constants.h"
+#include "rad_rwg_basis.h"
 #include <vector>
 #include <array>
 #include <complex>
@@ -359,6 +360,10 @@ private:
     std::complex<double> excitationValue_;  // V or I depending on type
     std::complex<double> totalCurrent_;     // Total current after solve
 
+    // Wire centerline path (for Biot-Savart field computation)
+    // Stored when creating wire/loop conductors
+    std::vector<TVector3d> wireCenterPath_;
+
     // Helper methods
     void GenerateRectangularFacePanels(const TVector3d& corner,
                                        const TVector3d& edge1,
@@ -422,51 +427,49 @@ public:
     void EnablePfft(bool enable = true) { usePfft_ = enable; }
 
     /**
-     * @brief Enable Loop-Star decomposition for low-frequency stability
-     * @param enable True to enable (default: true for f < 1 MHz)
+     * @brief Compute B field at a point (after solve)
      */
-    void EnableLoopStar(bool enable = true) { useLoopStar_ = enable; }
+    void ComputeB(const TVector3d& point,
+                  std::complex<double>& Bx,
+                  std::complex<double>& By,
+                  std::complex<double>& Bz) const;
+
+    /**
+     * @brief Get port impedance after solve
+     */
+    std::complex<double> GetPortImpedance() const { return portImpedance_; }
+
+    /**
+     * @brief Get total current after solve
+     */
+    std::complex<double> GetTotalCurrent() const { return totalCurrent_; }
 
 private:
     std::vector<std::shared_ptr<radTConductor>> conductors_;
     double frequency_;
     ConductorFormulation formulation_;
     bool usePfft_;
-    bool useLoopStar_;
-    bool directImpedanceMode_;  // True when impedance computed directly (skip SolveLinearSystem)
+    bool directImpedanceMode_;  // True when impedance computed directly
 
     // pFFT accelerator
     std::unique_ptr<radTPfft> pfft_;
 
-    // System matrix and RHS
+    // RWG EFIE solver
+    std::shared_ptr<RWGMesh> rwgMesh_;
+    std::unique_ptr<RWGEFIESolver> rwgSolver_;
+    std::complex<double> portImpedance_;
+    std::complex<double> totalCurrent_;
+
+    // System matrix and RHS (for backward compatibility)
     std::vector<std::complex<double>> systemMatrix_;
     std::vector<std::complex<double>> rhs_;
     std::vector<std::complex<double>> solution_;
 
-    // Loop-Star decomposition data
-    // Edge-based connectivity for RWG-like basis
-    struct Edge {
-        int panel1, panel2;     // Adjacent panels (-1 if boundary)
-        int localIdx1, localIdx2; // Local edge index in each panel
-        TVector3d midpoint;     // Edge midpoint
-        TVector3d direction;    // Edge direction (normalized)
-        double length;          // Edge length
-    };
-    std::vector<Edge> edges_;
-
-    // Loop-Star transformation matrices
-    std::vector<std::vector<double>> loopBasis_;   // Loop (solenoidal) basis
-    std::vector<std::vector<double>> starBasis_;   // Star (non-solenoidal) basis
-    int numLoops_;
-    int numStars_;
-
     void BuildSystemMatrix();
-    void BuildSystemMatrixLoopStar();  // Loop-Star version
-    void BuildEdgeConnectivity();       // Build edge topology
-    void BuildLoopStarBasis();          // Construct Loop and Star bases
     void SolveLinearSystem();
     void ExtractSolution();
     void ComputePortImpedance();
+    void BuildRWGMesh();
 };
 
 } // namespace radia
