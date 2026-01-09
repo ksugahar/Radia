@@ -2004,6 +2004,87 @@ K. Hollaus, M. Kaltenbacher, J. Schoberl, "A Nonlinear Effective Surface Impedan
 
 ---
 
-**Last Updated**: 2026-01-09 (Added complex permeability and ESIM policy)
+## VTK/VTS Export Policy
+
+### VTS Only for Field Export (2026-01-09)
+
+**Policy**: Radia uses **VTS (VTK XML Structured Grid)** format only for magnetic field export. Legacy VTK geometry export has been removed.
+
+**Rationale**:
+1. **Performance**: VTS export is implemented in C++ with OpenMP parallelization for large grids
+2. **Simplicity**: Single format (VTS) for all field visualization needs
+3. **ParaView Compatibility**: VTS is the standard format for structured 3D field grids
+
+**Removed APIs** (2026-01-09):
+- `rad.ObjDrwVTK()` - C++ geometry export removed
+- `exportGeometryToVTK()` - Python geometry export removed
+- `exportFieldToVTK()` - Python legacy field export removed
+- `radia_pyvista_viewer.py` - PyVista viewer removed (depended on ObjDrwVTK)
+
+**Current VTS Export APIs**:
+
+| API | Implementation | Use Case |
+|-----|----------------|----------|
+| `rad.FldVTS()` | C++ (OpenMP) | Large grids, performance-critical |
+| `RadiaVTKOutput` class | Python | Flexible configuration |
+| `export_field_grid_vts()` | Python | Simple convenience function |
+
+**C++ API (Recommended for Large Grids)**:
+
+```python
+import radia as rad
+
+rad.FldUnits('m')
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
+
+# Export field grid to VTS (C++ implementation)
+rad.FldVTS(magnet, 'field_output',
+           [-0.1, 0.1],  # x_range
+           [-0.1, 0.1],  # y_range
+           [0.02, 0.15], # z_range
+           nx=41, ny=41, nz=27,
+           include_B=1, include_H=0)
+# Output: field_output.vts
+```
+
+**Python API (For Flexibility)**:
+
+```python
+from radia import RadiaVTKOutput, export_field_grid_vts
+
+# Method 1: Convenience function
+grid_params = {
+    'x_range': [-0.1, 0.1],
+    'y_range': [-0.1, 0.1],
+    'z_range': [0.02, 0.15],
+    'nx': 41, 'ny': 41, 'nz': 27
+}
+export_field_grid_vts(magnet, grid_params, 'field', coefs=['B', 'B_magnitude'])
+
+# Method 2: Class-based (more options)
+vtk = RadiaVTKOutput(
+    obj=magnet,
+    coefs=['B', 'H', 'B_magnitude'],
+    filename='field_full',
+    grid_params=grid_params,
+    floatsize='double'
+)
+vtk.Do()
+```
+
+**VTS File Format**:
+- XML-based structured grid format
+- Coordinates automatically converted to meters (VTK standard)
+- Supports B field, H field, and scalar magnitudes
+- Compatible with ParaView, VisIt, and other VTK viewers
+
+**Performance Guidelines**:
+- For grids > 100x100x100: Use C++ `rad.FldVTS()` for performance
+- For smaller grids: Python API is sufficient
+- Field computation is OpenMP-parallelized in C++
+
+---
+
+**Last Updated**: 2026-01-09 (Added VTK/VTS export policy)
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation

@@ -1400,49 +1400,6 @@ int CALL RadFldLenTol(int* n, double AbsVal, double RelVal, double ZeroVal)
 
 //-------------------------------------------------------------------------
 
-int CALL RadObjDrwVTK(int* pNvp, int* pNp, int* pNvl, int* pNl, int* pKey, int obj, char* opt)
-{
-	const char *Opt1=0, *Opt2=0, *Opt3=0;
-	vector<string> AuxStrings;
-	if(opt != 0)
-	{
-		char *SepStrArr[] = {(char*)";", (char*)","};
-		CAuxParse::StringSplit(opt, SepStrArr, 2, (char*)" ", AuxStrings);
-		int AmOfTokens = (int)AuxStrings.size();
-		if(AmOfTokens > 0)
-		{
-			Opt1 = (AuxStrings[0]).c_str();
-			if(AmOfTokens > 1)
-			{
-				Opt2 = (AuxStrings[1]).c_str();
-				if(AmOfTokens > 2) Opt3 = (AuxStrings[2]).c_str();
-			}
-		}
-	}
-
-	*pNvp = 0; *pNp = 0; *pNvl = 0; *pNl = 0;
-	*pKey = GraphicsForElemVTK(obj, Opt1, Opt2, Opt3);
-
-	if(*pKey != 0)
-	{
-		ioBuffer.OutGeomPolygLen(*pKey, pNvp, pNp);
-		ioBuffer.OutGeomPolygLen(*pKey + 1, pNvl, pNl);
-	}
-
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjDrwDataGetVTK(double* arCrdVP, int* arLenP, float* arColP, double* arCrdVL, int* arLenL, float* arColL, int key)
-{
-	ioBuffer.OutGeomPolygData(key, arCrdVP, arLenP, arColP);
-	ioBuffer.OutGeomPolygData(key+1, arCrdVL, arLenL, arColL);
-	return 0;
-}
-
-//-------------------------------------------------------------------------
-
 int CALL RadObjDrwAtr(int Obj, double* pRGB, double Thcn)
 {
 	ApplyDrawAttrToElem(Obj, *pRGB, *(pRGB + 1), *(pRGB + 2), Thcn);
@@ -1832,6 +1789,124 @@ int CALL RadFldPhi(double* phi_out, int n_points, double* points, int container_
 int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle)
 {
 	ComputeVectorPotentialBatch(A_out, n_points, points, container_handle);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadFldVTS(int container_handle, const char* filename,
+                   double x_min, double x_max, int nx,
+                   double y_min, double y_max, int ny,
+                   double z_min, double z_max, int nz,
+                   int include_B, int include_H, double unit_scale)
+{
+	// Compute total number of points
+	int n_points = nx * ny * nz;
+
+	// Allocate arrays for field computation
+	double* points = new double[n_points * 3];
+	double* B_out = include_B ? new double[n_points * 3] : nullptr;
+	double* H_out = include_H ? new double[n_points * 3] : nullptr;
+
+	// Generate grid points in VTS order (i varies fastest, then j, then k)
+	double dx = (nx > 1) ? (x_max - x_min) / (nx - 1) : 0.0;
+	double dy = (ny > 1) ? (y_max - y_min) / (ny - 1) : 0.0;
+	double dz = (nz > 1) ? (z_max - z_min) / (nz - 1) : 0.0;
+
+	int idx = 0;
+	for(int k = 0; k < nz; k++) {
+		for(int j = 0; j < ny; j++) {
+			for(int i = 0; i < nx; i++) {
+				points[idx * 3 + 0] = x_min + i * dx;
+				points[idx * 3 + 1] = y_min + j * dy;
+				points[idx * 3 + 2] = z_min + k * dz;
+				idx++;
+			}
+		}
+	}
+
+	// Compute fields using batch API (OpenMP parallelized)
+	ComputeFieldBatch(B_out, H_out, n_points, points, container_handle, 0);
+
+	// Write VTS file
+	FILE* f = fopen(filename, "w");
+	if(f == nullptr) {
+		delete[] points;
+		if(B_out) delete[] B_out;
+		if(H_out) delete[] H_out;
+		ioBuffer.StoreErrorMessage("Radia::Error000");
+		return ioBuffer.OutErrorStatus();
+	}
+
+	// XML header
+	fprintf(f, "<?xml version=\"1.0\"?>\n");
+	fprintf(f, "<VTKFile type=\"StructuredGrid\" version=\"0.1\" byte_order=\"LittleEndian\">\n");
+	fprintf(f, "  <StructuredGrid WholeExtent=\"0 %d 0 %d 0 %d\">\n", nx-1, ny-1, nz-1);
+	fprintf(f, "    <Piece Extent=\"0 %d 0 %d 0 %d\">\n", nx-1, ny-1, nz-1);
+
+	// Points (apply unit scale for conversion to meters)
+	fprintf(f, "      <Points>\n");
+	fprintf(f, "        <DataArray type=\"Float64\" NumberOfComponents=\"3\" format=\"ascii\">\n");
+	for(int i = 0; i < n_points; i++) {
+		fprintf(f, "          %.15e %.15e %.15e\n",
+		        points[i*3+0] * unit_scale,
+		        points[i*3+1] * unit_scale,
+		        points[i*3+2] * unit_scale);
+	}
+	fprintf(f, "        </DataArray>\n");
+	fprintf(f, "      </Points>\n");
+
+	// Point data
+	fprintf(f, "      <PointData>\n");
+
+	// B field
+	if(include_B && B_out) {
+		fprintf(f, "        <DataArray type=\"Float64\" Name=\"B\" NumberOfComponents=\"3\" format=\"ascii\">\n");
+		for(int i = 0; i < n_points; i++) {
+			fprintf(f, "          %.15e %.15e %.15e\n", B_out[i*3+0], B_out[i*3+1], B_out[i*3+2]);
+		}
+		fprintf(f, "        </DataArray>\n");
+
+		// B magnitude
+		fprintf(f, "        <DataArray type=\"Float64\" Name=\"B_magnitude\" format=\"ascii\">\n");
+		for(int i = 0; i < n_points; i++) {
+			double Bx = B_out[i*3+0], By = B_out[i*3+1], Bz = B_out[i*3+2];
+			double B_mag = sqrt(Bx*Bx + By*By + Bz*Bz);
+			fprintf(f, "          %.15e\n", B_mag);
+		}
+		fprintf(f, "        </DataArray>\n");
+	}
+
+	// H field
+	if(include_H && H_out) {
+		fprintf(f, "        <DataArray type=\"Float64\" Name=\"H\" NumberOfComponents=\"3\" format=\"ascii\">\n");
+		for(int i = 0; i < n_points; i++) {
+			fprintf(f, "          %.15e %.15e %.15e\n", H_out[i*3+0], H_out[i*3+1], H_out[i*3+2]);
+		}
+		fprintf(f, "        </DataArray>\n");
+
+		// H magnitude
+		fprintf(f, "        <DataArray type=\"Float64\" Name=\"H_magnitude\" format=\"ascii\">\n");
+		for(int i = 0; i < n_points; i++) {
+			double Hx = H_out[i*3+0], Hy = H_out[i*3+1], Hz = H_out[i*3+2];
+			double H_mag = sqrt(Hx*Hx + Hy*Hy + Hz*Hz);
+			fprintf(f, "          %.15e\n", H_mag);
+		}
+		fprintf(f, "        </DataArray>\n");
+	}
+
+	fprintf(f, "      </PointData>\n");
+	fprintf(f, "    </Piece>\n");
+	fprintf(f, "  </StructuredGrid>\n");
+	fprintf(f, "</VTKFile>\n");
+
+	fclose(f);
+
+	// Cleanup
+	delete[] points;
+	if(B_out) delete[] B_out;
+	if(H_out) delete[] H_out;
+
 	return ioBuffer.OutErrorStatus();
 }
 

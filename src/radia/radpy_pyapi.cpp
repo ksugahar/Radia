@@ -1332,120 +1332,6 @@ static PyObject* radia_ObjDrwAtr(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Field Sources: outputs data for viewing of 3D geometry of an object using the VTK software system
- ***************************************************************************/
-static PyObject* ParseGeomDataDrwVTK(double* arCrdV, int nV, int* arLenP, float* arColP, int nP) //OC05112019 (from by R. Nagler's static PyObject* radia_ObjGeometry_helper)
-{
-	PyObject *lengths = PyList_New(nP);
-	PyObject *colors = PyList_New(nP*3);
-	PyObject *vertices = PyList_New(nV*3);
-	if(!vertices || !lengths || !colors) throw strEr_MAF;
-
-	for(Py_ssize_t i = PyList_Size(lengths); --i >= 0;) 
-	{
-		PyObject *o = PyLong_FromLong(arLenP[i]);
-		if(o == NULL || PyList_SetItem(lengths, i, o) < 0) throw strEr_MAF;
-	}
-
-	for(Py_ssize_t i = PyList_Size(colors); --i >= 0;) 
-	{
-		PyObject *o = PyFloat_FromDouble(arColP[i]); //OC04062020 (from Dan Abell) //why colors are float at input if they are casted to long here?
-		//PyObject *o = PyLong_FromDouble(arColP[i]); //why colors are float at input if they are casted to long here?
-		if(o == NULL || PyList_SetItem(colors, i, o) < 0) throw strEr_MAF;
-	}
-
-	for(Py_ssize_t i = PyList_Size(vertices); --i >= 0;) 
-	{
-		PyObject *o = PyFloat_FromDouble(arCrdV[i]);
-		if(o == NULL || PyList_SetItem(vertices, i, o) < 0) throw strEr_MAF;
-	}
-
-	PyObject *oRes = Py_BuildValue(
-		"{s:N,s:N,s:N}",
-		"colors",
-		colors,
-		"lengths",
-		lengths,
-		"vertices",
-		vertices
-	);
-	if(oRes == NULL) throw strEr_MAF;
-	return oRes;
-}
-
-/************************************************************************//**
- * Magnetic Field Sources: outputs data for viewing of 3D geometry of an object using the VTK software system
- ***************************************************************************/
-static PyObject* radia_ObjDrwVTK(PyObject* self, PyObject* args) //OC03112019 (requested by R. Nagler)
-//static PyObject* radia_ObjGeometry(PyObject *self, PyObject *args) 
-{
-	PyObject *oInd=0, *oOpt=0, *oRes=0;
-	double *arCrdVP=0, *arCrdVL=0;
-	float *arColP=0, *arColL=0;
-	int *arLenP=0, *arLenL=0;
-
-	try
-	{
-		if(!PyArg_ParseTuple(args, "O|O:ObjDrwVTK", &oInd, &oOpt)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwVTK");
-		//if(!PyArg_ParseTuple(args, "O|O:ObjGeometry", &oInd, &oOpt)) throw CombErStr(strEr_BadFuncArg, ": ObjGeometry");
-		if(oInd == 0) throw CombErStr(strEr_BadFuncArg, ": ObjDrwVTK");
-
-		if(!PyNumber_Check(oInd)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwVTK");
-		int ind = (int)PyLong_AsLong(oInd);
-
-		char sOpt[1024]; *sOpt = '\0';
-		if(oOpt != 0) CPyParse::CopyPyStringToC(oOpt, sOpt, 1024);
-
-		int nVertPgns=0, nPgns=0, nVertLines=0, nLines=0, key=-1;
-		g_pyParse.ProcRes(RadObjDrwVTK(&nVertPgns, &nPgns, &nVertLines, &nLines, &key, ind, sOpt));
-
-		if(nVertPgns > 0) arCrdVP = new double[nVertPgns*3];
-		if(nPgns > 0)
-		{
-			arLenP = new int[nPgns];
-			arColP = new float[nPgns*3];
-		}
-		if(nVertLines > 0) arCrdVL = new double[nVertLines*3];
-		if(nLines > 0)
-		{
-			arLenL = new int[nLines];
-			arColL = new float[nLines*3];
-		}
-
-		g_pyParse.ProcRes(RadObjDrwDataGetVTK(arCrdVP, arLenP, arColP, arCrdVL, arLenL, arColL, key));
-
-		PyObject* polygons_obj = ParseGeomDataDrwVTK(arCrdVP, nVertPgns, arLenP, arColP, nPgns);
-		PyObject* lines_obj = ParseGeomDataDrwVTK(arCrdVL, nVertLines, arLenL, arColL, nLines);
-
-		oRes = Py_BuildValue(
-			"{s:N,s:N}",
-			"polygons",
-			polygons_obj,
-			"lines",
-			lines_obj
-		);
-		if(oRes == NULL) throw strEr_MAF;
-		//TODO(robnagler) ref counts are invalid at this point,
-		//  but then this is a malloc error...
-
-		Py_XINCREF(oRes); //? NOTE: seem to have experienced crashes without this
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-	}
-
-	if(arCrdVP != 0) delete[] arCrdVP;
-	if(arCrdVL != 0) delete[] arCrdVL;
-	if(arColP != 0) delete[] arColP;
-	if(arColL != 0) delete[] arColL;
-	if(arLenP != 0) delete[] arLenP;
-	if(arLenL != 0) delete[] arLenL;
-
-	return oRes;
-}
-
-/************************************************************************//**
  * Space Transformations: Creates a symmetry with respect to plane defined by a point and a normal vector.
  ***************************************************************************/
 static PyObject* radia_TrfPlSym(PyObject* self, PyObject* args)
@@ -2913,6 +2799,64 @@ static PyObject* radia_FldBatch(PyObject* self, PyObject* args)
 	if(arPoints != 0) delete[] arPoints;
 	if(arB != 0) delete[] arB;
 	if(arH != 0) delete[] arH;
+	return oRes;
+}
+
+/************************************************************************//**
+ * VTS Export: Export magnetic field on structured 3D grid to VTS format
+ ***************************************************************************/
+static PyObject* radia_FldVTS(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	char *sFilename=0;
+	try
+	{
+		int container_handle=0;
+		double x_min=0, x_max=0, y_min=0, y_max=0, z_min=0, z_max=0;
+		int nx=21, ny=21, nz=21;
+		int include_B=1, include_H=0;
+		double unit_scale=1.0;
+
+		// Parse: obj, filename, x_range, y_range, z_range, [nx, ny, nz, include_B, include_H, unit_scale]
+		PyObject *oXRange=0, *oYRange=0, *oZRange=0;
+		if(!PyArg_ParseTuple(args, "isOOO|iiiid:FldVTS",
+		                     &container_handle, &sFilename,
+		                     &oXRange, &oYRange, &oZRange,
+		                     &nx, &ny, &nz, &include_B, &include_H, &unit_scale))
+			throw CombErStr(strEr_BadFuncArg, ": FldVTS");
+
+		if((container_handle == 0) || (sFilename == 0))
+			throw CombErStr(strEr_BadFuncArg, ": FldVTS");
+
+		// Parse ranges
+		if(!PySequence_Check(oXRange) || PySequence_Length(oXRange) != 2)
+			throw CombErStr(strEr_BadFuncArg, ": FldVTS: x_range must be [x_min, x_max]");
+		if(!PySequence_Check(oYRange) || PySequence_Length(oYRange) != 2)
+			throw CombErStr(strEr_BadFuncArg, ": FldVTS: y_range must be [y_min, y_max]");
+		if(!PySequence_Check(oZRange) || PySequence_Length(oZRange) != 2)
+			throw CombErStr(strEr_BadFuncArg, ": FldVTS: z_range must be [z_min, z_max]");
+
+		x_min = PyFloat_AsDouble(PySequence_GetItem(oXRange, 0));
+		x_max = PyFloat_AsDouble(PySequence_GetItem(oXRange, 1));
+		y_min = PyFloat_AsDouble(PySequence_GetItem(oYRange, 0));
+		y_max = PyFloat_AsDouble(PySequence_GetItem(oYRange, 1));
+		z_min = PyFloat_AsDouble(PySequence_GetItem(oZRange, 0));
+		z_max = PyFloat_AsDouble(PySequence_GetItem(oZRange, 1));
+
+		// Call C API
+		g_pyParse.ProcRes(RadFldVTS(container_handle, sFilename,
+		                            x_min, x_max, nx,
+		                            y_min, y_max, ny,
+		                            z_min, z_max, nz,
+		                            include_B, include_H, unit_scale));
+
+		// Return filename
+		oRes = PyUnicode_FromString(sFilename);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
 	return oRes;
 }
 
@@ -4489,7 +4433,6 @@ static PyMethodDef radia_methods[] = {
 	{"ObjSetM", radia_ObjSetM, METH_VARARGS, "ObjSetM(obj,[mx,my,mz]) sets magnetization [mx,my,mz] in 3D object obj."},
 	{"ObjScaleCur", radia_ObjScaleCur, METH_VARARGS, "ObjScaleCur(obj,k) scales current (density) in 3D object obj by multiplying it by constant k (if obj is a current-carying object). If obj is a container, the current (density) scaling applies to all its members."},
 	{"ObjDrwAtr", radia_ObjDrwAtr, METH_VARARGS, "ObjDrwAtr(obj,[r,g,b],thcn) assigns drawing attributes - RGB color [r,g,b] and line thickness thcn - to 3D object obj."},
-	{"ObjDrwVTK", radia_ObjDrwVTK, METH_VARARGS, "ObjDrwVTK(obj,'EdgeLines->True|False,Faces->True|False,Axes->True|False') exports data for viewing 3D geometry of the object obj. The data is in the format compatible with VTK graphics library. The option 'EdgeLines->True|False' (default 'EdgeLines->True') highlights the edge lines of objects; the option 'Faces->True|False' (default 'Faces->True') shows faces of the objects; the option 'Axes->True|False' (default 'Axes->True') shows the Cartesian frame axes."},
 
 	{"TrfTrsl", radia_TrfTrsl, METH_VARARGS, "TrfTrsl([vx,vy,vz]) creates a translation by vector [vx,vy,vz]."},
 	{"TrfRot", radia_TrfRot, METH_VARARGS, "TrfRot([x,y,z],[vx,vy,vz],phi) creates a rotation of angle phi around the axis defined by the point [x,y,z] and the vector [vx,vy,vz]."},
@@ -4535,6 +4478,7 @@ static PyMethodDef radia_methods[] = {
 
 	{"ClassifyPoints", radia_ClassifyPoints, METH_VARARGS, "ClassifyPoints(obj, points, near_threshold=3.0) classifies evaluation points relative to mesh elements. Returns dict with 'classification' (0=inside, 1=near, 2=far) and 'nearest_elem' (index of nearest element). Used for FMM field computation."},
 	{"FldBatch", radia_FldBatch, METH_VARARGS, "FldBatch(obj, points, method=0) computes B and H fields at multiple points. Returns dict with 'B' and 'H' arrays. method: 0=direct, 1=FMM (future). More efficient than calling Fld() in a loop."},
+	{"FldVTS", radia_FldVTS, METH_VARARGS, "FldVTS(obj, filename, x_range, y_range, z_range, nx=21, ny=21, nz=21, include_B=1, include_H=0, unit_scale=1.0) exports magnetic field on structured 3D grid to VTS (VTK XML Structured Grid) format. More efficient than Python-based export for large grids. Returns filename."},
 	{"FldPhi", radia_FldPhi, METH_VARARGS, "FldPhi(obj, points) computes magnetic scalar potential phi_m at multiple points. Returns list of scalar values. phi_m = (1/4pi) * integral(M . r / r^3) dV. Units: Ampere (A)."},
 	{"FldA", radia_FldA, METH_VARARGS, "FldA(obj, points) computes magnetic vector potential A at multiple points. Returns list of [Ax, Ay, Az] values. Note: Currently returns zero for ObjPolyhdr (MSC method) - implementation in progress."},
 
