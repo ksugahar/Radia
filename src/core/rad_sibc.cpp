@@ -186,9 +186,10 @@ void radTCrossSection2DFEM::SetFrequency(double frequency) {
     frequency_ = frequency;
     omega_ = 2.0 * RadConst::PI * frequency;
 
-    // Update skin depth
+    // Update skin depth using |μ| for estimation
     if (cs_.conductivity > 0 && omega_ > 0) {
-        skinDepth_ = std::sqrt(2.0 / (omega_ * cs_.permeability * cs_.conductivity));
+        double mu_abs = cs_.GetAbsolutePermeability();
+        skinDepth_ = std::sqrt(2.0 / (omega_ * mu_abs * cs_.conductivity));
     } else {
         skinDepth_ = 1e30;
     }
@@ -198,7 +199,17 @@ void radTCrossSection2DFEM::SetFrequency(double frequency) {
 
 void radTCrossSection2DFEM::SetMaterial(double conductivity, double relativePermeability) {
     cs_.conductivity = conductivity;
-    cs_.permeability = MU_0 * relativePermeability;
+    cs_.permeability_real = MU_0 * relativePermeability;
+    cs_.permeability_imag = 0.0;  // No magnetic loss
+    factorized_ = false;
+}
+
+void radTCrossSection2DFEM::SetComplexMaterial(double conductivity,
+                                                double mu_prime_r,
+                                                double mu_double_prime_r) {
+    cs_.conductivity = conductivity;
+    cs_.permeability_real = MU_0 * mu_prime_r;
+    cs_.permeability_imag = MU_0 * mu_double_prime_r;
     factorized_ = false;
 }
 
@@ -230,7 +241,15 @@ void radTCrossSection2DFEM::AssembleSystem() {
     }
 
     // Form system matrix: K - jωμσM
-    Complex factor = Complex(0, -omega_ * cs_.permeability * cs_.conductivity);
+    // For complex permeability μ = μ' - jμ":
+    //   factor = -jω(μ' - jμ")σ = -jωμ'σ - ωμ"σ
+    //          = ωμ"σ - jωμ'σ
+    // This shows that:
+    //   - Real part (ωμ"σ): Additional dissipation from magnetic loss
+    //   - Imaginary part (-ωμ'σ): Reactive response from energy storage
+    Complex mu_complex = cs_.GetComplexPermeability();  // μ' - jμ"
+    Complex factor = Complex(0, -omega_) * mu_complex * cs_.conductivity;
+
     systemMatrix_.resize(nNodes * nNodes);
 
     for (int i = 0; i < nNodes * nNodes; ++i) {
@@ -289,8 +308,12 @@ void radTCrossSection2DFEM::Solve(const std::vector<Complex>& Hv_boundary,
     int nBoundary = static_cast<int>(cs_.boundaryNodes.size());
 
     // Build RHS from boundary condition: ∂E/∂n = -jωμHv
+    // For complex μ = μ' - jμ":
+    //   bcFactor = -jω(μ' - jμ") = -jωμ' - ωμ"
+    //            = -ωμ" - jωμ'
     std::vector<Complex> rhs(nNodes, Complex(0, 0));
-    Complex bcFactor = Complex(0, -omega_ * cs_.permeability);
+    Complex mu_complex = cs_.GetComplexPermeability();
+    Complex bcFactor = Complex(0, -omega_) * mu_complex;
 
     // Apply Neumann BC as surface integral (simplified for boundary nodes)
     for (int ib = 0; ib < nBoundary; ++ib) {
@@ -441,7 +464,9 @@ radTNonlocalSIBC::radTNonlocalSIBC()
     , width_(0.001)
     , height_(0.001)
     , conductivity_(1e7)
-    , relPermeability_(1.0)
+    , relPermeability_real_(1.0)
+    , relPermeability_imag_(0.0)
+    , useComplexPermeability_(false)
     , frequency_(0)
     , omega_(0)
     , skinDepth_(1e30)
@@ -471,8 +496,22 @@ void radTNonlocalSIBC::SetConductorGeometry(const std::string& crossSection,
 
 void radTNonlocalSIBC::SetMaterial(double conductivity, double relPermeability) {
     conductivity_ = conductivity;
-    relPermeability_ = relPermeability;
+    relPermeability_real_ = relPermeability;
+    relPermeability_imag_ = 0.0;
+    useComplexPermeability_ = false;
     fem2D_->SetMaterial(conductivity, relPermeability);
+    impedanceComputed_ = false;
+    UpdateSkinDepth();
+}
+
+void radTNonlocalSIBC::SetComplexMaterial(double conductivity,
+                                           double mu_prime_r,
+                                           double mu_double_prime_r) {
+    conductivity_ = conductivity;
+    relPermeability_real_ = mu_prime_r;
+    relPermeability_imag_ = mu_double_prime_r;
+    useComplexPermeability_ = (mu_double_prime_r > 1e-10);
+    fem2D_->SetComplexMaterial(conductivity, mu_prime_r, mu_double_prime_r);
     impedanceComputed_ = false;
     UpdateSkinDepth();
 }
@@ -487,8 +526,10 @@ void radTNonlocalSIBC::SetFrequency(double frequency) {
 
 void radTNonlocalSIBC::UpdateSkinDepth() {
     if (conductivity_ > 0 && omega_ > 0) {
-        double mu = MU_0 * relPermeability_;
-        skinDepth_ = std::sqrt(2.0 / (omega_ * mu * conductivity_));
+        // For complex μ = μ' - jμ", use |μ| for skin depth estimation
+        double mu_abs = MU_0 * std::sqrt(relPermeability_real_ * relPermeability_real_ +
+                                          relPermeability_imag_ * relPermeability_imag_);
+        skinDepth_ = std::sqrt(2.0 / (omega_ * mu_abs * conductivity_));
     } else {
         skinDepth_ = 1e30;
     }
@@ -551,12 +592,30 @@ void radTNonlocalSIBC::Apply(const std::vector<Complex>& K, std::vector<Complex>
 }
 
 Complex radTNonlocalSIBC::GetLocalSurfaceImpedance() const {
-    // Zs = (1+j) / (σδ) where δ = skin depth
-    if (conductivity_ <= 0 || skinDepth_ > 1e20) {
+    // For real permeability: Zs = (1+j) / (σδ) where δ = skin depth
+    // For complex permeability μ = μ' - jμ":
+    //   Zs = sqrt(jωμ / σ)
+    //
+    // Physical interpretation:
+    //   - Real(Zs): Surface resistance, determines ohmic + magnetic loss
+    //   - Imag(Zs): Surface reactance, determines energy storage
+
+    if (conductivity_ <= 0 || omega_ <= 0) {
         return Complex(0, 0);
     }
 
-    return Complex(1, 1) / (conductivity_ * skinDepth_);
+    if (useComplexPermeability_) {
+        // Complex permeability: Zs = sqrt(jω(μ' - jμ") / σ)
+        Complex mu_complex = GetComplexRelPermeability() * MU_0;
+        Complex Z_arg = Complex(0, omega_) * mu_complex / conductivity_;
+        return std::sqrt(Z_arg);
+    } else {
+        // Real permeability: Zs = (1+j) / (σδ)
+        if (skinDepth_ > 1e20) {
+            return Complex(0, 0);
+        }
+        return Complex(1, 1) / (conductivity_ * skinDepth_);
+    }
 }
 
 bool radTNonlocalSIBC::IsLocalSIBCSufficient() const {
@@ -579,7 +638,8 @@ double radTNonlocalSIBC::GetDCResistance() const {
 double radTNonlocalSIBC::GetInternalInductance() const {
     // L_internal = μ / (8π) for circular wire (high frequency)
     // For rectangular, approximately μ*width/(4*height)
-    double mu = MU_0 * relPermeability_;
+    // Use real part of permeability for inductance (reactive energy storage)
+    double mu = MU_0 * relPermeability_real_;
 
     if (crossSectionType_ == "circular") {
         return mu / (8 * RadConst::PI);

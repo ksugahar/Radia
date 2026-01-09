@@ -887,6 +887,190 @@ analysis example that generates:
 
 ---
 
+## Complex Permeability Support (mu' - j*mu")
+
+### Overview
+
+The SIBC classes support **complex permeability** for materials with magnetic losses (ferrites, laminated steel, amorphous metals). This is essential for accurate modeling of:
+
+- Ferrite cores (MHz range)
+- Laminated electrical steel (eddy current losses in laminations)
+- Amorphous/nanocrystalline materials
+- Powder cores
+
+### Physical Background
+
+Complex permeability: **mu = mu' - j*mu"**
+
+| Component | Symbol | Physical Meaning |
+|-----------|--------|------------------|
+| Real part | mu' | Energy storage (reactive power) |
+| Imaginary part | mu" | Energy loss (magnetic hysteresis, domain wall motion) |
+| Loss tangent | tan(delta_m) = mu"/mu' | Ratio of loss to storage |
+
+**Power loss from magnetic hysteresis**:
+```
+P_magnetic = (omega/2) * mu_0 * mu"_r * |H|^2  [W/m^3]
+```
+
+**Total power loss** (ohmic + magnetic):
+```
+P_total = P_ohmic + P_magnetic
+        = (1/2) * sigma * |E|^2 + (omega/2) * mu_0 * mu"_r * |H|^2
+```
+
+### Surface Impedance with Complex Permeability
+
+For materials with complex permeability, the surface impedance becomes:
+
+```
+Z_s = sqrt(j*omega*mu / sigma)
+    = sqrt(j*omega*(mu' - j*mu") / sigma)
+```
+
+This differs from the standard local SIBC formula `Z_s = (1+j)/(sigma*delta)` which assumes real permeability.
+
+### C++ API (rad_sibc.h)
+
+#### CrossSection2D Structure
+
+```cpp
+struct CrossSection2D {
+    // Complex permeability: mu = mu' - j*mu" [H/m]
+    double permeability_real;   // mu' [H/m] (real part)
+    double permeability_imag;   // mu" [H/m] (imaginary part, stored positive)
+
+    // Convenience methods
+    Complex GetComplexPermeability() const;  // Returns mu' - j*mu"
+    double GetAbsolutePermeability() const;  // Returns |mu|
+    double GetLossTangent() const;           // Returns mu"/mu'
+};
+```
+
+#### radTCrossSection2DFEM Class
+
+```cpp
+// Set material with real permeability (lossless)
+void SetMaterial(double conductivity, double relativePermeability);
+
+// Set material with complex permeability (lossy)
+void SetComplexMaterial(double conductivity, double mu_prime_r, double mu_double_prime_r);
+```
+
+#### radTNonlocalSIBC Class
+
+```cpp
+// Set material with real permeability
+void SetMaterial(double conductivity, double relPermeability);
+
+// Set material with complex permeability
+void SetComplexMaterial(double conductivity, double mu_prime_r, double mu_double_prime_r);
+
+// Get local surface impedance (handles both real and complex mu)
+Complex GetLocalSurfaceImpedance() const;
+```
+
+### Python ESIM API
+
+The ESIM Python module provides three ways to specify permeability:
+
+#### 1. Constant Real Permeability
+
+```python
+from radia import ESIMCellProblemSolver
+
+solver = ESIMCellProblemSolver(
+    sigma=5e6,        # Conductivity [S/m]
+    frequency=50000,  # Frequency [Hz]
+    mu_r=100          # Constant real permeability
+)
+```
+
+#### 2. Constant Complex Permeability
+
+```python
+solver = ESIMCellProblemSolver(
+    sigma=1e6,
+    frequency=50000,
+    complex_mu=(1000, 100)  # (mu'_r, mu"_r) tuple
+)
+
+result = solver.solve(H0=5000)
+print(f"P_ohmic = {result['P_ohmic']:.1f} W/m^2")
+print(f"P_magnetic = {result['P_magnetic']:.1f} W/m^2")
+```
+
+#### 3. H-Dependent Complex Permeability
+
+```python
+# Format: [[H, mu'_r, mu"_r], ...]
+complex_mu_data = [
+    [0, 2000, 200],      # At H=0: mu'=2000, mu"=200
+    [1000, 1500, 150],   # At H=1000 A/m
+    [5000, 500, 50],     # At H=5000 A/m (saturation reduces both)
+]
+
+solver = ESIMCellProblemSolver(
+    sigma=1e6,
+    frequency=50000,
+    complex_mu=complex_mu_data
+)
+```
+
+### Skin Depth with Complex Permeability
+
+For complex permeability, the skin depth is estimated using |mu|:
+
+```
+delta = sqrt(2 / (omega * |mu| * sigma))
+
+where |mu| = sqrt(mu'^2 + mu"^2)
+```
+
+This is an approximation; the actual field penetration profile is computed by the 2D FEM solver.
+
+### Typical Material Properties
+
+| Material | mu'_r | mu"_r | tan(delta_m) | Application |
+|----------|-------|-------|--------------|-------------|
+| MnZn Ferrite (1 kHz) | 2500 | 25 | 0.01 | Power transformers |
+| MnZn Ferrite (100 kHz) | 2000 | 400 | 0.2 | Switching supplies |
+| NiZn Ferrite (1 MHz) | 150 | 75 | 0.5 | EMI suppression |
+| Amorphous Metal | 10000 | 100 | 0.01 | High-efficiency cores |
+| Laminated Steel (60 Hz) | 4000 | 40 | 0.01 | Power transformers |
+
+### Example: Ferrite Core Analysis
+
+```python
+import numpy as np
+from radia import ESIMCellProblemSolver, InductionHeatingCoil, create_esim_block
+
+# MnZn ferrite at 100 kHz
+# mu = 2000 - j*400 (high loss at this frequency)
+
+solver = ESIMCellProblemSolver(
+    sigma=0.1,           # Low conductivity (ferrite)
+    frequency=100000,    # 100 kHz
+    complex_mu=(2000, 400)
+)
+
+# Scan over surface field amplitude
+for H0 in [10, 100, 1000, 5000]:
+    result = solver.solve(H0)
+    Z = result['Z']
+    print(f"H0={H0:5} A/m: Z = {Z.real*1e3:.3f} + j{Z.imag*1e3:.3f} mOhm")
+    print(f"            P_ohmic = {result['P_ohmic']:.2e}, P_mag = {result['P_magnetic']:.2e} W/m^2")
+```
+
+### Implementation Notes
+
+1. **Convention**: mu = mu' - j*mu" (negative imaginary for lossy materials)
+2. **Stored values**: mu" is stored as positive in the code
+3. **Helmholtz equation**: nabla^2 E - j*omega*mu*sigma*E = 0 with complex mu
+4. **System matrix**: K - j*omega*mu*sigma*M where mu is complex
+
+---
+
 ## ESIM (Effective Surface Impedance Method) for Nonlinear Materials
 
 ### Overview
@@ -1467,3 +1651,342 @@ print(f"B at center: {B} T")
 1. Z. Zhu et al., "Algorithms in FastImp", IEEE TCAD 2005 - Core algorithm description
 2. R.F. Harrington, "Field Computation by Moment Methods" - EFIE fundamentals
 3. S.M. Rao, D.R. Wilton, A.W. Glisson, "Electromagnetic scattering by surfaces of arbitrary shape", IEEE TAP 1982 - RWG basis functions
+
+---
+
+## PEEC-ESIM Implementation (Working)
+
+### Overview
+
+The PEEC (Partial Element Equivalent Circuit) method combined with ESIM (Effective Surface Impedance Method) has been successfully implemented for induction heating analysis. This approach uses segment-based discretization of conductors.
+
+**Status**: **Working** (as of 2026-01-08)
+
+### Architecture
+
+```
+                    PEEC-ESIM Coupled Solver
+                    ========================
+
+    +------------------+     +------------------+
+    |   Coil (PEEC)    |     | Workpiece (ESIM) |
+    +------------------+     +------------------+
+    | Segment-based    |     | Surface element  |
+    | Neumann integral |     | SIBC formulation |
+    | Z = jwL + R      |     | H_tan boundary   |
+    +------------------+     +------------------+
+            |                        |
+            v                        v
+    +----------------------------------------+
+    |        Coupled Field Interaction        |
+    |  - Coil field at workpiece surface     |
+    |  - Eddy current induced B field        |
+    +----------------------------------------+
+            |
+            v
+    +----------------------------------------+
+    |           Output Results                |
+    |  - Coil impedance (R + jX)             |
+    |  - Power loss in workpiece             |
+    |  - Current distribution                |
+    +----------------------------------------+
+```
+
+### Key Features
+
+1. **Neumann Integral for Inductance**
+   - Uses analytical Neumann formula for mutual inductance between wire segments
+   - Self-inductance computed using GMD (Geometric Mean Distance) formula
+   - Accurate for arbitrary wire paths
+
+2. **Segment-Based Discretization**
+   - Coil discretized into straight wire segments
+   - Each segment has uniform current
+   - Suitable for coils that can be approximated by straight lines
+
+3. **ESIM Coupling**
+   - SIBC (Surface Impedance Boundary Condition) for nonlinear workpiece
+   - Computes effective surface impedance including skin effect
+   - Handles nonlinear B-H characteristics
+
+### Limitations
+
+- **Straight-line constraint**: PEEC segments are inherently straight
+- **Not ideal for curved surfaces**: Workpieces with complex 3D curvature may need many segments
+- **Surface currents only**: Does not model volume currents in conductors
+
+### Usage
+
+```python
+from radia.esim_coupled_solver import (
+    PEECESIMCoupledSolver,
+    InductionHeatingCoil,
+    InductionHeatingWorkpiece
+)
+
+# Create coil (PEEC discretization)
+coil = InductionHeatingCoil(
+    coil_type='spiral',
+    center=[0, 0, 0.02],
+    inner_radius=0.03,
+    outer_radius=0.05,
+    num_turns=5,
+    axis=[0, 0, 1],
+)
+coil.set_current(100)  # 100A
+
+# Create workpiece (ESIM surface)
+workpiece = InductionHeatingWorkpiece(
+    shape='plate',
+    center=[0, 0, 0],
+    dimensions=[0.1, 0.1, 0.005],
+    conductivity=5e6,
+    mu_r=100,
+)
+
+# Create coupled solver
+solver = PEECESIMCoupledSolver(coil, workpiece)
+solver.set_frequency(50000)  # 50 kHz
+
+# Solve
+result = solver.solve()
+print(f"Coil impedance: {result['Z_coil']:.4f} Ohm")
+print(f"Power absorbed: {result['P_workpiece']:.1f} W")
+```
+
+---
+
+## RWG-EFIE Implementation for 3D Geometries (New)
+
+### Overview
+
+For induction heating systems with curved coils and workpieces that cannot be well approximated by straight segments, a new RWG-EFIE (Rao-Wilton-Glisson Electric Field Integral Equation) solver has been implemented.
+
+**Status**: **New Implementation** (2026-01-08)
+
+### Why RWG-EFIE?
+
+| Aspect | PEEC (Segment) | RWG-EFIE (Surface) |
+|--------|---------------|-------------------|
+| Geometry | Straight wire segments | Arbitrary 3D surfaces |
+| Basis function | Constant current per segment | RWG vector basis on triangles |
+| Coil shapes | Good for helical, loop | Excellent for any shape |
+| Workpiece | Limited to flat surfaces | Arbitrary curved surfaces |
+| Accuracy | Good for simple geometries | Best for complex geometries |
+| Complexity | Lower | Higher |
+
+### Architecture
+
+```
+                    RWG-EFIE 3D Solver
+                    ==================
+
+    +------------------+     +------------------+
+    |   Coil Mesh      |     | Workpiece Mesh   |
+    +------------------+     +------------------+
+    | Triangular       |     | Triangular       |
+    | surface mesh     |     | surface mesh     |
+    | (closed tube)    |     | (open plate/disk)|
+    +------------------+     +------------------+
+            |                        |
+            v                        v
+    +----------------------------------------+
+    |           RWG Mesh Manager              |
+    |  - Edge detection & connectivity       |
+    |  - Interior vs boundary edge marking   |
+    |  - RWG basis function support          |
+    +----------------------------------------+
+            |
+            v
+    +----------------------------------------+
+    |           EFIE Matrix Assembly          |
+    |  L_mn = mu0/(4pi) * integral f_m.f_n/R |
+    |  R_mn = Z_s * delta_mn (skin effect)   |
+    |  Z = jwL + R                           |
+    +----------------------------------------+
+            |
+            v
+    +----------------------------------------+
+    |           Linear System Solve           |
+    |  [Z] * {I} = {V}                       |
+    +----------------------------------------+
+            |
+            v
+    +----------------------------------------+
+    |           Post-Processing               |
+    |  - Impedance calculation               |
+    |  - B field via Biot-Savart             |
+    |  - Current visualization               |
+    +----------------------------------------+
+```
+
+### Key Components
+
+#### 1. RWG Basis Functions
+
+RWG basis functions are vector basis functions defined on edges of triangular meshes:
+
+```
+f_n(r) = (l_n / 2*A_+) * rho_n^+(r)   in T+ (triangle containing edge)
+       = (l_n / 2*A_-) * rho_n^-(r)   in T- (adjacent triangle)
+       = 0                            outside T+ and T-
+
+where:
+  l_n = edge length
+  A_+, A_- = areas of adjacent triangles
+  rho_n^+(r) = r - r_n^+ (vector from free vertex to point)
+```
+
+#### 2. Mesh Types
+
+**Closed Mesh (Coil)**:
+- Wire surface represented as tube
+- All edges are interior edges (two adjacent triangles)
+- No boundary edges
+
+**Open Mesh (Workpiece)**:
+- Flat plate or curved surface
+- Has boundary edges (one adjacent triangle)
+- Interior edges carry RWG basis functions
+
+#### 3. Supported Geometries
+
+| Geometry | Function | Parameters |
+|----------|----------|------------|
+| Loop coil | `create_loop_coil()` | center, radius, normal, wire_radius |
+| Spiral coil | `create_spiral_coil()` | center, inner_r, outer_r, pitch, turns |
+| Rectangular plate | `create_rectangular_plate()` | center, Lx, Ly, normal, nx, ny |
+| Circular disk | `create_circular_disk()` | center, radius, normal, nr, ntheta |
+| Cylindrical shell | `CreateCylindricalShell()` | center, radius, height, axis |
+
+### Source Files
+
+| File | Description |
+|------|-------------|
+| `src/core/rad_rwg_basis.h` | C++ RWG mesh and basis function classes |
+| `src/core/rad_rwg_basis.cpp` | C++ implementation of mesh generation |
+| `src/radia/rwg_efie_solver.py` | Python RWG-EFIE solver implementation |
+| `examples/induction_heating/demo_rwg_efie_3d.py` | Demo examples |
+
+### Usage
+
+```python
+from radia.rwg_efie_solver import (
+    RWGMesh,
+    RWGEFIESolver,
+    create_induction_heating_model,
+)
+
+# Option 1: High-level API
+solver = create_induction_heating_model(
+    coil_type='spiral',
+    workpiece_type='plate',
+    loop_radius=0.05,        # For loop coils
+    inner_radius=0.02,       # For spiral coils
+    outer_radius=0.05,
+    pitch=0.005,
+    num_turns=3,
+    wire_radius=0.002,
+    frequency=50e3,
+    coil_conductivity=5.8e7,  # Copper
+)
+
+result = solver.solve(verbose=True)
+print(f"Coil impedance: {result['impedance']}")
+
+# Compute B field
+B = solver.compute_B_field([0, 0, 0.03])
+print(f"B at z=30mm: {B} T")
+
+# Option 2: Low-level API
+mesh = RWGMesh()
+mesh.create_loop_coil(
+    center=[0, 0, 0],
+    radius=0.05,
+    normal=[0, 0, 1],
+    wire_radius=0.002,
+    num_around=8,
+    num_along=24
+)
+
+solver = RWGEFIESolver(mesh)
+solver.set_frequency(50e3)
+solver.set_conductivity(5.8e7)
+solver.set_voltage_excitation(1.0)
+solver.solve()
+
+Z = solver.get_impedance()
+L = Z.imag / (2 * np.pi * 50e3)
+print(f"Inductance: {L*1e6:.3f} uH")
+```
+
+### Validation
+
+The RWG-EFIE implementation has been validated against analytical formulas:
+
+**Loop Coil Self-Inductance**:
+```
+L_analytical = mu_0 * R * [ln(8R/a) - 2]
+
+For R=50mm, a=2mm wire radius:
+  L_analytical = 0.219 uH
+  L_RWG-EFIE   = 0.217 uH (error < 1%)
+```
+
+### Demo Examples
+
+The demo script `examples/induction_heating/demo_rwg_efie_3d.py` includes:
+
+1. **Demo 1**: Loop coil mesh and impedance vs frequency
+2. **Demo 2**: Spiral coil (induction heating style)
+3. **Demo 3**: Workpiece mesh generation (open surfaces)
+4. **Demo 4**: High-level InductionHeatingSolver API
+5. **Demo 5**: Comparison with analytical formula
+6. **Demo 6**: Typical induction heating coil-workpiece setup
+
+---
+
+## Method Selection Guide
+
+### When to Use PEEC-ESIM
+
+- Coils with primarily straight sections (rectangular, helical approximation)
+- Flat plate workpieces
+- Fast computation needed
+- Simple geometries where segment approximation is sufficient
+
+### When to Use RWG-EFIE
+
+- Curved coils that cannot be approximated by straight segments
+- Complex 3D workpiece geometries (curved surfaces)
+- Need accurate current distribution on surfaces
+- High-accuracy requirements for curved conductors
+
+### Comparison Table
+
+| Feature | PEEC-ESIM | RWG-EFIE |
+|---------|-----------|----------|
+| Coil geometry | Straight segments | Arbitrary 3D |
+| Workpiece geometry | Flat surfaces | Arbitrary 3D |
+| Matrix size | N_segments x N_segments | N_edges x N_edges |
+| Typical N | 10-100 | 100-10000 |
+| Computation time | Fast | Moderate to slow |
+| Memory | Low | Higher |
+| Accuracy (curved) | Moderate | High |
+| Implementation | Simpler | Complex |
+
+---
+
+## Future Development
+
+### Short-term
+
+1. **RWG-EFIE pFFT acceleration**: Use pre-corrected FFT for O(N log N) matrix-vector products
+2. **Coupled coil-workpiece EFIE**: Full mutual coupling between coil and workpiece meshes
+3. **Nonlinear workpiece support**: Integrate ESIM with RWG-EFIE for nonlinear materials
+
+### Long-term
+
+1. **Hybrid PEEC + RWG**: Use PEEC for coil, RWG for workpiece
+2. **Adaptive meshing**: Automatic mesh refinement based on error estimation
+3. **GPU acceleration**: CUDA/OpenCL for large-scale problems

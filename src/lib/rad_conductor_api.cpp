@@ -56,6 +56,126 @@ static std::shared_ptr<radTConductor> GetConductor(int handle)
 static std::map<int, std::vector<int>> gConductorContainerMap;
 
 //=========================================================================
+// Unified Fld API Support Functions (for rad.Fld() conductor detection)
+//=========================================================================
+
+// Check if a handle is a conductor object
+bool IsConductorHandle(int handle)
+{
+    // Conductor handles start at 10000
+    if (handle < 10000) return false;
+
+    // Check if it's a valid conductor or container
+    if (gConductorMap.find(handle) != gConductorMap.end()) return true;
+    if (gConductorContainerMap.find(handle) != gConductorContainerMap.end()) return true;
+
+    return false;
+}
+
+// Compute conductor field for unified Fld() API
+// Returns true if successful, false if not a conductor
+// Output: pB = [Bx_re, By_re, Bz_re, Bx_im, By_im, Bz_im] for 'b'/'h' field
+// Output: pB = [Ex_re, Ey_re, Ez_re, Ex_im, Ey_im, Ez_im] for 'e' field
+// Output: pB = [Ax_re, Ay_re, Az_re, Ax_im, Ay_im, Az_im] for 'a' field
+// Output: pB = [Phi_re, Phi_im] for 'phi' field
+bool ComputeConductorField(double* pB, int* pNb, int cond, const char* fieldId, double* pCoord)
+{
+    try {
+        TVector3d pt(pCoord[0], pCoord[1], pCoord[2]);
+
+        // Get conductor object (always needed for field computation)
+        std::shared_ptr<radTConductor> conductor = nullptr;
+
+        // Check if it's a container - get first conductor from container
+        auto cnt_it = gConductorContainerMap.find(cond);
+        if (cnt_it != gConductorContainerMap.end() && !cnt_it->second.empty()) {
+            conductor = GetConductor(cnt_it->second[0]);
+        } else {
+            conductor = GetConductor(cond);
+        }
+
+        if (!conductor) {
+            return false;  // Not a valid conductor
+        }
+
+        // Dispatch based on field type
+        char fldType = fieldId[0];
+        if (fldType >= 'A' && fldType <= 'Z') {
+            fldType = fldType - 'A' + 'a';  // Convert to lowercase
+        }
+
+        if (fldType == 'b') {
+            std::complex<double> Bx, By, Bz;
+
+            // Use conductor's ComputeB (Biot-Savart from wire current)
+            conductor->ComputeB(pt, Bx, By, Bz);
+
+            // Return 6 values: [real, real, real, imag, imag, imag]
+            pB[0] = Bx.real(); pB[1] = By.real(); pB[2] = Bz.real();
+            pB[3] = Bx.imag(); pB[4] = By.imag(); pB[5] = Bz.imag();
+            *pNb = 6;
+        }
+        else if (fldType == 'h') {
+            std::complex<double> Bx, By, Bz;
+
+            // Use conductor's ComputeB then divide by mu_0 to get H
+            conductor->ComputeB(pt, Bx, By, Bz);
+
+            // H = B / mu_0
+            const double inv_mu0 = 1.0 / MU_0;
+            pB[0] = Bx.real() * inv_mu0; pB[1] = By.real() * inv_mu0; pB[2] = Bz.real() * inv_mu0;
+            pB[3] = Bx.imag() * inv_mu0; pB[4] = By.imag() * inv_mu0; pB[5] = Bz.imag() * inv_mu0;
+            *pNb = 6;
+        }
+        else if (fldType == 'e') {
+            std::complex<double> Ex, Ey, Ez;
+
+            if (conductor) {
+                conductor->ComputeE(pt, Ex, Ey, Ez);
+            }
+
+            pB[0] = Ex.real(); pB[1] = Ey.real(); pB[2] = Ez.real();
+            pB[3] = Ex.imag(); pB[4] = Ey.imag(); pB[5] = Ez.imag();
+            *pNb = 6;
+        }
+        else if (fldType == 'a') {
+            std::complex<double> Ax, Ay, Az;
+
+            if (conductor) {
+                conductor->ComputeA(pt, Ax, Ay, Az);
+            }
+
+            pB[0] = Ax.real(); pB[1] = Ay.real(); pB[2] = Az.real();
+            pB[3] = Ax.imag(); pB[4] = Ay.imag(); pB[5] = Az.imag();
+            *pNb = 6;
+        }
+        else if (fldType == 'p') {  // phi
+            std::complex<double> phi;
+
+            if (conductor) {
+                phi = conductor->ComputePhi(pt);
+            }
+
+            pB[0] = phi.real();
+            pB[1] = phi.imag();
+            *pNb = 2;
+        }
+        else {
+            // Unknown field type
+            *pNb = 0;
+            return false;
+        }
+
+        return true;
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+        *pNb = 0;
+        return false;
+    }
+}
+
+//=========================================================================
 // Conductor Creation Functions
 //=========================================================================
 
@@ -475,15 +595,24 @@ void CndSolve(int cond)
 void CndGetImpedance(double* Z_real, double* Z_imag, int cond)
 {
     try {
-        auto conductor = GetConductor(cond);
-        if (!conductor) {
-            ioBuffer.StoreErrorMessage("Invalid conductor handle");
-            *Z_real = 0;
-            *Z_imag = 0;
-            return;
+        std::complex<double> Z(0, 0);
+
+        // Check if solver exists (after CndSolve was called)
+        auto solver_it = gConductorSolverMap.find(cond);
+        if (solver_it != gConductorSolverMap.end() && solver_it->second) {
+            Z = solver_it->second->GetPortImpedance();
+        } else {
+            // Fall back to conductor's impedance
+            auto conductor = GetConductor(cond);
+            if (!conductor) {
+                ioBuffer.StoreErrorMessage("Invalid conductor handle");
+                *Z_real = 0;
+                *Z_imag = 0;
+                return;
+            }
+            Z = conductor->GetPortImpedance();
         }
 
-        std::complex<double> Z = conductor->GetPortImpedance();
         *Z_real = Z.real();
         *Z_imag = Z.imag();
     }
@@ -521,339 +650,20 @@ void CndImpedanceSweep(double* Z_real, double* Z_imag, int cond, double* freqs, 
     }
 }
 
-//=========================================================================
-// Field Computation Functions
-//=========================================================================
+/* NOTE: CndFld* functions have been removed.
+   Use the unified rad.Fld(cond, field_type, point) API for conductor field computation.
+   The Fld() API automatically detects conductor objects and returns complex fields
+   [Fx_re, Fy_re, Fz_re, Fx_im, Fy_im, Fz_im] for AC analysis.
 
-void CndFldB(double* B_real, double* B_imag, int cond, double* point)
-{
-    try {
-        auto conductor = GetConductor(cond);
-        if (!conductor) {
-            ioBuffer.StoreErrorMessage("Invalid conductor handle");
-            B_real[0] = B_real[1] = B_real[2] = 0;
-            B_imag[0] = B_imag[1] = B_imag[2] = 0;
-            return;
-        }
+   For internal use, access conductor field computation via:
+   - GetConductor(handle)->ComputeB(pt, Bx, By, Bz)
+   - GetConductor(handle)->ComputeE(pt, Ex, Ey, Ez)
+   - GetConductor(handle)->ComputeA(pt, Ax, Ay, Az)
+   - GetConductor(handle)->ComputePhi(pt)
 
-        TVector3d pt(point[0], point[1], point[2]);
-        std::complex<double> Bx, By, Bz;
-        conductor->ComputeB(pt, Bx, By, Bz);
-
-        B_real[0] = Bx.real();
-        B_real[1] = By.real();
-        B_real[2] = Bz.real();
-        B_imag[0] = Bx.imag();
-        B_imag[1] = By.imag();
-        B_imag[2] = Bz.imag();
-    }
-    catch (const std::exception& e) {
-        ioBuffer.StoreErrorMessage(e.what());
-        B_real[0] = B_real[1] = B_real[2] = 0;
-        B_imag[0] = B_imag[1] = B_imag[2] = 0;
-    }
-}
-
-//-------------------------------------------------------------------------
-
-void CndFldE(double* E_real, double* E_imag, int cond, double* point)
-{
-    try {
-        auto conductor = GetConductor(cond);
-        if (!conductor) {
-            ioBuffer.StoreErrorMessage("Invalid conductor handle");
-            E_real[0] = E_real[1] = E_real[2] = 0;
-            E_imag[0] = E_imag[1] = E_imag[2] = 0;
-            return;
-        }
-
-        TVector3d pt(point[0], point[1], point[2]);
-        std::complex<double> Ex, Ey, Ez;
-        conductor->ComputeE(pt, Ex, Ey, Ez);
-
-        E_real[0] = Ex.real();
-        E_real[1] = Ey.real();
-        E_real[2] = Ez.real();
-        E_imag[0] = Ex.imag();
-        E_imag[1] = Ey.imag();
-        E_imag[2] = Ez.imag();
-    }
-    catch (const std::exception& e) {
-        ioBuffer.StoreErrorMessage(e.what());
-        E_real[0] = E_real[1] = E_real[2] = 0;
-        E_imag[0] = E_imag[1] = E_imag[2] = 0;
-    }
-}
-
-//-------------------------------------------------------------------------
-
-void CndFldA(double* A_real, double* A_imag, int cond, double* point)
-{
-    try {
-        auto conductor = GetConductor(cond);
-        if (!conductor) {
-            ioBuffer.StoreErrorMessage("Invalid conductor handle");
-            A_real[0] = A_real[1] = A_real[2] = 0;
-            A_imag[0] = A_imag[1] = A_imag[2] = 0;
-            return;
-        }
-
-        TVector3d pt(point[0], point[1], point[2]);
-        std::complex<double> Ax, Ay, Az;
-        conductor->ComputeA(pt, Ax, Ay, Az);
-
-        A_real[0] = Ax.real();
-        A_real[1] = Ay.real();
-        A_real[2] = Az.real();
-        A_imag[0] = Ax.imag();
-        A_imag[1] = Ay.imag();
-        A_imag[2] = Az.imag();
-    }
-    catch (const std::exception& e) {
-        ioBuffer.StoreErrorMessage(e.what());
-        A_real[0] = A_real[1] = A_real[2] = 0;
-        A_imag[0] = A_imag[1] = A_imag[2] = 0;
-    }
-}
-
-//-------------------------------------------------------------------------
-
-void CndFldPhi(double* Phi_real, double* Phi_imag, int cond, double* point)
-{
-    try {
-        auto conductor = GetConductor(cond);
-        if (!conductor) {
-            ioBuffer.StoreErrorMessage("Invalid conductor handle");
-            *Phi_real = *Phi_imag = 0;
-            return;
-        }
-
-        TVector3d pt(point[0], point[1], point[2]);
-        std::complex<double> phi = conductor->ComputePhi(pt);
-
-        *Phi_real = phi.real();
-        *Phi_imag = phi.imag();
-    }
-    catch (const std::exception& e) {
-        ioBuffer.StoreErrorMessage(e.what());
-        *Phi_real = *Phi_imag = 0;
-    }
-}
-
-//-------------------------------------------------------------------------
-
-void CndFldBBatch(double* B_real, double* B_imag, int cond, double* points, int npts)
-{
-    try {
-        auto conductor = GetConductor(cond);
-        if (!conductor) {
-            ioBuffer.StoreErrorMessage("Invalid conductor handle");
-            return;
-        }
-
-#ifdef RADIA_USE_EXAFMM
-        // Check if FMM acceleration is enabled and problem is large enough
-        auto& fmmManager = radTConductorFmmManager::Instance();
-        if (fmmManager.IsEnabled() && conductor->NumPanels() >= fmmManager.GetFmm().GetThreshold()) {
-            // Use FMM acceleration
-            auto& fmm = fmmManager.GetFmm();
-            fmm.SetSources(*conductor);
-
-            std::vector<double> targets(points, points + 3 * npts);
-            std::vector<std::complex<double>> Bx, By, Bz;
-            fmm.ComputeB(targets, Bx, By, Bz);
-
-            #pragma omp parallel for
-            for (int i = 0; i < npts; i++) {
-                B_real[3*i]   = Bx[i].real();
-                B_real[3*i+1] = By[i].real();
-                B_real[3*i+2] = Bz[i].real();
-                B_imag[3*i]   = Bx[i].imag();
-                B_imag[3*i+1] = By[i].imag();
-                B_imag[3*i+2] = Bz[i].imag();
-            }
-        } else
-#endif  // RADIA_USE_EXAFMM
-        {
-            // Use direct computation (OpenMP parallelized)
-            #pragma omp parallel for schedule(dynamic)
-            for (int i = 0; i < npts; i++) {
-                TVector3d pt(points[3*i], points[3*i+1], points[3*i+2]);
-                std::complex<double> Bx, By, Bz;
-                conductor->ComputeB(pt, Bx, By, Bz);
-
-                B_real[3*i]   = Bx.real();
-                B_real[3*i+1] = By.real();
-                B_real[3*i+2] = Bz.real();
-                B_imag[3*i]   = Bx.imag();
-                B_imag[3*i+1] = By.imag();
-                B_imag[3*i+2] = Bz.imag();
-            }
-        }
-    }
-    catch (const std::exception& e) {
-        ioBuffer.StoreErrorMessage(e.what());
-    }
-}
-
-//-------------------------------------------------------------------------
-
-void CndFldEBatch(double* E_real, double* E_imag, int cond, double* points, int npts)
-{
-    try {
-        auto conductor = GetConductor(cond);
-        if (!conductor) {
-            ioBuffer.StoreErrorMessage("Invalid conductor handle");
-            return;
-        }
-
-#ifdef RADIA_USE_EXAFMM
-        // Check if FMM acceleration is enabled and problem is large enough
-        auto& fmmManager = radTConductorFmmManager::Instance();
-        if (fmmManager.IsEnabled() && conductor->NumPanels() >= fmmManager.GetFmm().GetThreshold()) {
-            // Use FMM acceleration
-            auto& fmm = fmmManager.GetFmm();
-            fmm.SetSources(*conductor);
-
-            std::vector<double> targets(points, points + 3 * npts);
-            std::vector<std::complex<double>> Ex, Ey, Ez;
-            fmm.ComputeE(targets, conductor->GetFrequency(), Ex, Ey, Ez);
-
-            #pragma omp parallel for
-            for (int i = 0; i < npts; i++) {
-                E_real[3*i]   = Ex[i].real();
-                E_real[3*i+1] = Ey[i].real();
-                E_real[3*i+2] = Ez[i].real();
-                E_imag[3*i]   = Ex[i].imag();
-                E_imag[3*i+1] = Ey[i].imag();
-                E_imag[3*i+2] = Ez[i].imag();
-            }
-        } else
-#endif  // RADIA_USE_EXAFMM
-        {
-            // Use direct computation (OpenMP parallelized)
-            #pragma omp parallel for schedule(dynamic)
-            for (int i = 0; i < npts; i++) {
-                TVector3d pt(points[3*i], points[3*i+1], points[3*i+2]);
-                std::complex<double> Ex, Ey, Ez;
-                conductor->ComputeE(pt, Ex, Ey, Ez);
-
-                E_real[3*i]   = Ex.real();
-                E_real[3*i+1] = Ey.real();
-                E_real[3*i+2] = Ez.real();
-                E_imag[3*i]   = Ex.imag();
-                E_imag[3*i+1] = Ey.imag();
-                E_imag[3*i+2] = Ez.imag();
-            }
-        }
-    }
-    catch (const std::exception& e) {
-        ioBuffer.StoreErrorMessage(e.what());
-    }
-}
-
-//-------------------------------------------------------------------------
-
-void CndFldABatch(double* A_real, double* A_imag, int cond, double* points, int npts)
-{
-    try {
-        auto conductor = GetConductor(cond);
-        if (!conductor) {
-            ioBuffer.StoreErrorMessage("Invalid conductor handle");
-            return;
-        }
-
-#ifdef RADIA_USE_EXAFMM
-        // Check if FMM acceleration is enabled and problem is large enough
-        auto& fmmManager = radTConductorFmmManager::Instance();
-        if (fmmManager.IsEnabled() && conductor->NumPanels() >= fmmManager.GetFmm().GetThreshold()) {
-            // Use FMM acceleration
-            auto& fmm = fmmManager.GetFmm();
-            fmm.SetSources(*conductor);
-
-            std::vector<double> targets(points, points + 3 * npts);
-            std::vector<std::complex<double>> Ax, Ay, Az;
-            fmm.ComputeA(targets, Ax, Ay, Az);
-
-            #pragma omp parallel for
-            for (int i = 0; i < npts; i++) {
-                A_real[3*i]   = Ax[i].real();
-                A_real[3*i+1] = Ay[i].real();
-                A_real[3*i+2] = Az[i].real();
-                A_imag[3*i]   = Ax[i].imag();
-                A_imag[3*i+1] = Ay[i].imag();
-                A_imag[3*i+2] = Az[i].imag();
-            }
-        } else
-#endif  // RADIA_USE_EXAFMM
-        {
-            // Use direct computation (OpenMP parallelized)
-            #pragma omp parallel for schedule(dynamic)
-            for (int i = 0; i < npts; i++) {
-                TVector3d pt(points[3*i], points[3*i+1], points[3*i+2]);
-                std::complex<double> Ax, Ay, Az;
-                conductor->ComputeA(pt, Ax, Ay, Az);
-
-                A_real[3*i]   = Ax.real();
-                A_real[3*i+1] = Ay.real();
-                A_real[3*i+2] = Az.real();
-                A_imag[3*i]   = Ax.imag();
-                A_imag[3*i+1] = Ay.imag();
-                A_imag[3*i+2] = Az.imag();
-            }
-        }
-    }
-    catch (const std::exception& e) {
-        ioBuffer.StoreErrorMessage(e.what());
-    }
-}
-
-//-------------------------------------------------------------------------
-
-void CndFldPhiBatch(double* Phi_real, double* Phi_imag, int cond, double* points, int npts)
-{
-    try {
-        auto conductor = GetConductor(cond);
-        if (!conductor) {
-            ioBuffer.StoreErrorMessage("Invalid conductor handle");
-            return;
-        }
-
-#ifdef RADIA_USE_EXAFMM
-        // Check if FMM acceleration is enabled and problem is large enough
-        auto& fmmManager = radTConductorFmmManager::Instance();
-        if (fmmManager.IsEnabled() && conductor->NumPanels() >= fmmManager.GetFmm().GetThreshold()) {
-            // Use FMM acceleration
-            auto& fmm = fmmManager.GetFmm();
-            fmm.SetSources(*conductor);
-
-            std::vector<double> targets(points, points + 3 * npts);
-            std::vector<std::complex<double>> phi;
-            fmm.ComputePhi(targets, phi);
-
-            #pragma omp parallel for
-            for (int i = 0; i < npts; i++) {
-                Phi_real[i] = phi[i].real();
-                Phi_imag[i] = phi[i].imag();
-            }
-        } else
-#endif  // RADIA_USE_EXAFMM
-        {
-            // Use direct computation (OpenMP parallelized)
-            #pragma omp parallel for schedule(dynamic)
-            for (int i = 0; i < npts; i++) {
-                TVector3d pt(points[3*i], points[3*i+1], points[3*i+2]);
-                std::complex<double> phi = conductor->ComputePhi(pt);
-
-                Phi_real[i] = phi.real();
-                Phi_imag[i] = phi.imag();
-            }
-        }
-    }
-    catch (const std::exception& e) {
-        ioBuffer.StoreErrorMessage(e.what());
-    }
-}
+   Or via the solver (after CndSolve):
+   - gConductorSolverMap[handle]->ComputeB(pt, Bx, By, Bz)
+*/
 
 //=========================================================================
 // Solution Access Functions

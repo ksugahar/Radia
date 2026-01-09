@@ -477,7 +477,17 @@
       "Bash(powershell.exe -Command \"& ''C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\Common7\\\\Tools\\\\Launch-VsDevShell.ps1'' -SkipAutomaticLocation; cd ''s:\\\\Radia\\\\01_GitHub''; cmake --build build-msvc --config Release --target radia 2>&1 | Select-Object -Last 100\")",
       "Bash(powershell.exe -Command \"Get-ChildItem ''s:\\\\Radia\\\\01_GitHub\\\\src\\\\radia\\\\*.pyd'' | Select-Object Name, LastWriteTime, Length\")",
       "Bash(powershell.exe -Command \"& ''C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\Common7\\\\Tools\\\\Launch-VsDevShell.ps1'' -SkipAutomaticLocation; cd ''s:\\\\Radia\\\\01_GitHub\\\\build-msvc''; cmake --build . --config Release --target rad_conductor 2>&1 | Select-Object -Last 50\")",
-      "Bash(powershell.exe -Command \"cd ''s:\\\\Radia\\\\01_GitHub''; & ''.\\\\BuildMSVC.ps1'' 2>&1 | Select-Object -Last 100\")"
+      "Bash(powershell.exe -Command \"cd ''s:\\\\Radia\\\\01_GitHub''; & ''.\\\\BuildMSVC.ps1'' 2>&1 | Select-Object -Last 100\")",
+      "Bash(del \"s:\\\\Radia\\\\01_GitHub\\\\test_esim_8khz.py\")",
+      "Bash(del \"s:\\\\Radia\\\\01_GitHub\\\\test_wpt_k_rm.py\")",
+      "Bash(del \"s:\\\\Radia\\\\01_GitHub\\\\test_rm_debug.py\")",
+      "Bash(Select-Object -Last 150)",
+      "Bash(cmd.exe /c \"cd /d s:\\\\Radia\\\\01_GitHub && call \"\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\VC\\\\Auxiliary\\\\Build\\\\vcvars64.bat\"\" >nul 2>&1 && cmake --build build-msvc --config Release --target radia 2>&1\")",
+      "Bash(cmd.exe /c \"cd /d s:\\\\Radia\\\\01_GitHub && \"\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\VC\\\\Auxiliary\\\\Build\\\\vcvars64.bat\"\" && cmake --build build-msvc --config Release --target radia 2>&1\")",
+      "Bash(cmd.exe /c \"s:\\\\Radia\\\\01_GitHub\\\\build_now.bat\")",
+      "Bash(Out-String)",
+      "Bash(cmd.exe /c \"cd /d s:\\\\Radia\\\\01_GitHub\\\\build-msvc && cmake --build . --config Release --target radia 2>&1\")",
+      "Bash(cmd.exe /c \"s:\\\\Radia\\\\01_GitHub\\\\build_now.bat 2>&1\")"
     ],
     "deny": [],
     "ask": []

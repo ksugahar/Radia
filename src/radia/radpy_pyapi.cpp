@@ -3442,77 +3442,11 @@ static PyObject* radia_CndImpedanceSweep(PyObject* self, PyObject* args)
 	return oRes;
 }
 
-/************************************************************************//**
- * Computes B field from conductor at a point
- ***************************************************************************/
-static PyObject* radia_CndFld(PyObject* self, PyObject* args)
-{
-	PyObject *oFldType=0, *oPoint=0, *oRes=0;
-	try
-	{
-		int cond = 0;
-		if(!PyArg_ParseTuple(args, "iOO:CndFld", &cond, &oFldType, &oPoint))
-			throw CombErStr(strEr_BadFuncArg, ": CndFld");
-
-		char sFldType[64]; *sFldType = '\0';
-		CPyParse::CopyPyStringToC(oFldType, sFldType, 64);
-
-		double arPoint[3];
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oPoint, 'd', arPoint, 3,
-			CombErStr(strEr_BadFuncArg, ": CndFld, incorrect point"));
-
-		double Fld_real[3], Fld_imag[3];
-
-		if(sFldType[0] == 'b' || sFldType[0] == 'B')
-		{
-			g_pyParse.ProcRes(RadCndFldB(Fld_real, Fld_imag, cond, arPoint));
-			// Return list of 3 complex numbers
-			oRes = PyList_New(3);
-			for(int i = 0; i < 3; i++)
-			{
-				PyList_SetItem(oRes, i, PyComplex_FromDoubles(Fld_real[i], Fld_imag[i]));
-			}
-		}
-		else if(sFldType[0] == 'e' || sFldType[0] == 'E')
-		{
-			g_pyParse.ProcRes(RadCndFldE(Fld_real, Fld_imag, cond, arPoint));
-			// Return list of 3 complex numbers
-			oRes = PyList_New(3);
-			for(int i = 0; i < 3; i++)
-			{
-				PyList_SetItem(oRes, i, PyComplex_FromDoubles(Fld_real[i], Fld_imag[i]));
-			}
-		}
-		else if(sFldType[0] == 'a' || sFldType[0] == 'A')
-		{
-			g_pyParse.ProcRes(RadCndFldA(Fld_real, Fld_imag, cond, arPoint));
-			// Return list of 3 complex numbers (Ax, Ay, Az)
-			oRes = PyList_New(3);
-			for(int i = 0; i < 3; i++)
-			{
-				PyList_SetItem(oRes, i, PyComplex_FromDoubles(Fld_real[i], Fld_imag[i]));
-			}
-		}
-		else if((sFldType[0] == 'p' || sFldType[0] == 'P') &&
-		        (sFldType[1] == 'h' || sFldType[1] == 'H'))
-		{
-			// 'phi' or 'Phi' - scalar potential
-			double Phi_real, Phi_imag;
-			g_pyParse.ProcRes(RadCndFldPhi(&Phi_real, &Phi_imag, cond, arPoint));
-			// Return single complex number
-			oRes = PyComplex_FromDoubles(Phi_real, Phi_imag);
-		}
-		else
-		{
-			throw CombErStr(strEr_BadFuncArg, ": CndFld, field type must be 'b', 'e', 'a', or 'phi'");
-		}
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-	}
-	return oRes;
-}
+/* NOTE: radia_CndFld has been removed.
+   Use rad.Fld(cond, field_type, point) for conductor field computation.
+   The unified Fld() API automatically detects conductor objects and returns
+   complex fields [Fx_re, Fy_re, Fz_re, Fx_im, Fy_im, Fz_im] for AC analysis.
+*/
 
 /************************************************************************//**
  * Gets number of panels in conductor
@@ -4644,7 +4578,7 @@ static PyMethodDef radia_methods[] = {
 	{"CndDefinePort", radia_CndDefinePort, METH_VARARGS, "CndDefinePort(cond,[t1_panels],[t2_panels]) defines port terminals for impedance calculation. t1_panels and t2_panels are lists of panel indices."},
 	{"CndDefinePortAuto", radia_CndDefinePortAuto, METH_VARARGS, "CndDefinePortAuto(cond) auto-defines port using first and last panels (for wire-like conductors)."},
 	{"CndImpedanceSweep", radia_CndImpedanceSweep, METH_VARARGS, "CndImpedanceSweep(cond,[f1,f2,...]) computes impedance at multiple frequencies. Returns list of complex impedances."},
-	{"CndFld", radia_CndFld, METH_VARARGS, "CndFld(cond,'b'|'e'|'a',[x,y,z]) computes field from conductor at point. Returns complex [Fx,Fy,Fz] for AC field."},
+	// NOTE: CndFld removed - use Fld(cond, field_type, point) for conductor fields
 	{"CndNumPanels", radia_CndNumPanels, METH_VARARGS, "CndNumPanels(cond) returns the number of panels in the conductor discretization."},
 	{"MatSIBC", radia_MatSIBC, METH_VARARGS, "MatSIBC(sigma,mu_r) creates a Surface Impedance Boundary Condition material. sigma: conductivity [S/m], mu_r: relative permeability. For high-conductivity regions in magnetic materials."},
 

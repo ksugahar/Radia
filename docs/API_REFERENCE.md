@@ -869,9 +869,16 @@ result = solver.solve(H0=5000)  # Surface field [A/m]
 |-----------|------|-------------|
 | `sigma` | float | Electrical conductivity [S/m] |
 | `frequency` | float | Analysis frequency [Hz] |
-| `mu_r` | float | Constant relative permeability (optional) |
+| `mu_r` | float | Constant real relative permeability (optional) |
 | `bh_curve` | list | H-dependent B-H data [[H, B], ...] (optional) |
-| `complex_mu` | tuple/list | Complex permeability (mu'_r, mu"_r) or H-dependent data (optional) |
+| `complex_mu` | tuple/list | Complex permeability - see below (optional) |
+
+**complex_mu Parameter Formats**:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| Tuple `(mu'_r, mu"_r)` | `(1000, 100)` | Constant complex mu |
+| List of lists | `[[H, mu'_r, mu"_r], ...]` | H-dependent complex mu |
 
 **Returns** (dict):
 
@@ -879,7 +886,7 @@ result = solver.solve(H0=5000)  # Surface field [A/m]
 |-----|-------------|
 | `Z` | Complex surface impedance [Ohm] |
 | `P_prime` | Total power density [W/m^2] |
-| `P_ohmic` | Ohmic (Joule) loss [W/m^2] |
+| `P_ohmic` | Ohmic (Joule) loss from sigma [W/m^2] |
 | `P_magnetic` | Magnetic loss from mu" [W/m^2] |
 | `delta` | Effective skin depth [m] |
 | `iterations` | Number of iterations (nonlinear) |
@@ -964,7 +971,20 @@ dB_dH = interp.get_dB_dH(H=5000)   # Differential permeability
 
 ### ComplexPermeabilityInterpolator - Complex mu Support
 
-For materials with magnetic hysteresis loss (ferrites, amorphous metals):
+For materials with magnetic hysteresis loss (ferrites, amorphous metals, laminated steel):
+
+**Complex Permeability**: mu = mu' - j*mu"
+
+| Component | Symbol | Physical Meaning |
+|-----------|--------|------------------|
+| Real part | mu' | Energy storage (reactive power) |
+| Imaginary part | mu" | Energy loss (hysteresis, domain wall motion) |
+| Loss tangent | tan(delta_m) = mu"/mu' | Ratio of loss to storage |
+
+**Power loss from magnetic hysteresis**:
+```
+P_magnetic = (omega/2) * mu_0 * mu"_r * |H|^2  [W/m^3]
+```
 
 ```python
 from radia import ComplexPermeabilityInterpolator
@@ -986,6 +1006,16 @@ mu_prime = interp.get_mu_prime(H=5000)   # Real part mu'
 mu_double_prime = interp.get_mu_double_prime(H=5000)  # Imaginary part mu"
 loss_tangent = mu_double_prime / mu_prime
 ```
+
+**Typical Material Properties**:
+
+| Material | mu'_r | mu"_r | tan(delta_m) | Application |
+|----------|-------|-------|--------------|-------------|
+| MnZn Ferrite (1 kHz) | 2500 | 25 | 0.01 | Power transformers |
+| MnZn Ferrite (100 kHz) | 2000 | 400 | 0.2 | Switching supplies |
+| NiZn Ferrite (1 MHz) | 150 | 75 | 0.5 | EMI suppression |
+| Amorphous Metal | 10000 | 100 | 0.01 | High-efficiency cores |
+| Laminated Steel (60 Hz) | 4000 | 40 | 0.01 | Power transformers |
 
 ### InductionHeatingCoil - Coil Geometry
 
