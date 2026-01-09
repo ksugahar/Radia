@@ -99,3 +99,18 @@ except ImportError:
     # ESIM requires scipy, which may not be installed
     ESIM_AVAILABLE = False
     RWG_EFIE_AVAILABLE = False
+
+# VTK Export utilities
+# Import VTK export functions for geometry and field visualization
+try:
+    from .radia_vtk_export import (
+        # Legacy VTK format (geometry and point field)
+        exportGeometryToVTK,
+        exportFieldToVTK,
+        # VTS format (structured grid for 3D field)
+        RadiaVTKOutput,
+        export_field_grid_vts,
+    )
+    VTK_EXPORT_AVAILABLE = True
+except ImportError:
+    VTK_EXPORT_AVAILABLE = False
