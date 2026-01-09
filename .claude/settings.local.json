@@ -487,7 +487,9 @@
       "Bash(cmd.exe /c \"s:\\\\Radia\\\\01_GitHub\\\\build_now.bat\")",
       "Bash(Out-String)",
       "Bash(cmd.exe /c \"cd /d s:\\\\Radia\\\\01_GitHub\\\\build-msvc && cmake --build . --config Release --target radia 2>&1\")",
-      "Bash(cmd.exe /c \"s:\\\\Radia\\\\01_GitHub\\\\build_now.bat 2>&1\")"
+      "Bash(cmd.exe /c \"s:\\\\Radia\\\\01_GitHub\\\\build_now.bat 2>&1\")",
+      "Bash(del \"src\\\\core\\\\rad_sibc.cpp\")",
+      "Bash(del \"src\\\\core\\\\rad_sibc.h\")"
     ],
     "deny": [],
     "ask": []
