@@ -1,17 +1,17 @@
-# FastImp + SIBC Integration Design Document
+# FastImp + ESIM Integration Design Document
 
-**Date**: 2026-01-08
+**Date**: 2026-01-09
 **Status**: Phase 4 Python API Complete (CndWire, CndSpiral added)
 
 ## Overview
 
-This document describes the design for integrating FastImp-based conductor modeling and Nonlocal SIBC (Surface Impedance Boundary Condition) into Radia for wide-band electromagnetic analysis.
+This document describes the design for integrating FastImp-based conductor modeling and ESIM (Effective Surface Impedance Method) into Radia for wide-band electromagnetic analysis.
 
 ## Goals
 
 1. **Coil/Conductor modeling**: Import FastImp formulation for surface current analysis
 2. **Magnetic material**: Use existing ELF/Radia MSC formulation
-3. **Conductive magnetic material**: Implement Nonlocal SIBC for materials with both conductivity and permeability
+3. **Conductive magnetic material**: Implement ESIM for nonlinear materials with both conductivity and permeability
 
 ## Target Applications
 
@@ -88,44 +88,44 @@ sm = M . n_hat
 
 **Acceleration**: HACApK (ACA+)
 
-### 3. Conductive Magnetic Material (Nonlocal SIBC)
+### 3. Conductive Magnetic Material (ESIM)
 
-**Target**: Electrical steel sheets, iron yoke (high frequency)
-**Properties**: s ~ 10^6 S/m, ur ~ 1000-10000
+**Target**: Electrical steel sheets, iron yoke, induction heating workpieces
+**Properties**: s ~ 10^6 S/m, ur ~ 100-10000 (nonlinear)
 
 **Unknowns**:
-- K: Surface current density [A/m]
-- Internal: Solved by 2D cross-section FEM
+- Surface impedance Z_s(H): H-field dependent
+- Internal fields: Solved by 1D cell problem
 
-**Formulation**: Nonlocal SIBC (Bilicz et al., 2023)
+**Formulation**: ESIM (Hollaus et al., 2025)
 ```
-Et = Z{n_hat x K}
-Z: Nonlocal impedance operator from 2D FEM
+Z_s = Z_s(H_surface)  - Effective surface impedance
+1D cell problem solved for each surface H-field level
 
-2D cross-section problem:
-nabla^2 Eu - jw*u(H)*k*Eu = 0  in Omega (cross-section)
-dEu/dn = -jw*u*Hv              on Gamma (boundary)
+Supports:
+- Nonlinear B-H curves
+- Complex permeability (mu' - j*mu")
+- DC to high frequency
 ```
 
 **Reference**:
-- Bilicz S, Badics Z, Pavo J. "Wide-band nonlocal impedance boundary condition model for high-conductivity regions in integral equation framework", December 2023.
+- K. Hollaus et al., "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025
 
-**Acceleration**: Surface integrals with pFFT/HACApK, 2D FEM solved once per cross-section
+**Advantage over Nonlocal SIBC**: Handles nonlinear materials and DC conditions
 
 ## Interaction Matrix
 
 ```
-[Z_cc  Z_cm  Z_cs] [K_coil ]   [V_ext]
-[Z_mc  Z_mm  Z_ms] [sm     ] = [H_ext]
-[Z_sc  Z_sm  Z_ss] [K_sibc ]   [E_ext]
+[Z_cc  Z_cm] [K_coil ]   [V_ext]
+[Z_mc  Z_mm] [sm     ] = [H_ext]
 
 Z_cc: Coil-Coil (FastImp)
-Z_mm: Magnetic-Magnetic (MSC)
-Z_ss: SIBC-SIBC (Nonlocal SIBC)
+Z_mm: Magnetic-Magnetic (MSC + ESIM for nonlinear)
 Z_cm, Z_mc: Coil-Magnetic (cross terms)
-Z_cs, Z_sc: Coil-SIBC (cross terms)
-Z_ms, Z_sm: Magnetic-SIBC (cross terms)
 ```
+
+For conductive magnetic materials, ESIM provides the effective surface impedance
+that is used in the Z_mm block to account for eddy current effects.
 
 ## Implementation Phases
 
@@ -165,20 +165,21 @@ Coil -> Magnetic: B field from coil currents induces magnetization
 Magnetic -> Coil: H field from magnetization affects coil impedance
 ```
 
-### Phase 3: Nonlocal SIBC Implementation
+### Phase 3: ESIM Implementation
 
 **Tasks**:
-1. Implement 2D cross-section FEM solver
-   - Option A: Use NGSolve (already integrated)
-   - Option B: Simple FEM for Helmholtz equation
-2. Implement nonlocal SIBC operator Z{.}
-3. Couple with FastImp surface formulation
-4. Test with conductive magnetic material
-5. Validate against 3D FEM (Ansys HFSS or similar)
+1. Implement ESIM cell problem solver (1D)
+   - Solve for surface impedance Z_s(H)
+   - Support nonlinear B-H curves
+   - Support complex permeability
+2. Integrate ESIM with MSC formulation
+3. Test with induction heating workpiece
+4. Validate against reference solutions
 
-**2D FEM Choice**:
-- Recommend NGSolve (same build configuration as radia_ngsolve)
-- Cross-section problem is simple: Helmholtz equation with Robin BC
+**ESIM Python Module**:
+- `esim_cell_problem.py`: Core 1D cell problem solver
+- `esim_coupled_solver.py`: Coupled coil-workpiece solver
+- `esim_workpiece.py`: Workpiece geometry handling
 
 ### Phase 4: Full Integration
 
@@ -881,9 +882,9 @@ analysis example that generates:
 
 1. **Ferrite cores are optimal for AC applications** due to low conductivity (high Q)
 2. **Iron/steel cores require lamination** to reduce eddy current losses at power frequencies
-3. **Nonlocal SIBC is essential** when skin depth is comparable to core dimension
-4. **Local SIBC is sufficient** when skin depth is small but not negligible
-5. **FastImp (surface current)** is appropriate when skin depth << dimension
+3. **ESIM is essential** for nonlinear materials and when accurate power loss is needed
+4. **ESIM handles DC to high frequency** with unified formulation
+5. **FastImp (surface current)** is appropriate for linear conductors (copper, aluminum)
 
 ---
 
@@ -891,7 +892,7 @@ analysis example that generates:
 
 ### Overview
 
-The SIBC classes support **complex permeability** for materials with magnetic losses (ferrites, laminated steel, amorphous metals). This is essential for accurate modeling of:
+ESIM supports **complex permeability** for materials with magnetic losses (ferrites, laminated steel, amorphous metals). This is essential for accurate modeling of:
 
 - Ferrite cores (MHz range)
 - Laminated electrical steel (eddy current losses in laminations)
@@ -929,46 +930,6 @@ Z_s = sqrt(j*omega*mu / sigma)
 ```
 
 This differs from the standard local SIBC formula `Z_s = (1+j)/(sigma*delta)` which assumes real permeability.
-
-### C++ API (rad_sibc.h)
-
-#### CrossSection2D Structure
-
-```cpp
-struct CrossSection2D {
-    // Complex permeability: mu = mu' - j*mu" [H/m]
-    double permeability_real;   // mu' [H/m] (real part)
-    double permeability_imag;   // mu" [H/m] (imaginary part, stored positive)
-
-    // Convenience methods
-    Complex GetComplexPermeability() const;  // Returns mu' - j*mu"
-    double GetAbsolutePermeability() const;  // Returns |mu|
-    double GetLossTangent() const;           // Returns mu"/mu'
-};
-```
-
-#### radTCrossSection2DFEM Class
-
-```cpp
-// Set material with real permeability (lossless)
-void SetMaterial(double conductivity, double relativePermeability);
-
-// Set material with complex permeability (lossy)
-void SetComplexMaterial(double conductivity, double mu_prime_r, double mu_double_prime_r);
-```
-
-#### radTNonlocalSIBC Class
-
-```cpp
-// Set material with real permeability
-void SetMaterial(double conductivity, double relPermeability);
-
-// Set material with complex permeability
-void SetComplexMaterial(double conductivity, double mu_prime_r, double mu_double_prime_r);
-
-// Get local surface impedance (handles both real and complex mu)
-Complex GetLocalSurfaceImpedance() const;
-```
 
 ### Python ESIM API
 
@@ -1085,8 +1046,6 @@ This section describes the implementation of ESIM based on Karl Hollaus's paper 
 | Method | Linear Materials | Nonlinear Materials | Computational Cost |
 |--------|-----------------|---------------------|-------------------|
 | Full ECP (3D FEM) | ✓ | ✓ | Very High |
-| Local SIBC | ✓ | ✗ | Low |
-| Nonlocal SIBC | ✓ | ✗ | Medium |
 | **ESIM** | ✓ | **✓** | **Low** |
 
 **Key Advantages**:
