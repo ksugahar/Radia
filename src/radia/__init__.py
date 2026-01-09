@@ -101,12 +101,11 @@ except ImportError:
     RWG_EFIE_AVAILABLE = False
 
 # VTK Export utilities
-# Import VTK export functions for geometry and field visualization
+# Import VTS export functions for magnetic field visualization
+# Note: rad.FldVTS() is the C++ high-performance implementation
+# RadiaVTKOutput and export_field_grid_vts provide Python flexibility
 try:
     from .radia_vtk_export import (
-        # Legacy VTK format (geometry and point field)
-        exportGeometryToVTK,
-        exportFieldToVTK,
         # VTS format (structured grid for 3D field)
         RadiaVTKOutput,
         export_field_grid_vts,

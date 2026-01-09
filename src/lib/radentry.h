@@ -453,31 +453,6 @@ EXP int CALL RadObjDegFre(int* num, int obj);
 */
 EXP int CALL RadObjDrwQD3D(int obj, char* opt);
 
-/** Generates data for viewing 3D geometry of an object obj as polygons and lines with VTK (or compatible) viewer, and outputs integer parameters defining the lengths / sizes of these polygons' and lines' data. The data itself has to be "taken" using the function RadObjDrwDataGetVTK
-@param nVP [out] number of polygon vertices
-@param nP [out] number of polygons
-@param nVL [out] number of line vertices
-@param nL [out] number of lines
-@param obj [in] reference number of the object to be viewed
-@param opt [in] pointer to options string, which can be "Axes->True" (default) or "Axes->False" for showing or not the axes of the Cartesian laboratory frame; "Faces->True" (default) or "Faces->False" for showing or not visible faces of 3D objects; "EdgeLines->True" (default) or "EdgeLines->False" for highlighting or not the edge lines of 3D objects. opt can contain composition of these option sub-strings separated by ";".
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjDrwVTK(int* nVP, int* nP, int* nVL, int* nL, int* pKey, int obj, char* opt);
-
-/** Extracts data for viewing 3D geometry of an object obj as polygons and lines with VTK (or compatible) viewer; to be called after the function RadObjDrwVTK
-@param arCrdVP [out] array of coordinates of polygons' vertex points
-@param arLenP [out] array of numbers of vertex points in polygons
-@param arColP [out] array of polygons' RGB colors
-@param arCrdVL [out] array of coordinates of lines' vertex points
-@param arLenL [out] array of numbers of vertex points in lines' (segments)
-@param arColL [out] array of lines' RGB colors
-@param key [in] reference number of data to be extracted for viewing
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjDrwDataGetVTK(double* arCrdVP, int* arLenP, float* arColP, double* arCrdVL, int* arLenL, float* arColL, int key);
-
 /** Applies drawing attributes - RGB color (r,g,b) and line thickness thcn - to object obj.
 @param obj [in] reference number of the object to which drawing attributes should be applied
 @param RGB [in] array of 3 numbers from 0 to 1 specifying intensities of red, green and blue colors
@@ -1253,6 +1228,28 @@ EXP int CALL RadFldPhi(double* phi_out, int n_points, double* points, int contai
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 */
 EXP int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle);
+
+/** Export magnetic field on structured 3D grid to VTS (VTK XML Structured Grid) format.
+Computes B and/or H fields at grid points and writes directly to VTS file.
+This is more efficient than calling FldBatch and writing in Python for large grids.
+@param container_handle [in] Radia container handle
+@param filename [in] output filename (with .vts extension)
+@param x_min, x_max [in] X range in current Radia units
+@param nx [in] number of grid points in X
+@param y_min, y_max [in] Y range in current Radia units
+@param ny [in] number of grid points in Y
+@param z_min, z_max [in] Z range in current Radia units
+@param nz [in] number of grid points in Z
+@param include_B [in] 1 to include B field, 0 to skip
+@param include_H [in] 1 to include H field, 0 to skip
+@param unit_scale [in] scale factor for coordinates (e.g., 0.001 for mm to m)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadFldVTS(int container_handle, const char* filename,
+                       double x_min, double x_max, int nx,
+                       double y_min, double y_max, int ny,
+                       double z_min, double z_max, int nz,
+                       int include_B, int include_H, double unit_scale);
 
 //=========================================================================
 // Conductor Analysis API (FastImp-based)
