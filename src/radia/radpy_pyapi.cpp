@@ -1189,40 +1189,8 @@ static PyObject* radia_ObjSetM(PyObject* self, PyObject* args)
 	return oResInd;
 }
 
-/************************************************************************//**
- * Cuts the object obj by a plane passing through a given point perpendicularly to a given vector.
- ***************************************************************************/
-static PyObject* radia_ObjCutMag(PyObject* self, PyObject* args)
-{
-	PyObject *oP=0, *oN=0, *oOpt=0, *oRes=0;
-	try
-	{
-		int ind = 0;
-		if(!PyArg_ParseTuple(args, "iOO|O:ObjCutMag", &ind, &oP, &oN, &oOpt)) throw CombErStr(strEr_BadFuncArg, ": ObjCutMag");
-		if(ind == 0) throw CombErStr(strEr_BadFuncArg, ": ObjCutMag");
-
-		double arP[3];
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oP, 'd', arP, 3, CombErStr(strEr_BadFuncArg, ": ObjCutMag, incorrect definition of point in the cutting plane"));
-		double arN[3];
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oN, 'd', arN, 3, CombErStr(strEr_BadFuncArg, ": ObjCutMag, incorrect definition of cutting plane normal"));
-
-		char sOpt[1024]; *sOpt = '\0';
-		if(oOpt != 0) CPyParse::CopyPyStringToC(oOpt, sOpt, 1024);
-
-		int arInds[10];
-		int nObj = 0;
-		g_pyParse.ProcRes(RadObjCutMag(arInds, &nObj, ind, arP, arN, sOpt));
-
-		oRes = CPyParse::SetDataListOfLists(arInds, nObj, 1, (char*)"i");
-		Py_XINCREF(oRes); //?
-	}
-	catch(const char* erText) 
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
-	}
-	return oRes;
-}
+// ObjCutMag REMOVED (2026-01-11)
+// Policy: Use Cubit for mesh operations. See CLAUDE.md "Mesh Subdivision Policy"
 
 /************************************************************************//**
  * Computes geometrical volume of a 3D object.
@@ -2819,7 +2787,7 @@ static PyObject* radia_FldVTS(PyObject* self, PyObject* args)
 
 		// Parse: obj, filename, x_range, y_range, z_range, [nx, ny, nz, include_B, include_H, unit_scale]
 		PyObject *oXRange=0, *oYRange=0, *oZRange=0;
-		if(!PyArg_ParseTuple(args, "isOOO|iiiid:FldVTS",
+		if(!PyArg_ParseTuple(args, "isOOO|iiiiid:FldVTS",
 		                     &container_handle, &sFilename,
 		                     &oXRange, &oYRange, &oZRange,
 		                     &nx, &ny, &nz, &include_B, &include_H, &unit_scale))
@@ -3186,6 +3154,79 @@ static PyObject* radia_CndSetFormulation(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
+ * Sets relative permeability for conductor (mu_r)
+ * Following Karl Hollaus's ESIM formulation
+ ***************************************************************************/
+static PyObject* radia_CndSetMuR(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		double mu_r = 1.0;
+		if(!PyArg_ParseTuple(args, "id:CndSetMuR", &cond, &mu_r))
+			throw CombErStr(strEr_BadFuncArg, ": CndSetMuR");
+
+		g_pyParse.ProcRes(RadCndSetMuR(cond, mu_r));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Gets skin depth at current frequency
+ * delta = sqrt(2 / (omega * mu_0 * mu_r * sigma))
+ ***************************************************************************/
+static PyObject* radia_CndGetSkinDepth(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndGetSkinDepth", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndGetSkinDepth");
+
+		double delta = 0;
+		g_pyParse.ProcRes(RadCndGetSkinDepth(&delta, cond));
+
+		oRes = Py_BuildValue("d", delta);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Gets surface impedance Z = (1+j) * Rs
+ * Following Karl Hollaus's ESIM formulation
+ ***************************************************************************/
+static PyObject* radia_CndGetSurfaceImpedance(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndGetSurfaceImpedance", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndGetSurfaceImpedance");
+
+		double Z_real = 0, Z_imag = 0;
+		g_pyParse.ProcRes(RadCndGetSurfaceImpedance(&Z_real, &Z_imag, cond));
+
+		// Return as complex number
+		oRes = PyComplex_FromDoubles(Z_real, Z_imag);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
  * Sets voltage excitation for conductor
  ***************************************************************************/
 static PyObject* radia_CndSetVoltage(PyObject* self, PyObject* args)
@@ -3518,6 +3559,338 @@ static PyObject* radia_CndFmmGetParameters(PyObject* self, PyObject* /*args*/)
 		PyErr_SetString(PyExc_RuntimeError, erText);
 	}
 	return oRes;
+}
+
+//=========================================================================
+// Coupled Solver API (PEEC + MMM, extensible for future couplings)
+//=========================================================================
+
+/************************************************************************//**
+ * Creates coupled solver (conductor + magnetic material)
+ ***************************************************************************/
+static PyObject* radia_CplMagCreate(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int conductor = 0, magnet = 0;
+		if(!PyArg_ParseTuple(args, "ii:CoupledCreate", &conductor, &magnet))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledCreate");
+
+		double out[1];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagCreate(out, &nout, conductor, magnet));
+
+		oRes = Py_BuildValue("i", (int)out[0]);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Sets frequency for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSetFrequency(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		double frequency = 0;
+		if(!PyArg_ParseTuple(args, "id:CoupledSetFrequency", &solver, &frequency))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetFrequency");
+
+		g_pyParse.ProcRes(RadCplMagSetFrequency(solver, frequency));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets voltage excitation for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSetVoltage(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		double V_real = 0, V_imag = 0;
+		if(!PyArg_ParseTuple(args, "idd:CoupledSetVoltage", &solver, &V_real, &V_imag))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetVoltage");
+
+		g_pyParse.ProcRes(RadCplMagSetVoltage(solver, V_real, V_imag));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets current excitation for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSetCurrent(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		double I_real = 0, I_imag = 0;
+		if(!PyArg_ParseTuple(args, "idd:CoupledSetCurrent", &solver, &I_real, &I_imag))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetCurrent");
+
+		g_pyParse.ProcRes(RadCplMagSetCurrent(solver, I_real, I_imag));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets external H field for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSetExtField(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		double Hx = 0, Hy = 0, Hz = 0;
+		if(!PyArg_ParseTuple(args, "iddd:CoupledSetExtField", &solver, &Hx, &Hy, &Hz))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetExtField");
+
+		g_pyParse.ProcRes(RadCplMagSetExtField(solver, Hx, Hy, Hz));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets complex permeability for coupled solver
+ * Complex permeability: mu = mu' - j*mu" (engineering convention)
+ ***************************************************************************/
+static PyObject* radia_CplMagSetMu(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		double mu_r_real = 1.0, mu_r_imag = 0.0;
+		if(!PyArg_ParseTuple(args, "idd:CoupledSetMu", &solver, &mu_r_real, &mu_r_imag))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetMu");
+
+		g_pyParse.ProcRes(RadCplMagSetMu(solver, mu_r_real, mu_r_imag));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets conductor for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSetConductor(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0, conductor = 0;
+		if(!PyArg_ParseTuple(args, "ii:CoupledSetConductor", &solver, &conductor))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetConductor");
+
+		g_pyParse.ProcRes(RadCplMagSetConductor(solver, conductor));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Solves coupled system
+ ***************************************************************************/
+static PyObject* radia_CplMagSolve(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "i:CoupledSolve", &solver))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSolve");
+
+		double out[5];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagSolve(out, &nout, solver));
+
+		// Return dict with Z (complex), P_conductor, P_magnet, iterations
+		oRes = PyDict_New();
+		PyDict_SetItemString(oRes, "Z", PyComplex_FromDoubles(out[0], out[1]));
+		PyDict_SetItemString(oRes, "P_conductor", PyFloat_FromDouble(out[2]));
+		PyDict_SetItemString(oRes, "P_magnet", PyFloat_FromDouble(out[3]));
+		PyDict_SetItemString(oRes, "iterations", PyLong_FromLong((long)out[4]));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Gets impedance from coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagImpedance(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "i:CoupledImpedance", &solver))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledImpedance");
+
+		double out[2];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagImpedance(out, &nout, solver));
+
+		oRes = PyComplex_FromDoubles(out[0], out[1]);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Gets power losses from coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagPower(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "i:CoupledPower", &solver))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledPower");
+
+		double out[2];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagPower(out, &nout, solver));
+
+		// Return tuple (P_conductor, P_magnet)
+		oRes = Py_BuildValue("(dd)", out[0], out[1]);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Computes B field from coupled system
+ ***************************************************************************/
+static PyObject* radia_CplMagFld(PyObject* self, PyObject* args)
+{
+	PyObject *oCoord=0, *oRes=0;
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "iO:CoupledFld", &solver, &oCoord))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledFld");
+
+		double arCoord[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oCoord, 'd', arCoord, 3,
+			CombErStr(strEr_BadFuncArg, ": CoupledFld, incorrect point"));
+
+		double out[6];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagFld(out, &nout, solver, arCoord));
+
+		// Return dict with B_real and B_imag
+		oRes = PyDict_New();
+		PyObject *oBreal = PyList_New(3);
+		PyObject *oBimag = PyList_New(3);
+		for(int i = 0; i < 3; i++) {
+			PyList_SetItem(oBreal, i, PyFloat_FromDouble(out[i]));
+			PyList_SetItem(oBimag, i, PyFloat_FromDouble(out[3+i]));
+		}
+		PyDict_SetItemString(oRes, "B_real", oBreal);
+		PyDict_SetItemString(oRes, "B_imag", oBimag);
+		Py_DECREF(oBreal);
+		Py_DECREF(oBimag);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Performs frequency sweep for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSweep(PyObject* self, PyObject* args)
+{
+	PyObject *oFreqs=0, *oRes=0;
+	double *arFreqs=0, *arOut=0;
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "iO:CoupledSweep", &solver, &oFreqs))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSweep");
+
+		int nFreq = 0;
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oFreqs, 'd', arFreqs, nFreq))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSweep, incorrect frequency list");
+
+		arOut = new double[2 * nFreq];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagSweep(arOut, &nout, solver, arFreqs, nFreq));
+
+		// Return list of complex impedances
+		oRes = PyList_New(nFreq);
+		for(int i = 0; i < nFreq; i++) {
+			PyList_SetItem(oRes, i, PyComplex_FromDoubles(arOut[2*i], arOut[2*i+1]));
+		}
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arFreqs != 0) delete[] arFreqs;
+	if(arOut != 0) delete[] arOut;
+	return oRes;
+}
+
+/************************************************************************//**
+ * Deletes coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagDelete(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "i:CoupledDelete", &solver))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledDelete");
+
+		g_pyParse.ProcRes(RadCplMagDelete(solver));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
 }
 
 //=========================================================================
@@ -4423,7 +4796,7 @@ static PyMethodDef radia_methods[] = {
 	{"ObjAddToCnt", radia_ObjAddToCnt, METH_VARARGS, "ObjAddToCnt(cnt,[obj1,obj2,...]) adds objects [obj1,obj2,...] to the container object cnt."},
 	{"ObjCntStuf", radia_ObjCntStuf, METH_VARARGS, "ObjCntStuf(obj) returns list of general indexes of the objects present in container if obj is a container; or returns [obj] if obj is not a container."}, 
 	{"ObjCntSize", radia_ObjCntSize, METH_VARARGS, "ObjCntSize(cnt) calculates the number of objects in the container cnt."},
-	{"ObjCutMag", radia_ObjCutMag, METH_VARARGS, "ObjCutMag(obj,[x,y,z],[nx,ny,nz],'Frame->Loc|Lab|LabTot') cuts 3D object by a plane normal to the vector [nx,ny,nz] and passing through the point [x,y,z]. The 'Frame->Loc', 'Frame->Lab' or 'Frame->LabTot' option specifies whether the cuting plane is defined in the local frame of the object obj or in the laboratory frame (default). The actions of 'Frame->Lab' and 'Frame->LabTot' differ for containers only: 'Frame->Lab' means that each of the objects in the container is cut separately; 'Frame->LabTot' means that the objects in the container are cut as one object, by the same plane. The function returns a list of indexes of the objects produced by the cutting."},
+	// ObjCutMag REMOVED (2026-01-11) - Use Cubit for mesh operations
 	{"ObjDpl", radia_ObjDpl, METH_VARARGS, "ObjDpl(obj,'FreeSym->False|True') duplicates 3D object obj. The option 'FreeSym->False|True' specifies whether the symmetries (transformations with multiplicity more than one) previously applied to the object obj should be simply copied at the duplication ('FreeSym->False', default), or a container of new independent objects should be created in place of any symmetry previously applied to the object obj. In both cases the final object created by the duplication has exactly the same geometry as the initial object obj."},
 	{"ObjGeoVol", radia_ObjGeoVol, METH_VARARGS, "ObjGeoVol(obj) computes geometrical volume of 3D object obj."},
 	{"ObjGeoLim", radia_ObjGeoLim, METH_VARARGS, "ObjGeoLim(obj) computes geometrical limits of 3D object obj in the laboratory frame. Returns [xmin, xmax, ymin, ymax, zmin, zmax]."},
@@ -4514,6 +4887,9 @@ static PyMethodDef radia_methods[] = {
 	{"CndWire", radia_CndWire, METH_VARARGS, "CndWire([[x1,y1,z1],[x2,y2,z2],...],cross_section,width,height,sigma,num_panels_around) creates a wire conductor along path points. cross_section: 'r'=rectangular, 'c'=circular. Default sigma=5.8e7 (copper)."},
 	{"CndSpiral", radia_CndSpiral, METH_VARARGS, "CndSpiral([x,y,z],inner_radius,outer_radius,pitch,num_turns,[ax,ay,az],cross_section,wire_width,wire_height,sigma,num_panels_around) creates a spiral conductor. Pitch is the height gain per turn."},
 	{"CndSetFrequency", radia_CndSetFrequency, METH_VARARGS, "CndSetFrequency(cond,freq) sets frequency [Hz] for conductor cond. Must be called before CndSolve."},
+	{"CndSetMuR", radia_CndSetMuR, METH_VARARGS, "CndSetMuR(cond,mu_r) sets relative permeability mu_r for conductor cond. Default is 1.0 (non-magnetic). For ferromagnetic materials like steel, use mu_r >> 1. Affects skin depth calculation."},
+	{"CndGetSkinDepth", radia_CndGetSkinDepth, METH_VARARGS, "CndGetSkinDepth(cond) returns skin depth [m] = sqrt(2/(omega*mu_0*mu_r*sigma)). Call after CndSetFrequency."},
+	{"CndGetSurfaceImpedance", radia_CndGetSurfaceImpedance, METH_VARARGS, "CndGetSurfaceImpedance(cond) returns complex surface impedance Z = (1+j)*Rs [Ohm], where Rs = 1/(sigma*delta). Follows ESIM (Effective Surface Impedance Model) formulation."},
 	{"CndSetVoltage", radia_CndSetVoltage, METH_VARARGS, "CndSetVoltage(cond,V_real,V_imag) sets voltage excitation [V] for conductor. Use before CndSolve for voltage-driven analysis."},
 	{"CndSetCurrent", radia_CndSetCurrent, METH_VARARGS, "CndSetCurrent(cond,I_real,I_imag) sets current excitation [A] for conductor. Use before CndSolve for current-driven analysis."},
 	{"CndGetTotalCurrent", radia_CndGetTotalCurrent, METH_VARARGS, "CndGetTotalCurrent(cond) returns total current [A] through conductor after solve. Returns complex number."},
@@ -4531,6 +4907,21 @@ static PyMethodDef radia_methods[] = {
 	{"CndFmmGetEnabled", radia_CndFmmGetEnabled, METH_NOARGS, "CndFmmGetEnabled() returns current FMM enabled status (1=enabled, 0=disabled)."},
 	{"CndFmmSetParameters", radia_CndFmmSetParameters, METH_VARARGS, "CndFmmSetParameters(p,ncrit,threshold) sets FMM parameters: p=expansion order (default 6), ncrit=particles per leaf (default 64), threshold=min problem size for FMM (default 500)."},
 	{"CndFmmGetParameters", radia_CndFmmGetParameters, METH_NOARGS, "CndFmmGetParameters() returns tuple (p, ncrit, threshold) of current FMM parameters."},
+
+	// CplMag Solver (Coupled Conductor + Magnetic Material, using PEEC + MMM)
+	{"CplMagCreate", radia_CplMagCreate, METH_VARARGS, "CplMagCreate(conductor,magnet) creates coupled solver for coil with magnetic core. Returns solver handle."},
+	{"CplMagSetFrequency", radia_CplMagSetFrequency, METH_VARARGS, "CplMagSetFrequency(solver,freq) sets analysis frequency [Hz]."},
+	{"CplMagSetVoltage", radia_CplMagSetVoltage, METH_VARARGS, "CplMagSetVoltage(solver,V_real,V_imag) sets voltage excitation [V]."},
+	{"CplMagSetCurrent", radia_CplMagSetCurrent, METH_VARARGS, "CplMagSetCurrent(solver,I_real,I_imag) sets current excitation [A]."},
+	{"CplMagSetExtField", radia_CplMagSetExtField, METH_VARARGS, "CplMagSetExtField(solver,Hx,Hy,Hz) sets external H field [A/m]."},
+	{"CplMagSetMu", radia_CplMagSetMu, METH_VARARGS, "CplMagSetMu(solver,mu_r_real,mu_r_imag) sets complex permeability. mu = mu' - j*mu'' (engineering convention)."},
+	{"CplMagSetConductor", radia_CplMagSetConductor, METH_VARARGS, "CplMagSetConductor(solver,conductor) sets conductor for solver."},
+	{"CplMagSolve", radia_CplMagSolve, METH_VARARGS, "CplMagSolve(solver) solves coupled system. Returns dict with Z, P_conductor, P_magnet, iterations."},
+	{"CplMagImpedance", radia_CplMagImpedance, METH_VARARGS, "CplMagImpedance(solver) returns impedance as complex number [Ohm]."},
+	{"CplMagPower", radia_CplMagPower, METH_VARARGS, "CplMagPower(solver) returns (P_conductor, P_magnet) power losses [W]."},
+	{"CplMagFld", radia_CplMagFld, METH_VARARGS, "CplMagFld(solver,[x,y,z]) computes B field. Returns dict with B_real, B_imag [T]."},
+	{"CplMagSweep", radia_CplMagSweep, METH_VARARGS, "CplMagSweep(solver,[f1,f2,...]) frequency sweep. Returns list of complex impedances."},
+	{"CplMagDelete", radia_CplMagDelete, METH_VARARGS, "CplMagDelete(solver) deletes coupled solver."},
 
 	{NULL, NULL}
 };

@@ -53,13 +53,20 @@ Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `-Rebuild` | switch | false | Clean + Configure + Build |
-| `-Verbose` | switch | false | Detailed output |
+| `-Test` | switch | false | Run import tests after build |
+| `-RadiaOnly` | switch | false | Build only radia.pyd (skip radia_ngsolve) |
+| `-Verbose` | switch | false | Show detailed build output |
+| `-NoOpenMP` | switch | false | Disable OpenMP (for debugging) |
+| `-NoExaFMM` | switch | false | Disable ExaFMM (for debugging) |
 
 **Examples**:
 
 ```powershell
-.\BuildMSVC.ps1                  # Standard build
+.\BuildMSVC.ps1                  # Standard build (radia + radia_ngsolve)
 .\BuildMSVC.ps1 -Rebuild         # Clean rebuild
+.\BuildMSVC.ps1 -RadiaOnly       # Build only radia.pyd
+.\BuildMSVC.ps1 -Test            # Build and run import tests
+.\BuildMSVC.ps1 -Verbose         # Show detailed build output
 ```
 
 **Features**:
@@ -67,6 +74,8 @@ Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 - Links Intel MKL for BLAS/LAPACK operations
 - Uses Intel OpenMP (`libiomp5md.dll`) for parallelization
 - Automatically copies required DLLs to output directory
+- Build log saved to `build_log.txt` for debugging
+- Shows PYD file size and timestamp on success
 
 ---
 
@@ -425,7 +434,11 @@ B_cf = radia_ngsolve.RadiaField(
 
 ### FastImp Conductor Module (Eddy Currents)
 
-Analyze eddy currents in conductors using Surface Impedance Boundary Condition (SIBC):
+Analyze eddy currents in conductors using **ESIM (Effective Surface Impedance Model)**.
+
+The ESIM formulation follows Karl Hollaus's approach:
+- **Skin depth**: `delta = sqrt(2 / (omega * mu_0 * mu_r * sigma))`
+- **Surface impedance**: `Z = (1 + j) * Rs`, where `Rs = 1 / (sigma * delta)`
 
 ```python
 import radia as rad
@@ -434,18 +447,35 @@ import radia as rad
 cond = rad.CndRecBlock([0, 0, 0], [0.01, 0.01, 0.001], 5.8e7, 4)
 
 # Set operating frequency
-rad.CndSetFrequency(cond, 1e6)  # 1 MHz
+rad.CndSetFrequency(cond, 50)  # 50 Hz
+
+# Set relative permeability for ferromagnetic materials (e.g., steel)
+rad.CndSetMuR(cond, 1000)  # mu_r = 1000 for steel
+
+# Get skin depth and surface impedance (ESIM)
+delta = rad.CndGetSkinDepth(cond)
+Z = rad.CndGetSurfaceImpedance(cond)  # Returns complex: (Rs, Rs) = (1+j)*Rs
+print(f"Skin depth: {delta*1000:.3f} mm")
+print(f"Surface impedance: {Z} Ohm")
 
 # Solve and compute field
 rad.CndSolve(cond)
-B = rad.CndFld(cond, 'b', [0.02, 0, 0])  # Complex B-field [Bx_re, By_re, Bz_re, Bx_im, By_im, Bz_im]
+B = rad.Fld(cond, 'b', [0.02, 0, 0])  # Complex B-field [Bx_re, By_re, Bz_re, Bx_im, By_im, Bz_im]
 ```
+
+**ESIM Reference Values** (Steel at 50 Hz, sigma=5e6 S/m, mu_r=1000):
+- Surface impedance: `Z = 0.4325e-3 * (1 + 1j)` Ohm
 
 **Available Conductor Types**:
 - `CndRecBlock`: Rectangular block conductor
 - `CndLoop`: Circular loop conductor
 - `CndWire`: Arbitrary wire path
 - `CndSpiral`: Spiral coil conductor
+
+**ESIM Material Functions**:
+- `CndSetMuR(cond, mu_r)`: Set relative permeability (default 1.0)
+- `CndGetSkinDepth(cond)`: Get skin depth [m]
+- `CndGetSurfaceImpedance(cond)`: Get complex surface impedance [Ohm]
 
 ### ExaFMM-t Fast Multipole Method
 
@@ -569,9 +599,10 @@ Remove-Item -Recurse -Force build-msvc
 
 ---
 
-**Last Updated**: 2026-01-08
+**Last Updated**: 2026-01-09
 **Build System**: CMake 3.21+ with MSVC / GCC / Clang
 **Primary Platform**: Windows with Intel MKL + Intel OpenMP
 **Supported Platforms**: Windows (primary), macOS, Linux
 **Supported Python**: 3.8, 3.9, 3.10, 3.11, 3.12
 **C++ Standard**: C++17 (required for ExaFMM-t inline variables)
+**SIBC Formulation**: ESIM (Effective Surface Impedance Model) - Karl Hollaus

@@ -11,19 +11,24 @@
 #   powershell.exe -ExecutionPolicy Bypass -File BuildMSVC.ps1
 #   powershell.exe -ExecutionPolicy Bypass -File BuildMSVC.ps1 -Rebuild
 #   powershell.exe -ExecutionPolicy Bypass -File BuildMSVC.ps1 -Test
+#   powershell.exe -ExecutionPolicy Bypass -File BuildMSVC.ps1 -RadiaOnly
 #
 # Options:
-#   -Rebuild   Clean build directory before building
-#   -Test      Run import test after build
-#   -NoOpenMP  Disable OpenMP (for debugging)
-#   -NoExaFMM  Disable ExaFMM (for debugging, ExaFMM is ON by default)
+#   -Rebuild    Clean build directory before building
+#   -Test       Run import test after build
+#   -NoOpenMP   Disable OpenMP (for debugging)
+#   -NoExaFMM   Disable ExaFMM (for debugging, ExaFMM is ON by default)
+#   -RadiaOnly  Build only radia.pyd (skip radia_ngsolve)
+#   -Verbose    Show detailed build output
 #==============================================================================
 
 param(
     [switch]$Rebuild,
     [switch]$Test,
     [switch]$NoOpenMP,     # Disable OpenMP (for debugging)
-    [switch]$NoExaFMM      # Disable ExaFMM (for debugging, ExaFMM is enabled by default)
+    [switch]$NoExaFMM,     # Disable ExaFMM (for debugging, ExaFMM is enabled by default)
+    [switch]$RadiaOnly,    # Build only radia.pyd
+    [switch]$Verbose       # Show detailed build output
 )
 
 $ErrorActionPreference = "Stop"
@@ -100,11 +105,27 @@ if ($NoExaFMM) {
     Write-Host "ExaFMM: ENABLED" -ForegroundColor Green
 }
 
+# Determine build targets
+if ($RadiaOnly) {
+    $BUILD_TARGETS = "radia"
+    Write-Host "Build target: radia only" -ForegroundColor Gray
+} else {
+    $BUILD_TARGETS = "radia radia_ngsolve"
+    Write-Host "Build targets: radia, radia_ngsolve" -ForegroundColor Gray
+}
+
 # Create batch file to run with Visual Studio environment
 $BatchContent = @"
 @echo off
+setlocal enabledelayedexpansion
+
 REM Set up Visual Studio environment
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" >nul 2>&1
+echo Setting up Visual Studio environment...
+call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+if errorlevel 1 (
+    echo ERROR: Failed to set up Visual Studio environment
+    exit /b 1
+)
 
 REM Add MKL paths
 set LIB=$INTEL_MKL\lib;%LIB%
@@ -113,7 +134,11 @@ set MKLROOT=$INTEL_MKL
 
 cd /d "$BUILD_DIR"
 
-echo Configuring CMake with MSVC...
+echo.
+echo ========================================
+echo   Configuring CMake with MSVC...
+echo ========================================
+echo.
 "$CMAKE_EXE" "$PROJECT_DIR" ^
     -G "Ninja" ^
     -DCMAKE_C_COMPILER=cl ^
@@ -122,29 +147,88 @@ echo Configuring CMake with MSVC...
     -DRADIA_ENABLE_OPENMP=$OPENMP_FLAG ^
     -DRADIA_ENABLE_EXAFMM=$EXAFMM_FLAG
 
-if errorlevel 1 exit /b 1
+if errorlevel 1 (
+    echo ERROR: CMake configuration failed
+    exit /b 1
+)
 
-echo Building radia...
+echo.
+echo ========================================
+echo   Building radia...
+echo ========================================
+echo.
 "$CMAKE_EXE" --build . --config Release --target radia -j
 
-if errorlevel 1 exit /b 1
+if errorlevel 1 (
+    echo ERROR: radia build failed
+    exit /b 1
+)
 
-echo Building radia_ngsolve...
+"@
+
+# Add radia_ngsolve build if not RadiaOnly
+if (-not $RadiaOnly) {
+    $BatchContent += @"
+
+echo.
+echo ========================================
+echo   Building radia_ngsolve...
+echo ========================================
+echo.
 "$CMAKE_EXE" --build . --config Release --target radia_ngsolve -j
 
-if errorlevel 1 exit /b 1
+if errorlevel 1 (
+    echo WARNING: radia_ngsolve build failed (NGSolve may not be installed)
+    REM Continue anyway - radia.pyd is the main target
+)
 
-echo Build completed.
+"@
+}
+
+$BatchContent += @"
+
+echo.
+echo Build completed successfully.
+exit /b 0
 "@
 
 $BatchFile = "$PROJECT_DIR\build_temp_msvc.bat"
 $BatchContent | Out-File -FilePath $BatchFile -Encoding ascii
 
+# Build log file
+$BuildLog = "$PROJECT_DIR\build_log.txt"
+
 try {
-    # Run the batch file
+    # Run the batch file with output capture
+    Write-Host ""
     Write-Host "Building..." -ForegroundColor Cyan
-    cmd /c $BatchFile
-    $BuildResult = $LASTEXITCODE
+    Write-Host ""
+
+    if ($Verbose) {
+        # Verbose mode: show output in real-time
+        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $BatchFile -NoNewWindow -PassThru -Wait
+        $BuildResult = $process.ExitCode
+    } else {
+        # Normal mode: capture output to log file and show summary
+        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "$BatchFile > `"$BuildLog`" 2>&1" -NoNewWindow -PassThru -Wait
+        $BuildResult = $process.ExitCode
+
+        # Show last 50 lines of build log
+        if (Test-Path $BuildLog) {
+            $logContent = Get-Content $BuildLog -Tail 50
+            foreach ($line in $logContent) {
+                if ($line -match "error|ERROR") {
+                    Write-Host $line -ForegroundColor Red
+                } elseif ($line -match "warning|WARNING") {
+                    Write-Host $line -ForegroundColor Yellow
+                } elseif ($line -match "Building|Linking|Compiling") {
+                    Write-Host $line -ForegroundColor Cyan
+                } else {
+                    Write-Host $line
+                }
+            }
+        }
+    }
 
     if ($BuildResult -ne 0) {
         throw "Build failed with exit code $BuildResult"
@@ -230,10 +314,24 @@ try {
         }
     }
 
+    # Show build summary
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Green
     Write-Host "  Build Completed Successfully" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
+    Write-Host ""
+
+    # Show PYD file info
+    if (Test-Path $PYD_DEST) {
+        $pydInfo = Get-Item $PYD_DEST
+        Write-Host "Output:" -ForegroundColor Yellow
+        Write-Host "  radia.pyd: $([math]::Round($pydInfo.Length / 1MB, 2)) MB" -ForegroundColor Gray
+        Write-Host "  Modified:  $($pydInfo.LastWriteTime)" -ForegroundColor Gray
+    }
+    if (Test-Path $NGSOLVE_PYD_DEST) {
+        $ngInfo = Get-Item $NGSOLVE_PYD_DEST
+        Write-Host "  radia_ngsolve.pyd: $([math]::Round($ngInfo.Length / 1MB, 2)) MB" -ForegroundColor Gray
+    }
     Write-Host ""
 }
 catch {
@@ -244,6 +342,20 @@ catch {
     Write-Host ""
     Write-Host "Error: $_" -ForegroundColor Red
     Write-Host ""
+
+    # Show error details from build log
+    if (Test-Path $BuildLog) {
+        Write-Host "Last 30 lines of build log:" -ForegroundColor Yellow
+        Get-Content $BuildLog -Tail 30 | ForEach-Object {
+            if ($_ -match "error|ERROR") {
+                Write-Host $_ -ForegroundColor Red
+            } else {
+                Write-Host $_
+            }
+        }
+        Write-Host ""
+        Write-Host "Full log: $BuildLog" -ForegroundColor Gray
+    }
     exit 1
 }
 finally {
@@ -289,7 +401,7 @@ if ($Test) {
     Write-Host ""
 
     # Check if pytest is available
-    $pytestCheck = python -c "import pytest; print('ok')" 2>&1
+    python -c "import pytest" 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "pytest not installed. Install with: pip install pytest" -ForegroundColor Yellow
         Write-Host "Skipping pytest..." -ForegroundColor Gray

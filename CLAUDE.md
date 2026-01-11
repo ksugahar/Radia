@@ -2,6 +2,46 @@
 
 This document contains development guidelines and refactoring policies for the Radia project when working with Claude Code.
 
+## Green's Function Policy: Laplace Kernel Only (MQS/Darwin)
+
+### Helmholtz Kernel Removed (2026-01-09)
+
+**CRITICAL**: Radia uses **Laplace kernel only** for all Green's function computations.
+
+**Policy**:
+- **Use Laplace kernel**: $G(r) = 1/(4\pi r)$ for all integral equation formulations
+- **Helmholtz kernel REMOVED**: $G(r) = e^{-jkr}/(4\pi r)$ is NOT supported
+- **Frequency regime**: MQS (Magneto-Quasi-Static) to Darwin approximation
+
+**Rationale**:
+1. **Target Applications**: MagLev, WPT, Induction Heating - all operate in quasi-static regime
+2. **Validity**: Valid when wavelength >> problem size ($kL << 1$)
+3. **Performance**: Laplace kernel enables efficient FMM/H-matrix acceleration
+4. **Simplicity**: Single kernel reduces code complexity and potential bugs
+
+**Affected Components**:
+- `rad_green_fullwave.h/cpp` - All Green's functions use Laplace kernel
+- `rad_conductor.cpp` - `GreenFunction()` returns $1/(4\pi r)$ for all formulations
+- `rad_hacapk.cpp` - HACApK H-matrix uses Laplace kernel
+- `rad_exafmm.h/cpp` - FMM uses Laplace kernel ($1/r^3$ for dipoles)
+
+**Do NOT**:
+- Add Helmholtz kernel ($e^{-jkr}/r$) to any Green's function
+- Use wave number $k$ in field calculations (except for skin depth)
+- Implement full-wave EFIE or MFIE formulations
+
+**Skin Effect Handling**:
+Skin depth is computed from frequency for SIBC, but field propagation uses quasi-static approximation:
+```cpp
+// Skin depth calculation (OK)
+double delta = std::sqrt(2.0 / (omega * mu * sigma));
+
+// Green's function (Laplace only)
+double G = 1.0 / (4.0 * M_PI * r);  // NOT exp(-jkr) / (4*pi*r)
+```
+
+---
+
 ## Build Policy: MSVC + Intel MKL
 
 ### Compiler Requirement (2025-12-27)
@@ -1515,6 +1555,212 @@ mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, unit
 
 **Note**: This is the recommended workflow for complex hexahedral geometries that Netgen cannot mesh directly.
 
+### Coreform Cubit Policy for CplMag (PEEC-MMM Coupling)
+
+**Policy (2026-01-11)**: For CplMag (coupled PEEC conductor + MMM magnetic material) simulations, use **Coreform Cubit** for hexahedral mesh generation.
+
+**Rationale**:
+1. **High-quality hex meshes**: Cubit produces better quality hexahedral meshes than automatic generators
+2. **Complex geometries**: Magnetic cores often have complex shapes (E-cores, pot cores, toroids)
+3. **Mesh control**: Cubit allows precise control over element size and distribution
+4. **Multi-element MMM**: CplMag requires multiple MMM elements for accurate coupling (NOT single dipole)
+
+**Workflow**:
+
+```python
+# Step 1: Generate hex mesh in Cubit (save as .cub or export to Nastran .bdf)
+
+# Step 2: Import mesh using cubit_mesh_export
+import sys
+sys.path.insert(0, 'S:/CoreformCubit/01_GitHub')
+from cubit_mesh_export import get_mesh_data
+
+# Get hex elements from Cubit session
+mesh_data = get_mesh_data()
+hex_elements = mesh_data['hex_elements']  # List of [8 vertices] per element
+
+# Step 3: Create Radia objects
+import radia as rad
+rad.FldUnits('m')
+
+sub_cores = []
+mat = rad.MatLin(mu_r)
+for vertices in hex_elements:
+    sub_core = rad.ObjHexahedron(vertices, [0, 0, 0])
+    rad.MatApl(sub_core, mat)
+    sub_cores.append(sub_core)
+
+# Create container for multi-element core
+core_container = rad.ObjCnt(sub_cores)
+
+# Step 4: Create CplMag solver with multi-element core
+coil = rad.CndLoop([0, 0, 0], radius, [0, 0, 1], 'r', w, h, sigma, n_radial, n_azimuthal)
+solver = rad.CplMagCreate(coil, core_container)
+rad.CplMagSetFrequency(solver, freq)
+rad.CplMagSetMu(solver, mu_r, mu_r_imag)
+result = rad.CplMagSolve(solver)
+```
+
+**Key Points**:
+- **ObjCnt**: Use container to group multiple hex elements for CplMag
+- **Multi-element**: Each element contributes to MMM interaction matrix
+- **No single dipole**: Full element-to-element coupling is computed
+
+**Repository**: `S:\CoreformCubit\01_GitHub` contains `cubit_mesh_export` utilities
+
+### Coreform Cubit Policy for PEEC Conductor Mesh
+
+**Policy (2026-01-11)**: For PEEC conductor meshes, use **Coreform Cubit** to generate surface meshes exported to Netgen format.
+
+**Rationale**:
+1. **Unified workflow**: Same tool for both MMM (magnetic) and PEEC (conductor) meshes
+2. **Quality control**: Cubit provides better mesh quality for complex conductor geometries
+3. **Wedge/Prism elements**: Cubit supports wedge elements for thin skin layers (induction heating)
+4. **Curved elements**: Future support via NGSolve high-order curving (PR submitted)
+
+**Current Limitation**:
+- Radia currently supports **1st order elements only** (linear)
+- Curved surface approximation uses piecewise-linear facets
+- High-order curving (SetDeformation) is planned for future versions
+
+**Workflow**:
+
+```python
+# Step 1: Generate conductor mesh in Cubit
+# - Create conductor geometry (coil, wire, trace)
+# - Mesh with surface elements (TRI, QUAD)
+# - Export to Gmsh format
+
+# Step 2: Import via NGSolve
+from ngsolve import Mesh
+from netgen.read_gmsh import ReadGmsh
+
+mesh = Mesh(ReadGmsh("conductor_mesh.msh"))
+
+# Step 3: Create PEEC conductor from mesh (future API)
+# conductor = rad.CndFromMesh(mesh, sigma=5.8e7)  # Planned API
+
+# Current workaround: Use CndLoop for simple geometries
+coil = rad.CndLoop([0, 0, 0], radius, [0, 0, 1], 'r', w, h, sigma, n_radial, n_azimuthal)
+```
+
+**Note**: Full mesh-based PEEC conductor creation (`CndFromMesh`) is planned for future implementation.
+
+### Hexahedral Mesh Import Functions (netgen_mesh_import.py)
+
+**Functions** for importing hexahedral meshes into Radia:
+
+| Function | Purpose |
+|----------|---------|
+| `cubit_hex_to_radia(hex_elements, ...)` | Convert Cubit hex element data to Radia geometry |
+| `create_hex_mesh_grid(center, size, divisions, ...)` | Create structured hex mesh without Cubit |
+
+**Usage with CplMag**:
+
+```python
+import radia as rad
+from netgen_mesh_import import create_hex_mesh_grid, cubit_hex_to_radia
+
+rad.FldUnits('m')
+
+# Create coil conductor
+coil = rad.CndLoop([0, 0, 0], 0.05, [0, 0, 1], 'r', 2e-3, 2e-3, 5.8e7, 8, 36)
+
+# Create multi-element magnetic core (no Cubit needed)
+core = create_hex_mesh_grid(
+    center=[0, 0, 0],
+    size=[0.03, 0.03, 0.03],  # 30mm cube
+    divisions=[3, 3, 3],       # 27 elements
+    mu_r=1000                  # mu_r = 1000
+)
+
+# Solve coupled system
+solver = rad.CplMagCreate(coil, core)
+rad.CplMagSetFrequency(solver, 1000)
+rad.CplMagSetMu(solver, 1000, 0)
+result = rad.CplMagSolve(solver)
+```
+
+**Usage with Cubit**:
+
+```python
+import radia as rad
+from netgen_mesh_import import cubit_hex_to_radia
+
+rad.FldUnits('m')
+
+# Get hex elements from Cubit (via cubit_mesh_export)
+# hex_elements = [[[x1,y1,z1], [x2,y2,z2], ..., [x8,y8,z8]], ...]
+
+# Convert to Radia geometry
+core = cubit_hex_to_radia(hex_elements, mu_r=1000)
+```
+
+---
+
+## Mesh Operations Policy: Netgen with Coreform Cubit Integration
+
+### Mesh APIs Dropped (2026-01-11)
+
+**CRITICAL**: Radia's internal mesh operation APIs are **NOT SUPPORTED**.
+
+**Dropped APIs**:
+- `ObjDivMag` - Internal mesh subdivision (REMOVED)
+- `ObjDivMagPln` - Plane-based subdivision (REMOVED)
+- `ObjCutMag` - Cutting objects by plane (REMOVED from Python API)
+
+**Policy**:
+- **All mesh operations** must use **Netgen with Coreform Cubit integration**
+- Coreform Cubit provides geometry and high-quality hex meshing
+- Netgen/NGSolve provides the mesh import interface to Radia
+- **Repository**: `S:\CoreformCubit\01_GitHub` contains `cubit_mesh_export` utilities
+
+**Key Functions** (from `netgen_mesh_import.py`):
+| Function | Purpose |
+|----------|---------|
+| `create_hex_mesh_grid()` | Simple structured hex mesh (no Cubit needed) |
+| `cubit_hex_to_radia()` | Import Cubit hex mesh to Radia |
+| `netgen_mesh_to_radia()` | Import Netgen/NGSolve mesh to Radia |
+
+**Rationale**:
+1. **Cubit produces higher quality meshes**: Professional meshing tool with quality control
+2. **Unified workflow**: Same tool for both conductor (PEEC) and magnetic (MMM) meshes
+3. **Flexibility**: Cubit supports complex geometries, grading, and boundary layers
+4. **NGSolve integration**: Cubit meshes exported to Netgen/NGSolve format via `cubit_mesh_export`
+5. **Maintenance**: Reduces Radia C++ codebase complexity
+
+**Workflow**:
+
+```python
+import radia as rad
+from netgen_mesh_import import create_hex_mesh_grid, cubit_hex_to_radia
+
+rad.FldUnits('m')
+
+# Method 1: Simple structured mesh (no Cubit needed)
+core = create_hex_mesh_grid(
+    center=[0, 0, 0],
+    size=[0.1, 0.1, 0.1],
+    divisions=[3, 3, 3],
+    mu_r=1000
+)
+
+# Method 2: Complex geometry via Cubit + Netgen
+# 1. Create geometry and mesh in Cubit
+# 2. Export via cubit_mesh_export.export_netgen()
+# 3. Import to Radia
+core = cubit_hex_to_radia(hex_elements_from_cubit, mu_r=1000)
+
+# Method 3: Tetrahedral mesh via Netgen
+# 1. Create geometry in Cubit, export to STEP
+# 2. Import STEP to Netgen, generate tet mesh
+# 3. Import to Radia
+from netgen_mesh_import import netgen_mesh_to_radia
+core = netgen_mesh_to_radia(ngsolve_mesh, material={'magnetization': [0,0,0]})
+```
+
+**Note**: Legacy examples using `ObjDivMag` or `ObjCutMag` are DEPRECATED and will not run.
+
 ---
 
 ## MSC (Magnetic Surface Charge) Method
@@ -2021,15 +2267,11 @@ K. Hollaus, M. Kaltenbacher, J. Schoberl, "A Nonlinear Effective Surface Impedan
 - `exportFieldToVTK()` - Python legacy field export removed
 - `radia_pyvista_viewer.py` - PyVista viewer removed (depended on ObjDrwVTK)
 
-**Current VTS Export APIs**:
+**VTS Export API**:
 
-| API | Implementation | Use Case |
-|-----|----------------|----------|
-| `rad.FldVTS()` | C++ (OpenMP) | Large grids, performance-critical |
-| `RadiaVTKOutput` class | Python | Flexible configuration |
-| `export_field_grid_vts()` | Python | Simple convenience function |
+`rad.FldVTS()` - C++ implementation with OpenMP parallelization
 
-**C++ API (Recommended for Large Grids)**:
+**Usage**:
 
 ```python
 import radia as rad
@@ -2037,39 +2279,12 @@ import radia as rad
 rad.FldUnits('m')
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
-# Export field grid to VTS (C++ implementation)
-rad.FldVTS(magnet, 'field_output',
-           [-0.1, 0.1],  # x_range
-           [-0.1, 0.1],  # y_range
-           [0.02, 0.15], # z_range
-           nx=41, ny=41, nz=27,
-           include_B=1, include_H=0)
+# Export field grid to VTS
+# FldVTS(obj, filename, x_range, y_range, z_range, nx, ny, nz, include_B, include_H, unit_scale)
+rad.FldVTS(magnet, 'field_output.vts',
+           [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15],
+           41, 41, 27, 1, 0, 1.0)
 # Output: field_output.vts
-```
-
-**Python API (For Flexibility)**:
-
-```python
-from radia import RadiaVTKOutput, export_field_grid_vts
-
-# Method 1: Convenience function
-grid_params = {
-    'x_range': [-0.1, 0.1],
-    'y_range': [-0.1, 0.1],
-    'z_range': [0.02, 0.15],
-    'nx': 41, 'ny': 41, 'nz': 27
-}
-export_field_grid_vts(magnet, grid_params, 'field', coefs=['B', 'B_magnitude'])
-
-# Method 2: Class-based (more options)
-vtk = RadiaVTKOutput(
-    obj=magnet,
-    coefs=['B', 'H', 'B_magnitude'],
-    filename='field_full',
-    grid_params=grid_params,
-    floatsize='double'
-)
-vtk.Do()
 ```
 
 **VTS File Format**:
@@ -2078,13 +2293,8 @@ vtk.Do()
 - Supports B field, H field, and scalar magnitudes
 - Compatible with ParaView, VisIt, and other VTK viewers
 
-**Performance Guidelines**:
-- For grids > 100x100x100: Use C++ `rad.FldVTS()` for performance
-- For smaller grids: Python API is sufficient
-- Field computation is OpenMP-parallelized in C++
-
 ---
 
-**Last Updated**: 2026-01-09 (Added VTK/VTS export policy)
+**Last Updated**: 2026-01-09 (VTS export API unified to rad.FldVTS only)
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation

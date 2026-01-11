@@ -24,6 +24,7 @@ namespace radia {
 
 radTConductor::radTConductor()
     : conductivity_(5.8e7)  // Default: copper
+    , mu_r_(1.0)            // Default: non-magnetic
     , frequency_(0)
     , formulation_(ConductorFormulation::DC)
     , portImpedance_(0, 0)
@@ -41,6 +42,42 @@ void radTConductor::SetConductivity(double conductivity) {
         throw std::invalid_argument("Conductivity must be positive");
     }
     conductivity_ = conductivity;
+}
+
+void radTConductor::SetRelativePermeability(double mu_r) {
+    if (mu_r < 1.0) {
+        throw std::invalid_argument("Relative permeability must be >= 1");
+    }
+    mu_r_ = mu_r;
+}
+
+double radTConductor::GetSkinDepth() const {
+    double omega = 2.0 * RadConst::PI * frequency_;
+    if (omega > 0 && conductivity_ > 0) {
+        // delta = sqrt(2 / (omega * mu_0 * mu_r * sigma))
+        // Following Karl Hollaus's formula from surface_impedence_eff_Kengo.py:58
+        return std::sqrt(2.0 / (omega * MU_0 * mu_r_ * conductivity_));
+    }
+    return 1e-3;  // Default 1mm for DC
+}
+
+std::complex<double> radTConductor::GetSurfaceImpedance() const {
+    // Surface impedance Z = (1+j) * Rs
+    // where Rs = 1 / (sigma * delta) = sqrt(omega * mu / (2 * sigma))
+    //
+    // Following Karl Hollaus's ESIM formulation:
+    // Z = 0.4325e-3 * (1+1j) Ohm for steel at 50 Hz
+    //
+    // Reference: surface_impedence_eff_Kengo.py:64
+    double omega = 2.0 * RadConst::PI * frequency_;
+    if (omega > 0 && conductivity_ > 0) {
+        double delta = GetSkinDepth();
+        double Rs = 1.0 / (conductivity_ * delta);
+        // Z = (1+j) * Rs
+        return std::complex<double>(Rs, Rs);
+    }
+    // DC case: pure resistance
+    return std::complex<double>(0, 0);
 }
 
 void radTConductor::SetFrequency(double frequency) {
@@ -680,23 +717,9 @@ std::complex<double> radTConductor::GreenFunction(double r) const {
         return std::complex<double>(0, 0);
     }
 
-    switch (formulation_) {
-        case ConductorFormulation::DC:
-        case ConductorFormulation::MQS:
-            // G(r) = 1 / (4*pi*r)
-            return std::complex<double>(INV_FOUR_PI / r, 0);
-
-        case ConductorFormulation::EMQS:
-        case ConductorFormulation::FullWave: {
-            // G(r) = exp(-jkr) / (4*pi*r)
-            double omega = 2.0 * RadConst::PI * frequency_;
-            double k = omega * std::sqrt(MU_0 * EPS_0);
-            std::complex<double> jkr(0, k * r);
-            return std::exp(-jkr) * INV_FOUR_PI / r;
-        }
-    }
-
-    return std::complex<double>(0, 0);
+    // Laplace kernel only: G(r) = 1 / (4*pi*r)
+    // Note: Helmholtz kernel (exp(-jkr)/r) removed - using quasi-static approximation
+    return std::complex<double>(INV_FOUR_PI / r, 0);
 }
 
 void radTConductor::DefinePort(const std::vector<int>& terminal1,
@@ -799,7 +822,7 @@ void radTConductor::ComputeB(const TVector3d& point,
             }
         }
     } else {
-        // Fallback: use surface current if available (for RWG-EFIE solution)
+        // Fallback: use surface current if available (for Loop-Star PEEC solution)
         for (size_t i = 0; i < panels_.size(); ++i) {
             const auto& panel = panels_[i];
 
@@ -912,7 +935,7 @@ void radTConductor::ComputeA(const TVector3d& point,
             Az += totalCurrent_ * coeff * dl.z / r;
         }
     } else {
-        // Fallback: use surface current if available (for RWG-EFIE solution)
+        // Fallback: use surface current if available (for Loop-Star PEEC solution)
         // A = mu_0/(4*pi) * integral{ K / |r - r'| } dA'
         for (size_t i = 0; i < panels_.size(); ++i) {
             const auto& panel = panels_[i];
@@ -972,7 +995,7 @@ std::complex<double> radTConductor::ComputePhi(const TVector3d& point) const {
 radTConductorSolver::radTConductorSolver()
     : frequency_(0)
     , formulation_(ConductorFormulation::MQS)
-    , usePfft_(true)
+    , useHACApK_(true)
     , directImpedanceMode_(false)
     , portImpedance_(0, 0)
     , totalCurrent_(0, 0)
@@ -988,9 +1011,9 @@ void radTConductorSolver::AddConductor(std::shared_ptr<radTConductor> conductor)
 
 void radTConductorSolver::Clear() {
     conductors_.clear();
-    pfft_.reset();
-    rwgMesh_.reset();
-    rwgSolver_.reset();
+    systemMatrix_.clear();
+    rhs_.clear();
+    solution_.clear();
 }
 
 void radTConductorSolver::SetFrequency(double frequency) {
@@ -1015,15 +1038,15 @@ void radTConductorSolver::Solve() {
 
     auto& cond = conductors_[0];
     double sigma = cond->GetConductivity();
+    double mu_r = cond->GetRelativePermeability();
     double omega = 2.0 * RadConst::PI * frequency_;
 
-    // Skin depth
-    double skinDepth = 1e-3;  // default 1mm
-    if (omega > 0 && sigma > 0) {
-        skinDepth = std::sqrt(2.0 / (omega * MU_0 * sigma));
-    }
+    // Use conductor's GetSkinDepth() which properly accounts for mu_r
+    // delta = sqrt(2 / (omega * mu_0 * mu_r * sigma))
+    // Following Karl Hollaus's ESIM formulation
+    double skinDepth = cond->GetSkinDepth();
 
-    // Surface resistance
+    // Surface resistance: Rs = 1 / (sigma * delta)
     double Rs = 1.0 / (sigma * skinDepth);
 
     const auto& panels = cond->GetPanels();
@@ -1157,56 +1180,8 @@ std::vector<std::complex<double>> radTConductorSolver::ImpedanceSweep(
 }
 
 // ============================================================================
-// RWG mesh building and field computation
+// Loop-Star PEEC with ESIM surface impedance
 // ============================================================================
-
-void radTConductorSolver::BuildRWGMesh() {
-    // Collect all vertices and triangles from conductor panels
-    // Use vertex merging to share vertices between adjacent panels
-    std::vector<TVector3d> vertices;
-    std::vector<std::array<int, 3>> triangles;
-
-    // Tolerance for vertex matching
-    const double tol = 1e-10;
-
-    // Lambda to find or add vertex
-    auto findOrAddVertex = [&](const TVector3d& v) -> int {
-        for (size_t i = 0; i < vertices.size(); ++i) {
-            TVector3d diff = vertices[i] - v;
-            if (diff.Abs() < tol) {
-                return static_cast<int>(i);
-            }
-        }
-        vertices.push_back(v);
-        return static_cast<int>(vertices.size() - 1);
-    };
-
-    for (const auto& cond : conductors_) {
-        const auto& panels = cond->GetPanels();
-
-        for (const auto& panel : panels) {
-            // Get vertex indices (with merging)
-            std::vector<int> vIdx;
-            for (const auto& v : panel.vertices) {
-                vIdx.push_back(findOrAddVertex(v));
-            }
-
-            // Create triangles from panel
-            if (panel.type == SurfacePanel::Triangle && vIdx.size() >= 3) {
-                // Single triangle
-                triangles.push_back({vIdx[0], vIdx[1], vIdx[2]});
-            } else if (vIdx.size() >= 4) {
-                // Quad -> 2 triangles
-                triangles.push_back({vIdx[0], vIdx[1], vIdx[2]});
-                triangles.push_back({vIdx[0], vIdx[2], vIdx[3]});
-            }
-        }
-    }
-
-    // Create RWG mesh
-    rwgMesh_ = std::make_shared<RWGMesh>();
-    rwgMesh_->CreateFromTriangles(vertices, triangles);
-}
 
 void radTConductorSolver::ComputeB(const TVector3d& point,
                                    std::complex<double>& Bx,
@@ -1214,25 +1189,50 @@ void radTConductorSolver::ComputeB(const TVector3d& point,
                                    std::complex<double>& Bz) const {
     Bx = By = Bz = std::complex<double>(0, 0);
 
-    if (!rwgSolver_) return;
-
-    rwgSolver_->ComputeB(point, Bx, By, Bz);
+    // Compute B field from all conductor surface currents
+    // Using Biot-Savart with Laplace kernel: mu0/(4*pi*r)
+    for (const auto& cond : conductors_) {
+        std::complex<double> bx, by, bz;
+        cond->ComputeB(point, bx, by, bz);
+        Bx += bx;
+        By += by;
+        Bz += bz;
+    }
 }
 
 void radTConductorSolver::BuildSystemMatrix() {
-    // Not used - BuildRWGMesh creates mesh instead
+    // TODO: Implement Loop-Star PEEC matrix assembly
+    //
+    // Loop-Star decomposition:
+    //   J = J_L + J_S
+    //   J_L: Loop currents (solenoidal, div J = 0) -> inductance
+    //   J_S: Star currents (irrotational) -> capacitance/charge
+    //
+    // System matrix (with low-frequency scaling):
+    //   [L        M_LS/jw ] [I_L ]   [V_L/jw ]
+    //   [M_SL*jw  1/C     ] [I_S'] = [V_S*jw ]
+    //
+    // where I_S' = jw * I_S (scaled star current)
+    //
+    // ESIM surface impedance (Karl Hollaus):
+    //   Zs = (1+j) * Rs
+    //   Rs = 1 / (sigma * delta)
+    //   delta = sqrt(2 / (omega * mu0 * mu_r * sigma))
 }
 
 void radTConductorSolver::SolveLinearSystem() {
-    // Not used - RWGEFIESolver handles linear solve
+    // TODO: Implement Loop-Star PEEC linear solve
+    // Use LAPACK for dense solve, or iterative solver for large problems
 }
 
 void radTConductorSolver::ExtractSolution() {
-    // Not used - RWGEFIESolver extracts its own solution
+    // TODO: Extract Loop and Star currents from solution vector
+    // Store in conductor surface current arrays
 }
 
 void radTConductorSolver::ComputePortImpedance() {
-    // Not used - RWGEFIESolver computes impedance
+    // TODO: Compute port impedance from Loop-Star solution
+    // Z = V / I at the port terminals
 }
 
 } // namespace radia

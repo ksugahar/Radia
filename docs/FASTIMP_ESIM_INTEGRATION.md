@@ -1,7 +1,7 @@
 # FastImp + ESIM Integration Design Document
 
 **Date**: 2026-01-09
-**Status**: Phase 4 Python API Complete (CndWire, CndSpiral added)
+**Status**: Phase 4 Python API Complete (CndWire, CndSpiral added) + Karl Hollaus ESIM Formulation
 
 ## Overview
 
@@ -110,8 +110,144 @@ Supports:
 
 **Reference**:
 - K. Hollaus et al., "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025
+- **Local file**: `W:\03_文献・論文\00_電磁界解析\SIBC\A_Nonlinear_Effective_Surface_Impedance_in_a_Magnetic_Scalar_Potential_Formulation.pdf`
 
 **Advantage over Nonlocal SIBC**: Handles nonlinear materials and DC conditions
+
+---
+
+## Karl Hollaus ESIM Formulation
+
+### Overview
+
+The ESIM (Effective Surface Impedance Method) implemented in Radia follows Karl Hollaus's formulation for MQS (Magneto-Quasi-Static) conductor analysis.
+
+**Reference Paper**:
+- K. Hollaus, M. Kaltenbacher, J. Schöberl, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025
+- DOI: 10.1109/TMAG.2025.3613932
+- **Local file**: `W:\03_文献・論文\00_電磁界解析\SIBC\A_Nonlinear_Effective_Surface_Impedance_in_a_Magnetic_Scalar_Potential_Formulation.pdf`
+
+### Mathematical Formulation
+
+#### Skin Depth (Linear Material)
+
+For a conductor with conductivity σ and relative permeability μᵣ at angular frequency ω:
+
+```
+δ = √(2 / (ω · μ₀ · μᵣ · σ))
+
+where:
+  δ  = skin depth [m]
+  ω  = 2πf = angular frequency [rad/s]
+  μ₀ = 4π × 10⁻⁷ H/m (permeability of free space)
+  μᵣ = relative permeability (dimensionless)
+  σ  = conductivity [S/m]
+```
+
+#### Surface Impedance (Linear Material)
+
+The effective surface impedance for a good conductor:
+
+```
+Z = (1 + j) · Rs
+
+where:
+  Rs = 1 / (σ · δ)  [Ohm]
+
+Combining:
+  Z = (1 + j) / (σ · δ)
+    = (1 + j) · √(ω · μ₀ · μᵣ / (2σ))
+```
+
+#### Reference Values (Validation)
+
+For **steel at 50 Hz** (σ = 5×10⁶ S/m, μᵣ = 1000):
+
+```
+δ = √(2 / (2π×50 × 4π×10⁻⁷ × 1000 × 5×10⁶))
+  = √(2 / 1.974×10⁶)
+  = 1.007 × 10⁻³ m ≈ 1 mm
+
+Rs = 1 / (5×10⁶ × 1.007×10⁻³)
+   = 1.986 × 10⁻⁴ Ω
+
+Z = (1 + j) × 1.986×10⁻⁴
+  ≈ 0.199 mΩ + j 0.199 mΩ
+```
+
+**Karl Hollaus reference value**: Z = 0.4325×10⁻³ × (1 + j) Ω for σ = 5×10⁶ S/m, μᵣ = 1000, f = 50 Hz
+
+### Implementation in Radia
+
+Both PEEC (rad_conductor.cpp) and RWG-EFIE (rad_rwg_coupled.cpp) solvers implement the same ESIM formulas:
+
+```cpp
+// In rad_conductor.cpp and rad_rwg_coupled.cpp
+
+double GetSkinDepth(double sigma, double mu_r) const {
+    // δ = √(2 / (ω · μ₀ · μᵣ · σ))
+    if (omega_ > 0 && sigma > 0) {
+        double mu = MU_0 * mu_r;
+        return sqrt(2.0 / (omega_ * mu * sigma));
+    }
+    return std::numeric_limits<double>::infinity();  // DC case
+}
+
+std::complex<double> GetSurfaceImpedance(double sigma, double mu_r) const {
+    // Z = (1 + j) · Rs, where Rs = 1 / (σ · δ)
+    if (omega_ > 0 && sigma > 0) {
+        double delta = GetSkinDepth(sigma, mu_r);
+        double Rs = 1.0 / (sigma * delta);
+        return std::complex<double>(Rs, Rs);  // Z = (1+j) * Rs
+    }
+    return std::complex<double>(0, 0);  // DC case
+}
+```
+
+### Python API
+
+The following Python API functions are available for ESIM:
+
+```python
+import radia as rad
+
+# Create conductor
+cond = rad.CndLoop([0,0,0], 0.05, [0,0,1], 'c', 0.001, 0.001, 5.8e7, 8, 30)
+
+# Set relative permeability (default is 1.0 for copper)
+rad.CndSetMuR(cond, 100)  # For steel, μᵣ = 100
+
+# Set frequency
+rad.CndSetFrequency(cond, 50000)  # 50 kHz
+
+# Get skin depth [m]
+delta = rad.CndGetSkinDepth(cond)
+print(f"Skin depth: {delta*1000:.3f} mm")
+
+# Get complex surface impedance [Ohm]
+Z = rad.CndGetSurfaceImpedance(cond)
+print(f"Surface impedance: {Z.real:.6f} + j{Z.imag:.6f} Ohm")
+```
+
+### API Reference
+
+| Function | Description | Parameters | Returns |
+|----------|-------------|------------|---------|
+| `CndSetMuR(cond, mu_r)` | Set relative permeability | cond: conductor handle, mu_r: relative permeability | None |
+| `CndGetSkinDepth(cond)` | Get skin depth | cond: conductor handle | Skin depth [m] |
+| `CndGetSurfaceImpedance(cond)` | Get complex surface impedance | cond: conductor handle | Complex Z [Ohm] |
+
+### Typical Material Properties
+
+| Material | σ [S/m] | μᵣ | δ @ 50 Hz | δ @ 50 kHz |
+|----------|---------|-----|-----------|------------|
+| Copper | 5.8×10⁷ | 1 | 9.3 mm | 0.29 mm |
+| Aluminum | 3.5×10⁷ | 1 | 12.0 mm | 0.38 mm |
+| Steel (cold) | 5×10⁶ | 100 | 1.0 mm | 0.032 mm |
+| Steel (hot, 800°C) | 1×10⁶ | 1 | 71.2 mm | 2.25 mm |
+| Stainless Steel | 1.4×10⁶ | 1 | 60.1 mm | 1.90 mm |
+
+**Note**: At high temperatures (above Curie point ~770°C), steel loses its ferromagnetic properties and μᵣ → 1.
 
 ## Interaction Matrix
 

@@ -3,7 +3,7 @@
 Complete reference for Radia Python API.
 
 **Version**: 1.4.4
-**Date**: 2026-01-08
+**Date**: 2026-01-09
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
 ---
@@ -767,8 +767,8 @@ rad.FldUnits('m')  # REQUIRED: NGSolve uses meters
 import ngsolve
 from ngsolve import *
 
-# 3. NOW import radia_ngsolve
-from radia import radia_ngsolve
+# 3. NOW import radia_ngsolve (separate C++ module)
+import radia_ngsolve
 ```
 
 Wrong order causes `ImportError: DLL load failed`.
@@ -828,117 +828,80 @@ version = rad.UtiVer()
 
 ---
 
-## VTK Export
+## VTK/VTS Export
 
-The VTK export module provides functions for exporting Radia geometry and field data to VTK format for visualization in ParaView and other VTK-compatible tools.
+Export Radia magnetic field to VTS (VTK XML Structured Grid) format for visualization in ParaView.
 
-**Availability**: Check `radia.VTK_EXPORT_AVAILABLE` to verify.
+### rad.FldVTS()
 
-### Available Formats
-
-| Format | Extension | Description | Use Case |
-|--------|-----------|-------------|----------|
-| Legacy VTK | `.vtk` | ASCII polydata format | Geometry export |
-| VTS | `.vts` | XML Structured Grid | 3D field grids |
-
-### Export Functions
-
-```python
-from radia import (
-    # Legacy VTK format (geometry and point field)
-    exportGeometryToVTK,
-    exportFieldToVTK,
-    # VTS format (structured grid for 3D field)
-    RadiaVTKOutput,
-    export_field_grid_vts,
-)
-```
-
-### exportGeometryToVTK - Geometry Export
-
-Export Radia object geometry to Legacy VTK format:
+Export magnetic field on a structured 3D grid to VTS format (C++ implementation with OpenMP):
 
 ```python
 import radia as rad
-from radia import exportGeometryToVTK
 
 rad.FldUnits('m')
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
-exportGeometryToVTK(magnet, 'magnet_geometry')
-# -> magnet_geometry.vtk
-```
-
-### export_field_grid_vts - Field Grid Export
-
-Export magnetic field on a structured 3D grid to VTS format:
-
-```python
-import radia as rad
-from radia import export_field_grid_vts
-
-rad.FldUnits('m')
-magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
-
-grid_params = {
-    'x_range': [-0.08, 0.08],   # X range in current units
-    'y_range': [-0.08, 0.08],   # Y range in current units
-    'z_range': [0.03, 0.12],    # Z range in current units
-    'nx': 33, 'ny': 33, 'nz': 19  # Grid points
-}
-
-export_field_grid_vts(magnet, grid_params, 'B_field',
-                      coefs=['B', 'B_magnitude'])
+# FldVTS(obj, filename, x_range, y_range, z_range, nx, ny, nz, include_B, include_H, unit_scale)
+rad.FldVTS(magnet, 'B_field.vts',
+           [-0.08, 0.08], [-0.08, 0.08], [0.03, 0.12],  # x, y, z ranges
+           33, 33, 19,    # grid points
+           1, 0,          # include_B=True, include_H=False
+           1.0)           # unit_scale (1.0 for meters)
 # -> B_field.vts
 ```
 
-**Available Coefficients**:
+**Parameters**:
 
-| Coefficient | Type | Description |
-|-------------|------|-------------|
-| `'B'` | Vector (3) | Magnetic flux density [T] |
-| `'H'` | Vector (3) | Magnetic field intensity [A/m] |
-| `'B_magnitude'` | Scalar | \|B\| [T] |
-| `'H_magnitude'` | Scalar | \|H\| [A/m] |
-| `'Bx'`, `'By'`, `'Bz'` | Scalar | B components [T] |
-| `'Hx'`, `'Hy'`, `'Hz'` | Scalar | H components [A/m] |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `obj` | int | required | Radia object handle |
+| `filename` | str | required | Output filename (.vts) |
+| `x_range` | [float, float] | required | X range [min, max] |
+| `y_range` | [float, float] | required | Y range [min, max] |
+| `z_range` | [float, float] | required | Z range [min, max] |
+| `nx` | int | 21 | Grid points in X |
+| `ny` | int | 21 | Grid points in Y |
+| `nz` | int | 21 | Grid points in Z |
+| `include_B` | int | 1 | Include B field (0/1) |
+| `include_H` | int | 0 | Include H field (0/1) |
+| `unit_scale` | float | 1.0 | Coordinate scale factor |
 
-### RadiaVTKOutput - Class-based Export
+**Output Fields**:
 
-For more control, use the `RadiaVTKOutput` class (following NGSolve's pattern):
+| Field | Type | Unit | Description |
+|-------|------|------|-------------|
+| `B` | Vector (3) | T | Magnetic flux density |
+| `B_magnitude` | Scalar | T | \|B\| |
+| `H` | Vector (3) | A/m | Magnetic field (if include_H=1) |
+| `H_magnitude` | Scalar | A/m | \|H\| (if include_H=1) |
+
+**Example** - Complete workflow:
 
 ```python
 import radia as rad
-from radia import RadiaVTKOutput
 
 rad.FldUnits('m')
-magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
-grid_params = {
-    'x_range': [-0.08, 0.08],
-    'y_range': [-0.08, 0.08],
-    'z_range': [0.03, 0.12],
-    'nx': 33, 'ny': 33, 'nz': 19
-}
+# Create permanent magnet
+vertices = [
+    [-0.02, -0.02, -0.01], [0.02, -0.02, -0.01],
+    [0.02, 0.02, -0.01], [-0.02, 0.02, -0.01],
+    [-0.02, -0.02, 0.01], [0.02, -0.02, 0.01],
+    [0.02, 0.02, 0.01], [-0.02, 0.02, 0.01],
+]
+magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])
 
-vtk = RadiaVTKOutput(
-    obj=magnet,
-    coefs=['B', 'H', 'B_magnitude', 'H_magnitude'],
-    filename='field_output',
-    grid_params=grid_params,
-    floatsize='double'  # or 'single' for smaller files
-)
-vtk.Do()  # -> field_output.vts
+# Export field to VTS
+rad.FldVTS(magnet, 'magnet_field.vts',
+           [-0.05, 0.05], [-0.05, 0.05], [0.02, 0.08],
+           21, 21, 13, 1, 1, 1.0)
+
+# View in ParaView:
+# 1. File -> Open -> magnet_field.vts
+# 2. Apply
+# 3. Color by B_magnitude or use Glyph filter for B vectors
 ```
-
-### Unit Conversion
-
-VTK files use meters as the standard unit for coordinates. The export functions automatically convert coordinates based on Radia's current unit setting:
-
-- `rad.FldUnits('m')`: No conversion (already meters)
-- `rad.FldUnits('mm')`: Multiplied by 0.001 to convert to meters
-
-Field values (B, H) are always in SI units (Tesla, A/m).
 
 ---
 

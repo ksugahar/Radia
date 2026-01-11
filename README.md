@@ -93,12 +93,19 @@ For iron saturation, we employ the **Magnetic Surface Charge (MSC)** formulation
 
 $$ \phi_m(\vec{r}) = \frac{1}{4\pi} \oint_{\partial \Omega} \frac{\vec{M} \cdot \vec{n}'}{|\vec{r} - \vec{r}'|} dS' - \frac{1}{4\pi} \int_{\Omega} \frac{\nabla' \cdot \vec{M}}{|\vec{r} - \vec{r}'|} dV' $$
 
-### 3. Surface Impedance & FastImp Kernels
-For high-frequency conductors, we solve the Surface Integral Equation (SIE) using the oscillatory Green's function kernel:
+### 3. Surface Impedance & FastImp Kernels (MQS/Darwin Regime)
+For conductor analysis, we solve the Surface Integral Equation (SIE) using the **Laplace kernel**:
 
-$$ G(\vec{r}, \vec{r}') = \frac{e^{ik|\vec{r} - \vec{r}'|}}{|\vec{r} - \vec{r}'|} $$
+$$ G(\vec{r}, \vec{r}') = \frac{1}{4\pi|\vec{r} - \vec{r}'|} $$
 
-Combined with **SIBC**, this reduces the volumetric skin-effect problem to a purely surface-based boundary element problem.
+**Supported Frequency Regime**: Magneto-Quasi-Static (MQS) to Darwin approximation.
+- **MQS**: Ignores displacement current ($\partial D/\partial t \approx 0$). Valid when $\lambda >> L$ (wavelength >> problem size).
+- **Darwin**: Includes inductive effects but ignores radiation. Valid for $kL << 1$ where $k = \omega/c$.
+
+Combined with **SIBC (Surface Impedance Boundary Condition)**, this reduces the volumetric skin-effect problem to a purely surface-based boundary element problem.
+
+> [!NOTE]
+> **Full-wave Helmholtz kernel** ($e^{ikr}/r$) has been removed. Radia targets MQS/Darwin applications (MagLev, WPT, Induction Heating) where wavelength >> device size, making the quasi-static approximation highly accurate and computationally efficient.
 
 ---
 
@@ -146,11 +153,11 @@ Instead of clicking through nested menus to find a "Halbach Array" button, you s
 We define our unique approach as a hybrid of **Integral Element Method (IEM)** and **Finite Element Method (FEM)**.
 
 **What is "Integral Element Method (IEM)"?**
-Unlike FEM, which uses uniform element formulations, IEM allows the combination of elements with **different integration kernels** (e.g., $1/r$ for monopoles, $\vec{J} \times \vec{r}/r^3$ for Biot-Savart, $e^{ikr}/r$ for wave kernels) into a single system.
+Unlike FEM, which uses uniform element formulations, IEM allows the combination of elements with **different integration kernels** (e.g., $1/r$ for monopoles, $\vec{J} \times \vec{r}/r^3$ for Biot-Savart) into a single system. All kernels use the **Laplace form** ($1/r$) for quasi-static analysis.
 
 | Layer | Method | Role & Kernels | Advantage |
 | :--- | :--- | :--- | :--- |
-| **Source Layer** | **IEM** (Integral Element Method) | **Diverse Kernels for Diverse Physics.** <br> • **Radia**: Magnetostatic Kernels (Volume Magnets, Coils). <br> • **FastImp**: Oscillatory Kernels (SIBC Surfaces). | **Composable Physics.** <br> You can mix-and-match analytical coils, volume magnets, and surface conductors freely. The interaction is handled by the appropriate Green's functions. |
+| **Source Layer** | **IEM** (Integral Element Method) | **Laplace Kernels for MQS/Darwin Physics.** <br> • **Radia**: Magnetostatic Kernels ($1/r$) for Volume Magnets, Coils. <br> • **FastImp**: Quasi-static SIBC Surfaces. | **Composable Physics.** <br> You can mix-and-match analytical coils, volume magnets, and surface conductors freely. The interaction is handled by the Laplace Green's function. |
 | **Material Layer** | **FEM** (Finite Element Method) | **NGSolve**: Differential Operators ($\nabla \cdot \mu \nabla$) | **Non-Linear & Multi-Physics.** <br> Handles complex material responses (Saturation, Hysteresis, Heat) where kernels become computationally expensive. |
 
 **The Workflow:**
@@ -194,14 +201,17 @@ Instead of simple "boundary conditions", Radia provides rich physical sources:
 
 
 ### 2. High-Performance Solvers & Acceleration
-To handle complex field sources efficiently, the framework employs state-of-the-art acceleration algorithms:
+To handle complex field sources efficiently, the framework employs state-of-the-art acceleration algorithms based on the **Laplace kernel** ($1/r$):
 
 *   **Solver Acceleration (Source Definition)**:
-    *   **H-Matrix**: Used for Magnetostatics (MMM). Compresses dense interaction matrices to $O(N \log N)$, enabling large-scale iron/magnet simulations.
+    *   **H-Matrix (HACApK ACA+)**: Used for Magnetostatics (MMM). Compresses dense interaction matrices to $O(N \log N)$, enabling large-scale iron/magnet simulations.
     *   **pFFT & SIBC**: Used for Conductor Analysis (FastImp). **Surface Impedance Boundary Conditions (SIBC)** combined with Precorrected-FFT allow extremely fast impedance extraction by modeling skin depth effects as surface properties.
 *   **Field Evaluation Acceleration**:
-    *   **FMM (Fast Multipole Method)**: Used for rapidly computing fields ($B, H, A$) from massive numbers of source elements. This is critical for the `CoefficientFunction` interface to NGSolve.
+    *   **FMM (ExaFMM-t)**: Fast Multipole Method using Laplace kernel for rapidly computing fields ($B, H, A$) from massive numbers of source elements. This is critical for the `CoefficientFunction` interface to NGSolve.
 *   **Hybrid FEM**: Reduced Potential coupling with NGSolve.
+
+> [!NOTE]
+> **All acceleration methods use Laplace kernel** ($1/r$). This ensures consistency across the framework and optimal performance for MQS/Darwin applications.
 
 
 ### 3. Visualization & Export
@@ -263,8 +273,10 @@ coil = rad.ObjRaceTrk(
     'man'          # Manually defined rectangular cross-section
 )
 
-# Visualize clearly
-rad.ObjDrwVTK(coil, "coil_geometry.vtk")
+# Export field to VTS for ParaView visualization
+rad.FldVTS(coil, "coil_field.vts",
+           [-50, 50], [-150, 150], [-20, 30],  # x, y, z ranges [mm]
+           21, 31, 11)  # grid points
 ```
 
 ---

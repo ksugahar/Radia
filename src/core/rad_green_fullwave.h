@@ -30,11 +30,14 @@ constexpr double CONST_ETA0 = 376.730313668;                   // Intrinsic impe
 constexpr double CONST_INV_FOUR_PI = RadConst::INV_FOUR_PI;    // 1/(4*pi)
 
 /**
- * @brief Green's function calculator for electromagnetic analysis
+ * @brief Green's function calculator for quasi-static electromagnetic analysis
  *
- * Computes scalar and vector Green's functions for various formulations:
- * - DC/MQS: G(r) = 1/(4*pi*r) - quasi-static
- * - Full-wave: G(r) = exp(-j*k*r)/(4*pi*r) - including wave propagation
+ * Computes scalar and vector Green's functions using Laplace kernel only:
+ * - G(r) = 1/(4*pi*r) - quasi-static (Laplace kernel)
+ *
+ * Note: Full-wave Helmholtz kernel (exp(-jkr)/r) has been removed.
+ * This simplification is appropriate for MQS (Magneto-Quasi-Static) applications
+ * such as induction heating where wavelength >> problem dimension.
  *
  * Key quantities:
  * - g: Scalar Green's function
@@ -77,8 +80,7 @@ public:
 
     /**
      * @brief Scalar Green's function G(r)
-     * DC/MQS: 1/(4*pi*r)
-     * Full-wave: exp(-j*k*r)/(4*pi*r)
+     * Laplace kernel: 1/(4*pi*r)
      * @param r Distance
      * @return G(r)
      */
@@ -86,8 +88,7 @@ public:
 
     /**
      * @brief Gradient of scalar Green's function dG/dr
-     * DC/MQS: -1/(4*pi*r^2)
-     * Full-wave: -exp(-j*k*r)*(1 + j*k*r)/(4*pi*r^2)
+     * Laplace kernel: -1/(4*pi*r^2)
      * @param r Distance
      * @return dG/dr
      */
@@ -106,8 +107,7 @@ public:
 
     /**
      * @brief Vector potential kernel A = mu * G * J
-     * For MQS: A = (mu/4pi) * J / r
-     * For Full-wave: A = (mu/4pi) * J * exp(-jkr) / r
+     * Laplace: A = (mu/4pi) * J / r
      * @param r Distance
      * @return Kernel value (multiply by J to get A contribution)
      */
@@ -117,8 +117,7 @@ public:
 
     /**
      * @brief Scalar potential kernel Phi = (1/eps) * G * rho
-     * For MQS: Phi = (1/4pi*eps) * rho / r
-     * For Full-wave: Phi = (1/4pi*eps) * rho * exp(-jkr) / r
+     * Laplace: Phi = (1/4pi*eps) * rho / r
      * @param r Distance
      * @return Kernel value (multiply by rho to get Phi contribution)
      */
@@ -336,32 +335,18 @@ private:
 inline radTGreenFunction::Complex radTGreenFunction::ScalarGreen(double r) const {
     if (r < 1e-15) return Complex(0.0, 0.0);  // Singularity protection
 
+    // Laplace kernel: 1/(4*pi*r)
     double gr = invFourPi_ / r;
-
-    if (std::abs(k_) < 1e-15) {
-        // DC/MQS: 1/(4*pi*r)
-        return Complex(gr, 0.0);
-    } else {
-        // Full-wave: exp(-jkr)/(4*pi*r)
-        Complex jkr = Complex(0.0, 1.0) * k_ * r;
-        return std::exp(-jkr) * gr;
-    }
+    return Complex(gr, 0.0);
 }
 
 inline radTGreenFunction::Complex radTGreenFunction::ScalarGreenGrad(double r) const {
     if (r < 1e-15) return Complex(0.0, 0.0);  // Singularity protection
 
+    // Laplace kernel gradient: -1/(4*pi*r^2)
     double r2 = r * r;
     double gr2 = -invFourPi_ / r2;
-
-    if (std::abs(k_) < 1e-15) {
-        // DC/MQS: -1/(4*pi*r^2)
-        return Complex(gr2, 0.0);
-    } else {
-        // Full-wave: -exp(-jkr)*(1 + jkr)/(4*pi*r^2)
-        Complex jkr = Complex(0.0, 1.0) * k_ * r;
-        return std::exp(-jkr) * (1.0 + jkr) * gr2;
-    }
+    return Complex(gr2, 0.0);
 }
 
 inline radTGreenFunction::Complex radTGreenFunction::VectorPotentialKernel(double r) const {

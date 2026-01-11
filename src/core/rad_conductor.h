@@ -1,14 +1,13 @@
 /*
  * rad_conductor.h
  *
- * Conductor element classes for electromagnetic analysis
- * Supports DC (analytical), MQS, and Full-wave formulations
+ * Conductor element classes for quasi-static electromagnetic analysis
+ * Uses Laplace kernel (1/R) only - Helmholtz kernel removed.
  *
  * Compatible with Radia geometry (ObjRecMag, ObjHexahedron, etc.)
  *
  * References:
  * [1] Z. Zhu et al., "Algorithms in FastImp", IEEE TCAD, 2005
- * [2] S. Bilicz et al., "Nonlocal SIBC", ISEM 2023
  *
  * Part of Radia project
  */
@@ -17,9 +16,7 @@
 #define RAD_CONDUCTOR_H
 
 #include "gmvect.h"
-#include "rad_pfft.h"
 #include "rad_constants.h"
-#include "rad_rwg_basis.h"
 #include <vector>
 #include <array>
 #include <complex>
@@ -38,12 +35,13 @@ class radTg3d;
 
 /**
  * @brief Formulation type for conductor analysis
+ * Note: All formulations now use Laplace kernel G(r) = 1/(4*pi*r)
  */
 enum class ConductorFormulation {
     DC,         // DC: Use existing Radia analytical formulas (Biot-Savart)
     MQS,        // Magneto-Quasi-Static: G(r) = 1/(4*pi*r), no displacement current
-    EMQS,       // Electro-Magneto-Quasi-Static: Low frequency with capacitance
-    FullWave    // Full-wave: G(r) = exp(-jkr)/(4*pi*r), includes resonance
+    EMQS,       // Electro-Magneto-Quasi-Static: Low frequency with capacitance (uses Laplace)
+    FullWave    // Full-wave: Now uses Laplace kernel (Helmholtz removed)
 };
 
 /**
@@ -86,6 +84,34 @@ public:
      * @brief Get conductivity
      */
     double GetConductivity() const { return conductivity_; }
+
+    /**
+     * @brief Set relative permeability (mu_r)
+     * @param mu_r Relative permeability (default 1.0 for non-magnetic)
+     *
+     * For ferromagnetic materials (e.g., steel), mu_r >> 1
+     * This affects skin depth: delta = sqrt(2 / (omega * mu_0 * mu_r * sigma))
+     */
+    void SetRelativePermeability(double mu_r);
+
+    /**
+     * @brief Get relative permeability
+     */
+    double GetRelativePermeability() const { return mu_r_; }
+
+    /**
+     * @brief Get skin depth at current frequency
+     * delta = sqrt(2 / (omega * mu_0 * mu_r * sigma))
+     */
+    double GetSkinDepth() const;
+
+    /**
+     * @brief Get surface impedance Z = (1+j) * Rs
+     * where Rs = 1 / (sigma * delta) = sqrt(omega * mu / (2 * sigma))
+     *
+     * Following Karl Hollaus's ESIM formulation
+     */
+    std::complex<double> GetSurfaceImpedance() const;
 
     /**
      * @brief Set analysis formulation
@@ -237,7 +263,7 @@ public:
 
     /**
      * @brief Compute magnetic field B at a point
-     * Uses appropriate formulation (DC/MQS/Full-wave)
+     * Uses Laplace kernel (quasi-static)
      * @param point Evaluation point
      * @return B field (complex for AC)
      */
@@ -338,6 +364,7 @@ public:
 private:
     // Material properties
     double conductivity_;     // [S/m]
+    double mu_r_;             // Relative permeability (mu_r >= 1)
     double frequency_;        // [Hz]
 
     // Formulation
@@ -422,9 +449,9 @@ public:
         const std::vector<double>& frequencies);
 
     /**
-     * @brief Use pFFT acceleration
+     * @brief Use HACApK H-matrix acceleration
      */
-    void EnablePfft(bool enable = true) { usePfft_ = enable; }
+    void EnableHACApK(bool enable = true) { useHACApK_ = enable; }
 
     /**
      * @brief Compute B field at a point (after solve)
@@ -448,19 +475,14 @@ private:
     std::vector<std::shared_ptr<radTConductor>> conductors_;
     double frequency_;
     ConductorFormulation formulation_;
-    bool usePfft_;
+    bool useHACApK_;
     bool directImpedanceMode_;  // True when impedance computed directly
 
-    // pFFT accelerator
-    std::unique_ptr<radTPfft> pfft_;
-
-    // RWG EFIE solver
-    std::shared_ptr<RWGMesh> rwgMesh_;
-    std::unique_ptr<RWGEFIESolver> rwgSolver_;
+    // Loop-Star PEEC solver with HACApK acceleration
     std::complex<double> portImpedance_;
     std::complex<double> totalCurrent_;
 
-    // System matrix and RHS (for backward compatibility)
+    // System matrix and RHS
     std::vector<std::complex<double>> systemMatrix_;
     std::vector<std::complex<double>> rhs_;
     std::vector<std::complex<double>> solution_;
@@ -469,7 +491,6 @@ private:
     void SolveLinearSystem();
     void ExtractSolution();
     void ComputePortImpedance();
-    void BuildRWGMesh();
 };
 
 } // namespace radia

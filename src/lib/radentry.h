@@ -1356,6 +1356,31 @@ EXP int CALL RadCndSetFormulation(int cond, const char* formulation);
 */
 EXP int CALL RadCndSetFrequency(int cond, double frequency);
 
+/** Sets relative permeability for a conductor (following Karl Hollaus's ESIM formulation).
+@param cond [in] conductor reference number
+@param mu_r [in] relative permeability (>= 1.0, default 1.0 for non-magnetic)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@note For ferromagnetic materials like steel, mu_r >> 1. Affects skin depth calculation.
+*/
+EXP int CALL RadCndSetMuR(int cond, double mu_r);
+
+/** Gets skin depth at current frequency.
+@param delta [out] skin depth in meters = sqrt(2/(omega*mu_0*mu_r*sigma))
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@note Call after CndSetFrequency and optionally CndSetMuR.
+*/
+EXP int CALL RadCndGetSkinDepth(double* delta, int cond);
+
+/** Gets surface impedance Z = (1+j)*Rs following ESIM (Effective Surface Impedance Model).
+@param Z_real [out] real part of surface impedance [Ohm]
+@param Z_imag [out] imaginary part of surface impedance [Ohm]
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@note Rs = 1/(sigma*delta), where delta is skin depth.
+*/
+EXP int CALL RadCndGetSurfaceImpedance(double* Z_real, double* Z_imag, int cond);
+
 /** Sets voltage excitation for a conductor.
 @param cond [in] conductor reference number
 @param V_real [in] real part of voltage [V]
@@ -1539,6 +1564,308 @@ EXP int CALL RadCndFmmSetParameters(int p, int ncrit, int threshold);
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 */
 EXP int CALL RadCndFmmGetParameters(int* p, int* ncrit, int* threshold);
+
+
+// ========================================================================
+// RWG-EFIE Coupled Solver for Induction Heating (OpenMP Parallelized)
+// ========================================================================
+
+/** Creates an RWG mesh from triangles.
+@param n [out] mesh handle
+@param vertices [in] flat array of vertex coordinates [x0,y0,z0,x1,y1,z1,...]
+@param nv [in] number of vertices
+@param triangles [in] flat array of triangle vertex indices [t0_v0,t0_v1,t0_v2,t1_v0,...]
+@param nt [in] number of triangles
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshCreate(int* n, double* vertices, int nv, int* triangles, int nt);
+
+/** Creates an RWG mesh for a rectangular surface.
+@param n [out] mesh handle
+@param center [in] center point [x,y,z]
+@param Lx [in] dimension in local x direction
+@param Ly [in] dimension in local y direction
+@param normal [in] normal vector [nx,ny,nz]
+@param nx [in] number of divisions in x
+@param ny [in] number of divisions in y
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshRect(int* n, double* center, double Lx, double Ly, double* normal, int nx, int ny);
+
+/** Creates an RWG mesh for a circular disk.
+@param n [out] mesh handle
+@param center [in] center point [x,y,z]
+@param radius [in] disk radius
+@param normal [in] normal vector [nx,ny,nz]
+@param nr [in] number of radial divisions
+@param ntheta [in] number of angular divisions
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshDisk(int* n, double* center, double radius, double* normal, int nr, int ntheta);
+
+/** Creates an RWG mesh for a cylindrical shell surface.
+@param n [out] mesh handle
+@param center [in] center point [x,y,z]
+@param radius [in] cylinder radius
+@param height [in] cylinder height
+@param axis [in] axis vector [ax,ay,az]
+@param nz [in] number of divisions along axis
+@param ntheta [in] number of angular divisions
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshCylinder(int* n, double* center, double radius, double height, double* axis, int nz, int ntheta);
+
+/** Creates an RWG mesh for a spiral coil surface.
+@param n [out] mesh handle
+@param center [in] center point [x,y,z]
+@param inner_radius [in] inner radius
+@param outer_radius [in] outer radius
+@param pitch [in] height per turn
+@param num_turns [in] number of turns
+@param axis [in] axis vector [ax,ay,az]
+@param wire_radius [in] wire cross-section radius (for surface mesh)
+@param num_around [in] number of panels around wire
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshSpiral(int* n, double* center, double inner_radius, double outer_radius,
+                              double pitch, int num_turns, double* axis, double wire_radius, int num_around);
+
+/** Creates an RWG mesh for a circular loop coil surface.
+@param n [out] mesh handle
+@param center [in] center point [x,y,z]
+@param radius [in] loop radius
+@param normal [in] normal vector [nx,ny,nz]
+@param wire_radius [in] wire cross-section radius
+@param num_around [in] number of panels around wire
+@param num_along [in] number of panels along loop circumference
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshLoop(int* n, double* center, double radius, double* normal,
+                            double wire_radius, int num_around, int num_along);
+
+/** Creates a coupled EFIE solver.
+@param n [out] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSolverCreate(int* n);
+
+/** Sets coil mesh for coupled solver.
+@param solver [in] solver handle
+@param coil_mesh [in] coil mesh handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetCoilMesh(int solver, int coil_mesh);
+
+/** Sets workpiece mesh for coupled solver.
+@param solver [in] solver handle
+@param workpiece_mesh [in] workpiece mesh handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetWorkpieceMesh(int solver, int workpiece_mesh);
+
+/** Sets frequency for coupled solver.
+@param solver [in] solver handle
+@param freq [in] frequency [Hz]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetFrequency(int solver, double freq);
+
+/** Sets coil conductivity.
+@param solver [in] solver handle
+@param sigma [in] conductivity [S/m]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetCoilConductivity(int solver, double sigma);
+
+/** Sets workpiece conductivity.
+@param solver [in] solver handle
+@param sigma [in] conductivity [S/m]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetWorkpieceConductivity(int solver, double sigma);
+
+/** Sets workpiece relative permeability.
+@param solver [in] solver handle
+@param mu_r [in] relative permeability
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetWorkpiecePermeability(int solver, double mu_r);
+
+/** Sets voltage excitation for coupled solver.
+@param solver [in] solver handle
+@param V_real [in] real part of voltage [V]
+@param V_imag [in] imaginary part of voltage [V]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetVoltage(int solver, double V_real, double V_imag);
+
+/** Solves the coupled EFIE system.
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSolve(int solver);
+
+/** Gets impedance from coupled solver.
+@param Z_real [out] real part of impedance [Ohm]
+@param Z_imag [out] imaginary part of impedance [Ohm]
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgGetImpedance(double* Z_real, double* Z_imag, int solver);
+
+/** Gets workpiece power from coupled solver.
+@param power [out] power dissipated in workpiece [W]
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgGetWorkpiecePower(double* power, int solver);
+
+/** Computes B field from coupled solver.
+@param Bx_real [out] real part of Bx [T]
+@param Bx_imag [out] imaginary part of Bx [T]
+@param By_real [out] real part of By [T]
+@param By_imag [out] imaginary part of By [T]
+@param Bz_real [out] real part of Bz [T]
+@param Bz_imag [out] imaginary part of Bz [T]
+@param solver [in] solver handle
+@param x [in] x coordinate [m]
+@param y [in] y coordinate [m]
+@param z [in] z coordinate [m]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgComputeB(double* Bx_real, double* Bx_imag,
+                            double* By_real, double* By_imag,
+                            double* Bz_real, double* Bz_imag,
+                            int solver, double x, double y, double z);
+
+/** High-level induction heating solver: creates model and solves.
+@param result [out] result array [R, L, P_workpiece, coil_DOF, workpiece_DOF]
+@param coil_type [in] coil type string ("spiral" or "loop")
+@param coil_params [in] coil parameters (type-dependent array)
+@param workpiece_type [in] workpiece type string ("disk", "rect", "cylinder")
+@param workpiece_params [in] workpiece parameters (type-dependent array)
+@param frequency [in] frequency [Hz]
+@param coil_sigma [in] coil conductivity [S/m]
+@param workpiece_sigma [in] workpiece conductivity [S/m]
+@param workpiece_mu_r [in] workpiece relative permeability
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSolveInductionHeating(double* result,
+                                         const char* coil_type, double* coil_params,
+                                         const char* workpiece_type, double* workpiece_params,
+                                         double frequency, double coil_sigma,
+                                         double workpiece_sigma, double workpiece_mu_r);
+
+// ========================================================================
+// CplMag Solver API (Coupled Conductor + Magnetic Material Solver)
+// Uses Loop-Star PEEC for conductors + MMM for magnetic materials
+// ========================================================================
+
+/** Creates a coupled solver for conductor + magnetic material problems.
+@param pOut [out] output array containing solver handle
+@param pNout [out] number of outputs (1)
+@param conductor [in] conductor handle (from CndLoop, CndRecBlock, etc.)
+@param magnet [in] magnet handle (from ObjRecMag, ObjHexahedron, etc.)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagCreate(double* pOut, int* pNout, int conductor, int magnet);
+
+/** Sets frequency for CplMag solver.
+@param solver [in] solver handle
+@param frequency [in] analysis frequency [Hz]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetFrequency(int solver, double frequency);
+
+/** Sets voltage excitation for CplMag solver.
+@param solver [in] solver handle
+@param V_real [in] real part of voltage [V]
+@param V_imag [in] imaginary part of voltage [V]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetVoltage(int solver, double V_real, double V_imag);
+
+/** Sets current excitation for CplMag solver.
+@param solver [in] solver handle
+@param I_real [in] real part of current [A]
+@param I_imag [in] imaginary part of current [A]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetCurrent(int solver, double I_real, double I_imag);
+
+/** Sets external magnetic field for CplMag solver.
+@param solver [in] solver handle
+@param Hx [in] x component of H field [A/m]
+@param Hy [in] y component of H field [A/m]
+@param Hz [in] z component of H field [A/m]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetExtField(int solver, double Hx, double Hy, double Hz);
+
+/** Sets complex permeability for CplMag solver.
+Complex permeability: mu = mu' - j*mu" (engineering convention)
+@param solver [in] solver handle
+@param mu_r_real [in] real part of relative permeability (mu')
+@param mu_r_imag [in] imaginary part of relative permeability (mu", positive for loss)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetMu(int solver, double mu_r_real, double mu_r_imag);
+
+/** Sets conductor for CplMag solver.
+@param solver [in] solver handle
+@param conductor [in] conductor handle (from CndLoop, CndRecBlock, etc.)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetConductor(int solver, int conductor);
+
+/** Solves CplMag system.
+@param pOut [out] output array [Z_real, Z_imag, P_conductor, P_magnet, n_iterations]
+@param pNout [out] number of outputs (5)
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSolve(double* pOut, int* pNout, int solver);
+
+/** Gets impedance from CplMag solver.
+@param pOut [out] output array [Z_real, Z_imag]
+@param pNout [out] number of outputs (2)
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagImpedance(double* pOut, int* pNout, int solver);
+
+/** Gets power losses from CplMag solver.
+@param pOut [out] output array [P_conductor, P_magnet]
+@param pNout [out] number of outputs (2)
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagPower(double* pOut, int* pNout, int solver);
+
+/** Computes B field from CplMag system.
+@param pOut [out] output array [Bx_re, By_re, Bz_re, Bx_im, By_im, Bz_im]
+@param pNout [out] number of outputs (6)
+@param solver [in] solver handle
+@param pCoord [in] evaluation point [x, y, z]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagFld(double* pOut, int* pNout, int solver, double* pCoord);
+
+/** Performs frequency sweep for CplMag solver.
+@param pOut [out] output array [Z_re1, Z_im1, Z_re2, Z_im2, ...]
+@param pNout [out] number of outputs (2 * nFreq)
+@param solver [in] solver handle
+@param pFreq [in] array of frequencies [Hz]
+@param nFreq [in] number of frequencies
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSweep(double* pOut, int* pNout, int solver, double* pFreq, int nFreq);
+
+/** Deletes CplMag solver.
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagDelete(int solver);
 
 #ifdef __cplusplus
 }

@@ -1,12 +1,12 @@
 /*
  * rad_green_fullwave.cpp
  *
- * Full-wave and quasi-static Green's functions for integral equation formulation
+ * Quasi-static Green's functions for integral equation formulation
+ * Uses Laplace kernel (1/R) only - Helmholtz kernel removed.
  *
  * References:
  * [1] Z. Zhu et al., "Algorithms in FastImp", IEEE TCAD, 2005
- * [2] S. Bilicz et al., "Nonlocal SIBC", ISEM 2023
- * [3] W. C. Gibson, "The Method of Moments in Electromagnetics", 2008
+ * [2] W. C. Gibson, "The Method of Moments in Electromagnetics", 2008
  *
  * Part of Radia project
  */
@@ -160,43 +160,11 @@ void radTGreenFunction::DyadicGreen(const TVector3d& r_vec,
     double ry = r_vec.y * invR;
     double rz = r_vec.z * invR;
 
-    // Second derivative d2G/dr2
-    Complex d2Gdr2;
-    if (std::abs(k_) < 1e-15) {
-        // DC: d2G/dr2 = 2/(4*pi*r^3)
-        d2Gdr2 = Complex(2.0 * invFourPi_ / (r * r * r), 0.0);
-    } else {
-        // Full-wave: d2G/dr2 = exp(-jkr) * (2 + 2jkr - k^2*r^2) / (4*pi*r^3)
-        Complex jkr = Complex(0.0, 1.0) * k_ * r;
-        Complex expjkr = std::exp(-jkr);
-        d2Gdr2 = expjkr * (2.0 + 2.0 * jkr - k_ * k_ * r * r) * invFourPi_ / (r * r * r);
-    }
-
-    // Dyadic Green's function: G_bar = (I + grad grad / k^2) * g
-    // For Full-wave with k != 0:
-    // G_bar_ij = g * delta_ij + (1/k^2) * (d2G/dr2 - dG/dr/r) * r_i * r_j
-    //          + (1/k^2) * dG/dr/r * delta_ij
-
-    if (std::abs(k_) < 1e-15) {
-        // MQS approximation: just use scalar Green's function
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                G_bar[i][j] = (i == j) ? g : Complex(0.0, 0.0);
-            }
-        }
-    } else {
-        // Full-wave dyadic
-        Complex k2inv = 1.0 / (k_ * k_);
-        Complex dGdr_over_r = dGdr * invR;
-
-        double r_components[3] = {rx, ry, rz};
-
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                Complex tensor_term = (d2Gdr2 - dGdr_over_r) * r_components[i] * r_components[j];
-                Complex identity_term = (i == j) ? (g + k2inv * dGdr_over_r) : Complex(0.0, 0.0);
-                G_bar[i][j] = identity_term + k2inv * tensor_term;
-            }
+    // Laplace kernel only: use scalar Green's function times identity
+    // (Full-wave dyadic removed)
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            G_bar[i][j] = (i == j) ? g : Complex(0.0, 0.0);
         }
     }
 }
@@ -513,20 +481,11 @@ radTPanelInteraction::Complex radTPanelInteraction::TriangleSelf(
     // Effective radius
     double R_eff = std::sqrt(area / RadConst::PI);
 
-    // Self-term approximation (regularized)
+    // Self-term approximation (regularized) - Laplace kernel only
     // For circular panel: I = R_eff * (2*ln(2) - 1) / (4*pi)
     double I_real = R_eff * (2.0 * std::log(2.0) - 1.0) / (4.0 * RadConst::PI);
 
-    Complex g_self(I_real, 0.0);
-
-    // For full-wave, add phase correction
-    if (std::abs(green_->GetWaveNumber()) > 1e-15) {
-        Complex k = green_->GetWaveNumber();
-        // First-order correction
-        g_self -= Complex(0.0, 1.0) * k * area / (4.0 * RadConst::PI);
-    }
-
-    return g_self;
+    return Complex(I_real, 0.0);
 }
 
 radTPanelInteraction::Complex radTPanelInteraction::QuadSelf(
@@ -538,18 +497,11 @@ radTPanelInteraction::Complex radTPanelInteraction::QuadSelf(
     double area;
     ComputeQuadGeometry(vertices, centroid, normal, area);
 
-    // Similar to triangle self-term
+    // Self-term approximation - Laplace kernel only
     double R_eff = std::sqrt(area / RadConst::PI);
     double I_real = R_eff * (2.0 * std::log(2.0) - 1.0) / (4.0 * RadConst::PI);
 
-    Complex g_self(I_real, 0.0);
-
-    if (std::abs(green_->GetWaveNumber()) > 1e-15) {
-        Complex k = green_->GetWaveNumber();
-        g_self -= Complex(0.0, 1.0) * k * area / (4.0 * RadConst::PI);
-    }
-
-    return g_self;
+    return Complex(I_real, 0.0);
 }
 
 } // namespace radia

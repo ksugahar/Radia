@@ -398,6 +398,10 @@ public:
 	// Get element handle by key (for FMM dipole collection)
 	// Returns true if element found, false otherwise
 	bool UnsafeGetElemByKey(int ElemKey, radThg& outHandle);
+
+	// Get interaction pointer by key (for CplMag solver)
+	// Returns nullptr if not found or not an interaction
+	radTInteraction* GetInteractionByKey(int interactKey);
 };
 
 //-------------------------------------------------------------------------
