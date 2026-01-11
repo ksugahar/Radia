@@ -420,6 +420,41 @@ extern "C" int RadCplMagSetMu(int solver, double mu_r_real, double mu_r_imag)
 }
 
 /**
+ * @brief Enable/disable matrix symmetrization for coupled solver
+ *
+ * Python: rad.CplMagSetSymmetric(solver, use_symmetric)
+ *
+ * Symmetrization uses variable scaling M' = sqrt(mu0 * V) * M
+ * to make the coupled matrix symmetric. This enables:
+ * - CLN (Cauer Ladder Network) model order reduction
+ * - Passivity guaranteed equivalent circuits
+ * - Physical L-C ladder circuit interpretation
+ *
+ * The solution (I, M) is IDENTICAL to non-symmetric formulation.
+ *
+ * @param solver Solver handle
+ * @param use_symmetric 1 for symmetric, 0 for non-symmetric (default)
+ * @return 0 on success, error code otherwise
+ */
+extern "C" int RadCplMagSetSymmetric(int solver, int use_symmetric)
+{
+    try {
+        auto pSolver = GetCplMagSolver(solver);
+        if (!pSolver) {
+            ioBuffer.StoreErrorMessage("CplMagSetSymmetric: Invalid solver handle");
+            return -1;
+        }
+
+        pSolver->SetUseSymmetric(use_symmetric != 0);
+        return 0;
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+        return -1;
+    }
+}
+
+/**
  * @brief Set conductor for coupled solver
  *
  * Python: rad.CplMagSetConductor(solver, conductor_handle)

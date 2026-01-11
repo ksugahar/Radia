@@ -6,6 +6,71 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-01-11
+
+### Added
+
+- **CplMag Coupled PEEC-MMM Solver**
+  - New coupled solver combining PEEC (conductor) with MMM (magnetic material)
+  - Full element-to-element MMM coupling with demagnetization tensor
+  - Complex permeability support (mu = mu' - j*mu") for magnetic losses
+  - APIs: `CplMagCreate()`, `CplMagSetFrequency()`, `CplMagSetVoltage()`, `CplMagSetMu()`, `CplMagSolve()`, `CplMagDelete()`
+  - Target applications: WPT (Wireless Power Transfer), induction heating with ferromagnetic cores
+
+- **Matrix Symmetrization for CLN Model Order Reduction**
+  - New `CplMagSetSymmetric(solver, use_symmetric)` API for matrix symmetrization
+  - Variable scaling M' = sqrt(mu_0 * V) * M symmetrizes the coupled matrix
+  - Enables CLN (Cauer Ladder Network) model order reduction
+  - Symmetrized system produces **identical results** (machine precision: 6.5e-19 Ohm difference)
+  - Mathematical proof via reciprocity: Z_LM^T = mu_0 * V * Z_ML
+
+- **CLN Model Reduction Design Document**
+  - New `docs/CLN_MODEL_REDUCTION_DESIGN.md` with full symmetry analysis
+  - PEEC Loop-Star decomposition symmetry analysis (all blocks symmetric)
+  - MMM demagnetization tensor symmetry analysis
+  - Hierarchical CLN extraction strategy: PEEC-only first, then magnetic coupling
+  - ACA+ low-rank approximation integration plan
+
+- **Symmetrization Verification Scripts**
+  - `examples/peec_integration/verify_symmetrization.py` - Mathematical proof verification
+  - `examples/peec_integration/test_symmetrization.py` - Numerical equivalence test
+  - `examples/peec_integration/test_cplmag_cubit_hex.py` - Cubit hex mesh test
+
+- **Hex Mesh Import Functions**
+  - `create_hex_mesh_grid()`: Create structured hexahedral mesh (no Cubit needed)
+  - `cubit_hex_to_radia()`: Import Cubit hexahedral mesh to Radia
+  - Located in `netgen_mesh_import.py`
+
+- **VTS Field Export (C++ Implementation)**
+  - `FldVTS()`: High-performance VTS (VTK XML Structured Grid) export
+  - OpenMP parallelization for large field grids
+  - Replaces Python-based VTK export for better performance
+
+### Changed
+
+- **Mesh Operations Policy**
+  - All mesh operations now use "Netgen with Coreform Cubit Integration"
+  - Coreform Cubit provides geometry and high-quality hex meshing
+  - Netgen/NGSolve provides mesh import interface to Radia
+  - See `S:\CoreformCubit\01_GitHub` for `cubit_mesh_export` utilities
+
+### Removed
+
+- **Deprecated Mesh APIs**
+  - `ObjCutMag`: Removed from Python API (use Cubit instead)
+  - `ObjDivMag`, `ObjDivMagPln`: Not supported (use Cubit for mesh subdivision)
+
+- **VTK Geometry Export**
+  - `ObjDrwVTK()`: C++ geometry export removed
+  - `exportGeometryToVTK()`: Python geometry export removed
+  - Use `FldVTS()` for field visualization in ParaView
+
+### Documentation
+
+- Updated CLAUDE.md with mesh operations policy
+- Added CplMag solver documentation in header files
+- Updated examples in `examples/peec_integration/`
+
 ## [1.4.4] - 2026-01-01
 
 ### Changed

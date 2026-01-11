@@ -45,6 +45,7 @@ PEECMMMCoupledSolver::PEECMMMCoupledSolver()
     , omega_(0)
     , tolerance_(1e-4)
     , maxIterations_(100)
+    , useSymmetric_(false)  // Default: non-symmetric (original formulation)
     , hasComplexMu_(false)
     , uniformComplexMu_(true)
     , uniformChi_(0, 0)
@@ -717,6 +718,35 @@ void PEECMMMCoupledSolver::SolveLinear()
     }
 
     // ================================================================
+    // Symmetrization via variable scaling (optional)
+    // ================================================================
+    // Original variables: I [A], M [A/m]
+    // Scaled variables:   I [A], M' = alpha * M [sqrt(T*m^3)]
+    //
+    // Scaling factor: alpha_j = sqrt(mu_0 * V_j)
+    //   where V_j is the volume of element j
+    //
+    // With this scaling:
+    //   Z_LM' = Z_LM / alpha  (divide by sqrt(mu_0 * V))
+    //   Z_ML' = Z_ML * alpha  (multiply by sqrt(mu_0 * V))
+    //
+    // By reciprocity: Z_LM'^T = Z_ML' (symmetric!)
+    //
+    // After solve: M = M' / alpha to recover original magnetization
+    // ================================================================
+
+    // Precompute scaling factors for each element (if symmetric mode)
+    std::vector<double> alpha(nMagnetElem, 1.0);
+    std::vector<double> inv_alpha(nMagnetElem, 1.0);
+    if (useSymmetric_) {
+        for (int jMag = 0; jMag < nMagnetElem; ++jMag) {
+            double V_j = magnetInteraction_->GetElementVolume(jMag);
+            alpha[jMag] = std::sqrt(MU_0 * V_j);
+            inv_alpha[jMag] = 1.0 / alpha[jMag];
+        }
+    }
+
+    // ================================================================
     // Fill Z_LM block (1 row x nMagnetDOF cols): -jω * Φ from M
     // ================================================================
     // The flux linkage from magnetization M to the loop is:
@@ -724,6 +754,8 @@ void PEECMMMCoupledSolver::SolveLinear()
     // For unit M in element j: Φ_j,k = Z_mc coefficient (summed over panels)
     //
     // Z_LM[0][jMag*3+k] = -jω * Σ_panel Z_mc[panel][jMag][k]
+    //
+    // If symmetric mode: Z_LM' = Z_LM / alpha
     std::complex<double> jw(0, omega_);
 
     if (!Z_mc_.empty()) {
@@ -739,8 +771,15 @@ void PEECMMMCoupledSolver::SolveLinear()
                 }
 
                 // Z_LM entry: -jω * total_flux
+                std::complex<double> Z_LM_entry = -jw * total_flux;
+
+                // Apply symmetrization scaling: Z_LM' = Z_LM / alpha
+                if (useSymmetric_) {
+                    Z_LM_entry *= inv_alpha[jMag];
+                }
+
                 int col = 1 + jMag * 3 + k;
-                A[static_cast<size_t>(col) * totalDOF + 0] = -jw * total_flux;
+                A[static_cast<size_t>(col) * totalDOF + 0] = Z_LM_entry;
             }
         }
     }
@@ -755,6 +794,8 @@ void PEECMMMCoupledSolver::SolveLinear()
     // carry the same current I, we sum over panels.
     //
     // Z_ML[iMag*3+k][0] = -χ/μ0 * Σ_panel Z_cm[iMag][panel][k]
+    //
+    // If symmetric mode: Z_ML' = Z_ML * alpha
 
     if (!Z_cm_.empty()) {
         const int nCondPanels = conductor_->NumPanels();
@@ -772,8 +813,25 @@ void PEECMMMCoupledSolver::SolveLinear()
                 }
 
                 // Z_ML entry
+                std::complex<double> Z_ML_entry = factor * total_B;
+
+                // Apply symmetrization scaling: Z_ML' = Z_ML * alpha
+                if (useSymmetric_) {
+                    Z_ML_entry *= alpha[iMag];
+                }
+
                 int row = 1 + iMag * 3 + k;
-                A[row] = factor * total_B;  // Column 0
+                A[row] = Z_ML_entry;  // Column 0
+            }
+        }
+    }
+
+    // If symmetric mode, also scale RHS for magnet equation: b' = alpha * b
+    if (useSymmetric_) {
+        for (int iElem = 0; iElem < nMagnetElem; ++iElem) {
+            int base = 1 + iElem * 3;
+            for (int k = 0; k < 3; ++k) {
+                b[base + k] *= alpha[iElem];
             }
         }
     }
@@ -802,12 +860,14 @@ void PEECMMMCoupledSolver::SolveLinear()
 
     // Extract solution
     // b[0] = Loop current I
-    // b[1..totalDOF-1] = Magnetization M (3 per element)
+    // b[1..totalDOF-1] = Magnetization M (or M' if symmetric mode)
 
-    // Get loop current (single DOF)
+    // Get loop current (single DOF) - same in both modes
     totalCurrent_ = b[0];
 
     // Compute impedance: Z = V / I
+    // This is IDENTICAL in symmetric and non-symmetric modes!
+    // Proof: I is computed from the first equation which is unchanged.
     if (std::abs(totalCurrent_) > 1e-15) {
         impedance_ = excitationValue_ / totalCurrent_;
     } else {
@@ -816,8 +876,21 @@ void PEECMMMCoupledSolver::SolveLinear()
 
     // Store solution for field computation
     solution_.resize(totalDOF);
-    for (int i = 0; i < totalDOF; ++i) {
-        solution_[i] = b[i];
+    solution_[0] = b[0];  // Current I
+
+    // If symmetric mode, recover original magnetization: M = M' / alpha
+    if (useSymmetric_) {
+        for (int iElem = 0; iElem < nMagnetElem; ++iElem) {
+            int base = 1 + iElem * 3;
+            for (int k = 0; k < 3; ++k) {
+                solution_[base + k] = b[base + k] * inv_alpha[iElem];
+            }
+        }
+    } else {
+        // Non-symmetric mode: M is already in original units
+        for (int i = 1; i < totalDOF; ++i) {
+            solution_[i] = b[i];
+        }
     }
 }
 

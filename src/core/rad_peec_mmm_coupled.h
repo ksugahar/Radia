@@ -154,6 +154,25 @@ public:
      */
     void SetMaxIterations(int maxIter) { maxIterations_ = maxIter; }
 
+    // ========== Matrix Symmetrization (for CLN model order reduction) ==========
+
+    /**
+     * @brief Enable/disable matrix symmetrization
+     * @param useSymmetric If true, symmetrize the coupled matrix via variable scaling
+     *
+     * Symmetrization uses scaling: M' = sqrt(mu0 * V) * M
+     * This makes Z_LM' = Z_ML'^T (symmetric) via reciprocity.
+     *
+     * Benefits:
+     * - Enables CLN (Cauer Ladder Network) model order reduction
+     * - Passivity guaranteed
+     * - Physical interpretation as L-C ladder circuit
+     *
+     * The solution (I, M) is identical to non-symmetric formulation.
+     */
+    void SetUseSymmetric(bool useSymmetric) { useSymmetric_ = useSymmetric; }
+    bool GetUseSymmetric() const { return useSymmetric_; }
+
     // ========== Complex Permeability (μ = μ' - jμ") ==========
 
     /**
@@ -287,6 +306,7 @@ private:
     double omega_;
     double tolerance_;
     int maxIterations_;
+    bool useSymmetric_;  // Use symmetrized matrix formulation
 
     // Complex permeability: μ = μ' - jμ" → χ = (μ'_r - 1) - jμ"_r
     bool hasComplexMu_;                              // True if complex permeability is set
