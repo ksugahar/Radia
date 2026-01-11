@@ -192,6 +192,7 @@ class radTInteraction : public radTg {
 	std::vector<int> m_elemDOF;               // DOF for each element (3 for standard, 6 for MSC hexahedra)
 	std::vector<int> m_elemDOFOffset;         // Starting offset in flattened arrays for each element
 	bool m_hasVariableDOF;                    // True if any element has DOF != 3
+	bool m_hasPEECElements;                   // True if any PEEC conductor elements are coupled
 
 	// Variable-size interaction matrix (COLUMN-MAJOR for LAPACK compatibility)
 	// Size: m_totalDOF x m_totalDOF
@@ -279,6 +280,8 @@ public:
 	int GetElementDOF(int elemIdx) const { return m_elemDOF[elemIdx]; }
 	int GetElementDOFOffset(int elemIdx) const { return m_elemDOFOffset[elemIdx]; }
 	bool HasVariableDOF() const { return m_hasVariableDOF; }
+	bool HasPEECElements() const { return m_hasPEECElements; }
+	void SetHasPEECElements(bool flag) { m_hasPEECElements = flag; }
 
 	// Triangle precomputation accessors (for HACApK sharing)
 	const double* GetHexaTriData() const { return m_hexaTriData.data(); }
@@ -291,6 +294,27 @@ public:
 	double* GetFlatMagnArray() { return m_flatMagnArray.data(); }
 	double* GetFlatFieldArray() { return m_flatFieldArray.data(); }
 	double* GetFlatExternFieldArray() { return m_flatExternFieldArray.data(); }
+
+	// Element access for coupled solver (PEEC-MMM)
+	int GetNumElements() const { return AmOfMainElem; }
+	TVector3d GetElementCenter(int elemIdx) const {
+		if (elemIdx >= 0 && elemIdx < AmOfMainElem) {
+			return g3dRelaxPtrVect[elemIdx]->CentrPoint;
+		}
+		return TVector3d(0, 0, 0);
+	}
+	TVector3d GetElementMagnetization(int elemIdx) const {
+		if (elemIdx >= 0 && elemIdx < AmOfMainElem) {
+			return g3dRelaxPtrVect[elemIdx]->Magn;
+		}
+		return TVector3d(0, 0, 0);
+	}
+	double GetElementVolume(int elemIdx) const {
+		if (elemIdx >= 0 && elemIdx < AmOfMainElem) {
+			return g3dRelaxPtrVect[elemIdx]->Volume();
+		}
+		return 0.0;
+	}
 
 	// Helper: Get pointer to interaction block (row_elem, col_elem)
 	// Matrix is stored COLUMN-MAJOR for LAPACK compatibility

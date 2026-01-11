@@ -73,43 +73,16 @@ try:
         export_esim_coil_field_vtk,
         export_esim_combined_vtk,
     )
-    # RWG-EFIE solver for 3D surface element analysis
-    from .rwg_efie_solver import (
-        RWGMesh,
-        RWGTriangle,
-        RWGEdge,
-        RWGEFIESolver,
-        CoupledEFIESolver,
-        NonlinearCoupledEFIESolver,
-        pFFTAccelerator,
-        pFFTEFIESolver,
-        HybridPEECRWGSolver,
-        InductionHeatingSolver,
-        create_induction_heating_model,
-        create_nonlinear_solver,
-        create_induction_heating_model_with_esim,
-        create_hybrid_solver,
-        # Loop-Star decomposition for low-frequency stability
-        LoopStarDecomposition,
-        LoopStarEFIESolver,
-    )
     ESIM_AVAILABLE = True
-    RWG_EFIE_AVAILABLE = True
 except ImportError:
     # ESIM requires scipy, which may not be installed
     ESIM_AVAILABLE = False
-    RWG_EFIE_AVAILABLE = False
 
-# VTK Export utilities
-# Import VTS export functions for magnetic field visualization
-# Note: rad.FldVTS() is the C++ high-performance implementation
-# RadiaVTKOutput and export_field_grid_vts provide Python flexibility
-try:
-    from .radia_vtk_export import (
-        # VTS format (structured grid for 3D field)
-        RadiaVTKOutput,
-        export_field_grid_vts,
-    )
-    VTK_EXPORT_AVAILABLE = True
-except ImportError:
-    VTK_EXPORT_AVAILABLE = False
+# RWG-EFIE solver for 3D surface element analysis
+# The Python implementation has been migrated to C++ with OpenMP parallelization.
+# Access via rad.RwgMeshRect(), rad.RwgMeshDisk(), rad.RwgMeshCylinder(),
+# rad.RwgMeshSpiral(), rad.RwgMeshLoop(), rad.RwgSolverCreate(), etc.
+# See docs/API_REFERENCE.md for usage.
+
+# VTK Export: Use rad.FldVTS() (C++ implementation)
+# See docs/API_REFERENCE.md for usage

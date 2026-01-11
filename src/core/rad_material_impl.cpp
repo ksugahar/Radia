@@ -2486,9 +2486,9 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 			return;
 		}
 
-		// Initialize output arrays to zero
-		std::memset(B_out, 0, n_points * 3 * sizeof(double));
-		std::memset(H_out, 0, n_points * 3 * sizeof(double));
+		// Initialize output arrays to zero (if provided)
+		if(B_out) std::memset(B_out, 0, n_points * 3 * sizeof(double));
+		if(H_out) std::memset(H_out, 0, n_points * 3 * sizeof(double));
 
 		// Magnetic constant (permeability of free space)
 		// B field is stored internally in A/m (same as H), needs conversion to Tesla
@@ -2538,14 +2538,18 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 			g3dPtr->B_genComp(&Field);
 
 			// Convert B from A/m to Tesla (multiply by Mu0)
-			B_out[i * 3 + 0] = Field.B.x * Mu0;
-			B_out[i * 3 + 1] = Field.B.y * Mu0;
-			B_out[i * 3 + 2] = Field.B.z * Mu0;
+			if(B_out) {
+				B_out[i * 3 + 0] = Field.B.x * Mu0;
+				B_out[i * 3 + 1] = Field.B.y * Mu0;
+				B_out[i * 3 + 2] = Field.B.z * Mu0;
+			}
 
 			// H is already in A/m
-			H_out[i * 3 + 0] = Field.H.x;
-			H_out[i * 3 + 1] = Field.H.y;
-			H_out[i * 3 + 2] = Field.H.z;
+			if(H_out) {
+				H_out[i * 3 + 0] = Field.H.x;
+				H_out[i * 3 + 1] = Field.H.y;
+				H_out[i * 3 + 2] = Field.H.z;
+			}
 		}
 	}
 	catch(...)
@@ -2677,6 +2681,18 @@ void radTApplication::ComputeVectorPotentialBatch(double* A_out, int n_points,
 	{
 		Send.ErrorMessage("Radia::Error000");
 	}
+}
+
+//-------------------------------------------------------------------------
+
+radTInteraction* radTApplication::GetInteractionByKey(int interactKey)
+{
+	radThg hg;
+	if(!ValidateElemKey(interactKey, hg))
+	{
+		return nullptr;
+	}
+	return Cast.InteractCast(hg.rep);
 }
 
 //-------------------------------------------------------------------------

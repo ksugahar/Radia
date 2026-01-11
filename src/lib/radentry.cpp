@@ -1924,6 +1924,9 @@ void CndCnt(int* Conds, int ncond);
 void CndCntAdd(int cnt, int* Conds, int ncond);
 void CndSetFormulation(int cond, const char* formulation);
 void CndSetFrequency(int cond, double frequency);
+void CndSetMuR(int cond, double mu_r);
+void CndGetSkinDepth(double* delta, int cond);
+void CndGetSurfaceImpedance(double* Z_real, double* Z_imag, int cond);
 void CndSetVoltage(int cond, double V_real, double V_imag);
 void CndSetCurrent(int cond, double I_real, double I_imag);
 void CndGetTotalCurrent(double* I_real, double* I_imag, int cond);
@@ -2030,6 +2033,30 @@ int CALL RadCndSetFormulation(int cond, const char* formulation)
 int CALL RadCndSetFrequency(int cond, double frequency)
 {
 	CndSetFrequency(cond, frequency);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndSetMuR(int cond, double mu_r)
+{
+	CndSetMuR(cond, mu_r);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndGetSkinDepth(double* delta, int cond)
+{
+	CndGetSkinDepth(delta, cond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndGetSurfaceImpedance(double* Z_real, double* Z_imag, int cond)
+{
+	CndGetSurfaceImpedance(Z_real, Z_imag, cond);
 	return ioBuffer.OutErrorStatus();
 }
 

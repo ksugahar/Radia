@@ -202,23 +202,23 @@ print("Test Complete")
 print("=" * 70)
 
 # ============================================================================
-# VTK Export - Export geometry for visualization
+# VTS Export - Export field distribution for visualization
 # ============================================================================
 
 try:
-	sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
-	from radia_vtk_export import exportGeometryToVTK
-
 	script_name = os.path.splitext(os.path.basename(__file__))[0]
-	vtk_filename = f"{script_name}.vtk"
-	vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+	vts_filename = f"{script_name}.vts"
+	vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
-	exportGeometryToVTK(container, vtk_path)
-	print(f"\n[VTK] Exported: {vtk_filename}")
-	print(f"      View with: paraview {vtk_filename}")
-except ImportError:
-	print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+	# Geometry: 10mm cube centered at origin, extend range to 40mm for far-field
+	x_range = [-40, 40]
+	y_range = [-40, 40]
+	z_range = [-40, 40]
+
+	rd.FldVTS(container, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+	print(f"\n[VTS] Exported: {vts_filename}")
+	print(f"      View with: paraview {vts_filename}")
 except Exception as e:
-	print(f"\n[VTK] Warning: Export failed: {e}")
+	print(f"\n[VTS] Warning: Export failed: {e}")
 
 rd.UtiDelAll()

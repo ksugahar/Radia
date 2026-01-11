@@ -134,22 +134,25 @@ if __name__ == '__main__':
 	print(f"    Y: {info['span']['y']:.2f} mm")
 	print(f"    Z: {info['span']['z']:.2f} mm")
 
-	# VTK Export - Export geometry with same filename as script
+	# VTS Export - Export field distribution with same filename as script
 	try:
-		from radia_vtk_export import exportGeometryToVTK
 		import os
 
 		script_name = os.path.splitext(os.path.basename(__file__))[0]
-		vtk_filename = f"{script_name}.vtk"
-		vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+		vts_filename = f"{script_name}.vts"
+		vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
-		exportGeometryToVTK(coil, vtk_path)
-		print(f"\n[VTK] Exported: {vtk_filename}")
-		print(f"      View with: paraview {vtk_filename}")
-	except ImportError:
-		print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+		# Based on bounding box, extend ranges with margin
+		margin = 100.0
+		x_range = [info['bbox']['x_min'] - margin, info['bbox']['x_max'] + margin]
+		y_range = [info['bbox']['y_min'] - margin, info['bbox']['y_max'] + margin]
+		z_range = [info['bbox']['z_min'] - margin, info['bbox']['z_max'] + margin]
+
+		rad.FldVTS(coil, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+		print(f"\n[VTS] Exported: {vts_filename}")
+		print(f"      View with: paraview {vts_filename}")
 	except Exception as e:
-		print(f"\n[VTK] Warning: Export failed: {e}")
+		print(f"\n[VTS] Warning: Export failed: {e}")
 
 	# Cleanup
 	rad.UtiDelAll()

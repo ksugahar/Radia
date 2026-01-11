@@ -138,12 +138,11 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_polyhedron.cpp            # Polyhedron with magnetization
 	${CORE_DIR}/rad_hacapk.cpp                # HACApK H-matrix manager (Method 2)
 
-	# FastImp + ESIM integration
-	${CORE_DIR}/rad_pfft.cpp                  # pFFT acceleration with MKL DFTI
-	${CORE_DIR}/rad_conductor.cpp             # FastImp conductor formulation
-	${CORE_DIR}/rad_rwg_basis.cpp             # RWG basis functions for EFIE
-	${CORE_DIR}/rad_green_fullwave.cpp        # Green's functions (DC/MQS/Full-wave)
+	# PEEC Loop-Star + MMM unified solver (Laplace kernel only, HACApK acceleration)
+	${CORE_DIR}/rad_conductor.cpp             # PEEC conductor formulation with Loop-Star
+	${CORE_DIR}/rad_green_fullwave.cpp        # Green's functions (Laplace kernel for quasi-static)
 	${CORE_DIR}/rad_coupled_solver.cpp        # Coupled conductor-magnetic solver
+	${CORE_DIR}/rad_peec_mmm_coupled.cpp      # PEEC-MMM coupled solver (conductor + magnet)
 )
 
 # FMM conductor source (only when ExaFMM is enabled)
@@ -176,6 +175,7 @@ set(HACAPK_SOURCES
 set(RADIA_LIB_SOURCES
 	${LIB_DIR}/radentry.cpp
 	${LIB_DIR}/rad_conductor_api.cpp
+	${LIB_DIR}/rad_peec_mmm_api.cpp       # PEEC-MMM coupled solver API
 )
 
 # Triangle library (C source needs special handling)

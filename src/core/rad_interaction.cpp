@@ -71,6 +71,9 @@ radTInteraction::radTInteraction()
 	m_tetraGeomReady = false;
 	m_hexaGeomReady = false;
 	m_hexaTriDataReady = false;
+
+	// PEEC element flag
+	m_hasPEECElements = false;
 }
 
 //-------------------------------------------------------------------------
@@ -687,6 +690,7 @@ void radTInteraction::ComputeDOFOffsets()
 
 	m_totalDOF = 0;
 	m_hasVariableDOF = false;
+	m_hasPEECElements = false;  // Will be set by coupled solver if PEEC elements are present
 
 	for(int i = 0; i < AmOfMainElem; i++)
 	{

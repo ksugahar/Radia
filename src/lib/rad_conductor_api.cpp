@@ -42,7 +42,7 @@ static int StoreConductor(std::shared_ptr<radTConductor> cond)
     return handle;
 }
 
-// Get a conductor by handle
+// Get a conductor by handle (internal)
 static std::shared_ptr<radTConductor> GetConductor(int handle)
 {
     auto it = gConductorMap.find(handle);
@@ -50,6 +50,12 @@ static std::shared_ptr<radTConductor> GetConductor(int handle)
         return nullptr;
     }
     return it->second;
+}
+
+// Get a conductor by handle (external, for PEEC-MMM API)
+std::shared_ptr<radTConductor> GetConductorByHandle(int handle)
+{
+    return GetConductor(handle);
 }
 
 // Container storage for conductor groups
@@ -417,6 +423,68 @@ void CndSetFrequency(int cond, double frequency)
     }
     catch (const std::exception& e) {
         ioBuffer.StoreErrorMessage(e.what());
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndSetMuR(int cond, double mu_r)
+{
+    try {
+        auto conductor = GetConductor(cond);
+        if (!conductor) {
+            ioBuffer.StoreErrorMessage("Invalid conductor handle");
+            return;
+        }
+
+        conductor->SetRelativePermeability(mu_r);
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndGetSkinDepth(double* delta, int cond)
+{
+    try {
+        auto conductor = GetConductor(cond);
+        if (!conductor) {
+            ioBuffer.StoreErrorMessage("Invalid conductor handle");
+            *delta = 0;
+            return;
+        }
+
+        *delta = conductor->GetSkinDepth();
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+        *delta = 0;
+    }
+}
+
+//-------------------------------------------------------------------------
+
+void CndGetSurfaceImpedance(double* Z_real, double* Z_imag, int cond)
+{
+    try {
+        auto conductor = GetConductor(cond);
+        if (!conductor) {
+            ioBuffer.StoreErrorMessage("Invalid conductor handle");
+            *Z_real = 0;
+            *Z_imag = 0;
+            return;
+        }
+
+        std::complex<double> Z = conductor->GetSurfaceImpedance();
+        *Z_real = Z.real();
+        *Z_imag = Z.imag();
+    }
+    catch (const std::exception& e) {
+        ioBuffer.StoreErrorMessage(e.what());
+        *Z_real = 0;
+        *Z_imag = 0;
     }
 }
 

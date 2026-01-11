@@ -100,9 +100,9 @@ python cubic_polyhedron_magnet.py
 
 5. **3D Visualization**
    ```python
-   # Export to VTK for ParaView visualization
-   from radia_vtk_export import exportGeometryToVTK
-   exportGeometryToVTK(obj, 'output.vtk')
+   # Export field distribution to VTS format for ParaView visualization
+   # rad.FldVTS(obj, filename, x_range, y_range, z_range, nx, ny, nz, include_B, include_H, unit_scale)
+   rad.FldVTS(obj, 'output.vts', [-40, 40], [-40, 40], [-40, 40], 21, 21, 21, 1, 0, 1.0)
    ```
 
 ## Requirements
