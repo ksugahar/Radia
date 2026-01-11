@@ -1811,6 +1811,15 @@ Complex permeability: mu = mu' - j*mu" (engineering convention)
 */
 EXP int CALL RadCplMagSetMu(int solver, double mu_r_real, double mu_r_imag);
 
+/** Enables/disables matrix symmetrization for CLN model order reduction.
+@param solver [in] solver handle
+@param use_symmetric [in] 1 for symmetric (enables CLN), 0 for non-symmetric (default)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@note Symmetrization uses variable scaling M' = sqrt(mu0*V)*M to make Z_LM' = Z_ML'^T.
+      The physical solution (I, M) is IDENTICAL to non-symmetric formulation.
+*/
+EXP int CALL RadCplMagSetSymmetric(int solver, int use_symmetric);
+
 /** Sets conductor for CplMag solver.
 @param solver [in] solver handle
 @param conductor [in] conductor handle (from CndLoop, CndRecBlock, etc.)

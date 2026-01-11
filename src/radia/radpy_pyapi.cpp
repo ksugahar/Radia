@@ -3697,6 +3697,27 @@ static PyObject* radia_CplMagSetMu(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
+ * Enable/disable matrix symmetrization for coupled solver
+ * Symmetrization enables CLN model order reduction while giving same results
+ ***************************************************************************/
+static PyObject* radia_CplMagSetSymmetric(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0, use_symmetric = 0;
+		if(!PyArg_ParseTuple(args, "ii:CplMagSetSymmetric", &solver, &use_symmetric))
+			throw CombErStr(strEr_BadFuncArg, ": CplMagSetSymmetric");
+
+		g_pyParse.ProcRes(RadCplMagSetSymmetric(solver, use_symmetric));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
  * Sets conductor for coupled solver
  ***************************************************************************/
 static PyObject* radia_CplMagSetConductor(PyObject* self, PyObject* args)
@@ -4915,6 +4936,7 @@ static PyMethodDef radia_methods[] = {
 	{"CplMagSetCurrent", radia_CplMagSetCurrent, METH_VARARGS, "CplMagSetCurrent(solver,I_real,I_imag) sets current excitation [A]."},
 	{"CplMagSetExtField", radia_CplMagSetExtField, METH_VARARGS, "CplMagSetExtField(solver,Hx,Hy,Hz) sets external H field [A/m]."},
 	{"CplMagSetMu", radia_CplMagSetMu, METH_VARARGS, "CplMagSetMu(solver,mu_r_real,mu_r_imag) sets complex permeability. mu = mu' - j*mu'' (engineering convention)."},
+	{"CplMagSetSymmetric", radia_CplMagSetSymmetric, METH_VARARGS, "CplMagSetSymmetric(solver,use_symmetric) enables matrix symmetrization (1) for CLN model order reduction. Default: 0 (non-symmetric)."},
 	{"CplMagSetConductor", radia_CplMagSetConductor, METH_VARARGS, "CplMagSetConductor(solver,conductor) sets conductor for solver."},
 	{"CplMagSolve", radia_CplMagSolve, METH_VARARGS, "CplMagSolve(solver) solves coupled system. Returns dict with Z, P_conductor, P_magnet, iterations."},
 	{"CplMagImpedance", radia_CplMagImpedance, METH_VARARGS, "CplMagImpedance(solver) returns impedance as complex number [Ohm]."},
