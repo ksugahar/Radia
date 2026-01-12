@@ -1099,9 +1099,24 @@ This section describes the application of CLN (Cauer Ladder Network) method for 
 
 **Current Scope**: Loop component only (conductor impedance with skin effect)
 
+**Key Assumption**: **Uniform conductor** (same material and cross-section for all segments)
+
+This assumption ensures:
+- τ = a²μσ is identical for all segments
+- F(s) and G(s) become scalar multipliers (not diagonal matrices)
+- Diagonal structure is **exactly preserved** after Lanczos transformation
+- Time-domain formulation uses constant coefficient matrices
+
+**Applicable Systems**:
+- WPT coils (single wire type, e.g., Litz wire AWG38)
+- Transformer windings (per winding, not across primary/secondary)
+- Single-layer inductors
+- PCB traces with uniform width/thickness
+
 **Future Extensions**:
 - Star component (capacitive effects)
 - Magnetic material coupling (MSC)
+- Multi-conductor extension (separate τ per conductor group)
 
 ### Problem Statement
 
@@ -1554,23 +1569,27 @@ For time-domain simulations (transient analysis), the DC basis approach is essen
 2. **State-space form** is straightforward to derive
 3. **No frequency-dependent basis** avoids convolution integrals
 
-#### Representative τ Approach
+#### Uniform Conductor: Single τ
 
-To ensure diagonal structure is **exactly preserved**, use a representative τ for all segments:
+Under the **uniform conductor assumption** (same material and cross-section), all segments share the same τ:
 
 ```
-tau_rep = geometric_mean(tau_1, tau_2, ..., tau_N)
-        = exp(mean(log(tau_i)))
+τ = a² * μ * σ
+
+where:
+  a: conductor radius or characteristic dimension [m]
+  μ: permeability [H/m]
+  σ: conductivity [S/m]
+
+Since all segments have identical (a, μ, σ):
+  τ_1 = τ_2 = ... = τ_N = τ
 
 This makes F(s) and G(s) scalar multipliers:
-  F(s) = F(tau_rep * s)  (scalar, not diagonal matrix)
-  G(s) = G(tau_rep * s)  (scalar, not diagonal matrix)
+  F(s) = F(τ * s)  (single scalar value)
+  G(s) = G(τ * s)  (single scalar value)
 ```
 
-**Why Geometric Mean?**
-- Preserves relative ratios in log-space
-- Robust to outliers
-- For uniform segments, equals the common τ exactly
+**Consequence**: Diagonal structure is **exactly preserved** without any approximation.
 
 #### State-Space Model with Skin Effect
 
@@ -1756,16 +1775,18 @@ plt.title('Step Response with Skin Effect')
 plt.show()
 ```
 
-#### Accuracy of Representative τ Approximation
+#### Summary: Uniform Conductor Advantage
 
-| τ Variation | Impedance Error | Notes |
-|-------------|-----------------|-------|
-| ±10% | < 1% | Typical uniform wire |
-| ±30% | < 5% | Mixed conductor sizes |
-| ±50% | < 10% | Significant variation |
-| > 2x | Use per-segment | Non-uniform structures |
+Under the uniform conductor assumption:
 
-**Recommendation**: For uniform or nearly uniform conductors (same material, similar cross-section), the representative τ approach provides excellent accuracy with exact diagonal preservation.
+| Property | Value |
+|----------|-------|
+| τ variation | 0 (identical) |
+| Diagonal preservation | **Exact** |
+| Time-domain accuracy | **Exact** (no approximation) |
+| Applicable to | WPT coils, inductors, transformer windings |
+
+This is not an approximation but an **exact formulation** for uniform conductors.
 
 ---
 
