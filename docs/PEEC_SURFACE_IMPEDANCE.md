@@ -1790,6 +1790,763 @@ This is not an approximation but an **exact formulation** for uniform conductors
 
 ---
 
+## PEEC-MMM Coupling via Mutual Inductance
+
+### Overview: Circuit Representation of Magnetic Material Coupling
+
+PEECと磁性体（MMM: Magnetic Moment Method）の結合を相互インダクタンスとして回路モデルに組み込む方法を示す。
+
+**目標**:
+1. PEEC-MMM結合系を対称化
+2. PEECサブシステムにCLNランチョス変換を適用
+3. 結合行列をACA+で低ランク近似
+4. 相互インダクタンスとして回路に表現
+
+### PEEC-MMM Coupled System
+
+#### Original System Equations
+
+PEECとMMMの結合系:
+
+```
+PEEC: V = [R + sL_ext + sL_int(s)] * I_p
+MMM:  H_m = N * M + H_ext
+```
+
+磁性体領域が導体の作る磁場に影響され、導体も磁性体からの磁場を受ける。
+
+#### Coupling Matrix Formulation
+
+結合系を行列形式で書くと:
+
+```
+[Z_pp(s)   M_pm  ] [I_p]   [V_p  ]
+[M_mp     Z_mm  ] [M  ] = [H_ext]
+```
+
+Where:
+- `Z_pp(s)`: PEEC impedance matrix (n_p x n_p)
+- `Z_mm`: MMM susceptibility matrix (n_m x n_m)
+- `M_pm`: Conductor-to-magnet coupling (n_p x n_m)
+- `M_mp`: Magnet-to-conductor coupling (n_m x n_p)
+
+#### Symmetrization
+
+物理的に `M_pm = M_mp^T` が成り立つ（相反定理）:
+
+```
+[Z_pp(s)   M_pm ] [I_p]   [V_p  ]
+[M_pm^T   Z_mm ] [M  ] = [H_ext]
+```
+
+### Mutual Inductance Representation
+
+#### Circuit Interpretation
+
+PEEC-MMM結合を相互インダクタンスで表現:
+
+```
+          +-- L_p --+
+          |        |
+V_p  o----+   M    +----o
+          |        |
+          +-- L_m --+
+```
+
+ここで:
+- `L_p = L_ext + L_int`: PEECの自己インダクタンス
+- `L_m`: MMMの等価インダクタンス（磁気モーメントのエネルギー）
+- `M`: 相互インダクタンス（PEEC-MMM結合）
+
+#### Mathematical Basis
+
+磁気エネルギーの観点から:
+
+```
+W_m = (1/2) * I_p^T * L_ext * I_p           (PEEC自己)
+    + (1/2) * M^T * Z_mm * M                (MMM自己)
+    + I_p^T * M_pm * M                      (相互作用)
+```
+
+相互インダクタンス項 `I_p^T * M_pm * M` が結合エネルギーを表す。
+
+### CLN Reduction with PEEC-MMM Coupling
+
+#### Step 1: Apply CLN to PEEC Subsystem
+
+PEECサブシステムにランチョスCLN変換を適用:
+
+```python
+# Original PEEC subsystem
+Z_pp_dc = R_dc + s * L_ext_dc  # s=0でのDC basis
+
+# Lanczos transformation (DC basis)
+result = lanczos(L_ext_dc, R_dc)
+U, V = result.U, result.V
+
+# Transformed PEEC matrices
+L_pp_tridiag = U.T @ L_ext_dc @ V  # Tridiagonal
+R_pp_diag = U.T @ R_dc @ V         # Diagonal
+```
+
+変換後の次元: n_p → k_reduced (k_reduced << n_p)
+
+#### Step 2: Transform Coupling Matrix
+
+結合行列も同じ変換で縮約:
+
+```python
+# Original coupling: M_pm (n_p x n_m)
+# After Lanczos: M'_pm (k_reduced x n_m)
+
+M_pm_reduced = U.T @ M_pm  # Shape: (k_reduced, n_m)
+```
+
+#### Step 3: ACA+ Compression of Coupling Matrix
+
+縮約後の結合行列 `M'_pm` にACA+低ランク近似を適用:
+
+```python
+# M'_pm = U_aca @ V_aca^T (rank-r approximation)
+# r << min(k_reduced, n_m)
+
+from hacapk import aca_plus_compress
+
+U_aca, V_aca = aca_plus_compress(M_pm_reduced, eps=1e-4)
+```
+
+低ランク表現により:
+- メモリ: O(k_reduced * n_m) → O(r * (k_reduced + n_m))
+- 行列ベクトル積: O(k_reduced * n_m) → O(r * (k_reduced + n_m))
+
+### Reduced PEEC-MMM Circuit Model
+
+#### Final System Structure
+
+CLN + ACA+適用後のシステム:
+
+```
+[L_tridiag    M_aca    ] [dI_p/dt]   [V_p  ]
+[M_aca^T     L_mm     ] [dM/dt  ] = [H_ext]
+```
+
+ここで:
+- `L_tridiag`: k_reduced x k_reduced 三重対角行列
+- `M_aca = U_aca @ V_aca^T`: 低ランク相互インダクタンス
+- `L_mm`: MMM等価インダクタンス
+
+#### Equivalent Circuit
+
+```
+             +--[L_1]--+--[L_2]--+-- ... --+--[L_k]--+
+             |         |         |         |         |
+V_in  o------+   M_1   +   M_2   +   ...   +   M_k   +------o
+             |         |         |         |         |
+             +--[R_1]--+--[R_2]--+-- ...   +--[R_k]--+
+                  |         |         |         |
+                  +----[Mutual to MMM nodes]----+
+                            ||
+                     +------++------+
+                     |              |
+                    [L_m1]        [L_mn]  (MMM equivalent)
+                     |              |
+                    GND            GND
+```
+
+各PEECノードとMMMノード間の相互インダクタンスが低ランク行列 `M_aca` で表現される。
+
+### Implementation
+
+```python
+import numpy as np
+from cln import lanczos
+
+class PEECMMMCoupledModel:
+    """
+    PEEC-MMM coupled model with CLN reduction and ACA+ compression.
+    """
+
+    def __init__(self, L_ext, R_dc, L_int_dc, M_pm, Z_mm, k_reduced=5, aca_eps=1e-4):
+        """
+        Parameters:
+            L_ext: PEEC external inductance (n_p x n_p)
+            R_dc: DC resistance (n_p x n_p)
+            L_int_dc: Internal inductance at DC (n_p x n_p)
+            M_pm: PEEC-MMM coupling matrix (n_p x n_m)
+            Z_mm: MMM susceptibility matrix (n_m x n_m)
+            k_reduced: CLN reduction order
+            aca_eps: ACA+ tolerance
+        """
+        self.n_p = L_ext.shape[0]
+        self.n_m = Z_mm.shape[0]
+
+        # Step 1: Lanczos CLN transformation
+        L_total = L_ext + L_int_dc
+        result = lanczos(L_total, R_dc, n_iter=k_reduced)
+
+        self.U = result.U  # (n_p, k_reduced)
+        self.V = result.V  # (n_p, k_reduced)
+        self.L_tridiag = result.LL  # (k_reduced, k_reduced)
+        self.R_diag = result.RR  # (k_reduced, k_reduced)
+
+        # Step 2: Transform coupling matrix
+        self.M_pm_reduced = self.U.T @ M_pm  # (k_reduced, n_m)
+
+        # Step 3: ACA+ compression (simplified version)
+        # In practice, use HACApK ACA+ implementation
+        self.M_pm_compressed = self._aca_compress(self.M_pm_reduced, aca_eps)
+
+        # MMM subsystem
+        self.Z_mm = Z_mm
+
+        self.k_reduced = k_reduced
+
+    def _aca_compress(self, M, eps):
+        """
+        Simplified ACA+ compression (placeholder).
+        Full implementation would use HACApK.
+        """
+        # SVD-based low-rank approximation as placeholder
+        U, s, Vh = np.linalg.svd(M, full_matrices=False)
+
+        # Truncate at tolerance
+        r = np.sum(s > eps * s[0])
+        r = max(1, r)
+
+        U_r = U[:, :r] * s[:r]
+        V_r = Vh[:r, :]
+
+        return {'U': U_r, 'V': V_r, 'rank': r}
+
+    def coupled_impedance(self, s):
+        """
+        Compute coupled impedance matrix at frequency s = jw.
+
+        Returns:
+            Z_coupled: (k_reduced + n_m) x (k_reduced + n_m) matrix
+        """
+        # PEEC impedance in reduced coordinates
+        Z_pp = self.R_diag + s * self.L_tridiag
+
+        # Reconstruct coupling from ACA
+        M_aca = self.M_pm_compressed['U'] @ self.M_pm_compressed['V']
+
+        # Coupled system
+        Z = np.zeros((self.k_reduced + self.n_m, self.k_reduced + self.n_m),
+                     dtype=complex)
+        Z[:self.k_reduced, :self.k_reduced] = Z_pp
+        Z[:self.k_reduced, self.k_reduced:] = s * M_aca
+        Z[self.k_reduced:, :self.k_reduced] = s * M_aca.T
+        Z[self.k_reduced:, self.k_reduced:] = self.Z_mm
+
+        return Z
+
+    def terminal_impedance(self, s, terminal_map):
+        """
+        Compute terminal impedance by Schur complement.
+
+        Parameters:
+            s: Complex frequency
+            terminal_map: Array mapping terminals to reduced indices
+
+        Returns:
+            Z_terminal: Terminal impedance matrix
+        """
+        Z_full = self.coupled_impedance(s)
+
+        # Partition into terminal and internal nodes
+        n_term = len(terminal_map)
+        n_int = self.k_reduced + self.n_m - n_term
+
+        # Reorder (terminal first)
+        all_idx = np.arange(self.k_reduced + self.n_m)
+        int_idx = np.setdiff1d(all_idx, terminal_map)
+
+        Z_tt = Z_full[np.ix_(terminal_map, terminal_map)]
+        Z_ti = Z_full[np.ix_(terminal_map, int_idx)]
+        Z_it = Z_full[np.ix_(int_idx, terminal_map)]
+        Z_ii = Z_full[np.ix_(int_idx, int_idx)]
+
+        # Schur complement
+        Z_terminal = Z_tt - Z_ti @ np.linalg.solve(Z_ii, Z_it)
+
+        return Z_terminal
+
+
+def example_peec_mmm_coupling():
+    """
+    Example: WPT coil with ferrite core.
+    """
+    # PEEC system (simplified)
+    n_p = 100  # PEEC segments
+    n_m = 50   # MMM elements
+
+    # Random positive definite matrices for illustration
+    np.random.seed(42)
+    A = np.random.randn(n_p, n_p)
+    L_ext = A @ A.T / n_p + np.eye(n_p) * 1e-6  # Inductance ~uH
+
+    R_dc = np.diag(np.random.rand(n_p) * 0.01)  # ~10 mOhm
+
+    L_int_dc = np.diag(np.random.rand(n_p) * 1e-7)  # Internal inductance
+
+    # Coupling matrix (decays with distance)
+    M_pm = np.random.randn(n_p, n_m) * 1e-7
+
+    # MMM susceptibility (diagonal approximation)
+    chi = 1000  # Susceptibility
+    Z_mm = np.eye(n_m) / chi
+
+    # Create reduced model
+    model = PEECMMMCoupledModel(
+        L_ext, R_dc, L_int_dc, M_pm, Z_mm,
+        k_reduced=10,  # Reduce 100 PEEC DOF to 10
+        aca_eps=1e-4
+    )
+
+    print(f"Original PEEC DOF: {n_p}")
+    print(f"Reduced PEEC DOF: {model.k_reduced}")
+    print(f"ACA rank: {model.M_pm_compressed['rank']}")
+    print(f"Compression ratio (coupling): {model.M_pm_compressed['rank'] * (model.k_reduced + n_m) / (n_p * n_m) * 100:.1f}%")
+
+    # Frequency sweep
+    freqs = np.logspace(3, 6, 50)  # 1 kHz to 1 MHz
+    terminal_map = np.array([0, model.k_reduced - 1])  # First and last terminal
+
+    Z_terminal = []
+    for f in freqs:
+        s = 2j * np.pi * f
+        Z = model.terminal_impedance(s, terminal_map)
+        Z_terminal.append(Z[0, 0])  # Self-impedance
+
+    Z_terminal = np.array(Z_terminal)
+
+    return freqs, Z_terminal
+```
+
+### Benefits of Mutual Inductance Representation
+
+| Aspect | Direct Coupling | Mutual Inductance |
+|--------|-----------------|-------------------|
+| Physical meaning | Matrix elements | M = k * sqrt(L_p * L_m) |
+| Circuit simulation | Full matrix | Standard M-coupled inductors |
+| Spice compatibility | Custom element | Standard SPICE syntax |
+| Energy conservation | Implicit | Explicit (W = M * I_p * I_m) |
+
+### SPICE Circuit Export
+
+CLN縮約+ACA圧縮後のモデルをSPICE回路として出力:
+
+```python
+def export_to_spice(model, filename):
+    """
+    Export PEEC-MMM coupled model to SPICE netlist.
+    """
+    with open(filename, 'w') as f:
+        f.write("* PEEC-MMM Coupled Model (CLN Reduced)\n")
+        f.write(f"* PEEC DOF: {model.k_reduced}, MMM DOF: {model.n_m}\n")
+        f.write(f"* ACA rank: {model.M_pm_compressed['rank']}\n\n")
+
+        # PEEC ladder (tridiagonal)
+        for i in range(model.k_reduced):
+            # Series inductance
+            f.write(f"L_p{i} n{i} n{i+1} {model.L_tridiag[i,i]:.6e}\n")
+            # Shunt resistance
+            f.write(f"R_p{i} n{i+1} 0 {model.R_diag[i,i]:.6e}\n")
+
+        # MMM equivalent inductances
+        for j in range(model.n_m):
+            L_eq = 1.0 / model.Z_mm[j, j] if model.Z_mm[j, j] > 0 else 1e6
+            f.write(f"L_m{j} m{j} 0 {L_eq:.6e}\n")
+
+        # Mutual inductances (from ACA low-rank)
+        U_aca = model.M_pm_compressed['U']
+        V_aca = model.M_pm_compressed['V']
+        rank = model.M_pm_compressed['rank']
+
+        f.write("\n* Mutual inductances (ACA low-rank)\n")
+        for r in range(rank):
+            # Intermediate node for rank-r contribution
+            f.write(f".subckt mutual_rank{r} ")
+            f.write(" ".join([f"p{i}" for i in range(model.k_reduced)]))
+            f.write(" " + " ".join([f"m{j}" for j in range(model.n_m)]))
+            f.write("\n")
+
+            # Coupling through intermediate node
+            for i in range(model.k_reduced):
+                if abs(U_aca[i, r]) > 1e-10:
+                    f.write(f"K_p{i}_r{r} L_p{i} L_aux_r{r} {U_aca[i, r]:.6e}\n")
+
+            for j in range(model.n_m):
+                if abs(V_aca[r, j]) > 1e-10:
+                    f.write(f"K_m{j}_r{r} L_m{j} L_aux_r{r} {V_aca[r, j]:.6e}\n")
+
+            f.write(".ends\n\n")
+
+        f.write(".end\n")
+```
+
+### Summary: PEEC-MMM Mutual Inductance Approach
+
+1. **Symmetrization**: PEEC-MMM結合行列は物理的に対称 (`M_pm = M_mp^T`)
+2. **CLN Reduction**: PEECサブシステムにランチョス変換を適用して次元削減
+3. **ACA+ Compression**: 縮約後の結合行列を低ランク近似でさらに圧縮
+4. **Mutual Inductance**: 結合を相互インダクタンスとして回路モデル化
+5. **SPICE Export**: 標準的なSPICE構文で回路出力可能
+
+**Compression Summary**:
+
+| Stage | DOF (PEEC) | DOF (Coupling) | Memory |
+|-------|------------|----------------|--------|
+| Original | n_p | n_p * n_m | O(n_p^2 + n_p*n_m) |
+| After CLN | k | k * n_m | O(k^2 + k*n_m) |
+| After ACA | k | r * (k + n_m) | O(k^2 + r*(k+n_m)) |
+
+典型的な値: n_p=1000, n_m=500, k=10, r=5
+- 圧縮率: (10^2 + 5*510) / (1000^2 + 1000*500) = 2650 / 1,500,000 ≈ **0.2%**
+
+---
+
+## FastImp Integration Design
+
+### Architecture Overview
+
+```
++-------------------------------------------------------------+
+|                    Radia Unified Solver                      |
++-------------------------------------------------------------+
+|                                                             |
+|  +------------------+  +------------------+  +--------------+|
+|  |  Coil/Conductor  |  | Magnetic (s=0)   |  | Magnetic     ||
+|  |                  |  |                  |  | Conductor    ||
+|  |  FastImp         |  |  ELF/Radia MSC   |  | (s!=0,ur!=1) ||
+|  |  Surface K, s    |  |  Surface sm, M   |  | ESIM         ||
+|  +--------+---------+  +--------+---------+  +------+-------+|
+|           |                     |                   |        |
+|           +----------+----------+-------------------+        |
+|                      v                                       |
+|              +-------------------+                            |
+|              |  Coupled Solver   |                            |
+|              +-------------------+                            |
+|                      |                                       |
+|           +----------+----------+                            |
+|           v                     v                            |
+|     +-----------+         +-----------+                      |
+|     |  HACApK   |         | pFFT(MKL) |                      |
+|     | Low freq  |         | High freq |                      |
+|     +-----------+         +-----------+                      |
++-------------------------------------------------------------+
+```
+
+### Three Modules
+
+#### 1. Coil/Conductor (FastImp Formulation)
+
+**Target**: Copper coils, aluminum conductors, wiring
+**Properties**: σ ~ 10^7 S/m, μr = 1
+
+**Unknowns**:
+- K: Surface current density [A/m]
+- s: Surface charge density [C/m^2]
+
+**Formulation**: FastImp Full-wave IE
+```
+A = μ * ∫ g(r,r') * K dF'
+Φ = (1/ε) * ∫ g(r,r') * s dF'
+g = exp(-jkr) / (4πr)
+```
+
+**Acceleration**: pFFT with MKL FFT backend (GPL-free)
+
+#### 2. Magnetic Material (ELF/Radia MSC)
+
+**Target**: Permanent magnets, ferrite (high resistivity), soft iron (low frequency)
+**Properties**: σ ~ 0, μr >> 1
+
+**Unknowns**:
+- σm: Magnetic surface charge density [Wb/m^2]
+- M: Magnetization vector [A/m]
+
+**Formulation**: MSC (existing Radia)
+```
+H = -(1/4π) * ∫ σm * (r-r')/|r-r'|^3 dF'
+σm = M · n_hat
+```
+
+**Acceleration**: HACApK (ACA+)
+
+#### 3. Conductive Magnetic Material (ESIM)
+
+**Target**: Electrical steel sheets, iron yoke, induction heating workpieces
+**Properties**: σ ~ 10^6 S/m, μr ~ 100-10000 (nonlinear)
+
+**Formulation**: ESIM (Hollaus et al., 2025)
+```
+Z_s = Z_s(H_surface)  - Effective surface impedance
+1D cell problem solved for each surface H-field level
+```
+
+### Python API Design
+
+#### Conductor Creation
+
+```python
+import radia as rad
+
+# Create conductor from rectangular block
+cond = rad.CndRecBlock(center, dimensions, conductivity)
+
+# Create circular loop coil
+cond = rad.CndLoop(center, radius, normal, cross_section, wire_width, wire_height, conductivity)
+
+# Create spiral coil
+cond = rad.CndSpiral(center, inner_radius, outer_radius, pitch, num_turns, axis,
+                     cross_section, wire_width, wire_height, conductivity)
+
+# Create wire along path
+cond = rad.CndWire(path, cross_section, width, height, conductivity)
+```
+
+#### Analysis Configuration
+
+```python
+# Set analysis frequency
+rad.CndSetFrequency(cond, frequency)
+
+# Set relative permeability for ESIM
+rad.CndSetMuR(cond, mu_r)
+
+# Get skin depth [m]
+delta = rad.CndGetSkinDepth(cond)
+
+# Get complex surface impedance [Ohm]
+Z = rad.CndGetSurfaceImpedance(cond)
+```
+
+#### Solver
+
+```python
+# Solve at single frequency
+rad.CndSolve(cond)
+
+# Get impedance after solve
+Z = rad.CndGetImpedance(cond)
+
+# Frequency sweep
+freqs = [1e3, 10e3, 100e3, 1e6]
+Z_list = rad.CndImpedanceSweep(cond, freqs)
+```
+
+#### Field Computation
+
+```python
+# Compute B field from conductor currents
+B = rad.CndFld(cond, 'b', point)
+
+# Compute E field from conductor
+E = rad.CndFld(cond, 'e', point)
+
+# Batch field computation
+B_list = rad.CndFldBatch(cond, 'b', points)
+```
+
+### Typical Material Properties
+
+| Material | σ [S/m] | μr | δ @ 50 Hz | δ @ 50 kHz |
+|----------|---------|-----|-----------|------------|
+| Copper | 5.8×10^7 | 1 | 9.3 mm | 0.29 mm |
+| Aluminum | 3.5×10^7 | 1 | 12.0 mm | 0.38 mm |
+| Steel (cold) | 5×10^6 | 100 | 1.0 mm | 0.032 mm |
+| Steel (hot, 800°C) | 1×10^6 | 1 | 71.2 mm | 2.25 mm |
+| Stainless Steel | 1.4×10^6 | 1 | 60.1 mm | 1.90 mm |
+
+---
+
+## Matrix Symmetrization for CLN
+
+### PEEC-MMM Coupling Symmetry
+
+The PEEC-MMM coupled system has natural symmetry that can be exploited for CLN extraction.
+
+#### PEEC Part (Loop-Star)
+
+```
+[Z_LL   Z_LS] [I_L]   [V_L]
+[Z_SL   Z_SS] [I_S] = [V_S]
+```
+
+**Symmetry of PEEC Blocks:**
+
+| Block | Formula | Symmetric? | Reason |
+|-------|---------|------------|--------|
+| Z_LL | jω * L_ij | **Yes** | L_ij = L_ji (Neumann formula) |
+| Z_SS | 1/(jω) * P_ij | **Yes** | P_ij = P_ji (potential coefficient) |
+| Z_LS | jω * M_ij | **Yes** | Loop-Star coupling via mutual inductance |
+| Z_SL | Z_LS^T | **Yes** | Reciprocity |
+
+#### MMM Part
+
+The MMM demagnetization tensor N_ij is symmetric:
+```
+N_ij[k][l] = (V_j / 4π) * (3*r_k*r_l - r^2*δ_kl) / r^5
+```
+
+#### Coupling Blocks Symmetrization
+
+Original formulation:
+- Z_LM: -jω * Φ_from_M (flux linkage)
+- Z_ML: -χ/μ_0 * B_coil (H field from coil)
+
+**Problem**: Z_LM ≠ Z_ML^T due to different units.
+
+**Solution**: Variable scaling M' = sqrt(μ_0 * V) * M
+
+```
+Z_LM' = Z_LM / sqrt(μ_0 * V)
+Z_ML' = Z_ML * sqrt(μ_0 * V)
+```
+
+By reciprocity theorem: **Z_LM' = Z_ML'^T**
+
+### Full Coupled System Structure
+
+With symmetrization:
+
+```
+┌────────────────────────────────────────────────┐
+│ [Z_LL   Z_LS   Z_LM'  0    ] [I_L ]   [V_L ]  │
+│ [Z_LS^T Z_SS   0      Z_SE ] [I_S ] = [V_S ]  │
+│ [Z_LM'^T 0     Z_MM   0    ] [M'  ]   [b'  ]  │
+│ [0      Z_SE^T 0      Z_EE ] [P   ]   [D   ]  │
+└────────────────────────────────────────────────┘
+```
+
+All blocks are symmetric or have symmetric transpose relationships, enabling CLN extraction.
+
+---
+
+## Coil on Magnetic Core Analysis
+
+### Frequency-Dependent Characteristics
+
+| Core Material | μr | σ [S/m] | L_DC (100 turns, 10cm path, 1cm^2) | Q @ 1kHz |
+|--------------|-----|---------|-----------------------------------|----------|
+| Air (no core) | 1 | 0 | 0.013 mH | 0.3 |
+| Ferrite (MnZn) | 2000 | 0.1 | 25.1 mH | 337 |
+| Ferrite (NiZn) | 200 | 1e-4 | 2.5 mH | 48 |
+| Silicon Steel | 4000 | 2e6 | 50.3 mH | ~0 |
+| Pure Iron | 5000 | 1e7 | 62.8 mH | ~0 |
+
+**Key Insight**: High permeability does NOT guarantee high Q-factor. Conductive cores have severe eddy current losses.
+
+### Solver Selection Algorithm
+
+```python
+def select_solver(material_sigma, material_mu_r, frequency, dimension):
+    """
+    Select appropriate solver based on skin depth vs characteristic dimension.
+    """
+    # Calculate skin depth
+    if frequency <= 0 or material_sigma <= 0:
+        delta = float('inf')
+    else:
+        omega = 2 * pi * frequency
+        mu = MU_0 * material_mu_r
+        delta = sqrt(2 / (omega * mu * material_sigma))
+
+    ratio = delta / dimension
+
+    if ratio > 10:
+        return "Radia MSC (quasi-static)"
+    elif ratio > 1:
+        return "Nonlocal SIBC (2D FEM cross-section)"
+    elif ratio > 0.1:
+        return "Local SIBC (Zs = (1+j)/(sigma*delta))"
+    else:
+        return "FastImp (surface current only)"
+```
+
+---
+
+## Complex Permeability Support
+
+### Physical Background
+
+Complex permeability: **μ = μ' - jμ"**
+
+| Component | Symbol | Physical Meaning |
+|-----------|--------|------------------|
+| Real part | μ' | Energy storage (reactive power) |
+| Imaginary part | μ" | Energy loss (magnetic hysteresis, domain wall motion) |
+| Loss tangent | tan(δ_m) = μ"/μ' | Ratio of loss to storage |
+
+**Power loss from magnetic hysteresis**:
+```
+P_magnetic = (ω/2) * μ_0 * μ"_r * |H|^2  [W/m^3]
+```
+
+### Python ESIM API
+
+```python
+from radia import ESIMCellProblemSolver
+
+# Constant complex permeability
+solver = ESIMCellProblemSolver(
+    sigma=1e6,
+    frequency=50000,
+    complex_mu=(1000, 100)  # (μ'_r, μ"_r) tuple
+)
+
+# H-dependent complex permeability
+complex_mu_data = [
+    [0, 2000, 200],      # [H, μ'_r, μ"_r]
+    [1000, 1500, 150],
+    [5000, 500, 50],
+]
+solver = ESIMCellProblemSolver(
+    sigma=1e6,
+    frequency=50000,
+    complex_mu=complex_mu_data
+)
+```
+
+### Typical Material Properties
+
+| Material | μ'_r | μ"_r | tan(δ_m) | Application |
+|----------|-------|-------|--------------|-------------|
+| MnZn Ferrite (1 kHz) | 2500 | 25 | 0.01 | Power transformers |
+| MnZn Ferrite (100 kHz) | 2000 | 400 | 0.2 | Switching supplies |
+| NiZn Ferrite (1 MHz) | 150 | 75 | 0.5 | EMI suppression |
+| Amorphous Metal | 10000 | 100 | 0.01 | High-efficiency cores |
+
+---
+
+## Method Selection Guide
+
+### When to Use Each Method
+
+| Application | Recommended Method | Reason |
+|-------------|-------------------|--------|
+| Power transformer | Radia MSC + loss factor | 50-60 Hz, quasi-static |
+| Choke coil | ESIM (Nonlocal SIBC) | 100 Hz - 1 MHz, nonlinear |
+| RF inductor | Local SIBC | 1 MHz - 100 MHz, thin skin |
+| Air-core coil | FastImp/PEEC | All frequencies, no core |
+| Induction heating | ESIM + PEEC | Nonlinear workpiece |
+
+### Comparison: PEEC vs RWG-EFIE
+
+| Feature | PEEC-ESIM | RWG-EFIE |
+|---------|-----------|----------|
+| Coil geometry | Straight segments | Arbitrary 3D |
+| Workpiece geometry | Flat surfaces | Arbitrary 3D |
+| Matrix size | N_segments x N_segments | N_edges x N_edges |
+| Typical N | 10-100 | 100-10000 |
+| Computation time | Fast | Moderate to slow |
+| Memory | Low | Higher |
+| Accuracy (curved) | Moderate | High |
+
+---
+
 ## References
 
 1. A. Ruehli, "Equivalent Circuit Models for Three-Dimensional Multiconductor Systems," IEEE Trans. MTT, 1974.
@@ -1798,6 +2555,12 @@ This is not an approximation but an **exact formulation** for uniform conductors
 4. K. Hollaus et al., "Nonlinear Effective Surface Impedance," IEEE Trans. Magnetics, 2025.
 5. H. S. Wall, "Analytic Theory of Continued Fractions," Van Nostrand, 1948.
 6. J. A. Ferreira, "Improved analytical modeling of conductive losses in magnetic components," IEEE Trans. Power Electronics, vol. 9, no. 1, 1994.
+7. M. Bebendorf, "Hierarchical Matrices: A Means to Efficiently Solve Elliptic Boundary Value Problems," Springer, 2008.
+8. Z. Zhu, B. Song, and J. K. White, "Algorithms in FastImp: a fast and wide-band impedance extraction program for complicated 3-D geometries," IEEE Trans. TCAD, vol. 24, no. 7, pp. 981-998, July 2005.
+9. S. Bilicz, Z. Badics, and J. Pávó, "Wide-band nonlocal impedance boundary condition model for high-conductivity regions," ISEM 2023.
+10. J. R. Phillips and J. K. White, "A Precorrected-FFT Method for Electrostatic Analysis," IEEE Trans. TCAD, 1997.
+11. G. Vecchi, "Loop-Star decomposition of basis functions," IEEE TAP, 1999.
+12. A. Odabasioglu et al., "PRIMA: Passive Reduced-order Interconnect Macromodeling Algorithm," IEEE TCAD, 1998.
 
 ---
 
