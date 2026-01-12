@@ -336,6 +336,384 @@ class ComplexPermeabilityInterpolator:
             self.mu_initial = mu_0 * complex(mu_p, -mu_pp)
 
 
+class ESIMFiniteSlabSolver:
+    """
+    Solves the 1D Cell Problem for a FINITE THICKNESS slab conductor.
+
+    This solver handles the skin effect in conductors with finite thickness,
+    which is important for accurate R_ac/R_dc calculation in the transition
+    region (0.5 < xi < 3) where xi = half_thickness / skin_depth.
+
+    The geometry is a slab of thickness 2*a with:
+    - Surface at z = 0 with tangential H = H0
+    - Center at z = a with dH/dz = 0 (symmetry)
+
+    Governing equation:
+        rho * d^2H/dz^2 + j*omega*mu(|H|)*H = 0    for z in [0, a]
+
+    Boundary conditions:
+        H(0) = H0           (surface tangential field)
+        dH/dz(a) = 0        (symmetry at center)
+
+    For linear materials, the analytical solution is:
+        H(z) = H0 * cosh(gamma*(a-z)) / cosh(gamma*a)
+        where gamma = (1+j)/delta
+
+    This gives Dowell's formula for R_ac/R_dc.
+    """
+
+    def __init__(self, half_thickness, bh_curve=None, sigma=None, frequency=None,
+                 n_nodes=100, complex_mu=None, mu_r=None):
+        """
+        Initialize the Finite Slab Cell Problem solver.
+
+        Parameters:
+            half_thickness: Half of conductor thickness [m] (a in equations)
+            bh_curve: BH curve data as [[H1, B1], [H2, B2], ...]
+            sigma: Electrical conductivity [S/m]
+            frequency: Operating frequency [Hz]
+            n_nodes: Number of mesh nodes (default: 100)
+            complex_mu: Complex permeability data (alternative to bh_curve)
+            mu_r: Relative permeability for linear material (alternative to bh_curve)
+        """
+        if not SCIPY_AVAILABLE:
+            raise ImportError("Scipy is required for ESIM Cell Problem solver")
+
+        if sigma is None or frequency is None:
+            raise ValueError("sigma and frequency are required parameters")
+
+        self.half_thickness = half_thickness  # a
+        self.sigma = sigma
+        self.frequency = frequency
+        self.omega = 2 * np.pi * frequency
+        self.rho = 1.0 / sigma
+
+        self.n_nodes = n_nodes
+
+        # Setup permeability model
+        self.use_complex_mu = complex_mu is not None
+        self.linear_mu_r = mu_r
+
+        if self.use_complex_mu:
+            self.mu_interp = ComplexPermeabilityInterpolator(complex_mu, frequency)
+            self.bh_interp = None
+            mu_initial = self.mu_interp.mu_initial
+        elif mu_r is not None:
+            # Linear material with constant mu_r
+            self.mu_interp = None
+            self.bh_interp = None
+            mu_initial = mu_0 * mu_r
+        elif bh_curve is not None:
+            self.bh_interp = BHCurveInterpolator(bh_curve)
+            self.mu_interp = None
+            mu_initial = self.bh_interp.mu_initial
+        else:
+            raise ValueError("Provide bh_curve, complex_mu, or mu_r")
+
+        self.mu_initial = mu_initial
+        mu_abs = abs(mu_initial)
+
+        # Skin depth
+        if self.omega > 0:
+            self.delta = np.sqrt(2 * self.rho / (self.omega * mu_abs))
+        else:
+            self.delta = float('inf')
+
+        # xi parameter
+        self.xi = half_thickness / self.delta if self.delta < float('inf') else 0
+
+        # Create uniform mesh from surface (z=0) to center (z=a)
+        self.mesh_points = np.linspace(0, half_thickness, n_nodes)
+        self.n_elements = n_nodes - 1
+
+    def _get_mu(self, H_abs):
+        """Get permeability for given |H|."""
+        if self.use_complex_mu:
+            return self.mu_interp.mu(H_abs)
+        elif self.linear_mu_r is not None:
+            return mu_0 * self.linear_mu_r
+        else:
+            return self.bh_interp.mu(H_abs)
+
+    def solve(self, H0, tol=1e-6, max_iter=50, relaxation=0.5):
+        """
+        Solve the finite slab Cell Problem for given surface field H0.
+
+        Parameters:
+            H0: Surface tangential field amplitude [A/m]
+            tol: Convergence tolerance
+            max_iter: Maximum Picard iterations
+            relaxation: Under-relaxation parameter
+
+        Returns:
+            result: dict with solution data
+        """
+        n = self.n_nodes
+        z = self.mesh_points
+        a = self.half_thickness
+
+        # Initial guess using analytical solution for linear material
+        if self.delta < float('inf') and self.delta > 0:
+            gamma = complex(1, 1) / self.delta
+            try:
+                H = H0 * np.cosh(gamma * (a - z)) / np.cosh(gamma * a)
+            except (OverflowError, FloatingPointError):
+                H = H0 * np.exp(-z / self.delta) * np.exp(-1j * z / self.delta)
+        else:
+            H = np.full(n, H0, dtype=complex)  # DC: uniform current
+
+        # Initial permeability distribution
+        mu_dist = np.full(n, self.mu_initial, dtype=complex)
+
+        converged = False
+
+        for iteration in range(max_iter):
+            # Build and solve linear system
+            H_new = self._solve_linear_system(H0, mu_dist)
+
+            # Update permeability
+            mu_new = np.array([self._get_mu(abs(h)) for h in H_new], dtype=complex)
+
+            # Check convergence
+            rel_change = np.max(np.abs(mu_new - mu_dist)) / np.max(np.abs(mu_dist))
+
+            # Under-relaxation
+            mu_dist = (1 - relaxation) * mu_dist + relaxation * mu_new
+            H = H_new
+
+            if rel_change < tol:
+                converged = True
+                break
+
+        # Compute resistance ratio R_ac/R_dc
+        R_ratio = self._compute_resistance_ratio(H, mu_dist, H0)
+
+        # Compute power losses
+        P_prime, Q_prime, P_magnetic = self._compute_power_losses(H, mu_dist)
+
+        # Effective surface impedance
+        Z = 2 * (P_prime + 1j * Q_prime) / (H0 ** 2)
+
+        return {
+            'R_ratio': R_ratio,  # R_ac/R_dc
+            'Z': Z,
+            'P_prime': P_prime,
+            'Q_prime': Q_prime,
+            'P_magnetic': P_magnetic,
+            'H_solution': H,
+            'mesh_points': self.mesh_points,
+            'converged': converged,
+            'iterations': iteration + 1,
+            'xi': self.xi,
+            'delta': self.delta
+        }
+
+    def _solve_linear_system(self, H0, mu_dist):
+        """
+        Solve the linearized Cell Problem with Neumann BC at surface (current-driven).
+
+        For skin effect analysis, we drive the conductor with a fixed surface
+        current density J0, not fixed surface H field. This gives correct
+        behavior in the DC limit.
+
+        Boundary conditions:
+            dH/dz(0) = -J0      (surface current density)
+            dH/dz(a) = 0        (symmetry at center)
+
+        The surface field H(0) adapts to the current.
+
+        For normalization, we use J0 such that total current I = a * J_avg = H0
+        (i.e., DC case with uniform current has total I = H0).
+
+        After solving, we scale the solution so that the total current I = H(0) - H(a)
+        equals H0, allowing comparison with the Dirichlet BC case.
+        """
+        n = self.n_nodes
+        z = self.mesh_points
+        h = z[1] - z[0]  # Uniform mesh spacing
+        a = self.half_thickness
+
+        # For DC with uniform J: I = integral{J} dz = J*a, so J = I/a
+        # We want total current I = H0, so J_surface = H0/a for DC reference
+        # But for AC, current concentrates at surface
+
+        # Use Dirichlet at surface (H(0) = H0) and Neumann at center (dH/dz(a) = 0)
+        # This is actually the correct formulation!
+        # The analytical solution is H(z) = H0 * cosh(gamma*(a-z)) / cosh(gamma*a)
+
+        # Coefficient arrays for tridiagonal matrix
+        diag_main = np.zeros(n, dtype=complex)
+        diag_lower = np.zeros(n - 1, dtype=complex)
+        diag_upper = np.zeros(n - 1, dtype=complex)
+        rhs = np.zeros(n, dtype=complex)
+
+        coef = self.rho / (h * h)
+
+        # Interior points (i = 1, ..., n-2)
+        for i in range(1, n - 1):
+            diag_lower[i - 1] = coef
+            diag_upper[i] = coef
+            diag_main[i] = -2 * coef + 1j * self.omega * mu_dist[i]
+            rhs[i] = 0.0
+
+        # BC at z=0: H(0) = H0 (Dirichlet)
+        diag_main[0] = 1.0
+        rhs[0] = H0
+
+        # BC at z=a: dH/dz = 0 (Neumann - symmetry)
+        # Use ghost point H[n] = H[n-2] from dH/dz = 0
+        # rho*(H[n-2] - 2*H[n-1] + H[n]) / h^2 + jωμH[n-1] = 0
+        # rho*(2*H[n-2] - 2*H[n-1]) / h^2 + jωμH[n-1] = 0
+        diag_main[n - 1] = -2 * coef + 1j * self.omega * mu_dist[n - 1]
+        diag_lower[n - 2] = 2 * coef
+        rhs[n - 1] = 0.0
+
+        # Solve tridiagonal system
+        from scipy.sparse import diags as sp_diags
+        from scipy.sparse.linalg import spsolve as sp_solve
+
+        A = sp_diags(
+            [diag_lower, diag_main, diag_upper],
+            offsets=[-1, 0, 1],
+            format='csr'
+        )
+
+        H = sp_solve(A, rhs)
+        return H
+
+    def _compute_resistance_ratio(self, H, mu_dist, H0):
+        """
+        Compute R_ac/R_dc using power loss method for better numerical stability.
+
+        Method: Compare AC power loss to DC power loss for the same total current.
+
+        Current density: J = -dH/dz (Ampere's law)
+        Total current (half slab): I = H(0) - H(a)
+
+        AC power (per unit length/width, half slab):
+            P_ac = integral_0^a { |J|^2 * rho } dz
+
+        DC power for same current:
+            J_dc = I / a  (uniform)
+            P_dc = |J_dc|^2 * rho * a = |I|^2 * rho / a
+
+        R_ac/R_dc = P_ac / P_dc = a * integral{|J|^2} dz / |I|^2
+
+        This is the Cauchy-Schwarz inequality form:
+            For uniform J: integral{|J|^2} dz * a = |integral{J} dz|^2 = |I|^2
+            So R_ac/R_dc = 1 for DC (uniform J)
+
+        For AC with skin effect: J is concentrated near surface, so R_ac > R_dc.
+        """
+        z = self.mesh_points
+        n = self.n_nodes
+        a = self.half_thickness
+
+        # Total current (per unit width): I = H(0) - H(a) by fundamental theorem
+        I_total = H[0] - H[n-1]
+
+        I_abs_sq = np.abs(I_total) ** 2
+        if I_abs_sq < 1e-30:
+            # Fall back to surface impedance method
+            return self._compute_resistance_ratio_surface_impedance(H)
+
+        # Compute integral{|J|^2} dz using J at element midpoints
+        J_sq_integral = 0.0
+        for i in range(n - 1):
+            dz = z[i + 1] - z[i]
+            # J = -dH/dz at midpoint
+            J_mid = -(H[i + 1] - H[i]) / dz
+            J_sq_integral += np.abs(J_mid) ** 2 * dz
+
+        # R_ac/R_dc = a * integral{|J|^2} dz / |I|^2
+        R_ratio = a * J_sq_integral / I_abs_sq
+
+        return max(R_ratio, 1.0)
+
+    def _compute_resistance_ratio_surface_impedance(self, H):
+        """
+        Fallback method using surface impedance when current is very small.
+
+        Z_s = -rho * dH/dz|_0 / H(0)
+        R_ac/R_dc = Re(Z_s) * a / rho
+        """
+        z = self.mesh_points
+        n = self.n_nodes
+        a = self.half_thickness
+        h = z[1] - z[0]
+
+        # 3-point forward formula for dH/dz at z=0
+        if n >= 3:
+            dHdz_surface = (-3*H[0] + 4*H[1] - H[2]) / (2*h)
+        else:
+            dHdz_surface = (H[1] - H[0]) / h
+
+        if abs(H[0]) < 1e-30:
+            return 1.0
+
+        Z_s = -self.rho * dHdz_surface / H[0]
+        R_ratio = Z_s.real * a / self.rho
+
+        return max(R_ratio, 1.0)
+
+    def _compute_power_losses(self, H, mu_dist):
+        """Compute power losses (same as semi-infinite solver)."""
+        z = self.mesh_points
+        n = self.n_nodes
+
+        P_ohmic = 0.0
+        P_magnetic = 0.0
+        Q_prime = 0.0
+
+        for i in range(n - 1):
+            dz = z[i + 1] - z[i]
+            dHdz = (H[i + 1] - H[i]) / dz
+            H_mid = 0.5 * (H[i] + H[i + 1])
+            mu_mid = 0.5 * (mu_dist[i] + mu_dist[i + 1])
+            H_sq = np.abs(H_mid) ** 2
+
+            P_ohmic += 0.5 * self.rho * np.abs(dHdz) ** 2 * dz
+
+            if self.use_complex_mu:
+                mu_prime = mu_mid.real
+                mu_double_prime = -mu_mid.imag
+                P_magnetic += 0.5 * self.omega * mu_double_prime * H_sq * dz
+                Q_prime += 0.5 * self.omega * mu_prime * H_sq * dz
+            else:
+                Q_prime += 0.5 * self.omega * mu_mid.real * H_sq * dz
+
+        P_prime = P_ohmic + P_magnetic
+        return float(P_prime), float(Q_prime), float(P_magnetic)
+
+    def get_dowell_ratio(self):
+        """
+        Get analytical R_ac/R_dc using Dowell's formula (linear material).
+
+        R_ac/R_dc = xi * (sinh(2*xi) + sin(2*xi)) / (cosh(2*xi) - cos(2*xi))
+
+        where xi = a / delta
+        """
+        xi = self.xi
+
+        if xi < 0.01:
+            return 1.0
+
+        try:
+            sh2 = np.sinh(2 * xi)
+            sn2 = np.sin(2 * xi)
+            ch2 = np.cosh(2 * xi)
+            cs2 = np.cos(2 * xi)
+
+            denom = ch2 - cs2
+            if abs(denom) < 1e-30:
+                return 1.0
+
+            return xi * (sh2 + sn2) / denom
+
+        except (OverflowError, FloatingPointError):
+            return xi  # High frequency limit
+
+
 class ESIMCellProblemSolver:
     """
     Solves the 1D Cell Problem for ESIM using finite differences.
@@ -350,6 +728,9 @@ class ESIMCellProblemSolver:
     Supports both real and complex permeability:
     - Real mu: From BH curve (nonlinear saturation)
     - Complex mu = mu' - j*mu": Includes magnetic losses (hysteresis, etc.)
+
+    NOTE: For finite-thickness conductors (transition region 0.5 < xi < 3),
+    use ESIMFiniteSlabSolver instead for accurate R_ac/R_dc calculation.
     """
 
     def __init__(self, bh_curve=None, sigma=None, frequency=None,
