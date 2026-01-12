@@ -1,8 +1,18 @@
-# PEEC Matrix and Surface Impedance Relationship
+# PEEC Surface Impedance and ESIM Analysis
 
 ## Overview
 
-This document describes how surface impedance Z_s is incorporated into the PEEC (Partial Element Equivalent Circuit) method for conductor modeling with skin effect.
+This document provides a comprehensive guide to surface impedance in PEEC (Partial Element Equivalent Circuit) conductor modeling, including:
+
+- PEEC impedance matrix formulation with skin effect
+- Dowell's formula for rectangular conductors
+- ESIM (Effective Surface Impedance Method) for nonlinear materials
+- Laplace domain representation and equivalent circuits
+- Proximity effect analysis
+
+**Current Scope**: Rectangular cross-section conductors (1D cell problem)
+
+**Future Extension**: Arbitrary 2D cross-sections (2D FEM cell problem)
 
 ## PEEC Basic Formulation
 
@@ -298,6 +308,55 @@ class PEECWithESIM:
 | AC Resistance | R_ac = R_dc · F | Diagonal matrix element |
 | PEEC Impedance | Z = R_ac + jωL | Full matrix |
 
+## ESIM vs Dowell: Boundary Condition Difference
+
+### Key Finding
+
+**ESIM (dH/dz = 0 BC) and Dowell's formula (H = 0 BC) solve DIFFERENT problems!**
+
+| Aspect | ESIM (Igarashi homogenization) | Dowell Formula |
+|--------|-------------------------------|----------------|
+| **BC at center** | dH/dz(a) = 0 (symmetry) | H(a) = 0 (current exits) |
+| **DC current** | 0 (no current at DC!) | I = H0 (current flows) |
+| **Use case** | Surface impedance Z_s | R_ac/R_dc |
+| **Formula** | Re(γa · tanh(γa)) | ξ · (sinh(2ξ)+sin(2ξ)) / (cosh(2ξ)-cos(2ξ)) |
+| **DC limit** | 0 | 1.0 |
+
+### Geometry Comparison
+
+**ESIM Geometry (dH/dz = 0)**:
+```
+Surface (z=0)          Center (z=a)
+    |                      |
+    H = H0                 dH/dz = 0
+    |                      |
+    +------ Conductor -----+
+
+At DC: H = constant, J = 0, I = 0
+This models a thick conductor where current crowds to surface.
+```
+
+**Dowell Geometry (H = 0)**:
+```
+Surface (z=0)          Center (z=a)
+    |                      |
+    H = H0                 H = 0
+    |                      |
+    +------ Conductor -----+
+
+At DC: H linear, J = H0/a, I = H0
+This models current flowing through the conductor.
+```
+
+### Key Difference: coth vs tanh
+
+| Formula | Function | BC at Center | DC Limit |
+|---------|----------|--------------|----------|
+| Dowell | **coth** | H(a) = 0 | F = 1 |
+| ESIM | **tanh** | dH/dz(a) = 0 | Z_s = 0 |
+
+Note: coth(x) = 1/tanh(x), reflecting different boundary conditions.
+
 ## Dowell vs ESIM: Method Comparison
 
 ### Dowell's Formula (Analytical)
@@ -370,6 +429,111 @@ L_int = Im(Z_s) · l / (ω · P)
 - Nonlinear material μ(H) (saturable iron)
 - Need Z_s for SIBC boundary conditions
 - Arbitrary cross-section (future 2D FEM)
+
+## Cross-Section Specific Formulas
+
+### Rectangular Cross-Section (Dowell)
+
+For width w >> height h (thin strip), use Dowell's formula:
+
+```python
+def dowell_rac_ratio(xi):
+    """Dowell's formula for rectangular conductor."""
+    if xi < 0.01:
+        return 1.0 + xi**4 / 45
+    sh2, sn2 = np.sinh(2*xi), np.sin(2*xi)
+    ch2, cs2 = np.cosh(2*xi), np.cos(2*xi)
+    return xi * (sh2 + sn2) / (ch2 - cs2)
+```
+
+### Round Wire (Kelvin Functions)
+
+For circular cross-section, use Kelvin functions (ber, bei):
+
+```python
+from scipy.special import kelvin
+
+def kelvin_rac_ratio(xi_sqrt2):
+    """R_ac/R_dc for round wire. xi_sqrt2 = sqrt(2) * radius / delta"""
+    ber, bei, _, _ = kelvin(xi_sqrt2)
+    h = 1e-6
+    ber_h, bei_h, _, _ = kelvin(xi_sqrt2 + h)
+    berp, beip = (ber_h - ber) / h, (bei_h - bei) / h
+    return (xi_sqrt2 / 2) * (complex(berp, beip) / complex(ber, bei)).real
+```
+
+### Geometry Summary
+
+| Cross-Section | Formula | Parameter |
+|--------------|---------|-----------|
+| Rectangular | Dowell (planar 1D) | ξ = half-thickness / δ |
+| Round | Kelvin functions | ξ = √2 × radius / δ |
+| Square | ~1.05 × Dowell | Approximate correction |
+| Litz wire | Complex formula | Depends on strand arrangement |
+| Arbitrary | 2D FEM required | No analytical formula |
+
+## ESIM Homogenization for Nonlinear Materials
+
+### Why Homogenization?
+
+For linear materials (constant μ), ESIM and Dowell give equivalent results:
+```
+mu_eff = mu * integral{|H|^2 dz} / integral{|H|^2 dz} = mu
+→ xi_eff = xi_initial
+→ ESIM → Dowell formula
+```
+
+**ESIM value is for NONLINEAR materials** where μ(H) varies with field strength.
+
+### Homogenization Algorithm
+
+1. **Solve 1D cell problem** with BC: H(0)=H0, dH/dz(a)=0
+   - Get H(z) and mu(z) distributions
+
+2. **Compute effective permeability** (|H|²-weighted average):
+   ```
+   mu_eff = integral{|H|^2 * mu(z)} dz / integral{|H|^2} dz
+   ```
+
+3. **Compute effective xi**:
+   ```
+   delta_eff = sqrt(2*rho / (omega * mu_eff))
+   xi_eff = a / delta_eff
+   ```
+
+4. **Apply Dowell's formula**:
+   ```
+   R_ac/R_dc = F(xi_eff)
+   ```
+
+### Validation Results (Linear Material)
+
+| ξ | Dowell | Direct Z_s | Homogenization |
+|----|--------|------------|----------------|
+| 0.3 | 1.0007 | 1.3335 | **1.0007** |
+| 1.0 | 1.0856 | 1.3513 | **1.0856** |
+| 3.0 | 3.0101 | 2.4779 | **3.0101** |
+
+The homogenization approach matches Dowell exactly for linear materials.
+
+### Nonlinear Material Example (Steel BH curve)
+
+| H0 [A/m] | μ_r_eff | ξ_eff | R_ac/R_dc |
+|----------|---------|-------|-----------|
+| 10 | 1588 | 25.0 | 25.0 |
+| 1000 | 1276 | 22.4 | 22.4 |
+| 10000 | 217 | 9.3 | 9.3 |
+
+As material saturates (high H0), μ_r decreases, ξ_eff decreases, and skin effect reduces.
+
+## Cross-Section Support Roadmap
+
+| Cross-Section | Cell Problem | Status |
+|--------------|--------------|--------|
+| **Rectangular/Planar** | 1D ESIM | Implemented |
+| Round wire | 1D (Kelvin functions) | Analytical solution available |
+| Arbitrary 2D | 2D FEM | Future work |
+| 3D topology (Litz, braid) | Complex homogenization | Not planned |
 
 ### PEEC Matrix Modification with Dowell
 
@@ -919,15 +1083,22 @@ Practical applicability:
 - Closely coupled windings: Use Dowell's m-layer formula or FEM
 ```
 
+## Implementation Files
+
+- `esim_cell_problem.py`: Base ESIM solvers (ESIMCellProblemSolver, ESIMFiniteSlabSolver)
+- `esim_correct_implementation.py`: ESIMHomogenizationSolver (correct approach)
+- `esim_conductor_model.py`: PEEC conductor model using ESIM
+
 ## References
 
 1. A. Ruehli, "Equivalent Circuit Models for Three-Dimensional Multiconductor Systems," IEEE Trans. MTT, 1974.
-2. P. L. Dowell, "Effects of eddy currents in transformer windings," Proc. IEE, 1966.
+2. P. L. Dowell, "Effects of eddy currents in transformer windings," Proc. IEE, vol. 113, no. 8, pp. 1387-1394, 1966.
 3. H. Igarashi, "Homogenization approach for skin effect in conductors," various papers.
 4. K. Hollaus et al., "Nonlinear Effective Surface Impedance," IEEE Trans. Magnetics, 2025.
 5. H. S. Wall, "Analytic Theory of Continued Fractions," Van Nostrand, 1948.
+6. J. A. Ferreira, "Improved analytical modeling of conductive losses in magnetic components," IEEE Trans. Power Electronics, vol. 9, no. 1, 1994.
 
 ---
 
-**Date**: 2026-01-11
+**Date**: 2026-01-12
 **Author**: Claude Code Analysis
