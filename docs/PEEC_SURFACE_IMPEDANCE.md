@@ -1191,12 +1191,68 @@ Z_ii(s) = R_dc,i * F(s) + s * (L_ext,ii + L_int,dc,i * G(s))
           Freq-dep R      External L     Freq-dep internal L
 ```
 
+### Why Dense L_ext Can Be Tridiagonalized
+
+**Question**: PEEC produces a dense L_ext matrix (with mutual inductances M_ij). Can Lanczos effectively tridiagonalize it?
+
+**Answer**: Yes! The Lanczos algorithm can tridiagonalize ANY symmetric/Hermitian matrix, including dense matrices.
+
+**Mathematical Basis**:
+
+```
+L_ext (N×N dense matrix)              L'_ext (n×n tridiagonal, n<<N)
+┌─────────────────────┐               ┌─────────────────┐
+│ L_11  M_12  M_13 ...│               │ α_1   β_1   0   │
+│ M_12  L_22  M_23 ...│    Lanczos    │ β_1   α_2   β_2 │
+│ M_13  M_23  L_33 ...│   ────────→   │  0    β_2   α_3 │
+│  :     :     :    : │               └─────────────────┘
+└─────────────────────┘
+
+Mutual inductances M_ij are absorbed into:
+- Transformation matrices U, V (Lanczos basis vectors)
+- Tridiagonal coefficients α_k, β_k
+```
+
+**Key Properties**:
+
+1. **Krylov Subspace Projection**: Lanczos generates an orthogonal basis for the Krylov subspace
+   K_n = span{v0, L·v0, L²·v0, ...}. On this subspace, L_ext is EXACTLY tridiagonal.
+
+2. **Moment Matching**: The reduced model preserves the first 2n moments of the transfer function
+   Z(s) = v0^T · (sL + R)^{-1} · v0. This means the terminal impedance is accurately reproduced.
+
+3. **Terminal Observability**: From the terminal (port), internal mutual coupling details are not
+   directly observable. Only the aggregate terminal response Z(s) matters for circuit simulation.
+
+**Physical Interpretation**:
+
+```
+Original PEEC model:           Reduced CLN model:
+
+  ┌───┐   M_12   ┌───┐           ┌───┐     ┌───┐
+  │L_1├─────────┤L_2│           │L'1├─────┤L'2├─────...
+  └─┬─┘   M_23   └─┬─┘     →     └─┬─┘     └─┬─┘
+    │      ↓       │                │         │
+   [R1]  ┌───┐   [R2]             [R'1]     [R'2]
+    │    │L_3│     │                │         │
+    ↓    └───┘     ↓                ↓         ↓
+
+N elements with N(N-1)/2         n elements with 2n-1
+mutual couplings                 neighbor couplings only
+```
+
+**Why This Works for Terminal Impedance**:
+
+The impedance seen from the terminal only depends on how currents distribute through the network
+in response to terminal voltage. Lanczos finds the optimal n-dimensional subspace to represent
+this current distribution, capturing the essential collective behavior of all mutual couplings.
+
 ### Step 1: DC Basis Generation
 
 Generate Lanczos basis at DC (s=0):
 
 ```
-K = L_ext (external inductance matrix, constant)
+K = L_ext (external inductance matrix, dense with mutual inductances)
 N = R_dc  (DC resistance matrix, diagonal)
 v0 = terminal excitation vector
 
