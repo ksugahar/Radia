@@ -409,17 +409,8 @@ EXP int CALL RadObjCenFld(double* B, int* arMesh, int obj, char type); //OC27092
 */
 EXP int CALL RadObjSetM(int obj, double* M);
 
-/** Cuts the object obj by a plane passing through a given point normally to a given vector.
-@param Objs [out] array of reference numbers of the objects produced by the cutting
-@param nobj [out] amount of the objects produced by the cutting
-@param obj [in] reference number of the object to cut
-@param P [in] array of 3 cartesian coordinates of a point the cutting plane passes through
-@param N [in] array of 3 cartesian coordinates of the vector normal to the cutting plane
-@param opt [in] pointer to an option string, which can be "Frame->Lab", "Frame->Loc" or 0. This specifies whether the cuting plane is defined in the laboratory frame ("Frame->Lab" or 0) or in the local frame of the object obj. 
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjCutMag(int* Objs, int* nobj, int obj, double* P, double* N, char* opt);
+// RadObjCutMag REMOVED (2026-01-14) - Use Cubit/Netgen for mesh operations
+// See CLAUDE.md "Mesh Operations Policy" for details
 
 /** Computes geometrical volume of a 3D object.
 @param v [out] volume (in mm^3)

@@ -43,7 +43,7 @@ void AddToGroup( int, int*, long );
 void OutGroupSize( int );
 void OutGroupSubObjectKeys( int );
 void DuplicateElementG3DOpt( int, const char* );
-void CutElementG3DOpt( int, double,double,double, double,double,double, const char* );
+// CutElementG3DOpt REMOVED (2026-01-14) - Use Cubit/Netgen for mesh operations
 void SubdivideElementG3DOpt( int, double*, char, double*, int, const char*, const char*, const char* );
 void GeometricalVolume( int );
 void GeometricalLimits( int );
@@ -546,18 +546,7 @@ int CALL RadObjSetM(int obj, double* pM)
 
 //-------------------------------------------------------------------------
 
-int CALL RadObjCutMag(int* pIndexes, int* pAmOfIndexes, int Obj, double* pP, double* pN, char* Opt1)
-{
-	CutElementG3DOpt(Obj, pP[0], pP[1], pP[2], pN[0], pN[1], pN[2], Opt1);
-
-	int ErrStat = ioBuffer.OutErrorStatus();
-	if(ErrStat > 0) return ErrStat;
-
-	int Dims[20], NumDims;
-	ioBuffer.OutMultiDimArrayOfInt(pIndexes, Dims, NumDims);
-	*pAmOfIndexes = Dims[0];
-	return ErrStat;
-}
+// RadObjCutMag REMOVED (2026-01-14) - Use Cubit/Netgen for mesh operations
 
 //-------------------------------------------------------------------------
 
