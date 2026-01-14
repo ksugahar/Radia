@@ -26,10 +26,6 @@
 // MSC (Magnetic Surface Charge) support for 6 DOF hexahedra
 // radTPolyhedron hexahedra use 6 DOF MSC (surface charge on each face)
 #define RADIA_MSC_SUPPORT
-#ifdef RADIA_MSC_SUPPORT
-// Note: radTPolyhedron is already included above (line 19)
-// radTExtrPolygonMSC is deprecated - use radTPolyhedron with 6 faces instead
-#endif
 
 // Note: Dipole-dipole method for tetrahedra was tested but found numerically unstable.
 // Radia production solver uses the surface charge (MSC) method.
