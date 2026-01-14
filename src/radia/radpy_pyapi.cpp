@@ -895,10 +895,14 @@ static PyObject* radia_PreRelax(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Set relaxation sub-interval for LU decomposition solver
+ * DEPRECATED: Set relaxation sub-interval for LU decomposition solver
+ * Use Solve() with method=0 (LU) instead.
  ***************************************************************************/
 static PyObject* radia_SetRelaxSubInterval(PyObject* self, PyObject* args)
 {
+	// Print deprecation warning
+	PySys_WriteStderr("Warning: SetRelaxSubInterval() is deprecated. Use Solve(obj, prec, maxiter, 0) for LU solver.\n");
+
 	PyObject* oRes = 0;
 	try
 	{
@@ -2117,10 +2121,14 @@ static PyObject* radia_MatMvsH(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Field Calculation Methods: Builds interaction matrix for an object.
+ * DEPRECATED: Builds interaction matrix for an object.
+ * Use Solve() instead - it handles matrix construction internally.
  ***************************************************************************/
 static PyObject* radia_RlxPre(PyObject* self, PyObject* args)
 {
+	// Print deprecation warning
+	PySys_WriteStderr("Warning: RlxPre() is deprecated. Use Solve() instead.\n");
+
 	PyObject *oResInd=0;
 	try
 	{
@@ -2144,10 +2152,14 @@ static PyObject* radia_RlxPre(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Field Calculation Methods: Executes manual relaxation procedure for the interaction matrix intrc.
+ * DEPRECATED: Executes manual relaxation procedure for the interaction matrix intrc.
+ * Use Solve() instead with method parameter (0=LU, 1=BiCGSTAB, 2=HACApK).
  ***************************************************************************/
 static PyObject* radia_RlxMan(PyObject* self, PyObject* args)
 {
+	// Print deprecation warning
+	PySys_WriteStderr("Warning: RlxMan() is deprecated. Use Solve(obj, prec, maxiter, method) instead.\n");
+
 	PyObject *oResInd=0;
 	try
 	{
@@ -2173,10 +2185,14 @@ static PyObject* radia_RlxMan(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Field Calculation Methods: Executes automatic relaxation procedure for the interaction matrix intrc.
+ * DEPRECATED: Executes automatic relaxation procedure for the interaction matrix intrc.
+ * Use Solve() instead - it provides automatic relaxation with better convergence.
  ***************************************************************************/
 static PyObject* radia_RlxAuto(PyObject* self, PyObject* args)
 {
+	// Print deprecation warning
+	PySys_WriteStderr("Warning: RlxAuto() is deprecated. Use Solve(obj, prec, maxiter, method) instead.\n");
+
 	PyObject *oOpt=0, *oResInd=0;
 	try
 	{
@@ -2207,10 +2223,14 @@ static PyObject* radia_RlxAuto(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Field Calculation Methods: Updates external field data for the relaxation (to take into account e.g. modification of currents in coils, if any) without rebuilding the interaction matrix.
+ * DEPRECATED: Updates external field data for the relaxation.
+ * Use Solve() instead - it automatically handles field updates.
  ***************************************************************************/
 static PyObject* radia_RlxUpdSrc(PyObject* self, PyObject* args)
 {
+	// Print deprecation warning
+	PySys_WriteStderr("Warning: RlxUpdSrc() is deprecated. Use Solve() for re-solving with updated sources.\n");
+
 	PyObject *oResInd = 0;
 
 	try
