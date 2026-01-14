@@ -1274,34 +1274,8 @@ static PyObject* radia_ObjDegFre(PyObject* self, PyObject* args)
 	return oRes;
 }
 
-/************************************************************************//**
- * Magnetic Field Sources: Assigns drawing attributes - RGB color (r,g,b) and line thickness thcn - to a Magnetic Field Source object
- ***************************************************************************/
-static PyObject* radia_ObjDrwAtr(PyObject* self, PyObject* args)
-{
-	PyObject *oInd=0, *oRGB=0;
-	try
-	{
-		double thcn=0.001;
-		if(!PyArg_ParseTuple(args, "OO|d:ObjDrwAtr", &oInd, &oRGB, &thcn)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwAtr");
-		if((oInd == 0) || (oRGB == 0)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwAtr");
-
-		if(!PyNumber_Check(oInd)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwAtr");
-		int ind = (int)PyLong_AsLong(oInd);
-
-		double arRGB[3];
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oRGB, 'd', arRGB, 3, CombErStr(strEr_BadFuncArg, ": ObjDrwAtr, incorrect definition of RGB color"));
-
-		g_pyParse.ProcRes(RadObjDrwAtr(ind, arRGB, thcn));
-		Py_XINCREF(oInd); //?
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
-	}
-	return oInd;
-}
+// radia_ObjDrwAtr REMOVED (2026-01-14) - Drawing attributes no longer used
+// Use VTK export (FldVTS) with ParaView for visualization
 
 /************************************************************************//**
  * Space Transformations: Creates a symmetry with respect to plane defined by a point and a normal vector.
@@ -4846,7 +4820,7 @@ static PyMethodDef radia_methods[] = {
 	{"ObjCenFld", radia_ObjCenFld, METH_VARARGS, "ObjCenFld(obj,'A|B|H|J|M') provides coordinates of geometrical center point of the object obj and a field characteristic vector at that point. The type of field characteristic is defined by the second parameter (character); it can be one of the following: 'A' for vector potential, 'B' for magnetic field induction, 'H' for magnetic field strength, 'J' for current density, 'M' for magnetization. If obj is a container, a list of the container members' center points and their field characteristics is returned."},
 	{"ObjSetM", radia_ObjSetM, METH_VARARGS, "ObjSetM(obj,[mx,my,mz]) sets magnetization [mx,my,mz] in 3D object obj."},
 	{"ObjScaleCur", radia_ObjScaleCur, METH_VARARGS, "ObjScaleCur(obj,k) scales current (density) in 3D object obj by multiplying it by constant k (if obj is a current-carying object). If obj is a container, the current (density) scaling applies to all its members."},
-	{"ObjDrwAtr", radia_ObjDrwAtr, METH_VARARGS, "ObjDrwAtr(obj,[r,g,b],thcn) assigns drawing attributes - RGB color [r,g,b] and line thickness thcn - to 3D object obj."},
+	// ObjDrwAtr REMOVED (2026-01-14) - Use VTK export with ParaView for visualization
 
 	{"TrfTrsl", radia_TrfTrsl, METH_VARARGS, "TrfTrsl([vx,vy,vz]) creates a translation by vector [vx,vy,vz]."},
 	{"TrfRot", radia_TrfRot, METH_VARARGS, "TrfRot([x,y,z],[vx,vy,vz],phi) creates a rotation of angle phi around the axis defined by the point [x,y,z] and the vector [vx,vy,vz]."},
