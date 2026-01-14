@@ -105,7 +105,6 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_poly_analytical.cpp
 	${CORE_DIR}/rad_particle_trajectory.cpp
 	${CORE_DIR}/rad_rectangular_block.cpp
-	${CORE_DIR}/rad_extruded_polygon_msc.cpp
 	${CORE_DIR}/rad_relaxation_methods.cpp
 	${CORE_DIR}/rad_subdivided_arc_current.cpp
 	${CORE_DIR}/rad_subdivided_extruded_polygon.cpp
