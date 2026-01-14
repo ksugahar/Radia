@@ -797,6 +797,29 @@ HACApK H-matrix solver is **implemented and available** as Method 2.
 
 **Note**: Original Radia used Implicit SS (Gauss-Seidel) which had slow convergence for nonlinear materials. This was replaced with BiCGSTAB in v1.3.13. HACApK was added in v1.3.15.
 
+### Deprecated Relaxation API (2026-01-14)
+
+The following legacy relaxation functions are **DEPRECATED** and will emit warnings:
+
+| Function | Status | Replacement |
+|----------|--------|-------------|
+| `RlxPre()` | Deprecated | Use `Solve()` - handles matrix construction internally |
+| `RlxMan()` | Deprecated | Use `Solve(obj, prec, maxiter, method)` |
+| `RlxAuto()` | Deprecated | Use `Solve(obj, prec, maxiter, method)` |
+| `RlxUpdSrc()` | Deprecated | Use `Solve()` for re-solving |
+| `SetRelaxSubInterval()` | Deprecated | Use `Solve(obj, prec, maxiter, 0)` for LU |
+
+**Migration Example**:
+
+```python
+# OLD (deprecated)
+intrc = rad.RlxPre(container, container)
+rad.RlxMan(intrc, 5, 1, 1.0)  # Method 5 = LU
+
+# NEW (recommended)
+rad.Solve(container, 0.0001, 1000, 0)  # Method 0 = LU
+```
+
 ### HACApK Parameters
 
 Configure HACApK parameters using `rad.SetHACApKParams(eps, leaf_size, eta)` or `rad.SetHMatrixEpsilon(eps)`:
