@@ -1388,14 +1388,8 @@ int CALL RadFldLenTol(int* n, double AbsVal, double RelVal, double ZeroVal)
 }
 
 //-------------------------------------------------------------------------
-
-int CALL RadObjDrwAtr(int Obj, double* pRGB, double Thcn)
-{
-	ApplyDrawAttrToElem(Obj, *pRGB, *(pRGB + 1), *(pRGB + 2), Thcn);
-	ioBuffer.OutInt(); // to clear buffer
-	return ioBuffer.OutErrorStatus();
-}
-
+// RadObjDrwAtr REMOVED (2026-01-14) - Drawing attributes no longer used
+// Use VTK export with ParaView for visualization
 //-------------------------------------------------------------------------
 
 int CALL RadUtiDel(int* n, int Elem)
