@@ -128,8 +128,6 @@ rad.SetHACApKParams(1e-4, 10, 2.0)
 rad.Solve(geometry, 0.0001, 1000, 2)
 ```
 
-**Note**: The legacy `RlxPre()` API is deprecated. Use `Solve()` with method 2 (HACApK) for H-matrix acceleration.
-
 ---
 
 ## Phase 3B Features Verification
