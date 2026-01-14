@@ -169,8 +169,6 @@ rad.MatApl(container, mat)
 rad.Solve(container, 0.0001, 1000, 2)  # HACApK
 ```
 
-**Note**: Some benchmark scripts use the deprecated `RlxPre()`/`RlxMan()` API for historical comparison purposes. For new code, always use `rad.Solve()`.
-
 ## Quick Start
 
 ```bash
