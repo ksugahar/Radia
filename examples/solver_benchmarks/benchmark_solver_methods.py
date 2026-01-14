@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """
-Solver Methods Benchmark: Direct vs Relaxation vs Relaxation+H-matrix
+Solver Methods Benchmark: LU vs BiCGSTAB vs HACApK
 
 Compares three solver methods for magnetic field problems:
-1. Direct calculation (no solver, uses initial magnetization)
-2. Standard relaxation solver
-3. H-matrix accelerated relaxation solver
+1. Method 0 (LU): Direct solver
+2. Method 1 (BiCGSTAB): Iterative solver
+3. Method 2 (HACApK): H-matrix accelerated solver
 
 Problem: Nonlinear magnetic material with applied background field
 
@@ -34,16 +34,38 @@ def hex_vertices(cx, cy, cz, dx, dy, dz):
         [cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz]
     ]
 
+
+def create_geometry(n, size, mat_params, H_bg):
+    """Create hexahedral mesh with material and background field."""
+    elem_size = size / n
+    mat = rad.MatSatIsoFrm(*mat_params)
+
+    elements = []
+    for i in range(n):
+        for j in range(n):
+            for k in range(n):
+                x = -size/2 + (i + 0.5) * elem_size
+                y = -size/2 + (j + 0.5) * elem_size
+                z = -size/2 + (k + 0.5) * elem_size
+                vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
+                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
+                rad.MatApl(elem, mat)
+                elements.append(elem)
+
+    bg_field = rad.ObjBckg(H_bg)
+    return rad.ObjCnt(elements + [bg_field])
+
+
 print("=" * 80)
 print("Solver Methods Benchmark")
-print("Direct / Relaxation / Relaxation+H-matrix Comparison")
+print("LU (Method 0) / BiCGSTAB (Method 1) / HACApK (Method 2)")
 print("=" * 80)
 
 # Test configurations
 test_cases = [
-	{"n": 3, "desc": "Small (N=27)"},
-	{"n": 5, "desc": "Medium (N=125)"},
-	{"n": 7, "desc": "Large (N=343)"},
+    {"n": 3, "desc": "Small (N=27)"},
+    {"n": 5, "desc": "Medium (N=125)"},
+    {"n": 7, "desc": "Large (N=343)"},
 ]
 
 # Solver parameters
@@ -51,12 +73,13 @@ precision = 0.0001
 max_iter = 1000
 
 # Background field (uniform field applied to material)
-# Note: In Radia, ObjBckg() uses Tesla, and field values are in Radia's internal units
-# where H and B are numerically equal. Use value ~1.0 for moderate field.
 H_bg = [1.0, 0, 0]  # 1.0 T background field in X direction
 
 # Observation point
 obs_point = [0, 0, 50]  # 50mm above center
+
+# Nonlinear material (soft iron)
+mat_params = [[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]]
 
 print("\nProblem Setup:")
 print("  Material: Nonlinear (Steel37)")
@@ -68,188 +91,131 @@ print("  Max iterations: {}".format(max_iter))
 results = []
 
 for test in test_cases:
-	n = test["n"]
-	desc = test["desc"]
+    n = test["n"]
+    desc = test["desc"]
+    n_elem = n ** 3
+    size = 20.0  # mm (total cube size)
 
-	print("\n" + "=" * 80)
-	print("Test Case: {}".format(desc))
-	print("=" * 80)
+    print("\n" + "=" * 80)
+    print("Test Case: {} ({} elements)".format(desc, n_elem))
+    print("=" * 80)
 
-	size = 20.0  # mm (total cube size)
-	elem_size = size / n
+    result_entry = {"n": n, "n_elem": n_elem}
 
-	# ========================================
-	# Method 1: Direct Calculation
-	# ========================================
-	print("\n[Method 1] Direct Calculation (no solver)")
-	print("-" * 80)
-	rad.UtiDelAll()
+    # ========================================
+    # Method 0: LU (Direct)
+    # ========================================
+    print("\n[Method 0] LU Direct Solver")
+    print("-" * 80)
+    rad.UtiDelAll()
+    container = create_geometry(n, size, mat_params, H_bg)
 
-	# Create material
-	mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
+    t0 = time.perf_counter()
+    result_lu = rad.Solve(container, precision, max_iter, 0)
+    t_lu = time.perf_counter() - t0
 
-	# Create geometry with initial magnetization
-	elements = []
-	for i in range(n):
-		for j in range(n):
-			for k in range(n):
-				x = -size/2 + (i + 0.5) * elem_size
-				y = -size/2 + (j + 0.5) * elem_size
-				z = -size/2 + (k + 0.5) * elem_size
-				# No initial magnetization (material will respond to background field)
-				# Element with dimensions elem_size x elem_size x elem_size
-				vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-				elem = rad.ObjHexahedron(vertices, [0, 0, 0])
-				rad.MatApl(elem, mat)
-				elements.append(elem)
+    H_lu = rad.Fld(container, 'h', obs_point)
+    iter_lu = int(result_lu[1]) if isinstance(result_lu, (list, tuple)) else 0
 
-	# Add background field source to container
-	bg_field = rad.ObjBckg(H_bg)
-	container = rad.ObjCnt(elements + [bg_field])
+    print("  Time: {:.6f} s, Iterations: {}".format(t_lu, iter_lu))
+    print("  H: [{:.6e}, {:.6e}, {:.6e}] A/m".format(*H_lu))
+    H_mag_lu = np.linalg.norm(H_lu)
+    print("  |H|: {:.6e} A/m".format(H_mag_lu))
 
-	print("  Elements: {} ({}x{}x{})".format(len(elements), n, n, n))
+    result_entry["t_lu"] = t_lu
+    result_entry["H_lu"] = H_lu
 
-	# Direct field calculation (using initial magnetization only)
-	t0 = time.perf_counter()
-	H_direct = rad.Fld(container, 'h', obs_point)
-	t_direct = time.perf_counter() - t0
+    # ========================================
+    # Method 1: BiCGSTAB (Iterative)
+    # ========================================
+    print("\n[Method 1] BiCGSTAB Iterative Solver")
+    print("-" * 80)
+    rad.UtiDelAll()
+    container = create_geometry(n, size, mat_params, H_bg)
 
-	print("  Time: {:.6f} s".format(t_direct))
-	print("  H: [{:.6e}, {:.6e}, {:.6e}] A/m".format(*H_direct))
-	H_mag_direct = np.linalg.norm(H_direct)
-	print("  |H|: {:.6e} A/m".format(H_mag_direct))
+    t0 = time.perf_counter()
+    result_bicg = rad.Solve(container, precision, max_iter, 1)
+    t_bicg = time.perf_counter() - t0
 
-	# ========================================
-	# Method 2: Standard Relaxation
-	# ========================================
-	print("\n[Method 2] Standard Relaxation (no H-matrix)")
-	print("-" * 80)
-	rad.UtiDelAll()
+    H_bicg = rad.Fld(container, 'h', obs_point)
+    iter_bicg = int(result_bicg[1]) if isinstance(result_bicg, (list, tuple)) else 0
 
-	# Recreate geometry
-	mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
+    print("  Time: {:.6f} s, Iterations: {}".format(t_bicg, iter_bicg))
+    print("  H: [{:.6e}, {:.6e}, {:.6e}] A/m".format(*H_bicg))
+    H_mag_bicg = np.linalg.norm(H_bicg)
+    print("  |H|: {:.6e} A/m".format(H_mag_bicg))
 
-	elements = []
-	for i in range(n):
-		for j in range(n):
-			for k in range(n):
-				x = -size/2 + (i + 0.5) * elem_size
-				y = -size/2 + (j + 0.5) * elem_size
-				z = -size/2 + (k + 0.5) * elem_size
-				# No initial magnetization - pure soft magnetic material
-				# Element with dimensions elem_size x elem_size x elem_size
-				vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-				elem = rad.ObjHexahedron(vertices, [0, 0, 0])
-				rad.MatApl(elem, mat)
-				elements.append(elem)
+    result_entry["t_bicg"] = t_bicg
+    result_entry["H_bicg"] = H_bicg
 
-	# Add background field source to container
-	bg_field = rad.ObjBckg(H_bg)
-	container = rad.ObjCnt(elements + [bg_field])
+    # ========================================
+    # Method 2: HACApK (H-matrix)
+    # ========================================
+    print("\n[Method 2] HACApK H-matrix Accelerated Solver")
+    print("-" * 80)
+    try:
+        rad.UtiDelAll()
+        container = create_geometry(n, size, mat_params, H_bg)
+        rad.SetHACApKParams(1e-4, 10, 2.0)
 
-	# Disable H-matrix for standard relaxation
-	rad.SolverHMatrixDisable()
+        t0 = time.perf_counter()
+        result_hmat = rad.Solve(container, precision, max_iter, 2)
+        t_hmat = time.perf_counter() - t0
 
-	# Run relaxation solver
-	t0 = time.perf_counter()
-	result_relax = rad.Solve(container, precision, max_iter)
-	t_relax = time.perf_counter() - t0
+        H_hmat = rad.Fld(container, 'h', obs_point)
+        iter_hmat = int(result_hmat[1]) if isinstance(result_hmat, (list, tuple)) else 0
 
-	H_relax = rad.Fld(container, 'h', obs_point)
+        print("  Time: {:.6f} s, Iterations: {}".format(t_hmat, iter_hmat))
+        print("  H: [{:.6e}, {:.6e}, {:.6e}] A/m".format(*H_hmat))
+        H_mag_hmat = np.linalg.norm(H_hmat)
+        print("  |H|: {:.6e} A/m".format(H_mag_hmat))
 
-	print("  Time: {:.6f} s".format(t_relax))
-	print("  H: [{:.6e}, {:.6e}, {:.6e}] A/m".format(*H_relax))
-	H_mag_relax = np.linalg.norm(H_relax)
-	print("  |H|: {:.6e} A/m".format(H_mag_relax))
-	print("  Convergence: {}".format(result_relax))
+        result_entry["t_hmat"] = t_hmat
+        result_entry["H_hmat"] = H_hmat
+    except Exception as e:
+        print("  HACApK not available: {}".format(e))
+        result_entry["t_hmat"] = float('inf')
+        result_entry["H_hmat"] = None
 
-	# ========================================
-	# Method 3: H-matrix Relaxation
-	# ========================================
-	print("\n[Method 3] H-matrix Accelerated Relaxation")
-	print("-" * 80)
-	rad.UtiDelAll()
+    # ========================================
+    # Comparison
+    # ========================================
+    print("\n[Comparison]")
+    print("-" * 80)
 
-	# Recreate geometry
-	mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
+    # Use LU as reference
+    H_ref = np.array(H_lu)
+    H_ref_mag = np.linalg.norm(H_ref)
 
-	elements = []
-	for i in range(n):
-		for j in range(n):
-			for k in range(n):
-				x = -size/2 + (i + 0.5) * elem_size
-				y = -size/2 + (j + 0.5) * elem_size
-				z = -size/2 + (k + 0.5) * elem_size
-				# No initial magnetization - pure soft magnetic material
-				# Element with dimensions elem_size x elem_size x elem_size
-				vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-				elem = rad.ObjHexahedron(vertices, [0, 0, 0])
-				rad.MatApl(elem, mat)
-				elements.append(elem)
+    # BiCGSTAB vs LU error
+    diff_bicg = np.array(H_bicg) - H_ref
+    err_bicg = np.linalg.norm(diff_bicg) / (H_ref_mag + 1e-15) * 100
 
-	# Add background field source to container
-	bg_field = rad.ObjBckg(H_bg)
-	container = rad.ObjCnt(elements + [bg_field])
+    # HACApK vs LU error
+    if result_entry.get("H_hmat") is not None:
+        diff_hmat = np.array(result_entry["H_hmat"]) - H_ref
+        err_hmat = np.linalg.norm(diff_hmat) / (H_ref_mag + 1e-15) * 100
+    else:
+        err_hmat = float('inf')
 
-	# Enable H-matrix for relaxation
-	rad.SolverHMatrixEnable(1, eps=1e-4, max_rank=30)
+    print("  Reference: LU |H| = {:.6e} A/m".format(H_ref_mag))
+    print("")
+    print("  Method           Time (s)    |H| (A/m)        Error (%)   Speedup")
+    print("  " + "-" * 72)
+    print("  LU             {:9.6f}  {:14.6e}  {:11.4f}     1.00x".format(
+        t_lu, H_mag_lu, 0.0))
+    print("  BiCGSTAB       {:9.6f}  {:14.6e}  {:11.4f}  {:7.2f}x".format(
+        t_bicg, H_mag_bicg, err_bicg, t_lu/t_bicg if t_bicg > 0 else 0))
+    if result_entry.get("t_hmat", float('inf')) < float('inf'):
+        print("  HACApK         {:9.6f}  {:14.6e}  {:11.4f}  {:7.2f}x".format(
+            result_entry["t_hmat"], H_mag_hmat, err_hmat, t_lu/result_entry["t_hmat"] if result_entry["t_hmat"] > 0 else 0))
 
-	# Run relaxation solver with H-matrix
-	t0 = time.perf_counter()
-	result_hmat = rad.Solve(container, precision, max_iter)
-	t_hmat = time.perf_counter() - t0
+    result_entry["err_bicg"] = err_bicg
+    result_entry["err_hmat"] = err_hmat
+    result_entry["speedup_bicg"] = t_lu/t_bicg if t_bicg > 0 else 0
+    result_entry["speedup_hmat"] = t_lu/result_entry.get("t_hmat", float('inf')) if result_entry.get("t_hmat", float('inf')) < float('inf') else 0
 
-	H_hmat = rad.Fld(container, 'h', obs_point)
-
-	# Get H-matrix stats
-	stats = rad.GetHMatrixStats()
-
-	print("  Time: {:.6f} s".format(t_hmat))
-	print("  H: [{:.6e}, {:.6e}, {:.6e}] A/m".format(*H_hmat))
-	H_mag_hmat = np.linalg.norm(H_hmat)
-	print("  |H|: {:.6e} A/m".format(H_mag_hmat))
-	print("  Convergence: {}".format(result_hmat))
-	print("  H-matrix memory: {:.3f} MB".format(stats[2]))
-
-	# ========================================
-	# Comparison
-	# ========================================
-	print("\n[Comparison]")
-	print("-" * 80)
-
-	# Use standard relaxation as reference
-	H_ref = np.array(H_relax)
-	H_ref_mag = np.linalg.norm(H_ref)
-
-	# Direct vs Relaxation error
-	diff_direct = np.array(H_direct) - H_ref
-	err_direct = np.linalg.norm(diff_direct) / (H_ref_mag + 1e-15) * 100
-
-	# H-matrix vs Relaxation error
-	diff_hmat = np.array(H_hmat) - H_ref
-	err_hmat = np.linalg.norm(diff_hmat) / (H_ref_mag + 1e-15) * 100
-
-	print("  Reference: Standard Relaxation |H| = {:.6e} A/m".format(H_ref_mag))
-	print("")
-	print("  Method           Time (s)    |H| (A/m)        Error (%)   Speedup")
-	print("  " + "-" * 72)
-	print("  Direct         {:9.6f}  {:14.6e}  {:11.4f}        -".format(
-		t_direct, H_mag_direct, err_direct))
-	print("  Relaxation     {:9.6f}  {:14.6e}  {:11.4f}     1.00x".format(
-		t_relax, H_mag_relax, 0.0))
-	print("  H-matrix       {:9.6f}  {:14.6e}  {:11.4f}  {:7.2f}x".format(
-		t_hmat, H_mag_hmat, err_hmat, t_relax/t_hmat if t_hmat > 0 else 0))
-
-	results.append({
-		"n": n,
-		"n_elem": n**3,
-		"t_direct": t_direct,
-		"t_relax": t_relax,
-		"t_hmat": t_hmat,
-		"err_direct": err_direct,
-		"err_hmat": err_hmat,
-		"speedup": t_relax/t_hmat if t_hmat > 0 else 0
-	})
+    results.append(result_entry)
 
 # ========================================
 # Summary
@@ -257,26 +223,27 @@ for test in test_cases:
 print("\n" + "=" * 80)
 print("SUMMARY")
 print("=" * 80)
-print("\n{:>6s} {:>8s}  {:>12s} {:>12s} {:>12s}  {:>10s} {:>10s}  {:>10s}".format(
-	"N", "Elements",
-	"Direct (s)", "Relax (s)", "H-mat (s)",
-	"Dir Err(%)", "H-mat Err(%)",
-	"Speedup"))
-print("-" * 80)
+print("\n{:>6s} {:>8s}  {:>12s} {:>12s} {:>12s}  {:>10s} {:>10s}".format(
+    "N", "Elements",
+    "LU (s)", "BiCGSTAB (s)", "HACApK (s)",
+    "BiCG Spdup", "HACApK Spdup"))
+print("-" * 90)
 
 for r in results:
-	print("{:>6d} {:>8d}  {:>12.6f} {:>12.6f} {:>12.6f}  {:>10.4f} {:>10.4f}  {:>10.2f}x".format(
-		r["n"], r["n_elem"],
-		r["t_direct"], r["t_relax"], r["t_hmat"],
-		r["err_direct"], r["err_hmat"],
-		r["speedup"]))
+    hmat_str = "{:.6f}".format(r.get("t_hmat", float('inf'))) if r.get("t_hmat", float('inf')) < float('inf') else "N/A"
+    hmat_spdup = "{:.2f}x".format(r.get("speedup_hmat", 0)) if r.get("speedup_hmat", 0) > 0 else "N/A"
+
+    print("{:>6d} {:>8d}  {:>12.6f} {:>12.6f} {:>12s}  {:>10.2f}x {:>10s}".format(
+        r["n"], r["n_elem"],
+        r["t_lu"], r["t_bicg"], hmat_str,
+        r.get("speedup_bicg", 0), hmat_spdup))
 
 print("=" * 80)
 print("\nNotes:")
-print("  - Direct: Uses initial magnetization only (no iterations)")
-print("  - Relaxation: Standard solver (reference for accuracy)")
-print("  - H-matrix: Accelerated solver (best for large problems N > 100)")
-print("  - Error: Relative difference from Relaxation method")
+print("  - LU: Direct solver, best for small problems (N < 200)")
+print("  - BiCGSTAB: Iterative solver, good for medium problems")
+print("  - HACApK: H-matrix accelerated, best for large problems (N > 1000)")
+print("  - Error: Relative difference from LU method")
 print("=" * 80)
 
 rad.UtiDelAll()
