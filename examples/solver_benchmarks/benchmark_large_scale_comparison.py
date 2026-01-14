@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Large-Scale Solver Comparison: LU vs Gauss-Seidel vs H-matrix
-==============================================================
+Large-Scale Solver Comparison: LU vs BiCGSTAB vs HACApK
+========================================================
 
 Comprehensive benchmark comparing three solver methods across a wide range of problem sizes:
-1. LU Decomposition - Direct solver, O(N^3)
-2. Gauss-Seidel (Standard Relaxation) - Iterative solver, O(N^2) per iteration
-3. H-matrix Accelerated - Fast iterative solver, O(N^2 log N) per iteration
+1. LU Decomposition (Method 0) - Direct solver, O(N^3)
+2. BiCGSTAB (Method 1) - Iterative solver, O(N^2) per iteration
+3. HACApK (Method 2) - H-matrix accelerated BiCGSTAB, O(N^2 log N) per iteration
 
 This benchmark demonstrates:
 - Performance scaling with problem size
@@ -20,7 +20,6 @@ Problem: Nonlinear magnetic material (soft iron) with background field
 import sys
 import time
 import os
-import tracemalloc
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
@@ -38,23 +37,42 @@ def hex_vertices(cx, cy, cz, dx, dy, dz):
         [cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz]
     ]
 
+
+def create_geometry(n, size, mat_params, H_bg):
+    """Create hexahedral mesh with material and background field."""
+    elem_size = size / n
+    mat = rad.MatSatIsoFrm(*mat_params)
+
+    elements = []
+    for i in range(n):
+        for j in range(n):
+            for k in range(n):
+                x = -size/2 + (i + 0.5) * elem_size
+                y = -size/2 + (j + 0.5) * elem_size
+                z = -size/2 + (k + 0.5) * elem_size
+                vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
+                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
+                rad.MatApl(elem, mat)
+                elements.append(elem)
+
+    bg_field = rad.ObjBckg(H_bg)
+    return rad.ObjCnt(elements + [bg_field])
+
+
 print("=" * 80)
 print("Large-Scale Solver Comparison Benchmark")
-print("LU Decomposition vs Gauss-Seidel vs H-matrix")
+print("LU (Method 0) vs BiCGSTAB (Method 1) vs HACApK (Method 2)")
 print("=" * 80)
 
 # Test configurations - progressively larger problems
 test_cases = [
-    {"n": 3, "desc": "Tiny (N=27)", "lu_enabled": True, "iterations": 50},
-    {"n": 4, "desc": "Very Small (N=64)", "lu_enabled": True, "iterations": 30},
-    {"n": 5, "desc": "Small (N=125)", "lu_enabled": True, "iterations": 20},
-    {"n": 6, "desc": "Medium-Small (N=216)", "lu_enabled": True, "iterations": 10},
-    {"n": 7, "desc": "Medium (N=343)", "lu_enabled": False, "iterations": 5},  # LU too slow
-    {"n": 8, "desc": "Medium-Large (N=512)", "lu_enabled": False, "iterations": 3},
-    {"n": 10, "desc": "Large (N=1000)", "lu_enabled": False, "iterations": 2},
-    {"n": 13, "desc": "Very Large (N=2197)", "lu_enabled": False, "iterations": 2},
-    {"n": 17, "desc": "Extra Large (N=4913)", "lu_enabled": False, "iterations": 1},
-    {"n": 22, "desc": "Huge (N=10648)", "lu_enabled": False, "iterations": 1},
+    {"n": 3, "desc": "Tiny (N=27)", "lu_enabled": True},
+    {"n": 4, "desc": "Very Small (N=64)", "lu_enabled": True},
+    {"n": 5, "desc": "Small (N=125)", "lu_enabled": True},
+    {"n": 6, "desc": "Medium-Small (N=216)", "lu_enabled": True},
+    {"n": 7, "desc": "Medium (N=343)", "lu_enabled": False},  # LU too slow
+    {"n": 8, "desc": "Medium-Large (N=512)", "lu_enabled": False},
+    {"n": 10, "desc": "Large (N=1000)", "lu_enabled": False},
 ]
 
 # Solver parameters
@@ -67,13 +85,16 @@ H_bg = [1.0, 0, 0]  # 1.0 T background field in X direction
 # Observation point
 obs_point = [0, 0, 50]  # 50mm above center
 
+# Nonlinear material (soft iron)
+mat_params = [[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]]
+
 print("\nProblem Setup:")
 print("  Material: Nonlinear soft iron (MatSatIsoFrm)")
 print("  Background field: [{}, {}, {}] T".format(*H_bg))
 print("  Observation point: [{}, {}, {}] mm".format(*obs_point))
 print("  Solver precision: {}".format(precision))
 print("  Max iterations: {}".format(max_iter))
-print("\nTest cases: {} problem sizes from N=27 to N=1000".format(len(test_cases)))
+print("\nTest cases: {} problem sizes".format(len(test_cases)))
 
 results = []
 
@@ -81,18 +102,12 @@ for test in test_cases:
     n = test["n"]
     desc = test["desc"]
     lu_enabled = test["lu_enabled"]
-    num_iterations = test["iterations"]
+    n_elem = n ** 3
+    size = 20.0  # mm (total cube size)
 
     print("\n" + "=" * 80)
-    print("Test Case: {} - {} iterations per solver".format(desc, num_iterations))
+    print("Test Case: {} ({} elements)".format(desc, n_elem))
     print("=" * 80)
-
-    size = 20.0  # mm (total cube size)
-    elem_size = size / n
-    n_elem = n ** 3
-
-    # Nonlinear material (soft iron)
-    mat_params = [[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]]
 
     result_entry = {
         "n": n,
@@ -101,378 +116,159 @@ for test in test_cases:
     }
 
     # ========================================
-    # Method 1: LU Decomposition
+    # Method 0: LU Decomposition
     # ========================================
     if lu_enabled:
-        print("\n[Method 1] LU Decomposition (Direct Solver)")
-        print("-" * 80)
+        print("\n[Method 0] LU Direct Solver")
+        print("-" * 40)
         rad.UtiDelAll()
+        container = create_geometry(n, size, mat_params, H_bg)
 
-        # Start memory tracking
-        tracemalloc.start()
-        mem_start = tracemalloc.get_traced_memory()[0]
+        t_start = time.perf_counter()
+        solve_result = rad.Solve(container, precision, max_iter, 0)
+        t_lu = time.perf_counter() - t_start
 
-        # Create material and geometry
-        mat = rad.MatSatIsoFrm(*mat_params)
-        elements = []
-        for i in range(n):
-            for j in range(n):
-                for k in range(n):
-                    x = -size/2 + (i + 0.5) * elem_size
-                    y = -size/2 + (j + 0.5) * elem_size
-                    z = -size/2 + (k + 0.5) * elem_size
-                    # Element with dimensions elem_size x elem_size x elem_size
-                    vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-                    elem = rad.ObjHexahedron(vertices, [0, 0, 0])
-                    rad.MatApl(elem, mat)
-                    elements.append(elem)
-
-        bg_field = rad.ObjBckg(H_bg)
-        container = rad.ObjCnt(elements + [bg_field])
-
-        print("  Elements: {} ({}x{}x{})".format(n_elem, n, n, n))
-
-        # Disable H-matrix
-        rad.SolverHMatrixDisable()
-
-        # Matrix construction
-        print("  Matrix construction...")
-        t_matrix_start = time.perf_counter()
-        intrc = rad.RlxPre(container, container)
-        t_matrix_lu = time.perf_counter() - t_matrix_start
-
-        # Enable LU decomposition
-        rad.SetRelaxSubInterval(intrc, 0, n_elem-1, 1)
-
-        # Measure per-iteration time
-        print("  LU solve ({} iterations)...".format(num_iterations))
-        t_solve_start = time.perf_counter()
-        for _ in range(num_iterations):
-            rad.RlxMan(intrc, 5, 1, 1.0)  # Method 5 = LU
-        t_solve_lu = (time.perf_counter() - t_solve_start) / num_iterations
-
-        # Memory usage
-        mem_peak = tracemalloc.get_traced_memory()[1]
-        mem_lu = (mem_peak - mem_start) / (1024 * 1024)  # MB
-        tracemalloc.stop()
-
-        # Get field
         H_lu = rad.Fld(container, 'h', obs_point)
+        iter_lu = int(solve_result[1]) if isinstance(solve_result, (list, tuple)) else 0
 
-        print("    Matrix construction: {:.6f} s".format(t_matrix_lu))
-        print("    Per-iteration time: {:.6f} s ({:.2f} ms)".format(t_solve_lu, t_solve_lu * 1000))
-        print("    Memory usage: {:.2f} MB".format(mem_lu))
-        print("    H: [{:.6e}, {:.6e}, {:.6e}] A/m".format(*H_lu))
-        print("    |H|: {:.6e} A/m".format(np.linalg.norm(H_lu)))
+        print("  Time: {:.4f} s, Iterations: {}".format(t_lu, iter_lu))
+        print("  |H|: {:.6e} A/m".format(np.linalg.norm(H_lu)))
 
         result_entry.update({
-            "t_matrix_lu": t_matrix_lu,
-            "t_solve_lu": t_solve_lu,
-            "mem_lu": mem_lu,
+            "t_lu": t_lu,
+            "iter_lu": iter_lu,
             "H_lu": H_lu,
         })
     else:
-        print("\n[Method 1] LU Decomposition - SKIPPED (too slow for N > 250)")
+        print("\n[Method 0] LU - SKIPPED (too slow for N > 250)")
         result_entry.update({
-            "t_matrix_lu": None,
-            "t_solve_lu": None,
-            "mem_lu": None,
+            "t_lu": None,
+            "iter_lu": None,
             "H_lu": None,
         })
 
     # ========================================
-    # Method 2: Gauss-Seidel (Standard Relaxation)
+    # Method 1: BiCGSTAB (Iterative)
     # ========================================
-    print("\n[Method 2] Gauss-Seidel (Standard Relaxation)")
-    print("-" * 80)
+    print("\n[Method 1] BiCGSTAB Iterative Solver")
+    print("-" * 40)
     rad.UtiDelAll()
+    container = create_geometry(n, size, mat_params, H_bg)
 
-    # Start memory tracking
-    tracemalloc.start()
-    mem_start = tracemalloc.get_traced_memory()[0]
+    t_start = time.perf_counter()
+    solve_result = rad.Solve(container, precision, max_iter, 1)
+    t_bicg = time.perf_counter() - t_start
 
-    # Recreate geometry
-    mat = rad.MatSatIsoFrm(*mat_params)
-    elements = []
-    for i in range(n):
-        for j in range(n):
-            for k in range(n):
-                x = -size/2 + (i + 0.5) * elem_size
-                y = -size/2 + (j + 0.5) * elem_size
-                z = -size/2 + (k + 0.5) * elem_size
-                # Element with dimensions elem_size x elem_size x elem_size
-                vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
-                rad.MatApl(elem, mat)
-                elements.append(elem)
+    H_bicg = rad.Fld(container, 'h', obs_point)
+    iter_bicg = int(solve_result[1]) if isinstance(solve_result, (list, tuple)) else 0
 
-    bg_field = rad.ObjBckg(H_bg)
-    container = rad.ObjCnt(elements + [bg_field])
-
-    # Disable H-matrix
-    rad.SolverHMatrixDisable()
-
-    # Matrix construction
-    print("  Matrix construction...")
-    t_matrix_start = time.perf_counter()
-    intrc = rad.RlxPre(container, container)
-    t_matrix_gs = time.perf_counter() - t_matrix_start
-
-    # Measure per-iteration time
-    print("  Gauss-Seidel solve ({} iterations)...".format(num_iterations))
-    t_solve_start = time.perf_counter()
-    for _ in range(num_iterations):
-        rad.RlxMan(intrc, 4, 1, 1.0)  # Method 4 = Gauss-Seidel
-    t_solve_gs = (time.perf_counter() - t_solve_start) / num_iterations
-
-    # Memory usage
-    mem_peak = tracemalloc.get_traced_memory()[1]
-    mem_gs = (mem_peak - mem_start) / (1024 * 1024)  # MB
-    tracemalloc.stop()
-
-    # Full solve for convergence
-    rad.UtiDelAll()
-    mat = rad.MatSatIsoFrm(*mat_params)
-    elements = []
-    for i in range(n):
-        for j in range(n):
-            for k in range(n):
-                x = -size/2 + (i + 0.5) * elem_size
-                y = -size/2 + (j + 0.5) * elem_size
-                z = -size/2 + (k + 0.5) * elem_size
-                # Element with dimensions elem_size x elem_size x elem_size
-                vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
-                rad.MatApl(elem, mat)
-                elements.append(elem)
-    bg_field = rad.ObjBckg(H_bg)
-    container = rad.ObjCnt(elements + [bg_field])
-    rad.SolverHMatrixDisable()
-
-    t_full_start = time.perf_counter()
-    result_gs = rad.Solve(container, precision, max_iter)
-    t_full_gs = time.perf_counter() - t_full_start
-    iter_gs = int(result_gs[1]) if isinstance(result_gs, (list, tuple)) else result_gs
-
-    H_gs = rad.Fld(container, 'h', obs_point)
-
-    print("    Matrix construction: {:.6f} s".format(t_matrix_gs))
-    print("    Per-iteration time: {:.6f} s ({:.2f} ms)".format(t_solve_gs, t_solve_gs * 1000))
-    print("    Full solve time: {:.6f} s ({} iterations)".format(t_full_gs, iter_gs))
-    print("    Memory usage: {:.2f} MB".format(mem_gs))
-    print("    H: [{:.6e}, {:.6e}, {:.6e}] A/m".format(*H_gs))
-    print("    |H|: {:.6e} A/m".format(np.linalg.norm(H_gs)))
+    print("  Time: {:.4f} s, Iterations: {}".format(t_bicg, iter_bicg))
+    print("  |H|: {:.6e} A/m".format(np.linalg.norm(H_bicg)))
 
     result_entry.update({
-        "t_matrix_gs": t_matrix_gs,
-        "t_solve_gs": t_solve_gs,
-        "t_full_gs": t_full_gs,
-        "iter_gs": iter_gs,
-        "mem_gs": mem_gs,
-        "H_gs": H_gs,
+        "t_bicg": t_bicg,
+        "iter_bicg": iter_bicg,
+        "H_bicg": H_bicg,
     })
 
     # ========================================
-    # Method 3: H-matrix Relaxation
+    # Method 2: HACApK (H-matrix)
     # ========================================
-    print("\n[Method 3] H-matrix Accelerated Relaxation")
-    print("-" * 80)
-    rad.UtiDelAll()
+    print("\n[Method 2] HACApK H-matrix Solver")
+    print("-" * 40)
+    try:
+        rad.UtiDelAll()
+        container = create_geometry(n, size, mat_params, H_bg)
+        rad.SetHACApKParams(1e-4, 10, 2.0)
 
-    # Start memory tracking
-    tracemalloc.start()
-    mem_start = tracemalloc.get_traced_memory()[0]
+        t_start = time.perf_counter()
+        solve_result = rad.Solve(container, precision, max_iter, 2)
+        t_hacapk = time.perf_counter() - t_start
 
-    # Recreate geometry
-    mat = rad.MatSatIsoFrm(*mat_params)
-    elements = []
-    for i in range(n):
-        for j in range(n):
-            for k in range(n):
-                x = -size/2 + (i + 0.5) * elem_size
-                y = -size/2 + (j + 0.5) * elem_size
-                z = -size/2 + (k + 0.5) * elem_size
-                # Element with dimensions elem_size x elem_size x elem_size
-                vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
-                rad.MatApl(elem, mat)
-                elements.append(elem)
+        H_hacapk = rad.Fld(container, 'h', obs_point)
+        iter_hacapk = int(solve_result[1]) if isinstance(solve_result, (list, tuple)) else 0
 
-    bg_field = rad.ObjBckg(H_bg)
-    container = rad.ObjCnt(elements + [bg_field])
+        print("  Time: {:.4f} s, Iterations: {}".format(t_hacapk, iter_hacapk))
+        print("  |H|: {:.6e} A/m".format(np.linalg.norm(H_hacapk)))
 
-    # Enable H-matrix
-    rad.SolverHMatrixEnable(1, 1e-4, 30)
-
-    # H-matrix construction (includes parallel OpenMP)
-    print("  H-matrix construction...")
-    t_hmatrix_start = time.perf_counter()
-    intrc = rad.RlxPre(container, container)
-    t_hmatrix_build = time.perf_counter() - t_hmatrix_start
-
-    # Measure per-iteration time
-    print("  H-matrix solve ({} iterations)...".format(num_iterations))
-    t_solve_start = time.perf_counter()
-    for _ in range(num_iterations):
-        rad.RlxMan(intrc, 4, 1, 1.0)  # Same method 4, but with H-matrix
-    t_solve_hmat = (time.perf_counter() - t_solve_start) / num_iterations
-
-    # Memory usage (H-matrix memory)
-    stats = rad.GetHMatrixStats()
-    mem_hmat = stats[2]  # H-matrix memory in MB
-
-    # Total memory (Python objects + H-matrix)
-    mem_peak = tracemalloc.get_traced_memory()[1]
-    mem_total = (mem_peak - mem_start) / (1024 * 1024)  # MB
-    tracemalloc.stop()
-
-    # Full solve for convergence
-    rad.UtiDelAll()
-    mat = rad.MatSatIsoFrm(*mat_params)
-    elements = []
-    for i in range(n):
-        for j in range(n):
-            for k in range(n):
-                x = -size/2 + (i + 0.5) * elem_size
-                y = -size/2 + (j + 0.5) * elem_size
-                z = -size/2 + (k + 0.5) * elem_size
-                # Element with dimensions elem_size x elem_size x elem_size
-                vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
-                rad.MatApl(elem, mat)
-                elements.append(elem)
-    bg_field = rad.ObjBckg(H_bg)
-    container = rad.ObjCnt(elements + [bg_field])
-    rad.SolverHMatrixEnable(1, 1e-4, 30)
-
-    t_full_start = time.perf_counter()
-    result_hmat = rad.Solve(container, precision, max_iter)
-    t_full_hmat = time.perf_counter() - t_full_start
-    iter_hmat = int(result_hmat[1]) if isinstance(result_hmat, (list, tuple)) else result_hmat
-
-    H_hmat = rad.Fld(container, 'h', obs_point)
-
-    print("    H-matrix construction: {:.6f} s".format(t_hmatrix_build))
-    print("    Per-iteration time: {:.6f} s ({:.2f} ms)".format(t_solve_hmat, t_solve_hmat * 1000))
-    print("    Full solve time: {:.6f} s ({} iterations)".format(t_full_hmat, iter_hmat))
-    print("    H-matrix memory: {:.2f} MB".format(mem_hmat))
-    print("    Total memory: {:.2f} MB".format(mem_total))
-    print("    H: [{:.6e}, {:.6e}, {:.6e}] A/m".format(*H_hmat))
-    print("    |H|: {:.6e} A/m".format(np.linalg.norm(H_hmat)))
-
-    result_entry.update({
-        "t_hmatrix_build": t_hmatrix_build,
-        "t_solve_hmat": t_solve_hmat,
-        "t_full_hmat": t_full_hmat,
-        "iter_hmat": iter_hmat,
-        "mem_hmat": mem_hmat,
-        "mem_total_hmat": mem_total,
-        "H_hmat": H_hmat,
-    })
+        result_entry.update({
+            "t_hacapk": t_hacapk,
+            "iter_hacapk": iter_hacapk,
+            "H_hacapk": H_hacapk,
+        })
+    except Exception as e:
+        print("  HACApK not available: {}".format(e))
+        result_entry.update({
+            "t_hacapk": float('inf'),
+            "iter_hacapk": None,
+            "H_hacapk": None,
+        })
 
     # ========================================
     # Comparison
     # ========================================
     print("\n[Comparison]")
-    print("-" * 80)
+    print("-" * 40)
 
-    # Use Gauss-Seidel as reference
-    H_ref = np.array(H_gs)
+    # Use BiCGSTAB as reference
+    H_ref = np.array(result_entry["H_bicg"])
     H_ref_mag = np.linalg.norm(H_ref)
 
-    # Accuracy
+    # Accuracy comparison
+    print("  Accuracy vs BiCGSTAB:")
     if lu_enabled and result_entry["H_lu"] is not None:
-        diff_lu = np.array(result_entry["H_lu"]) - H_ref
-        err_lu = np.linalg.norm(diff_lu) / (H_ref_mag + 1e-15) * 100
+        err_lu = np.linalg.norm(np.array(result_entry["H_lu"]) - H_ref) / (H_ref_mag + 1e-15) * 100
+        print("    LU:     {:.6f}%".format(err_lu))
         result_entry["err_lu"] = err_lu
     else:
         result_entry["err_lu"] = None
 
-    diff_hmat = np.array(H_hmat) - H_ref
-    err_hmat = np.linalg.norm(diff_hmat) / (H_ref_mag + 1e-15) * 100
-    result_entry["err_hmat"] = err_hmat
-
-    # Speedup calculations
-    if lu_enabled and result_entry["t_solve_lu"] is not None:
-        speedup_gs_vs_lu = result_entry["t_solve_lu"] / t_solve_gs
-        speedup_hmat_vs_lu = result_entry["t_solve_lu"] / t_solve_hmat
-        result_entry["speedup_gs_vs_lu"] = speedup_gs_vs_lu
-        result_entry["speedup_hmat_vs_lu"] = speedup_hmat_vs_lu
+    if result_entry.get("H_hacapk") is not None:
+        err_hacapk = np.linalg.norm(np.array(result_entry["H_hacapk"]) - H_ref) / (H_ref_mag + 1e-15) * 100
+        print("    HACApK: {:.6f}%".format(err_hacapk))
+        result_entry["err_hacapk"] = err_hacapk
     else:
-        result_entry["speedup_gs_vs_lu"] = None
-        result_entry["speedup_hmat_vs_lu"] = None
+        result_entry["err_hacapk"] = None
 
-    speedup_hmat_vs_gs = t_solve_gs / t_solve_hmat
-    result_entry["speedup_hmat_vs_gs"] = speedup_hmat_vs_gs
-
-    # Print comparison table
-    print("\n  {:20s} {:>12s} {:>12s} {:>12s} {:>12s}".format(
-        "Method", "Construct(s)", "Iter(ms)", "Memory(MB)", "Accuracy(%)"))
-    print("  " + "-" * 72)
-
-    if lu_enabled:
-        print("  {:20s} {:>12.6f} {:>12.2f} {:>12.2f} {:>12.6f}".format(
-            "LU Decomposition",
-            result_entry["t_matrix_lu"],
-            result_entry["t_solve_lu"] * 1000,
-            result_entry["mem_lu"],
-            result_entry["err_lu"]))
-
-    print("  {:20s} {:>12.6f} {:>12.2f} {:>12.2f} {:>12.6f}".format(
-        "Gauss-Seidel",
-        t_matrix_gs,
-        t_solve_gs * 1000,
-        mem_gs,
-        0.0))
-
-    print("  {:20s} {:>12.6f} {:>12.2f} {:>12.2f} {:>12.6f}".format(
-        "H-matrix",
-        t_hmatrix_build,
-        t_solve_hmat * 1000,
-        mem_hmat,
-        err_hmat))
-
-    print("\n  Speedup (per iteration vs Gauss-Seidel):")
-    if lu_enabled and speedup_gs_vs_lu is not None:
-        print("    LU: {:.2f}x SLOWER".format(1/speedup_gs_vs_lu))
-    print("    H-matrix: {:.2f}x {}".format(
-        abs(speedup_hmat_vs_gs),
-        "FASTER" if speedup_hmat_vs_gs > 1 else "SLOWER"))
+    # Speedup comparison
+    print("\n  Speedup vs BiCGSTAB:")
+    if lu_enabled and result_entry["t_lu"] is not None:
+        speedup_lu = t_bicg / result_entry["t_lu"]
+        print("    LU:     {:.2f}x".format(speedup_lu))
+    if result_entry.get("t_hacapk", float('inf')) < float('inf'):
+        speedup_hacapk = t_bicg / result_entry["t_hacapk"]
+        print("    HACApK: {:.2f}x".format(speedup_hacapk))
 
     results.append(result_entry)
 
 # ========================================
-# Summary and Analysis
+# Summary
 # ========================================
 print("\n" + "=" * 80)
 print("SUMMARY - Performance vs Problem Size")
 print("=" * 80)
 
-print("\n{:>6s} {:>8s}  {:>10s} {:>10s} {:>10s}  {:>10s} {:>10s}  {:>10s}".format(
-    "N", "Elements",
-    "LU(ms)", "GS(ms)", "H-mat(ms)",
-    "Mem_GS(MB)", "Mem_H(MB)",
-    "Best"))
-print("-" * 95)
+print("\n{:>6s} {:>8s}  {:>10s} {:>10s} {:>10s}  {:>10s}".format(
+    "N", "Elements", "LU (s)", "BiCG (s)", "HACApK (s)", "Best"))
+print("-" * 70)
 
 for r in results:
-    lu_str = "{:.2f}".format(r["t_solve_lu"] * 1000) if r["t_solve_lu"] is not None else "---"
-    gs_str = "{:.2f}".format(r["t_solve_gs"] * 1000)
-    hm_str = "{:.2f}".format(r["t_solve_hmat"] * 1000)
+    lu_str = "{:.4f}".format(r["t_lu"]) if r["t_lu"] is not None else "---"
+    bicg_str = "{:.4f}".format(r["t_bicg"])
+    hacapk_str = "{:.4f}".format(r["t_hacapk"]) if r.get("t_hacapk", float('inf')) < float('inf') else "N/A"
 
     # Determine best method
     times = []
-    if r["t_solve_lu"] is not None:
-        times.append(("LU", r["t_solve_lu"]))
-    times.append(("GS", r["t_solve_gs"]))
-    times.append(("H-mat", r["t_solve_hmat"]))
+    if r["t_lu"] is not None:
+        times.append(("LU", r["t_lu"]))
+    times.append(("BiCGSTAB", r["t_bicg"]))
+    if r.get("t_hacapk", float('inf')) < float('inf'):
+        times.append(("HACApK", r["t_hacapk"]))
     best_method = min(times, key=lambda x: x[1])[0]
 
-    print("{:>6d} {:>8d}  {:>10s} {:>10s} {:>10s}  {:>10.2f} {:>10.2f}  {:>10s}".format(
+    print("{:>6d} {:>8d}  {:>10s} {:>10s} {:>10s}  {:>10s}".format(
         r["n"], r["n_elem"],
-        lu_str, gs_str, hm_str,
-        r["mem_gs"], r["mem_hmat"],
-        best_method))
+        lu_str, bicg_str, hacapk_str, best_method))
 
 # ========================================
 # Scaling Analysis
@@ -485,32 +281,41 @@ print("=" * 80)
 n_values = np.array([r["n_elem"] for r in results])
 log_n = np.log(n_values)
 
-# GS scaling
-gs_times = np.array([r["t_solve_gs"] for r in results])
-log_gs = np.log(gs_times)
+# BiCGSTAB scaling
+bicg_times = np.array([r["t_bicg"] for r in results])
+log_bicg = np.log(bicg_times)
 A = np.vstack([log_n, np.ones(len(log_n))]).T
-alpha_gs, log_a_gs = np.linalg.lstsq(A, log_gs, rcond=None)[0]
+alpha_bicg, log_a_bicg = np.linalg.lstsq(A, log_bicg, rcond=None)[0]
 
-# H-matrix scaling
-hmat_times = np.array([r["t_solve_hmat"] for r in results])
-log_hmat = np.log(hmat_times)
-alpha_hmat, log_a_hmat = np.linalg.lstsq(A, log_hmat, rcond=None)[0]
+# HACApK scaling (filter valid results)
+valid_hacapk = [r for r in results if r.get("t_hacapk", float('inf')) < float('inf')]
+if len(valid_hacapk) >= 2:
+    n_hac = np.array([r["n_elem"] for r in valid_hacapk])
+    t_hac = np.array([r["t_hacapk"] for r in valid_hacapk])
+    log_n_hac = np.log(n_hac)
+    log_t_hac = np.log(t_hac)
+    A_hac = np.vstack([log_n_hac, np.ones(len(log_n_hac))]).T
+    alpha_hacapk, log_a_hacapk = np.linalg.lstsq(A_hac, log_t_hac, rcond=None)[0]
+else:
+    alpha_hacapk = None
 
-print("\nComplexity Analysis (per iteration):")
-print("  Gauss-Seidel: t = {:.6e} * N^{:.3f}".format(np.exp(log_a_gs), alpha_gs))
-print("  H-matrix:     t = {:.6e} * N^{:.3f}".format(np.exp(log_a_hmat), alpha_hmat))
+print("\nComplexity Analysis:")
+print("  BiCGSTAB: t = {:.6e} * N^{:.3f}".format(np.exp(log_a_bicg), alpha_bicg))
+if alpha_hacapk is not None:
+    print("  HACApK:   t = {:.6e} * N^{:.3f}".format(np.exp(log_a_hacapk), alpha_hacapk))
 
 print("\nTheoretical complexity:")
-print("  Gauss-Seidel: O(N^2) -> expected alpha ~= 2.0")
-print("  H-matrix:     O(N^2 log N) -> expected alpha ~= 2.0-2.5")
+print("  BiCGSTAB: O(N^2) per iteration -> expected alpha ~= 2.0")
+print("  HACApK:   O(N^2 log N) per iteration -> expected alpha ~= 2.0-2.5")
 
 print("\nMeasured complexity:")
-print("  Gauss-Seidel: alpha = {:.3f} -> {}".format(
-    alpha_gs,
-    "Matches O(N^2)" if 1.8 <= alpha_gs <= 2.2 else "Unexpected scaling"))
-print("  H-matrix:     alpha = {:.3f} -> {}".format(
-    alpha_hmat,
-    "Matches O(N^2 log N)" if 2.0 <= alpha_hmat <= 2.5 else "Unexpected scaling"))
+print("  BiCGSTAB: alpha = {:.3f} -> {}".format(
+    alpha_bicg,
+    "Matches O(N^2)" if 1.8 <= alpha_bicg <= 2.2 else "Unexpected scaling"))
+if alpha_hacapk is not None:
+    print("  HACApK:   alpha = {:.3f} -> {}".format(
+        alpha_hacapk,
+        "Matches O(N^2 log N)" if 1.5 <= alpha_hacapk <= 2.5 else "Unexpected scaling"))
 
 # ========================================
 # Recommendations
@@ -520,31 +325,31 @@ print("RECOMMENDATIONS")
 print("=" * 80)
 
 print("""
-Based on measured performance:
+Solver Selection Guidelines:
 
-1. PROBLEM SIZE SELECTION:
-   - N < 100 (tiny):     Use LU decomposition for direct solve
-   - 100 <= N < 250:      Use Gauss-Seidel for good performance
-   - N >= 250 (large):    Use H-matrix for best performance
+  Method 0 (LU):
+    - Best for: Small problems (N < 200)
+    - Complexity: O(N^3)
+    - Pros: Direct solution, guaranteed convergence
+    - Cons: Memory O(N^2), slow for large N
 
-2. MEMORY CONSIDERATIONS:
-   - Gauss-Seidel: O(N^2) memory, grows quickly
-   - H-matrix:     O(N log N) memory, much more efficient for large N
+  Method 1 (BiCGSTAB):
+    - Best for: Medium problems (200 < N < 2000)
+    - Complexity: O(N^2) per iteration
+    - Pros: Good general-purpose iterative solver
+    - Cons: May need tuning for ill-conditioned systems
 
-3. CONVERGENCE BEHAVIOR:
-   - Fast convergence (<5 iterations): GS may be faster due to H-matrix overhead
-   - Slow convergence (>10 iterations): H-matrix significantly faster per iteration
+  Method 2 (HACApK):
+    - Best for: Large problems (N > 1000)
+    - Complexity: O(N log N) memory, O(N^2 log N) time
+    - Pros: Memory efficient, scales well
+    - Cons: Setup overhead, best for large N
 
-4. DISK CACHING (v1.1.0):
-   - For repeated simulations: Enable H-matrix disk caching
-   - First run: Pays construction cost once
-   - Subsequent runs: ~10x faster startup (load from disk)
-   - Use: rad.SolverHMatrixCacheFull(1)
+Usage:
+  rad.Solve(obj, precision, max_iterations, method)
 
-5. WHEN TO USE EACH METHOD:
-   - LU:         Tiny problems, direct solve needed, single solution
-   - GS:         Medium problems, moderate accuracy, simple setup
-   - H-matrix:   Large problems, repeated simulations, memory-constrained
+  # Example
+  rad.Solve(container, 0.0001, 1000, 2)  # HACApK for large problem
 """)
 
 print("=" * 80)
