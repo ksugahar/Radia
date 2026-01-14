@@ -433,7 +433,6 @@ public:
 		}
 
 		// DON'T delete[] - memory is owned by vector in VectBuffer
-		// delete[] arStored; // REMOVED - this was undefined behavior!
 		Buffer.erase(key);
 		DimsBuffer.erase(key);
 		VectBuffer.erase(key); // ADDED - cleanup the owning vector
@@ -542,7 +541,6 @@ private:
 			int CurStrLen = (int)err_ar[i].size();
 			if(CurStrLen < LenErrorTitle) continue;
 			const char* CurStr = err_ar[i].c_str();
-			//strncpy(cAuxBuf, CurStr, LenErrorTitle);
 			if(strncmp(CurStr, ErrorTitle, LenErrorTitle) == 0) return i;
 		}
 		return 0;
@@ -560,14 +558,12 @@ private:
 		if(WarningTitle == 0) return 0;
 		int LenWarningTitle = (int)strlen(WarningTitle);
 		if(LenWarningTitle <= 0) return 0;
-		//char* cAuxBuf = new char[LenWarningTitle];
 
 		for(int i=0; i<AmOfWarnings; i++)
 		{
 			int CurStrLen = (int)warn_ar[i].size();
 			if(CurStrLen < LenWarningTitle) continue;
 			const char* CurStr = warn_ar[i].c_str();
-			//strncpy(cAuxBuf, warn_ar[i].c_str(), LenWarningTitle);
 			if(strncmp(CurStr, WarningTitle, LenWarningTitle) == 0) return i;
 		}
 		return 0;
