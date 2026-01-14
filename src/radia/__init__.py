@@ -2,7 +2,7 @@
 # This module re-exports all symbols from the C++ extension module (radia.pyd)
 # so that 'import radia' works correctly when installed via pip
 
-__version__ = "1.4.4"
+__version__ = "1.6.0"
 
 # Add package directory to DLL search path (Windows)
 # This is needed for finding Intel MKL DLL (mkl_rt.2.dll)

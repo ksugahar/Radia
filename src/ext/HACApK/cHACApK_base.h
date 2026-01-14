@@ -40,31 +40,27 @@
 #include <stdint.h>
 
 //
-// typedefs
+// Structure definitions
 //
-
-typedef struct st_cHACApK_cluster *st_cHACApK_cluster;
-typedef struct st_cHACApK_leafmtx *st_cHACApK_leafmtx;
-typedef struct st_cHACApK_leafmtxp *st_cHACApK_leafmtxp;
-typedef struct st_cHACApK_lcontrol *st_cHACApK_lcontrol;
-
-//
-// definition of structs
+// NOTE: These typedefs use the standard C pattern where the typedef name
+// is different from the struct tag. This allows both C and C++ to work correctly.
+// The pointer typedefs (st_cHACApK_*_p) are provided for backward compatibility
+// with existing HACApK code that passes structs by pointer.
 //
 
 //*** struct st_cHACApK_cluster
-struct st_cHACApK_cluster {
+typedef struct st_cHACApK_cluster_t {
   int ndim;
   int nstrt, nsize, ndpth, nnson, nmbr;
   int ndscd;
   double *bmin;
   double *bmax;
   double zwdth;
-  st_cHACApK_cluster *pc_sons;
-};
+  struct st_cHACApK_cluster_t **pc_sons;  // array of pointers to child clusters
+} st_cHACApK_cluster_t;
 
 //*** struct st_cHACApK_leafmtx
-struct st_cHACApK_leafmtx {
+typedef struct st_cHACApK_leafmtx_t {
   int ltmtx;  // kind of the matrix; 1:rk 2:full
   int kt;
   int nstrtl,ndl;
@@ -72,11 +68,11 @@ struct st_cHACApK_leafmtx {
   double *a1, *a2;
 
   int nlf; // number of leaves(sub-matrices) in the MPI process
-  st_cHACApK_leafmtx *st_lf;
-};
+  struct st_cHACApK_leafmtx_t **st_lf;  // array of pointers to sub-leaves
+} st_cHACApK_leafmtx_t;
 
 //*** struct st_cHACApK_leafmtxp
-struct st_cHACApK_leafmtxp {
+typedef struct st_cHACApK_leafmtxp_t {
   int nd; // number of unknowns of whole matrix
   int nlf; // number of leaves(sub-matrices) in the MPI process
   int nlfkt; // number of low-rank sub matrices in the MPI process
@@ -85,20 +81,29 @@ struct st_cHACApK_leafmtxp {
   int nlfalt; //number of leaves in row(column) of whole matrix
   int nlfl,nlft;  // number of leaves in row and column in the MPI process
   int ndlfs,ndtfs;  // vector sizes in the MPI process
-  st_cHACApK_leafmtx *st_lf;
+  struct st_cHACApK_leafmtx_t **st_lf;  // array of pointers to leaf matrices
   int64_t **lnlfl2g_t;  // 2D array
   int *lbstrtl, *lbstrtt; // Start points of each block in row and column
   int *lbndl, *lbndt; // vector sizes of each block in row and column
   int *lbndlfs, *lbndtfs; // vector sizes of each MPI process in row and column
   int *lbl2t; // bit vector for recieving data on each MPI process
-};
+} st_cHACApK_leafmtxp_t;
 
 //*** struct st_cHACApK_lcontrol
-struct st_cHACApK_lcontrol {
+typedef struct st_cHACApK_lcontrol_t {
   int *lod, *lsp, *lnp, *lthr, *lpmd;
   double *param, *time;
   int lf_umpi;
-};
+} st_cHACApK_lcontrol_t;
+
+//
+// Backward-compatible pointer typedefs
+// These match the original HACApK API where functions take pointers
+//
+typedef st_cHACApK_cluster_t  *st_cHACApK_cluster;
+typedef st_cHACApK_leafmtx_t  *st_cHACApK_leafmtx;
+typedef st_cHACApK_leafmtxp_t *st_cHACApK_leafmtxp;
+typedef st_cHACApK_lcontrol_t *st_cHACApK_lcontrol;
 
 //
 // prototype of functions
