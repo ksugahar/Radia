@@ -30,8 +30,8 @@ RadObjM
 RadObjGeoVol
 RadObjGeoLim
 
-RadObjDrwQD3D
-RadObjDrwAtr
+; RadObjDrwQD3D REMOVED (2026-01-14)
+; RadObjDrwAtr REMOVED (2026-01-14)
 
 RadTrfCmbL
 RadTrfCmbR
