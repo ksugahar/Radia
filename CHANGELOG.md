@@ -6,6 +6,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-01-14
+
+### Added
+
+- **mmm_core pybind11 Module - Standalone MMM Solver**
+  - New `mmm_core` Python module with direct C++ bindings via pybind11
+  - `MMMBuilder`: Build interaction matrices from tetrahedral/hexahedral meshes
+    - `add_tetrahedra_from_mesh(vertices, elements)`: Add tetrahedra from mesh data
+    - `add_hexahedra_from_mesh(vertices, elements)`: Add hexahedra from mesh data
+    - `build()`: Returns (N_matrix, dof_offset) tuple
+  - `MMMSolver`: Linear solvers for MMM equations
+    - `solve_lu(inv_chi, H_ext, chi_per_element)`: Direct LU decomposition
+    - `solve_bicgstab(inv_chi, H_ext, tol, max_iter, chi_per_element)`: BiCGSTAB iteration
+  - `MMMHACApKSolver`: H-matrix accelerated solver
+    - `set_from_builder(builder, dof_offset)`: Set elements from MMMBuilder
+    - `build_hmatrix(inv_chi, eps, leaf_size, eta, print_level)`: Build H-matrix with ACA+
+    - `matvec(x)`: H-matrix vector product (O(N log N) complexity)
+    - `solve(inv_chi, H_ext, tol, max_iter)`: Full BiCGSTAB solve with H-matrix
+    - `get_stats()`: H-matrix compression statistics
+  - `MMMFieldComputer`: Field computation from solved magnetization
+    - `compute_b_field(M, obs_points)`: Compute B field at observation points
+    - `compute_h_field(M, obs_points)`: Compute H field at observation points
+  - Helper functions: `compute_chi_from_bh()`, `check_convergence()`
+
+- **HACApK H-Matrix Library Integration**
+  - Integrated HACApK library for ACA+ (Adaptive Cross Approximation) compression
+  - O(N log N) memory usage vs O(N^2) for dense matrices
+  - H-matrix statistics: compression ratio, memory usage, max rank
+  - Automatic permutation handling via internal LOD array
+
+### Changed
+
+- **Documentation Updates**
+  - Updated `docs/PLAN_MMM_PYBIND11_REFACTOR.md` to "Implementation Complete" status
+  - Updated `examples/peec_integration/test_mmm_hacapk.py` to use new mmm_core API
+  - All mmm_core examples now use direct C++ API instead of mmm_ngsolve wrapper
+
+### Removed
+
+- **Legacy HACApK Files**
+  - Removed `src/ext/HACApK/cHACApK_radia.c` (replaced by cHACApK_cpp_impl.c)
+  - Removed `src/ext/HACApK/cHACApK_radia.h` (replaced by cHACApK_cpp.h)
+  - Removed development test files: `test_hacapk_quick.py`, `test_hacapk_simple.py`, `test_import.py`
+
+### Technical Details
+
+- **HACApK Permutation Fix**: Fixed 1-based to 0-based index conversion for LOD array
+- **Double Permutation Fix**: Removed manual permutation in MatVec (HACApK handles internally)
+- **inv_chi Parameter**: Added inv_chi to build_hmatrix for correct system matrix construction
+
 ## [1.5.0] - 2026-01-11
 
 ### Added
