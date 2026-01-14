@@ -60,7 +60,6 @@ public:
 				}
 				*CurKsi = *CurInKsi;
 				if(k == 0) *CurHci = *CurInHci;
-				//Hc[k] = InHc[k];
 			}
 			else *(Ksi[k]) = *(InKsi[k]);
 		}
@@ -86,7 +85,6 @@ public:
 	inline TVector3d M(const TVector3d& H);
 	inline void DefineInstantKsiTensor(const TVector3d&, TMatrix3d&, TVector3d&);
 	inline void MultMatrByInstKsiAndMr(const TVector3d&, const TMatrix3d&, TMatrix3d&, TVector3d&);
-	//inline void FindNewH(TVector3d&, const TMatrix3d&, const TVector3d&, double, radTg3dRelax*, void*); //OC140103
 	inline void FindNewH(TVector3d&, const TMatrix3d&, const TVector3d&, double);
 
 	inline void SetKsiTensor(double, double, TMatrix3d&);
@@ -254,19 +252,13 @@ inline double radTNonlinearAnisotropMaterial::ScalarInstantKsi(double ScalarH, c
 	{
 		//double hc = Hc[ParOrPerp];
 		//if(hc != 0.)
-		//{
 		double *ks = Ksi[0], *ms = Ms[0], *hci = Hci;
-		//double ScalarH_mi_hc = ScalarH - hc;
-		for(int j=0; j<3; j++) 
+		for(int j=0; j<3; j++)
 		{
-			if((*ms)!=0.) 
+			if((*ms)!=0.)
 			{
 				double ScalarH_mi_hc = ScalarH - *(hci);
-				//double Sech = 1./cosh(ScalarH_mi_hc*(*ks)); //OC040213 (commented-out)
-				//InstKsi += (*ks)*(*ms)*Sech*Sech;
-				//f += (*ms)*tanh((*ks)*ScalarH_mi_hc/(*ms));
-
-				double arg = (*ks)*ScalarH_mi_hc/(*ms); //OC040213
+				double arg = (*ks)*ScalarH_mi_hc/(*ms);
 				double Sech = 1./cosh(arg);
 				InstKsi += (*ks)*Sech*Sech;
 				f += (*ms)*tanh(arg);
@@ -274,14 +266,11 @@ inline double radTNonlinearAnisotropMaterial::ScalarInstantKsi(double ScalarH, c
 			ks++; ms++; hci++;
 		}
 		InstKsi += *ks;
-		//f += (*ks)*ScalarH_mi_hc;
 		f += (*ks)*(ScalarH - *(hci));
 
 		ScalInstMr = f - InstKsi*ScalarH;
 		InstMr = ScalInstMr*UnitEasyAxisVect;
 		return InstKsi;
-		//}
-		//else return ScalarInstantKsiAsForIsotropic(ScalarH, ParOrPerp);
 	}
 	else return ScalarInstantKsiAsForIsotropic(ScalarH, ParOrPerp);
 }
@@ -376,7 +365,6 @@ inline void radTNonlinearAnisotropMaterial::MultMatrByInstKsiAndMr(const TVector
 
 //-------------------------------------------------------------------------
 
-//inline void radTNonlinearAnisotropMaterial::FindNewH(TVector3d& H, const TMatrix3d& Matr, const TVector3d& H_Ext, double, radTg3dRelax* pMag, void* pvAuxRelax) //OC140103
 inline void radTNonlinearAnisotropMaterial::FindNewH(TVector3d& H, const TMatrix3d& Matr, const TVector3d& H_Ext, double)
 {
 	TVector3d ESt1(1.,0.,0.), ESt2(0.,1.,0.), ESt3(0.,0.,1.);
@@ -389,9 +377,6 @@ inline void radTNonlinearAnisotropMaterial::FindNewH(TVector3d& H, const TMatrix
 	BufMatr = E - Matr*InstantKsiTensor;
 	Matrix3d_inv(BufMatr, InvBufMatr);
 	H = InvBufMatr*(H_Ext + Matr*RemMagn);
-
-	//radTMaterial::SteerNewH(PrevH, H, pvAuxRelax); //OC140103
-	//insert the above into most unstable materials
 }
 
 //-------------------------------------------------------------------------
@@ -406,12 +391,6 @@ inline void radTNonlinearAnisotropMaterial::Dump(std::ostream& o, int ShortSign)
 	o << "   Parallel to the easy magnetization axis:" << endl;
 	if(DependenceIsNonlinear[0])
 	{
-		//o << "      {ksi1,ms1}= {" << Ksi[0][0] << ',' << Ms[0][0] << "}" << endl;
-		//o << "      {ksi2,ms2}= {" << Ksi[0][1] << ',' << Ms[0][1] << "}" << endl;
-		//o << "      {ksi3,ms3}= {" << Ksi[0][2] << ',' << Ms[0][2] << "}" << endl;
-		//o << "      ksi0= " << Ksi[0][3] << endl;
-		//o << "      hc= " << Hc[0] << endl;
-
 		o << "      {ksi1,ms1,hc1}= {" << Ksi[0][0] << ',' << Ms[0][0] << ',' << Hci[0] << "}" << endl;
 		o << "      {ksi2,ms2,hc2}= {" << Ksi[0][1] << ',' << Ms[0][1] << ',' << Hci[1] << "}" << endl;
 		o << "      {ksi3,ms3,hc3}= {" << Ksi[0][2] << ',' << Ms[0][2] << ',' << Hci[2] << "}" << endl;
@@ -696,9 +675,6 @@ public:
 			Matrix3d_inv(BufMatr, InvBufMatr);
 			H = InvBufMatr*(H_Ext + Matr*RemMagn);
 		}
-
-		//radTMaterial::SteerNewH(PrevH, H, pvAuxRelax); //OC140103
-		//insert the above into most unstable materials
 	}
 
 	TVector3d M(const TVector3d& InstantH)
@@ -709,25 +685,6 @@ public:
 		double AbsH_Norm = UnitEasyAxisVect*InstantH;
 		TVector3d H_Norm = AbsH_Norm*UnitEasyAxisVect;
 		TVector3d H_Tang = InstantH - H_Norm;
-
-		//double AbsH_Tang = sqrt(H_Tang.x*H_Tang.x + H_Tang.y*H_Tang.y + H_Tang.z*H_Tang.z);
-
-		//char AbsH_NormIsZero = (AbsH_Norm < AbsTol);
-		//char AbsH_TangIsZero = (AbsH_Tang < AbsTol);
-		//if(AbsH_NormIsZero && AbsH_TangIsZero) { return M_Norm;} //zero
-
-		//double Ksi_Tang = 0, Ksi_Norm = 0;
-		//if(!AbsH_TangIsZero)
-		//{
-		//  Ksi_Tang = gPackFactor*ScalarInstantKsiAsForIsotropic(AbsH_Tang, 0); // 0 - Par, 1 - Perp
-		//	M_Tang = Ksi_Tang*H_Tang;
-		//}
-		//if(!AbsH_NormIsZero)
-		//{
-		//  double KsiIso_Norm = ScalarInstantKsiAsForIsotropic(AbsH_Norm, 0); // 0 - Par, 1 - Perp
-		//  Ksi_Norm = gPackFactor*KsiIso_Norm/(1 + (1 - gPackFactor)*KsiIso_Norm);
-		//	M_Norm = Ksi_Norm*H_Norm;
-		//}
 
 		double AbsH = sqrt(InstantH.x*InstantH.x + InstantH.y*InstantH.y + InstantH.z*InstantH.z);
 		if(AbsH < AbsTol) { return M_Norm;} //zero
@@ -745,26 +702,11 @@ public:
 	{
 		InstantMr.x = 0; InstantMr.y = 0; InstantMr.z = 0;
 
-		//TVector3d M_Norm(0,0,0), M_Tang(0,0,0);
-		//const double AbsTol = 1.E-13;
-
-		//double AbsH_Norm = UnitEasyAxisVect*InstantH;
-		//TVector3d H_Norm = AbsH_Norm*UnitEasyAxisVect;
-		//TVector3d H_Tang = InstantH - H_Norm;
-		//double AbsH_Tang = sqrt(H_Tang.x*H_Tang.x + H_Tang.y*H_Tang.y + H_Tang.z*H_Tang.z);
-
-		//double Ksi_Tang = gPackFactor*ScalarInstantKsiAsForIsotropic(AbsH_Tang, 0); // 0 - Par, 1 - Perp
-		//double KsiIso_Norm = ScalarInstantKsiAsForIsotropic(AbsH_Norm, 0); // 0 - Par, 1 - Perp
-		//double Ksi_Norm = gPackFactor*KsiIso_Norm/(1 + (1 - gPackFactor)*KsiIso_Norm);
-
 		double AbsH = sqrt(InstantH.x*InstantH.x + InstantH.y*InstantH.y + InstantH.z*InstantH.z);
-		//if(AbsH < AbsTol) { return M_Norm;} //zero
 		double KsiIso = ScalarInstantKsiAsForIsotropic(AbsH, 0); // 0 - Par, 1 - Perp
 
 		double Ksi_Tang = gPackFactor*KsiIso;
-		//M_Tang = Ksi_Tang*H_Tang;
 		double Ksi_Norm = gPackFactor*KsiIso/(1. + (1. - gPackFactor)*KsiIso);
-		//M_Norm = Ksi_Norm*H_Norm;
 
 		SetKsiTensor(Ksi_Norm, Ksi_Tang, InstantKsiTensor);
 	}
