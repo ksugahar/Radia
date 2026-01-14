@@ -98,10 +98,11 @@ def profile_hacapk():
     t_mat = time.perf_counter() - t0
     print(f"   Time: {t_mat:.4f}s")
 
-    # Step 4: Apply external field
-    print("\n4. Applying external field...")
+    # Step 4: Add background field
+    print("\n4. Adding background field...")
     t0 = time.perf_counter()
-    rad.RlxPre(container)
+    bg_field = rad.ObjBckg(lambda p: [0, 0, H_EXT * 4e-7 * 3.14159])  # Convert H to B
+    rad.ObjAddToCnt(container, [bg_field])
     t_pre = time.perf_counter() - t0
     print(f"   Time: {t_pre:.4f}s")
 
