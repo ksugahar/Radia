@@ -436,22 +436,11 @@ EXP int CALL RadObjGeoLim(double* L, int obj);
 */
 EXP int CALL RadObjDegFre(int* num, int obj);
 
-/** Starts an application for viewing of 3D geometry of the object obj. The viewer is based on the QuickDraw 3D graphics library. 
-@param obj [in] reference number of the object to be viewed
-@param opt [in] pointer to options string, which can be "Axes->True" (default) or "Axes->False" for showing or not the axes of the Cartesian laboratory frame; "Faces->True" (default) or "Faces->False" for showing or not visible faces of 3D objects; "EdgeLines->True" (default) or "EdgeLines->False" for highlighting or not the edge lines of 3D objects. opt can contain composition of these option sub-strings separated by ";".
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjDrwQD3D(int obj, char* opt);
+// RadObjDrwQD3D REMOVED (2026-01-14) - QuickDraw 3D is obsolete
+// Use VTK export (rad.FldVTS) for visualization instead
 
-/** Applies drawing attributes - RGB color (r,g,b) and line thickness thcn - to object obj.
-@param obj [in] reference number of the object to which drawing attributes should be applied
-@param RGB [in] array of 3 numbers from 0 to 1 specifying intensities of red, green and blue colors
-@param thcn [in] line thickness parameter
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjDrwAtr(int obj, double* RGB, double thcn);
+// RadObjDrwAtr REMOVED (2026-01-14) - Drawing attributes no longer used
+// Use VTK export with ParaView for visualization
 
 /** Creates a parallelepiped block with center point {P[0],P[1],P[2]}, dimensions {L[0],L[1],L[2]} and color {RGB[0],RGB[1],RGB[2]}. 
 The block is magnetized according to {M[0],M[1],M[2]} then subdivided according to {K[0],K[1],K[2]} and added into the container grp. grp should be defined in advance by calling RadObjCnt().
