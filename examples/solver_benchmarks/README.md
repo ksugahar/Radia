@@ -148,6 +148,29 @@ Generates visualization plots:
 - Parallel construction speedup vs number of cores
 - Memory usage comparison
 
+## Recommended API
+
+**Current recommended solver API** (as of v1.4.4):
+
+```python
+import radia as rad
+
+# Create geometry
+container = rad.ObjCnt([...])
+
+# Apply material
+mat = rad.MatLin(999)  # mu_r = 1000
+rad.MatApl(container, mat)
+
+# Solve with rad.Solve() - recommended API
+# Method 0: LU (direct)
+# Method 1: BiCGSTAB (iterative)
+# Method 2: HACApK (H-matrix accelerated BiCGSTAB)
+rad.Solve(container, 0.0001, 1000, 2)  # HACApK
+```
+
+**Note**: Some benchmark scripts use the deprecated `RlxPre()`/`RlxMan()` API for historical comparison purposes. For new code, always use `rad.Solve()`.
+
 ## Quick Start
 
 ```bash
