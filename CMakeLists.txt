@@ -107,6 +107,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_exafmm.cpp                # ExaFMM wrapper for fast multipole acceleration
 	${CORE_DIR}/rad_point_classify.cpp        # Point classification for FMM near/far
 	${CORE_DIR}/rad_dipole_collect.cpp        # Collect dipoles from Radia for FMM
+	${CORE_DIR}/rad_field_unified.cpp         # Unified field computation (inside/outside + FMM)
 
 	# Geometry files (descriptive names)
 	${CORE_DIR}/rad_arc_current.cpp           # Arc with azimuthal current
@@ -128,7 +129,6 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_poly_analytical.cpp       # Analytical polygon field formulas
 	${CORE_DIR}/rad_particle_trajectory.cpp   # Particle trajectory/dynamics
 	${CORE_DIR}/rad_rectangular_block.cpp     # Rectangular parallelepiped
-	${CORE_DIR}/rad_extruded_polygon_msc.cpp  # MSC extruded polygon (6 DOF hexahedra)
 	${CORE_DIR}/rad_relaxation_methods.cpp    # Relaxation methods
 	${CORE_DIR}/rad_subdivided_arc_current.cpp        # Subdivided arc with current
 	${CORE_DIR}/rad_subdivided_extruded_polygon.cpp   # Subdivided extruded polygon
@@ -143,6 +143,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_green_fullwave.cpp        # Green's functions (Laplace kernel for quasi-static)
 	${CORE_DIR}/rad_coupled_solver.cpp        # Coupled conductor-magnetic solver
 	${CORE_DIR}/rad_peec_mmm_coupled.cpp      # PEEC-MMM coupled solver (conductor + magnet)
+	${CORE_DIR}/rad_peec_matrices.cpp         # PEEC Loop-Star matrix construction
 )
 
 # FMM conductor source (only when ExaFMM is enabled)
@@ -171,11 +172,16 @@ set(HACAPK_SOURCES
 	${EXT_DIR}/HACApK/cHACApK_cpp_impl.c
 )
 
-# Radia lib sources
+# Radia lib sources (main radia module)
 set(RADIA_LIB_SOURCES
 	${LIB_DIR}/radentry.cpp
 	${LIB_DIR}/rad_conductor_api.cpp
 	${LIB_DIR}/rad_peec_mmm_api.cpp       # PEEC-MMM coupled solver API
+)
+
+# PEEC matrices pybind11 module sources (separate module)
+set(PEEC_MATRICES_API_SOURCE
+	${LIB_DIR}/rad_peec_matrices_api.cpp  # pybind11 PEEC matrix construction API
 )
 
 # Triangle library (C source needs special handling)
@@ -599,3 +605,347 @@ endif()
 # message(STATUS "test_radhmat executable configured")
 
 # test_polygon_field removed (no longer needed)
+
+# ========================================
+# PEEC Matrices Python Module (peec_matrices.pyd)
+# ========================================
+# Independent pybind11 module for PEEC matrix construction
+# Style follows radia_ngsolve.cpp for consistency
+
+pybind11_add_module(peec_matrices
+	${PEEC_MATRICES_API_SOURCE}
+	${CORE_DIR}/rad_peec_matrices.cpp
+)
+
+# Add include directories
+target_include_directories(peec_matrices PRIVATE
+	${CORE_DIR}
+	${EXT_DIR}/genmath
+)
+
+# Add compile definitions
+target_compile_definitions(peec_matrices PRIVATE
+	_CRT_SECURE_NO_WARNINGS
+	$<$<CONFIG:Debug>:_DEBUG>
+	$<$<CONFIG:Release>:NDEBUG>
+	$<$<PLATFORM_ID:Windows>:WIN32>
+)
+
+# Intel MKL for BLAS operations (if available)
+if(WIN32 AND USE_MKL_FOUND)
+	target_link_libraries(peec_matrices PRIVATE ${BLAS_LIB})
+	target_include_directories(peec_matrices PRIVATE ${BLAS_INCLUDE_DIR})
+	target_compile_definitions(peec_matrices PRIVATE HAVE_LAPACK)
+	message(STATUS "Using Intel MKL for peec_matrices: ${BLAS_LIB}")
+endif()
+
+# Link Windows system libraries
+if(WIN32)
+	target_link_libraries(peec_matrices PRIVATE version.lib)
+	if(MSVC)
+		target_link_options(peec_matrices PRIVATE /NODEFAULTLIB:LIBCMT)
+	endif()
+endif()
+
+# Link OpenMP for parallel matrix construction
+if(RADIA_ENABLE_OPENMP)
+	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
+		if(EXISTS ${INTEL_OPENMP_LIB})
+			target_link_libraries(peec_matrices PRIVATE ${INTEL_OPENMP_LIB})
+			target_compile_definitions(peec_matrices PRIVATE _OPENMP)
+			message(STATUS "OpenMP enabled for peec_matrices (Intel OpenMP)")
+		elseif(OpenMP_CXX_FOUND)
+			target_link_libraries(peec_matrices PRIVATE OpenMP::OpenMP_CXX)
+			message(STATUS "OpenMP enabled for peec_matrices (MSVC OpenMP)")
+		endif()
+	elseif(OpenMP_CXX_FOUND)
+		target_link_libraries(peec_matrices PRIVATE OpenMP::OpenMP_CXX)
+		message(STATUS "OpenMP enabled for peec_matrices")
+	endif()
+endif()
+
+# Compiler-specific flags
+if(MSVC)
+	target_compile_options(peec_matrices PRIVATE
+		/O2
+		/fp:fast
+		/W0
+		/wd4244
+		/wd4267
+	)
+	if(RADIA_ENABLE_OPENMP)
+		target_compile_options(peec_matrices PRIVATE /openmp)
+	endif()
+	message(STATUS "Using MSVC compiler for peec_matrices")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+	target_compile_options(peec_matrices PRIVATE /O3 /fp:fast /W0)
+	if(RADIA_ENABLE_OPENMP)
+		target_compile_options(peec_matrices PRIVATE /Qopenmp)
+		target_link_options(peec_matrices PRIVATE /Qopenmp)
+	endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+	target_compile_options(peec_matrices PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+	)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(peec_matrices PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+	)
+endif()
+
+# Post-build: Copy required DLLs
+if(WIN32 AND USE_MKL_FOUND)
+	add_custom_command(TARGET peec_matrices POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${MKL_BIN_DIR}/mkl_rt.2.dll"
+			"$<TARGET_FILE_DIR:peec_matrices>"
+		COMMENT "Copying mkl_rt.2.dll for peec_matrices"
+	)
+	if(EXISTS "${INTEL_COMPILER_BIN}/libiomp5md.dll")
+		add_custom_command(TARGET peec_matrices POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${INTEL_COMPILER_BIN}/libiomp5md.dll"
+				"$<TARGET_FILE_DIR:peec_matrices>"
+			COMMENT "Copying libiomp5md.dll for peec_matrices"
+		)
+	endif()
+endif()
+
+message(STATUS "peec_matrices module configured")
+
+# ========================================
+# CLN Core Python Module (cln_core.pyd)
+# ========================================
+# Lanczos algorithm for PEEC model order reduction
+# CLN I form: R_diag (diagonal) + L_tridiag (tridiagonal)
+
+set(CLN_CORE_SOURCES
+	${LIB_DIR}/rad_cln_api.cpp
+	${CORE_DIR}/rad_cln.cpp
+)
+
+pybind11_add_module(cln_core
+	${CLN_CORE_SOURCES}
+)
+
+# Add include directories
+target_include_directories(cln_core PRIVATE
+	${CORE_DIR}
+)
+
+# Add compile definitions
+target_compile_definitions(cln_core PRIVATE
+	_CRT_SECURE_NO_WARNINGS
+	$<$<CONFIG:Debug>:_DEBUG>
+	$<$<CONFIG:Release>:NDEBUG>
+	$<$<PLATFORM_ID:Windows>:WIN32>
+)
+
+# Intel MKL for LAPACK operations (required for Lanczos)
+if(WIN32 AND USE_MKL_FOUND)
+	target_link_libraries(cln_core PRIVATE ${BLAS_LIB})
+	target_include_directories(cln_core PRIVATE ${BLAS_INCLUDE_DIR})
+	target_compile_definitions(cln_core PRIVATE HAVE_LAPACK)
+	message(STATUS "Using Intel MKL for cln_core: ${BLAS_LIB}")
+endif()
+
+# Link Windows system libraries
+if(WIN32)
+	target_link_libraries(cln_core PRIVATE version.lib)
+	if(MSVC)
+		target_link_options(cln_core PRIVATE /NODEFAULTLIB:LIBCMT)
+	endif()
+endif()
+
+# Link OpenMP for parallel frequency sweep
+if(RADIA_ENABLE_OPENMP)
+	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
+		if(EXISTS ${INTEL_OPENMP_LIB})
+			target_link_libraries(cln_core PRIVATE ${INTEL_OPENMP_LIB})
+			target_compile_definitions(cln_core PRIVATE _OPENMP)
+			message(STATUS "OpenMP enabled for cln_core (Intel OpenMP)")
+		elseif(OpenMP_CXX_FOUND)
+			target_link_libraries(cln_core PRIVATE OpenMP::OpenMP_CXX)
+			message(STATUS "OpenMP enabled for cln_core (MSVC OpenMP)")
+		endif()
+	elseif(OpenMP_CXX_FOUND)
+		target_link_libraries(cln_core PRIVATE OpenMP::OpenMP_CXX)
+		message(STATUS "OpenMP enabled for cln_core")
+	endif()
+endif()
+
+# Compiler-specific flags
+if(MSVC)
+	target_compile_options(cln_core PRIVATE
+		/O2
+		/fp:fast
+		/W0
+		/wd4244
+		/wd4267
+	)
+	if(RADIA_ENABLE_OPENMP)
+		target_compile_options(cln_core PRIVATE /openmp)
+	endif()
+	message(STATUS "Using MSVC compiler for cln_core")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+	target_compile_options(cln_core PRIVATE /O3 /fp:fast /W0)
+	if(RADIA_ENABLE_OPENMP)
+		target_compile_options(cln_core PRIVATE /Qopenmp)
+		target_link_options(cln_core PRIVATE /Qopenmp)
+	endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+	target_compile_options(cln_core PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+	)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(cln_core PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+	)
+endif()
+
+# Post-build: Copy required DLLs
+if(WIN32 AND USE_MKL_FOUND)
+	add_custom_command(TARGET cln_core POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${MKL_BIN_DIR}/mkl_rt.2.dll"
+			"$<TARGET_FILE_DIR:cln_core>"
+		COMMENT "Copying mkl_rt.2.dll for cln_core"
+	)
+	if(EXISTS "${INTEL_COMPILER_BIN}/libiomp5md.dll")
+		add_custom_command(TARGET cln_core POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${INTEL_COMPILER_BIN}/libiomp5md.dll"
+				"$<TARGET_FILE_DIR:cln_core>"
+			COMMENT "Copying libiomp5md.dll for cln_core"
+		)
+	endif()
+endif()
+
+message(STATUS "cln_core module configured")
+
+# ========================================
+# MMM Core Python Module (mmm_core.pyd)
+# ========================================
+# Standalone MMM (Magnetic Moment Method) matrix construction
+# for NGSolve mesh integration and external solvers
+
+set(MMM_CORE_SOURCES
+	${LIB_DIR}/rad_mmm_matrices_api.cpp
+	${CORE_DIR}/rad_mmm_matrices.cpp
+	${CORE_DIR}/rad_mmm_hacapk.cpp
+	${CORE_DIR}/rad_mmm_hacapk_callback.c
+	${EXT_DIR}/HACApK/cHACApK_base.c
+	${EXT_DIR}/HACApK/cHACApK_lib.c
+	${EXT_DIR}/HACApK/cHACApK_cpp_impl.c
+)
+
+pybind11_add_module(mmm_core
+	${MMM_CORE_SOURCES}
+)
+
+# Add include directories
+target_include_directories(mmm_core PRIVATE
+	${CORE_DIR}
+	${EXT_DIR}/HACApK
+)
+
+# Add compile definitions
+target_compile_definitions(mmm_core PRIVATE
+	_CRT_SECURE_NO_WARNINGS
+	RADIA_USE_HACAPK
+	HACAPK_RADIA_LOGGING
+	$<$<CONFIG:Debug>:_DEBUG>
+	$<$<CONFIG:Release>:NDEBUG>
+	$<$<PLATFORM_ID:Windows>:WIN32>
+)
+
+# Intel MKL for LAPACK operations (required for LU solver)
+if(WIN32 AND USE_MKL_FOUND)
+	target_link_libraries(mmm_core PRIVATE ${BLAS_LIB})
+	target_include_directories(mmm_core PRIVATE ${BLAS_INCLUDE_DIR})
+	target_compile_definitions(mmm_core PRIVATE HAVE_LAPACK)
+	message(STATUS "Using Intel MKL for mmm_core: ${BLAS_LIB}")
+endif()
+
+# Link Windows system libraries
+if(WIN32)
+	target_link_libraries(mmm_core PRIVATE version.lib)
+	if(MSVC)
+		target_link_options(mmm_core PRIVATE /NODEFAULTLIB:LIBCMT)
+	endif()
+endif()
+
+# Link OpenMP for parallel matrix construction
+if(RADIA_ENABLE_OPENMP)
+	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
+		if(EXISTS ${INTEL_OPENMP_LIB})
+			target_link_libraries(mmm_core PRIVATE ${INTEL_OPENMP_LIB})
+			target_compile_definitions(mmm_core PRIVATE _OPENMP)
+			message(STATUS "OpenMP enabled for mmm_core (Intel OpenMP)")
+		elseif(OpenMP_CXX_FOUND)
+			target_link_libraries(mmm_core PRIVATE OpenMP::OpenMP_CXX)
+			message(STATUS "OpenMP enabled for mmm_core (MSVC OpenMP)")
+		endif()
+	elseif(OpenMP_CXX_FOUND)
+		target_link_libraries(mmm_core PRIVATE OpenMP::OpenMP_CXX)
+		message(STATUS "OpenMP enabled for mmm_core")
+	endif()
+endif()
+
+# Compiler-specific flags
+if(MSVC)
+	target_compile_options(mmm_core PRIVATE
+		/O2
+		/fp:fast
+		/W0
+		/wd4244
+		/wd4267
+	)
+	if(RADIA_ENABLE_OPENMP)
+		target_compile_options(mmm_core PRIVATE /openmp)
+	endif()
+	message(STATUS "Using MSVC compiler for mmm_core")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+	target_compile_options(mmm_core PRIVATE /O3 /fp:fast /W0)
+	if(RADIA_ENABLE_OPENMP)
+		target_compile_options(mmm_core PRIVATE /Qopenmp)
+		target_link_options(mmm_core PRIVATE /Qopenmp)
+	endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+	target_compile_options(mmm_core PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+	)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(mmm_core PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+	)
+endif()
+
+# Post-build: Copy required DLLs
+if(WIN32 AND USE_MKL_FOUND)
+	add_custom_command(TARGET mmm_core POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${MKL_BIN_DIR}/mkl_rt.2.dll"
+			"$<TARGET_FILE_DIR:mmm_core>"
+		COMMENT "Copying mkl_rt.2.dll for mmm_core"
+	)
+	if(EXISTS "${INTEL_COMPILER_BIN}/libiomp5md.dll")
+		add_custom_command(TARGET mmm_core POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${INTEL_COMPILER_BIN}/libiomp5md.dll"
+				"$<TARGET_FILE_DIR:mmm_core>"
+			COMMENT "Copying libiomp5md.dll for mmm_core"
+		)
+	endif()
+endif()
+
+message(STATUS "mmm_core module configured")
