@@ -182,6 +182,39 @@ if errorlevel 1 (
     REM Continue anyway - radia.pyd is the main target
 )
 
+echo.
+echo ========================================
+echo   Building peec_matrices...
+echo ========================================
+echo.
+"$CMAKE_EXE" --build . --config Release --target peec_matrices -j
+
+if errorlevel 1 (
+    echo WARNING: peec_matrices build failed
+)
+
+echo.
+echo ========================================
+echo   Building cln_core...
+echo ========================================
+echo.
+"$CMAKE_EXE" --build . --config Release --target cln_core -j
+
+if errorlevel 1 (
+    echo WARNING: cln_core build failed
+)
+
+echo.
+echo ========================================
+echo   Building mmm_core...
+echo ========================================
+echo.
+"$CMAKE_EXE" --build . --config Release --target mmm_core -j
+
+if errorlevel 1 (
+    echo WARNING: mmm_core build failed
+)
+
 "@
 }
 
@@ -264,6 +297,39 @@ try {
         }
     }
 
+    # Copy peec_matrices.pyd to package directory (pybind11 module)
+    $PEEC_PYD_SOURCE = "$BUILD_DIR\peec_matrices.cp312-win_amd64.pyd"
+    $PEEC_PYD_DEST = "$PROJECT_DIR\src\radia\peec_matrices.pyd"
+
+    if (Test-Path $PEEC_PYD_SOURCE) {
+        Copy-Item $PEEC_PYD_SOURCE $PEEC_PYD_DEST -Force
+        Write-Host "Copied peec_matrices.pyd to src/radia/" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Could not find $PEEC_PYD_SOURCE" -ForegroundColor Yellow
+    }
+
+    # Copy cln_core.pyd to package directory (pybind11 module)
+    $CLN_PYD_SOURCE = "$BUILD_DIR\cln_core.cp312-win_amd64.pyd"
+    $CLN_PYD_DEST = "$PROJECT_DIR\src\radia\cln_core.pyd"
+
+    if (Test-Path $CLN_PYD_SOURCE) {
+        Copy-Item $CLN_PYD_SOURCE $CLN_PYD_DEST -Force
+        Write-Host "Copied cln_core.pyd to src/radia/" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Could not find $CLN_PYD_SOURCE" -ForegroundColor Yellow
+    }
+
+    # Copy mmm_core.pyd to package directory (pybind11 module)
+    $MMM_PYD_SOURCE = "$BUILD_DIR\mmm_core.cp312-win_amd64.pyd"
+    $MMM_PYD_DEST = "$PROJECT_DIR\src\radia\mmm_core.pyd"
+
+    if (Test-Path $MMM_PYD_SOURCE) {
+        Copy-Item $MMM_PYD_SOURCE $MMM_PYD_DEST -Force
+        Write-Host "Copied mmm_core.pyd to src/radia/" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Could not find $MMM_PYD_SOURCE" -ForegroundColor Yellow
+    }
+
     # Copy Intel MKL DLLs for distribution
     # mkl_rt.X.dll is SDL (Single Dynamic Library) that loads other DLLs at runtime
     # Use wildcard patterns to be version-agnostic (e.g., mkl_rt.2.dll, mkl_rt.3.dll)
@@ -331,6 +397,18 @@ try {
     if (Test-Path $NGSOLVE_PYD_DEST) {
         $ngInfo = Get-Item $NGSOLVE_PYD_DEST
         Write-Host "  radia_ngsolve.pyd: $([math]::Round($ngInfo.Length / 1MB, 2)) MB" -ForegroundColor Gray
+    }
+    if (Test-Path $PEEC_PYD_DEST) {
+        $peecInfo = Get-Item $PEEC_PYD_DEST
+        Write-Host "  peec_matrices.pyd: $([math]::Round($peecInfo.Length / 1MB, 2)) MB" -ForegroundColor Gray
+    }
+    if (Test-Path $CLN_PYD_DEST) {
+        $clnInfo = Get-Item $CLN_PYD_DEST
+        Write-Host "  cln_core.pyd: $([math]::Round($clnInfo.Length / 1MB, 2)) MB" -ForegroundColor Gray
+    }
+    if (Test-Path $MMM_PYD_DEST) {
+        $mmmInfo = Get-Item $MMM_PYD_DEST
+        Write-Host "  mmm_core.pyd: $([math]::Round($mmmInfo.Length / 1MB, 2)) MB" -ForegroundColor Gray
     }
     Write-Host ""
 }
