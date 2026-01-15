@@ -83,24 +83,28 @@ GPU acceleration targets:
 | Feature | Status | Module |
 |---------|--------|--------|
 | High homogeneity field | OK | MMM solver |
-| Shim coil optimization | TODO | Need implementation |
-| Spherical harmonic analysis | TODO | Need implementation |
+| Magnet array design | OK | `smco_array.py` |
+| Shim coil optimization | Partial | `demo_nmr_magnet.py` |
+| Spherical harmonic analysis | Partial | `demo_nmr_magnet.py` |
 | Gradient coil design | TODO | Need implementation |
 | Cryostat modeling | OK | NGSolve FEM |
 | Eddy current in shields | TODO | PEEC + surface Z |
 
-**Examples**: To be created
+**Examples**:
+- `examples/smco_magnet_array/smco_array.py` - SmCo hexagonal magnet array
+- `examples/peec_integration/demo_nmr_magnet.py` - Spherical harmonic shimming
 
 **TODO**:
-- [ ] Spherical harmonic expansion of B field
-- [ ] Shim coil current optimization
+- [x] Spherical harmonic expansion of B field
+- [x] Field homogeneity metrics (ppm)
+- [ ] Shim coil current optimization (physical coils)
 - [ ] Gradient coil Biot-Savart
-- [ ] Field homogeneity metrics (ppm)
+- [ ] Halbach ring permanent magnet NMR
 
 ---
 
 ### 5. Magnetic Levitation (MagLev)
-**Status**: Partial
+**Status**: In Development (student project)
 
 | Feature | Status | Module |
 |---------|--------|--------|
@@ -111,13 +115,14 @@ GPU acceleration targets:
 | Stability analysis | TODO | Need implementation |
 | Control system interface | TODO | Future |
 
-**Examples**: To be created
+**Examples**: Student project in progress
 
 **TODO**:
-- [ ] Force/torque calculation demos
+- [ ] Force/torque calculation demos (student)
 - [ ] Halbach array optimization
 - [ ] Eddy current braking (moving conductor)
 - [ ] Stability margin computation
+- [ ] Earnshaw stability analysis
 
 ---
 
