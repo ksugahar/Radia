@@ -1469,9 +1469,63 @@ Final Verilog-A: O(k*N) modules with O(1) frequency evaluation
 4. **Verilog-A ready**: Direct code generation for circuit simulation
 5. **Combines with ACA**: Low-rank structure + learned frequency dependence
 
-### Unified Approach: Analytical Models + PyKAN
+### Framework Architecture: Two Paths to Verilog-A
 
-The framework supports **both analytical models and data-driven learning**:
+This framework provides **two complementary paths** for converting frequency-dependent material properties to SPICE-compatible Verilog-A:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Material Property Input                       │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              │                               │
+              ▼                               ▼
+┌─────────────────────────┐     ┌─────────────────────────┐
+│   Path 1: Analytical    │     │   Path 2: Data-Driven   │
+│   Model Available       │     │   (No Analytical Model) │
+├─────────────────────────┤     ├─────────────────────────┤
+│ • Debye                 │     │ • Measured data         │
+│ • Cole-Cole             │     │ • FEM simulation        │
+│ • Cole-Davidson         │     │ • Literature curves     │
+│ • Havriliak-Negami      │     │ • Complex geometries    │
+│ • Multi-pole Debye      │     │ • Nonlinear effects     │
+│ • Dowell skin effect    │     │                         │
+└───────────┬─────────────┘     └───────────┬─────────────┘
+            │                               │
+            ▼                               ▼
+┌─────────────────────────┐     ┌─────────────────────────┐
+│  Direct Verilog-A       │     │  PyKAN Learning         │
+│  Implementation         │     │  + Formula Extraction   │
+│  (closed-form formula)  │     │  + Auto Verilog-A Gen   │
+└───────────┬─────────────┘     └───────────┬─────────────┘
+            │                               │
+            └───────────────┬───────────────┘
+                            ▼
+              ┌─────────────────────────┐
+              │   Verilog-A Module      │
+              │   for SPICE Simulation  │
+              └─────────────────────────┘
+```
+
+**Path 1 (Analytical Models)**: When material behavior follows known physics (Debye relaxation, skin effect, etc.), use established formulas directly in Verilog-A. This is simpler, faster, and produces compact models.
+
+**Path 2 (PyKAN)**: When no analytical model fits the data (arbitrary cross-sections, complex frequency dependence, nonlinear effects), PyKAN learns the relationship from numerical data and extracts a symbolic formula for Verilog-A.
+
+**Key Insight**: PyKAN is a fallback for cases where analytical models fail, not a replacement for them. Use the simplest approach that works:
+
+| Material Behavior | Recommended Path |
+|-------------------|------------------|
+| Standard dielectric (single τ) | Debye → Direct Verilog-A |
+| Ferrite with broad relaxation | Cole-Cole → Direct Verilog-A |
+| Rectangular conductor skin effect | Dowell → Direct Verilog-A |
+| Arbitrary cross-section Zs | PyKAN → Verilog-A |
+| ε(ω, T) temperature-dependent | PyKAN → Verilog-A |
+| Nonlinear μ(H, ω) | PyKAN → Verilog-A |
+
+### Path 1: Analytical Models (Direct Verilog-A)
+
+The framework supports **standard analytical models** with direct Verilog-A implementation:
 
 **Supported Analytical Models**:
 
@@ -1627,9 +1681,9 @@ Do you have analytical model parameters?
          └── Literature curves → Digitize + PyKAN
 ```
 
-**PyKAN Recovering Analytical Models**:
+### Path 2 Bonus: PyKAN for Model Identification
 
-PyKAN can also be used to **identify** which analytical model best fits measured data:
+PyKAN can also be used to **identify** which analytical model best fits measured data (useful when you're unsure which Path 1 model applies):
 
 ```python
 # Train PyKAN on measured data
@@ -1648,10 +1702,16 @@ print(f"Identified model: {identify_model(formula)}")
 print(f"Parameters: {extract_parameters(formula)}")
 ```
 
-This unified approach ensures:
-- **Known materials**: Use established analytical models with physical parameters
-- **New materials**: Learn from data without assuming model form
-- **Model validation**: PyKAN can verify if assumed model fits data
+**Summary of Two-Path Framework**:
+
+| Path | When to Use | Output | Complexity |
+|------|-------------|--------|------------|
+| **Path 1** | Analytical model exists (Debye, Dowell, etc.) | Direct Verilog-A | Simple |
+| **Path 2** | No analytical model, only data | PyKAN → Verilog-A | More complex |
+
+- **Known materials**: Use Path 1 with established analytical models
+- **New/complex materials**: Use Path 2 with PyKAN learning
+- **Uncertain cases**: Use PyKAN (Path 2) to identify which Path 1 model applies
 
 ---
 
