@@ -147,8 +147,6 @@ for radia_cfg in radia_configs:
 			# ----------------------------------------------------------
 			# DENSE MATRIX (H-matrix disabled)
 			# ----------------------------------------------------------
-			rad.SolverHMatrixDisable()
-
 			# Create CoefficientFunction
 			t_start = perf_counter()
 			cf_dense = radia_ngsolve.RadiaField(magnet, field_type, use_hmatrix=False)
@@ -167,8 +165,6 @@ for radia_cfg in radia_configs:
 			# ----------------------------------------------------------
 			# H-MATRIX (enabled)
 			# ----------------------------------------------------------
-			rad.SolverHMatrixEnable()
-
 			# Create CoefficientFunction
 			t_start = perf_counter()
 			cf_hmat = radia_ngsolve.RadiaField(magnet, field_type, use_hmatrix=True)

@@ -243,6 +243,26 @@ public:
      */
     std::vector<double> GetPanelAreas() const;
 
+    /**
+     * @brief Get wire centerline path (for impedance calculation)
+     */
+    const std::vector<TVector3d>& GetWireCenterPath() const { return wireCenterPath_; }
+
+    /**
+     * @brief Get wire cross-section type ("circular" or "rectangular")
+     */
+    const std::string& GetCrossSectionType() const { return crossSectionType_; }
+
+    /**
+     * @brief Get wire width (diameter for circular cross-section)
+     */
+    double GetWireWidth() const { return wireWidth_; }
+
+    /**
+     * @brief Get wire height (same as width for circular cross-section)
+     */
+    double GetWireHeight() const { return wireHeight_; }
+
     // ========== Solution data ==========
 
     /**
@@ -390,6 +410,11 @@ private:
     // Wire centerline path (for Biot-Savart field computation)
     // Stored when creating wire/loop conductors
     std::vector<TVector3d> wireCenterPath_;
+
+    // Wire cross-section parameters (for impedance calculation)
+    std::string crossSectionType_;  // "circular" or "rectangular"
+    double wireWidth_;              // Width (diameter for circular)
+    double wireHeight_;             // Height (same as width for circular)
 
     // Helper methods
     void GenerateRectangularFacePanels(const TVector3d& corner,
