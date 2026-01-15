@@ -176,7 +176,6 @@ def create_smco_magnet_array(
 	base_plate = create_meshed_disk(
 		array_radius, base_plate_height, n_radial, n_angular, n_z, 0, 0, 0
 	)
-	rad.ObjDrwAtr(base_plate, [0.5, 0.5, 0.5], 0.1)  # Gray color
 
 	# Apply iron material properties for magnetic yoke behavior
 	mat = rad.MatLin(1000)  # μr = 1000 (isotropic)
@@ -210,9 +209,6 @@ def create_smco_magnet_array(
 
 	# Combine all objects into container
 	geometry = rad.ObjCnt(magnets)
-
-	# Set visualization color for magnets (blue)
-	rad.ObjDrwAtr(geometry, [0.3, 0.3, 1.0], 0.1)
 
 	array_info = {
 		'num_magnets': magnet_count,
