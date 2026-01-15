@@ -50,10 +50,6 @@ g2 = rad.ObjCnt([g2, g3])
 # Note: Material properties (MatLin, MatSatIso) are for soft magnetic materials
 # like iron yokes, NOT for permanent magnets with fixed magnetization
 
-# Set drawing attributes
-rad.ObjDrwAtr(g1, [1, 0, 0], 0.001)  # Red for arc current
-rad.ObjDrwAtr(g2, [0, 0, 1], 0.001)  # Blue for magnets
-
 # Create final container with arc and magnets
 g = rad.ObjCnt([g1, g2])
 

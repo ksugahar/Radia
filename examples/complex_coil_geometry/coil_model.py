@@ -58,9 +58,6 @@ def create_beam_steering_coil():
 	# Combine all coils
 	coils_container = rad.ObjCnt(coil_segments)
 
-	# Set visualization attributes
-	rad.ObjDrwAtr(coils_container, [1, 0, 0], 0.1)  # Red, 10% opacity
-
 	# Apply symmetry for faster computation
 	rad.TrfZerPara(coils_container, [0, 0, 0], [1, 0, 0])
 

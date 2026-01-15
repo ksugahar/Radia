@@ -50,7 +50,7 @@ g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
 | `radMatLin[...]` | `rad.MatLin(...)` | Define linear material |
 | `radMatSatIso[...]` | `rad.MatSatIso(...)` | Nonlinear isotropic material |
 | `radMatApl[obj, mat]` | `rad.MatApl(obj, mat)` | Apply material |
-| `radObjDrwAtr[...]` | `rad.ObjDrwAtr(...)` | Set drawing attributes |
+| `radObjDrwAtr[...]` | (REMOVED) | Drawing attributes API removed |
 | `radObjCnt[{...}]` | `rad.ObjCnt([...])` | Create container |
 | `radObjMltExtRtg[...]` | `rad.ObjMltExtRtg(...)` | Multiple extrusion |
 | `radObjPolyhdr[...]` | `rad.ObjPolyhdr(...)` | Create polyhedron (internal API, use for wedge/pyramid only) |
