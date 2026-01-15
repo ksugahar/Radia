@@ -296,8 +296,7 @@ rad.MatApl(obj, mat)
 
 **Optional:**
 - NGSolve (for NGSolve_Integration/ examples)
-- PyVista (for interactive 3D visualization)
-- ParaView (for viewing VTK files)
+- ParaView (for viewing VTS files)
 
 ### Build Radia First
 
@@ -319,14 +318,11 @@ python arc_current_with_magnet.py
 
 ### View Output in ParaView
 
-Most examples generate VTK files:
+Most examples generate VTS files for field visualization:
 
 ```bash
-# Open geometry
-paraview arc_current_with_magnet.vtk
-
 # Open field distribution
-paraview field_distribution.vtk
+paraview field_output.vts
 ```
 
 ---
@@ -365,7 +361,7 @@ paraview field_distribution.vtk
 
 Free, open-source 3D visualization:
 
-1. Open `.vtk` file in ParaView
+1. Open `.vts` file in ParaView
 2. Apply filters:
    - **Glyph** - Vector field arrows
    - **StreamTracer** - Field lines
@@ -373,17 +369,6 @@ Free, open-source 3D visualization:
    - **Slice** - Cutting planes
 
 Download: https://www.paraview.org/
-
-### PyVista (Interactive)
-
-Python-based interactive 3D viewer:
-
-```python
-from radia_pyvista_viewer import view_radia_object
-view_radia_object(mag)
-```
-
-Install: `pip install pyvista`
 
 ---
 
