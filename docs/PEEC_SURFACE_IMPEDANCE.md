@@ -783,6 +783,112 @@ Speedup: ~8x for impedance calculation
 
 ---
 
+## ACA Low-Rank Approximation for Large-Scale PEEC
+
+### Overview
+
+For large PEEC systems (N > 1000 segments), the full inductance matrix $L_{ext}$ becomes memory-prohibitive ($O(N^2)$ storage). **ACA (Adaptive Cross Approximation)** provides efficient low-rank approximation for off-diagonal blocks.
+
+### H-Matrix Structure
+
+The PEEC inductance matrix can be hierarchically partitioned:
+
+$$
+L = \begin{pmatrix}
+L_{11} & L_{12} & \cdots \\
+L_{21} & L_{22} & \cdots \\
+\vdots & \vdots & \ddots
+\end{pmatrix}
+$$
+
+For well-separated clusters, off-diagonal blocks $L_{ij}$ are numerically low-rank:
+
+$$
+L_{ij} \approx U_k V_k^T \quad \text{where } k \ll \min(n_i, n_j)
+$$
+
+### ACA Algorithm
+
+**Adaptive Cross Approximation (ACA+)** builds low-rank approximation without computing full matrix:
+
+```
+Input: Matrix block A (m x n), tolerance eps
+Output: Low-rank factors U (m x k), V (n x k)
+
+1. Initialize: R = A, k = 0
+2. While ||R||_F > eps * ||A||_F:
+   a. Find pivot (i*, j*) = argmax |R_ij|
+   b. u_k = R[:, j*]          # Column
+   c. v_k = R[i*, :] / R[i*, j*]  # Row (normalized)
+   d. R = R - u_k * v_k^T     # Update residual
+   e. k = k + 1
+3. Return U = [u_1, ..., u_k], V = [v_1, ..., v_k]
+```
+
+### Admissibility Condition
+
+Blocks are approximated if clusters are **well-separated**:
+
+$$
+\text{dist}(C_i, C_j) \geq \eta \cdot \max(\text{diam}(C_i), \text{diam}(C_j))
+$$
+
+where $\eta \approx 2.0$ is the admissibility parameter.
+
+### Complexity Comparison
+
+| Operation | Dense | H-Matrix (ACA) |
+|-----------|-------|----------------|
+| Storage | $O(N^2)$ | $O(N \log N)$ |
+| Matrix-Vector | $O(N^2)$ | $O(N \log N)$ |
+| LU Factorization | $O(N^3)$ | $O(N \log^2 N)$ |
+
+### Integration with PRIMA
+
+ACA acceleration can be combined with PRIMA reduction:
+
+1. **Build H-matrix** for $L_{ext}$ using ACA
+2. **Apply PRIMA** using H-matrix-vector products
+3. **Result**: Reduced model from large-scale PEEC
+
+```python
+# Pseudo-code for H-matrix accelerated PRIMA
+from hacapk import HMatrix
+
+# Build H-matrix for L_ext
+L_hmat = HMatrix(segments, eps=1e-4, eta=2.0)
+
+# Lanczos with H-matrix MVP
+def matvec(v):
+    return L_hmat @ v
+
+U, T = lanczos_tridiagonalize(matvec, R_dc, v0, k_reduced)
+```
+
+### Radia Implementation
+
+Radia uses **HACApK** library for H-matrix operations:
+
+```python
+import radia as rad
+
+# Enable H-matrix solver
+rad.SetHACApKParams(eps=1e-4, leaf_size=10, eta=2.0)
+
+# Solve with H-matrix acceleration
+rad.Solve(container, precision=0.0001, max_iter=1000, method=2)  # method=2 = HACApK
+```
+
+### When to Use ACA
+
+| Problem Size | Recommended Solver |
+|--------------|-------------------|
+| N < 500 | Dense LU (fast for small N) |
+| 500 < N < 2000 | BiCGSTAB (iterative) |
+| N > 2000 | **HACApK (ACA)** |
+
+---
+
 ## PEEC-MMM Coupling via Mutual Inductance
 
 ### Overview
