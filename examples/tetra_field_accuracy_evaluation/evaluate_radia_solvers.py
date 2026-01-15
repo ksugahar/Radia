@@ -3,7 +3,7 @@
 Tetrahedral vs Hexahedral Field Accuracy Evaluation
 
 This script evaluates the accuracy of magnetic field computation from
-tetrahedral (Netgen) and hexahedral (ObjDivMag) meshes in Radia.
+tetrahedral (Netgen) and hexahedral (manual mesh) meshes in Radia.
 
 Both mesh types are solved using Radia's MMM solver to obtain magnetization,
 then the B field is compared at external test points.
@@ -106,9 +106,20 @@ def generate_test_points():
     return points, labels
 
 
+def hex_vertices(cx, cy, cz, dx, dy, dz):
+    """Generate hexahedron vertices from center and dimensions."""
+    hx, hy, hz = dx/2, dy/2, dz/2
+    return [
+        [cx-hx, cy-hy, cz-hz], [cx+hx, cy-hy, cz-hz],
+        [cx+hx, cy+hy, cz-hz], [cx-hx, cy+hy, cz-hz],
+        [cx-hx, cy-hy, cz+hz], [cx+hx, cy-hy, cz+hz],
+        [cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz]
+    ]
+
+
 def create_hexa_solution(test_points):
     """
-    Create hexahedral mesh using ObjDivMag and solve with Radia.
+    Create hexahedral mesh manually and solve with Radia.
     """
     rad.UtiDelAll()
     rad.FldUnits('m')
@@ -116,18 +127,23 @@ def create_hexa_solution(test_points):
     print()
     print('Creating hexahedral mesh (n_div=%d)...' % HEXA_NDIV)
 
-    # Create cube with initial zero magnetization: 1m side, centered at origin
+    # Create cube mesh manually: HEXA_NDIV x HEXA_NDIV x HEXA_NDIV elements
     half = CUBE_SIZE / 2
-    # Hexahedron vertices for cube centered at [0, 0, 0] with dimensions [1.0, 1.0, 1.0]
-    vertices = [
-        [-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
-        [-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
-    ]
-    cube = rad.ObjHexahedron(vertices, [0, 0, 0])
-
-    # Subdivide into hexahedra
-    rad.ObjDivMag(cube, [HEXA_NDIV, HEXA_NDIV, HEXA_NDIV])
+    elem_size = CUBE_SIZE / HEXA_NDIV
     n_elements = HEXA_NDIV ** 3
+
+    elements = []
+    for i in range(HEXA_NDIV):
+        for j in range(HEXA_NDIV):
+            for k in range(HEXA_NDIV):
+                cx = -half + (i + 0.5) * elem_size
+                cy = -half + (j + 0.5) * elem_size
+                cz = -half + (k + 0.5) * elem_size
+                vertices = hex_vertices(cx, cy, cz, elem_size, elem_size, elem_size)
+                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
+                elements.append(elem)
+
+    cube = rad.ObjCnt(elements)
 
     # Apply linear material
     mat = rad.MatLin(MU_R)  # relative permeability
@@ -168,7 +184,7 @@ def create_hexa_solution(test_points):
             B_values.append([np.nan, np.nan, np.nan])
 
     return {
-        'method': 'hexahedral (ObjDivMag)',
+        'method': 'hexahedral (manual mesh)',
         'n_elements': n_elements,
         'n_div': HEXA_NDIV,
         't_solve': t_solve,
@@ -268,7 +284,7 @@ def compare_results(hexa_result, tetra_result, test_points, labels):
     print('=' * 70)
 
     print()
-    print('Reference: Hexahedral (ObjDivMag)')
+    print('Reference: Hexahedral (manual mesh)')
     print()
 
     print('%s  %s  %s  %s  %s' % (
