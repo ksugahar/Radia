@@ -108,9 +108,17 @@ try:
         StaticResult,
         FrequencyResult,
         TransientResult,
-        # Solver classes
+        # PEEC solver classes
         PEECAnalysisSolver,
         UnifiedAnalysis,
+        # MMM result classes
+        MMMStaticResult,
+        MMMFrequencyResult,
+        # MMM solver classes
+        MMMAnalysisSolver,
+        UnifiedMMMAnalysis,
+        # MMM utility functions
+        build_magnetic_circuit_from_mmm,
         # Convenience waveform generators
         step_voltage,
         pulse_voltage,
