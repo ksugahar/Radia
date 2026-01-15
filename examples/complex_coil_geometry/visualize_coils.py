@@ -23,13 +23,6 @@ import radia as rad
 # Import coil model
 from coil_model import create_beam_steering_coil, get_coil_info
 
-# Try to import visualization tools
-try:
-	from radia_pyvista_viewer import view_radia_object
-	HAS_PYVISTA = True
-except ImportError:
-	HAS_PYVISTA = False
-
 
 
 def calculate_field_at_test_points(coil_obj):
@@ -131,24 +124,6 @@ def main():
 		print(f"  [OK] Created: {output_file}")
 	except Exception as e:
 		print(f"  [WARNING] Export failed: {e}")
-
-	# Visualize with PyVista
-	if HAS_PYVISTA:
-		print("\n" + "-" * 70)
-		print("Opening PyVista viewer...")
-		print("-" * 70)
-		print("\nControls:")
-		print("  - Left click + drag: Rotate")
-		print("  - Right click + drag: Pan")
-		print("  - Scroll wheel: Zoom")
-		print("  - 'q': Quit\n")
-
-		view_radia_object(coil)
-	else:
-		print("\n" + "-" * 70)
-		print("PyVista not available.")
-		print("-" * 70)
-		print("Install with: pip install pyvista")
 
 	print("\n" + "=" * 70)
 	print("VISUALIZATION COMPLETE")
