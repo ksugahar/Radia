@@ -4,41 +4,48 @@ import sys
 sys.path.insert(0, '../../src/radia')
 import radia as rad
 
+
+def hex_vertices(cx, cy, cz, dx, dy, dz):
+    """Generate hexahedron vertices from center and dimensions."""
+    hx, hy, hz = dx/2, dy/2, dz/2
+    return [
+        [cx-hx, cy-hy, cz-hz], [cx+hx, cy-hy, cz-hz],
+        [cx+hx, cy+hy, cz-hz], [cx-hx, cy+hy, cz-hz],
+        [cx-hx, cy-hy, cz+hz], [cx+hx, cy-hy, cz+hz],
+        [cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz]
+    ]
+
+
 rad.UtiDelAll()
 rad.FldUnits('m')
 
-# Create hexahedron
-vertices = [
-    [-0.015, -0.015, -0.015],
-    [0.015, -0.015, -0.015],
-    [0.015, 0.015, -0.015],
-    [-0.015, 0.015, -0.015],
-    [-0.015, -0.015, 0.015],
-    [0.015, -0.015, 0.015],
-    [0.015, 0.015, 0.015],
-    [-0.015, 0.015, 0.015],
-]
-core = rad.ObjHexahedron(vertices, [0, 0, 0])
-print(f"Hexahedron handle: {core}")
+# Create hexahedral mesh manually (2x2x2 = 8 elements)
+cube_half = 0.015  # m
+n_div = 2
+elem_size = 2 * cube_half / n_div
+n_elements = n_div ** 3
+
+print(f"Creating {n_div}x{n_div}x{n_div} = {n_elements} hexahedral elements...")
+
+elements = []
+for i in range(n_div):
+    for j in range(n_div):
+        for k in range(n_div):
+            cx = -cube_half + (i + 0.5) * elem_size
+            cy = -cube_half + (j + 0.5) * elem_size
+            cz = -cube_half + (k + 0.5) * elem_size
+            vertices = hex_vertices(cx, cy, cz, elem_size, elem_size, elem_size)
+            elem = rad.ObjHexahedron(vertices, [0, 0, 0])
+            elements.append(elem)
+            print(f"  Element {len(elements)}: center=({cx:.4f}, {cy:.4f}, {cz:.4f})")
+
+core = rad.ObjCnt(elements)
+print(f"Container handle: {core}")
 
 # Apply material
 mat = rad.MatLin(1000)
 rad.MatApl(core, mat)
-
-# Try to subdivide
-try:
-    # ObjDivMag divides magnetic objects
-    rad.ObjDivMag(core, [2, 2, 2])
-    print("Subdivided into 2x2x2 = 8 elements")
-except Exception as e:
-    print(f"ObjDivMag failed: {e}")
-
-# Try alternative subdivision
-try:
-    rad.ObjDivMagPln(core, [0, 0, 1], [0, 0, 0])
-    print("Subdivided by plane")
-except Exception as e:
-    print(f"ObjDivMagPln failed: {e}")
+print(f"Applied material with mu_r=1000")
 
 # Get geometry info
 try:
@@ -49,15 +56,13 @@ except Exception as e:
 
 # Check element count via container
 try:
-    cnt = rad.ObjCnt([core])
-    elements = rad.ObjCntSize(cnt)
-    print(f"Container size: {elements}")
+    cnt_size = rad.ObjCntSize(core)
+    print(f"Container size: {cnt_size}")
 except Exception as e:
     print(f"Container check failed: {e}")
 
-# Check with interaction
-print("\n--- Using PreRelax to create interaction ---")
-# PreRelax creates the interaction matrix
+# Solve
+print("\n--- Solving ---")
 result = rad.Solve(core, 0.0001, 10, 0)
 print(f"Solve result: {result}")
 

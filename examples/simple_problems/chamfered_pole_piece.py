@@ -13,7 +13,6 @@ This example demonstrates:
 import sys
 import os
 import math
-import numpy as np
 
 # Add parent directory to path to import radia
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'dist'))
@@ -79,13 +78,7 @@ print(f"  Level 3 (z={gap/2 + lz1} mm): size=[{thick/2}, {width}] mm (full)")
 g1 = rad.ObjMltExtRtg([k1, k2, k3], magnetization)
 
 print(f"\nMagnet object created: ID = {g1}")
-
-# Subdivide the magnet for accurate field calculation
-# [nx, ny, nz] - number of subdivisions in each direction
-n1 = [2, 3, 2]
-rad.ObjDivMag(g1, n1)
-
-print(f"Subdivisions applied: {n1[0]} × {n1[1]} × {n1[2]} = {n1[0]*n1[1]*n1[2]} segments")
+print("Note: ObjMltExtRtg creates a single element (no subdivision)")
 
 # Set drawing attributes (blue color)
 rad.ObjDrwAtr(g1, [0, 0, 1], 0.001)
