@@ -3,7 +3,7 @@
 Analytical Reference Solution for Magnetized Cube Field
 
 This script computes Radia's B field from a cube with known magnetization
-and compares tetrahedral mesh results with hexahedral (ObjDivMag) results.
+and compares tetrahedral mesh results with hexahedral (manual mesh) results.
 
 Test Case: Uniformly magnetized cube
 - Cube size: 1.0m x 1.0m x 1.0m
@@ -91,9 +91,20 @@ def generate_test_points():
     return points, labels
 
 
+def hex_vertices(cx, cy, cz, dx, dy, dz):
+    """Generate hexahedron vertices from center and dimensions."""
+    hx, hy, hz = dx/2, dy/2, dz/2
+    return [
+        [cx-hx, cy-hy, cz-hz], [cx+hx, cy-hy, cz-hz],
+        [cx+hx, cy+hy, cz-hz], [cx-hx, cy+hy, cz-hz],
+        [cx-hx, cy-hy, cz+hz], [cx+hx, cy-hy, cz+hz],
+        [cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz]
+    ]
+
+
 def compute_hexa_solution(test_points):
     """
-    Compute B field using Radia hexahedral (ObjDivMag) method.
+    Compute B field using Radia hexahedral (manual mesh) method.
     This uses analytical formulas for rectangular blocks.
     """
     rad.UtiDelAll()
@@ -101,17 +112,22 @@ def compute_hexa_solution(test_points):
 
     # Create uniformly magnetized cube: 1m side, centered at origin
     half = CUBE_SIZE / 2
-    # Hexahedron vertices for cube centered at [0, 0, 0] with dimensions [1.0, 1.0, 1.0]
-    vertices = [
-        [-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
-        [-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
-    ]
-    cube = rad.ObjHexahedron(vertices, MAGNETIZATION)
-
-    # Subdivide into hexahedra
-    rad.ObjDivMag(cube, [HEXA_NDIV, HEXA_NDIV, HEXA_NDIV])
-
+    elem_size = CUBE_SIZE / HEXA_NDIV
     n_elements = HEXA_NDIV ** 3
+
+    # Create cube mesh manually
+    elements = []
+    for i in range(HEXA_NDIV):
+        for j in range(HEXA_NDIV):
+            for k in range(HEXA_NDIV):
+                cx = -half + (i + 0.5) * elem_size
+                cy = -half + (j + 0.5) * elem_size
+                cz = -half + (k + 0.5) * elem_size
+                vertices = hex_vertices(cx, cy, cz, elem_size, elem_size, elem_size)
+                elem = rad.ObjHexahedron(vertices, MAGNETIZATION)
+                elements.append(elem)
+
+    cube = rad.ObjCnt(elements)
 
     # Evaluate field at test points
     B_values = []
@@ -124,7 +140,7 @@ def compute_hexa_solution(test_points):
             B_values.append([np.nan, np.nan, np.nan])
 
     return {
-        'method': 'hexahedral (ObjDivMag)',
+        'method': 'hexahedral (manual mesh)',
         'n_elements': n_elements,
         'B_values': B_values
     }
@@ -212,7 +228,7 @@ def main():
     print('=' * 70)
 
     print()
-    print('Reference: Hexahedral (ObjDivMag with analytical formula)')
+    print('Reference: Hexahedral (manual mesh with analytical formula)')
     print()
 
     print('%s  %s  %s  %s  %s' % (
