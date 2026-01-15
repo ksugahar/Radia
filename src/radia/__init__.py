@@ -86,3 +86,38 @@ except ImportError:
 
 # VTK Export: Use rad.FldVTS() (C++ implementation)
 # See docs/API_REFERENCE.md for usage
+
+# Beam Tracking: NumPy-based particle trajectory computation
+# Import beam_tracking submodule for accelerator physics applications
+try:
+    from . import beam_tracking
+    BEAM_TRACKING_AVAILABLE = True
+except ImportError:
+    # beam_tracking requires numpy
+    BEAM_TRACKING_AVAILABLE = False
+
+# Analysis Framework: Static, Frequency Response, Transient (CLN)
+# Unified interface for electromagnetic analysis
+try:
+    from .analysis import (
+        # Analysis types
+        AnalysisType,
+        SolverType,
+        # Result classes
+        AnalysisResult,
+        StaticResult,
+        FrequencyResult,
+        TransientResult,
+        # Solver classes
+        PEECAnalysisSolver,
+        UnifiedAnalysis,
+        # Convenience waveform generators
+        step_voltage,
+        pulse_voltage,
+        sinusoidal_voltage,
+        ramp_voltage,
+    )
+    ANALYSIS_AVAILABLE = True
+except ImportError:
+    # Analysis requires numpy
+    ANALYSIS_AVAILABLE = False
