@@ -959,6 +959,700 @@ represents:
 3. **A_pm**: Flux linkage per unit magnetization
 4. **jω**: Faraday's law (rate of change)
 
+### ACA Low-Rank Approximation for Schur Complement
+
+The core enhancement term $\Delta Z$ can be approximated using ACA (Adaptive Cross Approximation) to reduce SPICE netlist complexity.
+
+**Problem**: For N_coil PEEC segments and N_core MMM elements:
+- $A_{pm}$: N_coil × N_core matrix
+- $A_{cp}$: N_core × N_coil matrix
+- Full $\Delta Z$: N_coil × N_coil dense matrix → $O(N_{coil}^2)$ mutual inductance elements in SPICE
+
+**Solution**: Apply ACA to $\Delta Z$:
+
+$$
+\Delta Z = j\omega \cdot A_{pm} \cdot (I + \chi N)^{-1} \cdot \chi \cdot A_{cp} \approx j\omega \cdot U \cdot V^T
+$$
+
+where $U \in \mathbb{R}^{N_{coil} \times k}$ and $V \in \mathbb{R}^{N_{coil} \times k}$ with $k \ll N_{coil}$.
+
+**SPICE Element Reduction**:
+
+| Representation | Mutual Inductance Elements | Storage |
+|----------------|---------------------------|---------|
+| Full $\Delta Z$ | $N_{coil}(N_{coil}-1)/2$ | $O(N_{coil}^2)$ |
+| ACA Low-rank | $2 \cdot k \cdot N_{coil}$ | $O(k \cdot N_{coil})$ |
+
+For N_coil = 100 and k = 5:
+- Full: 4,950 mutual inductance elements
+- ACA: 1,000 elements (5x reduction)
+
+**Implementation in SPICE**:
+
+The low-rank approximation $\Delta Z \approx U V^T$ can be implemented as:
+
+```
+Original: V_i = sum_j (ΔZ_ij * I_j)  for each segment i
+
+Low-rank: V_i = sum_m (U_im * y_m)
+          y_m = sum_j (V_jm * I_j)
+
+→ Introduce k "auxiliary nodes" for rank-k approximation
+```
+
+**SPICE Subcircuit for Low-Rank Coupling**:
+
+```spice
+* Low-rank mutual inductance approximation
+* Delta_Z = j*omega * U * V^T
+* U: N_coil x k matrix, V: N_coil x k matrix
+
+.SUBCKT LOWRANK_COUPLING seg1 seg2 ... segN aux1 aux2 ... auxk
+* aux nodes represent intermediate "mode" currents
+
+* V^T part: aux_m = sum_j V_jm * I_segj (CCCS)
+G_aux1 0 aux1 POLY(N) seg1 0 seg2 0 ... segN 0  0 V_11 V_21 ... V_N1
+G_aux2 0 aux2 POLY(N) seg1 0 seg2 0 ... segN 0  0 V_12 V_22 ... V_N2
+...
+
+* U part: V_segi += j*omega * sum_m U_im * I_auxm
+* Implemented as mutual inductance from aux to seg
+L_aux1 aux1 0 1
+L_aux2 aux2 0 1
+...
+K_seg1_aux1 L_seg1 L_aux1 {U_11}
+K_seg1_aux2 L_seg1 L_aux2 {U_12}
+...
+
+.ENDS
+```
+
+---
+
+## Complex Permittivity and Star Component
+
+### Complex Permittivity ε(ω) = ε' - jε"
+
+In Loop-Star decomposition, the **Star component** handles capacitive effects. Complex permittivity includes both dielectric storage and loss:
+
+$$
+\varepsilon(\omega) = \varepsilon'(\omega) - j\varepsilon''(\omega)
+$$
+
+where the imaginary part includes both dielectric relaxation and conduction:
+
+$$
+\varepsilon''(\omega) = \varepsilon''_{relaxation}(\omega) + \frac{\sigma}{\omega}
+$$
+
+**Note**: The DC conductivity contribution $\sigma/\omega$ is often written as $\sigma/(j\omega)$ in the complex permittivity, which gives:
+
+$$
+\varepsilon_{eff} = \varepsilon' - j\left(\varepsilon'' + \frac{\sigma}{\omega}\right)
+$$
+
+### Capacitance Matrix in Star Component
+
+The Star-Star impedance block:
+
+$$
+Z_{SS} = \frac{1}{j\omega C(\varepsilon)}
+$$
+
+For complex $\varepsilon = \varepsilon' - j\varepsilon''$:
+
+$$
+C_{eff} = \varepsilon' \cdot C_0 \quad \text{(effective capacitance)}
+$$
+$$
+G_d = \omega \varepsilon'' \cdot C_0 \quad \text{(dielectric loss conductance)}
+$$
+
+Including DC conductivity:
+
+$$
+G_{total} = G_d + \sigma \cdot G_0 = \omega\varepsilon'' \cdot C_0 + \sigma \cdot G_0
+$$
+
+where $C_0$ and $G_0$ are geometry-dependent constants.
+
+### ACA for Capacitance Matrix (SPICE Element Reduction)
+
+Similar to the inductance case, the capacitance matrix $C_{ext}$ can be approximated using ACA:
+
+$$
+C_{ext} \approx U_C \cdot V_C^T
+$$
+
+**SPICE Capacitor Reduction**:
+
+| Representation | Capacitor Elements | Storage |
+|----------------|-------------------|---------|
+| Full $C_{ext}$ | $N(N-1)/2$ | $O(N^2)$ |
+| ACA Low-rank | $2 \cdot k \cdot N$ | $O(k \cdot N)$ |
+
+**Implementation**:
+
+```spice
+* Low-rank capacitance approximation
+* C_ext = U_C * V_C^T
+
+.SUBCKT LOWRANK_CAPACITANCE n1 n2 ... nN aux1 aux2 ... auxk
+
+* V_C^T part: charge sensing
+E_aux1 aux1 0 POLY(N) n1 0 n2 0 ... nN 0  0 VC_11 VC_21 ... VC_N1
+...
+
+* U_C part: voltage coupling
+* Q_ni = sum_m U_C_im * V_auxm → I_ni = sum_m U_C_im * C_m * dV_auxm/dt
+C_aux1 aux1 0 1
+C_aux2 aux2 0 1
+...
+
+.ENDS
+```
+
+### Combined Low-Rank PEEC Model
+
+For a complete PEEC model with both inductive and capacitive coupling:
+
+```
+Full PEEC:
+- N(N-1)/2 mutual inductances
+- N(N-1)/2 mutual capacitances
+- N self R, L, C
+
+Low-rank PEEC (rank k_L for L, rank k_C for C):
+- 2*k_L*N inductance-related elements
+- 2*k_C*N capacitance-related elements
+- N self R, L, C
+
+Reduction factor: (N-1)/2 / (k_L + k_C) for off-diagonal coupling
+```
+
+**Example**: N = 500 segments, k_L = k_C = 10
+
+| | Full | Low-rank | Reduction |
+|--|------|----------|-----------|
+| Mutual L | 124,750 | 10,000 | 12.5x |
+| Mutual C | 124,750 | 10,000 | 12.5x |
+| Total off-diagonal | 249,500 | 20,000 | **12.5x** |
+
+This dramatic reduction makes large PEEC models practical for SPICE simulation.
+
+### Verilog-A Implementation for Frequency-Dependent Low-Rank Model
+
+Standard SPICE cannot handle frequency-dependent matrix elements. Verilog-A allows implementing frequency-dependent low-rank coupling with full accuracy.
+
+**Low-Rank Mutual Inductance with Skin Effect**:
+
+```verilog
+`include "disciplines.vams"
+
+// Low-rank mutual inductance with frequency-dependent correction
+// Z_mutual = j*omega * L_mutual * F_skin(omega)
+// L_mutual = U * V^T (low-rank)
+
+module lowrank_mutual_L(seg1, seg2, aux1, aux2);
+    inout seg1, seg2;
+    inout aux1, aux2;
+    electrical seg1, seg2, aux1, aux2;
+
+    // Low-rank factors (example for rank-2)
+    parameter real U1_1 = 1e-9;  // U[seg1, mode1]
+    parameter real U1_2 = 0.5e-9;  // U[seg1, mode2]
+    parameter real V1_1 = 1.0;  // V[seg1, mode1]
+    parameter real V1_2 = 0.8;  // V[seg1, mode2]
+
+    // Skin effect parameters
+    parameter real tau = 1e-6;  // = a^2 * mu * sigma
+
+    real omega, sqrt_tau_s, F_skin_re, F_skin_im;
+    real L_mode1, L_mode2;
+
+    analog begin
+        omega = 2 * `M_PI * $freq;
+        if (omega < 1e-10) omega = 1e-10;
+
+        // Skin effect correction factor sqrt(tau*s)*coth(sqrt(tau*s))
+        sqrt_tau_s = sqrt(tau * omega);
+        if (sqrt_tau_s < 0.1) begin
+            F_skin_re = 1.0;
+            F_skin_im = tau * omega / 3.0;
+        end else begin
+            // Full formula for higher frequencies
+            F_skin_re = sqrt_tau_s * (sinh(2*sqrt_tau_s) + sin(2*sqrt_tau_s))
+                       / (cosh(2*sqrt_tau_s) - cos(2*sqrt_tau_s));
+            F_skin_im = sqrt_tau_s * (sinh(2*sqrt_tau_s) - sin(2*sqrt_tau_s))
+                       / (cosh(2*sqrt_tau_s) - cos(2*sqrt_tau_s));
+        end
+
+        // Mode currents from auxiliary nodes
+        L_mode1 = U1_1 * V1_1;
+        L_mode2 = U1_2 * V1_2;
+
+        // Voltage contribution with frequency-dependent skin effect
+        V(seg1) <+ (L_mode1 + L_mode2) * F_skin_re * ddt(I(aux1))
+                 + (L_mode1 + L_mode2) * F_skin_im / omega * ddt(ddt(I(aux1)));
+    end
+endmodule
+```
+
+**Low-Rank Capacitance with Complex Permittivity**:
+
+```verilog
+`include "disciplines.vams"
+
+// Low-rank capacitance with complex permittivity
+// Y_mutual = j*omega * C_mutual * (epsilon'/epsilon_0 - j*epsilon"/epsilon_0)
+// C_mutual = U_C * V_C^T (low-rank)
+
+module lowrank_mutual_C(n1, n2, aux1, aux2);
+    inout n1, n2;
+    inout aux1, aux2;
+    electrical n1, n2, aux1, aux2;
+
+    // Low-rank factors
+    parameter real UC1_1 = 1e-12;  // U_C[n1, mode1]
+    parameter real UC1_2 = 0.5e-12;  // U_C[n1, mode2]
+    parameter real VC1_1 = 1.0;  // V_C[n1, mode1]
+    parameter real VC1_2 = 0.8;  // V_C[n1, mode2]
+
+    // Complex permittivity parameters (frequency-dependent)
+    parameter real eps_r_dc = 4.0;    // DC relative permittivity
+    parameter real eps_r_inf = 2.5;   // High-freq relative permittivity
+    parameter real tau_d = 1e-9;      // Debye relaxation time
+    parameter real sigma_dc = 0.01;   // DC conductivity [S/m]
+    parameter real eps_0 = 8.854e-12; // Vacuum permittivity
+
+    real omega, eps_r_re, eps_r_im;
+    real C_mode, G_mode;
+    real debye_denom;
+
+    analog begin
+        omega = 2 * `M_PI * $freq;
+        if (omega < 1e-10) omega = 1e-10;
+
+        // Debye relaxation model for complex permittivity
+        // epsilon(omega) = eps_inf + (eps_dc - eps_inf)/(1 + j*omega*tau_d) - j*sigma/(omega*eps_0)
+        debye_denom = 1 + pow(omega * tau_d, 2);
+        eps_r_re = eps_r_inf + (eps_r_dc - eps_r_inf) / debye_denom;
+        eps_r_im = (eps_r_dc - eps_r_inf) * omega * tau_d / debye_denom
+                  + sigma_dc / (omega * eps_0);
+
+        // Mode capacitance and conductance
+        C_mode = (UC1_1 * VC1_1 + UC1_2 * VC1_2) * eps_r_re;
+        G_mode = (UC1_1 * VC1_1 + UC1_2 * VC1_2) * omega * eps_r_im;
+
+        // Current: I = C*dV/dt + G*V (capacitive + lossy)
+        I(n1) <+ C_mode * ddt(V(aux1)) + G_mode * V(aux1);
+    end
+endmodule
+```
+
+**Complete Low-Rank PEEC Segment with Skin Effect and Complex ε**:
+
+```verilog
+`include "disciplines.vams"
+
+// Complete PEEC segment with:
+// - Self R, L with Dowell skin effect
+// - Self C with complex permittivity
+// - Low-rank mutual coupling (L and C)
+
+module peec_segment_lowrank(p, n, aux_L1, aux_L2, aux_C1, aux_C2);
+    inout p, n;
+    inout aux_L1, aux_L2, aux_C1, aux_C2;
+    electrical p, n, aux_L1, aux_L2, aux_C1, aux_C2;
+
+    // Self parameters
+    parameter real R_dc = 1e-3;      // DC resistance [Ohm]
+    parameter real L_self = 10e-9;   // Self inductance [H]
+    parameter real C_self = 1e-12;   // Self capacitance [F]
+
+    // Skin effect
+    parameter real tau_skin = 1e-6;  // a^2 * mu * sigma
+
+    // Complex permittivity
+    parameter real eps_r = 4.0;
+    parameter real tan_delta = 0.02;  // Loss tangent
+    parameter real sigma = 0.01;      // DC conductivity
+
+    // Low-rank coupling coefficients
+    parameter real U_L1 = 1e-9;
+    parameter real U_L2 = 0.5e-9;
+    parameter real U_C1 = 1e-13;
+    parameter real U_C2 = 0.5e-13;
+
+    real omega, xi, F_R, F_L;
+    real eps_eff, G_dielectric;
+
+    analog begin
+        omega = 2 * `M_PI * $freq;
+        if (omega < 1e-10) omega = 1e-10;
+
+        // Dowell factors
+        xi = sqrt(tau_skin * omega / 2);
+        if (xi < 0.1) begin
+            F_R = 1.0 + pow(xi, 4) / 45.0;
+            F_L = 1.0 - pow(xi, 4) / 15.0;
+        end else begin
+            F_R = xi * (sinh(2*xi) + sin(2*xi)) / (cosh(2*xi) - cos(2*xi));
+            F_L = 1.5 / xi * (sinh(2*xi) - sin(2*xi)) / (cosh(2*xi) - cos(2*xi));
+        end
+
+        // Complex permittivity effect
+        eps_eff = eps_r;
+        G_dielectric = omega * eps_r * tan_delta * C_self + sigma * C_self / eps_r;
+
+        // Self impedance: V = R_ac*I + L_ac*dI/dt
+        V(p, n) <+ R_dc * F_R * I(p, n);
+        V(p, n) <+ L_self * F_L * ddt(I(p, n));
+
+        // Self capacitance with loss: I = C*dV/dt + G*V
+        I(p, n) <+ C_self * eps_eff * ddt(V(p, n));
+        I(p, n) <+ G_dielectric * V(p, n);
+
+        // Low-rank mutual inductance coupling (from auxiliary nodes)
+        V(p, n) <+ U_L1 * F_L * ddt(I(aux_L1));
+        V(p, n) <+ U_L2 * F_L * ddt(I(aux_L2));
+
+        // Low-rank mutual capacitance coupling (to auxiliary nodes)
+        I(p, n) <+ U_C1 * eps_eff * ddt(V(aux_C1));
+        I(p, n) <+ U_C2 * eps_eff * ddt(V(aux_C2));
+    end
+endmodule
+```
+
+**Advantages of Verilog-A Implementation**:
+
+| Aspect | Standard SPICE | Verilog-A |
+|--------|---------------|-----------|
+| Skin effect | Ladder approximation (finite accuracy) | Exact Dowell formula |
+| Complex ε(ω) | Fixed R//C (single frequency) | Debye model (all frequencies) |
+| Low-rank coupling | Auxiliary nodes + CCCS/VCVS | Direct implementation |
+| Model accuracy | Approximate | Exact |
+| Simulator support | Universal | Spectre, ADS, HSPICE |
+
+### PyKAN for Arbitrary Frequency-Dependent Properties
+
+When material properties are available only as **numerical data** (measured values, lookup tables, or FEM simulation results), PyKAN provides a powerful alternative that is **not limited to analytical models** like Debye relaxation.
+
+**Advantages over Analytical Models**:
+
+| Aspect | Debye/Cole-Cole | PyKAN |
+|--------|----------------|-------|
+| Model form | Fixed functional form | Arbitrary learned function |
+| Multi-pole relaxation | Manual pole fitting | Automatic learning |
+| Measured data | Requires curve fitting | Direct learning |
+| Nonlinear effects | Not supported | Supported (e.g., ε(E, ω)) |
+| Formula extraction | N/A | Symbolic regression |
+
+**Workflow: From Measured Data to Verilog-A**:
+
+```
+1. Measured data: ε'(ω), ε"(ω) at discrete frequencies
+                  ↓
+2. PyKAN training: Learn ε(ω) = f(log(ω))
+                  ↓
+3. Formula extraction: Symbolic regression
+   e.g., ε'(ω) = a + b*tanh(c*log(ω) + d)
+         ε"(ω) = e*exp(-f*(log(ω) - g)^2)
+                  ↓
+4. Verilog-A generation: Automatic code output
+```
+
+**PyKAN Training for Complex Permittivity**:
+
+```python
+import torch
+from kan import KAN
+import numpy as np
+
+# Measured data (example: ferrite material)
+freq_data = np.logspace(3, 9, 100)  # 1 kHz to 1 GHz
+omega_data = 2 * np.pi * freq_data
+eps_r_data = np.array([...])  # Measured eps'
+eps_i_data = np.array([...])  # Measured eps"
+
+# Normalize inputs
+log_omega = np.log10(omega_data)
+log_omega_norm = (log_omega - log_omega.mean()) / log_omega.std()
+
+# Create training data
+X = torch.tensor(log_omega_norm, dtype=torch.float32).reshape(-1, 1)
+Y_re = torch.tensor(eps_r_data, dtype=torch.float32).reshape(-1, 1)
+Y_im = torch.tensor(eps_i_data, dtype=torch.float32).reshape(-1, 1)
+
+# Train KAN for real part
+kan_re = KAN(width=[1, 5, 1], grid=10, k=3)
+kan_re.fit({'train_input': X, 'train_label': Y_re}, steps=2000)
+
+# Train KAN for imaginary part
+kan_im = KAN(width=[1, 5, 1], grid=10, k=3)
+kan_im.fit({'train_input': X, 'train_label': Y_im}, steps=2000)
+
+# Extract symbolic formulas
+formula_re = kan_re.symbolic_formula()[0][0]
+formula_im = kan_im.symbolic_formula()[0][0]
+
+print(f"eps'(omega) = {formula_re}")
+print(f"eps''(omega) = {formula_im}")
+```
+
+**Auto-Generated Verilog-A from PyKAN**:
+
+```verilog
+`include "disciplines.vams"
+
+// Auto-generated from PyKAN training
+// Material: Ferrite MN60 (measured data)
+// Frequency range: 1 kHz - 1 GHz
+
+module pykan_complex_eps(p, n);
+    inout p, n;
+    electrical p, n;
+
+    parameter real C_0 = 1e-12;  // Geometry factor [F]
+
+    real omega, log_omega, log_omega_norm;
+    real eps_r_re, eps_r_im;
+    real C_eff, G_loss;
+
+    // Normalization constants (from training)
+    parameter real log_omega_mean = 6.5;
+    parameter real log_omega_std = 1.8;
+
+    analog begin
+        omega = 2 * `M_PI * $freq;
+        if (omega < 1e-10) omega = 1e-10;
+
+        log_omega = log10(omega);
+        log_omega_norm = (log_omega - log_omega_mean) / log_omega_std;
+
+        // PyKAN-extracted formulas (example)
+        // eps'(x) = 12.5 + 8.3*tanh(-0.42*x + 0.15)
+        // eps''(x) = 2.1*exp(-0.8*(x - 0.3)^2) + 0.05*exp(0.9*x)
+        eps_r_re = 12.5 + 8.3 * tanh(-0.42 * log_omega_norm + 0.15);
+        eps_r_im = 2.1 * exp(-0.8 * pow(log_omega_norm - 0.3, 2))
+                  + 0.05 * exp(0.9 * log_omega_norm);
+
+        // Effective capacitance and loss conductance
+        C_eff = eps_r_re * C_0;
+        G_loss = omega * eps_r_im * C_0;
+
+        // Constitutive relation
+        I(p, n) <+ C_eff * ddt(V(p, n)) + G_loss * V(p, n);
+    end
+endmodule
+```
+
+**Combining Low-Rank + PyKAN**:
+
+For large PEEC models with complex materials:
+
+```
+Full model complexity: O(N^2) elements × O(M) frequency points
+                      ↓
+Low-rank (ACA): O(k*N) elements
+                      ↓
+PyKAN frequency model: Compact formula (few parameters)
+                      ↓
+Final Verilog-A: O(k*N) modules with O(1) frequency evaluation
+```
+
+**Benefits Summary**:
+
+1. **No analytical model required**: Works with pure numerical data
+2. **Automatic formula extraction**: Interpretable symbolic expressions
+3. **Multi-physics support**: Can learn ε(ω, T, E) for temperature and field dependence
+4. **Verilog-A ready**: Direct code generation for circuit simulation
+5. **Combines with ACA**: Low-rank structure + learned frequency dependence
+
+### Unified Approach: Analytical Models + PyKAN
+
+The framework supports **both analytical models and data-driven learning**:
+
+**Supported Analytical Models**:
+
+| Model | Formula | Use Case |
+|-------|---------|----------|
+| **Debye** | $\varepsilon(\omega) = \varepsilon_\infty + \frac{\varepsilon_s - \varepsilon_\infty}{1 + j\omega\tau}$ | Single relaxation time |
+| **Cole-Cole** | $\varepsilon(\omega) = \varepsilon_\infty + \frac{\varepsilon_s - \varepsilon_\infty}{1 + (j\omega\tau)^\alpha}$ | Distributed relaxation |
+| **Cole-Davidson** | $\varepsilon(\omega) = \varepsilon_\infty + \frac{\varepsilon_s - \varepsilon_\infty}{(1 + j\omega\tau)^\beta}$ | Asymmetric distribution |
+| **Havriliak-Negami** | $\varepsilon(\omega) = \varepsilon_\infty + \frac{\varepsilon_s - \varepsilon_\infty}{(1 + (j\omega\tau)^\alpha)^\beta}$ | General case |
+
+**Verilog-A for Debye Model**:
+
+```verilog
+`include "disciplines.vams"
+
+// Debye relaxation model for complex permittivity
+// epsilon(omega) = eps_inf + (eps_s - eps_inf) / (1 + j*omega*tau)
+
+module debye_capacitor(p, n);
+    inout p, n;
+    electrical p, n;
+
+    parameter real C_0 = 1e-12;      // Geometry factor [F]
+    parameter real eps_s = 80.0;     // Static permittivity
+    parameter real eps_inf = 4.0;    // High-frequency permittivity
+    parameter real tau = 1e-9;       // Relaxation time [s]
+    parameter real sigma = 0.0;      // DC conductivity [S/m]
+
+    real omega, omega_tau, denom;
+    real eps_re, eps_im;
+    real C_eff, G_eff;
+
+    analog begin
+        omega = 2 * `M_PI * $freq;
+        if (omega < 1e-10) omega = 1e-10;
+
+        omega_tau = omega * tau;
+        denom = 1 + omega_tau * omega_tau;
+
+        // Debye formula: eps' and eps"
+        eps_re = eps_inf + (eps_s - eps_inf) / denom;
+        eps_im = (eps_s - eps_inf) * omega_tau / denom + sigma / (omega * 8.854e-12);
+
+        // Effective C and G
+        C_eff = eps_re * C_0;
+        G_eff = omega * eps_im * C_0;
+
+        // Constitutive relation
+        I(p, n) <+ C_eff * ddt(V(p, n)) + G_eff * V(p, n);
+    end
+endmodule
+```
+
+**Verilog-A for Cole-Cole Model**:
+
+```verilog
+`include "disciplines.vams"
+
+// Cole-Cole model with distribution parameter alpha
+// epsilon(omega) = eps_inf + (eps_s - eps_inf) / (1 + (j*omega*tau)^alpha)
+
+module cole_cole_capacitor(p, n);
+    inout p, n;
+    electrical p, n;
+
+    parameter real C_0 = 1e-12;
+    parameter real eps_s = 80.0;
+    parameter real eps_inf = 4.0;
+    parameter real tau = 1e-9;
+    parameter real alpha = 0.8;  // Distribution parameter (0 < alpha <= 1)
+
+    real omega, x, theta;
+    real denom_re, denom_im, denom_mag2;
+    real eps_re, eps_im;
+    real C_eff, G_eff;
+
+    analog begin
+        omega = 2 * `M_PI * $freq;
+        if (omega < 1e-10) omega = 1e-10;
+
+        // (j*omega*tau)^alpha = (omega*tau)^alpha * exp(j*alpha*pi/2)
+        x = pow(omega * tau, alpha);
+        theta = alpha * `M_PI / 2;
+
+        // 1 + (j*omega*tau)^alpha
+        denom_re = 1 + x * cos(theta);
+        denom_im = x * sin(theta);
+        denom_mag2 = denom_re * denom_re + denom_im * denom_im;
+
+        // eps = eps_inf + (eps_s - eps_inf) / denom
+        eps_re = eps_inf + (eps_s - eps_inf) * denom_re / denom_mag2;
+        eps_im = (eps_s - eps_inf) * denom_im / denom_mag2;
+
+        C_eff = eps_re * C_0;
+        G_eff = omega * eps_im * C_0;
+
+        I(p, n) <+ C_eff * ddt(V(p, n)) + G_eff * V(p, n);
+    end
+endmodule
+```
+
+**Multi-Pole Debye (Multiple Relaxation Times)**:
+
+```verilog
+`include "disciplines.vams"
+
+// Multi-pole Debye model: sum of N Debye terms
+// epsilon(omega) = eps_inf + sum_k (Delta_eps_k / (1 + j*omega*tau_k))
+
+module multi_debye_capacitor(p, n);
+    inout p, n;
+    electrical p, n;
+
+    parameter real C_0 = 1e-12;
+    parameter real eps_inf = 2.5;
+
+    // Debye poles (example: 3 poles)
+    parameter real Delta_eps_1 = 10.0;  parameter real tau_1 = 1e-12;
+    parameter real Delta_eps_2 = 20.0;  parameter real tau_2 = 1e-10;
+    parameter real Delta_eps_3 = 50.0;  parameter real tau_3 = 1e-8;
+
+    real omega, eps_re, eps_im;
+    real ot1, ot2, ot3, d1, d2, d3;
+
+    analog begin
+        omega = 2 * `M_PI * $freq;
+        if (omega < 1e-10) omega = 1e-10;
+
+        ot1 = omega * tau_1; d1 = 1 + ot1*ot1;
+        ot2 = omega * tau_2; d2 = 1 + ot2*ot2;
+        ot3 = omega * tau_3; d3 = 1 + ot3*ot3;
+
+        eps_re = eps_inf + Delta_eps_1/d1 + Delta_eps_2/d2 + Delta_eps_3/d3;
+        eps_im = Delta_eps_1*ot1/d1 + Delta_eps_2*ot2/d2 + Delta_eps_3*ot3/d3;
+
+        I(p, n) <+ eps_re * C_0 * ddt(V(p, n)) + omega * eps_im * C_0 * V(p, n);
+    end
+endmodule
+```
+
+**Model Selection Decision Tree**:
+
+```
+Do you have analytical model parameters?
+├── Yes → Which model fits your data?
+│         ├── Single relaxation → Debye
+│         ├── Broad peak → Cole-Cole (fit alpha)
+│         ├── Asymmetric → Cole-Davidson or Havriliak-Negami
+│         └── Multiple peaks → Multi-pole Debye
+└── No → Is data available?
+         ├── Measured ε'(ω), ε"(ω) → PyKAN learning
+         ├── FEM simulation data → PyKAN learning
+         └── Literature curves → Digitize + PyKAN
+```
+
+**PyKAN Recovering Analytical Models**:
+
+PyKAN can also be used to **identify** which analytical model best fits measured data:
+
+```python
+# Train PyKAN on measured data
+kan = KAN(width=[1, 5, 1], grid=10, k=3)
+kan.fit({'train_input': X_omega, 'train_label': Y_eps}, steps=2000)
+
+# Extract symbolic formula
+formula = kan.symbolic_formula()
+
+# Compare with known models
+# If formula ~ 1/(1 + x^2) → Debye
+# If formula ~ 1/(1 + x^alpha) → Cole-Cole
+# If formula contains multiple 1/(1+x^2) terms → Multi-pole Debye
+
+print(f"Identified model: {identify_model(formula)}")
+print(f"Parameters: {extract_parameters(formula)}")
+```
+
+This unified approach ensures:
+- **Known materials**: Use established analytical models with physical parameters
+- **New materials**: Learn from data without assuming model form
+- **Model validation**: PyKAN can verify if assumed model fits data
+
 ---
 
 ## Complex Permeability Support
