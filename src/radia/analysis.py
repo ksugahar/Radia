@@ -859,52 +859,67 @@ class PEECAnalysisSolver(AnalysisSolver):
 
     def _solve_loop_star_coupled(self, s: complex) -> complex:
         """
-        Solve full Loop-Star coupled system.
+        Solve full Loop-Star coupled system using admittance matrix.
 
-        [Z_LL  Z_LS] [I_L]   [V_L]
-        [Z_SL  Z_SS] [I_S] = [V_S]
+        System equation:
+            [Z_LL  Z_LS] [I_L]   [V_L]
+            [Z_SL  Z_SS] [I_S] = [V_S]
 
-        Z_LL = R_LL + s * L_LL
-        Z_LS = R_LS + s * L_LS
-        Z_SL = Z_LS^T (reciprocity)
-        Z_SS = R_SS + s * L_SS + P_SS / s (capacitive term)
+        where:
+            Z_LL = R_LL + s * L_LL (Loop impedance: inductive)
+            Z_SS = R_SS + s * L_SS + P_SS / s (Star impedance: capacitive)
+            Z_LS = R_LS + s * L_LS (Loop-Star coupling)
+            Z_SL = Z_LS^T (reciprocity)
+
+        For parallel LC resonance, both Loop and Star branches see the same
+        voltage at the terminals. The total current is I_total = I_L + I_S.
+
+        Using admittance formulation:
+            Y_full = inv(Z_full)
+            I = Y_full * V
+
+        For unit voltage applied to all ports (V_L = V_S = 1):
+            I_total = sum(Y_full * ones)
+            Y_total = I_total / V
+            Z_total = 1 / Y_total
+
+        This correctly models parallel LC resonance where:
+            Z_total = Z_L || Z_C = 1 / (1/Z_L + 1/Z_C)
 
         Returns total impedance seen at terminals.
         """
         n_L = self._n_loops
         n_S = self._n_stars
 
-        # Build block matrices
-        # Z_LL
+        # Build Z_LL (Loop-Loop impedance)
         if self._R_LL.ndim == 1:
             R_LL = np.diag(self._R_LL)
         else:
             R_LL = self._R_LL
         Z_LL = R_LL + s * self._L_LL
 
-        # Z_LS
+        # Build Z_LS (Loop-Star coupling)
         if self._L_LS is not None:
             R_LS = self._R_LS if self._R_LS is not None else np.zeros_like(self._L_LS)
             Z_LS = R_LS + s * self._L_LS
         else:
             Z_LS = np.zeros((n_L, n_S), dtype=complex)
 
-        # Z_SL = Z_LS^T
+        # Z_SL = Z_LS^T (reciprocity for passive system)
         Z_SL = Z_LS.T
 
-        # Z_SS
+        # Build Z_SS (Star-Star impedance, includes capacitive term)
         if self._L_SS is not None:
             R_SS = self._R_SS if self._R_SS is not None else np.zeros_like(self._L_SS)
             Z_SS = R_SS + s * self._L_SS
-            # Add capacitive term P_SS / s
-            if self._P_SS is not None:
-                Z_SS = Z_SS + self._P_SS / s
         else:
             Z_SS = np.zeros((n_S, n_S), dtype=complex)
-            if self._P_SS is not None:
-                Z_SS = self._P_SS / s
 
-        # Assemble full system matrix
+        # Add capacitive term P_SS / s = 1/(s*C)
+        if self._P_SS is not None:
+            Z_SS = Z_SS + self._P_SS / s
+
+        # Assemble full impedance matrix
         n_total = n_L + n_S
         Z_full = np.zeros((n_total, n_total), dtype=complex)
         Z_full[:n_L, :n_L] = Z_LL
@@ -912,18 +927,64 @@ class PEECAnalysisSolver(AnalysisSolver):
         Z_full[n_L:, :n_L] = Z_SL
         Z_full[n_L:, n_L:] = Z_SS
 
-        # Solve for unit terminal voltage
-        # Assuming terminal connected to Loop DOF 0
-        V = np.zeros(n_total, dtype=complex)
-        V[0] = 1.0  # Unit voltage on first loop
-
+        # Compute admittance matrix Y = inv(Z)
         try:
-            I = np.linalg.solve(Z_full, V)
-            # Impedance = V / I_terminal = 1 / I[0]
-            Z_total = 1.0 / I[0] if abs(I[0]) > 1e-30 else np.inf
+            Y_full = np.linalg.inv(Z_full)
         except np.linalg.LinAlgError:
-            # Fallback
-            Z_total = Z_LL[0, 0]
+            # Fallback: return Loop impedance only
+            if n_L == 1:
+                return Z_LL[0, 0]
+            else:
+                return np.sum(Z_LL) / (n_L * n_L)
+
+        # Compute total port admittance
+        # For parallel connection: apply unit voltage to all nodes
+        # I_total = Y * V where V = ones
+        # Y_total = sum(I_total) / V = sum(sum(Y))
+        #
+        # For a single-port view (Loop side is the external port):
+        # Y_port = sum of all admittances flowing into the Loop port
+        # Y_port = sum(Y_full[:n_L, :])  (all currents due to all voltages)
+
+        # Simplest case: single Loop and single Star (parallel LC)
+        if n_L == 1 and n_S == 1:
+            # Y_total = Y_LL + Y_SS + Y_LS + Y_SL for parallel
+            # But Z is block matrix, so Y_total = sum of all Y elements
+            # For V_L = V_S = 1: I_L = Y[0,:] * [1,1]^T = Y[0,0] + Y[0,1]
+            #                   I_S = Y[1,:] * [1,1]^T = Y[1,0] + Y[1,1]
+            # Total current into port = I_L (Loop current)
+            # Z_port = V / I_L = 1 / (Y[0,0] + Y[0,1])
+
+            # For parallel LC: both branches see same V
+            # I_total = I_L + I_S = (Y[0,0]+Y[0,1]) + (Y[1,0]+Y[1,1]) * V
+            # Actually for single port connected to Loop:
+            # Z_port = 1 / sum(Y_full[0, :]) represents all current paths from Loop
+
+            # Correct: Port admittance = admittance seen at Loop terminal
+            # When applying V at Loop, current = Y_LL * V + Y_LS * V_S
+            # For parallel LC with shared voltage: V_L = V_S = V
+            # I = (Y_LL + Y_LS) * V, so Y_port = Y_LL + Y_LS
+
+            # Sum all elements for total admittance (parallel branches)
+            Y_total = np.sum(Y_full)
+            Z_total = 1.0 / Y_total if abs(Y_total) > 1e-30 else np.inf
+
+        else:
+            # General case: Port at Loop[0], others are internal
+            # Apply unit voltage at Loop[0], others grounded
+            # I_port = Y[0,0] * V = Y[0,0]
+            # Z_port = 1 / Y[0,0]
+
+            # For series-connected loops with parallel Star:
+            # Use row sum approach: Y_port = sum(Y_full[0,:]) when all V=1
+
+            # Actually, for proper port impedance:
+            # V = [1, 0, ..., 0]^T (voltage at port 0, others grounded)
+            # I = Y * V = Y[:, 0]
+            # I_port = I[0] = Y[0, 0]
+            # Z_port = 1 / Y[0, 0]
+
+            Z_total = 1.0 / Y_full[0, 0] if abs(Y_full[0, 0]) > 1e-30 else np.inf
 
         return Z_total
 
