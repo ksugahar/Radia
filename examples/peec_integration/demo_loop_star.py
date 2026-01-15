@@ -40,50 +40,45 @@ from analysis import UnifiedAnalysis, MU_0
 
 def create_simple_loop_star_model():
     """
-    Create a simple Loop-Star PEEC model for a 2-loop, 1-star system.
+    Create a simple Loop-Star PEEC model for a parallel LC circuit.
 
-    This represents a simple inductor with parasitic capacitance.
+    This represents an inductor in parallel with parasitic capacitance,
+    which is common in real inductors at high frequencies.
 
     Physical model:
-    - 2 independent current loops (turn-to-turn coupling)
-    - 1 star (capacitance between loops)
+    - 1 Loop (inductance + resistance)
+    - 1 Star (parasitic capacitance)
+    - Zero coupling (parallel connection: both see same voltage)
 
     Returns:
         L_LL: Loop-Loop inductance matrix [H]
         R_LL: Loop-Loop resistance matrix [Ohm]
-        L_LS: Loop-Star coupling [H]
-        L_SS: Star-Star inductance [H]
+        L_LS: Loop-Star coupling [H] (zero for parallel)
+        L_SS: Star-Star inductance [H] (zero)
         P_SS: Star-Star potential coefficient [1/F]
     """
     # Physical parameters
-    L_self = 10e-6      # Self-inductance per loop [H] (10 uH)
-    M_coupling = 5e-6   # Mutual inductance [H] (5 uH)
-    R_loop = 0.1        # Resistance per loop [Ohm]
-    C_parasitic = 10e-12  # Parasitic capacitance [F] (10 pF)
+    L = 10e-6          # Inductance [H] (10 uH)
+    R = 0.1            # Resistance [Ohm]
+    C = 10e-12         # Parasitic capacitance [F] (10 pF)
 
-    # Loop-Loop inductance matrix (2x2)
-    L_LL = np.array([
-        [L_self, M_coupling],
-        [M_coupling, L_self]
-    ])
+    # Expected resonant frequency: f = 1/(2*pi*sqrt(L*C)) = 15.92 MHz
 
-    # Loop-Loop resistance matrix (2x2, diagonal for simplicity)
-    R_LL = np.array([
-        [R_loop, 0],
-        [0, R_loop]
-    ])
+    # Loop-Loop inductance (1x1)
+    L_LL = np.array([[L]])
 
-    # Loop-Star coupling (2x1) - small coupling
-    L_LS = np.array([
-        [0.1e-6],
-        [0.1e-6]
-    ])
+    # Loop-Loop resistance (1x1)
+    R_LL = np.array([[R]])
 
-    # Star-Star inductance (1x1) - very small
-    L_SS = np.array([[0.01e-6]])
+    # Loop-Star coupling: zero for parallel connection
+    # (both branches see the same terminal voltage)
+    L_LS = np.array([[0.0]])
 
-    # Star-Star potential coefficient P = 1/C (1x1)
-    P_SS = np.array([[1.0 / C_parasitic]])
+    # Star-Star inductance: zero (pure capacitance)
+    L_SS = np.array([[0.0]])
+
+    # Star-Star potential coefficient P = 1/C
+    P_SS = np.array([[1.0 / C]])
 
     return L_LL, R_LL, L_LS, L_SS, P_SS
 
@@ -106,7 +101,6 @@ def create_multi_turn_coil_loop_star(n_turns=5):
     L_turn = 2e-6       # Inductance per turn [H]
     R_turn = 0.05       # Resistance per turn [Ohm]
     C_inter = 5e-12     # Inter-turn capacitance [F]
-    mu_0 = 4.0 * np.pi * 1e-7
 
     n_loops = n_turns
     n_stars = n_turns - 1
@@ -143,19 +137,24 @@ def create_multi_turn_coil_loop_star(n_turns=5):
 
 
 def demo_simple_loop_star():
-    """Demonstrate Loop-Star analysis on a simple 2-loop system."""
+    """Demonstrate Loop-Star analysis on a parallel LC circuit."""
     print("\n" + "=" * 70)
-    print("1. Simple Loop-Star Model (2 Loops, 1 Star)")
+    print("1. Simple Loop-Star Model (Parallel LC Circuit)")
     print("=" * 70)
 
     # Create model
     L_LL, R_LL, L_LS, L_SS, P_SS = create_simple_loop_star_model()
 
+    L = L_LL[0, 0]
+    C = 1.0 / P_SS[0, 0]
+    f_res_expected = 1.0 / (2.0 * np.pi * np.sqrt(L * C))
+
     print(f"Loop DOFs: {L_LL.shape[0]}")
     print(f"Star DOFs: {P_SS.shape[0]}")
-    print(f"L_LL (total inductance): {np.sum(L_LL)*1e6:.2f} uH")
-    print(f"R_LL (total resistance): {np.sum(R_LL):.4f} Ohm")
-    print(f"P_SS (1/C): {P_SS[0,0]:.2e} 1/F -> C = {1/P_SS[0,0]*1e12:.2f} pF")
+    print(f"L = {L*1e6:.2f} uH")
+    print(f"R = {R_LL[0,0]:.3f} Ohm")
+    print(f"C = {C*1e12:.2f} pF")
+    print(f"Expected resonant frequency: {f_res_expected/1e6:.2f} MHz")
 
     # Create analysis object
     analysis = UnifiedAnalysis()
