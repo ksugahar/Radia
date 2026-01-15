@@ -42,6 +42,55 @@ double G = 1.0 / (4.0 * M_PI * r);  // NOT exp(-jkr) / (4*pi*r)
 
 ---
 
+## No Reinventing the Wheel Policy (2026-01-16)
+
+### Use Established Libraries Instead of Custom C++ Implementation
+
+**CRITICAL**: Do NOT implement algorithms from scratch when well-established, validated libraries exist.
+
+**Policy**:
+- **Use existing libraries** for complex numerical algorithms
+- **Focus Radia C++ development** on MMM core and integration interfaces
+- **Python wrappers** are acceptable for prototyping and glue code
+
+**Specific Decisions**:
+
+| Component | Decision | Library/Approach |
+|-----------|----------|------------------|
+| **PEEC Solver** | Use external | PAMELA (established PEEC library) |
+| **H-matrix/ACA** | Use external | HACApK (already integrated) |
+| **BLAS/LAPACK** | Use external | Intel MKL |
+| **FEM** | Use external | NGSolve |
+| **Model Order Reduction** | Python | scipy + numpy (sufficient performance) |
+| **Verilog-A Generation** | Python | String templates (no C++ needed) |
+
+**Radia Core Competencies** (keep in C++):
+1. **MMM (Magnetic Moment Method)** - Radia's unique strength
+2. **MSC (Magnetic Surface Charge)** - Hexahedral/tetrahedral elements
+3. **Field computation** - B, H, A, Phi calculations
+4. **Geometry handling** - ObjRecMag, ObjHexahedron, ObjTetrahedron
+
+**Do NOT Implement in C++**:
+- PEEC partial inductance/capacitance extraction (use PAMELA)
+- General H-matrix algorithms (use HACApK)
+- Vector Fitting / rational approximation (use Python scipy)
+- Lanczos / PRIMA algorithms (use Python numpy)
+- Symbolic formula extraction (use PyKAN)
+
+**Rationale**:
+1. **Validation**: Established libraries have years of testing and bug fixes
+2. **Performance**: Optimized by experts, often better than naive implementations
+3. **Maintenance**: Community maintains the library, not Radia team
+4. **Development Speed**: Focus on integration, not reinvention
+5. **Risk Reduction**: Fewer bugs from untested custom code
+
+**Exception**: Only implement in C++ if:
+- No suitable library exists
+- Performance is critical AND Python is proven bottleneck
+- Licensing prevents use of existing library
+
+---
+
 ## Build Policy: MSVC + Intel MKL
 
 ### Compiler Requirement (2025-12-27)
@@ -2114,79 +2163,120 @@ def get_peak_memory_mb():
 
 ---
 
-## RWG-EFIE Conductor Solver Policy
+## Conductor Solver Policy: PEEC + Surface Impedance
 
-### Target Application: Power Electronics (2026-01-09)
+**Approach**:
+- **PEEC (Partial Element Equivalent Circuit)**: Loop-Star decomposition for coils and conductors
+- **SIBC (Surface Impedance Boundary Condition)**: Skin effect via analytical formulas
+- **ESIM (Effective Surface Impedance Method)**: Nonlinear/H-dependent surface impedance
 
-**Policy**: The RWG-EFIE conductor solver is designed for **power electronics applications** (DC to ~1 MHz).
-
-**Target Applications**:
+**Target Applications** (PEEC + SIBC covers):
 - **Induction heating**: 1 kHz - 500 kHz
-- **Wireless power transfer (WPT)**: 6.78 MHz, 13.56 MHz (industrial standards)
+- **Wireless power transfer (WPT)**: 6.78 MHz, 13.56 MHz
 - **Power electronics**: DC - 1 MHz (inverters, converters, transformers)
 - **Eddy current analysis**: Low to medium frequency
 
-**NOT Designed For**:
-- RF/Microwave applications (> 10 MHz)
-- Antenna design
-- High-frequency EMC/EMI analysis
+### NGSolve ngbem Integration
 
-**Rationale**: For RF applications, specialized tools (HFSS, CST, FEKO) are more appropriate. Radia focuses on power-frequency electromagnetics where quasi-static approximations are valid.
+Radia PEEC is designed to work alongside **NGSolve ngbem** for unified electromagnetic analysis.
 
-### Loop-Star Decomposition: Mandatory (No Option to Disable)
+**ngbem** features:
+- Helmholtz kernel (full-wave)
+- H-matrix acceleration (HLib/H2Lib)
+- EFIE/MFIE/CFIE formulations
+- Native NGSolve integration
 
-**Policy (2026-01-09)**: Loop-Star decomposition is **mandatory** for all RWG-EFIE solves. The legacy direct RWG solver has been **removed**.
+**Current frequency allocation**:
 
-**Implementation** (in `RWGEFIESolver`):
-```cpp
-// Constructor - Loop-Star is always used
-useMQS_ = true;  // MQS mode enabled by default for power electronics
+| Range | Solver | Use Case |
+|-------|--------|----------|
+| DC - 1 MHz | Radia PEEC + SIBC | Power electronics, WPT, transformers |
+| 1 MHz - GHz | ngbem | RF heating, antennas, EMC/shielding |
 
-// Solve() always calls SolveLoopStar()
-// Legacy SolveLinearSystem() has been REMOVED
+**Future: ngbem low-frequency support** (requested via NGSolve issue):
+- Loop-Star decomposition for MQS stability
+- Laplace kernel option for quasi-static problems
+- SIBC/ESIM integration
+
+### Radia PEEC Unique Features
+
+Even with ngbem low-frequency support, Radia PEEC provides:
+
+| Feature | Radia PEEC | ngbem |
+|---------|------------|-------|
+| **Circuit extraction** | Direct (L, R, C) | Post-processing needed |
+| **SPICE netlist** | Native output | Conversion needed |
+| **Lanczos MOR** | Implemented | Separate implementation |
+| **KAN/CFE learning** | Implemented | Not available |
+| **MMM coupling** | CplMag | FEM-BEM coupling |
+| **Schur complement** | Port extraction | Manual extraction |
+
+### Integration Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  NGSolve Geometry & Mesh                                        │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+           ┌───────────────┴───────────────┐
+           ▼                               ▼
+┌─────────────────────┐         ┌─────────────────────┐
+│  Radia PEEC         │         │  ngbem              │
+│  - Loop-Star        │         │  - EFIE/MFIE        │
+│  - SIBC/ESIM        │  <--->  │  - H-matrix         │
+│  - Lanczos MOR      │ coupling│  - Helmholtz/Laplace│
+│  - SPICE output     │         │                     │
+└─────────────────────┘         └─────────────────────┘
+           │                               │
+           └───────────────┬───────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Unified Solution (NGSolve GridFunction)                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### PRIMA Model Order Reduction
+
+**Policy**: Use PRIMA (not CLN/Cauer) terminology for model order reduction.
+
+**PRIMA vs CLN Equivalence**:
+- Both use **Lanczos tridiagonalization** to produce RL ladder networks
+- Mathematically identical: tridiagonal matrix -> series RL ladder
+- PRIMA (1998, IEEE TCAD) is the standard academic reference
+- CLN is a later repackaging with potential patent ambiguity
+
+**Implementation** (in `lanczos_reduction.py`):
+```python
+# PRIMASchurExtractor class handles:
+# - PRIMA Lanczos with re-orthogonalization (higher accuracy)
+# - Per-group ACA tolerance (magnetic, dielectric, conductor)
+# - Schur complement for port impedance extraction
+# - SPICE netlist generation
+```
+
+**Key Classes**:
+- `SPICEExtractionConfig`: Configuration with Lanczos order and ACA tolerances
+- `PRIMASchurExtractor`: Full SPICE extraction workflow
+- `LoopStarMagneticCoupled`: Loop-Star basis transformation
+
+**Configuration Example**:
+```python
+config = SPICEExtractionConfig(
+    n_lanczos_loop=20,          # Lanczos order for conductor loops
+    n_lanczos_star=10,          # Lanczos order for capacitive nodes
+    aca_tol_magnetic=1e-3,      # ACA tolerance for magnetic elements
+    aca_tol_dielectric=1e-4,    # ACA tolerance for dielectric elements
+    aca_tol_conductor=1e-5,     # ACA tolerance for conductor/shield
+    port_indices=[0, 1],
+)
 ```
 
 **Rationale**:
-1. **Target frequency range**: Power electronics (DC - 1 MHz) requires Loop-Star
-2. **Low-frequency stability**: Eliminates EFIE low-frequency breakdown (jωL → 0)
-3. **MQS validity**: At power frequencies, displacement current is negligible (div J ≈ 0)
-4. **Reduced DOF**: MQS mode solves only Loop equations (fewer unknowns)
-5. **Code simplicity**: Single solver path, no conditional branching
-
-**MQS Mode Control**:
-- `useMQS_ = true` (default): Solve Loop equations only (I_S = 0)
-- `useMQS_ = false`: Solve full Loop-Star system (for higher frequencies where capacitive effects matter)
-
-### Loop-Star Technical Details
-
-**Basis Transformation**:
-```
-RWG basis → Loop (solenoidal) + Star (irrotational)
-
-Loop functions: Formed from co-tree edges (create closed current loops)
-Star functions: Formed from tree edges (create divergent currents)
-```
-
-**MQS Mode** (useMQS_ = true):
-- Solves only Loop equations: `Z_LL * I_L = V_L`
-- Sets Star currents to zero: `I_S = 0`
-- Valid when: `ω * ε << σ` (conduction dominates displacement)
-
-**Full EFIE Mode** (useMQS_ = false):
-- Solves coupled system:
-  ```
-  [Z_LL  Z_LS] [I_L]   [V_L]
-  [Z_SL  Z_SS] [I_S] = [V_S]
-  ```
-- Required when capacitive effects are significant
-
-**Performance Impact**:
-
-| Mode | DOF Reduction | Accuracy (f < 1MHz) | Overhead |
-|------|---------------|---------------------|----------|
-| MQS (Loop-only) | ~50% | Excellent | Minimal |
-| Full Loop-Star | 0% | Exact | ~10% matrix transform |
-| No Loop-Star | 0% | Poor at low-f | None |
+1. **Low-frequency stability**: Eliminates breakdown at DC (jomega*L -> 0)
+2. **MQS validity**: At power frequencies, displacement current is negligible
+3. **Circuit extraction**: Direct mapping to RLC ladder elements
+4. **Passivity**: PRIMA Lanczos preserves passivity
+5. **Re-orthogonalization**: Higher accuracy than plain Lanczos
 
 ---
 
