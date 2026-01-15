@@ -5,8 +5,18 @@
  * Uses Laplace kernel (1/R) only - Helmholtz kernel removed.
  *
  * References:
- * [1] Z. Zhu et al., "Algorithms in FastImp", IEEE TCAD, 2005
- * [2] W. C. Gibson, "The Method of Moments in Electromagnetics", 2008
+ * [1] Z. Zhu et al., "Algorithms in FastImp: A Fast and Accurate
+ *     Impedance Extraction Program", IEEE TCAD, Vol. 24, No. 7, 2005
+ * [2] W. C. Gibson, "The Method of Moments in Electromagnetics",
+ *     Chapman & Hall/CRC, 2008
+ * [3] D. R. Wilton, S. M. Rao, A. W. Glisson, D. H. Schaubert,
+ *     O. M. Al-Bundak, C. M. Butler, "Potential Integrals for Uniform
+ *     and Linear Source Distributions on Polygonal and Polyhedral
+ *     Domains", IEEE Trans. Antennas Propag., Vol. 32, No. 3, 1984
+ *     (Analytical 1/R integrals over triangular panels)
+ * [4] R. D. Graglia, "On the Numerical Integration of the Linear
+ *     Shape Functions Times the 3-D Green's Function or its Gradient
+ *     on a Plane Triangle", IEEE Trans. AP, Vol. 41, No. 10, 1993
  *
  * Part of Radia project
  */
@@ -15,6 +25,150 @@
 #include <algorithm>
 
 namespace radia {
+
+// ============================================================================
+// Wilton Analytical 1/R Integral over Triangle (Ref [3])
+// ============================================================================
+//
+// Computes: I = integral_triangle 1/|r - r'| dS'
+//
+// Using the Wilton et al. formula, the integral is decomposed into
+// edge contributions involving logarithms and arctangents:
+//
+// I = sum_edges [ P0 * ln((R+ + l+)/(R- + l-))
+//               - |h| * (atan2(P0*l+, R0^2 + |h|*R+) - atan2(P0*l-, R0^2 + |h|*R-)) ]
+//
+// where for each edge from vertex A to vertex B:
+//   P0 = perpendicular distance from observation point projection to edge
+//   R0 = sqrt(P0^2 + h^2), h = height of obs point above triangle plane
+//   l+, l- = projections along edge direction from A and B
+//   R+, R- = 3D distances from obs point to vertices A and B
+//
+// This analytical formula is exact for the 1/R (Laplace) kernel and avoids
+// numerical integration, providing both accuracy and efficiency.
+// ============================================================================
+
+static double WiltonTriangleIntegral1OverR(
+    const TVector3d& obs,
+    const TVector3d& v0, const TVector3d& v1, const TVector3d& v2)
+{
+    const double EPS = 1.0e-14;
+
+    // Compute triangle normal and area
+    TVector3d e1 = {v1.x - v0.x, v1.y - v0.y, v1.z - v0.z};
+    TVector3d e2 = {v2.x - v0.x, v2.y - v0.y, v2.z - v0.z};
+    TVector3d normal = {
+        e1.y * e2.z - e1.z * e2.y,
+        e1.z * e2.x - e1.x * e2.z,
+        e1.x * e2.y - e1.y * e2.x
+    };
+    double norm_mag = std::sqrt(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z);
+
+    if (norm_mag < EPS) return 0.0;  // Degenerate triangle
+
+    // Unit normal
+    normal.x /= norm_mag;
+    normal.y /= norm_mag;
+    normal.z /= norm_mag;
+
+    // Vector from v0 to observation point
+    TVector3d r0 = {obs.x - v0.x, obs.y - v0.y, obs.z - v0.z};
+
+    // Height h: signed distance from obs point to triangle plane
+    double h = r0.x * normal.x + r0.y * normal.y + r0.z * normal.z;
+    double absH = std::abs(h);
+    double h2 = h * h;
+
+    // Projection of observation point onto triangle plane
+    TVector3d obs_proj = {
+        obs.x - h * normal.x,
+        obs.y - h * normal.y,
+        obs.z - h * normal.z
+    };
+
+    // Store vertices in array for edge loop
+    const TVector3d* verts[3] = {&v0, &v1, &v2};
+
+    // Compute distances from obs to each vertex
+    double R[3];
+    for (int i = 0; i < 3; i++) {
+        double dx = obs.x - verts[i]->x;
+        double dy = obs.y - verts[i]->y;
+        double dz = obs.z - verts[i]->z;
+        R[i] = std::sqrt(dx*dx + dy*dy + dz*dz);
+    }
+
+    // Accumulate edge contributions
+    double I_total = 0.0;
+
+    for (int i = 0; i < 3; i++) {
+        int j = (i + 1) % 3;
+
+        // Edge from vertex i to vertex j
+        TVector3d edge = {
+            verts[j]->x - verts[i]->x,
+            verts[j]->y - verts[i]->y,
+            verts[j]->z - verts[i]->z
+        };
+        double L = std::sqrt(edge.x*edge.x + edge.y*edge.y + edge.z*edge.z);
+        if (L < EPS) continue;
+
+        // Unit tangent along edge
+        double tx = edge.x / L;
+        double ty = edge.y / L;
+        double tz = edge.z / L;
+
+        // Inward unit normal to edge in triangle plane: m = n x t
+        double mx = normal.y * tz - normal.z * ty;
+        double my = normal.z * tx - normal.x * tz;
+        double mz = normal.x * ty - normal.y * tx;
+
+        // P0: perpendicular distance from obs_proj to edge line (in plane)
+        double dx_proj = obs_proj.x - verts[i]->x;
+        double dy_proj = obs_proj.y - verts[i]->y;
+        double dz_proj = obs_proj.z - verts[i]->z;
+        double P0 = dx_proj * mx + dy_proj * my + dz_proj * mz;
+
+        // R0_edge = sqrt(P0^2 + h^2): perpendicular distance in 3D
+        double R0_sq = P0 * P0 + h2;
+
+        // l+ = projection of (obs - vertex_i) onto edge direction
+        double dx_i = obs.x - verts[i]->x;
+        double dy_i = obs.y - verts[i]->y;
+        double dz_i = obs.z - verts[i]->z;
+        double l_plus = dx_i * tx + dy_i * ty + dz_i * tz;
+
+        // l- = projection of (obs - vertex_j) onto edge direction
+        double dx_j = obs.x - verts[j]->x;
+        double dy_j = obs.y - verts[j]->y;
+        double dz_j = obs.z - verts[j]->z;
+        double l_minus = dx_j * tx + dy_j * ty + dz_j * tz;
+
+        double R_plus = R[i];
+        double R_minus = R[j];
+
+        // Log term: P0 * ln((R+ + l+) / (R- + l-))
+        double log_term = 0.0;
+        double num = R_plus + l_plus;
+        double den = R_minus + l_minus;
+        if (std::abs(num) > EPS && std::abs(den) > EPS && std::abs(num / den) > EPS) {
+            log_term = P0 * std::log(std::abs(num / den));
+        }
+
+        // Arctan term: |h| * [atan2(P0*l+, R0^2 + |h|*R+) - atan2(P0*l-, R0^2 + |h|*R-)]
+        double atan_term = 0.0;
+        if (absH > EPS) {
+            double atan_plus = std::atan2(P0 * l_plus, R0_sq + absH * R_plus);
+            double atan_minus = std::atan2(P0 * l_minus, R0_sq + absH * R_minus);
+            atan_term = absH * (atan_plus - atan_minus);
+        }
+
+        // Edge contribution (note: sign convention for inward normal)
+        I_total += log_term - atan_term;
+    }
+
+    return I_total;
+}
 
 // ============================================================================
 // radTGreenFunction implementation
@@ -358,42 +512,16 @@ radTPanelInteraction::Complex radTPanelInteraction::TriangleToTriangle(
         return green_->ScalarGreen(r) * src_area;
     }
 
-    // Near-field: numerical integration
-    // Source: edges for parametric coordinates
-    TVector3d e1_src, e2_src;
-    e1_src.x = src_vertices[1].x - src_vertices[0].x;
-    e1_src.y = src_vertices[1].y - src_vertices[0].y;
-    e1_src.z = src_vertices[1].z - src_vertices[0].z;
+    // Near-field: Use Wilton analytical formula (Ref [3])
+    // The Wilton formula computes the integral of 1/R over the source triangle
+    // exactly using edge-based logarithm and arctangent terms.
+    // This is more accurate and often faster than Gauss quadrature.
+    double I_wilton = WiltonTriangleIntegral1OverR(
+        obs_centroid, src_vertices[0], src_vertices[1], src_vertices[2]);
 
-    e2_src.x = src_vertices[2].x - src_vertices[0].x;
-    e2_src.y = src_vertices[2].y - src_vertices[0].y;
-    e2_src.z = src_vertices[2].z - src_vertices[0].z;
-
-    Complex result(0.0, 0.0);
-    int npts = 6;  // Use 6-point rule
-
-    for (int i = 0; i < npts; i++) {
-        double xi = triangleGaussPts_[i][0];
-        double eta = triangleGaussPts_[i][1];
-        double w = triangleGaussPts_[i][2];
-
-        // Source point
-        TVector3d src_pt;
-        src_pt.x = src_vertices[0].x + xi * e1_src.x + eta * e2_src.x;
-        src_pt.y = src_vertices[0].y + xi * e1_src.y + eta * e2_src.y;
-        src_pt.z = src_vertices[0].z + xi * e1_src.z + eta * e2_src.z;
-
-        // Distance from observation centroid
-        r_vec.x = obs_centroid.x - src_pt.x;
-        r_vec.y = obs_centroid.y - src_pt.y;
-        r_vec.z = obs_centroid.z - src_pt.z;
-        r = std::sqrt(r_vec.x * r_vec.x + r_vec.y * r_vec.y + r_vec.z * r_vec.z);
-
-        result += w * green_->ScalarGreen(r);
-    }
-
-    // Jacobian for triangle: 2 * area
-    return result * 2.0 * src_area;
+    // For Laplace kernel: G(r) = 1/(4*pi*r)
+    // The Wilton formula gives integral of 1/r, so multiply by 1/(4*pi)
+    return Complex(I_wilton * RadConst::INV_FOUR_PI, 0.0);
 }
 
 radTPanelInteraction::Complex radTPanelInteraction::QuadToQuad(
@@ -420,44 +548,21 @@ radTPanelInteraction::Complex radTPanelInteraction::QuadToQuad(
     double char_size = std::sqrt(std::max(obs_area, src_area));
 
     if (r > 3.0 * char_size) {
-        // Far-field
+        // Far-field: centroid approximation
         return green_->ScalarGreen(r) * src_area;
     }
 
-    // Near-field: 2x2 Gauss integration
-    Complex result(0.0, 0.0);
+    // Near-field: Use Wilton analytical formula (Ref [3])
+    // Split source quad into two triangles: (v0, v1, v2) and (v0, v2, v3)
+    double I_tri1 = WiltonTriangleIntegral1OverR(
+        obs_centroid, src_vertices[0], src_vertices[1], src_vertices[2]);
+    double I_tri2 = WiltonTriangleIntegral1OverR(
+        obs_centroid, src_vertices[0], src_vertices[2], src_vertices[3]);
 
-    for (int i = 0; i < 4; i++) {
-        double xi = quadGaussPts_[i][0];
-        double eta = quadGaussPts_[i][1];
-        double w = quadGaussPts_[i][2];
+    double I_total = I_tri1 + I_tri2;
 
-        // Bilinear interpolation for quad
-        double N0 = 0.25 * (1 - xi) * (1 - eta);
-        double N1 = 0.25 * (1 + xi) * (1 - eta);
-        double N2 = 0.25 * (1 + xi) * (1 + eta);
-        double N3 = 0.25 * (1 - xi) * (1 + eta);
-
-        TVector3d src_pt;
-        src_pt.x = N0 * src_vertices[0].x + N1 * src_vertices[1].x +
-                   N2 * src_vertices[2].x + N3 * src_vertices[3].x;
-        src_pt.y = N0 * src_vertices[0].y + N1 * src_vertices[1].y +
-                   N2 * src_vertices[2].y + N3 * src_vertices[3].y;
-        src_pt.z = N0 * src_vertices[0].z + N1 * src_vertices[1].z +
-                   N2 * src_vertices[2].z + N3 * src_vertices[3].z;
-
-        // Distance
-        r_vec.x = obs_centroid.x - src_pt.x;
-        r_vec.y = obs_centroid.y - src_pt.y;
-        r_vec.z = obs_centroid.z - src_pt.z;
-        r = std::sqrt(r_vec.x * r_vec.x + r_vec.y * r_vec.y + r_vec.z * r_vec.z);
-
-        // Jacobian: approximate as constant
-        result += w * green_->ScalarGreen(r);
-    }
-
-    // Jacobian for bilinear quad: area/4 per Gauss point
-    return result * src_area;
+    // For Laplace kernel: G(r) = 1/(4*pi*r)
+    return Complex(I_total * RadConst::INV_FOUR_PI, 0.0);
 }
 
 radTPanelInteraction::Complex radTPanelInteraction::TriangleSelf(
@@ -465,27 +570,28 @@ radTPanelInteraction::Complex radTPanelInteraction::TriangleSelf(
 
     if (!green_) return Complex(0.0, 0.0);
 
-    // Self-term for triangle: analytical formula
-    // Reference: Wilton et al., "Potential Integrals for Uniform and Linear
-    // Source Distributions on Polygonal and Polyhedral Domains", IEEE TAP, 1984
+    // Self-term for triangle: Wilton analytical formula
+    // Reference: D.R. Wilton, S.M. Rao, A.W. Glisson, D.H. Schaubert,
+    //   O.M. Al-Bundak, C.M. Butler, "Potential Integrals for Uniform and Linear
+    //   Source Distributions on Polygonal and Polyhedral Domains",
+    //   IEEE Trans. Antennas Propag., Vol. 32, No. 3, March 1984
+    //
+    // For self-term, observation point is at centroid (h = 0).
+    // The Wilton formula simplifies: arctan terms vanish when h -> 0,
+    // leaving only the logarithm edge contributions:
+    //   I = sum_edges [ P0 * ln((R+ + l+)/(R- + l-)) ]
 
     TVector3d centroid, normal;
     double area;
     ComputeTriangleGeometry(vertices, centroid, normal, area);
 
-    // For MQS (1/r kernel), self-integral of triangle:
-    // I_self = (1/4pi) * integral_S dS'/|r-r'|
-    //        ≈ sqrt(A) / (2*pi) * ln(sqrt(A)) for characteristic dimension
-    // More accurate: use average distance from centroid
+    // Use Wilton analytical formula with observation point at centroid
+    // This gives exact result for the 1/R integral over the triangle
+    double I_wilton = WiltonTriangleIntegral1OverR(
+        centroid, vertices[0], vertices[1], vertices[2]);
 
-    // Effective radius
-    double R_eff = std::sqrt(area / RadConst::PI);
-
-    // Self-term approximation (regularized) - Laplace kernel only
-    // For circular panel: I = R_eff * (2*ln(2) - 1) / (4*pi)
-    double I_real = R_eff * (2.0 * std::log(2.0) - 1.0) / (4.0 * RadConst::PI);
-
-    return Complex(I_real, 0.0);
+    // For Laplace kernel: G(r) = 1/(4*pi*r)
+    return Complex(I_wilton * RadConst::INV_FOUR_PI, 0.0);
 }
 
 radTPanelInteraction::Complex radTPanelInteraction::QuadSelf(
@@ -493,15 +599,26 @@ radTPanelInteraction::Complex radTPanelInteraction::QuadSelf(
 
     if (!green_) return Complex(0.0, 0.0);
 
+    // Self-term for quad: Split into two triangles and use Wilton formula
+    // Reference: D.R. Wilton et al., IEEE TAP, Vol. 32, No. 3, 1984
+    //
+    // Quad vertices: v0, v1, v2, v3 (counterclockwise)
+    // Split into triangles: (v0, v1, v2) and (v0, v2, v3)
+
     TVector3d centroid, normal;
     double area;
     ComputeQuadGeometry(vertices, centroid, normal, area);
 
-    // Self-term approximation - Laplace kernel only
-    double R_eff = std::sqrt(area / RadConst::PI);
-    double I_real = R_eff * (2.0 * std::log(2.0) - 1.0) / (4.0 * RadConst::PI);
+    // Use Wilton formula for each sub-triangle with obs at quad centroid
+    double I_tri1 = WiltonTriangleIntegral1OverR(
+        centroid, vertices[0], vertices[1], vertices[2]);
+    double I_tri2 = WiltonTriangleIntegral1OverR(
+        centroid, vertices[0], vertices[2], vertices[3]);
 
-    return Complex(I_real, 0.0);
+    double I_total = I_tri1 + I_tri2;
+
+    // For Laplace kernel: G(r) = 1/(4*pi*r)
+    return Complex(I_total * RadConst::INV_FOUR_PI, 0.0);
 }
 
 } // namespace radia

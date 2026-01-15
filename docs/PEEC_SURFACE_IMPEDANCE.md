@@ -1224,9 +1224,32 @@ L_ext (N×N dense matrix)              L'_ext (n×n tridiagonal, n<<N)
 └─────────────────────┘
 
 Mutual inductances M_ij are absorbed into:
-- Transformation matrices U, V (Lanczos basis vectors)
+- Transformation matrix Q (Lanczos basis vectors)
 - Tridiagonal coefficients α_k, β_k
 ```
+
+**Critical Property: U = V = Q for Symmetric Matrices**:
+
+For a **symmetric** matrix A (like inductance matrices L_ext), the Lanczos
+tridiagonalization produces:
+
+```
+A = Q * T * Q^T
+```
+
+where:
+- **Q** is an orthonormal matrix (Q^T * Q = I)
+- **T** is a **symmetric** tridiagonal matrix
+
+Since A is symmetric and T is also symmetric, **U = V = Q**. This is because:
+1. The transformation preserves symmetry: A symmetric -> T symmetric
+2. A single orthonormal basis Q suffices for both left and right multiplication
+3. There is no distinction between "left" and "right" eigenvectors for symmetric matrices
+
+This property is **essential for passivity preservation** in model order reduction:
+- Passivity requires symmetric positive definite matrices
+- Using U = V = Q guarantees the reduced model remains symmetric
+- The CLN ladder network synthesis depends on this symmetry
 
 **Key Properties**:
 
@@ -2426,6 +2449,29 @@ All blocks are symmetric or have symmetric transpose relationships, enabling CLN
 ---
 
 ## Coil on Magnetic Core Analysis
+
+### Dowell補正の適用範囲
+
+磁性体コア上のコイル解析では、Dowell補正を適切に適用することが重要：
+
+| 成分 | Dowell補正 | 理由 |
+|------|------------|------|
+| R_dc, L_int_dc | **適用** | 導体内部の表皮効果 |
+| L_ext_air | 適用しない | 空気中の磁束（導体外） |
+| L_mag | 適用しない | 磁性体内の磁束（導体外） |
+| R_mag | 適用しない | 磁性体のヒステリシス損 |
+
+**物理的解釈**:
+- 表皮効果は**導体内部**の電流分布にのみ影響
+- 導体外部（空気、磁性体）の磁束分布は表皮効果の影響を受けない
+- 磁性体損失は別のメカニズム（ヒステリシス、渦電流）
+
+**拡張CLN等価回路**:
+```
+     [導体: Dowell CLN]           [磁性体]
+         R_dc*F_R   L_int*F_L      L_ext_air   L_mag     R_mag
+   o----[====]------[====]---------[====]------[====]----[====]---o
+```
 
 ### Frequency-Dependent Characteristics
 
