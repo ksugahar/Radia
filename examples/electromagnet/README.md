@@ -29,10 +29,9 @@ This directory contains a complete electromagnet simulation workflow:
 
 - **`York.jou`** - Cubit journal file with yoke geometry definition
 
-### Utilities (in `src/python/`)
+### Utilities (in `src/radia/`)
 
 - **`nastran_mesh_import.py`** - Nastran mesh import and conversion to Radia
-- **`radia_vtk_export.py`** - VTK Legacy format export
 
 ## Complete Workflow
 
@@ -242,15 +241,6 @@ sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")
 - Check coil and yoke bounding boxes overlap correctly
 - Verify material properties in `yoke_model.py`
 
-### VTK export fails
-
-**Error**: `ModuleNotFoundError: No module named 'radia_vtk_export'`
-
-**Solution**: Ensure `src/python/radia_vtk_export.py` exists and path is correct:
-```python
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
-```
-
 ### Field distribution file is huge
 
 **Issue**: 13,671 points × 3 components = ~40KB (normal size)
@@ -283,8 +273,7 @@ All magnetic field values in **Tesla (T)**.
 ## Further Reading
 
 - [Radia Python API](../../README.md)
-- [VTK Export Utilities](../../src/python/radia_vtk_export.py)
-- [Nastran Mesh Import](../../src/python/nastran_mesh_import.py)
+- [Nastran Mesh Import](../../src/radia/nastran_mesh_import.py)
 
 ## References
 
