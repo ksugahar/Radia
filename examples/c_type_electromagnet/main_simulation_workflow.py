@@ -58,9 +58,6 @@ yoke = create_radia_from_nastran(nastran_file, material={'magnetization': [0, 0,
 yoke_mat = rad.MatSatIsoFrm([20000, 2], [0.1, 2], [0.1, 2])
 rad.MatApl(yoke, yoke_mat)
 
-# Set yoke color to cyan
-rad.ObjDrwAtr(yoke, [0, 1, 1])  # RGB: cyan
-
 print(f"  [OK] Yoke imported: ID={yoke}")
 
 # ========================================================================
@@ -76,9 +73,6 @@ coil = rad.ObjRaceTrk(
     3,               # nseg
     -2000/105/35     # current density (A/mm^2): -2000A total
 )
-
-# Set coil color to red
-rad.ObjDrwAtr(coil, [1, 0, 0])  # RGB: red
 
 print(f"  [OK] Coil created: ID={coil}")
 print(f"  Total current: -2000 A")

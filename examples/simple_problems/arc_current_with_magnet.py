@@ -43,10 +43,6 @@ g2 = rad.ObjHexahedron(vertices, [0, 0, 1.0])
 # Note: Material properties (MatLin, MatSatIso) are for soft magnetic materials
 # like iron yokes, NOT for permanent magnets with fixed magnetization
 
-# Set drawing attributes
-rad.ObjDrwAtr(g1, [1, 0, 0], 0.001)  # Red for g1
-rad.ObjDrwAtr(g2, [0, 0, 1], 0.001)  # Blue for g2
-
 # Create container with both objects
 g = rad.ObjCnt([g1, g2])
 
