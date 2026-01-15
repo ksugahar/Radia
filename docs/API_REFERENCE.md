@@ -1686,16 +1686,30 @@ B = cuboid.get_B([25, 0, 0])
 
 12. **van Oosterom, A., Strackee, J.** (1983). "The solid angle of a plane triangle." IEEE Trans. Biomed. Eng. 30(2), 125-126. - Efficient solid angle computation
 
-### Potential Integrals on Triangles
+### Potential Integrals on Triangles (PEEC)
 
-13. **Carley, M.** (2013). "Potential integrals on triangles." arXiv:1201.4938. - Analytical formula for 1/r integral over triangular surfaces
+13. **Wilton, D.R., Rao, S.M., Glisson, A.W., Schaubert, D.H., Al-Bundak, O.M., Butler, C.M.** (1984). "Potential Integrals for Uniform and Linear Source Distributions on Polygonal and Polyhedral Domains." IEEE Trans. Antennas Propag. 32(3), 276-281. - Analytical 1/R integral over triangular panels using edge-based logarithm and arctangent formulas
+
+14. **Graglia, R.D.** (1993). "On the Numerical Integration of the Linear Shape Functions Times the 3-D Green's Function or its Gradient on a Plane Triangle." IEEE Trans. Antennas Propag. 41(10), 1448-1455. - Higher-order integration formulas
+
+15. **Carley, M.** (2013). "Potential integrals on triangles." arXiv:1201.4938. - Alternative analytical formula for 1/r integral
+
+### Arc Coil Analytical Formulas
+
+16. **Kameari, A.** (1990). "Calculation of Transient 3D Eddy Current using Edge-Elements." IEEE Trans. Magn. 26(2), 466-469. - Analytical formula for arc coil B-field using incomplete elliptic integrals, and 1/r integral over rectangular cross-sections. Also provides the analytical cross-section integration formula using distances to 4 corners (R[0-3]) at each azimuthal angle.
+
+17. **Abramowitz, M., Stegun, I.A.** (1964). "Handbook of Mathematical Functions with Formulas, Graphs, and Mathematical Tables." National Bureau of Standards, Chapter 17. - Incomplete elliptic integrals F(phi,m) and E(phi,m), arithmetic-geometric mean algorithm
+
+18. **Nakata, T., Takahashi, N., Fujiwara, K.** (1990). "Summary of Results for TEAM Problem 7." COMPEL 9(2), 137-154. - Validation of arc coil formulas
+
+19. **Piessens, R., de Doncker-Kapenga, E., Überhuber, C.W., Kahaner, D.K.** (1983). "QUADPACK: A Subroutine Package for Automatic Integration." Springer-Verlag. - Gauss-Kronrod 7-15 adaptive quadrature for azimuthal integration in near-field arc coil calculation
 
 ### General References
 
-14. [ESRF Radia Reference Guide](https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html)
-15. [examples/cube_uniform_field/](../examples/cube_uniform_field/) - Benchmark examples
+20. [ESRF Radia Reference Guide](https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html)
+21. [examples/cube_uniform_field/](../examples/cube_uniform_field/) - Benchmark examples
 
 ---
 
-**Last Updated**: 2026-01-08
+**Last Updated**: 2026-01-15
 **License**: LGPL-2.1 (modifications), BSD-style (original RADIA from ESRF)
