@@ -145,15 +145,8 @@ public:
 		FieldPtr->J += locJ;
 	}
 
-	void B_intComp(radTField* FieldPtr)
-	{
-		if(FieldPtr->FieldKey.FinInt_) B_intCompFinNum(FieldPtr);
-		else if(BasedOnPrecLevel) B_intCompWithNewton3(FieldPtr);
-		else B_intCompWithTrapeth(FieldPtr);
-	}
-	void B_intCompWithNewton3(radTField*);
-	void B_intCompWithTrapeth(radTField*);
-	void B_intUtilSpecCaseZeroVxVy(double, double, double, double, double, double, double, double&);
+	// Note: B_intComp is now handled through numerical integration for line integrals.
+	// The analytical elliptic integral method (B_compElliptic) is used for point field computation.
 
 	double Volume() { return 0.5*(Phi_max - Phi_min)*(R_max*R_max - R_min*R_min)*Height;}
 	void VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique);

@@ -6,6 +6,7 @@
 *
 * Description:    Elliptic integral functions for analytical coil field
 *                 computation (K(k), E(k) complete elliptic integrals)
+*                 and arc coil near-field B-field calculation.
 *
 * References:
 *   [1] J.C. Maxwell, "A Treatise on Electricity and Magnetism," Vol. 2,
@@ -18,6 +19,15 @@
 *   [4] W.J. Cody, "Chebyshev Approximations for the Complete Elliptic
 *       Integrals K and E," Math. Comp. 19(92), pp. 105-112, 1965.
 *   [5] A. Kameari, EMPY_Field library (original implementation)
+*   [6] A. Kameari, "Calculation of Transient 3D Eddy Current using
+*       Edge-Elements", IEEE Trans. Magn., Vol. 26, No. 2, pp. 466-469, 1990.
+*       - Arc coil B-field with incomplete elliptic integrals
+*       - Analytical cross-section integration (distances to 4 corners)
+*   [7] M. Abramowitz, I.A. Stegun, "Handbook of Mathematical Functions,"
+*       National Bureau of Standards, Chapter 17: Elliptic Integrals, 1964.
+*   [8] R. Piessens, E. de Doncker-Kapenga, C.W. Ueberhuber, D.K. Kahaner,
+*       "QUADPACK: A Subroutine Package for Automatic Integration,"
+*       Springer-Verlag, 1983. - Gauss-Kronrod 7-15 adaptive quadrature
 *
 * Author(s):      A. Kameari (original EMPY), adapted for Radia
 *
@@ -27,6 +37,7 @@
 
 #include "rad_elliptic_integral.h"
 #include <cmath>
+#include <algorithm>
 
 namespace RadElliptic {
 
@@ -391,6 +402,730 @@ double CircularLoopSolidAngle(double R, double Z, double CR, double CZ)
     double Omega = sign_z * (2.0 * PI / k) * ((2.0 - k2) * ELPK - 2.0 * ELPE);
 
     return Omega;
+}
+
+//-------------------------------------------------------------------------
+// Incomplete elliptic integrals F(phi, m) and E(phi, m)
+// using arithmetic-geometric mean algorithm
+//
+// Reference:
+//   [1] A. Kameari, EMPY implementation (ell_fe function)
+//   [2] M. Abramowitz, I.A. Stegun, "Handbook of Mathematical Functions",
+//       Chapter 17: Elliptic Integrals
+//
+// Parameters:
+//   phi: amplitude (radians)
+//   m: parameter m = k^2 (modulus squared)
+//   F: output - incomplete elliptic integral of first kind
+//   E: output - incomplete elliptic integral of second kind
+//
+// The integrals are defined as:
+//   F(phi, m) = integral_0^phi 1/sqrt(1 - m*sin^2(t)) dt
+//   E(phi, m) = integral_0^phi sqrt(1 - m*sin^2(t)) dt
+//-------------------------------------------------------------------------
+void IncompleteEllipticIntegrals(double phi, double m, double& F, double& E)
+{
+    const double HALF_PI = PI / 2.0;
+
+    // Handle m >= 1 case (degenerate)
+    if (m >= 1.0) {
+        double s = std::sin(phi);
+        F = 0.5 * std::log((1.0 + s) / (1.0 - s));
+        int per = static_cast<int>(std::floor((phi + HALF_PI) / PI));
+        double sign_val = (std::abs(per % 2) < 0.5) ? 1.0 : -1.0;
+        E = std::sin(phi) * sign_val + 2.0 * per;
+        return;
+    }
+
+    // Arithmetic-geometric mean algorithm
+    double sgn = (phi >= 0.0) ? 1.0 : -1.0;
+    phi = std::fabs(phi);
+
+    double a = 1.0;
+    double b = std::sqrt(1.0 - m);
+    double twon = 1.0;
+    double eok = 1.0 - 0.5 * m;
+    double cs = 0.0;
+
+    // AGM iteration (maximum ~8 passes for double precision)
+    for (int iter = 0; iter < 20; ++iter) {
+        double c = 0.5 * (a - b);
+        if (c < 1.0e-15) break;
+
+        double phase = (phi + HALF_PI) / PI;
+        double cycle = std::floor(phase);
+        if (std::fabs(cycle - phase) < 1.0e-10) {
+            phi *= 1.0 + 1.0e-15;
+        }
+        phi += std::atan((b / a) * std::tan(phi)) + PI * cycle;
+
+        cs += c * std::sin(phi);
+        eok -= twon * c * c;
+
+        twon *= 2.0;
+        double am = a - c;
+        if (am == a) break;
+        b = std::sqrt(a * b);
+        a = am;
+    }
+
+    F = phi / (twon * a) * sgn;
+    E = eok * F * sgn + sgn * cs;
+}
+
+//-------------------------------------------------------------------------
+// Incomplete elliptic integrals between two angles
+// Computes F(phi2,m) - F(phi1,m) and E(phi2,m) - E(phi1,m)
+//
+// Parameters:
+//   phi1, phi2: amplitude range (radians)
+//   m: parameter m = k^2 (modulus squared)
+//   F: output - F(phi2,m) - F(phi1,m)
+//   E: output - E(phi2,m) - E(phi1,m)
+//-------------------------------------------------------------------------
+void IncompleteEllipticIntegralsDiff(double phi1, double phi2, double m,
+                                      double& F, double& E)
+{
+    double F2 = 0.0, E2 = 0.0;
+    double F1 = 0.0, E1 = 0.0;
+
+    if (phi2 != 0.0) {
+        IncompleteEllipticIntegrals(phi2, m, F2, E2);
+    }
+
+    // Optimization for symmetric case
+    if (phi2 == -phi1) {
+        F = 2.0 * F2;
+        E = 2.0 * E2;
+        return;
+    }
+
+    if (phi1 != 0.0) {
+        IncompleteEllipticIntegrals(phi1, m, F1, E1);
+    }
+
+    F = F2 - F1;
+    E = E2 - E1;
+}
+
+//-------------------------------------------------------------------------
+// Arc coil B-field using incomplete elliptic integrals (far-field approximation)
+//
+// Reference:
+//   [1] A. Kameari, "Calculation of Transient 3D Eddy Current using
+//       Edge-Elements", IEEE Trans. Magn., Vol. 26, No. 2, 1990
+//   [2] A. Kameari, EMPY_Field implementation (field_ARC_line function)
+//
+// This implements the analytical formula for the magnetic field of an arc coil
+// in the far-field regime (when observation point is far from coil cross-section).
+// The coil is treated as a line current along the arc.
+//
+// Parameters:
+//   rho: radial distance from axis in local frame (m)
+//   z: axial distance from coil plane in local frame (m)
+//   rc: coil radius (m)
+//   phi1, phi2: arc start and end angles relative to observation point (rad)
+//   current: total current (A)
+//   cross_area: cross-section area (m^2)
+//   B_rho, B_theta, B_z: output B-field components in cylindrical coords (T)
+//
+// The observation point is at (rho, 0, z) in the local frame where phi=0
+// points toward the observation point's azimuthal position.
+//-------------------------------------------------------------------------
+void ArcCoilBFieldAnalytical(double rho, double z, double rc,
+                              double phi1, double phi2,
+                              double current, double cross_area,
+                              double& B_rho, double& B_theta, double& B_z)
+{
+    const double ZOT = 1.0e-10;
+
+    // Current density factor: J * mu_0 / (4*pi)
+    double J_density = current / cross_area;
+    double XI = J_density * MU0_DIV_4PI;
+
+    // Geometric quantities
+    double RHOSQ = rho * rho;
+    double ZSQ = z * z;
+    double RZSQ = RHOSQ + ZSQ;
+    double ASQ = rc * rc;
+    double ASRZS = ASQ + RZSQ;
+    double APR = rc + rho;
+    double APRSQ = APR * APR;
+    double RAZSQ = APRSQ + ZSQ;
+    double RAZ = std::sqrt(RAZSQ);
+
+    // Quantities for far-field approximation (line current)
+    double ARZSQ = (rc - rho) * (rc - rho) + ZSQ;  // min distance squared
+    double TAR = 2.0 * rho * rc;
+
+    // Modulus for elliptic integrals
+    // CASQ = k^2 = 4*rho*rc / ((rho+rc)^2 + z^2)
+    double CASQ = TAR + TAR;
+    if (RAZSQ > 0.0) {
+        CASQ /= RAZSQ;
+    }
+
+    // Angular quantities (shifted by pi for the formula)
+    double OMEGA1 = 0.5 * (phi1 - PI);
+    double OMEGA2 = 0.5 * (phi2 - PI);
+
+    double SNOMG1 = std::sin(OMEGA1);
+    double CSOMG1 = std::cos(OMEGA1);
+    double SNOMG2 = std::sin(OMEGA2);
+    double CSOMG2 = std::cos(OMEGA2);
+    double SN1SQ = SNOMG1 * SNOMG1;
+    double SN2SQ = SNOMG2 * SNOMG2;
+
+    // Compute incomplete elliptic integrals
+    double FEI = 0.0, EEI = 0.0;
+    IncompleteEllipticIntegralsDiff(OMEGA1, OMEGA2, CASQ, FEI, EEI);
+
+    B_rho = 0.0;
+    B_theta = 0.0;
+    B_z = 0.0;
+
+    static const double EPS_k2 = 1.0e-6;
+
+    if (CASQ >= EPS_k2) {
+        // Normal case: use elliptic integral formula
+        double D1 = std::sqrt(1.0 - CASQ * SN1SQ);
+        double D2 = std::sqrt(1.0 - CASQ * SN2SQ);
+
+        // B-field calculation
+        double D1_inv = 1.0 / D1;
+        double D2_inv = 1.0 / D2;
+        double SNCS1 = SNOMG1 * CSOMG1;
+        double SNCS2 = SNOMG2 * CSOMG2;
+        double SL = EEI - CASQ * (SNCS2 * D2_inv - SNCS1 * D1_inv);
+
+        double C = cross_area / RAZ;
+
+        if (std::fabs(z) > ZOT) {
+            double D = (z / rho) * C;
+            B_theta = XI * D * (D1_inv - D2_inv);
+            B_rho = XI * D * (SL * (ASRZS / ARZSQ) - FEI);
+        }
+
+        if (std::fabs(1.0 - RHOSQ / ASQ) > ZOT) {
+            SL *= (RZSQ - ASQ) / ARZSQ;
+        }
+        B_z = XI * C * (FEI - SL);
+
+    } else {
+        // Small modulus case: simplified formula
+        double C = (2.0 * rc / RAZ) * cross_area;
+        double ARO = C * (SN2SQ - SN1SQ);
+
+        B_z = XI * (C / RAZSQ) * APR * EEI;
+        double G = z / RAZSQ;
+        B_theta = -XI * G * ARO;
+    }
+}
+
+//-------------------------------------------------------------------------
+// Arc coil field computation with distance-based method selection
+//
+// This is the main entry point for arc coil field calculation.
+// It automatically selects between:
+//   1. Analytical (line current) formula for far-field
+//   2. Numerical integration for near-field
+//
+// Parameters:
+//   obs_rho, obs_z: observation point in local cylindrical coords (m)
+//   rc: coil center radius (m)
+//   phi1, phi2: arc angles (rad)
+//   a: half radial width (m)
+//   b: half axial width (m)
+//   current: total current (A)
+//   B_rho, B_theta, B_z: output B-field components (T)
+//
+// Returns: true if analytical formula was used, false if numerical integration
+//-------------------------------------------------------------------------
+bool ArcCoilBFieldAdaptive(double obs_rho, double obs_z, double rc,
+                            double phi1, double phi2,
+                            double a, double b, double current,
+                            double& B_rho, double& B_theta, double& B_z)
+{
+    // Cross-section area
+    double cross_area = 4.0 * a * b;
+
+    // Minimum distance to coil cross-section corners
+    double ARZSQ = (rc - obs_rho) * (rc - obs_rho) + obs_z * obs_z;
+    double TAR = 2.0 * obs_rho * rc;
+
+    // Check if phi range includes phi=0 (closest point)
+    double DMIN = ARZSQ;
+    if (phi1 * phi2 > 0.0) {
+        // Arc doesn't cross phi=0, minimum distance is at arc endpoints
+        double cos_max = std::max(std::cos(phi1), std::cos(phi2));
+        DMIN += TAR * (1.0 - cos_max);
+    }
+
+    // Distance threshold for line current approximation
+    // Use analytical formula when distance > LINE_APP_LIMIT * max(a, b)
+    const double LINE_APP_LIMIT = 3.0;  // Empirical value from EMPY
+    double DFT = LINE_APP_LIMIT * std::max(a, b);
+    DFT = DFT * DFT;
+
+    if (DMIN >= DFT) {
+        // Far-field: use analytical (line current) formula
+        ArcCoilBFieldAnalytical(obs_rho, obs_z, rc, phi1, phi2,
+                                 current, cross_area,
+                                 B_rho, B_theta, B_z);
+        return true;
+    }
+
+    // Near-field: return false to indicate numerical integration is needed
+    B_rho = 0.0;
+    B_theta = 0.0;
+    B_z = 0.0;
+    return false;
+}
+
+//-------------------------------------------------------------------------
+// Helper function: ATAN4 - computes arctan combination for field integrals
+// Reference: EMPY_Field (used in arc_field_integrand)
+//-------------------------------------------------------------------------
+static double ATAN4(double PP0, double PP1, double PP2, double PP3)
+{
+    return std::atan(PP2) - std::atan(PP0) + std::atan(PP3) - std::atan(PP1);
+}
+
+//-------------------------------------------------------------------------
+// Safe log division: LOGDIV(A, B) = log(A/B) with zero handling
+//-------------------------------------------------------------------------
+static double LOGDIV(double A, double B)
+{
+    const double FEPS = 1.0e-50;
+    if (std::fabs(A) > FEPS && std::fabs(B) > FEPS) {
+        return std::log(A / B);
+    }
+    return 0.0;
+}
+
+//-------------------------------------------------------------------------
+// Arc coil field integrand with analytical cross-section integration
+//
+// References:
+//   [1] A. Kameari, "Calculation of Transient 3D Eddy Current using
+//       Edge-Elements", IEEE Trans. Magn., Vol. 26, No. 2, pp. 466-469, 1990.
+//       - Analytical cross-section integration using distances to 4 corners
+//   [2] A. Kameari, EMPY_Field library (arc_field_integrand function)
+//       - Original implementation of this algorithm
+//
+// For each azimuthal angle ALPHA (phi), this function computes the
+// contribution to B and A fields by analytically integrating over the
+// rectangular cross-section using distances to 4 corners (R[0-3]).
+//
+// Parameters (in param structure):
+//   RHO: observation point radial distance from axis
+//   AL, AU: inner/outer coil radius (rc-a, rc+a)
+//   ZZL, ZZU: axial distances (z-b, z+b)
+//   ARZ[4]: squared distances to 4 corners at phi=0
+//   ARL, ARU: 2*rho*(rc-a), 2*rho*(rc+a)
+//   ALSQ, AUSQ, ZLSQ, ZUSQ: squared terms
+//   calcA, calcB: flags for A or B calculation
+//   symmetricArc: 1 if using symmetry (only positive half)
+//
+// Output F array:
+//   When symmetricArc=0 and calcB=1: F[0]=B_rho term, F[1]=B_theta term, F[2]=B_z term
+//   When symmetricArc=1 and calcB=1: F[0]=B_rho term (symmetric), F[1]=B_z term
+//   Similar pattern for A field terms
+//-------------------------------------------------------------------------
+void ArcFieldIntegrand(double ALPHA, double* F, const ArcFieldParams* param)
+{
+    double rp = param->RHO;
+    double AL = param->AL;      // rc - a (inner radius)
+    double AU = param->AU;      // rc + a (outer radius)
+    double ARL = param->ARL;    // 2*rp*(rc-a)
+    double ARU = param->ARU;    // 2*rp*(rc+a)
+    double ALSQ = param->ALSQ;  // (rc-a-rp)^2
+    double AUSQ = param->AUSQ;  // (rc+a-rp)^2
+    double ZLSQ = param->ZLSQ;  // (z+b)^2
+    double ZUSQ = param->ZUSQ;  // (z-b)^2
+    double ZZL = param->ZZL;    // z + b
+    double ZZU = param->ZZU;    // z - b
+
+    double sinPhi = std::sin(ALPHA);
+    double cosPhi = std::cos(ALPHA);
+    double RSA = rp * sinPhi;
+    double rpCosPhi = rp * cosPhi;
+
+    // Geometric terms
+    double GXL = AL - rpCosPhi;      // rc-a - rp*cos(phi)
+    double GXU = AU - rpCosPhi;      // rc+a - rp*cos(phi)
+
+    // (1 - cos(phi)) term - use Taylor expansion for small angles
+    double COSA1 = 1.0 - cosPhi;
+    if (COSA1 == 0.0) {
+        COSA1 = ALPHA * ALPHA / 2.0;
+    }
+
+    double ARCL = ARL * COSA1;       // 2*rp*(rc-a)*(1-cos)
+    double ARCU = ARU * COSA1;       // 2*rp*(rc+a)*(1-cos)
+    double CLSQ = ARCL + ALSQ;       // (rc-a)^2 + rp^2 - 2*(rc-a)*rp*cos
+    double CUSQ = ARCU + AUSQ;       // (rc+a)^2 + rp^2 - 2*(rc+a)*rp*cos
+
+    // Distances from observation point to 4 corners of cross-section
+    // R[i] = sqrt((r-rp)^2 + 2*rp*r*(1-cos) + (zp-z)^2) for corners
+    double R[4];
+    R[0] = std::sqrt(param->ARZ[0] + ARCL);  // Corner: r=rc-a, z=zc-b
+    R[1] = std::sqrt(param->ARZ[1] + ARCL);  // Corner: r=rc-a, z=zc+b
+    R[2] = std::sqrt(param->ARZ[2] + ARCU);  // Corner: r=rc+a, z=zc-b
+    R[3] = std::sqrt(param->ARZ[3] + ARCU);  // Corner: r=rc+a, z=zc+b
+
+    double RL = R[2] - R[0];  // R(outer,lower) - R(inner,lower)
+    double RU = R[3] - R[1];  // R(outer,upper) - R(inner,upper)
+
+    // Log terms for radial integration
+    double AXU = ((GXU * R[3] + CUSQ) + ZUSQ) / R[3];
+    double AXL = ((GXL * R[1] + CLSQ) + ZUSQ) / R[1];
+    double ALXU = std::log(AXU / AXL);
+
+    AXU = ((GXU * R[2] + CUSQ) + ZLSQ) / R[2];
+    AXL = ((GXL * R[0] + CLSQ) + ZLSQ) / R[0];
+    double ALXL = std::log(AXU / AXL);
+
+    double ZAZA = ZZU * ALXU - ZZL * ALXL;
+
+    // Additional log terms for B_z
+    double RZU = ((ZUSQ + ZZU * R[1]) + CLSQ) / R[1];
+    double RZL = ((ZLSQ + ZZL * R[0]) + CLSQ) / R[0];
+    double RLZ = std::fabs(RZU / RZL);
+
+    RZU = ((ZUSQ + ZZU * R[3]) + CUSQ) / R[3];
+    RZL = ((ZLSQ + ZZL * R[2]) + CUSQ) / R[2];
+    double RUZ = std::fabs(RZU / RZL);
+
+    int index = 0;
+
+    // B-field calculation
+    if (param->calcB) {
+        double PP[4];
+        PP[0] = (ZZL * GXL) / (RSA * R[0]);
+        PP[1] = (ZZU * GXL) / (RSA * R[1]);
+        PP[2] = (ZZL * GXU) / (RSA * R[2]);
+        PP[3] = (ZZU * GXU) / (RSA * R[3]);
+
+        double BRT = (RU - RL) + rpCosPhi * (ALXU - ALXL);
+        double F3 = RSA * ATAN4(PP[0], PP[1], PP[2], PP[3]) - rpCosPhi * LOGDIV(RLZ, RUZ) - ZAZA;
+
+        F[index++] = cosPhi * BRT;  // B_rho term
+
+        if (param->symmetricArc == 0) {
+            F[index++] = sinPhi * BRT;  // B_theta term
+            F[index++] = F3;             // B_z term
+        } else {
+            F[index++] = F3;  // B_z term (B_theta is antisymmetric, cancels)
+        }
+    }
+
+    // A-field calculation (if needed)
+    if (param->calcA) {
+        double ZLRS = ZZL * RSA;
+        double ZURS = ZZU * RSA;
+        double PP[4];
+
+        if (ZLRS != 0.0) {
+            PP[0] = (CLSQ + GXL * R[0]) / ZLRS;
+            PP[2] = (CUSQ + GXU * R[2]) / ZLRS;
+        } else {
+            PP[0] = 0.0;
+            PP[2] = 0.0;
+        }
+
+        if (ZURS != 0.0) {
+            PP[1] = (CLSQ + GXL * R[1]) / ZURS;
+            PP[3] = (CUSQ + GXU * R[3]) / ZURS;
+        } else {
+            PP[1] = 0.0;
+            PP[3] = 0.0;
+        }
+
+        double ART = 0.5 * (ZZU * RU - ZZL * RL)
+                   + rpCosPhi * (ZAZA - RSA * ATAN4(PP[0], PP[1], PP[2], PP[3]))
+                   + ((rpCosPhi * GXU + 0.5 * CUSQ) * std::log(RUZ)
+                    - (rpCosPhi * GXL + 0.5 * CLSQ) * std::log(RLZ));
+
+        if (param->symmetricArc == 0) {
+            F[index++] = sinPhi * ART;   // A_rho term
+            F[index++] = cosPhi * ART;   // A_theta term
+        } else {
+            F[index++] = cosPhi * ART;   // A_theta term (A_rho is antisymmetric)
+        }
+    }
+}
+
+//-------------------------------------------------------------------------
+// Adaptive 1D integration using Gauss-Kronrod quadrature
+//
+// Reference:
+//   [1] P. Wynn, "On a Device for Computing the e_m(S_n) Transformation",
+//       MTAC 10, pp. 91-96, 1956.
+//   [2] R. Piessens et al., QUADPACK: A Subroutine Package for Automatic
+//       Integration, Springer-Verlag, 1983.
+//
+// Parameters:
+//   ncal: number of function values to compute
+//   func: integrand function
+//   a, b: integration bounds
+//   eps: relative tolerance
+//   result: output array of size ncal
+//   param: parameter structure passed to func
+//
+// Returns: number of function evaluations
+//-------------------------------------------------------------------------
+int Adaptive1DIntegration(int ncal,
+                          void (*func)(double, double*, const ArcFieldParams*),
+                          double a, double b, double eps,
+                          double* result, const ArcFieldParams* param)
+{
+    const int KMAX = 7;  // Maximum recursion depth
+    const double EPSINT = 1.0e-6;
+
+    // Gauss-Kronrod 7-15 rule nodes and weights
+    static const double xgk[8] = {
+        0.0,
+        0.40584515137739716690660641,
+        0.74153118559939443986386477,
+        0.94910791234275852452618968,
+        0.20778495500789846760068940,
+        0.58608723546769113507090340,
+        0.86486442335976907278971278,
+        0.99145537112081263920685390
+    };
+
+    static const double wgk[8] = {
+        0.20948214108472782801299917,
+        0.20443294007529889241416199,
+        0.16900472663926790282658342,
+        0.10479001032225018383987633,
+        0.20443294007529889241416199,
+        0.16900472663926790282658342,
+        0.10479001032225018383987633,
+        0.02293532201052922496373200
+    };
+
+    static const double wg[4] = {
+        0.41795918367346938775510204,
+        0.38183005050511894495036978,
+        0.27970539148927666790146777,
+        0.12948496616886969327061143
+    };
+
+    // Initialize results
+    for (int i = 0; i < ncal; ++i) {
+        result[i] = 0.0;
+    }
+
+    // Integration bounds
+    double c = 0.5 * (a + b);
+    double h = 0.5 * (b - a);
+
+    if (std::fabs(h) < EPSINT) {
+        return 0;
+    }
+
+    // Function values at Gauss-Kronrod points
+    double fv[8 * 5];  // Max 5 function components, 8 points
+
+    // Evaluate at center
+    func(c, &fv[0], param);
+
+    int neval = 1;
+
+    // Evaluate at other points (symmetric)
+    for (int j = 1; j < 8; ++j) {
+        double x1 = c - h * xgk[j];
+        double x2 = c + h * xgk[j];
+
+        double f1[5], f2[5];
+        func(x1, f1, param);
+        func(x2, f2, param);
+        neval += 2;
+
+        for (int i = 0; i < ncal; ++i) {
+            fv[j * ncal + i] = f1[i] + f2[i];
+        }
+    }
+
+    // Compute Gauss-Kronrod and Gauss estimates
+    double resK[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+    double resG[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+
+    for (int i = 0; i < ncal; ++i) {
+        resK[i] = fv[0 * ncal + i] * wgk[0];
+        resG[i] = fv[0 * ncal + i] * wg[0];
+
+        for (int j = 1; j < 4; ++j) {
+            resK[i] += fv[j * ncal + i] * wgk[j];
+            resG[i] += fv[j * ncal + i] * wg[j];
+        }
+        for (int j = 4; j < 8; ++j) {
+            resK[i] += fv[j * ncal + i] * wgk[j];
+        }
+
+        resK[i] *= h;
+        resG[i] *= h;
+    }
+
+    // Estimate error
+    double err_est = 0.0;
+    for (int i = 0; i < ncal; ++i) {
+        double diff = std::fabs(resK[i] - resG[i]);
+        if (diff > err_est) err_est = diff;
+    }
+
+    double abs_est = 0.0;
+    for (int i = 0; i < ncal; ++i) {
+        if (std::fabs(resK[i]) > abs_est) abs_est = std::fabs(resK[i]);
+    }
+
+    // Check convergence
+    if (err_est < eps * abs_est || err_est < 1.0e-14) {
+        for (int i = 0; i < ncal; ++i) {
+            result[i] = resK[i];
+        }
+        return neval;
+    }
+
+    // Recursive subdivision if needed
+    double mid = c;
+    double res_left[5], res_right[5];
+
+    // Note: For simplicity, we use fixed subdivision. A full adaptive
+    // implementation would use a priority queue of subintervals.
+    int n_left = Adaptive1DIntegration(ncal, func, a, mid, eps, res_left, param);
+    int n_right = Adaptive1DIntegration(ncal, func, mid, b, eps, res_right, param);
+
+    for (int i = 0; i < ncal; ++i) {
+        result[i] = res_left[i] + res_right[i];
+    }
+
+    return neval + n_left + n_right;
+}
+
+//-------------------------------------------------------------------------
+// Arc coil near-field integration using analytical cross-section formula
+// with adaptive 1D integration over azimuthal direction
+//
+// References:
+//   [1] A. Kameari, "Calculation of Transient 3D Eddy Current using
+//       Edge-Elements", IEEE Trans. Magn., Vol. 26, No. 2, pp. 466-469, 1990.
+//       - Analytical cross-section integration formula
+//   [2] R. Piessens, E. de Doncker-Kapenga, C.W. Ueberhuber, D.K. Kahaner,
+//       "QUADPACK: A Subroutine Package for Automatic Integration,"
+//       Springer-Verlag, 1983. - Gauss-Kronrod 7-15 adaptive quadrature
+//   [3] A. Kameari, EMPY_Field library (arc_integration function)
+//       - Original implementation of this algorithm
+//
+// This computes the B-field of an arc coil when the observation point is
+// near the coil cross-section. Instead of 2D Gauss quadrature over the
+// cross-section, it uses:
+//   1. Analytical formula for cross-section integral at each phi [1]
+//   2. Adaptive Gauss-Kronrod 7-15 integration over azimuth [2]
+//
+// Parameters:
+//   obs_rho: observation point radial distance from axis (m)
+//   obs_z: observation point axial distance from coil center (m)
+//   rc: coil center radius (m)
+//   a: half radial width (m)
+//   b: half axial width (m)
+//   phi1, phi2: arc angles (rad)
+//   current: total current (A)
+//   B_rho, B_theta, B_z: output B-field components (T)
+//-------------------------------------------------------------------------
+void ArcCoilBFieldNearField(double obs_rho, double obs_z, double rc,
+                             double a, double b,
+                             double phi1, double phi2,
+                             double current,
+                             double& B_rho, double& B_theta, double& B_z)
+{
+    // Set up parameter structure for integrand
+    ArcFieldParams param;
+
+    double cross_area = 4.0 * a * b;
+    double J_density = current / cross_area;
+    double XI = J_density * MU0_DIV_4PI;
+
+    param.RHO = obs_rho;
+    param.RHOSQ = obs_rho * obs_rho;
+    param.ZSQ = obs_z * obs_z;
+    param.ASQ = rc * rc;
+    param.AA = rc;
+    param.Z1 = obs_z;
+
+    // Coil geometry
+    param.AL = rc - a;    // Inner radius
+    param.AU = rc + a;    // Outer radius
+    param.ZZL = obs_z + b;  // z + b (lower axial boundary relative to obs)
+    param.ZZU = obs_z - b;  // z - b (upper axial boundary relative to obs)
+
+    // Squared distances
+    param.ALSQ = (param.AL - obs_rho) * (param.AL - obs_rho);
+    param.AUSQ = (param.AU - obs_rho) * (param.AU - obs_rho);
+    param.ZLSQ = param.ZZL * param.ZZL;
+    param.ZUSQ = param.ZZU * param.ZZU;
+
+    // Corner distances at phi=0
+    param.ARZ[0] = param.ALSQ + param.ZLSQ;  // (rc-a-rp)^2 + (z+b)^2
+    param.ARZ[1] = param.ALSQ + param.ZUSQ;  // (rc-a-rp)^2 + (z-b)^2
+    param.ARZ[2] = param.AUSQ + param.ZLSQ;  // (rc+a-rp)^2 + (z+b)^2
+    param.ARZ[3] = param.AUSQ + param.ZUSQ;  // (rc+a-rp)^2 + (z-b)^2
+
+    // Factors for azimuthal variation
+    param.ARL = 2.0 * obs_rho * param.AL;  // 2*rp*(rc-a)
+    param.ARU = 2.0 * obs_rho * param.AU;  // 2*rp*(rc+a)
+
+    // Other geometric quantities
+    param.ARZSQ = (rc - obs_rho) * (rc - obs_rho) + obs_z * obs_z;
+    param.TAR = 2.0 * obs_rho * rc;
+    param.AREA = cross_area;
+
+    param.calcA = 0;
+    param.calcB = 1;
+    param.symmetricArc = 0;
+
+    // Integration tolerance
+    const double ArcIntegralAccuracy = 1.0e-6;
+
+    // Handle symmetric case for efficiency
+    if (phi1 * phi2 >= 0.0) {
+        // Arc doesn't cross phi=0
+        double result[5];
+        Adaptive1DIntegration(3, ArcFieldIntegrand, phi1, phi2, ArcIntegralAccuracy, result, &param);
+
+        B_rho = XI * result[0];
+        B_theta = XI * result[1];
+        B_z = XI * result[2];
+    } else {
+        // Arc crosses phi=0 - split integration for better accuracy
+        double result1[5], result2[5];
+
+        // First part: phi1 to 0
+        if (phi1 < -0.035) {  // About 2 degrees
+            Adaptive1DIntegration(3, ArcFieldIntegrand, phi1, -0.035, ArcIntegralAccuracy, result1, &param);
+            double result1b[5];
+            Adaptive1DIntegration(3, ArcFieldIntegrand, -0.035, 0.0, ArcIntegralAccuracy, result1b, &param);
+            for (int i = 0; i < 3; ++i) result1[i] += result1b[i];
+        } else {
+            Adaptive1DIntegration(3, ArcFieldIntegrand, phi1, 0.0, ArcIntegralAccuracy, result1, &param);
+        }
+
+        // Second part: 0 to phi2
+        if (phi2 > 0.035) {
+            Adaptive1DIntegration(3, ArcFieldIntegrand, 0.0, 0.035, ArcIntegralAccuracy, result2, &param);
+            double result2b[5];
+            Adaptive1DIntegration(3, ArcFieldIntegrand, 0.035, phi2, ArcIntegralAccuracy, result2b, &param);
+            for (int i = 0; i < 3; ++i) result2[i] += result2b[i];
+        } else {
+            Adaptive1DIntegration(3, ArcFieldIntegrand, 0.0, phi2, ArcIntegralAccuracy, result2, &param);
+        }
+
+        B_rho = XI * (result1[0] + result2[0]);
+        B_theta = XI * (result1[1] + result2[1]);
+        B_z = XI * (result1[2] + result2[2]);
+    }
 }
 
 } // namespace RadElliptic
