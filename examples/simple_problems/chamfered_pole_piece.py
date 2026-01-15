@@ -80,9 +80,6 @@ g1 = rad.ObjMltExtRtg([k1, k2, k3], magnetization)
 print(f"\nMagnet object created: ID = {g1}")
 print("Note: ObjMltExtRtg creates a single element (no subdivision)")
 
-# Set drawing attributes (blue color)
-rad.ObjDrwAtr(g1, [0, 0, 1], 0.001)
-
 # Calculate magnetic field at various points
 print("\n" + "=" * 70)
 print("Magnetic Field Calculation")

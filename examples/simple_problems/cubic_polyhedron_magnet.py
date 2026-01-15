@@ -53,9 +53,6 @@ print(f"  Size: {2*size} x {2*size} x {2*size} mm")
 print(f"  Magnetization: {magnetization} T")
 print(f"  Vertices: {len(vertices)}")
 
-# Set drawing attributes (blue color)
-rad.ObjDrwAtr(g1, [0, 0, 1], 0.001)
-
 # Calculate magnetic field at various points
 print("\n" + "=" * 70)
 print("Magnetic Field Calculation")
