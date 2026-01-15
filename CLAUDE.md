@@ -42,52 +42,71 @@ double G = 1.0 / (4.0 * M_PI * r);  // NOT exp(-jkr) / (4*pi*r)
 
 ---
 
-## No Reinventing the Wheel Policy (2026-01-16)
+## Development Strategy: Complement NGSolve (2026-01-16)
 
-### Use Established Libraries Instead of Custom C++ Implementation
+### Radia Focuses on What NGSolve Cannot Do Well
 
-**CRITICAL**: Do NOT implement algorithms from scratch when well-established, validated libraries exist.
+**CRITICAL**: Radia's role is to **complement NGSolve**, not compete with it. Focus development on areas where NGSolve (FEM) is weak.
 
-**Policy**:
-- **Use existing libraries** for complex numerical algorithms
-- **Focus Radia C++ development** on MMM core and integration interfaces
-- **Python wrappers** are acceptable for prototyping and glue code
+**Strategic Positioning**:
 
-**Specific Decisions**:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Electromagnetic Analysis                      │
+├─────────────────────────────────────────────────────────────────┤
+│  NGSolve (FEM)              │  Radia (BEM/Integral Methods)     │
+│  ───────────────────────────│──────────────────────────────────│
+│  OK: Bounded domains        │  OK: Unbounded domains (open BC) │
+│  OK: Complex geometry       │  OK: Permanent magnets (no mesh) │
+│  OK: Nonlinear materials    │  OK: Thin conductors (PEEC)      │
+│  OK: Transient analysis     │  OK: SPICE circuit extraction    │
+│  OK: Multi-physics coupling │  OK: Model order reduction (MOR) │
+│  WEAK: Open boundary (PML)  │  OK: Natural open boundary       │
+│  WEAK: Thin structures      │  OK: Surface impedance (SIBC)    │
+│  WEAK: Circuit parameters   │  OK: L, R, C, M extraction       │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-| Component | Decision | Library/Approach |
-|-----------|----------|------------------|
-| **PEEC Solver** | Use external | PAMELA (established PEEC library) |
-| **H-matrix/ACA** | Use external | HACApK (already integrated) |
-| **BLAS/LAPACK** | Use external | Intel MKL |
-| **FEM** | Use external | NGSolve |
-| **Model Order Reduction** | Python | scipy + numpy (sufficient performance) |
-| **Verilog-A Generation** | Python | String templates (no C++ needed) |
+**Radia Core Competencies** (where NGSolve is weak):
 
-**Radia Core Competencies** (keep in C++):
-1. **MMM (Magnetic Moment Method)** - Radia's unique strength
-2. **MSC (Magnetic Surface Charge)** - Hexahedral/tetrahedral elements
-3. **Field computation** - B, H, A, Phi calculations
-4. **Geometry handling** - ObjRecMag, ObjHexahedron, ObjTetrahedron
+| Capability | Why NGSolve Struggles | Radia's Approach |
+|------------|----------------------|------------------|
+| **Open boundaries** | Requires PML/ABC, adds DOFs | Natural with BEM |
+| **Permanent magnets** | Needs volume mesh | Analytical (ObjRecMag) |
+| **Thin conductors** | Mesh aspect ratio issues | PEEC (surface only) |
+| **Circuit extraction** | Post-processing needed | Direct L,R,C,M output |
+| **SPICE export** | Not supported | Verilog-A generation |
+| **Model order reduction** | Manual implementation | PRIMA/Lanczos built-in |
 
-**Do NOT Implement in C++**:
-- PEEC partial inductance/capacitance extraction (use PAMELA)
-- General H-matrix algorithms (use HACApK)
-- Vector Fitting / rational approximation (use Python scipy)
-- Lanczos / PRIMA algorithms (use Python numpy)
-- Symbolic formula extraction (use PyKAN)
+### No Reinventing the Wheel
+
+**Policy**: Use established libraries, do NOT implement from scratch.
+
+| Component | Decision | Library |
+|-----------|----------|---------|
+| **PEEC Solver** | External | PAMELA |
+| **H-matrix/ACA** | External | HACApK (integrated) |
+| **BLAS/LAPACK** | External | Intel MKL |
+| **FEM** | External | NGSolve |
+| **MOR** | Python | scipy + numpy |
+
+**Radia C++ Core** (maintain and enhance):
+1. **MMM** - Magnetic Moment Method for permanent magnets and soft iron
+2. **MSC** - Magnetic Surface Charge for hexahedra/tetrahedra
+3. **Field computation** - B, H, A, Phi in unbounded domains
+4. **NGSolve integration** - RadiaField CoefficientFunction
+
+**Do NOT Implement**:
+- FEM solvers (use NGSolve)
+- General sparse solvers (use MKL/MUMPS)
+- Full-wave BEM (use ngbem for high frequency)
+- CAD geometry kernels (use OpenCASCADE via NGSolve)
+- PEEC from scratch (use PAMELA)
 
 **Rationale**:
-1. **Validation**: Established libraries have years of testing and bug fixes
-2. **Performance**: Optimized by experts, often better than naive implementations
-3. **Maintenance**: Community maintains the library, not Radia team
-4. **Development Speed**: Focus on integration, not reinvention
-5. **Risk Reduction**: Fewer bugs from untested custom code
-
-**Exception**: Only implement in C++ if:
-- No suitable library exists
-- Performance is critical AND Python is proven bottleneck
-- Licensing prevents use of existing library
+1. NGSolve already excels at FEM - don't duplicate
+2. Focus resources on unique value: BEM + circuit extraction
+3. Integration > reinvention
 
 ---
 
