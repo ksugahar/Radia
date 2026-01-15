@@ -230,24 +230,38 @@ Incorporate well-known analytical solutions as Radia field sources. These provid
 | Helmholtz coil pair | Coil pair | TODO | `analytical_sources.py` |
 | Dipole field | Point | OK | `rad.Fld()` |
 
-### CLN (Continued Fraction) Representations
+### CLN (Continued Fraction / Ladder Network) Representations
 
-Analytical solutions can be expressed in CLN (Continued Fraction / Ladder Network) form for SPICE simulation:
+**Background**: MoM-CLN approach converts frequency-dependent integral equations into SPICE-compatible ladder networks. This was explored in:
+
+> Compumag 2019 Paris submission (#267): "MoM-CLN for electromagnetic analysis"
+
+Analytical solutions can be expressed in CLN form for SPICE simulation:
 
 ```
-Cylinder magnetic field -> CLN representation
+Frequency-dependent EM problem
+    |
+    v
+Method of Moments (MoM) formulation
+    |
+    v
+Lanczos tridiagonalization (PRIMA)
     |
     v
 [R1]--[L1]--[R2]--[L2]--...--[Rn]--[Ln]
     |
-    SPICE netlist
+    v
+SPICE netlist / Verilog-A
 ```
+
+**Key insight**: CLN is mathematically equivalent to PRIMA Lanczos reduction. The tridiagonal Lanczos matrix directly maps to a series RL ladder network.
 
 **Target formulas for CLN**:
 - [ ] Cylindrical conductor skin effect (Bessel functions -> CLN)
 - [ ] Spherical harmonic field expansion (NMR shimming)
 - [ ] Eddy current in conducting sphere
 - [ ] Mutual inductance between coaxial circles (elliptic integrals)
+- [ ] MoM interaction matrix -> CLN via PRIMA
 
 ### Implementation Approach
 
