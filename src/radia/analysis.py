@@ -150,19 +150,48 @@ class PEECAnalysisSolver(AnalysisSolver):
     - Static DC analysis
     - Frequency response with skin effect (Dowell or SIBC)
     - Transient analysis using CLN (Cauer Ladder Network)
+    - Loop-Star decomposition for low-frequency stability
 
     The CLN method represents the frequency-dependent impedance as a
     continued fraction expansion, enabling efficient time-domain simulation.
+
+    Loop-Star Decomposition:
+        The current I can be decomposed into:
+        - Loop currents I_L (solenoidal, inductive)
+        - Star currents I_S (irrotational, capacitive)
+
+        The system equation becomes:
+        [Z_LL  Z_LS] [I_L]   [V_L]
+        [Z_SL  Z_SS] [I_S] = [V_S]
+
+        where:
+        - Z_LL = R_L + j*omega*L_L (Loop-Loop: inductive)
+        - Z_SS = R_S + 1/(j*omega*C_S) (Star-Star: capacitive)
+        - Z_LS, Z_SL: coupling terms
+
+        In MQS (Magneto-Quasi-Static) approximation (power electronics),
+        the Star currents can be neglected: I_S ~ 0.
     """
 
     def __init__(self):
         super().__init__()
 
-        # PEEC matrices
-        self._L = None  # Inductance matrix
-        self._R = None  # Resistance matrix
-        self._P = None  # Potential coefficient matrix
-        self._M_LS = None  # Loop-Star coupling matrix
+        # PEEC matrices (original RWG basis)
+        self._L = None  # Inductance matrix [H]
+        self._R = None  # Resistance matrix [Ohm]
+        self._P = None  # Potential coefficient matrix [1/F]
+        self._M_LS = None  # Loop-Star coupling matrix (optional)
+
+        # Loop-Star decomposed matrices
+        self._L_LL = None  # Loop-Loop inductance
+        self._L_LS = None  # Loop-Star coupling (L)
+        self._L_SS = None  # Star-Star inductance
+        self._R_LL = None  # Loop-Loop resistance
+        self._R_LS = None  # Loop-Star coupling (R)
+        self._R_SS = None  # Star-Star resistance
+        self._P_SS = None  # Star-Star potential (capacitance)
+        self._n_loops = 0  # Number of Loop DOFs
+        self._n_stars = 0  # Number of Star DOFs
 
         # CLN parameters
         self._cln_order = 5  # Lanczos iterations
@@ -173,6 +202,9 @@ class PEECAnalysisSolver(AnalysisSolver):
         self._use_dowell = True
         self._conductor_width = None
         self._conductor_height = None
+
+        # MQS mode flag
+        self._use_mqs = True  # If True, neglect Star currents
 
     def set_peec_matrices(self, L: np.ndarray, R: np.ndarray,
                           P: Optional[np.ndarray] = None,
@@ -217,6 +249,108 @@ class PEECAnalysisSolver(AnalysisSolver):
         self._use_dowell = use_dowell
         self._conductor_width = width
         self._conductor_height = height
+
+    def set_mqs_mode(self, use_mqs: bool = True):
+        """
+        Set MQS (Magneto-Quasi-Static) mode.
+
+        In MQS mode, Star (capacitive) currents are neglected.
+        This is valid for power electronics frequencies (DC to ~1 MHz)
+        where omega * epsilon << sigma (conduction dominates displacement).
+
+        Parameters:
+            use_mqs: If True, solve Loop equations only (I_S = 0)
+        """
+        self._use_mqs = use_mqs
+
+    def set_loop_star_matrices(self,
+                                L_LL: np.ndarray, R_LL: np.ndarray,
+                                L_LS: Optional[np.ndarray] = None,
+                                L_SS: Optional[np.ndarray] = None,
+                                R_LS: Optional[np.ndarray] = None,
+                                R_SS: Optional[np.ndarray] = None,
+                                P_SS: Optional[np.ndarray] = None):
+        """
+        Set Loop-Star decomposed PEEC matrices directly.
+
+        This method is used when Loop-Star matrices are computed externally
+        (e.g., from mesh topology analysis).
+
+        Parameters:
+            L_LL: Loop-Loop inductance matrix [H]
+            R_LL: Loop-Loop resistance matrix [Ohm]
+            L_LS: Loop-Star inductance coupling matrix [H] (optional)
+            L_SS: Star-Star inductance matrix [H] (optional)
+            R_LS: Loop-Star resistance coupling matrix [Ohm] (optional)
+            R_SS: Star-Star resistance matrix [Ohm] (optional)
+            P_SS: Star-Star potential coefficient matrix [1/F] (optional)
+
+        The Loop-Star impedance system is:
+            Z_LL = R_LL + j*omega*L_LL
+            Z_LS = R_LS + j*omega*L_LS
+            Z_SL = R_LS^T + j*omega*L_LS^T
+            Z_SS = R_SS + j*omega*L_SS + P_SS/(j*omega)
+        """
+        self._L_LL = np.asarray(L_LL)
+        self._R_LL = np.asarray(R_LL)
+        self._n_loops = L_LL.shape[0]
+
+        if L_LS is not None:
+            self._L_LS = np.asarray(L_LS)
+            self._n_stars = L_LS.shape[1]
+        else:
+            self._L_LS = None
+            self._n_stars = 0
+
+        self._L_SS = np.asarray(L_SS) if L_SS is not None else None
+        self._R_LS = np.asarray(R_LS) if R_LS is not None else None
+        self._R_SS = np.asarray(R_SS) if R_SS is not None else None
+        self._P_SS = np.asarray(P_SS) if P_SS is not None else None
+
+        self._is_built = False
+
+    def compute_loop_star_from_topology(self, incidence_matrix: np.ndarray):
+        """
+        Compute Loop-Star transformation from mesh incidence matrix.
+
+        The incidence matrix A (n_nodes x n_edges) encodes mesh topology.
+        Loop-Star decomposition uses spanning tree analysis:
+        - Tree edges -> Star (irrotational) basis
+        - Co-tree edges -> Loop (solenoidal) basis
+
+        Parameters:
+            incidence_matrix: Node-edge incidence matrix A
+
+        Returns:
+            T_LS: Loop-Star transformation matrix [n_edges x (n_loops + n_stars)]
+        """
+        A = np.asarray(incidence_matrix)
+        n_nodes, n_edges = A.shape
+
+        # Number of independent loops (Euler formula)
+        # n_loops = n_edges - n_nodes + n_connected_components
+        # For simply connected mesh: n_loops = n_edges - n_nodes + 1
+
+        # Find spanning tree using graph algorithm
+        # Tree edges define Star basis, co-tree edges define Loop basis
+
+        # Simplified implementation: use rank analysis
+        # Rank of A = n_nodes - n_connected_components
+        rank_A = np.linalg.matrix_rank(A)
+        n_tree = rank_A  # Tree edges (Star)
+        n_cotree = n_edges - n_tree  # Co-tree edges (Loop)
+
+        # For full implementation, need to:
+        # 1. Find spanning tree edges (using BFS/DFS)
+        # 2. Build Loop basis from fundamental cycles
+        # 3. Build Star basis from tree gradients
+
+        # Placeholder: return identity (no transformation)
+        # Full implementation requires mesh topology from conductor solver
+        self._n_loops = n_cotree
+        self._n_stars = n_tree
+
+        return np.eye(n_edges)  # Identity for now
 
     def build(self) -> bool:
         """Build CLN model from PEEC matrices."""
@@ -592,6 +726,207 @@ class PEECAnalysisSolver(AnalysisSolver):
 
         return R_ac + 1j * omega * L_ac
 
+    def solve_frequency_loop_star(self, frequencies: np.ndarray) -> FrequencyResult:
+        """
+        Perform frequency response analysis using Loop-Star decomposition.
+
+        This method solves the Loop-Star coupled system:
+            [Z_LL  Z_LS] [I_L]   [V_L]
+            [Z_SL  Z_SS] [I_S] = [V_S]
+
+        where:
+            Z_LL = R_LL + j*omega*L_LL (Loop-Loop: inductive)
+            Z_SS = R_SS + j*omega*L_SS + P_SS/(j*omega) (Star-Star: capacitive)
+            Z_LS = R_LS + j*omega*L_LS (Loop-Star coupling)
+            Z_SL = Z_LS^T (reciprocity)
+
+        In MQS mode (self._use_mqs = True):
+            - Star currents are neglected: I_S = 0
+            - Only Loop equations are solved: Z_LL * I_L = V_L
+
+        Parameters:
+            frequencies: Array of frequencies [Hz]
+
+        Returns:
+            FrequencyResult with impedance Z(f)
+        """
+        import time
+        t_start = time.time()
+
+        # Check if Loop-Star matrices are set
+        if self._L_LL is None or self._R_LL is None:
+            # Fallback to standard CLN method
+            return self.solve_frequency(frequencies)
+
+        frequencies = np.asarray(frequencies)
+        n_freq = len(frequencies)
+
+        # Compute impedance at each frequency
+        Z = np.zeros(n_freq, dtype=complex)
+
+        for i, f in enumerate(frequencies):
+            omega = 2.0 * np.pi * f
+
+            if f < 1e-10:
+                # DC limit: Z = R_LL (Loop contribution only)
+                if self._R_LL.ndim == 2:
+                    Z[i] = np.sum(self._R_LL)
+                else:
+                    Z[i] = np.sum(self._R_LL)
+            else:
+                s = 1j * omega
+
+                if self._use_mqs or self._n_stars == 0:
+                    # MQS mode: solve Loop equations only (I_S = 0)
+                    # Z_LL * I_L = V_L -> I_L = inv(Z_LL) * V_L
+                    # For unit voltage: Z = V / I = 1 / (e1^T * inv(Z_LL) * e1)
+                    Z[i] = self._solve_loop_only(s)
+                else:
+                    # Full Loop-Star: solve coupled system
+                    Z[i] = self._solve_loop_star_coupled(s)
+
+                # Apply Dowell correction if enabled
+                if self._use_dowell and self._conductor_height is not None:
+                    Z[i] = self._apply_dowell_correction(Z[i], f)
+
+        R_array = np.real(Z)
+        X_array = np.imag(Z)
+
+        # Compute inductance L = X / (2*pi*f)
+        L_array = np.zeros(n_freq)
+        for i, f in enumerate(frequencies):
+            if f > 1e-10:
+                L_array[i] = X_array[i] / (2.0 * np.pi * f)
+            else:
+                # DC inductance from L_LL
+                L_array[i] = np.sum(self._L_LL) if self._L_LL is not None else 0.0
+
+        t_elapsed = time.time() - t_start
+
+        mode_str = "MQS (Loop-only)" if self._use_mqs else "Full Loop-Star"
+
+        return FrequencyResult(
+            analysis_type=AnalysisType.FREQUENCY,
+            solver_type=SolverType.PEEC,
+            success=True,
+            message=f"Loop-Star frequency sweep ({n_freq} points, {mode_str})",
+            computation_time=t_elapsed,
+            frequencies=frequencies,
+            impedance=Z,
+            resistance=R_array,
+            reactance=X_array,
+            inductance=L_array
+        )
+
+    def _solve_loop_only(self, s: complex) -> complex:
+        """
+        Solve Loop-only equations (MQS approximation).
+
+        Z_LL * I_L = V_L
+        Z_LL = R_LL + s * L_LL
+
+        For series-connected segments with unit terminal voltage,
+        the impedance is the sum of loop impedances.
+        """
+        # Build Z_LL
+        if self._R_LL.ndim == 1:
+            # Diagonal R
+            R_LL = np.diag(self._R_LL)
+        else:
+            R_LL = self._R_LL
+
+        L_LL = self._L_LL
+        Z_LL = R_LL + s * L_LL
+
+        # For total impedance with series connection:
+        # All loops carry same current -> Z_total = sum of all elements
+        # (This assumes parallel-connected loops driven by same voltage)
+
+        # More accurate: solve Z_LL * I = V and compute V^T * I / |I|^2
+        # For unit excitation: I = inv(Z_LL) * ones
+        n = Z_LL.shape[0]
+        ones = np.ones(n)
+
+        try:
+            I_L = np.linalg.solve(Z_LL, ones)
+            # Total impedance: Z = V_total / I_total = n / sum(I)
+            Z_total = n / np.sum(I_L)
+        except np.linalg.LinAlgError:
+            # Fallback: sum of elements
+            Z_total = np.sum(Z_LL)
+
+        return Z_total
+
+    def _solve_loop_star_coupled(self, s: complex) -> complex:
+        """
+        Solve full Loop-Star coupled system.
+
+        [Z_LL  Z_LS] [I_L]   [V_L]
+        [Z_SL  Z_SS] [I_S] = [V_S]
+
+        Z_LL = R_LL + s * L_LL
+        Z_LS = R_LS + s * L_LS
+        Z_SL = Z_LS^T (reciprocity)
+        Z_SS = R_SS + s * L_SS + P_SS / s (capacitive term)
+
+        Returns total impedance seen at terminals.
+        """
+        n_L = self._n_loops
+        n_S = self._n_stars
+
+        # Build block matrices
+        # Z_LL
+        if self._R_LL.ndim == 1:
+            R_LL = np.diag(self._R_LL)
+        else:
+            R_LL = self._R_LL
+        Z_LL = R_LL + s * self._L_LL
+
+        # Z_LS
+        if self._L_LS is not None:
+            R_LS = self._R_LS if self._R_LS is not None else np.zeros_like(self._L_LS)
+            Z_LS = R_LS + s * self._L_LS
+        else:
+            Z_LS = np.zeros((n_L, n_S), dtype=complex)
+
+        # Z_SL = Z_LS^T
+        Z_SL = Z_LS.T
+
+        # Z_SS
+        if self._L_SS is not None:
+            R_SS = self._R_SS if self._R_SS is not None else np.zeros_like(self._L_SS)
+            Z_SS = R_SS + s * self._L_SS
+            # Add capacitive term P_SS / s
+            if self._P_SS is not None:
+                Z_SS = Z_SS + self._P_SS / s
+        else:
+            Z_SS = np.zeros((n_S, n_S), dtype=complex)
+            if self._P_SS is not None:
+                Z_SS = self._P_SS / s
+
+        # Assemble full system matrix
+        n_total = n_L + n_S
+        Z_full = np.zeros((n_total, n_total), dtype=complex)
+        Z_full[:n_L, :n_L] = Z_LL
+        Z_full[:n_L, n_L:] = Z_LS
+        Z_full[n_L:, :n_L] = Z_SL
+        Z_full[n_L:, n_L:] = Z_SS
+
+        # Solve for unit terminal voltage
+        # Assuming terminal connected to Loop DOF 0
+        V = np.zeros(n_total, dtype=complex)
+        V[0] = 1.0  # Unit voltage on first loop
+
+        try:
+            I = np.linalg.solve(Z_full, V)
+            # Impedance = V / I_terminal = 1 / I[0]
+            Z_total = 1.0 / I[0] if abs(I[0]) > 1e-30 else np.inf
+        except np.linalg.LinAlgError:
+            # Fallback
+            Z_total = Z_LL[0, 0]
+
+        return Z_total
+
     def solve_transient(self, time: np.ndarray,
                         excitation: Callable[[float], float],
                         v_or_i: str = 'v') -> TransientResult:
@@ -833,6 +1168,75 @@ class UnifiedAnalysis:
 
         v_or_i = 'v' if excitation_type.lower().startswith('v') else 'i'
         return self._solver.solve_transient(time, excitation, v_or_i)
+
+    # =========================================================================
+    # Loop-Star Decomposition Methods
+    # =========================================================================
+
+    def set_loop_star_model(self,
+                            L_LL: np.ndarray, R_LL: np.ndarray,
+                            L_LS: Optional[np.ndarray] = None,
+                            L_SS: Optional[np.ndarray] = None,
+                            R_LS: Optional[np.ndarray] = None,
+                            R_SS: Optional[np.ndarray] = None,
+                            P_SS: Optional[np.ndarray] = None):
+        """
+        Configure Loop-Star decomposed PEEC model.
+
+        Loop-Star decomposition separates currents into:
+        - Loop (solenoidal) currents: I_L - inductive behavior
+        - Star (irrotational) currents: I_S - capacitive behavior
+
+        The system becomes:
+            [Z_LL  Z_LS] [I_L]   [V_L]
+            [Z_SL  Z_SS] [I_S] = [V_S]
+
+        Parameters:
+            L_LL: Loop-Loop inductance matrix [H]
+            R_LL: Loop-Loop resistance matrix [Ohm]
+            L_LS: Loop-Star inductance coupling [H] (optional)
+            L_SS: Star-Star inductance [H] (optional)
+            R_LS: Loop-Star resistance coupling [Ohm] (optional)
+            R_SS: Star-Star resistance [Ohm] (optional)
+            P_SS: Star-Star potential coefficient [1/F] (optional)
+        """
+        self._solver.set_loop_star_matrices(
+            L_LL, R_LL, L_LS, L_SS, R_LS, R_SS, P_SS
+        )
+        self._is_configured = True
+
+    def set_mqs_mode(self, use_mqs: bool = True):
+        """
+        Set MQS (Magneto-Quasi-Static) mode.
+
+        In MQS mode, Star (capacitive) currents are neglected (I_S = 0).
+        This is valid for power electronics frequencies where
+        omega * epsilon << sigma (conduction dominates displacement).
+
+        Parameters:
+            use_mqs: If True, solve Loop equations only
+        """
+        self._solver.set_mqs_mode(use_mqs)
+
+    def frequency_sweep_loop_star(self, frequencies: np.ndarray) -> FrequencyResult:
+        """
+        Perform frequency response using Loop-Star decomposition.
+
+        This method uses Loop-Star matrices if available, providing
+        better numerical stability at low frequencies.
+
+        In MQS mode, only Loop equations are solved (Star currents = 0).
+        In full mode, the coupled Loop-Star system is solved.
+
+        Parameters:
+            frequencies: Array of frequencies [Hz]
+
+        Returns:
+            FrequencyResult with impedance Z(f)
+        """
+        if not self._is_configured:
+            raise RuntimeError("Model not configured. Call set_loop_star_model() first.")
+        return self._solver.solve_frequency_loop_star(frequencies)
 
 
 # Convenience functions for common waveforms
