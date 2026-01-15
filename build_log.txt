@@ -24,7 +24,7 @@ CMake Warning (dev) at C:/Program Files/Python312/Lib/site-packages/ngsolve/cmak
   the cmake_policy command to set the policy and suppress this warning.
 
 Call Stack (most recent call first):
-  CMakeLists.txt:189 (add_ngsolve_python_module)
+  CMakeLists.txt:195 (add_ngsolve_python_module)
 This warning is for project developers.  Use -Wno-dev to suppress it.
 
 CMake Warning (dev) at C:/Program Files/Python312/Lib/site-packages/ngsolve/cmake/NGSolveConfig.cmake:80 (find_package):
@@ -33,7 +33,7 @@ CMake Warning (dev) at C:/Program Files/Python312/Lib/site-packages/ngsolve/cmak
   the cmake_policy command to set the policy and suppress this warning.
 
 Call Stack (most recent call first):
-  CMakeLists.txt:189 (add_ngsolve_python_module)
+  CMakeLists.txt:195 (add_ngsolve_python_module)
 This warning is for project developers.  Use -Wno-dev to suppress it.
 
 -- Using Intel MKL DFTI for FFT operations (radia_ngsolve)
@@ -48,19 +48,101 @@ This warning is for project developers.  Use -Wno-dev to suppress it.
 -- OpenMP enabled for radia (Intel OpenMP: C:/Program Files (x86)/Intel/oneAPI/compiler/latest/lib/libiomp5md.lib)
 -- Using MSVC compiler with Intel MKL for radia
 -- radia module configured
--- Configuring done (0.4s)
--- Generating done (0.9s)
+-- Using Intel MKL for peec_matrices: C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/mkl_rt.lib
+-- OpenMP enabled for peec_matrices (Intel OpenMP)
+-- Using MSVC compiler for peec_matrices
+-- peec_matrices module configured
+-- Using Intel MKL for cln_core: C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/mkl_rt.lib
+-- OpenMP enabled for cln_core (Intel OpenMP)
+-- Using MSVC compiler for cln_core
+-- cln_core module configured
+-- Using Intel MKL for mmm_core: C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/mkl_rt.lib
+-- OpenMP enabled for mmm_core (Intel OpenMP)
+-- Using MSVC compiler for mmm_core
+-- mmm_core module configured
+-- Configuring done (0.3s)
+-- Generating done (1.0s)
 -- Build files have been written to: S:/Radia/01_GitHub/build-msvc
 
 ========================================
   Building radia...
 ========================================
 
-[1/2] Building CXX object CMakeFiles\radia.dir\src\radia\radpy_pyapi.cpp.obj
-[2/2] Linking CXX shared module radia.cp312-win_amd64.pyd
+[1/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_point_classify.cpp.obj
+[2/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_transform_impl.cpp.obj
+[3/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_dipole_collect.cpp.obj
+[4/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_field_unified.cpp.obj
+[5/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_field_compute.cpp.obj
+[6/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_arc_current.cpp.obj
+[7/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_extruded_polygon.cpp.obj
+[8/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_obj_subdivision.cpp.obj
+[9/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_obj_creation.cpp.obj
+[10/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_material_impl.cpp.obj
+[11/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_filament.cpp.obj
+[12/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_geometry_3d.cpp.obj
+[13/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_planar_2d_part2.cpp.obj
+[14/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_group.cpp.obj
+[15/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_graphics_3d.cpp.obj
+[16/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_planar_2d_part1.cpp.obj
+[17/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_rectangular_block.cpp.obj
+[18/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_c_interface.cpp.obj
+[19/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_relaxation_methods.cpp.obj
+[20/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_subdivided_arc_current.cpp.obj
+[21/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_subdivided_extruded_polygon.cpp.obj
+[22/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_subdivided_polyhedron.cpp.obj
+[23/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_subdivided_rectangle.cpp.obj
+[24/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_serialization.cpp.obj
+[25/27] Building CXX object CMakeFiles\radia.dir\src\core\rad_polyhedron.cpp.obj
+[26/27] Building CXX object CMakeFiles\radia.dir\src\lib\rad_peec_mmm_api.cpp.obj
+[27/27] Linking CXX shared module radia.cp312-win_amd64.pyd
 
 ========================================
   Building radia_ngsolve...
+========================================
+
+[1/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_dipole_collect.cpp.obj
+[2/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_point_classify.cpp.obj
+[3/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_arc_current.cpp.obj
+[4/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_field_unified.cpp.obj
+[5/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_obj_subdivision.cpp.obj
+[6/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_transform_impl.cpp.obj
+[7/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_obj_creation.cpp.obj
+[8/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_filament.cpp.obj
+[9/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_field_compute.cpp.obj
+[10/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_material_impl.cpp.obj
+[11/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_geometry_3d.cpp.obj
+[12/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_graphics_3d.cpp.obj
+[13/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_extruded_polygon.cpp.obj
+[14/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_planar_2d_part2.cpp.obj
+[15/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_subdivided_arc_current.cpp.obj
+[16/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_group.cpp.obj
+[17/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_c_interface.cpp.obj
+[18/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_planar_2d_part1.cpp.obj
+[19/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_subdivided_polyhedron.cpp.obj
+[20/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_relaxation_methods.cpp.obj
+[21/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_rectangular_block.cpp.obj
+[22/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_subdivided_extruded_polygon.cpp.obj
+[23/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_serialization.cpp.obj
+[24/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\lib\rad_peec_mmm_api.cpp.obj
+[25/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_polyhedron.cpp.obj
+[26/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\core\rad_subdivided_rectangle.cpp.obj
+[27/28] Building CXX object CMakeFiles\radia_ngsolve.dir\src\radia\radia_ngsolve.cpp.obj
+[28/28] Linking CXX shared library radia_ngsolve.pyd
+
+========================================
+  Building peec_matrices...
+========================================
+
+ninja: no work to do.
+
+========================================
+  Building cln_core...
+========================================
+
+ninja: no work to do.
+
+========================================
+  Building mmm_core...
 ========================================
 
 ninja: no work to do.

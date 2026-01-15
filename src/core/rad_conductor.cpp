@@ -31,6 +31,9 @@ radTConductor::radTConductor()
     , excitationType_(0)
     , excitationValue_(0, 0)
     , totalCurrent_(0, 0)
+    , crossSectionType_("")
+    , wireWidth_(0)
+    , wireHeight_(0)
 {
 }
 
@@ -58,7 +61,8 @@ double radTConductor::GetSkinDepth() const {
         // Following Karl Hollaus's formula from surface_impedence_eff_Kengo.py:58
         return std::sqrt(2.0 / (omega * MU_0 * mu_r_ * conductivity_));
     }
-    return 1e-3;  // Default 1mm for DC
+    // DC: skin depth is effectively infinite (current fills entire cross-section)
+    return 1e10;  // Return very large value for DC
 }
 
 std::complex<double> radTConductor::GetSurfaceImpedance() const {
@@ -289,9 +293,15 @@ void radTConductor::CreateWire(const std::vector<TVector3d>& path,
     // Store wire centerline path for Biot-Savart field computation
     wireCenterPath_ = path;
 
+    // Store cross-section parameters for impedance calculation
+    crossSectionType_ = crossSection;
+    wireWidth_ = width;
+    wireHeight_ = height;
+
     bool isCircular = (crossSection == "circular");
     if (height <= 0 && !isCircular) {
         height = width;  // Square cross-section
+        wireHeight_ = height;
     }
 
     // Auto-compute panels along length
@@ -1077,19 +1087,52 @@ void radTConductorSolver::Solve() {
         totalArea += p.area;
     }
 
-    // Estimate wire radius from panel area / perimeter
-    // For a cylinder: Area = 2*pi*r*L, so r ~ Area/(2*pi*L)
+    // Compute path length from wire centerline (correct method)
+    // Use wireCenterPath_ if available (from CreateWire/CreateLoop)
     double pathLength = 0;
-    for (size_t i = 1; i < panels.size(); ++i) {
-        TVector3d d = panels[i].center - panels[i-1].center;
-        pathLength += d.Abs();
+    const std::vector<TVector3d>& centerPath = cond->GetWireCenterPath();
+    if (!centerPath.empty() && centerPath.size() > 1) {
+        // Use wire centerline path for accurate path length
+        for (size_t i = 1; i < centerPath.size(); ++i) {
+            TVector3d d;
+            d.x = centerPath[i].x - centerPath[i-1].x;
+            d.y = centerPath[i].y - centerPath[i-1].y;
+            d.z = centerPath[i].z - centerPath[i-1].z;
+            pathLength += d.Abs();
+        }
+    } else {
+        // Fallback: estimate from bounding box
+        pathLength = std::max({Lx, Ly, Lz});
     }
     if (pathLength < 1e-10) {
         pathLength = std::max({Lx, Ly, Lz});
     }
 
-    double wireRadius = totalArea / (2.0 * RadConst::PI * pathLength);
-    if (wireRadius < 1e-10) wireRadius = 1e-3;  // default 1mm
+    // Compute wire cross-section area and equivalent radius
+    double wireCrossSection;
+    double wireRadius;
+    std::string crossSectionType = cond->GetCrossSectionType();
+    double wireWidth = cond->GetWireWidth();
+    double wireHeight = cond->GetWireHeight();
+
+    if (!crossSectionType.empty() && wireWidth > 0) {
+        // Use stored cross-section parameters
+        if (crossSectionType == "circular") {
+            wireRadius = wireWidth / 2.0;
+            wireCrossSection = RadConst::PI * wireRadius * wireRadius;
+        } else {
+            // Rectangular cross-section
+            wireCrossSection = wireWidth * wireHeight;
+            // Equivalent radius for skin effect calculation
+            wireRadius = std::sqrt(wireCrossSection / RadConst::PI);
+        }
+    } else {
+        // Fallback: estimate from surface area (for old API compatibility)
+        // For a cylinder: Area = 2*pi*r*L, so r ~ Area/(2*pi*L)
+        wireRadius = totalArea / (2.0 * RadConst::PI * pathLength);
+        if (wireRadius < 1e-10) wireRadius = 1e-3;  // default 1mm
+        wireCrossSection = RadConst::PI * wireRadius * wireRadius;
+    }
 
     // Estimate loop radius from bounding box
     double loopRadius = std::max(Lx, Ly) / 2.0;
@@ -1116,8 +1159,8 @@ void radTConductorSolver::Solve() {
         L_self = MU_0 * loopRadius * (std::log(8.0 * loopRadius / wireRadius) - 2.0);
     }
 
-    // DC resistance
-    double wireCrossSection = RadConst::PI * wireRadius * wireRadius;
+    // DC resistance: R_dc = L / (sigma * A)
+    // wireCrossSection is already computed above (uses actual rectangular area if available)
     double R_dc = pathLength / (sigma * wireCrossSection);
 
     // AC resistance (skin effect)
