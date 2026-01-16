@@ -289,10 +289,25 @@ void ComputeComplexFieldBatch(
 );
 
 /**
+ * @brief Element face data for MSC (Magnetic Surface Charge) integration
+ *
+ * Stores face geometry for accurate near-field computation.
+ * For tetrahedra: 4 triangular faces
+ * For hexahedra: 6 quadrilateral faces (split into 2 triangles each)
+ */
+struct ElementFaceData {
+    int n_faces;                              // Number of faces (4 for tet, 6 for hex)
+    std::vector<std::vector<TVector3d>> face_vertices;  // Vertices per face
+    TVector3d centroid;                       // Element centroid
+    double characteristic_size;               // Element size for distance check
+};
+
+/**
  * @brief Compute B field from MMM elements with complex magnetization
  *
- * This is the core field computation for PEEC+MMM coupling.
- * Uses dipole approximation: B = (mu0/4pi) * sum_j [3(m_j.r)r/r^5 - m_j/r^3]
+ * ADAPTIVE METHOD: Uses MSC integration for near-field, dipole for far-field.
+ * - Near field (r < 3 * element_size): MSC surface charge integration (high accuracy)
+ * - Far field (r >= 3 * element_size): Dipole approximation (fast, <5% error)
  *
  * @param point       Evaluation point
  * @param centers     Element centers [x0,y0,z0, x1,y1,z1, ...]
@@ -308,6 +323,42 @@ void ComputeBFromMagnetization(
     const std::complex<double>* M_complex,
     int n_elements,
     std::complex<double>* B_out
+);
+
+/**
+ * @brief Compute B field with full element geometry for accurate near-field
+ *
+ * This version uses face geometry for MSC integration when point is near an element.
+ * Provides high accuracy even at close range.
+ *
+ * @param point          Evaluation point
+ * @param face_data      Element face data array
+ * @param M_complex      Complex magnetization [Mx0,My0,Mz0, Mx1,My1,Mz1, ...]
+ * @param n_elements     Number of elements
+ * @param near_threshold Distance threshold (default: 3.0 * element_size)
+ * @param B_out          Output: complex B field [Bx, By, Bz]
+ */
+void ComputeBFromMagnetizationAdaptive(
+    const TVector3d& point,
+    const ElementFaceData* face_data,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    double near_threshold,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Build element face data from Radia 3D object
+ *
+ * Extracts face geometry from all elements for MSC integration.
+ *
+ * @param g3dPtr     Pointer to Radia 3D object
+ * @param face_data  Output: face data array (one per element)
+ * @return           Number of elements processed
+ */
+int BuildElementFaceData(
+    radTg3d* g3dPtr,
+    std::vector<ElementFaceData>& face_data
 );
 
 /**

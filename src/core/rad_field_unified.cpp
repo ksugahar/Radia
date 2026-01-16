@@ -21,6 +21,7 @@
 #include "rad_dipole_collect.h"
 #include "rad_exafmm.h"
 #include "rad_type_cast.h"
+#include "rad_poly_analytical.h"  // For MSC integration
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -739,20 +740,52 @@ bool GetMagnetizationInElement(
 }
 
 //-----------------------------------------------------------------------------
+// Helper: Add single dipole contribution to B field
+// This is the core dipole computation extracted for reuse.
+//-----------------------------------------------------------------------------
+static inline void AddDipoleContribution(
+    const TVector3d& point,
+    const TVector3d& center,
+    const std::complex<double>& mx,
+    const std::complex<double>& my,
+    const std::complex<double>& mz,
+    std::complex<double>* B_out
+)
+{
+    // Vector from source to observation point
+    double rx = point.x - center.x;
+    double ry = point.y - center.y;
+    double rz = point.z - center.z;
+
+    double r2 = rx * rx + ry * ry + rz * rz;
+    double r = std::sqrt(r2);
+
+    if (r < 1e-12) return;  // Skip self-interaction
+
+    double r3 = r2 * r;
+    double r5 = r3 * r2;
+
+    // m dot r (complex)
+    std::complex<double> m_dot_r = mx * rx + my * ry + mz * rz;
+
+    // B = (mu0/4pi) * [3*(m.r)*r/r^5 - m/r^3]
+    const double factor = MU_0 / (4.0 * 3.14159265358979323846);
+    double coeff1 = 3.0 / r5;
+    double coeff2 = 1.0 / r3;
+
+    B_out[0] += factor * (coeff1 * m_dot_r * rx - coeff2 * mx);
+    B_out[1] += factor * (coeff1 * m_dot_r * ry - coeff2 * my);
+    B_out[2] += factor * (coeff1 * m_dot_r * rz - coeff2 * mz);
+}
+
+//-----------------------------------------------------------------------------
 // ComputeBFromMagnetization: B field from dipole sources
 //-----------------------------------------------------------------------------
 // NOTE: This uses magnetic dipole approximation which is accurate when
 // the observation point is far from the source element (r >> element_size).
 //
-// For near-field accuracy, consider:
-// 1. Use finer mesh (smaller elements)
-// 2. Use full surface charge integration (MSC method)
-// 3. Implement adaptive method (dipole for far, MSC for near)
-//
-// The dipole approximation is used here for:
-// - Efficiency: O(N) per evaluation point vs O(N*F) for full MSC
-// - FMM compatibility: Dipoles can be aggregated in multipole expansions
-// - PEEC+MMM coupling: Fast field evaluation at conductor panels
+// For near-field accuracy, use ComputeBFromMagnetizationAdaptive() which
+// switches to MSC integration for near-field elements.
 //
 // Accuracy guideline: |error| < 5% when r > 3 * element_characteristic_size
 //-----------------------------------------------------------------------------
@@ -771,48 +804,18 @@ void ComputeBFromMagnetization(
         return;
     }
 
-    // B from magnetic dipole: B = (mu0/4pi) * [3(m.r)r/r^5 - m/r^3]
-    // where m = M * V (magnetic moment)
-    const double factor = MU_0 / (4.0 * 3.14159265358979323846);
-
     for (int i = 0; i < n_elements; ++i) {
-        // Element center
-        TVector3d center;
-        center.x = centers[i * 3 + 0];
-        center.y = centers[i * 3 + 1];
-        center.z = centers[i * 3 + 2];
+        TVector3d center(centers[i * 3], centers[i * 3 + 1], centers[i * 3 + 2]);
 
         double V = volumes[i];
         if (V < 1e-20) continue;
 
-        // Complex magnetization (magnetic moment = M * V)
+        // Magnetic moment m = M * V
         std::complex<double> mx = M_complex[i * 3 + 0] * V;
         std::complex<double> my = M_complex[i * 3 + 1] * V;
         std::complex<double> mz = M_complex[i * 3 + 2] * V;
 
-        // Vector from source to observation point
-        double rx = point.x - center.x;
-        double ry = point.y - center.y;
-        double rz = point.z - center.z;
-
-        double r2 = rx * rx + ry * ry + rz * rz;
-        double r = std::sqrt(r2);
-
-        if (r < 1e-12) continue;  // Skip self-interaction
-
-        double r3 = r2 * r;
-        double r5 = r3 * r2;
-
-        // m dot r (complex)
-        std::complex<double> m_dot_r = mx * rx + my * ry + mz * rz;
-
-        // B = factor * [3*(m.r)*r/r^5 - m/r^3]
-        double coeff1 = 3.0 / r5;
-        double coeff2 = 1.0 / r3;
-
-        B_out[0] += factor * (coeff1 * m_dot_r * rx - coeff2 * mx);
-        B_out[1] += factor * (coeff1 * m_dot_r * ry - coeff2 * my);
-        B_out[2] += factor * (coeff1 * m_dot_r * rz - coeff2 * mz);
+        AddDipoleContribution(point, center, mx, my, mz, B_out);
     }
 }
 
@@ -1295,6 +1298,197 @@ void ComputeCombinedFieldBatch(
         B_out[i * 3 + 0] = B_pt[0];
         B_out[i * 3 + 1] = B_pt[1];
         B_out[i * 3 + 2] = B_pt[2];
+    }
+}
+
+// ============================================================================
+// Adaptive MSC Integration (Near: MSC, Far: Dipole)
+// ============================================================================
+
+//-----------------------------------------------------------------------------
+// BuildElementFaceData: Extract face geometry from Radia objects
+//-----------------------------------------------------------------------------
+int BuildElementFaceData(
+    radTg3d* g3dPtr,
+    std::vector<ElementFaceData>& face_data
+)
+{
+    face_data.clear();
+    if (!g3dPtr) return 0;
+
+    std::function<void(radTg3d*)> collectElements = [&](radTg3d* elem) {
+        if (!elem) return;
+
+        radTGroup* group = dynamic_cast<radTGroup*>(elem);
+        if (group) {
+            for (auto& child : group->GroupMapOfHandlers) {
+                radTg3d* childElem = radTCast::g3dCast(child.second.rep);
+                if (childElem) collectElements(childElem);
+            }
+            return;
+        }
+
+        // Extract vertices and faces for this element
+        std::vector<TVector3d> vertices;
+        std::vector<std::vector<int>> face_indices;
+        int num_faces = 0;
+
+        if (ExtractElementVertices(elem, vertices, face_indices, num_faces)) {
+            ElementFaceData efd;
+            efd.n_faces = num_faces;
+
+            // Compute centroid
+            TVector3d sum(0, 0, 0);
+            for (const auto& v : vertices) {
+                sum = sum + v;
+            }
+            efd.centroid = sum * (1.0 / vertices.size());
+
+            // Compute characteristic size (max distance from centroid to vertex)
+            double max_dist = 0;
+            for (const auto& v : vertices) {
+                TVector3d diff = v - efd.centroid;
+                double dist = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+                if (dist > max_dist) max_dist = dist;
+            }
+            efd.characteristic_size = max_dist;
+
+            // Store face vertices
+            efd.face_vertices.resize(num_faces);
+            for (int f = 0; f < num_faces; ++f) {
+                const auto& fi = face_indices[f];
+                efd.face_vertices[f].resize(fi.size());
+                for (size_t vi = 0; vi < fi.size(); ++vi) {
+                    int idx = fi[vi];
+                    if (idx >= 0 && idx < (int)vertices.size()) {
+                        efd.face_vertices[f][vi] = vertices[idx];
+                    }
+                }
+            }
+
+            face_data.push_back(std::move(efd));
+        }
+    };
+
+    collectElements(g3dPtr);
+    return (int)face_data.size();
+}
+
+//-----------------------------------------------------------------------------
+// ComputeBFromMagnetizationAdaptive: Adaptive MSC/Dipole computation
+//
+// Uses MSC (Magnetic Surface Charge) integration for near-field elements
+// and dipole approximation for far-field elements.
+//
+// Accuracy comparison (theoretical):
+// - MSC integration: exact for uniform magnetization, O(N_faces) per element
+// - Dipole approx: <1% error when r > 5*element_size
+//                  ~5% error when r ~ 3*element_size
+//                  >10% error when r < 2*element_size
+//-----------------------------------------------------------------------------
+void ComputeBFromMagnetizationAdaptive(
+    const TVector3d& point,
+    const ElementFaceData* face_data,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    double near_threshold_factor,  // Multiplier for element size
+    std::complex<double>* B_out
+)
+{
+    B_out[0] = B_out[1] = B_out[2] = std::complex<double>(0, 0);
+
+    if (!face_data || !M_complex || n_elements <= 0) return;
+
+    // Process each element
+    for (int i = 0; i < n_elements; ++i) {
+        const ElementFaceData& efd = face_data[i];
+
+        // Complex magnetization for this element
+        TVector3d M;
+        M.x = M_complex[i * 3 + 0].real();
+        M.y = M_complex[i * 3 + 1].real();
+        M.z = M_complex[i * 3 + 2].real();
+
+        TVector3d M_imag;
+        M_imag.x = M_complex[i * 3 + 0].imag();
+        M_imag.y = M_complex[i * 3 + 1].imag();
+        M_imag.z = M_complex[i * 3 + 2].imag();
+
+        // Distance from point to element centroid
+        TVector3d diff = point - efd.centroid;
+        double r = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+
+        // Check if point is in near-field region
+        double threshold = near_threshold_factor * efd.characteristic_size;
+
+        if (r < threshold && efd.n_faces > 0) {
+            // NEAR FIELD: Use MSC integration (high accuracy)
+            // H = sum_faces { sigma_f * solid_angle_integral }
+            // where sigma_f = M . n_f (surface charge on face f)
+
+            TVector3d H_real(0, 0, 0);
+            TVector3d H_imag(0, 0, 0);
+
+            for (int f = 0; f < efd.n_faces; ++f) {
+                const auto& fv = efd.face_vertices[f];
+
+                if (fv.size() == 3) {
+                    // Triangular face - direct MSC integration
+                    TVector3d H_face = RadFieldFromTriangleFaceGlobal(
+                        fv[0], fv[1], fv[2], M, point, efd.centroid);
+                    H_real = H_real + H_face;
+
+                    // Imaginary part (if non-zero)
+                    if (std::abs(M_imag.x) > 1e-20 || std::abs(M_imag.y) > 1e-20 ||
+                        std::abs(M_imag.z) > 1e-20) {
+                        TVector3d H_face_imag = RadFieldFromTriangleFaceGlobal(
+                            fv[0], fv[1], fv[2], M_imag, point, efd.centroid);
+                        H_imag = H_imag + H_face_imag;
+                    }
+                }
+                else if (fv.size() == 4) {
+                    // Quadrilateral face - split into 2 triangles
+                    // Triangle 1: v0, v1, v2
+                    TVector3d H_t1 = RadFieldFromTriangleFaceGlobal(
+                        fv[0], fv[1], fv[2], M, point, efd.centroid);
+                    // Triangle 2: v0, v2, v3
+                    TVector3d H_t2 = RadFieldFromTriangleFaceGlobal(
+                        fv[0], fv[2], fv[3], M, point, efd.centroid);
+                    H_real = H_real + H_t1 + H_t2;
+
+                    // Imaginary part
+                    if (std::abs(M_imag.x) > 1e-20 || std::abs(M_imag.y) > 1e-20 ||
+                        std::abs(M_imag.z) > 1e-20) {
+                        TVector3d H_t1_imag = RadFieldFromTriangleFaceGlobal(
+                            fv[0], fv[1], fv[2], M_imag, point, efd.centroid);
+                        TVector3d H_t2_imag = RadFieldFromTriangleFaceGlobal(
+                            fv[0], fv[2], fv[3], M_imag, point, efd.centroid);
+                        H_imag = H_imag + H_t1_imag + H_t2_imag;
+                    }
+                }
+            }
+
+            // B = mu0 * H (for MSC, H field is computed directly)
+            B_out[0] += std::complex<double>(MU_0 * H_real.x, MU_0 * H_imag.x);
+            B_out[1] += std::complex<double>(MU_0 * H_real.y, MU_0 * H_imag.y);
+            B_out[2] += std::complex<double>(MU_0 * H_real.z, MU_0 * H_imag.z);
+        }
+        else {
+            // FAR FIELD: Use dipole approximation via helper function
+            if (r < 1e-12) continue;  // Skip self-interaction
+
+            // Estimate volume from characteristic size
+            // For tetrahedron: V ~ (2a)^3/6, for hex: V ~ (2a)^3, average ~ 4a^3/3
+            double a = efd.characteristic_size;
+            double V = 4.0 * a * a * a / 3.0;
+
+            // Magnetic moment m = M * V
+            std::complex<double> mx = M_complex[i * 3 + 0] * V;
+            std::complex<double> my = M_complex[i * 3 + 1] * V;
+            std::complex<double> mz = M_complex[i * 3 + 2] * V;
+
+            AddDipoleContribution(point, efd.centroid, mx, my, mz, B_out);
+        }
     }
 }
 
