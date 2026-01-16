@@ -2440,13 +2440,24 @@ K. Hollaus, M. Kaltenbacher, J. Schoberl, "A Nonlinear Effective Surface Impedan
 
 ### Unified Visualization Framework
 
-**CRITICAL**: Radia uses **NGSolve/Netgen** and **VTK (PyVista)** for all visualization needs.
+**CRITICAL**: Radia uses **NGSolve/Netgen** and **VTK (PyVista/ParaView)** for all visualization needs.
 
 **Policy**:
+- **Default visualization**: PyVista (quick, interactive, Jupyter-friendly)
+- **Publication-quality**: ParaView (fine-tuned rendering, high-resolution export)
 - **Geometry visualization**: Netgen OCC + NGSolve Draw()
-- **Field visualization**: VTS export + ParaView/PyVista
+- **Field visualization**: VTS export + PyVista (default) / ParaView (publication)
 - **Mesh visualization**: NGSolve mesh + Netgen GUI
 - **DO NOT** implement custom visualization in Radia C++ code
+
+**Tool Selection**:
+| Purpose | Tool | Notes |
+|---------|------|-------|
+| Quick visualization | **PyVista** | Default, Jupyter integration |
+| Interactive exploration | **PyVista** | Python scripting |
+| Publication figures | **ParaView** | Fine control over rendering |
+| High-resolution export | **ParaView** | Vector graphics (SVG, PDF) |
+| Animation | **ParaView** | Keyframe animation |
 
 ### Visualization Stack
 
@@ -2515,9 +2526,9 @@ rad.FldVTS(magnet, 'field_output.vts',
            41, 41, 27, 1, 0, 1.0)
 ```
 
-### PyVista Integration
+### PyVista Integration (Default)
 
-**Policy**: Use PyVista for advanced VTK visualization.
+**Policy**: Use PyVista as the **default** visualization tool.
 
 ```python
 import pyvista as pv
@@ -2525,12 +2536,43 @@ import pyvista as pv
 # Read VTS field data
 grid = pv.read('field_output.vts')
 
-# Visualization
+# Quick visualization (default workflow)
 plotter = pv.Plotter()
 plotter.add_mesh(grid, scalars='B_magnitude', cmap='coolwarm')
 plotter.add_arrows(grid.points, grid['B_field'], mag=0.01)
 plotter.show()
+
+# Jupyter notebook integration
+grid.plot(scalars='B_magnitude', cmap='coolwarm', jupyter_backend='static')
 ```
+
+**Why PyVista as default**:
+- Python-native, integrates with Jupyter notebooks
+- Quick iterative visualization during development
+- Scriptable for batch processing
+- Good enough quality for most use cases
+
+### ParaView (Publication Quality)
+
+**Policy**: Use ParaView for **publication-quality** figures.
+
+```bash
+# Open VTS file in ParaView
+paraview field_output.vts
+```
+
+**ParaView workflow for publications**:
+1. Open VTS file in ParaView
+2. Apply filters (Glyph, Contour, Slice, StreamTracer)
+3. Adjust rendering (lighting, camera, colormap)
+4. Export high-resolution image (PNG, TIFF) or vector graphics (SVG, PDF)
+
+**When to use ParaView**:
+- Journal paper figures (fine control over appearance)
+- High-resolution exports (>300 DPI)
+- Vector graphics export (SVG, PDF for LaTeX)
+- Complex visualizations (streamlines, isosurfaces)
+- Animation sequences
 
 ### NGSolve webgui
 
