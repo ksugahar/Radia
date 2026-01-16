@@ -28,6 +28,7 @@
 #include "rad_point_classify.h"
 #include <vector>
 #include <cstdint>
+#include <complex>
 
 // Forward declarations
 class radTg3d;
@@ -222,6 +223,127 @@ void ReleaseFMM(int container_handle);
 bool BuildElementData(
     int container_handle,
     std::vector<RadPointClassify::ElementData>& elements
+);
+
+// ============================================================================
+// Complex Field Computation (for PEEC+MMM coupling)
+// ============================================================================
+
+/**
+ * @brief Complex field result for AC/frequency domain analysis
+ */
+struct ComplexFieldResult {
+    std::complex<double> Bx, By, Bz;  // B field [Tesla]
+    std::complex<double> Hx, Hy, Hz;  // H field [A/m]
+    std::complex<double> Ax, Ay, Az;  // Vector potential [T*m]
+    PointStatus status;                // Point classification
+    int element_id;                    // Containing element (-1 if outside)
+};
+
+/**
+ * @brief Compute complex B field at a single point
+ *
+ * For static (DC) analysis, imaginary parts are zero.
+ * For AC analysis with sinusoidal magnetization, this handles phase.
+ *
+ * @param g3dPtr      Pointer to Radia 3D object
+ * @param point       Evaluation point [x, y, z]
+ * @param M_complex   Optional: complex magnetization values for each element
+ *                    Format: [Mx0_re, My0_re, Mz0_re, Mx0_im, My0_im, Mz0_im, ...]
+ *                    If nullptr, use static magnetization from elements
+ * @param n_elements  Number of elements (only used if M_complex is provided)
+ * @param config      Computation configuration
+ * @return            ComplexFieldResult with B, H field values
+ */
+ComplexFieldResult ComputeComplexFieldSingle(
+    radTg3d* g3dPtr,
+    const TVector3d& point,
+    const std::complex<double>* M_complex = nullptr,
+    int n_elements = 0,
+    const ComputeConfig& config = ComputeConfig()
+);
+
+/**
+ * @brief Batch compute complex B field at multiple points (OpenMP parallelized)
+ *
+ * Used by PEEC+MMM coupled solver for efficient field evaluation.
+ *
+ * @param g3dPtr      Pointer to Radia 3D object
+ * @param points      Array of evaluation points [x0,y0,z0, x1,y1,z1, ...]
+ * @param n_points    Number of points
+ * @param M_complex   Optional: complex magnetization for each element
+ * @param n_elements  Number of elements (for M_complex array)
+ * @param config      Computation configuration
+ * @param B_out       Output: complex B field [Bx0,By0,Bz0, Bx1,By1,Bz1, ...]
+ * @param status_out  Output: point status array (may be nullptr)
+ */
+void ComputeComplexFieldBatch(
+    radTg3d* g3dPtr,
+    const double* points,
+    int n_points,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    const ComputeConfig& config,
+    std::complex<double>* B_out,
+    PointStatus* status_out = nullptr
+);
+
+/**
+ * @brief Compute B field from MMM elements with complex magnetization
+ *
+ * This is the core field computation for PEEC+MMM coupling.
+ * Uses dipole approximation: B = (mu0/4pi) * sum_j [3(m_j.r)r/r^5 - m_j/r^3]
+ *
+ * @param point       Evaluation point
+ * @param centers     Element centers [x0,y0,z0, x1,y1,z1, ...]
+ * @param volumes     Element volumes
+ * @param M_complex   Complex magnetization [Mx0,My0,Mz0, Mx1,My1,Mz1, ...]
+ * @param n_elements  Number of elements
+ * @param B_out       Output: complex B field [Bx, By, Bz]
+ */
+void ComputeBFromMagnetization(
+    const TVector3d& point,
+    const double* centers,
+    const double* volumes,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Check if point is inside any element (with element data cache)
+ *
+ * Shared by both static MMM and PEEC+MMM solvers for inside/outside
+ * classification. Uses solid angle method for accurate determination.
+ *
+ * @param point           Point to check
+ * @param elements        Pre-built element data (from BuildElementData)
+ * @param containing_elem Output: index of containing element (-1 if outside)
+ * @return                true if point is inside any element
+ */
+bool IsPointInsideAnyElement(
+    const TVector3d& point,
+    const std::vector<RadPointClassify::ElementData>& elements,
+    int& containing_elem
+);
+
+/**
+ * @brief Get magnetization at point inside an element
+ *
+ * For points inside magnetic elements, returns the element's magnetization.
+ * For PEEC+MMM, this uses the complex solution magnetization.
+ *
+ * @param containing_elem Index of containing element
+ * @param M_complex       Complex magnetization array (nullptr for static)
+ * @param n_elements      Number of elements
+ * @param M_out           Output: magnetization [Mx, My, Mz] (complex)
+ * @return                true if successful
+ */
+bool GetMagnetizationInElement(
+    int containing_elem,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    std::complex<double>* M_out
 );
 
 } // namespace RadFieldUnified
