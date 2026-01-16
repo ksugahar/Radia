@@ -379,7 +379,6 @@ public:
 	bool IsHexahedron() const { return AmOfFaces == 6; }
 
 	// MSC (Magnetic Surface Charge) methods for supported element types
-	void B_comp_tetrahedron_centroid(radTField*);
 	void B_comp_tetrahedron_analytical(radTField*);
 	void B_comp_hexahedron_MSC(radTField*);
 
