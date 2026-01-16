@@ -15,7 +15,7 @@ The question is: Does U = V for symmetric K, N?
 Answer: In general, U != V for the generalized Lanczos with two matrices.
 However, for the special case where N = I (identity), we get U = V = Q.
 
-For CLN (Cauer Ladder Network) transformation where:
+For PRIMA (Cauer Ladder Network) transformation where:
   K = L (inductance, tridiagonal)
   N = R (resistance, diagonal)
 
@@ -26,10 +26,10 @@ Let's verify numerically what the relationship is.
 import sys
 import numpy as np
 
-# Add CLN library path
+# Add PRIMA library path
 sys.path.insert(0, r'W:\30_CauerLadderNetwork\2021_01_22_CauerI_to_CauerII\Python')
 
-from cln import lanczos
+from prima import lanczos
 
 
 def test_uv_equality():
@@ -39,7 +39,7 @@ def test_uv_equality():
     print("=" * 60)
 
     # Test 1: Simple symmetric case - L tridiagonal, R diagonal
-    print("\n--- Test 1: CLN I form (L tridiagonal, R diagonal) ---")
+    print("\n--- Test 1: PRIMA I form (L tridiagonal, R diagonal) ---")
 
     n = 5
     L_diag = np.array([1.0, 0.5, 0.3, 0.2, 0.1])  # Inductance
@@ -89,13 +89,13 @@ def test_uv_equality():
             ratio = u_col / (v_col + 1e-30)  # Avoid division by zero
             print(f"  Column {j}: U/V ratios = {ratio[:3]}...")
 
-    # Test 2: Dense symmetric L - CLN I型
+    # Test 2: Dense symmetric L - PRIMA I型
     # lanczos(K, N): K->LL(三重対角), N->RR(対角)
-    # CLN I型 (s=0展開): R対角, L三重対角
+    # PRIMA I型 (s=0展開): R対角, L三重対角
     # よって: lanczos(K=L, N=R) -> LL=L'(三重対角), RR=R'(対角)
-    print("\n\n--- Test 2: CLN I型 (K=L dense, N=R diagonal) ---")
+    print("\n\n--- Test 2: PRIMA I型 (K=L dense, N=R diagonal) ---")
     print("lanczos(K, N): K->LL(tridiag), N->RR(diag)")
-    print("For CLN I: lanczos(K=L, N=R) -> LL=L'(tridiag), RR=R'(diag)")
+    print("For PRIMA I: lanczos(K=L, N=R) -> LL=L'(tridiag), RR=R'(diag)")
 
     # Dense L with mutual inductance
     L_dense = np.array([
@@ -109,7 +109,7 @@ def test_uv_equality():
     print(f"L_dense (symmetric):\n{L_dense}")
     print(f"R matrix (diagonal):\n{R}")
 
-    # CLN I型: lanczos(K=L, N=R) -> LL=L'(三重対角), RR=R'(対角)
+    # PRIMA I型: lanczos(K=L, N=R) -> LL=L'(三重対角), RR=R'(対角)
     result2 = lanczos(L_dense, R, n_iter=n)
 
     diff_uv2 = np.linalg.norm(result2.U - result2.V, 'fro')
@@ -143,13 +143,13 @@ def test_uv_equality():
         print("=> U != V (different)")
 
     # Verify the transformation preserves structure
-    print("\n\n--- Verification of CLN I Transformation ---")
+    print("\n\n--- Verification of PRIMA I Transformation ---")
     print("lanczos(K=R, N=L) function:")
     print("  R -> R_diag (diagonalized)")
     print("  L -> L_tridiag (tridiagonalized)")
 
-    # CLN I型: lanczos(K=R, N=L) -> R_diag (対角), L_tridiag (三重対角)
-    print("\n--- Test 4: CLN I型 (K=R, N=L_dense) ---")
+    # PRIMA I型: lanczos(K=R, N=L) -> R_diag (対角), L_tridiag (三重対角)
+    print("\n--- Test 4: PRIMA I型 (K=R, N=L_dense) ---")
     result4 = lanczos(R, L_dense, n_iter=n)
 
     print(f"R_diag (should be DIAGONAL):\n{result4.R_diag}")
@@ -170,17 +170,17 @@ def test_uv_equality():
     print(f"L_tridiag is tridiagonal: {is_tridiag_L}")
 
     if is_diag_R and is_tridiag_L:
-        print("\n=> CLN I型 structure confirmed!")
+        print("\n=> PRIMA I型 structure confirmed!")
 
     print("\n" + "=" * 60)
     print("Conclusion:")
     print("=" * 60)
     print("""
-CLN I型モデル縮約:
+PRIMA I型モデル縮約:
    lanczos(K=R, N=L) -> R_diag (対角), L_tridiag (三重対角)
 
 PEEC model order reduction:
-   lanczos(K=R_dc, N=L_ext) -> R_diag, L_tridiag (CLN I型)
+   lanczos(K=R_dc, N=L_ext) -> R_diag, L_tridiag (PRIMA I型)
 """)
 
 

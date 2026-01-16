@@ -1,7 +1,7 @@
 """
-Dowell Factor vs CLN Analysis
+Dowell Factor vs PRIMA Analysis
 
-Question: Does CLN match when using F_R(f) and F_L(f) expanded in s?
+Question: Does PRIMA match when using F_R(f) and F_L(f) expanded in s?
 
 The key issue is that Dowell's formula and 1D Diffusion have different structures:
 
@@ -13,11 +13,11 @@ The key issue is that Dowell's formula and 1D Diffusion have different structure
    - k = sqrt(-s*mu*sigma) = sqrt(j*omega*mu*sigma)
    - This is a transcendental function of sqrt(s)
 
-3. CLN I (continued fraction): The ladder network expansion
+3. PRIMA I (continued fraction): The ladder network expansion
    - R[n], L[n] are CONSTANTS (not frequency dependent)
    - Frequency dependence comes from the network structure
 
-The question is: Can we derive CLN parameters from Dowell's formula?
+The question is: Can we derive PRIMA parameters from Dowell's formula?
 """
 
 import numpy as np
@@ -78,7 +78,7 @@ def calc_skin_depth(freq, sigma, mu):
 
 def main():
     print("="*70)
-    print("Dowell Factor vs CLN Analysis")
+    print("Dowell Factor vs PRIMA Analysis")
     print("="*70)
 
     # Physical parameters
@@ -121,7 +121,7 @@ def main():
 
     # Key insight
     print("\n" + "="*70)
-    print("Key Insight: CLN vs Dowell Structure")
+    print("Key Insight: PRIMA vs Dowell Structure")
     print("="*70)
     print("""
 Dowell formula:
@@ -132,10 +132,10 @@ Dowell formula:
   This is NOT a rational function of s = j*omega!
   - F_R(xi) and F_L(xi) contain sinh, cosh, sin, cos of sqrt(omega)
   - These are transcendental functions that cannot be exactly
-    represented by a finite CLN ladder network.
+    represented by a finite PRIMA ladder network.
 
-CLN (Cauer Ladder Network):
-  The CLN I form is a continued fraction:
+PRIMA (Cauer Ladder Network):
+  The PRIMA I form is a continued fraction:
   Z(s) = R1 + sL1 / (1 + sL1/R2 + sL1*sL2/(R2*(...)))
 
   This is a RATIONAL function of s (ratio of polynomials)
@@ -148,15 +148,15 @@ CLN (Cauer Ladder Network):
   where k = sqrt(-s*mu*sigma)
 
   This CAN be expanded as a continued fraction of sqrt(s) terms,
-  which when combined with the ladder structure gives the CLN I form:
+  which when combined with the ladder structure gives the PRIMA I form:
     R[n] ~ 1/sigma*d * f(n)
     L[n] ~ mu*d * g(n)
 
-  The CLN eigenvalue expansion naturally produces these parameters.
+  The PRIMA eigenvalue expansion naturally produces these parameters.
 
 Conclusion:
-  - CLN matches 1D Diffusion EXACTLY (continued fraction of same function)
-  - CLN does NOT match Dowell exactly (different functional form)
+  - PRIMA matches 1D Diffusion EXACTLY (continued fraction of same function)
+  - PRIMA does NOT match Dowell exactly (different functional form)
   - Dowell is an approximation designed for engineering use
   - Both converge at low and high frequency limits
 """)
@@ -168,19 +168,19 @@ Conclusion:
 
     freqs = np.logspace(2, 7, 50)  # 100 Hz to 10 MHz
 
-    # CLN I parameters (from skin_effect_cln_params)
+    # PRIMA I parameters (from skin_effect_prima_params)
     n_stages = 7
-    R_cln = np.zeros(n_stages)
-    L_cln = np.zeros(n_stages)
+    R_prima = np.zeros(n_stages)
+    L_prima = np.zeros(n_stages)
 
     for n in range(1, n_stages + 1):
         if n == 1:
-            R_cln[n-1] = 1e-16
+            R_prima[n-1] = 1e-16
         else:
-            R_cln[n-1] = (4*n - 5) * 4.0 / (sigma * h)
-        L_cln[n-1] = h * MU_0 / (4*n - 3)
+            R_prima[n-1] = (4*n - 5) * 4.0 / (sigma * h)
+        L_prima[n-1] = h * MU_0 / (4*n - 3)
 
-    # Build CLN matrices
+    # Build PRIMA matrices
     def build_tridiag(L):
         n = len(L)
         U = np.eye(n)
@@ -189,12 +189,12 @@ Conclusion:
         return U.T @ np.diag(L) @ U
 
     # Calculate impedances
-    Z_cln = np.zeros(len(freqs), dtype=complex)
+    Z_prima = np.zeros(len(freqs), dtype=complex)
     Z_dowell = np.zeros(len(freqs), dtype=complex)
     Z_diffusion = np.zeros(len(freqs), dtype=complex)
 
-    RR = np.diag(R_cln)
-    LL = build_tridiag(L_cln)
+    RR = np.diag(R_prima)
+    LL = build_tridiag(L_prima)
     V = np.zeros(n_stages)
     V[0] = 1.0
 
@@ -202,10 +202,10 @@ Conclusion:
         s = 1j * 2 * np.pi * f
         omega = 2 * np.pi * f
 
-        # CLN I
+        # PRIMA I
         ZZ = RR + s * LL
         I = np.linalg.solve(ZZ, V)
-        Z_cln[i] = 1.0 / I[0]
+        Z_prima[i] = 1.0 / I[0]
 
         # Dowell
         delta = calc_skin_depth(f, sigma, MU_0)
@@ -218,11 +218,11 @@ Conclusion:
         Z_diffusion[i] = s * MU_0 * (2.0 / kd) * np.tan(kd / 2.0) * h
 
     # Calculate errors
-    err_cln_vs_diff = np.abs(Z_cln - Z_diffusion) / np.abs(Z_diffusion) * 100
+    err_prima_vs_diff = np.abs(Z_prima - Z_diffusion) / np.abs(Z_diffusion) * 100
     err_dowell_vs_diff = np.abs(Z_dowell - Z_diffusion) / np.abs(Z_diffusion) * 100
 
     print(f"\nImpedance at selected frequencies:")
-    print(f"{'Freq':>10} {'h/delta':>8} {'|Z_CLN|':>12} {'|Z_Dowell|':>12} {'|Z_Diff|':>12} {'Err CLN':>10} {'Err Dow':>10}")
+    print(f"{'Freq':>10} {'h/delta':>8} {'|Z_PRIMA|':>12} {'|Z_Dowell|':>12} {'|Z_Diff|':>12} {'Err PRIMA':>10} {'Err Dow':>10}")
     print("-"*85)
 
     test_freqs = [1e3, 10e3, 100e3, 1e6, 10e6]
@@ -232,11 +232,11 @@ Conclusion:
         h_delta = h / delta
         freq_str = f"{f/1e3:.0f} kHz" if f < 1e6 else f"{f/1e6:.0f} MHz"
 
-        print(f"  {freq_str:>8} {h_delta:>8.2f} {np.abs(Z_cln[idx]):>12.4e} "
+        print(f"  {freq_str:>8} {h_delta:>8.2f} {np.abs(Z_prima[idx]):>12.4e} "
               f"{np.abs(Z_dowell[idx]):>12.4e} {np.abs(Z_diffusion[idx]):>12.4e} "
-              f"{err_cln_vs_diff[idx]:>9.4f}% {err_dowell_vs_diff[idx]:>9.2f}%")
+              f"{err_prima_vs_diff[idx]:>9.4f}% {err_dowell_vs_diff[idx]:>9.2f}%")
 
-    print(f"\nMax error CLN vs Diffusion: {np.max(err_cln_vs_diff):.6f}%")
+    print(f"\nMax error PRIMA vs Diffusion: {np.max(err_prima_vs_diff):.6f}%")
     print(f"Max error Dowell vs Diffusion: {np.max(err_dowell_vs_diff):.2f}%")
 
     # Plot
@@ -244,7 +244,7 @@ Conclusion:
 
     # Plot 1: Impedance magnitude
     ax1 = axes[0]
-    ax1.loglog(freqs, np.abs(Z_cln), 'b-', linewidth=2, label='CLN I (7 stages)')
+    ax1.loglog(freqs, np.abs(Z_prima), 'b-', linewidth=2, label='PRIMA I (7 stages)')
     ax1.loglog(freqs, np.abs(Z_diffusion), 'r--', linewidth=2, label='1D Diffusion (exact)')
     ax1.loglog(freqs, np.abs(Z_dowell), 'g:', linewidth=2, label='Dowell')
     ax1.set_xlabel('Frequency [Hz]')
@@ -255,7 +255,7 @@ Conclusion:
 
     # Plot 2: Error comparison
     ax2 = axes[1]
-    ax2.semilogx(freqs, err_cln_vs_diff, 'b-', linewidth=2, label='CLN vs Diffusion')
+    ax2.semilogx(freqs, err_prima_vs_diff, 'b-', linewidth=2, label='PRIMA vs Diffusion')
     ax2.semilogx(freqs, err_dowell_vs_diff, 'g--', linewidth=2, label='Dowell vs Diffusion')
     ax2.set_xlabel('Frequency [Hz]')
     ax2.set_ylabel('Relative Error [%]')
@@ -265,35 +265,35 @@ Conclusion:
     ax2.set_ylim([0, min(100, max(np.max(err_dowell_vs_diff), 10) * 1.2)])
 
     plt.tight_layout()
-    plt.savefig('analyze_dowell_cln.png', dpi=150)
-    print(f"\nSaved: analyze_dowell_cln.png")
+    plt.savefig('analyze_dowell_prima.png', dpi=150)
+    print(f"\nSaved: analyze_dowell_prima.png")
     plt.close()
 
     print("\n" + "="*70)
     print("CONCLUSION")
     print("="*70)
     print("""
-Q: Does CLN match when using F_R(f) and F_L(f) expanded in s?
+Q: Does PRIMA match when using F_R(f) and F_L(f) expanded in s?
 
-A: NO - Dowell's formula cannot be exactly represented by CLN.
+A: NO - Dowell's formula cannot be exactly represented by PRIMA.
 
 Reason:
 1. Dowell's F_R(xi) and F_L(xi) are transcendental functions of xi = h*sqrt(omega)
    They contain sinh, cosh, sin, cos of xi, which are not rational functions.
 
-2. CLN (Cauer Ladder Network) produces a RATIONAL function of s:
+2. PRIMA (Cauer Ladder Network) produces a RATIONAL function of s:
    Z(s) = P(s) / Q(s) where P, Q are polynomials
 
 3. 1D Diffusion equation HAS a continued fraction expansion (eigenvalue expansion)
-   that directly produces the CLN I parameters:
+   that directly produces the PRIMA I parameters:
      R[n] = (4n-5)*4/(sigma*d) for n>=2
      L[n] = d*mu/(4n-3)
 
-4. CLN matches 1D Diffusion with ~0.0005% error (essentially exact)
+4. PRIMA matches 1D Diffusion with ~0.0005% error (essentially exact)
    Dowell vs 1D Diffusion shows much larger error (varies with frequency)
 
 The key is that Dowell's formula is a different APPROXIMATION, not an exact
-representation. The CLN continued fraction expansion comes from the 1D diffusion
+representation. The PRIMA continued fraction expansion comes from the 1D diffusion
 equation, which is the physically exact model.
 """)
 
