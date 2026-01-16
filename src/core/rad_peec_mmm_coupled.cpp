@@ -1042,13 +1042,111 @@ void PEECMMMCoupledSolver::ComputeBBatch(const std::vector<TVector3d>& points,
                                           std::vector<std::complex<double>>& Bz) const
 {
     const int nPts = static_cast<int>(points.size());
+    if (nPts == 0) return;
+
     Bx.resize(nPts);
     By.resize(nPts);
     Bz.resize(nPts);
 
-    #pragma omp parallel for
+    // Use rad_field_unified for efficient batch computation
+    // This enables future FMM acceleration
+
+    // Prepare conductor segments (same as ConductorBField)
+    std::vector<RadFieldUnified::ConductorSegment> condSegments;
+    if (conductor_) {
+        const auto& panels = conductor_->GetPanels();
+        int nPanels = static_cast<int>(panels.size());
+
+        condSegments.reserve(nPanels);
+        for (int i = 0; i < nPanels; ++i) {
+            const auto& panel = panels[i];
+            RadFieldUnified::ConductorSegment seg;
+
+            seg.center = panel.center;
+            double L = std::sqrt(panel.area);
+            seg.length = L;
+
+            double rho = std::sqrt(panel.center.x * panel.center.x +
+                                  panel.center.y * panel.center.y);
+            if (rho > 1e-12) {
+                seg.tangent.x = -panel.center.y / rho;
+                seg.tangent.y = panel.center.x / rho;
+                seg.tangent.z = 0;
+            } else {
+                seg.tangent.x = 1.0;
+                seg.tangent.y = 0;
+                seg.tangent.z = 0;
+            }
+
+            seg.start.x = seg.center.x - seg.tangent.x * L * 0.5;
+            seg.start.y = seg.center.y - seg.tangent.y * L * 0.5;
+            seg.start.z = seg.center.z - seg.tangent.z * L * 0.5;
+
+            seg.end.x = seg.center.x + seg.tangent.x * L * 0.5;
+            seg.end.y = seg.center.y + seg.tangent.y * L * 0.5;
+            seg.end.z = seg.center.z + seg.tangent.z * L * 0.5;
+
+            condSegments.push_back(seg);
+        }
+    }
+
+    // Prepare magnet element data
+    std::vector<double> magCenters;
+    std::vector<double> magVolumes;
+    int nMagElems = 0;
+    const std::complex<double>* M_complex = nullptr;
+    int nLoopDOF = 1;
+
+    if (magnetInteraction_ && !solution_.empty()) {
+        nMagElems = magnetInteraction_->GetNumElements();
+
+        if (static_cast<int>(solution_.size()) >= nLoopDOF + nMagElems * 3) {
+            magCenters.resize(nMagElems * 3);
+            magVolumes.resize(nMagElems);
+
+            for (int i = 0; i < nMagElems; ++i) {
+                TVector3d c = magnetInteraction_->GetElementCenter(i);
+                magCenters[i * 3 + 0] = c.x;
+                magCenters[i * 3 + 1] = c.y;
+                magCenters[i * 3 + 2] = c.z;
+                magVolumes[i] = magnetInteraction_->GetElementVolume(i);
+            }
+
+            M_complex = &solution_[nLoopDOF];
+        }
+    }
+
+    // Convert points to flat array
+    std::vector<double> pts_flat(nPts * 3);
     for (int i = 0; i < nPts; ++i) {
-        ComputeB(points[i], Bx[i], By[i], Bz[i]);
+        pts_flat[i * 3 + 0] = points[i].x;
+        pts_flat[i * 3 + 1] = points[i].y;
+        pts_flat[i * 3 + 2] = points[i].z;
+    }
+
+    // Batch output
+    std::vector<std::complex<double>> B_out(nPts * 3);
+
+    // Use unified combined field computation
+    RadFieldUnified::ComputeCombinedFieldBatch(
+        pts_flat.data(), nPts,
+        condSegments.empty() ? nullptr : condSegments.data(),
+        static_cast<int>(condSegments.size()),
+        totalCurrent_,
+        magCenters.empty() ? nullptr : magCenters.data(),
+        magVolumes.empty() ? nullptr : magVolumes.data(),
+        M_complex,
+        nMagElems,
+        false,  // use_fmm (future: enable for large problems)
+        0.0,    // fmm_eps
+        B_out.data()
+    );
+
+    // Extract results
+    for (int i = 0; i < nPts; ++i) {
+        Bx[i] = B_out[i * 3 + 0];
+        By[i] = B_out[i * 3 + 1];
+        Bz[i] = B_out[i * 3 + 2];
     }
 }
 
@@ -1057,11 +1155,84 @@ void PEECMMMCoupledSolver::ConductorBField(const TVector3d& point,
                                             std::complex<double>& By,
                                             std::complex<double>& Bz) const
 {
-    if (conductor_) {
-        conductor_->ComputeB(point, Bx, By, Bz);
-    } else {
-        Bx = By = Bz = std::complex<double>(0, 0);
+    Bx = By = Bz = std::complex<double>(0, 0);
+
+    if (!conductor_) {
+        return;
     }
+
+    // Use rad_field_unified for conductor field computation
+    // Extract wire path from conductor and compute using Biot-Savart
+    const auto& panels = conductor_->GetPanels();
+    int nPanels = static_cast<int>(panels.size());
+
+    if (nPanels == 0) {
+        // Fallback to direct conductor method if available
+        conductor_->ComputeB(point, Bx, By, Bz);
+        return;
+    }
+
+    // Build conductor segments from panel centers
+    // For a loop conductor, each panel represents a segment of the wire
+    std::vector<RadFieldUnified::ConductorSegment> segments;
+    segments.reserve(nPanels);
+
+    // Group panels by their position along the wire path
+    // For a circular loop: panels are ordered around the circumference
+    for (int i = 0; i < nPanels; ++i) {
+        const auto& panel = panels[i];
+
+        // Create segment from panel data
+        // For PEEC, each panel has a center and normal
+        // The wire direction is tangential (perpendicular to radial)
+        RadFieldUnified::ConductorSegment seg;
+
+        // Panel center as segment center
+        seg.center = panel.center;
+
+        // Segment length from panel area (assuming square-ish panels)
+        double L = std::sqrt(panel.area);
+        seg.length = L;
+
+        // Compute tangent direction (direction of current flow)
+        // For a circular loop in XY plane: tangent = (-y, x, 0) / rho
+        double rho = std::sqrt(panel.center.x * panel.center.x +
+                              panel.center.y * panel.center.y);
+        if (rho > 1e-12) {
+            seg.tangent.x = -panel.center.y / rho;
+            seg.tangent.y = panel.center.x / rho;
+            seg.tangent.z = 0;
+        } else {
+            seg.tangent.x = 1.0;
+            seg.tangent.y = 0;
+            seg.tangent.z = 0;
+        }
+
+        // Compute start and end points along tangent
+        seg.start.x = seg.center.x - seg.tangent.x * L * 0.5;
+        seg.start.y = seg.center.y - seg.tangent.y * L * 0.5;
+        seg.start.z = seg.center.z - seg.tangent.z * L * 0.5;
+
+        seg.end.x = seg.center.x + seg.tangent.x * L * 0.5;
+        seg.end.y = seg.center.y + seg.tangent.y * L * 0.5;
+        seg.end.z = seg.center.z + seg.tangent.z * L * 0.5;
+
+        segments.push_back(seg);
+    }
+
+    // Compute B field using unified Biot-Savart implementation
+    std::complex<double> B_out[3];
+    RadFieldUnified::ComputeBFromConductor(
+        point,
+        segments.data(),
+        static_cast<int>(segments.size()),
+        totalCurrent_,
+        B_out
+    );
+
+    Bx = B_out[0];
+    By = B_out[1];
+    Bz = B_out[2];
 }
 
 void PEECMMMCoupledSolver::MagnetBField(const TVector3d& point,

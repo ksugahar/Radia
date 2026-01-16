@@ -346,6 +346,152 @@ bool GetMagnetizationInElement(
     std::complex<double>* M_out
 );
 
+// ============================================================================
+// PEEC Conductor Field Computation (Biot-Savart with ExaFMM acceleration)
+// ============================================================================
+
+/**
+ * @brief Conductor segment data for Biot-Savart field computation
+ *
+ * Represents a filament segment carrying current.
+ * Can be used directly for FMM acceleration.
+ */
+struct ConductorSegment {
+    TVector3d start;    // Segment start point
+    TVector3d end;      // Segment end point
+    TVector3d center;   // Segment center (for FMM)
+    TVector3d tangent;  // Unit tangent vector (direction of current flow)
+    double length;      // Segment length
+};
+
+/**
+ * @brief Compute B field from conductor current using Biot-Savart
+ *
+ * Uses Laplace kernel: B = (mu0/4pi) * I * integral{ dl x r / r^3 }
+ *
+ * For FMM acceleration, segments are approximated as current dipoles:
+ *   m_current = I * dl (magnetic moment equivalent)
+ *   B = (mu0/4pi) * [3(m.r)r/r^5 - m/r^3] (same formula as magnetic dipole)
+ *
+ * @param point        Evaluation point
+ * @param segments     Array of conductor segments
+ * @param n_segments   Number of segments
+ * @param current      Complex current [A]
+ * @param B_out        Output: complex B field [Bx, By, Bz]
+ */
+void ComputeBFromConductor(
+    const TVector3d& point,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Batch compute B field from conductor (OpenMP + optional FMM)
+ *
+ * For large numbers of segments and points, uses FMM acceleration.
+ *
+ * @param points       Evaluation points [x0,y0,z0, ...]
+ * @param n_points     Number of points
+ * @param segments     Conductor segments
+ * @param n_segments   Number of segments
+ * @param current      Complex current [A]
+ * @param use_fmm      Use FMM acceleration if available
+ * @param fmm_eps      FMM tolerance (0 = auto)
+ * @param B_out        Output: complex B field [Bx0,By0,Bz0, ...]
+ */
+void ComputeBFromConductorBatch(
+    const double* points,
+    int n_points,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    bool use_fmm,
+    double fmm_eps,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Combined PEEC+MMM field computation
+ *
+ * Computes total B field from both conductor current and magnetization.
+ * B_total = B_conductor + B_magnet
+ *
+ * Uses shared FMM tree for efficiency when both sources are present.
+ *
+ * @param point        Evaluation point
+ * @param segments     Conductor segments (may be nullptr)
+ * @param n_segments   Number of conductor segments
+ * @param current      Conductor current [A]
+ * @param mag_centers  Magnet element centers (may be nullptr)
+ * @param mag_volumes  Magnet element volumes
+ * @param M_complex    Complex magnetization
+ * @param n_mag_elems  Number of magnet elements
+ * @param B_out        Output: total complex B field [Bx, By, Bz]
+ */
+void ComputeCombinedField(
+    const TVector3d& point,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    const double* mag_centers,
+    const double* mag_volumes,
+    const std::complex<double>* M_complex,
+    int n_mag_elems,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Batch combined PEEC+MMM field with FMM acceleration
+ *
+ * Most efficient for large-scale coupled problems.
+ * Builds unified FMM tree with both current and magnetic dipoles.
+ *
+ * @param points       Evaluation points
+ * @param n_points     Number of points
+ * @param segments     Conductor segments
+ * @param n_segments   Number of conductor segments
+ * @param current      Conductor current [A]
+ * @param mag_centers  Magnet element centers
+ * @param mag_volumes  Magnet element volumes
+ * @param M_complex    Complex magnetization
+ * @param n_mag_elems  Number of magnet elements
+ * @param use_fmm      Use FMM acceleration
+ * @param fmm_eps      FMM tolerance
+ * @param B_out        Output: total complex B field
+ */
+void ComputeCombinedFieldBatch(
+    const double* points,
+    int n_points,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    const double* mag_centers,
+    const double* mag_volumes,
+    const std::complex<double>* M_complex,
+    int n_mag_elems,
+    bool use_fmm,
+    double fmm_eps,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Extract conductor segments from radTConductor
+ *
+ * Converts conductor wire path to segment array for unified field computation.
+ *
+ * @param wirePath     Wire centerline path (from radTConductor)
+ * @param n_path_pts   Number of path points
+ * @param segments     Output: segment array (caller must allocate n_path_pts-1)
+ * @return             Number of segments created
+ */
+int ExtractConductorSegments(
+    const TVector3d* wirePath,
+    int n_path_pts,
+    ConductorSegment* segments
+);
+
 } // namespace RadFieldUnified
 
 #endif // RAD_FIELD_UNIFIED_H
