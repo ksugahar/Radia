@@ -1375,29 +1375,36 @@ int BuildElementFaceData(
 }
 
 //-----------------------------------------------------------------------------
-// ComputeBFromMagnetizationAdaptive: Adaptive MSC/Dipole computation
+// ComputeBFromMagnetizationAdaptive: Error-controlled adaptive MSC/Dipole
 //
 // Uses MSC (Magnetic Surface Charge) integration for near-field elements
 // and dipole approximation for far-field elements.
 //
-// Accuracy comparison (theoretical):
-// - MSC integration: exact for uniform magnetization, O(N_faces) per element
-// - Dipole approx: <1% error when r > 5*element_size
-//                  ~5% error when r ~ 3*element_size
-//                  >10% error when r < 2*element_size
+// The target_error parameter specifies the maximum acceptable relative error:
+// - target_error = 0.0: Always use MSC (exact, slow)
+// - target_error = 0.01: Use dipole when r > 4.6 * element_size
+// - target_error = 0.05: Use dipole when r > 2.7 * element_size (default)
+// - target_error = 0.10: Use dipole when r > 2.2 * element_size
+// - target_error = 1.0: Always use dipole (fast, approximate)
+//
+// Dipole error model: error ~ (element_size / distance)^3
 //-----------------------------------------------------------------------------
 void ComputeBFromMagnetizationAdaptive(
     const TVector3d& point,
     const ElementFaceData* face_data,
     const std::complex<double>* M_complex,
     int n_elements,
-    double near_threshold_factor,  // Multiplier for element size
+    double target_error,  // Target relative error (0.0 to 1.0)
     std::complex<double>* B_out
 )
 {
     B_out[0] = B_out[1] = B_out[2] = std::complex<double>(0, 0);
 
     if (!face_data || !M_complex || n_elements <= 0) return;
+
+    // Convert target error to distance threshold factor
+    // Using: error ~ (a/r)^3  =>  r/a = 1/error^(1/3)
+    double threshold_factor = ErrorToThresholdFactor(target_error);
 
     // Process each element
     for (int i = 0; i < n_elements; ++i) {
@@ -1418,8 +1425,8 @@ void ComputeBFromMagnetizationAdaptive(
         TVector3d diff = point - efd.centroid;
         double r = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
 
-        // Check if point is in near-field region
-        double threshold = near_threshold_factor * efd.characteristic_size;
+        // Check if point is in near-field region (needs MSC for accuracy)
+        double threshold = threshold_factor * efd.characteristic_size;
 
         if (r < threshold && efd.n_faces > 0) {
             // NEAR FIELD: Use MSC integration (high accuracy)
