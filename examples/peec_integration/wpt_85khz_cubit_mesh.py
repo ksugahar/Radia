@@ -10,7 +10,11 @@ Mesh components:
 3. Aluminum shields (hex mesh) - PEEC conductor with eddy currents
 
 Workflow:
-    Cubit geometry -> Nastran BDF -> Netgen mesh -> Radia PEEC+MMM
+    Cubit geometry -> Netgen mesh (direct via export_netgen) -> Radia PEEC+MMM
+
+Note: Netgen alone cannot create 3D hexahedral meshes.
+      Cubit is required for hex mesh generation.
+      Use cubit_mesh_export.export_netgen() for direct Cubit -> Netgen conversion.
 
 Requirements:
     - Coreform Cubit 2025.3+
@@ -32,11 +36,12 @@ sys.path.insert(0, CUBIT_EXPORT_PATH)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build-msvc'))
 
-import numpy as np
+# numpy not needed for mesh generation
 
 # Check if Cubit is available
 try:
     import cubit
+    import cubit_mesh_export
     CUBIT_AVAILABLE = True
 except ImportError:
     CUBIT_AVAILABLE = False
@@ -47,16 +52,14 @@ def create_wpt_geometry_cubit():
     """
     Create WPT system geometry in Cubit.
 
-    Returns filenames of exported Nastran BDF files.
+    Returns Netgen mesh objects directly (no intermediate file format).
+
+    Uses cubit_mesh_export.export_netgen() for direct Cubit -> Netgen conversion.
     """
     if not CUBIT_AVAILABLE:
         return None
 
-    import cubit_mesh_export
-
     cubit.init(['cubit', '-nojournal', '-batch'])
-
-    output_dir = os.path.dirname(os.path.abspath(__file__))
 
     # ============================================================
     # Parameters (all in mm for Cubit)
@@ -65,8 +68,8 @@ def create_wpt_geometry_cubit():
     coil_inner_r = 50.0      # 50 mm
     coil_outer_r = 150.0     # 150 mm
     coil_thickness = 3.0     # 3 mm (Litz wire bundle)
-    n_turns = 10
-    coil_pitch = (coil_outer_r - coil_inner_r) / n_turns
+    n_turns = 10  # Number of turns (for future spiral coil implementation)
+    _ = n_turns  # Suppress unused warning
 
     # Ferrite core (disc)
     ferrite_r = 180.0        # 180 mm
@@ -122,10 +125,9 @@ def create_wpt_geometry_cubit():
     cubit.cmd("block 3 add hex in volume 3")
     cubit.cmd("block 3 name 'tx_coil'")
 
-    # Export Tx assembly
-    tx_bdf = os.path.join(output_dir, "wpt_tx_assembly.bdf")
-    print(f"Exporting Tx assembly to {tx_bdf}")
-    cubit_mesh_export.export_nastran(cubit, tx_bdf, DIM="3D")
+    # Export Tx assembly to Netgen directly (no Nastran intermediate)
+    print("Exporting Tx assembly to Netgen mesh...")
+    tx_ngmesh = cubit_mesh_export.export_netgen(cubit)
 
     # ============================================================
     # Create Rx Assembly (mirror of Tx)
@@ -165,65 +167,52 @@ def create_wpt_geometry_cubit():
     cubit.cmd("block 3 add hex in volume 3")
     cubit.cmd("block 3 name 'rx_coil'")
 
-    # Export Rx assembly
-    rx_bdf = os.path.join(output_dir, "wpt_rx_assembly.bdf")
-    print(f"Exporting Rx assembly to {rx_bdf}")
-    cubit_mesh_export.export_nastran(cubit, rx_bdf, DIM="3D")
+    # Export Rx assembly to Netgen directly (no Nastran intermediate)
+    print("Exporting Rx assembly to Netgen mesh...")
+    rx_ngmesh = cubit_mesh_export.export_netgen(cubit)
 
     return {
-        'tx_bdf': tx_bdf,
-        'rx_bdf': rx_bdf,
+        'tx_mesh': tx_ngmesh,
+        'rx_mesh': rx_ngmesh,
         'air_gap': air_gap
     }
 
 
-def load_nastran_to_radia(bdf_file, material_type='conductor'):
+def load_netgen_to_radia(ngmesh, material_type='conductor'):
     """
-    Load Nastran BDF mesh and create Radia objects.
+    Load Netgen mesh and create Radia objects.
 
     Parameters:
-        bdf_file: Path to Nastran BDF file
+        ngmesh: Netgen mesh object (from cubit_mesh_export.export_netgen())
         material_type: 'conductor', 'ferrite', or 'shield'
 
     Returns:
         Radia container object
     """
     import radia as rad
-    from nastran_mesh_import import import_nastran_mesh
+    from netgen_mesh_import import netgen_mesh_to_radia
 
-    # Read mesh
-    mesh_data = import_nastran_mesh(bdf_file, units='mm')
-
-    # Get hex elements
-    hex_elements = mesh_data.get('hex_elements', [])
-    vertices = mesh_data['vertices']
-
-    print(f"  Loaded {len(hex_elements)} hex elements from {os.path.basename(bdf_file)}")
-
-    if len(hex_elements) == 0:
-        print(f"  Warning: No hex elements found in {bdf_file}")
+    # Convert Netgen mesh to NGSolve mesh for Radia import
+    try:
+        from ngsolve import Mesh
+        mesh = Mesh(ngmesh)
+    except ImportError:
+        print("  Warning: NGSolve not available for mesh import")
         return None
 
-    # Create Radia objects
-    objects = []
+    # Use netgen_mesh_to_radia for direct conversion
+    # This handles hex/tet elements automatically
+    magnetization = [0, 0, 0]  # Zero initial magnetization
 
-    for elem in hex_elements:
-        # Get vertex coordinates (convert mm to m)
-        verts = [[vertices[v][0] / 1000,
-                  vertices[v][1] / 1000,
-                  vertices[v][2] / 1000] for v in elem]
+    container = netgen_mesh_to_radia(
+        mesh,
+        material={'magnetization': magnetization},
+        units='m'  # Cubit exports in mm, but export_netgen converts to m
+    )
 
-        if material_type == 'ferrite':
-            # Magnetic material - zero initial magnetization
-            obj = rad.ObjHexahedron(verts, [0, 0, 0])
-        else:
-            # Conductor - no magnetization
-            obj = rad.ObjHexahedron(verts, [0, 0, 0])
-
-        objects.append(obj)
-
-    # Create container
-    container = rad.ObjCnt(objects)
+    if container is None:
+        print(f"  Warning: No elements found in mesh")
+        return None
 
     # Apply material
     if material_type == 'ferrite':
@@ -251,34 +240,27 @@ def analyze_wpt_system():
     print("WPT 85 kHz System Analysis with Cubit Mesh")
     print("=" * 70)
 
-    # Check for pre-generated mesh files
-    output_dir = os.path.dirname(os.path.abspath(__file__))
-    tx_bdf = os.path.join(output_dir, "wpt_tx_assembly.bdf")
-    rx_bdf = os.path.join(output_dir, "wpt_rx_assembly.bdf")
-
-    if not os.path.exists(tx_bdf) or not os.path.exists(rx_bdf):
-        if CUBIT_AVAILABLE:
-            print("\nGenerating mesh with Cubit...")
-            mesh_info = create_wpt_geometry_cubit()
-            if mesh_info is None:
-                print("Error: Mesh generation failed")
-                return
-        else:
-            print("\nError: Mesh files not found and Cubit not available")
-            print(f"  Expected: {tx_bdf}")
-            print(f"  Expected: {rx_bdf}")
-            print("\nPlease run this script with Cubit available to generate meshes.")
+    # Generate mesh with Cubit (direct Netgen export)
+    if CUBIT_AVAILABLE:
+        print("\nGenerating mesh with Cubit -> Netgen direct export...")
+        mesh_info = create_wpt_geometry_cubit()
+        if mesh_info is None:
+            print("Error: Mesh generation failed")
             return
+        print(f"  Air gap: {mesh_info['air_gap']} mm")
     else:
-        print(f"\nUsing existing mesh files:")
-        print(f"  Tx: {tx_bdf}")
-        print(f"  Rx: {rx_bdf}")
+        print("\nError: Cubit not available")
+        print("This example requires Coreform Cubit for hex mesh generation.")
+        print("\nTo run this example:")
+        print("  1. Install Coreform Cubit 2025.3+")
+        print("  2. Ensure cubit_mesh_export is in S:\\CoreformCubit\\01_GitHub")
+        return
 
-    # Load meshes into Radia
-    print("\n--- Loading Meshes into Radia ---")
+    # Load meshes into Radia via Netgen
+    print("\n--- Loading Netgen Meshes into Radia ---")
 
-    # For demonstration, we'll show the workflow
-    # Full implementation would parse blocks from BDF
+    # Convert Netgen meshes to Radia objects
+    # Full implementation would use mesh_info['tx_mesh'] and mesh_info['rx_mesh']
 
     print("\nNote: Full PEEC+MMM analysis requires:")
     print("  1. CndFromMesh() for conductor elements (PEEC)")
@@ -322,24 +304,25 @@ Expected Workflow:
 def main():
     """Main entry point."""
     print("\n" + "=" * 70)
-    print("WPT 85 kHz - Cubit Mesh Generation")
+    print("WPT 85 kHz - Cubit -> Netgen Direct Export")
     print("=" * 70)
 
     if CUBIT_AVAILABLE:
-        print("\nCubit available. Will generate meshes.")
+        print("\nCubit available. Will generate meshes directly to Netgen format.")
         mesh_info = create_wpt_geometry_cubit()
         if mesh_info:
-            print(f"\nMesh files created:")
-            print(f"  Tx: {mesh_info['tx_bdf']}")
-            print(f"  Rx: {mesh_info['rx_bdf']}")
+            print(f"\nNetgen meshes created in memory:")
+            print(f"  Tx mesh: {type(mesh_info['tx_mesh'])}")
+            print(f"  Rx mesh: {type(mesh_info['rx_mesh'])}")
             print(f"  Air gap: {mesh_info['air_gap']} mm")
     else:
-        print("\nCubit not available. Skipping mesh generation.")
+        print("\nCubit not available. Cannot generate hex meshes.")
         print("To generate meshes:")
         print("  1. Install Coreform Cubit 2025.3")
-        print("  2. Run this script with Cubit in PATH")
+        print("  2. Ensure cubit_mesh_export is available")
+        print("\nNote: Netgen alone cannot create 3D hexahedral meshes.")
 
-    # Analyze system (uses pre-generated meshes if Cubit not available)
+    # Analyze system
     print("\n")
     analyze_wpt_system()
 
