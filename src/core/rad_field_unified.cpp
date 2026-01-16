@@ -741,6 +741,21 @@ bool GetMagnetizationInElement(
 //-----------------------------------------------------------------------------
 // ComputeBFromMagnetization: B field from dipole sources
 //-----------------------------------------------------------------------------
+// NOTE: This uses magnetic dipole approximation which is accurate when
+// the observation point is far from the source element (r >> element_size).
+//
+// For near-field accuracy, consider:
+// 1. Use finer mesh (smaller elements)
+// 2. Use full surface charge integration (MSC method)
+// 3. Implement adaptive method (dipole for far, MSC for near)
+//
+// The dipole approximation is used here for:
+// - Efficiency: O(N) per evaluation point vs O(N*F) for full MSC
+// - FMM compatibility: Dipoles can be aggregated in multipole expansions
+// - PEEC+MMM coupling: Fast field evaluation at conductor panels
+//
+// Accuracy guideline: |error| < 5% when r > 3 * element_characteristic_size
+//-----------------------------------------------------------------------------
 void ComputeBFromMagnetization(
     const TVector3d& point,
     const double* centers,
