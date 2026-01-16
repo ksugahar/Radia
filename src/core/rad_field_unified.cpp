@@ -1032,4 +1032,255 @@ void ComputeComplexFieldBatch(
     }
 }
 
+// ============================================================================
+// PEEC Conductor Field Computation (Biot-Savart with ExaFMM acceleration)
+// ============================================================================
+
+//-----------------------------------------------------------------------------
+// ExtractConductorSegments: Convert wire path to segments
+//-----------------------------------------------------------------------------
+int ExtractConductorSegments(
+    const TVector3d* wirePath,
+    int n_path_pts,
+    ConductorSegment* segments
+)
+{
+    if (!wirePath || !segments || n_path_pts < 2) return 0;
+
+    int n_segments = 0;
+    for (int i = 0; i < n_path_pts - 1; ++i) {
+        ConductorSegment& seg = segments[n_segments];
+
+        seg.start = wirePath[i];
+        seg.end = wirePath[i + 1];
+
+        // Compute center
+        seg.center.x = (seg.start.x + seg.end.x) * 0.5;
+        seg.center.y = (seg.start.y + seg.end.y) * 0.5;
+        seg.center.z = (seg.start.z + seg.end.z) * 0.5;
+
+        // Compute tangent and length
+        TVector3d dl;
+        dl.x = seg.end.x - seg.start.x;
+        dl.y = seg.end.y - seg.start.y;
+        dl.z = seg.end.z - seg.start.z;
+
+        seg.length = std::sqrt(dl.x * dl.x + dl.y * dl.y + dl.z * dl.z);
+
+        if (seg.length > 1e-15) {
+            seg.tangent.x = dl.x / seg.length;
+            seg.tangent.y = dl.y / seg.length;
+            seg.tangent.z = dl.z / seg.length;
+            n_segments++;
+        }
+    }
+
+    return n_segments;
+}
+
+//-----------------------------------------------------------------------------
+// ComputeBFromConductor: Biot-Savart law for conductor segments
+//-----------------------------------------------------------------------------
+void ComputeBFromConductor(
+    const TVector3d& point,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    std::complex<double>* B_out
+)
+{
+    B_out[0] = B_out[1] = B_out[2] = std::complex<double>(0, 0);
+
+    if (!segments || n_segments <= 0) return;
+
+    // Biot-Savart: B = (mu0/4pi) * I * integral{ dl x r / r^3 }
+    // For a segment, use analytical formula for finite wire segment:
+    // B = (mu0 * I / 4pi) * (cos(theta1) - cos(theta2)) / d * phi_hat
+    // where d is perpendicular distance and phi_hat is azimuthal unit vector
+
+    const double factor = MU_0 / (4.0 * 3.14159265358979323846);
+
+    for (int i = 0; i < n_segments; ++i) {
+        const ConductorSegment& seg = segments[i];
+
+        // Vector from segment start to observation point
+        TVector3d r1;
+        r1.x = point.x - seg.start.x;
+        r1.y = point.y - seg.start.y;
+        r1.z = point.z - seg.start.z;
+
+        // Vector from segment end to observation point
+        TVector3d r2;
+        r2.x = point.x - seg.end.x;
+        r2.y = point.y - seg.end.y;
+        r2.z = point.z - seg.end.z;
+
+        double r1_mag = std::sqrt(r1.x * r1.x + r1.y * r1.y + r1.z * r1.z);
+        double r2_mag = std::sqrt(r2.x * r2.x + r2.y * r2.y + r2.z * r2.z);
+
+        if (r1_mag < 1e-12 || r2_mag < 1e-12) continue;  // Singularity
+
+        // Cross product: dl x r (direction of B field)
+        // dl = length * tangent
+        TVector3d dl;
+        dl.x = seg.tangent.x * seg.length;
+        dl.y = seg.tangent.y * seg.length;
+        dl.z = seg.tangent.z * seg.length;
+
+        // Use formula for finite straight wire:
+        // B = (mu0*I/4pi) * (dl x r_mid) * (1/r1 + 1/r2) / (r1*r2 + r1.dot(r2))
+        // This is more numerically stable than the differential form
+
+        // Vector from center to point
+        TVector3d r_mid;
+        r_mid.x = point.x - seg.center.x;
+        r_mid.y = point.y - seg.center.y;
+        r_mid.z = point.z - seg.center.z;
+
+        // Cross product: dl x r_mid
+        TVector3d cross;
+        cross.x = dl.y * r_mid.z - dl.z * r_mid.y;
+        cross.y = dl.z * r_mid.x - dl.x * r_mid.z;
+        cross.z = dl.x * r_mid.y - dl.y * r_mid.x;
+
+        // r1 . r2
+        double r1_dot_r2 = r1.x * r2.x + r1.y * r2.y + r1.z * r2.z;
+
+        double denom = r1_mag * r2_mag + r1_dot_r2;
+        if (std::abs(denom) < 1e-15) continue;  // Points on the line
+
+        double coeff = factor * (1.0 / r1_mag + 1.0 / r2_mag) / denom;
+
+        B_out[0] += current * coeff * cross.x;
+        B_out[1] += current * coeff * cross.y;
+        B_out[2] += current * coeff * cross.z;
+    }
+}
+
+//-----------------------------------------------------------------------------
+// ComputeBFromConductorBatch: Batch Biot-Savart with OpenMP
+//-----------------------------------------------------------------------------
+void ComputeBFromConductorBatch(
+    const double* points,
+    int n_points,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    bool use_fmm,
+    double fmm_eps,
+    std::complex<double>* B_out
+)
+{
+    if (!points || !B_out || n_points <= 0) return;
+
+    // Initialize output
+    for (int i = 0; i < n_points * 3; ++i) {
+        B_out[i] = std::complex<double>(0, 0);
+    }
+
+    if (!segments || n_segments <= 0) return;
+
+    // For now, use direct computation (FMM integration would go here)
+    // FMM for Biot-Savart treats segments as current dipoles
+    (void)use_fmm;  // Reserved for future FMM integration
+    (void)fmm_eps;
+
+    #ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if(n_points > 100)
+    #endif
+    for (int i = 0; i < n_points; ++i) {
+        TVector3d pt(points[i * 3], points[i * 3 + 1], points[i * 3 + 2]);
+
+        std::complex<double> B_pt[3];
+        ComputeBFromConductor(pt, segments, n_segments, current, B_pt);
+
+        B_out[i * 3 + 0] = B_pt[0];
+        B_out[i * 3 + 1] = B_pt[1];
+        B_out[i * 3 + 2] = B_pt[2];
+    }
+}
+
+//-----------------------------------------------------------------------------
+// ComputeCombinedField: B from both conductor and magnetization
+//-----------------------------------------------------------------------------
+void ComputeCombinedField(
+    const TVector3d& point,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    const double* mag_centers,
+    const double* mag_volumes,
+    const std::complex<double>* M_complex,
+    int n_mag_elems,
+    std::complex<double>* B_out
+)
+{
+    B_out[0] = B_out[1] = B_out[2] = std::complex<double>(0, 0);
+
+    // Conductor contribution (Biot-Savart)
+    if (segments && n_segments > 0) {
+        std::complex<double> B_cond[3];
+        ComputeBFromConductor(point, segments, n_segments, current, B_cond);
+        B_out[0] += B_cond[0];
+        B_out[1] += B_cond[1];
+        B_out[2] += B_cond[2];
+    }
+
+    // Magnetization contribution (dipole approximation)
+    if (mag_centers && mag_volumes && M_complex && n_mag_elems > 0) {
+        std::complex<double> B_mag[3];
+        ComputeBFromMagnetization(point, mag_centers, mag_volumes,
+                                  M_complex, n_mag_elems, B_mag);
+        B_out[0] += B_mag[0];
+        B_out[1] += B_mag[1];
+        B_out[2] += B_mag[2];
+    }
+}
+
+//-----------------------------------------------------------------------------
+// ComputeCombinedFieldBatch: Batch combined field with OpenMP
+//-----------------------------------------------------------------------------
+void ComputeCombinedFieldBatch(
+    const double* points,
+    int n_points,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    const double* mag_centers,
+    const double* mag_volumes,
+    const std::complex<double>* M_complex,
+    int n_mag_elems,
+    bool use_fmm,
+    double fmm_eps,
+    std::complex<double>* B_out
+)
+{
+    if (!points || !B_out || n_points <= 0) return;
+
+    // Initialize output
+    for (int i = 0; i < n_points * 3; ++i) {
+        B_out[i] = std::complex<double>(0, 0);
+    }
+
+    // FMM integration point - would build unified tree here
+    (void)use_fmm;
+    (void)fmm_eps;
+
+    #ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if(n_points > 100)
+    #endif
+    for (int i = 0; i < n_points; ++i) {
+        TVector3d pt(points[i * 3], points[i * 3 + 1], points[i * 3 + 2]);
+
+        std::complex<double> B_pt[3];
+        ComputeCombinedField(pt, segments, n_segments, current,
+                            mag_centers, mag_volumes, M_complex, n_mag_elems,
+                            B_pt);
+
+        B_out[i * 3 + 0] = B_pt[0];
+        B_out[i * 3 + 1] = B_pt[1];
+        B_out[i * 3 + 2] = B_pt[2];
+    }
+}
+
 } // namespace RadFieldUnified
