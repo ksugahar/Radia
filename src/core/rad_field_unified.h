@@ -326,16 +326,29 @@ void ComputeBFromMagnetization(
 );
 
 /**
- * @brief Compute B field with full element geometry for accurate near-field
+ * @brief Compute B field with error-controlled adaptive method
  *
- * This version uses face geometry for MSC integration when point is near an element.
- * Provides high accuracy even at close range.
+ * Switches between MSC integration and dipole approximation based on
+ * TARGET ERROR specification. The dipole approximation error scales as:
+ *   error ~ (element_size / distance)^3
+ *
+ * Distance threshold is computed from target error:
+ *   r_threshold = element_size / target_error^(1/3)
+ *
+ * Examples:
+ *   target_error = 0.01 (1%)  -> r > 4.6 * element_size uses dipole
+ *   target_error = 0.05 (5%)  -> r > 2.7 * element_size uses dipole
+ *   target_error = 0.10 (10%) -> r > 2.2 * element_size uses dipole
+ *
+ * Special values:
+ *   target_error = 0.0  -> Always use MSC (exact, slow)
+ *   target_error = 1.0  -> Always use dipole (fast, approximate)
  *
  * @param point          Evaluation point
  * @param face_data      Element face data array
  * @param M_complex      Complex magnetization [Mx0,My0,Mz0, Mx1,My1,Mz1, ...]
  * @param n_elements     Number of elements
- * @param near_threshold Distance threshold (default: 3.0 * element_size)
+ * @param target_error   Target relative error (0.0 to 1.0, default: 0.05 = 5%)
  * @param B_out          Output: complex B field [Bx, By, Bz]
  */
 void ComputeBFromMagnetizationAdaptive(
@@ -343,9 +356,24 @@ void ComputeBFromMagnetizationAdaptive(
     const ElementFaceData* face_data,
     const std::complex<double>* M_complex,
     int n_elements,
-    double near_threshold,
+    double target_error,
     std::complex<double>* B_out
 );
+
+/**
+ * @brief Convert target error to distance threshold factor
+ *
+ * Based on dipole approximation error: error ~ (a/r)^3
+ * -> r/a = 1 / error^(1/3)
+ *
+ * @param target_error  Target relative error (0.0 to 1.0)
+ * @return              Distance threshold as multiple of element size
+ */
+inline double ErrorToThresholdFactor(double target_error) {
+    if (target_error <= 0.0) return 1e10;  // Always MSC
+    if (target_error >= 1.0) return 0.0;   // Always dipole
+    return 1.0 / std::pow(target_error, 1.0/3.0);
+}
 
 /**
  * @brief Build element face data from Radia 3D object
