@@ -1,18 +1,20 @@
-# PEEC + CLN + Dowell連分数展開によるコイルモデル縮約
+# PEEC + PRIMA + Dowell連分数展開によるコイルモデル縮約
 
 ## 概要
 
-本Exampleでは、PEEC（Partial Element Equivalent Circuit）法とCauer Ladder Network（CLN）を組み合わせ、Dowellの連分数展開を用いたコイルモデル縮約の実装と検証を行う。
+本Exampleでは、PEEC（Partial Element Equivalent Circuit）法とPRIMA（Passive Reduced-order Interconnect Macromodeling Algorithm）を組み合わせ、Dowellの連分数展開を用いたコイルモデル縮約の実装と検証を行う。
+
+> **Note**: 本実装では「CLN (Cauer Ladder Network)」という用語の代わりに「PRIMA」を使用しています。両者は数学的に同等（Lanczos三重対角化によるラダー回路表現）ですが、PRIMAは1998年のIEEE論文で広く認知されており、特許問題を回避できます。
 
 **理論的背景**: [docs/PEEC_SURFACE_IMPEDANCE.md](../../docs/PEEC_SURFACE_IMPEDANCE.md) を参照。
 
 ## 主要な検証結果
 
-### 1. CLN(DC) + Dowell補正 = Dowell式（完全一致）
+### 1. PRIMA(DC) + Dowell補正 = Dowell式（完全一致）
 
-`cln_with_dowell_correction.py` による検証結果:
+`prima_with_dowell_correction.py` による検証結果:
 
-| 周波数 | |Z_Dowell| | |Z_CLN+Dowell| | 誤差 |
+| 周波数 | |Z_Dowell| | |Z_PRIMA+Dowell| | 誤差 |
 |--------|------------|---------------|------|
 | 1 Hz | 1.724e-04 | 1.724e-04 | 0% |
 | 1 kHz | 1.724e-04 | 1.724e-04 | 0% |
@@ -63,25 +65,25 @@ z*coth(z) = 1 + w/(3 + w/(5 + w/(7 + w/(9 + ...))))
 
 | ファイル | 説明 |
 |----------|------|
-| `cln_with_dowell_correction.py` | CLN(DC) + Dowell補正とDowell式の一致検証 |
+| `prima_with_dowell_correction.py` | PRIMA(DC) + Dowell補正とDowell式の一致検証 |
 | `derive_dowell_cf_algorithm.py` | Viskovatovアルゴリズムによる連分数係数導出 |
 | `derive_dowell_pade.py` | Pade近似による有理関数展開 |
-| `derive_dowell_cf.py` | Taylor展開の解析 |
+| `derive_dowell_prima.py` | Taylor展開の解析 |
 
-### PEEC-CLN統合デモ
+### PEEC-PRIMA統合デモ
 
 | ファイル | 説明 |
 |----------|------|
-| `demo_peec_cln_reduction.py` | PEEC + CLN + Dowellによるモデル次数削減デモ |
-| `verify_peec_cln_dowell.py` | PEEC-CLN-Dowell統合の検証 |
+| `demo_peec_prima_reduction.py` | PEEC + PRIMA + Dowellによるモデル次数削減デモ |
+| `verify_peec_prima_dowell.py` | PEEC-PRIMA-Dowell統合の検証 |
 
 ### 補助スクリプト
 
 | ファイル | 説明 |
 |----------|------|
-| `analyze_dowell_cln.py` | DowellファクターとCLNの関係分析 |
-| `verify_cln_dowell_correct.py` | CLN vs Dowell詳細比較 |
-| `verify_cln_dowell_form.py` | CLNからF_R, F_L抽出 |
+| `analyze_dowell_prima.py` | DowellファクターとPRIMAの関係分析 |
+| `verify_prima_dowell_correct.py` | PRIMA vs Dowell詳細比較 |
+| `verify_prima_dowell_form.py` | PRIMAからF_R, F_L抽出 |
 | `verify_dowell_diffusion.py` | Dowell vs 1D拡散方程式 |
 
 ### PEECコイル解析
@@ -96,24 +98,24 @@ z*coth(z) = 1 + w/(3 + w/(5 + w/(7 + w/(9 + ...))))
 ### 基本的な検証の実行
 
 ```bash
-# CLN + Dowell補正の検証
+# PRIMA + Dowell補正の検証
 cd examples/peec_integration
-python cln_with_dowell_correction.py
+python prima_with_dowell_correction.py
 
 # 連分数係数の導出と検証
 python derive_dowell_cf_algorithm.py
 
-# PEEC + CLN統合デモ
-python demo_peec_cln_reduction.py
+# PEEC + PRIMA統合デモ
+python demo_peec_prima_reduction.py
 ```
 
 ### 出力ファイル
 
 各スクリプトは `.png` 画像ファイルを出力:
 
-- `cln_with_dowell_correction.png` - CLN vs Dowell比較
+- `prima_with_dowell_correction.png` - PRIMA vs Dowell比較
 - `derive_dowell_cf_algorithm.png` - 連分数展開の検証
-- `demo_peec_cln_reduction.png` - モデル次数削減結果
+- `demo_peec_prima_reduction.png` - モデル次数削減結果
 
 ## 理論的背景
 

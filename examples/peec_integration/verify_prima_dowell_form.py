@@ -1,7 +1,7 @@
 """
-CLNインピーダンスをDowell形式に変換して比較
+PRIMAインピーダンスをDowell形式に変換して比較
 
-CLN I のインピーダンス Z(s) を計算し、それを
+PRIMA I のインピーダンス Z(s) を計算し、それを
   Z(s) = R_dc * F_R(s) + j*omega * L_int_dc * F_L(s)
 の形式に分解して、F_R と F_L を抽出し、Dowell の F_R, F_L と比較する。
 """
@@ -20,19 +20,19 @@ def calc_skin_depth(freq, sigma, mu=MU_0):
     return np.sqrt(2.0 / (omega * mu * sigma))
 
 
-def skin_effect_cln_params(d, sigma, mu=MU_0, n_stages=7):
-    """CLN I パラメータ（1D拡散方程式の連分数展開）"""
-    R_cln = np.zeros(n_stages)
-    L_cln = np.zeros(n_stages)
+def skin_effect_prima_params(d, sigma, mu=MU_0, n_stages=7):
+    """PRIMA I パラメータ（1D拡散方程式の連分数展開）"""
+    R_prima = np.zeros(n_stages)
+    L_prima = np.zeros(n_stages)
 
     for n in range(1, n_stages + 1):
         if n == 1:
-            R_cln[n-1] = 1e-16  # ほぼゼロ
+            R_prima[n-1] = 1e-16  # ほぼゼロ
         else:
-            R_cln[n-1] = (4*n - 5) * 4.0 / (sigma * d)
-        L_cln[n-1] = d * mu / (4*n - 3)
+            R_prima[n-1] = (4*n - 5) * 4.0 / (sigma * d)
+        L_prima[n-1] = d * mu / (4*n - 3)
 
-    return R_cln, L_cln
+    return R_prima, L_prima
 
 
 def build_tridiagonal(L):
@@ -44,11 +44,11 @@ def build_tridiagonal(L):
     return U.T @ np.diag(L) @ U
 
 
-def calc_cln_impedance(R_cln, L_cln, freqs):
-    """CLN I インピーダンスを計算"""
-    RR = np.diag(R_cln)
-    LL = build_tridiagonal(L_cln)
-    n = len(R_cln)
+def calc_prima_impedance(R_prima, L_prima, freqs):
+    """PRIMA I インピーダンスを計算"""
+    RR = np.diag(R_prima)
+    LL = build_tridiagonal(L_prima)
+    n = len(R_prima)
     V = np.zeros(n)
     V[0] = 1.0
 
@@ -91,7 +91,7 @@ def dowell_F_L(xi):
 
 def main():
     print("="*70)
-    print("CLN -> Dowell形式変換による比較")
+    print("PRIMA -> Dowell形式変換による比較")
     print("="*70)
 
     # 物理パラメータ
@@ -109,33 +109,33 @@ def main():
     print(f"  R_dc = 1/(sigma*d) = {R_dc:.6e} Ohm*m^2")
     print(f"  L_int_dc = mu*d/3 = {L_int_dc:.6e} H*m^2")
 
-    # CLN パラメータ
+    # PRIMA パラメータ
     n_stages = 10
-    R_cln, L_cln = skin_effect_cln_params(d, sigma, mu, n_stages)
+    R_prima, L_prima = skin_effect_prima_params(d, sigma, mu, n_stages)
 
-    print(f"\nCLN I パラメータ ({n_stages}段):")
-    print(f"  R_cln[0:3] = {R_cln[:3]}")
-    print(f"  L_cln[0:3] = {L_cln[:3]}")
+    print(f"\nPRIMA I パラメータ ({n_stages}段):")
+    print(f"  R_prima[0:3] = {R_prima[:3]}")
+    print(f"  L_prima[0:3] = {L_prima[:3]}")
 
     # 周波数範囲
     freqs = np.logspace(1, 8, 200)
 
-    # CLN インピーダンス計算
-    Z_cln = calc_cln_impedance(R_cln, L_cln, freqs)
+    # PRIMA インピーダンス計算
+    Z_prima = calc_prima_impedance(R_prima, L_prima, freqs)
 
-    # CLNから F_R, F_L を抽出
+    # PRIMAから F_R, F_L を抽出
     # Z(f) = R_dc * F_R + j*omega * L_int_dc * F_L
     # Re(Z) = R_dc * F_R  =>  F_R = Re(Z) / R_dc
     # Im(Z) = omega * L_int_dc * F_L  =>  F_L = Im(Z) / (omega * L_int_dc)
 
-    F_R_cln = np.real(Z_cln) / R_dc
-    F_L_cln = np.zeros(len(freqs))
+    F_R_prima = np.real(Z_prima) / R_dc
+    F_L_prima = np.zeros(len(freqs))
     for i, f in enumerate(freqs):
         omega = 2 * np.pi * f
         if omega * L_int_dc > 1e-30:
-            F_L_cln[i] = np.imag(Z_cln[i]) / (omega * L_int_dc)
+            F_L_prima[i] = np.imag(Z_prima[i]) / (omega * L_int_dc)
         else:
-            F_L_cln[i] = 1.0
+            F_L_prima[i] = 1.0
 
     # Dowell の F_R, F_L
     F_R_dowell = np.zeros(len(freqs))
@@ -150,7 +150,7 @@ def main():
         F_L_dowell[i] = dowell_F_L(xi)
 
     # 比較表示
-    print(f"\n{'Freq':>12} {'xi':>8} {'F_R(CLN)':>12} {'F_R(Dow)':>12} {'F_L(CLN)':>12} {'F_L(Dow)':>12}")
+    print(f"\n{'Freq':>12} {'xi':>8} {'F_R(PRIMA)':>12} {'F_R(Dow)':>12} {'F_L(PRIMA)':>12} {'F_L(Dow)':>12}")
     print("-"*75)
 
     test_freqs = [100, 1e3, 10e3, 100e3, 1e6, 10e6]
@@ -165,14 +165,14 @@ def main():
         else:
             freq_str = f"{f:.0f} Hz"
 
-        print(f"  {freq_str:>10} {xi:>8.3f} {F_R_cln[idx]:>12.6f} {F_R_dowell[idx]:>12.6f} "
-              f"{F_L_cln[idx]:>12.6f} {F_L_dowell[idx]:>12.6f}")
+        print(f"  {freq_str:>10} {xi:>8.3f} {F_R_prima[idx]:>12.6f} {F_R_dowell[idx]:>12.6f} "
+              f"{F_L_prima[idx]:>12.6f} {F_L_dowell[idx]:>12.6f}")
 
     # F_R, F_L の誤差
-    err_F_R = np.abs(F_R_cln - F_R_dowell) / np.maximum(np.abs(F_R_dowell), 1e-10) * 100
-    err_F_L = np.abs(F_L_cln - F_L_dowell) / np.maximum(np.abs(F_L_dowell), 1e-10) * 100
+    err_F_R = np.abs(F_R_prima - F_R_dowell) / np.maximum(np.abs(F_R_dowell), 1e-10) * 100
+    err_F_L = np.abs(F_L_prima - F_L_dowell) / np.maximum(np.abs(F_L_dowell), 1e-10) * 100
 
-    print(f"\n誤差 (CLN vs Dowell):")
+    print(f"\n誤差 (PRIMA vs Dowell):")
     print(f"{'Freq':>12} {'xi':>8} {'Err F_R':>12} {'Err F_L':>12}")
     print("-"*50)
 
@@ -194,7 +194,7 @@ def main():
 
     # Plot 1: F_R 比較
     ax1 = axes[0, 0]
-    ax1.semilogx(freqs, F_R_cln, 'b-', linewidth=2, label='F_R (CLN)')
+    ax1.semilogx(freqs, F_R_prima, 'b-', linewidth=2, label='F_R (PRIMA)')
     ax1.semilogx(freqs, F_R_dowell, 'r--', linewidth=2, label='F_R (Dowell)')
     ax1.set_xlabel('Frequency [Hz]')
     ax1.set_ylabel('F_R')
@@ -204,7 +204,7 @@ def main():
 
     # Plot 2: F_L 比較
     ax2 = axes[0, 1]
-    ax2.semilogx(freqs, F_L_cln, 'b-', linewidth=2, label='F_L (CLN)')
+    ax2.semilogx(freqs, F_L_prima, 'b-', linewidth=2, label='F_L (PRIMA)')
     ax2.semilogx(freqs, F_L_dowell, 'r--', linewidth=2, label='F_L (Dowell)')
     ax2.set_xlabel('Frequency [Hz]')
     ax2.set_ylabel('F_L')
@@ -214,7 +214,7 @@ def main():
 
     # Plot 3: F_R vs xi
     ax3 = axes[1, 0]
-    ax3.plot(xi_arr, F_R_cln, 'b-', linewidth=2, label='F_R (CLN)')
+    ax3.plot(xi_arr, F_R_prima, 'b-', linewidth=2, label='F_R (PRIMA)')
     ax3.plot(xi_arr, F_R_dowell, 'r--', linewidth=2, label='F_R (Dowell)')
     ax3.set_xlabel('xi = d/delta')
     ax3.set_ylabel('F_R')
@@ -225,7 +225,7 @@ def main():
 
     # Plot 4: F_L vs xi
     ax4 = axes[1, 1]
-    ax4.plot(xi_arr, F_L_cln, 'b-', linewidth=2, label='F_L (CLN)')
+    ax4.plot(xi_arr, F_L_prima, 'b-', linewidth=2, label='F_L (PRIMA)')
     ax4.plot(xi_arr, F_L_dowell, 'r--', linewidth=2, label='F_L (Dowell)')
     ax4.set_xlabel('xi = d/delta')
     ax4.set_ylabel('F_L')
@@ -235,8 +235,8 @@ def main():
     ax4.set_xlim([0, 10])
 
     plt.tight_layout()
-    plt.savefig('verify_cln_dowell_form.png', dpi=150)
-    print(f"\nSaved: verify_cln_dowell_form.png")
+    plt.savefig('verify_prima_dowell_form.png', dpi=150)
+    print(f"\nSaved: verify_prima_dowell_form.png")
     plt.close()
 
 
