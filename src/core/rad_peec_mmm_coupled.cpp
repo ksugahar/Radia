@@ -1251,7 +1251,9 @@ void PEECMMMCoupledSolver::MagnetBField(const TVector3d& point,
         return;
     }
 
-    radTg3d* g3dPtr = radTCast::g3dCast(hg.rep);
+    // Note: radTCast::g3dCast returns ::radTg3d* (global namespace)
+    // RadFieldUnified functions expect ::radTg3d* (not radia::radTg3d)
+    ::radTg3d* g3dPtr = radTCast::g3dCast(hg.rep);
     if (!g3dPtr) {
         return;
     }
