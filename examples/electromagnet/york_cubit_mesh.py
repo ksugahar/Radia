@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 """
-Generate Nastran mesh from Cubit journal file
+Generate Netgen mesh from Cubit journal file
 
-This script reads York.jou (Cubit journal file) and generates mesh files:
-- York.bdf (Nastran format) - for Radia simulation
-- York.msh (Gmsh format) - optional
+This script reads York.jou (Cubit journal file) and generates Netgen mesh directly:
+- Direct export to Netgen (in-memory, no intermediate files)
 - York.vtk (VTK format) - for ParaView visualization
+
+Workflow: Cubit geometry -> export_netgen() -> Netgen mesh -> Radia
 
 Requirements:
 - Coreform Cubit 2025.3 (or compatible version)
-- cubit_mesh_export module (from Coreform Cubit installation)
+- cubit_mesh_export module from S:\CoreformCubit\01_GitHub
+- NGSolve (for Mesh wrapper)
 
 Usage:
     python york_cubit_mesh.py
@@ -18,8 +20,7 @@ Input:
     York.jou - Cubit journal file with yoke geometry definition
 
 Output:
-    York.bdf - Nastran bulk data file (288 elements, 569 vertices)
-    York.msh - Gmsh version 2 format
+    Netgen mesh object (returned for use in main_simulation_workflow.py)
     York.vtk - VTK legacy format for ParaView
 """
 
@@ -27,14 +28,20 @@ import os
 import sys
 
 # Add Cubit Python API to path
-# Adjust this path if Cubit is installed in a different location
 CUBIT_PATH = "C:/Program Files/Coreform Cubit 2025.3/bin"
+CUBIT_EXPORT_PATH = "S:/CoreformCubit/01_GitHub"
+
 if os.path.exists(CUBIT_PATH):
-    sys.path.append(CUBIT_PATH)
+    sys.path.insert(0, CUBIT_PATH)
 else:
     print(f"[WARNING] Cubit not found at: {CUBIT_PATH}")
     print("          Please adjust CUBIT_PATH in this script")
-    print("          or install Coreform Cubit")
+    sys.exit(1)
+
+if os.path.exists(CUBIT_EXPORT_PATH):
+    sys.path.insert(0, CUBIT_EXPORT_PATH)
+else:
+    print(f"[WARNING] cubit_mesh_export not found at: {CUBIT_EXPORT_PATH}")
     sys.exit(1)
 
 try:
@@ -42,48 +49,60 @@ try:
 except ImportError:
     print("[ERROR] Failed to import cubit module")
     print("        Make sure Coreform Cubit is installed")
-    print(f"        and CUBIT_PATH is correct: {CUBIT_PATH}")
     sys.exit(1)
 
 try:
     import cubit_mesh_export
 except ImportError:
     print("[ERROR] Failed to import cubit_mesh_export module")
-    print("        This module should be included with Coreform Cubit")
+    print("        This module should be at S:\\CoreformCubit\\01_GitHub")
     sys.exit(1)
 
-# Initialize Cubit in batch mode (no GUI)
-print("Initializing Cubit...")
-cubit.init(['cubit', '-nojournal', '-batch'])
 
-# Read and execute Cubit journal file
-JOURNAL_FILE = 'York.jou'
-if not os.path.exists(JOURNAL_FILE):
-    print(f"[ERROR] Journal file not found: {JOURNAL_FILE}")
-    sys.exit(1)
+def generate_yoke_mesh():
+    """
+    Generate yoke mesh from Cubit journal file.
 
-print(f"Reading journal file: {JOURNAL_FILE}")
-with open(JOURNAL_FILE, 'r', encoding='utf8') as fid:
-    strLines = fid.readlines()
-    for n, line in enumerate(strLines):
-        cubit.cmd(line)
+    Returns:
+        Netgen mesh object (for use with NGSolve.Mesh())
+    """
+    # Initialize Cubit in batch mode (no GUI)
+    print("Initializing Cubit...")
+    cubit.init(['cubit', '-nojournal', '-batch'])
 
-print(f"  Executed {len(strLines)} commands")
+    # Read and execute Cubit journal file
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    journal_file = os.path.join(script_dir, 'York.jou')
 
-# Export mesh in multiple formats
-FileName = 'York'
+    if not os.path.exists(journal_file):
+        print(f"[ERROR] Journal file not found: {journal_file}")
+        return None
 
-print(f"\nExporting mesh files:")
-print(f"  {FileName}.msh (Gmsh v2)")
-cubit_mesh_export.export_Gmsh_ver2(cubit, FileName + '.msh')
+    print(f"Reading journal file: {journal_file}")
+    with open(journal_file, 'r', encoding='utf8') as fid:
+        lines = fid.readlines()
+        for line in lines:
+            cubit.cmd(line)
 
-print(f"  {FileName}.bdf (Nastran)")
-cubit_mesh_export.export_Nastran(cubit, FileName + '.bdf', DIM='3D', PYRAM=False)
+    print(f"  Executed {len(lines)} commands")
 
-print(f"  {FileName}.vtk (VTK)")
-cubit_mesh_export.export_vtk(cubit, FileName + '.vtk', ORDER="1st")
+    # Export VTK for visualization
+    vtk_file = os.path.join(script_dir, 'York.vtk')
+    print(f"\nExporting VTK: {vtk_file}")
+    cubit_mesh_export.export_vtk(cubit, vtk_file, ORDER="1st")
 
-print("\n[SUCCESS] Mesh generation complete!")
-print(f"          Use {FileName}.bdf in main_simulation_workflow.py")
-print(f"          Visualize with: paraview {FileName}.vtk")
+    # Export directly to Netgen (no intermediate file)
+    print("Exporting to Netgen mesh (direct, in-memory)...")
+    ngmesh = cubit_mesh_export.export_netgen(cubit)
 
+    print("\n[SUCCESS] Mesh generation complete!")
+    print(f"          Visualize with: paraview York.vtk")
+
+    return ngmesh
+
+
+if __name__ == '__main__':
+    ngmesh = generate_yoke_mesh()
+    if ngmesh:
+        print(f"\nNetgen mesh created: {type(ngmesh)}")
+        print("Use this mesh in main_simulation_workflow.py")

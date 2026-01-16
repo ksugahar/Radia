@@ -1157,93 +1157,145 @@ Include appropriate license notices in the package.
 
 ---
 
-## Nastran Mesh Import Unification (2025-11-23)
+## Nastran Format Policy: REMOVED (2026-01-16)
 
-### Migration: nastran_reader.py → nastran_mesh_import.py
+### Nastran BDF Support Removed from Radia
 
-**Date**: 2025-11-23
-**Status**: Complete
+**CRITICAL**: Nastran BDF format support is **REMOVED** from Radia. Use **Coreform Cubit → Netgen direct export** exclusively.
 
-### Changes
+**Policy**:
+- **Nastran import modules REMOVED** from Radia codebase
+- **All Nastran workflows REMOVED** - no backwards compatibility
+- **Use Coreform Cubit** for all mesh operations (hex/tet)
+- **Cubit can read legacy .bdf** files if needed
 
-**Removed**:
-- `src/python/nastran_reader.py` - Legacy Nastran reader (deprecated)
+**Rationale**:
+1. **Legacy format**: Nastran BDF is a decades-old format with limitations
+2. **Complexity**: Fixed-width fields, multiple continuation styles, error-prone parsing
+3. **Better alternatives**: Cubit `export_netgen()` provides direct in-memory mesh transfer
+4. **No users yet**: No backwards compatibility concerns
 
-**Enhanced**:
-- `src/python/nastran_mesh_import.py` - Unified Nastran import module
+**Removed Files**:
+- `src/radia/nastran_mesh_import.py` - REMOVED
+- `src/radia/nastran_reader.py` - REMOVED (already deprecated)
+- All examples using `import_nastran_mesh()` - REMOVED or refactored
 
-### Supported Element Types
-
-`nastran_mesh_import.py` now supports all major 3D element types:
-
-| Element Type | Nastran Card | Nodes | Status |
-|--------------|--------------|-------|--------|
-| Hexahedron | CHEXA | 8 | ✓ Supported |
-| Wedge/Prism | CPENTA | 6 | ✓ Supported |
-| Pyramid | CPYRAM | 5 | ✓ Supported |
-| Tetrahedron | CTETRA | 4 | ✓ Supported |
-| Triangle (Surface) | CTRIA3 | 3 | ✓ Supported |
-
-### CTRIA3 Surface Mesh Support
-
-**Key Feature**: CTRIA3 elements are grouped by material ID (property ID).
-
-- Each material ID creates **one polyhedron** from all its triangles
-- Enables surface-based magnetic analysis
-- Compatible with sphere.bdf (8 material groups, 7408 total faces)
-
-**Usage**:
-```python
-from nastran_mesh_import import import_nastran_mesh, create_radia_from_nastran
-
-# Read mesh
-mesh_data = import_nastran_mesh('sphere.bdf', units='mm')
-
-# Access triangle groups
-tria_groups = mesh_data['tria_groups']
-# Format: {material_id: {'faces': [[n1,n2,n3], ...], 'node_ids': set(...)}}
-
-# Create Radia objects automatically
-mag_obj = create_radia_from_nastran('sphere.bdf',
-                                     material={'magnetization': [0, 0, 1.2]},
-                                     units='mm')
+**Correct Workflow** (2026-01-16):
+```
+Cubit geometry → export_netgen() → Netgen mesh → Radia
+                 (direct, no file)
 ```
 
-### Migration Guide
-
-**Before** (using nastran_reader.py):
-```python
-from nastran_reader import read_nastran_mesh, TETRA_FACES
-
-mesh = read_nastran_mesh(nas_file)
-nodes = mesh['nodes']  # numpy array
-tetra_elements = mesh['tetra_elements']  # list
-tria_groups = mesh['tria_groups']  # dict
+**For Legacy .bdf Files**:
+```
+Legacy .bdf → Cubit (import nastran) → export_netgen() → Netgen → Radia
+              (Cubit handles .bdf reading)
 ```
 
-**After** (using nastran_mesh_import.py):
+### Cubit → Netgen Workflow
+
+**Standard workflow** (recommended):
 ```python
-from nastran_mesh_import import import_nastran_mesh, create_radia_from_nastran
-from netgen_mesh_import import TETRA_FACES, WEDGE_FACES, PYRAMID_FACES
+# RECOMMENDED - Use Cubit direct export
+import cubit
+import cubit_mesh_export
+from ngsolve import Mesh
+from netgen_mesh_import import netgen_mesh_to_radia
 
-# Option 1: Parse only
-mesh = import_nastran_mesh(nas_file, units='mm')
-vertices = mesh['vertices']  # list of [x,y,z]
-tet_elements = mesh['tet_elements']  # list of vertex indices
-tria_groups = mesh['tria_groups']  # dict (same format)
+# Generate mesh in Cubit, export directly to Netgen
+cubit.init(['cubit', '-nojournal', '-batch'])
+cubit.cmd("import geometry 'model.step'")
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("mesh volume all")
 
-# Option 2: Create Radia objects directly (recommended)
-mag_obj = create_radia_from_nastran(nas_file,
-                                     material={'magnetization': [0, 0, 1.2]},
-                                     units='mm')
+# Direct export to Netgen (no intermediate file)
+ngmesh = cubit_mesh_export.export_netgen(cubit)
+mesh = Mesh(ngmesh)
+
+# Convert to Radia
+mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
 ```
 
-### Affected Files
+### Reading Legacy Nastran Files via Cubit
 
-**Deprecated**:
-- `examples/background_fields/sphere_nastran_analysis.py` - Marked as DEPRECATED, kept for reference
+**If you have existing Nastran .bdf files**, use Coreform Cubit to read them and add boundary condition labels before exporting to Netgen:
 
-**Note**: If issues arise with Nastran import, refer to `nastran_mesh_import.py` as the single source of truth.
+```python
+# RECOMMENDED - Read legacy Nastran via Cubit, add labels, export to Netgen
+import cubit
+import cubit_mesh_export
+from ngsolve import Mesh
+
+cubit.init(['cubit', '-nojournal', '-batch'])
+
+# Read legacy Nastran mesh into Cubit
+cubit.cmd("import nastran 'legacy_mesh.bdf'")
+
+# Add boundary condition labels (sidesets/nodesets) in Cubit
+cubit.cmd("sideset 1 surface 1 2 3")
+cubit.cmd("sideset 1 name 'conductor'")
+cubit.cmd("sideset 2 surface 4 5 6")
+cubit.cmd("sideset 2 name 'ferrite'")
+cubit.cmd("sideset 3 surface 7 8")
+cubit.cmd("sideset 3 name 'shield'")
+
+# Export to Netgen with boundary labels preserved
+ngmesh = cubit_mesh_export.export_netgen(cubit)
+mesh = Mesh(ngmesh)
+
+# Boundary labels are now accessible as mesh.GetBoundaries()
+print(mesh.GetBoundaries())  # ['conductor', 'ferrite', 'shield']
+```
+
+**Benefits of Cubit as intermediary**:
+1. **Label management**: Add/modify boundary condition names
+2. **Mesh repair**: Fix mesh quality issues
+3. **Visualization**: Inspect mesh before export
+4. **Format flexibility**: Read various legacy formats (Nastran, ANSYS, Abaqus)
+5. **CAD format support**: Import STEP, IGES, SAT, and other CAD formats directly
+6. **Modern workflow**: No custom parsers needed in Radia
+```
+
+### CAD Format Support via Cubit
+
+Coreform Cubit supports direct import of CAD formats, eliminating need for custom importers:
+
+**Supported CAD Formats**:
+- STEP (.step, .stp) - ISO standard, recommended
+- IGES (.iges, .igs) - Legacy CAD exchange
+- Parasolid (.x_t, .x_b) - Siemens/NX native
+- ACIS SAT (.sat) - Spatial native
+- STL (.stl) - Triangulated surface
+- BREP (.brep) - OpenCascade native
+
+**Workflow with CAD files**:
+```python
+import cubit
+import cubit_mesh_export
+from ngsolve import Mesh
+from netgen_mesh_import import netgen_mesh_to_radia
+
+cubit.init(['cubit', '-nojournal', '-batch'])
+
+# Import CAD file (STEP, IGES, etc.)
+cubit.cmd("import step 'motor_rotor.step' heal")
+
+# Set up mesh
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("volume all size auto factor 5")
+cubit.cmd("mesh volume all")
+
+# Add boundary condition labels
+cubit.cmd("sideset 1 surface with z_coord > 0")
+cubit.cmd("sideset 1 name 'north_pole'")
+
+# Export directly to Netgen
+ngmesh = cubit_mesh_export.export_netgen(cubit)
+mesh = Mesh(ngmesh)
+
+# Convert to Radia
+mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
+```
 
 ---
 
@@ -1561,11 +1613,13 @@ run_all_benchmarks.py             # Orchestrator script
 
 | Element Type | Tool | Notes |
 |--------------|------|-------|
-| **Tetrahedral** | **Netgen** | Recommended. Uses `netgen.occ.Box` + `OCCGeometry.GenerateMesh()` |
+| **Tetrahedral** | **Netgen** | Simple geometry. Uses `netgen.occ.Box` + `OCCGeometry.GenerateMesh()` |
+| Tetrahedral | **Coreform Cubit** | Complex geometry. Uses `cubit_mesh_export.export_netgen()` |
 | Tetrahedral | **GMSH via NGSolve** | Import .msh files using `ngsolve.Mesh()` |
-| Tetrahedral | Nastran | DEPRECATED - Use Netgen or GMSH instead |
-| **Hexahedral** | **Netgen** | Recommended for structured hex mesh |
-| Hexahedral | Nastran | DEPRECATED - Use Netgen instead |
+| **Hexahedral** | **Coreform Cubit** | Required. Netgen cannot generate 3D hex meshes |
+| Mixed (hex+tet) | **Coreform Cubit** | Required for mixed element meshes |
+
+**Note**: Nastran BDF format is **REMOVED**. Use Cubit to read legacy .bdf files if needed.
 
 ### GMSH Mesh Import via NGSolve
 
@@ -2382,28 +2436,72 @@ K. Hollaus, M. Kaltenbacher, J. Schoberl, "A Nonlinear Effective Surface Impedan
 
 ---
 
-## VTK/VTS Export Policy
+## Visualization Policy: NGSolve + VTK (2026-01-16)
 
-### VTS Only for Field Export (2026-01-09)
+### Unified Visualization Framework
 
-**Policy**: Radia uses **VTS (VTK XML Structured Grid)** format only for magnetic field export. Legacy VTK geometry export has been removed.
+**CRITICAL**: Radia uses **NGSolve/Netgen** and **VTK (PyVista)** for all visualization needs.
 
-**Rationale**:
-1. **Performance**: VTS export is implemented in C++ with OpenMP parallelization for large grids
-2. **Simplicity**: Single format (VTS) for all field visualization needs
-3. **ParaView Compatibility**: VTS is the standard format for structured 3D field grids
+**Policy**:
+- **Geometry visualization**: Netgen OCC + NGSolve Draw()
+- **Field visualization**: VTS export + ParaView/PyVista
+- **Mesh visualization**: NGSolve mesh + Netgen GUI
+- **DO NOT** implement custom visualization in Radia C++ code
 
-**Removed APIs** (2026-01-09):
-- `rad.ObjDrwVTK()` - C++ geometry export removed
-- `exportGeometryToVTK()` - Python geometry export removed
-- `exportFieldToVTK()` - Python legacy field export removed
-- `radia_pyvista_viewer.py` - PyVista viewer removed (depended on ObjDrwVTK)
+### Visualization Stack
 
-**VTS Export API**:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Visualization Framework                       │
+├─────────────────────────────────────────────────────────────────┤
+│  Geometry (CAD)        │  Field Data          │  Interactive    │
+│  ──────────────────────│─────────────────────│────────────────│
+│  Netgen OCC shapes     │  rad.FldVTS()       │  NGSolve Draw() │
+│  STEP import (Cubit)   │  PyVista meshes     │  Netgen GUI     │
+│  ObjRecMag -> OCC      │  ParaView VTS/VTU   │  webgui         │
+│  ObjCylinder -> OCC    │                     │                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-`rad.FldVTS()` - C++ implementation with OpenMP parallelization
+### Analytical Objects → OCC Shapes (TODO)
 
-**Usage**:
+**Goal**: Export Radia analytical objects (no mesh) as OCC shapes for unified visualization.
+
+**Planned Implementation**:
+```python
+from netgen.occ import Box, Cylinder, Sphere
+import radia as rad
+
+# Radia analytical object
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
+
+# Export as OCC shape for visualization
+occ_shape = rad.ExportOCC(magnet)  # Returns netgen.occ shape
+
+# Combine with Cubit-imported geometry
+from ngsolve import Mesh
+mesh = Mesh(...)  # From Cubit export_netgen
+
+# Unified visualization
+from ngsolve.webgui import Draw
+Draw(mesh)
+Draw(occ_shape)  # Analytical object as CAD
+```
+
+**Supported Conversions** (TODO):
+| Radia Object | OCC Shape | Notes |
+|--------------|-----------|-------|
+| ObjRecMag | Box | Rectangular permanent magnet |
+| ObjCylMag | Cylinder | Cylindrical permanent magnet |
+| ObjSphMag | Sphere | Spherical permanent magnet |
+| ObjArcCur | Torus section | Arc current coil |
+| ObjRaceTrk | Composite | Racetrack coil |
+
+**Reference**: EMPY_Field implementation at `S:\NGSolve\EMPY\EMPY_Field`
+
+### VTS Field Export
+
+**Policy**: Use `rad.FldVTS()` for field data export.
 
 ```python
 import radia as rad
@@ -2412,21 +2510,60 @@ rad.FldUnits('m')
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
 # Export field grid to VTS
-# FldVTS(obj, filename, x_range, y_range, z_range, nx, ny, nz, include_B, include_H, unit_scale)
 rad.FldVTS(magnet, 'field_output.vts',
            [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15],
            41, 41, 27, 1, 0, 1.0)
-# Output: field_output.vts
 ```
 
-**VTS File Format**:
-- XML-based structured grid format
-- Coordinates automatically converted to meters (VTK standard)
-- Supports B field, H field, and scalar magnitudes
-- Compatible with ParaView, VisIt, and other VTK viewers
+### PyVista Integration
+
+**Policy**: Use PyVista for advanced VTK visualization.
+
+```python
+import pyvista as pv
+
+# Read VTS field data
+grid = pv.read('field_output.vts')
+
+# Visualization
+plotter = pv.Plotter()
+plotter.add_mesh(grid, scalars='B_magnitude', cmap='coolwarm')
+plotter.add_arrows(grid.points, grid['B_field'], mag=0.01)
+plotter.show()
+```
+
+### NGSolve webgui
+
+**Policy**: Use NGSolve webgui for interactive visualization.
+
+```python
+from ngsolve import *
+from ngsolve.webgui import Draw
+
+# Mesh from Cubit
+mesh = Mesh(...)
+
+# Field from Radia
+from radia_ngsolve import RadiaField
+B_cf = RadiaField(magnet, 'b')
+
+# GridFunction projection
+B_gf = GridFunction(HDiv(mesh, order=2))
+B_gf.Set(B_cf)
+
+# Interactive visualization
+Draw(B_gf, mesh, name='B_field')
+```
+
+### Removed Legacy Visualization
+
+**Removed APIs** (2026-01-09):
+- `rad.ObjDrwVTK()` - Use NGSolve Draw() instead
+- `exportGeometryToVTK()` - Use OCC export instead
+- `radia_pyvista_viewer.py` - Use PyVista directly
 
 ---
 
-**Last Updated**: 2026-01-09 (VTS export API unified to rad.FldVTS only)
+**Last Updated**: 2026-01-16 (Unified visualization policy: NGSolve + VTK)
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation

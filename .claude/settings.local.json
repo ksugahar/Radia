@@ -557,7 +557,15 @@
       "Bash(cmd /c \"call \"\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\VC\\\\Auxiliary\\\\Build\\\\vcvars64.bat\"\" && cd /d \"\"s:\\\\Radia\\\\01_GitHub\"\" && cmake --build build-msvc --config Release --target radia 2>&1\")",
       "Bash(\"s:/Radia/01_GitHub/build_now.bat\")",
       "Bash(powershell.exe -Command \"cmake --build build --config Release --target radia 2>&1 | Select-Object -Last 30\")",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(Remove-Item \"s:\\\\Radia\\\\01_GitHub\\\\examples\\\\esim_rwg_efie\\\\demo_esim_rwg_nonlinear.py\" -Force)",
+      "Bash(Remove-Item \"s:\\\\Radia\\\\01_GitHub\\\\examples\\\\esim_rwg_efie\\\\demo_pfft_acceleration.py\" -Force)",
+      "Bash(Remove-Item \"s:\\\\Radia\\\\01_GitHub\\\\examples\\\\esim_rwg_efie\\\\demo_hybrid_peec_rwg.py\" -Force)",
+      "Bash(Remove-Item \"s:\\\\Radia\\\\01_GitHub\\\\examples\\\\esim_rwg_efie\\\\demo_loop_star_decomposition.py\" -Force)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\ndocs: Add ACA low-rank approximation section to PEEC documentation\n\n- Add ''ACA Low-Rank Approximation for Large-Scale PEEC'' section\n- Include H-matrix structure explanation with TeX math\n- Document ACA+ algorithm with pseudo-code\n- Add admissibility condition formula\n- Include complexity comparison table \\(Dense vs H-Matrix\\)\n- Show integration with PRIMA for large-scale model reduction\n- Add Radia HACApK API usage example\n- Provide solver selection guidelines by problem size\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\npolicy: Add \"No Reinventing the Wheel\" development guideline\n\n- Use established libraries \\(PAMELA, HACApK, MKL, NGSolve\\) instead of\n  custom C++ implementations\n- Focus Radia C++ on core competencies: MMM, MSC, field computation\n- Python is acceptable for MOR, Verilog-A generation, vector fitting\n- Rationale: validation, performance, maintenance, development speed\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\npolicy: Clarify Radia''s role as NGSolve complement\n\nStrategic positioning:\n- Radia focuses on what NGSolve \\(FEM\\) cannot do well\n- Open boundaries, thin conductors, circuit extraction, SPICE export\n- No reinventing the wheel: use PAMELA, HACApK, MKL, NGSolve\n\nRadia core competencies:\n- MMM for permanent magnets and soft iron\n- MSC for hexahedra/tetrahedra\n- Field computation in unbounded domains\n- NGSolve integration \\(RadiaField\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\ndocs: Add application roadmap for research lab areas\n\n- Target applications: WPT, Induction Heating, Accelerator, NMR, MagLev\n- GPU acceleration plans for beam tracking \\(jhpcn: A100/H200\\)\n- Karl Hollaus ESIM collaboration with theory documentation\n- Hane Lab RNA collaboration with MMM H-matrix equivalence hypothesis\n- Analytical formula library section \\(sphere, cylinder, CLN forms\\)\n- Development phases and module status summary\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ],
     "deny": [],
     "ask": []

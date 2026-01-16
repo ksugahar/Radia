@@ -2,7 +2,7 @@
 Dowell F_R(s) and F_L(s) Pade (Rational Function) Expansion
 
 F_R and F_L are transcendental functions of xi = sqrt(-j*tau*s).
-We approximate them as rational functions of s for use in CLN.
+We approximate them as rational functions of s for use in PRIMA.
 
 Pade approximation: P(s)/Q(s) where P, Q are polynomials
 """
@@ -314,10 +314,10 @@ for x in [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]:
     print(f"  {x:>8.2f} {F_R_ex:>12.6f} {F_R_rat:>12.6f} {F_L_ex:>12.6f} {F_L_rat:>12.6f}")
 
 # ============================================================
-# Continued Fraction Form (for CLN)
+# Continued Fraction Form (for PRIMA)
 # ============================================================
 print("\n" + "="*70)
-print("Continued Fraction Form for CLN")
+print("Continued Fraction Form for PRIMA")
 print("="*70)
 
 print("""
@@ -334,7 +334,7 @@ For a general [n,n] Pade from z*coth(z):
 
 This IS already in continued fraction form in w = tau*s!
 
-For CLN implementation with N stages:
+For PRIMA implementation with N stages:
   Z(s) = R_dc * F_R(tau*s) + s * L_dc * F_L(tau*s)
 
 Using Pade[N,N] approximations gives a (2N)-order rational function
@@ -408,7 +408,7 @@ print("""
    F_L(x) = (11025 + 30*x^2) / (11025 + 100*x^2)
 
 4. These rational functions CAN be converted to continued fractions
-   and implemented as CLN ladder networks.
+   and implemented as PRIMA ladder networks.
 
 5. Higher-order Pade gives better accuracy at high frequencies,
    but Pade[3,3] is already very accurate for most applications.

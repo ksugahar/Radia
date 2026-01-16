@@ -93,6 +93,78 @@ class FrequencyResult(AnalysisResult):
 
 
 @dataclass
+class MultiPortResult(AnalysisResult):
+    """
+    Result of multi-port frequency response analysis.
+
+    For WPT (Wireless Power Transfer) and transformer analysis:
+    - Z-parameters: [V] = [Z] * [I]
+    - Y-parameters: [I] = [Y] * [V]
+    - S-parameters: [b] = [S] * [a] (for RF applications)
+
+    Key quantities for WPT:
+    - Mutual inductance M_ij: Off-diagonal elements of L matrix
+    - Coupling coefficient k_ij = M_ij / sqrt(L_ii * L_jj)
+    - Transfer impedance Z_21: Voltage at port 2 per current at port 1
+    """
+    frequencies: np.ndarray = field(default_factory=lambda: np.array([]))
+    n_ports: int = 2
+
+    # Z-parameters [n_freq, n_ports, n_ports]
+    Z_matrix: np.ndarray = field(default_factory=lambda: np.array([]))
+
+    # Derived quantities
+    mutual_inductance: np.ndarray = field(default_factory=lambda: np.array([]))  # M_12 vs frequency
+    coupling_coefficient: np.ndarray = field(default_factory=lambda: np.array([]))  # k vs frequency
+    self_inductance: np.ndarray = field(default_factory=lambda: np.array([]))  # [L1, L2] vs frequency
+
+    # Transfer characteristics
+    transfer_impedance: np.ndarray = field(default_factory=lambda: np.array([]))  # Z_21
+    power_transfer_efficiency: np.ndarray = field(default_factory=lambda: np.array([]))  # eta
+
+    def __post_init__(self):
+        self.analysis_type = AnalysisType.FREQUENCY
+        self.solver_type = SolverType.PEEC
+
+    def get_Z(self, i: int, j: int) -> np.ndarray:
+        """Get Z_ij parameter vs frequency."""
+        return self.Z_matrix[:, i, j]
+
+    def get_Y(self) -> np.ndarray:
+        """Get Y-parameters (Y = inv(Z))."""
+        n_freq = len(self.frequencies)
+        Y = np.zeros_like(self.Z_matrix)
+        for i in range(n_freq):
+            try:
+                Y[i] = np.linalg.inv(self.Z_matrix[i])
+            except np.linalg.LinAlgError:
+                Y[i] = np.linalg.pinv(self.Z_matrix[i])
+        return Y
+
+    def get_S(self, Z0: float = 50.0) -> np.ndarray:
+        """
+        Get S-parameters (for RF applications).
+
+        S = (Z - Z0*I) * (Z + Z0*I)^{-1}
+
+        Parameters:
+            Z0: Reference impedance [Ohm] (default: 50)
+        """
+        n_freq = len(self.frequencies)
+        n_ports = self.n_ports
+        S = np.zeros((n_freq, n_ports, n_ports), dtype=complex)
+        I = np.eye(n_ports)
+
+        for i in range(n_freq):
+            Z = self.Z_matrix[i]
+            try:
+                S[i] = (Z - Z0 * I) @ np.linalg.inv(Z + Z0 * I)
+            except np.linalg.LinAlgError:
+                pass
+        return S
+
+
+@dataclass
 class TransientResult(AnalysisResult):
     """Result of transient analysis."""
     time: np.ndarray = field(default_factory=lambda: np.array([]))
@@ -988,6 +1060,191 @@ class PEECAnalysisSolver(AnalysisSolver):
 
         return Z_total
 
+    # =========================================================================
+    # Multi-Port Analysis for WPT (Wireless Power Transfer)
+    # =========================================================================
+
+    def set_multiport_matrices(self,
+                                L_matrix: np.ndarray,
+                                R_matrix: np.ndarray,
+                                port_indices: Optional[List[List[int]]] = None):
+        """
+        Set multi-port PEEC matrices for WPT analysis.
+
+        The L and R matrices contain self and mutual terms:
+            L_ii: Self-inductance of port i
+            L_ij: Mutual inductance between ports i and j (i != j)
+            R_ii: Resistance of port i
+            R_ij: Mutual resistance (usually zero)
+
+        Parameters:
+            L_matrix: Full inductance matrix [n_loops x n_loops]
+            R_matrix: Full resistance matrix [n_loops x n_loops]
+            port_indices: List of loop indices for each port (optional)
+                          If None, each loop is one port.
+                          Example: [[0,1,2], [3,4,5]] for 2 ports, 3 loops each
+
+        Example for 2-coil WPT:
+            L = [[L1, M],     # L1 = self-inductance of Tx
+                 [M,  L2]]    # L2 = self-inductance of Rx, M = mutual
+            R = [[R1, 0],
+                 [0,  R2]]
+        """
+        self._L = np.asarray(L_matrix)
+        self._R = np.asarray(R_matrix)
+
+        n_loops = L_matrix.shape[0]
+        if port_indices is None:
+            # Each loop is one port
+            self._port_indices = [[i] for i in range(n_loops)]
+            self._n_ports = n_loops
+        else:
+            self._port_indices = port_indices
+            self._n_ports = len(port_indices)
+
+        self._is_built = False
+
+    def solve_frequency_multiport(self, frequencies: np.ndarray) -> 'MultiPortResult':
+        """
+        Perform multi-port frequency response analysis.
+
+        Computes the full Z-parameter matrix at each frequency:
+            [V1]   [Z11 Z12 ... Z1n] [I1]
+            [V2] = [Z21 Z22 ... Z2n] [I2]
+            [..]   [... ... ... ...] [..]
+            [Vn]   [Zn1 Zn2 ... Znn] [In]
+
+        where Z_ij = V_i / I_j with I_k = 0 for k != j
+
+        For WPT analysis, key outputs include:
+        - Z_21: Transfer impedance (induced voltage at Rx per Tx current)
+        - M_12: Mutual inductance = Im(Z_12) / omega
+        - k: Coupling coefficient = M_12 / sqrt(L1 * L2)
+
+        Parameters:
+            frequencies: Array of frequencies [Hz]
+
+        Returns:
+            MultiPortResult with Z-parameters and WPT metrics
+        """
+        import time as time_module
+        t_start = time_module.time()
+
+        if self._L is None or self._R is None:
+            raise ValueError("Matrices not set. Call set_multiport_matrices() first.")
+
+        frequencies = np.asarray(frequencies)
+        n_freq = len(frequencies)
+        n_ports = getattr(self, '_n_ports', self._L.shape[0])
+        n_loops = self._L.shape[0]
+
+        # Allocate result arrays
+        Z_matrix = np.zeros((n_freq, n_ports, n_ports), dtype=complex)
+        M_12 = np.zeros(n_freq)
+        k = np.zeros(n_freq)
+        L_self = np.zeros((n_freq, n_ports))
+        Z_21 = np.zeros(n_freq, dtype=complex)
+        eta = np.zeros(n_freq)
+
+        # Build R matrix if diagonal
+        if self._R.ndim == 1:
+            R_matrix = np.diag(self._R)
+        else:
+            R_matrix = self._R
+
+        # Get port grouping
+        port_indices = getattr(self, '_port_indices', [[i] for i in range(n_loops)])
+
+        for idx, f in enumerate(frequencies):
+            omega = 2.0 * np.pi * f
+            s = 1j * omega if f > 1e-10 else 1e-10
+
+            # Build full impedance matrix Z = R + j*omega*L
+            Z_full = R_matrix + s * self._L
+
+            # Apply Dowell correction if enabled (to diagonal elements)
+            if self._use_dowell and self._conductor_height is not None:
+                for i in range(n_loops):
+                    Z_full[i, i] = self._apply_dowell_correction(Z_full[i, i], f)
+
+            # Compute Z-parameters for each port
+            # For grouped ports, aggregate loop impedances
+
+            if n_ports == n_loops:
+                # Simple case: each loop is one port
+                # Z-matrix = Z_full directly
+                Z_matrix[idx] = Z_full
+
+            else:
+                # Grouped ports: need to aggregate
+                # Z_ij = sum over loops in port i, j
+                for pi in range(n_ports):
+                    for pj in range(n_ports):
+                        loops_i = port_indices[pi]
+                        loops_j = port_indices[pj]
+                        # Z_port_ij = sum of Z_full[li, lj] for li in port_i, lj in port_j
+                        Z_sum = 0.0j
+                        for li in loops_i:
+                            for lj in loops_j:
+                                Z_sum += Z_full[li, lj]
+                        Z_matrix[idx, pi, pj] = Z_sum
+
+            # Compute WPT metrics for 2-port system
+            if n_ports >= 2:
+                Z11 = Z_matrix[idx, 0, 0]
+                Z22 = Z_matrix[idx, 1, 1]
+                Z12 = Z_matrix[idx, 0, 1]
+                Z21_val = Z_matrix[idx, 1, 0]
+
+                # Self-inductances: L = Im(Z) / omega
+                if omega > 1e-10:
+                    L1 = np.imag(Z11) / omega
+                    L2 = np.imag(Z22) / omega
+                    M = np.imag(Z12) / omega  # Mutual inductance
+
+                    L_self[idx, 0] = L1
+                    L_self[idx, 1] = L2
+                    M_12[idx] = M
+
+                    # Coupling coefficient k = M / sqrt(L1 * L2)
+                    if L1 > 0 and L2 > 0:
+                        k[idx] = M / np.sqrt(L1 * L2)
+                    else:
+                        k[idx] = 0.0
+
+                # Transfer impedance Z_21
+                Z_21[idx] = Z21_val
+
+                # Power transfer efficiency (simplified, at resonance)
+                # eta = (k^2 * Q1 * Q2) / (1 + k^2 * Q1 * Q2)
+                # where Q = omega*L / R
+                R1 = np.real(Z11)
+                R2 = np.real(Z22)
+                if omega > 1e-10 and R1 > 1e-30 and R2 > 1e-30:
+                    Q1 = omega * L_self[idx, 0] / R1
+                    Q2 = omega * L_self[idx, 1] / R2
+                    k_sq = k[idx] ** 2
+                    eta_num = k_sq * Q1 * Q2
+                    eta[idx] = eta_num / (1.0 + eta_num) if eta_num > 0 else 0.0
+
+        t_elapsed = time_module.time() - t_start
+
+        return MultiPortResult(
+            analysis_type=AnalysisType.FREQUENCY,
+            solver_type=SolverType.PEEC,
+            success=True,
+            message=f"Multi-port analysis completed ({n_freq} freqs, {n_ports} ports)",
+            computation_time=t_elapsed,
+            frequencies=frequencies,
+            n_ports=n_ports,
+            Z_matrix=Z_matrix,
+            mutual_inductance=M_12,
+            coupling_coefficient=k,
+            self_inductance=L_self,
+            transfer_impedance=Z_21,
+            power_transfer_efficiency=eta
+        )
+
     def solve_transient(self, time: np.ndarray,
                         excitation: Callable[[float], float],
                         v_or_i: str = 'v') -> TransientResult:
@@ -1298,6 +1555,120 @@ class UnifiedAnalysis:
         if not self._is_configured:
             raise RuntimeError("Model not configured. Call set_loop_star_model() first.")
         return self._solver.solve_frequency_loop_star(frequencies)
+
+    # =========================================================================
+    # Multi-Port Analysis for WPT
+    # =========================================================================
+
+    def set_multiport_model(self,
+                            L_matrix: np.ndarray,
+                            R_matrix: np.ndarray,
+                            port_indices: Optional[List[List[int]]] = None):
+        """
+        Configure multi-port PEEC model for WPT analysis.
+
+        For a 2-coil WPT system:
+            L = [[L1, M],     # L1 = Tx self-inductance
+                 [M,  L2]]    # L2 = Rx self-inductance, M = mutual
+            R = [[R1, 0],
+                 [0,  R2]]
+
+        Parameters:
+            L_matrix: Full inductance matrix including mutual terms [H]
+            R_matrix: Full resistance matrix [Ohm]
+            port_indices: Port grouping (optional). If None, each loop = 1 port.
+
+        Example for simple 2-coil WPT:
+            >>> L1, L2, M = 10e-6, 10e-6, 5e-6  # 10 uH each, 5 uH mutual
+            >>> R1, R2 = 0.1, 0.1  # 0.1 Ohm each
+            >>> analysis.set_multiport_model(
+            ...     L_matrix=np.array([[L1, M], [M, L2]]),
+            ...     R_matrix=np.array([[R1, 0], [0, R2]])
+            ... )
+        """
+        self._solver.set_multiport_matrices(L_matrix, R_matrix, port_indices)
+        self._is_configured = True
+
+    def frequency_sweep_multiport(self, frequencies: np.ndarray) -> MultiPortResult:
+        """
+        Perform multi-port frequency response for WPT analysis.
+
+        Returns Z-parameters and WPT metrics:
+        - Z_matrix: Full impedance matrix [Z_ij] at each frequency
+        - mutual_inductance: M_12 = Im(Z_12) / omega
+        - coupling_coefficient: k = M / sqrt(L1 * L2)
+        - power_transfer_efficiency: eta at each frequency
+
+        Parameters:
+            frequencies: Array of frequencies [Hz]
+
+        Returns:
+            MultiPortResult with WPT analysis data
+
+        Example:
+            >>> freqs = np.logspace(3, 6, 100)  # 1 kHz to 1 MHz
+            >>> result = analysis.frequency_sweep_multiport(freqs)
+            >>> print(f"k = {result.coupling_coefficient[50]:.3f}")
+            >>> print(f"Max eta = {np.max(result.power_transfer_efficiency)*100:.1f}%")
+        """
+        if not self._is_configured:
+            raise RuntimeError("Model not configured. Call set_multiport_model() first.")
+        return self._solver.solve_frequency_multiport(frequencies)
+
+    def compute_wpt_coupling(self, L1: float, L2: float, M: float) -> dict:
+        """
+        Compute WPT coupling parameters from inductances.
+
+        Parameters:
+            L1: Transmitter self-inductance [H]
+            L2: Receiver self-inductance [H]
+            M: Mutual inductance [H]
+
+        Returns:
+            dict with:
+                k: Coupling coefficient
+                n: Turns ratio equivalent (sqrt(L2/L1))
+                M_max: Maximum possible M (geometric mean)
+        """
+        k = M / np.sqrt(L1 * L2) if L1 > 0 and L2 > 0 else 0.0
+        n = np.sqrt(L2 / L1) if L1 > 0 else 1.0
+        M_max = np.sqrt(L1 * L2)
+
+        return {
+            'k': k,
+            'n': n,
+            'M': M,
+            'M_max': M_max,
+            'L1': L1,
+            'L2': L2
+        }
+
+    def find_resonant_frequency(self, L: float, C: float) -> float:
+        """
+        Calculate resonant frequency for LC compensation.
+
+        Parameters:
+            L: Inductance [H]
+            C: Capacitance [F]
+
+        Returns:
+            Resonant frequency [Hz]
+        """
+        return 1.0 / (2.0 * np.pi * np.sqrt(L * C))
+
+    def design_compensation_capacitor(self, L: float, f_res: float) -> float:
+        """
+        Design compensation capacitor for WPT at target frequency.
+
+        Parameters:
+            L: Inductance to compensate [H]
+            f_res: Target resonant frequency [Hz]
+
+        Returns:
+            Required capacitance [F]
+        """
+        omega = 2.0 * np.pi * f_res
+        return 1.0 / (omega ** 2 * L)
 
 
 # Convenience functions for common waveforms

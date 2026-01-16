@@ -1,11 +1,11 @@
 """
-Dowell式をCLN形式で表現
+Dowell式をPRIMA形式で表現
 
 Dowell式:
   Z(s) = R_dc * F_R(xi) + s * L_int_dc * F_L(xi)
   xi = d/delta = d * sqrt(omega*mu*sigma/2)
 
-F_R(xi)とF_L(xi)をsの関数として展開し、CLN I形式で表現できるか検証。
+F_R(xi)とF_L(xi)をsの関数として展開し、PRIMA I形式で表現できるか検証。
 """
 
 import numpy as np
@@ -97,11 +97,11 @@ def build_tridiagonal(L):
     return U.T @ np.diag(L) @ U
 
 
-def calc_cln_impedance(R_cln, L_cln, freqs):
-    """CLN I インピーダンス"""
-    RR = np.diag(R_cln)
-    LL = build_tridiagonal(L_cln)
-    n = len(R_cln)
+def calc_prima_impedance(R_prima, L_prima, freqs):
+    """PRIMA I インピーダンス"""
+    RR = np.diag(R_prima)
+    LL = build_tridiagonal(L_prima)
+    n = len(R_prima)
     V = np.zeros(n)
     V[0] = 1.0
 
@@ -115,39 +115,39 @@ def calc_cln_impedance(R_cln, L_cln, freqs):
     return Z
 
 
-def dowell_cln_params(d, sigma, mu=MU_0, n_stages=7):
+def dowell_prima_params(d, sigma, mu=MU_0, n_stages=7):
     """
-    Dowell式に基づくCLNパラメータ
+    Dowell式に基づくPRIMAパラメータ
 
     Dowell DC parameters:
       R_dc = 1/(sigma*d)
       L_int_dc = mu*d/3
 
-    CLN I DC極限で Z -> R_dc + j*omega*L_int_dc となるように設定
+    PRIMA I DC極限で Z -> R_dc + j*omega*L_int_dc となるように設定
     """
     R_dc = 1.0 / (sigma * d)
     L_int_dc = mu * d / 3.0
 
-    R_cln = np.zeros(n_stages)
-    L_cln = np.zeros(n_stages)
+    R_prima = np.zeros(n_stages)
+    L_prima = np.zeros(n_stages)
 
     # Stage 1: DC抵抗とDC内部インダクタンス
-    R_cln[0] = R_dc
-    L_cln[0] = L_int_dc
+    R_prima[0] = R_dc
+    L_prima[0] = L_int_dc
 
     # Stage 2以降: 高周波補正項
     # 表皮効果による追加のR, L
     for n in range(2, n_stages + 1):
         # 経験的なスケーリング (要調整)
-        R_cln[n-1] = R_dc * (4*n - 5)
-        L_cln[n-1] = L_int_dc / (4*n - 3)
+        R_prima[n-1] = R_dc * (4*n - 5)
+        L_prima[n-1] = L_int_dc / (4*n - 3)
 
-    return R_cln, L_cln
+    return R_prima, L_prima
 
 
 def main():
     print("="*70)
-    print("Dowell式のCLN表現")
+    print("Dowell式のPRIMA表現")
     print("="*70)
 
     d = 0.1e-3
@@ -166,37 +166,37 @@ def main():
     # Dowell式
     Z_dowell = calc_dowell_impedance(R_dc, L_int_dc, d, sigma, mu, freqs)
 
-    # CLN (Dowell DC parameters)
+    # PRIMA (Dowell DC parameters)
     n_stages = 10
-    R_cln, L_cln = dowell_cln_params(d, sigma, mu, n_stages)
-    Z_cln = calc_cln_impedance(R_cln, L_cln, freqs)
+    R_prima, L_prima = dowell_prima_params(d, sigma, mu, n_stages)
+    Z_prima = calc_prima_impedance(R_prima, L_prima, freqs)
 
-    print(f"\nCLN parameters ({n_stages} stages):")
-    print(f"  R_cln[:3] = {R_cln[:3]}")
-    print(f"  L_cln[:3] = {L_cln[:3]}")
+    print(f"\nPRIMA parameters ({n_stages} stages):")
+    print(f"  R_prima[:3] = {R_prima[:3]}")
+    print(f"  L_prima[:3] = {L_prima[:3]}")
 
     # DC極限確認
     print(f"\nDC極限 (f=1Hz):")
     print(f"  Z_dowell = {Z_dowell[0]:.6e}")
-    print(f"  Z_cln = {Z_cln[0]:.6e}")
+    print(f"  Z_prima = {Z_prima[0]:.6e}")
     print(f"  R_dc + j*w*L_dc = {R_dc + 1j*2*np.pi*1*L_int_dc:.6e}")
 
     # 比較
-    print(f"\n{'Freq':>12} {'|Z_Dowell|':>14} {'|Z_CLN|':>14} {'Err':>10}")
+    print(f"\n{'Freq':>12} {'|Z_Dowell|':>14} {'|Z_PRIMA|':>14} {'Err':>10}")
     print("-"*55)
 
     test_freqs = [1, 100, 1e3, 10e3, 100e3, 1e6, 10e6]
     for f in test_freqs:
         idx = np.argmin(np.abs(freqs - f))
         z_dow = Z_dowell[idx]
-        z_cln = Z_cln[idx]
-        err = np.abs(z_cln - z_dow) / np.abs(z_dow) * 100
+        z_prima = Z_prima[idx]
+        err = np.abs(z_prima - z_dow) / np.abs(z_dow) * 100
         freq_str = f"{f:.0f} Hz" if f < 1000 else f"{f/1e3:.0f} kHz" if f < 1e6 else f"{f/1e6:.0f} MHz"
-        print(f"  {freq_str:>10} {np.abs(z_dow):>14.6e} {np.abs(z_cln):>14.6e} {err:>9.2f}%")
+        print(f"  {freq_str:>10} {np.abs(z_dow):>14.6e} {np.abs(z_prima):>14.6e} {err:>9.2f}%")
 
-    # CLNから逆算したF_R, F_L
-    print(f"\nCLNから逆算したF_R, F_L:")
-    print(f"{'Freq':>12} {'xi':>8} {'F_R(CLN)':>12} {'F_R(Dow)':>12} {'F_L(CLN)':>12} {'F_L(Dow)':>12}")
+    # PRIMAから逆算したF_R, F_L
+    print(f"\nPRIMAから逆算したF_R, F_L:")
+    print(f"{'Freq':>12} {'xi':>8} {'F_R(PRIMA)':>12} {'F_R(Dow)':>12} {'F_L(PRIMA)':>12} {'F_L(Dow)':>12}")
     print("-"*75)
 
     for f in test_freqs:
@@ -205,22 +205,22 @@ def main():
         delta = calc_skin_depth(f, sigma, mu)
         xi = d / delta
 
-        z_cln = Z_cln[idx]
-        F_R_cln = z_cln.real / R_dc
-        F_L_cln = z_cln.imag / (omega * L_int_dc) if omega * L_int_dc > 1e-30 else 1.0
+        z_prima = Z_prima[idx]
+        F_R_prima = z_prima.real / R_dc
+        F_L_prima = z_prima.imag / (omega * L_int_dc) if omega * L_int_dc > 1e-30 else 1.0
 
         F_R_dow = dowell_F_R(xi)
         F_L_dow = dowell_F_L(xi)
 
         freq_str = f"{f:.0f} Hz" if f < 1000 else f"{f/1e3:.0f} kHz" if f < 1e6 else f"{f/1e6:.0f} MHz"
-        print(f"  {freq_str:>10} {xi:>8.3f} {F_R_cln:>12.4f} {F_R_dow:>12.4f} {F_L_cln:>12.4f} {F_L_dow:>12.4f}")
+        print(f"  {freq_str:>10} {xi:>8.3f} {F_R_prima:>12.4f} {F_R_dow:>12.4f} {F_L_prima:>12.4f} {F_L_dow:>12.4f}")
 
     # プロット
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     ax1 = axes[0, 0]
     ax1.loglog(freqs, np.abs(Z_dowell), 'r-', linewidth=2, label='Dowell')
-    ax1.loglog(freqs, np.abs(Z_cln), 'b--', linewidth=2, label='CLN')
+    ax1.loglog(freqs, np.abs(Z_prima), 'b--', linewidth=2, label='PRIMA')
     ax1.set_xlabel('Frequency [Hz]')
     ax1.set_ylabel('|Z| [Ohm*m^2]')
     ax1.set_title('Impedance Magnitude')
@@ -228,16 +228,16 @@ def main():
     ax1.grid(True, which='both', alpha=0.3)
 
     ax2 = axes[0, 1]
-    err = np.abs(Z_cln - Z_dowell) / np.abs(Z_dowell) * 100
+    err = np.abs(Z_prima - Z_dowell) / np.abs(Z_dowell) * 100
     ax2.semilogx(freqs, err, 'b-', linewidth=2)
     ax2.set_xlabel('Frequency [Hz]')
     ax2.set_ylabel('Relative Error [%]')
-    ax2.set_title('CLN vs Dowell Error')
+    ax2.set_title('PRIMA vs Dowell Error')
     ax2.grid(True, which='both', alpha=0.3)
 
     ax3 = axes[1, 0]
     ax3.loglog(freqs, np.real(Z_dowell), 'r-', linewidth=2, label='Dowell')
-    ax3.loglog(freqs, np.real(Z_cln), 'b--', linewidth=2, label='CLN')
+    ax3.loglog(freqs, np.real(Z_prima), 'b--', linewidth=2, label='PRIMA')
     ax3.set_xlabel('Frequency [Hz]')
     ax3.set_ylabel('Re(Z)')
     ax3.set_title('Real Part (Resistance)')
@@ -246,7 +246,7 @@ def main():
 
     ax4 = axes[1, 1]
     ax4.loglog(freqs, np.imag(Z_dowell), 'r-', linewidth=2, label='Dowell')
-    ax4.loglog(freqs, np.imag(Z_cln), 'b--', linewidth=2, label='CLN')
+    ax4.loglog(freqs, np.imag(Z_prima), 'b--', linewidth=2, label='PRIMA')
     ax4.set_xlabel('Frequency [Hz]')
     ax4.set_ylabel('Im(Z)')
     ax4.set_title('Imaginary Part (Reactance)')
@@ -254,8 +254,8 @@ def main():
     ax4.grid(True, which='both', alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig('dowell_to_cln.png', dpi=150)
-    print(f"\nSaved: dowell_to_cln.png")
+    plt.savefig('dowell_to_prima.png', dpi=150)
+    print(f"\nSaved: dowell_to_prima.png")
     plt.close()
 
 

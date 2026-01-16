@@ -1,10 +1,10 @@
 """
-Test CLN (Cauer Ladder Network) C++ Module (pybind11)
+Test PRIMA (Cauer Ladder Network) C++ Module (pybind11)
 
 Tests:
-1. Lanczos algorithm for CLN I model reduction
+1. Lanczos algorithm for PRIMA I model reduction
 2. build_tridiagonal function
-3. CLN impedance computation
+3. PRIMA impedance computation
 4. Comparison with Python implementation
 """
 
@@ -20,16 +20,16 @@ MU_0 = 4 * np.pi * 1e-7  # H/m
 
 
 def test_lanczos_basic():
-    """Test basic Lanczos CLN I reduction"""
+    """Test basic Lanczos PRIMA I reduction"""
     print("=" * 60)
-    print("Test: Lanczos CLN I Reduction (pybind11)")
+    print("Test: Lanczos PRIMA I Reduction (pybind11)")
     print("=" * 60)
 
     try:
-        from cln_core import lanczos, build_tridiagonal
-        print("cln_core module imported successfully")
+        from prima_core import lanczos, build_tridiagonal
+        print("prima_core module imported successfully")
     except ImportError as e:
-        print(f"ERROR: Failed to import cln_core: {e}")
+        print(f"ERROR: Failed to import prima_core: {e}")
         return False
 
     # Create simple PEEC matrices
@@ -88,7 +88,7 @@ def test_build_tridiagonal():
     print("Test: build_tridiagonal Function")
     print("=" * 60)
 
-    from cln_core import build_tridiagonal
+    from prima_core import build_tridiagonal
 
     diag = np.array([1.0, 2.0, 3.0, 4.0])
     T = build_tridiagonal(diag)
@@ -123,13 +123,13 @@ def test_build_tridiagonal():
         return False
 
 
-def test_cln_impedance():
-    """Test CLN impedance computation"""
+def test_prima_impedance():
+    """Test PRIMA impedance computation"""
     print("\n" + "=" * 60)
-    print("Test: CLN Impedance Computation")
+    print("Test: PRIMA Impedance Computation")
     print("=" * 60)
 
-    from cln_core import lanczos, compute_cln_impedance, compute_cln_impedance_sweep
+    from prima_core import lanczos, compute_prima_impedance, compute_prima_impedance_sweep
 
     # Create PEEC matrices
     n = 10
@@ -150,14 +150,14 @@ def test_cln_impedance():
 
     # Single frequency test
     freq = 1e6  # 1 MHz
-    Z_single = compute_cln_impedance(result.R_diag, result.L_tridiag, freq)
+    Z_single = compute_prima_impedance(result.R_diag, result.L_tridiag, freq)
     print(f"\nImpedance at 1 MHz: {Z_single:.6e} Ohm")
     print(f"  |Z| = {np.abs(Z_single):.6f} Ohm")
     print(f"  angle = {np.angle(Z_single) * 180 / np.pi:.1f} deg")
 
     # Frequency sweep
     freqs = np.logspace(3, 8, 50)  # 1 kHz to 100 MHz
-    Z_sweep = compute_cln_impedance_sweep(result.R_diag, result.L_tridiag, freqs)
+    Z_sweep = compute_prima_impedance_sweep(result.R_diag, result.L_tridiag, freqs)
 
     print(f"\nFrequency sweep ({len(freqs)} points):")
     print(f"  1 kHz:   |Z| = {np.abs(Z_sweep[0]):.6e} Ohm")
@@ -169,10 +169,10 @@ def test_cln_impedance():
     print(f"\n  Inductive behavior (|Z| increases with freq): {is_inductive}")
 
     if is_inductive:
-        print("\n*** CLN Impedance Test PASSED ***")
+        print("\n*** PRIMA Impedance Test PASSED ***")
         return True
     else:
-        print("\n*** CLN Impedance Test FAILED ***")
+        print("\n*** PRIMA Impedance Test FAILED ***")
         return False
 
 
@@ -182,15 +182,15 @@ def test_compare_with_python():
     print("Test: Compare C++ vs Python Lanczos")
     print("=" * 60)
 
-    from cln_core import lanczos as lanczos_cpp
+    from prima_core import lanczos as lanczos_cpp
 
-    # Import Python implementation from external CLN library
+    # Import Python implementation from external PRIMA library
     try:
         sys.path.insert(0, r'W:\30_CauerLadderNetwork\2021_01_22_CauerI_to_CauerII\Python')
-        from cln import lanczos as lanczos_py
-        print("Python CLN library imported successfully")
+        from prima import lanczos as lanczos_py
+        print("Python PRIMA library imported successfully")
     except ImportError as e:
-        print(f"Python CLN library not available: {e}")
+        print(f"Python PRIMA library not available: {e}")
         print("Skipping comparison test")
         return True
 
@@ -249,8 +249,8 @@ def test_loop_star_coupling():
     print("Test: Loop-Star Coupling Transformation")
     print("=" * 60)
 
-    from cln_core import lanczos, transform_coupling, transform_port_vector
-    from cln_core import create_loop_star_cln, compute_loop_star_impedance
+    from prima_core import lanczos, transform_coupling, transform_port_vector
+    from prima_core import create_loop_star_prima, compute_loop_star_impedance
 
     # Create PEEC matrices
     n_loop = 10
@@ -314,17 +314,17 @@ def test_loop_star_coupling():
     diff_port = np.max(np.abs(port_reduced - port_reduced_np))
     print(f"  Max diff from NumPy: {diff_port:.2e}")
 
-    # Create LoopStarCLN
-    cln = create_loop_star_cln(result, M_LS, P)
-    print(f"\nLoopStarCLN created:")
-    print(f"  n_loop = {cln.n_loop}")
-    print(f"  n_reduced = {cln.n_reduced}")
-    print(f"  n_star = {cln.n_star}")
+    # Create LoopStarPRIMA
+    prima = create_loop_star_prima(result, M_LS, P)
+    print(f"\nLoopStarPRIMA created:")
+    print(f"  n_loop = {prima.n_loop}")
+    print(f"  n_reduced = {prima.n_reduced}")
+    print(f"  n_star = {prima.n_star}")
 
     # Compute impedance at various frequencies
     print(f"\nLoop-Star impedance:")
     for freq in [1e3, 1e6, 1e9]:
-        Z = compute_loop_star_impedance(cln, freq, port)
+        Z = compute_loop_star_impedance(prima, freq, port)
         freq_str = f"{freq/1e6:.0f} MHz" if freq >= 1e6 else f"{freq/1e3:.0f} kHz"
         print(f"  {freq_str}: |Z| = {np.abs(Z):.4e} Ohm, angle = {np.angle(Z)*180/np.pi:.1f} deg")
 
@@ -342,8 +342,8 @@ def test_aca_compression():
     print("Test: ACA+ Low-Rank Approximation (P Matrix)")
     print("=" * 60)
 
-    from cln_core import aca_compress, create_compressed_cln, compute_compressed_impedance
-    from cln_core import lanczos, create_loop_star_cln, compute_loop_star_impedance
+    from prima_core import aca_compress, create_compressed_prima, compute_compressed_impedance
+    from prima_core import lanczos, create_loop_star_prima, compute_loop_star_impedance
 
     # Create test P matrix (potential coefficient, positive definite)
     n_star = 20
@@ -372,8 +372,8 @@ def test_aca_compression():
         rel_error = np.linalg.norm(P - P_approx, 'fro') / np.linalg.norm(P, 'fro')
         print(f"    Relative error: {rel_error:.4e}")
 
-    # Test compressed Loop-Star CLN
-    print(f"\n--- Compressed Loop-Star CLN Test ---")
+    # Test compressed Loop-Star PRIMA
+    print(f"\n--- Compressed Loop-Star PRIMA Test ---")
 
     n_loop = 15
     n_star = 10
@@ -407,17 +407,17 @@ def test_aca_compression():
     n_reduced = 5
     lanczos_result = lanczos(R, L, n_iter=n_reduced)
 
-    # Create full (uncompressed) Loop-Star CLN for reference
-    cln_full = create_loop_star_cln(lanczos_result, M_LS, P)
+    # Create full (uncompressed) Loop-Star PRIMA for reference
+    prima_full = create_loop_star_prima(lanczos_result, M_LS, P)
 
-    # Create compressed Loop-Star CLN
-    cln_compressed = create_compressed_cln(lanczos_result, M_LS, P, eps=1e-4)
+    # Create compressed Loop-Star PRIMA
+    prima_compressed = create_compressed_prima(lanczos_result, M_LS, P, eps=1e-4)
 
     print(f"\nDimensions:")
     print(f"  Original: n_loop={n_loop}, n_star={n_star}")
-    print(f"  Full CLN: n_reduced={cln_full.n_reduced}, n_star={cln_full.n_star}")
-    print(f"  Compressed: n_reduced={cln_compressed.n_reduced}, k_star={cln_compressed.k_star}")
-    print(f"  Star compression: {n_star} -> {cln_compressed.k_star} ({cln_compressed.k_star/n_star:.1%})")
+    print(f"  Full PRIMA: n_reduced={prima_full.n_reduced}, n_star={prima_full.n_star}")
+    print(f"  Compressed: n_reduced={prima_compressed.n_reduced}, k_star={prima_compressed.k_star}")
+    print(f"  Star compression: {n_star} -> {prima_compressed.k_star} ({prima_compressed.k_star/n_star:.1%})")
 
     # Compare impedance
     port = np.zeros(n_loop)
@@ -429,8 +429,8 @@ def test_aca_compression():
 
     max_error = 0.0
     for freq in [1e3, 1e5, 1e7, 1e9]:
-        Z_full = compute_loop_star_impedance(cln_full, freq, port)
-        Z_comp = compute_compressed_impedance(cln_compressed, freq, port)
+        Z_full = compute_loop_star_impedance(prima_full, freq, port)
+        Z_comp = compute_compressed_impedance(prima_compressed, freq, port)
 
         rel_error = np.abs(Z_comp - Z_full) / np.abs(Z_full) * 100
         max_error = max(max_error, rel_error)
@@ -441,13 +441,13 @@ def test_aca_compression():
     print(f"\n  Max relative error: {max_error:.4f}%")
 
     # DOF reduction summary
-    dof_full = cln_full.n_reduced + cln_full.n_star
-    dof_comp = cln_compressed.n_reduced + cln_compressed.k_star
+    dof_full = prima_full.n_reduced + prima_full.n_star
+    dof_comp = prima_compressed.n_reduced + prima_compressed.k_star
     dof_orig = n_loop + n_star
 
     print(f"\nDOF Reduction Summary:")
     print(f"  Original: {dof_orig} DOF")
-    print(f"  Full CLN: {dof_full} DOF ({dof_full/dof_orig:.1%})")
+    print(f"  Full PRIMA: {dof_full} DOF ({dof_full/dof_orig:.1%})")
     print(f"  Compressed: {dof_comp} DOF ({dof_comp/dof_orig:.1%})")
 
     if max_error < 1.0:  # Less than 1% error
@@ -458,13 +458,13 @@ def test_aca_compression():
         return False
 
 
-def test_peec_cln_reduction():
-    """Test full PEEC -> CLN reduction workflow"""
+def test_peec_prima_reduction():
+    """Test full PEEC -> PRIMA reduction workflow"""
     print("\n" + "=" * 60)
-    print("Test: DC PEEC -> CLN I Reduction (Full Workflow)")
+    print("Test: DC PEEC -> PRIMA I Reduction (Full Workflow)")
     print("=" * 60)
 
-    from cln_core import lanczos, compute_cln_impedance_sweep
+    from prima_core import lanczos, compute_prima_impedance_sweep
 
     # Try to use C++ PEEC matrices
     try:
@@ -513,11 +513,11 @@ def test_peec_cln_reduction():
     print(f"  R_dc total: {np.sum(np.diag(R_mat))*1e3:.4f} mOhm")
     print(f"  L_self avg: {np.mean(np.diag(L_mat))*1e9:.2f} nH")
 
-    # Reduce to CLN I
+    # Reduce to PRIMA I
     n_reduced = 5
     result = lanczos(R_mat, L_mat, n_iter=n_reduced)
 
-    print(f"\nReduced CLN I model:")
+    print(f"\nReduced PRIMA I model:")
     print(f"  DOF: {result.n_output}")
     print(f"  DOF reduction: {(1 - result.n_output / n_full) * 100:.0f}%")
     print(f"  Converged: {result.converged}")
@@ -536,7 +536,7 @@ def test_peec_cln_reduction():
         Z_full[i] = 1.0 / I[0]
 
     # Reduced model impedance
-    Z_reduced = compute_cln_impedance_sweep(result.R_diag, result.L_tridiag, freqs)
+    Z_reduced = compute_prima_impedance_sweep(result.R_diag, result.L_tridiag, freqs)
 
     # Compute error
     rel_error = np.abs(Z_reduced - Z_full) / np.abs(Z_full) * 100
@@ -555,8 +555,8 @@ def test_peec_cln_reduction():
         freq_str = f"{f_check/1e3:.0f} kHz" if f_check < 1e6 else f"{f_check/1e6:.0f} MHz"
         print(f"  {freq_str:<12} {np.abs(Z_full[idx]):<14.4e} {np.abs(Z_reduced[idx]):<14.4e} {rel_error[idx]:<8.4f}%")
 
-    # CLN I circuit representation
-    print(f"\nCLN I Circuit Elements:")
+    # PRIMA I circuit representation
+    print(f"\nPRIMA I Circuit Elements:")
     print(f"  Stage | L (nH)       | R (mOhm)")
     print(f"  {'-'*40}")
     for i in range(result.n_output):
@@ -565,28 +565,28 @@ def test_peec_cln_reduction():
         print(f"  {i+1:5} | {L_val:12.4f} | {R_val:12.4f}")
 
     if max_error < 1.0:  # Less than 1% error
-        print("\n*** PEEC -> CLN Reduction Test PASSED ***")
+        print("\n*** PEEC -> PRIMA Reduction Test PASSED ***")
         return True
     else:
-        print("\n*** PEEC -> CLN Reduction Test PASSED (with higher error) ***")
+        print("\n*** PEEC -> PRIMA Reduction Test PASSED (with higher error) ***")
         return True
 
 
 def main():
     """Run all tests"""
     print("\n" + "=" * 60)
-    print("CLN Core C++ Module Tests (pybind11)")
+    print("PRIMA Core C++ Module Tests (pybind11)")
     print("=" * 60 + "\n")
 
     results = {}
 
     results['lanczos_basic'] = test_lanczos_basic()
     results['build_tridiagonal'] = test_build_tridiagonal()
-    results['cln_impedance'] = test_cln_impedance()
+    results['prima_impedance'] = test_prima_impedance()
     results['compare_python'] = test_compare_with_python()
     results['loop_star_coupling'] = test_loop_star_coupling()
     results['aca_compression'] = test_aca_compression()
-    results['peec_cln_reduction'] = test_peec_cln_reduction()
+    results['peec_prima_reduction'] = test_peec_prima_reduction()
 
     # Summary
     print("\n" + "=" * 60)
