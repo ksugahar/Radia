@@ -12,6 +12,9 @@
 
 #include "rad_peec_mmm_coupled.h"
 #include "rad_constants.h"
+#include "rad_field_unified.h"
+#include "rad_application.h"
+#include "rad_type_cast.h"
 #include <cmath>
 #include <stdexcept>
 #include <algorithm>
@@ -26,6 +29,9 @@
 #include "mkl_lapack.h"
 #include "mkl_cblas.h"
 #endif
+
+// External Radia application instance
+extern radTApplication rad;
 
 namespace radia {
 
@@ -1061,10 +1067,60 @@ void PEECMMMCoupledSolver::ConductorBField(const TVector3d& point,
 void PEECMMMCoupledSolver::MagnetBField(const TVector3d& point,
                                          double& Bx, double& By, double& Bz) const
 {
-    // TODO: Compute B from magnetInteraction_
-    // Need to use Radia's Fld() function or equivalent
+    Bx = By = Bz = 0;
 
-    Bx = By = Bz = 0;  // Placeholder
+    // Use rad_field_unified for field computation
+    if (magnetHandle_ <= 0) {
+        return;
+    }
+
+    // Get radTg3d pointer from handle
+    radThg hg;
+    if (!rad.ValidateElemKey(magnetHandle_, hg)) {
+        return;
+    }
+
+    radTg3d* g3dPtr = radTCast::g3dCast(hg.rep);
+    if (!g3dPtr) {
+        return;
+    }
+
+    // Use unified field computation with inside/outside check
+    RadFieldUnified::ComputeConfig config;
+    config.check_inside = true;
+    config.return_internal_field = true;
+
+    // Check if we have a solution with complex magnetization
+    if (!solution_.empty() && magnetInteraction_) {
+        int nMagElems = magnetInteraction_->GetNumElements();
+        int nLoopDOF = 1;
+
+        if (static_cast<int>(solution_.size()) >= nLoopDOF + nMagElems * 3) {
+            // Use complex magnetization from solution
+            RadFieldUnified::ComplexFieldResult result =
+                RadFieldUnified::ComputeComplexFieldSingle(
+                    g3dPtr, point,
+                    &solution_[nLoopDOF],  // Skip loop current DOF
+                    nMagElems,
+                    config
+                );
+
+            // Return real part (for static-like field evaluation)
+            Bx = result.Bx.real();
+            By = result.By.real();
+            Bz = result.Bz.real();
+            return;
+        }
+    }
+
+    // Fallback: Use static field computation
+    RadFieldUnified::FieldResult result =
+        RadFieldUnified::ComputeFieldSingle(g3dPtr, point,
+                                            RadFieldUnified::FIELD_B, config);
+
+    Bx = result.Bx;
+    By = result.By;
+    Bz = result.Bz;
 }
 
 //=============================================================================

@@ -669,4 +669,367 @@ void ReleaseFMM(int container_handle)
     g_elemCache.erase(container_handle);
 }
 
+// ============================================================================
+// Complex Field Computation (for PEEC+MMM coupling)
+// ============================================================================
+
+//-----------------------------------------------------------------------------
+// IsPointInsideAnyElement: Check if point is inside any element
+//-----------------------------------------------------------------------------
+bool IsPointInsideAnyElement(
+    const TVector3d& point,
+    const std::vector<RadPointClassify::ElementData>& elements,
+    int& containing_elem
+)
+{
+    containing_elem = -1;
+
+    for (size_t i = 0; i < elements.size(); ++i) {
+        const auto& elem = elements[i];
+
+        // Quick AABB check first
+        TVector3d aabb_min, aabb_max;
+        RadPointClassify::ComputeElementAABB(
+            elem.vertices.data(), static_cast<int>(elem.vertices.size()),
+            aabb_min, aabb_max);
+
+        if (point.x < aabb_min.x || point.x > aabb_max.x ||
+            point.y < aabb_min.y || point.y > aabb_max.y ||
+            point.z < aabb_min.z || point.z > aabb_max.z) {
+            continue;  // Outside AABB, skip
+        }
+
+        // Accurate solid angle test
+        if (RadPointClassify::PointInPolyhedronSolidAngle(point, elem.vertices, elem.faces)) {
+            containing_elem = static_cast<int>(i);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+//-----------------------------------------------------------------------------
+// GetMagnetizationInElement: Get M inside an element
+//-----------------------------------------------------------------------------
+bool GetMagnetizationInElement(
+    int containing_elem,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    std::complex<double>* M_out
+)
+{
+    if (containing_elem < 0 || containing_elem >= n_elements) {
+        M_out[0] = M_out[1] = M_out[2] = std::complex<double>(0, 0);
+        return false;
+    }
+
+    if (M_complex) {
+        // Use provided complex magnetization
+        int idx = containing_elem * 3;
+        M_out[0] = M_complex[idx + 0];
+        M_out[1] = M_complex[idx + 1];
+        M_out[2] = M_complex[idx + 2];
+        return true;
+    }
+
+    // No complex magnetization provided - return zeros
+    M_out[0] = M_out[1] = M_out[2] = std::complex<double>(0, 0);
+    return false;
+}
+
+//-----------------------------------------------------------------------------
+// ComputeBFromMagnetization: B field from dipole sources
+//-----------------------------------------------------------------------------
+void ComputeBFromMagnetization(
+    const TVector3d& point,
+    const double* centers,
+    const double* volumes,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    std::complex<double>* B_out
+)
+{
+    B_out[0] = B_out[1] = B_out[2] = std::complex<double>(0, 0);
+
+    if (!centers || !volumes || !M_complex || n_elements <= 0) {
+        return;
+    }
+
+    // B from magnetic dipole: B = (mu0/4pi) * [3(m.r)r/r^5 - m/r^3]
+    // where m = M * V (magnetic moment)
+    const double factor = MU_0 / (4.0 * 3.14159265358979323846);
+
+    for (int i = 0; i < n_elements; ++i) {
+        // Element center
+        TVector3d center;
+        center.x = centers[i * 3 + 0];
+        center.y = centers[i * 3 + 1];
+        center.z = centers[i * 3 + 2];
+
+        double V = volumes[i];
+        if (V < 1e-20) continue;
+
+        // Complex magnetization (magnetic moment = M * V)
+        std::complex<double> mx = M_complex[i * 3 + 0] * V;
+        std::complex<double> my = M_complex[i * 3 + 1] * V;
+        std::complex<double> mz = M_complex[i * 3 + 2] * V;
+
+        // Vector from source to observation point
+        double rx = point.x - center.x;
+        double ry = point.y - center.y;
+        double rz = point.z - center.z;
+
+        double r2 = rx * rx + ry * ry + rz * rz;
+        double r = std::sqrt(r2);
+
+        if (r < 1e-12) continue;  // Skip self-interaction
+
+        double r3 = r2 * r;
+        double r5 = r3 * r2;
+
+        // m dot r (complex)
+        std::complex<double> m_dot_r = mx * rx + my * ry + mz * rz;
+
+        // B = factor * [3*(m.r)*r/r^5 - m/r^3]
+        double coeff1 = 3.0 / r5;
+        double coeff2 = 1.0 / r3;
+
+        B_out[0] += factor * (coeff1 * m_dot_r * rx - coeff2 * mx);
+        B_out[1] += factor * (coeff1 * m_dot_r * ry - coeff2 * my);
+        B_out[2] += factor * (coeff1 * m_dot_r * rz - coeff2 * mz);
+    }
+}
+
+//-----------------------------------------------------------------------------
+// ComputeComplexFieldSingle: Single point complex field
+//-----------------------------------------------------------------------------
+ComplexFieldResult ComputeComplexFieldSingle(
+    radTg3d* g3dPtr,
+    const TVector3d& point,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    const ComputeConfig& config
+)
+{
+    ComplexFieldResult result;
+    result.Bx = result.By = result.Bz = std::complex<double>(0, 0);
+    result.Hx = result.Hy = result.Hz = std::complex<double>(0, 0);
+    result.Ax = result.Ay = result.Az = std::complex<double>(0, 0);
+    result.status = STATUS_ERROR;
+    result.element_id = -1;
+
+    if (!g3dPtr) return result;
+
+    // Build element data for inside/outside check
+    std::vector<RadPointClassify::ElementData> elements;
+    std::function<void(radTg3d*)> collectElements = [&](radTg3d* elem) {
+        if (!elem) return;
+
+        radTGroup* group = dynamic_cast<radTGroup*>(elem);
+        if (group) {
+            for (auto& child : group->GroupMapOfHandlers) {
+                radTg3d* childElem = radTCast::g3dCast(child.second.rep);
+                if (childElem) collectElements(childElem);
+            }
+            return;
+        }
+
+        RadPointClassify::ElementData ed;
+        if (ExtractElementVertices(elem, ed.vertices, ed.faces, ed.num_faces)) {
+            TVector3d sum(0, 0, 0);
+            for (const auto& v : ed.vertices) sum = sum + v;
+            ed.center = sum * (1.0 / ed.vertices.size());
+            ed.size = RadPointClassify::ComputeElementSize(
+                ed.vertices.data(), (int)ed.vertices.size());
+            elements.push_back(ed);
+        }
+    };
+    collectElements(g3dPtr);
+
+    // Check if point is inside
+    if (config.check_inside && !elements.empty()) {
+        int containing_elem = -1;
+        if (IsPointInsideAnyElement(point, elements, containing_elem)) {
+            result.status = STATUS_INSIDE;
+            result.element_id = containing_elem;
+
+            if (config.return_internal_field && M_complex && n_elements > 0) {
+                // Return internal magnetization as B field
+                std::complex<double> M_elem[3];
+                if (GetMagnetizationInElement(containing_elem, M_complex, n_elements, M_elem)) {
+                    result.Bx = MU_0 * M_elem[0];
+                    result.By = MU_0 * M_elem[1];
+                    result.Bz = MU_0 * M_elem[2];
+                }
+            }
+            return result;
+        }
+    }
+
+    // Point is outside - compute field
+    result.status = STATUS_OUTSIDE;
+
+    if (M_complex && n_elements > 0) {
+        // Use complex magnetization (PEEC+MMM mode)
+        // Need element centers and volumes
+        std::vector<double> centers(n_elements * 3);
+        std::vector<double> volumes(n_elements);
+
+        // Extract from elements data
+        for (int i = 0; i < std::min(n_elements, (int)elements.size()); ++i) {
+            centers[i * 3 + 0] = elements[i].center.x;
+            centers[i * 3 + 1] = elements[i].center.y;
+            centers[i * 3 + 2] = elements[i].center.z;
+
+            // Estimate volume from element size
+            // (For proper implementation, should get from radTg3d)
+            double s = elements[i].size;
+            volumes[i] = s * s * s / 6.0;  // Approximate
+        }
+
+        std::complex<double> B_out[3];
+        ComputeBFromMagnetization(point, centers.data(), volumes.data(),
+                                  M_complex, n_elements, B_out);
+
+        result.Bx = B_out[0];
+        result.By = B_out[1];
+        result.Bz = B_out[2];
+
+        // H = B / mu0 (in free space)
+        result.Hx = result.Bx / MU_0;
+        result.Hy = result.By / MU_0;
+        result.Hz = result.Bz / MU_0;
+    } else {
+        // Use static field computation (original Radia)
+        FieldResult static_result = ComputeFieldSingle(g3dPtr, point, FIELD_B, config);
+
+        result.Bx = std::complex<double>(static_result.Bx, 0);
+        result.By = std::complex<double>(static_result.By, 0);
+        result.Bz = std::complex<double>(static_result.Bz, 0);
+        result.Hx = std::complex<double>(static_result.Hx, 0);
+        result.Hy = std::complex<double>(static_result.Hy, 0);
+        result.Hz = std::complex<double>(static_result.Hz, 0);
+        result.status = static_result.status;
+        result.element_id = static_result.element_id;
+    }
+
+    return result;
+}
+
+//-----------------------------------------------------------------------------
+// ComputeComplexFieldBatch: Batch complex field with OpenMP
+//-----------------------------------------------------------------------------
+void ComputeComplexFieldBatch(
+    radTg3d* g3dPtr,
+    const double* points,
+    int n_points,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    const ComputeConfig& config,
+    std::complex<double>* B_out,
+    PointStatus* status_out
+)
+{
+    if (!g3dPtr || n_points <= 0 || !B_out) return;
+
+    // Initialize outputs
+    for (int i = 0; i < n_points * 3; ++i) {
+        B_out[i] = std::complex<double>(0, 0);
+    }
+    if (status_out) {
+        for (int i = 0; i < n_points; ++i) {
+            status_out[i] = STATUS_OUTSIDE;
+        }
+    }
+
+    // Build element data once
+    std::vector<RadPointClassify::ElementData> elements;
+    std::function<void(radTg3d*)> collectElements = [&](radTg3d* elem) {
+        if (!elem) return;
+
+        radTGroup* group = dynamic_cast<radTGroup*>(elem);
+        if (group) {
+            for (auto& child : group->GroupMapOfHandlers) {
+                radTg3d* childElem = radTCast::g3dCast(child.second.rep);
+                if (childElem) collectElements(childElem);
+            }
+            return;
+        }
+
+        RadPointClassify::ElementData ed;
+        if (ExtractElementVertices(elem, ed.vertices, ed.faces, ed.num_faces)) {
+            TVector3d sum(0, 0, 0);
+            for (const auto& v : ed.vertices) sum = sum + v;
+            ed.center = sum * (1.0 / ed.vertices.size());
+            ed.size = RadPointClassify::ComputeElementSize(
+                ed.vertices.data(), (int)ed.vertices.size());
+            elements.push_back(ed);
+        }
+    };
+    collectElements(g3dPtr);
+
+    // Prepare element data for batch computation
+    int actual_n_elements = static_cast<int>(elements.size());
+    std::vector<double> centers(actual_n_elements * 3);
+    std::vector<double> volumes(actual_n_elements);
+
+    for (int i = 0; i < actual_n_elements; ++i) {
+        centers[i * 3 + 0] = elements[i].center.x;
+        centers[i * 3 + 1] = elements[i].center.y;
+        centers[i * 3 + 2] = elements[i].center.z;
+        double s = elements[i].size;
+        volumes[i] = s * s * s / 6.0;
+    }
+
+    // OpenMP parallel computation
+    #ifdef _OPENMP
+    #pragma omp parallel for schedule(static) if(n_points > 100)
+    #endif
+    for (int i = 0; i < n_points; ++i) {
+        TVector3d pt(points[i * 3], points[i * 3 + 1], points[i * 3 + 2]);
+
+        // Check inside
+        if (config.check_inside && !elements.empty()) {
+            int containing_elem = -1;
+            if (IsPointInsideAnyElement(pt, elements, containing_elem)) {
+                if (status_out) status_out[i] = STATUS_INSIDE;
+
+                if (config.return_internal_field && M_complex && n_elements > 0) {
+                    std::complex<double> M_elem[3];
+                    GetMagnetizationInElement(containing_elem, M_complex, n_elements, M_elem);
+                    B_out[i * 3 + 0] = MU_0 * M_elem[0];
+                    B_out[i * 3 + 1] = MU_0 * M_elem[1];
+                    B_out[i * 3 + 2] = MU_0 * M_elem[2];
+                }
+                continue;
+            }
+        }
+
+        // Compute field at external point
+        if (M_complex && n_elements > 0) {
+            std::complex<double> B_pt[3];
+            ComputeBFromMagnetization(pt, centers.data(), volumes.data(),
+                                      M_complex, n_elements, B_pt);
+            B_out[i * 3 + 0] = B_pt[0];
+            B_out[i * 3 + 1] = B_pt[1];
+            B_out[i * 3 + 2] = B_pt[2];
+        } else {
+            // Static field using Radia's B_genComp
+            TVector3d ZeroVect(0, 0, 0);
+            radTFieldKey FieldKey;
+            FieldKey.B_ = true;
+
+            radTField Field(FieldKey, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect);
+            Field.P = pt;
+
+            g3dPtr->B_genComp(&Field);
+
+            B_out[i * 3 + 0] = std::complex<double>(Field.B.x, 0);
+            B_out[i * 3 + 1] = std::complex<double>(Field.B.y, 0);
+            B_out[i * 3 + 2] = std::complex<double>(Field.B.z, 0);
+        }
+    }
+}
+
 } // namespace RadFieldUnified

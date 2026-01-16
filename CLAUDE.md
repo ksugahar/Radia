@@ -554,6 +554,82 @@ Vector potential A satisfies `B = curl(A)` (verified numerically).
 - `rad_poly_analytical.cpp`: ObjHexahedron/ObjTetrahedron A/Phi field computation
 - `rad_arc_current.cpp`: Biot-Savart field from arc currents
 
+### Unified Field Computation Architecture (2026-01-16)
+
+**POLICY**: All field computation MUST use `rad_field_unified.h/cpp` as the central module.
+
+**Architecture**:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    rad_field_unified.h/cpp                       │
+│  ─────────────────────────────────────────────────────────────  │
+│  ComputeFieldSingle()     - Single point, static field          │
+│  ComputeFieldBatch()      - Batch points, OpenMP parallelized   │
+│  ComputeComplexFieldSingle() - Complex (AC) field               │
+│  ComputeComplexFieldBatch()  - Complex batch with OpenMP        │
+│  IsPointInsideAnyElement() - Inside/outside classification      │
+│  ComputeBFromMagnetization() - Dipole field from M (complex)    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+           ┌──────────────────┼──────────────────┐
+           ▼                  ▼                  ▼
+    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+    │ rad.Fld()   │    │ rad.FldVTS()│    │ CplMagFld() │
+    │ rad.FldBatch│    │ VTS export  │    │ PEEC+MMM    │
+    └─────────────┘    └─────────────┘    └─────────────┘
+           │                  │                  │
+           ▼                  ▼                  ▼
+    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+    │ radentry.cpp│    │ radentry.cpp│    │ rad_peec_   │
+    │ Python API  │    │ VTS output  │    │ mmm_coupled │
+    └─────────────┘    └─────────────┘    └─────────────┘
+```
+
+**Users of rad_field_unified**:
+| Component | Function Used | Purpose |
+|-----------|--------------|---------|
+| `rad.Fld()` | `ComputeFieldSingle` | Python API single-point field |
+| `rad.FldBatch()` | `ComputeFieldBatch` | Python API batch field |
+| `rad.FldVTS()` | `ComputeFieldBatch` | VTS export grid field |
+| `radia_ngsolve` | `ComputeFieldSingle` | RadiaField CoefficientFunction |
+| `rad_particle_trajectory` | `ComputeFieldForTrajectory` | Beam tracking |
+| `CplMagFld()` | `ComputeComplexFieldSingle` | PEEC+MMM coupled field |
+
+**Key Features**:
+1. **Inside/Outside Classification**: Uses solid angle method for accurate determination
+2. **OpenMP Parallelization**: Batch computations parallelized with `#pragma omp parallel for`
+3. **Complex Field Support**: For PEEC+MMM AC analysis with complex magnetization
+4. **FMM Acceleration**: Optional dipole approximation for large problems
+
+**Inside/Outside Handling**:
+```cpp
+// Automatic inside/outside handling
+RadFieldUnified::ComputeConfig config;
+config.check_inside = true;           // Enable inside check
+config.return_internal_field = true;  // Return M*mu0 for inside points
+
+RadFieldUnified::FieldResult result =
+    RadFieldUnified::ComputeFieldSingle(g3dPtr, point, FIELD_B, config);
+
+if (result.status == RadFieldUnified::STATUS_INSIDE) {
+    // Point is inside element result.element_id
+    // result.Bx/By/Bz contains internal field (mu0 * M)
+}
+```
+
+**Complex Field Computation (PEEC+MMM)**:
+```cpp
+// For coupled PEEC+MMM with complex magnetization
+std::complex<double>* M_complex = ...;  // From coupled solver solution
+int n_elements = ...;
+
+RadFieldUnified::ComplexFieldResult result =
+    RadFieldUnified::ComputeComplexFieldSingle(
+        g3dPtr, point, M_complex, n_elements, config);
+
+// result.Bx, By, Bz are std::complex<double>
+```
+
 ---
 
 ## Material Specification
