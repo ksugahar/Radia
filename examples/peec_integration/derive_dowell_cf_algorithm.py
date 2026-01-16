@@ -205,10 +205,10 @@ for w_val in [0.01, 0.1, 1.0, 4.0, 10.0]:
     print(f"  {w_val:>8.2f} {np.abs(exact):>14.8f} {np.abs(jf5):>14.8f} {np.abs(jf10):>14.8f}")
 
 # ============================================================
-# Convert J-fraction to CLN form
+# Convert J-fraction to PRIMA form
 # ============================================================
 print("\n" + "="*70)
-print("J-fraction to CLN Ladder Network")
+print("J-fraction to PRIMA Ladder Network")
 print("="*70)
 
 print("""
@@ -233,22 +233,22 @@ But the exact correspondence depends on the impedance formula structure.
 """)
 
 # ============================================================
-# CLN parameters from continued fraction
+# PRIMA parameters from continued fraction
 # ============================================================
 print("\n" + "="*70)
-print("CLN I Parameters (from 1D diffusion eigenvalue expansion)")
+print("PRIMA I Parameters (from 1D diffusion eigenvalue expansion)")
 print("="*70)
 
 print("""
-The CLN I form comes from eigenvalue expansion of 1D diffusion:
+The PRIMA I form comes from eigenvalue expansion of 1D diffusion:
 
 R[n] = (4n-5) * 4 / (sigma*d)  for n >= 2, R[1] ~ 0
 L[n] = d*mu / (4n-3)
 
-The continued fraction for CLN I is different from z*coth(z).
+The continued fraction for PRIMA I is different from z*coth(z).
 
-CLN I represents:
-  Z_cln(s) = sL[1] + R[1] || (sL[2] + R[2] || (sL[3] + R[3] || ...))
+PRIMA I represents:
+  Z_prima(s) = sL[1] + R[1] || (sL[2] + R[2] || (sL[3] + R[3] || ...))
 
 which matches the 1D diffusion equation solution:
   Z_diff(s) = s*mu*(2/(k*d))*tan(k*d/2)*d
@@ -256,39 +256,39 @@ which matches the 1D diffusion equation solution:
 NOT Dowell's formula: Z_dowell = R_dc*F_R + s*L_dc*F_L
 
 So:
-- CLN I matches 1D Diffusion (exact)
-- CLN I does NOT match Dowell (different model)
+- PRIMA I matches 1D Diffusion (exact)
+- PRIMA I does NOT match Dowell (different model)
 - Dowell has its own continued fraction (J-fraction)
 """)
 
-def skin_effect_cln_params(d, sigma, mu=MU_0, n_stages=7):
-    """CLN I parameters for 1D diffusion skin effect"""
-    R_cln = np.zeros(n_stages)
-    L_cln = np.zeros(n_stages)
+def skin_effect_prima_params(d, sigma, mu=MU_0, n_stages=7):
+    """PRIMA I parameters for 1D diffusion skin effect"""
+    R_prima = np.zeros(n_stages)
+    L_prima = np.zeros(n_stages)
 
     for n in range(1, n_stages + 1):
         if n == 1:
-            R_cln[n-1] = 1e-16  # Nearly zero
+            R_prima[n-1] = 1e-16  # Nearly zero
         else:
-            R_cln[n-1] = (4*n - 5) * 4.0 / (sigma * d)
-        L_cln[n-1] = d * mu / (4*n - 3)
+            R_prima[n-1] = (4*n - 5) * 4.0 / (sigma * d)
+        L_prima[n-1] = d * mu / (4*n - 3)
 
-    return R_cln, L_cln
+    return R_prima, L_prima
 
 # Example parameters
 d = 0.1e-3  # 0.1 mm
 sigma = 5.8e7  # Copper
 
-print(f"\nCLN I parameters for d = {d*1e3} mm, sigma = {sigma:.1e} S/m:")
-R_cln, L_cln = skin_effect_cln_params(d, sigma, MU_0, 7)
+print(f"\nPRIMA I parameters for d = {d*1e3} mm, sigma = {sigma:.1e} S/m:")
+R_prima, L_prima = skin_effect_prima_params(d, sigma, MU_0, 7)
 for i in range(7):
-    print(f"  Stage {i+1}: R = {R_cln[i]:.4e} Ohm*m^2, L = {L_cln[i]*1e9:.4f} nH*m^2")
+    print(f"  Stage {i+1}: R = {R_prima[i]:.4e} Ohm*m^2, L = {L_prima[i]*1e9:.4f} nH*m^2")
 
 # ============================================================
-# Dowell CLN form
+# Dowell PRIMA form
 # ============================================================
 print("\n" + "="*70)
-print("Dowell-based CLN (Different from 1D Diffusion CLN)")
+print("Dowell-based PRIMA (Different from 1D Diffusion PRIMA)")
 print("="*70)
 
 print("""
@@ -305,11 +305,11 @@ We can write F_R and F_L in terms of continued fractions.
 However, the structure is:
   Z = R_dc * (rational function of tau*s)
 
-This is different from the CLN I structure:
+This is different from the PRIMA I structure:
   Z = s*L + parallel RC network
 
-The "DC CLN + Dowell correction" approach avoids this mismatch:
-1. Build CLN with DC parameters
+The "DC PRIMA + Dowell correction" approach avoids this mismatch:
+1. Build PRIMA with DC parameters
 2. Apply F_R(omega), F_L(omega) at each frequency
 3. No need for continued fraction conversion
 """)
@@ -332,11 +332,11 @@ print("""
 3. The Viskovatov algorithm can convert Taylor series to S-fraction,
    but the J-fraction form is more natural for z*coth(z).
 
-4. The CLN I form (from 1D diffusion) has DIFFERENT structure:
-   - CLN I matches 1D diffusion equation
-   - CLN I does NOT match Dowell formula
+4. The PRIMA I form (from 1D diffusion) has DIFFERENT structure:
+   - PRIMA I matches 1D diffusion equation
+   - PRIMA I does NOT match Dowell formula
 
-5. For Dowell-based PEEC, use "DC CLN + Dowell correction":
+5. For Dowell-based PEEC, use "DC PRIMA + Dowell correction":
    - No continued fraction conversion needed
    - Apply F_R(omega), F_L(omega) directly per frequency
    - This is EXACT (no approximation error)

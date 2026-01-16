@@ -277,7 +277,7 @@ def main():
     3. The physical solution (I, M) is unchanged
     4. Impedance Z = V/I is identical in both formulations
 
-    => CLN (Cauer Ladder Network) method can be applied to the
+    => PRIMA (Cauer Ladder Network) method can be applied to the
        symmetrized system for model order reduction.
     """)
     print("="*70)
