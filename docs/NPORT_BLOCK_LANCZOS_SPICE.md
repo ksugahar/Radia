@@ -4,6 +4,15 @@
 
 This document describes the N-port Block Lanczos algorithm for SPICE-compatible circuit extraction from coupled electromagnetic systems (conductors + magnetic materials + dielectrics).
 
+## Scalar vs Block Lanczos: When to Use Which
+
+| Ports | Lanczos Type | Rationale |
+|-------|--------------|-----------|
+| **1-port** | Scalar Lanczos OK | Single starting vector captures port behavior |
+| **N-port (N≥2)** | **Block Lanczos required** | Need p starting vectors for p ports |
+
+**WARNING**: Using scalar Lanczos for N-port systems is **meaningless** - it cannot capture multi-port interactions correctly.
+
 ## Key Insight: Block Lanczos with DC Starting Vectors
 
 For N-port systems, **Block Lanczos** (not scalar Lanczos) must be used for magnetic and dielectric subsystems. The critical insight is:

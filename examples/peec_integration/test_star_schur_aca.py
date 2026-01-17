@@ -2,6 +2,15 @@
 """
 Test: Star (capacitance) DOF with Schur complement and Lanczos reduction
 
+**LIMITATION**: This test uses SCALAR Lanczos and is valid for **1-PORT ONLY**.
+For N-port systems (N >= 2), use Block Lanczos classes:
+  - NPortBlockLanczosSPICE
+  - NPortCoupledMagneticSPICE
+  - NPortCoupledDielectricSPICE
+  - NPortFullCoupledSPICE
+
+See docs/NPORT_BLOCK_LANCZOS_SPICE.md for details.
+
 This test verifies that the PRIMASchurExtractor correctly handles:
 1. Star DOFs (capacitive behavior, P/s term)
 2. Lanczos reduction for both Loop (L) and Star (P) matrices
