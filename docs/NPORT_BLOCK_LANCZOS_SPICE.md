@@ -204,6 +204,23 @@ Reduction: 22 -> 12 total DOF (45.5% compression)
 Complex materials: ferrite (mu_r=2000, tan_delta_m=1%), PCB (eps_r=4.5, tan_delta_e=2%)
 ```
 
+## Design Decision: PRIMA Only, No ACA
+
+**Policy (2026-01-17)**: For PEEC interaction matrices, use **PRIMA Lanczos only**. ACA (Adaptive Cross Approximation) is **not used**.
+
+**Rationale**:
+1. **PRIMA directly reduces element count**: Lanczos produces a tridiagonal matrix that maps directly to an RL/RC ladder in SPICE
+2. **ACA only compresses storage**: Low-rank approximation doesn't reduce circuit complexity
+3. **Port impedance preservation**: PRIMA with DC starting vectors preserves port behavior exactly
+4. **Simplicity**: Single reduction method, no need for ACA tolerance tuning
+
+**Comparison**:
+| Method | Storage | SPICE Elements | Port Accuracy |
+|--------|---------|----------------|---------------|
+| Full | O(N^2) | N elements | Exact |
+| ACA | O(N log N) | Still N elements | Approximate |
+| **PRIMA** | O(k) | **k elements** | Exact at ports |
+
 ## References
 
 1. A. Odabasioglu, M. Celik, L.T. Pileggi, "PRIMA: Passive Reduced-order Interconnect Macromodeling Algorithm," IEEE TCAD, 1998.
