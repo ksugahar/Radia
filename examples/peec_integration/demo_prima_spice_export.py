@@ -1,6 +1,15 @@
 """
 PRIMA to SPICE Export Demo
 
+**LIMITATION**: This demo uses SCALAR Lanczos and is valid for **1-PORT ONLY**.
+For N-port systems (N >= 2), use Block Lanczos classes:
+  - NPortBlockLanczosSPICE
+  - NPortCoupledMagneticSPICE
+  - NPortCoupledDielectricSPICE
+  - NPortFullCoupledSPICE
+
+See docs/NPORT_BLOCK_LANCZOS_SPICE.md for details.
+
 Demonstrates the complete workflow:
 1. PEEC matrix generation (Loop-Star)
 2. PRIMA Lanczos reduction
