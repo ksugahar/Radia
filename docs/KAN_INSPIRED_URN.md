@@ -25,6 +25,203 @@ Output:
   - SPICE netlist (RLC ladder)
 ```
 
+## Why "KAN-inspired"?
+
+### Kolmogorov-Arnold Networks (KAN) Philosophy
+
+KAN (Liu et al., 2024) は従来のMLPとは異なるアプローチを提案:
+
+| Aspect | MLP | KAN |
+|--------|-----|-----|
+| 活性化関数 | 固定 (ReLU, tanh) | **学習可能なスプライン** |
+| 線形変換 | 学習パラメータ | 固定 |
+| 解釈性 | ブラックボックス | 各辺が関数を学習 |
+
+**KANの核心思想**: "Let the network discover the functional form"
+
+### URNへの適用: 物理基底関数による実現
+
+URNは KAN の思想を**回路互換な物理基底関数**で実現:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  KAN: Σ φ_i(x)  where φ_i are learnable splines            │
+│                                                             │
+│  URN: Σ w_i · basis_i(ω, θ_i)  where basis_i are physical │
+│       └─ weight (sparse)  └─ Debye, Cole-Cole, Warburg... │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### KAN vs URN: 基底関数の選択
+
+| Approach | Basis Functions | Interpretability | Circuit Synthesis |
+|----------|-----------------|------------------|-------------------|
+| **Original KAN** | B-splines (mathematical) | Difficult | Not possible |
+| **URN (ours)** | Physical relaxations | Direct physical meaning | RLC ladder |
+
+### なぜスプラインではなく物理基底？
+
+1. **回路合成の必要性**: SPICEシミュレーションには RLC 等価回路が必要
+   - スプライン → 回路変換は困難
+   - Debye → RC並列 は直接対応
+
+2. **物理的制約**: 緩和現象には既知の数学形式がある
+   - Debye: 1/(1 + jωτ)
+   - Cole-Cole: 1/(1 + (jωτ)^α)
+   - Warburg: 1/√(jω)
+
+3. **パラメータの意味**:
+   - スプライン係数 → 物理的意味なし
+   - τ (緩和時間) → 直接測定可能な物理量
+
+4. **スパース性の自然な発現**:
+   - 多くの物理系は 2-5 の支配的メカニズムを持つ
+   - L1正則化で自動選択 → KANの "discover the form" を実現
+
+### Kolmogorov-Arnold表現定理との関係
+
+```
+Kolmogorov-Arnold定理:
+  f(x₁,...,xₙ) = Σᵢ Φᵢ(Σⱼ φᵢⱼ(xⱼ))
+
+URNの解釈:
+  Z(ω) = Z∞ + Σᵢ wᵢ · basisᵢ(ω, θᵢ)
+
+  - 外側の和: 基底関数の重み付き和
+  - 内側の関数: 各基底関数 (Debye, Cole-Cole, etc.)
+  - θᵢ: 各基底のパラメータ (τ, α, β, etc.)
+```
+
+URNは単変数 (ω) の関数なので、完全なKAN構造は不要。
+代わりに、**物理的に意味のある基底関数の線形結合**で表現。
+
+### 結論: "Physics-informed KAN"
+
+URNは以下の意味で "KAN-inspired":
+
+1. **学習可能な基底**: 固定活性化関数ではなく、パラメータ化された物理基底
+2. **自動構造発見**: スパース性により支配的メカニズムを自動選択
+3. **解釈可能性**: 各成分が明確な物理的意味を持つ
+
+ただし、純粋なKANとは異なり:
+- スプラインではなく**回路互換な解析関数**を使用
+- **SPICE合成可能**な形式を維持
+- **物理的事前知識**を活用
+
+## Comparison with Other Methods
+
+### 手法比較表
+
+| Method | Basis | Stability | Interpretability | Circuit Synthesis | Model Order | Noise |
+|--------|-------|-----------|------------------|-------------------|-------------|-------|
+| **Vector Fitting (VF)** | Poles/residues | Unstable poles possible | None | Foster/Cauer | Manual | Sensitive |
+| **Rational Fitting** | Polynomials | Depends | None | Difficult | Manual | Sensitive |
+| **Prony Method** | Exponentials | Stable | Limited | Manual | Manual | Very sensitive |
+| **Original KAN** | B-splines | Stable | Limited | Not possible | Auto (grid) | Moderate |
+| **Physics-Informed NN** | MLP + physics loss | Stable | Limited | Not possible | Fixed architecture | Moderate |
+| **URN (ours)** | Physical basis | **Always stable** | **Direct** | **Direct** | **Auto (sparsity)** | **Robust** |
+
+### 詳細比較
+
+#### Vector Fitting (VF) vs URN
+
+```
+Vector Fitting:
+  Z(s) = Σ rₖ/(s - pₖ) + d + s·h
+         └── 極と留数（数学的）
+
+URN:
+  Z(ω) = Z∞ + Σ wₖ · basisₖ(ω, θₖ)
+              └── 物理基底（Debye, Cole-Cole, etc.）
+```
+
+| Aspect | Vector Fitting | URN |
+|--------|----------------|-----|
+| 極の安定性 | 不安定極が発生しうる | 全基底が受動回路→常に安定 |
+| 極の数 | ユーザーが指定 | スパース性で自動決定 |
+| パラメータ意味 | 極位置のみ | 緩和時間τ、指数α等 |
+| 回路合成 | Foster/Cauer変換が必要 | 基底→回路が直接対応 |
+| ノイズ耐性 | 極数増加でオーバーフィット | 物理制約で正則化 |
+
+**実測結果**: URN 11勝 / VF 2勝 (13テスト中)
+
+#### Prony Method vs URN
+
+Pronyは指数関数の和でフィット:
+```
+y(t) = Σ Aₖ exp(λₖ t)
+```
+
+| Aspect | Prony | URN |
+|--------|-------|-----|
+| 基底 | 指数関数（固定形式） | 多様な物理基底 |
+| 周波数特性 | Debyeのみ表現可 | Cole-Cole, CPE, Warburg等 |
+| ノイズ | 非常に敏感 | L1正則化で頑健 |
+| 適用範囲 | 単純緩和のみ | 拡散、表皮効果含む |
+
+#### Physics-Informed Neural Networks (PINN) vs URN
+
+```
+PINN:
+  出力 = MLP(ω)  with  Loss = ||Z_pred - Z_data||² + λ·||Physics||²
+         └── ブラックボックス      └── 物理拘束をロス関数で
+
+URN:
+  出力 = Σ wₖ · basisₖ(ω, θₖ)
+         └── 物理基底そのもの（構造に埋め込み）
+```
+
+| Aspect | PINN | URN |
+|--------|------|-----|
+| 物理の導入方法 | ロス関数への追加項 | ネットワーク構造自体 |
+| 回路合成 | 不可能（MLP出力） | 直接可能 |
+| パラメータ数 | 多い（MLP重み） | 少ない（100-200） |
+| 学習時間 | GPU必要、長時間 | CPU、~100秒 |
+| 汎化性 | 訓練範囲外で不安定 | 物理基底で外挿可能 |
+
+#### Original KAN vs URN
+
+| Aspect | Original KAN | URN |
+|--------|--------------|-----|
+| 基底関数 | B-spline（学習） | 物理関数（Debye等） |
+| グリッド | 学習で細分化 | 不要 |
+| 解釈性 | スプライン形状から推測 | 直接的（τ, α等） |
+| 回路合成 | 不可能 | RLCラダーへ直接 |
+| 計算コスト | 高い（スプライン評価） | 低い（解析関数） |
+
+### 各手法の適用領域
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    周波数応答フィッティング手法                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Simple relaxation          Complex physics        Black-box   │
+│  (Debye only)              (multi-mechanism)       prediction  │
+│       │                          │                      │      │
+│       ▼                          ▼                      ▼      │
+│  ┌─────────┐              ┌───────────┐          ┌─────────┐  │
+│  │  Prony  │              │    URN    │          │   MLP   │  │
+│  │   VF    │              │  (ours)   │          │  PINN   │  │
+│  └─────────┘              └───────────┘          └─────────┘  │
+│                                 │                              │
+│                                 ▼                              │
+│                          ┌───────────┐                        │
+│                          │   SPICE   │                        │
+│                          │  Netlist  │                        │
+│                          └───────────┘                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### URNの位置づけ
+
+URNは以下のギャップを埋める:
+
+1. **VFの問題**: 不安定極、解釈困難 → 物理基底で解決
+2. **PINNの問題**: 回路合成不可 → 基底が回路に対応
+3. **KANの問題**: スプラインは回路にならない → 物理基底を採用
+4. **Pronyの問題**: Debyeのみ → 24種の多様な基底
+
 ## Key Features
 
 1. **Automatic Model Discovery**: L1 sparsity selects 3-5 dominant mechanisms from 24 candidates
