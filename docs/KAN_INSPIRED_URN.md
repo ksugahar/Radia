@@ -44,12 +44,12 @@ KAN (Liu et al., 2024) proposes a different approach from traditional MLPs:
 URN realizes the KAN philosophy using **circuit-compatible physical basis functions**:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  KAN: Σ φ_i(x)  where φ_i are learnable splines            │
-│                                                             │
-│  URN: Σ w_i · basis_i(ω, θ_i)  where basis_i are physical │
-│       └─ weight (sparse)  └─ Debye, Cole-Cole, Warburg... │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│  KAN: Σ φ_i(x)  where φ_i are learnable splines                  │
+│                                                                   │
+│  URN: Σ w_i · basis_i(ω, θ_i)  where basis_i are physical        │
+│       └─ weight (sparse)       └─ Debye, Cole-Cole, Warburg...   │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ### KAN vs URN: Choice of Basis Functions
