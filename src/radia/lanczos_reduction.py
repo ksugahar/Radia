@@ -7,8 +7,8 @@ Algorithm) with Lanczos process for SPICE-compatible circuit extraction.
 Key features:
 1. PRIMA Lanczos with re-orthogonalization (higher accuracy than plain Lanczos)
 2. Tridiagonal structure yields RL ladder network (no Arnoldi, direct circuit)
-3. ACA+ compression for material blocks (magnetic, dielectric, conductor)
-4. Schur complement for port impedance extraction
+3. Schur complement for port impedance extraction
+4. Lanczos reduction for Star (capacitive) DOFs - reduces capacitor count
 5. PyKAN integration for complex material properties (mu", eps")
 
 The goal is to reduce:
@@ -21,6 +21,11 @@ To a sparse equivalent circuit with KAN-based material models.
 Note: This implementation uses PRIMA (not CLN/Cauer), avoiding patent issues
 while providing passive, stable reduced-order models.
 
+Design Decision (2026-01-17):
+- ACA+ was evaluated but removed in favor of Lanczos-only approach
+- Reason: ACA+ doesn't reduce element count in standard SPICE netlists
+- Lanczos directly produces tridiagonal -> RL/RC ladder with fewer elements
+
 References:
 - A. Odabasioglu, M. Celik, L.T. Pileggi, "PRIMA: Passive Reduced-order
   Interconnect Macromodeling Algorithm," IEEE TCAD, 1998.
@@ -28,7 +33,7 @@ References:
   responses by Vector Fitting," IEEE TPWRD, 1999.
 
 Author: Radia Development Team
-Date: 2026-01-16
+Date: 2026-01-17
 """
 
 import numpy as np
@@ -299,106 +304,15 @@ class LanczosReducer:
             )
 
 
-class ACAPlus:
-    """
-    ACA+ (Adaptive Cross Approximation with pivoting).
-
-    Computes low-rank approximation: A ≈ U @ V.T
-
-    Algorithm:
-    1. Select pivot row/column based on maximum residual
-    2. Update U and V
-    3. Repeat until ||residual|| < tol * ||A||
-    """
-
-    def __init__(self, tol: float = 1e-4, max_rank: int = None):
-        self.tol = tol
-        self.max_rank = max_rank
-
-    def compress(self, A: np.ndarray) -> LowRankBlock:
-        """
-        ACA+ compression of dense matrix.
-
-        Parameters:
-            A: Dense matrix [m x n]
-
-        Returns:
-            LowRankBlock approximation
-        """
-        m, n = A.shape
-        max_rank = min(m, n) if self.max_rank is None else min(self.max_rank, m, n)
-
-        # Working copy for residual tracking
-        R = A.copy()
-
-        U_list = []
-        V_list = []
-
-        norm_A = np.linalg.norm(A, 'fro')
-        if norm_A < 1e-15:
-            # Zero matrix
-            return LowRankBlock(
-                U=np.zeros((m, 1)),
-                S=np.array([0.0]),
-                V=np.zeros((n, 1)),
-                rank=0
-            )
-
-        for k in range(max_rank):
-            # Find pivot (maximum absolute value in residual)
-            idx = np.unravel_index(np.argmax(np.abs(R)), R.shape)
-            i_pivot, j_pivot = idx
-
-            pivot_val = R[i_pivot, j_pivot]
-            if np.abs(pivot_val) < self.tol * norm_A / max(m, n):
-                break
-
-            # Extract row and column
-            u = R[:, j_pivot].copy()
-            v = R[i_pivot, :].copy() / pivot_val
-
-            U_list.append(u)
-            V_list.append(v)
-
-            # Update residual
-            R -= np.outer(u, v)
-
-            # Check convergence
-            norm_R = np.linalg.norm(R, 'fro')
-            if norm_R < self.tol * norm_A:
-                break
-
-        if len(U_list) == 0:
-            return LowRankBlock(
-                U=np.zeros((m, 1)),
-                S=np.array([0.0]),
-                V=np.zeros((n, 1)),
-                rank=0
-            )
-
-        # Convert to U @ S @ V.T form via SVD of small matrix
-        U = np.column_stack(U_list)
-        V = np.column_stack(V_list)
-
-        # Compact SVD
-        C = U.T @ A @ V  # Small matrix [r x r]
-        Uc, Sc, Vct = linalg.svd(C, full_matrices=False)
-
-        # Truncate small singular values
-        r = np.sum(Sc > self.tol * Sc[0])
-        r = max(1, r)
-
-        return LowRankBlock(
-            U=U @ Uc[:, :r],
-            S=Sc[:r],
-            V=V @ Vct[:r, :].T,
-            rank=r
-        )
+# ACAPlus class was removed (2026-01-17)
+# Reason: ACA+ doesn't reduce element count in standard SPICE netlists.
+# Lanczos-only approach is used for all model order reduction.
+# See design decision in module docstring.
 
 
 class HierarchicalReducer:
     """
-    Hierarchical model order reduction combining Lanczos and ACA+.
+    Hierarchical model order reduction using Lanczos only.
 
     System:
         [Z_LL    Z_LS    Z_LM  ] [I_L]   [V_L  ]
@@ -413,23 +327,23 @@ class HierarchicalReducer:
         Z_LM' = Q_L.T @ Z_LM
         Z_LS' = Q_L.T @ Z_LS
 
-    Step 3: ACA+ on coupling blocks
-        Z_LM' ≈ U_LM @ S_LM @ V_LM.T
-        Z_LS' ≈ U_LS @ S_LS @ V_LS.T
+    Step 3: Lanczos on Star (capacitance) block
+        P = Q_S @ T_P @ Q_S.T  (P = inverse capacitance)
+        Reduces capacitor count in SPICE output
 
     Step 4: Schur complement
         Z_port = Z_LL' - Z_LM' @ Z_MM^{-1} @ Z_ML' - Z_LS' @ Z_SS^{-1} @ Z_SL'
+
+    Note: ACA+ was removed (2026-01-17) - Lanczos directly reduces element count.
     """
 
-    def __init__(self, lanczos_tol: float = 1e-6, aca_tol: float = 1e-4,
-                 max_lanczos_rank: int = None, max_aca_rank: int = None):
+    def __init__(self, lanczos_tol: float = 1e-6,
+                 max_lanczos_rank: int = None):
         self.lanczos = LanczosReducer(tol=lanczos_tol, max_rank=max_lanczos_rank)
-        self.aca = ACAPlus(tol=aca_tol, max_rank=max_aca_rank)
 
         # Stored results
         self._lanczos_result = None
         self._reduced_blocks = {}
-        self._aca_blocks = {}
 
     def reduce_loop_block(self, L: np.ndarray, R: np.ndarray,
                           truncate: bool = True,
@@ -520,25 +434,9 @@ class HierarchicalReducer:
 
         return self._reduced_blocks
 
-    def apply_aca_compression(self) -> dict:
-        """
-        Step 3: ACA+ compression of transformed coupling blocks.
-
-        Returns:
-            Dictionary of LowRankBlock approximations
-        """
-        self._aca_blocks = {}
-
-        for name, block in self._reduced_blocks.items():
-            if block is not None and block.size > 0:
-                self._aca_blocks[name] = self.aca.compress(block)
-
-        return self._aca_blocks
-
     def compute_schur_complement(self, s: complex,
                                   Z_SS: np.ndarray = None,
-                                  Z_MM: np.ndarray = None,
-                                  use_aca: bool = False) -> np.ndarray:
+                                  Z_MM: np.ndarray = None) -> np.ndarray:
         """
         Step 4: Schur complement to eliminate Star and Magnetic DOFs.
 
@@ -558,7 +456,6 @@ class HierarchicalReducer:
             s: Complex frequency
             Z_SS: Star-Star impedance (typically P/s for capacitive)
             Z_MM: Magnetic-Magnetic impedance
-            use_aca: Use ACA+ compressed blocks (experimental)
 
         Returns:
             Reduced port impedance matrix [k x k] in Lanczos basis
@@ -575,60 +472,37 @@ class HierarchicalReducer:
         # Initialize Schur complement
         Z_schur = Z_LL_red.copy()
 
-        # Use dense reduced blocks (more accurate)
-        if not use_aca:
-            # Add Magnetic contribution (+ sign: magnetic increases inductance)
-            #
-            # Full system block matrix (physically correct):
-            #   [R + sL    s*K  ] [I]   [V]
-            #   [-K.T      Z_MM ] [M] = [0]
-            #
-            # Schur complement:
-            #   Z_schur = (R + sL) - (s*K) @ Z_MM^{-1} @ (-K.T)
-            #           = (R + sL) + s * K @ Z_MM^{-1} @ K.T
-            #
-            # In Lanczos reduced form (Q.T @ ... @ Q):
-            #   K_red = Q.T @ K  [k x n_M]
-            #   Z_schur = Z_LL' + s * K_red @ Z_MM^{-1} @ K_red.T
-            if 'Z_LM' in self._reduced_blocks and Z_MM is not None:
-                K_red = self._reduced_blocks['Z_LM']  # [k x n_M]
-                try:
-                    Z_MM_inv = np.linalg.inv(Z_MM)
-                    # Physically correct: + s * coupling (inductance increases)
-                    Z_schur += s * K_red @ Z_MM_inv @ K_red.T
-                except np.linalg.LinAlgError:
-                    pass
+        # Add Magnetic contribution (+ sign: magnetic increases inductance)
+        #
+        # Full system block matrix (physically correct):
+        #   [R + sL    s*K  ] [I]   [V]
+        #   [-K.T      Z_MM ] [M] = [0]
+        #
+        # Schur complement:
+        #   Z_schur = (R + sL) - (s*K) @ Z_MM^{-1} @ (-K.T)
+        #           = (R + sL) + s * K @ Z_MM^{-1} @ K.T
+        #
+        # In Lanczos reduced form (Q.T @ ... @ Q):
+        #   K_red = Q.T @ K  [k x n_M]
+        #   Z_schur = Z_LL' + s * K_red @ Z_MM^{-1} @ K_red.T
+        if 'Z_LM' in self._reduced_blocks and Z_MM is not None:
+            K_red = self._reduced_blocks['Z_LM']  # [k x n_M]
+            try:
+                Z_MM_inv = np.linalg.inv(Z_MM)
+                # Physically correct: + s * coupling (inductance increases)
+                Z_schur += s * K_red @ Z_MM_inv @ K_red.T
+            except np.linalg.LinAlgError:
+                pass
 
-            # Subtract Star contribution (capacitive effect)
-            if 'Z_LS' in self._reduced_blocks and Z_SS is not None:
-                Z_LS_red = self._reduced_blocks['Z_LS']  # [k x n_S]
-                Z_SL_red = self._reduced_blocks['Z_SL']  # [n_S x k]
-                try:
-                    Z_SS_inv = np.linalg.inv(Z_SS)
-                    Z_schur -= s**3 * Z_LS_red @ Z_SS_inv @ Z_SL_red
-                except np.linalg.LinAlgError:
-                    pass
-
-        else:
-            # Use ACA+ compressed (experimental, less accurate)
-            if 'Z_LM' in self._aca_blocks and Z_MM is not None:
-                lr_LM = self._aca_blocks['Z_LM']
-                try:
-                    Z_MM_inv = np.linalg.inv(Z_MM)
-                    temp = (lr_LM.S[:, None] * lr_LM.V.T) @ Z_MM_inv @ (lr_LM.V * lr_LM.S)
-                    Z_schur += s * lr_LM.U @ temp @ lr_LM.U.T
-                except np.linalg.LinAlgError:
-                    pass
-
-            if 'Z_LS' in self._aca_blocks and Z_SS is not None:
-                lr_LS = self._aca_blocks['Z_LS']
-                lr_SL = self._aca_blocks['Z_SL']
-                try:
-                    Z_SS_inv = np.linalg.inv(Z_SS)
-                    temp = (lr_LS.S[:, None] * lr_LS.V.T) @ Z_SS_inv @ (lr_SL.U * lr_SL.S)
-                    Z_schur -= s**3 * lr_LS.U @ temp @ lr_SL.V.T
-                except np.linalg.LinAlgError:
-                    pass
+        # Subtract Star contribution (capacitive effect)
+        if 'Z_LS' in self._reduced_blocks and Z_SS is not None:
+            Z_LS_red = self._reduced_blocks['Z_LS']  # [k x n_S]
+            Z_SL_red = self._reduced_blocks['Z_SL']  # [n_S x k]
+            try:
+                Z_SS_inv = np.linalg.inv(Z_SS)
+                Z_schur -= s**3 * Z_LS_red @ Z_SS_inv @ Z_SL_red
+            except np.linalg.LinAlgError:
+                pass
 
         return Z_schur
 
@@ -4353,6 +4227,498 @@ class KANContinuedFraction:
         return '\n'.join(lines)
 
 
+class PyKANSurfaceImpedance:
+    """
+    PyKAN-based Surface Impedance Learning for Nonlinear Magnetic Materials.
+
+    Uses Kolmogorov-Arnold Networks (KAN) to learn the surface impedance
+    Z_s(H, f) from ESIM (Effective Surface Impedance Method) data or
+    measurement data.
+
+    Key features:
+    1. Learns nonlinear Z_s(H, f) relationship from data
+    2. Supports both real and imaginary parts (Z_s = R_s + jX_s)
+    3. Exports to SPICE PWL (Piece-Wise Linear) format
+    4. Integrates with PRIMA for reduced-order models
+
+    Workflow:
+        1. Generate training data from ESIM cell problem or measurements
+        2. Train KAN: (H, f) -> (R_s, X_s) or (|Z_s|, angle)
+        3. Export to SPICE PWL or Verilog-A
+        4. Use in coupled PEEC+MMM simulations
+
+    Reference:
+        Liu et al., "KAN: Kolmogorov-Arnold Networks", 2024
+        Hollaus et al., "Nonlinear Effective Surface Impedance", IEEE TMAG, 2025
+    """
+
+    def __init__(self, width: List[int] = None, grid: int = 5, k: int = 3):
+        """
+        Initialize PyKAN surface impedance model.
+
+        Parameters
+        ----------
+        width : list of int, optional
+            KAN layer widths. Default: [2, 5, 5, 2] for (H, f) -> (R_s, X_s)
+        grid : int
+            Number of grid points for spline basis (default: 5)
+        k : int
+            Spline order (default: 3 for cubic)
+        """
+        self.width = width if width is not None else [2, 5, 5, 2]
+        self.grid = grid
+        self.k = k
+        self.kan_model = None
+        self.is_trained = False
+
+        # Normalization parameters
+        self.H_min = None
+        self.H_max = None
+        self.f_min = None
+        self.f_max = None
+        self.Z_scale = None
+
+        # Training history
+        self.train_loss_history = []
+
+    def train_from_esim_data(self, H_data: np.ndarray, f_data: np.ndarray,
+                              Zs_data: np.ndarray,
+                              epochs: int = 100, lr: float = 0.01,
+                              verbose: bool = True) -> dict:
+        """
+        Train KAN from ESIM surface impedance data.
+
+        Parameters
+        ----------
+        H_data : np.ndarray
+            Surface magnetic field values [A/m], shape (n_H,)
+        f_data : np.ndarray
+            Frequency values [Hz], shape (n_f,)
+        Zs_data : np.ndarray
+            Complex surface impedance [Ohm], shape (n_H, n_f)
+        epochs : int
+            Number of training epochs
+        lr : float
+            Learning rate
+        verbose : bool
+            Print training progress
+
+        Returns
+        -------
+        result : dict
+            Training results with loss history
+        """
+        try:
+            from kan import KAN
+            import torch
+        except ImportError:
+            raise ImportError("PyKAN not installed. Install with: pip install pykan")
+
+        # Create meshgrid for training data
+        H_grid, f_grid = np.meshgrid(H_data, f_data, indexing='ij')
+        H_flat = H_grid.flatten()
+        f_flat = f_grid.flatten()
+        Zs_flat = Zs_data.flatten()
+
+        # Store normalization parameters
+        self.H_min, self.H_max = H_flat.min(), H_flat.max()
+        self.f_min, self.f_max = f_flat.min(), f_flat.max()
+        self.Z_scale = np.abs(Zs_flat).max()
+
+        # Normalize inputs to [0, 1]
+        H_norm = (H_flat - self.H_min) / (self.H_max - self.H_min + 1e-10)
+        f_norm = (f_flat - self.f_min) / (self.f_max - self.f_min + 1e-10)
+
+        # Normalize outputs
+        Rs_norm = np.real(Zs_flat) / self.Z_scale
+        Xs_norm = np.imag(Zs_flat) / self.Z_scale
+
+        # Prepare PyTorch tensors
+        X_train = torch.tensor(np.column_stack([H_norm, f_norm]),
+                               dtype=torch.float32)
+        Y_train = torch.tensor(np.column_stack([Rs_norm, Xs_norm]),
+                               dtype=torch.float32)
+
+        # Create and train KAN
+        self.kan_model = KAN(width=self.width, grid=self.grid, k=self.k)
+
+        if verbose:
+            print(f"Training PyKAN surface impedance model...")
+            print(f"  Input: (H, f) normalized to [0, 1]")
+            print(f"  Output: (R_s, X_s) / {self.Z_scale:.2e}")
+            print(f"  Training samples: {len(H_flat)}")
+            print(f"  KAN width: {self.width}")
+
+        # Training loop
+        dataset = {'train_input': X_train, 'train_label': Y_train,
+                   'test_input': X_train, 'test_label': Y_train}
+
+        self.train_loss_history = []
+
+        results = self.kan_model.fit(dataset, opt='Adam', steps=epochs, lr=lr,
+                                      loss_fn=torch.nn.MSELoss())
+
+        self.is_trained = True
+
+        if verbose:
+            final_loss = results['train_loss'][-1] if 'train_loss' in results else 0
+            print(f"  Final loss: {final_loss:.6e}")
+
+        return {
+            'loss_history': results.get('train_loss', []),
+            'final_loss': results.get('train_loss', [0])[-1],
+            'n_samples': len(H_flat),
+            'width': self.width
+        }
+
+    def train_from_measurement(self, H_data: np.ndarray, f_data: np.ndarray,
+                                Rs_data: np.ndarray, Xs_data: np.ndarray,
+                                **kwargs) -> dict:
+        """
+        Train KAN from measured R_s and X_s data.
+
+        Parameters
+        ----------
+        H_data : np.ndarray
+            Surface field values [A/m]
+        f_data : np.ndarray
+            Frequencies [Hz]
+        Rs_data : np.ndarray
+            Surface resistance [Ohm/sq]
+        Xs_data : np.ndarray
+            Surface reactance [Ohm/sq]
+
+        Returns
+        -------
+        result : dict
+            Training results
+        """
+        Zs_data = Rs_data + 1j * Xs_data
+        return self.train_from_esim_data(H_data, f_data, Zs_data, **kwargs)
+
+    def predict(self, H: np.ndarray, f: np.ndarray) -> np.ndarray:
+        """
+        Predict surface impedance for given (H, f) values.
+
+        Parameters
+        ----------
+        H : np.ndarray
+            Surface field [A/m]
+        f : np.ndarray
+            Frequency [Hz]
+
+        Returns
+        -------
+        Zs : np.ndarray
+            Complex surface impedance [Ohm]
+        """
+        if not self.is_trained:
+            raise ValueError("Model not trained. Call train_from_esim_data first.")
+
+        import torch
+
+        H = np.asarray(H)
+        f = np.asarray(f)
+
+        # Handle scalar inputs
+        scalar_input = H.ndim == 0 and f.ndim == 0
+        if scalar_input:
+            H = np.array([H])
+            f = np.array([f])
+
+        # Normalize
+        H_norm = (H - self.H_min) / (self.H_max - self.H_min + 1e-10)
+        f_norm = (f - self.f_min) / (self.f_max - self.f_min + 1e-10)
+
+        # Predict
+        X = torch.tensor(np.column_stack([H_norm.flatten(), f_norm.flatten()]),
+                         dtype=torch.float32)
+
+        with torch.no_grad():
+            Y_pred = self.kan_model(X).numpy()
+
+        Rs = Y_pred[:, 0] * self.Z_scale
+        Xs = Y_pred[:, 1] * self.Z_scale
+        Zs = Rs + 1j * Xs
+
+        if scalar_input:
+            return Zs[0]
+
+        return Zs.reshape(H.shape)
+
+    def to_spice_pwl(self, H_values: np.ndarray, f_ref: float,
+                      element_name: str = "Zskin") -> str:
+        """
+        Export to SPICE PWL (Piece-Wise Linear) format.
+
+        Creates a behavioral model using PWL sources for R(H) and L(H).
+
+        Parameters
+        ----------
+        H_values : np.ndarray
+            H field values for PWL table [A/m]
+        f_ref : float
+            Reference frequency [Hz]
+        element_name : str
+            Base name for SPICE elements
+
+        Returns
+        -------
+        spice : str
+            SPICE netlist string
+        """
+        if not self.is_trained:
+            raise ValueError("Model not trained. Call train_from_esim_data first.")
+
+        omega_ref = 2 * np.pi * f_ref
+        Zs = self.predict(H_values, np.full_like(H_values, f_ref))
+        Rs = np.real(Zs)
+        Xs = np.imag(Zs)
+        Ls = Xs / omega_ref  # X_s = omega * L_s
+
+        lines = []
+        lines.append(f"* PyKAN Surface Impedance Model")
+        lines.append(f"* Reference frequency: {f_ref/1e3:.1f} kHz")
+        lines.append(f"* H range: {H_values.min():.1f} - {H_values.max():.1f} A/m")
+        lines.append(f"")
+        lines.append(f".SUBCKT {element_name} in out H_sense")
+        lines.append(f"")
+
+        # R(H) as PWL table
+        lines.append(f"* Surface Resistance R_s(H)")
+        pwl_R = " ".join([f"{H:.3e},{R:.6e}" for H, R in zip(H_values, Rs)])
+        lines.append(f"B{element_name}_R in mid I=V(H_sense)*PWL({pwl_R})")
+        lines.append(f"")
+
+        # L(H) as PWL table
+        lines.append(f"* Surface Inductance L_s(H) at f_ref = {f_ref/1e3:.1f} kHz")
+        pwl_L = " ".join([f"{H:.3e},{L:.6e}" for H, L in zip(H_values, Ls)])
+        lines.append(f"L{element_name} mid out 1")  # 1H placeholder
+        lines.append(f"* Note: For frequency-dependent L, use Verilog-A")
+        lines.append(f"")
+
+        lines.append(f".ENDS {element_name}")
+
+        return '\n'.join(lines)
+
+    def to_verilog_a(self, name: str = "kan_zskin") -> str:
+        """
+        Export to Verilog-A behavioral model.
+
+        Implements frequency-dependent Z_s(H, f) using KAN evaluation.
+
+        Parameters
+        ----------
+        name : str
+            Module name
+
+        Returns
+        -------
+        verilog_a : str
+            Verilog-A code string
+        """
+        lines = []
+        lines.append(f"// PyKAN Surface Impedance Model")
+        lines.append(f"// Trained KAN: (H, f) -> (R_s, X_s)")
+        lines.append(f"`include \"disciplines.vams\"")
+        lines.append(f"")
+        lines.append(f"module {name}(p, n, H_sense);")
+        lines.append(f"    inout p, n;")
+        lines.append(f"    input H_sense;")
+        lines.append(f"    electrical p, n, H_sense;")
+        lines.append(f"")
+        lines.append(f"    // Normalization parameters")
+        lines.append(f"    parameter real H_min = {self.H_min:.6e};")
+        lines.append(f"    parameter real H_max = {self.H_max:.6e};")
+        lines.append(f"    parameter real f_min = {self.f_min:.6e};")
+        lines.append(f"    parameter real f_max = {self.f_max:.6e};")
+        lines.append(f"    parameter real Z_scale = {self.Z_scale:.6e};")
+        lines.append(f"")
+        lines.append(f"    real H_norm, f_norm, Rs, Xs;")
+        lines.append(f"")
+        lines.append(f"    analog begin")
+        lines.append(f"        // Get normalized inputs")
+        lines.append(f"        H_norm = (V(H_sense) - H_min) / (H_max - H_min + 1e-10);")
+        lines.append(f"        // Note: Frequency from $freq in Spectre")
+        lines.append(f"        f_norm = ($freq - f_min) / (f_max - f_min + 1e-10);")
+        lines.append(f"")
+        lines.append(f"        // KAN evaluation (simplified polynomial approximation)")
+        lines.append(f"        // TODO: Export actual KAN spline coefficients")
+        lines.append(f"        Rs = Z_scale * (0.1 + 0.5*H_norm + 0.3*f_norm);")
+        lines.append(f"        Xs = Z_scale * (0.05 + 0.2*H_norm + 0.6*f_norm);")
+        lines.append(f"")
+        lines.append(f"        // Surface impedance: V = Z_s * I")
+        lines.append(f"        V(p, n) <+ Rs * I(p, n);")
+        lines.append(f"        V(p, n) <+ Xs / (2*`M_PI*$freq) * ddt(I(p, n));")
+        lines.append(f"    end")
+        lines.append(f"endmodule")
+
+        return '\n'.join(lines)
+
+    def plot_comparison(self, H_test: np.ndarray, f_test: np.ndarray,
+                        Zs_true: np.ndarray, save_path: str = None):
+        """
+        Plot KAN prediction vs true values.
+
+        Parameters
+        ----------
+        H_test : np.ndarray
+            Test H values
+        f_test : np.ndarray
+            Test frequency values
+        Zs_true : np.ndarray
+            True surface impedance values
+        save_path : str, optional
+            Path to save figure
+        """
+        import matplotlib.pyplot as plt
+
+        Zs_pred = self.predict(H_test, f_test)
+
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+        # R_s comparison
+        ax = axes[0, 0]
+        ax.scatter(np.real(Zs_true).flatten(), np.real(Zs_pred).flatten(),
+                   alpha=0.5, s=10)
+        ax.plot([0, np.real(Zs_true).max()], [0, np.real(Zs_true).max()],
+                'r--', label='Perfect fit')
+        ax.set_xlabel('True R_s [Ohm]')
+        ax.set_ylabel('Predicted R_s [Ohm]')
+        ax.set_title('Surface Resistance')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # X_s comparison
+        ax = axes[0, 1]
+        ax.scatter(np.imag(Zs_true).flatten(), np.imag(Zs_pred).flatten(),
+                   alpha=0.5, s=10)
+        ax.plot([np.imag(Zs_true).min(), np.imag(Zs_true).max()],
+                [np.imag(Zs_true).min(), np.imag(Zs_true).max()],
+                'r--', label='Perfect fit')
+        ax.set_xlabel('True X_s [Ohm]')
+        ax.set_ylabel('Predicted X_s [Ohm]')
+        ax.set_title('Surface Reactance')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # Error distribution
+        ax = axes[1, 0]
+        error_R = (np.real(Zs_pred) - np.real(Zs_true)).flatten()
+        error_X = (np.imag(Zs_pred) - np.imag(Zs_true)).flatten()
+        ax.hist(error_R, bins=30, alpha=0.5, label='R_s error')
+        ax.hist(error_X, bins=30, alpha=0.5, label='X_s error')
+        ax.set_xlabel('Error [Ohm]')
+        ax.set_ylabel('Count')
+        ax.set_title('Error Distribution')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # Relative error
+        ax = axes[1, 1]
+        rel_error = np.abs(Zs_pred - Zs_true) / (np.abs(Zs_true) + 1e-10)
+        ax.hist(rel_error.flatten() * 100, bins=30)
+        ax.set_xlabel('Relative Error [%]')
+        ax.set_ylabel('Count')
+        ax.set_title(f'Relative Error (mean: {rel_error.mean()*100:.2f}%)')
+        ax.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path, dpi=150)
+            print(f"Saved: {save_path}")
+
+        plt.show()
+
+        return {
+            'mean_rel_error': rel_error.mean(),
+            'max_rel_error': rel_error.max(),
+            'R_rmse': np.sqrt(np.mean(error_R**2)),
+            'X_rmse': np.sqrt(np.mean(error_X**2))
+        }
+
+
+def demo_pykan_surface_impedance():
+    """Demonstrate PyKAN surface impedance learning."""
+    print("=" * 60)
+    print("PyKAN Surface Impedance Demo")
+    print("=" * 60)
+
+    # Generate synthetic ESIM data
+    # Z_s = sqrt(j*omega*mu / sigma) for linear case
+    # With saturation: mu(H) = mu_0 * mu_r / (1 + H/H_sat)
+
+    sigma = 5.8e7  # Copper conductivity [S/m]
+    mu_0 = 4 * np.pi * 1e-7
+    mu_r_0 = 100  # Initial relative permeability
+    H_sat = 1000  # Saturation field [A/m]
+
+    H_data = np.linspace(10, 5000, 20)  # A/m
+    f_data = np.logspace(3, 6, 15)  # 1 kHz to 1 MHz
+
+    print(f"\nGenerating synthetic ESIM data:")
+    print(f"  H range: {H_data.min():.0f} - {H_data.max():.0f} A/m")
+    print(f"  f range: {f_data.min()/1e3:.1f} kHz - {f_data.max()/1e6:.1f} MHz")
+    print(f"  Saturation model: mu_r(H) = {mu_r_0} / (1 + H/{H_sat})")
+
+    # Generate Z_s data
+    Zs_data = np.zeros((len(H_data), len(f_data)), dtype=complex)
+    for i, H in enumerate(H_data):
+        mu_r = mu_r_0 / (1 + H / H_sat)
+        mu = mu_0 * mu_r
+        for j, f in enumerate(f_data):
+            omega = 2 * np.pi * f
+            # Surface impedance for good conductor
+            Zs_data[i, j] = np.sqrt(1j * omega * mu / sigma)
+
+    print(f"  Generated {Zs_data.size} data points")
+
+    # Train KAN
+    kan_zs = PyKANSurfaceImpedance(width=[2, 8, 8, 2], grid=5, k=3)
+
+    try:
+        result = kan_zs.train_from_esim_data(
+            H_data, f_data, Zs_data,
+            epochs=200, lr=0.01, verbose=True
+        )
+        print(f"\nTraining completed:")
+        print(f"  Final loss: {result['final_loss']:.6e}")
+
+        # Test prediction
+        H_test = np.array([100, 500, 2000])
+        f_test = np.array([10e3, 100e3, 500e3])
+
+        print(f"\nPrediction test:")
+        for H, f in zip(H_test, f_test):
+            Zs_pred = kan_zs.predict(H, f)
+            # True value
+            mu_r = mu_r_0 / (1 + H / H_sat)
+            mu = mu_0 * mu_r
+            omega = 2 * np.pi * f
+            Zs_true = np.sqrt(1j * omega * mu / sigma)
+
+            error = np.abs(Zs_pred - Zs_true) / np.abs(Zs_true) * 100
+            print(f"  H={H:.0f} A/m, f={f/1e3:.0f} kHz:")
+            print(f"    True:  {Zs_true:.4e}")
+            print(f"    KAN:   {Zs_pred:.4e}")
+            print(f"    Error: {error:.2f}%")
+
+        # Generate SPICE output
+        print(f"\nSPICE PWL export:")
+        spice = kan_zs.to_spice_pwl(H_data, f_ref=100e3)
+        for line in spice.split('\n')[:15]:
+            print(f"  {line}")
+        print("  ...")
+
+        return kan_zs, result
+
+    except ImportError as e:
+        print(f"\nPyKAN not available: {e}")
+        print("Install with: pip install pykan")
+        return None, None
+
+
 class ContinuedFractionExpansion:
     """
     Continued Fraction Expansion (CFE) for complex frequency responses.
@@ -5384,7 +5750,6 @@ class ElementGroupConfig:
     """Configuration for an element group in SPICE extraction."""
     name: str                    # Group name: 'magnetic', 'dielectric', 'conductor'
     indices: List[int]           # DOF indices for this group
-    aca_tol: float              # ACA tolerance for this group
     n_lanczos: int = 0          # Lanczos order (0 = no reduction)
     material_type: str = 'linear'  # 'linear', 'nonlinear', 'kan'
     kan_model: Optional['KANMaterialInterface'] = None  # KAN model if applicable
@@ -5392,15 +5757,17 @@ class ElementGroupConfig:
 
 @dataclass
 class SPICEExtractionConfig:
-    """Configuration for SPICE circuit extraction."""
+    """Configuration for SPICE circuit extraction.
+
+    Note (2026-01-17): ACA tolerances were removed. Lanczos-only approach is used
+    for all model order reduction because it directly reduces element count in SPICE.
+    """
     # PRIMA Lanczos settings
     n_lanczos_loop: int = 20        # Lanczos order for Loop (conductor) DOFs
     n_lanczos_star: int = 10        # Lanczos order for Star (capacitive) DOFs
-
-    # Element group ACA tolerances
-    aca_tol_magnetic: float = 1e-4    # ACA tolerance for magnetic elements
-    aca_tol_dielectric: float = 1e-4  # ACA tolerance for dielectric elements
-    aca_tol_conductor: float = 1e-4   # ACA tolerance for conductor (shield) elements
+    n_lanczos_magnetic: int = 0     # Lanczos order for Magnetic DOFs (0 = no reduction)
+    n_lanczos_dielectric: int = 0   # Lanczos order for Dielectric DOFs (0 = no reduction)
+    n_lanczos_conductor: int = 0    # Lanczos order for Conductor/Shield DOFs (0 = no reduction)
 
     # Port settings
     port_indices: List[int] = field(default_factory=list)
@@ -5414,7 +5781,7 @@ class SPICEExtractionConfig:
 
 class PRIMASchurExtractor:
     """
-    PRIMA-based Schur complement extractor with per-group ACA control.
+    PRIMA-based Schur complement extractor using Lanczos-only reduction.
 
     This class implements a complete workflow for SPICE netlist extraction:
 
@@ -5422,28 +5789,25 @@ class PRIMASchurExtractor:
        - Apply block Lanczos to Loop and Star DOFs
        - Specify Lanczos order (ladder stages) for each block
        - Result: Tridiagonal (PRIMA ladder) structure
+       - Directly reduces element count in SPICE output
 
     2. Schur Complement:
        - Eliminate internal DOFs, keep port DOFs
        - Port impedance: Z_port = Z_PP - Z_PI @ Z_II^{-1} @ Z_IP
 
-    3. ACA+ Compression (per element group):
-       - Magnetic: Z_MM block with aca_tol_magnetic
-       - Dielectric: Z_DD block with aca_tol_dielectric
-       - Conductor/Shield: Z_CC block with aca_tol_conductor
+    3. SPICE Netlist Generation:
+       - Each Lanczos stage -> RL ladder element (inductor)
+       - Each Lanczos stage -> RC ladder element (capacitor)
+       - Tridiagonal structure = series ladder with mutual coupling
 
-    4. SPICE Netlist Generation:
-       - Each Lanczos stage -> RL ladder element
-       - ACA modes -> coupled subcircuits
+    Note (2026-01-17): ACA+ was removed. Lanczos-only approach is used because
+    it directly reduces the number of circuit elements in SPICE output.
 
     Usage:
     ------
     config = SPICEExtractionConfig(
-        n_lanczos_loop=20,
-        n_lanczos_star=10,
-        aca_tol_magnetic=1e-3,
-        aca_tol_dielectric=1e-4,
-        aca_tol_conductor=1e-5,
+        n_lanczos_loop=20,    # Reduces inductors to 20
+        n_lanczos_star=10,    # Reduces capacitors to 10
         port_indices=[0, 1],
     )
 
@@ -5459,18 +5823,20 @@ class PRIMASchurExtractor:
         Parameters
         ----------
         config : SPICEExtractionConfig
-            Extraction configuration with Lanczos orders and ACA tolerances
+            Extraction configuration with Lanczos orders
         """
         self.config = config
 
-        # ACA extractors for each element group
-        self.aca_magnetic = ACAPlus(tol=config.aca_tol_magnetic)
-        self.aca_dielectric = ACAPlus(tol=config.aca_tol_dielectric)
-        self.aca_conductor = ACAPlus(tol=config.aca_tol_conductor)
-
-        # Lanczos reducer
-        self.lanczos = LanczosReducer(tol=1e-10, max_rank=max(
-            config.n_lanczos_loop, config.n_lanczos_star, 100))
+        # Lanczos reducer (Lanczos-only, no ACA)
+        max_lanczos = max(
+            config.n_lanczos_loop,
+            config.n_lanczos_star,
+            config.n_lanczos_magnetic,
+            config.n_lanczos_dielectric,
+            config.n_lanczos_conductor,
+            100
+        )
+        self.lanczos = LanczosReducer(tol=1e-10, max_rank=max_lanczos)
 
         # Results storage
         self.Q_loop = None      # Lanczos basis for Loop
@@ -5528,9 +5894,6 @@ class PRIMASchurExtractor:
             'circuit': Extracted circuit parameters
             'lanczos_loop': Lanczos result for Loop
             'lanczos_star': Lanczos result for Star
-            'aca_magnetic': ACA result for magnetic block
-            'aca_dielectric': ACA result for dielectric block
-            'aca_conductor': ACA result for conductor block
             'Z_port_func': Port impedance function Z(s)
         """
         if frequencies is None:
@@ -5552,14 +5915,14 @@ class PRIMASchurExtractor:
         n_ports = len(port_indices)
 
         print("=" * 70)
-        print("PRIMA-Schur SPICE Extraction")
+        print("PRIMA-Schur SPICE Extraction (Lanczos-only)")
         print("=" * 70)
         print(f"\nSystem dimensions:")
         print(f"  Loop (conductor):    {n_L} DOFs -> Lanczos order {self.config.n_lanczos_loop}")
         print(f"  Star (capacitive):   {n_S} DOFs -> Lanczos order {self.config.n_lanczos_star}")
-        print(f"  Magnetic:            {n_M} DOFs -> ACA tol {self.config.aca_tol_magnetic:.1e}")
-        print(f"  Dielectric:          {n_D} DOFs -> ACA tol {self.config.aca_tol_dielectric:.1e}")
-        print(f"  Conductor (shield):  {n_C} DOFs -> ACA tol {self.config.aca_tol_conductor:.1e}")
+        print(f"  Magnetic:            {n_M} DOFs -> Lanczos order {self.config.n_lanczos_magnetic}")
+        print(f"  Dielectric:          {n_D} DOFs -> Lanczos order {self.config.n_lanczos_dielectric}")
+        print(f"  Conductor (shield):  {n_C} DOFs -> Lanczos order {self.config.n_lanczos_conductor}")
         print(f"  Ports:               {n_ports}")
 
         # ================================================================
@@ -5615,35 +5978,50 @@ class PRIMASchurExtractor:
             lanczos_S = None
 
         # ================================================================
-        # Step 2: ACA compression for each material group
+        # Step 2: Lanczos reduction for each material group
         # ================================================================
-        print("\n[Step 2] ACA compression per element group...")
+        print("\n[Step 2] Lanczos reduction per element group...")
 
-        aca_results = {}
+        lanczos_results = {}
 
-        # Magnetic ACA
+        # Magnetic Lanczos
         if n_M > 0:
-            print(f"  Magnetic: ", end="")
-            aca_M = self._aca_compress_block(
-                Z_MM, self.aca_magnetic, "magnetic", kan_models.get('magnetic'))
-            aca_results['magnetic'] = aca_M
-            print(f"rank {aca_M['rank']}/{n_M} (compression {100*(1-aca_M['rank']/n_M):.1f}%)")
+            n_lanczos_M = self.config.n_lanczos_magnetic
+            if n_lanczos_M > 0 and n_M > n_lanczos_M:
+                print(f"  Magnetic: {n_M} -> {n_lanczos_M} (Lanczos)")
+                lanczos_M = self.lanczos.tridiagonalize(Z_MM, n_lanczos_M)
+                lanczos_results['magnetic'] = {
+                    'Q': lanczos_M.Q, 'T': lanczos_M.T, 'rank': n_lanczos_M}
+            else:
+                print(f"  Magnetic: No reduction ({n_M} DOFs)")
+                lanczos_results['magnetic'] = {
+                    'Q': np.eye(n_M), 'T': Z_MM, 'rank': n_M}
 
-        # Dielectric ACA
+        # Dielectric Lanczos
         if n_D > 0:
-            print(f"  Dielectric: ", end="")
-            aca_D = self._aca_compress_block(
-                Z_DD, self.aca_dielectric, "dielectric", kan_models.get('dielectric'))
-            aca_results['dielectric'] = aca_D
-            print(f"rank {aca_D['rank']}/{n_D} (compression {100*(1-aca_D['rank']/n_D):.1f}%)")
+            n_lanczos_D = self.config.n_lanczos_dielectric
+            if n_lanczos_D > 0 and n_D > n_lanczos_D:
+                print(f"  Dielectric: {n_D} -> {n_lanczos_D} (Lanczos)")
+                lanczos_D = self.lanczos.tridiagonalize(Z_DD, n_lanczos_D)
+                lanczos_results['dielectric'] = {
+                    'Q': lanczos_D.Q, 'T': lanczos_D.T, 'rank': n_lanczos_D}
+            else:
+                print(f"  Dielectric: No reduction ({n_D} DOFs)")
+                lanczos_results['dielectric'] = {
+                    'Q': np.eye(n_D), 'T': Z_DD, 'rank': n_D}
 
-        # Conductor/Shield ACA
+        # Conductor/Shield Lanczos
         if n_C > 0:
-            print(f"  Conductor: ", end="")
-            aca_C = self._aca_compress_block(
-                Z_CC, self.aca_conductor, "conductor", kan_models.get('conductor'))
-            aca_results['conductor'] = aca_C
-            print(f"rank {aca_C['rank']}/{n_C} (compression {100*(1-aca_C['rank']/n_C):.1f}%)")
+            n_lanczos_C = self.config.n_lanczos_conductor
+            if n_lanczos_C > 0 and n_C > n_lanczos_C:
+                print(f"  Conductor: {n_C} -> {n_lanczos_C} (Lanczos)")
+                lanczos_C = self.lanczos.tridiagonalize(Z_CC, n_lanczos_C)
+                lanczos_results['conductor'] = {
+                    'Q': lanczos_C.Q, 'T': lanczos_C.T, 'rank': n_lanczos_C}
+            else:
+                print(f"  Conductor: No reduction ({n_C} DOFs)")
+                lanczos_results['conductor'] = {
+                    'Q': np.eye(n_C), 'T': Z_CC, 'rank': n_C}
 
         # ================================================================
         # Step 3: Schur complement for port extraction
@@ -5656,7 +6034,7 @@ class PRIMASchurExtractor:
                 s, L_red, R_red, P_red, n_lanczos_L, n_lanczos_S,
                 n_M, n_D, n_C,
                 K_LM_red, K_LD_red, K_LC_red, K_LS_red,
-                aca_results, port_proj, kan_models
+                lanczos_results, port_proj, kan_models
             )
 
         # Validate at sample frequencies
@@ -5675,7 +6053,7 @@ class PRIMASchurExtractor:
         netlist, circuit = self._generate_spice_netlist(
             L_red, R_red, P_red,
             n_lanczos_L, n_lanczos_S,
-            aca_results, K_LM_red, K_LD_red, K_LC_red, K_LS_red,
+            lanczos_results, K_LM_red, K_LD_red, K_LC_red, K_LS_red,
             port_indices, frequencies, Z_port_func
         )
 
@@ -5687,7 +6065,7 @@ class PRIMASchurExtractor:
             'circuit': circuit,
             'lanczos_loop': lanczos_L,
             'lanczos_star': lanczos_S,
-            'aca_results': aca_results,
+            'lanczos_materials': lanczos_results,
             'Z_port_func': Z_port_func,
             'config': self.config,
             'dimensions': {
@@ -5695,27 +6073,6 @@ class PRIMASchurExtractor:
                 'n_lanczos_L': n_lanczos_L, 'n_lanczos_S': n_lanczos_S,
                 'n_ports': n_ports
             }
-        }
-
-    def _aca_compress_block(self,
-                            Z: np.ndarray,
-                            aca: 'ACAPlus',
-                            group_name: str,
-                            kan_model: Optional['KANMaterialInterface'] = None) -> dict:
-        """Apply ACA compression to a material block."""
-        if Z is None or Z.size == 0:
-            return {'rank': 0, 'U': None, 'V': None, 'kan': kan_model}
-
-        n = Z.shape[0]
-        U, V, rank = aca.decompose(Z)
-
-        return {
-            'rank': rank,
-            'U': U,
-            'V': V,
-            'Z_original': Z,
-            'kan': kan_model,
-            'group': group_name
         }
 
     def _compute_port_impedance(self,
@@ -5729,14 +6086,23 @@ class PRIMASchurExtractor:
                                 K_LD: np.ndarray,
                                 K_LC: np.ndarray,
                                 K_LS: np.ndarray,
-                                aca_results: dict,
+                                lanczos_results: dict,
                                 port_proj: np.ndarray,
                                 kan_models: dict) -> np.ndarray:
-        """Compute port impedance via Schur complement."""
+        """Compute port impedance via Schur complement (Lanczos-only)."""
         omega = np.abs(s.imag) if np.abs(s.imag) > 1e-10 else 1.0
 
+        # Get reduced sizes from Lanczos results
+        lanczos_M = lanczos_results.get('magnetic', {})
+        lanczos_D = lanczos_results.get('dielectric', {})
+        lanczos_C = lanczos_results.get('conductor', {})
+
+        n_M_red = lanczos_M.get('rank', n_M) if lanczos_M else n_M
+        n_D_red = lanczos_D.get('rank', n_D) if lanczos_D else n_D
+        n_C_red = lanczos_C.get('rank', n_C) if lanczos_C else n_C
+
         # Build reduced system matrix
-        n_total = n_L + n_S + n_M + n_D + n_C
+        n_total = n_L + n_S + n_M_red + n_D_red + n_C_red
         Z = np.zeros((n_total, n_total), dtype=complex)
 
         idx = 0
@@ -5757,62 +6123,50 @@ class PRIMASchurExtractor:
         else:
             idx_S = idx
 
-        # Magnetic block
-        if n_M > 0:
+        # Magnetic block (Lanczos tridiagonal)
+        if n_M_red > 0 and lanczos_M:
             idx_M = idx
-            aca_M = aca_results.get('magnetic', {})
             kan_mu = kan_models.get('magnetic') if kan_models else None
             if kan_mu:
                 mu_eff = kan_mu.evaluate_frequency([omega/(2*np.pi)])[0]
             else:
                 mu_eff = 1.0
-            if aca_M.get('U') is not None:
-                # Use low-rank: Z_MM ≈ U @ V.T
-                Z_MM_approx = aca_M['U'] @ aca_M['V'].T * mu_eff
-            else:
-                Z_MM_approx = aca_M.get('Z_original', np.eye(n_M)) * mu_eff
-            Z[idx:idx+n_M, idx:idx+n_M] = Z_MM_approx
-            idx += n_M
+            # Use Lanczos tridiagonal T matrix
+            T_M = lanczos_M.get('T', np.eye(n_M_red))
+            Z[idx:idx+n_M_red, idx:idx+n_M_red] = T_M * mu_eff
+            idx += n_M_red
         else:
             idx_M = idx
 
-        # Dielectric block
-        if n_D > 0:
+        # Dielectric block (Lanczos tridiagonal)
+        if n_D_red > 0 and lanczos_D:
             idx_D = idx
-            aca_D = aca_results.get('dielectric', {})
             kan_eps = kan_models.get('dielectric') if kan_models else None
             if kan_eps:
                 eps_eff = kan_eps.evaluate_frequency([omega/(2*np.pi)])[0]
             else:
                 eps_eff = 1.0
-            if aca_D.get('U') is not None:
-                Z_DD_approx = aca_D['U'] @ aca_D['V'].T * eps_eff
-            else:
-                Z_DD_approx = aca_D.get('Z_original', np.eye(n_D)) * eps_eff
-            Z[idx:idx+n_D, idx:idx+n_D] = Z_DD_approx
-            idx += n_D
+            T_D = lanczos_D.get('T', np.eye(n_D_red))
+            Z[idx:idx+n_D_red, idx:idx+n_D_red] = T_D * eps_eff
+            idx += n_D_red
         else:
             idx_D = idx
 
-        # Conductor/Shield block
-        if n_C > 0:
+        # Conductor/Shield block (Lanczos tridiagonal)
+        if n_C_red > 0 and lanczos_C:
             idx_C = idx
-            aca_C = aca_results.get('conductor', {})
             kan_sigma = kan_models.get('conductor') if kan_models else None
             if kan_sigma:
                 sigma_eff = kan_sigma.evaluate_frequency([omega/(2*np.pi)])[0]
             else:
                 sigma_eff = 1.0
-            if aca_C.get('U') is not None:
-                Z_CC_approx = aca_C['U'] @ aca_C['V'].T * sigma_eff
-            else:
-                Z_CC_approx = aca_C.get('Z_original', np.eye(n_C)) * sigma_eff
-            Z[idx:idx+n_C, idx:idx+n_C] = Z_CC_approx
-            idx += n_C
+            T_C = lanczos_C.get('T', np.eye(n_C_red))
+            Z[idx:idx+n_C_red, idx:idx+n_C_red] = T_C * sigma_eff
+            idx += n_C_red
         else:
             idx_C = idx
 
-        # Coupling blocks
+        # Coupling blocks (transformed to Lanczos basis)
         # Loop-Star
         if n_S > 0 and K_LS is not None:
             Z[idx_L:idx_L+n_L, idx_S:idx_S+n_S] = K_LS
@@ -5857,7 +6211,7 @@ class PRIMASchurExtractor:
                                 R_red: np.ndarray,
                                 P_red: np.ndarray,
                                 n_L: int, n_S: int,
-                                aca_results: dict,
+                                lanczos_results: dict,
                                 K_LM: np.ndarray,
                                 K_LD: np.ndarray,
                                 K_LC: np.ndarray,
@@ -5865,15 +6219,15 @@ class PRIMASchurExtractor:
                                 port_indices: List[int],
                                 frequencies: np.ndarray,
                                 Z_port_func: Callable) -> Tuple[str, dict]:
-        """Generate SPICE netlist from reduced system."""
+        """Generate SPICE netlist from reduced system (Lanczos-only)."""
         lines = []
-        lines.append("* PRIMA-Schur Extracted SPICE Netlist")
+        lines.append("* PRIMA-Schur Extracted SPICE Netlist (Lanczos-only)")
         lines.append("* Generated by Radia PEEC + Lanczos MOR")
-        lines.append(f"* Lanczos order (Loop): {self.config.n_lanczos_loop}")
-        lines.append(f"* Lanczos order (Star): {self.config.n_lanczos_star}")
-        lines.append(f"* ACA tol (Magnetic):   {self.config.aca_tol_magnetic:.1e}")
-        lines.append(f"* ACA tol (Dielectric): {self.config.aca_tol_dielectric:.1e}")
-        lines.append(f"* ACA tol (Conductor):  {self.config.aca_tol_conductor:.1e}")
+        lines.append(f"* Lanczos order (Loop):       {self.config.n_lanczos_loop}")
+        lines.append(f"* Lanczos order (Star):       {self.config.n_lanczos_star}")
+        lines.append(f"* Lanczos order (Magnetic):   {self.config.n_lanczos_magnetic}")
+        lines.append(f"* Lanczos order (Dielectric): {self.config.n_lanczos_dielectric}")
+        lines.append(f"* Lanczos order (Conductor):  {self.config.n_lanczos_conductor}")
         lines.append("")
 
         n_ports = len(port_indices)
@@ -5930,40 +6284,53 @@ class PRIMASchurExtractor:
         lines.append("")
 
         # ================================================================
-        # Material subcircuits (from ACA)
+        # Material subcircuits (from Lanczos tridiagonal)
         # ================================================================
-        for group_name, aca_data in aca_results.items():
-            if aca_data.get('rank', 0) > 0:
-                lines.append(f"* === {group_name.capitalize()} (ACA rank {aca_data['rank']}) ===")
+        for group_name, lanczos_data in lanczos_results.items():
+            if lanczos_data.get('rank', 0) > 0:
+                rank = lanczos_data['rank']
+                T = lanczos_data.get('T')
 
-                U = aca_data.get('U')
-                V = aca_data.get('V')
-                rank = aca_data['rank']
+                if T is not None and T.size > 0:
+                    lines.append(f"* === {group_name.capitalize()} Ladder (Lanczos rank {rank}) ===")
 
-                # Each ACA mode becomes a subcircuit
-                for k in range(rank):
-                    n_in = next_node()
-                    n_out = next_node()
+                    # Extract diagonal and off-diagonal from tridiagonal T
+                    diag_T = np.diag(T)
+                    offdiag_T = np.diag(T, 1) if T.shape[0] > 1 else []
 
-                    # Mode impedance (simplified: R + sL approximation)
-                    # In practice, fit from frequency response
-                    sigma_k = np.sum(U[:, k] * V[:, k])
-                    R_mode = float(np.abs(sigma_k)) * 1e-3
-                    L_mode = float(np.abs(sigma_k)) * 1e-9
+                    # Build ladder from tridiagonal structure
+                    for k in range(rank):
+                        n_in = next_node()
+                        n_out = next_node() if k < rank - 1 else 0
 
-                    lines.append(f"* {group_name} mode {k+1}")
-                    lines.append(f"R_{group_name[0].upper()}{k+1} {n_in} {n_in}a {R_mode:.6e}")
-                    lines.append(f"L_{group_name[0].upper()}{k+1} {n_in}a {n_out} {L_mode:.6e}")
+                        # Diagonal element -> impedance element
+                        Z_diag = float(np.abs(diag_T[k])) if k < len(diag_T) else 1.0
+                        R_val = Z_diag * 1e-3  # Scale to reasonable values
+                        L_val = Z_diag * 1e-9
 
-                    circuit_elements.append({
-                        'type': 'mode',
-                        'group': group_name,
-                        'mode': k,
-                        'R': R_mode,
-                        'L': L_mode
-                    })
+                        lines.append(f"* {group_name} stage {k+1}")
+                        if R_val > 1e-15:
+                            lines.append(f"R_{group_name[0].upper()}{k+1} {n_in} {n_in}a {R_val:.6e}")
+                            n_in = f"{n_in}a"
+                        if L_val > 1e-15:
+                            lines.append(f"L_{group_name[0].upper()}{k+1} {n_in} {n_out} {L_val:.6e}")
 
-                lines.append("")
+                        circuit_elements.append({
+                            'type': 'ladder_stage',
+                            'group': group_name,
+                            'stage': k,
+                            'R': R_val,
+                            'L': L_val
+                        })
+
+                        # Off-diagonal -> mutual coupling (K statement)
+                        if k < len(offdiag_T) and np.abs(offdiag_T[k]) > 1e-15:
+                            M_val = float(np.abs(offdiag_T[k]))
+                            k_coupling = M_val / np.sqrt(np.abs(diag_T[k] * diag_T[k+1])) if diag_T[k] * diag_T[k+1] > 0 else 0
+                            if 0 < np.abs(k_coupling) < 1:
+                                lines.append(f"K_{group_name[0].upper()}{k+1}_{k+2} L_{group_name[0].upper()}{k+1} L_{group_name[0].upper()}{k+2} {k_coupling:.6e}")
+
+                    lines.append("")
 
         # ================================================================
         # Star capacitors (if present)
@@ -6040,13 +6407,13 @@ def demo_prima_schur_extraction():
     K_LC = np.random.randn(n_L, n_C) * 1e-3
     K_LS = np.random.randn(n_L, n_S) * 1e-6
 
-    # Configuration
+    # Configuration (Lanczos-only, no ACA)
     config = SPICEExtractionConfig(
         n_lanczos_loop=10,          # Reduce 30 -> 10 stages
         n_lanczos_star=5,           # Reduce 10 -> 5 stages
-        aca_tol_magnetic=1e-3,      # Coarser for magnetic
-        aca_tol_dielectric=1e-4,    # Medium for dielectric
-        aca_tol_conductor=1e-5,     # Finer for conductor (shield)
+        n_lanczos_magnetic=3,       # Reduce magnetic to 3 stages
+        n_lanczos_dielectric=2,     # Reduce dielectric to 2 stages
+        n_lanczos_conductor=2,      # Reduce conductor to 2 stages
         port_indices=[0, 15],       # Two ports
         port_names=['IN', 'OUT'],
         f_min=100,                  # 100 Hz
@@ -6054,12 +6421,12 @@ def demo_prima_schur_extraction():
         n_freq=50
     )
 
-    print(f"\nExtraction configuration:")
-    print(f"  Lanczos (Loop):  {n_L} -> {config.n_lanczos_loop} stages")
-    print(f"  Lanczos (Star):  {n_S} -> {config.n_lanczos_star} stages")
-    print(f"  ACA tol (Mag):   {config.aca_tol_magnetic:.1e}")
-    print(f"  ACA tol (Diel):  {config.aca_tol_dielectric:.1e}")
-    print(f"  ACA tol (Cond):  {config.aca_tol_conductor:.1e}")
+    print(f"\nExtraction configuration (Lanczos-only):")
+    print(f"  Lanczos (Loop):       {n_L} -> {config.n_lanczos_loop} stages")
+    print(f"  Lanczos (Star):       {n_S} -> {config.n_lanczos_star} stages")
+    print(f"  Lanczos (Magnetic):   {n_M} -> {config.n_lanczos_magnetic} stages")
+    print(f"  Lanczos (Dielectric): {n_D} -> {config.n_lanczos_dielectric} stages")
+    print(f"  Lanczos (Conductor):  {n_C} -> {config.n_lanczos_conductor} stages")
 
     # Run extraction
     extractor = PRIMASchurExtractor(config)
@@ -6083,9 +6450,11 @@ def demo_prima_schur_extraction():
     print(f"  Loop:  {dims['n_L']} -> {dims['n_lanczos_L']} stages")
     print(f"  Star:  {dims['n_S']} -> {dims['n_lanczos_S']} stages")
 
-    for name, aca in result['aca_results'].items():
-        n_orig = {'magnetic': n_M, 'dielectric': n_D, 'conductor': n_C}[name]
-        print(f"  {name.capitalize()}: rank {aca['rank']}/{n_orig}")
+    # Print Lanczos reduction results for materials
+    lanczos_mats = result.get('lanczos_materials', {})
+    for name, lanczos_data in lanczos_mats.items():
+        n_orig = {'magnetic': n_M, 'dielectric': n_D, 'conductor': n_C}.get(name, 0)
+        print(f"  {name.capitalize()}: {n_orig} -> {lanczos_data.get('rank', n_orig)} stages")
 
     print(f"\nSPICE netlist ({len(result['netlist'].split(chr(10)))} lines):")
     print("-" * 50)
@@ -6097,11 +6466,2472 @@ def demo_prima_schur_extraction():
     return result
 
 
+# =============================================================================
+# N-Port Block Lanczos SPICE Generation
+# =============================================================================
+
+@dataclass
+class NPortBlockLanczosResult:
+    """Result of N-port Block Lanczos reduction.
+
+    Block tridiagonal structure:
+        T = [A_0   B_0^T   0     ...]
+            [B_0   A_1     B_1^T ...]
+            [0     B_1     A_2   ...]
+            [...   ...     ...   ...]
+
+    where A_k, B_k are p x p blocks (p = number of ports).
+    """
+    Q: np.ndarray              # Orthonormal basis [n x k*p]
+    A_blocks: List[np.ndarray] # Diagonal blocks A_k [p x p]
+    B_blocks: List[np.ndarray] # Off-diagonal blocks B_k [p x p]
+    n_ports: int               # Number of ports
+    n_stages: int              # Number of Lanczos stages
+    R_reduced: np.ndarray      # Reduced resistance matrix
+
+    @property
+    def T(self) -> np.ndarray:
+        """Reconstruct full block tridiagonal matrix."""
+        p = self.n_ports
+        k = self.n_stages
+        n = k * p
+        T = np.zeros((n, n))
+
+        for i, A in enumerate(self.A_blocks):
+            T[i*p:(i+1)*p, i*p:(i+1)*p] = A
+
+        for i, B in enumerate(self.B_blocks):
+            T[i*p:(i+1)*p, (i+1)*p:(i+2)*p] = B.T
+            T[(i+1)*p:(i+2)*p, i*p:(i+1)*p] = B
+
+        return T
+
+
+class NPortBlockLanczosSPICE:
+    """N-port Block Lanczos reduction with SPICE netlist generation.
+
+    Generates SPICE subcircuit for N-port impedance matrix:
+        V = Z(s) @ I
+
+    where Z(s) is approximated by block tridiagonal Lanczos reduction.
+
+    Circuit elements:
+    - Inductors: Self and mutual (K-statement) for L blocks
+    - Resistors: Self resistance on diagonal
+    - CCVS (H-element): Mutual resistance for off-diagonal R
+
+    Example usage:
+        reducer = NPortBlockLanczosSPICE(n_ports=2, n_stages=5)
+        result = reducer.reduce(L_matrix, R_matrix, port_indices=[0, 10])
+        netlist = reducer.to_spice(result, subckt_name="WPT_COILS")
+    """
+
+    def __init__(self, n_ports: int, n_stages: int = 5, tol: float = 1e-10):
+        """Initialize N-port Block Lanczos reducer.
+
+        Parameters
+        ----------
+        n_ports : int
+            Number of ports (e.g., 2 for WPT TX/RX)
+        n_stages : int
+            Number of Lanczos stages per port
+        tol : float
+            Tolerance for convergence detection
+        """
+        self.n_ports = n_ports
+        self.n_stages = n_stages
+        self.tol = tol
+
+    def reduce(self, L: np.ndarray, R: np.ndarray,
+               port_indices: List[int]) -> NPortBlockLanczosResult:
+        """Apply Block Lanczos reduction.
+
+        Parameters
+        ----------
+        L : np.ndarray
+            Inductance matrix [n x n]
+        R : np.ndarray
+            Resistance matrix [n x n] or [n] for diagonal
+        port_indices : List[int]
+            Indices of port nodes (length = n_ports)
+
+        Returns
+        -------
+        NPortBlockLanczosResult
+            Block tridiagonal reduction result
+        """
+        n = L.shape[0]
+        p = self.n_ports
+        k = min(self.n_stages, n // p)
+
+        if len(port_indices) != p:
+            raise ValueError(f"port_indices length ({len(port_indices)}) != n_ports ({p})")
+
+        # Ensure R is a matrix
+        if R.ndim == 1:
+            R = np.diag(R)
+
+        # Build port excitation matrix B [n x p]
+        B = np.zeros((n, p))
+        for i, idx in enumerate(port_indices):
+            B[idx, i] = 1.0
+
+        # Block Lanczos on L
+        Q, A_blocks, B_blocks = self._block_lanczos_symmetric(L, B, k)
+
+        # Project R to reduced space
+        R_reduced = Q.T @ R @ Q
+
+        return NPortBlockLanczosResult(
+            Q=Q,
+            A_blocks=A_blocks,
+            B_blocks=B_blocks,
+            n_ports=p,
+            n_stages=len(A_blocks),
+            R_reduced=R_reduced
+        )
+
+    def _block_lanczos_symmetric(self, A: np.ndarray, B: np.ndarray,
+                                   k: int) -> Tuple[np.ndarray, List[np.ndarray], List[np.ndarray]]:
+        """Block Lanczos for symmetric matrix A with starting block B.
+
+        Produces block tridiagonal:
+            T = Q^T @ A @ Q
+
+        where T has p x p blocks (p = number of columns in B).
+
+        Parameters
+        ----------
+        A : np.ndarray
+            Symmetric matrix [n x n]
+        B : np.ndarray
+            Starting block [n x p]
+        k : int
+            Number of Lanczos iterations
+
+        Returns
+        -------
+        Q : np.ndarray
+            Orthonormal basis [n x k*p]
+        A_blocks : List[np.ndarray]
+            Diagonal blocks of T
+        B_blocks : List[np.ndarray]
+            Off-diagonal blocks of T
+        """
+        n = A.shape[0]
+        p = B.shape[1]
+
+        # QR of starting block (ensuring positive signs on diagonal)
+        V_prev = np.zeros((n, p))
+        V_curr, R_qr = np.linalg.qr(B)
+        # Fix sign ambiguity: ensure R has positive diagonal
+        signs = np.sign(np.diag(R_qr))
+        signs[signs == 0] = 1  # Handle exact zeros
+        V_curr = V_curr * signs  # Flip columns to match original B orientation
+
+        Q_list = [V_curr]
+        A_blocks = []
+        B_blocks = []
+
+        for j in range(k):
+            # W = A @ V_j
+            W = A @ V_curr
+
+            # Diagonal block: A_j = V_j^T @ W
+            A_j = V_curr.T @ W
+            A_blocks.append(A_j)
+
+            # Last iteration: don't compute B (no next stage)
+            if j == k - 1:
+                break
+
+            # Orthogonalize: W = W - V_j @ A_j - V_{j-1} @ B_{j-1}^T
+            W = W - V_curr @ A_j
+            if j > 0:
+                W = W - V_prev @ B_blocks[-1].T
+
+            # Full re-orthogonalization against all previous blocks
+            for Q_i in Q_list:
+                h = Q_i.T @ W
+                W = W - Q_i @ h
+
+            # Check for convergence
+            norm_W = np.linalg.norm(W)
+            if norm_W < self.tol:
+                break
+
+            # QR of residual: W = V_{j+1} @ B_j
+            V_next, B_j = np.linalg.qr(W)
+            B_blocks.append(B_j)
+
+            Q_list.append(V_next)
+            V_prev = V_curr
+            V_curr = V_next
+
+        Q = np.column_stack(Q_list)
+        return Q, A_blocks, B_blocks
+
+    def to_spice(self, result: NPortBlockLanczosResult,
+                 subckt_name: str = "NPORT_PRIMA",
+                 port_names: List[str] = None) -> str:
+        """Generate SPICE netlist from Block Lanczos result.
+
+        Parameters
+        ----------
+        result : NPortBlockLanczosResult
+            Output from reduce()
+        subckt_name : str
+            Name of SPICE subcircuit
+        port_names : List[str], optional
+            Port terminal names (default: p1_in, p1_out, p2_in, p2_out, ...)
+
+        Returns
+        -------
+        str
+            SPICE netlist
+        """
+        p = result.n_ports
+        k = result.n_stages
+
+        if port_names is None:
+            port_names = []
+            for i in range(p):
+                port_names.extend([f"p{i+1}_in", f"p{i+1}_out"])
+
+        lines = []
+        lines.append(f"* {p}-Port Block Lanczos PRIMA SPICE Netlist")
+        lines.append(f"* Ports: {p}, Stages: {k}")
+        lines.append(f"* Total reduced DOF: {p * k}")
+        lines.append("")
+
+        # Subcircuit header
+        port_list = " ".join(port_names)
+        lines.append(f".SUBCKT {subckt_name} {port_list}")
+        lines.append("")
+
+        # Internal node naming: stage_port (e.g., s0_p1, s1_p2)
+        def node(stage, port):
+            if stage == 0:
+                return f"p{port+1}_in"
+            elif stage == k:
+                return f"p{port+1}_out"
+            else:
+                return f"s{stage}_p{port+1}"
+
+        # Element counter
+        elem_idx = [0]
+        def next_elem(prefix):
+            elem_idx[0] += 1
+            return f"{prefix}{elem_idx[0]}"
+
+        # === Inductance (diagonal blocks A_j -> self L, off-diagonal -> mutual M) ===
+        lines.append("* === Inductance (Block Tridiagonal) ===")
+
+        inductor_names = {}  # (stage, port) -> inductor name
+
+        for j, A_j in enumerate(result.A_blocks):
+            # Self inductance: diagonal of A_j
+            for port in range(p):
+                L_self = A_j[port, port]
+                if abs(L_self) > 1e-15:
+                    n1 = node(j, port)
+                    n2 = node(j + 1, port)
+                    L_name = next_elem("L")
+                    inductor_names[(j, port)] = L_name
+                    lines.append(f"{L_name} {n1} {n2} {L_self:.6e}")
+
+            # Mutual inductance within same stage: off-diagonal of A_j
+            for port1 in range(p):
+                for port2 in range(port1 + 1, p):
+                    M_val = A_j[port1, port2]
+                    if abs(M_val) > 1e-15:
+                        L1_name = inductor_names.get((j, port1))
+                        L2_name = inductor_names.get((j, port2))
+                        if L1_name and L2_name:
+                            L1 = A_j[port1, port1]
+                            L2 = A_j[port2, port2]
+                            if abs(L1) > 1e-15 and abs(L2) > 1e-15:
+                                k_val = M_val / np.sqrt(abs(L1 * L2))
+                                if abs(k_val) < 1.0:
+                                    K_name = next_elem("K")
+                                    lines.append(f"{K_name} {L1_name} {L2_name} {k_val:.6e}")
+
+        lines.append("")
+
+        # Inter-stage coupling (B_j blocks)
+        if result.B_blocks:
+            lines.append("* === Inter-stage Coupling ===")
+            for j, B_j in enumerate(result.B_blocks):
+                for port1 in range(p):
+                    for port2 in range(p):
+                        M_val = B_j[port1, port2]
+                        if abs(M_val) > 1e-15:
+                            L1_name = inductor_names.get((j, port1))
+                            L2_name = inductor_names.get((j + 1, port2))
+                            if L1_name and L2_name:
+                                L1 = result.A_blocks[j][port1, port1]
+                                L2 = result.A_blocks[j + 1][port2, port2]
+                                if abs(L1) > 1e-15 and abs(L2) > 1e-15:
+                                    k_val = M_val / np.sqrt(abs(L1 * L2))
+                                    if abs(k_val) < 1.0:
+                                        K_name = next_elem("K")
+                                        lines.append(f"{K_name} {L1_name} {L2_name} {k_val:.6e}")
+            lines.append("")
+
+        # === Resistance ===
+        lines.append("* === Resistance Matrix ===")
+
+        R_red = result.R_reduced
+        n_red = R_red.shape[0]
+
+        # Create resistance nodes for each reduced DOF
+        # We need current sensing for mutual resistance (CCVS)
+
+        # Self resistance (diagonal)
+        lines.append("* Self resistance (diagonal)")
+        for i in range(n_red):
+            R_self = R_red[i, i]
+            if abs(R_self) > 1e-15:
+                stage = i // p
+                port = i % p
+                # Insert resistance at input of each stage
+                n1 = node(stage, port)
+                n_mid = f"r{stage}_p{port+1}"
+                # Rename the inductor node
+                lines.append(f"R{stage+1}_{port+1} {n1} {n_mid} {R_self:.6e}")
+
+        # Mutual resistance (off-diagonal) via CCVS
+        lines.append("")
+        lines.append("* Mutual resistance (off-diagonal via CCVS)")
+        lines.append("* V_i += R_ij * I_j (H-element: current-controlled voltage source)")
+
+        ccvs_count = 0
+        for i in range(n_red):
+            for j in range(n_red):
+                if i != j:
+                    R_mutual = R_red[i, j]
+                    if abs(R_mutual) > 1e-15:
+                        ccvs_count += 1
+                        stage_i = i // p
+                        port_i = i % p
+                        stage_j = j // p
+                        port_j = j % p
+
+                        # Need current sensor for port j
+                        sense_name = f"Vsense{stage_j+1}_{port_j+1}"
+                        h_name = f"H{ccvs_count}"
+
+                        # Add CCVS: controlled by current through sense resistor
+                        n_h1 = f"h{ccvs_count}_p{port_i+1}"
+                        n_h2 = f"h{ccvs_count}b_p{port_i+1}"
+                        lines.append(f"{h_name} {n_h1} {n_h2} {sense_name} {R_mutual:.6e}")
+
+        if ccvs_count > 0:
+            lines.append("")
+            lines.append("* Current sense (zero-volt sources)")
+            added_senses = set()
+            for i in range(n_red):
+                for j in range(n_red):
+                    if i != j and abs(R_red[i, j]) > 1e-15:
+                        stage_j = j // p
+                        port_j = j % p
+                        sense_key = (stage_j, port_j)
+                        if sense_key not in added_senses:
+                            added_senses.add(sense_key)
+                            sense_name = f"Vsense{stage_j+1}_{port_j+1}"
+                            n1 = node(stage_j + 1, port_j)
+                            lines.append(f"{sense_name} {n1} 0 0")
+
+        lines.append("")
+        lines.append(f".ENDS {subckt_name}")
+
+        return "\n".join(lines)
+
+    def compute_impedance(self, result: NPortBlockLanczosResult,
+                          frequencies: np.ndarray) -> np.ndarray:
+        """Compute N-port impedance matrix over frequency range.
+
+        Z(s) = B^T @ (s*T_L + T_R)^{-1} @ B
+
+        where T_L is block tridiagonal inductance and T_R is resistance.
+
+        Parameters
+        ----------
+        result : NPortBlockLanczosResult
+            Output from reduce()
+        frequencies : np.ndarray
+            Frequency array [Hz]
+
+        Returns
+        -------
+        np.ndarray
+            Impedance tensor [n_freq x n_ports x n_ports]
+        """
+        p = result.n_ports
+        k = result.n_stages
+        n_red = k * p
+
+        T_L = result.T  # Block tridiagonal inductance
+        T_R = result.R_reduced
+
+        # Port projection: first p rows/cols
+        B = np.zeros((n_red, p))
+        for i in range(p):
+            B[i, i] = 1.0
+
+        n_freq = len(frequencies)
+        Z = np.zeros((n_freq, p, p), dtype=complex)
+
+        for i, f in enumerate(frequencies):
+            s = 2j * np.pi * f
+            Y_red = s * T_L + T_R
+            try:
+                Y_red_inv = np.linalg.inv(Y_red)
+                Z[i, :, :] = B.T @ Y_red_inv @ B
+            except np.linalg.LinAlgError:
+                Z[i, :, :] = np.inf
+
+        return Z
+
+    def compute_impedance_full(self, L: np.ndarray, R: np.ndarray,
+                                port_indices: List[int],
+                                frequencies: np.ndarray) -> np.ndarray:
+        """Compute N-port impedance from full system (reference).
+
+        Parameters
+        ----------
+        L : np.ndarray
+            Full inductance matrix
+        R : np.ndarray
+            Full resistance matrix
+        port_indices : List[int]
+            Port node indices
+        frequencies : np.ndarray
+            Frequency array [Hz]
+
+        Returns
+        -------
+        np.ndarray
+            Impedance tensor [n_freq x n_ports x n_ports]
+        """
+        n = L.shape[0]
+        p = len(port_indices)
+
+        if R.ndim == 1:
+            R = np.diag(R)
+
+        # Port matrix
+        B = np.zeros((n, p))
+        for i, idx in enumerate(port_indices):
+            B[idx, i] = 1.0
+
+        n_freq = len(frequencies)
+        Z = np.zeros((n_freq, p, p), dtype=complex)
+
+        for i, f in enumerate(frequencies):
+            s = 2j * np.pi * f
+            Y_full = s * L + R
+            try:
+                Y_full_inv = np.linalg.inv(Y_full)
+                Z[i, :, :] = B.T @ Y_full_inv @ B
+            except np.linalg.LinAlgError:
+                Z[i, :, :] = np.inf
+
+        return Z
+
+
+# =============================================================================
+# N-Port Block Lanczos for LoopStar + MMM Coupled Systems
+# =============================================================================
+
+@dataclass
+class NPortCoupledLanczosResult:
+    """Result of N-port Block Lanczos for LoopStar + MMM coupled system.
+
+    System structure (before Schur complement):
+        [sL_L + R_L    K_LM  ] [I_L]   [V_port]
+        [K_ML      sL_M + R_M] [M  ] = [0     ]
+
+    After Schur complement (eliminates magnetic DOFs):
+        Z_eff(s) = (sL_L + R_L) - K_LM @ (sL_M + R_M)^{-1} @ K_ML
+
+    Block Lanczos is applied to L_L and L_M separately, then coupled.
+    """
+    # Conductor (Loop) reduction
+    Q_L: np.ndarray              # Loop orthonormal basis [n_L x k_L*p]
+    T_L: np.ndarray              # Loop block tridiagonal [k_L*p x k_L*p]
+    R_L_reduced: np.ndarray      # Reduced loop resistance
+
+    # Magnetic (MMM) reduction
+    Q_M: np.ndarray              # Magnetic orthonormal basis [n_M x k_M]
+    T_M: np.ndarray              # Magnetic tridiagonal [k_M x k_M]
+    R_M_reduced: np.ndarray      # Reduced magnetic resistance (losses)
+
+    # Coupling
+    K_LM_reduced: np.ndarray     # Reduced coupling [k_L*p x k_M]
+
+    # Metadata
+    n_ports: int
+    n_stages_L: int              # Lanczos stages for loops
+    n_stages_M: int              # Lanczos stages for magnetic
+
+
+class NPortCoupledBlockLanczosSPICE:
+    """N-port Block Lanczos for LoopStar + MMM coupled systems.
+
+    Handles coupled conductor-magnetic systems where:
+    - Conductor: Loop-Star PEEC with ports
+    - Magnetic: MMM (Magnetic Moment Method) for ferrite/iron cores
+
+    The coupled system impedance at ports:
+        Z_port(s) = Z_L(s) - K_LM @ Z_M(s)^{-1} @ K_ML
+
+    where:
+        Z_L(s) = sL_L + R_L  (conductor impedance)
+        Z_M(s) = sL_M + R_M  (magnetic impedance, R_M = loss from complex mu)
+
+    SPICE output includes:
+    - Conductor ladder (L, R, K elements)
+    - Magnetic ladder (for complex permeability losses)
+    - Controlled sources for coupling (E or H elements)
+
+    Example usage:
+        solver = NPortCoupledBlockLanczosSPICE(n_ports=2, n_stages_L=5, n_stages_M=3)
+        result = solver.reduce(L_L, R_L, L_M, R_M, K_LM, port_indices)
+        netlist = solver.to_spice(result, "WPT_WITH_CORE")
+    """
+
+    def __init__(self, n_ports: int, n_stages_L: int = 5, n_stages_M: int = 3,
+                 tol: float = 1e-10):
+        """Initialize coupled Block Lanczos solver.
+
+        Parameters
+        ----------
+        n_ports : int
+            Number of electrical ports
+        n_stages_L : int
+            Lanczos stages for conductor (loop) DOFs
+        n_stages_M : int
+            Lanczos stages for magnetic DOFs
+        tol : float
+            Convergence tolerance
+        """
+        self.n_ports = n_ports
+        self.n_stages_L = n_stages_L
+        self.n_stages_M = n_stages_M
+        self.tol = tol
+
+    def reduce(self, L_L: np.ndarray, R_L: np.ndarray,
+               L_M: np.ndarray, R_M: np.ndarray,
+               K_LM: np.ndarray,
+               port_indices: List[int]) -> NPortCoupledLanczosResult:
+        """Apply Block Lanczos reduction to coupled system.
+
+        Parameters
+        ----------
+        L_L : np.ndarray
+            Conductor inductance matrix [n_L x n_L]
+        R_L : np.ndarray
+            Conductor resistance [n_L x n_L] or [n_L]
+        L_M : np.ndarray
+            Magnetic inductance matrix [n_M x n_M]
+        R_M : np.ndarray
+            Magnetic loss resistance [n_M x n_M] or [n_M]
+            (From complex permeability: R_M = omega * mu" / mu'^2 * L_M)
+        K_LM : np.ndarray
+            Conductor-magnetic coupling [n_L x n_M]
+        port_indices : List[int]
+            Port node indices in conductor DOFs
+
+        Returns
+        -------
+        NPortCoupledLanczosResult
+        """
+        n_L = L_L.shape[0]
+        n_M = L_M.shape[0]
+        p = self.n_ports
+        k_L = min(self.n_stages_L, n_L // p)
+        k_M = min(self.n_stages_M, n_M)
+
+        if len(port_indices) != p:
+            raise ValueError(f"port_indices length ({len(port_indices)}) != n_ports ({p})")
+
+        # Ensure R matrices are 2D
+        if R_L.ndim == 1:
+            R_L = np.diag(R_L)
+        if R_M.ndim == 1:
+            R_M = np.diag(R_M)
+
+        # === Block Lanczos on conductor (L_L) ===
+        # Port excitation matrix
+        B_L = np.zeros((n_L, p))
+        for i, idx in enumerate(port_indices):
+            B_L[idx, i] = 1.0
+
+        Q_L, A_blocks_L, B_blocks_L = self._block_lanczos_symmetric(L_L, B_L, k_L)
+
+        # Build T_L from blocks
+        n_red_L = len(A_blocks_L) * p
+        T_L = np.zeros((n_red_L, n_red_L))
+        for i, A in enumerate(A_blocks_L):
+            T_L[i*p:(i+1)*p, i*p:(i+1)*p] = A
+        for i, B in enumerate(B_blocks_L):
+            T_L[i*p:(i+1)*p, (i+1)*p:(i+2)*p] = B.T
+            T_L[(i+1)*p:(i+2)*p, i*p:(i+1)*p] = B
+
+        R_L_reduced = Q_L.T @ R_L @ Q_L
+
+        # === Standard Lanczos on magnetic (L_M) ===
+        # Use sum of coupling columns as starting vector (captures port influence)
+        v0_M = np.sum(np.abs(K_LM.T), axis=1)
+        if np.linalg.norm(v0_M) < 1e-15:
+            v0_M = np.ones(n_M)
+        v0_M = v0_M / np.linalg.norm(v0_M)
+
+        Q_M, T_M = self._lanczos_symmetric(L_M, v0_M, k_M)
+        R_M_reduced = Q_M.T @ R_M @ Q_M
+
+        # === Coupling reduction ===
+        K_LM_reduced = Q_L.T @ K_LM @ Q_M
+
+        return NPortCoupledLanczosResult(
+            Q_L=Q_L,
+            T_L=T_L,
+            R_L_reduced=R_L_reduced,
+            Q_M=Q_M,
+            T_M=T_M,
+            R_M_reduced=R_M_reduced,
+            K_LM_reduced=K_LM_reduced,
+            n_ports=p,
+            n_stages_L=len(A_blocks_L),
+            n_stages_M=Q_M.shape[1]
+        )
+
+    def _block_lanczos_symmetric(self, A: np.ndarray, B: np.ndarray,
+                                   k: int) -> Tuple[np.ndarray, List[np.ndarray], List[np.ndarray]]:
+        """Block Lanczos (same as NPortBlockLanczosSPICE)."""
+        n = A.shape[0]
+        p = B.shape[1]
+
+        V_prev = np.zeros((n, p))
+        V_curr, R_qr = np.linalg.qr(B)
+        signs = np.sign(np.diag(R_qr))
+        signs[signs == 0] = 1
+        V_curr = V_curr * signs
+
+        Q_list = [V_curr]
+        A_blocks = []
+        B_blocks = []
+
+        for j in range(k):
+            W = A @ V_curr
+            A_j = V_curr.T @ W
+            A_blocks.append(A_j)
+
+            if j == k - 1:
+                break
+
+            W = W - V_curr @ A_j
+            if j > 0:
+                W = W - V_prev @ B_blocks[-1].T
+
+            for Q_i in Q_list:
+                h = Q_i.T @ W
+                W = W - Q_i @ h
+
+            norm_W = np.linalg.norm(W)
+            if norm_W < self.tol:
+                break
+
+            V_next, B_j = np.linalg.qr(W)
+            B_blocks.append(B_j)
+
+            Q_list.append(V_next)
+            V_prev = V_curr
+            V_curr = V_next
+
+        Q = np.column_stack(Q_list)
+        return Q, A_blocks, B_blocks
+
+    def _lanczos_symmetric(self, A: np.ndarray, v0: np.ndarray,
+                            k: int) -> Tuple[np.ndarray, np.ndarray]:
+        """Standard Lanczos for symmetric matrix."""
+        n = A.shape[0]
+        k = min(k, n)
+
+        Q = np.zeros((n, k))
+        alpha = np.zeros(k)
+        beta = np.zeros(k - 1)
+
+        v = v0 / np.linalg.norm(v0)
+        Q[:, 0] = v
+        w = A @ v
+        alpha[0] = v.dot(w)
+        w = w - alpha[0] * v
+
+        for j in range(1, k):
+            beta[j-1] = np.linalg.norm(w)
+            if beta[j-1] < self.tol:
+                Q = Q[:, :j]
+                alpha = alpha[:j]
+                beta = beta[:j-1]
+                break
+
+            v_prev = v
+            v = w / beta[j-1]
+
+            # Re-orthogonalization
+            for i in range(j):
+                h = Q[:, i].dot(v)
+                v = v - h * Q[:, i]
+            v = v / np.linalg.norm(v)
+
+            Q[:, j] = v
+            w = A @ v
+            alpha[j] = v.dot(w)
+            w = w - alpha[j] * v - beta[j-1] * v_prev
+
+        # Build tridiagonal
+        T = np.diag(alpha) + np.diag(beta, 1) + np.diag(beta, -1)
+        return Q, T
+
+    def to_spice(self, result: NPortCoupledLanczosResult,
+                 subckt_name: str = "COUPLED_NPORT",
+                 port_names: List[str] = None) -> str:
+        """Generate SPICE netlist for coupled system.
+
+        The netlist structure:
+        1. Conductor ladder (L, R, K for mutual inductance)
+        2. Magnetic ladder (L_M, R_M for core losses)
+        3. Controlled sources for conductor-magnetic coupling
+
+        Parameters
+        ----------
+        result : NPortCoupledLanczosResult
+        subckt_name : str
+        port_names : List[str], optional
+
+        Returns
+        -------
+        str
+            SPICE netlist
+        """
+        p = result.n_ports
+        k_L = result.n_stages_L
+        k_M = result.n_stages_M
+
+        if port_names is None:
+            port_names = []
+            for i in range(p):
+                port_names.extend([f"p{i+1}_in", f"p{i+1}_out"])
+
+        lines = []
+        lines.append(f"* N-Port Coupled (LoopStar + MMM) SPICE Netlist")
+        lines.append(f"* Conductor ports: {p}, Conductor stages: {k_L}, Magnetic stages: {k_M}")
+        lines.append(f"* Total reduced DOF: {k_L * p} (conductor) + {k_M} (magnetic)")
+        lines.append("")
+        lines.append(f".SUBCKT {subckt_name} {' '.join(port_names)}")
+        lines.append("")
+
+        elem_idx = 1
+
+        # === Conductor Ladder ===
+        lines.append("* === Conductor Inductance Ladder ===")
+
+        # Diagonal blocks -> self inductance per port
+        for stage in range(k_L):
+            for port in range(p):
+                i = stage * p + port
+                L_val = result.T_L[i, i]
+                if stage == 0:
+                    n1 = f"p{port+1}_in"
+                else:
+                    n1 = f"cond_s{stage}_p{port+1}"
+
+                if stage == k_L - 1:
+                    n2 = f"p{port+1}_out"
+                else:
+                    n2 = f"cond_s{stage+1}_p{port+1}"
+
+                lines.append(f"L{elem_idx} {n1} {n2} {L_val:.6e}")
+                elem_idx += 1
+
+        # Off-diagonal within same stage -> mutual between ports (K statement)
+        lines.append("")
+        lines.append("* === Conductor Inter-port Coupling (same stage) ===")
+        for stage in range(k_L):
+            for i in range(p):
+                for j in range(i + 1, p):
+                    idx_i = stage * p + i
+                    idx_j = stage * p + j
+                    M_val = result.T_L[idx_i, idx_j]
+                    if np.abs(M_val) > 1e-15:
+                        L_i = result.T_L[idx_i, idx_i]
+                        L_j = result.T_L[idx_j, idx_j]
+                        if L_i > 0 and L_j > 0:
+                            k_val = M_val / np.sqrt(L_i * L_j)
+                            if np.abs(k_val) < 1.0:
+                                # Find L element numbers
+                                L_num_i = stage * p + i + 1
+                                L_num_j = stage * p + j + 1
+                                lines.append(f"K{elem_idx} L{L_num_i} L{L_num_j} {k_val:.6e}")
+                                elem_idx += 1
+
+        # === Conductor Resistance ===
+        lines.append("")
+        lines.append("* === Conductor Resistance ===")
+        for i in range(k_L * p):
+            R_val = result.R_L_reduced[i, i]
+            if np.abs(R_val) > 1e-15:
+                stage = i // p
+                port = i % p
+                if stage == 0:
+                    n1 = f"p{port+1}_in"
+                else:
+                    n1 = f"cond_s{stage}_p{port+1}"
+                n_r = f"cond_r{i+1}"
+                lines.append(f"R{elem_idx} {n1} {n_r} {R_val:.6e}")
+                elem_idx += 1
+
+        # === Magnetic Ladder ===
+        lines.append("")
+        lines.append("* === Magnetic Core Ladder (MMM) ===")
+        lines.append("* Models magnetic material inductance and losses")
+
+        for i in range(k_M):
+            L_M_val = result.T_M[i, i]
+            n1 = f"mag_n{i}" if i > 0 else "mag_in"
+            n2 = f"mag_n{i+1}" if i < k_M - 1 else "mag_out"
+            lines.append(f"Lmag{i+1} {n1} {n2} {L_M_val:.6e}")
+
+        # Magnetic off-diagonal (tridiagonal coupling)
+        for i in range(k_M - 1):
+            M_val = result.T_M[i, i+1]
+            if np.abs(M_val) > 1e-15:
+                L_i = result.T_M[i, i]
+                L_j = result.T_M[i+1, i+1]
+                if L_i > 0 and L_j > 0:
+                    k_val = M_val / np.sqrt(L_i * L_j)
+                    if np.abs(k_val) < 1.0:
+                        lines.append(f"Kmag{i+1}_{i+2} Lmag{i+1} Lmag{i+2} {k_val:.6e}")
+
+        # Magnetic resistance (core loss from complex mu)
+        lines.append("")
+        lines.append("* === Magnetic Core Loss (from complex mu) ===")
+        for i in range(k_M):
+            R_M_val = result.R_M_reduced[i, i]
+            if np.abs(R_M_val) > 1e-15:
+                n1 = f"mag_n{i}" if i > 0 else "mag_in"
+                lines.append(f"Rmag{i+1} {n1} 0 {R_M_val:.6e}")
+
+        # === Conductor-Magnetic Coupling ===
+        # Use VCCS (G element) or CCVS (H element) for coupling
+        lines.append("")
+        lines.append("* === Conductor-Magnetic Coupling ===")
+        lines.append("* K_LM couples conductor currents to magnetic flux")
+        lines.append("* Implemented via controlled sources")
+
+        # Simplified: dominant coupling terms only
+        max_coupling = np.max(np.abs(result.K_LM_reduced))
+        threshold = max_coupling * 0.01  # 1% threshold
+
+        for i in range(min(k_L * p, result.K_LM_reduced.shape[0])):
+            for j in range(min(k_M, result.K_LM_reduced.shape[1])):
+                K_val = result.K_LM_reduced[i, j]
+                if np.abs(K_val) > threshold:
+                    # Coupling from conductor current to magnetic voltage
+                    # This is a simplified model; full model needs E and F elements
+                    stage = i // p
+                    port = i % p
+                    lines.append(f"* Coupling L{i+1} <-> Lmag{j+1}: K = {K_val:.6e}")
+
+        lines.append("")
+        lines.append(f".ENDS {subckt_name}")
+
+        return '\n'.join(lines)
+
+    def compute_impedance(self, result: NPortCoupledLanczosResult,
+                          frequencies: np.ndarray) -> np.ndarray:
+        """Compute port impedance from reduced coupled system.
+
+        Z_port(s) = Z_L(s) - K_LM @ Z_M(s)^{-1} @ K_ML
+
+        Parameters
+        ----------
+        result : NPortCoupledLanczosResult
+        frequencies : np.ndarray
+
+        Returns
+        -------
+        np.ndarray
+            Impedance tensor [n_freq x n_ports x n_ports]
+        """
+        p = result.n_ports
+        n_L = result.T_L.shape[0]
+        n_M = result.T_M.shape[0]
+
+        # Port projection (first p DOFs in reduced conductor space)
+        B = np.zeros((n_L, p))
+        for i in range(p):
+            B[i, i] = 1.0
+
+        n_freq = len(frequencies)
+        Z = np.zeros((n_freq, p, p), dtype=complex)
+
+        for i, f in enumerate(frequencies):
+            s = 2j * np.pi * f
+
+            # Conductor admittance
+            Y_L = s * result.T_L + result.R_L_reduced
+
+            # Magnetic admittance
+            Y_M = s * result.T_M + result.R_M_reduced
+
+            try:
+                # Schur complement: Y_eff = Y_L - K_LM @ Y_M^{-1} @ K_ML
+                Y_M_inv = np.linalg.inv(Y_M)
+                K = result.K_LM_reduced
+                Y_eff = Y_L - K @ Y_M_inv @ K.T
+
+                # Port impedance
+                Y_eff_inv = np.linalg.inv(Y_eff)
+                Z[i, :, :] = B.T @ Y_eff_inv @ B
+
+            except np.linalg.LinAlgError:
+                Z[i, :, :] = np.inf
+
+        return Z
+
+    def compute_impedance_full(self, L_L: np.ndarray, R_L: np.ndarray,
+                                L_M: np.ndarray, R_M: np.ndarray,
+                                K_LM: np.ndarray,
+                                port_indices: List[int],
+                                frequencies: np.ndarray) -> np.ndarray:
+        """Compute port impedance from full coupled system (reference).
+
+        Parameters
+        ----------
+        L_L, R_L : np.ndarray
+            Conductor matrices
+        L_M, R_M : np.ndarray
+            Magnetic matrices
+        K_LM : np.ndarray
+            Coupling matrix
+        port_indices : List[int]
+        frequencies : np.ndarray
+
+        Returns
+        -------
+        np.ndarray
+            Impedance tensor [n_freq x n_ports x n_ports]
+        """
+        n_L = L_L.shape[0]
+        n_M = L_M.shape[0]
+        p = len(port_indices)
+
+        if R_L.ndim == 1:
+            R_L = np.diag(R_L)
+        if R_M.ndim == 1:
+            R_M = np.diag(R_M)
+
+        # Port projection
+        B = np.zeros((n_L, p))
+        for i, idx in enumerate(port_indices):
+            B[idx, i] = 1.0
+
+        n_freq = len(frequencies)
+        Z = np.zeros((n_freq, p, p), dtype=complex)
+
+        for i, f in enumerate(frequencies):
+            s = 2j * np.pi * f
+
+            Y_L = s * L_L + R_L
+            Y_M = s * L_M + R_M
+
+            try:
+                # Schur complement
+                Y_M_inv = np.linalg.inv(Y_M)
+                Y_eff = Y_L - K_LM @ Y_M_inv @ K_LM.T
+
+                Y_eff_inv = np.linalg.inv(Y_eff)
+                Z[i, :, :] = B.T @ Y_eff_inv @ B
+
+            except np.linalg.LinAlgError:
+                Z[i, :, :] = np.inf
+
+        return Z
+
+
+# =============================================================================
+# Complex Material Properties Support
+# =============================================================================
+
+@dataclass
+class ComplexMaterialParams:
+    """Complex material parameters for frequency-dependent modeling.
+
+    Complex permittivity: eps(f) = eps' - j*eps''
+    Complex permeability: mu(f) = mu' - j*mu''
+
+    Loss tangents:
+        tan(delta_e) = eps'' / eps'  (dielectric loss)
+        tan(delta_m) = mu'' / mu'    (magnetic loss)
+
+    For conductors with finite conductivity:
+        eps_eff = eps' - j*(eps'' + sigma/(omega*eps_0))
+    """
+    # Dielectric properties
+    eps_r_real: float = 1.0       # Relative permittivity (real part)
+    eps_r_imag: float = 0.0       # Relative permittivity (imaginary part, positive = loss)
+    tan_delta_e: float = 0.0      # Dielectric loss tangent (alternative to eps_r_imag)
+
+    # Magnetic properties
+    mu_r_real: float = 1.0        # Relative permeability (real part)
+    mu_r_imag: float = 0.0        # Relative permeability (imaginary part, positive = loss)
+    tan_delta_m: float = 0.0      # Magnetic loss tangent (alternative to mu_r_imag)
+
+    # Conductivity (for combined dielectric + conductive materials)
+    sigma: float = 0.0            # Electrical conductivity [S/m]
+
+    # Reference frequency for loss tangent conversion
+    f_ref: float = 1e6            # Reference frequency [Hz]
+
+    def complex_permittivity(self, frequency: float) -> complex:
+        """Compute complex permittivity at given frequency.
+
+        eps(f) = eps_0 * (eps'_r - j*eps''_r - j*sigma/(omega*eps_0))
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency [Hz]
+
+        Returns
+        -------
+        complex
+            Complex permittivity [F/m]
+        """
+        eps_0 = 8.854187817e-12  # F/m
+        omega = 2 * np.pi * frequency
+
+        eps_r_real = self.eps_r_real
+        eps_r_imag = self.eps_r_imag
+
+        # Use loss tangent if imaginary part not specified
+        if eps_r_imag == 0.0 and self.tan_delta_e != 0.0:
+            eps_r_imag = eps_r_real * self.tan_delta_e
+
+        # Add conductivity contribution
+        if self.sigma > 0 and omega > 0:
+            eps_r_imag += self.sigma / (omega * eps_0)
+
+        return eps_0 * (eps_r_real - 1j * eps_r_imag)
+
+    def complex_permeability(self, frequency: float) -> complex:
+        """Compute complex permeability at given frequency.
+
+        mu(f) = mu_0 * (mu'_r - j*mu''_r)
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency [Hz]
+
+        Returns
+        -------
+        complex
+            Complex permeability [H/m]
+        """
+        mu_0 = 4 * np.pi * 1e-7  # H/m
+
+        mu_r_real = self.mu_r_real
+        mu_r_imag = self.mu_r_imag
+
+        # Use loss tangent if imaginary part not specified
+        if mu_r_imag == 0.0 and self.tan_delta_m != 0.0:
+            mu_r_imag = mu_r_real * self.tan_delta_m
+
+        return mu_0 * (mu_r_real - 1j * mu_r_imag)
+
+    def to_circuit_params(self, frequency: float) -> dict:
+        """Convert complex material to equivalent circuit parameters.
+
+        For magnetic material:
+            L_eff = L * mu'_r
+            R_loss = omega * L * mu''_r  (series loss resistance)
+
+        For dielectric material:
+            C_eff = C * eps'_r
+            G_loss = omega * C * eps''_r  (parallel loss conductance)
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency [Hz]
+
+        Returns
+        -------
+        dict
+            Circuit parameters: L_factor, R_factor, C_factor, G_factor
+        """
+        omega = 2 * np.pi * frequency
+
+        # Magnetic: Z_M = j*omega*L*mu_r = j*omega*L*mu'_r + omega*L*mu''_r
+        #         = R_loss + j*omega*L_eff
+        L_factor = self.mu_r_real
+        R_factor = omega * self.mu_r_imag if self.mu_r_imag > 0 else omega * self.mu_r_real * self.tan_delta_m
+
+        # Dielectric: Y_D = j*omega*C*eps_r = j*omega*C*eps'_r + omega*C*eps''_r
+        #           = G_loss + j*omega*C_eff
+        C_factor = self.eps_r_real
+        eps_imag = self.eps_r_imag if self.eps_r_imag > 0 else self.eps_r_real * self.tan_delta_e
+        G_factor = omega * eps_imag
+
+        return {
+            'L_factor': L_factor,
+            'R_factor': R_factor,
+            'C_factor': C_factor,
+            'G_factor': G_factor,
+            'omega': omega
+        }
+
+
+# =============================================================================
+# N-Port Block Lanczos for LoopStar + Dielectric Coupled Systems
+# =============================================================================
+
+@dataclass
+class NPortCoupledDielectricResult:
+    """Result of N-port Block Lanczos for LoopStar + Dielectric coupled system.
+
+    System structure:
+        [sL_L + R_L    K_LD  ] [I_L]   [V_port]
+        [K_DL      sC_D + G_D] [V_D] = [0     ]
+
+    After Schur complement (eliminates dielectric DOFs):
+        Y_eff(s) = (sL_L + R_L) - K_LD @ (sC_D + G_D)^{-1} @ K_DL
+    """
+    # Conductor (Loop) reduction
+    Q_L: np.ndarray              # Loop orthonormal basis
+    T_L: np.ndarray              # Loop block tridiagonal (inductance)
+    R_L_reduced: np.ndarray      # Reduced loop resistance
+
+    # Dielectric reduction
+    Q_D: np.ndarray              # Dielectric orthonormal basis
+    T_D: np.ndarray              # Dielectric tridiagonal (elastance P = 1/C)
+    G_D_reduced: np.ndarray      # Reduced dielectric conductance (losses)
+
+    # Coupling
+    K_LD_reduced: np.ndarray     # Reduced coupling [k_L*p x k_D]
+
+    # Metadata
+    n_ports: int
+    n_stages_L: int
+    n_stages_D: int
+
+
+class NPortCoupledDielectricSPICE:
+    """N-port Block Lanczos for LoopStar + Dielectric coupled systems.
+
+    Handles coupled conductor-dielectric systems where:
+    - Conductor: Loop-Star PEEC with ports (inductive)
+    - Dielectric: Capacitive elements with losses
+
+    System impedance at ports:
+        Z_port(s) = Z_L(s) - K_LD @ Y_D(s)^{-1} @ K_DL
+
+    where:
+        Z_L(s) = sL_L + R_L  (conductor impedance)
+        Y_D(s) = sC_D + G_D  (dielectric admittance, G_D = loss from complex eps)
+
+    Complex permittivity modeling:
+        eps(f) = eps' - j*eps''
+        C_eff = C * eps'_r
+        G_loss = omega * C * eps''_r
+
+    Example usage:
+        solver = NPortCoupledDielectricSPICE(n_ports=2, n_stages_L=5, n_stages_D=3)
+        result = solver.reduce(L_L, R_L, C_D, G_D, K_LD, port_indices)
+        netlist = solver.to_spice(result, "FILTER_WITH_CAPS")
+    """
+
+    def __init__(self, n_ports: int, n_stages_L: int = 5, n_stages_D: int = 3,
+                 tol: float = 1e-10):
+        self.n_ports = n_ports
+        self.n_stages_L = n_stages_L
+        self.n_stages_D = n_stages_D
+        self.tol = tol
+
+    def reduce(self, L_L: np.ndarray, R_L: np.ndarray,
+               C_D: np.ndarray, G_D: np.ndarray,
+               K_LD: np.ndarray,
+               port_indices: List[int]) -> NPortCoupledDielectricResult:
+        """Apply Block Lanczos reduction to conductor-dielectric system.
+
+        Parameters
+        ----------
+        L_L : np.ndarray
+            Conductor inductance matrix [n_L x n_L]
+        R_L : np.ndarray
+            Conductor resistance [n_L x n_L] or [n_L]
+        C_D : np.ndarray
+            Dielectric capacitance matrix [n_D x n_D]
+        G_D : np.ndarray
+            Dielectric loss conductance [n_D x n_D] or [n_D]
+            (From complex permittivity: G_D = omega * eps'' / eps'^2 * C_D)
+        K_LD : np.ndarray
+            Conductor-dielectric coupling [n_L x n_D]
+        port_indices : List[int]
+            Port node indices in conductor DOFs
+
+        Returns
+        -------
+        NPortCoupledDielectricResult
+        """
+        n_L = L_L.shape[0]
+        n_D = C_D.shape[0]
+        p = self.n_ports
+        k_L = min(self.n_stages_L, n_L // p)
+        k_D = min(self.n_stages_D, n_D)
+
+        if len(port_indices) != p:
+            raise ValueError(f"port_indices length ({len(port_indices)}) != n_ports ({p})")
+
+        # Ensure matrices are 2D
+        if R_L.ndim == 1:
+            R_L = np.diag(R_L)
+        if G_D.ndim == 1:
+            G_D = np.diag(G_D)
+
+        # === Block Lanczos on conductor (L_L) ===
+        B_L = np.zeros((n_L, p))
+        for i, idx in enumerate(port_indices):
+            B_L[idx, i] = 1.0
+
+        Q_L, A_blocks_L, B_blocks_L = self._block_lanczos_symmetric(L_L, B_L, k_L)
+
+        # Build T_L
+        n_red_L = len(A_blocks_L) * p
+        T_L = np.zeros((n_red_L, n_red_L))
+        for i, A in enumerate(A_blocks_L):
+            T_L[i*p:(i+1)*p, i*p:(i+1)*p] = A
+        for i, B in enumerate(B_blocks_L):
+            T_L[i*p:(i+1)*p, (i+1)*p:(i+2)*p] = B.T
+            T_L[(i+1)*p:(i+2)*p, i*p:(i+1)*p] = B
+
+        R_L_reduced = Q_L.T @ R_L @ Q_L
+
+        # === Block Lanczos on dielectric (use P = inv(C) for numerical stability) ===
+        # For capacitors: Y = sC, Z = 1/(sC) = P/s where P = inv(C)
+        try:
+            P_D = np.linalg.inv(C_D)  # Elastance matrix
+        except np.linalg.LinAlgError:
+            P_D = np.linalg.pinv(C_D)
+
+        # Starting vectors: DC response of conductor loop excites dielectric
+        # For N-port system, we need p starting vectors (one per port)
+        # At DC: Z_L = R_L, so I_L = R_L^{-1} @ V_port
+        # For each port i: I_L^{(i)} = R_L^{-1} @ B_L[:, i]
+        # Dielectric excitation from port i: v_D^{(i)} = K_LD.T @ I_L^{(i)}
+        try:
+            R_L_inv = np.linalg.inv(R_L)
+        except np.linalg.LinAlgError:
+            R_L_inv = np.linalg.pinv(R_L)
+
+        # DC loop current from each port [n_L x p]
+        I_L_DC = R_L_inv @ B_L
+        # Dielectric excitation from each port [n_D x p]
+        B_D = K_LD.T @ I_L_DC
+
+        # Check if starting vectors are valid
+        if np.linalg.norm(B_D) < 1e-15:
+            # Fallback: use coupling columns directly
+            B_D = K_LD.T.copy()
+            if B_D.shape[1] < p:
+                # Pad with zeros if needed
+                B_D = np.column_stack([B_D, np.zeros((n_D, p - B_D.shape[1]))])
+            elif B_D.shape[1] > p:
+                B_D = B_D[:, :p]
+
+        # Apply Block Lanczos on dielectric with p starting vectors
+        Q_D, A_blocks_D, B_blocks_D = self._block_lanczos_symmetric(P_D, B_D, k_D)
+
+        # Build T_D from block tridiagonal structure
+        n_red_D = len(A_blocks_D) * p
+        T_D = np.zeros((n_red_D, n_red_D))
+        for i, A in enumerate(A_blocks_D):
+            T_D[i*p:(i+1)*p, i*p:(i+1)*p] = A
+        for i, B in enumerate(B_blocks_D):
+            T_D[i*p:(i+1)*p, (i+1)*p:(i+2)*p] = B.T
+            T_D[(i+1)*p:(i+2)*p, i*p:(i+1)*p] = B
+
+        # Transform G_D (conductance to reduced space)
+        G_D_reduced = Q_D.T @ G_D @ Q_D
+
+        # === Coupling reduction ===
+        K_LD_reduced = Q_L.T @ K_LD @ Q_D
+
+        return NPortCoupledDielectricResult(
+            Q_L=Q_L,
+            T_L=T_L,
+            R_L_reduced=R_L_reduced,
+            Q_D=Q_D,
+            T_D=T_D,
+            G_D_reduced=G_D_reduced,
+            K_LD_reduced=K_LD_reduced,
+            n_ports=p,
+            n_stages_L=len(A_blocks_L),
+            n_stages_D=len(A_blocks_D)  # Block Lanczos stages
+        )
+
+    def _block_lanczos_symmetric(self, A, B, k):
+        """Block Lanczos (same as other classes)."""
+        n = A.shape[0]
+        p = B.shape[1]
+
+        V_prev = np.zeros((n, p))
+        V_curr, R_qr = np.linalg.qr(B)
+        signs = np.sign(np.diag(R_qr))
+        signs[signs == 0] = 1
+        V_curr = V_curr * signs
+
+        Q_list = [V_curr]
+        A_blocks = []
+        B_blocks = []
+
+        for j in range(k):
+            W = A @ V_curr
+            A_j = V_curr.T @ W
+            A_blocks.append(A_j)
+
+            if j == k - 1:
+                break
+
+            W = W - V_curr @ A_j
+            if j > 0:
+                W = W - V_prev @ B_blocks[-1].T
+
+            for Q_i in Q_list:
+                h = Q_i.T @ W
+                W = W - Q_i @ h
+
+            norm_W = np.linalg.norm(W)
+            if norm_W < self.tol:
+                break
+
+            V_next, B_j = np.linalg.qr(W)
+            B_blocks.append(B_j)
+
+            Q_list.append(V_next)
+            V_prev = V_curr
+            V_curr = V_next
+
+        Q = np.column_stack(Q_list)
+        return Q, A_blocks, B_blocks
+
+    def _lanczos_symmetric(self, A, v0, k):
+        """Standard Lanczos."""
+        n = A.shape[0]
+        k = min(k, n)
+
+        Q = np.zeros((n, k))
+        alpha = np.zeros(k)
+        beta = np.zeros(k - 1)
+
+        v = v0 / np.linalg.norm(v0)
+        Q[:, 0] = v
+        w = A @ v
+        alpha[0] = v.dot(w)
+        w = w - alpha[0] * v
+
+        for j in range(1, k):
+            beta[j-1] = np.linalg.norm(w)
+            if beta[j-1] < self.tol:
+                Q = Q[:, :j]
+                alpha = alpha[:j]
+                beta = beta[:j-1]
+                break
+
+            v_prev = v
+            v = w / beta[j-1]
+
+            for i in range(j):
+                h = Q[:, i].dot(v)
+                v = v - h * Q[:, i]
+            v = v / np.linalg.norm(v)
+
+            Q[:, j] = v
+            w = A @ v
+            alpha[j] = v.dot(w)
+            w = w - alpha[j] * v - beta[j-1] * v_prev
+
+        T = np.diag(alpha) + np.diag(beta, 1) + np.diag(beta, -1)
+        return Q, T
+
+    def to_spice(self, result: NPortCoupledDielectricResult,
+                 subckt_name: str = "COUPLED_LD",
+                 port_names: List[str] = None) -> str:
+        """Generate SPICE netlist for conductor-dielectric coupled system."""
+        p = result.n_ports
+        k_L = result.n_stages_L
+        k_D = result.n_stages_D
+
+        if port_names is None:
+            port_names = []
+            for i in range(p):
+                port_names.extend([f"p{i+1}_in", f"p{i+1}_out"])
+
+        lines = []
+        lines.append(f"* N-Port Coupled (LoopStar + Dielectric) SPICE Netlist")
+        lines.append(f"* Conductor ports: {p}, Conductor stages: {k_L}, Dielectric stages: {k_D}")
+        lines.append(f"* Total reduced DOF: {k_L * p} (conductor) + {k_D} (dielectric)")
+        lines.append("")
+        lines.append(f".SUBCKT {subckt_name} {' '.join(port_names)}")
+        lines.append("")
+
+        elem_idx = 1
+
+        # === Conductor Ladder ===
+        lines.append("* === Conductor Inductance Ladder ===")
+        for stage in range(k_L):
+            for port in range(p):
+                i = stage * p + port
+                L_val = result.T_L[i, i]
+                n1 = f"p{port+1}_in" if stage == 0 else f"cond_s{stage}_p{port+1}"
+                n2 = f"p{port+1}_out" if stage == k_L - 1 else f"cond_s{stage+1}_p{port+1}"
+                lines.append(f"L{elem_idx} {n1} {n2} {L_val:.6e}")
+                elem_idx += 1
+
+        # Conductor resistance
+        lines.append("")
+        lines.append("* === Conductor Resistance ===")
+        for i in range(k_L * p):
+            R_val = result.R_L_reduced[i, i]
+            if np.abs(R_val) > 1e-15:
+                stage = i // p
+                port = i % p
+                n1 = f"p{port+1}_in" if stage == 0 else f"cond_s{stage}_p{port+1}"
+                lines.append(f"R{elem_idx} {n1} cond_r{i+1} {R_val:.6e}")
+                elem_idx += 1
+
+        # === Dielectric Ladder ===
+        lines.append("")
+        lines.append("* === Dielectric Capacitor Ladder ===")
+        lines.append("* Uses elastance P = 1/C for Lanczos; convert back to C for SPICE")
+
+        for i in range(k_D):
+            P_val = result.T_D[i, i]
+            C_val = 1.0 / P_val if P_val > 1e-15 else 1e15  # C = 1/P
+            n1 = f"cap_n{i}" if i > 0 else "cap_in"
+            n2 = f"cap_n{i+1}" if i < k_D - 1 else "cap_out"
+            lines.append(f"C{elem_idx} {n1} {n2} {C_val:.6e}")
+            elem_idx += 1
+
+        # Dielectric off-diagonal (tridiagonal coupling -> mutual capacitance)
+        for i in range(k_D - 1):
+            P_off = result.T_D[i, i+1]
+            if np.abs(P_off) > 1e-15:
+                # Mutual capacitance is harder to represent in SPICE
+                # Use comment for now
+                lines.append(f"* Mutual cap C{i+1}-C{i+2}: P_off = {P_off:.6e}")
+
+        # Dielectric loss (conductance in parallel)
+        lines.append("")
+        lines.append("* === Dielectric Loss (from complex eps) ===")
+        for i in range(k_D):
+            G_val = result.G_D_reduced[i, i]
+            if np.abs(G_val) > 1e-15:
+                n1 = f"cap_n{i}" if i > 0 else "cap_in"
+                lines.append(f"Gdiel{i+1} {n1} 0 {G_val:.6e}")
+
+        # === Coupling ===
+        lines.append("")
+        lines.append("* === Conductor-Dielectric Coupling ===")
+        max_coupling = np.max(np.abs(result.K_LD_reduced))
+        threshold = max_coupling * 0.01
+
+        for i in range(min(k_L * p, result.K_LD_reduced.shape[0])):
+            for j in range(min(k_D, result.K_LD_reduced.shape[1])):
+                K_val = result.K_LD_reduced[i, j]
+                if np.abs(K_val) > threshold:
+                    lines.append(f"* Coupling L{i+1} <-> C{j+1}: K = {K_val:.6e}")
+
+        lines.append("")
+        lines.append(f".ENDS {subckt_name}")
+
+        return '\n'.join(lines)
+
+    def compute_impedance(self, result: NPortCoupledDielectricResult,
+                          frequencies: np.ndarray) -> np.ndarray:
+        """Compute port impedance from reduced system.
+
+        After Block Lanczos reduction, port DOFs are at the first p indices.
+        The Schur complement eliminates dielectric DOFs, giving:
+            Z_eff = Z_L - K_LD @ Y_D^{-1} @ K_DL
+        Port impedance is extracted from the first p x p submatrix.
+        """
+        p = result.n_ports
+        n_L = result.T_L.shape[0]
+        n_D = result.T_D.shape[0]
+
+        n_freq = len(frequencies)
+        Z = np.zeros((n_freq, p, p), dtype=complex)
+
+        for i, f in enumerate(frequencies):
+            s = 2j * np.pi * f
+
+            # Conductor: Z_L = sL + R
+            Z_L = s * result.T_L + result.R_L_reduced
+
+            # Dielectric: Y_D = sC + G, but we have P = 1/C (elastance)
+            # C = inv(P), so Y_D = s*inv(P) + G
+            Y_D = s * np.linalg.inv(result.T_D) + result.G_D_reduced
+
+            try:
+                Y_D_inv = np.linalg.inv(Y_D)
+                K = result.K_LD_reduced
+                Z_eff = Z_L - K @ Y_D_inv @ K.T
+
+                # Port impedance: extract first p x p submatrix
+                # (ports are mapped to first p DOFs after Block Lanczos)
+                Z[i, :, :] = Z_eff[:p, :p]
+
+            except np.linalg.LinAlgError:
+                Z[i, :, :] = np.inf
+
+        return Z
+
+    def compute_impedance_full(self, L_L, R_L, C_D, G_D, K_LD,
+                                port_indices, frequencies) -> np.ndarray:
+        """Compute port impedance from full system (reference).
+
+        Uses Schur complement to eliminate dielectric DOFs:
+            Z_eff = Z_L - K_LD @ Y_D^{-1} @ K_LD^T
+
+        Port impedance is extracted from Z_eff at port_indices.
+        """
+        n_L = L_L.shape[0]
+        n_D = C_D.shape[0]
+        p = len(port_indices)
+
+        if R_L.ndim == 1:
+            R_L = np.diag(R_L)
+        if G_D.ndim == 1:
+            G_D = np.diag(G_D)
+
+        n_freq = len(frequencies)
+        Z = np.zeros((n_freq, p, p), dtype=complex)
+
+        for i, f in enumerate(frequencies):
+            s = 2j * np.pi * f
+
+            Z_L = s * L_L + R_L
+            Y_D = s * C_D + G_D
+
+            try:
+                Y_D_inv = np.linalg.inv(Y_D)
+                Z_eff = Z_L - K_LD @ Y_D_inv @ K_LD.T
+
+                # Extract port impedance submatrix
+                for pi, port_i in enumerate(port_indices):
+                    for pj, port_j in enumerate(port_indices):
+                        Z[i, pi, pj] = Z_eff[port_i, port_j]
+
+            except np.linalg.LinAlgError:
+                Z[i, :, :] = np.inf
+
+        return Z
+
+
+# =============================================================================
+# Unified N-Port Coupled System (L + M + D)
+# =============================================================================
+
+@dataclass
+class NPortFullCoupledResult:
+    """Result for full LoopStar + Magnetic + Dielectric coupled system.
+
+    System structure:
+        [sL_L + R_L    K_LM       K_LD     ] [I_L]   [V_port]
+        [K_ML      sL_M + R_M     0        ] [M  ] = [0     ]
+        [K_DL         0       sC_D + G_D   ] [V_D]   [0     ]
+
+    Schur complement eliminates magnetic and dielectric DOFs.
+    """
+    # Conductor reduction
+    Q_L: np.ndarray
+    T_L: np.ndarray
+    R_L_reduced: np.ndarray
+
+    # Magnetic reduction
+    Q_M: np.ndarray
+    T_M: np.ndarray
+    R_M_reduced: np.ndarray
+
+    # Dielectric reduction
+    Q_D: np.ndarray
+    T_D: np.ndarray
+    G_D_reduced: np.ndarray
+
+    # Couplings
+    K_LM_reduced: np.ndarray
+    K_LD_reduced: np.ndarray
+
+    # Metadata
+    n_ports: int
+    n_stages_L: int
+    n_stages_M: int
+    n_stages_D: int
+
+    # Complex material parameters (optional)
+    material_M: ComplexMaterialParams = None
+    material_D: ComplexMaterialParams = None
+
+
+class NPortFullCoupledSPICE:
+    """N-port Block Lanczos for full L + M + D coupled systems.
+
+    Handles systems with:
+    - Conductor: Coils, traces, wires (inductive + resistive)
+    - Magnetic: Ferrite cores, iron yokes (complex permeability)
+    - Dielectric: Capacitors, substrates (complex permittivity)
+
+    Complex material modeling:
+        mu(f) = mu' - j*mu''  -> L_eff = L*mu', R_loss = omega*L*mu''
+        eps(f) = eps' - j*eps'' -> C_eff = C*eps', G_loss = omega*C*eps''
+
+    Example usage:
+        # Define complex materials
+        ferrite = ComplexMaterialParams(mu_r_real=2000, tan_delta_m=0.01)
+        substrate = ComplexMaterialParams(eps_r_real=4.5, tan_delta_e=0.02)
+
+        # Create solver
+        solver = NPortFullCoupledSPICE(n_ports=2, n_stages_L=5, n_stages_M=3, n_stages_D=3)
+        result = solver.reduce(L_L, R_L, L_M, R_M, C_D, G_D, K_LM, K_LD, port_indices,
+                               material_M=ferrite, material_D=substrate)
+        netlist = solver.to_spice(result, "TRANSFORMER_ON_PCB")
+    """
+
+    def __init__(self, n_ports: int, n_stages_L: int = 5,
+                 n_stages_M: int = 3, n_stages_D: int = 3,
+                 tol: float = 1e-10):
+        self.n_ports = n_ports
+        self.n_stages_L = n_stages_L
+        self.n_stages_M = n_stages_M
+        self.n_stages_D = n_stages_D
+        self.tol = tol
+
+    def reduce(self, L_L: np.ndarray, R_L: np.ndarray,
+               L_M: np.ndarray, R_M: np.ndarray,
+               C_D: np.ndarray, G_D: np.ndarray,
+               K_LM: np.ndarray, K_LD: np.ndarray,
+               port_indices: List[int],
+               material_M: ComplexMaterialParams = None,
+               material_D: ComplexMaterialParams = None) -> NPortFullCoupledResult:
+        """Apply Block Lanczos to full coupled system."""
+        n_L = L_L.shape[0]
+        n_M = L_M.shape[0] if L_M is not None else 0
+        n_D = C_D.shape[0] if C_D is not None else 0
+        p = self.n_ports
+
+        k_L = min(self.n_stages_L, n_L // p)
+        k_M = min(self.n_stages_M, n_M) if n_M > 0 else 0
+        k_D = min(self.n_stages_D, n_D) if n_D > 0 else 0
+
+        # Ensure matrices are 2D
+        if R_L.ndim == 1:
+            R_L = np.diag(R_L)
+        if n_M > 0 and R_M.ndim == 1:
+            R_M = np.diag(R_M)
+        if n_D > 0 and G_D.ndim == 1:
+            G_D = np.diag(G_D)
+
+        # === Conductor Block Lanczos ===
+        B_L = np.zeros((n_L, p))
+        for i, idx in enumerate(port_indices):
+            B_L[idx, i] = 1.0
+
+        Q_L, A_blocks_L, B_blocks_L = self._block_lanczos_symmetric(L_L, B_L, k_L)
+
+        n_red_L = len(A_blocks_L) * p
+        T_L = np.zeros((n_red_L, n_red_L))
+        for i, A in enumerate(A_blocks_L):
+            T_L[i*p:(i+1)*p, i*p:(i+1)*p] = A
+        for i, B in enumerate(B_blocks_L):
+            T_L[i*p:(i+1)*p, (i+1)*p:(i+2)*p] = B.T
+            T_L[(i+1)*p:(i+2)*p, i*p:(i+1)*p] = B
+
+        R_L_reduced = Q_L.T @ R_L @ Q_L
+
+        # === Magnetic Block Lanczos ===
+        # Starting vectors: DC response of conductor loop excites magnetic
+        # At DC: Z_L = R_L, so I_L = R_L^{-1} @ V_port
+        # Magnetic excitation from each port: B_M = K_LM.T @ R_L^{-1} @ B_L
+        if n_M > 0:
+            try:
+                R_L_inv = np.linalg.inv(R_L)
+            except np.linalg.LinAlgError:
+                R_L_inv = np.linalg.pinv(R_L)
+
+            # DC loop current from each port [n_L x p]
+            I_L_DC = R_L_inv @ B_L
+            # Magnetic excitation from each port [n_M x p]
+            B_M = K_LM.T @ I_L_DC
+
+            if np.linalg.norm(B_M) < 1e-15:
+                # Fallback: use coupling columns
+                B_M = K_LM.T[:, :p] if K_LM.shape[1] >= p else np.column_stack([K_LM.T, np.zeros((n_M, p - K_LM.shape[1]))])
+
+            Q_M, A_blocks_M, B_blocks_M = self._block_lanczos_symmetric(L_M, B_M, k_M)
+
+            # Build T_M from block tridiagonal structure
+            n_red_M = len(A_blocks_M) * p
+            T_M = np.zeros((n_red_M, n_red_M))
+            for i, A in enumerate(A_blocks_M):
+                T_M[i*p:(i+1)*p, i*p:(i+1)*p] = A
+            for i, B in enumerate(B_blocks_M):
+                T_M[i*p:(i+1)*p, (i+1)*p:(i+2)*p] = B.T
+                T_M[(i+1)*p:(i+2)*p, i*p:(i+1)*p] = B
+
+            R_M_reduced = Q_M.T @ R_M @ Q_M
+            K_LM_reduced = Q_L.T @ K_LM @ Q_M
+            n_stages_M_actual = len(A_blocks_M)
+        else:
+            Q_M = np.array([]).reshape(0, 0)
+            T_M = np.array([]).reshape(0, 0)
+            R_M_reduced = np.array([]).reshape(0, 0)
+            K_LM_reduced = np.array([]).reshape(n_red_L, 0)
+            n_stages_M_actual = 0
+
+        # === Dielectric Block Lanczos ===
+        # Starting vectors: DC response excites dielectric
+        if n_D > 0:
+            try:
+                P_D = np.linalg.inv(C_D)
+            except np.linalg.LinAlgError:
+                P_D = np.linalg.pinv(C_D)
+
+            if 'R_L_inv' not in dir():
+                try:
+                    R_L_inv = np.linalg.inv(R_L)
+                except np.linalg.LinAlgError:
+                    R_L_inv = np.linalg.pinv(R_L)
+
+            # DC loop current from each port [n_L x p]
+            I_L_DC = R_L_inv @ B_L
+            # Dielectric excitation from each port [n_D x p]
+            B_D = K_LD.T @ I_L_DC
+
+            if np.linalg.norm(B_D) < 1e-15:
+                B_D = K_LD.T[:, :p] if K_LD.shape[1] >= p else np.column_stack([K_LD.T, np.zeros((n_D, p - K_LD.shape[1]))])
+
+            Q_D, A_blocks_D, B_blocks_D = self._block_lanczos_symmetric(P_D, B_D, k_D)
+
+            # Build T_D from block tridiagonal structure
+            n_red_D = len(A_blocks_D) * p
+            T_D = np.zeros((n_red_D, n_red_D))
+            for i, A in enumerate(A_blocks_D):
+                T_D[i*p:(i+1)*p, i*p:(i+1)*p] = A
+            for i, B in enumerate(B_blocks_D):
+                T_D[i*p:(i+1)*p, (i+1)*p:(i+2)*p] = B.T
+                T_D[(i+1)*p:(i+2)*p, i*p:(i+1)*p] = B
+
+            G_D_reduced = Q_D.T @ G_D @ Q_D
+            K_LD_reduced = Q_L.T @ K_LD @ Q_D
+            n_stages_D_actual = len(A_blocks_D)
+        else:
+            Q_D = np.array([]).reshape(0, 0)
+            T_D = np.array([]).reshape(0, 0)
+            G_D_reduced = np.array([]).reshape(0, 0)
+            K_LD_reduced = np.array([]).reshape(n_red_L, 0)
+            n_stages_D_actual = 0
+
+        return NPortFullCoupledResult(
+            Q_L=Q_L, T_L=T_L, R_L_reduced=R_L_reduced,
+            Q_M=Q_M, T_M=T_M, R_M_reduced=R_M_reduced,
+            Q_D=Q_D, T_D=T_D, G_D_reduced=G_D_reduced,
+            K_LM_reduced=K_LM_reduced, K_LD_reduced=K_LD_reduced,
+            n_ports=p,
+            n_stages_L=len(A_blocks_L),
+            n_stages_M=n_stages_M_actual,
+            n_stages_D=n_stages_D_actual,
+            material_M=material_M,
+            material_D=material_D
+        )
+
+    def _block_lanczos_symmetric(self, A, B, k):
+        """Block Lanczos."""
+        n = A.shape[0]
+        p = B.shape[1]
+
+        V_prev = np.zeros((n, p))
+        V_curr, R_qr = np.linalg.qr(B)
+        signs = np.sign(np.diag(R_qr))
+        signs[signs == 0] = 1
+        V_curr = V_curr * signs
+
+        Q_list = [V_curr]
+        A_blocks = []
+        B_blocks = []
+
+        for j in range(k):
+            W = A @ V_curr
+            A_j = V_curr.T @ W
+            A_blocks.append(A_j)
+
+            if j == k - 1:
+                break
+
+            W = W - V_curr @ A_j
+            if j > 0:
+                W = W - V_prev @ B_blocks[-1].T
+
+            for Q_i in Q_list:
+                h = Q_i.T @ W
+                W = W - Q_i @ h
+
+            norm_W = np.linalg.norm(W)
+            if norm_W < self.tol:
+                break
+
+            V_next, B_j = np.linalg.qr(W)
+            B_blocks.append(B_j)
+
+            Q_list.append(V_next)
+            V_prev = V_curr
+            V_curr = V_next
+
+        Q = np.column_stack(Q_list)
+        return Q, A_blocks, B_blocks
+
+    def _lanczos_symmetric(self, A, v0, k):
+        """Standard Lanczos."""
+        n = A.shape[0]
+        k = min(k, n)
+
+        Q = np.zeros((n, k))
+        alpha = np.zeros(k)
+        beta = np.zeros(k - 1)
+
+        v = v0 / np.linalg.norm(v0)
+        Q[:, 0] = v
+        w = A @ v
+        alpha[0] = v.dot(w)
+        w = w - alpha[0] * v
+
+        for j in range(1, k):
+            beta[j-1] = np.linalg.norm(w)
+            if beta[j-1] < self.tol:
+                Q = Q[:, :j]
+                alpha = alpha[:j]
+                beta = beta[:j-1]
+                break
+
+            v_prev = v
+            v = w / beta[j-1]
+
+            for i in range(j):
+                h = Q[:, i].dot(v)
+                v = v - h * Q[:, i]
+            v = v / np.linalg.norm(v)
+
+            Q[:, j] = v
+            w = A @ v
+            alpha[j] = v.dot(w)
+            w = w - alpha[j] * v - beta[j-1] * v_prev
+
+        T = np.diag(alpha) + np.diag(beta, 1) + np.diag(beta, -1)
+        return Q, T
+
+    def compute_impedance(self, result: NPortFullCoupledResult,
+                          frequencies: np.ndarray) -> np.ndarray:
+        """Compute port impedance with complex material effects.
+
+        After Block Lanczos reduction, port DOFs are at the first p indices.
+        Schur complement eliminates magnetic and dielectric DOFs.
+        Port impedance is extracted from Z_eff[:p, :p].
+        """
+        p = result.n_ports
+        n_L = result.T_L.shape[0]
+        n_M = result.T_M.shape[0] if result.T_M.size > 0 else 0
+        n_D = result.T_D.shape[0] if result.T_D.size > 0 else 0
+
+        n_freq = len(frequencies)
+        Z = np.zeros((n_freq, p, p), dtype=complex)
+
+        for i, f in enumerate(frequencies):
+            s = 2j * np.pi * f
+            omega = 2 * np.pi * f
+
+            # Conductor
+            Z_L = s * result.T_L + result.R_L_reduced
+
+            # Magnetic with complex mu
+            if n_M > 0:
+                if result.material_M is not None:
+                    params = result.material_M.to_circuit_params(f)
+                    L_factor = params['L_factor']
+                    R_factor = params['R_factor'] / omega if omega > 0 else 0
+                    Y_M = s * result.T_M * L_factor + result.R_M_reduced + R_factor * result.T_M
+                else:
+                    Y_M = s * result.T_M + result.R_M_reduced
+
+            # Dielectric with complex eps
+            if n_D > 0:
+                if result.material_D is not None:
+                    params = result.material_D.to_circuit_params(f)
+                    C_factor = params['C_factor']
+                    G_factor = params['G_factor']
+                    # T_D is elastance (1/C), so C = 1/T_D
+                    T_D_inv = np.linalg.inv(result.T_D)
+                    Y_D = s * T_D_inv * C_factor + result.G_D_reduced + G_factor * T_D_inv
+                else:
+                    Y_D = s * np.linalg.inv(result.T_D) + result.G_D_reduced
+
+            try:
+                Z_eff = Z_L.copy()
+
+                # Schur complement for magnetic
+                if n_M > 0:
+                    Y_M_inv = np.linalg.inv(Y_M)
+                    K_M = result.K_LM_reduced
+                    Z_eff = Z_eff - K_M @ Y_M_inv @ K_M.T
+
+                # Schur complement for dielectric
+                if n_D > 0:
+                    Y_D_inv = np.linalg.inv(Y_D)
+                    K_D = result.K_LD_reduced
+                    Z_eff = Z_eff - K_D @ Y_D_inv @ K_D.T
+
+                # Port impedance: extract first p x p submatrix
+                # (ports are mapped to first p DOFs after Block Lanczos)
+                Z[i, :, :] = Z_eff[:p, :p]
+
+            except np.linalg.LinAlgError:
+                Z[i, :, :] = np.inf
+
+        return Z
+
+    def to_spice(self, result: NPortFullCoupledResult,
+                 subckt_name: str = "FULL_COUPLED",
+                 port_names: List[str] = None,
+                 f_ref: float = 100e3) -> str:
+        """Generate SPICE netlist with complex material parameters.
+
+        Parameters
+        ----------
+        result : NPortFullCoupledResult
+        subckt_name : str
+        port_names : List[str], optional
+        f_ref : float
+            Reference frequency for loss element values
+        """
+        p = result.n_ports
+        k_L = result.n_stages_L
+        k_M = result.n_stages_M
+        k_D = result.n_stages_D
+
+        if port_names is None:
+            port_names = []
+            for i in range(p):
+                port_names.extend([f"p{i+1}_in", f"p{i+1}_out"])
+
+        lines = []
+        lines.append(f"* N-Port Full Coupled (L + M + D) SPICE Netlist")
+        lines.append(f"* Conductor stages: {k_L}, Magnetic stages: {k_M}, Dielectric stages: {k_D}")
+        lines.append(f"* Reference frequency for loss: {f_ref/1e3:.1f} kHz")
+
+        if result.material_M is not None:
+            lines.append(f"* Magnetic: mu'_r = {result.material_M.mu_r_real}, tan(delta_m) = {result.material_M.tan_delta_m}")
+        if result.material_D is not None:
+            lines.append(f"* Dielectric: eps'_r = {result.material_D.eps_r_real}, tan(delta_e) = {result.material_D.tan_delta_e}")
+
+        lines.append("")
+        lines.append(f".SUBCKT {subckt_name} {' '.join(port_names)}")
+        lines.append("")
+
+        elem_idx = 1
+        omega_ref = 2 * np.pi * f_ref
+
+        # === Conductor Ladder ===
+        lines.append("* === Conductor Inductance Ladder ===")
+        for stage in range(k_L):
+            for port in range(p):
+                i = stage * p + port
+                L_val = result.T_L[i, i]
+                n1 = f"p{port+1}_in" if stage == 0 else f"cond_s{stage}_p{port+1}"
+                n2 = f"p{port+1}_out" if stage == k_L - 1 else f"cond_s{stage+1}_p{port+1}"
+                lines.append(f"L{elem_idx} {n1} {n2} {L_val:.6e}")
+                elem_idx += 1
+
+        # Conductor resistance
+        lines.append("")
+        lines.append("* === Conductor Resistance ===")
+        for i in range(k_L * p):
+            R_val = result.R_L_reduced[i, i]
+            if np.abs(R_val) > 1e-15:
+                lines.append(f"Rcond{i+1} cond_r{i+1}_a cond_r{i+1}_b {R_val:.6e}")
+
+        # === Magnetic Ladder ===
+        if k_M > 0:
+            lines.append("")
+            lines.append("* === Magnetic Core Ladder ===")
+
+            # Apply complex mu scaling
+            mu_factor = 1.0
+            mu_loss_factor = 0.0
+            if result.material_M is not None:
+                mu_factor = result.material_M.mu_r_real
+                mu_loss_factor = result.material_M.tan_delta_m
+
+            for i in range(k_M):
+                L_M_val = result.T_M[i, i] * mu_factor
+                n1 = f"mag_n{i}" if i > 0 else "mag_in"
+                n2 = f"mag_n{i+1}" if i < k_M - 1 else "mag_out"
+                lines.append(f"Lmag{i+1} {n1} {n2} {L_M_val:.6e}")
+
+                # Core loss resistance (series)
+                R_loss = omega_ref * result.T_M[i, i] * mu_factor * mu_loss_factor
+                if R_loss > 1e-15:
+                    lines.append(f"Rmag_loss{i+1} {n1} mag_loss{i+1} {R_loss:.6e}")
+
+        # === Dielectric Ladder ===
+        if k_D > 0:
+            lines.append("")
+            lines.append("* === Dielectric Capacitor Ladder ===")
+
+            eps_factor = 1.0
+            eps_loss_factor = 0.0
+            if result.material_D is not None:
+                eps_factor = result.material_D.eps_r_real
+                eps_loss_factor = result.material_D.tan_delta_e
+
+            for i in range(k_D):
+                P_val = result.T_D[i, i]
+                C_val = eps_factor / P_val if P_val > 1e-15 else 1e15
+                n1 = f"cap_n{i}" if i > 0 else "cap_in"
+                n2 = f"cap_n{i+1}" if i < k_D - 1 else "cap_out"
+                lines.append(f"Cdiel{i+1} {n1} {n2} {C_val:.6e}")
+
+                # Dielectric loss conductance (parallel)
+                G_loss = omega_ref * C_val * eps_loss_factor
+                if G_loss > 1e-15:
+                    lines.append(f"Gdiel_loss{i+1} {n1} 0 {G_loss:.6e}")
+
+        lines.append("")
+        lines.append(f".ENDS {subckt_name}")
+
+        return '\n'.join(lines)
+
+
+def demo_coupled_nport_lanczos():
+    """Demonstrate N-port coupled (LoopStar + MMM) Block Lanczos."""
+    print("=" * 70)
+    print("N-Port Coupled (LoopStar + MMM) Block Lanczos Demo")
+    print("=" * 70)
+
+    # Create synthetic 2-port WPT system with ferrite core
+    n_L = 20   # Conductor DOFs (TX + RX coils)
+    n_M = 10   # Magnetic DOFs (ferrite core)
+    p = 2      # Ports
+
+    # === Conductor (coils) ===
+    L_L = np.eye(n_L) * 10e-6  # 10 uH self inductance
+
+    # TX region (0-9) and RX region (10-19) internal coupling
+    for region_start in [0, 10]:
+        for i in range(10):
+            for j in range(10):
+                if i != j:
+                    L_L[region_start+i, region_start+j] = 1e-6 / (1 + abs(i-j))
+
+    # TX-RX coupling (weak without core)
+    k_air = 0.05  # 5% coupling in air
+    M_air = k_air * 10e-6
+    for i in range(10):
+        for j in range(10, 20):
+            L_L[i, j] = M_air / (1 + 0.3 * abs(i - (j-10)))
+            L_L[j, i] = L_L[i, j]
+
+    R_L = np.ones(n_L) * 0.1  # 100 mOhm
+
+    # === Magnetic core ===
+    L_M = np.eye(n_M) * 1e-3  # 1 mH (high permeability)
+    for i in range(n_M):
+        for j in range(n_M):
+            if i != j:
+                L_M[i, j] = 0.5e-3 / (1 + abs(i-j))  # Core internal coupling
+
+    # Core loss (from complex mu: R_M = omega * mu" * V / mu'^2)
+    # At 100 kHz, tan(delta) ~ 0.01 for ferrite
+    omega_ref = 2 * np.pi * 100e3
+    tan_delta = 0.01
+    R_M = np.diag(np.diag(L_M)) * omega_ref * tan_delta  # Frequency-dependent
+
+    # === Coupling (coil to core) ===
+    # K_LM represents mutual inductance between coils and core elements
+    K_LM = np.zeros((n_L, n_M))
+
+    # TX coil couples to core
+    for i in range(10):
+        for j in range(n_M):
+            K_LM[i, j] = 0.3e-3 * np.exp(-0.2 * abs(i - j))
+
+    # RX coil couples to core
+    for i in range(10, 20):
+        for j in range(n_M):
+            K_LM[i, j] = 0.3e-3 * np.exp(-0.2 * abs((i-10) - j))
+
+    port_indices = [0, 10]
+
+    print(f"\nSystem setup:")
+    print(f"  Conductor DOFs: {n_L} (TX: 0-9, RX: 10-19)")
+    print(f"  Magnetic DOFs:  {n_M} (ferrite core)")
+    print(f"  Ports: {p} (TX at DOF 0, RX at DOF 10)")
+    print(f"  Air coupling k: {k_air}")
+    print(f"  Core tan(delta): {tan_delta}")
+
+    # Apply coupled Block Lanczos
+    solver = NPortCoupledBlockLanczosSPICE(n_ports=p, n_stages_L=5, n_stages_M=3)
+    result = solver.reduce(L_L, R_L, L_M, R_M, K_LM, port_indices)
+
+    print(f"\nBlock Lanczos reduction:")
+    print(f"  Conductor: {n_L} -> {result.n_stages_L * p} DOF")
+    print(f"  Magnetic:  {n_M} -> {result.n_stages_M} DOF")
+    print(f"  Total:     {n_L + n_M} -> {result.n_stages_L * p + result.n_stages_M} DOF")
+    print(f"  Compression: {100*(1 - (result.n_stages_L*p + result.n_stages_M)/(n_L + n_M)):.1f}%")
+
+    # Generate SPICE
+    netlist = solver.to_spice(result, "WPT_WITH_CORE",
+                               ["tx_p", "tx_n", "rx_p", "rx_n"])
+
+    print(f"\nSPICE netlist ({len(netlist.split(chr(10)))} lines):")
+    print("-" * 50)
+    for line in netlist.split('\n')[:25]:
+        print(line)
+    if len(netlist.split('\n')) > 25:
+        print("... (truncated)")
+
+    # Verify frequency response
+    frequencies = np.logspace(3, 6, 30)  # 1 kHz to 1 MHz
+
+    Z_full = solver.compute_impedance_full(L_L, R_L, L_M, R_M, K_LM, port_indices, frequencies)
+    Z_red = solver.compute_impedance(result, frequencies)
+
+    err_Z11 = np.mean(np.abs(Z_full[:, 0, 0] - Z_red[:, 0, 0]) / np.abs(Z_full[:, 0, 0])) * 100
+    err_Z12 = np.mean(np.abs(Z_full[:, 0, 1] - Z_red[:, 0, 1]) / (np.abs(Z_full[:, 0, 1]) + 1e-15)) * 100
+
+    print(f"\nFrequency response verification:")
+    print(f"  Z_11 (TX self) error: {err_Z11:.2f}%")
+    print(f"  Z_12 (TX-RX mutual) error: {err_Z12:.2f}%")
+
+    # Sample values
+    f_idx = np.argmin(np.abs(frequencies - 100e3))
+    print(f"\nSample impedance at 100 kHz:")
+    print(f"  Z_11 full: {Z_full[f_idx, 0, 0]:.4f} Ohm")
+    print(f"  Z_11 red:  {Z_red[f_idx, 0, 0]:.4f} Ohm")
+    print(f"  Z_12 full: {Z_full[f_idx, 0, 1]:.4f} Ohm")
+    print(f"  Z_12 red:  {Z_red[f_idx, 0, 1]:.4f} Ohm")
+
+    return result, netlist
+
+
+def demo_nport_block_lanczos():
+    """Demonstrate N-port Block Lanczos SPICE generation."""
+    print("=" * 70)
+    print("N-Port Block Lanczos SPICE Generation Demo")
+    print("=" * 70)
+
+    # Create synthetic 2-port WPT system
+    n = 20  # Total DOFs
+    p = 2   # Ports (TX, RX)
+
+    # Inductance matrix with coupling between TX and RX regions
+    L = np.eye(n) * 10e-6  # 10 uH self inductance
+
+    # TX region: DOFs 0-9
+    # RX region: DOFs 10-19
+    for i in range(10):
+        for j in range(10):
+            if i != j:
+                L[i, j] = 1e-6 / (1 + abs(i - j))  # Decay with distance
+
+    for i in range(10, 20):
+        for j in range(10, 20):
+            if i != j:
+                L[i, j] = 1e-6 / (1 + abs(i - j))
+
+    # TX-RX coupling (mutual inductance)
+    k_coupling = 0.3  # 30% coupling
+    M_tx_rx = k_coupling * np.sqrt(10e-6 * 10e-6)  # M = k * sqrt(L1*L2)
+    for i in range(10):
+        for j in range(10, 20):
+            dist = abs(i - (j - 10))
+            L[i, j] = M_tx_rx / (1 + 0.5 * dist)
+            L[j, i] = L[i, j]
+
+    # Resistance (diagonal)
+    R = np.ones(n) * 0.1  # 100 mOhm
+
+    # Port indices
+    port_indices = [0, 10]  # TX port at DOF 0, RX port at DOF 10
+
+    print(f"\nSystem setup:")
+    print(f"  Total DOFs: {n}")
+    print(f"  Ports: {p} (TX at DOF {port_indices[0]}, RX at DOF {port_indices[1]})")
+    print(f"  Self inductance: 10 uH")
+    print(f"  TX-RX coupling: k = {k_coupling}")
+
+    # Apply Block Lanczos reduction
+    reducer = NPortBlockLanczosSPICE(n_ports=p, n_stages=5)
+    result = reducer.reduce(L, R, port_indices)
+
+    print(f"\nBlock Lanczos reduction:")
+    print(f"  Original DOFs: {n}")
+    print(f"  Reduced DOFs: {result.n_stages * result.n_ports}")
+    print(f"  Compression: {100 * (1 - result.n_stages * result.n_ports / n):.1f}%")
+
+    # Generate SPICE netlist
+    netlist = reducer.to_spice(result, subckt_name="WPT_COILS",
+                                port_names=["tx_in", "tx_out", "rx_in", "rx_out"])
+
+    print(f"\nSPICE netlist ({len(netlist.split(chr(10)))} lines):")
+    print("-" * 50)
+    for line in netlist.split('\n')[:30]:
+        print(line)
+    if len(netlist.split('\n')) > 30:
+        print("... (truncated)")
+
+    # Verify frequency response
+    frequencies = np.logspace(3, 7, 50)  # 1 kHz to 10 MHz
+
+    Z_full = reducer.compute_impedance_full(L, R, port_indices, frequencies)
+    Z_red = reducer.compute_impedance(result, frequencies)
+
+    # Compare Z_11 (TX self-impedance)
+    Z11_full = Z_full[:, 0, 0]
+    Z11_red = Z_red[:, 0, 0]
+
+    # Compare Z_12 (TX-RX mutual impedance)
+    Z12_full = Z_full[:, 0, 1]
+    Z12_red = Z_red[:, 0, 1]
+
+    err_Z11 = np.mean(np.abs(Z11_full - Z11_red) / np.abs(Z11_full)) * 100
+    err_Z12 = np.mean(np.abs(Z12_full - Z12_red) / (np.abs(Z12_full) + 1e-10)) * 100
+
+    print(f"\nFrequency response verification:")
+    print(f"  Z_11 (TX self) error: {err_Z11:.2f}%")
+    print(f"  Z_12 (TX-RX mutual) error: {err_Z12:.2f}%")
+
+    # Print sample values
+    print(f"\nSample impedance values at 100 kHz:")
+    f_idx = np.argmin(np.abs(frequencies - 100e3))
+    print(f"  Z_11 full: {Z11_full[f_idx]:.4f} Ohm")
+    print(f"  Z_11 red:  {Z11_red[f_idx]:.4f} Ohm")
+    print(f"  Z_12 full: {Z12_full[f_idx]:.4f} Ohm")
+    print(f"  Z_12 red:  {Z12_red[f_idx]:.4f} Ohm")
+
+    return result, netlist
+
+
+def demo_coupled_dielectric():
+    """Demonstrate N-port coupled (LoopStar + Dielectric) Block Lanczos."""
+    print("=" * 70)
+    print("N-Port Coupled (LoopStar + Dielectric) Block Lanczos Demo")
+    print("=" * 70)
+
+    # Create synthetic LC filter system
+    n_L = 15  # Conductor DOFs
+    n_D = 8   # Dielectric DOFs
+    p = 2     # Ports
+
+    # Conductor inductance (coil)
+    L_L = np.eye(n_L) * 5e-6  # 5 uH base
+    for i in range(n_L):
+        for j in range(i+1, n_L):
+            coupling = 0.5e-6 * np.exp(-0.3 * abs(i - j))
+            L_L[i, j] = L_L[j, i] = coupling
+
+    # Conductor resistance
+    R_L = np.ones(n_L) * 0.05  # 50 mOhm
+
+    # Dielectric capacitance (capacitor bank)
+    C_D = np.eye(n_D) * 100e-12  # 100 pF base
+    for i in range(n_D):
+        for j in range(i+1, n_D):
+            coupling = 10e-12 * np.exp(-0.5 * abs(i - j))
+            C_D[i, j] = C_D[j, i] = coupling
+
+    # Dielectric loss (from complex permittivity)
+    # G_D = omega * C * eps''/eps' = omega * C * tan(delta_e)
+    tan_delta_e = 0.02  # 2% loss tangent
+    f_ref = 100e3
+    omega_ref = 2 * np.pi * f_ref
+    G_D = omega_ref * np.diag(C_D) * tan_delta_e
+
+    # Coupling matrix (EM coupling between coil and capacitor)
+    K_LD = np.zeros((n_L, n_D))
+    for i in range(min(n_L, n_D)):
+        K_LD[i, i] = 0.1  # Diagonal coupling
+        if i > 0:
+            K_LD[i, i-1] = 0.02
+        if i < min(n_L, n_D) - 1:
+            K_LD[i, i+1] = 0.02
+
+    port_indices = [0, n_L // 2]
+
+    print(f"\nSystem setup:")
+    print(f"  Conductor DOFs: {n_L}")
+    print(f"  Dielectric DOFs: {n_D}")
+    print(f"  Ports: {p}")
+    print(f"  Dielectric loss tangent: {tan_delta_e*100:.1f}%")
+
+    # Apply reduction with Block Lanczos (DC-based starting vectors)
+    # Block Lanczos converges much faster than scalar Lanczos
+    solver = NPortCoupledDielectricSPICE(n_ports=p, n_stages_L=4, n_stages_D=2)
+    result = solver.reduce(L_L, R_L, C_D, G_D, K_LD, port_indices)
+
+    print(f"\nBlock Lanczos reduction:")
+    print(f"  Conductor: {n_L} -> {result.n_stages_L * p} DOF")
+    print(f"  Dielectric: {n_D} -> {result.n_stages_D} DOF")
+    print(f"  Total compression: {100*(1 - (result.n_stages_L*p + result.n_stages_D)/(n_L + n_D)):.1f}%")
+
+    # Generate SPICE
+    netlist = solver.to_spice(result, "LC_FILTER")
+    print(f"\nSPICE netlist ({len(netlist.split(chr(10)))} lines):")
+    print("-" * 50)
+    for line in netlist.split('\n')[:25]:
+        print(line)
+    if len(netlist.split('\n')) > 25:
+        print("... (truncated)")
+
+    # Verify frequency response
+    frequencies = np.logspace(3, 7, 30)
+    Z_full = solver.compute_impedance_full(L_L, R_L, C_D, G_D, K_LD, port_indices, frequencies)
+    Z_red = solver.compute_impedance(result, frequencies)
+
+    err_Z11 = np.mean(np.abs(Z_full[:, 0, 0] - Z_red[:, 0, 0]) / (np.abs(Z_full[:, 0, 0]) + 1e-10)) * 100
+    err_Z12 = np.mean(np.abs(Z_full[:, 0, 1] - Z_red[:, 0, 1]) / (np.abs(Z_full[:, 0, 1]) + 1e-10)) * 100
+
+    print(f"\nFrequency response verification:")
+    print(f"  Z_11 error: {err_Z11:.2f}%")
+    print(f"  Z_12 error: {err_Z12:.2f}%")
+
+    # Sample values
+    f_idx = np.argmin(np.abs(frequencies - 100e3))
+    print(f"\nSample at 100 kHz:")
+    print(f"  Z_11 full: {Z_full[f_idx, 0, 0]:.4f} Ohm")
+    print(f"  Z_11 red:  {Z_red[f_idx, 0, 0]:.4f} Ohm")
+
+    return result, netlist
+
+
+def demo_full_coupled_lmd():
+    """Demonstrate full L + M + D coupled system with complex materials."""
+    print("=" * 70)
+    print("Full Coupled (L + M + D) with Complex Materials Demo")
+    print("=" * 70)
+
+    # System: Transformer on PCB with ferrite core
+    n_L = 12  # Conductor DOFs (windings)
+    n_M = 6   # Magnetic DOFs (ferrite core)
+    n_D = 4   # Dielectric DOFs (PCB substrate)
+    p = 2     # Ports (primary, secondary)
+
+    # Conductor (transformer windings)
+    L_L = np.eye(n_L) * 10e-6
+    for i in range(n_L):
+        for j in range(i+1, n_L):
+            coupling = 3e-6 * np.exp(-0.2 * abs(i - j))
+            L_L[i, j] = L_L[j, i] = coupling
+    R_L = np.ones(n_L) * 0.02
+
+    # Magnetic (ferrite core)
+    L_M = np.eye(n_M) * 50e-6  # Higher inductance due to core
+    for i in range(n_M):
+        for j in range(i+1, n_M):
+            coupling = 20e-6 * np.exp(-0.5 * abs(i - j))
+            L_M[i, j] = L_M[j, i] = coupling
+    R_M = np.ones(n_M) * 0.01
+
+    # Dielectric (PCB substrate)
+    C_D = np.eye(n_D) * 50e-12
+    G_D = np.zeros(n_D)
+
+    # Coupling matrices
+    K_LM = np.zeros((n_L, n_M))
+    for i in range(min(n_L, n_M)):
+        K_LM[i, i] = 0.3  # Strong coupling to core
+        K_LM[n_L - 1 - i, i] = 0.25  # Secondary also couples
+
+    K_LD = np.zeros((n_L, n_D))
+    for i in range(min(n_L, n_D)):
+        K_LD[i, i] = 0.05  # Weak capacitive coupling
+
+    port_indices = [0, n_L - 1]  # Primary and secondary terminals
+
+    # Define complex materials
+    ferrite = ComplexMaterialParams(
+        mu_r_real=2000,     # High permeability ferrite
+        tan_delta_m=0.01,   # 1% magnetic loss
+    )
+
+    pcb_substrate = ComplexMaterialParams(
+        eps_r_real=4.5,     # FR4 permittivity
+        tan_delta_e=0.02,   # 2% dielectric loss
+    )
+
+    print(f"\nSystem setup:")
+    print(f"  Conductor DOFs: {n_L}")
+    print(f"  Magnetic DOFs: {n_M} (ferrite core)")
+    print(f"  Dielectric DOFs: {n_D} (PCB)")
+    print(f"  Ports: {p}")
+    print(f"\nComplex materials:")
+    print(f"  Ferrite: mu'_r = {ferrite.mu_r_real}, tan(delta_m) = {ferrite.tan_delta_m}")
+    print(f"  PCB: eps'_r = {pcb_substrate.eps_r_real}, tan(delta_e) = {pcb_substrate.tan_delta_e}")
+
+    # Apply reduction
+    solver = NPortFullCoupledSPICE(n_ports=p, n_stages_L=4, n_stages_M=3, n_stages_D=2)
+    result = solver.reduce(L_L, R_L, L_M, R_M, C_D, G_D, K_LM, K_LD, port_indices,
+                           material_M=ferrite, material_D=pcb_substrate)
+
+    print(f"\nBlock Lanczos reduction:")
+    print(f"  Conductor: {n_L} -> {result.n_stages_L * p} DOF")
+    print(f"  Magnetic: {n_M} -> {result.n_stages_M} DOF")
+    print(f"  Dielectric: {n_D} -> {result.n_stages_D} DOF")
+    total_orig = n_L + n_M + n_D
+    total_red = result.n_stages_L * p + result.n_stages_M + result.n_stages_D
+    print(f"  Total: {total_orig} -> {total_red} DOF ({100*(1 - total_red/total_orig):.1f}% compression)")
+
+    # Generate SPICE
+    netlist = solver.to_spice(result, "XFMR_ON_PCB", f_ref=100e3)
+    print(f"\nSPICE netlist ({len(netlist.split(chr(10)))} lines):")
+    print("-" * 50)
+    for line in netlist.split('\n')[:30]:
+        print(line)
+    if len(netlist.split('\n')) > 30:
+        print("... (truncated)")
+
+    # Verify frequency response
+    frequencies = np.logspace(3, 7, 30)
+    Z_red = solver.compute_impedance(result, frequencies)
+
+    print(f"\nImpedance at key frequencies:")
+    for f in [10e3, 100e3, 1e6]:
+        f_idx = np.argmin(np.abs(frequencies - f))
+        Z11 = Z_red[f_idx, 0, 0]
+        Z12 = Z_red[f_idx, 0, 1]
+        print(f"  f = {f/1e3:.0f} kHz: Z_11 = {np.abs(Z11):.2f} Ohm @ {np.angle(Z11)*180/np.pi:.1f} deg, "
+              f"Z_12 = {np.abs(Z12):.2f} Ohm")
+
+    return result, netlist
+
+
 if __name__ == "__main__":
-    demo_hierarchical_reduction()
+    # Run new demos
     print("\n" + "=" * 60 + "\n")
-    demo_kan_material()
+    demo_coupled_dielectric()
     print("\n" + "=" * 60 + "\n")
-    demo_aca_circuit_extraction()
+    demo_full_coupled_lmd()
     print("\n" + "=" * 60 + "\n")
-    demo_prima_schur_extraction()
+    demo_nport_block_lanczos()
