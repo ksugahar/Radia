@@ -43,14 +43,16 @@ KAN (Liu et al., 2024) proposes a different approach from traditional MLPs:
 
 URN realizes the KAN philosophy using **circuit-compatible physical basis functions**:
 
-```
-┌───────────────────────────────────────────────────────────────────┐
-│  KAN: Σ φ_i(x)  where φ_i are learnable splines                  │
-│                                                                   │
-│  URN: Σ w_i · basis_i(ω, θ_i)  where basis_i are physical        │
-│       └─ weight (sparse)       └─ Debye, Cole-Cole, Warburg...   │
-└───────────────────────────────────────────────────────────────────┘
-```
+**KAN formulation:**
+$$Z(\omega) = \sum_i \phi_i(\omega) \quad \text{where } \phi_i \text{ are learnable splines}$$
+
+**URN formulation:**
+$$Z(\omega) = Z_\infty + \sum_i w_i \cdot \text{basis}_i(\omega, \theta_i)$$
+
+where:
+- $w_i$: sparse weights (selected by L1 regularization)
+- $\text{basis}_i$: physical basis functions (Debye, Cole-Cole, Warburg, etc.)
+- $\theta_i$: physical parameters ($\tau$, $\alpha$, $\beta$, etc.)
 
 ### KAN vs URN: Choice of Basis Functions
 
@@ -80,17 +82,15 @@ URN realizes the KAN philosophy using **circuit-compatible physical basis functi
 
 ### Connection to Kolmogorov-Arnold Representation Theorem
 
-```
-Kolmogorov-Arnold Theorem:
-  f(x₁,...,xₙ) = Σᵢ Φᵢ(Σⱼ φᵢⱼ(xⱼ))
+**Kolmogorov-Arnold Theorem:**
+$$f(x_1, \ldots, x_n) = \sum_{i=0}^{2n} \Phi_i \left( \sum_{j=1}^{n} \phi_{ij}(x_j) \right)$$
 
-URN Interpretation:
-  Z(ω) = Z∞ + Σᵢ wᵢ · basisᵢ(ω, θᵢ)
+**URN Interpretation:**
+$$Z(\omega) = Z_\infty + \sum_i w_i \cdot \text{basis}_i(\omega, \theta_i)$$
 
-  - Outer sum: weighted sum of basis functions
-  - Inner functions: each basis function (Debye, Cole-Cole, etc.)
-  - θᵢ: parameters of each basis (τ, α, β, etc.)
-```
+- Outer sum: weighted sum of basis functions
+- Inner functions: each basis function (Debye, Cole-Cole, etc.)
+- $\theta_i$: parameters of each basis ($\tau$, $\alpha$, $\beta$, etc.)
 
 Since URN is a function of a single variable (ω), the full KAN structure is not needed.
 Instead, it is expressed as a **linear combination of physically meaningful basis functions**.
@@ -125,15 +125,15 @@ However, unlike pure KAN:
 
 #### Vector Fitting (VF) vs URN
 
-```
-Vector Fitting:
-  Z(s) = Σ rₖ/(s - pₖ) + d + s·h
-         └── poles and residues (mathematical)
+**Vector Fitting:**
+$$Z(s) = \sum_k \frac{r_k}{s - p_k} + d + s \cdot h$$
+- $p_k$: poles (mathematical, can be unstable)
+- $r_k$: residues (no physical meaning)
 
-URN:
-  Z(ω) = Z∞ + Σ wₖ · basisₖ(ω, θₖ)
-              └── physical basis (Debye, Cole-Cole, etc.)
-```
+**URN:**
+$$Z(\omega) = Z_\infty + \sum_k w_k \cdot \text{basis}_k(\omega, \theta_k)$$
+- $\text{basis}_k$: physical basis (Debye, Cole-Cole, Warburg, etc.)
+- $\theta_k$: physical parameters ($\tau$, $\alpha$, etc.)
 
 | Aspect | Vector Fitting | URN |
 |--------|----------------|-----|
@@ -148,9 +148,7 @@ URN:
 #### Prony Method vs URN
 
 Prony fits as sum of exponentials:
-```
-y(t) = Σ Aₖ exp(λₖ t)
-```
+$$y(t) = \sum_k A_k \exp(\lambda_k t)$$
 
 | Aspect | Prony | URN |
 |--------|-------|-----|
@@ -161,15 +159,15 @@ y(t) = Σ Aₖ exp(λₖ t)
 
 #### Physics-Informed Neural Networks (PINN) vs URN
 
-```
-PINN:
-  Output = MLP(ω)  with  Loss = ||Z_pred - Z_data||² + λ·||Physics||²
-           └── black box           └── physics as loss term
+**PINN:**
+$$\text{Output} = \text{MLP}(\omega), \quad \mathcal{L} = \|Z_{\text{pred}} - Z_{\text{data}}\|^2 + \lambda \cdot \|\text{Physics}\|^2$$
+- MLP output is a black box
+- Physics enforced via loss term
 
-URN:
-  Output = Σ wₖ · basisₖ(ω, θₖ)
-           └── physical basis itself (embedded in structure)
-```
+**URN:**
+$$\text{Output} = \sum_k w_k \cdot \text{basis}_k(\omega, \theta_k)$$
+- Physical basis embedded in network structure
+- No additional physics loss needed
 
 | Aspect | PINN | URN |
 |--------|------|-----|
