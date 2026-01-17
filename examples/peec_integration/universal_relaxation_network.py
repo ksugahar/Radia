@@ -406,6 +406,301 @@ def train_urn(
     return best_model
 
 
+# =============================================================================
+# UNCERTAINTY QUANTIFICATION
+# =============================================================================
+# Methods for quantifying prediction uncertainty:
+# 1. Ensemble methods: Train multiple models, compute variance
+# 2. Dropout-based: Monte Carlo dropout at inference
+# 3. Bayesian: Full posterior over parameters (expensive)
+#
+# We implement ensemble-based uncertainty as a practical approach.
+
+@dataclass
+class URNUncertaintyConfig(URNConfig):
+    """Configuration for URN with uncertainty quantification."""
+    n_ensemble: int = 5  # Number of ensemble members
+    bootstrap_fraction: float = 0.8  # Fraction of data for each bootstrap sample
+
+
+class URNEnsemble:
+    """
+    Ensemble of URN models for uncertainty quantification.
+
+    Trains multiple URN models with different:
+    1. Random initializations
+    2. Bootstrap samples of the data
+
+    Provides:
+    - Mean prediction
+    - Standard deviation (epistemic uncertainty)
+    - Prediction intervals
+    """
+
+    def __init__(self, config: URNUncertaintyConfig):
+        """
+        Initialize ensemble.
+
+        Args:
+            config: Configuration with n_ensemble and other URN parameters
+        """
+        self.config = config
+        self.models: List[UniversalRelaxationNetwork] = []
+        self.omega_ref = None
+        self.Z_ref = None
+
+    def fit(self, freqs: np.ndarray, Z_data: np.ndarray,
+            verbose: bool = True) -> 'URNEnsemble':
+        """
+        Train ensemble of URN models.
+
+        Args:
+            freqs: Frequency array (Hz)
+            Z_data: Complex impedance data
+            verbose: Print progress
+
+        Returns:
+            self (for method chaining)
+        """
+        omega = 2 * np.pi * freqs
+        self.omega_ref = self.config.omega_ref or np.sqrt(omega.min() * omega.max())
+        self.Z_ref = self.config.Z_ref or np.abs(Z_data).mean()
+
+        n_data = len(freqs)
+        n_sample = int(n_data * self.config.bootstrap_fraction)
+
+        self.models = []
+
+        for i in range(self.config.n_ensemble):
+            if verbose:
+                print(f"\nTraining ensemble member {i+1}/{self.config.n_ensemble}")
+
+            # Bootstrap sample
+            np.random.seed(i * 123 + 42)
+            indices = np.random.choice(n_data, n_sample, replace=True)
+            freqs_boot = freqs[indices]
+            Z_boot = Z_data[indices]
+
+            # Sort by frequency for proper fitting
+            sort_idx = np.argsort(freqs_boot)
+            freqs_boot = freqs_boot[sort_idx]
+            Z_boot = Z_boot[sort_idx]
+
+            # Train with different random seed
+            config_i = URNConfig(
+                n_debye=self.config.n_debye,
+                n_cole_cole=self.config.n_cole_cole,
+                n_cole_davidson=self.config.n_cole_davidson,
+                n_havriliak_negami=self.config.n_havriliak_negami,
+                n_cpe=self.config.n_cpe,
+                n_warburg=self.config.n_warburg,
+                n_gerischer=self.config.n_gerischer,
+                n_rlc=self.config.n_rlc,
+                n_skin_effect=self.config.n_skin_effect,
+                sparsity_weight=self.config.sparsity_weight,
+                lr=self.config.lr,
+                n_epochs=self.config.n_epochs,
+                n_restarts=max(1, self.config.n_restarts // 2),  # Fewer restarts per member
+                omega_ref=self.omega_ref,
+                Z_ref=self.Z_ref,
+            )
+
+            model = train_urn(freqs_boot, Z_boot, config_i, verbose=False)
+            self.models.append(model)
+
+            if verbose:
+                # Evaluate on full data
+                omega_torch = torch.tensor(omega, dtype=torch.float64)
+                with torch.no_grad():
+                    Z_pred = model(omega_torch).numpy()
+                rel_err = np.max(np.abs(Z_pred - Z_data) / (np.abs(Z_data) + 1e-10))
+                print(f"  Max error: {rel_err*100:.2f}%")
+
+        return self
+
+    def predict(self, freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Predict with uncertainty estimation.
+
+        Args:
+            freqs: Frequency array (Hz)
+
+        Returns:
+            (mean_prediction, std_prediction) - both complex arrays
+        """
+        if len(self.models) == 0:
+            raise ValueError("Ensemble not trained. Call fit() first.")
+
+        omega = 2 * np.pi * freqs
+        omega_torch = torch.tensor(omega, dtype=torch.float64)
+
+        predictions = []
+        for model in self.models:
+            with torch.no_grad():
+                Z_pred = model(omega_torch).numpy()
+            predictions.append(Z_pred)
+
+        predictions = np.array(predictions)  # Shape: (n_ensemble, n_freq)
+
+        # Mean and std
+        mean_pred = np.mean(predictions, axis=0)
+
+        # Complex standard deviation (compute separately for real and imag)
+        std_real = np.std(np.real(predictions), axis=0)
+        std_imag = np.std(np.imag(predictions), axis=0)
+        std_pred = std_real + 1j * std_imag
+
+        return mean_pred, std_pred
+
+    def predict_interval(self, freqs: np.ndarray,
+                          confidence: float = 0.95) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Predict with confidence intervals.
+
+        Args:
+            freqs: Frequency array (Hz)
+            confidence: Confidence level (default 95%)
+
+        Returns:
+            (mean, lower_bound, upper_bound) for magnitude
+        """
+        mean_pred, std_pred = self.predict(freqs)
+
+        # For magnitude-based intervals
+        mean_mag = np.abs(mean_pred)
+        std_mag = np.abs(std_pred)
+
+        # Approximate confidence interval (assuming normal distribution)
+        from scipy import stats
+        z_score = stats.norm.ppf((1 + confidence) / 2)
+
+        lower = mean_mag - z_score * std_mag
+        upper = mean_mag + z_score * std_mag
+
+        return mean_pred, lower, upper
+
+    def get_mechanism_consensus(self, threshold: float = 0.05) -> Dict[str, Dict]:
+        """
+        Get consensus on active mechanisms across ensemble.
+
+        Returns:
+            Dictionary with mechanism name -> {
+                'frequency': how often detected,
+                'mean_params': average parameters,
+                'std_params': parameter uncertainty
+            }
+        """
+        all_active = []
+        for model in self.models:
+            active = model.get_active_components(threshold)
+            all_active.append(active)
+
+        # Count mechanism occurrences
+        mechanism_counts = {}
+        mechanism_params = {}
+
+        for active in all_active:
+            for mech_name, components in active.items():
+                if mech_name not in mechanism_counts:
+                    mechanism_counts[mech_name] = 0
+                    mechanism_params[mech_name] = []
+                mechanism_counts[mech_name] += 1
+                mechanism_params[mech_name].extend(components)
+
+        # Compute statistics
+        result = {}
+        n_ensemble = len(self.models)
+
+        for mech_name, count in mechanism_counts.items():
+            params_list = mechanism_params[mech_name]
+
+            # Aggregate parameters
+            if len(params_list) > 0:
+                # Get parameter names (exclude weight_magnitude)
+                param_names = [k for k in params_list[0].keys() if k != 'weight_magnitude']
+
+                mean_params = {}
+                std_params = {}
+
+                for pname in param_names:
+                    values = [p[pname] for p in params_list if pname in p]
+                    if len(values) > 0:
+                        mean_params[pname] = np.mean(values)
+                        std_params[pname] = np.std(values) if len(values) > 1 else 0.0
+
+                result[mech_name] = {
+                    'frequency': count / n_ensemble,
+                    'mean_params': mean_params,
+                    'std_params': std_params,
+                    'n_detections': count,
+                }
+
+        return result
+
+    def uncertainty_summary(self, freqs: np.ndarray, Z_data: np.ndarray) -> Dict:
+        """
+        Generate summary statistics for uncertainty analysis.
+
+        Args:
+            freqs: Frequency array
+            Z_data: True impedance data
+
+        Returns:
+            Dictionary with uncertainty metrics
+        """
+        mean_pred, std_pred = self.predict(freqs)
+
+        # Prediction error
+        abs_error = np.abs(mean_pred - Z_data)
+        rel_error = abs_error / (np.abs(Z_data) + 1e-10)
+
+        # Uncertainty metrics
+        mean_uncertainty = np.mean(np.abs(std_pred))
+        max_uncertainty = np.max(np.abs(std_pred))
+
+        # Coverage: how often true value falls within +/- 2 std
+        coverage = np.mean(abs_error <= 2 * np.abs(std_pred))
+
+        # Mechanism consensus
+        consensus = self.get_mechanism_consensus()
+
+        return {
+            'mean_rel_error': float(np.mean(rel_error)),
+            'max_rel_error': float(np.max(rel_error)),
+            'mean_uncertainty': float(mean_uncertainty),
+            'max_uncertainty': float(max_uncertainty),
+            'coverage_2sigma': float(coverage),
+            'mechanism_consensus': consensus,
+            'n_ensemble': len(self.models),
+        }
+
+
+def train_urn_with_uncertainty(
+    freqs: np.ndarray,
+    Z_data: np.ndarray,
+    config: Optional[URNUncertaintyConfig] = None,
+    verbose: bool = True
+) -> URNEnsemble:
+    """
+    Train URN ensemble for uncertainty quantification.
+
+    Args:
+        freqs: Frequency array (Hz)
+        Z_data: Complex impedance data
+        config: Configuration (uses defaults if None)
+        verbose: Print progress
+
+    Returns:
+        Trained URNEnsemble
+    """
+    if config is None:
+        config = URNUncertaintyConfig()
+
+    ensemble = URNEnsemble(config)
+    ensemble.fit(freqs, Z_data, verbose)
+    return ensemble
+
+
 def generate_spice_netlist(model: UniversalRelaxationNetwork, port_name: str = "Z") -> str:
     """
     Generate SPICE netlist from learned model.
@@ -640,6 +935,73 @@ def test_spice_generation():
     print(netlist)
 
 
+def test_uncertainty_quantification():
+    """Test uncertainty quantification with ensemble."""
+    print("\n" + "=" * 70)
+    print("Test: Uncertainty Quantification")
+    print("=" * 70)
+
+    # Cole-Cole with some noise
+    tau = 1e-5
+    alpha = 0.75
+    freqs = np.logspace(2, 7, 60)
+    omega = 2 * np.pi * freqs
+
+    # Clean data
+    Z_clean = 1.0 / (1.0 + (1j * omega * tau) ** alpha)
+
+    # Add noise
+    np.random.seed(123)
+    noise_level = 0.02
+    noise = noise_level * np.abs(Z_clean) * (np.random.randn(len(Z_clean)) +
+                                               1j * np.random.randn(len(Z_clean)))
+    Z_noisy = Z_clean + noise
+
+    print(f"True: Cole-Cole, tau={tau:.2e}, alpha={alpha}")
+    print(f"Noise level: {noise_level*100:.0f}%")
+
+    # Train ensemble with reduced epochs for speed
+    config = URNUncertaintyConfig(
+        n_ensemble=3,
+        n_debye=2,
+        n_cole_cole=2,
+        n_cpe=1,
+        n_warburg=0,
+        n_gerischer=0,
+        n_rlc=0,
+        n_skin_effect=0,
+        sparsity_weight=0.01,
+        n_epochs=2000,
+        n_restarts=2,
+        bootstrap_fraction=0.8,
+    )
+
+    print("\nTraining ensemble...")
+    ensemble = train_urn_with_uncertainty(freqs, Z_noisy, config, verbose=True)
+
+    # Get predictions with uncertainty
+    mean_pred, std_pred = ensemble.predict(freqs)
+
+    # Compare to clean data
+    error_vs_clean = np.abs(mean_pred - Z_clean) / np.abs(Z_clean)
+    print(f"\nError vs clean data: max={error_vs_clean.max()*100:.1f}%, "
+          f"mean={error_vs_clean.mean()*100:.1f}%")
+
+    # Uncertainty summary
+    summary = ensemble.uncertainty_summary(freqs, Z_noisy)
+    print(f"\nUncertainty Summary:")
+    print(f"  Mean relative error: {summary['mean_rel_error']*100:.2f}%")
+    print(f"  Coverage (2-sigma): {summary['coverage_2sigma']*100:.0f}%")
+
+    print(f"\nMechanism Consensus:")
+    for mech, info in summary['mechanism_consensus'].items():
+        freq = info['frequency'] * 100
+        print(f"  {mech}: detected {freq:.0f}% of ensemble")
+        for pname, pval in info['mean_params'].items():
+            pstd = info['std_params'].get(pname, 0)
+            print(f"    {pname} = {pval:.3e} +/- {pstd:.3e}")
+
+
 if __name__ == '__main__':
     np.random.seed(42)
 
@@ -652,6 +1014,7 @@ if __name__ == '__main__':
     test_skin_effect_conductor()
     test_electrochemistry_diffusion()
     test_spice_generation()
+    test_uncertainty_quantification()
 
     print("\n" + "=" * 70)
     print("Summary")
@@ -660,27 +1023,35 @@ if __name__ == '__main__':
 Universal Relaxation Network capabilities:
 
 1. AUTOMATIC MODEL DISCOVERY:
-   - Combines 15+ basis functions
+   - Combines 30+ basis functions (including FMR, domain wall)
    - Sparsity selects dominant mechanisms
    - No prior knowledge needed
 
 2. PHYSICAL INTERPRETABILITY:
    - Each basis has known physical meaning
    - Learned parameters are directly interpretable
-   - Can identify: Debye relaxation, skin effect, diffusion, etc.
+   - Can identify: Debye relaxation, skin effect, diffusion, FMR, etc.
 
 3. SPICE CIRCUIT GENERATION:
-   - Converts learned model to equivalent circuit
+   - Foster synthesis (parallel RLC branches)
+   - Cauer synthesis (cascade ladder networks)
    - Ready for circuit simulation
 
-4. APPLICATIONS:
-   - Ferrite permeability modeling
+4. UNCERTAINTY QUANTIFICATION:
+   - Ensemble-based prediction intervals
+   - Mechanism consensus across models
+   - Bootstrap sampling for robustness
+
+5. APPLICATIONS:
+   - Ferrite permeability modeling (including FMR)
    - Conductor skin effect characterization
    - Electrochemical impedance spectroscopy
+   - Magnetic domain wall dynamics
    - Any frequency-dependent material property
 
 PUBLICATION POTENTIAL:
 - Novel combination of physical basis functions + neural network
 - Solves Vector Fitting problems (stability, noise, interpretability)
+- Uncertainty quantification for reliability
 - Broad applicability across multiple fields
 """)

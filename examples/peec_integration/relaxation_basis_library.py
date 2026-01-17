@@ -271,6 +271,12 @@ def multilayer_winding(omega: torch.Tensor, R_dc: torch.Tensor,
 # =============================================================================
 # Magnetic relaxation maps to electrical via:
 # mu(omega) -> L(omega) or Z_magnetic(omega)
+#
+# Physical mechanisms in magnetic materials:
+# 1. Domain wall motion: Low frequency, high permeability
+# 2. Spin rotation: Higher frequency, lower contribution
+# 3. Ferromagnetic resonance (FMR): GHz range for thin films/nanoparticles
+# 4. Eddy current losses: Depends on conductivity and geometry
 
 def magnetic_debye(omega: torch.Tensor, mu_s: torch.Tensor, mu_inf: torch.Tensor,
                    tau: torch.Tensor) -> torch.Tensor:
@@ -305,6 +311,155 @@ def two_relaxation_permeability(omega: torch.Tensor, mu_dc: torch.Tensor,
     Circuit: Two RL stages in series (domain wall + spin rotation)
     """
     return mu_dc / ((1.0 + 1j * omega / omega_1) * (1.0 + 1j * omega / omega_2))
+
+
+def domain_wall_relaxation(omega: torch.Tensor, mu_dw: torch.Tensor,
+                            omega_dw: torch.Tensor, beta: torch.Tensor) -> torch.Tensor:
+    """
+    Domain Wall Relaxation (Cole-Cole type)
+    Formula: mu_dw / (1 + (j*omega/omega_dw)^beta)
+
+    Physical basis: Domain wall motion in polycrystalline ferrites.
+    Domain walls move in response to applied field, but are pinned by
+    grain boundaries and defects, leading to distribution of relaxation times.
+
+    Circuit: RL ladder (distributed time constants)
+
+    Parameters:
+        mu_dw: Domain wall contribution to permeability
+        omega_dw: Characteristic angular frequency of domain wall motion
+        beta: Distribution parameter (0.5-1.0, beta=1 -> single relaxation)
+
+    Applications:
+        - MnZn ferrites (power frequencies)
+        - NiZn ferrites (RF frequencies)
+        - Soft magnetic composites
+    """
+    beta = torch.clamp(beta, 0.3, 1.0)
+    return mu_dw / (1.0 + safe_power(1j * omega / omega_dw, beta))
+
+
+def spin_rotation_relaxation(omega: torch.Tensor, mu_spin: torch.Tensor,
+                              omega_spin: torch.Tensor) -> torch.Tensor:
+    """
+    Spin Rotation Relaxation (Debye type)
+    Formula: mu_spin / (1 + j*omega/omega_spin)
+
+    Physical basis: Rotation of magnetic moments within domains.
+    Higher frequency process than domain wall motion.
+    Damping from spin-orbit coupling and magnon-phonon interactions.
+
+    Circuit: Single RL parallel (L_spin || R_spin)
+
+    Parameters:
+        mu_spin: Spin rotation contribution to permeability
+        omega_spin: Characteristic angular frequency of spin rotation
+
+    Applications:
+        - High-frequency ferrites
+        - Thin magnetic films
+        - RF absorbers
+    """
+    return mu_spin / (1.0 + 1j * omega / omega_spin)
+
+
+def ferromagnetic_resonance(omega: torch.Tensor, mu_0_r: torch.Tensor,
+                            omega_0: torch.Tensor, alpha_G: torch.Tensor) -> torch.Tensor:
+    """
+    Ferromagnetic Resonance (FMR) - Landau-Lifshitz-Gilbert form
+    Formula: mu_0_r * omega_0^2 / (omega_0^2 - omega^2 + j*alpha_G*omega*omega_0)
+
+    Physical basis: Precession of magnetization around effective field.
+    Based on Landau-Lifshitz-Gilbert equation:
+        dM/dt = -gamma * M x H_eff + (alpha/M_s) * M x dM/dt
+
+    Resonance occurs at omega = omega_0 = gamma * H_eff (Kittel formula)
+
+    Circuit: RLC parallel resonator
+        L = 1/(mu_0_r * omega_0^2)
+        C = mu_0_r
+        R = 1/(alpha_G * omega_0 * mu_0_r)
+
+    Parameters:
+        mu_0_r: DC relative permeability (susceptibility contribution)
+        omega_0: Resonance angular frequency (= gamma * B_eff)
+        alpha_G: Gilbert damping parameter (typically 0.001 - 0.1)
+
+    Applications:
+        - Thin magnetic films (GHz range)
+        - Magnetic nanoparticles
+        - Ferrite resonators
+        - Microwave absorbers
+
+    Reference:
+        Kittel, "On the Theory of Ferromagnetic Resonance Absorption", Phys. Rev. 73, 155 (1948)
+    """
+    alpha_G = torch.clamp(alpha_G, 0.001, 0.5)
+    denominator = omega_0**2 - omega**2 + 1j * alpha_G * omega * omega_0
+    return mu_0_r * omega_0**2 / (denominator + 1e-15)
+
+
+def domain_wall_resonance(omega: torch.Tensor, chi_dw: torch.Tensor,
+                           omega_dw: torch.Tensor, gamma_dw: torch.Tensor) -> torch.Tensor:
+    """
+    Domain Wall Resonance (oscillatory domain wall motion)
+    Formula: chi_dw * omega_dw^2 / (omega_dw^2 - omega^2 + j*gamma_dw*omega)
+
+    Physical basis: Domain walls can resonate like mechanical oscillators.
+    The wall has effective mass (from eddy currents and spin inertia) and
+    restoring force (from magnetostatic energy and pinning).
+
+    Typically lower frequency than FMR (kHz to MHz for bulk materials).
+
+    Circuit: RLC series resonator
+        L = 1/chi_dw (effective mass)
+        C = chi_dw/omega_dw^2 (stiffness)
+        R = gamma_dw/chi_dw (damping)
+
+    Parameters:
+        chi_dw: Domain wall susceptibility contribution
+        omega_dw: Domain wall resonance frequency
+        gamma_dw: Damping coefficient (from eddy currents)
+
+    Applications:
+        - Power ferrites with domain wall oscillations
+        - Magnetic after-effect studies
+        - Low-frequency absorbers
+    """
+    gamma_dw = torch.clamp(gamma_dw, 1e-3, 10.0)
+    denominator = omega_dw**2 - omega**2 + 1j * gamma_dw * omega
+    return chi_dw * omega_dw**2 / (denominator + 1e-15)
+
+
+def snoek_limit_model(omega: torch.Tensor, mu_s: torch.Tensor,
+                      f_cutoff: torch.Tensor) -> torch.Tensor:
+    """
+    Snoek's Limit Permeability Model
+    Formula: mu_s / (1 + j*omega/(2*pi*f_cutoff)) with constraint (mu_s-1)*f_cutoff = const
+
+    Physical basis: Snoek's law states that for polycrystalline ferrites:
+        (mu_s - 1) * f_r = (2/3) * gamma * M_s / (2*pi)
+
+    This fundamental limit arises from the gyromagnetic ratio and saturation
+    magnetization, independent of material details.
+
+    Circuit: Single RL parallel with L proportional to mu_s
+
+    Parameters:
+        mu_s: Static permeability (limited by Snoek's law)
+        f_cutoff: Cutoff frequency (Hz)
+
+    Applications:
+        - Ferrite material selection
+        - High-frequency inductor design
+        - Estimating permeability rolloff
+
+    Reference:
+        Snoek, "Dispersion and absorption in magnetic ferrites at frequencies above one Mc/s",
+        Physica 14, 207 (1948)
+    """
+    omega_cutoff = 2 * np.pi * f_cutoff
+    return 1.0 + (mu_s - 1.0) / (1.0 + 1j * omega / omega_cutoff)
 
 
 # =============================================================================
@@ -516,6 +671,36 @@ BASIS_FUNCTIONS: Dict[str, Dict] = {
         'category': 'Magnetic',
         'circuit': 'Two RL stages (domain wall + spin)'
     },
+    'domain_wall_relaxation': {
+        'func': domain_wall_relaxation,
+        'params': ['mu_dw', 'omega_dw', 'beta'],
+        'category': 'Magnetic',
+        'circuit': 'RL ladder (distributed domain wall motion)'
+    },
+    'spin_rotation': {
+        'func': spin_rotation_relaxation,
+        'params': ['mu_spin', 'omega_spin'],
+        'category': 'Magnetic',
+        'circuit': 'L_spin || R_spin (single Debye)'
+    },
+    'fmr': {
+        'func': ferromagnetic_resonance,
+        'params': ['mu_0_r', 'omega_0', 'alpha_G'],
+        'category': 'Magnetic',
+        'circuit': 'RLC parallel (Landau-Lifshitz-Gilbert)'
+    },
+    'domain_wall_resonance': {
+        'func': domain_wall_resonance,
+        'params': ['chi_dw', 'omega_dw', 'gamma_dw'],
+        'category': 'Magnetic',
+        'circuit': 'RLC series (oscillatory domain wall)'
+    },
+    'snoek_limit': {
+        'func': snoek_limit_model,
+        'params': ['mu_s', 'f_cutoff'],
+        'category': 'Magnetic',
+        'circuit': 'RL parallel (Snoek-limited)'
+    },
 
     # CATEGORY 7: RLC Resonance
     'rlc_series': {
@@ -657,10 +842,395 @@ def generate_ladder_circuit(basis_name: str, params: Dict, n_stages: int = 5) ->
     return "\n".join(lines)
 
 
+# =============================================================================
+# CAUER LADDER SYNTHESIS
+# =============================================================================
+# Cauer (continued fraction) synthesis produces RL or RC ladders by
+# successive removal of poles/zeros from the immittance function.
+#
+# Foster synthesis: Parallel connection of series RLC branches
+# Cauer synthesis: Cascade (ladder) connection of L-C or R-C sections
+#
+# Advantages of Cauer over Foster for circuit simulation:
+# 1. Better numerical conditioning (smaller range of values)
+# 2. Direct mapping to transmission line segments
+# 3. Lower sensitivity to component tolerances
+# 4. More natural for distributed systems
+#
+# Reference:
+# [1] Cauer, "Theorie der linearen Wechselstromschaltungen", 1941
+# [2] Guillemin, "Synthesis of Passive Networks", 1957
+
+def continued_fraction_expansion(z_func: Callable, omega_test: np.ndarray,
+                                   n_stages: int = 5,
+                                   ladder_type: str = 'RC') -> List[Tuple[float, float]]:
+    """
+    Compute Cauer continued fraction expansion of an impedance function.
+
+    The impedance is expanded as:
+    Z(s) = Z_1 + 1/(Y_1 + 1/(Z_2 + 1/(Y_2 + ...)))
+
+    For RC ladder: Z_k = R_k, Y_k = sC_k
+    For RL ladder: Z_k = sL_k, Y_k = 1/R_k
+
+    Args:
+        z_func: Impedance function Z(omega) -> complex
+        omega_test: Angular frequencies for evaluation
+        n_stages: Number of ladder stages
+        ladder_type: 'RC' or 'RL'
+
+    Returns:
+        List of (element1, element2) pairs for each stage
+        RC: [(R1, C1), (R2, C2), ...]
+        RL: [(L1, R1), (L2, R2), ...]
+    """
+    # Evaluate impedance at test frequencies
+    s = 1j * omega_test
+    Z_data = z_func(omega_test)
+
+    elements = []
+
+    # Current residual impedance/admittance
+    Z_residual = Z_data.copy()
+
+    for stage in range(n_stages):
+        if ladder_type == 'RC':
+            # Extract series R (real part at low frequency)
+            R_k = np.real(Z_residual[0])
+            if R_k < 1e-15:
+                R_k = np.mean(np.real(Z_residual)) / 10
+
+            # Remove series R
+            Z_residual = Z_residual - R_k
+
+            # Invert to get admittance
+            Y_residual = 1.0 / (Z_residual + 1e-15)
+
+            # Extract shunt C (imaginary part divided by omega)
+            C_k = np.mean(np.imag(Y_residual) / omega_test)
+            if C_k < 1e-18:
+                C_k = 1e-12  # Default small capacitance
+
+            # Remove shunt C
+            Y_residual = Y_residual - 1j * omega_test * C_k
+
+            # Invert back to impedance for next stage
+            Z_residual = 1.0 / (Y_residual + 1e-15)
+
+            elements.append((abs(R_k), abs(C_k)))
+
+        elif ladder_type == 'RL':
+            # Extract series L (imaginary part divided by omega)
+            L_k = np.mean(np.imag(Z_residual) / omega_test)
+            if L_k < 1e-15:
+                L_k = np.mean(np.abs(Z_residual)) / omega_test.mean()
+
+            # Remove series L
+            Z_residual = Z_residual - 1j * omega_test * L_k
+
+            # Invert to get admittance
+            Y_residual = 1.0 / (Z_residual + 1e-15)
+
+            # Extract shunt conductance (real part)
+            G_k = np.mean(np.real(Y_residual))
+            R_k = 1.0 / (G_k + 1e-15)
+
+            # Remove shunt R
+            Y_residual = Y_residual - G_k
+
+            # Invert back
+            Z_residual = 1.0 / (Y_residual + 1e-15)
+
+            elements.append((abs(L_k), abs(R_k)))
+
+    return elements
+
+
+def generate_cauer_ladder(basis_name: str, params: Dict,
+                           omega_range: Tuple[float, float],
+                           n_stages: int = 5,
+                           ladder_type: str = 'auto') -> str:
+    """
+    Generate SPICE subcircuit using Cauer (continued fraction) synthesis.
+
+    Unlike Foster synthesis which creates parallel RLC branches,
+    Cauer synthesis creates a cascade ladder structure.
+
+    Args:
+        basis_name: Name of basis function
+        params: Parameter values for the basis function
+        omega_range: (omega_min, omega_max) for synthesis
+        n_stages: Number of ladder stages
+        ladder_type: 'RC', 'RL', or 'auto' (detect from basis)
+
+    Returns:
+        SPICE subcircuit definition
+    """
+    lines = [f"* {basis_name} Cauer ladder approximation ({n_stages} stages)"]
+
+    # Determine ladder type from basis name
+    if ladder_type == 'auto':
+        if basis_name in ['skin_dowell', 'skin_cylindrical', 'multilayer_winding',
+                          'magnetic_debye', 'magnetic_cole_cole', 'fmr',
+                          'domain_wall_relaxation', 'spin_rotation']:
+            ladder_type = 'RL'
+        else:
+            ladder_type = 'RC'
+
+    # Create test frequencies
+    omega_test = np.logspace(np.log10(omega_range[0]), np.log10(omega_range[1]), 50)
+
+    # Get the basis function
+    if basis_name not in BASIS_FUNCTIONS:
+        lines.append(f"* ERROR: Unknown basis function '{basis_name}'")
+        return "\n".join(lines)
+
+    func_info = BASIS_FUNCTIONS[basis_name]
+    func = func_info['func']
+
+    # Create impedance evaluation function
+    def z_func(omega):
+        omega_t = torch.tensor(omega, dtype=torch.float64)
+        param_tensors = {}
+        for p in func_info['params']:
+            if p in params:
+                param_tensors[p] = torch.tensor(params[p], dtype=torch.float64)
+            else:
+                param_tensors[p] = torch.tensor(1.0, dtype=torch.float64)
+        # Call function with positional arguments
+        param_vals = [param_tensors[p] for p in func_info['params']]
+        result = func(omega_t, *param_vals)
+        return result.numpy()
+
+    # Compute Cauer expansion
+    try:
+        elements = continued_fraction_expansion(z_func, omega_test, n_stages, ladder_type)
+    except Exception as e:
+        lines.append(f"* ERROR in Cauer expansion: {e}")
+        return "\n".join(lines)
+
+    # Generate SPICE netlist
+    lines.append(f".subckt {basis_name}_cauer in out")
+
+    node = 'in'
+    for k, (elem1, elem2) in enumerate(elements):
+        next_node = f"n{k+1}" if k < len(elements) - 1 else 'out'
+
+        if ladder_type == 'RC':
+            # Series R, shunt C
+            lines.append(f"R{k+1} {node} {next_node} {elem1:.6g}")
+            lines.append(f"C{k+1} {next_node} 0 {elem2:.6g}")
+        elif ladder_type == 'RL':
+            # Series L, shunt R
+            lines.append(f"L{k+1} {node} n{k+1}a {elem1:.6g}")
+            lines.append(f"R{k+1} n{k+1}a 0 {elem2:.6g}")
+            if k < len(elements) - 1:
+                lines.append(f"* Connection to next stage")
+                lines.append(f"R{k+1}s n{k+1}a {next_node} 0")
+            node = f"n{k+1}a"
+            continue
+
+        node = next_node
+
+    lines.append(".ends")
+
+    # Add comparison info
+    lines.append("")
+    lines.append("* Cauer vs Foster synthesis comparison:")
+    lines.append("* - Cauer: Better for distributed systems, lower sensitivity")
+    lines.append("* - Foster: Easier to compute, direct pole-residue mapping")
+
+    return "\n".join(lines)
+
+
+class CauerLadderSynthesizer:
+    """
+    Synthesize Cauer ladder networks from impedance data or transfer functions.
+
+    Supports both RC ladders (dielectric/diffusion) and RL ladders (magnetic/skin effect).
+
+    The Cauer form is particularly useful for:
+    1. Transmission line modeling
+    2. Thermal networks
+    3. Magnetic permeability dispersion
+    4. Skin effect approximation
+    """
+
+    def __init__(self, n_stages: int = 5, ladder_type: str = 'RC'):
+        """
+        Initialize Cauer synthesizer.
+
+        Args:
+            n_stages: Number of ladder stages
+            ladder_type: 'RC' or 'RL'
+        """
+        self.n_stages = n_stages
+        self.ladder_type = ladder_type
+        self.elements = []
+
+    def fit_from_data(self, freqs: np.ndarray, Z_data: np.ndarray) -> 'CauerLadderSynthesizer':
+        """
+        Fit Cauer ladder to impedance data.
+
+        Args:
+            freqs: Frequency array (Hz)
+            Z_data: Complex impedance array
+
+        Returns:
+            self (for method chaining)
+        """
+        omega = 2 * np.pi * freqs
+
+        def z_func(w):
+            return np.interp(w, omega, np.real(Z_data)) + \
+                   1j * np.interp(w, omega, np.imag(Z_data))
+
+        self.elements = continued_fraction_expansion(
+            z_func, omega, self.n_stages, self.ladder_type
+        )
+        return self
+
+    def fit_from_function(self, z_func: Callable, omega_range: Tuple[float, float]
+                          ) -> 'CauerLadderSynthesizer':
+        """
+        Fit Cauer ladder to impedance function.
+
+        Args:
+            z_func: Function Z(omega) -> complex
+            omega_range: (omega_min, omega_max)
+
+        Returns:
+            self (for method chaining)
+        """
+        omega_test = np.logspace(np.log10(omega_range[0]),
+                                  np.log10(omega_range[1]), 100)
+        self.elements = continued_fraction_expansion(
+            z_func, omega_test, self.n_stages, self.ladder_type
+        )
+        return self
+
+    def evaluate(self, omega: np.ndarray) -> np.ndarray:
+        """
+        Evaluate the synthesized ladder impedance.
+
+        Args:
+            omega: Angular frequency array
+
+        Returns:
+            Complex impedance array
+        """
+        if len(self.elements) == 0:
+            raise ValueError("Ladder not yet synthesized. Call fit_* first.")
+
+        s = 1j * omega
+
+        # Build impedance from bottom of ladder
+        Z = np.zeros_like(s)
+
+        # Reverse iterate through elements
+        for elem1, elem2 in reversed(self.elements):
+            if self.ladder_type == 'RC':
+                # Shunt C: Z_shunt = 1/(sC)
+                Z_shunt = 1.0 / (s * elem2 + 1e-15)
+                # Parallel combination with residual
+                Z = 1.0 / (1.0/Z_shunt + 1.0/(Z + 1e-15))
+                # Add series R
+                Z = Z + elem1
+            elif self.ladder_type == 'RL':
+                # Shunt R
+                Z_shunt = elem2
+                # Parallel combination
+                Z = 1.0 / (1.0/Z_shunt + 1.0/(Z + 1e-15))
+                # Add series L
+                Z = Z + s * elem1
+
+        return Z
+
+    def to_spice(self, subckt_name: str = "cauer_ladder") -> str:
+        """
+        Generate SPICE subcircuit.
+
+        Args:
+            subckt_name: Name for the subcircuit
+
+        Returns:
+            SPICE netlist string
+        """
+        if len(self.elements) == 0:
+            return "* ERROR: Ladder not synthesized"
+
+        lines = [
+            f"* Cauer {self.ladder_type} ladder ({self.n_stages} stages)",
+            f".subckt {subckt_name} in out",
+        ]
+
+        node = 'in'
+        for k, (elem1, elem2) in enumerate(self.elements):
+            next_node = f"n{k+1}" if k < len(self.elements) - 1 else 'out'
+
+            if self.ladder_type == 'RC':
+                lines.append(f"R{k+1} {node} {next_node} {elem1:.6g}")
+                lines.append(f"C{k+1} {next_node} 0 {elem2:.6g}")
+            else:  # RL
+                lines.append(f"L{k+1} {node} m{k+1} {elem1:.6g}")
+                lines.append(f"R{k+1} m{k+1} 0 {elem2:.6g}")
+                lines.append(f"V{k+1} m{k+1} {next_node} 0")  # Ideal wire
+
+            node = next_node
+
+        lines.append(".ends")
+        return "\n".join(lines)
+
+    def get_elements(self) -> List[Dict]:
+        """
+        Get element values as list of dictionaries.
+
+        Returns:
+            List of {'stage': k, 'type': 'RC'/'RL', 'elem1': val, 'elem2': val}
+        """
+        return [
+            {
+                'stage': k + 1,
+                'type': self.ladder_type,
+                'elem1_name': 'R' if self.ladder_type == 'RC' else 'L',
+                'elem1_value': elem1,
+                'elem2_name': 'C' if self.ladder_type == 'RC' else 'R',
+                'elem2_value': elem2,
+            }
+            for k, (elem1, elem2) in enumerate(self.elements)
+        ]
+
+
 if __name__ == '__main__':
     list_basis_functions()
 
-    print("\n\nExample: Generate Dowell skin effect ladder circuit")
+    print("\n\nExample: Generate Dowell skin effect ladder circuit (Foster)")
     print("-" * 60)
     spice = generate_ladder_circuit('skin_dowell', {'R_dc': 0.01, 'delta_ref': 0.5e-3}, n_stages=5)
     print(spice)
+
+    print("\n\nExample: Generate Debye Cauer ladder circuit")
+    print("-" * 60)
+    spice_cauer = generate_cauer_ladder('debye', {'tau': 1e-6},
+                                         omega_range=(1e3, 1e9), n_stages=5)
+    print(spice_cauer)
+
+    print("\n\nExample: Cauer synthesis from data")
+    print("-" * 60)
+    # Test with Cole-Cole data
+    freqs = np.logspace(2, 8, 100)
+    omega = 2 * np.pi * freqs
+    tau = 1e-5
+    alpha = 0.7
+    Z_data = 1.0 / (1.0 + (1j * omega * tau) ** alpha)
+
+    synth = CauerLadderSynthesizer(n_stages=5, ladder_type='RC')
+    synth.fit_from_data(freqs, Z_data)
+
+    Z_synth = synth.evaluate(omega)
+    error = np.max(np.abs(Z_synth - Z_data) / np.abs(Z_data)) * 100
+    print(f"Cole-Cole fit error: {error:.2f}%")
+    print("\nElement values:")
+    for elem in synth.get_elements():
+        print(f"  Stage {elem['stage']}: {elem['elem1_name']}={elem['elem1_value']:.3e}, "
+              f"{elem['elem2_name']}={elem['elem2_value']:.3e}")

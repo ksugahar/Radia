@@ -11,7 +11,7 @@ Input: Z(omega) frequency response data
          |
          v
 +----------------------------------+
-|  24 Circuit-Compatible Basis     |
+|  29 Circuit-Compatible Basis     |
 |  Functions (RLC Ladders)         |
 +----------------------------------+
          |
@@ -218,17 +218,17 @@ URN fills the following gaps:
 1. **VF problems**: Unstable poles, difficult interpretation → solved by physical basis
 2. **PINN problems**: No circuit synthesis → basis corresponds to circuits
 3. **KAN problems**: Splines don't map to circuits → physical basis adopted
-4. **Prony problems**: Debye only → 24 diverse basis types
+4. **Prony problems**: Debye only → 29 diverse basis types
 
 ## Key Features
 
-1. **Automatic Model Discovery**: L1 sparsity selects 3-5 dominant mechanisms from 24 candidates
+1. **Automatic Model Discovery**: L1 sparsity selects 3-5 dominant mechanisms from 29 candidates
 2. **Physical Interpretability**: Each basis function has known physical meaning
 3. **Circuit Synthesis**: ALL basis functions map to RLC ladder networks
 4. **No GPU Required**: Runs on CPU in seconds (few hundred parameters)
 5. **Vector Fitting Problems Avoided**: No unstable poles, no noise sensitivity
 
-## Basis Function Library (24 Functions)
+## Basis Function Library (29 Functions)
 
 All functions have direct circuit equivalents:
 
@@ -239,9 +239,19 @@ All functions have direct circuit equivalents:
 | **Diffusion** (3) | warburg_infinite, warburg_finite, gerischer | RC ladder with termination |
 | **Transmission Line** (2) | tl_open, tl_short | N-section RC ladder |
 | **Skin Effect** (3) | skin_dowell, skin_cylindrical, multilayer_winding | RL ladder (Dowell coefficients) |
-| **Magnetic** (3) | magnetic_debye, magnetic_cole_cole, two_relaxation_mu | RL Foster network |
+| **Magnetic** (8) | magnetic_debye, magnetic_cole_cole, two_relaxation_mu, domain_wall_relaxation, spin_rotation, fmr, domain_wall_resonance, snoek_limit | RL/RLC networks |
 | **Resonance** (3) | rlc_series, rlc_parallel, piezo_bvd | Direct RLC |
 | **Viscoelastic** (3) | maxwell, voigt, sls | RC analog |
+
+### New Magnetic Permeability Basis Functions (v1.4)
+
+| Function | Physical Mechanism | Formula | Applications |
+|----------|-------------------|---------|--------------|
+| **domain_wall_relaxation** | Cole-Cole type domain wall motion | $\mu_{dw} / (1 + (j\omega/\omega_{dw})^\beta)$ | MnZn/NiZn ferrites |
+| **spin_rotation** | Debye type spin rotation | $\mu_{spin} / (1 + j\omega/\omega_{spin})$ | High-frequency ferrites |
+| **fmr** | Ferromagnetic resonance (LLG) | $\mu_0 \omega_0^2 / (\omega_0^2 - \omega^2 + j\alpha_G\omega\omega_0)$ | Thin films, GHz absorbers |
+| **domain_wall_resonance** | Oscillatory domain wall | $\chi_{dw} \omega_{dw}^2 / (\omega_{dw}^2 - \omega^2 + j\gamma_{dw}\omega)$ | Power ferrites |
+| **snoek_limit** | Snoek's law permeability | $(mu_s - 1) / (1 + j\omega/\omega_c)$ | Ferrite selection |
 
 ## Installation
 
@@ -514,7 +524,7 @@ Location: `examples/peec_integration/`
 
 | File | Description |
 |------|-------------|
-| `relaxation_basis_library.py` | 24 circuit-compatible basis functions |
+| `relaxation_basis_library.py` | 29 circuit-compatible basis functions |
 | `universal_relaxation_network.py` | URN training and SPICE generation |
 | `urn_benchmark_suite.py` | Full benchmark suite (19 tests) |
 | `urn_benchmark_improved.py` | Focused benchmark (13 tests) |
@@ -558,14 +568,113 @@ Location: `examples/peec_integration/`
    - CPU-only (no GPU required)
    - Training time: ~100-150 seconds
 
+## Cauer Ladder Synthesis (v1.4)
+
+In addition to Foster synthesis, URN now supports **Cauer (continued fraction) synthesis** for circuit generation.
+
+### Foster vs Cauer Comparison
+
+| Aspect | Foster Synthesis | Cauer Synthesis |
+|--------|-----------------|-----------------|
+| Structure | Parallel RLC branches | Cascade ladder |
+| Numerical conditioning | Larger value range | Better conditioning |
+| Transmission line modeling | Indirect | Direct |
+| Component sensitivity | Higher | Lower |
+| Best for | Resonant circuits | Distributed systems |
+
+### Usage
+
+```python
+from relaxation_basis_library import CauerLadderSynthesizer, generate_cauer_ladder
+
+# Method 1: From impedance data
+synth = CauerLadderSynthesizer(n_stages=5, ladder_type='RC')
+synth.fit_from_data(freqs, Z_data)
+Z_approx = synth.evaluate(omega)
+spice = synth.to_spice("cauer_rc")
+
+# Method 2: From basis function
+spice = generate_cauer_ladder('cole_cole', {'tau': 1e-5, 'alpha': 0.7},
+                               omega_range=(1e3, 1e8), n_stages=5)
+```
+
+### Cauer Ladder Circuit Topology
+
+```
+         Z1         Z2         Z3
+in o----[===]--+----[===]--+----[===]--o out
+               |           |
+              Y1          Y2
+               |           |
+              GND         GND
+
+RC Ladder: Z_k = R_k, Y_k = sC_k
+RL Ladder: Z_k = sL_k, Y_k = 1/R_k
+```
+
+## Uncertainty Quantification (v1.4)
+
+URN now provides **ensemble-based uncertainty quantification** for:
+- Prediction confidence intervals
+- Mechanism detection reliability
+- Parameter uncertainty
+
+### Usage
+
+```python
+from universal_relaxation_network import (
+    URNUncertaintyConfig, train_urn_with_uncertainty
+)
+
+# Configure ensemble
+config = URNUncertaintyConfig(
+    n_ensemble=5,           # Number of ensemble members
+    bootstrap_fraction=0.8, # Data fraction per bootstrap sample
+    n_debye=3,
+    n_cole_cole=2,
+    sparsity_weight=0.01,
+    n_epochs=4000,
+)
+
+# Train ensemble
+ensemble = train_urn_with_uncertainty(freqs, Z_data, config)
+
+# Get predictions with uncertainty
+mean_pred, std_pred = ensemble.predict(freqs)
+
+# Get 95% confidence intervals
+mean, lower, upper = ensemble.predict_interval(freqs, confidence=0.95)
+
+# Mechanism consensus
+consensus = ensemble.get_mechanism_consensus()
+for mech, info in consensus.items():
+    print(f"{mech}: detected {info['frequency']*100:.0f}% of ensemble")
+    print(f"  Parameters: {info['mean_params']} +/- {info['std_params']}")
+
+# Full summary
+summary = ensemble.uncertainty_summary(freqs, Z_data)
+print(f"Mean error: {summary['mean_rel_error']*100:.2f}%")
+print(f"Coverage (2-sigma): {summary['coverage_2sigma']*100:.0f}%")
+```
+
+### Uncertainty Metrics
+
+| Metric | Description |
+|--------|-------------|
+| **Prediction std** | Standard deviation across ensemble members |
+| **Coverage** | Fraction of true values within prediction interval |
+| **Mechanism frequency** | How often each mechanism is detected |
+| **Parameter uncertainty** | Std of fitted parameters across ensemble |
+
 ## Future Work
 
-- [ ] Add magnetic permeability basis (FMR, domain wall)
-- [ ] Implement Cauer ladder synthesis
+- [x] Add magnetic permeability basis (FMR, domain wall) - **DONE v1.4**
+- [x] Implement Cauer ladder synthesis - **DONE v1.4**
+- [x] Uncertainty quantification - **DONE v1.4**
 - [ ] GPU acceleration for large datasets
-- [ ] Uncertainty quantification
 - [ ] Multi-port extension
 - [ ] Real measurement data validation
+- [ ] Bayesian uncertainty (full posterior)
 
 ## License
 
