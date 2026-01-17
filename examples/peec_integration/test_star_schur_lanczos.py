@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test: Star (capacitance) DOF with Schur complement and Lanczos reduction
+Test: Star (capacitance) DOF with Schur complement and PRIMA Lanczos reduction
 
 **LIMITATION**: This test uses SCALAR Lanczos and is valid for **1-PORT ONLY**.
 For N-port systems (N >= 2), use Block Lanczos classes:
@@ -11,14 +11,16 @@ For N-port systems (N >= 2), use Block Lanczos classes:
 
 See docs/NPORT_BLOCK_LANCZOS_SPICE.md for details.
 
+**POLICY (2026-01-17)**: PRIMA Lanczos only, no ACA.
+For PEEC interaction matrices, ACA compression is unnecessary.
+PRIMA Lanczos directly reduces element count in SPICE output while
+preserving port impedance accuracy.
+
 This test verifies that the PRIMASchurExtractor correctly handles:
 1. Star DOFs (capacitive behavior, P/s term)
 2. Lanczos reduction for both Loop (L) and Star (P) matrices
 3. Schur complement elimination of internal DOFs
 4. Loop-Star coupling (K_LS)
-
-Note (2026-01-17): ACA+ was removed in favor of Lanczos-only approach.
-Reason: Lanczos directly reduces element count in SPICE output.
 
 Test case: LC circuit with parasitic capacitance
 - Loop: Inductor (L = 10 uH, R = 0.1 Ohm)
@@ -650,8 +652,8 @@ def test_lanczos_capacitor_reduction():
 def main():
     """Run all tests."""
     print("=" * 70)
-    print("Star (Capacitance) Schur Complement + Lanczos Test Suite")
-    print("(ACA+ removed - Lanczos-only approach)")
+    print("Star (Capacitance) Schur Complement + PRIMA Lanczos Test Suite")
+    print("(PRIMA only - ACA not used for PEEC)")
     print("=" * 70)
 
     results = {}
