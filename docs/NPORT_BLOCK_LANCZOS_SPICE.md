@@ -221,6 +221,33 @@ Complex materials: ferrite (mu_r=2000, tan_delta_m=1%), PCB (eps_r=4.5, tan_delt
 | ACA | O(N log N) | Still N elements | Approximate |
 | **PRIMA** | O(k) | **k elements** | Exact at ports |
 
+## PyKAN for Continued Fraction: Evaluation (2026-01-17)
+
+**Question**: Can PyKAN learn continued fraction expansions and extract RL ladder parameters?
+
+**Test Results**:
+| Test | Result | Notes |
+|------|--------|-------|
+| z*coth(z) function learning | PASS | 1.34% max error |
+| Symbolic regression to CF | FAIL | Cannot extract rational form |
+| Ladder coefficient extraction | FAIL | Derivative-based extraction unreliable |
+
+**Conclusion**: KAN can **approximate** skin effect functions accurately, but **cannot extract** the continued fraction structure [3, 5, 7, ...].
+
+**Recommended Approach**:
+1. **Standard skin effect**: Use analytical Dowell formula (exact CF coefficients)
+2. **Nonlinear Z(H,f)**: Use KAN to learn from ESIM data, export as **PWL lookup table**
+3. **DO NOT** attempt to extract ladder structure from KAN
+
+```python
+# RECOMMENDED: Analytical Dowell for standard skin effect
+dowell_coeffs = [3, 5, 7, 9, 11]  # Exact continued fraction
+
+# FOR NONLINEAR: KAN with PWL export (not CF extraction)
+kan_model.train_from_esim_data(H_values, f_values, Zs_data)
+spice_pwl = kan_model.to_spice_pwl(H_export, f_ref)
+```
+
 ## References
 
 1. A. Odabasioglu, M. Celik, L.T. Pileggi, "PRIMA: Passive Reduced-order Interconnect Macromodeling Algorithm," IEEE TCAD, 1998.
