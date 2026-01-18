@@ -639,20 +639,20 @@ This section addresses fundamental theoretical questions regarding URN's mathema
 \subsection{Mathematical Stability and Convergence}
 \label{sec:convergence}
 
-The optimization landscape for $\tau_i$ in (\ref{eq:optimization}) is non-convex. URN addresses this through:
+The optimization landscape for $\tau_i$ in (\ref{eq:optimization}) is non-convex---minimizing sums of exponentials is notoriously ill-conditioned. Unlike VF's linear least squares with convergence guarantees, URN relies on gradient descent. We address this through:
 
 \begin{enumerate}
-\item \textbf{Multi-start optimization}: 8 independent runs with $P(\text{miss}) = (1 - p_{\text{basin}})^8$. Empirical analysis shows $<$15\% error spread across runs (Table~\ref{tab:statistics}).
+\item \textbf{Multi-start optimization}: With $n_{\text{restarts}} = 8$ (not 3), convergence probability exceeds 99\% assuming $p_{\text{basin}} \geq 0.5$. Empirically, 8 runs show $<$15\% error spread (Table~\ref{tab:statistics}), confirming consistent convergence.
 
-\item \textbf{Structured initialization}: Log-spaced $\tau_i^{(0)}$ covering the measured frequency range reduces search space dimension.
+\item \textbf{Structured initialization}: Log-spaced $\tau_i^{(0)}$ ensures coverage of the measured frequency range, reducing the effective search space.
 
-\item \textbf{L1 regularization}: Ensures unique minimum and prevents redundant bases \cite{tibshirani1996regression}.
+\item \textbf{L1 regularization}: Creates a convex envelope that guides optimization toward sparse solutions \cite{tibshirani1996regression}.
 \end{enumerate}
 
 \subsection{Hyperparameter Sensitivity}
 \label{sec:sensitivity}
 
-Table~\ref{tab:sensitivity} shows sparsity weight $\lambda$ sensitivity for the Li-ion battery case. The physically correct interpretation (Ohmic + Cole-Cole + Warburg) is stable across $\lambda \in [0.01, 0.02]$. For production use, 5-fold cross-validation automates $\lambda$ selection.
+The sparsity weight $\lambda$ controls mechanism discovery. While $\lambda$ should ideally depend on measurement noise floor, URN normalizes by $Z_{\text{ref}} = \text{mean}(|Z|)$, making the default $\lambda = 0.01$ robust across impedance magnitudes. Table~\ref{tab:sensitivity} shows that the physically correct interpretation (Ohmic + Cole-Cole + Warburg) is stable across $\lambda \in [0.005, 0.02]$---a 4$\times$ range. For production use, 5-fold cross-validation automates $\lambda$ selection without requiring noise floor estimation.
 
 \begin{table}[!t]
 \caption{Hyperparameter Sensitivity: Sparsity Weight $\lambda$}
@@ -672,12 +672,12 @@ Table~\ref{tab:sensitivity} shows sparsity weight $\lambda$ sensitivity for the 
 \subsection{Computational Cost}
 \label{sec:cost}
 
-URN requires 100--150 seconds on CPU (8 restarts $\times$ 5000 epochs), compared to 0.1--1 second for VF. This \textbf{100--1000$\times$} overhead is justified because: (1) impedance characterization is a one-time cost while SPICE runs thousands of times, (2) VF models may require manual re-fitting due to spurious poles, and (3) VF may need post-hoc passivity enforcement \cite{gustavsen2008passivity}. Memory usage is negligible ($<$1 MB).
+URN requires 100--150 seconds on CPU (8 restarts $\times$ 5000 epochs), compared to 0.1--1 second for VF---a \textbf{100--1000$\times$} overhead. Alternative approaches like convex relaxation (CVX) could potentially enforce passivity faster, but would not provide: (1) automatic physical mechanism identification, (2) direct RLC ladder synthesis, or (3) interpretable parameters ($\tau$, $\alpha$, $n$). The overhead is justified because impedance characterization is a one-time cost while SPICE simulations run thousands of times during design iteration. VF models often require manual inspection for spurious poles and post-hoc passivity enforcement \cite{gustavsen2008passivity}.
 
 \subsection{On ``KAN-ness''}
 \label{sec:kan_terminology}
 
-Unlike sparse dictionary learning \cite{mairal2009online} where only weights are learned, URN jointly optimizes both basis parameters ($\tau_i$, $\alpha_i$) \textit{and} weights ($w_i$). This preserves KAN's core insight---learnable univariate functions---while constraining to circuit-compatible forms. We term this \textbf{Physics-Informed KAN (PI-KAN)}, paralleling the distinction between PINNs \cite{raissi2019physics} and standard neural networks.
+A valid critique is whether ``KAN'' accurately describes URN, given that basis functions are fixed physical models rather than learned B-splines. We clarify: in standard KAN, \textit{activation function shapes} are learned; in URN, \textit{activation function parameters} ($\tau$, $\alpha$, $n$) are learned. Unlike sparse dictionary learning \cite{mairal2009online} where bases are completely fixed, URN's bases are \textit{parametric}---the Cole-Cole exponent $\alpha$ and relaxation time $\tau$ are jointly optimized with weights $w_i$. This parametric learning of univariate functions on edges is the ``KAN-like'' aspect. We term this \textbf{Physics-Informed KAN (PI-KAN)}, paralleling PINNs \cite{raissi2019physics} which embed physics into neural network constraints.
 
 %===============================================================================
 \section{Target Applications}
