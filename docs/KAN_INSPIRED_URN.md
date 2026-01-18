@@ -665,35 +665,6 @@ Comprehensive benchmark suite with 13 test cases across 4 categories.
 - **Epochs**: 6000-8000
 - **Restarts**: 5 (multi-start optimization)
 
-## Circuit Synthesis
-
-### Dowell Skin Effect Ladder
-
-```
-         R/3        R/5        R/7        R/9        R/11
-in o----AAAA--+----AAAA--+----AAAA--+----AAAA--+----AAAA--o out
-              |          |          |          |
-             (L/3)      (L/5)      (L/7)      (L/9)
-              |          |          |          |
-             GND        GND        GND        GND
-
-where: L = R_dc * tau, tau = delta^2 / 2
-       Dowell coefficients: [3, 5, 7, 9, 11]
-```
-
-### CPE (Constant Phase Element) Ladder
-
-```
-         R0         R0*a       R0*a^2     R0*a^3
-in o----AAAA--+----AAAA--+----AAAA--+----AAAA--o out
-              |          |          |
-             C0        C0/b      C0/b^2
-              |          |          |
-             GND        GND        GND
-
-where: a = 10^(1/N), b = a^n, n = CPE exponent
-```
-
 ## Comparison with Vector Fitting
 
 ### Two-Mode Benchmark: Conservative vs Aggressive VF Initialization
@@ -873,11 +844,11 @@ Location: `examples/peec_integration/`
    - CPU-only (no GPU required)
    - Training time: ~100-150 seconds
 
-## Cauer Ladder Synthesis (v1.4)
+## Circuit Synthesis: Ladder Network Generation
 
-In addition to Foster synthesis, URN now supports **Cauer (continued fraction) synthesis** for circuit generation.
+URN converts discovered physical mechanisms into **SPICE-compatible ladder networks**. This section explains the synthesis process and automatic stage determination.
 
-### Foster vs Cauer Comparison
+### Synthesis Methods: Foster vs Cauer
 
 | Aspect | Foster Synthesis | Cauer Synthesis |
 |--------|-----------------|-----------------|
@@ -887,23 +858,134 @@ In addition to Foster synthesis, URN now supports **Cauer (continued fraction) s
 | Component sensitivity | Higher | Lower |
 | Best for | Resonant circuits | Distributed systems |
 
-### Usage
+### Automatic Ladder Stage Determination
+
+**Key Question**: How many ladder stages are needed for each basis function?
+
+URN automatically determines the optimal number of stages based on:
+
+1. **Frequency Range Coverage**
+2. **Target Approximation Error**
+3. **Physical Basis Type**
+
+#### Stage Count by Basis Type
+
+| Basis Function | Typical Stages | Determination Criterion |
+|----------------|----------------|------------------------|
+| **Debye** | 1 | Exact: single RC parallel |
+| **Cole-Cole** | 5-7 | Error < 1% over frequency range |
+| **CPE** | 5-10 | Valsa method: 1 stage per decade |
+| **Warburg** | 5-10 | Same as CPE (n=0.5) |
+| **Skin Effect (Dowell)** | 5-10 | Coefficients [3,5,7,9,11,...] |
+| **Cauer (general)** | 3-7 | AIC/BIC model selection |
+
+#### Automatic Stage Selection Algorithm
 
 ```python
-from relaxation_basis_library import CauerLadderSynthesizer, generate_cauer_ladder
+def auto_select_stages(basis_type, omega_range, target_error=0.01):
+    """Automatically determine optimal ladder stages."""
+    omega_min, omega_max = omega_range
+    n_decades = np.log10(omega_max / omega_min)
 
-# Method 1: From impedance data
-synth = CauerLadderSynthesizer(n_stages=5, ladder_type='RC')
-synth.fit_from_data(freqs, Z_data)
-Z_approx = synth.evaluate(omega)
-spice = synth.to_spice("cauer_rc")
+    if basis_type == 'debye':
+        return 1  # Exact representation
 
-# Method 2: From basis function
-spice = generate_cauer_ladder('cole_cole', {'tau': 1e-5, 'alpha': 0.7},
-                               omega_range=(1e3, 1e8), n_stages=5)
+    elif basis_type in ['cole_cole', 'cole_davidson', 'havriliak_negami']:
+        # Charef method: ~1.5 stages per decade for 1% error
+        return max(3, int(np.ceil(1.5 * n_decades)))
+
+    elif basis_type in ['cpe', 'warburg']:
+        # Valsa method: 1 stage per decade
+        return max(3, int(np.ceil(n_decades)))
+
+    elif basis_type == 'skin_effect':
+        # Dowell coefficients: [3, 5, 7, 9, 11, ...]
+        # More stages for higher frequency accuracy
+        if n_decades <= 3:
+            return 5
+        elif n_decades <= 5:
+            return 7
+        else:
+            return 10
+
+    else:
+        # Default: use AIC for model selection
+        return select_by_aic(basis_type, omega_range, target_error)
 ```
 
-### Cauer Ladder Circuit Topology
+#### AIC-Based Stage Selection
+
+For complex basis functions, URN uses **Akaike Information Criterion (AIC)** to balance accuracy vs complexity:
+
+$$\text{AIC} = 2k + n \cdot \ln(\text{MSE})$$
+
+where:
+- $k$ = number of stages (model complexity)
+- $n$ = number of frequency points
+- MSE = mean squared error
+
+```python
+def select_by_aic(basis_type, omega_range, target_error):
+    """Select stages using AIC criterion."""
+    results = []
+    for n_stages in range(2, 12):
+        error = evaluate_ladder_error(basis_type, n_stages, omega_range)
+        aic = 2 * n_stages + len(omega_range) * np.log(error + 1e-10)
+        results.append((n_stages, aic, error))
+
+    # Return stages with minimum AIC
+    best = min(results, key=lambda x: x[1])
+    return best[0]
+```
+
+#### Stage Count Constraints
+
+Users can override automatic selection with constraints:
+
+```python
+config = URNConfig(
+    min_ladder_stages=3,    # Minimum stages (default: 3)
+    max_ladder_stages=15,   # Maximum stages (default: 15)
+    target_ladder_error=0.01,  # Target approximation error (default: 1%)
+)
+```
+
+### Ladder Circuit Topologies
+
+#### CPE/Warburg RC Ladder (Valsa Method)
+
+```
+         R0         R0*a       R0*a^2     R0*a^3
+in o----AAAA--+----AAAA--+----AAAA--+----AAAA--o out
+              |          |          |
+             C0        C0/b      C0/b^2
+              |          |          |
+             GND        GND        GND
+
+where: a = 10^(1/N), b = a^n, n = CPE exponent
+       N = number of stages
+```
+
+**Stage count formula for CPE**:
+$$N = \lceil \log_{10}(\omega_{max}/\omega_{min}) \rceil$$
+
+#### Skin Effect RL Ladder (Dowell Method)
+
+```
+         R/3        R/5        R/7        R/9        R/11
+in o----AAAA--+----AAAA--+----AAAA--+----AAAA--+----AAAA--o out
+              |          |          |          |
+             (L/3)      (L/5)      (L/7)      (L/9)
+              |          |          |          |
+             GND        GND        GND        GND
+
+where: L = R_dc * tau, tau = delta^2 / 2
+       Dowell coefficients: [3, 5, 7, 9, 11, ...]
+```
+
+**Stage count**: First N odd numbers starting from 3. Typically N=5-7 covers 5+ decades.
+
+#### Cauer Ladder (Continued Fraction)
 
 ```
          Z1         Z2         Z3
@@ -916,6 +998,41 @@ in o----[===]--+----[===]--+----[===]--o out
 RC Ladder: Z_k = R_k, Y_k = sC_k
 RL Ladder: Z_k = sL_k, Y_k = 1/R_k
 ```
+
+**Stage count**: Determined by continued fraction convergence.
+
+### Usage Example
+
+```python
+from relaxation_basis_library import CauerLadderSynthesizer, generate_ladder_circuit
+
+# Method 1: Automatic stage selection (recommended)
+spice = generate_ladder_circuit('cole_cole',
+                                 {'tau': 1e-5, 'alpha': 0.7},
+                                 omega_range=(1e3, 1e8))  # Auto: 7 stages
+
+# Method 2: Manual stage specification
+spice = generate_ladder_circuit('cole_cole',
+                                 {'tau': 1e-5, 'alpha': 0.7},
+                                 omega_range=(1e3, 1e8),
+                                 n_stages=10)  # Force 10 stages
+
+# Method 3: Cauer synthesis from impedance data
+synth = CauerLadderSynthesizer(n_stages=5, ladder_type='RC')
+synth.fit_from_data(freqs, Z_data)
+Z_approx = synth.evaluate(omega)
+spice = synth.to_spice("cauer_rc")
+```
+
+### Stage Count Summary
+
+| Application | Recommended Stages | Rationale |
+|-------------|-------------------|-----------|
+| Power electronics (1kHz - 1MHz) | 5 | 3 decades |
+| Ferrite modeling (1MHz - 1GHz) | 7 | 3 decades, high-freq accuracy |
+| EIS (1mHz - 1MHz) | 10 | 9 decades |
+| Skin effect | 5-7 | Dowell coefficients cover 5+ decades |
+| General purpose | AIC-based | Automatic optimization |
 
 ## Uncertainty Quantification (v1.4)
 
@@ -973,7 +1090,7 @@ print(f"Coverage (2-sigma): {summary['coverage_2sigma']*100:.0f}%")
 
 ## Future Work
 
-### Current TODO
+### Remaining TODO
 
 - [ ] Series/parallel hybrid topology (mixed connection modes)
 - [ ] GPU acceleration for large datasets
@@ -981,162 +1098,19 @@ print(f"Coverage (2-sigma): {summary['coverage_2sigma']*100:.0f}%")
 - [ ] Real measurement data validation
 - [ ] Bayesian uncertainty (full posterior)
 
-### Absorbing More from KAN: Enhancement Roadmap
+### KAN-Inspired Enhancements (ALL IMPLEMENTED)
 
-URN currently uses KAN's philosophy of "learnable basis functions" but does not fully exploit KAN's key innovations. Below are specific enhancements to make URN more KAN-like while maintaining circuit synthesis capability.
+All five KAN-inspired enhancements have been implemented:
 
-#### 1. Adaptive Basis Function Parameters (KAN's Grid Refinement)
+| Enhancement | Description | Status |
+|-------------|-------------|--------|
+| **Adaptive tau** | KAN-like grid refinement for τ distribution | **IMPLEMENTED** |
+| **Hierarchical URN** | Multi-scale time decomposition (ms/us/ns) | **IMPLEMENTED** |
+| **Attention-based** | Frequency-dependent basis gating | **IMPLEMENTED** |
+| **Learnable exponents** | Havriliak-Negami α, β and CPE n | **IMPLEMENTED** |
+| **Symbolic discovery** | Auto LaTeX generation and physical snapping | **IMPLEMENTED** |
 
-**KAN Feature**: KAN uses B-splines with adaptive grid refinement - starting with coarse grids and refining where needed.
-
-**URN Enhancement**: Implement adaptive tau (relaxation time) distribution.
-
-```python
-# Current: Fixed log-spaced tau values
-taus = np.logspace(-7, 0, n_debye)  # Fixed grid
-
-# Enhanced: Learnable tau positions with refinement
-class AdaptiveTauNetwork:
-    def __init__(self, n_initial=3, max_taus=10):
-        self.tau_positions = nn.Parameter(torch.linspace(-7, 0, n_initial))
-
-    def refine(self, loss_gradient):
-        # Add new tau where gradient is high (data not well captured)
-        high_grad_regions = find_high_gradient_regions(loss_gradient)
-        self.tau_positions = add_taus_at(high_grad_regions)
-```
-
-**Benefit**: Automatically concentrates basis functions where data has complex behavior.
-
-#### 2. Learnable Exponents (Beyond Fixed Cole-Cole)
-
-**KAN Feature**: KAN learns the shape of each activation function, not just its position.
-
-**URN Enhancement**: Allow exponents alpha, beta to be learned per frequency region.
-
-```python
-# Current: Single alpha per Cole-Cole term
-Z_cc = Delta_Z / (1 + (1j*omega*tau)**alpha)  # Global alpha
-
-# Enhanced: Frequency-dependent alpha via neural network
-class LearnableExponent:
-    def __init__(self):
-        # Small MLP to predict alpha(omega)
-        self.alpha_net = nn.Sequential(
-            nn.Linear(1, 8), nn.Tanh(),
-            nn.Linear(8, 1), nn.Sigmoid()  # Outputs alpha in (0, 1)
-        )
-
-    def forward(self, omega):
-        log_omega = torch.log10(omega).unsqueeze(-1)
-        alpha = self.alpha_net(log_omega) * 0.99 + 0.01  # (0.01, 1.0)
-        return alpha
-```
-
-**Benefit**: Captures frequency-dependent non-ideality (e.g., electrode roughness varying with scale).
-
-**Trade-off**: Loses direct circuit synthesis (variable alpha -> requires approximation with RC ladder).
-
-#### 3. Symbolic Regression for New Basis Discovery (KAN's Interpretability)
-
-**KAN Feature**: KAN can extract symbolic formulas from trained networks via symbolic regression.
-
-**URN Enhancement**: Identify when existing basis functions are insufficient and suggest new forms.
-
-```python
-class BasisDiscovery:
-    def __init__(self, existing_bases):
-        self.bases = existing_bases
-
-    def analyze_residual(self, omega, Z_residual):
-        """Analyze fitting residual to discover new physics."""
-        # Fit residual with generic KAN
-        kan = KAN(layers=[1, 5, 1])
-        kan.fit(omega, Z_residual)
-
-        # Extract symbolic form
-        symbolic = kan.symbolic_fit()  # e.g., "a / (1 + b*omega^0.67)"
-
-        # Suggest new basis
-        return f"Residual suggests: {symbolic}"
-
-    def suggest_circuit(self, symbolic_form):
-        """Map discovered form to circuit topology."""
-        # Use pattern matching to suggest circuit
-        if "omega^0.5" in symbolic_form:
-            return "Warburg element (diffusion)"
-        elif "omega^n" in symbolic_form and 0 < n < 1:
-            return "CPE (constant phase element)"
-        # ...
-```
-
-**Benefit**: Bridges gap between pure KAN flexibility and circuit requirements.
-
-#### 4. Multi-Scale Hierarchical Architecture (KAN's Depth)
-
-**KAN Feature**: Deep KAN networks can capture hierarchical patterns.
-
-**URN Enhancement**: Hierarchical relaxation decomposition.
-
-```python
-class HierarchicalURN:
-    """
-    Level 1: Coarse time scales (ms - s) - bulk relaxation
-    Level 2: Medium time scales (us - ms) - interface effects
-    Level 3: Fine time scales (ns - us) - fast processes
-    """
-    def __init__(self):
-        self.level1 = URNLayer(tau_range=(-3, 0))   # ms to s
-        self.level2 = URNLayer(tau_range=(-6, -3)) # us to ms
-        self.level3 = URNLayer(tau_range=(-9, -6)) # ns to us
-
-    def forward(self, omega):
-        # Cascade: each level refines the previous
-        Z1 = self.level1(omega)
-        residual1 = Z_data - Z1
-        Z2 = self.level2(omega, residual1)
-        residual2 = residual1 - Z2
-        Z3 = self.level3(omega, residual2)
-        return Z1 + Z2 + Z3
-```
-
-**Benefit**: Naturally separates physical processes at different time scales.
-
-#### 5. Attention-Based Basis Selection (Transformer + KAN)
-
-**KAN Feature**: KAN edges can be pruned based on importance.
-
-**URN Enhancement**: Use attention to dynamically weight basis functions.
-
-```python
-class AttentionURN:
-    def __init__(self, n_bases=29):
-        self.query = nn.Linear(1, 64)  # omega -> query
-        self.keys = nn.Parameter(torch.randn(n_bases, 64))  # Basis keys
-
-    def forward(self, omega):
-        # Attention weights based on frequency
-        q = self.query(torch.log10(omega).unsqueeze(-1))
-        attn = torch.softmax(q @ self.keys.T / 8, dim=-1)
-
-        # Weighted sum of basis functions
-        Z = sum(attn[:, i] * self.bases[i](omega) for i in range(n_bases))
-        return Z
-```
-
-**Benefit**: Frequency-dependent basis selection (different bases active at different frequencies).
-
-#### 6. Implementation Priority
-
-| Enhancement | Impact | Difficulty | Circuit Synthesis | Priority | Status |
-|-------------|--------|------------|-------------------|----------|--------|
-| Adaptive tau | High | Medium | Preserved | **1** | **IMPLEMENTED** |
-| Hierarchical URN | High | Medium | Preserved | **2** | **IMPLEMENTED** |
-| Attention-based | Medium | Medium | Preserved | **3** | **IMPLEMENTED** |
-| Learnable exponents | Medium | Low | Requires approx | **4** | **IMPLEMENTED** |
-| Symbolic discovery | High | High | Guides design | **5** | **IMPLEMENTED** |
-
-### Implementation Status
+### Implementation Details
 
 **Priority 1: Adaptive Tau Distribution** - COMPLETE
 - `AdaptiveURN` class in `universal_relaxation_network.py`
