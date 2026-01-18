@@ -108,6 +108,194 @@ However, unlike pure KAN:
 - Maintains **SPICE-synthesizable** form
 - Leverages **physical prior knowledge**
 
+## Learning vs Optimization: A Critical Perspective
+
+### Is URN "Learning" or "Optimization"?
+
+**Short answer**: URN is essentially **optimization-based model selection** (sparse regression), not "learning" in the neural network sense.
+
+### Comparison of Terminology
+
+| Aspect | Neural Network "Learning" | URN (This Work) |
+|--------|---------------------------|-----------------|
+| Data usage | Train/validation split for generalization | All data for parameter fitting |
+| Update rule | Stochastic gradient descent (mini-batch) | Full-batch gradient descent |
+| Overfitting prevention | Dropout, early stopping, data augmentation | L1 regularization only |
+| Feature discovery | Automatic feature extraction | Fixed basis functions |
+| Core objective | Generalize to unseen data | Fit given data with sparse model |
+
+### Why We Use "Learning" Terminology
+
+Despite being closer to optimization, URN adopts machine learning terminology for practical reasons:
+
+1. **Uses PyTorch**: Adam optimizer, automatic differentiation
+2. **Multiple restarts**: Escapes local minima like training runs
+3. **Ensemble uncertainty**: Bootstrap sampling mimics training ensembles
+4. **KAN lineage**: Follows KAN paper's terminology
+
+### What URN Actually Does
+
+```
+min_{w,theta} ||Z_data - sum_i w_i * basis_i(omega, theta_i)||^2 + lambda * ||w||_1
+```
+
+This is **LASSO (Least Absolute Shrinkage and Selection Operator)** with:
+- Non-linear basis functions (Debye, Cole-Cole, etc.)
+- Physical parameter constraints
+- Automatic model selection via sparsity
+
+### Honest Assessment
+
+| Claim | Reality |
+|-------|---------|
+| "Learns physical mechanisms" | Selects from predefined candidates |
+| "Discovers functional forms" | Parameters tuned, forms are fixed |
+| "Neural network approach" | Sparse regression with PyTorch |
+| "Automatic structure discovery" | L1 penalty drives model selection |
+
+### Alternative Terminology
+
+More accurate descriptions for URN:
+- **Sparse physical model selection**
+- **Optimization-based mechanism identification**
+- **Regularized basis function fitting**
+- **Physics-constrained sparse regression**
+
+### Does KAN Also "Just Optimize"?
+
+Yes. KAN (Kolmogorov-Arnold Networks) also uses gradient-based optimization:
+
+```python
+loss.backward()
+optimizer.step()
+```
+
+| Aspect | Traditional MLP | KAN | URN |
+|--------|-----------------|-----|-----|
+| What's learned | Weight matrices | B-spline control points | Basis weights |
+| Optimization | SGD/Adam | SGD/Adam | Adam |
+| Generalization | Via validation | Via grid refinement | Via sparsity |
+| Interpretability | Black box | Symbolic extraction possible | Direct physical meaning |
+
+**Conclusion**: All three are parameter optimization. The difference is:
+- MLP: Optimizes general-purpose weights
+- KAN: Optimizes spline coefficients (more interpretable)
+- URN: Optimizes physical parameters (most interpretable for circuits)
+
+### Why This Distinction Matters
+
+1. **Expectation management**: URN won't discover truly novel physics
+2. **Appropriate comparisons**: Compare to LASSO/elastic net, not deep learning
+3. **Computational cost**: Much lighter than neural network training
+4. **Reproducibility**: Deterministic with fixed seed (no stochastic batching)
+
+## URN as a Physics-Informed Neural Network (PINN)
+
+### URN is a Form of PINN
+
+URN can be classified as a **Physics-Informed Neural Network (PINN)**, specifically a variant that uses:
+- **Physical basis functions** instead of generic activation functions
+- **Hard constraints** (passive circuit structure) instead of soft physics loss terms
+
+### PINN Framework Classification
+
+| PINN Variant | Physics Integration | URN Correspondence |
+|--------------|---------------------|-------------------|
+| **Soft PINN** | Physics loss term added to data loss | - |
+| **Hard PINN** | Architecture encodes physics constraints | **URN uses this** |
+| **Hybrid PINN** | Both soft and hard constraints | - |
+
+### How URN Embeds Physics
+
+1. **Basis Function Selection (Hard Constraint)**
+   - Each basis function (Debye, Cole-Cole, Warburg, etc.) represents a known physical relaxation mechanism
+   - No arbitrary functional forms allowed - only physics-derived functions
+
+2. **Passivity Guarantee (Hard Constraint)**
+   - All basis functions correspond to passive RLC circuits
+   - No unstable poles possible by construction
+
+3. **Parameter Constraints (Hard Constraint)**
+   - Relaxation times τ > 0 (enforced via log-parameterization)
+   - Exponents α, β ∈ (0, 1) (enforced via sigmoid)
+   - Weights magnitude ≥ 0 (enforced via softplus)
+
+4. **Sparsity Regularization (Soft Constraint)**
+   - L1 penalty encourages selection of minimal mechanisms
+   - Mimics Occam's razor: prefer simpler physical models
+
+### Comparison with Traditional PINN
+
+| Aspect | Traditional PINN | URN (This Work) |
+|--------|------------------|-----------------|
+| Network architecture | MLP with physics loss | Physical basis functions |
+| Physics enforcement | Soft (loss term) | **Hard (structure)** |
+| Interpretability | Post-hoc analysis | **Built-in** |
+| Differential equations | Embedded in loss | **Pre-solved** (analytical forms) |
+| Training stability | Can be unstable | **Always stable** |
+| Output | Network weights | **Physical parameters** (τ, α, R, L, C) |
+
+### Why Hard Physics Constraints?
+
+Traditional PINNs add physics as a loss term:
+```
+Loss = Loss_data + λ * Loss_physics
+```
+
+This "soft" approach has issues:
+- Balancing λ is difficult
+- Physics may not be exactly satisfied
+- Training can be unstable
+
+URN uses "hard" constraints:
+```
+Z(ω) = Σ w_i * basis_i(ω, θ_i)
+```
+
+Where each `basis_i` is **mathematically derived from physics** (relaxation theory, transmission line equations, etc.). Physics is satisfied by construction, not by optimization.
+
+### Connection to Neural Operator Methods
+
+URN also shares concepts with **neural operators** (DeepONet, FNO):
+
+| Approach | Learns | Input → Output |
+|----------|--------|----------------|
+| DeepONet | Operator mapping | Function → Function |
+| FNO | Spectral coefficients | Field → Field |
+| **URN** | Basis coefficients | ω → Z(ω) |
+
+URN can be seen as a **physics-constrained operator** that maps frequency to impedance using a learned linear combination of physical operators (basis functions).
+
+### Why "KAN-inspired" and "PINN" are Both Accurate
+
+- **KAN-inspired**: Uses learnable combinations of basis functions (like KAN's learnable activation functions)
+- **PINN**: Embeds physics through basis function selection and parameter constraints
+
+URN is at the intersection:
+```
+            ┌─────────────────────┐
+            │   Neural Networks   │
+            └─────────────────────┘
+                     │
+         ┌───────────┴───────────┐
+         │                       │
+    ┌────▼────┐            ┌────▼────┐
+    │   KAN   │            │  PINN   │
+    │(learned │            │(physics │
+    │ basis)  │            │ loss)   │
+    └────┬────┘            └────┬────┘
+         │                       │
+         └───────────┬───────────┘
+                     │
+              ┌──────▼──────┐
+              │     URN     │
+              │ (physical   │
+              │  basis +    │
+              │  hard       │
+              │  constraints│
+              └─────────────┘
+```
+
 ## Comparison with Other Methods
 
 ### Method Comparison Table
@@ -668,9 +856,7 @@ print(f"Coverage (2-sigma): {summary['coverage_2sigma']*100:.0f}%")
 
 ## Future Work
 
-- [x] Add magnetic permeability basis (FMR, domain wall) - **DONE v1.4**
-- [x] Implement Cauer ladder synthesis - **DONE v1.4**
-- [x] Uncertainty quantification - **DONE v1.4**
+- [ ] Series/parallel hybrid topology (mixed connection modes)
 - [ ] GPU acceleration for large datasets
 - [ ] Multi-port extension
 - [ ] Real measurement data validation
