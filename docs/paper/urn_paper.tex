@@ -162,7 +162,7 @@ This paper presents URN with the following contributions:
 
 \subsection{Paper Organization}
 
-Section~\ref{sec:basis} describes the KAN-inspired insight and circuit-compatible basis library. Section~\ref{sec:method} presents the training algorithm. Section~\ref{sec:results} provides benchmark results with emphasis on the pole-free advantage and circuit synthesis. Section~\ref{sec:discussion} identifies target applications where URN is most effective. Section~\ref{sec:conclusion} concludes.
+Section~\ref{sec:basis} describes the KAN-inspired insight and circuit-compatible basis library. Section~\ref{sec:method} presents the training algorithm. Section~\ref{sec:kan_features} details five advanced KAN-inspired features: adaptive grid refinement, hierarchical decomposition, attention-based selection, learnable exponents, and symbolic discovery. Section~\ref{sec:results} provides benchmark results with emphasis on the pole-free advantage, experimental validation with real-world data, and time-domain simulation verification. Section~\ref{sec:discussion} identifies target applications. Section~\ref{sec:conclusion} concludes.
 
 %===============================================================================
 \section{Circuit-Compatible Basis Library}
@@ -393,6 +393,98 @@ For complex or hybrid basis functions, URN uses the Akaike Information Criterion
 \text{AIC} = 2k + n \cdot \ln(\text{RSS}/n)
 \end{equation}
 where $k$ is the number of parameters (ladder stages), $n$ is the number of frequency points, and RSS is the residual sum of squares. The algorithm evaluates $k = 2, 3, \ldots, 12$ and selects the stage count minimizing AIC, balancing accuracy against model complexity.
+
+%===============================================================================
+\section{Advanced KAN-Inspired Features}
+\label{sec:kan_features}
+%===============================================================================
+
+Beyond the basic sparse optimization, URN implements five advanced features inspired by KAN's philosophy of learnable, interpretable basis functions. These features enable URN to handle complex impedance spectra that span multiple decades and contain multiple overlapping mechanisms.
+
+\subsection{Adaptive Grid Refinement (Priority 1)}
+\label{sec:adaptive}
+
+Standard URN initializes time constants $\tau_i$ uniformly in log-space across the measured frequency range. However, for spectra with multiple closely-spaced relaxations, this coarse grid may miss important features.
+
+\textbf{AdaptiveURN} implements KAN-style grid refinement:
+\begin{enumerate}
+\item \textbf{Initial fit}: Fit with coarse $\tau$ grid (5 values per decade)
+\item \textbf{Error analysis}: Identify frequency regions with high residual error
+\item \textbf{Grid refinement}: Add new basis functions with $\tau$ values targeting high-error regions
+\item \textbf{Sparse re-optimization}: Re-run L1 optimization on the augmented basis set
+\end{enumerate}
+
+This adaptive approach mimics KAN's knot refinement strategy, but in the physically-meaningful $\tau$-space rather than arbitrary spline knots. The result is automatic resolution of closely-spaced relaxation peaks without requiring a priori knowledge of their locations.
+
+\subsection{Hierarchical Decomposition (Priority 2)}
+\label{sec:hierarchical}
+
+Many physical systems exhibit relaxation processes at vastly different time scales. For example, a battery impedance may contain:
+\begin{itemize}
+\item \textbf{Fast} ($\tau < 1$ ms): Double-layer capacitance, ohmic resistance
+\item \textbf{Medium} ($\tau \sim 10$--$100$ ms): Charge transfer kinetics
+\item \textbf{Slow} ($\tau > 1$ s): Solid-state diffusion
+\end{itemize}
+
+\textbf{HierarchicalURN} decomposes the impedance into three time-scale bands:
+\begin{equation}
+Z(\omega) = Z_{\text{fast}}(\omega) + Z_{\text{medium}}(\omega) + Z_{\text{slow}}(\omega)
+\end{equation}
+Each band uses a separate URN subnetwork with appropriate $\tau$ ranges. This hierarchical structure:
+\begin{itemize}
+\item Prevents fast mechanisms from ``stealing'' weight from slow ones during optimization
+\item Enables separate circuit synthesis for each time scale
+\item Improves interpretability by isolating physical processes
+\end{itemize}
+
+\subsection{Attention-Based Basis Selection (Priority 3)}
+\label{sec:attention}
+
+In complex spectra, different basis functions may be relevant at different frequencies. \textbf{AttentionURN} implements frequency-dependent gating:
+\begin{equation}
+Z(\omega) = \sum_{i=1}^{M} g_i(\omega) \cdot w_i \cdot \phi_i(\omega; \theta_i)
+\end{equation}
+where $g_i(\omega)$ is a learned gating function that modulates the contribution of basis $i$ at frequency $\omega$. The gating functions are parameterized as:
+\begin{equation}
+g_i(\omega) = \sigma\left( a_i \cdot \log(\omega/\omega_{0,i}) + b_i \right)
+\end{equation}
+where $\sigma$ is the sigmoid function, and $a_i$, $b_i$, $\omega_{0,i}$ are learnable parameters.
+
+This attention mechanism allows URN to automatically ``turn on'' specific basis functions only in the frequency ranges where they are physically relevant, reducing interference between mechanisms and improving both accuracy and interpretability.
+
+\subsection{Learnable Exponents (Priority 4)}
+\label{sec:learnable_exp}
+
+The Cole-Cole exponent $\alpha$, CPE exponent $n$, and Havriliak-Negami parameters $(\alpha, \beta)$ are traditionally fixed during fitting or estimated from Nyquist plot geometry. \textbf{LearnableExponentURN} treats these as fully differentiable parameters:
+\begin{equation}
+Z_{\text{CC}}(\omega; \tau, \alpha) = \frac{\Delta Z}{1 + (j\omega\tau)^{\alpha(\theta)}}
+\end{equation}
+where $\alpha(\theta) = \sigma(\theta) \cdot 0.9 + 0.1$ constrains $\alpha \in [0.1, 1.0]$ for physical validity.
+
+Joint optimization of $\tau$ and $\alpha$ enables URN to:
+\begin{itemize}
+\item Discover non-ideal relaxation behavior without a priori assumptions
+\item Distinguish between symmetric (Cole-Cole) and asymmetric (Cole-Davidson) distributions
+\item Identify anomalous diffusion with $n \neq 0.5$
+\end{itemize}
+
+\subsection{Symbolic Discovery (Priority 5)}
+\label{sec:symbolic}
+
+The ultimate goal of KAN is symbolic regression---discovering the mathematical form underlying data. \textbf{SymbolicDiscovery} extends this to physical mechanism identification.
+
+After training, the learned parameters $(\tau, \alpha, n, \ldots)$ are compared against known physical mechanisms:
+\begin{itemize}
+\item $\alpha \approx 1.0$: Pure Debye relaxation (single time constant)
+\item $\alpha \approx 0.5$--$0.8$: Cole-Cole distributed relaxation
+\item $n \approx 0.5$: Warburg diffusion (semi-infinite)
+\item $n \approx 0.25$: Anomalous sub-diffusion
+\item $\xi\coth(\xi)$ pattern: Skin effect (Dowell model)
+\end{itemize}
+
+The symbolic discovery module outputs human-readable mechanism names and suggests physical interpretations. For example, a battery fit might report: ``Ohmic resistance (15 m$\Omega$) + Charge transfer Cole-Cole ($\tau = 0.1$ s, $\alpha = 0.8$) + Warburg diffusion ($A_W = 5$ m$\Omega \cdot$s$^{-0.5}$).''
+
+This bridges the gap between data-driven fitting and physics-based understanding, enabling engineers to validate models against domain knowledge.
 
 %===============================================================================
 \section{Benchmark Results and Pole-Free Advantage}
