@@ -401,6 +401,10 @@ is_valid = is_stable and (is_well_damped or is_outside_range)
 - VF "wins" only count when model is valid
 - Invalid VF models marked with asterisk (*) in results
 
+**Note on current benchmark**: Our VF implementation uses conservative pole initialization
+(damping ratio ~0.995), so no invalid cases occurred. Real-world VF with free pole search
+may produce problematic poles more frequently.
+
 #### Prony Method vs URN
 
 Prony fits as sum of exponentials:
