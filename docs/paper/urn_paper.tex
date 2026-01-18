@@ -336,13 +336,41 @@ We use Adam optimizer \cite{kingma2014adam} with multi-start optimization:
 
 Typical training requires 100--150 seconds on CPU (Intel Core i7).
 
-\subsection{Automatic Stage Determination}
+\subsection{Automatic Ladder Stage Determination}
+\label{sec:stage}
 
-For each selected basis function, URN determines the optimal ladder stage count using the Akaike Information Criterion (AIC) \cite{akaike1974new}:
+A critical question for SPICE implementation is: \textit{how many ladder stages are required?} Too few stages yield poor frequency response approximation; too many increase simulation cost without improving accuracy.
+
+URN determines the optimal stage count based on (1) basis function type, (2) frequency range coverage, and (3) target approximation error. Table~\ref{tab:stages} summarizes typical stage requirements.
+
+\begin{table}[!t]
+\caption{Ladder Stage Count by Basis Function Type}
+\label{tab:stages}
+\centering
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Basis Function & Typical Stages & Determination Method \\
+\midrule
+Debye & 1 & Exact (single RC) \\
+Cole-Cole & 5--7 & Charef: $\sim$1.5/decade \\
+CPE/Warburg & 5--10 & Valsa: 1/decade \\
+Skin effect & 5--7 & Dowell coefficients \\
+General & 3--7 & AIC model selection \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For Cole-Cole and CPE bases, the stage count scales with frequency decades:
+\begin{equation}
+N_{\text{stages}} = \lceil c \cdot \log_{10}(\omega_{\max}/\omega_{\min}) \rceil
+\end{equation}
+where $c \approx 1.5$ for Charef approximation \cite{charef1992fractal} and $c = 1$ for Valsa method \cite{valsa2013rc}.
+
+For complex or hybrid basis functions, URN uses the Akaike Information Criterion (AIC) \cite{akaike1974new}:
 \begin{equation}
 \text{AIC} = 2k + n \cdot \ln(\text{MSE})
 \end{equation}
-where $k$ is the number of stages (model complexity) and $n$ is the number of frequency points.
+where $k$ is the number of stages and $n$ is the number of frequency points. The algorithm evaluates $k = 2, 3, \ldots, 12$ and selects the stage count minimizing AIC, balancing accuracy against model complexity.
 
 %===============================================================================
 \section{Benchmark Results and Pole-Free Advantage}
