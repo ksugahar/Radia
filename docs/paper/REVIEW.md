@@ -222,6 +222,57 @@ python run_ltspice_verification.py --dataset battery
 
 ---
 
+## Author Response (2026-01-19) - Round 4: Acknowledging Validation Gap
+
+### Reviewer's Re-Verification (Accepted)
+
+The reviewer's re-verification is **correct and accepted**:
+
+1. **All benchmark data is synthetic**: `urn_benchmark_improved.py` uses mathematically generated data (`Z_true = ...` from formulas), not external measurements.
+
+2. **`validate_real_data.py` is a framework only**: We provided a script to *support* real-world validation, but **we have not actually run it** with NASA/Mendeley data in the paper.
+
+3. **The paper lacks real-world validation**: This is a **valid criticism** that we accept.
+
+### Our Position (Clarified)
+
+**What we claim**:
+- URN is a novel method for mechanism discovery with passivity guarantees
+- Synthetic benchmarks demonstrate the algorithm's correctness (ground truth known)
+- SPICE verification proves circuit synthesis works (LTspice actually executed)
+
+**What we acknowledge**:
+- The paper **does not yet include real-world validation**
+- This is a limitation that **must be addressed before final publication**
+- We have provided the tooling (`validate_real_data.py`) but not the results
+
+### Action Plan for Real-World Validation
+
+We will add real-world validation results using publicly available datasets:
+
+| Dataset | Source | Status |
+|---------|--------|--------|
+| NASA Li-ion Battery Aging | NASA PCoE | Script ready, results pending |
+| Mendeley SoC EIS | Mendeley Data | Script ready, results pending |
+
+**Deliverables** (to be added before resubmission):
+1. Run `validate_real_data.py` on NASA B0005.mat
+2. Run `validate_real_data.py` on Mendeley SoC dataset
+3. Add results to paper Section 5.6 "Real-World Validation"
+4. Compare URN vs scikit-rf VF on same real data
+
+### Regarding "Lack of Validation is Total"
+
+We **partially disagree** with this characterization:
+
+- **SPICE verification is real**: `run_ltspice_verification.py` actually executes LTspice (not Python approximation). The `.raw` file is proof of execution.
+- **Synthetic benchmarks have value**: Ground-truth validation is standard practice in algorithm development.
+- **Real-world validation is missing**: We accept this and will address it.
+
+The characterization should be: "Lack of **real-world** validation is complete" - not "Lack of validation is total."
+
+---
+
 ## 1. Executive Summary
 
 The revised manuscript introduces "Universal Relaxation Network (URN)," a novel framework combining KAN-based learning with physics-based circuit modeling.
