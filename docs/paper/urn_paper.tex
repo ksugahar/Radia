@@ -1,0 +1,574 @@
+\documentclass{ieeeaccess}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+\history{Date of publication xxxx 00, 0000, date of current version xxxx 00, 0000.}
+\doi{10.1109/ACCESS.2026.XXXXXXX}
+
+\title{KAN-inspired Universal Relaxation Network for Automatic Discovery of Physical Relaxation Mechanisms with Direct Circuit Synthesis}
+
+\author{
+\uppercase{Kenta Sugahara}\authorrefmark{1},\orcidicon{0000-0002-2200-311X} and
+\uppercase{Shun Sato}\authorrefmark{2},\orcidicon{0000-0002-4052-5966}
+}
+
+\address[1]{Faculty of Science and Engineering, Kindai University, Higashi-Osaka 577-8502, Japan}
+\address[2]{College of Science and Engineering, Aoyama Gakuin University, Sagamihara 252-5258, Japan}
+
+\tfootnote{This work was supported in part by JSPS KAKENHI.}
+
+\markboth
+{Sugahara and Sato: KAN-inspired Universal Relaxation Network}
+{Sugahara and Sato: KAN-inspired Universal Relaxation Network}
+
+\corresp{Corresponding author: Kenta Sugahara (e-mail: sugahara@kindai.ac.jp).}
+
+\begin{abstract}
+We propose a Universal Relaxation Network (URN), a KAN-inspired approach for automatic discovery of physical relaxation mechanisms from frequency-domain impedance data. Unlike Vector Fitting (VF), which uses mathematical pole-residue representations that can produce unstable or physically meaningless models, URN employs 29 circuit-compatible basis functions derived from established physical relaxation models (Debye, Cole-Cole, Warburg, skin effect, etc.). Through L1-regularized sparse optimization, URN automatically selects the dominant physical mechanisms and directly synthesizes SPICE-compatible RLC ladder networks. Benchmarks on 13 test cases spanning ferrite permeability, conductor skin effect, and electrochemical impedance demonstrate that URN achieves 3.22\% average maximum error, outperforming conservative VF (63.21\%) and aggressive VF (368.24\%, with 46\% invalid models). The pole-free formulation guarantees structural stability while providing physically interpretable parameters. Open-source implementation in PyTorch (700 lines) requires only CPU and completes training in 100--150 seconds per case.
+\end{abstract}
+
+\begin{keywords}
+Circuit synthesis, Cole-Cole relaxation, electrochemical impedance spectroscopy, impedance modeling, Kolmogorov-Arnold networks, SPICE simulation, Vector Fitting, Warburg impedance.
+\end{keywords}
+
+\titlepgskip=-15pt
+
+\maketitle
+
+%===============================================================================
+\section{Introduction}
+\label{sec:introduction}
+%===============================================================================
+
+\subsection{Time-Domain Analysis in Power Electronics}
+
+Modern power electronics systems---including wireless power transfer (WPT), DC-DC converters, and motor drives---require accurate time-domain simulation for switching loss estimation, EMI prediction, and control loop design. Circuit simulators such as SPICE \cite{nagel1975spice2} and their derivatives (LTspice, PSIM, PLECS) form the backbone of power electronics design workflows.
+
+A critical challenge is modeling frequency-dependent components: magnetic cores with complex permeability \cite{snelling1988soft}, winding conductors with skin and proximity effects \cite{dowell1966eddy,hurley2000optimizing}, and electrochemical cells with diffusion dynamics \cite{barsoukov2018impedance}. These components exhibit impedance that varies over multiple decades of frequency, directly affecting:
+\begin{itemize}
+\item \textbf{Switching transients}: Core and winding losses depend on harmonic content
+\item \textbf{EMI filtering}: High-frequency impedance determines filter effectiveness
+\item \textbf{Control stability}: Frequency-dependent phase shifts affect loop gain margins
+\item \textbf{Thermal design}: Accurate loss estimation prevents overheating
+\end{itemize}
+
+The standard approach is to characterize component impedance $Z(\omega)$ in the frequency domain (via impedance analyzer or VNA), then fit a circuit model for time-domain simulation. The quality of this fitting directly determines simulation accuracy.
+
+\subsection{Fundamental Limitations of Vector Fitting}
+
+Vector Fitting (VF) \cite{gustavsen1999rational,gustavsen2006improving} has become the \textit{de facto} standard for rational approximation of frequency responses, representing impedance as:
+\begin{equation}
+Z(s) = \sum_{n=1}^{N} \frac{c_n}{s - a_n} + d + se
+\label{eq:vf}
+\end{equation}
+where $a_n$ are poles and $c_n$ are residues. While mathematically elegant, VF suffers from fundamental limitations that compromise time-domain simulation fidelity:
+
+\begin{enumerate}
+\item \textbf{Pole initialization sensitivity}: VF performance depends critically on initial pole placement. Conservative initialization (damping ratio $\zeta \approx 0.995$) may fail to capture dynamics, yielding errors exceeding 500\% on simple Debye relaxation. Aggressive initialization ($\zeta \approx 0.1$) produces weakly-damped poles that cause \textit{spurious ringing} in time-domain simulations---oscillations that do not exist in the physical system.
+
+\item \textbf{Time-domain instability}: Weakly-damped poles with natural frequencies between measurement points can produce unbounded oscillations in transient simulation. Our benchmarks show 46\% of aggressive VF models contain such problematic poles.
+
+\item \textbf{Lack of physical interpretability}: Poles and residues have no correspondence to physical mechanisms. A pole at $s = -1000 + j5000$ reveals nothing about whether the underlying physics involves magnetic relaxation, diffusion, or skin effect. This opacity prevents engineers from validating models against physical intuition.
+
+\item \textbf{Model order selection}: Users must specify pole count \textit{a priori}. Too few poles yield poor accuracy; too many cause overfitting and numerical conditioning issues.
+
+\item \textbf{Circuit synthesis complexity}: Converting pole-residue models to SPICE netlists requires Foster or Cauer synthesis \cite{foster1924reactance,cauer1958synthesis}, which may produce negative component values requiring workarounds (controlled sources, negative resistors).
+\end{enumerate}
+
+\subsection{KAN: A New Paradigm for Function Approximation}
+
+The recently proposed Kolmogorov-Arnold Networks (KAN) \cite{liu2024kan} offer a fundamentally different approach to function approximation. Based on the Kolmogorov-Arnold representation theorem \cite{kolmogorov1957representation,arnold1957functions}:
+\begin{equation}
+f(x_1, \ldots, x_n) = \sum_{q=0}^{2n} \Phi_q \left( \sum_{p=1}^{n} \phi_{q,p}(x_p) \right)
+\end{equation}
+KAN replaces fixed activation functions in neural networks with \textit{learnable univariate functions} on network edges, typically implemented as B-splines.
+
+KAN's key innovations include:
+\begin{itemize}
+\item \textbf{Interpretability}: Learned functions can be inspected and symbolically simplified
+\item \textbf{Accuracy}: Outperforms MLPs on scientific computing tasks
+\item \textbf{Efficiency}: Smaller networks achieve comparable accuracy
+\end{itemize}
+
+However, directly applying KAN to impedance modeling faces challenges:
+\begin{itemize}
+\item Spline-based functions do not map to physical circuits
+\item No guarantee of passivity or stability
+\item SPICE netlist generation is non-trivial
+\end{itemize}
+
+\subsection{URN: KAN Philosophy with Circuit Constraints}
+
+We propose the Universal Relaxation Network (URN), which adapts KAN's philosophy of \textit{learnable basis functions} while constraining the search space to \textit{circuit-synthesizable} forms. For impedance modeling, the representation becomes:
+\begin{equation}
+Z(\omega) = Z_\infty + \sum_{i=1}^{M} w_i \cdot \phi_i(\omega; \theta_i)
+\label{eq:urn}
+\end{equation}
+where $\phi_i$ are \textit{physically-motivated basis functions} (Debye, Cole-Cole, Warburg, skin effect, etc.), $\theta_i$ are physical parameters (relaxation time $\tau$, exponent $\alpha$), and $w_i$ are sparse weights selected by L1 regularization.
+
+Table~\ref{tab:physical_mechanisms} summarizes the basis functions and their power electronics applications.
+
+\begin{table}[!t]
+\caption{Physical Relaxation Mechanisms in Power Electronics}
+\label{tab:physical_mechanisms}
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Mechanism} & \textbf{Impedance Form} & \textbf{Application} \\
+\midrule
+Debye & $\frac{1}{1+j\omega\tau}$ & Ferrite permeability \\
+Cole-Cole & $\frac{1}{1+(j\omega\tau)^\alpha}$ & Non-ideal magnetics \\
+Warburg & $\frac{1}{\sqrt{j\omega}}$ & Battery diffusion \\
+Skin effect & $\xi \coth(\xi)$ & Winding AC resistance \\
+CPE & $(j\omega)^{-n}$ & Electrode interfaces \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The key insight is that while KAN discovers arbitrary functions via splines, URN discovers \textit{which physical mechanisms} are present. This trades generality for:
+\begin{itemize}
+\item \textbf{Direct SPICE synthesis}: Each basis maps to an RLC ladder
+\item \textbf{Physical interpretability}: $\tau$, $\alpha$, $n$ have measurable meanings
+\item \textbf{Guaranteed stability}: All bases derive from passive systems
+\item \textbf{Time-domain fidelity}: No spurious ringing from artificial poles
+\end{itemize}
+
+\subsection{Contributions}
+
+This paper presents URN with the following contributions:
+
+\begin{enumerate}
+\item \textbf{Physics-informed basis library}: 29 circuit-compatible functions covering relaxation (Debye, Cole-Cole, Havriliak-Negami), diffusion (Warburg, Gerischer), and distributed effects (CPE, skin effect).
+
+\item \textbf{Automatic mechanism discovery}: L1-regularized sparse optimization selects dominant mechanisms without manual model order specification.
+
+\item \textbf{Guaranteed circuit compatibility}: Each basis maps to RLC ladders via Valsa \cite{valsa2013rc}, Charef \cite{charef1992fractal}, and Dowell \cite{dowell1966eddy} methods with automatic stage determination.
+
+\item \textbf{Pole-free formulation}: Eliminates spurious resonances that plague VF in time-domain simulation.
+
+\item \textbf{Comprehensive validation}: Benchmarks on 13 cases (ferrites, conductors, batteries) demonstrate 3.22\% average error vs.\ VF's 63--368\%.
+\end{enumerate}
+
+\subsection{Paper Organization}
+
+Section~\ref{sec:basis} describes the KAN-inspired insight and circuit-compatible basis library. Section~\ref{sec:method} presents the training algorithm. Section~\ref{sec:results} provides benchmark results with emphasis on the pole-free advantage and circuit synthesis. Section~\ref{sec:discussion} identifies target applications where URN is most effective. Section~\ref{sec:conclusion} concludes.
+
+%===============================================================================
+\section{Circuit-Compatible Basis Library}
+\label{sec:basis}
+%===============================================================================
+
+\subsection{The KAN-Inspired Insight}
+
+The central insight behind URN stems from a critical observation about KAN \cite{liu2024kan} and its relationship to function approximation in physical systems.
+
+KAN's key innovation is replacing fixed activation functions (ReLU, sigmoid) with \textit{learnable univariate functions}---typically B-splines---on network edges. This enables KAN to discover the underlying mathematical structure of a function rather than brute-force approximating it. For scientific computing, this yields significant advantages: smaller networks, better accuracy, and \textit{symbolic interpretability}.
+
+However, when we examined KAN's potential for impedance modeling, we recognized a fundamental mismatch. While KAN discovers arbitrary univariate functions, SPICE simulation requires \textit{circuit-compatible} functions---impedances that can be realized as RLC networks. B-splines, polynomials, and neural network outputs generally have no circuit equivalent.
+
+This led to our key insight: \textit{What if we could use KAN's philosophy of learnable basis functions, but constrain the search space to physically-meaningful, circuit-synthesizable forms?}
+
+The answer is URN's basis library. Instead of learning arbitrary spline knots, we learn:
+\begin{enumerate}
+\item \textbf{Which physical mechanisms} are active (Debye, Cole-Cole, Warburg, skin effect, etc.)
+\item \textbf{Their physical parameters} (relaxation time $\tau$, exponent $\alpha$, etc.)
+\item \textbf{Their relative contributions} (sparse weights $w_i$)
+\end{enumerate}
+
+This constraint is not a limitation---it is the source of URN's power. By restricting to circuit-compatible bases, we guarantee:
+\begin{itemize}
+\item Every output can be synthesized as an RLC ladder
+\item All learned parameters have physical units and meanings
+\item Passivity and stability are structural properties, not post-hoc corrections
+\item Time-domain simulation is free of spurious oscillations
+\end{itemize}
+
+\subsection{Why Circuit Compatibility Matters}
+
+The practical importance of circuit compatibility becomes clear when considering the full design workflow:
+
+\begin{enumerate}
+\item \textbf{Characterization}: Measure $Z(\omega)$ with impedance analyzer
+\item \textbf{Modeling}: Fit a circuit model to the data
+\item \textbf{Simulation}: Run time-domain SPICE simulation
+\item \textbf{Design iteration}: Modify circuit parameters and re-simulate
+\end{enumerate}
+
+Vector Fitting excels at Step 2 but creates problems for Steps 3--4. A pole-residue model must be converted to a circuit via Foster/Cauer synthesis, which may produce:
+\begin{itemize}
+\item Negative resistances or capacitances (require controlled sources)
+\item Complex conjugate poles requiring coupled LC tanks
+\item High-Q poles that cause numerical stiffness in time-domain solvers
+\end{itemize}
+
+URN eliminates these issues entirely. Each basis function \textit{is already a circuit}:
+\begin{align}
+\text{Debye} &\rightarrow \text{Parallel RC} \nonumber \\
+\text{Cole-Cole} &\rightarrow \text{RC ladder (Charef)} \nonumber \\
+\text{Warburg} &\rightarrow \text{RC ladder (Valsa)} \nonumber \\
+\text{Skin effect} &\rightarrow \text{RL ladder (Dowell)} \nonumber
+\end{align}
+
+The synthesis step becomes a simple lookup, and all component values are guaranteed positive.
+
+\subsection{Relationship to Traditional Equivalent Circuit Fitting}
+
+Electrochemists and power electronics engineers have long used equivalent circuit models (ECMs) with elements like Randles circuits \cite{randles1947kinetics}, Warburg impedances \cite{warburg1899ueber}, and Cole-Cole elements \cite{cole1941dispersion}. However, traditional ECM fitting requires:
+\begin{enumerate}
+\item Expert knowledge to select circuit topology
+\item Manual initial parameter estimation
+\item Nonlinear fitting with local minima issues
+\item Iterative model refinement
+\end{enumerate}
+
+URN automates this entire process. The L1-regularized sparse optimization \textit{automatically selects} which physical mechanisms are present, eliminating the need for expert circuit topology selection. The multi-start optimization with 5--8 independent runs avoids local minima. And the predefined basis-to-ladder mappings ensure correct circuit synthesis.
+
+In essence, URN is an \textit{automatic equivalent circuit modeler} guided by KAN's philosophy of discovering underlying structure rather than brute-force fitting.
+
+\subsection{Basis Function Categories}
+
+URN employs a library of 29 basis functions organized into seven categories. Each basis function satisfies two requirements: (1) it represents a known physical relaxation mechanism, and (2) it can be synthesized as an RLC ladder network for SPICE simulation.
+
+\subsection{Relaxation Functions}
+
+The classical relaxation models describe polarization and magnetization dynamics in materials.
+
+\subsubsection{Debye Relaxation}
+The simplest relaxation model assumes a single time constant \cite{debye1929polar}:
+\begin{equation}
+Z_{\text{Debye}}(\omega) = \frac{\Delta Z}{1 + j\omega\tau}
+\end{equation}
+where $\Delta Z$ is the relaxation strength and $\tau$ is the relaxation time. This maps directly to a parallel RC circuit with $R = \Delta Z$ and $C = \tau/\Delta Z$.
+
+\subsubsection{Cole-Cole Relaxation}
+For materials with distributed relaxation times \cite{cole1941dispersion}:
+\begin{equation}
+Z_{\text{CC}}(\omega) = \frac{\Delta Z}{1 + (j\omega\tau)^\alpha}, \quad 0 < \alpha \leq 1
+\end{equation}
+The exponent $\alpha < 1$ broadens the relaxation peak. Circuit synthesis uses the Charef approximation \cite{charef1992fractal} with approximately 1.5 ladder stages per frequency decade.
+
+\subsubsection{Cole-Davidson and Havriliak-Negami}
+Asymmetric relaxation is modeled by \cite{davidson1951dielectric,havriliak1967complex}:
+\begin{equation}
+Z_{\text{HN}}(\omega) = \frac{\Delta Z}{(1 + (j\omega\tau)^\alpha)^\beta}
+\end{equation}
+where $\beta = 1$ recovers Cole-Cole and $\alpha = 1$ gives Cole-Davidson.
+
+\subsection{Diffusion and Electrochemical Functions}
+
+\subsubsection{Warburg Impedance}
+Semi-infinite diffusion produces \cite{warburg1899ueber}:
+\begin{equation}
+Z_{\text{W}}(\omega) = \frac{A_W}{\sqrt{j\omega}} = A_W (1-j) / \sqrt{2\omega}
+\end{equation}
+This is a special case of the constant phase element (CPE) with $n = 0.5$.
+
+\subsubsection{Constant Phase Element (CPE)}
+Surface roughness and electrode inhomogeneity produce \cite{jorcin2006cpe}:
+\begin{equation}
+Z_{\text{CPE}}(\omega) = \frac{1}{Q(j\omega)^n}, \quad 0 < n < 1
+\end{equation}
+Circuit synthesis uses the Valsa method \cite{valsa2013rc} with one RC stage per frequency decade.
+
+\subsection{Skin Effect Functions}
+
+For conductors at high frequencies, current concentrates near the surface \cite{dowell1966eddy}:
+\begin{equation}
+Z_{\text{skin}}(\omega) = R_{\text{dc}} \cdot \xi \cdot \coth(\xi), \quad \xi = (1+j)\frac{d}{\delta}
+\end{equation}
+where $d$ is the conductor thickness and $\delta = \sqrt{2/(\omega\mu\sigma)}$ is the skin depth. The continued fraction expansion yields RL ladder coefficients $[3, 5, 7, 9, 11, \ldots]$.
+
+\subsection{Circuit Synthesis Mapping}
+
+Table~\ref{tab:synthesis} summarizes the ladder network mapping for each basis type.
+
+\begin{table}[!t]
+\caption{Automatic Ladder Stage Determination}
+\label{tab:synthesis}
+\centering
+\begin{tabular}{@{}lcl@{}}
+\toprule
+\textbf{Basis} & \textbf{Stages} & \textbf{Method} \\
+\midrule
+Debye & 1 & Exact (RC parallel) \\
+Cole-Cole & 5--7 & Charef (1.5/decade) \\
+CPE/Warburg & 5--10 & Valsa (1/decade) \\
+Skin effect & 5--7 & Dowell [3,5,7,...] \\
+General & 3--7 & AIC model selection \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%===============================================================================
+\section{URN Training Method}
+\label{sec:method}
+%===============================================================================
+
+\subsection{Optimization Problem}
+
+Given measured impedance data $\{(\omega_k, Z_k)\}_{k=1}^{K}$, URN solves:
+\begin{equation}
+\min_{\mathbf{w}, \boldsymbol{\theta}} \sum_{k=1}^{K} \left| Z_k - Z_\infty - \sum_{i=1}^{M} w_i \cdot \text{basis}_i(\omega_k; \theta_i) \right|^2 + \lambda \|\mathbf{w}\|_1
+\label{eq:optimization}
+\end{equation}
+where $\lambda$ controls sparsity. This is LASSO \cite{tibshirani1996regression} with nonlinear basis functions.
+
+\subsection{Training Algorithm}
+
+We use Adam optimizer \cite{kingma2014adam} with multi-start optimization:
+\begin{enumerate}
+\item Initialize $M = 29$ basis functions with random parameters
+\item Run 5--8 independent training runs (5000--8000 epochs each)
+\item Select the run with lowest validation loss
+\item Prune bases with $|w_i| < 0.01 \cdot \max_j |w_j|$
+\end{enumerate}
+
+Typical training requires 100--150 seconds on CPU (Intel Core i7).
+
+\subsection{Automatic Stage Determination}
+
+For each selected basis function, URN determines the optimal ladder stage count using the Akaike Information Criterion (AIC) \cite{akaike1974new}:
+\begin{equation}
+\text{AIC} = 2k + n \cdot \ln(\text{MSE})
+\end{equation}
+where $k$ is the number of stages (model complexity) and $n$ is the number of frequency points.
+
+%===============================================================================
+\section{Benchmark Results and Pole-Free Advantage}
+\label{sec:results}
+%===============================================================================
+
+\subsection{Test Cases}
+
+We evaluate URN on 13 test cases covering three application domains:
+\begin{itemize}
+\item \textbf{Ferrite permeability} (4 cases): MnZn Debye, NiZn Cole-Cole, HF ferrite, lossy ferrite
+\item \textbf{Conductor skin effect} (3 cases): Cu foil (0.1mm, 0.5mm), Al busbar (2mm)
+\item \textbf{Electrochemical} (6 cases): Randles circuits, battery 2-RC, polymer dielectric, glass, ceramic
+\end{itemize}
+
+\subsection{VF Pole Initialization Dilemma}
+
+VF performance depends critically on initial pole placement, characterized by the \textit{damping ratio} $\zeta$:
+\begin{equation}
+\zeta = \frac{|\text{Re}(p)|}{|p|}, \quad p = \text{pole}
+\end{equation}
+We test two strategies:
+\begin{itemize}
+\item \textbf{Conservative} ($\zeta \approx 0.995$): Highly-damped poles, safe but may miss dynamics
+\item \textbf{Aggressive} ($\zeta \approx 0.1$): Weakly-damped poles, captures more dynamics but risks instability
+\end{itemize}
+
+A pole is flagged as \textit{invalid} if $\zeta < 0.1$ and its natural frequency lies within the measurement band. Such poles cause spurious ringing between data points---oscillations that do not exist in the physical system.
+
+\subsection{Quantitative Comparison}
+
+Table~\ref{tab:benchmark} compares URN against both VF strategies.
+
+\begin{table}[!t]
+\caption{Benchmark Results: Maximum Fitting Error (\%)}
+\label{tab:benchmark}
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Metric} & \textbf{URN} & \textbf{VF (Cons.)} & \textbf{VF (Aggr.)} \\
+\midrule
+Average Max Error & \textbf{3.22\%} & 63.21\% & 368.24\% \\
+Win Rate vs URN & -- & 15.4\% & 0\% \\
+Invalid Models & \textbf{0/13} & 0/13 & \textbf{6/13} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+URN wins 11/13 cases against conservative VF and 13/13 against aggressive VF. The two conservative VF wins are Cu foil 0.1mm (5.64\% vs 7.35\%) and Battery 2RC (1.11\% vs 7.44\%)---cases where highly-damped poles are physically appropriate.
+
+\subsection{The Pole-Free Advantage}
+
+URN's most significant advantage is its \textbf{pole-free formulation}. Unlike VF which represents impedance as:
+\begin{equation}
+Z_{\text{VF}}(s) = \sum_{n} \frac{c_n}{s - p_n} + d + se
+\end{equation}
+URN uses physically-grounded basis functions that contain \textit{no explicit poles}:
+\begin{equation}
+Z_{\text{URN}}(\omega) = Z_\infty + \sum_i w_i \cdot \phi_i(\omega; \theta_i)
+\end{equation}
+
+This distinction has profound implications for time-domain simulation:
+
+\begin{enumerate}
+\item \textbf{No spurious resonances}: VF poles at $p = -\sigma \pm j\omega_0$ with small $\sigma$ create high-Q resonances that ring in transient simulation. URN bases (Debye, Cole-Cole, etc.) are inherently overdamped.
+
+\item \textbf{Guaranteed passivity}: Each URN basis corresponds to a passive physical system. VF may produce poles that violate passivity, requiring post-hoc enforcement.
+
+\item \textbf{Numerical stability}: High-Q VF poles cause stiff ODEs requiring small time steps. URN ladder networks have well-conditioned time constants.
+\end{enumerate}
+
+Table~\ref{tab:pole_analysis} shows pole validity analysis for aggressive VF.
+
+\begin{table}[!t]
+\caption{Aggressive VF Pole Validity Analysis}
+\label{tab:pole_analysis}
+\centering
+\begin{tabular}{@{}lccl@{}}
+\toprule
+\textbf{Test Case} & \textbf{Weak Poles} & \textbf{Valid?} & \textbf{URN Error} \\
+\midrule
+MnZn Debye & 2 & NO & 3.06\% \\
+Lossy ColeCole & 2 & NO & 1.91\% \\
+Cu foil 0.1mm & 2 & NO & 7.35\% \\
+Cu foil 0.5mm & 2 & NO & 1.82\% \\
+Al busbar 2mm & 4 & NO & 0.93\% \\
+Ceramic Debye & 2 & NO & 4.35\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Circuit Synthesis: From Basis to Ladder}
+
+Each URN basis function maps to a well-defined ladder network topology. The current implementation supports:
+
+\begin{itemize}
+\item \textbf{Series topology}: Bases connected in series (dominant mode)
+\item \textbf{Parallel topology}: Bases connected in parallel
+\end{itemize}
+
+The synthesis follows the Cauer continued fraction expansion \cite{cauer1958synthesis}. For a Cole-Cole element with $\alpha = 0.7$, the impedance:
+\begin{equation}
+Z_{\text{CC}}(s) = \frac{R}{1 + (s\tau)^{0.7}}
+\end{equation}
+is approximated by an RC ladder using the Charef method \cite{charef1992fractal}:
+\begin{equation}
+Z_{\text{ladder}}(s) = R_1 + \frac{1}{sC_1 + \frac{1}{R_2 + \frac{1}{sC_2 + \cdots}}}
+\end{equation}
+
+The component values follow geometric progressions:
+\begin{align}
+R_k &= R_0 \cdot a^k, \quad C_k = C_0 / b^k \\
+a &= 10^{1/N}, \quad b = a^\alpha
+\end{align}
+where $N$ is the number of stages per decade.
+
+\textbf{Extensibility}: While the current implementation uses series/parallel topologies, the framework readily extends to:
+\begin{itemize}
+\item \textbf{Hybrid topologies}: Mixed series-parallel connections
+\item \textbf{Bridged-T networks}: For transmission line models
+\item \textbf{Multi-port synthesis}: Via Block Lanczos \cite{odabasioglu1998prima}
+\end{itemize}
+
+%===============================================================================
+\section{Target Applications}
+\label{sec:discussion}
+%===============================================================================
+
+URN is most effective for problems where (1) the underlying physics involves known relaxation mechanisms, and (2) accurate time-domain simulation is required. We identify three high-impact application domains.
+
+\subsection{Wireless Power Transfer (WPT)}
+
+WPT systems operating at 6.78~MHz or 13.56~MHz require accurate modeling of:
+\begin{itemize}
+\item \textbf{Ferrite core permeability}: Temperature and DC-bias dependent relaxation
+\item \textbf{Litz wire AC resistance}: Skin and proximity effects
+\item \textbf{Compensation network}: Resonant tank tuning
+\end{itemize}
+
+VF struggles with ferrite modeling because the Cole-Cole response appears as a ``single broad peak'' that VF approximates with multiple sharp poles---leading to spurious ringing during load transients. URN directly identifies the Cole-Cole mechanism with correct $\alpha$ parameter.
+
+\textbf{Expected impact}: 5--10$\times$ improvement in transient simulation accuracy for WPT control loop design.
+
+\subsection{Battery Management Systems (BMS)}
+
+Lithium-ion battery impedance exhibits:
+\begin{itemize}
+\item \textbf{Charge transfer}: Randles circuit with Warburg diffusion
+\item \textbf{SEI layer}: Constant phase element (CPE) response
+\item \textbf{State-of-charge dependence}: Parameter variation with SOC
+\end{itemize}
+
+URN's automatic mechanism discovery is particularly valuable for BMS because:
+\begin{enumerate}
+\item Different battery chemistries have different dominant mechanisms
+\item Aging changes the relative contribution of each mechanism
+\item Real-time parameter tracking requires fast, robust fitting
+\end{enumerate}
+
+The Warburg element ($n = 0.5$) is automatically detected and synthesized as an RC ladder, enabling accurate prediction of diffusion-limited dynamics during fast charging.
+
+\subsection{EMI Filter Design}
+
+Common-mode (CM) chokes exhibit complex frequency-dependent impedance due to:
+\begin{itemize}
+\item \textbf{Winding capacitance}: Creates self-resonance
+\item \textbf{Core loss}: Frequency-dependent permeability
+\item \textbf{Skin effect}: AC resistance increase
+\end{itemize}
+
+Accurate CM choke models are critical for predicting conducted EMI spectra. VF models often produce ``phantom resonances'' that do not appear in measurements---leading to over-designed or under-performing filters.
+
+URN's pole-free formulation eliminates phantom resonances while capturing the true frequency-dependent behavior through physically-meaningful basis functions.
+
+\subsection{Induction Heating}
+
+Induction heating workpieces exhibit strongly nonlinear, temperature-dependent surface impedance. The skin depth:
+\begin{equation}
+\delta = \sqrt{\frac{2}{\omega \mu(T) \sigma(T)}}
+\end{equation}
+varies with temperature, affecting power distribution.
+
+URN's skin effect basis with the Dowell ladder synthesis \cite{dowell1966eddy} provides a SPICE-compatible model that can be coupled with thermal simulation for accurate power prediction.
+
+\subsection{Limitations and When NOT to Use URN}
+
+URN is \textit{not} recommended for:
+\begin{enumerate}
+\item \textbf{Resonant structures}: Antennas, cavities, and waveguides with true poles
+\item \textbf{Multi-port S-parameters}: Current single-port limitation
+\item \textbf{Unknown physics}: Systems with mechanisms not in the 29-function library
+\end{enumerate}
+
+For these cases, VF or physics-based modeling remains appropriate.
+
+%===============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+%===============================================================================
+
+We presented the Universal Relaxation Network (URN), a KAN-inspired approach for automatic discovery of physical relaxation mechanisms from impedance data. The key contributions are:
+
+\begin{enumerate}
+\item \textbf{Pole-free formulation}: Unlike Vector Fitting's pole-residue representation, URN uses physically-grounded basis functions that guarantee stability and prevent spurious resonances in time-domain simulation.
+
+\item \textbf{Automatic mechanism discovery}: L1-regularized sparse optimization selects 2--4 dominant mechanisms from a library of 29 basis functions, eliminating the need for expert circuit topology selection.
+
+\item \textbf{Direct circuit synthesis}: Each basis maps to an RLC ladder via established methods (Valsa, Charef, Dowell), producing SPICE-compatible netlists with guaranteed positive component values.
+
+\item \textbf{Superior accuracy}: Benchmarks on 13 test cases demonstrate 3.22\% average maximum error, compared to 63.21\% for conservative VF and 368.24\% for aggressive VF (with 46\% invalid models).
+\end{enumerate}
+
+The pole-free advantage is particularly significant for power electronics applications---WPT, BMS, EMI filters, and induction heating---where accurate time-domain simulation is essential for control design and loss estimation.
+
+\textbf{Current implementation}: Series and parallel basis topologies with Cauer ladder synthesis. The framework is extensible to hybrid topologies and multi-port systems via Block Lanczos.
+
+\textbf{Open-source availability}: PyTorch implementation (700 lines), CPU-only, training time 100--150 seconds per case. No GPU required.
+
+URN bridges the gap between data-driven flexibility (KAN philosophy) and physics-based interpretability (circuit-compatible constraints), offering a practical tool for impedance modeling in power electronics design.
+
+%===============================================================================
+% References
+%===============================================================================
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\EOD
+
+\end{document}
