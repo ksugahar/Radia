@@ -281,6 +281,62 @@ V1 in 0 PULSE(0 1 0 1n 1n 100m 200m)
     return full_netlist
 
 
+def load_battery_data():
+    """
+    Load battery EIS data, preferring real NASA data over synthetic.
+
+    Returns:
+        (freq, Z, data_source) tuple
+    """
+    # Try real NASA data first
+    real_data_path = Path(__file__).parent / 'data' / 'real_world' / 'nasa_battery' / 'nasa_18650_eis.csv'
+    synthetic_data_path = Path(__file__).parent / 'data' / 'synthetic' / 'liion_battery_eis.csv'
+
+    if real_data_path.exists():
+        print(f"  Loading REAL NASA battery data: {real_data_path.name}")
+        import pandas as pd
+        df = pd.read_csv(real_data_path, comment='#')
+        freq = df['frequency_Hz'].values
+        Z = df['Z_real_Ohm'].values + 1j * df['Z_imag_Ohm'].values
+        return freq, Z, "NASA 18650 (REAL)"
+    elif synthetic_data_path.exists():
+        print(f"  Loading synthetic battery data: {synthetic_data_path.name}")
+        data = np.loadtxt(synthetic_data_path, delimiter=',', skiprows=18)
+        freq = data[:, 0]
+        Z = data[:, 1] + 1j * data[:, 2]
+        return freq, Z, "Synthetic Randles"
+    else:
+        raise FileNotFoundError("No battery EIS data found")
+
+
+def load_ferrite_data():
+    """
+    Load ferrite impedance data, preferring real TDK data over synthetic.
+
+    Returns:
+        (freq, Z, data_source) tuple
+    """
+    # Try real TDK data first (PC50 is a good general-purpose material)
+    real_data_path = Path(__file__).parent / 'data' / 'real_world' / 'tdk_ferrite' / 'tdk_pc50_impedance.csv'
+    synthetic_data_path = Path(__file__).parent / 'data' / 'synthetic' / 'mnzn_ferrite_impedance.csv'
+
+    if real_data_path.exists():
+        print(f"  Loading REAL TDK PC50 ferrite data: {real_data_path.name}")
+        import pandas as pd
+        df = pd.read_csv(real_data_path, comment='#')
+        freq = df['frequency_Hz'].values
+        Z = df['Z_real_Ohm'].values + 1j * df['Z_imag_Ohm'].values
+        return freq, Z, "TDK PC50 (REAL)"
+    elif synthetic_data_path.exists():
+        print(f"  Loading synthetic ferrite data: {synthetic_data_path.name}")
+        data = np.loadtxt(synthetic_data_path, delimiter=',', skiprows=19)
+        freq = data[:, 0]
+        Z = data[:, 3] + 1j * data[:, 4]
+        return freq, Z, "Synthetic Cole-Cole"
+    else:
+        raise FileNotFoundError("No ferrite impedance data found")
+
+
 def main():
     """Run SPICE time-domain demonstration."""
     print("=" * 70)
@@ -296,10 +352,9 @@ def main():
     print("\n[1/2] Li-ion Battery: Time-Domain Analysis")
     print("-" * 40)
 
-    data_path = Path(__file__).parent / 'data' / 'liion_battery_eis.csv'
-    data = np.loadtxt(data_path, delimiter=',', skiprows=7)
-    freq_bat = data[:, 0]
-    Z_bat = data[:, 1] + 1j * data[:, 2]
+    freq_bat, Z_bat, bat_source = load_battery_data()
+    print(f"  Data source: {bat_source}")
+    print(f"  Frequency range: {freq_bat[0]:.2f} Hz - {freq_bat[-1]:.0f} Hz")
 
     print(f"  Fitting URN model to battery data...")
     config_bat = URNConfig(
@@ -328,10 +383,9 @@ def main():
     print("\n[2/2] MnZn Ferrite: Time-Domain Analysis")
     print("-" * 40)
 
-    data_path = Path(__file__).parent / 'data' / 'mnzn_ferrite_impedance.csv'
-    data = np.loadtxt(data_path, delimiter=',', skiprows=7)
-    freq_fer = data[:, 0]
-    Z_fer = data[:, 3] + 1j * data[:, 4]
+    freq_fer, Z_fer, fer_source = load_ferrite_data()
+    print(f"  Data source: {fer_source}")
+    print(f"  Frequency range: {freq_fer[0]:.0f} Hz - {freq_fer[-1]/1e6:.1f} MHz")
 
     print(f"  Fitting URN model to ferrite data...")
     config_fer = URNConfig(
