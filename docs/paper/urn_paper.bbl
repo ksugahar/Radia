@@ -146,6 +146,11 @@ R.~Mingant and M.~Petit, ``{SoC} estimation on {Li}-ion batteries: {A} new
   {EIS}-based dataset for data-driven applications,'' \emph{Data in Brief},
   vol.~56, p. 110807, 2024.
 
+\bibitem{tdk_ferrite}
+{TDK Corporation}, ``Mn-zn ferrite material characteristics,'' Datasheet, May
+  2022, document No. ferrite\_mn-zn\_material\_characteristics\_en, Rev.
+  20220510. Available: \url{https://www.tdk-electronics.tdk.com/}.
+
 \bibitem{gustavsen2008passivity}
 B.~Gustavsen and A.~Semlyen, ``Fast passivity enforcement for pole-residue
   models by perturbation of residue matrix eigenvalues,'' \emph{IEEE
