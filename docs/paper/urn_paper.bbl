@@ -136,6 +136,16 @@ A.~Odabasioglu, M.~Celik, and L.~T. Pileggi, ``{PRIMA}: Passive reduced-order
   Design of Integrated Circuits and Systems}, vol.~17, no.~8, pp. 645--654,
   1998.
 
+\bibitem{nasa_battery}
+{NASA Prognostics Center of Excellence}, ``Li-ion battery aging datasets,''
+  \url{https://data.nasa.gov/dataset/li-ion-battery-aging-datasets}, 2024,
+  accessed: 2025-01-19.
+
+\bibitem{mendeley_eis}
+R.~Mingant and M.~Petit, ``{SoC} estimation on {Li}-ion batteries: {A} new
+  {EIS}-based dataset for data-driven applications,'' \emph{Data in Brief},
+  vol.~56, p. 110807, 2024.
+
 \bibitem{gustavsen2008passivity}
 B.~Gustavsen and A.~Semlyen, ``Fast passivity enforcement for pole-residue
   models by perturbation of residue matrix eigenvalues,'' \emph{IEEE
