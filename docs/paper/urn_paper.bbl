@@ -88,23 +88,14 @@ A.~Charef, H.~H. Sun, Y.~Y. Tsao, and B.~Onaral, ``Fractal system as
   represented by singularity function,'' \emph{IEEE Transactions on Automatic
   Control}, vol.~37, no.~9, pp. 1465--1470, 1992.
 
-\bibitem{randles1947kinetics}
-J.~E.~B. Randles, ``Kinetics of rapid electrode reactions,'' \emph{Discussions
-  of the Faraday Society}, vol.~1, pp. 11--19, 1947.
-
-\bibitem{warburg1899ueber}
-E.~Warburg, ``Ueber das verhalten sogenannter unpolarisirbarer elektroden gegen
-  wechselstrom,'' \emph{Annalen der Physik}, vol. 303, no.~3, pp. 493--499,
-  1899.
+\bibitem{debye1929polar}
+P.~Debye, \emph{Polar Molecules}.\hskip 1em plus 0.5em minus 0.4em\relax New
+  York: Chemical Catalog Company, 1929.
 
 \bibitem{cole1941dispersion}
 K.~S. Cole and R.~H. Cole, ``Dispersion and absorption in dielectrics {I}.
   {A}lternating current characteristics,'' \emph{The Journal of Chemical
   Physics}, vol.~9, no.~4, pp. 341--351, 1941.
-
-\bibitem{debye1929polar}
-P.~Debye, \emph{Polar Molecules}.\hskip 1em plus 0.5em minus 0.4em\relax New
-  York: Chemical Catalog Company, 1929.
 
 \bibitem{davidson1951dielectric}
 D.~W. Davidson and R.~H. Cole, ``Dielectric relaxation in glycerol, propylene
@@ -115,6 +106,11 @@ D.~W. Davidson and R.~H. Cole, ``Dielectric relaxation in glycerol, propylene
 S.~Havriliak and S.~Negami, ``A complex plane representation of dielectric and
   mechanical relaxation processes in some polymers,'' \emph{Polymer}, vol.~8,
   pp. 161--210, 1967.
+
+\bibitem{warburg1899ueber}
+E.~Warburg, ``Ueber das verhalten sogenannter unpolarisirbarer elektroden gegen
+  wechselstrom,'' \emph{Annalen der Physik}, vol. 303, no.~3, pp. 493--499,
+  1899.
 
 \bibitem{jorcin2006cpe}
 J.-B. Jorcin, M.~E. Orazem, N.~Pebere, and B.~Tribollet, ``{CPE} analysis by
@@ -139,5 +135,20 @@ A.~Odabasioglu, M.~Celik, and L.~T. Pileggi, ``{PRIMA}: Passive reduced-order
   interconnect macromodeling algorithm,'' \emph{IEEE Trans. Computer-Aided
   Design of Integrated Circuits and Systems}, vol.~17, no.~8, pp. 645--654,
   1998.
+
+\bibitem{gustavsen2008passivity}
+B.~Gustavsen and A.~Semlyen, ``Fast passivity enforcement for pole-residue
+  models by perturbation of residue matrix eigenvalues,'' \emph{IEEE
+  Transactions on Power Delivery}, vol.~23, no.~3, pp. 1396--1404, 2008.
+
+\bibitem{mairal2009online}
+J.~Mairal, F.~Bach, J.~Ponce, and G.~Sapiro, ``Online dictionary learning for
+  sparse coding,'' pp. 689--696, 2009.
+
+\bibitem{raissi2019physics}
+M.~Raissi, P.~Perdikaris, and G.~E. Karniadakis, ``Physics-informed neural
+  networks: A deep learning framework for solving forward and inverse problems
+  involving nonlinear partial differential equations,'' \emph{Journal of
+  Computational Physics}, vol. 378, pp. 686--707, 2019.
 
 \end{thebibliography}
