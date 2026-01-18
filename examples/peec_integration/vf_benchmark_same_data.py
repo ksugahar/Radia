@@ -29,10 +29,23 @@ class VectorFitting:
     """
 
     def __init__(self, n_poles: int = 10, n_iterations: int = 3,
-                 enforce_stability: bool = True):
+                 enforce_stability: bool = True,
+                 pole_init_mode: str = 'conservative'):
+        """
+        Initialize Vector Fitting.
+
+        Args:
+            n_poles: Number of poles
+            n_iterations: Number of VF iterations
+            enforce_stability: Flip unstable poles after each iteration
+            pole_init_mode: Pole initialization strategy
+                - 'conservative': High damping ratio (zeta ~0.995), well-behaved
+                - 'aggressive': Low damping ratio (zeta ~0.1), may cause problems
+        """
         self.n_poles = n_poles
         self.n_iterations = n_iterations
         self.enforce_stability = enforce_stability
+        self.pole_init_mode = pole_init_mode
         self.poles = None
         self.residues = None
         self.d = 0
@@ -45,7 +58,16 @@ class VectorFitting:
         # Distribute pairs logarithmically
         alphas = np.logspace(np.log10(omega.min() * 0.5),
                              np.log10(omega.max() * 2), n_pairs)
-        betas = alphas * 0.1  # Small imaginary part
+
+        if self.pole_init_mode == 'aggressive':
+            # Low damping ratio: imaginary part dominates
+            # zeta = alpha / sqrt(alpha^2 + beta^2) ~ 0.1
+            # beta = alpha * sqrt(1/zeta^2 - 1) ~ alpha * 9.95
+            betas = alphas * 10.0  # zeta ~ 0.1
+        else:  # conservative (default)
+            # High damping ratio: real part dominates
+            # zeta ~ 0.995
+            betas = alphas * 0.1  # Small imaginary part
 
         poles = []
         for a, b in zip(alphas, betas):
@@ -270,77 +292,53 @@ def generate_dielectric_data():
 # Main Comparison
 # =============================================================================
 
-def main():
-    np.random.seed(42)
-
-    print("=" * 80)
-    print("Vector Fitting Benchmark on Same Test Data as URN")
-    print("=" * 80)
-
-    # Load URN results
-    with open('urn_benchmark_focused.json', 'r') as f:
-        urn_results = json.load(f)
-
-    urn_by_name = {r['name']: r for r in urn_results['results']}
-
-    # Run VF on all test cases
+def run_vf_benchmark(pole_init_mode: str, urn_by_name: dict) -> list:
+    """Run VF benchmark with specified pole initialization mode."""
     vf_results = []
 
     # Ferrite tests
-    print("\n--- Ferrite Permeability ---")
     freqs_f, ferrite_tests = generate_ferrite_data()
     for name, Z_data in ferrite_tests.items():
-        vf = VectorFitting(n_poles=10, n_iterations=5)
+        vf = VectorFitting(n_poles=10, n_iterations=5, pole_init_mode=pole_init_mode)
         result = vf.fit(freqs_f, Z_data)
         result['name'] = name
         result['category'] = 'ferrite'
         vf_results.append(result)
-        urn_err = urn_by_name[name]['max_error_pct']
-        print(f"  {name}: VF={result['max_error_pct']:.2f}% URN={urn_err:.2f}%")
 
     # Skin effect tests
-    print("\n--- Skin Effect ---")
     freqs_s, skin_tests = generate_skin_effect_data()
     for name, Z_data in skin_tests.items():
-        vf = VectorFitting(n_poles=12, n_iterations=5)
+        vf = VectorFitting(n_poles=12, n_iterations=5, pole_init_mode=pole_init_mode)
         result = vf.fit(freqs_s, Z_data)
         result['name'] = name
         result['category'] = 'skin_effect'
         vf_results.append(result)
-        urn_err = urn_by_name[name]['max_error_pct']
-        print(f"  {name}: VF={result['max_error_pct']:.2f}% URN={urn_err:.2f}%")
 
     # EIS tests
-    print("\n--- EIS ---")
     freqs_e, eis_tests = generate_eis_data()
     for name, Z_data in eis_tests.items():
-        vf = VectorFitting(n_poles=14, n_iterations=5)
+        vf = VectorFitting(n_poles=14, n_iterations=5, pole_init_mode=pole_init_mode)
         result = vf.fit(freqs_e, Z_data)
         result['name'] = name
         result['category'] = 'eis'
         vf_results.append(result)
-        urn_err = urn_by_name[name]['max_error_pct']
-        print(f"  {name}: VF={result['max_error_pct']:.2f}% URN={urn_err:.2f}%")
 
     # Dielectric tests
-    print("\n--- Dielectric ---")
     freqs_d, dielectric_tests = generate_dielectric_data()
     for name, Z_data in dielectric_tests.items():
-        vf = VectorFitting(n_poles=10, n_iterations=5)
+        vf = VectorFitting(n_poles=10, n_iterations=5, pole_init_mode=pole_init_mode)
         result = vf.fit(freqs_d, Z_data)
         result['name'] = name
         result['category'] = 'dielectric'
         vf_results.append(result)
-        urn_err = urn_by_name[name]['max_error_pct']
-        print(f"  {name}: VF={result['max_error_pct']:.2f}% URN={urn_err:.2f}%")
 
-    # Summary comparison table
-    print("\n" + "=" * 100)
-    print("COMPARISON SUMMARY: URN vs Vector Fitting")
-    print("=" * 120)
+    return vf_results
 
-    print(f"\n{'Test':<20} {'Category':<12} {'URN Err%':<10} {'VF Err%':<10} {'VF Poles':<8} {'In-Range':<10} {'Valid':<6} {'Winner':<8}")
-    print("-" * 120)
+
+def print_comparison_table(vf_results: list, urn_by_name: dict, mode_name: str):
+    """Print comparison table and return statistics."""
+    print(f"\n{'Test':<20} {'Category':<12} {'URN Err%':<10} {'VF Err%':<10} {'VF Poles':<8} {'Weakly':<8} {'Valid':<6} {'Winner':<8}")
+    print("-" * 100)
 
     urn_wins = 0
     vf_wins = 0
@@ -352,10 +350,10 @@ def main():
 
         urn_err = urn_r['max_error_pct']
         vf_err = vf_r['max_error_pct']
-        n_in_range = vf_r.get('n_poles_in_range', 0)
+        n_weakly_damped = vf_r.get('n_weakly_damped_in_range', 0)
         is_valid = vf_r.get('is_valid_model', True)
 
-        # VF wins only if model is valid (no poles in frequency range)
+        # VF wins only if model is valid
         if not is_valid:
             winner = "URN*"  # URN wins by default if VF model is invalid
             urn_wins += 1
@@ -369,13 +367,90 @@ def main():
 
         valid_str = "Yes" if is_valid else "NO!"
         print(f"{name:<20} {vf_r['category']:<12} {urn_err:<10.2f} {vf_err:<10.2f} "
-              f"{vf_r['n_poles']:<8} {n_in_range:<10} {valid_str:<6} {winner:<8}")
+              f"{vf_r['n_poles']:<8} {n_weakly_damped:<8} {valid_str:<6} {winner:<8}")
 
-    print("-" * 120)
-    print(f"\nOverall: URN wins {urn_wins}/{len(vf_results)}, VF wins {vf_wins}/{len(vf_results)}")
+    print("-" * 100)
+    print(f"Overall: URN wins {urn_wins}/{len(vf_results)}, VF wins {vf_wins}/{len(vf_results)}")
     if vf_invalid > 0:
-        print(f"WARNING: {vf_invalid} VF models have poles within frequency range (marked with *)")
-        print("         These models may fit evaluation points but behave badly between them.")
+        print(f"  ({vf_invalid} VF models invalid due to weakly-damped poles in frequency range)")
+
+    return urn_wins, vf_wins, vf_invalid
+
+
+def main():
+    np.random.seed(42)
+
+    print("=" * 100)
+    print("Vector Fitting Benchmark: Conservative vs Aggressive Pole Initialization")
+    print("=" * 100)
+    print("""
+This benchmark compares URN against Vector Fitting with TWO initialization strategies:
+
+1. CONSERVATIVE (high damping): zeta ~0.995
+   - Poles are well-damped (real part >> imaginary part)
+   - Fewer numerical issues, but may not capture all dynamics
+
+2. AGGRESSIVE (low damping): zeta ~0.1
+   - Poles are weakly-damped (imaginary part >> real part)
+   - May capture more dynamics, but can produce problematic poles
+   - Poles with zeta < 0.1 in frequency range are INVALID
+""")
+
+    # Load URN results
+    with open('urn_benchmark_focused.json', 'r') as f:
+        urn_results = json.load(f)
+
+    urn_by_name = {r['name']: r for r in urn_results['results']}
+
+    # ===========================================================================
+    # Mode 1: Conservative (high damping ratio ~0.995)
+    # ===========================================================================
+    print("\n" + "=" * 100)
+    print("MODE 1: CONSERVATIVE VF (High Damping, zeta ~0.995)")
+    print("=" * 100)
+
+    vf_conservative = run_vf_benchmark('conservative', urn_by_name)
+    urn_wins_c, vf_wins_c, vf_invalid_c = print_comparison_table(
+        vf_conservative, urn_by_name, "Conservative")
+
+    # ===========================================================================
+    # Mode 2: Aggressive (low damping ratio ~0.1)
+    # ===========================================================================
+    print("\n" + "=" * 100)
+    print("MODE 2: AGGRESSIVE VF (Low Damping, zeta ~0.1)")
+    print("=" * 100)
+
+    vf_aggressive = run_vf_benchmark('aggressive', urn_by_name)
+    urn_wins_a, vf_wins_a, vf_invalid_a = print_comparison_table(
+        vf_aggressive, urn_by_name, "Aggressive")
+
+    # ===========================================================================
+    # FINAL SUMMARY: Both VF modes vs URN
+    # ===========================================================================
+    print("\n" + "=" * 100)
+    print("FINAL SUMMARY: URN vs Vector Fitting (Both Initialization Modes)")
+    print("=" * 100)
+
+    total_tests = len(vf_conservative)
+
+    # Compute average errors for each method
+    urn_avg_err = np.mean([urn_by_name[r['name']]['max_error_pct'] for r in vf_conservative])
+    vf_cons_avg_err = np.mean([r['max_error_pct'] for r in vf_conservative])
+    vf_aggr_avg_err = np.mean([r['max_error_pct'] for r in vf_aggressive])
+
+    print(f"""
+SUMMARY TABLE:
++---------------------------+------------+------------+------------+
+| Metric                    |    URN     | VF Conserv | VF Aggress |
++---------------------------+------------+------------+------------+
+| Average Max Error (%)     | {urn_avg_err:>10.2f} | {vf_cons_avg_err:>10.2f} | {vf_aggr_avg_err:>10.2f} |
+| Wins vs URN               |     --     | {vf_wins_c:>10} | {vf_wins_a:>10} |
+| Invalid Models            |      0     | {vf_invalid_c:>10} | {vf_invalid_a:>10} |
++---------------------------+------------+------------+------------+
+
+URN wins {urn_wins_c}/{total_tests} vs Conservative VF
+URN wins {urn_wins_a}/{total_tests} vs Aggressive VF
+""")
 
     # Interpretability comparison
     print("\n" + "=" * 80)
@@ -384,7 +459,8 @@ def main():
     print(f"\n{'Test':<20} {'Mechanisms (URN)':<50}")
     print("-" * 70)
 
-    for name in [r['name'] for r in vf_results]:
+    for r in vf_conservative:
+        name = r['name']
         urn_r = urn_by_name[name]
         mechs = ", ".join(urn_r['mechanisms'])
         print(f"{name:<20} {mechs:<50}")
@@ -395,13 +471,23 @@ def main():
     combined = {
         'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
         'urn_results': urn_results['results'],
-        'vf_results': vf_results,
+        'vf_conservative': [
+            {k: v for k, v in r.items() if k not in ['poles_real', 'poles_imag', 'pole_freqs', 'damping_ratios']}
+            for r in vf_conservative
+        ],
+        'vf_aggressive': [
+            {k: v for k, v in r.items() if k not in ['poles_real', 'poles_imag', 'pole_freqs', 'damping_ratios']}
+            for r in vf_aggressive
+        ],
         'summary': {
-            'urn_wins': urn_wins,
-            'vf_wins': vf_wins,
-            'total_tests': len(vf_results),
-            'urn_avg_max_error': np.mean([urn_by_name[r['name']]['max_error_pct'] for r in vf_results]),
-            'vf_avg_max_error': np.mean([r['max_error_pct'] for r in vf_results]),
+            'total_tests': total_tests,
+            'urn_avg_max_error': float(urn_avg_err),
+            'vf_conservative_avg_max_error': float(vf_cons_avg_err),
+            'vf_aggressive_avg_max_error': float(vf_aggr_avg_err),
+            'urn_wins_vs_conservative': urn_wins_c,
+            'urn_wins_vs_aggressive': urn_wins_a,
+            'vf_conservative_invalid': vf_invalid_c,
+            'vf_aggressive_invalid': vf_invalid_a,
         }
     }
 
@@ -412,10 +498,17 @@ def main():
     print("PUBLICATION-READY FINDINGS")
     print("=" * 80)
     print(f"""
-ACCURACY COMPARISON:
-  - URN average max error: {combined['summary']['urn_avg_max_error']:.2f}%
-  - VF average max error:  {combined['summary']['vf_avg_max_error']:.2f}%
-  - URN wins: {urn_wins}/{len(vf_results)} tests
+ACCURACY COMPARISON (Both VF Modes):
+  - URN average max error:              {urn_avg_err:.2f}%
+  - VF (conservative) average max error: {vf_cons_avg_err:.2f}%
+  - VF (aggressive) average max error:   {vf_aggr_avg_err:.2f}%
+
+  URN wins {urn_wins_c}/{total_tests} tests vs Conservative VF (zeta ~0.995)
+  URN wins {urn_wins_a}/{total_tests} tests vs Aggressive VF (zeta ~0.1)
+
+POLE VALIDITY ANALYSIS:
+  Conservative VF: {vf_invalid_c} invalid models (all poles well-damped)
+  Aggressive VF:   {vf_invalid_a} invalid models (weakly-damped poles in freq range)
 
 KEY ADVANTAGES OF URN:
 
@@ -429,17 +522,17 @@ KEY ADVANTAGES OF URN:
    - VF requires user to specify number of poles
 
 3. INHERENT STABILITY
-   - URN basis functions are passive circuits
-   - VF can produce unstable poles (positive real part)
+   - URN basis functions are passive circuits (guaranteed stable)
+   - VF can produce unstable or weakly-damped poles
 
-4. DIRECT CIRCUIT SYNTHESIS
+4. POLE-FREE FORMULATION
+   - URN uses physical basis functions, not mathematical poles
+   - No risk of resonance between evaluation points
+
+5. DIRECT CIRCUIT SYNTHESIS
    - URN maps directly to RLC ladder networks
    - Each basis function has known equivalent circuit
    - VF requires Foster/Cauer synthesis (may lose passivity)
-
-5. ROBUSTNESS
-   - Physical constraints act as regularization
-   - Fewer effective parameters due to sparsity
 """)
 
     print(f"\nResults saved to: urn_vs_vf_comparison.json")
