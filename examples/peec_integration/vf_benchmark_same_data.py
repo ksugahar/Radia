@@ -114,11 +114,28 @@ class VectorFitting:
         # Pole at s = -alpha + j*beta corresponds to frequency f = |beta|/(2*pi)
         f_min, f_max = freqs.min(), freqs.max()
         pole_freqs = np.abs(np.imag(self.poles)) / (2 * np.pi)
-        n_poles_in_range = int(np.sum((pole_freqs >= f_min) & (pole_freqs <= f_max)))
+        poles_in_range_mask = (pole_freqs >= f_min) & (pole_freqs <= f_max)
+        n_poles_in_range = int(np.sum(poles_in_range_mask))
 
-        # Flag model as invalid if poles exist within measurement range
-        # Such models may fit well at evaluation points but behave badly between them
-        is_valid_model = (n_poles_in_range == 0) and (n_unstable_final == 0)
+        # Check damping ratio for poles in frequency range
+        # Weakly damped poles (zeta < 0.1) cause ringing/oscillation
+        # Damping ratio: zeta = |Re(pole)| / |pole|
+        pole_magnitudes = np.abs(self.poles)
+        damping_ratios = np.abs(np.real(self.poles)) / (pole_magnitudes + 1e-12)
+        DAMPING_THRESHOLD = 0.1  # Physical relaxation is overdamped (zeta >> 0.1)
+
+        # Problematic poles: in frequency range AND weakly damped
+        weakly_damped_in_range = poles_in_range_mask & (damping_ratios < DAMPING_THRESHOLD)
+        n_problematic_poles = int(np.sum(weakly_damped_in_range))
+
+        # Also count well-damped poles in range (not necessarily invalid but noteworthy)
+        well_damped_in_range = poles_in_range_mask & (damping_ratios >= DAMPING_THRESHOLD)
+        n_well_damped_in_range = int(np.sum(well_damped_in_range))
+
+        # Flag model as invalid if:
+        # 1. Any unstable poles (Re > 0)
+        # 2. Any weakly-damped poles within frequency range
+        is_valid_model = (n_unstable_final == 0) and (n_problematic_poles == 0)
 
         return {
             'max_error_pct': float(rel_err.max() * 100),
@@ -128,10 +145,13 @@ class VectorFitting:
             'n_poles': M,
             'n_unstable': n_unstable_final,
             'n_poles_in_range': n_poles_in_range,
+            'n_weakly_damped_in_range': n_problematic_poles,
+            'n_well_damped_in_range': n_well_damped_in_range,
             'is_valid_model': is_valid_model,
             'poles_real': np.real(self.poles).tolist(),
             'poles_imag': np.imag(self.poles).tolist(),
             'pole_freqs': pole_freqs.tolist(),
+            'damping_ratios': damping_ratios.tolist(),
         }
 
     def predict(self, freqs: np.ndarray) -> np.ndarray:
