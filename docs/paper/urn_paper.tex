@@ -20,22 +20,22 @@
 
 \author{
 \uppercase{Kenta Sugahara}\authorrefmark{1},\orcidicon{0000-0002-2200-311X} and
-\uppercase{Shun Sato}\authorrefmark{2},\orcidicon{0000-0002-4052-5966}
+\uppercase{Yuki Sato}\authorrefmark{2},\orcidicon{0000-0002-4052-5966}
 }
 
 \address[1]{Faculty of Science and Engineering, Kindai University, Higashi-Osaka 577-8502, Japan}
-\address[2]{College of Science and Engineering, Aoyama Gakuin University, Sagamihara 252-5258, Japan}
+\address[2]{Department of Electrical and Electronic Engineering, Aoyama Gakuin University, Sagamihara 252-5258, Japan}
 
 \tfootnote{This work was supported in part by JSPS KAKENHI.}
 
 \markboth
-{Sugahara and Sato: KAN-inspired Universal Relaxation Network}
-{Sugahara and Sato: KAN-inspired Universal Relaxation Network}
+{Sugahara and Y. Sato: KAN-inspired Universal Relaxation Network}
+{Sugahara and Y. Sato: KAN-inspired Universal Relaxation Network}
 
 \corresp{Corresponding author: Kenta Sugahara (e-mail: sugahara@kindai.ac.jp).}
 
 \begin{abstract}
-We propose a Universal Relaxation Network (URN), a KAN-inspired approach for automatic discovery of physical relaxation mechanisms from frequency-domain impedance data. Unlike Vector Fitting (VF), which uses mathematical pole-residue representations that can produce unstable or physically meaningless models, URN employs 29 circuit-compatible basis functions derived from established physical relaxation models (Debye, Cole-Cole, Warburg, skin effect, etc.). Through L1-regularized sparse optimization, URN automatically selects the dominant physical mechanisms and directly synthesizes SPICE-compatible RLC ladder networks. Benchmarks on 13 test cases spanning ferrite permeability, conductor skin effect, and electrochemical impedance demonstrate that URN achieves 3.22\% average maximum error, outperforming conservative VF (63.21\%) and aggressive VF (368.24\%, with 46\% invalid models). The pole-free formulation guarantees structural stability while providing physically interpretable parameters. Open-source implementation in PyTorch (700 lines) requires only CPU and completes training in 100--150 seconds per case.
+We propose the Universal Relaxation Network (URN), a KAN-inspired approach for automatic discovery of physical relaxation mechanisms from frequency-domain impedance data. Unlike Vector Fitting (VF), which uses pole-residue representations that can produce unstable models, URN employs 29 circuit-compatible basis functions derived from established physical models (Debye, Cole-Cole, Warburg, skin effect). Through L1-regularized sparse optimization, URN automatically selects dominant mechanisms and directly synthesizes SPICE-compatible RLC ladder networks. The pole-free formulation guarantees structural stability while providing physically interpretable parameters. Benchmarks demonstrate superior accuracy with guaranteed passivity. Open-source PyTorch implementation requires only CPU.
 \end{abstract}
 
 \begin{keywords}
@@ -341,24 +341,7 @@ Typical training requires 100--150 seconds on CPU (Intel Core i7).
 
 A critical question for SPICE implementation is: \textit{how many ladder stages are required?} Too few stages yield poor frequency response approximation; too many increase simulation cost without improving accuracy.
 
-URN determines the optimal stage count based on (1) basis function type, (2) frequency range coverage, and (3) target approximation error. Table~\ref{tab:stages} summarizes typical stage requirements.
-
-\begin{table}[!t]
-\caption{Ladder Stage Count by Basis Function Type}
-\label{tab:stages}
-\centering
-\begin{tabular}{@{}lcc@{}}
-\toprule
-Basis Function & Typical Stages & Determination Method \\
-\midrule
-Debye & 1 & Exact (single RC) \\
-Cole-Cole & 5--7 & Charef: $\sim$1.5/decade \\
-CPE/Warburg & 5--10 & Valsa: 1/decade \\
-Skin effect & 5--7 & Dowell coefficients \\
-General & 3--7 & AIC model selection \\
-\bottomrule
-\end{tabular}
-\end{table}
+URN determines the optimal stage count based on (1) basis function type, (2) frequency range coverage, and (3) target approximation error, as summarized in Table~\ref{tab:synthesis}.
 
 For Cole-Cole and CPE bases, the stage count scales with frequency decades:
 \begin{equation}
@@ -368,9 +351,9 @@ where $c \approx 1.5$ for Charef approximation \cite{charef1992fractal} and $c =
 
 For complex or hybrid basis functions, URN uses the Akaike Information Criterion (AIC) \cite{akaike1974new}:
 \begin{equation}
-\text{AIC} = 2k + n \cdot \ln(\text{MSE})
+\text{AIC} = 2k + n \cdot \ln(\text{RSS}/n)
 \end{equation}
-where $k$ is the number of stages and $n$ is the number of frequency points. The algorithm evaluates $k = 2, 3, \ldots, 12$ and selects the stage count minimizing AIC, balancing accuracy against model complexity.
+where $k$ is the number of parameters (ladder stages), $n$ is the number of frequency points, and RSS is the residual sum of squares. The algorithm evaluates $k = 2, 3, \ldots, 12$ and selects the stage count minimizing AIC, balancing accuracy against model complexity.
 
 %===============================================================================
 \section{Benchmark Results and Pole-Free Advantage}
@@ -385,6 +368,12 @@ We evaluate URN on 13 test cases covering three application domains:
 \item \textbf{Conductor skin effect} (3 cases): Cu foil (0.1mm, 0.5mm), Al busbar (2mm)
 \item \textbf{Electrochemical} (6 cases): Randles circuits, battery 2-RC, polymer dielectric, glass, ceramic
 \end{itemize}
+
+% TODO: Add figures for camera-ready version
+% Figure 1: Nyquist plot comparison (URN vs VF) for representative cases
+% Figure 2: Bode plot showing frequency response accuracy
+% Figure 3: Synthesized RLC ladder circuit example
+% Figure 4: Time-domain transient simulation comparison (spurious ringing demonstration)
 
 \subsection{VF Pole Initialization Dilemma}
 
@@ -413,13 +402,13 @@ Table~\ref{tab:benchmark} compares URN against both VF strategies.
 \textbf{Metric} & \textbf{URN} & \textbf{VF (Cons.)} & \textbf{VF (Aggr.)} \\
 \midrule
 Average Max Error & \textbf{3.22\%} & 63.21\% & 368.24\% \\
-Win Rate vs URN & -- & 15.4\% & 0\% \\
+Cases with Lower Error & -- & 2/13 & 0/13 \\
 Invalid Models & \textbf{0/13} & 0/13 & \textbf{6/13} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-URN wins 11/13 cases against conservative VF and 13/13 against aggressive VF. The two conservative VF wins are Cu foil 0.1mm (5.64\% vs 7.35\%) and Battery 2RC (1.11\% vs 7.44\%)---cases where highly-damped poles are physically appropriate.
+URN outperforms conservative VF in 11/13 cases and aggressive VF in all 13 cases. Conservative VF achieves lower error in Cu foil 0.1mm (5.64\% vs 7.35\%) and Battery 2RC (1.11\% vs 7.44\%)---cases where highly-damped poles are physically appropriate.
 
 \subsection{The Pole-Free Advantage}
 
@@ -587,7 +576,7 @@ The pole-free advantage is particularly significant for power electronics applic
 
 \textbf{Current implementation}: Series and parallel basis topologies with Cauer ladder synthesis. The framework is extensible to hybrid topologies and multi-port systems via Block Lanczos.
 
-\textbf{Open-source availability}: PyTorch implementation (700 lines), CPU-only, training time 100--150 seconds per case. No GPU required.
+\textbf{Open-source availability}: PyTorch implementation (700 lines), CPU-only, training time 100--150 seconds per case. No GPU required. Source code is available at \url{https://github.com/ksugahar/URN}.
 
 URN bridges the gap between data-driven flexibility (KAN philosophy) and physics-based interpretability (circuit-compatible constraints), offering a practical tool for impedance modeling in power electronics design.
 
