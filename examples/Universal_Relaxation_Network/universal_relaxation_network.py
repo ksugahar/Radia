@@ -82,17 +82,32 @@ class URNConfig:
     sparsity_weight: float = 0.01
     lr: float = 0.02
     n_epochs: int = 6000      # Increased from 5000 for better convergence
-    n_restarts: int = 5       # Increased from 3 for robustness
+    n_restarts: int = 10      # Increased from 5 for robustness (reviewer feedback)
 
     # Frequency scaling (auto-detected if None)
     omega_ref: Optional[float] = None
     Z_ref: Optional[float] = None
+
+    # Attention mechanism (NEW - addresses reviewer critique)
+    use_attention: bool = True          # Enable frequency-dependent attention
+    attention_hidden_dim: int = 16      # Hidden dimension for attention MLP
+    attention_temperature: float = 1.0  # Softmax temperature (lower = sharper)
 
     @property
     def has_parallel_branch(self) -> bool:
         """Check if parallel branch is enabled."""
         return (self.n_debye_parallel + self.n_cole_cole_parallel +
                 self.n_cpe_parallel + self.n_warburg_parallel) > 0
+
+    @property
+    def total_basis_functions(self) -> int:
+        """Total number of basis functions (for attention)."""
+        series = (self.n_debye + self.n_cole_cole + self.n_cole_davidson +
+                  self.n_havriliak_negami + self.n_cpe + self.n_warburg +
+                  self.n_gerischer + self.n_rlc + self.n_skin_effect)
+        parallel = (self.n_debye_parallel + self.n_cole_cole_parallel +
+                    self.n_cpe_parallel + self.n_warburg_parallel)
+        return series + parallel
 
 
 class UniversalRelaxationNetwork(nn.Module):
@@ -132,6 +147,10 @@ class UniversalRelaxationNetwork(nn.Module):
         # Initialize PARALLEL branch (if enabled)
         if config.has_parallel_branch:
             self._init_parallel_branch()
+
+        # Initialize Frequency-Dependent Attention (NEW - reviewer feedback)
+        if config.use_attention:
+            self._init_attention()
 
     def _init_debye(self):
         n = self.config.n_debye
@@ -245,6 +264,66 @@ class UniversalRelaxationNetwork(nn.Module):
             self.warburg_par_weight_mag = nn.Parameter(torch.rand(n) * 0.3)
             self.warburg_par_weight_phase = nn.Parameter(torch.randn(n) * 0.3)
 
+    def _init_attention(self):
+        """
+        Initialize Frequency-Dependent Attention mechanism.
+
+        This implements a learnable attention network that computes
+        frequency-dependent weights for each basis function:
+
+            alpha_k(omega) = softmax(MLP(log(omega)))_k
+
+        where MLP is a small neural network with hidden layer.
+
+        This allows the model to learn which basis functions are
+        most relevant at different frequency ranges, addressing the
+        reviewer's critique about missing attention mechanism.
+        """
+        n_basis = self.config.total_basis_functions
+        hidden_dim = self.config.attention_hidden_dim
+
+        # Attention MLP: log(omega) -> hidden -> n_basis logits
+        # Input: scalar log(omega/omega_ref)
+        # Output: n_basis attention scores
+        # Use double precision to match impedance computation
+        self.attention_fc1 = nn.Linear(1, hidden_dim).double()
+        self.attention_fc2 = nn.Linear(hidden_dim, n_basis).double()
+
+        # Initialize with small weights for smooth attention
+        nn.init.xavier_uniform_(self.attention_fc1.weight, gain=0.5)
+        nn.init.zeros_(self.attention_fc1.bias)
+        nn.init.xavier_uniform_(self.attention_fc2.weight, gain=0.5)
+        nn.init.zeros_(self.attention_fc2.bias)
+
+    def compute_attention_weights(self, omega: torch.Tensor) -> torch.Tensor:
+        """
+        Compute frequency-dependent attention weights.
+
+        Args:
+            omega: Angular frequency tensor (shape: [N])
+
+        Returns:
+            Attention weights tensor (shape: [N, n_basis])
+            Each row sums to 1 (softmax normalized).
+        """
+        if not self.config.use_attention:
+            # Return uniform weights if attention is disabled
+            n_basis = self.config.total_basis_functions
+            return torch.ones(len(omega), n_basis) / n_basis
+
+        # Compute log-frequency features
+        log_omega = torch.log(omega / self.omega_ref + 1e-10).unsqueeze(-1)  # [N, 1]
+
+        # MLP forward pass
+        h = torch.tanh(self.attention_fc1(log_omega))  # [N, hidden_dim]
+        logits = self.attention_fc2(h)  # [N, n_basis]
+
+        # Apply softmax with temperature
+        T = self.config.attention_temperature
+        attention = torch.softmax(logits / T, dim=-1)  # [N, n_basis]
+
+        return attention
+
     def _get_weight(self, mag: torch.Tensor, phase: torch.Tensor) -> torch.Tensor:
         """Convert magnitude and phase to complex weight."""
         # Softplus for positive magnitude
@@ -252,19 +331,32 @@ class UniversalRelaxationNetwork(nn.Module):
         return m * torch.exp(1j * phase)
 
     def forward(self, omega: torch.Tensor) -> torch.Tensor:
-        """Compute Z(omega) using hybrid series/parallel topology.
+        """Compute Z(omega) using hybrid series/parallel topology with attention.
 
         Z = Z_series + Z_parallel
 
         where:
-        - Z_series = Z_inf + sum of weighted impedance basis functions
+        - Z_series = Z_inf + sum(attention_k * w_k * basis_k)
         - Z_parallel = 1 / Y_parallel (if parallel branch enabled)
         - Y_parallel = Y_inf + sum of weighted admittance basis functions
+
+        Frequency-Dependent Attention:
+        - Each basis function has an attention weight alpha_k(omega)
+        - alpha_k(omega) = softmax(MLP(log(omega)))_k
+        - This allows different basis functions to dominate at different frequencies
         """
         omega_norm = omega / self.omega_ref
 
+        # Compute frequency-dependent attention weights (NEW - reviewer feedback)
+        if self.config.use_attention:
+            attention = self.compute_attention_weights(omega)  # [N, n_basis]
+            basis_idx = 0  # Track which basis we're on
+        else:
+            attention = None
+            basis_idx = 0
+
         # =====================================================================
-        # SERIES BRANCH: Z_series = Z_inf + sum(w_i * basis_i)
+        # SERIES BRANCH: Z_series = Z_inf + sum(attention_i * w_i * basis_i)
         # =====================================================================
         Z_series = torch.complex(self.Z_inf_real, self.Z_inf_imag) * torch.ones_like(omega_norm)
 
@@ -273,7 +365,12 @@ class UniversalRelaxationNetwork(nn.Module):
             tau = torch.exp(self.debye_log_tau)
             weights = self._get_weight(self.debye_weight_mag, self.debye_weight_phase)
             for k in range(self.config.n_debye):
-                Z_series = Z_series + weights[k] * debye(omega_norm, tau[k])
+                basis_contrib = weights[k] * debye(omega_norm, tau[k])
+                if attention is not None:
+                    # Apply frequency-dependent attention
+                    basis_contrib = basis_contrib * attention[:, basis_idx]
+                    basis_idx += 1
+                Z_series = Z_series + basis_contrib
 
         # Add Cole-Cole contributions (series)
         if self.config.n_cole_cole > 0:
@@ -281,7 +378,11 @@ class UniversalRelaxationNetwork(nn.Module):
             alpha = torch.sigmoid(self.cc_alpha_raw) * 0.8 + 0.2  # [0.2, 1.0]
             weights = self._get_weight(self.cc_weight_mag, self.cc_weight_phase)
             for k in range(self.config.n_cole_cole):
-                Z_series = Z_series + weights[k] * cole_cole(omega_norm, tau[k], alpha[k])
+                basis_contrib = weights[k] * cole_cole(omega_norm, tau[k], alpha[k])
+                if attention is not None:
+                    basis_contrib = basis_contrib * attention[:, basis_idx]
+                    basis_idx += 1
+                Z_series = Z_series + basis_contrib
 
         # Add Cole-Davidson contributions (series)
         if self.config.n_cole_davidson > 0:
@@ -289,7 +390,11 @@ class UniversalRelaxationNetwork(nn.Module):
             beta = torch.sigmoid(self.cd_beta_raw) * 0.8 + 0.2
             weights = self._get_weight(self.cd_weight_mag, self.cd_weight_phase)
             for k in range(self.config.n_cole_davidson):
-                Z_series = Z_series + weights[k] * cole_davidson(omega_norm, tau[k], beta[k])
+                basis_contrib = weights[k] * cole_davidson(omega_norm, tau[k], beta[k])
+                if attention is not None:
+                    basis_contrib = basis_contrib * attention[:, basis_idx]
+                    basis_idx += 1
+                Z_series = Z_series + basis_contrib
 
         # Add Havriliak-Negami contributions (series)
         if self.config.n_havriliak_negami > 0:
@@ -298,7 +403,11 @@ class UniversalRelaxationNetwork(nn.Module):
             beta = torch.sigmoid(self.hn_beta_raw) * 0.8 + 0.2
             weights = self._get_weight(self.hn_weight_mag, self.hn_weight_phase)
             for k in range(self.config.n_havriliak_negami):
-                Z_series = Z_series + weights[k] * havriliak_negami(omega_norm, tau[k], alpha[k], beta[k])
+                basis_contrib = weights[k] * havriliak_negami(omega_norm, tau[k], alpha[k], beta[k])
+                if attention is not None:
+                    basis_contrib = basis_contrib * attention[:, basis_idx]
+                    basis_idx += 1
+                Z_series = Z_series + basis_contrib
 
         # Add CPE contributions (series)
         if self.config.n_cpe > 0:
@@ -306,14 +415,22 @@ class UniversalRelaxationNetwork(nn.Module):
             n = torch.sigmoid(self.cpe_n_raw) * 0.8 + 0.1  # [0.1, 0.9]
             weights = self._get_weight(self.cpe_weight_mag, self.cpe_weight_phase)
             for k in range(self.config.n_cpe):
-                Z_series = Z_series + weights[k] * cpe(omega_norm, Q[k], n[k])
+                basis_contrib = weights[k] * cpe(omega_norm, Q[k], n[k])
+                if attention is not None:
+                    basis_contrib = basis_contrib * attention[:, basis_idx]
+                    basis_idx += 1
+                Z_series = Z_series + basis_contrib
 
         # Add Warburg contributions (series)
         if self.config.n_warburg > 0:
             Aw = torch.exp(self.warburg_log_Aw)
             weights = self._get_weight(self.warburg_weight_mag, self.warburg_weight_phase)
             for k in range(self.config.n_warburg):
-                Z_series = Z_series + weights[k] * warburg_infinite(omega_norm, Aw[k])
+                basis_contrib = weights[k] * warburg_infinite(omega_norm, Aw[k])
+                if attention is not None:
+                    basis_contrib = basis_contrib * attention[:, basis_idx]
+                    basis_idx += 1
+                Z_series = Z_series + basis_contrib
 
         # Add Gerischer contributions (series)
         if self.config.n_gerischer > 0:
@@ -321,7 +438,11 @@ class UniversalRelaxationNetwork(nn.Module):
             tau_g = torch.exp(self.ger_log_tau)
             weights = self._get_weight(self.ger_weight_mag, self.ger_weight_phase)
             for k in range(self.config.n_gerischer):
-                Z_series = Z_series + weights[k] * gerischer(omega_norm, R_g[k], tau_g[k])
+                basis_contrib = weights[k] * gerischer(omega_norm, R_g[k], tau_g[k])
+                if attention is not None:
+                    basis_contrib = basis_contrib * attention[:, basis_idx]
+                    basis_idx += 1
+                Z_series = Z_series + basis_contrib
 
         # Add RLC contributions (series, uses physical frequency)
         if self.config.n_rlc > 0:
@@ -330,7 +451,11 @@ class UniversalRelaxationNetwork(nn.Module):
             C = torch.exp(self.rlc_log_C)
             weights = self._get_weight(self.rlc_weight_mag, self.rlc_weight_phase)
             for k in range(self.config.n_rlc):
-                Z_series = Z_series + weights[k] * rlc_series(omega, R[k], L[k], C[k]) / self.Z_ref
+                basis_contrib = weights[k] * rlc_series(omega, R[k], L[k], C[k]) / self.Z_ref
+                if attention is not None:
+                    basis_contrib = basis_contrib * attention[:, basis_idx]
+                    basis_idx += 1
+                Z_series = Z_series + basis_contrib
 
         # Add Skin effect contributions (series)
         if self.config.n_skin_effect > 0:
@@ -339,7 +464,11 @@ class UniversalRelaxationNetwork(nn.Module):
             weights = self._get_weight(self.skin_weight_mag, self.skin_weight_phase)
             for k in range(self.config.n_skin_effect):
                 # Skin effect uses physical omega
-                Z_series = Z_series + weights[k] * skin_effect_dowell(omega, R_dc[k], delta[k]) / self.Z_ref
+                basis_contrib = weights[k] * skin_effect_dowell(omega, R_dc[k], delta[k]) / self.Z_ref
+                if attention is not None:
+                    basis_contrib = basis_contrib * attention[:, basis_idx]
+                    basis_idx += 1
+                Z_series = Z_series + basis_contrib
 
         # =====================================================================
         # PARALLEL BRANCH: Z_parallel = 1 / Y_parallel (if enabled)
@@ -357,7 +486,11 @@ class UniversalRelaxationNetwork(nn.Module):
                 weights = self._get_weight(self.debye_par_weight_mag, self.debye_par_weight_phase)
                 for k in range(self.config.n_debye_parallel):
                     # Y_debye = 1 + j*omega*tau (admittance form of Debye)
-                    Y_parallel = Y_parallel + weights[k] * (1.0 + 1j * omega_norm * tau[k])
+                    basis_contrib = weights[k] * (1.0 + 1j * omega_norm * tau[k])
+                    if attention is not None:
+                        basis_contrib = basis_contrib * attention[:, basis_idx]
+                        basis_idx += 1
+                    Y_parallel = Y_parallel + basis_contrib
 
             # Cole-Cole in parallel (as admittance)
             if self.config.n_cole_cole_parallel > 0:
@@ -366,7 +499,11 @@ class UniversalRelaxationNetwork(nn.Module):
                 weights = self._get_weight(self.cc_par_weight_mag, self.cc_par_weight_phase)
                 for k in range(self.config.n_cole_cole_parallel):
                     # Y_cc = 1 + (j*omega*tau)^alpha
-                    Y_parallel = Y_parallel + weights[k] * (1.0 + (1j * omega_norm * tau[k]) ** alpha[k])
+                    basis_contrib = weights[k] * (1.0 + (1j * omega_norm * tau[k]) ** alpha[k])
+                    if attention is not None:
+                        basis_contrib = basis_contrib * attention[:, basis_idx]
+                        basis_idx += 1
+                    Y_parallel = Y_parallel + basis_contrib
 
             # CPE in parallel (as admittance)
             if self.config.n_cpe_parallel > 0:
@@ -375,7 +512,11 @@ class UniversalRelaxationNetwork(nn.Module):
                 weights = self._get_weight(self.cpe_par_weight_mag, self.cpe_par_weight_phase)
                 for k in range(self.config.n_cpe_parallel):
                     # Y_cpe = Q * (j*omega)^n
-                    Y_parallel = Y_parallel + weights[k] * Q[k] * (1j * omega_norm) ** n[k]
+                    basis_contrib = weights[k] * Q[k] * (1j * omega_norm) ** n[k]
+                    if attention is not None:
+                        basis_contrib = basis_contrib * attention[:, basis_idx]
+                        basis_idx += 1
+                    Y_parallel = Y_parallel + basis_contrib
 
             # Warburg in parallel (as admittance)
             if self.config.n_warburg_parallel > 0:
@@ -383,7 +524,11 @@ class UniversalRelaxationNetwork(nn.Module):
                 weights = self._get_weight(self.warburg_par_weight_mag, self.warburg_par_weight_phase)
                 for k in range(self.config.n_warburg_parallel):
                     # Y_warburg = sqrt(j*omega) / Aw
-                    Y_parallel = Y_parallel + weights[k] * torch.sqrt(1j * omega_norm + 1e-10) / Aw[k]
+                    basis_contrib = weights[k] * torch.sqrt(1j * omega_norm + 1e-10) / Aw[k]
+                    if attention is not None:
+                        basis_contrib = basis_contrib * attention[:, basis_idx]
+                        basis_idx += 1
+                    Y_parallel = Y_parallel + basis_contrib
 
             # Convert admittance to impedance: Z_parallel = 1/Y_parallel
             # Add small epsilon to avoid division by zero
