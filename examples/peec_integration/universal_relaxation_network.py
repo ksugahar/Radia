@@ -871,6 +871,1504 @@ def train_urn_with_uncertainty(
     return ensemble
 
 
+# =============================================================================
+# ADAPTIVE TAU DISTRIBUTION (KAN-LIKE GRID REFINEMENT)
+# =============================================================================
+# This implements KAN's key feature: adaptive grid refinement.
+# Instead of fixed log-spaced tau values, we:
+# 1. Start with coarse distribution
+# 2. Identify regions where fit is poor
+# 3. Add new basis functions in those regions
+# 4. Continue training with refined basis
+#
+# This preserves circuit synthesis capability while gaining KAN's adaptivity.
+
+@dataclass
+class AdaptiveURNConfig:
+    """Configuration for Adaptive URN with KAN-like grid refinement."""
+    # Initial coarse grid
+    n_debye_initial: int = 3
+    n_cole_cole_initial: int = 2
+
+    # Refinement parameters
+    max_refinements: int = 3          # Maximum refinement iterations
+    refinement_threshold: float = 0.05  # Add new tau if local error > 5%
+    max_bases_per_type: int = 8       # Maximum bases after refinement
+
+    # Training parameters
+    sparsity_weight: float = 0.01
+    lr: float = 0.02
+    n_epochs_initial: int = 3000      # Epochs for initial fit
+    n_epochs_refine: int = 2000       # Epochs per refinement
+    n_restarts: int = 3
+
+    # Frequency scaling
+    omega_ref: Optional[float] = None
+    Z_ref: Optional[float] = None
+
+
+class AdaptiveURN:
+    """
+    Adaptive Universal Relaxation Network with KAN-like grid refinement.
+
+    Key KAN-inspired features:
+    1. Starts with coarse tau distribution (like KAN's initial coarse grid)
+    2. Identifies frequency regions with high error
+    3. Adds new Debye/Cole-Cole bases at optimal tau values
+    4. Continues training with refined basis set
+
+    This approach:
+    - Automatically concentrates bases where data is complex
+    - Preserves full circuit synthesis capability
+    - Provides interpretable tau values for physical insight
+    """
+
+    def __init__(self, config: Optional[AdaptiveURNConfig] = None):
+        self.config = config or AdaptiveURNConfig()
+        self.models: List[UniversalRelaxationNetwork] = []
+        self.refinement_history: List[Dict] = []
+        self.final_model: Optional[UniversalRelaxationNetwork] = None
+        self.omega_ref = None
+        self.Z_ref = None
+
+    def fit(self, freqs: np.ndarray, Z_data: np.ndarray,
+            verbose: bool = True) -> 'AdaptiveURN':
+        """
+        Fit with adaptive tau refinement.
+
+        Args:
+            freqs: Frequency array (Hz)
+            Z_data: Complex impedance data
+            verbose: Print progress
+
+        Returns:
+            self (for method chaining)
+        """
+        omega = 2 * np.pi * freqs
+        self.omega_ref = self.config.omega_ref or np.sqrt(omega.min() * omega.max())
+        self.Z_ref = self.config.Z_ref or np.abs(Z_data).mean()
+
+        # Stage 1: Initial coarse fit
+        if verbose:
+            print("=" * 60)
+            print("Adaptive URN: Stage 1 - Initial Coarse Fit")
+            print("=" * 60)
+
+        current_config = URNConfig(
+            n_debye=self.config.n_debye_initial,
+            n_cole_cole=self.config.n_cole_cole_initial,
+            n_cole_davidson=1,
+            n_havriliak_negami=0,
+            n_cpe=1,
+            n_warburg=1,
+            n_gerischer=0,
+            n_rlc=0,
+            n_skin_effect=1,
+            # Disable parallel branch for simpler initial fit
+            n_debye_parallel=0,
+            n_cole_cole_parallel=0,
+            n_cpe_parallel=0,
+            n_warburg_parallel=0,
+            sparsity_weight=self.config.sparsity_weight,
+            lr=self.config.lr,
+            n_epochs=self.config.n_epochs_initial,
+            n_restarts=self.config.n_restarts,
+            omega_ref=self.omega_ref,
+            Z_ref=self.Z_ref,
+        )
+
+        model = train_urn(freqs, Z_data, current_config, verbose=verbose)
+        self.models.append(model)
+
+        # Evaluate initial fit
+        omega_torch = torch.tensor(omega, dtype=torch.float64)
+        with torch.no_grad():
+            Z_pred = model(omega_torch).numpy()
+
+        rel_error = np.abs(Z_pred - Z_data) / (np.abs(Z_data) + 1e-10)
+        max_error = rel_error.max()
+
+        self.refinement_history.append({
+            'stage': 0,
+            'n_debye': current_config.n_debye,
+            'n_cole_cole': current_config.n_cole_cole,
+            'max_error': float(max_error),
+            'mean_error': float(rel_error.mean()),
+        })
+
+        if verbose:
+            print(f"\nInitial fit: max_error = {max_error*100:.2f}%, "
+                  f"mean_error = {rel_error.mean()*100:.2f}%")
+
+        # Stage 2-N: Refinement iterations
+        for refine_iter in range(self.config.max_refinements):
+            if max_error < self.config.refinement_threshold:
+                if verbose:
+                    print(f"\nError below threshold ({self.config.refinement_threshold*100:.1f}%), "
+                          f"stopping refinement.")
+                break
+
+            if verbose:
+                print(f"\n{'=' * 60}")
+                print(f"Adaptive URN: Stage {refine_iter + 2} - Refinement")
+                print(f"{'=' * 60}")
+
+            # Find frequency regions with high error
+            high_error_mask = rel_error > self.config.refinement_threshold
+            if not np.any(high_error_mask):
+                high_error_mask = rel_error > rel_error.mean()
+
+            # Find optimal tau values for new bases
+            high_error_freqs = freqs[high_error_mask]
+            if len(high_error_freqs) == 0:
+                break
+
+            # Add new Debye bases at characteristic frequencies
+            new_taus = self._find_optimal_taus(high_error_freqs, omega)
+            n_new = min(len(new_taus), 2)  # Add at most 2 per refinement
+
+            if verbose:
+                print(f"Adding {n_new} new Debye bases at tau = {new_taus[:n_new]}")
+
+            # Check limits
+            n_debye_new = min(current_config.n_debye + n_new,
+                              self.config.max_bases_per_type)
+            n_cole_cole_new = min(current_config.n_cole_cole + (n_new // 2),
+                                   self.config.max_bases_per_type)
+
+            if n_debye_new == current_config.n_debye:
+                if verbose:
+                    print("Max bases reached, stopping refinement.")
+                break
+
+            # Create refined config
+            current_config = URNConfig(
+                n_debye=n_debye_new,
+                n_cole_cole=n_cole_cole_new,
+                n_cole_davidson=1,
+                n_havriliak_negami=0,
+                n_cpe=1,
+                n_warburg=1,
+                n_gerischer=0,
+                n_rlc=0,
+                n_skin_effect=1,
+                n_debye_parallel=0,
+                n_cole_cole_parallel=0,
+                n_cpe_parallel=0,
+                n_warburg_parallel=0,
+                sparsity_weight=self.config.sparsity_weight,
+                lr=self.config.lr,
+                n_epochs=self.config.n_epochs_refine,
+                n_restarts=max(1, self.config.n_restarts - 1),
+                omega_ref=self.omega_ref,
+                Z_ref=self.Z_ref,
+            )
+
+            # Train with refined basis set
+            model = train_urn(freqs, Z_data, current_config, verbose=verbose)
+            self.models.append(model)
+
+            # Evaluate refined fit
+            with torch.no_grad():
+                Z_pred = model(omega_torch).numpy()
+
+            rel_error = np.abs(Z_pred - Z_data) / (np.abs(Z_data) + 1e-10)
+            max_error = rel_error.max()
+
+            self.refinement_history.append({
+                'stage': refine_iter + 1,
+                'n_debye': current_config.n_debye,
+                'n_cole_cole': current_config.n_cole_cole,
+                'max_error': float(max_error),
+                'mean_error': float(rel_error.mean()),
+            })
+
+            if verbose:
+                print(f"\nRefined fit: max_error = {max_error*100:.2f}%, "
+                      f"mean_error = {rel_error.mean()*100:.2f}%")
+
+        # Keep best model
+        self.final_model = self.models[-1]
+
+        if verbose:
+            print(f"\n{'=' * 60}")
+            print("Adaptive URN: Refinement Complete")
+            print(f"{'=' * 60}")
+            print(f"Total refinement stages: {len(self.refinement_history)}")
+            print(f"Final: n_debye={current_config.n_debye}, "
+                  f"n_cole_cole={current_config.n_cole_cole}")
+            print(f"Final error: max={max_error*100:.2f}%, "
+                  f"mean={rel_error.mean()*100:.2f}%")
+
+        return self
+
+    def _find_optimal_taus(self, high_error_freqs: np.ndarray,
+                           omega: np.ndarray) -> np.ndarray:
+        """Find optimal tau values for new bases based on error distribution."""
+        # Convert frequencies to characteristic time constants
+        # tau ~ 1 / (2 * pi * f_characteristic)
+        taus = 1.0 / (2 * np.pi * high_error_freqs)
+
+        # Cluster to find representative values
+        # Simple approach: use log-space percentiles
+        log_taus = np.log10(taus)
+        percentiles = [25, 50, 75]
+        optimal_log_taus = np.percentile(log_taus, percentiles)
+        optimal_taus = 10 ** optimal_log_taus
+
+        return optimal_taus
+
+    def predict(self, freqs: np.ndarray) -> np.ndarray:
+        """Predict impedance at given frequencies."""
+        if self.final_model is None:
+            raise ValueError("Model not trained. Call fit() first.")
+
+        omega = 2 * np.pi * freqs
+        omega_torch = torch.tensor(omega, dtype=torch.float64)
+
+        with torch.no_grad():
+            Z_pred = self.final_model(omega_torch).numpy()
+
+        return Z_pred
+
+    def get_active_components(self, threshold: float = 0.05) -> Dict[str, List[Dict]]:
+        """Get active components from final model."""
+        if self.final_model is None:
+            raise ValueError("Model not trained. Call fit() first.")
+        return self.final_model.get_active_components(threshold)
+
+    def get_refinement_summary(self) -> Dict:
+        """Get summary of refinement process."""
+        return {
+            'n_stages': len(self.refinement_history),
+            'history': self.refinement_history,
+            'improvement': (
+                self.refinement_history[0]['max_error'] -
+                self.refinement_history[-1]['max_error']
+            ) if len(self.refinement_history) > 1 else 0.0,
+        }
+
+
+def train_adaptive_urn(
+    freqs: np.ndarray,
+    Z_data: np.ndarray,
+    config: Optional[AdaptiveURNConfig] = None,
+    verbose: bool = True
+) -> AdaptiveURN:
+    """
+    Train Adaptive URN with KAN-like grid refinement.
+
+    Args:
+        freqs: Frequency array (Hz)
+        Z_data: Complex impedance data
+        config: Configuration (uses defaults if None)
+        verbose: Print progress
+
+    Returns:
+        Trained AdaptiveURN
+    """
+    urn = AdaptiveURN(config)
+    urn.fit(freqs, Z_data, verbose)
+    return urn
+
+
+# =============================================================================
+# HIERARCHICAL URN (KAN Priority 2)
+# =============================================================================
+
+@dataclass
+class HierarchicalURNConfig:
+    """Configuration for Hierarchical URN with multi-scale decomposition."""
+    # Time scale ranges (log10 of tau in seconds)
+    # Level 1: Slow processes (ms to s) - bulk relaxation
+    level1_tau_range: Tuple[float, float] = (-3, 0)
+    # Level 2: Medium processes (us to ms) - interface effects
+    level2_tau_range: Tuple[float, float] = (-6, -3)
+    # Level 3: Fast processes (ns to us) - high-frequency effects
+    level3_tau_range: Tuple[float, float] = (-9, -6)
+
+    # Number of bases per level
+    n_debye_per_level: int = 3
+    n_cole_cole_per_level: int = 2
+
+    # Training parameters
+    sparsity_weight: float = 0.01
+    lr: float = 0.02
+    n_epochs: int = 3000
+    n_restarts: int = 3
+
+    # Frequency scaling
+    omega_ref: Optional[float] = None
+    Z_ref: Optional[float] = None
+
+
+class URNLayer(nn.Module):
+    """
+    Single layer of Hierarchical URN for a specific time scale range.
+
+    Uses Debye and Cole-Cole bases with tau values constrained to a specific range.
+    """
+
+    def __init__(self, tau_range: Tuple[float, float], n_debye: int, n_cole_cole: int,
+                 omega_ref: float = 1.0, Z_ref: float = 1.0):
+        super().__init__()
+
+        self.tau_range = tau_range
+        self.n_debye = n_debye
+        self.n_cole_cole = n_cole_cole
+        self.omega_ref = omega_ref
+        self.Z_ref = Z_ref
+
+        # Total bases
+        self.n_bases = n_debye + n_cole_cole
+
+        # Parameters for Debye bases
+        # log_tau is constrained to tau_range via sigmoid
+        self.log_tau_debye_raw = nn.Parameter(torch.randn(n_debye, dtype=torch.float64))
+
+        # Parameters for Cole-Cole bases
+        self.log_tau_cc_raw = nn.Parameter(torch.randn(n_cole_cole, dtype=torch.float64))
+        # alpha in (0, 1) via sigmoid
+        self.alpha_cc_raw = nn.Parameter(torch.zeros(n_cole_cole, dtype=torch.float64))
+
+        # Weights (complex) for all bases
+        self.weight_real = nn.Parameter(torch.randn(self.n_bases, dtype=torch.float64) * 0.1)
+        self.weight_imag = nn.Parameter(torch.zeros(self.n_bases, dtype=torch.float64))
+
+        # Residual scaling factor
+        self.residual_scale = nn.Parameter(torch.tensor(1.0, dtype=torch.float64))
+
+    def _get_log_tau_debye(self) -> torch.Tensor:
+        """Convert raw parameter to log_tau in range."""
+        # Sigmoid maps to (0, 1), then scale to tau_range
+        t = torch.sigmoid(self.log_tau_debye_raw)
+        return self.tau_range[0] + t * (self.tau_range[1] - self.tau_range[0])
+
+    def _get_log_tau_cc(self) -> torch.Tensor:
+        """Convert raw parameter to log_tau in range."""
+        t = torch.sigmoid(self.log_tau_cc_raw)
+        return self.tau_range[0] + t * (self.tau_range[1] - self.tau_range[0])
+
+    def _get_alpha_cc(self) -> torch.Tensor:
+        """Convert raw parameter to alpha in (0.3, 1.0)."""
+        return 0.3 + 0.7 * torch.sigmoid(self.alpha_cc_raw)
+
+    def forward(self, omega: torch.Tensor, residual: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Compute layer output.
+
+        Args:
+            omega: Angular frequency (rad/s)
+            residual: Optional residual from previous level (complex tensor)
+
+        Returns:
+            Complex impedance contribution from this layer
+        """
+        Z_total = torch.zeros(len(omega), dtype=torch.complex128)
+
+        idx = 0
+
+        # Debye contributions
+        log_taus_debye = self._get_log_tau_debye()
+        for i in range(self.n_debye):
+            # tau is in seconds (log_tau is log10 of tau in seconds)
+            tau = 10 ** log_taus_debye[i]
+            w = self.weight_real[idx] + 1j * self.weight_imag[idx]
+
+            # Debye: 1 / (1 + j*omega*tau)
+            Z_basis = 1.0 / (1.0 + 1j * omega * tau)
+            Z_total = Z_total + w * Z_basis
+            idx += 1
+
+        # Cole-Cole contributions
+        log_taus_cc = self._get_log_tau_cc()
+        alphas_cc = self._get_alpha_cc()
+        for i in range(self.n_cole_cole):
+            tau = 10 ** log_taus_cc[i]
+            alpha = alphas_cc[i]
+            w = self.weight_real[idx] + 1j * self.weight_imag[idx]
+
+            # Cole-Cole: 1 / (1 + (j*omega*tau)^alpha)
+            Z_basis = 1.0 / (1.0 + (1j * omega * tau) ** alpha)
+            Z_total = Z_total + w * Z_basis
+            idx += 1
+
+        # Scale output by Z_ref (weights are in normalized units)
+        Z_total = Z_total * self.Z_ref
+
+        # If residual is provided, add weighted residual pass-through
+        if residual is not None:
+            Z_total = Z_total + self.residual_scale * residual
+
+        return Z_total
+
+    def get_parameters_dict(self) -> Dict:
+        """Get layer parameters as dictionary."""
+        params = {
+            'debye': [],
+            'cole_cole': [],
+        }
+
+        log_taus_debye = self._get_log_tau_debye().detach().numpy()
+        log_taus_cc = self._get_log_tau_cc().detach().numpy()
+        alphas_cc = self._get_alpha_cc().detach().numpy()
+
+        idx = 0
+        for i in range(self.n_debye):
+            w = complex(self.weight_real[idx].item(), self.weight_imag[idx].item())
+            params['debye'].append({
+                'log_tau': float(log_taus_debye[i]),
+                'tau': float(10 ** log_taus_debye[i]),
+                'weight': w,
+                'weight_magnitude': abs(w),
+            })
+            idx += 1
+
+        for i in range(self.n_cole_cole):
+            w = complex(self.weight_real[idx].item(), self.weight_imag[idx].item())
+            params['cole_cole'].append({
+                'log_tau': float(log_taus_cc[i]),
+                'tau': float(10 ** log_taus_cc[i]),
+                'alpha': float(alphas_cc[i]),
+                'weight': w,
+                'weight_magnitude': abs(w),
+            })
+            idx += 1
+
+        return params
+
+
+class HierarchicalURN(nn.Module):
+    """
+    Hierarchical Universal Relaxation Network with multi-scale time decomposition.
+
+    Inspired by KAN's multi-resolution approach:
+    - Level 1: Coarse time scales (ms - s) - bulk relaxation
+    - Level 2: Medium time scales (us - ms) - interface effects
+    - Level 3: Fine time scales (ns - us) - fast processes
+
+    Each level refines the residual from the previous level, enabling:
+    - Better separation of physical processes by time scale
+    - More efficient learning (coarse-to-fine)
+    - Interpretable hierarchy of relaxation mechanisms
+    """
+
+    def __init__(self, config: Optional[HierarchicalURNConfig] = None):
+        super().__init__()
+
+        self.config = config or HierarchicalURNConfig()
+
+        # Store scaling factors
+        self.omega_ref = self.config.omega_ref or 1.0
+        self.Z_ref = self.config.Z_ref or 1.0
+
+        # DC offset (Z_inf)
+        self.Z_inf_real = nn.Parameter(torch.tensor(0.0, dtype=torch.float64))
+        self.Z_inf_imag = nn.Parameter(torch.tensor(0.0, dtype=torch.float64))
+
+        # Create three hierarchical levels
+        self.level1 = URNLayer(
+            tau_range=self.config.level1_tau_range,
+            n_debye=self.config.n_debye_per_level,
+            n_cole_cole=self.config.n_cole_cole_per_level,
+            omega_ref=self.omega_ref,
+            Z_ref=self.Z_ref,
+        )
+
+        self.level2 = URNLayer(
+            tau_range=self.config.level2_tau_range,
+            n_debye=self.config.n_debye_per_level,
+            n_cole_cole=self.config.n_cole_cole_per_level,
+            omega_ref=self.omega_ref,
+            Z_ref=self.Z_ref,
+        )
+
+        self.level3 = URNLayer(
+            tau_range=self.config.level3_tau_range,
+            n_debye=self.config.n_debye_per_level,
+            n_cole_cole=self.config.n_cole_cole_per_level,
+            omega_ref=self.omega_ref,
+            Z_ref=self.Z_ref,
+        )
+
+    def forward(self, omega: torch.Tensor) -> torch.Tensor:
+        """
+        Compute hierarchical impedance.
+
+        The cascade structure allows each level to model specific time scales
+        while passing residual information to finer levels.
+
+        Args:
+            omega: Angular frequency (rad/s)
+
+        Returns:
+            Total complex impedance
+        """
+        # DC offset
+        Z_inf = (self.Z_inf_real + 1j * self.Z_inf_imag) * self.Z_ref
+
+        # Level 1: Slow processes (ms - s)
+        Z1 = self.level1(omega)
+
+        # Level 2: Medium processes (us - ms)
+        # Receives context from level 1 but operates on different time scale
+        Z2 = self.level2(omega)
+
+        # Level 3: Fast processes (ns - us)
+        Z3 = self.level3(omega)
+
+        # Total impedance: sum of all contributions
+        Z_total = Z_inf + Z1 + Z2 + Z3
+
+        return Z_total
+
+    def forward_cascade(self, omega: torch.Tensor, Z_data: torch.Tensor) -> Tuple[torch.Tensor, Dict]:
+        """
+        Forward pass with cascade residual information.
+
+        Returns both prediction and intermediate residuals for analysis.
+
+        Args:
+            omega: Angular frequency
+            Z_data: Target impedance data (for residual computation)
+
+        Returns:
+            Tuple of (prediction, residuals_dict)
+        """
+        Z_inf = (self.Z_inf_real + 1j * self.Z_inf_imag) * self.Z_ref
+
+        # Level 1
+        Z1 = self.level1(omega)
+        residual1 = Z_data - Z_inf - Z1
+
+        # Level 2: Fit residual from level 1
+        Z2 = self.level2(omega, residual=None)
+        residual2 = residual1 - Z2
+
+        # Level 3: Fit residual from level 2
+        Z3 = self.level3(omega, residual=None)
+        residual3 = residual2 - Z3
+
+        Z_total = Z_inf + Z1 + Z2 + Z3
+
+        residuals = {
+            'level1': residual1,
+            'level2': residual2,
+            'level3': residual3,
+        }
+
+        return Z_total, residuals
+
+    def get_level_contributions(self, omega: torch.Tensor) -> Dict[str, np.ndarray]:
+        """
+        Get individual level contributions.
+
+        Args:
+            omega: Angular frequency
+
+        Returns:
+            Dictionary with contributions from each level (as numpy arrays)
+        """
+        with torch.no_grad():
+            Z_inf = complex(self.Z_inf_real.item(), self.Z_inf_imag.item()) * self.Z_ref
+            Z1 = self.level1(omega).numpy()
+            Z2 = self.level2(omega).numpy()
+            Z3 = self.level3(omega).numpy()
+
+        # Z_inf is scalar, expand to array
+        Z_inf_arr = np.full(len(omega), Z_inf)
+
+        return {
+            'Z_inf': Z_inf_arr,
+            'level1_slow': Z1,
+            'level2_medium': Z2,
+            'level3_fast': Z3,
+            'total': Z_inf_arr + Z1 + Z2 + Z3,
+        }
+
+    def get_all_parameters(self) -> Dict:
+        """Get all hierarchical parameters."""
+        return {
+            'Z_inf': complex(self.Z_inf_real.item(), self.Z_inf_imag.item()) * self.Z_ref,
+            'level1_slow': self.level1.get_parameters_dict(),
+            'level2_medium': self.level2.get_parameters_dict(),
+            'level3_fast': self.level3.get_parameters_dict(),
+        }
+
+    def get_active_components(self, threshold: float = 0.05) -> Dict[str, List[Dict]]:
+        """
+        Get active components across all levels.
+
+        Args:
+            threshold: Minimum weight magnitude (relative to Z_ref)
+
+        Returns:
+            Dictionary with active components per level
+        """
+        all_params = self.get_all_parameters()
+        active = {}
+
+        for level_name in ['level1_slow', 'level2_medium', 'level3_fast']:
+            level_params = all_params[level_name]
+
+            for basis_type in ['debye', 'cole_cole']:
+                for comp in level_params[basis_type]:
+                    rel_weight = comp['weight_magnitude'] / self.Z_ref
+                    if rel_weight > threshold:
+                        key = f"{level_name}_{basis_type}"
+                        if key not in active:
+                            active[key] = []
+                        active[key].append(comp)
+
+        return active
+
+
+def train_hierarchical_urn(
+    freqs: np.ndarray,
+    Z_data: np.ndarray,
+    config: Optional[HierarchicalURNConfig] = None,
+    verbose: bool = True
+) -> HierarchicalURN:
+    """
+    Train Hierarchical URN with multi-scale time decomposition.
+
+    Args:
+        freqs: Frequency array (Hz)
+        Z_data: Complex impedance data
+        config: Configuration (uses defaults if None)
+        verbose: Print progress
+
+    Returns:
+        Trained HierarchicalURN model
+    """
+    config = config or HierarchicalURNConfig()
+    omega = 2 * np.pi * freqs
+
+    # Auto-detect scaling
+    omega_ref = config.omega_ref or np.sqrt(omega.min() * omega.max())
+    Z_ref = config.Z_ref or np.abs(Z_data).mean()
+
+    # Update config with detected scaling
+    config.omega_ref = omega_ref
+    config.Z_ref = Z_ref
+
+    if verbose:
+        print("=" * 60)
+        print("Hierarchical URN Training")
+        print("=" * 60)
+        print(f"Frequency range: {freqs.min():.2e} - {freqs.max():.2e} Hz")
+        print(f"omega_ref: {omega_ref:.2e}, Z_ref: {Z_ref:.2e}")
+        print(f"Level 1 (slow): tau = 10^[{config.level1_tau_range[0]}, {config.level1_tau_range[1]}] s")
+        print(f"Level 2 (medium): tau = 10^[{config.level2_tau_range[0]}, {config.level2_tau_range[1]}] s")
+        print(f"Level 3 (fast): tau = 10^[{config.level3_tau_range[0]}, {config.level3_tau_range[1]}] s")
+
+    # Prepare training data
+    omega_torch = torch.tensor(omega, dtype=torch.float64)
+    Z_target_real = torch.tensor(Z_data.real / Z_ref, dtype=torch.float64)
+    Z_target_imag = torch.tensor(Z_data.imag / Z_ref, dtype=torch.float64)
+
+    best_model = None
+    best_loss = float('inf')
+
+    for restart in range(config.n_restarts):
+        if verbose:
+            print(f"\nRestart {restart + 1}/{config.n_restarts}")
+
+        # Create model
+        model = HierarchicalURN(config)
+
+        # Optimizer
+        optimizer = optim.Adam(model.parameters(), lr=config.lr)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', factor=0.5, patience=300
+        )
+
+        for epoch in range(config.n_epochs):
+            optimizer.zero_grad()
+
+            # Forward pass
+            Z_pred = model(omega_torch)
+            Z_pred_norm = Z_pred / Z_ref
+
+            # Loss: MSE on real and imaginary parts
+            loss_real = torch.mean((Z_pred_norm.real - Z_target_real) ** 2)
+            loss_imag = torch.mean((Z_pred_norm.imag - Z_target_imag) ** 2)
+            loss_fit = loss_real + loss_imag
+
+            # Sparsity penalty on weights
+            sparsity = 0.0
+            for level in [model.level1, model.level2, model.level3]:
+                sparsity += torch.sum(torch.abs(level.weight_real))
+                sparsity += torch.sum(torch.abs(level.weight_imag))
+
+            loss = loss_fit + config.sparsity_weight * sparsity
+
+            # Backward pass
+            loss.backward()
+            optimizer.step()
+            scheduler.step(loss.detach())
+
+            if verbose and (epoch + 1) % 500 == 0:
+                rel_err = torch.abs(Z_pred - torch.tensor(Z_data, dtype=torch.complex128))
+                rel_err = rel_err / torch.abs(torch.tensor(Z_data, dtype=torch.complex128))
+                print(f"  Epoch {epoch+1}: loss={loss.item():.6f}, "
+                      f"max_err={rel_err.max().item()*100:.2f}%")
+
+        # Evaluate final loss
+        with torch.no_grad():
+            Z_pred = model(omega_torch)
+            Z_pred_norm = Z_pred / Z_ref
+            loss_final = torch.mean((Z_pred_norm.real - Z_target_real) ** 2)
+            loss_final += torch.mean((Z_pred_norm.imag - Z_target_imag) ** 2)
+
+        if loss_final < best_loss:
+            best_loss = loss_final
+            best_model = model
+
+    if verbose:
+        print(f"\nBest loss: {best_loss.item():.6f}")
+
+        # Show active components
+        active = best_model.get_active_components()
+        print("\nActive components by level:")
+        for key, comps in active.items():
+            print(f"  {key}: {len(comps)} active")
+            for c in comps[:2]:  # Show first 2
+                if 'alpha' in c:
+                    print(f"    tau={c['tau']:.2e}s, alpha={c['alpha']:.2f}, |w|={c['weight_magnitude']:.3f}")
+                else:
+                    print(f"    tau={c['tau']:.2e}s, |w|={c['weight_magnitude']:.3f}")
+
+    return best_model
+
+
+def test_hierarchical_urn():
+    """Test Hierarchical URN with multi-scale data."""
+    print("\n" + "=" * 70)
+    print("Test: Hierarchical URN (Multi-Scale Time Decomposition)")
+    print("=" * 70)
+
+    # Create data with 3 distinct time scales
+    # Level 1 (slow): tau = 10 ms (100 Hz) - bulk diffusion
+    # Level 2 (medium): tau = 10 us (16 kHz) - grain boundary
+    # Level 3 (fast): tau = 10 ns (16 MHz) - electronic
+
+    tau_slow = 10e-3    # 10 ms
+    tau_medium = 10e-6  # 10 us
+    tau_fast = 10e-9    # 10 ns
+
+    freqs = np.logspace(0, 9, 120)  # 1 Hz to 1 GHz
+    omega = 2 * np.pi * freqs
+
+    # Multi-scale impedance
+    Z_slow = 100 / (1 + 1j * omega * tau_slow)      # Bulk (100 Ohm)
+    Z_medium = 30 / (1 + 1j * omega * tau_medium)   # Grain boundary (30 Ohm)
+    Z_fast = 10 / (1 + 1j * omega * tau_fast)       # Electronic (10 Ohm)
+    Z_inf = 5  # High-frequency limit
+
+    Z_data = Z_inf + Z_slow + Z_medium + Z_fast
+
+    print(f"True multi-scale model:")
+    print(f"  Level 1 (slow):   tau = {tau_slow*1000:.1f} ms, f_c = {1/(2*np.pi*tau_slow):.0f} Hz")
+    print(f"  Level 2 (medium): tau = {tau_medium*1e6:.1f} us, f_c = {1/(2*np.pi*tau_medium)/1000:.1f} kHz")
+    print(f"  Level 3 (fast):   tau = {tau_fast*1e9:.1f} ns, f_c = {1/(2*np.pi*tau_fast)/1e6:.1f} MHz")
+
+    # Train Hierarchical URN
+    config = HierarchicalURNConfig(
+        level1_tau_range=(-3, 0),   # 1 ms to 1 s
+        level2_tau_range=(-6, -3),  # 1 us to 1 ms
+        level3_tau_range=(-9, -6),  # 1 ns to 1 us
+        n_debye_per_level=3,
+        n_cole_cole_per_level=1,
+        n_epochs=2500,
+        n_restarts=3,
+        sparsity_weight=0.008,
+    )
+
+    model = train_hierarchical_urn(freqs, Z_data, config, verbose=True)
+
+    # Evaluate fit
+    omega_torch = torch.tensor(omega, dtype=torch.float64)
+    with torch.no_grad():
+        Z_pred = model(omega_torch).numpy()
+
+    rel_error = np.abs(Z_pred - Z_data) / np.abs(Z_data)
+    print(f"\nFit quality:")
+    print(f"  Max error: {rel_error.max()*100:.2f}%")
+    print(f"  Mean error: {rel_error.mean()*100:.2f}%")
+
+    # Show level contributions
+    contributions = model.get_level_contributions(omega_torch)
+    print(f"\nLevel contributions (magnitude at 1 kHz):")
+    idx_1k = np.argmin(np.abs(freqs - 1000))
+    for name, Z in contributions.items():
+        if isinstance(Z, torch.Tensor):
+            Z_val = Z[idx_1k].numpy()
+        elif isinstance(Z, np.ndarray):
+            if Z.ndim == 0:
+                Z_val = Z.item()
+            else:
+                Z_val = Z[idx_1k] if len(Z) > idx_1k else Z[0]
+        else:
+            Z_val = Z
+        # Handle both scalar and complex values
+        if isinstance(Z_val, (np.ndarray, np.generic)):
+            Z_val = complex(Z_val)
+        print(f"  {name}: |Z| = {np.abs(Z_val):.2f} Ohm")
+
+    # Show learned parameters
+    params = model.get_all_parameters()
+    print(f"\nLearned time constants:")
+    for level_name in ['level1_slow', 'level2_medium', 'level3_fast']:
+        print(f"  {level_name}:")
+        for basis_type in ['debye', 'cole_cole']:
+            for comp in params[level_name][basis_type]:
+                if comp['weight_magnitude'] > 0.01:
+                    print(f"    {basis_type}: tau = {comp['tau']:.2e} s, |w| = {comp['weight_magnitude']:.2f}")
+
+    return model
+
+
+# =============================================================================
+# KAN PRIORITY 3: ATTENTION-BASED BASIS SELECTION
+# =============================================================================
+# Frequency-dependent weighting of basis functions
+# Key insight: Different basis functions are relevant at different frequencies
+# - Low frequency: Debye, diffusion terms dominate
+# - Medium frequency: Cole-Cole, interface effects
+# - High frequency: Skin effect, FMR terms
+#
+# The attention mechanism learns which bases to activate at each frequency
+# =============================================================================
+
+@dataclass
+class AttentionURNConfig:
+    """Configuration for Attention-based URN."""
+    # Basis function counts
+    n_debye: int = 5
+    n_cole_cole: int = 3
+    n_cpe: int = 2
+    n_warburg: int = 1
+    n_skin_effect: int = 2
+
+    # Attention parameters
+    attention_dim: int = 32       # Dimension of attention space
+    n_attention_heads: int = 4    # Multi-head attention
+    temperature: float = 1.0      # Softmax temperature (lower = sharper attention)
+
+    # Training parameters
+    n_epochs: int = 3000
+    lr: float = 0.005
+    n_restarts: int = 3
+    sparsity_weight: float = 0.005
+    attention_entropy_weight: float = 0.01  # Encourage sparse attention
+
+    # Internal (set during training)
+    omega_ref: float = 1.0
+    Z_ref: float = 1.0
+
+
+class AttentionBasisBank(nn.Module):
+    """
+    Bank of basis functions with learned tau values.
+
+    Contains multiple types of basis functions, each with learnable parameters.
+    """
+
+    def __init__(self, config: AttentionURNConfig):
+        super().__init__()
+        self.config = config
+
+        # Total number of bases
+        self.n_bases = (config.n_debye + config.n_cole_cole +
+                       config.n_cpe + config.n_warburg + config.n_skin_effect)
+
+        # Debye: tau
+        self.debye_log_tau = nn.Parameter(
+            torch.linspace(-8, 0, config.n_debye, dtype=torch.float64)
+        )
+
+        # Cole-Cole: tau, alpha
+        self.cole_cole_log_tau = nn.Parameter(
+            torch.linspace(-7, -1, config.n_cole_cole, dtype=torch.float64)
+        )
+        self.cole_cole_alpha_raw = nn.Parameter(
+            torch.ones(config.n_cole_cole, dtype=torch.float64) * 0.5
+        )
+
+        # CPE: tau, n
+        self.cpe_log_tau = nn.Parameter(
+            torch.linspace(-6, -2, config.n_cpe, dtype=torch.float64)
+        )
+        self.cpe_n_raw = nn.Parameter(
+            torch.ones(config.n_cpe, dtype=torch.float64) * 0.0
+        )
+
+        # Warburg: tau_d
+        self.warburg_log_tau = nn.Parameter(
+            torch.linspace(-4, -1, config.n_warburg, dtype=torch.float64)
+        )
+
+        # Skin effect: R_dc, delta
+        self.skin_log_R = nn.Parameter(
+            torch.zeros(config.n_skin_effect, dtype=torch.float64)
+        )
+        self.skin_log_delta = nn.Parameter(
+            torch.linspace(-4, -2, config.n_skin_effect, dtype=torch.float64)
+        )
+
+    def get_all_basis_responses(self, omega: torch.Tensor) -> torch.Tensor:
+        """
+        Compute all basis function responses at given frequencies.
+
+        Args:
+            omega: Angular frequency array (n_freq,)
+
+        Returns:
+            Complex tensor (n_freq, n_bases) with each basis response
+        """
+        n_freq = omega.shape[0]
+        responses = []
+
+        # Debye: 1 / (1 + j*omega*tau)
+        for i in range(self.config.n_debye):
+            tau = 10 ** self.debye_log_tau[i]
+            Z = 1.0 / (1.0 + 1j * omega * tau)
+            responses.append(Z)
+
+        # Cole-Cole: 1 / (1 + (j*omega*tau)^alpha)
+        for i in range(self.config.n_cole_cole):
+            tau = 10 ** self.cole_cole_log_tau[i]
+            alpha = 0.3 + 0.65 * torch.sigmoid(self.cole_cole_alpha_raw[i])  # 0.3-0.95
+            Z = 1.0 / (1.0 + (1j * omega * tau) ** alpha)
+            responses.append(Z)
+
+        # CPE: 1 / (j*omega*tau)^n
+        for i in range(self.config.n_cpe):
+            tau = 10 ** self.cpe_log_tau[i]
+            n_exp = 0.3 + 0.4 * torch.sigmoid(self.cpe_n_raw[i])  # 0.3-0.7
+            Z = 1.0 / ((1j * omega * tau) ** n_exp + 1e-10)
+            responses.append(Z)
+
+        # Warburg (finite): tanh(sqrt(j*omega*tau)) / sqrt(j*omega*tau)
+        for i in range(self.config.n_warburg):
+            tau = 10 ** self.warburg_log_tau[i]
+            z = torch.sqrt(1j * omega * tau + 1e-10)
+            Z = torch.tanh(z) / (z + 1e-10)
+            responses.append(Z)
+
+        # Skin effect: z / tanh(z) where z = (1+j)*sqrt(omega*tau)
+        for i in range(self.config.n_skin_effect):
+            R_dc = 10 ** self.skin_log_R[i]
+            delta = 10 ** self.skin_log_delta[i]
+            tau = delta ** 2 / 2
+            z = (1 + 1j) * torch.sqrt(omega * tau + 1e-10)
+            Z = R_dc * z / (torch.tanh(z) + 1e-10)
+            responses.append(Z)
+
+        # Stack into (n_freq, n_bases)
+        return torch.stack(responses, dim=1)
+
+    def get_basis_info(self) -> List[Dict]:
+        """Get information about each basis function."""
+        info = []
+
+        for i in range(self.config.n_debye):
+            info.append({
+                'type': 'debye',
+                'index': i,
+                'tau': 10 ** self.debye_log_tau[i].item()
+            })
+
+        for i in range(self.config.n_cole_cole):
+            alpha = 0.3 + 0.65 * torch.sigmoid(self.cole_cole_alpha_raw[i]).item()
+            info.append({
+                'type': 'cole_cole',
+                'index': i,
+                'tau': 10 ** self.cole_cole_log_tau[i].item(),
+                'alpha': alpha
+            })
+
+        for i in range(self.config.n_cpe):
+            n_exp = 0.3 + 0.4 * torch.sigmoid(self.cpe_n_raw[i]).item()
+            info.append({
+                'type': 'cpe',
+                'index': i,
+                'tau': 10 ** self.cpe_log_tau[i].item(),
+                'n': n_exp
+            })
+
+        for i in range(self.config.n_warburg):
+            info.append({
+                'type': 'warburg',
+                'index': i,
+                'tau_d': 10 ** self.warburg_log_tau[i].item()
+            })
+
+        for i in range(self.config.n_skin_effect):
+            info.append({
+                'type': 'skin_effect',
+                'index': i,
+                'R_dc': 10 ** self.skin_log_R[i].item(),
+                'delta': 10 ** self.skin_log_delta[i].item()
+            })
+
+        return info
+
+
+class FrequencyAttention(nn.Module):
+    """
+    Frequency-dependent gating mechanism.
+
+    Maps log(omega) to per-basis gate values (0-1).
+    Unlike softmax attention, gates are INDEPENDENT - multiple bases can
+    be fully active at the same frequency.
+
+    This is critical for impedance modeling where multiple physical mechanisms
+    (Debye + Cole-Cole + skin effect) contribute simultaneously.
+    """
+
+    def __init__(self, n_bases: int, config: AttentionURNConfig):
+        super().__init__()
+        self.n_bases = n_bases
+        self.temperature = config.temperature
+
+        # Gate network: log(omega) -> gate values per basis
+        # Using sigmoid for independent gating (not softmax)
+        self.gate_net = nn.Sequential(
+            nn.Linear(1, config.attention_dim, dtype=torch.float64),
+            nn.Tanh(),
+            nn.Linear(config.attention_dim, config.attention_dim, dtype=torch.float64),
+            nn.Tanh(),
+            nn.Linear(config.attention_dim, n_bases, dtype=torch.float64),
+        )
+
+        # Per-basis frequency center and bandwidth (learnable)
+        # Each basis has a preferred frequency range
+        self.log_f_center = nn.Parameter(
+            torch.linspace(-1, 8, n_bases, dtype=torch.float64)  # 0.1 Hz to 100 MHz
+        )
+        self.log_bandwidth = nn.Parameter(
+            torch.ones(n_bases, dtype=torch.float64) * 2.0  # ~2 decades wide
+        )
+
+    def forward(self, omega: torch.Tensor) -> torch.Tensor:
+        """
+        Compute gate values for each frequency and basis.
+
+        Args:
+            omega: Angular frequency (n_freq,)
+
+        Returns:
+            Gate values (n_freq, n_bases) in range [0, 1], NOT summing to 1
+        """
+        n_freq = omega.shape[0]
+
+        # Input: log10(frequency)
+        log_f = torch.log10(omega / (2 * np.pi) + 1e-20)  # (n_freq,)
+
+        # Frequency-dependent gates from neural network
+        log_f_input = log_f.unsqueeze(-1)  # (n_freq, 1)
+        gate_nn = torch.sigmoid(self.gate_net(log_f_input))  # (n_freq, n_bases)
+
+        # Gaussian frequency window per basis (soft frequency selectivity)
+        # gate_gaussian = exp(-((log_f - center) / bandwidth)^2)
+        log_f_expanded = log_f.unsqueeze(1)  # (n_freq, 1)
+        bandwidth = torch.abs(self.log_bandwidth) + 0.5  # Minimum 0.5 decades
+        distance = (log_f_expanded - self.log_f_center) / bandwidth  # (n_freq, n_bases)
+        gate_gaussian = torch.exp(-distance ** 2)
+
+        # Combine: neural network gate * Gaussian frequency window
+        # This allows learning of complex frequency patterns while maintaining
+        # physical interpretability (each basis has a characteristic frequency range)
+        gates = gate_nn * gate_gaussian
+
+        return gates
+
+
+class AttentionURN(nn.Module):
+    """
+    Attention-based Universal Relaxation Network.
+
+    KAN Priority 3: Uses frequency-dependent attention to weight basis functions.
+
+    Key features:
+    - Multi-head attention maps frequency to basis relevance
+    - Basis functions are learnable (tau, alpha, etc.)
+    - Sparse attention encourages model simplicity
+    - Interpretable: can inspect which bases are active at each frequency
+    """
+
+    def __init__(self, config: AttentionURNConfig):
+        super().__init__()
+        self.config = config
+
+        # High-frequency impedance
+        self.Z_inf_real = nn.Parameter(torch.tensor(0.1, dtype=torch.float64))
+        self.Z_inf_imag = nn.Parameter(torch.tensor(0.0, dtype=torch.float64))
+
+        # Basis function bank
+        self.basis_bank = AttentionBasisBank(config)
+
+        # Attention mechanism
+        self.attention = FrequencyAttention(self.basis_bank.n_bases, config)
+
+        # Amplitude scaling per basis (learnable)
+        self.basis_amplitude = nn.Parameter(
+            torch.ones(self.basis_bank.n_bases, dtype=torch.float64)
+        )
+        self.basis_phase = nn.Parameter(
+            torch.zeros(self.basis_bank.n_bases, dtype=torch.float64)
+        )
+
+        # Reference values
+        self.Z_ref = config.Z_ref
+        self.omega_ref = config.omega_ref
+
+    def forward(self, omega: torch.Tensor) -> torch.Tensor:
+        """
+        Compute impedance using gated basis functions.
+
+        The gating mechanism provides frequency-dependent selection:
+        - gate(f, basis) in [0,1] determines how much each basis contributes at frequency f
+        - Gates are INDEPENDENT (not softmax) - multiple bases can fully contribute
+        - amplitude scales the overall contribution magnitude
+
+        Args:
+            omega: Angular frequency array
+
+        Returns:
+            Complex impedance Z(omega)
+        """
+        # Get all basis responses: (n_freq, n_bases)
+        basis_responses = self.basis_bank.get_all_basis_responses(omega)
+
+        # Get gate values: (n_freq, n_bases) in [0, 1]
+        gates = self.attention(omega)
+
+        # Scale bases by learned amplitude and phase
+        # amplitude determines "importance" of each basis type
+        amplitude = torch.abs(self.basis_amplitude) + 1e-10
+        phase = self.basis_phase
+        scaling = amplitude * torch.exp(1j * phase)  # (n_bases,)
+
+        # Apply scaling to basis responses
+        scaled_bases = basis_responses * scaling.unsqueeze(0)  # (n_freq, n_bases)
+
+        # Weighted sum using gates (no additional scaling needed - gates are independent)
+        Z_bases = torch.sum(gates * scaled_bases, dim=1)  # (n_freq,)
+
+        # Add Z_inf
+        Z_inf = self.Z_inf_real + 1j * self.Z_inf_imag
+
+        # Total impedance
+        Z_total = (Z_inf + Z_bases) * self.Z_ref
+
+        return Z_total
+
+    def get_attention_weights(self, omega: torch.Tensor) -> np.ndarray:
+        """Get attention weights at given frequencies."""
+        with torch.no_grad():
+            attn = self.attention(omega)
+            return attn.numpy()
+
+    def get_basis_contributions(self, omega: torch.Tensor) -> Dict[str, np.ndarray]:
+        """
+        Get individual basis contributions at given frequencies.
+
+        Returns dict with frequency array and contribution per basis.
+        """
+        with torch.no_grad():
+            basis_responses = self.basis_bank.get_all_basis_responses(omega)
+            gates = self.attention(omega)
+
+            amplitude = torch.abs(self.basis_amplitude)
+            phase = self.basis_phase
+            scaling = amplitude * torch.exp(1j * phase)
+
+            scaled_bases = basis_responses * scaling.unsqueeze(0)
+            contributions = gates * scaled_bases * self.Z_ref
+
+            return {
+                'frequencies': omega.numpy() / (2 * np.pi),
+                'contributions': contributions.numpy(),
+                'gates': gates.numpy(),
+                'basis_info': self.basis_bank.get_basis_info()
+            }
+
+    def get_dominant_bases(self, omega: torch.Tensor, threshold: float = 0.1) -> List[Dict]:
+        """
+        Get dominant basis functions at each frequency.
+
+        Args:
+            omega: Frequencies to analyze
+            threshold: Minimum attention weight to be considered dominant
+
+        Returns:
+            List of dicts with frequency and dominant bases info
+        """
+        with torch.no_grad():
+            attn = self.attention(omega).numpy()
+            basis_info = self.basis_bank.get_basis_info()
+
+            results = []
+            freqs = omega.numpy() / (2 * np.pi)
+
+            for i, f in enumerate(freqs):
+                dominant = []
+                for j, info in enumerate(basis_info):
+                    if attn[i, j] > threshold:
+                        dominant.append({
+                            **info,
+                            'attention': attn[i, j]
+                        })
+
+                # Sort by attention
+                dominant.sort(key=lambda x: x['attention'], reverse=True)
+                results.append({
+                    'frequency': f,
+                    'dominant_bases': dominant
+                })
+
+            return results
+
+    def get_active_components(self, threshold: float = 0.1) -> Dict:
+        """Get summary of active components (high average gate activation)."""
+        # Sample across frequency range
+        omega_sample = torch.logspace(-1, 9, 100, dtype=torch.float64) * 2 * np.pi
+
+        with torch.no_grad():
+            gates = self.attention(omega_sample).numpy()
+            avg_gate = gates.mean(axis=0)
+
+            basis_info = self.basis_bank.get_basis_info()
+            active = {}
+
+            for i, info in enumerate(basis_info):
+                if avg_gate[i] > threshold:
+                    basis_type = info['type']
+                    if basis_type not in active:
+                        active[basis_type] = []
+
+                    amp = self.basis_amplitude[i].abs().item()
+                    active[basis_type].append({
+                        **info,
+                        'avg_gate': avg_gate[i],
+                        'amplitude': amp
+                    })
+
+            return active
+
+    def predict(self, freqs: np.ndarray) -> np.ndarray:
+        """Predict impedance at given frequencies (Hz)."""
+        omega = torch.tensor(2 * np.pi * freqs, dtype=torch.float64)
+        with torch.no_grad():
+            return self(omega).numpy()
+
+
+def train_attention_urn(freqs: np.ndarray, Z_data: np.ndarray,
+                        config: AttentionURNConfig = None,
+                        verbose: bool = True) -> AttentionURN:
+    """
+    Train Attention-based URN on impedance data.
+
+    Args:
+        freqs: Frequency array (Hz)
+        Z_data: Complex impedance data
+        config: Configuration (optional)
+        verbose: Print progress
+
+    Returns:
+        Trained AttentionURN model
+    """
+    if config is None:
+        config = AttentionURNConfig()
+
+    omega = 2 * np.pi * freqs
+
+    # Determine reference scales
+    omega_ref = np.sqrt(omega.min() * omega.max())
+    Z_ref = np.mean(np.abs(Z_data))
+
+    config.omega_ref = omega_ref
+    config.Z_ref = Z_ref
+
+    if verbose:
+        print("=" * 60)
+        print("Attention-based URN Training")
+        print("=" * 60)
+        print(f"Frequency range: {freqs.min():.2e} - {freqs.max():.2e} Hz")
+        print(f"Total bases: {config.n_debye + config.n_cole_cole + config.n_cpe + config.n_warburg + config.n_skin_effect}")
+        print(f"Attention heads: {config.n_attention_heads}")
+        print(f"omega_ref: {omega_ref:.2e}, Z_ref: {Z_ref:.2e}")
+
+    # Prepare training data
+    omega_torch = torch.tensor(omega, dtype=torch.float64)
+    Z_target_real = torch.tensor(Z_data.real / Z_ref, dtype=torch.float64)
+    Z_target_imag = torch.tensor(Z_data.imag / Z_ref, dtype=torch.float64)
+
+    best_model = None
+    best_loss = float('inf')
+
+    for restart in range(config.n_restarts):
+        if verbose:
+            print(f"\nRestart {restart + 1}/{config.n_restarts}")
+
+        # Create model
+        model = AttentionURN(config)
+
+        # Optimizer
+        optimizer = optim.Adam(model.parameters(), lr=config.lr)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', factor=0.5, patience=300
+        )
+
+        for epoch in range(config.n_epochs):
+            optimizer.zero_grad()
+
+            # Forward pass
+            Z_pred = model(omega_torch)
+            Z_pred_norm = Z_pred / Z_ref
+
+            # Loss: MSE on real and imaginary parts
+            loss_real = torch.mean((Z_pred_norm.real - Z_target_real) ** 2)
+            loss_imag = torch.mean((Z_pred_norm.imag - Z_target_imag) ** 2)
+            loss_fit = loss_real + loss_imag
+
+            # Sparsity on basis amplitudes
+            sparsity = torch.sum(torch.abs(model.basis_amplitude))
+
+            # Gate sparsity penalty (encourage sparse gate activation)
+            # Unlike entropy for softmax, we penalize total gate activation
+            gates = model.attention(omega_torch)
+            gate_sparsity = torch.mean(torch.sum(gates, dim=1))  # Average number of active gates
+
+            loss = loss_fit + config.sparsity_weight * sparsity
+            loss = loss + config.attention_entropy_weight * gate_sparsity
+
+            # Backward pass
+            loss.backward()
+            optimizer.step()
+            scheduler.step(loss.detach())
+
+            if verbose and (epoch + 1) % 500 == 0:
+                rel_err = torch.abs(Z_pred - torch.tensor(Z_data, dtype=torch.complex128))
+                rel_err = rel_err / torch.abs(torch.tensor(Z_data, dtype=torch.complex128))
+                print(f"  Epoch {epoch+1}: loss={loss.item():.6f}, "
+                      f"max_err={rel_err.max().item()*100:.2f}%, "
+                      f"avg_gates={gate_sparsity.item():.2f}")
+
+        # Evaluate final loss
+        with torch.no_grad():
+            Z_pred = model(omega_torch)
+            Z_pred_norm = Z_pred / Z_ref
+            loss_final = torch.mean((Z_pred_norm.real - Z_target_real) ** 2)
+            loss_final += torch.mean((Z_pred_norm.imag - Z_target_imag) ** 2)
+
+        if loss_final < best_loss:
+            best_loss = loss_final
+            best_model = model
+
+    if verbose:
+        print(f"\nBest loss: {best_loss.item():.6f}")
+
+        # Show active components
+        active = best_model.get_active_components()
+        print("\nActive components (avg gate > 10%):")
+        for basis_type, comps in active.items():
+            print(f"  {basis_type}:")
+            for c in comps[:3]:  # Show top 3
+                if 'tau' in c:
+                    print(f"    tau={c['tau']:.2e}s, gate={c['avg_gate']:.2f}, amp={c['amplitude']:.2f}")
+                elif 'R_dc' in c:
+                    print(f"    R_dc={c['R_dc']:.2e}, gate={c['avg_gate']:.2f}, amp={c['amplitude']:.2f}")
+
+    return best_model
+
+
+def test_attention_urn():
+    """Test Attention-based URN with frequency-dependent data."""
+    print("\n" + "=" * 70)
+    print("Test: Attention-based URN (Frequency-Dependent Basis Selection)")
+    print("=" * 70)
+
+    # Create data with distinct frequency regimes:
+    # - Low freq: Debye relaxation (tau = 1 ms)
+    # - Mid freq: Cole-Cole (tau = 10 us, alpha = 0.8)
+    # - High freq: Skin effect (delta = 0.1 mm)
+
+    tau_debye = 1e-3      # 1 ms -> f_c ~ 160 Hz
+    tau_cc = 10e-6        # 10 us -> f_c ~ 16 kHz
+    alpha_cc = 0.8
+    R_dc = 0.1            # 100 mOhm
+    delta = 0.1e-3        # 0.1 mm skin depth
+
+    freqs = np.logspace(1, 8, 100)  # 10 Hz to 100 MHz
+    omega = 2 * np.pi * freqs
+
+    # Build impedance
+    Z_inf = 0.05  # 50 mOhm at high freq
+    Z_debye = 10 / (1 + 1j * omega * tau_debye)
+    Z_cc = 2 / (1 + (1j * omega * tau_cc) ** alpha_cc)
+
+    # Skin effect
+    tau_skin = delta ** 2 / 2
+    z_skin = (1 + 1j) * np.sqrt(omega * tau_skin)
+    Z_skin = R_dc * z_skin / np.tanh(z_skin + 1e-10)
+
+    Z_data = Z_inf + Z_debye + Z_cc + Z_skin
+
+    print(f"True model components:")
+    print(f"  Debye: tau = {tau_debye*1000:.1f} ms, f_c = {1/(2*np.pi*tau_debye):.0f} Hz")
+    print(f"  Cole-Cole: tau = {tau_cc*1e6:.1f} us, alpha = {alpha_cc}, f_c = {1/(2*np.pi*tau_cc)/1000:.1f} kHz")
+    print(f"  Skin effect: R_dc = {R_dc*1000:.0f} mOhm, delta = {delta*1000:.2f} mm")
+
+    # Train Attention URN
+    # Use more epochs and lower learning rate for better convergence
+    config = AttentionURNConfig(
+        n_debye=5,
+        n_cole_cole=3,
+        n_cpe=0,  # Disable CPE (not in true model)
+        n_warburg=0,
+        n_skin_effect=3,
+        attention_dim=64,
+        n_attention_heads=4,
+        temperature=1.0,
+        n_epochs=4000,
+        lr=0.003,
+        n_restarts=3,
+        sparsity_weight=0.001,  # Lower sparsity penalty
+        attention_entropy_weight=0.001,  # Lower gate penalty
+    )
+
+    model = train_attention_urn(freqs, Z_data, config, verbose=True)
+
+    # Evaluate fit
+    Z_pred = model.predict(freqs)
+    rel_error = np.abs(Z_pred - Z_data) / np.abs(Z_data)
+    print(f"\nFit quality:")
+    print(f"  Max error: {rel_error.max()*100:.2f}%")
+    print(f"  Mean error: {rel_error.mean()*100:.2f}%")
+
+    # Show attention at key frequencies
+    omega_torch = torch.tensor(omega, dtype=torch.float64)
+    print(f"\nDominant bases at key frequencies:")
+
+    key_freqs = [100, 10000, 10e6]  # 100 Hz, 10 kHz, 10 MHz
+    for f in key_freqs:
+        idx = np.argmin(np.abs(freqs - f))
+        dominant = model.get_dominant_bases(omega_torch[idx:idx+1], threshold=0.1)
+        if dominant and dominant[0]['dominant_bases']:
+            print(f"  f = {f:.0e} Hz:")
+            for base in dominant[0]['dominant_bases'][:2]:
+                if 'tau' in base:
+                    print(f"    {base['type']}: tau={base['tau']:.2e}s, attn={base['attention']:.2f}")
+                elif 'R_dc' in base:
+                    print(f"    {base['type']}: R_dc={base['R_dc']:.2e}, attn={base['attention']:.2f}")
+
+    return model
+
+
 def generate_spice_netlist(model: UniversalRelaxationNetwork, port_name: str = "Z") -> str:
     """
     Generate SPICE netlist from learned model.
@@ -943,6 +2441,795 @@ def generate_spice_netlist(model: UniversalRelaxationNetwork, port_name: str = "
     lines.append(".end")
 
     return "\n".join(lines)
+
+
+# =============================================================================
+# KAN PRIORITY 4: LEARNABLE EXPONENTS
+# =============================================================================
+# Cole-Cole alpha, CPE n, Cole-Davidson beta as fully learnable parameters
+# Key insight: Exponents determine the "shape" of relaxation
+# - alpha = 1: Pure Debye (single relaxation time)
+# - alpha < 1: Distributed relaxation times (disorder, heterogeneity)
+# - n = 0.5: Warburg diffusion
+# - n = 1: Pure capacitor
+#
+# Making exponents fully learnable allows discovery of non-standard relaxation
+# =============================================================================
+
+@dataclass
+class LearnableExponentConfig:
+    """Configuration for Learnable Exponent URN."""
+    # Number of each basis type
+    n_generalized_relaxation: int = 8  # Generalized: 1/(1 + (j*omega*tau)^alpha)^beta
+    n_generalized_cpe: int = 4         # Generalized CPE: 1/(j*omega*tau)^n
+
+    # Exponent constraints (for stability)
+    alpha_range: Tuple[float, float] = (0.1, 1.5)  # Cole-Cole exponent
+    beta_range: Tuple[float, float] = (0.1, 2.0)   # Cole-Davidson exponent
+    n_range: Tuple[float, float] = (0.1, 0.9)       # CPE exponent
+
+    # Training parameters
+    n_epochs: int = 4000
+    lr: float = 0.003
+    n_restarts: int = 3
+    sparsity_weight: float = 0.005
+
+    # Internal
+    omega_ref: float = 1.0
+    Z_ref: float = 1.0
+
+
+class GeneralizedRelaxation(nn.Module):
+    """
+    Generalized relaxation element with fully learnable exponents.
+
+    Z(omega) = 1 / (1 + (j*omega*tau)^alpha)^beta
+
+    Special cases:
+    - alpha=1, beta=1: Debye
+    - alpha<1, beta=1: Cole-Cole
+    - alpha=1, beta<1: Cole-Davidson
+    - alpha<1, beta<1: Havriliak-Negami
+    """
+
+    def __init__(self, n_elements: int, config: LearnableExponentConfig):
+        super().__init__()
+        self.n_elements = n_elements
+        self.config = config
+
+        # Learnable parameters
+        self.log_tau = nn.Parameter(
+            torch.linspace(-8, 0, n_elements, dtype=torch.float64)
+        )
+
+        # Alpha: Cole-Cole exponent (unconstrained, mapped via sigmoid)
+        self.alpha_raw = nn.Parameter(
+            torch.zeros(n_elements, dtype=torch.float64)
+        )
+
+        # Beta: Cole-Davidson exponent
+        self.beta_raw = nn.Parameter(
+            torch.zeros(n_elements, dtype=torch.float64)
+        )
+
+        # Complex weight
+        self.weight_real = nn.Parameter(
+            torch.ones(n_elements, dtype=torch.float64) * 0.5
+        )
+        self.weight_imag = nn.Parameter(
+            torch.zeros(n_elements, dtype=torch.float64)
+        )
+
+    def get_alpha(self) -> torch.Tensor:
+        """Get constrained alpha values."""
+        a_min, a_max = self.config.alpha_range
+        return a_min + (a_max - a_min) * torch.sigmoid(self.alpha_raw)
+
+    def get_beta(self) -> torch.Tensor:
+        """Get constrained beta values."""
+        b_min, b_max = self.config.beta_range
+        return b_min + (b_max - b_min) * torch.sigmoid(self.beta_raw)
+
+    def forward(self, omega: torch.Tensor) -> torch.Tensor:
+        """
+        Compute generalized relaxation response.
+
+        Args:
+            omega: Angular frequency (n_freq,)
+
+        Returns:
+            Complex impedance contribution (n_freq,)
+        """
+        tau = 10 ** self.log_tau  # (n_elements,)
+        alpha = self.get_alpha()   # (n_elements,)
+        beta = self.get_beta()     # (n_elements,)
+
+        # Z = w / (1 + (j*omega*tau)^alpha)^beta
+        omega_tau = omega.unsqueeze(1) * tau.unsqueeze(0)  # (n_freq, n_elements)
+
+        # (j*omega*tau)^alpha using complex power
+        z_alpha = (1j * omega_tau) ** alpha.unsqueeze(0)  # (n_freq, n_elements)
+
+        # (1 + z_alpha)^beta
+        denominator = (1.0 + z_alpha) ** beta.unsqueeze(0)
+
+        # Avoid division by zero
+        denominator = denominator + 1e-20
+
+        # Weighted sum
+        weights = self.weight_real + 1j * self.weight_imag  # (n_elements,)
+        Z_elements = weights.unsqueeze(0) / denominator  # (n_freq, n_elements)
+
+        return torch.sum(Z_elements, dim=1)  # (n_freq,)
+
+    def get_parameters(self) -> List[Dict]:
+        """Get learned parameters for each element."""
+        params = []
+        tau = 10 ** self.log_tau
+        alpha = self.get_alpha()
+        beta = self.get_beta()
+        weights = self.weight_real + 1j * self.weight_imag
+
+        for i in range(self.n_elements):
+            params.append({
+                'tau': tau[i].item(),
+                'alpha': alpha[i].item(),
+                'beta': beta[i].item(),
+                'weight_magnitude': torch.abs(weights[i]).item(),
+                'weight_phase': torch.angle(weights[i]).item(),
+            })
+
+        return params
+
+
+class GeneralizedCPE(nn.Module):
+    """
+    Generalized Constant Phase Element with learnable exponent.
+
+    Z(omega) = 1 / (Q * (j*omega)^n)
+
+    where n is fully learnable (not just 0.5 for Warburg).
+    """
+
+    def __init__(self, n_elements: int, config: LearnableExponentConfig):
+        super().__init__()
+        self.n_elements = n_elements
+        self.config = config
+
+        # Q parameter (magnitude)
+        self.log_Q = nn.Parameter(
+            torch.zeros(n_elements, dtype=torch.float64)
+        )
+
+        # n exponent (unconstrained, mapped via sigmoid)
+        self.n_raw = nn.Parameter(
+            torch.zeros(n_elements, dtype=torch.float64)
+        )
+
+        # Weight
+        self.weight_real = nn.Parameter(
+            torch.ones(n_elements, dtype=torch.float64) * 0.3
+        )
+        self.weight_imag = nn.Parameter(
+            torch.zeros(n_elements, dtype=torch.float64)
+        )
+
+    def get_n(self) -> torch.Tensor:
+        """Get constrained n values."""
+        n_min, n_max = self.config.n_range
+        return n_min + (n_max - n_min) * torch.sigmoid(self.n_raw)
+
+    def forward(self, omega: torch.Tensor) -> torch.Tensor:
+        """
+        Compute generalized CPE response.
+
+        Args:
+            omega: Angular frequency (n_freq,)
+
+        Returns:
+            Complex impedance contribution (n_freq,)
+        """
+        Q = 10 ** self.log_Q  # (n_elements,)
+        n = self.get_n()       # (n_elements,)
+
+        # Z = w / (Q * (j*omega)^n)
+        omega_expanded = omega.unsqueeze(1)  # (n_freq, 1)
+
+        # (j*omega)^n
+        jw_n = (1j * omega_expanded) ** n.unsqueeze(0)  # (n_freq, n_elements)
+
+        # Q * (j*omega)^n
+        denominator = Q.unsqueeze(0) * jw_n + 1e-20
+
+        # Weighted sum
+        weights = self.weight_real + 1j * self.weight_imag
+        Z_elements = weights.unsqueeze(0) / denominator
+
+        return torch.sum(Z_elements, dim=1)
+
+    def get_parameters(self) -> List[Dict]:
+        """Get learned parameters for each element."""
+        params = []
+        Q = 10 ** self.log_Q
+        n = self.get_n()
+        weights = self.weight_real + 1j * self.weight_imag
+
+        for i in range(self.n_elements):
+            params.append({
+                'Q': Q[i].item(),
+                'n': n[i].item(),
+                'weight_magnitude': torch.abs(weights[i]).item(),
+            })
+
+        return params
+
+
+class LearnableExponentURN(nn.Module):
+    """
+    URN with fully learnable exponents.
+
+    KAN Priority 4: All exponents (alpha, beta, n) are learnable parameters.
+
+    This enables discovery of non-standard relaxation behaviors:
+    - Fractional diffusion (n != 0.5)
+    - Anomalous relaxation (alpha != 1)
+    - Complex distributed relaxation (Havriliak-Negami)
+    """
+
+    def __init__(self, config: LearnableExponentConfig):
+        super().__init__()
+        self.config = config
+
+        # High-frequency limit
+        self.Z_inf_real = nn.Parameter(torch.tensor(0.1, dtype=torch.float64))
+        self.Z_inf_imag = nn.Parameter(torch.tensor(0.0, dtype=torch.float64))
+
+        # Generalized relaxation elements
+        self.relaxation = GeneralizedRelaxation(
+            config.n_generalized_relaxation, config
+        )
+
+        # Generalized CPE elements
+        self.cpe = GeneralizedCPE(
+            config.n_generalized_cpe, config
+        )
+
+        # Reference values
+        self.Z_ref = config.Z_ref
+        self.omega_ref = config.omega_ref
+
+    def forward(self, omega: torch.Tensor) -> torch.Tensor:
+        """Compute total impedance."""
+        Z_inf = self.Z_inf_real + 1j * self.Z_inf_imag
+        Z_relax = self.relaxation(omega)
+        Z_cpe = self.cpe(omega)
+
+        return (Z_inf + Z_relax + Z_cpe) * self.Z_ref
+
+    def get_active_components(self, threshold: float = 0.1) -> Dict:
+        """Get components with significant weights."""
+        active = {'generalized_relaxation': [], 'generalized_cpe': []}
+
+        # Relaxation
+        for p in self.relaxation.get_parameters():
+            if p['weight_magnitude'] > threshold:
+                active['generalized_relaxation'].append(p)
+
+        # CPE
+        for p in self.cpe.get_parameters():
+            if p['weight_magnitude'] > threshold:
+                active['generalized_cpe'].append(p)
+
+        return active
+
+    def classify_relaxation_type(self, alpha: float, beta: float) -> str:
+        """Classify relaxation type based on exponents."""
+        if abs(alpha - 1.0) < 0.1 and abs(beta - 1.0) < 0.1:
+            return "Debye"
+        elif abs(alpha - 1.0) >= 0.1 and abs(beta - 1.0) < 0.1:
+            return f"Cole-Cole (alpha={alpha:.2f})"
+        elif abs(alpha - 1.0) < 0.1 and abs(beta - 1.0) >= 0.1:
+            return f"Cole-Davidson (beta={beta:.2f})"
+        else:
+            return f"Havriliak-Negami (alpha={alpha:.2f}, beta={beta:.2f})"
+
+    def get_physical_interpretation(self) -> List[Dict]:
+        """Get physical interpretation of learned components."""
+        interpretations = []
+
+        for p in self.relaxation.get_parameters():
+            if p['weight_magnitude'] > 0.1:
+                relax_type = self.classify_relaxation_type(p['alpha'], p['beta'])
+                f_c = 1 / (2 * np.pi * p['tau'])
+                interpretations.append({
+                    'type': relax_type,
+                    'tau': p['tau'],
+                    'f_characteristic': f_c,
+                    'alpha': p['alpha'],
+                    'beta': p['beta'],
+                    'weight': p['weight_magnitude'],
+                })
+
+        for p in self.cpe.get_parameters():
+            if p['weight_magnitude'] > 0.1:
+                if abs(p['n'] - 0.5) < 0.1:
+                    cpe_type = "Warburg diffusion"
+                elif abs(p['n'] - 1.0) < 0.1:
+                    cpe_type = "Capacitive"
+                elif abs(p['n']) < 0.1:
+                    cpe_type = "Resistive"
+                else:
+                    cpe_type = f"Fractional (n={p['n']:.2f})"
+
+                interpretations.append({
+                    'type': cpe_type,
+                    'n': p['n'],
+                    'Q': p['Q'],
+                    'weight': p['weight_magnitude'],
+                })
+
+        return interpretations
+
+    def predict(self, freqs: np.ndarray) -> np.ndarray:
+        """Predict impedance at given frequencies."""
+        omega = torch.tensor(2 * np.pi * freqs, dtype=torch.float64)
+        with torch.no_grad():
+            return self(omega).numpy()
+
+
+def train_learnable_exponent_urn(freqs: np.ndarray, Z_data: np.ndarray,
+                                  config: LearnableExponentConfig = None,
+                                  verbose: bool = True) -> LearnableExponentURN:
+    """Train URN with learnable exponents."""
+    if config is None:
+        config = LearnableExponentConfig()
+
+    omega = 2 * np.pi * freqs
+
+    # Reference scaling
+    omega_ref = np.sqrt(omega.min() * omega.max())
+    Z_ref = np.mean(np.abs(Z_data))
+    config.omega_ref = omega_ref
+    config.Z_ref = Z_ref
+
+    if verbose:
+        print("=" * 60)
+        print("Learnable Exponent URN Training")
+        print("=" * 60)
+        print(f"Frequency range: {freqs.min():.2e} - {freqs.max():.2e} Hz")
+        print(f"Generalized relaxation elements: {config.n_generalized_relaxation}")
+        print(f"Generalized CPE elements: {config.n_generalized_cpe}")
+        print(f"Alpha range: {config.alpha_range}")
+        print(f"Beta range: {config.beta_range}")
+        print(f"n range: {config.n_range}")
+
+    # Training data
+    omega_torch = torch.tensor(omega, dtype=torch.float64)
+    Z_target_real = torch.tensor(Z_data.real / Z_ref, dtype=torch.float64)
+    Z_target_imag = torch.tensor(Z_data.imag / Z_ref, dtype=torch.float64)
+
+    best_model = None
+    best_loss = float('inf')
+
+    for restart in range(config.n_restarts):
+        if verbose:
+            print(f"\nRestart {restart + 1}/{config.n_restarts}")
+
+        model = LearnableExponentURN(config)
+        optimizer = optim.Adam(model.parameters(), lr=config.lr)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', factor=0.5, patience=300
+        )
+
+        for epoch in range(config.n_epochs):
+            optimizer.zero_grad()
+
+            Z_pred = model(omega_torch)
+            Z_pred_norm = Z_pred / Z_ref
+
+            loss_real = torch.mean((Z_pred_norm.real - Z_target_real) ** 2)
+            loss_imag = torch.mean((Z_pred_norm.imag - Z_target_imag) ** 2)
+            loss_fit = loss_real + loss_imag
+
+            # Sparsity
+            sparsity = torch.sum(torch.abs(model.relaxation.weight_real))
+            sparsity += torch.sum(torch.abs(model.relaxation.weight_imag))
+            sparsity += torch.sum(torch.abs(model.cpe.weight_real))
+            sparsity += torch.sum(torch.abs(model.cpe.weight_imag))
+
+            loss = loss_fit + config.sparsity_weight * sparsity
+
+            loss.backward()
+            optimizer.step()
+            scheduler.step(loss.detach())
+
+            if verbose and (epoch + 1) % 500 == 0:
+                rel_err = torch.abs(Z_pred - torch.tensor(Z_data, dtype=torch.complex128))
+                rel_err = rel_err / torch.abs(torch.tensor(Z_data, dtype=torch.complex128))
+                print(f"  Epoch {epoch+1}: loss={loss.item():.6f}, "
+                      f"max_err={rel_err.max().item()*100:.2f}%")
+
+        # Final evaluation
+        with torch.no_grad():
+            Z_pred = model(omega_torch)
+            Z_pred_norm = Z_pred / Z_ref
+            loss_final = torch.mean((Z_pred_norm.real - Z_target_real) ** 2)
+            loss_final += torch.mean((Z_pred_norm.imag - Z_target_imag) ** 2)
+
+        if loss_final < best_loss:
+            best_loss = loss_final
+            best_model = model
+
+    if verbose:
+        print(f"\nBest loss: {best_loss.item():.6f}")
+        print("\nPhysical interpretation:")
+        for interp in best_model.get_physical_interpretation():
+            print(f"  {interp['type']}")
+            for k, v in interp.items():
+                if k != 'type':
+                    if isinstance(v, float):
+                        print(f"    {k}: {v:.4g}")
+
+    return best_model
+
+
+def test_learnable_exponent_urn():
+    """Test Learnable Exponent URN."""
+    print("\n" + "=" * 70)
+    print("Test: Learnable Exponent URN (Havriliak-Negami Discovery)")
+    print("=" * 70)
+
+    # Create Havriliak-Negami data (alpha != 1, beta != 1)
+    tau = 1e-4
+    alpha = 0.7   # Cole-Cole component
+    beta = 0.6    # Cole-Davidson component
+    Z0 = 100
+
+    freqs = np.logspace(1, 7, 80)
+    omega = 2 * np.pi * freqs
+
+    # Havriliak-Negami: Z = Z0 / (1 + (j*omega*tau)^alpha)^beta
+    Z_data = Z0 / (1 + (1j * omega * tau) ** alpha) ** beta
+
+    # Add some CPE contribution
+    n_cpe = 0.65  # Between Warburg (0.5) and capacitor (1.0)
+    Q = 1e-5
+    Z_cpe = 1 / (Q * (1j * omega) ** n_cpe)
+    Z_data = Z_data + 0.2 * Z_cpe  # Small CPE contribution
+
+    print(f"True Havriliak-Negami parameters:")
+    print(f"  tau = {tau:.2e} s, alpha = {alpha}, beta = {beta}")
+    print(f"  CPE: n = {n_cpe}, Q = {Q:.2e}")
+
+    # Train
+    config = LearnableExponentConfig(
+        n_generalized_relaxation=6,
+        n_generalized_cpe=3,
+        alpha_range=(0.3, 1.2),
+        beta_range=(0.3, 1.2),
+        n_range=(0.3, 0.8),
+        n_epochs=4000,
+        n_restarts=3,
+        sparsity_weight=0.003,
+    )
+
+    model = train_learnable_exponent_urn(freqs, Z_data, config, verbose=True)
+
+    # Evaluate
+    Z_pred = model.predict(freqs)
+    rel_error = np.abs(Z_pred - Z_data) / np.abs(Z_data)
+    print(f"\nFit quality:")
+    print(f"  Max error: {rel_error.max()*100:.2f}%")
+    print(f"  Mean error: {rel_error.mean()*100:.2f}%")
+
+    return model
+
+
+# =============================================================================
+# KAN PRIORITY 5: SYMBOLIC DISCOVERY
+# =============================================================================
+# Automatic discovery of symbolic expressions from learned parameters
+# Key insight: Learned exponents and weights can be "snapped" to known values
+# - alpha ~= 0.5 -> sqrt behavior (diffusion)
+# - alpha ~= 1 -> Debye
+# - beta ~= 0.5 -> Cole-Davidson
+# - n ~= 0.5 -> Warburg
+#
+# This enables generating human-readable symbolic expressions
+# =============================================================================
+
+class SymbolicDiscovery:
+    """
+    Symbolic discovery from learned URN parameters.
+
+    Analyzes learned exponents and parameters to:
+    1. Identify known physical mechanisms
+    2. Generate symbolic expressions
+    3. Suggest equivalent circuit topology
+    """
+
+    # Known exponent values and their physical meanings
+    KNOWN_EXPONENTS = {
+        1.0: ("unity", "pure single relaxation"),
+        0.5: ("half", "diffusion-limited, square-root"),
+        0.75: ("3/4", "anomalous diffusion"),
+        0.25: ("1/4", "ultra-slow diffusion"),
+        0.33: ("1/3", "1D diffusion"),
+        0.67: ("2/3", "2D diffusion"),
+    }
+
+    # Tolerance for snapping to known values
+    SNAP_TOLERANCE = 0.08
+
+    def __init__(self, model):
+        """
+        Initialize with a trained URN model.
+
+        Args:
+            model: Trained URN model (LearnableExponentURN or similar)
+        """
+        self.model = model
+        self.discovered_components = []
+        self.symbolic_expression = None
+
+    def snap_to_known(self, value: float) -> Tuple[float, str, str]:
+        """
+        Snap a value to nearest known physical value.
+
+        Returns:
+            (snapped_value, symbolic_name, physical_meaning)
+        """
+        for known_val, (name, meaning) in self.KNOWN_EXPONENTS.items():
+            if abs(value - known_val) < self.SNAP_TOLERANCE:
+                return known_val, name, meaning
+
+        # Check simple fractions
+        for num in range(1, 10):
+            for den in range(2, 10):
+                frac = num / den
+                if abs(value - frac) < self.SNAP_TOLERANCE:
+                    return frac, f"{num}/{den}", f"fractional power {num}/{den}"
+
+        # No match - return as-is
+        return value, f"{value:.3f}", "non-standard"
+
+    def analyze(self) -> Dict:
+        """
+        Analyze learned model and discover symbolic structure.
+
+        Returns:
+            Dict with discovered components and expressions
+        """
+        self.discovered_components = []
+
+        # Analyze relaxation elements
+        if hasattr(self.model, 'relaxation'):
+            for p in self.model.relaxation.get_parameters():
+                if p['weight_magnitude'] > 0.1:
+                    alpha_snap, alpha_sym, alpha_meaning = self.snap_to_known(p['alpha'])
+                    beta_snap, beta_sym, beta_meaning = self.snap_to_known(p['beta'])
+
+                    component = {
+                        'type': 'relaxation',
+                        'tau': p['tau'],
+                        'alpha': {'value': p['alpha'], 'snapped': alpha_snap,
+                                 'symbol': alpha_sym, 'meaning': alpha_meaning},
+                        'beta': {'value': p['beta'], 'snapped': beta_snap,
+                                'symbol': beta_sym, 'meaning': beta_meaning},
+                        'weight': p['weight_magnitude'],
+                    }
+
+                    # Determine relaxation type
+                    if alpha_snap == 1.0 and beta_snap == 1.0:
+                        component['name'] = 'Debye'
+                        component['formula'] = '1/(1 + j*omega*tau)'
+                    elif beta_snap == 1.0:
+                        component['name'] = 'Cole-Cole'
+                        component['formula'] = f'1/(1 + (j*omega*tau)^{alpha_sym})'
+                    elif alpha_snap == 1.0:
+                        component['name'] = 'Cole-Davidson'
+                        component['formula'] = f'1/(1 + j*omega*tau)^{beta_sym}'
+                    else:
+                        component['name'] = 'Havriliak-Negami'
+                        component['formula'] = f'1/(1 + (j*omega*tau)^{alpha_sym})^{beta_sym}'
+
+                    self.discovered_components.append(component)
+
+        # Analyze CPE elements
+        if hasattr(self.model, 'cpe'):
+            for p in self.model.cpe.get_parameters():
+                if p['weight_magnitude'] > 0.1:
+                    n_snap, n_sym, n_meaning = self.snap_to_known(p['n'])
+
+                    component = {
+                        'type': 'cpe',
+                        'Q': p['Q'],
+                        'n': {'value': p['n'], 'snapped': n_snap,
+                             'symbol': n_sym, 'meaning': n_meaning},
+                        'weight': p['weight_magnitude'],
+                    }
+
+                    # Determine CPE type
+                    if n_snap == 0.5:
+                        component['name'] = 'Warburg'
+                        component['formula'] = '1/sqrt(j*omega)'
+                    elif n_snap == 1.0:
+                        component['name'] = 'Capacitor'
+                        component['formula'] = '1/(j*omega*C)'
+                    else:
+                        component['name'] = f'Fractional CPE'
+                        component['formula'] = f'1/(j*omega)^{n_sym}'
+
+                    self.discovered_components.append(component)
+
+        # Generate overall symbolic expression
+        self._generate_expression()
+
+        return {
+            'components': self.discovered_components,
+            'expression': self.symbolic_expression,
+            'circuit_suggestion': self._suggest_circuit(),
+        }
+
+    def _generate_expression(self):
+        """Generate overall symbolic expression."""
+        terms = []
+
+        # Z_inf
+        if hasattr(self.model, 'Z_inf_real'):
+            Z_inf = self.model.Z_inf_real.item()
+            if abs(Z_inf) > 0.01:
+                terms.append(f"R_inf")
+
+        # Add component terms
+        for i, comp in enumerate(self.discovered_components):
+            if comp['type'] == 'relaxation':
+                terms.append(f"Z_{comp['name']}_{i}")
+            else:
+                terms.append(f"Z_{comp['name']}_{i}")
+
+        self.symbolic_expression = " + ".join(terms) if terms else "0"
+
+    def _suggest_circuit(self) -> str:
+        """Suggest equivalent circuit topology."""
+        suggestions = []
+
+        for comp in self.discovered_components:
+            if comp.get('name') == 'Debye':
+                suggestions.append("RC parallel (single time constant)")
+            elif comp.get('name') == 'Cole-Cole':
+                suggestions.append("Distributed RC (ZARC element)")
+            elif comp.get('name') == 'Cole-Davidson':
+                suggestions.append("Asymmetric relaxation (requires RC ladder)")
+            elif comp.get('name') == 'Havriliak-Negami':
+                suggestions.append("Complex distributed relaxation (multi-stage RC)")
+            elif comp.get('name') == 'Warburg':
+                suggestions.append("Semi-infinite diffusion (Warburg element)")
+            elif 'Fractional' in comp.get('name', ''):
+                suggestions.append("Fractional element (RC ladder approximation)")
+
+        return "; ".join(suggestions) if suggestions else "Simple resistor"
+
+    def print_report(self):
+        """Print human-readable discovery report."""
+        print("\n" + "=" * 60)
+        print("SYMBOLIC DISCOVERY REPORT")
+        print("=" * 60)
+
+        if not self.discovered_components:
+            self.analyze()
+
+        print(f"\nDiscovered {len(self.discovered_components)} active component(s):")
+        print("-" * 60)
+
+        for i, comp in enumerate(self.discovered_components):
+            print(f"\n[{i+1}] {comp['name']}")
+            print(f"    Formula: {comp['formula']}")
+
+            if comp['type'] == 'relaxation':
+                print(f"    tau = {comp['tau']:.3e} s (f_c = {1/(2*np.pi*comp['tau']):.2e} Hz)")
+                print(f"    alpha = {comp['alpha']['value']:.3f} -> {comp['alpha']['snapped']:.3f} "
+                      f"({comp['alpha']['meaning']})")
+                print(f"    beta = {comp['beta']['value']:.3f} -> {comp['beta']['snapped']:.3f} "
+                      f"({comp['beta']['meaning']})")
+            else:
+                print(f"    Q = {comp['Q']:.3e}")
+                print(f"    n = {comp['n']['value']:.3f} -> {comp['n']['snapped']:.3f} "
+                      f"({comp['n']['meaning']})")
+
+            print(f"    weight = {comp['weight']:.3f}")
+
+        print("\n" + "-" * 60)
+        print(f"Overall expression: Z(omega) = {self.symbolic_expression}")
+        print(f"\nCircuit suggestion: {self._suggest_circuit()}")
+
+    def to_latex(self) -> str:
+        """Generate LaTeX expression."""
+        if not self.discovered_components:
+            self.analyze()
+
+        latex_terms = []
+
+        if hasattr(self.model, 'Z_inf_real'):
+            Z_inf = self.model.Z_inf_real.item()
+            if abs(Z_inf) > 0.01:
+                latex_terms.append("R_{\\infty}")
+
+        for i, comp in enumerate(self.discovered_components):
+            if comp['type'] == 'relaxation':
+                alpha_sym = comp['alpha']['symbol']
+                beta_sym = comp['beta']['symbol']
+                if alpha_sym == 'unity' and beta_sym == 'unity':
+                    latex_terms.append(f"\\frac{{Z_{i}}}{{1 + j\\omega\\tau_{i}}}")
+                elif beta_sym == 'unity':
+                    latex_terms.append(f"\\frac{{Z_{i}}}{{1 + (j\\omega\\tau_{i})^{{{alpha_sym}}}}}")
+                elif alpha_sym == 'unity':
+                    latex_terms.append(f"\\frac{{Z_{i}}}{{(1 + j\\omega\\tau_{i})^{{{beta_sym}}}}}")
+                else:
+                    latex_terms.append(f"\\frac{{Z_{i}}}{{(1 + (j\\omega\\tau_{i})^{{{alpha_sym}}})^{{{beta_sym}}}}}")
+            else:
+                n_sym = comp['n']['symbol']
+                latex_terms.append(f"\\frac{{1}}{{Q_{i}(j\\omega)^{{{n_sym}}}}}")
+
+        return "Z(\\omega) = " + " + ".join(latex_terms) if latex_terms else "0"
+
+
+def test_symbolic_discovery():
+    """Test symbolic discovery functionality."""
+    print("\n" + "=" * 70)
+    print("Test: Symbolic Discovery (Automatic Expression Generation)")
+    print("=" * 70)
+
+    # Create test data with known structure
+    # Component 1: Cole-Cole with alpha = 0.75
+    tau1 = 1e-4
+    alpha1 = 0.75
+
+    # Component 2: Warburg (n = 0.5)
+    Q2 = 1e-5
+
+    freqs = np.logspace(1, 7, 80)
+    omega = 2 * np.pi * freqs
+
+    Z_cc = 50 / (1 + (1j * omega * tau1) ** alpha1)
+    Z_warburg = 1 / (Q2 * (1j * omega) ** 0.5)
+    Z_data = 10 + Z_cc + 0.3 * Z_warburg  # R_inf + Cole-Cole + Warburg
+
+    print(f"True model:")
+    print(f"  R_inf = 10 Ohm")
+    print(f"  Cole-Cole: tau = {tau1:.2e} s, alpha = {alpha1}")
+    print(f"  Warburg: Q = {Q2:.2e}, n = 0.5")
+
+    # Train model with learnable exponents
+    config = LearnableExponentConfig(
+        n_generalized_relaxation=4,
+        n_generalized_cpe=2,
+        alpha_range=(0.5, 1.0),
+        beta_range=(0.8, 1.2),
+        n_range=(0.4, 0.6),
+        n_epochs=3000,
+        n_restarts=2,
+        sparsity_weight=0.005,
+    )
+
+    model = train_learnable_exponent_urn(freqs, Z_data, config, verbose=True)
+
+    # Symbolic discovery
+    discovery = SymbolicDiscovery(model)
+    discovery.print_report()
+
+    # LaTeX output
+    print("\nLaTeX expression:")
+    print(discovery.to_latex())
+
+    # Evaluate fit
+    Z_pred = model.predict(freqs)
+    rel_error = np.abs(Z_pred - Z_data) / np.abs(Z_data)
+    print(f"\nFit quality:")
+    print(f"  Max error: {rel_error.max()*100:.2f}%")
+    print(f"  Mean error: {rel_error.mean()*100:.2f}%")
+
+    return model, discovery
 
 
 # =============================================================================
@@ -1172,6 +3459,77 @@ def test_uncertainty_quantification():
             print(f"    {pname} = {pval:.3e} +/- {pstd:.3e}")
 
 
+def test_adaptive_urn():
+    """Test Adaptive URN with KAN-like grid refinement."""
+    print("\n" + "=" * 70)
+    print("Test: Adaptive URN (KAN-like Grid Refinement)")
+    print("=" * 70)
+
+    # Create complex multi-relaxation data that needs refinement
+    # Two Debye processes at different frequencies + Cole-Cole
+    tau1 = 1e-4   # 1.6 kHz
+    tau2 = 1e-6   # 160 kHz
+    tau3 = 1e-8   # 16 MHz (Cole-Cole)
+    alpha = 0.7
+
+    freqs = np.logspace(2, 9, 100)  # 100 Hz to 1 GHz
+    omega = 2 * np.pi * freqs
+
+    # Complex impedance with 3 processes
+    Z_debye1 = 100 / (1 + 1j * omega * tau1)
+    Z_debye2 = 50 / (1 + 1j * omega * tau2)
+    Z_cc = 30 / (1 + (1j * omega * tau3) ** alpha)
+    Z_data = 10 + Z_debye1 + Z_debye2 + Z_cc  # R_inf + 3 processes
+
+    print(f"True: 3 relaxation processes")
+    print(f"  Debye 1: tau = {tau1:.0e} s (f = {1/(2*np.pi*tau1):.0f} Hz)")
+    print(f"  Debye 2: tau = {tau2:.0e} s (f = {1/(2*np.pi*tau2):.0f} Hz)")
+    print(f"  Cole-Cole: tau = {tau3:.0e} s, alpha = {alpha}")
+
+    # Train with Adaptive URN
+    config = AdaptiveURNConfig(
+        n_debye_initial=2,        # Start with just 2 Debye
+        n_cole_cole_initial=1,    # And 1 Cole-Cole
+        max_refinements=2,        # Allow 2 refinement steps
+        refinement_threshold=0.10, # Refine if error > 10%
+        max_bases_per_type=6,     # Allow up to 6 of each
+        n_epochs_initial=2000,    # Faster for demo
+        n_epochs_refine=1500,
+        n_restarts=2,
+        sparsity_weight=0.008,
+    )
+
+    print("\nTraining Adaptive URN...")
+    adaptive = train_adaptive_urn(freqs, Z_data, config, verbose=True)
+
+    # Show refinement history
+    summary = adaptive.get_refinement_summary()
+    print(f"\nRefinement Summary:")
+    print(f"  Total stages: {summary['n_stages']}")
+    print(f"  Error improvement: {summary['improvement']*100:.1f}%")
+
+    for stage in summary['history']:
+        print(f"  Stage {stage['stage']}: n_debye={stage['n_debye']}, "
+              f"n_cole_cole={stage['n_cole_cole']}, "
+              f"max_error={stage['max_error']*100:.1f}%")
+
+    # Show active components
+    active = adaptive.get_active_components()
+    print("\nActive components (final):")
+    for name, comps in active.items():
+        print(f"  {name}: {len(comps)} active")
+        for c in comps:
+            if 'tau' in c:
+                print(f"    tau = {c['tau']:.2e} s, weight = {c['weight_magnitude']:.3f}")
+
+    # Evaluate fit
+    Z_pred = adaptive.predict(freqs)
+    rel_error = np.abs(Z_pred - Z_data) / np.abs(Z_data)
+    print(f"\nFinal fit quality:")
+    print(f"  Max error: {rel_error.max()*100:.2f}%")
+    print(f"  Mean error: {rel_error.mean()*100:.2f}%")
+
+
 if __name__ == '__main__':
     np.random.seed(42)
 
@@ -1185,6 +3543,11 @@ if __name__ == '__main__':
     test_electrochemistry_diffusion()
     test_spice_generation()
     test_uncertainty_quantification()
+    test_adaptive_urn()       # KAN Priority 1: Adaptive refinement
+    test_hierarchical_urn()   # KAN Priority 2: Hierarchical multi-scale
+    test_attention_urn()      # KAN Priority 3: Attention-based selection
+    test_learnable_exponent_urn()  # KAN Priority 4: Learnable exponents
+    test_symbolic_discovery()      # KAN Priority 5: Symbolic discovery
 
     print("\n" + "=" * 70)
     print("Summary")
@@ -1212,7 +3575,39 @@ Universal Relaxation Network capabilities:
    - Mechanism consensus across models
    - Bootstrap sampling for robustness
 
-5. APPLICATIONS:
+5. KAN-LIKE ADAPTIVE REFINEMENT:
+   - Starts with coarse tau distribution
+   - Automatically identifies high-error regions
+   - Adds new bases at optimal tau values
+   - Preserves circuit synthesis capability
+
+6. HIERARCHICAL MULTI-SCALE DECOMPOSITION:
+   - Level 1: Slow processes (ms - s) - bulk relaxation
+   - Level 2: Medium processes (us - ms) - interface effects
+   - Level 3: Fast processes (ns - us) - high-frequency effects
+   - Better physical separation by time scale
+   - Efficient coarse-to-fine learning
+
+7. ATTENTION-BASED BASIS SELECTION:
+   - Frequency-dependent weighting of basis functions
+   - Multi-head attention for rich frequency selectivity
+   - Entropy penalty encourages sparse, interpretable attention
+   - Shows which mechanisms dominate at each frequency
+   - Can identify: low-freq (diffusion), mid-freq (interface), high-freq (skin)
+
+8. LEARNABLE EXPONENTS (KAN Priority 4):
+   - Cole-Cole alpha, Cole-Davidson beta, CPE n fully learnable
+   - Discovers Havriliak-Negami (alpha != 1, beta != 1) automatically
+   - Physical interpretation: Debye, Cole-Cole, Cole-Davidson classification
+   - Enables discovery of non-standard relaxation mechanisms
+
+9. SYMBOLIC DISCOVERY (KAN Priority 5):
+   - Snaps learned exponents to known physical values (1/2, 3/4, 1, etc.)
+   - Generates human-readable symbolic expressions
+   - LaTeX output for publication
+   - Circuit topology suggestions based on discovered mechanisms
+
+10. APPLICATIONS:
    - Ferrite permeability modeling (including FMR)
    - Conductor skin effect characterization
    - Electrochemical impedance spectroscopy
@@ -1221,6 +3616,11 @@ Universal Relaxation Network capabilities:
 
 PUBLICATION POTENTIAL:
 - Novel combination of physical basis functions + neural network
+- KAN-inspired adaptive grid refinement for tau distribution
+- Hierarchical multi-scale decomposition for complex systems
+- Attention mechanism for frequency-dependent basis selection
+- Fully learnable exponents (Havriliak-Negami discovery)
+- Symbolic regression with physical constraints
 - Solves Vector Fitting problems (stability, noise, interpretability)
 - Uncertainty quantification for reliability
 - Broad applicability across multiple fields
