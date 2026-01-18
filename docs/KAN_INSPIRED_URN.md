@@ -331,43 +331,71 @@ $$Z(\omega) = Z_\infty + \sum_k w_k \cdot \text{basis}_k(\omega, \theta_k)$$
 | Circuit synthesis | Requires Foster/Cauer transform | Basis → circuit direct correspondence |
 | Noise robustness | Overfits with more poles | Regularized by physical constraints |
 
-#### Critical Issue: Poles Within Frequency Range
+#### Critical Issue: Problematic Poles
 
 **Vector Fitting models can be invalid even with low fitting error!**
 
-A VF model places poles at $s = -\alpha \pm j\beta$, corresponding to frequency $f = |\beta|/(2\pi)$.
-If this frequency falls within the measurement range, the model is **physically invalid**:
+A VF model places poles at $s = -\alpha + j\beta$. Several conditions make poles problematic:
 
+**1. Poles within frequency range (resonance artifacts)**
 ```
-Measurement range: f_min to f_max
 Pole frequency: f_pole = |Im(pole)| / (2*pi)
-
 If f_min <= f_pole <= f_max:
-    → Model is INVALID (even if error is low at evaluation points)
-    → The model may oscillate wildly between measurement points
-    → Circuit simulation will show unphysical behavior
+    → Creates spurious resonance/anti-resonance
+    → Model oscillates wildly between measurement points
+```
+
+**2. Weakly damped poles (divergence tendency)**
+```
+Damping ratio: zeta = |Re(pole)| / |pole|
+If zeta < 0.1 (or |Re(pole)| << |Im(pole)|):
+    → Response shows ringing/oscillation
+    → Circuit simulation becomes unstable
+    → Not representative of relaxation phenomena
+```
+
+**3. Unstable poles (positive real part)**
+```
+If Re(pole) > 0:
+    → Exponentially growing response
+    → Completely unphysical
+```
+
+**Combined validity check:**
+```python
+# Pole at s = -alpha + j*beta
+alpha = -Re(pole)  # Should be positive for stability
+beta = Im(pole)
+f_pole = |beta| / (2*pi)
+
+is_stable = alpha > 0
+is_well_damped = alpha > 0.1 * |pole|  # zeta > 0.1
+is_outside_range = (f_pole < f_min) or (f_pole > f_max)
+
+is_valid = is_stable and (is_well_damped or is_outside_range)
 ```
 
 **Why this matters:**
-- VF can place poles anywhere to minimize error at evaluation points
-- Poles within the measurement range create resonances/anti-resonances
-- These are mathematical artifacts, not physical phenomena
+- VF minimizes error at evaluation points only
+- Weakly damped poles can fit data points while creating wild oscillations between them
+- Physical relaxation has well-damped poles (overdamped response)
 - Low error at measured frequencies ≠ correct model
 
 **URN advantage:**
-- Physical basis functions have no spurious poles within operating range
-- Debye relaxation: pole at $s = -1/\tau$ (always negative real, outside jω axis)
-- Cole-Cole, Warburg, etc.: branch cuts, not discrete poles
+- Physical basis functions have no spurious poles
+- Debye: pole at $s = -1/\tau$ (purely real, overdamped)
+- Cole-Cole: branch cut, no discrete poles
+- All bases represent overdamped relaxation (no ringing)
 
 **Benchmark validation criteria:**
 1. Fitting error (max relative error %)
-2. **Model validity** (no poles in frequency range)
+2. **Pole validity** (stable, well-damped, or outside frequency range)
 3. VF models failing validity check → URN wins by default
 
 | Model Status | Criteria | Action |
 |--------------|----------|--------|
-| **Valid** | No poles in [f_min, f_max] and no unstable poles | Compare errors normally |
-| **Invalid** | Poles in frequency range OR unstable poles | URN wins automatically |
+| **Valid** | All poles stable AND (well-damped OR outside range) | Compare errors normally |
+| **Invalid** | Unstable poles OR weakly-damped in-range poles | URN wins automatically |
 
 **Benchmark result**: URN wins 11 / VF wins 2 (out of 13 tests)
 - VF "wins" only count when model is valid
