@@ -711,9 +711,9 @@ VF performance depends critically on **pole initialization strategy**. We benchm
 
 | Metric | URN | VF (Conservative) | VF (Aggressive) |
 |--------|-----|-------------------|-----------------|
-| Average Max Error | **3.22%** | 63.21% | 446.77% |
+| Average Max Error | **3.22%** | 63.21% | 368.24% |
 | Wins vs URN | -- | 2/13 | 0/13 |
-| Invalid Models | 0 | 0 | **13/13** |
+| Invalid Models | 0 | 0 | **6/13** |
 
 **URN wins regardless of VF initialization strategy!**
 
@@ -741,21 +741,21 @@ VF performance depends critically on **pole initialization strategy**. We benchm
 
 | Test | URN Error | VF Error | Weakly Damped Poles | Valid | Winner |
 |------|-----------|----------|---------------------|-------|--------|
-| MnZn_Debye | 3.06% | 3148.31% | 8 | NO! | URN* |
-| NiZn_ColeCole | 2.42% | 515.66% | 8 | NO! | URN* |
-| HF_ColeCole | 1.68% | 89.68% | 8 | NO! | URN* |
-| Lossy_ColeCole | 1.91% | 547.87% | 8 | NO! | URN* |
-| Cu_foil_0.1mm | 7.35% | 4.10% | 8 | NO! | URN* |
-| Cu_foil_0.5mm | 1.82% | 29.38% | 8 | NO! | URN* |
-| Al_busbar_2mm | 0.93% | 145.14% | 8 | NO! | URN* |
-| Randles_simple | 1.13% | 541.84% | 10 | NO! | URN* |
-| Randles_lowRct | 1.57% | 232.37% | 10 | NO! | URN* |
-| Battery_2RC | 7.44% | 26.70% | 10 | NO! | URN* |
-| Polymer_HN | 4.15% | 98.36% | 8 | NO! | URN* |
-| Glass_CC | 4.11% | 47.65% | 8 | NO! | URN* |
-| Ceramic_Debye | 4.35% | 380.89% | 8 | NO! | URN* |
+| MnZn_Debye | 3.06% | 2548.50% | 2 | NO! | URN* |
+| NiZn_ColeCole | 2.42% | 437.37% | 0 | YES | URN |
+| HF_ColeCole | 1.68% | 82.02% | 0 | YES | URN |
+| Lossy_ColeCole | 1.91% | 462.30% | 2 | NO! | URN* |
+| Cu_foil_0.1mm | 7.35% | 7.30% | 2 | NO! | URN* |
+| Cu_foil_0.5mm | 1.82% | 40.47% | 2 | NO! | URN* |
+| Al_busbar_2mm | 0.93% | 221.89% | 4 | NO! | URN* |
+| Randles_simple | 1.13% | 399.96% | 0 | YES | URN |
+| Randles_lowRct | 1.57% | 122.98% | 0 | YES | URN |
+| Battery_2RC | 7.44% | 20.00% | 0 | YES | URN |
+| Polymer_HN | 4.15% | 82.78% | 0 | YES | URN |
+| Glass_CC | 4.11% | 37.95% | 0 | YES | URN |
+| Ceramic_Debye | 4.35% | 323.58% | 2 | NO! | URN* |
 
-**Result: URN wins 13/13 (100%) - All VF models invalid due to weakly-damped poles!**
+**Result: URN wins 13/13 (100%) - 6 VF models invalid due to weakly-damped poles!**
 
 *(URN* = URN wins by default because VF model is invalid)*
 
@@ -763,7 +763,7 @@ VF performance depends critically on **pole initialization strategy**. We benchm
 
 1. **VF Dilemma**:
    - **Conservative VF**: Low error on some cases, but fails on simple Debye (594% error)
-   - **Aggressive VF**: All models invalid - weakly-damped poles cause resonance between evaluation points
+   - **Aggressive VF**: 6/13 models invalid (weakly-damped poles), remaining 7 have high error
    - VF cannot win: either high error OR invalid model
 
 2. **URN Advantages**:
