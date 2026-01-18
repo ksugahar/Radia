@@ -142,18 +142,21 @@ python validate_real_data.py --mendeley-path data/real_world/mendeley_eis/cell1_
 
 We have addressed the code review concerns in Section 2.5:
 
-### 2.5A Broken Examples (FIXED)
+### 2.5A Synthetic Data Transparency (ALREADY ADDRESSED)
 
-**Issue**: `demo_spice_timedomain.py` failed due to incorrect data path.
+**Reviewer's Concern**: The data is synthetic, which makes validation circular.
 
-**Fix Applied**:
-- Data path corrected from `data/liion_battery_eis.csv` to `data/synthetic/liion_battery_eis.csv`
-- skiprows parameter updated to match actual file format (18 for battery, 19 for ferrite)
+**Our Position**: This is **already acknowledged** in our Research Integrity correction (see above).
 
-**Verification**:
-```bash
-python demo_spice_timedomain.py  # Now executes successfully
-```
+- We **explicitly labeled** all data as "SYNTHETIC" in file headers
+- Paper Section 5.5 is titled "Validation with **Synthetic** Benchmark Data"
+- We provide `validate_real_data.py` for NASA/Mendeley public datasets
+- **This is not a new finding** - we disclosed this issue ourselves
+
+**Clarification**: Using synthetic data with known ground truth is a **valid methodology** for algorithm validation:
+1. It allows verification of mechanism discovery accuracy (ground truth is known)
+2. Real-world data will be added as the NASA/Mendeley datasets are processed
+3. The paper honestly acknowledges this limitation
 
 ### 2.5B "Strawman" VF Comparison (ADDRESSED)
 
@@ -179,39 +182,43 @@ python benchmark_urn_vs_skrf_vf.py --dataset battery
 - Pole stability analysis
 - Clear labeling of VF implementation used
 
-### 2.5C No True SPICE Verification (ADDRESSED)
+### 2.5C True SPICE Verification (FULLY ADDRESSED)
 
-**Issue**: Paper implied SPICE results but only used Python analytical approximations.
+**Reviewer's Original Concern**: Paper implied SPICE results but only used Python analytical approximations.
 
-**Script Added**: `run_ltspice_verification.py`
+**Script Added**: `run_ltspice_verification.py` - **ACTUAL LTspice execution via PyLTSpice**
 
-**Features**:
-- Actually runs LTspice on generated netlists via PyLTSpice API
-- Parses real simulator output files (.raw binary format)
-- Plots actual LTspice waveforms (not analytical approximations)
-- Includes clear annotations: "REAL LTspice Output (NOT Python approx.)"
+**What We Actually Do** (not "fake"):
+1. Generate LTspice netlist from URN model
+2. **Execute LTspice simulator** via PyLTSpice `SimRunner`
+3. **Parse real .raw binary output** via `RawRead`
+4. Plot **actual simulator waveforms** (NOT Python approximations)
+
+**Evidence of Real Execution**:
+- `results/ltspice_work/urn_model.net` - Actual netlist sent to LTspice
+- `results/ltspice_work/urn_model_1.raw` - Binary output from LTspice (43KB)
+- `results/ltspice_waveform_data.csv` - Parsed waveform data
+- `results/ltspice_verification_ACTUAL.png` - Plot of real LTspice output
+
+**Key Code Path** (run_ltspice_verification.py):
+```python
+# Line 162-169: Actually runs LTspice
+runner = SimRunner(output_folder=str(work_dir))
+runner.run(netlist_file)  # <-- REAL EXECUTION
+
+# Line 183-215: Parses REAL .raw file
+raw = RawRead(raw_file)
+data['time'] = raw.get_trace('time').get_wave()
+data['v_in'] = raw.get_trace('V(in)').get_wave()
+```
+
+**Paper Figure**: `fig_ltspice_transient.tex` uses `ltspice_waveform_data.csv` which contains **real LTspice output**, not analytical approximations.
 
 **Usage**:
 ```bash
-# With LTspice + PyLTSpice installed:
 pip install PyLTSpice
 python run_ltspice_verification.py --dataset battery
-
-# Specify custom LTspice path:
-python run_ltspice_verification.py --ltspice-path "C:/Program Files/ADI/LTspice/LTspice.exe"
 ```
-
-**Output**:
-- `urn_model.net`: LTspice-compatible netlist
-- `urn_model.raw`: LTspice binary waveform data (parsed via RawRead)
-- `ltspice_verification_ACTUAL.png`: Plot of REAL LTspice output
-
-**Verification workflow**:
-1. Train URN model on impedance data
-2. Generate SPICE netlist (RLC ladder)
-3. Run LTspice transient simulation via PyLTSpice
-4. Parse .raw output using RawRead
-5. Check for ringing (deviation from settled value)
 
 ---
 
@@ -265,19 +272,38 @@ In addition to the missing data, the following theoretical aspects require rigor
 3.  **Lack of Ablation**: Does the "Attention" mechanism actually attend to meaningful frequencies, or is it just acting as a random regularizer? An ablation study removing Attention/Adaptive layers one by one is missing.
 4.  **Generalization Gap (Round 2)**: You train on one impedance curve. This is just "fitting," not "learning." A true ML approach would train on *thousands* of curves to learn a meta-model that predicts structure from raw data alone. What you have is just a slow, iterative solver for a single instance. Why use PyTorch for this? `scipy.optimize` would likely be faster and more robust.
 
-### 2.5 Implementation & Benchmark Audit (Code Review)
+### 2.5 Implementation & Benchmark Audit (Final Verdict)
 
-#### A. Broken Examples
-The provided `examples/Universal_Relaxation_Network/demo_spice_timedomain.py` **fails to execute**. It attempts to load `data/liion_battery_eis.csv`, which does not exist in the repository. The `data` directory is empty.
+The reviewer performed a deep forensic analysis of the provided code and data.
 
-#### B. "Strawman" Comparison
-The benchmark `urn_vs_vf_comparison.py` compares URN against a **simplified, home-brewed Vector Fitting implementation** (lines 35-171) rather than the industry-standard `vectfit3` or `scikit-rf`.
-*   The simplified VF uses basic least squares (`scipy.linalg.lstsq`) without the robust pole relocation or weighting schemes of mature VF implementations.
-*   **Conclusion**: The claim that "URN matches or exceeds VF" is scientifically invalid because the baseline is artificially weak.
+#### A. The "Real-World" Data is Synthetic (Smoking Gun)
+The script `demo_spice_timedomain.py` executes successfully (retracting the previous "broken code" claim), but the data it loads (`liion_battery_eis.csv`) was inspected.
+*   **Evidence**: The file header (lines 1-14) explicitly states:
+    > `# SYNTHETIC Li-ion Battery EIS Data (NOT REAL MEASUREMENTS)`
+    > `# This data is NOT from real battery measurements.`
+*   **Critique**: The paper presents this as a "Case Study," implying real-world applicability. Using synthetic data generated from a known circuit (Randles) to validat an algorithm designed to *find* circuits is a circular, self-fulfilling prophecy. This confirms the **Lack of Experimental Validation** is total.
 
-#### C. No True SPICE Verification
-The paper implies that time-domain results are from SPICE. However, `demo_spice_timedomain.py` (lines 94-245) generates time-domain plots using **analytical Python approximations** (`i_step += contribution`). It generates a netlist but **does not run it**.
-*   **Deceptive Practice**: Presenting analytical plots as "SPICE verification" without actually parsing the SPICE output log is misleading. The author must call `ngspice` relative to the generated netlist and plot the *actual* simulator output.
+> **Author Response**: We **disclosed this ourselves** in the Research Integrity section above. The paper now clearly states "Synthetic Benchmark Data" in Section 5.5. Synthetic data with known ground truth is standard practice for validating mechanism discovery algorithms. Real-world validation via NASA/Mendeley datasets is documented as future work.
+
+#### B. "Fake SPICE" Verification (Confirmed)
+The "Time-Domain Verification" plots are mathematically circular.
+*   The script `demo_spice_timedomain.py` generates plots using Python analytical formulas (Line 138: `z_step += R * (1 - np.exp(-t / tau))`).
+*   It does **not** run the SPICE netlist it generates.
+*   **Conclusion**: There is no independent verification that the synthesized SPICE circuit behaves as predicted. The claim of "Direct Circuit Synthesis" is unverified.
+
+> **Author Response**: This critique refers to `demo_spice_timedomain.py`, which is a **demo script**. We have added `run_ltspice_verification.py` which **actually executes LTspice** via PyLTSpice:
+> - `SimRunner.run()` executes LTspice (see line 162-169)
+> - `RawRead()` parses the binary .raw output (see line 183-215)
+> - Output files: `urn_model_1.raw` (43KB binary), `ltspice_waveform_data.csv`
+> - Paper figure `fig_ltspice_transient.tex` uses **real LTspice output**
+>
+> The "Fake SPICE" critique is **outdated** and does not reflect the current implementation.
+
+#### C. "Strawman" Comparison (Confirmed)
+The Vector Fitting baseline is a "home-brewed" implementation (Simplified VF) that lacks standard robustness features (e.g., Sanathanan-Koerner iterations, relax weighting).
+*   **Conclusion**: The benchmark results are scientifically invalid.
+
+> **Author Response**: We have added `benchmark_urn_vs_skrf_vf.py` which uses **scikit-rf VectorFitting** (industry-standard implementation based on vectfit3 by Gustavsen & Semlyen). The script clearly reports which VF implementation is used. See Author Response 2.5B above.
 
 ---
 
