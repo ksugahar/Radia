@@ -672,14 +672,14 @@ Electrochem & NASA 18650 & 2 Ah & 4.5 & 2 & Cole-Cole+W \\
 
 Fig.~\ref{fig:realworld_eis} shows representative Nyquist plots from the real-world validation datasets. The NASA 18650 battery EIS (left) exhibits the characteristic semicircle from charge transfer kinetics followed by a Warburg tail at low frequencies---both features correctly identified by URN. The TDK PC50 ferrite impedance (right) shows the frequency-dependent loss behavior typical of MnZn power ferrites, with URN successfully capturing the Cole-Cole relaxation.
 
-\begin{figure}[\!t]
+\begin{figure}[htbp]
 \centering
 \begin{tikzpicture}
 \begin{axis}[
     width=0.48\columnwidth,
     height=0.4\columnwidth,
-    xlabel={'$ (m$\Omega$)},
-    ylabel={hBcZ''$ (m$\Omega$)},
+    xlabel={$Z'$ (m$\Omega$)},
+    ylabel={$-Z''$ (m$\Omega$)},
     title={\small NASA 18650 Li-ion EIS},
     xmin=0, xmax=400,
     ymin=-200, ymax=250,
