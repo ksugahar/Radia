@@ -5,15 +5,26 @@ A neural network that combines circuit-compatible basis functions
 with automatic sparse selection to discover the dominant physical mechanisms.
 
 Key features:
-1. Uses 24 circuit-compatible basis functions as building blocks
+1. Uses 29 circuit-compatible basis functions as building blocks
 2. L1 sparsity penalty for automatic model selection
 3. Physical parameter constraints (positivity, bounds)
 4. SPICE circuit generation from learned parameters
 5. Interpretable results: identifies which relaxation mechanisms dominate
 6. ALL basis functions have direct RLC ladder equivalents
+7. Series/parallel hybrid topology for richer expression space
 
 This is a research prototype toward a publishable method.
 Combines KAN (Kolmogorov-Arnold Network) philosophy with physical basis functions.
+
+Hybrid Topology:
+    Z = Z_series + 1/Y_parallel
+
+    - Z_series: Sum of weighted basis functions (impedance space)
+    - Y_parallel: Sum of weighted basis functions (admittance space)
+
+    This allows modeling both:
+    - Series connections (electrode-electrolyte-electrode, multilayer dielectric)
+    - Parallel connections (multiple conduction paths, ionic+electronic)
 """
 
 import numpy as np
@@ -49,7 +60,7 @@ from relaxation_basis_library import (
 @dataclass
 class URNConfig:
     """Configuration for Universal Relaxation Network."""
-    # Number of instances per basis type
+    # Number of instances per basis type (SERIES branch)
     n_debye: int = 3
     n_cole_cole: int = 2
     n_cole_davidson: int = 1
@@ -60,6 +71,13 @@ class URNConfig:
     n_rlc: int = 1
     n_skin_effect: int = 1
 
+    # Number of instances for PARALLEL branch (admittance space)
+    # Set to 0 to disable parallel branch (series-only mode)
+    n_debye_parallel: int = 2
+    n_cole_cole_parallel: int = 1
+    n_cpe_parallel: int = 1
+    n_warburg_parallel: int = 1
+
     # Training parameters
     sparsity_weight: float = 0.01
     lr: float = 0.02
@@ -69,6 +87,12 @@ class URNConfig:
     # Frequency scaling (auto-detected if None)
     omega_ref: Optional[float] = None
     Z_ref: Optional[float] = None
+
+    @property
+    def has_parallel_branch(self) -> bool:
+        """Check if parallel branch is enabled."""
+        return (self.n_debye_parallel + self.n_cole_cole_parallel +
+                self.n_cpe_parallel + self.n_warburg_parallel) > 0
 
 
 class UniversalRelaxationNetwork(nn.Module):
@@ -94,7 +118,7 @@ class UniversalRelaxationNetwork(nn.Module):
         self.Z_inf_real = nn.Parameter(torch.tensor(0.0))
         self.Z_inf_imag = nn.Parameter(torch.tensor(0.0))
 
-        # Initialize parameters for each basis type
+        # Initialize parameters for each basis type (SERIES branch)
         self._init_debye()
         self._init_cole_cole()
         self._init_cole_davidson()
@@ -104,6 +128,10 @@ class UniversalRelaxationNetwork(nn.Module):
         self._init_gerischer()
         self._init_rlc()
         self._init_skin_effect()
+
+        # Initialize PARALLEL branch (if enabled)
+        if config.has_parallel_branch:
+            self._init_parallel_branch()
 
     def _init_debye(self):
         n = self.config.n_debye
@@ -177,6 +205,46 @@ class UniversalRelaxationNetwork(nn.Module):
             self.skin_weight_mag = nn.Parameter(torch.rand(n) * 0.3)
             self.skin_weight_phase = nn.Parameter(torch.randn(n) * 0.3)
 
+    def _init_parallel_branch(self):
+        """Initialize parameters for parallel branch (admittance space).
+
+        The parallel branch contributes: Z_parallel = 1 / Y_parallel
+        where Y_parallel = sum of weighted admittance basis functions.
+        """
+        # Y_inf for parallel branch (DC conductance)
+        self.Y_inf_real = nn.Parameter(torch.tensor(0.01))
+        self.Y_inf_imag = nn.Parameter(torch.tensor(0.0))
+
+        # Debye in parallel (admittance form)
+        n = self.config.n_debye_parallel
+        if n > 0:
+            self.debye_par_log_tau = nn.Parameter(torch.randn(n) * 2)
+            self.debye_par_weight_mag = nn.Parameter(torch.rand(n) * 0.3)
+            self.debye_par_weight_phase = nn.Parameter(torch.randn(n) * 0.3)
+
+        # Cole-Cole in parallel
+        n = self.config.n_cole_cole_parallel
+        if n > 0:
+            self.cc_par_log_tau = nn.Parameter(torch.randn(n) * 2)
+            self.cc_par_alpha_raw = nn.Parameter(torch.randn(n) * 0.5)
+            self.cc_par_weight_mag = nn.Parameter(torch.rand(n) * 0.3)
+            self.cc_par_weight_phase = nn.Parameter(torch.randn(n) * 0.3)
+
+        # CPE in parallel
+        n = self.config.n_cpe_parallel
+        if n > 0:
+            self.cpe_par_log_Q = nn.Parameter(torch.randn(n) * 2)
+            self.cpe_par_n_raw = nn.Parameter(torch.randn(n) * 0.3)
+            self.cpe_par_weight_mag = nn.Parameter(torch.rand(n) * 0.3)
+            self.cpe_par_weight_phase = nn.Parameter(torch.randn(n) * 0.3)
+
+        # Warburg in parallel
+        n = self.config.n_warburg_parallel
+        if n > 0:
+            self.warburg_par_log_Aw = nn.Parameter(torch.randn(n))
+            self.warburg_par_weight_mag = nn.Parameter(torch.rand(n) * 0.3)
+            self.warburg_par_weight_phase = nn.Parameter(torch.randn(n) * 0.3)
+
     def _get_weight(self, mag: torch.Tensor, phase: torch.Tensor) -> torch.Tensor:
         """Convert magnitude and phase to complex weight."""
         # Softplus for positive magnitude
@@ -184,92 +252,155 @@ class UniversalRelaxationNetwork(nn.Module):
         return m * torch.exp(1j * phase)
 
     def forward(self, omega: torch.Tensor) -> torch.Tensor:
-        """Compute Z(omega) as sum of weighted basis functions."""
+        """Compute Z(omega) using hybrid series/parallel topology.
+
+        Z = Z_series + Z_parallel
+
+        where:
+        - Z_series = Z_inf + sum of weighted impedance basis functions
+        - Z_parallel = 1 / Y_parallel (if parallel branch enabled)
+        - Y_parallel = Y_inf + sum of weighted admittance basis functions
+        """
         omega_norm = omega / self.omega_ref
 
-        # Start with Z_inf
-        Z = torch.complex(self.Z_inf_real, self.Z_inf_imag) * torch.ones_like(omega_norm)
+        # =====================================================================
+        # SERIES BRANCH: Z_series = Z_inf + sum(w_i * basis_i)
+        # =====================================================================
+        Z_series = torch.complex(self.Z_inf_real, self.Z_inf_imag) * torch.ones_like(omega_norm)
 
-        # Add Debye contributions
+        # Add Debye contributions (series)
         if self.config.n_debye > 0:
             tau = torch.exp(self.debye_log_tau)
             weights = self._get_weight(self.debye_weight_mag, self.debye_weight_phase)
             for k in range(self.config.n_debye):
-                Z = Z + weights[k] * debye(omega_norm, tau[k])
+                Z_series = Z_series + weights[k] * debye(omega_norm, tau[k])
 
-        # Add Cole-Cole contributions
+        # Add Cole-Cole contributions (series)
         if self.config.n_cole_cole > 0:
             tau = torch.exp(self.cc_log_tau)
             alpha = torch.sigmoid(self.cc_alpha_raw) * 0.8 + 0.2  # [0.2, 1.0]
             weights = self._get_weight(self.cc_weight_mag, self.cc_weight_phase)
             for k in range(self.config.n_cole_cole):
-                Z = Z + weights[k] * cole_cole(omega_norm, tau[k], alpha[k])
+                Z_series = Z_series + weights[k] * cole_cole(omega_norm, tau[k], alpha[k])
 
-        # Add Cole-Davidson contributions
+        # Add Cole-Davidson contributions (series)
         if self.config.n_cole_davidson > 0:
             tau = torch.exp(self.cd_log_tau)
             beta = torch.sigmoid(self.cd_beta_raw) * 0.8 + 0.2
             weights = self._get_weight(self.cd_weight_mag, self.cd_weight_phase)
             for k in range(self.config.n_cole_davidson):
-                Z = Z + weights[k] * cole_davidson(omega_norm, tau[k], beta[k])
+                Z_series = Z_series + weights[k] * cole_davidson(omega_norm, tau[k], beta[k])
 
-        # Add Havriliak-Negami contributions
+        # Add Havriliak-Negami contributions (series)
         if self.config.n_havriliak_negami > 0:
             tau = torch.exp(self.hn_log_tau)
             alpha = torch.sigmoid(self.hn_alpha_raw) * 0.8 + 0.2
             beta = torch.sigmoid(self.hn_beta_raw) * 0.8 + 0.2
             weights = self._get_weight(self.hn_weight_mag, self.hn_weight_phase)
             for k in range(self.config.n_havriliak_negami):
-                Z = Z + weights[k] * havriliak_negami(omega_norm, tau[k], alpha[k], beta[k])
+                Z_series = Z_series + weights[k] * havriliak_negami(omega_norm, tau[k], alpha[k], beta[k])
 
-        # Add CPE contributions
+        # Add CPE contributions (series)
         if self.config.n_cpe > 0:
             Q = torch.exp(self.cpe_log_Q)
             n = torch.sigmoid(self.cpe_n_raw) * 0.8 + 0.1  # [0.1, 0.9]
             weights = self._get_weight(self.cpe_weight_mag, self.cpe_weight_phase)
             for k in range(self.config.n_cpe):
-                Z = Z + weights[k] * cpe(omega_norm, Q[k], n[k])
+                Z_series = Z_series + weights[k] * cpe(omega_norm, Q[k], n[k])
 
-        # Add Warburg contributions
+        # Add Warburg contributions (series)
         if self.config.n_warburg > 0:
             Aw = torch.exp(self.warburg_log_Aw)
             weights = self._get_weight(self.warburg_weight_mag, self.warburg_weight_phase)
             for k in range(self.config.n_warburg):
-                Z = Z + weights[k] * warburg_infinite(omega_norm, Aw[k])
+                Z_series = Z_series + weights[k] * warburg_infinite(omega_norm, Aw[k])
 
-        # Add Gerischer contributions
+        # Add Gerischer contributions (series)
         if self.config.n_gerischer > 0:
             R_g = torch.exp(self.ger_log_R)
             tau_g = torch.exp(self.ger_log_tau)
             weights = self._get_weight(self.ger_weight_mag, self.ger_weight_phase)
             for k in range(self.config.n_gerischer):
-                Z = Z + weights[k] * gerischer(omega_norm, R_g[k], tau_g[k])
+                Z_series = Z_series + weights[k] * gerischer(omega_norm, R_g[k], tau_g[k])
 
-        # Add RLC contributions (careful: needs physical frequency)
+        # Add RLC contributions (series, uses physical frequency)
         if self.config.n_rlc > 0:
             R = torch.exp(self.rlc_log_R)
             L = torch.exp(self.rlc_log_L)
             C = torch.exp(self.rlc_log_C)
             weights = self._get_weight(self.rlc_weight_mag, self.rlc_weight_phase)
             for k in range(self.config.n_rlc):
-                # RLC uses physical omega
-                Z = Z + weights[k] * rlc_series(omega, R[k], L[k], C[k]) / self.Z_ref
+                Z_series = Z_series + weights[k] * rlc_series(omega, R[k], L[k], C[k]) / self.Z_ref
 
-        # Add Skin effect contributions
+        # Add Skin effect contributions (series)
         if self.config.n_skin_effect > 0:
             R_dc = torch.exp(self.skin_log_Rdc)
             delta = torch.exp(self.skin_log_delta)
             weights = self._get_weight(self.skin_weight_mag, self.skin_weight_phase)
             for k in range(self.config.n_skin_effect):
                 # Skin effect uses physical omega
-                Z = Z + weights[k] * skin_effect_dowell(omega, R_dc[k], delta[k]) / self.Z_ref
+                Z_series = Z_series + weights[k] * skin_effect_dowell(omega, R_dc[k], delta[k]) / self.Z_ref
 
-        return Z * self.Z_ref
+        # =====================================================================
+        # PARALLEL BRANCH: Z_parallel = 1 / Y_parallel (if enabled)
+        # =====================================================================
+        Z_parallel = torch.zeros_like(omega_norm, dtype=torch.complex128)
+
+        if self.config.has_parallel_branch:
+            # Y_parallel = Y_inf + sum of weighted admittance basis functions
+            # Note: We use ADMITTANCE form, so basis functions represent Y, not Z
+            Y_parallel = torch.complex(self.Y_inf_real, self.Y_inf_imag) * torch.ones_like(omega_norm)
+
+            # Debye in parallel (as admittance: Y = 1/Z_debye)
+            if self.config.n_debye_parallel > 0:
+                tau = torch.exp(self.debye_par_log_tau)
+                weights = self._get_weight(self.debye_par_weight_mag, self.debye_par_weight_phase)
+                for k in range(self.config.n_debye_parallel):
+                    # Y_debye = 1 + j*omega*tau (admittance form of Debye)
+                    Y_parallel = Y_parallel + weights[k] * (1.0 + 1j * omega_norm * tau[k])
+
+            # Cole-Cole in parallel (as admittance)
+            if self.config.n_cole_cole_parallel > 0:
+                tau = torch.exp(self.cc_par_log_tau)
+                alpha = torch.sigmoid(self.cc_par_alpha_raw) * 0.8 + 0.2
+                weights = self._get_weight(self.cc_par_weight_mag, self.cc_par_weight_phase)
+                for k in range(self.config.n_cole_cole_parallel):
+                    # Y_cc = 1 + (j*omega*tau)^alpha
+                    Y_parallel = Y_parallel + weights[k] * (1.0 + (1j * omega_norm * tau[k]) ** alpha[k])
+
+            # CPE in parallel (as admittance)
+            if self.config.n_cpe_parallel > 0:
+                Q = torch.exp(self.cpe_par_log_Q)
+                n = torch.sigmoid(self.cpe_par_n_raw) * 0.8 + 0.1
+                weights = self._get_weight(self.cpe_par_weight_mag, self.cpe_par_weight_phase)
+                for k in range(self.config.n_cpe_parallel):
+                    # Y_cpe = Q * (j*omega)^n
+                    Y_parallel = Y_parallel + weights[k] * Q[k] * (1j * omega_norm) ** n[k]
+
+            # Warburg in parallel (as admittance)
+            if self.config.n_warburg_parallel > 0:
+                Aw = torch.exp(self.warburg_par_log_Aw)
+                weights = self._get_weight(self.warburg_par_weight_mag, self.warburg_par_weight_phase)
+                for k in range(self.config.n_warburg_parallel):
+                    # Y_warburg = sqrt(j*omega) / Aw
+                    Y_parallel = Y_parallel + weights[k] * torch.sqrt(1j * omega_norm + 1e-10) / Aw[k]
+
+            # Convert admittance to impedance: Z_parallel = 1/Y_parallel
+            # Add small epsilon to avoid division by zero
+            Z_parallel = 1.0 / (Y_parallel + 1e-12)
+
+        # =====================================================================
+        # FINAL IMPEDANCE: Z = Z_series + Z_parallel
+        # =====================================================================
+        Z_total = Z_series + Z_parallel
+
+        return Z_total * self.Z_ref
 
     def get_sparsity_loss(self) -> torch.Tensor:
-        """L1 penalty on all weight magnitudes."""
+        """L1 penalty on all weight magnitudes (series and parallel branches)."""
         total = torch.tensor(0.0)
 
+        # Series branch weights
         if self.config.n_debye > 0:
             total = total + torch.sum(torch.nn.functional.softplus(self.debye_weight_mag))
         if self.config.n_cole_cole > 0:
@@ -288,6 +419,17 @@ class UniversalRelaxationNetwork(nn.Module):
             total = total + torch.sum(torch.nn.functional.softplus(self.rlc_weight_mag))
         if self.config.n_skin_effect > 0:
             total = total + torch.sum(torch.nn.functional.softplus(self.skin_weight_mag))
+
+        # Parallel branch weights
+        if self.config.has_parallel_branch:
+            if self.config.n_debye_parallel > 0:
+                total = total + torch.sum(torch.nn.functional.softplus(self.debye_par_weight_mag))
+            if self.config.n_cole_cole_parallel > 0:
+                total = total + torch.sum(torch.nn.functional.softplus(self.cc_par_weight_mag))
+            if self.config.n_cpe_parallel > 0:
+                total = total + torch.sum(torch.nn.functional.softplus(self.cpe_par_weight_mag))
+            if self.config.n_warburg_parallel > 0:
+                total = total + torch.sum(torch.nn.functional.softplus(self.warburg_par_weight_mag))
 
         return total
 
@@ -341,6 +483,34 @@ class UniversalRelaxationNetwork(nn.Module):
             delta = torch.exp(self.skin_log_delta).detach()
             active['skin_effect'] = check_component(
                 'skin_effect', self.skin_weight_mag, {'R_dc': R_dc, 'delta': delta})
+
+        # Parallel branch components (marked with _parallel suffix)
+        if self.config.has_parallel_branch:
+            if self.config.n_debye_parallel > 0:
+                tau = torch.exp(self.debye_par_log_tau).detach()
+                active['debye_parallel'] = check_component(
+                    'debye_parallel', self.debye_par_weight_mag,
+                    {'tau': tau / self.omega_ref, 'branch': 'parallel'})
+
+            if self.config.n_cole_cole_parallel > 0:
+                tau = torch.exp(self.cc_par_log_tau).detach()
+                alpha = (torch.sigmoid(self.cc_par_alpha_raw) * 0.8 + 0.2).detach()
+                active['cole_cole_parallel'] = check_component(
+                    'cole_cole_parallel', self.cc_par_weight_mag,
+                    {'tau': tau / self.omega_ref, 'alpha': alpha, 'branch': 'parallel'})
+
+            if self.config.n_cpe_parallel > 0:
+                Q = torch.exp(self.cpe_par_log_Q).detach()
+                n = (torch.sigmoid(self.cpe_par_n_raw) * 0.8 + 0.1).detach()
+                active['cpe_parallel'] = check_component(
+                    'cpe_parallel', self.cpe_par_weight_mag,
+                    {'Q': Q, 'n': n, 'branch': 'parallel'})
+
+            if self.config.n_warburg_parallel > 0:
+                Aw = torch.exp(self.warburg_par_log_Aw).detach()
+                active['warburg_parallel'] = check_component(
+                    'warburg_parallel', self.warburg_par_weight_mag,
+                    {'Aw': Aw, 'branch': 'parallel'})
 
         # Filter out empty categories
         return {k: v for k, v in active.items() if len(v) > 0}
