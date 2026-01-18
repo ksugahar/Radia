@@ -110,6 +110,16 @@ class VectorFitting:
         # Count unstable poles (before enforcement, based on final poles)
         n_unstable_final = int(np.sum(np.real(self.poles) > 0))
 
+        # Count poles within frequency range (CRITICAL: these are problematic!)
+        # Pole at s = -alpha + j*beta corresponds to frequency f = |beta|/(2*pi)
+        f_min, f_max = freqs.min(), freqs.max()
+        pole_freqs = np.abs(np.imag(self.poles)) / (2 * np.pi)
+        n_poles_in_range = int(np.sum((pole_freqs >= f_min) & (pole_freqs <= f_max)))
+
+        # Flag model as invalid if poles exist within measurement range
+        # Such models may fit well at evaluation points but behave badly between them
+        is_valid_model = (n_poles_in_range == 0) and (n_unstable_final == 0)
+
         return {
             'max_error_pct': float(rel_err.max() * 100),
             'mean_error_pct': float(rel_err.mean() * 100),
@@ -117,8 +127,11 @@ class VectorFitting:
             'time_sec': elapsed,
             'n_poles': M,
             'n_unstable': n_unstable_final,
+            'n_poles_in_range': n_poles_in_range,
+            'is_valid_model': is_valid_model,
             'poles_real': np.real(self.poles).tolist(),
             'poles_imag': np.imag(self.poles).tolist(),
+            'pole_freqs': pole_freqs.tolist(),
         }
 
     def predict(self, freqs: np.ndarray) -> np.ndarray:
@@ -304,13 +317,14 @@ def main():
     # Summary comparison table
     print("\n" + "=" * 100)
     print("COMPARISON SUMMARY: URN vs Vector Fitting")
-    print("=" * 100)
+    print("=" * 120)
 
-    print(f"\n{'Test':<20} {'Category':<12} {'URN Err%':<10} {'VF Err%':<10} {'VF Poles':<10} {'Winner':<8}")
-    print("-" * 100)
+    print(f"\n{'Test':<20} {'Category':<12} {'URN Err%':<10} {'VF Err%':<10} {'VF Poles':<8} {'In-Range':<10} {'Valid':<6} {'Winner':<8}")
+    print("-" * 120)
 
     urn_wins = 0
     vf_wins = 0
+    vf_invalid = 0
 
     for vf_r in vf_results:
         name = vf_r['name']
@@ -318,18 +332,30 @@ def main():
 
         urn_err = urn_r['max_error_pct']
         vf_err = vf_r['max_error_pct']
+        n_in_range = vf_r.get('n_poles_in_range', 0)
+        is_valid = vf_r.get('is_valid_model', True)
 
-        winner = "URN" if urn_err <= vf_err else "VF"
-        if urn_err <= vf_err:
+        # VF wins only if model is valid (no poles in frequency range)
+        if not is_valid:
+            winner = "URN*"  # URN wins by default if VF model is invalid
+            urn_wins += 1
+            vf_invalid += 1
+        elif urn_err <= vf_err:
+            winner = "URN"
             urn_wins += 1
         else:
+            winner = "VF"
             vf_wins += 1
 
+        valid_str = "Yes" if is_valid else "NO!"
         print(f"{name:<20} {vf_r['category']:<12} {urn_err:<10.2f} {vf_err:<10.2f} "
-              f"{vf_r['n_poles']:<10} {winner:<8}")
+              f"{vf_r['n_poles']:<8} {n_in_range:<10} {valid_str:<6} {winner:<8}")
 
-    print("-" * 100)
+    print("-" * 120)
     print(f"\nOverall: URN wins {urn_wins}/{len(vf_results)}, VF wins {vf_wins}/{len(vf_results)}")
+    if vf_invalid > 0:
+        print(f"WARNING: {vf_invalid} VF models have poles within frequency range (marked with *)")
+        print("         These models may fit evaluation points but behave badly between them.")
 
     # Interpretability comparison
     print("\n" + "=" * 80)
