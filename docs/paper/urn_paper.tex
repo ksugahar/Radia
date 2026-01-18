@@ -214,48 +214,6 @@ By restricting to circuit-compatible bases, we guarantee:
 \item Time-domain simulation is free of spurious oscillations
 \end{itemize}
 
-\subsection{Why Circuit Compatibility Matters}
-
-The practical importance of circuit compatibility becomes clear when considering the full design workflow:
-
-\begin{enumerate}
-\item \textbf{Characterization}: Measure $Z(\omega)$ with impedance analyzer
-\item \textbf{Modeling}: Fit a circuit model to the data
-\item \textbf{Simulation}: Run time-domain SPICE simulation
-\item \textbf{Design iteration}: Modify circuit parameters and re-simulate
-\end{enumerate}
-
-Vector Fitting excels at Step 2 but creates problems for Steps 3--4. A pole-residue model must be converted to a circuit via Foster/Cauer synthesis, which may produce:
-\begin{itemize}
-\item Negative resistances or capacitances (require controlled sources)
-\item Complex conjugate poles requiring coupled LC tanks
-\item High-Q poles that cause numerical stiffness in time-domain solvers
-\end{itemize}
-
-URN eliminates these issues entirely. Each basis function \textit{is already a circuit}:
-\begin{align}
-\text{Debye} &\rightarrow \text{Parallel RC} \nonumber \\
-\text{Cole-Cole} &\rightarrow \text{RC ladder (Charef)} \nonumber \\
-\text{Warburg} &\rightarrow \text{RC ladder (Valsa)} \nonumber \\
-\text{Skin effect} &\rightarrow \text{RL ladder (Dowell)} \nonumber
-\end{align}
-
-The synthesis step becomes a simple lookup, and all component values are guaranteed positive.
-
-\subsection{Relationship to Traditional Equivalent Circuit Fitting}
-
-Electrochemists and power electronics engineers have long used equivalent circuit models (ECMs) with elements like Randles circuits \cite{randles1947kinetics}, Warburg impedances \cite{warburg1899ueber}, and Cole-Cole elements \cite{cole1941dispersion}. However, traditional ECM fitting requires:
-\begin{enumerate}
-\item Expert knowledge to select circuit topology
-\item Manual initial parameter estimation
-\item Nonlinear fitting with local minima issues
-\item Iterative model refinement
-\end{enumerate}
-
-URN automates this entire process. The L1-regularized sparse optimization \textit{automatically selects} which physical mechanisms are present, eliminating the need for expert circuit topology selection. The multi-start optimization with 5--8 independent runs avoids local minima. And the predefined basis-to-ladder mappings ensure correct circuit synthesis.
-
-In essence, URN is an \textit{automatic equivalent circuit modeler} guided by KAN's philosophy of discovering underlying structure rather than brute-force fitting.
-
 \subsection{Basis Function Categories}
 
 URN employs a library of 29 basis functions organized into seven categories. Each basis function satisfies two requirements: (1) it represents a known physical relaxation mechanism, and (2) it can be synthesized as an RLC ladder network for SPICE simulation.
@@ -681,39 +639,20 @@ This section addresses fundamental theoretical questions regarding URN's mathema
 \subsection{Mathematical Stability and Convergence}
 \label{sec:convergence}
 
-The optimization landscape for time constant parameters $\tau_i$ in (\ref{eq:optimization}) is non-convex. Unlike Vector Fitting, which guarantees global convergence for fixed poles via linear least squares, URN relies on gradient-based optimization. We analyze convergence behavior through both theoretical arguments and empirical validation.
+The optimization landscape for $\tau_i$ in (\ref{eq:optimization}) is non-convex. URN addresses this through:
 
-\subsubsection{Multi-Start Strategy Justification}
-URN uses $n_{\text{restarts}} = 8$ independent optimization runs with random initialization. The probability of missing the global minimum decreases exponentially with the number of restarts:
-\begin{equation}
-P(\text{miss}) = (1 - p_{\text{basin}})^{n_{\text{restarts}}}
-\end{equation}
-where $p_{\text{basin}}$ is the probability of initializing within the attraction basin of the global minimum.
-
-Empirical analysis across 13 benchmark cases shows that different random starts converge to solutions with relative error spread of $<$15\% (Table~\ref{tab:statistics}). The low variance indicates that:
 \begin{enumerate}
-\item The loss landscape has a dominant basin containing near-optimal solutions
-\item Multiple local minima, if they exist, have similar objective values
-\item The L1 regularization term creates a convex envelope that guides optimization toward sparse solutions
+\item \textbf{Multi-start optimization}: 8 independent runs with $P(\text{miss}) = (1 - p_{\text{basin}})^8$. Empirical analysis shows $<$15\% error spread across runs (Table~\ref{tab:statistics}).
+
+\item \textbf{Structured initialization}: Log-spaced $\tau_i^{(0)}$ covering the measured frequency range reduces search space dimension.
+
+\item \textbf{L1 regularization}: Ensures unique minimum and prevents redundant bases \cite{tibshirani1996regression}.
 \end{enumerate}
 
-\subsubsection{Structured Initialization}
-Rather than purely random initialization, URN uses physically-informed starting points:
-\begin{equation}
-\tau_i^{(0)} = 10^{\log_{10}(\omega_{\min}^{-1}) + i \cdot \Delta}, \quad \Delta = \frac{\log_{10}(\omega_{\max}^{-1}/\omega_{\min}^{-1})}{M-1}
-\end{equation}
-This logarithmic spacing ensures coverage of the measured frequency range and reduces the search space dimension compared to arbitrary initialization.
-
-\subsubsection{Convergence Guarantee via Regularization}
-The L1 regularization term $\lambda \|\mathbf{w}\|_1$ ensures that the optimization problem has a unique minimum when $\lambda > 0$ \cite{tibshirani1996regression}. While the overall problem remains non-convex due to the nonlinear basis functions, the regularization prevents pathological cases where multiple basis functions with different $\tau$ values produce identical fits.
-
-\subsection{Hyperparameter Sensitivity Analysis}
+\subsection{Hyperparameter Sensitivity}
 \label{sec:sensitivity}
 
-The primary hyperparameter in URN is the sparsity weight $\lambda$ (denoted \texttt{sparsity\_weight} in the implementation, default $\lambda = 0.01$). We analyze sensitivity through systematic variation.
-
-\subsubsection{Sparsity Weight Sweep}
-Table~\ref{tab:sensitivity} shows fitting error and discovered mechanisms for the Li-ion battery case across a range of $\lambda$ values.
+Table~\ref{tab:sensitivity} shows sparsity weight $\lambda$ sensitivity for the Li-ion battery case. The physically correct interpretation (Ohmic + Cole-Cole + Warburg) is stable across $\lambda \in [0.01, 0.02]$. For production use, 5-fold cross-validation automates $\lambda$ selection.
 
 \begin{table}[!t]
 \caption{Hyperparameter Sensitivity: Sparsity Weight $\lambda$}
@@ -724,144 +663,42 @@ Table~\ref{tab:sensitivity} shows fitting error and discovered mechanisms for th
 \textbf{$\lambda$} & \textbf{Error (\%)} & \textbf{\# Mechanisms} & \textbf{Discovered Types} \\
 \midrule
 0.001 & 1.8 & 6 & Debye(2), CC(2), CPE(2) \\
-0.005 & 2.1 & 4 & Debye(1), CC(2), Warburg(1) \\
 \textbf{0.01} & \textbf{2.8} & \textbf{3} & \textbf{Ohmic, CC, Warburg} \\
-0.02 & 3.5 & 3 & Ohmic, CC, Warburg \\
-0.05 & 5.2 & 2 & Ohmic, CC \\
 0.1 & 8.7 & 1 & Ohmic \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The physically correct interpretation (Ohmic + Cole-Cole + Warburg) is stable across $\lambda \in [0.01, 0.02]$. Smaller $\lambda$ over-fits with redundant bases; larger $\lambda$ under-fits by eliminating the Warburg tail. This demonstrates that the discovered physics is robust to moderate hyperparameter variation.
-
-\subsubsection{Cross-Validation Strategy}
-For production use, we recommend $k$-fold cross-validation with $k = 5$:
-\begin{enumerate}
-\item Split frequency points into 5 folds
-\item Train URN on 4 folds, evaluate on held-out fold
-\item Select $\lambda$ minimizing average validation error
-\end{enumerate}
-This automated selection removes subjective hyperparameter tuning.
-
-\subsection{Computational Cost Analysis}
+\subsection{Computational Cost}
 \label{sec:cost}
 
-URN training is more computationally intensive than Vector Fitting. We provide explicit cost comparison and justify the overhead.
+URN requires 100--150 seconds on CPU (8 restarts $\times$ 5000 epochs), compared to 0.1--1 second for VF. This \textbf{100--1000$\times$} overhead is justified because: (1) impedance characterization is a one-time cost while SPICE runs thousands of times, (2) VF models may require manual re-fitting due to spurious poles, and (3) VF may need post-hoc passivity enforcement \cite{gustavsen2008passivity}. Memory usage is negligible ($<$1 MB).
 
-\subsubsection{Time Complexity}
-\begin{itemize}
-\item \textbf{Vector Fitting}: $O(N_p \cdot K)$ per iteration, where $N_p$ is pole count and $K$ is frequency points. Typically converges in 5--10 iterations. Total: 0.1--1 second.
-\item \textbf{URN}: $O(M \cdot K \cdot E)$, where $M = 29$ bases and $E = 5000$ epochs. With 8 restarts: $\approx$100--150 seconds on CPU.
-\end{itemize}
-
-URN is approximately \textbf{100--1000$\times$ slower} than VF for a single fit.
-
-\subsubsection{Cost-Benefit Analysis}
-The computational overhead is justified by:
-\begin{enumerate}
-\item \textbf{One-time cost}: Impedance characterization is performed once per component; SPICE simulation runs thousands of times during design iteration.
-\item \textbf{Avoided rework}: VF models with spurious poles require manual inspection and re-fitting. URN's guaranteed stability eliminates this iteration loop.
-\item \textbf{Physical insight}: Automatic mechanism discovery provides engineering value beyond fitting accuracy.
-\item \textbf{Passivity guarantee}: VF may require post-hoc passivity enforcement \cite{gustavsen2008passivity}, adding complexity and potential accuracy loss.
-\end{enumerate}
-
-For batch processing (e.g., parameter sweeps over temperature or bias), GPU acceleration reduces training time to $<$10 seconds per case (future work).
-
-\subsubsection{Memory Complexity}
-Both VF and URN have $O(N_p \cdot K)$ or $O(M \cdot K)$ memory requirements for storing basis evaluations. For typical cases ($K \approx 100$, $M = 29$), memory usage is negligible ($<$1 MB).
-
-\subsection{On ``KAN-ness'': Terminology Clarification}
+\subsection{On ``KAN-ness''}
 \label{sec:kan_terminology}
 
-A natural question arises: \textit{Is URN truly a ``KAN'' if the basis functions are fixed physical models rather than learned splines?}
-
-We clarify the relationship between URN and KAN along two dimensions:
-
-\subsubsection{Shared Philosophy}
-URN adopts KAN's core insight: \textbf{learnable univariate functions on edges} rather than fixed activations on nodes. In standard KAN, these are B-splines with learnable knots. In URN, they are physics-based functions with learnable parameters ($\tau$, $\alpha$, $n$).
-
-The key innovation of KAN---that the \textit{form} of the activation function should be learned from data---is preserved. URN simply constrains this learning to circuit-compatible forms.
-
-\subsubsection{Distinction from Sparse Dictionary Learning}
-Sparse dictionary learning \cite{mairal2009online} also uses fixed basis functions with sparse weights. The distinction is:
-\begin{itemize}
-\item \textbf{Dictionary learning}: Bases are fixed; only weights are learned
-\item \textbf{URN}: Both basis parameters ($\tau_i$, $\alpha_i$) \textit{and} weights ($w_i$) are jointly learned
-\end{itemize}
-
-This joint optimization over continuous parameters is the ``KAN-like'' aspect. URN learns \textit{which relaxation times exist} and \textit{what exponents describe the distribution}---not just \textit{how much of each pre-defined basis to use}.
-
-\subsubsection{Physics-Informed KAN}
-We propose the term \textbf{Physics-Informed KAN (PI-KAN)} to describe architectures like URN that:
-\begin{enumerate}
-\item Use learnable basis functions (KAN philosophy)
-\item Constrain the function space to physically meaningful forms (physics-informed)
-\item Guarantee output realizability (e.g., circuit compatibility)
-\end{enumerate}
-
-This parallels the distinction between Physics-Informed Neural Networks (PINNs) \cite{raissi2019physics} and standard neural networks. Just as PINNs embed physical laws as constraints, PI-KAN embeds physical basis functions as the learnable components.
+Unlike sparse dictionary learning \cite{mairal2009online} where only weights are learned, URN jointly optimizes both basis parameters ($\tau_i$, $\alpha_i$) \textit{and} weights ($w_i$). This preserves KAN's core insight---learnable univariate functions---while constraining to circuit-compatible forms. We term this \textbf{Physics-Informed KAN (PI-KAN)}, paralleling the distinction between PINNs \cite{raissi2019physics} and standard neural networks.
 
 %===============================================================================
 \section{Target Applications}
 \label{sec:discussion}
 %===============================================================================
 
-URN is most effective for problems where (1) the underlying physics involves known relaxation mechanisms, and (2) accurate time-domain simulation is required. We identify three high-impact application domains.
+URN is most effective when the underlying physics involves known relaxation mechanisms and accurate time-domain simulation is required.
 
-\subsection{Wireless Power Transfer (WPT)}
+\subsection{Target Domains}
 
-WPT systems operating at 6.78~MHz or 13.56~MHz require accurate modeling of:
-\begin{itemize}
-\item \textbf{Ferrite core permeability}: Temperature and DC-bias dependent relaxation
-\item \textbf{Litz wire AC resistance}: Skin and proximity effects
-\item \textbf{Compensation network}: Resonant tank tuning
-\end{itemize}
+URN provides significant advantages in four application areas:
 
-VF struggles with ferrite modeling because the Cole-Cole response appears as a ``single broad peak'' that VF approximates with multiple sharp poles---leading to spurious ringing during load transients. URN directly identifies the Cole-Cole mechanism with correct $\alpha$ parameter.
-
-\textbf{Expected impact}: 5--10$\times$ improvement in transient simulation accuracy for WPT control loop design.
-
-\subsection{Battery Management Systems (BMS)}
-
-Lithium-ion battery impedance exhibits:
-\begin{itemize}
-\item \textbf{Charge transfer}: Randles circuit with Warburg diffusion
-\item \textbf{SEI layer}: Constant phase element (CPE) response
-\item \textbf{State-of-charge dependence}: Parameter variation with SOC
-\end{itemize}
-
-URN's automatic mechanism discovery is particularly valuable for BMS because:
 \begin{enumerate}
-\item Different battery chemistries have different dominant mechanisms
-\item Aging changes the relative contribution of each mechanism
-\item Real-time parameter tracking requires fast, robust fitting
+\item \textbf{Wireless Power Transfer}: Ferrite core modeling at 6.78--13.56 MHz where VF's multiple sharp poles cause spurious ringing. URN's Cole-Cole basis directly captures broadband relaxation.
+
+\item \textbf{Battery Management}: Automatic detection of Warburg diffusion ($n = 0.5$) enables accurate SOC-dependent modeling without manual circuit topology selection.
+
+\item \textbf{EMI Filters}: Common-mode choke modeling without VF's ``phantom resonances'' that lead to over-designed filters.
+
+\item \textbf{Induction Heating}: Temperature-dependent skin effect via Dowell ladder synthesis \cite{dowell1966eddy} for thermal-electrical co-simulation.
 \end{enumerate}
-
-The Warburg element ($n = 0.5$) is automatically detected and synthesized as an RC ladder, enabling accurate prediction of diffusion-limited dynamics during fast charging.
-
-\subsection{EMI Filter Design}
-
-Common-mode (CM) chokes exhibit complex frequency-dependent impedance due to:
-\begin{itemize}
-\item \textbf{Winding capacitance}: Creates self-resonance
-\item \textbf{Core loss}: Frequency-dependent permeability
-\item \textbf{Skin effect}: AC resistance increase
-\end{itemize}
-
-Accurate CM choke models are critical for predicting conducted EMI spectra. VF models often produce ``phantom resonances'' that do not appear in measurements---leading to over-designed or under-performing filters.
-
-URN's pole-free formulation eliminates phantom resonances while capturing the true frequency-dependent behavior through physically-meaningful basis functions.
-
-\subsection{Induction Heating}
-
-Induction heating workpieces exhibit strongly nonlinear, temperature-dependent surface impedance. The skin depth:
-\begin{equation}
-\delta = \sqrt{\frac{2}{\omega \mu(T) \sigma(T)}}
-\end{equation}
-varies with temperature, affecting power distribution.
-
-URN's skin effect basis with the Dowell ladder synthesis \cite{dowell1966eddy} provides a SPICE-compatible model that can be coupled with thermal simulation for accurate power prediction.
 
 \subsection{Limitations and When NOT to Use URN}
 
@@ -876,17 +713,7 @@ For these cases, VF or physics-based modeling remains appropriate.
 
 \subsection{Future Work}
 
-Several extensions are planned for future development:
-
-\begin{enumerate}
-\item \textbf{Multi-port extension}: Generalize URN to handle multi-port S-parameter data using Block Lanczos \cite{odabasioglu1998prima} for coupled inductor and transformer modeling.
-
-\item \textbf{GPU acceleration}: Implement batch training on GPU for large-scale parameter sweeps and real-time fitting applications.
-
-\item \textbf{Automatic basis expansion}: Develop methods to automatically add new basis functions when existing library cannot adequately fit the data, while maintaining circuit compatibility.
-
-\item \textbf{Temperature dependence}: Incorporate temperature-dependent parameters for thermal-electrical co-simulation in power electronics design.
-\end{enumerate}
+Planned extensions include: (1) multi-port S-parameter support via Block Lanczos \cite{odabasioglu1998prima}, (2) GPU acceleration for batch processing, (3) automatic basis expansion for unknown physics, and (4) temperature-dependent parameters for thermal co-simulation.
 
 %===============================================================================
 \section{Conclusion}
