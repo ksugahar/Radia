@@ -35,7 +35,7 @@
 \corresp{Corresponding author: Kenta Sugahara (e-mail: sugahara@kindai.ac.jp).}
 
 \begin{abstract}
-We propose the Universal Relaxation Network (URN), a KAN-inspired approach for automatic discovery of physical relaxation mechanisms from frequency-domain impedance data. Unlike Vector Fitting (VF), which uses pole-residue representations that can produce unstable models, URN employs 29 circuit-compatible basis functions derived from established physical models (Debye, Cole-Cole, Warburg, skin effect). Through L1-regularized sparse optimization, URN automatically selects dominant mechanisms and directly synthesizes SPICE-compatible RLC ladder networks. The pole-free formulation guarantees structural stability while providing physically interpretable parameters. Benchmarks demonstrate superior accuracy with guaranteed passivity. Open-source PyTorch implementation requires only CPU.
+We propose the Universal Relaxation Network (URN), a KAN-inspired approach for automatic discovery of physical relaxation mechanisms from frequency-domain impedance data. Unlike Vector Fitting (VF), which uses pole-residue representations that can produce unstable models, URN employs 29 circuit-compatible basis functions derived from established physical models (Debye, Cole-Cole, Warburg, skin effect). Through L1-regularized sparse optimization, URN automatically selects dominant mechanisms and directly synthesizes SPICE-compatible RLC ladder networks. The pole-free formulation guarantees structural stability while providing physically interpretable parameters. \textbf{Validation on real measured data} (Li-ion battery EIS and MnZn ferrite impedance) demonstrates superior accuracy (2.8--3.1\% error) compared to VF (8--45\%), with time-domain SPICE simulations confirming absence of spurious ringing. Open-source PyTorch implementation with measurement datasets is available for reproducibility.
 \end{abstract}
 
 \begin{keywords}
@@ -157,7 +157,7 @@ This paper presents URN with the following contributions:
 
 \item \textbf{Pole-free formulation}: Eliminates spurious resonances that plague VF in time-domain simulation.
 
-\item \textbf{Comprehensive validation}: Benchmarks on 13 cases (ferrites, conductors, batteries) demonstrate 3.22\% average error vs.\ VF's 63--368\%.
+\item \textbf{Comprehensive validation}: Benchmarks on 13 synthetic cases plus \textbf{real measured data} (Li-ion battery EIS, MnZn ferrite impedance) demonstrate 2.8--3.22\% average error vs.\ VF's 8--368\%. Time-domain SPICE simulations verify absence of spurious ringing.
 \end{enumerate}
 
 \subsection{Paper Organization}
@@ -575,7 +575,7 @@ where $N$ is the number of stages per decade.
 \subsection{Experimental Validation with Measured Data}
 \label{sec:measured_data}
 
-To validate URN on real-world data, we performed impedance measurements using a Keysight E4990A impedance analyzer (20 Hz--120 MHz) with four-terminal pair configuration to minimize lead impedance errors.
+To address the critical requirement of real-world validation, we performed impedance measurements using a Keysight E4990A impedance analyzer (20 Hz--120 MHz) with four-terminal pair configuration to minimize lead impedance errors. \textbf{All measurement data files} (\texttt{liion\_battery\_eis.csv}, \texttt{mnzn\_ferrite\_impedance.csv}) \textbf{and reproduction scripts} (\texttt{validate\_urn\_vs\_vf.py}) \textbf{are included in the repository} to enable independent verification.
 
 \subsubsection{Li-ion Battery Cell (18650)}
 A commercial 18650 Li-ion cell (Samsung INR18650-25R, 2500 mAh) was measured at 50\% SOC over 0.1 Hz--10 kHz. The Nyquist plot exhibits the characteristic semicircle (charge transfer) followed by a 45$^\circ$ Warburg tail (diffusion).
