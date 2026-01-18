@@ -331,7 +331,47 @@ $$Z(\omega) = Z_\infty + \sum_k w_k \cdot \text{basis}_k(\omega, \theta_k)$$
 | Circuit synthesis | Requires Foster/Cauer transform | Basis → circuit direct correspondence |
 | Noise robustness | Overfits with more poles | Regularized by physical constraints |
 
+#### Critical Issue: Poles Within Frequency Range
+
+**Vector Fitting models can be invalid even with low fitting error!**
+
+A VF model places poles at $s = -\alpha \pm j\beta$, corresponding to frequency $f = |\beta|/(2\pi)$.
+If this frequency falls within the measurement range, the model is **physically invalid**:
+
+```
+Measurement range: f_min to f_max
+Pole frequency: f_pole = |Im(pole)| / (2*pi)
+
+If f_min <= f_pole <= f_max:
+    → Model is INVALID (even if error is low at evaluation points)
+    → The model may oscillate wildly between measurement points
+    → Circuit simulation will show unphysical behavior
+```
+
+**Why this matters:**
+- VF can place poles anywhere to minimize error at evaluation points
+- Poles within the measurement range create resonances/anti-resonances
+- These are mathematical artifacts, not physical phenomena
+- Low error at measured frequencies ≠ correct model
+
+**URN advantage:**
+- Physical basis functions have no spurious poles within operating range
+- Debye relaxation: pole at $s = -1/\tau$ (always negative real, outside jω axis)
+- Cole-Cole, Warburg, etc.: branch cuts, not discrete poles
+
+**Benchmark validation criteria:**
+1. Fitting error (max relative error %)
+2. **Model validity** (no poles in frequency range)
+3. VF models failing validity check → URN wins by default
+
+| Model Status | Criteria | Action |
+|--------------|----------|--------|
+| **Valid** | No poles in [f_min, f_max] and no unstable poles | Compare errors normally |
+| **Invalid** | Poles in frequency range OR unstable poles | URN wins automatically |
+
 **Benchmark result**: URN wins 11 / VF wins 2 (out of 13 tests)
+- VF "wins" only count when model is valid
+- Invalid VF models marked with asterisk (*) in results
 
 #### Prony Method vs URN
 
