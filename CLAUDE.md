@@ -2682,6 +2682,136 @@ Draw(B_gf, mesh, name='B_field')
 
 ---
 
-**Last Updated**: 2026-01-16 (Unified visualization policy: NGSolve + VTK)
+## Universal Relaxation Network (URN) Policy (2026-01-19)
+
+### URN Examples Directory
+
+**CRITICAL**: All URN-related examples, data, and scripts MUST be placed in:
+```
+examples/Universal_Relaxation_Network/
+```
+
+**Directory Structure**:
+```
+examples/Universal_Relaxation_Network/
+  data/
+    synthetic/                    # Synthetic benchmark data
+      liion_battery_eis.csv       # Physics-based synthetic Li-ion EIS
+      mnzn_ferrite_impedance.csv  # Physics-based synthetic ferrite data
+    real_world/                   # Publicly available real datasets
+      nasa_battery/               # NASA Li-ion Battery Aging Dataset
+      mendeley_eis/               # Mendeley SoC EIS Dataset
+  universal_relaxation_network.py # Main URN implementation
+  validate_urn_vs_vf.py           # Validation script (URN vs VF comparison)
+  demo_spice_timedomain.py        # Time-domain SPICE simulation demo
+```
+
+**Policy**:
+1. **All paper data here**: Data mentioned in `docs/paper/urn_paper.tex` MUST exist in this directory
+2. **Synthetic data labeled**: Synthetic data MUST be clearly marked as synthetic in file headers
+3. **Real data with attribution**: Real-world datasets MUST include license and citation info
+4. **Reproducibility**: All paper results MUST be reproducible from scripts in this directory
+
+**Do NOT**:
+- Place URN examples in `examples/peec_integration/` (legacy location)
+- Claim synthetic data as real measurements
+- Use proprietary datasets without proper licensing
+
+**Paper-Data Consistency**:
+Any data file referenced in `urn_paper.tex` MUST:
+1. Exist in `examples/Universal_Relaxation_Network/data/`
+2. Have matching parameters (frequency range, impedance values)
+3. Include header comments explaining data source
+
+---
+
+## Publication-Quality Figure Generation Policy (2026-01-19)
+
+### Matplotlib Settings for IEEE/Academic Papers
+
+**CRITICAL**: When generating figures for academic papers, use the following matplotlib settings for publication-quality PDF output.
+
+**Required Settings**:
+
+```python
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
+
+# Font settings: Times New Roman, 10pt at 8cm width
+rcParams['font.family'] = 'serif'
+rcParams['font.serif'] = ['Times New Roman']
+rcParams['font.size'] = 10
+rcParams['axes.labelsize'] = 10
+rcParams['axes.titlesize'] = 10
+rcParams['xtick.labelsize'] = 9
+rcParams['ytick.labelsize'] = 9
+rcParams['legend.fontsize'] = 8
+
+# High quality output
+rcParams['figure.dpi'] = 300
+rcParams['savefig.dpi'] = 300
+rcParams['savefig.bbox'] = 'tight'
+rcParams['savefig.pad_inches'] = 0.02  # Minimal margins
+
+# Tick settings: INWARD on ALL sides
+rcParams['xtick.direction'] = 'in'
+rcParams['ytick.direction'] = 'in'
+rcParams['xtick.top'] = True
+rcParams['xtick.bottom'] = True
+rcParams['ytick.left'] = True
+rcParams['ytick.right'] = True
+
+# Line widths
+rcParams['axes.linewidth'] = 0.5
+rcParams['xtick.major.width'] = 0.5
+rcParams['ytick.major.width'] = 0.5
+rcParams['xtick.minor.width'] = 0.3
+rcParams['ytick.minor.width'] = 0.3
+
+# Figure size: 8cm width (standard single-column)
+CM_TO_INCH = 1 / 2.54
+FIG_WIDTH = 8 * CM_TO_INCH   # 8cm = 3.15 inches
+FIG_HEIGHT = 6 * CM_TO_INCH  # Adjustable
+
+fig, ax = plt.subplots(figsize=(FIG_WIDTH, FIG_HEIGHT))
+# ... plot code ...
+plt.savefig('figure.pdf', format='pdf')
+```
+
+**Key Requirements**:
+
+| Setting | Value | Rationale |
+|---------|-------|-----------|
+| Font | Times New Roman | IEEE standard |
+| Font size | 10pt at 8cm | Readable in print |
+| Tick direction | Inward | Professional appearance |
+| Ticks | All 4 sides | Complete axis frame |
+| Margins | Minimal (0.02 in) | Maximize data area |
+| Output | PDF | Vector graphics, scalable |
+| DPI | 300 | High quality |
+
+**Figure Dimensions**:
+
+| Column Type | Width (cm) | Width (inch) |
+|-------------|-----------|--------------|
+| Single column | 8.0 | 3.15 |
+| Double column | 17.0 | 6.69 |
+| Full page | 19.0 | 7.48 |
+
+**Do NOT**:
+- Use PNG for paper figures (use PDF)
+- Use default matplotlib fonts (use Times New Roman)
+- Use outward ticks (use inward)
+- Leave large margins (use minimal padding)
+- Forget ticks on top/right axes
+
+**Example Script Location**:
+- `examples/Universal_Relaxation_Network/generate_paper_figures.py`
+
+---
+
+**Last Updated**: 2026-01-19 (Added Publication Figure Policy)
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation
