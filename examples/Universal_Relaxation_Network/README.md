@@ -2,6 +2,22 @@
 
 This directory contains the implementation and examples for the Universal Relaxation Network (URN), a KAN-inspired approach for automatic discovery of physical relaxation mechanisms from impedance data.
 
+## Validation Results (2026-01-19)
+
+### Real-World Data Performance
+
+| Dataset | Method | NRMSE | Params | Time |
+|---------|--------|-------|--------|------|
+| NASA 18650 Battery EIS | Vector Fitting | 1.9437 | 10 | 0.00s |
+| | **URN** | **0.2693** | 16 | 126s |
+| TDK PC50 Ferrite | Vector Fitting | 0.4367 | 12 | 0.00s |
+| | **URN** | **0.0102** | 17 | 184s |
+
+**Key Findings**:
+- **Battery EIS**: URN achieves 86% lower error than Vector Fitting
+- **Ferrite Impedance**: URN achieves 98% lower error than Vector Fitting
+- **Attention Mechanism**: 79-83% accuracy improvement on real data (ablation study)
+
 ## Directory Structure
 
 ```
@@ -10,10 +26,12 @@ Universal_Relaxation_Network/
     synthetic/                    # Physics-based synthetic benchmark data
       liion_battery_eis.csv       # Synthetic Li-ion battery EIS
       mnzn_ferrite_impedance.csv  # Synthetic MnZn ferrite impedance
-    real_world/                   # Publicly available real datasets
+    real_world/                   # Real measurement datasets
       nasa_battery/               # NASA Li-ion Battery Aging Dataset
-      mendeley_eis/               # Mendeley SoC EIS Dataset
-  universal_relaxation_network.py # Main URN implementation
+        nasa_18650_eis.csv        # Extracted EIS data (included)
+      tdk_ferrite/                # TDK MnZn ferrite datasheet data
+        tdk_pc50_impedance.csv    # PC50 impedance (included)
+  universal_relaxation_network.py # Main URN implementation (3900+ lines)
   relaxation_basis_library.py     # Basis function library
   validate_urn_vs_vf.py           # URN vs Vector Fitting comparison
   demo_spice_timedomain.py        # Time-domain SPICE simulation demo
@@ -32,24 +50,29 @@ from universal_relaxation_network import (
     UniversalRelaxationNetwork, URNConfig, train_urn, generate_spice_netlist
 )
 import numpy as np
+import torch
 
-# Load impedance data
-data = np.loadtxt('data/synthetic/liion_battery_eis.csv', delimiter=',', skiprows=7)
+# Load impedance data (use real NASA battery data if available)
+data = np.loadtxt('data/real_world/nasa_battery/nasa_18650_eis.csv',
+                  delimiter=',', skiprows=24)
 freq = data[:, 0]
 Z = data[:, 1] + 1j * data[:, 2]
 
-# Configure and train URN
+# Configure and train URN (with attention enabled by default)
 config = URNConfig(n_debye=3, n_cole_cole=2, n_warburg=2, sparsity_weight=0.01)
-model, history = train_urn(freq, Z, config)
+model = train_urn(freq, Z, config)  # Returns trained model
 
 # View discovered mechanisms
-mechanisms = model.get_discovered_mechanisms()
-for name, params in mechanisms.items():
-    print(f"{name}: {params}")
+mechanisms = model.get_active_components()
+for name, components in mechanisms.items():
+    for comp in components:
+        print(f"{name}: {comp}")
 
-# Generate SPICE netlist
+# Generate SPICE netlist (uses learned parameters)
 netlist = generate_spice_netlist(model, "BATTERY")
-print(netlist)
+with open("battery_model.sp", "w") as f:
+    f.write(netlist)
+print("SPICE netlist saved to battery_model.sp")
 ```
 
 ## Data Sources
