@@ -23,6 +23,7 @@ Output:
 
 import sys
 import numpy as np
+import torch
 import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy import signal
@@ -101,19 +102,21 @@ def simulate_step_response(freq, Z_data, model, title, output_path):
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     # Get model parameters
-    mechanisms = model.get_discovered_mechanisms()
+    mechanisms = model.get_active_components()
     omega = 2 * np.pi * freq
-    Z_fit = model.forward_numpy(omega)
+    omega_torch = torch.tensor(omega, dtype=torch.float64)
+    Z_fit = model(omega_torch).detach().numpy()
 
     # Create approximate transfer function from dominant poles
     # Extract time constants from discovered mechanisms
     tau_values = []
     R_values = []
 
-    for name, params in mechanisms.items():
-        if 'tau' in params and params['weight'] > 0.01:
-            tau_values.append(params['tau'])
-            R_values.append(params['weight'] * np.abs(Z_data).mean())
+    for name, components in mechanisms.items():
+        for params in components:
+            if 'tau' in params and params.get('weight_magnitude', 0) > 0.01:
+                tau_values.append(params['tau'])
+                R_values.append(params['weight_magnitude'] * np.abs(Z_data).mean())
 
     # Ensure we have at least some values
     if len(tau_values) == 0:
@@ -362,7 +365,7 @@ def main():
         n_debye_parallel=2, n_warburg_parallel=1,
         sparsity_weight=0.01, n_epochs=2000, n_restarts=2
     )
-    model_bat, _ = train_urn(freq_bat, Z_bat, config_bat)
+    model_bat = train_urn(freq_bat, Z_bat, config_bat)
 
     # Generate time-domain plots
     simulate_step_response(
@@ -393,7 +396,7 @@ def main():
         n_debye_parallel=2, n_cole_cole_parallel=1,
         sparsity_weight=0.01, n_epochs=2000, n_restarts=2
     )
-    model_fer, _ = train_urn(freq_fer, Z_fer, config_fer)
+    model_fer = train_urn(freq_fer, Z_fer, config_fer)
 
     # Generate time-domain plots
     simulate_step_response(
