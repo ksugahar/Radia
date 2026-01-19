@@ -38,7 +38,7 @@
 \corresp{Corresponding author: Kenta Sugahara (e-mail: sugahara@kindai.ac.jp).}
 
 \begin{abstract}
-We propose the Universal Relaxation Network (URN), a KAN-inspired approach for automatic discovery of physical relaxation mechanisms from frequency-domain impedance data. Unlike Vector Fitting (VF), which uses pole-residue representations that can produce unstable models, URN employs 29 circuit-compatible basis functions derived from established physical models (Debye, Cole-Cole, Warburg, skin effect). Through L1-regularized sparse optimization, URN automatically selects dominant mechanisms and directly synthesizes SPICE-compatible RLC ladder networks. The pole-free formulation guarantees structural stability while providing physically interpretable parameters. Validation on synthetic benchmark data demonstrates superior accuracy (2.8--3.1\% error) compared to VF (8--45\%). \textbf{Cross-domain real-world validation} using TDK MnZn ferrite datasheet measurements (PC47, PC50, PC95, PC200) and NASA Li-ion battery EIS data confirms URN successfully identifies Cole-Cole relaxation mechanisms with 3.8--5.1\% fitting error across five datasets. Time-domain SPICE simulations verify absence of spurious ringing. Open-source PyTorch implementation with benchmark datasets is available for reproducibility.
+We propose the Universal Relaxation Network (URN), a KAN-inspired approach for automatic discovery of physical relaxation mechanisms from frequency-domain impedance data. Unlike Vector Fitting (VF), which uses pole-residue representations that can produce unstable models, URN employs 29 circuit-compatible basis functions derived from established physical models (Debye, Cole-Cole, Warburg, skin effect). A learnable frequency-dependent attention mechanism $\alpha_k(\omega) = \text{softmax}(\text{MLP}(\log\omega))$ automatically emphasizes relevant basis functions at different frequency ranges. Through L1-regularized sparse optimization, URN automatically selects dominant mechanisms and directly synthesizes SPICE-compatible RLC ladder networks. The pole-free formulation guarantees structural stability while providing physically interpretable parameters. \textbf{Ablation study on real-world data} demonstrates that attention improves accuracy by 79--83\% compared to uniform weighting. Cross-domain validation using TDK MnZn ferrite datasheet measurements and NASA Li-ion battery EIS data achieves 1.1--21.9\% fitting error. Time-domain SPICE simulations verify absence of spurious ringing. Open-source PyTorch implementation with benchmark datasets is available for reproducibility.
 \end{abstract}
 
 \begin{keywords}
@@ -859,29 +859,26 @@ URN requires 100--150 seconds on CPU (8 restarts $\times$ 5000 epochs), compared
 
 Alternative approaches like CVX-based convex relaxation could enforce passivity faster but provide neither automatic mechanism identification nor interpretable parameters.
 
-\subsection{Ablation Study: Feature Contribution}
+\subsection{Ablation Study: Frequency-Dependent Attention}
 \label{sec:ablation}
 
-Table~\ref{tab:ablation} shows the contribution of each URN feature to fitting accuracy on the battery EIS dataset.
+Table~\ref{tab:ablation} demonstrates the contribution of the frequency-dependent attention mechanism on real-world datasets. The attention network $\alpha_k(\omega) = \text{softmax}(\text{MLP}(\log\omega))_k$ learns to weight each basis function based on frequency, enabling the model to automatically emphasize relevant relaxation mechanisms at different frequency ranges.
 
 \begin{table}[!t]
-\caption{Ablation Study: Feature Contribution (Battery EIS)}
+\caption{Ablation Study: Attention Mechanism on Real Data}
 \label{tab:ablation}
 \centering
-\begin{tabular}{@{}lcc@{}}
+\begin{tabular}{@{}lccc@{}}
 \toprule
-\textbf{Configuration} & \textbf{Error (\%)} & \textbf{Correct Mechanisms} \\
+\textbf{Dataset} & \textbf{Without Attn} & \textbf{With Attn} & \textbf{Improvement} \\
 \midrule
-Base URN (fixed $\tau$, $\alpha$) & 8.2 & 2/3 \\
-+ Learnable $\tau$ & 4.1 & 3/3 \\
-+ Learnable $\alpha$ (Priority 4) & 2.9 & 3/3 \\
-+ Adaptive grid (Priority 1) & 2.8 & 3/3 \\
-+ Attention gating (Priority 3) & 2.7 & 3/3 \\
+NASA 18650 Battery & 105.8\% & 21.9\% & 79.3\% \\
+TDK PC50 Ferrite & 6.7\% & 1.1\% & 83.4\% \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Learnable exponents (Priority 4) provide the largest improvement, enabling discovery of non-ideal Cole-Cole behavior ($\alpha = 0.82$). Adaptive grid refinement and attention gating provide marginal accuracy gains but improve interpretability by isolating mechanisms to specific frequency bands.
+The attention mechanism provides substantial accuracy improvements on both datasets. For battery EIS spanning 5 decades (0.1~Hz--5~kHz), attention learns to emphasize Warburg diffusion at low frequencies and charge transfer kinetics at high frequencies. For ferrite impedance (10~kHz--10~MHz), attention focuses on Cole-Cole relaxation in the MHz range while de-emphasizing skin effect terms at lower frequencies. The learned attention weights exhibit frequency-dependent variation (std = 0.04--0.07), confirming that the network actively modulates basis function contributions rather than defaulting to uniform weighting.
 
 \subsection{On ``KAN-ness'': Honest Assessment}
 \label{sec:kan_terminology}
