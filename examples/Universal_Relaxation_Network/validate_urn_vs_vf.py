@@ -42,9 +42,18 @@ from universal_relaxation_network import (
 
 
 def load_battery_data():
-    """Load Li-ion battery EIS data."""
-    data_path = Path(__file__).parent / 'data' / 'liion_battery_eis.csv'
-    data = np.loadtxt(data_path, delimiter=',', skiprows=7)
+    """Load NASA Li-ion battery EIS data (real measurement)."""
+    # Try real-world NASA data first
+    data_path = Path(__file__).parent / 'data' / 'real_world' / 'nasa_battery' / 'nasa_18650_eis.csv'
+    if not data_path.exists():
+        # Fall back to synthetic data
+        data_path = Path(__file__).parent / 'data' / 'synthetic' / 'liion_battery_eis.csv'
+        print(f"  Note: Using synthetic data ({data_path.name})")
+        skiprows = 7  # Synthetic data has 7 header lines
+    else:
+        print(f"  Using real NASA 18650 battery EIS data")
+        skiprows = 24  # NASA data has 24 header lines
+    data = np.loadtxt(data_path, delimiter=',', skiprows=skiprows)
     freq = data[:, 0]
     Z_real = data[:, 1]
     Z_imag = data[:, 2]
@@ -52,12 +61,21 @@ def load_battery_data():
 
 
 def load_ferrite_data():
-    """Load MnZn ferrite impedance data."""
-    data_path = Path(__file__).parent / 'data' / 'mnzn_ferrite_impedance.csv'
-    data = np.loadtxt(data_path, delimiter=',', skiprows=7)
+    """Load TDK MnZn ferrite impedance data (real measurement)."""
+    # Try real-world TDK data first
+    data_path = Path(__file__).parent / 'data' / 'real_world' / 'tdk_ferrite' / 'tdk_pc50_impedance.csv'
+    if not data_path.exists():
+        # Fall back to synthetic data
+        data_path = Path(__file__).parent / 'data' / 'synthetic' / 'mnzn_ferrite_impedance.csv'
+        print(f"  Note: Using synthetic data ({data_path.name})")
+        skiprows = 7  # Synthetic data has 7 header lines
+    else:
+        print(f"  Using real TDK PC50 ferrite impedance data")
+        skiprows = 19  # TDK data has 19 header lines
+    data = np.loadtxt(data_path, delimiter=',', skiprows=skiprows)
     freq = data[:, 0]
-    Z_real = data[:, 3]
-    Z_imag = data[:, 4]
+    Z_real = data[:, 1]  # Z_real is column 1
+    Z_imag = data[:, 2]  # Z_imag is column 2
     return freq, Z_real + 1j * Z_imag
 
 
@@ -166,18 +184,21 @@ def run_urn_fitting(freq, Z_data, config=None):
         )
 
     start_time = time.time()
-    model, history = train_urn(freq, Z_data, config)
+    model = train_urn(freq, Z_data, config)  # train_urn returns only model
     train_time = time.time() - start_time
 
     # Get fitted response
+    import torch
     omega = 2 * np.pi * freq
-    Z_fit = model.forward_numpy(omega)
+    omega_tensor = torch.tensor(omega, dtype=torch.float64)
+    Z_fit = model(omega_tensor).detach().numpy()
 
-    # Count active parameters
-    active_params = model.count_active_parameters()
+    # Count active parameters via get_active_components
+    active_components = model.get_active_components()
+    active_params = sum(len(v) for v in active_components.values())
 
-    # Get discovered mechanisms
-    mechanisms = model.get_discovered_mechanisms()
+    # Get discovered mechanisms (renamed API)
+    mechanisms = active_components
 
     return Z_fit, model, active_params, mechanisms, train_time
 
