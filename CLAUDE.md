@@ -2755,6 +2755,10 @@ rcParams['savefig.dpi'] = 300
 rcParams['savefig.bbox'] = 'tight'
 rcParams['savefig.pad_inches'] = 0.02  # Minimal margins
 
+# PDF font embedding: Type 42 (TrueType) for Acrobat compatibility
+rcParams['pdf.fonttype'] = 42
+rcParams['ps.fonttype'] = 42
+
 # Tick settings: INWARD on ALL sides
 rcParams['xtick.direction'] = 'in'
 rcParams['ytick.direction'] = 'in'

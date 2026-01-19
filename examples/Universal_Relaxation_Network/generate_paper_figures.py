@@ -42,6 +42,10 @@ rcParams['savefig.dpi'] = 300
 rcParams['savefig.bbox'] = 'tight'
 rcParams['savefig.pad_inches'] = 0.02
 
+# PDF settings: Use Type 42 (TrueType) fonts for better compatibility
+rcParams['pdf.fonttype'] = 42
+rcParams['ps.fonttype'] = 42
+
 # Tick settings: inward on all sides
 rcParams['xtick.direction'] = 'in'
 rcParams['ytick.direction'] = 'in'
