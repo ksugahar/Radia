@@ -156,13 +156,15 @@ This paper presents URN with the following contributions:
 \begin{enumerate}
 \item \textbf{Physics-informed basis library}: 29 circuit-compatible functions covering relaxation (Debye, Cole-Cole, Havriliak-Negami), diffusion (Warburg, Gerischer), and distributed effects (CPE, skin effect).
 
+\item \textbf{Frequency-dependent attention}: Learnable MLP-based attention $\alpha_k(\omega) = \text{softmax}(\text{MLP}(\log\omega))$ automatically emphasizes relevant basis functions at different frequency ranges. Ablation study on real data demonstrates 79--83\% accuracy improvement.
+
 \item \textbf{Automatic mechanism discovery}: L1-regularized sparse optimization selects dominant mechanisms without manual model order specification.
 
 \item \textbf{Guaranteed circuit compatibility}: Each basis maps to RLC ladders via Valsa \cite{valsa2013rc}, Charef \cite{charef1992fractal}, and Dowell \cite{dowell1966eddy} methods with automatic stage determination.
 
 \item \textbf{Pole-free formulation}: Eliminates spurious resonances that plague VF in time-domain simulation.
 
-\item \textbf{Comprehensive validation}: Benchmarks on 13 synthetic cases plus \textbf{physics-based synthetic data} modeled after Li-ion battery EIS and MnZn ferrite impedance spectra demonstrate 2.8--3.22\% average error vs.\ VF's 8--368\%. Time-domain SPICE simulations verify absence of spurious ringing. \textbf{Note}: Real-world validation using publicly available datasets (NASA Battery Dataset, Mendeley EIS Dataset) is planned for future work.
+\item \textbf{Real-world validation}: Cross-domain validation using TDK MnZn ferrite datasheet measurements (PC47, PC50, PC95, PC200) and NASA 18650 Li-ion battery EIS data achieves 1.1--21.9\% fitting error across diverse applications.
 \end{enumerate}
 
 \subsection{Paper Organization}
@@ -400,20 +402,33 @@ Each band uses a separate URN subnetwork with appropriate $\tau$ ranges. This hi
 \item Improves interpretability by isolating physical processes
 \end{itemize}
 
-\subsection{Attention-Based Basis Selection (Priority 3)}
+\subsection{Frequency-Dependent Attention (Priority 3)}
 \label{sec:attention}
 
-In complex spectra, different basis functions may be relevant at different frequencies. \textbf{AttentionURN} implements frequency-dependent gating:
+In complex spectra spanning multiple decades (e.g., battery EIS from 0.1~Hz to 5~kHz), different basis functions are relevant at different frequencies. \textbf{AttentionURN} implements frequency-dependent gating via a learnable MLP:
 \begin{equation}
-Z(\omega) = \sum_{i=1}^{M} g_i(\omega) \cdot w_i \cdot \phi_i(\omega; \theta_i)
+Z(\omega) = \sum_{k=1}^{M} \alpha_k(\omega) \cdot w_k \cdot \phi_k(\omega; \theta_k)
 \end{equation}
-where $g_i(\omega)$ is a learned gating function that modulates the contribution of basis $i$ at frequency $\omega$. The gating functions are parameterized as:
+where the attention weights $\alpha_k(\omega)$ are computed as:
 \begin{equation}
-g_i(\omega) = \sigma\left( a_i \cdot \log(\omega/\omega_{0,i}) + b_i \right)
+\alpha_k(\omega) = \text{softmax}\left( \text{MLP}(\log(\omega/\omega_{\text{ref}})) / T \right)_k
+\label{eq:attention}
 \end{equation}
-where $\sigma$ is the sigmoid function, and $a_i$, $b_i$, $\omega_{0,i}$ are learnable parameters.
 
-This attention mechanism allows URN to automatically ``turn on'' specific basis functions only in the frequency ranges where they are physically relevant, reducing interference between mechanisms and improving both accuracy and interpretability.
+The MLP architecture consists of two linear layers with tanh activation:
+\begin{equation}
+\text{MLP}(x) = W_2 \cdot \tanh(W_1 \cdot x + b_1) + b_2
+\end{equation}
+where $W_1 \in \mathbb{R}^{H \times 1}$, $W_2 \in \mathbb{R}^{M \times H}$, $H$ is the hidden dimension (default: 16), and $T$ is the softmax temperature (default: 1.0). Xavier initialization with gain 0.5 ensures smooth initial attention.
+
+This attention mechanism provides three key advantages:
+\begin{itemize}
+\item \textbf{Automatic frequency localization}: Warburg diffusion is emphasized at low frequencies, charge transfer at mid-frequencies, and skin effect at high frequencies---without manual specification.
+\item \textbf{Reduced basis interference}: By suppressing irrelevant bases at each frequency, attention prevents erroneous mechanism identification.
+\item \textbf{Interpretable decomposition}: The learned $\alpha_k(\omega)$ curves directly visualize which physical mechanisms dominate at each frequency.
+\end{itemize}
+
+As demonstrated in Section~\ref{sec:ablation}, attention improves fitting accuracy by 79--83\% on real-world datasets compared to uniform weighting.
 
 \subsection{Learnable Exponents (Priority 4)}
 \label{sec:learnable_exp}
