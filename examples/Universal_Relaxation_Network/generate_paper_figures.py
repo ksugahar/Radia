@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Generate publication-quality PDF figures for URN paper.
+Generate publication-quality PNG figures for URN paper.
 
 Requirements:
 - Times New Roman font
@@ -9,10 +9,7 @@ Requirements:
 - Inward ticks on all sides
 
 Output:
-- docs/paper/figures/fig_nasa_battery_eis.pdf
-- docs/paper/figures/fig_tdk_ferrite_impedance.pdf
-- docs/paper/figures/fig_urn_vs_vf_comparison.pdf
-- docs/paper/figures/fig_ablation_attention.pdf
+- paper/Figures/fig_*.pdf
 """
 
 import sys
@@ -25,44 +22,38 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import matplotlib
 matplotlib.use('Agg')
+matplotlib.rc('mathtext', **{'rm':'serif', 'it':'serif:italic', 'bf':'serif:bold', 'fontset':'cm'})
 import matplotlib.pyplot as plt
-from matplotlib import rcParams
 
-# Publication settings
-rcParams['font.family'] = 'serif'
-rcParams['font.serif'] = ['Times New Roman']
-rcParams['font.size'] = 10
-rcParams['axes.labelsize'] = 10
-rcParams['axes.titlesize'] = 10
-rcParams['xtick.labelsize'] = 9
-rcParams['ytick.labelsize'] = 9
-rcParams['legend.fontsize'] = 8
-rcParams['figure.dpi'] = 300
-rcParams['savefig.dpi'] = 300
-rcParams['savefig.bbox'] = 'tight'
-rcParams['savefig.pad_inches'] = 0.02
-
-# PDF settings: Use Type 42 (TrueType) fonts for better compatibility
-rcParams['pdf.fonttype'] = 42
-rcParams['ps.fonttype'] = 42
-
-# Tick settings: inward on all sides
-rcParams['xtick.direction'] = 'in'
-rcParams['ytick.direction'] = 'in'
-rcParams['xtick.top'] = True
-rcParams['xtick.bottom'] = True
-rcParams['ytick.left'] = True
-rcParams['ytick.right'] = True
-rcParams['axes.linewidth'] = 0.5
-rcParams['xtick.major.width'] = 0.5
-rcParams['ytick.major.width'] = 0.5
-rcParams['xtick.minor.width'] = 0.3
-rcParams['ytick.minor.width'] = 0.3
-
-# Figure size: 8cm width
+# Figure size: 8cm width at 600 dpi
 CM_TO_INCH = 1 / 2.54
-FIG_WIDTH = 8 * CM_TO_INCH  # 8cm
+FIG_WIDTH = 8 * CM_TO_INCH  # 8cm = 3.15 inches
 FIG_HEIGHT = 6 * CM_TO_INCH  # 6cm (adjustable)
+DPI = 600
+
+# Font settings
+FONT_NAME = 'times new roman'
+FONT_SIZE = 10
+FONT_SIZE_TICK = 9
+FONT_SIZE_LEGEND = 8
+
+
+def setup_axis(ax, xlabel, ylabel, title=None):
+    """Setup axis with publication-quality formatting."""
+    # Axis labels
+    ax.set_xlabel(xlabel, fontname=FONT_NAME, fontsize=FONT_SIZE)
+    ax.set_ylabel(ylabel, fontname=FONT_NAME, fontsize=FONT_SIZE)
+    if title:
+        ax.set_title(title, fontname=FONT_NAME, fontsize=FONT_SIZE)
+
+    # Tick labels
+    plt.setp(ax.get_xticklabels(), fontname=FONT_NAME, fontsize=FONT_SIZE_TICK)
+    plt.setp(ax.get_yticklabels(), fontname=FONT_NAME, fontsize=FONT_SIZE_TICK)
+
+    # Tick direction: inward on all sides
+    ax.minorticks_on()
+    ax.tick_params(which='major', direction='in', top=True, right=True, width=0.5, length=4)
+    ax.tick_params(which='minor', direction='in', top=True, right=True, width=0.3, length=2)
 
 
 def load_nasa_battery_data():
@@ -170,37 +161,33 @@ def fig_nasa_battery_eis(output_dir):
     Z_vf = run_vector_fitting(freq, Z_data, n_poles=10)
 
     # Create figure with two subplots
-    fig, axes = plt.subplots(1, 2, figsize=(FIG_WIDTH * 2, FIG_HEIGHT))
+    fig = plt.figure(figsize=(FIG_WIDTH * 2, FIG_HEIGHT), dpi=DPI)
 
     # Nyquist plot
-    ax1 = axes[0]
+    ax1 = fig.add_subplot(1, 2, 1)
     ax1.plot(Z_data.real * 1000, -Z_data.imag * 1000, 'ko', markersize=3,
              label='Measured', markerfacecolor='none', markeredgewidth=0.5)
     if Z_urn is not None:
         ax1.plot(Z_urn.real * 1000, -Z_urn.imag * 1000, 'b-', linewidth=1, label='URN')
     ax1.plot(Z_vf.real * 1000, -Z_vf.imag * 1000, 'r--', linewidth=1, label='VF')
-    ax1.set_xlabel(r"$Z'$ (m$\Omega$)")
-    ax1.set_ylabel(r"$-Z''$ (m$\Omega$)")
-    ax1.legend(loc='upper right', frameon=False)
+    setup_axis(ax1, r"$Z'$ (m$\Omega$)", r"$-Z''$ (m$\Omega$)", '(a) Nyquist plot')
+    ax1.legend(loc='upper right', frameon=False, prop={'family': FONT_NAME, 'size': FONT_SIZE_LEGEND})
     ax1.set_aspect('equal', adjustable='box')
-    ax1.set_title('(a) Nyquist plot')
 
     # Bode magnitude plot
-    ax2 = axes[1]
+    ax2 = fig.add_subplot(1, 2, 2)
     ax2.loglog(freq, np.abs(Z_data) * 1000, 'ko', markersize=3,
                label='Measured', markerfacecolor='none', markeredgewidth=0.5)
     if Z_urn is not None:
         ax2.loglog(freq, np.abs(Z_urn) * 1000, 'b-', linewidth=1, label='URN')
     ax2.loglog(freq, np.abs(Z_vf) * 1000, 'r--', linewidth=1, label='VF')
-    ax2.set_xlabel('Frequency (Hz)')
-    ax2.set_ylabel(r'$|Z|$ (m$\Omega$)')
-    ax2.legend(loc='upper right', frameon=False)
-    ax2.set_title('(b) Bode magnitude')
+    setup_axis(ax2, 'Frequency (Hz)', r'$|Z|$ (m$\Omega$)', '(b) Bode magnitude')
+    ax2.legend(loc='upper right', frameon=False, prop={'family': FONT_NAME, 'size': FONT_SIZE_LEGEND})
 
     plt.tight_layout(pad=0.5)
 
     output_path = output_dir / 'fig_nasa_battery_eis.pdf'
-    plt.savefig(output_path, format='pdf')
+    plt.savefig(output_path, dpi=DPI)
     plt.close()
     print(f"  Saved: {output_path}")
 
@@ -210,35 +197,35 @@ def fig_tdk_ferrite_impedance(output_dir):
     print("[2/4] Generating TDK ferrite impedance figure...")
 
     materials = ['pc47', 'pc50', 'pc95', 'pc200']
-    fig, axes = plt.subplots(2, 2, figsize=(FIG_WIDTH * 2, FIG_HEIGHT * 2))
-    axes = axes.flatten()
+    fig = plt.figure(figsize=(FIG_WIDTH * 2, FIG_HEIGHT * 2), dpi=DPI)
 
     for idx, material in enumerate(materials):
         freq, Z_data = load_tdk_ferrite_data(material)
+        ax = fig.add_subplot(2, 2, idx + 1)
+
         if freq is None:
-            axes[idx].text(0.5, 0.5, f'{material.upper()}\n(data not found)',
-                          ha='center', va='center', transform=axes[idx].transAxes)
+            ax.text(0.5, 0.5, f'{material.upper()}\n(data not found)',
+                    ha='center', va='center', transform=ax.transAxes,
+                    fontname=FONT_NAME, fontsize=FONT_SIZE)
             continue
 
         Z_urn = run_urn_fitting(freq, Z_data)
         Z_vf = run_vector_fitting(freq, Z_data, n_poles=12)
 
-        ax = axes[idx]
         ax.loglog(freq, np.abs(Z_data), 'ko', markersize=2,
                   label='Measured', markerfacecolor='none', markeredgewidth=0.4)
         if Z_urn is not None:
             ax.loglog(freq, np.abs(Z_urn), 'b-', linewidth=0.8, label='URN')
         ax.loglog(freq, np.abs(Z_vf), 'r--', linewidth=0.8, label='VF')
-        ax.set_xlabel('Frequency (Hz)')
-        ax.set_ylabel(r'$|Z|$ ($\Omega$)')
-        ax.set_title(f'({chr(97+idx)}) TDK {material.upper()}')
+
+        setup_axis(ax, 'Frequency (Hz)', r'$|Z|$ ($\Omega$)', f'({chr(97+idx)}) TDK {material.upper()}')
         if idx == 0:
-            ax.legend(loc='upper left', frameon=False)
+            ax.legend(loc='upper left', frameon=False, prop={'family': FONT_NAME, 'size': FONT_SIZE_LEGEND})
 
     plt.tight_layout(pad=0.5)
 
     output_path = output_dir / 'fig_tdk_ferrite_impedance.pdf'
-    plt.savefig(output_path, format='pdf')
+    plt.savefig(output_path, dpi=DPI)
     plt.close()
     print(f"  Saved: {output_path}")
 
@@ -255,32 +242,32 @@ def fig_urn_vs_vf_comparison(output_dir):
     x = np.arange(len(datasets))
     width = 0.35
 
-    fig, ax = plt.subplots(figsize=(FIG_WIDTH, FIG_HEIGHT))
+    fig = plt.figure(figsize=(FIG_WIDTH, FIG_HEIGHT), dpi=DPI)
+    ax = fig.add_subplot(1, 1, 1)
 
     bars1 = ax.bar(x - width/2, vf_nrmse, width, label='Vector Fitting',
                    color='#d62728', edgecolor='black', linewidth=0.5)
     bars2 = ax.bar(x + width/2, urn_nrmse, width, label='URN',
                    color='#1f77b4', edgecolor='black', linewidth=0.5)
 
-    ax.set_ylabel('NRMSE')
+    setup_axis(ax, '', 'NRMSE')
     ax.set_xticks(x)
-    ax.set_xticklabels(datasets)
-    ax.legend(loc='upper right', frameon=False)
+    ax.set_xticklabels(datasets, fontname=FONT_NAME, fontsize=FONT_SIZE_TICK)
+    ax.legend(loc='upper right', frameon=False, prop={'family': FONT_NAME, 'size': FONT_SIZE_LEGEND})
     ax.set_ylim(0, 0.35)
 
     # Add improvement annotations
     improvements = [9.1, 39.4, 65.9, -48.9, 48.4]
     for i, (v, u, imp) in enumerate(zip(vf_nrmse, urn_nrmse, improvements)):
         y_pos = max(v, u) + 0.01
-        if imp > 0:
-            ax.annotate(f'+{imp:.0f}%', (x[i], y_pos), ha='center', fontsize=7, color='green')
-        else:
-            ax.annotate(f'{imp:.0f}%', (x[i], y_pos), ha='center', fontsize=7, color='red')
+        color = 'green' if imp > 0 else 'red'
+        text = f'+{imp:.0f}%' if imp > 0 else f'{imp:.0f}%'
+        ax.annotate(text, (x[i], y_pos), ha='center', fontname=FONT_NAME, fontsize=7, color=color)
 
     plt.tight_layout(pad=0.5)
 
     output_path = output_dir / 'fig_urn_vs_vf_comparison.pdf'
-    plt.savefig(output_path, format='pdf')
+    plt.savefig(output_path, dpi=DPI)
     plt.close()
     print(f"  Saved: {output_path}")
 
@@ -297,29 +284,30 @@ def fig_ablation_attention(output_dir):
     x = np.arange(len(datasets))
     width = 0.35
 
-    fig, ax = plt.subplots(figsize=(FIG_WIDTH, FIG_HEIGHT))
+    fig = plt.figure(figsize=(FIG_WIDTH, FIG_HEIGHT), dpi=DPI)
+    ax = fig.add_subplot(1, 1, 1)
 
     bars1 = ax.bar(x - width/2, without_attn, width, label='Without Attention',
                    color='#ff7f0e', edgecolor='black', linewidth=0.5)
     bars2 = ax.bar(x + width/2, with_attn, width, label='With Attention',
                    color='#2ca02c', edgecolor='black', linewidth=0.5)
 
-    ax.set_ylabel('NRMSE')
+    setup_axis(ax, '', 'NRMSE')
     ax.set_xticks(x)
-    ax.set_xticklabels(datasets)
-    ax.legend(loc='upper right', frameon=False)
+    ax.set_xticklabels(datasets, fontname=FONT_NAME, fontsize=FONT_SIZE_TICK)
+    ax.legend(loc='upper right', frameon=False, prop={'family': FONT_NAME, 'size': FONT_SIZE_LEGEND})
     ax.set_ylim(0, 0.7)
 
     # Add improvement annotations
     improvements = [59.0, 80.1, 81.7, 77.8]
     for i, (wo, w, imp) in enumerate(zip(without_attn, with_attn, improvements)):
         y_pos = wo + 0.02
-        ax.annotate(f'-{imp:.0f}%', (x[i], y_pos), ha='center', fontsize=7, color='green')
+        ax.annotate(f'-{imp:.0f}%', (x[i], y_pos), ha='center', fontname=FONT_NAME, fontsize=7, color='green')
 
     plt.tight_layout(pad=0.5)
 
     output_path = output_dir / 'fig_ablation_attention.pdf'
-    plt.savefig(output_path, format='pdf')
+    plt.savefig(output_path, dpi=DPI)
     plt.close()
     print(f"  Saved: {output_path}")
 
@@ -328,8 +316,8 @@ def main():
     print("=" * 60)
     print("Generating Publication-Quality Figures for URN Paper")
     print("=" * 60)
-    print(f"Figure width: 8cm, Font: Times New Roman 10pt")
-    print(f"Ticks: inward on all sides")
+    print(f"Figure width: 8cm, Font: {FONT_NAME} {FONT_SIZE}pt")
+    print(f"DPI: {DPI}, Ticks: inward on all sides")
     print()
 
     output_dir = create_output_dir()

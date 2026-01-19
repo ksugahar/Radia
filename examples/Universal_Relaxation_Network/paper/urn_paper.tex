@@ -6,11 +6,7 @@
 \usepackage{textcomp}
 \usepackage{booktabs}
 \usepackage{multirow}
-\usepackage{xcolor}
 \usepackage{hyperref}
-\usepackage{tikz}
-\usepackage{pgfplots}
-\pgfplotsset{compat=1.18}
 
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
     T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
@@ -667,17 +663,17 @@ Table~\ref{tab:realworld} summarizes URN performance across all five real-world 
 \caption{Real-World Validation Results}
 \label{tab:realworld}
 \centering
+\footnotesize
 \begin{tabular}{@{}llcccc@{}}
 \toprule
-\textbf{Domain} & \textbf{Dataset} & \textbf{Param} & \textbf{Error} & \textbf{\#} & \textbf{Primary} \\
- & & & \textbf{(\%)} & \textbf{Mech.} & \textbf{Type} \\
+\textbf{Domain} & \textbf{Dataset} & \textbf{Param} & \textbf{Err(\%)} & \textbf{\#} & \textbf{Type} \\
 \midrule
-Magnetic & TDK PC47 & $\mu_i$=2500 & 3.8 & 2 & Cole-Cole \\
-Magnetic & TDK PC50 & $\mu_i$=1400 & 4.2 & 2 & Cole-Cole \\
-Magnetic & TDK PC95 & $\mu_i$=3300 & 4.0 & 2 & Cole-Cole \\
-Magnetic & TDK PC200 & $\mu_i$=800 & 5.1 & 2 & Cole-Cole+CD \\
+Mag. & TDK PC47 & $\mu_i$=2500 & 3.8 & 2 & Cole-Cole \\
+Mag. & TDK PC50 & $\mu_i$=1400 & 4.2 & 2 & Cole-Cole \\
+Mag. & TDK PC95 & $\mu_i$=3300 & 4.0 & 2 & Cole-Cole \\
+Mag. & TDK PC200 & $\mu_i$=800 & 5.1 & 2 & CC+CD \\
 \midrule
-Electrochem & NASA 18650 & 2 Ah & 4.5 & 2 & Cole-Cole+W \\
+Elec. & NASA 18650 & 2 Ah & 4.5 & 2 & CC+W \\
 \bottomrule
 \end{tabular}
 \begin{flushleft}
@@ -701,7 +697,7 @@ Fig.~\ref{fig:realworld_eis} shows representative Nyquist plots from the real-wo
 \label{fig:tdk_ferrite}
 \end{figure}
 
-The TDK datasheet PDF and NASA battery data files are included in the repository at \texttt{examples/Universal\_Relaxation\_Network/data/real\_world/}.
+Data files are included in the repository under \texttt{data/real\_world/}.
 
 \subsubsection{URN vs Vector Fitting: Direct Comparison}
 \label{sec:urn_vs_vf}
@@ -712,17 +708,18 @@ To quantify URN's advantage over the industry-standard Vector Fitting (VF), we p
 \caption{URN vs Vector Fitting on Real-World Data}
 \label{tab:urn_vs_vf}
 \centering
-\begin{tabular}{@{}lcccc@{}}
+\footnotesize
+\begin{tabular}{@{}lccc@{}}
 \toprule
-\textbf{Dataset} & \textbf{VF NRMSE} & \textbf{URN NRMSE} & \textbf{Improvement} & \textbf{Time} \\
+\textbf{Dataset} & \textbf{VF} & \textbf{URN} & \textbf{Impr.} \\
 \midrule
-NASA 18650 Battery & 0.2700 & \textbf{0.2454} & 9.1\% & 178s \\
-TDK PC47 Ferrite & 0.0146 & \textbf{0.0088} & 39.4\% & 175s \\
-TDK PC50 Ferrite & 0.0288 & \textbf{0.0098} & 65.9\% & 176s \\
-TDK PC95 Ferrite & \textbf{0.0080} & 0.0120 & $-$48.9\% & 176s \\
-TDK PC200 Ferrite & 0.0108 & \textbf{0.0056} & 48.4\% & 177s \\
+NASA 18650 & 0.270 & \textbf{0.245} & 9.1\% \\
+TDK PC47 & 0.015 & \textbf{0.009} & 39.4\% \\
+TDK PC50 & 0.029 & \textbf{0.010} & 65.9\% \\
+TDK PC95 & \textbf{0.008} & 0.012 & $-$48.9\% \\
+TDK PC200 & 0.011 & \textbf{0.006} & 48.4\% \\
 \midrule
-\textbf{Average} & --- & --- & \textbf{22.8\%} & 176s \\
+\textbf{Average} & --- & --- & \textbf{22.8\%} \\
 \bottomrule
 \end{tabular}
 \begin{flushleft}
@@ -807,7 +804,7 @@ The sparsity weight $\lambda$ controls mechanism discovery. URN normalizes by $Z
 \centering
 \begin{tabular}{@{}lccc@{}}
 \toprule
-\textbf{$\lambda$} & \textbf{Error (\%)} & \textbf{\# Mechanisms} & \textbf{Discovered Types} \\
+$\mathbf{\lambda}$ & \textbf{Error (\%)} & \textbf{\# Mechanisms} & \textbf{Discovered Types} \\
 \midrule
 0.001 & 1.8 & 6 & Debye(2), CC(2), CPE(2) \\
 \textbf{0.01} & \textbf{2.8} & \textbf{3} & \textbf{Ohmic, CC, Warburg} \\
@@ -827,7 +824,7 @@ Real EMI measurements contain significant noise. We evaluated URN robustness by 
 \centering
 \begin{tabular}{@{}lccc@{}}
 \toprule
-\textbf{SNR (dB)} & \textbf{$\tau$ Error} & \textbf{$\alpha$ Error} & \textbf{Correct Topology} \\
+\textbf{SNR (dB)} & $\mathbf{\tau}$ \textbf{Err} & $\mathbf{\alpha}$ \textbf{Err} & \textbf{Correct Topology} \\
 \midrule
 $\infty$ (clean) & 0.2\% & 0.5\% & 100\% \\
 40 & 1.1\% & 2.3\% & 100\% \\
@@ -980,9 +977,7 @@ The pole-free advantage is particularly significant for power electronics applic
 
 \textbf{Current implementation}: Series and parallel basis topologies with Cauer ladder synthesis. The framework is extensible to hybrid topologies and multi-port systems via Block Lanczos.
 
-\textbf{Open-source availability}: PyTorch implementation (700 lines), CPU-only, training time 100--150 seconds per case. No GPU required. Source code is available at \url{https://github.com/ksugahar/Radia} in the \texttt{examples/Universal\_Relaxation\_Network/} directory.
-
-\textbf{Reproducibility}: The repository includes synthetic benchmark data files (\texttt{data/liion\_battery\_eis.csv}, \texttt{data/mnzn\_ferrite\_impedance.csv}) and validation scripts (\texttt{validate\_urn\_vs\_vf.py}, \texttt{demo\_spice\_timedomain.py}) to reproduce all results presented in this paper. Additionally, publicly available real-world datasets (NASA Li-ion Battery Dataset, Mendeley EIS Dataset) are included in \texttt{data/real\_world/} for future validation extensions.
+\textbf{Open-source availability}: PyTorch implementation (700 lines), CPU-only, 100--150 seconds training time. Source code available at GitHub.\footnote{\url{https://github.com/ksugahar/Radia}}
 
 URN bridges the gap between data-driven flexibility (KAN philosophy) and physics-based interpretability (circuit-compatible constraints), offering a practical tool for impedance modeling in power electronics design.
 
