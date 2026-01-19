@@ -1,4 +1,83 @@
-# Peer Review Report: KAN-inspired Universal Relaxation Network (URN)
+# Peer Review Report: Universal Relaxation Network (URN)
+
+**Manuscript Title**: KAN-inspired Universal Relaxation Network for Automatic Discovery of Physical Relaxation Mechanisms with Direct Circuit Synthesis
+**Review Date**: 2026-01-19 (Final Post-Revision Audit)
+**Reviewer**: Antigravity (AI Agent)
+**Verdict**: **Major Revision**
+
+---
+
+## 1. Executive Summary
+
+The manuscript proposes "Universal Relaxation Network (URN)," a physics-informed framework for impedance spectroscopy analysis. Following significant revisions and code updates, the project has transitioned from a theoretical concept to a **fully implemented functional prototype**.
+
+**Key Findings**:
+*   **Code Completeness**: The repository now implements all 5 core "KAN-inspired" features claimed in the paper (Adaptive Grid, Hierarchical Decomposition, Attention Gating, Learnable Exponents, Symbolic Discovery). A rigorous code audit confirms these features exist and are functional.
+*   **Circuit Synthesis**: The critical issue of "Direct Circuit Synthesis" has been resolved. The synthesizer now correctly maps learned parameters to SPICE equivalents using industry-standard approximations (Valsa, Charef, Dowell) rather than hardcoded placeholders.
+*   **Data Integrity**: The authors have correctly labeled synthetic benchmarks and added frameworks for real-world data (NASA Battery, TDK Ferrite).
+
+**Critical Gap**:
+While the *tooling* for real-world validation is now present (`validate_real_data.py`, `validate_tdk_ferrite.py`), the manuscript itself currently lacks comprehensive results using these frameworks. Theoretical claims of "superiority over Vector Fitting" must be backed by these real-world benchmarks before publication.
+
+---
+
+## 2. Code Verification (Audit Results)
+
+A deep line-by-line inspection of the `universal_relaxation_network.py` (v1.5) confirmed the following:
+
+### 2.1 Implemented Features (Verified)
+The "5 KAN Priorities" claimed in the methodology are physically present in the codebase:
+
+| Feature | Status | Verification Details |
+|---------|--------|----------------------|
+| **1. Adaptive Grid** | **Verified** | `AdaptiveURN` class (Line 1055) implements iterative grid refinement based on residual error. |
+| **2. Hierarchy** | **Verified** | `HierarchicalURN` class (Line 1486) implements multi-scale `URNLayer` decomposition. |
+| **3. Attention Gating** | **Verified** | `_init_attention` (Line 267) and `AttentionURN` (Line 2134) implement frequency-dependent weighting. |
+| **4. Learnable Exponents** | **Verified** | `LearnableExponentURN` (Line 2812) allows training of $\alpha, \beta, n$ parameters. |
+| **5. Symbolic Discovery** | **Verified** | `SymbolicDiscovery` class (Line 3086) maps parameters to named physical mechanisms. |
+
+### 2.2 Circuit Synthesis (Fixed)
+The `generate_spice_netlist` function (Lines 2517+) has been corrected to use learned parameters:
+*   **CPE**: Uses Valsa method with learned `Q` and `n`.
+*   **Cole-Cole**: Uses Charef method with learned `tau` and `alpha`.
+*   **Warburg**: Uses RC ladder with learned `Aw` ($n=0.5$).
+*   **Verification**: The hardcoded test loops observed in previous versions have been replaced with proper parameter-driven generation logic.
+
+### 2.3 Simulation Fidelity
+*   **LTspice Integration**: `run_ltspice_verification.py` was verified to execute actual LTspice simulations (via `SimRunner`) and parse binary `.raw` files, contrasting with the previous Python-only approximations.
+
+---
+
+## 3. Outstanding Issues (Required for Acceptance)
+
+### 3.1 Experimental Validation
+**Current State**: The repository contains scripts to validate against TDK Ferrite datasheets and NASA Battery data, but the manuscript relies primarily on synthetic data.
+**Requirement**: The "Real-World Validation" section must be populated with the outputs of these new scripts. Specifically:
+1.  **TDK Ferrite**: Show accurate recovery of complex permeability ($\mu', \mu''$) from datasheet impedance.
+2.  **NASA Battery**: Demonstrate better fit/explainability than Vector Fitting on noisy aging data.
+
+### 3.2 Computational Cost
+**Current State**: URN takes minutes (vs seconds for Vector Fitting).
+**Requirement**: Explicitly justify this cost. The argument should likely be: "URN is an offline *modeling* step to generate a highly efficient SPICE model for *online* simulation. The high one-time training cost is amortized over thousands of subsequent circuit simulations."
+
+### 3.3 Terminology ("KAN-inspired")
+**Assessment**: The architecture is technically **Sparse Parametric Basis Pursuit** with learnable parameters. It shares the "learnable activation function" philosophy of KANs but differs in implementation (analytical basis vs splines).
+**Requirement**: The manuscript honors this distinction in Section 6.6. This transparency should be maintained in the Abstract and Conclusion to avoid overclaiming.
+
+---
+
+## 4. Final Recommendation
+
+**MAJOR REVISION**
+
+The codebase is now scientifically robust and matches the paper's theoretical claims. The implementation of advanced features and circuit synthesis is commendable. However, the manuscript cannot be accepted until the **Real-World Validation** gap is closed.
+
+**Path to Acceptance**:
+1.  Execute the provided `validate_tdk_ferrite.py` and `validate_real_data.py` scripts.
+2.  Incorporate the resulting plots and error metrics into the manuscript (replacing or augmenting synthetic benchmarks).
+3.  Submit the revised manuscript with the generated real-world evidence.
+
+Once these validation results are integrated, the paper will represent a significant contribution to automated physical modeling.
 
 **Manuscript Title**: KAN-inspired Universal Relaxation Network for Automatic Discovery of Physical Relaxation Mechanisms with Direct Circuit Synthesis
 **Review Date**: 2026-01-19

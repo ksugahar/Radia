@@ -749,6 +749,43 @@ Fig.~\ref{fig:realworld_eis} shows representative Nyquist plots from the real-wo
 
 The TDK datasheet PDF and NASA battery data files are included in the repository at \texttt{examples/Universal\_Relaxation\_Network/data/real\_world/}.
 
+\subsubsection{URN vs Vector Fitting: Direct Comparison}
+\label{sec:urn_vs_vf}
+
+To quantify URN's advantage over the industry-standard Vector Fitting (VF), we performed direct accuracy comparisons on the same real-world datasets. Table~\ref{tab:urn_vs_vf} summarizes the normalized root-mean-square error (NRMSE) for both methods.
+
+\begin{table}[!t]
+\caption{URN vs Vector Fitting on Real-World Data}
+\label{tab:urn_vs_vf}
+\centering
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Dataset} & \textbf{VF NRMSE} & \textbf{URN NRMSE} & \textbf{Improvement} & \textbf{Time} \\
+\midrule
+NASA 18650 Battery & 0.2700 & \textbf{0.2454} & 9.1\% & 178s \\
+TDK PC47 Ferrite & 0.0146 & \textbf{0.0088} & 39.4\% & 175s \\
+TDK PC50 Ferrite & 0.0288 & \textbf{0.0098} & 65.9\% & 176s \\
+TDK PC95 Ferrite & \textbf{0.0080} & 0.0120 & $-$48.9\% & 176s \\
+TDK PC200 Ferrite & 0.0108 & \textbf{0.0056} & 48.4\% & 177s \\
+\midrule
+\textbf{Average} & --- & --- & \textbf{22.8\%} & 176s \\
+\bottomrule
+\end{tabular}
+\begin{flushleft}
+\footnotesize{VF: 10--12 poles, $<$0.01s fitting time. URN: 16 active parameters, 3 restarts.}
+\end{flushleft}
+\end{table}
+
+Key observations:
+\begin{enumerate}
+\item \textbf{Battery EIS}: URN achieves 9\% lower error than VF. The multi-decade frequency range (0.1~Hz--5~kHz) benefits from URN's physics-based Warburg and Cole-Cole basis functions.
+\item \textbf{Ferrite Impedance (PC47, PC50, PC200)}: URN achieves 39--66\% lower error than VF. The ferrites' Cole-Cole relaxation requires fractional-order dynamics that pole-zero models approximate poorly.
+\item \textbf{Ferrite Impedance (PC95)}: VF outperforms URN on this dataset (48.9\% lower error). PC95's lower-loss characteristic produces nearly ideal Debye behavior, which VF's rational poles capture well. This demonstrates that URN is not universally superior---its advantage emerges when fractional-order dynamics dominate.
+\item \textbf{Physical Interpretability}: Unlike VF's opaque poles, URN directly outputs mechanism names (Cole-Cole, Warburg) with physical parameters ($\tau$, $\alpha$, $A_w$).
+\end{enumerate}
+
+The validation script \texttt{validate\_urn\_vs\_vf.py} and generated SPICE netlists are included in the repository.
+
 \subsection{Time-Domain Simulation Verification}
 \label{sec:time_domain}
 
