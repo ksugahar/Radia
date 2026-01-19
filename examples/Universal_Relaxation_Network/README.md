@@ -4,19 +4,23 @@ This directory contains the implementation and examples for the Universal Relaxa
 
 ## Validation Results (2026-01-19)
 
-### Real-World Data Performance
+### Comprehensive Real-World Data Performance
 
-| Dataset | Method | NRMSE | Params | Time |
-|---------|--------|-------|--------|------|
-| NASA 18650 Battery EIS | Vector Fitting | 1.9437 | 10 | 0.00s |
-| | **URN** | **0.2693** | 16 | 126s |
-| TDK PC50 Ferrite | Vector Fitting | 0.4367 | 12 | 0.00s |
-| | **URN** | **0.0102** | 17 | 184s |
+| Dataset | VF NRMSE | URN NRMSE | Improvement | URN Time |
+|---------|----------|-----------|-------------|----------|
+| NASA 18650 Battery | 0.2700 | **0.2454** | 9.1% | 178s |
+| TDK PC47 Ferrite | 0.0146 | **0.0088** | 39.4% | 175s |
+| TDK PC50 Ferrite | 0.0288 | **0.0098** | 65.9% | 176s |
+| TDK PC95 Ferrite | **0.0080** | 0.0120 | -48.9% | 176s |
+| TDK PC200 Ferrite | 0.0108 | **0.0056** | 48.4% | 177s |
+| **Average** | --- | --- | **22.8%** | 176s |
 
 **Key Findings**:
-- **Battery EIS**: URN achieves 86% lower error than Vector Fitting
-- **Ferrite Impedance**: URN achieves 98% lower error than Vector Fitting
+- **Overall**: URN outperforms Vector Fitting on 4/5 datasets (average 22.8% improvement)
+- **Ferrite (PC47, PC50, PC200)**: URN achieves 39-66% lower error on materials with Cole-Cole relaxation
+- **Ferrite (PC95)**: VF outperforms URN (-49%) on near-ideal Debye behavior
 - **Attention Mechanism**: 79-83% accuracy improvement on real data (ablation study)
+- **Honest Assessment**: URN's advantage emerges when fractional-order dynamics dominate
 
 ## Directory Structure
 
