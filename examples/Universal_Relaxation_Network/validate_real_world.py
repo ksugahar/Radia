@@ -40,8 +40,8 @@ sys.path.insert(0, script_dir)
 from universal_relaxation_network import (
     UniversalRelaxationNetwork,
     URNConfig,
-    fit_urn,
-    urn_to_spice
+    train_urn,
+    generate_spice_netlist
 )
 
 
@@ -292,12 +292,12 @@ def validate_urn_on_dataset(
 
     # Fit URN
     start_time = time.time()
-    model, history = fit_urn(omega, Z, config)
+    model = train_urn(omega, Z, config)
     fit_time = time.time() - start_time
 
     # Evaluate fit
     import torch
-    omega_tensor = torch.tensor(omega, dtype=torch.float32)
+    omega_tensor = torch.tensor(omega, dtype=torch.float64)
     with torch.no_grad():
         Z_fit_tensor = model(omega_tensor)
         Z_fit = Z_fit_tensor.numpy()
@@ -310,7 +310,8 @@ def validate_urn_on_dataset(
     rmse, rel_error = compute_fit_metrics(Z, Z_fit)
 
     # Count active basis functions
-    n_active = model.count_active_terms()
+    active_components = model.get_active_components()
+    n_active = sum(len(components) for components in active_components.values())
 
     print(f"\nURN Results:")
     print(f"  RMSE: {rmse:.4e} Ohm")
@@ -324,7 +325,9 @@ def validate_urn_on_dataset(
     spice_file = os.path.join(spice_dir, f"urn_{name.lower().replace(' ', '_')}.lib")
 
     try:
-        urn_to_spice(model, spice_file, name.replace(' ', '_'))
+        spice_netlist = generate_spice_netlist(model, name.replace(' ', '_'))
+        with open(spice_file, 'w') as f:
+            f.write(spice_netlist)
         print(f"  SPICE: {spice_file}")
     except Exception as e:
         print(f"  SPICE generation failed: {e}")
