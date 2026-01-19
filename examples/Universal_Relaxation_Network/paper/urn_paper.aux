@@ -110,52 +110,61 @@
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-G}3}Real-World Validation Results}{13}{subsubsection.5.7.3}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Real-World Validation Results}}{15}{table.7}\protected@file@percent }
 \newlabel{tab:realworld}{{7}{15}{Real-World Validation Results}{table.7}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces NASA 18650 Li-ion battery EIS validation. (a) Nyquist plot showing semicircle (charge transfer) and Warburg tail (diffusion). (b) Bode magnitude plot. Open circles: measured data; solid blue: URN fit; dashed red: Vector Fitting. URN achieves 9.1\% lower NRMSE than VF.}}{15}{figure.1}\protected@file@percent }
+\newlabel{fig:realworld_eis}{{1}{15}{NASA 18650 Li-ion battery EIS validation. (a) Nyquist plot showing semicircle (charge transfer) and Warburg tail (diffusion). (b) Bode magnitude plot. Open circles: measured data; solid blue: URN fit; dashed red: Vector Fitting. URN achieves 9.1\% lower NRMSE than VF}{figure.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces TDK MnZn ferrite impedance validation on four materials: (a) PC47, (b) PC50, (c) PC95, (d) PC200. Open circles: datasheet values; solid blue: URN fit; dashed red: Vector Fitting. URN outperforms VF on PC47/PC50/PC200 (Cole-Cole relaxation), while VF is superior on PC95 (near-ideal Debye behavior).}}{15}{figure.2}\protected@file@percent }
+\newlabel{fig:tdk_ferrite}{{2}{15}{TDK MnZn ferrite impedance validation on four materials: (a) PC47, (b) PC50, (c) PC95, (d) PC200. Open circles: datasheet values; solid blue: URN fit; dashed red: Vector Fitting. URN outperforms VF on PC47/PC50/PC200 (Cole-Cole relaxation), while VF is superior on PC95 (near-ideal Debye behavior)}{figure.2}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces URN vs Vector Fitting on Real-World Data}}{15}{table.8}\protected@file@percent }
 \newlabel{tab:urn_vs_vf}{{8}{15}{URN vs Vector Fitting on Real-World Data}{table.8}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Real-world EIS data used for URN validation. Left: NASA 18650 Li-ion battery showing semicircle (charge transfer) and Warburg tail (diffusion). Right: TDK PC50 MnZn ferrite showing frequency-dependent impedance with Cole-Cole relaxation peak near 3 MHz.}}{15}{figure.1}\protected@file@percent }
-\newlabel{fig:realworld_eis}{{1}{15}{Real-world EIS data used for URN validation. Left: NASA 18650 Li-ion battery showing semicircle (charge transfer) and Warburg tail (diffusion). Right: TDK PC50 MnZn ferrite showing frequency-dependent impedance with Cole-Cole relaxation peak near 3 MHz}{figure.1}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-G}4}URN vs Vector Fitting: Direct Comparison}{15}{subsubsection.5.7.4}\protected@file@percent }
 \newlabel{sec:urn_vs_vf}{{\mbox  {V-G}4}{15}{URN vs Vector Fitting: Direct Comparison}{subsubsection.5.7.4}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-H}}Time-Domain Simulation Verification}{15}{subsection.5.8}\protected@file@percent }
 \newlabel{sec:time_domain}{{\mbox  {V-H}}{15}{Time-Domain Simulation Verification}{subsection.5.8}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-H}1}Step Response Comparison}{15}{subsubsection.5.8.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-H}2}PWM Switching Simulation}{15}{subsubsection.5.8.2}\protected@file@percent }
 \citation{tibshirani1996regression}
-\citation{charef1992fractal}
-\citation{valsa2013rc}
-\citation{dowell1966eddy}
-\citation{gustavsen2008passivity}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces URN vs Vector Fitting NRMSE comparison across five real-world datasets. URN outperforms VF on 4/5 datasets (average 22.8\% improvement). PC95 ferrite favors VF due to near-ideal Debye behavior.}}{17}{figure.3}\protected@file@percent }
+\newlabel{fig:urn_vs_vf_bar}{{3}{17}{URN vs Vector Fitting NRMSE comparison across five real-world datasets. URN outperforms VF on 4/5 datasets (average 22.8\% improvement). PC95 ferrite favors VF due to near-ideal Debye behavior}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-H}2}PWM Switching Simulation}{17}{subsubsection.5.8.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-H}3}Numerical Stability}{17}{subsubsection.5.8.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {VI}Theoretical Analysis}{17}{section.6}\protected@file@percent }
 \newlabel{sec:theory}{{VI}{17}{Theoretical Analysis}{section.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Hyperparameter Sensitivity: Sparsity Weight $\lambda $}}{17}{table.9}\protected@file@percent }
+\newlabel{tab:sensitivity}{{9}{17}{Hyperparameter Sensitivity: Sparsity Weight $\lambda $}{table.9}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Noise Robustness: Parameter Recovery vs SNR}}{17}{table.10}\protected@file@percent }
+\newlabel{tab:noise}{{10}{17}{Noise Robustness: Parameter Recovery vs SNR}{table.10}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Mathematical Stability and Convergence}{17}{subsection.6.1}\protected@file@percent }
 \newlabel{sec:convergence}{{\mbox  {VI-A}}{17}{Mathematical Stability and Convergence}{subsection.6.1}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Hyperparameter Sensitivity}{17}{subsection.6.2}\protected@file@percent }
 \newlabel{sec:sensitivity}{{\mbox  {VI-B}}{17}{Hyperparameter Sensitivity}{subsection.6.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}Noise Robustness}{17}{subsection.6.3}\protected@file@percent }
 \newlabel{sec:noise}{{\mbox  {VI-C}}{17}{Noise Robustness}{subsection.6.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Hyperparameter Sensitivity: Sparsity Weight $\lambda $}}{17}{table.9}\protected@file@percent }
-\newlabel{tab:sensitivity}{{9}{17}{Hyperparameter Sensitivity: Sparsity Weight $\lambda $}{table.9}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Noise Robustness: Parameter Recovery vs SNR}}{17}{table.10}\protected@file@percent }
-\newlabel{tab:noise}{{10}{17}{Noise Robustness: Parameter Recovery vs SNR}{table.10}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-D}}Passivity Guarantee for Stiff Switching}{17}{subsection.6.4}\protected@file@percent }
-\newlabel{sec:passivity}{{\mbox  {VI-D}}{17}{Passivity Guarantee for Stiff Switching}{subsection.6.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-E}}Computational Cost}{17}{subsection.6.5}\protected@file@percent }
-\newlabel{sec:cost}{{\mbox  {VI-E}}{17}{Computational Cost}{subsection.6.5}{}}
+\citation{charef1992fractal}
+\citation{valsa2013rc}
+\citation{dowell1966eddy}
+\citation{gustavsen2008passivity}
 \citation{mairal2009online}
 \citation{raissi2019physics}
-\citation{dowell1966eddy}
-\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces Ablation Study: Attention Mechanism on Real Data}}{19}{table.11}\protected@file@percent }
-\newlabel{tab:ablation}{{11}{19}{Ablation Study: Attention Mechanism on Real Data}{table.11}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-D}}Passivity Guarantee for Stiff Switching}{19}{subsection.6.4}\protected@file@percent }
+\newlabel{sec:passivity}{{\mbox  {VI-D}}{19}{Passivity Guarantee for Stiff Switching}{subsection.6.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-E}}Computational Cost}{19}{subsection.6.5}\protected@file@percent }
+\newlabel{sec:cost}{{\mbox  {VI-E}}{19}{Computational Cost}{subsection.6.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-F}}Ablation Study: Frequency-Dependent Attention}{19}{subsection.6.6}\protected@file@percent }
 \newlabel{sec:ablation}{{\mbox  {VI-F}}{19}{Ablation Study: Frequency-Dependent Attention}{subsection.6.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces Ablation Study: Attention Mechanism on Real Data}}{19}{table.11}\protected@file@percent }
+\newlabel{tab:ablation}{{11}{19}{Ablation Study: Attention Mechanism on Real Data}{table.11}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Ablation study: NRMSE comparison with and without frequency-dependent attention mechanism. Attention provides 59--82\% accuracy improvement by automatically emphasizing relevant basis functions at different frequency ranges.}}{19}{figure.4}\protected@file@percent }
+\newlabel{fig:ablation_bar}{{4}{19}{Ablation study: NRMSE comparison with and without frequency-dependent attention mechanism. Attention provides 59--82\% accuracy improvement by automatically emphasizing relevant basis functions at different frequency ranges}{figure.4}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-G}}On ``KAN-ness'': Honest Assessment}{19}{subsection.6.7}\protected@file@percent }
 \newlabel{sec:kan_terminology}{{\mbox  {VI-G}}{19}{On ``KAN-ness'': Honest Assessment}{subsection.6.7}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {VII}Target Applications}{19}{section.7}\protected@file@percent }
-\newlabel{sec:discussion}{{VII}{19}{Target Applications}{section.7}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Target Domains}{19}{subsection.7.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Limitations and Honest Assessment}{19}{subsection.7.2}\protected@file@percent }
+\citation{dowell1966eddy}
 \citation{odabasioglu1998prima}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Target Applications}{21}{section.7}\protected@file@percent }
+\newlabel{sec:discussion}{{VII}{21}{Target Applications}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Target Domains}{21}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Limitations and Honest Assessment}{21}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Future Work}{21}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Conclusion}{21}{section.8}\protected@file@percent }
+\newlabel{sec:conclusion}{{VIII}{21}{Conclusion}{section.8}{}}
 \bibstyle{IEEEtran}
 \bibdata{references}
 \bibcite{nagel1975spice2}{1}
@@ -185,11 +194,8 @@
 \bibcite{nasa_battery}{25}
 \bibcite{mendeley_eis}{26}
 \bibcite{tdk_ferrite}{27}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Future Work}{21}{subsection.7.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {VIII}Conclusion}{21}{section.8}\protected@file@percent }
-\newlabel{sec:conclusion}{{VIII}{21}{Conclusion}{section.8}{}}
-\@writefile{toc}{\contentsline {section}{REFERENCES}{21}{section*.1}\protected@file@percent }
 \bibcite{gustavsen2008passivity}{28}
 \bibcite{mairal2009online}{29}
 \bibcite{raissi2019physics}{30}
+\@writefile{toc}{\contentsline {section}{REFERENCES}{23}{section*.1}\protected@file@percent }
 \gdef \@abspage@last{24}
