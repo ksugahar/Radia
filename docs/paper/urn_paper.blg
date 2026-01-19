@@ -14,45 +14,45 @@ Database file #1: references.bib
 Warning--empty journal in mairal2009online
 
 Done.
-You've used 29 entries,
+You've used 30 entries,
             4087 wiz_defined-function locations,
-            998 strings with 11816 characters,
-and the built_in function-call counts, 22326 in all, are:
-= -- 1911
-> -- 434
+            1004 strings with 12023 characters,
+and the built_in function-call counts, 22732 in all, are:
+= -- 1947
+> -- 438
 < -- 235
-+ -- 252
-- -- 60
-* -- 1041
-:= -- 3381
-add.period$ -- 58
-call.type$ -- 29
-change.case$ -- 28
++ -- 254
+- -- 61
+* -- 1055
+:= -- 3456
+add.period$ -- 60
+call.type$ -- 30
+change.case$ -- 30
 chr.to.int$ -- 534
-cite$ -- 30
-duplicate$ -- 1582
-empty$ -- 1662
-format.name$ -- 76
-if$ -- 5196
+cite$ -- 31
+duplicate$ -- 1617
+empty$ -- 1701
+format.name$ -- 77
+if$ -- 5287
 int.to.chr$ -- 0
-int.to.str$ -- 29
-missing$ -- 240
-newline$ -- 110
-num.names$ -- 29
-pop$ -- 484
+int.to.str$ -- 30
+missing$ -- 248
+newline$ -- 113
+num.names$ -- 30
+pop$ -- 503
 preamble$ -- 1
 purify$ -- 0
 quote$ -- 2
-skip$ -- 1760
+skip$ -- 1792
 stack$ -- 0
-substring$ -- 1260
-swap$ -- 1359
+substring$ -- 1263
+swap$ -- 1382
 text.length$ -- 57
 text.prefix$ -- 0
 top$ -- 5
-type$ -- 29
+type$ -- 30
 warning$ -- 1
-while$ -- 112
-width$ -- 31
-write$ -- 308
+while$ -- 113
+width$ -- 32
+write$ -- 317
 (There was 1 warning)

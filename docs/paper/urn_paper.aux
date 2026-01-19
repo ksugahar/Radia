@@ -28,7 +28,6 @@
 \citation{debye1929polar}
 \citation{cole1941dispersion}
 \citation{charef1992fractal}
-\citation{davidson1951dielectric,havriliak1967complex}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-F}}Paper Organization}{5}{subsection.1.6}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {II}Circuit-Compatible Basis Library}{5}{section.2}\protected@file@percent }
 \newlabel{sec:basis}{{II}{5}{Circuit-Compatible Basis Library}{section.2}{}}
@@ -39,6 +38,7 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Relaxation Functions}{5}{subsection.2.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-C}1}Debye Relaxation}{5}{subsubsection.2.3.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-C}2}Cole-Cole Relaxation}{5}{subsubsection.2.3.2}\protected@file@percent }
+\citation{davidson1951dielectric,havriliak1967complex}
 \citation{warburg1899ueber}
 \citation{jorcin2006cpe}
 \citation{valsa2013rc}
@@ -71,23 +71,21 @@
 \newlabel{sec:adaptive}{{\mbox  {IV-A}}{9}{Adaptive Grid Refinement (Priority 1)}{subsection.4.1}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Hierarchical Decomposition (Priority 2)}{9}{subsection.4.2}\protected@file@percent }
 \newlabel{sec:hierarchical}{{\mbox  {IV-B}}{9}{Hierarchical Decomposition (Priority 2)}{subsection.4.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Attention-Based Basis Selection (Priority 3)}{9}{subsection.4.3}\protected@file@percent }
-\newlabel{sec:attention}{{\mbox  {IV-C}}{9}{Attention-Based Basis Selection (Priority 3)}{subsection.4.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Frequency-Dependent Attention (Priority 3)}{9}{subsection.4.3}\protected@file@percent }
+\newlabel{sec:attention}{{\mbox  {IV-C}}{9}{Frequency-Dependent Attention (Priority 3)}{subsection.4.3}{}}
+\newlabel{eq:attention}{{15}{9}{Frequency-Dependent Attention (Priority 3)}{equation.15}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Learnable Exponents (Priority 4)}{9}{subsection.4.4}\protected@file@percent }
 \newlabel{sec:learnable_exp}{{\mbox  {IV-D}}{9}{Learnable Exponents (Priority 4)}{subsection.4.4}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-E}}Symbolic Discovery (Priority 5)}{9}{subsection.4.5}\protected@file@percent }
 \newlabel{sec:symbolic}{{\mbox  {IV-E}}{9}{Symbolic Discovery (Priority 5)}{subsection.4.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {V}Benchmark Results and Pole-Free Advantage}{9}{section.5}\protected@file@percent }
-\newlabel{sec:results}{{V}{9}{Benchmark Results and Pole-Free Advantage}{section.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Test Cases}{9}{subsection.5.1}\protected@file@percent }
 \citation{cauer1958synthesis}
 \citation{charef1992fractal}
 \citation{odabasioglu1998prima}
-\citation{nasa_battery}
-\citation{mendeley_eis}
-\citation{barsoukov2018impedance}
 \@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Benchmark Results: Maximum Fitting Error (\%)}}{11}{table.5}\protected@file@percent }
 \newlabel{tab:benchmark}{{5}{11}{Benchmark Results: Maximum Fitting Error (\%)}{table.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Benchmark Results and Pole-Free Advantage}{11}{section.5}\protected@file@percent }
+\newlabel{sec:results}{{V}{11}{Benchmark Results and Pole-Free Advantage}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Test Cases}{11}{subsection.5.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}VF Pole Initialization Dilemma}{11}{subsection.5.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Quantitative Comparison}{11}{subsection.5.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}The Pole-Free Advantage}{11}{subsection.5.4}\protected@file@percent }
@@ -96,6 +94,9 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-E}}Circuit Synthesis: From Basis to Ladder}{11}{subsection.5.5}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-F}}Validation with Synthetic Benchmark Data}{11}{subsection.5.6}\protected@file@percent }
 \newlabel{sec:synthetic_data}{{\mbox  {V-F}}{11}{Validation with Synthetic Benchmark Data}{subsection.5.6}{}}
+\citation{nasa_battery}
+\citation{mendeley_eis}
+\citation{barsoukov2018impedance}
 \citation{snelling1988soft}
 \citation{tdk_ferrite}
 \citation{nasa_battery}
@@ -107,56 +108,57 @@
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-G}1}TDK MnZn Ferrite Data}{13}{subsubsection.5.7.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-G}2}NASA Li-ion Battery EIS Data}{13}{subsubsection.5.7.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-G}3}Real-World Validation Results}{13}{subsubsection.5.7.3}\protected@file@percent }
-\citation{tibshirani1996regression}
 \@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Real-World Validation Results}}{15}{table.7}\protected@file@percent }
 \newlabel{tab:realworld}{{7}{15}{Real-World Validation Results}{table.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces URN vs Vector Fitting on Real-World Data}}{15}{table.8}\protected@file@percent }
+\newlabel{tab:urn_vs_vf}{{8}{15}{URN vs Vector Fitting on Real-World Data}{table.8}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Real-world EIS data used for URN validation. Left: NASA 18650 Li-ion battery showing semicircle (charge transfer) and Warburg tail (diffusion). Right: TDK PC50 MnZn ferrite showing frequency-dependent impedance with Cole-Cole relaxation peak near 3 MHz.}}{15}{figure.1}\protected@file@percent }
 \newlabel{fig:realworld_eis}{{1}{15}{Real-world EIS data used for URN validation. Left: NASA 18650 Li-ion battery showing semicircle (charge transfer) and Warburg tail (diffusion). Right: TDK PC50 MnZn ferrite showing frequency-dependent impedance with Cole-Cole relaxation peak near 3 MHz}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-G}4}URN vs Vector Fitting: Direct Comparison}{15}{subsubsection.5.7.4}\protected@file@percent }
+\newlabel{sec:urn_vs_vf}{{\mbox  {V-G}4}{15}{URN vs Vector Fitting: Direct Comparison}{subsubsection.5.7.4}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-H}}Time-Domain Simulation Verification}{15}{subsection.5.8}\protected@file@percent }
 \newlabel{sec:time_domain}{{\mbox  {V-H}}{15}{Time-Domain Simulation Verification}{subsection.5.8}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-H}1}Step Response Comparison}{15}{subsubsection.5.8.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-H}2}PWM Switching Simulation}{15}{subsubsection.5.8.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-H}3}Numerical Stability}{15}{subsubsection.5.8.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {VI}Theoretical Analysis}{15}{section.6}\protected@file@percent }
-\newlabel{sec:theory}{{VI}{15}{Theoretical Analysis}{section.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Mathematical Stability and Convergence}{15}{subsection.6.1}\protected@file@percent }
-\newlabel{sec:convergence}{{\mbox  {VI-A}}{15}{Mathematical Stability and Convergence}{subsection.6.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Hyperparameter Sensitivity}{15}{subsection.6.2}\protected@file@percent }
-\newlabel{sec:sensitivity}{{\mbox  {VI-B}}{15}{Hyperparameter Sensitivity}{subsection.6.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}Noise Robustness}{15}{subsection.6.3}\protected@file@percent }
-\newlabel{sec:noise}{{\mbox  {VI-C}}{15}{Noise Robustness}{subsection.6.3}{}}
+\citation{tibshirani1996regression}
 \citation{charef1992fractal}
 \citation{valsa2013rc}
 \citation{dowell1966eddy}
 \citation{gustavsen2008passivity}
-\citation{mairal2009online}
-\citation{raissi2019physics}
-\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Hyperparameter Sensitivity: Sparsity Weight $\lambda $}}{17}{table.8}\protected@file@percent }
-\newlabel{tab:sensitivity}{{8}{17}{Hyperparameter Sensitivity: Sparsity Weight $\lambda $}{table.8}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Noise Robustness: Parameter Recovery vs SNR}}{17}{table.9}\protected@file@percent }
-\newlabel{tab:noise}{{9}{17}{Noise Robustness: Parameter Recovery vs SNR}{table.9}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-H}3}Numerical Stability}{17}{subsubsection.5.8.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Theoretical Analysis}{17}{section.6}\protected@file@percent }
+\newlabel{sec:theory}{{VI}{17}{Theoretical Analysis}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Mathematical Stability and Convergence}{17}{subsection.6.1}\protected@file@percent }
+\newlabel{sec:convergence}{{\mbox  {VI-A}}{17}{Mathematical Stability and Convergence}{subsection.6.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Hyperparameter Sensitivity}{17}{subsection.6.2}\protected@file@percent }
+\newlabel{sec:sensitivity}{{\mbox  {VI-B}}{17}{Hyperparameter Sensitivity}{subsection.6.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}Noise Robustness}{17}{subsection.6.3}\protected@file@percent }
+\newlabel{sec:noise}{{\mbox  {VI-C}}{17}{Noise Robustness}{subsection.6.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Hyperparameter Sensitivity: Sparsity Weight $\lambda $}}{17}{table.9}\protected@file@percent }
+\newlabel{tab:sensitivity}{{9}{17}{Hyperparameter Sensitivity: Sparsity Weight $\lambda $}{table.9}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Noise Robustness: Parameter Recovery vs SNR}}{17}{table.10}\protected@file@percent }
+\newlabel{tab:noise}{{10}{17}{Noise Robustness: Parameter Recovery vs SNR}{table.10}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-D}}Passivity Guarantee for Stiff Switching}{17}{subsection.6.4}\protected@file@percent }
 \newlabel{sec:passivity}{{\mbox  {VI-D}}{17}{Passivity Guarantee for Stiff Switching}{subsection.6.4}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-E}}Computational Cost}{17}{subsection.6.5}\protected@file@percent }
 \newlabel{sec:cost}{{\mbox  {VI-E}}{17}{Computational Cost}{subsection.6.5}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Ablation Study: Feature Contribution (Battery EIS)}}{17}{table.10}\protected@file@percent }
-\newlabel{tab:ablation}{{10}{17}{Ablation Study: Feature Contribution (Battery EIS)}{table.10}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-F}}Ablation Study: Feature Contribution}{17}{subsection.6.6}\protected@file@percent }
-\newlabel{sec:ablation}{{\mbox  {VI-F}}{17}{Ablation Study: Feature Contribution}{subsection.6.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-G}}On ``KAN-ness'': Honest Assessment}{17}{subsection.6.7}\protected@file@percent }
-\newlabel{sec:kan_terminology}{{\mbox  {VI-G}}{17}{On ``KAN-ness'': Honest Assessment}{subsection.6.7}{}}
+\citation{mairal2009online}
+\citation{raissi2019physics}
 \citation{dowell1966eddy}
-\citation{odabasioglu1998prima}
-\bibstyle{IEEEtran}
-\bibdata{references}
-\bibcite{nagel1975spice2}{1}
+\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces Ablation Study: Attention Mechanism on Real Data}}{19}{table.11}\protected@file@percent }
+\newlabel{tab:ablation}{{11}{19}{Ablation Study: Attention Mechanism on Real Data}{table.11}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-F}}Ablation Study: Frequency-Dependent Attention}{19}{subsection.6.6}\protected@file@percent }
+\newlabel{sec:ablation}{{\mbox  {VI-F}}{19}{Ablation Study: Frequency-Dependent Attention}{subsection.6.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-G}}On ``KAN-ness'': Honest Assessment}{19}{subsection.6.7}\protected@file@percent }
+\newlabel{sec:kan_terminology}{{\mbox  {VI-G}}{19}{On ``KAN-ness'': Honest Assessment}{subsection.6.7}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {VII}Target Applications}{19}{section.7}\protected@file@percent }
 \newlabel{sec:discussion}{{VII}{19}{Target Applications}{section.7}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Target Domains}{19}{subsection.7.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Limitations and Honest Assessment}{19}{subsection.7.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Future Work}{19}{subsection.7.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {VIII}Conclusion}{19}{section.8}\protected@file@percent }
-\newlabel{sec:conclusion}{{VIII}{19}{Conclusion}{section.8}{}}
+\citation{odabasioglu1998prima}
+\bibstyle{IEEEtran}
+\bibdata{references}
+\bibcite{nagel1975spice2}{1}
 \bibcite{snelling1988soft}{2}
 \bibcite{dowell1966eddy}{3}
 \bibcite{hurley2000optimizing}{4}
@@ -183,8 +185,11 @@
 \bibcite{nasa_battery}{25}
 \bibcite{mendeley_eis}{26}
 \bibcite{tdk_ferrite}{27}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Future Work}{21}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Conclusion}{21}{section.8}\protected@file@percent }
+\newlabel{sec:conclusion}{{VIII}{21}{Conclusion}{section.8}{}}
+\@writefile{toc}{\contentsline {section}{REFERENCES}{21}{section*.1}\protected@file@percent }
 \bibcite{gustavsen2008passivity}{28}
 \bibcite{mairal2009online}{29}
 \bibcite{raissi2019physics}{30}
-\@writefile{toc}{\contentsline {section}{REFERENCES}{21}{section*.1}\protected@file@percent }
-\gdef \@abspage@last{22}
+\gdef \@abspage@last{24}
