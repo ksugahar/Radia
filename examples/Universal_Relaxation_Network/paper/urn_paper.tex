@@ -8,6 +8,9 @@
 \usepackage{multirow}
 \usepackage{hyperref}
 
+% ORCID icon command - links to ORCID profile
+\newcommand{\orcidicon}[1]{\href{https://orcid.org/#1}{\textcolor{blue}{ORCID}}}
+
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
     T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
@@ -18,7 +21,7 @@
 \title{KAN-inspired Universal Relaxation Network for Automatic Discovery of Physical Relaxation Mechanisms with Direct Circuit Synthesis}
 
 \author{
-\uppercase{Kenta Sugahara}\authorrefmark{1},\orcidicon{0000-0002-2200-311X} and
+\uppercase{Kengo Sugahara}\authorrefmark{1},\orcidicon{0000-0002-2200-311X} and
 \uppercase{Yuki Sato}\authorrefmark{2},\orcidicon{0000-0002-4052-5966}
 }
 
@@ -31,7 +34,7 @@
 {Sugahara and Y. Sato: KAN-inspired Universal Relaxation Network}
 {Sugahara and Y. Sato: KAN-inspired Universal Relaxation Network}
 
-\corresp{Corresponding author: Kenta Sugahara (e-mail: sugahara@kindai.ac.jp).}
+\corresp{Corresponding author: Kengo Sugahara (e-mail: sugahara@kindai.ac.jp).}
 
 \begin{abstract}
 We propose the Universal Relaxation Network (URN), a KAN-inspired approach for automatic discovery of physical relaxation mechanisms from frequency-domain impedance data. Unlike Vector Fitting (VF), which uses pole-residue representations that can produce unstable models, URN employs 29 circuit-compatible basis functions derived from established physical models (Debye, Cole-Cole, Warburg, skin effect). A learnable frequency-dependent attention mechanism $\alpha_k(\omega) = \text{softmax}(\text{MLP}(\log\omega))$ automatically emphasizes relevant basis functions at different frequency ranges. Through L1-regularized sparse optimization, URN automatically selects dominant mechanisms and directly synthesizes SPICE-compatible RLC ladder networks. The pole-free formulation guarantees structural stability while providing physically interpretable parameters. \textbf{Ablation study on real-world data} demonstrates that attention improves accuracy by 79--83\% compared to uniform weighting. Cross-domain validation using TDK MnZn ferrite datasheet measurements and NASA Li-ion battery EIS data achieves 1.1--21.9\% fitting error. Time-domain SPICE simulations verify absence of spurious ringing. Open-source PyTorch implementation with benchmark datasets is available for reproducibility.
@@ -591,9 +594,9 @@ where $N$ is the number of stages per decade.
 \subsection{Validation with Synthetic Benchmark Data}
 \label{sec:synthetic_data}
 
-To demonstrate URN's capabilities on realistic impedance spectra, we constructed \textbf{physics-based synthetic benchmark data} that faithfully reproduce the characteristics of typical Li-ion battery EIS and MnZn ferrite impedance. These synthetic datasets are constructed from known analytical models with literature-based parameters, enabling ground-truth comparison of mechanism discovery accuracy. \textbf{All data files} (\texttt{liion\_battery\_eis.csv}, \texttt{mnzn\_ferrite\_impedance.csv}) \textbf{and reproduction scripts} (\texttt{validate\_urn\_vs\_vf.py}) \textbf{are included in the repository}.
+To demonstrate URN's capabilities on realistic impedance spectra, we constructed \textbf{physics-based synthetic benchmark data} that faithfully reproduce the characteristics of typical Li-ion battery EIS and MnZn ferrite impedance. These synthetic datasets are constructed from known analytical models with literature-based parameters, enabling ground-truth comparison of mechanism discovery accuracy. 
 
-\textbf{Important note}: The current validation uses synthetic data only. Real-world validation using publicly available datasets (NASA Li-ion Battery Aging Dataset \cite{nasa_battery}, Mendeley EIS Dataset \cite{mendeley_eis}) is planned for future work and will be added to the repository.
+\textbf{Important note}: The current validation uses synthetic data only. Real-world validation using publicly available datasets (NASA Li-ion Battery Aging Dataset \cite{nasa_battery}, Mendeley EIS Dataset \cite{mendeley_eis}) is planned for future work .
 
 \subsubsection{Li-ion Battery EIS (Synthetic)}
 The synthetic battery impedance is modeled using standard electrochemical equivalent circuit parameters from literature \cite{barsoukov2018impedance}: Randles circuit with charge transfer resistance, double-layer capacitance, and Warburg diffusion element. The frequency range (0.1 Hz--10 kHz) and parameter values are representative of typical 18650 Li-ion cells at 50\% SOC.
@@ -697,7 +700,7 @@ Fig.~\ref{fig:realworld_eis} shows representative Nyquist plots from the real-wo
 \label{fig:tdk_ferrite}
 \end{figure}
 
-Data files are included in the repository.
+
 
 \subsubsection{URN vs Vector Fitting: Direct Comparison}
 \label{sec:urn_vs_vf}
@@ -744,7 +747,7 @@ Fig.~\ref{fig:urn_vs_vf_bar} visualizes the NRMSE comparison across all five dat
 \label{fig:urn_vs_vf_bar}
 \end{figure}
 
-The validation script \texttt{validate\_urn\_vs\_vf.py} and generated SPICE netlists are included in the repository.
+
 
 \subsection{Time-Domain Simulation Verification}
 \label{sec:time_domain}
