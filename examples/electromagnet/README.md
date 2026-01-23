@@ -1,183 +1,122 @@
-# Electromagnet Simulation - Complete Workflow
+# Electromagnet Simulation - C-Type Yoke
 
-Complete 3D magnetostatic simulation of beam steering electromagnet with racetrack coil and magnetic yoke.
+Complete 3D magnetostatic simulation of beam steering electromagnet with racetrack coil and C-type magnetic yoke.
+
+Reference: `S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type`
 
 ## Overview
 
-This directory contains a complete electromagnet simulation workflow:
+This example demonstrates the Cubit -> Netgen -> Radia workflow with **separated mesh generation and simulation**.
 
-1. **Mesh Generation**: Generate Netgen mesh directly from Cubit (no intermediate files)
-2. **Magnetostatic Simulation**: Solve field distribution with Radia
-3. **Visualization**: Export field distribution for ParaView
+### Workflow
 
-**Workflow**: Cubit geometry -> export_netgen() -> Netgen mesh -> Radia
+```
+generate_mesh.py          run_simulation.py
+================          =================
+Cubit geometry            Load yoke.vol
+(from Trelis.jou)              |
+    |                     Convert to Radia
+Hex mesh                       |
+(6x6x6 intervals)         Create coil
+    |                          |
+Reflect x2                Solve
+    |                          |
+Transform                 Export VTS
+    |
+Export Netgen (.vol)
+Export STEP (NGSolve)
+```
+
+**Reference**: S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type\Cubit\6x6x6\Trelis.jou
+
+## Quick Start
+
+### Step 1: Generate Mesh
+
+```bash
+python generate_mesh.py
+```
+
+Output:
+- `yoke.vol` : Netgen mesh file
+- `yoke_mesh.vtk` : VTK mesh for ParaView
+- `yoke.step` : STEP geometry
+
+### Step 2: Run Simulation
+
+```bash
+python run_simulation.py
+```
+
+Output:
+- `field_distribution.vts` : Magnetic field data
+
+### Step 3: Visualize
+
+```bash
+paraview yoke_mesh.vtk field_distribution.vts
+```
 
 ## Files
 
-### Main Simulation
+| File | Description |
+|------|-------------|
+| `generate_mesh.py` | Mesh generation (Cubit hex mesh from Trelis.jou) |
+| `run_simulation.py` | Radia simulation |
+| `yoke.cub` | Cubit database (generated) |
+| `yoke.vol` | Netgen hex mesh (generated) |
+| `yoke.step` | STEP geometry for NGSolve (generated) |
+| `yoke_mesh.vtk` | VTK mesh for ParaView (generated) |
+| `field_distribution.vts` | Radia field data (generated) |
 
-- **`main_simulation_workflow.py`** - Main simulation script
-  - Loads magnetic yoke via Cubit -> Netgen direct export
-  - Creates racetrack coil geometry
-  - Solves magnetostatic problem
-  - Exports field distribution (VTS)
+## Geometry
 
-### Mesh Generation
+### C-Type Yoke
 
-- **`york_cubit_mesh.py`** - Generate Netgen mesh from Cubit journal file
-  - Input: `York.jou` (Cubit journal file)
-  - Output: Netgen mesh (in-memory), `York.vtk` (visualization)
-  - Creates hexahedral and pentahedral mesh for magnetic yoke
-
-- **`York.jou`** - Cubit journal file with yoke geometry definition
-
-## Complete Workflow
-
-### Step 1: Run Simulation (includes mesh generation)
-
-```bash
-cd examples/electromagnet
-
-# Run complete simulation (Cubit -> Netgen -> Radia)
-python main_simulation_workflow.py
+```
+          ┌─────┐
+          │pole │
+    ┌─────┴─────┴─────┐
+    │   yoke back     │
+    └──┬──────────┬───┘
+       │          │
+       │   leg    │  (magnetic gap)
+       │          │
+    ┌──┴──────────┴───┐
+    │   yoke back     │
+    └─────┬─────┬─────┘
+          │pole │
+          └─────┘
 ```
 
-**Output**:
-```
-======================================================================
-ELECTROMAGNET SIMULATION WORKFLOW
-======================================================================
-
-[Step 1/5] Importing yoke mesh via Cubit -> Netgen...
-  Reading: York.jou
-  Exporting to Netgen mesh...
-  [OK] Yoke imported: ID=297
-
-[Step 2/5] Creating racetrack coil...
-  [OK] Coil created: ID=600
-  Total current: -2000 A
-
-[Step 3/5] Combining coil + yoke...
-  [OK] Combined model: ID=605
-
-[Step 4/5] Solving magnetostatics...
-  [OK] Solution converged
-
-[Step 5/5] Exporting field distribution...
-  [OK] Field distribution exported to field_distribution.vts
-
-======================================================================
-SIMULATION COMPLETE
-======================================================================
-```
-
-**Output Files**:
-- `field_distribution.vts` - 3D magnetic field distribution (VTS format)
-
-### Step 2: Visualize in ParaView
-
-```bash
-# Open magnetic field distribution
-paraview field_distribution.vts
-```
-
-**In ParaView**:
-1. Click "Apply"
-2. Add **Glyph** filter:
-   - Filters -> Common -> Glyph
-   - Glyph Type: Arrow
-   - Scalars: None
-   - Vectors: B_field
-   - Scale Mode: vector
-   - Scale Factor: 0.1 (adjust for visibility)
-3. Click "Apply" to show field vectors
-
-**Visualization Tips**:
-- Use **Slice** filter to view field on cutting planes
-- Use **Contour** filter for field magnitude iso-surfaces
-- Use **Calculator** to compute |B| magnitude
-
-## Requirements
-
-- **Coreform Cubit 2025.3+** - For hex mesh generation
-- **cubit_mesh_export** - From S:\CoreformCubit\01_GitHub
-- **NGSolve** - For Netgen mesh wrapper
-- **ParaView** - For visualization
-
-## Geometry Specifications
+**Dimensions** (mm, from Cubit model):
+- Quarter geometry (before reflection):
+  - Main leg: 62.5 x 105 x 25
+  - Yoke back: 80 x 50 x 25 at (71.25, -27.5, 0)
+  - Pole piece: 40 x 100 x 25 at (131.25, -2.5, 0)
+- Full model: ~262.5 x 105 x 50 (after reflections)
 
 ### Racetrack Coil
 
-```python
-Center: [0, 131.25, 0] mm
-X dimensions: inner=5 mm, outer=40 mm
-Y dimensions: inner=50 mm, outer=62.5 mm
-Height: 105 mm
-Turns: 105
-Current: -2000 A
-Current density: -0.544218 A/mm^2
-Arc approximation: 3 segments
-```
+- Position: (0, 131.25, 26.25) mm (original ELF coordinates)
+- SQRING: 60 x 72.5 mm inner, 35mm height
+- Current: -2000 A
 
-### Magnetic Yoke
+## Requirements
 
-**Source**: `York.jou` (Cubit journal file)
+- **Coreform Cubit 2025.3+** (for generate_mesh.py only)
+- **cubit_mesh_export**: S:\CoreformCubit\01_GitHub
+- **NGSolve / Netgen**
+- **Radia**
 
-**Mesh**:
-- Format: Netgen (direct from Cubit via export_netgen)
-- Elements: 240 hexahedra + 48 pentahedra = 288 total
-- Nodes: ~495
+## Advantages of Separation
 
-**Material**:
-- Type: Nonlinear isotropic (saturation model)
-- Applied via `rad.MatSatIsoFrm()`
-
-## Troubleshooting
-
-### "Cubit not found"
-
-**Solution**: Install Coreform Cubit or adjust paths:
-```python
-CUBIT_PATH = "C:/Program Files/Coreform Cubit 2025.3/bin"
-CUBIT_EXPORT_PATH = "S:/CoreformCubit/01_GitHub"
-```
-
-### "cubit_mesh_export not found"
-
-**Solution**: Clone the Coreform Cubit Mesh Export repository:
-```bash
-git clone https://github.com/ksugahar/Coreform_Cubit_Mesh_Export S:/CoreformCubit/01_GitHub
-```
-
-### Solver returns NaN
-
-**Causes**:
-1. Geometry scale mismatch
-2. Invalid polyhedra (degenerate elements)
-3. Material property errors
-
-**Solution**:
-- Verify mesh quality in ParaView: `paraview York.vtk`
-- Check coil and yoke bounding boxes overlap correctly
-
-## Coordinate System
-
-- **X**: Horizontal (perpendicular to beam)
-- **Y**: Beam direction
-- **Z**: Vertical
-
-All dimensions in **millimeters (mm)**.
-All magnetic field values in **Tesla (T)**.
-
-## References
-
-- **Radia**: https://github.com/ochubar/Radia
-- **Coreform Cubit**: https://coreform.com/products/coreform-cubit/
-- **Coreform Cubit Mesh Export**: https://github.com/ksugahar/Coreform_Cubit_Mesh_Export
-- **ParaView**: https://www.paraview.org/
+1. **Re-run simulation without remeshing**: Change coil current, material, etc.
+2. **Share mesh files**: Send `yoke.vol` to collaborators
+3. **Faster iteration**: Mesh generation is the slow part
+4. **Independent debugging**: Test mesh and simulation separately
 
 ---
 
-**Last Updated**: 2026-01-16
-**Workflow**: Cubit -> Netgen (direct) -> Radia -> VTS -> ParaView
-**Status**: Updated to use Cubit -> Netgen direct export (no Nastran)
+**Last Updated**: 2026-01-22
+**Workflow**: Cubit -> Netgen -> Radia (separated)
