@@ -236,8 +236,9 @@ Complex materials: ferrite (mu_r=2000, tan_delta_m=1%), PCB (eps_r=4.5, tan_delt
 
 **Recommended Approach**:
 1. **Standard skin effect**: Use analytical Dowell formula (exact CF coefficients)
-2. **Nonlinear Z(H,f)**: Use KAN to learn from ESIM data, export as **PWL lookup table**
-3. **DO NOT** attempt to extract ladder structure from KAN
+2. **Nonlinear Z(H,f) steady-state**: Use KAN to learn from ESIM data, export as **PWL lookup table**
+3. **Nonlinear Z(H,f) transient**: **DEFERRED** - requires Verilog-A with dynamic H tracking
+4. **DO NOT** attempt to extract ladder structure from KAN
 
 ```python
 # RECOMMENDED: Analytical Dowell for standard skin effect
