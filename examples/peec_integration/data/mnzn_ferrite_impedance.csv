@@ -1,10 +1,21 @@
-# MnZn Ferrite Complex Permeability Data
-# Sample: TDK PC40 material (equivalent)
-# Conditions: 25C, H < 1 A/m (small signal)
-# Frequency range: 1kHz - 30MHz
-# Reference: Synthetic data based on typical MnZn ferrite spectra
+# ============================================================================
+# SYNTHETIC MnZn Ferrite Complex Permeability Data (NOT REAL MEASUREMENTS)
+# ============================================================================
+# This is PHYSICS-BASED SYNTHETIC DATA for algorithm validation purposes.
+# The data is generated using Cole-Cole relaxation model with parameters
+# representative of typical MnZn power ferrite materials.
+#
+# Model parameters (from literature - Snelling, "Soft Ferrites", 1988):
+#   - Initial permeability: mu_s = 2300
+#   - Relaxation frequency: fr = 2 MHz
+#   - Cole-Cole exponent: alpha = 0.9
+#   - High-frequency permeability: mu_inf = 1
+#
+# This data is NOT from real ferrite measurements.
+# For real-world validation, measure actual ferrite samples.
+# ============================================================================
+# Geometry for Z calculation: toroid with Ae=31mm^2, le=24mm, N=10 turns
 # Format: frequency(Hz), mu_real, mu_imag, Z_real(Ohm), Z_imag(Ohm)
-# Note: Z calculated for toroid with Ae=31mm^2, le=24mm, N=10 turns
 frequency,mu_real,mu_imag,Z_real,Z_imag
 1000,2300,5,0.0041,1.8807
 1585,2298,8,0.0103,2.9810

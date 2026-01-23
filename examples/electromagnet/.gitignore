@@ -1,6 +1,20 @@
-# Generated output files (from main_simulation_workflow.py)
-Radia_model.vtk
+# Generated mesh files (from generate_mesh.py)
+yoke.cub
+yoke.vol
+yoke.step
+yoke_mesh.vtk
+yoke_mesh.vtu
+
+# Generated field data (from run_simulation.py)
+field_distribution.vts
 field_distribution.vtk
+
+# Cubit log files
+step_export.log
+step_import.log
+
+# Legacy files
+Radia_model.vtk
 
 # ParaView state files (user-specific)
 *.pvsm
@@ -11,6 +25,3 @@ test_*.vtk
 # Python cache
 __pycache__/
 *.pyc
-
-# Claude working directory
-.claude/

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:\\Program Files\\Python312\\python.exe\" -c:*)",
+      "Bash(\"C:\\Program Files\\Python312\\python.exe\" S:Radia01_GitHubteststest_tetrahedral_solver.py)",
+      "Bash(cd:*)",
+      "Bash(\"C:\\Program Files\\Python312\\python.exe\" teststest_tetrahedral_solver.py)",
+      "Bash(\"C:\\Program Files\\Python312\\python.exe\" \"S:\\Radia\\01_GitHub\\tests\\test_tetrahedral_solver.py\")",
+      "Bash(findstr:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

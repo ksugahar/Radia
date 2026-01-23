@@ -1,8 +1,19 @@
-# Li-ion Battery EIS Measurement Data
-# Sample: 18650 cylindrical cell (LiNiMnCoO2 cathode)
-# Conditions: 25C, 50% SOC, 10mV AC amplitude
-# Frequency range: 10mHz - 100kHz
-# Reference: Synthetic data based on typical Li-ion impedance spectra
+# ============================================================================
+# SYNTHETIC Li-ion Battery EIS Data (NOT REAL MEASUREMENTS)
+# ============================================================================
+# This is PHYSICS-BASED SYNTHETIC DATA for algorithm validation purposes.
+# The data is generated using standard Randles circuit model with parameters
+# representative of typical 18650 Li-ion cells at 50% SOC.
+#
+# Model parameters (from literature - Barsoukov & Macdonald, 2018):
+#   - Ohmic resistance: Rs = 15 mOhm
+#   - Charge transfer: Rct = 25 mOhm, tau = 0.1 s
+#   - Warburg diffusion: Aw = 5 mOhm/sqrt(Hz)
+#   - Double layer: Cdl = 1 F (CPE with n=0.85)
+#
+# This data is NOT from real battery measurements.
+# For real-world validation, use NASA or Mendeley EIS datasets.
+# ============================================================================
 # Format: frequency(Hz), Z_real(Ohm), Z_imag(Ohm)
 frequency,Z_real,Z_imag
 100000,0.0152,-0.0089

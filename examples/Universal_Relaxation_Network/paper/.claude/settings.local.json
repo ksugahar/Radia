@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(handle64.exe:*)",
+      "Bash(handle.exe:*)",
+      "Bash(powershell.exe -NoProfile -Command \"Get-Process | Where-Object {$_ProcessName -match ''pdf|acro|sumatr|fox|edge|chrome''} | Format-Table Id, ProcessName, MainWindowTitle -AutoSize\")"
+    ]
+  }
+}
