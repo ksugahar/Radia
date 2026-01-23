@@ -818,23 +818,28 @@ B = rad.Fld(assembly, 'b', [0, 0, 0.1])
 
 ## Python Script Path Import Policy
 
-**Policy**: Use relative paths for module imports (not absolute paths).
+**Policy**: Import from `src/radia` package directory (not build directories).
 
 ```python
-# ✓ CORRECT - Relative path
+# ✓ CORRECT - Import from src/radia package
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import radia as rad
 
-# ✗ WRONG - Absolute path
-sys.path.insert(0, r"S:\Radia\01_GitHub\build\Release")
+# ✗ WRONG - Import from build directory (may be outdated)
+sys.path.insert(0, r"S:\Radia\01_GitHub\build-msvc")
 import radia as rad
 ```
 
 **Path patterns**:
-- Examples folder: `'../../build/Release'`
-- Tests folder: `'../build/Release'`
+- Examples folder: `'../../src/radia'`
+- Tests folder: `'../src/radia'`
+
+**Rationale**:
+- `src/radia/` contains the latest .pyd files copied by BuildMSVC.ps1
+- Build directories may contain outdated or version-tagged .pyd files
+- `build/Release/` is REMOVED - do not use
 
 ---
 
@@ -1177,8 +1182,9 @@ if os.path.exists(msvc_pyd):
 Solution: Always run `BuildMSVC.ps1` immediately before `python -m build`.
 
 **Build Path Priority** (setup.py):
-1. `build-msvc/` (MSVC + Intel MKL - PREFERRED)
-2. `build/Release/` (legacy CMake - fallback)
+1. `build-msvc/` (MSVC + Intel MKL - ONLY supported path)
+
+**Note**: `build/Release/` is REMOVED. Only `build-msvc/` is supported.
 
 ```powershell
 # Set PyPI API token (keep secure!)
@@ -1685,6 +1691,50 @@ run_all_benchmarks.py             # Orchestrator script
 
 ## Mesh Generation Tools
 
+### CAD Modeling and Mesh Generation Policy (2026-01-23)
+
+**CRITICAL**: Use **Coreform Cubit for CAD modeling**, then import to **Netgen for meshing**.
+
+**Workflow**:
+```
+Cubit (CAD modeling) → STEP export → Netgen (mesh import) → NGSolve (Curve for high-order)
+```
+
+**Rationale**:
+1. **Cubit excels at CAD**: Complex geometry creation, Boolean operations, parametric modeling
+2. **Netgen excels at meshing**: High-quality tetrahedral/hexahedral mesh generation
+3. **STEP as interchange**: Standard CAD format, preserves geometry accurately
+4. **High-order elements**: Use `mesh.Curve(order)` for curved boundaries
+
+**Policy**:
+- **Complex CAD**: Create in Cubit, export to STEP, import to Netgen
+- **Simple geometry**: Can use Netgen OCC directly (`netgen.occ.Box`, `Sphere`, etc.)
+- **Curved elements**: Always call `mesh.Curve(order)` after importing STEP geometry
+- **Mesh quality**: Use Cubit's mesh controls for element size grading
+
+**Implementation**:
+
+```python
+from netgen.occ import OCCGeometry
+from ngsolve import Mesh
+
+# Import STEP file (created in Cubit)
+geo = OCCGeometry('model.step')
+
+# Generate mesh
+ngmesh = geo.GenerateMesh(maxh=0.05)
+
+# Create NGSolve mesh and curve for high-order accuracy
+mesh = Mesh(ngmesh)
+mesh.Curve(3)  # 3rd order curved elements for accurate geometry
+
+# Now use with Radia or NGSolve FEM
+```
+
+**Note**: The `mesh.Curve(order)` method is essential for accurate representation of curved boundaries when using high-order finite elements.
+
+---
+
 ### Tool Selection by Element Type
 
 | Element Type | Tool | Notes |
@@ -2169,17 +2219,17 @@ powershell.exe -ExecutionPolicy Bypass -File BuildRadiaInternal.ps1 -Verbose  # 
 
 **What the Script Does**:
 1. Runs CMake configure and build
-2. Finds `radia.cp312-win_amd64.pyd` in `build/Release/`
+2. Finds `radia.cp312-win_amd64.pyd` in `build-msvc/`
 3. Copies it to `src/radia/radia.pyd` (with rename)
 4. Verifies the copy with timestamp check
 
 **NEVER Do This**:
 ```powershell
 # WRONG - Does NOT copy .pyd to src/radia
-cmake --build build --config Release --target radia
+cmake --build build-msvc --config Release --target radia
 
 # WRONG - Manual copy forgets the rename
-copy build\Release\radia.cp312-win_amd64.pyd src\radia\
+copy build-msvc\radia.cp312-win_amd64.pyd src\radia\
 ```
 
 **If You Must Use Manual Commands** (not recommended):
@@ -2480,9 +2530,25 @@ solver = ESIMCellProblemSolver(
 
 **Policy**: ESIM is the recommended method for nonlinear magnetic materials in conductor problems.
 
+**Field-Dependent Surface Impedance**:
+```
+Zs(H) = Re{Zs(H)} + j·Im{Zs(H)}
+```
+
+The surface impedance is field-dependent, not just frequency-dependent.
+
+**1D Cell Problem**:
+ESIM solves the 1D cell problem in the depth direction:
+
+```
+d/dz[(1/μ(z)) · dH/dz] = jωσ·H
+```
+
+where μ(z) = μ(H(z)) for nonlinear materials (e.g., from the B-H curve of a specific material).
+
 **What ESIM Does**:
 1. Solves 1D Cell Problem in depth direction for each surface H-field value
-2. Computes effective surface impedance Z(H0) that accounts for:
+2. Computes effective surface impedance Zs(H0) that accounts for:
    - Skin effect (nonuniform current distribution)
    - Magnetic saturation (H-dependent μ)
    - Magnetic losses (complex μ = μ' - jμ")
@@ -2508,7 +2574,7 @@ solver = ESIMCellProblemSolver(
 - `src/radia/esim_coupled_solver.py`: 3D coupled solver using ESIM
 
 **Literature Reference**:
-K. Hollaus, M. Kaltenbacher, J. Schoberl, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025.
+K. Hollaus, V. Hanser, and M. Schobinger, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025.
 
 ---
 

@@ -152,6 +152,12 @@ def fig_nasa_battery_eis(output_dir):
     """Generate NASA battery EIS comparison figure."""
     print("[1/4] Generating NASA battery EIS figure...")
 
+    # 1x2 panel figure: final width is columnwidth (8cm), so each panel is 4cm
+    # Font size must be 2x to appear as 10pt when scaled to 50%
+    FONT_SIZE_2X = FONT_SIZE * 2  # 20pt -> 10pt after scaling
+    FONT_SIZE_TICK_2X = FONT_SIZE_TICK * 2  # 18pt -> 9pt after scaling
+    FONT_SIZE_LEGEND_1_2X = FONT_SIZE_LEGEND * 1.2  # smaller legend to avoid overlap
+
     freq, Z_data = load_nasa_battery_data()
     if freq is None:
         print("  Skipped (data not found)")
@@ -161,28 +167,41 @@ def fig_nasa_battery_eis(output_dir):
     Z_vf = run_vector_fitting(freq, Z_data, n_poles=10)
 
     # Create figure with two subplots
-    fig = plt.figure(figsize=(FIG_WIDTH * 2, FIG_HEIGHT), dpi=DPI)
+    fig = plt.figure(figsize=(FIG_WIDTH * 2, FIG_HEIGHT * 1.5), dpi=DPI)
 
-    # Nyquist plot
+    # Nyquist plot - 2x sizes for 1x2 panel figure
     ax1 = fig.add_subplot(1, 2, 1)
-    ax1.plot(Z_data.real * 1000, -Z_data.imag * 1000, 'ko', markersize=3,
-             label='Measured', markerfacecolor='none', markeredgewidth=0.5)
+    ax1.plot(Z_data.real * 1000, -Z_data.imag * 1000, 'ko', markersize=6,
+             label='Measured', markerfacecolor='none', markeredgewidth=1.0)
     if Z_urn is not None:
-        ax1.plot(Z_urn.real * 1000, -Z_urn.imag * 1000, 'b-', linewidth=1, label='URN')
-    ax1.plot(Z_vf.real * 1000, -Z_vf.imag * 1000, 'r--', linewidth=1, label='VF')
-    setup_axis(ax1, r"$Z'$ (m$\Omega$)", r"$-Z''$ (m$\Omega$)", '(a) Nyquist plot')
-    ax1.legend(loc='upper right', frameon=False, prop={'family': FONT_NAME, 'size': FONT_SIZE_LEGEND})
-    ax1.set_aspect('equal', adjustable='box')
+        ax1.plot(Z_urn.real * 1000, -Z_urn.imag * 1000, 'b-', linewidth=2, label='URN')
+    ax1.plot(Z_vf.real * 1000, -Z_vf.imag * 1000, 'r--', linewidth=2, label='VF')
+    ax1.set_xlabel(r"$Z'$ (m$\Omega$)", fontname=FONT_NAME, fontsize=FONT_SIZE_2X)
+    ax1.set_ylabel(r"$-Z''$ (m$\Omega$)", fontname=FONT_NAME, fontsize=FONT_SIZE_2X)
+    ax1.set_title('(a) Nyquist plot', fontname=FONT_NAME, fontsize=FONT_SIZE_2X)
+    plt.setp(ax1.get_xticklabels(), fontname=FONT_NAME, fontsize=FONT_SIZE_TICK_2X)
+    plt.setp(ax1.get_yticklabels(), fontname=FONT_NAME, fontsize=FONT_SIZE_TICK_2X)
+    ax1.minorticks_on()
+    ax1.tick_params(which='major', direction='in', top=True, right=True, width=1.0, length=8)
+    ax1.tick_params(which='minor', direction='in', top=True, right=True, width=0.6, length=4)
+    ax1.legend(loc='upper left', frameon=False, prop={'family': FONT_NAME, 'size': FONT_SIZE_LEGEND_1_2X})
 
-    # Bode magnitude plot
+    # Bode magnitude plot - 2x sizes for 1x2 panel figure
     ax2 = fig.add_subplot(1, 2, 2)
-    ax2.loglog(freq, np.abs(Z_data) * 1000, 'ko', markersize=3,
-               label='Measured', markerfacecolor='none', markeredgewidth=0.5)
+    ax2.loglog(freq, np.abs(Z_data) * 1000, 'ko', markersize=6,
+               label='Measured', markerfacecolor='none', markeredgewidth=1.0)
     if Z_urn is not None:
-        ax2.loglog(freq, np.abs(Z_urn) * 1000, 'b-', linewidth=1, label='URN')
-    ax2.loglog(freq, np.abs(Z_vf) * 1000, 'r--', linewidth=1, label='VF')
-    setup_axis(ax2, 'Frequency (Hz)', r'$|Z|$ (m$\Omega$)', '(b) Bode magnitude')
-    ax2.legend(loc='upper right', frameon=False, prop={'family': FONT_NAME, 'size': FONT_SIZE_LEGEND})
+        ax2.loglog(freq, np.abs(Z_urn) * 1000, 'b-', linewidth=2, label='URN')
+    ax2.loglog(freq, np.abs(Z_vf) * 1000, 'r--', linewidth=2, label='VF')
+    ax2.set_xlabel('Frequency (Hz)', fontname=FONT_NAME, fontsize=FONT_SIZE_2X)
+    ax2.set_ylabel(r'$|Z|$ (m$\Omega$)', fontname=FONT_NAME, fontsize=FONT_SIZE_2X)
+    ax2.set_title('(b) Bode magnitude', fontname=FONT_NAME, fontsize=FONT_SIZE_2X)
+    plt.setp(ax2.get_xticklabels(), fontname=FONT_NAME, fontsize=FONT_SIZE_TICK_2X)
+    plt.setp(ax2.get_yticklabels(), fontname=FONT_NAME, fontsize=FONT_SIZE_TICK_2X)
+    ax2.minorticks_on()
+    ax2.tick_params(which='major', direction='in', top=True, right=True, width=1.0, length=8)
+    ax2.tick_params(which='minor', direction='in', top=True, right=True, width=0.6, length=4)
+    ax2.legend(loc='upper right', frameon=False, prop={'family': FONT_NAME, 'size': FONT_SIZE_LEGEND_1_2X})
 
     plt.tight_layout(pad=0.5)
 
@@ -197,6 +216,12 @@ def fig_tdk_ferrite_impedance(output_dir):
     print("[2/4] Generating TDK ferrite impedance figure...")
 
     materials = ['pc47', 'pc50', 'pc95', 'pc200']
+    # 2x2 panel figure: final width is columnwidth (8cm), so each panel is 4cm
+    # Font size must be 2x to appear as 10pt when scaled to 50%
+    FONT_SIZE_2X = FONT_SIZE * 2  # 20pt -> 10pt after scaling
+    FONT_SIZE_TICK_2X = FONT_SIZE_TICK * 2  # 18pt -> 9pt after scaling
+    FONT_SIZE_LEGEND_1_5X = FONT_SIZE_LEGEND * 1.5  # 12pt -> 6pt after scaling (smaller legend)
+
     fig = plt.figure(figsize=(FIG_WIDTH * 2, FIG_HEIGHT * 2), dpi=DPI)
 
     for idx, material in enumerate(materials):
@@ -206,21 +231,29 @@ def fig_tdk_ferrite_impedance(output_dir):
         if freq is None:
             ax.text(0.5, 0.5, f'{material.upper()}\n(data not found)',
                     ha='center', va='center', transform=ax.transAxes,
-                    fontname=FONT_NAME, fontsize=FONT_SIZE)
+                    fontname=FONT_NAME, fontsize=FONT_SIZE_2X)
             continue
 
         Z_urn = run_urn_fitting(freq, Z_data)
         Z_vf = run_vector_fitting(freq, Z_data, n_poles=12)
 
-        ax.loglog(freq, np.abs(Z_data), 'ko', markersize=2,
-                  label='Measured', markerfacecolor='none', markeredgewidth=0.4)
+        ax.loglog(freq, np.abs(Z_data), 'ko', markersize=4,
+                  label='Measured', markerfacecolor='none', markeredgewidth=0.8)
         if Z_urn is not None:
-            ax.loglog(freq, np.abs(Z_urn), 'b-', linewidth=0.8, label='URN')
-        ax.loglog(freq, np.abs(Z_vf), 'r--', linewidth=0.8, label='VF')
+            ax.loglog(freq, np.abs(Z_urn), 'b-', linewidth=1.6, label='URN')
+        ax.loglog(freq, np.abs(Z_vf), 'r--', linewidth=1.6, label='VF')
 
-        setup_axis(ax, 'Frequency (Hz)', r'$|Z|$ ($\Omega$)', f'({chr(97+idx)}) TDK {material.upper()}')
+        # Inline axis setup with 2x font sizes for 2x2 panel
+        ax.set_xlabel('Frequency (Hz)', fontname=FONT_NAME, fontsize=FONT_SIZE_2X)
+        ax.set_ylabel(r'$|Z|$ ($\Omega$)', fontname=FONT_NAME, fontsize=FONT_SIZE_2X)
+        ax.set_title(f'({chr(97+idx)}) TDK {material.upper()}', fontname=FONT_NAME, fontsize=FONT_SIZE_2X)
+        plt.setp(ax.get_xticklabels(), fontname=FONT_NAME, fontsize=FONT_SIZE_TICK_2X)
+        plt.setp(ax.get_yticklabels(), fontname=FONT_NAME, fontsize=FONT_SIZE_TICK_2X)
+        ax.minorticks_on()
+        ax.tick_params(which='major', direction='in', top=True, right=True, width=1.0, length=8)
+        ax.tick_params(which='minor', direction='in', top=True, right=True, width=0.6, length=4)
         if idx == 0:
-            ax.legend(loc='upper left', frameon=False, prop={'family': FONT_NAME, 'size': FONT_SIZE_LEGEND})
+            ax.legend(loc='upper left', frameon=False, prop={'family': FONT_NAME, 'size': FONT_SIZE_LEGEND_1_5X})
 
     plt.tight_layout(pad=0.5)
 
