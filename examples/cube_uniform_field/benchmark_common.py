@@ -205,9 +205,9 @@ def run_benchmark(
         mat = rad.MatSatIsoTab(BH_DATA)
     rad.MatApl(radia_obj, mat)
 
-    # External field
+    # External field (ObjBckg callback returns B in Tesla)
     B_ext = MU_0 * H_EXT
-    ext = rad.ObjBckg([0, 0, B_ext])
+    ext = rad.ObjBckg(lambda p: [0, 0, B_ext])
     grp = rad.ObjCnt([radia_obj, ext])
 
     # Configure H-matrix if using HACApK
