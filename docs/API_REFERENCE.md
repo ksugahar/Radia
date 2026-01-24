@@ -59,7 +59,7 @@ container = rad.ObjCnt(elements)
 mat = rad.MatLin(1000)  # mu_r = 1000
 rad.MatApl(container, mat)
 
-ext = rad.ObjBckg([0, 0, MU_0 * 50000])
+ext = rad.ObjBckg(lambda p: [0, 0, MU_0 * 50000])  # B field in Tesla
 grp = rad.ObjCnt([container, ext])
 rad.Solve(grp, 0.001, 1000, 1)
 ```
@@ -242,16 +242,33 @@ vertices = [[0,0,0], [1,0,0], [0.5,0.866,0], [0,0,1], [1,0,1], [0.5,0.866,1]]
 wedge = rad.ObjPolyhdr(vertices, WEDGE_FACES, [0, 0, 1e6])
 ```
 
-### ObjBckg - Uniform Background Field
+### ObjBckg - Background Field (Callback)
 
 ```python
-field_src = rad.ObjBckg([Bx, By, Bz])
+field_src = rad.ObjBckg(lambda p: [Bx, By, Bz])  # Uniform field
+field_src = rad.ObjBckg(callback_function)        # Non-uniform field
 ```
 
+The callback function receives a point `[x, y, z]` in current units and returns `[Bx, By, Bz]` in Tesla.
+
+**Uniform Background Field**:
 ```python
 MU_0 = 4 * np.pi * 1e-7
-ext = rad.ObjBckg([0, 0, MU_0 * 50000])  # 50,000 A/m in z
+H_ext = 50000  # A/m
+ext = rad.ObjBckg(lambda p: [0, 0, MU_0 * H_ext])  # B = mu_0 * H in Tesla
 ```
+
+**Non-uniform Background Field** (e.g., quadrupole):
+```python
+def quadrupole_field(point):
+    x, y, z = point
+    G = 10.0  # T/m gradient
+    return [G * y, G * x, 0]
+
+ext = rad.ObjBckg(quadrupole_field)
+```
+
+**IMPORTANT**: The callback returns **B field in Tesla**, NOT H field in A/m.
 
 ### ObjCnt - Container
 
@@ -394,7 +411,7 @@ result = rad.Solve(obj, tolerance, max_iter, method=1)
 | `obj` | int | Object or container |
 | `tolerance` | float | Convergence threshold (0.001 = 0.1%) |
 | `max_iter` | int | Maximum iterations |
-| `method` | int | `0` = LU, `1` = BiCGSTAB (default) |
+| `method` | int | `0` = LU, `1` = BiCGSTAB (default), `2` = HACApK |
 
 | Returns | Description |
 |---------|-------------|
@@ -405,9 +422,14 @@ result = rad.Solve(obj, tolerance, max_iter, method=1)
 
 | Problem Size | Elements | Method | Code |
 |--------------|----------|--------|------|
-| Small | < 1,000 | LU | `rad.Solve(grp, 0.001, 100, 0)` |
-| Medium | 1,000-10,000 | BiCGSTAB | `rad.Solve(grp, 0.001, 1000, 1)` |
-| Large | > 10,000 | BiCGSTAB | `rad.Solve(grp, 0.001, 1000, 1)` |
+| Small | < 500 | LU | `rad.Solve(grp, 0.001, 100, 0)` |
+| Medium | 500-5,000 | BiCGSTAB | `rad.Solve(grp, 0.001, 1000, 1)` |
+| Large | > 5,000 | HACApK | `rad.Solve(grp, 0.001, 1000, 2)` |
+
+**HACApK Advantages** (for large problems):
+- O(N log N) memory vs O(N^2) for dense
+- 10-20% of dense matrix memory at 10,000+ elements
+- 5-10x faster than BiCGSTAB for 10,000+ elements
 
 **Iteration counts**:
 - Linear materials: 1-2 iterations
