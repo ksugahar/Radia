@@ -354,176 +354,14 @@ endif()
 message(STATUS "radia_ngsolve module configured")
 
 # ========================================
-# Radia Python Module (radia.pyd)
+# Legacy _radia Python Module (REMOVED)
 # ========================================
-
-# Create radia Python module using pybind11
-pybind11_add_module(radia
-	${RADIA_CORE_SOURCES}
-	${RADIA_FMM_CONDUCTOR_SOURCES}
-	${EXT_DIR}/auxparse/auxparse.cpp
-	${EXT_DIR}/genmath/gmfft.cpp
-	${EXT_DIR}/genmath/gmtrans.cpp
-	${HACAPK_SOURCES}
-	${RADIA_LIB_SOURCES}
-	${PYTHON_DIR}/radpy_pyapi.cpp
-)
-
-# Link triangle library
-target_link_libraries(radia PRIVATE triangle_lib)
-
-# Add include directories
-target_include_directories(radia PRIVATE
-	${CORE_DIR}
-	${LIB_DIR}
-	${EXT_DIR}/auxparse
-	${EXT_DIR}/genmath
-	${EXT_DIR}/HACApK
-	${CMAKE_CURRENT_SOURCE_DIR}/external/exafmm-t/include
-	${MKL_FFTW3_INCLUDE_DIR}
-)
-
-# Add preprocessor definitions
-target_compile_definitions(radia PRIVATE
-	_CRT_SECURE_NO_WARNINGS
-	_GM_WITHOUT_BASE
-	ALPHA__DLL__
-	ANSI_DECLARATORS
-	RADIA_USE_HACAPK
-	HACAPK_RADIA_LOGGING
-	RADIA_MSC_SUPPORT
-	$<$<BOOL:${RADIA_ENABLE_EXAFMM}>:RADIA_USE_EXAFMM>
-)
-
-# FFT functionality provided by Intel MKL DFTI (via fftw.h compatibility layer)
-# No external FFTW library required - MKL is already linked for BLAS/LAPACK
-message(STATUS "Using Intel MKL DFTI for FFT operations (radia)")
-
-# Intel MKL for radia (required for fast LU decomposition and matrix operations)
-if(WIN32 AND USE_MKL_FOUND)
-	target_link_libraries(radia PRIVATE ${BLAS_LIB})
-	target_include_directories(radia PRIVATE ${BLAS_INCLUDE_DIR})
-	target_compile_definitions(radia PRIVATE HAVE_LAPACK)
-	message(STATUS "Using Intel MKL for radia: ${BLAS_LIB}")
-endif()
-
-# ExaFMM is header-only, no library linking needed
-if(RADIA_ENABLE_EXAFMM)
-	message(STATUS "ExaFMM enabled for radia (header-only library)")
-endif()
-
-# Link Windows system libraries
-if(WIN32)
-	target_link_libraries(radia PRIVATE version.lib)
-	# Fix LIBCMT conflict warning
-	if(MSVC)
-		target_link_options(radia PRIVATE /NODEFAULTLIB:LIBCMT)
-		# Increase stack size to 16MB for deep HACApK cluster tree recursion
-		# Default is 1MB which causes stack overflow at ~30,000+ elements
-		target_link_options(radia PRIVATE /STACK:16777216)
-	endif()
-endif()
-
-# Link OpenMP for parallel matrix construction
-# Use Intel OpenMP (libiomp5md.dll) for better performance with Intel MKL
-if(RADIA_ENABLE_OPENMP)
-	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-		# MSVC: Link Intel OpenMP directly instead of using OpenMP::OpenMP_CXX
-		# OpenMP::OpenMP_CXX would link to vcomp140.dll (MSVC OpenMP)
-		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
-		if(EXISTS ${INTEL_OPENMP_LIB})
-			target_link_libraries(radia PRIVATE ${INTEL_OPENMP_LIB})
-			target_compile_definitions(radia PRIVATE _OPENMP)
-			message(STATUS "OpenMP enabled for radia (Intel OpenMP: ${INTEL_OPENMP_LIB})")
-		elseif(OpenMP_CXX_FOUND)
-			target_link_libraries(radia PRIVATE OpenMP::OpenMP_CXX)
-			message(STATUS "OpenMP enabled for radia (MSVC OpenMP - fallback)")
-		endif()
-	else()
-		if(OpenMP_CXX_FOUND)
-			target_link_libraries(radia PRIVATE OpenMP::OpenMP_CXX)
-			message(STATUS "OpenMP enabled for radia (C++)")
-		endif()
-		if(OpenMP_C_FOUND)
-			target_link_libraries(radia PRIVATE OpenMP::OpenMP_C)
-			message(STATUS "OpenMP enabled for radia (C)")
-		endif()
-	endif()
-endif()
-
-# Compiler-specific flags for radia
-# MSVC with Intel MKL or Intel oneAPI compiler
-if(MSVC)
-	# MSVC with Intel MKL
-	target_compile_options(radia PRIVATE
-		/O2                # Optimization
-		/fp:fast           # Fast floating-point
-		/W0                # Disable warnings
-		/wd4244            # Disable conversion warnings
-		/wd4267            # Disable size_t conversion warnings
-	)
-	if(RADIA_ENABLE_OPENMP)
-		# Use standard /openmp flag - Intel OpenMP runtime is linked separately
-		# The libiomp5md.lib is linked via target_link_libraries above
-		target_compile_options(radia PRIVATE /openmp)
-	endif()
-	message(STATUS "Using MSVC compiler with Intel MKL for radia")
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-	# Intel oneAPI compiler (icx-cl) - optimal performance
-	set(RADIA_INTEL_FLAGS
-		/O3                # Maximum optimization
-		/Qipo              # Interprocedural optimization
-		/fp:fast           # Fast floating-point model
-		/Qopt-report:2     # Optimization report
-		/W0                # Disable warnings
-	)
-	if(RADIA_ENABLE_OPENMP)
-		list(APPEND RADIA_INTEL_FLAGS /Qopenmp)  # Enable OpenMP (Intel style)
-	endif()
-	target_compile_options(radia PRIVATE ${RADIA_INTEL_FLAGS})
-	# Link with Intel OpenMP
-	if(RADIA_ENABLE_OPENMP)
-		target_link_options(radia PRIVATE /Qopenmp)
-	endif()
-	message(STATUS "Using Intel oneAPI compiler for radia (optimal performance)")
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-	# GCC
-	target_compile_options(radia PRIVATE
-		-Wno-conversion
-		-Wno-sign-conversion
-		-Wno-unused-variable
-	)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	# Clang (including Apple Clang)
-	target_compile_options(radia PRIVATE
-		-Wno-conversion
-		-Wno-sign-conversion
-		-Wno-unused-variable
-	)
-endif()
-
-message(STATUS "radia module configured")
-
-# Post-build: Copy required DLLs for distribution
-if(WIN32 AND USE_MKL_FOUND)
-	# Copy MKL runtime DLL
-	add_custom_command(TARGET radia POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${MKL_BIN_DIR}/mkl_rt.2.dll"
-			"$<TARGET_FILE_DIR:radia>"
-		COMMENT "Copying mkl_rt.2.dll for distribution"
-	)
-
-	# Copy Intel OpenMP runtime if available
-	if(EXISTS "${INTEL_COMPILER_BIN}/libiomp5md.dll")
-		add_custom_command(TARGET radia POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-				"${INTEL_COMPILER_BIN}/libiomp5md.dll"
-				"$<TARGET_FILE_DIR:radia>"
-			COMMENT "Copying libiomp5md.dll for distribution"
-		)
-	endif()
-endif()
+# The legacy Python C API module (_radia.pyd using radpy_pyapi.cpp) has been
+# removed as of 2026-01. All Python bindings now use pybind11 exclusively
+# via the _radia_pybind module (see below at line ~956).
+#
+# For the new pybind11 module, see: _radia_pybind target
+# The Python package (__init__.py) imports from _radia_pybind.
 
 # ========================================
 # Test Programs
@@ -949,3 +787,124 @@ if(WIN32 AND USE_MKL_FOUND)
 endif()
 
 message(STATUS "mmm_core module configured")
+
+# ========================================
+# Radia pybind11 Module (_radia_pybind.pyd)
+# ========================================
+# pybind11 bindings following NGSolve patterns
+# This is the sole Python binding (radpy_pyapi.cpp removed 2026-01)
+
+set(RADIA_PYBIND_SOURCES
+	${PYTHON_DIR}/radia_pybind.cpp
+)
+
+pybind11_add_module(_radia_pybind
+	${RADIA_CORE_SOURCES}
+	${RADIA_FMM_CONDUCTOR_SOURCES}
+	${EXT_DIR}/auxparse/auxparse.cpp
+	${EXT_DIR}/genmath/gmfft.cpp
+	${EXT_DIR}/genmath/gmtrans.cpp
+	${HACAPK_SOURCES}
+	${RADIA_LIB_SOURCES}
+	${RADIA_PYBIND_SOURCES}
+)
+
+# Link triangle library
+target_link_libraries(_radia_pybind PRIVATE triangle_lib)
+
+# Add include directories
+target_include_directories(_radia_pybind PRIVATE
+	${CORE_DIR}
+	${LIB_DIR}
+	${EXT_DIR}/auxparse
+	${EXT_DIR}/genmath
+	${EXT_DIR}/HACApK
+	${CMAKE_CURRENT_SOURCE_DIR}/external/exafmm-t/include
+	${MKL_FFTW3_INCLUDE_DIR}
+)
+
+# Add preprocessor definitions
+target_compile_definitions(_radia_pybind PRIVATE
+	_CRT_SECURE_NO_WARNINGS
+	_GM_WITHOUT_BASE
+	ALPHA__DLL__
+	ANSI_DECLARATORS
+	RADIA_USE_HACAPK
+	HACAPK_RADIA_LOGGING
+	RADIA_MSC_SUPPORT
+	$<$<BOOL:${RADIA_ENABLE_EXAFMM}>:RADIA_USE_EXAFMM>
+)
+
+# Intel MKL for _radia_pybind
+if(WIN32 AND USE_MKL_FOUND)
+	target_link_libraries(_radia_pybind PRIVATE ${BLAS_LIB})
+	target_include_directories(_radia_pybind PRIVATE ${BLAS_INCLUDE_DIR})
+	target_compile_definitions(_radia_pybind PRIVATE HAVE_LAPACK)
+	message(STATUS "Using Intel MKL for _radia_pybind: ${BLAS_LIB}")
+endif()
+
+# Link Windows system libraries
+if(WIN32)
+	target_link_libraries(_radia_pybind PRIVATE version.lib)
+	if(MSVC)
+		target_link_options(_radia_pybind PRIVATE /NODEFAULTLIB:LIBCMT)
+	endif()
+endif()
+
+# Link OpenMP for parallel operations
+if(RADIA_ENABLE_OPENMP)
+	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
+		if(EXISTS ${INTEL_OPENMP_LIB})
+			target_link_libraries(_radia_pybind PRIVATE ${INTEL_OPENMP_LIB})
+			target_compile_definitions(_radia_pybind PRIVATE _OPENMP)
+			message(STATUS "OpenMP enabled for _radia_pybind (Intel OpenMP)")
+		elseif(OpenMP_CXX_FOUND)
+			target_link_libraries(_radia_pybind PRIVATE OpenMP::OpenMP_CXX)
+			message(STATUS "OpenMP enabled for _radia_pybind (MSVC OpenMP)")
+		endif()
+	elseif(OpenMP_CXX_FOUND)
+		target_link_libraries(_radia_pybind PRIVATE OpenMP::OpenMP_CXX)
+		message(STATUS "OpenMP enabled for _radia_pybind")
+	endif()
+endif()
+
+# Compiler-specific flags
+if(MSVC)
+	target_compile_options(_radia_pybind PRIVATE
+		/O2
+		/fp:fast
+		/W0
+		/wd4244
+		/wd4267
+	)
+	if(RADIA_ENABLE_OPENMP)
+		target_compile_options(_radia_pybind PRIVATE /openmp)
+	endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+	target_compile_options(_radia_pybind PRIVATE /O3 /fp:fast /W0)
+	if(RADIA_ENABLE_OPENMP)
+		target_compile_options(_radia_pybind PRIVATE /Qopenmp)
+		target_link_options(_radia_pybind PRIVATE /Qopenmp)
+	endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+	target_compile_options(_radia_pybind PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+	)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(_radia_pybind PRIVATE
+		-Wno-conversion
+		-Wno-sign-conversion
+	)
+endif()
+
+# Post-build: Copy to src/radia
+add_custom_command(TARGET _radia_pybind POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"$<TARGET_FILE:_radia_pybind>"
+		"${CMAKE_SOURCE_DIR}/src/radia/_radia_pybind.pyd"
+	COMMENT "Copying _radia_pybind.pyd to src/radia"
+)
+
+message(STATUS "_radia_pybind module configured (pybind11 bindings)")
