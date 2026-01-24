@@ -34,8 +34,12 @@ def hex_vertices(cx, cy, cz, dx, dy, dz):
     ]
 
 
-def create_geometry(n, size, H_bg):
-    """Create hexahedral mesh with material and background field."""
+def create_geometry(n, size, B_bg):
+    """Create hexahedral mesh with material and background field.
+
+    Args:
+        B_bg: Background field in Tesla (ObjBckg callback returns B, not H).
+    """
     elem_size = size / n
     mat = rad.MatLin(1000.0)  # mu_r = 1000
 
@@ -51,7 +55,7 @@ def create_geometry(n, size, H_bg):
                 rad.MatApl(elem, mat)
                 elements.append(elem)
 
-    bg_field = rad.ObjBckg(H_bg)
+    bg_field = rad.ObjBckg(lambda p: B_bg)
     return rad.ObjCnt(elements + [bg_field])
 
 
@@ -64,9 +68,9 @@ def benchmark_solver(n, method, tol=1e-4, max_iter=1000):
     gc.collect()
 
     size = 40.0  # mm cube
-    H_bg = [0, 0, 1.0]  # Background field
+    B_bg = [0, 0, 1.0]  # Background field in Tesla
 
-    container = create_geometry(n, size, H_bg)
+    container = create_geometry(n, size, B_bg)
 
     # Configure HACApK if method 2
     if method == 2:
