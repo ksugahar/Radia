@@ -89,7 +89,7 @@ static std::shared_ptr<PEECMMMCoupledSolver> GetCplMagSolver(int handle)
 }
 
 //=========================================================================
-// External API Functions (called from radpy_pyapi.cpp)
+// External API Functions (called from radia_pybind.cpp via radentry.h)
 //=========================================================================
 
 /**
