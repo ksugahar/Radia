@@ -172,19 +172,32 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 		// Full circular coil: use direct elliptic integral formulas
 		// Integrate over the rectangular cross-section
 
-		// Integration over cross-section using Gaussian quadrature (2x2)
-		static const double gp[] = {-0.5773502691896257, 0.5773502691896257};  // Gauss points
-		static const double gw[] = {1.0, 1.0};  // Gauss weights
+		// Integration over cross-section using Gaussian quadrature (4x4)
+		// 4-point Gauss-Legendre quadrature gives excellent accuracy for thick coils
+		// Reference: Abramowitz & Stegun, Table 25.4
+		static const int GAUSS_ORDER = 4;
+		static const double gp[] = {
+			-0.8611363115940526,
+			-0.3399810435848563,
+			 0.3399810435848563,
+			 0.8611363115940526
+		};
+		static const double gw[] = {
+			0.3478548451374538,
+			0.6521451548625461,
+			0.6521451548625461,
+			0.3478548451374538
+		};
 
 		double r_mid = 0.5 * (R_max + R_min);
 		double r_half = 0.5 * (R_max - R_min);
 		double z_half = 0.5 * Height;
 
-		for (int ir = 0; ir < 2; ++ir) {
+		for (int ir = 0; ir < GAUSS_ORDER; ++ir) {
 			double r_coil = r_mid + r_half * gp[ir];
 			double w_r = gw[ir] * r_half;
 
-			for (int iz = 0; iz < 2; ++iz) {
+			for (int iz = 0; iz < GAUSS_ORDER; ++iz) {
 				double z_coil = z_half * gp[iz];  // z relative to coil center
 				double w_z = gw[iz] * z_half;
 
@@ -229,79 +242,96 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 			}
 		}
 	} else {
-		// Arc coil: use analytical formula (Kameari) when far from coil cross-section,
-		// fall back to numerical integration when observation point is near.
-		//
-		// Reference:
-		//   A. Kameari, "Calculation of Transient 3D Eddy Current using Edge-Elements",
-		//   IEEE Trans. Magn., Vol. 26, No. 2, 1990
+		// Arc coil: use Biot-Savart with Gauss quadrature over cross-section
+		// This replaces the analytical Kameari formula which had accuracy issues
+		// for thick coils with large aspect ratios.
 
 		double r_mid = 0.5 * (R_max + R_min);
 		double r_half = 0.5 * (R_max - R_min);  // Half radial width (a)
 		double z_half = 0.5 * Height;           // Half axial width (b)
 
-		// Total current: I = J_azim * cross_section_area
-		double cross_area = (R_max - R_min) * Height;  // = 4 * a * b
-		double total_current = J_azim * cross_area;
+		// B-field calculation using Biot-Savart with Gauss quadrature
+		if (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) {
+			// 4-point Gauss-Legendre quadrature for cross-section integration
+			static const int GAUSS_ORDER = 4;
+			static const double gp[] = {
+				-0.8611363115940526,
+				-0.3399810435848563,
+				 0.3399810435848563,
+				 0.8611363115940526
+			};
+			static const double gw[] = {
+				0.3478548451374538,
+				0.6521451548625461,
+				0.6521451548625461,
+				0.3478548451374538
+			};
 
-		// Transform arc angles relative to observation point azimuth
-		// phi1_rel and phi2_rel are angles from observation point's phi direction
-		double phi1_rel = Phi_min - phi_obs;
-		double phi2_rel = Phi_max - phi_obs;
+			// Number of phi segments for arc integration
+			// Use at least 4 segments per 90 degrees for accuracy
+			int n_phi = NumberOfSectors;
+			if (n_phi < 4) n_phi = 4;
+			// Scale by arc angle relative to full circle
+			n_phi = std::max(4, (int)(n_phi * delta_phi / TwoPi + 0.5));
 
-		// Normalize angles to [-pi, pi] range for proper handling
-		while (phi2_rel < -Pi + 0.001) {
-			phi1_rel += TwoPi;
-			phi2_rel += TwoPi;
-		}
-		while (phi1_rel > Pi - 0.001) {
-			phi1_rel -= TwoPi;
-			phi2_rel -= TwoPi;
-		}
+			double dphi = delta_phi / n_phi;
 
-		// Try analytical formula first (far-field approximation)
-		double B_rho = 0.0, B_theta = 0.0, B_z_cyl = 0.0;
-		bool use_analytical = RadElliptic::ArcCoilBFieldAdaptive(
-			r, z, r_mid, phi1_rel, phi2_rel, r_half, z_half, total_current,
-			B_rho, B_theta, B_z_cyl);
+			// Biot-Savart constant: mu_0 / (4 * pi)
+			const double mu0_over_4pi = 1.0e-7;
 
-		if (use_analytical && (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_)) {
-			// Analytical formula was used - convert from cylindrical to Cartesian
-			double cos_phi = cos(phi_obs);
-			double sin_phi = sin(phi_obs);
+			// Integrate over cross-section using Gauss quadrature
+			for (int ir = 0; ir < GAUSS_ORDER; ++ir) {
+				double r_coil = r_mid + r_half * gp[ir];
+				double w_r = gw[ir] * r_half;
 
-			// B_x = B_rho * cos(phi) - B_theta * sin(phi)
-			// B_y = B_rho * sin(phi) + B_theta * cos(phi)
-			IntForBx = B_rho * cos_phi - B_theta * sin_phi;
-			IntForBy = B_rho * sin_phi + B_theta * cos_phi;
-			IntForBz = B_z_cyl;
-		}
+				for (int iz = 0; iz < GAUSS_ORDER; ++iz) {
+					double z_coil = z_half * gp[iz];
+					double w_z = gw[iz] * z_half;
 
-		// Near-field B calculation using analytical cross-section formula
-		// with adaptive 1D integration (replaces coarse 2x2 Gauss quadrature)
-		//
-		// References:
-		//   [1] A. Kameari, "Calculation of Transient 3D Eddy Current using
-		//       Edge-Elements", IEEE Trans. Magn., Vol. 26, No. 2, 1990.
-		//       - Analytical cross-section integration (distances to 4 corners)
-		//   [2] R. Piessens et al., "QUADPACK: A Subroutine Package for
-		//       Automatic Integration", Springer-Verlag, 1983.
-		//       - Gauss-Kronrod 7-15 adaptive quadrature
-		//
-		if (!use_analytical && (FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_)) {
-			// Use Kameari's analytical cross-section formula [1] with adaptive GK7-15 [2]
-			double B_rho_near = 0.0, B_theta_near = 0.0, B_z_near = 0.0;
-			RadElliptic::ArcCoilBFieldNearField(r, z, r_mid, r_half, z_half,
-			                                     phi1_rel, phi2_rel, total_current,
-			                                     B_rho_near, B_theta_near, B_z_near);
+					// Current for this cross-section element
+					double dI = J_azim * w_r * w_z;
 
-			// Convert from cylindrical to Cartesian
-			double cos_phi = cos(phi_obs);
-			double sin_phi = sin(phi_obs);
+					// Integrate over arc angle using midpoint rule
+					for (int iphi = 0; iphi < n_phi; ++iphi) {
+						double phi_coil = Phi_min + (iphi + 0.5) * dphi;
 
-			IntForBx = B_rho_near * cos_phi - B_theta_near * sin_phi;
-			IntForBy = B_rho_near * sin_phi + B_theta_near * cos_phi;
-			IntForBz = B_z_near;
+						// Position of current element (in coil-centered coordinates)
+						double x_src = r_coil * cos(phi_coil);
+						double y_src = r_coil * sin(phi_coil);
+						double z_src = z_coil;
+
+						// Current direction (tangent to arc)
+						// dl = r_coil * dphi * (-sin(phi), cos(phi), 0)
+						double dlx = r_coil * dphi * (-sin(phi_coil));
+						double dly = r_coil * dphi * cos(phi_coil);
+						double dlz = 0.0;
+
+						// Vector from source to observation point
+						double Rx = P_mi_CenPo.x - x_src;
+						double Ry = P_mi_CenPo.y - y_src;
+						double Rz = P_mi_CenPo.z - z_src;
+
+						double R_mag_sq = Rx*Rx + Ry*Ry + Rz*Rz;
+						double R_mag = sqrt(R_mag_sq);
+
+						if (R_mag > 1.0e-15) {
+							double R_mag_cubed = R_mag_sq * R_mag;
+
+							// dB = (mu_0 / 4pi) * dI * (dl x R) / |R|^3
+							// Cross product: dl x R
+							double crossX = dly * Rz - dlz * Ry;
+							double crossY = dlz * Rx - dlx * Rz;
+							double crossZ = dlx * Ry - dly * Rx;
+
+							double factor = mu0_over_4pi * dI / R_mag_cubed;
+
+							IntForBx += factor * crossX;
+							IntForBy += factor * crossY;
+							IntForBz += factor * crossZ;
+						}
+					}
+				}
+			}
 		}
 
 		// Vector potential and scalar potential still use numerical integration
