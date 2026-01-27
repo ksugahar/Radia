@@ -5,6 +5,9 @@ yoke.step
 yoke_mesh.vtk
 yoke_mesh.vtu
 
+# Large geometry files (regenerate from STEP)
+*.stl
+
 # Generated field data (from run_simulation.py)
 field_distribution.vts
 field_distribution.vtk
