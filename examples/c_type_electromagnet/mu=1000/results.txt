@@ -1,0 +1,18 @@
+Electromagnet Simulation Results
+================================
+
+Parameters:
+  mu_r = 1000
+  Coil current = 1000 A
+  Mesh elements = 13
+
+Solver:
+  Residual = 0.006178
+  Iterations = 0.0
+  Time = 0.01 s
+
+Field at observation points:
+  [0, 0, 0]: |B| = 3.3813 mT
+  [0, 0, 0.01]: |B| = 3.9758 mT
+  [0, 0, 0.02]: |B| = 6.4789 mT
+  [0.01, 0, 0.01]: |B| = 3.4170 mT
