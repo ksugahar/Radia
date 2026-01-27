@@ -1473,27 +1473,44 @@ void radTInteraction::SetupExternFieldArray()
 					for(int face_i = 0; face_i < 6; face_i++)
 					{
 						// Eval point for face i (midpoint between face center and element center)
+						// This is in element's local coordinates
 						TVector3d EvalPt;
 						EvalPt.x = 0.5 * (poly->FaceCenter[face_i].x + poly->CentrPoint.x);
 						EvalPt.y = 0.5 * (poly->FaceCenter[face_i].y + poly->CentrPoint.y);
 						EvalPt.z = 0.5 * (poly->FaceCenter[face_i].z + poly->CentrPoint.z);
 
+						// Transform EvalPt from element's local coords to world coords
+						TVector3d WorldEvalPt = MainTransPtrArray[StrNo]->TrPoint(EvalPt);
+
 						// Compute H_ext at eval point from all external sources
-						TVector3d H_total(0., 0., 0.);
+						// Use same transform handling as 3DOF elements
+						TVector3d H_world(0., 0., 0.);
 						for(int ExtElNo = 0; ExtElNo < AmOfExtElem; ExtElNo++)
 						{
+							FillInTransPtrVectForElem(ExtElNo, 'E');
 							radTg3d* ExtElPtr = g3dExternPtrVect[ExtElNo];
-							radTField Field(FieldKeyExtern, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-							ExtElPtr->B_comp(&Field);
-							H_total.x += Field.H.x;
-							H_total.y += Field.H.y;
-							H_total.z += Field.H.z;
+
+							TVector3d BufVect(0., 0., 0.);
+							for(unsigned t = 0; t < TransPtrVect.size(); t++)
+							{
+								// Transform obs point to external element's local coords
+								TVector3d ObsPoiVect = TransPtrVect[t]->TrPoint_inv(WorldEvalPt);
+								radTField Field(FieldKeyExtern, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+								ExtElPtr->B_comp(&Field);
+								// Transform field back to world coords
+								BufVect += TransPtrVect[t]->TrVectField(Field.H);
+							}
+							H_world += BufVect;
+							EmptyTransPtrVect();
 						}
 
-						// H_ext dot n_i
-						double H_dot_n = H_total.x * poly->FaceNormal[face_i].x +
-						                 H_total.y * poly->FaceNormal[face_i].y +
-						                 H_total.z * poly->FaceNormal[face_i].z;
+						// Transform H to element's local coords for dot product with FaceNormal
+						TVector3d H_local = MainTransPtrArray[StrNo]->TrVectField_inv(H_world);
+
+						// H_ext dot n_i (both now in element's local coords)
+						double H_dot_n = H_local.x * poly->FaceNormal[face_i].x +
+						                 H_local.y * poly->FaceNormal[face_i].y +
+						                 H_local.z * poly->FaceNormal[face_i].z;
 
 						m_flatExternFieldArray[offset + face_i] += H_dot_n;
 					}
@@ -1553,19 +1570,27 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 						for(int face_i = 0; face_i < 6; face_i++)
 						{
 							// Eval point for face i (midpoint between face center and element center)
+							// This is in element's local coordinates
 							TVector3d EvalPt;
 							EvalPt.x = 0.5 * (poly->FaceCenter[face_i].x + poly->CentrPoint.x);
 							EvalPt.y = 0.5 * (poly->FaceCenter[face_i].y + poly->CentrPoint.y);
 							EvalPt.z = 0.5 * (poly->FaceCenter[face_i].z + poly->CentrPoint.z);
 
-							// Compute H_ext at eval point
-							radTField Field(FieldKeyExtern, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+							// Transform EvalPt to world coords (same as 3DOF code on line 1520)
+							TVector3d WorldEvalPt = MainTransPtrArray[StrNo]->TrPoint(EvalPt);
+
+							// Compute H_ext at world eval point
+							// B_genComp handles internal transforms recursively
+							radTField Field(FieldKeyExtern, CompCriterium, WorldEvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 							(static_cast<radTg3d*>(MoreExtSourceHandle.rep))->B_genComp(&Field);
 
-							// H_ext dot n_i
-							double H_dot_n = Field.H.x * poly->FaceNormal[face_i].x +
-							                 Field.H.y * poly->FaceNormal[face_i].y +
-							                 Field.H.z * poly->FaceNormal[face_i].z;
+							// Transform field back to element's local coords (same as 3DOF code on line 1527)
+							TVector3d H_local = MainTransPtrArray[StrNo]->TrVectField_inv(Field.H);
+
+							// H_ext dot n_i (both now in element's local coords)
+							double H_dot_n = H_local.x * poly->FaceNormal[face_i].x +
+							                 H_local.y * poly->FaceNormal[face_i].y +
+							                 H_local.z * poly->FaceNormal[face_i].z;
 
 							m_flatExternFieldArray[offset + face_i] = H_dot_n;
 						}
