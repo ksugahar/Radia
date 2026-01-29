@@ -447,7 +447,7 @@ public:
 
 inline void radTInteraction::PushFrontNativeElemTransList(radTg3d* g3dPtr, radTlphgPtr* ListOfPtrToTransPtr)
 {
-	for(radTlphg::iterator TrIter = g3dPtr->g3dListOfTransform.begin();	
+	for(radTlphg::iterator TrIter = g3dPtr->g3dListOfTransform.begin();
 		TrIter != g3dPtr->g3dListOfTransform.end(); ++TrIter)
 		ListOfPtrToTransPtr->push_back(&(*TrIter)); // Improve dereferentiation?
 }

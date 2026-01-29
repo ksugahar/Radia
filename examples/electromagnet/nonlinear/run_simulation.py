@@ -55,10 +55,10 @@ BH_DATA = [
 # ============================================================
 COIL_CURRENT = 20000  # A (Ampere-turns, 20000 AT)
 
-# Coil parameters (simplified for quarter model)
-COIL_CENTER = [0, 0, 0.05]  # m
-COIL_RADII = [0.02, 0.025]  # m
-COIL_HEIGHT = 0.01  # m
+# Coil parameters (matching ELF/MAGIC)
+COIL_CENTER = [0, 0.13125, 0]  # m = [0, 131.25, 0] mm
+COIL_RADII = [0.06, 0.0725]  # m = [60, 72.5] mm (inner/outer radius)
+COIL_HEIGHT = 0.105  # m = 105 mm
 
 print("=" * 60)
 print(f"ELECTROMAGNET SIMULATION: Nonlinear B-H curve")

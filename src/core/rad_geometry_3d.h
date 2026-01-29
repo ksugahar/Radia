@@ -188,7 +188,7 @@ public:
 	void FlattenSpaceTransforms(radTvhg&);
 	int TotalMultiplicity();
 
-	inline void B_genComp(radTField*);
+	virtual void B_genComp(radTField*);
 	virtual void B_comp(radTField*) {}
 	void NestedFor_B(radTField*, const radTlphg::iterator&);
 	inline void B_comp_Or_NestedFor(radTField*, const radTlphg::iterator&);
@@ -903,23 +903,7 @@ inline void radTg3d::EraseAllTransformations()
 }
 
 //-------------------------------------------------------------------------
-
-inline void radTg3d::B_genComp(radTField* FieldPtr)
-{
-	radTFieldKey& FieldKey = FieldPtr->FieldKey;
-	if(g3dListOfTransform.empty())
-	{
-		if(FieldKey.Ib_ || FieldKey.Ih_) B_intComp(FieldPtr);
-		else if(FieldKey.Force_) IntOverShape(FieldPtr);
-		else B_comp(FieldPtr);
-	}
-	else
-	{
-		if(FieldKey.Force_) NestedFor_IntOverShape(FieldPtr, g3dListOfTransform.begin());
-		else NestedFor_B(FieldPtr, g3dListOfTransform.begin());
-	}
-}
-
+// B_genComp moved to rad_geometry_3d.cpp (now virtual, cannot be inline)
 //-------------------------------------------------------------------------
 
 inline void radTg3d::B_comp_Or_NestedFor(radTField* FieldPtr, const radTlphg::iterator& Iter)

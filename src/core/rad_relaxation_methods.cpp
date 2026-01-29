@@ -26,6 +26,9 @@
 #include <cstdio>   // For fprintf in debug logging
 #include <cstdlib>  // For getenv
 
+// Uncomment to enable chi value debugging
+// #define RADIA_DEBUG_CHI
+
 // External access to radTApplication for NonlinearMethod setting
 extern radTApplication rad;
 
@@ -970,6 +973,9 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	// Update diagonal and RHS based on current chi
 	// Matrix is COLUMN-MAJOR: A(i,j) at [j * totalDOF + i]
 	// Diagonal element A(k,k) is at [k * totalDOF + k] = [k * (totalDOF + 1)]
+#ifdef RADIA_DEBUG_CHI
+	fprintf(stderr, "=== LU Solver Debug: chi and matrix values ===\n");
+#endif
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
@@ -979,12 +985,24 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		if(chi < 1.0e-6) chi = 1.0e-6;
 		double inv_chi = 1.0 / chi;
 
+#ifdef RADIA_DEBUG_CHI
+		fprintf(stderr, "Element %d: chi = %.6f, inv_chi = %.6e, dof = %d\n", elem, chi, inv_chi, dof);
+#endif
+
 		// Add 1/chi to diagonal and set RHS
 		for(int k = 0; k < dof; k++)
 		{
 			int row = offset + k;
 			// Column-major diagonal: A(row,row) at index [row * (totalDOF + 1)]
+#ifdef RADIA_DEBUG_CHI
+			double diag_before = SystemMatrix[row * (totalDOF + 1)];
+#endif
 			SystemMatrix[row * (totalDOF + 1)] += inv_chi;
+#ifdef RADIA_DEBUG_CHI
+			double diag_after = SystemMatrix[row * (totalDOF + 1)];
+			fprintf(stderr, "  row %d: diag_before = %.6e, diag_after = %.6e, RHS = %.6e\n",
+			        row, diag_before, diag_after, ctx.FlatExtern[row]);
+#endif
 			RHS[row] = ctx.FlatExtern[row];
 		}
 
@@ -1033,6 +1051,21 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	{
 		ctx.FlatMagn[i] = RHS[i];
 	}
+
+#ifdef RADIA_DEBUG_CHI
+	fprintf(stderr, "=== LU Solver Debug: Solution (sigma/M) values ===\n");
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+		fprintf(stderr, "Element %d (dof=%d): ", elem, dof);
+		for(int k = 0; k < dof; k++)
+		{
+			fprintf(stderr, "%.3e ", RHS[offset + k]);
+		}
+		fprintf(stderr, "\n");
+	}
+#endif
 
 	return 0;  // LU is direct solver, no iterations
 }

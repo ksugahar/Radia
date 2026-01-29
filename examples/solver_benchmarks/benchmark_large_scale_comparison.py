@@ -38,8 +38,12 @@ def hex_vertices(cx, cy, cz, dx, dy, dz):
     ]
 
 
-def create_geometry(n, size, mat_params, H_bg):
-    """Create hexahedral mesh with material and background field."""
+def create_geometry(n, size, mat_params, B_bg):
+    """Create hexahedral mesh with material and background field.
+
+    Args:
+        B_bg: Background field in Tesla (ObjBckg callback returns B, not H).
+    """
     elem_size = size / n
     mat = rad.MatSatIsoFrm(*mat_params)
 
@@ -55,7 +59,7 @@ def create_geometry(n, size, mat_params, H_bg):
                 rad.MatApl(elem, mat)
                 elements.append(elem)
 
-    bg_field = rad.ObjBckg(H_bg)
+    bg_field = rad.ObjBckg(lambda p: B_bg)
     return rad.ObjCnt(elements + [bg_field])
 
 
@@ -80,7 +84,7 @@ precision = 0.0001
 max_iter = 1000
 
 # Background field (applied to soft magnetic material)
-H_bg = [1.0, 0, 0]  # 1.0 T background field in X direction
+B_bg = [1.0, 0, 0]  # 1.0 T background field in X direction
 
 # Observation point
 obs_point = [0, 0, 50]  # 50mm above center
@@ -90,7 +94,7 @@ mat_params = [[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]]
 
 print("\nProblem Setup:")
 print("  Material: Nonlinear soft iron (MatSatIsoFrm)")
-print("  Background field: [{}, {}, {}] T".format(*H_bg))
+print("  Background field: [{}, {}, {}] T".format(*B_bg))
 print("  Observation point: [{}, {}, {}] mm".format(*obs_point))
 print("  Solver precision: {}".format(precision))
 print("  Max iterations: {}".format(max_iter))
@@ -122,7 +126,7 @@ for test in test_cases:
         print("\n[Method 0] LU Direct Solver")
         print("-" * 40)
         rad.UtiDelAll()
-        container = create_geometry(n, size, mat_params, H_bg)
+        container = create_geometry(n, size, mat_params, B_bg)
 
         t_start = time.perf_counter()
         solve_result = rad.Solve(container, precision, max_iter, 0)
@@ -153,7 +157,7 @@ for test in test_cases:
     print("\n[Method 1] BiCGSTAB Iterative Solver")
     print("-" * 40)
     rad.UtiDelAll()
-    container = create_geometry(n, size, mat_params, H_bg)
+    container = create_geometry(n, size, mat_params, B_bg)
 
     t_start = time.perf_counter()
     solve_result = rad.Solve(container, precision, max_iter, 1)
@@ -178,7 +182,7 @@ for test in test_cases:
     print("-" * 40)
     try:
         rad.UtiDelAll()
-        container = create_geometry(n, size, mat_params, H_bg)
+        container = create_geometry(n, size, mat_params, B_bg)
         rad.SetHACApKParams(1e-4, 10, 2.0)
 
         t_start = time.perf_counter()
