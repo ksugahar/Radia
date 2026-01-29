@@ -862,11 +862,13 @@ void ArcCur(double xc, double yc, double zc, double rmin, double rmax, double ph
 
 void RaceTrack(double xc, double yc, double zc, double rmin, double rmax, double Lx, double Ly, double Height, int NumberOfSegm, double J_azim, char* ManOrAuto, char* Orient)
 {
-	// Apply unit scaling: convert user units to internal mm
+	// Apply unit scaling: convert user units to internal meters
+	// DON'T perturb CPoi here - perturbation is applied to final arc centers in SetRaceTrack
+	// This ensures arc centers get identical perturbation to manually created arcs
 	double scale = rad.GetLengthUnitScale();
-	double CPoi[] = {radCR.Double(xc * scale), radCR.Double(yc * scale), radCR.Double(zc * scale)};
+	double CPoi[] = {xc * scale, yc * scale, zc * scale};  // Unperturbed!
 	double Radii[] = {fabs(radCR.Double(rmin * scale)), fabs(radCR.Double(rmax * scale))};
-	double StrPartDims[] = {(Lx==0.)? Lx : radCR.Double(Lx * scale), (Ly==0.)? Ly : radCR.Double(Ly * scale)};
+	double StrPartDims[] = {Lx * scale, Ly * scale};  // Unperturbed
 	// Current density J is in A/mm^2 or A/m^2 depending on units
 	double currentDensityScale = scale * scale;
 	rad.SetRaceTrack(CPoi, 3, Radii, 2, StrPartDims, 2, Height * scale, J_azim / currentDensityScale, NumberOfSegm, ManOrAuto, Orient);

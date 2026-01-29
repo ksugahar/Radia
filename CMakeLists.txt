@@ -8,6 +8,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Option to disable OpenMP (for debugging)
 option(RADIA_ENABLE_OPENMP "Enable OpenMP parallelization" ON)
 
+# Option to build radia_ngsolve module (requires NGSolve to be installed)
+option(RADIA_BUILD_NGSOLVE "Build radia_ngsolve integration module" ON)
+
 # FFTW is replaced by Intel MKL DFTI (direct integration in fftw.h)
 # No FFTW library linking required - MKL DFTI provides FFT functionality
 
@@ -41,12 +44,14 @@ set(pybind11_DIR ${PYTHON_SITE_PACKAGES}/pybind11/share/cmake/pybind11)
 message("Finding pybind11...")
 find_package(pybind11 REQUIRED)
 
-# Set NGSolve and Netgen directories
-set(NGSolve_DIR ${PYTHON_SITE_PACKAGES}/ngsolve/cmake)
-set(Netgen_DIR ${PYTHON_SITE_PACKAGES}/netgen/cmake)
+# Set NGSolve and Netgen directories (only if building radia_ngsolve)
+if(RADIA_BUILD_NGSOLVE)
+	set(NGSolve_DIR ${PYTHON_SITE_PACKAGES}/ngsolve/cmake)
+	set(Netgen_DIR ${PYTHON_SITE_PACKAGES}/netgen/cmake)
 
-# Find NGSolve
-find_package(NGSolve CONFIG REQUIRED)
+	# Find NGSolve
+	find_package(NGSolve CONFIG REQUIRED)
+endif()
 
 # Radia source directories
 set(CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/core")
@@ -192,6 +197,8 @@ target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
 
 # Create NGSolve Python module using add_ngsolve_python_module
 # (following EMPY_Field pattern exactly)
+# Only build if RADIA_BUILD_NGSOLVE is ON (requires NGSolve to be installed)
+if(RADIA_BUILD_NGSOLVE)
 add_ngsolve_python_module(radia_ngsolve
 	${RADIA_CORE_SOURCES}
 	${RADIA_FMM_CONDUCTOR_SOURCES}
@@ -352,6 +359,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 message(STATUS "radia_ngsolve module configured")
+endif() # RADIA_BUILD_NGSOLVE
 
 # ========================================
 # Legacy _radia Python Module (REMOVED)

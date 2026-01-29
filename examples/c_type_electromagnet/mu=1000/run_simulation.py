@@ -2,7 +2,8 @@
 """
 Electromagnet Simulation: mu_r = 1000 case
 
-Uses 1/4 model with symmetry.
+Uses full model hex mesh from Cubit (yoke.vol).
+Reference: ELF_MAGIC Radia_1x1x1 (Bz = 51.5 mT at origin)
 """
 
 import sys
@@ -26,11 +27,13 @@ import time
 # ============================================================
 MU_R = 1000  # Relative permeability
 
-# Coil parameters (simplified for quarter model)
-COIL_CENTER = [0, 0, 0.05]  # m
-COIL_RADII = [0.02, 0.025]  # m
-COIL_HEIGHT = 0.01  # m
-COIL_CURRENT = 1000  # A (total NI)
+# Coil parameters (from verified Radia_1x1x1/Radia.py)
+# radObjRaceTrk[{0, 131.25, 0}, {5, 40}, {50, 62.5}, 105, 3, current/105/35]
+COIL_CENTER = [0, 0.13125, 0]  # m = [0, 131.25, 0] mm
+COIL_RADII = [0.005, 0.040]   # m = [5, 40] mm (corner radii)
+COIL_STRAIGHT = [0.050, 0.0625]  # m = [50, 62.5] mm (half-lengths)
+COIL_HEIGHT = 0.105  # m = 105 mm
+COIL_CURRENT = -2000  # A (verified value)
 
 # Field grid
 GRID_X = [-0.05, 0.05]
@@ -49,10 +52,11 @@ rad.FldUnits('m')
 # ============================================================
 print("\nStep 1: Load mesh")
 
-vol_file = os.path.join(parent_dir, 'yoke_1x1x1_quarter.vol')
+vol_file = os.path.join(work_dir, 'yoke.vol')
 
 if not os.path.exists(vol_file):
     print(f"  [ERROR] Mesh file not found: {vol_file}")
+    print(f"  Run: python generate_mesh.py")
     sys.exit(1)
 
 ngmesh = NetgenMesh()
@@ -60,7 +64,7 @@ ngmesh.Load(vol_file)
 mesh = Mesh(ngmesh)
 
 print(f"  Loaded: {vol_file}")
-print(f"  Elements: {mesh.ne}")
+print(f"  Elements: {mesh.ne} (full model)")
 
 # ============================================================
 # Convert to Radia
@@ -76,33 +80,38 @@ if yoke is None:
     print("  [ERROR] Failed to create Radia geometry")
     sys.exit(1)
 
+# Full model - no symmetry transformation needed
+print(f"  Yoke ID: {yoke} (full model, {mesh.ne} hex elements)")
+
 # Apply material
 yoke_mat = rad.MatLin(MU_R)
 rad.MatApl(yoke, yoke_mat)
-print(f"  Yoke ID: {yoke}, mu_r = {MU_R}")
+print(f"  Material: mu_r = {MU_R}")
 
 # ============================================================
 # Create coil
 # ============================================================
-print("\nStep 3: Create coil")
+print("\nStep 3: Create racetrack coil")
 
-coil_width = COIL_RADII[1] - COIL_RADII[0]
+# Coil cross-section: height * width (width = outer_radius - inner_radius)
+coil_width = COIL_RADII[1] - COIL_RADII[0]  # 35 mm = 0.035 m
 coil_cs = COIL_HEIGHT * coil_width
 j_density = COIL_CURRENT / coil_cs
 
-coil = rad.ObjArcCur(
+coil = rad.ObjRaceTrk(
     COIL_CENTER,
     COIL_RADII,
-    [0, 2*np.pi],
+    COIL_STRAIGHT,
     COIL_HEIGHT,
-    36,
-    'man',
-    'z',
+    3,           # nseg (from verified script)
+    'man',       # manual mode
+    'z',         # axis
     j_density
 )
 
 print(f"  Coil ID: {coil}")
 print(f"  Current: {COIL_CURRENT} A")
+print(f"  Current density: {j_density:.1f} A/m^2")
 
 # ============================================================
 # Solve
@@ -111,12 +120,22 @@ print("\nStep 4: Solve")
 
 g = rad.ObjCnt([coil, yoke])
 
+# Set solver tolerances (matching benchmark setup)
+rad.SetBiCGSTABTol(1e-4)
+rad.SetRelaxParam(0.0)
+
 t_start = time.time()
-result = rad.Solve(g, 0.001, 1000, 1)  # BiCGSTAB
+result = rad.Solve(g, 0.0001, 100, 0)  # LU direct solver
 t_solve = time.time() - t_start
 
-print(f"  Converged: residual = {result[0]:.6f}")
-print(f"  Iterations: {result[1]}")
+# Get solve statistics
+stats = rad.GetSolveStats()
+nonl_iter = stats.get('nonl_iterations', 0)
+linear_iter = stats.get('linear_iterations', 0)
+
+print(f"  Residual: {result[0]:.6f}")
+print(f"  Nonlinear iterations: {nonl_iter}")
+print(f"  Linear iterations: {linear_iter}")
 print(f"  Time: {t_solve:.2f} s")
 
 # ============================================================

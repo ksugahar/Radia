@@ -1572,6 +1572,7 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 	m_solve_stats_valid = false;
 	m_solve_t_matrix_build = 0.0;
 	m_solve_t_linear_solve = 0.0;
+	m_solve_t_lu_decomp = 0.0;  // Reset LU decomposition time
 	m_solve_linear_iterations = 0;
 	m_solve_nonl_iterations = 0;
 
