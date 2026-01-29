@@ -1895,20 +1895,35 @@ int radTApplication::SetRaceTrack(double* CPoi, long lenCPoi,double* Radii, long
 
 		int IndTr = FindSpaceTransToOrientObjAlongMainAxis(CPoi, 'Z', *Orient);
 
-		double ArcCurCPoi[] = {CPoi[0]+0.5*StrPartDims[0], CPoi[1]+0.5*StrPartDims[1], CPoi[2]};
+		// Apply radCR.Double perturbation to computed arc center coordinates
+		// This ensures identical perturbation to manually created arcs (fixes singularity bug)
+		// Arc 1: +x, +y corner
+		double ArcCurCPoi[] = {
+			radCR.Double(CPoi[0]+0.5*StrPartDims[0]),
+			radCR.Double(CPoi[1]+0.5*StrPartDims[1]),
+			radCR.Double(CPoi[2])
+		};
 		double ArcCurAngles[] = {0., 0.5*Pi};
-		//int FirstArcCur = SetArcCur(ArcCurCPoi, 3, Radii, 2, ArcCurAngles, 2, InHeight, InJ_azim, InNumberOfSegm, ManOrAuto, "Z");
-		int FirstArcCur = SetArcCur(ArcCurCPoi, 3, Radii, 2, ArcCurAngles, 2, InHeight, InJ_azim, InNumberOfSegm, ManOrAuto, (char*)"Z"); //OC01052013 to walk-around of a warning in GCC
+		int FirstArcCur = SetArcCur(ArcCurCPoi, 3, Radii, 2, ArcCurAngles, 2, InHeight, InJ_azim, InNumberOfSegm, ManOrAuto, (char*)"Z");
 		if(FirstArcCur==0) return 0;
-		ArcCurCPoi[0] = CPoi[0]-0.5*StrPartDims[0]; ArcCurCPoi[1] = CPoi[1]+0.5*StrPartDims[1];
+		// Arc 2: -x, +y corner
+		ArcCurCPoi[0] = radCR.Double(CPoi[0]-0.5*StrPartDims[0]);
+		ArcCurCPoi[1] = radCR.Double(CPoi[1]+0.5*StrPartDims[1]);
+		ArcCurCPoi[2] = radCR.Double(CPoi[2]);
 		ArcCurAngles[0] = 0.5*Pi; ArcCurAngles[1] = Pi;
 		int SecondArcCur = SetArcCur(ArcCurCPoi, 3, Radii, 2, ArcCurAngles, 2, InHeight, InJ_azim, InNumberOfSegm, ManOrAuto, (char*)"Z");
 		if(SecondArcCur==0) return 0;
-		ArcCurCPoi[0] = CPoi[0]-0.5*StrPartDims[0]; ArcCurCPoi[1] = CPoi[1]-0.5*StrPartDims[1];
+		// Arc 3: -x, -y corner
+		ArcCurCPoi[0] = radCR.Double(CPoi[0]-0.5*StrPartDims[0]);
+		ArcCurCPoi[1] = radCR.Double(CPoi[1]-0.5*StrPartDims[1]);
+		ArcCurCPoi[2] = radCR.Double(CPoi[2]);
 		ArcCurAngles[0] = Pi; ArcCurAngles[1] = 1.5*Pi;
 		int ThirdArcCur = SetArcCur(ArcCurCPoi, 3, Radii, 2, ArcCurAngles, 2, InHeight, InJ_azim, InNumberOfSegm, ManOrAuto, (char*)"Z");
 		if(ThirdArcCur==0) return 0;
-		ArcCurCPoi[0] = CPoi[0]+0.5*StrPartDims[0]; ArcCurCPoi[1] = CPoi[1]-0.5*StrPartDims[1];
+		// Arc 4: +x, -y corner
+		ArcCurCPoi[0] = radCR.Double(CPoi[0]+0.5*StrPartDims[0]);
+		ArcCurCPoi[1] = radCR.Double(CPoi[1]-0.5*StrPartDims[1]);
+		ArcCurCPoi[2] = radCR.Double(CPoi[2]);
 		ArcCurAngles[0] = 1.5*Pi; ArcCurAngles[1] = 1.999999999999*Pi;
 		int FourthArcCur = SetArcCur(ArcCurCPoi, 3, Radii, 2, ArcCurAngles, 2, InHeight, InJ_azim, InNumberOfSegm, ManOrAuto, (char*)"Z");
 		if(FourthArcCur==0) return 0;

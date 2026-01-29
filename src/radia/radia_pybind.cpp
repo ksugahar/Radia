@@ -174,9 +174,9 @@ int ObjHexahedron(py::list vertices, py::array_t<double> magnetization) {
     }
 
     int handle = 0;
-    double M_LinCoef[3] = {0, 0, 0};
+    double M_LinCoef[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     double J[3] = {0, 0, 0};
-    double J_LinCoef[3] = {0, 0, 0};
+    double J_LinCoef[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     int err = RadObjPolyhdr(&handle, flat_verts.data(), nv,
                            flatFaces.data(), faceLengths, 6,
@@ -227,9 +227,9 @@ int ObjTetrahedron(py::list vertices, py::array_t<double> magnetization) {
     }
 
     int handle = 0;
-    double M_LinCoef[3] = {0, 0, 0};
+    double M_LinCoef[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     double J[3] = {0, 0, 0};
-    double J_LinCoef[3] = {0, 0, 0};
+    double J_LinCoef[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     int err = RadObjPolyhdr(&handle, flat_verts.data(), nv,
                            flatFaces.data(), faceLengths, 4,
@@ -633,11 +633,10 @@ py::tuple Solve(int obj, double prec, int max_iter, int method) {
     double D[4] = {0};
     int n = 0;
 
-    {
-        py::gil_scoped_release release;
-        int err = RadSolve(D, &n, obj, prec, max_iter, method);
-        check_error(err);
-    }
+    // Note: GIL release disabled because OpenMP threads in the solver
+    // don't have proper Python thread state, causing crashes.
+    int err = RadSolve(D, &n, obj, prec, max_iter, method);
+    check_error(err);
 
     return py::make_tuple(D[0], D[1], D[2], D[3]);
 }
@@ -1214,11 +1213,10 @@ py::tuple SolveNonl(int obj, double prec, int max_iter, int method, int nonl_met
     double D[4] = {0};
     int n = 4;
 
-    {
-        py::gil_scoped_release release;
-        int err = RadSolveNonl(D, &n, obj, prec, max_iter, method, nonl_method);
-        check_error(err);
-    }
+    // Note: GIL release disabled because OpenMP threads in the solver
+    // don't have proper Python thread state, causing crashes.
+    int err = RadSolveNonl(D, &n, obj, prec, max_iter, method, nonl_method);
+    check_error(err);
 
     return py::make_tuple(D[0], D[1], D[2], D[3]);
 }
@@ -1868,7 +1866,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     m.def("Solve", &radia_solver::Solve,
           py::arg("obj"), py::arg("prec"), py::arg("max_iter"), py::arg("method") = 1,
-          py::call_guard<py::gil_scoped_release>(),
           R"pbdoc(
               Solve magnetostatic problem.
 
@@ -2257,7 +2254,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("SolveNonl", &radia_solver_ext::SolveNonl,
           py::arg("obj"), py::arg("prec"), py::arg("max_iter"),
           py::arg("method"), py::arg("nonl_method"),
-          py::call_guard<py::gil_scoped_release>(),
           R"pbdoc(
               Solve with specific nonlinear iteration method.
 

@@ -27,7 +27,7 @@ def setup_radia_path():
     - Tests directory: python test_simple.py
     - Benchmarks directory: python benchmark_openmp.py
 
-    Priority order for finding radia.pyd:
+    Priority order for finding _radia.pyd:
     1. src/radia/ (package directory - BuildMSVC.ps1 copies here)
     2. build-msvc/ (MSVC build output)
     3. build-intel/ (Intel build output)
@@ -59,9 +59,9 @@ def setup_radia_path():
 
     for path in search_paths:
         if path.exists():
-            # Check if radia.pyd exists in this directory
-            pyd_file = path / 'radia.pyd'
-            pyd_file_versioned = list(path.glob('radia.cp*-win_amd64.pyd'))
+            # Check if _radia.pyd exists in this directory
+            pyd_file = path / '_radia.pyd'
+            pyd_file_versioned = list(path.glob('_radia.cp*-win_amd64.pyd'))
             if pyd_file.exists() or pyd_file_versioned:
                 sys.path.insert(0, str(path))
                 break

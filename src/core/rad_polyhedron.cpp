@@ -807,21 +807,54 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 	else
 	{
 		// =====================================================================
-		// Normal mode: Compute actual H field from current magnetization
+		// Normal mode: Compute actual H field
+		// =====================================================================
+		// For permanent magnets (no material, fixed M): compute sigma = M · n
+		// For soft materials (after Solve): use solved Sigma[i] values
 		// =====================================================================
 		TVector3d H_total(0., 0., 0.);
 
-		for(int i = 0; i < nFaces; i++)
-		{
-			const TVector3d& V0 = faceVertices[i][0];
-			const TVector3d& V1 = faceVertices[i][1];
-			const TVector3d& V2 = faceVertices[i][2];
-			const TVector3d& V3 = faceVertices[i][3];
+		// Check if Sigma values have been set (by Solve or directly)
+		// If all Sigma = 0 and Magn != 0, this is a permanent magnet - compute sigma from M
+		bool sigmaIsZero = true;
+		for(int i = 0; i < nFaces && sigmaIsZero; i++) {
+			if(Sigma[i] != 0.0) sigmaIsZero = false;
+		}
+		bool magnIsNotZero = (Magn.x != 0.0 || Magn.y != 0.0 || Magn.z != 0.0);
 
-			// Triangle 1: V0, V1, V2
-			H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
-			// Triangle 2: V0, V2, V3
-			H_total += RadFieldFromTriangleFaceGlobal(V0, V2, V3, Magn, obsPoint, CentrPoint);
+		if(sigmaIsZero && magnIsNotZero)
+		{
+			// Permanent magnet: compute sigma = M · n for each face
+			// Use triangle-based field computation (like tetrahedron)
+			for(int i = 0; i < nFaces; i++)
+			{
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+				const TVector3d& V3 = faceVertices[i][3];
+
+				// Split quad into 2 triangles and use triangle field formula
+				// Triangle 1: V0, V1, V2
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
+				// Triangle 2: V0, V2, V3
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V2, V3, Magn, obsPoint, CentrPoint);
+			}
+		}
+		else
+		{
+			// Soft material (solved): use Sigma values
+			for(int i = 0; i < nFaces; i++)
+			{
+				TVector3d H_face = FieldFromQuadFace(obsPoint, i, Sigma[i]);
+				H_total.x += H_face.x;
+				H_total.y += H_face.y;
+				H_total.z += H_face.z;
+			}
+
+			// Apply 1/(4*pi) factor (matching interaction matrix and FieldFromQuadFace)
+			H_total.x *= RadConst::INV_FOUR_PI;
+			H_total.y *= RadConst::INV_FOUR_PI;
+			H_total.z *= RadConst::INV_FOUR_PI;
 		}
 
 		if(FldKey.H_) FieldPtr->H += H_total;
@@ -1231,6 +1264,406 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 	H.z = coef * r_minus_p.z;
 
 	return H;
+}
+
+//-------------------------------------------------------------------------
+
+TVector3d radTPolyhedron::FieldFromQuadFaceTransformed(const TVector3d& obs, int faceIdx,
+                                                        double sigma, radTrans* srcTrans) const
+{
+	// Compute field from a transformed quadrilateral face (for TrfMlt symmetry)
+	//
+	// SIMPLE APPROACH: Just transform vertices and compute field.
+	// The sigma value passed in already includes any necessary sign corrections.
+	// No reverseWinding - let the geometry transformation speak for itself.
+
+	// Get face vertices (same as FieldFromQuadFace)
+	radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[faceIdx];
+	radTPolygon* pgn = hpt.PgnHndl.rep;
+	radTrans* tr = hpt.TransHndl.rep;
+
+	const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+	if(verts2d.size() < 4) return TVector3d(0.0, 0.0, 0.0);
+
+	// Get local face vertices and transform to global (element's coords)
+	TVector3d V0 = tr->TrPoint(TVector3d(verts2d[0].x, verts2d[0].y, pgn->CoordZ));
+	TVector3d V1 = tr->TrPoint(TVector3d(verts2d[1].x, verts2d[1].y, pgn->CoordZ));
+	TVector3d V2 = tr->TrPoint(TVector3d(verts2d[2].x, verts2d[2].y, pgn->CoordZ));
+	TVector3d V3 = tr->TrPoint(TVector3d(verts2d[3].x, verts2d[3].y, pgn->CoordZ));
+
+	// Apply TrfMlt symmetry transformation to source vertices
+	V0 = srcTrans->TrPoint(V0);
+	V1 = srcTrans->TrPoint(V1);
+	V2 = srcTrans->TrPoint(V2);
+	V3 = srcTrans->TrPoint(V3);
+
+	// Compute field using standard vertex winding
+	TVector3d H_total(0.0, 0.0, 0.0);
+	H_total += FieldFromChargedTriangle(obs, V0, V1, V2, sigma);
+	H_total += FieldFromChargedTriangle(obs, V0, V2, V3, sigma);
+
+	return H_total;
+}
+
+//-------------------------------------------------------------------------
+
+TVector3d radTPolyhedron::FieldFromPointChargeAtPos(const TVector3d& obs, double charge,
+                                                     const TVector3d& srcPos) const
+{
+	// Magnetic field from point magnetic charge at specified position
+	// H = m * (r - p) / |r - p|^3
+	// Returns field WITHOUT 4pi divisor (matches convention)
+
+	TVector3d r_minus_p;
+	r_minus_p.x = obs.x - srcPos.x;
+	r_minus_p.y = obs.y - srcPos.y;
+	r_minus_p.z = obs.z - srcPos.z;
+
+	double r_mag_sq = r_minus_p.x * r_minus_p.x +
+	                  r_minus_p.y * r_minus_p.y +
+	                  r_minus_p.z * r_minus_p.z;
+
+	if(r_mag_sq < 1e-20)
+	{
+		return TVector3d(0.0, 0.0, 0.0);
+	}
+
+	double r_mag = sqrt(r_mag_sq);
+	double r_mag_cubed = r_mag_sq * r_mag;
+	double coef = charge / r_mag_cubed;
+
+	TVector3d H;
+	H.x = coef * r_minus_p.x;
+	H.y = coef * r_minus_p.y;
+	H.z = coef * r_minus_p.z;
+
+	return H;
+}
+
+//-------------------------------------------------------------------------
+// B_comp_hexahedron_MSC_transformed: Field computation with source transformation
+// This function computes the field from a "virtual" transformed copy of the hexahedron.
+// Used by B_comp_with_TrfMlt to correctly handle plane symmetry (reflections).
+//
+// For plane symmetry:
+// - Source vertices are transformed: V' = T * V
+// - Magnetization transforms as pseudo-vector: M' = det(T) * T * M = -T * M (for det=-1)
+//-------------------------------------------------------------------------
+void radTPolyhedron::B_comp_hexahedron_MSC_transformed(radTField* FieldPtr, radTrans* srcTrans)
+{
+	radTFieldKey& FldKey = FieldPtr->FieldKey;
+	TVector3d& obsPoint = FieldPtr->P;
+
+	// Get transformed face vertices and magnetization
+	std::array<std::array<TVector3d, 4>, 8> faceVertices;
+	int nFaces = (AmOfFaces <= 8) ? AmOfFaces : 8;
+
+	// Get determinant to determine if this is a reflection
+	double detM = srcTrans->ShowParity();
+
+	for(int i = 0; i < nFaces; i++)
+	{
+		const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[i];
+		radTPolygon* pgn = hpt.PgnHndl.rep;
+		radTrans* tr = hpt.TransHndl.rep;
+
+		const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+		if(verts2d.size() < 4) continue;
+
+		// Transform: local 2D -> global 3D -> TrfMlt transformed
+		TVector3d v0 = tr->TrPoint(TVector3d(verts2d[0].x, verts2d[0].y, pgn->CoordZ));
+		TVector3d v1 = tr->TrPoint(TVector3d(verts2d[1].x, verts2d[1].y, pgn->CoordZ));
+		TVector3d v2 = tr->TrPoint(TVector3d(verts2d[2].x, verts2d[2].y, pgn->CoordZ));
+		TVector3d v3 = tr->TrPoint(TVector3d(verts2d[3].x, verts2d[3].y, pgn->CoordZ));
+
+		// Apply source transformation
+		faceVertices[i][0] = srcTrans->TrPoint(v0);
+		faceVertices[i][1] = srcTrans->TrPoint(v1);
+		faceVertices[i][2] = srcTrans->TrPoint(v2);
+		faceVertices[i][3] = srcTrans->TrPoint(v3);
+	}
+
+	// Transform magnetization as pseudo-vector (axial vector) for mirror symmetry
+	// Magnetization M transforms as: M' = det(T) * T * M
+	// For plane symmetry: det(T) = -1, so M' = -T * M
+	// - X-mirror (T=diag(-1,1,1)): Mx -> Mx, My -> -My, Mz -> -Mz
+	// - Z-mirror (T=diag(1,1,-1)): Mx -> -Mx, My -> -My, Mz -> Mz
+	// TrAxialVect returns detM * M * v which is the correct pseudo-vector transformation
+	TVector3d transformedMagn = srcTrans->TrAxialVect(Magn);
+
+	// Transform center point for inside/outside checks
+	TVector3d transformedCenter = srcTrans->TrPoint(CentrPoint);
+
+	// Compute field (same logic as B_comp_hexahedron_MSC but with transformed geometry)
+	TVector3d H_total(0., 0., 0.);
+
+	// Check if Sigma values have been set
+	bool sigmaIsZero = true;
+	for(int i = 0; i < nFaces && sigmaIsZero; i++) {
+		if(Sigma[i] != 0.0) sigmaIsZero = false;
+	}
+	bool magnIsNotZero = (Magn.x != 0.0 || Magn.y != 0.0 || Magn.z != 0.0);
+
+	if(sigmaIsZero && magnIsNotZero)
+	{
+		// Permanent magnet: use transformed magnetization
+		for(int i = 0; i < nFaces; i++)
+		{
+			const TVector3d& V0 = faceVertices[i][0];
+			const TVector3d& V1 = faceVertices[i][1];
+			const TVector3d& V2 = faceVertices[i][2];
+			const TVector3d& V3 = faceVertices[i][3];
+
+			// Use transformed magnetization
+			H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, transformedMagn, obsPoint, transformedCenter);
+			H_total += RadFieldFromTriangleFaceGlobal(V0, V2, V3, transformedMagn, obsPoint, transformedCenter);
+		}
+	}
+	else
+	{
+		// Reciprocity approach - matches interaction matrix:
+		// 1. Inverse-transform observation point
+		// 2. Compute field from UNTRANSFORMED source
+		// 3. Forward-transform H field using TrAxialVect
+
+		// Inverse-transform observation point
+		TVector3d ObsPoiVect = srcTrans->TrPoint_inv(obsPoint);
+
+		for(int i = 0; i < nFaces; i++)
+		{
+			// Field from face at UNTRANSFORMED source with solved sigma
+			TVector3d H_face = FieldFromQuadFace(ObsPoiVect, i, Sigma[i]);
+			H_total.x += H_face.x;
+			H_total.y += H_face.y;
+			H_total.z += H_face.z;
+		}
+
+		H_total.x *= RadConst::INV_FOUR_PI;
+		H_total.y *= RadConst::INV_FOUR_PI;
+		H_total.z *= RadConst::INV_FOUR_PI;
+
+		// Forward-transform H field (axial vector transformation)
+		H_total = srcTrans->TrAxialVect(H_total);
+	}
+
+	if(FldKey.H_) FieldPtr->H += H_total;
+
+	if(FldKey.B_)
+	{
+		FieldPtr->B += H_total;
+
+		// Check if point is inside transformed hexahedron
+		const double PI = 3.14159265358979323846;
+		const double FOUR_PI = 4.0 * PI;
+		const double tolerance = 0.1;
+
+		double total_solid_angle = 0.0;
+		for(int i = 0; i < nFaces; i++)
+		{
+			const TVector3d& V0 = faceVertices[i][0];
+			const TVector3d& V1 = faceVertices[i][1];
+			const TVector3d& V2 = faceVertices[i][2];
+			const TVector3d& V3 = faceVertices[i][3];
+
+			total_solid_angle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V1, V2);
+			total_solid_angle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V2, V3);
+		}
+
+		bool pointInside = std::fabs(std::fabs(total_solid_angle) - FOUR_PI) < FOUR_PI * tolerance;
+		if(pointInside)
+		{
+			FieldPtr->B += transformedMagn;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+// B_comp_tetrahedron_analytical_transformed: Field computation with source transformation
+//-------------------------------------------------------------------------
+void radTPolyhedron::B_comp_tetrahedron_analytical_transformed(radTField* FieldPtr, radTrans* srcTrans)
+{
+	radTFieldKey& FldKey = FieldPtr->FieldKey;
+	TVector3d& obsPoint = FieldPtr->P;
+
+	// Get determinant to handle pseudo-vector transformation
+	double detM = srcTrans->ShowParity();
+
+	// Get transformed face vertices (4 triangular faces for tetrahedron)
+	std::array<std::array<TVector3d, 3>, 4> faceVertices;
+
+	for(int i = 0; i < 4 && i < AmOfFaces; i++)
+	{
+		const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[i];
+		radTPolygon* pgn = hpt.PgnHndl.rep;
+		radTrans* tr = hpt.TransHndl.rep;
+
+		const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+		if(verts2d.size() < 3) continue;
+
+		TVector3d v0 = tr->TrPoint(TVector3d(verts2d[0].x, verts2d[0].y, pgn->CoordZ));
+		TVector3d v1 = tr->TrPoint(TVector3d(verts2d[1].x, verts2d[1].y, pgn->CoordZ));
+		TVector3d v2 = tr->TrPoint(TVector3d(verts2d[2].x, verts2d[2].y, pgn->CoordZ));
+
+		// Apply source transformation
+		faceVertices[i][0] = srcTrans->TrPoint(v0);
+		faceVertices[i][1] = srcTrans->TrPoint(v1);
+		faceVertices[i][2] = srcTrans->TrPoint(v2);
+	}
+
+	// Transform magnetization as pseudo-vector (axial vector) for mirror symmetry
+	// Magnetization M transforms as: M' = det(T) * T * M
+	// TrAxialVect returns detM * M * v which is the correct pseudo-vector transformation
+	TVector3d transformedMagn = srcTrans->TrAxialVect(Magn);
+
+	TVector3d transformedCenter = srcTrans->TrPoint(CentrPoint);
+
+	TVector3d H_total(0., 0., 0.);
+	for(int i = 0; i < 4; i++)
+	{
+		const TVector3d& V0 = faceVertices[i][0];
+		const TVector3d& V1 = faceVertices[i][1];
+		const TVector3d& V2 = faceVertices[i][2];
+
+		H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, transformedMagn, obsPoint, transformedCenter);
+	}
+
+	if(FldKey.H_) FieldPtr->H += H_total;
+	if(FldKey.B_) FieldPtr->B += H_total;
+}
+
+//-------------------------------------------------------------------------
+// B_comp_with_TrfMlt_recursive: Helper for recursive TrfMlt field computation
+// Recursively enumerates all transformation combinations and computes field contributions.
+//-------------------------------------------------------------------------
+void radTPolyhedron::B_comp_with_TrfMlt_recursive(
+	radTField* FieldPtr,
+	const radTlphg::const_iterator& iter,
+	const radTlphg::const_iterator& end,
+	const radTrans& accumulatedTrans)
+{
+	// Make mutable copy for non-const operations
+	radTrans accum = accumulatedTrans;
+
+	if(iter == end)
+	{
+		// Base case: compute field with accumulated transformation
+		// Skip identity (original already computed in B_comp_with_TrfMlt)
+		if(accum.IsIdent(1e-12))
+			return;
+
+		// Compute field from this transformed copy
+		if(IsTetrahedron())
+			B_comp_tetrahedron_analytical_transformed(FieldPtr, &accum);
+		else if(IsHexahedron())
+			B_comp_hexahedron_MSC_transformed(FieldPtr, &accum);
+		return;
+	}
+
+	// Get current transformation and multiplicity
+	radTrans* pTrans = (radTrans*)(((*iter).Handler_g).rep);
+	int mult = (*iter).m;
+
+	// Move to next iterator
+	radTlphg::const_iterator nextIter = iter;
+	++nextIter;
+
+	// For each power of the transformation (0 to mult-1)
+	radTrans curPower;
+	curPower.SetupIdent();
+
+	for(int k = 0; k < mult; k++)
+	{
+		// Combine current power with accumulated transformation
+		radTrans combined;
+		TrProduct(&curPower, &accum, combined);
+
+		// Recurse to process remaining transformations
+		B_comp_with_TrfMlt_recursive(FieldPtr, nextIter, end, combined);
+
+		// Update curPower = pTrans * curPower for next iteration
+		if(k < mult - 1)
+		{
+			radTrans temp;
+			TrProduct(pTrans, &curPower, temp);
+			curPower = temp;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+// B_comp_with_TrfMlt: Compute field from all TrfMlt copies
+// This function correctly handles plane symmetry (reflections) by
+// transforming the source geometry instead of the observation point.
+// Uses recursive enumeration to handle nested TrfMlt correctly.
+//-------------------------------------------------------------------------
+void radTPolyhedron::B_comp_with_TrfMlt(radTField* FieldPtr)
+{
+	// First compute field from original geometry
+	if(IsTetrahedron())
+		B_comp_tetrahedron_analytical(FieldPtr);
+	else if(IsHexahedron())
+		B_comp_hexahedron_MSC(FieldPtr);
+	else
+		return;
+
+	// If no TrfMlt transformations, we're done
+	if(g3dListOfTransform.empty()) return;
+
+	// Use recursive enumeration to process all transformation combinations
+	radTrans identity;
+	identity.SetupIdent();
+
+	B_comp_with_TrfMlt_recursive(
+		FieldPtr,
+		g3dListOfTransform.begin(),
+		g3dListOfTransform.end(),
+		identity);
+}
+
+//-------------------------------------------------------------------------
+// B_genComp override for polyhedra
+// Handles TrfMlt correctly by transforming source geometry instead of
+// using NestedFor_B (which transforms observation point and fails for reflections)
+//-------------------------------------------------------------------------
+void radTPolyhedron::B_genComp(radTField* FieldPtr)
+{
+	radTFieldKey& FieldKey = FieldPtr->FieldKey;
+
+	// Handle special field keys that don't need TrfMlt fix
+	if(FieldKey.Ib_ || FieldKey.Ih_)
+	{
+		B_intComp(FieldPtr);
+		return;
+	}
+	if(FieldKey.Force_)
+	{
+		if(g3dListOfTransform.empty())
+			IntOverShape(FieldPtr);
+		else
+			NestedFor_IntOverShape(FieldPtr, g3dListOfTransform.begin());
+		return;
+	}
+
+	// For B/H field computation with TrfMlt, use the transformed source approach
+	// This correctly handles plane symmetry (reflections)
+	if(!g3dListOfTransform.empty())
+	{
+		// Use B_comp_with_TrfMlt which transforms source geometry
+		bool M_IsNotZero = !Magn.isZero();
+		if(M_IsNotZero || FieldKey.PreRelax_)
+		{
+			B_comp_with_TrfMlt(FieldPtr);
+		}
+		if(J_IsNotZero)
+		{
+			// For J field, use base class approach (NestedFor_B) since it works for currents
+			NestedFor_B(FieldPtr, g3dListOfTransform.begin());
+		}
+		return;
+	}
+
+	// No TrfMlt: use standard B_comp
+	B_comp(FieldPtr);
 }
 
 //-------------------------------------------------------------------------

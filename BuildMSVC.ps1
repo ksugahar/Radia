@@ -105,12 +105,14 @@ if ($NoExaFMM) {
     Write-Host "ExaFMM: ENABLED" -ForegroundColor Green
 }
 
-# Determine build targets
+# Determine build targets and NGSolve flag
 if ($RadiaOnly) {
     $BUILD_TARGETS = "_radia"
-    Write-Host "Build target: _radia only" -ForegroundColor Gray
+    $NGSOLVE_FLAG = "OFF"
+    Write-Host "Build target: _radia only (no NGSolve)" -ForegroundColor Gray
 } else {
     $BUILD_TARGETS = "_radia radia_ngsolve"
+    $NGSOLVE_FLAG = "ON"
     Write-Host "Build targets: _radia, radia_ngsolve" -ForegroundColor Gray
 }
 
@@ -145,7 +147,8 @@ echo.
     -DCMAKE_CXX_COMPILER=cl ^
     -DCMAKE_BUILD_TYPE=Release ^
     -DRADIA_ENABLE_OPENMP=$OPENMP_FLAG ^
-    -DRADIA_ENABLE_EXAFMM=$EXAFMM_FLAG
+    -DRADIA_ENABLE_EXAFMM=$EXAFMM_FLAG ^
+    -DRADIA_BUILD_NGSOLVE=$NGSOLVE_FLAG
 
 if errorlevel 1 (
     echo ERROR: CMake configuration failed
@@ -210,6 +213,23 @@ if errorlevel 1 (
 echo.
 echo ========================================
 echo   Building _radia_pybind...
+echo ========================================
+echo.
+"$CMAKE_EXE" --build . --config Release --target _radia_pybind -j
+
+if errorlevel 1 (
+    echo ERROR: _radia_pybind build failed
+    exit /b 1
+)
+
+"@
+} else {
+    # RadiaOnly mode: Just build _radia_pybind
+    $BatchContent += @"
+
+echo.
+echo ========================================
+echo   Building _radia_pybind (RadiaOnly)...
 echo ========================================
 echo.
 "$CMAKE_EXE" --build . --config Release --target _radia_pybind -j

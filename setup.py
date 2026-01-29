@@ -3,11 +3,15 @@
 Setup script for Radia-NGSolve package
 
 This setup.py is used for building binary distributions (wheels) that include
-the pre-compiled C++ extension modules (radia.pyd, rad_ngsolve.pyd).
+the pre-compiled C++ extension modules (_radia.pyd, radia_ngsolve.pyd).
 
 For development builds, use the CMake build scripts:
-- Build.ps1 for radia.pyd
-- Build_NGSolve.ps1 for rad_ngsolve.pyd
+- BuildMSVC.ps1 for _radia.pyd (main module)
+- BuildMSVC.ps1 for radia_ngsolve.pyd (NGSolve integration)
+
+Module naming: The C++ extension is named '_radia' (with underscore) so that
+'import radia' uses the Python package with __init__.py, which then imports
+from _radia. This follows NGSolve's pattern.
 """
 
 from setuptools import setup, find_packages
@@ -42,26 +46,26 @@ def prepare_package_data():
 		Path(__file__).parent / "build" / "Release",  # Legacy CMake build
 	]
 
-	# Copy radia.pyd
+	# Copy _radia.pyd (main C++ extension module)
 	radia_pyd_found = False
 	for build_dir in build_dirs:
 		# Try versioned name first
-		radia_pyd = build_dir / "radia.cp312-win_amd64.pyd"
+		radia_pyd = build_dir / "_radia.cp312-win_amd64.pyd"
 		if radia_pyd.exists():
-			shutil.copy2(radia_pyd, package_dir / "radia.pyd")
+			shutil.copy2(radia_pyd, package_dir / "_radia.pyd")
 			print(f"Copied {radia_pyd} to {package_dir}")
 			radia_pyd_found = True
 			break
 		# Try simple name
-		radia_pyd = build_dir / "radia.pyd"
+		radia_pyd = build_dir / "_radia.pyd"
 		if radia_pyd.exists():
-			shutil.copy2(radia_pyd, package_dir / "radia.pyd")
+			shutil.copy2(radia_pyd, package_dir / "_radia.pyd")
 			print(f"Copied {radia_pyd} to {package_dir}")
 			radia_pyd_found = True
 			break
 
 	if not radia_pyd_found:
-		print(f"Warning: radia.pyd not found. Run BuildMSVC.ps1 first.")
+		print(f"Warning: _radia.pyd not found. Run BuildMSVC.ps1 first.")
 
 	# Copy radia_ngsolve.pyd
 	for build_dir in build_dirs:
@@ -114,7 +118,7 @@ setup(
 	package_dir={"": "src"},
 	package_data={
 		"radia": [
-			"*.pyd",  # Include all .pyd files (radia.pyd, radia_ngsolve.pyd)
+			"*.pyd",  # Include all .pyd files (_radia.pyd, radia_ngsolve.pyd, etc.)
 			"*.dll",  # Include Intel MKL DLLs (mkl_rt.2.dll, mkl_core.2.dll, libiomp5md.dll, etc.)
 			"*.py",   # Include all Python utility modules
 		],
