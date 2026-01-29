@@ -1150,6 +1150,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	for(int col = 0; col < AmOfMainElem; col++)
 	{
 		FillInTransPtrVectForElem(col, 'I');
+
 		radTg3dRelax* elem_col = g3dRelaxPtrVect[col];
 		int dof_col = m_elemDOF[col];
 		int offset_col = m_elemDOFOffset[col];
@@ -1238,14 +1239,17 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							H_local.y = H_face.y + H_point.y;
 							H_local.z = H_face.z + H_point.z;
 
-							// Transform back to global
-							H_total.x += TransPtrVect[tr]->TrVectField(H_local).x;
-							H_total.y += TransPtrVect[tr]->TrVectField(H_local).y;
-							H_total.z += TransPtrVect[tr]->TrVectField(H_local).z;
+							// Transform back to global using pseudo-vector (axial vector) transformation
+							// H field is a pseudo-vector: H' = det(T) * T * H
+							TVector3d H_tr = TransPtrVect[tr]->TrAxialVect(H_local);
+							H_total.x += H_tr.x;
+							H_total.y += H_tr.y;
+							H_total.z += H_tr.z;
 						}
 
-						// Transform by row's main transform (inverse)
-						TVector3d H_final = MainTransPtrArray[row]->TrVectField_inv(H_total);
+						// Transform by row's main transform (inverse) using pseudo-vector transformation
+						// H' = (1/det(T)) * T_inv * H = det(T) * T_inv * H (since 1/det = det for det=+/-1)
+						TVector3d H_final = MainTransPtrArray[row]->TrAxialVect_inv(H_total);
 
 						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
 						// row is component (0,1,2 = Mx,My,Mz), col is face_j
@@ -1332,12 +1336,28 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				// K(face_i, face_j) = normal_i dot H_field(eval_pt_i, src_face_j)
 				// Field functions return values WITHOUT 4pi divisor
 				// Matrix stores: -K_ij / (4*pi) (following ELF convention)
+				//
+				// APPROACH: Same as 3x6 and 3x3 blocks:
+				// 1. Inverse-transform observation point
+				// 2. Compute field from source at original position
+				// 3. Forward-transform the result (H field)
+				// This ensures correct face-to-sigma mapping under symmetry.
 
 				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
 				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
 
 				if(poly_row && poly_row->Use6DOF_MSC && poly_col && poly_col->Use6DOF_MSC)
 				{
+					// MSC 6x6 block using SAME APPROACH as working 3x6 block:
+					// 1. Inverse-transform observation point
+					// 2. Compute field from UNTRANSFORMED source
+					// 3. Forward-transform H field using TrAxialVect
+					// 4. Sum contributions and apply final inverse transform
+					//
+					// This approach works because:
+					// - MSC sigma DOFs are on the original element
+					// - Field from TrfMlt copy = TrAxialVect(field from original at T^-1(obs))
+
 					for(int face_i = 0; face_i < 6; face_i++)
 					{
 						// Yano-Sugahara evaluation point: midpoint between face center and element center
@@ -1346,21 +1366,22 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
 						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
 
+						// Transform eval point to world coordinates
 						TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(EvalPt);
 
 						for(int face_j = 0; face_j < 6; face_j++)
 						{
-							double K_ij = 0.0;
+							TVector3d H_total(0., 0., 0.);
 
 							for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
 							{
+								// Inverse-transform observation point (same as 3x6 block)
 								TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
 
-								// Field from unit sigma on face j (quad face + point charge)
-								// Field functions return values WITHOUT 4pi divisor
+								// Field from unit sigma on face j at UNTRANSFORMED source
 								TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
 
-								// Point charge contribution: m = -sigma * area (Yano-Sugahara MSC method)
+								// Point charge contribution (m = -sigma * area) - Yano-Sugahara MSC method
 								double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
 								TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
 
@@ -1369,16 +1390,25 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 								H_local.y = H_face.y + H_point.y;
 								H_local.z = H_face.z + H_point.z;
 
-								// Transform back
-								TVector3d H_global = TransPtrVect[tr]->TrVectField(H_local);
-								K_ij += H_global.x * poly_row->FaceNormal[face_i].x +
-								        H_global.y * poly_row->FaceNormal[face_i].y +
-								        H_global.z * poly_row->FaceNormal[face_i].z;
+								// Transform back to global using pseudo-vector (axial vector) transformation
+								// H field is a pseudo-vector: H' = det(T) * T * H
+								TVector3d H_tr = TransPtrVect[tr]->TrAxialVect(H_local);
+								H_total.x += H_tr.x;
+								H_total.y += H_tr.y;
+								H_total.z += H_tr.z;
 							}
 
+							// Transform by row's main transform (inverse) using pseudo-vector transformation
+							TVector3d H_final = MainTransPtrArray[row]->TrAxialVect_inv(H_total);
+
+							// K_ij = normal_i dot H_final
+							double K_ij = H_final.x * poly_row->FaceNormal[face_i].x +
+							              H_final.y * poly_row->FaceNormal[face_i].y +
+							              H_final.z * poly_row->FaceNormal[face_i].z;
+
 							// Store -K_ij / (4*pi) (COLUMN-MAJOR): A(i,j) at [j * stride + i]
-							// CRITICAL: Use size_t cast for indexing with m_totalDOF
-							block[(size_t)face_j * m_totalDOF + face_i] = -K_ij * RadConst::INV_FOUR_PI;
+							double K_val = -K_ij * RadConst::INV_FOUR_PI;
+							block[(size_t)face_j * m_totalDOF + face_i] = K_val;
 						}
 					}
 				}
@@ -1440,9 +1470,11 @@ void radTInteraction::SetupExternFieldArray()
 				TVector3d ObsPoiVect = TransPtrVect[i]->TrPoint_inv(InitObsPoiVect);
 				radTField Field(FieldKeyExtern, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.); // Improve
 				ExtElPtr->B_comp(&Field);
-				BufVect += TransPtrVect[i]->TrVectField(Field.H);
+				// H field is a pseudo-vector (axial vector): H' = det(T) * T * H
+				BufVect += TransPtrVect[i]->TrAxialVect(Field.H);
 			}
-			ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrVectField_inv(BufVect);
+			// Inverse pseudo-vector transformation: H_local = det(T) * T_inv * H_world
+			ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrAxialVect_inv(BufVect);
 		}
 		EmptyTransPtrVect();
 	}
@@ -1467,6 +1499,8 @@ void radTInteraction::SetupExternFieldArray()
 			else if(dof == 6)
 			{
 				// MSC hexahedron: compute H_ext dot n at each face
+				// External field is evaluated at ORIGINAL element positions only
+				// TrfMlt virtual elements are handled in the interaction matrix (K)
 				radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
 				if(poly && poly->Use6DOF_MSC)
 				{
@@ -1497,15 +1531,17 @@ void radTInteraction::SetupExternFieldArray()
 								TVector3d ObsPoiVect = TransPtrVect[t]->TrPoint_inv(WorldEvalPt);
 								radTField Field(FieldKeyExtern, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 								ExtElPtr->B_comp(&Field);
-								// Transform field back to world coords
-								BufVect += TransPtrVect[t]->TrVectField(Field.H);
+								// Transform field back to world coords using pseudo-vector transformation
+								// H field is a pseudo-vector: H' = det(T) * T * H
+								BufVect += TransPtrVect[t]->TrAxialVect(Field.H);
 							}
 							H_world += BufVect;
 							EmptyTransPtrVect();
 						}
 
 						// Transform H to element's local coords for dot product with FaceNormal
-						TVector3d H_local = MainTransPtrArray[StrNo]->TrVectField_inv(H_world);
+						// Inverse pseudo-vector transformation: H_local = det(T) * T_inv * H_world
+						TVector3d H_local = MainTransPtrArray[StrNo]->TrAxialVect_inv(H_world);
 
 						// H_ext dot n_i (both now in element's local coords)
 						double H_dot_n = H_local.x * poly->FaceNormal[face_i].x +
@@ -1541,7 +1577,8 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 
 			//TVector3d BufVect = ExternFieldArray[StrNo];
 
-			ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrVectField_inv(Field.H);
+			// H field is a pseudo-vector: inverse transformation uses TrAxialVect_inv
+			ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrAxialVect_inv(Field.H);
 		}
 
 		// Also populate m_flatExternFieldArray (always used now with unified solver)
@@ -1584,8 +1621,9 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 							radTField Field(FieldKeyExtern, CompCriterium, WorldEvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 							(static_cast<radTg3d*>(MoreExtSourceHandle.rep))->B_genComp(&Field);
 
-							// Transform field back to element's local coords (same as 3DOF code on line 1527)
-							TVector3d H_local = MainTransPtrArray[StrNo]->TrVectField_inv(Field.H);
+							// Transform field back to element's local coords using pseudo-vector transformation
+							// H field is a pseudo-vector: H_local = det(T) * T_inv * H_world
+							TVector3d H_local = MainTransPtrArray[StrNo]->TrAxialVect_inv(Field.H);
 
 							// H_ext dot n_i (both now in element's local coords)
 							double H_dot_n = H_local.x * poly->FaceNormal[face_i].x +
@@ -1620,7 +1658,8 @@ void radTInteraction::AddMoreExternField(const radThg& hExtraExtSrc)
 		radTField Field(FieldKeyExtern, CompCriterium, InitObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.); // Improve
 		pExtraExtSrc->B_genComp(&Field);
 
-		ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrVectField_inv(Field.H);
+		// H field is a pseudo-vector: inverse transformation uses TrAxialVect_inv
+		ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrAxialVect_inv(Field.H);
 	}
 }
 
