@@ -1087,17 +1087,8 @@ int TrfRot(py::array_t<double> point, py::array_t<double> vector, double phi) {
     return handle;
 }
 
-int TrfPlSym(py::array_t<double> point, py::array_t<double> normal) {
-    auto p = point.unchecked<1>();
-    auto n = normal.unchecked<1>();
-    double P[3] = {p(0), p(1), p(2)};
-    double N[3] = {n(0), n(1), n(2)};
-
-    int handle = 0;
-    int err = RadTrfPlSym(&handle, P, N);
-    check_error(err);
-    return handle;
-}
+// TrfPlSym REMOVED (2026-01-31) - Use IMA symmetry instead
+// See docs/IMA_SYMMETRY_DESIGN.md for the correct approach
 
 int TrfInv() {
     int handle = 0;
@@ -1120,12 +1111,9 @@ int TrfCmbR(int orig_trf, int trf) {
     return handle;
 }
 
-int TrfMlt(int obj, int trf, int mlt) {
-    int handle = 0;
-    int err = RadTrfMlt(&handle, obj, trf, mlt);
-    check_error(err);
-    return handle;
-}
+// TrfMlt REMOVED (2026-01-31) - Use IMA symmetry instead
+// TrfMlt shared DOFs between original and virtual elements, which is incorrect for MSC 6DOF hexahedra
+// See docs/IMA_SYMMETRY_DESIGN.md for the correct element-based approach
 
 int TrfOrnt(int obj, int trf) {
     int handle = 0;
@@ -1134,29 +1122,8 @@ int TrfOrnt(int obj, int trf) {
     return handle;
 }
 
-int TrfZerPara(int obj, py::array_t<double> point, py::array_t<double> normal) {
-    auto p = point.unchecked<1>();
-    auto n = normal.unchecked<1>();
-    double P[3] = {p(0), p(1), p(2)};
-    double N[3] = {n(0), n(1), n(2)};
-
-    int handle = 0;
-    int err = RadTrfZerPara(&handle, obj, P, N);
-    check_error(err);
-    return handle;
-}
-
-int TrfZerPerp(int obj, py::array_t<double> point, py::array_t<double> normal) {
-    auto p = point.unchecked<1>();
-    auto n = normal.unchecked<1>();
-    double P[3] = {p(0), p(1), p(2)};
-    double N[3] = {n(0), n(1), n(2)};
-
-    int handle = 0;
-    int err = RadTrfZerPerp(&handle, obj, P, N);
-    check_error(err);
-    return handle;
-}
+// TrfZerPara REMOVED (2026-01-31) - Use IMA symmetry instead
+// TrfZerPerp REMOVED (2026-01-31) - Use IMA symmetry instead
 
 } // namespace radia_transform
 
@@ -1376,6 +1343,20 @@ double GetRelaxParam() {
     int err = RadGetRelaxParam(&relax);
     check_error(err);
     return relax;
+}
+
+int SetIMASymmetry(int InteractKey, const std::string& symmetry) {
+    int numElements = 0;
+    int err = RadSetIMASymmetry(&numElements, InteractKey, symmetry.c_str());
+    check_error(err);
+    return numElements;
+}
+
+int BuildIMAMatrix(int InteractKey) {
+    int result = 0;
+    int err = RadBuildIMAMatrix(&result, InteractKey);
+    check_error(err);
+    return result;
 }
 
 } // namespace radia_solver_ext
@@ -2215,18 +2196,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   Transformation handle
           )pbdoc");
 
-    m.def("TrfPlSym", &radia_transform::TrfPlSym,
-          py::arg("point"), py::arg("normal"),
-          R"pbdoc(
-              Create plane symmetry transformation.
-
-              Args:
-                  point: Point on symmetry plane [x, y, z]
-                  normal: Normal vector of symmetry plane [nx, ny, nz]
-
-              Returns:
-                  Transformation handle
-          )pbdoc");
+    // TrfPlSym REMOVED (2026-01-31) - Use IMA symmetry instead
 
     m.def("TrfInv", &radia_transform::TrfInv,
           "Create inversion transformation (point reflection through origin).");
@@ -2239,31 +2209,15 @@ PYBIND11_MODULE(_radia_pybind, m) {
           py::arg("orig_trf"), py::arg("trf"),
           "Combine transformations: orig_trf = orig_trf * trf (right multiply).");
 
-    m.def("TrfMlt", &radia_transform::TrfMlt,
-          py::arg("obj"), py::arg("trf"), py::arg("mlt"),
-          R"pbdoc(
-              Apply transformation multiple times to create array.
-
-              Args:
-                  obj: Object handle
-                  trf: Transformation handle
-                  mlt: Number of copies
-
-              Returns:
-                  Container handle with original and copies
-          )pbdoc");
+    // TrfMlt REMOVED (2026-01-31) - Use IMA symmetry instead
+    // The shared-DOF approach was fundamentally incompatible with MSC 6DOF hexahedra
 
     m.def("TrfOrnt", &radia_transform::TrfOrnt,
           py::arg("obj"), py::arg("trf"),
           "Apply transformation to orient object (modifies in place).");
 
-    m.def("TrfZerPara", &radia_transform::TrfZerPara,
-          py::arg("obj"), py::arg("point"), py::arg("normal"),
-          "Set parallel magnetization component to zero at plane.");
-
-    m.def("TrfZerPerp", &radia_transform::TrfZerPerp,
-          py::arg("obj"), py::arg("point"), py::arg("normal"),
-          "Set perpendicular magnetization component to zero at plane.");
+    // TrfZerPara REMOVED (2026-01-31) - Use IMA symmetry instead
+    // TrfZerPerp REMOVED (2026-01-31) - Use IMA symmetry instead
 
     // ========================================================================
     // Extended Materials
@@ -2432,6 +2386,46 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     m.def("GetRelaxParam", &radia_solver_ext::GetRelaxParam,
           "Get under-relaxation parameter.");
+
+    m.def("SetIMASymmetry", &radia_solver_ext::SetIMASymmetry,
+          py::arg("InteractKey"), py::arg("symmetry"),
+          R"pbdoc(
+              Set IMA (Image) symmetry mode for interaction matrix.
+
+              IMA symmetry enables half-model (x-mirror), quarter-model (xy),
+              or eighth-model (xyz) analysis by including image contributions
+              during matrix assembly.
+
+              Args:
+                  InteractKey: Interaction handle from PreRelax
+                  symmetry: Symmetry type: "x", "y", "z", "xy", "xz", "yz", "xyz", or "none"
+
+              Returns:
+                  Number of elements in IMA region (reduced set)
+
+              Note:
+                  After calling this, use BuildIMAMatrix to construct the matrix.
+          )pbdoc");
+
+    m.def("BuildIMAMatrix", &radia_solver_ext::BuildIMAMatrix,
+          py::arg("InteractKey"),
+          R"pbdoc(
+              Build IMA interaction matrix with image summation.
+
+              The matrix is constructed using:
+                  N_IMA[i,j] = N[i,j] + N[i, mirror_j] @ P
+
+              where P is the DOF permutation matrix for the active symmetry.
+
+              Args:
+                  InteractKey: Interaction handle from PreRelax
+
+              Returns:
+                  1 if successful, 0 if failed
+
+              Note:
+                  Must be called after SetIMASymmetry.
+          )pbdoc");
 
     // ========================================================================
     // Extended Field Functions
