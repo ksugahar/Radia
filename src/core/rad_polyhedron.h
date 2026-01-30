@@ -382,35 +382,11 @@ public:
 	void B_comp_tetrahedron_analytical(radTField*);
 	void B_comp_hexahedron_MSC(radTField*);
 
-	// TrfMlt-aware field computation (transforms source geometry for reflections)
-	void B_comp_hexahedron_MSC_transformed(radTField*, radTrans* srcTrans);
-	void B_comp_tetrahedron_analytical_transformed(radTField*, radTrans* srcTrans);
-
-	// Compute field contribution from all TrfMlt copies
-	void B_comp_with_TrfMlt(radTField*);
-
-	// Recursive helper for TrfMlt field computation
-	void B_comp_with_TrfMlt_recursive(
-		radTField* FieldPtr,
-		const radTlphg::const_iterator& iter,
-		const radTlphg::const_iterator& end,
-		const radTrans& accumulatedTrans);
-
 	// 6 DOF MSC field computation for hexahedra
 	TVector3d FieldFromChargedTriangle(const TVector3d& obs, const TVector3d& v0,
 	                                    const TVector3d& v1, const TVector3d& v2, double sigma) const;
 	TVector3d FieldFromQuadFace(const TVector3d& obs, int faceIdx, double sigma) const;
 	TVector3d FieldFromPointCharge(const TVector3d& obs, double charge) const;
-
-	// Transformed source geometry versions for TrfMlt symmetry
-	TVector3d FieldFromQuadFaceTransformed(const TVector3d& obs, int faceIdx, double sigma,
-	                                        radTrans* srcTrans) const;
-	TVector3d FieldFromPointChargeAtPos(const TVector3d& obs, double charge,
-	                                     const TVector3d& srcPos) const;
-
-	// Check if a face lies on the mirror plane defined by a transformation
-	// Returns true if all vertices of the face coincide with their transformed positions
-	bool IsFaceOnMirrorPlane(int faceIdx, radTrans* pTrans) const;
 
 	// 6 DOF MSC setup for hexahedra
 	void SetupFaceGeometry()
@@ -519,10 +495,7 @@ public:
 
 	int ConvertToPolyhedron(radThg&, radTApplication*, char) { return 1;} // 1 is essential
 
-	// Override B_genComp to handle TrfMlt correctly for polyhedra
-	// The base class NestedFor_B approach doesn't work for plane symmetry (reflections)
-	// because it transforms the observation point instead of the source geometry.
-	// For polyhedra, we compute field from all TrfMlt copies with transformed source.
+	// Override B_genComp for field computation
 	void B_genComp(radTField* pField) override;
 
 	void B_comp(radTField* pField)

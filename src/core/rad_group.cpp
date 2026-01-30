@@ -235,8 +235,7 @@ void radTGroup::SetM(TVector3d& M)
 
 //-------------------------------------------------------------------------
 // B_genComp override for radTGroup
-// Propagates container's TrfMlt transformations to children before computing field.
-// This ensures polyhedra use their own B_genComp which handles reflections correctly.
+// Propagates container's transformations to children before computing field.
 //-------------------------------------------------------------------------
 void radTGroup::B_genComp(radTField* FieldPtr)
 {
@@ -258,9 +257,8 @@ void radTGroup::B_genComp(radTField* FieldPtr)
 		return;
 	}
 
-	// For B/H field computation with TrfMlt:
-	// Propagate transformations to children so each child can use its own
-	// B_genComp method (polyhedra use source transformation for reflections)
+	// For B/H field computation with transformations:
+	// Propagate transformations to children
 
 	// Save children's original transformation lists
 	std::vector<radTlphg> savedTransforms;

@@ -1,10 +1,10 @@
-# IMA (Image) Symmetry Implementation Design
+# Image Symmetry Implementation Design
 
 ## Overview
 
-This document describes the implementation of ELF-compatible IMA (Image) symmetry for MSC hexahedra in Radia.
+This document describes the implementation of Image symmetry for MSC hexahedra in Radia.
 
-**Note**: As of 2026-01-31, `TrfMlt`, `TrfPlSym`, `TrfZerPara`, and `TrfZerPerp` have been **REMOVED** from Radia. IMA is the only supported method for plane symmetry with MSC hexahedra.
+**Note**: As of 2026-01-31, `TrfMlt`, `TrfPlSym`, `TrfZerPara`, and `TrfZerPerp` have been **REMOVED** from Radia. `rad.Image()` is the only supported method for plane symmetry with MSC hexahedra.
 
 ## Why TrfMlt Was Removed
 
@@ -16,13 +16,17 @@ The original TrfMlt had fundamental design issues:
 
 3. **Design Philosophy**: Element-based management (independent DOFs per element) is essential for correct physics. Face-based management (shared DOFs) causes errors.
 
-## ELF's IMA Approach
+## Image Matrix Construction
 
-ELF constructs the x-mirror matrix using **image summation** during assembly:
+The Image method constructs the mirror matrix using **image summation** during assembly:
 
 ```
-N_IMA[i,j] = N[i,j] + N[i, mirror_j] @ P
+N_Image[i,j] = N[i,j] + sign * N[i, mirror_j] @ P
 ```
+
+Where:
+- `sign = +1` for **symmetric boundary condition** (field tangent to plane)
+- `sign = -1` for **antisymmetric boundary condition** (field normal to plane)
 
 Where:
 - `N[i,j]`: Interaction from element j to element i (direct)
@@ -81,21 +85,47 @@ P_z = [[1,0,0,0,0,0],
        [0,0,0,0,1,0]]
 ```
 
-## Implementation Architecture
+## API Reference
 
-### 1. New API Functions
+### Python API
+
+```python
+import radia as rad
+
+# Set Image symmetry with optional sign
+n_ima = rad.Image(intrc, symmetry)
+
+# Build Image interaction matrix
+rad.BuildImageMatrix(intrc)
+```
+
+**Symmetry String Format**: `[+|-]axis`
+
+| String | Description | Boundary Condition |
+|--------|-------------|-------------------|
+| `+x`, `x` | x-mirror (symmetric) | Field tangent to YZ plane |
+| `-x` | x-mirror (antisymmetric) | Field normal to YZ plane |
+| `+y`, `y` | y-mirror (symmetric) | Field tangent to XZ plane |
+| `-y` | y-mirror (antisymmetric) | Field normal to XZ plane |
+| `+z`, `z` | z-mirror (symmetric) | Field tangent to XY plane |
+| `-z` | z-mirror (antisymmetric) | Field normal to XY plane |
+| `+xy` | Quarter model (both symmetric) | |
+| `-xz` | xz-mirror (antisymmetric) | |
+| `+xyz` | Eighth model (all symmetric) | |
+
+### C++ Internal API
 
 ```cpp
-// Set IMA symmetry configuration
-// symmetry_type: "x", "y", "z", "xy", "xz", "yz", "xyz"
-// Returns: handle for IMA configuration
-int SetIMASymmetry(const char* symmetry_type);
+// Set Image symmetry configuration
+// symmetry: axis flags (IMA_X, IMA_Y, IMA_Z)
+// sign: +1 (symmetric) or -1 (antisymmetric)
+int SetIMASymmetry(int symmetry, int sign = 1);
 
-// Get IMA-reduced element count
+// Get Image-reduced element count
 int GetIMAElementCount();
 
 // Check if element is in the positive half-space for given symmetry
-bool IsElementInIMARegion(int elem_idx, const char* symmetry_type);
+bool IsElementInIMARegion(int elem_idx);
 ```
 
 ### 2. Element Mapping
@@ -274,22 +304,32 @@ rad.FldUnits('m')
 hex_objects = [rad.ObjHexahedron(verts, [0,0,0]) for verts in all_vertices]
 container = rad.ObjCnt(hex_objects + [coil])
 
-# Setup IMA x-mirror
+# Setup Image x-mirror (symmetric BC)
 intrc = rad.PreRelax(container, container)
-n_ima = rad.SetIMASymmetry(intrc, 'x')  # Returns number of IMA elements
-rad.BuildIMAMatrix(intrc)  # Build reduced matrix
+n_ima = rad.Image(intrc, '+x')  # Returns number of Image elements
+rad.BuildImageMatrix(intrc)    # Build reduced matrix
 
 # Solve with half the DOFs
 rad.Solve(container, 0.0001, 100, 0)
 B = rad.Fld(container, 'b', [0, 0, 0])
 ```
 
-### Phase 2: HACApK IMA - FUTURE ENHANCEMENT
+**Example with antisymmetric BC:**
 
-HACApK IMA support requires modifying the on-demand matrix element computation to include the IMA formula. This involves:
+```python
+# Z-mirror with antisymmetric BC (field normal to XY plane)
+intrc = rad.PreRelax(container, container)
+n_ima = rad.Image(intrc, '-z')  # Antisymmetric z-mirror
+rad.BuildImageMatrix(intrc)
+rad.Solve(container, 0.0001, 100, 0)
+```
 
-1. Adding IMA state to RadHACApKManager
-2. Modifying GetInteractionMatrixElement() to compute K_IMA = K_direct + K_mirror @ P
+### Phase 2: HACApK Image - FUTURE ENHANCEMENT
+
+HACApK Image support requires modifying the on-demand matrix element computation to include the Image formula. This involves:
+
+1. Adding Image state to RadHACApKManager
+2. Modifying GetInteractionMatrixElement() to compute K_Image = K_direct + sign * K_mirror @ P
 3. Building cluster tree on reduced element set
 
 This is planned for large-scale problems (N > 2000 elements) where memory savings are significant.

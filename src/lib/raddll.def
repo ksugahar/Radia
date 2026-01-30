@@ -36,9 +36,9 @@ RadObjGeoLim
 RadTrfCmbL
 RadTrfCmbR
 RadTrfInv
-RadTrfMlt
+; RadTrfMlt REMOVED (2026-01-31) - Use Image symmetry instead
 RadTrfOrnt
-RadTrfPlSym
+; RadTrfPlSym REMOVED (2026-01-31) - Use Image symmetry instead
 RadTrfRot
 RadTrfTrsl
 
@@ -82,6 +82,6 @@ RadUtiDmp
 RadUtiDmpSize
 RadUtiYeldFuncSet
 
-RadTrfZerPara
-RadTrfZerPerp
+; RadTrfZerPara REMOVED (2026-01-31) - Use Image symmetry instead
+; RadTrfZerPerp REMOVED (2026-01-31) - Use Image symmetry instead
 RadSolve
