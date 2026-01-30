@@ -3267,6 +3267,7 @@ int radTInteraction::SetIMASymmetry(int symmetry, int sign)
 		m_imaNumElements = AmOfMainElem;
 		m_imaToFull.clear();
 		m_imaMirrorMap.clear();
+		m_imaUseVirtualMirror.clear();
 		return m_imaNumElements;
 	}
 
@@ -3274,6 +3275,7 @@ int radTInteraction::SetIMASymmetry(int symmetry, int sign)
 	// Elements in IMA region have positive coordinates for each active symmetry axis
 	m_imaToFull.clear();
 	m_imaMirrorMap.clear();
+	m_imaUseVirtualMirror.clear();
 
 	for(int i = 0; i < AmOfMainElem; i++)
 	{
@@ -3286,16 +3288,66 @@ int radTInteraction::SetIMASymmetry(int symmetry, int sign)
 	m_imaNumElements = (int)m_imaToFull.size();
 
 	// Build mirror map: for each IMA element, find its mirror in full model
-	// This is used for x-mirror: element j's mirror is the element with x' = -x
+	// For quarter models, there may be no physical mirror - use virtual mirror
 	m_imaMirrorMap.resize(m_imaNumElements);
+	m_imaUseVirtualMirror.resize(m_imaNumElements, false);
+
+	const double eps = 1e-6;  // Tolerance for matching
+	int numVirtualMirrors = 0;
+
 	for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
 	{
 		int full_i = m_imaToFull[ima_i];
-		m_imaMirrorMap[ima_i] = GetMirrorElementIndex(full_i, m_imaSymmetry);
+		TVector3d center = g3dRelaxPtrVect[full_i]->ReturnCentrPoint();
+
+		// Compute mirrored center
+		TVector3d mirror_center = center;
+		if(m_imaSymmetry & IMA_X) mirror_center.x = -center.x;
+		if(m_imaSymmetry & IMA_Y) mirror_center.y = -center.y;
+		if(m_imaSymmetry & IMA_Z) mirror_center.z = -center.z;
+
+		// Find element closest to mirror_center
+		double min_dist_sq = 1e30;
+		int best_match = -1;
+
+		for(int i = 0; i < AmOfMainElem; i++)
+		{
+			TVector3d c = g3dRelaxPtrVect[i]->ReturnCentrPoint();
+			double dx = c.x - mirror_center.x;
+			double dy = c.y - mirror_center.y;
+			double dz = c.z - mirror_center.z;
+			double dist_sq = dx*dx + dy*dy + dz*dz;
+
+			if(dist_sq < min_dist_sq)
+			{
+				min_dist_sq = dist_sq;
+				best_match = i;
+			}
+		}
+
+		// Check if we found a physical mirror element
+		if(min_dist_sq > eps * eps)
+		{
+			// No physical mirror found - use virtual mirror
+			m_imaMirrorMap[ima_i] = full_i;  // Store self for reference
+			m_imaUseVirtualMirror[ima_i] = true;
+			numVirtualMirrors++;
+		}
+		else
+		{
+			// Physical mirror found
+			m_imaMirrorMap[ima_i] = best_match;
+			m_imaUseVirtualMirror[ima_i] = false;
+		}
 	}
 
 	std::cout << "[Radia] IMA symmetry enabled: " << m_imaNumElements
-	          << " / " << AmOfMainElem << " elements in IMA region" << std::endl;
+	          << " / " << AmOfMainElem << " elements in IMA region";
+	if(numVirtualMirrors > 0)
+	{
+		std::cout << " (" << numVirtualMirrors << " use virtual mirrors)";
+	}
+	std::cout << std::endl;
 
 	return m_imaNumElements;
 }
@@ -3368,9 +3420,7 @@ int radTInteraction::GetMirrorElementIndex(int elemIdx, int symmetryAxis) const
 	// Verify match is close enough
 	if(min_dist_sq > eps * eps)
 	{
-		std::cerr << "[Radia] Warning: No mirror element found for element " << elemIdx
-		          << " (min dist = " << sqrt(min_dist_sq) << ")" << std::endl;
-		return elemIdx;  // Fall back to self (degenerate case)
+		return -1;  // No physical mirror found
 	}
 
 	return best_match;
@@ -3409,7 +3459,8 @@ void radTInteraction::ApplyDOFPermutation(const double* input, const int* perm, 
 
 //-------------------------------------------------------------------------
 // Compute6x6BlockIMA: Compute IMA block with image summation
-// K_IMA[i][j] = K[full_i][full_j] + K[full_i][mirror_j] @ P
+// K_IMA[i][j] = K[full_i][full_j] + sign * K[full_i][mirror_j] @ P
+// For quarter models: if no physical mirror exists, compute virtual mirror
 //-------------------------------------------------------------------------
 void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) const
 {
@@ -3422,18 +3473,16 @@ void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) co
 
 	int full_i = m_imaToFull[ima_i];
 	int full_j = m_imaToFull[ima_j];
-	int mirror_j = m_imaMirrorMap[ima_j];
 
 	// Find hex indices in precomputed arrays
-	int hex_i = -1, hex_j = -1, hex_mirror_j = -1;
+	int hex_i = -1, hex_j = -1;
 	for(int h = 0; h < (int)m_hexaElemIndices.size(); h++)
 	{
 		if(m_hexaElemIndices[h] == full_i) hex_i = h;
 		if(m_hexaElemIndices[h] == full_j) hex_j = h;
-		if(m_hexaElemIndices[h] == mirror_j) hex_mirror_j = h;
 	}
 
-	if(hex_i < 0 || hex_j < 0 || hex_mirror_j < 0)
+	if(hex_i < 0 || hex_j < 0)
 	{
 		std::cerr << "[Radia] Error: Element not found in hex arrays" << std::endl;
 		for(int k = 0; k < 36; k++) K_ima[k] = 0.0;
@@ -3444,9 +3493,34 @@ void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) co
 	double K_direct[36];
 	Compute6x6BlockFast(hex_i, hex_j, K_direct);
 
-	// Compute mirror interaction: K[full_i][mirror_j]
+	// Compute mirror interaction
 	double K_mirror[36];
-	Compute6x6BlockFast(hex_i, hex_mirror_j, K_mirror);
+	if(m_imaUseVirtualMirror[ima_j])
+	{
+		// Virtual mirror: compute interaction with element j's geometry mirrored
+		Compute6x6BlockMirrored(hex_i, hex_j, m_imaSymmetry, K_mirror);
+	}
+	else
+	{
+		// Physical mirror: use actual mirror element
+		int mirror_j = m_imaMirrorMap[ima_j];
+		int hex_mirror_j = -1;
+		for(int h = 0; h < (int)m_hexaElemIndices.size(); h++)
+		{
+			if(m_hexaElemIndices[h] == mirror_j)
+			{
+				hex_mirror_j = h;
+				break;
+			}
+		}
+		if(hex_mirror_j < 0)
+		{
+			std::cerr << "[Radia] Error: Mirror element not found in hex arrays" << std::endl;
+			for(int k = 0; k < 36; k++) K_ima[k] = 0.0;
+			return;
+		}
+		Compute6x6BlockFast(hex_i, hex_mirror_j, K_mirror);
+	}
 
 	// Apply DOF permutation based on symmetry
 	double K_mirror_perm[36];
@@ -3473,6 +3547,131 @@ void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) co
 	for(int k = 0; k < 36; k++)
 	{
 		K_ima[k] = K_direct[k] + m_imaSign * K_mirror_perm[k];
+	}
+}
+
+//-------------------------------------------------------------------------
+// Compute6x6BlockMirrored: Compute interaction with virtually mirrored element j
+// For quarter model support: element j's geometry is mirrored on-the-fly
+// mirrorAxis: IMA_X, IMA_Y, IMA_Z, or combinations
+//-------------------------------------------------------------------------
+void radTInteraction::Compute6x6BlockMirrored(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const
+{
+	std::memset(K_mat, 0, 36 * sizeof(double));
+
+	if(!m_hexaGeomReady) return;
+
+	int nHex = (int)m_hexaElemIndices.size();
+	if(hex_i < 0 || hex_i >= nHex || hex_j < 0 || hex_j >= nHex) return;
+
+	// Mirror source element center
+	double src_center[3] = {m_hexaCenters[hex_j * 3 + 0],
+	                        m_hexaCenters[hex_j * 3 + 1],
+	                        m_hexaCenters[hex_j * 3 + 2]};
+	if(mirrorAxis & IMA_X) src_center[0] = -src_center[0];
+	if(mirrorAxis & IMA_Y) src_center[1] = -src_center[1];
+	if(mirrorAxis & IMA_Z) src_center[2] = -src_center[2];
+
+	// For each target face i (unchanged)
+	for(int face_i = 0; face_i < 6; face_i++)
+	{
+		// Yano-Sugahara evaluation point for target face
+		int epIdx = (hex_i * 6 + face_i) * 3;
+		const double obs[3] = {m_hexaEvalPoints[epIdx + 0],
+		                       m_hexaEvalPoints[epIdx + 1],
+		                       m_hexaEvalPoints[epIdx + 2]};
+
+		// Target face normal
+		int fnIdx_i = (hex_i * 6 + face_i) * 3;
+		const double n_i[3] = {m_hexaFaceNormals[fnIdx_i + 0],
+		                       m_hexaFaceNormals[fnIdx_i + 1],
+		                       m_hexaFaceNormals[fnIdx_i + 2]};
+
+		// For each source face j (mirrored)
+		for(int face_j = 0; face_j < 6; face_j++)
+		{
+			// Field from unit sigma on mirrored source face j
+			double H_total[3] = {0.0, 0.0, 0.0};
+
+			// Sum contributions from 2 triangles of mirrored face j
+			for(int t = 0; t < 2; t++)
+			{
+				// Get original triangle vertices
+				int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
+				double V0[3] = {m_hexaTriVertices[tvIdx + 0],
+				                m_hexaTriVertices[tvIdx + 1],
+				                m_hexaTriVertices[tvIdx + 2]};
+				double V1[3] = {m_hexaTriVertices[tvIdx + 3],
+				                m_hexaTriVertices[tvIdx + 4],
+				                m_hexaTriVertices[tvIdx + 5]};
+				double V2[3] = {m_hexaTriVertices[tvIdx + 6],
+				                m_hexaTriVertices[tvIdx + 7],
+				                m_hexaTriVertices[tvIdx + 8]};
+
+				// Mirror vertices
+				if(mirrorAxis & IMA_X)
+				{
+					V0[0] = -V0[0]; V1[0] = -V1[0]; V2[0] = -V2[0];
+				}
+				if(mirrorAxis & IMA_Y)
+				{
+					V0[1] = -V0[1]; V1[1] = -V1[1]; V2[1] = -V2[1];
+				}
+				if(mirrorAxis & IMA_Z)
+				{
+					V0[2] = -V0[2]; V1[2] = -V1[2]; V2[2] = -V2[2];
+				}
+
+				// Original sign (for orientation)
+				double sign = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
+
+				// Mirror reverses winding -> flip sign
+				// Count number of mirror axes (odd = flip, even = no flip)
+				int numMirrors = 0;
+				if(mirrorAxis & IMA_X) numMirrors++;
+				if(mirrorAxis & IMA_Y) numMirrors++;
+				if(mirrorAxis & IMA_Z) numMirrors++;
+				if(numMirrors % 2 == 1)
+				{
+					// Odd number of mirrors: swap V1 and V2 to restore winding
+					std::swap(V1[0], V2[0]);
+					std::swap(V1[1], V2[1]);
+					std::swap(V1[2], V2[2]);
+				}
+
+				double H_tri[3];
+				FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign, H_tri);
+
+				H_total[0] += H_tri[0];
+				H_total[1] += H_tri[1];
+				H_total[2] += H_tri[2];
+			}
+
+			// Point charge contribution from mirrored element center
+			// (Same approximation as Compute6x6BlockFast: use element center for all faces)
+			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
+			double r[3] = {obs[0] - src_center[0],
+			               obs[1] - src_center[1],
+			               obs[2] - src_center[2]};
+			double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+
+			if(dist_sq > 1e-30)
+			{
+				double dist = sqrt(dist_sq);
+				double inv_dist3 = 1.0 / (dist * dist_sq);
+				double coef = -area_j * inv_dist3;
+				H_total[0] += coef * r[0];
+				H_total[1] += coef * r[1];
+				H_total[2] += coef * r[2];
+			}
+
+			// K_ij = n_i dot H_total / (4*pi)
+			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
+			              * RadConst::INV_FOUR_PI;
+
+			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
+			K_mat[face_i * 6 + face_j] = K_ij;
+		}
 	}
 }
 
