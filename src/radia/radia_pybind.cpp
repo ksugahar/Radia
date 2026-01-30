@@ -2387,35 +2387,56 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("GetRelaxParam", &radia_solver_ext::GetRelaxParam,
           "Get under-relaxation parameter.");
 
-    m.def("SetIMASymmetry", &radia_solver_ext::SetIMASymmetry,
+    m.def("Image", &radia_solver_ext::SetIMASymmetry,
           py::arg("InteractKey"), py::arg("symmetry"),
           R"pbdoc(
-              Set IMA (Image) symmetry mode for interaction matrix.
+              Set Image symmetry mode for interaction matrix.
 
-              IMA symmetry enables half-model (x-mirror), quarter-model (xy),
+              Image symmetry enables half-model (x-mirror), quarter-model (xy),
               or eighth-model (xyz) analysis by including image contributions
               during matrix assembly.
 
               Args:
                   InteractKey: Interaction handle from PreRelax
-                  symmetry: Symmetry type: "x", "y", "z", "xy", "xz", "yz", "xyz", or "none"
+                  symmetry: Symmetry type with optional sign prefix:
+                      "+x", "-x", "+y", "-y", "+z", "-z" (single axis)
+                      "+xy", "-xy", "+xz", "-xz", "+yz", "-yz" (two axes)
+                      "+xyz", "-xyz" (all three axes)
+                      "x", "y", "z", "xy", "xz", "yz", "xyz" (default to +)
+                      "none" (disable)
+
+                      Sign indicates boundary condition:
+                      "+" = symmetric BC (field tangent to plane)
+                      "-" = antisymmetric BC (field normal to plane)
 
               Returns:
-                  Number of elements in IMA region (reduced set)
+                  Number of elements in Image region (reduced set)
 
               Note:
-                  After calling this, use BuildIMAMatrix to construct the matrix.
+                  After calling this, use BuildImageMatrix to construct the matrix.
+
+              Example:
+                  intrc = rad.PreRelax(container, container)
+                  n_ima = rad.Image(intrc, '+x')  # Symmetric x-mirror
+                  rad.BuildImageMatrix(intrc)
+                  rad.Solve(container, 0.0001, 100, 0)
           )pbdoc");
 
-    m.def("BuildIMAMatrix", &radia_solver_ext::BuildIMAMatrix,
+    // Legacy alias for backwards compatibility
+    m.def("SetIMASymmetry", &radia_solver_ext::SetIMASymmetry,
+          py::arg("InteractKey"), py::arg("symmetry"),
+          "Deprecated: Use Image() instead.");
+
+    m.def("BuildImageMatrix", &radia_solver_ext::BuildIMAMatrix,
           py::arg("InteractKey"),
           R"pbdoc(
-              Build IMA interaction matrix with image summation.
+              Build Image interaction matrix with image summation.
 
               The matrix is constructed using:
-                  N_IMA[i,j] = N[i,j] + N[i, mirror_j] @ P
+                  N_Image[i,j] = N[i,j] + sign * N[i, mirror_j] @ P
 
-              where P is the DOF permutation matrix for the active symmetry.
+              where P is the DOF permutation matrix for the active symmetry,
+              and sign is +1 (symmetric BC) or -1 (antisymmetric BC).
 
               Args:
                   InteractKey: Interaction handle from PreRelax
@@ -2424,8 +2445,13 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   1 if successful, 0 if failed
 
               Note:
-                  Must be called after SetIMASymmetry.
+                  Must be called after Image().
           )pbdoc");
+
+    // Legacy alias for backwards compatibility
+    m.def("BuildIMAMatrix", &radia_solver_ext::BuildIMAMatrix,
+          py::arg("InteractKey"),
+          "Deprecated: Use BuildImageMatrix() instead.");
 
     // ========================================================================
     // Extended Field Functions

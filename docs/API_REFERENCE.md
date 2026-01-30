@@ -1411,16 +1411,38 @@ rad.TrfRot(obj, [x, y, z], [nx, ny, nz], angle)
 rad.TrfOrnt(obj, trf)  # Apply transformation to orient object
 ```
 
-### IMA Symmetry (Replaces TrfMlt)
+### Image Symmetry (Replaces TrfMlt)
 
-**Note**: `TrfMlt` has been removed (2026-01-31). Use IMA symmetry for plane symmetry:
+**Note**: `TrfMlt` has been removed (2026-01-31). Use `rad.Image()` for plane symmetry:
 
 ```python
 intrc = rad.PreRelax(container, container)
-n_ima = rad.SetIMASymmetry(intrc, 'x')  # 'x', 'y', or 'z' mirror
-rad.BuildIMAMatrix(intrc)
+n_ima = rad.Image(intrc, '+x')  # Symmetric x-mirror (tangent field)
+rad.BuildImageMatrix(intrc)
 rad.Solve(container, 0.0001, 100, 0)
 ```
+
+**Symmetry String Format**: `[+|-]axis`
+
+| String | Description | Boundary Condition |
+|--------|-------------|-------------------|
+| `+x`, `x` | x-mirror (symmetric) | Field tangent to YZ plane |
+| `-x` | x-mirror (antisymmetric) | Field normal to YZ plane |
+| `+y`, `y` | y-mirror (symmetric) | Field tangent to XZ plane |
+| `-y` | y-mirror (antisymmetric) | Field normal to XZ plane |
+| `+z`, `z` | z-mirror (symmetric) | Field tangent to XY plane |
+| `-z` | z-mirror (antisymmetric) | Field normal to XY plane |
+| `+xy`, `xy` | Quarter model (symmetric) | Both tangent |
+| `-xz` | xz-mirror (antisymmetric) | Both normal |
+| `+xyz` | Eighth model (symmetric) | All tangent |
+
+**Matrix Construction**:
+- Symmetric (+): `N_Image[i,j] = N[i,j] + N[i, mirror_j] @ P`
+- Antisymmetric (-): `N_Image[i,j] = N[i,j] - N[i, mirror_j] @ P`
+
+**Legacy API** (deprecated):
+- `SetIMASymmetry()` -> Use `Image()`
+- `BuildIMAMatrix()` -> Use `BuildImageMatrix()`
 
 See [IMA_SYMMETRY_DESIGN.md](IMA_SYMMETRY_DESIGN.md) for details.
 
