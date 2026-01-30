@@ -676,21 +676,21 @@ void radTRelaxationMethNo_1::GetDiagonalElements(std::vector<double>& diag, cons
 		double inv_chi_y = inv_chi[3*i + 1];
 		double inv_chi_z = inv_chi[3*i + 2];
 
-		// Diagonal of system matrix: A = -N + 1/chi
+		// Diagonal of system matrix: A = -N - 1/chi (ELF-compatible)
 		if(IntrcMat != nullptr)
 		{
 			// Nii is from InteractMatrix[i][i]
 			TMatrix3df& Nii = IntrcMat[i][i];
-			diag[3*i + 0] = -Nii.Str0.x + inv_chi_x;
-			diag[3*i + 1] = -Nii.Str1.y + inv_chi_y;
-			diag[3*i + 2] = -Nii.Str2.z + inv_chi_z;
+			diag[3*i + 0] = -Nii.Str0.x - inv_chi_x;  // ELF-compatible
+			diag[3*i + 1] = -Nii.Str1.y - inv_chi_y;  // ELF-compatible
+			diag[3*i + 2] = -Nii.Str2.z - inv_chi_z;  // ELF-compatible
 		}
 		else
 		{
-			// Fallback: just use 1/chi as diagonal (no N contribution)
-			diag[3*i + 0] = inv_chi_x;
-			diag[3*i + 1] = inv_chi_y;
-			diag[3*i + 2] = inv_chi_z;
+			// Fallback: just use -1/chi as diagonal (no N contribution) (ELF-compatible)
+			diag[3*i + 0] = -inv_chi_x;
+			diag[3*i + 1] = -inv_chi_y;
+			diag[3*i + 2] = -inv_chi_z;
 		}
 	}
 }
@@ -698,7 +698,7 @@ void radTRelaxationMethNo_1::GetDiagonalElements(std::vector<double>& diag, cons
 void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vector<double>& y,
                                          const std::vector<double>& inv_chi, int ndof)
 {
-	// Computes y = A * x where A = -N + 1/chi
+	// Computes y = A * x where A = -N - 1/chi (ELF-compatible)
 	// Uses dense matrix-vector product
 	// CRITICAL FIX: Use pre-computed 1/chi values that are FIXED for this BiCGSTAB solve
 	// (chi is only updated in the outer nonlinear iteration loop)
@@ -731,10 +731,10 @@ void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vect
 			double inv_chi_y = inv_chi[3*i + 1];
 			double inv_chi_z = inv_chi[3*i + 2];
 
-			// y[i] = -sum(N[i][j] * x[j]) + (1/chi) * x[i]
-			double y0 = inv_chi_x * x[3*i + 0];
-			double y1 = inv_chi_y * x[3*i + 1];
-			double y2 = inv_chi_z * x[3*i + 2];
+			// y[i] = -sum(N[i][j] * x[j]) - (1/chi) * x[i] (ELF-compatible)
+			double y0 = -inv_chi_x * x[3*i + 0];  // ELF-compatible: -1/chi
+			double y1 = -inv_chi_y * x[3*i + 1];  // ELF-compatible: -1/chi
+			double y2 = -inv_chi_z * x[3*i + 2];  // ELF-compatible: -1/chi
 
 			for(int j = 0; j < n_elem; j++)
 			{
@@ -761,7 +761,7 @@ void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vect
 
 void radTRelaxationMethNo_1::BuildFlatMatrix(std::vector<double>& A_flat, const std::vector<double>& inv_chi, int ndof)
 {
-	// Build flat matrix A = -N + diag(1/chi) for BLAS dgemv
+	// Build flat matrix A = -N - diag(1/chi) for BLAS dgemv (ELF-compatible)
 	// Stored in column-major order for BLAS compatibility
 	//
 	// MATRIX LAYOUT FIX (2025-12-24):
@@ -808,10 +808,10 @@ void radTRelaxationMethNo_1::BuildFlatMatrix(std::vector<double>& A_flat, const 
 				A_flat[(row_base + 2) + (col_base + 2)*ndof] = -Nij.Str2.z;  // -dHz/dMz
 			}
 
-			// Add diagonal 1/chi terms
-			A_flat[(3*i + 0) + (3*i + 0)*ndof] += inv_chi[3*i + 0];
-			A_flat[(3*i + 1) + (3*i + 1)*ndof] += inv_chi[3*i + 1];
-			A_flat[(3*i + 2) + (3*i + 2)*ndof] += inv_chi[3*i + 2];
+			// Subtract diagonal 1/chi terms (ELF-compatible: -1/chi)
+			A_flat[(3*i + 0) + (3*i + 0)*ndof] -= inv_chi[3*i + 0];
+			A_flat[(3*i + 1) + (3*i + 1)*ndof] -= inv_chi[3*i + 1];
+			A_flat[(3*i + 2) + (3*i + 2)*ndof] -= inv_chi[3*i + 2];
 		}
 	}
 }
@@ -989,7 +989,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		fprintf(stderr, "Element %d: chi = %.6f, inv_chi = %.6e, dof = %d\n", elem, chi, inv_chi, dof);
 #endif
 
-		// Add 1/chi to diagonal and set RHS
+		// Subtract 1/chi from diagonal and set RHS (ELF-compatible: -1/chi)
 		for(int k = 0; k < dof; k++)
 		{
 			int row = offset + k;
@@ -997,7 +997,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 #ifdef RADIA_DEBUG_CHI
 			double diag_before = SystemMatrix[row * (totalDOF + 1)];
 #endif
-			SystemMatrix[row * (totalDOF + 1)] += inv_chi;
+			SystemMatrix[row * (totalDOF + 1)] -= inv_chi;  // ELF-compatible
 #ifdef RADIA_DEBUG_CHI
 			double diag_after = SystemMatrix[row * (totalDOF + 1)];
 			fprintf(stderr, "  row %d: diag_before = %.6e, diag_after = %.6e, RHS = %.6e\n",
@@ -1077,10 +1077,10 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, std::vector<double>& y,
                                                  const std::vector<double>& inv_chi, int totalDOF)
 {
-	// Computes y = A * x where A = (base matrix) + diag(1/chi)
+	// Computes y = A * x where A = (base matrix) - diag(1/chi) (ELF-compatible)
 	// Sign convention:
-	// - MMM (3 DOF): FlatInteract stores N, equation is (-N + I/chi) -> negate
-	// - MSC (6 DOF): FlatInteract stores -K/(4pi), equation is (-K/(4pi) + I/chi) -> use as-is
+	// - MMM (3 DOF): FlatInteract stores N, equation is (-N - I/chi) -> negate N, subtract I/chi
+	// - MSC (6 DOF): FlatInteract stores -K/(4pi), equation is (-K/(4pi) - I/chi) -> use as-is, subtract I/chi
 	//
 	// IMPORTANT: FlatInteract is stored in COLUMN-MAJOR format (Fortran/LAPACK style)
 	// Element at (row, col) is at index [col * totalDOF + row]
@@ -1098,7 +1098,7 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 	{
 		// Pure 3 DOF system (tetrahedra only) - use single BLAS call with alpha=-1.0
 		// y = -1.0 * A * x + 0.0 * y
-		// Then add diagonal: y[i] += inv_chi[i] * x[i]
+		// Then subtract diagonal: y[i] -= inv_chi[i] * x[i] (ELF-compatible)
 
 		// Intel MKL cblas_dgemv:
 		// y := alpha*A*x + beta*y (for CblasNoTrans)
@@ -1112,12 +1112,12 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 		            0.0,                      // beta
 		            y.data(), 1);             // y, incy
 
-		// Add diagonal contribution: y[i] += inv_chi[i] * x[i]
-		// This is element-wise multiplication and addition
+		// Subtract diagonal contribution: y[i] -= inv_chi[i] * x[i] (ELF-compatible)
+		// This is element-wise multiplication and subtraction
 		#pragma omp parallel for if(totalDOF > 1000)
 		for(int i = 0; i < totalDOF; i++)
 		{
-			y[i] += inv_chi[i] * x[i];
+			y[i] -= inv_chi[i] * x[i];  // ELF-compatible: -1/chi
 		}
 		return;
 	}
@@ -1140,11 +1140,11 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 		            0.0,
 		            y.data(), 1);
 
-		// Add diagonal contribution
+		// Subtract diagonal contribution (ELF-compatible: -1/chi)
 		#pragma omp parallel for if(totalDOF > 1000)
 		for(int i = 0; i < totalDOF; i++)
 		{
-			y[i] += inv_chi[i] * x[i];
+			y[i] -= inv_chi[i] * x[i];  // ELF-compatible
 		}
 		return;
 	}
@@ -1160,10 +1160,10 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 		int dof_row = IntrctPtr->GetElementDOF(row_elem);
 		int offset_row = IntrctPtr->GetElementDOFOffset(row_elem);
 
-		// Diagonal contribution: (1/chi) * x
+		// Diagonal contribution: -(1/chi) * x (ELF-compatible)
 		for(int k = 0; k < dof_row; k++)
 		{
-			y[offset_row + k] = inv_chi[offset_row + k] * x[offset_row + k];
+			y[offset_row + k] = -inv_chi[offset_row + k] * x[offset_row + k];  // ELF-compatible
 		}
 
 		// Matrix-vector product
@@ -1220,9 +1220,9 @@ void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>
 
 		for(int k = 0; k < dof; k++)
 		{
-			// Diagonal element: sign*matrix_ii + 1/chi
+			// Diagonal element: sign*matrix_ii - 1/chi (ELF-compatible)
 			// CRITICAL: Use size_t cast for indexing with totalDOF
-			diag[offset + k] = sign * diag_block[(size_t)k * totalDOF + k] + inv_chi[offset + k];
+			diag[offset + k] = sign * diag_block[(size_t)k * totalDOF + k] - inv_chi[offset + k];
 		}
 	}
 }
@@ -1270,7 +1270,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		}
 		else if(dof == 6)
 		{
-			// MSC hexahedron (6 DOF): equation (-K/(4pi) + 1/chi * I) * sigma = H_ext_n
+			// MSC hexahedron (6 DOF): equation (-K/(4pi) - 1/chi * I) * sigma = H_ext_n (ELF-compatible)
 			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
 			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
 
@@ -1635,7 +1635,7 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, doub
 	// which includes the current inv_chi values. Radia was caching the diagonal computed with
 	// INITIAL inv_chi, causing slower convergence (17 iter vs 14 iter).
 	//
-	// The fix is to recompute diag_inv = 1/(N_ii + inv_chi[i]) each iteration.
+	// The fix is to recompute diag_inv = 1/(N_ii - inv_chi[i]) each iteration (ELF-compatible).
 	// This is O(N) and uses cached N_ii values, so it's cheap.
 	GetDiagonalElements_HMatrix_VariableDOF(diag_inv, inv_chi, totalDOF);
 	for(int i = 0; i < totalDOF; i++)
@@ -1763,7 +1763,7 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
                                                                       const std::vector<double>& inv_chi,
                                                                       int totalDOF)
 {
-	// Get diagonal elements A_ii = N_ii + 1/chi_i
+	// Get diagonal elements A_ii = N_ii - 1/chi_i (ELF-compatible)
 	// Use cached N_ii values for efficiency (computed once during H-matrix build)
 	if(m_hacapk->IsDiagonalCached())
 	{
@@ -1771,7 +1771,7 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
 		#pragma omp parallel for if(totalDOF > 100)
 		for(int i = 0; i < totalDOF; i++)
 		{
-			diag[i] = diag_N[i] + inv_chi[i];
+			diag[i] = diag_N[i] - inv_chi[i];  // ELF-compatible
 		}
 	}
 	else
@@ -1780,7 +1780,7 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
 		for(int i = 0; i < totalDOF; i++)
 		{
 			double N_ii = m_hacapk->GetInteractionMatrixElement(i, i);
-			diag[i] = N_ii + inv_chi[i];
+			diag[i] = N_ii - inv_chi[i];  // ELF-compatible
 		}
 	}
 }
@@ -1877,7 +1877,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		rad.m_timing_hmatrix_build = std::chrono::duration<double>(t_hmat_end - t_hmat_start).count();
 
 		// NOTE: No longer caching Jacobi preconditioner (FIX 2025-12-27)
-		// We recompute diag_inv = 1/(N_ii + inv_chi[i]) each iteration
+		// We recompute diag_inv = 1/(N_ii - inv_chi[i]) each iteration (ELF-compatible)
 	}
 
 	// NOTE: 3DOF tetrahedra use PrecomputeFlatInteractMatrix() for fast O(1) access

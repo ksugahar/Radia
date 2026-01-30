@@ -1459,10 +1459,50 @@ void radTApplication::ShowInteractMatrix(int InteractElemKey)
 {
 	radThg hg;
 	if(!ValidateElemKey(InteractElemKey, hg)) return;
-	radTInteraction* InteractPtr = Cast.InteractCast(hg.rep); 
+	radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
 	if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return;}
 
 	InteractPtr->ShowInteractMatrix();
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::GetInteractMatrix(int InteractElemKey, double* pMatrix, int* pDOF)
+{
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
+		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
+		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
+
+		// Get total DOF and matrix data
+		int totalDOF = InteractPtr->GetTotalDOF();
+		*pDOF = totalDOF;
+
+		if(pMatrix != nullptr && totalDOF > 0)
+		{
+			const double* matrixData = InteractPtr->GetFlatInteractMatrix();
+			if(matrixData != nullptr)
+			{
+				// Copy matrix data (column-major format)
+				long matrixSize = (long)totalDOF * (long)totalDOF;
+				std::memcpy(pMatrix, matrixData, matrixSize * sizeof(double));
+			}
+			else
+			{
+				// Matrix not built - return zeros
+				long matrixSize = (long)totalDOF * (long)totalDOF;
+				std::memset(pMatrix, 0, matrixSize * sizeof(double));
+			}
+		}
+
+		return 1;
+	}
+	catch (...)
+	{
+		Initialize(); return 0;
+	}
 }
 
 //-------------------------------------------------------------------------

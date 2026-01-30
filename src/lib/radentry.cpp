@@ -84,6 +84,7 @@ void MvsH( int, char*, double,double,double );
 
 void PreRelax( int, int );
 void ShowInteractMatrix(int);
+int GetInteractMatrix(int, double*, int*);
 void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
 void ManualRelax( int, int, int, double );
@@ -1667,6 +1668,15 @@ int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey)
 	PreRelax(ElemKey, SrcElemKey);
 	*n = ioBuffer.OutInt();
 	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadGetInteractMatrix(double* pMatrix, int* pDOF, int InteractElemKey)
+{
+	int result = GetInteractMatrix(InteractElemKey, pMatrix, pDOF);
+	if(result == 0) return ioBuffer.OutErrorStatus();
+	return 0;
 }
 
 //-------------------------------------------------------------------------
