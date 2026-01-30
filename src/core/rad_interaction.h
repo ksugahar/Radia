@@ -244,7 +244,42 @@ class radTInteraction : public radTg {
 	std::vector<double> m_hexaTriData;            // n_hex * 12 * 32: pre-computed triangle data
 	bool m_hexaTriDataReady;                      // True if triangle data is pre-computed
 
+	//-------------------------------------------------------------------------
+	// IMA (Image) Symmetry for MSC hexahedra (private member variables)
+	//-------------------------------------------------------------------------
+	int m_imaSymmetry;                            // IMA symmetry flags
+	int m_imaSign;                                // IMA sign: +1 (symmetric BC) or -1 (antisymmetric BC)
+	bool m_imaEnabled;                            // True if IMA mode is active
+	int m_imaNumElements;                         // Number of elements in IMA region (reduced set)
+	std::vector<int> m_imaToFull;                 // IMA element index -> full element index
+	std::vector<int> m_imaMirrorMap;              // For each IMA element, its mirror element index in full model
+
 public:
+
+	//-------------------------------------------------------------------------
+	// IMA (Image) Symmetry for MSC hexahedra
+	// Reference: ELF_MAGIC IMA approach with image summation during matrix assembly
+	// Enables half-model (x-mirror), quarter-model (xy), eighth-model (xyz) analysis
+	//-------------------------------------------------------------------------
+	enum IMASymmetryFlags {
+		IMA_NONE = 0,
+		IMA_X = 1,    // Mirror in X=0 plane (YZ plane)
+		IMA_Y = 2,    // Mirror in Y=0 plane (XZ plane)
+		IMA_Z = 4,    // Mirror in Z=0 plane (XY plane)
+		IMA_XY = 3,   // Quarter model (X and Y mirrors)
+		IMA_XZ = 5,   // Quarter model (X and Z mirrors)
+		IMA_YZ = 6,   // Quarter model (Y and Z mirrors)
+		IMA_XYZ = 7   // Eighth model (all three mirrors)
+	};
+
+	// DOF permutation arrays for face swapping (size 6 each)
+	// P_x: swaps face 1 (x+) and face 3 (x-)
+	// P_y: swaps face 0 (y-) and face 2 (y+)
+	// P_z: swaps face 4 (z-) and face 5 (z+)
+	// ELF face ordering: [y-, x+, y+, x-, z-, z+] = DOFs [0, 1, 2, 3, 4, 5]
+	static constexpr int IMA_PERM_X[6] = {0, 3, 2, 1, 4, 5};  // Swap x+ (1) and x- (3)
+	static constexpr int IMA_PERM_Y[6] = {2, 1, 0, 3, 4, 5};  // Swap y- (0) and y+ (2)
+	static constexpr int IMA_PERM_Z[6] = {0, 1, 2, 3, 5, 4};  // Swap z- (4) and z+ (5)
 
 	int AmOfRelaxSubInterv;
 
@@ -375,6 +410,42 @@ public:
 	void PrecomputeHexaTriangleData();  // Pre-compute triangle local coordinate systems
 	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
+
+	//-------------------------------------------------------------------------
+	// IMA (Image) Symmetry Methods
+	// Reference: ELF_MAGIC IMA approach - matrix construction with image summation
+	//-------------------------------------------------------------------------
+
+	// Configure IMA symmetry mode
+	// symmetry: IMA_X, IMA_Y, IMA_Z, IMA_XY, etc.
+	// sign: +1 for symmetric BC (N_IMA = N_direct + N_mirror @ P)
+	//       -1 for antisymmetric BC (N_IMA = N_direct - N_mirror @ P)
+	// Returns: number of elements in IMA region (reduced set)
+	int SetIMASymmetry(int symmetry, int sign = 1);
+
+	// Check if element is in IMA region (positive half-space for all active mirrors)
+	bool IsElementInIMARegion(int elemIdx) const;
+
+	// Get mirror element index for a given element and symmetry axis
+	int GetMirrorElementIndex(int elemIdx, int symmetryAxis) const;
+
+	// Build IMA interaction matrix (with image summation)
+	// N_IMA[i,j] = N[i,j] ± N[i, mirror_j] @ P
+	// Sign determined by m_imaSign: +1 (symmetric BC) or -1 (antisymmetric BC)
+	int SetupInteractMatrix_IMA();
+
+	// Apply DOF permutation to 6x6 block: result = input @ P
+	// perm: permutation array (e.g., IMA_PERM_X)
+	void ApplyDOFPermutation(const double* input, const int* perm, double* result) const;
+
+	// Compute IMA 6x6 block: direct + sum of mirror contributions
+	void Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) const;
+
+	// IMA accessors
+	bool IsIMAEnabled() const { return m_imaEnabled; }
+	int GetIMASymmetry() const { return m_imaSymmetry; }
+	int GetIMASign() const { return m_imaSign; }
+	int GetIMANumElements() const { return m_imaNumElements; }
 
 	void SetupExternFieldArray();
 	void AddExternFieldFromMoreExtSource();

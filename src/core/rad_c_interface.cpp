@@ -19,6 +19,7 @@
 #include <Python.h>
 
 #include "rad_application.h"
+#include "rad_interaction.h"
 #include "gmvect.h"
 #include "rad_io_buffer.h"
 
@@ -159,6 +160,8 @@ void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
 double GetRelaxParam();
+int SetIMASymmetry(int, const char*);
+int BuildIMAMatrix(int);
 void ClassifyPoints( int*, int*, int, double*, int, double );
 void ComputeFieldBatch( double*, double*, int, double*, int, int );
 void ComputeScalarPotentialBatch( double*, int, double*, int );
@@ -1687,6 +1690,91 @@ void SetRelaxParam(double relax)
 double GetRelaxParam()
 {
 	return rad.m_relax;
+}
+
+//-------------------------------------------------------------------------
+// IMA (Image) Symmetry Support
+//-------------------------------------------------------------------------
+
+int SetIMASymmetry(int InteractKey, const char* symmetry)
+{
+	// Convert symmetry string to flag and sign
+	// Format: [+|-]axis (e.g., "+x", "-z", "x", "xy", "+xy", "-xz")
+	// sign = +1 for symmetric BC (default), -1 for antisymmetric BC
+	int symFlag = 0;
+	int sign = 1;  // Default to symmetric (+)
+
+	if(symmetry != nullptr)
+	{
+		std::string symStr(symmetry);
+
+		// Parse optional sign prefix
+		if(!symStr.empty())
+		{
+			if(symStr[0] == '+')
+			{
+				sign = 1;
+				symStr = symStr.substr(1);
+			}
+			else if(symStr[0] == '-')
+			{
+				sign = -1;
+				symStr = symStr.substr(1);
+			}
+		}
+
+		// Convert to lowercase for comparison
+		for(char& c : symStr) c = tolower(c);
+
+		if(symStr == "x") symFlag = radTInteraction::IMA_X;
+		else if(symStr == "y") symFlag = radTInteraction::IMA_Y;
+		else if(symStr == "z") symFlag = radTInteraction::IMA_Z;
+		else if(symStr == "xy" || symStr == "yx") symFlag = radTInteraction::IMA_XY;
+		else if(symStr == "xz" || symStr == "zx") symFlag = radTInteraction::IMA_XZ;
+		else if(symStr == "yz" || symStr == "zy") symFlag = radTInteraction::IMA_YZ;
+		else if(symStr == "xyz" || symStr == "xzy" || symStr == "yxz" ||
+		        symStr == "yzx" || symStr == "zxy" || symStr == "zyx")
+			symFlag = radTInteraction::IMA_XYZ;
+		else if(symStr == "none" || symStr.empty()) symFlag = radTInteraction::IMA_NONE;
+		else
+		{
+			rad.Send.ErrorMessage("Radia::Error051"); // Invalid symmetry string
+			return 0;
+		}
+	}
+
+	// Get interaction object
+	radTInteraction* pIntrc = rad.GetInteractionByKey(InteractKey);
+	if(pIntrc == nullptr)
+	{
+		rad.Send.ErrorMessage("Radia::Error050"); // Invalid interaction handle
+		return 0;
+	}
+
+	// Set IMA symmetry with sign
+	int numElements = pIntrc->SetIMASymmetry(symFlag, sign);
+	return numElements;
+}
+
+int BuildIMAMatrix(int InteractKey)
+{
+	// Get interaction object
+	radTInteraction* pIntrc = rad.GetInteractionByKey(InteractKey);
+	if(pIntrc == nullptr)
+	{
+		rad.Send.ErrorMessage("Radia::Error050"); // Invalid interaction handle
+		return 0;
+	}
+
+	if(!pIntrc->IsIMAEnabled())
+	{
+		rad.Send.ErrorMessage("Radia::Error052"); // IMA not enabled
+		return 0;
+	}
+
+	// Build IMA matrix
+	int result = pIntrc->SetupInteractMatrix_IMA();
+	return result;
 }
 
 //-------------------------------------------------------------------------
