@@ -74,7 +74,7 @@ struct HACApKStats {
  *
  * This class provides H-matrix acceleration for the MMM linear system:
  *   A * M = H_ext
- * where A = (1/chi) * I - N is the system matrix.
+ * where A = -(1/chi) * I - N is the system matrix (ELF-compatible).
  *
  * The H-matrix approximates A using ACA+ compression, providing
  * O(N log N) complexity for matrix-vector products instead of O(N^2).

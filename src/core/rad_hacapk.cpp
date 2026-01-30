@@ -92,9 +92,9 @@ double ComputeEntry(int i, int j) {
     //   val = cHACApK_entry_ij(lodl[permuted_pos], lodt[permuted_pos], i_bemv)
     // So we receive original indices, NOT permuted indices!
     //
-    // Matrix element: A(i,j) = N(i,j) + delta_ij/chi_i
+    // Matrix element: A(i,j) = N(i,j) - delta_ij/chi_i (ELF-compatible)
     // where N already contains -K/(4*pi) from GetInteractionMatrixElement()
-    // So the equation is: (-K/(4pi) + 1/chi * I) * sigma = H_ext_n
+    // So the equation is: (-K/(4pi) - 1/chi * I) * sigma = H_ext_n (ELF-compatible)
 
     if (g_currentManager == nullptr) {
         std::cerr << "[HACApK] Error: g_currentManager is null in ComputeEntry" << std::endl;
@@ -115,13 +115,14 @@ double ComputeEntry(int i, int j) {
     }
 
     // Get N matrix element through manager (friend class access)
-    // GetInteractionMatrixElement() returns -K_ij/(4*pi) for MSC hexahedra
+    // GetInteractionMatrixElement() returns K_ij/(4*pi) for MSC hexahedra (ELF-compatible)
     double N_val = g_currentManager->GetInteractionMatrixElement(i0, j0);
 
-    // A = N + diag(1/chi) (N already has correct sign: -K/(4pi))
+    // A = N - diag(1/chi) (ELF-compatible: negative diagonal)
+    // N has ELF-compatible sign: K/(4pi) (negative for self-demagnetization)
     double A_val = N_val;
     if (i0 == j0 && i0 < (int)g_invChi.size()) {
-        A_val += g_invChi[i0];
+        A_val -= g_invChi[i0];  // ELF-compatible: -1/chi
     }
 
     return A_val;
@@ -378,7 +379,7 @@ void RadHACApKManager::PrecomputeFlatInteractMatrix() {
     m_flat_N_data.resize(total_size);
 
     // Copy from InteractMatrix[i][j] to flat array with sign flip (-N)
-    // The system matrix is A = -N + diag(1/chi), so we store -N
+    // The system matrix is A = -N - diag(1/chi) (ELF-compatible), so we store -N
     //
     // MATRIX LAYOUT FIX (2025-12-24):
     // InteractMatrix[i][j] stores TMatrix3df where:
@@ -731,8 +732,9 @@ void RadHACApKManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) co
                           H_total.y * poly_row->FaceNormal[fi].y +
                           H_total.z * poly_row->FaceNormal[fi].z;
 
-            // Store -K_ij / (4*pi) in row-major order: K_mat[row * 6 + col]
-            K_mat[fi * 6 + fj] = -K_ij * RadConst::INV_FOUR_PI;
+            // Store K_ij / (4*pi) in row-major order: K_mat[row * 6 + col]
+            // Sign convention: positive = ELF-compatible (self-demagnetization is negative)
+            K_mat[fi * 6 + fj] = K_ij * RadConst::INV_FOUR_PI;
         }
     }
 }
@@ -956,7 +958,7 @@ void RadHACApKManager::Compute3x3Block(int elem_i, int elem_j, double* N_mat) co
     // This requires transposed access: row k gets Str0[k], Str1[k], Str2[k]
     //
     // IMPORTANT: Radia's InteractMatrix stores positive N, but the system matrix is:
-    //   A = -N + diag(1/chi)
+    //   A = -N - diag(1/chi) (ELF-compatible)
     // The LU solver uses: BaseMatrix = -Nij
     // For HACApK, GetInteractionMatrixElement should return -N to match.
 
@@ -994,7 +996,7 @@ void RadHACApKManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* 
     // Compute interaction from element j to observation at element i center
     // using B_comp() directly (same approach as SetupInteractMatrix)
     //
-    // IMPORTANT: Returns -N to match system matrix A = -N + diag(1/chi)
+    // IMPORTANT: Returns -N to match system matrix A = -N - diag(1/chi) (ELF-compatible)
 
     std::memset(N_mat, 0, 9 * sizeof(double));
 

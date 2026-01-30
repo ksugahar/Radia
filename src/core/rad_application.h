@@ -285,6 +285,7 @@ public:
 	int PreRelax(int ElemKey, int SrcElemKey, char skipDenseMatrix=0);
 	int SetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
 	void ShowInteractMatrix(int InteractElemKey);
+	int GetInteractMatrix(int InteractElemKey, double* pMatrix, int* pDOF);
 	void ShowInteractVector(int InteractElemKey, char* FieldVectID);
 	int MakeManualRelax(int InteractElemKey, int MethNo, int IterNumber, double RelaxParam);
 	int MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char** arOptionNames=0, const char** arOptionValues=0, int numOptions=0);

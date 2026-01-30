@@ -369,6 +369,7 @@ EXP int CALL RadObjCntStuf(int* Objs, int cnt);
 
 // Relaxation sub-interval control for LU decomposition solver
 EXP int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey);
+EXP int CALL RadGetInteractMatrix(double* pMatrix, int* pDOF, int InteractElemKey);
 EXP int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
 
 /** Duplicates the object obj. 

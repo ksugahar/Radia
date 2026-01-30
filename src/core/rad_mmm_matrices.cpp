@@ -621,7 +621,7 @@ void MMMSolver::SetMatrix(const double* N, const int* dof_offset, int total_dof,
 void MMMSolver::BuildSystemMatrix(std::vector<double>& A,
                                    const std::vector<double>& inv_chi,
                                    bool chi_per_element) const {
-    // Build A = diag(inv_chi) - N
+    // Build A = -diag(inv_chi) - N (ELF-compatible)
     size_t n = total_dof_;
     A = N_;  // Copy N
 
@@ -630,7 +630,7 @@ void MMMSolver::BuildSystemMatrix(std::vector<double>& A,
         A[i] = -A[i];
     }
 
-    // Add diagonal: A += diag(inv_chi)
+    // Subtract diagonal: A -= diag(inv_chi) (ELF-compatible: -1/chi)
     if (chi_per_element) {
         // Broadcast chi from elements to DOF
         for (int e = 0; e < n_elements_; e++) {
@@ -639,13 +639,13 @@ void MMMSolver::BuildSystemMatrix(std::vector<double>& A,
             int end = dof_offset_[e + 1];
             for (int i = start; i < end; i++) {
                 // Column-major: A[i,i] at i*n + i
-                A[static_cast<size_t>(i) * n + i] += inv_chi_e;
+                A[static_cast<size_t>(i) * n + i] -= inv_chi_e;  // ELF-compatible
             }
         }
     } else {
         // inv_chi is already per-DOF
         for (size_t i = 0; i < n; i++) {
-            A[i * n + i] += inv_chi[i];
+            A[i * n + i] -= inv_chi[i];  // ELF-compatible
         }
     }
 }

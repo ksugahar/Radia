@@ -994,7 +994,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	if(!hasSymmetry && hasMSCElements)
 	{
 		// Use unified 1/(4*pi) constant for all MSC interactions
-		// (Following ELF convention: all matrix elements use -K_ij / (4*pi))
+		// (ELF-compatible sign convention: K_ij / (4*pi))
 
 		#pragma omp parallel for schedule(dynamic) if(AmOfMainElem > 20)
 		for(int col = 0; col < AmOfMainElem; col++)
@@ -1076,7 +1076,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							              H_total.z * poly_row->FaceNormal[face_i].z;
 
 							// CRITICAL: Use size_t cast for indexing with m_totalDOF
-							block[(size_t)face_j * m_totalDOF + face_i] = -K_ij * RadConst::INV_FOUR_PI;
+							// Sign convention: positive = ELF-compatible (self-demagnetization is negative)
+							block[(size_t)face_j * m_totalDOF + face_i] = K_ij * RadConst::INV_FOUR_PI;
 						}
 					}
 				}
@@ -1213,6 +1214,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				// 3x6 block: Field at tetrahedron (3 DOF) center from MSC hexahedron (6 DOF)
 				// K(Mk, face_j) = H_field_k at tetra center due to unit sigma on hex face j
 				// Matrix stores: -H_field(k) / (4*pi) (following ELF convention)
+				//
+				// DIRECT GEOMETRY APPROACH (NOT reciprocity + TrAxialVect):
+				// For each transformation, transform the source geometry and compute field
+				// at the ORIGINAL observation point. This correctly handles plane symmetry.
 
 				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
 				if(poly_col && poly_col->Use6DOF_MSC)
@@ -1225,39 +1230,49 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 						for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
 						{
-							TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
+							radTrans* pTrans = TransPtrVect[tr];
 
-							// Field from unit sigma on face j (quad face + point charge)
-							TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
+							// Get parity (det = +1 for rotations, -1 for reflections)
+							// For reflections, sigma' = det * sigma, so field contribution is scaled by det
+							double parity = pTrans->ShowParity();
 
-							// Point charge contribution (m = -sigma * area) - Yano-Sugahara MSC method
-							double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
-							TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
+							// Check if this is identity (original source)
+							if(pTrans->IsIdent(1e-12))
+							{
+								// Field from original source at original observation point
+								TVector3d H_face = poly_col->FieldFromQuadFace(InitObsPoiVect, face_j, 1.0);
+								double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
+								TVector3d H_point = poly_col->FieldFromPointCharge(InitObsPoiVect, unit_point_charge);
+								H_total.x += H_face.x + H_point.x;
+								H_total.y += H_face.y + H_point.y;
+								H_total.z += H_face.z + H_point.z;
+							}
+							else
+							{
+								// Field from TRANSFORMED source at original observation point
+								// FieldFromQuadFaceTransformed handles winding reversal for reflections
+								TVector3d H_face = poly_col->FieldFromQuadFaceTransformed(InitObsPoiVect, face_j, 1.0, pTrans);
 
-							TVector3d H_local;
-							H_local.x = H_face.x + H_point.x;
-							H_local.y = H_face.y + H_point.y;
-							H_local.z = H_face.z + H_point.z;
+								// Point charge at transformed position
+								TVector3d transformedCenter = pTrans->TrPoint(poly_col->CentrPoint);
+								double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
+								TVector3d H_point = poly_col->FieldFromPointChargeAtPos(InitObsPoiVect, unit_point_charge, transformedCenter);
 
-							// Transform back to global using pseudo-vector (axial vector) transformation
-							// H field is a pseudo-vector: H' = det(T) * T * H
-							TVector3d H_tr = TransPtrVect[tr]->TrAxialVect(H_local);
-							H_total.x += H_tr.x;
-							H_total.y += H_tr.y;
-							H_total.z += H_tr.z;
+								// For TrfMlt plane symmetry, the mirrored element has the SAME sigma
+								// as the original (by symmetry). No parity scaling needed.
+								H_total.x += H_face.x + H_point.x;
+								H_total.y += H_face.y + H_point.y;
+								H_total.z += H_face.z + H_point.z;
+							}
 						}
 
 						// Transform by row's main transform (inverse) using pseudo-vector transformation
-						// H' = (1/det(T)) * T_inv * H = det(T) * T_inv * H (since 1/det = det for det=+/-1)
 						TVector3d H_final = MainTransPtrArray[row]->TrAxialVect_inv(H_total);
 
 						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
-						// row is component (0,1,2 = Mx,My,Mz), col is face_j
-						// Sign convention: +K/(4*pi) for tetra-hex (following ELF)
-						// CRITICAL: Use size_t cast for indexing with m_totalDOF
-						block[(size_t)face_j * m_totalDOF + 0] = H_final.x * RadConst::INV_FOUR_PI;  // (Mx, face_j)
-						block[(size_t)face_j * m_totalDOF + 1] = H_final.y * RadConst::INV_FOUR_PI;  // (My, face_j)
-						block[(size_t)face_j * m_totalDOF + 2] = H_final.z * RadConst::INV_FOUR_PI;  // (Mz, face_j)
+						block[(size_t)face_j * m_totalDOF + 0] = H_final.x * RadConst::INV_FOUR_PI;
+						block[(size_t)face_j * m_totalDOF + 1] = H_final.y * RadConst::INV_FOUR_PI;
+						block[(size_t)face_j * m_totalDOF + 2] = H_final.z * RadConst::INV_FOUR_PI;
 					}
 				}
 			}
@@ -1335,29 +1350,17 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				// 6x6 block: Field at MSC hexahedron (6 DOF) eval points from MSC hexahedron (6 DOF)
 				// K(face_i, face_j) = normal_i dot H_field(eval_pt_i, src_face_j)
 				// Field functions return values WITHOUT 4pi divisor
-				// Matrix stores: -K_ij / (4*pi) (following ELF convention)
+				// Matrix stores: K_ij / (4*pi) (ELF-compatible sign convention)
 				//
-				// APPROACH: Same as 3x6 and 3x3 blocks:
-				// 1. Inverse-transform observation point
-				// 2. Compute field from source at original position
-				// 3. Forward-transform the result (H field)
-				// This ensures correct face-to-sigma mapping under symmetry.
+				// DIRECT GEOMETRY APPROACH (NOT reciprocity + TrAxialVect):
+				// For each transformation, transform the source geometry and compute field
+				// at the ORIGINAL observation point. This correctly handles plane symmetry.
 
 				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
 				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
 
 				if(poly_row && poly_row->Use6DOF_MSC && poly_col && poly_col->Use6DOF_MSC)
 				{
-					// MSC 6x6 block using SAME APPROACH as working 3x6 block:
-					// 1. Inverse-transform observation point
-					// 2. Compute field from UNTRANSFORMED source
-					// 3. Forward-transform H field using TrAxialVect
-					// 4. Sum contributions and apply final inverse transform
-					//
-					// This approach works because:
-					// - MSC sigma DOFs are on the original element
-					// - Field from TrfMlt copy = TrAxialVect(field from original at T^-1(obs))
-
 					for(int face_i = 0; face_i < 6; face_i++)
 					{
 						// Yano-Sugahara evaluation point: midpoint between face center and element center
@@ -1373,29 +1376,61 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						{
 							TVector3d H_total(0., 0., 0.);
 
+							// First, check if face_j is on a mirror plane
+							// A face is on the mirror plane if all its vertices are unchanged by the reflection
+							bool faceOnMirrorPlane = false;
+							for(unsigned tr = 0; tr < TransPtrVect.size() && !faceOnMirrorPlane; tr++)
+							{
+								radTrans* pTrans = TransPtrVect[tr];
+								if(pTrans->ShowParity() < 0.0 && !pTrans->IsIdent(1e-12))
+								{
+									// This is a reflection - check if face_j is on the mirror plane
+									faceOnMirrorPlane = poly_col->IsFaceOnMirrorPlane(face_j, pTrans);
+								}
+							}
+
 							for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
 							{
-								// Inverse-transform observation point (same as 3x6 block)
-								TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
+								radTrans* pTrans = TransPtrVect[tr];
 
-								// Field from unit sigma on face j at UNTRANSFORMED source
-								TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
+								// Get parity (det = +1 for rotations, -1 for reflections)
+								// For reflections, sigma' = det * sigma, so field contribution is scaled by det
+								double parity = pTrans->ShowParity();
 
-								// Point charge contribution (m = -sigma * area) - Yano-Sugahara MSC method
-								double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
-								TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
+								// Check if this is identity (original source)
+								if(pTrans->IsIdent(1e-12))
+								{
+									// Field from original source at original observation point
+									// For faces on mirror plane: skip face contribution (it cancels with mirrored face)
+									TVector3d H_face(0., 0., 0.);
+									if(!faceOnMirrorPlane)
+									{
+										H_face = poly_col->FieldFromQuadFace(InitObsPoiVect, face_j, 1.0);
+									}
+									double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
+									TVector3d H_point = poly_col->FieldFromPointCharge(InitObsPoiVect, unit_point_charge);
+									H_total.x += H_face.x + H_point.x;
+									H_total.y += H_face.y + H_point.y;
+									H_total.z += H_face.z + H_point.z;
+								}
+								else
+								{
+									// Field from TRANSFORMED source at original observation point
+									// For faces on mirror plane: FieldFromQuadFaceTransformed already returns zero
+									TVector3d H_face = poly_col->FieldFromQuadFaceTransformed(InitObsPoiVect, face_j, 1.0, pTrans);
 
-								TVector3d H_local;
-								H_local.x = H_face.x + H_point.x;
-								H_local.y = H_face.y + H_point.y;
-								H_local.z = H_face.z + H_point.z;
+									// Point charge at transformed position
+									TVector3d transformedCenter = pTrans->TrPoint(poly_col->CentrPoint);
+									double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
+									TVector3d H_point = poly_col->FieldFromPointChargeAtPos(InitObsPoiVect, unit_point_charge, transformedCenter);
 
-								// Transform back to global using pseudo-vector (axial vector) transformation
-								// H field is a pseudo-vector: H' = det(T) * T * H
-								TVector3d H_tr = TransPtrVect[tr]->TrAxialVect(H_local);
-								H_total.x += H_tr.x;
-								H_total.y += H_tr.y;
-								H_total.z += H_tr.z;
+									// For TrfMlt plane symmetry, the mirrored element has the SAME sigma
+								// as the original (by symmetry). No parity scaling needed.
+								// The winding reversal in FieldFromQuadFaceTransformed handles geometry.
+								H_total.x += H_face.x + H_point.x;
+								H_total.y += H_face.y + H_point.y;
+								H_total.z += H_face.z + H_point.z;
+								}
 							}
 
 							// Transform by row's main transform (inverse) using pseudo-vector transformation
@@ -1406,8 +1441,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							              H_final.y * poly_row->FaceNormal[face_i].y +
 							              H_final.z * poly_row->FaceNormal[face_i].z;
 
-							// Store -K_ij / (4*pi) (COLUMN-MAJOR): A(i,j) at [j * stride + i]
-							double K_val = -K_ij * RadConst::INV_FOUR_PI;
+							// Store K_ij / (4*pi) (COLUMN-MAJOR): A(i,j) at [j * stride + i]
+							// Sign convention: positive = ELF-compatible (self-demagnetization is negative)
+							double K_val = K_ij * RadConst::INV_FOUR_PI;
 							block[(size_t)face_j * m_totalDOF + face_i] = K_val;
 						}
 					}
@@ -3268,8 +3304,9 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 				H_total[2] += coef * r[2];
 			}
 
-			// K_ij = -n_i dot H_total / (4*pi)
-			double K_ij = -(n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
+			// K_ij = n_i dot H_total / (4*pi)
+			// Sign convention: positive = ELF-compatible (self-demagnetization is negative)
+			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
 			              * RadConst::INV_FOUR_PI;
 
 			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j

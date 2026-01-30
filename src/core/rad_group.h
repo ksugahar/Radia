@@ -41,6 +41,7 @@ public:
 	inline void AddElement(int, const radThg&);
 
 	inline void B_comp(radTField*) override;  // Modified by P. Elleaume 8 Nov 96
+	void B_genComp(radTField* FieldPtr) override;  // Override to handle TrfMlt propagation
 	void B_intComp(radTField* FieldPtr) { B_comp(FieldPtr);} // This is not an Error!!!
 
 	void Dump(std::ostream&, int =0);
