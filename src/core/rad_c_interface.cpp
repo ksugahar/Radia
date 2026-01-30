@@ -140,6 +140,7 @@ void CompPrecisionOpt( const char*, const char*, const char*, const char*, const
 void MultipoleThresholds(double, double, double, double); // Maybe to be removed later
 void PreRelax( int, int );
 void ShowInteractMatrix(int);
+int GetInteractMatrix(int, double*, int*);
 void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
 void ManualRelax( int, int, int, double );
@@ -1568,6 +1569,13 @@ void PreRelax(int ElemKey, int SrcElemKey)
 void ShowInteractMatrix(int InteractElemKey)
 {
 	rad.ShowInteractMatrix(InteractElemKey);
+}
+
+//-------------------------------------------------------------------------
+
+int GetInteractMatrix(int InteractElemKey, double* pMatrix, int* pDOF)
+{
+	return rad.GetInteractMatrix(InteractElemKey, pMatrix, pDOF);
 }
 
 //-------------------------------------------------------------------------

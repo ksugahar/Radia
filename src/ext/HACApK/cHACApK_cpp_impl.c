@@ -1195,9 +1195,9 @@ void HACApK_update_diagonal_fast_wrapper(
                 int global_idx = lod[nstrtl + il] - 1;  /* Convert 1-based to 0-based */
 
                 if (global_idx >= 0 && global_idx < ndof) {
-                    /* A_ii = N_ii + 1/chi_i */
+                    /* A_ii = N_ii - 1/chi_i (ELF-compatible) */
                     /* Storage: a1[it + ndt * il] where it==il for diagonal */
-                    a1[il + ndt * il] = diag_N[global_idx] + inv_chi[global_idx];
+                    a1[il + ndt * il] = diag_N[global_idx] - inv_chi[global_idx];
                 }
             }
         }

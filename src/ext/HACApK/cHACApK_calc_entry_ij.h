@@ -14,11 +14,11 @@
  *   i_bemv  - Problem type identifier (unused in Radia)
  *
  * Returns:
- *   The (i,j) element of the interaction matrix A = -N + diag(1/chi)
+ *   The (i,j) element of the interaction matrix A = -N - diag(1/chi) (ELF-compatible)
  *
  * Note: In Radia's MMM (Magnetic Moment Method), the system matrix is:
- *   A * M = H_ext + M_r/chi
- *   where A_ij = -N_ij + delta_ij/chi_i
+ *   A * M = H_ext + M_r/chi (ELF-compatible formulation)
+ *   where A_ij = -N_ij - delta_ij/chi_i
  *         N_ij is the demagnetization tensor element
  *
  * Thread Safety:

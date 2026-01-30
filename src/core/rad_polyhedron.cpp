@@ -1273,9 +1273,16 @@ TVector3d radTPolyhedron::FieldFromQuadFaceTransformed(const TVector3d& obs, int
 {
 	// Compute field from a transformed quadrilateral face (for TrfMlt symmetry)
 	//
-	// SIMPLE APPROACH: Just transform vertices and compute field.
-	// The sigma value passed in already includes any necessary sign corrections.
-	// No reverseWinding - let the geometry transformation speak for itself.
+	// For reflection transformations (det = -1), the vertex winding is effectively
+	// reversed by the mirror operation. This causes the computed face normal to
+	// point inward instead of outward. We must reverse the winding to maintain
+	// outward-pointing normals.
+	//
+	// SPECIAL CASE: Faces ON the mirror plane
+	// When a face is exactly on the mirror plane, its transformed vertices are
+	// identical to the original vertices. In this case, the contribution from
+	// this face should be zero (with parity applied, it would cancel with the
+	// original face contribution anyway).
 
 	// Get face vertices (same as FieldFromQuadFace)
 	radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[faceIdx];
@@ -1286,18 +1293,52 @@ TVector3d radTPolyhedron::FieldFromQuadFaceTransformed(const TVector3d& obs, int
 	if(verts2d.size() < 4) return TVector3d(0.0, 0.0, 0.0);
 
 	// Get local face vertices and transform to global (element's coords)
-	TVector3d V0 = tr->TrPoint(TVector3d(verts2d[0].x, verts2d[0].y, pgn->CoordZ));
-	TVector3d V1 = tr->TrPoint(TVector3d(verts2d[1].x, verts2d[1].y, pgn->CoordZ));
-	TVector3d V2 = tr->TrPoint(TVector3d(verts2d[2].x, verts2d[2].y, pgn->CoordZ));
-	TVector3d V3 = tr->TrPoint(TVector3d(verts2d[3].x, verts2d[3].y, pgn->CoordZ));
+	TVector3d V0_orig = tr->TrPoint(TVector3d(verts2d[0].x, verts2d[0].y, pgn->CoordZ));
+	TVector3d V1_orig = tr->TrPoint(TVector3d(verts2d[1].x, verts2d[1].y, pgn->CoordZ));
+	TVector3d V2_orig = tr->TrPoint(TVector3d(verts2d[2].x, verts2d[2].y, pgn->CoordZ));
+	TVector3d V3_orig = tr->TrPoint(TVector3d(verts2d[3].x, verts2d[3].y, pgn->CoordZ));
 
 	// Apply TrfMlt symmetry transformation to source vertices
-	V0 = srcTrans->TrPoint(V0);
-	V1 = srcTrans->TrPoint(V1);
-	V2 = srcTrans->TrPoint(V2);
-	V3 = srcTrans->TrPoint(V3);
+	TVector3d V0 = srcTrans->TrPoint(V0_orig);
+	TVector3d V1 = srcTrans->TrPoint(V1_orig);
+	TVector3d V2 = srcTrans->TrPoint(V2_orig);
+	TVector3d V3 = srcTrans->TrPoint(V3_orig);
 
-	// Compute field using standard vertex winding
+	// Check if this is a reflection (det < 0)
+	double detM = srcTrans->ShowParity();
+	bool isReflection = (detM < 0.0);
+
+	// Check if face is ON the mirror plane (vertices unchanged by transformation)
+	// This happens when the face lies exactly on the symmetry plane
+	const double tol = 1e-12;
+	bool faceOnMirror = false;
+	if(isReflection)
+	{
+		double d0 = (V0.x - V0_orig.x)*(V0.x - V0_orig.x) +
+		            (V0.y - V0_orig.y)*(V0.y - V0_orig.y) +
+		            (V0.z - V0_orig.z)*(V0.z - V0_orig.z);
+		double d1 = (V1.x - V1_orig.x)*(V1.x - V1_orig.x) +
+		            (V1.y - V1_orig.y)*(V1.y - V1_orig.y) +
+		            (V1.z - V1_orig.z)*(V1.z - V1_orig.z);
+		double d2 = (V2.x - V2_orig.x)*(V2.x - V2_orig.x) +
+		            (V2.y - V2_orig.y)*(V2.y - V2_orig.y) +
+		            (V2.z - V2_orig.z)*(V2.z - V2_orig.z);
+		double d3 = (V3.x - V3_orig.x)*(V3.x - V3_orig.x) +
+		            (V3.y - V3_orig.y)*(V3.y - V3_orig.y) +
+		            (V3.z - V3_orig.z)*(V3.z - V3_orig.z);
+
+		faceOnMirror = (d0 < tol && d1 < tol && d2 < tol && d3 < tol);
+	}
+
+	// For faces ON the mirror plane, return zero (they cancel with original by symmetry)
+	if(faceOnMirror)
+	{
+		return TVector3d(0.0, 0.0, 0.0);
+	}
+
+	// Compute field using standard winding for ALL transformations
+	// For reflections, the transformed vertices naturally flip the face normal,
+	// which gives the correct field direction from the mirrored face.
 	TVector3d H_total(0.0, 0.0, 0.0);
 	H_total += FieldFromChargedTriangle(obs, V0, V1, V2, sigma);
 	H_total += FieldFromChargedTriangle(obs, V0, V2, V3, sigma);
@@ -1338,6 +1379,50 @@ TVector3d radTPolyhedron::FieldFromPointChargeAtPos(const TVector3d& obs, double
 	H.z = coef * r_minus_p.z;
 
 	return H;
+}
+
+//-------------------------------------------------------------------------
+
+bool radTPolyhedron::IsFaceOnMirrorPlane(int faceIdx, radTrans* pTrans) const
+{
+	// Check if face faceIdx lies on the mirror plane defined by pTrans
+	// Returns true if all vertices of the face are unchanged by the transformation
+	// (i.e., they lie on the mirror plane)
+
+	if(faceIdx < 0 || faceIdx >= AmOfFaces) return false;
+	if(!pTrans) return false;
+
+	// Only relevant for reflections (det < 0)
+	double detM = pTrans->ShowParity();
+	if(detM >= 0.0) return false;  // Not a reflection
+
+	// Get face vertices
+	const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[faceIdx];
+	radTPolygon* pgn = hpt.PgnHndl.rep;
+	radTrans* tr = hpt.TransHndl.rep;
+
+	const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+	if(verts2d.size() < 3) return false;
+
+	// Check if all vertices are unchanged by the mirror transformation
+	const double tol = 1e-12;
+	for(size_t i = 0; i < verts2d.size(); i++)
+	{
+		// Get original vertex in global coordinates
+		TVector3d V_orig = tr->TrPoint(TVector3d(verts2d[i].x, verts2d[i].y, pgn->CoordZ));
+
+		// Apply mirror transformation
+		TVector3d V_trans = pTrans->TrPoint(V_orig);
+
+		// Check if transformed equals original
+		double dist_sq = (V_trans.x - V_orig.x) * (V_trans.x - V_orig.x) +
+		                 (V_trans.y - V_orig.y) * (V_trans.y - V_orig.y) +
+		                 (V_trans.z - V_orig.z) * (V_trans.z - V_orig.z);
+
+		if(dist_sq >= tol) return false;  // This vertex is NOT on the mirror plane
+	}
+
+	return true;  // All vertices are on the mirror plane
 }
 
 //-------------------------------------------------------------------------
@@ -1404,9 +1489,16 @@ void radTPolyhedron::B_comp_hexahedron_MSC_transformed(radTField* FieldPtr, radT
 	}
 	bool magnIsNotZero = (Magn.x != 0.0 || Magn.y != 0.0 || Magn.z != 0.0);
 
+	// Determine if this is a reflection (need to reverse winding)
+	bool isReflection = (detM < 0.0);
+
 	if(sigmaIsZero && magnIsNotZero)
 	{
-		// Permanent magnet: use transformed magnetization
+		// Permanent magnet: The face normal from cross product changes direction after
+		// mirror transformation. Using pseudo-vector transformed M (transformedMagn)
+		// compensates for this, giving sigma' = M'.n' = (det*T*M).(T*n) = M.n = sigma
+		// which is physically correct for symmetric problems.
+		// Standard winding for all transformations.
 		for(int i = 0; i < nFaces; i++)
 		{
 			const TVector3d& V0 = faceVertices[i][0];
@@ -1414,36 +1506,59 @@ void radTPolyhedron::B_comp_hexahedron_MSC_transformed(radTField* FieldPtr, radT
 			const TVector3d& V2 = faceVertices[i][2];
 			const TVector3d& V3 = faceVertices[i][3];
 
-			// Use transformed magnetization
+			// Use transformedMagn (pseudo-vector transformed) to compensate for
+			// the normal direction change from vertex transformation.
+			// Standard winding for all transformations.
 			H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, transformedMagn, obsPoint, transformedCenter);
 			H_total += RadFieldFromTriangleFaceGlobal(V0, V2, V3, transformedMagn, obsPoint, transformedCenter);
 		}
 	}
 	else
 	{
-		// Reciprocity approach - matches interaction matrix:
-		// 1. Inverse-transform observation point
-		// 2. Compute field from UNTRANSFORMED source
-		// 3. Forward-transform H field using TrAxialVect
-
-		// Inverse-transform observation point
-		TVector3d ObsPoiVect = srcTrans->TrPoint_inv(obsPoint);
+		// Direct computation from transformed geometry (NOT reciprocity)
+		//
+		// For TrfMlt plane symmetry, the reciprocity approach with TrAxialVect
+		// gives WRONG results for X-mirror and Y-mirror because:
+		// - TrAxialVect flips Hz sign for X-mirror (det=-1, T preserves z)
+		// - This causes Hz contributions from original and mirrored sources to CANCEL
+		//
+		// The correct approach is to compute H directly from transformed faces.
+		// The sigma values are shared (same DOF), so we use the original Sigma[i]
+		// but compute the field from the transformed face vertices.
+		//
+		// CRITICAL: For reflection transformations (det = -1), the mirror operation
+		// reverses the vertex winding order, which reverses the computed face normal.
+		// This causes the field to have the wrong sign. We must reverse the winding
+		// back to maintain outward-pointing normals.
 
 		for(int i = 0; i < nFaces; i++)
 		{
-			// Field from face at UNTRANSFORMED source with solved sigma
-			TVector3d H_face = FieldFromQuadFace(ObsPoiVect, i, Sigma[i]);
-			H_total.x += H_face.x;
-			H_total.y += H_face.y;
-			H_total.z += H_face.z;
+			// Use pre-computed transformed face vertices
+			const TVector3d& V0 = faceVertices[i][0];
+			const TVector3d& V1 = faceVertices[i][1];
+			const TVector3d& V2 = faceVertices[i][2];
+			const TVector3d& V3 = faceVertices[i][3];
+
+			// For TrfMlt plane symmetry, the mirrored element has the SAME sigma values
+			// as the original element (by symmetry of the physical problem).
+			double sigma_effective = Sigma[i];
+
+			// For reflections (det < 0), the transformed face vertices define a face
+			// with reversed winding (flipped normal). The FieldFromChargedTriangle
+			// formula uses the vertex order to determine the face normal direction.
+			//
+			// By NOT reversing the winding, we allow the geometric mirror to naturally
+			// flip the normal direction. Combined with the same sigma value, this
+			// gives the correct field contribution from the mirrored face.
+			//
+			// Standard winding for ALL transformations (including reflections)
+			H_total += FieldFromChargedTriangle(obsPoint, V0, V1, V2, sigma_effective);
+			H_total += FieldFromChargedTriangle(obsPoint, V0, V2, V3, sigma_effective);
 		}
 
 		H_total.x *= RadConst::INV_FOUR_PI;
 		H_total.y *= RadConst::INV_FOUR_PI;
 		H_total.z *= RadConst::INV_FOUR_PI;
-
-		// Forward-transform H field (axial vector transformation)
-		H_total = srcTrans->TrAxialVect(H_total);
 	}
 
 	if(FldKey.H_) FieldPtr->H += H_total;
@@ -1472,7 +1587,10 @@ void radTPolyhedron::B_comp_hexahedron_MSC_transformed(radTField* FieldPtr, radT
 		bool pointInside = std::fabs(std::fabs(total_solid_angle) - FOUR_PI) < FOUR_PI * tolerance;
 		if(pointInside)
 		{
-			FieldPtr->B += transformedMagn;
+			// For TrfMlt symmetric problems, the internal field should be mu_0 * M
+			// where M is the ORIGINAL magnetization (same direction for both copies).
+			// Use Magn, not transformedMagn.
+			FieldPtr->B += Magn;
 		}
 	}
 }

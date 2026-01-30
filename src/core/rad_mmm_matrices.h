@@ -302,7 +302,7 @@ private:
     int n_elements_;
     bool matrix_set_;
 
-    // Build system matrix A = diag(inv_chi) - N
+    // Build system matrix A = -diag(inv_chi) - N (ELF-compatible)
     void BuildSystemMatrix(std::vector<double>& A,
                            const std::vector<double>& inv_chi,
                            bool chi_per_element) const;
