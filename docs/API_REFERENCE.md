@@ -1405,11 +1405,24 @@ rad.TrfTrsl(obj, [dx, dy, dz])
 rad.TrfRot(obj, [x, y, z], [nx, ny, nz], angle)
 ```
 
-### TrfMlt - Multiple Copies
+### TrfOrnt - Apply Transformation
 
 ```python
-array = rad.TrfMlt(obj, transformation, n_copies)
+rad.TrfOrnt(obj, trf)  # Apply transformation to orient object
 ```
+
+### IMA Symmetry (Replaces TrfMlt)
+
+**Note**: `TrfMlt` has been removed (2026-01-31). Use IMA symmetry for plane symmetry:
+
+```python
+intrc = rad.PreRelax(container, container)
+n_ima = rad.SetIMASymmetry(intrc, 'x')  # 'x', 'y', or 'z' mirror
+rad.BuildIMAMatrix(intrc)
+rad.Solve(container, 0.0001, 100, 0)
+```
+
+See [IMA_SYMMETRY_DESIGN.md](IMA_SYMMETRY_DESIGN.md) for details.
 
 ---
 

@@ -459,14 +459,8 @@ The block is magnetized according to {M[0],M[1],M[2]} then subdivided according 
 */
 EXP int CALL RadObjFullMag(int* n, double* P, double* L, double* M, double* K, int nK, int grp, int mat, double* RGB);
 
-/** Creates a symmetry with respect to plane defined by a point and a normal vector.
-@param trf [out] reference number of the symmetry object created
-@param P [in] array of 3 numbers representing cartesian coordinates of a point in the plane
-@param N [in] array of 3 numbers representing cartesian coordinates of a vector normal to the plane
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadTrfPlSym(int* trf, double* P, double* N);
+// RadTrfPlSym REMOVED (2026-01-31) - Use IMA symmetry instead
+// See docs/IMA_SYMMETRY_DESIGN.md for the correct approach
 
 /** Creates a rotation.
 @param trf [out] reference number of the symmetry object created
@@ -511,15 +505,9 @@ EXP int CALL RadTrfCmbL(int* fintrf, int origtrf, int trf);
 */
 EXP int CALL RadTrfCmbR(int* fintrf, int origtrf, int trf);
 
-/** Creates mlt-1 symmetry objects of the object obj. Each symmetry object is derived from the previous one by applying the transformation trf to it. Following this, the object obj becomes equivalent to mlt different objects.
-@param objout [out] reference number of the final object with symmetries applied
-@param obj [in] reference number of the original object to which symmetries should be applied
-@param trf [in] reference number of a space transformation
-@param mlt [in] multiplicity of the space transformation
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadTrfMlt(int* objout, int obj, int trf, int mlt);
+// RadTrfMlt REMOVED (2026-01-31) - Use IMA symmetry instead
+// The shared-DOF approach was fundamentally incompatible with MSC 6DOF hexahedra
+// See docs/IMA_SYMMETRY_DESIGN.md for the correct element-based approach
 
 /** Orients object obj by applying transformation trf to it once.
 @param objout [out] reference number of the final object with space transformation applied
@@ -528,25 +516,9 @@ EXP int CALL RadTrfMlt(int* objout, int obj, int trf, int mlt);
 */
 EXP int CALL RadTrfOrnt(int* objout, int obj, int trf);
 
-/** Creates an object mirror with respect to a plane. The object mirror possesses the same geometry as obj, but its magnetization and/or current densities are modified in such a way that the magnetic field produced by the obj and its mirror in the plane of mirroring is perpendicular to this plane.
-@param objout [out] reference number of the final object
-@param obj [in] an integer number referencing the original object
-@param P [in] array of 3 cartesian coordinates of a pointg in the mirror plane
-@param N [in] array of 3 cartesian coordinates of a vector normal to the mirror plane
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author P.E., O.C.
-*/ 
-EXP int CALL RadTrfZerPara(int* objout, int obj, double* P, double* N);
-
-/** Creates an object mirror with respect to a plane. The object mirror possesses the same geometry as obj, but its magnetization and/or current densities are modified in such a way that the magnetic field produced by the obj and its mirror in the plane of mirroring is parallel to this plane.
-@param objout [out] reference number of the object
-@param obj [in] an integer number referencing the original object
-@param P [in] array of 3 cartesian coordinates of a pointg in the mirror plane
-@param N [in] array of 3 cartesian coordinates of a vector normal to the mirror plane
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author P.E., O.C.
-*/ 
-EXP int CALL RadTrfZerPerp(int* objout, int obj, double* P, double* N);
+// RadTrfZerPara REMOVED (2026-01-31) - Use IMA symmetry instead
+// RadTrfZerPerp REMOVED (2026-01-31) - Use IMA symmetry instead
+// These functions used RadTrfMlt internally, which has fundamental issues with MSC 6DOF hexahedra
 
 /** Applies material mat to object obj.
 @param objout [out] reference number of the final object with material applied
@@ -1167,6 +1139,30 @@ EXP int CALL RadSetRelaxParam(int* n, double relax);
 @author Radia Development Team
 */
 EXP int CALL RadGetRelaxParam(double* relax);
+
+/** Sets IMA (Image) symmetry mode for interaction matrix.
+IMA symmetry enables half-model (x-mirror), quarter-model (xy), or eighth-model (xyz) analysis
+by including image contributions during matrix assembly.
+
+@param numElements [out] number of elements in IMA region (reduced set)
+@param InteractKey [in] interaction handle from PreRelax
+@param symmetry [in] symmetry type: "x", "y", "z", "xy", "xz", "yz", "xyz", or "none"
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadSetIMASymmetry(int* numElements, int InteractKey, const char* symmetry);
+
+/** Builds IMA interaction matrix with image summation.
+Must be called after RadSetIMASymmetry. The matrix is built using:
+N_IMA[i,j] = N[i,j] + N[i, mirror_j] @ P
+where P is the DOF permutation matrix for the active symmetry.
+
+@param result [out] 1 if successful, 0 if failed
+@param InteractKey [in] interaction handle from PreRelax
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@author Radia Development Team
+*/
+EXP int CALL RadBuildIMAMatrix(int* result, int InteractKey);
 
 /** Classifies evaluation points as inside/near/far relative to mesh elements.
 @param classification [out] array of classification (0=inside, 1=near, 2=far)
