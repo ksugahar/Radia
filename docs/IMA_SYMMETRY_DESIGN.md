@@ -1,0 +1,305 @@
+# IMA (Image) Symmetry Implementation Design
+
+## Overview
+
+This document describes the implementation of ELF-compatible IMA (Image) symmetry for MSC hexahedra in Radia.
+
+**Note**: As of 2026-01-31, `TrfMlt`, `TrfPlSym`, `TrfZerPara`, and `TrfZerPerp` have been **REMOVED** from Radia. IMA is the only supported method for plane symmetry with MSC hexahedra.
+
+## Why TrfMlt Was Removed
+
+The original TrfMlt had fundamental design issues:
+
+1. **DOF Sharing Issue**: TrfMlt shared DOFs between original and virtual elements, but MSC requires independent DOFs when the external field is perpendicular to the mirror plane.
+
+2. **Face Permutation Required**: For x-mirror, face 1 (x+) and face 3 (x-) must be permuted. TrfMlt did not handle this.
+
+3. **Design Philosophy**: Element-based management (independent DOFs per element) is essential for correct physics. Face-based management (shared DOFs) causes errors.
+
+## ELF's IMA Approach
+
+ELF constructs the x-mirror matrix using **image summation** during assembly:
+
+```
+N_IMA[i,j] = N[i,j] + N[i, mirror_j] @ P
+```
+
+Where:
+- `N[i,j]`: Interaction from element j to element i (direct)
+- `N[i, mirror_j]`: Interaction from mirror image of element j to element i
+- `P`: DOF permutation matrix (swaps face 1 and face 3 for x-mirror)
+
+## Face Ordering (ELF Convention)
+
+| DOF Index | Face | Direction |
+|-----------|------|-----------|
+| 0 | y- | -Y normal |
+| 1 | x+ | +X normal |
+| 2 | y+ | +Y normal |
+| 3 | x- | -X normal |
+| 4 | z- | -Z normal |
+| 5 | z+ | +Z normal |
+
+## Permutation Matrices
+
+### X-Mirror (YZ plane)
+
+Swaps x+ (DOF 1) and x- (DOF 3):
+
+```
+P_x = [[1,0,0,0,0,0],
+       [0,0,0,1,0,0],
+       [0,0,1,0,0,0],
+       [0,1,0,0,0,0],
+       [0,0,0,0,1,0],
+       [0,0,0,0,0,1]]
+```
+
+### Y-Mirror (XZ plane)
+
+Swaps y- (DOF 0) and y+ (DOF 2):
+
+```
+P_y = [[0,0,1,0,0,0],
+       [0,1,0,0,0,0],
+       [1,0,0,0,0,0],
+       [0,0,0,1,0,0],
+       [0,0,0,0,1,0],
+       [0,0,0,0,0,1]]
+```
+
+### Z-Mirror (XY plane)
+
+Swaps z- (DOF 4) and z+ (DOF 5):
+
+```
+P_z = [[1,0,0,0,0,0],
+       [0,1,0,0,0,0],
+       [0,0,1,0,0,0],
+       [0,0,0,1,0,0],
+       [0,0,0,0,0,1],
+       [0,0,0,0,1,0]]
+```
+
+## Implementation Architecture
+
+### 1. New API Functions
+
+```cpp
+// Set IMA symmetry configuration
+// symmetry_type: "x", "y", "z", "xy", "xz", "yz", "xyz"
+// Returns: handle for IMA configuration
+int SetIMASymmetry(const char* symmetry_type);
+
+// Get IMA-reduced element count
+int GetIMAElementCount();
+
+// Check if element is in the positive half-space for given symmetry
+bool IsElementInIMARegion(int elem_idx, const char* symmetry_type);
+```
+
+### 2. Element Mapping
+
+For x-mirror symmetry:
+- Original elements: Elements with x_center >= 0
+- Mirror elements: Same elements reflected through x=0 plane
+
+```cpp
+struct IMASymmetryConfig {
+    int symmetry_flags;           // Bitfield: X=1, Y=2, Z=4
+    std::vector<int> ima_to_full; // IMA element index -> full element index
+    std::vector<int> mirror_map;  // IMA element index -> mirror element index in full model
+    std::vector<int> perm_x;      // DOF permutation for x-mirror (size 6)
+    std::vector<int> perm_y;      // DOF permutation for y-mirror (size 6)
+    std::vector<int> perm_z;      // DOF permutation for z-mirror (size 6)
+};
+```
+
+### 3. Modified Matrix Assembly (Dense)
+
+```cpp
+int SetupInteractMatrix_IMA()
+{
+    // For each IMA element pair (i, j):
+    // N_IMA[i,j] = N[full_i, full_j] + N[full_i, mirror_j] @ P_x
+
+    for(int i = 0; i < n_ima_elem; i++)
+    {
+        int full_i = ima_to_full[i];
+
+        for(int j = 0; j < n_ima_elem; j++)
+        {
+            int full_j = ima_to_full[j];
+            int mirror_j = mirror_map[full_j];
+
+            // Compute direct interaction
+            double N_direct[36];
+            Compute6x6Block(full_i, full_j, N_direct);
+
+            // Compute mirror interaction
+            double N_mirror[36];
+            Compute6x6Block(full_i, mirror_j, N_mirror);
+
+            // Apply permutation: N_mirror @ P_x
+            double N_mirror_perm[36];
+            ApplyPermutation(N_mirror, perm_x, N_mirror_perm);
+
+            // Sum: N_IMA = N_direct + N_mirror_perm
+            double N_IMA[36];
+            for(int k = 0; k < 36; k++)
+                N_IMA[k] = N_direct[k] + N_mirror_perm[k];
+
+            // Store in flattened matrix
+            StoreBlock(i, j, N_IMA);
+        }
+    }
+}
+```
+
+### 4. HACApK Adaptation
+
+For HACApK on-demand matrix computation:
+
+```cpp
+void ComputeMatrixElement_IMA(int row, int col, double* values)
+{
+    // row, col are IMA element indices (reduced set)
+    int full_row = ima_to_full[row];
+    int full_col = ima_to_full[col];
+    int mirror_col = mirror_map[full_col];
+
+    // Compute both direct and mirror contributions
+    double N_direct[36], N_mirror[36];
+    Compute6x6BlockFast(full_row, full_col, N_direct);
+    Compute6x6BlockFast(full_row, mirror_col, N_mirror);
+
+    // Apply permutation and sum
+    ApplyPermutation(N_mirror, perm_x, N_mirror);
+    for(int k = 0; k < 36; k++)
+        values[k] = N_direct[k] + N_mirror[k];
+}
+```
+
+### 5. Element Position for Cluster Tree
+
+HACApK cluster tree uses element positions. For IMA:
+- Use the original element positions (not mirrored)
+- The cluster tree is built on the reduced element set
+- Distance calculation uses original positions
+
+```cpp
+TVector3d GetIMAElementCenter(int ima_idx)
+{
+    int full_idx = ima_to_full[ima_idx];
+    return g3dRelaxPtrVect[full_idx]->ReturnCentrPoint();
+}
+```
+
+## External Field Handling
+
+For x-mirror IMA with coil:
+- Coil also needs IMA treatment
+- H_ext[i] = H_coil[full_i] (evaluated at original position)
+- The mirror contribution is implicitly included via matrix IMA
+
+## Validation
+
+Compare with ELF_MAGIC x-mirror results:
+1. Matrix should match exactly (rel diff < 0.01%)
+2. Field at origin should match (-228 mT for mu=1000 case)
+
+## Performance Considerations
+
+### Dense Matrix (LU/BiCGSTAB)
+- Memory: 4x reduction (N/2)^2 vs N^2
+- Assembly: 2x more work per block (direct + mirror)
+- Net: ~2x memory reduction
+
+### HACApK
+- Element count: N/2 (reduced)
+- Each block computation: 2x (direct + mirror)
+- ACA compression: May be slightly less effective due to image contributions
+- Overall: Significant memory and time savings for large problems
+
+## Implementation Priority
+
+1. **Phase 1**: Dense matrix IMA (SetupInteractMatrix_IMA)
+   - Implement for x-mirror only first
+   - Validate against ELF_MAGIC
+
+2. **Phase 2**: HACApK IMA (ComputeMatrixElement_IMA)
+   - Modify RadHACApKManager for IMA mode
+   - Validate performance and accuracy
+
+3. **Phase 3**: Multi-axis symmetry
+   - Extend to xy, xz, yz, xyz symmetries
+   - Quarter model (xy) and eighth model (xyz) support
+
+## Files to Modify
+
+1. `rad_interaction.h`: Add IMASymmetryConfig struct
+2. `rad_interaction.cpp`: Add SetupInteractMatrix_IMA()
+3. `rad_hacapk.h/cpp`: Add IMA support to ComputeMatrixElement
+4. `radentry.cpp`: Add Python API for SetIMASymmetry
+5. `radia_pybind.cpp`: Bind new functions
+
+## Implementation Status (2026-01-30)
+
+### Phase 1: Dense Matrix IMA - COMPLETED
+
+**Files Modified:**
+- `rad_interaction.h`: Added IMA enums, permutation arrays, and method declarations
+- `rad_interaction.cpp`: Implemented SetIMASymmetry(), SetupInteractMatrix_IMA(), ApplyDOFPermutation()
+- `rad_c_interface.cpp`: Added RadSetIMASymmetry() and RadBuildIMAMatrix() C interfaces
+- `radentry.cpp`: Added Python API bindings
+- `radia_pybind.cpp`: Added pybind11 bindings for SetIMASymmetry() and BuildIMAMatrix()
+
+**Validation Results:**
+
+| Model | Bz at Origin | Notes |
+|-------|--------------|-------|
+| Full model (52 elements) | -226.24 mT | Reference |
+| IMA x-mirror (26 elements) | -226.24 mT | **Matches full model exactly** |
+| ELF EIEM2 | -228.12 mT | Difference due to coil modeling |
+
+The IMA implementation produces **identical results** to the full model (0.00% difference), confirming correct implementation.
+
+**Python API Usage:**
+
+```python
+import radia as rad
+
+# Build model with full geometry
+rad.FldUnits('m')
+hex_objects = [rad.ObjHexahedron(verts, [0,0,0]) for verts in all_vertices]
+container = rad.ObjCnt(hex_objects + [coil])
+
+# Setup IMA x-mirror
+intrc = rad.PreRelax(container, container)
+n_ima = rad.SetIMASymmetry(intrc, 'x')  # Returns number of IMA elements
+rad.BuildIMAMatrix(intrc)  # Build reduced matrix
+
+# Solve with half the DOFs
+rad.Solve(container, 0.0001, 100, 0)
+B = rad.Fld(container, 'b', [0, 0, 0])
+```
+
+### Phase 2: HACApK IMA - FUTURE ENHANCEMENT
+
+HACApK IMA support requires modifying the on-demand matrix element computation to include the IMA formula. This involves:
+
+1. Adding IMA state to RadHACApKManager
+2. Modifying GetInteractionMatrixElement() to compute K_IMA = K_direct + K_mirror @ P
+3. Building cluster tree on reduced element set
+
+This is planned for large-scale problems (N > 2000 elements) where memory savings are significant.
+
+### Phase 3: Multi-axis Symmetry - FUTURE ENHANCEMENT
+
+Extension to xy (quarter model) and xyz (eighth model) symmetry is straightforward:
+- Apply multiple permutations for combined symmetries
+- Filter elements by positive half-spaces for all active axes
+
+## References
+
+- Yano-Sugahara MSC method (EIEM2 evaluation points)

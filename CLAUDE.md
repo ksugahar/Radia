@@ -2146,62 +2146,43 @@ rad.Solve(mag_obj, 0.0001, 1000, 1)
 - Hexahedron: 6 DOF (sigma per face) - surface charge density
 - LU solver (Method 0) and BiCGSTAB (Method 1) both work
 
+### TrfMlt REMOVED (2026-01-31)
+
+**CRITICAL**: `TrfMlt`, `TrfPlSym`, `TrfZerPara`, and `TrfZerPerp` have been **REMOVED** from Radia.
+
+**Reason**: The shared-DOF design in TrfMlt was fundamentally incompatible with MSC 6DOF hexahedra. Element-based management (IMA) is the correct approach.
+
+**Replacement**: Use **IMA (Image) Symmetry** for plane symmetry:
+
+```python
+import radia as rad
+
+rad.FldUnits('m')
+
+# Build full model geometry
+hex_objects = [rad.ObjHexahedron(verts, [0,0,0]) for verts in all_vertices]
+for h in hex_objects:
+    rad.MatApl(h, rad.MatLin(mu_r))
+container = rad.ObjCnt([coil] + hex_objects)
+
+# Enable IMA x-mirror (half model)
+intrc = rad.PreRelax(container, container)
+n_ima = rad.SetIMASymmetry(intrc, 'x')  # 'x', 'y', or 'z' mirror
+rad.BuildIMAMatrix(intrc)
+
+# Solve with reduced DOF
+rad.Solve(container, 0.0001, 100, 0)
+B = rad.Fld(container, 'b', [0, 0, 0])
+```
+
+**Design Principle**: Element-based management (independent DOFs per element) is essential for correct physics. Face-based management (shared DOFs) causes errors.
+
+See [docs/IMA_SYMMETRY_DESIGN.md](docs/IMA_SYMMETRY_DESIGN.md) for implementation details.
+
 ### Documentation
 
 - [docs/MSC_QUICK_START.md](docs/MSC_QUICK_START.md): Quick start guide
 - [examples/cube_uniform_field/nonlinear/](examples/cube_uniform_field/nonlinear/): Nonlinear benchmark
-
-### TrfMlt Limitation for MSC Hexahedra (2026-01-29)
-
-**CRITICAL**: `TrfMlt` (Transformation Multiplicity) has a fundamental limitation with MSC hexahedra when the external field is perpendicular to the mirror plane.
-
-**Problem**:
-
-| Configuration | Result | Reason |
-|---------------|--------|--------|
-| X-mirror + Z-field | **Works** | Field parallel to mirror plane, DOFs unaffected |
-| Z-mirror + Z-field | **Fails** | Field perpendicular to mirror plane, DOF incompatibility |
-
-**Root Cause**:
-
-```
-Reference case (2 explicit cubes):     TrfMlt case:
-- Cube 1: 6 DOFs (sigma_1[0..5])       - Original: 6 DOFs (sigma[0..5])
-- Cube 2: 6 DOFs (sigma_2[0..5])       - Virtual: shares same 6 DOFs
-- Total: 12 DOFs (independent)         - Total: 6 DOFs (shared)
-```
-
-For Z-mirror with Z-field:
-- `sigma[0]` must represent both `sigma_1[0]` (= -Mz) and `sigma_2[1]` (= +Mz)
-- These have **opposite signs** - impossible with shared DOF!
-
-**Recommendation**:
-
-1. **For mirrors parallel to field**: Use `TrfMlt` (works correctly)
-2. **For mirrors perpendicular to field**: Use explicit element duplication instead of `TrfMlt`
-3. **Alternative**: Use MMM (3DOF per element) instead of MSC (6DOF) for better TrfMlt compatibility
-
-**Example - What Works**:
-```python
-# X-mirror with Z-field (WORKS)
-cube = rad.ObjHexahedron(vertices, [0, 0, 0])
-rad.MatApl(cube, rad.MatLin(1000))
-rad.TrfMlt(cube, rad.TrfPlSym([0,0,0], [1,0,0]), 2)  # X-mirror
-bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])  # Z-field
-g = rad.ObjCnt([cube, bkg])
-rad.Solve(g, 0.0001, 100, 0)  # OK
-```
-
-**Example - What Fails**:
-```python
-# Z-mirror with Z-field (FAILS - use explicit cubes instead)
-cube = rad.ObjHexahedron(vertices, [0, 0, 0])
-rad.MatApl(cube, rad.MatLin(1000))
-rad.TrfMlt(cube, rad.TrfPlSym([0,0,0], [0,0,1]), 2)  # Z-mirror
-bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])  # Z-field (perpendicular!)
-g = rad.ObjCnt([cube, bkg])
-rad.Solve(g, 0.0001, 100, 0)  # INCORRECT RESULT
-```
 
 ---
 
