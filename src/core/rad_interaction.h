@@ -253,6 +253,7 @@ class radTInteraction : public radTg {
 	int m_imaNumElements;                         // Number of elements in IMA region (reduced set)
 	std::vector<int> m_imaToFull;                 // IMA element index -> full element index
 	std::vector<int> m_imaMirrorMap;              // For each IMA element, its mirror element index in full model
+	std::vector<bool> m_imaUseVirtualMirror;      // True if element needs virtual mirror (quarter model)
 
 public:
 
@@ -440,6 +441,10 @@ public:
 
 	// Compute IMA 6x6 block: direct + sum of mirror contributions
 	void Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) const;
+
+	// Compute 6x6 block with virtually mirrored element j
+	// For quarter model support: element j's geometry is mirrored on-the-fly
+	void Compute6x6BlockMirrored(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const;
 
 	// IMA accessors
 	bool IsIMAEnabled() const { return m_imaEnabled; }
