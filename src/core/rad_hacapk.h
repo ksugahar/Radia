@@ -81,7 +81,7 @@ struct RadHACApKStats {
  *   3. Call MatVec(x, y) for matrix-vector products
  *   4. Call UpdateDiagonal() when chi(H) changes (nonlinear iteration)
  *
- * The H-matrix approximates A = -N + diag(1/chi) using ACA+ compression.
+ * The H-matrix approximates A = -N - diag(1/chi) using ACA+ compression (ELF-compatible).
  * For problems where elements are spatially well-separated, this provides
  * O(N log N) complexity instead of O(N^2) for dense matrix-vector products.
  *
@@ -317,7 +317,7 @@ namespace RadHACApKCallback {
     void SetLod(int* lod, int size);
     void ClearLod();
 
-    // Compute matrix element A(i,j) = -N(i,j) + delta_ij/chi_i
+    // Compute matrix element A(i,j) = -N(i,j) - delta_ij/chi_i (ELF-compatible)
     // Called from cHACApK_entry_ij
     double ComputeEntry(int i, int j);
 }

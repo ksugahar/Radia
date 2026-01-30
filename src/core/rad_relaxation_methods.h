@@ -282,7 +282,7 @@ private:
 	                              const std::vector<double>& elemChiArray);
 
 	// Matrix-vector product
-	// Computes: y = A * x where A = -N + diag(1/chi)
+	// Computes: y = A * x where A = -N - diag(1/chi) (ELF-compatible)
 	void MatVec(const std::vector<double>& x, std::vector<double>& y,
 	            const std::vector<double>& inv_chi, int ndof);
 
@@ -292,7 +292,7 @@ private:
 	                 const std::vector<double>& inv_chi, int ndof);
 
 	// Build flat matrix for BLAS dgemv (row-major order)
-	// Matrix A = -N + diag(1/chi) stored in column-major for BLAS
+	// Matrix A = -N - diag(1/chi) stored in column-major for BLAS (ELF-compatible)
 	void BuildFlatMatrix(std::vector<double>& A_flat, const std::vector<double>& inv_chi, int ndof);
 
 	// Dense matrix-vector product using BLAS dgemv

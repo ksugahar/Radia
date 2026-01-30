@@ -408,6 +408,10 @@ public:
 	TVector3d FieldFromPointChargeAtPos(const TVector3d& obs, double charge,
 	                                     const TVector3d& srcPos) const;
 
+	// Check if a face lies on the mirror plane defined by a transformation
+	// Returns true if all vertices of the face coincide with their transformed positions
+	bool IsFaceOnMirrorPlane(int faceIdx, radTrans* pTrans) const;
+
 	// 6 DOF MSC setup for hexahedra
 	void SetupFaceGeometry()
 	{

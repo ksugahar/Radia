@@ -20,6 +20,7 @@
 #include <vector>
 #include <array>
 #include <complex>
+#include <cmath>
 #include <string>
 #include <stdexcept>
 #include <memory>
@@ -132,9 +133,46 @@ int ObjRecMag(py::array_t<double> center,
 }
 
 /**
+ * @brief Compute cross product of two 3D vectors
+ */
+static void cross3(const double* a, const double* b, double* result) {
+    result[0] = a[1] * b[2] - a[2] * b[1];
+    result[1] = a[2] * b[0] - a[0] * b[2];
+    result[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+/**
+ * @brief Compute dot product of two 3D vectors
+ */
+static double dot3(const double* a, const double* b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+/**
+ * @brief Normalize a 3D vector in place, return magnitude
+ */
+static double normalize3(double* v) {
+    double mag = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    if (mag > 1e-15) {
+        v[0] /= mag;
+        v[1] /= mag;
+        v[2] /= mag;
+    }
+    return mag;
+}
+
+/**
  * @brief Create hexahedral element from 8 vertices
  *
- * @param vertices 8 vertices in standard hexahedral ordering
+ * Face ordering follows ELF convention: [y-, x-, y+, x+, z-, z+]
+ *
+ * ELF assigns faces based on GEOMETRY (face normal direction), not topology.
+ * For each local axis direction, the face whose normal best aligns with
+ * that direction is assigned to that DOF position.
+ *
+ * This handles sheared/rotated elements correctly.
+ *
+ * @param vertices 8 vertices in CHEXA ordering
  * @param magnetization Magnetization vector [Mx, My, Mz] in A/m
  * @return Object handle
  */
@@ -152,24 +190,38 @@ int ObjHexahedron(py::list vertices, py::array_t<double> magnetization) {
 
     double M[3] = {m(0), m(1), m(2)};
 
-    // Convert to Radia's polyhedron format with 6 faces
-    // Hexahedron face definitions (1-indexed vertices for each quadrilateral face)
-    static const int HEX_FACES[6][4] = {
-        {1, 4, 3, 2},  // Bottom (z-)
-        {5, 6, 7, 8},  // Top (z+)
-        {1, 2, 6, 5},  // Front (y-)
-        {3, 4, 8, 7},  // Back (y+)
-        {1, 5, 8, 4},  // Left (x-)
-        {2, 3, 7, 6}   // Right (x+)
+    // Extract vertex coordinates (0-indexed)
+    double v[8][3];
+    for (int i = 0; i < 8; i++) {
+        v[i][0] = flat_verts[i * 3 + 0];
+        v[i][1] = flat_verts[i * 3 + 1];
+        v[i][2] = flat_verts[i * 3 + 2];
+    }
+
+    // ELF/CHEXA face definitions (1-indexed vertices)
+    // Face ordering: [y-, x+, y+, x-, z-, z+] - matches magic.f90 kkh array exactly
+    // Reference: magic.f90 lines 1122-1127 (kkh array)
+    // Note: When comparing with ELF matrices, apply permutation [3,2,1,0,5,4] to Radia output
+    static const int CHEXA_FACES[6][4] = {
+        {1, 2, 6, 5},  // Slot 0 (y-): kkh(:,1) - verts 1,2,6,5
+        {2, 3, 7, 6},  // Slot 1 (x+): kkh(:,2) - verts 2,3,7,6
+        {3, 4, 8, 7},  // Slot 2 (y+): kkh(:,3) - verts 3,4,8,7
+        {4, 1, 5, 8},  // Slot 3 (x-): kkh(:,4) - verts 4,1,5,8
+        {4, 3, 2, 1},  // Slot 4 (z-): kkh(:,5) - verts 4,3,2,1
+        {5, 6, 7, 8}   // Slot 5 (z+): kkh(:,6) - verts 5,6,7,8
     };
 
-    // Build flat face array and face length array
+    // Identity face ordering - ELF uses pure topology-based assignment
+    int face_order[6] = {0, 1, 2, 3, 4, 5};
+
+    // Build flat face array in ELF order using topology-based assignment
     std::vector<int> flatFaces;
     int faceLengths[6] = {4, 4, 4, 4, 4, 4};
 
-    for (int f = 0; f < 6; f++) {
-        for (int v = 0; v < 4; v++) {
-            flatFaces.push_back(HEX_FACES[f][v]);
+    for (int elf_slot = 0; elf_slot < 6; elf_slot++) {
+        int chexa_face = face_order[elf_slot];
+        for (int v_idx = 0; v_idx < 4; v_idx++) {
+            flatFaces.push_back(CHEXA_FACES[chexa_face][v_idx]);
         }
     }
 
@@ -679,6 +731,55 @@ void SetHACApKParams(double eps, int leaf_size, double eta);  // Forward declara
  * @param tol Convergence tolerance
  */
 void SetBiCGSTABTol(double tol);  // Forward declaration
+
+/**
+ * @brief Build interaction matrix (PreRelax step)
+ *
+ * @param obj Object handle
+ * @param src_obj Source object handle (usually same as obj)
+ * @return Interaction matrix handle
+ */
+int PreRelax(int obj, int src_obj) {
+    int handle = 0;
+    int err = RadPreRelax(&handle, obj, src_obj);
+    check_error(err);
+    return handle;
+}
+
+/**
+ * @brief Get interaction matrix as numpy array
+ *
+ * @param intrc_handle Interaction handle from PreRelax
+ * @return Tuple (matrix as 2D numpy array, dof)
+ */
+py::tuple GetInteractMatrix(int intrc_handle) {
+    // First call to get DOF only
+    int dof = 0;
+    int err = RadGetInteractMatrix(nullptr, &dof, intrc_handle);
+    check_error(err);
+
+    if (dof <= 0) {
+        throw std::runtime_error("No interaction matrix built");
+    }
+
+    // Allocate and get matrix
+    std::vector<double> matrix_data(static_cast<size_t>(dof) * dof);
+    err = RadGetInteractMatrix(matrix_data.data(), &dof, intrc_handle);
+    check_error(err);
+
+    // Create numpy array (column-major to row-major conversion)
+    py::array_t<double> result({dof, dof});
+    auto r = result.mutable_unchecked<2>();
+
+    // Matrix is stored column-major (Fortran/LAPACK), convert to row-major
+    for (int i = 0; i < dof; i++) {
+        for (int j = 0; j < dof; j++) {
+            r(i, j) = matrix_data[j * dof + i];  // Column-major to row-major
+        }
+    }
+
+    return py::make_tuple(result, dof);
+}
 
 } // namespace radia_solver
 
@@ -1894,6 +1995,33 @@ PYBIND11_MODULE(_radia_pybind, m) {
                     - t_linear_solve: Linear solver time [s]
                     - linear_iterations: BiCGSTAB iterations
                     - nonl_iterations: Nonlinear iterations
+          )pbdoc");
+
+    m.def("PreRelax", &radia_solver::PreRelax,
+          py::arg("obj"), py::arg("src_obj"),
+          R"pbdoc(
+              Build interaction matrix without solving.
+
+              This is useful for extracting the interaction matrix for verification.
+
+              Args:
+                  obj: Object or container handle
+                  src_obj: Source object handle (usually same as obj)
+
+              Returns:
+                  Interaction matrix handle
+          )pbdoc");
+
+    m.def("GetInteractMatrix", &radia_solver::GetInteractMatrix,
+          py::arg("intrc_handle"),
+          R"pbdoc(
+              Get interaction matrix as numpy array.
+
+              Args:
+                  intrc_handle: Interaction handle from PreRelax()
+
+              Returns:
+                  Tuple (matrix, dof) where matrix is (dof x dof) numpy array
           )pbdoc");
 
     // ========================================================================
