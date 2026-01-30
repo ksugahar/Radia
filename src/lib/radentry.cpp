@@ -102,6 +102,8 @@ void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
 double GetRelaxParam();
+int SetIMASymmetry(int, const char*);
+int BuildIMAMatrix(int);
 void ClassifyPoints( int*, int*, int, double*, int, double );
 void ComputeFieldBatch( double*, double*, int, double*, int, int );
 void ComputeScalarPotentialBatch( double*, int, double*, int );
@@ -616,13 +618,9 @@ int CALL RadTrfInv(int* n)
 
 //-------------------------------------------------------------------------
 
-int CALL RadTrfMlt(int* n, int obj, int trf, int mlt)
-{
-	ApplySymmetry(obj, trf, mlt);
-
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
+// RadTrfMlt REMOVED (2026-01-31) - Use IMA symmetry instead
+// The shared-DOF approach was fundamentally incompatible with MSC 6DOF hexahedra
+// See docs/IMA_SYMMETRY_DESIGN.md for the correct element-based approach
 
 //-------------------------------------------------------------------------
 
@@ -636,13 +634,7 @@ int CALL RadTrfOrnt(int* n, int obj, int trf)
 
 //-------------------------------------------------------------------------
 
-int CALL RadTrfPlSym(int* n, double* pP, double* pN)
-{
-	PlaneSym(pP[0], pP[1], pP[2], pN[0], pN[1], pN[2]);
-
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
+// RadTrfPlSym REMOVED (2026-01-31) - Use IMA symmetry instead
 
 //-------------------------------------------------------------------------
 
@@ -1581,43 +1573,9 @@ int CALL RadUtiMPI(int* arPar, char* sOnOff, double* arData, long* pnData, long*
 // "Secondary" functions
 //-------------------------------------------------------------------------
 
-int CALL RadTrfZerPara(int* n, int obj, double* P, double* N)
-{
-	*n = 0;
-	int OutRes = 0, LocRes = 0;
-	int sym, inv, trf;
-
-	if((LocRes = RadTrfPlSym(&sym, P, N)) > 0) return LocRes;
-	if(LocRes < 0) OutRes = LocRes;
-
-	if((LocRes = RadTrfInv(&inv)) > 0) return LocRes;
-	if((LocRes < 0) && (OutRes == 0)) OutRes = LocRes;
-
-	if((LocRes = RadTrfCmbL(&trf, sym, inv)) > 0) return LocRes;
-	if((LocRes < 0) && (OutRes == 0)) OutRes = LocRes;
-
-	if((LocRes = RadTrfMlt(n, obj, trf, 2)) > 0) return LocRes;
-	if((LocRes < 0) && (OutRes == 0)) OutRes = LocRes;
-
-	return OutRes;
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadTrfZerPerp(int* n, int obj, double* P, double* N)
-{
-	*n = 0;
-	int OutRes = 0, LocRes = 0;
-	int sym;
-
-	if((LocRes = RadTrfPlSym(&sym, P, N)) > 0) return LocRes;
-	if(LocRes < 0) OutRes = LocRes;
-
-	if((LocRes = RadTrfMlt(n, obj, sym, 2)) > 0) return LocRes;
-	if((LocRes < 0) && (OutRes == 0)) OutRes = LocRes;
-
-	return OutRes;
-}
+// RadTrfZerPara REMOVED (2026-01-31) - Use IMA symmetry instead
+// RadTrfZerPerp REMOVED (2026-01-31) - Use IMA symmetry instead
+// These functions used RadTrfMlt internally, which has fundamental issues with MSC 6DOF hexahedra
 
 //-------------------------------------------------------------------------
 
@@ -1748,6 +1706,22 @@ int CALL RadSetRelaxParam(int* n, double relax)
 int CALL RadGetRelaxParam(double* relax)
 {
 	*relax = GetRelaxParam();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+// IMA (Image) Symmetry API
+//-------------------------------------------------------------------------
+
+int CALL RadSetIMASymmetry(int* numElements, int InteractKey, const char* symmetry)
+{
+	*numElements = SetIMASymmetry(InteractKey, symmetry);
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadBuildIMAMatrix(int* result, int InteractKey)
+{
+	*result = BuildIMAMatrix(InteractKey);
 	return ioBuffer.OutErrorStatus();
 }
 
