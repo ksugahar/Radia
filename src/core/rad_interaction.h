@@ -128,6 +128,49 @@ struct iterator_traits <radTRelaxSubInterval*> {
 
 //-------------------------------------------------------------------------
 
+//-------------------------------------------------------------------------
+// Global IMA Context for Field Computation
+// When IMA is active, field computation needs to include contributions
+// from virtual mirror elements. This context stores the IMA settings
+// and is checked during B_comp() to add mirror contributions.
+//-------------------------------------------------------------------------
+class RadIMAFieldContext {
+public:
+	// Current IMA settings for field computation
+	static bool s_active;           // True if IMA field computation is enabled
+	static int s_symmetry;          // IMA symmetry flags (IMA_X, IMA_Z, etc.)
+	static int s_signX;             // Sign for X mirror: +1 (symmetric) or -1 (antisymmetric)
+	static int s_signY;             // Sign for Y mirror
+	static int s_signZ;             // Sign for Z mirror
+
+	// Set IMA context before field computation
+	static void Set(int symmetry, int signX, int signY, int signZ) {
+		s_active = (symmetry != 0);
+		s_symmetry = symmetry;
+		s_signX = signX;
+		s_signY = signY;
+		s_signZ = signZ;
+	}
+
+	// Clear IMA context after field computation
+	static void Clear() {
+		s_active = false;
+		s_symmetry = 0;
+		s_signX = s_signY = s_signZ = 1;
+	}
+
+	// Check if IMA is active
+	static bool IsActive() { return s_active; }
+
+	// Get symmetry flags
+	static int GetSymmetry() { return s_symmetry; }
+	static int GetSignX() { return s_signX; }
+	static int GetSignY() { return s_signY; }
+	static int GetSignZ() { return s_signZ; }
+};
+
+//-------------------------------------------------------------------------
+
 class radTInteraction : public radTg {
 	friend class radTHMatrixACA;    // Allow H-matrix to access interaction data
 	friend class RadHACApKManager;  // Allow HACApK manager to access interaction data
@@ -276,13 +319,50 @@ public:
 	};
 
 	// DOF permutation arrays for face swapping (size 6 each)
+	// ELF face ordering: [y-, x+, y+, x-, z-, z+] = DOFs [0, 1, 2, 3, 4, 5]
+	//
+	// Column permutations (P): used with K[i, mirror(j)] @ P (DEPRECATED)
 	// P_x: swaps face 1 (x+) and face 3 (x-)
 	// P_y: swaps face 0 (y-) and face 2 (y+)
 	// P_z: swaps face 4 (z-) and face 5 (z+)
-	// ELF face ordering: [y-, x+, y+, x-, z-, z+] = DOFs [0, 1, 2, 3, 4, 5]
 	static constexpr int IMA_PERM_X[6] = {0, 3, 2, 1, 4, 5};  // Swap x+ (1) and x- (3)
 	static constexpr int IMA_PERM_Y[6] = {2, 1, 0, 3, 4, 5};  // Swap y- (0) and y+ (2)
 	static constexpr int IMA_PERM_Z[6] = {0, 1, 2, 3, 5, 4};  // Swap z- (4) and z+ (5)
+
+	// ELF-compatible IMA permutations (empirically verified)
+	// Formula: K_IMA = K_AA + P_row @ K_AB @ P_col
+	// where K_AB = K[i, mirror(j)] is computed by Compute6x6BlockMirrored
+	//
+	// ELF IMA formula:
+	// K_IMA[i,i] = K[i,i] + Q @ K[mirror(i), i]
+	//            = K_AA + Q @ K_BA
+	//
+	// IMA row permutation based on Radia's face ordering: [x-, x+, y-, y+, z-, z+]
+	// From rad_rectangular_block.cpp:
+	//   Face 0: x- (vertices at xMin)
+	//   Face 1: x+ (vertices at xMax)
+	//   Face 2: y- (vertices at yMin)
+	//   Face 3: y+ (vertices at yMax)
+	//   Face 4: z- (vertices at zMin)
+	//   Face 5: z+ (vertices at zMax)
+	//
+	// Using Compute6x6BlockMirroredTarget to get K_BA directly,
+	// we apply the Q row permutation that accounts for face swapping after mirroring.
+	//
+	// For x-mirror: faces 0 (x-) and 1 (x+) swap
+	//   Q_x = [1, 0, 2, 3, 4, 5]
+	static constexpr int IMA_ROW_PERM_X[6] = {1, 0, 2, 3, 4, 5};  // Swap x- <-> x+
+	static constexpr int IMA_COL_PERM_X[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
+
+	// For y-mirror: faces 2 (y-) and 3 (y+) swap
+	//   Q_y = [0, 1, 3, 2, 4, 5]
+	static constexpr int IMA_ROW_PERM_Y[6] = {0, 1, 3, 2, 4, 5};  // Swap y- <-> y+
+	static constexpr int IMA_COL_PERM_Y[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
+
+	// For z-mirror: faces 4 (z-) and 5 (z+) swap
+	//   Q_z = [0, 1, 2, 3, 5, 4]
+	static constexpr int IMA_ROW_PERM_Z[6] = {0, 1, 2, 3, 5, 4};  // Swap z- <-> z+
+	static constexpr int IMA_COL_PERM_Z[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
 
 	int AmOfRelaxSubInterv;
 
@@ -443,9 +523,17 @@ public:
 	// Compute IMA 6x6 block: direct + sum of mirror contributions
 	void Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) const;
 
-	// Compute 6x6 block with virtually mirrored element j
+	// Compute 6x6 block with virtually mirrored source element j (DEPRECATED - not ELF compatible)
 	// For quarter model support: element j's geometry is mirrored on-the-fly
 	void Compute6x6BlockMirrored(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const;
+
+	// Compute 6x6 block with virtually mirrored target element i (ELF-compatible)
+	// K_BA = K[mirror(i), j]: field at mirrored target from original source
+	void Compute6x6BlockMirroredTarget(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const;
+
+	// Apply row permutation Q: result[perm[i], j] = input[i, j]
+	// Used for ELF IMA formula: K_IMA = K_AA + Q @ K_BA
+	void ApplyRowPermutation(const double* input, const int* perm, double* result) const;
 
 	// IMA accessors
 	bool IsIMAEnabled() const { return m_imaEnabled; }
