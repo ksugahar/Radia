@@ -31,6 +31,15 @@
 // Radia production solver uses the surface charge (MSC) method.
 
 //-------------------------------------------------------------------------
+// Static member definitions for RadIMAFieldContext
+//-------------------------------------------------------------------------
+bool RadIMAFieldContext::s_active = false;
+int RadIMAFieldContext::s_symmetry = 0;
+int RadIMAFieldContext::s_signX = 1;
+int RadIMAFieldContext::s_signY = 1;
+int RadIMAFieldContext::s_signZ = 1;
+
+//-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
 radTInteraction::radTInteraction(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char ExtraExternFieldArrayIsNeeded, char KeepTransData, int rankMPI, int nProcMPI, char skipDenseMatrix) //OC08012020 + skipDenseMatrix
@@ -70,6 +79,14 @@ radTInteraction::radTInteraction()
 
 	// PEEC element flag
 	m_hasPEECElements = false;
+
+	// IMA flags - initialize to disabled
+	m_imaEnabled = false;
+	m_imaSymmetry = 0;
+	m_imaSignX = 1;
+	m_imaSignY = 1;
+	m_imaSignZ = 1;
+	m_imaNumElements = 0;
 }
 
 //-------------------------------------------------------------------------
@@ -97,6 +114,14 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	m_tetraGeomReady = false;
 	m_hexaGeomReady = false;
 	m_hexaTriDataReady = false;
+
+	// IMA flags - initialize to disabled
+	m_imaEnabled = false;
+	m_imaSymmetry = 0;
+	m_imaSignX = 1;
+	m_imaSignY = 1;
+	m_imaSignZ = 1;
+	m_imaNumElements = 0;
 
 	SourceHandle = In_hg;
 	CompCriterium = InCompCriterium;
@@ -716,9 +741,10 @@ double* radTInteraction::GetInteractBlock(int row_elem, int col_elem)
 	int offset_col = m_elemDOFOffset[col_elem];
 
 	// Block starts at row offset_row, column offset_col in the totalDOF x totalDOF matrix
-	// Column-major: element at (row, col) is at index [col * m_totalDOF + row]
+	// ROW-MAJOR: element at (row, col) is at index [row * m_totalDOF + col]
+	// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 	// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-	return &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+	return &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 }
 
 const double* radTInteraction::GetInteractBlock(int row_elem, int col_elem) const
@@ -728,9 +754,10 @@ const double* radTInteraction::GetInteractBlock(int row_elem, int col_elem) cons
 	int offset_row = m_elemDOFOffset[row_elem];
 	int offset_col = m_elemDOFOffset[col_elem];
 
-	// Column-major: element at (row, col) is at index [col * m_totalDOF + row]
+	// ROW-MAJOR: element at (row, col) is at index [row * m_totalDOF + col]
+	// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 	// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-	return &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+	return &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 }
 
 //-------------------------------------------------------------------------
@@ -861,25 +888,26 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					int offset_row = m_elemDOFOffset[row];
 
 					// Get pointer to this block in the flattened matrix
-					// COLUMN-MAJOR: A(row, col) at index [col * m_totalDOF + row]
+					// ROW-MAJOR: A(row, col) at index [row * m_totalDOF + col]
+					// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 					// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-					double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+					double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 
 					// Compute 3x3 block using cached geometry
 					double N_mat[9];
 					Compute3x3BlockFast(row, col, N_mat);
 
-					// Copy to flat matrix (Compute3x3BlockFast returns row-major)
-					// Need to transpose to column-major for LAPACK
+					// Copy to flat matrix (both row-major, direct copy)
+					// N_mat is [target][source] row-major, matrix is [target][source] row-major
 					// CRITICAL: Use size_t cast for all indexing with m_totalDOF
 					block[(size_t)0 * m_totalDOF + 0] = N_mat[0];  // (0,0)
-					block[(size_t)0 * m_totalDOF + 1] = N_mat[3];  // (1,0)
-					block[(size_t)0 * m_totalDOF + 2] = N_mat[6];  // (2,0)
-					block[(size_t)1 * m_totalDOF + 0] = N_mat[1];  // (0,1)
+					block[(size_t)0 * m_totalDOF + 1] = N_mat[1];  // (0,1)
+					block[(size_t)0 * m_totalDOF + 2] = N_mat[2];  // (0,2)
+					block[(size_t)1 * m_totalDOF + 0] = N_mat[3];  // (1,0)
 					block[(size_t)1 * m_totalDOF + 1] = N_mat[4];  // (1,1)
-					block[(size_t)1 * m_totalDOF + 2] = N_mat[7];  // (2,1)
-					block[(size_t)2 * m_totalDOF + 0] = N_mat[2];  // (0,2)
-					block[(size_t)2 * m_totalDOF + 1] = N_mat[5];  // (1,2)
+					block[(size_t)1 * m_totalDOF + 2] = N_mat[5];  // (1,2)
+					block[(size_t)2 * m_totalDOF + 0] = N_mat[6];  // (2,0)
+					block[(size_t)2 * m_totalDOF + 1] = N_mat[7];  // (2,1)
 					block[(size_t)2 * m_totalDOF + 2] = N_mat[8];  // (2,2)
 				}
 			}
@@ -901,9 +929,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				int offset_row = m_elemDOFOffset[row];
 
 				// Get pointer to this block in the flattened matrix
-				// COLUMN-MAJOR: A(row, col) at index [col * m_totalDOF + row]
+				// ROW-MAJOR: A(row, col) at index [row * m_totalDOF + col]
+				// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 				// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-				double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+				double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 
 				// Compute the interaction block based on DOF types
 				// FAST PATH: Only for 3x3 blocks (tetrahedra)
@@ -921,16 +950,17 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 					elem_col->B_comp(&Field);
 
-					// Store result directly (no transformation)
+					// Store result directly in row-major format
+					// A[target][source] where target=row, source=col
 					// CRITICAL: Use size_t cast for all indexing with m_totalDOF
 					block[(size_t)0 * m_totalDOF + 0] = Field.B.x;  // (0,0)
-					block[(size_t)0 * m_totalDOF + 1] = Field.H.x;  // (1,0)
-					block[(size_t)0 * m_totalDOF + 2] = Field.A.x;  // (2,0)
-					block[(size_t)1 * m_totalDOF + 0] = Field.B.y;  // (0,1)
+					block[(size_t)0 * m_totalDOF + 1] = Field.B.y;  // (0,1)
+					block[(size_t)0 * m_totalDOF + 2] = Field.B.z;  // (0,2)
+					block[(size_t)1 * m_totalDOF + 0] = Field.H.x;  // (1,0)
 					block[(size_t)1 * m_totalDOF + 1] = Field.H.y;  // (1,1)
-					block[(size_t)1 * m_totalDOF + 2] = Field.A.y;  // (2,1)
-					block[(size_t)2 * m_totalDOF + 0] = Field.B.z;  // (0,2)
-					block[(size_t)2 * m_totalDOF + 1] = Field.H.z;  // (1,2)
+					block[(size_t)1 * m_totalDOF + 2] = Field.H.z;  // (1,2)
+					block[(size_t)2 * m_totalDOF + 0] = Field.A.x;  // (2,0)
+					block[(size_t)2 * m_totalDOF + 1] = Field.A.y;  // (2,1)
 					block[(size_t)2 * m_totalDOF + 2] = Field.A.z;  // (2,2)
 				}
 				// Note: MSC blocks (3x6, 6x3, 6x6) not handled in fast path
@@ -969,16 +999,16 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					double K_block[36];
 					Compute6x6BlockFast(hex_row, hex_col, K_block);
 
-					// Copy to column-major flat matrix (transpose from row-major)
+					// Copy to row-major flat matrix (both row-major, direct copy pattern)
+					// K_block is [target][source] row-major, matrix is [target][source] row-major
 					// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-					double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+					double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 					for(int i = 0; i < 6; i++)
 					{
 						for(int j = 0; j < 6; j++)
 						{
-							// K_block is row-major: K[i][j] at i*6+j
-							// block is column-major: block[j*stride+i]
-							block[(size_t)j * m_totalDOF + i] = K_block[i * 6 + j];
+							// Both row-major: K[i][j] at i*6+j -> A[target_i][source_j] at i*stride+j
+							block[(size_t)i * m_totalDOF + j] = K_block[i * 6 + j];
 						}
 					}
 				}
@@ -1016,8 +1046,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				int dof_row = m_elemDOF[row];
 				int offset_row = m_elemDOFOffset[row];
 
+				// ROW-MAJOR: A(row, col) at index [row * m_totalDOF + col]
+				// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 				// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-				double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+				double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 
 				// Check if target is MSC hexahedron
 				radTPolyhedron* poly_row = nullptr;
@@ -1034,15 +1066,15 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
 					elem_col->B_comp(&Field);
 
-					// CRITICAL: Use size_t cast for all indexing with m_totalDOF
+					// ROW-MAJOR: A[target_i][source_j] at row*stride+col
 					block[(size_t)0 * m_totalDOF + 0] = Field.B.x;
-					block[(size_t)0 * m_totalDOF + 1] = Field.H.x;
-					block[(size_t)0 * m_totalDOF + 2] = Field.A.x;
-					block[(size_t)1 * m_totalDOF + 0] = Field.B.y;
+					block[(size_t)0 * m_totalDOF + 1] = Field.B.y;
+					block[(size_t)0 * m_totalDOF + 2] = Field.B.z;
+					block[(size_t)1 * m_totalDOF + 0] = Field.H.x;
 					block[(size_t)1 * m_totalDOF + 1] = Field.H.y;
-					block[(size_t)1 * m_totalDOF + 2] = Field.A.y;
-					block[(size_t)2 * m_totalDOF + 0] = Field.B.z;
-					block[(size_t)2 * m_totalDOF + 1] = Field.H.z;
+					block[(size_t)1 * m_totalDOF + 2] = Field.H.z;
+					block[(size_t)2 * m_totalDOF + 0] = Field.A.x;
+					block[(size_t)2 * m_totalDOF + 1] = Field.A.y;
 					block[(size_t)2 * m_totalDOF + 2] = Field.A.z;
 				}
 				else if(dof_row == 6 && dof_col == 6 && poly_row && poly_col)
@@ -1075,9 +1107,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							              H_total.y * poly_row->FaceNormal[face_i].y +
 							              H_total.z * poly_row->FaceNormal[face_i].z;
 
-							// CRITICAL: Use size_t cast for indexing with m_totalDOF
+							// ROW-MAJOR: A[target_face_i][source_face_j] at face_i*stride+face_j
 							// Sign convention: positive = ELF-compatible (self-demagnetization is negative)
-							block[(size_t)face_j * m_totalDOF + face_i] = K_ij * RadConst::INV_FOUR_PI;
+							block[(size_t)face_i * m_totalDOF + face_j] = K_ij * RadConst::INV_FOUR_PI;
 						}
 					}
 				}
@@ -1097,10 +1129,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						H_total.y = H_face.y + H_point.y;
 						H_total.z = H_face.z + H_point.z;
 
-						// CRITICAL: Use size_t cast for indexing with m_totalDOF
-						block[(size_t)face_j * m_totalDOF + 0] = H_total.x * RadConst::INV_FOUR_PI;
-						block[(size_t)face_j * m_totalDOF + 1] = H_total.y * RadConst::INV_FOUR_PI;
-						block[(size_t)face_j * m_totalDOF + 2] = H_total.z * RadConst::INV_FOUR_PI;
+						// ROW-MAJOR: A[target_i][source_face_j] at target_i*stride+face_j
+						block[(size_t)0 * m_totalDOF + face_j] = H_total.x * RadConst::INV_FOUR_PI;
+						block[(size_t)1 * m_totalDOF + face_j] = H_total.y * RadConst::INV_FOUR_PI;
+						block[(size_t)2 * m_totalDOF + face_j] = H_total.z * RadConst::INV_FOUR_PI;
 					}
 				}
 				else if(dof_row == 6 && dof_col == 3 && poly_row)
@@ -1124,10 +1156,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						double K_My = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
 						double K_Mz = n.x * Field.A.x + n.y * Field.A.y + n.z * Field.A.z;
 
-						// CRITICAL: Use size_t cast for indexing with m_totalDOF
-						block[(size_t)0 * m_totalDOF + face_i] = K_Mx * RadConst::INV_FOUR_PI;
-						block[(size_t)1 * m_totalDOF + face_i] = K_My * RadConst::INV_FOUR_PI;
-						block[(size_t)2 * m_totalDOF + face_i] = K_Mz * RadConst::INV_FOUR_PI;
+						// ROW-MAJOR: A[target_face_i][source_j] at face_i*stride+source_j
+						block[(size_t)face_i * m_totalDOF + 0] = K_Mx * RadConst::INV_FOUR_PI;
+						block[(size_t)face_i * m_totalDOF + 1] = K_My * RadConst::INV_FOUR_PI;
+						block[(size_t)face_i * m_totalDOF + 2] = K_Mz * RadConst::INV_FOUR_PI;
 					}
 				}
 				else
@@ -1137,8 +1169,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					{
 						for(int j = 0; j < dof_col; j++)
 						{
-							// CRITICAL: Use size_t cast for indexing with m_totalDOF
-							block[(size_t)j * m_totalDOF + i] = 0.0;
+							// ROW-MAJOR: A[i][j] at i*stride+j
+							block[(size_t)i * m_totalDOF + j] = 0.0;
 						}
 					}
 				}
@@ -1163,9 +1195,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			int offset_row = m_elemDOFOffset[row];
 
 			// Get pointer to this block in the flattened matrix
-			// COLUMN-MAJOR: A(row, col) at index [col * m_totalDOF + row]
+			// ROW-MAJOR: A(row, col) at index [row * m_totalDOF + col]
+			// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 			// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-			double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+			double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 
 			// Compute the interaction block based on DOF types
 			// For now, only support 3x3 blocks (standard elements)
@@ -1195,17 +1228,17 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				}
 				MainTransPtrArray[row]->TrMatrix_inv(SubMatrix);
 
-				// Copy 3x3 matrix to flattened block (COLUMN-MAJOR)
-				// A(i,j) at [j * stride + i] where stride = m_totalDOF
+				// Copy 3x3 matrix to flattened block (ROW-MAJOR)
+				// A[i][j] at [i * stride + j] where stride = m_totalDOF
 				// CRITICAL: Use size_t cast for indexing with m_totalDOF
 				block[(size_t)0 * m_totalDOF + 0] = SubMatrix.Str0.x;  // (0,0)
-				block[(size_t)0 * m_totalDOF + 1] = SubMatrix.Str1.x;  // (1,0)
-				block[(size_t)0 * m_totalDOF + 2] = SubMatrix.Str2.x;  // (2,0)
-				block[(size_t)1 * m_totalDOF + 0] = SubMatrix.Str0.y;  // (0,1)
+				block[(size_t)0 * m_totalDOF + 1] = SubMatrix.Str0.y;  // (0,1)
+				block[(size_t)0 * m_totalDOF + 2] = SubMatrix.Str0.z;  // (0,2)
+				block[(size_t)1 * m_totalDOF + 0] = SubMatrix.Str1.x;  // (1,0)
 				block[(size_t)1 * m_totalDOF + 1] = SubMatrix.Str1.y;  // (1,1)
-				block[(size_t)1 * m_totalDOF + 2] = SubMatrix.Str2.y;  // (2,1)
-				block[(size_t)2 * m_totalDOF + 0] = SubMatrix.Str0.z;  // (0,2)
-				block[(size_t)2 * m_totalDOF + 1] = SubMatrix.Str1.z;  // (1,2)
+				block[(size_t)1 * m_totalDOF + 2] = SubMatrix.Str1.z;  // (1,2)
+				block[(size_t)2 * m_totalDOF + 0] = SubMatrix.Str2.x;  // (2,0)
+				block[(size_t)2 * m_totalDOF + 1] = SubMatrix.Str2.y;  // (2,1)
 				block[(size_t)2 * m_totalDOF + 2] = SubMatrix.Str2.z;  // (2,2)
 			}
 #ifdef RADIA_MSC_SUPPORT
@@ -1244,10 +1277,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						// Transform by row's main transform (inverse) using pseudo-vector transformation
 						TVector3d H_final = MainTransPtrArray[row]->TrAxialVect_inv(H_total);
 
-						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
-						block[(size_t)face_j * m_totalDOF + 0] = H_final.x * RadConst::INV_FOUR_PI;
-						block[(size_t)face_j * m_totalDOF + 1] = H_final.y * RadConst::INV_FOUR_PI;
-						block[(size_t)face_j * m_totalDOF + 2] = H_final.z * RadConst::INV_FOUR_PI;
+						// Store in block (ROW-MAJOR): A[i][j] at [i * stride + j]
+						block[(size_t)0 * m_totalDOF + face_j] = H_final.x * RadConst::INV_FOUR_PI;
+						block[(size_t)1 * m_totalDOF + face_j] = H_final.y * RadConst::INV_FOUR_PI;
+						block[(size_t)2 * m_totalDOF + face_j] = H_final.z * RadConst::INV_FOUR_PI;
 					}
 				}
 			}
@@ -1310,13 +1343,13 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						double K_face_My = n.x * SubMatrix.Str1.x + n.y * SubMatrix.Str1.y + n.z * SubMatrix.Str1.z;
 						double K_face_Mz = n.x * SubMatrix.Str2.x + n.y * SubMatrix.Str2.y + n.z * SubMatrix.Str2.z;
 
-						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
+						// Store in block (ROW-MAJOR): A[face_i][col] at [face_i * stride + col]
 						// row is face_i (0-5), col is component (0,1,2 = Mx,My,Mz)
 						// Sign convention: +K/(4*pi) for hex-tetra (following ELF)
 						// CRITICAL: Use size_t cast for indexing with m_totalDOF
-						block[(size_t)0 * m_totalDOF + face_i] = K_face_Mx * RadConst::INV_FOUR_PI;  // (face_i, Mx)
-						block[(size_t)1 * m_totalDOF + face_i] = K_face_My * RadConst::INV_FOUR_PI;  // (face_i, My)
-						block[(size_t)2 * m_totalDOF + face_i] = K_face_Mz * RadConst::INV_FOUR_PI;  // (face_i, Mz)
+						block[(size_t)face_i * m_totalDOF + 0] = K_face_Mx * RadConst::INV_FOUR_PI;  // (face_i, Mx)
+						block[(size_t)face_i * m_totalDOF + 1] = K_face_My * RadConst::INV_FOUR_PI;  // (face_i, My)
+						block[(size_t)face_i * m_totalDOF + 2] = K_face_Mz * RadConst::INV_FOUR_PI;  // (face_i, Mz)
 					}
 				}
 			}
@@ -1370,10 +1403,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							              H_final.y * poly_row->FaceNormal[face_i].y +
 							              H_final.z * poly_row->FaceNormal[face_i].z;
 
-							// Store K_ij / (4*pi) (COLUMN-MAJOR): A(i,j) at [j * stride + i]
+							// Store K_ij / (4*pi) (ROW-MAJOR): A[face_i][face_j] at [face_i * stride + face_j]
 							// Sign convention: positive = ELF-compatible (self-demagnetization is negative)
 							double K_val = K_ij * RadConst::INV_FOUR_PI;
-							block[(size_t)face_j * m_totalDOF + face_i] = K_val;
+							block[(size_t)face_i * m_totalDOF + face_j] = K_val;
 						}
 					}
 				}
@@ -1381,13 +1414,13 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 #endif // RADIA_MSC_SUPPORT
 			else
 			{
-				// Unknown DOF combination - zero out the block (COLUMN-MAJOR)
+				// Unknown DOF combination - zero out the block (ROW-MAJOR)
 				for(int i = 0; i < dof_row; i++)
 				{
 					for(int j = 0; j < dof_col; j++)
 					{
-						// CRITICAL: Use size_t cast for indexing with m_totalDOF
-						block[(size_t)j * m_totalDOF + i] = 0.0;
+						// ROW-MAJOR: A[i][j] at [i * stride + j]
+						block[(size_t)i * m_totalDOF + j] = 0.0;
 					}
 				}
 			}
@@ -3149,6 +3182,13 @@ void radTInteraction::FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, con
 // Compute6x6BlockFast: Fast 6x6 interaction block for hexahedra
 // Uses pre-computed geometry (avoiding FieldFromQuadFace overhead)
 // Reference: Yano-Sugahara MSC method
+//
+// When IMA is enabled (m_imaEnabled=true), this function computes:
+//   K[i,j] = field at target i from original source j + field from mirrored source j
+// This is the kernel-based IMA approach (user suggestion 2026-01-31):
+// - Mirroring is done directly in the kernel, not via virtual elements/DOFs
+// - No permutation arrays needed - coordinates are mirrored directly
+// - HACApK compatible - kernel returns correct IMA value directly
 //=========================================================================
 
 void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const
@@ -3161,7 +3201,9 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 	if(hex_i < 0 || hex_i >= nHex || hex_j < 0 || hex_j >= nHex) return;
 
 	// Source element center (for point charge)
-	const double* src_center = &m_hexaCenters[hex_j * 3];
+	const double src_center_orig[3] = {m_hexaCenters[hex_j * 3 + 0],
+	                                   m_hexaCenters[hex_j * 3 + 1],
+	                                   m_hexaCenters[hex_j * 3 + 2]};
 
 	// Check if pre-computed triangle data is available
 	const bool usePrecomputed = m_hexaTriDataReady;
@@ -3187,6 +3229,7 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 			// Field from unit sigma on source face j
 			double H_total[3] = {0.0, 0.0, 0.0};
 
+			// =========== Original source contribution ===========
 			// Sum contributions from 2 triangles of face j
 			for(int t = 0; t < 2; t++)
 			{
@@ -3217,19 +3260,115 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 			// Point charge contribution: m = -sigma * area
 			// H_point = -area * (r - p) / |r - p|^3
 			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
-			double r[3] = {obs[0] - src_center[0],
-			               obs[1] - src_center[1],
-			               obs[2] - src_center[2]};
-			double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
-
-			if(dist_sq > 1e-30)
 			{
-				double dist = sqrt(dist_sq);
-				double inv_dist3 = 1.0 / (dist * dist_sq);
-				double coef = -area_j * inv_dist3;
-				H_total[0] += coef * r[0];
-				H_total[1] += coef * r[1];
-				H_total[2] += coef * r[2];
+				double r[3] = {obs[0] - src_center_orig[0],
+				               obs[1] - src_center_orig[1],
+				               obs[2] - src_center_orig[2]};
+				double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+
+				if(dist_sq > 1e-30)
+				{
+					double dist = sqrt(dist_sq);
+					double inv_dist3 = 1.0 / (dist * dist_sq);
+					double coef = -area_j * inv_dist3;
+					H_total[0] += coef * r[0];
+					H_total[1] += coef * r[1];
+					H_total[2] += coef * r[2];
+				}
+			}
+
+			// =========== IMA: Mirrored source contributions ===========
+			// Kernel-based IMA: compute field from mirrored source coordinates directly
+			// This avoids virtual elements/DOFs and permutation arrays
+			if(m_imaEnabled)
+			{
+				// Helper lambda: add field contribution from mirrored source
+				auto addMirroredSourceContribution = [&](int mirrorAxis, int sign) {
+					// Mirror sign: +1 for symmetric BC, -1 for antisymmetric BC
+					double imaSign = (double)sign;
+
+					// Mirrored source center
+					double src_mirror[3] = {src_center_orig[0], src_center_orig[1], src_center_orig[2]};
+					if(mirrorAxis & IMA_X) src_mirror[0] = -src_mirror[0];
+					if(mirrorAxis & IMA_Y) src_mirror[1] = -src_mirror[1];
+					if(mirrorAxis & IMA_Z) src_mirror[2] = -src_mirror[2];
+
+					// Count number of mirror axes for winding correction
+					int numMirrors = 0;
+					if(mirrorAxis & IMA_X) numMirrors++;
+					if(mirrorAxis & IMA_Y) numMirrors++;
+					if(mirrorAxis & IMA_Z) numMirrors++;
+					bool flipWinding = (numMirrors % 2 == 1);
+
+					// Field from mirrored triangles
+					for(int t = 0; t < 2; t++)
+					{
+						int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
+						double V0[3] = {m_hexaTriVertices[tvIdx + 0],
+						                m_hexaTriVertices[tvIdx + 1],
+						                m_hexaTriVertices[tvIdx + 2]};
+						double V1[3] = {m_hexaTriVertices[tvIdx + 3],
+						                m_hexaTriVertices[tvIdx + 4],
+						                m_hexaTriVertices[tvIdx + 5]};
+						double V2[3] = {m_hexaTriVertices[tvIdx + 6],
+						                m_hexaTriVertices[tvIdx + 7],
+						                m_hexaTriVertices[tvIdx + 8]};
+
+						// Mirror vertices
+						if(mirrorAxis & IMA_X) { V0[0] = -V0[0]; V1[0] = -V1[0]; V2[0] = -V2[0]; }
+						if(mirrorAxis & IMA_Y) { V0[1] = -V0[1]; V1[1] = -V1[1]; V2[1] = -V2[1]; }
+						if(mirrorAxis & IMA_Z) { V0[2] = -V0[2]; V1[2] = -V1[2]; V2[2] = -V2[2]; }
+
+						// Swap V1/V2 to restore winding if odd number of mirrors
+						if(flipWinding) {
+							std::swap(V1[0], V2[0]);
+							std::swap(V1[1], V2[1]);
+							std::swap(V1[2], V2[2]);
+						}
+
+						double sign_tri = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
+						double H_tri[3];
+						FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign_tri, H_tri);
+
+						H_total[0] += imaSign * H_tri[0];
+						H_total[1] += imaSign * H_tri[1];
+						H_total[2] += imaSign * H_tri[2];
+					}
+
+					// Point charge from mirrored center
+					double r[3] = {obs[0] - src_mirror[0],
+					               obs[1] - src_mirror[1],
+					               obs[2] - src_mirror[2]};
+					double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+
+					if(dist_sq > 1e-30)
+					{
+						double dist = sqrt(dist_sq);
+						double inv_dist3 = 1.0 / (dist * dist_sq);
+						double coef = -area_j * inv_dist3 * imaSign;
+						H_total[0] += coef * r[0];
+						H_total[1] += coef * r[1];
+						H_total[2] += coef * r[2];
+					}
+				};
+
+				// Add contributions based on active symmetry axes
+				bool hasX = (m_imaSymmetry & IMA_X) != 0;
+				bool hasY = (m_imaSymmetry & IMA_Y) != 0;
+				bool hasZ = (m_imaSymmetry & IMA_Z) != 0;
+
+				// Single axis mirrors
+				if(hasX) addMirroredSourceContribution(IMA_X, m_imaSignX);
+				if(hasY) addMirroredSourceContribution(IMA_Y, m_imaSignY);
+				if(hasZ) addMirroredSourceContribution(IMA_Z, m_imaSignZ);
+
+				// Dual axis mirrors (for quarter models)
+				if(hasX && hasY) addMirroredSourceContribution(IMA_XY, m_imaSignX * m_imaSignY);
+				if(hasX && hasZ) addMirroredSourceContribution(IMA_XZ, m_imaSignX * m_imaSignZ);
+				if(hasY && hasZ) addMirroredSourceContribution(IMA_YZ, m_imaSignY * m_imaSignZ);
+
+				// Triple axis mirror (for eighth models)
+				if(hasX && hasY && hasZ) addMirroredSourceContribution(IMA_XYZ, m_imaSignX * m_imaSignY * m_imaSignZ);
 			}
 
 			// K_ij = n_i dot H_total / (4*pi)
@@ -3460,8 +3599,34 @@ void radTInteraction::ApplyDOFPermutation(const double* input, const int* perm, 
 }
 
 //-------------------------------------------------------------------------
-// Compute6x6BlockIMA: Compute IMA block with image summation
-// For single axis: K_IMA[i,j] = K[i,j] + sign * K[i, mirror(j)] @ P
+// ApplyRowPermutation: Apply row permutation Q to 6x6 block
+// result[i, :] = input[perm[i], :]
+// For ELF IMA: result = Q @ K_BA
+// Q[i] = row index in K_BA that becomes row i in result
+//-------------------------------------------------------------------------
+void radTInteraction::ApplyRowPermutation(const double* input, const int* perm, double* result) const
+{
+	// result = Q @ input
+	// Q[i][k] = 1 if perm[i] == k, else 0
+	// (Q @ input)[i][j] = sum_k Q[i][k] * input[k][j] = input[perm[i]][j]
+
+	// For each row i of result, copy from row perm[i] of input
+	for(int i = 0; i < 6; i++)
+	{
+		int k = perm[i];  // row i comes from row k
+		for(int j = 0; j < 6; j++)
+		{
+			// input[k][j] -> result[i][j]
+			result[i * 6 + j] = input[k * 6 + j];
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+// Compute6x6BlockIMA: Compute IMA block with image summation (ELF-compatible)
+// ELF formula: K_IMA[i,j] = K[i,j] + sign * Q @ K[mirror(i), j]
+// where K[mirror(i), j] = K_BA (field at mirrored target from original source)
+// For single axis: K_IMA[i,j] = K[i,j] + sign * Q @ K[mirror(i), j]
 // For dual axis (e.g., XZ):
 //   K_IMA[i,j] = K[i,j] + sign_x * K[i, mx(j)] @ Px
 //                       + sign_z * K[i, mz(j)] @ Pz
@@ -3495,25 +3660,33 @@ void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) co
 		return;
 	}
 
-	// Start with direct interaction: K[full_i][full_j]
+	// Start with direct interaction: K[full_i][full_j] = K_AA
 	Compute6x6BlockFast(hex_i, hex_j, K_ima);
 
-	// Helper lambda to add mirror contribution
-	auto addMirrorContribution = [&](int mirrorAxis, int sign, const int* perm) {
-		double K_mirror[36];
-		double K_mirror_perm[36];
+	// ELF-compatible IMA formula:
+	// K_IMA[i,i] = K[i,i] + sign * Q @ K[mirror(i), i]
+	//            = K_AA + sign * Q @ K_BA
+	//
+	// where K_BA = K[mirror(i), i] is computed by Compute6x6BlockMirroredTarget
+	// Q is the row permutation to reorder faces after mirroring
+	//
+	// For x-mirror: Q = [3, 2, 1, 0, 4, 5] (swap x-faces, reverse order of y-faces)
 
-		// Quarter models use virtual mirrors (geometry mirrored on-the-fly)
-		// Always use virtual mirror for IMA since quarter models have no physical mirrors
-		Compute6x6BlockMirrored(hex_i, hex_j, mirrorAxis, K_mirror);
+	// Helper lambda to add mirror contribution using ELF formula
+	auto addMirrorContributionELF = [&](int mirrorAxis, int sign, const int* rowPerm, const int* colPerm) {
+		double K_BA[36];        // K[mirror(i), j] from Compute6x6BlockMirroredTarget
+		double K_BA_perm[36];   // After row permutation: Q @ K_BA
 
-		// Apply DOF permutation: K_mirror @ P
-		ApplyDOFPermutation(K_mirror, perm, K_mirror_perm);
+		// Compute K_BA: mirrored TARGET element i
+		Compute6x6BlockMirroredTarget(hex_i, hex_j, mirrorAxis, K_BA);
 
-		// Add contribution: K_ima += sign * K_mirror_perm
+		// Apply row permutation Q: K_BA_perm[i, :] = K_BA[rowPerm[i], :]
+		ApplyRowPermutation(K_BA, rowPerm, K_BA_perm);
+
+		// Add contribution: K_ima += sign * Q @ K_BA
 		for(int k = 0; k < 36; k++)
 		{
-			K_ima[k] += sign * K_mirror_perm[k];
+			K_ima[k] += sign * K_BA_perm[k];
 		}
 	};
 
@@ -3522,53 +3695,63 @@ void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) co
 	bool hasY = (m_imaSymmetry & IMA_Y) != 0;
 	bool hasZ = (m_imaSymmetry & IMA_Z) != 0;
 
-	// Single axis contributions
-	if(hasX) addMirrorContribution(IMA_X, m_imaSignX, IMA_PERM_X);
-	if(hasY) addMirrorContribution(IMA_Y, m_imaSignY, IMA_PERM_Y);
-	if(hasZ) addMirrorContribution(IMA_Z, m_imaSignZ, IMA_PERM_Z);
+	// Single axis contributions using ELF permutations
+	if(hasX) addMirrorContributionELF(IMA_X, m_imaSignX, IMA_ROW_PERM_X, IMA_COL_PERM_X);
+	if(hasY) addMirrorContributionELF(IMA_Y, m_imaSignY, IMA_ROW_PERM_Y, IMA_COL_PERM_Y);
+	if(hasZ) addMirrorContributionELF(IMA_Z, m_imaSignZ, IMA_ROW_PERM_Z, IMA_COL_PERM_Z);
 
-	// Dual axis contributions (combined permutation)
+	// Dual axis contributions (combined permutations)
 	if(hasX && hasY)
 	{
-		// XY mirror: apply Px then Py (or equivalently, Pxy)
-		double K_mirror[36], K_temp[36], K_mirror_perm[36];
-		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XY, K_mirror);
-		ApplyDOFPermutation(K_mirror, IMA_PERM_X, K_temp);
-		ApplyDOFPermutation(K_temp, IMA_PERM_Y, K_mirror_perm);
+		// XY mirror: apply column perms, then row perms
+		double K_AB[36], K_col1[36], K_col2[36], K_row1[36], K_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XY, K_AB);
+		ApplyDOFPermutation(K_AB, IMA_COL_PERM_X, K_col1);
+		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Y, K_col2);
+		ApplyRowPermutation(K_col2, IMA_ROW_PERM_X, K_row1);
+		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Y, K_perm);
 		int sign = m_imaSignX * m_imaSignY;
-		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_mirror_perm[k];
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
 	}
 	if(hasX && hasZ)
 	{
-		// XZ mirror: apply Px then Pz (or equivalently, Pxz)
-		double K_mirror[36], K_temp[36], K_mirror_perm[36];
-		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XZ, K_mirror);
-		ApplyDOFPermutation(K_mirror, IMA_PERM_X, K_temp);
-		ApplyDOFPermutation(K_temp, IMA_PERM_Z, K_mirror_perm);
+		// XZ mirror: apply column perms, then row perms
+		double K_AB[36], K_col1[36], K_col2[36], K_row1[36], K_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XZ, K_AB);
+		ApplyDOFPermutation(K_AB, IMA_COL_PERM_X, K_col1);
+		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Z, K_col2);
+		ApplyRowPermutation(K_col2, IMA_ROW_PERM_X, K_row1);
+		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Z, K_perm);
 		int sign = m_imaSignX * m_imaSignZ;
-		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_mirror_perm[k];
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
 	}
 	if(hasY && hasZ)
 	{
-		// YZ mirror: apply Py then Pz
-		double K_mirror[36], K_temp[36], K_mirror_perm[36];
-		Compute6x6BlockMirrored(hex_i, hex_j, IMA_YZ, K_mirror);
-		ApplyDOFPermutation(K_mirror, IMA_PERM_Y, K_temp);
-		ApplyDOFPermutation(K_temp, IMA_PERM_Z, K_mirror_perm);
+		// YZ mirror: apply column perms, then row perms
+		double K_AB[36], K_col1[36], K_col2[36], K_row1[36], K_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_YZ, K_AB);
+		ApplyDOFPermutation(K_AB, IMA_COL_PERM_Y, K_col1);
+		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Z, K_col2);
+		ApplyRowPermutation(K_col2, IMA_ROW_PERM_Y, K_row1);
+		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Z, K_perm);
 		int sign = m_imaSignY * m_imaSignZ;
-		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_mirror_perm[k];
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
 	}
 
 	// Triple axis contribution (eighth model)
 	if(hasX && hasY && hasZ)
 	{
-		double K_mirror[36], K_temp1[36], K_temp2[36], K_mirror_perm[36];
-		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XYZ, K_mirror);
-		ApplyDOFPermutation(K_mirror, IMA_PERM_X, K_temp1);
-		ApplyDOFPermutation(K_temp1, IMA_PERM_Y, K_temp2);
-		ApplyDOFPermutation(K_temp2, IMA_PERM_Z, K_mirror_perm);
+		double K_AB[36], K_col1[36], K_col2[36], K_col3[36];
+		double K_row1[36], K_row2[36], K_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XYZ, K_AB);
+		ApplyDOFPermutation(K_AB, IMA_COL_PERM_X, K_col1);
+		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Y, K_col2);
+		ApplyDOFPermutation(K_col2, IMA_COL_PERM_Z, K_col3);
+		ApplyRowPermutation(K_col3, IMA_ROW_PERM_X, K_row1);
+		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Y, K_row2);
+		ApplyRowPermutation(K_row2, IMA_ROW_PERM_Z, K_perm);
 		int sign = m_imaSignX * m_imaSignY * m_imaSignZ;
-		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_mirror_perm[k];
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
 	}
 }
 
@@ -3698,6 +3881,112 @@ void radTInteraction::Compute6x6BlockMirrored(int hex_i, int hex_j, int mirrorAx
 }
 
 //-------------------------------------------------------------------------
+// Compute6x6BlockMirroredTarget: Compute K[mirror(i), j] for ELF IMA formula
+// This mirrors the TARGET element i, keeping SOURCE element j unchanged.
+// K_BA[face_i, face_j] = n'_i dot H_j / (4*pi)
+// where n'_i is the mirrored target face normal,
+// and H_j is computed at the mirrored target evaluation point
+// mirrorAxis: IMA_X, IMA_Y, IMA_Z, or combinations
+//-------------------------------------------------------------------------
+void radTInteraction::Compute6x6BlockMirroredTarget(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const
+{
+	std::memset(K_mat, 0, 36 * sizeof(double));
+
+	if(!m_hexaGeomReady) return;
+
+	int nHex = (int)m_hexaElemIndices.size();
+	if(hex_i < 0 || hex_i >= nHex || hex_j < 0 || hex_j >= nHex) return;
+
+	// Source element center (unchanged)
+	double src_center[3] = {m_hexaCenters[hex_j * 3 + 0],
+	                        m_hexaCenters[hex_j * 3 + 1],
+	                        m_hexaCenters[hex_j * 3 + 2]};
+
+	// For each target face i (MIRRORED evaluation point and normal)
+	for(int face_i = 0; face_i < 6; face_i++)
+	{
+		// Get original target evaluation point and mirror it
+		int epIdx = (hex_i * 6 + face_i) * 3;
+		double obs[3] = {m_hexaEvalPoints[epIdx + 0],
+		                 m_hexaEvalPoints[epIdx + 1],
+		                 m_hexaEvalPoints[epIdx + 2]};
+
+		// Mirror the evaluation point
+		if(mirrorAxis & IMA_X) obs[0] = -obs[0];
+		if(mirrorAxis & IMA_Y) obs[1] = -obs[1];
+		if(mirrorAxis & IMA_Z) obs[2] = -obs[2];
+
+		// Get original target face normal and mirror it
+		int fnIdx_i = (hex_i * 6 + face_i) * 3;
+		double n_i[3] = {m_hexaFaceNormals[fnIdx_i + 0],
+		                 m_hexaFaceNormals[fnIdx_i + 1],
+		                 m_hexaFaceNormals[fnIdx_i + 2]};
+
+		// Mirror the normal (flip component in mirror axis)
+		if(mirrorAxis & IMA_X) n_i[0] = -n_i[0];
+		if(mirrorAxis & IMA_Y) n_i[1] = -n_i[1];
+		if(mirrorAxis & IMA_Z) n_i[2] = -n_i[2];
+
+		// For each source face j (unchanged geometry)
+		for(int face_j = 0; face_j < 6; face_j++)
+		{
+			// Field from unit sigma on ORIGINAL source face j
+			double H_total[3] = {0.0, 0.0, 0.0};
+
+			// Sum contributions from 2 triangles of original source face j
+			for(int t = 0; t < 2; t++)
+			{
+				// Get original triangle vertices (NOT mirrored)
+				int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
+				double V0[3] = {m_hexaTriVertices[tvIdx + 0],
+				                m_hexaTriVertices[tvIdx + 1],
+				                m_hexaTriVertices[tvIdx + 2]};
+				double V1[3] = {m_hexaTriVertices[tvIdx + 3],
+				                m_hexaTriVertices[tvIdx + 4],
+				                m_hexaTriVertices[tvIdx + 5]};
+				double V2[3] = {m_hexaTriVertices[tvIdx + 6],
+				                m_hexaTriVertices[tvIdx + 7],
+				                m_hexaTriVertices[tvIdx + 8]};
+
+				double sign = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
+
+				double H_tri[3];
+				FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign, H_tri);
+
+				H_total[0] += H_tri[0];
+				H_total[1] += H_tri[1];
+				H_total[2] += H_tri[2];
+			}
+
+			// Point charge contribution from original source element center
+			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
+			double r[3] = {obs[0] - src_center[0],
+			               obs[1] - src_center[1],
+			               obs[2] - src_center[2]};
+			double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+
+			if(dist_sq > 1e-30)
+			{
+				double dist = sqrt(dist_sq);
+				double inv_dist3 = 1.0 / (dist * dist_sq);
+				double coef = -area_j * inv_dist3;
+				H_total[0] += coef * r[0];
+				H_total[1] += coef * r[1];
+				H_total[2] += coef * r[2];
+			}
+
+			// K_ij = n'_i dot H_total / (4*pi)
+			// where n'_i is the mirrored normal
+			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
+			              * RadConst::INV_FOUR_PI;
+
+			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
+			K_mat[face_i * 6 + face_j] = K_ij;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
 // SetupInteractMatrix_IMA: Build IMA interaction matrix
 // Matrix size is (n_ima * 6) x (n_ima * 6)
 // N_IMA[i,j] = N[full_i, full_j] + sign * N[full_i, mirror_j] @ P
@@ -3744,44 +4033,88 @@ int radTInteraction::SetupInteractMatrix_IMA()
 	// Update total DOF to IMA DOF
 	m_totalDOF = imaDOF;
 
-	// Allocate flat arrays
-	m_flatExternFieldArray.resize(imaDOF, 0.0);
-	m_flatMagnArray.resize(imaDOF, 0.0);
-	m_flatFieldArray.resize(imaDOF, 0.0);
-
-	// Build IMA interaction matrix with OpenMP
-	#pragma omp parallel for schedule(dynamic) if(m_imaNumElements > 10)
-	for(int ima_col = 0; ima_col < m_imaNumElements; ima_col++)
+	// Save external field values for IMA elements BEFORE resizing
+	// m_imaToFull[ima_i] gives the full model element index for IMA element ima_i
+	std::vector<double> savedExternField(imaDOF, 0.0);
+	if(!m_flatExternFieldArray.empty())
 	{
-		int offset_col = ima_col * 6;
-
-		for(int ima_row = 0; ima_row < m_imaNumElements; ima_row++)
+		for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
 		{
-			int offset_row = ima_row * 6;
+			int full_i = m_imaToFull[ima_i];
+			int full_offset = m_elemDOFOffset[full_i];
+			int ima_offset = ima_i * 6;
 
-			// Compute IMA block
-			double K_ima[36];
-			Compute6x6BlockIMA(ima_row, ima_col, K_ima);
-
-			// Store in column-major format WITH BLOCK TRANSPOSE
-			// ELF convention: the 6x6 block K[i,j] should be transposed
-			// Radia computes K_ima[face_i, face_j] = effect on face_i from face_j
-			// ELF expects M[face_i, face_j] = K_ima[face_j, face_i] (transposed)
-			double* block = &m_flatInteractMatrix[(size_t)offset_col * imaDOF + offset_row];
-			for(int i = 0; i < 6; i++)
+			// Copy 6 DOF values from full model to IMA
+			for(int dof = 0; dof < 6; dof++)
 			{
-				for(int j = 0; j < 6; j++)
+				if((size_t)(full_offset + dof) < m_flatExternFieldArray.size())
 				{
-					// Transpose the 6x6 block: store K_ima[j][i] at position [i][j]
-					// K_ima is row-major: K_ima[j][i] at j*6+i
-					// block position [i][j] in column-major: block[j*stride+i]
-					block[(size_t)j * imaDOF + i] = K_ima[j * 6 + i];  // Note: j*6+i instead of i*6+j
+					savedExternField[ima_offset + dof] = m_flatExternFieldArray[full_offset + dof];
 				}
 			}
 		}
 	}
 
-	std::cout << "[Radia] IMA interaction matrix built successfully" << std::endl;
+	// Now resize arrays
+	m_flatExternFieldArray = std::move(savedExternField);  // Use saved values, not zeros
+	m_flatMagnArray.resize(imaDOF, 0.0);
+	m_flatFieldArray.resize(imaDOF, 0.0);
+
+	// Build mapping from IMA index to hex index
+	// This allows us to call Compute6x6BlockFast directly
+	std::vector<int> imaToHex(m_imaNumElements, -1);
+	for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
+	{
+		int full_i = m_imaToFull[ima_i];
+		for(int h = 0; h < (int)m_hexaElemIndices.size(); h++)
+		{
+			if(m_hexaElemIndices[h] == full_i)
+			{
+				imaToHex[ima_i] = h;
+				break;
+			}
+		}
+	}
+
+	// Build IMA interaction matrix with OpenMP
+	// Kernel-based IMA: Compute6x6BlockFast includes mirrored source contributions directly
+	// No permutation arrays needed - coordinates are mirrored directly in the kernel
+	#pragma omp parallel for schedule(dynamic) if(m_imaNumElements > 10)
+	for(int ima_col = 0; ima_col < m_imaNumElements; ima_col++)
+	{
+		int offset_col = ima_col * 6;
+		int hex_col = imaToHex[ima_col];
+
+		if(hex_col < 0) continue;  // Skip if mapping not found
+
+		for(int ima_row = 0; ima_row < m_imaNumElements; ima_row++)
+		{
+			int offset_row = ima_row * 6;
+			int hex_row = imaToHex[ima_row];
+
+			if(hex_row < 0) continue;  // Skip if mapping not found
+
+			// Compute IMA block using kernel-based approach
+			// Compute6x6BlockFast now includes mirrored source contributions when m_imaEnabled=true
+			double K_ima[36];
+			Compute6x6BlockFast(hex_row, hex_col, K_ima);
+
+			// Store in ROW-MAJOR format (both K_ima and matrix are row-major)
+			// K_ima[i][j] = interaction from source face j to target face i
+			// ROW-MAJOR storage: element at (row=i, col=j) goes to index [i * stride + j]
+			double* block = &m_flatInteractMatrix[(size_t)offset_row * imaDOF + offset_col];
+			for(int i = 0; i < 6; i++)
+			{
+				for(int j = 0; j < 6; j++)
+				{
+					// Both row-major: K_ima[i][j] at i*6+j -> block[i*stride+j]
+					block[(size_t)i * imaDOF + j] = K_ima[i * 6 + j];
+				}
+			}
+		}
+	}
+
+	std::cout << "[Radia] IMA interaction matrix built successfully (kernel-based)" << std::endl;
 	return 1;
 }
 
