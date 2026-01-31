@@ -91,6 +91,7 @@ public:
 	// Caching avoids the expensive O(N^2) matrix construction on every Solve()
 	int m_cached_interact_key;       // Key of cached interaction object (0 = no cache)
 	int m_cached_obj_key;            // Geometry key that the cache is valid for
+	std::string m_cached_image_spec; // Image symmetry string that the cache is valid for
 
 #ifdef RADIA_USE_HACAPK
 	// HACApK parameters for H-matrix solver
@@ -146,6 +147,7 @@ public:
 		// Interaction matrix cache init
 		m_cached_interact_key = 0;
 		m_cached_obj_key = 0;
+		m_cached_image_spec.clear();
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
 
@@ -290,8 +292,14 @@ public:
 	int MakeManualRelax(int InteractElemKey, int MethNo, int IterNumber, double RelaxParam);
 	int MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char** arOptionNames=0, const char** arOptionValues=0, int numOptions=0);
 	int UpdateSourcesForRelax(int InteractElemKey);
-	int SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo);
-	int SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod);
+	int SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char* image = nullptr);
+	int SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod, const char* image = nullptr);
+	int BuildMatrix(int ObjKey, const char* image = nullptr);  // Build matrix without solving
+
+	// Helper: Parse image string and apply IMA symmetry to interaction object
+	// Format: "+x", "-z", "+x-z", "+x+y-z", etc.
+	// Returns true on success
+	bool ApplyIMASymmetryToInteraction(radTInteraction* pIntrc, const char* imageSpec);
 
 #ifdef RADIA_USE_HACAPK
 	// HACApK parameter setting and statistics retrieval

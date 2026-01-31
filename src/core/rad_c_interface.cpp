@@ -149,8 +149,9 @@ void ManualRelax( int, int, int, double );
 void AutoRelax();
 void AutoRelaxOpt( int, double, int, int, const char* );
 void UpdateSourcesForRelax( int );
-void SolveGen( int, double, int, int );
-void SolveGenNonl( int, double, int, int, int );
+void SolveGen( int, double, int, int, const char* );
+void SolveGenNonl( int, double, int, int, int, const char* );
+int BuildMatrix( int, const char* );
 #ifdef RADIA_USE_HACAPK
 void SetHACApKParams( double, int, double );
 void GetHACApKStats( double*, int* );
@@ -1632,16 +1633,23 @@ void UpdateSourcesForRelax(int InteractElemKey)
 
 //-------------------------------------------------------------------------
 
-void SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo)
+void SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char* image)
 {
-	rad.SolveGen(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
+	rad.SolveGen(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo, image);
 }
 
 //-------------------------------------------------------------------------
 
-void SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod)
+int BuildMatrix(int ObjKey, const char* image)
 {
-	rad.SolveGenNonl(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo, NonlMethod);
+	return rad.BuildMatrix(ObjKey, image);
+}
+
+//-------------------------------------------------------------------------
+
+void SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod, const char* image)
+{
+	rad.SolveGenNonl(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo, NonlMethod, image);
 }
 
 //-------------------------------------------------------------------------
