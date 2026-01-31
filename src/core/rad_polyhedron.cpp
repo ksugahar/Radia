@@ -1026,16 +1026,17 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 			int signZ = RadIMAFieldContext::GetSignZ();
 
 
-			// DOF permutation arrays (from radTInteraction)
-			// Face numbering: 0=y-, 1=x+, 2=y+, 3=x-, 4=z-, 5=z+
-			static const int PERM_X[6] = {0, 3, 2, 1, 4, 5};     // Swap x+ (1) and x- (3)
-			static const int PERM_Y[6] = {2, 1, 0, 3, 4, 5};     // Swap y- (0) and y+ (2)
+			// DOF permutation arrays based on Radia's face ordering from rad_rectangular_block.cpp:
+			// Face numbering: 0=x-, 1=x+, 2=y-, 3=y+, 4=z-, 5=z+
+			// (Different from ELF's face ordering: 0=y-, 1=x+, 2=y+, 3=x-, 4=z-, 5=z+)
+			static const int PERM_X[6] = {1, 0, 2, 3, 4, 5};     // Swap x- (0) and x+ (1)
+			static const int PERM_Y[6] = {0, 1, 3, 2, 4, 5};     // Swap y- (2) and y+ (3)
 			static const int PERM_Z[6] = {0, 1, 2, 3, 5, 4};     // Swap z- (4) and z+ (5)
 			// Composed permutations for dual-axis mirrors
-			static const int PERM_XY[6] = {2, 3, 0, 1, 4, 5};    // PERM_Y[PERM_X[i]]
-			static const int PERM_XZ[6] = {0, 3, 2, 1, 5, 4};    // PERM_Z[PERM_X[i]]
-			static const int PERM_YZ[6] = {2, 1, 0, 3, 5, 4};    // PERM_Z[PERM_Y[i]]
-			static const int PERM_XYZ[6] = {2, 3, 0, 1, 5, 4};   // PERM_Z[PERM_Y[PERM_X[i]]]
+			static const int PERM_XY[6] = {1, 0, 3, 2, 4, 5};    // PERM_Y[PERM_X[i]]
+			static const int PERM_XZ[6] = {1, 0, 2, 3, 5, 4};    // PERM_Z[PERM_X[i]]
+			static const int PERM_YZ[6] = {0, 1, 3, 2, 5, 4};    // PERM_Z[PERM_Y[i]]
+			static const int PERM_XYZ[6] = {1, 0, 3, 2, 5, 4};   // PERM_Z[PERM_Y[PERM_X[i]]]
 
 			// Helper lambda to compute field from mirrored geometry
 			// The 'sign' parameter (+1 or -1) indicates the symmetry type:
@@ -1119,14 +1120,17 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 				}
 				else
 				{
-					// Soft material: use permuted and signed Sigma values
-					// sigma = M . n, so for antisymmetric BC, sigma is negated
+					// Soft material: use Sigma[i] with mirrored geometry of face i
+					// This matches the kernel-based IMA matrix construction where
+					// K[obs][j] = (field from original face j) + (field from mirrored face j)
+					// Both contributions use the SAME DOF index sigma[j]
+					// The sign parameter handles symmetric (+1) vs antisymmetric (-1) BC
 					for(int i = 0; i < nFaces; i++)
 					{
-						int permIdx = perm ? perm[i] : i;
-						double permSigma = sign * Sigma[permIdx];  // Apply BC sign to sigma
+						// Use Sigma[i] (NOT permuted) - matches kernel-based IMA
+						double mirrorSigma = sign * Sigma[i];
 
-						// Get vertex positions for this face
+						// Get vertex positions for this face (mirrored geometry)
 						const TVector3d& MV0 = mirrorVerts[i][0];
 						const TVector3d& MV1 = mirrorVerts[i][1];
 						const TVector3d& MV2 = mirrorVerts[i][2];
@@ -1136,20 +1140,21 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 						if(reverseWinding)
 						{
 							// Reverse winding
-							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV3, MV2, MV1, permSigma);
+							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV3, MV2, MV1, mirrorSigma);
 						}
 						else
 						{
 							// Keep original winding
-							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, permSigma);
+							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, mirrorSigma);
 						}
 						H_mirror.x += H_face.x;
 						H_mirror.y += H_face.y;
 						H_mirror.z += H_face.z;
 					}
-					H_mirror.x *= RadConst::INV_FOUR_PI;
-					H_mirror.y *= RadConst::INV_FOUR_PI;
-					H_mirror.z *= RadConst::INV_FOUR_PI;
+					// Apply 2/(4*pi) factor - matches main field computation (ELF convention)
+					H_mirror.x *= 2.0 * RadConst::INV_FOUR_PI;
+					H_mirror.y *= 2.0 * RadConst::INV_FOUR_PI;
+					H_mirror.z *= 2.0 * RadConst::INV_FOUR_PI;
 				}
 
 				return H_mirror;  // No additional sign multiplication

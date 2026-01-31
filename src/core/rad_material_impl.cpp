@@ -2729,6 +2729,38 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 			return;
 		}
 
+		// Setup IMA context if IMA was used in the last solve AND we're computing field for that model
+		// CRITICAL: Only set IMA context if container_handle matches the cached model (m_cached_obj_key)
+		// Otherwise, we'd incorrectly add mirror contributions for models that weren't solved with IMA
+		bool imaWasSet = false;
+
+		// DEBUG: Check IMA setup conditions
+		static int imaDebugCount = 0;
+		if(imaDebugCount < 3) {
+			std::cout << "[IMA Setup Batch] cached_key=" << m_cached_interact_key
+			          << " cached_obj=" << m_cached_obj_key
+			          << " handle=" << container_handle << std::endl;
+			imaDebugCount++;
+		}
+
+		if(m_cached_interact_key > 0 && m_cached_obj_key == container_handle)
+		{
+			radTInteraction* pIntrc = GetInteractionByKey(m_cached_interact_key);
+			if(pIntrc && pIntrc->IsIMAEnabled())
+			{
+				RadIMAFieldContext::Set(
+					pIntrc->GetIMASymmetry(),
+					pIntrc->GetIMASignX(),
+					pIntrc->GetIMASignY(),
+					pIntrc->GetIMASignZ()
+				);
+				imaWasSet = true;
+				if(imaDebugCount <= 3) {
+					std::cout << "[IMA Setup Batch] Context SET! sym=" << pIntrc->GetIMASymmetry() << std::endl;
+				}
+			}
+		}
+
 		// Initialize output arrays to zero (if provided)
 		if(B_out) std::memset(B_out, 0, n_points * 3 * sizeof(double));
 		if(H_out) std::memset(H_out, 0, n_points * 3 * sizeof(double));
@@ -2794,9 +2826,14 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 				H_out[i * 3 + 2] = Field.H.z;
 			}
 		}
+
+		// Clear IMA context after computation
+		if(imaWasSet) RadIMAFieldContext::Clear();
 	}
 	catch(...)
 	{
+		// Clear IMA context on error
+		RadIMAFieldContext::Clear();
 		Send.ErrorMessage("Radia::Error000");
 	}
 }
@@ -2820,6 +2857,25 @@ void radTApplication::ComputeScalarPotentialBatch(double* phi_out, int n_points,
 		{
 			Send.ErrorMessage("Radia::Error003");
 			return;
+		}
+
+		// Setup IMA context if IMA was used in the last solve AND we're computing field for that model
+		// CRITICAL: Only set IMA context if container_handle matches the cached model (m_cached_obj_key)
+		// Otherwise, we'd incorrectly add mirror contributions for models that weren't solved with IMA
+		bool imaWasSet = false;
+		if(m_cached_interact_key > 0 && m_cached_obj_key == container_handle)
+		{
+			radTInteraction* pIntrc = GetInteractionByKey(m_cached_interact_key);
+			if(pIntrc && pIntrc->IsIMAEnabled())
+			{
+				RadIMAFieldContext::Set(
+					pIntrc->GetIMASymmetry(),
+					pIntrc->GetIMASignX(),
+					pIntrc->GetIMASignY(),
+					pIntrc->GetIMASignZ()
+				);
+				imaWasSet = true;
+			}
 		}
 
 		// Initialize output array to zero
@@ -2856,9 +2912,14 @@ void radTApplication::ComputeScalarPotentialBatch(double* phi_out, int n_points,
 			// Units: [phi_m] = A (magnetic scalar potential)
 			phi_out[i] = Field.Phi;
 		}
+
+		// Clear IMA context after computation
+		if(imaWasSet) RadIMAFieldContext::Clear();
 	}
 	catch(...)
 	{
+		// Clear IMA context on error
+		RadIMAFieldContext::Clear();
 		Send.ErrorMessage("Radia::Error000");
 	}
 }
