@@ -139,32 +139,36 @@ def main():
 
     # Create coil using ObjRaceTrk
     # Note: Coil is analytical (not discretized) and provides background field
-    # No TrfMlt needed - coil field computed analytically at all mirror points
+    # The coil wraps around the yoke with axis along Y (perpendicular to yoke)
     print("\nCreating coil...")
     # Convert mm to m for all dimensions
+    # ELF: AA O 0 131.25 26.25, AA SQRING 60 72.5 52.5 35 5 3
     coil_center = [0, 0.13125, 0.02625]  # m (was 131.25 mm, 26.25 mm)
     r_inner = 0.060   # m (was 60 mm)
     r_outer = 0.0725  # m (was 72.5 mm)
     straight_half = 0.0525  # m (was 52.5 mm)
-    height = 0.070    # m (was 70 mm)
+    height = 0.070    # m (was 70 mm = 2 * 35 mm)
     current = 10000.0  # A (10000 AT for quarter model -> 20000 AT effective with symmetry)
     nseg = 8  # number of segments
 
     print(f"  Coil center: {coil_center} m")
     print(f"  R_inner: {r_inner*1000:.1f} mm, R_outer: {r_outer*1000:.1f} mm")
+    print(f"  Straight section: {straight_half*2*1000:.1f} mm")
+    print(f"  Height: {height*1000:.1f} mm")
     print(f"  Current: {current} A")
+    print(f"  Axis: Z")
 
     try:
         # ObjRaceTrk(center, radii, lengths, h, nseg, man_auto, axis, j)
-        # h is height (thickness of coil), j is current density
+        # For Z-axis coil: lengths[0] is in X, lengths[1] is in Y
         coil = rad.ObjRaceTrk(
             coil_center,
             [r_inner, r_outer],
-            [straight_half * 2, height],
-            height,  # h: coil height
+            [straight_half * 2, height],  # [X-extent, Y-extent]
+            height,  # h: coil thickness in Z direction
             nseg,    # number of segments
             'man',   # manual mode
-            'z',     # axis
+            'z',     # axis along Z
             current / (height * (r_outer - r_inner))  # j: current density
         )
         print(f"  Coil created: {coil}")
@@ -183,7 +187,7 @@ def main():
                 height,          # h: height
                 nseg,            # number of phi segments
                 'man',           # manual mode
-                'z',             # axis
+                'z',             # axis along Z
                 current / (height * (r_outer - r_inner))  # j: current density
             )
             print(f"  ObjArcCur coil created: {coil}")
