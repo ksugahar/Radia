@@ -3253,13 +3253,15 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 //-------------------------------------------------------------------------
 // SetIMASymmetry: Configure IMA symmetry mode
 // symmetry: IMA_X, IMA_Y, IMA_Z, etc.
-// sign: +1 for symmetric BC, -1 for antisymmetric BC
+// signX, signY, signZ: +1 for symmetric BC, -1 for antisymmetric BC per axis
 // Returns: number of elements in IMA region
 //-------------------------------------------------------------------------
-int radTInteraction::SetIMASymmetry(int symmetry, int sign)
+int radTInteraction::SetIMASymmetry(int symmetry, int signX, int signY, int signZ)
 {
 	m_imaSymmetry = symmetry;
-	m_imaSign = (sign >= 0) ? 1 : -1;  // Normalize to +1 or -1
+	m_imaSignX = (signX >= 0) ? 1 : -1;  // Normalize to +1 or -1
+	m_imaSignY = (signY >= 0) ? 1 : -1;
+	m_imaSignZ = (signZ >= 0) ? 1 : -1;
 	m_imaEnabled = (symmetry != IMA_NONE);
 
 	if(!m_imaEnabled)
@@ -3459,7 +3461,11 @@ void radTInteraction::ApplyDOFPermutation(const double* input, const int* perm, 
 
 //-------------------------------------------------------------------------
 // Compute6x6BlockIMA: Compute IMA block with image summation
-// K_IMA[i][j] = K[full_i][full_j] + sign * K[full_i][mirror_j] @ P
+// For single axis: K_IMA[i,j] = K[i,j] + sign * K[i, mirror(j)] @ P
+// For dual axis (e.g., XZ):
+//   K_IMA[i,j] = K[i,j] + sign_x * K[i, mx(j)] @ Px
+//                       + sign_z * K[i, mz(j)] @ Pz
+//                       + sign_x * sign_z * K[i, mxz(j)] @ Pxz
 // For quarter models: if no physical mirror exists, compute virtual mirror
 //-------------------------------------------------------------------------
 void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) const
@@ -3489,64 +3495,80 @@ void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) co
 		return;
 	}
 
-	// Compute direct interaction: K[full_i][full_j]
-	double K_direct[36];
-	Compute6x6BlockFast(hex_i, hex_j, K_direct);
+	// Start with direct interaction: K[full_i][full_j]
+	Compute6x6BlockFast(hex_i, hex_j, K_ima);
 
-	// Compute mirror interaction
-	double K_mirror[36];
-	if(m_imaUseVirtualMirror[ima_j])
-	{
-		// Virtual mirror: compute interaction with element j's geometry mirrored
-		Compute6x6BlockMirrored(hex_i, hex_j, m_imaSymmetry, K_mirror);
-	}
-	else
-	{
-		// Physical mirror: use actual mirror element
-		int mirror_j = m_imaMirrorMap[ima_j];
-		int hex_mirror_j = -1;
-		for(int h = 0; h < (int)m_hexaElemIndices.size(); h++)
+	// Helper lambda to add mirror contribution
+	auto addMirrorContribution = [&](int mirrorAxis, int sign, const int* perm) {
+		double K_mirror[36];
+		double K_mirror_perm[36];
+
+		// Quarter models use virtual mirrors (geometry mirrored on-the-fly)
+		// Always use virtual mirror for IMA since quarter models have no physical mirrors
+		Compute6x6BlockMirrored(hex_i, hex_j, mirrorAxis, K_mirror);
+
+		// Apply DOF permutation: K_mirror @ P
+		ApplyDOFPermutation(K_mirror, perm, K_mirror_perm);
+
+		// Add contribution: K_ima += sign * K_mirror_perm
+		for(int k = 0; k < 36; k++)
 		{
-			if(m_hexaElemIndices[h] == mirror_j)
-			{
-				hex_mirror_j = h;
-				break;
-			}
+			K_ima[k] += sign * K_mirror_perm[k];
 		}
-		if(hex_mirror_j < 0)
-		{
-			std::cerr << "[Radia] Error: Mirror element not found in hex arrays" << std::endl;
-			for(int k = 0; k < 36; k++) K_ima[k] = 0.0;
-			return;
-		}
-		Compute6x6BlockFast(hex_i, hex_mirror_j, K_mirror);
+	};
+
+	// Add contributions based on active symmetry axes
+	bool hasX = (m_imaSymmetry & IMA_X) != 0;
+	bool hasY = (m_imaSymmetry & IMA_Y) != 0;
+	bool hasZ = (m_imaSymmetry & IMA_Z) != 0;
+
+	// Single axis contributions
+	if(hasX) addMirrorContribution(IMA_X, m_imaSignX, IMA_PERM_X);
+	if(hasY) addMirrorContribution(IMA_Y, m_imaSignY, IMA_PERM_Y);
+	if(hasZ) addMirrorContribution(IMA_Z, m_imaSignZ, IMA_PERM_Z);
+
+	// Dual axis contributions (combined permutation)
+	if(hasX && hasY)
+	{
+		// XY mirror: apply Px then Py (or equivalently, Pxy)
+		double K_mirror[36], K_temp[36], K_mirror_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XY, K_mirror);
+		ApplyDOFPermutation(K_mirror, IMA_PERM_X, K_temp);
+		ApplyDOFPermutation(K_temp, IMA_PERM_Y, K_mirror_perm);
+		int sign = m_imaSignX * m_imaSignY;
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_mirror_perm[k];
+	}
+	if(hasX && hasZ)
+	{
+		// XZ mirror: apply Px then Pz (or equivalently, Pxz)
+		double K_mirror[36], K_temp[36], K_mirror_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XZ, K_mirror);
+		ApplyDOFPermutation(K_mirror, IMA_PERM_X, K_temp);
+		ApplyDOFPermutation(K_temp, IMA_PERM_Z, K_mirror_perm);
+		int sign = m_imaSignX * m_imaSignZ;
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_mirror_perm[k];
+	}
+	if(hasY && hasZ)
+	{
+		// YZ mirror: apply Py then Pz
+		double K_mirror[36], K_temp[36], K_mirror_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_YZ, K_mirror);
+		ApplyDOFPermutation(K_mirror, IMA_PERM_Y, K_temp);
+		ApplyDOFPermutation(K_temp, IMA_PERM_Z, K_mirror_perm);
+		int sign = m_imaSignY * m_imaSignZ;
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_mirror_perm[k];
 	}
 
-	// Apply DOF permutation based on symmetry
-	double K_mirror_perm[36];
-	if(m_imaSymmetry & IMA_X)
+	// Triple axis contribution (eighth model)
+	if(hasX && hasY && hasZ)
 	{
-		ApplyDOFPermutation(K_mirror, IMA_PERM_X, K_mirror_perm);
-	}
-	else if(m_imaSymmetry & IMA_Y)
-	{
-		ApplyDOFPermutation(K_mirror, IMA_PERM_Y, K_mirror_perm);
-	}
-	else if(m_imaSymmetry & IMA_Z)
-	{
-		ApplyDOFPermutation(K_mirror, IMA_PERM_Z, K_mirror_perm);
-	}
-	else
-	{
-		// No permutation needed
-		for(int k = 0; k < 36; k++) K_mirror_perm[k] = K_mirror[k];
-	}
-
-	// Sum: K_IMA = K_direct + sign * K_mirror_perm
-	// sign = +1 for symmetric BC, -1 for antisymmetric BC
-	for(int k = 0; k < 36; k++)
-	{
-		K_ima[k] = K_direct[k] + m_imaSign * K_mirror_perm[k];
+		double K_mirror[36], K_temp1[36], K_temp2[36], K_mirror_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XYZ, K_mirror);
+		ApplyDOFPermutation(K_mirror, IMA_PERM_X, K_temp1);
+		ApplyDOFPermutation(K_temp1, IMA_PERM_Y, K_temp2);
+		ApplyDOFPermutation(K_temp2, IMA_PERM_Z, K_mirror_perm);
+		int sign = m_imaSignX * m_imaSignY * m_imaSignZ;
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_mirror_perm[k];
 	}
 }
 
@@ -3741,15 +3763,19 @@ int radTInteraction::SetupInteractMatrix_IMA()
 			double K_ima[36];
 			Compute6x6BlockIMA(ima_row, ima_col, K_ima);
 
-			// Store in column-major format
+			// Store in column-major format WITH BLOCK TRANSPOSE
+			// ELF convention: the 6x6 block K[i,j] should be transposed
+			// Radia computes K_ima[face_i, face_j] = effect on face_i from face_j
+			// ELF expects M[face_i, face_j] = K_ima[face_j, face_i] (transposed)
 			double* block = &m_flatInteractMatrix[(size_t)offset_col * imaDOF + offset_row];
 			for(int i = 0; i < 6; i++)
 			{
 				for(int j = 0; j < 6; j++)
 				{
-					// K_ima is row-major: K[i][j] at i*6+j
-					// block is column-major: block[j*stride+i]
-					block[(size_t)j * imaDOF + i] = K_ima[i * 6 + j];
+					// Transpose the 6x6 block: store K_ima[j][i] at position [i][j]
+					// K_ima is row-major: K_ima[j][i] at j*6+i
+					// block position [i][j] in column-major: block[j*stride+i]
+					block[(size_t)j * imaDOF + i] = K_ima[j * 6 + i];  // Note: j*6+i instead of i*6+j
 				}
 			}
 		}

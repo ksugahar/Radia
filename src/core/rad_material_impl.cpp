@@ -1750,7 +1750,7 @@ int radTApplication::UpdateSourcesForRelax(int InteractElemKey)
 
 //-------------------------------------------------------------------------
 
-int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo)
+int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char* image)
 {
 	// Methods 6-7 have been removed (deprecated)
 	// All methods now go through the standard PreRelax + MakeAutoRelax path
@@ -1776,7 +1776,19 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		int InteractElemKey = 0;
 		double t_matrix_build = 0.0;
 
+		// Normalize image string for comparison
+		std::string imageSpec = (image != nullptr) ? image : "";
+
 		bool cacheValid = (m_cached_interact_key > 0 && m_cached_obj_key == ObjKey);
+
+		// Invalidate cache if image spec changed
+		if(cacheValid && imageSpec != m_cached_image_spec)
+		{
+			cacheValid = false;
+			m_cached_interact_key = 0;
+			m_cached_obj_key = 0;
+			m_cached_image_spec.clear();
+		}
 
 		// For HACApK, cache invalidation is handled differently (H-matrix is rebuilt internally)
 		// Also invalidate cache if solver method changed (different matrix type might be needed)
@@ -1802,6 +1814,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 				cacheValid = false;
 				m_cached_interact_key = 0;
 				m_cached_obj_key = 0;
+				m_cached_image_spec.clear();
 			}
 		}
 
@@ -1814,9 +1827,26 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 			t_matrix_build = std::chrono::duration<double>(t_prerelax_end - t_prerelax_start).count();
 			if(InteractElemKey <= 0) return 0;
 
+			// Apply IMA symmetry if specified
+			if(!imageSpec.empty())
+			{
+				// Get interaction object
+				radThg hg;
+				if(ValidateElemKey(InteractElemKey, hg))
+				{
+					radTInteraction* pIntrc = dynamic_cast<radTInteraction*>(hg.rep);
+					if(pIntrc != nullptr)
+					{
+						// Parse and apply IMA symmetry
+						ApplyIMASymmetryToInteraction(pIntrc, imageSpec.c_str());
+					}
+				}
+			}
+
 			// Cache the interaction key for future reuse
 			m_cached_interact_key = InteractElemKey;
 			m_cached_obj_key = ObjKey;
+			m_cached_image_spec = imageSpec;
 		}
 
 		SendingIsRequired = PrevSendingIsRequired;
@@ -1846,19 +1876,191 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 
 //-------------------------------------------------------------------------
 
-int radTApplication::SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod)
+int radTApplication::SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod, const char* image)
 {
 	// Set nonlinear method before calling SolveGen
 	// 0 = mucal1 (chi-change), 1 = mucal2 (B-change/Newton)
 	int OldNonlMethod = this->NonlinearMethod;
 	this->NonlinearMethod = NonlMethod;
 
-	int result = SolveGen(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
+	int result = SolveGen(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo, image);
 
 	// Restore previous setting
 	this->NonlinearMethod = OldNonlMethod;
 
 	return result;
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::BuildMatrix(int ObjKey, const char* image)
+{
+	// Build interaction matrix without solving
+	// This allows users to inspect the matrix before solving
+	int InteractElemKey = 0;
+	try
+	{
+		short PrevSendingIsRequired = SendingIsRequired;
+		SendingIsRequired = 0;
+
+		// Normalize image string for comparison
+		std::string imageSpec = (image != nullptr) ? image : "";
+
+		// Invalidate cache if object or image spec changed
+		bool cacheValid = (m_cached_interact_key > 0 && m_cached_obj_key == ObjKey);
+		if(cacheValid && imageSpec != m_cached_image_spec)
+		{
+			cacheValid = false;
+			m_cached_interact_key = 0;
+			m_cached_obj_key = 0;
+			m_cached_image_spec.clear();
+		}
+
+		if(cacheValid)
+		{
+			// Reuse cached interaction object
+			InteractElemKey = m_cached_interact_key;
+
+			// Validate the cached key is still valid in GlobalMapOfHandlers
+			radThg hg;
+			if(!ValidateElemKey(InteractElemKey, hg))
+			{
+				// Cache is stale, need to rebuild
+				cacheValid = false;
+				m_cached_interact_key = 0;
+				m_cached_obj_key = 0;
+				m_cached_image_spec.clear();
+			}
+		}
+
+		if(!cacheValid)
+		{
+			// Build interaction matrix (PreRelax includes SetupInteractMatrix)
+			InteractElemKey = PreRelax(ObjKey, 0, 0);
+			if(InteractElemKey <= 0)
+			{
+				SendingIsRequired = PrevSendingIsRequired;
+				return 0;
+			}
+
+			// Apply IMA symmetry if specified
+			if(!imageSpec.empty())
+			{
+				// Get interaction object
+				radThg hg;
+				if(ValidateElemKey(InteractElemKey, hg))
+				{
+					radTInteraction* pIntrc = dynamic_cast<radTInteraction*>(hg.rep);
+					if(pIntrc != nullptr)
+					{
+						// Parse and apply IMA symmetry
+						ApplyIMASymmetryToInteraction(pIntrc, imageSpec.c_str());
+					}
+				}
+			}
+
+			// Cache the interaction key for future reuse
+			m_cached_interact_key = InteractElemKey;
+			m_cached_obj_key = ObjKey;
+			m_cached_image_spec = imageSpec;
+		}
+
+		SendingIsRequired = PrevSendingIsRequired;
+	}
+	catch(...)
+	{
+		Initialize();
+		return 0;
+	}
+	return InteractElemKey;
+}
+
+//-------------------------------------------------------------------------
+// ApplyIMASymmetryToInteraction: Parse image string and apply IMA symmetry
+// Format: "+x", "-z", "+x-z", "+x+y-z", etc.
+// Each axis is prefixed by + (symmetric) or - (antisymmetric)
+// No prefix defaults to + (symmetric)
+// Examples:
+//   "+x" -> X mirror with symmetric BC
+//   "-z" -> Z mirror with antisymmetric BC
+//   "+x-z" -> X and Z mirrors, X symmetric, Z antisymmetric (ELF quarter model)
+//-------------------------------------------------------------------------
+bool radTApplication::ApplyIMASymmetryToInteraction(radTInteraction* pIntrc, const char* imageSpec)
+{
+	if(pIntrc == nullptr || imageSpec == nullptr || imageSpec[0] == '\0')
+	{
+		return false;
+	}
+
+	std::string spec(imageSpec);
+
+	// Parse the image specification string
+	int symmetryFlags = radTInteraction::IMA_NONE;
+	int signX = 1, signY = 1, signZ = 1;  // Default to symmetric (+)
+
+	size_t pos = 0;
+	while(pos < spec.length())
+	{
+		// Skip whitespace
+		while(pos < spec.length() && (spec[pos] == ' ' || spec[pos] == '\t'))
+			pos++;
+
+		if(pos >= spec.length()) break;
+
+		// Check for sign prefix
+		int currentSign = 1;  // Default to symmetric
+		if(spec[pos] == '+')
+		{
+			currentSign = 1;
+			pos++;
+		}
+		else if(spec[pos] == '-')
+		{
+			currentSign = -1;
+			pos++;
+		}
+
+		if(pos >= spec.length()) break;
+
+		// Read axis
+		char axis = tolower(spec[pos]);
+		pos++;
+
+		switch(axis)
+		{
+		case 'x':
+			symmetryFlags |= radTInteraction::IMA_X;
+			signX = currentSign;
+			break;
+		case 'y':
+			symmetryFlags |= radTInteraction::IMA_Y;
+			signY = currentSign;
+			break;
+		case 'z':
+			symmetryFlags |= radTInteraction::IMA_Z;
+			signZ = currentSign;
+			break;
+		default:
+			// Invalid axis - skip
+			break;
+		}
+	}
+
+	if(symmetryFlags == radTInteraction::IMA_NONE)
+	{
+		return false;  // No valid symmetry specified
+	}
+
+	// Apply IMA symmetry with per-axis signs
+	int numElements = pIntrc->SetIMASymmetry(symmetryFlags, signX, signY, signZ);
+
+	// Build IMA matrix
+	if(pIntrc->IsIMAEnabled())
+	{
+		pIntrc->SetupInteractMatrix_IMA();
+	}
+
+	return (numElements > 0);
 }
 
 //-------------------------------------------------------------------------
