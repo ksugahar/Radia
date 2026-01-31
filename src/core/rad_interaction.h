@@ -248,7 +248,9 @@ class radTInteraction : public radTg {
 	// IMA (Image) Symmetry for MSC hexahedra (private member variables)
 	//-------------------------------------------------------------------------
 	int m_imaSymmetry;                            // IMA symmetry flags
-	int m_imaSign;                                // IMA sign: +1 (symmetric BC) or -1 (antisymmetric BC)
+	int m_imaSignX;                               // IMA sign for X-axis: +1 (symmetric) or -1 (antisymmetric)
+	int m_imaSignY;                               // IMA sign for Y-axis: +1 (symmetric) or -1 (antisymmetric)
+	int m_imaSignZ;                               // IMA sign for Z-axis: +1 (symmetric) or -1 (antisymmetric)
 	bool m_imaEnabled;                            // True if IMA mode is active
 	int m_imaNumElements;                         // Number of elements in IMA region (reduced set)
 	std::vector<int> m_imaToFull;                 // IMA element index -> full element index
@@ -419,10 +421,9 @@ public:
 
 	// Configure IMA symmetry mode
 	// symmetry: IMA_X, IMA_Y, IMA_Z, IMA_XY, etc.
-	// sign: +1 for symmetric BC (N_IMA = N_direct + N_mirror @ P)
-	//       -1 for antisymmetric BC (N_IMA = N_direct - N_mirror @ P)
+	// signX, signY, signZ: +1 for symmetric BC, -1 for antisymmetric BC per axis
 	// Returns: number of elements in IMA region (reduced set)
-	int SetIMASymmetry(int symmetry, int sign = 1);
+	int SetIMASymmetry(int symmetry, int signX = 1, int signY = 1, int signZ = 1);
 
 	// Check if element is in IMA region (positive half-space for all active mirrors)
 	bool IsElementInIMARegion(int elemIdx) const;
@@ -449,7 +450,9 @@ public:
 	// IMA accessors
 	bool IsIMAEnabled() const { return m_imaEnabled; }
 	int GetIMASymmetry() const { return m_imaSymmetry; }
-	int GetIMASign() const { return m_imaSign; }
+	int GetIMASignX() const { return m_imaSignX; }
+	int GetIMASignY() const { return m_imaSignY; }
+	int GetIMASignZ() const { return m_imaSignZ; }
 	int GetIMANumElements() const { return m_imaNumElements; }
 
 	void SetupExternFieldArray();
