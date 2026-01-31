@@ -18,6 +18,7 @@
 #include "rad_particle_trajectory.h"
 #include "rad_geometry_3d_aux.h"
 #include "rad_operation_names.h"
+#include "rad_interaction.h"
 
 #include <math.h>
 #include <string.h>
@@ -31,7 +32,7 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPoi, long lenStObsPoi, 
+void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPoi, long lenStObsPoi,
 								   double* FiObsPoi, long lenFiObsPoi, int Np, char* ShowArgFlag, double StrtArg)
 {
 	radTField* FieldArray = nullptr;
@@ -48,11 +49,29 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPo
 		if(!ValidateVector3d(StObsPoi, lenStObsPoi, &StObsPoiVect)) return;
 		if(!ValidateVector3d(FiObsPoi, lenFiObsPoi, &FiObsPoiVect)) return;
 
+		// Setup IMA context if IMA was used in the last solve AND we're computing field for that model
+		// CRITICAL: Only set IMA context if ElemKey matches the cached model (m_cached_obj_key)
+		bool imaWasSet = false;
+		if(m_cached_interact_key > 0 && m_cached_obj_key == ElemKey)
+		{
+			radTInteraction* pIntrc = GetInteractionByKey(m_cached_interact_key);
+			if(pIntrc && pIntrc->IsIMAEnabled())
+			{
+				RadIMAFieldContext::Set(
+					pIntrc->GetIMASymmetry(),
+					pIntrc->GetIMASignX(),
+					pIntrc->GetIMASignY(),
+					pIntrc->GetIMASignZ()
+				);
+				imaWasSet = true;
+			}
+		}
+
 		short ArgumentNeeded = 0;
 		if(!strcmp(ShowArgFlag, "arg")) ArgumentNeeded = 1;
 		else if(strcmp(ShowArgFlag, "noarg")) { Send.ErrorMessage("Radia::Error034"); return;}
 
-		if(Np==1 && (FiObsPoiVect.x < 1.E+22) && (FiObsPoiVect.y < 1.E+22) && (FiObsPoiVect.z < 1.E+22)) Np = 101; // New Default 
+		if(Np==1 && (FiObsPoiVect.x < 1.E+22) && (FiObsPoiVect.y < 1.E+22) && (FiObsPoiVect.z < 1.E+22)) Np = 101; // New Default
 
 		TVector3d ZeroVect(0.,0.,0.);
 		TVector3d ObsPoiVect = StObsPoiVect;
@@ -75,7 +94,7 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPo
 			FieldArray[0] = Field;
 			TVector3d TranslVect = (1./double(Np-1))*(FiObsPoiVect-StObsPoiVect);
 			double StepArg;
-			if(ArgumentNeeded) 
+			if(ArgumentNeeded)
 			{
 				ArgArray[0] = StrtArg;
 				StepArg	= sqrt(TranslVect.x*TranslVect.x + TranslVect.y*TranslVect.y + TranslVect.z*TranslVect.z);
@@ -93,10 +112,15 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPo
 		else FieldArray = &Field;
 
 		if(SendingIsRequired) Send.OutFieldCompRes(FieldChar, FieldArray, ArgArray, Np);
+
+		// Clear IMA context after computation
+		if(imaWasSet) RadIMAFieldContext::Clear();
 		// RAII: vFieldArray and vArgArray cleaned up automatically
 	}
 	catch(...)
 	{
+		// Clear IMA context on error
+		RadIMAFieldContext::Clear();
 		// RAII: vFieldArray and vArgArray cleaned up automatically
 		Initialize(); return;
 	}
@@ -116,6 +140,24 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, radTVectorOfVec
 		radTFieldKey FieldKey;
 		if(!ValidateFieldChar(FieldChar, &FieldKey)) return;
 
+		// Setup IMA context if IMA was used in the last solve AND we're computing field for that model
+		// CRITICAL: Only set IMA context if ElemKey matches the cached model (m_cached_obj_key)
+		bool imaWasSet = false;
+		if(m_cached_interact_key > 0 && m_cached_obj_key == ElemKey)
+		{
+			radTInteraction* pIntrc = GetInteractionByKey(m_cached_interact_key);
+			if(pIntrc && pIntrc->IsIMAEnabled())
+			{
+				RadIMAFieldContext::Set(
+					pIntrc->GetIMASymmetry(),
+					pIntrc->GetIMASignX(),
+					pIntrc->GetIMASignY(),
+					pIntrc->GetIMASignZ()
+				);
+				imaWasSet = true;
+			}
+		}
+
 		long Np = (long)(VectorOfVector3d.size());
 		std::vector<radTField> vFieldArray(Np);
 		FieldArray = vFieldArray.data();
@@ -130,10 +172,15 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, radTVectorOfVec
 		}
 
 		if(SendingIsRequired) OutFieldCompRes(FieldChar, FieldArray, Np, VectInputCell);
+
+		// Clear IMA context after computation
+		if(imaWasSet) RadIMAFieldContext::Clear();
 		// RAII: vFieldArray cleaned up automatically
 	}
 	catch(...)
 	{
+		// Clear IMA context on error
+		RadIMAFieldContext::Clear();
 		// RAII: vFieldArray cleaned up automatically
 		Initialize(); return;
 	}
@@ -153,6 +200,24 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double** Points
 		if(g3dPtr==0) { Send.ErrorMessage("Radia::Error003"); return;}
 		radTFieldKey FieldKey;
 		if(!ValidateFieldChar(FieldChar, &FieldKey)) return;
+
+		// Setup IMA context if IMA was used in the last solve AND we're computing field for that model
+		// CRITICAL: Only set IMA context if ElemKey matches the cached model (m_cached_obj_key)
+		bool imaWasSet = false;
+		if(m_cached_interact_key > 0 && m_cached_obj_key == ElemKey)
+		{
+			radTInteraction* pIntrc = GetInteractionByKey(m_cached_interact_key);
+			if(pIntrc && pIntrc->IsIMAEnabled())
+			{
+				RadIMAFieldContext::Set(
+					pIntrc->GetIMASymmetry(),
+					pIntrc->GetIMASignX(),
+					pIntrc->GetIMASignY(),
+					pIntrc->GetIMASignZ()
+				);
+				imaWasSet = true;
+			}
+		}
 
 		std::vector<radTField> vFieldArray;
 		if(m_nProcMPI < 2) //OC01012020
@@ -175,9 +240,14 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double** Points
 			if(SendingIsRequired) OutFieldCompRes(FieldChar, FieldArray, Np);
 			// RAII: vFieldArray cleaned up automatically
 		}
+
+		// Clear IMA context after computation
+		if(imaWasSet) RadIMAFieldContext::Clear();
 	}
 	catch(...)
 	{
+		// Clear IMA context on error
+		RadIMAFieldContext::Clear();
 		// RAII: vFieldArray cleaned up automatically
 		if(arFldVals != 0) delete[] arFldVals; //OC02012020
 		if(arFldValsRecv != 0) delete[] arFldValsRecv; //OC02012020
