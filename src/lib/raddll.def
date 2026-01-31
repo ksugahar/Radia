@@ -51,7 +51,7 @@ RadMatSatLamFrm
 RadMatSatLamTab
 RadMatSatAniso
 
-RadRlxPre
+; RadRlxPre REMOVED (2026-01-31) - Use RadBuildMatrix instead
 RadRlxMan
 RadRlxAuto
 RadFld

@@ -91,8 +91,9 @@ void ManualRelax( int, int, int, double );
 //void AutoRelax( int, double, int, int );
 void AutoRelaxOpt( int, double, int, int, const char* );
 void UpdateSourcesForRelax( int );
-void SolveGen( int, double, int, int );
-void SolveGenNonl( int, double, int, int, int );
+void SolveGen( int, double, int, int, const char* );
+void SolveGenNonl( int, double, int, int, int, const char* );
+int BuildMatrix( int, const char* );
 #ifdef RADIA_USE_HACAPK
 void SetHACApKParams( double, int, double );
 void GetHACApKStats( double*, int* );
@@ -102,8 +103,7 @@ void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
 double GetRelaxParam();
-int SetIMASymmetry(int, const char*);
-int BuildIMAMatrix(int);
+// SetIMASymmetry, BuildIMAMatrix REMOVED (2026-01-31) - Use BuildMatrix(obj, image) instead
 void ClassifyPoints( int*, int*, int, double*, int, double );
 void ComputeFieldBatch( double*, double*, int, double*, int, int );
 void ComputeScalarPotentialBatch( double*, int, double*, int );
@@ -618,9 +618,9 @@ int CALL RadTrfInv(int* n)
 
 //-------------------------------------------------------------------------
 
-// RadTrfMlt REMOVED (2026-01-31) - Use IMA symmetry instead
+// RadTrfMlt REMOVED (2026-01-31) - Use Image symmetry instead
 // The shared-DOF approach was fundamentally incompatible with MSC 6DOF hexahedra
-// See docs/IMA_SYMMETRY_DESIGN.md for the correct element-based approach
+// Use: RadSolve(..., image="+x-z") or RadBuildMatrix(obj, image="+x-z")
 
 //-------------------------------------------------------------------------
 
@@ -634,7 +634,8 @@ int CALL RadTrfOrnt(int* n, int obj, int trf)
 
 //-------------------------------------------------------------------------
 
-// RadTrfPlSym REMOVED (2026-01-31) - Use IMA symmetry instead
+// RadTrfPlSym REMOVED (2026-01-31) - Use Image symmetry instead
+// Use: RadSolve(..., image="+x") or RadBuildMatrix(obj, image="+x")
 
 //-------------------------------------------------------------------------
 
@@ -891,13 +892,8 @@ int CALL RadMatSatAniso(int* n, double* pDataPar, int LenDataPar, double* pDataP
 
 //-------------------------------------------------------------------------
 
-int CALL RadRlxPre(int* n, int Obj, int SrcObj)
-{
-	PreRelax(Obj, SrcObj);
-
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
+// RadRlxPre REMOVED (2026-01-31) - Use RadBuildMatrix instead
+// int CALL RadRlxPre(int* n, int Obj, int SrcObj) - REMOVED
 
 //-------------------------------------------------------------------------
 
@@ -1573,15 +1569,16 @@ int CALL RadUtiMPI(int* arPar, char* sOnOff, double* arData, long* pnData, long*
 // "Secondary" functions
 //-------------------------------------------------------------------------
 
-// RadTrfZerPara REMOVED (2026-01-31) - Use IMA symmetry instead
-// RadTrfZerPerp REMOVED (2026-01-31) - Use IMA symmetry instead
+// RadTrfZerPara REMOVED (2026-01-31) - Use Image symmetry instead
+// RadTrfZerPerp REMOVED (2026-01-31) - Use Image symmetry instead
 // These functions used RadTrfMlt internally, which has fundamental issues with MSC 6DOF hexahedra
+// Use: RadSolve(..., image="+x-z") or RadBuildMatrix(obj, image="+x-z")
 
 //-------------------------------------------------------------------------
 
-int CALL RadSolve(double* dOut, int* nOut, int obj, double prec, int iter, int meth)
+int CALL RadSolve(double* dOut, int* nOut, int obj, double prec, int iter, int meth, const char* image)
 {
-	SolveGen(obj, prec, iter, meth);
+	SolveGen(obj, prec, iter, meth, image);
 
 	int ErrStat = ioBuffer.OutErrorStatus();
 	if(ErrStat > 0) return ErrStat;
@@ -1595,9 +1592,9 @@ int CALL RadSolve(double* dOut, int* nOut, int obj, double prec, int iter, int m
 
 //-------------------------------------------------------------------------
 
-int CALL RadSolveNonl(double* dOut, int* nOut, int obj, double prec, int iter, int meth, int nonl_method)
+int CALL RadSolveNonl(double* dOut, int* nOut, int obj, double prec, int iter, int meth, int nonl_method, const char* image)
 {
-	SolveGenNonl(obj, prec, iter, meth, nonl_method);
+	SolveGenNonl(obj, prec, iter, meth, nonl_method, image);
 
 	int ErrStat = ioBuffer.OutErrorStatus();
 	if(ErrStat > 0) return ErrStat;
@@ -1607,6 +1604,15 @@ int CALL RadSolveNonl(double* dOut, int* nOut, int obj, double prec, int iter, i
 	ioBuffer.OutMultiDimArrayOfDouble(dOut, Dims, NumDims);
 	*nOut = Dims[0];
 	return ErrStat;
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadBuildMatrix(int* n, int ElemKey, const char* image)
+{
+	int result = BuildMatrix(ElemKey, image);
+	*n = result;
+	return ioBuffer.OutErrorStatus();
 }
 
 //-------------------------------------------------------------------------
@@ -1621,12 +1627,8 @@ int CALL RadUtiDataGet(char* pcData, const char typeData[3], long key) //OC04102
 	return ErrStat;
 }
 
-int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey)
-{
-	PreRelax(ElemKey, SrcElemKey);
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
+// RadPreRelax REMOVED (2026-01-31) - Use RadBuildMatrix instead
+// int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey) - REMOVED
 
 //-------------------------------------------------------------------------
 
@@ -1710,20 +1712,12 @@ int CALL RadGetRelaxParam(double* relax)
 }
 
 //-------------------------------------------------------------------------
-// IMA (Image) Symmetry API
+// Image Symmetry API - REMOVED (2026-01-31)
+// Use RadBuildMatrix(obj, image) instead of RadSetIMASymmetry + RadBuildIMAMatrix
 //-------------------------------------------------------------------------
 
-int CALL RadSetIMASymmetry(int* numElements, int InteractKey, const char* symmetry)
-{
-	*numElements = SetIMASymmetry(InteractKey, symmetry);
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadBuildIMAMatrix(int* result, int InteractKey)
-{
-	*result = BuildIMAMatrix(InteractKey);
-	return ioBuffer.OutErrorStatus();
-}
+// RadSetIMASymmetry REMOVED - use RadBuildMatrix(obj, "+x-z") instead
+// RadBuildIMAMatrix REMOVED - use RadBuildMatrix(obj, "+x-z") instead
 
 //-------------------------------------------------------------------------
 

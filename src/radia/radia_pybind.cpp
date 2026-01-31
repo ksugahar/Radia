@@ -679,18 +679,35 @@ namespace radia_solver {
  * @param prec Convergence precision
  * @param max_iter Maximum iterations
  * @param method Solver method: 0=LU, 1=BiCGSTAB, 2=HACApK
+ * @param image Image symmetry string (e.g., "+x", "-z", "+x-z") or empty
  * @return Result tuple [residual, ?, ?, iterations]
  */
-py::tuple Solve(int obj, double prec, int max_iter, int method) {
+py::tuple Solve(int obj, double prec, int max_iter, int method, const std::string& image = "") {
     double D[4] = {0};
     int n = 0;
 
     // Note: GIL release disabled because OpenMP threads in the solver
     // don't have proper Python thread state, causing crashes.
-    int err = RadSolve(D, &n, obj, prec, max_iter, method);
+    const char* img = image.empty() ? nullptr : image.c_str();
+    int err = RadSolve(D, &n, obj, prec, max_iter, method, img);
     check_error(err);
 
     return py::make_tuple(D[0], D[1], D[2], D[3]);
+}
+
+/**
+ * @brief Build interaction matrix without solving
+ *
+ * @param obj Object or container handle
+ * @param image Image symmetry string (e.g., "+x", "-z", "+x-z") or empty
+ * @return Interaction matrix handle (for GetInteractMatrix)
+ */
+int BuildMatrix(int obj, const std::string& image = "") {
+    int handle = 0;
+    const char* img = image.empty() ? nullptr : image.c_str();
+    int err = RadBuildMatrix(&handle, obj, img);
+    check_error(err);
+    return handle;
 }
 
 /**
@@ -732,24 +749,14 @@ void SetHACApKParams(double eps, int leaf_size, double eta);  // Forward declara
  */
 void SetBiCGSTABTol(double tol);  // Forward declaration
 
-/**
- * @brief Build interaction matrix (PreRelax step)
- *
- * @param obj Object handle
- * @param src_obj Source object handle (usually same as obj)
- * @return Interaction matrix handle
- */
-int PreRelax(int obj, int src_obj) {
-    int handle = 0;
-    int err = RadPreRelax(&handle, obj, src_obj);
-    check_error(err);
-    return handle;
-}
+// PreRelax REMOVED (2026-01-31) - Use BuildMatrix() instead
+// The new API is: rad.BuildMatrix(obj, image='+x-z')
+// or simply: rad.Solve(obj, prec, maxiter, method, image='+x-z')
 
 /**
  * @brief Get interaction matrix as numpy array
  *
- * @param intrc_handle Interaction handle from PreRelax
+ * @param intrc_handle Interaction handle from BuildMatrix
  * @return Tuple (matrix as 2D numpy array, dof)
  */
 py::tuple GetInteractMatrix(int intrc_handle) {
@@ -1087,8 +1094,8 @@ int TrfRot(py::array_t<double> point, py::array_t<double> vector, double phi) {
     return handle;
 }
 
-// TrfPlSym REMOVED (2026-01-31) - Use IMA symmetry instead
-// See docs/IMA_SYMMETRY_DESIGN.md for the correct approach
+// TrfPlSym REMOVED (2026-01-31) - Use Image symmetry instead
+// Use: Solve(..., image="+x") or BuildMatrix(obj, image="+x")
 
 int TrfInv() {
     int handle = 0;
@@ -1111,9 +1118,9 @@ int TrfCmbR(int orig_trf, int trf) {
     return handle;
 }
 
-// TrfMlt REMOVED (2026-01-31) - Use IMA symmetry instead
+// TrfMlt REMOVED (2026-01-31) - Use Image symmetry instead
 // TrfMlt shared DOFs between original and virtual elements, which is incorrect for MSC 6DOF hexahedra
-// See docs/IMA_SYMMETRY_DESIGN.md for the correct element-based approach
+// Use: Solve(..., image="+x-z") or BuildMatrix(obj, image="+x-z")
 
 int TrfOrnt(int obj, int trf) {
     int handle = 0;
@@ -1122,8 +1129,9 @@ int TrfOrnt(int obj, int trf) {
     return handle;
 }
 
-// TrfZerPara REMOVED (2026-01-31) - Use IMA symmetry instead
-// TrfZerPerp REMOVED (2026-01-31) - Use IMA symmetry instead
+// TrfZerPara REMOVED (2026-01-31) - Use Image symmetry instead
+// TrfZerPerp REMOVED (2026-01-31) - Use Image symmetry instead
+// Use: Solve(..., image="+x-z") or BuildMatrix(obj, image="+x-z")
 
 } // namespace radia_transform
 
@@ -1277,13 +1285,14 @@ py::array_t<double> MatMvsH(int obj, const std::string& component, py::array_t<d
 
 namespace radia_solver_ext {
 
-py::tuple SolveNonl(int obj, double prec, int max_iter, int method, int nonl_method) {
+py::tuple SolveNonl(int obj, double prec, int max_iter, int method, int nonl_method, const std::string& image = "") {
     double D[4] = {0};
     int n = 4;
 
     // Note: GIL release disabled because OpenMP threads in the solver
     // don't have proper Python thread state, causing crashes.
-    int err = RadSolveNonl(D, &n, obj, prec, max_iter, method, nonl_method);
+    const char* img = image.empty() ? nullptr : image.c_str();
+    int err = RadSolveNonl(D, &n, obj, prec, max_iter, method, nonl_method, img);
     check_error(err);
 
     return py::make_tuple(D[0], D[1], D[2], D[3]);
@@ -1345,19 +1354,8 @@ double GetRelaxParam() {
     return relax;
 }
 
-int SetIMASymmetry(int InteractKey, const std::string& symmetry) {
-    int numElements = 0;
-    int err = RadSetIMASymmetry(&numElements, InteractKey, symmetry.c_str());
-    check_error(err);
-    return numElements;
-}
-
-int BuildIMAMatrix(int InteractKey) {
-    int result = 0;
-    int err = RadBuildIMAMatrix(&result, InteractKey);
-    check_error(err);
-    return result;
-}
+// SetIMASymmetry, BuildIMAMatrix REMOVED (2026-01-31)
+// Use BuildMatrix(obj, image="+x-z") or Solve(obj, ..., image="+x-z") instead
 
 } // namespace radia_solver_ext
 
@@ -1948,6 +1946,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     m.def("Solve", &radia_solver::Solve,
           py::arg("obj"), py::arg("prec"), py::arg("max_iter"), py::arg("method") = 1,
+          py::arg("image") = "",
           R"pbdoc(
               Solve magnetostatic problem.
 
@@ -1956,6 +1955,10 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   prec: Convergence precision (e.g., 0.001 = 0.1%)
                   max_iter: Maximum iterations
                   method: Solver method (0=LU, 1=BiCGSTAB, 2=HACApK)
+                  image: Image symmetry string (e.g., "+x", "-z", "+x-z")
+                         +x: X-axis symmetric mirror (default)
+                         -z: Z-axis antisymmetric mirror
+                         +x-z: X symmetric + Z antisymmetric (ELF quarter model)
 
               Returns:
                   Tuple (residual, ?, ?, iterations)
@@ -1964,6 +1967,27 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   - Small (<500 elements): method=0 (LU)
                   - Medium (500-5000): method=1 (BiCGSTAB)
                   - Large (>5000): method=2 (HACApK)
+          )pbdoc");
+
+    m.def("BuildMatrix", &radia_solver::BuildMatrix,
+          py::arg("obj"), py::arg("image") = "",
+          R"pbdoc(
+              Build interaction matrix without solving.
+
+              This allows inspection of the matrix before solving. The matrix is
+              cached for subsequent Solve() calls with the same object and image.
+
+              Args:
+                  obj: Object or container handle
+                  image: Image symmetry string (e.g., "+x", "-z", "+x-z")
+
+              Returns:
+                  Interaction matrix handle (for GetInteractMatrix)
+
+              Example:
+                  >>> handle = rad.BuildMatrix(model, image='+x-z')
+                  >>> matrix, dof = rad.GetInteractMatrix(handle)
+                  >>> rad.Solve(model, 0.0001, 100, 0)  # Uses cached matrix
           )pbdoc");
 
     m.def("GetSolveStats", &radia_solver::GetSolveStats,
@@ -1978,20 +2002,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                     - nonl_iterations: Nonlinear iterations
           )pbdoc");
 
-    m.def("PreRelax", &radia_solver::PreRelax,
-          py::arg("obj"), py::arg("src_obj"),
-          R"pbdoc(
-              Build interaction matrix without solving.
-
-              This is useful for extracting the interaction matrix for verification.
-
-              Args:
-                  obj: Object or container handle
-                  src_obj: Source object handle (usually same as obj)
-
-              Returns:
-                  Interaction matrix handle
-          )pbdoc");
+    // PreRelax REMOVED (2026-01-31) - Use BuildMatrix() instead
 
     m.def("GetInteractMatrix", &radia_solver::GetInteractMatrix,
           py::arg("intrc_handle"),
@@ -1999,7 +2010,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Get interaction matrix as numpy array.
 
               Args:
-                  intrc_handle: Interaction handle from PreRelax()
+                  intrc_handle: Interaction handle from BuildMatrix()
 
               Returns:
                   Tuple (matrix, dof) where matrix is (dof x dof) numpy array
@@ -2335,7 +2346,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     m.def("SolveNonl", &radia_solver_ext::SolveNonl,
           py::arg("obj"), py::arg("prec"), py::arg("max_iter"),
-          py::arg("method"), py::arg("nonl_method"),
+          py::arg("method"), py::arg("nonl_method"), py::arg("image") = "",
           R"pbdoc(
               Solve with specific nonlinear iteration method.
 
@@ -2345,6 +2356,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   max_iter: Maximum iterations
                   method: Linear solver (0=LU, 1=BiCGSTAB, 2=HACApK)
                   nonl_method: Nonlinear method
+                  image: Image symmetry string (e.g., "+x", "-z", "+x-z")
 
               Returns:
                   Tuple (residual, max_M, avg_M, iterations)
@@ -2387,71 +2399,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("GetRelaxParam", &radia_solver_ext::GetRelaxParam,
           "Get under-relaxation parameter.");
 
-    m.def("Image", &radia_solver_ext::SetIMASymmetry,
-          py::arg("InteractKey"), py::arg("symmetry"),
-          R"pbdoc(
-              Set Image symmetry mode for interaction matrix.
-
-              Image symmetry enables half-model (x-mirror), quarter-model (xy),
-              or eighth-model (xyz) analysis by including image contributions
-              during matrix assembly.
-
-              Args:
-                  InteractKey: Interaction handle from PreRelax
-                  symmetry: Symmetry type with optional sign prefix:
-                      "+x", "-x", "+y", "-y", "+z", "-z" (single axis)
-                      "+xy", "-xy", "+xz", "-xz", "+yz", "-yz" (two axes)
-                      "+xyz", "-xyz" (all three axes)
-                      "x", "y", "z", "xy", "xz", "yz", "xyz" (default to +)
-                      "none" (disable)
-
-                      Sign indicates boundary condition:
-                      "+" = symmetric BC (field tangent to plane)
-                      "-" = antisymmetric BC (field normal to plane)
-
-              Returns:
-                  Number of elements in Image region (reduced set)
-
-              Note:
-                  After calling this, use BuildImageMatrix to construct the matrix.
-
-              Example:
-                  intrc = rad.PreRelax(container, container)
-                  n_ima = rad.Image(intrc, '+x')  # Symmetric x-mirror
-                  rad.BuildImageMatrix(intrc)
-                  rad.Solve(container, 0.0001, 100, 0)
-          )pbdoc");
-
-    // Legacy alias for backwards compatibility
-    m.def("SetIMASymmetry", &radia_solver_ext::SetIMASymmetry,
-          py::arg("InteractKey"), py::arg("symmetry"),
-          "Deprecated: Use Image() instead.");
-
-    m.def("BuildImageMatrix", &radia_solver_ext::BuildIMAMatrix,
-          py::arg("InteractKey"),
-          R"pbdoc(
-              Build Image interaction matrix with image summation.
-
-              The matrix is constructed using:
-                  N_Image[i,j] = N[i,j] + sign * N[i, mirror_j] @ P
-
-              where P is the DOF permutation matrix for the active symmetry,
-              and sign is +1 (symmetric BC) or -1 (antisymmetric BC).
-
-              Args:
-                  InteractKey: Interaction handle from PreRelax
-
-              Returns:
-                  1 if successful, 0 if failed
-
-              Note:
-                  Must be called after Image().
-          )pbdoc");
-
-    // Legacy alias for backwards compatibility
-    m.def("BuildIMAMatrix", &radia_solver_ext::BuildIMAMatrix,
-          py::arg("InteractKey"),
-          "Deprecated: Use BuildImageMatrix() instead.");
+    // Image symmetry functions REMOVED (2026-01-31)
+    // SetIMASymmetry, BuildIMAMatrix, etc. are replaced by the unified API:
+    //   rad.Solve(obj, prec, maxiter, method, image='+x-z')
+    //   rad.BuildMatrix(obj, image='+x-z')
+    // The 'image' parameter specifies mirror symmetry: "+x", "-z", "+x-z", etc.
 
     // ========================================================================
     // Extended Field Functions
