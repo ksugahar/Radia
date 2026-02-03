@@ -38,7 +38,7 @@ def main():
     # File paths
     script_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.dirname(script_dir)
-    meg_file = r"S:/ELF_MAGIC/2020_03_07_CEFC_2020/model_C-Type/nonlinear_20000AT/ELF_MMB8T_EIEM2_1x1x1/ELF_magic.meg"
+    meg_file = r"S:/ELF_MAGIC/2020_03_07_CEFC_2020/model_C-Type/nonlinear_20000AT/ELF_MMB8T_EIEM2_1x1x1/quater/ELF_magic.meg"
     bh_file = os.path.join(parent_dir, "BH.txt")
 
     # Load B-H curve
@@ -75,7 +75,7 @@ def main():
     coil_center = [0, 0.13125, 0.02625]
     r_inner, r_outer = 0.060, 0.0725
     straight_half, height = 0.0525, 0.070
-    current = 10000.0
+    current = 20000.0  # 20000 AT for nonlinear test
     nseg = 8
 
     coil = rad.ObjRaceTrk(
