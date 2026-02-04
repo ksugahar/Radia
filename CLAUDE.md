@@ -2288,17 +2288,17 @@ rad.Solve(container, 0.0001, 100, 0)  # No image parameter
 - Mirror field contribution with reversed winding causes cancellation
 - Result: Field magnitude is approximately **half** of the correct value (ratio ~0.5)
 
-**Affected Cases**:
+**Affected Cases** (verified 2026-02-04):
 
 | Element Position | Mirror Type | Observation Point | IMA Result | Status |
 |------------------|-------------|-------------------|------------|--------|
-| Face at x=0 | +x (same-pole) | On x=0 plane | **~0.5x** | **FAIL** |
-| Face at x=0 | +x (same-pole) | Off x=0 plane | ~1.0x | PASS |
-| Face at z=0 | -z (opposite-pole) | On z=0 plane | **~0.5x** | **FAIL** |
-| Face at z=0 | -z (opposite-pole) | Off z=0 plane | **~0.84x** | **FAIL** |
-| No boundary face | Any | Any location | ~1.0x | PASS |
+| Face at z=0 | -z (antisym) | On z=0 inside element | **~0.5x** | **FAIL** |
+| Face at z=0 | -z (antisym) | On z=0 but off-axis | **~0.71x** | **FAIL** |
+| Face at z=0 | -z (antisym) | Off z=0 (x offset) | ~1.0x | PASS |
+| No boundary face | -z (antisym) | Any location | ~1.0x | **PASS** |
+| No boundary face | +x (sym) | Any location | ~1.0x | **PASS** |
 
-**Note**: Antisymmetric mirrors (-z) show additional field errors even for observation points off the symmetry plane.
+**Key Finding**: IMA works correctly for elements WITHOUT faces on the symmetry plane. The limitation only affects boundary elements (elements with faces AT z=0 or x=0).
 
 **Diagnostic Test Results** (sheared hexahedron with face at x=0):
 ```
