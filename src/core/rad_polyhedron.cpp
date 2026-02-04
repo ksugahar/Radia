@@ -1201,16 +1201,25 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 						//
 						// WORKAROUND: Use explicit element duplication for models with boundary elements.
 						//
-						// Solution:
-						// - Non-boundary: winding reversal (H_flip = -H_mirror = H_c2)
-						// - Boundary: negate sigma (mirrorSigma = -sigma_c1, then H = -H_mirror = H_c2)
+						// Winding reversal logic:
+						// When we mirror vertices, the cross product (used for face normal)
+						// flips sign because mirroring reverses the handedness of vertex order.
+						// Winding reversal compensates for this, giving correct normal direction.
+						// - Non-boundary faces: use winding reversal
+						// - Boundary faces: special handling (no winding reversal, negate sigma)
 						bool useReversedWinding = reverseWinding && !isBoundaryFace;
 
-						// For boundary faces, negate sigma to account for opposite outward normals
+						// Mirror sigma = sign * Sigma
+						// This accounts for the IMA symmetry type:
+						// - Antisymmetric (sign=-1): M' = M (同極対称/異極対称)
+						// - Symmetric (sign=+1): M'_parallel = -M_parallel
+						// Combined with winding reversal, this gives correct H_c2 contribution.
 						double mirrorSigma = sign * Sigma[i];
+
+						// For boundary faces, negate sigma to account for coincident geometry with opposite normals
 						if(isBoundaryFace)
 						{
-							mirrorSigma = -mirrorSigma;  // H_c2 = -H_c1 for boundary
+							mirrorSigma = -mirrorSigma;
 						}
 
 						// Compute field from mirrored geometry
