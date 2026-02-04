@@ -385,7 +385,21 @@ public:
 	// 6 DOF MSC field computation for hexahedra
 	TVector3d FieldFromChargedTriangle(const TVector3d& obs, const TVector3d& v0,
 	                                    const TVector3d& v1, const TVector3d& v2, double sigma) const;
+	// Version with explicit normal (for IMA boundary faces where computed normal is wrong)
+	TVector3d FieldFromChargedTriangleWithNormal(const TVector3d& obs, const TVector3d& v0,
+	                                              const TVector3d& v1, const TVector3d& v2,
+	                                              double sigma, const TVector3d& explicitNormal) const;
 	TVector3d FieldFromQuadFace(const TVector3d& obs, int faceIdx, double sigma) const;
+	TVector3d FieldFromQuadFaceMirrored(const TVector3d& obs, const TVector3d& V0,
+	                                     const TVector3d& V1, const TVector3d& V2,
+	                                     const TVector3d& V3, double sigma,
+	                                     bool flipNormal, const TVector3d& mirrorCenter) const;
+	// Version with explicit normals for IMA boundary faces
+	TVector3d FieldFromQuadFaceMirroredWithNormals(const TVector3d& obs, const TVector3d& V0,
+	                                                const TVector3d& V1, const TVector3d& V2,
+	                                                const TVector3d& V3, double sigma,
+	                                                const TVector3d& tri1Normal,
+	                                                const TVector3d& tri2Normal) const;
 	TVector3d FieldFromPointCharge(const TVector3d& obs, double charge) const;
 
 	// 6 DOF MSC setup for hexahedra

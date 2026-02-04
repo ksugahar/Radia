@@ -1100,35 +1100,6 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 					// Soft material: compute mirror contributions for field
 					const double BOUNDARY_TOL = 1.0e-6;
 
-					// Get DOF permutation array for this mirror axis
-					// Under reflection, face i in the original maps to face perm[i] in the mirror
-					const int* perm = nullptr;
-					if(mirrorAxis == radTInteraction::IMA_X) perm = radTInteraction::IMA_PERM_X;
-					else if(mirrorAxis == radTInteraction::IMA_Y) perm = radTInteraction::IMA_PERM_Y;
-					else if(mirrorAxis == radTInteraction::IMA_Z) perm = radTInteraction::IMA_PERM_Z;
-					else if(mirrorAxis == radTInteraction::IMA_XY) {
-						// Combined XY permutation: apply X then Y
-						static int PERM_XY[6];
-						for(int k = 0; k < 6; k++) PERM_XY[k] = radTInteraction::IMA_PERM_Y[radTInteraction::IMA_PERM_X[k]];
-						perm = PERM_XY;
-					}
-					else if(mirrorAxis == radTInteraction::IMA_XZ) {
-						static int PERM_XZ[6];
-						for(int k = 0; k < 6; k++) PERM_XZ[k] = radTInteraction::IMA_PERM_Z[radTInteraction::IMA_PERM_X[k]];
-						perm = PERM_XZ;
-					}
-					else if(mirrorAxis == radTInteraction::IMA_YZ) {
-						static int PERM_YZ[6];
-						for(int k = 0; k < 6; k++) PERM_YZ[k] = radTInteraction::IMA_PERM_Z[radTInteraction::IMA_PERM_Y[k]];
-						perm = PERM_YZ;
-					}
-					else if(mirrorAxis == radTInteraction::IMA_XYZ) {
-						static int PERM_XYZ[6];
-						for(int k = 0; k < 6; k++) PERM_XYZ[k] = radTInteraction::IMA_PERM_Z[radTInteraction::IMA_PERM_Y[radTInteraction::IMA_PERM_X[k]]];
-						perm = PERM_XYZ;
-					}
-
-					int boundarySkipCount = 0;
 					for(int i = 0; i < nFaces; i++)
 					{
 						const TVector3d& MV0 = mirrorVerts[i][0];
@@ -1149,83 +1120,34 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 						if((mirrorAxis & radTInteraction::IMA_Z) && std::abs(faceCenterZ) < BOUNDARY_TOL)
 							isBoundaryFace = true;
 
-						// Determine sigma for mirror contribution
-						//
-						// For IMA, the mirror element c2 has the same induced M as c1.
-						// When we mirror c1's face vertices to represent c2's geometry,
-						// the computed normal direction from the mirrored vertices is
-						// OPPOSITE to what c2's outward normal should be (because
-						// mirroring flips the handedness of the vertex order).
-						//
-						// To compensate, we NEGATE sigma for non-boundary faces.
-						//
-						// BOUNDARY FACE FIX:
-						// For boundary faces at x=0, the mirrored vertices are IDENTICAL
-						// to the original (x=0 maps to x=0). But c2's outward normal should
-						// be OPPOSITE to c1's (c2 is at x<0, so its boundary face points +x).
-						// Since mirroring doesn't change the vertices, the computed normal
-						// is still c1's direction (-x). We need to NEGATE sigma for boundary
-						// faces to correct for this.
-						//
-						// For non-boundary faces, sigma_c2 = sigma_c1 (the two sign flips
-						// from M and n cancel out for same-polarity IMA).
-						if(isBoundaryFace)
+						TVector3d H_face;
+						// DEBUG: Skip boundary face special handling to test if non-boundary works
+						if(false && isBoundaryFace)  // TEMPORARILY DISABLED
 						{
-							boundarySkipCount++;
+							// BOUNDARY FACE FIX:
+							// For boundary faces at symmetry plane (e.g., z=0 under z-mirror):
+							// - c1's face 0 (z-) at z=0: normal = (0,0,-1), sigma = -Mz
+							// - c2's face 1 (z+) at z=0: normal = (0,0,+1), sigma = +Mz
+							//
+							// When we mirror c1's face 0 vertices, they stay at z=0.
+							// The cross product with forward winding gives normal (0,0,-1) - WRONG.
+							// We need normal (0,0,+1) to match c2's face 1.
+							//
+							// Solution:
+							// - mirrorSigma = -Sigma[i] = -(-Mz) = +Mz (matches sigma_c2_f1)
+							// - reverseWinding = true to flip normal from (0,0,-1) to (0,0,+1)
+							double mirrorSigma = -Sigma[i];  // Negate sigma for boundary faces
+							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, mirrorSigma, true, mirrorCenter);  // true = reverse winding
+						}
+						else
+						{
+							// NON-BOUNDARY FACE:
+							// Mirror sigma = sign * Sigma (accounts for IMA symmetry type)
+							// Use winding reversal to flip the computed normal
+							double mirrorSigma = sign * Sigma[i];
+							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, mirrorSigma, reverseWinding, mirrorCenter);
 						}
 
-						// IMA field computation for MSC (6-DOF) hexahedra
-						//
-						// Correct analysis of field computation:
-						//
-						// For BOUNDARY faces (vertices don't move under mirroring):
-						// - c1's outward normal: n_c1 = (-1, 0, 0) for x>0 element
-						// - c2's outward normal: n_c2 = (+1, 0, 0) for x<0 element
-						// - sigma_c1 = M_c1 · n_c1 = +Mx (where M_c1.x < 0)
-						// - sigma_c2 = M_c2 · n_c2 = +Mx (same value, because M_c2.x > 0 and n_c2.x > 0)
-						// - So sigma_c1 = sigma_c2, but n_c2 = -n_c1
-						// - H_c2 = sigma_c2 * integral * n_c2 = sigma * (-n_c1) = -H_c1
-						// - Our mirrored computation gives: H_mirror = sigma * n_c1 = H_c1
-						// - So H_c2 = -H_mirror for boundary faces
-						//
-						// For NON-BOUNDARY faces:
-						// - Winding reversal flips the field: H_flip = -H_mirror
-						// - This gives H_flip = H_c2 ✓
-						//
-						// KNOWN LIMITATION:
-						// For boundary elements (elements WITH faces ON the symmetry plane),
-						// the mirrored geometry does NOT correctly represent the mirror element.
-						// When c1's face 4 is at x=0, mirroring keeps it at x=0.
-						// But c2's face 5 (the physically corresponding face) is at x<0, not x=0.
-						// This limitation causes errors for observation points on the symmetry plane.
-						//
-						// WORKAROUND: Use explicit element duplication for models with boundary elements.
-						//
-						// Winding reversal logic:
-						// When we mirror vertices, the cross product (used for face normal)
-						// flips sign because mirroring reverses the handedness of vertex order.
-						// Winding reversal compensates for this, giving correct normal direction.
-						// - Non-boundary faces: use winding reversal
-						// - Boundary faces: special handling (no winding reversal, negate sigma)
-						bool useReversedWinding = reverseWinding && !isBoundaryFace;
-
-						// Mirror sigma = sign * Sigma
-						// This accounts for the IMA symmetry type:
-						// - Antisymmetric (sign=-1): M' = M (同極対称/異極対称)
-						// - Symmetric (sign=+1): M'_parallel = -M_parallel
-						// Combined with winding reversal, this gives correct H_c2 contribution.
-						double mirrorSigma = sign * Sigma[i];
-
-						// For boundary faces, negate sigma to account for coincident geometry with opposite normals
-						if(isBoundaryFace)
-						{
-							mirrorSigma = -mirrorSigma;
-						}
-
-						// Compute field from mirrored geometry
-						TVector3d H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, mirrorSigma, useReversedWinding);
-
-						// With winding reversal, H_face = -H_mirror = H_c2
 						H_mirror.x += H_face.x;
 						H_mirror.y += H_face.y;
 						H_mirror.z += H_face.z;
@@ -1272,6 +1194,7 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 //-------------------------------------------------------------------------
 // FieldFromQuadFaceMirrored: Helper for IMA field computation
 // Computes field from a quad face with explicit vertex positions
+// Uses mirrorCenter to determine correct outward normal direction
 // If flipNormal is true, swaps triangle vertex order to flip normal direction
 //-------------------------------------------------------------------------
 TVector3d radTPolyhedron::FieldFromQuadFaceMirrored(const TVector3d& obs,
@@ -1280,25 +1203,78 @@ TVector3d radTPolyhedron::FieldFromQuadFaceMirrored(const TVector3d& obs,
                                                      const TVector3d& V2,
                                                      const TVector3d& V3,
                                                      double sigma,
-                                                     bool flipNormal) const
+                                                     bool flipNormal,
+                                                     const TVector3d& mirrorCenter) const
 {
-	// Split quad into 2 triangles
-	// Normal direction determined by (V1-V0) x (V2-V0)
-	// To flip normal, swap V1 and V2 in each triangle
-	TVector3d H1, H2;
+	// Split quad into 2 triangles, applying sign_factor correction
+	// based on whether triangle normal points outward from mirrorCenter.
+	// This matches the logic in FieldFromQuadFace().
+
+	TVector3d H_total(0.0, 0.0, 0.0);
+
+	// Triangle split: (V0,V1,V2) and (V0,V2,V3) - or reversed if flipNormal
+	TVector3d tri_verts[2][3];
 	if(flipNormal)
 	{
 		// Flip normal by swapping second and third vertex
-		// (V0, V2, V1) has normal -(V1-V0)x(V2-V0)
-		H1 = FieldFromChargedTriangle(obs, V0, V2, V1, sigma);
-		H2 = FieldFromChargedTriangle(obs, V0, V3, V2, sigma);
+		tri_verts[0][0] = V0; tri_verts[0][1] = V2; tri_verts[0][2] = V1;
+		tri_verts[1][0] = V0; tri_verts[1][1] = V3; tri_verts[1][2] = V2;
 	}
 	else
 	{
-		H1 = FieldFromChargedTriangle(obs, V0, V1, V2, sigma);
-		H2 = FieldFromChargedTriangle(obs, V0, V2, V3, sigma);
+		tri_verts[0][0] = V0; tri_verts[0][1] = V1; tri_verts[0][2] = V2;
+		tri_verts[1][0] = V0; tri_verts[1][1] = V2; tri_verts[1][2] = V3;
 	}
-	return TVector3d(H1.x + H2.x, H1.y + H2.y, H1.z + H2.z);
+
+	for(int iTri = 0; iTri < 2; iTri++)
+	{
+		const TVector3d& T0 = tri_verts[iTri][0];
+		const TVector3d& T1 = tri_verts[iTri][1];
+		const TVector3d& T2 = tri_verts[iTri][2];
+
+		// Compute triangle normal
+		TVector3d edge1, edge2, tri_normal;
+		edge1.x = T1.x - T0.x; edge1.y = T1.y - T0.y; edge1.z = T1.z - T0.z;
+		edge2.x = T2.x - T0.x; edge2.y = T2.y - T0.y; edge2.z = T2.z - T0.z;
+
+		tri_normal.x = edge1.y * edge2.z - edge1.z * edge2.y;
+		tri_normal.y = edge1.z * edge2.x - edge1.x * edge2.z;
+		tri_normal.z = edge1.x * edge2.y - edge1.y * edge2.x;
+
+		double norm_len = sqrt(tri_normal.x*tri_normal.x + tri_normal.y*tri_normal.y + tri_normal.z*tri_normal.z);
+		if(norm_len < 1e-20) continue;
+
+		// Normalize
+		tri_normal.x /= norm_len;
+		tri_normal.y /= norm_len;
+		tri_normal.z /= norm_len;
+
+		// Compute triangle center
+		TVector3d tri_center;
+		tri_center.x = (T0.x + T1.x + T2.x) / 3.0;
+		tri_center.y = (T0.y + T1.y + T2.y) / 3.0;
+		tri_center.z = (T0.z + T1.z + T2.z) / 3.0;
+
+		// Check if normal points outward (away from MIRROR element center)
+		TVector3d to_center;
+		to_center.x = tri_center.x - mirrorCenter.x;
+		to_center.y = tri_center.y - mirrorCenter.y;
+		to_center.z = tri_center.z - mirrorCenter.z;
+
+		double dot_prod = tri_normal.x * to_center.x + tri_normal.y * to_center.y + tri_normal.z * to_center.z;
+
+		// Sign factor: +1 if normal points outward, -1 if inward
+		double sign_factor = (dot_prod >= 0.0) ? 1.0 : -1.0;
+
+		// Compute field from this triangle with sign-corrected sigma
+		TVector3d H_tri = FieldFromChargedTriangle(obs, T0, T1, T2, sigma * sign_factor);
+
+		H_total.x += H_tri.x;
+		H_total.y += H_tri.y;
+		H_total.z += H_tri.z;
+	}
+
+	return H_total;
 }
 
 //-------------------------------------------------------------------------
@@ -1457,6 +1433,173 @@ TVector3d radTPolyhedron::FieldFromChargedTriangle(const TVector3d& obs,
 	Hfield.z = HH1*AA.z + HH2*BB.z + HH3*basis_c.z;
 
 	return Hfield;
+}
+
+//-------------------------------------------------------------------------
+// FieldFromChargedTriangleWithNormal: Version with explicit normal for IMA boundary faces
+// When vertices don't move under mirroring (boundary faces), the computed normal from
+// cross product would be wrong. This version uses an explicit transformed normal.
+//-------------------------------------------------------------------------
+TVector3d radTPolyhedron::FieldFromChargedTriangleWithNormal(const TVector3d& obs,
+                                                              const TVector3d& v0,
+                                                              const TVector3d& v1,
+                                                              const TVector3d& v2,
+                                                              double sigma,
+                                                              const TVector3d& explicitNormal) const
+{
+	// Analytic field from uniformly charged triangle with explicit normal direction
+	// Used for IMA boundary faces where the mirrored geometry doesn't give correct normal
+	// Returns field WITHOUT 4pi divisor (4pi is applied in matrix assembly)
+
+	const double EPS = 1.0e-20;
+
+	// Use the provided explicit normal as basis_c (local Z axis)
+	TVector3d basis_c = explicitNormal;
+	double cLen = sqrt(basis_c.x*basis_c.x + basis_c.y*basis_c.y + basis_c.z*basis_c.z);
+	if(cLen < EPS) return TVector3d(0.0, 0.0, 0.0);
+	basis_c.x /= cLen; basis_c.y /= cLen; basis_c.z /= cLen;
+
+	// Build local coordinate system using explicit normal
+	// basis_a = edge (v1-v0) normalized (local X)
+	TVector3d e1, e2;
+	e1.x = v1.x - v0.x; e1.y = v1.y - v0.y; e1.z = v1.z - v0.z;
+	e2.x = v2.x - v0.x; e2.y = v2.y - v0.y; e2.z = v2.z - v0.z;
+
+	TVector3d basis_a = e1;
+	double aLen = sqrt(basis_a.x*basis_a.x + basis_a.y*basis_a.y + basis_a.z*basis_a.z);
+	if(aLen < EPS) return TVector3d(0.0, 0.0, 0.0);
+	basis_a.x /= aLen; basis_a.y /= aLen; basis_a.z /= aLen;
+
+	// basis_b = basis_c x basis_a (local Y)
+	TVector3d basis_b;
+	basis_b.x = basis_c.y * basis_a.z - basis_c.z * basis_a.y;
+	basis_b.y = basis_c.z * basis_a.x - basis_c.x * basis_a.z;
+	basis_b.z = basis_c.x * basis_a.y - basis_c.y * basis_a.x;
+	double bLen = sqrt(basis_b.x*basis_b.x + basis_b.y*basis_b.y + basis_b.z*basis_b.z);
+	if(bLen < EPS) return TVector3d(0.0, 0.0, 0.0);
+	basis_b.x /= bLen; basis_b.y /= bLen; basis_b.z /= bLen;
+
+	TVector3d AA = basis_a;  // Local X
+	TVector3d BB = basis_b;  // Local Y
+
+	// Convert vertices to local 2D coordinates (v0 = origin)
+	double xy0_x = 0.0, xy0_y = 0.0;
+
+	double xy1_x = e1.x*AA.x + e1.y*AA.y + e1.z*AA.z;
+	double xy1_y = e1.x*BB.x + e1.y*BB.y + e1.z*BB.z;
+
+	double xy2_x = e2.x*AA.x + e2.y*AA.y + e2.z*AA.z;
+	double xy2_y = e2.x*BB.x + e2.y*BB.y + e2.z*BB.z;
+
+	// Edge parameters (3 edges for triangle)
+	double XY[3][2] = {{xy0_x, xy0_y}, {xy1_x, xy1_y}, {xy2_x, xy2_y}};
+	double DS[3], AM[3], SM[3], XD[3], YD[3];
+	double EPSG = 0.0;
+
+	for(int j = 0; j < 3; j++)
+	{
+		int l = (j + 1) % 3;
+		double dx = XY[l][0] - XY[j][0];
+		double dy = XY[l][1] - XY[j][1];
+		if(fabs(dx) < EPS) dx = (dx >= 0) ? EPS : -EPS;
+
+		DS[j] = sqrt(dx*dx + dy*dy);
+		AM[j] = dy / dx;
+		SM[j] = sqrt(AM[j]*AM[j] + 1.0);
+		XD[j] = -dx / DS[j];
+		YD[j] =  dy / DS[j];
+
+		if(DS[j] > EPSG) EPSG = DS[j];
+	}
+	EPSG *= 1.0e-12;
+
+	// Transform observation point to local coordinates
+	TVector3d d;
+	d.x = obs.x - v0.x;
+	d.y = obs.y - v0.y;
+	d.z = obs.z - v0.z;
+
+	double EE1 = d.x*AA.x + d.y*AA.y + d.z*AA.z;  // local X
+	double EE2 = d.x*BB.x + d.y*BB.y + d.z*BB.z;  // local Y
+	double EE3 = d.x*basis_c.x + d.y*basis_c.y + d.z*basis_c.z;  // local Z (height)
+
+	// Distances from observation point to vertices
+	double X[3], Y[3], H[3], E[3], R[3];
+	for(int j = 0; j < 3; j++)
+	{
+		X[j] = EE1 - XY[j][0];
+		Y[j] = EE2 - XY[j][1];
+		H[j] = Y[j] * X[j];
+		E[j] = EE3*EE3 + X[j]*X[j];
+		R[j] = sqrt(X[j]*X[j] + Y[j]*Y[j] + EE3*EE3);
+	}
+
+	double Z = EE3;
+
+	// Edge contributions
+	double RM[3], RP[3], RR[3], AL[3];
+	for(int j = 0; j < 3; j++)
+	{
+		int jp1 = (j + 1) % 3;
+		RM[j] = R[j] + R[jp1] - DS[j];
+		RP[j] = R[j] + R[jp1] + DS[j];
+		RR[j] = (RM[j] / RP[j] > EPS) ? (RM[j] / RP[j]) : EPS;
+		AL[j] = log(RR[j]);
+	}
+
+	// Field components in local frame WITHOUT 4pi divisor
+	double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
+	double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
+	double HH3 = 0.0;
+
+	// Normal component (atan terms) - only if not on surface
+	if(fabs(Z) > EPSG)
+	{
+		double ZR[3];
+		for(int j = 0; j < 3; j++)
+		{
+			ZR[j] = Z * R[j];
+		}
+
+		double AT[3], BT[3];
+		for(int j = 0; j < 3; j++)
+		{
+			int jp1 = (j + 1) % 3;
+			AT[j] = (AM[j]*E[j] - H[j]) / ZR[j];
+			BT[j] = (AM[j]*E[jp1] - H[jp1]) / ZR[jp1];
+		}
+
+		HH3 = sigma * (-atan(AT[0]) - atan(AT[1]) - atan(AT[2])
+		               +atan(BT[0]) + atan(BT[1]) + atan(BT[2]));
+	}
+
+	// Transform back to global coordinates
+	TVector3d Hfield;
+	Hfield.x = HH1*AA.x + HH2*BB.x + HH3*basis_c.x;
+	Hfield.y = HH1*AA.y + HH2*BB.y + HH3*basis_c.y;
+	Hfield.z = HH1*AA.z + HH2*BB.z + HH3*basis_c.z;
+
+	return Hfield;
+}
+
+//-------------------------------------------------------------------------
+// FieldFromQuadFaceMirroredWithNormals: Version with explicit normals for IMA boundary faces
+//-------------------------------------------------------------------------
+TVector3d radTPolyhedron::FieldFromQuadFaceMirroredWithNormals(const TVector3d& obs,
+                                                                const TVector3d& V0,
+                                                                const TVector3d& V1,
+                                                                const TVector3d& V2,
+                                                                const TVector3d& V3,
+                                                                double sigma,
+                                                                const TVector3d& tri1Normal,
+                                                                const TVector3d& tri2Normal) const
+{
+	// Split quad into 2 triangles with explicit normals
+	// Triangle 1: V0, V1, V2
+	// Triangle 2: V0, V2, V3
+	TVector3d H1 = FieldFromChargedTriangleWithNormal(obs, V0, V1, V2, sigma, tri1Normal);
+	TVector3d H2 = FieldFromChargedTriangleWithNormal(obs, V0, V2, V3, sigma, tri2Normal);
+	return TVector3d(H1.x + H2.x, H1.y + H2.y, H1.z + H2.z);
 }
 
 //-------------------------------------------------------------------------
