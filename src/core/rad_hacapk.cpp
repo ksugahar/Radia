@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <iostream>
 #include <chrono>
+#include <atomic>
 
 // Include C++ compatible HACApK wrapper header
 extern "C" {
@@ -48,6 +49,12 @@ namespace {
     // Note: lod (DOF permutation array) is now accessed via C-side accessors:
     //   HACApK_get_current_lod() and HACApK_get_current_lod_size()
     // Set during H-matrix build by HACApK_build_hmatrix_varDOF_wrapper
+
+    // FIX (2025-02-04): Generation counter for thread-local cache invalidation
+    // Incremented each time a new HACApK manager is created or BuildHMatrix is called.
+    // Thread-local caches check this counter to invalidate stale entries.
+    // Using a counter instead of pointer comparison prevents issues with memory reuse.
+    std::atomic<uint64_t> g_hacapk_generation{0};
 }
 
 namespace RadHACApKCallback {
@@ -86,6 +93,26 @@ void ClearLod() {
     // This function is kept for API compatibility but does nothing
 }
 
+void ClearGlobalState() {
+    // Clear all global callback state to prevent interference between solves
+    g_currentManager = nullptr;
+    g_interaction = nullptr;
+    g_nElem = 0;
+    g_nffc = 3;
+    g_invChi.clear();
+    // Note: g_hacapk_generation is NOT reset here - it continues incrementing
+}
+
+// FIX (2025-02-04): Get current generation for cache invalidation
+uint64_t GetGeneration() {
+    return g_hacapk_generation.load(std::memory_order_acquire);
+}
+
+// FIX (2025-02-04): Increment generation to invalidate all thread-local caches
+void IncrementGeneration() {
+    g_hacapk_generation.fetch_add(1, std::memory_order_release);
+}
+
 double ComputeEntry(int i, int j) {
     // i, j are 1-based ORIGINAL indices from HACApK
     // The lod conversion is already done by cHACApK_fill_leafmtx_hyp:
@@ -115,14 +142,15 @@ double ComputeEntry(int i, int j) {
     }
 
     // Get N matrix element through manager (friend class access)
-    // GetInteractionMatrixElement() returns K_ij/(4*pi) for MSC hexahedra (ELF-compatible)
+    // GetInteractionMatrixElement() returns K_ij/(4*pi) for MSC hexahedra
     double N_val = g_currentManager->GetInteractionMatrixElement(i0, j0);
 
-    // A = N - diag(1/chi) (ELF-compatible: negative diagonal)
-    // N has ELF-compatible sign: K/(4pi) (negative for self-demagnetization)
-    double A_val = N_val;
+    // A = -K/(4pi) + diag(1/chi) (Physically correct sign)
+    // Physical equation: (-K/(4pi) + 1/chi) * sigma = H_ext_n
+    // N_val contains K/(4pi), so we negate it
+    double A_val = -N_val;
     if (i0 == j0 && i0 < (int)g_invChi.size()) {
-        A_val -= g_invChi[i0];  // ELF-compatible: -1/chi
+        A_val += g_invChi[i0];  // Physically correct: +1/chi
     }
 
     return A_val;
@@ -170,6 +198,9 @@ RadHACApKManager::~RadHACApKManager() {
 }
 
 void RadHACApKManager::FreeResources() {
+    // Clear global callback state first (prevents stale state in next solve)
+    RadHACApKCallback::ClearGlobalState();
+
     if (m_leafmtxp || m_control) {
         HACApK_free_hmatrix_wrapper(m_leafmtxp, m_control);
     }
@@ -181,6 +212,10 @@ void RadHACApKManager::FreeResources() {
         HACApK_free_lcontrol(m_control);
         m_control = nullptr;
     }
+
+    // Reset HACApK global state (persistent matvec buffers, lod)
+    HACApK_reset_global_state();
+
     m_valid = false;
 }
 
@@ -449,6 +484,10 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     // Set global callback state
     RadHACApKCallback::SetInteraction(m_interaction, m_n_elem, m_nffc);
     RadHACApKCallback::SetCurrentManager(this);
+
+    // FIX (2025-02-04): Increment generation counter to invalidate thread-local caches
+    // This ensures that matrix element caches from previous solves are not reused
+    RadHACApKCallback::IncrementGeneration();
 
     // Verify DOF was configured correctly (3DOF, 6DOF, or mixed=0)
     if (m_ndof == 0 || (m_nffc != 0 && m_nffc != 3 && m_nffc != 6)) {
@@ -733,7 +772,7 @@ void RadHACApKManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) co
                           H_total.z * poly_row->FaceNormal[fi].z;
 
             // Store K_ij / (4*pi) in row-major order: K_mat[row * 6 + col]
-            // Sign convention: positive = ELF-compatible (self-demagnetization is negative)
+            // The solver will negate when building system matrix
             K_mat[fi * 6 + fj] = K_ij * RadConst::INV_FOUR_PI;
         }
     }
@@ -748,6 +787,10 @@ void RadHACApKManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) co
 // - NO global cache, NO critical sections
 //
 // This is THE key optimization: hash lookup + no locking = fast scaling
+//
+// FIX (2025-02-04): Added interaction pointer tracking to invalidate cache
+// when IMA settings change between solves. Previously, stale cache values
+// from non-IMA solves were incorrectly used for IMA solves.
 //=========================================================================
 
 // Hash-based cache size (must be power of 2 for fast modulo)
@@ -755,6 +798,12 @@ static constexpr int TL_HASH_SIZE = 1024;
 static constexpr int TL_HASH_MASK = TL_HASH_SIZE - 1;
 
 double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const {
+    // FIX (2025-02-04): Use generation counter for cache invalidation.
+    // The generation counter is incremented each time a new HACApK manager builds its H-matrix.
+    // This properly handles memory reuse where a new interaction object might have the
+    // same pointer value as a previous (deleted) object.
+    static thread_local uint64_t tl_cached_generation = 0;
+
     // Thread-local single-entry cache (most common case: same block accessed multiple times)
     static thread_local int tl_single_elem_i = -1;
     static thread_local int tl_single_elem_j = -1;
@@ -765,6 +814,21 @@ double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i,
     static thread_local int tl_cache_elem_j[TL_HASH_SIZE];
     static thread_local double tl_cache_K_mat[TL_HASH_SIZE][36];
     static thread_local bool tl_initialized = false;
+
+    // Check if generation changed (new solve with different settings)
+    // This handles IMA vs non-IMA transitions and geometry changes
+    uint64_t current_gen = RadHACApKCallback::GetGeneration();
+    if (tl_cached_generation != current_gen) {
+        // Invalidate all caches
+        tl_single_elem_i = -1;
+        tl_single_elem_j = -1;
+        for (int i = 0; i < TL_HASH_SIZE; i++) {
+            tl_cache_elem_i[i] = -1;
+            tl_cache_elem_j[i] = -1;
+        }
+        tl_cached_generation = current_gen;
+        tl_initialized = true;  // Skip redundant initialization below
+    }
 
     // Initialize thread-local cache on first access
     if (!tl_initialized) {
@@ -862,6 +926,9 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
 // GetCached3x3Element: On-demand 3x3 block computation with thread-local hash cache
 // Similar to GetCached6x6Element for 6DOF hexahedra
 // Uses O(1) hash lookup instead of O(n) LRU search
+//
+// FIX (2025-02-04): Added interaction pointer tracking to invalidate cache
+// when IMA settings change between solves.
 //=========================================================================
 
 // Hash-based cache size for 3DOF (must be power of 2 for fast modulo)
@@ -879,6 +946,9 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
     // On-demand computation with thread-local hash cache
     // This path is used when SetupInteractMatrix() is NOT called (HACApK optimization)
 
+    // FIX (2025-02-04): Use generation counter for cache invalidation
+    static thread_local uint64_t tl_cached_generation = 0;
+
     // Thread-local single-entry cache (most common case: same block accessed multiple times)
     static thread_local int tl_single_elem_i = -1;
     static thread_local int tl_single_elem_j = -1;
@@ -889,6 +959,20 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
     static thread_local int tl_cache_elem_j[TL_HASH_SIZE_3DOF];
     static thread_local double tl_cache_N_mat[TL_HASH_SIZE_3DOF][9];
     static thread_local bool tl_initialized = false;
+
+    // Check if generation changed (new solve with different settings)
+    uint64_t current_gen = RadHACApKCallback::GetGeneration();
+    if (tl_cached_generation != current_gen) {
+        // Invalidate all caches
+        tl_single_elem_i = -1;
+        tl_single_elem_j = -1;
+        for (int i = 0; i < TL_HASH_SIZE_3DOF; i++) {
+            tl_cache_elem_i[i] = -1;
+            tl_cache_elem_j[i] = -1;
+        }
+        tl_cached_generation = current_gen;
+        tl_initialized = true;
+    }
 
     // Initialize thread-local cache on first access
     if (!tl_initialized) {
@@ -1160,8 +1244,9 @@ double RadHACApKManager::GetMixed3x6Element(int elem_tetra, int elem_hex, int co
     int offset_j = m_dof_offset[elem_hex];
     int total_dof = m_interaction->m_totalDOF;
 
-    // COLUMN-MAJOR access: A(row, col) at [col * total_dof + row]
-    return m_interaction->m_flatInteractMatrix[(offset_j + face) * total_dof + (offset_i + comp)];
+    // ROW-MAJOR access: A(row, col) at [row * total_dof + col]
+    // Row = offset_i + comp (tetra target), Col = offset_j + face (hex source)
+    return m_interaction->m_flatInteractMatrix[(offset_i + comp) * total_dof + (offset_j + face)];
 }
 
 double RadHACApKManager::GetMixed6x3Element(int elem_hex, int elem_tetra, int face, int comp) const {
@@ -1182,8 +1267,9 @@ double RadHACApKManager::GetMixed6x3Element(int elem_hex, int elem_tetra, int fa
     int offset_j = m_dof_offset[elem_tetra];
     int total_dof = m_interaction->m_totalDOF;
 
-    // COLUMN-MAJOR access
-    return m_interaction->m_flatInteractMatrix[(offset_j + comp) * total_dof + (offset_i + face)];
+    // ROW-MAJOR access: A(row, col) at [row * total_dof + col]
+    // Row = offset_i + face (hex target), Col = offset_j + comp (tetra source)
+    return m_interaction->m_flatInteractMatrix[(offset_i + face) * total_dof + (offset_j + comp)];
 }
 
 void RadHACApKManager::Compute3x6Block(int elem_tetra, int elem_hex, double* K_mat) const {
