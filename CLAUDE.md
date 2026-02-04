@@ -208,6 +208,64 @@ for dll in process.memory_maps():
 
 ---
 
+## Matrix Storage Convention: Row-Major (2026-01-31)
+
+### Unified Row-Major Matrix Format
+
+**CRITICAL**: Radia uses **row-major [target][source] format** for all interaction matrices.
+
+**Format Definition**:
+- Matrix element `A[i][j]` is stored at index `i * stride + j` (row-major, C-style)
+- `A[i][j]` represents the effect **ON target i FROM source j**
+- This matches ELF convention and is optimal for C++ cache efficiency
+
+**Memory Layout**:
+```
+Row-major: A[0][0], A[0][1], A[0][2], ..., A[1][0], A[1][1], ...
+           ^^^^^^^^^^^^^^^^^^^^^^^^       ^^^^^^^^^^^^^^^^^^^^^^^^
+           Row 0 (contiguous)              Row 1 (contiguous)
+```
+
+**BLAS Convention**:
+All BLAS calls use `CblasRowMajor`:
+```cpp
+cblas_dgemv(CblasRowMajor, CblasNoTrans, nrows, ncols, alpha, A, lda, x, 1, beta, y, 1);
+```
+
+**Why Row-Major**:
+
+| Aspect | Row-Major | Column-Major |
+|--------|-----------|--------------|
+| C/C++ native | Yes | No |
+| Python/NumPy native | Yes | No (Fortran order) |
+| Cache efficiency for matvec | Optimal | Suboptimal |
+| ELF compatibility | Yes | No |
+| BiCGSTAB performance | Optimal | Suboptimal |
+
+**Source Files Using Row-Major**:
+- `rad_interaction.cpp`: Interaction matrix construction
+- `rad_relaxation_methods.cpp`: BiCGSTAB, LU solver (via BLAS)
+- `rad_hacapk.cpp`: H-matrix element access
+
+**Block Storage Example**:
+```cpp
+// 6x6 hexahedral block storage
+double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
+for (int i = 0; i < 6; i++) {
+    for (int j = 0; j < 6; j++) {
+        // K_block is already [target][source] format
+        block[(size_t)i * m_totalDOF + j] = K_block[i * 6 + j];
+    }
+}
+```
+
+**Policy**:
+- **All new matrix code** MUST use row-major format
+- **BLAS calls** MUST use `CblasRowMajor`
+- **Python interface**: Returns NumPy array in C-contiguous (row-major) order
+
+---
+
 ## Radia Solver Methods: MMM and MSC
 
 Radia supports two solver methods:
@@ -680,6 +738,30 @@ cube2 = rad.ObjHexahedron(iron_vertices2, [0, 0, 0])
 mat2 = rad.MatLin([5001, 101], [0, 0, 1])  # Easy axis along z
 rad.MatApl(cube2, mat2)
 ```
+
+### Magnetization Units: A/m (NOT Tesla)
+
+**CRITICAL**: Radia uses **M in A/m** (Amperes per meter), the same units as H field.
+
+| Quantity | Symbol | SI Unit | Radia Convention |
+|----------|--------|---------|------------------|
+| Magnetization | M | A/m | M = chi * H |
+| Field strength | H | A/m | Internal + external field |
+| Flux density | B | Tesla | B = mu_0 * (H + M) |
+| Susceptibility | chi | - | chi = mu_r - 1 |
+
+**Common conversion** (NdFeB permanent magnet):
+```python
+# Br = 1.2 T (remanence in Tesla)
+# M = Br / mu_0 = 1.2 / (4*pi*1e-7) = 954930 A/m
+Mr = 954930  # A/m - use this in ObjHexahedron
+
+pm = rad.ObjHexahedron(vertices, [0, 0, Mr])  # Magnetization in A/m
+```
+
+**Do NOT confuse** M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M
+
+**Reference**: See [docs/ELF_CONVENTIONS.md](docs/ELF_CONVENTIONS.md) for detailed unit system documentation.
 
 ### MatSatIsoTab - Nonlinear Materials (B-H Curve)
 
@@ -2146,38 +2228,125 @@ rad.Solve(mag_obj, 0.0001, 1000, 1)
 - Hexahedron: 6 DOF (sigma per face) - surface charge density
 - LU solver (Method 0) and BiCGSTAB (Method 1) both work
 
-### TrfMlt REMOVED (2026-01-31)
+### IMA Symmetry and Field Direction (2026-01-29)
 
-**CRITICAL**: `TrfMlt`, `TrfPlSym`, `TrfZerPara`, and `TrfZerPerp` have been **REMOVED** from Radia.
+**Important**: IMA (Image Method of Analysis) behavior depends on the relationship between field direction and mirror plane. This is an **electromagnetic phenomenon**, not an MSC-specific limitation.
 
-**Reason**: The shared-DOF design in TrfMlt was fundamentally incompatible with MSC 6DOF hexahedra. Element-based management (IMA) is the correct approach.
+**Physical Phenomenon**:
 
-**Replacement**: Use **IMA (Image) Symmetry** for plane symmetry:
+For Z-mirror symmetry with Z-directed field:
+- Magnetization M is the **SAME** in both cubes (M1 = M2) - physically correct
+- But MSC uses surface charge sigma = M · n as DOF
+- When geometry is Z-mirrored, z-face normals flip: n_mirror = -n_original
+- Therefore: sigma_mirror = M · n_mirror = -sigma_original
 
+| Configuration | M relationship | sigma relationship | IMA |
+|---------------|----------------|-------------------|-----|
+| X-mirror + Z-field | M1 = M2 | sigma_m = sigma_o | **Works** |
+| Z-mirror + Z-field | M1 = M2 | sigma_m = -sigma_o | Uses explicit elements |
+
+**Electromagnetic Basis**:
+- The induced magnetization M is symmetric regardless of field direction
+- The surface charge sigma = M · n depends on face normal direction
+- When field is perpendicular to mirror, sigma becomes antisymmetric (opposite signs)
+- This is correct physics, not a bug
+
+**Recommendation**:
+
+1. **Field parallel to mirror**: Use IMA (DOF reduction works)
+2. **Field perpendicular to mirror**: Use explicit element duplication
+3. **MMM (3-DOF)**: Uses M as DOF, so IMA works for all field directions
+
+**Example - IMA Works**:
 ```python
-import radia as rad
-
-rad.FldUnits('m')
-
-# Build full model geometry
-hex_objects = [rad.ObjHexahedron(verts, [0,0,0]) for verts in all_vertices]
-for h in hex_objects:
-    rad.MatApl(h, rad.MatLin(mu_r))
-container = rad.ObjCnt([coil] + hex_objects)
-
-# Enable IMA x-mirror (half model)
-intrc = rad.PreRelax(container, container)
-n_ima = rad.SetIMASymmetry(intrc, 'x')  # 'x', 'y', or 'z' mirror
-rad.BuildIMAMatrix(intrc)
-
-# Solve with reduced DOF
-rad.Solve(container, 0.0001, 100, 0)
-B = rad.Fld(container, 'b', [0, 0, 0])
+# X-mirror with Z-field (field parallel to mirror plane)
+rad.Solve(container, 0.0001, 100, 0, image='+x')  # OK
 ```
 
-**Design Principle**: Element-based management (independent DOFs per element) is essential for correct physics. Face-based management (shared DOFs) causes errors.
+**Example - IMA Works**:
+```python
+# X-mirror with Z-field (field parallel to mirror plane)
+rad.Solve(container, 0.0001, 100, 0, image='+x')  # OK
+```
 
-See [docs/IMA_SYMMETRY_DESIGN.md](docs/IMA_SYMMETRY_DESIGN.md) for implementation details.
+**Example - Use Explicit Elements**:
+```python
+# Z-mirror with Z-field (field perpendicular to mirror plane)
+cube1 = rad.ObjHexahedron(v1, [0, 0, 0])
+cube2 = rad.ObjHexahedron(v1_mirrored, [0, 0, 0])  # Explicit mirror
+container = rad.ObjCnt([cube1, cube2, bkg])
+rad.Solve(container, 0.0001, 100, 0)  # No image parameter
+```
+
+### IMA Boundary Element Limitation (2026-02-03)
+
+**Known Limitation**: IMA field computation produces incorrect results for **boundary elements** (elements with faces ON the symmetry plane) when observation points are also on the symmetry plane.
+
+**Problem Description**:
+- When a hexahedral element has a face at x=0 (the symmetry plane) and observation point is also at x=0
+- The mirrored geometry coincides with the original geometry
+- Mirror field contribution with reversed winding causes cancellation
+- Result: Field magnitude is approximately **half** of the correct value (ratio ~0.5)
+
+**Affected Cases**:
+
+| Element Position | Mirror Type | Observation Point | IMA Result | Status |
+|------------------|-------------|-------------------|------------|--------|
+| Face at x=0 | +x (same-pole) | On x=0 plane | **~0.5x** | **FAIL** |
+| Face at x=0 | +x (same-pole) | Off x=0 plane | ~1.0x | PASS |
+| Face at z=0 | -z (opposite-pole) | On z=0 plane | **~0.5x** | **FAIL** |
+| Face at z=0 | -z (opposite-pole) | Off z=0 plane | **~0.84x** | **FAIL** |
+| No boundary face | Any | Any location | ~1.0x | PASS |
+
+**Note**: Antisymmetric mirrors (-z) show additional field errors even for observation points off the symmetry plane.
+
+**Diagnostic Test Results** (sheared hexahedron with face at x=0):
+```
+Failing point (x=0, on plane):  Ratio = 0.5017  FAIL
+Passing point (x=0.01, off):    Ratio = 1.0000  PASS
+```
+
+**Root Cause Analysis**:
+1. Element has face 4 (x- face) at x=0 symmetry plane
+2. X-mirror of face 4 maps to SAME geometry (self-mapping)
+3. But winding is reversed (V0,V1,V2,V3 → V0,V3,V2,V1)
+4. Reversed winding causes field contribution -F instead of +F
+5. Net contribution: F + (-F) = 0 (incorrectly zeroed)
+
+**This is NOT a fixable bug** - it's a fundamental limitation of the MSC face-based approach:
+- In the full model, element 1's face 4 and element 2's face 5 are DIFFERENT faces at the same location
+- They have opposite normals and contribute correctly
+- In IMA, trying to represent element 2's face 5 using mirrored face 4 fails geometrically
+
+**Workaround**: Use explicit element duplication for models with boundary elements:
+
+```python
+# INSTEAD of using IMA:
+# rad.Solve(container, 0.0001, 100, 0, image='+x-z')  # May fail for boundary elements
+
+# USE explicit element duplication:
+def x_mirror(verts):
+    return [[-v[0], v[1], v[2]] for v in verts]
+
+def z_mirror(verts):
+    return [[v[0], v[1], -v[2]] for v in verts]
+
+def xz_mirror(verts):
+    return [[-v[0], v[1], -v[2]] for v in verts]
+
+c1 = rad.ObjHexahedron(v_sheared, [0, 0, 0])
+c2 = rad.ObjHexahedron(x_mirror(v_sheared), [0, 0, 0])
+c3 = rad.ObjHexahedron(z_mirror(v_sheared), [0, 0, 0])
+c4 = rad.ObjHexahedron(xz_mirror(v_sheared), [0, 0, 0])
+
+container = rad.ObjCnt([c1, c2, c3, c4, bkg])
+rad.Solve(container, 0.0001, 100, 0)  # No image parameter - correct result
+```
+
+**When IMA is Safe**:
+1. **Non-boundary elements only**: All elements are offset from symmetry planes
+2. **Observation points off-plane**: Observation points are not on symmetry planes
+3. **MMM (tetrahedra)**: 3-DOF magnetization method does not have this limitation
 
 ### Documentation
 

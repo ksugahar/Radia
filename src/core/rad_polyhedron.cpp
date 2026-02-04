@@ -859,10 +859,10 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 				H_total.z += H_face.z;
 			}
 
-			// Apply 2/(4*pi) factor - matches ELF field convention (verified: full model Bz within 0.12%)
-			H_total.x *= 2.0 * RadConst::INV_FOUR_PI;
-			H_total.y *= 2.0 * RadConst::INV_FOUR_PI;
-			H_total.z *= 2.0 * RadConst::INV_FOUR_PI;
+			// Apply 1/(4*pi) factor - consistent with matrix construction (ELF uses same factor for both)
+			H_total.x *= RadConst::INV_FOUR_PI;
+			H_total.y *= RadConst::INV_FOUR_PI;
+			H_total.z *= RadConst::INV_FOUR_PI;
 		}
 
 		if(FldKey.H_) FieldPtr->H += H_total;
@@ -1025,19 +1025,6 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 			int signY = RadIMAFieldContext::GetSignY();
 			int signZ = RadIMAFieldContext::GetSignZ();
 
-
-			// DOF permutation arrays based on Radia's face ordering from rad_rectangular_block.cpp:
-			// Face numbering: 0=x-, 1=x+, 2=y-, 3=y+, 4=z-, 5=z+
-			// (Different from ELF's face ordering: 0=y-, 1=x+, 2=y+, 3=x-, 4=z-, 5=z+)
-			static const int PERM_X[6] = {1, 0, 2, 3, 4, 5};     // Swap x- (0) and x+ (1)
-			static const int PERM_Y[6] = {0, 1, 3, 2, 4, 5};     // Swap y- (2) and y+ (3)
-			static const int PERM_Z[6] = {0, 1, 2, 3, 5, 4};     // Swap z- (4) and z+ (5)
-			// Composed permutations for dual-axis mirrors
-			static const int PERM_XY[6] = {1, 0, 3, 2, 4, 5};    // PERM_Y[PERM_X[i]]
-			static const int PERM_XZ[6] = {1, 0, 2, 3, 5, 4};    // PERM_Z[PERM_X[i]]
-			static const int PERM_YZ[6] = {0, 1, 3, 2, 5, 4};    // PERM_Z[PERM_Y[i]]
-			static const int PERM_XYZ[6] = {1, 0, 3, 2, 5, 4};   // PERM_Z[PERM_Y[PERM_X[i]]]
-
 			// Helper lambda to compute field from mirrored geometry
 			// The 'sign' parameter (+1 or -1) indicates the symmetry type:
 			// +1 = symmetric BC (magnetization preserved)
@@ -1057,16 +1044,6 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 						if(mirrorAxis & radTInteraction::IMA_Z) mirrorVerts[i][j].z = -mirrorVerts[i][j].z;
 					}
 				}
-
-				// Determine DOF permutation based on mirror axis
-				const int* perm = nullptr;
-				if(mirrorAxis == radTInteraction::IMA_X) perm = PERM_X;
-				else if(mirrorAxis == radTInteraction::IMA_Y) perm = PERM_Y;
-				else if(mirrorAxis == radTInteraction::IMA_Z) perm = PERM_Z;
-				else if(mirrorAxis == radTInteraction::IMA_XY) perm = PERM_XY;
-				else if(mirrorAxis == radTInteraction::IMA_XZ) perm = PERM_XZ;
-				else if(mirrorAxis == radTInteraction::IMA_YZ) perm = PERM_YZ;
-				else if(mirrorAxis == radTInteraction::IMA_XYZ) perm = PERM_XYZ;
 
 				// Count number of mirror axes (odd number = need winding reversal)
 				int numAxes = 0;
@@ -1120,41 +1097,135 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 				}
 				else
 				{
-					// Soft material: use Sigma[i] with mirrored geometry of face i
-					// This matches the kernel-based IMA matrix construction where
-					// K[obs][j] = (field from original face j) + (field from mirrored face j)
-					// Both contributions use the SAME DOF index sigma[j]
-					// The sign parameter handles symmetric (+1) vs antisymmetric (-1) BC
+					// Soft material: compute mirror contributions for field
+					const double BOUNDARY_TOL = 1.0e-6;
+
+					// Get DOF permutation array for this mirror axis
+					// Under reflection, face i in the original maps to face perm[i] in the mirror
+					const int* perm = nullptr;
+					if(mirrorAxis == radTInteraction::IMA_X) perm = radTInteraction::IMA_PERM_X;
+					else if(mirrorAxis == radTInteraction::IMA_Y) perm = radTInteraction::IMA_PERM_Y;
+					else if(mirrorAxis == radTInteraction::IMA_Z) perm = radTInteraction::IMA_PERM_Z;
+					else if(mirrorAxis == radTInteraction::IMA_XY) {
+						// Combined XY permutation: apply X then Y
+						static int PERM_XY[6];
+						for(int k = 0; k < 6; k++) PERM_XY[k] = radTInteraction::IMA_PERM_Y[radTInteraction::IMA_PERM_X[k]];
+						perm = PERM_XY;
+					}
+					else if(mirrorAxis == radTInteraction::IMA_XZ) {
+						static int PERM_XZ[6];
+						for(int k = 0; k < 6; k++) PERM_XZ[k] = radTInteraction::IMA_PERM_Z[radTInteraction::IMA_PERM_X[k]];
+						perm = PERM_XZ;
+					}
+					else if(mirrorAxis == radTInteraction::IMA_YZ) {
+						static int PERM_YZ[6];
+						for(int k = 0; k < 6; k++) PERM_YZ[k] = radTInteraction::IMA_PERM_Z[radTInteraction::IMA_PERM_Y[k]];
+						perm = PERM_YZ;
+					}
+					else if(mirrorAxis == radTInteraction::IMA_XYZ) {
+						static int PERM_XYZ[6];
+						for(int k = 0; k < 6; k++) PERM_XYZ[k] = radTInteraction::IMA_PERM_Z[radTInteraction::IMA_PERM_Y[radTInteraction::IMA_PERM_X[k]]];
+						perm = PERM_XYZ;
+					}
+
+					int boundarySkipCount = 0;
 					for(int i = 0; i < nFaces; i++)
 					{
-						// Use Sigma[i] (NOT permuted) - matches kernel-based IMA
-						double mirrorSigma = sign * Sigma[i];
-
-						// Get vertex positions for this face (mirrored geometry)
 						const TVector3d& MV0 = mirrorVerts[i][0];
 						const TVector3d& MV1 = mirrorVerts[i][1];
 						const TVector3d& MV2 = mirrorVerts[i][2];
 						const TVector3d& MV3 = mirrorVerts[i][3];
 
-						TVector3d H_face;
-						if(reverseWinding)
+						// Check if this face is ON the symmetry plane (boundary face)
+						double faceCenterX = 0.25 * (MV0.x + MV1.x + MV2.x + MV3.x);
+						double faceCenterY = 0.25 * (MV0.y + MV1.y + MV2.y + MV3.y);
+						double faceCenterZ = 0.25 * (MV0.z + MV1.z + MV2.z + MV3.z);
+
+						bool isBoundaryFace = false;
+						if((mirrorAxis & radTInteraction::IMA_X) && std::abs(faceCenterX) < BOUNDARY_TOL)
+							isBoundaryFace = true;
+						if((mirrorAxis & radTInteraction::IMA_Y) && std::abs(faceCenterY) < BOUNDARY_TOL)
+							isBoundaryFace = true;
+						if((mirrorAxis & radTInteraction::IMA_Z) && std::abs(faceCenterZ) < BOUNDARY_TOL)
+							isBoundaryFace = true;
+
+						// Determine sigma for mirror contribution
+						//
+						// For IMA, the mirror element c2 has the same induced M as c1.
+						// When we mirror c1's face vertices to represent c2's geometry,
+						// the computed normal direction from the mirrored vertices is
+						// OPPOSITE to what c2's outward normal should be (because
+						// mirroring flips the handedness of the vertex order).
+						//
+						// To compensate, we NEGATE sigma for non-boundary faces.
+						//
+						// BOUNDARY FACE FIX:
+						// For boundary faces at x=0, the mirrored vertices are IDENTICAL
+						// to the original (x=0 maps to x=0). But c2's outward normal should
+						// be OPPOSITE to c1's (c2 is at x<0, so its boundary face points +x).
+						// Since mirroring doesn't change the vertices, the computed normal
+						// is still c1's direction (-x). We need to NEGATE sigma for boundary
+						// faces to correct for this.
+						//
+						// For non-boundary faces, sigma_c2 = sigma_c1 (the two sign flips
+						// from M and n cancel out for same-polarity IMA).
+						if(isBoundaryFace)
 						{
-							// Reverse winding
-							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV3, MV2, MV1, mirrorSigma);
+							boundarySkipCount++;
 						}
-						else
+
+						// IMA field computation for MSC (6-DOF) hexahedra
+						//
+						// Correct analysis of field computation:
+						//
+						// For BOUNDARY faces (vertices don't move under mirroring):
+						// - c1's outward normal: n_c1 = (-1, 0, 0) for x>0 element
+						// - c2's outward normal: n_c2 = (+1, 0, 0) for x<0 element
+						// - sigma_c1 = M_c1 · n_c1 = +Mx (where M_c1.x < 0)
+						// - sigma_c2 = M_c2 · n_c2 = +Mx (same value, because M_c2.x > 0 and n_c2.x > 0)
+						// - So sigma_c1 = sigma_c2, but n_c2 = -n_c1
+						// - H_c2 = sigma_c2 * integral * n_c2 = sigma * (-n_c1) = -H_c1
+						// - Our mirrored computation gives: H_mirror = sigma * n_c1 = H_c1
+						// - So H_c2 = -H_mirror for boundary faces
+						//
+						// For NON-BOUNDARY faces:
+						// - Winding reversal flips the field: H_flip = -H_mirror
+						// - This gives H_flip = H_c2 ✓
+						//
+						// KNOWN LIMITATION:
+						// For boundary elements (elements WITH faces ON the symmetry plane),
+						// the mirrored geometry does NOT correctly represent the mirror element.
+						// When c1's face 4 is at x=0, mirroring keeps it at x=0.
+						// But c2's face 5 (the physically corresponding face) is at x<0, not x=0.
+						// This limitation causes errors for observation points on the symmetry plane.
+						//
+						// WORKAROUND: Use explicit element duplication for models with boundary elements.
+						//
+						// Solution:
+						// - Non-boundary: winding reversal (H_flip = -H_mirror = H_c2)
+						// - Boundary: negate sigma (mirrorSigma = -sigma_c1, then H = -H_mirror = H_c2)
+						bool useReversedWinding = reverseWinding && !isBoundaryFace;
+
+						// For boundary faces, negate sigma to account for opposite outward normals
+						double mirrorSigma = sign * Sigma[i];
+						if(isBoundaryFace)
 						{
-							// Keep original winding
-							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, mirrorSigma);
+							mirrorSigma = -mirrorSigma;  // H_c2 = -H_c1 for boundary
 						}
+
+						// Compute field from mirrored geometry
+						TVector3d H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, mirrorSigma, useReversedWinding);
+
+						// With winding reversal, H_face = -H_mirror = H_c2
 						H_mirror.x += H_face.x;
 						H_mirror.y += H_face.y;
 						H_mirror.z += H_face.z;
 					}
-					// Apply 2/(4*pi) factor - matches main field computation (ELF convention)
-					H_mirror.x *= 2.0 * RadConst::INV_FOUR_PI;
-					H_mirror.y *= 2.0 * RadConst::INV_FOUR_PI;
-					H_mirror.z *= 2.0 * RadConst::INV_FOUR_PI;
+
+					// Apply 1/(4*pi) factor - same as main field computation
+					H_mirror.x *= RadConst::INV_FOUR_PI;
+					H_mirror.y *= RadConst::INV_FOUR_PI;
+					H_mirror.z *= RadConst::INV_FOUR_PI;
 				}
 
 				return H_mirror;  // No additional sign multiplication
@@ -1192,17 +1263,32 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 //-------------------------------------------------------------------------
 // FieldFromQuadFaceMirrored: Helper for IMA field computation
 // Computes field from a quad face with explicit vertex positions
+// If flipNormal is true, swaps triangle vertex order to flip normal direction
 //-------------------------------------------------------------------------
 TVector3d radTPolyhedron::FieldFromQuadFaceMirrored(const TVector3d& obs,
                                                      const TVector3d& V0,
                                                      const TVector3d& V1,
                                                      const TVector3d& V2,
                                                      const TVector3d& V3,
-                                                     double sigma) const
+                                                     double sigma,
+                                                     bool flipNormal) const
 {
 	// Split quad into 2 triangles
-	TVector3d H1 = FieldFromChargedTriangle(obs, V0, V1, V2, sigma);
-	TVector3d H2 = FieldFromChargedTriangle(obs, V0, V2, V3, sigma);
+	// Normal direction determined by (V1-V0) x (V2-V0)
+	// To flip normal, swap V1 and V2 in each triangle
+	TVector3d H1, H2;
+	if(flipNormal)
+	{
+		// Flip normal by swapping second and third vertex
+		// (V0, V2, V1) has normal -(V1-V0)x(V2-V0)
+		H1 = FieldFromChargedTriangle(obs, V0, V2, V1, sigma);
+		H2 = FieldFromChargedTriangle(obs, V0, V3, V2, sigma);
+	}
+	else
+	{
+		H1 = FieldFromChargedTriangle(obs, V0, V1, V2, sigma);
+		H2 = FieldFromChargedTriangle(obs, V0, V2, V3, sigma);
+	}
 	return TVector3d(H1.x + H2.x, H1.y + H2.y, H1.z + H2.z);
 }
 
