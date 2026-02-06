@@ -328,6 +328,46 @@ rad.Solve(container, 0.001, 100, 0)  # Method 0 = LU
 - Variable DOF offset arrays: `m_elemDOF`, `m_elemDOFOffset`, `m_totalDOF`
 - Block interaction computation in `SetupInteractMatrix_VariableDOF()`
 
+### BiCGSTAB Block Jacobi Preconditioner (2026-02-06)
+
+**Problem**: For meshes with distorted hexahedral elements (high aspect ratio, skewed faces), the scalar Jacobi preconditioner fails and BiCGSTAB diverges.
+
+**Solution**: Automatic **block Jacobi preconditioner** that inverts each element's diagonal block exactly.
+
+**Automatic Detection**:
+BiCGSTAB automatically switches to block Jacobi when:
+- Diagonal ratio (max/min) > 10, OR
+- Min diagonal dominance < 0.1
+
+**Conditioning Metrics**:
+
+| Mesh Type | Diagonal Ratio | Min Dominance | Preconditioner |
+|-----------|----------------|---------------|----------------|
+| Uniform cube | ~1.0 | >0.15 | Scalar Jacobi |
+| Distorted mesh (V304) | ~100 | <0.05 | **Block Jacobi** |
+
+**Implementation**:
+- `BuildBlockJacobiPreconditioner_VariableDOF()`: Extracts and inverts each 6x6 (hex) or 3x3 (tetra) diagonal block using LAPACK `dgetrf_`/`dgetri_`
+- `ApplyBlockJacobiPreconditioner_VariableDOF()`: Applies block-diagonal inverse as preconditioner
+
+**When Block Jacobi is Needed**:
+1. **Distorted elements**: High aspect ratio (>5) or skewed faces (>30°)
+2. **Non-uniform meshes**: Large variation in element sizes
+3. **Complex geometries**: C-type magnets, E-cores with curved surfaces
+
+**Debug Output**:
+```
+[BiCG Conditioning] DOF=444
+[BiCG Conditioning] Diagonal: min=1.929e-01, max=2.014e+01, ratio=104.4
+[BiCG Conditioning] Min dominance: 0.0434, weak rows: 13/444 (2.9%)
+[BiCG] Using BLOCK Jacobi preconditioner (better for ill-conditioned matrix)
+```
+
+**Performance**:
+- Block Jacobi adds O(N) overhead for building block inverses (one-time cost)
+- Each preconditioner application is O(N) with small constant factor
+- Overall: Slightly slower per iteration, but converges when scalar Jacobi fails
+
 ---
 
 ## Field Calculation Methods: Surface Current vs Surface Charge
@@ -517,17 +557,25 @@ magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])  # meters, A/m
 
 ## Radia Field Computation Limitations
 
-### rad.Fld() Accuracy Inside Magnets
+### rad.Fld() Behavior Inside Magnetic Materials
 
-**Important Limitation**: `rad.Fld()` does **NOT** accurately compute field values **inside** permanent magnets.
+**Important Note**: The field computed by `rad.Fld()` **inside** magnetic materials has different characteristics depending on the method:
 
-**Rationale**:
-- Radia MMM is designed for field calculation in **air regions** (outside magnetic materials)
-- Inside magnets, `rad.Fld()` returns inaccurate values (known limitation, not a bug)
+**MMM (Magnetic Moment Method) - Tetrahedra**:
+- Designed for field calculation in **air regions** (outside magnetic materials)
+- Inside materials, `rad.Fld()` returns approximations based on dipole fields
+- Not recommended for quantitative analysis inside materials
+
+**MSC (Magnetic Surface Charge) - Hexahedra**:
+- Inside materials, the field is **uniform within each element**
+- This uniform field is derived from the **surface charge distribution** (sigma), which is the MSC solution
+- The internal field represents `H_internal = -grad(Phi)` from the surface charge potential
+- For validation, compare the **sigma values** (surface charges) or the **external field**, not internal field values
 
 **Testing Strategy**:
-- X **Avoid**: Direct comparison of `rad.Fld()` inside magnets
-- OK **Use**: Large magnet with small mesh region (field approximately uniform)
+- **Solver comparison**: Compare sigma (surface charge) values OR external field points
+- **Avoid**: Direct comparison of `rad.Fld()` inside materials for validation
+- **OK**: Use external observation points (outside all magnetic materials)
 
 ### Vector Potential A Field Implementation (2025-12-31)
 
@@ -2251,72 +2299,71 @@ For Z-mirror symmetry with Z-directed field:
 - When field is perpendicular to mirror, sigma becomes antisymmetric (opposite signs)
 - This is correct physics, not a bug
 
-**Recommendation**:
+**IMA Sign Selection Policy** (2026-02-05):
 
-1. **Field parallel to mirror**: Use IMA (DOF reduction works)
-2. **Field perpendicular to mirror**: Use explicit element duplication
-3. **MMM (3-DOF)**: Uses M as DOF, so IMA works for all field directions
+| Field Direction vs Mirror Plane | IMA Sign | Physical Meaning |
+|--------------------------------|----------|------------------|
+| Field **parallel** to mirror plane | **+** (symmetric) | Same field on both sides |
+| Field **perpendicular** to mirror plane | **-** (antisymmetric) | Field reverses across plane |
 
-**Example - IMA Works**:
+**Example - Quarter Model with Z-field**:
 ```python
-# X-mirror with Z-field (field parallel to mirror plane)
-rad.Solve(container, 0.0001, 100, 0, image='+x')  # OK
+# Z-directed field with X-Z quarter model
+# - X-mirror (yz plane): Bz is PARALLEL to mirror plane -> use +x
+# - Z-mirror (xy plane): Bz is PERPENDICULAR to mirror plane -> use -z
+rad.Solve(container, 0.0001, 100, 0, image='+x-z')  # Correct for Z-field
 ```
 
-**Example - IMA Works**:
+**Example - Quarter Model with X-field**:
 ```python
-# X-mirror with Z-field (field parallel to mirror plane)
-rad.Solve(container, 0.0001, 100, 0, image='+x')  # OK
+# X-directed field with X-Z quarter model
+# - X-mirror (yz plane): Bx is PERPENDICULAR to mirror plane -> use -x
+# - Z-mirror (xy plane): Bx is PARALLEL to mirror plane -> use +z
+rad.Solve(container, 0.0001, 100, 0, image='-x+z')  # Correct for X-field
 ```
 
-**Example - Use Explicit Elements**:
-```python
-# Z-mirror with Z-field (field perpendicular to mirror plane)
-cube1 = rad.ObjHexahedron(v1, [0, 0, 0])
-cube2 = rad.ObjHexahedron(v1_mirrored, [0, 0, 0])  # Explicit mirror
-container = rad.ObjCnt([cube1, cube2, bkg])
-rad.Solve(container, 0.0001, 100, 0)  # No image parameter
-```
+**Additional Recommendations**:
+1. **MMM (3-DOF tetrahedra)**: Uses M as DOF, IMA works for all field directions
+2. **MSC (6-DOF hexahedra)**: Follow the sign policy strictly
+3. **Boundary elements**: Avoid elements with faces ON the symmetry plane
 
-### IMA Boundary Element Limitation (2026-02-03)
+### IMA Boundary Element Limitation (2026-02-03, Updated 2026-02-04)
 
-**Known Limitation**: IMA field computation produces incorrect results for **boundary elements** (elements with faces ON the symmetry plane) when observation points are also on the symmetry plane.
+**Known Limitation**: IMA field computation produces incorrect results for **boundary elements** (elements with faces ON the symmetry plane) when observation points are **also on the symmetry plane**.
+
+**Partial Fix (2026-02-04)**: Boundary faces now correctly handle off-plane observation points by negating sigma to account for the opposite normal direction of the mirror element's boundary face.
 
 **Problem Description**:
-- When a hexahedral element has a face at x=0 (the symmetry plane) and observation point is also at x=0
+- When a hexahedral element has a face at z=0 (the symmetry plane) and observation point is also at z=0
 - The mirrored geometry coincides with the original geometry
-- Mirror field contribution with reversed winding causes cancellation
+- The solid angle computation for points ON the face plane produces incorrect results
 - Result: Field magnitude is approximately **half** of the correct value (ratio ~0.5)
 
-**Affected Cases** (verified 2026-02-04):
+**Affected Cases** (verified 2026-02-04 after fix):
 
 | Element Position | Mirror Type | Observation Point | IMA Result | Status |
 |------------------|-------------|-------------------|------------|--------|
-| Face at z=0 | -z (antisym) | On z=0 inside element | **~0.5x** | **FAIL** |
-| Face at z=0 | -z (antisym) | On z=0 but off-axis | **~0.71x** | **FAIL** |
-| Face at z=0 | -z (antisym) | Off z=0 (x offset) | ~1.0x | PASS |
+| Face at z=0 | -z (antisym) | **On z=0 plane** | **~0.5x** | **FAIL** |
+| Face at z=0 | -z (antisym) | Off z=0 (z offset) | ~1.0x | **PASS (fixed)** |
+| Face at z=0 | -z (antisym) | Off z=0 (x offset) | ~1.0x | **PASS** |
 | No boundary face | -z (antisym) | Any location | ~1.0x | **PASS** |
 | No boundary face | +x (sym) | Any location | ~1.0x | **PASS** |
 
-**Key Finding**: IMA works correctly for elements WITHOUT faces on the symmetry plane. The limitation only affects boundary elements (elements with faces AT z=0 or x=0).
-
-**Diagnostic Test Results** (sheared hexahedron with face at x=0):
-```
-Failing point (x=0, on plane):  Ratio = 0.5017  FAIL
-Passing point (x=0.01, off):    Ratio = 1.0000  PASS
-```
+**Key Finding**: IMA now works correctly for boundary elements when observation points are OFF the symmetry plane. The remaining limitation only affects observation points exactly ON the symmetry plane.
 
 **Root Cause Analysis**:
-1. Element has face 4 (x- face) at x=0 symmetry plane
-2. X-mirror of face 4 maps to SAME geometry (self-mapping)
-3. But winding is reversed (V0,V1,V2,V3 → V0,V3,V2,V1)
-4. Reversed winding causes field contribution -F instead of +F
-5. Net contribution: F + (-F) = 0 (incorrectly zeroed)
+For boundary faces (face at z=0 under z-mirror):
+1. mirrorVerts[i] has SAME geometry as faceVertices[i] (vertices at z=0 don't move)
+2. The computed normal from cross product is n_computed (same as original)
+3. But the mirror element's boundary face has opposite normal: n_c2 = -n_computed
+4. The sigma for the mirror face is: sigma_c2 = M . n_c2 = -Sigma[i]
+5. **Fixed**: Use mirrorSigma = -Sigma[i] for boundary faces (negated sigma)
+6. **Remaining issue**: Solid angle computation fails for observation points ON the face plane
 
-**This is NOT a fixable bug** - it's a fundamental limitation of the MSC face-based approach:
-- In the full model, element 1's face 4 and element 2's face 5 are DIFFERENT faces at the same location
-- They have opposite normals and contribute correctly
-- In IMA, trying to represent element 2's face 5 using mirrored face 4 fails geometrically
+**This remaining limitation is fundamental** - it's a geometric singularity in the MSC formulation:
+- The solid angle from a point ON a face has special behavior
+- The full model handles this correctly because c1's face 0 and c2's face 1 are geometrically distinct
+- In IMA, the mirrored boundary face overlaps exactly with the original, causing numerical issues
 
 **Workaround**: Use explicit element duplication for models with boundary elements:
 
@@ -2505,6 +2552,53 @@ def get_peak_memory_mb():
   "M_avg_z": 149846.0
 }
 ```
+
+---
+
+## Field Comparison Policy (2026-02-06)
+
+### Vector Difference, Not Magnitude
+
+**CRITICAL**: When comparing magnetic field values between solvers or models, use **vector difference**, not scalar magnitude difference.
+
+**Correct Formula**:
+```python
+import numpy as np
+
+# Compare two field vectors B1 and B2
+B1 = np.array([Bx1, By1, Bz1])  # e.g., from LU solver
+B2 = np.array([Bx2, By2, Bz2])  # e.g., from BiCGSTAB solver
+
+# Vector difference (CORRECT)
+diff_vector = np.linalg.norm(B1 - B2)
+rel_diff = diff_vector / np.linalg.norm(B1) * 100  # Percentage
+
+# Magnitude-only comparison (INCOMPLETE - avoids)
+# diff_mag = abs(np.linalg.norm(B1) - np.linalg.norm(B2))  # WRONG
+```
+
+**Rationale**:
+1. **Direction matters**: Two vectors with same magnitude but different directions are NOT equal
+2. **Physical accuracy**: Magnetic field is a vector quantity
+3. **IMA validation**: Mirror symmetry may affect field direction differently than magnitude
+
+**Example**:
+```python
+# Good - vector comparison
+B_lu = np.array(rad.Fld(model_lu, 'b', point))
+B_bicg = np.array(rad.Fld(model_bicg, 'b', point))
+vector_diff = np.linalg.norm(B_lu - B_bicg)
+rel_diff = vector_diff / np.linalg.norm(B_lu) * 100
+print(f"Vector difference: {rel_diff:.4f}%")
+
+# Avoid - scalar comparison only
+# diff_z = abs(B_lu[2] - B_bicg[2]) / abs(B_lu[2]) * 100  # Incomplete
+```
+
+**Acceptance Criteria**:
+- Solver comparison (LU vs BiCGSTAB): < 0.1% vector difference
+- IMA vs Full model: < 1.0% vector difference
+- ELF reference comparison: < 5.0% vector difference (different implementations)
 
 ---
 

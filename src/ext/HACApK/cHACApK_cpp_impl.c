@@ -126,6 +126,40 @@ static void init_matvec_buffers(int nd, int nthr, int ktmax) {
     }
 }
 
+/* Free persistent matvec buffers (call when H-matrix is destroyed) */
+static void free_matvec_buffers(void) {
+    int i;
+    if (g_x_perm) { free(g_x_perm); g_x_perm = NULL; }
+    if (g_y_perm) { free(g_y_perm); g_y_perm = NULL; }
+    if (g_y_thread) {
+        for (i = 0; i < g_matvec_nthr; i++) {
+            if (g_y_thread[i]) free(g_y_thread[i]);
+        }
+        free(g_y_thread);
+        g_y_thread = NULL;
+    }
+    if (g_tmp_vec) {
+        for (i = 0; i < g_matvec_nthr; i++) {
+            if (g_tmp_vec[i]) free(g_tmp_vec[i]);
+        }
+        free(g_tmp_vec);
+        g_tmp_vec = NULL;
+    }
+    g_matvec_nd = 0;
+    g_matvec_nthr = 0;
+    g_matvec_ktmax = 0;
+}
+
+/* Public function to reset all HACApK global state */
+void HACApK_reset_global_state(void) {
+    /* Free persistent matvec buffers */
+    free_matvec_buffers();
+
+    /* Clear lod state */
+    g_hacapk_lod = NULL;
+    g_hacapk_lod_size = 0;
+}
+
 /*=========================================================================
  * High-level wrapper: Build complete H-matrix
  *=========================================================================*/
@@ -1195,9 +1229,10 @@ void HACApK_update_diagonal_fast_wrapper(
                 int global_idx = lod[nstrtl + il] - 1;  /* Convert 1-based to 0-based */
 
                 if (global_idx >= 0 && global_idx < ndof) {
-                    /* A_ii = N_ii - 1/chi_i (ELF-compatible) */
+                    /* A_ii = -K/(4pi) + 1/chi = -diag_N + inv_chi */
+                    /* diag_N contains K/(4pi) (positive), we need -K/(4pi) */
                     /* Storage: a1[it + ndt * il] where it==il for diagonal */
-                    a1[il + ndt * il] = diag_N[global_idx] - inv_chi[global_idx];
+                    a1[il + ndt * il] = -diag_N[global_idx] + inv_chi[global_idx];
                 }
             }
         }

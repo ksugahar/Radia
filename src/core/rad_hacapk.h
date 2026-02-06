@@ -317,6 +317,12 @@ namespace RadHACApKCallback {
     void SetLod(int* lod, int size);
     void ClearLod();
 
+    // Clear all global callback state (called on manager destruction)
+    void ClearGlobalState();
+
+    // Set interaction for callback
+    void SetInteraction(radTInteraction* interaction, int n_elem, int nffc);
+
     // Compute matrix element A(i,j) = -N(i,j) - delta_ij/chi_i (ELF-compatible)
     // Called from cHACApK_entry_ij
     double ComputeEntry(int i, int j);

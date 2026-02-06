@@ -12,7 +12,7 @@ The original TrfMlt had fundamental design issues:
 
 1. **DOF Sharing Issue**: TrfMlt shared DOFs between original and virtual elements, but MSC requires independent DOFs when the external field is perpendicular to the mirror plane.
 
-2. **Face Permutation Required**: For x-mirror, face 1 (x+) and face 3 (x-) must be permuted. TrfMlt did not handle this.
+2. **Face Permutation Required**: For x-mirror, face 1 and face 3 must be permuted. TrfMlt did not handle this.
 
 3. **Design Philosophy**: Element-based management (independent DOFs per element) is essential for correct physics. Face-based management (shared DOFs) causes errors.
 
@@ -33,22 +33,22 @@ Where:
 - `N[i, mirror_j]`: Interaction from mirror image of element j to element i
 - `P`: DOF permutation matrix (swaps face 1 and face 3 for x-mirror)
 
-## Face Ordering (ELF Convention)
+## Face Ordering
 
-| DOF Index | Face | Direction |
-|-----------|------|-----------|
-| 0 | y- | -Y normal |
-| 1 | x+ | +X normal |
-| 2 | y+ | +Y normal |
-| 3 | x- | -X normal |
-| 4 | z- | -Z normal |
-| 5 | z+ | +Z normal |
+| DOF Index | Face Normal Direction |
+|-----------|----------------------|
+| 0 | Face 0 |
+| 1 | Face 1 |
+| 2 | Face 2 |
+| 3 | Face 3 |
+| 4 | Face 4 |
+| 5 | Face 5 |
 
 ## Permutation Matrices
 
 ### X-Mirror (YZ plane)
 
-Swaps x+ (DOF 1) and x- (DOF 3):
+Swaps DOF 1 and DOF 3:
 
 ```
 P_x = [[1,0,0,0,0,0],
@@ -61,7 +61,7 @@ P_x = [[1,0,0,0,0,0],
 
 ### Y-Mirror (XZ plane)
 
-Swaps y- (DOF 0) and y+ (DOF 2):
+Swaps DOF 0 and DOF 2:
 
 ```
 P_y = [[0,0,1,0,0,0],
@@ -74,7 +74,7 @@ P_y = [[0,0,1,0,0,0],
 
 ### Z-Mirror (XY plane)
 
-Swaps z- (DOF 4) and z+ (DOF 5):
+Swaps DOF 4 and DOF 5:
 
 ```
 P_z = [[1,0,0,0,0,0],

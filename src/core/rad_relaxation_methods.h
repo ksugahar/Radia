@@ -310,6 +310,12 @@ private:
 	// Variable DOF version
 	void GetDiagonalElements_VariableDOF(std::vector<double>& diag, const std::vector<double>& inv_chi, int totalDOF);
 
+	// Block Jacobi preconditioner (for ill-conditioned matrices)
+	bool BuildBlockJacobiPreconditioner_VariableDOF(std::vector<double>& blockInverse, std::vector<int>& blockOffsets,
+	                                                 const std::vector<double>& inv_chi, int totalDOF);
+	void ApplyBlockJacobiPreconditioner_VariableDOF(const std::vector<double>& x, std::vector<double>& y,
+	                                                 const std::vector<double>& blockInverse, const std::vector<int>& blockOffsets);
+
 	// BLAS-like operations
 	double Dot(const std::vector<double>& a, const std::vector<double>& b, int n);
 	double Norm2(const std::vector<double>& a, int n);
