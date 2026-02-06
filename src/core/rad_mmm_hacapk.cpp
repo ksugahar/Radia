@@ -66,7 +66,7 @@ static double mmm_entry_callback(int i, int j, int /* bemv */) {
         int n_elem = static_cast<int>(dof_offset.size()) - 1;
         for (int e = 0; e < n_elem; ++e) {
             if (pi >= dof_offset[e] && pi < dof_offset[e + 1]) {
-                val -= inv_chi[e];  // ELF-compatible: -1/chi
+                val += inv_chi[e];  // Physically correct: +1/chi
                 break;
             }
         }
@@ -292,11 +292,11 @@ void MMMHACApKSolver::MatVec(const std::vector<double>& x, std::vector<double>& 
         for (int i = 0; i < total_dof_; ++i) {
             double sum = 0.0;
             for (int j = 0; j < total_dof_; ++j) {
-                // A(i,j) = -N(i,j) - delta_ij / chi (ELF-compatible)
+                // A(i,j) = -N(i,j) + delta_ij / chi (physically correct)
                 double aij = -N_[i * total_dof_ + j];
                 if (i == j) {
                     int e = dof_to_elem_[i];
-                    aij -= inv_chi_[e];  // ELF-compatible: -1/chi
+                    aij += inv_chi_[e];  // Physically correct: +1/chi
                 }
                 sum += aij * x[j];
             }
@@ -315,8 +315,8 @@ void MMMHACApKSolver::UpdateDiagonal(const std::vector<double>& inv_chi) {
     inv_chi_ = inv_chi;
 
     // For nonlinear iteration, the diagonal update is handled in MatVec
-    // since the system matrix A = -diag(inv_chi) - N changes per iteration (ELF-compatible).
-    // The H-matrix stores the N matrix; we subtract inv_chi during matvec.
+    // since the system matrix A = +diag(inv_chi) - N changes per iteration.
+    // The H-matrix stores the N matrix; we add inv_chi during matvec.
     // This approach is simpler and avoids modifying the H-matrix structure.
 }
 

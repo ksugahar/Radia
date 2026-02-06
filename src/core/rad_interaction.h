@@ -180,6 +180,7 @@ class radTInteraction : public radTg {
 	friend bool BuildBaseMatrix(struct NonlinearContext&, radTInteraction*);
 	friend void StoreOldValuesAndComputeBnorm(struct NonlinearContext&, radTInteraction*);
 	friend void UpdateMagnAndComputeH(struct NonlinearContext&, radTInteraction*);
+	friend void ComputeActualHFieldFromSigma(struct NonlinearContext&, radTInteraction*);
 	friend double UpdateChiAndCheckConvergence(struct NonlinearContext&, radTInteraction*);
 
 	int AmOfMainElem;
@@ -318,50 +319,42 @@ public:
 		IMA_XYZ = 7   // Eighth model (all three mirrors)
 	};
 
-	// DOF permutation arrays for face swapping (size 6 each)
-	// ELF face ordering: [y-, x+, y+, x-, z-, z+] = DOFs [0, 1, 2, 3, 4, 5]
+	// IMA (Image Method of Analysis) implementation notes:
+	// Netgen face ordering: DOFs [0, 1, 2, 3, 4, 5] = z-, z+, y-, y+, x-, x+
+	// (Matches netgen_mesh_import.py HEX_FACES)
 	//
-	// Column permutations (P): used with K[i, mirror(j)] @ P (DEPRECATED)
-	// P_x: swaps face 1 (x+) and face 3 (x-)
-	// P_y: swaps face 0 (y-) and face 2 (y+)
-	// P_z: swaps face 4 (z-) and face 5 (z+)
-	static constexpr int IMA_PERM_X[6] = {0, 3, 2, 1, 4, 5};  // Swap x+ (1) and x- (3)
-	static constexpr int IMA_PERM_Y[6] = {2, 1, 0, 3, 4, 5};  // Swap y- (0) and y+ (2)
-	static constexpr int IMA_PERM_Z[6] = {0, 1, 2, 3, 5, 4};  // Swap z- (4) and z+ (5)
+	// IMA simply adds mirrored kernel contributions:
+	//   K_IMA[i,j] = K[i,j] + K[i, mirror(j)] * sign
+	//
+	// The mirrored geometry automatically handles face position changes.
+	// No DOF permutation matrices are needed - the kernel-based approach
+	// computes field contributions directly from mirrored face positions.
+	//
+	// Legacy permutation arrays (DEPRECATED - kept for reference only)
+	static constexpr int IMA_PERM_X[6] = {0, 1, 2, 3, 5, 4};  // Swap x- and x+ (faces 4,5)
+	static constexpr int IMA_PERM_Y[6] = {0, 1, 3, 2, 4, 5};  // Swap y- and y+ (faces 2,3)
+	static constexpr int IMA_PERM_Z[6] = {1, 0, 2, 3, 4, 5};  // Swap z- and z+ (faces 0,1)
 
-	// ELF-compatible IMA permutations (empirically verified)
-	// Formula: K_IMA = K_AA + P_row @ K_AB @ P_col
-	// where K_AB = K[i, mirror(j)] is computed by Compute6x6BlockMirrored
-	//
-	// ELF IMA formula:
-	// K_IMA[i,i] = K[i,i] + Q @ K[mirror(i), i]
+	// IMA kernel formula (no permutation needed):
 	//            = K_AA + Q @ K_BA
 	//
-	// IMA row permutation based on Radia's face ordering: [x-, x+, y-, y+, z-, z+]
-	// From rad_rectangular_block.cpp:
-	//   Face 0: x- (vertices at xMin)
-	//   Face 1: x+ (vertices at xMax)
-	//   Face 2: y- (vertices at yMin)
-	//   Face 3: y+ (vertices at yMax)
-	//   Face 4: z- (vertices at zMin)
-	//   Face 5: z+ (vertices at zMax)
-	//
+	// IMA row permutation based on Netgen face ordering: 0=z-, 1=z+, 2=y-, 3=y+, 4=x-, 5=x+
 	// Using Compute6x6BlockMirroredTarget to get K_BA directly,
 	// we apply the Q row permutation that accounts for face swapping after mirroring.
 	//
-	// For x-mirror: faces 0 (x-) and 1 (x+) swap
-	//   Q_x = [1, 0, 2, 3, 4, 5]
-	static constexpr int IMA_ROW_PERM_X[6] = {1, 0, 2, 3, 4, 5};  // Swap x- <-> x+
+	// For x-mirror: faces 4 (x-) and 5 (x+) swap
+	//   Q_x = [0, 1, 2, 3, 5, 4]
+	static constexpr int IMA_ROW_PERM_X[6] = {0, 1, 2, 3, 5, 4};  // Swap Face 4 <-> Face 5
 	static constexpr int IMA_COL_PERM_X[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
 
 	// For y-mirror: faces 2 (y-) and 3 (y+) swap
 	//   Q_y = [0, 1, 3, 2, 4, 5]
-	static constexpr int IMA_ROW_PERM_Y[6] = {0, 1, 3, 2, 4, 5};  // Swap y- <-> y+
+	static constexpr int IMA_ROW_PERM_Y[6] = {0, 1, 3, 2, 4, 5};  // Swap Face 2 <-> Face 3
 	static constexpr int IMA_COL_PERM_Y[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
 
-	// For z-mirror: faces 4 (z-) and 5 (z+) swap
-	//   Q_z = [0, 1, 2, 3, 5, 4]
-	static constexpr int IMA_ROW_PERM_Z[6] = {0, 1, 2, 3, 5, 4};  // Swap z- <-> z+
+	// For z-mirror: faces 0 (z-) and 1 (z+) swap
+	//   Q_z = [1, 0, 2, 3, 4, 5]
+	static constexpr int IMA_ROW_PERM_Z[6] = {1, 0, 2, 3, 4, 5};  // Swap Face 0 <-> Face 1
 	static constexpr int IMA_COL_PERM_Z[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
 
 	int AmOfRelaxSubInterv;

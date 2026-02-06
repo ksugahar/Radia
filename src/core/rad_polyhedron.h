@@ -403,6 +403,10 @@ public:
 	TVector3d FieldFromPointCharge(const TVector3d& obs, double charge) const;
 
 	// 6 DOF MSC setup for hexahedra
+	// IMPORTANT: This relies on Netgen face winding convention for correct normal direction.
+	// No inside/outside check is performed - the normal is computed mechanically from
+	// the polygon's local coordinate system which was set up from vertex winding order.
+	// Face ordering (Netgen convention): 0=z-, 1=z+, 2=y-, 3=y+, 4=x-, 5=x+
 	void SetupFaceGeometry()
 	{
 		// Compute face normals, areas, and centers for 6 DOF MSC
@@ -421,9 +425,13 @@ public:
 			FaceCenter[i] = pTrans->TrBiPoint(localCenter);
 
 			// Face normal is the Z-axis of the local frame transformed to global
+			// The local frame was set up from the face vertex winding order,
+			// so the Z-axis (0,0,1) transformed to global gives the outward normal.
+			// This is the Netgen convention - no inside/outside check needed.
 			TVector3d localNormal(0.0, 0.0, 1.0);
 			FaceNormal[i] = pTrans->TrBiPoint(localNormal) - pTrans->TrBiPoint(TVector3d(0, 0, 0));
-			// Normalize
+
+			// Normalize the normal vector
 			double normLen = sqrt(FaceNormal[i].x * FaceNormal[i].x +
 			                      FaceNormal[i].y * FaceNormal[i].y +
 			                      FaceNormal[i].z * FaceNormal[i].z);
@@ -434,23 +442,10 @@ public:
 				FaceNormal[i].z /= normLen;
 			}
 
-			// CRITICAL: Ensure normal points OUTWARD from element center
-			// Compute vector from element center to face center
-			TVector3d toFace;
-			toFace.x = FaceCenter[i].x - CentrPoint.x;
-			toFace.y = FaceCenter[i].y - CentrPoint.y;
-			toFace.z = FaceCenter[i].z - CentrPoint.z;
-
-			// If normal points inward (opposite to toFace), flip it
-			double dotProd = FaceNormal[i].x * toFace.x +
-			                 FaceNormal[i].y * toFace.y +
-			                 FaceNormal[i].z * toFace.z;
-			if(dotProd < 0.0)
-			{
-				FaceNormal[i].x = -FaceNormal[i].x;
-				FaceNormal[i].y = -FaceNormal[i].y;
-				FaceNormal[i].z = -FaceNormal[i].z;
-			}
+			// NOTE: Previous implementation had inside/outside check here:
+			// if(dotProd < 0.0) { flip normal }
+			// This was removed to follow Netgen convention strictly.
+			// The face winding order determines normal direction mechanically.
 
 			// Compute face area from polygon
 			FaceArea[i] = pPgn->Area();

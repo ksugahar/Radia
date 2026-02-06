@@ -1108,7 +1108,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							              H_total.z * poly_row->FaceNormal[face_i].z;
 
 							// ROW-MAJOR: A[target_face_i][source_face_j] at face_i*stride+face_j
-							// Sign convention: positive = ELF-compatible (self-demagnetization is negative)
+							// Store K/(4pi) - the solver will negate when building system matrix
 							block[(size_t)face_i * m_totalDOF + face_j] = K_ij * RadConst::INV_FOUR_PI;
 						}
 					}
@@ -1246,11 +1246,14 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			{
 				// 3x6 block: Field at tetrahedron (3 DOF) center from MSC hexahedron (6 DOF)
 				// K(Mk, face_j) = H_field_k at tetra center due to unit sigma on hex face j
-				// Matrix stores: -H_field(k) / (4*pi) (following ELF convention)
+				// Matrix stores: H_field(k) / (4*pi) (following ELF convention)
 				//
-				// DIRECT GEOMETRY APPROACH (NOT reciprocity + TrAxialVect):
-				// For each transformation, transform the source geometry and compute field
-				// at the ORIGINAL observation point. This correctly handles plane symmetry.
+				// COORDINATE TRANSFORM APPROACH (matches 3x3 block logic):
+				// 1. Transform obs point from row's local frame to world frame
+				// 2. Transform obs point from world frame to column's local frame
+				// 3. Compute field in column's local frame
+				// 4. Transform field back to world frame
+				// 5. Transform field from world frame to row's local frame
 
 				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
 				if(poly_col && poly_col->Use6DOF_MSC)
@@ -1263,18 +1266,29 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 						for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
 						{
-							radTrans* pTrans = TransPtrVect[tr];
+							// Transform obs point from world frame to column element's local frame
+							TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
 
-							// Field from source at observation point
-							TVector3d H_face = poly_col->FieldFromQuadFace(InitObsPoiVect, face_j, 1.0);
+							// Field from source at observation point (both in column's local frame)
+							TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
 							double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
-							TVector3d H_point = poly_col->FieldFromPointCharge(InitObsPoiVect, unit_point_charge);
-							H_total.x += H_face.x + H_point.x;
-							H_total.y += H_face.y + H_point.y;
-							H_total.z += H_face.z + H_point.z;
+							TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
+
+							// Sum field contributions (in column's local frame)
+							TVector3d H_local;
+							H_local.x = H_face.x + H_point.x;
+							H_local.y = H_face.y + H_point.y;
+							H_local.z = H_face.z + H_point.z;
+
+							// Transform field from column's local frame back to world frame
+							TVector3d H_world = TransPtrVect[tr]->TrAxialVect(H_local);
+
+							H_total.x += H_world.x;
+							H_total.y += H_world.y;
+							H_total.z += H_world.z;
 						}
 
-						// Transform by row's main transform (inverse) using pseudo-vector transformation
+						// Transform field from world frame to row element's local frame
 						TVector3d H_final = MainTransPtrArray[row]->TrAxialVect_inv(H_total);
 
 						// Store in block (ROW-MAJOR): A[i][j] at [i * stride + j]
@@ -1360,9 +1374,12 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				// Field functions return values WITHOUT 4pi divisor
 				// Matrix stores: K_ij / (4*pi) (ELF-compatible sign convention)
 				//
-				// DIRECT GEOMETRY APPROACH (NOT reciprocity + TrAxialVect):
-				// For each transformation, transform the source geometry and compute field
-				// at the ORIGINAL observation point. This correctly handles plane symmetry.
+				// COORDINATE FRAME CONVENTION:
+				// - FaceCenter, FaceNormal, CentrPoint are stored in GLOBAL frame
+				//   (SetupFaceGeometry applies element's transform)
+				// - Evaluation point is computed in GLOBAL frame
+				// - Field is computed in GLOBAL frame
+				// - Dot product uses GLOBAL frame vectors
 
 				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
 				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
@@ -1372,13 +1389,14 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					for(int face_i = 0; face_i < 6; face_i++)
 					{
 						// Yano-Sugahara evaluation point: midpoint between face center and element center
+						// FaceCenter and CentrPoint are already in GLOBAL frame
 						TVector3d EvalPt;
 						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
 						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
 						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
 
-						// Transform eval point to world coordinates
-						TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(EvalPt);
+						// EvalPt is already in GLOBAL frame - no transform needed
+						TVector3d InitObsPoiVect = EvalPt;
 
 						for(int face_j = 0; face_j < 6; face_j++)
 						{
@@ -1386,25 +1404,35 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 							for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
 							{
-								// Field from source at observation point
-								TVector3d H_face = poly_col->FieldFromQuadFace(InitObsPoiVect, face_j, 1.0);
+								// Transform obs point from GLOBAL frame to column element's local frame
+								TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
+
+								// Field from source at observation point (in column's local frame)
+								TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
 								double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
-								TVector3d H_point = poly_col->FieldFromPointCharge(InitObsPoiVect, unit_point_charge);
-								H_total.x += H_face.x + H_point.x;
-								H_total.y += H_face.y + H_point.y;
-								H_total.z += H_face.z + H_point.z;
+								TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
+
+								// Sum field contributions (in column's local frame)
+								TVector3d H_local;
+								H_local.x = H_face.x + H_point.x;
+								H_local.y = H_face.y + H_point.y;
+								H_local.z = H_face.z + H_point.z;
+
+								// Transform field from column's local frame back to GLOBAL frame
+								TVector3d H_world = TransPtrVect[tr]->TrAxialVect(H_local);
+
+								H_total.x += H_world.x;
+								H_total.y += H_world.y;
+								H_total.z += H_world.z;
 							}
 
-							// Transform by row's main transform (inverse) using pseudo-vector transformation
-							TVector3d H_final = MainTransPtrArray[row]->TrAxialVect_inv(H_total);
-
-							// K_ij = normal_i dot H_final
-							double K_ij = H_final.x * poly_row->FaceNormal[face_i].x +
-							              H_final.y * poly_row->FaceNormal[face_i].y +
-							              H_final.z * poly_row->FaceNormal[face_i].z;
+							// K_ij = normal_i dot H_total (both in GLOBAL frame)
+							// FaceNormal is already in GLOBAL frame (from SetupFaceGeometry)
+							double K_ij = H_total.x * poly_row->FaceNormal[face_i].x +
+							              H_total.y * poly_row->FaceNormal[face_i].y +
+							              H_total.z * poly_row->FaceNormal[face_i].z;
 
 							// Store K_ij / (4*pi) (ROW-MAJOR): A[face_i][face_j] at [face_i * stride + face_j]
-							// Sign convention: positive = ELF-compatible (self-demagnetization is negative)
 							double K_val = K_ij * RadConst::INV_FOUR_PI;
 							block[(size_t)face_i * m_totalDOF + face_j] = K_val;
 						}
@@ -1536,14 +1564,13 @@ void radTInteraction::SetupExternFieldArray()
 							EmptyTransPtrVect();
 						}
 
-						// Transform H to element's local coords for dot product with FaceNormal
-						// Inverse pseudo-vector transformation: H_local = det(T) * T_inv * H_world
-						TVector3d H_local = MainTransPtrArray[StrNo]->TrAxialVect_inv(H_world);
-
-						// H_ext dot n_i (both now in element's local coords)
-						double H_dot_n = H_local.x * poly->FaceNormal[face_i].x +
-						                 H_local.y * poly->FaceNormal[face_i].y +
-						                 H_local.z * poly->FaceNormal[face_i].z;
+						// FaceNormal is stored in GLOBAL coordinates (from SetupFaceGeometry)
+						// H_world is already in global coordinates
+						// Compute dot product directly in global coordinates (ELF-compatible)
+						// Note: Do NOT transform H to local coords - FaceNormal is already global!
+						double H_dot_n = H_world.x * poly->FaceNormal[face_i].x +
+						                 H_world.y * poly->FaceNormal[face_i].y +
+						                 H_world.z * poly->FaceNormal[face_i].z;
 
 						m_flatExternFieldArray[offset + face_i] += H_dot_n;
 					}
@@ -1618,14 +1645,13 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 							radTField Field(FieldKeyExtern, CompCriterium, WorldEvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 							(static_cast<radTg3d*>(MoreExtSourceHandle.rep))->B_genComp(&Field);
 
-							// Transform field back to element's local coords using pseudo-vector transformation
-							// H field is a pseudo-vector: H_local = det(T) * T_inv * H_world
-							TVector3d H_local = MainTransPtrArray[StrNo]->TrAxialVect_inv(Field.H);
-
-							// H_ext dot n_i (both now in element's local coords)
-							double H_dot_n = H_local.x * poly->FaceNormal[face_i].x +
-							                 H_local.y * poly->FaceNormal[face_i].y +
-							                 H_local.z * poly->FaceNormal[face_i].z;
+							// FaceNormal is stored in GLOBAL coordinates (from SetupFaceGeometry)
+							// Field.H from B_genComp is already in global coordinates
+							// Compute dot product directly in global coordinates (ELF-compatible)
+							// Note: Do NOT transform H to local coords - FaceNormal is already global!
+							double H_dot_n = Field.H.x * poly->FaceNormal[face_i].x +
+							                 Field.H.y * poly->FaceNormal[face_i].y +
+							                 Field.H.z * poly->FaceNormal[face_i].z;
 
 							m_flatExternFieldArray[offset + face_i] = H_dot_n;
 						}
@@ -3372,11 +3398,11 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 			}
 
 			// K_ij = n_i dot H_total / (4*pi)
-			// Sign convention: positive = ELF-compatible (self-demagnetization is negative)
 			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
 			              * RadConst::INV_FOUR_PI;
 
 			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
+			// The solver will negate when building system matrix
 			K_mat[face_i * 6 + face_j] = K_ij;
 		}
 	}
@@ -3875,6 +3901,7 @@ void radTInteraction::Compute6x6BlockMirrored(int hex_i, int hex_j, int mirrorAx
 			              * RadConst::INV_FOUR_PI;
 
 			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
+			// The solver will negate when building system matrix
 			K_mat[face_i * 6 + face_j] = K_ij;
 		}
 	}
@@ -3981,6 +4008,7 @@ void radTInteraction::Compute6x6BlockMirroredTarget(int hex_i, int hex_j, int mi
 			              * RadConst::INV_FOUR_PI;
 
 			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
+			// The solver will negate when building system matrix
 			K_mat[face_i * 6 + face_j] = K_ij;
 		}
 	}
@@ -4059,6 +4087,49 @@ int radTInteraction::SetupInteractMatrix_IMA()
 	m_flatExternFieldArray = std::move(savedExternField);  // Use saved values, not zeros
 	m_flatMagnArray.resize(imaDOF, 0.0);
 	m_flatFieldArray.resize(imaDOF, 0.0);
+
+	// FIX (2026-02-05): Update AmOfMainElem, m_elemDOF, m_elemDOFOffset, and g3dRelaxPtrVect
+	// for IMA mode. Without this, BiCGSTAB uses wrong element count and offsets.
+	// Save original values for potential restoration (not currently needed but defensive)
+	int originalAmOfMainElem = AmOfMainElem;
+	std::vector<int> originalElemDOF = m_elemDOF;
+	std::vector<int> originalElemDOFOffset = m_elemDOFOffset;
+	radTVectPtrg3dRelax originalG3dRelaxPtrVect = g3dRelaxPtrVect;
+
+	// Update AmOfMainElem to IMA element count
+	AmOfMainElem = m_imaNumElements;
+
+	// Rebuild m_elemDOF for IMA elements (all 6 DOF hexahedra)
+	m_elemDOF.resize(m_imaNumElements);
+	for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
+	{
+		m_elemDOF[ima_i] = 6;  // All IMA elements are 6DOF hexahedra
+	}
+
+	// Rebuild m_elemDOFOffset for IMA elements (sequential: 0, 6, 12, ...)
+	m_elemDOFOffset.resize(m_imaNumElements + 1);
+	for(int ima_i = 0; ima_i <= m_imaNumElements; ima_i++)
+	{
+		m_elemDOFOffset[ima_i] = ima_i * 6;
+	}
+
+	// FIX (2026-02-05): Update m_totalDOF to IMA DOF count
+	// This is CRITICAL - BiCGSTAB uses GetTotalDOF() for matrix dimensions.
+	// Without this, BiCGSTAB uses wrong matrix dimensions (original DOF vs IMA DOF).
+	m_totalDOF = imaDOF;
+
+	// Remap g3dRelaxPtrVect to only contain IMA elements
+	// Use m_imaToFull to map IMA index -> original element index
+	g3dRelaxPtrVect.resize(m_imaNumElements);
+	for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
+	{
+		int full_i = m_imaToFull[ima_i];
+		g3dRelaxPtrVect[ima_i] = originalG3dRelaxPtrVect[full_i];
+	}
+
+	std::cout << "[Radia] IMA: Updated AmOfMainElem from " << originalAmOfMainElem
+	          << " to " << AmOfMainElem << " (IMA elements)" << std::endl;
+	std::cout << "[Radia] IMA: m_totalDOF = " << m_totalDOF << " (expected " << imaDOF << ")" << std::endl;
 
 	// Build mapping from IMA index to hex index
 	// This allows us to call Compute6x6BlockFast directly
