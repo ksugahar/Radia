@@ -72,13 +72,14 @@ matrix, dof = rad.GetInteractMatrix(handle)
   - ELF: Discretized coil elements (MCL8T)
   - Radia: Analytical coil (ObjArcCur)
 
-### Test Files
+### Key Test Files
 
 | File | Description |
 |------|-------------|
-| `mu=1000/quarter/diagnose_image.py` | Verify Image API functionality |
-| `mu=1000/quarter/compare_interaction_matrix.py` | Compare Radia vs ELF matrix |
-| `mu=1000/quarter/test_field_comparison.py` | Field comparison |
+| `mu=1000/quarter/test_all_solvers_ima.py` | All solvers with IMA (LU/BiCGSTAB/HACApK) |
+| `mu=1000/quarter/test_hacapk_ima_transition.py` | HACApK state management verification |
+| `nonlinear/full/LU/test_all_solvers.py` | Nonlinear solver comparison |
+| `nonlinear/full/LU/verify_full_nonlinear.py` | Full nonlinear model verification |
 
 ## Quick Start
 
@@ -163,8 +164,12 @@ Gap center Bz field [T] for different mesh densities and permeabilities:
 | Directory | Description |
 |-----------|-------------|
 | `mu=1000/` | Linear material validation (mu_r=1000) |
-| `mu=1000/quarter/` | Quarter model Image symmetry tests |
-| `nonlinear/` | Nonlinear material (20000 AT) tests |
+| `mu=1000/full/` | Full model tests |
+| `mu=1000/quarter/` | Quarter model IMA symmetry tests |
+| `mu=1000/single/` | Single element verification |
+| `nonlinear/` | Nonlinear material (B-H curve) tests |
+| `nonlinear/full/` | Full model with LU/BiCGSTAB/HACApK solvers |
+| `nonlinear/quarter/` | Quarter model with all solvers |
 
 ## Geometry
 
@@ -210,6 +215,12 @@ Gap center Bz field [T] for different mesh densities and permeabilities:
 
 ## Changelog
 
+### 2026-02-05
+- Cleaned up debug/temporary scripts (114 -> 67 files)
+- Reorganized folder structure: linear in mu=1000/, nonlinear in nonlinear/
+- Fixed HACApK thread-local cache invalidation for IMA transitions
+- Verified all solvers work with quarter model (+x-z)
+
 ### 2026-01-31
 - Implemented new Image symmetry API: `rad.Solve(..., image='+x-z')`
 - Removed old TrfMlt-based symmetry approach
@@ -220,5 +231,5 @@ Gap center Bz field [T] for different mesh densities and permeabilities:
 
 ---
 
-**Last Updated**: 2026-01-31
+**Last Updated**: 2026-02-05
 **Reference**: S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type

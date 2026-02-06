@@ -702,9 +702,16 @@ double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH, TVector2d*
 	}
 	else if(Indx >= (LenArrayHB - 1))
 	{
-		// Above last point: use last point's value (saturation)
-		TVector2d *pHB = ArrayHB + (LenArrayHB - 1);
-		B = pHB->y;  // Saturated B value
+		// Above last point: linear extrapolation using last slope (ELF-compatible)
+		// ELF magic.f90 line 4241-4245: continues linear interpolation beyond last point
+		TVector2d *pHB_last = ArrayHB + (LenArrayHB - 1);
+		TVector2d *pHB_prev = ArrayHB + (LenArrayHB - 2);
+		double H_last = pHB_last->x;
+		double B_last = pHB_last->y;
+		double H_prev = pHB_prev->x;
+		double B_prev = pHB_prev->y;
+		double dBdH_last = (B_last - B_prev) / (H_last - H_prev);
+		B = B_last + dBdH_last * (AbsH - H_last);  // Linear extrapolation
 	}
 	else
 	{
