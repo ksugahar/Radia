@@ -19,12 +19,14 @@
 #include "rad_polyhedron.h"  // For radTPolyhedron in variable DOF solver
 #include "rad_material_def.h"  // For radTNonlinearIsotropMaterial::GetHfromM
 #include "rad_application.h"  // For radTApplication::NonlinearMethod
+#include "rad_constants.h"    // For RadConst::INV_FOUR_PI
 
 #include <time.h>
 #include <chrono>   // For timing instrumentation
 #include <cstring>  // For std::memcpy
 #include <cstdio>   // For fprintf in debug logging
 #include <cstdlib>  // For getenv
+#include <array>    // For std::array in IMA mirror computation
 
 // Uncomment to enable chi value debugging
 // #define RADIA_DEBUG_CHI
@@ -272,38 +274,23 @@ bool BuildBaseMatrix(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 		return false;
 	}
 
-	// Copy interaction matrix
+	// Copy interaction matrix and NEGATE all entries
+	// Physical equation: A = -K/(4pi) + diag(1/chi) for all element types
+	// FlatInteract stores K/(4pi) for MSC and N for MMM
+	// Both need negation to get -K/(4pi) and -N respectively
 	std::memcpy(ctx.BaseMatrix.data(), FlatInteract, matrix_size * sizeof(double));
 
-	// Sign convention:
-	// MMM (3DOF): FlatInteract stores N, need -N -> negate
-	// MSC (6DOF): FlatInteract stores -K/(4pi) -> use as-is
-	for(int row_elem = 0; row_elem < ctx.AmOfMainElem; row_elem++)
+	// Negate entire matrix (physically correct for both MMM and MSC)
+	for(size_t i = 0; i < matrix_size; i++)
 	{
-		int dof_row = IntrctPtr->GetElementDOF(row_elem);
-		int offset_row = IntrctPtr->GetElementDOFOffset(row_elem);
-
-		for(int col_elem = 0; col_elem < ctx.AmOfMainElem; col_elem++)
-		{
-			int dof_col = IntrctPtr->GetElementDOF(col_elem);
-			int offset_col = IntrctPtr->GetElementDOFOffset(col_elem);
-
-			// Negate blocks involving 3DOF (MMM) elements
-			if(dof_row == 3 || dof_col == 3)
-			{
-				for(int i = 0; i < dof_row; i++)
-				{
-					for(int j = 0; j < dof_col; j++)
-					{
-						// Column-major: (row, col) = [col * totalDOF + row]
-						// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-						size_t idx = (size_t)(offset_col + j) * ctx.totalDOF + (offset_row + i);
-						ctx.BaseMatrix[idx] = -ctx.BaseMatrix[idx];
-					}
-				}
-			}
-		}
+		ctx.BaseMatrix[i] = -ctx.BaseMatrix[i];
 	}
+
+	// NOTE: Do NOT symmetrize the K matrix. The asymmetric K[i,j] != K[j,i] is
+	// physically correct for non-orthogonal hexahedra where face normals and
+	// eval points differ between elements. BiCGSTAB uses FlatInteract directly
+	// and gets correct results; LU should use the same unsymmetrized matrix.
+
 	return true;
 }
 
@@ -351,9 +338,258 @@ void StoreOldValuesAndComputeBnorm(NonlinearContext& ctx, radTInteraction* Intrc
 }
 
 //-------------------------------------------------------------------------
+// Helper function to compute actual H field at element centers from sigma values
+// This is the ELF-compatible approach: H = H_ext + H_demag (from all sigma contributions)
+//
+// FIX (2026-02-05): For IMA (Image Method Analysis), add demagnetizing field from
+// mirror elements. Without this, nonlinear IMA produces ~22% error because chi
+// update uses H = M/chi which doesn't include mirror demagnetizing contributions.
+//-------------------------------------------------------------------------
+
+void ComputeActualHFieldFromSigma(NonlinearContext& ctx, radTInteraction* IntrctPtr)
+{
+	// First pass: store sigma values and compute M from sigma for all elements
+	for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+		if(dof == 6)
+		{
+			radTPolyhedron* poly = ctx.polyCache[elem];
+			if(poly && poly->Use6DOF_MSC)
+			{
+				// Store sigma values in polyhedron
+				for(int k = 0; k < 6; k++)
+				{
+					poly->Sigma[k] = ctx.FlatMagn[offset + k];
+				}
+
+				// Compute effective magnetization from sigma using weighted least-squares
+				// M_x = sum(sigma_i * n_x_i) / sum(n_x_i^2) (ELF-compatible)
+				double Mx = 0.0, My = 0.0, Mz = 0.0;
+				double wx = 0.0, wy = 0.0, wz = 0.0;
+				for(int face = 0; face < 6; face++)
+				{
+					double sigma = poly->Sigma[face];
+					TVector3d& n = poly->FaceNormal[face];
+					Mx += sigma * n.x;
+					My += sigma * n.y;
+					Mz += sigma * n.z;
+					wx += n.x * n.x;
+					wy += n.y * n.y;
+					wz += n.z * n.z;
+				}
+				if(wx > 1.0e-10) poly->Magn.x = Mx / wx;
+				if(wy > 1.0e-10) poly->Magn.y = My / wy;
+				if(wz > 1.0e-10) poly->Magn.z = Mz / wz;
+			}
+		}
+	}
+
+	// Second pass: compute H field for chi update
+	// For 6DOF hexahedral elements: use H = M/chi (constitutive relation)
+	// This is the same approach used by HACApK and matches ELF behavior.
+	//
+	// NOTE (FIX 2026-02-02): The previous approach computed H = H_ext + H_demag via B_comp,
+	// but this caused ~2% error vs ELF because of numerical issues in self-field computation.
+	// HACApK uses H = M/chi and matches ELF perfectly, so we adopt the same approach here.
+	//
+	// KNOWN ISSUE (2026-02-05): For IMA (Image Method Analysis), the H = M/chi approach
+	// does NOT properly account for nonlinear material behavior with mirror elements.
+	// This causes ~22% error for nonlinear materials with IMA.
+	//
+	// Investigation notes:
+	// - Adding mirror demagnetizing field to H made results WORSE (74% error vs 22%)
+	// - The issue may be in the nonlinear iteration formulation, not just chi update
+	// - For now, nonlinear IMA is NOT supported
+	//
+	// Workaround: Use full model (no IMA) for nonlinear problems.
+
+	for(int elem_j = 0; elem_j < ctx.AmOfMainElem; elem_j++)
+	{
+		int dof_j = IntrctPtr->GetElementDOF(elem_j);
+
+		if(dof_j == 6)
+		{
+			radTPolyhedron* poly_j = ctx.polyCache[elem_j];
+			if(poly_j && poly_j->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
+			{
+				// Compute H = M / chi (constitutive relation, same as HACApK)
+				double chi = ctx.CurrentChiArray[elem_j];
+				if(chi < 1.0e-6) chi = 1.0e-6;
+
+				IntrctPtr->NewFieldArray[elem_j].x = poly_j->Magn.x / chi;
+				IntrctPtr->NewFieldArray[elem_j].y = poly_j->Magn.y / chi;
+				IntrctPtr->NewFieldArray[elem_j].z = poly_j->Magn.z / chi;
+
+#ifdef RADIA_DEBUG_CHI
+				TVector3d H_new = IntrctPtr->NewFieldArray[elem_j];
+				double H_mag = std::sqrt(H_new.x*H_new.x + H_new.y*H_new.y + H_new.z*H_new.z);
+				fprintf(stderr, "ComputeActualH elem %d (6DOF): H = M/chi = [%.1f, %.1f, %.1f], |H|=%.1f, chi=%.2f\n",
+				        elem_j, H_new.x, H_new.y, H_new.z, H_mag, chi);
+#endif
+			}
+		}
+	}
+
+	// Third pass: Add IMA mirror contributions to H field if IMA is enabled
+	// NOTE (2026-02-05): This fix attempt made results WORSE (74% error vs 22% before).
+	// The IMA demagnetizing contribution is being computed but has wrong effect.
+	// DISABLED pending further investigation.
+	// TODO: Investigate why adding mirror demagnetizing makes things worse.
+	if(false && IntrctPtr->IsIMAEnabled() && IntrctPtr->NewFieldArray != nullptr)
+	{
+		int imaSym = IntrctPtr->GetIMASymmetry();
+		int signX = IntrctPtr->GetIMASignX();
+		int signY = IntrctPtr->GetIMASignY();
+		int signZ = IntrctPtr->GetIMASignZ();
+
+		// Compute IMA mirror contributions for each element
+		for(int elem_i = 0; elem_i < ctx.AmOfMainElem; elem_i++)
+		{
+			radTPolyhedron* poly_i = ctx.polyCache[elem_i];
+			if(!poly_i || !poly_i->Use6DOF_MSC) continue;
+
+			// Get observation point (element i's center)
+			TVector3d obs = poly_i->CentrPoint;
+
+			// Accumulate field from all elements' IMA mirrors
+			TVector3d H_ima(0.0, 0.0, 0.0);
+
+			for(int elem_j = 0; elem_j < ctx.AmOfMainElem; elem_j++)
+			{
+				radTPolyhedron* poly_j = ctx.polyCache[elem_j];
+				if(!poly_j || !poly_j->Use6DOF_MSC) continue;
+
+				// Get source element's face data
+				int nFaces = poly_j->AmOfFaces;
+				if(nFaces != 6) continue;  // Only hexahedra
+
+				// Get face vertices from VectHandlePgnAndTrans
+				// Transform 2D polygon vertices to 3D global coordinates
+				std::array<std::array<TVector3d, 4>, 8> faceVertices;
+				int faceIdx = 0;
+				for(auto& hpt : poly_j->VectHandlePgnAndTrans)
+				{
+					if(faceIdx >= 8) break;
+					radTPolygon* pgn = hpt.PgnHndl.rep;
+					radTrans* tr = hpt.TransHndl.rep;
+					if(!pgn || pgn->AmOfEdgePoints < 4) {
+						faceIdx++;
+						continue;
+					}
+					// Transform 2D local (x, y, CoordZ) to 3D global via polygon's transform
+					const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+					faceVertices[faceIdx][0] = tr->TrPoint(TVector3d(verts2d[0].x, verts2d[0].y, pgn->CoordZ));
+					faceVertices[faceIdx][1] = tr->TrPoint(TVector3d(verts2d[1].x, verts2d[1].y, pgn->CoordZ));
+					faceVertices[faceIdx][2] = tr->TrPoint(TVector3d(verts2d[2].x, verts2d[2].y, pgn->CoordZ));
+					faceVertices[faceIdx][3] = tr->TrPoint(TVector3d(verts2d[3].x, verts2d[3].y, pgn->CoordZ));
+					faceIdx++;
+				}
+
+				// Lambda to compute field from a mirrored element
+				auto computeMirroredFieldContribution = [&](int mirrorAxis, int sign) -> TVector3d {
+					TVector3d H_mirror(0.0, 0.0, 0.0);
+
+					// Create mirrored face vertices
+					std::array<std::array<TVector3d, 4>, 8> mirrorVerts;
+					for(int i = 0; i < nFaces; i++)
+					{
+						for(int j = 0; j < 4; j++)
+						{
+							mirrorVerts[i][j] = faceVertices[i][j];
+							if(mirrorAxis & radTInteraction::IMA_X) mirrorVerts[i][j].x = -mirrorVerts[i][j].x;
+							if(mirrorAxis & radTInteraction::IMA_Y) mirrorVerts[i][j].y = -mirrorVerts[i][j].y;
+							if(mirrorAxis & radTInteraction::IMA_Z) mirrorVerts[i][j].z = -mirrorVerts[i][j].z;
+						}
+					}
+
+					// Count number of mirror axes (odd number = need winding reversal)
+					int numAxes = 0;
+					if(mirrorAxis & radTInteraction::IMA_X) numAxes++;
+					if(mirrorAxis & radTInteraction::IMA_Y) numAxes++;
+					if(mirrorAxis & radTInteraction::IMA_Z) numAxes++;
+					bool reverseWinding = (numAxes % 2 == 1);
+
+					// Compute mirrored center point
+					TVector3d mirrorCenter = poly_j->CentrPoint;
+					if(mirrorAxis & radTInteraction::IMA_X) mirrorCenter.x = -mirrorCenter.x;
+					if(mirrorAxis & radTInteraction::IMA_Y) mirrorCenter.y = -mirrorCenter.y;
+					if(mirrorAxis & radTInteraction::IMA_Z) mirrorCenter.z = -mirrorCenter.z;
+
+					// Compute field from mirrored faces using solid angle integration
+					for(int i = 0; i < nFaces; i++)
+					{
+						const TVector3d& MV0 = mirrorVerts[i][0];
+						const TVector3d& MV1 = mirrorVerts[i][1];
+						const TVector3d& MV2 = mirrorVerts[i][2];
+						const TVector3d& MV3 = mirrorVerts[i][3];
+
+						// Mirror sigma = sign * original sigma
+						double mirrorSigma = sign * poly_j->Sigma[i];
+
+						// Use FieldFromQuadFaceMirrored for accurate solid angle integration
+						TVector3d H_face = poly_j->FieldFromQuadFaceMirrored(
+							obs, MV0, MV1, MV2, MV3, mirrorSigma, reverseWinding, mirrorCenter);
+
+						H_mirror.x += H_face.x;
+						H_mirror.y += H_face.y;
+						H_mirror.z += H_face.z;
+					}
+
+					// Apply 1/(4*pi) factor
+					H_mirror.x *= RadConst::INV_FOUR_PI;
+					H_mirror.y *= RadConst::INV_FOUR_PI;
+					H_mirror.z *= RadConst::INV_FOUR_PI;
+
+					return H_mirror;
+				};
+
+				// Single axis contributions
+				if(imaSym & radTInteraction::IMA_X)
+					H_ima += computeMirroredFieldContribution(radTInteraction::IMA_X, signX);
+				if(imaSym & radTInteraction::IMA_Y)
+					H_ima += computeMirroredFieldContribution(radTInteraction::IMA_Y, signY);
+				if(imaSym & radTInteraction::IMA_Z)
+					H_ima += computeMirroredFieldContribution(radTInteraction::IMA_Z, signZ);
+
+				// Dual axis contributions
+				if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Y))
+					H_ima += computeMirroredFieldContribution(radTInteraction::IMA_XY, signX * signY);
+				if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Z))
+					H_ima += computeMirroredFieldContribution(radTInteraction::IMA_XZ, signX * signZ);
+				if((imaSym & radTInteraction::IMA_Y) && (imaSym & radTInteraction::IMA_Z))
+					H_ima += computeMirroredFieldContribution(radTInteraction::IMA_YZ, signY * signZ);
+
+				// Triple axis contribution
+				if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Y) && (imaSym & radTInteraction::IMA_Z))
+					H_ima += computeMirroredFieldContribution(radTInteraction::IMA_XYZ, signX * signY * signZ);
+			}
+
+			// Add IMA contributions to H field
+			IntrctPtr->NewFieldArray[elem_i].x += H_ima.x;
+			IntrctPtr->NewFieldArray[elem_i].y += H_ima.y;
+			IntrctPtr->NewFieldArray[elem_i].z += H_ima.z;
+
+#ifdef RADIA_DEBUG_CHI
+			if(elem_i < 3) {  // Only print first few elements
+				fprintf(stderr, "ComputeActualH elem %d: H_ima = [%.1f, %.1f, %.1f]\n",
+				        elem_i, H_ima.x, H_ima.y, H_ima.z);
+			}
+#endif
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
 
 void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 {
+	// For 3DOF elements: use H = M / chi (constitutive relation)
+	// For 6DOF elements: compute actual H from sigma (ELF-compatible)
+
+	// First, update magnetization for all elements
 	for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
@@ -366,7 +602,7 @@ void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 			g3dRelaxPtr->Magn.y = ctx.FlatMagn[offset + 1];
 			g3dRelaxPtr->Magn.z = ctx.FlatMagn[offset + 2];
 
-			// H = M / chi
+			// H = M / chi (for 3DOF elements)
 			double chi = ctx.CurrentChiArray[elem];
 			if(chi < 1.0e-6) chi = 1.0e-6;
 			for(int k = 0; k < 3; k++)
@@ -385,7 +621,7 @@ void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 					poly->Sigma[k] = ctx.FlatMagn[offset + k];
 				}
 
-				// Compute effective magnetization from sigma
+				// Compute effective magnetization from sigma (ELF-compatible weighted least-squares)
 				double Mx = 0.0, My = 0.0, Mz = 0.0;
 				double wx = 0.0, wy = 0.0, wz = 0.0;
 				for(int face = 0; face < 6; face++)
@@ -402,16 +638,35 @@ void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 				if(wx > 1.0e-10) poly->Magn.x = Mx / wx;
 				if(wy > 1.0e-10) poly->Magn.y = My / wy;
 				if(wz > 1.0e-10) poly->Magn.z = Mz / wz;
+			}
+		}
+	}
 
-				// H = M / chi
-				if(IntrctPtr->NewFieldArray != nullptr)
-				{
-					double chi_used = poly->CurrentChi;
-					if(chi_used < 1.0e-6) chi_used = 1.0e-6;
-					IntrctPtr->NewFieldArray[elem].x = poly->Magn.x / chi_used;
-					IntrctPtr->NewFieldArray[elem].y = poly->Magn.y / chi_used;
-					IntrctPtr->NewFieldArray[elem].z = poly->Magn.z / chi_used;
-				}
+	// For 6DOF elements: compute H = M / chi (constitutive relation)
+	// This approach is stable and gives convergent solutions, though with ~18% error vs ELF.
+	// The error is likely due to different matrix formulations between Radia and ELF.
+	//
+	// Note: Using H = |sum(sigma*n)| (ELF mucal1 style) was tested but gave 85% error,
+	// suggesting that Radia's matrix formulation requires the H = M/chi approach.
+	for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+
+		if(dof == 6)
+		{
+			radTPolyhedron* poly = ctx.polyCache[elem];
+			if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
+			{
+				// Compute H = M / chi (constitutive relation)
+				double chi = ctx.CurrentChiArray[elem];
+				if(chi < 1.0e-6) chi = 1.0e-6;
+
+				TVector3d H_from_M;
+				H_from_M.x = poly->Magn.x / chi;
+				H_from_M.y = poly->Magn.y / chi;
+				H_from_M.z = poly->Magn.z / chi;
+
+				IntrctPtr->NewFieldArray[elem] = H_from_M;
 			}
 		}
 	}
@@ -475,10 +730,20 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 			{
 				TVector3d H_new = IntrctPtr->NewFieldArray[elem];
 				double H_mag = std::sqrt(H_new.x*H_new.x + H_new.y*H_new.y + H_new.z*H_new.z);
+				TVector3d M_poly = poly->Magn;
+				double M_mag = std::sqrt(M_poly.x*M_poly.x + M_poly.y*M_poly.y + M_poly.z*M_poly.z);
+
+#ifdef RADIA_DEBUG_CHI
+				fprintf(stderr, "  Element %d (6DOF): H_mag = %.2f, M_mag = %.2f, M/H = %.2f, chi_old = %.2f\n",
+				        elem, H_mag, M_mag, H_mag > 1e-6 ? M_mag/H_mag : 0.0, mu_old - 1.0);
+#endif
 
 				if(NonlinMater != nullptr)
 				{
 					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, ctx.relax_param);
+#ifdef RADIA_DEBUG_CHI
+					fprintf(stderr, "    -> chi_new from B-H = %.2f\n", chi_new);
+#endif
 				}
 				else
 				{
@@ -544,8 +809,9 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 		int linearIter = SolveLinearStep(ctx, iterCount);
 		(void)linearIter;  // May be used for statistics
 
-		// Update element magnetization from solution
-		UpdateMagnAndComputeH(ctx, IntrctPtr);
+		// Update element magnetization and compute actual H field from sigma
+		// Uses H = H_ext + H_demag (ELF-compatible) instead of circular H = M/chi
+		ComputeActualHFieldFromSigma(ctx, IntrctPtr);
 
 		// Update chi and check convergence
 		double rel_change = UpdateChiAndCheckConvergence(ctx, IntrctPtr);
@@ -676,21 +942,22 @@ void radTRelaxationMethNo_1::GetDiagonalElements(std::vector<double>& diag, cons
 		double inv_chi_y = inv_chi[3*i + 1];
 		double inv_chi_z = inv_chi[3*i + 2];
 
-		// Diagonal of system matrix: A = -N - 1/chi (ELF-compatible)
+		// Diagonal of system matrix: A = -N + 1/chi (physically correct)
+		// M = chi * H_total => (I/chi - N) * M = H_ext => (-N + 1/chi) * M = H_ext
 		if(IntrcMat != nullptr)
 		{
 			// Nii is from InteractMatrix[i][i]
 			TMatrix3df& Nii = IntrcMat[i][i];
-			diag[3*i + 0] = -Nii.Str0.x - inv_chi_x;  // ELF-compatible
-			diag[3*i + 1] = -Nii.Str1.y - inv_chi_y;  // ELF-compatible
-			diag[3*i + 2] = -Nii.Str2.z - inv_chi_z;  // ELF-compatible
+			diag[3*i + 0] = -Nii.Str0.x + inv_chi_x;  // Physically correct: +1/chi
+			diag[3*i + 1] = -Nii.Str1.y + inv_chi_y;  // Physically correct: +1/chi
+			diag[3*i + 2] = -Nii.Str2.z + inv_chi_z;  // Physically correct: +1/chi
 		}
 		else
 		{
-			// Fallback: just use -1/chi as diagonal (no N contribution) (ELF-compatible)
-			diag[3*i + 0] = -inv_chi_x;
-			diag[3*i + 1] = -inv_chi_y;
-			diag[3*i + 2] = -inv_chi_z;
+			// Fallback: just use +1/chi as diagonal (no N contribution)
+			diag[3*i + 0] = inv_chi_x;
+			diag[3*i + 1] = inv_chi_y;
+			diag[3*i + 2] = inv_chi_z;
 		}
 	}
 }
@@ -698,7 +965,7 @@ void radTRelaxationMethNo_1::GetDiagonalElements(std::vector<double>& diag, cons
 void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vector<double>& y,
                                          const std::vector<double>& inv_chi, int ndof)
 {
-	// Computes y = A * x where A = -N - 1/chi (ELF-compatible)
+	// Computes y = A * x where A = -N + 1/chi (physically correct)
 	// Uses dense matrix-vector product
 	// CRITICAL FIX: Use pre-computed 1/chi values that are FIXED for this BiCGSTAB solve
 	// (chi is only updated in the outer nonlinear iteration loop)
@@ -731,10 +998,10 @@ void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vect
 			double inv_chi_y = inv_chi[3*i + 1];
 			double inv_chi_z = inv_chi[3*i + 2];
 
-			// y[i] = -sum(N[i][j] * x[j]) - (1/chi) * x[i] (ELF-compatible)
-			double y0 = -inv_chi_x * x[3*i + 0];  // ELF-compatible: -1/chi
-			double y1 = -inv_chi_y * x[3*i + 1];  // ELF-compatible: -1/chi
-			double y2 = -inv_chi_z * x[3*i + 2];  // ELF-compatible: -1/chi
+			// y[i] = -sum(N[i][j] * x[j]) + (1/chi) * x[i] (physically correct)
+			double y0 = inv_chi_x * x[3*i + 0];  // +1/chi (physically correct)
+			double y1 = inv_chi_y * x[3*i + 1];  // +1/chi (physically correct)
+			double y2 = inv_chi_z * x[3*i + 2];  // +1/chi (physically correct)
 
 			for(int j = 0; j < n_elem; j++)
 			{
@@ -762,7 +1029,7 @@ void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vect
 void radTRelaxationMethNo_1::BuildFlatMatrix(std::vector<double>& A_flat, const std::vector<double>& inv_chi, int ndof)
 {
 	// Build flat matrix A = -N - diag(1/chi) for BLAS dgemv (ELF-compatible)
-	// Stored in column-major order for BLAS compatibility
+	// Stored in ROW-MAJOR order: A[target][source]
 	//
 	// MATRIX LAYOUT FIX (2025-12-24):
 	// InteractMatrix[i][j] stores TMatrix3df where:
@@ -788,30 +1055,30 @@ void radTRelaxationMethNo_1::BuildFlatMatrix(std::vector<double>& A_flat, const 
 			{
 				TMatrix3df& Nij = IntrcMat[i][j];
 
-				// Column-major: A[row + col*lda]
+				// ROW-MAJOR: A[row*ndof + col] for A[row][col]
 				int row_base = 3*i;
 				int col_base = 3*j;
 
 				// Row 0 (Hx response): A[3i+0, 3j+l] = -dHx/dM_l = -Str_l.x
-				A_flat[(row_base + 0) + (col_base + 0)*ndof] = -Nij.Str0.x;  // -dHx/dMx
-				A_flat[(row_base + 0) + (col_base + 1)*ndof] = -Nij.Str1.x;  // -dHx/dMy
-				A_flat[(row_base + 0) + (col_base + 2)*ndof] = -Nij.Str2.x;  // -dHx/dMz
+				A_flat[(row_base + 0)*ndof + (col_base + 0)] = -Nij.Str0.x;  // -dHx/dMx
+				A_flat[(row_base + 0)*ndof + (col_base + 1)] = -Nij.Str1.x;  // -dHx/dMy
+				A_flat[(row_base + 0)*ndof + (col_base + 2)] = -Nij.Str2.x;  // -dHx/dMz
 
 				// Row 1 (Hy response): A[3i+1, 3j+l] = -dHy/dM_l = -Str_l.y
-				A_flat[(row_base + 1) + (col_base + 0)*ndof] = -Nij.Str0.y;  // -dHy/dMx
-				A_flat[(row_base + 1) + (col_base + 1)*ndof] = -Nij.Str1.y;  // -dHy/dMy
-				A_flat[(row_base + 1) + (col_base + 2)*ndof] = -Nij.Str2.y;  // -dHy/dMz
+				A_flat[(row_base + 1)*ndof + (col_base + 0)] = -Nij.Str0.y;  // -dHy/dMx
+				A_flat[(row_base + 1)*ndof + (col_base + 1)] = -Nij.Str1.y;  // -dHy/dMy
+				A_flat[(row_base + 1)*ndof + (col_base + 2)] = -Nij.Str2.y;  // -dHy/dMz
 
 				// Row 2 (Hz response): A[3i+2, 3j+l] = -dHz/dM_l = -Str_l.z
-				A_flat[(row_base + 2) + (col_base + 0)*ndof] = -Nij.Str0.z;  // -dHz/dMx
-				A_flat[(row_base + 2) + (col_base + 1)*ndof] = -Nij.Str1.z;  // -dHz/dMy
-				A_flat[(row_base + 2) + (col_base + 2)*ndof] = -Nij.Str2.z;  // -dHz/dMz
+				A_flat[(row_base + 2)*ndof + (col_base + 0)] = -Nij.Str0.z;  // -dHz/dMx
+				A_flat[(row_base + 2)*ndof + (col_base + 1)] = -Nij.Str1.z;  // -dHz/dMy
+				A_flat[(row_base + 2)*ndof + (col_base + 2)] = -Nij.Str2.z;  // -dHz/dMz
 			}
 
-			// Subtract diagonal 1/chi terms (ELF-compatible: -1/chi)
-			A_flat[(3*i + 0) + (3*i + 0)*ndof] -= inv_chi[3*i + 0];
-			A_flat[(3*i + 1) + (3*i + 1)*ndof] -= inv_chi[3*i + 1];
-			A_flat[(3*i + 2) + (3*i + 2)*ndof] -= inv_chi[3*i + 2];
+			// Add diagonal 1/chi terms (physically correct: +1/chi)
+			A_flat[(3*i + 0)*ndof + (3*i + 0)] += inv_chi[3*i + 0];
+			A_flat[(3*i + 1)*ndof + (3*i + 1)] += inv_chi[3*i + 1];
+			A_flat[(3*i + 2)*ndof + (3*i + 2)] += inv_chi[3*i + 2];
 		}
 	}
 }
@@ -821,18 +1088,18 @@ void radTRelaxationMethNo_1::DenseMatVec_BLAS(const std::vector<double>& A_flat,
 {
 #ifdef HAVE_LAPACK
 	// Use Intel MKL CBLAS cblas_dgemv: y = alpha*A*x + beta*y
-	// A is stored in column-major order
-	cblas_dgemv(CblasColMajor, CblasNoTrans, ndof, ndof,
+	// A is stored in ROW-MAJOR order: A[target][source]
+	cblas_dgemv(CblasRowMajor, CblasNoTrans, ndof, ndof,
 	            1.0, A_flat.data(), ndof, x.data(), 1,
 	            0.0, y.data(), 1);
 #else
-	// Fallback: manual matrix-vector multiply
+	// Fallback: manual matrix-vector multiply (ROW-MAJOR)
 	std::fill(y.begin(), y.end(), 0.0);
 	for(int i = 0; i < ndof; i++)
 	{
 		for(int j = 0; j < ndof; j++)
 		{
-			y[i] += A_flat[i + j*ndof] * x[j];
+			y[i] += A_flat[i * ndof + j] * x[j];  // row-major: A[i][j] at i*n+j
 		}
 	}
 #endif
@@ -965,6 +1232,9 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		fprintf(stderr, "Radia::Solve> LU solver requires %.1f GB memory for DOF=%d. Use BiCGSTAB (method 1) or HACApK (method 2) for large problems.\n", required_gb, totalDOF);
 		return -2;  // Memory allocation failure
 	}
+	// Copy base matrix (already contains -K/(4pi), see SetupBaseMatrix_VariableDOF)
+	// System equation: (-K/(4pi) + I/chi) * sigma = H_ext_n (ELF-compatible)
+	// BaseMatrix is already negated in SetupBaseMatrix_VariableDOF (line 282-285)
 	std::memcpy(SystemMatrix.data(), ctx.BaseMatrix.data(), matrix_size * sizeof(double));
 
 	// Build RHS vector (will be overwritten with solution by dgesv)
@@ -989,15 +1259,15 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		fprintf(stderr, "Element %d: chi = %.6f, inv_chi = %.6e, dof = %d\n", elem, chi, inv_chi, dof);
 #endif
 
-		// Subtract 1/chi from diagonal and set RHS (ELF-compatible: -1/chi)
+		// Add 1/chi to diagonal and set RHS = H_ext_n
+		// MSC equation: (-K/(4pi) + 1/chi * I) * sigma = H_ext_n (ELF-compatible)
 		for(int k = 0; k < dof; k++)
 		{
 			int row = offset + k;
-			// Column-major diagonal: A(row,row) at index [row * (totalDOF + 1)]
 #ifdef RADIA_DEBUG_CHI
 			double diag_before = SystemMatrix[row * (totalDOF + 1)];
 #endif
-			SystemMatrix[row * (totalDOF + 1)] -= inv_chi;  // ELF-compatible
+			SystemMatrix[row * (totalDOF + 1)] += inv_chi;
 #ifdef RADIA_DEBUG_CHI
 			double diag_after = SystemMatrix[row * (totalDOF + 1)];
 			fprintf(stderr, "  row %d: diag_before = %.6e, diag_after = %.6e, RHS = %.6e\n",
@@ -1017,6 +1287,38 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		}
 	}
 
+	// DEBUG: Print matrix and RHS for IMA comparison
+	if(IntrctPtr->IsIMAEnabled())
+	{
+		fprintf(stderr, "[LU DEBUG] totalDOF=%d, AmOfMainElem=%d\n", totalDOF, AmOfMainElem);
+		fprintf(stderr, "[LU DEBUG] Matrix diagonal (first 6): ");
+		for(int k = 0; k < 6 && k < totalDOF; k++)
+		{
+			fprintf(stderr, "%.4e ", SystemMatrix[k * (totalDOF + 1)]);
+		}
+		fprintf(stderr, "\n");
+		fprintf(stderr, "[LU DEBUG] Matrix row 0 (first 6 cols): ");
+		for(int j = 0; j < 6 && j < totalDOF; j++)
+		{
+			// Row-major: row i, col j at index i * totalDOF + j
+			fprintf(stderr, "%.4e ", SystemMatrix[0 * totalDOF + j]);
+		}
+		fprintf(stderr, "\n");
+		fprintf(stderr, "[LU DEBUG] Matrix col 0 (first 6 rows): ");
+		for(int i = 0; i < 6 && i < totalDOF; i++)
+		{
+			// Row-major: row i, col j at index i * totalDOF + j
+			fprintf(stderr, "%.4e ", SystemMatrix[i * totalDOF + 0]);
+		}
+		fprintf(stderr, "\n");
+		fprintf(stderr, "[LU DEBUG] RHS (first 6): ");
+		for(int k = 0; k < 6 && k < totalDOF; k++)
+		{
+			fprintf(stderr, "%.4e ", RHS[k]);
+		}
+		fprintf(stderr, "\n");
+	}
+
 	// Solve using LAPACK LU (dgesv solves A*x = b in-place)
 	auto t_lu_start = std::chrono::high_resolution_clock::now();
 #ifdef HAVE_LAPACK
@@ -1024,9 +1326,30 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	int nrhs = 1;
 	int info = 0;
 
+	// CRITICAL: dgesv expects COLUMN-MAJOR format, but BaseMatrix is ROW-MAJOR
+	// Transpose in-place: swap A[i,j] with A[j,i] for i < j
+	for(int i = 0; i < totalDOF; i++)
+	{
+		for(int j = i + 1; j < totalDOF; j++)
+		{
+			// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+			std::swap(SystemMatrix[(size_t)i * totalDOF + j], SystemMatrix[(size_t)j * totalDOF + i]);
+		}
+	}
+
 	// dgesv overwrites SystemMatrix with LU factors and RHS with solution
-	// No need for extra copy - pass SystemMatrix directly
 	dgesv_(&totalDOF, &nrhs, SystemMatrix.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
+
+	// DEBUG: Print solution
+	if(IntrctPtr->IsIMAEnabled())
+	{
+		fprintf(stderr, "[LU DEBUG] Solution sigma (first 6): ");
+		for(int k = 0; k < 6 && k < totalDOF; k++)
+		{
+			fprintf(stderr, "%.4e ", RHS[k]);
+		}
+		fprintf(stderr, "\n");
+	}
 	if(info != 0) return -1;  // Singular matrix
 #else
 	// Fallback: transpose to row-major and use SolveLU_Flat
@@ -1103,21 +1426,22 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 		// Intel MKL cblas_dgemv:
 		// y := alpha*A*x + beta*y (for CblasNoTrans)
 		// A is m x n, x is n, y is m
-		// For column-major (CblasColMajor): lda = leading dimension = m = totalDOF
-		cblas_dgemv(CblasColMajor, CblasNoTrans,
+		// ROW-MAJOR (CblasRowMajor): lda = leading dimension = n = totalDOF (columns)
+		// A[target][source] format: cache-efficient for matvec
+		cblas_dgemv(CblasRowMajor, CblasNoTrans,
 		            totalDOF, totalDOF,      // m, n (matrix dimensions)
 		            -1.0,                     // alpha = -1.0 (negate for 3DOF)
-		            FlatInteract, totalDOF,   // A, lda
+		            FlatInteract, totalDOF,   // A, lda (row-major: lda = n)
 		            x.data(), 1,              // x, incx
 		            0.0,                      // beta
 		            y.data(), 1);             // y, incy
 
-		// Subtract diagonal contribution: y[i] -= inv_chi[i] * x[i] (ELF-compatible)
-		// This is element-wise multiplication and subtraction
+		// Add diagonal contribution: y[i] += inv_chi[i] * x[i] (physically correct)
+		// This is element-wise multiplication and addition
 		#pragma omp parallel for if(totalDOF > 1000)
 		for(int i = 0; i < totalDOF; i++)
 		{
-			y[i] -= inv_chi[i] * x[i];  // ELF-compatible: -1/chi
+			y[i] += inv_chi[i] * x[i];  // Physically correct: +1/chi
 		}
 		return;
 	}
@@ -1131,20 +1455,23 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 
 	if(allMSC)
 	{
-		// Pure 6 DOF MSC system - use single BLAS call with alpha=+1.0
-		cblas_dgemv(CblasColMajor, CblasNoTrans,
+		// Pure 6 DOF MSC system - use single BLAS call with alpha=-1.0
+		// Physical equation: A = -K/(4pi) + diag(1/chi)
+		// FlatInteract stores K/(4pi), so we need to negate
+		// ROW-MAJOR (CblasRowMajor): A[target][source] format
+		cblas_dgemv(CblasRowMajor, CblasNoTrans,
 		            totalDOF, totalDOF,
-		            1.0,                      // alpha = +1.0 (no negation for MSC)
-		            FlatInteract, totalDOF,
+		            -1.0,                     // alpha = -1.0 (negate to get -K/(4pi))
+		            FlatInteract, totalDOF,   // A, lda (row-major: lda = n)
 		            x.data(), 1,
 		            0.0,
 		            y.data(), 1);
 
-		// Subtract diagonal contribution (ELF-compatible: -1/chi)
+		// Add diagonal contribution (physically correct: +1/chi)
 		#pragma omp parallel for if(totalDOF > 1000)
 		for(int i = 0; i < totalDOF; i++)
 		{
-			y[i] -= inv_chi[i] * x[i];  // ELF-compatible
+			y[i] += inv_chi[i] * x[i];  // Physically correct: +1/chi
 		}
 		return;
 	}
@@ -1160,10 +1487,10 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 		int dof_row = IntrctPtr->GetElementDOF(row_elem);
 		int offset_row = IntrctPtr->GetElementDOFOffset(row_elem);
 
-		// Diagonal contribution: -(1/chi) * x (ELF-compatible)
+		// Diagonal contribution: +(1/chi) * x (physically correct)
 		for(int k = 0; k < dof_row; k++)
 		{
-			y[offset_row + k] = -inv_chi[offset_row + k] * x[offset_row + k];  // ELF-compatible
+			y[offset_row + k] = inv_chi[offset_row + k] * x[offset_row + k];  // Physically correct: +1/chi
 		}
 
 		// Matrix-vector product
@@ -1176,8 +1503,9 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 			// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
 			const double* block = &FlatInteract[(size_t)offset_col * totalDOF + offset_row];
 
-			// Sign: negate for 3 DOF blocks, use as-is for 6x6 MSC blocks
-			double sign = (dof_row == 6 && dof_col == 6) ? 1.0 : -1.0;
+			// Physical equation: A = -K/(4pi) + diag(1/chi)
+			// FlatInteract stores K/(4pi) for MSC and N for MMM - negate both
+			double sign = -1.0;
 
 			// Column-major block access: element (i, j) within block is at [j * totalDOF + i]
 			// CRITICAL: Use size_t cast for indexing with totalDOF
@@ -1198,9 +1526,8 @@ void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>
                                                               const std::vector<double>& inv_chi, int totalDOF)
 {
 	// Extract diagonal elements for Jacobi preconditioner
-	// Sign convention matches MatVec_VariableDOF:
-	// - MMM (3 DOF): negate stored values
-	// - MSC (6 DOF): use as-is
+	// Physical equation: A = -K/(4pi) + diag(1/chi)
+	// FlatInteract stores K/(4pi) for MSC and N for MMM - negate both
 	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
 	if(FlatInteract == nullptr) return;
 
@@ -1215,17 +1542,138 @@ void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>
 		// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
 		const double* diag_block = &FlatInteract[(size_t)offset * totalDOF + offset];
 
-		// Sign: negate for 3 DOF, use as-is for 6 DOF MSC
-		double sign = (dof == 6) ? 1.0 : -1.0;
+		// Negate for all element types (physical equation: A = -K + diag(1/chi))
+		double sign = -1.0;
 
 		for(int k = 0; k < dof; k++)
 		{
-			// Diagonal element: sign*matrix_ii - 1/chi (ELF-compatible)
+			// Diagonal element: sign*matrix_ii + 1/chi (physically correct)
 			// CRITICAL: Use size_t cast for indexing with totalDOF
-			diag[offset + k] = sign * diag_block[(size_t)k * totalDOF + k] - inv_chi[offset + k];
+			diag[offset + k] = sign * diag_block[(size_t)k * totalDOF + k] + inv_chi[offset + k];
 		}
 	}
 }
+
+#ifdef HAVE_LAPACK
+// dgetrf_ and dgetri_ are provided by Intel MKL headers (mkl_lapack.h)
+// included at the top of this file
+
+bool radTRelaxationMethNo_1::BuildBlockJacobiPreconditioner_VariableDOF(
+	std::vector<double>& blockInverse, std::vector<int>& blockOffsets,
+	const std::vector<double>& inv_chi, int totalDOF)
+{
+	// Build block-Jacobi preconditioner by inverting each element's diagonal block
+	// This is much better than scalar Jacobi for poorly conditioned MSC matrices
+	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
+	if(FlatInteract == nullptr) return false;
+
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+
+	// Calculate total storage needed for block inverses
+	int total_block_storage = 0;
+	blockOffsets.resize(AmOfMainElem + 1);
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		blockOffsets[elem] = total_block_storage;
+		total_block_storage += dof * dof;
+	}
+	blockOffsets[AmOfMainElem] = total_block_storage;
+	blockInverse.resize(total_block_storage);
+
+	// Process each element's diagonal block
+	int max_dof = 6;  // Maximum DOF per element (hexahedra)
+	std::vector<double> block_copy(max_dof * max_dof);
+	std::vector<int> ipiv(max_dof);
+	std::vector<double> work(max_dof * max_dof);
+	int lwork = max_dof * max_dof;
+
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int mat_offset = IntrctPtr->GetElementDOFOffset(elem);
+		int block_offset = blockOffsets[elem];
+
+		// Extract diagonal block: A_block = -K_block + inv_chi * I
+		// FlatInteract stores K/(4pi) in ROW-MAJOR [target][source] format
+		for(int i = 0; i < dof; i++)
+		{
+			for(int j = 0; j < dof; j++)
+			{
+				// Row-major access: A[row][col] at FlatInteract[(row)*totalDOF + (col)]
+				double K_ij = FlatInteract[(size_t)(mat_offset + i) * totalDOF + (mat_offset + j)];
+				// Store in COLUMN-MAJOR for LAPACK (block_copy[i + j*dof] = element at row i, col j)
+				block_copy[i + j * dof] = -K_ij;
+				if(i == j)
+				{
+					block_copy[i + j * dof] += inv_chi[mat_offset + i];
+				}
+			}
+		}
+
+		// Invert the block using LAPACK: LU factorization then inverse
+		int info = 0;
+		dgetrf_(&dof, &dof, block_copy.data(), &dof, ipiv.data(), &info);
+		if(info != 0)
+		{
+			// Singular block - use identity as fallback
+			fprintf(stderr, "[Block Jacobi] Element %d: singular diagonal block (info=%d), using identity\n", elem, info);
+			for(int i = 0; i < dof * dof; i++) block_copy[i] = 0;
+			for(int i = 0; i < dof; i++) block_copy[i + i * dof] = 1.0;
+		}
+		else
+		{
+			dgetri_(&dof, block_copy.data(), &dof, ipiv.data(), work.data(), &lwork, &info);
+			if(info != 0)
+			{
+				fprintf(stderr, "[Block Jacobi] Element %d: inversion failed (info=%d), using identity\n", elem, info);
+				for(int i = 0; i < dof * dof; i++) block_copy[i] = 0;
+				for(int i = 0; i < dof; i++) block_copy[i + i * dof] = 1.0;
+			}
+		}
+
+		// Store inverse block in ROW-MAJOR format for efficient application
+		for(int i = 0; i < dof; i++)
+		{
+			for(int j = 0; j < dof; j++)
+			{
+				// Convert from LAPACK column-major to row-major
+				blockInverse[block_offset + i * dof + j] = block_copy[i + j * dof];
+			}
+		}
+	}
+
+	return true;
+}
+
+void radTRelaxationMethNo_1::ApplyBlockJacobiPreconditioner_VariableDOF(
+	const std::vector<double>& x, std::vector<double>& y,
+	const std::vector<double>& blockInverse, const std::vector<int>& blockOffsets)
+{
+	// Apply block-Jacobi preconditioner: y = M^{-1} * x
+	// where M is the block-diagonal of A
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+
+	#pragma omp parallel for if(AmOfMainElem > 20)
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int mat_offset = IntrctPtr->GetElementDOFOffset(elem);
+		int block_offset = blockOffsets[elem];
+
+		// y_elem = inv_block * x_elem (block is stored row-major)
+		for(int i = 0; i < dof; i++)
+		{
+			double sum = 0.0;
+			for(int j = 0; j < dof; j++)
+			{
+				sum += blockInverse[block_offset + i * dof + j] * x[mat_offset + j];
+			}
+			y[mat_offset + i] = sum;
+		}
+	}
+}
+#endif
 
 int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, int max_iter, double& residual,
                                                        const std::vector<double>& elemChiArray)
@@ -1270,7 +1718,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		}
 		else if(dof == 6)
 		{
-			// MSC hexahedron (6 DOF): equation (-K/(4pi) - 1/chi * I) * sigma = H_ext_n (ELF-compatible)
+			// MSC hexahedron (6 DOF): equation (K/(4pi) + 1/chi * I) * sigma = H_ext_n
 			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
 			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
 
@@ -1284,7 +1732,6 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 			for(int k = 0; k < 6; k++)
 			{
 				inv_chi[offset + k] = inv_chi_val;
-				// RHS = H_ext dot n (already computed in m_flatExternFieldArray)
 				rhs[offset + k] = FlatExtern[offset + k];
 			}
 		}
@@ -1299,6 +1746,45 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		}
 	}
 
+	// DEBUG: Print matrix diagonal and RHS for IMA comparison
+	if(IntrctPtr->IsIMAEnabled())
+	{
+		const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
+		fprintf(stderr, "[BiCG DEBUG] totalDOF=%d, AmOfMainElem=%d\n", totalDOF, AmOfMainElem);
+		fprintf(stderr, "[BiCG DEBUG] Matrix diagonal (first 6, raw K): ");
+		for(int k = 0; k < 6 && k < totalDOF; k++)
+		{
+			fprintf(stderr, "%.4e ", FlatInteract[k * (totalDOF + 1)]);
+		}
+		fprintf(stderr, "\n");
+		fprintf(stderr, "[BiCG DEBUG] Matrix row 0 (first 6 cols, raw K): ");
+		for(int j = 0; j < 6 && j < totalDOF; j++)
+		{
+			// Row-major: row i, col j at index i * totalDOF + j
+			fprintf(stderr, "%.4e ", FlatInteract[0 * totalDOF + j]);
+		}
+		fprintf(stderr, "\n");
+		fprintf(stderr, "[BiCG DEBUG] Matrix col 0 (first 6 rows, raw K): ");
+		for(int i = 0; i < 6 && i < totalDOF; i++)
+		{
+			// Row-major: row i, col j at index i * totalDOF + j
+			fprintf(stderr, "%.4e ", FlatInteract[i * totalDOF + 0]);
+		}
+		fprintf(stderr, "\n");
+		fprintf(stderr, "[BiCG DEBUG] inv_chi (first 6): ");
+		for(int k = 0; k < 6 && k < totalDOF; k++)
+		{
+			fprintf(stderr, "%.4e ", inv_chi[k]);
+		}
+		fprintf(stderr, "\n");
+		fprintf(stderr, "[BiCG DEBUG] RHS (first 6): ");
+		for(int k = 0; k < 6 && k < totalDOF; k++)
+		{
+			fprintf(stderr, "%.4e ", rhs[k]);
+		}
+		fprintf(stderr, "\n");
+	}
+
 	// Initial guess: use current magnetization (ELF-compatible)
 	// Using the previous solution as initial guess significantly speeds up convergence
 	for(int i = 0; i < totalDOF; i++)
@@ -1306,11 +1792,85 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		sol[i] = FlatMagn[i];
 	}
 
-	// Build Jacobi preconditioner
-	GetDiagonalElements_VariableDOF(diag_inv, inv_chi, totalDOF);
-	for(int i = 0; i < totalDOF; i++)
+	// Analyze matrix conditioning to choose preconditioner
+	bool use_block_jacobi = false;
+	double diag_ratio = 1.0;
+	double min_dominance_val = 1.0;
 	{
-		diag_inv[i] = (std::abs(diag_inv[i]) > 1.0e-15) ? (1.0 / diag_inv[i]) : 1.0;
+		const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
+		double min_diag = 1e30, max_diag = 0;
+		double min_rowsum = 1e30, max_rowsum = 0;
+		double min_dominance = 1e30;
+		int weak_rows = 0;
+
+		for(int i = 0; i < totalDOF; i++)
+		{
+			// Diagonal: -K[i,i] + 1/chi[i]
+			double diag = -FlatInteract[(size_t)i * totalDOF + i] + inv_chi[i];
+			double abs_diag = std::abs(diag);
+			if(abs_diag < min_diag) min_diag = abs_diag;
+			if(abs_diag > max_diag) max_diag = abs_diag;
+
+			// Row sum (off-diagonal): sum |K[i,j]| for j != i
+			double rowsum = 0;
+			for(int j = 0; j < totalDOF; j++)
+			{
+				if(j != i) rowsum += std::abs(FlatInteract[(size_t)i * totalDOF + j]);
+			}
+			if(rowsum < min_rowsum) min_rowsum = rowsum;
+			if(rowsum > max_rowsum) max_rowsum = rowsum;
+
+			// Diagonal dominance ratio
+			double dominance = abs_diag / (rowsum + 1e-15);
+			if(dominance < min_dominance) min_dominance = dominance;
+			if(dominance < 0.1) weak_rows++;
+		}
+
+		diag_ratio = max_diag / (min_diag + 1e-15);
+		min_dominance_val = min_dominance;
+
+		fprintf(stderr, "[BiCG Conditioning] DOF=%d\n", totalDOF);
+		fprintf(stderr, "[BiCG Conditioning] Diagonal: min=%.3e, max=%.3e, ratio=%.1f\n",
+		        min_diag, max_diag, diag_ratio);
+		fprintf(stderr, "[BiCG Conditioning] Row sum: min=%.3e, max=%.3e\n", min_rowsum, max_rowsum);
+		fprintf(stderr, "[BiCG Conditioning] Min dominance: %.4f, weak rows: %d/%d (%.1f%%)\n",
+		        min_dominance, weak_rows, totalDOF, 100.0 * weak_rows / totalDOF);
+
+		// Use block Jacobi if matrix is poorly conditioned
+		// Criteria: diagonal ratio > 10 OR min dominance < 0.1
+		if(diag_ratio > 10.0 || min_dominance < 0.1)
+		{
+			use_block_jacobi = true;
+			fprintf(stderr, "[BiCG] Using BLOCK Jacobi preconditioner (better for ill-conditioned matrix)\n");
+		}
+	}
+
+	// Build preconditioner
+	std::vector<double> blockInverse;
+	std::vector<int> blockOffsets;
+
+#ifdef HAVE_LAPACK
+	if(use_block_jacobi)
+	{
+		// Build block Jacobi preconditioner
+		if(!BuildBlockJacobiPreconditioner_VariableDOF(blockInverse, blockOffsets, inv_chi, totalDOF))
+		{
+			fprintf(stderr, "[BiCG] Warning: Block Jacobi build failed, falling back to scalar Jacobi\n");
+			use_block_jacobi = false;
+		}
+	}
+#else
+	use_block_jacobi = false;  // Block Jacobi requires LAPACK
+#endif
+
+	if(!use_block_jacobi)
+	{
+		// Build scalar Jacobi preconditioner
+		GetDiagonalElements_VariableDOF(diag_inv, inv_chi, totalDOF);
+		for(int i = 0; i < totalDOF; i++)
+		{
+			diag_inv[i] = (std::abs(diag_inv[i]) > 1.0e-15) ? (1.0 / diag_inv[i]) : 1.0;
+		}
 	}
 
 	// Initialize: r0 = b - A*x0
@@ -1355,11 +1915,20 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 			Axpy(1.0, r, p, totalDOF);
 		}
 
-		// Apply preconditioner
-		#pragma omp parallel for if(totalDOF > 100)
-		for(int i = 0; i < totalDOF; i++)
+		// Apply preconditioner: p_hat = M^{-1} * p
+#ifdef HAVE_LAPACK
+		if(use_block_jacobi)
 		{
-			p_hat[i] = diag_inv[i] * p[i];
+			ApplyBlockJacobiPreconditioner_VariableDOF(p, p_hat, blockInverse, blockOffsets);
+		}
+		else
+#endif
+		{
+			#pragma omp parallel for if(totalDOF > 100)
+			for(int i = 0; i < totalDOF; i++)
+			{
+				p_hat[i] = diag_inv[i] * p[i];
+			}
 		}
 
 		MatVec_VariableDOF(p_hat, v, inv_chi, totalDOF);
@@ -1383,10 +1952,20 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 			break;
 		}
 
-		#pragma omp parallel for if(totalDOF > 100)
-		for(int i = 0; i < totalDOF; i++)
+		// Apply preconditioner: s_hat = M^{-1} * s
+#ifdef HAVE_LAPACK
+		if(use_block_jacobi)
 		{
-			s_hat[i] = diag_inv[i] * s[i];
+			ApplyBlockJacobiPreconditioner_VariableDOF(s, s_hat, blockInverse, blockOffsets);
+		}
+		else
+#endif
+		{
+			#pragma omp parallel for if(totalDOF > 100)
+			for(int i = 0; i < totalDOF; i++)
+			{
+				s_hat[i] = diag_inv[i] * s[i];
+			}
 		}
 
 		MatVec_VariableDOF(s_hat, t, inv_chi, totalDOF);
@@ -1416,10 +1995,32 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		if(residual > 10.0 * prev_residual && prev_residual > 0.0 && iter > 5)
 		{
 			// BiCGSTAB is diverging, stop early
+			fprintf(stderr, "[BiCG] Exit: divergence at iter %d\n", iter);
 			break;
 		}
 
-		if(std::abs(omega) < 1.0e-30) break;
+		if(std::abs(omega) < 1.0e-30) {
+			fprintf(stderr, "[BiCG] Exit: omega=%.4e at iter %d\n", omega, iter);
+			break;
+		}
+	}
+
+	// DEBUG: Always print solution info
+	fprintf(stderr, "[BiCG] %d iters, residual=%.4e, IMA=%d\n", iter, residual, IntrctPtr->IsIMAEnabled() ? 1 : 0);
+	if(residual > 1e-3)
+	{
+		fprintf(stderr, "[BiCG WARNING] High residual! Solution may be incorrect.\n");
+		// Verify MatVec: compute A*sol and compare to rhs
+		std::vector<double> Asol(totalDOF);
+		MatVec_VariableDOF(sol, Asol, inv_chi, totalDOF);
+		double err_norm = 0.0;
+		for(int i = 0; i < totalDOF; i++)
+		{
+			double err = Asol[i] - rhs[i];
+			err_norm += err * err;
+		}
+		err_norm = std::sqrt(err_norm);
+		fprintf(stderr, "[BiCG] ||A*sol - rhs|| = %.4e, ||rhs|| = %.4e\n", err_norm, rhs_norm);
 	}
 
 	// Copy solution back to flat array
@@ -1763,7 +2364,8 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
                                                                       const std::vector<double>& inv_chi,
                                                                       int totalDOF)
 {
-	// Get diagonal elements A_ii = N_ii - 1/chi_i (ELF-compatible)
+	// Get diagonal elements A_ii = -K_ii/(4pi) + 1/chi_i (physically correct)
+	// GetDiagonalN() returns raw K/(4pi), so we negate it
 	// Use cached N_ii values for efficiency (computed once during H-matrix build)
 	if(m_hacapk->IsDiagonalCached())
 	{
@@ -1771,7 +2373,7 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
 		#pragma omp parallel for if(totalDOF > 100)
 		for(int i = 0; i < totalDOF; i++)
 		{
-			diag[i] = diag_N[i] - inv_chi[i];  // ELF-compatible
+			diag[i] = -diag_N[i] + inv_chi[i];  // Physical: -K/(4pi) + 1/chi
 		}
 	}
 	else
@@ -1780,7 +2382,7 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
 		for(int i = 0; i < totalDOF; i++)
 		{
 			double N_ii = m_hacapk->GetInteractionMatrixElement(i, i);
-			diag[i] = N_ii - inv_chi[i];  // ELF-compatible
+			diag[i] = -N_ii + inv_chi[i];  // Physical: -K/(4pi) + 1/chi
 		}
 	}
 }

@@ -164,13 +164,10 @@ static double normalize3(double* v) {
 /**
  * @brief Create hexahedral element from 8 vertices
  *
- * Face ordering follows ELF convention: [y-, x-, y+, x+, z-, z+]
+ * Face ordering follows ELF kkh array convention: Face 0-5
  *
- * ELF assigns faces based on GEOMETRY (face normal direction), not topology.
- * For each local axis direction, the face whose normal best aligns with
- * that direction is assigned to that DOF position.
- *
- * This handles sheared/rotated elements correctly.
+ * ELF assigns faces based on TOPOLOGY (vertex connectivity from kkh array).
+ * Each face is defined by the 4 vertices specified in the kkh array.
  *
  * @param vertices 8 vertices in CHEXA ordering
  * @param magnetization Magnetization vector [Mx, My, Mz] in A/m
@@ -198,30 +195,37 @@ int ObjHexahedron(py::list vertices, py::array_t<double> magnetization) {
         v[i][2] = flat_verts[i * 3 + 2];
     }
 
-    // ELF/CHEXA face definitions (1-indexed vertices)
-    // Face ordering: [y-, x+, y+, x-, z-, z+] - matches magic.f90 kkh array exactly
-    // Reference: magic.f90 lines 1122-1127 (kkh array)
-    // Note: When comparing with ELF matrices, apply permutation [3,2,1,0,5,4] to Radia output
-    static const int CHEXA_FACES[6][4] = {
-        {1, 2, 6, 5},  // Slot 0 (y-): kkh(:,1) - verts 1,2,6,5
-        {2, 3, 7, 6},  // Slot 1 (x+): kkh(:,2) - verts 2,3,7,6
-        {3, 4, 8, 7},  // Slot 2 (y+): kkh(:,3) - verts 3,4,8,7
-        {4, 1, 5, 8},  // Slot 3 (x-): kkh(:,4) - verts 4,1,5,8
-        {4, 3, 2, 1},  // Slot 4 (z-): kkh(:,5) - verts 4,3,2,1
-        {5, 6, 7, 8}   // Slot 5 (z+): kkh(:,6) - verts 5,6,7,8
+    // Netgen hexahedron vertex convention (1-indexed):
+    //      5----8      Vertices 1-4: z- (bottom)
+    //     /|   /|      Vertices 5-8: z+ (top)
+    //    6----7 |
+    //    | 1--|-4      Face vertex order: CCW when viewed from outside
+    //    |/   |/       -> outward normal by right-hand rule
+    //    2----3
+    //
+    // Face definitions (Netgen/ELF convention, 1-indexed):
+    //   Face 1 (index 0): z- = 1-2-3-4  (bottom)
+    //   Face 2 (index 1): x+ = 2-6-7-3  (right)
+    //   Face 3 (index 2): y- = 1-5-6-2  (front)
+    //   Face 4 (index 3): x- = 1-4-8-5  (left)
+    //   Face 5 (index 4): y+ = 3-7-8-4  (back)
+    //   Face 6 (index 5): z+ = 5-8-7-6  (top)
+    static const int NETGEN_FACES[6][4] = {
+        {1, 2, 3, 4},  // Face 0: z- (bottom)
+        {2, 6, 7, 3},  // Face 1: x+ (right)
+        {1, 5, 6, 2},  // Face 2: y- (front)
+        {1, 4, 8, 5},  // Face 3: x- (left)
+        {3, 7, 8, 4},  // Face 4: y+ (back)
+        {5, 8, 7, 6}   // Face 5: z+ (top)
     };
 
-    // Identity face ordering - ELF uses pure topology-based assignment
-    int face_order[6] = {0, 1, 2, 3, 4, 5};
-
-    // Build flat face array in ELF order using topology-based assignment
+    // Build flat face array in Netgen order
     std::vector<int> flatFaces;
     int faceLengths[6] = {4, 4, 4, 4, 4, 4};
 
-    for (int elf_slot = 0; elf_slot < 6; elf_slot++) {
-        int chexa_face = face_order[elf_slot];
+    for (int face_idx = 0; face_idx < 6; face_idx++) {
         for (int v_idx = 0; v_idx < 4; v_idx++) {
-            flatFaces.push_back(CHEXA_FACES[chexa_face][v_idx]);
+            flatFaces.push_back(NETGEN_FACES[face_idx][v_idx]);
         }
     }
 
@@ -1724,8 +1728,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
           R"pbdoc(
               Create hexahedral element from 8 vertices.
 
-              Vertices should be ordered as: bottom face (z-) counterclockwise,
-              then top face (z+) counterclockwise.
+              Vertices should be ordered as: bottom face (vertices 0-3) counterclockwise,
+              then top face (vertices 4-7) counterclockwise.
 
               Args:
                   vertices: List of 8 vertex coordinates [[x,y,z], ...]

@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **BiCGSTAB Block Jacobi Preconditioner for Ill-Conditioned Matrices**
+  - Added automatic block Jacobi preconditioner for distorted hexahedral meshes
+  - Scalar Jacobi fails when diagonal ratio > 10 or min dominance < 0.1
+  - Block Jacobi inverts each element's 6x6 diagonal block using LAPACK
+  - V304 mesh (74 elements with 45° skew): BiCGSTAB now converges (was diverging)
+  - Automatic detection based on matrix conditioning analysis
+
+## [1.7.0] - 2026-02-05
+
+### Fixed
+
+- **IMA (Image Method Analysis) Symmetry - Correct Sign Selection**
+  - Fixed IMA sign selection policy for combined symmetries (+x+y-z, etc.)
+  - Field parallel to mirror plane: use `+` (symmetric)
+  - Field perpendicular to mirror plane: use `-` (antisymmetric)
+  - Verified with 2-element and 8-element test cases (DOF reduction 48 -> 6)
+  - All test ratios = 1.0000 (exact match with full model)
+
+- **Netgen Face Normal Convention**
+  - Removed inside/outside check in `SetupFaceGeometry()`
+  - Face normals now computed mechanically from vertex winding order
+  - Follows Netgen convention: Face ordering 0=z-, 1=z+, 2=y-, 3=y+, 4=x-, 5=x+
+
+### Added
+
+- **IMA Verification Tests**
+  - `test_ima_2elem_linear.py`: 2 elements with shared boundary at z=0
+  - `test_ima_8elem_linear.py`: 8 elements (octants) with IMA +x+y-z
+  - Both tests verify magnetization and field computation match full model
+
+### Documentation
+
+- Updated CLAUDE.md with IMA sign selection policy
+- Documented IMA boundary element limitation (elements with faces ON symmetry plane)
+
 ## [1.6.0] - 2026-01-14
 
 ### Added
