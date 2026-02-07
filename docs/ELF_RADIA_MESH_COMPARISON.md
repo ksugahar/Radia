@@ -14,7 +14,7 @@ Radia と ELF_MAGIC は同じ MSC（Magnetic Surface Charge）法を使用して
 |------|---------------|-------------|
 | 行列格納順序 | Column-major | Row-major |
 | 対角成分符号 | 負 | 負（v1.4.4以降同一）|
-| 面の順序 | [x-,x+,y-,y+,z-,z+] (推定) | [z-,z+,y-,y+,x-,x+] |
+| 面の順序 | Face 0-5 (kkh array) | Face 0-5 (kkh array) |
 
 ### 変換結果
 

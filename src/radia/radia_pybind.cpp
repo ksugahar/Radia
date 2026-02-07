@@ -296,6 +296,93 @@ int ObjTetrahedron(py::list vertices, py::array_t<double> magnetization) {
 }
 
 /**
+ * @brief Create wedge/prism element from 6 vertices
+ *
+ * Wedge element with triangular top and bottom faces.
+ * 5 faces total: 2 triangular (top/bottom) + 3 quadrilateral (sides)
+ * 5 DOF for MSC method.
+ *
+ * Vertex convention (ELF MMB6T compatible):
+ *      3-----5
+ *     /|    /|
+ *    / |   / |
+ *   4-----+  |      Vertices 0-2: z- (bottom triangle)
+ *   |  0--|--2      Vertices 3-5: z+ (top triangle)
+ *   | /   | /       Bottom: v0, v1, v2 (CCW when viewed from below)
+ *   |/    |/        Top: v3, v4, v5 (CCW when viewed from above)
+ *   1-----+
+ *
+ * @param vertices 6 vertices in wedge order
+ * @param magnetization Magnetization vector [Mx, My, Mz] in A/m
+ * @return Object handle
+ */
+int ObjWedge(py::list vertices, py::array_t<double> magnetization) {
+    if (py::len(vertices) != 6) {
+        throw std::runtime_error("Wedge requires exactly 6 vertices");
+    }
+
+    auto [flat_verts, nv] = to_vertex_array(vertices);
+    auto m = magnetization.unchecked<1>();
+
+    if (m.size() != 3) {
+        throw std::runtime_error("magnetization must have 3 elements");
+    }
+
+    double M[3] = {m(0), m(1), m(2)};
+
+    // Wedge face definitions (1-indexed vertices)
+    // Face 0: bottom triangle (v0, v2, v1) - outward normal points -z
+    // Face 1: top triangle (v3, v4, v5) - outward normal points +z
+    // Face 2: quad side (v0, v1, v4, v3)
+    // Face 3: quad side (v1, v2, v5, v4)
+    // Face 4: quad side (v2, v0, v3, v5)
+
+    // Build flat face array (1-indexed for RadObjPolyhdr)
+    std::vector<int> flatFaces;
+    int faceLengths[5] = {3, 3, 4, 4, 4};
+
+    // Face 0: bottom triangle (CCW from below = CW from above)
+    flatFaces.push_back(1);  // v0
+    flatFaces.push_back(3);  // v2
+    flatFaces.push_back(2);  // v1
+
+    // Face 1: top triangle (CCW from above)
+    flatFaces.push_back(4);  // v3
+    flatFaces.push_back(5);  // v4
+    flatFaces.push_back(6);  // v5
+
+    // Face 2: front quad (v0, v1, v4, v3)
+    flatFaces.push_back(1);  // v0
+    flatFaces.push_back(2);  // v1
+    flatFaces.push_back(5);  // v4
+    flatFaces.push_back(4);  // v3
+
+    // Face 3: right quad (v1, v2, v5, v4)
+    flatFaces.push_back(2);  // v1
+    flatFaces.push_back(3);  // v2
+    flatFaces.push_back(6);  // v5
+    flatFaces.push_back(5);  // v4
+
+    // Face 4: left quad (v2, v0, v3, v5)
+    flatFaces.push_back(3);  // v2
+    flatFaces.push_back(1);  // v0
+    flatFaces.push_back(4);  // v3
+    flatFaces.push_back(6);  // v5
+
+    int handle = 0;
+    double M_LinCoef[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    double J[3] = {0, 0, 0};
+    double J_LinCoef[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    int err = RadObjPolyhdr(&handle, flat_verts.data(), nv,
+                           flatFaces.data(), faceLengths, 5,
+                           M, M_LinCoef, J, J_LinCoef);
+    check_error(err);
+
+    return handle;
+}
+
+/**
  * @brief Create container for objects
  *
  * @param objects List of object handles
@@ -1746,6 +1833,28 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Args:
                   vertices: List of 4 vertex coordinates [[x,y,z], ...]
+                  magnetization: Magnetization vector [Mx, My, Mz] in A/m
+
+              Returns:
+                  Object handle
+          )pbdoc");
+
+    m.def("ObjWedge", &radia_objects::ObjWedge,
+          py::arg("vertices"), py::arg("magnetization"),
+          R"pbdoc(
+              Create wedge/prism element from 6 vertices.
+
+              Wedge element with triangular top and bottom faces.
+              5 faces total: 2 triangular (top/bottom) + 3 quadrilateral (sides).
+              5 DOF for MSC method.
+
+              Vertex ordering (ELF MMB6T compatible):
+                  Bottom triangle: vertices 0, 1, 2 (CCW when viewed from below)
+                  Top triangle: vertices 3, 4, 5 (CCW when viewed from above)
+                  v3-v5 are directly above v0-v2 respectively.
+
+              Args:
+                  vertices: List of 6 vertex coordinates [[x,y,z], ...]
                   magnetization: Magnetization vector [Mx, My, Mz] in A/m
 
               Returns:

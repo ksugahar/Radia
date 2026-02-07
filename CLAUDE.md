@@ -283,9 +283,9 @@ Radia supports two solver methods:
 
 **Note**: Radia does NOT use BEM (Boundary Element Method). The MSC method uses surface charges but differs from classical BEM.
 
-### Mixed Hex/Tetra Element Support (2025-12-26)
+### Mixed Element Support (2025-12-26, Updated 2026-02-07)
 
-Radia supports **mixed meshes** containing both hexahedral (6DOF) and tetrahedral (3DOF) elements.
+Radia supports **mixed meshes** containing hexahedral (6DOF), wedge (5DOF), and tetrahedral (3DOF) elements.
 
 **Solver Compatibility**:
 
@@ -293,15 +293,26 @@ Radia supports **mixed meshes** containing both hexahedral (6DOF) and tetrahedra
 |--------|----------------|-------|
 | LU (Method 0) | **Supported** | Dense LU with variable DOF blocks |
 | BiCGSTAB (Method 1) | **Supported** | Iterative solver with variable DOF |
-| HACApK (Method 2) | NOT Supported | HACApK cluster tree requires uniform DOF |
+| HACApK (Method 2) | **Supported** | Variable DOF mode with flat matrix precomputation |
 
-**Note**: HACApK's cluster tree algorithm assumes fixed DOF per element. For mixed meshes, use LU (small problems) or BiCGSTAB (large problems).
+**Note**: HACApK uses variable DOF mode (`m_is_mixed_dof`) for meshes containing wedges or mixed element types.
+
+**IMA (Image Method of Analysis) Compatibility**:
+
+| Element Type | IMA Support | Notes |
+|--------------|-------------|-------|
+| Hexahedron (6DOF) | **Supported** | Fast path with precomputed triangle data |
+| Wedge (5DOF) | **Supported** | Generic path with FieldFromFaceMirrored |
+| Tetrahedron (3DOF) | **Supported** | MMM dipole mirror |
+| Mixed (hex+wedge) | **Supported** | Variable DOF IMA matrix building |
 
 **Interaction Matrix Blocks**:
 - **3x3 block** (tetra-tetra): Standard demagnetization tensor
-- **6x6 block** (hex-hex): Surface charge interaction (MSC)
-- **3x6 block** (tetra from hex): H-field at tetra center from hex face charges
-- **6x3 block** (hex from tetra): Normal dot N_matrix at hex eval points
+- **5x5 block** (wedge-wedge): Surface charge interaction (MSC, 5 faces)
+- **6x6 block** (hex-hex): Surface charge interaction (MSC, 6 faces)
+- **5x6 / 6x5 block** (wedge-hex): Cross-element MSC interaction
+- **3x6 / 3x5 block** (tetra from hex/wedge): H-field at tetra center from face charges
+- **6x3 / 5x3 block** (hex/wedge from tetra): Normal dot N_matrix at eval points
 
 **Usage**:
 ```python
@@ -2172,13 +2183,15 @@ Radia uses **MSC (Magnetic Surface Charge)** for all hexahedral elements:
 
 | Element Type | Faces | DOF | Python API | Use Case |
 |--------------|-------|-----|------------|----------|
-| **Tetrahedron** | 4 triangular | 3 (Mx, My, Mz) | `netgen_mesh_to_radia()` | Complex curved geometry |
-| **Hexahedron** | 6 quadrilateral | 6 (sigma per face) | `netgen_mesh_to_radia()` | Permanent magnets, soft iron |
+| **Tetrahedron** | 4 triangular | 3 (Mx, My, Mz) | `ObjTetrahedron()` | Complex curved geometry |
+| **Wedge** | 5 (2 tri + 3 quad) | 5 (sigma per face) | `ObjWedge()` | Transition elements in EIEM2 meshes |
+| **Hexahedron** | 6 quadrilateral | 6 (sigma per face) | `ObjHexahedron()` | Permanent magnets, soft iron |
 
-**Policy (2025-12-27, updated 2025-12-31)**:
-- **Python API**: Use `ObjHexahedron()` and `ObjTetrahedron()` for individual elements
+**Policy (2025-12-27, updated 2026-02-07)**:
+- **Python API**: Use `ObjHexahedron()`, `ObjWedge()`, and `ObjTetrahedron()` for individual elements
 - **Mesh import**: Use `netgen_mesh_to_radia()` for Netgen meshes
 - **Tetrahedron**: 3 DOF (Mx, My, Mz) - MMM method with uniform magnetization
+- **Wedge**: 5 DOF (sigma per face) - MSC method with surface charges on 2 tri + 3 quad faces
 - **Hexahedron**: 6 DOF (sigma per face) - MSC method with surface charges
 - 3 DOF hexahedron (MMM) is NOT supported - all hexahedra use 6 DOF MSC
 

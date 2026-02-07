@@ -208,7 +208,7 @@ bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPt
 		ctx.CurrentChiArray[elem] = chi_init;
 
 		// Store in poly->CurrentChi for 6DOF elements
-		if(dof == 6)
+		if(dof >= 5)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -232,7 +232,7 @@ bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPt
 				ctx.FlatField[offset + k] = ctx.FlatExtern[offset + k] * scale;
 			}
 		}
-		else if(dof == 6)
+		else if(dof >= 5)
 		{
 			for(int k = 0; k < dof; k++)
 			{
@@ -320,7 +320,7 @@ void StoreOldValuesAndComputeBnorm(NonlinearContext& ctx, radTInteraction* Intrc
 			TVector3d B(MU_0 * (H.x + M.x), MU_0 * (H.y + M.y), MU_0 * (H.z + M.z));
 			ctx.OldBnorm[elem] = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
 		}
-		else if(dof == 6)
+		else if(dof >= 5)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -348,19 +348,27 @@ void StoreOldValuesAndComputeBnorm(NonlinearContext& ctx, radTInteraction* Intrc
 
 void ComputeActualHFieldFromSigma(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 {
-	// First pass: store sigma values and compute M from sigma for all elements
+	// First pass: store magnetization/sigma values for all elements
 	for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
 		int offset = IntrctPtr->GetElementDOFOffset(elem);
 
-		if(dof == 6)
+		if(dof == 3)
+		{
+			// 3DOF elements (tetrahedra, wedges): FlatMagn contains M directly
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+			g3dRelaxPtr->Magn.x = ctx.FlatMagn[offset + 0];
+			g3dRelaxPtr->Magn.y = ctx.FlatMagn[offset + 1];
+			g3dRelaxPtr->Magn.z = ctx.FlatMagn[offset + 2];
+		}
+		else if(dof >= 5)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
 			{
-				// Store sigma values in polyhedron
-				for(int k = 0; k < 6; k++)
+				// Store sigma values in polyhedron (5 for wedge, 6 for hex)
+				for(int k = 0; k < dof; k++)
 				{
 					poly->Sigma[k] = ctx.FlatMagn[offset + k];
 				}
@@ -369,7 +377,7 @@ void ComputeActualHFieldFromSigma(NonlinearContext& ctx, radTInteraction* Intrct
 				// M_x = sum(sigma_i * n_x_i) / sum(n_x_i^2) (ELF-compatible)
 				double Mx = 0.0, My = 0.0, Mz = 0.0;
 				double wx = 0.0, wy = 0.0, wz = 0.0;
-				for(int face = 0; face < 6; face++)
+				for(int face = 0; face < dof; face++)
 				{
 					double sigma = poly->Sigma[face];
 					TVector3d& n = poly->FaceNormal[face];
@@ -409,8 +417,28 @@ void ComputeActualHFieldFromSigma(NonlinearContext& ctx, radTInteraction* Intrct
 	for(int elem_j = 0; elem_j < ctx.AmOfMainElem; elem_j++)
 	{
 		int dof_j = IntrctPtr->GetElementDOF(elem_j);
+		int offset_j = IntrctPtr->GetElementDOFOffset(elem_j);
 
-		if(dof_j == 6)
+		if(dof_j == 3)
+		{
+			// 3DOF elements: compute H = M / chi (constitutive relation)
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem_j];
+			double chi = ctx.CurrentChiArray[elem_j];
+			if(chi < 1.0e-6) chi = 1.0e-6;
+
+			if(IntrctPtr->NewFieldArray != nullptr)
+			{
+				IntrctPtr->NewFieldArray[elem_j].x = g3dRelaxPtr->Magn.x / chi;
+				IntrctPtr->NewFieldArray[elem_j].y = g3dRelaxPtr->Magn.y / chi;
+				IntrctPtr->NewFieldArray[elem_j].z = g3dRelaxPtr->Magn.z / chi;
+			}
+
+			// Also update FlatField for convergence check
+			ctx.FlatField[offset_j + 0] = g3dRelaxPtr->Magn.x / chi;
+			ctx.FlatField[offset_j + 1] = g3dRelaxPtr->Magn.y / chi;
+			ctx.FlatField[offset_j + 2] = g3dRelaxPtr->Magn.z / chi;
+		}
+		else if(dof_j >= 5)
 		{
 			radTPolyhedron* poly_j = ctx.polyCache[elem_j];
 			if(poly_j && poly_j->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
@@ -610,13 +638,13 @@ void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 				ctx.FlatField[offset + k] = ctx.FlatMagn[offset + k] / chi;
 			}
 		}
-		else if(dof == 6)
+		else if(dof >= 5)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
 			{
-				// Store sigma values
-				for(int k = 0; k < 6; k++)
+				// Store sigma values (5 for wedge, 6 for hex)
+				for(int k = 0; k < dof; k++)
 				{
 					poly->Sigma[k] = ctx.FlatMagn[offset + k];
 				}
@@ -624,7 +652,7 @@ void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 				// Compute effective magnetization from sigma (ELF-compatible weighted least-squares)
 				double Mx = 0.0, My = 0.0, Mz = 0.0;
 				double wx = 0.0, wy = 0.0, wz = 0.0;
-				for(int face = 0; face < 6; face++)
+				for(int face = 0; face < dof; face++)
 				{
 					double sigma = poly->Sigma[face];
 					TVector3d& n = poly->FaceNormal[face];
@@ -652,7 +680,7 @@ void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
 
-		if(dof == 6)
+		if(dof >= 5)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
@@ -723,7 +751,7 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 			if(B_rel_change > max_B_rel_change)
 				max_B_rel_change = B_rel_change;
 		}
-		else if(dof == 6)
+		else if(dof >= 5)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
@@ -1277,7 +1305,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		}
 
 		// Update poly->CurrentChi for 6DOF elements
-		if(dof == 6)
+		if(dof >= 5)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -1285,38 +1313,6 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 				poly->CurrentChi = chi;
 			}
 		}
-	}
-
-	// DEBUG: Print matrix and RHS for IMA comparison
-	if(IntrctPtr->IsIMAEnabled())
-	{
-		fprintf(stderr, "[LU DEBUG] totalDOF=%d, AmOfMainElem=%d\n", totalDOF, AmOfMainElem);
-		fprintf(stderr, "[LU DEBUG] Matrix diagonal (first 6): ");
-		for(int k = 0; k < 6 && k < totalDOF; k++)
-		{
-			fprintf(stderr, "%.4e ", SystemMatrix[k * (totalDOF + 1)]);
-		}
-		fprintf(stderr, "\n");
-		fprintf(stderr, "[LU DEBUG] Matrix row 0 (first 6 cols): ");
-		for(int j = 0; j < 6 && j < totalDOF; j++)
-		{
-			// Row-major: row i, col j at index i * totalDOF + j
-			fprintf(stderr, "%.4e ", SystemMatrix[0 * totalDOF + j]);
-		}
-		fprintf(stderr, "\n");
-		fprintf(stderr, "[LU DEBUG] Matrix col 0 (first 6 rows): ");
-		for(int i = 0; i < 6 && i < totalDOF; i++)
-		{
-			// Row-major: row i, col j at index i * totalDOF + j
-			fprintf(stderr, "%.4e ", SystemMatrix[i * totalDOF + 0]);
-		}
-		fprintf(stderr, "\n");
-		fprintf(stderr, "[LU DEBUG] RHS (first 6): ");
-		for(int k = 0; k < 6 && k < totalDOF; k++)
-		{
-			fprintf(stderr, "%.4e ", RHS[k]);
-		}
-		fprintf(stderr, "\n");
 	}
 
 	// Solve using LAPACK LU (dgesv solves A*x = b in-place)
@@ -1340,16 +1336,6 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	// dgesv overwrites SystemMatrix with LU factors and RHS with solution
 	dgesv_(&totalDOF, &nrhs, SystemMatrix.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
 
-	// DEBUG: Print solution
-	if(IntrctPtr->IsIMAEnabled())
-	{
-		fprintf(stderr, "[LU DEBUG] Solution sigma (first 6): ");
-		for(int k = 0; k < 6 && k < totalDOF; k++)
-		{
-			fprintf(stderr, "%.4e ", RHS[k]);
-		}
-		fprintf(stderr, "\n");
-	}
 	if(info != 0) return -1;  // Singular matrix
 #else
 	// Fallback: transpose to row-major and use SolveLU_Flat
@@ -1716,7 +1702,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 				rhs[offset + k] = FlatExtern[offset + k];
 			}
 		}
-		else if(dof == 6)
+		else if(dof >= 5)
 		{
 			// MSC hexahedron (6 DOF): equation (K/(4pi) + 1/chi * I) * sigma = H_ext_n
 			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
@@ -1729,7 +1715,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 
 			double inv_chi_val = 1.0 / chi;
 
-			for(int k = 0; k < 6; k++)
+			for(int k = 0; k < dof; k++)
 			{
 				inv_chi[offset + k] = inv_chi_val;
 				rhs[offset + k] = FlatExtern[offset + k];
@@ -1744,45 +1730,6 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 				rhs[offset + k] = FlatExtern[offset + k];
 			}
 		}
-	}
-
-	// DEBUG: Print matrix diagonal and RHS for IMA comparison
-	if(IntrctPtr->IsIMAEnabled())
-	{
-		const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
-		fprintf(stderr, "[BiCG DEBUG] totalDOF=%d, AmOfMainElem=%d\n", totalDOF, AmOfMainElem);
-		fprintf(stderr, "[BiCG DEBUG] Matrix diagonal (first 6, raw K): ");
-		for(int k = 0; k < 6 && k < totalDOF; k++)
-		{
-			fprintf(stderr, "%.4e ", FlatInteract[k * (totalDOF + 1)]);
-		}
-		fprintf(stderr, "\n");
-		fprintf(stderr, "[BiCG DEBUG] Matrix row 0 (first 6 cols, raw K): ");
-		for(int j = 0; j < 6 && j < totalDOF; j++)
-		{
-			// Row-major: row i, col j at index i * totalDOF + j
-			fprintf(stderr, "%.4e ", FlatInteract[0 * totalDOF + j]);
-		}
-		fprintf(stderr, "\n");
-		fprintf(stderr, "[BiCG DEBUG] Matrix col 0 (first 6 rows, raw K): ");
-		for(int i = 0; i < 6 && i < totalDOF; i++)
-		{
-			// Row-major: row i, col j at index i * totalDOF + j
-			fprintf(stderr, "%.4e ", FlatInteract[i * totalDOF + 0]);
-		}
-		fprintf(stderr, "\n");
-		fprintf(stderr, "[BiCG DEBUG] inv_chi (first 6): ");
-		for(int k = 0; k < 6 && k < totalDOF; k++)
-		{
-			fprintf(stderr, "%.4e ", inv_chi[k]);
-		}
-		fprintf(stderr, "\n");
-		fprintf(stderr, "[BiCG DEBUG] RHS (first 6): ");
-		for(int k = 0; k < 6 && k < totalDOF; k++)
-		{
-			fprintf(stderr, "%.4e ", rhs[k]);
-		}
-		fprintf(stderr, "\n");
 	}
 
 	// Initial guess: use current magnetization (ELF-compatible)
@@ -2046,7 +1993,7 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
-		if(dof == 6)
+		if(dof >= 5)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -2177,11 +2124,11 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, doub
 		int dof = IntrctPtr->GetElementDOF(elem);
 		int offset = IntrctPtr->GetElementDOFOffset(elem);
 
-		if(dof != 3 && dof != 6)
+		if(dof != 3 && dof < 5)
 		{
-			// HACApK supports 3DOF tetrahedra and 6DOF hexahedra
+			// HACApK supports 3DOF tetrahedra and 5/6DOF MSC elements (wedges/hexahedra)
 			std::cerr << "[HACApK] Error: Element " << elem << " has " << dof
-			          << " DOF, expected 3 (tetrahedra) or 6 (hexahedra)" << std::endl;
+			          << " DOF, expected 3 (tetrahedra), 5 (wedges), or 6 (hexahedra)" << std::endl;
 			return 0;
 		}
 
@@ -2204,7 +2151,7 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, doub
 				rhs[offset + k] = FlatExtern[offset + k];
 			}
 		}
-		else if(dof == 6)
+		else if(dof >= 5)
 		{
 			// For 6DOF MSC: use isotropic chi from poly->CurrentChi (same as BiCGSTAB)
 			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
@@ -2213,7 +2160,7 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, doub
 			if(chi < 1.0e-6) chi = 1.0e-6;
 			double inv_chi_val = 1.0 / chi;
 
-			for(int k = 0; k < 6; k++)
+			for(int k = 0; k < dof; k++)
 			{
 				inv_chi[offset + k] = inv_chi_val;
 				rhs[offset + k] = FlatExtern[offset + k];
@@ -2521,7 +2468,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			IntrctPtr->NewFieldArray[elem].y = FlatExtern[offset + 1] * scale;
 			IntrctPtr->NewFieldArray[elem].z = FlatExtern[offset + 2] * scale;
 		}
-		else if(dof == 6)
+		else if(dof >= 5)
 		{
 			// 6DOF MSC hexahedra: initialize FlatField and estimate H from external field
 			for(int k = 0; k < dof; k++)
@@ -2538,7 +2485,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				// Estimate H from sigma pattern: H ~ sum(sigma_i * n_i) / sum(n_i dot n_i)
 				double Hx = 0.0, Hy = 0.0, Hz = 0.0;
 				double wx = 0.0, wy = 0.0, wz = 0.0;
-				for(int face = 0; face < 6; face++)
+				for(int face = 0; face < dof; face++)
 				{
 					double sigma = FlatExtern[offset + face];
 					TVector3d& n = poly->FaceNormal[face];
@@ -2612,7 +2559,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		CurrentChiArray_hacapk[elem] = chi_init;
 
 		// For 6DOF elements, also store in poly->CurrentChi
-		if(dof == 6)
+		if(dof >= 5)
 		{
 			radTPolyhedron* poly = polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -2653,7 +2600,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				TVector3d B(MU_0 * (H.x + M.x), MU_0 * (H.y + M.y), MU_0 * (H.z + M.z));
 				OldBnorm[elem] = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
 			}
-			else if(dof == 6)
+			else if(dof >= 5)
 			{
 				radTPolyhedron* poly = polyCache[elem];
 				if(poly && poly->Use6DOF_MSC)
@@ -2723,13 +2670,13 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					IntrctPtr->NewFieldArray[elem].z = FlatField[offset + 2];
 				}
 			}
-			else if(dof == 6)
+			else if(dof >= 5)
 			{
 				radTPolyhedron* poly = polyCache[elem];
 				if(poly && poly->Use6DOF_MSC)
 				{
-					// Store sigma values
-					for(int k = 0; k < 6; k++)
+					// Store sigma values (5 for wedge, 6 for hex)
+					for(int k = 0; k < dof; k++)
 					{
 						poly->Sigma[k] = FlatMagn[offset + k];
 					}
@@ -2737,7 +2684,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					// Compute effective magnetization from sigma (same as LU solver)
 					double Mx = 0.0, My = 0.0, Mz = 0.0;
 					double wx = 0.0, wy = 0.0, wz = 0.0;
-					for(int face = 0; face < 6; face++)
+					for(int face = 0; face < dof; face++)
 					{
 						double sigma = poly->Sigma[face];
 						TVector3d& n = poly->FaceNormal[face];
@@ -2834,7 +2781,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				if(B_rel_change > max_B_rel_change)
 					max_B_rel_change = B_rel_change;
 			}
-			else if(dof == 6)
+			else if(dof >= 5)
 			{
 				has_6dof_elements = true;
 				radTPolyhedron* poly = polyCache[elem];
