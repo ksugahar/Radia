@@ -116,14 +116,15 @@ public:
 	short SomethingIsWrong;
 	radTPairOfDouble AuxPairOfDouble; // Used for cylindrical subdivision
 
-	// 6 DOF MSC support for hexahedra (2025-12-15)
-	// For 6-face hexahedra, we use surface charge density (sigma) on each face
+	// MSC (Magnetic Surface Charge) support for hexahedra and wedges
+	// For 5+ face elements, we use surface charge density (sigma) on each face
 	// instead of magnetization vector (Mx, My, Mz)
-	double Sigma[6];           // Surface charge densities for each face (6 DOF)
-	double FaceArea[6];        // Face areas
-	TVector3d FaceNormal[6];   // Face normals (outward)
-	TVector3d FaceCenter[6];   // Face centers
-	bool Use6DOF_MSC;          // Flag: true if hexahedron uses 6 DOF MSC
+	// Hexahedra: 6 faces -> 6 DOF, Wedges: 5 faces -> 5 DOF
+	double Sigma[6];           // Surface charge densities for each face (max 6 DOF)
+	double FaceArea[6];        // Face areas (max 6)
+	TVector3d FaceNormal[6];   // Face normals (outward, max 6)
+	TVector3d FaceCenter[6];   // Face centers (max 6)
+	bool Use6DOF_MSC;          // Flag: true if element uses per-face MSC (5+ faces)
 	double CurrentChi;         // Chi used for current solve (for H = M/chi update)
 
 	radTPolyhedron(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces, const TVector3d& InMagn)
@@ -135,7 +136,7 @@ public:
 		J_IsNotZero = false;
 
 		// Initialize 6 DOF MSC data for hexahedra
-		Use6DOF_MSC = (AmOfFaces == 6);
+		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
 		CurrentChi = 1.0;  // Default chi
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
@@ -160,7 +161,7 @@ public:
 		AmOfFaces = lenArrayOfFaces; SomethingIsWrong = 0;
 
 		// Initialize 6 DOF MSC data for hexahedra
-		Use6DOF_MSC = (AmOfFaces == 6);
+		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
 		CurrentChi = 1.0;  // Default chi
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
@@ -195,7 +196,7 @@ public:
 		J_IsNotZero = false;
 
 		// Initialize 6 DOF MSC data for hexahedra
-		Use6DOF_MSC = (AmOfFaces == 6);
+		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
 			FaceArea[i] = 0.0;
@@ -234,7 +235,7 @@ public:
 		DefineCentrPoint();
 
 		// Initialize 6 DOF MSC data for hexahedra
-		Use6DOF_MSC = (AmOfFaces == 6);
+		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
 			FaceArea[i] = 0.0;
@@ -296,7 +297,7 @@ public:
 		if(SomethingIsWrong) return;
 
 		// Now that AmOfFaces is set, update 6 DOF flag for hexahedra
-		Use6DOF_MSC = (AmOfFaces == 6);
+		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
 		if(Use6DOF_MSC) SetupFaceGeometry();
 
 		if(avgCur != 0)
@@ -331,7 +332,7 @@ public:
 		DumpBinParse_Polyhedron(inStr);
 
 		// Setup 6 DOF after parsing for hexahedra
-		Use6DOF_MSC = (AmOfFaces == 6);
+		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
 		if(Use6DOF_MSC) SetupFaceGeometry();
 	}
 	radTPolyhedron() : radTg3dRelax()
@@ -356,9 +357,10 @@ public:
 	}
 
 	int Type_g3dRelax() { return 5;}
-	// DOF: 6 for hexahedra (6 DOF MSC: sigma per face), 3 for tetrahedra (Mx, My, Mz)
+	// DOF: AmOfFaces for MSC elements (sigma per face), 3 for tetrahedra (Mx, My, Mz)
+	// Hexahedra: 6 DOF, Wedges: 5 DOF, Tetrahedra: 3 DOF
 	// Returns 0 if no material is applied (same behavior as radTRecMag)
-	int NumberOfDegOfFreedom() { return (MaterHandle.rep == 0) ? 0 : (Use6DOF_MSC ? 6 : 3); }
+	int NumberOfDegOfFreedom() { return (MaterHandle.rep == 0) ? 0 : (Use6DOF_MSC ? AmOfFaces : 3); }
 
 	void FillInVectHandlePgnAndTrans(TVector3d*, int, int**, int*);
 	void MakeNormalPresentation(TVector3d**, int*, TVector3d*&, int&, int**&);
@@ -376,10 +378,14 @@ public:
 
 	// Element type detection (MSC method support)
 	bool IsTetrahedron() const { return AmOfFaces == 4; }
+	bool IsWedge() const { return AmOfFaces == 5; }
 	bool IsHexahedron() const { return AmOfFaces == 6; }
+	bool IsMSCElement() const { return AmOfFaces >= 5; }
 
 	// MSC (Magnetic Surface Charge) methods for supported element types
 	void B_comp_tetrahedron_analytical(radTField*);
+	void B_comp_wedge_analytical(radTField*);  // 3DOF wedge/prism (5 faces: 2 tri + 3 quad)
+	void B_comp_wedge_MSC(radTField*);         // 5DOF wedge MSC (sigma per face)
 	void B_comp_hexahedron_MSC(radTField*);
 
 	// 6 DOF MSC field computation for hexahedra
@@ -389,6 +395,7 @@ public:
 	TVector3d FieldFromChargedTriangleWithNormal(const TVector3d& obs, const TVector3d& v0,
 	                                              const TVector3d& v1, const TVector3d& v2,
 	                                              double sigma, const TVector3d& explicitNormal) const;
+	TVector3d FieldFromFace(const TVector3d& obs, int faceIdx, double sigma) const;  // Generalized: tri or quad
 	TVector3d FieldFromQuadFace(const TVector3d& obs, int faceIdx, double sigma) const;
 	TVector3d FieldFromQuadFaceMirrored(const TVector3d& obs, const TVector3d& V0,
 	                                     const TVector3d& V1, const TVector3d& V2,
@@ -401,6 +408,11 @@ public:
 	                                                const TVector3d& tri1Normal,
 	                                                const TVector3d& tri2Normal) const;
 	TVector3d FieldFromPointCharge(const TVector3d& obs, double charge) const;
+	// Generalized mirrored face field: dispatches to tri or quad based on numVerts
+	TVector3d FieldFromFaceMirrored(const TVector3d& obs,
+	                                 const TVector3d* mirrorVerts, int numVerts,
+	                                 double sigma, bool flipNormal,
+	                                 const TVector3d& mirrorCenter) const;
 
 	// 6 DOF MSC setup for hexahedra
 	// IMPORTANT: This relies on Netgen face winding convention for correct normal direction.
@@ -409,11 +421,11 @@ public:
 	// Face ordering (Netgen convention): 0=z-, 1=z+, 2=y-, 3=y+, 4=x-, 5=x+
 	void SetupFaceGeometry()
 	{
-		// Compute face normals, areas, and centers for 6 DOF MSC
-		// This is called only for hexahedra (AmOfFaces == 6)
-		if(AmOfFaces != 6) return;
+		// Compute face normals, areas, and centers for MSC elements
+		// Supports wedges (5 faces) and hexahedra (6 faces)
+		if(AmOfFaces < 5 || AmOfFaces > 6) return;
 
-		for(int i = 0; i < 6; i++)
+		for(int i = 0; i < AmOfFaces; i++)
 		{
 			radTHandlePgnAndTrans& hPgnTrans = VectHandlePgnAndTrans[i];
 			radTPolygon* pPgn = hPgnTrans.PgnHndl.rep;
