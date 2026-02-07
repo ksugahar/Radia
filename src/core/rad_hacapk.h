@@ -289,6 +289,9 @@ private:
     void Compute3x6Block(int elem_tetra, int elem_hex, double* K_mat) const;
     void Compute6x3Block(int elem_hex, int elem_tetra, double* K_mat) const;
 
+    // Generic variable DOF element access (5-DOF wedges, mixed wedge+hex, etc.)
+    double GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const;
+
     // Disable copy
     RadHACApKManager(const RadHACApKManager&) = delete;
     RadHACApKManager& operator=(const RadHACApKManager&) = delete;

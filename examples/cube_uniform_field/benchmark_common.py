@@ -20,7 +20,7 @@ os.environ['OMP_NUM_THREADS'] = '8'
 os.environ['MKL_NUM_THREADS'] = '8'
 
 # Add Radia to path
-_src_path = os.path.join(os.path.dirname(__file__), '../../src/radia')
+_src_path = os.path.join(os.path.dirname(__file__), '../../src')
 sys.path.insert(0, _src_path)
 
 import numpy as np
