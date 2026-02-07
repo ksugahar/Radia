@@ -96,6 +96,7 @@ enum class MMMMaterialType {
  *
  * Supports:
  *   - Tetrahedron (4 faces, 3 DOF: Mx, My, Mz)
+ *   - Wedge/Prism (5 faces, 5 DOF: sigma per face - MSC method)
  *   - Hexahedron (6 faces, 6 DOF: sigma per face - MSC method)
  *   - Permanent magnet elements (fixed Mr, 0 DOF in solve)
  */
@@ -163,8 +164,9 @@ struct MMMMatrices {
  *
  * Usage:
  *   MMMBuilder builder;
- *   builder.AddTetrahedron(vertices);  // 4 vertices
- *   builder.AddHexahedron(vertices);   // 8 vertices
+ *   builder.AddTetrahedron(vertices);  // 4 vertices, 3 DOF
+ *   builder.AddWedge(vertices);        // 6 vertices, 5 DOF (MSC)
+ *   builder.AddHexahedron(vertices);   // 8 vertices, 6 DOF (MSC)
  *   MMMMatrices result = builder.Build();
  */
 class MMMBuilder {
@@ -197,6 +199,34 @@ public:
      * @param vertices: 24 doubles [x0,y0,z0, ..., x7,y7,z7]
      */
     void AddHexahedron(const double* vertices);
+
+    /**
+     * Add wedge/prism element (6 vertices, 5 DOF MSC)
+     * @param vertices: 6 vertices in standard wedge order
+     *                  [0-2: bottom triangle, 3-5: top triangle]
+     *
+     * Face ordering:
+     *   Face 0: bottom triangle (v0, v2, v1)
+     *   Face 1: top triangle (v3, v4, v5)
+     *   Face 2: side quad (v0, v1, v4, v3)
+     *   Face 3: side quad (v1, v2, v5, v4)
+     *   Face 4: side quad (v2, v0, v3, v5)
+     */
+    void AddWedge(const std::vector<Vec3d>& vertices);
+
+    /**
+     * Add wedge element from flat array
+     * @param vertices: 18 doubles [x0,y0,z0, ..., x5,y5,z5]
+     */
+    void AddWedge(const double* vertices);
+
+    /**
+     * Add permanent magnet wedge (fixed magnetization, 0 DOF in solve)
+     * @param vertices: 6 vertices
+     * @param Mr: Remanent magnetization [Mx, My, Mz] in A/m
+     */
+    void AddPermanentMagnetWedge(const std::vector<Vec3d>& vertices, const Vec3d& Mr);
+    void AddPermanentMagnetWedge(const double* vertices, const double* Mr);
 
     /**
      * Add permanent magnet tetrahedron (fixed magnetization, 0 DOF in solve)
@@ -232,9 +262,14 @@ private:
 
     // Block computation methods
     void Compute3x3Block(int elem_i, int elem_j, double* N_block) const;
+    void Compute5x5Block(int elem_i, int elem_j, double* K_block) const;
     void Compute6x6Block(int elem_i, int elem_j, double* K_block) const;
+    void Compute3x5Block(int tetra_idx, int wedge_idx, double* N_block) const;
+    void Compute5x3Block(int wedge_idx, int tetra_idx, double* N_block) const;
     void Compute3x6Block(int tetra_idx, int hexa_idx, double* N_block) const;
     void Compute6x3Block(int hexa_idx, int tetra_idx, double* N_block) const;
+    void Compute5x6Block(int wedge_idx, int hexa_idx, double* K_block) const;
+    void Compute6x5Block(int hexa_idx, int wedge_idx, double* K_block) const;
 
     // Field computation helpers
     Vec3d FieldFromChargedTriangle(const TriangleFace& tri, const Vec3d& obs, double sigma) const;

@@ -242,11 +242,11 @@ void RadHACApKManager::ExtractElementCoordinates() {
 
         if (elem_dof == 3) {
             n_3dof++;
-        } else if (elem_dof == 6) {
-            n_6dof++;
+        } else if (elem_dof >= 5) {
+            n_6dof++;  // Count all MSC elements (5-DOF wedges and 6-DOF hexahedra)
         } else {
             std::cerr << "[HACApK] Error: Element " << i << " has " << elem_dof
-                      << " DOF, expected 3 or 6" << std::endl;
+                      << " DOF, expected 3, 5, or 6" << std::endl;
             m_ndof = 0;
             m_nffc = 0;
             m_is_6dof = false;
@@ -257,20 +257,36 @@ void RadHACApKManager::ExtractElementCoordinates() {
     m_dof_offset[m_n_elem] = total_dof;
     m_ndof = total_dof;
 
-    // Support mixed DOF elements (hex + tetra)
+    // Support mixed DOF elements (hex + tetra + wedge)
     if (n_3dof > 0 && n_6dof > 0) {
-        // Mixed mode: variable DOF per element
+        // Mixed mode: variable DOF per element (tetra + MSC)
         m_nffc = 0;  // Indicates variable DOF
-        m_is_6dof = false;  // Not uniform 6DOF
+        m_is_6dof = false;
         m_is_mixed_dof = true;
 #ifdef HACAPK_RADIA_LOGGING
         std::cout << "[HACApK] Mixed DOF mode: " << n_3dof << " tetrahedra (3DOF) + "
-                  << n_6dof << " hexahedra (6DOF), total " << total_dof << " DOF" << std::endl;
+                  << n_6dof << " MSC elements (5/6DOF), total " << total_dof << " DOF" << std::endl;
 #endif
     } else if (n_6dof > 0) {
-        m_nffc = 6;
-        m_is_6dof = true;
-        m_is_mixed_dof = false;
+        // Check if ALL are 6DOF hexahedra or if we have 5DOF wedges
+        bool allHex = true;
+        for (int i = 0; i < m_n_elem && allHex; i++) {
+            if (m_interaction->GetElementDOF(i) != 6) allHex = false;
+        }
+        if (allHex) {
+            m_nffc = 6;
+            m_is_6dof = true;  // Pure hex (fast path with Compute6x6BlockFast)
+            m_is_mixed_dof = false;
+        } else {
+            // Has 5DOF wedges: use variable DOF mode
+            m_nffc = 0;
+            m_is_6dof = false;
+            m_is_mixed_dof = true;
+#ifdef HACAPK_RADIA_LOGGING
+            std::cout << "[HACApK] Variable DOF mode (wedge+hex): total "
+                      << total_dof << " DOF" << std::endl;
+#endif
+        }
     } else {
         m_nffc = 3;
         m_is_6dof = false;
@@ -511,8 +527,13 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     // FIX (2025-12-26): For 3DOF tetrahedra, use PrecomputeFlatInteractMatrix()
     // if InteractMatrix was already computed (fallback path)
     // This provides O(1) matrix element access during H-matrix construction
-    if (!m_is_6dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
+    if (!m_is_6dof && !m_is_mixed_dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
         PrecomputeFlatInteractMatrix();
+    }
+    // For mixed DOF mode (including 5-DOF wedges): precompute flat interaction matrix
+    // This provides O(1) element access for H-matrix ACA+ fill via GetGenericElement()
+    if (m_is_mixed_dof && m_interaction->m_flatInteractMatrix.empty()) {
+        m_interaction->SetupInteractMatrix_VariableDOF();
     }
 
     // Initialize inverse susceptibility with ELF-style initial chi from BH curve point 2
@@ -919,7 +940,9 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
         return GetMixed6x3Element(elem_i, elem_j, local_i, local_j);
     }
 
-    return 0.0;
+    // Generic path for variable DOF (5-DOF wedges, mixed wedge+hex, etc.)
+    // Uses pre-computed flat interaction matrix for O(1) access
+    return GetGenericElement(elem_i, elem_j, local_i, local_j);
 }
 
 //=========================================================================
@@ -1270,6 +1293,20 @@ double RadHACApKManager::GetMixed6x3Element(int elem_hex, int elem_tetra, int fa
     // ROW-MAJOR access: A(row, col) at [row * total_dof + col]
     // Row = offset_i + face (hex target), Col = offset_j + comp (tetra source)
     return m_interaction->m_flatInteractMatrix[(offset_i + face) * total_dof + (offset_j + comp)];
+}
+
+double RadHACApKManager::GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const {
+    // Generic path for any DOF combination (5-DOF wedges, mixed wedge+hex, etc.)
+    // Uses pre-computed flat interaction matrix from SetupInteractMatrix_VariableDOF()
+
+    if (!m_interaction || m_interaction->m_flatInteractMatrix.empty()) return 0.0;
+
+    int offset_i = m_dof_offset[elem_i];
+    int offset_j = m_dof_offset[elem_j];
+    int total_dof = m_interaction->m_totalDOF;
+
+    // ROW-MAJOR access: A(row, col) at [row * total_dof + col]
+    return m_interaction->m_flatInteractMatrix[(offset_i + local_i) * total_dof + (offset_j + local_j)];
 }
 
 void RadHACApKManager::Compute3x6Block(int elem_tetra, int elem_hex, double* K_mat) const {
