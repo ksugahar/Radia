@@ -1,13 +1,18 @@
-# pybind11 Migration Plan
+# pybind11 Migration Log
 
-## Current State (2026-01-24)
+**Status**: COMPLETED (2026-01)
 
-### Binding Technology
+All Python bindings have been migrated from Python C API to pybind11.
+The C++ extension module is `_radia_pybind.pyd` (built from `radia_pybind.cpp`).
 
-| Aspect | Current Status |
+## Pre-Migration State (2026-01-24)
+
+### Binding Technology (Before Migration)
+
+| Aspect | Pre-Migration Status |
 |--------|----------------|
-| **Binding type** | Python C API (NOT pybind11) |
-| **Source file** | `src/radia/radpy_pyapi.cpp` |
+| **Binding type** | Python C API (migrated to pybind11) |
+| **Source file** | `src/radia/radpy_pyapi.cpp` (removed) |
 | **Python API functions** | 131 |
 | **C API functions** | 172 |
 | **Coverage** | ~76% (most core functions exposed) |

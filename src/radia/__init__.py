@@ -9,7 +9,7 @@
 # pybind11 Migration Complete (2026-01):
 # All bindings now use pybind11 exclusively.
 
-__version__ = "1.7.0"
+__version__ = "1.8.0"
 
 # Add package directory to DLL search path (Windows)
 # This is needed for finding Intel MKL DLL (mkl_rt.2.dll)

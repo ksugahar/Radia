@@ -3,15 +3,18 @@
 Setup script for Radia-NGSolve package
 
 This setup.py is used for building binary distributions (wheels) that include
-the pre-compiled C++ extension modules (_radia.pyd, radia_ngsolve.pyd).
+the pre-compiled C++ extension modules (_radia_pybind.pyd, radia_ngsolve.pyd).
 
 For development builds, use the CMake build scripts:
-- BuildMSVC.ps1 for _radia.pyd (main module)
+- BuildMSVC.ps1 for _radia_pybind.pyd (main module)
 - BuildMSVC.ps1 for radia_ngsolve.pyd (NGSolve integration)
 
-Module naming: The C++ extension is named '_radia' (with underscore) so that
+Module naming: The C++ extension is named '_radia_pybind' (with underscore) so that
 'import radia' uses the Python package with __init__.py, which then imports
-from _radia. This follows NGSolve's pattern.
+from _radia_pybind. This follows NGSolve's pattern.
+
+pybind11 Migration Complete (2026-01):
+All bindings now use pybind11 exclusively via _radia_pybind.pyd.
 """
 
 from setuptools import setup, find_packages
@@ -19,8 +22,9 @@ from pathlib import Path
 import shutil
 import sys
 
-# Read version from pyproject.toml
-version = "1.4.4"
+# Version is read from pyproject.toml by setuptools
+# This fallback is only used if pyproject.toml is not available
+version = "1.8.0"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -30,50 +34,40 @@ def prepare_package_data():
 	"""
 	Prepare package data by copying built extension modules to the package directory
 
-	Note: Package directory is now src/radia (not src/python) so that
+	Note: Package directory is src/radia so that
 	'import radia' works correctly after pip install.
 
-	Build paths searched (in order):
-	1. build-msvc/ (MSVC + Intel MKL build - PREFERRED)
-	2. build/Release/ (legacy CMake build)
+	Build path: build-msvc/ (MSVC + Intel MKL build)
 	"""
 	package_dir = Path(__file__).parent / "src" / "radia"
 	package_dir.mkdir(parents=True, exist_ok=True)
 
-	# Try build-msvc first (MSVC + Intel MKL), then fall back to build/Release
-	build_dirs = [
-		Path(__file__).parent / "build-msvc",  # MSVC build (preferred)
-		Path(__file__).parent / "build" / "Release",  # Legacy CMake build
-	]
+	build_dir = Path(__file__).parent / "build-msvc"
 
-	# Copy _radia.pyd (main C++ extension module)
+	# Copy _radia_pybind.pyd (main C++ extension module)
 	radia_pyd_found = False
-	for build_dir in build_dirs:
-		# Try versioned name first
-		radia_pyd = build_dir / "_radia.cp312-win_amd64.pyd"
-		if radia_pyd.exists():
-			shutil.copy2(radia_pyd, package_dir / "_radia.pyd")
-			print(f"Copied {radia_pyd} to {package_dir}")
-			radia_pyd_found = True
-			break
+	# Try versioned name first
+	radia_pyd = build_dir / "_radia_pybind.cp312-win_amd64.pyd"
+	if radia_pyd.exists():
+		shutil.copy2(radia_pyd, package_dir / "_radia_pybind.pyd")
+		print(f"Copied {radia_pyd} to {package_dir}")
+		radia_pyd_found = True
+	else:
 		# Try simple name
-		radia_pyd = build_dir / "_radia.pyd"
+		radia_pyd = build_dir / "_radia_pybind.pyd"
 		if radia_pyd.exists():
-			shutil.copy2(radia_pyd, package_dir / "_radia.pyd")
+			shutil.copy2(radia_pyd, package_dir / "_radia_pybind.pyd")
 			print(f"Copied {radia_pyd} to {package_dir}")
 			radia_pyd_found = True
-			break
 
 	if not radia_pyd_found:
-		print(f"Warning: _radia.pyd not found. Run BuildMSVC.ps1 first.")
+		print(f"Warning: _radia_pybind.pyd not found. Run BuildMSVC.ps1 first.")
 
 	# Copy radia_ngsolve.pyd
-	for build_dir in build_dirs:
-		radia_ngsolve_pyd = build_dir / "radia_ngsolve.pyd"
-		if radia_ngsolve_pyd.exists():
-			shutil.copy2(radia_ngsolve_pyd, package_dir / "radia_ngsolve.pyd")
-			print(f"Copied {radia_ngsolve_pyd} to {package_dir}")
-			break
+	radia_ngsolve_pyd = build_dir / "radia_ngsolve.pyd"
+	if radia_ngsolve_pyd.exists():
+		shutil.copy2(radia_ngsolve_pyd, package_dir / "radia_ngsolve.pyd")
+		print(f"Copied {radia_ngsolve_pyd} to {package_dir}")
 	else:
 		print(f"Info: radia_ngsolve.pyd not found. This is optional.")
 
@@ -93,12 +87,12 @@ setup(
 	author="Oleg Chubar, Pascal Elleaume",
 	author_email="chubar@bnl.gov",
 	maintainer="Radia Development Team",
-	url="https://github.com/ksugahar/Radia_NGSolve",
+	url="https://github.com/ksugahar/Radia",
 	project_urls={
-		"Homepage": "https://github.com/ksugahar/Radia_NGSolve",
+		"Homepage": "https://github.com/ksugahar/Radia",
 		"Documentation": "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia",
-		"Repository": "https://github.com/ksugahar/Radia_NGSolve",
-		"Issues": "https://github.com/ksugahar/Radia_NGSolve/issues",
+		"Repository": "https://github.com/ksugahar/Radia",
+		"Issues": "https://github.com/ksugahar/Radia/issues",
 	},
 	license="BSD-style AND MIT",
 	classifiers=[
@@ -118,7 +112,7 @@ setup(
 	package_dir={"": "src"},
 	package_data={
 		"radia": [
-			"*.pyd",  # Include all .pyd files (_radia.pyd, radia_ngsolve.pyd, etc.)
+			"*.pyd",  # Include all .pyd files (_radia_pybind.pyd, radia_ngsolve.pyd, etc.)
 			"*.dll",  # Include Intel MKL DLLs (mkl_rt.2.dll, mkl_core.2.dll, libiomp5md.dll, etc.)
 			"*.py",   # Include all Python utility modules
 		],
