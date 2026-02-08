@@ -735,7 +735,7 @@ void radTInteraction::ComputeDOFOffsets()
 double* radTInteraction::GetInteractBlock(int row_elem, int col_elem)
 {
 	// Return pointer to interaction block (row_elem, col_elem) in flattened matrix
-	// Matrix is COLUMN-MAJOR: A(i,j) at index [j * m_totalDOF + i]
+	// Matrix is ROW-MAJOR: A(i,j) at index [i * m_totalDOF + j]
 	if(m_flatInteractMatrix.empty()) return nullptr;
 
 	int offset_row = m_elemDOFOffset[row_elem];
@@ -3002,7 +3002,7 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 		H_from_Mz[0] += H_point_Mz[0]; H_from_Mz[1] += H_point_Mz[1]; H_from_Mz[2] += H_point_Mz[2];
 	}
 
-	// Store in ROW-MAJOR format (different from COLUMN-MAJOR flat matrix!)
+	// Store in ROW-MAJOR format (same as flat matrix)
 	// N[i][j] = H_i due to unit M_j (i = Hx,Hy,Hz; j = Mx,My,Mz)
 	// Row 0: Hx from Mx, Hx from My, Hx from Mz
 	// Row 1: Hy from Mx, Hy from My, Hy from Mz
@@ -3847,7 +3847,7 @@ void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) co
 	// where K_BA = K[mirror(i), i] is computed by Compute6x6BlockMirroredTarget
 	// Q is the row permutation to reorder faces after mirroring
 	//
-	// For x-mirror: Q = [3, 2, 1, 0, 4, 5] (swap x-faces, reverse order of y-faces)
+	// For x-mirror: Q = [0, 3, 2, 1, 4, 5] (swap x+ (face 1) and x- (face 3))
 
 	// Helper lambda to add mirror contribution using ELF formula
 	auto addMirrorContributionELF = [&](int mirrorAxis, int sign, const int* rowPerm, const int* colPerm) {
