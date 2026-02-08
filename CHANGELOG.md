@@ -6,13 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-02-09
+
+### Changed
+
+- **radia_ngsolve.cpp: Unit conversion cleanup and modernization**
+  - Removed `coord_scale_` member (always 1.0 for meters-only NGSolve)
+  - Constructor now uses `std::optional` instead of `py::object` for type safety
+  - Removed `parse_vector()` in favor of direct `std::vector<double>` from pybind11
+  - Batch Evaluate/PrepareCache now uses numpy arrays instead of Python lists
+  - Added A-field and M-field support via per-point `rad.Fld()` fallback
+  - Fixed FMM dipole extraction comments (ObjGeoLim returns meters, not mm)
+  - Removed confused FMM scaling blocks (scale was always 1.0)
+  - Cached `rad_module_` to avoid repeated `py::module_::import("radia")`
+  - `units='mm'` now raises `std::invalid_argument` (NGSolve requires meters)
+
+- **MatLin API: mu_r input with automatic chi conversion**
+  - `rad.MatLin(mu_r)` now takes relative permeability (mu_r >= 1.0)
+  - Internally converts to chi = mu_r - 1 before passing to C++ solver
+  - Validation: rejects mu_r < 1.0 with clear error message
+  - Tests updated from `MatLin(999)` to `MatLin(1000)` (mu_r, not chi)
+
+- **Row-major matrix convention enforcement**
+  - Fixed BiCGSTAB MatVec to use row-major indexing (`[row*N+col]`)
+  - Fixed `GetInteractMatrix` pybind11 export (was column-major, now row-major)
+  - Updated all matrix access comments to document row-major convention
+
+- **analytical_magnet.py: Configurable unit conversion**
+  - Added `units='mm'` parameter to SphericalMagnet, CuboidMagnet, CurrentLoop
+  - Replaced 12 hardcoded `/ 1000.0` with `* self._length_to_m`
+  - Backward compatible: default `units='mm'` preserves existing behavior
+
+- **cylindrical_magnet.py: Configurable unit conversion**
+  - Added `units='mm'` parameter to CylindricalMagnet
+  - Replaced hardcoded `* 1e-3` and `* 1000.0` with `length_to_m` factor
+
+- **Physical constants unified via rad_constants.h**
+  - `rad_mmm_matrices.h` now imports from `rad_constants.h` instead of redefining
+
 ### Fixed
 
 - **BiCGSTAB Block Jacobi Preconditioner for Ill-Conditioned Matrices**
   - Added automatic block Jacobi preconditioner for distorted hexahedral meshes
   - Scalar Jacobi fails when diagonal ratio > 10 or min dominance < 0.1
   - Block Jacobi inverts each element's 6x6 diagonal block using LAPACK
-  - V304 mesh (74 elements with 45° skew): BiCGSTAB now converges (was diverging)
+  - V304 mesh (74 elements with 45 deg skew): BiCGSTAB now converges (was diverging)
   - Automatic detection based on matrix conditioning analysis
 
 ## [1.7.0] - 2026-02-05

@@ -5,8 +5,8 @@
  * First release: October 2025
  *
  * IMPORTANT:
- * - NGSolve uses meters, Radia uses millimeters
- * - Automatic unit conversion: m -> mm (multiply by 1000)
+ * - Both NGSolve and Radia use meters (SI) internally
+ * - No unit conversion needed (FldUnits('m') required)
  *
  * Field types supported:
  * - 'b': Magnetic flux density (Tesla) - vector
@@ -32,6 +32,7 @@
 #include <vector>
 #include <unordered_map>
 #include <array>
+#include <optional>
 #include <fem.hpp>
 #include <python_ngstd.hpp>
 #include <pybind11/pybind11.h>
@@ -44,6 +45,7 @@
 #include "rad_dipole_collect.h"
 #include "rad_exafmm.h"
 #include "rad_application.h"
+#include "rad_constants.h"
 
 namespace py = pybind11;
 
@@ -64,7 +66,7 @@ public:
 	bool use_transform;    // Whether to apply coordinate transformation
 
 	// Computation settings
-	py::object precision;  // Computation precision (None = use Radia default)
+	std::optional<double> precision;  // Computation precision (nullopt = use Radia default)
 
 	// Point cache for batch evaluation
 	mutable std::unordered_map<uint64_t, std::array<double,3>> point_cache_;
@@ -72,9 +74,6 @@ public:
 	double cache_tolerance_;  // Tolerance for point hashing (meters)
 	mutable size_t cache_hits_;
 	mutable size_t cache_misses_;
-
-	// Unit conversion: NGSolve (meters) -> Radia (mm or m)
-	double coord_scale_;  // Scaling factor for coordinates (1.0 for meters, 1000.0 for mm)
 
 	// Cached Radia module to avoid repeated imports (memory optimization)
 	mutable py::module_ rad_module_;
@@ -85,18 +84,17 @@ public:
 	mutable bool dipoles_extracted_;                    // Whether dipoles have been extracted
 
 	RadiaFieldCF(int obj, const std::string& ftype = "b",
-	             py::object py_origin = py::none(),
-	             py::object py_u = py::none(),
-	             py::object py_v = py::none(),
-	             py::object py_w = py::none(),
-	             py::object py_precision = py::none(),
+	             std::optional<std::vector<double>> opt_origin = std::nullopt,
+	             std::optional<std::vector<double>> opt_u = std::nullopt,
+	             std::optional<std::vector<double>> opt_v = std::nullopt,
+	             std::optional<std::vector<double>> opt_w = std::nullopt,
+	             std::optional<double> opt_precision = std::nullopt,
 	             const std::string& units = "m",
 	             double fmm_eps = 0.0)
-	    : CoefficientFunction(ftype == "phi" ? 1 : 3),  // phi is scalar (1D), others are vector (3D)
+	    : CoefficientFunction(ftype == "phi" ? 1 : 3),
 	      radia_obj(obj), field_type(ftype), use_transform(false),
-	      precision(py_precision),
+	      precision(opt_precision),
 	      use_cache_(false), cache_tolerance_(1e-10), cache_hits_(0), cache_misses_(0),
-	      coord_scale_(units == "m" ? 1.0 : 1000.0),
 	      fmm_eps_(fmm_eps), dipoles_extracted_(false)
 	{
 		// Validate field type
@@ -108,49 +106,41 @@ public:
 				"or 'phi' (magnetic scalar potential)");
 		}
 
+		// Validate units - NGSolve always uses meters
+		if (units != "m") {
+			throw std::invalid_argument(
+				"RadiaField requires units='m'. NGSolve always uses meters. "
+				"Ensure rad.FldUnits('m') is set before creating Radia objects.");
+		}
+
 		// Default: identity transformation
 		origin[0] = 0.0; origin[1] = 0.0; origin[2] = 0.0;
 		u_axis[0] = 1.0; u_axis[1] = 0.0; u_axis[2] = 0.0;
 		v_axis[0] = 0.0; v_axis[1] = 1.0; v_axis[2] = 0.0;
 		w_axis[0] = 0.0; w_axis[1] = 0.0; w_axis[2] = 1.0;
 
-		// Parse origin
-		if (!py_origin.is_none()) {
-			parse_vector(py_origin, origin);
+		// Apply coordinate transformation vectors
+		auto apply_vec = [this](const std::optional<std::vector<double>>& opt, double dst[3], bool do_normalize) {
+			if (!opt.has_value()) return;
+			const auto& v = opt.value();
+			if (v.size() != 3)
+				throw std::invalid_argument("Vector must have 3 components");
+			dst[0] = v[0]; dst[1] = v[1]; dst[2] = v[2];
+			if (do_normalize) normalize(dst);
 			use_transform = true;
-		}
+		};
 
-		// Parse and normalize u-axis
-		if (!py_u.is_none()) {
-			parse_vector(py_u, u_axis);
-			normalize(u_axis);
-			use_transform = true;
-		}
+		apply_vec(opt_origin, origin, false);
+		apply_vec(opt_u, u_axis, true);
+		apply_vec(opt_v, v_axis, true);
+		apply_vec(opt_w, w_axis, true);
 
-		// Parse and normalize v-axis
-		if (!py_v.is_none()) {
-			parse_vector(py_v, v_axis);
-			normalize(v_axis);
-			use_transform = true;
-		}
-
-		// Parse and normalize w-axis
-		if (!py_w.is_none()) {
-			parse_vector(py_w, w_axis);
-			normalize(w_axis);
-			use_transform = true;
-		}
-
-		// Apply computation settings
+		// Cache Radia module and apply precision
 		py::gil_scoped_acquire acquire;
-
-		// Cache Radia module import to avoid repeated imports (memory optimization)
 		rad_module_ = py::module_::import("radia");
 
-		// Set precision if specified
-		if (!py_precision.is_none()) {
-			double prec = py_precision.cast<double>();
-			// Set precision for all field computation types
+		if (precision.has_value()) {
+			double prec = precision.value();
 			std::string prec_str = "PrcB->" + std::to_string(prec) +
 			                       ",PrcA->" + std::to_string(prec) +
 			                       ",PrcH->" + std::to_string(prec) +
@@ -160,28 +150,6 @@ public:
 	}
 
 private:
-	void parse_vector(py::object py_vec, double vec[3]) {
-		if (py::isinstance<py::list>(py_vec)) {
-			py::list lst = py_vec.cast<py::list>();
-			if (lst.size() != 3) {
-				throw std::invalid_argument("Vector must have 3 components");
-			}
-			vec[0] = lst[0].cast<double>();
-			vec[1] = lst[1].cast<double>();
-			vec[2] = lst[2].cast<double>();
-		} else if (py::isinstance<py::tuple>(py_vec)) {
-			py::tuple tup = py_vec.cast<py::tuple>();
-			if (tup.size() != 3) {
-				throw std::invalid_argument("Vector must have 3 components");
-			}
-			vec[0] = tup[0].cast<double>();
-			vec[1] = tup[1].cast<double>();
-			vec[2] = tup[2].cast<double>();
-		} else {
-			throw std::invalid_argument("Vector must be a list or tuple");
-		}
-	}
-
 	void normalize(double vec[3]) {
 		double norm = std::sqrt(vec[0]*vec[0] + vec[1]*vec[1] + vec[2]*vec[2]);
 		if (norm < 1e-12) {
@@ -232,46 +200,62 @@ public:
 				return;
 			}
 
-			// Build Radia points list (mm)
-			py::list radia_points;
-			for (size_t i = 0; i < npts; i++) {
-				py::list pt = points_list[i].cast<py::list>();
-				double p_global[3] = {pt[0].cast<double>(), pt[1].cast<double>(), pt[2].cast<double>()};
+			// Build numpy array of coordinates (N x 3)
+			py::array_t<double> pts_arr({(py::ssize_t)npts, (py::ssize_t)3});
+			auto pts_buf = pts_arr.mutable_unchecked<2>();
 
-				double p_local[3];
-				if (use_transform) {
-					double p_t[3] = {p_global[0]-origin[0], p_global[1]-origin[1], p_global[2]-origin[2]};
-					p_local[0] = dot(u_axis, p_t);
-					p_local[1] = dot(v_axis, p_t);
-					p_local[2] = dot(w_axis, p_t);
-				} else {
-					p_local[0] = p_global[0];
-					p_local[1] = p_global[1];
-					p_local[2] = p_global[2];
-				}
+			// Also store global coordinates for cache keys
+			std::vector<double> globals(npts * 3);
 
-				py::list coords;
-				coords.append(p_local[0] * coord_scale_);
-				coords.append(p_local[1] * coord_scale_);
-				coords.append(p_local[2] * coord_scale_);
-				radia_points.append(coords);
-			}
-
-			// Single batch call to Radia
-			py::module_ rad = py::module_::import("radia");
-			py::object results = rad.attr("Fld")(radia_obj, field_type, radia_points);
-			py::list results_list = results.cast<py::list>();
-
-			// Store in cache
-			// No scaling needed - Radia returns values in consistent units with FldUnits
 			for (size_t i = 0; i < npts; i++) {
 				py::list pt = points_list[i].cast<py::list>();
 				double x = pt[0].cast<double>();
 				double y = pt[1].cast<double>();
 				double z = pt[2].cast<double>();
+				globals[i*3+0] = x; globals[i*3+1] = y; globals[i*3+2] = z;
 
-				py::list fld = results_list[i].cast<py::list>();
-				double f_local[3] = {fld[0].cast<double>(), fld[1].cast<double>(), fld[2].cast<double>()};
+				if (use_transform) {
+					double p_t[3] = {x-origin[0], y-origin[1], z-origin[2]};
+					pts_buf(i, 0) = dot(u_axis, p_t);
+					pts_buf(i, 1) = dot(v_axis, p_t);
+					pts_buf(i, 2) = dot(w_axis, p_t);
+				} else {
+					pts_buf(i, 0) = x;
+					pts_buf(i, 1) = y;
+					pts_buf(i, 2) = z;
+				}
+			}
+
+			// Batch call using native numpy APIs where available
+			// B/H -> FldBatch (numpy), a/m -> rad.Fld() multi-point
+			py::array_t<double> fld_arr;
+
+			if (field_type == "b" || field_type == "h") {
+				py::dict batch_result = rad_module_.attr("FldBatch")(radia_obj, pts_arr);
+				const char* key = (field_type == "b") ? "B" : "H";
+				fld_arr = batch_result[key].cast<py::array_t<double>>();
+			} else {
+				// For 'a' and 'm': call rad.Fld() per point (single-point API)
+				fld_arr = py::array_t<double>({(py::ssize_t)npts, (py::ssize_t)3});
+				auto fld_buf = fld_arr.mutable_unchecked<2>();
+				for (size_t i = 0; i < npts; i++) {
+					py::array_t<double> coords(3);
+					auto cb = coords.mutable_unchecked<1>();
+					cb(0) = pts_buf(i, 0);
+					cb(1) = pts_buf(i, 1);
+					cb(2) = pts_buf(i, 2);
+					py::object f = rad_module_.attr("Fld")(radia_obj, field_type, coords);
+					auto fa = f.cast<py::array_t<double>>().unchecked<1>();
+					fld_buf(i, 0) = fa(0);
+					fld_buf(i, 1) = fa(1);
+					fld_buf(i, 2) = fa(2);
+				}
+			}
+
+			// Store in cache with inverse transform
+			auto fld = fld_arr.unchecked<2>();
+			for (size_t i = 0; i < npts; i++) {
+				double f_local[3] = {fld(i, 0), fld(i, 1), fld(i, 2)};
 
 				double f_global[3];
 				if (use_transform) {
@@ -284,7 +268,7 @@ public:
 					f_global[2] = f_local[2];
 				}
 
-				uint64_t hash = hash_point(x, y, z);
+				uint64_t hash = hash_point(globals[i*3], globals[i*3+1], globals[i*3+2]);
 				point_cache_[hash] = {f_global[0], f_global[1], f_global[2]};
 			}
 
@@ -318,11 +302,7 @@ public:
 	}
 
 	virtual ~RadiaFieldCF() {
-		// Acquire GIL before releasing Python objects to prevent memory leaks
-		// When NGSolve destroys this CoefficientFunction, we must ensure
-		// Python reference counting is done safely
-		py::gil_scoped_acquire acquire;
-		precision.release();
+		// rad_module_ (py::module_) ref-counting is handled by pybind11 destructor
 	}
 
 	// Scalar evaluation - used for 'phi' (magnetic scalar potential)
@@ -358,21 +338,15 @@ public:
 	        p_local[2] = p_global[2];
 	    }
 
-	    // Convert to Radia units
-	    double coords_radia[3];
-	    coords_radia[0] = p_local[0] * coord_scale_;
-	    coords_radia[1] = p_local[1] * coord_scale_;
-	    coords_radia[2] = p_local[2] * coord_scale_;
-
-	    // Call Radia to get phi
+	    // Call Radia to get phi (coordinates already in meters)
 	    double phi_value = 0.0;
 	    {
 	        py::gil_scoped_acquire acquire;
 	        try {
 	            py::list coords;
-	            coords.append(coords_radia[0]);
-	            coords.append(coords_radia[1]);
-	            coords.append(coords_radia[2]);
+	            coords.append(p_local[0]);
+	            coords.append(p_local[1]);
+	            coords.append(p_local[2]);
 
 	            py::object field_result = rad_module_.attr("Fld")(radia_obj, field_type, coords);
 	            // For 'phi', Radia returns [Phi, Hx, Hy, Hz] - we want just Phi (index 0)
@@ -436,22 +410,16 @@ public:
 	        p_local[2] = p_global[2];
 	    }
 
-	    // Convert m -> mm (store in C++ variables)
-	    double coords_mm[3];
-	    coords_mm[0] = p_local[0] * coord_scale_;
-	    coords_mm[1] = p_local[1] * coord_scale_;
-	    coords_mm[2] = p_local[2] * coord_scale_;
-
-	    // Now acquire GIL only for Python call (minimum scope)
+	    // Acquire GIL only for Python call (minimum scope)
 	    double f_local[3];
 	    {
 	        py::gil_scoped_acquire acquire;
 	        try {
-	            // Create temporary py::list only when calling rad.Fld()
+	            // Coordinates already in meters - pass directly to rad.Fld()
 	            py::list coords;
-	            coords.append(coords_mm[0]);
-	            coords.append(coords_mm[1]);
-	            coords.append(coords_mm[2]);
+	            coords.append(p_local[0]);
+	            coords.append(p_local[1]);
+	            coords.append(p_local[2]);
 
 	            py::object field_result = rad_module_.attr("Fld")(radia_obj, field_type, coords);
 	            f_local[0] = field_result[py::int_(0)].cast<double>();
@@ -480,11 +448,6 @@ public:
 	        f_global[2] = f_local[2];
 	    }
 
-	    // Vector potential A: No additional scaling needed
-	    // Radia returns A in T*m when FldUnits('m') is set, or T*mm when FldUnits('mm')
-	    // The numerical value is the same, but units match the FldUnits setting
-	    // Since we use coord_scale_ to convert coords to Radia's unit system,
-	    // the returned A is already in the correct units (T*m for NGSolve)
 	    result(0) = f_global[0];
 	    result(1) = f_global[1];
 	    result(2) = f_global[2];
@@ -499,15 +462,11 @@ public:
 	 *
 	 * Radia API notes:
 	 * - ObjM(key) returns [[Mabs_min, Mabs_avg, Mabs_max], [Mx, My, Mz]]
-	 * - ObjGeoLim(key) returns [xmin, xmax, ymin, ymax, zmin, zmax] in mm (always)
+	 * - ObjGeoLim(key) returns [xmin, xmax, ymin, ymax, zmin, zmax] in internal units (meters)
 	 * - For single elements, the key itself is the element
 	 * - For containers (ObjCnt), need to iterate through children
 	 *
-	 * IMPORTANT: ObjGeoLim always returns values in mm, regardless of FldUnits setting.
-	 * But the targets for FMM are in the user's coordinate system (coord_scale_).
-	 * So dipole positions must match: if coord_scale_=1000 (mm), positions are in mm;
-	 * if coord_scale_=1 (m), positions must be in m. Since ObjGeoLim is always mm,
-	 * we divide by coord_scale_ to convert to user's system when needed.
+	 * All coordinates are in meters (SI). No unit conversion needed.
 	 */
 	void ExtractDipolesIfNeeded() const {
 	    if (dipoles_extracted_) return;
@@ -516,8 +475,6 @@ public:
 	    py::gil_scoped_acquire acquire;
 
 	    try {
-	        py::module_ rad = py::module_::import("radia");
-
 	        dipole_cache_.clear();
 
 	        // Extract single element's dipole data
@@ -525,7 +482,7 @@ public:
 	        // TODO: Traverse container hierarchy for better accuracy
 
 	        // rad.ObjM returns [[Mabs_min, Mabs_avg, Mabs_max], [Mx, My, Mz]]
-	        py::object m_result = rad.attr("ObjM")(radia_obj);
+	        py::object m_result = rad_module_.attr("ObjM")(radia_obj);
 	        py::list m_outer = m_result.cast<py::list>();
 	        py::list m_vec = m_outer[1].cast<py::list>();
 
@@ -533,52 +490,35 @@ public:
 	        double My = m_vec[1].cast<double>();
 	        double Mz = m_vec[2].cast<double>();
 
-	        // rad.ObjGeoLim returns [xmin, xmax, ymin, ymax, zmin, zmax] in mm
-	        py::object geo_result = rad.attr("ObjGeoLim")(radia_obj);
+	        // ObjGeoLim returns [xmin, xmax, ymin, ymax, zmin, zmax] in meters (internal SI units)
+	        py::object geo_result = rad_module_.attr("ObjGeoLim")(radia_obj);
 	        py::list geo_list = geo_result.cast<py::list>();
 
-	        // ObjGeoLim is always in mm, so we get mm values here
-	        double xmin_mm = geo_list[0].cast<double>();
-	        double xmax_mm = geo_list[1].cast<double>();
-	        double ymin_mm = geo_list[2].cast<double>();
-	        double ymax_mm = geo_list[3].cast<double>();
-	        double zmin_mm = geo_list[4].cast<double>();
-	        double zmax_mm = geo_list[5].cast<double>();
+	        double xmin = geo_list[0].cast<double>();
+	        double xmax = geo_list[1].cast<double>();
+	        double ymin = geo_list[2].cast<double>();
+	        double ymax = geo_list[3].cast<double>();
+	        double zmin = geo_list[4].cast<double>();
+	        double zmax = geo_list[5].cast<double>();
 
-	        // Volume in mm^3
-	        double vol_mm3 = (xmax_mm - xmin_mm) * (ymax_mm - ymin_mm) * (zmax_mm - zmin_mm);
+	        // Volume in m^3 (all coordinates already in meters)
+	        double vol = (xmax - xmin) * (ymax - ymin) * (zmax - zmin);
 
 	        // Skip zero-volume elements
-	        if (vol_mm3 > 0.0) {
-	            // Dipole moment: m = M * V
-	            // M is in A/m, V should be in m^3 for SI units
-	            // vol_mm3 is in mm^3, so vol_m3 = vol_mm3 * 1e-9
-	            double vol_m3 = vol_mm3 * 1e-9;
-
-	            // Center in mm
-	            double cx_mm = (xmin_mm + xmax_mm) / 2.0;
-	            double cy_mm = (ymin_mm + ymax_mm) / 2.0;
-	            double cz_mm = (zmin_mm + zmax_mm) / 2.0;
-
-	            // Dipole position should match the coordinate system used for targets
-	            // Targets are multiplied by coord_scale_ in Evaluate(), so they're in mm if coord_scale_=1000
-	            // We store position in same units (mm when coord_scale_=1000, otherwise convert)
-	            // Actually: in Evaluate, targets are: pnt * coord_scale_
-	            // If coord_scale_ = 1 (user uses 'm'), targets are in m, we need positions in m
-	            // If coord_scale_ = 1000 (user uses 'mm'), targets are in mm, we need positions in mm
-	            // ObjGeoLim returns mm, so:
-	            // - if coord_scale_ = 1000, keep mm
-	            // - if coord_scale_ = 1, convert to m (divide by 1000)
-	            double len_scale = (coord_scale_ < 1.5) ? 0.001 : 1.0;  // mm->m if using meters
+	        if (vol > 0.0) {
+	            // Dipole moment: m = M [A/m] * V [m^3] = [A*m^2]
+	            double cx = (xmin + xmax) / 2.0;
+	            double cy = (ymin + ymax) / 2.0;
+	            double cz = (zmin + zmax) / 2.0;
 
 	            RadDipoleCollect::DipoleData dipole;
-	            dipole.x = cx_mm * len_scale;
-	            dipole.y = cy_mm * len_scale;
-	            dipole.z = cz_mm * len_scale;
-	            dipole.mx = Mx * vol_m3;
-	            dipole.my = My * vol_m3;
-	            dipole.mz = Mz * vol_m3;
-	            dipole.volume = vol_m3;
+	            dipole.x = cx;
+	            dipole.y = cy;
+	            dipole.z = cz;
+	            dipole.mx = Mx * vol;
+	            dipole.my = My * vol;
+	            dipole.mz = Mz * vol;
+	            dipole.volume = vol;
 
 	            // Skip zero-moment dipoles
 	            double momentMagSq = dipole.mx*dipole.mx + dipole.my*dipole.my + dipole.mz*dipole.mz;
@@ -665,7 +605,7 @@ public:
 	            result_z.assign(ntarget, 0.0);
 	        } else if (ftype == "b") {
 	            // B-field = mu0 * H
-	            const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+	            constexpr double MU_0 = RadConst::MU_0;
 	            result_x.resize(ntarget);
 	            result_y.resize(ntarget);
 	            result_z.resize(ntarget);
@@ -703,66 +643,20 @@ public:
 	        for (size_t i = 0; i < npts; i++) {
 	            auto pnt = mir[i].GetPoint();
 	            int dim = pnt.Size();
-	            // Convert to Radia units (coord_scale_: 1.0 for m, 1000.0 for mm)
-	            targets[i*3 + 0] = pnt[0] * coord_scale_;
-	            targets[i*3 + 1] = (dim >= 2) ? pnt[1] * coord_scale_ : 0.0;
-	            targets[i*3 + 2] = (dim >= 3) ? pnt[2] * coord_scale_ : 0.0;
+	            targets[i*3 + 0] = pnt[0];
+	            targets[i*3 + 1] = (dim >= 2) ? pnt[1] : 0.0;
+	            targets[i*3 + 2] = (dim >= 3) ? pnt[2] : 0.0;
 	        }
 
 	        // Compute field using FMM
 	        std::vector<double> Fx, Fy, Fz;
 	        ComputeFieldFMM(field_type, targets, npts, Fx, Fy, Fz);
 
-	        // Copy to result matrix
-	        // For vector potential A, need to scale to NGSolve units (m)
-	        // The dipole formula gives A in T*m when positions are in m
-	        // But we're using coord_scale_ for positions, so we need to adjust
-	        double scale = 1.0;
-	        if (field_type == "a" && coord_scale_ > 1.5) {
-	            // Positions were in mm, but A formula expects m
-	            // A is proportional to 1/r^2, so if r is in mm (1000x larger),
-	            // A is 1e6x smaller. We need to multiply by 1e-3 to convert.
-	            // Actually: A = mu0/4pi * (m x r)/|r|^3
-	            // If r is in mm, |r|^3 is (mm)^3 = 1e-9 m^3
-	            // So A would be 1e9 times larger if we don't adjust.
-	            // We need A in T*m for NGSolve, but positions were in mm.
-	            // The dipole moment m is in A*m^2, correct.
-	            // Let's think: if target is at 0.1m = 100mm from source
-	            // r_m = 0.1, r_mm = 100
-	            // A ~ 1/r^2, so A_m ~ 1/0.01, A_mm ~ 1/10000
-	            // A_mm = A_m / 1e6
-	            // So if we computed with mm, we get 1e-6 of the correct value
-	            // Need to multiply by 1e6? No wait...
-	            // A = mu0/4pi * (m x r) / |r|^3
-	            // If r is in mm, then |r|^3 has units mm^3
-	            // We want A in T*m
-	            // mu0/4pi has units H/m = kg*m/(A^2*s^2)
-	            // m has units A*m^2
-	            // (m x r)/|r|^3 has units (A*m^2 * mm) / mm^3 = A*m^2/mm^2
-	            // = A*m^2 / (1e-6 m^2) = 1e6 * A
-	            // So A = 1e-7 * 1e6 * A = 1e-1 * A (units are weird)
-	            // Actually easier: just convert positions to m before calling FMM
-	            // The current code scales by coord_scale_ which gives mm if user is in m
-	            // This is wrong for FMM! FMM should use consistent units.
-	            // For now, positions are stored in user units, which is m for NGSolve.
-	            // coord_scale_ is applied to match Radia's expected units.
-	            // So if coord_scale_ = 1 (user uses m), positions are in m -> correct
-	            // If coord_scale_ = 1000 (user uses mm), positions are in mm
-	            // For FMM we need positions in the same units as dipole positions
-	            // Dipole positions come from ObjGeoLim which is always in mm
-	            // So we need target positions also in mm when coord_scale_ = 1 (m)
-	            // Current: targets = pnt * coord_scale_
-	            //   coord_scale_ = 1 (m): targets in m, but dipoles in m (after len_scale)
-	            //   coord_scale_ = 1000 (mm): targets in mm, dipoles in mm
-	            // This seems correct! No additional scaling needed.
-	            // The formula gives A in T*m when everything is in SI (m).
-	            scale = 1.0;
-	        }
-
+	        // All positions are in meters (SI), results are in SI units
 	        for (size_t i = 0; i < npts; i++) {
-	            result(i, 0) = Fx[i] * scale;
-	            result(i, 1) = Fy[i] * scale;
-	            result(i, 2) = Fz[i] * scale;
+	            result(i, 0) = Fx[i];
+	            result(i, 1) = Fy[i];
+	            result(i, 2) = Fz[i];
 	        }
 	        return;
 	    }
@@ -798,78 +692,66 @@ public:
 	            if (all_cached) return;
 	        }
 
-	        // Collect all points in a Python list of lists
-	        py::list points_list;
+	        // Build numpy array of coordinates (N x 3) - avoids N*4 Python object overhead
+	        py::array_t<double> pts_arr({(py::ssize_t)npts, (py::ssize_t)3});
+	        auto pts_buf = pts_arr.mutable_unchecked<2>();
 
 	        for (size_t i = 0; i < npts; i++) {
 	            auto pnt = mir[i].GetPoint();
 	            int dim = pnt.Size();
 
-	            // Get global coordinates (NGSolve, in meters)
-	            double p_global[3];
-	            p_global[0] = pnt[0];
-	            p_global[1] = (dim >= 2) ? pnt[1] : 0.0;
-	            p_global[2] = (dim >= 3) ? pnt[2] : 0.0;
+	            double p_global[3] = {pnt[0], (dim >= 2) ? pnt[1] : 0.0, (dim >= 3) ? pnt[2] : 0.0};
 
-	            // Apply coordinate transformation if enabled
-	            double p_local[3];
 	            if (use_transform) {
-	                double p_translated[3];
-	                p_translated[0] = p_global[0] - origin[0];
-	                p_translated[1] = p_global[1] - origin[1];
-	                p_translated[2] = p_global[2] - origin[2];
-
-	                p_local[0] = dot(u_axis, p_translated);
-	                p_local[1] = dot(v_axis, p_translated);
-	                p_local[2] = dot(w_axis, p_translated);
+	                double p_t[3] = {p_global[0]-origin[0], p_global[1]-origin[1], p_global[2]-origin[2]};
+	                pts_buf(i, 0) = dot(u_axis, p_t);
+	                pts_buf(i, 1) = dot(v_axis, p_t);
+	                pts_buf(i, 2) = dot(w_axis, p_t);
 	            } else {
-	                p_local[0] = p_global[0];
-	                p_local[1] = p_global[1];
-	                p_local[2] = p_global[2];
+	                pts_buf(i, 0) = p_global[0];
+	                pts_buf(i, 1) = p_global[1];
+	                pts_buf(i, 2) = p_global[2];
 	            }
-
-	            // Convert m -> mm
-	            py::list coords;
-	            coords.append(p_local[0] * coord_scale_);
-	            coords.append(p_local[1] * coord_scale_);
-	            coords.append(p_local[2] * coord_scale_);
-
-	            points_list.append(coords);
 	        }
 
-	        // Single Python call for all points!
-	        py::module_ rad = py::module_::import("radia");
-	        py::object field_results = rad.attr("Fld")(radia_obj, field_type, points_list);
+	        // Batch compute using native numpy APIs where available
+	        // B/H -> FldBatch (numpy), a/m -> rad.Fld() multi-point
+	        py::array_t<double> field_arr;
 
-	        // field_results is a list of [Bx, By, Bz] for each point
-	        py::list results_list = field_results.cast<py::list>();
-
-	        // Extract results and apply transformations
-	        // No scaling needed - Radia returns values in consistent units with FldUnits
-
-	        for (size_t i = 0; i < npts; i++) {
-	            py::list field_list = results_list[i].cast<py::list>();
-
-	            double f_local[3];
-	            f_local[0] = field_list[0].cast<double>();
-	            f_local[1] = field_list[1].cast<double>();
-	            f_local[2] = field_list[2].cast<double>();
-
-	            // Transform field back to global coordinate system
-	            double f_global[3];
-	            if (use_transform) {
-	                f_global[0] = u_axis[0]*f_local[0] + v_axis[0]*f_local[1] + w_axis[0]*f_local[2];
-	                f_global[1] = u_axis[1]*f_local[0] + v_axis[1]*f_local[1] + w_axis[1]*f_local[2];
-	                f_global[2] = u_axis[2]*f_local[0] + v_axis[2]*f_local[1] + w_axis[2]*f_local[2];
-	            } else {
-	                f_global[0] = f_local[0];
-	                f_global[1] = f_local[1];
-	                f_global[2] = f_local[2];
+	        if (field_type == "b" || field_type == "h") {
+	            py::dict batch_result = rad_module_.attr("FldBatch")(radia_obj, pts_arr);
+	            const char* key = (field_type == "b") ? "B" : "H";
+	            field_arr = batch_result[key].cast<py::array_t<double>>();
+	        } else {
+	            // For 'a' and 'm': call rad.Fld() per point (single-point API)
+	            field_arr = py::array_t<double>({(py::ssize_t)npts, (py::ssize_t)3});
+	            auto fld_buf = field_arr.mutable_unchecked<2>();
+	            for (size_t i = 0; i < npts; i++) {
+	                py::array_t<double> coords(3);
+	                auto cb = coords.mutable_unchecked<1>();
+	                cb(0) = pts_buf(i, 0);
+	                cb(1) = pts_buf(i, 1);
+	                cb(2) = pts_buf(i, 2);
+	                py::object f = rad_module_.attr("Fld")(radia_obj, field_type, coords);
+	                auto fa = f.cast<py::array_t<double>>().unchecked<1>();
+	                fld_buf(i, 0) = fa(0);
+	                fld_buf(i, 1) = fa(1);
+	                fld_buf(i, 2) = fa(2);
 	            }
+	        }
 
-	            result(i, 0) = f_global[0];
-	            result(i, 1) = f_global[1];
-	            result(i, 2) = f_global[2];
+	        auto fld = field_arr.unchecked<2>();
+	        for (size_t i = 0; i < npts; i++) {
+	            double f_local[3] = {fld(i, 0), fld(i, 1), fld(i, 2)};
+	            if (use_transform) {
+	                result(i, 0) = u_axis[0]*f_local[0] + v_axis[0]*f_local[1] + w_axis[0]*f_local[2];
+	                result(i, 1) = u_axis[1]*f_local[0] + v_axis[1]*f_local[1] + w_axis[1]*f_local[2];
+	                result(i, 2) = u_axis[2]*f_local[0] + v_axis[2]*f_local[1] + w_axis[2]*f_local[2];
+	            } else {
+	                result(i, 0) = f_local[0];
+	                result(i, 1) = f_local[1];
+	                result(i, 2) = f_local[2];
+	            }
 	        }
 
 	    } catch (std::exception &e) {
@@ -888,19 +770,19 @@ public:
 } // namespace ngfem
 
 PYBIND11_MODULE(radia_ngsolve, m) {
-	m.doc() = "NGSolve CoefficientFunction interface for Radia (with m->mm conversion and coordinate transformation)";
+	m.doc() = "NGSolve CoefficientFunction interface for Radia (with coordinate transformation support)";
 
 	// Unified interface with coordinate transformation
 	py::class_<ngfem::RadiaFieldCF,
 	           std::shared_ptr<ngfem::RadiaFieldCF>,
 	           ngfem::CoefficientFunction>(m, "RadiaField")
-	    .def(py::init<int>(), py::arg("radia_obj"),
-	         "Create Radia field CoefficientFunction (default: magnetic flux density)")
-	    .def(py::init<int, const std::string&>(),
-	         py::arg("radia_obj"), py::arg("field_type"),
-	         "Create Radia field CoefficientFunction\n"
-	         "field_type: 'b' (flux density), 'h' (field), 'a' (vector potential), 'm' (magnetization)")
-	    .def(py::init<int, const std::string&, py::object, py::object, py::object, py::object, py::object, const std::string&, double>(),
+	    .def(py::init<int, const std::string&,
+	                  std::optional<std::vector<double>>,
+	                  std::optional<std::vector<double>>,
+	                  std::optional<std::vector<double>>,
+	                  std::optional<std::vector<double>>,
+	                  std::optional<double>,
+	                  const std::string&, double>(),
 	         py::arg("radia_obj"),
 	         py::arg("field_type") = "b",
 	         py::arg("origin") = py::none(),
@@ -919,7 +801,7 @@ PYBIND11_MODULE(radia_ngsolve, m) {
 	         "  v_axis: Local v-axis [vx, vy, vz] (default: [0, 1, 0]) - will be normalized\n"
 	         "  w_axis: Local w-axis [wx, wy, wz] (default: [0, 0, 1]) - will be normalized\n"
 	         "  precision: Computation precision in Tesla (default: None = Radia default)\n"
-	         "  units: Coordinate units - 'm' (meters, default) or 'mm' (millimeters)\n"
+	         "  units: Coordinate units - must be 'm' (meters). Requires rad.FldUnits('m').\n"
 	         "  fmm_eps: FMM tolerance for field computation (0 = disabled, typical: 1e-4 to 1e-6)\n\n"
 	         "FMM acceleration (Fast Multipole Method / Dipole Approximation):\n"
 	         "  When fmm_eps > 0, field computation uses dipole approximation.\n"

@@ -347,7 +347,7 @@ mat = rad.MatLin([mu_r_par, mu_r_perp], [ex, ey, ez])
 
 ```python
 # Easy axis in z-direction
-mat = rad.MatLin([5001, 101], [0, 0, 1])
+mat = rad.MatLin([5000, 100], [0, 0, 1])
 ```
 
 ### MatSatIsoTab - Nonlinear (B-H Table)
@@ -384,6 +384,8 @@ mat = rad.MatSatIsoFrm([ksi1, ms1], [ksi2, ms2], [ksi3, ms3])
 ```
 
 Formula: `M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3)`
+
+**Note**: `ksi` here is a **fitting parameter** for the tanh saturation formula (initial susceptibility of each term), not the same as the bulk susceptibility chi = mu_r - 1.
 
 ```python
 # Steel37 (C<0.13%)
@@ -540,7 +542,7 @@ rad.SetRelaxParam(relax)
 **Notes:**
 - Affects all solver methods (0=LU, 1=BiCGSTAB, 2=HACApK)
 - `relax=0.0`: Full Newton step (default, fastest convergence when stable)
-- `relax>0.0`: Damped update: `chi_new = chi_new*(1-relax) + chi_old*relax`
+- `relax>0.0`: Damped update: `M_new = M_computed*(1-relax) + M_old*relax`
 - Use under-relaxation (e.g., 0.2-0.5) when:
   - Convergence is slow or oscillating
   - Material has steep B-H curve
@@ -761,18 +763,6 @@ for el in elements:
 | `compute_element_centroid()` | Compute centroid from vertex list |
 | `create_radia_tetrahedron()` | Create single Radia tetrahedron |
 | `create_radia_hexahedron()` | Create single Radia hexahedron |
-
-### create_radia_from_nastran - Nastran Import
-
-```python
-from nastran_mesh_import import create_radia_from_nastran
-
-mag_obj = create_radia_from_nastran('model.bdf',
-                                     material={'magnetization': [0, 0, 1e6]},
-                                     units='m')
-```
-
-**Supported Nastran elements**: CTETRA, CHEXA, CPENTA, CPYRAM, CTRIA3
 
 ---
 

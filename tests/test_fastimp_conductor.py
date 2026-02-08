@@ -21,8 +21,7 @@ import sys
 import os
 
 # Add build directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../build/Release'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../build-msvc'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src'))
 
 # Physical constants
 MU_0 = 4e-7 * np.pi  # H/m
