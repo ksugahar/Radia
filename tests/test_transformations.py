@@ -11,7 +11,7 @@ Tests transformation creation and application:
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../build/Release"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 import pytest
 import radia as rad

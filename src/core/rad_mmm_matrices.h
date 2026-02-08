@@ -593,10 +593,12 @@ private:
 // Physical Constants
 //=========================================================================
 
+#include "rad_constants.h"
+
 namespace constants {
-    constexpr double MU_0 = 4.0 * 3.14159265358979323846 * 1e-7;  // H/m
-    constexpr double INV_FOUR_PI = 1.0 / (4.0 * 3.14159265358979323846);
-    constexpr double MU_0_OVER_FOUR_PI = 1e-7;  // H/m
+    constexpr double MU_0 = RadConst::MU_0;
+    constexpr double INV_FOUR_PI = 1.0 / (4.0 * RadConst::PI);
+    constexpr double MU_0_OVER_FOUR_PI = RadConst::MU_0 * INV_FOUR_PI;
 }
 
 }  // namespace mmm

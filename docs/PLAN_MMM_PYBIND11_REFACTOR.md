@@ -46,8 +46,11 @@ solver = mmm_core.MMMSolver()
 solver.set_matrix(N, dof_offset)
 
 # LU直接法
+# Note: mmm_core内部APIはchi (= mu_r - 1)を使用。
+# ユーザー向けAPIの rad.MatLin(mu_r) は自動変換する。
 mu_r = 1000
-inv_chi = np.full(n_elem, 1.0 / (mu_r - 1))
+chi = mu_r - 1  # chi = 999
+inv_chi = np.full(n_elem, 1.0 / chi)
 H_ext = np.array([0, 0, 1e5, ...])  # total_dof
 M = solver.solve_lu(inv_chi, H_ext, chi_per_element=True)
 
@@ -58,6 +61,7 @@ M, iterations = solver.solve_bicgstab(inv_chi, H_ext, tol=1e-8, max_iter=1000, c
 hacapk_solver = mmm_core.MMMHACApKSolver()
 hacapk_solver.set_from_builder(builder, dof_offset)
 success = hacapk_solver.build_hmatrix(inv_chi, eps=1e-4, leaf_size=10, eta=2.0, print_level=0)
+# inv_chi = 1/(mu_r - 1) per element
 y = hacapk_solver.matvec(x)  # H行列-ベクトル積 (内部で置換処理済み)
 stats = hacapk_solver.get_stats()  # 圧縮統計
 
@@ -69,6 +73,7 @@ B = field_computer.compute_b_field(M, obs_points)
 H = field_computer.compute_h_field(M, obs_points)
 
 # === 非線形ヘルパー ===
+# BH曲線からchi (= mu_r - 1)を計算
 chi = mmm_core.compute_chi_from_bh(M_flat, H_flat, bh_curve)
 max_change = mmm_core.check_convergence(B_new, B_old, B_sat)
 ```

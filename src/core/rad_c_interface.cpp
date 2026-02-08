@@ -1382,21 +1382,21 @@ void NonlinearIsotropMaterial3()
 
 //-------------------------------------------------------------------------
 
-void NonlinearIsotropMaterial3Opt(double** HandM_Array, long LenHandM_Array)
+void NonlinearIsotropMaterial3Opt(double** HandB_Array, long LenHandB_Array)
 {
-	std::vector<TVector2d> vArrayOfPoints2d(LenHandM_Array);
+	std::vector<TVector2d> vArrayOfPoints2d(LenHandB_Array);
 	TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
 	TVector2d* tArrayOfPoints2d = ArrayOfPoints2d;
-	double** tHandM_Array = HandM_Array;
+	double** tHandB_Array = HandB_Array;
 
-	for(long i=0; i<LenHandM_Array; i++)
+	for(long i=0; i<LenHandB_Array; i++)
 	{
-		tArrayOfPoints2d->x = **tHandM_Array;
-		(tArrayOfPoints2d++)->y = (*tHandM_Array)[1];
-		tHandM_Array++;
+		tArrayOfPoints2d->x = **tHandB_Array;        // H [A/m]
+		(tArrayOfPoints2d++)->y = (*tHandB_Array)[1]; // B [T]
+		tHandB_Array++;
 	}
 
-	rad.SetNonlinearIsotropMaterial(ArrayOfPoints2d, (int)LenHandM_Array);
+	rad.SetNonlinearIsotropMaterial(ArrayOfPoints2d, (int)LenHandB_Array);
 	// RAII: automatic cleanup
 }
 

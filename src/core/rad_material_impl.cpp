@@ -369,13 +369,13 @@ int radTApplication::ValidateIsotropMaterDescrByPoints(TVector2d* ArrayHB, int L
 		if((ArrayHB->x < 0.) || (ArrayHB->y < 0.)) { Send.ErrorMessage("Radia::Error071"); return 0;}
 
 		TVector2d* tArrayHB = ArrayHB;
-		double Hprev = -1, Mprev = -1;
+		double Hprev = -1, Bprev = -1;
 		for(int i=0; i<LenArrayHB; i++)
 		{
 			if(tArrayHB->x < Hprev) { Send.ErrorMessage("Radia::Error071"); return 0;}
-			if(tArrayHB->y < 0.95*Mprev) { Send.WarningMessage("Radia::Warning014");}
+			if(tArrayHB->y < 0.95*Bprev) { Send.WarningMessage("Radia::Warning014");}
 
-			Hprev = tArrayHB->x; Mprev = tArrayHB->y;
+			Hprev = tArrayHB->x; Bprev = tArrayHB->y;
 			tArrayHB++;
 		}
 		return 1;
@@ -1485,7 +1485,7 @@ int radTApplication::GetInteractMatrix(int InteractElemKey, double* pMatrix, int
 			const double* matrixData = InteractPtr->GetFlatInteractMatrix();
 			if(matrixData != nullptr)
 			{
-				// Copy matrix data (column-major format)
+				// Copy matrix data (row-major format: A[target][source])
 				long matrixSize = (long)totalDOF * (long)totalDOF;
 				std::memcpy(pMatrix, matrixData, matrixSize * sizeof(double));
 			}
