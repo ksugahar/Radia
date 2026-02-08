@@ -159,7 +159,7 @@ import radia as rad
 container = rad.ObjCnt([...])
 
 # Apply material
-mat = rad.MatLin(999)  # mu_r = 1000
+mat = rad.MatLin(1000)  # mu_r = 1000
 rad.MatApl(container, mat)
 
 # Solve with rad.Solve() - recommended API
