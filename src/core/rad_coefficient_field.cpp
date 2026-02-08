@@ -75,7 +75,7 @@ void radTCoefficientFunctionFieldSource::B_comp(radTField* FieldPtr)
 	PyGILState_STATE gstate = PyGILState_Ensure();
 
 	try {
-		// Prepare coordinates as Python list [x, y, z] in mm
+		// Prepare coordinates as Python list [x, y, z] in internal units (meters)
 		PyObject* coords = PyList_New(3);
 		PyList_SetItem(coords, 0, PyFloat_FromDouble(FieldPtr->P.x));
 		PyList_SetItem(coords, 1, PyFloat_FromDouble(FieldPtr->P.y));

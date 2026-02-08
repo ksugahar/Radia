@@ -25,6 +25,13 @@ mu_r = B / (mu_0 * H) = 1 + chi
 chi = mu_r - 1
 ```
 
+**Radia Python API**: `rad.MatLin()` takes **mu_r** (relative permeability, >= 1.0).
+Radia internally converts to chi = mu_r - 1 before passing to the C++ solver.
+```python
+mat = rad.MatLin(1000)           # mu_r = 1000, internally chi = 999
+mat = rad.MatLin([5000, 100], [0, 0, 1])  # anisotropic, easy axis in z
+```
+
 **Common Mistake**: Do NOT confuse M with J (magnetic polarization).
 - M (magnetization): A/m
 - J (magnetic polarization): J = mu_0 * M, in Tesla
@@ -141,7 +148,9 @@ radia_block = radia_matrix[i*6:(i+1)*6, j*6:(j+1)*6]
 elf_block = radia_block.T  # Transpose for column-major storage
 ```
 
-## Nastran CHEXA Format
+## Nastran CHEXA Format (Reference Only)
+
+**Note**: Nastran BDF import is removed from Radia. This section is kept as a reference for understanding ELF's element conventions. Use Coreform Cubit for mesh generation.
 
 ```
 CHEXA  EID     PID     G1      G2      G3      G4      G5      G6      +

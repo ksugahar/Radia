@@ -1269,7 +1269,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	std::vector<double> RHS(totalDOF);
 
 	// Update diagonal and RHS based on current chi
-	// Matrix is COLUMN-MAJOR: A(i,j) at [j * totalDOF + i]
+	// Matrix is ROW-MAJOR: A(i,j) at [i * totalDOF + j]
 	// Diagonal element A(k,k) is at [k * totalDOF + k] = [k * (totalDOF + 1)]
 #ifdef RADIA_DEBUG_CHI
 	fprintf(stderr, "=== LU Solver Debug: chi and matrix values ===\n");
@@ -1391,8 +1391,8 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 	// - MMM (3 DOF): FlatInteract stores N, equation is (-N - I/chi) -> negate N, subtract I/chi
 	// - MSC (6 DOF): FlatInteract stores -K/(4pi), equation is (-K/(4pi) - I/chi) -> use as-is, subtract I/chi
 	//
-	// IMPORTANT: FlatInteract is stored in COLUMN-MAJOR format (Fortran/LAPACK style)
-	// Element at (row, col) is at index [col * totalDOF + row]
+	// IMPORTANT: FlatInteract is stored in ROW-MAJOR format (C/NumPy style)
+	// Element at (row, col) is at index [row * totalDOF + col]
 
 	const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
 	if(FlatInteract == nullptr) return;
@@ -1485,22 +1485,22 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 			int dof_col = IntrctPtr->GetElementDOF(col_elem);
 			int offset_col = IntrctPtr->GetElementDOFOffset(col_elem);
 
-			// Get block from flat matrix - COLUMN-MAJOR: block starts at [col * totalDOF + row]
+			// Get block from flat matrix - ROW-MAJOR: block starts at [row * totalDOF + col]
 			// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-			const double* block = &FlatInteract[(size_t)offset_col * totalDOF + offset_row];
+			const double* block = &FlatInteract[(size_t)offset_row * totalDOF + offset_col];
 
 			// Physical equation: A = -K/(4pi) + diag(1/chi)
 			// FlatInteract stores K/(4pi) for MSC and N for MMM - negate both
 			double sign = -1.0;
 
-			// Column-major block access: element (i, j) within block is at [j * totalDOF + i]
+			// Row-major block access: element (i, j) within block is at [i * totalDOF + j]
 			// CRITICAL: Use size_t cast for indexing with totalDOF
 			for(int i = 0; i < dof_row; i++)
 			{
 				double sum = 0.0;
 				for(int j = 0; j < dof_col; j++)
 				{
-					sum += block[(size_t)j * totalDOF + i] * x[offset_col + j];
+					sum += block[(size_t)i * totalDOF + j] * x[offset_col + j];
 				}
 				y[offset_row + i] += sign * sum;
 			}

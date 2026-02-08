@@ -210,6 +210,9 @@ int ObjHexahedron(py::list vertices, py::array_t<double> magnetization) {
     //   Face 4 (index 3): x- = 1-4-8-5  (left)
     //   Face 5 (index 4): y+ = 3-7-8-4  (back)
     //   Face 6 (index 5): z+ = 5-8-7-6  (top)
+    // NOTE: 1-indexed vertex references (Radia C++ core convention).
+    // v[] array above is 0-indexed for coordinate access.
+    // These indices are passed directly to PolyhedronDLL which expects 1-indexed.
     static const int NETGEN_FACES[6][4] = {
         {1, 2, 3, 4},  // Face 0: z- (bottom)
         {2, 6, 7, 3},  // Face 1: x+ (right)
@@ -671,15 +674,22 @@ int MatLin(py::object mu_r, py::object easy_axis = py::none()) {
     int handle = 0;
 
     if (py::isinstance<py::float_>(mu_r) || py::isinstance<py::int_>(mu_r)) {
-        // Isotropic material
-        double ksi = mu_r.cast<double>();
+        // Isotropic material: convert mu_r to chi (susceptibility)
+        double mu_r_val = mu_r.cast<double>();
+        if (mu_r_val < 1.0) {
+            throw std::runtime_error("mu_r must be >= 1.0 (relative permeability)");
+        }
+        double ksi = mu_r_val - 1.0;  // chi = mu_r - 1
         int err = RadMatLinIso(&handle, ksi);
         check_error(err);
     } else {
-        // Anisotropic material
+        // Anisotropic material: convert [mu_par, mu_perp] to [chi_par, chi_perp]
         auto mu = to_vector(mu_r);
         if (mu.size() != 2) {
             throw std::runtime_error("For anisotropic material, mu_r must be [mu_par, mu_perp]");
+        }
+        if (mu[0] < 1.0 || mu[1] < 1.0) {
+            throw std::runtime_error("mu_r values must be >= 1.0 (relative permeability)");
         }
 
         if (easy_axis.is_none()) {
@@ -691,7 +701,7 @@ int MatLin(py::object mu_r, py::object easy_axis = py::none()) {
             throw std::runtime_error("easy_axis must have 3 components");
         }
 
-        double Ksi[2] = {mu[0], mu[1]};
+        double Ksi[2] = {mu[0] - 1.0, mu[1] - 1.0};  // chi = mu_r - 1
         int err = RadMatLinAniso(&handle, Ksi, axis.data());
         check_error(err);
     }
@@ -865,14 +875,15 @@ py::tuple GetInteractMatrix(int intrc_handle) {
     err = RadGetInteractMatrix(matrix_data.data(), &dof, intrc_handle);
     check_error(err);
 
-    // Create numpy array (column-major to row-major conversion)
+    // Create numpy array from row-major FlatInteract data
     py::array_t<double> result({dof, dof});
     auto r = result.mutable_unchecked<2>();
 
-    // Matrix is stored column-major (Fortran/LAPACK), convert to row-major
+    // FlatInteract is stored ROW-MAJOR: A[i][j] at index [i * dof + j]
+    // This matches C/NumPy convention, so direct copy
     for (int i = 0; i < dof; i++) {
         for (int j = 0; j < dof; j++) {
-            r(i, j) = matrix_data[j * dof + i];  // Column-major to row-major
+            r(i, j) = matrix_data[i * dof + j];  // Row-major: A[target][source]
         }
     }
 

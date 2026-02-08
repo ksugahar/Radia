@@ -10,7 +10,7 @@ Tests material definition and application:
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../build/Release"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 import pytest
 import radia as rad
@@ -24,8 +24,8 @@ class TestLinearMaterials:
 		"""Test linear isotropic material"""
 		rad.UtiDelAll()
 
-		# Create linear isotropic material: MatLin(ksi)
-		# Single ksi value for isotropic (same in all directions)
+		# Create linear isotropic material: MatLin(mu_r)
+		# Single mu_r value for isotropic (same in all directions)
 		mat = rad.MatLin(1000)
 		assert mat > 0, "Linear material should have valid index"
 
@@ -33,7 +33,7 @@ class TestLinearMaterials:
 		"""Test linear anisotropic material"""
 		rad.UtiDelAll()
 
-		# Create anisotropic material: different ksi in parallel and perpendicular
+		# Create anisotropic material: different mu_r in parallel and perpendicular
 		mat = rad.MatLin([2000, 500], [0, 0, 1])
 		assert mat > 0
 
@@ -42,7 +42,7 @@ class TestLinearMaterials:
 		rad.UtiDelAll()
 
 		# Soft iron: high permeability, isotropic (no remanence)
-		# Use new isotropic API: MatLin(ksi)
+		# Use isotropic API: MatLin(mu_r)
 		mat = rad.MatLin(5000)
 		assert mat > 0
 
@@ -54,7 +54,7 @@ class TestLinearMaterials:
 		mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
 
 		# Create and apply material (anisotropic, easy axis [1,1,1])
-		mat = rad.MatLin([1000, 0], [1, 1, 1])
+		mat = rad.MatLin([1000, 1], [1, 1, 1])
 		rad.MatApl(mag, mat)
 
 		# Compute field - should be non-zero
@@ -108,7 +108,7 @@ class TestMaterialOnGroups:
 		group = rad.ObjCnt([mag1, mag2])
 
 		# Apply material to group (anisotropic, easy axis [1,1,1])
-		mat = rad.MatLin([1000, 0], [1, 1, 1])
+		mat = rad.MatLin([1000, 1], [1, 1, 1])
 		rad.MatApl(group, mat)
 
 		# Should compute field
@@ -121,11 +121,11 @@ class TestMaterialOnGroups:
 
 		# Create two magnets with different materials
 		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-		mat1 = rad.MatLin([1000, 0], [1, 1, 1])  # Easy axis [1,1,1]
+		mat1 = rad.MatLin([1000, 1], [1, 1, 1])  # Easy axis [1,1,1]
 		rad.MatApl(mag1, mat1)
 
 		mag2 = rad.ObjRecMag([20, 0, 0], [10, 10, 10], [0, 0, 1])
-		mat2 = rad.MatLin([2000, 0], [1, 0, 0])  # Easy axis [1,0,0] (x-direction)
+		mat2 = rad.MatLin([2000, 1], [1, 0, 0])  # Easy axis [1,0,0] (x-direction)
 		rad.MatApl(mag2, mat2)
 
 		# Group them
@@ -150,9 +150,6 @@ class TestMaterialWithRelaxation:
 		HM_data = [[0, 0], [100, 800], [500, 1200], [1000, 1400], [5000, 1500], [10000, 1500]]
 		mat = rad.MatSatIsoTab(HM_data)
 		rad.MatApl(core, mat)
-
-		# Create interaction for solving
-		rad.ObjDrwAtr(core, [1, 0, 0])  # Color (for drawing)
 
 		# Solve (may fail if problem is simple, but shouldn't crash)
 		try:

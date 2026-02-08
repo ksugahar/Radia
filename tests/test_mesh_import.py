@@ -19,8 +19,7 @@ import unittest
 import numpy as np
 
 # Add Radia build path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../build/Release'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src'))
 
 import radia as rad
 
@@ -345,7 +344,7 @@ class TestMeshImportSolver(unittest.TestCase):
         container = rad.ObjCnt(polyhedra)
 
         # Apply linear material (mu_r = 1000)
-        mat = rad.MatLin(999.0)  # chi = mu_r - 1
+        mat = rad.MatLin(1000)  # mu_r = 1000
         rad.MatApl(container, mat)
 
         # External field
@@ -391,7 +390,7 @@ class TestMeshImportSolver(unittest.TestCase):
             polyhedra.append(obj)
 
         cube_hex = rad.ObjCnt(polyhedra)
-        mat = rad.MatLin(mu_r - 1)
+        mat = rad.MatLin(mu_r)
         rad.MatApl(cube_hex, mat)
         ext = rad.ObjBckg(lambda p: [0, 0, B_ext])
         grp_hex = rad.ObjCnt([cube_hex, ext])

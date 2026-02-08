@@ -2215,6 +2215,27 @@ Radia uses **MSC (Magnetic Surface Charge)** for all hexahedral elements:
 - Computes field using **solid angle integration** formula (van Oosterom & Strackee, 1983)
 - Handles **outward normal orientation** automatically
 
+### EIEM2 Evaluation Point Convention (2026-02-08)
+
+**CRITICAL**: Radia's MSC implementation matches **ELF's EIEM2** (Element Integral Equation Method, Order 2) exactly.
+
+**Evaluation Point**: The interaction matrix evaluation point for face `i` is the **midpoint between the face center and the element center**:
+
+```cpp
+EvalPt = 0.5 * (FaceCenter[i] + ElementCenter)
+```
+
+**Do NOT change this evaluation point**. This is the correct EIEM2 convention used in ELF.
+
+**Face Center**: Geometric centroid (arithmetic mean of 4 face vertices in global 3D coordinates). Matches ELF convention.
+
+**Element Center (CentrPoint)**: Arithmetic mean of all 8 hex vertices in global 3D coordinates.
+
+**Source Files**:
+- `rad_interaction.cpp`: `PrecomputeHexaGeometry()` stores eval points in `m_hexaEvalPoints`
+- `rad_interaction.cpp`: `SetupInteractMatrix_VariableDOF()` uses same eval point formula
+- `rad_hacapk.cpp`: On-demand 6x6 block computation uses same eval point formula
+
 ### Quick Start
 
 **Tetrahedral mesh (Netgen)**:
