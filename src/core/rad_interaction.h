@@ -320,8 +320,8 @@ public:
 	};
 
 	// IMA (Image Method of Analysis) implementation notes:
-	// Netgen face ordering: DOFs [0, 1, 2, 3, 4, 5] = z-, z+, y-, y+, x-, x+
-	// (Matches netgen_mesh_import.py HEX_FACES)
+	// Netgen face ordering: DOFs [0, 1, 2, 3, 4, 5] = z-, x+, y-, x-, y+, z+
+	// (Matches NETGEN_FACES in radia_pybind.cpp)
 	//
 	// IMA simply adds mirrored kernel contributions:
 	//   K_IMA[i,j] = K[i,j] + K[i, mirror(j)] * sign
@@ -331,30 +331,32 @@ public:
 	// computes field contributions directly from mirrored face positions.
 	//
 	// Legacy permutation arrays (DEPRECATED - kept for reference only)
-	static constexpr int IMA_PERM_X[6] = {0, 1, 2, 3, 5, 4};  // Swap x- and x+ (faces 4,5)
-	static constexpr int IMA_PERM_Y[6] = {0, 1, 3, 2, 4, 5};  // Swap y- and y+ (faces 2,3)
-	static constexpr int IMA_PERM_Z[6] = {1, 0, 2, 3, 4, 5};  // Swap z- and z+ (faces 0,1)
+	static constexpr int IMA_PERM_X[6] = {0, 3, 2, 1, 4, 5};  // Swap x+ and x- (faces 1,3)
+	static constexpr int IMA_PERM_Y[6] = {0, 1, 4, 3, 2, 5};  // Swap y- and y+ (faces 2,4)
+	static constexpr int IMA_PERM_Z[6] = {5, 1, 2, 3, 4, 0};  // Swap z- and z+ (faces 0,5)
 
 	// IMA kernel formula (no permutation needed):
 	//            = K_AA + Q @ K_BA
 	//
-	// IMA row permutation based on Netgen face ordering: 0=z-, 1=z+, 2=y-, 3=y+, 4=x-, 5=x+
+	// IMA row permutation based on Netgen face ordering: 0=z-, 1=x+, 2=y-, 3=x-, 4=y+, 5=z+
 	// Using Compute6x6BlockMirroredTarget to get K_BA directly,
 	// we apply the Q row permutation that accounts for face swapping after mirroring.
+	// NOTE: Compute6x6BlockIMA (which uses these arrays) is currently dead code.
+	// The active IMA path uses kernel-based Compute6x6BlockFast which needs no permutation.
 	//
-	// For x-mirror: faces 4 (x-) and 5 (x+) swap
-	//   Q_x = [0, 1, 2, 3, 5, 4]
-	static constexpr int IMA_ROW_PERM_X[6] = {0, 1, 2, 3, 5, 4};  // Swap Face 4 <-> Face 5
+	// For x-mirror: faces 1 (x+) and 3 (x-) swap
+	//   Q_x = [0, 3, 2, 1, 4, 5]
+	static constexpr int IMA_ROW_PERM_X[6] = {0, 3, 2, 1, 4, 5};  // Swap Face 1 <-> Face 3
 	static constexpr int IMA_COL_PERM_X[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
 
-	// For y-mirror: faces 2 (y-) and 3 (y+) swap
-	//   Q_y = [0, 1, 3, 2, 4, 5]
-	static constexpr int IMA_ROW_PERM_Y[6] = {0, 1, 3, 2, 4, 5};  // Swap Face 2 <-> Face 3
+	// For y-mirror: faces 2 (y-) and 4 (y+) swap
+	//   Q_y = [0, 1, 4, 3, 2, 5]
+	static constexpr int IMA_ROW_PERM_Y[6] = {0, 1, 4, 3, 2, 5};  // Swap Face 2 <-> Face 4
 	static constexpr int IMA_COL_PERM_Y[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
 
-	// For z-mirror: faces 0 (z-) and 1 (z+) swap
-	//   Q_z = [1, 0, 2, 3, 4, 5]
-	static constexpr int IMA_ROW_PERM_Z[6] = {1, 0, 2, 3, 4, 5};  // Swap Face 0 <-> Face 1
+	// For z-mirror: faces 0 (z-) and 5 (z+) swap
+	//   Q_z = [5, 1, 2, 3, 4, 0]
+	static constexpr int IMA_ROW_PERM_Z[6] = {5, 1, 2, 3, 4, 0};  // Swap Face 0 <-> Face 5
 	static constexpr int IMA_COL_PERM_Z[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
 
 	int AmOfRelaxSubInterv;

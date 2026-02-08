@@ -1,7 +1,7 @@
 # ELF と Radia のメッシュ規約の比較
 
 **作成日**: 2026-01-30
-**更新日**: 2026-01-30
+**更新日**: 2026-02-08
 **目的**: ELF_MAGIC と Radia の六面体（ヘキサヘドロン）要素における規約の違いを文書化
 
 ## 概要
@@ -55,7 +55,7 @@ elf_matrix = elf_matrix_raw.T  # 転置して使用
 
 ### 結論: 同一
 
-両ソルバーとも**標準 CHEXA 頂点順序**（Netgen/Nastran 互換）を使用しています。
+両ソルバーとも**標準 CHEXA 頂点順序**（Netgen 互換、Nastran CHEXA相当）を使用しています。
 
 ```
       v7 -------- v6
@@ -84,14 +84,14 @@ elf_matrix = elf_matrix_raw.T  # 転置して使用
 
 ### 結論: 異なる
 
-| Radia面 | Radia方向 | ELF面 | ELF方向 |
-|---------|----------|-------|--------|
-| 0 | z- (底面) | 4 | z- |
-| 1 | z+ (上面) | 5 | z+ |
-| 2 | y- (前面) | 0 | y- |
-| 3 | y+ (後面) | 2 | y+ |
-| 4 | x- (左面) | 1 | x- |
-| 5 | x+ (右面) | 3 | x+ |
+| Radia面 | Radia方向 | Radia頂点 | ELF面 | ELF方向 | ELF頂点 (kkh) |
+|---------|----------|-----------|-------|--------|---------------|
+| 0 | z- (底面) | {v0,v1,v2,v3} | 4 | z- | {v3,v2,v1,v0} |
+| 1 | x+ (右面) | {v1,v5,v6,v2} | 1 | x+ | {v1,v2,v6,v5} |
+| 2 | y- (前面) | {v0,v4,v5,v1} | 0 | y- | {v0,v1,v5,v4} |
+| 3 | x- (左面) | {v0,v3,v7,v4} | 3 | x- | {v3,v0,v4,v7} |
+| 4 | y+ (後面) | {v2,v6,v7,v3} | 2 | y+ | {v2,v3,v7,v6} |
+| 5 | z+ (上面) | {v4,v7,v6,v5} | 5 | z+ | {v4,v5,v6,v7} |
 
 ### 置換行列
 
@@ -99,22 +99,41 @@ Radia から ELF への変換:
 
 ```
 置換: Radia面 -> ELF面
-  0 -> 4
-  1 -> 5
-  2 -> 0
-  3 -> 2
-  4 -> 1
-  5 -> 3
+  0 -> 4  (z-)
+  1 -> 1  (x+)
+  2 -> 0  (y-)
+  3 -> 3  (x-)
+  4 -> 2  (y+)
+  5 -> 5  (z+)
 
-置換ベクトル: [4, 5, 0, 2, 1, 3]
+置換ベクトル: radia_to_elf = [4, 1, 0, 3, 2, 5]
+
+ELF の対角値を Radia 順に並べ替える:
+  radia_ordered[i] = elf_diag[radia_to_elf[i]]
 
 置換行列 P:
-[[0 0 1 0 0 0]
- [0 0 0 0 1 0]
- [0 0 0 1 0 0]
- [0 0 0 0 0 1]
+[[0 0 0 0 1 0]
+ [0 1 0 0 0 0]
  [1 0 0 0 0 0]
- [0 1 0 0 0 0]]
+ [0 0 0 1 0 0]
+ [0 0 1 0 0 0]
+ [0 0 0 0 0 1]]
+```
+
+### Radia 面順序の定義元
+
+Radia の面順序は `radia_pybind.cpp` の `NETGEN_FACES` 定数で定義:
+
+```cpp
+static const int NETGEN_FACES[6][4] = {
+    {1, 2, 3, 4},  // Face 0: z- (bottom) = {v0,v1,v2,v3}
+    {2, 6, 7, 3},  // Face 1: x+ (right)  = {v1,v5,v6,v2}
+    {1, 5, 6, 2},  // Face 2: y- (front)  = {v0,v4,v5,v1}
+    {1, 4, 8, 5},  // Face 3: x- (left)   = {v0,v3,v7,v4}
+    {3, 7, 8, 4},  // Face 4: y+ (back)   = {v2,v6,v7,v3}
+    {5, 8, 7, 6}   // Face 5: z+ (top)    = {v4,v7,v6,v5}
+};
+// Note: NETGEN_FACES uses 1-indexed vertex IDs
 ```
 
 ## 符号規約（Sign Convention）
@@ -124,7 +143,7 @@ Radia から ELF への変換:
 | 項目 | Radia | ELF |
 |------|-------|-----|
 | 対角成分 | 負 (-1.5684) | 負 (-1.5684) |
-| 行列定義 | N = 相互作用行列 | A = N - diag(1/chi) |
+| 行列定義 | N = 相互作用行列 | A = N - diag(1/chi), chi = mu_r - 1 |
 
 ### 物理的解釈
 
@@ -165,6 +184,14 @@ A_ELF_raw = P @ N_Radia^T @ P^T
 
 **重要**: 置換は要素形状（立方体/直方体）に依存せず、面の命名規約のみに依存します。
 
+**V304モデル** (74要素、歪んだ六面体、EIEM2メッシュ):
+- 対角成分比較（radia_to_elf = [4, 1, 0, 3, 2, 5] で並べ替え）:
+  - 全74要素のうち、最大誤差 < 1%: 32要素 (43%)
+  - 全74要素のうち、最大誤差 < 5%: 48要素 (65%)
+  - 対角和の相対差: 0.7-1.7%
+- 残差の主な原因: 同一形状面ペア（x方向押出し）でRadiaは同一値、ELFは異なる値
+- 結論: トポロジカル面順序の検証に成功。残差は実装詳細の違い（評価点計算等）に起因
+
 ## コード例
 
 ### Python による行列変換
@@ -174,7 +201,7 @@ import numpy as np
 
 def create_permutation_matrix():
     """Radia -> ELF の置換行列を作成"""
-    perm = [4, 5, 0, 2, 1, 3]  # Radia面 -> ELF面
+    perm = [4, 1, 0, 3, 2, 5]  # Radia面 -> ELF面
     P = np.zeros((6, 6))
     for radia_i, elf_i in enumerate(perm):
         P[elf_i, radia_i] = 1.0
@@ -197,7 +224,8 @@ def elf_raw_to_radia_matrix(elf_A_raw):
 
 def read_elf_matrix_and_convert(mat_file):
     """ELFファイルを読み込み、Radia形式に変換"""
-    from elf_nastran_reader import read_elf_matrix
+    # ELF行列読み込み関数（verify_elf_radia.pyのload_elf_matrix等を使用）
+    from verify_elf_radia import load_elf_matrix as read_elf_matrix
     elf_raw = read_elf_matrix(mat_file)
     # 6x6ブロックごとに変換
     n = elf_raw.shape[0]
@@ -238,3 +266,4 @@ def read_elf_matrix_and_convert(mat_file):
 |------|----------|
 | 2026-01-30 | 初版作成。面順序と符号規約の違いを特定。 |
 | 2026-01-30 | 対角成分符号をELF互換に変更（正→負）。変換式から負号を削除。 |
+| 2026-02-08 | 面順序を修正: 旧 [4,5,0,2,1,3] -> 正 [4,1,0,3,2,5]。V304メッシュ検証結果を追加。NETGEN_FACES定義元を追加。 |

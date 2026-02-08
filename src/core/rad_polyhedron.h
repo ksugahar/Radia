@@ -418,7 +418,7 @@ public:
 	// IMPORTANT: This relies on Netgen face winding convention for correct normal direction.
 	// No inside/outside check is performed - the normal is computed mechanically from
 	// the polygon's local coordinate system which was set up from vertex winding order.
-	// Face ordering (Netgen convention): 0=z-, 1=z+, 2=y-, 3=y+, 4=x-, 5=x+
+	// Face ordering (Netgen convention): 0=z-, 1=x+, 2=y-, 3=x-, 4=y+, 5=z+
 	void SetupFaceGeometry()
 	{
 		// Compute face normals, areas, and centers for MSC elements
