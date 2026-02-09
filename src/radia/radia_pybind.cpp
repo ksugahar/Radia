@@ -1425,8 +1425,14 @@ py::dict GetHACApKStats() {
     result["n_lowrank"] = static_cast<int>(dOut[0]);
     result["n_dense"] = static_cast<int>(dOut[1]);
     result["max_rank"] = static_cast<int>(dOut[2]);
-    result["compression"] = dOut[3];
-    result["build_time"] = dOut[4];
+    result["n_leaves"] = static_cast<int>(dOut[3]);
+    result["n_dof"] = static_cast<int>(dOut[4]);
+    result["compression"] = dOut[5];
+    result["build_time"] = dOut[6];
+    result["hmatrix_build_time"] = dOut[7];
+    result["linear_iterations"] = static_cast<int>(dOut[9]);
+    result["memory_mb"] = dOut[10];
+    result["dense_memory_mb"] = dOut[11];
     return result;
 }
 
