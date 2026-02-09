@@ -1739,58 +1739,11 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		sol[i] = FlatMagn[i];
 	}
 
-	// Analyze matrix conditioning to choose preconditioner
-	bool use_block_jacobi = false;
-	double diag_ratio = 1.0;
-	double min_dominance_val = 1.0;
-	{
-		const double* FlatInteract = IntrctPtr->GetFlatInteractMatrix();
-		double min_diag = 1e30, max_diag = 0;
-		double min_rowsum = 1e30, max_rowsum = 0;
-		double min_dominance = 1e30;
-		int weak_rows = 0;
-
-		for(int i = 0; i < totalDOF; i++)
-		{
-			// Diagonal: -K[i,i] + 1/chi[i]
-			double diag = -FlatInteract[(size_t)i * totalDOF + i] + inv_chi[i];
-			double abs_diag = std::abs(diag);
-			if(abs_diag < min_diag) min_diag = abs_diag;
-			if(abs_diag > max_diag) max_diag = abs_diag;
-
-			// Row sum (off-diagonal): sum |K[i,j]| for j != i
-			double rowsum = 0;
-			for(int j = 0; j < totalDOF; j++)
-			{
-				if(j != i) rowsum += std::abs(FlatInteract[(size_t)i * totalDOF + j]);
-			}
-			if(rowsum < min_rowsum) min_rowsum = rowsum;
-			if(rowsum > max_rowsum) max_rowsum = rowsum;
-
-			// Diagonal dominance ratio
-			double dominance = abs_diag / (rowsum + 1e-15);
-			if(dominance < min_dominance) min_dominance = dominance;
-			if(dominance < 0.1) weak_rows++;
-		}
-
-		diag_ratio = max_diag / (min_diag + 1e-15);
-		min_dominance_val = min_dominance;
-
-		fprintf(stderr, "[BiCG Conditioning] DOF=%d\n", totalDOF);
-		fprintf(stderr, "[BiCG Conditioning] Diagonal: min=%.3e, max=%.3e, ratio=%.1f\n",
-		        min_diag, max_diag, diag_ratio);
-		fprintf(stderr, "[BiCG Conditioning] Row sum: min=%.3e, max=%.3e\n", min_rowsum, max_rowsum);
-		fprintf(stderr, "[BiCG Conditioning] Min dominance: %.4f, weak rows: %d/%d (%.1f%%)\n",
-		        min_dominance, weak_rows, totalDOF, 100.0 * weak_rows / totalDOF);
-
-		// Use block Jacobi if matrix is poorly conditioned
-		// Criteria: diagonal ratio > 10 OR min dominance < 0.1
-		if(diag_ratio > 10.0 || min_dominance < 0.1)
-		{
-			use_block_jacobi = true;
-			fprintf(stderr, "[BiCG] Using BLOCK Jacobi preconditioner (better for ill-conditioned matrix)\n");
-		}
-	}
+	// Always use block Jacobi preconditioner for MSC (6x6 block inverse per element)
+	// Block Jacobi cost is negligible (small block inversions) but gives much better
+	// preconditioning than scalar Jacobi for the coupled 6-DOF MSC formulation.
+	bool use_block_jacobi = true;
+	fprintf(stderr, "[BiCG] DOF=%d, using block Jacobi preconditioner\n", totalDOF);
 
 	// Build preconditioner
 	std::vector<double> blockInverse;
@@ -1934,15 +1887,14 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		Axpy(-omega, t, r, totalDOF);
 
 		double r_norm = Norm2(r, totalDOF);
-		double prev_residual = residual;
 		residual = r_norm / rhs_norm;
 		if(residual < tol) break;
 
-		// Detect divergence: if residual increases by more than 10x, stop
-		if(residual > 10.0 * prev_residual && prev_residual > 0.0 && iter > 5)
+		// Only detect true numerical blowup (NaN/Inf or extreme divergence)
+		// BiCGSTAB naturally has non-monotonic convergence - do NOT stop on temporary spikes
+		if(std::isnan(residual) || std::isinf(residual) || residual > 1.0e15)
 		{
-			// BiCGSTAB is diverging, stop early
-			fprintf(stderr, "[BiCG] Exit: divergence at iter %d\n", iter);
+			fprintf(stderr, "[BiCG] Exit: numerical blowup at iter %d (residual=%.4e)\n", iter, residual);
 			break;
 		}
 
@@ -1952,23 +1904,7 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		}
 	}
 
-	// DEBUG: Always print solution info
-	fprintf(stderr, "[BiCG] %d iters, residual=%.4e, IMA=%d\n", iter, residual, IntrctPtr->IsIMAEnabled() ? 1 : 0);
-	if(residual > 1e-3)
-	{
-		fprintf(stderr, "[BiCG WARNING] High residual! Solution may be incorrect.\n");
-		// Verify MatVec: compute A*sol and compare to rhs
-		std::vector<double> Asol(totalDOF);
-		MatVec_VariableDOF(sol, Asol, inv_chi, totalDOF);
-		double err_norm = 0.0;
-		for(int i = 0; i < totalDOF; i++)
-		{
-			double err = Asol[i] - rhs[i];
-			err_norm += err * err;
-		}
-		err_norm = std::sqrt(err_norm);
-		fprintf(stderr, "[BiCG] ||A*sol - rhs|| = %.4e, ||rhs|| = %.4e\n", err_norm, rhs_norm);
-	}
+	fprintf(stderr, "[BiCG] %d iters, residual=%.4e\n", iter, residual);
 
 	// Copy solution back to flat array
 	for(int i = 0; i < totalDOF; i++)
