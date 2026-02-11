@@ -182,6 +182,7 @@ class radTInteraction : public radTg {
 	friend void UpdateMagnAndComputeH(struct NonlinearContext&, radTInteraction*);
 	friend void ComputeActualHFieldFromSigma(struct NonlinearContext&, radTInteraction*);
 	friend double UpdateChiAndCheckConvergence(struct NonlinearContext&, radTInteraction*);
+	friend double ApplyLineSearchDamping(struct NonlinearContext&, radTInteraction*, const std::vector<double>&);
 
 	int AmOfMainElem;
 	int AmOfExtElem;
@@ -509,7 +510,7 @@ public:
 	// Build IMA interaction matrix (with image summation)
 	// N_IMA[i,j] = N[i,j] ± N[i, mirror_j] @ P
 	// Sign determined by m_imaSign: +1 (symmetric BC) or -1 (antisymmetric BC)
-	int SetupInteractMatrix_IMA();
+	int SetupInteractMatrix_IMA(bool skipDenseMatrix = false);
 
 	// Apply DOF permutation to 6x6 block: result = input @ P
 	// perm: permutation array (e.g., IMA_PERM_X)

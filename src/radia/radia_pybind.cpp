@@ -1134,17 +1134,46 @@ int ObjDpl(int obj, const std::string& opt = "") {
 
 /**
  * @brief Get object magnetization
+ * For a single object: returns dict with 'center' and 'magnetization' tuples.
+ * For a container: returns list of (center_tuple, magnetization_tuple) tuples.
  */
-py::dict ObjM(int obj) {
-    double M[6] = {0};  // [x, y, z, Mx, My, Mz]
-    int arMesh[10] = {0};
-    int err = RadObjM(M, arMesh, obj);
+py::object ObjM(int obj) {
+    // Get DOF count to determine buffer size
+    // Each element outputs 6 doubles (3 center + 3 magnetization)
+    // DOF per element is 3 or 6, so numElements <= numDOF/3
+    // Buffer needed: numElements * 6 <= numDOF * 2
+    int numDOF = 0;
+    RadObjDegFre(&numDOF, obj);
+    int bufSize = (numDOF > 0) ? (numDOF * 2 + 6) : 6;
+
+    std::vector<double> M(bufSize, 0.0);
+    int arMesh[20] = {0};
+    int err = RadObjM(M.data(), arMesh, obj);
     check_error(err);
 
-    py::dict result;
-    result["center"] = py::make_tuple(M[0], M[1], M[2]);
-    result["magnetization"] = py::make_tuple(M[3], M[4], M[5]);
-    return result;
+    // arMesh[0] = NumDims, arMesh[1..NumDims] = Dims
+    // Single element: Dims = {3, 2, 1}, NumDims = 3
+    // N elements: Dims = {3, 2, N}, NumDims = 3
+    int numDims = arMesh[0];
+    int numPoints = 1;
+    if(numDims >= 3) numPoints = arMesh[3];
+
+    if(numPoints <= 1) {
+        // Single object
+        py::dict result;
+        result["center"] = py::make_tuple(M[0], M[1], M[2]);
+        result["magnetization"] = py::make_tuple(M[3], M[4], M[5]);
+        return result;
+    } else {
+        // Container: return list of (center, magnetization) tuples
+        py::list result;
+        for(int i = 0; i < numPoints; i++) {
+            py::tuple center = py::make_tuple(M[i*6], M[i*6+1], M[i*6+2]);
+            py::tuple magn = py::make_tuple(M[i*6+3], M[i*6+4], M[i*6+5]);
+            result.append(py::make_tuple(center, magn));
+        }
+        return result;
+    }
 }
 
 /**
@@ -1460,6 +1489,39 @@ double GetRelaxParam() {
     int err = RadGetRelaxParam(&relax);
     check_error(err);
     return relax;
+}
+
+void SetNewtonMethod(bool use_newton) {
+    int n = 0;
+    int err = RadSetNewtonMethod(&n, use_newton ? 1 : 0);
+    check_error(err);
+}
+
+bool GetNewtonMethod() {
+    int use_newton = 0;
+    int err = RadGetNewtonMethod(&use_newton);
+    check_error(err);
+    return use_newton != 0;
+}
+
+void SetNewtonDamping(bool enabled = true, int max_iter = 5, double min_omega = 0.01) {
+    int n = 0;
+    int err = RadSetNewtonDamping(&n, enabled ? 1 : 0, max_iter, min_omega);
+    check_error(err);
+}
+
+py::dict GetNewtonDampingStats() {
+    int enabled = 0;
+    int max_iter = 0;
+    double min_omega = 0.0;
+    int err = RadGetNewtonDampingStats(&enabled, &max_iter, &min_omega);
+    check_error(err);
+
+    py::dict stats;
+    stats["enabled"] = (enabled != 0);
+    stats["max_iter"] = max_iter;
+    stats["min_omega"] = min_omega;
+    return stats;
 }
 
 // SetIMASymmetry, BuildIMAMatrix REMOVED (2026-01-31)
@@ -2296,7 +2358,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Get object magnetization.
 
               Returns:
-                  Dictionary with 'center' and 'magnetization' tuples
+                  For single object: dict with 'center' and 'magnetization' tuples.
+                  For container: list of (center, magnetization) tuples.
           )pbdoc");
 
     m.def("ObjSetM", &radia_objects_ext::ObjSetM,
@@ -2528,6 +2591,33 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     m.def("GetRelaxParam", &radia_solver_ext::GetRelaxParam,
           "Get under-relaxation parameter.");
+
+    m.def("SetNewtonMethod", &radia_solver_ext::SetNewtonMethod,
+          py::arg("use_newton"),
+          "Enable/disable Newton-Raphson nonlinear iteration (default: False=Picard).");
+
+    m.def("GetNewtonMethod", &radia_solver_ext::GetNewtonMethod,
+          "Get Newton method setting (True=Newton, False=Picard).");
+
+    m.def("SetNewtonDamping", &radia_solver_ext::SetNewtonDamping,
+          py::arg("enabled") = true,
+          py::arg("max_iter") = 5,
+          py::arg("min_omega") = 0.01,
+          R"pbdoc(
+              Configure Newton-Raphson line search damping.
+
+              Parameters:
+                  enabled: Enable adaptive damping (default: True)
+                  max_iter: Max line search iterations (default: 5)
+                  min_omega: Minimum omega threshold (default: 0.01)
+
+              Newton line search finds optimal damping factor omega in [min_omega, 1.0]:
+                  sigma_new = omega * sigma_trial + (1-omega) * sigma_old
+              Uses backtracking with omega *= 0.5 until residual decreases.
+          )pbdoc");
+
+    m.def("GetNewtonDampingStats", &radia_solver_ext::GetNewtonDampingStats,
+          "Get Newton line search damping configuration (returns dict with enabled, max_iter, min_omega).");
 
     // Image symmetry functions REMOVED (2026-01-31)
     // SetIMASymmetry, BuildIMAMatrix, etc. are replaced by the unified API:

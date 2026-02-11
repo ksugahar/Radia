@@ -70,7 +70,7 @@ A_ELF[i,j] = A_Radia[i,j]  (i ≠ j)
 | `rad_hacapk.cpp` | UpdateDiagonal()の符号 |
 | `rad_hacapk.h` | コメント更新 |
 | `rad_relaxation_methods.cpp` | ソルバーの調整 |
-| `rad_mmm_hacapk.cpp` | MMM用H-matrix |
+| ~~`rad_mmm_hacapk.cpp`~~ | ~~MMM用H-matrix~~ (removed) |
 
 ### 3.2 テストファイル
 

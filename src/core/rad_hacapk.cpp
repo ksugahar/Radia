@@ -40,7 +40,11 @@ extern "C" {
 //=========================================================================
 
 namespace {
-    // Thread-local storage for callback state
+    // Global callback state shared across all OpenMP threads.
+    // NOT thread_local: HACApK calls cHACApK_entry_ij from OpenMP worker threads,
+    // which must see the same manager/invChi/interaction set by the main thread.
+    // Thread safety for concurrent BuildHMatrix calls (multiple Python threads)
+    // is ensured by Python's GIL; standalone C++ use would require a mutex.
     RadHACApKManager* g_currentManager = nullptr;
     std::vector<double> g_invChi;
     radTInteraction* g_interaction = nullptr;

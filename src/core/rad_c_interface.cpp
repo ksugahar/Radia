@@ -161,6 +161,10 @@ void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
 double GetRelaxParam();
+void SetNewtonMethod( bool );
+bool GetNewtonMethod();
+void SetNewtonDamping( bool, int, double );
+void GetNewtonDampingStats( bool*, int*, double* );
 int SetIMASymmetry(int, const char*);
 int BuildIMAMatrix(int);
 void ClassifyPoints( int*, int*, int, double*, int, double );
@@ -1698,6 +1702,34 @@ void SetRelaxParam(double relax)
 double GetRelaxParam()
 {
 	return rad.m_relax;
+}
+
+void SetNewtonMethod(bool use_newton)
+{
+	rad.m_use_newton = use_newton;
+}
+
+bool GetNewtonMethod()
+{
+	return rad.m_use_newton;
+}
+
+void SetNewtonDamping(bool enabled, int max_iter, double min_omega)
+{
+	if(enabled) {
+		rad.m_newton_damping_enabled = true;
+		if(max_iter > 0) rad.m_newton_ls_max_iter = max_iter;
+		if(min_omega > 0.0 && min_omega < 1.0) rad.m_newton_ls_min_omega = min_omega;
+	} else {
+		rad.m_newton_damping_enabled = false;
+	}
+}
+
+void GetNewtonDampingStats(bool* enabled, int* max_iter, double* min_omega)
+{
+	*enabled = rad.m_newton_damping_enabled;
+	*max_iter = rad.m_newton_ls_max_iter;
+	*min_omega = rad.m_newton_ls_min_omega;
 }
 
 //-------------------------------------------------------------------------
