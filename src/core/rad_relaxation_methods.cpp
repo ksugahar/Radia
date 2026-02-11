@@ -728,10 +728,18 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 			if(NonlinMater != nullptr)
 			{
 				chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, ctx.relax_param);
+				if(ctx.use_newton && !ctx.DifferentialChiArray.empty())
+				{
+					ctx.DifferentialChiArray[elem] = NonlinMater->ComputeDifferentialChi(H_mag);
+				}
 			}
 			else
 			{
 				chi_new = chi_matrix;  // Linear: keep constant
+				if(ctx.use_newton && !ctx.DifferentialChiArray.empty())
+				{
+					ctx.DifferentialChiArray[elem] = chi_matrix;
+				}
 			}
 			ctx.CurrentChiArray[elem] = chi_new;
 
@@ -769,6 +777,10 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 				if(NonlinMater != nullptr)
 				{
 					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, ctx.relax_param);
+					if(ctx.use_newton && !ctx.DifferentialChiArray.empty())
+					{
+						ctx.DifferentialChiArray[elem] = NonlinMater->ComputeDifferentialChi(H_mag);
+					}
 #ifdef RADIA_DEBUG_CHI
 					fprintf(stderr, "    -> chi_new from B-H = %.2f\n", chi_new);
 #endif
@@ -776,6 +788,10 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 				else
 				{
 					chi_new = chi_matrix;
+					if(ctx.use_newton && !ctx.DifferentialChiArray.empty())
+					{
+						ctx.DifferentialChiArray[elem] = chi_matrix;
+					}
 				}
 				poly->CurrentChi = chi_new;
 				ctx.CurrentChiArray[elem] = chi_new;
@@ -806,6 +822,148 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 	return max_B_rel_change;
 }
 
+//-------------------------------------------------------------------------
+/**
+ * Apply adaptive line search damping to Newton-Raphson update.
+ *
+ * Finds optimal damping factor omega in [min_omega, 1.0] such that:
+ *   sigma_new = omega * sigma_trial + (1 - omega) * sigma_old
+ *
+ * Uses backtracking line search with residual = max_B_rel_change as merit function.
+ *
+ * @param ctx Nonlinear context with trial solution to be damped
+ * @param IntrctPtr Interaction data
+ * @param sigma_trial Trial solution from linear solve [totalDOF]
+ * @return Accepted omega value (1.0 = full Newton step, <1.0 = damped)
+ */
+double ApplyLineSearchDamping(NonlinearContext& ctx, radTInteraction* IntrctPtr,
+                              const std::vector<double>& sigma_trial)
+{
+	// Only apply if Newton is active and damping is enabled
+	if(!ctx.use_newton || !ctx.newton_damping_enabled) {
+		return 1.0;  // Full step (no damping)
+	}
+
+	const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+
+	// Store original solution for backtracking
+	std::vector<double> sigma_old = ctx.OldSigma;
+
+	double omega = 1.0;  // Start with full Newton step
+	double best_residual = 1.0e30;
+
+	for(int ls_iter = 0; ls_iter < ctx.newton_ls_max_iter; ls_iter++)
+	{
+		// Apply damped update: sigma = omega * trial + (1-omega) * old
+		for(int i = 0; i < ctx.totalDOF; i++)
+		{
+			ctx.FlatMagn[i] = omega * sigma_trial[i] + (1.0 - omega) * sigma_old[i];
+		}
+
+		// Update magnetization from FlatMagn and compute H field
+		// This syncs poly->Magn and computes IntrctPtr->NewFieldArray
+		ComputeActualHFieldFromSigma(ctx, IntrctPtr);
+
+		// Compute B-field change metric (same as convergence check)
+		// Returns max_elem |B_new - B_old| / B_sat
+		double residual = 0.0;
+
+		for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
+		{
+			int dof = IntrctPtr->GetElementDOF(elem);
+			int offset = IntrctPtr->GetElementDOFOffset(elem);
+
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
+			radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+			radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
+
+			// Get current chi (not updated yet - use old chi for line search)
+			double chi = ctx.CurrentChiArray[elem];
+			if(chi < 1.0e-6) chi = 1.0e-6;
+
+			double B_sat = ctx.B_sat;
+			if(NonlinMater != nullptr) {
+				B_sat = NonlinMater->GetBsaturation();
+				if(B_sat < 1.0e-10) B_sat = 1.0;
+			}
+
+			if(dof == 3)
+			{
+				// 3DOF: compute B from current FlatMagn
+				TVector3d M(ctx.FlatMagn[offset], ctx.FlatMagn[offset+1], ctx.FlatMagn[offset+2]);
+				TVector3d H(M.x / chi, M.y / chi, M.z / chi);
+				TVector3d B(MU_0 * (H.x + M.x), MU_0 * (H.y + M.y), MU_0 * (H.z + M.z));
+				double B_new_norm = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
+
+				double B_rel_change = std::fabs(B_new_norm - ctx.OldBnorm[elem]) / B_sat;
+				if(B_rel_change > residual)
+					residual = B_rel_change;
+			}
+			else if(dof >= 5)
+			{
+				// 6DOF: compute B from poly->Magn (already updated by ComputeActualHFieldFromSigma)
+				radTPolyhedron* poly = ctx.polyCache[elem];
+				if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
+				{
+					TVector3d M = poly->Magn;
+					TVector3d H(M.x / chi, M.y / chi, M.z / chi);
+					TVector3d B(MU_0 * (H.x + M.x), MU_0 * (H.y + M.y), MU_0 * (H.z + M.z));
+					double B_new_norm = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
+
+					double B_rel_change = std::fabs(B_new_norm - ctx.OldBnorm[elem]) / B_sat;
+					if(B_rel_change > residual)
+						residual = B_rel_change;
+				}
+			}
+		}
+
+		// Accept step if residual decreased (or first iteration)
+		if(ls_iter == 0)
+		{
+			best_residual = residual;
+			// Check if full step is acceptable (at least 1% improvement from previous iteration)
+			// Note: ctx.max_B_rel_change contains residual from PREVIOUS iteration
+			if(ctx.max_B_rel_change > 1.0e-12 && residual < ctx.max_B_rel_change * 0.99)
+			{
+				ctx.accepted_omegas.push_back(omega);
+				return omega;  // Accept full Newton step
+			}
+			// If first nonlinear iteration, always accept full step
+			if(ctx.max_B_rel_change < 1.0e-12)
+			{
+				ctx.accepted_omegas.push_back(omega);
+				return omega;
+			}
+		}
+		else if(residual < best_residual * 0.99)
+		{
+			// Accept damped step (at least 1% improvement over previous omega)
+			ctx.accepted_omegas.push_back(omega);
+			return omega;
+		}
+
+		// Reject step: reduce omega and retry
+		omega *= 0.5;
+		ctx.total_ls_backtracks++;
+
+		// Stop if omega too small
+		if(omega < ctx.newton_ls_min_omega)
+		{
+			omega = ctx.newton_ls_min_omega;
+			ctx.accepted_omegas.push_back(omega);
+			// Accept minimal step to avoid stall
+			for(int i = 0; i < ctx.totalDOF; i++)
+				ctx.FlatMagn[i] = omega * sigma_trial[i] + (1.0 - omega) * sigma_old[i];
+			ComputeActualHFieldFromSigma(ctx, IntrctPtr);
+			return omega;
+		}
+	}
+
+	// Max iterations reached: accept last omega
+	ctx.accepted_omegas.push_back(omega);
+	return omega;
+}
+
 //=========================================================================
 // Unified Nonlinear Iteration (base class implementation)
 // Calls virtual SolveLinearStep which is overridden by each solver
@@ -820,6 +978,21 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 	if(!InitializeNonlinearContext(ctx, IntrctPtr, MagnResetIsNotNeeded))
 		return 0;
 
+	// Newton-Raphson initialization
+	ctx.use_newton = rad.m_use_newton;
+	if(ctx.use_newton)
+	{
+		ctx.DifferentialChiArray.resize(ctx.AmOfMainElem, 1.0);
+		ctx.OldSigma.resize(ctx.totalDOF, 0.0);
+
+		// Line search damping parameters
+		ctx.newton_damping_enabled = rad.m_newton_damping_enabled;
+		ctx.newton_ls_max_iter = rad.m_newton_ls_max_iter;
+		ctx.newton_ls_min_omega = rad.m_newton_ls_min_omega;
+		ctx.total_ls_backtracks = 0;
+		ctx.accepted_omegas.reserve(MaxIterNumber);
+	}
+
 	// Build base matrix (geometric part without chi)
 	if(!BuildBaseMatrix(ctx, IntrctPtr))
 		return 0;  // Memory allocation failed
@@ -830,6 +1003,13 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 	// Nonlinear iteration loop
 	for(iterCount = 0; iterCount < MaxIterNumber; iterCount++)
 	{
+		// Store old sigma for Newton RHS correction
+		if(ctx.use_newton)
+		{
+			for(int i = 0; i < ctx.totalDOF; i++)
+				ctx.OldSigma[i] = ctx.FlatMagn[i];
+		}
+
 		// Store old values for convergence check
 		StoreOldValuesAndComputeBnorm(ctx, IntrctPtr);
 
@@ -1274,34 +1454,49 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 #ifdef RADIA_DEBUG_CHI
 	fprintf(stderr, "=== LU Solver Debug: chi and matrix values ===\n");
 #endif
+	// Newton: use chi_d for system matrix (start after 10 Picard iterations)
+	const int newton_start_iter = 10;
+	bool newton_active = ctx.use_newton && iterCount >= newton_start_iter && !ctx.DifferentialChiArray.empty();
+
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
 		int offset = IntrctPtr->GetElementDOFOffset(elem);
 
-		double chi = ctx.CurrentChiArray[elem];
-		if(chi < 1.0e-6) chi = 1.0e-6;
-		double inv_chi = 1.0 / chi;
+		double chi_abs = ctx.CurrentChiArray[elem];
+		if(chi_abs < 1.0e-6) chi_abs = 1.0e-6;
+
+		// Newton: use chi_d for matrix diagonal; Picard: use chi_abs
+		// Newton: use chi_d for diagonal, add RHS correction
+		double chi_matrix = chi_abs;
+		if(newton_active)
+		{
+			chi_matrix = ctx.DifferentialChiArray[elem];
+			if(chi_matrix < 1.0e-6) chi_matrix = 1.0e-6;
+		}
+		double inv_chi = 1.0 / chi_matrix;
+
+		double newton_correction = 0.0;
+		if(newton_active)
+		{
+			newton_correction = inv_chi - 1.0 / chi_abs;
+		}
 
 #ifdef RADIA_DEBUG_CHI
-		fprintf(stderr, "Element %d: chi = %.6f, inv_chi = %.6e, dof = %d\n", elem, chi, inv_chi, dof);
+		fprintf(stderr, "Element %d: chi = %.6f, inv_chi = %.6e, dof = %d\n", elem, chi_matrix, inv_chi, dof);
 #endif
 
-		// Add 1/chi to diagonal and set RHS = H_ext_n
-		// MSC equation: (-K/(4pi) + 1/chi * I) * sigma = H_ext_n (ELF-compatible)
+		// Add 1/chi to diagonal and set RHS
+		// Newton: RHS = H_ext + (1/chi_d - 1/chi_abs) * sigma_old
 		for(int k = 0; k < dof; k++)
 		{
 			int row = offset + k;
-#ifdef RADIA_DEBUG_CHI
-			double diag_before = SystemMatrix[row * (totalDOF + 1)];
-#endif
 			SystemMatrix[row * (totalDOF + 1)] += inv_chi;
-#ifdef RADIA_DEBUG_CHI
-			double diag_after = SystemMatrix[row * (totalDOF + 1)];
-			fprintf(stderr, "  row %d: diag_before = %.6e, diag_after = %.6e, RHS = %.6e\n",
-			        row, diag_before, diag_after, ctx.FlatExtern[row]);
-#endif
 			RHS[row] = ctx.FlatExtern[row];
+			if(newton_active)
+			{
+				RHS[row] += newton_correction * ctx.OldSigma[row];
+			}
 		}
 
 		// Update poly->CurrentChi for 6DOF elements
@@ -1310,7 +1505,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
 			{
-				poly->CurrentChi = chi;
+				poly->CurrentChi = chi_abs;  // Always store absolute chi
 			}
 		}
 	}
@@ -1355,11 +1550,20 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	rad.m_solve_t_lu_decomp += t_lu;
 	rad.m_solve_t_linear_solve += t_lu;
 
-	// Copy solution to FlatMagn
-	for(int i = 0; i < totalDOF; i++)
+	// Apply line search damping if Newton is active
+	std::vector<double> sigma_trial = RHS;  // RHS contains solution after dgesv
+	double omega = ApplyLineSearchDamping(ctx, IntrctPtr, sigma_trial);
+
+	// If line search already updated FlatMagn (omega < 0.999), we're done
+	// Otherwise copy trial solution (omega=1.0 case, full step)
+	if(omega >= 0.999)
 	{
-		ctx.FlatMagn[i] = RHS[i];
+		for(int i = 0; i < totalDOF; i++)
+		{
+			ctx.FlatMagn[i] = sigma_trial[i];
+		}
 	}
+	// else: ApplyLineSearchDamping already updated FlatMagn with damped solution
 
 #ifdef RADIA_DEBUG_CHI
 	fprintf(stderr, "=== LU Solver Debug: Solution (sigma/M) values ===\n");
@@ -1661,8 +1865,12 @@ void radTRelaxationMethNo_1::ApplyBlockJacobiPreconditioner_VariableDOF(
 }
 #endif
 
-int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, int max_iter, double& residual,
-                                                       const std::vector<double>& elemChiArray)
+int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
+                                                       int totalDOF, double tol, int max_iter, double& residual,
+                                                       const std::vector<double>& elemChiArray,
+                                                       bool use_newton,
+                                                       const std::vector<double>* absChiArray,
+                                                       const double* oldSigma)
 {
 	// BiCGSTAB with Jacobi preconditioner for variable DOF systems
 	int AmOfMainElem = IntrctPtr->AmOfMainElem;
@@ -1681,53 +1889,33 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 	if(FlatMagn == nullptr || FlatField == nullptr || FlatExtern == nullptr) return 0;
 
 	// Pre-compute 1/chi and RHS for all elements
+	// Picard: (D(1/chi_abs) + G) sigma = H_ext
+	// Newton: (D(1/chi_d) + G) sigma_new = H_ext + D(1/chi_d - 1/chi_abs) * sigma_old
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
 		int offset = IntrctPtr->GetElementDOFOffset(elem);
 
-		if(dof == 3)
-		{
-			// 3DOF MMM element: use SAME equation as LU solver
-			// Equation: (-N + I/chi) * M = H_ext
-			// Use isotropic chi from elemChiArray (computed in outer loop)
-			double chi = elemChiArray[elem];
-			if(chi < 1.0e-6) chi = 1.0e-6;
-			double inv_chi_val = 1.0 / chi;
+		// elemChiArray: chi_d (Newton) or chi_abs (Picard)
+		double chi_matrix = elemChiArray[elem];
+		if(chi_matrix < 1.0e-6) chi_matrix = 1.0e-6;
+		double inv_chi_val = 1.0 / chi_matrix;
 
-			for(int k = 0; k < 3; k++)
-			{
-				inv_chi[offset + k] = inv_chi_val;  // Same chi for all 3 components
-				// RHS = H_ext (same as LU solver, no Mr term for nonlinear isotropic materials)
-				rhs[offset + k] = FlatExtern[offset + k];
-			}
+		double newton_correction = 0.0;
+		if(use_newton && absChiArray && oldSigma)
+		{
+			double chi_abs = (*absChiArray)[elem];
+			if(chi_abs < 1.0e-6) chi_abs = 1.0e-6;
+			newton_correction = inv_chi_val - 1.0 / chi_abs;
 		}
-		else if(dof >= 5)
+
+		for(int k = 0; k < dof; k++)
 		{
-			// MSC hexahedron (6 DOF): equation (K/(4pi) + 1/chi * I) * sigma = H_ext_n
-			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
-			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
-
-			// Use CurrentChi which was initialized in AutoRelax_VariableDOF
-			double chi = (poly && poly->Use6DOF_MSC && poly->CurrentChi > 1.0e-6)
-			           ? poly->CurrentChi : 1.0;
-			if(chi < 1.0e-6) chi = 1.0e-6;
-
-			double inv_chi_val = 1.0 / chi;
-
-			for(int k = 0; k < dof; k++)
+			inv_chi[offset + k] = inv_chi_val;
+			rhs[offset + k] = FlatExtern[offset + k];
+			if(use_newton && oldSigma)
 			{
-				inv_chi[offset + k] = inv_chi_val;
-				rhs[offset + k] = FlatExtern[offset + k];
-			}
-		}
-		else
-		{
-			// Fallback for unknown DOF types
-			for(int k = 0; k < dof; k++)
-			{
-				inv_chi[offset + k] = 1.0;
-				rhs[offset + k] = FlatExtern[offset + k];
+				rhs[offset + k] += newton_correction * oldSigma[offset + k];
 			}
 		}
 	}
@@ -1743,7 +1931,6 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 	// Block Jacobi cost is negligible (small block inversions) but gives much better
 	// preconditioning than scalar Jacobi for the coupled 6-DOF MSC formulation.
 	bool use_block_jacobi = true;
-	fprintf(stderr, "[BiCG] DOF=%d, using block Jacobi preconditioner\n", totalDOF);
 
 	// Build preconditioner
 	std::vector<double> blockInverse;
@@ -1790,29 +1977,29 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 	for(iter = 1; iter <= max_iter; iter++)
 	{
 		double rho_old = rho;
-		rho = Dot(r0, r, totalDOF);
+		rho = this->Dot(r0, r, totalDOF);
 
 		if(std::abs(rho) < 1.0e-30)
 		{
-			residual = Norm2(r, totalDOF) / rhs_norm;
+			residual = this->Norm2(r, totalDOF) / rhs_norm;
 			break;
 		}
 
 		if(iter == 1)
 		{
-			Copy(r, p, totalDOF);
+			this->Copy(r, p, totalDOF);
 		}
 		else
 		{
 			if(std::abs(rho_old * omega) < 1.0e-30)
 			{
-				residual = Norm2(r, totalDOF) / rhs_norm;
+				residual = this->Norm2(r, totalDOF) / rhs_norm;
 				break;
 			}
 			double beta = (rho / rho_old) * (alpha_bicg / omega);
-			Axpy(-omega, v, p, totalDOF);
-			Scale(beta, p, totalDOF);
-			Axpy(1.0, r, p, totalDOF);
+			this->Axpy(-omega, v, p, totalDOF);
+			this->Scale(beta, p, totalDOF);
+			this->Axpy(1.0, r, p, totalDOF);
 		}
 
 		// Apply preconditioner: p_hat = M^{-1} * p
@@ -1904,13 +2091,20 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, 
 		}
 	}
 
-	fprintf(stderr, "[BiCG] %d iters, residual=%.4e\n", iter, residual);
+	// Apply line search damping if Newton is active
+	std::vector<double> sigma_trial = sol;
+	double omega_ls = ApplyLineSearchDamping(ctx, this->IntrctPtr, sigma_trial);
 
-	// Copy solution back to flat array
-	for(int i = 0; i < totalDOF; i++)
+	// If line search already updated FlatMagn (omega_ls < 0.999), we're done
+	// Otherwise copy trial solution (omega_ls=1.0 case, full step)
+	if(omega_ls >= 0.999)
 	{
-		FlatMagn[i] = sol[i];
+		for(int i = 0; i < totalDOF; i++)
+		{
+			FlatMagn[i] = sigma_trial[i];
+		}
 	}
+	// else: ApplyLineSearchDamping already updated FlatMagn with damped solution
 
 	return iter;
 }
@@ -1944,8 +2138,24 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	const double bicg_tol = rad.m_bicg_tol;
 	const int bicg_max_iter = 10000;
 
+	// Newton: use chi_d in system matrix with RHS correction (start after 10 Picard iters)
+	const int newton_start_iter_bicg = 10;
+	bool newton_active = ctx.use_newton && iterCount >= newton_start_iter_bicg && !ctx.DifferentialChiArray.empty();
+
 	auto t_bicg_start = std::chrono::high_resolution_clock::now();
-	int n_iter = SolveBiCGSTAB_VariableDOF(totalDOF, bicg_tol, bicg_max_iter, residual, ctx.CurrentChiArray);
+	int n_iter;
+	if(newton_active)
+	{
+		// Newton: pass chi_d for system matrix, chi_abs for RHS correction
+		n_iter = SolveBiCGSTAB_VariableDOF(ctx, totalDOF, bicg_tol, bicg_max_iter, residual,
+		                                    ctx.DifferentialChiArray, true,
+		                                    &ctx.CurrentChiArray, ctx.OldSigma.data());
+	}
+	else
+	{
+		n_iter = SolveBiCGSTAB_VariableDOF(ctx, totalDOF, bicg_tol, bicg_max_iter, residual,
+		                                    ctx.CurrentChiArray);
+	}
 	auto t_bicg_end = std::chrono::high_resolution_clock::now();
 	rad.m_solve_t_linear_solve += std::chrono::duration<double>(t_bicg_end - t_bicg_start).count();
 
@@ -2033,8 +2243,12 @@ int radTRelaxationMethNo_2::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 // BiCGSTAB with H-matrix for both 3DOF tetrahedra and 6DOF hexahedra
 //-------------------------------------------------------------------------
 
-int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, double tol, int max_iter, double& residual,
-                                                               const std::vector<double>& elemChiArray)
+int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& ctx,
+                                                               int totalDOF, double tol, int max_iter, double& residual,
+                                                               const std::vector<double>& elemChiArray,
+                                                               bool use_newton,
+                                                               const std::vector<double>* absChiArray,
+                                                               const double* oldSigma)
 {
 	if (!m_hacapk || !m_hacapk->IsValid()) return 0;
 
@@ -2054,7 +2268,8 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, doub
 	if(FlatMagn == nullptr || FlatField == nullptr || FlatExtern == nullptr) return 0;
 
 	// Pre-compute 1/chi and RHS for all elements
-	// FIX (2025-12-26): Use isotropic chi from elemChiArray for 3DOF elements (same as BiCGSTAB)
+	// Picard: (D(1/chi_abs) + G) sigma = H_ext
+	// Newton: (D(1/chi_d) + G) sigma_new = H_ext + D(1/chi_d - 1/chi_abs) * sigma_old
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
@@ -2062,44 +2277,32 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, doub
 
 		if(dof != 3 && dof < 5)
 		{
-			// HACApK supports 3DOF tetrahedra and 5/6DOF MSC elements (wedges/hexahedra)
 			std::cerr << "[HACApK] Error: Element " << elem << " has " << dof
 			          << " DOF, expected 3 (tetrahedra), 5 (wedges), or 6 (hexahedra)" << std::endl;
 			return 0;
 		}
 
-		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
-		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+		// elemChiArray contains chi_d (Newton) or chi_abs (Picard) for system matrix
+		double chi_matrix = elemChiArray[elem];
+		if(chi_matrix < 1.0e-6) chi_matrix = 1.0e-6;
+		double inv_chi_val = 1.0 / chi_matrix;
 
-		if(dof == 3)
+		// Newton correction: (1/chi_d - 1/chi_abs) per element
+		double newton_correction = 0.0;
+		if(use_newton && absChiArray && oldSigma)
 		{
-			// 3DOF MMM element: use SAME equation as LU solver
-			// Equation: (-N + I/chi) * M = H_ext
-			// Use isotropic chi from elemChiArray (computed in outer loop)
-			double chi = elemChiArray[elem];
-			if(chi < 1.0e-6) chi = 1.0e-6;
-			double inv_chi_val = 1.0 / chi;
-
-			for(int k = 0; k < 3; k++)
-			{
-				inv_chi[offset + k] = inv_chi_val;  // Same chi for all 3 components
-				// RHS = H_ext (same as LU solver, no Mr term for nonlinear isotropic materials)
-				rhs[offset + k] = FlatExtern[offset + k];
-			}
+			double chi_abs = (*absChiArray)[elem];
+			if(chi_abs < 1.0e-6) chi_abs = 1.0e-6;
+			newton_correction = inv_chi_val - 1.0 / chi_abs;
 		}
-		else if(dof >= 5)
-		{
-			// For 6DOF MSC: use isotropic chi from poly->CurrentChi (same as BiCGSTAB)
-			radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
-			double chi = (poly && poly->Use6DOF_MSC && poly->CurrentChi > 1.0e-6)
-			           ? poly->CurrentChi : 1.0;
-			if(chi < 1.0e-6) chi = 1.0e-6;
-			double inv_chi_val = 1.0 / chi;
 
-			for(int k = 0; k < dof; k++)
+		for(int k = 0; k < dof; k++)
+		{
+			inv_chi[offset + k] = inv_chi_val;
+			rhs[offset + k] = FlatExtern[offset + k];
+			if(use_newton && oldSigma)
 			{
-				inv_chi[offset + k] = inv_chi_val;
-				rhs[offset + k] = FlatExtern[offset + k];
+				rhs[offset + k] += newton_correction * oldSigma[offset + k];
 			}
 		}
 	}
@@ -2113,128 +2316,158 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, doub
 		sol[i] = FlatMagn[i];
 	}
 
-	// Build Jacobi preconditioner using H-matrix diagonal
-	// FIX (2025-12-27): Recompute diagonal EVERY iteration (not cached)
-	// Reason: ELF extracts diagonal from updated H-matrix blocks via HACApK_extract_diagonal_omp,
-	// which includes the current inv_chi values. Radia was caching the diagonal computed with
-	// INITIAL inv_chi, causing slower convergence (17 iter vs 14 iter).
-	//
-	// The fix is to recompute diag_inv = 1/(N_ii - inv_chi[i]) each iteration (ELF-compatible).
-	// This is O(N) and uses cached N_ii values, so it's cheap.
-	GetDiagonalElements_HMatrix_VariableDOF(diag_inv, inv_chi, totalDOF);
-	for(int i = 0; i < totalDOF; i++)
+	// Build preconditioner
+	bool use_block_jacobi = false;
+	std::vector<double> hmat_blockInverse;
+	std::vector<int> hmat_blockOffsets;
+
+#ifdef HAVE_LAPACK
+	// Try block Jacobi (6x6 block inverse per element) - much better for MSC
+	use_block_jacobi = BuildBlockJacobiPreconditioner_HMatrix(
+		hmat_blockInverse, hmat_blockOffsets, inv_chi, totalDOF);
+#endif
+
+	if(!use_block_jacobi)
 	{
-		diag_inv[i] = (std::abs(diag_inv[i]) > 1.0e-15) ? (1.0 / diag_inv[i]) : 1.0;
+		// Fallback: scalar Jacobi preconditioner
+		GetDiagonalElements_HMatrix_VariableDOF(diag_inv, inv_chi, totalDOF);
+		for(int i = 0; i < totalDOF; i++)
+		{
+			diag_inv[i] = (std::abs(diag_inv[i]) > 1.0e-15) ? (1.0 / diag_inv[i]) : 1.0;
+		}
 	}
 
 	// Initialize: r0 = b - A*x0
 	m_hacapk->MatVec(sol, v);  // v = A*x0 using H-matrix
-	Copy(rhs, r, totalDOF);
-	Axpy(-1.0, v, r, totalDOF);
-	Copy(r, r0, totalDOF);
+	this->Copy(rhs, r, totalDOF);
+	this->Axpy(-1.0, v, r, totalDOF);
+	this->Copy(r, r0, totalDOF);
 
 	double rho = 1.0, alpha_bicg = 1.0, omega = 1.0;
 	std::fill(p.begin(), p.end(), 0.0);
 	std::fill(v.begin(), v.end(), 0.0);
 
-	double rhs_norm = Norm2(rhs, totalDOF);
+	double rhs_norm = this->Norm2(rhs, totalDOF);
 	if(rhs_norm < 1.0e-30) rhs_norm = 1.0;
 
 	int iter;
 	for(iter = 1; iter <= max_iter; iter++)
 	{
 		double rho_old = rho;
-		rho = Dot(r0, r, totalDOF);
+		rho = this->Dot(r0, r, totalDOF);
 
 		if(std::abs(rho) < 1.0e-30)
 		{
-			residual = Norm2(r, totalDOF) / rhs_norm;
+			residual = this->Norm2(r, totalDOF) / rhs_norm;
 			break;
 		}
 
 		if(iter == 1)
 		{
-			Copy(r, p, totalDOF);
+			this->Copy(r, p, totalDOF);
 		}
 		else
 		{
 			if(std::abs(rho_old * omega) < 1.0e-30)
 			{
-				residual = Norm2(r, totalDOF) / rhs_norm;
+				residual = this->Norm2(r, totalDOF) / rhs_norm;
 				break;
 			}
 			double beta = (rho / rho_old) * (alpha_bicg / omega);
-			Axpy(-omega, v, p, totalDOF);
-			Scale(beta, p, totalDOF);
-			Axpy(1.0, r, p, totalDOF);
+			this->Axpy(-omega, v, p, totalDOF);
+			this->Scale(beta, p, totalDOF);
+			this->Axpy(1.0, r, p, totalDOF);
 		}
 
 		// Apply preconditioner
-		#pragma omp parallel for if(totalDOF > 100)
-		for(int i = 0; i < totalDOF; i++)
+		if(use_block_jacobi)
 		{
-			p_hat[i] = diag_inv[i] * p[i];
+			this->ApplyBlockJacobiPreconditioner_HMatrix(p, p_hat, hmat_blockInverse, hmat_blockOffsets);
+		}
+		else
+		{
+			#pragma omp parallel for if(totalDOF > 100)
+			for(int i = 0; i < totalDOF; i++)
+			{
+				p_hat[i] = diag_inv[i] * p[i];
+			}
 		}
 
 		// v = A * p_hat using H-matrix
 		m_hacapk->MatVec(p_hat, v);
 
-		double r0_dot_v = Dot(r0, v, totalDOF);
+		double r0_dot_v = this->Dot(r0, v, totalDOF);
 		if(std::abs(r0_dot_v) < 1.0e-30)
 		{
-			residual = Norm2(r, totalDOF) / rhs_norm;
+			residual = this->Norm2(r, totalDOF) / rhs_norm;
 			break;
 		}
 		alpha_bicg = rho / r0_dot_v;
 
-		Copy(r, s, totalDOF);
-		Axpy(-alpha_bicg, v, s, totalDOF);
+		this->Copy(r, s, totalDOF);
+		this->Axpy(-alpha_bicg, v, s, totalDOF);
 
-		double s_norm = Norm2(s, totalDOF);
+		double s_norm = this->Norm2(s, totalDOF);
 		if(s_norm / rhs_norm < tol)
 		{
-			Axpy(alpha_bicg, p_hat, sol, totalDOF);
+			this->Axpy(alpha_bicg, p_hat, sol, totalDOF);
 			residual = s_norm / rhs_norm;
 			break;
 		}
 
-		#pragma omp parallel for if(totalDOF > 100)
-		for(int i = 0; i < totalDOF; i++)
+		if(use_block_jacobi)
 		{
-			s_hat[i] = diag_inv[i] * s[i];
+			ApplyBlockJacobiPreconditioner_HMatrix(s, s_hat, hmat_blockInverse, hmat_blockOffsets);
+		}
+		else
+		{
+			#pragma omp parallel for if(totalDOF > 100)
+			for(int i = 0; i < totalDOF; i++)
+			{
+				s_hat[i] = diag_inv[i] * s[i];
+			}
 		}
 
 		// t = A * s_hat using H-matrix
 		m_hacapk->MatVec(s_hat, t);
 
-		double t_dot_s = Dot(t, s, totalDOF);
-		double t_dot_t = Dot(t, t, totalDOF);
+		double t_dot_s = this->Dot(t, s, totalDOF);
+		double t_dot_t = this->Dot(t, t, totalDOF);
 		if(std::abs(t_dot_t) < 1.0e-30)
 		{
-			Axpy(alpha_bicg, p_hat, sol, totalDOF);
+			this->Axpy(alpha_bicg, p_hat, sol, totalDOF);
 			residual = s_norm / rhs_norm;
 			break;
 		}
 		omega = t_dot_s / t_dot_t;
 
-		Axpy(alpha_bicg, p_hat, sol, totalDOF);
-		Axpy(omega, s_hat, sol, totalDOF);
+		this->Axpy(alpha_bicg, p_hat, sol, totalDOF);
+		this->Axpy(omega, s_hat, sol, totalDOF);
 
-		Copy(s, r, totalDOF);
-		Axpy(-omega, t, r, totalDOF);
+		this->Copy(s, r, totalDOF);
+		this->Axpy(-omega, t, r, totalDOF);
 
-		double r_norm = Norm2(r, totalDOF);
+		double r_norm = this->Norm2(r, totalDOF);
 		residual = r_norm / rhs_norm;
 		if(residual < tol) break;
 
 		if(std::abs(omega) < 1.0e-30) break;
 	}
 
-	// Copy solution back to flat array
-	for(int i = 0; i < totalDOF; i++)
+	// Apply line search damping if Newton is active
+	std::vector<double> sigma_trial = sol;
+	double omega_ls = ApplyLineSearchDamping(ctx, this->IntrctPtr, sigma_trial);
+
+	// If line search already updated FlatMagn (omega_ls < 0.999), we're done
+	// Otherwise copy trial solution (omega_ls=1.0 case, full step)
+	if(omega_ls >= 0.999)
 	{
-		FlatMagn[i] = sol[i];
+		for(int i = 0; i < totalDOF; i++)
+		{
+			FlatMagn[i] = sigma_trial[i];
+		}
 	}
+	// else: ApplyLineSearchDamping already updated FlatMagn with damped solution
 
 	return iter;
 }
@@ -2266,6 +2499,120 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
 		{
 			double N_ii = m_hacapk->GetInteractionMatrixElement(i, i);
 			diag[i] = -N_ii + inv_chi[i];  // Physical: -K/(4pi) + 1/chi
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+// Block Jacobi preconditioner for H-matrix BiCGSTAB
+// Extracts 6x6 diagonal blocks from H-matrix using Compute6x6BlockFast
+//-------------------------------------------------------------------------
+
+#ifdef HAVE_LAPACK
+bool radTRelaxationMethNo_2::BuildBlockJacobiPreconditioner_HMatrix(
+	std::vector<double>& blockInverse, std::vector<int>& blockOffsets,
+	const std::vector<double>& inv_chi, int totalDOF)
+{
+	if(!m_hacapk || !IntrctPtr) return false;
+
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+
+	// Calculate total storage needed for block inverses
+	int total_block_storage = 0;
+	blockOffsets.resize(AmOfMainElem + 1);
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		blockOffsets[elem] = total_block_storage;
+		total_block_storage += dof * dof;
+	}
+	blockOffsets[AmOfMainElem] = total_block_storage;
+	blockInverse.resize(total_block_storage);
+
+	int max_dof = 6;
+	std::vector<double> K_mat(max_dof * max_dof);
+	std::vector<double> block_copy(max_dof * max_dof);
+	std::vector<int> ipiv(max_dof);
+	std::vector<double> work(max_dof * max_dof);
+	int lwork = max_dof * max_dof;
+
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int mat_offset = IntrctPtr->GetElementDOFOffset(elem);
+		int block_offset = blockOffsets[elem];
+
+		// Extract diagonal K block from H-matrix kernel
+		m_hacapk->Compute6x6BlockFast(elem, elem, K_mat.data());
+
+		// Form A_block = -K_block/(4pi) + (1/chi) * I
+		// K_mat stores K/(4pi), so negate it
+		for(int i = 0; i < dof; i++)
+		{
+			for(int j = 0; j < dof; j++)
+			{
+				// K_mat is row-major [i*6+j], convert to column-major for LAPACK
+				block_copy[i + j * dof] = -K_mat[i * 6 + j];
+				if(i == j)
+				{
+					block_copy[i + j * dof] += inv_chi[mat_offset + i];
+				}
+			}
+		}
+
+		// Invert with LAPACK
+		int info = 0;
+		dgetrf_(&dof, &dof, block_copy.data(), &dof, ipiv.data(), &info);
+		if(info != 0)
+		{
+			for(int i = 0; i < dof * dof; i++) block_copy[i] = 0;
+			for(int i = 0; i < dof; i++) block_copy[i + i * dof] = 1.0;
+		}
+		else
+		{
+			dgetri_(&dof, block_copy.data(), &dof, ipiv.data(), work.data(), &lwork, &info);
+			if(info != 0)
+			{
+				for(int i = 0; i < dof * dof; i++) block_copy[i] = 0;
+				for(int i = 0; i < dof; i++) block_copy[i + i * dof] = 1.0;
+			}
+		}
+
+		// Store inverse in row-major format
+		for(int i = 0; i < dof; i++)
+		{
+			for(int j = 0; j < dof; j++)
+			{
+				blockInverse[block_offset + i * dof + j] = block_copy[i + j * dof];
+			}
+		}
+	}
+
+	return true;
+}
+#endif
+
+void radTRelaxationMethNo_2::ApplyBlockJacobiPreconditioner_HMatrix(
+	const std::vector<double>& x, std::vector<double>& y,
+	const std::vector<double>& blockInverse, const std::vector<int>& blockOffsets)
+{
+	int AmOfMainElem = IntrctPtr->AmOfMainElem;
+
+	#pragma omp parallel for if(AmOfMainElem > 20)
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int mat_offset = IntrctPtr->GetElementDOFOffset(elem);
+		int block_offset = blockOffsets[elem];
+
+		for(int i = 0; i < dof; i++)
+		{
+			double sum = 0.0;
+			for(int j = 0; j < dof; j++)
+			{
+				sum += blockInverse[block_offset + i * dof + j] * x[mat_offset + j];
+			}
+			y[mat_offset + i] = sum;
 		}
 	}
 }
@@ -2371,6 +2718,10 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	std::vector<double> OldMagn(totalDOF);
 	// Store current isotropic chi for ALL elements (unified 3DOF/6DOF handling, same as LU/BiCGSTAB)
 	std::vector<double> CurrentChiArray_hacapk(AmOfMainElem, 1.0);
+	// Newton-Raphson: differential chi (chi_d = (dB/dH)/mu_0 - 1) and old sigma
+	std::vector<double> DifferentialChiArray(AmOfMainElem, 1.0);
+	std::vector<double> OldSigma(totalDOF, 0.0);
+	bool use_newton = rad.m_use_newton;
 	double MisfitE2 = 1.0e30;
 	int totalIterCount = 0;
 	int outerIter = 0;
@@ -2508,6 +2859,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	// B-field convergence tracking (same as LU solver, ELF mucal2)
 	std::vector<double> OldBnorm(AmOfMainElem, 0.0);
 	const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+	double max_B_rel_change = 1.0e30;  // Initialize for first iteration
 
 	// Outer nonlinear iteration (rewritten to match LU solver structure)
 	for(outerIter = 0; outerIter < MaxIterNumber; outerIter++)
@@ -2517,6 +2869,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		for(int i = 0; i < totalDOF; i++)
 		{
 			OldMagn[i] = FlatMagn[i];
+			OldSigma[i] = FlatMagn[i];  // Store sigma_old for Newton RHS correction
 		}
 
 		// Store old B norm for convergence check (same as LU/BiCGSTAB)
@@ -2551,6 +2904,25 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			}
 		}
 
+		// Build temporary NonlinearContext for line search
+		NonlinearContext ctx_temp;
+		ctx_temp.totalDOF = totalDOF;
+		ctx_temp.AmOfMainElem = AmOfMainElem;
+		ctx_temp.FlatMagn = FlatMagn;
+		ctx_temp.FlatField = FlatField;  // Use FlatField (double*) not NewFieldArray (TVector3d*)
+		ctx_temp.FlatExtern = IntrctPtr->GetFlatExternFieldArray();
+		ctx_temp.OldSigma = OldSigma;
+		ctx_temp.OldBnorm = OldBnorm;
+		ctx_temp.CurrentChiArray = CurrentChiArray_hacapk;
+		ctx_temp.DifferentialChiArray = DifferentialChiArray;
+		ctx_temp.polyCache = polyCache;
+		ctx_temp.use_newton = use_newton;
+		ctx_temp.newton_damping_enabled = rad.m_newton_damping_enabled;
+		ctx_temp.newton_ls_max_iter = rad.m_newton_ls_max_iter;
+		ctx_temp.newton_ls_min_omega = rad.m_newton_ls_min_omega;
+		ctx_temp.max_B_rel_change = max_B_rel_change;  // Use previous iteration's value
+		ctx_temp.B_sat = 1.0;  // Default, will be overridden by material
+
 		// Solve with BiCGSTAB using H-matrix
 		// NOTE: max_iter for BiCGSTAB inner loop should be FIXED (not user's MaxIterNumber)
 		// User's MaxIterNumber controls OUTER nonlinear iterations, not inner BiCGSTAB
@@ -2560,8 +2932,24 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		const int bicg_max_iter = 10000;  // Inner BiCGSTAB max iterations (fixed)
 
 		// Time BiCGSTAB solve
+		// Newton-Raphson: use chi_d for system matrix with RHS correction
+		// Start with Picard for first 10 iterations to approach solution, then switch to Newton
+		const int newton_start_iter = 10;
 		auto t_bicg_start = std::chrono::high_resolution_clock::now();
-		int n_iter = SolveBiCGSTAB_HMatrix_VariableDOF(totalDOF, bicg_tol, bicg_max_iter, residual, CurrentChiArray_hacapk);
+		int n_iter;
+		if(use_newton && outerIter >= newton_start_iter)
+		{
+			// Newton: system matrix uses chi_d, RHS adds correction with chi_abs
+			n_iter = SolveBiCGSTAB_HMatrix_VariableDOF(ctx_temp, totalDOF, bicg_tol, bicg_max_iter, residual,
+			                                            DifferentialChiArray, true,
+			                                            &CurrentChiArray_hacapk, OldSigma.data());
+		}
+		else
+		{
+			// Picard: use chi_abs
+			n_iter = SolveBiCGSTAB_HMatrix_VariableDOF(ctx_temp, totalDOF, bicg_tol, bicg_max_iter, residual,
+			                                            CurrentChiArray_hacapk);
+		}
 		auto t_bicg_end = std::chrono::high_resolution_clock::now();
 		rad.m_timing_linear_solve += std::chrono::duration<double>(t_bicg_end - t_bicg_start).count();
 		rad.m_linear_iterations += n_iter;
@@ -2652,7 +3040,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		}
 
 		// Compute convergence and update chi (same structure as LU/BiCGSTAB)
-		double max_B_rel_change = 0.0;
+		max_B_rel_change = 0.0;  // Reset for this iteration (declared outside loop)
 		bool has_6dof_elements = false;
 
 		for(int elem = 0; elem < AmOfMainElem; elem++)
@@ -2681,6 +3069,11 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				{
 					// ELF-style dual-method with relax parameter
 					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, relax_hacapk);
+					// Newton: also compute differential chi
+					if(use_newton)
+					{
+						DifferentialChiArray[elem] = NonlinMater->ComputeDifferentialChi(H_mag);
+					}
 				}
 				else
 				{
@@ -2690,11 +3083,11 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
 					chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 					if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-					// Apply under-relaxation for linear materials
 					if(relax_hacapk > 0.0 && relax_hacapk <= 1.0)
 					{
 						chi_new = chi_new * (1.0 - relax_hacapk) + chi_matrix * relax_hacapk;
 					}
+					if(use_newton) DifferentialChiArray[elem] = chi_new;
 				}
 				CurrentChiArray_hacapk[elem] = chi_new;
 
@@ -2739,24 +3132,27 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					double relax_hacapk = rad.m_relax;
 					if(NonlinMater != nullptr)
 					{
-						// ELF-style dual-method with relax parameter
 						chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, relax_hacapk);
+						if(use_newton)
+						{
+							DifferentialChiArray[elem] = NonlinMater->ComputeDifferentialChi(H_mag);
+						}
 					}
 					else
 					{
-						// Fallback for linear materials
 						TMatrix3d KsiTensor;
 						TVector3d MrVect;
 						MaterPtr->DefineInstantKsiTensor(H_new, KsiTensor, MrVect);
 						chi_new = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
 						if(chi_new < 1.0e-6) chi_new = 1.0e-6;
-						// Apply under-relaxation for linear materials
 						if(relax_hacapk > 0.0 && relax_hacapk <= 1.0)
 						{
 							chi_new = chi_new * (1.0 - relax_hacapk) + chi_matrix * relax_hacapk;
 						}
+						if(use_newton) DifferentialChiArray[elem] = chi_new;
 					}
 					poly->CurrentChi = chi_new;
+					CurrentChiArray_hacapk[elem] = chi_new;
 
 					// B-field convergence
 					TVector3d& M_new = poly->Magn;

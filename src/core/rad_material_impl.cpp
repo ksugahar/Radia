@@ -1569,7 +1569,7 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 				hacapk_params.aca_eps = m_hacapk_eps;
 				hacapk_params.leaf_size = m_hacapk_leaf_size;
 				hacapk_params.eta = m_hacapk_eta;
-				hacapk_params.print_level = 1;  // Standard output
+				hacapk_params.print_level = 0;  // Silent (set to 1 for debug output)
 				RelaxMethNo_2.SetHACApKParams(hacapk_params);
 
 				RelaxMethNo_2.AutoRelax(RelaxParam, IterNumber);
@@ -1686,7 +1686,7 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 				hacapk_params.aca_eps = m_hacapk_eps;
 				hacapk_params.leaf_size = m_hacapk_leaf_size;
 				hacapk_params.eta = m_hacapk_eta;
-				hacapk_params.print_level = 1;  // Standard output
+				hacapk_params.print_level = 0;  // Silent (set to 1 for debug output)
 				RelaxMethNo_2.SetHACApKParams(hacapk_params);
 
 				ActualIterNum = RelaxMethNo_2.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
@@ -1838,7 +1838,8 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 					if(pIntrc != nullptr)
 					{
 						// Parse and apply IMA symmetry
-						ApplyIMASymmetryToInteraction(pIntrc, imageSpec.c_str());
+						// For HACApK, skip dense IMA matrix (kernel handles IMA)
+						ApplyIMASymmetryToInteraction(pIntrc, imageSpec.c_str(), skipDenseMatrix != 0);
 					}
 				}
 			}
@@ -1985,7 +1986,7 @@ int radTApplication::BuildMatrix(int ObjKey, const char* image)
 //   "-z" -> Z mirror with antisymmetric BC
 //   "+x-z" -> X and Z mirrors, X symmetric, Z antisymmetric (ELF quarter model)
 //-------------------------------------------------------------------------
-bool radTApplication::ApplyIMASymmetryToInteraction(radTInteraction* pIntrc, const char* imageSpec)
+bool radTApplication::ApplyIMASymmetryToInteraction(radTInteraction* pIntrc, const char* imageSpec, bool skipDenseIMA)
 {
 	if(pIntrc == nullptr || imageSpec == nullptr || imageSpec[0] == '\0')
 	{
@@ -2054,10 +2055,11 @@ bool radTApplication::ApplyIMASymmetryToInteraction(radTInteraction* pIntrc, con
 	// Apply IMA symmetry with per-axis signs
 	int numElements = pIntrc->SetIMASymmetry(symmetryFlags, signX, signY, signZ);
 
-	// Build IMA matrix
+	// Setup IMA subsystem (element reduction + optional dense matrix)
+	// For HACApK: skipDenseIMA=true skips dense matrix, kernel handles IMA
 	if(pIntrc->IsIMAEnabled())
 	{
-		pIntrc->SetupInteractMatrix_IMA();
+		pIntrc->SetupInteractMatrix_IMA(skipDenseIMA);
 	}
 
 	return (numElements > 0);
