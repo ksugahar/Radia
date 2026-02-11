@@ -1,0 +1,46 @@
+Setting up Visual Studio environment...
+'vswhere.exe' は、内部コマンドまたは外部コマンド、
+操作可能なプログラムまたはバッチ ファイルとして認識されていません。
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.0
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+
+========================================
+  Configuring CMake with MSVC...
+========================================
+
+-- OpenMP found: 2.0
+Python3_EXECUTABLE: C:/Program Files/Python312/python.exe
+Python site-packages: C:\Program Files\Python312\Lib\site-packages
+Finding pybind11...
+-- Found pybind11: C:/Program Files/Python312/Lib/site-packages/pybind11/include (found version "3.0.1")
+-- Intel MKL found: C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/mkl_rt.lib
+-- Using Intel MKL for peec_matrices: C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/mkl_rt.lib
+-- OpenMP enabled for peec_matrices (Intel OpenMP)
+-- Using MSVC compiler for peec_matrices
+-- peec_matrices module configured
+-- Using Intel MKL for cln_core: C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/mkl_rt.lib
+-- OpenMP enabled for cln_core (Intel OpenMP)
+-- Using MSVC compiler for cln_core
+-- cln_core module configured
+-- Using Intel MKL for mmm_core: C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/mkl_rt.lib
+-- OpenMP enabled for mmm_core (Intel OpenMP)
+-- Using MSVC compiler for mmm_core
+-- mmm_core module configured
+-- Using Intel MKL for _radia_pybind: C:/Program Files (x86)/Intel/oneAPI/mkl/latest/lib/mkl_rt.lib
+-- OpenMP enabled for _radia_pybind (Intel OpenMP)
+-- _radia_pybind module configured (pybind11 bindings)
+-- Configuring done (0.3s)
+-- Generating done (0.7s)
+-- Build files have been written to: S:/Radia/01_GitHub/build-msvc
+
+========================================
+  Building _radia_pybind (RadiaOnly)...
+========================================
+
+[1/2] Building CXX object CMakeFiles\_radia_pybind.dir\src\core\rad_c_interface.cpp.obj
+[2/2] Linking CXX shared module _radia_pybind.cp312-win_amd64.pyd
+
+Build completed successfully.

@@ -1168,6 +1168,33 @@ EXP int CALL RadSetRelaxParam(int* n, double relax);
 */
 EXP int CALL RadGetRelaxParam(double* relax);
 
+/** Enables/disables Newton-Raphson nonlinear iteration.
+When enabled, uses differential susceptibility chi_d = (dB/dH)/mu_0 - 1 for the system matrix
+and adds a correction term to the RHS for quadratic convergence.
+@param use_newton [in] 1 to enable Newton, 0 for Picard (default)
+*/
+EXP int CALL RadSetNewtonMethod(int* n, int use_newton);
+
+/** Gets current Newton method setting.
+@param use_newton [out] 1 if Newton is enabled, 0 if Picard
+*/
+EXP int CALL RadGetNewtonMethod(int* use_newton);
+
+/** Configure Newton-Raphson line search damping.
+@param n [out] Number of elements modified (always 1)
+@param enabled [in] 1 to enable damping, 0 to disable
+@param max_iter [in] Max line search iterations (default: 5)
+@param min_omega [in] Minimum omega threshold (default: 0.01)
+*/
+EXP int CALL RadSetNewtonDamping(int* n, int enabled, int max_iter, double min_omega);
+
+/** Get Newton line search damping configuration.
+@param enabled [out] 1 if damping enabled, 0 otherwise
+@param max_iter [out] Max line search iterations
+@param min_omega [out] Minimum omega threshold
+*/
+EXP int CALL RadGetNewtonDampingStats(int* enabled, int* max_iter, double* min_omega);
+
 // RadSetIMASymmetry REMOVED (2026-01-31) - Use RadBuildMatrix(obj, image) instead
 // The new unified API handles both interaction creation and Image symmetry
 // Example: int handle = RadBuildMatrix(obj, "+x-z");

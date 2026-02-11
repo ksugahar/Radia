@@ -92,6 +92,18 @@ struct NonlinearContext {
 	// Base matrix for linear system (geometric part without chi)
 	std::vector<double> BaseMatrix;
 
+	// Newton-Raphson fields
+	bool use_newton;                           // True to use differential chi
+	std::vector<double> DifferentialChiArray;  // chi_d per element [AmOfMainElem]
+	std::vector<double> OldSigma;              // sigma_old for Newton RHS correction [totalDOF]
+
+	// Newton line search damping
+	bool newton_damping_enabled;               // Enable adaptive line search damping
+	int newton_ls_max_iter;                    // Max line search backtracks (default: 5)
+	double newton_ls_min_omega;                // Minimum omega threshold (default: 0.01)
+	int total_ls_backtracks;                   // Statistics: cumulative backtracks
+	std::vector<double> accepted_omegas;       // ω values per iteration (for debugging)
+
 	// Constructor
 	NonlinearContext()
 		: totalDOF(0)
@@ -103,6 +115,11 @@ struct NonlinearContext {
 		, B_sat(1.0)
 		, max_B_rel_change(0.0)
 		, relax_param(0.0)
+		, use_newton(false)
+		, newton_damping_enabled(false)
+		, newton_ls_max_iter(5)
+		, newton_ls_min_omega(0.01)
+		, total_ls_backtracks(0)
 	{}
 };
 
@@ -277,9 +294,13 @@ protected:
 
 private:
 	// Variable DOF version of BiCGSTAB
-	// elemChiArray: isotropic chi for each element (3DOF elements use this, 6DOF uses poly->CurrentChi)
-	int SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, int max_iter, double& residual,
-	                              const std::vector<double>& elemChiArray);
+	// elemChiArray: chi for system matrix diagonal (chi_abs for Picard, chi_d for Newton)
+	int SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
+	                              int totalDOF, double tol, int max_iter, double& residual,
+	                              const std::vector<double>& elemChiArray,
+	                              bool use_newton = false,
+	                              const std::vector<double>* absChiArray = nullptr,
+	                              const double* oldSigma = nullptr);
 
 	// Matrix-vector product
 	// Computes: y = A * x where A = -N - diag(1/chi) (ELF-compatible)
@@ -381,9 +402,14 @@ private:
 
 	// BiCGSTAB with H-matrix for 6DOF MSC hexahedra
 	// Returns number of iterations (0 on failure)
-	// elemChiArray: isotropic chi for each element (3DOF elements use this, 6DOF uses poly->CurrentChi)
-	int SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, double tol, int max_iter, double& residual,
-	                                       const std::vector<double>& elemChiArray);
+	// elemChiArray: chi for system matrix diagonal (chi_abs for Picard, chi_d for Newton)
+	// Newton params (optional): diffChiArray=differential chi, absChiArray=absolute chi, oldSigma=prev solution
+	int SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& ctx,
+	                                       int totalDOF, double tol, int max_iter, double& residual,
+	                                       const std::vector<double>& elemChiArray,
+	                                       bool use_newton = false,
+	                                       const std::vector<double>* absChiArray = nullptr,
+	                                       const double* oldSigma = nullptr);
 
 	// Matrix-vector product using H-matrix for 6DOF MSC hexahedra
 	void MatVec_HMatrix_VariableDOF(const std::vector<double>& x, std::vector<double>& y, int totalDOF);
@@ -391,6 +417,14 @@ private:
 	// Get diagonal elements using H-matrix for 6DOF MSC hexahedra
 	void GetDiagonalElements_HMatrix_VariableDOF(std::vector<double>& diag,
 	                                              const std::vector<double>& inv_chi, int totalDOF);
+
+	// Block Jacobi preconditioner for H-matrix BiCGSTAB
+	bool BuildBlockJacobiPreconditioner_HMatrix(std::vector<double>& blockInverse,
+	                                             std::vector<int>& blockOffsets,
+	                                             const std::vector<double>& inv_chi, int totalDOF);
+	void ApplyBlockJacobiPreconditioner_HMatrix(const std::vector<double>& x, std::vector<double>& y,
+	                                             const std::vector<double>& blockInverse,
+	                                             const std::vector<int>& blockOffsets);
 
 	// BLAS-like operations (same as radTRelaxationMethNo_1)
 	double Dot(const std::vector<double>& a, const std::vector<double>& b, int n);

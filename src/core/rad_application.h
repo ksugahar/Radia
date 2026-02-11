@@ -78,6 +78,19 @@ public:
 	// Can be set via Python API: rad.SetRelaxParam(value)
 	double m_relax;
 
+	// Newton-Raphson nonlinear iteration (default: false = Picard/fixed-point)
+	// When true, uses differential susceptibility chi_d = (dB/dH)/mu_0 - 1 for system matrix
+	// and adds correction term to RHS for quadratic convergence
+	// Can be set via Python API: rad.SetNewtonMethod(True/False)
+	bool m_use_newton;
+
+	// Newton line search damping parameters
+	// Enables adaptive backtracking line search to improve nonlinear convergence
+	// Can be configured via Python API: rad.SetNewtonDamping(enabled, max_iter, min_omega)
+	bool m_newton_damping_enabled;   // Enable line search damping (default: true when Newton active)
+	int m_newton_ls_max_iter;        // Max line search backtracks (default: 5)
+	double m_newton_ls_min_omega;    // Minimum omega threshold (default: 0.01)
+
 	// Solve statistics (always available)
 	double m_solve_t_matrix_build;   // Interaction matrix build time [s]
 	double m_solve_t_lu_decomp;      // LU decomposition time [s] (Method 0 only)
@@ -135,6 +148,12 @@ public:
 		NonlinearMethod = 1;  // Default: mucal2 (B-change/Newton) for faster convergence
 		m_bicg_tol = 1.0e-4;  // Default: 1e-4 (ELF-compatible)
 		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
+		m_use_newton = false; // Default: Picard iteration (backward compatible)
+
+		// Newton line search damping init
+		m_newton_damping_enabled = true;  // Default: enabled when Newton is active
+		m_newton_ls_max_iter = 5;
+		m_newton_ls_min_omega = 0.01;
 
 		// Solve statistics init
 		m_solve_t_matrix_build = 0.0;
@@ -299,7 +318,7 @@ public:
 	// Helper: Parse image string and apply IMA symmetry to interaction object
 	// Format: "+x", "-z", "+x-z", "+x+y-z", etc.
 	// Returns true on success
-	bool ApplyIMASymmetryToInteraction(radTInteraction* pIntrc, const char* imageSpec);
+	bool ApplyIMASymmetryToInteraction(radTInteraction* pIntrc, const char* imageSpec, bool skipDenseIMA = false);
 
 #ifdef RADIA_USE_HACAPK
 	// HACApK parameter setting and statistics retrieval

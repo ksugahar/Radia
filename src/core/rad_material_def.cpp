@@ -980,6 +980,62 @@ double radTNonlinearIsotropMaterial::ComputeChiDualMethod(double H_mag, double m
 }
 
 //-------------------------------------------------------------------------
+// Compute differential susceptibility chi_d = (dB/dH)/mu_0 - 1
+// Uses piecewise linear B-H curve: dB/dH is constant within each interval
+//-------------------------------------------------------------------------
+
+double radTNonlinearIsotropMaterial::ComputeDifferentialChi(double H_mag) const
+{
+	const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+
+	if(gLenArrayHB < 2 || gArrayHB == nullptr)
+	{
+		return 0.0;  // Linear material: dB/dH = mu_0, chi_d = 0
+	}
+
+	double dBdH;
+
+	if(H_mag <= gArrayHB[0].x)
+	{
+		// Below first point: use slope from origin to first point
+		if(gArrayHB[0].x > 1.0e-15)
+			dBdH = gArrayHB[0].y / gArrayHB[0].x;
+		else
+			dBdH = MU_0;
+	}
+	else if(H_mag >= gArrayHB[gLenArrayHB - 1].x)
+	{
+		// Above last point: use slope from last two points
+		int n = gLenArrayHB;
+		double dH = gArrayHB[n-1].x - gArrayHB[n-2].x;
+		if(std::fabs(dH) > 1.0e-15)
+			dBdH = (gArrayHB[n-1].y - gArrayHB[n-2].y) / dH;
+		else
+			dBdH = MU_0;
+	}
+	else
+	{
+		// Find interval and compute piecewise linear slope
+		for(int i = 0; i < gLenArrayHB - 1; i++)
+		{
+			if(H_mag >= gArrayHB[i].x && H_mag < gArrayHB[i+1].x)
+			{
+				double dH = gArrayHB[i+1].x - gArrayHB[i].x;
+				if(std::fabs(dH) > 1.0e-15)
+					dBdH = (gArrayHB[i+1].y - gArrayHB[i].y) / dH;
+				else
+					dBdH = MU_0;
+				break;
+			}
+		}
+	}
+
+	double chi_d = dBdH / MU_0 - 1.0;
+	if(chi_d < 1.0e-6) chi_d = 1.0e-6;
+	return chi_d;
+}
+
+//-------------------------------------------------------------------------
 
 // Get H from M using Newton iteration for analytical formula (tanh model)
 double radTNonlinearIsotropMaterial::GetHfromM_Analytical(double AbsM) const
