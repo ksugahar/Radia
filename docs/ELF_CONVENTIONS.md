@@ -194,3 +194,102 @@ CHEXA_FACES = [
 # Verify diagonal block matches ELF
 # If diagonal values are in same positions, face ordering is correct
 ```
+
+## Nonlinear Solver Methods (ELF/MAGIC Compatibility)
+
+This section describes the correspondence between Radia's nonlinear solver implementation and ELF/MAGIC's solver methods (mucal1, mucal2).
+
+**Acknowledgment**: The author thanks ELF Corporation (President: Dr. Yano) for permission to document this correspondence.
+
+### Method Overview
+
+ELF/MAGIC uses two distinct nonlinear solution methods:
+
+| Method | Name | Description |
+|--------|------|-------------|
+| mucal1 | Picard Method | Fixed-point iteration with dual estimation for stability |
+| mucal2 | Newton Method | Newton-Raphson using differential susceptibility |
+
+### mucal1: Picard Method (Relaxation)
+
+**ELF Implementation**: `magic.f90` subroutine `mucal1(it,ccon)` (line 4181)
+
+**Radia Implementation**: Default nonlinear iteration in `rad_relaxation_methods.cpp`
+
+The Picard method (fixed-point iteration) updates the permeability using two estimation methods and selects the one with smaller change for stability:
+
+**Method 1** (un1): H-value interpolation from B-H curve
+```
+mu_1 = B(H) / (mu_0 * H)
+```
+where B is interpolated from the B-H curve at the current H value.
+
+**Method 2** (un2): (H+B)-sum based interpolation
+```
+# Find B-H curve point where H_curve + B_curve ≈ H_current + B_current
+# Then: mu_2 = B_interp / (mu_0 * H_interp)
+```
+
+**Selection**: Apply under-relaxation α = 0.5 to both estimates:
+```
+mu_k_relaxed = (1-α) * mu_k + α * mu_old,  k=1,2
+```
+Select the estimate with smaller |mu_new - mu_old| to improve convergence stability.
+
+**Convergence**: Based on relative permeability change
+```
+max |mu_new - mu_old| / mu_old < tolerance
+```
+
+### mucal2: Newton-Raphson Method
+
+**ELF Implementation**: `magic.f90` subroutine `mucal2(it,ccon)` (line 4311)
+
+**Radia Implementation**: Newton method in `rad_relaxation_methods.cpp` (activated by `use_newton` flag)
+
+The Newton-Raphson method uses differential susceptibility from the B-H curve tangent:
+```
+chi_d = (dB/dH) / mu_0 - 1
+```
+
+Modified linear system:
+```
+[D(1/chi_d) + G] * sigma^(k+1) = H_ext + D(1/chi_d - 1/chi) * sigma^(k)
+```
+
+**Convergence**: Based on B-field change (faster convergence but requires good initial guess)
+```
+max |B_new - B_old| / B_sat < tolerance
+```
+
+### Hybrid Strategy (Radia Default)
+
+Radia uses a hybrid approach combining both methods:
+
+1. **Initial 10 iterations**: Picard method (mucal1-like) for stable convergence
+2. **Subsequent iterations**: Newton method (mucal2-like) for faster convergence
+
+This is controlled by:
+```cpp
+const int newton_start_iter = 10;
+bool newton_active = ctx.use_newton && iterCount >= newton_start_iter;
+```
+
+**Implementation note**: Radia implements Method 1 and Method 2 as separate options, whereas ELF's mucal1 combines both and selects the better estimate automatically. Both approaches achieve stable convergence.
+
+### Correspondence Table
+
+| Aspect | ELF/MAGIC | Radia |
+|--------|-----------|-------|
+| Picard (Method 1) | mucal1 - un1 | Method 1: μ₁ = B(H)/(μ₀H) |
+| Picard (Method 2) | mucal1 - un2 | Method 2: (H+B)-sum interpolation |
+| Newton method | mucal2 | Newton with χ_d = (dB/dH)/μ₀ - 1 |
+| Switching logic | newton flag | newton_start_iter = 10 |
+| Convergence (Picard) | μ change | B-field change |
+| Convergence (Newton) | B change | B-field change |
+
+### References
+
+- ELF/MAGIC source code: `S:\ELF_MAGIC\01_GitHub\src\legacy\magic.f90`
+- Radia source code: `S:\radia\01_GitHub\src\core\rad_relaxation_methods.cpp`
+- Paper reference: SA-26-010 (IEEJ Technical Meeting on Static Apparatus and Rotating Machinery, 2026)
