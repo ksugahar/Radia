@@ -559,6 +559,99 @@ rad.Solve(container, 0.001, 100, 1)
 rad.SetRelaxParam(0.0)
 ```
 
+### SetNewtonMethod - Newton-Raphson Method (v1.4.4+)
+
+```python
+rad.SetNewtonMethod(enabled)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | bool | False | Enable Newton-Raphson with differential susceptibility |
+
+**Notes:**
+- Uses tangent stiffness matrix based on differential susceptibility χ_d = (dB/dH)/μ₀ - 1
+- Reduces linear iterations per nonlinear step compared to Picard (fixed-point) method
+- Recommended for large-scale problems (>10,000 DOF) with HACApK solver (Method 2)
+- Combine with `SetNewtonDamping()` for robust convergence
+- Call BEFORE `rad.Solve()`
+
+**Example:**
+```python
+rad.SetSolver(2)  # HACApK
+rad.SetNewtonMethod(True)
+rad.SetNewtonDamping(True)  # Enable line search damping
+rad.Solve(container, 0.001, 100)
+```
+
+### GetNewtonMethod - Query Newton-Raphson Status (v1.4.4+)
+
+```python
+enabled = rad.GetNewtonMethod()
+```
+
+Returns `True` if Newton-Raphson is enabled, `False` otherwise.
+
+### SetNewtonDamping - Line Search Damping (v1.4.4+)
+
+```python
+rad.SetNewtonDamping(enabled=True, max_iter=5, min_omega=0.01)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | bool | True | Enable backtracking line search |
+| `max_iter` | int | 5 | Maximum line search iterations |
+| `min_omega` | float | 0.01 | Minimum damping factor (1%) |
+
+**Notes:**
+- Only active when Newton-Raphson is enabled (`SetNewtonMethod(True)`)
+- Uses backtracking line search: σ_new = ω × σ_trial + (1-ω) × σ_old
+- Starts with ω=1.0 (full Newton step), reduces by ω *= 0.5 if residual increases
+- Ensures monotonic residual reduction, improves nonlinear convergence
+- Particularly effective for highly nonlinear problems
+- Call BEFORE `rad.Solve()`
+
+**Algorithm:**
+1. Solve linear system: (D(1/χ_d) + G) σ_trial = RHS
+2. Try full step ω=1.0
+3. If residual increases: ω *= 0.5, retry with damped update
+4. Repeat up to `max_iter` times
+5. Force accept if ω < `min_omega`
+
+**Example:**
+```python
+# Enable Newton with line search damping (recommended)
+rad.SetNewtonMethod(True)
+rad.SetNewtonDamping(True, max_iter=5, min_omega=0.01)
+rad.Solve(container, 0.001, 100, 2)  # HACApK + Newton + Damping
+
+# Disable damping for full Newton steps
+rad.SetNewtonDamping(False)
+rad.Solve(container, 0.001, 100, 2)  # HACApK + Newton (no damping)
+```
+
+### GetNewtonDampingStats - Query Damping Statistics (v1.4.4+)
+
+```python
+stats = rad.GetNewtonDampingStats()
+```
+
+Returns a dictionary with damping configuration:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `'enabled'` | bool | Damping enabled status |
+| `'max_iter'` | int | Maximum line search iterations |
+| `'min_omega'` | float | Minimum damping factor |
+
+**Example:**
+```python
+stats = rad.GetNewtonDampingStats()
+print(f"Damping: {stats['enabled']}, max_iter={stats['max_iter']}, min_omega={stats['min_omega']}")
+# Output: Damping: True, max_iter=5, min_omega=0.01
+```
+
 ### BiCGSTAB Performance
 
 Typical solve times (nonlinear BH curve material):
