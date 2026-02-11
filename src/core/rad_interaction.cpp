@@ -4171,7 +4171,7 @@ void radTInteraction::Compute6x6BlockMirroredTarget(int hex_i, int hex_j, int mi
 // N_IMA[i,j] = N[full_i, full_j] + sign * N[full_i, mirror_j] @ P
 // sign = +1 for symmetric BC, -1 for antisymmetric BC
 //-------------------------------------------------------------------------
-int radTInteraction::SetupInteractMatrix_IMA()
+int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 {
 	if(!m_imaEnabled)
 	{
@@ -4207,13 +4207,16 @@ int radTInteraction::SetupInteractMatrix_IMA()
 
 	// Build IMA interaction matrix (imaDOF x imaDOF)
 
-	// Allocate IMA matrix
-	size_t matrix_size = (size_t)imaDOF * (size_t)imaDOF;
-	try {
-		m_flatInteractMatrix.resize(matrix_size, 0.0);
-	} catch(const std::bad_alloc&) {
-		std::cerr << "[Radia] Error: Memory allocation failed for IMA matrix" << std::endl;
-		return 0;
+	// Allocate IMA matrix (skip for HACApK - kernel computes entries on demand)
+	if(!skipDenseMatrix)
+	{
+		size_t matrix_size = (size_t)imaDOF * (size_t)imaDOF;
+		try {
+			m_flatInteractMatrix.resize(matrix_size, 0.0);
+		} catch(const std::bad_alloc&) {
+			std::cerr << "[Radia] Error: Memory allocation failed for IMA matrix" << std::endl;
+			return 0;
+		}
 	}
 
 	// Save original values
@@ -4277,7 +4280,16 @@ int radTInteraction::SetupInteractMatrix_IMA()
 
 	// IMA: AmOfMainElem updated, m_totalDOF set
 
+	// For HACApK: skip dense matrix fill, kernel handles IMA via Compute6x6BlockFast
+	if(skipDenseMatrix)
+	{
+		// Reset precomputed geometry so HACApK recomputes for the reduced IMA elements
+		m_hexaGeomReady = false;
+		return 1;
+	}
+
 	// Build mapping from IMA index to hex index (for Compute6x6BlockFast fast path)
+	// Uses geometry precomputed from the full model (before system reduction)
 	std::vector<int> imaToHex(m_imaNumElements, -1);
 	if(allHex && m_hexaGeomReady)
 	{

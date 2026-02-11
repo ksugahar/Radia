@@ -693,11 +693,6 @@ message(STATUS "cln_core module configured")
 set(MMM_CORE_SOURCES
 	${LIB_DIR}/rad_mmm_matrices_api.cpp
 	${CORE_DIR}/rad_mmm_matrices.cpp
-	${CORE_DIR}/rad_mmm_hacapk.cpp
-	${CORE_DIR}/rad_mmm_hacapk_callback.c
-	${EXT_DIR}/HACApK/cHACApK_base.c
-	${EXT_DIR}/HACApK/cHACApK_lib.c
-	${EXT_DIR}/HACApK/cHACApK_cpp_impl.c
 )
 
 pybind11_add_module(mmm_core
@@ -707,14 +702,11 @@ pybind11_add_module(mmm_core
 # Add include directories
 target_include_directories(mmm_core PRIVATE
 	${CORE_DIR}
-	${EXT_DIR}/HACApK
 )
 
 # Add compile definitions
 target_compile_definitions(mmm_core PRIVATE
 	_CRT_SECURE_NO_WARNINGS
-	RADIA_USE_HACAPK
-	HACAPK_RADIA_LOGGING
 	$<$<CONFIG:Debug>:_DEBUG>
 	$<$<CONFIG:Release>:NDEBUG>
 	$<$<PLATFORM_ID:Windows>:WIN32>

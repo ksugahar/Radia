@@ -14,7 +14,8 @@
       "Bash(\"/c/Program Files/Pandoc/pandoc.exe\" \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.md\" -o \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.docx\")",
       "Bash(\"/c/Tools/pandoc-3.6.2/pandoc.exe\" \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.md\" -o \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.docx\")",
       "Bash(\"/c/Tools/pandoc-3.6.2/pandoc.exe\" \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.md\" -o \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.pdf\" --pdf-engine=xelatex)",
-      "Bash(\"/c/Tools/pandoc-3.6.2/pandoc.exe\":*)"
+      "Bash(\"/c/Tools/pandoc-3.6.2/pandoc.exe\":*)",
+      "Bash($PSVersionTable)"
     ]
   }
 }

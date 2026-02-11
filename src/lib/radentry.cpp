@@ -103,6 +103,10 @@ void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
 double GetRelaxParam();
+void SetNewtonMethod( bool );
+bool GetNewtonMethod();
+void SetNewtonDamping( bool, int, double );
+void GetNewtonDampingStats( bool*, int*, double* );
 // SetIMASymmetry, BuildIMAMatrix REMOVED (2026-01-31) - Use BuildMatrix(obj, image) instead
 void ClassifyPoints( int*, int*, int, double*, int, double );
 void ComputeFieldBatch( double*, double*, int, double*, int, int );
@@ -1708,6 +1712,34 @@ int CALL RadSetRelaxParam(int* n, double relax)
 int CALL RadGetRelaxParam(double* relax)
 {
 	*relax = GetRelaxParam();
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadSetNewtonMethod(int* n, int use_newton)
+{
+	SetNewtonMethod(use_newton != 0);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetNewtonMethod(int* use_newton)
+{
+	*use_newton = GetNewtonMethod() ? 1 : 0;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadSetNewtonDamping(int* n, int enabled, int max_iter, double min_omega)
+{
+	SetNewtonDamping(enabled != 0, max_iter, min_omega);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetNewtonDampingStats(int* enabled, int* max_iter, double* min_omega)
+{
+	bool enabled_bool;
+	GetNewtonDampingStats(&enabled_bool, max_iter, min_omega);
+	*enabled = enabled_bool ? 1 : 0;
 	return ioBuffer.OutErrorStatus();
 }
 

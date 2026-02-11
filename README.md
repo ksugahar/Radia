@@ -70,6 +70,8 @@ We stand on the shoulders of giants:
     *   *Ref*: O. Chubar, P. Elleaume, J. Chavanne, "A 3D Magnetostatics Computer Code for Insertion Devices", J. Synchrotron Rad. (1998).
 *   **FastImp (MIT)**: Developed by **J. White, et al.** at MIT. The pioneer of pFFT-accelerated Surface Integral Equation methods.
     *   *Ref*: Z. Zhu, B. Song, J. White, "Algorithms in FastImp: A Fast and Wide-Band Impedance Extraction Program", DAC (2003).
+*   **[HACApK](https://github.com/RIKENGITHUB/ppOpen-HPC) (JAMSTEC/RIKEN)**: Developed by **A. Ida, et al.** at JAMSTEC. Hierarchical matrices with Adaptive Cross Approximation for Krylov solvers.
+    *   *Ref*: A. Ida, T. Iwashita, T. Mifune, Y. Takahashi, "Parallel Hierarchical Matrices with Adaptive Cross Approximation on Symmetric Multiprocessing Clusters", J. Inf. Process., Vol. 22, No. 4, pp. 642–650 (2014).
 
 ---
 
@@ -204,7 +206,7 @@ Instead of simple "boundary conditions", Radia provides rich physical sources:
 To handle complex field sources efficiently, the framework employs state-of-the-art acceleration algorithms based on the **Laplace kernel** ($1/r$):
 
 *   **Solver Acceleration (Source Definition)**:
-    *   **H-Matrix (HACApK ACA+)**: Used for Magnetostatics (MMM). Compresses dense interaction matrices to $O(N \log N)$, enabling large-scale iron/magnet simulations.
+    *   **$\mathcal{H}$-Matrix ([HACApK](https://github.com/RIKENGITHUB/ppOpen-HPC) ACA+)**: Used for Magnetostatics (MMM). Compresses dense interaction matrices to $O(N \log N)$, enabling large-scale iron/magnet simulations.
     *   **pFFT & SIBC**: Used for Conductor Analysis (FastImp). **Surface Impedance Boundary Conditions (SIBC)** combined with Precorrected-FFT allow extremely fast impedance extraction by modeling skin depth effects as surface properties.
 *   **Field Evaluation Acceleration**:
     *   **FMM (ExaFMM-t)**: Fast Multipole Method using Laplace kernel for rapidly computing fields ($B, H, A$) from massive numbers of source elements. This is critical for the `CoefficientFunction` interface to NGSolve.
@@ -291,7 +293,7 @@ rad.FldVTS(coil, "coil_field.vts",
 ## License
 
 *   **Radia Core**: BSD-style (ESRF)
-*   **H-Matrix Library**: MIT (ppOpen-HPC)
+*   **$\mathcal{H}$-Matrix Library ([HACApK](https://github.com/RIKENGITHUB/ppOpen-HPC))**: MIT (ppOpen-HPC/JAMSTEC)
 
 ---
 *Radia: Empowering the next generation of magnetic system design.*
