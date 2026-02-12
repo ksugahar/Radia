@@ -11,6 +11,7 @@ from . import (
     solver_tools,
     field_tools,
     export_tools,
+    ngsolve_integration_tools,
 )
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "solver_tools",
     "field_tools",
     "export_tools",
+    "ngsolve_integration_tools",
 ]
