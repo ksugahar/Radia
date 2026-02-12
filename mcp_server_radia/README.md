@@ -159,6 +159,235 @@ Claude calls:
 Result: NPZ file compatible with scipy.interpolate for NGSolve
 ```
 
+## Troubleshooting
+
+### Solver Issues
+
+**Problem: Solver does not converge (rad.Solve() returns error)**
+
+**原因 (Causes):**
+- Material permeability too high or nonlinear B-H curve poorly defined
+- Geometry has very small or degenerate elements
+- Insufficient relaxation for nonlinear materials
+
+**解決策 (Solutions):**
+```python
+# 1. Increase relaxation parameter for nonlinear materials
+radia_solver_set_relax_param(relaxation_param=0.5)  # Default 1.0 → reduce to 0.5
+
+# 2. Check geometry for degenerate elements
+radia_list_objects()  # List all objects
+radia_get_object_info(object_name="magnet")  # Check specific object
+
+# 3. Use BiCGSTAB for large problems
+radia_solver_solve(
+    object_name="magnet",
+    method="bicgstab",  # Not "lu"
+    precision=1e-6,
+    max_iter=1000
+)
+
+# 4. For H-matrix solver
+radia_solver_set_hacapk_params(
+    precision=1e-6,
+    max_iter=1000,
+    use_hmatrix=True
+)
+```
+
+**Problem: Solver is too slow**
+
+**原因 (Causes):**
+- Too many elements (mesh too fine)
+- Using LU solver for large problems
+- H-matrix not enabled for large systems
+
+**解決策 (Solutions):**
+```python
+# 1. Enable H-matrix acceleration (O(N log N) vs O(N²))
+radia_solver_set_hacapk_params(
+    precision=1e-6,
+    use_hmatrix=True
+)
+
+# 2. Use iterative solver for large problems
+radia_solver_solve(
+    object_name="magnet",
+    method="bicgstab",
+    precision=1e-6
+)
+
+# 3. Check element count
+radia_list_objects()
+# If > 500 elements, consider coarser subdivision
+```
+
+### Field Evaluation Issues
+
+**Problem: Field values are zero or incorrect**
+
+**原因 (Causes):**
+- Solver not run before field evaluation
+- Evaluation point inside magnet geometry (singularity)
+- Units mismatch (Radia in mm, NGSolve in m)
+
+**解決策 (Solutions):**
+```python
+# 1. ALWAYS set units before creating geometry
+radia_geometry_set_units(units="m")  # Required for NGSolve coupling
+
+# 2. Run solver before evaluating fields
+radia_solver_solve(object_name="magnet", method="bicgstab")
+
+# 3. Evaluate fields OUTSIDE magnet geometry
+# Rule: evaluation point > 0.001m from magnet surfaces
+radia_field_compute(
+    object_name="magnet",
+    point=[0.12, 0, 0],  # Outside 0.1m magnet
+    field_type="b"
+)
+```
+
+**Problem: H-matrix batch evaluation slower than expected**
+
+**原因 (Causes):**
+- H-matrix not properly enabled
+- Batch size too small (< 100 points)
+- Precision too tight (< 1e-8)
+
+**解決策 (Solutions):**
+```python
+# 1. Explicitly enable H-matrix
+radia_ngsolve_enable_hmatrix(
+    enable=True,
+    precision=1e-6  # Not 1e-10
+)
+
+# 2. Use large batches (> 1000 points for best speedup)
+points = [[x, y, z] for ... in range(10000)]  # Large batch
+radia_ngsolve_batch_evaluate(
+    radia_object_name="magnet",
+    field_type="b",
+    points=points,
+    use_hmatrix=True
+)
+
+# 3. Check speedup
+# Expected: 10-100× faster for N > 1000 points
+```
+
+### NGSolve Integration Issues
+
+**Problem: Field grid export produces NaN values**
+
+**原因 (Causes):**
+- Evaluation grid extends inside magnet geometry
+- Grid resolution too fine near magnet surfaces
+- Solver precision insufficient
+
+**解決策 (Solutions):**
+```python
+# 1. Keep grid outside magnet geometry
+# For 0.1m magnet, use bbox_min/max > ±0.11m
+radia_ngsolve_export_field_grid(
+    radia_object_name="magnet",
+    field_type="b",
+    bbox_min=[-0.15, -0.15, -0.15],  # Outside magnet
+    bbox_max=[0.15, 0.15, 0.15],
+    grid_size=[20, 20, 20],
+    output_file="field_grid.npz"
+)
+
+# 2. Reduce grid resolution near boundaries
+# Use grid_size=[15, 15, 15] instead of [30, 30, 30]
+
+# 3. Increase solver precision
+radia_solver_solve(
+    object_name="magnet",
+    method="bicgstab",
+    precision=1e-8  # Was 1e-6 → tighten
+)
+```
+
+**Problem: Workspace export fails or session not found**
+
+**原因 (Causes):**
+- Object not created or named incorrectly
+- Workspace directory not accessible
+- Insufficient permissions
+
+**解決策 (Solutions):**
+```python
+# 1. Verify object exists in state
+radia_list_objects()  # Check object is listed
+
+# 2. Use exact object name
+radia_workspace_export_object(
+    object_name="magnet",  # Must match creation name
+    export_geometry=True,
+    export_fields=True
+)
+
+# 3. List created sessions
+radia_workspace_list_sessions()
+# Copy session_id for NGSolve import
+
+# 4. Check workspace directory
+# Verify: S:\Radia\01_Github\mcp_shared\ is writable
+```
+
+### Geometry Creation Issues
+
+**Problem: Object creation fails with invalid geometry**
+
+**原因 (Causes):**
+- Vertex ordering incorrect for hexahedron/tetrahedron
+- Dimensions too small or negative
+- Overlapping geometry (container issues)
+
+**解決策 (Solutions):**
+```python
+# 1. Check hexahedron vertex ordering
+# Must follow Radia convention:
+# vertices[0-3]: bottom face (z=z_min), counterclockwise
+# vertices[4-7]: top face (z=z_max), counterclockwise
+vertices = [
+    [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],  # Bottom
+    [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1],  # Top
+]
+
+# 2. Verify dimensions are positive
+radia_geometry_create_recmag(
+    center=[0, 0, 0],
+    dimensions=[0.1, 0.1, 0.1],  # All > 0
+    magnetization=[0, 0, 954930]
+)
+
+# 3. Check container objects
+radia_list_objects()  # Verify all sub-objects exist
+```
+
+### Diagnostic Tools Usage
+
+**サーバ状態確認 (Check server state):**
+```python
+# 1. Get server information
+radia_server_info()
+# Returns: version, Radia availability, object count
+
+# 2. List all objects in memory
+radia_list_objects()
+# Shows all Radia objects with IDs
+
+# 3. Get detailed object information
+radia_get_object_info(object_name="magnet")
+# Returns: type, Radia ID, properties
+
+# 4. Reset server state (clear all objects)
+radia_clear_state(confirm=True)
+# WARNING: Deletes all objects from memory
+```
+
 ## Development Policy
 
 ### Branch Management
