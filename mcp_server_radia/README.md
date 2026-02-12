@@ -25,7 +25,7 @@ powershell -ExecutionPolicy Bypass -File BuildMSVC.ps1
 pip install mcp
 ```
 
-## Tools (26 total)
+## Tools (31 total)
 
 ### Geometry (6)
 - `radia_geometry_create_recmag` - Rectangular magnet
@@ -62,6 +62,13 @@ pip install mcp
 - `radia_workspace_create_session` - New session
 - `radia_workspace_export_object` - Export to workspace
 - `radia_workspace_list_sessions` - List sessions
+
+### NGSolve Integration (5)
+- `radia_ngsolve_create_field` - Create field data for NGSolve CoefficientFunction
+- `radia_ngsolve_batch_evaluate` - Batch field evaluation with H-matrix (10-100x speedup)
+- `radia_ngsolve_enable_hmatrix` - Enable H-matrix acceleration
+- `radia_ngsolve_export_field_grid` - Export structured grid to NPZ format
+- `radia_ngsolve_mesh_field_sample` - Sample field at mesh vertices
 
 ## Usage
 
@@ -109,6 +116,41 @@ Claude calls:
   )
 
 Result: Session ID that NGSolve server can import
+```
+
+### NGSolve Integration with H-Matrix
+
+```
+User: "Evaluate field at 10000 points using H-matrix acceleration"
+
+Claude calls:
+  radia_ngsolve_enable_hmatrix(enable=True, precision=1e-6)
+  radia_ngsolve_batch_evaluate(
+    radia_object_name="magnet",
+    field_type="b",
+    points=[[x1,y1,z1], ...],  # 10k points
+    use_hmatrix=True
+  )
+
+Result: Field values with 10-100x speedup vs standard evaluation
+```
+
+### Export Field Grid for NGSolve Import
+
+```
+User: "Export B field on 20x20x20 grid from -0.1 to 0.1m cube"
+
+Claude calls:
+  radia_ngsolve_export_field_grid(
+    radia_object_name="magnet",
+    field_type="b",
+    bbox_min=[-0.1, -0.1, -0.1],
+    bbox_max=[0.1, 0.1, 0.1],
+    grid_size=[20, 20, 20],
+    output_file="field_grid.npz"
+  )
+
+Result: NPZ file compatible with scipy.interpolate for NGSolve
 ```
 
 ## See Also
