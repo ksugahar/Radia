@@ -159,6 +159,47 @@ Claude calls:
 Result: NPZ file compatible with scipy.interpolate for NGSolve
 ```
 
+## Validation Examples
+
+### Rotating Magnet Eddy Current Analysis
+
+Complete validation examples demonstrating Radia-NGSolve coupling for transient eddy current analysis are available in [`examples/NGSolve_Integration/rotating_magnets/`](../examples/NGSolve_Integration/rotating_magnets/).
+
+**Physical Model:**
+- Rotating 1mm³ permanent magnet (Br = 0.2 T) moving over 0.5mm copper plate
+- 180 timesteps with 4°/step rotation (2 full rotations)
+- Movement range: X = -6mm to 4mm, fixed height Y = 2mm
+
+**Two Formulation Comparison:**
+
+1. **A-Φ Method** (Vector-Scalar Potential)
+   - Vector potential: A = A_ext + A_r
+   - Radia provides A_ext via `'a'` field type
+   - HCurl(nograds=True) + H1 mixed formulation
+   - Direct computation of B = curl(A), E = -∂A/∂t - grad(Φ)
+   - File: [`comparison_A_Phi_method.py`](../examples/NGSolve_Integration/rotating_magnets/comparison_A_Phi_method.py)
+
+2. **T-Ω Method** (Current-Magnetic Scalar Potential)
+   - Current potential: J = curl(T)
+   - Radia provides H_ext via `'h'` field type
+   - HCurl(nograds=True) + H1 mixed formulation
+   - Conductor-only T field (DOF reduction)
+   - File: [`comparison_T_Omega_method.py`](../examples/NGSolve_Integration/rotating_magnets/comparison_T_Omega_method.py)
+
+**Validation Results:**
+- Maxwell relation verification: curl(A_ext) ≈ B_ext/μ₀ (< 0.1% error)
+- Both formulations reproduce similar eddy current patterns
+- Magnetic energy and Joule loss calculations
+- CSV outputs: field data, statistics, energy metrics
+
+**Radia Integration Features Demonstrated:**
+- External field provision: `radia_ngsolve_create_field()` for A_ext, B_ext, H_ext
+- Time-dependent analysis: 180-step transient simulation
+- Batch field evaluation: efficient multi-point field computation
+- Workspace coupling: Radia geometry → NGSolve FEM solver
+
+For detailed documentation, see the [README.md](../examples/NGSolve_Integration/rotating_magnets/README.md) in the validation directory.
+
 ## Troubleshooting
 
 ### Solver Issues
