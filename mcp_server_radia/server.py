@@ -39,6 +39,7 @@ from .tools import (
     solver_tools,
     field_tools,
     export_tools,
+    ngsolve_integration_tools,
 )
 
 # Configure logging
@@ -85,6 +86,9 @@ class RadiaMCPServer:
             # Export and workspace tools
             tools.extend(export_tools.get_tools())
 
+            # NGSolve integration tools
+            tools.extend(ngsolve_integration_tools.get_tools())
+
             logger.info(f"Listing {len(tools)} available tools")
             return tools
 
@@ -105,6 +109,8 @@ class RadiaMCPServer:
                     result = await field_tools.execute(name, arguments, self.radia_state)
                 elif name.startswith("radia_export_") or name.startswith("radia_workspace_"):
                     result = await export_tools.execute(name, arguments, self.radia_state)
+                elif name.startswith("radia_ngsolve_"):
+                    result = await ngsolve_integration_tools.execute(name, arguments, self.radia_state)
                 else:
                     raise ValueError(f"Unknown tool: {name}")
 
