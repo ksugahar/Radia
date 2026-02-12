@@ -25,7 +25,7 @@ powershell -ExecutionPolicy Bypass -File BuildMSVC.ps1
 pip install mcp
 ```
 
-## Tools (31 total)
+## Tools (35 total)
 
 ### Geometry (6)
 - `radia_geometry_create_recmag` - Rectangular magnet
@@ -69,6 +69,12 @@ pip install mcp
 - `radia_ngsolve_enable_hmatrix` - Enable H-matrix acceleration
 - `radia_ngsolve_export_field_grid` - Export structured grid to NPZ format
 - `radia_ngsolve_mesh_field_sample` - Sample field at mesh vertices
+
+### Diagnostic & Debugging (4)
+- `radia_server_info` - Get server version and status
+- `radia_list_objects` - List all objects in server state
+- `radia_get_object_info` - Get detailed information about an object
+- `radia_clear_state` - Clear all objects from server state (reset)
 
 ## Usage
 

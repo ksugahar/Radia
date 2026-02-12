@@ -12,6 +12,7 @@ from . import (
     field_tools,
     export_tools,
     ngsolve_integration_tools,
+    diagnostic_tools,
 )
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "field_tools",
     "export_tools",
     "ngsolve_integration_tools",
+    "diagnostic_tools",
 ]
