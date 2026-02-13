@@ -76,10 +76,16 @@ struct PEECSegment {
     int node_from;          // Source node ID (-1 = legacy mode, no topology)
     int node_to;            // Destination node ID (-1 = legacy mode)
 
+    // Multi-filament subdivision (nwinc/nhinc)
+    int nwinc;              // Width subdivisions (default: 1 = no subdivision)
+    int nhinc;              // Height subdivisions (default: 1 = no subdivision)
+    int parent_segment;     // Parent segment index (-1 if not a sub-filament)
+
     PEECSegment()
         : length(0), width(0), height(0), sigma(5.8e7),
           cross_section_type(CrossSectionType::RECTANGULAR),
-          node_from(-1), node_to(-1) {
+          node_from(-1), node_to(-1),
+          nwinc(1), nhinc(1), parent_segment(-1) {
         center = TVector3d(0, 0, 0);
         direction = TVector3d(1, 0, 0);
     }
@@ -88,7 +94,8 @@ struct PEECSegment {
                 double w, double h, double s = 5.8e7,
                 CrossSectionType type = CrossSectionType::RECTANGULAR)
         : center(c), direction(d), length(l), width(w), height(h), sigma(s),
-          cross_section_type(type), node_from(-1), node_to(-1) {}
+          cross_section_type(type), node_from(-1), node_to(-1),
+          nwinc(1), nhinc(1), parent_segment(-1) {}
 
     // Cross-section area [m^2]
     double area() const { return width * height; }
@@ -266,6 +273,7 @@ public:
      * @brief Add a segment connecting two nodes
      *
      * Computes center, direction, and length from node positions.
+     * If nwinc*nhinc > 1, sub-filaments are created during Build().
      *
      * @param node_from Source node ID
      * @param node_to Destination node ID
@@ -273,11 +281,14 @@ public:
      * @param height Cross-section height [m]
      * @param sigma Conductivity [S/m]
      * @param type Cross-section type
+     * @param nwinc Width subdivisions (default: 1)
+     * @param nhinc Height subdivisions (default: 1)
      */
     void AddConnectedSegment(int node_from, int node_to,
                              double width, double height,
                              double sigma = 5.8e7,
-                             CrossSectionType type = CrossSectionType::RECTANGULAR);
+                             CrossSectionType type = CrossSectionType::RECTANGULAR,
+                             int nwinc = 1, int nhinc = 1);
 
     /**
      * @brief Add a port between two nodes
@@ -286,6 +297,16 @@ public:
      * @return Port ID (auto-incrementing)
      */
     int AddPort(int node_positive, int node_negative);
+
+    /**
+     * @brief Expand multi-filament segments into sub-filaments
+     *
+     * For segments with nwinc*nhinc > 1, creates sub-filaments by
+     * subdividing the cross-section. Sub-filaments share the same
+     * node_from/node_to (parallel connection). The original parent
+     * segment is replaced by its sub-filaments.
+     */
+    void ExpandFilaments();
 
     /**
      * @brief Build incidence matrix from segment connectivity

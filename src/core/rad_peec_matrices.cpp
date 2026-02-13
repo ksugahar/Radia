@@ -211,7 +211,8 @@ int PEECMatrixBuilder::AddNodeAt(const TVector3d& position, double area) {
 void PEECMatrixBuilder::AddConnectedSegment(int node_from, int node_to,
                                              double width, double height,
                                              double sigma,
-                                             CrossSectionType type) {
+                                             CrossSectionType type,
+                                             int nwinc, int nhinc) {
     int n_nodes = static_cast<int>(nodes_.size());
     if (node_from < 0 || node_from >= n_nodes ||
         node_to < 0 || node_to >= n_nodes) {
@@ -243,7 +244,93 @@ void PEECMatrixBuilder::AddConnectedSegment(int node_from, int node_to,
     PEECSegment seg(center, dir, len, width, height, sigma, type);
     seg.node_from = node_from;
     seg.node_to = node_to;
+    seg.nwinc = (nwinc > 0) ? nwinc : 1;
+    seg.nhinc = (nhinc > 0) ? nhinc : 1;
+    seg.parent_segment = -1;
     segments_.push_back(seg);
+}
+
+void PEECMatrixBuilder::ExpandFilaments() {
+    // Expand segments with nwinc*nhinc > 1 into sub-filaments
+    // Sub-filaments are parallel (same node_from, node_to) with smaller cross-sections
+    // and offset centers in the local cross-section coordinate system.
+
+    std::vector<PEECSegment> expanded;
+
+    for (int s = 0; s < static_cast<int>(segments_.size()); ++s) {
+        const PEECSegment& seg = segments_[s];
+
+        int nw = seg.nwinc;
+        int nh = seg.nhinc;
+
+        if (nw <= 1 && nh <= 1) {
+            // No subdivision needed - keep original
+            expanded.push_back(seg);
+            continue;
+        }
+
+        // Build local coordinate system perpendicular to segment direction
+        // dir = segment direction (unit vector)
+        // e_w = width direction (perpendicular to dir)
+        // e_h = height direction (perpendicular to dir and e_w)
+        TVector3d dir = seg.direction;
+
+        // Choose a reference vector not parallel to dir
+        TVector3d ref;
+        if (std::abs(dir.x) < 0.9) {
+            ref = TVector3d(1, 0, 0);
+        } else {
+            ref = TVector3d(0, 1, 0);
+        }
+
+        // e_w = ref x dir (normalized)
+        TVector3d e_w;
+        e_w.x = ref.y * dir.z - ref.z * dir.y;
+        e_w.y = ref.z * dir.x - ref.x * dir.z;
+        e_w.z = ref.x * dir.y - ref.y * dir.x;
+        double e_w_len = std::sqrt(e_w.x*e_w.x + e_w.y*e_w.y + e_w.z*e_w.z);
+        if (e_w_len < 1e-15) continue;
+        e_w.x /= e_w_len;
+        e_w.y /= e_w_len;
+        e_w.z /= e_w_len;
+
+        // e_h = dir x e_w (already unit vector)
+        TVector3d e_h;
+        e_h.x = dir.y * e_w.z - dir.z * e_w.y;
+        e_h.y = dir.z * e_w.x - dir.x * e_w.z;
+        e_h.z = dir.x * e_w.y - dir.y * e_w.x;
+
+        // Sub-filament dimensions
+        double sub_w = seg.width / nw;
+        double sub_h = seg.height / nh;
+
+        // Create sub-filaments
+        for (int iw = 0; iw < nw; ++iw) {
+            for (int ih = 0; ih < nh; ++ih) {
+                // Offset from parent center in local coordinates
+                // Center of sub-filament (iw, ih) relative to parent center
+                double offset_w = sub_w * (iw - (nw - 1) * 0.5);
+                double offset_h = sub_h * (ih - (nh - 1) * 0.5);
+
+                TVector3d sub_center;
+                sub_center.x = seg.center.x + offset_w * e_w.x + offset_h * e_h.x;
+                sub_center.y = seg.center.y + offset_w * e_w.y + offset_h * e_h.y;
+                sub_center.z = seg.center.z + offset_w * e_w.z + offset_h * e_h.z;
+
+                PEECSegment sub(sub_center, seg.direction, seg.length,
+                                sub_w, sub_h, seg.sigma, seg.cross_section_type);
+                sub.node_from = seg.node_from;
+                sub.node_to = seg.node_to;
+                sub.nwinc = 1;
+                sub.nhinc = 1;
+                sub.parent_segment = s;  // Index in original segment list
+
+                expanded.push_back(sub);
+            }
+        }
+    }
+
+    segments_ = std::move(expanded);
 }
 
 int PEECMatrixBuilder::AddPort(int node_positive, int node_negative) {
@@ -351,6 +438,9 @@ void PEECMatrixBuilder::BuildIncidenceMatrix(PEECMatrices& matrices) {
 }
 
 PEECMatrices PEECMatrixBuilder::Build(bool includeStar) {
+    // Expand multi-filament segments before computing matrices
+    ExpandFilaments();
+
     PEECMatrices matrices;
 
     int n_loop = static_cast<int>(segments_.size());
@@ -597,22 +687,133 @@ double PEECMatrixBuilder::SelfInductanceCircular(const PEECSegment& seg) const {
 
 double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
                                             const PEECSegment& seg_j) const {
-    // Neumann formula approximation (point matching)
-    // L_ij = (mu_0 / 4*pi) * (d_i . d_j) * l_i * l_j / r_ij
-
-    double dx = seg_i.center.x - seg_j.center.x;
-    double dy = seg_i.center.y - seg_j.center.y;
-    double dz = seg_i.center.z - seg_j.center.z;
-    double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-
-    if (r < 1e-15) return 0.0;
+    // Neumann integral for mutual inductance between two straight filaments
+    //
+    // M_ij = (mu_0 / 4*pi) * (d_i . d_j) * integral integral dt ds / |r_i(t) - r_j(s)|
+    //
+    // For parallel filaments (|d_i . d_j| > 0.999): analytical Rosa/Grover formula
+    // For general case: 4-point Gauss quadrature
 
     // Direction dot product
     double dot = seg_i.direction.x * seg_j.direction.x +
                  seg_i.direction.y * seg_j.direction.y +
                  seg_i.direction.z * seg_j.direction.z;
 
-    return (PEEC_MU_0 * PEEC_INV_FOUR_PI) * dot * seg_i.length * seg_j.length / r;
+    if (std::abs(dot) < 1e-10) return 0.0;  // Perpendicular filaments
+
+    // Center-to-center vector
+    double rx = seg_j.center.x - seg_i.center.x;
+    double ry = seg_j.center.y - seg_i.center.y;
+    double rz = seg_j.center.z - seg_i.center.z;
+
+    double l_i = seg_i.length;
+    double l_j = seg_j.length;
+
+    // Check if filaments are nearly parallel
+    if (std::abs(std::abs(dot) - 1.0) < 1e-3) {
+        // Parallel filaments: use analytical Neumann/Rosa/Grover formula
+        //
+        // Reference: F. W. Grover, "Inductance Calculations", Dover, 1946
+        //
+        // M = (mu_0/(4*pi)) * [F(alpha, d) + F(beta, d) - F(gamma, d) - F(delta, d)]
+        //
+        // where F(x, d) = x * arsinh(x/d) - sqrt(x^2 + d^2)
+        //   (F is an even function of x)
+        //
+        // alpha = (l_i + l_j)/2 + p,  beta = (l_i + l_j)/2 - p
+        // gamma = (l_i - l_j)/2 + p,  delta = (l_j - l_i)/2 + p = -gamma + ... hmm
+        //
+        // Using exact derivation from double integration:
+        //   b1 = l_i/2, a1 = -l_i/2 (filament i limits)
+        //   b2 = p + l_j/2, a2 = p - l_j/2 (filament j limits shifted by axial offset p)
+        //   M = (mu_0/(4*pi)) * [F(b1-a2) + F(a1-b2) - F(b1-b2) - F(a1-a2)]
+
+        // Axial offset: projection of r onto direction
+        double p = rx * seg_i.direction.x + ry * seg_i.direction.y + rz * seg_i.direction.z;
+        if (dot < 0) p = -p;  // Account for anti-parallel
+
+        // Perpendicular distance
+        // d_perp = |r - p*d_i|
+        double px = p * seg_i.direction.x;
+        double py = p * seg_i.direction.y;
+        double pz = p * seg_i.direction.z;
+        double dpx = rx - px;
+        double dpy = ry - py;
+        double dpz = rz - pz;
+        double d_perp = std::sqrt(dpx*dpx + dpy*dpy + dpz*dpz);
+
+        if (d_perp < 1e-15) {
+            // Collinear filaments - use Gauss quadrature (falls through below)
+        } else {
+            // F(x, d) = x * arsinh(x/d) - sqrt(x^2 + d^2)
+            // F is even in x, so F(-x, d) = F(x, d)
+            // F(x, d) = x * arsinh(x/d) - sqrt(x^2 + d^2)
+            // Note: x + sqrt(x^2+d^2) > 0 for all x when d > 0, so log is safe.
+            // Do NOT use abs(x) here - it breaks the formula for negative x.
+            auto F = [](double x, double d) -> double {
+                double x2d2 = x*x + d*d;
+                return x * std::log((x + std::sqrt(x2d2)) / d) - std::sqrt(x2d2);
+            };
+
+            // Filament i: from -l_i/2 to +l_i/2
+            // Filament j: from p - l_j/2 to p + l_j/2
+            double b1 = l_i / 2.0;
+            double a1 = -l_i / 2.0;
+            double b2 = p + l_j / 2.0;
+            double a2 = p - l_j / 2.0;
+
+            double M = (PEEC_MU_0 * PEEC_INV_FOUR_PI) *
+                       (F(b1 - a2, d_perp) + F(a1 - b2, d_perp) -
+                        F(b1 - b2, d_perp) - F(a1 - a2, d_perp));
+
+            return std::abs(dot) * M;  // Scale by cos(angle) for nearly-parallel
+        }
+    }
+
+    // General case: 8-point Gauss-Legendre quadrature
+    // Higher order for accurate mutual inductance when segments are close
+    static const double gp[] = {
+        -0.9602898564975363, -0.7966664774136267,
+        -0.5255324099163290, -0.1834346424956498,
+         0.1834346424956498,  0.5255324099163290,
+         0.7966664774136267,  0.9602898564975363
+    };
+    static const double gw[] = {
+         0.1012285362903763,  0.2223810344533745,
+         0.3137066458778873,  0.3626837833783620,
+         0.3626837833783620,  0.3137066458778873,
+         0.2223810344533745,  0.1012285362903763
+    };
+    static const int ng = 8;
+
+    double sum = 0.0;
+    for (int ki = 0; ki < ng; ++ki) {
+        // Point on filament i: center_i + t * direction_i
+        double ti = gp[ki] * (l_i / 2.0);
+        double xi = seg_i.center.x + ti * seg_i.direction.x;
+        double yi = seg_i.center.y + ti * seg_i.direction.y;
+        double zi = seg_i.center.z + ti * seg_i.direction.z;
+
+        for (int kj = 0; kj < ng; ++kj) {
+            double tj = gp[kj] * (l_j / 2.0);
+            double xj = seg_j.center.x + tj * seg_j.direction.x;
+            double yj = seg_j.center.y + tj * seg_j.direction.y;
+            double zj = seg_j.center.z + tj * seg_j.direction.z;
+
+            double ddx = xi - xj;
+            double ddy = yi - yj;
+            double ddz = zi - zj;
+            double dist = std::sqrt(ddx*ddx + ddy*ddy + ddz*ddz);
+
+            if (dist > 1e-15) {
+                sum += gw[ki] * gw[kj] / dist;
+            }
+        }
+    }
+
+    // Scale: integral was over [-1,1]x[-1,1], actual limits are [-l/2,l/2]
+    // Jacobian: (l_i/2) * (l_j/2)
+    return (PEEC_MU_0 * PEEC_INV_FOUR_PI) * dot * sum * (l_i / 2.0) * (l_j / 2.0);
 }
 
 double PEECMatrixBuilder::SelfPotential(const PEECNode& node) const {
