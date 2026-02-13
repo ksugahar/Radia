@@ -116,7 +116,7 @@ void PEECPanel::ComputeGeometry() {
 // PEECMatrixBuilder
 // ============================================================================
 
-PEECMatrixBuilder::PEECMatrixBuilder() {}
+PEECMatrixBuilder::PEECMatrixBuilder() : nextPortId_(0) {}
 
 PEECMatrixBuilder::~PEECMatrixBuilder() {}
 
@@ -148,6 +148,8 @@ void PEECMatrixBuilder::Clear() {
     segments_.clear();
     nodes_.clear();
     panels_.clear();
+    ports_.clear();
+    nextPortId_ = 0;
 }
 
 void PEECMatrixBuilder::AutoGenerateNodes() {
@@ -196,6 +198,158 @@ void PEECMatrixBuilder::AutoGenerateNodes() {
     }
 }
 
+// ============================================================================
+// Topology-aware methods (node-segment model)
+// ============================================================================
+
+int PEECMatrixBuilder::AddNodeAt(const TVector3d& position, double area) {
+    int id = static_cast<int>(nodes_.size());
+    nodes_.push_back(PEECNode(position, area));
+    return id;
+}
+
+void PEECMatrixBuilder::AddConnectedSegment(int node_from, int node_to,
+                                             double width, double height,
+                                             double sigma,
+                                             CrossSectionType type) {
+    int n_nodes = static_cast<int>(nodes_.size());
+    if (node_from < 0 || node_from >= n_nodes ||
+        node_to < 0 || node_to >= n_nodes) {
+        return;  // Invalid node IDs
+    }
+
+    const TVector3d& p1 = nodes_[node_from].position;
+    const TVector3d& p2 = nodes_[node_to].position;
+
+    // Compute center
+    TVector3d center;
+    center.x = 0.5 * (p1.x + p2.x);
+    center.y = 0.5 * (p1.y + p2.y);
+    center.z = 0.5 * (p1.z + p2.z);
+
+    // Compute direction and length
+    TVector3d dir;
+    dir.x = p2.x - p1.x;
+    dir.y = p2.y - p1.y;
+    dir.z = p2.z - p1.z;
+    double len = std::sqrt(dir.x*dir.x + dir.y*dir.y + dir.z*dir.z);
+
+    if (len < 1e-15) return;  // Zero-length segment
+
+    dir.x /= len;
+    dir.y /= len;
+    dir.z /= len;
+
+    PEECSegment seg(center, dir, len, width, height, sigma, type);
+    seg.node_from = node_from;
+    seg.node_to = node_to;
+    segments_.push_back(seg);
+}
+
+int PEECMatrixBuilder::AddPort(int node_positive, int node_negative) {
+    int id = nextPortId_++;
+    ports_.push_back(PEECPort(node_positive, node_negative, id));
+    return id;
+}
+
+void PEECMatrixBuilder::BuildIncidenceMatrix(PEECMatrices& matrices) {
+    // Identify junction nodes: internal nodes that are NOT port terminals
+    // A junction node has KCL constraint: sum of currents = 0
+    int n_nodes = static_cast<int>(nodes_.size());
+    int n_filaments = static_cast<int>(segments_.size());
+
+    // Mark port terminal nodes
+    std::vector<bool> is_port_terminal(n_nodes, false);
+    for (const auto& port : ports_) {
+        if (port.node_positive >= 0 && port.node_positive < n_nodes)
+            is_port_terminal[port.node_positive] = true;
+        if (port.node_negative >= 0 && port.node_negative < n_nodes)
+            is_port_terminal[port.node_negative] = true;
+    }
+
+    // Count connections per node
+    std::vector<int> connection_count(n_nodes, 0);
+    for (const auto& seg : segments_) {
+        if (seg.node_from >= 0) connection_count[seg.node_from]++;
+        if (seg.node_to >= 0) connection_count[seg.node_to]++;
+    }
+
+    // Identify junction nodes: connected to 2+ segments and NOT a port terminal
+    std::vector<int> node_to_junction(n_nodes, -1);  // maps node ID -> junction index
+    int n_junction = 0;
+    for (int i = 0; i < n_nodes; ++i) {
+        if (!is_port_terminal[i] && connection_count[i] >= 2) {
+            node_to_junction[i] = n_junction++;
+        }
+    }
+
+    matrices.n_junction = n_junction;
+
+    if (n_junction == 0) {
+        // No junctions - all segments in series or simple topology
+        matrices.incidence_indptr.assign(1, 0);
+        matrices.incidence_indices.clear();
+        matrices.incidence_data.clear();
+        matrices.ports = ports_;
+        return;
+    }
+
+    // Build CSR incidence matrix A (n_junction x n_filaments)
+    // First pass: count non-zeros per row
+    std::vector<int> row_nnz(n_junction, 0);
+    for (int f = 0; f < n_filaments; ++f) {
+        const auto& seg = segments_[f];
+        if (seg.node_from >= 0 && node_to_junction[seg.node_from] >= 0)
+            row_nnz[node_to_junction[seg.node_from]]++;
+        if (seg.node_to >= 0 && node_to_junction[seg.node_to] >= 0)
+            row_nnz[node_to_junction[seg.node_to]]++;
+    }
+
+    // Build row pointers
+    matrices.incidence_indptr.resize(n_junction + 1);
+    matrices.incidence_indptr[0] = 0;
+    for (int i = 0; i < n_junction; ++i) {
+        matrices.incidence_indptr[i + 1] = matrices.incidence_indptr[i] + row_nnz[i];
+    }
+
+    int total_nnz = matrices.incidence_indptr[n_junction];
+    matrices.incidence_indices.resize(total_nnz);
+    matrices.incidence_data.resize(total_nnz);
+
+    // Second pass: fill entries
+    std::vector<int> row_pos(n_junction, 0);  // current insert position per row
+    for (int i = 0; i < n_junction; ++i) {
+        row_pos[i] = matrices.incidence_indptr[i];
+    }
+
+    for (int f = 0; f < n_filaments; ++f) {
+        const auto& seg = segments_[f];
+
+        // Filament leaves node_from: A[junction, filament] = +1
+        if (seg.node_from >= 0) {
+            int j = node_to_junction[seg.node_from];
+            if (j >= 0) {
+                int pos = row_pos[j]++;
+                matrices.incidence_indices[pos] = f;
+                matrices.incidence_data[pos] = +1.0;
+            }
+        }
+
+        // Filament enters node_to: A[junction, filament] = -1
+        if (seg.node_to >= 0) {
+            int j = node_to_junction[seg.node_to];
+            if (j >= 0) {
+                int pos = row_pos[j]++;
+                matrices.incidence_indices[pos] = f;
+                matrices.incidence_data[pos] = -1.0;
+            }
+        }
+    }
+
+    // Copy port definitions
+    matrices.ports = ports_;
+}
+
 PEECMatrices PEECMatrixBuilder::Build(bool includeStar) {
     PEECMatrices matrices;
 
@@ -217,8 +371,13 @@ PEECMatrices PEECMatrixBuilder::Build(bool includeStar) {
             // Use panels for Star elements (true 2D surface integration)
             n_star = static_cast<int>(panels_.size());
         } else {
-            // Auto-generate nodes if not provided (point approximation)
-            if (nodes_.empty()) {
+            // In topology mode, nodes are already defined by AddNodeAt
+            // In legacy mode, auto-generate from segment endpoints
+            bool has_topology = false;
+            for (const auto& seg : segments_) {
+                if (seg.node_from >= 0) { has_topology = true; break; }
+            }
+            if (!has_topology && nodes_.empty()) {
                 AutoGenerateNodes();
             }
             n_star = static_cast<int>(nodes_.size());
@@ -234,6 +393,15 @@ PEECMatrices PEECMatrixBuilder::Build(bool includeStar) {
         ComputeM_LS(matrices);
     } else {
         matrices.n_star = 0;
+    }
+
+    // Build incidence matrix if topology is present
+    bool has_topology = false;
+    for (const auto& seg : segments_) {
+        if (seg.node_from >= 0) { has_topology = true; break; }
+    }
+    if (has_topology) {
+        BuildIncidenceMatrix(matrices);
     }
 
     return matrices;
