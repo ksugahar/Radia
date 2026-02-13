@@ -3025,6 +3025,77 @@ where ξ = d/δ (conductor thickness / skin depth)
 
 **AC Results**: Qualitatively correct (skin effect present)
 
+**Bessel SIBC Validation** (2026-02-13):
+- `examples/peec_integration/validation/validate_bessel_sibc.py`
+- PEEC + Bessel SIBC vs Analytical: **0.00% error** (perfect match)
+- PEEC + Dowell vs Analytical @ 1MHz: **242.9% error** (Dowell is for rectangular only)
+- Confirms scipy.special.jv approach is correct for circular conductors
+
+### PEEC Filament-Panel Architecture (FastImp Style) (2026-02-13)
+
+**CRITICAL**: Radia PEEC uses **Filament + Panel** decomposition following the FastImp approach. **Loop-Star basis transformation is NOT needed**.
+
+**Architecture**:
+
+```
+Surface Mesh (Tri3/Quad4)
+  |
+  +-- Face -> Panel  = Star element  -> P matrix (potential coefficient / capacitance)
+  |                                     Where charge accumulates
+  |
+  +-- Edge -> Filament = Loop element -> L matrix (inductance), R matrix (resistance)
+                                         Where current flows
+```
+
+**PEEC System Equation**:
+
+```
+[R + jwL + Zs    jwM_LS  ] [I_filament]   [V]
+[jwM_LS^T        P/(jw)  ] [Q_panel   ] = [0]
+
+where:
+  I_filament = current through filaments (Loop unknowns)
+  Q_panel    = charge on panels (Star unknowns)
+  L          = filament-filament inductance (Neumann formula)
+  R          = filament resistance (DC + SIBC)
+  Zs         = surface impedance (Bessel/Dowell/ESIM)
+  P          = panel-panel potential coefficient (Wilton formula)
+  M_LS       = filament-panel magnetic coupling
+```
+
+**Why Loop-Star Transformation is NOT Needed**:
+
+| Formulation | Loop-Star Separation | Notes |
+|-------------|---------------------|-------|
+| **MoM/BEM (RWG basis)** | **Required** | Single basis function set must be decomposed into solenoidal (loop) and irrotational (star) parts for low-frequency stability |
+| **PEEC Filament+Panel** | **NOT needed** | Loop (filament) and Star (panel) are **inherently separate** from the formulation. No basis transformation required |
+
+**Rationale**:
+1. In MoM/BEM, a single set of basis functions (e.g., RWG) represents both current and charge. At low frequency, the system becomes ill-conditioned because jwL -> 0 and P/(jw) -> infinity. Loop-Star decomposition separates these to restore numerical stability.
+2. In PEEC with filaments and panels, the inductive (Loop) and capacitive (Star) parts are **already separate** unknowns with separate matrices. The MNA system naturally handles the frequency scaling without any basis transformation.
+
+**Mesh-to-PEEC Conversion** (surface mesh → filaments + panels):
+
+```python
+# Step 1: Faces → Panels (direct)
+for face in mesh.faces:
+    builder.add_panel(face.vertices)
+
+# Step 2: Extract unique edges → Filaments (automatic)
+edges = extract_unique_edges(mesh.faces)  # topology-based
+for edge in edges:
+    v0, v1 = vertices[edge[0]], vertices[edge[1]]
+    center = (v0 + v1) / 2
+    direction = (v1 - v0) / np.linalg.norm(v1 - v0)
+    length = np.linalg.norm(v1 - v0)
+    builder.add_segment(center, direction, length, thickness, dual_width, sigma)
+
+# Step 3: Build matrices (no Loop-Star transformation)
+L, R, P, M_LS = builder.build(include_star=True)
+```
+
+**Reference**: Z. Zhu, B. Song, and J. White, "Algorithms in FastImp: A Fast and Wideband Impedance Extraction Program for Complicated 3-D Geometries," IEEE Trans. TCAD, vol. 24, no. 7, 2005.
+
 ---
 
 ## Visualization Policy: NGSolve + VTK (2026-01-16)
