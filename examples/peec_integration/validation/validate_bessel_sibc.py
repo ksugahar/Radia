@@ -4,7 +4,7 @@ PEEC SIBC Validation: Bessel Function (Circular Wire) vs Dowell (Rectangular)
 Compares three approaches for AC resistance of a circular coil:
   A. Analytical (Bessel exact): scipy.special.jv for circular wire
   B. PEEC + Bessel SIBC (Python): PEEC L matrix + scipy Bessel Z_s
-  C. PEEC + Dowell (C++ built-in): PEEC with set_frequency() Dowell factor
+  C. PEEC + Dowell (Python): Dowell formula for rectangular cross-section
 
 Model: Single-turn circular coil
   - Coil radius: 50 mm
@@ -122,6 +122,35 @@ def skin_depth(freq, sigma_val, mu_r=1.0):
     return np.sqrt(2.0 / (omega * mu * sigma_val))
 
 
+def dowell_factor(freq, sigma_val, thickness, mu_r=1.0):
+    """
+    Dowell's AC resistance factor for rectangular cross-section (Python).
+
+    F_R = xi * [sinh(2*xi) + sin(2*xi)] / [cosh(2*xi) - cos(2*xi)]
+
+    where xi = thickness / skin_depth
+
+    Valid only for d << w (thin plate approximation).
+    For circular cross-section, use bessel_impedance_per_length() instead.
+    """
+    if freq <= 0:
+        return 1.0
+
+    delta = skin_depth(freq, sigma_val, mu_r)
+    xi = thickness / delta
+
+    if xi < 1e-6:
+        return 1.0  # DC limit
+
+    numerator = np.sinh(2.0 * xi) + np.sin(2.0 * xi)
+    denominator = np.cosh(2.0 * xi) - np.cos(2.0 * xi)
+
+    if abs(denominator) < 1e-30:
+        return xi  # Large xi limit
+
+    return xi * numerator / denominator
+
+
 # DC analytical values
 R_dc_analytical = circumference / (sigma * cross_section_area)
 L_analytical = grover_inductance(coil_radius, wire_radius)
@@ -141,7 +170,7 @@ print(f"  Bessel DC R:   {R_dc_bessel*1e3:.6f} mOhm (should match)")
 
 print(f"\n--- PEEC Model Construction ---")
 
-# Build PEEC at DC to get L matrix
+# Build PEEC matrices (frequency-independent: L, R_dc)
 builder_dc = PEECBuilder()
 n_created = builder_dc.create_loop(
     [0, 0, 0],        # center
@@ -153,7 +182,6 @@ n_created = builder_dc.create_loop(
     sigma              # conductivity
 )
 
-builder_dc.set_frequency(0.0)  # DC
 L_matrix, R_dc_vec, _, _ = builder_dc.build(False)  # include_star=False
 
 L_total_peec = np.sum(L_matrix)
@@ -222,19 +250,12 @@ for freq in frequencies:
         'Z': Z_peec_bessel,
     })
 
-    # --- Method C: PEEC + Dowell (C++ built-in) ---
-    builder_ac = PEECBuilder()
-    builder_ac.create_loop(
-        [0, 0, 0], coil_radius, [0, 0, 1],
-        equiv_side, equiv_side, n_segments, sigma
-    )
-    builder_ac.set_frequency(freq)
-    L_ac, R_dowell_vec, _, _ = builder_ac.build(False)
-
-    R_ac_dowell = np.sum(R_dowell_vec)
-    L_total_ac = np.sum(L_ac)
-    Z_peec_dowell = R_ac_dowell + 1j * omega * L_total_ac
-    F_R_dowell = R_ac_dowell / R_dc_peec
+    # --- Method C: PEEC + Dowell (Python, rectangular approximation) ---
+    # Dowell formula applied to DC resistance (reuses same L matrix)
+    F_R_dowell_factor = dowell_factor(freq, sigma, equiv_side)
+    R_ac_dowell = R_dc_peec * F_R_dowell_factor
+    Z_peec_dowell = R_ac_dowell + 1j * omega * L_total_peec
+    F_R_dowell = F_R_dowell_factor
 
     results_peec_dowell.append({
         'freq': freq,

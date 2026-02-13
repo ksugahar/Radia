@@ -158,28 +158,7 @@ public:
     }
 
     /**
-     * Set frequency for AC analysis
-     *
-     * Enables frequency-dependent surface impedance (SIBC).
-     * If frequency = 0, uses DC resistance only.
-     *
-     * Args:
-     *   freq_hz: Frequency [Hz] (0 for DC)
-     */
-    void set_frequency(double freq_hz) {
-        builder_->SetFrequency(freq_hz);
-        matrices_built_ = false;  // Invalidate matrices when frequency changes
-    }
-
-    /**
-     * Get current frequency setting
-     */
-    double get_frequency() const {
-        return builder_->GetFrequency();
-    }
-
-    /**
-     * Build PEEC matrices
+     * Build PEEC matrices (frequency-independent: L, R_dc, P, M_LS)
      *
      * Returns tuple: (L, R, P, M_LS)
      *   L: Inductance matrix [H] (n_loop x n_loop)
@@ -269,46 +248,6 @@ public:
         return solver.ComputePortImpedance(pv_vec);
     }
 
-    /**
-     * Set surface impedance for skin effect
-     *
-     * Args:
-     *   Zs_diag: Diagonal surface impedance vector (n_loop,)
-     */
-    void set_surface_impedance(py::array_t<std::complex<double>> Zs_diag) {
-        auto Zs = Zs_diag.unchecked<1>();
-        Zs_diag_.resize(Zs.size());
-        for (py::ssize_t i = 0; i < Zs.size(); ++i) {
-            Zs_diag_[i] = Zs(i);
-        }
-    }
-
-    /**
-     * Compute impedance with surface impedance (skin effect)
-     */
-    std::complex<double> compute_impedance_with_Zs(double freq_hz,
-                                                    py::array_t<double> port_vector) {
-        if (!matrices_built_) {
-            build(true);
-        }
-
-        PEECSolver solver;
-        solver.SetMatrices(matrices_);
-        solver.SetFrequency(freq_hz);
-
-        if (!Zs_diag_.empty()) {
-            solver.SetSurfaceImpedance(Zs_diag_);
-        }
-
-        auto pv = port_vector.unchecked<1>();
-        std::vector<double> pv_vec(pv.size());
-        for (py::ssize_t i = 0; i < pv.size(); ++i) {
-            pv_vec[i] = pv(i);
-        }
-
-        return solver.ComputePortImpedance(pv_vec);
-    }
-
     // Properties
     int n_loop() const { return builder_->NumSegments(); }
     int n_star() const { return builder_->NumNodes(); }
@@ -328,7 +267,6 @@ private:
     std::unique_ptr<PEECMatrixBuilder> builder_;
     PEECMatrices matrices_;
     bool matrices_built_;
-    std::vector<std::complex<double>> Zs_diag_;
 };
 
 //=========================================================================
@@ -352,22 +290,30 @@ PEEC System Equation:
   [Z_LL   Z_LS] [I_L]   [V_L]
   [Z_SL   Z_SS] [I_S] = [V_S]
 
-  Z_LL = R + jw*L + Z_s (with optional skin effect)
+  Z_LL = R_dc + jw*L + Z_s  (Z_s computed in Python: Bessel/Dowell/ESIM)
   Z_SS = P / jw
   Z_LS = jw*M_LS
   Z_SL = Z_LS^T (reciprocity)
+
+Note: build() returns frequency-independent matrices (L, R_dc, P, M_LS).
+      Frequency-dependent surface impedance Z_s is computed in Python
+      using scipy.special.jv (circular) or Dowell formula (rectangular).
 
 Valid Frequency Range: DC to ~100 MHz (Darwin approximation)
 
 Example:
     from peec_matrices import PEECBuilder
+    import numpy as np
+    from scipy.special import jv
 
     builder = PEECBuilder()
     builder.create_wire([0,0,0], [0.1,0,0], 1e-3, 1e-3, 10, 5.8e7)
-    L, R, P, M_LS = builder.build()
+    L, R_dc, P, M_LS = builder.build()
 
-    # Port impedance at 1 MHz
-    Z = builder.compute_impedance(1e6, [1.0] + [0.0]*9)
+    # AC impedance with Bessel SIBC (Python-side)
+    freq = 1e6
+    omega = 2 * np.pi * freq
+    Z = np.sum(R_dc) + 1j * omega * np.sum(L)  # + Z_s from Bessel
 )doc";
 
     py::class_<PyPEECBuilder>(m, "PEECBuilder",
@@ -474,30 +420,6 @@ Example:
                  Number of segments created
              )doc")
 
-        .def("set_frequency", &PyPEECBuilder::set_frequency,
-             py::arg("freq_hz"),
-             R"doc(
-             Set frequency for AC analysis.
-
-             Enables frequency-dependent surface impedance (SIBC) for skin effect.
-             If frequency = 0, uses DC resistance only.
-
-             Args:
-                 freq_hz: Frequency [Hz] (0 for DC analysis)
-
-             Example:
-                 builder.set_frequency(50000)  # 50 kHz for induction heating
-                 builder.set_frequency(0)      # DC analysis
-             )doc")
-
-        .def("get_frequency", &PyPEECBuilder::get_frequency,
-             R"doc(
-             Get current frequency setting.
-
-             Returns:
-                 Frequency [Hz]
-             )doc")
-
         .def("build", &PyPEECBuilder::build,
              py::arg("include_star") = true,
              R"doc(
@@ -507,11 +429,16 @@ Example:
                  include_star: If True, compute P and M_LS matrices
 
              Returns:
-                 Tuple (L, R, P, M_LS):
+                 Tuple (L, R_dc, P, M_LS):
                    L: Inductance matrix [H] (n_loop x n_loop)
-                   R: Resistance vector [Ohm] (n_loop,)
+                   R_dc: DC resistance vector [Ohm] (n_loop,)
                    P: Potential coefficient [1/F] (n_star x n_star) or None
                    M_LS: Loop-Star coupling (n_loop x n_star) or None
+
+             Note:
+                 All matrices are frequency-independent.
+                 For AC analysis, compute Z_s in Python (scipy Bessel/Dowell/ESIM)
+                 and add to R_dc.
              )doc")
 
         .def("compute_impedance", &PyPEECBuilder::compute_impedance,
@@ -526,29 +453,6 @@ Example:
 
              Returns:
                  Complex port impedance [Ohm]
-             )doc")
-
-        .def("set_surface_impedance", &PyPEECBuilder::set_surface_impedance,
-             py::arg("Zs_diag"),
-             R"doc(
-             Set surface impedance for skin effect.
-
-             Args:
-                 Zs_diag: Diagonal surface impedance vector (n_loop,)
-             )doc")
-
-        .def("compute_impedance_with_Zs", &PyPEECBuilder::compute_impedance_with_Zs,
-             py::arg("freq_hz"),
-             py::arg("port_vector"),
-             R"doc(
-             Compute impedance including surface impedance (skin effect).
-
-             Args:
-                 freq_hz: Frequency in Hz
-                 port_vector: Excitation vector (n_loop,)
-
-             Returns:
-                 Complex port impedance [Ohm] including Z_s contribution
              )doc")
 
         .def("clear", &PyPEECBuilder::clear, "Clear all geometry")
