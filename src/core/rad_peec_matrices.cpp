@@ -7,7 +7,6 @@
  */
 
 #include "rad_peec_matrices.h"
-#include "rad_peec_surface_impedance.h"
 #include <cmath>
 #include <algorithm>
 #include <set>
@@ -117,7 +116,7 @@ void PEECPanel::ComputeGeometry() {
 // PEECMatrixBuilder
 // ============================================================================
 
-PEECMatrixBuilder::PEECMatrixBuilder() : frequency_(0.0) {}
+PEECMatrixBuilder::PEECMatrixBuilder() {}
 
 PEECMatrixBuilder::~PEECMatrixBuilder() {}
 
@@ -311,45 +310,12 @@ void PEECMatrixBuilder::ComputeP(PEECMatrices& matrices) {
 }
 
 void PEECMatrixBuilder::ComputeR(PEECMatrices& matrices) {
+    // DC resistance only. Frequency-dependent Z_s is computed in Python
+    // (scipy.special.jv for Bessel SIBC, Dowell formula, or ESIM).
     int n = static_cast<int>(segments_.size());
 
     for (int i = 0; i < n; ++i) {
-        const PEECSegment& seg = segments_[i];
-
-        // DC resistance
-        double R_dc = seg.resistance();
-
-        // Add surface impedance (skin effect) if frequency > 0
-        double R_total = R_dc;
-        if (frequency_ > 0.0) {
-            // Check if SIBC is valid (skin depth << characteristic size)
-            double characteristic_size = std::min(seg.width, seg.height);
-            bool sibc_valid = radPEEC::SurfaceImpedance::IsSIBCValid(
-                frequency_,
-                seg.sigma,
-                1.0,  // mu_r
-                characteristic_size
-            );
-
-            if (sibc_valid) {
-                // Use Dowell's formula for AC resistance factor
-                // F_R = R_ac / R_dc (includes skin effect accurately for rectangular conductors)
-                double thickness = std::min(seg.width, seg.height);  // Conservative choice
-                double F_R = radPEEC::SurfaceImpedance::ComputeDowellFactor(
-                    frequency_,
-                    seg.sigma,
-                    1.0,        // mu_r (assume non-magnetic conductor)
-                    thickness,
-                    1           // num_layers = 1 (single conductor, skin effect only)
-                );
-
-                // Apply Dowell factor to DC resistance
-                R_total = R_dc * F_R;
-            }
-            // else: Use DC resistance only (skin depth >> dimension)
-        }
-
-        matrices.R[i] = R_total;
+        matrices.R[i] = segments_[i].resistance();
     }
 }
 
