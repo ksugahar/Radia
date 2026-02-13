@@ -16,10 +16,14 @@
  *   [Z_LL   Z_LS] [I_L]   [V_L]
  *   [Z_SL   Z_SS] [I_S] = [V_S]
  *
- *   Z_LL = R + jw*L + Z_s (with optional skin effect)
+ *   Z_LL = R_dc + jw*L + Z_s  (Z_s computed in Python: Bessel/Dowell/ESIM)
  *   Z_SS = P / jw
  *   Z_LS = jw*M_LS
  *   Z_SL = Z_LS^T (reciprocity)
+ *
+ * Note: build() returns frequency-independent matrices (L, R_dc, P, M_LS).
+ *       Frequency-dependent surface impedance Z_s is computed in Python
+ *       using scipy.special.jv (Bessel) or other cross-section models.
  *
  * Valid Frequency Range: DC to ~100 MHz (Darwin approximation)
  *
@@ -35,7 +39,6 @@
 
 #include "gmvect.h"
 #include "rad_constants.h"
-#include "rad_peec_surface_impedance.h"
 #include <vector>
 #include <complex>
 #include <memory>
@@ -222,22 +225,7 @@ public:
     // ========== Matrix computation ==========
 
     /**
-     * @brief Set frequency for AC analysis
-     *
-     * Enables frequency-dependent surface impedance (SIBC) in resistance matrix.
-     * If frequency = 0, uses DC resistance only.
-     *
-     * @param freq_hz Frequency [Hz] (0 for DC)
-     */
-    void SetFrequency(double freq_hz) { frequency_ = freq_hz; }
-
-    /**
-     * @brief Get current frequency setting
-     */
-    double GetFrequency() const { return frequency_; }
-
-    /**
-     * @brief Build all PEEC matrices
+     * @brief Build all PEEC matrices (frequency-independent: L, R_dc, P, M_LS)
      * @param includeStar If true, compute P and M_LS matrices
      * @return PEECMatrices structure
      */
@@ -277,8 +265,6 @@ private:
     std::vector<PEECSegment> segments_;
     std::vector<PEECNode> nodes_;
     std::vector<PEECPanel> panels_;
-
-    double frequency_;  // Frequency [Hz] for AC analysis (0 = DC)
 
     // Compute self-inductance (dispatches to rectangular or circular)
     double SelfInductance(const PEECSegment& seg) const;
