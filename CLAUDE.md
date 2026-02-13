@@ -3303,6 +3303,90 @@ For non-parallel filaments: 8-point Gauss-Legendre quadrature of Neumann integra
 - `src/lib/rad_peec_matrices_api.cpp`: pybind11 nwinc/nhinc parameters
 - `examples/peec_integration/validation/validate_multifilament.py`: Validation script
 
+### FastHenry .inp Parser API (2026-02-13)
+
+**Policy**: Use `FastHenryParser` to import FastHenry models for Radia PEEC analysis.
+
+**Supported Directives**:
+
+| Directive | Syntax | Description |
+|-----------|--------|-------------|
+| `.Units` | `.Units mm` | Length unit (m, cm, mm, um, in, mils) |
+| `N<name>` | `N1 x=0 y=0 z=0` | Node definition |
+| `E<name>` | `E1 N1 N2 w=1 h=1 sigma=5.8e7 nwinc=3 nhinc=3` | Segment definition |
+| `.external` | `.external N1 N2` | Port definition |
+| `.freq` | `.freq fmin=1e3 fmax=1e6 ndec=5` | Frequency sweep |
+| `.default` | `.default w=1 h=1 sigma=5.8e7` | Default segment parameters |
+| `.equiv` | `.equiv N1 N3` | Node merge (equivalence) |
+| `.end` | `.end` | End of file |
+| `*` | `* comment` | Comment (to end of line) |
+| `+` | `E1 N1 N2 w=1 +` | Line continuation |
+
+**Python API** (`src/radia/fasthenry_parser.py`):
+
+```python
+from fasthenry_parser import FastHenryParser
+
+# Parse from file or string
+parser = FastHenryParser()
+parser.parse_file('inductor.inp')
+# or: parser.parse_string(inp_text)
+
+# Inspect model
+print(parser.get_summary())  # nodes, segments, ports, freq_spec
+print(parser.get_frequencies())  # numpy array from .freq
+
+# Convert to Radia PEECBuilder
+builder = parser.to_peec_builder()
+topo = builder.build_topology()
+
+# Or solve directly
+result = parser.solve()  # Returns dict: freqs, Z_port, R, L, topology
+```
+
+**One-Step Solve**:
+```python
+from fasthenry_parser import FastHenryParser
+
+parser = FastHenryParser()
+parser.parse_string("""
+.Units mm
+.default sigma=5.8e7
+
+N1 x=0 y=0 z=0
+N2 x=100 y=0 z=0
+
+E1 N1 N2 w=1 h=1 nwinc=3 nhinc=3
+
+.external N1 N2
+.freq fmin=100 fmax=1e6 ndec=5
+.end
+""")
+
+result = parser.solve()
+print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
+```
+
+**Unit Conversion**: All coordinates and dimensions are automatically converted to meters (SI) internally, regardless of `.Units` setting.
+
+**Validation Results** (9/9 tests pass):
+
+| Test | Description | Result |
+|------|-------------|--------|
+| Parser directives | .Units, N, E, .external, .freq | PASSED |
+| .equiv | Node merge | PASSED |
+| Single wire | Parsed vs manual builder (0.00% error) | PASSED |
+| Parallel wires | R_parallel = R_single/2 | PASSED |
+| Multi-filament | nwinc/nhinc from .inp matches manual | PASSED |
+| Series chain | 4 segments in series | PASSED |
+| Frequency sweep | .freq -> Z(f) sweep | PASSED |
+| .default params | Inheritance of default parameters | PASSED |
+| Continuation lines | Line continuation with '+' | PASSED |
+
+**Source Files**:
+- `src/radia/fasthenry_parser.py`: FastHenry .inp parser
+- `examples/peec_integration/validation/validate_fasthenry.py`: Validation script
+
 ---
 
 ## Visualization Policy: NGSolve + VTK (2026-01-16)
