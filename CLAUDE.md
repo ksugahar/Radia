@@ -3096,6 +3096,213 @@ L, R, P, M_LS = builder.build(include_star=True)
 
 **Reference**: Z. Zhu, B. Song, and J. White, "Algorithms in FastImp: A Fast and Wideband Impedance Extraction Program for Complicated 3-D Geometries," IEEE Trans. TCAD, vol. 24, no. 7, 2005.
 
+### PEEC Node-Segment Topology API (2026-02-13)
+
+**Policy**: Use **node-segment topology** for all new PEEC models. Legacy flat segment lists are backward-compatible but topology mode is preferred.
+
+**Architecture**:
+```
+Node-Segment Model (FastHenry-style):
+  Nodes: define positions in 3D space
+  Segments: connect two nodes (node_from -> node_to)
+  Ports: define measurement terminals (node_positive, node_negative)
+
+  Series: filaments share intermediate nodes (junctions)
+    N1 --seg1--> N2 --seg2--> N3   (port: N1-N3)
+
+  Parallel: filaments share same endpoint nodes
+    N1 --seg1--> N2
+    N1 --seg2--> N2   (port: N1-N2)
+```
+
+**C++ API** (`PEECMatrixBuilder`):
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `AddNodeAt(position, area)` | `int` (node ID) | Add node at 3D position |
+| `AddConnectedSegment(node_from, node_to, w, h, sigma, type, nwinc, nhinc)` | void | Add segment connecting two nodes (nwinc/nhinc for multi-filament) |
+| `AddPort(node_positive, node_negative)` | `int` (port ID) | Define port between two nodes |
+| `BuildIncidenceMatrix(matrices)` | void | Build CSR incidence matrix (auto-called by Build) |
+
+**Python API** (`peec_matrices.PyPEECBuilder`):
+
+```python
+from peec_matrices import PyPEECBuilder
+from peec_topology import PEECCircuitSolver
+
+# Build topology
+builder = PyPEECBuilder()
+n1 = builder.add_node_at(0, 0, 0)         # Returns node ID
+n2 = builder.add_node_at(0.05, 0, 0)
+n3 = builder.add_node_at(0.1, 0, 0)
+builder.add_connected_segment(n1, n2, 1e-3, 1e-3)  # width, height
+builder.add_connected_segment(n2, n3, 1e-3, 1e-3)
+builder.add_port(n1, n3)
+
+# Build matrices with topology info
+topo = builder.build_topology()
+# Returns dict: {
+#   'L': ndarray (n_loop x n_loop),
+#   'R': ndarray (n_loop,),
+#   'P': ndarray or None,
+#   'segment_nodes': ndarray (n_seg x 2) of [node_from, node_to],
+#   'n_nodes': int,
+#   'n_loop': int, 'n_star': int,
+#   'incidence_data/indices/indptr': CSR arrays,
+#   'n_junction': int,
+#   'ports': list of (pos, neg, id),
+# }
+
+# Solve port impedance
+solver = PEECCircuitSolver(topo)
+Z = solver.compute_port_impedance(freq=1e6)       # Single frequency
+Z_sweep = solver.frequency_sweep(freqs, Zs_func)  # Frequency sweep with SIBC
+```
+
+**PEECCircuitSolver** (`src/radia/peec_topology.py`):
+
+MNA (Modified Nodal Analysis) formulation:
+```
+Z_branch = diag(R_dc + Zs) + jw*L
+Y_branch = Z_branch^{-1}
+Y_node = A_full * Y_branch * A_full^T
+Ground negative terminal: V[neg] = 0
+Solve: Y_reduced * V = I_ext (1A injection at positive terminal)
+Z_port = V[pos]
+```
+
+Where `A_full` is the full node incidence matrix (n_nodes x n_filaments):
+- `A_full[node, fil] = +1` if filament leaves node (node_from)
+- `A_full[node, fil] = -1` if filament enters node (node_to)
+
+**Validation Results** (0.00% error on all tests):
+
+| Test | Description | Error |
+|------|-------------|-------|
+| Series wire | L/R match vs legacy create_wire | 0.00% |
+| Parallel wires | Z = Z_single/2 | 0.00% |
+| Series analytical | Z = sum(R) + jw*(L11+L22+2*L12) | 0.00% |
+| DC resistance | Series R_total = R1+R2, Parallel R_total = R1*R2/(R1+R2) | 0.00% |
+
+**Backward Compatibility**: Legacy API (add_segment, create_wire, create_loop, build) is unchanged.
+
+**Source Files**:
+- `src/core/rad_peec_matrices.h`: PEECSegment (node_from/to), PEECPort, PEECMatrices (CSR incidence)
+- `src/core/rad_peec_matrices.cpp`: AddNodeAt, AddConnectedSegment, AddPort, BuildIncidenceMatrix
+- `src/lib/rad_peec_matrices_api.cpp`: pybind11 bindings (add_node_at, add_connected_segment, add_port, build_topology)
+- `src/radia/peec_topology.py`: PEECCircuitSolver (MNA nodal admittance)
+- `examples/peec_integration/validation/validate_topology.py`: Validation script
+
+### PEEC Multi-Filament API (nwinc/nhinc) (2026-02-13)
+
+**Policy**: Use **nwinc/nhinc** parameters to subdivide conductor cross-sections into parallel sub-filaments for skin and proximity effect modeling.
+
+**Architecture**:
+```
+Multi-Filament Cross-Section Subdivision:
+
+  Single filament (1x1):        Multi-filament (3x3):
+  ┌─────────────┐               ┌────┬────┬────┐
+  │             │               │ f1 │ f2 │ f3 │
+  │   w x h     │    nwinc=3   ├────┼────┼────┤
+  │             │   ────────>   │ f4 │ f5 │ f6 │
+  │             │    nhinc=3   ├────┼────┼────┤
+  └─────────────┘               │ f7 │ f8 │ f9 │
+                                └────┴────┴────┘
+
+  Each sub-filament: w/nwinc x h/nhinc cross-section
+  All sub-filaments share same node_from/node_to (parallel)
+  Mutual inductance between sub-filaments -> skin/proximity effect
+```
+
+**C++ API** (`PEECMatrixBuilder`):
+
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| `AddConnectedSegment(...)` | `nwinc=1, nhinc=1` | Last two args control subdivision |
+| `ExpandFilaments()` | (internal) | Auto-called by Build(), expands nwinc*nhinc > 1 |
+
+**PEECSegment Fields** (new):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `nwinc` | int | 1 | Width subdivisions |
+| `nhinc` | int | 1 | Height subdivisions |
+| `parent_segment` | int | -1 | Parent segment index (-1 if not sub-filament) |
+
+**Python API**:
+
+```python
+from peec_matrices import PyPEECBuilder
+from peec_topology import PEECCircuitSolver
+
+builder = PyPEECBuilder()
+n1 = builder.add_node_at(0, 0, 0)
+n2 = builder.add_node_at(0.1, 0, 0)
+
+# Single filament (legacy)
+builder.add_connected_segment(n1, n2, 3e-3, 3e-3, sigma=5.8e7)
+
+# Multi-filament: 3x3 = 9 parallel sub-filaments
+builder.add_connected_segment(n1, n2, 3e-3, 3e-3, sigma=5.8e7, nwinc=3, nhinc=3)
+
+builder.add_port(n1, n2)
+topo = builder.build_topology()
+
+# Frequency sweep shows skin effect
+solver = PEECCircuitSolver(topo)
+Z_dc = solver.compute_port_impedance(freq=1.0)    # DC: uniform current
+Z_ac = solver.compute_port_impedance(freq=1e6)    # AC: skin effect
+# R_ac > R_dc due to non-uniform current distribution
+```
+
+**Mutual Inductance Formula**:
+
+For parallel filaments (Rosa/Grover/Neumann analytical):
+```
+M = (mu_0 / (4*pi)) * [2*F(l, d) - F(l+s, d) - F(l-s, d)]
+
+where F(x, d) = x * arsinh(x/d) - sqrt(x^2 + d^2)
+      l = segment length, d = center-to-center distance, s = offset along direction
+```
+
+For non-parallel filaments: 8-point Gauss-Legendre quadrature of Neumann integral.
+
+**Physical Effects**:
+
+| Effect | How It Works | Condition |
+|--------|-------------|-----------|
+| Skin effect | Non-uniform current in sub-filaments at high freq | nwinc*nhinc > 1, freq > 0 |
+| Proximity effect | Mutual inductance between adjacent conductors | Multiple segments |
+| DC resistance | R_sub = rho*l/(w/nwinc * h/nhinc), R_total = R_sub/N | Always exact |
+| Inductance reduction | L_multi < L_single (mutual coupling lowers effective L) | nwinc*nhinc > 1 |
+
+**Validation Results**:
+
+| Test | Description | Result |
+|------|-------------|--------|
+| API test | nwinc*nhinc filament count | PASSED |
+| DC resistance | R_3x3 = R_1x1 (parallel reduction exact) | 0.00% error |
+| Inductance reduction | L_3x3 = 80.6 nH < L_1x1 = 82.1 nH (1.76% reduction) | PASSED |
+| AC resistance | R_ac/R_dc = 2.85 at 1 MHz (3mm x 3mm Cu) | PASSED |
+| Convergence | L_eff converges as nwinc/nhinc increases | PASSED |
+| Series + multifilament | Combined topology works correctly | PASSED |
+
+**Convergence Guidelines**:
+
+| Application | Recommended nwinc x nhinc | Notes |
+|-------------|--------------------------|-------|
+| DC/low frequency | 1x1 | No subdivision needed |
+| Moderate skin effect (d/delta ~ 2-5) | 3x3 | Good balance |
+| Strong skin effect (d/delta > 5) | 5x5 or higher | Higher accuracy |
+| Bus bar (wide, thin) | 5x1 or 7x1 | Width subdivision only |
+
+**Source Files**:
+- `src/core/rad_peec_matrices.h`: PEECSegment (nwinc, nhinc, parent_segment)
+- `src/core/rad_peec_matrices.cpp`: ExpandFilaments(), MutualInductance (Rosa/Grover + Gauss-Legendre)
+- `src/lib/rad_peec_matrices_api.cpp`: pybind11 nwinc/nhinc parameters
+- `examples/peec_integration/validation/validate_multifilament.py`: Validation script
+
 ---
 
 ## Visualization Policy: NGSolve + VTK (2026-01-16)

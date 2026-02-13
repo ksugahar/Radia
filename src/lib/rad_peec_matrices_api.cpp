@@ -177,11 +177,12 @@ public:
     void add_connected_segment(int node_from, int node_to,
                                double width, double height,
                                double sigma = 5.8e7,
-                               int cross_section_type = 0) {
+                               int cross_section_type = 0,
+                               int nwinc = 1, int nhinc = 1) {
         CrossSectionType type = (cross_section_type == 1)
                                     ? CrossSectionType::CIRCULAR
                                     : CrossSectionType::RECTANGULAR;
-        builder_->AddConnectedSegment(node_from, node_to, width, height, sigma, type);
+        builder_->AddConnectedSegment(node_from, node_to, width, height, sigma, type, nwinc, nhinc);
         matrices_built_ = false;
     }
 
@@ -625,11 +626,19 @@ Example:
              py::arg("width"), py::arg("height"),
              py::arg("sigma") = 5.8e7,
              py::arg("cross_section_type") = 0,
+             py::arg("nwinc") = 1, py::arg("nhinc") = 1,
              R"doc(
              Add a segment connecting two nodes.
 
              Computes center, direction, and length from node positions.
              Parallel segments share the same pair of nodes.
+
+             If nwinc*nhinc > 1, the cross-section is subdivided into
+             nwinc*nhinc parallel sub-filaments during build(). Each
+             sub-filament has width/nwinc x height/nhinc cross-section
+             and shares the same node_from/node_to (parallel connection).
+             The mutual inductance between sub-filaments naturally
+             captures skin and proximity effects.
 
              Args:
                  node_from: Source node ID
@@ -638,11 +647,16 @@ Example:
                  height: Cross-section height [m]
                  sigma: Conductivity [S/m] (default: copper 5.8e7)
                  cross_section_type: 0 = rectangular, 1 = circular
+                 nwinc: Width subdivisions (default: 1, no subdivision)
+                 nhinc: Height subdivisions (default: 1, no subdivision)
 
              Example:
                  n1 = builder.add_node_at(0, 0, 0)
                  n2 = builder.add_node_at(0.1, 0, 0)
+                 # Single filament
                  builder.add_connected_segment(n1, n2, 1e-3, 1e-3)
+                 # 3x3 = 9 sub-filaments (solid conductor)
+                 builder.add_connected_segment(n1, n2, 3e-3, 3e-3, nwinc=3, nhinc=3)
              )doc")
 
         .def("add_port", &PyPEECBuilder::add_port,

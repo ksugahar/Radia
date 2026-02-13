@@ -255,26 +255,35 @@ def test_parallel_wires():
     freq = 1e6
     omega = 2 * np.pi * freq
 
-    # Single wire impedance
-    Z_single = R[0] + 1j * omega * L[0, 0]
+    # For two parallel branches with mutual inductance M:
+    # Z_branch = [[R+jwL, jwM], [jwM, R+jwL]]
+    # Z_parallel = (R + jw*(L+M)) / 2
+    L_self = L[0, 0]
+    M = L[0, 1]
+    Z_single = R[0] + 1j * omega * L_self
 
-    # Expected parallel (identical wires, same position = same mutual):
-    # Z_parallel = Z_single / 2
-    Z_expected = Z_single / 2.0
+    # Correct expected value including mutual inductance
+    Z_expected = (R[0] + 1j * omega * (L_self + M)) / 2.0
 
     # Compute via topology solver
     solver = PEECCircuitSolver(topo)
     Z_topo = solver.compute_port_impedance(freq)
 
     print(f"\n  Frequency: {freq/1e6:.1f} MHz")
+    print(f"  L_self = {L_self*1e9:.4f} nH, M = {M*1e9:.4f} nH")
     print(f"  Z_single:   {Z_single:.6e}")
-    print(f"  Z_expected: {Z_expected:.6e} (Z_single/2)")
+    print(f"  Z_expected: {Z_expected:.6e} ((R+jw(L+M))/2)")
     print(f"  Z_topology: {Z_topo:.6e}")
 
     Z_diff = abs(Z_topo - Z_expected) / abs(Z_expected) * 100
     print(f"  Relative difference: {Z_diff:.4f}%")
 
-    if Z_diff < 5.0:
+    # DC resistance should be R/2 regardless of mutual inductance
+    R_expected = R[0] / 2.0
+    R_diff = abs(Z_topo.real - R_expected) / R_expected * 100
+    print(f"  DC R check: {Z_topo.real:.6e} vs {R_expected:.6e} ({R_diff:.4f}%)")
+
+    if Z_diff < 1.0:
         print("  PASSED\n")
     else:
         print(f"  WARNING: {Z_diff:.2f}% difference\n")
