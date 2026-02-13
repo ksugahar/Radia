@@ -3387,6 +3387,91 @@ print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
 - `src/radia/fasthenry_parser.py`: FastHenry .inp parser
 - `examples/peec_integration/validation/validate_fasthenry.py`: Validation script
 
+### Coupled PEEC + MMM Solver (2026-02-13)
+
+**Policy**: Use `CoupledPEECSolver` for conductors near magnetic materials (iron cores, ferrite).
+
+**Physics**:
+```
+Z_eff(f) = diag(R + Zs(f)) + jw * (L_air + Delta_L)
+```
+
+Where Delta_L is the coupling matrix from magnetic material response:
+1. Unit current in segment j -> H-field via Biot-Savart (finite filament)
+2. H-field magnetizes material via `rad.ObjBckg()` + `rad.Solve()`
+3. Vector potential A from magnetized material: `rad.Fld(mag_obj, 'a', point)`
+4. Delta_L[i][j] = dot(A(center_i), dir_i) * length_i
+
+**Key Property**: For linear materials, Delta_L is frequency-independent (computed once).
+
+**Python API**:
+```python
+from peec_coupled import CoupledPEECSolver
+
+solver = CoupledPEECSolver(topology_dict, magnetic_objects=[core_id])
+solver.compute_coupling_matrix()  # N_seg Radia Solve calls
+Z = solver.compute_port_impedance(freq)
+Z_sweep = solver.frequency_sweep(freqs)
+L_total = solver.get_effective_inductance()  # L_air + Delta_L
+```
+
+**FastHenry .magnetic Block**:
+```
+.magnetic
+  type=box
+  center=0.05,0.01,0.0
+  size=0.06,0.01,0.01
+  divisions=2,1,1
+  mu_r=1000
+  mu_r_imag=0
+.endmagnetic
+```
+
+Or explicit hexahedron:
+```
+.magnetic
+  type=hexahedron
+  vertices=x1,y1,z1, x2,y2,z2, ..., x8,y8,z8
+  mu_r=500
+.endmagnetic
+```
+
+**Deleted APIs (2026-02-13)**:
+The following old C++ PEEC/CplMag APIs have been **REMOVED**:
+- `CndLoop`, `CndRecBlock`, `CndLoopFromHelix` - Use PEECBuilder instead
+- `CplMagCreate`, `CplMagSolve`, `CplMagSetFrequency` - Use CoupledPEECSolver instead
+- `CndHexahedron`, `CndWire`, `CndSpiral` - Use PEECBuilder instead
+- `MatSIBC` - Use rad_peec_surface_impedance.cpp directly
+
+**Deleted C++ Files (12 files)**:
+```
+src/core/rad_conductor.h/cpp
+src/core/rad_conductor_fmm.h/cpp
+src/core/rad_coupled_solver.h/cpp
+src/core/rad_peec_mmm_coupled.h/cpp
+src/core/rad_green_fullwave.h/cpp
+src/lib/rad_conductor_api.cpp
+src/lib/rad_peec_mmm_api.cpp
+```
+
+**Validation Results**:
+
+| Test | Description | Result |
+|------|-------------|--------|
+| Biot-Savart | Finite filament formula accuracy | PASSED |
+| mu_r=1 | No coupling with air material | PASSED |
+| High-mu | L increases with magnetic material | PASSED |
+| Symmetry | Delta_L matrix symmetry | PASSED |
+| Freq sweep | Z(f) physically reasonable | PASSED |
+| .magnetic box | FastHenry box block parsing | PASSED |
+| .magnetic hex | FastHenry hexahedron block parsing | PASSED |
+| Coupled solve | Full parser -> coupled solve | PASSED |
+
+**Source Files**:
+- `src/radia/peec_coupled.py`: CoupledPEECSolver class
+- `src/radia/fasthenry_parser.py`: Extended with .magnetic blocks
+- `examples/peec_integration/validation/validate_coupled.py`: Validation script
+
 ---
 
 ## Visualization Policy: NGSolve + VTK (2026-01-16)
