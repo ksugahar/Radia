@@ -158,7 +158,6 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_coupled_solver.cpp        # Coupled conductor-magnetic solver
 	${CORE_DIR}/rad_peec_mmm_coupled.cpp      # PEEC-MMM coupled solver (conductor + magnet)
 	${CORE_DIR}/rad_peec_matrices.cpp         # PEEC Loop-Star matrix construction
-	${CORE_DIR}/rad_peec_surface_impedance.cpp # Surface impedance (SIBC) for skin effect
 )
 
 # FMM conductor source (only when ExaFMM is enabled)
@@ -471,7 +470,6 @@ endif() # RADIA_BUILD_NGSOLVE
 pybind11_add_module(peec_matrices
 	${PEEC_MATRICES_API_SOURCE}
 	${CORE_DIR}/rad_peec_matrices.cpp
-	${CORE_DIR}/rad_peec_surface_impedance.cpp
 )
 
 # Add include directories
