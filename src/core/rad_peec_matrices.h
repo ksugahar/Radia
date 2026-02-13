@@ -72,9 +72,14 @@ struct PEECSegment {
     double sigma;           // Conductivity [S/m]
     CrossSectionType cross_section_type;  // Cross-section shape
 
+    // Connectivity (topology mode)
+    int node_from;          // Source node ID (-1 = legacy mode, no topology)
+    int node_to;            // Destination node ID (-1 = legacy mode)
+
     PEECSegment()
         : length(0), width(0), height(0), sigma(5.8e7),
-          cross_section_type(CrossSectionType::RECTANGULAR) {
+          cross_section_type(CrossSectionType::RECTANGULAR),
+          node_from(-1), node_to(-1) {
         center = TVector3d(0, 0, 0);
         direction = TVector3d(1, 0, 0);
     }
@@ -83,7 +88,7 @@ struct PEECSegment {
                 double w, double h, double s = 5.8e7,
                 CrossSectionType type = CrossSectionType::RECTANGULAR)
         : center(c), direction(d), length(l), width(w), height(h), sigma(s),
-          cross_section_type(type) {}
+          cross_section_type(type), node_from(-1), node_to(-1) {}
 
     // Cross-section area [m^2]
     double area() const { return width * height; }
@@ -141,6 +146,20 @@ struct PEECPanel {
 };
 
 /**
+ * @brief PEEC port definition
+ *
+ * Defines a port between two nodes for impedance extraction.
+ */
+struct PEECPort {
+    int node_positive;      // Positive terminal node ID
+    int node_negative;      // Negative terminal node ID
+    int port_id;            // Port identifier
+
+    PEECPort() : node_positive(-1), node_negative(-1), port_id(0) {}
+    PEECPort(int pos, int neg, int id) : node_positive(pos), node_negative(neg), port_id(id) {}
+};
+
+/**
  * @brief PEEC matrix set
  *
  * Contains all matrices for Loop-Star PEEC analysis.
@@ -153,7 +172,18 @@ struct PEECMatrices {
     int n_loop;                 // Number of loop elements
     int n_star;                 // Number of star elements
 
-    PEECMatrices() : n_loop(0), n_star(0) {}
+    // Incidence matrix A (CSR format): n_junction x n_filament
+    // A[m,n] = +1 if filament n leaves junction m
+    // A[m,n] = -1 if filament n enters junction m
+    std::vector<int> incidence_indptr;    // Row pointers (size: n_junction+1)
+    std::vector<int> incidence_indices;   // Column indices (filament index)
+    std::vector<double> incidence_data;   // Values (+1 or -1)
+    int n_junction;                       // Number of internal junction nodes
+
+    // Port definitions
+    std::vector<PEECPort> ports;
+
+    PEECMatrices() : n_loop(0), n_star(0), n_junction(0) {}
 
     // Access L(i,j)
     double& L_at(int i, int j) { return L[i * n_loop + j]; }
@@ -222,6 +252,49 @@ public:
      */
     void Clear();
 
+    // ========== Topology-aware input (node-segment model) ==========
+
+    /**
+     * @brief Add a node at a given position
+     * @param position Node position [m]
+     * @param area Associated area [m^2] (for capacitive effects)
+     * @return Node ID (auto-incrementing)
+     */
+    int AddNodeAt(const TVector3d& position, double area = 0.0);
+
+    /**
+     * @brief Add a segment connecting two nodes
+     *
+     * Computes center, direction, and length from node positions.
+     *
+     * @param node_from Source node ID
+     * @param node_to Destination node ID
+     * @param width Cross-section width [m]
+     * @param height Cross-section height [m]
+     * @param sigma Conductivity [S/m]
+     * @param type Cross-section type
+     */
+    void AddConnectedSegment(int node_from, int node_to,
+                             double width, double height,
+                             double sigma = 5.8e7,
+                             CrossSectionType type = CrossSectionType::RECTANGULAR);
+
+    /**
+     * @brief Add a port between two nodes
+     * @param node_positive Positive terminal node ID
+     * @param node_negative Negative terminal node ID
+     * @return Port ID (auto-incrementing)
+     */
+    int AddPort(int node_positive, int node_negative);
+
+    /**
+     * @brief Build incidence matrix from segment connectivity
+     *
+     * Identifies junction nodes (internal nodes not used as port terminals
+     * with 2+ connections) and builds the CSR incidence matrix.
+     */
+    void BuildIncidenceMatrix(PEECMatrices& matrices);
+
     // ========== Matrix computation ==========
 
     /**
@@ -265,6 +338,8 @@ private:
     std::vector<PEECSegment> segments_;
     std::vector<PEECNode> nodes_;
     std::vector<PEECPanel> panels_;
+    std::vector<PEECPort> ports_;
+    int nextPortId_;
 
     // Compute self-inductance (dispatches to rectangular or circular)
     double SelfInductance(const PEECSegment& seg) const;

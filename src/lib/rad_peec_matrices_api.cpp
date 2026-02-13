@@ -157,6 +157,154 @@ public:
         return static_cast<int>(segments.size());
     }
 
+    // ========== Topology-aware methods ==========
+
+    /**
+     * Add a node at a given position
+     *
+     * Returns node ID (auto-incrementing).
+     */
+    int add_node_at(double x, double y, double z, double area = 0.0) {
+        TVector3d pos(x, y, z);
+        int id = builder_->AddNodeAt(pos, area);
+        matrices_built_ = false;
+        return id;
+    }
+
+    /**
+     * Add a segment connecting two nodes
+     */
+    void add_connected_segment(int node_from, int node_to,
+                               double width, double height,
+                               double sigma = 5.8e7,
+                               int cross_section_type = 0) {
+        CrossSectionType type = (cross_section_type == 1)
+                                    ? CrossSectionType::CIRCULAR
+                                    : CrossSectionType::RECTANGULAR;
+        builder_->AddConnectedSegment(node_from, node_to, width, height, sigma, type);
+        matrices_built_ = false;
+    }
+
+    /**
+     * Add a port between two nodes
+     *
+     * Returns port ID.
+     */
+    int add_port(int node_positive, int node_negative) {
+        int id = builder_->AddPort(node_positive, node_negative);
+        matrices_built_ = false;
+        return id;
+    }
+
+    /**
+     * Build PEEC matrices with topology information
+     *
+     * Returns dict with L, R, P (optional), incidence matrix (CSR), ports.
+     */
+    py::dict build_topology(bool include_star = false) {
+        matrices_ = builder_->Build(include_star);
+        matrices_built_ = true;
+
+        int n_loop = matrices_.n_loop;
+        int n_star = matrices_.n_star;
+
+        py::dict result;
+
+        // L matrix
+        py::array_t<double> L({n_loop, n_loop});
+        auto L_buf = L.mutable_unchecked<2>();
+        for (int i = 0; i < n_loop; ++i) {
+            for (int j = 0; j < n_loop; ++j) {
+                L_buf(i, j) = matrices_.L[i * n_loop + j];
+            }
+        }
+        result["L"] = L;
+
+        // R vector (diagonal)
+        py::array_t<double> R(n_loop);
+        auto R_buf = R.mutable_unchecked<1>();
+        for (int i = 0; i < n_loop; ++i) {
+            R_buf(i) = matrices_.R[i];
+        }
+        result["R"] = R;
+
+        // P matrix (optional)
+        if (include_star && n_star > 0) {
+            py::array_t<double> P({n_star, n_star});
+            auto P_buf = P.mutable_unchecked<2>();
+            for (int i = 0; i < n_star; ++i) {
+                for (int j = 0; j < n_star; ++j) {
+                    P_buf(i, j) = matrices_.P[i * n_star + j];
+                }
+            }
+            result["P"] = P;
+        } else {
+            result["P"] = py::none();
+        }
+
+        // Incidence matrix (CSR format)
+        int n_junction = matrices_.n_junction;
+        result["n_junction"] = n_junction;
+
+        {
+            int indptr_size = static_cast<int>(matrices_.incidence_indptr.size());
+            py::array_t<int> indptr(indptr_size);
+            auto ip_buf = indptr.mutable_unchecked<1>();
+            for (int i = 0; i < indptr_size; ++i) {
+                ip_buf(i) = matrices_.incidence_indptr[i];
+            }
+            result["incidence_indptr"] = indptr;
+        }
+
+        {
+            int indices_size = static_cast<int>(matrices_.incidence_indices.size());
+            py::array_t<int> indices(indices_size);
+            auto idx_buf = indices.mutable_unchecked<1>();
+            for (int i = 0; i < indices_size; ++i) {
+                idx_buf(i) = matrices_.incidence_indices[i];
+            }
+            result["incidence_indices"] = indices;
+        }
+
+        {
+            int data_size = static_cast<int>(matrices_.incidence_data.size());
+            py::array_t<double> data(data_size);
+            auto d_buf = data.mutable_unchecked<1>();
+            for (int i = 0; i < data_size; ++i) {
+                d_buf(i) = matrices_.incidence_data[i];
+            }
+            result["incidence_data"] = data;
+        }
+
+        // Port definitions
+        py::list port_list;
+        for (const auto& port : matrices_.ports) {
+            port_list.append(py::make_tuple(port.node_positive, port.node_negative, port.port_id));
+        }
+        result["ports"] = port_list;
+
+        result["n_loop"] = n_loop;
+        result["n_star"] = n_star;
+
+        // Segment connectivity (node_from, node_to for each filament)
+        {
+            const auto& segs = builder_->GetSegments();
+            int n_seg = static_cast<int>(segs.size());
+            py::array_t<int> seg_nodes({n_seg, 2});
+            auto sn_buf = seg_nodes.mutable_unchecked<2>();
+            for (int i = 0; i < n_seg; ++i) {
+                sn_buf(i, 0) = segs[i].node_from;
+                sn_buf(i, 1) = segs[i].node_to;
+            }
+            result["segment_nodes"] = seg_nodes;
+        }
+
+        // Total number of nodes
+        result["n_nodes"] = static_cast<int>(builder_->GetNodes().size());
+
+        return result;
+    }
+
     /**
      * Build PEEC matrices (frequency-independent: L, R_dc, P, M_LS)
      *
@@ -456,6 +604,77 @@ Example:
              )doc")
 
         .def("clear", &PyPEECBuilder::clear, "Clear all geometry")
+
+        // Topology-aware methods
+        .def("add_node_at", &PyPEECBuilder::add_node_at,
+             py::arg("x"), py::arg("y"), py::arg("z"),
+             py::arg("area") = 0.0,
+             R"doc(
+             Add a node at a given position.
+
+             Args:
+                 x, y, z: Node position in meters
+                 area: Associated area [m^2] (for capacitive effects)
+
+             Returns:
+                 Node ID (auto-incrementing, starting from 0)
+             )doc")
+
+        .def("add_connected_segment", &PyPEECBuilder::add_connected_segment,
+             py::arg("node_from"), py::arg("node_to"),
+             py::arg("width"), py::arg("height"),
+             py::arg("sigma") = 5.8e7,
+             py::arg("cross_section_type") = 0,
+             R"doc(
+             Add a segment connecting two nodes.
+
+             Computes center, direction, and length from node positions.
+             Parallel segments share the same pair of nodes.
+
+             Args:
+                 node_from: Source node ID
+                 node_to: Destination node ID
+                 width: Cross-section width [m]
+                 height: Cross-section height [m]
+                 sigma: Conductivity [S/m] (default: copper 5.8e7)
+                 cross_section_type: 0 = rectangular, 1 = circular
+
+             Example:
+                 n1 = builder.add_node_at(0, 0, 0)
+                 n2 = builder.add_node_at(0.1, 0, 0)
+                 builder.add_connected_segment(n1, n2, 1e-3, 1e-3)
+             )doc")
+
+        .def("add_port", &PyPEECBuilder::add_port,
+             py::arg("node_positive"), py::arg("node_negative"),
+             R"doc(
+             Add a port between two nodes.
+
+             Args:
+                 node_positive: Positive terminal node ID
+                 node_negative: Negative terminal node ID
+
+             Returns:
+                 Port ID (auto-incrementing, starting from 0)
+             )doc")
+
+        .def("build_topology", &PyPEECBuilder::build_topology,
+             py::arg("include_star") = false,
+             R"doc(
+             Build PEEC matrices with topology information.
+
+             Returns a dict containing:
+                 L: Inductance matrix [H] (n_loop x n_loop)
+                 R: DC resistance vector [Ohm] (n_loop,)
+                 P: Potential coefficient [1/F] or None
+                 incidence_indptr: CSR row pointers for incidence matrix
+                 incidence_indices: CSR column indices
+                 incidence_data: CSR values (+1 or -1)
+                 n_junction: Number of internal junction nodes
+                 ports: List of (node_positive, node_negative, port_id)
+                 n_loop: Number of filaments
+                 n_star: Number of star elements
+             )doc")
 
         .def_property_readonly("n_loop", &PyPEECBuilder::n_loop,
             "Number of Loop elements (segments)")
