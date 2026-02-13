@@ -152,21 +152,9 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_polyhedron.cpp            # Polyhedron with magnetization
 	${CORE_DIR}/rad_hacapk.cpp                # HACApK H-matrix manager (Method 2)
 
-	# PEEC Loop-Star + MMM unified solver (Laplace kernel only, HACApK acceleration)
-	${CORE_DIR}/rad_conductor.cpp             # PEEC conductor formulation with Loop-Star
-	${CORE_DIR}/rad_green_fullwave.cpp        # Green's functions (Laplace kernel for quasi-static)
-	${CORE_DIR}/rad_coupled_solver.cpp        # Coupled conductor-magnetic solver
-	${CORE_DIR}/rad_peec_mmm_coupled.cpp      # PEEC-MMM coupled solver (conductor + magnet)
+	# PEEC Loop-Star matrix construction (Laplace kernel only)
 	${CORE_DIR}/rad_peec_matrices.cpp         # PEEC Loop-Star matrix construction
 )
-
-# FMM conductor source (only when ExaFMM is enabled)
-set(RADIA_FMM_CONDUCTOR_SOURCES "")
-if(RADIA_ENABLE_EXAFMM)
-	set(RADIA_FMM_CONDUCTOR_SOURCES
-		${CORE_DIR}/rad_conductor_fmm.cpp     # FMM-accelerated conductor field computation
-	)
-endif()
 
 # Radia ext sources
 set(RADIA_EXT_SOURCES
@@ -189,8 +177,6 @@ set(HACAPK_SOURCES
 # Radia lib sources (main radia module)
 set(RADIA_LIB_SOURCES
 	${LIB_DIR}/radentry.cpp
-	${LIB_DIR}/rad_conductor_api.cpp
-	${LIB_DIR}/rad_peec_mmm_api.cpp       # PEEC-MMM coupled solver API
 )
 
 # PEEC matrices pybind11 module sources (separate module)
@@ -210,7 +196,7 @@ target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
 if(RADIA_BUILD_NGSOLVE)
 add_ngsolve_python_module(radia_ngsolve
 	${RADIA_CORE_SOURCES}
-	${RADIA_FMM_CONDUCTOR_SOURCES}
+
 	${EXT_DIR}/auxparse/auxparse.cpp
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp
@@ -809,7 +795,7 @@ set(RADIA_PYBIND_SOURCES
 
 pybind11_add_module(_radia_pybind
 	${RADIA_CORE_SOURCES}
-	${RADIA_FMM_CONDUCTOR_SOURCES}
+
 	${EXT_DIR}/auxparse/auxparse.cpp
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp
