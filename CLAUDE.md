@@ -1876,17 +1876,63 @@ mesh.Curve(3)  # 3rd order curved elements for accurate geometry
 
 ---
 
+### GMSH Standard Policy (2026-02-12)
+
+**CRITICAL**: **GMSH** is the standard mesh generator for Radia, supporting both magnetic materials and conductors.
+
+**Policy**:
+- **Standard format**: GMSH `.msh` → NGSolve → Radia
+- **Magnetic materials**: Volume mesh (Tet4, Hex8)
+- **Conductors (PEEC)**: **Surface mesh ONLY** (Tri3, Quad4)
+- **CAD import**: GMSH directly imports STEP, IGES, BREP, STL
+- **Viewers**: PyVista (development), ParaView (publication), NGSolve webgui (interactive)
+
+**Mesh Type Requirements**:
+
+| Application | Mesh Type | GMSH Command | Elements |
+|-------------|-----------|--------------|----------|
+| **Magnetic materials (MMM/MSC)** | Volume mesh | `gmsh.model.mesh.generate(3)` | Tet4, Hex8, Wedge6 |
+| **Conductors (PEEC)** | **Surface mesh ONLY** | `gmsh.model.mesh.generate(2)` | Tri3, Quad4 |
+
+**PEEC Surface-Only Rationale**:
+1. **Skin effect**: High-frequency currents concentrate at surface
+2. **SIBC**: Surface Impedance Boundary Condition models interior current distribution
+3. **Efficiency**: Surface mesh provides sufficient accuracy without volume discretization
+
+**Workflow**:
+```
+Magnetic materials:
+  CAD → GMSH → Volume mesh (.msh) → NGSolve → Radia (MMM/MSC)
+
+Conductors (PEEC):
+  CAD → GMSH → Surface mesh (.msh) → NGSolve → Radia (PEEC)
+  Current: Use rad.CndLoop() for simple geometries
+
+Combined (Electromagnet):
+  Magnetic core (volume) + Coil (surface) → rad.ObjCnt() → rad.Solve()
+```
+
+**Documentation**:
+- [GMSH_WORKFLOW.md](docs/GMSH_WORKFLOW.md) - Complete GMSH integration guide
+- [GMSH_VIEWERS.md](docs/GMSH_VIEWERS.md) - Viewer comparison (PyVista, ParaView, webgui)
+
+---
+
 ### Tool Selection by Element Type
 
 | Element Type | Tool | Notes |
 |--------------|------|-------|
-| **Tetrahedral** | **Netgen** | Simple geometry. Uses `netgen.occ.Box` + `OCCGeometry.GenerateMesh()` |
+| **Tetrahedral** | **GMSH** (推奨) | CAD import (STEP/IGES), volume mesh `generate(3)` |
+| Tetrahedral | **Netgen** | Simple geometry. Uses `netgen.occ.Box` + `OCCGeometry.GenerateMesh()` |
 | Tetrahedral | **Coreform Cubit** | Complex geometry. Uses `cubit_mesh_export.export_netgen()` |
-| Tetrahedral | **GMSH via NGSolve** | Import .msh files using `ngsolve.Mesh()` |
-| **Hexahedral** | **Coreform Cubit** | Required. Netgen cannot generate 3D hex meshes |
+| **Hexahedral** | **Coreform Cubit** | Required. GMSH/Netgen cannot generate 3D hex automatically |
+| **Surface mesh (PEEC)** | **GMSH** (推奨) | Conductor surface only, `generate(2)` |
 | Mixed (hex+tet) | **Coreform Cubit** | Required for mixed element meshes |
 
-**Note**: Nastran BDF format is **REMOVED**. Use Cubit to read legacy .bdf files if needed.
+**Notes**:
+- Nastran BDF format is **REMOVED**. Use Cubit to read legacy .bdf files if needed.
+- **GMSH is now the standard** for tetrahedral and surface meshes (CAD import, open source)
+- **PEEC conductors require surface mesh ONLY** - no volume discretization needed
 
 ### GMSH Mesh Import via NGSolve
 
@@ -2905,6 +2951,79 @@ where μ(z) = μ(H(z)) for nonlinear materials (e.g., from the B-H curve of a sp
 
 **Literature Reference**:
 K. Hollaus, V. Hanser, and M. Schobinger, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025.
+
+### PEEC SIBC Implementation (2026-02-13)
+
+**Policy**: Use **scipy.special.jv** for circular conductor SIBC. Boost.Math migration deferred to future.
+
+#### Bessel Function Strategy
+
+| Phase | Implementation | Library | Status |
+|-------|---------------|---------|--------|
+| **Phase 1 (Current)** | **scipy.special.jv** | **scipy (Fortran AMOS)** | **✅ Active** |
+| Phase 2 (Future) | Boost.Math | boost-math:x64-windows | Deferred |
+
+#### Circular Conductor SIBC
+
+**Current Implementation**:
+```python
+# validate_circular_coil_sibc.py
+from scipy.special import jv  # Fortran AMOS Bessel functions
+
+def bessel_impedance_circular(frequency, radius, length, sigma, mu_r=1.0):
+    """
+    Exact impedance for circular wire using Bessel functions.
+
+    Formula: Z = (k*length)/(2*pi*r*sigma) * J0(kr)/J1(kr)
+    """
+    omega = 2 * np.pi * frequency
+    mu = mu_r * MU_0
+    k = np.sqrt(1j * omega * mu * sigma)
+    kr = k * radius
+
+    J0_kr = jv(0, kr)  # Complex Bessel J0
+    J1_kr = jv(1, kr)  # Complex Bessel J1
+
+    Z = (k * length) / (2 * np.pi * radius * sigma) * (J0_kr / J1_kr)
+    return Z
+```
+
+**Why scipy (not Boost.Math)**:
+1. ✅ **No external dependency**: scipy already installed
+2. ✅ **High precision**: Fortran AMOS (NIST-validated, 40+ year track record)
+3. ✅ **Complex argument support**: Native complex Bessel functions
+4. ✅ **Sufficient performance**: ~5 μs/call (3000 calls = 15 ms)
+
+**Why not Intel MKL**: ❌ MKL does not provide Bessel functions
+
+#### Dowell Formula for Rectangular Conductors
+
+**Implementation**: [rad_peec_surface_impedance.cpp](s:/Radia/01_GitHub/src/core/rad_peec_surface_impedance.cpp)
+
+**Formula**:
+```
+F_R = ξ * [sinh(2ξ) + sin(2ξ)] / [cosh(2ξ) - cos(2ξ)]
+
+where ξ = d/δ (conductor thickness / skin depth)
+```
+
+**Valid range**: d << w (thin plate approximation)
+- ✅ Transformer windings: d/w < 0.1
+- ❌ Square cross-section: d/w = 1.0 (200%+ error)
+
+**Use case**: Rectangular conductors with d << w only
+
+#### Validation
+
+**Scripts**:
+- `examples/peec_integration/validation/validate_circular_coil_sibc.py`
+- `examples/peec_integration/validation/cubit_mesh_generation/generate_circular_coil.py`
+
+**DC Results** (Circular coil, 50mm radius, 1mm wire):
+- Inductance error: 2.14%
+- DC resistance error: 0.13%
+
+**AC Results**: Qualitatively correct (skin effect present)
 
 ---
 

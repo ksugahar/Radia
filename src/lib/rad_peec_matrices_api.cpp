@@ -35,15 +35,29 @@ public:
 
     /**
      * Add a conductor segment
+     *
+     * Args:
+     *   center: Segment center [x, y, z] in meters
+     *   direction: Unit direction vector [dx, dy, dz]
+     *   length: Segment length [m]
+     *   width: Cross-section width [m]
+     *   height: Cross-section height [m]
+     *   sigma: Conductivity [S/m] (default: 5.8e7 for copper)
+     *   cross_section_type: 0 = rectangular (default), 1 = circular
      */
     void add_segment(py::array_t<double> center,
                      py::array_t<double> direction,
                      double length,
                      double width,
                      double height,
-                     double sigma = 5.8e7) {
+                     double sigma = 5.8e7,
+                     int cross_section_type = 0) {
         auto c = center.unchecked<1>();
         auto d = direction.unchecked<1>();
+
+        CrossSectionType type = (cross_section_type == 1)
+                                    ? CrossSectionType::CIRCULAR
+                                    : CrossSectionType::RECTANGULAR;
 
         PEECSegment seg;
         seg.center = TVector3d(c(0), c(1), c(2));
@@ -52,6 +66,7 @@ public:
         seg.width = width;
         seg.height = height;
         seg.sigma = sigma;
+        seg.cross_section_type = type;
 
         builder_->AddSegment(seg);
         matrices_built_ = false;
@@ -68,6 +83,28 @@ public:
         node.area = area;
 
         builder_->AddNode(node);
+        matrices_built_ = false;
+    }
+
+    /**
+     * Add a 2D surface panel (triangle or quadrilateral)
+     *
+     * Args:
+     *   vertices: List of 3 or 4 vertices [[x,y,z], ...] in meters
+     */
+    void add_panel(py::list vertices) {
+        std::vector<TVector3d> verts;
+        for (auto item : vertices) {
+            auto v = item.cast<py::array_t<double>>().unchecked<1>();
+            verts.push_back(TVector3d(v(0), v(1), v(2)));
+        }
+
+        if (verts.size() != 3 && verts.size() != 4) {
+            throw std::invalid_argument("Panel must have 3 or 4 vertices");
+        }
+
+        PEECPanel panel(verts);
+        builder_->AddPanel(panel);
         matrices_built_ = false;
     }
 
@@ -118,6 +155,27 @@ public:
         matrices_built_ = false;
 
         return static_cast<int>(segments.size());
+    }
+
+    /**
+     * Set frequency for AC analysis
+     *
+     * Enables frequency-dependent surface impedance (SIBC).
+     * If frequency = 0, uses DC resistance only.
+     *
+     * Args:
+     *   freq_hz: Frequency [Hz] (0 for DC)
+     */
+    void set_frequency(double freq_hz) {
+        builder_->SetFrequency(freq_hz);
+        matrices_built_ = false;  // Invalidate matrices when frequency changes
+    }
+
+    /**
+     * Get current frequency setting
+     */
+    double get_frequency() const {
+        return builder_->GetFrequency();
     }
 
     /**
@@ -256,6 +314,7 @@ public:
     int n_star() const { return builder_->NumNodes(); }
     int num_segments() const { return builder_->NumSegments(); }
     int num_nodes() const { return builder_->NumNodes(); }
+    int num_panels() const { return builder_->NumPanels(); }
 
     /**
      * Clear all geometry
@@ -326,6 +385,7 @@ Example:
              py::arg("width"),
              py::arg("height"),
              py::arg("sigma") = 5.8e7,
+             py::arg("cross_section_type") = 0,
              R"doc(
              Add a conductor segment.
 
@@ -336,6 +396,7 @@ Example:
                  width: Cross-section width [m]
                  height: Cross-section height [m]
                  sigma: Conductivity [S/m] (default: copper 5.8e7)
+                 cross_section_type: 0 = rectangular (default), 1 = circular
              )doc")
 
         .def("add_node", &PyPEECBuilder::add_node,
@@ -347,6 +408,24 @@ Example:
              Args:
                  position: Node position [x, y, z] in meters
                  area: Associated area [m^2] for self-potential
+             )doc")
+
+        .def("add_panel", &PyPEECBuilder::add_panel,
+             py::arg("vertices"),
+             R"doc(
+             Add a 2D surface panel (triangle or quadrilateral).
+
+             Args:
+                 vertices: List of 3 or 4 vertices [[x,y,z], ...] in meters
+                           3 vertices: Triangle
+                           4 vertices: Quadrilateral
+
+             Example:
+                 # Triangle panel
+                 builder.add_panel([[0,0,0], [0.01,0,0], [0,0.01,0]])
+
+                 # Quadrilateral panel
+                 builder.add_panel([[0,0,0], [0.01,0,0], [0.01,0.01,0], [0,0.01,0]])
              )doc")
 
         .def("create_wire", &PyPEECBuilder::create_wire,
@@ -393,6 +472,30 @@ Example:
 
              Returns:
                  Number of segments created
+             )doc")
+
+        .def("set_frequency", &PyPEECBuilder::set_frequency,
+             py::arg("freq_hz"),
+             R"doc(
+             Set frequency for AC analysis.
+
+             Enables frequency-dependent surface impedance (SIBC) for skin effect.
+             If frequency = 0, uses DC resistance only.
+
+             Args:
+                 freq_hz: Frequency [Hz] (0 for DC analysis)
+
+             Example:
+                 builder.set_frequency(50000)  # 50 kHz for induction heating
+                 builder.set_frequency(0)      # DC analysis
+             )doc")
+
+        .def("get_frequency", &PyPEECBuilder::get_frequency,
+             R"doc(
+             Get current frequency setting.
+
+             Returns:
+                 Frequency [Hz]
              )doc")
 
         .def("build", &PyPEECBuilder::build,
@@ -457,7 +560,9 @@ Example:
         .def_property_readonly("num_segments", &PyPEECBuilder::num_segments,
             "Number of segments")
         .def_property_readonly("num_nodes", &PyPEECBuilder::num_nodes,
-            "Number of nodes");
+            "Number of nodes")
+        .def_property_readonly("num_panels", &PyPEECBuilder::num_panels,
+            "Number of panels");
 
     // Convenience function for wire PEEC
     m.def("create_wire_peec",
