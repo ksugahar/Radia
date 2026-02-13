@@ -81,11 +81,8 @@ except ImportError:
     # ESIM requires scipy, which may not be installed
     ESIM_AVAILABLE = False
 
-# RWG-EFIE solver for 3D surface element analysis
-# The Python implementation has been migrated to C++ with OpenMP parallelization.
-# Access via rad.RwgMeshRect(), rad.RwgMeshDisk(), rad.RwgMeshCylinder(),
-# rad.RwgMeshSpiral(), rad.RwgMeshLoop(), rad.RwgSolverCreate(), etc.
-# See docs/API_REFERENCE.md for usage.
+# NOTE: Old conductor API (CndLoop, CndRecBlock, CplMag*, Rwg*) removed (2026-02-13).
+# Use PEEC topology solver (peec_topology.py) and coupled solver (peec_coupled.py).
 
 # VTK Export: Use rad.FldVTS() (C++ implementation)
 # See docs/API_REFERENCE.md for usage

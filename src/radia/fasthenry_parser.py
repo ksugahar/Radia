@@ -4,6 +4,7 @@ fasthenry_parser.py
 FastHenry .inp file parser for Radia PEEC
 
 Parses FastHenry input files and converts to PEECBuilder topology.
+Supports magnetic material blocks for coupled PEEC+MMM analysis.
 
 Supported directives:
   .Units  - Length unit (m, mm, um, cm, etc.)
@@ -13,6 +14,7 @@ Supported directives:
   .freq    - Frequency sweep: .freq fmin=1e3 fmax=1e9 ndec=10
   .default - Default segment parameters
   .equiv   - Node merge (equivalence)
+  .magnetic / .endmagnetic - Magnetic material block (hex/box)
 
 Usage:
     from fasthenry_parser import FastHenryParser
@@ -26,6 +28,9 @@ Usage:
 
     # Get frequencies
     freqs = parser.get_frequencies()
+
+    # Solve (auto-detects magnetic blocks and uses coupled solver)
+    result = parser.solve(freqs)
 
 Part of Radia project
 """
@@ -92,6 +97,9 @@ class FastHenryParser:
         # Segment ordering (preserve insertion order)
         self.segment_order = []
 
+        # Magnetic material blocks
+        self.magnetic_blocks = []  # list of dicts with block specs
+
         # Comments / title
         self.title = ''
 
@@ -142,8 +150,27 @@ class FastHenryParser:
         if current:
             joined.append(current)
 
-        for line in joined:
-            self._parse_line(line)
+        # Parse with multi-line block support
+        idx = 0
+        while idx < len(joined):
+            line = joined[idx]
+            stripped = line.strip()
+
+            # Check for .magnetic block start
+            if stripped and stripped.lower().startswith('.magnetic'):
+                # Collect lines until .endmagnetic
+                block_lines = []
+                idx += 1
+                while idx < len(joined):
+                    bline = joined[idx].strip()
+                    if bline.lower().startswith('.endmagnetic'):
+                        break
+                    block_lines.append(bline)
+                    idx += 1
+                self._parse_magnetic_block(block_lines)
+            else:
+                self._parse_line(line)
+            idx += 1
 
         # Apply node equivalences
         self._apply_equivalences()
@@ -362,6 +389,85 @@ class FastHenryParser:
                     new_ports.append((p1, p2))
                 self.ports = new_ports
 
+    def _parse_magnetic_block(self, lines):
+        """
+        Parse a .magnetic / .endmagnetic block.
+
+        Supported formats:
+
+        Box form (structured hex mesh):
+            .magnetic
+              type=box
+              center=0,0,0
+              size=0.03,0.03,0.03
+              divisions=3,3,3
+              mu_r=1000
+              mu_r_imag=0
+            .endmagnetic
+
+        Hexahedron form (explicit 8 vertices):
+            .magnetic
+              type=hexahedron
+              vertices=x1,y1,z1, x2,y2,z2, ..., x8,y8,z8
+              mu_r=1000
+              mu_r_imag=0
+            .endmagnetic
+
+        Args:
+            lines: List of lines between .magnetic and .endmagnetic
+        """
+        params = {}
+        for line in lines:
+            # Strip comments
+            if '*' in line:
+                line = line[:line.index('*')]
+            line = line.strip()
+            if not line:
+                continue
+            # Parse key=value
+            if '=' in line:
+                key, val = line.split('=', 1)
+                params[key.strip().lower()] = val.strip()
+
+        block_type = params.get('type', 'box').lower()
+        mu_r = float(params.get('mu_r', 1000.0))
+        mu_r_imag = float(params.get('mu_r_imag', 0.0))
+
+        block = {
+            'type': block_type,
+            'mu_r': mu_r,
+            'mu_r_imag': mu_r_imag,
+        }
+
+        if block_type == 'box':
+            # Parse center, size, divisions
+            center = [float(v) * self.unit_scale
+                      for v in params.get('center', '0,0,0').split(',')]
+            size = [float(v) * self.unit_scale
+                    for v in params.get('size', '0.01,0.01,0.01').split(',')]
+            divisions = [int(v)
+                         for v in params.get('divisions', '1,1,1').split(',')]
+
+            block['center'] = center
+            block['size'] = size
+            block['divisions'] = divisions
+
+        elif block_type == 'hexahedron':
+            # Parse 24 floats (8 vertices x 3 coords)
+            vert_str = params.get('vertices', '')
+            vals = [float(v) * self.unit_scale for v in vert_str.split(',')]
+            if len(vals) != 24:
+                raise ValueError(
+                    f".magnetic hexahedron requires 24 vertex values "
+                    f"(8 vertices x 3 coords), got {len(vals)}")
+            vertices = [vals[i*3:(i+1)*3] for i in range(8)]
+            block['vertices'] = vertices
+
+        else:
+            raise ValueError(f"Unknown .magnetic type: {block_type}")
+
+        self.magnetic_blocks.append(block)
+
     def _parse_key_value_pairs(self, line, start_idx=0):
         """
         Extract key=value pairs from a line.
@@ -414,6 +520,7 @@ class FastHenryParser:
             'n_segments': len(self.segments),
             'n_ports': len(self.ports),
             'n_equiv_groups': len(self.equiv_groups),
+            'n_magnetic_blocks': len(self.magnetic_blocks),
             'freq_spec': self.freq_spec,
             'defaults': {k: v for k, v in self.defaults.items() if v is not None},
         }
@@ -486,13 +593,100 @@ class FastHenryParser:
 
         return builder
 
-    def solve(self, freqs=None, Zs_func=None):
+    def build_magnetic_objects(self):
+        """
+        Create Radia magnetic objects from parsed .magnetic blocks.
+
+        Returns:
+            list of Radia object handles, or empty list if no magnetic blocks
+
+        Raises:
+            ImportError: If radia module not available
+        """
+        if not self.magnetic_blocks:
+            return []
+
+        import sys
+        import os
+        try:
+            sys.path.insert(0, os.path.dirname(__file__))
+            from _radia_pybind import (ObjHexahedron, ObjCnt, MatLin, MatApl,
+                                       FldUnits)
+        except ImportError:
+            import radia as rad
+            ObjHexahedron = rad.ObjHexahedron
+            ObjCnt = rad.ObjCnt
+            MatLin = rad.MatLin
+            MatApl = rad.MatApl
+
+        objects = []
+
+        for block in self.magnetic_blocks:
+            mu_r = block['mu_r']
+
+            if block['type'] == 'box':
+                # Create structured hex mesh
+                center = np.array(block['center'])
+                size = np.array(block['size'])
+                divs = block['divisions']
+
+                # Element sizes
+                dx = size[0] / divs[0]
+                dy = size[1] / divs[1]
+                dz = size[2] / divs[2]
+
+                # Starting corner
+                corner = center - size / 2.0
+
+                sub_objs = []
+                for iz in range(divs[2]):
+                    for iy in range(divs[1]):
+                        for ix in range(divs[0]):
+                            x0 = corner[0] + ix * dx
+                            y0 = corner[1] + iy * dy
+                            z0 = corner[2] + iz * dz
+
+                            verts = [
+                                [x0, y0, z0],
+                                [x0 + dx, y0, z0],
+                                [x0 + dx, y0 + dy, z0],
+                                [x0, y0 + dy, z0],
+                                [x0, y0, z0 + dz],
+                                [x0 + dx, y0, z0 + dz],
+                                [x0 + dx, y0 + dy, z0 + dz],
+                                [x0, y0 + dy, z0 + dz],
+                            ]
+                            obj = ObjHexahedron(verts, [0, 0, 0])
+                            mat = MatLin(mu_r)
+                            MatApl(obj, mat)
+                            sub_objs.append(obj)
+
+                if len(sub_objs) == 1:
+                    objects.append(sub_objs[0])
+                else:
+                    objects.append(ObjCnt(sub_objs))
+
+            elif block['type'] == 'hexahedron':
+                obj = ObjHexahedron(block['vertices'], [0, 0, 0])
+                mat = MatLin(mu_r)
+                MatApl(obj, mat)
+                objects.append(obj)
+
+        return objects
+
+    def solve(self, freqs=None, Zs_func=None, solver_method=0,
+              solver_prec=0.0001, solver_maxiter=1000):
         """
         Parse, build, and solve in one step.
+
+        Automatically uses CoupledPEECSolver when .magnetic blocks are present.
 
         Args:
             freqs: Frequency array [Hz], or None to use .freq directive
             Zs_func: Optional surface impedance function(freq) -> Zs array
+            solver_method: Radia solver method for coupling (0=LU, 1=BiCGSTAB)
+            solver_prec: Radia solver precision
+            solver_maxiter: Radia solver max iterations
 
         Returns:
             dict with:
@@ -501,20 +695,36 @@ class FastHenryParser:
                 'R': real part (resistance)
                 'L': imaginary part / omega (inductance)
                 'topology': build_topology() result dict
+                'Delta_L': coupling matrix (if magnetic blocks present)
         """
-        from peec_topology import PEECCircuitSolver
-
         builder = self.to_peec_builder()
         topo = builder.build_topology()
-        solver = PEECCircuitSolver(topo)
 
         if freqs is None:
             freqs = self.get_frequencies()
         if freqs is None:
             freqs = np.array([0.0])  # DC only
-
         freqs = np.asarray(freqs)
-        Z_port = solver.frequency_sweep(freqs, Zs_func)
+
+        Delta_L = None
+
+        if self.magnetic_blocks:
+            # Coupled PEEC + MMM solve
+            from peec_coupled import CoupledPEECSolver
+
+            mag_objects = self.build_magnetic_objects()
+            solver = CoupledPEECSolver(topo, mag_objects)
+            solver.compute_coupling_matrix(
+                solver_method=solver_method,
+                solver_prec=solver_prec,
+                solver_maxiter=solver_maxiter)
+            Delta_L = solver.Delta_L
+            Z_port = solver.frequency_sweep(freqs, Zs_func)
+        else:
+            # Standard PEEC solve (no magnetic coupling)
+            from peec_topology import PEECCircuitSolver
+            solver = PEECCircuitSolver(topo)
+            Z_port = solver.frequency_sweep(freqs, Zs_func)
 
         # Extract R and L
         R = np.real(Z_port)
@@ -523,18 +733,26 @@ class FastHenryParser:
         mask = omega > 0
         L[mask] = np.imag(Z_port[mask]) / omega[mask]
 
-        return {
+        result = {
             'freqs': freqs,
             'Z_port': Z_port,
             'R': R,
             'L': L,
             'topology': topo,
         }
+        if Delta_L is not None:
+            result['Delta_L'] = Delta_L
+
+        return result
 
     def __repr__(self):
         summary = self.get_summary()
-        return (f"FastHenryParser("
-                f"nodes={summary['n_nodes']}, "
-                f"segments={summary['n_segments']}, "
-                f"ports={summary['n_ports']}, "
-                f"units={summary['units']})")
+        parts = [
+            f"nodes={summary['n_nodes']}",
+            f"segments={summary['n_segments']}",
+            f"ports={summary['n_ports']}",
+            f"units={summary['units']}",
+        ]
+        if summary['n_magnetic_blocks'] > 0:
+            parts.append(f"magnetic_blocks={summary['n_magnetic_blocks']}")
+        return f"FastHenryParser({', '.join(parts)})"

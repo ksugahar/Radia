@@ -287,17 +287,55 @@ public:
         result["n_loop"] = n_loop;
         result["n_star"] = n_star;
 
-        // Segment connectivity (node_from, node_to for each filament)
+        // Segment connectivity and geometry
         {
             const auto& segs = builder_->GetSegments();
             int n_seg = static_cast<int>(segs.size());
+
+            // Connectivity (node_from, node_to)
             py::array_t<int> seg_nodes({n_seg, 2});
             auto sn_buf = seg_nodes.mutable_unchecked<2>();
+
+            // Geometry arrays
+            py::array_t<double> seg_centers({n_seg, 3});
+            py::array_t<double> seg_directions({n_seg, 3});
+            py::array_t<double> seg_lengths(n_seg);
+            py::array_t<double> seg_widths(n_seg);
+            py::array_t<double> seg_heights(n_seg);
+            py::array_t<double> seg_sigmas(n_seg);
+
+            auto sc_buf = seg_centers.mutable_unchecked<2>();
+            auto sd_buf = seg_directions.mutable_unchecked<2>();
+            auto sl_buf = seg_lengths.mutable_unchecked<1>();
+            auto sw_buf = seg_widths.mutable_unchecked<1>();
+            auto sh_buf = seg_heights.mutable_unchecked<1>();
+            auto ss_buf = seg_sigmas.mutable_unchecked<1>();
+
             for (int i = 0; i < n_seg; ++i) {
                 sn_buf(i, 0) = segs[i].node_from;
                 sn_buf(i, 1) = segs[i].node_to;
+
+                sc_buf(i, 0) = segs[i].center.x;
+                sc_buf(i, 1) = segs[i].center.y;
+                sc_buf(i, 2) = segs[i].center.z;
+
+                sd_buf(i, 0) = segs[i].direction.x;
+                sd_buf(i, 1) = segs[i].direction.y;
+                sd_buf(i, 2) = segs[i].direction.z;
+
+                sl_buf(i) = segs[i].length;
+                sw_buf(i) = segs[i].width;
+                sh_buf(i) = segs[i].height;
+                ss_buf(i) = segs[i].sigma;
             }
+
             result["segment_nodes"] = seg_nodes;
+            result["segment_centers"] = seg_centers;
+            result["segment_directions"] = seg_directions;
+            result["segment_lengths"] = seg_lengths;
+            result["segment_widths"] = seg_widths;
+            result["segment_heights"] = seg_heights;
+            result["segment_sigmas"] = seg_sigmas;
         }
 
         // Total number of nodes
