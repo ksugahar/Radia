@@ -7,8 +7,14 @@ Computes port impedance Z(f) for conductors near magnetic materials.
 Uses Biot-Savart for H-field from conductors, Radia Solve + A-field
 for magnetic material response, yielding a coupling matrix Delta_L.
 
-Effective impedance:
-    Z_eff(f) = diag(R + Zs(f)) + jw * (L_air + Delta_L)
+Effective impedance with complex permeability mu = mu'_r - j*mu"_r:
+    Z_branch(f) = diag(R + Zs(f)) + jw * (L_air + Delta_L)
+                  + omega * tan_delta_m * Delta_L
+
+where tan_delta_m = mu"_r / mu'_r is the magnetic loss tangent.
+
+The Delta_L matrix is computed from mu'_r (real part) via Radia Solve.
+The mu"_r loss term adds frequency-proportional resistance (magnetic loss).
 
 For linear materials, Delta_L is computed ONCE and reused for all frequencies.
 
@@ -33,8 +39,8 @@ Usage:
     mat = rad.MatLin(999)
     rad.MatApl(core, mat)
 
-    # Coupled solver
-    solver = CoupledPEECSolver(topo, [core])
+    # Coupled solver with magnetic loss
+    solver = CoupledPEECSolver(topo, [core], mu_r_imag=10.0)
     solver.compute_coupling_matrix()
     Z = solver.compute_port_impedance(1e6)
 
@@ -129,10 +135,16 @@ class CoupledPEECSolver(PEECCircuitSolver):
         3. Magnetized material produces vector potential A at other segments
         4. Delta_L[i][j] = dot(A(center_i), dir_i) * length_i
 
+    Complex permeability mu = mu'_r - j*mu"_r:
+        - Delta_L is computed using mu'_r (real part) via Radia MatLin
+        - mu"_r adds magnetic loss as frequency-proportional resistance:
+          R_mag(f) = omega * tan_delta_m * Delta_L
+          where tan_delta_m = mu"_r / mu'_r
+
     For linear materials, Delta_L is frequency-independent and computed once.
     """
 
-    def __init__(self, topology_dict, magnetic_objects=None):
+    def __init__(self, topology_dict, magnetic_objects=None, mu_r_imag=0.0):
         """
         Initialize coupled solver.
 
@@ -142,6 +154,9 @@ class CoupledPEECSolver(PEECCircuitSolver):
                 segment_centers, segment_directions, segment_lengths
             magnetic_objects: List of Radia object handles (hex/tet with material)
                              or None for uncoupled mode
+            mu_r_imag: Imaginary part of relative permeability (positive value).
+                       Represents magnetic loss: mu = mu'_r - j*mu"_r.
+                       Set to 0 for lossless magnetic material.
         """
         super().__init__(topology_dict)
 
@@ -162,6 +177,14 @@ class CoupledPEECSolver(PEECCircuitSolver):
         self.magnetic_objects = magnetic_objects or []
         self.Delta_L = None  # Coupling matrix (computed on demand)
 
+        # Complex permeability: mu = mu'_r - j*mu"_r
+        # mu_r_imag is the POSITIVE imaginary part (loss factor)
+        self.mu_r_imag = float(mu_r_imag)
+
+        # mu'_r will be detected from the material applied to magnetic objects
+        # (used to compute tan_delta = mu"_r / mu'_r)
+        self._mu_r_real = None  # Set during compute_coupling_matrix or externally
+
     def _reconstruct_endpoints(self):
         """Reconstruct segment endpoints from center/direction/length."""
         n_seg = self.n_loop
@@ -173,8 +196,17 @@ class CoupledPEECSolver(PEECCircuitSolver):
             self.seg_p1[i] = self.seg_centers[i] - half
             self.seg_p2[i] = self.seg_centers[i] + half
 
+    @property
+    def tan_delta_m(self):
+        """Magnetic loss tangent: mu"_r / mu'_r."""
+        if self.mu_r_imag == 0.0:
+            return 0.0
+        if self._mu_r_real is not None and self._mu_r_real > 0:
+            return self.mu_r_imag / self._mu_r_real
+        return 0.0
+
     def compute_coupling_matrix(self, solver_method=0, solver_prec=0.0001,
-                                solver_maxiter=1000):
+                                solver_maxiter=1000, mu_r_real=None):
         """
         Compute Delta_L matrix (n_seg x n_seg) from magnetic material response.
 
@@ -189,6 +221,8 @@ class CoupledPEECSolver(PEECCircuitSolver):
             solver_method: Radia solver method (0=LU, 1=BiCGSTAB, 2=HACApK)
             solver_prec: Solver precision
             solver_maxiter: Maximum iterations
+            mu_r_real: Real part of mu_r (for tan_delta computation).
+                       If None, auto-detected from Radia material.
 
         Returns:
             Delta_L matrix (n_seg x n_seg) in Henries
@@ -206,6 +240,10 @@ class CoupledPEECSolver(PEECCircuitSolver):
             Solve = rad.Solve
             Fld = rad.Fld
             UtiDel = rad.UtiDel
+
+        # Store mu_r_real for tan_delta computation
+        if mu_r_real is not None:
+            self._mu_r_real = float(mu_r_real)
 
         if len(self.magnetic_objects) == 0:
             self.Delta_L = np.zeros((self.n_loop, self.n_loop))
@@ -256,7 +294,14 @@ class CoupledPEECSolver(PEECCircuitSolver):
         """
         Compute port impedance at a given frequency with magnetic coupling.
 
-        Uses L_total = L_air + Delta_L for the inductance matrix.
+        Uses:
+            L_total = L_air + Delta_L
+            R_magnetic = omega * tan_delta_m * Delta_L  (from mu"_r)
+
+        The total branch impedance becomes:
+            Z_branch = diag(R_dc + Zs) + jw*L_total + R_magnetic
+                     = diag(R_dc + Zs) + jw*(L_air + Delta_L)
+                       + omega * tan_delta_m * Delta_L
 
         Args:
             freq: Frequency in Hz
@@ -265,15 +310,31 @@ class CoupledPEECSolver(PEECCircuitSolver):
         Returns:
             Complex port impedance [Ohm]
         """
+        omega = 2.0 * np.pi * freq
+
         # Temporarily replace L with L_total = L_air + Delta_L
         L_original = self.L
+        R_original = self.R_dc
+
         if self.Delta_L is not None:
             self.L = L_original + self.Delta_L
 
+            # Add magnetic loss resistance from mu"_r
+            if self.tan_delta_m > 0 and omega > 0:
+                # R_mag = omega * tan_delta * Delta_L (matrix)
+                # For the MNA formulation, we add this as extra Zs-like impedance
+                # Since R_dc is a diagonal and Delta_L is a matrix,
+                # we handle the loss via the L matrix (complex inductance)
+                # L_complex = Delta_L * (1 - j*tan_delta)
+                # => jw*L_complex = jw*Delta_L + omega*tan_delta*Delta_L
+                #                 = jw*Delta_L + R_magnetic
+                self.L = L_original + self.Delta_L * (1.0 - 1j * self.tan_delta_m)
+
         Z = super().compute_port_impedance(freq, Zs)
 
-        # Restore original L
+        # Restore original L and R
         self.L = L_original
+        self.R_dc = R_original
         return Z
 
     def frequency_sweep(self, freqs, Zs_func=None):
@@ -309,3 +370,20 @@ class CoupledPEECSolver(PEECCircuitSolver):
         if self.Delta_L is not None:
             return self.L + self.Delta_L
         return self.L.copy()
+
+    def get_magnetic_loss_resistance(self, freq):
+        """
+        Get frequency-dependent magnetic loss resistance from mu"_r.
+
+        R_mag(f) = omega * tan_delta_m * Delta_L
+
+        Args:
+            freq: Frequency in Hz
+
+        Returns:
+            R_mag: (n_seg x n_seg) magnetic loss resistance matrix [Ohm]
+        """
+        omega = 2.0 * np.pi * freq
+        if self.Delta_L is not None and self.tan_delta_m > 0:
+            return omega * self.tan_delta_m * self.Delta_L
+        return np.zeros((self.n_loop, self.n_loop))
