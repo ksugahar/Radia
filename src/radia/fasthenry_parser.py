@@ -14,7 +14,7 @@ Supported directives:
   .freq    - Frequency sweep: .freq fmin=1e3 fmax=1e9 ndec=10
   .default - Default segment parameters
   .equiv   - Node merge (equivalence)
-  .magnetic / .endmagnetic - Magnetic material block (hex/box)
+  .magnetic / .endmagnetic - Magnetic material block (box/hexahedron/mesh)
 
 Usage:
     from fasthenry_parser import FastHenryParser
@@ -121,6 +121,7 @@ class FastHenryParser:
             lines = f.readlines()
 
         self.reset()
+        self._current_file_dir = os.path.dirname(os.path.abspath(filename))
         self._parse_lines(lines)
 
     def parse_string(self, text):
@@ -132,6 +133,7 @@ class FastHenryParser:
         """
         lines = text.splitlines(keepends=True)
         self.reset()
+        self._current_file_dir = os.getcwd()
         self._parse_lines(lines)
 
     def _parse_lines(self, lines):
@@ -413,6 +415,15 @@ class FastHenryParser:
               mu_r_imag=0
             .endmagnetic
 
+        Mesh file form (GMSH .msh import):
+            .magnetic
+              type=mesh
+              file=ferrite_core.msh
+              mu_r=1000
+              mu_r_imag=0
+              physical_group=1    (optional: GMSH physical group filter)
+            .endmagnetic
+
         Args:
             lines: List of lines between .magnetic and .endmagnetic
         """
@@ -462,6 +473,21 @@ class FastHenryParser:
                     f"(8 vertices x 3 coords), got {len(vals)}")
             vertices = [vals[i*3:(i+1)*3] for i in range(8)]
             block['vertices'] = vertices
+
+        elif block_type == 'mesh':
+            # GMSH .msh file import
+            mesh_file = params.get('file', '')
+            if not mesh_file:
+                raise ValueError(
+                    ".magnetic type=mesh requires 'file' parameter "
+                    "(path to GMSH .msh file)")
+            # Resolve relative path against input file directory
+            if hasattr(self, '_current_file_dir') and self._current_file_dir:
+                mesh_file = os.path.join(self._current_file_dir, mesh_file)
+            block['file'] = mesh_file
+            # Optional physical group filter
+            pg = params.get('physical_group', None)
+            block['physical_group'] = int(pg) if pg is not None else None
 
         else:
             raise ValueError(f"Unknown .magnetic type: {block_type}")
@@ -672,6 +698,17 @@ class FastHenryParser:
                 MatApl(obj, mat)
                 objects.append(obj)
 
+            elif block['type'] == 'mesh':
+                # Import from GMSH .msh file
+                from gmsh_mesh_import import gmsh_to_radia
+                obj = gmsh_to_radia(
+                    block['file'],
+                    mu_r=mu_r,
+                    physical_group=block.get('physical_group'),
+                    unit_scale=1.0,  # Already in parser units
+                )
+                objects.append(obj)
+
         return objects
 
     def solve(self, freqs=None, Zs_func=None, solver_method=0,
@@ -712,12 +749,19 @@ class FastHenryParser:
             # Coupled PEEC + MMM solve
             from peec_coupled import CoupledPEECSolver
 
+            # Extract mu_r_imag and mu_r_real from magnetic blocks
+            # Use first block's values (all blocks typically share same material)
+            mu_r_imag = self.magnetic_blocks[0].get('mu_r_imag', 0.0)
+            mu_r_real = self.magnetic_blocks[0].get('mu_r', 1000.0)
+
             mag_objects = self.build_magnetic_objects()
-            solver = CoupledPEECSolver(topo, mag_objects)
+            solver = CoupledPEECSolver(topo, mag_objects,
+                                       mu_r_imag=mu_r_imag)
             solver.compute_coupling_matrix(
                 solver_method=solver_method,
                 solver_prec=solver_prec,
-                solver_maxiter=solver_maxiter)
+                solver_maxiter=solver_maxiter,
+                mu_r_real=mu_r_real)
             Delta_L = solver.Delta_L
             Z_port = solver.frequency_sweep(freqs, Zs_func)
         else:
