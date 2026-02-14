@@ -712,7 +712,8 @@ class FastHenryParser:
         return objects
 
     def solve(self, freqs=None, Zs_func=None, solver_method=0,
-              solver_prec=0.0001, solver_maxiter=1000):
+              solver_prec=0.0001, solver_maxiter=1000,
+              use_ngbem=False, ngbem_options=None):
         """
         Parse, build, and solve in one step.
 
@@ -724,6 +725,12 @@ class FastHenryParser:
             solver_method: Radia solver method for coupling (0=LU, 1=BiCGSTAB)
             solver_prec: Radia solver precision
             solver_maxiter: Radia solver max iterations
+            use_ngbem: If True, use ngbem BEM backend instead of PEEC filaments
+            ngbem_options: Dict with ngbem parameters:
+                'maxh': max element size for surface mesh (default: auto)
+                'order': FE order (default: 0)
+                'intorder': BEM integration order (default: 5)
+                'mode': 'mqs' or 'full' (default: 'mqs')
 
         Returns:
             dict with:
@@ -733,7 +740,11 @@ class FastHenryParser:
                 'L': imaginary part / omega (inductance)
                 'topology': build_topology() result dict
                 'Delta_L': coupling matrix (if magnetic blocks present)
+                'backend': 'peec' or 'ngbem'
         """
+        if use_ngbem:
+            return self._solve_ngbem(freqs, Zs_func, ngbem_options or {})
+
         builder = self.to_peec_builder()
         topo = builder.build_topology()
 
@@ -783,11 +794,196 @@ class FastHenryParser:
             'R': R,
             'L': L,
             'topology': topo,
+            'backend': 'peec',
         }
         if Delta_L is not None:
             result['Delta_L'] = Delta_L
 
         return result
+
+    def _solve_ngbem(self, freqs, Zs_func, options):
+        """Solve using ngbem BEM backend instead of PEEC filaments.
+
+        Builds a conductor surface mesh from the segment geometry,
+        assembles ngbem BEM matrices, bridges to PEECCircuitSolver,
+        and runs frequency sweep.
+
+        Args:
+            freqs: Frequency array or None
+            Zs_func: Surface impedance function (not used by ngbem path)
+            options: Dict with ngbem parameters (maxh, order, intorder, mode)
+
+        Returns:
+            dict with same format as solve()
+        """
+        try:
+            from ngbem_peec import NGBEMPEECSolver
+            from ngbem_interface import NGBEMBridge
+        except ImportError:
+            raise ImportError(
+                "ngbem backend requires NGSolve and ngbem. "
+                "Install with: pip install ngsolve ngbem")
+
+        from peec_topology import PEECCircuitSolver
+
+        if freqs is None:
+            freqs = self.get_frequencies()
+        if freqs is None:
+            freqs = np.array([0.0])
+        freqs = np.asarray(freqs)
+
+        # Build conductor surface mesh from segment geometry
+        mesh = self._build_conductor_surface_mesh(options)
+
+        # Get material parameters from segments
+        sigma = 5.8e7  # default copper
+        thickness = None
+        if self.segments:
+            seg = list(self.segments.values())[0]
+            sigma = seg.get('sigma', 5.8e7)
+            # Use min(w, h) as effective thickness for SIBC
+            w = seg.get('w', 1e-3)
+            h = seg.get('h', 1e-3)
+            thickness = min(w, h)
+
+        # Create and assemble ngbem solver
+        order = options.get('order', 0)
+        intorder = options.get('intorder', 5)
+        mode = options.get('mode', 'mqs')
+
+        ngbem_solver = NGBEMPEECSolver(
+            mesh, sigma=sigma, thickness=thickness,
+            order=order, intorder=intorder, mode=mode)
+        ngbem_solver.assemble()
+
+        # Bridge ngbem matrices to topology_dict
+        # Determine port specification from parser's .external directives
+        port_spec = self._get_ngbem_port_spec()
+        bridge = NGBEMBridge(ngbem_solver, port_spec=port_spec)
+        topo = bridge.to_topology_dict()
+
+        # Solve using PEECCircuitSolver (same as PEEC path)
+        solver = PEECCircuitSolver(topo)
+        Z_port = solver.frequency_sweep(freqs, Zs_func)
+
+        # Extract R and L
+        R = np.real(Z_port)
+        omega = 2.0 * np.pi * freqs
+        L = np.zeros_like(freqs)
+        mask = omega > 0
+        L[mask] = np.imag(Z_port[mask]) / omega[mask]
+
+        return {
+            'freqs': freqs,
+            'Z_port': Z_port,
+            'R': R,
+            'L': L,
+            'topology': topo,
+            'backend': 'ngbem',
+        }
+
+    def _build_conductor_surface_mesh(self, options):
+        """Build NGSolve surface mesh from FastHenry segment geometry.
+
+        Phase 1: Supports single-segment conductors only.
+        Creates a rectangular box surface mesh using Netgen OCC.
+
+        Args:
+            options: Dict with 'maxh' (max element size)
+
+        Returns:
+            ngsolve.Mesh: Surface mesh for ngbem
+        """
+        try:
+            from netgen.occ import Box, Pnt, OCCGeometry
+            from ngsolve import Mesh
+        except ImportError:
+            raise ImportError(
+                "Surface mesh generation requires NGSolve. "
+                "Install with: pip install ngsolve")
+
+        if not self.segments:
+            raise ValueError("No segments defined. Cannot build surface mesh.")
+
+        # Get segment geometry (use first segment for Phase 1)
+        seg_name = list(self.segments.keys())[0]
+        seg = self.segments[seg_name]
+        node_from = seg['node_from']
+        node_to = seg['node_to']
+
+        p1 = np.array(self.nodes[node_from]) * self.unit_scale
+        p2 = np.array(self.nodes[node_to]) * self.unit_scale
+        w = seg.get('w', 1e-3) * self.unit_scale
+        h = seg.get('h', 1e-3) * self.unit_scale
+
+        # Compute segment direction and perpendicular axes
+        direction = p2 - p1
+        length = np.linalg.norm(direction)
+        if length < 1e-15:
+            raise ValueError(f"Segment {seg_name} has zero length")
+        d_hat = direction / length
+
+        # Find perpendicular axes for width and height
+        # Use Gram-Schmidt to find axes perpendicular to d_hat
+        if abs(d_hat[2]) < 0.9:
+            ref = np.array([0.0, 0.0, 1.0])
+        else:
+            ref = np.array([1.0, 0.0, 0.0])
+        w_hat = np.cross(d_hat, ref)
+        w_hat /= np.linalg.norm(w_hat)
+        h_hat = np.cross(d_hat, w_hat)
+        h_hat /= np.linalg.norm(h_hat)
+
+        # Build OCC box centered on segment midpoint
+        center = 0.5 * (p1 + p2)
+        half_l = length / 2.0
+        half_w = w / 2.0
+        half_h = h / 2.0
+
+        # Box corner points (min and max)
+        corner_min = center - half_l * d_hat - half_w * w_hat - half_h * h_hat
+        corner_max = center + half_l * d_hat + half_w * w_hat + half_h * h_hat
+
+        # For axis-aligned segments, use Box directly
+        # For general orientation, build via transformation
+        # Phase 1: Use bounding box approach (works for axis-aligned)
+        box = Box(Pnt(corner_min[0], corner_min[1], corner_min[2]),
+                  Pnt(corner_max[0], corner_max[1], corner_max[2]))
+        box.faces.name = "conductor"
+
+        geo = OCCGeometry(box)
+
+        # Determine mesh size
+        maxh = options.get('maxh', min(w, h, length * 0.2))
+
+        # Generate surface mesh only (2D elements in 3D)
+        ngmesh = geo.GenerateMesh(maxh=maxh)
+
+        return Mesh(ngmesh)
+
+    def _get_ngbem_port_spec(self):
+        """Convert FastHenry .external port spec to ngbem port coordinates.
+
+        Maps port node names to 3D coordinates for NGBEMBridge.
+
+        Returns:
+            tuple of (pos_coords, neg_coords) or 'auto'
+        """
+        if not self.ports:
+            return 'auto'
+
+        # Use first port
+        port = self.ports[0]
+        node_pos_name = port['node_positive']
+        node_neg_name = port['node_negative']
+
+        if node_pos_name not in self.nodes or node_neg_name not in self.nodes:
+            return 'auto'
+
+        pos_coords = np.array(self.nodes[node_pos_name]) * self.unit_scale
+        neg_coords = np.array(self.nodes[node_neg_name]) * self.unit_scale
+
+        return (pos_coords.tolist(), neg_coords.tolist())
 
     def __repr__(self):
         summary = self.get_summary()
