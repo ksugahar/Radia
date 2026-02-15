@@ -41,7 +41,7 @@ MU_0 = 4.0 * np.pi * 1e-7
 EPS_0 = 8.854187817e-12
 
 # Valid core model choices
-VALID_CORE_MODELS = (None, 'fembem', 'fem', 'radia')
+VALID_CORE_MODELS = (None, 'fembem', 'fem', 'radia', 'vector_fembem')
 
 
 def _biot_savart_finite_filament(p1, p2, obs_point):
@@ -104,6 +104,12 @@ class CoupledPEECMMM:
                    - High-order BEM elements available
                    - Best for: aluminum shields, copper conductors
 
+        'vector_fembem' : Vector FEM-BEM (H(curl) + Maxwell SLP).
+                   - Any linear mu_r (not restricted to 1)
+                   - Unbounded domain (Weggler stabilized BEM)
+                   - Full 3D vector eddy currents
+                   - Best for: magnetic conducting cores (steel, iron)
+
         'fem'    : FEM-only with Dirichlet BC.
                    - Any linear mu_r
                    - Bounded domain (Dirichlet BC = Hz_inc on boundary)
@@ -147,9 +153,10 @@ class CoupledPEECMMM:
             print(f"  [WARNING] core_model='fembem' uses scalar Hz formulation "
                   f"valid ONLY for mu_r=1.")
             print(f"            Got mu_r={mu_r}. Results may be inaccurate.")
-            print(f"            Use core_model='fem' or 'radia' for mu_r != 1.")
+            print(f"            Use core_model='vector_fembem', 'fem', or "
+                  f"'radia' for mu_r != 1.")
 
-        if core_model in ('fembem', 'fem') and core_mesh is None:
+        if core_model in ('fembem', 'fem', 'vector_fembem') and core_mesh is None:
             raise ValueError(
                 f"core_mesh required for core_model='{core_model}'")
 
@@ -422,6 +429,59 @@ class CoupledPEECMMM:
         # For now, return static mu_r for Radia core model
         return self.mu_r - 1j * self.mu_r_imag
 
+    def _compute_mu_eff_vector_fembem(self, omega):
+        """Compute mu_eff using vector FEM-BEM eddy current solver.
+
+        Uses H(curl) FEM + Maxwell SLP BEM to solve the full 3D vector
+        eddy current problem in the core. Handles arbitrary mu_r.
+
+        Args:
+            omega: Angular frequency [rad/s]
+
+        Returns:
+            mu_eff: Complex effective relative permeability
+        """
+        from ngbem_eddy import VectorEddyCurrentFEMBEM
+        from ngsolve import Integrate, CF
+
+        freq = omega / (2.0 * np.pi)
+
+        # Check cache
+        cache_key = ('vector_fembem', round(freq, 6))
+        if cache_key in self._mu_eff_cache:
+            return self._mu_eff_cache[cache_key]
+
+        # Create and assemble vector FEM-BEM solver (lazily)
+        if not hasattr(self, '_vector_fembem_solver'):
+            self._vector_fembem_solver = VectorEddyCurrentFEMBEM(
+                self.core_mesh,
+                sigma=self.core_sigma,
+                mu_r=self.mu_r,
+                order=self.fem_order,
+                conductor_label="conductor",
+                surface_label="surface")
+            self._vector_fembem_solver.assemble()
+
+        solver = self._vector_fembem_solver
+
+        # Solve with uniform z-directed B field
+        B_ext = [0, 0, 1.0]
+        solver.solve(freq, B_ext=B_ext)
+
+        # Compute stored energy to derive effective permeability
+        # For a volume V in field H_inc = B_ext/mu_0:
+        # W = 0.5 * mu_eff * mu_0 * |H_inc|^2 * V
+        # Also: W = 0.5 * Re(integral 1/mu * |curl A|^2 dV) (from FEM)
+        H_inc = B_ext[2] / MU_0
+        volume = Integrate(CF(1), self.core_mesh).real
+
+        W = solver.compute_stored_energy()
+        # mu_eff = 2 * W / (mu_0 * |H_inc|^2 * V)
+        mu_eff = 2.0 * W / (MU_0 * H_inc**2 * volume)
+
+        self._mu_eff_cache[cache_key] = mu_eff
+        return mu_eff
+
     def _get_mu_eff(self, omega):
         """Get effective permeability at given frequency.
 
@@ -442,6 +502,8 @@ class CoupledPEECMMM:
             return self._compute_mu_eff_fem(omega, mode='fem')
         elif self.core_model == 'radia':
             return self._compute_mu_eff_radia(omega)
+        elif self.core_model == 'vector_fembem':
+            return self._compute_mu_eff_vector_fembem(omega)
         else:
             # No core model: static mu_r
             return self.mu_r - 1j * self.mu_r_imag
