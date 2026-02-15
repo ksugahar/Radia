@@ -19,20 +19,41 @@ The key mapping:
   - HDivSurface DOF i  <->  mesh edge i  <->  virtual segment i
   - SurfaceL2 DOF j    <->  mesh triangle j  <->  virtual star node j
 
+Loop-Star Decomposition:
+    Decomposes HDivSurface (edge-based) DOFs into:
+    - Loop (face-based): solenoidal currents, div(J_loop) = 0  -> eddy currents
+    - Star (vertex-based): irrotational currents, curl(J_star) = 0  -> charge
+
+    T_loop: (n_edges, n_loop) face circulation basis
+    T_star: (n_edges, n_star) vertex star basis
+    T = [T_loop | T_star]: full transformation (square, invertible)
+
+    For BEM matrix A_edge:
+        A_LS = T^T * A_edge * T  (congruence transform, preserves symmetry)
+
+    Properties:
+        T_star^T * T_loop = 0  (orthogonality)
+        M_LS * T_loop = 0      (loops are divergence-free)
+
 Usage:
     from ngbem_peec import NGBEMPEECSolver, create_plate_mesh
-    from ngbem_interface import NGBEMBridge
+    from ngbem_interface import NGBEMBridge, LoopStarTransform
 
     mesh = create_plate_mesh(0.01, 0.001, 0.003)
     solver = NGBEMPEECSolver(mesh, sigma=5.8e7, thickness=1e-3)
     solver.assemble()
 
+    # Option 1: Direct bridge to PEEC
     bridge = NGBEMBridge(solver, port_spec=([0,0,0], [0.1,0,0]))
     topo = bridge.to_topology_dict()
 
-    from peec_topology import PEECCircuitSolver
-    circuit = PEECCircuitSolver(topo)
-    Z = circuit.compute_port_impedance(1e6)
+    # Option 2: Loop-Star decomposition
+    ls = LoopStarTransform(mesh)
+    L_LS = ls.transform_matrix(solver.L)
+    L_LL, L_LS_block, L_SL, L_SS = ls.extract_blocks(L_LS)
+
+    # Decompose BEM solution into eddy current + charge components
+    J_loop, J_star, alpha_loop, alpha_star = ls.decompose_current(J_edge)
 
 Part of Radia project
 """
@@ -101,6 +122,346 @@ def extract_edge_geometry(mesh):
         'edge_vertices': np.array(edge_verts_list, dtype=int),
         'vertex_positions': vertex_positions,
     }
+
+
+class LoopStarTransform:
+    """Loop-Star basis transformation for surface BEM mesh.
+
+    Decomposes HDivSurface (edge-based) DOFs into:
+    - Loop (face-based): solenoidal currents, div(J_loop) = 0
+    - Star (vertex-based): irrotational currents, curl(J_star) = 0
+
+    Physical interpretation:
+    - Loop = eddy currents (no charge accumulation at vertices)
+    - Star = charge-driven currents (charge accumulates at vertices)
+
+    Mathematical basis:
+    - T_loop columns = face circulation vectors (incidence matrix B^T)
+    - T_star columns = vertex star vectors (node-edge incidence A^T)
+    - Orthogonality: T_star^T * T_loop = 0 (exact, from graph theory)
+    - Euler formula: n_loop + n_star = n_edges
+
+    Surface type handling:
+    - Open surface (chi=1): remove 1 reference vertex from T_star
+    - Closed surface (chi=2): remove 1 vertex + 1 face
+
+    Supported element orders:
+    - order=0: Full Loop-Star (1 DOF per edge, exact decomposition)
+    - order>0: Not yet supported (requires extended Helmholtz decomposition)
+
+    Usage:
+        ls = LoopStarTransform(mesh)
+
+        # Transform BEM matrix to Loop-Star basis
+        L_LS = ls.transform_matrix(L_edge)
+        L_LL, L_LS_block, L_SL, L_SS = ls.extract_blocks(L_LS)
+
+        # Decompose BEM solution
+        J_loop, J_star, alpha_loop, alpha_star = ls.decompose_current(J_edge)
+    """
+
+    def __init__(self, mesh):
+        """Build Loop-Star transformation from NGSolve surface mesh.
+
+        Args:
+            mesh: NGSolve Mesh (surface mesh with triangular elements)
+
+        Raises:
+            ValueError: If mesh has no surface elements
+        """
+        self.mesh = mesh
+        self._build()
+
+    def _build(self):
+        """Build T_loop and T_star matrices from mesh topology."""
+        try:
+            from ngsolve import BND
+        except ImportError:
+            raise ImportError(
+                "LoopStarTransform requires NGSolve. "
+                "Install with: pip install ngsolve==6.2.2405")
+
+        mesh = self.mesh
+
+        # --- Collect vertices ---
+        vertex_nrs = []
+        vertex_positions = {}
+        for v in mesh.vertices:
+            vertex_nrs.append(v.nr)
+            pt = v.point
+            vertex_positions[v.nr] = np.array([pt[0], pt[1], pt[2]])
+
+        vertex_nrs = sorted(vertex_nrs)
+        vert_to_idx = {v: i for i, v in enumerate(vertex_nrs)}
+        n_vertices = len(vertex_nrs)
+
+        # --- Collect edges with global direction ---
+        edge_list = []        # [(v0_nr, v1_nr)] in mesh.edges iteration order
+        edge_to_idx = {}     # (min_v, max_v) -> sequential index
+
+        for idx, edge in enumerate(mesh.edges):
+            verts = list(edge.vertices)
+            v0, v1 = verts[0].nr, verts[1].nr
+            edge_list.append((v0, v1))
+            key = (min(v0, v1), max(v0, v1))
+            edge_to_idx[key] = idx
+
+        n_edges = len(edge_list)
+
+        # --- Collect faces (surface elements) ---
+        face_vertex_list = []
+        for el in mesh.Elements(BND):
+            face_verts = [v.nr for v in el.vertices]
+            face_vertex_list.append(face_verts)
+
+        n_faces = len(face_vertex_list)
+
+        if n_faces == 0:
+            raise ValueError(
+                "No surface elements found. "
+                "LoopStarTransform requires a surface mesh.")
+
+        # --- Euler characteristic ---
+        chi = n_vertices - n_edges + n_faces
+
+        # --- Build T_loop: face-edge incidence (n_edges x n_faces) ---
+        # T_loop[e, f] = +1 if edge e's global direction matches face f's
+        #                     local circulation (va -> vb), -1 otherwise
+        T_loop_full = np.zeros((n_edges, n_faces))
+
+        for f_idx, face_verts in enumerate(face_vertex_list):
+            n_v = len(face_verts)
+            for k in range(n_v):
+                va = face_verts[k]
+                vb = face_verts[(k + 1) % n_v]
+                key = (min(va, vb), max(va, vb))
+
+                if key not in edge_to_idx:
+                    continue
+
+                e_idx = edge_to_idx[key]
+                global_v0, global_v1 = edge_list[e_idx]
+
+                # +1 if global direction matches face local (va -> vb)
+                if global_v0 == va:
+                    sign = +1.0
+                else:
+                    sign = -1.0
+
+                T_loop_full[e_idx, f_idx] = sign
+
+        # --- Build T_star: node-edge incidence (n_edges x n_vertices) ---
+        # T_star[e, v] = +1 if edge e leaves vertex v (v is v0)
+        #               -1 if edge e enters vertex v (v is v1)
+        T_star_full = np.zeros((n_edges, n_vertices))
+
+        for e_idx, (v0, v1) in enumerate(edge_list):
+            v0_idx = vert_to_idx[v0]
+            v1_idx = vert_to_idx[v1]
+            T_star_full[e_idx, v0_idx] = +1.0
+            T_star_full[e_idx, v1_idx] = -1.0
+
+        # --- Remove dependent columns to make T square ---
+        # Euler: V - E + F = chi
+        # For open surface (chi=1): remove 1 star column (reference vertex)
+        # For closed surface (chi=2): remove 1 star + 1 loop column
+        T_star = T_star_full
+        T_loop = T_loop_full
+
+        if chi >= 1:
+            T_star = T_star_full[:, :-1]
+        if chi >= 2:
+            T_loop = T_loop_full[:, :-1]
+
+        # --- Store results ---
+        self.T_loop = T_loop          # (n_edges, n_loop)
+        self.T_star = T_star          # (n_edges, n_star)
+        self.T = np.hstack([T_loop, T_star])  # (n_edges, n_edges)
+
+        self._n_loop = T_loop.shape[1]
+        self._n_star = T_star.shape[1]
+        self._n_edges = n_edges
+        self._n_faces = n_faces
+        self._n_vertices = n_vertices
+        self._chi = chi
+
+        self._vertex_positions = vertex_positions
+        self._vert_to_idx = vert_to_idx
+        self._edge_list = edge_list
+        self._face_vertex_list = face_vertex_list
+
+        # Verify T is square
+        expected_cols = n_edges
+        actual_cols = self._n_loop + self._n_star
+        if actual_cols != expected_cols:
+            raise RuntimeError(
+                f"Loop-Star dimension mismatch: "
+                f"n_loop({self._n_loop}) + n_star({self._n_star}) = "
+                f"{actual_cols} != n_edges({expected_cols}). "
+                f"Euler chi={chi}")
+
+        # Compute inverse
+        try:
+            cond = np.linalg.cond(self.T)
+            if cond > 1e14:
+                self.T_inv = np.linalg.pinv(self.T)
+                self._invertible = False
+            else:
+                self.T_inv = np.linalg.inv(self.T)
+                self._invertible = True
+        except np.linalg.LinAlgError:
+            self.T_inv = np.linalg.pinv(self.T)
+            self._invertible = False
+
+    @property
+    def n_loop(self):
+        """Number of Loop (face-based, solenoidal) DOFs."""
+        return self._n_loop
+
+    @property
+    def n_star(self):
+        """Number of Star (vertex-based, irrotational) DOFs."""
+        return self._n_star
+
+    @property
+    def n_edge(self):
+        """Number of edge DOFs (HDivSurface order=0)."""
+        return self._n_edges
+
+    def transform_matrix(self, A_edge):
+        """Transform BEM matrix from edge basis to Loop-Star basis.
+
+        Congruence transformation: A_LS = T^T * A_edge * T
+        Preserves symmetry: if A_edge is symmetric, A_LS is symmetric.
+
+        Args:
+            A_edge: BEM matrix in edge basis (n_edges x n_edges)
+
+        Returns:
+            A_LS: Matrix in Loop-Star basis (n_edges x n_edges)
+                  Block structure: [[A_LL, A_LS], [A_SL, A_SS]]
+        """
+        A_edge = np.asarray(A_edge)
+        if A_edge.shape != (self._n_edges, self._n_edges):
+            raise ValueError(
+                f"Matrix shape {A_edge.shape} doesn't match "
+                f"n_edges={self._n_edges}")
+        return self.T.T @ A_edge @ self.T
+
+    def extract_blocks(self, A_LS):
+        """Extract Loop-Loop, Loop-Star, Star-Loop, Star-Star blocks.
+
+        Args:
+            A_LS: Matrix in Loop-Star basis (n_edges x n_edges)
+
+        Returns:
+            A_LL: (n_loop, n_loop) Loop-Loop block (inductance-like)
+            A_LS_block: (n_loop, n_star) Loop-Star coupling
+            A_SL: (n_star, n_loop) Star-Loop coupling
+            A_SS: (n_star, n_star) Star-Star block (capacitance-like)
+        """
+        nL = self._n_loop
+        A_LL = A_LS[:nL, :nL]
+        A_LS_block = A_LS[:nL, nL:]
+        A_SL = A_LS[nL:, :nL]
+        A_SS = A_LS[nL:, nL:]
+        return A_LL, A_LS_block, A_SL, A_SS
+
+    def transform_vector(self, b_edge):
+        """Transform RHS vector from edge basis to Loop-Star basis.
+
+        b_LS = T^T * b_edge
+
+        Args:
+            b_edge: Vector in edge basis (n_edges,) or (n_edges, k)
+
+        Returns:
+            b_LS: Vector in Loop-Star basis
+        """
+        return self.T.T @ np.asarray(b_edge)
+
+    def decompose_current(self, J_edge):
+        """Decompose edge-basis current into Loop and Star components.
+
+        Solves: T * [alpha_loop; alpha_star] = J_edge
+
+        Physical meaning:
+        - J_loop = T_loop * alpha_loop: eddy currents (div-free)
+        - J_star = T_star * alpha_star: charge currents (curl-free)
+
+        Verification: J_loop + J_star = J_edge (exact if T is invertible)
+
+        Args:
+            J_edge: Current coefficients in edge basis (n_edges,)
+
+        Returns:
+            J_loop: Loop (eddy) component in edge basis (n_edges,)
+            J_star: Star (charge) component in edge basis (n_edges,)
+            alpha_loop: Loop coefficients (n_loop,)
+            alpha_star: Star coefficients (n_star,)
+        """
+        J_edge = np.asarray(J_edge, dtype=float)
+
+        if self._invertible:
+            alpha = self.T_inv @ J_edge
+        else:
+            alpha = np.linalg.lstsq(self.T, J_edge, rcond=None)[0]
+
+        nL = self._n_loop
+        alpha_loop = alpha[:nL]
+        alpha_star = alpha[nL:]
+
+        J_loop = self.T_loop @ alpha_loop
+        J_star = self.T_star @ alpha_star
+
+        return J_loop, J_star, alpha_loop, alpha_star
+
+    def verify_orthogonality(self):
+        """Verify T_star^T * T_loop = 0 (graph-theoretic orthogonality).
+
+        Returns:
+            max_abs: Maximum absolute value (should be ~0 to machine precision)
+        """
+        product = self.T_star.T @ self.T_loop
+        return np.max(np.abs(product))
+
+    def verify_divergence_free(self, M_LS):
+        """Verify that Loop basis functions are divergence-free.
+
+        M_LS is the divergence coupling matrix from ngbem:
+            M_LS[i, j] = integral div(basis_j) * phi_i dS
+
+        For loop basis: M_LS * T_loop should be ~0
+
+        Args:
+            M_LS: Divergence coupling matrix (n_star_ngbem x n_edges)
+
+        Returns:
+            max_abs: Maximum absolute value of M_LS * T_loop
+        """
+        M_LS = np.asarray(M_LS)
+        product = M_LS @ self.T_loop
+        return np.max(np.abs(product))
+
+    def print_summary(self):
+        """Print Loop-Star transform summary."""
+        print("LoopStarTransform Summary:")
+        print(f"  Mesh: {self._n_vertices} vertices, "
+              f"{self._n_edges} edges, {self._n_faces} faces")
+        print(f"  Euler characteristic chi = {self._chi} "
+              f"({'closed' if self._chi == 2 else 'open'} surface)")
+        print(f"  Loop DOFs (face-based, solenoidal): {self._n_loop}")
+        print(f"  Star DOFs (vertex-based, irrotational): {self._n_star}")
+        print(f"  Total: {self._n_loop} + {self._n_star} = "
+              f"{self._n_loop + self._n_star} (edges: {self._n_edges})")
+        print(f"  T matrix: {self.T.shape}, "
+              f"invertible: {self._invertible}")
+
+        ortho = self.verify_orthogonality()
+        print(f"  Orthogonality |T_star^T * T_loop|_max = {ortho:.2e}")
+
+        if not self._invertible:
+            print("  WARNING: T matrix is near-singular, using pseudoinverse")
 
 
 class NGBEMBridge:
@@ -237,15 +598,24 @@ class NGBEMBridge:
         self._ports = [(node_pos, node_neg, 0)]
         return self._ports
 
-    def to_topology_dict(self):
+    def to_topology_dict(self, decompose_loop_star=False):
         """Convert ngbem matrices to topology_dict format.
 
         This is the main entry point. Produces a dict compatible
         with PEECCircuitSolver.__init__().
 
+        Args:
+            decompose_loop_star: If True, apply Loop-Star decomposition
+                to transform edge-basis matrices into Loop-Star blocks.
+                L_LL becomes the PEEC inductance, L_SS the capacitance-like.
+                Only supported for order=0.
+
         Returns:
             topology_dict: dict with L, R, segment_nodes, n_nodes,
-                          n_loop, ports, and optional P, M_LS, n_star
+                          n_loop, ports, and optional P, M_LS, n_star.
+                          If decompose_loop_star=True, also includes
+                          'loop_star_transform' with the LoopStarTransform
+                          object and Loop-Star block matrices.
         """
         mats = self.solver.get_matrices()
 
@@ -269,7 +639,7 @@ class NGBEMBridge:
             'segment_lengths': self._edge_geom['lengths'],
             'node_positions': self._virtual_topo['node_positions'],
 
-            # Optional: full Loop-Star
+            # Optional: full Loop-Star (from ngbem product space)
             'P': mats['P'],
             'M_LS': mats['M_LS'],
             'n_star': mats['n_star'],
@@ -281,6 +651,48 @@ class NGBEMBridge:
 
         # Build incidence data for MNA solver
         topo.update(self._build_incidence_data())
+
+        # --- Loop-Star decomposition ---
+        if decompose_loop_star:
+            if self.solver.order > 0:
+                raise NotImplementedError(
+                    "Loop-Star decomposition is only supported for order=0. "
+                    "High-order (order>0) requires extended Helmholtz "
+                    "decomposition (Andriulli et al., 2008).")
+
+            ls = LoopStarTransform(self.mesh)
+
+            # Transform L matrix to Loop-Star basis
+            L_LS = ls.transform_matrix(mats['L'])
+            L_LL, L_LS_block, L_SL, L_SS = ls.extract_blocks(L_LS)
+
+            # Transform R to Loop-Star basis
+            R_diag = np.diag(mats['R_loop'])
+            R_LS = ls.transform_matrix(R_diag)
+            R_LL, R_LS_block, R_SL, R_SS = ls.extract_blocks(R_LS)
+
+            # Verify divergence-free property
+            div_free_error = 0.0
+            if mats['M_LS'] is not None:
+                div_free_error = ls.verify_divergence_free(mats['M_LS'])
+
+            topo['loop_star'] = {
+                'transform': ls,
+                'L_LL': L_LL,           # Loop inductance (n_loop x n_loop)
+                'L_LS': L_LS_block,     # Loop-Star coupling
+                'L_SL': L_SL,           # Star-Loop coupling
+                'L_SS': L_SS,           # Star "inductance" (small)
+                'R_LL': R_LL,           # Loop resistance
+                'R_SS': R_SS,           # Star resistance
+                'n_loop_ls': ls.n_loop, # Loop DOFs (face-based)
+                'n_star_ls': ls.n_star, # Star DOFs (vertex-based)
+                'T_loop': ls.T_loop,    # Transformation matrices
+                'T_star': ls.T_star,
+                'T': ls.T,
+                'T_inv': ls.T_inv,
+                'orthogonality_error': ls.verify_orthogonality(),
+                'div_free_error': div_free_error,
+            }
 
         return topo
 
