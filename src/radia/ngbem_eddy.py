@@ -2078,6 +2078,13 @@ class VectorEddyCurrentFEMBEM:
     def solve(self, freq, A_inc_func=None, B_ext=None):
         """Solve eddy current problem at given frequency.
 
+        Uses TOTAL FIELD formulation to avoid catastrophic cancellation:
+          Row 1: a_FEM * A_total + B^T * j_scat = 0
+          Row 2: B * A_total - S * [j_scat; rho_scat] = B * A_inc
+
+        The unknown A is the TOTAL interior field (not scattered).
+        The BEM unknowns j, rho are scattered surface quantities.
+
         Args:
             freq: Frequency [Hz]
             A_inc_func: Callable(points) -> A_inc vectors (n, 3) array.
@@ -2096,6 +2103,7 @@ class VectorEddyCurrentFEMBEM:
 
         self.freq = freq
         self.omega = 2.0 * np.pi * freq
+        self._B_ext_stored = B_ext  # Store for compute_loss_sibc()
 
         # Skin depth
         if self.omega > 0 and self.sigma > 0:
@@ -2127,21 +2135,22 @@ class VectorEddyCurrentFEMBEM:
         # S_bem = [A_k, Q_k^T; Q_k, kappa^2*V_k]
         A_sys[n1:, n1:] = -self._S_bem_np
 
-        # --- Build RHS ---
+        # --- Build RHS (TOTAL FIELD formulation) ---
         rhs = np.zeros(N, dtype=complex)
 
-        # Compute A_inc at DOF locations
+        # Compute A_inc coefficients
         A_inc_coeffs = self._project_incident_field(A_inc_func, B_ext)
 
         if A_inc_coeffs is not None:
-            # f_1 = -j*omega*sigma * M_mass @ A_inc_coeffs (FEM source)
-            rhs[:n1] = (-1j * self.omega * self.sigma
-                        * self._a_mass_np @ A_inc_coeffs)
+            # Total field formulation:
+            #   Row 1: a_FEM * A_total + B^T * j = 0  (homogeneous interior)
+            #   Row 2: B * A_total - S * [j; rho] = B * A_inc  (BEM drive)
+            #
+            # Row 1 RHS = 0 (no source inside conductor)
+            # Row 2 RHS = +B @ A_inc (incident field drives via BEM coupling)
+            rhs[n1:n1+n2] = self._B_np @ A_inc_coeffs
 
-            # f_2 = -B @ A_inc_coeffs (BEM: B*A_s = S*j - B*A_inc)
-            rhs[n1:n1+n2] = -self._B_np @ A_inc_coeffs
-
-            # f_3 = 0 (no charge source)
+            # Row 3 RHS = 0 (no charge source)
 
         # --- Symmetric diagonal scaling (FEM-BEM equilibration) ---
         # FEM block O(10^10) vs BEM block O(10^-2) causes cond ~10^14.
@@ -2159,6 +2168,7 @@ class VectorEddyCurrentFEMBEM:
         sol = sol_scaled * D_inv  # unscale
 
         # --- Extract solution ---
+        # A_coeffs is now A_TOTAL (not scattered)
         self._A_coeffs = sol[:n1]
         self._j_coeffs = sol[n1:n1+n2]
         self._rho_coeffs = sol[n1+n2:]
@@ -2265,16 +2275,18 @@ class VectorEddyCurrentFEMBEM:
         return np.array([gf.vec[i] for i in range(self._n_hcurl)])
 
     def compute_loss(self):
-        """Compute eddy current loss.
+        """Compute eddy current loss from volume integral.
 
         P = 0.5 * Re(integral sigma * |E_total|^2 dV)
           = 0.5 * omega^2 * sigma * Re(A_total^H * M_mass * A_total)
 
-        where E_total = -j*omega*A_total, A_total = A_scat + A_inc.
+        where E_total = -j*omega*A_total.
 
-        The total field is used because A_scat ~ -A_inc inside a good
-        conductor, so the loss comes from the small difference near the
-        skin layer.
+        WARNING: This formula requires the mesh to resolve the skin depth.
+        When maxh >> delta (skin depth), the FEM produces A_total ~ 0
+        (perfect conductor limit) and P ~ 0. Use compute_loss_sibc()
+        for a mesh-independent SIBC-based estimate, or use
+        ShieldBEMSIBC for thin-skin problems.
 
         Returns:
             P: Eddy current loss [W]
@@ -2282,16 +2294,75 @@ class VectorEddyCurrentFEMBEM:
         if not self._solved:
             raise RuntimeError("Call solve() first")
 
-        # A_total = A_scattered + A_incident
-        if self._A_inc_coeffs is not None:
-            A_total = self._A_coeffs + self._A_inc_coeffs
-        else:
-            A_total = self._A_coeffs
+        # _A_coeffs is already A_total (total field formulation)
+        A_total = self._A_coeffs
 
         # P = 0.5 * sigma * omega^2 * integral |A_total|^2 dV
         P = (0.5 * self.omega**2 * self.sigma
              * np.real(A_total.conj() @ self._a_mass_np @ A_total))
         return P
+
+    def compute_loss_sibc(self):
+        """Compute eddy current loss using analytical SIBC on boundary faces.
+
+        For each boundary triangle, computes:
+            H_inc_t = H_inc - (H_inc . n) * n   (tangential H)
+            dP = 0.5 * Re(Zs) * |H_inc_t|^2 * area
+
+        This is mesh-INDEPENDENT and valid when delta << thickness
+        (thin-skin regime where compute_loss() fails on coarse mesh).
+
+        NOTE: This gives the half-space SIBC estimate. It does not account
+        for finite-body edge/corner enhancement effects. For accurate
+        thin-skin loss, use ShieldBEMSIBC which includes BEM mutual
+        coupling effects.
+
+        Returns:
+            P: Eddy current loss [W] (analytical SIBC estimate)
+        """
+        if not self._solved:
+            raise RuntimeError("Call solve() first")
+        if self.omega <= 0 or self.sigma <= 0:
+            return 0.0
+
+        # Surface impedance
+        delta = np.sqrt(2.0 / (self.omega * self.mu * self.sigma))
+        Zs = (1 + 1j) / (self.sigma * delta)
+
+        # Need B_ext to compute H_inc; extract from stored A_inc
+        if not hasattr(self, '_B_ext_stored') or self._B_ext_stored is None:
+            return 0.0
+
+        B_ext = np.asarray(self._B_ext_stored, dtype=float)
+        H_inc = B_ext / self.mu  # H_inc = B_ext / (mu_r * mu_0)
+
+        from ngsolve import BND
+
+        P_total = 0.0
+        for el in self.mesh.Elements(BND):
+            # Get triangle vertices
+            verts = [self.mesh.vertices[v.nr].point for v in el.vertices]
+            v0 = np.array(verts[0])
+            v1 = np.array(verts[1])
+            v2 = np.array(verts[2])
+
+            # Outward normal and area
+            edge1 = v1 - v0
+            edge2 = v2 - v0
+            cross = np.cross(edge1, edge2)
+            area = 0.5 * np.linalg.norm(cross)
+            if area < 1e-30:
+                continue
+            n_hat = cross / (2.0 * area)
+
+            # Tangential H_inc
+            H_t = H_inc - np.dot(H_inc, n_hat) * n_hat
+            H_t_mag2 = np.dot(H_t, H_t)
+
+            # SIBC loss contribution: 0.5 * Re(Zs) * |H_t|^2 * area
+            P_total += 0.5 * Zs.real * H_t_mag2 * area
+
+        return P_total
 
     def compute_stored_energy(self):
         """Compute magnetic stored energy.
@@ -2327,6 +2398,7 @@ class VectorEddyCurrentFEMBEM:
         n_freq = len(freqs)
 
         P_loss = np.zeros(n_freq)
+        P_loss_sibc = np.zeros(n_freq)
         W_stored = np.zeros(n_freq)
         delta_arr = np.zeros(n_freq)
 
@@ -2334,6 +2406,7 @@ class VectorEddyCurrentFEMBEM:
         for i, f in enumerate(freqs):
             self.solve(f, A_inc_func, B_ext)
             P_loss[i] = self.compute_loss()
+            P_loss_sibc[i] = self.compute_loss_sibc()
             W_stored[i] = self.compute_stored_energy()
             delta_arr[i] = self.delta
         t_total = time.time() - t0
@@ -2341,6 +2414,7 @@ class VectorEddyCurrentFEMBEM:
         return {
             'freqs': freqs,
             'P_loss': P_loss,
+            'P_loss_sibc': P_loss_sibc,
             'W_stored': W_stored,
             'delta': delta_arr,
             't_total': t_total,

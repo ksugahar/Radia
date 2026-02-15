@@ -136,78 +136,84 @@ from the incomplete RHS.
 formula `P = 0.5*w^2*s*|A_total|^2` fundamentally requires mesh elements finer
 than the skin depth to resolve the boundary layer where the physical loss occurs.
 
-## Required Fix
+## Fixes Applied
 
-### Fix 1: Correct the RHS (minor, code correctness)
+### Fix 1: Total field formulation (DONE)
 
-In `VectorEddyCurrentFEMBEM.solve()`, change line 2138 from:
+Switched from scattered field (A_scat as unknown) to total field (A_total as
+unknown) to avoid catastrophic cancellation:
 
-```python
-rhs[:n1] = -1j * self.omega * self.sigma * self._a_mass_np @ A_inc_coeffs
-```
-
-to:
+**Old (scattered)**: A_scat + A_inc ~ 0 (both large, nearly cancel)
+**New (total)**: A_total is direct unknown (no cancellation)
 
 ```python
-rhs[:n1] = -(self._a_curl_np
-             + 1j * self.omega * self.sigma * self._a_mass_np
-             ) @ A_inc_coeffs
+# Old: Row 1 RHS = -jws*M*A_inc (buggy: missing curl-curl)
+# New: Row 1 RHS = 0 (homogeneous interior)
+# New: Row 2 RHS = +B @ A_inc (BEM drives system)
 ```
 
-### Fix 2: Alternative loss computation from surface current (major)
+Result: A_total -> 0 (PEC limit on coarse mesh), j is frequency-independent
+and nonzero (correct for PEC surface current).
 
-Instead of the volume loss formula, compute loss from the BEM surface current j
-using the SIBC-like formula:
+### Fix 2: Surface current j cannot be used for SIBC loss (INVESTIGATED)
+
+Investigation showed that j in the Johnson-Nedelec FEM-BEM coupling is an
+auxiliary SLP representation density, NOT the physical surface current
+K = n x H. The normalization differs by ~10^10 from the physical current.
+
+**Why**: In VectorFEMBEM, the BEM equation relates j to the boundary trace of
+the vector potential A (not to H or E). ShieldBEMSIBC uses the EFIE which
+directly solves for the physical surface current K.
+
+### Fix 3: Analytical SIBC loss estimate (DONE)
+
+Added `compute_loss_sibc()` method that computes loss from the known incident
+field H_inc on each boundary triangle:
 
 ```python
-P = 0.5 * Re(Zs) * integral_Gamma |j_tangential|^2 dS
+P = sum_faces 0.5 * Re(Zs) * |H_inc_tangential|^2 * area
 ```
 
-This requires:
-1. HDivSurface mass matrix `M_hdiv` (boundary L2 inner product)
-2. Surface impedance `Zs = (1+j)/(sigma*delta)`
+This is the half-space SIBC approximation applied face-by-face.
 
-```python
-def compute_loss_from_surface_current(self):
-    """Loss from surface current (works on coarse mesh)."""
-    Zs = (1 + 1j) / (self.sigma * self.delta)
-    P = 0.5 * Zs.real * np.real(self._j_coeffs.conj() @ self._M_hdiv_np @ self._j_coeffs)
-    return P
-```
+### Cross-validation: compute_loss_sibc() vs ShieldBEMSIBC
 
-This would make VectorFEMBEM loss mesh-independent (like ShieldBEMSIBC) while
-still using the 3-block FEM-BEM system to compute the surface current j correctly.
+| Frequency | P_analSIBC (W) | P_shield (W) | Ratio |
+|-----------|----------------|--------------|-------|
+| 1 kHz     | 2,617          | 678          | 3.87  |
+| 10 kHz    | 8,274          | 9,005        | 0.92  |
+| 100 kHz   | 26,165         | 19,604       | 1.33  |
+| 1 MHz     | 82,741         | 50,796       | 1.63  |
 
-**However**, this requires that j from the FEM-BEM system correctly represents
-the physical surface current. Current diagnostics show |j| ~ 1/omega
-(decreasing), which is WRONG (should be ~constant). This is because the BEM
-equation `S*[j;rho] = B*A_total` has A_total -> 0, so j -> 0.
+The analytical SIBC gives the correct frequency scaling (sqrt(f)) and is
+within a factor of 0.9-3.9x of ShieldBEMSIBC. The deviation comes from:
+- Low freq (delta ~ thickness): half-space assumption breaks down
+- High freq (delta << thickness): no edge/corner enhancement in flat approx
 
-### Fix 3: Reformulate to solve for A_total directly (fundamental)
+## Solver Selection Guide
 
-Instead of the scattered field formulation (A_s = A_total - A_inc), reformulate
-to solve for A_total directly with proper boundary conditions. This avoids the
-catastrophic cancellation A_total = A_scat + A_inc ~ 0.
+| Regime | delta vs thickness | Recommended Solver | Notes |
+|--------|--------------------|--------------------|-------|
+| Thick skin | delta > thickness | VectorFEMBEM (fine mesh) | Need mesh resolution < delta |
+| Moderate | delta ~ thickness | VectorFEMBEM (fine mesh) | Boundary layer meshing |
+| Thin skin | delta << thickness | **ShieldBEMSIBC** | Mesh-independent, most accurate |
+| Quick estimate | Any | VectorFEMBEM.compute_loss_sibc() | 1-4x of ShieldBEMSIBC |
 
-## Recommendations
+**VectorFEMBEM is most useful** for:
+1. Thick-skin problems where skin depth is resolvable by the mesh
+2. Magnetic materials (mu_r >> 1) where ShieldBEMSIBC is less accurate
+3. Computing A_total and H fields inside the conductor (not just loss)
 
-1. **For thin-skin problems (delta << thickness)**: Use **ShieldBEMSIBC**.
-   It handles skin depth analytically via SIBC, is mesh-independent, and
-   is validated to work for mu_r >= 1.
-
-2. **For moderate-skin problems (delta ~ thickness)**: VectorFEMBEM is
-   appropriate only if the mesh resolves the skin depth. Use boundary
-   layer meshing (fine elements near surface).
-
-3. **Fix priority**: Fix 1 (curl-curl RHS) is a simple code correction.
-   Fix 2 (surface current loss) requires rethinking the BEM coupling.
-   Fix 3 (total field formulation) is the most robust but requires
-   significant refactoring.
+**ShieldBEMSIBC is preferred** for:
+1. Thin-skin shielding analysis (delta << thickness)
+2. Loss computation on coarse meshes
+3. Quick frequency sweeps (surface-only, no volume DOFs)
 
 ## Diagnostic Scripts
 
-- `examples/ngbem_diagnostics/diagnose_vector_fembem.py` - Full diagnostic
+- `examples/ngbem_diagnostics/diagnose_vector_fembem.py` - Root cause diagnostic
 - `examples/ngbem_diagnostics/validate_shield_vs_vector.py` - Cross-validation
+- `examples/ngbem_diagnostics/test_sibc_loss.py` - SIBC loss method comparison
 
 ## References
 
