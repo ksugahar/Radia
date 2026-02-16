@@ -390,6 +390,16 @@ private:
  * @brief PEEC Solver
  *
  * Solves the Loop-Star PEEC system at a given frequency.
+ *
+ * Supports two modes:
+ * 1. Legacy mode: Direct impedance solve (Solve, ComputePortImpedance)
+ * 2. MNA mode: Multi-port Z-parameter extraction via Modified Nodal Analysis
+ *
+ * MNA solver methods:
+ *   0 = LU (LAPACK zgesv_/zgetrf_/zgetrs_) - default, O(n^3)
+ *   1 = BiCGSTAB (rad_bicgstab.h templated solver) - iterative, O(k*n^2)
+ *
+ * Both share MKL BLAS/LAPACK infrastructure with MSC solver.
  */
 class PEECSolver {
 public:
@@ -400,6 +410,68 @@ public:
      * @brief Set PEEC matrices
      */
     void SetMatrices(const PEECMatrices& matrices);
+
+    /**
+     * @brief Set segment connectivity for MNA topology
+     * @param seg_nodes Vector of (node_from, node_to) pairs per filament
+     * @param n_nodes Total number of nodes
+     */
+    void SetSegmentNodes(const std::vector<std::pair<int,int>>& seg_nodes, int n_nodes);
+
+    /**
+     * @brief Set port definitions for multi-port extraction
+     * @param ports Vector of PEECPort
+     */
+    void SetPorts(const std::vector<PEECPort>& ports);
+
+    // ========== MNA Multi-Port Solver (uses LAPACK zgetrf_/zgetrs_) ==========
+
+    /**
+     * @brief Compute multi-port Z-parameter matrix at a single frequency
+     *
+     * Z[i,j] = V_port_i when I_port_j = 1A (all other ports open-circuited).
+     *
+     * @param freq Frequency in Hz
+     * @param Zs Per-filament surface impedance (n_loop complex values), or nullptr
+     * @param n_Zs Number of Zs elements
+     * @param Z_out Output Z matrix (n_ports x n_ports, row-major complex)
+     * @param n_ports_out Number of ports (for validation)
+     */
+    void ComputeZMatrix(double freq,
+                        const std::complex<double>* Zs, int n_Zs,
+                        std::complex<double>* Z_out, int n_ports_out);
+
+    /**
+     * @brief Compute coupling coefficient from Z-parameters
+     *
+     * k_ij = L_ij / sqrt(L_ii * L_jj) where L_ij = Im(Z_ij) / omega
+     *
+     * @param freq Frequency in Hz
+     * @param Zs Per-filament surface impedance, or nullptr
+     * @param n_Zs Number of Zs elements
+     * @param k_out Coupling coefficient matrix (n_ports x n_ports, row-major)
+     * @param L_out Inductance matrix (n_ports x n_ports, row-major) [H]
+     * @param n_ports_out Number of ports
+     */
+    void ComputeCouplingCoefficient(double freq,
+                                    const std::complex<double>* Zs, int n_Zs,
+                                    double* k_out, double* L_out,
+                                    int n_ports_out);
+
+    /**
+     * @brief Batch frequency sweep for multi-port Z-parameters
+     *
+     * @param freqs Frequency array [Hz]
+     * @param n_freq Number of frequencies
+     * @param Zs_all Per-frequency surface impedance (n_freq x n_loop), or nullptr
+     * @param Z_out Output Z matrices (n_freq x n_ports x n_ports, row-major)
+     * @param n_ports_out Number of ports
+     */
+    void FrequencySweep(const double* freqs, int n_freq,
+                        const std::complex<double>* Zs_all,
+                        std::complex<double>* Z_out, int n_ports_out);
+
+    // ========== Legacy API (upgraded to LAPACK zgesv_) ==========
 
     /**
      * @brief Set frequency
@@ -433,12 +505,101 @@ public:
     void Solve(const std::vector<std::complex<double>>& V,
                std::vector<std::complex<double>>& I);
 
+    // ========== Solver method selection ==========
+
+    /**
+     * @brief Set solver method for MNA Z_branch inversion
+     * @param method 0 = LU (default), 1 = BiCGSTAB
+     */
+    void SetSolverMethod(int method) { solverMethod_ = method; }
+    int GetSolverMethod() const { return solverMethod_; }
+
+    /**
+     * @brief Set BiCGSTAB parameters
+     * @param tol Convergence tolerance (default 1e-10)
+     * @param max_iter Maximum iterations (default 1000)
+     */
+    void SetBiCGSTABParams(double tol, int max_iter) {
+        bicgstab_tol_ = tol;
+        bicgstab_max_iter_ = max_iter;
+    }
+
+    // ========== Query ==========
+
+    int NumPorts() const { return static_cast<int>(ports_.size()); }
+    bool HasTopology() const { return hasTopology_; }
+
 private:
     PEECMatrices matrices_;
     double frequency_;
     double omega_;
-    std::vector<std::complex<double>> Zs_;  // Surface impedance (diagonal)
+    std::vector<std::complex<double>> Zs_;
     bool hasSurfaceImpedance_;
+
+    // MNA topology data
+    std::vector<std::pair<int,int>> segment_nodes_;
+    int n_nodes_;
+    std::vector<PEECPort> ports_;
+    bool hasTopology_;
+
+    // Solver method: 0 = LU, 1 = BiCGSTAB
+    int solverMethod_;
+    double bicgstab_tol_;
+    int bicgstab_max_iter_;
+
+    // ========== MNA internal methods ==========
+
+    /**
+     * @brief Build full incidence matrix A_full (n_nodes x n_loop, dense, real)
+     *
+     * A_full[node, fil] = +1 if filament leaves node (node_from)
+     * A_full[node, fil] = -1 if filament enters node (node_to)
+     */
+    void BuildFullIncidenceMatrix(std::vector<double>& A_full);
+
+    /**
+     * @brief Find connected components of the node graph via BFS
+     * @param components Output: list of node sets (one per component)
+     */
+    void FindConnectedComponents(std::vector<std::vector<int>>& components);
+
+    /**
+     * @brief Select ground nodes (one per connected component)
+     *
+     * Prefers negative terminal of a port in each component.
+     */
+    void SelectGroundNodes(const std::vector<std::vector<int>>& components,
+                           std::vector<int>& ground_nodes);
+
+    /**
+     * @brief Build Z_branch = diag(R + Zs) + jw*L
+     */
+    void BuildZBranch(double freq,
+                      const std::complex<double>* Zs, int n_Zs,
+                      std::vector<std::complex<double>>& Z_branch);
+
+    /**
+     * @brief Build Z_eff = Z_branch - Z_LS * Z_SS^{-1} * Z_SL (Schur complement)
+     *
+     * When panels are present, eliminates Star unknowns.
+     * Falls back to Z_branch if no panels.
+     */
+    void BuildZEff(double freq,
+                   const std::complex<double>* Zs, int n_Zs,
+                   std::vector<std::complex<double>>& Z_eff);
+
+    /**
+     * @brief Full MNA multi-port solve
+     *
+     * 1. Invert Z_eff -> Y_branch (via zgesv_)
+     * 2. Y_node = A * Y_branch * A^T (via cblas_zgemm)
+     * 3. Ground selection (one per connected component)
+     * 4. LU factorize Y_reduced (zgetrf_)
+     * 5. Solve for each port excitation (zgetrs_)
+     * 6. Extract Z_mat from voltage solutions
+     */
+    void MNASolveMultiPort(const std::vector<std::complex<double>>& Z_eff,
+                           std::complex<double>* Z_out, int n_ports_out);
 };
 
 // ========== Utility functions ==========

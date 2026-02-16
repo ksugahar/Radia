@@ -15,6 +15,7 @@ Supported directives:
   .default - Default segment parameters
   .equiv   - Node merge (equivalence)
   .magnetic / .endmagnetic - Magnetic material block (box/hexahedron/mesh)
+  .panel / .endpanel - Panel block for capacitive effects (plate/mesh)
 
 Usage:
     from fasthenry_parser import FastHenryParser
@@ -100,6 +101,12 @@ class FastHenryParser:
         # Magnetic material blocks
         self.magnetic_blocks = []  # list of dicts with block specs
 
+        # Shield blocks (conducting shields for BEM+SIBC)
+        self.shield_blocks = []  # list of dicts with shield specs
+
+        # Panel blocks (capacitive surfaces for RLCM)
+        self.panel_blocks = []  # list of dicts with panel specs
+
         # Comments / title
         self.title = ''
 
@@ -170,6 +177,28 @@ class FastHenryParser:
                     block_lines.append(bline)
                     idx += 1
                 self._parse_magnetic_block(block_lines)
+            # Check for .shield block start
+            elif stripped and stripped.lower().startswith('.shield'):
+                block_lines = []
+                idx += 1
+                while idx < len(joined):
+                    bline = joined[idx].strip()
+                    if bline.lower().startswith('.endshield'):
+                        break
+                    block_lines.append(bline)
+                    idx += 1
+                self._parse_shield_block(block_lines)
+            # Check for .panel block start
+            elif stripped and stripped.lower().startswith('.panel'):
+                block_lines = []
+                idx += 1
+                while idx < len(joined):
+                    bline = joined[idx].strip()
+                    if bline.lower().startswith('.endpanel'):
+                        break
+                    block_lines.append(bline)
+                    idx += 1
+                self._parse_panel_block(block_lines)
             else:
                 self._parse_line(line)
             idx += 1
@@ -494,6 +523,300 @@ class FastHenryParser:
 
         self.magnetic_blocks.append(block)
 
+    def _parse_shield_block(self, lines):
+        """Parse .shield / .endshield block for conducting shield.
+
+        Creates an NGSolve mesh from OCC geometry and builds a
+        ShieldBEMSIBC solver.
+
+        Supported forms:
+
+        Box form:
+            .shield
+              type=box
+              center=0,0,-0.005
+              size=0.1,0.1,0.002
+              sigma=3.7e7
+              mu_r=1.0
+              maxh=0.01
+            .endshield
+
+        Args:
+            lines: List of lines between .shield and .endshield
+        """
+        params = {}
+        for line in lines:
+            if '*' in line:
+                line = line[:line.index('*')]
+            line = line.strip()
+            if not line:
+                continue
+            if '=' in line:
+                key, val = line.split('=', 1)
+                params[key.strip().lower()] = val.strip()
+
+        block_type = params.get('type', 'box').lower()
+        sigma = float(params.get('sigma', 3.7e7))
+        mu_r = float(params.get('mu_r', 1.0))
+        maxh = float(params.get('maxh', 0.01))
+
+        block = {
+            'type': block_type,
+            'sigma': sigma,
+            'mu_r': mu_r,
+            'maxh': maxh,
+        }
+
+        if block_type == 'box':
+            center = [float(v) * self.unit_scale
+                      for v in params.get('center', '0,0,0').split(',')]
+            size = [float(v) * self.unit_scale
+                    for v in params.get('size', '0.1,0.1,0.002').split(',')]
+            block['center'] = center
+            block['size'] = size
+        else:
+            raise ValueError(f"Unknown .shield type: {block_type}")
+
+        self.shield_blocks.append(block)
+
+    def _parse_panel_block(self, lines):
+        """Parse .panel / .endpanel block for capacitive panel surfaces.
+
+        Supported forms:
+
+        Plate form (structured triangular mesh on flat rectangular surface):
+            .panel
+              type=plate
+              center=0,0,0.005
+              size=0.1,0.1
+              divisions=4,4
+              sigma=5.8e7
+              thickness=1e-3
+            .endpanel
+
+        Triangle form (single triangle panel):
+            .panel
+              type=triangle
+              vertices=x1,y1,z1, x2,y2,z2, x3,y3,z3
+            .endpanel
+
+        Quad form (single quad panel):
+            .panel
+              type=quad
+              vertices=x1,y1,z1, x2,y2,z2, x3,y3,z3, x4,y4,z4
+            .endpanel
+
+        Mesh file form (GMSH .msh surface mesh):
+            .panel
+              type=mesh
+              file=panel_surface.msh
+              sigma=5.8e7
+              thickness=1e-3
+            .endpanel
+
+        Args:
+            lines: List of lines between .panel and .endpanel
+        """
+        params = {}
+        for line in lines:
+            if '*' in line:
+                line = line[:line.index('*')]
+            line = line.strip()
+            if not line:
+                continue
+            if '=' in line:
+                key, val = line.split('=', 1)
+                params[key.strip().lower()] = val.strip()
+
+        block_type = params.get('type', 'plate').lower()
+        sigma = float(params.get('sigma', 5.8e7))
+        thickness = float(params.get('thickness', 1e-3))
+
+        block = {
+            'type': block_type,
+            'sigma': sigma,
+            'thickness': thickness,
+        }
+
+        if block_type == 'plate':
+            center = [float(v) * self.unit_scale
+                      for v in params.get('center', '0,0,0').split(',')]
+            size = [float(v) * self.unit_scale
+                    for v in params.get('size', '0.1,0.1').split(',')]
+            divisions = [int(v)
+                         for v in params.get('divisions', '4,4').split(',')]
+            block['center'] = center
+            block['size'] = size
+            block['divisions'] = divisions
+
+        elif block_type == 'triangle':
+            vert_str = params.get('vertices', '')
+            vals = [float(v) * self.unit_scale for v in vert_str.split(',')]
+            if len(vals) != 9:
+                raise ValueError(
+                    ".panel triangle requires 9 vertex values "
+                    f"(3 vertices x 3 coords), got {len(vals)}")
+            block['vertices'] = [vals[i*3:(i+1)*3] for i in range(3)]
+
+        elif block_type == 'quad':
+            vert_str = params.get('vertices', '')
+            vals = [float(v) * self.unit_scale for v in vert_str.split(',')]
+            if len(vals) != 12:
+                raise ValueError(
+                    ".panel quad requires 12 vertex values "
+                    f"(4 vertices x 3 coords), got {len(vals)}")
+            block['vertices'] = [vals[i*3:(i+1)*3] for i in range(4)]
+
+        elif block_type == 'mesh':
+            mesh_file = params.get('file', '')
+            if not mesh_file:
+                raise ValueError(
+                    ".panel type=mesh requires 'file' parameter")
+            if hasattr(self, '_current_file_dir') and self._current_file_dir:
+                mesh_file = os.path.join(self._current_file_dir, mesh_file)
+            block['file'] = mesh_file
+
+        else:
+            raise ValueError(f"Unknown .panel type: {block_type}")
+
+        self.panel_blocks.append(block)
+
+    def _add_panels_to_builder(self, builder):
+        """Add parsed panel blocks to a PEECBuilder instance.
+
+        Called by to_peec_builder() when panel_blocks are present.
+
+        Args:
+            builder: PEECBuilder instance (already has segments/nodes)
+        """
+        for block in self.panel_blocks:
+            if block['type'] == 'plate':
+                from peec_mesh_import import create_plate_mesh
+                # Use a temporary builder to get the panel vertices
+                center = block['center']
+                size = block['size']
+                divisions = block['divisions']
+
+                # Generate structured grid
+                cx, cy, cz = center
+                sx, sy = size
+                nx, ny = divisions
+                x = np.linspace(cx - sx / 2, cx + sx / 2, nx + 1)
+                y = np.linspace(cy - sy / 2, cy + sy / 2, ny + 1)
+
+                nodes = []
+                for j in range(ny + 1):
+                    for i in range(nx + 1):
+                        nodes.append([x[i], y[j], cz])
+                nodes = np.array(nodes)
+
+                # Triangular faces
+                for j in range(ny):
+                    for i in range(nx):
+                        n00 = j * (nx + 1) + i
+                        n10 = j * (nx + 1) + (i + 1)
+                        n01 = (j + 1) * (nx + 1) + i
+                        n11 = (j + 1) * (nx + 1) + (i + 1)
+                        builder.add_panel(
+                            [nodes[n00].tolist(),
+                             nodes[n10].tolist(),
+                             nodes[n11].tolist()])
+                        builder.add_panel(
+                            [nodes[n00].tolist(),
+                             nodes[n11].tolist(),
+                             nodes[n01].tolist()])
+
+            elif block['type'] in ('triangle', 'quad'):
+                builder.add_panel(block['vertices'])
+
+            elif block['type'] == 'mesh':
+                try:
+                    import gmsh
+                    gmsh.initialize()
+                    gmsh.option.setNumber("General.Terminal", 0)
+                    gmsh.open(block['file'])
+
+                    node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
+                    coords = node_coords.reshape(-1, 3)
+                    tag_to_idx = {int(t): i for i, t in enumerate(node_tags)}
+
+                    elem_types, _, elem_node_tags = gmsh.model.mesh.getElements()
+                    for i, et in enumerate(elem_types):
+                        if et == 2:  # Triangle
+                            ntags = elem_node_tags[i]
+                            for j in range(len(ntags) // 3):
+                                tri = ntags[j*3:(j+1)*3]
+                                verts = [coords[tag_to_idx[int(t)]].tolist()
+                                         for t in tri]
+                                builder.add_panel(verts)
+                        elif et == 3:  # Quad
+                            ntags = elem_node_tags[i]
+                            for j in range(len(ntags) // 4):
+                                quad = ntags[j*4:(j+1)*4]
+                                verts = [coords[tag_to_idx[int(t)]].tolist()
+                                         for t in quad]
+                                builder.add_panel(verts)
+
+                    gmsh.finalize()
+                except ImportError:
+                    raise ImportError(
+                        ".panel type=mesh requires GMSH Python API. "
+                        "Install with: pip install gmsh")
+
+    def build_shield_solvers(self):
+        """Create ShieldBEMSIBC solver instances from parsed .shield blocks.
+
+        Generates NGSolve mesh from OCC geometry and assembles BEM matrices.
+
+        Returns:
+            list of assembled ShieldBEMSIBC instances, or empty list
+        """
+        if not self.shield_blocks:
+            return []
+
+        try:
+            from netgen.occ import Box, Pnt, OCCGeometry
+            from ngsolve import Mesh
+        except ImportError:
+            raise ImportError(
+                "Shield blocks require NGSolve/Netgen. "
+                "Install with: pip install ngsolve")
+
+        from ngbem_eddy import ShieldBEMSIBC
+
+        solvers = []
+
+        for block in self.shield_blocks:
+            if block['type'] == 'box':
+                center = block['center']
+                size = block['size']
+                half = [s / 2.0 for s in size]
+
+                shape = Box(
+                    Pnt(center[0] - half[0],
+                        center[1] - half[1],
+                        center[2] - half[2]),
+                    Pnt(center[0] + half[0],
+                        center[1] + half[1],
+                        center[2] + half[2]))
+                shape.solids.name = "conductor"
+                shape.faces.name = "surface"
+
+                geo = OCCGeometry(shape)
+                maxh = block.get('maxh', 0.01)
+                mesh = Mesh(geo.GenerateMesh(maxh=maxh))
+
+                # Thickness = minimum box dimension (slab impedance)
+                thickness = min(size)
+
+                shield = ShieldBEMSIBC(
+                    mesh, block['sigma'], mu_r=block['mu_r'],
+                    thickness=thickness)
+                shield.assemble(intorder=4)
+                solvers.append(shield)
+
+        return solvers
+
     def _parse_key_value_pairs(self, line, start_idx=0):
         """
         Extract key=value pairs from a line.
@@ -547,6 +870,8 @@ class FastHenryParser:
             'n_ports': len(self.ports),
             'n_equiv_groups': len(self.equiv_groups),
             'n_magnetic_blocks': len(self.magnetic_blocks),
+            'n_shield_blocks': len(self.shield_blocks),
+            'n_panel_blocks': len(self.panel_blocks),
             'freq_spec': self.freq_spec,
             'defaults': {k: v for k, v in self.defaults.items() if v is not None},
         }
@@ -616,6 +941,10 @@ class FastHenryParser:
             if p_neg not in node_id_map:
                 raise ValueError(f"Port: undefined node {p_neg}")
             builder.add_port(node_id_map[p_pos], node_id_map[p_neg])
+
+        # Add panels (capacitive surfaces) if .panel blocks present
+        if self.panel_blocks:
+            self._add_panels_to_builder(builder)
 
         return builder
 
@@ -717,7 +1046,8 @@ class FastHenryParser:
         """
         Parse, build, and solve in one step.
 
-        Automatically uses CoupledPEECSolver when .magnetic blocks are present.
+        Automatically uses ShieldedPEECSolver when .shield blocks are present,
+        CoupledPEECSolver when .magnetic blocks are present.
 
         Args:
             freqs: Frequency array [Hz], or None to use .freq directive
@@ -746,7 +1076,8 @@ class FastHenryParser:
             return self._solve_ngbem(freqs, Zs_func, ngbem_options or {})
 
         builder = self.to_peec_builder()
-        topo = builder.build_topology()
+        include_star = len(self.panel_blocks) > 0
+        topo = builder.build_topology(include_star=include_star)
 
         if freqs is None:
             freqs = self.get_frequencies()
@@ -756,7 +1087,17 @@ class FastHenryParser:
 
         Delta_L = None
 
-        if self.magnetic_blocks:
+        if self.shield_blocks:
+            # Shielded PEEC solve (BEM + SIBC)
+            from peec_shielded import ShieldedPEECSolver
+
+            shield_solvers = self.build_shield_solvers()
+            # Use first shield solver (multi-shield future work)
+            shield = shield_solvers[0]
+            solver = ShieldedPEECSolver(topo, shield)
+            Z_port = solver.frequency_sweep(freqs, Zs_func)
+
+        elif self.magnetic_blocks:
             # Coupled PEEC + MMM solve
             from peec_coupled import CoupledPEECSolver
 
@@ -995,4 +1336,6 @@ class FastHenryParser:
         ]
         if summary['n_magnetic_blocks'] > 0:
             parts.append(f"magnetic_blocks={summary['n_magnetic_blocks']}")
+        if summary['n_panel_blocks'] > 0:
+            parts.append(f"panel_blocks={summary['n_panel_blocks']}")
         return f"FastHenryParser({', '.join(parts)})"
