@@ -1,6 +1,6 @@
 # Radia Solver Architecture: Design Philosophy
 
-**Date**: 2026-02-14
+**Date**: 2026-02-16
 **Status**: Active Design Document
 
 ---
@@ -17,11 +17,12 @@ each optimized for its domain. The key principle: **use the right tool for each 
 |                                                                   |
 |  Conductor (Coil)          Magnetic Material (Core)               |
 |  ==================        ===========================            |
-|  FastHenry PEEC + SIBC     Radia MMM/MSC                         |
-|  - L, R extraction         - Linear: MatLin(mu_r)                |
-|  - Skin effect (Dowell)    - Nonlinear: MatSatIsoTab(BH)         |
-|  - Loop-Star decomp.       - Hex/Tet/Wedge elements              |
-|  - Surface mesh only       - Volume mesh                         |
+|  PEEC + SIBC (C++)         Radia MMM/MSC                         |
+|  - L, R, C extraction      - Linear: MatLin(mu_r)                |
+|  - Skin effect (SIBC)      - Nonlinear: MatSatIsoTab(BH)         |
+|  - Node-segment topology   - Hex/Tet/Wedge elements              |
+|  - MNA multi-port solver   - Volume mesh                         |
+|  - FastHenry .inp parser                                         |
 |                                                                   |
 |        |                           |                              |
 |        +--- Coupling (Delta_L) ----+                              |
@@ -29,18 +30,16 @@ each optimized for its domain. The key principle: **use the right tool for each 
 |        v                           v                              |
 |  +--------------------------------------------------+            |
 |  |  Coupled System:                                  |            |
-|  |  Z = R + jw(L_air + Delta_L * (mu_eff(w) - 1))  |            |
+|  |  Z_eff = diag(R + Zs) + jw * (L_air + Delta_L)  |            |
 |  |                                                   |            |
-|  |  mu_eff(w): from ngbem FEM eddy current solution  |            |
-|  |  <Hz> = volume average of Hz from FEM diffusion   |            |
-|  |  mu_eff = mu_r * <Hz> / Hz_inc                    |            |
+|  |  Delta_L: from Radia Solve() of magnetic core     |            |
 |  +--------------------------------------------------+            |
 |                                                                   |
 |  Optional: ngbem (NGSolve BEM)                                    |
 |  =============================                                    |
 |  - Linear materials ONLY                                          |
 |  - Galerkin BEM (LaplaceSL)                                       |
-|  - FEM-BEM coupling (Calderon)                                    |
+|  - Stabilized low-frequency formulation                           |
 |  - High-order elements                                            |
 |                                                                   |
 +------------------------------------------------------------------+
@@ -50,39 +49,66 @@ each optimized for its domain. The key principle: **use the right tool for each 
 
 ## Component Roles
 
-### 1. Conductor (Coil): FastHenry PEEC + SIBC
+### 1. Conductor (Coil): PEEC + SIBC (C++ MKL)
 
 **Role**: Model coil windings, PCB traces, and conducting structures.
 
-**Why FastHenry approach**:
-- PEEC naturally gives circuit parameters (L, R, C, M)
-- Surface mesh only (no volume mesh needed for conductors)
-- SIBC captures skin effect without meshing skin depth
-- Direct SPICE netlist output
+**Architecture**: Filament + Panel decomposition (FastImp-style, no Loop-Star needed).
+
+**C++ Implementation** (`src/core/rad_peec_matrices.cpp`):
+- LAPACK `zgesv_`/`zgetrf_`/`zgetrs_` for LU factorization (complex)
+- Templated BiCGSTAB (`rad_bicgstab.h`) shared with MSC solver
+- MKL `cblas_zgemm` for matrix multiplication
+- MNA (Modified Nodal Analysis) multi-port solver
 
 **Formulation**:
 ```
-Loop-Star block system:
-| R + jwL       M_LS^T  |   | I_loop |   | V_port |
-| M_LS      P/(jw)      | * | Q_star | = | 0      |
+Filament-Panel block system (no Loop-Star transformation):
+| R + jwL + Zs    jwM_LS  |   | I_filament |   | V |
+| jwM_LS^T        P/(jw)  | * | Q_panel    | = | 0 |
+
+MNA multi-port solver:
+  Z_branch = diag(R_dc + Zs) + jw*L
+  Y_branch = Z_branch^{-1}        (via LU or BiCGSTAB)
+  Y_node = A_full * Y_branch * A_full^T
+  Z_port from Y_reduced LU factorization
 
 where:
-  L = inductance matrix (Laplace kernel, BEM)
-  R = resistance (DC + skin effect via SIBC/Dowell)
-  P = potential coefficients (capacitive)
-  M_LS = divergence coupling
+  L = filament inductance (Neumann/Rosa-Grover analytical)
+  R = DC resistance + surface impedance (SIBC)
+  P = panel potential coefficients (Wilton formula)
+  M_LS = filament-panel magnetic coupling
+  A_full = node incidence matrix (from topology)
 ```
 
 **SIBC (Surface Impedance Boundary Condition)**:
 - Rectangular conductors: Dowell formula `F_R = xi * [sinh(2xi) + sin(2xi)] / [cosh(2xi) - cos(2xi)]`
-- Circular conductors: Bessel function `Z = (k*l)/(2*pi*r*sigma) * J0(kr)/J1(kr)`
+- Circular conductors: Bessel function `Z = (k*l)/(2*pi*r*sigma) * J0(kr)/J1(kr)` (scipy.special.jv)
 - Skin depth: `delta = sqrt(2/(omega*mu*sigma))`
+
+**Node-Segment Topology API**:
+```python
+from peec_matrices import PyPEECBuilder
+from peec_topology import PEECCircuitSolver
+
+builder = PyPEECBuilder()
+n1 = builder.add_node_at(0, 0, 0)
+n2 = builder.add_node_at(0.1, 0, 0)
+builder.add_connected_segment(n1, n2, w=1e-3, h=1e-3, sigma=5.8e7, nwinc=3, nhinc=3)
+builder.add_port(n1, n2)
+topo = builder.build_topology()
+
+solver = PEECCircuitSolver(topo)
+Z = solver.compute_port_impedance(freq=1e6)
+```
+
+**Multi-filament subdivision**: `nwinc`/`nhinc` parameters create parallel sub-filaments for skin/proximity effect.
 
 **When to use**:
 - Power electronics (DC - 1 MHz)
 - WPT coils (6.78 MHz, 13.56 MHz)
 - Transformer/inductor windings
-- Any application needing SPICE models
+- Any application needing SPICE models or circuit parameters
 
 ### 2. Magnetic Material (Core): Radia MMM/MSC
 
@@ -118,7 +144,7 @@ FEM-BEM (ngbem) is limited to linear materials because BEM requires a known Gree
 **Capabilities**:
 - LaplaceSL on HDivSurface -> inductance L (PEEC)
 - SingleLayerPotentialOperator on SurfaceL2 -> potential P
-- FEM-BEM coupling via Calderon projector (eddy current)
+- Stabilized low-frequency formulation (Weggler 2026)
 - High-order elements (order 0, 1, 2, ...)
 - FMM acceleration for large problems
 
@@ -131,6 +157,11 @@ Nonlinear materials (mu depends on H) cannot be handled by BEM because:
 2. Nonlinear problems require iterative updates of material parameters
 3. The boundary integral equation is only valid for linear, piecewise-homogeneous media
 
+**Low-frequency stabilized formulation** (ngbem 2026):
+- Block system `[A_k, Q_k; Q_k^T, k^2*V_k]` with O(1) condition number for all k
+- Uses product space: HDivSurface x SurfaceL2
+- Eliminates classical O(k^{-2}) blow-up at low frequencies
+
 **When to use ngbem**:
 - High-accuracy PEEC (Galerkin > Collocation)
 - Linear eddy current problems (FEM interior + BEM exterior)
@@ -141,41 +172,98 @@ Nonlinear materials (mu depends on H) cannot be handled by BEM because:
 - Saturable cores -> use Radia MMM with MatSatIsoTab
 - Problems with H-dependent permeability
 
-### 4. Coupling: PEEC + MMM (Delta_L)
+### 4. Coupling: PEEC + MMM (CoupledPEECSolver)
 
 **Role**: Connect conductor impedance with magnetic core response.
 
+**Implementation**: `src/radia/peec_coupled.py` - CoupledPEECSolver class.
+
 **Coupling mechanism**:
 ```
-L_total = L_air + Delta_L * (mu_eff(omega) - 1)
+Z_eff(f) = diag(R + Zs(f)) + jw * (L_air + Delta_L)
 
-Delta_L[i,j] = mu_0 * integral_core H_i(r) . H_j(r) dV
-```
-
-where `H_i` is the field from unit current in loop i.
-
-**mu_eff(omega)** is computed from ngbem FEM eddy current solution:
-```
-1. Solve FEM diffusion: laplacian(Hz) = j*omega*mu*sigma*Hz
-2. Volume average: <Hz> = Integrate(Hz, mesh) / Volume
-3. mu_eff = mu_r * <Hz> / Hz_inc
+Delta_L[i,j]:
+  1. Unit current in segment j -> H-field via Biot-Savart (finite filament)
+  2. H-field magnetizes material via rad.ObjBckg() + rad.Solve()
+  3. Vector potential A from magnetized material: rad.Fld(mag_obj, 'a', point)
+  4. Delta_L[i][j] = dot(A(center_i), dir_i) * length_i
 ```
 
-**For non-conducting core** (ferrite, sigma ~ 0):
-```
-mu_eff = mu_r (constant, frequency-independent)
-L_total = L_air + Delta_L * (mu_r - 1)
-```
-Core increases inductance at all frequencies.
+**Key Property**: For linear materials, Delta_L is frequency-independent (computed once).
 
-**For conducting core** (steel, iron, sigma >> 0):
+**Python API**:
+```python
+from peec_coupled import CoupledPEECSolver
+
+solver = CoupledPEECSolver(topology_dict, magnetic_objects=[core_id])
+solver.compute_coupling_matrix()  # N_seg Radia Solve calls
+Z = solver.compute_port_impedance(freq)
+Z_sweep = solver.frequency_sweep(freqs)
 ```
-mu_eff(omega) computed from FEM -> decreases with frequency
+
+**FastHenry .magnetic block** support:
 ```
-Eddy currents cause:
-- Low freq: mu_eff ~ mu_r, L increases (full permeability)
-- Mid freq: mu_eff decreases, loss peak (d/delta ~ 1)
-- High freq: mu_eff ~ 0, L ~ L_air (core fully shielded)
+.magnetic
+  type=box
+  center=0.05,0.01,0.0
+  size=0.06,0.01,0.01
+  divisions=2,1,1
+  mu_r=1000
+.endmagnetic
+```
+
+---
+
+## PEEC Solver Details
+
+### C++ MNA Solver (rad_peec_matrices.cpp)
+
+The PEEC MNA solver is implemented entirely in C++ using MKL LAPACK/BLAS:
+
+| Operation | LU (Method 0) | BiCGSTAB (Method 1) |
+|-----------|---------------|---------------------|
+| Z_branch inversion | `zgesv_` | `bicgstab::DenseInvert<complex>` |
+| Y_node assembly | `cblas_zgemm` | `cblas_zgemm` |
+| Y_reduced factorization | `zgetrf_` | `zgetrf_` |
+| Multi-RHS solve | `zgetrs_` | `zgetrs_` |
+
+**Templated BiCGSTAB** (`rad_bicgstab.h`):
+- Shared between MSC (real, `double`) and PEEC (complex, `std::complex<double>`)
+- BLAS dispatch via C++ overloading in `radia::blas` namespace
+- `cblas_d*` functions for real, `cblas_z*` for complex
+- Non-LAPACK fallback for builds without MKL
+
+**Solver method selection**:
+```python
+solver = PEECCircuitSolver(topo)
+solver.set_solver_method(0)  # LU (default, LAPACK zgesv_)
+solver.set_solver_method(1)  # BiCGSTAB (templated, shared with MSC)
+solver.set_bicgstab_params(tol=1e-10, max_iter=1000)
+```
+
+### FastHenry .inp Parser
+
+`src/radia/fasthenry_parser.py` parses FastHenry input files:
+
+| Directive | Description |
+|-----------|-------------|
+| `.Units` | Length unit (m, cm, mm, um, in, mils) |
+| `N<name>` | Node definition |
+| `E<name>` | Segment (w, h, sigma, nwinc, nhinc) |
+| `.external` | Port definition |
+| `.freq` | Frequency sweep |
+| `.default` | Default parameters |
+| `.equiv` | Node merge |
+| `.magnetic` | Magnetic material block |
+
+**One-step solve**:
+```python
+from fasthenry_parser import FastHenryParser
+
+parser = FastHenryParser()
+parser.parse_file('inductor.inp')
+result = parser.solve()  # Returns dict: freqs, Z_port, R, L, topology
+```
 
 ---
 
@@ -207,11 +295,11 @@ BEM (ngbem) is powerful but has fundamental limitations:
 | Iterative nonlinear solve | Not possible | BiCGSTAB with relaxation |
 | High-order elements | Supported | Not needed (piecewise constant) |
 
-### Why FastHenry-Style PEEC for Coils?
+### Why PEEC for Coils?
 
 | Approach | Advantages | Limitations |
 |----------|-----------|-------------|
-| **FastHenry PEEC + SIBC** | Direct L,R; surface mesh; SPICE output; skin effect | MQS only |
+| **PEEC + SIBC** | Direct L,R; surface mesh; SPICE output; skin effect | MQS only |
 | FEM (NGSolve) | Full physics; complex geometry | Volume mesh; no direct circuit params |
 | ngbem Galerkin | High accuracy; high-order | Linear only; no SIBC |
 
@@ -228,11 +316,11 @@ For power electronics and WPT, **PEEC + SIBC is the optimal choice**:
 
 | Application | Conductor | Core | Coupling |
 |-------------|-----------|------|----------|
-| **Transformer** | PEEC + SIBC | MMM (MatSatIsoTab) | Delta_L |
-| **WPT coil** | PEEC + SIBC | MMM (MatLin) | Delta_L |
-| **Induction heating** | PEEC + SIBC | MMM + FEM eddy (mu_eff) | Delta_L + eddy |
+| **Transformer** | PEEC + SIBC | MMM (MatSatIsoTab) | CoupledPEECSolver |
+| **WPT coil** | PEEC + SIBC | MMM (MatLin) | CoupledPEECSolver |
+| **Induction heating** | PEEC + SIBC | MMM + ESIM (mu_eff) | CoupledPEECSolver |
 | **PM motor** | - | MMM (MatMagFixed + MatLin) | Radia Solve() |
-| **EMC shielding** | PEEC | - (or MMM for mu-metal) | Delta_L |
+| **EMC shielding** | PEEC | - (or MMM for mu-metal) | CoupledPEECSolver |
 | **PCB trace** | PEEC + SIBC | - | - |
 
 ### By Material
@@ -251,8 +339,8 @@ For power electronics and WPT, **PEEC + SIBC is the optimal choice**:
 | Range | Conductor Model | Core Model | Notes |
 |-------|----------------|------------|-------|
 | DC | PEEC (R only) | MMM (static) | No skin effect |
-| 50 Hz - 10 kHz | PEEC + SIBC | MMM + FEM eddy | Lamination matters |
-| 10 kHz - 1 MHz | PEEC + SIBC | MMM + FEM eddy | Power electronics |
+| 50 Hz - 10 kHz | PEEC + SIBC | MMM | Lamination matters |
+| 10 kHz - 1 MHz | PEEC + SIBC | MMM | Power electronics |
 | 1 MHz - 100 MHz | PEEC + SIBC | MMM (ferrite, sigma~0) | WPT, RF |
 | > 100 MHz | ngbem (full-wave) | - | EMC, antenna |
 
@@ -262,16 +350,34 @@ For power electronics and WPT, **PEEC + SIBC is the optimal choice**:
 
 | Component | Status | File |
 |-----------|--------|------|
-| PEEC Loop-Star (ngbem) | **Implemented** | `src/radia/ngbem_peec.py` |
-| FEM-BEM eddy current | **Implemented** (FEM mode) | `src/radia/ngbem_eddy.py` |
-| Coupled PEEC+MMM | **Implemented** | `src/radia/ngbem_coupled.py` |
+| PEEC C++ MNA solver (LU) | **Implemented** | `src/core/rad_peec_matrices.cpp` |
+| PEEC C++ BiCGSTAB | **Implemented** | `src/core/rad_bicgstab.h` |
+| PEEC Node-segment topology | **Implemented** | `src/core/rad_peec_matrices.cpp` |
+| PEEC Multi-filament (nwinc/nhinc) | **Implemented** | `src/core/rad_peec_matrices.cpp` |
+| FastHenry .inp parser | **Implemented** | `src/radia/fasthenry_parser.py` |
+| Coupled PEEC+MMM | **Implemented** | `src/radia/peec_coupled.py` |
 | SIBC (Dowell) | **Implemented** | `src/core/rad_peec_surface_impedance.cpp` |
-| SIBC (Bessel) | **Implemented** | `examples/.../validate_circular_coil_sibc.py` |
-| FEM eddy current mu_eff | **Implemented** | `src/radia/ngbem_coupled.py` |
+| SIBC (Bessel) | **Implemented** | Python: `scipy.special.jv` |
+| Panel (capacitance) | **Implemented** | `src/core/rad_peec_matrices.cpp` |
 | Radia MMM (nonlinear) | **Implemented** | `src/core/rad_relaxation_methods.cpp` |
 | Radia MSC (hex/tet/wedge) | **Implemented** | `src/core/rad_polyhedron.cpp` |
-| FastHenry C++ PEEC | **Implemented** | `src/core/rad_peec_matrices.cpp` |
+| Templated BiCGSTAB (real+complex) | **Implemented** | `src/core/rad_bicgstab.h` |
 | ngbem Galerkin PEEC | **Implemented** | `src/radia/ngbem_peec.py` |
+| ngbem FEM-BEM eddy current | **Implemented** | `src/radia/ngbem_eddy.py` |
+| ngbem PEEC+MMM coupling | **Implemented** | `src/radia/ngbem_coupled.py` |
+
+### Validation Results
+
+| Test Suite | Tests | Status |
+|------------|-------|--------|
+| Topology (series/parallel/DC) | 4/4 | PASS |
+| Coupling (2-port transformer) | 31/31 | PASS |
+| FastHenry parser | 9/9 | PASS |
+| Multi-filament (nwinc/nhinc) | 6/6 | PASS |
+| Panel/Resonance | 23/23 | PASS |
+| **Total** | **73/73** | **ALL PASS** |
+
+BiCGSTAB vs LU numerical equivalence: < 1e-6% relative difference on all test cases.
 
 ---
 
@@ -280,13 +386,15 @@ For power electronics and WPT, **PEEC + SIBC is the optimal choice**:
 ```
 Nonlinear core       -----> Radia MMM/MSC (ONLY option)
 Linear core          -----> Radia MMM/MSC  OR  ngbem
-Conductor coil       -----> FastHenry PEEC + SIBC (BEST for circuits)
-Eddy current (linear)-----> ngbem FEM eddy (mu_eff from FEM)
+Conductor coil       -----> PEEC + SIBC (BEST for circuits)
+Eddy current (linear)-----> ngbem FEM eddy
 High-order accuracy  -----> ngbem Galerkin BEM
 SPICE extraction     -----> PEEC + Lanczos MOR (ONLY option)
+Circuit parameters   -----> PEEC MNA solver (C++ LAPACK)
 ```
 
 The fundamental constraint is:
 - **BEM requires linear materials** (known Green's function)
 - **Nonlinear materials require volume-based methods** (MMM/MSC or FEM)
 - **Radia's unique value**: integral equation + nonlinear iteration in unbounded domains
+- **PEEC's unique value**: direct circuit parameter extraction (L, R, C, M) from geometry

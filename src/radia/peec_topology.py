@@ -6,11 +6,30 @@ PEEC Circuit Solver with Node-Segment Topology
 Computes port impedance Z(f) using Modified Nodal Analysis (MNA)
 with full node incidence matrix from PEECBuilder.build_topology().
 
+All linear algebra is delegated to C++ LAPACK via MNASolver
+(zgesv_/zgetrf_/zgetrs_ + cblas_zgemm, shared MKL infrastructure with MSC).
+
 Supports:
 - Series connections (wire segments)
 - Parallel connections (Litz wire strands, multi-filament)
 - Multi-port extraction
 - Frequency-dependent surface impedance (Bessel SIBC)
+- Full RLCM system with P matrix (capacitive panels) for resonance
+
+Full PEEC system (when panels present):
+
+  [Z_LL   Z_LS] [I_L]   [V_L]       Z_LL = diag(R + Zs) + jw*L
+  [Z_SL   Z_SS] [I_S] = [V_S]       Z_SS = P / (jw)
+                                      Z_LS = jw * M_LS
+                                      Z_SL = Z_LS^T
+
+  Resonance: wL = 1/(wC) at f_res = 1/(2*pi*sqrt(LC))
+
+Loop-only system (no panels, backward compatible):
+
+  Z_branch = diag(R + Zs) + jw*L
+  Y_node = A * Z_branch^{-1} * A^T
+  Y_node * V = I_ext
 
 Usage:
     from peec_matrices import PEECBuilder
@@ -32,27 +51,31 @@ Part of Radia project
 """
 
 import numpy as np
+from peec_matrices import MNASolver
 
 
 class PEECCircuitSolver:
     """
     PEEC port impedance solver using nodal admittance (MNA).
 
-    Formulation:
-      Full node incidence: A_full (n_nodes x n_filaments)
-      A_full[node, fil] = +1 if filament leaves node (node_from)
-      A_full[node, fil] = -1 if filament enters node (node_to)
+    All linear algebra delegated to C++ LAPACK via MNASolver.
 
-      Branch impedance: Z_branch = diag(R_dc + Zs) + jw*L
+    Supports two modes:
 
-      Nodal admittance: Y_node = A_full * Z_branch^{-1} * A_full^T
+    1. Loop-only (no panels): Classic PEEC with L, R, Zs
+       Z_branch = diag(R_dc + Zs) + jw*L
+       Y_node = A * Z_branch^{-1} * A^T
 
-      Port injection: I_ext[pos] = +1, I_ext[neg] = -1
+    2. Full RLCM (with panels): Includes capacitive coupling
+       [Z_LL   Z_LS] [I_L]   [V_L]
+       [Z_SL   Z_SS] [I_S] = [V_S]
 
-      Solve: Y_node * V_node = I_ext
-      Z_port = V_node[pos] - V_node[neg]
+       Z_LL = diag(R + Zs) + jw*L
+       Z_SS = P / (jw)
+       Z_LS = jw * M_LS
+       Z_SL = Z_LS^T
 
-    For grounding, fix one node voltage to 0 (delete that row/col).
+    Mode is auto-detected from topology_dict contents.
     """
 
     def __init__(self, topology_dict):
@@ -62,6 +85,7 @@ class PEECCircuitSolver:
         Args:
             topology_dict: Dict from PEECBuilder.build_topology() containing:
                 L, R, segment_nodes, n_nodes, ports, n_loop
+                Optional: P, M_LS, n_star (for full RLCM mode)
         """
         self.L = np.array(topology_dict['L'])
         self.R_dc = np.array(topology_dict['R'])
@@ -74,35 +98,60 @@ class PEECCircuitSolver:
         # Port definitions: list of (node_positive, node_negative, port_id)
         self.ports = topology_dict['ports']
 
-        # Build full incidence matrix A_full (n_nodes x n_filaments)
-        self._build_full_incidence()
+        # Panel/Star data (optional - enables full RLCM mode)
+        P_raw = topology_dict.get('P', None)
+        M_LS_raw = topology_dict.get('M_LS', None)
+        self.n_star = topology_dict.get('n_star', 0)
 
-    def _build_full_incidence(self):
-        """Build full node incidence matrix from segment connectivity."""
-        n_nodes = self.n_nodes
-        n_fil = self.n_loop
+        if P_raw is not None and not isinstance(P_raw, type(None)):
+            self.P = np.array(P_raw)
+            self.has_panels = self.P.size > 0 and self.n_star > 0
+        else:
+            self.P = None
+            self.has_panels = False
 
-        self.A_full = np.zeros((n_nodes, n_fil))
+        if M_LS_raw is not None and not isinstance(M_LS_raw, type(None)):
+            self.M_LS = np.array(M_LS_raw)
+        else:
+            self.M_LS = None
 
-        for f in range(n_fil):
-            nf = self.segment_nodes[f, 0]  # node_from
-            nt = self.segment_nodes[f, 1]  # node_to
+        # Create C++ MNA solver from raw arrays
+        seg_nodes_int = np.ascontiguousarray(self.segment_nodes, dtype=np.int32)
+        port_tuples = [(int(p[0]), int(p[1]), int(p[2])) for p in self.ports]
 
-            if nf >= 0 and nf < n_nodes:
-                self.A_full[nf, f] = +1.0  # filament leaves node_from
-            if nt >= 0 and nt < n_nodes:
-                self.A_full[nt, f] = -1.0  # filament enters node_to
+        P_arg = self.P if self.has_panels else None
+        M_LS_arg = self.M_LS if (self.has_panels and self.M_LS is not None) else None
+
+        self._solver = MNASolver(
+            np.ascontiguousarray(self.L, dtype=np.float64),
+            np.ascontiguousarray(self.R_dc, dtype=np.float64),
+            seg_nodes_int,
+            self.n_nodes,
+            port_tuples,
+            P_arg,
+            M_LS_arg,
+        )
+
+    def set_solver_method(self, method):
+        """Set solver method for Z_branch inversion.
+
+        Args:
+            method: 0 = LU (default, LAPACK zgesv_), 1 = BiCGSTAB
+        """
+        self._solver.set_solver_method(method)
+
+    def set_bicgstab_params(self, tol=1e-10, max_iter=1000):
+        """Set BiCGSTAB solver parameters.
+
+        Args:
+            tol: Convergence tolerance (default 1e-10)
+            max_iter: Maximum iterations (default 1000)
+        """
+        self._solver.set_bicgstab_params(tol, max_iter)
 
     def compute_port_impedance(self, freq, Zs=None):
         """
         Compute port impedance at a given frequency.
-
-        Method:
-        1. Build Z_branch = diag(R_dc + Zs) + jw*L
-        2. Compute Y_branch = Z_branch^{-1}
-        3. Build Y_node = A * Y_branch * A^T
-        4. Remove ground node (port negative), solve Y * V = I_ext
-        5. Z_port = V[pos] - V[neg]
 
         Args:
             freq: Frequency in Hz
@@ -111,59 +160,12 @@ class PEECCircuitSolver:
         Returns:
             Complex port impedance [Ohm]
         """
-        omega = 2.0 * np.pi * freq
-
-        # Branch impedance: Z_branch = diag(R_dc) + jw*L + diag(Zs)
-        Z_branch = np.diag(self.R_dc.astype(complex)) + 1j * omega * self.L
-
-        if Zs is not None:
-            Zs = np.asarray(Zs)
-            if Zs.shape[0] == self.n_loop:
-                Z_branch += np.diag(Zs)
-
         if len(self.ports) == 0:
             return 0.0 + 0.0j
 
-        port = self.ports[0]
-        node_pos, node_neg = port[0], port[1]
-
-        # Branch admittance
-        Y_branch = np.linalg.inv(Z_branch)
-
-        # Nodal admittance: Y_node = A * Y_branch * A^T
-        A = self.A_full
-        Y_node = A @ Y_branch @ A.T  # (n_nodes x n_nodes)
-
-        # External current injection: I_ext[pos] = +1, I_ext[neg] = -1
-        # Ground the negative terminal: V[neg] = 0
-        # Remove the ground node row/col from the system
-
-        # Reorder nodes: ground node last
-        n = self.n_nodes
-        node_order = [i for i in range(n) if i != node_neg] + [node_neg]
-        inv_order = [0] * n
-        for i, j in enumerate(node_order):
-            inv_order[j] = i
-
-        # Permute Y_node
-        Y_perm = Y_node[np.ix_(node_order, node_order)]
-
-        # Remove ground node (last row/col)
-        Y_reduced = Y_perm[:n-1, :n-1]
-
-        # Current injection (ground node removed)
-        I_ext = np.zeros(n-1, dtype=complex)
-        pos_idx = inv_order[node_pos]
-        if pos_idx < n-1:
-            I_ext[pos_idx] = 1.0  # 1A into positive terminal
-
-        # Solve Y_reduced * V = I_ext
-        V_reduced = np.linalg.solve(Y_reduced, I_ext)
-
-        # Port voltage = V[pos] - V[neg] = V[pos] - 0 = V[pos]
-        Z_port = V_reduced[pos_idx]
-
-        return Z_port
+        Zs_arg = np.asarray(Zs, dtype=complex) if Zs is not None else None
+        Z_mat = np.array(self._solver.solve_z_matrix(freq, Zs_arg))
+        return Z_mat[0, 0]
 
     def frequency_sweep(self, freqs, Zs_func=None):
         """
@@ -178,11 +180,195 @@ class PEECCircuitSolver:
         Returns:
             Z_port: Complex array of port impedances, shape (len(freqs),)
         """
-        freqs = np.asarray(freqs)
-        Z_port = np.zeros(len(freqs), dtype=complex)
+        freqs = np.asarray(freqs, dtype=np.float64)
 
+        if Zs_func is None:
+            # Batch sweep in C++ (no per-frequency callback)
+            result = self._solver.frequency_sweep(freqs)
+            Z_all = np.array(result['Z_matrix'])  # (n_freq, n_ports, n_ports)
+            return Z_all[:, 0, 0]
+
+        # Per-frequency Zs: compute in Python, batch in C++
+        n_freq = len(freqs)
+        Z_port = np.zeros(n_freq, dtype=complex)
         for i, f in enumerate(freqs):
-            Zs = Zs_func(f) if Zs_func is not None else None
-            Z_port[i] = self.compute_port_impedance(f, Zs)
+            Zs = Zs_func(f)
+            Zs_arg = np.asarray(Zs, dtype=complex) if Zs is not None else None
+            Z_mat = np.array(self._solver.solve_z_matrix(f, Zs_arg))
+            Z_port[i] = Z_mat[0, 0]
 
         return Z_port
+
+    def compute_Z_matrix(self, freq, Zs=None):
+        """Compute full n_port x n_port Z-parameter matrix.
+
+        For a 2-port system:
+            Z = [[Z11, Z12],
+                 [Z21, Z22]]
+
+        where Z_ij = V_i / I_j with all other ports open-circuited.
+
+        Args:
+            freq: Frequency in Hz
+            Zs: Surface impedance array (n_loop,) complex, or None
+
+        Returns:
+            Z_mat: (n_ports x n_ports) complex Z-parameter matrix
+        """
+        Zs_arg = np.asarray(Zs, dtype=complex) if Zs is not None else None
+        return np.array(self._solver.solve_z_matrix(freq, Zs_arg))
+
+    def compute_coupling_coefficient(self, freq, Zs=None):
+        """Compute coupling coefficient k between ports from Z-parameters.
+
+        Uses the relation:
+            L_ij = Im(Z_ij) / omega
+            k_ij = M_ij / sqrt(L_ii * L_jj)
+
+        For a 2-port transformer:
+            k = M12 / sqrt(L1 * L2)
+
+        Args:
+            freq: Frequency in Hz
+            Zs: Surface impedance array (n_loop,) complex, or None
+
+        Returns:
+            dict with keys:
+                Z_matrix: (n_ports x n_ports) complex Z-parameter matrix
+                L_matrix: (n_ports x n_ports) inductance matrix [H]
+                k_matrix: (n_ports x n_ports) coupling coefficient matrix
+                k: Scalar coupling coefficient k_12 (for 2-port)
+                L1, L2: Self-inductances of port 1 and 2 [H]
+                M: Mutual inductance between port 1 and 2 [H]
+        """
+        Z_mat = self.compute_Z_matrix(freq, Zs)
+        n_ports = Z_mat.shape[0]
+        omega = 2.0 * np.pi * freq
+
+        if n_ports < 2 or omega < 1e-10:
+            return {
+                'Z_matrix': Z_mat,
+                'L_matrix': np.zeros_like(Z_mat, dtype=float),
+                'k_matrix': np.zeros_like(Z_mat, dtype=float),
+                'k': 0.0, 'L1': 0.0, 'L2': 0.0, 'M': 0.0,
+            }
+
+        # Extract inductance matrix from imaginary part of Z
+        L = np.imag(Z_mat) / omega
+
+        # Coupling coefficient matrix
+        k_mat = np.zeros((n_ports, n_ports))
+        for i in range(n_ports):
+            for j in range(n_ports):
+                if L[i, i] > 0 and L[j, j] > 0:
+                    k_mat[i, j] = L[i, j] / np.sqrt(L[i, i] * L[j, j])
+
+        return {
+            'Z_matrix': Z_mat,
+            'L_matrix': L,
+            'k_matrix': k_mat,
+            'k': k_mat[0, 1] if n_ports >= 2 else 0.0,
+            'L1': L[0, 0],
+            'L2': L[1, 1] if n_ports >= 2 else 0.0,
+            'M': L[0, 1] if n_ports >= 2 else 0.0,
+        }
+
+    def frequency_sweep_multiport(self, freqs, Zs_func=None):
+        """Compute Z-parameter matrix and coupling over a frequency range.
+
+        Args:
+            freqs: Array of frequencies [Hz]
+            Zs_func: Optional callable(freq) returning Zs array (n_loop,)
+
+        Returns:
+            dict with keys:
+                freqs: Frequency array [Hz]
+                Z_matrix: (n_freq, n_ports, n_ports) complex Z-parameters
+                L_matrix: (n_freq, n_ports, n_ports) inductance [H]
+                k: (n_freq,) coupling coefficient k_12
+                L1, L2: (n_freq,) self-inductances [H]
+                M: (n_freq,) mutual inductance [H]
+        """
+        freqs = np.asarray(freqs, dtype=np.float64)
+        n_freq = len(freqs)
+        n_ports = len(self.ports)
+
+        if Zs_func is None:
+            # Batch sweep in C++
+            result = self._solver.frequency_sweep(freqs)
+            Z_all = np.array(result['Z_matrix'])
+        else:
+            # Pre-compute Zs array, then batch in C++
+            n_loop = self.n_loop
+            Zs_all = np.zeros((n_freq, n_loop), dtype=complex)
+            for i, f in enumerate(freqs):
+                Zs_val = Zs_func(f)
+                if Zs_val is not None:
+                    Zs_all[i] = Zs_val
+            result = self._solver.frequency_sweep(freqs, Zs_all)
+            Z_all = np.array(result['Z_matrix'])
+
+        # Post-process: extract L, k from Z (numpy only, no scipy)
+        L_all = np.zeros((n_freq, n_ports, n_ports))
+        k_arr = np.zeros(n_freq)
+        L1_arr = np.zeros(n_freq)
+        L2_arr = np.zeros(n_freq)
+        M_arr = np.zeros(n_freq)
+
+        for i in range(n_freq):
+            omega = 2.0 * np.pi * freqs[i]
+            if omega > 1e-10:
+                L_all[i] = np.imag(Z_all[i]) / omega
+
+            L1_val = L_all[i, 0, 0]
+            L2_val = L_all[i, 1, 1] if n_ports >= 2 else 0.0
+            M_val = L_all[i, 0, 1] if n_ports >= 2 else 0.0
+
+            L1_arr[i] = L1_val
+            L2_arr[i] = L2_val
+            M_arr[i] = M_val
+            k_arr[i] = M_val / np.sqrt(L1_val * L2_val) if (L1_val > 0 and L2_val > 0) else 0.0
+
+        return {
+            'freqs': freqs,
+            'Z_matrix': Z_all,
+            'L_matrix': L_all,
+            'k': k_arr,
+            'L1': L1_arr,
+            'L2': L2_arr,
+            'M': M_arr,
+        }
+
+    def get_resonant_frequencies(self, freq_min=1e3, freq_max=1e9, n_points=1000):
+        """
+        Find self-resonant frequencies by scanning Im(Z) zero crossings.
+
+        Only meaningful when panels are present (has_panels=True).
+        Resonance occurs where Im(Z) changes sign (inductive -> capacitive).
+
+        Args:
+            freq_min: Scan start frequency [Hz]
+            freq_max: Scan end frequency [Hz]
+            n_points: Number of scan points
+
+        Returns:
+            List of resonant frequencies [Hz], or empty list if no resonance found
+        """
+        if not self.has_panels:
+            return []
+
+        freqs = np.logspace(np.log10(freq_min), np.log10(freq_max), n_points)
+        Z_sweep = self.frequency_sweep(freqs)
+        im_Z = Z_sweep.imag
+
+        # Find zero crossings of Im(Z)
+        resonances = []
+        for i in range(len(freqs) - 1):
+            if im_Z[i] * im_Z[i + 1] < 0:
+                # Linear interpolation for zero crossing
+                f1, f2 = freqs[i], freqs[i + 1]
+                z1, z2 = im_Z[i], im_Z[i + 1]
+                f_res = f1 - z1 * (f2 - f1) / (z2 - z1)
+                resonances.append(float(f_res))
+
+        return resonances
