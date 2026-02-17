@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "1.8.1"
+version = "2.0.0"
 description = "Radia 3D Magnetostatics with NGSolve Integration and OpenMP Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -29,6 +29,8 @@ classifiers = [
 
 dependencies = [
     "numpy>=1.20",
+    "mkl>=2024.2.0",
+    "intel-cmplr-lib-rt>=2024.2.0",
 ]
 
 [project.optional-dependencies]
