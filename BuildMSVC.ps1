@@ -359,55 +359,10 @@ try {
         Write-Host "ERROR: _radia_pybind.pyd not found - build failed?" -ForegroundColor Red
     }
 
-    # Copy Intel MKL DLLs for distribution
-    # mkl_rt.X.dll is SDL (Single Dynamic Library) that loads other DLLs at runtime
-    # Use wildcard patterns to be version-agnostic (e.g., mkl_rt.2.dll, mkl_rt.3.dll)
-
-    Write-Host "Copying Intel MKL DLLs..." -ForegroundColor Cyan
-
-    # MKL DLL patterns (version-agnostic)
-    # NOTE: Only essential DLLs are included to reduce package size
-    # Removed: mkl_def.*.dll, mkl_vml_def.*.dll (fallback for non-AVX2 CPUs)
-    # These are not needed on modern CPUs (2013+) with AVX2 support
-    $MKL_DLL_PATTERNS = @(
-        "mkl_rt.*.dll",            # MKL SDL runtime
-        "mkl_core.*.dll",          # MKL core
-        "mkl_intel_thread.*.dll",  # MKL threading (Intel OpenMP)
-        "mkl_avx2.*.dll",          # AVX2 optimized kernels
-        "mkl_vml_avx2.*.dll"       # Vector math library (AVX2)
-    )
-
-    foreach ($pattern in $MKL_DLL_PATTERNS) {
-        $dlls = Get-ChildItem -Path "$INTEL_MKL\bin" -Filter $pattern -ErrorAction SilentlyContinue
-        if ($dlls) {
-            foreach ($dll in $dlls) {
-                Copy-Item $dll.FullName "$PROJECT_DIR\src\radia\" -Force
-                Write-Host "  Copied $($dll.Name)" -ForegroundColor Green
-            }
-        } else {
-            Write-Host "  WARNING: No DLL matching $pattern found" -ForegroundColor Yellow
-        }
-    }
-
-    # Intel OpenMP runtime DLL (required)
-    # NOTE: libmmd.dll and svml_dispmd.dll are NOT needed and removed to reduce package size
-    $INTEL_COMPILER = "$INTEL_ONEAPI\compiler\latest"
-    $RUNTIME_DLL_PATTERNS = @(
-        "libiomp5md.dll"      # Intel OpenMP runtime (required)
-    )
-
-    Write-Host "Copying Intel compiler runtime DLLs..." -ForegroundColor Cyan
-    foreach ($pattern in $RUNTIME_DLL_PATTERNS) {
-        $dlls = Get-ChildItem -Path "$INTEL_COMPILER\bin" -Filter $pattern -ErrorAction SilentlyContinue
-        if ($dlls) {
-            foreach ($dll in $dlls) {
-                Copy-Item $dll.FullName "$PROJECT_DIR\src\radia\" -Force
-                Write-Host "  Copied $($dll.Name)" -ForegroundColor Green
-            }
-        } else {
-            Write-Host "  WARNING: No DLL matching $pattern found" -ForegroundColor Yellow
-        }
-    }
+    # MKL DLLs are NOT bundled in the wheel (v2.0.0+)
+    # MKL is installed via pip dependency: mkl>=2024.2.0, intel-cmplr-lib-rt>=2024.2.0
+    # DLLs are found at runtime via {sys.prefix}/Library/bin/ (see __init__.py)
+    Write-Host "MKL DLLs: NOT bundled (pip dependency)" -ForegroundColor Cyan
 
     # Show build summary
     Write-Host ""
