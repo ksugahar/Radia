@@ -1,6 +1,6 @@
 # PEEC Solver Validation Plan
 
-**Status**: Phases 1-3 Complete (2026-02-16)
+**Status**: Phases 1-3 + Shield Complete (2026-02-17)
 **Purpose**: Systematic validation of PEEC solver and PEEC-MSC coupling
 
 ---
@@ -218,6 +218,44 @@ Panel potential coefficients and LC resonance validation.
 
 ---
 
+## Shield Conductor Validation
+
+**Status**: COMPLETE (3/3 tests pass, 2026-02-17)
+**Goal**: Verify shield conductor reflected impedance
+
+### Test S.1: Basic Shield Effect
+
+50mm square loop coil + 80x80mm aluminum shield (t=1mm, z=-5mm).
+
+| Check | Criterion | Result |
+|-------|-----------|--------|
+| L decreases | Delta_L < 0 at high freq | -46.0 nH PASS |
+| R increases | Delta_R > 0 at high freq | +1.6 mOhm PASS |
+| Freq dependence | Effect increases with frequency | PASS |
+
+### Test S.2: Distance Dependence
+
+Shield at 2, 5, 10, 20mm from coil. Closer shield -> larger effect.
+
+**Result**: |Delta_L(2mm)| = 86 nH > |Delta_L(20mm)| = 6.4 nH. PASS.
+
+### Test S.3: No-Shield Baseline
+
+Self-inductance vs analytical formula for square loop.
+
+**Result**: 7.1% error (within 30% tolerance for approximate formula). PASS.
+
+### Bug Fix: Mutual Inductance Sign (2026-02-17)
+
+Fixed `std::abs(dot) * M` -> `dot * M` in Rosa/Grover analytical path
+(`rad_peec_matrices.cpp:776`). The `std::abs()` discarded sign for
+anti-parallel filaments, causing mutual inductance to cancel to ~0
+for spiral coils.
+
+**Validation script**: `examples/peec_integration/validation/validate_shield_delta_r.py`
+
+---
+
 ## Phase 5: Complex Geometries
 
 **Status**: Future
@@ -289,8 +327,9 @@ All 73 validation tests pass with the C++ solver.
 | 2: Multi-filament | 6/6 | PASS |
 | 3: FastHenry + Coupled | 9/9 + coupling | PASS |
 | 4: Panel/Resonance + Coupling | 23/23 + 31/31 | PASS |
+| Shield: Conductor modeling | 3/3 | PASS |
 | 5: Complex geometries | - | Future |
-| **Total** | **73/73** | **ALL PASS** |
+| **Total** | **76/76** | **ALL PASS** |
 
 ---
 
