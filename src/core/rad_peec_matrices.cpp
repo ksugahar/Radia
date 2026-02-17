@@ -773,7 +773,7 @@ double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
                        (F(b1 - a2, d_perp) + F(a1 - b2, d_perp) -
                         F(b1 - b2, d_perp) - F(a1 - a2, d_perp));
 
-            return std::abs(dot) * M;  // Scale by cos(angle) for nearly-parallel
+            return dot * M;  // Preserve sign for anti-parallel filaments
         }
     }
 
