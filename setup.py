@@ -113,13 +113,15 @@ setup(
 	package_data={
 		"radia": [
 			"*.pyd",  # Include all .pyd files (_radia_pybind.pyd, radia_ngsolve.pyd, etc.)
-			"*.dll",  # Include Intel MKL DLLs (mkl_rt.2.dll, mkl_core.2.dll, libiomp5md.dll, etc.)
 			"*.py",   # Include all Python utility modules
+			# MKL DLLs are NOT bundled - installed via pip dependency (mkl>=2024.2.0)
 		],
 	},
 	include_package_data=True,
 	install_requires=[
 		"numpy>=1.20",
+		"mkl>=2024.2.0",
+		"intel-cmplr-lib-rt>=2024.2.0",
 	],
 	extras_require={
 		"viz": [
