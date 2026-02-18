@@ -38,6 +38,8 @@ radia-*/
 *.pdb
 *.iobj
 *.ipdb
+*.zip
+*.whl
 
 # ============================================================================
 # Python Cache
@@ -99,6 +101,11 @@ Makefile
 *.userosscache
 *.sln.docstates
 *.tlog
+*.ipch
+*.sdf
+*.bsc
+*.db-wal
+*.mat
 
 # ============================================================================
 # Build Logs
@@ -173,6 +180,11 @@ file_format_documents/
 # Keep example VTK files and ParaView state files
 !examples/**/radia_components.vtk
 !examples/**/*.pvsm
+
+# Keep example data CSV files
+!examples/Universal_Relaxation_Network/data/**/*.csv
+!examples/Universal_Relaxation_Network/results/*.csv
+!examples/peec_integration/data/*.csv
 
 # ============================================================================
 # IMPORTANT: PyPI Distribution Files - DO NOT IGNORE
