@@ -45,7 +45,7 @@ def create_geometry(n, size, mat_params, B_bg):
         B_bg: Background field in Tesla (ObjBckg callback returns B, not H).
     """
     elem_size = size / n
-    mat = rad.MatSatIsoFrm(*mat_params)
+    mat = rad.MatSatIsoFrm(mat_params)
 
     elements = []
     for i in range(n):

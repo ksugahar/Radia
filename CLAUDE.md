@@ -110,6 +110,36 @@ double G = 1.0 / (4.0 * M_PI * r);  // NOT exp(-jkr) / (4*pi*r)
 
 ---
 
+## Binary File Policy: No Binaries in Repository (2026-02-19)
+
+**CRITICAL**: Binary files are NOT stored in the git repository.
+
+**Policy**:
+- **`.pyd`, `.dll`, `.so`, `.lib`, `.exe`**: Hosted on GitHub Releases (tag: `binaries`)
+- **Auto-upload**: Pre-push hook automatically uploads `.pyd` and `fmm3d.lib` to Releases on every `git push`
+- **Download**: After cloning, run `./download_binaries.sh` to fetch pre-built binaries
+- **`.png`, `.pdf`**: Allowed in repository for documentation and examples
+- **`.msh`, `.vtu`, `.vtk`, `.vol`**: Generated files, NOT committed (see File Placement Policy)
+
+**Rationale**: Repository size was reduced from 566 MB to 61 MB by removing all binaries from git history.
+
+---
+
+## File Placement Policy (2026-02-19)
+
+**CRITICAL**: Generated output files (`.png`, `.msh`, `.vtu`, `.vtk`, `.vol`, `.vts`) must be placed **next to their corresponding `.py` script** in the same directory.
+
+**Rules**:
+1. Example output files belong in `examples/<category>/` alongside their `.py` script
+2. Do NOT place generated files at the repository root
+3. `.msh` files in `examples/**/gmsh_models/` are tracked (pre-generated mesh definitions)
+4. All other `.msh`, `.vol`, `.vtu`, `.vtk`, `.vts`, `.npz` files are `.gitignore`d
+5. Build output goes to `build*/` or `dist/` (both gitignored)
+
+**Build folders**: Use `build*/` glob pattern in `.gitignore` to cover `build/`, `build-msvc/`, `build-intel/`, etc.
+
+---
+
 ## Build Policy: MSVC + Intel MKL
 
 ### Compiler Requirement (2025-12-27)

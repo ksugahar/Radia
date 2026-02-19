@@ -12,9 +12,8 @@ from pathlib import Path
 
 # Add paths
 project_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(project_root / 'build' / 'lib' / 'Release'))
-sys.path.insert(0, str(project_root / 'dist'))
-sys.path.insert(0, str(project_root / 'src' / 'python'))
+sys.path.insert(0, str(project_root / 'build' / 'Release'))
+sys.path.insert(0, str(project_root / 'src' / 'radia'))
 
 import numpy as np
 import radia as rad

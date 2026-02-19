@@ -12,9 +12,7 @@ Build_PyPI_Package.ps1
 # ============================================================================
 # Build Directories
 # ============================================================================
-build/
-build-msvc/
-build-intel/
+build*/
 dist/
 radia-*/
 *.egg-info/
@@ -220,8 +218,12 @@ dev/
 # NGSolve integration outputs
 *.ObjBckgCF/
 rad.ObjBckgCF/
-*.vtu
-*.vtk
+
+# Generated mesh/visualization files (keep only if near corresponding .py)
+*.vol
+*.npz
+*.msh
+!examples/**/gmsh_models/*.msh
 
 # Python development files (experimental implementations)
 src/python/*_fast.py
