@@ -25,6 +25,10 @@ from coil_model import create_racetrack_coil
 
 ELF_Z_MIRROR = r"S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type\mu=1000\ELF_MMB8T_EIEM2_1x1x1\z-mirror"
 
+if not os.path.isdir(ELF_Z_MIRROR):
+    print(f"Skipping: ELF reference data not found at {ELF_Z_MIRROR}")
+    sys.exit(0)
+
 MU_R = 1000
 scale = 0.001  # mm to m
 

@@ -33,15 +33,18 @@ def main():
     mp = MeshingParameters(maxh=0.01)  # 10mm max element size
     mesh = geo.GenerateMesh(mp)
     print(f"    Mesh generated:")
-    print(f"      Vertices: {mesh.nv}")
-    print(f"      Volume elements: {mesh.ne}")
-    print(f"      Surface elements: {mesh.nse}")  # <- Automatically created!
+    nv = mesh.nv if hasattr(mesh, 'nv') else len(list(mesh.Points()))
+    ne = mesh.ne if hasattr(mesh, 'ne') else len(list(mesh.Elements3D()))
+    nse = mesh.nse if hasattr(mesh, 'nse') else len(list(mesh.Elements2D()))
+    print(f"      Vertices: {nv}")
+    print(f"      Volume elements: {ne}")
+    print(f"      Surface elements: {nse}")  # <- Automatically created!
 
     # Step 3: Verify surface elements
     print("\n[3] Verifying surface elements...")
-    if mesh.nse > 0:
-        print("    ✅ Surface elements present!")
-        print(f"       Count: {mesh.nse}")
+    if nse > 0:
+        print("    Surface elements present!")
+        print(f"       Count: {nse}")
         print("       Netgen GUI will display this mesh correctly")
 
         # Analyze surface element types

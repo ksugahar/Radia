@@ -29,7 +29,14 @@ import numpy as np
 # Add PRIMA library path
 sys.path.insert(0, r'W:\30_CauerLadderNetwork\2021_01_22_CauerI_to_CauerII\Python')
 
-from prima import lanczos
+try:
+    from prima import lanczos
+except ImportError:
+    print("ERROR: 'prima' module not found.")
+    print("This example requires the PRIMA library from:")
+    print("  W:\\30_CauerLadderNetwork\\2021_01_22_CauerI_to_CauerII\\Python")
+    print("Skipping this example.")
+    sys.exit(0)
 
 
 def test_uv_equality():

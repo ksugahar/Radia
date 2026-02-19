@@ -34,7 +34,7 @@ CUBIT_EXPORT_PATH = "S:/CoreformCubit/01_GitHub"
 sys.path.insert(0, CUBIT_PATH)
 sys.path.insert(0, CUBIT_EXPORT_PATH)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build-msvc'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
 
 # numpy not needed for mesh generation
 
