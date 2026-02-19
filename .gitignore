@@ -202,6 +202,9 @@ file_format_documents/
 #
 # Note: Build_PyPI_Package.ps1 is now ignored (merged into Publish_to_PyPI.ps1)
 
+# MATLAB files (use Python matplotlib instead)
+*.m
+
 # Reference repositories (local only)
 参考/
 
