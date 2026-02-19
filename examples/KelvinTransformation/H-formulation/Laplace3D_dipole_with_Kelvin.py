@@ -41,6 +41,9 @@ mag_sphere_surface.bc("dipole_bc")  # Set BC before subtraction
 # Inner air domain (sphere_radius < r < kelvin_radius)
 inner_sphere = Sphere(Pnt(0, 0, 0), kelvin_radius)
 inner_sphere.maxh = maxh_fine
+# Name Kelvin boundary face before subtraction (survives Boolean ops)
+for face in inner_sphere.faces:
+    face.name = "kelvin_int"
 inner_air = inner_sphere - mag_sphere_surface
 inner_air.mat("air_inner")
 
@@ -48,6 +51,9 @@ inner_air.mat("air_inner")
 # Exterior domain: 0 < r' < kelvin_radius
 outer_sphere = Sphere(Pnt(offset_x, 0, 0), kelvin_radius)
 outer_sphere.maxh = maxh_fine
+# Name Kelvin boundary face before Glue (survives Boolean ops)
+for face in outer_sphere.faces:
+    face.name = "kelvin_ext"
 outer_sphere.mat("air_outer")
 
 # ===== GND VERTEX (center of exterior domain) =====
@@ -65,11 +71,23 @@ print(f"  Number of solids: {len(geo.solids)}")
 for i, solid in enumerate(geo.solids):
 	print(f"  Solid[{i}] ({solid.name}): {len(solid.faces)} faces")
 
-# Identify the planar faces at x=kelvin_radius and x=offset_x (interface between domains)
-print(f"  Identifying periodic faces...")
-# Identify faces between air_inner (solid[0]) and air_outer (solid[1])
-geo.solids[0].faces[0].Identify(geo.solids[1].faces[0], "periodic")
-print("  Periodic identification applied")
+# Find Kelvin boundary faces by name (named during geometry construction)
+kelvin_int_face = None
+kelvin_ext_face = None
+for solid in geo.solids:
+    for face in solid.faces:
+        if face.name == "kelvin_int":
+            kelvin_int_face = face
+            print(f"  Found kelvin_int face in solid '{solid.name}'")
+        elif face.name == "kelvin_ext":
+            kelvin_ext_face = face
+            print(f"  Found kelvin_ext face in solid '{solid.name}'")
+
+if kelvin_int_face is not None and kelvin_ext_face is not None:
+    kelvin_int_face.Identify(kelvin_ext_face, "periodic", IdentificationType.PERIODIC)
+    print("  Periodic identification applied between kelvin_int and kelvin_ext")
+else:
+    raise RuntimeError(f"Could not find Kelvin boundary faces!")
 
 # ============================================================
 # Mesh Generation

@@ -199,7 +199,7 @@ def create_geometry():
 	for face in air_inner.faces:
 		fc = face.center
 		dist = sqrt(fc.x**2 + fc.y**2 + fc.z**2)
-		if dist > kelvin_radius * 0.8:
+		if abs(dist - kelvin_radius) < kelvin_radius * 0.2:
 			kelvin_int_face = face
 			face.name = "kelvin_int"
 			print(f"  Found kelvin_int face at center ({fc.x:.2f}, {fc.y:.2f}, {fc.z:.2f}), dist={dist:.2f}")
@@ -208,7 +208,7 @@ def create_geometry():
 	for face in outer_sphere.faces:
 		fc = face.center
 		dist = sqrt((fc.x - center_x)**2 + fc.y**2 + fc.z**2)
-		if dist > kelvin_radius * 0.8:
+		if abs(dist - kelvin_radius) < kelvin_radius * 0.2:
 			kelvin_ext_face = face
 			face.name = "kelvin_ext"
 			print(f"  Found kelvin_ext face at center ({fc.x:.2f}, {fc.y:.2f}, {fc.z:.2f}), dist={dist:.2f}")
