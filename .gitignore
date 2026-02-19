@@ -4,10 +4,16 @@
 # Local Development Files (DO NOT COMMIT)
 # ============================================================================
 CLAUDE.md
-.claude/settings.local.json
+.claude/
 publish_to_pypi.cmd
 Publish_to_PyPI.ps1
 Build_PyPI_Package.ps1
+
+# Kelvin transformation reference documents (large PDFs, docx)
+examples/KelvinTransformation/docs/Supplement/Computational Electromagnetism/
+examples/KelvinTransformation/docs/Supplement/*.docx
+examples/KelvinTransformation/docs/digest/
+*.html
 
 # ============================================================================
 # Build Directories
