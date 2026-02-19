@@ -26,7 +26,7 @@
 
 // MSC (Magnetic Surface Charge) support for 6 DOF hexahedra
 // radTPolyhedron hexahedra use 6 DOF MSC (surface charge on each face)
-// Note: RADIA_MSC_SUPPORT is defined via CMakeLists.txt compile definitions
+// MSC is always enabled (unconditional)
 
 // Note: Dipole-dipole method for tetrahedra was tested but found numerically unstable.
 // Radia production solver uses the surface charge (MSC) method.
@@ -1394,7 +1394,6 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				block[(size_t)2 * m_totalDOF + 1] = SubMatrix.Str2.y;  // (2,1)
 				block[(size_t)2 * m_totalDOF + 2] = SubMatrix.Str2.z;  // (2,2)
 			}
-#ifdef RADIA_MSC_SUPPORT
 			else if(dof_row == 3 && dof_col >= 5)
 			{
 				// 3xN block: Field at tetrahedron (3 DOF) center from MSC element (5 or 6 DOF)
@@ -1575,7 +1574,6 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					}
 				}
 			}
-#endif // RADIA_MSC_SUPPORT
 			else
 			{
 				// Unknown DOF combination - zero out the block (ROW-MAJOR)

@@ -167,7 +167,6 @@ target_compile_definitions(radia_ngsolve PRIVATE
 	_GM_WITHOUT_BASE
 	RADIA_USE_HACAPK
 	HACAPK_RADIA_LOGGING
-	RADIA_MSC_SUPPORT
 	$<$<CONFIG:Debug>:_DEBUG>
 	$<$<CONFIG:Release>:NDEBUG>
 	$<$<PLATFORM_ID:Windows>:WIN32>
