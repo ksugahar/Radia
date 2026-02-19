@@ -29,7 +29,6 @@ peec_integration/
 ├── algorithm_development/   # Algorithm derivation scripts
 ├── analysis/                # Analysis and paper figure generation
 ├── gmsh_models/             # Mesh generation and conversion utilities
-├── figures/                 # Paper figures (PDF/PNG)
 ├── data/                    # Measurement data (CSV)
 └── model/                   # Model cache
 ```
@@ -150,10 +149,10 @@ python analysis/generate_paper_figures.py
 
 | Figure | Content | Output |
 |--------|---------|--------|
-| fig1 | PEEC matrix verification | `figures/fig1_peec_matrix_verification.pdf` |
-| fig2 | PRIMA accuracy comparison | `figures/fig2_prima_accuracy.pdf` |
-| fig3 | Adaptive MSC error | `figures/fig3_adaptive_msc_error.pdf` |
-| fig4 | WPT coil (85 kHz) | `figures/fig4_wpt_coil_85khz.pdf` |
+| fig1 | PEEC matrix verification | `analysis/figures/fig1_peec_matrix_verification.pdf` |
+| fig2 | PRIMA accuracy comparison | `analysis/figures/fig2_prima_accuracy.pdf` |
+| fig3 | Adaptive MSC error | `analysis/figures/fig3_adaptive_msc_error.pdf` |
+| fig4 | WPT coil (85 kHz) | `analysis/figures/fig4_wpt_coil_85khz.pdf` |
 
 ## References
 
