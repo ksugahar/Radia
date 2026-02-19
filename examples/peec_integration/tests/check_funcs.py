@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, '../../src/radia')
+sys.path.insert(0, '../../../src/radia')
 import radia as rad
 rad.FldUnits('m')
 

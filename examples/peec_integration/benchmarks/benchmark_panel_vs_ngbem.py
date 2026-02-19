@@ -32,7 +32,7 @@ import os
 import time
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 # Physical constants
 EPS_0 = 8.854187817e-12  # F/m

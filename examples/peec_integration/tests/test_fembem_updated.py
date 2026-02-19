@@ -2,7 +2,7 @@
 import sys
 import os
 import numpy as np
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 MU_0 = 4.0 * np.pi * 1e-7
 
