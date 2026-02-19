@@ -3756,6 +3756,79 @@ plt.savefig('figure.pdf', format='pdf')
 
 ---
 
-**Last Updated**: 2026-01-19 (Added Publication Figure Policy)
+## Python API Usage Checklist (2026-02-19)
+
+### Common Mistakes Identified by Code Review
+
+These rules encode recurring issues found across the `examples/` directory. An MCP server (`tools/mcp_radia_lint/`) automates checking these patterns.
+
+**1. ObjBckg Requires Callable (CRITICAL)**
+
+`rad.ObjBckg()` takes a **Python callable** (lambda or function), NOT a list.
+
+```python
+# ✓ CORRECT
+bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])
+
+# ✗ WRONG - will fail at runtime
+bkg = rad.ObjBckg([0, 0, 0.1])
+```
+
+**2. UtiDelAll() Cleanup (HIGH)**
+
+Every example script must call `rad.UtiDelAll()` before exiting to free Radia C++ objects.
+
+```python
+def main():
+    # ... computation ...
+    rad.UtiDelAll()  # Required cleanup
+
+if __name__ == '__main__':
+    main()
+```
+
+**3. Relative Path Imports (HIGH)**
+
+Never use hardcoded absolute paths. Use `os.path.dirname(__file__)` for relative imports.
+
+```python
+# ✓ CORRECT
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
+
+# ✗ WRONG - machine-specific
+sys.path.insert(0, r'S:\Radia\01_GitHub\src\radia')
+```
+
+**4. Docstring Unit Consistency (MODERATE)**
+
+Public API methods that accept coordinates must NOT hardcode "in mm" in docstrings if the class has a `units` parameter. Use "in constructor length units" instead.
+
+```python
+# ✓ CORRECT
+def get_B(self, point):
+    """
+    Parameters:
+        point: [x, y, z] observation point (in constructor length units)
+    """
+
+# ✗ WRONG - misleading when units='m'
+def get_B(self, point):
+    """
+    Parameters:
+        point: [x, y, z] observation point in mm
+    """
+```
+
+**5. Analytical Magnet Classes: units Parameter (MODERATE)**
+
+All analytical magnet classes (`SphericalMagnet`, `CuboidMagnet`, `CurrentLoop`, `CylindricalMagnet`, `RingMagnet`) accept a `units` parameter (`'mm'` or `'m'`). Subclasses must propagate this parameter to the parent.
+
+**6. State Mutation in Computation Methods (LOW)**
+
+Computation methods (`get_B`, `get_H`, etc.) must NOT leave object state inconsistent on exception. Use `try/finally` when temporarily modifying `self`.
+
+---
+
+**Last Updated**: 2026-02-19 (Added Python API Usage Checklist, MCP lint server)
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation
