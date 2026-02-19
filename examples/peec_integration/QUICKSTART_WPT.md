@@ -46,7 +46,7 @@ print(f"Phase: {np.angle(Z_total, deg=True):.1f} deg")
 
 ```bash
 # Generate SPICE netlist
-python demo_prima_spice_export.py
+python spice/demo_prima_spice_export.py
 
 # Output files:
 #   wire_full.sp  - Full PEEC model
@@ -95,6 +95,6 @@ Tested against analytical formulas:
 
 ## References
 
-- `verify_frequency_response_85khz.py` - Full validation script
-- `demo_wpt.py` - WPT system demo with multiple coils
+- `verification/verify_frequency_response_85khz.py` - Full validation script
+- `wpt/demo_wpt.py` - WPT system demo with multiple coils
 - [PEEC_SURFACE_IMPEDANCE.md](../../docs/PEEC_SURFACE_IMPEDANCE.md) - Theory documentation
