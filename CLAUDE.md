@@ -1857,6 +1857,36 @@ run_all_benchmarks.py             # Orchestrator script
 
 ---
 
+## Examples Folder Documentation Policy
+
+### Requirement: One README.md per Examples Subdirectory
+
+**Policy**: Every subdirectory under `examples/` MUST contain exactly one `README.md` file that serves as the entry point documentation for that example category.
+
+**Rules**:
+1. Each `examples/<category>/` directory must have a `README.md`
+2. The README.md should describe the purpose of the example category, list all scripts with brief descriptions, and note any prerequisites
+3. Do NOT create multiple `.md` files per examples subdirectory — consolidate all documentation into the single `README.md`
+4. When adding a new example script, update the corresponding `README.md` to include it
+
+**Structure**:
+```
+examples/
+├── electromagnet/
+│   ├── README.md              # Required: describes all electromagnet examples
+│   ├── sphere_in_quadrupole.py
+│   └── ...
+├── KelvinTransformation/
+│   ├── README.md              # Required: describes Kelvin transformation examples
+│   ├── H-formulation/
+│   │   ├── README.md          # Required for each subdirectory
+│   │   └── ...
+│   └── ...
+└── ...
+```
+
+---
+
 ## Mesh Generation Tools
 
 ### Mesh Generation Policy by Element Order (2026-02-14)
