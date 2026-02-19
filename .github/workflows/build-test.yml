@@ -1,0 +1,102 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [master]
+
+# Cancel previous runs on same branch to save runner time
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-upload:
+    runs-on: [self-hosted, windows-radia]
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------
+      # Build: MSVC + MKL (RadiaOnly mode for speed)
+      # ----------------------------------------------------------------
+      - name: Build with MSVC + MKL
+        shell: pwsh
+        run: |
+          Write-Host "Starting Radia build (RadiaOnly mode)..."
+          & "${{ github.workspace }}\BuildMSVC.ps1" -RadiaOnly -Verbose
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Build failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          Write-Host "Build completed successfully."
+
+      # ----------------------------------------------------------------
+      # Verify: Check that .pyd was produced
+      # ----------------------------------------------------------------
+      - name: Verify .pyd output
+        shell: pwsh
+        run: |
+          $pyd = "${{ github.workspace }}\src\radia\_radia_pybind.pyd"
+          if (-not (Test-Path $pyd)) {
+            Write-Host "::error::_radia_pybind.pyd not found at $pyd"
+            exit 1
+          }
+          $sz = [math]::Round((Get-Item $pyd).Length / 1MB, 2)
+          Write-Host "_radia_pybind.pyd: ${sz} MB"
+
+      # ----------------------------------------------------------------
+      # Test: Run basic pytest tests (~2 sec)
+      # ----------------------------------------------------------------
+      - name: Run basic tests
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          Write-Host "Running pytest -m basic..."
+          python -m pytest tests/ -m "basic" -v --tb=short --junitxml=test-results.xml
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Basic tests failed"
+            exit $LASTEXITCODE
+          }
+
+      # ----------------------------------------------------------------
+      # Upload test results for GitHub Actions summary
+      # ----------------------------------------------------------------
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results.xml
+          retention-days: 30
+
+      # ----------------------------------------------------------------
+      # Upload .pyd to GitHub Releases (tag: binaries)
+      # ----------------------------------------------------------------
+      - name: Upload .pyd to GitHub Releases
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== Uploading .pyd files to GitHub Releases ==="
+
+          # Ensure 'binaries' release exists
+          gh release view binaries >/dev/null 2>&1 || \
+            gh release create binaries --title "Binary Files" \
+              --notes "Pre-built modules. Updated by CI." --latest=false
+
+          # Collect .pyd files
+          FILES=()
+          for f in src/radia/*.pyd; do
+            [ -f "$f" ] && FILES+=("$f")
+          done
+
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "::warning::No .pyd files found to upload"
+            exit 0
+          fi
+
+          echo "Uploading ${#FILES[@]} file(s)..."
+          gh release upload binaries "${FILES[@]}" --clobber
+          echo "Upload complete."
