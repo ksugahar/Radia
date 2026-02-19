@@ -5,7 +5,7 @@ This module provides Loop-Star PEEC matrix construction for quasi-static
 electromagnetic analysis using Darwin approximation.
 
 IMPORTANT: This module requires the C++ pybind11 module (peec_matrices.pyd).
-No Python fallback is provided. Build Radia with BuildMSVC.ps1 to generate
+No Python fallback is provided. Build Radia with Build.ps1 to generate
 the required .pyd file.
 
 Usage:
@@ -33,7 +33,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "PEEC C++ module (peec_matrices.pyd) not found. "
-        "Build Radia with BuildMSVC.ps1 to generate the required module. "
+        "Build Radia with Build.ps1 to generate the required module. "
         f"Original error: {e}"
     ) from e
 

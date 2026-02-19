@@ -40,7 +40,7 @@ try:
     print("\nUsing C++ PEEC implementation")
 except ImportError:
     print("\nERROR: PEEC module not available")
-    print("Build with: powershell.exe -ExecutionPolicy Bypass -File BuildMSVC.ps1")
+    print("Build with: powershell.exe -ExecutionPolicy Bypass -File Build.ps1")
     sys.exit(1)
 
 # Check mesh file

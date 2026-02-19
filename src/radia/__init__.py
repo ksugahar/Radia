@@ -54,7 +54,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "Failed to import radia pybind11 module (_radia_pybind.pyd). "
-        "Ensure the package was built correctly with BuildMSVC.ps1 before installation. "
+        "Ensure the package was built correctly with Build.ps1 before installation. "
         f"Package directory: {_package_dir}"
     ) from e
 

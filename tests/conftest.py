@@ -28,7 +28,7 @@ def setup_radia_path():
     - Benchmarks directory: python benchmark_openmp.py
 
     Priority order for finding _radia.pyd:
-    1. src/radia/ (package directory - BuildMSVC.ps1 copies here)
+    1. src/radia/ (package directory - Build.ps1 copies here)
     2. build-msvc/ (MSVC build output)
     3. build-intel/ (Intel build output)
     4. build/lib/Release/ (legacy build location)
