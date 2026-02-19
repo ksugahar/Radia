@@ -1,52 +1,101 @@
-# PEEC + PRIMA + Dowell連分数展開によるコイルモデル縮約
+# PEEC Integration Examples
 
-## 概要
+PEEC (Partial Element Equivalent Circuit) method implementation and verification,
+combined with PRIMA model order reduction and Dowell continued-fraction expansion.
 
-本Exampleでは、PEEC（Partial Element Equivalent Circuit）法とPRIMA（Passive Reduced-order Interconnect Macromodeling Algorithm）を組み合わせ、Dowellの連分数展開を用いたコイルモデル縮約の実装と検証を行う。
+> **Note**: We use "PRIMA" (Passive Reduced-order Interconnect Macromodeling Algorithm)
+> instead of "CLN" (Cauer Ladder Network). Both are mathematically equivalent
+> (Lanczos tridiagonalization for ladder network representation), but PRIMA is
+> the widely recognized term from the 1998 IEEE paper and avoids patent issues.
 
-> **Note**: 本実装では「CLN (Cauer Ladder Network)」という用語の代わりに「PRIMA」を使用しています。両者は数学的に同等（Lanczos三重対角化によるラダー回路表現）ですが、PRIMAは1998年のIEEE論文で広く認知されており、特許問題を回避できます。
+**Theory**: See [docs/PEEC_SURFACE_IMPEDANCE.md](../../docs/PEEC_SURFACE_IMPEDANCE.md).
 
-**理論的背景**: [docs/PEEC_SURFACE_IMPEDANCE.md](../../docs/PEEC_SURFACE_IMPEDANCE.md) を参照。
+## Directory Structure
 
-## 主要な検証結果
+```
+peec_integration/
+├── ngbem/                   # ngsbem (NGSolve BEM) based PEEC demos
+├── ngsbem_peec_demo/        # ngsbem PEEC Jupyter notebook
+├── basic_peec/              # Basic PEEC demos (loop, DC, mesh input)
+├── coil/                    # Coil impedance analysis
+├── coupled/                 # Coupled analysis (mutual inductance, eddy currents)
+├── wpt/                     # Wireless power transfer (WPT)
+├── applications/            # Applications (dielectric, magnetic core, induction heating, NMR)
+├── spice/                   # SPICE / Verilog-A export
+├── tests/                   # Tests and debug scripts
+├── benchmarks/              # Benchmarks and comparisons
+├── validation/              # Validation scripts
+├── verification/            # Verification scripts
+├── algorithm_development/   # Algorithm derivation scripts
+├── analysis/                # Analysis and paper figure generation
+├── gmsh_models/             # Mesh generation and conversion utilities
+├── docs/                    # Internal documentation
+├── figures/                 # Paper figures (PDF/PNG)
+├── data/                    # Measurement data (CSV)
+└── model/                   # Model cache
+```
 
-### 1. PRIMA(DC) + Dowell補正 = Dowell式（完全一致）
+Each folder contains its own `README.md`.
 
-`prima_with_dowell_correction.py` による検証結果:
+### Demo Folders
 
-| 周波数 | |Z_Dowell| | |Z_PRIMA+Dowell| | 誤差 |
-|--------|------------|---------------|------|
+| Folder | Description |
+|--------|-------------|
+| `ngbem/` | ngsbem PEEC Loop-Star / FEM-BEM eddy current solver |
+| `ngsbem_peec_demo/` | **Jupyter notebook**: ngsbem PEEC impedance extraction |
+| `basic_peec/` | Core PEEC: loop analysis, DC, mesh input, Loop-Star |
+| `coil/` | Coil impedance, coil on magnetic core |
+| `coupled/` | Coupled inductance, eddy current inductance reduction |
+| `wpt/` | WPT 85 kHz coils, shielded models |
+| `applications/` | Dielectric, FastHenry comparison, induction heating, NMR magnet |
+| `spice/` | PRIMA reduced-order model SPICE/Verilog-A export |
+
+## Quick Start
+
+```bash
+cd examples/peec_integration
+
+# PRIMA + Dowell correction verification
+python spice/prima_with_dowell_correction.py
+
+# Continued-fraction coefficient derivation
+python algorithm_development/derive_dowell_cf_algorithm.py
+
+# PEEC + PRIMA integration demo
+python spice/demo_peec_prima_reduction.py
+
+# ngsbem PEEC notebook
+jupyter notebook ngsbem_peec_demo/peec_impedance.ipynb
+```
+
+## Key Verification Results
+
+### 1. PRIMA(DC) + Dowell correction = Dowell formula (exact match)
+
+Verified by `spice/prima_with_dowell_correction.py`:
+
+| Frequency | |Z_Dowell| | |Z_PRIMA+Dowell| | Error |
+|-----------|-----------|----------------|-------|
 | 1 Hz | 1.724e-04 | 1.724e-04 | 0% |
 | 1 kHz | 1.724e-04 | 1.724e-04 | 0% |
 | 100 kHz | 2.044e-04 | 2.044e-04 | 0% |
 | 10 MHz | 1.229e-03 | 1.229e-03 | 0% |
 | 100 MHz | 3.867e-03 | 3.867e-03 | 0% |
 
-**結論**: 最大誤差 < 1e-10%（数値精度限界）
+Maximum error < 1e-10% (numerical precision limit).
 
-### 2. z*coth(z)の連分数展開
-
-`derive_dowell_cf_algorithm.py` でViskovatovアルゴリズムによる導出を検証:
+### 2. Continued-fraction expansion of z*coth(z)
 
 ```
 z*coth(z) = 1 + w/(3 + w/(5 + w/(7 + w/(9 + ...))))
-
-連分数係数: b_n = 2n + 1  (n = 1, 2, 3, ...)
-           -> 3, 5, 7, 9, 11, 13, ...
+w = z^2 = tau * s,   tau = d^2 * mu * sigma / 2
 ```
 
-**数値検証**:
+This expansion is **exact** (no approximation error).
 
-| Delta | z*coth(z) (exact) | J-fraction (N=10) | 誤差 |
-|-------|-------------------|-------------------|------|
-| 0.1 | 1.00333 | 1.00333 | 3.9e-15% |
-| 1.0 | 1.31304 | 1.31304 | 4.8e-14% |
-| 2.0 | 2.16396 | 2.16396 | 1.9e-12% |
-| 5.0 | 5.03326 | 5.03326 | 2.7e-08% |
+### 3. Ladder network conversion
 
-### 3. ラダーネットワークへの変換
-
-連分数 `1 + w/(3 + w/(5 + ...))` は以下のRCラダーに対応:
+The continued fraction maps to an RL ladder circuit:
 
 ```
         R1        R2        R3
@@ -57,294 +106,57 @@ z*coth(z) = 1 + w/(3 + w/(5 + w/(7 + w/(9 + ...))))
         ===       ===       ===
 ```
 
-ここで `w = tau * s`、`tau = d^2 * mu * sigma / 2`。
+## Theory
 
-## ファイル構成
+### Dowell formula
 
-### コア検証スクリプト
-
-| ファイル | 説明 |
-|----------|------|
-| `prima_with_dowell_correction.py` | PRIMA(DC) + Dowell補正とDowell式の一致検証 |
-| `derive_dowell_cf_algorithm.py` | Viskovatovアルゴリズムによる連分数係数導出 |
-| `derive_dowell_pade.py` | Pade近似による有理関数展開 |
-| `derive_dowell_prima.py` | Taylor展開の解析 |
-
-### PEEC-PRIMA統合デモ
-
-| ファイル | 説明 |
-|----------|------|
-| `demo_peec_prima_reduction.py` | PEEC + PRIMA + Dowellによるモデル次数削減デモ |
-| `verify_peec_prima_dowell.py` | PEEC-PRIMA-Dowell統合の検証 |
-
-### 補助スクリプト
-
-| ファイル | 説明 |
-|----------|------|
-| `analyze_dowell_prima.py` | DowellファクターとPRIMAの関係分析 |
-| `verify_prima_dowell_correct.py` | PRIMA vs Dowell詳細比較 |
-| `verify_prima_dowell_form.py` | PRIMAからF_R, F_L抽出 |
-| `verify_dowell_diffusion.py` | Dowell vs 1D拡散方程式 |
-
-### PEECコイル解析
-
-| ファイル | 説明 |
-|----------|------|
-| `coil_impedance_peec.py` | PEECによるコイルインピーダンス解析 |
-| `coil_on_magnetic_core_peec.py` | 磁性体コア上のコイル解析 |
-
-### SPICE/Verilog-A出力
-
-| ファイル | 説明 |
-|----------|------|
-| `demo_prima_spice_export.py` | PRIMA縮約モデルのSPICE/Verilog-A出力 |
-| `wire_full.sp` | フルPEECモデルのSPICE netlist |
-| `wire_prima.sp` | PRIMA縮約モデルのSPICE netlist |
-| `wire_prima.va` | PRIMA縮約モデルのVerilog-Aモジュール |
-
-### WPT検証
-
-| ファイル | 説明 |
-|----------|------|
-| `verify_frequency_response_85khz.py` | 85kHz WPT周波数応答検証 |
-| `demo_wpt.py` | WPTシステムのデモ |
-| `wpt_85khz_cubit_mesh.py` | Cubitメッシュを使用したWPTモデル |
-
-### 論文用図表
-
-| ファイル | 説明 |
-|----------|------|
-| `generate_paper_figures.py` | 論文用図表の一括生成 |
-
-## 使用方法
-
-### 基本的な検証の実行
-
-```bash
-# PRIMA + Dowell補正の検証
-cd examples/peec_integration
-python prima_with_dowell_correction.py
-
-# 連分数係数の導出と検証
-python derive_dowell_cf_algorithm.py
-
-# PEEC + PRIMA統合デモ
-python demo_peec_prima_reduction.py
-```
-
-### 出力ファイル
-
-各スクリプトは `.png` 画像ファイルを出力:
-
-- `prima_with_dowell_correction.png` - PRIMA vs Dowell比較
-- `derive_dowell_cf_algorithm.png` - 連分数展開の検証
-- `demo_peec_prima_reduction.png` - モデル次数削減結果
-
-## 理論的背景
-
-### Dowell式
-
-導体の表皮効果を考慮したインピーダンス:
+Impedance with skin-effect correction:
 
 ```
 Z(s) = R_dc * F_R(xi) + s * L_int_dc * F_L(xi)
 ```
 
-ここで:
-- `R_dc = 1/(sigma*d)` : DC抵抗
-- `L_int_dc = mu*d/3` : DC内部インダクタンス
-- `xi = d/delta` : 正規化導体厚さ
-- `delta = sqrt(2/(omega*mu*sigma))` : 表皮深さ
+where `R_dc = 1/(sigma*d)`, `L_int_dc = mu*d/3`, `xi = d/delta`,
+`delta = sqrt(2/(omega*mu*sigma))`.
 
-### F_R, F_L の定義
-
-```
-z = (1+j) * Delta    (Delta = xi/sqrt(2))
-
-F_R = Re[z * coth(z)]
-F_L = (3/2) * Im[z * coth(z)] / Delta^2
-```
-
-DC極限（xi -> 0）で: F_R(0) = 1, F_L(0) = 1
-
-### 連分数展開（J-fraction）
-
-```
-z*coth(z) = 1 + w/(3 + w/(5 + w/(7 + w/(9 + ...))))
-
-w = z^2 = 2j*Delta^2 = tau*s
-tau = d^2*mu*sigma/2
-```
-
-この展開は**厳密**（近似誤差なし）。
-
-## 適用条件
-
-本手法が厳密となる条件:
-
-| 項目 | 条件 |
-|------|------|
-| 断面形状 | 長方形（1D表皮効果） |
-| 材料分布 | 一様（sigma, mu が定数） |
-| 連分数次数 | 5-10項で高精度 |
-
-## 磁性体を含む場合の拡張
-
-磁性体（軟磁性コア）がコイル近傍にある場合、インピーダンスは以下のように分解される：
+### Extension with magnetic core
 
 ```
 Z_total(s) = Z_cond(s) + Z_mag(s)
 
-Z_cond(s) = R_dc * F_R + s * L_int_dc * F_L + s * L_ext_air  [導体: Dowell適用]
-Z_mag(s)  = R_mag(omega) + s * L_mag                         [磁性体: Dowell非適用]
+Z_cond(s) = R_dc * F_R + s * L_int_dc * F_L + s * L_ext_air   [conductor: Dowell applies]
+Z_mag(s)  = R_mag(omega) + s * L_mag                           [magnetic: Dowell does not apply]
 ```
 
-### Dowell補正の適用範囲
+See `coil/coil_on_magnetic_core_peec.py` for implementation.
 
-| 成分 | Dowell補正 | 理由 |
-|------|------------|------|
-| R_dc, L_int_dc | **適用** | 導体内部の表皮効果 |
-| L_ext_air | 適用しない | 空気中の磁束（導体外） |
-| L_mag | 適用しない | 磁性体内の磁束（導体外） |
-| R_mag | 適用しない | 磁性体損失（別メカニズム） |
-
-### 複素透磁率による損失
-
-```
-mu = mu_0 * (mu'_r - j * mu"_r)
-
-L_mag = L_mag_0 * mu'_r    [リアクタンス]
-R_mag = omega * L_mag_0 * mu"_r / mu_0  [磁性体損失]
-```
-
-### 関連スクリプト
-
-| ファイル | 説明 |
-|----------|------|
-| `coil_on_magnetic_core_peec.py` | 磁性体コア上のコイル解析（CplMagソルバ） |
-| `esim_conductor_model.py` | ESIM表面インピーダンスモデル |
-
-詳細な理論は [docs/PEEC_SURFACE_IMPEDANCE.md](../../docs/PEEC_SURFACE_IMPEDANCE.md) を参照。
-
-## 利点
-
-### 周波数領域
-- DCから高周波まで厳密な周波数特性
-- 各周波数でF_R, F_Lを直接計算可能
-
-### 時間領域
-- FFT/IFFTが不要
-- 非線形材料との結合が可能
-- SPICEとの連携が容易
-
-### モデル次数削減
-- Lanczosで効率的に削減
-- リアルタイムシミュレーション向け
-- 制御系設計への応用
-
-## SPICE/Verilog-A出力
-
-### 概要
-
-PEECモデルおよびPRIMA縮約モデルをSPICE netlistおよびVerilog-Aモジュールとして出力できます。
-
-### 出力フォーマット
-
-| フォーマット | 拡張子 | 互換性 | 用途 |
-|-------------|--------|--------|------|
-| SPICE netlist | `.sp` | 高い（LTspice, PSpice, ngspice等） | 回路シミュレーション |
-| Verilog-A | `.va` | 限定的（Spectre, ADS, HSPICE等） | 高度なモデリング |
-
-### 使用方法
+## SPICE / Verilog-A Export
 
 ```bash
-# 基本的なSPICE出力
-python demo_prima_spice_export.py
-
-# Verilog-A出力を有効化
-python demo_prima_spice_export.py --verilog-a
-
-# Lanczos次数を指定
-python demo_prima_spice_export.py --lanczos 10
+python spice/demo_prima_spice_export.py              # SPICE netlist
+python spice/demo_prima_spice_export.py --verilog-a   # Verilog-A
+python spice/demo_prima_spice_export.py --lanczos 10  # Set Lanczos order
 ```
 
-### 出力ファイル例
+| Format | Extension | Compatibility | Use case |
+|--------|-----------|---------------|----------|
+| SPICE netlist | `.sp` | High (LTspice, PSpice, ngspice, etc.) | Circuit simulation |
+| Verilog-A | `.va` | Limited (Spectre, ADS, HSPICE) | Advanced modeling |
 
-**SPICE netlist** (`wire_prima.sp`):
-```spice
-.SUBCKT WIRE_PRIMA port_in port_out
-* PRIMA Ladder Network
-R1 port_in port_ina 1.724138e-04
-L1 port_ina n1 7.481454e-09
-...
-K1_2 L1 L2 3.204657e-01
-.ENDS
-```
-
-**Verilog-A** (`wire_prima.va`):
-```verilog
-module wire_prima(port_in, port_out);
-    inout port_in, port_out;
-    electrical port_in, port_out;
-    // Implementation using ddt() for inductors
-endmodule
-```
-
-### 注意事項
-
-- **Verilog-Aの互換性**: Verilog-Aは全てのシミュレータでサポートされているわけではありません。確認済みシミュレータ：Cadence Spectre, Keysight ADS, Synopsys HSPICE
-- **標準SPICE推奨**: 互換性を重視する場合は標準SPICE netlist (`.sp`) を使用してください
-
-## 85kHz WPT周波数応答検証
-
-### 概要
-
-ワイヤレス電力伝送(WPT)の標準周波数である85kHzでのPEECモデル精度を検証しています。
-
-### 検証項目
-
-| テスト | 内容 | 結果 |
-|--------|------|------|
-| 直線導体 | R, L vs 解析解 | R誤差 < 1%, L誤差 < 10% |
-| 円形ループ | インピーダンス特性 | PASS |
-| 周波数掃引 | 1kHz - 1MHz | 位相角 > 80° (高周波) |
-
-### 実行方法
+## Paper Figure Generation
 
 ```bash
-python verify_frequency_response_85khz.py
+python analysis/generate_paper_figures.py
 ```
 
-### 検証結果
+| Figure | Content | Output |
+|--------|---------|--------|
+| fig1 | PEEC matrix verification | `figures/fig1_peec_matrix_verification.pdf` |
+| fig2 | PRIMA accuracy comparison | `figures/fig2_prima_accuracy.pdf` |
+| fig3 | Adaptive MSC error | `figures/fig3_adaptive_msc_error.pdf` |
+| fig4 | WPT coil (85 kHz) | `figures/fig4_wpt_coil_85khz.pdf` |
 
-```
-Wire parameters:
-  Length: 100mm, Width: 2mm, Height: 0.5mm
-
-85kHz Results:
-  Skin depth: 234 um
-  R_DC: 0.172 mOhm
-  L: 56.0 nH
-  |Z|: 30.2 mOhm @ 85kHz
-  Phase: 89.7 deg (strongly inductive)
-```
-
-## 論文用図表生成
-
-`generate_paper_figures.py` で以下の図を生成できます:
-
-| 図 | 内容 | 出力ファイル |
-|----|------|-------------|
-| fig1 | PEECマトリクス検証 | `figures/fig1_peec_matrix_verification.pdf` |
-| fig2 | PRIMA精度比較 | `figures/fig2_prima_accuracy.pdf` |
-| fig3 | 適応的MSC誤差 | `figures/fig3_adaptive_msc_error.pdf` |
-| fig4 | WPTコイル(85kHz) | `figures/fig4_wpt_coil_85khz.pdf` |
-
-```bash
-python generate_paper_figures.py
-```
-
-## 参考文献
+## References
 
 1. P.L. Dowell, "Effects of eddy currents in transformer windings," Proc. IEE, 1966.
 2. J.A. Ferreira, "Electromagnetic Modelling of Power Electronic Converters," 1989.
