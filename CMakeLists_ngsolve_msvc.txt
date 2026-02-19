@@ -173,14 +173,13 @@ target_compile_definitions(radia_ngsolve PRIVATE
 	$<$<PLATFORM_ID:Windows>:_WINDOWS>
 )
 
-# FFTW library
-if(WIN32)
-	set(FFTW_LIB ${FFTW_DIR}/fftw64_f.lib)
-	if(EXISTS ${FFTW_LIB})
-		target_link_libraries(radia_ngsolve PRIVATE ${FFTW_LIB})
-		message(STATUS "Found FFTW library: ${FFTW_LIB}")
-	else()
-		message(WARNING "FFTW library not found: ${FFTW_LIB}")
+# FFT: Use MKL DFTI (no external FFTW library needed)
+# MKL provides fftw3 compatibility via include/fftw/
+if(WIN32 AND USE_MKL_FOUND)
+	set(MKL_FFTW3_INCLUDE_DIR "${MKL_INCLUDE_DIR}/fftw")
+	if(EXISTS ${MKL_FFTW3_INCLUDE_DIR})
+		target_include_directories(radia_ngsolve PRIVATE ${MKL_FFTW3_INCLUDE_DIR})
+		message(STATUS "Using MKL DFTI for FFT (fftw3 wrapper): ${MKL_FFTW3_INCLUDE_DIR}")
 	endif()
 endif()
 

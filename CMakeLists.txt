@@ -46,17 +46,16 @@ find_package(pybind11 REQUIRED)
 
 # Set NGSolve and Netgen directories (only if building radia_ngsolve)
 if(RADIA_BUILD_NGSOLVE)
-	# Try custom NGSolve installation first (local build), then fall back to site-packages
-	set(NGSOLVE_CUSTOM_PATH "S:/NGSolve/01_GitHub/install_ksugahar")
-	if(EXISTS "${NGSOLVE_CUSTOM_PATH}/cmake/NGSolveConfig.cmake")
-		set(NGSolve_DIR "${NGSOLVE_CUSTOM_PATH}/cmake")
-		set(Netgen_DIR "${NGSOLVE_CUSTOM_PATH}/cmake")
-		message(STATUS "Using custom NGSolve: ${NGSolve_DIR}")
-	else()
+	# Use pip-installed NGSolve from site-packages (version-agnostic)
+	# Override with -DNGSolve_DIR=... -DNetgen_DIR=... if needed
+	if(NOT NGSolve_DIR)
 		set(NGSolve_DIR ${PYTHON_SITE_PACKAGES}/ngsolve/cmake)
-		set(Netgen_DIR ${PYTHON_SITE_PACKAGES}/netgen/cmake)
-		message(STATUS "Using site-packages NGSolve: ${NGSolve_DIR}")
 	endif()
+	if(NOT Netgen_DIR)
+		set(Netgen_DIR ${PYTHON_SITE_PACKAGES}/netgen/cmake)
+	endif()
+	message(STATUS "NGSolve_DIR: ${NGSolve_DIR}")
+	message(STATUS "Netgen_DIR: ${Netgen_DIR}")
 
 	# Find NGSolve
 	find_package(NGSolve CONFIG REQUIRED)
