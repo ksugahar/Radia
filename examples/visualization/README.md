@@ -210,7 +210,7 @@ Build from source:
 
 ```powershell
 # In S:\Radia\01_GitHub
-powershell.exe -ExecutionPolicy Bypass -File BuildMSVC.ps1
+powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 ```
 
 ---
@@ -293,7 +293,7 @@ Build `radia_ngsolve.pyd`:
 
 ```powershell
 # S:\Radia\01_GitHub
-powershell.exe -ExecutionPolicy Bypass -File BuildMSVC.ps1
+powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 ```
 
 ### ParaView: "pvpython not found"

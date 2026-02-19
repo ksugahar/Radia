@@ -24,7 +24,7 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Starting Radia build (RadiaOnly mode)..."
-          & "${{ github.workspace }}\BuildMSVC.ps1" -RadiaOnly -Verbose
+          & "${{ github.workspace }}\Build.ps1" -RadiaOnly -Verbose
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Build failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE

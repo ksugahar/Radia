@@ -10,10 +10,10 @@ Complete guide for building Radia Python modules on Windows, macOS, and Linux.
 
 ```powershell
 # Build both radia and radia_ngsolve (recommended)
-.\BuildMSVC.ps1
+.\Build.ps1
 
 # Clean rebuild
-.\BuildMSVC.ps1 -Rebuild
+.\Build.ps1 -Rebuild
 ```
 
 **Outputs**: `build-msvc/radia.pyd`, `build-msvc/radia_ngsolve.pyd`
@@ -44,7 +44,7 @@ make -j$(nproc)
 
 ## Build Scripts (Windows)
 
-### BuildMSVC.ps1 - Primary Build Script (Recommended)
+### Build.ps1 - Primary Build Script (Recommended)
 
 Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 
@@ -62,11 +62,11 @@ Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 **Examples**:
 
 ```powershell
-.\BuildMSVC.ps1                  # Standard build (radia + radia_ngsolve)
-.\BuildMSVC.ps1 -Rebuild         # Clean rebuild
-.\BuildMSVC.ps1 -RadiaOnly       # Build only radia.pyd
-.\BuildMSVC.ps1 -Test            # Build and run import tests
-.\BuildMSVC.ps1 -Verbose         # Show detailed build output
+.\Build.ps1                  # Standard build (radia + radia_ngsolve)
+.\Build.ps1 -Rebuild         # Clean rebuild
+.\Build.ps1 -RadiaOnly       # Build only radia.pyd
+.\Build.ps1 -Test            # Build and run import tests
+.\Build.ps1 -Verbose         # Show detailed build output
 ```
 
 **Features**:
@@ -317,8 +317,8 @@ import radia_ngsolve  # Now this will work
 **Cause**: Intel MKL DLLs not found
 **Solution**: Ensure Intel oneAPI is installed and DLLs are copied:
 ```powershell
-# BuildMSVC.ps1 automatically copies required DLLs
-.\BuildMSVC.ps1 -Rebuild
+# Build.ps1 automatically copies required DLLs
+.\Build.ps1 -Rebuild
 ```
 
 #### OpenMP issues (two OpenMP runtimes)
@@ -338,11 +338,11 @@ for dll in process.memory_maps():
 #### Build fails with linking errors
 ```powershell
 # Clean rebuild
-.\BuildMSVC.ps1 -Rebuild
+.\Build.ps1 -Rebuild
 
 # Or full clean
 Remove-Item -Recurse -Force build-msvc
-.\BuildMSVC.ps1
+.\Build.ps1
 ```
 
 ### macOS
@@ -509,7 +509,7 @@ rad.CndSolve(cond)
 - name: Build Radia
   shell: pwsh
   run: |
-    .\BuildMSVC.ps1
+    .\Build.ps1
 
 - name: Upload artifacts
   uses: actions/upload-artifact@v3
@@ -527,10 +527,10 @@ rad.CndSolve(cond)
 - **Intel MKL** for all BLAS/LAPACK/FFT operations
 - **Intel OpenMP** (`libiomp5md.dll`) for parallelization
 - **MSVC** compiler for NGSolve ABI compatibility
-- BuildMSVC.ps1 automatically copies required DLLs
+- Build.ps1 automatically copies required DLLs
 - Supports both cmd.exe and PowerShell
 
-**Required DLLs** (auto-copied by BuildMSVC.ps1):
+**Required DLLs** (auto-copied by Build.ps1):
 | DLL | Purpose |
 |-----|---------|
 | `mkl_rt.2.dll` | MKL runtime (single dynamic library) |
@@ -558,14 +558,14 @@ rad.CndSolve(cond)
 
 ## Deprecated Scripts
 
-The following old scripts have been replaced:
+The following old scripts have been replaced by `Build.ps1`:
 
 | Old Script | Replacement |
 |------------|-------------|
-| `Build.ps1` | `.\BuildMSVC.ps1` |
-| `Build_NGSolve.ps1` | `.\BuildMSVC.ps1` |
-| `build_radia_ngsolve.bat` | `.\BuildMSVC.ps1` |
-| `build_radia_ngsolve_full.bat` | `.\BuildMSVC.ps1 -Rebuild` |
+| `BuildMSVC.ps1` | `.\Build.ps1` |
+| `Build_NGSolve.ps1` | `.\Build.ps1` |
+| `build_radia_ngsolve.bat` | `.\Build.ps1` |
+| `build_radia_ngsolve_full.bat` | `.\Build.ps1 -Rebuild` |
 
 Old scripts are removed from the repository.
 
@@ -575,17 +575,17 @@ Old scripts are removed from the repository.
 
 ```powershell
 # Initial setup
-.\BuildMSVC.ps1 -Rebuild
+.\Build.ps1 -Rebuild
 
 # During development (incremental builds)
-.\BuildMSVC.ps1
+.\Build.ps1
 
 # Test import
 python -c "import sys; sys.path.insert(0, 'build-msvc'); import radia; print(radia.UtiVer())"
 
 # Clean everything
 Remove-Item -Recurse -Force build-msvc
-.\BuildMSVC.ps1
+.\Build.ps1
 ```
 
 ---

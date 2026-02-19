@@ -30,7 +30,7 @@ try:
     print("\nUsing C++ PEEC implementation with panel support")
 except ImportError as e:
     print(f"\nERROR: PEEC module not available: {e}")
-    print("Build with: powershell.exe -ExecutionPolicy Bypass -File BuildMSVC.ps1")
+    print("Build with: powershell.exe -ExecutionPolicy Bypass -File Build.ps1")
     sys.exit(1)
 
 # Physical constants
