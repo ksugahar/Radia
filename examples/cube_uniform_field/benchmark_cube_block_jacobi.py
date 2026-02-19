@@ -12,7 +12,7 @@ import numpy as np
 os.environ['OMP_NUM_THREADS'] = '8'
 os.environ['MKL_NUM_THREADS'] = '8'
 
-repo_root = r"S:\Radia\01_GitHub"
+repo_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
 sys.path.insert(0, os.path.join(repo_root, 'src'))
 
 import radia as rad

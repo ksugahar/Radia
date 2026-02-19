@@ -19,8 +19,8 @@ sys.path.insert(0, str(project_root / 'src' / 'radia'))
 import numpy as np
 import radia as rad
 
-# Import coil model
-from coil_model import create_beam_steering_coil, get_coil_info
+# Import coil model (sets rad.FldUnits('m') and defines mm = 1e-3)
+from coil_model import create_beam_steering_coil, get_coil_info, mm
 
 
 
@@ -37,23 +37,23 @@ def calculate_field_at_test_points(coil_obj):
 	print(f"{'Position (mm)':<25} {'Bx (mT)':<15} {'By (mT)':<15} {'Bz (mT)':<15} {'|B| (mT)':<15}")
 	print("-" * 70)
 
-	# Test points along different axes
+	# Test points (displayed in mm)
 	test_points = [
 		[0, 0, 0],
-		[0, 0, 100],
-		[0, 0, 500],
-		[100, 0, 0],
-		[0, 100, 0],
-		[50, 0, 100],
-		[0, 200, 0],
-		[0, 0, -100],
+		[0, 0, 100*mm],
+		[0, 0, 500*mm],
+		[100*mm, 0, 0],
+		[0, 100*mm, 0],
+		[50*mm, 0, 100*mm],
+		[0, 200*mm, 0],
+		[0, 0, -100*mm],
 	]
 
 	for pt in test_points:
 		B = rad.Fld(coil_obj, 'b', pt)
 		Bx, By, Bz = B[0] * 1000, B[1] * 1000, B[2] * 1000  # T to mT
 		B_mag = np.sqrt(Bx**2 + By**2 + Bz**2)
-		pt_str = f"({pt[0]:.0f}, {pt[1]:.0f}, {pt[2]:.0f})"
+		pt_str = f"({pt[0]/mm:.0f}, {pt[1]/mm:.0f}, {pt[2]/mm:.0f})"
 		print(f"{pt_str:<25} {Bx:<15.6f} {By:<15.6f} {Bz:<15.6f} {B_mag:<15.6f}")
 
 	print("-" * 70)
@@ -64,12 +64,12 @@ def calculate_field_at_test_points(coil_obj):
 	print("-" * 70)
 	print(f"{'Z (mm)':<15} {'Bx (mT)':<15} {'|B| (mT)':<15}")
 	print("-" * 40)
-	z_points = np.linspace(-200, 600, 17)
+	z_points = np.linspace(-200*mm, 600*mm, 17)
 	for z in z_points:
 		B = rad.Fld(coil_obj, 'b', [0, 0, z])
 		Bx = B[0] * 1000
 		B_mag = np.linalg.norm(B) * 1000
-		print(f"{z:<15.1f} {Bx:<15.6f} {B_mag:<15.6f}")
+		print(f"{z/mm:<15.1f} {Bx:<15.6f} {B_mag:<15.6f}")
 	print("-" * 40)
 
 
@@ -91,15 +91,15 @@ def main():
 	print(f"[OK] Coil model loaded")
 	print(f"     Description: {params['description']}")
 	print(f"     Current: {params['current']} A")
-	print(f"     Cross-section: {params['cross_section']['width']}×{params['cross_section']['height']} mm")
+	print(f"     Cross-section: {params['cross_section']['width']/mm:.0f}×{params['cross_section']['height']/mm:.0f} mm")
 	print(f"     Segments: {params['num_segments']}")
 
 	# Get geometry info
 	info = get_coil_info(coil)
 	print(f"\n     Bounding box:")
-	print(f"       X: [{info['bbox']['x_min']:.2f}, {info['bbox']['x_max']:.2f}] mm")
-	print(f"       Y: [{info['bbox']['y_min']:.2f}, {info['bbox']['y_max']:.2f}] mm")
-	print(f"       Z: [{info['bbox']['z_min']:.2f}, {info['bbox']['z_max']:.2f}] mm")
+	print(f"       X: [{info['bbox']['x_min']/mm:.2f}, {info['bbox']['x_max']/mm:.2f}] mm")
+	print(f"       Y: [{info['bbox']['y_min']/mm:.2f}, {info['bbox']['y_max']/mm:.2f}] mm")
+	print(f"       Z: [{info['bbox']['z_min']/mm:.2f}, {info['bbox']['z_max']/mm:.2f}] mm")
 
 	# Calculate magnetic field at test points
 	calculate_field_at_test_points(coil)
@@ -114,7 +114,7 @@ def main():
 
 		# Based on bounding box, extend ranges with margin
 		bbox = info['bbox']
-		margin = 100.0
+		margin = 100 * mm
 		x_range = [bbox['x_min'] - margin, bbox['x_max'] + margin]
 		y_range = [bbox['y_min'] - margin, bbox['y_max'] + margin]
 		z_range = [bbox['z_min'] - margin, bbox['z_max'] + margin]
@@ -123,6 +123,9 @@ def main():
 		print(f"  [OK] Created: {output_file}")
 	except Exception as e:
 		print(f"  [WARNING] Export failed: {e}")
+
+	# Cleanup
+	rad.UtiDelAll()
 
 	print("\n" + "=" * 70)
 	print("VISUALIZATION COMPLETE")

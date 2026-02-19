@@ -6,11 +6,15 @@ Run with: python -u benchmark_ctype_sequential.py
 """
 
 import sys
-sys.path.insert(0, r'S:\Radia\01_GitHub\src\radia')
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 import radia as rad
+rad.FldUnits('m')
 import time
 import json
+
+mm = 1e-3  # 1 mm in meters
 
 # B-H curve data (100 points, same as paper)
 bh_data = [
@@ -38,12 +42,12 @@ bh_data = [
 def create_ctype_electromagnet(nx=6, ny=6, nz=6):
     """Create C-type electromagnet model with specified mesh density"""
 
-    # Geometry parameters (mm)
-    yoke_width = 304.8  # 12 inch
-    yoke_height = 304.8
-    yoke_depth = 288.0  # Reduced from 304.8 to avoid wedge
-    gap_height = 50.0
-    pole_width = 100.0
+    # Geometry parameters (mm -> meters)
+    yoke_width = 304.8 * mm  # 12 inch
+    yoke_height = 304.8 * mm
+    yoke_depth = 288.0 * mm  # Reduced from 304.8 to avoid wedge
+    gap_height = 50.0 * mm
+    pole_width = 100.0 * mm
 
     # Coil parameters
     coil_current = 20000  # AT (Ampere-turns)
@@ -87,8 +91,8 @@ def create_ctype_electromagnet(nx=6, ny=6, nz=6):
     yoke = rad.ObjCnt([lower_yoke, upper_pole, vertical_yoke])
 
     # Create racetrack coil (approximation with two rectangular current loops)
-    coil_height = gap_height + 20
-    coil_width = pole_width + 20
+    coil_height = gap_height + 20 * mm
+    coil_width = pole_width + 20 * mm
 
     # Horizontal segments (main field contribution)
     coil_h1 = rad.ObjRaceTrk(
@@ -175,7 +179,7 @@ def run_single_benchmark(mesh_size, solver_type, use_newton=False):
     print(f"  Nonlinear iterations: {n_iter}")
     print(f"  Total linear iterations: {solve_stats['total_linear_iter']}")
     print(f"  Avg linear iter/NL: {solve_stats['total_linear_iter']/n_iter:.1f}")
-    print(f"  Bz at gap center: {Bz:.2f} mT")
+    print(f"  Bz at gap center: {Bz*1e3:.2f} mT ({Bz:.4f} T)")
     print(f"  Solve time: {t_solve:.2f} s")
     print(f"  Total time: {t_build + t_solve:.2f} s")
 
@@ -184,7 +188,7 @@ def run_single_benchmark(mesh_size, solver_type, use_newton=False):
         'solver': solver_name,
         'nl_iter': n_iter,
         'linear_iter': solve_stats['total_linear_iter'],
-        'Bz_mT': Bz,
+        'Bz_T': Bz,
         'build_time_s': t_build,
         'solve_time_s': t_solve,
         'total_time_s': t_build + t_solve,
@@ -241,12 +245,12 @@ def main():
     print("\n" + "="*70)
     print("SUMMARY TABLE")
     print("="*70)
-    print(f"{'Mesh':<12} {'Solver':<18} {'NL':<6} {'Lin':<8} {'Time(s)':<10} {'Mem(MB)':<10} {'Bz(mT)':<10}")
+    print(f"{'Mesh':<12} {'Solver':<18} {'NL':<6} {'Lin':<8} {'Time(s)':<10} {'Mem(MB)':<10} {'Bz(T)':<10}")
     print("-"*70)
     for r in all_results:
         mem_str = f"{r['memory_mb']:.1f}" if 'memory_mb' in r else "---"
         print(f"{r['mesh']:<12} {r['solver']:<18} {r['nl_iter']:<6} {r['linear_iter']:<8} "
-              f"{r['solve_time_s']:<10.1f} {mem_str:<10} {r['Bz_mT']:<10.2f}")
+              f"{r['solve_time_s']:<10.1f} {mem_str:<10} {r['Bz_T']:<10.4f}")
 
     # Save results
     output_file = 'ctype_benchmark_results.json'

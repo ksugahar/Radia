@@ -8,7 +8,8 @@ Date: 2025-11-08
 """
 
 import sys
-sys.path.insert(0, r"S:\Radia\01_GitHub\build\Release")
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
 
 import numpy as np
 import matplotlib.pyplot as plt

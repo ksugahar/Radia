@@ -19,6 +19,9 @@ import numpy as np
 # Add Radia to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
+import radia as rad
+rad.FldUnits('m')
+
 try:
     from peec_matrices import PEECBuilder
     print("Using C++ PEEC implementation")
@@ -30,6 +33,8 @@ except ImportError:
 # Physical constants
 MU_0 = 4 * np.pi * 1e-7  # H/m
 SIGMA_COPPER = 5.8e7      # S/m
+
+mm = 1e-3  # 1 mm in meters
 
 
 def skin_depth(f, sigma=SIGMA_COPPER, mu_r=1.0):
@@ -91,16 +96,16 @@ def verify_straight_wire(f_target=85000):
     print("=" * 60)
 
     # Wire parameters (typical WPT coil segment)
-    length = 0.1       # 10 cm
-    width = 2e-3       # 2 mm
-    height = 0.5e-3    # 0.5 mm (Litz wire cross-section)
+    length = 100*mm     # 10 cm
+    width = 2*mm        # 2 mm
+    height = 0.5*mm     # 0.5 mm (Litz wire cross-section)
     n_segments = 20
     sigma = SIGMA_COPPER
 
     print(f"\nWire parameters:")
-    print(f"  Length:     {length*1e3:.0f} mm")
-    print(f"  Width:      {width*1e3:.1f} mm")
-    print(f"  Height:     {height*1e3:.2f} mm")
+    print(f"  Length:     {length/mm:.0f} mm")
+    print(f"  Width:      {width/mm:.1f} mm")
+    print(f"  Height:     {height/mm:.2f} mm")
     print(f"  Segments:   {n_segments}")
 
     # Analytical values
@@ -170,16 +175,16 @@ def verify_circular_loop(f_target=85000):
     print("=" * 60)
 
     # Loop parameters (typical WPT coil)
-    radius = 0.15      # 15 cm diameter
-    width = 3e-3       # 3 mm
-    height = 1e-3      # 1 mm
+    radius = 150*mm     # 15 cm diameter
+    width = 3*mm        # 3 mm
+    height = 1*mm       # 1 mm
     n_segments = 36    # 10 deg per segment
     sigma = SIGMA_COPPER
 
     print(f"\nLoop parameters:")
-    print(f"  Radius:     {radius*1e2:.0f} cm")
-    print(f"  Width:      {width*1e3:.1f} mm")
-    print(f"  Height:     {height*1e3:.1f} mm")
+    print(f"  Radius:     {radius/mm/10:.0f} cm")
+    print(f"  Width:      {width/mm:.1f} mm")
+    print(f"  Height:     {height/mm:.1f} mm")
     print(f"  Segments:   {n_segments}")
 
     # Analytical values
@@ -251,9 +256,9 @@ def verify_frequency_sweep():
     print("=" * 60)
 
     # Simple wire for testing
-    length = 0.1
-    width = 2e-3
-    height = 0.5e-3
+    length = 100*mm
+    width = 2*mm
+    height = 0.5*mm
     n_segments = 10
     sigma = SIGMA_COPPER
 

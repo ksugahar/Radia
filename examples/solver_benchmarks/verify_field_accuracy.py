@@ -15,6 +15,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import radia as rad
 import numpy as np
 
+# Set unit system to meters
+rad.FldUnits('m')
+mm = 1e-3  # 1 mm in meters
+
 
 def hex_vertices(cx, cy, cz, dx, dy, dz):
 	"""Generate hexahedron vertices from center and dimensions."""
@@ -31,7 +35,7 @@ def create_magnet(n_per_side):
 	Create a cubic magnet subdivided into n x n x n elements.
 	Permanent magnet with fixed magnetization (no relaxation needed).
 	"""
-	size = 20.0
+	size = 20.0 * mm
 	elem_size = size / n_per_side
 	container = rad.ObjCnt([])
 
@@ -61,7 +65,7 @@ def main():
 	magnet_small = create_magnet(5)
 
 	B_small_center = rad.Fld(magnet_small, 'b', [0, 0, 0])
-	B_small_outside = rad.Fld(magnet_small, 'b', [0, 0, 30])
+	B_small_outside = rad.Fld(magnet_small, 'b', [0, 0, 30 * mm])
 
 	print(f"  B at center [0,0,0]:    [{B_small_center[0]:.8f}, {B_small_center[1]:.8f}, {B_small_center[2]:.8f}] T")
 	print(f"  B outside [0,0,30mm]:   [{B_small_outside[0]:.8f}, {B_small_outside[1]:.8f}, {B_small_outside[2]:.8f}] T")
@@ -72,7 +76,7 @@ def main():
 	magnet_medium = create_magnet(7)
 
 	B_medium_center = rad.Fld(magnet_medium, 'b', [0, 0, 0])
-	B_medium_outside = rad.Fld(magnet_medium, 'b', [0, 0, 30])
+	B_medium_outside = rad.Fld(magnet_medium, 'b', [0, 0, 30 * mm])
 
 	print(f"  B at center [0,0,0]:    [{B_medium_center[0]:.8f}, {B_medium_center[1]:.8f}, {B_medium_center[2]:.8f}] T")
 	print(f"  B outside [0,0,30mm]:   [{B_medium_outside[0]:.8f}, {B_medium_outside[1]:.8f}, {B_medium_outside[2]:.8f}] T")
@@ -107,12 +111,12 @@ def main():
 
 	test_points = [
 		[0, 0, 0],
-		[5, 0, 0],
-		[0, 5, 0],
-		[0, 0, 15],
-		[10, 0, 0],
-		[0, 0, 30],
-		[0, 0, 50],
+		[5 * mm, 0, 0],
+		[0, 5 * mm, 0],
+		[0, 0, 15 * mm],
+		[10 * mm, 0, 0],
+		[0, 0, 30 * mm],
+		[0, 0, 50 * mm],
 	]
 
 	print("\n{:<20} {:<20} {:<20} {:<15}".format("Point [mm]", "Standard B_z [T]", "H-matrix B_z [T]", "Rel Error [%]"))
@@ -130,7 +134,7 @@ def main():
 
 		max_error = max(max_error, rel_error)
 
-		point_str = f"[{point[0]}, {point[1]}, {point[2]}]"
+		point_str = f"[{point[0]/mm:.0f}, {point[1]/mm:.0f}, {point[2]/mm:.0f}]"
 		print(f"{point_str:<20} {B_small[2]:<20.8f} {B_medium[2]:<20.8f} {rel_error:<15.4f}")
 
 	# Summary
@@ -196,9 +200,9 @@ def main():
 		script_name = os.path.splitext(os.path.basename(__file__))[0]
 
 		# Magnet is 20mm cube, extend range to 50mm for far-field
-		x_range = [-50, 50]
-		y_range = [-50, 50]
-		z_range = [-50, 50]
+		x_range = [-50 * mm, 50 * mm]
+		y_range = [-50 * mm, 50 * mm]
+		z_range = [-50 * mm, 50 * mm]
 
 		# Export small magnet field
 		vts_filename_small = f"{script_name}_small.vts"
@@ -215,6 +219,8 @@ def main():
 		print(f"      View with: paraview {vts_filename_small} {vts_filename_medium}")
 	except Exception as e:
 		print(f"\n[VTS] Warning: Export failed: {e}")
+
+	rad.UtiDelAll()
 
 if __name__ == "__main__":
 	main()
