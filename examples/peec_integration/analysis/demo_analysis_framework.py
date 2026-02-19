@@ -18,8 +18,8 @@ import sys
 import os
 
 # Add build path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build-msvc'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../build-msvc'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 # Import analysis framework
 from analysis import (

@@ -9,7 +9,7 @@ Expected result: Error < 10%
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 import numpy as np
 from pathlib import Path

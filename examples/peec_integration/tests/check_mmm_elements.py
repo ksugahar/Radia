@@ -1,7 +1,7 @@
 """Check MMM element count and geometry."""
 
 import sys
-sys.path.insert(0, '../../src/radia')
+sys.path.insert(0, '../../../src/radia')
 import radia as rad
 
 
