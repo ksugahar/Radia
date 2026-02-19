@@ -13,7 +13,7 @@ import os
 
 # Add build directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
 import codecs
@@ -37,6 +37,7 @@ def compare_cylindrical_magnet():
 	# Import libraries
 	try:
 		import radia as rad
+		rad.FldUnits('m')
 		print("[OK] Radia imported successfully")
 	except ImportError as e:
 		print(f"[ERROR] Failed to import Radia: {e}")
@@ -54,9 +55,12 @@ def compare_cylindrical_magnet():
 	print("Magnet Configuration")
 	print("-" * 70)
 
-	# Magnet parameters (in mm for Radia, convert to mm for magpylib)
-	radius = 10.0  # mm
-	height = 20.0  # mm
+	# Magnet parameters in mm (magpylib uses mm natively)
+	radius_mm = 10.0  # mm
+	height_mm = 20.0  # mm
+	# Convert to meters for Radia (FldUnits('m'))
+	radius = radius_mm / 1000  # 0.010 m
+	height = height_mm / 1000  # 0.020 m
 
 	# Use NdFeB-like material properties for realistic comparison
 	# Typical NdFeB: Br = 1.2 T (remanence)
@@ -67,8 +71,8 @@ def compare_cylindrical_magnet():
 	magnetization_T = remanence_T
 
 	print(f"  Shape: Cylinder")
-	print(f"  Radius: {radius} mm")
-	print(f"  Height: {height} mm")
+	print(f"  Radius: {radius_mm} mm")
+	print(f"  Height: {height_mm} mm")
 	print(f"  Material: NdFeB-like")
 	print(f"  Remanence Br: {remanence_T} T")
 	print(f"  Magnetization M: {magnetization_T} T (Z-direction)")
@@ -93,13 +97,13 @@ def compare_cylindrical_magnet():
 	print("Creating magnet in magpylib...")
 	print("-" * 70)
 
-	# magpylib uses SI units (mm for position, T for field and polarization)
+	# magpylib uses mm for position, T for field and polarization
 	# Use polarization parameter (remanence Br) in Tesla
 	# For permanent magnet: polarization = remanence Br
 
 	magpy_mag = magpy.magnet.Cylinder(
 		polarization=(0, 0, remanence_T),  # in Tesla
-		dimension=(2*radius, height)  # (diameter, height) in mm
+		dimension=(2*radius_mm, height_mm)  # (diameter, height) in mm
 	)
 	print(f"[OK] magpylib cylindrical magnet created")
 	print(f"     Polarization (Br): {remanence_T} T")
@@ -109,28 +113,28 @@ def compare_cylindrical_magnet():
 	print("Calculating fields at test points...")
 	print("-" * 70)
 
-	# Test points along Z-axis and radial direction
-	test_points = []
+	# Test points in mm (magpylib convention), convert to m for Radia
+	test_points_mm = []
 
 	# Points along Z-axis (above magnet)
 	for z in [25, 30, 40, 50]:
-		test_points.append([0, 0, z])
+		test_points_mm.append([0, 0, z])
 
 	# Points in radial direction at z=0 plane
 	for r in [15, 20, 30]:
-		test_points.append([r, 0, 0])
+		test_points_mm.append([r, 0, 0])
 
 	# Points in XZ plane
 	for x in [10, 20]:
 		for z in [20, 30]:
-			test_points.append([x, 0, z])
+			test_points_mm.append([x, 0, z])
 
-	print(f"  Number of test points: {len(test_points)}")
+	print(f"  Number of test points: {len(test_points_mm)}")
 	print(f"  Point locations:")
-	for i, pt in enumerate(test_points[:5]):
+	for i, pt in enumerate(test_points_mm[:5]):
 		print(f"    {i+1}. ({pt[0]:.1f}, {pt[1]:.1f}, {pt[2]:.1f}) mm")
-	if len(test_points) > 5:
-		print(f"    ... and {len(test_points)-5} more points")
+	if len(test_points_mm) > 5:
+		print(f"    ... and {len(test_points_mm)-5} more points")
 
 	# Calculate fields with both libraries
 	print("\n" + "-" * 70)
@@ -144,13 +148,16 @@ def compare_cylindrical_magnet():
 	bz_rad_first = 0.0
 	bz_mag_first = 0.0
 
-	for i, pt in enumerate(test_points):
+	for i, pt_mm in enumerate(test_points_mm):
+		# Convert mm to meters for Radia
+		pt_m = [c / 1000 for c in pt_mm]
+
 		# Radia field calculation (returns field in Tesla)
-		b_radia = rad.Fld(radia_mag, 'b', pt)
+		b_radia = rad.Fld(radia_mag, 'b', pt_m)
 		bx_rad, by_rad, bz_rad = b_radia[0] * 1000, b_radia[1] * 1000, b_radia[2] * 1000  # Convert T to mT
 
-		# magpylib field calculation (returns field in Tesla)
-		b_magpy = magpy_mag.getB(pt)
+		# magpylib field calculation (returns field in Tesla, position in mm)
+		b_magpy = magpy_mag.getB(pt_mm)
 		bx_mag, by_mag, bz_mag = b_magpy[0] * 1000, b_magpy[1] * 1000, b_magpy[2] * 1000  # Convert T to mT
 
 		# Compare Bz (main component for axially magnetized cylinder)
@@ -170,12 +177,12 @@ def compare_cylindrical_magnet():
 			bz_rad_first = bz_rad
 			bz_mag_first = bz_mag
 
-		pt_str = f"({pt[0]:.0f},{pt[1]:.0f},{pt[2]:.0f})"
+		pt_str = f"({pt_mm[0]:.0f},{pt_mm[1]:.0f},{pt_mm[2]:.0f})"
 		print(f"{pt_str:<20} {bz_rad:<15.6f} {bz_mag:<18.6f} {diff:<12.6f} {error_percent:<10.2f}")
 
 	# Summary statistics
 	print("-" * 70)
-	avg_abs_error = total_abs_error / len(test_points)
+	avg_abs_error = total_abs_error / len(test_points_mm)
 	print(f"\nSummary:")
 	print(f"  Maximum relative error: {max_error_percent:.2f}%")
 	print(f"  Average absolute error: {avg_abs_error:.6f} mT")
@@ -185,13 +192,13 @@ def compare_cylindrical_magnet():
 	print("ANALYSIS")
 	print("=" * 70)
 	print(f"\nImportant: Unit systems:")
-	print(f"  - Radia: Uses Tesla for both magnetization and field (SI units)")
+	print(f"  - Radia: FldUnits('m') -> geometry in meters, field in Tesla")
 	print(f"    -> For permanent magnets: M = Br (in Tesla)")
 	print(f"    -> Field output: B in Tesla")
-	print(f"  - magpylib: Uses Tesla for polarization and field (SI units)")
+	print(f"  - magpylib: geometry in mm, field in Tesla")
 	print(f"    -> Polarization = Br (in Tesla)")
 	print(f"    -> Field output: B in Tesla")
-	print(f"\nBoth libraries use the same unit system and physical model.")
+	print(f"\nBoth libraries output field in Tesla. Position units differ (m vs mm).")
 	print(f"\nExpected agreement: Within a few percent")
 	if bz_mag_first > 0:
 		ratio = bz_rad_first / bz_mag_first
@@ -218,9 +225,9 @@ def compare_cylindrical_magnet():
 		vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
 		# Cylindrical magnet: radius=10mm, height=20mm, extend range for far-field
-		x_range = [-50, 50]
-		y_range = [-50, 50]
-		z_range = [-50, 50]
+		x_range = [-0.050, 0.050]
+		y_range = [-0.050, 0.050]
+		z_range = [-0.050, 0.050]
 
 		rad.FldVTS(radia_mag, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
 		print(f"\n[VTS] Exported: {vts_filename}")
