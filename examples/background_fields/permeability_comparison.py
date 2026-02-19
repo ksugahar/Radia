@@ -6,7 +6,7 @@ Permeability Comparison - Analytical Solution Test
 Compares Radia numerical solutions with analytical quadrupole field
 for different permeability values (mu_r).
 
-Tests magnetizable sphere in quadrupole background field with:
+Tests magnetizable cube (approximating sphere) in quadrupole background field with:
 - mu_r = 10 (low permeability)
 - mu_r = 100 (medium permeability)
 - mu_r = 1000 (high permeability - soft iron)
@@ -20,40 +20,43 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import numpy as np
 import radia as rd
 
+rd.FldUnits('m')
+mm = 1e-3  # 1 mm in meters
+
 print("=" * 80)
 print("Permeability Comparison - Analytical Solution Test")
 print("=" * 80)
 
 # Test parameters
 gradient = 10.0  # T/m
-R_sphere = 5.0   # mm (sphere radius)
+R_sphere = 5.0 * mm   # half-size of cube (sphere approximation)
 permeability_values = [10, 100, 1000]
 
-# Test points outside the sphere (r > R_sphere)
+# Test points outside the cube (field ≈ background + stray field from cube)
+# Note: The magnetized cube produces stray fields that decay with distance.
+# Points farther from the cube give closer agreement with the pure background.
 test_points = [
 	# Along X-axis (y=0, z=0)
-	[10, 0, 0],   # r = 10mm
-	[15, 0, 0],   # r = 15mm
-	[20, 0, 0],   # r = 20mm
-	[30, 0, 0],   # r = 30mm
+	[20*mm, 0, 0],    # r = 20mm
+	[30*mm, 0, 0],    # r = 30mm
+	[50*mm, 0, 0],    # r = 50mm
+	[100*mm, 0, 0],   # r = 100mm
 	# Along Y-axis (x=0, z=0)
-	[0, 10, 0],   # r = 10mm
-	[0, 15, 0],   # r = 15mm
-	[0, 20, 0],   # r = 20mm
-	[0, 30, 0],   # r = 30mm
+	[0, 20*mm, 0],    # r = 20mm
+	[0, 30*mm, 0],    # r = 30mm
+	[0, 50*mm, 0],    # r = 50mm
+	[0, 100*mm, 0],   # r = 100mm
 	# Diagonal points
-	[10, 10, 0],  # r = 14.14mm
-	[15, 15, 0],  # r = 21.21mm
-	[20, 20, 0],  # r = 28.28mm
+	[20*mm, 20*mm, 0],   # r = 28.28mm
+	[50*mm, 50*mm, 0],   # r = 70.71mm
+	[100*mm, 100*mm, 0], # r = 141.42mm
 ]
 
 def quadrupole_field(pos):
 	"""Quadrupole field: Bx = g*y, By = g*x, Bz = 0"""
-	x, y, z = pos  # Position in mm
-	x_m = x * 1e-3  # Convert to meters
-	y_m = y * 1e-3
-	Bx = gradient * y_m  # [T]
-	By = gradient * x_m  # [T]
+	x, y, z = pos  # Position in meters (FldUnits='m')
+	Bx = gradient * y  # [T]
+	By = gradient * x  # [T]
 	Bz = 0.0
 	return [Bx, By, Bz]
 
@@ -69,16 +72,13 @@ for mu_r in permeability_values:
 	print(f"Testing with mu_r = {mu_r}")
 	print(f"{'=' * 80}")
 
-	chi = mu_r - 1.0
-
-	print(f"\nParameters:")
-	print(f"  Sphere radius: {R_sphere} mm")
+	print("\nParameters:")
+	print(f"  Cube half-size: {R_sphere/mm:.1f} mm")
 	print(f"  Relative permeability: {mu_r}")
-	print(f"  Magnetic susceptibility: {chi}")
 	print(f"  Quadrupole gradient: {gradient} T/m")
 
 	# Create Geometry
-	print(f"\n[Step 1] Creating Geometry")
+	print("\n[Step 1] Creating Geometry")
 	print("-" * 80)
 
 	rd.UtiDelAll()  # Clear all previous objects
@@ -94,38 +94,43 @@ for mu_r in permeability_values:
 	cube = rd.ObjHexahedron(vertices, [0, 0, 0])
 
 	# Use linear material with specified permeability
-	# MatLin(mu_r): defines isotropic linear material
-	mat = rd.MatLin(mu_r)  # Isotropic linear material
+	mat = rd.MatLin(mu_r)
 	rd.MatApl(cube, mat)
-	print(f"  Created {size}x{size}x{size} mm cube with linear material (mu_r={mu_r}, chi={chi})")
+	print(f"  Created {size/mm:.0f}x{size/mm:.0f}x{size/mm:.0f} mm cube with MatLin(mu_r={mu_r})")
 
 	# Create Quadrupole Background Field
-	print(f"\n[Step 2] Creating Quadrupole Background Field")
+	print("\n[Step 2] Creating Quadrupole Background Field")
 	print("-" * 80)
 
 	bckg_cf = rd.ObjBckg(quadrupole_field)
-	print(f"  Quadrupole field created: Bx = g*y, By = g*x")
+	print("  Quadrupole field created: Bx = g*y, By = g*x")
 
 	# Container with cube and background field
 	container = rd.ObjCnt([cube, bckg_cf])
-	print(f"  Container created")
+	print("  Container created")
 
 	# Solve
-	print(f"\n[Step 3] Solving Magnetostatic Problem")
+	print("\n[Step 3] Solving Magnetostatic Problem")
 	print("-" * 80)
 
-	print(f"  Solving...")
-	result = rd.Solve(container, 1e-5, 5000)
-	print(f"  [OK] Convergence: {result}")
+	print("  Solving...")
+	solve_result = rd.Solve(container, 1e-5, 5000)
+	max_abs_M = solve_result[3]
+	max_abs_H = solve_result[4]
+	print(f"  Solve result: max|dM|={max_abs_M:.2e}, max|dH|={max_abs_H:.2e}")
+	if max_abs_M < 1e-5:
+		print("  [OK] Solution converged")
+	else:
+		print(f"  [WARNING] Solution may not have converged (max|dM|={max_abs_M:.2e})")
 
 	# Compare with Analytical Solution
-	print(f"\n[Step 4] Compare with Analytical Quadrupole Field")
+	print("\n[Step 4] Compare with Analytical Quadrupole Field")
 	print("-" * 80)
 
-	print(f"\nComparison at points outside sphere (r > {R_sphere} mm):")
-	print(f"")
-	print(f"{'Point (mm)':<15} {'r (mm)':>8} | {'B_Radia (T)':^35} | {'B_Analytical (T)':^35} | {'|Delta B| (T)':>12} {'Error (%)':>10}")
-	print("-" * 130)
+	print(f"\nComparison at points outside cube (r > {R_sphere/mm:.1f} mm):")
+	print()
+	print(f"{'Point (mm)':<25} {'r (mm)':>8} | {'B_Radia (T)':^35} | {'B_Analytical (T)':^35} | {'|Delta B| (T)':>12} {'Error (%)':>10}")
+	print("-" * 140)
 
 	errors = []
 	for pt in test_points:
@@ -135,10 +140,8 @@ for mu_r in permeability_values:
 		# Radia solution
 		B_radia = rd.Fld(container, 'b', pt)
 
-		# Analytical quadrupole field
-		x_m = pt[0] * 1e-3
-		y_m = pt[1] * 1e-3
-		B_analytical = np.array([gradient * y_m, gradient * x_m, 0.0])
+		# Analytical quadrupole field (positions already in meters)
+		B_analytical = np.array([gradient * pt[1], gradient * pt[0], 0.0])
 
 		# Calculate error
 		B_radia_arr = np.array(B_radia)
@@ -154,17 +157,18 @@ for mu_r in permeability_values:
 		errors.append(error_pct)
 
 		# Format output
+		pt_mm = [p/mm for p in pt]
 		B_radia_str = f"[{B_radia[0]:8.5f}, {B_radia[1]:8.5f}, {B_radia[2]:8.5f}]"
 		B_analytical_str = f"[{B_analytical[0]:8.5f}, {B_analytical[1]:8.5f}, {B_analytical[2]:8.5f}]"
 
-		print(f"{str(pt):<15} {r:8.2f} | {B_radia_str:^35} | {B_analytical_str:^35} | {error_mag:12.6e} {error_pct:9.4f}%")
+		print(f"{str([f'{p:.0f}' for p in pt_mm]):<25} {r/mm:8.2f} | {B_radia_str:^35} | {B_analytical_str:^35} | {error_mag:12.6e} {error_pct:9.4f}%")
 
 	# Statistics
 	print(f"\n[Step 5] Error Statistics for mu_r = {mu_r}")
 	print("-" * 80)
 
 	errors_arr = np.array(errors)
-	print(f"\nError statistics:")
+	print("\nError statistics:")
 	print(f"  Mean error:    {errors_arr.mean():.4f}%")
 	print(f"  Median error:  {np.median(errors_arr):.4f}%")
 	print(f"  Max error:     {errors_arr.max():.4f}%")
@@ -188,9 +192,9 @@ for mu_r in permeability_values:
 		vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
 		# Geometry: 10mm cube centered at origin, extend range to 40mm for far-field
-		x_range = [-40, 40]
-		y_range = [-40, 40]
-		z_range = [-40, 40]
+		x_range = [-40*mm, 40*mm]
+		y_range = [-40*mm, 40*mm]
+		z_range = [-40*mm, 40*mm]
 
 		rd.FldVTS(container, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
 		print(f"\n[VTS] Exported: {vts_filename}")
@@ -205,8 +209,8 @@ print(f"\n{'=' * 80}")
 print("Summary: Permeability Comparison")
 print(f"{'=' * 80}")
 
-print(f"\nError statistics for different permeability values:")
-print(f"")
+print("\nError statistics for different permeability values:")
+print()
 print(f"{'mu_r':>6} | {'Mean (%)':>10} {'Median (%)':>12} {'Max (%)':>10} {'Min (%)':>10} {'Std (%)':>10}")
 print("-" * 80)
 
@@ -222,24 +226,28 @@ print(f"\n{'=' * 80}")
 print("Physical Interpretation")
 print(f"{'=' * 80}")
 
-print(f"\nKey Observations:")
-print(f"")
-print(f"1. Near-field distortion (r ~ {R_sphere*2} mm):")
+print("\nKey Observations:")
+print()
+print(f"1. Near-field distortion (r ~ {R_sphere*2/mm:.0f} mm):")
 for mu_r in permeability_values:
 	res = all_results[mu_r]
-	# First 4 points are along X-axis at 10-30mm, select r=15mm (index 1)
-	error_15mm = res['errors'][1]
-	print(f"   mu_r = {mu_r:4d}: {error_15mm:6.2f}% error")
+	# First point along X-axis: r=20mm (index 0)
+	error_near = res['errors'][0]
+	print(f"   mu_r = {mu_r:4d}: {error_near:6.2f}% error at r=20mm")
 
-print(f"\n2. Far-field accuracy (r ~ 30 mm):")
+print("\n2. Far-field accuracy (r >= 50 mm):")
 for mu_r in permeability_values:
 	res = all_results[mu_r]
-	# Last few points include r=30mm, select average of r~30mm points
-	far_field_errors = res['errors'][-4:]  # Last 4 points are far field
-	avg_far_field = far_field_errors.mean()
+	# Select points at r >= 50mm by checking actual distances
+	far_errors = []
+	for i, pt in enumerate(test_points):
+		r = np.sqrt(pt[0]**2 + pt[1]**2 + pt[2]**2)
+		if r >= 50*mm:
+			far_errors.append(res['errors'][i])
+	avg_far_field = np.mean(far_errors) if far_errors else float('inf')
 	print(f"   mu_r = {mu_r:4d}: {avg_far_field:6.4f}% average error")
 
-print(f"\n3. Overall accuracy:")
+print("\n3. Overall accuracy:")
 for mu_r in permeability_values:
 	res = all_results[mu_r]
 	if res['mean'] < 1.0:
@@ -250,10 +258,10 @@ for mu_r in permeability_values:
 		status = "[MODERATE] "
 	print(f"   mu_r = {mu_r:4d}: {status} {res['mean']:6.4f}% average error")
 
-print(f"\n4. Permeability effect:")
-print(f"   Higher permeability -> Stronger field distortion near sphere")
-print(f"   But far-field accuracy remains excellent for all mu_r values")
-print(f"   Error scaling follows 1/r^2 behavior (dipole perturbation)")
+print("\n4. Permeability effect:")
+print("   Higher permeability -> Stronger field distortion near cube")
+print("   But far-field accuracy remains excellent for all mu_r values")
+print("   Error scaling follows 1/r^2 behavior (dipole perturbation)")
 
 # ============================================================================
 # Final Summary
@@ -263,11 +271,10 @@ print(f"\n{'=' * 80}")
 print("Final Summary")
 print(f"{'=' * 80}")
 
-print(f"\n1. ObjBckg successfully implements quadrupole background field")
+print("\n1. ObjBckg successfully implements quadrupole background field")
 print(f"2. Tested with {len(permeability_values)} different permeability values: {permeability_values}")
-print(f"3. All tests show excellent agreement with analytical solution")
-print(f"4. Far-field accuracy < 0.5% for all permeability values")
-print(f"5. Near-field distortion increases with permeability (as expected)")
+print("3. All tests show good agreement with analytical solution")
+print("4. Near-field distortion increases with permeability (as expected)")
 
 best_mu = min(all_results.keys(), key=lambda k: all_results[k]['mean'])
 worst_mu = max(all_results.keys(), key=lambda k: all_results[k]['mean'])

@@ -4,6 +4,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 import numpy as np
 import radia as rad
 
+rad.FldUnits('m')
+
 MU_0 = 4 * np.pi * 1e-7
 H_EXT = 200000.0
 B_ext = MU_0 * H_EXT

@@ -17,12 +17,17 @@ import numpy as np
 # Add Radia to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
+import radia as rad
+rad.FldUnits('m')
+
 try:
     from peec_matrices import PEECBuilder
     print("Using C++ PEEC implementation")
 except ImportError:
     print("C++ PEEC module not available, using Python fallback")
     from radia.peec_matrices import PEECBuilder
+
+mm = 1e-3  # 1 mm in meters
 
 
 def verify_matrix_properties(name, M, expected_symmetric=True, expected_spd=True):
@@ -69,13 +74,13 @@ def verify_wire_peec():
     print("=" * 60)
 
     # Wire parameters
-    length = 0.1  # 10 cm
-    width = 1e-3  # 1 mm
-    height = 1e-3  # 1 mm
+    length = 100*mm  # 10 cm
+    width = 1*mm     # 1 mm
+    height = 1*mm    # 1 mm
     n_segments = 10
     sigma = 5.8e7  # Copper
 
-    print(f"\nWire: L={length*1e3:.0f}mm, w={width*1e3:.1f}mm, h={height*1e3:.1f}mm")
+    print(f"\nWire: L={length/mm:.0f}mm, w={width/mm:.1f}mm, h={height/mm:.1f}mm")
     print(f"Segments: {n_segments}, Conductivity: {sigma:.2e} S/m")
 
     # Build PEEC matrices
@@ -133,13 +138,13 @@ def verify_loop_peec():
     print("=" * 60)
 
     # Loop parameters
-    radius = 0.05  # 5 cm
-    width = 2e-3   # 2 mm
-    height = 1e-3  # 1 mm
+    radius = 50*mm   # 5 cm
+    width = 2*mm     # 2 mm
+    height = 1*mm    # 1 mm
     n_segments = 36
     sigma = 5.8e7
 
-    print(f"\nLoop: R={radius*1e3:.0f}mm, w={width*1e3:.1f}mm, h={height*1e3:.1f}mm")
+    print(f"\nLoop: R={radius/mm:.0f}mm, w={width/mm:.1f}mm, h={height/mm:.1f}mm")
     print(f"Segments: {n_segments}")
 
     # Build PEEC matrices
@@ -183,9 +188,9 @@ def verify_frequency_response():
     print("=" * 60)
 
     # Simple wire
-    length = 0.1
-    width = 1e-3
-    height = 1e-3
+    length = 100*mm
+    width = 1*mm
+    height = 1*mm
     n_segments = 10
     sigma = 5.8e7
 
