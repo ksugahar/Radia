@@ -39,10 +39,10 @@ viz = [
     "matplotlib>=3.5",
 ]
 ngsolve = [
-    # NGSolve 6.2.2406+ has a regression bug in Periodic BC (Identify lost during mesh generation)
+    # NGSolve 6.2.2406~2.2501 had a regression bug in Periodic BC (Identify lost during mesh generation)
     # See: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
-    # Working versions: 6.2.2404, 6.2.2405 (recommend 6.2.2405)
-    "ngsolve==6.2.2405",
+    # Fixed in 6.2.2601+. Verified: geominfo, Periodic BC, vol-to-gmsh all pass.
+    "ngsolve>=6.2.2601",
 ]
 test = [
     "pytest>=7.0",
