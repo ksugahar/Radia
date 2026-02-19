@@ -1367,46 +1367,43 @@ powershell.exe -ExecutionPolicy Bypass -File Publish_to_PyPI.ps1
 
 **Security**: NEVER commit PyPI tokens to repository. NEVER ask user for their token.
 
-### MKL DLL Bundling Policy (2025-12-27)
+### MKL DLL Policy: Do NOT Bundle (2026-02-20)
 
-**Policy**: PyPI packages MUST include Intel MKL runtime DLLs for user convenience.
+**Policy**: PyPI packages MUST NOT bundle Intel MKL DLLs. MKL is installed via pip dependency.
 
-**Required DLLs** (Windows):
-- `mkl_core.2.dll` - MKL core library
-- `mkl_intel_thread.2.dll` - MKL Intel OpenMP threading
-- `mkl_def.2.dll` - MKL definitions
-- `mkl_rt.2.dll` - MKL runtime (optional, for dynamic linking)
-- `libiomp5md.dll` - Intel OpenMP runtime
+**Rationale** (changed from previous bundling policy):
+- `pyproject.toml` declares `mkl>=2024.2.0` and `intel-cmplr-lib-rt>=2024.2.0` as dependencies
+- pip automatically installs MKL DLLs to `{sys.prefix}/Library/bin/`
+- `__init__.py` dynamically adds the MKL DLL directory via `os.add_dll_directory()`
+- Bundling DLLs causes version conflicts with pip-installed MKL
+- Reduces wheel size significantly (~100MB less)
 
-**Source Location** (Intel oneAPI):
-```
-C:\Program Files (x86)\Intel\oneAPI\mkl\latest\bin\
-C:\Program Files (x86)\Intel\oneAPI\compiler\latest\bin\
-```
+**Do NOT**:
+- Copy MKL DLLs (mkl_rt.2.dll, mkl_core.2.dll, etc.) into `src/radia/`
+- Copy Intel OpenMP DLLs (libiomp5md.dll, svml_dispmd.dll, etc.) into `src/radia/`
+- Include `*.dll` in `package_data` or `MANIFEST.in`
+- Bundle any Intel runtime libraries in the wheel
 
-**Package Structure**:
+**Package Structure** (v2.1.0+):
 ```
 src/radia/
-  __init__.py
-  radia.pyd           # C++ extension
-  mkl_core.2.dll      # MKL runtime (bundled)
-  mkl_intel_thread.2.dll
-  mkl_def.2.dll
-  libiomp5md.dll      # Intel OpenMP
+  __init__.py           # DLL path setup + re-export from C++ module
+  _radia_pybind.pyd     # Main C++ extension (links to mkl_rt.lib)
+  radia_ngsolve.pyd     # NGSolve integration (optional)
+  cln_core.pyd          # CLN transient solver
+  mmm_core.pyd          # MMM solver
+  peec_matrices.pyd     # PEEC matrix assembly
+  *.py                  # Python utility modules
+  # NO .dll files - MKL comes from pip dependency
 ```
 
-**Rationale**:
-- Users should NOT need to install Intel oneAPI to use Radia
-- Bundling DLLs ensures consistent behavior across environments
-- Reduces support burden from "DLL not found" errors
-
-**Build Integration**:
-- `BuildWithIntel.ps1` should copy required DLLs to `src/radia/`
-- `setup.py` / `pyproject.toml` should include DLLs in `package_data`
-
-**License Consideration**:
-Intel MKL runtime DLLs are redistributable under Intel oneAPI EULA.
-Include appropriate license notices in the package.
+**DLL Resolution** (at import time):
+```python
+# __init__.py adds MKL DLL path dynamically
+_mkl_bin = os.path.join(sys.prefix, "Library", "bin")
+if os.path.isdir(_mkl_bin):
+    os.add_dll_directory(_mkl_bin)
+```
 
 ---
 
