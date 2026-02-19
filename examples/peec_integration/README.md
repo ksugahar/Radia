@@ -22,10 +22,8 @@ peec_integration/
 ├── wpt/                     # Wireless power transfer (WPT)
 ├── applications/            # Applications (dielectric, magnetic core, induction heating, NMR)
 ├── spice/                   # SPICE / Verilog-A export
-├── tests/                   # Tests and debug scripts
 ├── benchmarks/              # Benchmarks and comparisons
-├── validation/              # Validation scripts
-├── verification/            # Verification scripts
+├── verification/            # Verification, validation, and debug scripts
 ├── algorithm_development/   # Algorithm derivation scripts
 ├── analysis/                # Analysis and paper figure generation
 ├── gmsh_models/             # Mesh generation and conversion utilities
