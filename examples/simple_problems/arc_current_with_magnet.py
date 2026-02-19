@@ -19,15 +19,16 @@ import radia as rad
 
 # Clear all objects
 rad.UtiDelAll()
+rad.FldUnits('m')
 
-# Parameters
-rmin = 100
-rmax = 150
+# Parameters (in meters)
+rmin = 0.100       # 100 mm
+rmax = 0.150       # 150 mm
 phimin = 0
 phimax = 2 * math.pi
-h = 20
+h = 0.020          # 20 mm
 nseg = 20
-j = 10
+j = 10e6           # 10 A/mm^2 = 10e6 A/m^2
 
 # Create arc with current
 g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
@@ -35,9 +36,9 @@ g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
 # Create hexahedral magnet with magnetization [0,0,1.0] T
 # Note: Radia magnetization unit is Tesla (T), not A/m
 # For permanent magnets, set magnetization directly (no material needed)
-# 300x300x5 mm centered at [0, 0, -50]
-vertices = [[-150, -150, -52.5], [150, -150, -52.5], [150, 150, -52.5], [-150, 150, -52.5],
-            [-150, -150, -47.5], [150, -150, -47.5], [150, 150, -47.5], [-150, 150, -47.5]]
+# 300x300x5 mm centered at [0, 0, -0.050 m]
+vertices = [[-0.150, -0.150, -0.0525], [0.150, -0.150, -0.0525], [0.150, 0.150, -0.0525], [-0.150, 0.150, -0.0525],
+            [-0.150, -0.150, -0.0475], [0.150, -0.150, -0.0475], [0.150, 0.150, -0.0475], [-0.150, 0.150, -0.0475]]
 g2 = rad.ObjHexahedron(vertices, [0, 0, 1.0])
 
 # Note: Material properties (MatLin, MatSatIso) are for soft magnetic materials
@@ -65,11 +66,11 @@ try:
 	vts_filename = f"{script_name}.vts"
 	vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
-	# Geometry: arc current rmin=100, rmax=150, magnet 300x300x5 at z=-50
+	# Geometry: arc current rmin=0.1m, rmax=0.15m, magnet 0.3x0.3x0.005m at z=-0.05m
 	# Extend range to cover geometry
-	x_range = [-200, 200]
-	y_range = [-200, 200]
-	z_range = [-100, 50]
+	x_range = [-0.200, 0.200]
+	y_range = [-0.200, 0.200]
+	z_range = [-0.100, 0.050]
 
 	rad.FldVTS(g, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
 	print(f"\n[VTS] Exported: {vts_filename}")
