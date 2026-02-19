@@ -29,7 +29,6 @@ peec_integration/
 ├── algorithm_development/   # Algorithm derivation scripts
 ├── analysis/                # Analysis and paper figure generation
 ├── gmsh_models/             # Mesh generation and conversion utilities
-├── docs/                    # Internal documentation
 ├── figures/                 # Paper figures (PDF/PNG)
 ├── data/                    # Measurement data (CSV)
 └── model/                   # Model cache
