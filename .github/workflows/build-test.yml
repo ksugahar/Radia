@@ -75,28 +75,27 @@ jobs:
       # ----------------------------------------------------------------
       - name: Upload .pyd to GitHub Releases
         if: success()
-        shell: bash
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "=== Uploading .pyd files to GitHub Releases ==="
+          Write-Host "=== Uploading .pyd files to GitHub Releases ==="
 
           # Ensure 'binaries' release exists
-          gh release view binaries >/dev/null 2>&1 || \
-            gh release create binaries --title "Binary Files" \
+          gh release view binaries 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create binaries --title "Binary Files" `
               --notes "Pre-built modules. Updated by CI." --latest=false
+          }
 
           # Collect .pyd files
-          FILES=()
-          for f in src/radia/*.pyd; do
-            [ -f "$f" ] && FILES+=("$f")
-          done
-
-          if [ ${#FILES[@]} -eq 0 ]; then
-            echo "::warning::No .pyd files found to upload"
+          $files = Get-ChildItem -Path "src\radia\*.pyd" -ErrorAction SilentlyContinue
+          if (-not $files -or $files.Count -eq 0) {
+            Write-Host "::warning::No .pyd files found to upload"
             exit 0
-          fi
+          }
 
-          echo "Uploading ${#FILES[@]} file(s)..."
-          gh release upload binaries "${FILES[@]}" --clobber
-          echo "Upload complete."
+          Write-Host "Uploading $($files.Count) file(s)..."
+          $filePaths = $files | ForEach-Object { $_.FullName }
+          gh release upload binaries @filePaths --clobber
+          Write-Host "Upload complete."
