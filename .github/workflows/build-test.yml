@@ -96,6 +96,8 @@ jobs:
           }
 
           Write-Host "Uploading $($files.Count) file(s)..."
-          $filePaths = $files | ForEach-Object { $_.FullName }
-          gh release upload binaries @filePaths --clobber
+          foreach ($f in $files) {
+            Write-Host "  Uploading $($f.Name)..."
+            gh release upload binaries $f.FullName --clobber
+          }
           Write-Host "Upload complete."
