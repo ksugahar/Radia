@@ -1204,22 +1204,6 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 		// 2. Permuted DOF values (face sigma values swapped)
 		// 3. Sign based on symmetry type (+1 symmetric, -1 antisymmetric)
 		// =====================================================================
-		// DEBUG: Check if IMA is active for this B_comp call
-		static int totalCalls = 0;
-		static int imaActiveCalls = 0;
-		totalCalls++;
-		if(RadIMAFieldContext::IsActive() && !FldKey.PreRelax_) {
-			imaActiveCalls++;
-			if(imaActiveCalls <= 5 && std::abs(H_total.z) < 1.0) {  // Only for reasonable field values
-				std::cout << "[IMA UserFld] H_total.z=" << H_total.z*1000 << " mT" << std::endl;
-			}
-		}
-		if(totalCalls == 1000000) {  // Print stats periodically
-			std::cout << "[IMA Stats] total=" << totalCalls << " imaActive=" << imaActiveCalls << std::endl;
-			totalCalls = 0;
-			imaActiveCalls = 0;
-		}
-
 		if(RadIMAFieldContext::IsActive() && !FldKey.PreRelax_)
 		{
 			int imaSym = RadIMAFieldContext::GetSymmetry();
@@ -2244,7 +2228,7 @@ TVector3d radTPolyhedron::FieldFromQuadFace(const TVector3d& obs, int faceIdx, d
 	// - Returns field WITHOUT 4pi divisor (applied in matrix assembly)
 
 	// Get face vertices
-	radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[faceIdx];
+	const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[faceIdx];
 	radTPolygon* pgn = hpt.PgnHndl.rep;
 	radTrans* tr = hpt.TransHndl.rep;
 
@@ -2502,7 +2486,7 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 		TVector3d& P = FieldPtr->P;
 		for(int i = 0; i < AmOfFaces && PointIsInside; i++)
 		{
-			radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+			const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[i];
 			radTPolygon* pgn = hpt.PgnHndl.rep;
 			radTrans* tr = hpt.TransHndl.rep;
 			
@@ -2588,7 +2572,7 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 		TVector3d H_from_Mx(0., 0., 0.);
 		for(int i=0; i<AmOfFaces; i++)
 		{
-			radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+			const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[i];
 			radTPolygon* pgn = hpt.PgnHndl.rep;
 			radTrans* tr = hpt.TransHndl.rep;
 			
@@ -2605,7 +2589,7 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 		TVector3d H_from_My(0., 0., 0.);
 		for(int i=0; i<AmOfFaces; i++)
 		{
-			radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+			const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[i];
 			radTPolygon* pgn = hpt.PgnHndl.rep;
 			radTrans* tr = hpt.TransHndl.rep;
 			
@@ -2622,7 +2606,7 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 		TVector3d H_from_Mz(0., 0., 0.);
 		for(int i=0; i<AmOfFaces; i++)
 		{
-			radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[i];
+			const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[i];
 			radTPolygon* pgn = hpt.PgnHndl.rep;
 			radTrans* tr = hpt.TransHndl.rep;
 			
@@ -2712,7 +2696,7 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 			double elemSizeSq = 0.0;
 			for(int ii = 0; ii < AmOfFaces; ii++)
 			{
-				radTHandlePgnAndTrans hpt = VectHandlePgnAndTrans[ii];
+				const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[ii];
 				radTPolygon* pgn = hpt.PgnHndl.rep;
 				radTrans* tr = hpt.TransHndl.rep;
 				TVector3d faceCtr = tr->TrPoint(TVector3d(pgn->CentrPoint.x, pgn->CentrPoint.y, pgn->CoordZ));
