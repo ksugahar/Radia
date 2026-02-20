@@ -623,35 +623,81 @@ double PEECMatrixBuilder::SelfInductance(const PEECSegment& seg) const {
 }
 
 double PEECMatrixBuilder::SelfInductanceRectangular(const PEECSegment& seg) const {
-    // Grover formula for rectangular cross-section (EXACT, no GMD approximation)
-    // Reference: F. W. Grover, "Inductance Calculations", Dover, 1946
+    // Full Rosa/Grover formula for rectangular cross-section
     //
-    // L = (mu_0/2pi) * l * [ln(2*l/sqrt(w^2+h^2)) + 0.25 + (w^2+h^2)/(12*l^2)]
+    // Reference:
+    //   Rosa, NBS Scientific Paper 169 (1908)
+    //   Grover, "Inductance Calculations", Dover, 1946
+    //   Ruehli, IBM J. Res. Dev., 16(5), 470-481, 1972
     //
-    // This is the EXACT formula for a straight rectangular conductor segment
-    // NO conversion to circular cross-section (FastImp approach)
+    // Exact double-volume integral of 1/R for rectangular conductor.
+    // L = mu_0 * l * Y(l, w, h)
+    // where Y contains asinh, atan, and rational correction terms.
 
     double l = seg.length;
     double w = seg.width;
     double h = seg.height;
 
-    // Rectangular cross-section diagonal
-    double d_rect = std::sqrt(w*w + h*h);
+    // Minimum dimension check
+    if (w < 1e-15) w = 1e-10;
+    if (h < 1e-15) h = 1e-10;
+    if (l < 1e-15) return 0.0;
 
-    // Minimum cross-section check
-    if (d_rect < 1e-15) d_rect = 1e-6;
+    // Normalize by length
+    double wn = w / l;
+    double tn = h / l;
 
-    if (l > d_rect) {
-        // Grover formula (exact for rectangular cross-section)
-        double term1 = std::log(2.0 * l / d_rect);
-        double term2 = 0.25;
-        double term3 = (w*w + h*h) / (12.0 * l*l);
+    // Derived quantities
+    double aw = std::sqrt(wn * wn + 1.0);
+    double at = std::sqrt(tn * tn + 1.0);
+    double r  = std::sqrt(wn * wn + tn * tn);
+    double ar = std::sqrt(wn * wn + tn * tn + 1.0);
 
-        return (PEEC_MU_0 / (2.0 * RadConst::PI)) * l * (term1 + term2 + term3);
-    } else {
-        // Short segment approximation (l << cross-section)
-        return (PEEC_MU_0 / (2.0 * RadConst::PI)) * l * 0.5;
-    }
+    double z = 0.0;
+
+    // Base terms (1/4 coefficient)
+    z += 0.25 * (
+        (1.0 / wn) * std::asinh(wn / at) +
+        (1.0 / tn) * std::asinh(tn / aw) +
+        std::asinh(1.0 / r)
+    );
+
+    // Correction terms (1/24 coefficient) - 6 additional terms
+    z += (1.0 / 24.0) * (
+        (tn * tn / wn) * std::asinh(wn / (tn * at * (r + ar))) +
+        (wn * wn / tn) * std::asinh(tn / (wn * aw * (r + ar))) +
+        (tn * tn / (wn * wn)) * std::asinh(wn * wn / (tn * r * (at + ar))) +
+        (wn * wn / (tn * tn)) * std::asinh(tn * tn / (wn * r * (aw + ar))) +
+        (1.0 / (wn * tn * tn)) * std::asinh(wn * tn * tn / (at * (aw + ar))) +
+        (1.0 / (tn * wn * wn)) * std::asinh(tn * wn * wn / (aw * (at + ar)))
+    );
+
+    // Arctangent corrections (1/6 coefficient)
+    z -= (1.0 / 6.0) * (
+        (1.0 / (wn * tn)) * std::atan(wn * tn / ar) +
+        (tn / wn) * std::atan(wn / (tn * ar)) +
+        (wn / tn) * std::atan(tn / (wn * ar))
+    );
+
+    // Rational corrections (1/60 coefficient)
+    z -= (1.0 / 60.0) * (
+        ((ar + r + tn + at) * tn * tn) /
+            ((ar + r) * (r + tn) * (tn + at) * (at + ar)) +
+        ((ar + r + wn + aw) * wn * wn) /
+            ((ar + r) * (r + wn) * (wn + aw) * (aw + ar)) +
+        (ar + aw + 1.0 + at) /
+            ((ar + aw) * (aw + 1.0) * (1.0 + at) * (at + ar))
+    );
+
+    // Inverse distance corrections (1/20 coefficient)
+    z -= (1.0 / 20.0) * (
+        1.0 / (r + ar) + 1.0 / (aw + ar) + 1.0 / (at + ar)
+    );
+
+    z *= (2.0 / RadConst::PI);
+    z *= l;
+
+    return z * PEEC_MU_0;
 }
 
 double PEECMatrixBuilder::SelfInductanceCircular(const PEECSegment& seg) const {
@@ -777,8 +823,15 @@ double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
         }
     }
 
+    // Check if segments are close (use fourfil for near-field)
+    double r_dist = std::sqrt(rx*rx + ry*ry + rz*rz);
+    double max_cs = std::max({seg_i.width, seg_i.height, seg_j.width, seg_j.height});
+    if (r_dist < 3.0 * max_cs && max_cs > 1e-15) {
+        // Near-field: use recursive fourfil subdivision
+        return MutualInductanceFourfil(seg_i, seg_j, 2);
+    }
+
     // General case: 8-point Gauss-Legendre quadrature
-    // Higher order for accurate mutual inductance when segments are close
     static const double gp[] = {
         -0.9602898564975363, -0.7966664774136267,
         -0.5255324099163290, -0.1834346424956498,
@@ -795,7 +848,6 @@ double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
 
     double sum = 0.0;
     for (int ki = 0; ki < ng; ++ki) {
-        // Point on filament i: center_i + t * direction_i
         double ti = gp[ki] * (l_i / 2.0);
         double xi = seg_i.center.x + ti * seg_i.direction.x;
         double yi = seg_i.center.y + ti * seg_i.direction.y;
@@ -821,6 +873,104 @@ double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
     // Scale: integral was over [-1,1]x[-1,1], actual limits are [-l/2,l/2]
     // Jacobian: (l_i/2) * (l_j/2)
     return (PEEC_MU_0 * PEEC_INV_FOUR_PI) * dot * sum * (l_i / 2.0) * (l_j / 2.0);
+}
+
+double PEECMatrixBuilder::MutualInductanceFourfil(const PEECSegment& seg_i,
+                                                   const PEECSegment& seg_j,
+                                                   int depth) const {
+    // Recursive fourfil subdivision for near-field mutual inductance.
+    // Each filament is split into 2x2 cross-section sub-filaments.
+    // M = average of all 4 sub-filament pair mutual inductances.
+    //
+    // Reference: A. E. Ruehli, "Inductance Calculations in a Complex
+    //   Integrated Circuit Environment", IBM J. Res. Dev., 1972.
+    // Also: FastMaxwell src/calcaoneoverr.h fourfil() approach.
+
+    if (depth <= 0) {
+        // Base case: compute mutual inductance via 8-point Gauss quadrature
+        double dot = seg_i.direction.x * seg_j.direction.x +
+                     seg_i.direction.y * seg_j.direction.y +
+                     seg_i.direction.z * seg_j.direction.z;
+        if (std::abs(dot) < 1e-10) return 0.0;
+
+        double l_i = seg_i.length;
+        double l_j = seg_j.length;
+
+        static const double gp[] = {
+            -0.9602898564975363, -0.7966664774136267,
+            -0.5255324099163290, -0.1834346424956498,
+             0.1834346424956498,  0.5255324099163290,
+             0.7966664774136267,  0.9602898564975363
+        };
+        static const double gw[] = {
+             0.1012285362903763,  0.2223810344533745,
+             0.3137066458778873,  0.3626837833783620,
+             0.3626837833783620,  0.3137066458778873,
+             0.2223810344533745,  0.1012285362903763
+        };
+
+        double sum = 0.0;
+        for (int ki = 0; ki < 8; ++ki) {
+            double ti = gp[ki] * (l_i / 2.0);
+            double xi = seg_i.center.x + ti * seg_i.direction.x;
+            double yi = seg_i.center.y + ti * seg_i.direction.y;
+            double zi = seg_i.center.z + ti * seg_i.direction.z;
+            for (int kj = 0; kj < 8; ++kj) {
+                double tj = gp[kj] * (l_j / 2.0);
+                double xj = seg_j.center.x + tj * seg_j.direction.x;
+                double yj = seg_j.center.y + tj * seg_j.direction.y;
+                double zj = seg_j.center.z + tj * seg_j.direction.z;
+                double ddx = xi - xj; double ddy = yi - yj; double ddz = zi - zj;
+                double dist = std::sqrt(ddx*ddx + ddy*ddy + ddz*ddz);
+                if (dist > 1e-15) sum += gw[ki] * gw[kj] / dist;
+            }
+        }
+        return (PEEC_MU_0 * PEEC_INV_FOUR_PI) * dot * sum * (l_i / 2.0) * (l_j / 2.0);
+    }
+
+    // Build local coordinate system for cross-section subdivision.
+    // We need two vectors perpendicular to the filament direction.
+    // Use the segment's width/height axes (approximate from direction).
+
+    auto make_perp_axes = [](const TVector3d& dir, TVector3d& u, TVector3d& v) {
+        // Find a vector not parallel to dir
+        TVector3d ref;
+        if (std::fabs(dir.x) < 0.9) { ref.x = 1; ref.y = 0; ref.z = 0; }
+        else { ref.x = 0; ref.y = 1; ref.z = 0; }
+        // u = dir × ref (normalized)
+        u.x = dir.y * ref.z - dir.z * ref.y;
+        u.y = dir.z * ref.x - dir.x * ref.z;
+        u.z = dir.x * ref.y - dir.y * ref.x;
+        double norm_u = std::sqrt(u.x*u.x + u.y*u.y + u.z*u.z);
+        u.x /= norm_u; u.y /= norm_u; u.z /= norm_u;
+        // v = dir × u
+        v.x = dir.y * u.z - dir.z * u.y;
+        v.y = dir.z * u.x - dir.x * u.z;
+        v.z = dir.x * u.y - dir.y * u.x;
+    };
+
+    // Create 4 sub-filaments for seg_j (2x2 subdivision of cross-section)
+    TVector3d u_j, v_j;
+    make_perp_axes(seg_j.direction, u_j, v_j);
+
+    double half_w = seg_j.width / 4.0;   // offset = w/4 from center
+    double half_h = seg_j.height / 4.0;
+
+    double M_sum = 0.0;
+    for (int iw = -1; iw <= 1; iw += 2) {
+        for (int ih = -1; ih <= 1; ih += 2) {
+            PEECSegment sub_j = seg_j;
+            sub_j.width = seg_j.width / 2.0;
+            sub_j.height = seg_j.height / 2.0;
+            sub_j.center.x = seg_j.center.x + iw * half_w * u_j.x + ih * half_h * v_j.x;
+            sub_j.center.y = seg_j.center.y + iw * half_w * u_j.y + ih * half_h * v_j.y;
+            sub_j.center.z = seg_j.center.z + iw * half_w * u_j.z + ih * half_h * v_j.z;
+
+            M_sum += MutualInductanceFourfil(seg_i, sub_j, depth - 1);
+        }
+    }
+
+    return M_sum / 4.0;  // Average over 4 sub-filaments
 }
 
 double PEECMatrixBuilder::SelfPotential(const PEECNode& node) const {
@@ -855,208 +1005,277 @@ double PEECMatrixBuilder::MutualPotential(const PEECNode& node_i,
 }
 
 // ============================================================================
-// Panel Analytical Integration (Wilton et al., 1984)
+// Panel Analytical Integration - Hess-Smith Edge Integration
+// Reference: Arcioni, Bressan, Perregrini, IEEE MTT, vol. 45, 1997
 // ============================================================================
 
-double PEECMatrixBuilder::SelfPotentialPanelTriangle(const PEECPanel& panel) const {
-    // Analytical self-potential for triangular panel using Wilton formula
-    // Reference: Wilton et al., IEEE TAP, vol. 32, no. 3, pp. 276-281, 1984
+double PEECMatrixBuilder::HessSmithPotential(const std::vector<TVector3d>& vertices,
+                                              const TVector3d& normal,
+                                              const TVector3d& obs_point) const {
+    // Analytical integration of 1/R over a flat polygon, evaluated at obs_point.
+    // Returns integral = integral_S (1/|r - r'|) dS'
     //
-    // Formula: P_self = (1/4πε₀) * Σ_edges [analytical_edge_integral]
+    // Uses per-edge analytical primitives (log for SLP, atan for solid angle).
+    // Works for triangles and quads (any convex polygon).
+
+    const int nv = static_cast<int>(vertices.size());
+    if (nv < 3) return 0.0;
+
+    // Height of observation point above panel plane
+    double hx = obs_point.x - vertices[0].x;
+    double hy = obs_point.y - vertices[0].y;
+    double hz = obs_point.z - vertices[0].z;
+    double h = hx * normal.x + hy * normal.y + hz * normal.z;
+    double abs_h = std::fabs(h);
+
+    double slp_sum = 0.0;  // Single layer potential (log terms)
+    double dlp_sum = 0.0;  // Solid angle (atan terms)
+
+    for (int i = 0; i < nv; ++i) {
+        int j = (i + 1) % nv;
+
+        // Vector from obs_point to edge vertices
+        double r0x = vertices[i].x - obs_point.x;
+        double r0y = vertices[i].y - obs_point.y;
+        double r0z = vertices[i].z - obs_point.z;
+        double r1x = vertices[j].x - obs_point.x;
+        double r1y = vertices[j].y - obs_point.y;
+        double r1z = vertices[j].z - obs_point.z;
+
+        double R0 = std::sqrt(r0x*r0x + r0y*r0y + r0z*r0z);
+        double R1 = std::sqrt(r1x*r1x + r1y*r1y + r1z*r1z);
+
+        if (R0 < 1e-15 || R1 < 1e-15) continue;
+
+        // Edge vector and length
+        double ex = vertices[j].x - vertices[i].x;
+        double ey = vertices[j].y - vertices[i].y;
+        double ez = vertices[j].z - vertices[i].z;
+        double l_edge = std::sqrt(ex*ex + ey*ey + ez*ez);
+        if (l_edge < 1e-15) continue;
+
+        // Unit edge tangent
+        double tx = ex / l_edge;
+        double ty = ey / l_edge;
+        double tz = ez / l_edge;
+
+        // Outward edge normal in panel plane: m = n × t
+        double mx = normal.y * tz - normal.z * ty;
+        double my = normal.z * tx - normal.x * tz;
+        double mz = normal.x * ty - normal.y * tx;
+
+        // Projections onto edge coordinate system
+        double d = r0x * mx + r0y * my + r0z * mz;  // perpendicular distance to edge line
+        double s0 = r0x * tx + r0y * ty + r0z * tz;  // projection along edge from vertex i
+        double s1 = r1x * tx + r1y * ty + r1z * tz;  // projection along edge from vertex j
+
+        // SLP term: log((R0 + s0) / (R1 + s1)) * |d| or equivalent stable form
+        // Using Newman formula: log((R0 - s0 + R1 + s1) / (R0 + s0 + R1 - s1)) * d
+        // which is equivalent but more numerically stable
+        double num = R0 + R1 + l_edge;
+        double den = R0 + R1 - l_edge;
+        if (den > 1e-15 && num > 1e-15) {
+            double log_term = std::log(num / den);
+            slp_sum += d * log_term;
+        }
+
+        // DLP (solid angle) term - only if h != 0
+        if (abs_h > 1e-15) {
+            // Solid angle contribution from this edge
+            // atan2(h * l_edge * d, R0*R1*(R0*R1 + r0·r1))
+            // where r0·r1 = dot product of r0, r1
+            double dot01 = r0x*r1x + r0y*r1y + r0z*r1z;
+            double denom = R0 * R1 + dot01;
+            if (std::fabs(denom) > 1e-30) {
+                // Cross product component along normal: (r0 × r1) · n
+                double cx = r0y*r1z - r0z*r1y;
+                double cy = r0z*r1x - r0x*r1z;
+                double cz = r0x*r1y - r0y*r1x;
+                double cross_n = cx * normal.x + cy * normal.y + cz * normal.z;
+                dlp_sum += std::atan2(h * cross_n, R0 * R1 + dot01 * 1.0);
+            }
+        }
+    }
+
+    // Result: integral_S 1/R dS = slp_sum - |h| * dlp_sum  (for h > 0)
+    //                            = slp_sum + |h| * dlp_sum  (for h < 0)
+    // General: slp_sum - h * sign(h) * |dlp_sum| ... actually:
+    // The formula is: integral = slp_sum - h * dlp_sum
+    // where dlp_sum already has the correct sign from atan2
+    double result = slp_sum - h * dlp_sum;
+
+    return result;
+}
+
+double PEECMatrixBuilder::SelfPotentialPanelTriangle(const PEECPanel& panel) const {
+    // Self-potential for triangular panel using Hess-Smith analytical integration.
+    // Evaluates integral_S integral_S' 1/|r-r'| dS dS' / area
+    // by 7-point Gauss quadrature on test panel + analytical on source.
 
     if (panel.type != PEECPanel::Triangle || panel.vertices.size() != 3) {
-        return 0.0;  // Fallback to node approximation
+        return 0.0;
     }
+
+    // 7-point Gauss quadrature for triangles (Strang & Fix)
+    const double q7_w[7] = {
+        0.225 / 2.0,
+        0.13239415, 0.13239415, 0.13239415,
+        0.12593918, 0.12593918, 0.12593918
+    };
+    const double q7_bc[7][3] = {
+        {1.0/3.0, 1.0/3.0, 1.0/3.0},
+        {0.05971587, 0.47014206, 0.47014206},
+        {0.47014206, 0.05971587, 0.47014206},
+        {0.47014206, 0.47014206, 0.05971587},
+        {0.79742699, 0.10128651, 0.10128651},
+        {0.10128651, 0.79742699, 0.10128651},
+        {0.10128651, 0.10128651, 0.79742699}
+    };
 
     const TVector3d& v0 = panel.vertices[0];
     const TVector3d& v1 = panel.vertices[1];
     const TVector3d& v2 = panel.vertices[2];
 
+    // Small offset along normal for self-term (avoid singularity)
+    double char_len = std::sqrt(panel.area);
+    double offset = char_len * 0.01;  // 1% of characteristic length
+
     double sum = 0.0;
+    for (int q = 0; q < 7; ++q) {
+        TVector3d obs;
+        obs.x = q7_bc[q][0] * v0.x + q7_bc[q][1] * v1.x + q7_bc[q][2] * v2.x;
+        obs.y = q7_bc[q][0] * v0.y + q7_bc[q][1] * v1.y + q7_bc[q][2] * v2.y;
+        obs.z = q7_bc[q][0] * v0.z + q7_bc[q][1] * v1.z + q7_bc[q][2] * v2.z;
 
-    // Edge integration over 3 edges
-    for (int edge_idx = 0; edge_idx < 3; ++edge_idx) {
-        // Edge endpoints
-        const TVector3d& p0 = panel.vertices[edge_idx];
-        const TVector3d& p1 = panel.vertices[(edge_idx + 1) % 3];
-        const TVector3d& p2 = panel.vertices[(edge_idx + 2) % 3];  // Opposite vertex
+        // Offset observation point slightly along normal
+        obs.x += offset * panel.normal.x;
+        obs.y += offset * panel.normal.y;
+        obs.z += offset * panel.normal.z;
 
-        // Edge vector
-        TVector3d edge;
-        edge.x = p1.x - p0.x;
-        edge.y = p1.y - p0.y;
-        edge.z = p1.z - p0.z;
-        double l_edge = std::sqrt(edge.x * edge.x + edge.y * edge.y + edge.z * edge.z);
+        double val = HessSmithPotential(panel.vertices, panel.normal, obs);
+        sum += q7_w[q] * val;
+    }
 
-        if (l_edge < 1e-15) continue;  // Degenerate edge
+    // Jacobian: 2*A for triangle quadrature
+    return (2.0 * panel.area * sum) / (4.0 * RadConst::PI * PEEC_EPS_0);
+}
 
-        // Vector from p0 to opposite vertex
-        TVector3d r0;
-        r0.x = p2.x - p0.x;
-        r0.y = p2.y - p0.y;
-        r0.z = p2.z - p0.z;
+double PEECMatrixBuilder::SelfPotentialPanelQuad(const PEECPanel& panel) const {
+    // Self-potential for quad panel using Hess-Smith analytical integration.
+    // 4-point Gauss quadrature on test quad + HessSmith on source quad.
 
-        // Vector from p1 to opposite vertex
-        TVector3d r1;
-        r1.x = p2.x - p1.x;
-        r1.y = p2.y - p1.y;
-        r1.z = p2.z - p1.z;
+    if (panel.type != PEECPanel::Quadrilateral || panel.vertices.size() != 4) {
+        return 0.0;
+    }
 
-        // Distances
-        double R0 = std::sqrt(r0.x * r0.x + r0.y * r0.y + r0.z * r0.z);
-        double R1 = std::sqrt(r1.x * r1.x + r1.y * r1.y + r1.z * r1.z);
+    // 2x2 Gauss-Legendre on quad mapped via bilinear shape functions
+    const double gp = 1.0 / std::sqrt(3.0);
+    const double quad_pts[4][2] = {
+        {-gp, -gp}, {gp, -gp}, {gp, gp}, {-gp, gp}
+    };
 
-        if (R0 < 1e-15 || R1 < 1e-15) continue;
+    const TVector3d& v0 = panel.vertices[0];
+    const TVector3d& v1 = panel.vertices[1];
+    const TVector3d& v2 = panel.vertices[2];
+    const TVector3d& v3 = panel.vertices[3];
 
-        // Cross product: edge × r0 (to get height vector)
-        TVector3d cross;
-        cross.x = edge.y * r0.z - edge.z * r0.y;
-        cross.y = edge.z * r0.x - edge.x * r0.z;
-        cross.z = edge.x * r0.y - edge.y * r0.x;
-        double h = std::sqrt(cross.x * cross.x + cross.y * cross.y + cross.z * cross.z) / l_edge;
+    double char_len = std::sqrt(panel.area);
+    double offset = char_len * 0.01;
 
-        if (h < 1e-15) continue;  // Degenerate triangle
+    double sum = 0.0;
+    for (int q = 0; q < 4; ++q) {
+        double xi = quad_pts[q][0];
+        double eta = quad_pts[q][1];
 
-        // Wilton analytical formula for edge contribution
-        double arg = (R0 + R1 + l_edge) / (R0 + R1 - l_edge);
-        if (arg > 0 && arg < 1e15) {  // Valid logarithm argument
-            double ln_term = std::log(arg);
-            sum += l_edge * ln_term;
-        }
+        // Bilinear shape functions
+        double N0 = 0.25 * (1 - xi) * (1 - eta);
+        double N1 = 0.25 * (1 + xi) * (1 - eta);
+        double N2 = 0.25 * (1 + xi) * (1 + eta);
+        double N3 = 0.25 * (1 - xi) * (1 + eta);
+
+        TVector3d obs;
+        obs.x = N0*v0.x + N1*v1.x + N2*v2.x + N3*v3.x + offset*panel.normal.x;
+        obs.y = N0*v0.y + N1*v1.y + N2*v2.y + N3*v3.y + offset*panel.normal.y;
+        obs.z = N0*v0.z + N1*v1.z + N2*v2.z + N3*v3.z + offset*panel.normal.z;
+
+        // Jacobian for bilinear mapping
+        double dxdxi  = 0.25*(-(1-eta)*v0.x + (1-eta)*v1.x + (1+eta)*v2.x - (1+eta)*v3.x);
+        double dydxi  = 0.25*(-(1-eta)*v0.y + (1-eta)*v1.y + (1+eta)*v2.y - (1+eta)*v3.y);
+        double dzdxi  = 0.25*(-(1-eta)*v0.z + (1-eta)*v1.z + (1+eta)*v2.z - (1+eta)*v3.z);
+        double dxdeta = 0.25*(-(1-xi)*v0.x - (1+xi)*v1.x + (1+xi)*v2.x + (1-xi)*v3.x);
+        double dydeta = 0.25*(-(1-xi)*v0.y - (1+xi)*v1.y + (1+xi)*v2.y + (1-xi)*v3.y);
+        double dzdeta = 0.25*(-(1-xi)*v0.z - (1+xi)*v1.z + (1+xi)*v2.z + (1-xi)*v3.z);
+
+        // Cross product for Jacobian magnitude
+        double cx = dydxi*dzdeta - dzdxi*dydeta;
+        double cy = dzdxi*dxdeta - dxdxi*dzdeta;
+        double cz = dxdxi*dydeta - dydxi*dxdeta;
+        double jac = std::sqrt(cx*cx + cy*cy + cz*cz);
+
+        double val = HessSmithPotential(panel.vertices, panel.normal, obs);
+        sum += val * jac;  // weight = 1.0 for 2x2 Gauss
     }
 
     return sum / (4.0 * RadConst::PI * PEEC_EPS_0);
 }
 
-double PEECMatrixBuilder::SelfPotentialPanelQuad(const PEECPanel& panel) const {
-    // Quadrilateral self-potential by splitting into 2 triangles
-    //
-    // Split quad (v0, v1, v2, v3) into:
-    //   Triangle 1: (v0, v1, v2)
-    //   Triangle 2: (v0, v2, v3)
-    //
-    // Sum contributions from both triangles
-
-    if (panel.type != PEECPanel::Quadrilateral || panel.vertices.size() != 4) {
-        return 0.0;  // Invalid quad
-    }
-
-    // Create temporary triangle panels
-    PEECPanel tri1, tri2;
-    tri1.type = PEECPanel::Triangle;
-    tri2.type = PEECPanel::Triangle;
-
-    // Triangle 1: v0-v1-v2
-    tri1.vertices.push_back(panel.vertices[0]);
-    tri1.vertices.push_back(panel.vertices[1]);
-    tri1.vertices.push_back(panel.vertices[2]);
-    tri1.ComputeGeometry();
-
-    // Triangle 2: v0-v2-v3
-    tri2.vertices.push_back(panel.vertices[0]);
-    tri2.vertices.push_back(panel.vertices[2]);
-    tri2.vertices.push_back(panel.vertices[3]);
-    tri2.ComputeGeometry();
-
-    // Compute self-potential for each triangle and sum
-    double P_tri1 = SelfPotentialPanelTriangle(tri1);
-    double P_tri2 = SelfPotentialPanelTriangle(tri2);
-
-    // Average the two contributions (both triangles are part of the same quad)
-    // Actually, we need to be more careful here. The self-potential of a quad
-    // is NOT simply the sum of the triangle self-potentials, because the triangles
-    // are not independent - they share edges.
-    //
-    // For now, we approximate by averaging. This is a known limitation.
-    // A more accurate approach would require proper quad integration formulas.
-
-    return 0.5 * (P_tri1 + P_tri2);
-}
-
 double PEECMatrixBuilder::MutualPotentialPanelTriangle(const PEECPanel& panel_i,
                                                         const PEECPanel& panel_j) const {
-    // Mutual potential between two triangular panels
+    // Mutual potential between two triangular panels.
+    // Uses 7-point Gauss on test panel_i + HessSmith analytical on source panel_j.
     //
-    // Strategy:
-    //   - Far-field (distance > 3 * panel_size): Centroid approximation
-    //   - Near-field (distance < 3 * panel_size): TODO: Hess-Smith edge integration
+    // Far-field (distance > 5 * panel_size): centroid approximation.
+    // Near/mid-field: Gauss + HessSmith (no singularity issues).
 
     if (panel_i.type != PEECPanel::Triangle || panel_j.type != PEECPanel::Triangle) {
-        return 0.0;  // Fallback
+        return 0.0;
     }
 
-    // Distance between panel centroids
     double dx = panel_i.center.x - panel_j.center.x;
     double dy = panel_i.center.y - panel_j.center.y;
     double dz = panel_i.center.z - panel_j.center.z;
     double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
 
-    // Characteristic panel size (sqrt of area)
-    double char_size_i = std::sqrt(panel_i.area);
-    double char_size_j = std::sqrt(panel_j.area);
-    double char_size = std::max(char_size_i, char_size_j);
+    double char_size = std::max(std::sqrt(panel_i.area), std::sqrt(panel_j.area));
 
-    if (dist > 3.0 * char_size) {
-        // Far-field: Centroid approximation (monopole-monopole)
-        // P_ij ≈ (Area_i * Area_j) / (4πε₀ * r)
+    if (dist > 5.0 * char_size) {
+        // Far-field: centroid approximation
         return (panel_i.area * panel_j.area) / (4.0 * RadConst::PI * PEEC_EPS_0 * dist);
-    } else {
-        // Near-field: Use Gauss quadrature integration
-        // 3-point Gauss quadrature for triangles (barycentric coordinates)
-        //
-        // Reference: Gauss integration on triangular domains
-
-        // 3-point Gauss rule for triangles
-        const double w = 1.0 / 6.0;  // Each point has equal weight (total = 1/2 for triangle)
-
-        // Barycentric coordinates for 3-point rule
-        const double xi[3][3] = {
-            {0.5, 0.5, 0.0},   // Midpoint of edge 0-1
-            {0.0, 0.5, 0.5},   // Midpoint of edge 1-2
-            {0.5, 0.0, 0.5}    // Midpoint of edge 2-0
-        };
-
-        double sum = 0.0;
-
-        // Get vertices for both panels
-        const TVector3d& v0_i = panel_i.vertices[0];
-        const TVector3d& v1_i = panel_i.vertices[1];
-        const TVector3d& v2_i = panel_i.vertices[2];
-
-        const TVector3d& v0_j = panel_j.vertices[0];
-        const TVector3d& v1_j = panel_j.vertices[1];
-        const TVector3d& v2_j = panel_j.vertices[2];
-
-        // Double loop over quadrature points
-        for (int qi = 0; qi < 3; ++qi) {
-            // Compute physical point on panel_i using barycentric coordinates
-            TVector3d point_i;
-            point_i.x = xi[qi][0] * v0_i.x + xi[qi][1] * v1_i.x + xi[qi][2] * v2_i.x;
-            point_i.y = xi[qi][0] * v0_i.y + xi[qi][1] * v1_i.y + xi[qi][2] * v2_i.y;
-            point_i.z = xi[qi][0] * v0_i.z + xi[qi][1] * v1_i.z + xi[qi][2] * v2_i.z;
-
-            for (int qj = 0; qj < 3; ++qj) {
-                // Compute physical point on panel_j
-                TVector3d point_j;
-                point_j.x = xi[qj][0] * v0_j.x + xi[qj][1] * v1_j.x + xi[qj][2] * v2_j.x;
-                point_j.y = xi[qj][0] * v0_j.y + xi[qj][1] * v1_j.y + xi[qj][2] * v2_j.y;
-                point_j.z = xi[qj][0] * v0_j.z + xi[qj][1] * v1_j.z + xi[qj][2] * v2_j.z;
-
-                // Distance between quadrature points
-                double dx_q = point_i.x - point_j.x;
-                double dy_q = point_i.y - point_j.y;
-                double dz_q = point_i.z - point_j.z;
-                double R = std::sqrt(dx_q*dx_q + dy_q*dy_q + dz_q*dz_q);
-
-                if (R > 1e-10) {  // Avoid singularity
-                    sum += w * w / R;
-                }
-            }
-        }
-
-        // Multiply by panel areas (Jacobian of the barycentric transformation)
-        return (panel_i.area * panel_j.area * sum) / (4.0 * RadConst::PI * PEEC_EPS_0);
     }
+
+    // 7-point Gauss quadrature on test panel_i (Strang & Fix)
+    const double q7_w[7] = {
+        0.225 / 2.0,
+        0.13239415, 0.13239415, 0.13239415,
+        0.12593918, 0.12593918, 0.12593918
+    };
+    const double q7_bc[7][3] = {
+        {1.0/3.0, 1.0/3.0, 1.0/3.0},
+        {0.05971587, 0.47014206, 0.47014206},
+        {0.47014206, 0.05971587, 0.47014206},
+        {0.47014206, 0.47014206, 0.05971587},
+        {0.79742699, 0.10128651, 0.10128651},
+        {0.10128651, 0.79742699, 0.10128651},
+        {0.10128651, 0.10128651, 0.79742699}
+    };
+
+    const TVector3d& v0 = panel_i.vertices[0];
+    const TVector3d& v1 = panel_i.vertices[1];
+    const TVector3d& v2 = panel_i.vertices[2];
+
+    double sum = 0.0;
+    for (int q = 0; q < 7; ++q) {
+        TVector3d obs;
+        obs.x = q7_bc[q][0]*v0.x + q7_bc[q][1]*v1.x + q7_bc[q][2]*v2.x;
+        obs.y = q7_bc[q][0]*v0.y + q7_bc[q][1]*v1.y + q7_bc[q][2]*v2.y;
+        obs.z = q7_bc[q][0]*v0.z + q7_bc[q][1]*v1.z + q7_bc[q][2]*v2.z;
+
+        double val = HessSmithPotential(panel_j.vertices, panel_j.normal, obs);
+        sum += q7_w[q] * val;
+    }
+
+    // Jacobian: 2*A_i for triangle quadrature on test panel
+    return (2.0 * panel_i.area * sum) / (4.0 * RadConst::PI * PEEC_EPS_0);
 }
 
 // ============================================================================
