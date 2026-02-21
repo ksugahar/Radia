@@ -14,7 +14,7 @@ Model: Single-turn circular coil
 
 References:
   - F.W. Grover, "Inductance Calculations", Dover, 1946
-  - Bessel: Z_i/l = k/(2*pi*a*sigma) * J0(ka)/J1(ka)
+  - Bessel: Z_i/l = k/(2*pi*a*sigma) * I0(ka)/I1(ka)
   - Dowell: F_R = xi * [sinh(2xi)+sin(2xi)] / [cosh(2xi)-cos(2xi)]
 
 Author: Radia Development Team
@@ -26,7 +26,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 import numpy as np
-from scipy.special import jv
+from scipy.special import iv
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -82,11 +82,11 @@ def bessel_impedance_per_length(freq, radius, sigma_val, mu_r=1.0):
     """
     Internal impedance per unit length of solid circular wire (exact).
 
-    Z_i/l = k/(2*pi*a*sigma) * J0(ka)/J1(ka)
+    Z_i/l = k/(2*pi*a*sigma) * I0(ka)/I1(ka)
 
-    where k = sqrt(j*omega*mu*sigma)
+    where k = sqrt(j*omega*mu*sigma), I0/I1 are modified Bessel functions.
 
-    DC limit: Z_i/l -> 1/(sigma*pi*a^2) = R_dc/l
+    DC limit: Z_i/l -> 1/(sigma*pi*a^2) + j*omega*mu/(8*pi)
     """
     if freq <= 0:
         # DC limit
@@ -97,10 +97,10 @@ def bessel_impedance_per_length(freq, radius, sigma_val, mu_r=1.0):
     k = np.sqrt(1j * omega * mu * sigma_val)
     ka = k * radius
 
-    J0_ka = jv(0, ka)
-    J1_ka = jv(1, ka)
+    I0_ka = iv(0, ka)
+    I1_ka = iv(1, ka)
 
-    Z_i_per_length = k / (2.0 * np.pi * radius * sigma_val) * (J0_ka / J1_ka)
+    Z_i_per_length = k / (2.0 * np.pi * radius * sigma_val) * (I0_ka / I1_ka)
     return Z_i_per_length
 
 

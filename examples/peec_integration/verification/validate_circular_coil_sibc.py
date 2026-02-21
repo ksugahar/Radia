@@ -16,7 +16,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 import numpy as np
-from scipy.special import jv, ellipk, ellipe  # Bessel and elliptic integrals
+from scipy.special import iv, ellipk, ellipe  # Modified Bessel and elliptic integrals
 import matplotlib.pyplot as plt
 
 # Add path for GMSH reader

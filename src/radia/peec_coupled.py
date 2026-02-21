@@ -165,13 +165,9 @@ class CoupledPEECSolver(PEECCircuitSolver):
         self.seg_directions = np.array(topology_dict['segment_directions'])
         self.seg_lengths = np.array(topology_dict['segment_lengths'])
 
-        # Node positions for Biot-Savart endpoints
-        nodes = topology_dict.get('node_positions', None)
-        if nodes is not None:
-            self.node_positions = np.array(nodes)
-        else:
-            # Reconstruct from segment center/direction/length
-            self._reconstruct_endpoints()
+        # Segment endpoints for Biot-Savart
+        # Always reconstruct from center/direction/length (reliable)
+        self._reconstruct_endpoints()
 
         # Magnetic objects
         self.magnetic_objects = magnetic_objects or []
@@ -288,20 +284,45 @@ class CoupledPEECSolver(PEECCircuitSolver):
             UtiDel(bkg)
 
         self.Delta_L = Delta_L
+
+        # Store original L_air and update L to include coupling
+        self._L_air = self.L.copy()
+        self.L = self._L_air + Delta_L
+
+        # Rebuild C++ MNASolver with coupled L
+        # (The C++ solver holds its own copy of L, so we must rebuild it)
+        self._rebuild_mna_solver()
+
         return Delta_L
+
+    def _rebuild_mna_solver(self):
+        """Rebuild C++ MNASolver with current self.L matrix."""
+        from peec_matrices import MNASolver
+
+        seg_nodes_int = np.ascontiguousarray(self.segment_nodes, dtype=np.int32)
+        port_tuples = [(int(p[0]), int(p[1]), int(p[2])) for p in self.ports]
+
+        P_arg = self.P if self.has_panels else None
+        M_LS_arg = self.M_LS if (self.has_panels and self.M_LS is not None) else None
+
+        self._solver = MNASolver(
+            np.ascontiguousarray(self.L, dtype=np.float64),
+            np.ascontiguousarray(self.R_dc, dtype=np.float64),
+            seg_nodes_int,
+            self.n_nodes,
+            port_tuples,
+            P_arg,
+            M_LS_arg,
+        )
 
     def compute_port_impedance(self, freq, Zs=None):
         """
         Compute port impedance at a given frequency with magnetic coupling.
 
-        Uses:
-            L_total = L_air + Delta_L
-            R_magnetic = omega * tan_delta_m * Delta_L  (from mu"_r)
+        Uses L_total = L_air + Delta_L (set during compute_coupling_matrix).
 
-        The total branch impedance becomes:
-            Z_branch = diag(R_dc + Zs) + jw*L_total + R_magnetic
-                     = diag(R_dc + Zs) + jw*(L_air + Delta_L)
-                       + omega * tan_delta_m * Delta_L
+        For lossy materials (mu"_r > 0), adds frequency-proportional
+        magnetic loss resistance: R_mag(f) = omega * tan_delta * diag(Delta_L).
 
         Args:
             freq: Frequency in Hz
@@ -310,32 +331,17 @@ class CoupledPEECSolver(PEECCircuitSolver):
         Returns:
             Complex port impedance [Ohm]
         """
-        omega = 2.0 * np.pi * freq
+        if self.Delta_L is not None and self.tan_delta_m > 0:
+            omega = 2.0 * np.pi * freq
+            if omega > 0:
+                # R_mag = omega * tan_delta * diag(Delta_L)
+                R_mag_diag = omega * self.tan_delta_m * np.diag(self.Delta_L)
+                Zs_total = R_mag_diag.astype(complex)
+                if Zs is not None:
+                    Zs_total += np.asarray(Zs, dtype=complex)
+                return super().compute_port_impedance(freq, Zs_total)
 
-        # Temporarily replace L with L_total = L_air + Delta_L
-        L_original = self.L
-        R_original = self.R_dc
-
-        if self.Delta_L is not None:
-            self.L = L_original + self.Delta_L
-
-            # Add magnetic loss resistance from mu"_r
-            if self.tan_delta_m > 0 and omega > 0:
-                # R_mag = omega * tan_delta * Delta_L (matrix)
-                # For the MNA formulation, we add this as extra Zs-like impedance
-                # Since R_dc is a diagonal and Delta_L is a matrix,
-                # we handle the loss via the L matrix (complex inductance)
-                # L_complex = Delta_L * (1 - j*tan_delta)
-                # => jw*L_complex = jw*Delta_L + omega*tan_delta*Delta_L
-                #                 = jw*Delta_L + R_magnetic
-                self.L = L_original + self.Delta_L * (1.0 - 1j * self.tan_delta_m)
-
-        Z = super().compute_port_impedance(freq, Zs)
-
-        # Restore original L and R
-        self.L = L_original
-        self.R_dc = R_original
-        return Z
+        return super().compute_port_impedance(freq, Zs)
 
     def frequency_sweep(self, freqs, Zs_func=None):
         """
@@ -351,14 +357,17 @@ class CoupledPEECSolver(PEECCircuitSolver):
         Returns:
             Z_port: Complex array of port impedances, shape (len(freqs),)
         """
-        freqs = np.asarray(freqs)
-        Z_port = np.zeros(len(freqs), dtype=complex)
+        if self.Delta_L is not None and self.tan_delta_m > 0:
+            # Lossy: per-frequency Zs with R_mag
+            freqs = np.asarray(freqs)
+            Z_port = np.zeros(len(freqs), dtype=complex)
+            for i, f in enumerate(freqs):
+                Zs = Zs_func(f) if Zs_func is not None else None
+                Z_port[i] = self.compute_port_impedance(f, Zs)
+            return Z_port
 
-        for i, f in enumerate(freqs):
-            Zs = Zs_func(f) if Zs_func is not None else None
-            Z_port[i] = self.compute_port_impedance(f, Zs)
-
-        return Z_port
+        # Lossless: use C++ batch sweep (fast path)
+        return super().frequency_sweep(freqs, Zs_func)
 
     def get_effective_inductance(self):
         """
@@ -367,8 +376,7 @@ class CoupledPEECSolver(PEECCircuitSolver):
         Returns:
             L_total: (n_seg x n_seg) inductance matrix [H]
         """
-        if self.Delta_L is not None:
-            return self.L + self.Delta_L
+        # self.L already contains L_air + Delta_L after compute_coupling_matrix()
         return self.L.copy()
 
     def get_magnetic_loss_resistance(self, freq):
