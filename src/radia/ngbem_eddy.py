@@ -348,6 +348,10 @@ class EddyCurrentFEMBEM:
         ])
 
         # --- Solve with GMRes ---
+        # Note: While the block matrix is complex symmetric (where COCG might be
+        # mathematically optimal for memory), we use GMRes because COCG often
+        # fails to stably converge for these particular BEM-coupled systems without
+        # a specialized spectral preconditioner. GMRes guarantees residual minimization.
         if printrates:
             print(f"  FEMBEM: H1 DOFs={self._fes_h1.ndof}, "
                   f"L2 DOFs={self._fes_l2.ndof}")
@@ -1079,8 +1083,9 @@ class EddyCurrentBEMSIBC:
 class LoopBasisBuilder:
     """Build divergence-free basis from surface mesh topology.
 
-    Uses the face-edge divergence matrix D (n_faces x n_edges) where
-    D[f,e] = +/-1 encodes the signed incidence of edge e in face f.
+    Uses NGSolve's div operator to build the face-edge divergence matrix
+    D (n_faces x n_edges), ensuring consistency with the HDivSurface
+    basis function convention used by M and V operators.
 
     The divergence-free subspace is null(D). For a closed surface:
       n_loops = n_edges - rank(D) = V - 1  (for genus-0)
@@ -1094,12 +1099,15 @@ class LoopBasisBuilder:
     def __init__(self, mesh, fes):
         """Build divergence-free basis from mesh and HDivSurface FE space.
 
+        Uses NGSolve's own div operator to build D, ensuring the loop
+        basis T = null(D) is in the same convention as the BEM operators.
+
         Args:
             mesh: NGSolve Mesh (with volume elements; boundary = closed surface)
             fes: HDivSurface FE space (order=0)
         """
         from scipy.linalg import null_space
-        from ngsolve import BND
+        from ngsolve import BND, SurfaceL2, BilinearForm, div, ds
 
         # Collect active (boundary) DOFs
         active_dof_set = set()
@@ -1112,57 +1120,21 @@ class LoopBasisBuilder:
         self.n_active = len(self.active_dofs)
         self._dof_to_idx = {d: i for i, d in enumerate(self.active_dofs)}
 
-        # Build edge-vertex map for geometric orientation
-        edge_vnrs_map = {}
-        for edge in mesh.edges:
-            if edge.nr in active_dof_set:
-                edge_vnrs_map[edge.nr] = set(v.nr for v in edge.vertices)
-
         bnd_elements = list(mesh.Elements(BND))
         n_faces = len(bnd_elements)
+        self.n_faces = n_faces
 
-        # Build face normals for geometric edge orientation
-        face_normals = []
-        for el in bnd_elements:
-            coords = [np.array([mesh.vertices[v.nr].point[0],
-                                mesh.vertices[v.nr].point[1],
-                                mesh.vertices[v.nr].point[2]])
-                      for v in el.vertices]
-            if len(coords) >= 3:
-                normal = np.cross(coords[1] - coords[0], coords[2] - coords[0])
-                nlen = np.linalg.norm(normal)
-                if nlen > 1e-30:
-                    normal = normal / nlen
-                else:
-                    normal = np.array([0.0, 0.0, 0.0])
-            else:
-                normal = np.array([0.0, 0.0, 0.0])
-            face_normals.append(normal)
-
-        # Build face-edge divergence matrix D with GEOMETRIC orientation.
-        #
-        # GetDofNrs signs are NOT correct for surface divergence - they
-        # can be all +1 even for edges shared by two triangles. The
-        # correct divergence matrix needs opposite signs on the two
-        # triangles sharing an edge (outward edge conormal convention).
-        #
-        # For each edge on each triangle, the geometric sign is determined
-        # by comparing the outward edge conormal (pointing away from the
-        # triangle) with a global reference direction for that edge
-        # (face_normal x global_edge_direction, where global_edge_direction
-        # goes from smaller to larger vertex number).
-        D = np.zeros((n_faces, self.n_active))
-
-        # Also store face geometry for RHS computation
-        self._face_dofs = []      # list of (dof_idx, sign, dof_nr) per face
+        # Store face geometry for RHS computation
         self._face_verts = []     # list of vertex coords per face
         self._face_centroids = [] # centroids
         self._face_areas = []     # areas
 
+        # DOF info per face (for sign extraction from D later)
+        face_dof_indices = []  # list of [(idx, dof_nr), ...] per face
+
         for face_idx, el in enumerate(bnd_elements):
             verts = [mesh.vertices[v.nr].point for v in el.vertices]
             coords = [np.array([v[0], v[1], v[2]]) for v in verts]
-            vnrs = [v.nr for v in el.vertices]
 
             self._face_verts.append(coords)
             centroid = sum(coords) / len(coords)
@@ -1178,70 +1150,76 @@ class LoopBasisBuilder:
                     np.cross(coords[2] - coords[0], coords[3] - coords[0])))
             self._face_areas.append(area)
 
-            n_face = face_normals[face_idx]
-            face_dof_list = []
-
+            dofs_on_face = []
             for d_raw in fes.GetDofNrs(el):
                 d = d_raw if d_raw >= 0 else ~d_raw
-                if d not in self._dof_to_idx:
-                    continue
-                idx = self._dof_to_idx[d]
+                if d in self._dof_to_idx:
+                    dofs_on_face.append((self._dof_to_idx[d], d))
+            face_dof_indices.append(dofs_on_face)
 
-                # NGSolve sign for RT0 basis function evaluation (RHS)
-                ngsolve_sign = +1.0 if d_raw >= 0 else -1.0
+        # -----------------------------------------------------------------
+        # Build D using NGSolve's div operator for consistent convention.
+        #
+        # The geometric sign computation (cross-product based) can differ
+        # from NGSolve's internal RT0 convention for ~50% of edges.
+        # Using NGSolve's own div operator ensures D is in the SAME
+        # convention as M (mass) and V (SLP), so the loop projection
+        # M_LL = T^T M T is consistent.
+        # -----------------------------------------------------------------
+        fes_l2 = SurfaceL2(mesh, order=0)
 
-                # Geometric orientation sign for divergence matrix
-                evnrs = edge_vnrs_map.get(d, set())
-                geo_sign = ngsolve_sign  # fallback
+        # Build mapping: SurfaceL2 DOF index -> BND element index
+        l2_dof_to_face = {}
+        for fi, el in enumerate(bnd_elements):
+            for d in fes_l2.GetDofNrs(el):
+                d_abs = d if d >= 0 else ~d
+                l2_dof_to_face[d_abs] = fi
 
-                if len(coords) == 3 and len(evnrs) == 2:
-                    # Find the two edge vertices on this face
-                    edge_verts_on_face = [k for k in range(3)
-                                         if vnrs[k] in evnrs]
-                    if len(edge_verts_on_face) == 2:
-                        k0, k1 = edge_verts_on_face
-                        edge_dir = coords[k1] - coords[k0]
+        # Mixed bilinear form: <div(u_hdiv), v_l2> on boundary surface
+        u_trial = fes.TrialFunction()
+        v_test = fes_l2.TestFunction()
 
-                        # Outward edge conormal (in surface plane)
-                        n_out = np.cross(n_face, edge_dir)
-                        nlen = np.linalg.norm(n_out)
-                        if nlen > 1e-30:
-                            n_out = n_out / nlen
+        bf_div = BilinearForm(trialspace=fes, testspace=fes_l2)
+        bf_div += div(u_trial.Trace()) * v_test * ds(bonus_intorder=2)
+        bf_div.Assemble()
 
-                        # Should point AWAY from triangle (opposite vertex)
-                        opp_idx = 3 - k0 - k1
-                        to_opp = (coords[opp_idx]
-                                  - 0.5 * (coords[k0] + coords[k1]))
-                        to_opp_s = to_opp - np.dot(to_opp, n_face) * n_face
-                        if np.dot(n_out, to_opp_s) > 0:
-                            n_out = -n_out
+        D_mat = bf_div.mat
 
-                        # Global edge direction: smaller -> larger vertex nr
-                        vnr_sorted = sorted(evnrs)
-                        p0 = np.array(mesh.vertices[vnr_sorted[0]].point)
-                        p1 = np.array(mesh.vertices[vnr_sorted[1]].point)
-                        e_global = p1 - p0
-                        glen = np.linalg.norm(e_global)
-                        if glen > 1e-30:
-                            e_global = e_global / glen
+        # Use GridFunction vectors (not CreateColVector which may have
+        # incompatible vector types for mixed HDivSurface/SurfaceL2 forms)
+        from ngsolve import GridFunction as GF
+        gf_trial = GF(fes)
+        gf_test = GF(fes_l2)
 
-                        # Global edge normal
-                        n_global = np.cross(n_face, e_global)
-                        glen2 = np.linalg.norm(n_global)
-                        if glen2 > 1e-30:
-                            n_global = n_global / glen2
+        # Extract D column by column for active DOFs only
+        D_raw = np.zeros((fes_l2.ndof, self.n_active))
+        for k, dk in enumerate(self.active_dofs):
+            gf_trial.vec[:] = 0
+            gf_trial.vec[dk] = 1.0
+            gf_test.vec.data = D_mat * gf_trial.vec
+            for f in range(fes_l2.ndof):
+                D_raw[f, k] = gf_test.vec[f]
 
-                        # Sign: +1 if outward aligns with global
-                        geo_sign = np.sign(np.dot(n_out, n_global))
+        # Reorder rows: L2 DOF order -> BND element order
+        D = np.zeros((n_faces, self.n_active))
+        for l2_dof in range(fes_l2.ndof):
+            face_idx = l2_dof_to_face.get(l2_dof, l2_dof)
+            D[face_idx, :] = D_raw[l2_dof, :]
 
-                D[face_idx, idx] = geo_sign
-                # Store NGSolve sign for RHS basis function evaluation
-                face_dof_list.append((idx, ngsolve_sign, d))
-
-            self._face_dofs.append(face_dof_list)
-
-        self.n_faces = n_faces
         self._D = D
+
+        # Build face_dofs with correct signs from D (NGSolve convention).
+        # For RT0 order=0: D[f,k] = +-1 (sign of basis function on face f).
+        # This sign is used in _compute_excitation for centroid quadrature:
+        #   phi_k(centroid) = sign * (centroid - p_opp) / (2 * area)
+        self._face_dofs = []
+        for face_idx in range(n_faces):
+            face_dof_list = []
+            for dof_idx, dof_nr in face_dof_indices[face_idx]:
+                d_val = D[face_idx, dof_idx]
+                sign = np.sign(d_val) if abs(d_val) > 1e-10 else 1.0
+                face_dof_list.append((dof_idx, sign, dof_nr))
+            self._face_dofs.append(face_dof_list)
 
         # Loop basis = null space of D (divergence-free subspace)
         self.T_loop = null_space(D)
@@ -1439,14 +1417,13 @@ class ShieldBEMSIBC:
 
         n_loops = self._loop.n_loops
 
-        # System matrix from EFIE: E_inc + E_scat + Zs*J = 0
-        # E_scat = -jw*mu_0*V_vec*J (in loop subspace, grad(Phi) vanishes)
-        # => (Zs*M - jw*mu_0*V_vec)*J = -<E_inc, phi>
+        # System matrix from EFIE:
+        #   E_inc_tan + E_scat_tan = Zs * J   (SIBC boundary condition)
+        #   E_scat = -jw*mu_0*V*J              (SLP, loop subspace: no grad Phi)
+        #   => (Zs*M + jw*mu_0*V)*J = -jw*<A_inc, phi>
         #
-        # ngsolve.bem Maxwell SLP in loop subspace:
-        #   V_LL = V_vec_LL (positive definite; V_div term vanishes)
-        # Verified: V_LL eigenvalues are positive [~1e-4, ~1e-2]
-        A_sys = Zs * self._M_LL - 1j * omega * MU_0 * self._V_LL
+        # PLUS sign on V: Lenz's law requires A_scat opposing A_inc
+        A_sys = Zs * self._M_LL + 1j * omega * MU_0 * self._V_LL
 
         # RHS: -jw * M * A_inc projected to loop space
         # For PEEC coupling: A_inc = vector potential from coil at edge centers
@@ -1576,22 +1553,74 @@ class ShieldBEMSIBC:
         W = MU_0 / (2.0 * self._omega) * np.abs(np.imag(J.conj() @ VJ))
         return W
 
-    def compute_impedance_matrix(self, topology_dict):
-        """Compute shield contribution to PEEC port impedance.
+    def compute_A_scattered(self, obs_points):
+        """Compute vector potential from shield eddy currents at external points.
 
-        For each PEEC filament j with unit current:
-          1. A_inc_j(r) = mu_0/(4pi) * integral(I * dl / |r - r'|) (Biot-Savart)
-          2. Solve BEM+SIBC for shield currents J
-          3. A_shield(r) = V * J (vector potential from shield currents)
-          4. Delta_Z[i][j] = -jw * integral(A_shield . dl_i) for each target filament i
+        A_scat(r) = mu_0/(4*pi) * integral_S J(r')/|r-r'| dS'
 
-        This gives the shield's impedance contribution as a matrix
-        that can be added to the PEEC system.
+        Uses NGSolve Integrate with the solved HDivSurface current distribution.
+        Same approach as compute_vector_potential() in ngbem_peec.py.
+
+        Must call solve() first.
 
         Args:
-            topology_dict: PEEC topology from PEECBuilder.build_topology()
-                Must contain: segment_centers, segment_directions,
-                segment_lengths
+            obs_points: (N, 3) array of observation points [m]
+
+        Returns:
+            A_scat: (N, 3) complex array of vector potential [T*m]
+        """
+        from ngsolve import GridFunction, x, y, z, sqrt, Integrate
+
+        if not self._solved:
+            raise RuntimeError("Call solve() first")
+
+        obs_points = np.atleast_2d(obs_points)
+        n_obs = len(obs_points)
+        A = np.zeros((n_obs, 3), dtype=complex)
+
+        bnd = self.mesh.Boundaries("surface")
+        fes = self._fes
+
+        active_dofs = self._loop.active_dofs
+
+        for part_label, get_part in [('real', np.real), ('imag', np.imag)]:
+            gf_J = GridFunction(fes)
+            for k in range(len(self._J_full)):
+                gf_J.vec[active_dofs[k]] = float(get_part(self._J_full[k]))
+
+            for i in range(n_obs):
+                rx, ry, rz = obs_points[i]
+                dist = sqrt((x - rx)**2 + (y - ry)**2 + (z - rz)**2 + 1e-30)
+                kernel = 1.0 / dist
+                for comp in range(3):
+                    val = MU_0 / (4 * np.pi) * Integrate(
+                        gf_J[comp] * kernel, self.mesh,
+                        definedon=bnd, order=5)
+                    if part_label == 'real':
+                        A[i, comp] += val
+                    else:
+                        A[i, comp] += 1j * val
+
+        return A
+
+    def compute_impedance_matrix(self, freq, topology_dict):
+        """Compute shield contribution to PEEC impedance matrix.
+
+        For each PEEC filament j with unit current:
+          1. A_inc_j(r) = Biot-Savart vector potential from filament j
+          2. Solve BEM+SIBC for shield eddy currents J
+          3. Compute A_scat from shield J at all filament centers
+          4. Delta_Z[i][j] = jw * A_scat(center_i) . dir_i * len_i
+
+        The resulting Delta_Z is added to the PEEC branch impedance:
+            Z_branch = R + jw*L_air + Delta_Z_shield
+
+        Args:
+            freq: Frequency [Hz]
+            topology_dict: Dict with keys:
+                segment_centers: (n_seg, 3) array
+                segment_directions: (n_seg, 3) unit direction array
+                segment_lengths: (n_seg,) length array
 
         Returns:
             Delta_Z: (n_seg x n_seg) complex impedance matrix [Ohm]
@@ -1599,32 +1628,47 @@ class ShieldBEMSIBC:
         if not self._assembled:
             raise RuntimeError("Call assemble() first")
 
-        centers = topology_dict['segment_centers']
-        directions = topology_dict['segment_directions']
-        lengths = topology_dict['segment_lengths']
+        omega = 2.0 * np.pi * freq
+
+        centers = np.asarray(topology_dict['segment_centers'])
+        directions = np.asarray(topology_dict['segment_directions'])
+        lengths = np.asarray(topology_dict['segment_lengths'])
         n_seg = len(centers)
 
         Delta_Z = np.zeros((n_seg, n_seg), dtype=complex)
 
+        print(f"  [ShieldBEMSIBC] Computing Delta_Z ({n_seg}x{n_seg}) "
+              f"at {freq:.0f} Hz...")
+
         for j in range(n_seg):
-            # Biot-Savart vector potential from filament j
+            # Biot-Savart vector potential from filament j (unit current)
             def A_inc_from_filament_j(points, _j=j):
                 return _biot_savart_A(
                     points,
                     centers[_j], directions[_j], lengths[_j])
 
             # Solve for shield currents due to filament j
-            self.solve(self.freq, A_inc_func=A_inc_from_filament_j)
+            self.solve(freq, A_inc_func=A_inc_from_filament_j)
 
-            # Back-EMF on each target filament i from shield currents
-            # A_shield at filament i center = V_full * J_full (approx)
-            # For now, use edge-based approximation
+            # Compute A_scattered from shield currents at all filament centers
+            A_scat = self.compute_A_scattered(centers)
+
+            # Delta_Z from Faraday's law: V = jw * Phi_linkage
+            #   Phi_linkage_i = dot(A_scat(center_i), dir_i) * len_i
+            #   Delta_Z[i][j] = jw * dot(A_scat_i, dir_i) * len_i
+            #
+            # Lenz's law check: A_scat opposes A_inc at the coil,
+            # so dot(A_scat, dir) < 0, giving Im(Delta_Z) < 0,
+            # i.e., Delta_L < 0 (inductance decreases). Correct.
             for i in range(n_seg):
-                # Delta_Z[i][j] = -jw * A_shield(center_i) . dir_i * len_i
-                # This requires evaluating the BEM potential at external points
-                # Simplified: use the loop current to compute flux linkage
-                pass  # TODO: implement potential evaluation
+                Delta_Z[i, j] = (1j * omega
+                                 * np.dot(A_scat[i], directions[i])
+                                 * lengths[i])
 
+            if (j + 1) % max(1, n_seg // 5) == 0:
+                print(f"    Filament {j+1}/{n_seg} done")
+
+        print(f"  [ShieldBEMSIBC] Delta_Z computed")
         return Delta_Z
 
     def frequency_sweep(self, freqs, A_inc_func=None):

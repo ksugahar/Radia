@@ -18,7 +18,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 import numpy as np
-from scipy.special import jv  # Bessel functions
+from scipy.special import iv  # Modified Bessel functions
 import matplotlib.pyplot as plt
 
 # Add path for GMSH reader
@@ -124,11 +124,11 @@ def bessel_impedance_circular(frequency, radius, length, sigma, mu_r=1.0):
     """
     Exact impedance for circular wire using Bessel functions.
 
-    Formula: Z = (k*length)/(2*pi*r*sigma) * J0(kr)/J1(kr)
+    Formula: Z = (k*length)/(2*pi*r*sigma) * I0(kr)/I1(kr)
 
     where:
       k = sqrt(j*omega*mu*sigma)
-      J0, J1 = Bessel functions of first kind, order 0 and 1
+      I0, I1 = Modified Bessel functions of first kind, order 0 and 1
 
     Args:
       frequency: Frequency [Hz]
@@ -152,13 +152,13 @@ def bessel_impedance_circular(frequency, radius, length, sigma, mu_r=1.0):
     k = np.sqrt(1j * omega * mu * sigma)
     kr = k * radius
 
-    # Bessel functions J0(kr), J1(kr)
-    J0 = jv(0, kr)
-    J1 = jv(1, kr)
+    # Modified Bessel functions I0(kr), I1(kr)
+    I0 = iv(0, kr)
+    I1 = iv(1, kr)
 
     # Impedance [Ohm]
-    # Z = (k*length)/(2*pi*r*sigma) * J0(kr)/J1(kr)
-    Z = (k * length) / (2 * np.pi * radius * sigma) * (J0 / J1)
+    # Z = (k*length)/(2*pi*r*sigma) * I0(kr)/I1(kr)
+    Z = (k * length) / (2 * np.pi * radius * sigma) * (I0 / I1)
 
     return Z
 
@@ -324,7 +324,7 @@ print(f"  - (Area matches circular: {cross_section_area * 1e6:.4f} mm^2)")
 
 print("\nBessel Analytical Solution:")
 print("  - Exact for circular cross-section")
-print("  - J0(kr)/J1(kr) impedance formula")
+print("  - I0(kr)/I1(kr) impedance formula")
 
 print("\nError Summary:")
 print(f"  - Resistance mean error: {np.mean(R_error_pct):.2f}%")

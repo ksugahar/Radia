@@ -127,10 +127,9 @@ def test_sphere_condition_numbers():
                             + kappa * kappa * V_k.mat)
 
                 # RHS: plane wave E_inc = (1,0,0) * exp(-j*kappa*z)
-                z = CF((0, 0, 1)) * CF((CF.x, CF.y, CF.z))
-                # Use simpler excitation
-                from ngsolve import exp
-                E_inc = CF((1, 0, 0)) * exp(-1j * kappa * CF.z)
+                from ngsolve import x as cf_x, y as cf_y, z as cf_z, exp
+                z_coord = cf_z  # z coordinate CF
+                E_inc = CF((1, 0, 0)) * exp(-1j * kappa * z_coord)
                 rhs = LinearForm(
                     E_inc * vHDiv.Trace() * ds(bonus_intorder=2*intorder)
                 ).Assemble()

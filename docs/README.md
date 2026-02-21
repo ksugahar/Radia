@@ -27,6 +27,7 @@
 | Document | Description |
 |----------|-------------|
 | [GMSH_WORKFLOW.md](GMSH_WORKFLOW.md) | CAD -> GMSH -> NGSolve -> Radia workflow |
+| [SETGEOMINFO_API.md](SETGEOMINFO_API.md) | SetGeomInfo API for high-order curving (ksugahar/ngsolve fork) |
 | [VISUALIZATION_WORKFLOW.md](VISUALIZATION_WORKFLOW.md) | Radia-NGSolve visualization workflow |
 | [VIEWER_COMPARISON.md](VIEWER_COMPARISON.md) | Viewer comparison (PyVista, ParaView, GMSH, Netgen) |
 | [MESH_AND_SURFACE_ELEMENTS_GUIDE.md](MESH_AND_SURFACE_ELEMENTS_GUIDE.md) | Surface elements FAQ and Netgen GUI guide |
@@ -42,6 +43,7 @@
 
 | Document | Description |
 |----------|-------------|
+| [EDDY_CURRENT_METHODS.md](EDDY_CURRENT_METHODS.md) | Eddy current method comparison (ngbem FEM-BEM, BEM+SIBC, FEM+Kelvin) |
 | [GROVER_FORMULA_IMPLEMENTATION.md](GROVER_FORMULA_IMPLEMENTATION.md) | Grover's formula for self-inductance |
 | [VECTOR_FEMBEM_ANALYSIS.md](VECTOR_FEMBEM_ANALYSIS.md) | VectorEddyCurrentFEMBEM analysis |
 | [NGBEM_INTEGRATION_DESIGN.md](NGBEM_INTEGRATION_DESIGN.md) | NGSolve BEM integration design |

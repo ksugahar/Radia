@@ -29,13 +29,14 @@ Usage:
                               sigma=5.8e7, thickness=0.035e-3)
     solver.assemble()
 
-    freqs = np.logspace(3, 9, 50)
+    freqs = np.logspace(1, 6, 50)
     Z = solver.solve_frequency(freqs, mode='full')
 
 Part of Radia project
 """
 
 import numpy as np
+import scipy.linalg
 import time
 
 # Physical constants
@@ -53,12 +54,20 @@ def extract_dense_matrix(mat, ndof):
     Returns:
         Dense numpy array (ndof x ndof)
     """
-    M = np.zeros((ndof, ndof))
-    for i in range(ndof):
-        ei = mat.CreateColVector()
+    # Probe first column to detect complex output
+    ei = mat.CreateColVector()
+    ei[:] = 0
+    ei[0] = 1.0
+    col = mat.CreateColVector()
+    mat.Mult(ei, col)
+    is_complex = isinstance(col[0], complex)
+
+    M = np.zeros((ndof, ndof), dtype=complex if is_complex else float)
+    for j in range(ndof):
+        M[j, 0] = col[j]
+    for i in range(1, ndof):
         ei[:] = 0
         ei[i] = 1.0
-        col = mat.CreateColVector()
         mat.Mult(ei, col)
         for j in range(ndof):
             M[j, i] = col[j]
@@ -130,6 +139,13 @@ class NGBEMPEECSolver:
     - High-order elements (order > 0)
     - Natural Loop-Star decomposition (no explicit basis transformation)
     - FMM acceleration available for large problems
+
+    Solver notes:
+    - Dense direct: LDL^T (Bunch-Kaufman) for complex symmetric A = A^T
+    - Iterative (large-scale): GMRes is recommended over COCG/COCR because
+      BEM-discretized systems exhibit erratic COCG convergence without
+      specialized spectral preconditioners (SSOR, incomplete Cholesky).
+      GMRes guarantees monotonic residual minimization.
     """
 
     def __init__(self, mesh, conductor_label="conductor", sigma=5.8e7,
@@ -284,8 +300,9 @@ class NGBEMPEECSolver:
         triangles, areas = get_mesh_triangles(self.mesh)
         n_tri = len(triangles)
 
-        # For simple resistance estimate: use average element properties
-        # More accurate: compute per-edge length from mesh topology
+        # Simplified resistance estimate: all edges get the same R value
+        # based on average element dimensions. For a more accurate model,
+        # compute per-edge length and dual area from mesh topology.
         total_area = np.sum(areas)
         mean_edge_length = np.sqrt(4.0 * total_area / (np.sqrt(3) * n_tri))
 
@@ -326,34 +343,26 @@ class NGBEMPEECSolver:
     def _solve_mqs(self, omega):
         """MQS mode: Loop-only impedance (capacitive effects neglected).
 
-        Z_branch = diag(R) + jw*L
+        Z_branch = diag(R) + jw*L  (complex symmetric: A = A^T)
         Z_port = 1 / (e^T * Z_branch^{-1} * e)
 
-        where e is the port excitation vector.
+        Uses LDL^T factorization (Bunch-Kaufman) for complex symmetric solve.
         """
         Z_branch = np.diag(self.R_loop.astype(complex)) + 1j * omega * self.L
 
-        # For simple total impedance (series assumption):
-        # Z_port = sum of all Z_branch elements
-        # This is valid for a 1-port single-conductor problem.
-        #
-        # For general multi-port, need proper MNA formulation.
-        # Use sum-of-all approximation for now.
-        try:
-            Z_inv = np.linalg.inv(Z_branch)
-            # Port vector: uniform excitation (all edges carry same current)
-            e = np.ones(self.n_loop) / self.n_loop
-            Z_port = 1.0 / (e @ Z_inv @ e)
-        except np.linalg.LinAlgError:
-            # Fallback: sum of diagonal
-            Z_port = np.sum(self.R_loop) + 1j * omega * np.sum(self.L)
+        # Port vector: uniform excitation (all edges carry same current)
+        e = np.ones(self.n_loop) / self.n_loop
+
+        # Solve Z_branch * x = e via LDL^T (complex symmetric)
+        x = scipy.linalg.solve(Z_branch, e, assume_a='sym')
+        Z_port = 1.0 / (e @ x)
 
         return Z_port
 
     def _solve_full_loop_star(self, omega):
         """Full Loop-Star: includes capacitive (Star) DOFs.
 
-        Block system:
+        Block system (complex symmetric: A = A^T):
             | Z_LL    M_LS^T  |   | I_L |   | V_port |
             | M_LS    Z_SS    | * | Q_S | = | 0      |
 
@@ -363,35 +372,76 @@ class NGBEMPEECSolver:
             M_LS                      (n_star x n_loop)
 
         Port impedance via Schur complement:
-            Z_port = e^T * (Z_LL - M_LS^T * Z_SS^{-1} * M_LS)^{-1} * e
+            Z_eff = Z_LL - M_LS^T * Z_SS^{-1} * M_LS
+            Z_port = 1 / (e^T * Z_eff^{-1} * e)
+
+        All linear solves use LDL^T (Bunch-Kaufman) for complex symmetric matrices.
         """
         # Loop-Loop block
         Z_LL = np.diag(self.R_loop.astype(complex)) + 1j * omega * self.L
 
         if omega < 1e-10:
             # DC limit: only resistance
-            return np.sum(self.R_loop) + 0j
+            e = np.ones(self.n_loop) / self.n_loop
+            x = scipy.linalg.solve(np.diag(self.R_loop), e)
+            return 1.0 / (e @ x) + 0j
 
         # Star-Star block
         Z_SS = self.P / (1j * omega)
 
         # Schur complement: Z_eff = Z_LL - M_LS^T * Z_SS^{-1} * M_LS
-        try:
-            Z_SS_inv = np.linalg.inv(Z_SS)
-            Schur = Z_LL - self.M_LS.T @ Z_SS_inv @ self.M_LS
-        except np.linalg.LinAlgError:
-            # If P is singular, fall back to MQS
-            Schur = Z_LL
+        # Solve Z_SS * X = M_LS via LDL^T (complex symmetric)
+        X = scipy.linalg.solve(Z_SS, self.M_LS, assume_a='sym')
+        Schur = Z_LL - self.M_LS.T @ X
 
-        # Port extraction (uniform excitation approximation)
-        try:
-            Schur_inv = np.linalg.inv(Schur)
-            e = np.ones(self.n_loop) / self.n_loop
-            Z_port = 1.0 / (e @ Schur_inv @ e)
-        except np.linalg.LinAlgError:
-            Z_port = np.sum(self.R_loop) + 1j * omega * np.sum(self.L)
+        # Port extraction via LDL^T (complex symmetric)
+        e = np.ones(self.n_loop) / self.n_loop
+        x = scipy.linalg.solve(Schur, e, assume_a='sym')
+        Z_port = 1.0 / (e @ x)
 
         return Z_port
+
+    def solve_loop_star(self, freq):
+        """Solve full Loop-Star system and return solution vectors.
+
+        This method exposes the internal current and charge distributions,
+        useful for visualization and post-processing.
+
+        Args:
+            freq: Frequency [Hz]
+
+        Returns:
+            I_loop: Complex array (n_loop,) — edge current coefficients
+            Q_star: Complex array (n_star,) — cell charge coefficients
+        """
+        if self.L is None:
+            raise RuntimeError("Call assemble() before solve_loop_star()")
+
+        omega = 2.0 * np.pi * freq
+
+        Z_LL = np.diag(self.R_loop.astype(complex)) + 1j * omega * self.L
+        e = np.ones(self.n_loop) / self.n_loop
+
+        if omega < 1e-10:
+            # DC limit: only resistance, no charge
+            I_loop = scipy.linalg.solve(np.diag(self.R_loop), e)
+            Q_star = np.zeros(self.n_star, dtype=complex)
+            return I_loop, Q_star
+
+        Z_SS = self.P / (1j * omega)
+
+        # Schur complement: Z_eff = Z_LL - M_LS^T * Z_SS^{-1} * M_LS
+        X = scipy.linalg.solve(Z_SS, self.M_LS, assume_a='sym')
+        Schur = Z_LL - self.M_LS.T @ X
+
+        # Solve for loop currents
+        I_loop = scipy.linalg.solve(Schur, e, assume_a='sym')
+
+        # Back-substitute for star charges: Z_SS * Q = -M_LS * I
+        Q_star = -scipy.linalg.solve(Z_SS, self.M_LS @ I_loop,
+                                      assume_a='sym')
+
+        return I_loop, Q_star
 
     def get_matrices(self):
         """Return assembled matrices for external use.
@@ -461,3 +511,194 @@ class NGBEMPEECSolver:
         if self.thickness:
             R_sheet = 1.0 / (self.sigma * self.thickness)
             print(f"  Sheet resistance: {R_sheet:.4e} Ohm/sq")
+
+
+# ============================================================
+# Visualization functions (netgen.webgui)
+# ============================================================
+
+def draw_peec_model(mesh, solver=None, conductor_label="conductor"):
+    """Draw PEEC model in netgen.webgui: surface mesh with edges and DOF counts.
+
+    Renders the surface mesh (triangles) with wireframe overlay.
+    If a solver is provided, prints the Loop/Star DOF counts.
+
+    Args:
+        mesh: NGSolve Mesh (surface mesh)
+        solver: NGBEMPEECSolver instance (optional, for DOF info)
+        conductor_label: Boundary label
+
+    Returns:
+        scene: webgui scene object
+    """
+    from ngsolve.webgui import Draw
+
+    if solver is not None:
+        print(f"PEEC model: {solver.n_loop} Loop DOFs (edges), "
+              f"{solver.n_star} Star DOFs (cells)")
+
+    scene = Draw(mesh)
+    return scene
+
+
+def draw_loop_current(solver, freq, mesh):
+    """Visualize Loop current magnitude |I| on the mesh.
+
+    Solves the full Loop-Star system at the given frequency and projects
+    the edge current magnitudes onto a per-element scalar field.
+
+    Each triangle's current is the mean |I| of its three edge DOFs.
+    This shows where the current concentrates on the conductor surface.
+
+    Args:
+        solver: NGBEMPEECSolver instance (must be assembled)
+        freq: Frequency [Hz]
+        mesh: NGSolve Mesh
+
+    Returns:
+        gf_current: GridFunction with current magnitude
+        scene: webgui scene object
+    """
+    from ngsolve import SurfaceL2, GridFunction, BND
+    from ngsolve.webgui import Draw
+
+    I_loop, Q_star = solver.solve_loop_star(freq)
+
+    # Create scalar field for current magnitude
+    fes_l2 = SurfaceL2(mesh, order=0)
+    gf_current = GridFunction(fes_l2, name="Loop_current")
+
+    # Map edge DOF magnitudes to element-average current
+    for el in mesh.Elements(BND):
+        edge_nrs = [e.nr for e in el.edges]
+        # Average |I| of the edges belonging to this element
+        edge_vals = [abs(I_loop[e]) for e in edge_nrs
+                     if e < len(I_loop)]
+        if edge_vals:
+            gf_current.vec[el.nr] = np.mean(edge_vals)
+
+    scene = Draw(gf_current, mesh, name="|I_loop|")
+    return gf_current, scene
+
+
+def draw_star_charge(solver, freq, mesh):
+    """Visualize Star charge density Q on the mesh.
+
+    Solves the full Loop-Star system at the given frequency and displays
+    the per-cell charge density. Star DOFs are naturally piecewise constant
+    on cells (SurfaceL2), so no projection is needed.
+
+    Positive/negative charge accumulation shows the capacitive behavior
+    of the conductor.
+
+    Args:
+        solver: NGBEMPEECSolver instance (must be assembled)
+        freq: Frequency [Hz]
+        mesh: NGSolve Mesh
+
+    Returns:
+        gf_charge: GridFunction with charge density
+        scene: webgui scene object
+    """
+    from ngsolve import SurfaceL2, GridFunction
+    from ngsolve.webgui import Draw
+
+    I_loop, Q_star = solver.solve_loop_star(freq)
+
+    # Star DOFs map directly to SurfaceL2 cells
+    fes_l2 = SurfaceL2(mesh, order=0)
+    gf_charge = GridFunction(fes_l2, name="Star_charge")
+
+    for i in range(min(solver.n_star, fes_l2.ndof)):
+        gf_charge.vec[i] = Q_star[i].real
+
+    scene = Draw(gf_charge, mesh, name="Q_star")
+    return gf_charge, scene
+
+
+def draw_loop_star(solver, freq, mesh):
+    """Visualize both Loop currents and Star charges side by side.
+
+    Convenience wrapper that calls draw_loop_current() and
+    draw_star_charge() and returns both results.
+
+    Args:
+        solver: NGBEMPEECSolver instance (must be assembled)
+        freq: Frequency [Hz]
+        mesh: NGSolve Mesh
+
+    Returns:
+        (gf_current, gf_charge): Tuple of GridFunctions
+    """
+    print(f"Loop-Star decomposition at f = {freq:.2e} Hz:")
+
+    gf_current, _ = draw_loop_current(solver, freq, mesh)
+    gf_charge, _ = draw_star_charge(solver, freq, mesh)
+
+    # Print statistics
+    I_loop, Q_star = solver.solve_loop_star(freq)
+    Z_port = solver.solve_frequency(np.array([freq]), mode='full')[0]
+    L_nH = np.imag(Z_port) / (2 * np.pi * freq) * 1e9
+
+    print(f"  |I_loop| range: [{np.min(np.abs(I_loop)):.4e}, "
+          f"{np.max(np.abs(I_loop)):.4e}]")
+    print(f"  |Q_star| range: [{np.min(np.abs(Q_star)):.4e}, "
+          f"{np.max(np.abs(Q_star)):.4e}]")
+    print(f"  Z_port = {Z_port.real:.4e} + j{Z_port.imag:.4e} Ohm")
+    print(f"  L_eff = {L_nH:.2f} nH")
+
+    return gf_current, gf_charge
+
+
+def compute_vector_potential(solver, I_loop, obs_points):
+    """Compute vector potential A at observation points from solved current J.
+
+    This is the key output of the PEEC solver for coupling to external physics:
+    a coil's effect on a magnetic core, a shield's back-action on a coil, etc.
+
+        A(r) = mu_0 / (4*pi) * integral_S  J(r') / |r - r'|  dS'
+
+    Uses NGSolve Integrate over boundary elements with the solved
+    HDivSurface current distribution.
+
+    Args:
+        solver: NGBEMPEECSolver instance (must be assembled)
+        I_loop: Complex array (n_loop,) of edge current coefficients
+                (from solve_loop_star or solve_frequency)
+        obs_points: Array of observation points, shape (N, 3) [m]
+
+    Returns:
+        A: Complex array (N, 3) — vector potential [T*m] at each point
+    """
+    from ngsolve import x, y, z, sqrt, Integrate, GridFunction
+
+    mesh = solver.mesh
+    bnd = mesh.Boundaries(solver.conductor_label)
+
+    obs_points = np.asarray(obs_points)
+    n_obs = len(obs_points)
+
+    # Process real and imaginary parts separately (Integrate is real-valued)
+    A = np.zeros((n_obs, 3), dtype=complex)
+
+    for part_label, get_part in [('real', np.real), ('imag', np.imag)]:
+        gf_J = GridFunction(solver._fes_hdiv)
+        for i in range(solver.n_loop):
+            gf_J.vec[i] = float(get_part(I_loop[i]))
+
+        for i in range(n_obs):
+            rx, ry, rz = obs_points[i]
+            # Distance with small regularization (obs points should be off-surface)
+            dist = sqrt((x - rx)**2 + (y - ry)**2 + (z - rz)**2 + 1e-30)
+            kernel = 1.0 / dist
+
+            for comp in range(3):
+                val = MU_0 / (4 * np.pi) * Integrate(
+                    gf_J[comp] * kernel, mesh, definedon=bnd, order=5)
+
+                if part_label == 'real':
+                    A[i, comp] += val
+                else:
+                    A[i, comp] += 1j * val
+
+    return A

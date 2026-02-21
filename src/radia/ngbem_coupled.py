@@ -270,20 +270,10 @@ class CoupledPEECMMM:
         print(f"  [ngbem_coupled] Computing Delta_L ({n_loop}x{n_loop}) "
               f"via Radia...")
 
+        # Create persistent container for core objects (survives across iterations)
+        mag_container = rad.ObjCnt(core_handles)
+
         for j in range(n_loop):
-            # Clean up previous solve state
-            rad.UtiDelAll()
-
-            # Re-create magnetic core objects (UtiDelAll removes everything)
-            # This is needed because ObjBckg + Solve modifies internal state
-            # For efficiency, we could use a reset mechanism instead
-            # but UtiDelAll + recreate is the safe approach for now.
-            #
-            # NOTE: The caller must ensure radia_core objects are
-            # re-creatable, or provide a factory function.
-            # For now, assume radia_core is persistent (not deleted by UtiDelAll).
-            # Use ObjCnt to group them.
-
             p1_j = edge_data[j]['p1']
             p2_j = edge_data[j]['p2']
 
@@ -295,7 +285,7 @@ class CoupledPEECMMM:
 
             # Create background field and solve
             bkg = rad.ObjBckg(h_field_from_edge_j)
-            container = rad.ObjCnt(core_handles + [bkg])
+            container = rad.ObjCnt([mag_container, bkg])
             rad.Solve(container, solver_prec, solver_maxiter, solver_method)
 
             # Extract A-field at each target edge center
@@ -306,8 +296,9 @@ class CoupledPEECMMM:
                 len_i = edge_data[i]['length']
                 Delta_L[i, j] = np.dot(A_vec, dir_i) * len_i
 
-            # Clean up background field
+            # Only delete background and outer container (mag_container survives)
             rad.UtiDel(bkg)
+            rad.UtiDel(container)
 
             if (j + 1) % max(1, n_loop // 10) == 0:
                 print(f"    Edge {j+1}/{n_loop} done")
@@ -534,14 +525,21 @@ class CoupledPEECMMM:
     def _solve_mqs(self, omega):
         """MQS (Loop-only) impedance with core coupling.
 
-        Z_branch = R_diag + j*omega*(L_air + Delta_L * (mu_eff(omega) - 1))
+        For Radia core: Delta_L already includes full material response,
+            L_total = L_air + Delta_L
+        For FEM/FEMBEM core: Delta_L is geometric coupling,
+            L_total = L_air + Delta_L * (mu_eff(omega) - 1)
         """
         R = np.diag(self.R_loop)
         L_total = self.L_air.copy()
 
         if self._coupled and self.Delta_L is not None:
-            mu_eff = self._get_mu_eff(omega)
-            L_total = L_total + self.Delta_L * (mu_eff - 1.0)
+            if self.core_model == 'radia':
+                # Radia Delta_L already includes full material response
+                L_total = L_total + self.Delta_L
+            else:
+                mu_eff = self._get_mu_eff(omega)
+                L_total = L_total + self.Delta_L * (mu_eff - 1.0)
 
         Z_branch = R + 1j * omega * L_total
 
@@ -563,15 +561,18 @@ class CoupledPEECMMM:
         | Z_LL    M_LS^T |   | I_L |   | V_port |
         | M_LS    Z_SS   | * | Q_S | = | 0      |
 
-        Z_LL = R + j*omega*(L_air + Delta_L * (mu_eff - 1))
+        Z_LL = R + j*omega*L_total
         Z_SS = P / (j*omega)
         """
         R = np.diag(self.R_loop)
         L_total = self.L_air.copy()
 
         if self._coupled and self.Delta_L is not None:
-            mu_eff = self._get_mu_eff(omega)
-            L_total = L_total + self.Delta_L * (mu_eff - 1.0)
+            if self.core_model == 'radia':
+                L_total = L_total + self.Delta_L
+            else:
+                mu_eff = self._get_mu_eff(omega)
+                L_total = L_total + self.Delta_L * (mu_eff - 1.0)
 
         Z_LL = R + 1j * omega * L_total
 

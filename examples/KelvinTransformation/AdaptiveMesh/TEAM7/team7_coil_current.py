@@ -23,9 +23,9 @@ TEAM Problem 7: コイル電流密度の正確な定義
 import os
 import sys
 
-os.environ['NETGENDIR'] = r'S:\NGSolve\01_GitHub\install_ksugahar\bin'
-os.environ['PATH'] = r'S:\NGSolve\01_GitHub\install_ksugahar\bin;' + os.environ.get('PATH', '')
-sys.path.insert(0, r'S:\NGSolve\01_GitHub\install_ksugahar\Lib\site-packages')
+os.environ['NETGENDIR'] = r'S:\NGSolve\01_GitHub\install_ngsolve\bin'
+os.environ['PATH'] = r'S:\NGSolve\01_GitHub\install_ngsolve\bin;' + os.environ.get('PATH', '')
+sys.path.insert(0, r'S:\NGSolve\01_GitHub\install_ngsolve\Lib\site-packages')
 
 import math
 from numpy import pi, sqrt

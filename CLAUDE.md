@@ -2973,23 +2973,26 @@ K. Hollaus, V. Hanser, and M. Schobinger, "A Nonlinear Effective Surface Impedan
 **Current Implementation**:
 ```python
 # validate_circular_coil_sibc.py
-from scipy.special import jv  # Fortran AMOS Bessel functions
+from scipy.special import iv  # Modified Bessel functions (Fortran AMOS)
 
 def bessel_impedance_circular(frequency, radius, length, sigma, mu_r=1.0):
     """
-    Exact impedance for circular wire using Bessel functions.
+    Exact impedance for circular wire using modified Bessel functions.
 
-    Formula: Z = (k*length)/(2*pi*r*sigma) * J0(kr)/J1(kr)
+    Formula: Z = (k*length)/(2*pi*r*sigma) * I0(kr)/I1(kr)
+
+    IMPORTANT: Use I0/I1 (modified Bessel), NOT J0/J1 (regular Bessel).
+    J0/J1 gives correct R but wrong sign for internal inductance.
     """
     omega = 2 * np.pi * frequency
     mu = mu_r * MU_0
     k = np.sqrt(1j * omega * mu * sigma)
     kr = k * radius
 
-    J0_kr = jv(0, kr)  # Complex Bessel J0
-    J1_kr = jv(1, kr)  # Complex Bessel J1
+    I0_kr = iv(0, kr)  # Modified Bessel I0
+    I1_kr = iv(1, kr)  # Modified Bessel I1
 
-    Z = (k * length) / (2 * np.pi * radius * sigma) * (J0_kr / J1_kr)
+    Z = (k * length) / (2 * np.pi * radius * sigma) * (I0_kr / I1_kr)
     return Z
 ```
 

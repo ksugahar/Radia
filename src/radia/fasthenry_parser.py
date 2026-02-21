@@ -806,12 +806,8 @@ class FastHenryParser:
                 maxh = block.get('maxh', 0.01)
                 mesh = Mesh(geo.GenerateMesh(maxh=maxh))
 
-                # Thickness = minimum box dimension (slab impedance)
-                thickness = min(size)
-
                 shield = ShieldBEMSIBC(
-                    mesh, block['sigma'], mu_r=block['mu_r'],
-                    thickness=thickness)
+                    mesh, block['sigma'], mu_r=block['mu_r'])
                 shield.assemble(intorder=4)
                 solvers.append(shield)
 
@@ -1087,12 +1083,52 @@ class FastHenryParser:
 
         Delta_L = None
 
-        if self.shield_blocks:
+        if self.shield_blocks and self.magnetic_blocks:
+            # Combined: magnetic core + conducting shield
+            from peec_coupled import CoupledPEECSolver
+            from peec_shielded import ShieldedPEECSolver
+
+            # Step 1: Compute Delta_L from magnetic coupling
+            mu_r_imag = self.magnetic_blocks[0].get('mu_r_imag', 0.0)
+            mu_r_real = self.magnetic_blocks[0].get('mu_r', 1000.0)
+
+            mag_objects = self.build_magnetic_objects()
+            coupled = CoupledPEECSolver(topo, mag_objects,
+                                        mu_r_imag=mu_r_imag)
+            coupled.compute_coupling_matrix(
+                solver_method=solver_method,
+                solver_prec=solver_prec,
+                solver_maxiter=solver_maxiter,
+                mu_r_real=mu_r_real)
+            Delta_L = coupled.Delta_L
+
+            # Step 2: Modified topology with L_total = L_air + Delta_L
+            topo_coupled = dict(topo)
+            topo_coupled['L'] = coupled.L  # Already L_air + Delta_L
+
+            # Step 3: Shielded solver with coupled L
+            shield_solvers = self.build_shield_solvers()
+            shield = shield_solvers[0]
+            solver = ShieldedPEECSolver(topo_coupled, shield)
+
+            # Step 4: Frequency sweep with optional magnetic loss
+            tan_delta_m = coupled.tan_delta_m
+            if tan_delta_m > 0:
+                def Zs_with_mag_loss(freq, _td=tan_delta_m, _dL=Delta_L,
+                                     _zf=Zs_func, _n=coupled.n_loop):
+                    omega_f = 2.0 * np.pi * freq
+                    R_mag = omega_f * _td * np.diag(_dL)
+                    Zs_base = _zf(freq) if _zf is not None else np.zeros(_n)
+                    return R_mag.astype(complex) + np.asarray(Zs_base, dtype=complex)
+                Z_port = solver.frequency_sweep(freqs, Zs_with_mag_loss)
+            else:
+                Z_port = solver.frequency_sweep(freqs, Zs_func)
+
+        elif self.shield_blocks:
             # Shielded PEEC solve (BEM + SIBC)
             from peec_shielded import ShieldedPEECSolver
 
             shield_solvers = self.build_shield_solvers()
-            # Use first shield solver (multi-shield future work)
             shield = shield_solvers[0]
             solver = ShieldedPEECSolver(topo, shield)
             Z_port = solver.frequency_sweep(freqs, Zs_func)
@@ -1101,8 +1137,6 @@ class FastHenryParser:
             # Coupled PEEC + MMM solve
             from peec_coupled import CoupledPEECSolver
 
-            # Extract mu_r_imag and mu_r_real from magnetic blocks
-            # Use first block's values (all blocks typically share same material)
             mu_r_imag = self.magnetic_blocks[0].get('mu_r_imag', 0.0)
             mu_r_real = self.magnetic_blocks[0].get('mu_r', 1000.0)
 
