@@ -89,7 +89,7 @@ jobs:
           echo "Wheel: $WHL"
 
       - name: Install twine
-        run: pip install twine
+        run: pip install 'twine>=5.0,<6.0'
 
       - name: Publish to PyPI
         env:
