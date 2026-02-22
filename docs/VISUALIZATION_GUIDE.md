@@ -819,7 +819,7 @@ mesh.ngmesh.Save('motor_rotor.vol')  # 表面要素を含む
 
 **結果**: Cubit sidesetが表面要素に変換される ✅
 
-メッシュ生成と表面要素の詳細については [MESH_AND_SURFACE_ELEMENTS_GUIDE.md](MESH_AND_SURFACE_ELEMENTS_GUIDE.md) を参照。
+メッシュ生成と表面要素の詳細については [MESH_GUIDE.md](MESH_GUIDE.md) を参照。
 
 #### パターンC: GMSH → NGSolve
 
@@ -1020,8 +1020,8 @@ pip install ngsolve  # webgui同梱
 
 ### 関連ドキュメント
 
-- [MESH_AND_SURFACE_ELEMENTS_GUIDE.md](MESH_AND_SURFACE_ELEMENTS_GUIDE.md) - メッシュ生成と表面要素の詳細
-- [GMSH_WORKFLOW.md](GMSH_WORKFLOW.md) - GMSHメッシュ生成ワークフロー
+- [MESH_GUIDE.md](MESH_GUIDE.md) - メッシュ生成と表面要素の詳細
+- [MESH_GUIDE.md](MESH_GUIDE.md) - GMSHメッシュ生成ワークフロー
 - [VOL_FILE_ASSOCIATION.md](file://S:/Radia/01_GitHub/utils/VOL_FILE_ASSOCIATION.md) - .volファイル関連付け設定
 
 ---

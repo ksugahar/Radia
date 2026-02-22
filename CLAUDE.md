@@ -1,54 +1,98 @@
 # Claude Code - Radia Project Development Guidelines
 
-This document contains development guidelines and refactoring policies for the Radia project when working with Claude Code.
+This document contains development guidelines and policies for the Radia project when working with Claude Code.
 
-## Green's Function Policy: Laplace Kernel Only (MQS/Darwin)
+---
 
-### Helmholtz Kernel Removed (2026-01-09)
+## Critical Policies
 
-**CRITICAL**: Radia uses **Laplace kernel only** for all Green's function computations.
+### Green's Function: Laplace Kernel Only (MQS/Darwin)
 
-**Policy**:
-- **Use Laplace kernel**: $G(r) = 1/(4\pi r)$ for all integral equation formulations
-- **Helmholtz kernel REMOVED**: $G(r) = e^{-jkr}/(4\pi r)$ is NOT supported
-- **Frequency regime**: MQS (Magneto-Quasi-Static) to Darwin approximation
-
-**Rationale**:
-1. **Target Applications**: MagLev, WPT, Induction Heating - all operate in quasi-static regime
-2. **Validity**: Valid when wavelength >> problem size ($kL << 1$)
-3. **Performance**: Laplace kernel enables efficient FMM/H-matrix acceleration
-4. **Simplicity**: Single kernel reduces code complexity and potential bugs
-
-**Affected Components**:
-- `rad_green_fullwave.h/cpp` - All Green's functions use Laplace kernel
-- `rad_conductor.cpp` - `GreenFunction()` returns $1/(4\pi r)$ for all formulations
-- `rad_hacapk.cpp` - HACApK H-matrix uses Laplace kernel
-- `rad_exafmm.h/cpp` - FMM uses Laplace kernel ($1/r^3$ for dipoles)
+**POLICY**: Radia uses **Laplace kernel only**: $G(r) = 1/(4\pi r)$. Target regime is MQS (Magneto-Quasi-Static) to Darwin approximation.
 
 **Do NOT**:
 - Add Helmholtz kernel ($e^{-jkr}/r$) to any Green's function
 - Use wave number $k$ in field calculations (except for skin depth)
 - Implement full-wave EFIE or MFIE formulations
 
-**Skin Effect Handling**:
-Skin depth is computed from frequency for SIBC, but field propagation uses quasi-static approximation:
-```cpp
-// Skin depth calculation (OK)
-double delta = std::sqrt(2.0 / (omega * mu * sigma));
+Skin depth is computed from frequency for SIBC, but field propagation uses quasi-static approximation.
 
-// Green's function (Laplace only)
-double G = 1.0 / (4.0 * M_PI * r);  // NOT exp(-jkr) / (4*pi*r)
+**Affected Components**: `rad_green_fullwave.h/cpp`, `rad_conductor.cpp` (`GreenFunction()`), `rad_hacapk.cpp`, `rad_exafmm.h/cpp`.
+
+### Matrix Storage: Row-Major (C-style)
+
+**POLICY**: All interaction matrices use **row-major [target][source] format**.
+- `A[i][j]` stored at `i * stride + j`; represents effect ON target i FROM source j
+- All BLAS calls use `CblasRowMajor`
+- Python interface returns NumPy C-contiguous (row-major) arrays
+
+**Source Files**: `rad_interaction.cpp`, `rad_relaxation_methods.cpp`, `rad_hacapk.cpp`.
+
+### Binary File Policy
+
+**POLICY**: No binary files (`.pyd`, `.dll`, `.so`, `.lib`, `.exe`) in the git repository.
+- Hosted on GitHub Releases (tag: `binaries`)
+- Pre-push hook auto-uploads `.pyd` and `fmm3d.lib` on `git push`
+- After cloning, run `./download_binaries.sh` to fetch binaries
+- `.png`, `.pdf` allowed in repository; `.msh`, `.vtu`, `.vtk`, `.vol` are gitignored
+
+### File Placement Policy
+
+**POLICY**: Generated output files (`.png`, `.msh`, `.vtu`, `.vtk`, `.vol`, `.vts`) must be placed **next to their corresponding `.py` script**.
+- Example outputs belong in `examples/<category>/` alongside their script
+- Do NOT place generated files at the repository root
+- `.msh` files in `examples/**/gmsh_models/` are tracked (pre-generated mesh definitions)
+- Build output goes to `build*/` or `dist/` (both gitignored)
+
+### Unit System Policy
+
+**POLICY**: Always use meters. All examples MUST call `rad.FldUnits('m')`. NGSolve integration ALWAYS requires meters.
+
+**No hard-coded unit conversions**: All unit conversions must go through `rad.FldUnits()`, never through hard-coded factors like `*1000` or `/1000`.
+
+```python
+# CORRECT
+rad.FldUnits('m')
+magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])  # meters, A/m
+
+# WRONG - hard-coded conversion
+x_mm = x_m * 1000.0  # DO NOT DO THIS
 ```
+
+**Radia Internal Units**:
+- All coordinates in meters after `FldUnits` conversion
+- B in Tesla, H in A/m, A in T*m
+- Physical constants in `rad_constants.h`: `MU_0_OVER_FOUR_PI = 1e-7`, `INV_FOUR_PI = 1/(4*pi)`
+
+### Magnetization Units: A/m (NOT Tesla)
+
+**POLICY**: Radia uses **M in A/m**. Common conversion: `M = Br / mu_0` (e.g., Br=1.2T -> M=954930 A/m).
+
+Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
+
+### Windows Console Encoding (cp932)
+
+**POLICY**: NEVER use Unicode mathematical symbols in print statements. Use ASCII equivalents: `^2` not `²`, `->` not `→`, `<=` not `≤`, etc. Windows console defaults to cp932 in Japanese environments.
+
+### Naming Policy: External Project References
+
+**POLICY**: Do NOT use "ELF" or "ELF_MAGIC" in Radia source code, documentation, or comments. Radia is an independent project. Academic citations are allowed.
+
+### No Console Output from C++ Code
+
+**POLICY**: No `printf`/`cout`/`cerr` in C++ code for logging. All user-facing output through Python. Allowed: error messages via `Send.ErrorMessage(...)` and `#ifdef DEBUG_...` guards.
+
+### Field Comparison: Vector Difference
+
+**POLICY**: Compare magnetic fields using **vector difference** `norm(B1 - B2)`, not scalar magnitude difference `abs(|B1| - |B2|)`. Magnetic field is a vector quantity.
 
 ---
 
-## Development Strategy: Complement NGSolve (2026-01-16)
+## Architecture Overview
 
-### Radia Focuses on What NGSolve Cannot Do Well
+### Development Strategy: Complement NGSolve
 
-**CRITICAL**: Radia's role is to **complement NGSolve**, not compete with it. Focus development on areas where NGSolve (FEM) is weak.
-
-**Strategic Positioning**:
+Radia's role is to **complement NGSolve**, not compete with it. Focus on areas where FEM is weak.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -67,645 +111,41 @@ double G = 1.0 / (4.0 * M_PI * r);  // NOT exp(-jkr) / (4*pi*r)
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Radia Core Competencies** (where NGSolve is weak):
-
-| Capability | Why NGSolve Struggles | Radia's Approach |
-|------------|----------------------|------------------|
-| **Open boundaries** | Requires PML/ABC, adds DOFs | Natural with BEM |
-| **Permanent magnets** | Needs volume mesh | Analytical (ObjRecMag) |
-| **Thin conductors** | Mesh aspect ratio issues | PEEC (surface only) |
-| **Circuit extraction** | Post-processing needed | Direct L,R,C,M output |
-| **SPICE export** | Not supported | Verilog-A generation |
-| **Model order reduction** | Manual implementation | PRIMA/Lanczos built-in |
-
-### No Reinventing the Wheel
-
-**Policy**: Use established libraries, do NOT implement from scratch.
-
-| Component | Decision | Library |
-|-----------|----------|---------|
-| **PEEC Solver** | External | PAMELA |
-| **H-matrix/ACA** | External | HACApK (integrated) |
-| **BLAS/LAPACK** | External | Intel MKL |
-| **FEM** | External | NGSolve |
-| **MOR** | Python | scipy + numpy |
-
-**Radia C++ Core** (maintain and enhance):
-1. **MMM** - Magnetic Moment Method for permanent magnets and soft iron
-2. **MSC** - Magnetic Surface Charge for hexahedra/tetrahedra
-3. **Field computation** - B, H, A, Phi in unbounded domains
-4. **NGSolve integration** - RadiaField CoefficientFunction
-
-**Do NOT Implement**:
+**Do NOT Implement** (use existing libraries):
 - FEM solvers (use NGSolve)
 - General sparse solvers (use MKL/MUMPS)
 - Full-wave BEM (use ngbem for high frequency)
 - CAD geometry kernels (use OpenCASCADE via NGSolve)
 - PEEC from scratch (use PAMELA)
+- Custom H-matrix algorithms (use HACApK)
 
-**Rationale**:
-1. NGSolve already excels at FEM - don't duplicate
-2. Focus resources on unique value: BEM + circuit extraction
-3. Integration > reinvention
+**Radia C++ Core** (maintain and enhance):
+1. MMM - Magnetic Moment Method for permanent magnets and soft iron
+2. MSC - Magnetic Surface Charge for hexahedra/tetrahedra
+3. Field computation - B, H, A, Phi in unbounded domains
+4. NGSolve integration - RadiaField CoefficientFunction
 
----
+### Solver Methods: MMM and MSC
 
-## Binary File Policy: No Binaries in Repository (2026-02-19)
+| Method | Element | DOF | Description |
+|--------|---------|-----|-------------|
+| **MMM** | Tetrahedra (4 faces) | 3 (Mx, My, Mz) | Magnetic dipole distributions |
+| **MSC** | Hexahedra (6 faces) | 6 (sigma/face) | Surface charge solid angle integration |
+| **MSC** | Wedges (5 faces) | 5 (sigma/face) | Transition elements |
 
-**CRITICAL**: Binary files are NOT stored in the git repository.
+**Mixed Element Support**: All solvers (LU, BiCGSTAB, HACApK) support mixed hex+wedge+tet meshes. Variable DOF offset arrays: `m_elemDOF`, `m_elemDOFOffset`, `m_totalDOF`.
 
-**Policy**:
-- **`.pyd`, `.dll`, `.so`, `.lib`, `.exe`**: Hosted on GitHub Releases (tag: `binaries`)
-- **Auto-upload**: Pre-push hook automatically uploads `.pyd` and `fmm3d.lib` to Releases on every `git push`
-- **Download**: After cloning, run `./download_binaries.sh` to fetch pre-built binaries
-- **`.png`, `.pdf`**: Allowed in repository for documentation and examples
-- **`.msh`, `.vtu`, `.vtk`, `.vol`**: Generated files, NOT committed (see File Placement Policy)
+**BiCGSTAB Block Jacobi**: Automatically switches to block Jacobi preconditioner when diagonal ratio > 10 or min dominance < 0.1 (distorted elements). Uses LAPACK `dgetrf_`/`dgetri_` for block inversion.
 
-**Rationale**: Repository size was reduced from 566 MB to 61 MB by removing all binaries from git history.
+**Interaction Matrix Blocks** (mixed elements):
+- **3x3** (tet-tet), **5x5** (wedge-wedge), **6x6** (hex-hex)
+- **5x6 / 6x5** (wedge-hex cross), **3x6 / 3x5 / 6x3 / 5x3** (tet-hex/wedge cross)
+- Implementation: `SetupInteractMatrix_VariableDOF()`, compile flag `RADIA_MSC_SUPPORT`
 
----
+### Unified Field Computation Architecture
 
-## File Placement Policy (2026-02-19)
+**POLICY**: All field computation MUST use `rad_field_unified.h/cpp`.
 
-**CRITICAL**: Generated output files (`.png`, `.msh`, `.vtu`, `.vtk`, `.vol`, `.vts`) must be placed **next to their corresponding `.py` script** in the same directory.
-
-**Rules**:
-1. Example output files belong in `examples/<category>/` alongside their `.py` script
-2. Do NOT place generated files at the repository root
-3. `.msh` files in `examples/**/gmsh_models/` are tracked (pre-generated mesh definitions)
-4. All other `.msh`, `.vol`, `.vtu`, `.vtk`, `.vts`, `.npz` files are `.gitignore`d
-5. Build output goes to `build*/` or `dist/` (both gitignored)
-
-**Build folders**: Use `build*/` glob pattern in `.gitignore` to cover `build/`, `build-msvc/`, `build-intel/`, etc.
-
----
-
-## Build Policy: MSVC + Intel MKL
-
-### Compiler Requirement (2025-12-27)
-
-**CRITICAL**: Use **MSVC (Visual Studio C++ compiler)** with **Intel MKL** for building Radia.
-
-**Policy**:
-- **Use MSVC** for building both `radia.pyd` and `radia_ngsolve.pyd`
-- **Use Intel MKL** for BLAS/LAPACK operations (mkl_rt.lib)
-- **radia_ngsolve REQUIRES MSVC** due to ABI compatibility with MSVC-compiled NGSolve libraries
-- Intel oneAPI compiler (icx-cl) is NOT compatible with NGSolve linking
-
-**Build Command**:
-```powershell
-powershell.exe -ExecutionPolicy Bypass -File "BuildMSVC.ps1"
-# Or for clean rebuild:
-powershell.exe -ExecutionPolicy Bypass -File "BuildMSVC.ps1" -Rebuild
-```
-
-**Why MSVC instead of Intel Compiler**:
-1. **NGSolve Compatibility**: NGSolve is compiled with MSVC; Intel compiler produces LLVM bitcode objects that are incompatible with MSVC-compiled libraries
-2. **radia_ngsolve Linking**: The `add_ngsolve_python_module` CMake function requires MSVC ABI compatibility
-3. **Intel MKL Still Used**: mkl_rt.lib works with both MSVC and Intel compilers, providing fast BLAS/LAPACK
-
-**Rationale**:
-1. **NGSolve Integration**: Required for RadiaField CoefficientFunction support
-2. **MKL Performance**: Intel MKL provides optimized BLAS/LAPACK regardless of compiler
-3. **Build Simplicity**: Single build produces both radia.pyd and radia_ngsolve.pyd
-
-**Required Software**:
-- Visual Studio 2022 (MSVC compiler)
-- Intel oneAPI Base Toolkit (for Intel MKL only, NOT the compiler)
-
----
-
-## BLAS/LAPACK Policy: Intel MKL Only
-
-### OpenBLAS Dropped (2025-12-28)
-
-**Policy**: Radia uses **Intel MKL only** for BLAS/LAPACK operations. **OpenBLAS is NOT supported**.
-
-**Rationale**:
-1. **Performance**: Intel MKL is faster than OpenBLAS on Intel CPUs
-2. **OpenMP Integration**: Intel MKL uses Intel OpenMP (libiomp5md.dll) which integrates well with parallel Radia code
-3. **Simplicity**: Single BLAS library reduces complexity and potential conflicts
-
-**Removed Files** (2025-12-28):
-- `src/ext/openblas/` - OpenBLAS headers, libraries, and binaries
-- `src/radia/libopenblas.dll` - OpenBLAS runtime DLL
-
-**Required Intel MKL DLLs** (auto-copied by BuildMSVC.ps1):
-- `mkl_rt.*.dll` - MKL SDL (Single Dynamic Library) runtime
-- `mkl_core.*.dll` - MKL core
-- `mkl_intel_thread.*.dll` - MKL threading
-- `mkl_def.*.dll`, `mkl_avx2.*.dll` - CPU kernels
-- `mkl_vml_def.*.dll`, `mkl_vml_avx2.*.dll` - Vector math library
-- `libiomp5md.dll` - Intel OpenMP runtime
-- `libmmd.dll`, `svml_dispmd.dll` - Intel compiler runtime
-
-**Note**: The DLL patterns use wildcards (e.g., `mkl_rt.*.dll`) for version-agnostic compatibility with future Intel oneAPI releases.
-
----
-
-## OpenMP Policy: Intel OpenMP Only
-
-### Use Intel OpenMP Instead of MSVC OpenMP (2025-12-28)
-
-**Policy**: Radia uses **Intel OpenMP (libiomp5md.dll)** only. **MSVC OpenMP (vcomp140.dll) is NOT used**.
-
-**Rationale**:
-1. **Intel MKL Compatibility**: Intel MKL uses Intel OpenMP internally; mixing with MSVC OpenMP causes conflicts
-2. **Performance**: Intel OpenMP provides better threading performance on Intel CPUs
-3. **Consistency**: Single OpenMP runtime avoids DLL conflicts and undefined behavior
-
-**CMake Configuration**:
-- Use standard `/openmp` compiler flag for MSVC
-- Link against `libiomp5md.lib` directly instead of CMake's `OpenMP::OpenMP_CXX`
-- CMake detects Intel OpenMP and links it instead of MSVC's vcomp140.dll
-
-**Required DLLs** (auto-copied by BuildMSVC.ps1):
-- `libiomp5md.dll` - Intel OpenMP runtime (from Intel oneAPI compiler directory)
-
-**Verification**:
-After building, verify only Intel OpenMP is loaded:
-```python
-import psutil, os
-process = psutil.Process(os.getpid())
-for dll in process.memory_maps():
-    if 'omp' in dll.path.lower():
-        print(dll.path)
-# Should show: libiomp5md.dll
-# Should NOT show: vcomp140.dll
-```
-
-**Note**: If both `libiomp5md.dll` and `vcomp140.dll` are loaded, there is a configuration error that will cause OpenMP parallelization to malfunction.
-
----
-
-## Matrix Storage Convention: Row-Major (2026-01-31)
-
-### Unified Row-Major Matrix Format
-
-**CRITICAL**: Radia uses **row-major [target][source] format** for all interaction matrices.
-
-**Format Definition**:
-- Matrix element `A[i][j]` is stored at index `i * stride + j` (row-major, C-style)
-- `A[i][j]` represents the effect **ON target i FROM source j**
-- This matches ELF convention and is optimal for C++ cache efficiency
-
-**Memory Layout**:
-```
-Row-major: A[0][0], A[0][1], A[0][2], ..., A[1][0], A[1][1], ...
-           ^^^^^^^^^^^^^^^^^^^^^^^^       ^^^^^^^^^^^^^^^^^^^^^^^^
-           Row 0 (contiguous)              Row 1 (contiguous)
-```
-
-**BLAS Convention**:
-All BLAS calls use `CblasRowMajor`:
-```cpp
-cblas_dgemv(CblasRowMajor, CblasNoTrans, nrows, ncols, alpha, A, lda, x, 1, beta, y, 1);
-```
-
-**Why Row-Major**:
-
-| Aspect | Row-Major | Column-Major |
-|--------|-----------|--------------|
-| C/C++ native | Yes | No |
-| Python/NumPy native | Yes | No (Fortran order) |
-| Cache efficiency for matvec | Optimal | Suboptimal |
-| ELF compatibility | Yes | No |
-| BiCGSTAB performance | Optimal | Suboptimal |
-
-**Source Files Using Row-Major**:
-- `rad_interaction.cpp`: Interaction matrix construction
-- `rad_relaxation_methods.cpp`: BiCGSTAB, LU solver (via BLAS)
-- `rad_hacapk.cpp`: H-matrix element access
-
-**Block Storage Example**:
-```cpp
-// 6x6 hexahedral block storage
-double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
-for (int i = 0; i < 6; i++) {
-    for (int j = 0; j < 6; j++) {
-        // K_block is already [target][source] format
-        block[(size_t)i * m_totalDOF + j] = K_block[i * 6 + j];
-    }
-}
-```
-
-**Policy**:
-- **All new matrix code** MUST use row-major format
-- **BLAS calls** MUST use `CblasRowMajor`
-- **Python interface**: Returns NumPy array in C-contiguous (row-major) order
-
----
-
-## Radia Solver Methods: MMM and MSC
-
-Radia supports two solver methods:
-
-### MMM (Magnetic Moment Method) - Tetrahedra
-- Used for **tetrahedral elements** (4 faces)
-- **3 DOF per element**: Magnetization vector (Mx, My, Mz)
-- Represents magnetic objects as distributions of magnetic dipoles
-
-### MSC (Magnetic Surface Charge) - Hexahedra
-- Used for **hexahedral elements** (6 faces)
-- **6 DOF per element**: Surface charge density (sigma) per face
-- Computes field from surface charges using solid angle integration
-- Use `ObjHexahedron()` for hexahedral elements
-
-**Note**: Radia does NOT use BEM (Boundary Element Method). The MSC method uses surface charges but differs from classical BEM.
-
-### Mixed Element Support (2025-12-26, Updated 2026-02-07)
-
-Radia supports **mixed meshes** containing hexahedral (6DOF), wedge (5DOF), and tetrahedral (3DOF) elements.
-
-**Solver Compatibility**:
-
-| Solver | Mixed Elements | Notes |
-|--------|----------------|-------|
-| LU (Method 0) | **Supported** | Dense LU with variable DOF blocks |
-| BiCGSTAB (Method 1) | **Supported** | Iterative solver with variable DOF |
-| HACApK (Method 2) | **Supported** | Variable DOF mode with flat matrix precomputation |
-
-**Note**: HACApK uses variable DOF mode (`m_is_mixed_dof`) for meshes containing wedges or mixed element types.
-
-**IMA (Image Method of Analysis) Compatibility**:
-
-| Element Type | IMA Support | Notes |
-|--------------|-------------|-------|
-| Hexahedron (6DOF) | **Supported** | Fast path with precomputed triangle data |
-| Wedge (5DOF) | **Supported** | Generic path with FieldFromFaceMirrored |
-| Tetrahedron (3DOF) | **Supported** | MMM dipole mirror |
-| Mixed (hex+wedge) | **Supported** | Variable DOF IMA matrix building |
-
-**Interaction Matrix Blocks**:
-- **3x3 block** (tetra-tetra): Standard demagnetization tensor
-- **5x5 block** (wedge-wedge): Surface charge interaction (MSC, 5 faces)
-- **6x6 block** (hex-hex): Surface charge interaction (MSC, 6 faces)
-- **5x6 / 6x5 block** (wedge-hex): Cross-element MSC interaction
-- **3x6 / 3x5 block** (tetra from hex/wedge): H-field at tetra center from face charges
-- **6x3 / 5x3 block** (hex/wedge from tetra): Normal dot N_matrix at eval points
-
-**Usage**:
-```python
-import radia as rad
-
-rad.FldUnits('m')
-
-# Create mixed container with hex and tetra elements
-hex_vertices = [[0,0,0], [0.1,0,0], [0.1,0.1,0], [0,0.1,0],
-                [0,0,0.1], [0.1,0,0.1], [0.1,0.1,0.1], [0,0.1,0.1]]
-hex_obj = rad.ObjHexahedron(hex_vertices, [0, 0, 0])   # 6DOF MSC
-tetra_obj = rad.ObjTetrahedron(tetra_vertices, [0, 0, 0])  # 3DOF MMM
-
-container = rad.ObjCnt([hex_obj, tetra_obj])
-mat = rad.MatSatIsoTab(BH_DATA)
-rad.MatApl(container, mat)
-
-# Solve with LU or BiCGSTAB (NOT HACApK)
-rad.Solve(container, 0.001, 100, 0)  # Method 0 = LU
-```
-
-**Implementation Details**:
-- `RADIA_MSC_SUPPORT` compile flag enables mixed element support
-- Variable DOF offset arrays: `m_elemDOF`, `m_elemDOFOffset`, `m_totalDOF`
-- Block interaction computation in `SetupInteractMatrix_VariableDOF()`
-
-### BiCGSTAB Block Jacobi Preconditioner (2026-02-06)
-
-**Problem**: For meshes with distorted hexahedral elements (high aspect ratio, skewed faces), the scalar Jacobi preconditioner fails and BiCGSTAB diverges.
-
-**Solution**: Automatic **block Jacobi preconditioner** that inverts each element's diagonal block exactly.
-
-**Automatic Detection**:
-BiCGSTAB automatically switches to block Jacobi when:
-- Diagonal ratio (max/min) > 10, OR
-- Min diagonal dominance < 0.1
-
-**Conditioning Metrics**:
-
-| Mesh Type | Diagonal Ratio | Min Dominance | Preconditioner |
-|-----------|----------------|---------------|----------------|
-| Uniform cube | ~1.0 | >0.15 | Scalar Jacobi |
-| Distorted mesh (V304) | ~100 | <0.05 | **Block Jacobi** |
-
-**Implementation**:
-- `BuildBlockJacobiPreconditioner_VariableDOF()`: Extracts and inverts each 6x6 (hex) or 3x3 (tetra) diagonal block using LAPACK `dgetrf_`/`dgetri_`
-- `ApplyBlockJacobiPreconditioner_VariableDOF()`: Applies block-diagonal inverse as preconditioner
-
-**When Block Jacobi is Needed**:
-1. **Distorted elements**: High aspect ratio (>5) or skewed faces (>30°)
-2. **Non-uniform meshes**: Large variation in element sizes
-3. **Complex geometries**: C-type magnets, E-cores with curved surfaces
-
-**Debug Output**:
-```
-[BiCG Conditioning] DOF=444
-[BiCG Conditioning] Diagonal: min=1.929e-01, max=2.014e+01, ratio=104.4
-[BiCG Conditioning] Min dominance: 0.0434, weak rows: 13/444 (2.9%)
-[BiCG] Using BLOCK Jacobi preconditioner (better for ill-conditioned matrix)
-```
-
-**Performance**:
-- Block Jacobi adds O(N) overhead for building block inverses (one-time cost)
-- Each preconditioner application is O(N) with small constant factor
-- Overall: Slightly slower per iteration, but converges when scalar Jacobi fails
-
----
-
-## Field Calculation Methods: Surface Current vs Surface Charge
-
-### ObjRecMag - Surface Current Model (Rectangular Blocks Only)
-
-`ObjRecMag` uses the **surface current approximation** for field calculations:
-
-- **Applicable to**: Rectangular blocks (parallelepipeds) only
-- **B/H field**: 8-corner analytical formula with arctangent and logarithm integrals
-- **A field (vector potential)**: Uses unified BufVect formula: `A = (1/4π) * M × BufVect`
-- **Phi field (scalar potential)**: Uses `Phi = (1/4π) * M · BufVect`
-
-**Key advantage**: The 8-corner BufVect formula is computationally efficient and does NOT cancel on symmetry axes.
-
-```python
-import radia as rad
-rad.FldUnits('m')
-
-# Create rectangular permanent magnet
-rec_mag = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 954930])
-
-# All field types work correctly
-B = rad.Fld(rec_mag, 'b', [0.05, 0, 0])  # Magnetic field
-A = rad.Fld(rec_mag, 'a', [0, 0, 0.05])  # Vector potential (non-zero on axis)
-```
-
-### ObjHexahedron/ObjTetrahedron - Surface Charge Model (General Polyhedra)
-
-`ObjHexahedron` and `ObjTetrahedron` use **surface charge integration**:
-
-- **Applicable to**: Arbitrary hexahedra (6 quadrilateral faces) and tetrahedra (4 triangular faces)
-- **B/H field**: Face-based solid angle integration: `H = (1/4π) * Σ σ_i * Ω_i`
-- **A field (vector potential)**: Face-based integration: `A = (1/4π) * Σ (M × n_i) * I_i`
-
-**Limitation**: On symmetry axes, face-based A integration gives A=0 due to symmetric cancellation. This is mathematically correct for the face-based formula but differs from ObjRecMag.
-
-```python
-import radia as rad
-rad.FldUnits('m')
-
-# Create hexahedral magnet (arbitrary shape)
-vertices = [
-    [-0.02, -0.02, -0.03], [0.02, -0.02, -0.03],
-    [0.02, 0.02, -0.03], [-0.02, 0.02, -0.03],
-    [-0.02, -0.02, 0.03], [0.02, -0.02, 0.03],
-    [0.02, 0.02, 0.03], [-0.02, 0.02, 0.03],
-]
-hex_mag = rad.ObjHexahedron(vertices, [0, 0, 954930])
-
-# B/H fields work correctly everywhere
-B = rad.Fld(hex_mag, 'b', [0.05, 0, 0])
-
-# A field: May be zero on symmetry axes (mathematical cancellation)
-A = rad.Fld(hex_mag, 'a', [0, 0, 0.05])  # Could be ~0 on z-axis
-```
-
-### API Summary (2025-12-31)
-
-**User-facing APIs** for creating magnetic elements:
-- `ObjRecMag(center, dimensions, magnetization)` - Rectangular magnets (optimized formulas)
-- `ObjHexahedron(vertices, magnetization)` - Arbitrary hexahedra (8 vertices, auto-generates faces)
-- `ObjTetrahedron(vertices, magnetization)` - Tetrahedra (4 vertices, auto-generates faces)
-- Mesh import functions (`netgen_mesh_to_radia`, `create_radia_from_nastran`) for complex geometries
-
----
-
-## Background Field Policy (2025-12-31)
-
-### Background Field API
-
-**Policy**: Use `ObjBckg(callback)` for all background field applications.
-
-**API**:
-- `rad.ObjBckg(callback)` - Background field via Python callback function
-  - Callback receives `[x, y, z]` in current units and returns `[Bx, By, Bz]` in Tesla
-
-**Uniform Background Field**:
-```python
-bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])  # 0.1 T in z-direction
-```
-
-**NOT Supported** (Do NOT use):
-- Solve-time background field specification
-- Legacy `ObjBckg([Bx, By, Bz])` array form - use `lambda p: [Bx, By, Bz]` instead
-
-**Usage**:
-
-```python
-import radia as rad
-
-rad.FldUnits('m')
-
-# Create magnetic object
-mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
-mat = rad.MatLin(999)  # mu_r = 1000
-rad.MatApl(mag_obj, mat)
-
-# Uniform background field
-bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])  # 0.1 T in z-direction
-
-# Quadrupole background field
-def quadrupole_field(point):
-    x, y, z = point
-    G = 10.0  # T/m gradient
-    return [G * y, G * x, 0]
-
-bkg = rad.ObjBckg(quadrupole_field)
-
-# Add background to container and solve
-container = rad.ObjCnt([mag_obj, bkg])
-rad.Solve(container, 0.0001, 1000, 1)
-```
-
-**Rationale**:
-- Single unified API for all background field types
-- Uniform fields expressed as `lambda p: [Bx, By, Bz]`
-- Consistent design: all fields are callback-based
-
----
-
-## Memory Management
-
-### Exception Safety
-
-All functions that allocate memory with `new` must follow this pattern:
-
-```cpp
-Type* ptr = nullptr;
-try {
-	ptr = new Type(...);
-	Handle h(ptr);
-	ptr = nullptr;  // Ownership transferred to handle
-	...
-}
-catch(...) {
-	if(ptr) delete ptr;  // Cleanup if exception before ownership transfer
-	Initialize();
-	return 0;
-}
-```
-
-**Key Points**:
-- Initialize raw pointers to `nullptr` before `try` block
-- Set to `nullptr` immediately after ownership transfer
-- Clean up in `catch(...)` block if pointer is still non-null
-
-### RAII (Resource Acquisition Is Initialization)
-
-Prefer RAII containers over manual memory management:
-
-```cpp
-// Good - RAII with std::vector
-std::vector<radTPolygon> polygons;
-
-// Avoid - Manual memory management
-radTPolygon* polygons = new radTPolygon[n];  // Requires manual delete[]
-```
-
----
-
-## Unit System Policy
-
-### Always Use Meters (SI Units)
-
-**Policy**:
-- **All examples** in `examples/` folder MUST use `rad.FldUnits('m')`
-- **NGSolve integration** ALWAYS requires `rad.FldUnits('m')`
-
-**Rationale**:
-- Radia default: millimeters (mm)
-- NGSolve default: meters (m)
-- Without `rad.FldUnits('m')`, coordinates are off by 1000x
-
-**Correct workflow**:
-```python
-import radia as rad
-rad.FldUnits('m')  # REQUIRED for NGSolve integration
-
-# Hexahedral magnet using ObjHexahedron (8 vertices, magnetization in A/m)
-vertices = [[-0.02,-0.02,-0.03], [0.02,-0.02,-0.03], [0.02,0.02,-0.03], [-0.02,0.02,-0.03],
-            [-0.02,-0.02,0.03], [0.02,-0.02,0.03], [0.02,0.02,0.03], [-0.02,0.02,0.03]]
-magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])  # meters, A/m
-```
-
----
-
-## Radia Field Computation Limitations
-
-### rad.Fld() Behavior Inside Magnetic Materials
-
-**Important Note**: The field computed by `rad.Fld()` **inside** magnetic materials has different characteristics depending on the method:
-
-**MMM (Magnetic Moment Method) - Tetrahedra**:
-- Designed for field calculation in **air regions** (outside magnetic materials)
-- Inside materials, `rad.Fld()` returns approximations based on dipole fields
-- Not recommended for quantitative analysis inside materials
-
-**MSC (Magnetic Surface Charge) - Hexahedra**:
-- Inside materials, the field is **uniform within each element**
-- This uniform field is derived from the **surface charge distribution** (sigma), which is the MSC solution
-- The internal field represents `H_internal = -grad(Phi)` from the surface charge potential
-- For validation, compare the **sigma values** (surface charges) or the **external field**, not internal field values
-
-**Testing Strategy**:
-- **Solver comparison**: Compare sigma (surface charge) values OR external field points
-- **Avoid**: Direct comparison of `rad.Fld()` inside materials for validation
-- **OK**: Use external observation points (outside all magnetic materials)
-
-### Vector Potential A Field Implementation (2025-12-31)
-
-**Status**: Vector potential A is now **IMPLEMENTED** for all ObjHexahedron/ObjTetrahedron elements.
-
-**Implementation Details**:
-- Uses **face integration** (not dipole approximation) for accurate results
-- Formula: `A = (mu_0/4pi) * (M x BufVect)` with mm-to-m conversion factor
-- Matches the analytical formula used in radTRecMag for rectangular blocks
-- Extended to arbitrary triangular and quadrilateral faces using the Wilton et al. formula
-
-**Usage**:
-```python
-import radia as rad
-rad.FldUnits('m')
-
-# Create hexahedral magnet
-vertices = [[-0.02,-0.02,-0.03], [0.02,-0.02,-0.03], ...]  # 8 vertices
-magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])
-
-# Get vector potential A at a point
-A = rad.Fld(magnet, 'a', [0.03, 0.02, 0.05])  # Returns [Ax, Ay, Az] in T*m
-```
-
-**Maxwell Equation Consistency**:
-Vector potential A satisfies `B = curl(A)` (verified numerically).
-
-**Verification Script**:
-- `examples/ngsolve_integration/verify_curl_A_equals_B/` - Verifies curl(A) = B
-
-### Radia Internal Unit System: SI Meters (2025-12-31 Refactoring)
-
-**POLICY**: Radia now uses **meters (m)** as the internal base length unit, matching ELF.
-
-**Key Design Principles**:
-1. **FldUnits controls ONLY input geometry** - Converts user geometry coordinates to meters at input time
-2. **One-time conversion only** - After initial conversion, all internal processing uses meters
-3. **B, H, and evaluation points are NEVER scaled** - Fixed to SI units (Tesla, A/m, meters)
-4. **FldUnits functionality is LIMITED** - Only geometry input uses unit conversion
-
-**How it Works**:
-1. `rad.FldUnits('m')` - Uses meters directly (default, recommended)
-2. `rad.FldUnits('mm')` - Converts user geometry coordinates from mm to m at input time
-3. **Evaluation points always in meters** - `rad.Fld()` point coordinates are always in meters
-4. **Field values are always in SI**: B in Tesla, H in A/m, A in T*m
-
-**Physical Constants Used**:
-
-| Constant | Value | Usage |
-|----------|-------|-------|
-| `MU_0_OVER_FOUR_PI` | `1.0e-7` H/m | Vector potential A, Biot-Savart |
-| `INV_FOUR_PI` | `1/(4*pi)` | Scalar potential Phi, solid angle |
-| `MU_0` | `4*pi*1e-7` H/m | B-H relations |
-
-**Field Calculation Formulas (SI Units)**:
-
-| Field | Formula | Constant |
-|-------|---------|----------|
-| B field | `B = -mu_0 * grad(Omega)` | Uses solid angle |
-| H field | `H = -grad(Phi)` | Uses `INV_FOUR_PI` |
-| Phi (scalar) | `Phi = (1/4pi) * M . BufVect` | `INV_FOUR_PI` |
-| **A field** | `A = (mu_0/4pi) * M x BufVect` | `MU_0_OVER_FOUR_PI = 1e-7` |
-
-**Comparison with ELF (Now Matching)**:
-
-| Aspect | Radia (v1.4.3+) | ELF |
-|--------|-----------------|-----|
-| Internal units | **m (SI)** | m (SI) |
-| A field constant | `mu_0/(4*pi) = 1e-7` | `mu_0/(4*pi) = 1e-7` |
-| Unit conversion bugs | **None** | None |
-| Maxwell equations | B = curl(A), H = -grad(Phi) | Same |
-
-**Policy for C++ Developers**:
-1. **All coordinates in meters** - no mm assumptions in calculations
-2. **Use SI constants from rad_constants.h**: `MU_0_OVER_FOUR_PI`, `INV_FOUR_PI`
-3. **Test with curl(A) = B** for vector potential implementations
-4. **No hardcoded conversion factors** - all units are consistent
-
-**Source Files with Field Constants**:
-- `rad_constants.h`: Central location for physical constants
-- `rad_rectangular_block.cpp`: ObjRecMag A/Phi/B field computation
-- `rad_poly_analytical.cpp`: ObjHexahedron/ObjTetrahedron A/Phi field computation
-- `rad_arc_current.cpp`: Biot-Savart field from arc currents
-
-### Unified Field Computation Architecture (2026-01-16)
-
-**POLICY**: All field computation MUST use `rad_field_unified.h/cpp` as the central module.
-
-**Architecture**:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    rad_field_unified.h/cpp                       │
@@ -724,568 +164,189 @@ Vector potential A satisfies `B = curl(A)` (verified numerically).
     │ rad.Fld()   │    │ rad.FldVTS()│    │ CplMagFld() │
     │ rad.FldBatch│    │ VTS export  │    │ PEEC+MMM    │
     └─────────────┘    └─────────────┘    └─────────────┘
-           │                  │                  │
-           ▼                  ▼                  ▼
-    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-    │ radentry.cpp│    │ radentry.cpp│    │ rad_peec_   │
-    │ Python API  │    │ VTS output  │    │ mmm_coupled │
-    └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
-**Users of rad_field_unified**:
-| Component | Function Used | Purpose |
-|-----------|--------------|---------|
-| `rad.Fld()` | `ComputeFieldSingle` | Python API single-point field |
-| `rad.FldBatch()` | `ComputeFieldBatch` | Python API batch field |
-| `rad.FldVTS()` | `ComputeFieldBatch` | VTS export grid field |
-| `radia_ngsolve` | `ComputeFieldSingle` | RadiaField CoefficientFunction |
-| `rad_particle_trajectory` | `ComputeFieldForTrajectory` | Beam tracking |
-| `CplMagFld()` | `ComputeComplexFieldSingle` | PEEC+MMM coupled field |
+**Users**: `rad.Fld()`, `rad.FldBatch()`, `rad.FldVTS()`, `radia_ngsolve` RadiaField, `rad_particle_trajectory`, `CplMagFld()`.
 
-**Key Features**:
-1. **Inside/Outside Classification**: Uses solid angle method for accurate determination
-2. **OpenMP Parallelization**: Batch computations parallelized with `#pragma omp parallel for`
-3. **Complex Field Support**: For PEEC+MMM AC analysis with complex magnetization
-4. **FMM Acceleration**: Optional dipole approximation for large problems
+**Key Features**: Inside/outside classification (solid angle method), OpenMP parallelized batch, complex field support (PEEC+MMM AC), optional FMM acceleration.
 
-**Inside/Outside Handling**:
+### Field Calculation: Surface Current vs Surface Charge
+
+- **ObjRecMag**: Surface current model (rectangular blocks). 8-corner BufVect formula, efficient and non-cancelling on symmetry axes.
+- **ObjHexahedron/ObjTetrahedron**: Surface charge model (general polyhedra). Face-based solid angle integration. A field may be zero on symmetry axes (mathematical cancellation, not a bug).
+
+**rad.Fld() inside materials**: MMM gives dipole approximations inside materials; MSC gives uniform field per element. For validation, compare sigma values or external field points, not internal fields.
+
+### Vector Potential A Field
+
+A field is **implemented** for all element types using face integration (Wilton et al. formula). Formula: `A = (mu_0/4pi) * (M x BufVect)`. Satisfies `B = curl(A)` (verified numerically). Verification script: `examples/ngsolve_integration/verify_curl_A_equals_B/`.
+
+### User-Facing Element APIs
+
+- `rad.ObjRecMag(center, dimensions, magnetization)` -- Rectangular magnets (optimized formulas)
+- `rad.ObjHexahedron(vertices, magnetization)` -- Arbitrary hexahedra (8 vertices)
+- `rad.ObjTetrahedron(vertices, magnetization)` -- Tetrahedra (4 vertices)
+- `rad.ObjWedge(vertices, magnetization)` -- Wedges (6 vertices)
+- Mesh import functions (`netgen_mesh_to_radia`, `gmsh_to_radia`) for complex geometries
+
+### EIEM2 Evaluation Point Convention
+
+**POLICY**: The MSC interaction matrix evaluation point for face `i` is:
 ```cpp
-// Automatic inside/outside handling
-RadFieldUnified::ComputeConfig config;
-config.check_inside = true;           // Enable inside check
-config.return_internal_field = true;  // Return M*mu0 for inside points
+EvalPt = 0.5 * (FaceCenter[i] + ElementCenter)
+```
+Do NOT change this. This matches ELF's EIEM2 convention exactly.
 
-RadFieldUnified::FieldResult result =
-    RadFieldUnified::ComputeFieldSingle(g3dPtr, point, FIELD_B, config);
+**MSC Source Files**: `rad_polyhedron.cpp` (element dispatch), `rad_poly_analytical.cpp` (triangle/quad integration), `rad_interaction.cpp` (interaction matrix, `PrecomputeHexaGeometry()`).
 
-if (result.status == RadFieldUnified::STATUS_INSIDE) {
-    // Point is inside element result.element_id
-    // result.Bx/By/Bz contains internal field (mu0 * M)
+See `docs/MSC_QUICK_START.md` for quick start guide.
+
+---
+
+## API Guardrails
+
+### Common Mistakes Checklist
+
+**1. ObjBckg Requires Callable (CRITICAL)**
+```python
+bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])  # CORRECT
+bkg = rad.ObjBckg([0, 0, 0.1])             # WRONG - not a callable
+```
+
+**2. UtiDelAll() Cleanup**: Every script must call `rad.UtiDelAll()` before exiting.
+
+**3. Relative Path Imports**:
+```python
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))  # CORRECT
+sys.path.insert(0, r'S:\Radia\01_GitHub\src\radia')  # WRONG - machine-specific
+```
+
+**4. MatLin Usage**: For isotropic materials, ALWAYS use single-argument form `MatLin(mu_r)`. MatLin is for soft magnetic materials only -- permanent magnets specify magnetization directly in `ObjHexahedron(vertices, [Mx, My, Mz])`.
+
+**5. Docstring Units**: Use "in constructor length units", not "in mm".
+
+**6. State Mutation**: Computation methods must NOT leave object state inconsistent on exception.
+
+### Background Field API
+
+```python
+bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])      # Uniform 0.1T in z
+bkg = rad.ObjBckg(quadrupole_field_function)    # Spatially varying
+container = rad.ObjCnt([mag_obj, bkg])
+rad.Solve(container, 0.0001, 1000, 1)
+```
+Legacy `ObjBckg([Bx, By, Bz])` array form is NOT supported. Callback receives `[x, y, z]` in current units and returns `[Bx, By, Bz]` in Tesla.
+
+### Memory Management
+
+```cpp
+// Exception-safe pattern
+Type* ptr = nullptr;
+try {
+    ptr = new Type(...);
+    Handle h(ptr);
+    ptr = nullptr;  // Ownership transferred
+} catch(...) {
+    if(ptr) delete ptr;
+    Initialize();
+    return 0;
 }
 ```
+Prefer RAII containers (`std::vector`) over manual `new`/`delete`.
 
-**Complex Field Computation (PEEC+MMM)**:
-```cpp
-// For coupled PEEC+MMM with complex magnetization
-std::complex<double>* M_complex = ...;  // From coupled solver solution
-int n_elements = ...;
+### Deprecated Relaxation API
 
-RadFieldUnified::ComplexFieldResult result =
-    RadFieldUnified::ComputeComplexFieldSingle(
-        g3dPtr, point, M_complex, n_elements, config);
-
-// result.Bx, By, Bz are std::complex<double>
-```
+| Deprecated | Replacement |
+|------------|-------------|
+| `RlxPre()`, `RlxMan()`, `RlxAuto()` | `rad.Solve(obj, prec, maxiter, method)` |
+| `RlxUpdSrc()`, `SetRelaxSubInterval()` | `rad.Solve()` |
 
 ---
 
-## Material Specification
+## Build & Release
 
-### MatLin - Linear Materials
+### Build: MSVC + Intel MKL
 
-`rad.MatLin()` defines **linear magnetic materials** (soft magnetic materials, NOT permanent magnets).
+**POLICY**: Use **MSVC** compiler with **Intel MKL**. Intel oneAPI compiler (icx-cl) is NOT compatible with NGSolve linking.
 
-**IMPORTANT**: MatLin is for **linear materials only**. For permanent magnets, use `ObjHexahedron()` or `ObjRecMag()` with magnetization vector.
-
-### API Forms (Industry Standard)
-
-```python
-# Form 1: Isotropic linear material
-mat = rad.MatLin(mu_r)  # Relative permeability (mu_r >= 1)
-
-# Form 2: Anisotropic linear material with easy axis
-mat = rad.MatLin([mu_r_par, mu_r_perp], [ex, ey, ez])
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File "BuildMSVC.ps1"
+powershell.exe -ExecutionPolicy Bypass -File "BuildMSVC.ps1" -Rebuild  # Clean rebuild
 ```
 
-**Parameters**:
-- **mu_r**: Relative permeability (industry standard, mu_r >= 1)
-- **[mu_r_par, mu_r_perp]**: Parallel and perpendicular relative permeabilities
-- **[ex, ey, ez]**: Easy axis direction vector (does NOT need normalization)
+**Required Software**: Visual Studio 2022 (MSVC), Intel oneAPI Base Toolkit (MKL only, NOT the compiler).
 
-**Important Notes**:
-1. **Linear materials ONLY**: MatLin is for soft magnetic materials (iron, steel, mu-metal, etc.)
-2. **Permanent magnets**: Do NOT use MatLin - define magnetization directly in `ObjHexahedron(vertices, [Mx,My,Mz])`
-3. **Isotropic materials**: **ALWAYS prefer single-argument form `MatLin(mu_r)`** for isotropic materials.
-4. **Easy axis**: For anisotropic materials, the easy axis vector must have significant magnitude (e.g., `[0, 0, 1]`)
+### BLAS/LAPACK: Intel MKL Only
 
-**Example**:
-```python
-import radia as rad
-rad.FldUnits('m')
+**POLICY**: OpenBLAS is NOT supported. MKL provides optimized BLAS/LAPACK and integrates with Intel OpenMP.
 
-# Soft iron cube (isotropic, mu_r=4000)
-iron_vertices = [[0,0,0], [0.1,0,0], [0.1,0.1,0], [0,0.1,0],
-                 [0,0,0.1], [0.1,0,0.1], [0.1,0.1,0.1], [0,0.1,0.1]]
-cube = rad.ObjHexahedron(iron_vertices, [0, 0, 0])  # Zero magnetization
-mat = rad.MatLin(4000)  # mu_r = 4000
-rad.MatApl(cube, mat)
+**Required MKL DLLs** (auto-copied by BuildMSVC.ps1): `mkl_rt.*.dll`, `mkl_core.*.dll`, `mkl_intel_thread.*.dll`, `mkl_def.*.dll`, `mkl_avx2.*.dll`, `mkl_vml_*.dll`, `libiomp5md.dll`, `libmmd.dll`, `svml_dispmd.dll`.
 
-# Anisotropic material with easy axis in z-direction
-iron_vertices2 = [[0.2,0,0], [0.3,0,0], [0.3,0.1,0], [0.2,0.1,0],
-                  [0.2,0,0.1], [0.3,0,0.1], [0.3,0.1,0.1], [0.2,0.1,0.1]]
-cube2 = rad.ObjHexahedron(iron_vertices2, [0, 0, 0])
-mat2 = rad.MatLin([5001, 101], [0, 0, 1])  # Easy axis along z
-rad.MatApl(cube2, mat2)
+### OpenMP: Intel OpenMP Only
+
+**POLICY**: Use Intel OpenMP (`libiomp5md.dll`), NOT MSVC OpenMP (`vcomp140.dll`). Mixing causes DLL conflicts. If both are loaded, there is a configuration error.
+
+### PyPI Release Workflow
+
+1. Claude Code bumps version in `pyproject.toml` and `src/radia/__init__.py`, updates `CHANGELOG.md`
+2. **CRITICAL**: Run `BuildMSVC.ps1` BEFORE `python -m build`
+3. **MANDATORY**: Verify wheel contains correct `.pyd` before upload:
+   ```python
+   import zipfile
+   whl = zipfile.ZipFile('dist/radia-X.Y.Z-py3-none-any.whl')
+   for info in whl.infolist():
+       if info.filename == 'radia/radia.pyd':
+           print(f'Wheel .pyd: {info.file_size} bytes')  # Must match build output
+   ```
+4. **User manually executes** `Publish_to_PyPI.ps1` (Claude Code does NOT upload)
+5. NEVER commit PyPI tokens to repository
+
+**Build Path**: Only `build-msvc/` is supported. `build/Release/` is REMOVED.
+
+**Testing Checklist** (before PyPI upload):
+1. `python -m build`
+2. Inspect wheel contents (must show `radia/radia.pyd`, NOT `python/radia.pyd`)
+3. `pip install dist/radia-x.y.z-py3-none-any.whl`
+4. `python -c "import radia; print(radia.__version__)"`
+
+### MKL DLL Policy: Do NOT Bundle
+
+**POLICY**: PyPI packages MUST NOT bundle Intel MKL DLLs. `pyproject.toml` declares `mkl>=2024.2.0` as dependency; pip installs MKL DLLs to `{sys.prefix}/Library/bin/`. `__init__.py` adds the path via `os.add_dll_directory()`.
+
+**Do NOT**: Copy MKL/Intel OpenMP DLLs into `src/radia/` or include `*.dll` in `package_data`.
+
+### Package Structure
+
+```
+src/radia/
+  __init__.py           # DLL path setup + re-export from C++ module
+  _radia_pybind.pyd     # Main C++ extension
+  radia_ngsolve.pyd     # NGSolve integration (optional)
+  cln_core.pyd          # CLN transient solver
+  mmm_core.pyd          # MMM solver
+  peec_matrices.pyd     # PEEC matrix assembly
+  *.py                  # Python utility modules
+  # NO .dll files
 ```
 
-### Magnetization Units: A/m (NOT Tesla)
-
-**CRITICAL**: Radia uses **M in A/m** (Amperes per meter), the same units as H field.
-
-| Quantity | Symbol | SI Unit | Radia Convention |
-|----------|--------|---------|------------------|
-| Magnetization | M | A/m | M = chi * H |
-| Field strength | H | A/m | Internal + external field |
-| Flux density | B | Tesla | B = mu_0 * (H + M) |
-| Susceptibility | chi | - | chi = mu_r - 1 |
-
-**Common conversion** (NdFeB permanent magnet):
-```python
-# Br = 1.2 T (remanence in Tesla)
-# M = Br / mu_0 = 1.2 / (4*pi*1e-7) = 954930 A/m
-Mr = 954930  # A/m - use this in ObjHexahedron
-
-pm = rad.ObjHexahedron(vertices, [0, 0, Mr])  # Magnetization in A/m
-```
-
-**Do NOT confuse** M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M
-
-**Reference**: See [docs/ELF_CONVENTIONS.md](docs/ELF_CONVENTIONS.md) for detailed unit system documentation.
-
-### MatSatIsoTab - Nonlinear Materials (B-H Curve)
-
-`rad.MatSatIsoTab()` defines **nonlinear isotropic magnetic materials** using a B-H curve.
-
-**API (Industry Standard)**:
-
-```python
-# B-H curve: [[H1, B1], [H2, B2], ...] where H is in A/m and B is in Tesla
-mat = rad.MatSatIsoTab(BH_data)
-```
-
-**Example**:
-```python
-# Steel B-H curve data
-BH_DATA = [
-    [0.0, 0.0],
-    [100.0, 0.1],
-    [500.0, 0.8],
-    [1000.0, 1.2],
-    [5000.0, 1.7],
-    [50000.0, 2.0],
-]
-
-mat = rad.MatSatIsoTab(BH_DATA)
-rad.MatApl(steel_obj, mat)
-```
-
-**Note**: Radia internally converts B-H to M-H using: M = B/mu_0 - H
-
-### Permanent Magnet Materials
-
-Radia provides several APIs for permanent magnet materials:
-
-#### Method 1: ObjHexahedron with Magnetization (Recommended for Fixed PM)
-
-For permanent magnets where demagnetization is negligible, specify magnetization directly in `ObjHexahedron`:
-
-```python
-import radia as rad
-rad.FldUnits('m')
-
-# Define hexahedral vertices (8 corners)
-vertices = [
-    [-0.05, -0.05, -0.05],
-    [0.05, -0.05, -0.05],
-    [0.05, 0.05, -0.05],
-    [-0.05, 0.05, -0.05],
-    [-0.05, -0.05, 0.05],
-    [0.05, -0.05, 0.05],
-    [0.05, 0.05, 0.05],
-    [-0.05, 0.05, 0.05],
-]
-
-# NdFeB magnet: Br = 1.2 T = 954930 A/m (= Br / mu_0)
-Mr = 954930  # A/m
-pm = rad.ObjHexahedron(vertices, [0, 0, Mr])
-
-# Compute field (NO Solve needed for fixed PM)
-B = rad.Fld(pm, 'b', [0, 0, 0.1])  # Field at z=0.1m
-```
-
-**Key Points**:
-- Use `ObjHexahedron` for arbitrary hexahedral shapes (8 vertices)
-- Magnetization is specified in A/m: Mr = Br / mu_0
-- **No `Solve()` required** for fixed magnetization permanent magnets
-- Only call `Solve()` when soft iron is present in the model
-
-#### Method 2: PM Material Classes (Future Demagnetization Support)
-
-Three material classes are available for future demagnetization implementation:
-
-```python
-# MatMagFixed - Fixed magnetization (no demagnetization)
-# Magnetization [Mx, My, Mz] in A/m
-mat = rad.MatMagFixed([0, 0, 954930])
-
-# MatMagLinear - Linear demagnetization (Br/Hc model)
-# Br [T], Hc [A/m], easy axis [ex, ey, ez]
-mat = rad.MatMagLinear(1.2, 955000, [0, 0, 1])
-
-# MatMagCurve - User-defined B-H demagnetization curve
-# [[H1,B1], [H2,B2], ...], easy axis [ex, ey, ez]
-BH_curve = [[0.0, 1.2], [-500000, 0.6], [-955000, 0.0]]
-mat = rad.MatMagCurve(BH_curve, [0, 0, 1])
-```
-
-**Note**: Currently all three material classes behave as fixed magnetization. Full demagnetization implementation is planned for future versions.
-
-#### Permanent Magnet + Soft Iron Interaction
-
-When combining permanent magnets with soft iron, use `Solve()` to calculate the induced magnetization in the iron:
-
-```python
-import radia as rad
-rad.FldUnits('m')
-
-# PM magnet (with fixed magnetization)
-pm_vertices = [...]  # 8 vertex coordinates
-pm = rad.ObjHexahedron(pm_vertices, [0, 0, 954930])
-
-# Soft iron yoke (zero initial magnetization)
-iron_vertices = [...]  # 8 vertex coordinates
-iron = rad.ObjHexahedron(iron_vertices, [0, 0, 0])
-mat_iron = rad.MatLin(1000)  # mu_r = 1000
-rad.MatApl(iron, mat_iron)
-
-# Create assembly and solve
-assembly = rad.ObjCnt([pm, iron])
-result = rad.Solve(assembly, 0.0001, 1000, 0)  # LU solver
-
-# Now compute fields
-B = rad.Fld(assembly, 'b', [0, 0, 0.1])
-```
+**Always use `BuildRadiaInternal.ps1`** for building. Never use manual cmake commands -- the script handles the `.pyd` rename from `radia.cp312-win_amd64.pyd` to `radia.pyd`.
 
 ---
 
-## Windows Console Encoding (cp932) Compatibility
-
-**Policy**: **NEVER use Unicode mathematical symbols** in print statements.
-
-**Forbidden Unicode → ASCII Replacements**:
-
-| Unicode | Symbol | ASCII | Example |
-|---------|--------|-------|---------|
-| `\u00b2` | ² | `^2` | `N²` → `N^2` |
-| `\u00b3` | ³ | `^3` | `N³` → `N^3` |
-| `\u2192` | → | `->` | `A → B` → `A -> B` |
-| `\u2248` | ≈ | `~=` | `x ≈ 2` → `x ~= 2` |
-| `\u2264` | ≤ | `<=` | `N ≤ 100` → `N <= 100` |
-| `\u2265` | ≥ | `>=` | `N ≥ 250` → `N >= 250` |
-
-**Rationale**: Windows console (cmd.exe) defaults to cp932 encoding in Japanese environments, causing `UnicodeEncodeError` for Unicode symbols.
-
----
-
-## Python Script Path Import Policy
-
-**Policy**: Import from `src/radia` package directory (not build directories).
-
-```python
-# ✓ CORRECT - Import from src/radia package
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
-import radia as rad
-
-# ✗ WRONG - Import from build directory (may be outdated)
-sys.path.insert(0, r"S:\Radia\01_GitHub\build-msvc")
-import radia as rad
-```
-
-**Path patterns**:
-- Examples folder: `'../../src/radia'`
-- Tests folder: `'../src/radia'`
-
-**Rationale**:
-- `src/radia/` contains the latest .pyd files copied by BuildMSVC.ps1
-- Build directories may contain outdated or version-tagged .pyd files
-- `build/Release/` is REMOVED - do not use
-
----
-
-## File Organization Policies
-
-### Mesh File Preservation
-
-**Policy**:
-- **NEVER DELETE** mesh files (`.bdf`, `.nas`, `.msh`, `.vtk`)
-- **NEVER DELETE** Cubit journal files (`.jou`, `.journal`)
-- **NEVER DELETE** mesh generation scripts
-
-**Rationale**: Mesh files are difficult to recreate without original CAD or mesh generation tools.
-
-### Cubit Mesh Generation
-
-**Policy**: Use `cubit_mesh_export` utilities for Cubit-based workflows.
-
-**Requirements**:
-- Journal files (`.jou`) MUST define blocks before export
-- Use `cubit_mesh_export` for NASTRAN format conversion
-
-**Correct workflow**:
-```python
-# In Cubit journal file (.jou):
-# 1. Create geometry
-# 2. Generate mesh
-# 3. Define blocks (REQUIRED)
-block 1 volume 1
-block 1 element type hex8
-
-# 4. Export using cubit_mesh_export
-export nastran "geometry.bdf" dimension 3 overwrite
-
-# In Python script:
-from cubit_mesh_export import export_cubit_mesh
-export_cubit_mesh('geometry.bdf', blocks={'1': {'material': 'NdFeB', 'Mr': [0, 0, 1.2]}})
-```
-
-**Common mistakes**:
-```python
-# WRONG - No block definition in .jou file
-export nastran "geometry.bdf"  # Missing block assignment!
-
-# WRONG - Block defined after export
-export nastran "geometry.bdf"
-block 1 volume 1  # Too late!
-```
-
-### VTK Export Policy
-
-All example scripts should export VTK files with the same basename as the script.
-
----
-
-## H-Matrix Acceleration Policy (HACApK ACA+)
-
-### Policy: Do NOT Implement Custom H-Matrix - Use HACApK Only
-
-**Date**: 2025-12-19
-**Status**: Development Policy
-
-**CRITICAL POLICY**:
-1. **Do NOT implement custom H-matrix algorithms** (ACA, ACA+, or any low-rank approximation)
-2. **If H-matrix acceleration is needed**, use the HACApK library at `src/ext/HACApK_LH-Cimplm/`
-3. **Custom implementations have been removed** - rad_hmatrix*.cpp/h files were deleted (2025-12-18)
-
-**Rationale**:
-- Custom ACA implementations are prone to bugs and difficult to validate
-- HACApK is a proven, MIT-licensed library with established correctness
-- Benchmarks showed NO speedup for typical Radia use cases (single compact objects)
-
-**Reference Implementation (for future use)**:
-- **Library**: HACApK (Hierarchical Approximation with ACA+ for Krylov methods)
-- **Source**: `src/ext/HACApK_LH-Cimplm/` (C implementation)
-- **Original**: ppOpen-HPC project (MIT License)
-- **Key Files**:
-  - `cHACApK_base.h` - Core H-matrix structures and cluster tree
-  - `cHACApK_base.c` - ACA+ implementation
-  - `mpi_stub.h` - MPI stub for single-process execution (created for Radia)
-
-**Why HACApK ACA+** (if needed in future):
-1. **Proven Algorithm**: ACA+ is a well-established low-rank approximation method
-2. **MIT License**: Compatible with Radia's license
-3. **C Implementation**: Direct integration possible (no Fortran dependency)
-4. **MPI Stub Available**: Can run without MPI dependency using provided stub
-
-**Current Status (2025-12-23)**:
-
-HACApK H-matrix solver is **implemented and available** as Method 2.
-
-**When to Use HACApK**:
-- Large-scale problems (N > 1,000 elements, >6,000 DOF)
-- Memory-constrained environments (H-matrix uses O(N log N) memory vs O(N^2) for dense)
-- NOT recommended for small problems where LU is faster
-
-**Current Solver Methods** (v1.3.15):
-
-| Method | Name | Description | Use Case |
-|--------|------|-------------|----------|
-| 0 | LU | Dense LU decomposition with LAPACK dgesv | Small problems (N < 500), guaranteed convergence |
-| 1 | BiCGSTAB | Iterative BiCGSTAB with Jacobi preconditioner | General purpose, medium problems |
-| 2 | HACApK | BiCGSTAB with H-matrix acceleration (ACA+) | Large problems (N > 1000), memory efficiency |
-
-**Note**: Original Radia used Implicit SS (Gauss-Seidel) which had slow convergence for nonlinear materials. This was replaced with BiCGSTAB in v1.3.13. HACApK was added in v1.3.15.
-
-### Deprecated Relaxation API (2026-01-14)
-
-The following legacy relaxation functions are **DEPRECATED** and will emit warnings:
-
-| Function | Status | Replacement |
-|----------|--------|-------------|
-| `RlxPre()` | Deprecated | Use `Solve()` - handles matrix construction internally |
-| `RlxMan()` | Deprecated | Use `Solve(obj, prec, maxiter, method)` |
-| `RlxAuto()` | Deprecated | Use `Solve(obj, prec, maxiter, method)` |
-| `RlxUpdSrc()` | Deprecated | Use `Solve()` for re-solving |
-| `SetRelaxSubInterval()` | Deprecated | Use `Solve(obj, prec, maxiter, 0)` for LU |
-
-**Migration Example**:
-
-```python
-# OLD (deprecated)
-intrc = rad.RlxPre(container, container)
-rad.RlxMan(intrc, 5, 1, 1.0)  # Method 5 = LU
-
-# NEW (recommended)
-rad.Solve(container, 0.0001, 1000, 0)  # Method 0 = LU
-```
-
-### HACApK Parameters
-
-Configure HACApK parameters using `rad.SetHACApKParams(eps, leaf_size, eta)` or `rad.SetHMatrixEpsilon(eps)`:
-
-| Function | Description |
-|----------|-------------|
-| `SetHACApKParams(eps, leaf_size, eta)` | Set all H-matrix parameters |
-| `SetHMatrixEpsilon(eps)` | Set only ACA tolerance (ELF-compatible: `magic.set_hmatrix_epsilon`) |
-| `GetHACApKStats()` | Get H-matrix statistics after solve |
-
-| Parameter | Description | Default | Range |
-|-----------|-------------|---------|-------|
-| **eps** | ACA tolerance (lower = more accurate, higher = faster) | 1e-4 | 1e-6 to 1e-2 |
-| **leaf_size** | Minimum cluster size for leaf nodes | 10 | 5 to 50 |
-| **eta** | Admissibility parameter (higher = more low-rank blocks) | 2.0 | 1.0 to 3.0 |
-
-**Parameter Rationale**:
-
-| Parameter | Default | Rationale |
-|-----------|---------|-----------|
-| `eps` | 1e-4 | Balance between accuracy and compression. ELF-compatible default. |
-| `leaf_size` | 10 | Minimum cluster size. Smaller values allow deeper tree but increase overhead. 10 is ELF-compatible and provides good balance for typical problems. Values < 5 rarely improve performance; values > 50 reduce H-matrix benefit. |
-| `eta` | 2.0 | Standard admissibility: clusters are "well-separated" when `dist(c1,c2) >= eta * max(diam(c1), diam(c2))`. eta=2.0 is conservative and ELF-compatible. Lower values (1.0-1.5) allow more aggressive compression but may reduce accuracy. |
-
-**ACA Tolerance (eps) Guidelines**:
-
-| eps | Accuracy | Speed | Use Case |
-|-----|----------|-------|----------|
-| 1e-6 | Highest | Slowest | Validation, reference solutions |
-| 1e-4 | Good | Good | **Default, ELF-compatible** |
-| 1e-3 | Moderate | Fast | Quick iterations, exploration |
-| 1e-2 | Lower | Fastest | Initial guess, previews |
-
-**Recommended Usage**:
-```python
-import radia as rad
-
-# Method 0: Dense LU (direct solver, default)
-rad.Solve(container, 0.0001, 1000, 0)
-
-# Method 1: BiCGSTAB (iterative solver, better for large problems)
-rad.Solve(container, 0.0001, 1000, 1)
-
-# Method 2: HACApK (H-matrix accelerated BiCGSTAB)
-rad.SetHACApKParams(1e-4, 10, 2.0)  # eps=1e-4 (ELF-compatible)
-rad.Solve(container, 0.0001, 1000, 2)
-
-# ELF-compatible: Set only epsilon (other params unchanged)
-rad.SetHMatrixEpsilon(1e-3)  # magic.set_hmatrix_epsilon(1e-3)
-rad.Solve(container, 0.0001, 1000, 2)
-
-# Under-relaxation for difficult nonlinear problems
-rad.SetRelaxParam(0.3)  # 30% damping (0.0 = full step, 0.0-1.0)
-rad.Solve(container, 0.0001, 1000, 1)
-rad.SetRelaxParam(0.0)  # Reset to full step
-```
-
-**Benchmark Script Usage**:
-```bash
-# Run HACApK benchmark with default eps=1e-4
-python benchmark_hexahedron_msc.py --hacapk 5 10 15
-
-# Run with custom ACA tolerance
-python benchmark_hexahedron_msc.py --hacapk --eps 1e-3 5 10 15
-```
-
-**Documentation**:
-- `docs/HMATRIX_EVALUATION.md` - Full evaluation report
-- `examples/cube_uniform_field/nonlinear/` - Benchmark scripts and results
-
-### Performance Comparison with ELF (2025-12-30)
-
-**All solvers now match or exceed ELF performance** (Hex N=10, 1000 elements):
-
-| Solver | ELF | Radia | Radia/ELF |
-|--------|-----|-------|-----------|
-| LU | 14.0s | 14.1s | 1.01x (同等) |
-| BiCGSTAB | 5.1s | **3.2s** | **0.62x (Radia高速)** |
-| HACApK | 3.0s | **3.4s** | **1.13x (ほぼ同等)** |
-
-**最適化履歴**:
-- 2025-12-29: HACApK 10.2s (3.4x遅い) - 線形ソルブボトルネック特定
-- 2025-12-30: UpdateDiagonal fast method有効化 → 3.4s (**3.0x高速化**)
-
-**ボトルネック修正**:
-1. ✅ `UpdateDiagonal`: fast method有効化 (O(N) vs O(N^2))
-2. ✅ `HACApK_update_diagonal_wrapper`: OpenMP並列化
-3. ✅ ACA+ fill: 既にOpenMP並列化済み
-
-**ソルバー選択ガイドライン**:
-- **小規模 (N<500)**: LU推奨 (確実な収束)
-- **中規模 (500<N<2000)**: BiCGSTAB推奨 (最速)
-- **大規模 (N>2000)**: HACApK推奨 (メモリ効率、O(N log N))
-
-### Known Performance Issue: Tetrahedron HACApK (2025-12-30)
-
-**問題**: TetrahedronメッシュでHACApKがELFより4-7倍遅い
-
-| メッシュ | ELF (s) | Radia (s) | Radia/ELF |
-|---------|---------|-----------|-----------|
-| maxh=0.10 (4994要素) | 19.5 | 80.3 | **4.1x遅い** |
-| maxh=0.15 (2211要素) | 3.8 | 25.6 | **6.7x遅い** |
-
-**ボトルネック分析** (maxh=0.10):
-
-| 項目 | ELF (s) | Radia (s) | Radia/ELF |
-|------|---------|-----------|-----------|
-| H-matrix構築 | 6.1 | 68.9 | **11.3x遅い** |
-| 線形ソルブ | 13.4 | 11.2 | 0.84x (Radia高速) |
-
-**原因**:
-- H-matrix構築 (ACA+ fill) がTetrahedronで特に遅い
-- ELFはFortran + OpenMPで高度に最適化
-- Radiaの三角形積分計算がTetraで重い
-
-**TODO (次の改善項目)**:
-1. [ ] TetrahedronのACA+ fill並列化の最適化
-2. [ ] 三角形積分のキャッシュ効率改善
-3. [ ] `radTInteraction::B_comp_tetrahedron_MSC()` のプロファイリング
-4. [ ] ELFの実装との比較調査
-
-**Note**: HexahedronではRadiaはELFと同等以上の性能を達成済み。
-
----
-
-## NGSolve Integration Best Practices
+## Mesh & NGSolve Integration
 
 ### NGSolve Version Requirement
 
-**CRITICAL**: Use NGSolve **6.2.2405** only.
+**CRITICAL**: Use NGSolve **6.2.2405** only. Version 6.2.2406+ has a regression in Periodic Boundary Conditions (`Identify()` lost during `Glue()`).
 
-**Version Constraint**: `ngsolve==6.2.2405`
+Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
 
-**Reason**: NGSolve 6.2.2406+ has a regression bug in Periodic Boundary Conditions.
-The `Identify()` information is lost during mesh generation with `Glue()`.
-
-**Reference**: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
-
-**Installation**:
 ```bash
-pip install radia[ngsolve]  # Installs with correct NGSolve version constraint
-# OR
-pip install ngsolve==6.2.2405
+pip install radia[ngsolve]  # Installs with correct version constraint
+# OR: pip install ngsolve==6.2.2405
 ```
 
-### Recommended Configuration
+### NGSolve Recommended Configuration
 
 ```python
 fes = HDiv(mesh, order=2)  # Best accuracy
@@ -1293,1557 +354,299 @@ B_gf = GridFunction(fes)
 B_gf.Set(radia_ngsolve.RadiaField(radia_obj, 'b'))
 ```
 
-**Evaluation guidelines**:
 - Evaluate GridFunction at distances > 1 mesh cell from magnet surface
 - Use CoefficientFunction directly for maximum accuracy near boundaries
 - Avoid GridFunction evaluation within 1 mesh cell of magnet surface
 
----
+### NGSolve Mesh Access Policy
 
-## PyPI Package Release Policy
-
-### Version Management (Automated by Claude Code)
-
-Claude Code is responsible for:
-- Maintaining version numbers in `pyproject.toml` and `src/radia/__init__.py`
-- Following semantic versioning (MAJOR.MINOR.PATCH)
-- Updating `CHANGELOG.md` with release notes
-- Committing and pushing version bump changes
-
-### PyPI Upload (Manual by User)
-
-**IMPORTANT**: Claude Code does NOT execute PyPI upload. The user must manually run the upload script.
-
-**Workflow**:
-1. Claude Code prepares the release (version bump, CHANGELOG, commit, push)
-2. **CRITICAL: Run `BuildMSVC.ps1` BEFORE `python -m build`** to ensure latest .pyd files
-3. Claude Code runs `python -m build` to create wheel package
-4. **CRITICAL: Verify wheel contains correct .pyd** (see verification below)
-5. **User manually executes** `Publish_to_PyPI.ps1` with their API token
-
-### Wheel Verification (MANDATORY before PyPI upload)
-
-**ALWAYS verify the wheel contains the latest .pyd before upload!**
+**POLICY**: All mesh access MUST use functions from `src/radia/netgen_mesh_import.py`. NEVER directly access `mesh.ngmesh.Points()` or `el.vertices[].nr` -- NGSolve has two indexing schemes (0-indexed vs 1-indexed) that cause off-by-one errors.
 
 ```python
-# Verification script - run BEFORE PyPI upload
-import zipfile
-import os
-from datetime import datetime
+# CORRECT
+from netgen_mesh_import import netgen_mesh_to_radia, extract_elements
+radia_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0,0,0]}, units='m')
 
-whl_path = 'dist/radia-X.Y.Z-py3-none-any.whl'  # Update version
-whl = zipfile.ZipFile(whl_path)
-
-# Get wheel .pyd info
-for info in whl.infolist():
-    if info.filename == 'radia/radia.pyd':
-        print(f'Wheel radia.pyd: {info.file_size} bytes, {info.date_time}')
-        break
-
-# Compare with build-msvc .pyd
-msvc_pyd = 'build-msvc/radia.cp312-win_amd64.pyd'
-if os.path.exists(msvc_pyd):
-    stat = os.stat(msvc_pyd)
-    print(f'Build radia.pyd: {stat.st_size} bytes, {datetime.fromtimestamp(stat.st_mtime)}')
-
-# SIZES MUST MATCH! If wheel is smaller, it's using old .pyd
+# WRONG - index confusion
+pt = mesh.ngmesh.Points()[v.nr]  # Off-by-one!
 ```
 
-**Common mistake**: `python -m build` uses sdist which may contain old .pyd.
-Solution: Always run `BuildMSVC.ps1` immediately before `python -m build`.
+### Mesh Generation Policy
 
-**Build Path Priority** (setup.py):
-1. `build-msvc/` (MSVC + Intel MKL - ONLY supported path)
+**2-Tier workflow by element order**:
 
-**Note**: `build/Release/` is REMOVED. Only `build-msvc/` is supported.
+| Element Order | Workflow | Tools |
+|---------------|----------|-------|
+| **1st + 2nd order** | GMSH direct | GMSH, or Cubit -> GMSH export |
+| **3rd order+** | Netgen + Cubit via STEP | `mesh.Curve(order)` with OCC geometry (NGSolve FEM only) |
 
-```powershell
-# Set PyPI API token (keep secure!)
-$env:PYPI_TOKEN = "pypi-AgEIcGl..."
+**Radia supports 1st order only** (Tet4, Hex8, Wedge6). 2nd order planned.
 
-# Run upload script
-powershell.exe -ExecutionPolicy Bypass -File Publish_to_PyPI.ps1
-```
-
-**Security**: NEVER commit PyPI tokens to repository. NEVER ask user for their token.
-
-### MKL DLL Policy: Do NOT Bundle (2026-02-20)
-
-**Policy**: PyPI packages MUST NOT bundle Intel MKL DLLs. MKL is installed via pip dependency.
-
-**Rationale** (changed from previous bundling policy):
-- `pyproject.toml` declares `mkl>=2024.2.0` and `intel-cmplr-lib-rt>=2024.2.0` as dependencies
-- pip automatically installs MKL DLLs to `{sys.prefix}/Library/bin/`
-- `__init__.py` dynamically adds the MKL DLL directory via `os.add_dll_directory()`
-- Bundling DLLs causes version conflicts with pip-installed MKL
-- Reduces wheel size significantly (~100MB less)
-
-**Do NOT**:
-- Copy MKL DLLs (mkl_rt.2.dll, mkl_core.2.dll, etc.) into `src/radia/`
-- Copy Intel OpenMP DLLs (libiomp5md.dll, svml_dispmd.dll, etc.) into `src/radia/`
-- Include `*.dll` in `package_data` or `MANIFEST.in`
-- Bundle any Intel runtime libraries in the wheel
-
-**Package Structure** (v2.1.0+):
-```
-src/radia/
-  __init__.py           # DLL path setup + re-export from C++ module
-  _radia_pybind.pyd     # Main C++ extension (links to mkl_rt.lib)
-  radia_ngsolve.pyd     # NGSolve integration (optional)
-  cln_core.pyd          # CLN transient solver
-  mmm_core.pyd          # MMM solver
-  peec_matrices.pyd     # PEEC matrix assembly
-  *.py                  # Python utility modules
-  # NO .dll files - MKL comes from pip dependency
-```
-
-**DLL Resolution** (at import time):
-```python
-# __init__.py adds MKL DLL path dynamically
-_mkl_bin = os.path.join(sys.prefix, "Library", "bin")
-if os.path.isdir(_mkl_bin):
-    os.add_dll_directory(_mkl_bin)
-```
-
----
-
-## Nastran Format Policy: REMOVED (2026-01-16)
-
-### Nastran BDF Support Removed from Radia
-
-**CRITICAL**: Nastran BDF format support is **REMOVED** from Radia. Use **Coreform Cubit → Netgen direct export** exclusively.
-
-**Policy**:
-- **Nastran import modules REMOVED** from Radia codebase
-- **All Nastran workflows REMOVED** - no backwards compatibility
-- **Use Coreform Cubit** for all mesh operations (hex/tet)
-- **Cubit can read legacy .bdf** files if needed
-
-**Rationale**:
-1. **Legacy format**: Nastran BDF is a decades-old format with limitations
-2. **Complexity**: Fixed-width fields, multiple continuation styles, error-prone parsing
-3. **Better alternatives**: Cubit `export_netgen()` provides direct in-memory mesh transfer
-4. **No users yet**: No backwards compatibility concerns
-
-**Removed Files**:
-- `src/radia/nastran_mesh_import.py` - REMOVED
-- `src/radia/nastran_reader.py` - REMOVED (already deprecated)
-- All examples using `import_nastran_mesh()` - REMOVED or refactored
-
-**Correct Workflow** (2026-01-16):
-```
-Cubit geometry → export_netgen() → Netgen mesh → Radia
-                 (direct, no file)
-```
-
-**For Legacy .bdf Files**:
-```
-Legacy .bdf → Cubit (import nastran) → export_netgen() → Netgen → Radia
-              (Cubit handles .bdf reading)
-```
-
-### Cubit → Netgen Workflow
-
-**Standard workflow** (recommended):
-```python
-# RECOMMENDED - Use Cubit direct export
-import cubit
-import cubit_mesh_export
-from ngsolve import Mesh
-from netgen_mesh_import import netgen_mesh_to_radia
-
-# Generate mesh in Cubit, export directly to Netgen
-cubit.init(['cubit', '-nojournal', '-batch'])
-cubit.cmd("import geometry 'model.step'")
-cubit.cmd("volume all scheme tetmesh")
-cubit.cmd("mesh volume all")
-
-# Direct export to Netgen (no intermediate file)
-ngmesh = cubit_mesh_export.export_netgen(cubit)
-mesh = Mesh(ngmesh)
-
-# Convert to Radia
-mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
-```
-
-### Reading Legacy Nastran Files via Cubit
-
-**If you have existing Nastran .bdf files**, use Coreform Cubit to read them and add boundary condition labels before exporting to Netgen:
-
-```python
-# RECOMMENDED - Read legacy Nastran via Cubit, add labels, export to Netgen
-import cubit
-import cubit_mesh_export
-from ngsolve import Mesh
-
-cubit.init(['cubit', '-nojournal', '-batch'])
-
-# Read legacy Nastran mesh into Cubit
-cubit.cmd("import nastran 'legacy_mesh.bdf'")
-
-# Add boundary condition labels (sidesets/nodesets) in Cubit
-cubit.cmd("sideset 1 surface 1 2 3")
-cubit.cmd("sideset 1 name 'conductor'")
-cubit.cmd("sideset 2 surface 4 5 6")
-cubit.cmd("sideset 2 name 'ferrite'")
-cubit.cmd("sideset 3 surface 7 8")
-cubit.cmd("sideset 3 name 'shield'")
-
-# Export to Netgen with boundary labels preserved
-ngmesh = cubit_mesh_export.export_netgen(cubit)
-mesh = Mesh(ngmesh)
-
-# Boundary labels are now accessible as mesh.GetBoundaries()
-print(mesh.GetBoundaries())  # ['conductor', 'ferrite', 'shield']
-```
-
-**Benefits of Cubit as intermediary**:
-1. **Label management**: Add/modify boundary condition names
-2. **Mesh repair**: Fix mesh quality issues
-3. **Visualization**: Inspect mesh before export
-4. **Format flexibility**: Read various legacy formats (Nastran, ANSYS, Abaqus)
-5. **CAD format support**: Import STEP, IGES, SAT, and other CAD formats directly
-6. **Modern workflow**: No custom parsers needed in Radia
-```
-
-### CAD Format Support via Cubit
-
-Coreform Cubit supports direct import of CAD formats, eliminating need for custom importers:
-
-**Supported CAD Formats**:
-- STEP (.step, .stp) - ISO standard, recommended
-- IGES (.iges, .igs) - Legacy CAD exchange
-- Parasolid (.x_t, .x_b) - Siemens/NX native
-- ACIS SAT (.sat) - Spatial native
-- STL (.stl) - Triangulated surface
-- BREP (.brep) - OpenCascade native
-
-**Workflow with CAD files**:
-```python
-import cubit
-import cubit_mesh_export
-from ngsolve import Mesh
-from netgen_mesh_import import netgen_mesh_to_radia
-
-cubit.init(['cubit', '-nojournal', '-batch'])
-
-# Import CAD file (STEP, IGES, etc.)
-cubit.cmd("import step 'motor_rotor.step' heal")
-
-# Set up mesh
-cubit.cmd("volume all scheme tetmesh")
-cubit.cmd("volume all size auto factor 5")
-cubit.cmd("mesh volume all")
-
-# Add boundary condition labels
-cubit.cmd("sideset 1 surface with z_coord > 0")
-cubit.cmd("sideset 1 name 'north_pole'")
-
-# Export directly to Netgen
-ngmesh = cubit_mesh_export.export_netgen(cubit)
-mesh = Mesh(ngmesh)
-
-# Convert to Radia
-mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
-```
-
----
-
-## Unit System Policy: No Hard-Coded Unit Conversions
-
-### Requirement: Centralized Unit Control via rad.FldUnits() and radia_ngsolve
-
-**Goal**: All unit conversions must be controlled through explicit API calls (`rad.FldUnits()` or `radia_ngsolve` constructor), never through hard-coded conversion factors in user code.
-
-**Policy**:
-
-**✓ ALLOWED - Explicit unit control**:
-```python
-# Method 1: Set Radia units globally
-import radia as rad
-rad.FldUnits('m')  # All Radia operations now use meters
-
-# Create hexahedral magnet with ObjHexahedron
-vertices = [[-0.05,-0.05,-0.05], [0.05,-0.05,-0.05], [0.05,0.05,-0.05], [-0.05,0.05,-0.05],
-            [-0.05,-0.05,0.05], [0.05,-0.05,0.05], [0.05,0.05,0.05], [-0.05,0.05,0.05]]
-magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])  # 0.1m cube, 1.2T equivalent
-
-# Method 2: Specify units in radia_ngsolve constructor
-from radia_ngsolve import RadiaField
-B_cf = RadiaField(magnet, 'b', units='m')  # Explicitly use meters
-```
-
-**✗ FORBIDDEN - Hard-coded unit conversions**:
-```python
-# WRONG - Hard-coded mm to m conversion
-for pt in obs_points:
-    f.write(f'{pt[0]/1000.0} {pt[1]/1000.0} {pt[2]/1000.0}\n')  # ✗ DO NOT DO THIS
-
-# WRONG - Hard-coded scaling factors
-x_mm = x_m * 1000.0  # ✗ DO NOT DO THIS
-field_m = field_mm / 1000.0  # ✗ DO NOT DO THIS
-```
-
-**Rationale**:
-- **Single source of truth**: Units controlled by `rad.FldUnits()` only
-- **Consistency**: All code uses same unit system set at initialization
-- **Maintainability**: Changing units requires one line change, not searching for conversion factors
-- **Error prevention**: Hard-coded conversions cause bugs when unit system changes
-
-**Unit Detection**:
-
-Use `rad.FldUnits()` without arguments to get current unit system:
-
-```python
-import radia as rad
-
-# Get current units (returns multi-line string)
-units_str = rad.FldUnits()
-# Parse to detect length unit
-if 'Length:  mm' in units_str:
-    length_unit = 'mm'
-    length_scale = 1.0  # No conversion needed
-elif 'Length:  m' in units_str:
-    length_unit = 'm'
-    length_scale = 0.001  # mm to m
-else:
-    raise ValueError(f"Unknown length unit in: {units_str}")
-```
-
-**No Exceptions**:
-
-All code, including `radia_vtk_export.py`, `radia_ngsolve.cpp`, `nastran_mesh_import.py`, must:
-1. Query current unit system via `rad.FldUnits()`
-2. Convert based on detected units, not hard-coded assumptions
-3. Never assume Radia is using mm or m
-
-This ensures code works regardless of user's `rad.FldUnits()` setting.
-
-**Implementation Pattern**:
-
-```python
-# CORRECT - Use rad.FldUnits() to control units
-import radia as rad
-
-# Set unit system once at start
-rad.FldUnits('mm')  # or 'm' for NGSolve integration
-
-# Create hexahedral magnet with ObjHexahedron (100mm cube)
-vertices = [[-50,-50,-50], [50,-50,-50], [50,50,-50], [-50,50,-50],
-            [-50,-50,50], [50,-50,50], [50,50,50], [-50,50,50]]
-magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])  # 100mm, A/m
-field = rad.Fld(magnet, 'b', [50, 50, 50])  # 50mm point
-
-# Export - automatically uses correct units
-from radia_vtk_export import exportGeometryToVTK
-exportGeometryToVTK(magnet, 'output.vtk')  # Handles units internally
-```
-
-**Migration Guidelines**:
-
-When removing hard-coded unit conversions:
-
-1. **Identify conversion factors**: Search for `/1000`, `*1000`, `0.001`, etc.
-2. **Determine intended unit system**: mm or m?
-3. **Add `rad.FldUnits()` at script start**: Set unit system explicitly
-4. **Remove conversion factors**: Use values directly in chosen unit system
-5. **Update comments**: Document which unit system is used
-
-**Files to Check**:
-
-When writing or modifying code:
-- ✓ Check for hard-coded `*1000`, `/1000`, `*0.001`, `/0.001`
-- ✓ Ensure `rad.FldUnits()` is called at script start
-- ✓ Verify no manual coordinate scaling
-- ✓ Use `radia_vtk_export.py` for VTK export (handles units)
-
-**Example - Corrected Code**:
-
-Before (hard-coded conversions):
-```python
-# BAD - Hard-coded unit conversion
-x_range = np.linspace(-90, 90, 21)  # mm
-for pt in obs_points:
-    f.write(f'{pt[0]/1000.0} {pt[1]/1000.0} {pt[2]/1000.0}\n')  # Manual mm->m
-```
-
-After (unit-aware):
-```python
-# GOOD - Use rad.FldUnits() and exportGeometryToVTK
-rad.FldUnits('m')  # Set to meters
-x_range = np.linspace(-0.09, 0.09, 21)  # m (no conversion needed)
-
-# Use radia_vtk_export for geometry
-from radia_vtk_export import exportGeometryToVTK
-exportGeometryToVTK(magnet, 'output.vtk')  # Automatic unit handling
-
-# For field data, use same unit system
-for pt in obs_points:
-    f.write(f'{pt[0]} {pt[1]} {pt[2]}\n')  # Already in meters
-```
-
----
-
-## NGSolve Mesh Access Policy
-
-### Centralized Mesh Access via netgen_mesh_import.py
-
-**Policy**:
-- **All NGSolve mesh access** MUST use functions from `src/radia/netgen_mesh_import.py`
-- **NEVER** directly access `mesh.ngmesh.Points()`, `mesh.vertices[]`, or `el.vertices[].nr` in any script
-- **ALWAYS** import mesh handling functions from `netgen_mesh_import.py`
-- **NO EXCEPTIONS**: This applies to all scripts including examples, tests, and debugging code
-
-**Enforcement**:
-- Direct mesh access is a bug source due to index confusion
-- All new code MUST use `extract_elements()` or `netgen_mesh_to_radia()`
-- Existing code with direct access MUST be refactored
-
-**Rationale**:
-
-NGSolve has two different indexing schemes that cause off-by-one errors:
-
-| Access Method | Indexing | Notes |
-|--------------|----------|-------|
-| `mesh.ngmesh.Points()[i]` | **1-indexed** | Index 0 raises error, valid: 1 to nv |
-| `mesh.vertices[i]` | **0-indexed** | Valid: 0 to nv-1 |
-| `el.vertices[i].nr` | Returns value for **0-indexed** `mesh.vertices[]` | Use with `mesh.vertices[]` only |
-
-**Common Bug Pattern**:
-```python
-# WRONG - Using 0-indexed .nr with 1-indexed ngmesh.Points()
-for v in el.vertices:
-    pt = mesh.ngmesh.Points()[v.nr]  # Off-by-one error!
-
-# CORRECT - Use 0-indexed consistently
-for v in el.vertices:
-    vertex = mesh.vertices[v.nr]
-    pt = vertex.point
-```
-
-**Correct Usage**:
-
-```python
-# Import from centralized module
-from netgen_mesh_import import netgen_mesh_to_radia, extract_elements, TETRA_FACES
-
-# Option 1: Direct conversion to Radia (recommended)
-radia_obj = netgen_mesh_to_radia(mesh,
-                                  material={'magnetization': [0, 0, 0]},
-                                  units='m',
-                                  material_filter='magnetic')
-
-# Option 2: Extract elements for custom processing
-elements, _ = extract_elements(mesh, material_filter='magnetic')
-for el in elements:
-    vertices = el['vertices']  # Already extracted correctly
-    # ...
-```
-
-**Module Location**: `src/radia/netgen_mesh_import.py`
-
-**Available Functions**:
-- `netgen_mesh_to_radia()`: Convert entire mesh to Radia geometry (recommended)
-- `extract_elements()`: Extract element data for custom processing
-- `compute_element_centroid()`: Compute centroid from vertex list
-- `create_radia_tetrahedron()`: Create single Radia tetrahedron
-- `create_radia_hexahedron()`: Create single Radia hexahedron
-
-**Available Constants**:
-- `TETRA_FACES`: 1-indexed face topology for tetrahedra
-- `HEX_FACES`: 1-indexed face topology for hexahedra
-- `WEDGE_FACES`: 1-indexed face topology for wedges
-- `PYRAMID_FACES`: 1-indexed face topology for pyramids
-
----
-
-## Example Script Naming Convention
-
-### Requirement: Consistent snake_case Naming with Functional Prefixes
-
-**Goal**: All example scripts in `examples/` folder must follow a consistent naming convention for easy identification and organization.
-
-**Policy**:
-
-**Naming pattern**: `<prefix>_<description>.py`
-
-- Use **snake_case** (all lowercase with underscores)
-- Use **functional prefix** to indicate script purpose
-- Use **descriptive names** that explain what the script does
-
-**Standard prefixes**:
-
-| Prefix | Purpose | Example |
-|--------|---------|---------|
-| `demo_` | Educational demonstration of a feature | `demo_batch_evaluation.py` |
-| `example_` | Complete working example | `example_hmatrix_cache_usage.py` |
-| `benchmark_` | Performance measurement script | `benchmark_solver_scaling.py` |
-| `test_` | Validation/verification script | `test_batch_evaluation.py` |
-| `verify_` | Correctness verification | `verify_curl_A_equals_B.py` |
-| `compare_` | Comparison between methods | `compare_radia_ngsolve_cube.py` |
-| `visualize_` | Visualization script | `visualize_field.py` |
-| `run_` | Runner/orchestrator script | `run_all_benchmarks.py` |
-| (none) | Descriptive physical model name | `sphere_in_quadrupole.py`, `arc_current_with_magnet.py` |
-
-**Naming rules**:
-
-1. **✓ CORRECT - snake_case**:
-   ```
-   sphere_in_quadrupole.py
-   benchmark_solver_scaling.py
-   demo_batch_evaluation.py
-   verify_curl_A_equals_B.py
-   ```
-
-2. **✗ INCORRECT - CamelCase or PascalCase**:
-   ```
-   Cubit2Nastran.py        # Should be: cubit_to_nastran.py
-   York_cubit_mesh.py      # Should be: york_cubit_mesh.py (already correct case, but York should be lowercase)
-   CompareResults.py       # Should be: compare_results.py
-   ```
-
-3. **✗ INCORRECT - No prefix for functional scripts**:
-   ```
-   accuracy.py             # Should be: verify_accuracy.py or benchmark_accuracy.py
-   plot.py                 # Should be: visualize_results.py or plot_benchmark_results.py
-   ```
-
-**Directory-specific guidelines**:
-
-| Directory | Typical Prefixes | Notes |
-|-----------|------------------|-------|
-| `examples/simple_problems/` | (none), `demo_` | Physical model names preferred |
-| `examples/solver_benchmarks/` | `benchmark_`, `run_`, `plot_`, `verify_` | Performance focus |
-| `examples/ngsolve_integration/` | `demo_`, `example_`, `test_`, `verify_` | Educational + validation |
-| `examples/background_fields/` | (none), `compare_` | Physical model names |
-| `examples/electromagnet/` | `main_`, `visualize_` | Workflow scripts |
-
-**Migration checklist**:
-
-When renaming files:
-1. Use `git mv` to preserve history: `git mv OldName.py new_name.py`
-2. Update imports in other files
-3. Update README.md references
-4. Update documentation
-5. Commit with clear message: `"Rename OldName.py to new_name.py (naming convention)"`
-
-**Examples of good names**:
+### Mesh Import Paths
 
 ```
-# Physical models - descriptive, no prefix needed
-sphere_in_quadrupole.py           # Clear physics description
-arc_current_with_magnet.py        # Clear what it models
-cubic_polyhedron_magnet.py        # Clear geometry + physics
+Path A: GMSH direct (no NGSolve needed)
+  CAD -> GMSH -> .msh -> gmsh_mesh_import.py -> Radia
 
-# Functional scripts - prefix required
-demo_batch_evaluation.py          # Demo of batch feature
-benchmark_solver_scaling.py       # Benchmark solver performance
-verify_curl_A_equals_B.py         # Verify Maxwell equation
-compare_radia_ngsolve.py          # Compare two methods
-visualize_field.py                # Visualize field data
-run_all_benchmarks.py             # Orchestrator script
+Path B: GMSH via NGSolve
+  CAD -> GMSH -> .msh -> NGSolve Mesh() -> netgen_mesh_import.py -> Radia
+
+Path C: Cubit for complex hex
+  CAD -> Cubit -> GMSH export -> Path A or B
 ```
 
-**Files to rename** (current violations):
+**Key import functions**:
 
-1. `background_fields/Cubit2Nastran.py` → `background_fields/cubit_to_nastran.py`
-2. `electromagnet/York_cubit_mesh.py` → `electromagnet/york_cubit_mesh.py`
-
-**Rationale**:
-- **Consistency**: Easy to scan and find scripts by purpose
-- **Clarity**: Prefix immediately indicates script type
-- **Python convention**: PEP 8 recommends snake_case for module names
-- **Sorting**: Related scripts group together alphabetically
-
----
-
-## Examples Folder Documentation Policy
-
-### Requirement: One README.md per Examples Subdirectory
-
-**Policy**: Every subdirectory under `examples/` MUST contain exactly one `README.md` file that serves as the entry point documentation for that example category.
-
-**Rules**:
-1. Each `examples/<category>/` directory must have a `README.md`
-2. The README.md should describe the purpose of the example category, list all scripts with brief descriptions, and note any prerequisites
-3. Do NOT create multiple `.md` files per examples subdirectory — consolidate all documentation into the single `README.md`
-4. When adding a new example script, update the corresponding `README.md` to include it
-
-**Structure**:
-```
-examples/
-├── electromagnet/
-│   ├── README.md              # Required: describes all electromagnet examples
-│   ├── sphere_in_quadrupole.py
-│   └── ...
-├── KelvinTransformation/
-│   ├── README.md              # Required: describes Kelvin transformation examples
-│   ├── H-formulation/
-│   │   ├── README.md          # Required for each subdirectory
-│   │   └── ...
-│   └── ...
-└── ...
-```
-
----
-
-## Mesh Generation Tools
-
-### Mesh Generation Policy by Element Order (2026-02-14)
-
-**CRITICAL**: Mesh generation workflow is determined by **element order** (polynomial degree).
-
-**2-Tier Policy**:
-
-| Element Order | geominfo | Workflow | Tools |
-|---------------|----------|----------|-------|
-| **1st + 2nd order** | **不要** | **GMSH direct** | GMSH, or Coreform Cubit -> GMSH export |
-| **3rd order+** | **必要** | **Netgen + Coreform via STEP** | Cubit + STEP + Netgen + `mesh.Curve(order)` |
-
-**Rationale**:
-1. **1st + 2nd order**: GMSH handles both. 1st order: Tet4, Hex8, Wedge6. 2nd order: Tet10, Hex20/27. GMSH places mid-edge nodes on CAD surfaces automatically if it has the geometry. Coreform Cubit's GMSH export also handles 2nd order. No geominfo needed.
-2. **3rd order+**: Accurate node placement on curved boundaries requires full OCC geometry information (`geominfo`). Only achievable through `mesh.Curve(order)` with OCC geometry from STEP import. Primary use: NGSolve FEM.
-
-**Hex generation constraint**:
-- GMSH: Only **structured hex** (Transfinite) - limited to simple geometries
-- **Non-structured hex**: Requires Coreform Cubit -> GMSH format export
-- Netgen: Tet only (no hex generation)
-
-**Radia element support status**:
-- **1st order**: Supported (Tet4, Hex8, Wedge6)
-- **2nd order**: Future (Tet10, Hex20 - same GMSH workflow, Radia C++ extension needed)
-
----
-
-### 1st + 2nd Order Elements: GMSH Direct
-
-**GMSH** is the standard mesh generator for Radia.
-
-**Supported Element Types**:
-
-| Application | Mesh Type | GMSH Command | 1st Order | 2nd Order |
-|-------------|-----------|--------------|-----------|-----------|
-| **Magnetic (MMM/MSC)** | Volume | `generate(3)` | Tet4, Hex8, Wedge6 | Tet10, Hex20/27 |
-| **Conductors (PEEC)** | **Surface ONLY** | `generate(2)` | Tri3, Quad4 | Tri6, Quad8/9 |
-
-**Import Paths**:
-
-```
-Path A: GMSH direct import (no NGSolve dependency)
-  CAD -> GMSH -> .msh file -> gmsh_mesh_import.py -> Radia objects
-
-Path B: GMSH via NGSolve (with NGSolve integration)
-  CAD -> GMSH -> .msh file -> NGSolve Mesh() -> netgen_mesh_import.py -> Radia objects
-
-Path C: Coreform Cubit (complex hex geometry)
-  CAD -> Cubit -> GMSH export (.msh) -> Path A or B
-```
-
-**Path A - Direct GMSH import** (recommended for standalone Radia):
-
-```python
-import radia as rad
-from gmsh_mesh_import import gmsh_to_radia
-
-rad.FldUnits('m')
-
-# Import GMSH mesh directly (no NGSolve needed)
-core = gmsh_to_radia('ferrite_core.msh', mu_r=1000)
-
-# Or with options
-core = gmsh_to_radia('ferrite_core.msh',
-                      mu_r=1000,
-                      physical_group=1,     # Filter by GMSH physical group
-                      unit_scale=0.001)     # mm -> m conversion
-
-rad.Solve(core, 0.0001, 1000, 0)
-```
-
-**Path B - GMSH via NGSolve**:
-
-```python
-from ngsolve import Mesh
-from netgen_mesh_import import netgen_mesh_to_radia
-import radia as rad
-
-rad.FldUnits('m')
-mesh = Mesh('geometry.msh')
-mag_obj = netgen_mesh_to_radia(mesh,
-                                material={'magnetization': [0, 0, 0]},
-                                units='m',
-                                material_filter='magnetic')
-```
-
-**PEEC Surface-Only Rationale**:
-1. **Skin effect**: High-frequency currents concentrate at surface
-2. **SIBC**: Surface Impedance Boundary Condition models interior current distribution
-3. **Efficiency**: Surface mesh provides sufficient accuracy without volume discretization
-
-**CAD Import**: GMSH directly imports STEP, IGES, BREP, STL
-
----
-
-### 3rd Order+ Elements: Netgen + Coreform via geominfo
-
-**Status**: For NGSolve FEM only. Radia BEM does not need 3rd+ order.
-
-**Workflow**:
-```
-Cubit (CAD modeling) -> STEP export -> Netgen (import + mesh) -> mesh.Curve(order) -> NGSolve FEM
-```
-
-**Implementation**:
-
-```python
-from netgen.occ import OCCGeometry
-from ngsolve import Mesh
-
-# Import STEP file (created in Cubit)
-geo = OCCGeometry('model.step')
-
-# Generate mesh
-ngmesh = geo.GenerateMesh(maxh=0.05)
-
-# Create NGSolve mesh and curve for high-order accuracy
-mesh = Mesh(ngmesh)
-mesh.Curve(3)  # 3rd order curved elements - requires geominfo from OCC
-
-# Now use with NGSolve FEM (NOT Radia)
-```
-
-**Key Points**:
-- `mesh.Curve(order)` requires OCC geometry information (geominfo) to place nodes on curved surfaces
-- This is only available when meshing from OCC geometry (STEP import), not from .msh files
-- Primary use case: NGSolve FEM with high-order accuracy for curved domains
-
----
-
-### Tool Selection by Element Type
-
-| Element Type | Tool | Notes |
-|--------------|------|-------|
-| **Tet4/Tet10** | **GMSH** (recommended) | CAD import (STEP/IGES), `generate(3)` |
-| Tet4 | **Netgen** | Simple geometry. `netgen.occ.Box` + `OCCGeometry.GenerateMesh()` |
-| **Hex8/Hex20** | **GMSH** (structured) | Transfinite meshing for simple geometries |
-| Hex8/Hex20 | **Coreform Cubit** (non-structured) | Required for complex hex geometries |
-| **Wedge6** | **GMSH** or **Cubit** | Transition elements |
-| **Surface mesh (PEEC)** | **GMSH** (recommended) | Conductor surface only, `generate(2)` |
-| High-order (3rd+) | **Netgen + Cubit via STEP** | NGSolve FEM only, requires geominfo |
-
-**Notes**:
-- Nastran BDF format is **REMOVED**. Use Cubit to read legacy .bdf files if needed.
-- **1st + 2nd order**: Use `gmsh_mesh_import.py` (standalone) or NGSolve `Mesh()` (with NGSolve)
-- **PEEC conductors require surface mesh ONLY** - no volume discretization needed
+| Module | Function | Purpose |
+|--------|----------|---------|
+| `gmsh_mesh_import` | `gmsh_to_radia(file, mu_r, ...)` | GMSH .msh -> Radia (no NGSolve) |
+| `netgen_mesh_import` | `netgen_mesh_to_radia(mesh, ...)` | NGSolve mesh -> Radia |
+| `netgen_mesh_import` | `create_hex_mesh_grid(...)` | Structured hex (no external tool) |
 
 ### Coreform Cubit Mesh Export
 
-For complex hexahedral meshes, use the **Coreform Cubit Mesh Export** tool:
+For complex hexahedral meshes, use the **Coreform Cubit Mesh Export** tool.
 
 **Repository**: https://github.com/ksugahar/Coreform_Cubit_Mesh_Export
-
-**Features**:
-- Export Cubit meshes directly to Python (no file I/O needed)
-- Export to GMSH format (.msh) for Radia import (1st and 2nd order)
-- Export to Netgen format for NGSolve integration
-- Supports hexahedral, tetrahedral, and mixed element meshes
-
-**Usage with Radia**:
-
-```python
-# Option 1: Cubit -> GMSH -> gmsh_mesh_import (no NGSolve needed)
-from gmsh_mesh_import import gmsh_to_radia
-core = gmsh_to_radia('cubit_exported.msh', mu_r=1000)
-
-# Option 2: Cubit -> GMSH -> NGSolve (with NGSolve integration)
-from ngsolve import Mesh
-from netgen_mesh_import import netgen_mesh_to_radia
-mesh = Mesh('cubit_exported.msh')
-mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
-```
-
-**Note**: This is the recommended workflow for complex hexahedral geometries that GMSH structured meshing cannot handle.
-
-### Coupled PEEC+MMM Mesh Import (2026-02-14)
-
-**Policy**: For coupled PEEC+MMM simulations, use **GMSH** (or Coreform Cubit -> GMSH export) for magnetic core meshes.
-
-**Recommended Workflows**:
-
-```python
-# Workflow 1: GMSH direct import (simplest)
-import radia as rad
-from gmsh_mesh_import import gmsh_to_radia
-
-rad.FldUnits('m')
-core = gmsh_to_radia('ferrite_core.msh', mu_r=1000)
-
-# Workflow 2: Via FastHenry .magnetic block (type=mesh)
-# .magnetic
-#   type=mesh
-#   file=ferrite_core.msh
-#   mu_r=1000
-# .endmagnetic
-
-# Workflow 3: Complex hex geometry via Cubit -> GMSH
-# In Cubit: create geometry, mesh, export to GMSH
-# In Python:
-core = gmsh_to_radia('cubit_exported.msh', mu_r=1000)
-```
-
-**Key Points**:
-- **ObjCnt**: `gmsh_to_radia()` returns a container grouping all mesh elements
-- **Multi-element**: Each element contributes to MMM interaction matrix
-- **Physical groups**: Use GMSH physical groups to filter materials
-- **GMSH handles hex**: Structured hex (Transfinite) or via Cubit export
-
-**Coreform Cubit** (for complex hex geometries):
-
-**Repository**: `S:\CoreformCubit\01_GitHub` contains `cubit_mesh_export` utilities
 
 ```python
 # Cubit -> GMSH -> Radia (recommended for complex hex)
 from gmsh_mesh_import import gmsh_to_radia
-core = gmsh_to_radia('cubit_hex_mesh.msh', mu_r=1000)
+core = gmsh_to_radia('cubit_exported.msh', mu_r=1000)
 ```
 
-### PEEC Conductor Mesh Policy
+Cubit workflow for journal files: define blocks before export, use `cubit_mesh_export` utilities.
 
-**Policy (2026-02-14)**: For PEEC conductor meshes, use **GMSH** for surface mesh generation.
+### PEEC Conductor Mesh
 
-**Rationale**:
-1. **GMSH**: Native CAD import (STEP, IGES), surface mesh generation `generate(2)`
-2. **Coreform Cubit**: For complex geometries, export to GMSH format
-3. **Surface-only**: PEEC conductors use surface mesh (SIBC handles skin effect)
+PEEC conductors use **surface mesh only** (SIBC handles skin effect). Use GMSH `generate(2)` for surface meshes. Supported: Tri3, Quad4 (1st order), Tri6, Quad8/9 (2nd order).
 
-**Current Limitation**:
-- Radia currently supports **1st order elements only** (linear)
-- Curved surface approximation uses piecewise-linear facets
-- 2nd order elements planned (GMSH -> Netgen path)
+### Nastran Format: REMOVED
 
-**Workflow**:
+Nastran BDF support is **REMOVED**. Use Cubit -> Netgen direct export. Cubit can read legacy `.bdf` files if needed.
+
+### Mesh Operations: Dropped APIs
+
+`ObjDivMag`, `ObjDivMagPln`, `ObjCutMag` are NOT supported. All mesh operations use external tools (GMSH, Cubit).
+
+### Mesh File Preservation
+
+**NEVER DELETE** mesh files (`.bdf`, `.nas`, `.msh`, `.vtk`), Cubit journal files (`.jou`), or mesh generation scripts. These are difficult to recreate.
+
+### Available Mesh Access Functions
+
+From `src/radia/netgen_mesh_import.py`:
+- `netgen_mesh_to_radia()` -- Convert entire mesh to Radia (recommended)
+- `extract_elements()` -- Extract element data for custom processing
+- `compute_element_centroid()` -- Centroid from vertex list
+- `create_radia_tetrahedron()` / `create_radia_hexahedron()` -- Single elements
+- `create_hex_mesh_grid()` -- Structured hex grid (no external tool)
+- Constants: `TETRA_FACES`, `HEX_FACES`, `WEDGE_FACES`, `PYRAMID_FACES` (1-indexed face topology)
+
+---
+
+## H-Matrix Acceleration (HACApK)
+
+### Policy: Use HACApK Only
+
+**POLICY**: Do NOT implement custom H-matrix algorithms. Use the HACApK library at `src/ext/HACApK_LH-Cimplm/` (MIT license).
+
+**Solver Methods**:
+
+| Method | Name | Use Case |
+|--------|------|----------|
+| 0 | LU | Small problems (N < 500), guaranteed convergence |
+| 1 | BiCGSTAB | General purpose, medium problems |
+| 2 | HACApK | Large problems (N > 1000), O(N log N) memory |
+
+**ソルバー選択ガイドライン**:
+- **小規模 (N<500)**: LU推奨 (確実な収束)
+- **中規模 (500<N<2000)**: BiCGSTAB推奨 (最速)
+- **大規模 (N>2000)**: HACApK推奨 (メモリ効率)
+
+### HACApK Parameters
 
 ```python
-# GMSH surface mesh for conductors
-# gmsh.model.mesh.generate(2)  # Surface mesh only
-# gmsh.write('conductor.msh')
-
-# Import surface mesh for PEEC
-from ngsolve import Mesh
-mesh = Mesh('conductor.msh')
-# Use PEECBuilder for circuit extraction
+rad.SetHACApKParams(eps, leaf_size, eta)
 ```
 
-### Mesh Import Functions
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| eps | 1e-4 | ACA tolerance (1e-6 to 1e-2) |
+| leaf_size | 10 | Minimum cluster size |
+| eta | 2.0 | Admissibility parameter |
 
-**Functions** for importing meshes into Radia:
+See `docs/HMATRIX_EVALUATION.md` for full evaluation report.
 
-| Module | Function | Purpose |
-|--------|----------|---------|
-| `gmsh_mesh_import` | `gmsh_to_radia(filename, mu_r, ...)` | **GMSH .msh -> Radia** (recommended, no NGSolve) |
-| `gmsh_mesh_import` | `read_gmsh(filename)` | Parse GMSH .msh file to dict |
-| `gmsh_mesh_import` | `get_mesh_info(filename)` | Get mesh statistics |
-| `netgen_mesh_import` | `netgen_mesh_to_radia(mesh, ...)` | NGSolve mesh -> Radia |
-| `netgen_mesh_import` | `cubit_hex_to_radia(hex_elements, ...)` | Cubit hex data -> Radia |
-| `netgen_mesh_import` | `create_hex_mesh_grid(center, size, divisions, ...)` | Structured hex mesh (no external tool) |
-
-**Usage - GMSH direct** (recommended for 1st order):
+### Under-Relaxation for Nonlinear Problems
 
 ```python
-import radia as rad
-from gmsh_mesh_import import gmsh_to_radia
-
-rad.FldUnits('m')
-
-# Simple: import GMSH mesh as magnetic core
-core = gmsh_to_radia('ferrite_core.msh', mu_r=1000)
-
-# With options
-core = gmsh_to_radia('ferrite_core.msh',
-                      mu_r=1000,
-                      physical_group=1,   # Filter by GMSH physical group
-                      unit_scale=0.001)   # mm -> m conversion
-```
-
-**Usage - Structured hex grid** (no external tool):
-
-```python
-from netgen_mesh_import import create_hex_mesh_grid
-
-core = create_hex_mesh_grid(
-    center=[0, 0, 0],
-    size=[0.03, 0.03, 0.03],  # 30mm cube
-    divisions=[3, 3, 3],       # 27 elements
-    mu_r=1000
-)
+rad.SetRelaxParam(0.3)  # 30% damping (0.0 = full step)
+rad.Solve(container, 0.0001, 1000, 1)
+rad.SetRelaxParam(0.0)  # Reset to full step
 ```
 
 ---
 
-## Mesh Operations Policy (2026-02-14)
+## IMA (Image Method of Analysis)
 
-### Mesh APIs Dropped
+### IMA Sign Selection Policy
 
-**CRITICAL**: Radia's internal mesh operation APIs are **NOT SUPPORTED**.
-
-**Dropped APIs**:
-- `ObjDivMag` - Internal mesh subdivision (REMOVED)
-- `ObjDivMagPln` - Plane-based subdivision (REMOVED)
-- `ObjCutMag` - Cutting objects by plane (REMOVED from Python API)
-
-**Policy**: All mesh operations use external tools:
-- **1st order**: GMSH direct (`gmsh_mesh_import.py`) or Coreform Cubit -> GMSH export
-- **2nd order**: GMSH -> Netgen, or Coreform Cubit -> GMSH export
-- **3rd order+**: Netgen + Coreform Cubit via STEP/geominfo
-
-**Key Mesh Import Modules**:
-
-| Module | Primary Use | NGSolve Required? |
-|--------|------------|-------------------|
-| `gmsh_mesh_import` | **1st order GMSH .msh -> Radia** | No |
-| `netgen_mesh_import` | NGSolve mesh -> Radia, Cubit hex import | Yes |
-
-**Workflow Summary**:
+| Field vs Mirror Plane | IMA Sign |
+|----------------------|----------|
+| Field **parallel** to mirror | **+** (symmetric) |
+| Field **perpendicular** to mirror | **-** (antisymmetric) |
 
 ```python
-import radia as rad
-rad.FldUnits('m')
+# Z-field, X-Z quarter model
+rad.Solve(container, 0.0001, 100, 0, image='+x-z')  # Bz parallel to X-mirror, perp to Z-mirror
 
-# Method 1: GMSH direct import (recommended, no NGSolve needed)
-from gmsh_mesh_import import gmsh_to_radia
-core = gmsh_to_radia('ferrite_core.msh', mu_r=1000)
-
-# Method 2: Structured hex grid (no external tool)
-from netgen_mesh_import import create_hex_mesh_grid
-core = create_hex_mesh_grid(center=[0,0,0], size=[0.1,0.1,0.1],
-                            divisions=[3,3,3], mu_r=1000)
-
-# Method 3: NGSolve mesh (with NGSolve integration)
-from netgen_mesh_import import netgen_mesh_to_radia
-core = netgen_mesh_to_radia(ngsolve_mesh, material={'magnetization': [0,0,0]})
+# X-field, X-Z quarter model
+rad.Solve(container, 0.0001, 100, 0, image='-x+z')
 ```
 
-**Note**: Legacy examples using `ObjDivMag` or `ObjCutMag` are DEPRECATED and will not run.
+### IMA Boundary Element Limitation
 
----
+IMA produces incorrect results for **boundary elements** (faces ON symmetry plane) when observation points are **also on the symmetry plane** (~0.5x magnitude). Off-plane observation points work correctly (fixed 2026-02-04).
 
-## MSC (Magnetic Surface Charge) Method
-
-### Overview
-
-Radia uses **MSC (Magnetic Surface Charge)** for all hexahedral elements:
-
-| Element Type | Faces | DOF | Python API | Use Case |
-|--------------|-------|-----|------------|----------|
-| **Tetrahedron** | 4 triangular | 3 (Mx, My, Mz) | `ObjTetrahedron()` | Complex curved geometry |
-| **Wedge** | 5 (2 tri + 3 quad) | 5 (sigma per face) | `ObjWedge()` | Transition elements in EIEM2 meshes |
-| **Hexahedron** | 6 quadrilateral | 6 (sigma per face) | `ObjHexahedron()` | Permanent magnets, soft iron |
-
-**Policy (2025-12-27, updated 2026-02-07)**:
-- **Python API**: Use `ObjHexahedron()`, `ObjWedge()`, and `ObjTetrahedron()` for individual elements
-- **Mesh import**: Use `netgen_mesh_to_radia()` for Netgen meshes
-- **Tetrahedron**: 3 DOF (Mx, My, Mz) - MMM method with uniform magnetization
-- **Wedge**: 5 DOF (sigma per face) - MSC method with surface charges on 2 tri + 3 quad faces
-- **Hexahedron**: 6 DOF (sigma per face) - MSC method with surface charges
-- 3 DOF hexahedron (MMM) is NOT supported - all hexahedra use 6 DOF MSC
-
-**Python APIs for element creation**:
-- `rad.ObjHexahedron(vertices, magnetization)` - 8 vertices, auto-generates faces
-- `rad.ObjTetrahedron(vertices, magnetization)` - 4 vertices, auto-generates faces
-- `netgen_mesh_import.netgen_mesh_to_radia()` - Batch import from Netgen mesh
-
-### Implementation
-
-**Source files** (`src/core/`):
-- `rad_polyhedron.cpp`: Element type detection and dispatch
-- `B_comp_tetrahedron_MSC()`: 4-face tetrahedral field computation
-- `B_comp_hexahedron_MSC()`: 6-face hexahedral field computation
-- `FieldFromChargedTriangle()`: Analytic field from charged triangle (solid angle formula)
-- `FieldFromQuadFace()`: Quad face split into 2 triangles
-- `rad_poly_analytical.cpp`: `RadFieldFromTriangleFaceGlobal()` for triangle integration
-
-**Key Features**:
-- Uses **global coordinates** directly (no local coordinate transformations)
-- Computes field using **solid angle integration** formula (van Oosterom & Strackee, 1983)
-- Handles **outward normal orientation** automatically
-
-### EIEM2 Evaluation Point Convention (2026-02-08)
-
-**CRITICAL**: Radia's MSC implementation matches **ELF's EIEM2** (Element Integral Equation Method, Order 2) exactly.
-
-**Evaluation Point**: The interaction matrix evaluation point for face `i` is the **midpoint between the face center and the element center**:
-
-```cpp
-EvalPt = 0.5 * (FaceCenter[i] + ElementCenter)
-```
-
-**Do NOT change this evaluation point**. This is the correct EIEM2 convention used in ELF.
-
-**Face Center**: Geometric centroid (arithmetic mean of 4 face vertices in global 3D coordinates). Matches ELF convention.
-
-**Element Center (CentrPoint)**: Arithmetic mean of all 8 hex vertices in global 3D coordinates.
-
-**Source Files**:
-- `rad_interaction.cpp`: `PrecomputeHexaGeometry()` stores eval points in `m_hexaEvalPoints`
-- `rad_interaction.cpp`: `SetupInteractMatrix_VariableDOF()` uses same eval point formula
-- `rad_hacapk.cpp`: On-demand 6x6 block computation uses same eval point formula
-
-### Quick Start
-
-**Tetrahedral mesh (Netgen)**:
-
-```python
-import radia as rad
-from netgen.occ import Box, Pnt, OCCGeometry
-from ngsolve import Mesh
-from netgen_mesh_import import netgen_mesh_to_radia
-
-rad.FldUnits('m')
-
-# Generate tetrahedral mesh
-cube_solid = Box(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))
-cube_solid.mat('magnetic')
-geo = OCCGeometry(cube_solid)
-mesh = Mesh(geo.GenerateMesh(maxh=0.3))
-
-# Import to Radia (uses MSC automatically)
-mag_obj = netgen_mesh_to_radia(mesh,
-                                material={'magnetization': [0, 0, 0]},
-                                units='m',
-                                material_filter='magnetic')
-
-# Apply material and solve
-mat = rad.MatLin(999)  # mu_r = 1000
-rad.MatApl(mag_obj, mat)
-rad.Solve(mag_obj, 0.0001, 1000, 1)  # Method 1 = BiCGSTAB
-```
-
-**Hexahedral mesh (Netgen)**:
-
-```python
-import radia as rad
-from netgen.occ import Box, Pnt, OCCGeometry
-from ngsolve import Mesh
-from netgen_mesh_import import netgen_mesh_to_radia
-
-rad.FldUnits('m')
-
-# Generate hexahedral mesh using Netgen
-# Note: Netgen generates tetrahedral meshes by default
-# For true hexahedral meshes, use structured mesh generation
-cube_solid = Box(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))
-cube_solid.mat('magnetic')
-geo = OCCGeometry(cube_solid)
-mesh = Mesh(geo.GenerateMesh(maxh=0.3))
-
-# Import to Radia
-mag_obj = netgen_mesh_to_radia(mesh,
-                                material={'magnetization': [0, 0, 0]},
-                                units='m',
-                                material_filter='magnetic')
-
-# Apply material and solve
-mat = rad.MatLin(999)  # mu_r = 1000
-rad.MatApl(mag_obj, mat)
-rad.Solve(mag_obj, 0.0001, 1000, 1)
-```
-
-### Benchmark Results (2025-12-19)
-
-**Nonlinear Material (H_ext = 50,000 A/m)**:
-
-| Element Type | N_elem | Solver | Iterations | M_avg_z (A/m) |
-|--------------|--------|--------|------------|---------------|
-| Hexahedral MSC | 125 | LU | 3 | 173,400 |
-| Tetrahedral MSC | ~200 | LU | 2 | ~190,000 |
-
-**Notes**:
-- Tetrahedron: 3 DOF (Mx, My, Mz) - uniform magnetization
-- Hexahedron: 6 DOF (sigma per face) - surface charge density
-- LU solver (Method 0) and BiCGSTAB (Method 1) both work
-
-### IMA Symmetry and Field Direction (2026-01-29)
-
-**Important**: IMA (Image Method of Analysis) behavior depends on the relationship between field direction and mirror plane. This is an **electromagnetic phenomenon**, not an MSC-specific limitation.
-
-**Physical Phenomenon**:
-
-For Z-mirror symmetry with Z-directed field:
-- Magnetization M is the **SAME** in both cubes (M1 = M2) - physically correct
-- But MSC uses surface charge sigma = M · n as DOF
-- When geometry is Z-mirrored, z-face normals flip: n_mirror = -n_original
-- Therefore: sigma_mirror = M · n_mirror = -sigma_original
-
-| Configuration | M relationship | sigma relationship | IMA |
-|---------------|----------------|-------------------|-----|
-| X-mirror + Z-field | M1 = M2 | sigma_m = sigma_o | **Works** |
-| Z-mirror + Z-field | M1 = M2 | sigma_m = -sigma_o | Uses explicit elements |
-
-**Electromagnetic Basis**:
-- The induced magnetization M is symmetric regardless of field direction
-- The surface charge sigma = M · n depends on face normal direction
-- When field is perpendicular to mirror, sigma becomes antisymmetric (opposite signs)
-- This is correct physics, not a bug
-
-**IMA Sign Selection Policy** (2026-02-05):
-
-| Field Direction vs Mirror Plane | IMA Sign | Physical Meaning |
-|--------------------------------|----------|------------------|
-| Field **parallel** to mirror plane | **+** (symmetric) | Same field on both sides |
-| Field **perpendicular** to mirror plane | **-** (antisymmetric) | Field reverses across plane |
-
-**Example - Quarter Model with Z-field**:
-```python
-# Z-directed field with X-Z quarter model
-# - X-mirror (yz plane): Bz is PARALLEL to mirror plane -> use +x
-# - Z-mirror (xy plane): Bz is PERPENDICULAR to mirror plane -> use -z
-rad.Solve(container, 0.0001, 100, 0, image='+x-z')  # Correct for Z-field
-```
-
-**Example - Quarter Model with X-field**:
-```python
-# X-directed field with X-Z quarter model
-# - X-mirror (yz plane): Bx is PERPENDICULAR to mirror plane -> use -x
-# - Z-mirror (xy plane): Bx is PARALLEL to mirror plane -> use +z
-rad.Solve(container, 0.0001, 100, 0, image='-x+z')  # Correct for X-field
-```
-
-**Additional Recommendations**:
-1. **MMM (3-DOF tetrahedra)**: Uses M as DOF, IMA works for all field directions
-2. **MSC (6-DOF hexahedra)**: Follow the sign policy strictly
-3. **Boundary elements**: Avoid elements with faces ON the symmetry plane
-
-### IMA Boundary Element Limitation (2026-02-03, Updated 2026-02-04)
-
-**Known Limitation**: IMA field computation produces incorrect results for **boundary elements** (elements with faces ON the symmetry plane) when observation points are **also on the symmetry plane**.
-
-**Partial Fix (2026-02-04)**: Boundary faces now correctly handle off-plane observation points by negating sigma to account for the opposite normal direction of the mirror element's boundary face.
-
-**Problem Description**:
-- When a hexahedral element has a face at z=0 (the symmetry plane) and observation point is also at z=0
-- The mirrored geometry coincides with the original geometry
-- The solid angle computation for points ON the face plane produces incorrect results
-- Result: Field magnitude is approximately **half** of the correct value (ratio ~0.5)
-
-**Affected Cases** (verified 2026-02-04 after fix):
-
-| Element Position | Mirror Type | Observation Point | IMA Result | Status |
-|------------------|-------------|-------------------|------------|--------|
-| Face at z=0 | -z (antisym) | **On z=0 plane** | **~0.5x** | **FAIL** |
-| Face at z=0 | -z (antisym) | Off z=0 (z offset) | ~1.0x | **PASS (fixed)** |
-| Face at z=0 | -z (antisym) | Off z=0 (x offset) | ~1.0x | **PASS** |
-| No boundary face | -z (antisym) | Any location | ~1.0x | **PASS** |
-| No boundary face | +x (sym) | Any location | ~1.0x | **PASS** |
-
-**Key Finding**: IMA now works correctly for boundary elements when observation points are OFF the symmetry plane. The remaining limitation only affects observation points exactly ON the symmetry plane.
-
-**Root Cause Analysis**:
-For boundary faces (face at z=0 under z-mirror):
-1. mirrorVerts[i] has SAME geometry as faceVertices[i] (vertices at z=0 don't move)
-2. The computed normal from cross product is n_computed (same as original)
-3. But the mirror element's boundary face has opposite normal: n_c2 = -n_computed
-4. The sigma for the mirror face is: sigma_c2 = M . n_c2 = -Sigma[i]
-5. **Fixed**: Use mirrorSigma = -Sigma[i] for boundary faces (negated sigma)
-6. **Remaining issue**: Solid angle computation fails for observation points ON the face plane
-
-**This remaining limitation is fundamental** - it's a geometric singularity in the MSC formulation:
-- The solid angle from a point ON a face has special behavior
-- The full model handles this correctly because c1's face 0 and c2's face 1 are geometrically distinct
-- In IMA, the mirrored boundary face overlaps exactly with the original, causing numerical issues
-
-**Workaround**: Use explicit element duplication for models with boundary elements:
-
-```python
-# INSTEAD of using IMA:
-# rad.Solve(container, 0.0001, 100, 0, image='+x-z')  # May fail for boundary elements
-
-# USE explicit element duplication:
-def x_mirror(verts):
-    return [[-v[0], v[1], v[2]] for v in verts]
-
-def z_mirror(verts):
-    return [[v[0], v[1], -v[2]] for v in verts]
-
-def xz_mirror(verts):
-    return [[-v[0], v[1], -v[2]] for v in verts]
-
-c1 = rad.ObjHexahedron(v_sheared, [0, 0, 0])
-c2 = rad.ObjHexahedron(x_mirror(v_sheared), [0, 0, 0])
-c3 = rad.ObjHexahedron(z_mirror(v_sheared), [0, 0, 0])
-c4 = rad.ObjHexahedron(xz_mirror(v_sheared), [0, 0, 0])
-
-container = rad.ObjCnt([c1, c2, c3, c4, bkg])
-rad.Solve(container, 0.0001, 100, 0)  # No image parameter - correct result
-```
+**Workaround**: Use explicit element duplication for models with boundary elements.
 
 **When IMA is Safe**:
-1. **Non-boundary elements only**: All elements are offset from symmetry planes
-2. **Observation points off-plane**: Observation points are not on symmetry planes
-3. **MMM (tetrahedra)**: 3-DOF magnetization method does not have this limitation
-
-### Documentation
-
-- [docs/MSC_QUICK_START.md](docs/MSC_QUICK_START.md): Quick start guide
-- [examples/cube_uniform_field/nonlinear/](examples/cube_uniform_field/nonlinear/): Nonlinear benchmark
+1. Non-boundary elements only (offset from symmetry planes)
+2. Observation points off-plane
+3. MMM (tetrahedra) -- no limitation
 
 ---
 
-## PyPI Package Structure (v1.3.8+)
+## PEEC & Conductor Solver
 
-### Package Directory: src/radia (NOT src/python)
+### Architecture Overview
 
-**Critical Requirement**: The package directory MUST be named `src/radia` for `pip install radia` to work correctly.
+**Approach**: PEEC (Partial Element Equivalent Circuit) with SIBC (Surface Impedance Boundary Condition) and ESIM (Effective Surface Impedance Method).
 
-**Rationale**:
-- `setuptools.find_packages(where="src")` discovers packages by directory name
-- If the directory is named `python`, the wheel creates `python/` folder, not `radia/`
-- Users would need `import python` instead of `import radia` - completely wrong!
+**Target**: Induction heating (1-500 kHz), WPT (6.78/13.56 MHz), power electronics (DC-1 MHz).
 
-**Correct Structure**:
+See `docs/` for detailed PEEC documentation.
+
+### Filament-Panel Architecture (FastImp Style)
+
 ```
-src/
-  radia/              # Package directory (import radia works)
-    __init__.py       # Re-exports symbols from radia.pyd
-    radia.pyd         # Core C++ extension module
-    radia_ngsolve.pyd # Optional NGSolve integration
-    *.py              # Python utility modules
+Surface Mesh -> Face -> Panel (Star: charge)  -> P matrix
+             -> Edge -> Filament (Loop: current) -> L, R matrices
 ```
 
-**__init__.py Requirements**:
-```python
-# Radia Python package
-__version__ = "1.3.8"
+Loop-Star basis transformation is NOT needed -- filaments and panels are inherently separate in PEEC.
 
-# Import all symbols from the C++ extension module
-try:
-    from radia.radia import *
-except ImportError:
-    from .radia import *
+### PEEC System Equation
+
+```
+[R + jwL + Zs    jwM_LS  ] [I_filament]   [V]
+[jwM_LS^T        P/(jw)  ] [Q_panel   ] = [0]
 ```
 
-**Key Points**:
-1. **Directory name = Package name**: `src/radia/` -> `import radia`
-2. **C++ module import**: `__init__.py` must re-export symbols from `radia.pyd`
-3. **setup.py package_data**: Use `"radia"` not `"python"` in package_data dict
-4. **Version sync**: Keep version consistent across `__init__.py`, `setup.py`, `pyproject.toml`
-
-### Build Policy: Always Use BuildRadiaInternal.ps1
-
-**CRITICAL**: Always use the standard build script to ensure .pyd files are correctly copied.
-
-**Policy**:
-1. **ALWAYS use `BuildRadiaInternal.ps1`** for building - NEVER use manual cmake commands
-2. The script automatically copies .pyd to `src/radia/radia.pyd` after build
-3. The script verifies the copy was successful
-
-**Standard Build Command**:
-```powershell
-# From project root directory:
-powershell.exe -ExecutionPolicy Bypass -File BuildRadiaInternal.ps1
-
-# With options:
-powershell.exe -ExecutionPolicy Bypass -File BuildRadiaInternal.ps1 -Rebuild  # Clean rebuild
-powershell.exe -ExecutionPolicy Bypass -File BuildRadiaInternal.ps1 -Verbose  # Verbose output
-```
-
-**Why This Matters**:
-- CMake outputs `radia.cp312-win_amd64.pyd` (version-tagged name)
-- Python package expects `src/radia/radia.pyd` (simple name)
-- Manual cmake builds do NOT copy/rename the .pyd file
-- Using old .pyd causes "AttributeError: module has no attribute" errors
-
-**What the Script Does**:
-1. Runs CMake configure and build
-2. Finds `radia.cp312-win_amd64.pyd` in `build-msvc/`
-3. Copies it to `src/radia/radia.pyd` (with rename)
-4. Verifies the copy with timestamp check
-
-**NEVER Do This**:
-```powershell
-# WRONG - Does NOT copy .pyd to src/radia
-cmake --build build-msvc --config Release --target radia
-
-# WRONG - Manual copy forgets the rename
-copy build-msvc\radia.cp312-win_amd64.pyd src\radia\
-```
-
-**If You Must Use Manual Commands** (not recommended):
-```powershell
-# Build
-cmake --build "s:\Radia\01_GitHub\build" --config Release --target radia
-
-# MUST copy with rename
-Copy-Item "build\Release\radia.cp312-win_amd64.pyd" "src\radia\radia.pyd" -Force
-
-# Verify
-(Get-Item "src\radia\radia.pyd").LastWriteTime
-```
-
-**Rationale**:
-- `src/radia/` is the package source directory
-- `python -m build` uses files from `src/radia/` to create wheels
-- Ensures wheel contains the latest built binaries
-- Avoids confusion about which .pyd is the "current" version
-
-**Note**: The `.gitignore` excludes `.pyd` files, so these copied files are NOT committed to git.
-
-**Testing Checklist** (before PyPI upload):
-1. Build wheel: `python -m build`
-2. Inspect wheel: `unzip -l dist/radia-x.y.z-py3-none-any.whl`
-3. Verify structure: Contents should show `radia/radia.pyd`, NOT `python/radia.pyd`
-4. Test install: `pip install dist/radia-x.y.z-py3-none-any.whl`
-5. Test import: `python -c "import radia; print(radia.__version__)"`
-
----
-
-## Benchmark Policy
-
-### ベンチマーク実行ルール
-
-1. **1ケース毎に実行**: 複数のソルバーやパラメータを比較する場合でも、1ケースずつ実行して結果を確認
-2. **シーケンシャル実行のみ**: ベンチマークは並列実行せず、必ず1つずつ順番に実行する（メモリ測定の正確性のため）
-3. **メモリ使用量を記録**: ピークメモリ使用量を測定し、結果JSONに含める
-
-### メモリ測定方法
-
-**psutil を使用**（C++拡張のメモリも含めて測定可能）:
+### Node-Segment Topology API
 
 ```python
-import psutil
-import os
+from peec_matrices import PyPEECBuilder
+from peec_topology import PEECCircuitSolver
 
-def get_peak_memory_mb():
-    """Get peak memory usage in MB (Windows: peak_wset)"""
-    process = psutil.Process(os.getpid())
-    mem_info = process.memory_info()
-    # Windows: peak_wset = peak working set size
-    # Linux/Mac: rss = resident set size (ピークは別途追跡必要)
-    if hasattr(mem_info, 'peak_wset'):
-        return mem_info.peak_wset / (1024 * 1024)  # MB
-    else:
-        return mem_info.rss / (1024 * 1024)  # MB (fallback)
+builder = PyPEECBuilder()
+n1 = builder.add_node_at(0, 0, 0)
+n2 = builder.add_node_at(0.1, 0, 0)
+builder.add_connected_segment(n1, n2, 1e-3, 1e-3, sigma=5.8e7)
+builder.add_port(n1, n2)
+topo = builder.build_topology()
+
+solver = PEECCircuitSolver(topo)
+Z = solver.compute_port_impedance(freq=1e6)
 ```
 
-**注意**: `tracemalloc` はPython内部のメモリのみ追跡するため、C++拡張モジュール (radia.pyd) のメモリは測定されない。
+### Multi-Filament (nwinc/nhinc)
 
-### 結果JSONフォーマット
-
-```json
-{
-  "n_elements": 1000,
-  "solver_method": 0,
-  "t_solve": 5.2,
-  "peak_memory_mb": 450.0,
-  "iterations": 6,
-  "M_avg_z": 149846.0
-}
-```
-
----
-
-## Field Comparison Policy (2026-02-06)
-
-### Vector Difference, Not Magnitude
-
-**CRITICAL**: When comparing magnetic field values between solvers or models, use **vector difference**, not scalar magnitude difference.
-
-**Correct Formula**:
+Use `nwinc`/`nhinc` parameters to subdivide conductor cross-sections for skin/proximity effect:
 ```python
-import numpy as np
-
-# Compare two field vectors B1 and B2
-B1 = np.array([Bx1, By1, Bz1])  # e.g., from LU solver
-B2 = np.array([Bx2, By2, Bz2])  # e.g., from BiCGSTAB solver
-
-# Vector difference (CORRECT)
-diff_vector = np.linalg.norm(B1 - B2)
-rel_diff = diff_vector / np.linalg.norm(B1) * 100  # Percentage
-
-# Magnitude-only comparison (INCOMPLETE - avoids)
-# diff_mag = abs(np.linalg.norm(B1) - np.linalg.norm(B2))  # WRONG
+builder.add_connected_segment(n1, n2, 3e-3, 3e-3, sigma=5.8e7, nwinc=3, nhinc=3)
 ```
 
-**Rationale**:
-1. **Direction matters**: Two vectors with same magnitude but different directions are NOT equal
-2. **Physical accuracy**: Magnetic field is a vector quantity
-3. **IMA validation**: Mirror symmetry may affect field direction differently than magnitude
+Guidelines: DC=1x1, moderate skin (d/delta~2-5)=3x3, strong skin (d/delta>5)=5x5+.
 
-**Example**:
+### FastHenry .inp Parser
+
 ```python
-# Good - vector comparison
-B_lu = np.array(rad.Fld(model_lu, 'b', point))
-B_bicg = np.array(rad.Fld(model_bicg, 'b', point))
-vector_diff = np.linalg.norm(B_lu - B_bicg)
-rel_diff = vector_diff / np.linalg.norm(B_lu) * 100
-print(f"Vector difference: {rel_diff:.4f}%")
-
-# Avoid - scalar comparison only
-# diff_z = abs(B_lu[2] - B_bicg[2]) / abs(B_lu[2]) * 100  # Incomplete
+from fasthenry_parser import FastHenryParser
+parser = FastHenryParser()
+parser.parse_file('inductor.inp')
+result = parser.solve()
 ```
 
-**Acceptance Criteria**:
-- Solver comparison (LU vs BiCGSTAB): < 0.1% vector difference
-- IMA vs Full model: < 1.0% vector difference
-- ELF reference comparison: < 5.0% vector difference (different implementations)
+Supports: `.Units`, `N`/`E` definitions, `.external`, `.freq`, `.default`, `.equiv`, `.magnetic` blocks, line continuation `+`.
 
----
+### Coupled PEEC + MMM
 
-## Naming Policy: External Project References
-
-### Do NOT Use "ELF" or "ELF_MAGIC" in Radia Codebase
-
-**Policy (2025-12-16)**:
-- **Do NOT use "ELF" or "ELF_MAGIC"** as terminology in Radia source code, documentation, or comments
-- The MSC (Magnetic Surface Charge) method in Radia is a **Radia-native implementation**
-- References to external projects should be kept to academic citations only
-
-**Rationale**:
-- Radia is an independent project with its own implementation
-- Avoid confusion with external codebases
-- Maintain clear intellectual property boundaries
-
-**Allowed**:
-- Academic citations in documentation (e.g., "Reference: Yano & Sugahara, J. Magn. Soc. Jpn., 2023")
-- General algorithm descriptions (e.g., "MSC method", "surface charge method")
-
-**Not Allowed**:
-- Variable/function names containing "ELF" (e.g., `ELF_MAGIC_compatible`)
-- Comments like "following ELF_MAGIC convention"
-- Documentation referring to "ELF_MAGIC format"
-
-**Migration**: If existing code contains "ELF" references, replace with Radia-native terminology.
-
----
-
-## Logging and Debugging Policy
-
-### No Console Output from C++ Code
-
-**Policy (2025-12-21)**:
-- **Do NOT add printf/cout/cerr output in C++ code** for logging or debugging
-- All user-facing output should be handled through **Python scripts**
-- C++ code should be silent unless there is a critical error that requires immediate attention
-
-**Rationale**:
-- Python stdout/stderr can be captured and formatted properly
-- C++ printf may not appear in Python console depending on buffering
-- Keeps separation of concerns: C++ for computation, Python for user interaction
-
-**Allowed**:
-- Error messages via Radia's error handling system (`Send.ErrorMessage(...)`)
-- Debug output controlled by compile-time flags (`#ifdef DEBUG_...`)
-
-**Not Allowed**:
-- Unconditional `printf()`, `fprintf(stderr, ...)`, `std::cout`, `std::cerr`
-- Timing output from C++ code (use Python's `time.time()` instead)
-
-**Debugging Approach**:
-1. Use Python-side timing: `time.time()` before/after calls
-2. Use conditional compile flags: `#ifdef RADIA_DEBUG_TIMING`
-3. Write to file only when explicitly enabled by environment variable
-
----
-
-## Conductor Solver Policy: PEEC + Surface Impedance
-
-**Approach**:
-- **PEEC (Partial Element Equivalent Circuit)**: Loop-Star decomposition for coils and conductors
-- **SIBC (Surface Impedance Boundary Condition)**: Skin effect via analytical formulas
-- **ESIM (Effective Surface Impedance Method)**: Nonlinear/H-dependent surface impedance
-
-**Target Applications** (PEEC + SIBC covers):
-- **Induction heating**: 1 kHz - 500 kHz
-- **Wireless power transfer (WPT)**: 6.78 MHz, 13.56 MHz
-- **Power electronics**: DC - 1 MHz (inverters, converters, transformers)
-- **Eddy current analysis**: Low to medium frequency
-
-### NGSolve ngbem Integration
-
-Radia PEEC is designed to work alongside **NGSolve ngbem** for unified electromagnetic analysis.
-
-**ngbem** features:
-- Helmholtz kernel (full-wave)
-- H-matrix acceleration (HLib/H2Lib)
-- EFIE/MFIE/CFIE formulations
-- Native NGSolve integration
-
-**Current frequency allocation**:
-
-| Range | Solver | Use Case |
-|-------|--------|----------|
-| DC - 1 MHz | Radia PEEC + SIBC | Power electronics, WPT, transformers |
-| DC - 1 MHz | ngbem (Weggler EFIE) | Low-frequency BEM via product space |
-| 1 MHz - GHz | ngbem (Helmholtz) | RF heating, antennas, EMC/shielding |
-
-### ngbem Low-Frequency BEM (Verified)
-
-**Status**: Validated in `examples/peec_integration/ngsbem_peec_demo/`.
-
-**Principle**: ngbem の `HDivSurface × SurfaceL2` product space が自然に Loop-Star 分解を与え、
-DC～RF で条件数 O(1) を維持。Weggler の stabilized EFIE と等価。
-
-**Block system (Loop-Star)**:
-```
-| Z_LL    M_LS^T |   | I_loop |   | V_port |
-| M_LS    Z_SS   | * | Q_star | = | 0      |
-```
-- L = μ₀ · LaplaceSL(HDivSurface): Loop inductance
-- P = SingleLayerPotentialOperator(SurfaceL2) / ε₀: Star potential
-- M_LS = ∫div(J_edge)·φ_cell dS: Divergence coupling (charge conservation)
-
-**Dowell skin effect**: F_R(ξ) for AC resistance, added as Zs_func callback.
-
-**Port extraction (Schur complement)**:
-1. Solve Z_SS·X = M_LS (LDL^T, complex symmetric)
-2. Z_eff = Z_LL - M_LS^T·X
-3. Z_port = 1/(e^T·Z_eff^{-1}·e)
-
-**Coupled core models** (ngbem_coupled.py):
-
-| Model | Domain | μ_r | Notes |
-|-------|--------|-----|-------|
-| fembem (Calderon) | Unbounded | =1 only | Hz scalar; μ_r≠1 で不正確 |
-| vector_fembem | Unbounded | Any | Full vector formulation |
-| fem | Bounded | Any | Truncated domain |
-| radia (MMM) | Unbounded | Nonlinear | Static/time-domain向き |
-| BEM+SIBC | Fast | N/A | Mesh-independent loss |
-
-**Known limitations**:
-1. **fembem は μ_r=1 のみ** — Calderon Hz scalar formulation の制約
-2. **Loop-Star 分解は order=0 のみ完全** — 高次 Helmholtz decomposition (Andriulli 2008) 未実装
-3. **Radia core model は静的 μ_r のみ** — 周波数依存 eddy current 未対応
-4. **BEM+SIBC は maxh >> δ で perfect conductor 極限** — compute_loss_sibc() で回避
-
-**Solver strategy**:
-- Dense direct: scipy LDL^T (assume_a='sym') for complex symmetric BEM
-- Iterative: GMRes over COCG (BEM は COCG 単体で収束不安定)
-- Large-scale: NGSolve FMM acceleration
-
-**Typical parameters**:
-- Frequency: 10 Hz – 1 MHz
-- BEM assembly: intorder ≥ 5, Laplace kernel
-- Mesh: maxh = 1/5～1/20 of conductor dimension
-- Copper: σ=5.8e7 S/m, t=35μm
-
-**Reference code** (`examples/peec_integration/ngsbem_peec_demo/`):
-```
-ngbem_peec.py      — PEEC Loop-Star matrices (L, P, M_LS, R)
-ngbem_interface.py — Edge topology extraction for coupling
-ngbem_coupled.py   — Coupled core solver (FEM-BEM, Radia, etc.)
-test_dowell_comparison.py — FastHenry comparison & validation
+```python
+from peec_coupled import CoupledPEECSolver
+solver = CoupledPEECSolver(topology_dict, magnetic_objects=[core_id])
+solver.compute_coupling_matrix()  # N_seg Radia Solve calls
+Z = solver.compute_port_impedance(freq)
+Z_sweep = solver.frequency_sweep(freqs)
+L_total = solver.get_effective_inductance()  # L_air + Delta_L
 ```
 
-### Radia PEEC Unique Features
+For linear materials, `Delta_L` is frequency-independent (computed once).
 
-Even with ngbem low-frequency support, Radia PEEC provides:
+**Physics**: `Z_eff(f) = diag(R + Zs(f)) + jw * (L_air + Delta_L)` where Delta_L comes from Biot-Savart -> `rad.ObjBckg()` + `rad.Solve()` -> vector potential A -> mutual inductance.
 
-| Feature | Radia PEEC | ngbem |
-|---------|------------|-------|
-| **Circuit extraction** | Direct (L, R, C) | Post-processing needed |
-| **SPICE netlist** | Native output | Conversion needed |
-| **Lanczos MOR** | Implemented | Separate implementation |
-| **KAN/CFE learning** | Implemented | Not available |
-| **MMM coupling** | CplMag | FEM-BEM coupling |
-| **Schur complement** | Port extraction | Manual extraction |
+**FastHenry .magnetic Block** for coupled simulations:
+```
+.magnetic
+  type=box
+  center=0.05,0.01,0.0
+  size=0.06,0.01,0.01
+  mu_r=1000
+.endmagnetic
+```
+
+### SIBC Implementations
+
+| Conductor Type | Method | Library |
+|---------------|--------|---------|
+| Circular | Bessel I0/I1 | `scipy.special.iv` |
+| Rectangular (d << w) | Dowell formula | C++ rad_peec_surface_impedance.cpp |
+| Nonlinear magnetic | ESIM cell problem | `esim_cell_problem.py` |
+
+**Bessel**: Use `scipy.special.iv` (modified Bessel), NOT `jv` (regular Bessel). MKL does not provide Bessel functions.
+
+### ESIM (Effective Surface Impedance Method)
+
+ESIM solves 1D cell problem for H-dependent surface impedance: `d/dz[(1/mu(z)) * dH/dz] = jw*sigma*H`.
+
+Supports complex permeability: `mu = mu' - j*mu"` for magnetic hysteresis/grain eddy current losses.
+
+Use for: induction heating workpieces, nonlinear iron cores, lossy ferrite at high frequency.
+
+Reference: `src/radia/esim_cell_problem.py`, `src/radia/esim_coupled_solver.py`.
+
+### Deleted Legacy PEEC APIs
+
+The following C++ APIs are **REMOVED**: `CndLoop`, `CndRecBlock`, `CndLoopFromHelix`, `CplMagCreate`, `CplMagSolve`, `CplMagSetFrequency`, `CndHexahedron`, `CndWire`, `CndSpiral`, `MatSIBC`. Use `PEECBuilder` and `CoupledPEECSolver` instead.
+
+### PRIMA Model Order Reduction
+
+**POLICY**: Use PRIMA (not CLN/Cauer) terminology. Both use Lanczos tridiagonalization; PRIMA (1998, IEEE TCAD) is the standard reference.
+
+Key classes: `SPICEExtractionConfig`, `PRIMASchurExtractor`, `LoopStarMagneticCoupled` in `lanczos_reduction.py`.
+
+### ngbem Integration
+
+Radia PEEC works alongside NGSolve ngbem:
+
+| Range | Solver |
+|-------|--------|
+| DC - 1 MHz | Radia PEEC + SIBC |
+| DC - 1 MHz | ngbem (Weggler EFIE, low-freq stable) |
+| 1 MHz - GHz | ngbem (Helmholtz) |
+
+Radia PEEC unique features: direct circuit extraction (L, R, C), native SPICE netlist, Lanczos MOR, MMM coupling.
 
 ### Integration Architecture
 
@@ -2869,695 +672,135 @@ Even with ngbem low-frequency support, Radia PEEC provides:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### PRIMA Model Order Reduction
+### PEEC Source Files
 
-**Policy**: Use PRIMA (not CLN/Cauer) terminology for model order reduction.
+**C++ Core**:
+- `src/core/rad_peec_matrices.h/cpp` -- PEECSegment, PEECPort, PEECMatrices, MutualInductance
+- `src/core/rad_peec_surface_impedance.cpp` -- Dowell formula
+- `src/lib/rad_peec_matrices_api.cpp` -- pybind11 bindings
 
-**PRIMA vs CLN Equivalence**:
-- Both use **Lanczos tridiagonalization** to produce RL ladder networks
-- Mathematically identical: tridiagonal matrix -> series RL ladder
-- PRIMA (1998, IEEE TCAD) is the standard academic reference
-- CLN is a later repackaging with potential patent ambiguity
-
-**Implementation** (in `lanczos_reduction.py`):
-```python
-# PRIMASchurExtractor class handles:
-# - PRIMA Lanczos with re-orthogonalization (higher accuracy)
-# - Per-group ACA tolerance (magnetic, dielectric, conductor)
-# - Schur complement for port impedance extraction
-# - SPICE netlist generation
-```
-
-**Key Classes**:
-- `SPICEExtractionConfig`: Configuration with Lanczos order and ACA tolerances
-- `PRIMASchurExtractor`: Full SPICE extraction workflow
-- `LoopStarMagneticCoupled`: Loop-Star basis transformation
-
-**Configuration Example**:
-```python
-config = SPICEExtractionConfig(
-    n_lanczos_loop=20,          # Lanczos order for conductor loops
-    n_lanczos_star=10,          # Lanczos order for capacitive nodes
-    aca_tol_magnetic=1e-3,      # ACA tolerance for magnetic elements
-    aca_tol_dielectric=1e-4,    # ACA tolerance for dielectric elements
-    aca_tol_conductor=1e-5,     # ACA tolerance for conductor/shield
-    port_indices=[0, 1],
-)
-```
-
-**Rationale**:
-1. **Low-frequency stability**: Eliminates breakdown at DC (jomega*L -> 0)
-2. **MQS validity**: At power frequencies, displacement current is negligible
-3. **Circuit extraction**: Direct mapping to RLC ladder elements
-4. **Passivity**: PRIMA Lanczos preserves passivity
-5. **Re-orthogonalization**: Higher accuracy than plain Lanczos
+**Python**:
+- `src/radia/peec_topology.py` -- PEECCircuitSolver (MNA nodal admittance)
+- `src/radia/peec_coupled.py` -- CoupledPEECSolver
+- `src/radia/fasthenry_parser.py` -- FastHenry .inp parser
+- `src/radia/esim_cell_problem.py` -- ESIM cell problem solver
+- `src/radia/lanczos_reduction.py` -- PRIMA model order reduction
 
 ---
 
-## Complex Permeability and ESIM Policy
+## Material Specification
 
-### Complex Permeability Support (2026-01-09)
-
-Radia SIBC (Surface Impedance Boundary Condition) supports **complex permeability**:
-
-```
-μ = μ' - jμ"
-```
-
-Where:
-- **μ'** (real part): Energy storage, determines reactive power
-- **μ"** (imaginary part): Energy loss from magnetic hysteresis/eddy currents in grains
-- **Loss tangent**: tan(δ_m) = μ" / μ'
-
-**Physical Effects**:
-
-| Component | Physical Meaning | Power |
-|-----------|------------------|-------|
-| μ' | Magnetic energy storage | Reactive: Q' = (ω/2) * μ' * |H|^2 |
-| μ" | Magnetic loss | Active: P_mag = (ω/2) * μ" * |H|^2 |
-
-**API Usage**:
+### MatLin - Linear Materials
 
 ```python
-from esim_cell_problem import ESIMCellProblemSolver
-
-# Constant complex permeability (ferrite at 50 kHz)
-solver = ESIMCellProblemSolver(
-    sigma=0.01,           # S/m (ferrite is nearly insulating)
-    frequency=50000,      # Hz
-    complex_mu=(2000, 200)  # (μ'_r, μ"_r)
-)
-
-# H-dependent complex permeability (saturable ferromagnetic)
-complex_mu_data = [
-    [0, 2000, 200],      # [H (A/m), μ'_r, μ"_r]
-    [1000, 1000, 100],
-    [10000, 200, 20],
-]
-solver = ESIMCellProblemSolver(
-    sigma=2e6,
-    frequency=50000,
-    complex_mu=complex_mu_data
-)
+mat = rad.MatLin(mu_r)                       # Isotropic (preferred)
+mat = rad.MatLin([mu_r_par, mu_r_perp], [ex, ey, ez])  # Anisotropic
 ```
 
-### ESIM (Effective Surface Impedance Method)
+For isotropic materials, ALWAYS use single-argument form. MatLin is for soft magnetic materials only.
 
-**Policy**: ESIM is the recommended method for nonlinear magnetic materials in conductor problems.
-
-**Field-Dependent Surface Impedance**:
-```
-Zs(H) = Re{Zs(H)} + j·Im{Zs(H)}
-```
-
-The surface impedance is field-dependent, not just frequency-dependent.
-
-**1D Cell Problem**:
-ESIM solves the 1D cell problem in the depth direction:
-
-```
-d/dz[(1/μ(z)) · dH/dz] = jωσ·H
-```
-
-where μ(z) = μ(H(z)) for nonlinear materials (e.g., from the B-H curve of a specific material).
-
-**What ESIM Does**:
-1. Solves 1D Cell Problem in depth direction for each surface H-field value
-2. Computes effective surface impedance Zs(H0) that accounts for:
-   - Skin effect (nonuniform current distribution)
-   - Magnetic saturation (H-dependent μ)
-   - Magnetic losses (complex μ = μ' - jμ")
-3. Builds lookup table for fast 3D solver iteration
-
-**When to Use ESIM**:
-- Induction heating (workpiece heating analysis)
-- Nonlinear iron cores in transformers/motors
-- Lossy ferrite components at high frequency
-- Any case where μ(H) varies significantly
-
-**ESIM vs Standard SIBC**:
-
-| Aspect | Standard SIBC | ESIM |
-|--------|---------------|------|
-| μ assumption | Constant | H-dependent |
-| Magnetic loss | Optional (μ") | Included via μ"(H) |
-| Accuracy in saturation | Poor | Good |
-| Computational cost | Low | Higher (1D solve per H0) |
-
-**Reference Implementation**:
-- `src/radia/esim_cell_problem.py`: Cell problem solver with complex μ
-- `src/radia/esim_coupled_solver.py`: 3D coupled solver using ESIM
-
-**Literature Reference**:
-K. Hollaus, V. Hanser, and M. Schobinger, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025.
-
-### PEEC SIBC Implementation (2026-02-13)
-
-**Policy**: Use **scipy.special.jv** for circular conductor SIBC. Boost.Math migration deferred to future.
-
-#### Bessel Function Strategy
-
-| Phase | Implementation | Library | Status |
-|-------|---------------|---------|--------|
-| **Phase 1 (Current)** | **scipy.special.jv** | **scipy (Fortran AMOS)** | **✅ Active** |
-| Phase 2 (Future) | Boost.Math | boost-math:x64-windows | Deferred |
-
-#### Circular Conductor SIBC
-
-**Current Implementation**:
-```python
-# validate_circular_coil_sibc.py
-from scipy.special import iv  # Modified Bessel functions (Fortran AMOS)
-
-def bessel_impedance_circular(frequency, radius, length, sigma, mu_r=1.0):
-    """
-    Exact impedance for circular wire using modified Bessel functions.
-
-    Formula: Z = (k*length)/(2*pi*r*sigma) * I0(kr)/I1(kr)
-
-    IMPORTANT: Use I0/I1 (modified Bessel), NOT J0/J1 (regular Bessel).
-    J0/J1 gives correct R but wrong sign for internal inductance.
-    """
-    omega = 2 * np.pi * frequency
-    mu = mu_r * MU_0
-    k = np.sqrt(1j * omega * mu * sigma)
-    kr = k * radius
-
-    I0_kr = iv(0, kr)  # Modified Bessel I0
-    I1_kr = iv(1, kr)  # Modified Bessel I1
-
-    Z = (k * length) / (2 * np.pi * radius * sigma) * (I0_kr / I1_kr)
-    return Z
-```
-
-**Why scipy (not Boost.Math)**:
-1. ✅ **No external dependency**: scipy already installed
-2. ✅ **High precision**: Fortran AMOS (NIST-validated, 40+ year track record)
-3. ✅ **Complex argument support**: Native complex Bessel functions
-4. ✅ **Sufficient performance**: ~5 μs/call (3000 calls = 15 ms)
-
-**Why not Intel MKL**: ❌ MKL does not provide Bessel functions
-
-#### Dowell Formula for Rectangular Conductors
-
-**Implementation**: [rad_peec_surface_impedance.cpp](s:/Radia/01_GitHub/src/core/rad_peec_surface_impedance.cpp)
-
-**Formula**:
-```
-F_R = ξ * [sinh(2ξ) + sin(2ξ)] / [cosh(2ξ) - cos(2ξ)]
-
-where ξ = d/δ (conductor thickness / skin depth)
-```
-
-**Valid range**: d << w (thin plate approximation)
-- ✅ Transformer windings: d/w < 0.1
-- ❌ Square cross-section: d/w = 1.0 (200%+ error)
-
-**Use case**: Rectangular conductors with d << w only
-
-#### Validation
-
-**Scripts**:
-- `examples/peec_integration/validation/validate_circular_coil_sibc.py`
-- `examples/peec_integration/validation/cubit_mesh_generation/generate_circular_coil.py`
-
-**DC Results** (Circular coil, 50mm radius, 1mm wire):
-- Inductance error: 2.14%
-- DC resistance error: 0.13%
-
-**AC Results**: Qualitatively correct (skin effect present)
-
-**Bessel SIBC Validation** (2026-02-13):
-- `examples/peec_integration/validation/validate_bessel_sibc.py`
-- PEEC + Bessel SIBC vs Analytical: **0.00% error** (perfect match)
-- PEEC + Dowell vs Analytical @ 1MHz: **242.9% error** (Dowell is for rectangular only)
-- Confirms scipy.special.jv approach is correct for circular conductors
-
-### PEEC Filament-Panel Architecture (FastImp Style) (2026-02-13)
-
-**CRITICAL**: Radia PEEC uses **Filament + Panel** decomposition following the FastImp approach. **Loop-Star basis transformation is NOT needed**.
-
-**Architecture**:
-
-```
-Surface Mesh (Tri3/Quad4)
-  |
-  +-- Face -> Panel  = Star element  -> P matrix (potential coefficient / capacitance)
-  |                                     Where charge accumulates
-  |
-  +-- Edge -> Filament = Loop element -> L matrix (inductance), R matrix (resistance)
-                                         Where current flows
-```
-
-**PEEC System Equation**:
-
-```
-[R + jwL + Zs    jwM_LS  ] [I_filament]   [V]
-[jwM_LS^T        P/(jw)  ] [Q_panel   ] = [0]
-
-where:
-  I_filament = current through filaments (Loop unknowns)
-  Q_panel    = charge on panels (Star unknowns)
-  L          = filament-filament inductance (Neumann formula)
-  R          = filament resistance (DC + SIBC)
-  Zs         = surface impedance (Bessel/Dowell/ESIM)
-  P          = panel-panel potential coefficient (Wilton formula)
-  M_LS       = filament-panel magnetic coupling
-```
-
-**Why Loop-Star Transformation is NOT Needed**:
-
-| Formulation | Loop-Star Separation | Notes |
-|-------------|---------------------|-------|
-| **MoM/BEM (RWG basis)** | **Required** | Single basis function set must be decomposed into solenoidal (loop) and irrotational (star) parts for low-frequency stability |
-| **PEEC Filament+Panel** | **NOT needed** | Loop (filament) and Star (panel) are **inherently separate** from the formulation. No basis transformation required |
-
-**Rationale**:
-1. In MoM/BEM, a single set of basis functions (e.g., RWG) represents both current and charge. At low frequency, the system becomes ill-conditioned because jwL -> 0 and P/(jw) -> infinity. Loop-Star decomposition separates these to restore numerical stability.
-2. In PEEC with filaments and panels, the inductive (Loop) and capacitive (Star) parts are **already separate** unknowns with separate matrices. The MNA system naturally handles the frequency scaling without any basis transformation.
-
-**Mesh-to-PEEC Conversion** (surface mesh → filaments + panels):
+### MatSatIsoTab - Nonlinear (B-H Curve)
 
 ```python
-# Step 1: Faces → Panels (direct)
-for face in mesh.faces:
-    builder.add_panel(face.vertices)
-
-# Step 2: Extract unique edges → Filaments (automatic)
-edges = extract_unique_edges(mesh.faces)  # topology-based
-for edge in edges:
-    v0, v1 = vertices[edge[0]], vertices[edge[1]]
-    center = (v0 + v1) / 2
-    direction = (v1 - v0) / np.linalg.norm(v1 - v0)
-    length = np.linalg.norm(v1 - v0)
-    builder.add_segment(center, direction, length, thickness, dual_width, sigma)
-
-# Step 3: Build matrices (no Loop-Star transformation)
-L, R, P, M_LS = builder.build(include_star=True)
+BH_DATA = [[0.0, 0.0], [100.0, 0.1], [1000.0, 1.2], [50000.0, 2.0]]
+mat = rad.MatSatIsoTab(BH_DATA)  # [[H(A/m), B(T)], ...]
 ```
 
-**Reference**: Z. Zhu, B. Song, and J. White, "Algorithms in FastImp: A Fast and Wideband Impedance Extraction Program for Complicated 3-D Geometries," IEEE Trans. TCAD, vol. 24, no. 7, 2005.
+### Permanent Magnets
 
-### PEEC Node-Segment Topology API (2026-02-13)
-
-**Policy**: Use **node-segment topology** for all new PEEC models. Legacy flat segment lists are backward-compatible but topology mode is preferred.
-
-**Architecture**:
-```
-Node-Segment Model (FastHenry-style):
-  Nodes: define positions in 3D space
-  Segments: connect two nodes (node_from -> node_to)
-  Ports: define measurement terminals (node_positive, node_negative)
-
-  Series: filaments share intermediate nodes (junctions)
-    N1 --seg1--> N2 --seg2--> N3   (port: N1-N3)
-
-  Parallel: filaments share same endpoint nodes
-    N1 --seg1--> N2
-    N1 --seg2--> N2   (port: N1-N2)
-```
-
-**C++ API** (`PEECMatrixBuilder`):
-
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `AddNodeAt(position, area)` | `int` (node ID) | Add node at 3D position |
-| `AddConnectedSegment(node_from, node_to, w, h, sigma, type, nwinc, nhinc)` | void | Add segment connecting two nodes (nwinc/nhinc for multi-filament) |
-| `AddPort(node_positive, node_negative)` | `int` (port ID) | Define port between two nodes |
-| `BuildIncidenceMatrix(matrices)` | void | Build CSR incidence matrix (auto-called by Build) |
-
-**Python API** (`peec_matrices.PyPEECBuilder`):
-
+For fixed magnetization PM, specify directly -- no `Solve()` needed:
 ```python
-from peec_matrices import PyPEECBuilder
-from peec_topology import PEECCircuitSolver
-
-# Build topology
-builder = PyPEECBuilder()
-n1 = builder.add_node_at(0, 0, 0)         # Returns node ID
-n2 = builder.add_node_at(0.05, 0, 0)
-n3 = builder.add_node_at(0.1, 0, 0)
-builder.add_connected_segment(n1, n2, 1e-3, 1e-3)  # width, height
-builder.add_connected_segment(n2, n3, 1e-3, 1e-3)
-builder.add_port(n1, n3)
-
-# Build matrices with topology info
-topo = builder.build_topology()
-# Returns dict: {
-#   'L': ndarray (n_loop x n_loop),
-#   'R': ndarray (n_loop,),
-#   'P': ndarray or None,
-#   'segment_nodes': ndarray (n_seg x 2) of [node_from, node_to],
-#   'n_nodes': int,
-#   'n_loop': int, 'n_star': int,
-#   'incidence_data/indices/indptr': CSR arrays,
-#   'n_junction': int,
-#   'ports': list of (pos, neg, id),
-# }
-
-# Solve port impedance
-solver = PEECCircuitSolver(topo)
-Z = solver.compute_port_impedance(freq=1e6)       # Single frequency
-Z_sweep = solver.frequency_sweep(freqs, Zs_func)  # Frequency sweep with SIBC
+pm = rad.ObjHexahedron(vertices, [0, 0, 954930])  # M in A/m
+B = rad.Fld(pm, 'b', [0, 0, 0.1])
 ```
 
-**PEECCircuitSolver** (`src/radia/peec_topology.py`):
+Call `Solve()` only when soft iron is present alongside permanent magnets.
 
-MNA (Modified Nodal Analysis) formulation:
-```
-Z_branch = diag(R_dc + Zs) + jw*L
-Y_branch = Z_branch^{-1}
-Y_node = A_full * Y_branch * A_full^T
-Ground negative terminal: V[neg] = 0
-Solve: Y_reduced * V = I_ext (1A injection at positive terminal)
-Z_port = V[pos]
-```
+PM material classes (`MatMagFixed`, `MatMagLinear`, `MatMagCurve`) are available but currently all behave as fixed magnetization. Full demagnetization is planned.
 
-Where `A_full` is the full node incidence matrix (n_nodes x n_filaments):
-- `A_full[node, fil] = +1` if filament leaves node (node_from)
-- `A_full[node, fil] = -1` if filament enters node (node_to)
+See `docs/ELF_CONVENTIONS.md` for detailed unit system documentation.
 
-**Validation Results** (0.00% error on all tests):
+### Permanent Magnet + Soft Iron Interaction
 
-| Test | Description | Error |
-|------|-------------|-------|
-| Series wire | L/R match vs legacy create_wire | 0.00% |
-| Parallel wires | Z = Z_single/2 | 0.00% |
-| Series analytical | Z = sum(R) + jw*(L11+L22+2*L12) | 0.00% |
-| DC resistance | Series R_total = R1+R2, Parallel R_total = R1*R2/(R1+R2) | 0.00% |
-
-**Backward Compatibility**: Legacy API (add_segment, create_wire, create_loop, build) is unchanged.
-
-**Source Files**:
-- `src/core/rad_peec_matrices.h`: PEECSegment (node_from/to), PEECPort, PEECMatrices (CSR incidence)
-- `src/core/rad_peec_matrices.cpp`: AddNodeAt, AddConnectedSegment, AddPort, BuildIncidenceMatrix
-- `src/lib/rad_peec_matrices_api.cpp`: pybind11 bindings (add_node_at, add_connected_segment, add_port, build_topology)
-- `src/radia/peec_topology.py`: PEECCircuitSolver (MNA nodal admittance)
-- `examples/peec_integration/validation/validate_topology.py`: Validation script
-
-### PEEC Multi-Filament API (nwinc/nhinc) (2026-02-13)
-
-**Policy**: Use **nwinc/nhinc** parameters to subdivide conductor cross-sections into parallel sub-filaments for skin and proximity effect modeling.
-
-**Architecture**:
-```
-Multi-Filament Cross-Section Subdivision:
-
-  Single filament (1x1):        Multi-filament (3x3):
-  ┌─────────────┐               ┌────┬────┬────┐
-  │             │               │ f1 │ f2 │ f3 │
-  │   w x h     │    nwinc=3   ├────┼────┼────┤
-  │             │   ────────>   │ f4 │ f5 │ f6 │
-  │             │    nhinc=3   ├────┼────┼────┤
-  └─────────────┘               │ f7 │ f8 │ f9 │
-                                └────┴────┴────┘
-
-  Each sub-filament: w/nwinc x h/nhinc cross-section
-  All sub-filaments share same node_from/node_to (parallel)
-  Mutual inductance between sub-filaments -> skin/proximity effect
-```
-
-**C++ API** (`PEECMatrixBuilder`):
-
-| Method | Parameters | Description |
-|--------|------------|-------------|
-| `AddConnectedSegment(...)` | `nwinc=1, nhinc=1` | Last two args control subdivision |
-| `ExpandFilaments()` | (internal) | Auto-called by Build(), expands nwinc*nhinc > 1 |
-
-**PEECSegment Fields** (new):
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `nwinc` | int | 1 | Width subdivisions |
-| `nhinc` | int | 1 | Height subdivisions |
-| `parent_segment` | int | -1 | Parent segment index (-1 if not sub-filament) |
-
-**Python API**:
-
+When combining PM with soft iron, use `Solve()`:
 ```python
-from peec_matrices import PyPEECBuilder
-from peec_topology import PEECCircuitSolver
-
-builder = PyPEECBuilder()
-n1 = builder.add_node_at(0, 0, 0)
-n2 = builder.add_node_at(0.1, 0, 0)
-
-# Single filament (legacy)
-builder.add_connected_segment(n1, n2, 3e-3, 3e-3, sigma=5.8e7)
-
-# Multi-filament: 3x3 = 9 parallel sub-filaments
-builder.add_connected_segment(n1, n2, 3e-3, 3e-3, sigma=5.8e7, nwinc=3, nhinc=3)
-
-builder.add_port(n1, n2)
-topo = builder.build_topology()
-
-# Frequency sweep shows skin effect
-solver = PEECCircuitSolver(topo)
-Z_dc = solver.compute_port_impedance(freq=1.0)    # DC: uniform current
-Z_ac = solver.compute_port_impedance(freq=1e6)    # AC: skin effect
-# R_ac > R_dc due to non-uniform current distribution
+pm = rad.ObjHexahedron(pm_vertices, [0, 0, 954930])  # Fixed PM
+iron = rad.ObjHexahedron(iron_vertices, [0, 0, 0])    # Zero initial M
+mat_iron = rad.MatLin(1000)
+rad.MatApl(iron, mat_iron)
+assembly = rad.ObjCnt([pm, iron])
+result = rad.Solve(assembly, 0.0001, 1000, 0)  # LU solver
+B = rad.Fld(assembly, 'b', [0, 0, 0.1])
 ```
-
-**Mutual Inductance Formula**:
-
-For parallel filaments (Rosa/Grover/Neumann analytical):
-```
-M = (mu_0 / (4*pi)) * [2*F(l, d) - F(l+s, d) - F(l-s, d)]
-
-where F(x, d) = x * arsinh(x/d) - sqrt(x^2 + d^2)
-      l = segment length, d = center-to-center distance, s = offset along direction
-```
-
-For non-parallel filaments: 8-point Gauss-Legendre quadrature of Neumann integral.
-
-**Physical Effects**:
-
-| Effect | How It Works | Condition |
-|--------|-------------|-----------|
-| Skin effect | Non-uniform current in sub-filaments at high freq | nwinc*nhinc > 1, freq > 0 |
-| Proximity effect | Mutual inductance between adjacent conductors | Multiple segments |
-| DC resistance | R_sub = rho*l/(w/nwinc * h/nhinc), R_total = R_sub/N | Always exact |
-| Inductance reduction | L_multi < L_single (mutual coupling lowers effective L) | nwinc*nhinc > 1 |
-
-**Validation Results**:
-
-| Test | Description | Result |
-|------|-------------|--------|
-| API test | nwinc*nhinc filament count | PASSED |
-| DC resistance | R_3x3 = R_1x1 (parallel reduction exact) | 0.00% error |
-| Inductance reduction | L_3x3 = 80.6 nH < L_1x1 = 82.1 nH (1.76% reduction) | PASSED |
-| AC resistance | R_ac/R_dc = 2.85 at 1 MHz (3mm x 3mm Cu) | PASSED |
-| Convergence | L_eff converges as nwinc/nhinc increases | PASSED |
-| Series + multifilament | Combined topology works correctly | PASSED |
-
-**Convergence Guidelines**:
-
-| Application | Recommended nwinc x nhinc | Notes |
-|-------------|--------------------------|-------|
-| DC/low frequency | 1x1 | No subdivision needed |
-| Moderate skin effect (d/delta ~ 2-5) | 3x3 | Good balance |
-| Strong skin effect (d/delta > 5) | 5x5 or higher | Higher accuracy |
-| Bus bar (wide, thin) | 5x1 or 7x1 | Width subdivision only |
-
-**Source Files**:
-- `src/core/rad_peec_matrices.h`: PEECSegment (nwinc, nhinc, parent_segment)
-- `src/core/rad_peec_matrices.cpp`: ExpandFilaments(), MutualInductance (Rosa/Grover + Gauss-Legendre)
-- `src/lib/rad_peec_matrices_api.cpp`: pybind11 nwinc/nhinc parameters
-- `examples/peec_integration/validation/validate_multifilament.py`: Validation script
-
-### FastHenry .inp Parser API (2026-02-13)
-
-**Policy**: Use `FastHenryParser` to import FastHenry models for Radia PEEC analysis.
-
-**Supported Directives**:
-
-| Directive | Syntax | Description |
-|-----------|--------|-------------|
-| `.Units` | `.Units mm` | Length unit (m, cm, mm, um, in, mils) |
-| `N<name>` | `N1 x=0 y=0 z=0` | Node definition |
-| `E<name>` | `E1 N1 N2 w=1 h=1 sigma=5.8e7 nwinc=3 nhinc=3` | Segment definition |
-| `.external` | `.external N1 N2` | Port definition |
-| `.freq` | `.freq fmin=1e3 fmax=1e6 ndec=5` | Frequency sweep |
-| `.default` | `.default w=1 h=1 sigma=5.8e7` | Default segment parameters |
-| `.equiv` | `.equiv N1 N3` | Node merge (equivalence) |
-| `.end` | `.end` | End of file |
-| `*` | `* comment` | Comment (to end of line) |
-| `+` | `E1 N1 N2 w=1 +` | Line continuation |
-
-**Python API** (`src/radia/fasthenry_parser.py`):
-
-```python
-from fasthenry_parser import FastHenryParser
-
-# Parse from file or string
-parser = FastHenryParser()
-parser.parse_file('inductor.inp')
-# or: parser.parse_string(inp_text)
-
-# Inspect model
-print(parser.get_summary())  # nodes, segments, ports, freq_spec
-print(parser.get_frequencies())  # numpy array from .freq
-
-# Convert to Radia PEECBuilder
-builder = parser.to_peec_builder()
-topo = builder.build_topology()
-
-# Or solve directly
-result = parser.solve()  # Returns dict: freqs, Z_port, R, L, topology
-```
-
-**One-Step Solve**:
-```python
-from fasthenry_parser import FastHenryParser
-
-parser = FastHenryParser()
-parser.parse_string("""
-.Units mm
-.default sigma=5.8e7
-
-N1 x=0 y=0 z=0
-N2 x=100 y=0 z=0
-
-E1 N1 N2 w=1 h=1 nwinc=3 nhinc=3
-
-.external N1 N2
-.freq fmin=100 fmax=1e6 ndec=5
-.end
-""")
-
-result = parser.solve()
-print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
-```
-
-**Unit Conversion**: All coordinates and dimensions are automatically converted to meters (SI) internally, regardless of `.Units` setting.
-
-**Validation Results** (9/9 tests pass):
-
-| Test | Description | Result |
-|------|-------------|--------|
-| Parser directives | .Units, N, E, .external, .freq | PASSED |
-| .equiv | Node merge | PASSED |
-| Single wire | Parsed vs manual builder (0.00% error) | PASSED |
-| Parallel wires | R_parallel = R_single/2 | PASSED |
-| Multi-filament | nwinc/nhinc from .inp matches manual | PASSED |
-| Series chain | 4 segments in series | PASSED |
-| Frequency sweep | .freq -> Z(f) sweep | PASSED |
-| .default params | Inheritance of default parameters | PASSED |
-| Continuation lines | Line continuation with '+' | PASSED |
-
-**Source Files**:
-- `src/radia/fasthenry_parser.py`: FastHenry .inp parser
-- `examples/peec_integration/validation/validate_fasthenry.py`: Validation script
-
-### Coupled PEEC + MMM Solver (2026-02-13)
-
-**Policy**: Use `CoupledPEECSolver` for conductors near magnetic materials (iron cores, ferrite).
-
-**Physics**:
-```
-Z_eff(f) = diag(R + Zs(f)) + jw * (L_air + Delta_L)
-```
-
-Where Delta_L is the coupling matrix from magnetic material response:
-1. Unit current in segment j -> H-field via Biot-Savart (finite filament)
-2. H-field magnetizes material via `rad.ObjBckg()` + `rad.Solve()`
-3. Vector potential A from magnetized material: `rad.Fld(mag_obj, 'a', point)`
-4. Delta_L[i][j] = dot(A(center_i), dir_i) * length_i
-
-**Key Property**: For linear materials, Delta_L is frequency-independent (computed once).
-
-**Python API**:
-```python
-from peec_coupled import CoupledPEECSolver
-
-solver = CoupledPEECSolver(topology_dict, magnetic_objects=[core_id])
-solver.compute_coupling_matrix()  # N_seg Radia Solve calls
-Z = solver.compute_port_impedance(freq)
-Z_sweep = solver.frequency_sweep(freqs)
-L_total = solver.get_effective_inductance()  # L_air + Delta_L
-```
-
-**FastHenry .magnetic Block**:
-```
-.magnetic
-  type=box
-  center=0.05,0.01,0.0
-  size=0.06,0.01,0.01
-  divisions=2,1,1
-  mu_r=1000
-  mu_r_imag=0
-.endmagnetic
-```
-
-Or explicit hexahedron:
-```
-.magnetic
-  type=hexahedron
-  vertices=x1,y1,z1, x2,y2,z2, ..., x8,y8,z8
-  mu_r=500
-.endmagnetic
-```
-
-**Deleted APIs (2026-02-13)**:
-The following old C++ PEEC/CplMag APIs have been **REMOVED**:
-- `CndLoop`, `CndRecBlock`, `CndLoopFromHelix` - Use PEECBuilder instead
-- `CplMagCreate`, `CplMagSolve`, `CplMagSetFrequency` - Use CoupledPEECSolver instead
-- `CndHexahedron`, `CndWire`, `CndSpiral` - Use PEECBuilder instead
-- `MatSIBC` - Use rad_peec_surface_impedance.cpp directly
-
-**Deleted C++ Files (12 files)**:
-```
-src/core/rad_conductor.h/cpp
-src/core/rad_conductor_fmm.h/cpp
-src/core/rad_coupled_solver.h/cpp
-src/core/rad_peec_mmm_coupled.h/cpp
-src/core/rad_green_fullwave.h/cpp
-src/lib/rad_conductor_api.cpp
-src/lib/rad_peec_mmm_api.cpp
-```
-
-**Validation Results**:
-
-| Test | Description | Result |
-|------|-------------|--------|
-| Biot-Savart | Finite filament formula accuracy | PASSED |
-| mu_r=1 | No coupling with air material | PASSED |
-| High-mu | L increases with magnetic material | PASSED |
-| Symmetry | Delta_L matrix symmetry | PASSED |
-| Freq sweep | Z(f) physically reasonable | PASSED |
-| .magnetic box | FastHenry box block parsing | PASSED |
-| .magnetic hex | FastHenry hexahedron block parsing | PASSED |
-| Coupled solve | Full parser -> coupled solve | PASSED |
-
-**Source Files**:
-- `src/radia/peec_coupled.py`: CoupledPEECSolver class
-- `src/radia/fasthenry_parser.py`: Extended with .magnetic blocks
-- `examples/peec_integration/validation/validate_coupled.py`: Validation script
 
 ---
 
-## Visualization Policy: NGSolve + VTK (2026-01-16)
+## File & Naming Conventions
 
-### Unified Visualization Framework
+### Python Script Path Import
 
-**CRITICAL**: Radia uses **NGSolve/Netgen** and **VTK (PyVista/ParaView)** for all visualization needs.
+```python
+# From examples/: use ../../src/radia
+# From tests/: use ../src/radia
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
+```
 
-**Policy**:
-- **Default visualization**: PyVista (quick, interactive, Jupyter-friendly)
-- **Publication-quality**: ParaView (fine-tuned rendering, high-resolution export)
-- **Geometry visualization**: Netgen OCC + NGSolve Draw()
-- **Field visualization**: VTS export + PyVista (default) / ParaView (publication)
-- **Mesh visualization**: NGSolve mesh + Netgen GUI
-- **DO NOT** implement custom visualization in Radia C++ code
+Import from `src/radia` package (not build directories).
 
-**Tool Selection**:
-| Purpose | Tool | Notes |
-|---------|------|-------|
-| Quick visualization | **PyVista** | Default, Jupyter integration |
-| Interactive exploration | **PyVista** | Python scripting |
-| Publication figures | **ParaView** | Fine control over rendering |
-| High-resolution export | **ParaView** | Vector graphics (SVG, PDF) |
-| Animation | **ParaView** | Keyframe animation |
+### Script Naming Convention
+
+Use **snake_case** with functional prefixes:
+
+| Prefix | Purpose | Example |
+|--------|---------|---------|
+| `demo_` | Educational demonstration | `demo_batch_evaluation.py` |
+| `benchmark_` | Performance measurement | `benchmark_solver_scaling.py` |
+| `verify_` | Correctness verification | `verify_curl_A_equals_B.py` |
+| `compare_` | Method comparison | `compare_radia_ngsolve.py` |
+| (none) | Physical model name | `sphere_in_quadrupole.py` |
+
+### VTK Export
+
+All example scripts should export VTK files with the same basename as the script. Use `rad.FldVTS()` for field data export.
+
+### Benchmark Policy
+
+ベンチマーク実行ルール:
+1. 1ケース毎に実行（並列実行しない、メモリ測定の正確性のため）
+2. メモリ使用量を記録（`psutil` を使用、`tracemalloc` はC++メモリを追跡しない）
+3. 結果JSONに含める: `n_elements`, `solver_method`, `t_solve`, `peak_memory_mb`, `iterations`
+
+```python
+import psutil, os
+def get_peak_memory_mb():
+    mem = psutil.Process(os.getpid()).memory_info()
+    return mem.peak_wset / (1024 * 1024) if hasattr(mem, 'peak_wset') else mem.rss / (1024 * 1024)
+```
+
+---
+
+## Visualization Policy
+
+### Tool Selection
+
+| Purpose | Tool |
+|---------|------|
+| Quick/interactive | **PyVista** (default) |
+| Publication figures | **ParaView** |
+| Geometry | Netgen OCC + NGSolve Draw() |
+| Field data | `rad.FldVTS()` -> PyVista/ParaView |
+
+**Do NOT** implement custom visualization in Radia C++ code.
+
+**Removed APIs**: `rad.ObjDrwVTK()`, `exportGeometryToVTK()`, `radia_pyvista_viewer.py`.
+
+### VTS Field Export
+
+```python
+rad.FldVTS(magnet, 'field_output.vts',
+           [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15],
+           41, 41, 27, 1, 0, 1.0)
+```
 
 ### Visualization Stack
 
@@ -3570,349 +813,22 @@ src/lib/rad_peec_mmm_api.cpp
 │  Netgen OCC shapes     │  rad.FldVTS()       │  NGSolve Draw() │
 │  STEP import (Cubit)   │  PyVista meshes     │  Netgen GUI     │
 │  ObjRecMag -> OCC      │  ParaView VTS/VTU   │  webgui         │
-│  ObjCylinder -> OCC    │                     │                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Analytical Objects → OCC Shapes (TODO)
-
-**Goal**: Export Radia analytical objects (no mesh) as OCC shapes for unified visualization.
-
-**Planned Implementation**:
-```python
-from netgen.occ import Box, Cylinder, Sphere
-import radia as rad
-
-# Radia analytical object
-magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
-
-# Export as OCC shape for visualization
-occ_shape = rad.ExportOCC(magnet)  # Returns netgen.occ shape
-
-# Combine with Cubit-imported geometry
-from ngsolve import Mesh
-mesh = Mesh(...)  # From Cubit export_netgen
-
-# Unified visualization
-from ngsolve.webgui import Draw
-Draw(mesh)
-Draw(occ_shape)  # Analytical object as CAD
-```
-
-**Supported Conversions** (TODO):
-| Radia Object | OCC Shape | Notes |
-|--------------|-----------|-------|
-| ObjRecMag | Box | Rectangular permanent magnet |
-| ObjCylMag | Cylinder | Cylindrical permanent magnet |
-| ObjSphMag | Sphere | Spherical permanent magnet |
-| ObjArcCur | Torus section | Arc current coil |
-| ObjRaceTrk | Composite | Racetrack coil |
-
-**Reference**: EMPY_Field implementation at `S:\NGSolve\EMPY\EMPY_Field`
-
-### VTS Field Export
-
-**Policy**: Use `rad.FldVTS()` for field data export.
-
-```python
-import radia as rad
-
-rad.FldUnits('m')
-magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
-
-# Export field grid to VTS
-rad.FldVTS(magnet, 'field_output.vts',
-           [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15],
-           41, 41, 27, 1, 0, 1.0)
-```
-
-### PyVista Integration (Default)
-
-**Policy**: Use PyVista as the **default** visualization tool.
-
-```python
-import pyvista as pv
-
-# Read VTS field data
-grid = pv.read('field_output.vts')
-
-# Quick visualization (default workflow)
-plotter = pv.Plotter()
-plotter.add_mesh(grid, scalars='B_magnitude', cmap='coolwarm')
-plotter.add_arrows(grid.points, grid['B_field'], mag=0.01)
-plotter.show()
-
-# Jupyter notebook integration
-grid.plot(scalars='B_magnitude', cmap='coolwarm', jupyter_backend='static')
-```
-
-**Why PyVista as default**:
-- Python-native, integrates with Jupyter notebooks
-- Quick iterative visualization during development
-- Scriptable for batch processing
-- Good enough quality for most use cases
-
-### ParaView (Publication Quality)
-
-**Policy**: Use ParaView for **publication-quality** figures.
-
-```bash
-# Open VTS file in ParaView
-paraview field_output.vts
-```
-
-**ParaView workflow for publications**:
-1. Open VTS file in ParaView
-2. Apply filters (Glyph, Contour, Slice, StreamTracer)
-3. Adjust rendering (lighting, camera, colormap)
-4. Export high-resolution image (PNG, TIFF) or vector graphics (SVG, PDF)
-
-**When to use ParaView**:
-- Journal paper figures (fine control over appearance)
-- High-resolution exports (>300 DPI)
-- Vector graphics export (SVG, PDF for LaTeX)
-- Complex visualizations (streamlines, isosurfaces)
-- Animation sequences
-
-### NGSolve webgui
-
-**Policy**: Use NGSolve webgui for interactive visualization.
-
-```python
-from ngsolve import *
-from ngsolve.webgui import Draw
-
-# Mesh from Cubit
-mesh = Mesh(...)
-
-# Field from Radia
-from radia_ngsolve import RadiaField
-B_cf = RadiaField(magnet, 'b')
-
-# GridFunction projection
-B_gf = GridFunction(HDiv(mesh, order=2))
-B_gf.Set(B_cf)
-
-# Interactive visualization
-Draw(B_gf, mesh, name='B_field')
-```
-
-### Removed Legacy Visualization
-
-**Removed APIs** (2026-01-09):
-- `rad.ObjDrwVTK()` - Use NGSolve Draw() instead
-- `exportGeometryToVTK()` - Use OCC export instead
-- `radia_pyvista_viewer.py` - Use PyVista directly
-
 ---
 
-## Universal Relaxation Network (URN) Policy (2026-01-19)
+## Universal Relaxation Network (URN)
 
-### URN Examples Directory
-
-**CRITICAL**: All URN-related examples, data, and scripts MUST be placed in:
-```
-examples/Universal_Relaxation_Network/
-```
-
-**Directory Structure**:
-```
-examples/Universal_Relaxation_Network/
-  data/
-    synthetic/                    # Synthetic benchmark data
-      liion_battery_eis.csv       # Physics-based synthetic Li-ion EIS
-      mnzn_ferrite_impedance.csv  # Physics-based synthetic ferrite data
-    real_world/                   # Publicly available real datasets
-      nasa_battery/               # NASA Li-ion Battery Aging Dataset
-      mendeley_eis/               # Mendeley SoC EIS Dataset
-  universal_relaxation_network.py # Main URN implementation
-  validate_urn_vs_vf.py           # Validation script (URN vs VF comparison)
-  demo_spice_timedomain.py        # Time-domain SPICE simulation demo
-```
+All URN examples, data, and scripts in `examples/Universal_Relaxation_Network/`.
 
 **Policy**:
-1. **All paper data here**: Data mentioned in `docs/paper/urn_paper.tex` MUST exist in this directory
-2. **Synthetic data labeled**: Synthetic data MUST be clearly marked as synthetic in file headers
-3. **Real data with attribution**: Real-world datasets MUST include license and citation info
-4. **Reproducibility**: All paper results MUST be reproducible from scripts in this directory
-
-**Do NOT**:
-- Place URN examples in `examples/peec_integration/` (legacy location)
-- Claim synthetic data as real measurements
-- Use proprietary datasets without proper licensing
-
-**Paper-Data Consistency**:
-Any data file referenced in `urn_paper.tex` MUST:
-1. Exist in `examples/Universal_Relaxation_Network/data/`
-2. Have matching parameters (frequency range, impedance values)
-3. Include header comments explaining data source
+- Synthetic data MUST be clearly marked as synthetic
+- Real-world datasets MUST include license and citation info
+- All paper results reproducible from scripts in this directory
 
 ---
 
-## Publication-Quality Figure Generation Policy (2026-01-19)
-
-### Matplotlib Settings for IEEE/Academic Papers
-
-**CRITICAL**: When generating figures for academic papers, use the following matplotlib settings for publication-quality PDF output.
-
-**Required Settings**:
-
-```python
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-
-# Font settings: Times New Roman, 10pt at 8cm width
-rcParams['font.family'] = 'serif'
-rcParams['font.serif'] = ['Times New Roman']
-rcParams['font.size'] = 10
-rcParams['axes.labelsize'] = 10
-rcParams['axes.titlesize'] = 10
-rcParams['xtick.labelsize'] = 9
-rcParams['ytick.labelsize'] = 9
-rcParams['legend.fontsize'] = 8
-
-# High quality output
-rcParams['figure.dpi'] = 300
-rcParams['savefig.dpi'] = 300
-rcParams['savefig.bbox'] = 'tight'
-rcParams['savefig.pad_inches'] = 0.02  # Minimal margins
-
-# PDF font embedding: Type 42 (TrueType) for Acrobat compatibility
-rcParams['pdf.fonttype'] = 42
-rcParams['ps.fonttype'] = 42
-
-# Tick settings: INWARD on ALL sides
-rcParams['xtick.direction'] = 'in'
-rcParams['ytick.direction'] = 'in'
-rcParams['xtick.top'] = True
-rcParams['xtick.bottom'] = True
-rcParams['ytick.left'] = True
-rcParams['ytick.right'] = True
-
-# Line widths
-rcParams['axes.linewidth'] = 0.5
-rcParams['xtick.major.width'] = 0.5
-rcParams['ytick.major.width'] = 0.5
-rcParams['xtick.minor.width'] = 0.3
-rcParams['ytick.minor.width'] = 0.3
-
-# Figure size: 8cm width (standard single-column)
-CM_TO_INCH = 1 / 2.54
-FIG_WIDTH = 8 * CM_TO_INCH   # 8cm = 3.15 inches
-FIG_HEIGHT = 6 * CM_TO_INCH  # Adjustable
-
-fig, ax = plt.subplots(figsize=(FIG_WIDTH, FIG_HEIGHT))
-# ... plot code ...
-plt.savefig('figure.pdf', format='pdf')
-```
-
-**Key Requirements**:
-
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| Font | Times New Roman | IEEE standard |
-| Font size | 10pt at 8cm | Readable in print |
-| Tick direction | Inward | Professional appearance |
-| Ticks | All 4 sides | Complete axis frame |
-| Margins | Minimal (0.02 in) | Maximize data area |
-| Output | PDF | Vector graphics, scalable |
-| DPI | 300 | High quality |
-
-**Figure Dimensions**:
-
-| Column Type | Width (cm) | Width (inch) |
-|-------------|-----------|--------------|
-| Single column | 8.0 | 3.15 |
-| Double column | 17.0 | 6.69 |
-| Full page | 19.0 | 7.48 |
-
-**Do NOT**:
-- Use PNG for paper figures (use PDF)
-- Use default matplotlib fonts (use Times New Roman)
-- Use outward ticks (use inward)
-- Leave large margins (use minimal padding)
-- Forget ticks on top/right axes
-
-**Example Script Location**:
-- `examples/Universal_Relaxation_Network/generate_paper_figures.py`
-
----
-
-## Python API Usage Checklist (2026-02-19)
-
-### Common Mistakes Identified by Code Review
-
-These rules encode recurring issues found across the `examples/` directory. An MCP server (`tools/mcp_radia_lint/`) automates checking these patterns.
-
-**1. ObjBckg Requires Callable (CRITICAL)**
-
-`rad.ObjBckg()` takes a **Python callable** (lambda or function), NOT a list.
-
-```python
-# ✓ CORRECT
-bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])
-
-# ✗ WRONG - will fail at runtime
-bkg = rad.ObjBckg([0, 0, 0.1])
-```
-
-**2. UtiDelAll() Cleanup (HIGH)**
-
-Every example script must call `rad.UtiDelAll()` before exiting to free Radia C++ objects.
-
-```python
-def main():
-    # ... computation ...
-    rad.UtiDelAll()  # Required cleanup
-
-if __name__ == '__main__':
-    main()
-```
-
-**3. Relative Path Imports (HIGH)**
-
-Never use hardcoded absolute paths. Use `os.path.dirname(__file__)` for relative imports.
-
-```python
-# ✓ CORRECT
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
-
-# ✗ WRONG - machine-specific
-sys.path.insert(0, r'S:\Radia\01_GitHub\src\radia')
-```
-
-**4. Docstring Unit Consistency (MODERATE)**
-
-Public API methods that accept coordinates must NOT hardcode "in mm" in docstrings if the class has a `units` parameter. Use "in constructor length units" instead.
-
-```python
-# ✓ CORRECT
-def get_B(self, point):
-    """
-    Parameters:
-        point: [x, y, z] observation point (in constructor length units)
-    """
-
-# ✗ WRONG - misleading when units='m'
-def get_B(self, point):
-    """
-    Parameters:
-        point: [x, y, z] observation point in mm
-    """
-```
-
-**5. Analytical Magnet Classes: units Parameter (MODERATE)**
-
-All analytical magnet classes (`SphericalMagnet`, `CuboidMagnet`, `CurrentLoop`, `CylindricalMagnet`, `RingMagnet`) accept a `units` parameter (`'mm'` or `'m'`). Subclasses must propagate this parameter to the parent.
-
-**6. State Mutation in Computation Methods (LOW)**
-
-Computation methods (`get_B`, `get_H`, etc.) must NOT leave object state inconsistent on exception. Use `try/finally` when temporarily modifying `self`.
-
----
-
-**Last Updated**: 2026-02-19 (Added Python API Usage Checklist, MCP lint server)
+**Last Updated**: 2026-02-22
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation
