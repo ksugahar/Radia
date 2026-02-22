@@ -1,6 +1,6 @@
 # Radia Documentation
 
-**Version:** 1.4.4
+**Version:** 2.3.0
 
 ## Core Documentation
 
@@ -21,6 +21,7 @@
 | [PEEC_MSC_COUPLING.md](PEEC_MSC_COUPLING.md) | PEEC-MSC coupled solver theory |
 | [PEEC_FASTIMPINTEGRATION.md](PEEC_FASTIMPINTEGRATION.md) | FastImp Loop-Star integration |
 | [PEEC_VALIDATION_PLAN.md](PEEC_VALIDATION_PLAN.md) | Systematic validation phases |
+| [PEEC_FORMULA_VALIDATION.md](PEEC_FORMULA_VALIDATION.md) | Formula validation (Neumann integral) |
 
 ## Mesh & Visualization
 
@@ -46,9 +47,10 @@
 | [EDDY_CURRENT_METHODS.md](EDDY_CURRENT_METHODS.md) | Eddy current method comparison (ngbem FEM-BEM, BEM+SIBC, FEM+Kelvin) |
 | [GROVER_FORMULA_IMPLEMENTATION.md](GROVER_FORMULA_IMPLEMENTATION.md) | Grover's formula for self-inductance |
 | [VECTOR_FEMBEM_ANALYSIS.md](VECTOR_FEMBEM_ANALYSIS.md) | VectorEddyCurrentFEMBEM analysis |
-| [NGBEM_INTEGRATION_DESIGN.md](NGBEM_INTEGRATION_DESIGN.md) | NGSolve BEM integration design |
+| [NGBEM_INTEGRATION_DESIGN.md](NGBEM_INTEGRATION_DESIGN.md) | NGSolve BEM integration design (low-freq verified) |
+| [NGSolve_FEM_Verification.md](NGSolve_FEM_Verification.md) | FEM verification of PEEC+BEM inductance |
 | [UNIFIED_FIELD_API_DESIGN.md](UNIFIED_FIELD_API_DESIGN.md) | Unified field computation API |
-| [HMATRIX_EVALUATION.md](HMATRIX_EVALUATION.md) | H-matrix acceleration evaluation |
+| [CLN_I_VERIFICATION.md](CLN_I_VERIFICATION.md) | CLN I type coordinate transform verification |
 
 ## Specialized Features
 
@@ -59,13 +61,6 @@
 | [IMA_SYMMETRY_DESIGN.md](IMA_SYMMETRY_DESIGN.md) | Image symmetry for MSC |
 | [KAN_INSPIRED_URN.md](KAN_INSPIRED_URN.md) | KAN-inspired Universal Relaxation Network |
 | [NPORT_BLOCK_LANCZOS_SPICE.md](NPORT_BLOCK_LANCZOS_SPICE.md) | N-port Block Lanczos SPICE generation |
-
-## Maintenance
-
-| Document | Description |
-|----------|-------------|
-| [PLAN_MMM_PYBIND11_REFACTOR.md](PLAN_MMM_PYBIND11_REFACTOR.md) | MMM pybind11 refactoring plan |
-| [PYBIND11_MIGRATION_LOG.md](PYBIND11_MIGRATION_LOG.md) | pybind11 migration completion log |
 
 ## Quick Links
 
@@ -95,4 +90,4 @@
 
 ---
 
-**Last Updated:** 2026-02-19
+**Last Updated:** 2026-02-22

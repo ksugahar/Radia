@@ -2,7 +2,7 @@
 
 Complete reference for Radia Python API.
 
-**Version**: 1.8.1
+**Version**: 2.3.0
 **Date**: 2026-02-16
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
