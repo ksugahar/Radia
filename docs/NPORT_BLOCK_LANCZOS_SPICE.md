@@ -9,7 +9,7 @@ This document describes the N-port Block Lanczos algorithm for SPICE-compatible 
 | Ports | Lanczos Type | Rationale |
 |-------|--------------|-----------|
 | **1-port** | Scalar Lanczos OK | Single starting vector captures port behavior |
-| **N-port (N≥2)** | **Block Lanczos required** | Need p starting vectors for p ports |
+| **N-port (N>=2)** | **Block Lanczos required** | Need p starting vectors for p ports |
 
 **WARNING**: Using scalar Lanczos for N-port systems is **meaningless** - it cannot capture multi-port interactions correctly.
 
@@ -249,6 +249,159 @@ kan_model.train_from_esim_data(H_values, f_values, Zs_data)
 spice_pwl = kan_model.to_spice_pwl(H_export, f_ref)
 ```
 
+## CLN I型 Coordinate Transform Verification
+
+This section documents the verification of the CLN I (Cauer Ladder Network Type I) coordinate transform used in PEEC model order reduction. The CLN I transform is the s=0 (DC) expansion variant of the Lanczos algorithm that converts dense PEEC matrices into sparse tridiagonal/diagonal form.
+
+### CLN I Transform Definition
+
+Given two Hermitian matrices R (resistance, diagonal) and L (inductance, dense), the CLN I transform finds a transformation matrix Q such that:
+
+```
+R_diag    = Q^T * R * Q    (diagonal matrix)
+L_tridiag = Q^T * L * Q    (tridiagonal matrix)
+```
+
+```python
+from cln import lanczos
+
+result = lanczos(K=R, N=L)
+# result.R_diag:    diagonal matrix (resistance)
+# result.L_tridiag: tridiagonal matrix (inductance)
+# result.U, result.V: transformation matrices (U = V = Q for symmetric case)
+```
+
+### Key Property: U = V = Q
+
+For symmetric PEEC matrices, the Lanczos algorithm produces identical left and right transformation matrices:
+
+```
+||U - V||_F ~ 1e-16  (machine precision)
+```
+
+This means a single transformation matrix Q fully characterizes the coordinate change.
+
+### K-Inner Product Orthogonality
+
+Q is orthogonal under the K-inner product but **not** under the standard inner product:
+
+```
+Q^T * K * Q = R_diag     (diagonal = K-inner product orthogonal)
+Q^T * Q != I              (NOT standard-orthogonal)
+||Q^T * Q - I||_F = 1.105e+09  (very large)
+```
+
+This distinction is critical when adding terms like surface impedance Z_s to the transformed system.
+
+### Verification Test 1: Without Surface Impedance
+
+**Original PEEC circuit:**
+```
+Z(s) = R + s*L  (dense matrices)
+```
+
+**After CLN I transform:**
+```
+Z'(s) = R_diag + s*L_tridiag  (sparse matrices)
+```
+
+**Result:**
+- Max relative error: 8.23e-16
+- Mean relative error: 2.09e-16
+- **PASS** (machine precision)
+
+### Verification Test 2: With Surface Impedance Z_s
+
+When surface impedance (skin effect) is included:
+
+**Original:**
+```
+Z(s) = R + s*L + Z_s(s)*I  (dense matrices)
+```
+
+**After CLN I transform:**
+```
+Z'(s) = R_diag + s*L_tridiag + Z_s(s)*(Q^T * Q)  (sparse + transformed identity)
+```
+
+Since Q^T * Q != I, the transformed identity matrix `Q^T * Q` must be used (not I).
+
+**Surface impedance Z_s:**
+```
+Z_s = (1+j) * sqrt(pi * f * mu / sigma)
+```
+
+Copper conductor (sigma = 5.8e7 S/m) examples:
+
+| Frequency | Z_s | Skin depth delta |
+|-----------|-----|------------------|
+| 10 Hz | 8.25e-7 + j8.25e-7 | 20.9 mm |
+| 10 kHz | 2.70e-5 + j2.70e-5 | 0.64 mm |
+| 10 MHz | 8.25e-4 + j8.25e-4 | 0.021 mm |
+
+**Result:**
+- Max relative error: 9.53e-16
+- Mean relative error: 2.10e-16
+- **PASS** (machine precision)
+
+### Test Conditions
+
+```python
+n = 10  # number of loops
+
+# Dense inductance matrix (with mutual inductance)
+L0 = 1e-6  # 1 uH
+decay = 3.0
+L_dense[i,j] = L0 * exp(-|i-j| / decay)
+
+# Diagonal resistance matrix
+R0 = 0.01  # 10 mOhm
+R_diag = diag([R0, R0, ..., R0])
+
+# Frequency range
+frequencies = logspace(1, 7, 100)  # 10 Hz to 10 MHz
+```
+
+### Coupling Matrix Transformation Rules for PEEC-MMM/STAR Systems
+
+When coupling the CLN I-transformed LoopStar subsystem with other physics (MMM, STAR, etc.), the coupling matrices require one-sided transformation:
+
+| Coupling Term | Original | CLN I Coordinates | Note |
+|---------------|----------|-------------------|------|
+| Z_s * I | Z_s * I | Z_s * (Q^T * Q) | Surface impedance |
+| Z_LM | Z_LM | Q^T * Z_LM | Loop to MMM (left multiply) |
+| Z_ML | Z_ML | Z_ML * Q | MMM to Loop (right multiply) |
+| Z_LS | Z_LS | Q^T * Z_LS | Loop to STAR |
+| Z_SL | Z_SL | Z_SL * Q | STAR to Loop |
+
+**Important rules:**
+1. **MMM/STAR subsystem matrices are NOT transformed** - Z_MMM, Z_STAR remain unchanged
+2. **Coupling matrices are one-sided** - Z_LM gets Q^T on the left; Z_ML gets Q on the right
+3. **Excitation vectors are also transformed** - Loop excitation V_L becomes Q^T * V_L
+
+### Coupled System in CLN I Coordinates
+
+Original coupled system:
+```
+[R + sL    Z_LM  ] [I_L]   [V_L]
+[Z_ML     Z_MMM ] [I_M] = [V_M]
+```
+
+After CLN I transform:
+```
+[R_diag + s*L_tridiag    Q^T*Z_LM ] [I_L']   [Q^T*V_L]
+[Z_ML*Q                  Z_MMM    ] [I_M ] = [V_M    ]
+```
+
+where `I_L' = Q^{-1} * I_L` is the transformed Loop current.
+
+### Verification Artifacts
+
+- `cln_frequency_response_verification.png` - Test 1 results
+- `cln_frequency_response_with_zs.png` - Test 2 results (with Z_s)
+- `verify_cln_frequency_response.py` - Frequency response verification script
+- `verify_lanczos_uv_equality.py` - U, V matrix and CLN I structure verification script
+
 ## References
 
 1. A. Odabasioglu, M. Celik, L.T. Pileggi, "PRIMA: Passive Reduced-order Interconnect Macromodeling Algorithm," IEEE TCAD, 1998.
@@ -257,5 +410,9 @@ spice_pwl = kan_model.to_spice_pwl(H_export, f_ref)
 
 3. van Oosterom & Strackee, "The Solid Angle of a Plane Triangle," IEEE Trans. BME, 1983.
 
+4. Lanczos algorithm for generalized eigenvalue problems and Cauer circuit model order reduction of RLC equivalent circuits.
+
+5. PEEC (Partial Element Equivalent Circuit) method.
+
 ---
-Last Updated: 2026-01-17
+Last Updated: 2026-02-22

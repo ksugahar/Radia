@@ -1,13 +1,13 @@
 # PEEC Panel Implementation (2D Surface Integration)
 
-**Date**: 2026-02-13
-**Status**: Implemented and Tested
+**Date**: 2026-02-22
+**Status**: Implemented and Tested (Panel integration); FastImp integration in progress
 
 ---
 
-## 1. Problem: Point Approximation Limitation
+## 1. Problem: Point and GMD Approximation Limitations
 
-### Current (Point) Approach
+### 1.1 Current (Point) Approach for Potential Coefficients
 
 ```cpp
 // Panel = Point with area
@@ -28,13 +28,22 @@ P_ij = 1 / (4pi epsilon_0 r_ij)
 - Breaks down for large panels
 - Not FastImp-compatible
 
-### GMD Approximation Issue
+### 1.2 GMD Approximation for Inductance
 
 The original `SelfInductance()` uses a GMD (Geometric Mean Distance) approximation:
 
 ```cpp
 // rad_peec_matrices.cpp:207-223
-double gmd = 0.2235 * (seg.width + seg.height);  // Converts rectangular to circular
+double PEECMatrixBuilder::SelfInductance(const PEECSegment& seg) const {
+    // GMD approximation for self-inductance
+    // L = (mu_0 / 2*pi) * l * (ln(2*l/GMD) - 1)
+    // GMD for rectangular cross-section: GMD ~ 0.2235 * (w + h)
+
+    double l = seg.length;
+    double gmd = 0.2235 * (seg.width + seg.height);  // Converts rectangular to circular
+
+    return (PEEC_MU_0 / (2.0 * RadConst::PI)) * l * (std::log(2.0 * l / gmd) - 1.0);
+}
 ```
 
 This introduces ~6% error in inductance for square cross-sections. FastImp uses panel integration (Neumann formula), not GMD.
@@ -43,6 +52,26 @@ This introduces ~6% error in inductance for square cross-sections. FastImp uses 
 ```
 L = (mu_0/2pi) * l * [ln(2*l/sqrt(w^2+h^2)) + 0.25 + (w^2+h^2)/(12*l^2)]
 ```
+
+### 1.3 Point-Matching Approximation for Mutual Inductance
+
+```cpp
+// rad_peec_matrices.cpp:225-243
+double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
+                                            const PEECSegment& seg_j) const {
+    // Neumann formula approximation (point matching)
+    // L_ij = (mu_0 / 4*pi) * (d_i . d_j) * l_i * l_j / r_ij
+
+    // Uses center-to-center distance only
+    double r = distance(seg_i.center, seg_j.center);
+    return (PEEC_MU_0 * PEEC_INV_FOUR_PI) * dot * seg_i.length * seg_j.length / r;
+}
+```
+
+**Why it's wrong**:
+- Uses center-to-center distance only (point matching)
+- Should use segment-to-segment integration
+- Loses accuracy for close or parallel segments
 
 ---
 
@@ -278,87 +307,11 @@ print(f"P matrix: {P.shape}")
 
 ---
 
-## 4. Results & Testing
+## 4. Architecture: Filament + Panel Duality
 
-### 4.1 Self-Potential Tests
+### 4.1 Two-Level Discretization
 
-**Test Case 1: Equilateral Triangle (10mm side)**
-- Area: 43.3 mm^2
-- **P_self = 2.96e8 1/F** (Wilton analytical)
-- Physically reasonable
-
-**Test Case 2: Right Triangle (10mm x 10mm)**
-- Area: 50.0 mm^2
-- **P_self = 3.82e8 1/F**
-- Consistent with equilateral triangle
-
-**Test Case 3: Aspect Ratio Effect**
-
-| Aspect Ratio | Area (mm^2) | P_self (1/F) | P_self * sqrt(A) |
-|--------------|------------|--------------|-------------------|
-| 1:1 | 50.0 | 3.23e8 | 2.28e6 |
-| 2:1 | 25.0 | 2.70e8 | 1.35e6 |
-| 4:1 | 12.5 | 3.35e8 | 1.18e6 |
-
-**Observation**: Self-potential correctly scales with panel size.
-
-### 4.2 Near-Field Mutual Potential Tests
-
-**Test File**: `test_panel_near_field.py`
-
-| Separation (mm) | P_mutual (1/F) | Method Used |
-|-----------------|----------------|-------------|
-| 2.0 (very close) | 1.23e3 | Near (Gauss) |
-| 5.0 | 6.84e2 | Near (Gauss) |
-| 10.0 | 3.95e2 | Near (Gauss) |
-| 20.0 | 8.50e2 | Far (centroid) |
-| 50.0 | 3.40e2 | Far (centroid) |
-
-**Key Finding**: For 2mm separation, Gauss gives 1.23e3 vs centroid 8.50e3 (85% difference). Near-field integration is **essential** for close panels.
-
-### 4.3 Quadrilateral Panel Tests
-
-**Test File**: `test_quad_panel.py`
-
-| Panel Type | Dimensions (mm) | Area (mm^2) | P_self (1/F) | Status |
-|------------|-----------------|------------|--------------|--------|
-| Square quad | 10x10 | 100 | 3.82e8 | OK |
-| Rectangular quad | 20x10 | 200 | 6.90e8 | OK |
-| Triangle 1 (v0-v1-v2) | - | 50 | 3.82e8 | OK |
-| Triangle 2 (v0-v2-v3) | - | 50 | 3.82e8 | OK |
-| Average | - | - | 3.82e8 | Matches quad |
-
-**Mixed Mesh Test**: 2 triangles + 1 quad in same builder works correctly.
-
-### 4.4 Comparison: Point vs Panel
-
-| Aspect | Point Approximation | Panel (Wilton Analytical) |
-|--------|---------------------|---------------------------|
-| **Accuracy** | Poor for close panels | Exact self-potential |
-| **Singularity** | Disk approximation | Analytical (no singularity) |
-| **Far-field** | Adequate | Same (centroid) |
-| **Near-field** | Inaccurate | Gauss quadrature |
-| **Implementation** | Simple | Complex (analytical formulas) |
-
-### 4.5 Performance
-
-| Operation | Complexity | Time (single panel) |
-|-----------|------------|---------------------|
-| Panel geometry | O(1) | < 1 us |
-| Wilton self-potential | O(1) | ~5 us |
-| Gauss mutual (3x3 points) | O(1) | ~10 us |
-| Centroid mutual | O(1) | ~2 us |
-| Full P matrix (N panels) | O(N^2) | ~N^2 * 10 us |
-
-**Example**: 100 panels -> ~100ms for P matrix computation.
-
----
-
-## 5. Architecture: Filament + Panel Duality
-
-### 5.1 Dual Representation
-
-FastImp uses a **two-level discretization** for conductors:
+FastImp uses a **filament + panel** approach for conductors:
 
 ```
 Conductor (3D solid)
@@ -375,18 +328,34 @@ Conductor (3D solid)
 | **Magnetic field** (inductive) | Filament (Loop) | Current I | Biot-Savart: `B = integral (I dl x r) / r^3` |
 | **Electric field** (capacitive) | Panel (Star) | Charge sigma | Coulomb: `E = integral sigma dS / (4pi*epsilon_0*r)` |
 
-### 5.2 Loop-Star Decomposition
+### 4.2 Loop-Star Decomposition
+
+**CRITICAL**: In the Filament+Panel formulation, the Loop-Star basis transformation (Vecchi 1999) is **NOT needed**.
+
+In MoM/BEM with RWG basis functions, a single set of basis functions must be decomposed
+into solenoidal (Loop) and irrotational (Star) parts for low-frequency numerical stability.
+However, in the PEEC Filament+Panel formulation, Filament = Loop elements and
+Panel = Star elements are **inherently separate from the start**.
+
+| Method | Loop-Star Separation | Reason |
+|--------|---------------------|--------|
+| **MoM/BEM (RWG)** | **Required** | Single basis set must be decomposed into solenoidal/irrotational parts |
+| **PEEC Filament+Panel** | **NOT needed** | Filament=Loop, Panel=Star are inherently separate from the formulation |
 
 **System Equation**:
 
 ```
-[Z_LL   Z_LS] [I_L]   [V_L]
-[Z_SL   Z_SS] [I_S] = [V_S]
+[Z_LL   Z_LS] [I_filament]   [V]
+[Z_SL   Z_SS] [Q_panel   ] = [0]
 
 where:
-  Z_LL = R + jw*L + Z_s  (Loop-Loop: inductive + resistive + skin effect)
-  Z_SS = P / (jw*epsilon)  (Star-Star: capacitive)
-  Z_LS = jw*M_LS           (Loop-Star coupling)
+  I_filament = current through filaments (Loop unknowns)
+  Q_panel    = charge on panels (Star unknowns)
+
+  Z_LL = R + jw*L + Z_s  (Filament-Filament: inductive + resistive + skin effect)
+  Z_SS = P / (jw)         (Panel-Panel: capacitive, P = potential coefficient)
+  Z_LS = jw*M_LS          (Filament-Panel coupling)
+  Z_SL = Z_LS^T           (reciprocity)
 ```
 
 **Matrix Components**:
@@ -399,7 +368,26 @@ where:
 | **P** | `n_star x n_star` | Potential coefficient | Panel-panel integration |
 | **M_LS** | `n_loop x n_star` | Loop-Star coupling | Filament-panel integration |
 
-### 5.3 Surface Impedance Boundary Condition (SIBC)
+### 4.3 Matrix Computation (FastImp Formulas)
+
+1. **L matrix (inductance)**: Neumann formula with numerical integration over filament pairs
+   ```
+   L_ij = (mu_0/4pi) * integral_i integral_j (d_i . d_j) / r
+   ```
+   - NOT GMD approximation
+   - Full segment-to-segment integration
+
+2. **P matrix (potential coefficient)**: Panel-to-panel integration
+   ```
+   P_ij = (1/4pi*eps_0) * integral_i integral_j dS_i dS_j / r
+   ```
+
+3. **M_LS matrix** (Loop-Star coupling): Filament-to-panel integration
+   ```
+   M_LS[i][j] = (mu_0/4pi) * integral_filament_i integral_panel_j (d_i . n_j) / r
+   ```
+
+### 4.4 Surface Impedance Boundary Condition (SIBC)
 
 **CRITICAL**: SIBC/ESIM is applied to **PANEL elements**, not filaments.
 
@@ -432,7 +420,7 @@ void PEECSolver::SetSurfaceImpedance(
 Z_LL[i][i] = R[i] + jw*L[i][i] + Z_s[i]
 ```
 
-### 5.4 Mesh Import Workflow
+### 4.5 Mesh Import Workflow
 
 ```
 1D Mesh (centerline) --> Filaments --> Neumann formula --> L matrix
@@ -467,9 +455,176 @@ Added 108 triangle panels + 36 quad panels
 Using TRUE 2D analytical integration (Wilton + Gauss quadrature)
 ```
 
+### 4.6 Existing Data Structures
+
+**SurfacePanel** (`rad_conductor.h`):
+```cpp
+struct SurfacePanel {
+    TVector3d center;         // Panel center
+    TVector3d normal;         // Outward normal
+    double area;              // Panel area
+    std::vector<TVector3d> vertices;  // Panel vertices (3 or 4)
+    enum Type { Triangle, Quadrilateral } type;
+};
+```
+
+**PEECSegment** (`rad_peec_matrices.h`):
+```cpp
+struct PEECSegment {
+    TVector3d center;       // Segment center [m]
+    TVector3d direction;    // Unit direction vector
+    double length;          // Segment length [m]
+    double width;           // Cross-section width [m]
+    double height;          // Cross-section height [m]
+    double sigma;           // Conductivity [S/m]
+};
+```
+
+### 4.7 Codebase References
+
+| File | Line | Reference |
+|------|------|-----------|
+| `rad_conductor.h` | 10 | `[1] Z. Zhu et al., "Algorithms in FastImp", IEEE TCAD, 2005` |
+| `radentry.cpp` | 1907 | `// Conductor Analysis API Implementation (FastImp-based)` |
+| `rad_conductor.cpp` | 759 | `// If totalCurrent_ is set (from Solve), use filament Biot-Savart` |
+| `rad_conductor.cpp` | 914 | `// For wire conductors, use filament approximation along wire centerline` |
+
 ---
 
-## 6. Completion Status
+## 5. FastImp Integration Plan
+
+### Phase 1: Document FastImp Algorithm (COMPLETED)
+
+- [x] Locate SurfacePanel implementation
+- [x] Locate GMD approximation code
+- [x] Find FastImp references in codebase
+- [x] Document panel-based integration formulas (Wilton, Gauss quadrature)
+
+### Phase 2: Implement Panel-Based Inductance
+
+1. **Replace `SelfInductance()` function**:
+   - Remove GMD approximation
+   - Implement proper Neumann formula with segment integration
+   - Handle rectangular cross-section accurately (no circular conversion)
+
+2. **Replace `MutualInductance()` function**:
+   - Remove point-matching approximation
+   - Implement segment-to-segment integration (Neumann formula)
+   - Use Gauss quadrature for accuracy
+
+### Phase 3: Extend Panel Support
+
+1. **Extend `PEECMatrixBuilder` to accept panels**:
+   ```cpp
+   void AddPanel(const SurfacePanel& panel);
+   void ComputePanelP();  // Panel potential coefficient matrix
+   void ComputeFilamentPanelM_LS();  // Filament-panel coupling
+   ```
+
+2. **Update GMSH import workflow**:
+   - Generate 1D centerline mesh (filaments) -- ALREADY WORKING
+   - Generate 2D surface mesh (panels) -- ALREADY WORKING
+   - Link filaments to panels
+
+### Phase 4: Validation
+
+1. **Test on circular coil**:
+   - Compare against analytical formula
+   - Target: < 1% error (down from current 6%)
+
+2. **Test against FastImp reference**:
+   - If FastImp source code available, run same geometry
+   - Compare L, R, P matrices
+
+### File Modification Plan
+
+| File | Action | Priority |
+|------|--------|----------|
+| `rad_peec_matrices.cpp` | Remove GMD approximation (lines 207-223) | **HIGH** |
+| `rad_peec_matrices.cpp` | Implement segment integration for L matrix | **HIGH** |
+| `rad_peec_matrices.h` | Add panel-based API | MEDIUM |
+| `demo_peec_from_1d_mesh.py` | Test new implementation | HIGH |
+| `generate_1d_coil_mesh.py` | Add surface panel generation | MEDIUM |
+
+---
+
+## 6. Results & Testing
+
+### 6.1 Self-Potential Tests
+
+**Test Case 1: Equilateral Triangle (10mm side)**
+- Area: 43.3 mm^2
+- **P_self = 2.96e8 1/F** (Wilton analytical)
+- Physically reasonable
+
+**Test Case 2: Right Triangle (10mm x 10mm)**
+- Area: 50.0 mm^2
+- **P_self = 3.82e8 1/F**
+- Consistent with equilateral triangle
+
+**Test Case 3: Aspect Ratio Effect**
+
+| Aspect Ratio | Area (mm^2) | P_self (1/F) | P_self * sqrt(A) |
+|--------------|------------|--------------|-------------------|
+| 1:1 | 50.0 | 3.23e8 | 2.28e6 |
+| 2:1 | 25.0 | 2.70e8 | 1.35e6 |
+| 4:1 | 12.5 | 3.35e8 | 1.18e6 |
+
+**Observation**: Self-potential correctly scales with panel size.
+
+### 6.2 Near-Field Mutual Potential Tests
+
+**Test File**: `test_panel_near_field.py`
+
+| Separation (mm) | P_mutual (1/F) | Method Used |
+|-----------------|----------------|-------------|
+| 2.0 (very close) | 1.23e3 | Near (Gauss) |
+| 5.0 | 6.84e2 | Near (Gauss) |
+| 10.0 | 3.95e2 | Near (Gauss) |
+| 20.0 | 8.50e2 | Far (centroid) |
+| 50.0 | 3.40e2 | Far (centroid) |
+
+**Key Finding**: For 2mm separation, Gauss gives 1.23e3 vs centroid 8.50e3 (85% difference). Near-field integration is **essential** for close panels.
+
+### 6.3 Quadrilateral Panel Tests
+
+**Test File**: `test_quad_panel.py`
+
+| Panel Type | Dimensions (mm) | Area (mm^2) | P_self (1/F) | Status |
+|------------|-----------------|------------|--------------|--------|
+| Square quad | 10x10 | 100 | 3.82e8 | OK |
+| Rectangular quad | 20x10 | 200 | 6.90e8 | OK |
+| Triangle 1 (v0-v1-v2) | - | 50 | 3.82e8 | OK |
+| Triangle 2 (v0-v2-v3) | - | 50 | 3.82e8 | OK |
+| Average | - | - | 3.82e8 | Matches quad |
+
+**Mixed Mesh Test**: 2 triangles + 1 quad in same builder works correctly.
+
+### 6.4 Comparison: Point vs Panel
+
+| Aspect | Point Approximation | Panel (Wilton Analytical) |
+|--------|---------------------|---------------------------|
+| **Accuracy** | Poor for close panels | Exact self-potential |
+| **Singularity** | Disk approximation | Analytical (no singularity) |
+| **Far-field** | Adequate | Same (centroid) |
+| **Near-field** | Inaccurate | Gauss quadrature |
+| **Implementation** | Simple | Complex (analytical formulas) |
+
+### 6.5 Performance
+
+| Operation | Complexity | Time (single panel) |
+|-----------|------------|---------------------|
+| Panel geometry | O(1) | < 1 us |
+| Wilton self-potential | O(1) | ~5 us |
+| Gauss mutual (3x3 points) | O(1) | ~10 us |
+| Centroid mutual | O(1) | ~2 us |
+| Full P matrix (N panels) | O(N^2) | ~N^2 * 10 us |
+
+**Example**: 100 panels -> ~100ms for P matrix computation.
+
+---
+
+## 7. Completion Status
 
 ### Implemented
 
@@ -489,12 +644,13 @@ Using TRUE 2D analytical integration (Wilton + Gauss quadrature)
 
 | Feature | Priority | Notes |
 |---------|----------|-------|
+| **Replace GMD with Neumann formula** | HIGH | `SelfInductance()` still uses GMD approximation |
+| **Replace point-matching mutual inductance** | HIGH | Implement segment-to-segment Neumann integration |
 | **Quad-quad mutual potential** | MEDIUM | Currently returns 0.0; split quads into triangles |
 | **Tri-quad mutual potential** | MEDIUM | Currently returns 0.0; split quad |
+| **M_LS coupling with panels** | MEDIUM | Not fully tested for panel-based Star elements |
 | **Hess-Smith edge integration** | MEDIUM | Replace Gauss quadrature for near-field |
 | **Newman method** | LOW | Very close panels |
-| **Replace GMD with Neumann formula** | HIGH | `SelfInductance()` still uses GMD approximation |
-| **M_LS coupling with panels** | MEDIUM | Not fully tested for panel-based Star elements |
 | **True quad integration formulas** | LOW | Replace averaging with proper quad Gauss quadrature |
 | **Higher-order Gauss rules** | LOW | 4-point or 7-point rules for very close panels |
 | **Performance optimization** | LOW | OpenMP parallelization, ACA for large panel counts |
@@ -526,12 +682,14 @@ Using TRUE 2D analytical integration (Wilton + Gauss quadrature)
 
 4. **J. N. Newman**, "Distributions of sources and normal dipoles over a quadrilateral panel," J. Engineering Mathematics, vol. 20, pp. 113-126, 1986.
 
-5. **Z. Zhu et al.**, "Algorithms in FastImp," IEEE TCAD, vol. 24, no. 7, pp. 981-998, 2005.
+5. **Z. Zhu, B. Song, and J. White**, "Algorithms in FastImp: A Fast and Wideband Impedance Extraction Program for Complicated 3-D Geometries," IEEE Trans. Computer-Aided Design, vol. 24, no. 7, pp. 981-998, July 2005.
 
-6. **G. Vecchi**, "Loop-Star Decomposition," IEEE TAP, vol. 47, no. 2, pp. 339-346, 1999.
+6. **G. Vecchi**, "Loop-Star Decomposition of Basis Functions in the Discretization of the EFIE," IEEE Trans. Antennas and Propagation, vol. 47, no. 2, pp. 339-346, Feb. 1999.
 
 7. **K. Hollaus et al.**, "Effective Surface Impedance in Scalar Potential Formulation," IEEE Trans. Magnetics, 2025.
 
 8. **F. W. Grover**, "Inductance Calculations," Dover Publications, 1946.
 
-9. **FastImp source code**: https://github.com/ediloren/FastImp (Key files: `calcpForOneOverR.h`, `element.cc`, `formulation.cc`)
+9. **A. E. Ruehli**, "Equivalent Circuit Models for Three-Dimensional Multiconductor Systems," IEEE Trans. Microwave Theory and Techniques, vol. 22, no. 3, pp. 216-221, Mar. 1974.
+
+10. **FastImp source code**: https://github.com/ediloren/FastImp (Key files: `calcpForOneOverR.h`, `element.cc`, `formulation.cc`)
