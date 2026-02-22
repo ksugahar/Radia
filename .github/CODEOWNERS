@@ -5,7 +5,7 @@
 src/core/ @ksugahar
 
 # Python bindings
-src/lib/ @ksugahar
+src/radia/ @ksugahar
 
 # CI/CD workflows
 .github/workflows/ @ksugahar

@@ -1127,10 +1127,9 @@ radia core tests: 7/7 passed (100%)
 
 ## Links
 
-- [Coding Standards](claude.md) (not in repository)
-- [Security Fixes Documentation](SECURITY_FIXES.md)
 - [Testing Guide](tests/README.md)
-- [Build Instructions](README_BUILD.md)
+- [Build Instructions](BUILD.md)
+- [Contributing](CONTRIBUTING.md)
 
 ---
 
