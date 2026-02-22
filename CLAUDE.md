@@ -2771,12 +2771,66 @@ Radia PEEC is designed to work alongside **NGSolve ngbem** for unified electroma
 | Range | Solver | Use Case |
 |-------|--------|----------|
 | DC - 1 MHz | Radia PEEC + SIBC | Power electronics, WPT, transformers |
-| 1 MHz - GHz | ngbem | RF heating, antennas, EMC/shielding |
+| DC - 1 MHz | ngbem (Weggler EFIE) | Low-frequency BEM via product space |
+| 1 MHz - GHz | ngbem (Helmholtz) | RF heating, antennas, EMC/shielding |
 
-**Future: ngbem low-frequency support** (requested via NGSolve issue):
-- Loop-Star decomposition for MQS stability
-- Laplace kernel option for quasi-static problems
-- SIBC/ESIM integration
+### ngbem Low-Frequency BEM (Verified)
+
+**Status**: Validated in `examples/peec_integration/ngsbem_peec_demo/`.
+
+**Principle**: ngbem の `HDivSurface × SurfaceL2` product space が自然に Loop-Star 分解を与え、
+DC～RF で条件数 O(1) を維持。Weggler の stabilized EFIE と等価。
+
+**Block system (Loop-Star)**:
+```
+| Z_LL    M_LS^T |   | I_loop |   | V_port |
+| M_LS    Z_SS   | * | Q_star | = | 0      |
+```
+- L = μ₀ · LaplaceSL(HDivSurface): Loop inductance
+- P = SingleLayerPotentialOperator(SurfaceL2) / ε₀: Star potential
+- M_LS = ∫div(J_edge)·φ_cell dS: Divergence coupling (charge conservation)
+
+**Dowell skin effect**: F_R(ξ) for AC resistance, added as Zs_func callback.
+
+**Port extraction (Schur complement)**:
+1. Solve Z_SS·X = M_LS (LDL^T, complex symmetric)
+2. Z_eff = Z_LL - M_LS^T·X
+3. Z_port = 1/(e^T·Z_eff^{-1}·e)
+
+**Coupled core models** (ngbem_coupled.py):
+
+| Model | Domain | μ_r | Notes |
+|-------|--------|-----|-------|
+| fembem (Calderon) | Unbounded | =1 only | Hz scalar; μ_r≠1 で不正確 |
+| vector_fembem | Unbounded | Any | Full vector formulation |
+| fem | Bounded | Any | Truncated domain |
+| radia (MMM) | Unbounded | Nonlinear | Static/time-domain向き |
+| BEM+SIBC | Fast | N/A | Mesh-independent loss |
+
+**Known limitations**:
+1. **fembem は μ_r=1 のみ** — Calderon Hz scalar formulation の制約
+2. **Loop-Star 分解は order=0 のみ完全** — 高次 Helmholtz decomposition (Andriulli 2008) 未実装
+3. **Radia core model は静的 μ_r のみ** — 周波数依存 eddy current 未対応
+4. **BEM+SIBC は maxh >> δ で perfect conductor 極限** — compute_loss_sibc() で回避
+
+**Solver strategy**:
+- Dense direct: scipy LDL^T (assume_a='sym') for complex symmetric BEM
+- Iterative: GMRes over COCG (BEM は COCG 単体で収束不安定)
+- Large-scale: NGSolve FMM acceleration
+
+**Typical parameters**:
+- Frequency: 10 Hz – 1 MHz
+- BEM assembly: intorder ≥ 5, Laplace kernel
+- Mesh: maxh = 1/5～1/20 of conductor dimension
+- Copper: σ=5.8e7 S/m, t=35μm
+
+**Reference code** (`examples/peec_integration/ngsbem_peec_demo/`):
+```
+ngbem_peec.py      — PEEC Loop-Star matrices (L, P, M_LS, R)
+ngbem_interface.py — Edge topology extraction for coupling
+ngbem_coupled.py   — Coupled core solver (FEM-BEM, Radia, etc.)
+test_dowell_comparison.py — FastHenry comparison & validation
+```
 
 ### Radia PEEC Unique Features
 
@@ -2805,7 +2859,7 @@ Even with ngbem low-frequency support, Radia PEEC provides:
 │  - Loop-Star        │         │  - EFIE/MFIE        │
 │  - SIBC/ESIM        │  <--->  │  - H-matrix         │
 │  - Lanczos MOR      │ coupling│  - Helmholtz/Laplace│
-│  - SPICE output     │         │                     │
+│  - SPICE output     │         │  - Low-freq Weggler │
 └─────────────────────┘         └─────────────────────┘
            │                               │
            └───────────────┬───────────────┘

@@ -1,7 +1,7 @@
 # Unified PEEC Loop-Star + MMM + MSC Architecture
 
-**Date**: 2026-01-10
-**Status**: Architecture Redesign Phase
+**Date**: 2026-01-10 (updated 2026-02-22)
+**Status**: Low-frequency BEM verified via product space (ngsbem_peec_demo)
 
 ## Overview
 
@@ -133,7 +133,7 @@ With complex mu_r = mu_r' - j*mu_r'':
 | **3** | Remove RWG-EFIE | Done | Files deleted |
 | **4** | Complex mu/epsilon support | Planned | Loss modeling |
 | **5** | Star-MSC coupling (dielectric) | Future | For WPT capacitors |
-| **6** | NGBEM low-frequency kernel | Future | Optional high-order elements |
+| **6** | NGBEM low-frequency BEM | **Verified** | Product space = Weggler EFIE |
 
 ### Key Development Goals Summary
 
@@ -835,108 +835,102 @@ fes_bem = HDivSurface(mesh_surf, order=2)
 # ... (NGSolve provides coupling operators)
 ```
 
-## Priority 3: NGBEM Low-Frequency Kernel Extension
+## Priority 3: NGBEM Low-Frequency BEM (VERIFIED)
 
-### Objective
+### Status: Verified (2026-02-22)
 
-**Implement low-frequency/MQS kernel in NGBEM** to enable stable quasi-static analysis.
+Low-frequency BEM は ngbem の既存 product space (`HDivSurface × SurfaceL2`) で実現済み。
+専用の MQS カーネルは不要 — Weggler stabilized EFIE と等価な定式化が自然に得られる。
 
-This is a key development goal that would:
-1. Enable high-order elements for induction heating (f < 1 MHz)
-2. Avoid numerical issues with standard Maxwell kernel at low frequencies
-3. Support quadrilateral meshes from Coreform Cubit
+**Reference implementation**: `examples/peec_integration/ngsbem_peec_demo/`
 
-### Current NGBEM Kernels
+### Verified Approach: Product Space = Weggler EFIE
+
+ngbem の `HDivSurface × SurfaceL2` product space が自然に Loop-Star 分解を与える:
+
+```
+| Z_LL    M_LS^T |   | I_loop |   | V_port |
+| M_LS    Z_SS   | * | Q_star | = | 0      |
+```
+
+- **L = μ₀ · LaplaceSL(HDivSurface)**: Loop inductance (edge-based RWG)
+- **P = SingleLayerPotentialOperator(SurfaceL2) / ε₀**: Star potential (cell-based)
+- **M_LS = ∫div(J_edge)·φ_cell dS**: Divergence coupling (charge conservation)
+- **Condition number**: O(1) from DC to RF — no low-frequency breakdown
+
+### Loop-Star Decomposition (Graph Theory)
+
+Euler characteristic χ = V - E + F determines:
+- **T_loop** (face-edge incidence): ±1 based on face circulation vs global edge direction
+- **T_star** (node-edge incidence): ±1 for edge leaving/entering vertex
+- **Orthogonality**: T_star^T · T_loop = 0 (exact, from graph theory)
+- **Completeness**: n_loop + n_star = n_edges (at order=0)
+
+### Dowell Skin Effect (Verified)
+
+AC resistance for rectangular conductors (d << w):
+
+```
+F_R(ξ) = ξ · (sinh(2ξ) + sin(2ξ)) / (cosh(2ξ) - cos(2ξ))
+ξ = d / (2δ),  δ = √(2/(ωμσ))
+Zs[i] = R_dc[i] · (F_R(ξ) - 1)
+```
+
+Added as callable `Zs_func` for frequency-dependent excess resistance.
+
+### Schur Complement Port Extraction (Verified)
+
+1. Solve Z_SS · X = M_LS via LDL^T (complex symmetric, Bunch-Kaufman)
+2. Z_eff = Z_LL - M_LS^T · X
+3. Z_port = 1 / (e^T · Z_eff^{-1} · e)
+
+### Coupled Core Models (Verified in ngbem_coupled.py)
+
+| Model | Domain | μ_r | Status | Notes |
+|-------|--------|-----|--------|-------|
+| fembem (Calderon) | Unbounded | =1 only | Verified | Hz scalar; **μ_r≠1 で不正確** |
+| vector_fembem | Unbounded | Any | Verified | Full vector formulation |
+| fem | Bounded | Any | Verified | Truncated domain |
+| radia (MMM) | Unbounded | Nonlinear | Verified | Static/time-domain向き |
+| BEM+SIBC | Fast | N/A | Verified | Mesh-independent loss via compute_loss_sibc() |
+
+### Known Limitations (Practical)
+
+1. **fembem は μ_r=1 のみ** — Calderon Hz scalar formulation の制約
+2. **Loop-Star order=0 のみ完全** — 高次 Helmholtz decomposition (Andriulli 2008) 未実装
+3. **Radia core: 静的 μ_r のみ** — 周波数依存 eddy current 未対応
+4. **BEM+SIBC: maxh >> δ で PEC 極限** — compute_loss_sibc() で回避
+5. **T matrix 条件数 > 1e14** — pseudoinverse で対処済み
+6. **COCG 単体は BEM で収束不安定** — GMRes over COCG を推奨
+
+### Verified Parameters
+
+| Parameter | Typical Range | Guidance |
+|-----------|---------------|----------|
+| Frequency | 10 Hz – 1 MHz | DC extrapolation: ω < 1e-10 triggers DC path |
+| intorder | ≥ 5 | Singular quadrature; 5-7 recommended |
+| maxh | 1/5 – 1/20 of conductor | Mesh resolution |
+| Order p | 0, 1, 2 | p=0 for speed; p=1,2 for convergence |
+| Copper σ | 5.8e7 S/m | t=35μm → R_sheet=1/(σ·t) |
+| Solver | scipy LDL^T | assume_a='sym' for complex symmetric |
+
+### Reference Code Architecture
+
+```
+ngbem_peec.py      — PEEC Loop-Star matrices (L, P, M_LS, R)
+ngbem_interface.py — Edge topology extraction for coupling
+ngbem_coupled.py   — Coupled core solver (FEM-BEM, Radia, etc.)
+test_dowell_comparison.py — FastHenry comparison & Dowell validation
+```
+
+### Original Kernel Table (Updated)
 
 | Kernel | Formula | Frequency | Stability |
 |--------|---------|-----------|-----------|
 | Laplace | 1/(4*pi*r) | Static | Stable |
 | Helmholtz | exp(-jkr)/(4*pi*r) | High freq | Stable |
-| Maxwell | Full-wave EFIE | High freq | **Unstable at low freq** |
-
-### Proposed MQS Kernel
-
-**Magneto-Quasi-Static (MQS) EFIE**:
-
-```
-Z_MQS = jw*L + R
-
-where:
-  L: Inductance matrix (Neumann kernel)
-  R: Resistance matrix (ESIM surface impedance)
-```
-
-**Neumann kernel** (low-frequency vector potential):
-```
-A(r) = mu0/(4*pi) * integral{ J(r') / |r-r'| dV' }
-
-G_Neumann = mu0 / (4*pi*|r-r'|)
-```
-
-This is the **same kernel as Laplace** scaled by mu0, so NGBEM's existing Laplace operator can be reused.
-
-### Loop-Star Scaling for MQS
-
-Standard EFIE at low frequency:
-```
-[ZLL  ZLS] [IL]   [VL]
-[ZSL  ZSS] [IS] = [VS]
-```
-
-Problem: ZLL ~ O(w), ZSS ~ O(1/w) -> condition number ~ O(1/w^2)
-
-**MQS Loop-Star scaling**:
-```
-ZLL_mqs = ZLL / (jw)  -> O(1) (pure inductance)
-ZSS_mqs = ZSS * (jw)  -> O(1) (pure capacitance)
-```
-
-Rescaled system:
-```
-[L       M_LS  ] [IL ]   [VL/jw ]
-[M_SL    1/C   ] [IS'] = [VS*jw ]
-```
-
-where IS' = jw*IS (charge derivative = current)
-
-### Implementation Strategy
-
-**Phase 3a: Use existing Laplace kernel for MQS**
-
-```python
-from ngbem import SingleLayerPotentialOperator
-
-# Laplace SLP = G(r,r') = 1/(4*pi*|r-r'|)
-# MQS inductance = mu0 * Laplace SLP
-V_laplace = SingleLayerPotentialOperator(fes, intorder=12, eps=1e-4)
-
-# Scale by mu0 to get inductance operator
-mu0 = 4 * np.pi * 1e-7
-L_operator = mu0 * V_laplace.mat
-```
-
-**Phase 3b: Contribute MQS kernel to NGBEM (upstream)**
-
-If successful, contribute the MQS implementation back to NGBEM project:
-- Add `MQSInductanceOperator` class
-- Add Loop-Star transformation utilities
-- Add ESIM surface impedance support
-
-### Technical Challenges
-
-1. **Loop-Star basis construction**: Need to identify loops and stars from mesh topology
-2. **Quadrilateral support**: Verify NGBEM supports quad elements for H(div) space
-3. **Singular integrals**: MQS kernel has same singularity as Laplace (manageable)
-4. **ACA compression**: Verify ACA works for MQS kernel (should work, same smoothness)
-
-### Validation Plan
-
-| Test Case | Reference | Expected Accuracy |
-|-----------|-----------|-------------------|
-| Circular loop inductance | Analytical | < 1% |
-| Mutual inductance | Neumann formula | < 1% |
-| Coil impedance vs frequency | FastImp PEEC | < 5% |
-| Induction heating power | RWG-EFIE | < 5% |
+| **Product Space** | **HDivSurface × SurfaceL2** | **DC – RF** | **Stable (verified)** |
+| Maxwell EFIE | Full-wave | High freq | Unstable at low freq |
 
 ## Priority 4: NGBEM High-Order EFIE (After MQS Kernel)
 
@@ -1012,11 +1006,12 @@ pip install coreform-cubit-mesh-export
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | Laplace BEM verification | Planned |
-| 2 | Loop-Star EFIE implementation | Planned |
-| 3 | ESIM integration | Planned |
-| 4 | Coreform mesh import | Planned |
-| 5 | Validation and benchmarks | Planned |
+| 1 | Laplace BEM verification | **Done** (ngbem_peec_demo) |
+| 2 | Loop-Star via product space | **Done** (Weggler EFIE verified) |
+| 3 | Dowell skin effect + Schur complement | **Done** (test_dowell_comparison.py) |
+| 4 | Coupled core models (5 types) | **Done** (ngbem_coupled.py) |
+| 5 | Coreform mesh import | Planned |
+| 6 | High-order Loop-Star (p≥1) | Future (Andriulli 2008) |
 
 ## References
 
