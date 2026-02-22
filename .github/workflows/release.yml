@@ -1,6 +1,6 @@
 name: Release
 
-# Runs automatically after CI succeeds on master.
+# Runs automatically after CI succeeds on master or a version tag.
 on:
   workflow_run:
     workflows: ["CI"]
@@ -55,4 +55,46 @@ jobs:
             echo "  Uploading $(basename "$f")..."
             gh release upload binaries "$f" --clobber
           done
+          echo "Upload complete."
+
+  # ==================================================================
+  # Publish to PyPI (only on version tags: v*)
+  # ==================================================================
+  publish-pypi:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-wheel
+          path: dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify wheel exists
+        run: |
+          echo "=== Wheel files ==="
+          ls -la dist/
+          WHL=$(find dist -name '*.whl' | head -1)
+          if [ -z "$WHL" ]; then
+            echo "::error::No wheel found in dist/"
+            exit 1
+          fi
+          echo "Wheel: $WHL"
+
+      - name: Install twine
+        run: pip install twine
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          echo "=== Publishing to PyPI ==="
+          python -m twine upload dist/*.whl
           echo "Upload complete."

@@ -266,5 +266,8 @@ if ($DryRun) {
 }
 
 Write-Host ""
-Write-Host "Press any key to exit..." -ForegroundColor Cyan
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+# Skip interactive prompt in non-interactive mode (e.g., CI)
+if ([Environment]::UserInteractive -and -not $env:CI) {
+    Write-Host "Press any key to exit..." -ForegroundColor Cyan
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
