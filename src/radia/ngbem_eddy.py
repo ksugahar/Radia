@@ -30,6 +30,7 @@ Part of Radia project
 
 import numpy as np
 import time
+from scipy.linalg import lu_factor, lu_solve
 
 # Physical constants
 MU_0 = 4.0 * np.pi * 1e-7   # H/m
@@ -1603,24 +1604,173 @@ class ShieldBEMSIBC:
 
         return A
 
+    def _precompute_excitation_geometry(self, topology_dict):
+        """Precompute geometry-only part of excitation RHS for all filaments.
+
+        The excitation for filament j at frequency f is:
+            rhs_full_j = -jw * rhs_geom_j
+
+        where rhs_geom_j depends only on geometry (Biot-Savart + RT0 quadrature).
+        This is computed once and reused for all frequencies.
+
+        Returns:
+            rhs_geom: (n_active, n_seg) real/complex array (geometry-only)
+        """
+        centers = np.asarray(topology_dict['segment_centers'])
+        directions = np.asarray(topology_dict['segment_directions'])
+        lengths = np.asarray(topology_dict['segment_lengths'])
+        n_seg = len(centers)
+
+        loop = self._loop
+        n_active = loop.n_active
+        centroids = np.array(loop._face_centroids)
+
+        # Build edge-to-vertices map (for finding opposite vertex)
+        edge_vertex_map = {}
+        for edge in self.mesh.edges:
+            if edge.nr in loop._dof_to_idx:
+                edge_vertex_map[edge.nr] = {v.nr for v in edge.vertices}
+
+        from ngsolve import BND
+        face_vert_nrs = []
+        for el in self.mesh.Elements(BND):
+            face_vert_nrs.append([v.nr for v in el.vertices])
+
+        rhs_geom = np.zeros((n_active, n_seg), dtype=float)
+
+        for j in range(n_seg):
+            # Biot-Savart A at all face centroids for filament j
+            A_at_centroids = _biot_savart_A(
+                centroids, centers[j], directions[j], lengths[j])
+
+            # RT0 centroid quadrature (same as _compute_excitation but w/o -jw)
+            for face_idx in range(loop.n_faces):
+                A_c = A_at_centroids[face_idx]
+                centroid = centroids[face_idx]
+                verts = loop._face_verts[face_idx]
+                vnrs = face_vert_nrs[face_idx]
+
+                for dof_idx, sign, dof_nr in loop._face_dofs[face_idx]:
+                    edge_vnrs = edge_vertex_map.get(dof_nr, set())
+                    p_opp = None
+                    for k, vnr in enumerate(vnrs):
+                        if vnr not in edge_vnrs:
+                            p_opp = verts[k]
+                            break
+                    if p_opp is None:
+                        continue
+                    integral = sign * np.dot(A_c, centroid - p_opp) / 2.0
+                    rhs_geom[dof_idx, j] += integral
+
+        return rhs_geom
+
+    def _build_A_scattered_operator(self, obs_points):
+        """Build coupling matrix from shield DOFs to A_scattered at obs points.
+
+        C[obs_i, comp, dof_k] such that:
+            A_scat[obs_i, comp] = sum_k C[obs_i, comp, k] * J_full[k]
+
+        Uses 7-point triangle quadrature (degree 5) for accuracy.
+
+        Args:
+            obs_points: (n_obs, 3) array
+
+        Returns:
+            C: (n_obs*3, n_active) real coupling matrix
+        """
+        loop = self._loop
+        n_active = loop.n_active
+        obs_points = np.atleast_2d(obs_points)
+        n_obs = len(obs_points)
+
+        # 7-point quadrature on reference triangle (degree 5)
+        # Barycentric coordinates (L1, L2, L3) and weights
+        a1, b1 = 0.059715871789770, 0.470142064105115
+        a2, b2 = 0.797426985353087, 0.101286507323456
+        quad_bary = np.array([
+            [1.0/3, 1.0/3, 1.0/3],
+            [a1, b1, b1], [b1, a1, b1], [b1, b1, a1],
+            [a2, b2, b2], [b2, a2, b2], [b2, b2, a2],
+        ])
+        quad_weights = np.array([
+            0.225,
+            0.132394152788506, 0.132394152788506, 0.132394152788506,
+            0.125939180544827, 0.125939180544827, 0.125939180544827,
+        ])
+        n_quad = len(quad_weights)
+
+        # Build edge-to-vertices map
+        edge_vertex_map = {}
+        for edge in self.mesh.edges:
+            if edge.nr in loop._dof_to_idx:
+                edge_vertex_map[edge.nr] = {v.nr for v in edge.vertices}
+
+        from ngsolve import BND
+        face_vert_nrs = []
+        for el in self.mesh.Elements(BND):
+            face_vert_nrs.append([v.nr for v in el.vertices])
+
+        # C matrix: (n_obs, 3, n_active)
+        C = np.zeros((n_obs, 3, n_active))
+
+        for face_idx in range(loop.n_faces):
+            verts = loop._face_verts[face_idx]
+            area = loop._face_areas[face_idx]
+            vnrs = face_vert_nrs[face_idx]
+
+            if len(verts) != 3:
+                continue  # skip non-triangles (shouldn't happen for BEM)
+
+            v0, v1, v2 = np.array(verts[0]), np.array(verts[1]), np.array(verts[2])
+
+            # Physical quadrature points
+            r_q = (quad_bary[:, 0:1] * v0[np.newaxis, :]
+                   + quad_bary[:, 1:2] * v1[np.newaxis, :]
+                   + quad_bary[:, 2:3] * v2[np.newaxis, :])  # (n_quad, 3)
+
+            # Distance from obs points to quad points: (n_obs, n_quad)
+            diff = obs_points[:, np.newaxis, :] - r_q[np.newaxis, :, :]  # (n_obs, n_quad, 3)
+            dist = np.sqrt(np.sum(diff**2, axis=2) + 1e-30)  # (n_obs, n_quad)
+
+            # kernel = w_q / |r - r'| : (n_obs, n_quad)
+            kernel = quad_weights[np.newaxis, :] / dist  # (n_obs, n_quad)
+
+            for dof_idx, sign, dof_nr in loop._face_dofs[face_idx]:
+                # Find opposite vertex
+                edge_vnrs = edge_vertex_map.get(dof_nr, set())
+                p_opp = None
+                for k, vnr in enumerate(vnrs):
+                    if vnr not in edge_vnrs:
+                        p_opp = np.array(verts[k])
+                        break
+                if p_opp is None:
+                    continue
+
+                # phi_k(r_q) = sign * (r_q - p_opp) / (2*area)  : (n_quad, 3)
+                phi_q = sign * (r_q - p_opp[np.newaxis, :]) / (2.0 * area)
+
+                # Dunavant quadrature: integral_T f dS = area * sum_q w_q * f(r_q)
+                # (weights sum to 1.0, not 0.5)
+                # kernel is (n_obs, n_quad), phi_q is (n_quad, 3)
+                contrib = area * np.einsum('oq,qc->oc', kernel, phi_q)
+                C[:, :, dof_idx] += MU_0 / (4.0 * np.pi) * contrib
+
+        # Reshape to (n_obs*3, n_active) for efficient matrix multiply
+        return C.reshape(n_obs * 3, n_active)
+
     def compute_impedance_matrix(self, freq, topology_dict):
         """Compute shield contribution to PEEC impedance matrix.
 
-        For each PEEC filament j with unit current:
-          1. A_inc_j(r) = Biot-Savart vector potential from filament j
-          2. Solve BEM+SIBC for shield eddy currents J
-          3. Compute A_scat from shield J at all filament centers
-          4. Delta_Z[i][j] = jw * A_scat(center_i) . dir_i * len_i
-
-        The resulting Delta_Z is added to the PEEC branch impedance:
-            Z_branch = R + jw*L_air + Delta_Z_shield
+        Optimized version using precomputed operators:
+          1. Excitation geometry vectors (computed once per topology)
+          2. A_scattered coupling matrix (computed once per obs points)
+          3. LU factorization (once per frequency)
+          4. Batch solve all filament RHS at once
 
         Args:
             freq: Frequency [Hz]
             topology_dict: Dict with keys:
-                segment_centers: (n_seg, 3) array
-                segment_directions: (n_seg, 3) unit direction array
-                segment_lengths: (n_seg,) length array
+                segment_centers, segment_directions, segment_lengths
 
         Returns:
             Delta_Z: (n_seg x n_seg) complex impedance matrix [Ohm]
@@ -1635,40 +1785,77 @@ class ShieldBEMSIBC:
         lengths = np.asarray(topology_dict['segment_lengths'])
         n_seg = len(centers)
 
+        loop = self._loop
+
+        # --- Precompute (cached, done once for all frequencies) ---
+
+        # Excitation geometry: only depends on filament geometry
+        if not hasattr(self, '_cached_rhs_geom'):
+            t0 = time.time()
+            self._cached_rhs_geom = self._precompute_excitation_geometry(
+                topology_dict)
+            self._t_precompute_rhs = time.time() - t0
+            print(f"  [ShieldBEMSIBC] Precomputed excitation geometry "
+                  f"({n_seg} filaments): {self._t_precompute_rhs:.3f} s")
+
+        # A_scattered coupling: only depends on obs point geometry
+        obs_key = id(topology_dict)
+        if not hasattr(self, '_cached_C_ascat') or self._cached_obs_key != obs_key:
+            t0 = time.time()
+            self._cached_C_ascat = self._build_A_scattered_operator(centers)
+            self._cached_obs_key = obs_key
+            self._t_precompute_ascat = time.time() - t0
+            print(f"  [ShieldBEMSIBC] Precomputed A_scattered operator "
+                  f"({n_seg} obs pts x {loop.n_active} DOFs): "
+                  f"{self._t_precompute_ascat:.3f} s")
+
+        rhs_geom = self._cached_rhs_geom  # (n_active, n_seg)
+        C_ascat = self._cached_C_ascat     # (n_obs*3, n_active)
+
+        # --- Per-frequency computation ---
+
+        # Surface impedance
+        delta = np.sqrt(2.0 / (omega * self.mu * self.sigma))
+        gamma = (1.0 + 1j) / delta
+        Zs = gamma / self.sigma
+
+        # Slab impedance if thickness is set
+        if hasattr(self, 'thickness') and self.thickness is not None:
+            t = self.thickness
+            gt = gamma * t
+            if abs(gt) > 30:
+                Zs_slab = Zs
+            else:
+                Zs_slab = Zs * np.cosh(gt) / np.sinh(gt)
+            Zs = Zs_slab
+
+        # System matrix (same for all filaments)
+        A_sys = Zs * self._M_LL + 1j * omega * MU_0 * self._V_LL
+
+        # Scale RHS by -jw and project to loop subspace
+        rhs_full_all = -1j * omega * rhs_geom  # (n_active, n_seg)
+        rhs_loop_all = loop.T_loop.conj().T @ rhs_full_all  # (n_loops, n_seg)
+
+        # Batch solve: one LU factorization, n_seg forward/back substitutions
+        lu, piv = lu_factor(A_sys)
+        J_loop_all = lu_solve((lu, piv), rhs_loop_all)  # (n_loops, n_seg)
+
+        # Expand to full DOF space
+        J_full_all = loop.T_loop @ J_loop_all  # (n_active, n_seg)
+
+        # A_scattered via precomputed coupling matrix
+        # C_ascat is (n_seg*3, n_active), J_full_all is (n_active, n_seg)
+        A_scat_flat = C_ascat @ J_full_all  # (n_seg*3, n_seg)
+        A_scat_all = A_scat_flat.reshape(n_seg, 3, n_seg)  # (n_obs, 3, n_src)
+
+        # Delta_Z from Faraday's law
         Delta_Z = np.zeros((n_seg, n_seg), dtype=complex)
-
-        print(f"  [ShieldBEMSIBC] Computing Delta_Z ({n_seg}x{n_seg}) "
-              f"at {freq:.0f} Hz...")
-
-        for j in range(n_seg):
-            # Biot-Savart vector potential from filament j (unit current)
-            def A_inc_from_filament_j(points, _j=j):
-                return _biot_savart_A(
-                    points,
-                    centers[_j], directions[_j], lengths[_j])
-
-            # Solve for shield currents due to filament j
-            self.solve(freq, A_inc_func=A_inc_from_filament_j)
-
-            # Compute A_scattered from shield currents at all filament centers
-            A_scat = self.compute_A_scattered(centers)
-
-            # Delta_Z from Faraday's law: V = jw * Phi_linkage
-            #   Phi_linkage_i = dot(A_scat(center_i), dir_i) * len_i
-            #   Delta_Z[i][j] = jw * dot(A_scat_i, dir_i) * len_i
-            #
-            # Lenz's law check: A_scat opposes A_inc at the coil,
-            # so dot(A_scat, dir) < 0, giving Im(Delta_Z) < 0,
-            # i.e., Delta_L < 0 (inductance decreases). Correct.
-            for i in range(n_seg):
+        for i in range(n_seg):
+            for j in range(n_seg):
                 Delta_Z[i, j] = (1j * omega
-                                 * np.dot(A_scat[i], directions[i])
+                                 * np.dot(A_scat_all[i, :, j], directions[i])
                                  * lengths[i])
 
-            if (j + 1) % max(1, n_seg // 5) == 0:
-                print(f"    Filament {j+1}/{n_seg} done")
-
-        print(f"  [ShieldBEMSIBC] Delta_Z computed")
         return Delta_Z
 
     def frequency_sweep(self, freqs, A_inc_func=None):

@@ -22,6 +22,7 @@ Part of Radia project
 
 import sys
 import os
+import time
 import numpy as np
 from scipy.special import iv
 
@@ -168,17 +169,22 @@ def case_1_air(coil_inp, freqs_str, wire_w_m, wire_h_m, sigma):
     n_fil = topo['n_loop']
 
     Zs_func = make_bessel_Zs_func(n_fil, seg_lengths, wire_w_m, wire_h_m, sigma)
+
+    t0 = time.perf_counter()
     result = parser.solve(Zs_func=Zs_func)
+    t_solve = time.perf_counter() - t0
 
     freqs = result['freqs']
     R = result['R']
     L = result['L']
+    result['t_solve'] = t_solve
 
     print(f"  Frequency points: {len(freqs)}")
     print(f"  DC resistance:  {R[0]*1e3:.4f} mOhm")
     print(f"  R at {freqs[-1]/1e6:.0f} MHz:  {R[-1]*1e3:.4f} mOhm")
     print(f"  L at {freqs[0]/1e3:.0f} kHz:   {L[0]*1e9:.2f} nH")
     print(f"  L at {freqs[-1]/1e6:.0f} MHz:  {L[-1]*1e9:.2f} nH")
+    print(f"  Solve time:     {t_solve:.3f} s")
 
     # Skin effect info
     delta = np.sqrt(2.0 / (2 * np.pi * freqs[-1] * MU_0 * sigma))
@@ -227,16 +233,21 @@ def case_2_magnetic(coil_inp, freqs_str, wire_w_m, wire_h_m, sigma):
     n_fil = topo['n_loop']
 
     Zs_func = make_bessel_Zs_func(n_fil, seg_lengths, wire_w_m, wire_h_m, sigma)
+
+    t0 = time.perf_counter()
     result = parser.solve(Zs_func=Zs_func)
+    t_solve = time.perf_counter() - t0
 
     freqs = result['freqs']
     R = result['R']
     L = result['L']
+    result['t_solve'] = t_solve
 
     print(f"  DC resistance:  {R[0]*1e3:.4f} mOhm")
     print(f"  R at {freqs[-1]/1e6:.0f} MHz:  {R[-1]*1e3:.4f} mOhm")
     print(f"  L at {freqs[0]/1e3:.0f} kHz:   {L[0]*1e9:.2f} nH")
     print(f"  L at {freqs[-1]/1e6:.0f} MHz:  {L[-1]*1e9:.2f} nH")
+    print(f"  Solve time:     {t_solve:.3f} s")
 
     if 'Delta_L' in result:
         dL = np.diag(result['Delta_L']).sum()
@@ -283,16 +294,21 @@ def case_3_shield(coil_inp, freqs_str, wire_w_m, wire_h_m, sigma):
     n_fil = topo['n_loop']
 
     Zs_func = make_bessel_Zs_func(n_fil, seg_lengths, wire_w_m, wire_h_m, sigma)
+
+    t0 = time.perf_counter()
     result = parser.solve(Zs_func=Zs_func)
+    t_solve = time.perf_counter() - t0
 
     freqs = result['freqs']
     R = result['R']
     L = result['L']
+    result['t_solve'] = t_solve
 
     print(f"  DC resistance:  {R[0]*1e3:.4f} mOhm")
     print(f"  R at {freqs[-1]/1e6:.0f} MHz:  {R[-1]*1e3:.4f} mOhm")
     print(f"  L at {freqs[0]/1e3:.0f} kHz:   {L[0]*1e9:.2f} nH")
     print(f"  L at {freqs[-1]/1e6:.0f} MHz:  {L[-1]*1e9:.2f} nH")
+    print(f"  Solve time:     {t_solve:.3f} s")
     print()
 
     return result
@@ -342,16 +358,21 @@ def case_4_magnetic_shield(coil_inp, freqs_str, wire_w_m, wire_h_m, sigma):
     n_fil = topo['n_loop']
 
     Zs_func = make_bessel_Zs_func(n_fil, seg_lengths, wire_w_m, wire_h_m, sigma)
+
+    t0 = time.perf_counter()
     result = parser.solve(Zs_func=Zs_func)
+    t_solve = time.perf_counter() - t0
 
     freqs = result['freqs']
     R = result['R']
     L = result['L']
+    result['t_solve'] = t_solve
 
     print(f"  DC resistance:  {R[0]*1e3:.4f} mOhm")
     print(f"  R at {freqs[-1]/1e6:.0f} MHz:  {R[-1]*1e3:.4f} mOhm")
     print(f"  L at {freqs[0]/1e3:.0f} kHz:   {L[0]*1e9:.2f} nH")
     print(f"  L at {freqs[-1]/1e6:.0f} MHz:  {L[-1]*1e9:.2f} nH")
+    print(f"  Solve time:     {t_solve:.3f} s")
 
     if 'Delta_L' in result:
         dL = np.diag(result['Delta_L']).sum()
@@ -440,6 +461,18 @@ def comparison_table(r1, r2, r3, r4):
         print(f"      Difference                = "
               f"{(delta_both - delta_sum):+.2f} nH "
               f"(cross-coupling)")
+
+    # Timing summary
+    t_total = sum(r['t_solve'] for r in [r1, r2, r3, r4])
+    print(f"\n  Timing (PEEC+ngbem):")
+    print(f"    Case 1 (Air):     {r1['t_solve']:6.2f} s")
+    print(f"    Case 2 (+Core):   {r2['t_solve']:6.2f} s")
+    print(f"    Case 3 (+Shield): {r3['t_solve']:6.2f} s")
+    print(f"    Case 4 (+Both):   {r4['t_solve']:6.2f} s")
+    print(f"    Total:            {t_total:6.2f} s")
+    print()
+    print(f"  For comparison, NGSolve FEM (PARDISO) takes ~15 min for same problem.")
+    print(f"  Speedup: ~{15*60/t_total:.0f}x")
 
     print()
 
