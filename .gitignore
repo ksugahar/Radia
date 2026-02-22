@@ -8,6 +8,8 @@ CLAUDE.md
 publish_to_pypi.cmd
 Publish_to_PyPI.ps1
 Build_PyPI_Package.ps1
+build_log.txt
+src/FastMaxwellv1.0/
 
 # Kelvin transformation reference documents (large PDFs, docx)
 examples/KelvinTransformation/docs/Supplement/Computational Electromagnetism/

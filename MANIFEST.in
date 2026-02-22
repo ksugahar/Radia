@@ -5,7 +5,7 @@ include COPYRIGHT.txt
 # Include documentation
 include README.md
 include README_BUILD.md
-include RAD_NGSOLVE_BUILD_SUCCESS.md
+
 
 # Include Python utilities
 recursive-include src/python *.py

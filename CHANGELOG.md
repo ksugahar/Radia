@@ -499,7 +499,7 @@ This is a major feature release with significant new APIs, performance improveme
 - **Documentation**
   - `docs/MESH_MSC_API_DESIGN.md` - Mesh MSC API design document
   - `docs/MMM_MSC_IMPLEMENTATION.md` - MMM+MSC implementation guide
-  - `docs/SOLVER_METHODS.md` - Solver method documentation
+  - `docs/SOLVER_ARCHITECTURE.md` - Solver method documentation
 
 ### Changed
 

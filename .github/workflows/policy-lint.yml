@@ -79,3 +79,19 @@ jobs:
           HITS=$(grep -rn 'src/python' --include='*.py' . 2>/dev/null | grep 'sys\.path' || true)
           [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 6 failed: use src/radia not src/python"; exit 1; }
           echo "PASS: No legacy src/python import path"
+
+      # ----------------------------------------------------------------
+      # Policy 7: Example README Coverage
+      #   Every examples/*/ subdirectory must have a README.md
+      # ----------------------------------------------------------------
+      - name: "Policy 7: README.md in every example directory"
+        run: |
+          FAIL=0
+          for dir in examples/*/; do
+            if [ ! -f "${dir}README.md" ]; then
+              echo "FAIL: $dir missing README.md"
+              FAIL=1
+            fi
+          done
+          [ "$FAIL" -eq 0 ] || { echo "::error::Policy 7 failed: every examples/ subdirectory must have README.md"; exit 1; }
+          echo "PASS: All example directories have README.md"
