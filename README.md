@@ -5,7 +5,9 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-BSD%20%2B%20MIT-green.svg)](LICENSE)
 
-**A Python-native environment designed for the age of AI-driven Engineering.**
+**A Python-native electromagnetic source framework for [NGSolve](https://ngsolve.org/) and [NGbem](https://docu.ngsolve.org/latest/i-tutorials/unit-8.1-ngbem/ngbem.html).**
+
+Radia provides **analytical field sources** ($B$, $H$, $A$, $\Phi$) as native C++ `CoefficientFunction` objects that NGSolve and NGbem consume directly during finite element assembly. Where FEM needs boundary conditions and source terms, Radia delivers them — analytically, without meshing the source region.
 
 ## 🚀 Mission: The Design Tool for Open-Space Magnetics
 
@@ -52,8 +54,8 @@ Commercially available Finite Element Method (FEM) tools are powerful, but they 
 *   **The "Moving Source" Problem**: Moving a coil or magnet in FEM requires complex re-meshing or sliding interfaces, introducing numerical noise.
     *   *Our Solution*: Sources are analytical objects. Moving them is a simple coordinate transformation, free of discretization error.
 
-**We do not replace FEM; We complete it.**
-By handling the "Sources" with Integral Methods and the "Materials" with FEM (NGSolve), we provide a hybrid workflow that overcomes the structural weaknesses of using FEM alone.
+**We do not replace FEM; We are the Source Provider for FEM.**
+Radia actively feeds NGSolve and NGbem with high-fidelity electromagnetic sources — coils, magnets, and conductor impedances — so that FEM can focus on what it does best: solving material-dominated PDEs (saturation, eddy currents, thermal coupling). The integration is not a loose coupling; Radia's fields are evaluated **inside** NGSolve's assembly loop as native `CoefficientFunction` objects.
 
 ---
 
@@ -126,23 +128,28 @@ Combined with **SIBC (Surface Impedance Boundary Condition)**, this reduces the 
 
 ---
 
-## 🧘 Philosophy: Integration over Re-invention
+## 🧘 Philosophy: The Source Provider for NGSolve
 
-**We do not aim to build new solvers from scratch.**
-Instead, our mission is to provide a **Unified Integrated Environment** that orchestrates the world's best open-source physics engines into a single design workflow.
+**Radia exists to give NGSolve and NGbem the best possible electromagnetic sources.**
+
+The division of labor is clear:
+
+| Role | Engine | What it computes |
+| :--- | :--- | :--- |
+| **Source Provider** | **Radia** | $H_s$, $B_s$, $A_s$, $\Phi_s$ from coils, magnets, conductors — analytically |
+| **Material Solver** | **NGSolve** | Reaction fields in iron/dielectric via FEM ($\nabla \cdot \mu \nabla \phi = -\nabla \cdot \mu H_s$) |
+| **Eddy Current Solver** | **NGbem** | Surface eddy currents via BEM (HDivSurface $\times$ SurfaceL2) |
+| **Circuit Extraction** | **Radia PEEC** | Impedance (L, R, C, M) from conductor geometry for SPICE |
+
+**How the integration works**:
+1.  Radia computes the source field analytically (no mesh, no discretization error).
+2.  `radia_ngsolve.RadiaField()` wraps the result as an NGSolve `CoefficientFunction` — a native C++ object evaluated directly inside NGSolve's element assembly loop.
+3.  NGSolve / NGbem solve the reaction problem driven by this source.
+4.  Result = Source Field (Radia) + Reaction Field (NGSolve).
 
 We bridge the gap between distinct mathematical communities:
-*   **Integral Codes**: Radia (ESRF) & FastImp (MIT) $\rightarrow$ *The Heritage of Synchrotron/Chip Design.*
-*   **Finite Element Codes**: NGSolve (Vienna) $\rightarrow$ *The Modern Standard for PDE Solving.*
-
-**Breathing New Life into Proven Physics**:
-Both Radia and FastImp are "dormant" projects—development has slowed, but their physics engines remain robust and unmatched for their specific niches.
-**The unique value of this framework lies in "Integration as Resurrection".**
-By wrapping these legacy engines in a modern Python ecosystem, we unlock their potential for a new generation of engineers who might otherwise find them inaccessible.
-
-**The Framework's Role**:
-We provide the **High-Performance Bridge**—the Python API, the memory exchange (C++ Coupling), and the coordinate transformations—that allows these disparate solvers to talk to each other as if they were one.
-This allows researchers to focus on **System Design** rather than solver implementation.
+*   **Integral Codes**: Radia (ESRF) & FastImp (MIT) $\rightarrow$ *Analytical source fields.*
+*   **Finite Element Codes**: NGSolve (TU Wien) & NGbem $\rightarrow$ *Material & eddy current solvers.*
 
 ---
 
@@ -165,17 +172,18 @@ Instead of clicking through nested menus to find a "Halbach Array" button, you s
 
 ---
 
-## 💡 Architecture: The "IEM + FEM" Framework
+## 💡 Architecture: Source (IEM) + Material (FEM) + Eddy Current (BEM)
 
-We define our unique approach as a hybrid of **Integral Element Method (IEM)** and **Finite Element Method (FEM)**.
+We define our unique approach as a hybrid of **Integral Element Method (IEM)**, **Finite Element Method (FEM)**, and **Boundary Element Method (BEM)**.
 
 **What is "Integral Element Method (IEM)"?**
 Unlike FEM, which uses uniform element formulations, IEM allows the combination of elements with **different integration kernels** (e.g., $1/r$ for monopoles, $\vec{J} \times \vec{r}/r^3$ for Biot-Savart) into a single system. All kernels use the **Laplace form** ($1/r$) for quasi-static analysis.
 
 | Layer | Method | Role & Kernels | Advantage |
 | :--- | :--- | :--- | :--- |
-| **Source Layer** | **IEM** (Integral Element Method) | **Laplace Kernels for MQS/Darwin Physics.** <br> • **Radia**: Magnetostatic Kernels ($1/r$) for Volume Magnets, Coils. <br> • **FastImp**: Quasi-static SIBC Surfaces. | **Composable Physics.** <br> You can mix-and-match analytical coils, volume magnets, and surface conductors freely. The interaction is handled by the Laplace Green's function. |
-| **Material Layer** | **FEM** (Finite Element Method) | **NGSolve**: Differential Operators ($\nabla \cdot \mu \nabla$) | **Non-Linear & Multi-Physics.** <br> Handles complex material responses (Saturation, Hysteresis, Heat) where kernels become computationally expensive. |
+| **Source Layer** | **IEM** (Radia) | **Laplace Kernels** ($1/r$): Volume Magnets, Coils, SIBC Surfaces. Provides $H_s$, $B_s$, $A_s$ as `CoefficientFunction`. | **Composable & Analytical.** No mesh needed for sources. |
+| **Material Layer** | **FEM** (NGSolve) | **Differential Operators** ($\nabla \cdot \mu \nabla$): Saturation, Hysteresis, Thermal. | **Non-Linear & Multi-Physics.** |
+| **Eddy Current Layer** | **BEM** (NGbem) | **Surface BEM** (HDivSurface $\times$ SurfaceL2): Eddy currents, shielding. | **No volume mesh in conductors.** |
 
 **The Workflow:**
 1.  **Radia**: Computes the source field ($H_s$ or $T_s$) analytically.
@@ -185,7 +193,7 @@ Unlike FEM, which uses uniform element formulations, IEM allows the combination 
 3.  **Result**: Superposition of Source Field + Reaction Field.
 
 > [!NOTE]
-> **Limitation**: Strong coupling with FEM is **not currently supported**. The integration is presently one-Way (Radia Sources $\rightarrow$ NGSolve).
+> **Design**: The coupling is intentionally one-way (Radia Sources $\rightarrow$ NGSolve/NGbem). Radia provides the source; NGSolve and NGbem solve the reaction. This clean separation keeps the architecture composable and each solver optimal for its role.
 
 ### NGSolve Integration Details (Weak Coupling Mechanism)
 The `radia_ngsolve` module implements a high-performance **Weak Coupling** bridge using a native C++ `CoefficientFunction`. This allows Radia fields to be evaluated directly during NGSolve's finite element assembly process.
@@ -347,6 +355,7 @@ print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
 *   **[Installation Guide](BUILD.md)**: Build from source (Windows/Linux/macOS).
 *   **[API Reference](docs/API_REFERENCE.md)**: Full Python API documentation.
 *   **[NGSolve Integration](docs/NGSOLVE_INTEGRATION.md)**: Theory and usage of the hybrid FEM-Integral method.
+*   **[NGbem Integration](docs/NGBEM_INTEGRATION_DESIGN.md)**: Eddy current solver via NGSolve BEM.
 *   **[Original Radia](https://github.com/ochubar/Radia)**: The core physics engine developed at ESRF.
 
 ## License
