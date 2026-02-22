@@ -67,6 +67,8 @@ jobs:
       startsWith(github.event.workflow_run.head_branch, 'v')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      id-token: write
 
     steps:
       - name: Download wheel artifact
@@ -88,14 +90,7 @@ jobs:
           fi
           echo "Wheel: $WHL"
 
-      - name: Install twine
-        run: pip install 'twine>=5.0,<6.0'
-
       - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: |
-          echo "=== Publishing to PyPI ==="
-          python -m twine upload dist/*.whl
-          echo "Upload complete."
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
