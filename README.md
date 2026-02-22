@@ -1,5 +1,10 @@
 # Radia - Electromagnetic Simulation Framework for Magnetic Levitation Systems
 
+[![CI](https://github.com/ksugahar/Radia/actions/workflows/build-test.yml/badge.svg)](https://github.com/ksugahar/Radia/actions/workflows/build-test.yml)
+[![Policy Lint](https://github.com/ksugahar/Radia/actions/workflows/policy-lint.yml/badge.svg)](https://github.com/ksugahar/Radia/actions/workflows/policy-lint.yml)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-BSD%20%2B%20MIT-green.svg)](LICENSE)
+
 **A Python-native environment designed for the age of AI-driven Engineering.**
 
 ## 🚀 Mission: The Design Tool for Open-Space Magnetics
@@ -261,7 +266,7 @@ We provide built-in formulations for the unique physics of magnetic levitation:
 
 ```bash
 # Windows (Python 3.12)
-pip install radia-ngsolve
+pip install radia
 ```
 
 *Prerequisites for FEM features: `pip install ngsolve`*
@@ -291,8 +296,8 @@ rad.FldVTS(coil, "coil_field.vts",
 ### Example 2: PEEC Circuit Parameter Extraction
 
 ```python
-from peec_matrices import PyPEECBuilder
-from peec_topology import PEECCircuitSolver
+from radia.peec_matrices import PyPEECBuilder
+from radia.peec_topology import PEECCircuitSolver
 import numpy as np
 
 # Build a simple inductor: 4 segments in series
@@ -319,7 +324,7 @@ print(f"DC: R={R[0]*1e3:.2f} mOhm, L={L[0]*1e9:.1f} nH")
 ### Example 3: FastHenry .inp Import
 
 ```python
-from fasthenry_parser import FastHenryParser
+from radia.fasthenry_parser import FastHenryParser
 
 parser = FastHenryParser()
 parser.parse_string("""

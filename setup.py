@@ -24,7 +24,7 @@ import sys
 
 # Version is read from pyproject.toml by setuptools
 # This fallback is only used if pyproject.toml is not available
-version = "2.2.0"
+version = "2.3.0"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"

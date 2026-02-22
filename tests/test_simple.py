@@ -1,78 +1,54 @@
 """
-Simple Radia Test
-Quick test to verify basic functionality
+Simple Radia Test - Basic functionality verification
+
+Tests:
+  - Module import
+  - Version query
+  - Rectangular magnet creation
+  - Magnetization setting
+  - Field computation
 """
 
-import sys
-import os
-
-# Set UTF-8 encoding for output
-if sys.platform == 'win32':
-	import codecs
-
-# Add project root's build directory to path
-import sys
-import os
-from pathlib import Path
-
-# Find project root (works from any test subdirectory)
-current_file = Path(__file__).resolve()
-if 'tests' in current_file.parts:
-	# Find the 'tests' directory and go up one level
-	tests_index = current_file.parts.index('tests')
-	project_root = Path(*current_file.parts[:tests_index])
-else:
-	# Fallback
-	project_root = current_file.parent
-
-# Add build directory to path
-build_dir = project_root / 'build' / 'Release'
-if build_dir.exists():
-	sys.path.insert(0, str(build_dir))
-
-	sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
-	sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
+import pytest
 
 
-print("=" * 60)
-print("Simple Radia Module Test")
-print("=" * 60)
+@pytest.mark.basic
+def test_import_radia():
+    """Verify radia module can be imported."""
+    import radia as rad
 
-try:
-	print("\n1. Importing radia module...")
-	import radia as rad
-	print(f"   [OK] SUCCESS")
-	print(f"   Module: {rad.__file__}")
+    assert hasattr(rad, "__version__")
+    assert hasattr(rad, "ObjRecMag")
 
-	print("\n2. Getting version...")
-	version = rad.UtiVer()
-	print(f"   [OK] Version: {version}")
 
-	print("\n3. Creating a rectangular magnet (10x10x10 mm)...")
-	magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
-	print(f"   [OK] Magnet ID: {magnet}")
+@pytest.mark.basic
+def test_version(radia_module):
+    """Verify version string is returned."""
+    version = radia_module.UtiVer()
+    assert isinstance(version, str)
+    assert len(version) > 0
 
-	print("\n4. Setting magnetization (1000 A/m in Z direction)...")
-	rad.ObjSetM(magnet, [0, 0, 1000])
-	print(f"   [OK] Magnetization set")
 
-	print("\n5. Calculating field at point (0, 0, 20) mm...")
-	field = rad.Fld(magnet, 'b', [0, 0, 20])
-	print(f"   [OK] Field (Tesla):")
-	print(f"      Bx = {field[0]:.6f}")
-	print(f"      By = {field[1]:.6f}")
-	print(f"      Bz = {field[2]:.6f}")
+@pytest.mark.basic
+def test_rectangular_magnet(radia_clean):
+    """Create a rectangular magnet and verify field computation."""
+    rad = radia_clean
 
-	print("\n6. Cleaning up...")
-	rad.UtiDelAll()
-	print(f"   [OK] All objects deleted")
+    # Create 10x10x10 mm magnet
+    magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
+    assert isinstance(magnet, int)
+    assert magnet > 0
 
-	print("\n" + "=" * 60)
-	print("[OK] ALL TESTS PASSED!")
-	print("=" * 60)
+    # Set magnetization (1000 A/m in Z)
+    rad.ObjSetM(magnet, [0, 0, 1000])
 
-except Exception as e:
-	print(f"\n[FAIL] ERROR: {e}")
-	import traceback
-	traceback.print_exc()
-	sys.exit(1)
+    # Compute field at (0, 0, 20) mm
+    field = rad.Fld(magnet, "b", [0, 0, 20])
+    assert len(field) == 3
+
+    # Bz should be positive (above magnet magnetized in +z)
+    assert field[2] > 0
+
+    # Bx, By should be ~0 by symmetry
+    assert abs(field[0]) < 1e-10
+    assert abs(field[1]) < 1e-10

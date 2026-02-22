@@ -31,8 +31,13 @@ param(
 $ErrorActionPreference = "Stop"
 
 # Intel MKL path (required for BLAS/LAPACK)
-$INTEL_ONEAPI = "C:\Program Files (x86)\Intel\oneAPI"
-$INTEL_MKL = "$INTEL_ONEAPI\mkl\latest"
+# Check MKLROOT environment variable first, then fallback to default install path
+if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
+    $INTEL_MKL = $env:MKLROOT
+} else {
+    $INTEL_ONEAPI = "C:\Program Files (x86)\Intel\oneAPI"
+    $INTEL_MKL = "$INTEL_ONEAPI\mkl\latest"
+}
 
 # Verify Intel MKL is installed
 if (-not (Test-Path "$INTEL_MKL\lib\mkl_rt.lib")) {
@@ -76,11 +81,25 @@ if (-not (Test-Path $BUILD_DIR)) {
     New-Item -ItemType Directory -Path $BUILD_DIR | Out-Null
 }
 
-# CMake executable
-$CMAKE_EXE = "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+# CMake executable - auto-detect via vswhere, fallback to hardcoded path
+$VSWHERE = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$CMAKE_EXE = $null
+if (Test-Path $VSWHERE) {
+    $VS_PATH = & $VSWHERE -latest -property installationPath 2>$null
+    if ($VS_PATH) {
+        $CMAKE_CANDIDATE = "$VS_PATH\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+        if (Test-Path $CMAKE_CANDIDATE) {
+            $CMAKE_EXE = $CMAKE_CANDIDATE
+        }
+    }
+}
+# Fallback to hardcoded Community edition path
+if (-not $CMAKE_EXE) {
+    $CMAKE_EXE = "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+}
 if (-not (Test-Path $CMAKE_EXE)) {
-    Write-Host "ERROR: CMake not found at $CMAKE_EXE" -ForegroundColor Red
-    Write-Host "Please install Visual Studio 2022 with CMake component" -ForegroundColor Yellow
+    Write-Host "ERROR: CMake not found. Install Visual Studio 2022 with CMake component." -ForegroundColor Red
+    Write-Host "Searched via vswhere and fallback path: $CMAKE_EXE" -ForegroundColor Yellow
     exit 1
 }
 

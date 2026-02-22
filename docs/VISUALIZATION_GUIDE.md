@@ -1,6 +1,6 @@
 # Visualization Guide: Radia-NGSolve Viewer Selection and Workflows
 
-## 全体フロー
+## Overall Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -11,103 +11,103 @@
 │      Coreform Cubit / FreeCAD / STEP files                      │
 │                          ↓                                       │
 │  [2] Mesh Generation                                            │
-│      Netgen / Cubit → .vol file (表面要素自動生成)               │
+│      Netgen / Cubit → .vol file (surface elements auto-generated)│
 │      GMSH → .msh file                                           │
 │                          ↓                                       │
-│  [3] Visualization (用途別)                                      │
-│      ├─ .msh確認: GMSH GUI (ネイティブ、最速)                    │
-│      ├─ 形状確認: Netgen GUI (軽量、正確)                        │
-│      ├─ 開発確認: PyVista (迅速)                                │
-│      ├─ 論文図表: ParaView (高品質)                              │
-│      └─ 統合確認: webgui (ブラウザ)                              │
+│  [3] Visualization (by purpose)                                  │
+│      ├─ .msh inspection: GMSH GUI (native, fastest)             │
+│      ├─ Shape inspection: Netgen GUI (lightweight, accurate)    │
+│      ├─ Development inspection: PyVista (rapid)                 │
+│      ├─ Publication figures: ParaView (high quality)            │
+│      └─ Integrated inspection: webgui (browser)                 │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**重要**: Jupyterノートブック（.ipynb）はClaude Codeとの相性が悪いため、通常のPythonスクリプト（.py）を推奨します。PyVistaもwebguiも.pyスクリプトから完全に使用可能です。
+**Important**: Jupyter notebooks (.ipynb) do not work well with Claude Code, so regular Python scripts (.py) are recommended. Both PyVista and webgui can be fully used from .py scripts.
 
 ### Jupyter Notebook vs Python Script
 
-**Python Script（.py）推奨の理由**:
+**Reasons to prefer Python Scripts (.py)**:
 
-| 観点 | Python Script (.py) | Jupyter Notebook (.ipynb) |
+| Aspect | Python Script (.py) | Jupyter Notebook (.ipynb) |
 |------|-------------------|-------------------------|
-| **Claude Code編集** | ✅ 容易（通常のテキスト） | ❌ 困難（JSON構造） |
-| **バージョン管理** | ✅ Git差分が明確 | ❌ JSON差分が読みにくい |
-| **ファイルサイズ** | ✅ 小さい | ❌ 実行結果で肥大化 |
-| **デバッグ** | ✅ 標準デバッガ使用可 | ❌ セル単位のみ |
-| **自動化** | ✅ CI/CDで実行容易 | ❌ 追加設定必要 |
-| **PyVista** | ✅ インタラクティブウィンドウ | ⚠️ インライン表示（制約あり） |
-| **webgui** | ✅ ブラウザ自動起動 | ⚠️ ノートブック内表示 |
+| **Claude Code editing** | ✅ Easy (plain text) | ❌ Difficult (JSON structure) |
+| **Version control** | ✅ Clear Git diffs | ❌ Hard to read JSON diffs |
+| **File size** | ✅ Small | ❌ Bloated with execution results |
+| **Debugging** | ✅ Standard debugger available | ❌ Cell-based only |
+| **Automation** | ✅ Easy to run in CI/CD | ❌ Additional setup required |
+| **PyVista** | ✅ Interactive window | ⚠️ Inline display (limited) |
+| **webgui** | ✅ Auto-launches browser | ⚠️ In-notebook display |
 
-**結論**: 特別な理由がない限り、通常のPythonスクリプト（.py）を使用してください。
+**Conclusion**: Unless there is a specific reason, use regular Python scripts (.py).
 
 ```python
-# demo.py - 通常のPythonスクリプト
+# demo.py - Regular Python script
 import pyvista as pv
 
-# PyVista: インタラクティブウィンドウが開く（Jupyter不要）
+# PyVista: Opens an interactive window (no Jupyter needed)
 grid = pv.read('field.vts')
-grid.plot(scalars='B_magnitude', cmap='coolwarm')  # ← ウィンドウが開く
+grid.plot(scalars='B_magnitude', cmap='coolwarm')  # ← Opens a window
 ```
 
 ```python
-# webgui_demo.py - 通常のPythonスクリプト
+# webgui_demo.py - Regular Python script
 from ngsolve.webgui import Draw
 
-# NGSolve webgui: ブラウザが自動的に開く（Jupyter不要）
-Draw(B_gf, mesh, 'B_field')  # ← ブラウザタブが開く
+# NGSolve webgui: Automatically opens in browser (no Jupyter needed)
+Draw(B_gf, mesh, 'B_field')  # ← Opens a browser tab
 ```
 
 ---
 
-## ビューワー比較表
+## Viewer Comparison Table
 
-| ビューワー | 品質 | 速度 | 用途 | インストール |
+| Viewer | Quality | Speed | Purpose | Installation |
 |----------|------|------|------|------------|
-| **GMSH GUI** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | **.msh用ベストビューワー（最優先）** | GMSH同梱 |
-| **PyVista** | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Python統合（デフォルト） | `pip install pyvista` |
-| **ParaView** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | **論文図表（最高品質）** | 単体アプリ |
-| **NGSolve webgui** | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Radiaフィールド統合 | `pip install ngsolve` |
-| **Netgen GUI** | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | .vol形式 / 形状・メッシュ確認 | NGSolve同梱 |
+| **GMSH GUI** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | **Best viewer for .msh (top priority)** | Bundled with GMSH |
+| **PyVista** | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Python integration (default) | `pip install pyvista` |
+| **ParaView** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | **Publication figures (highest quality)** | Standalone application |
+| **NGSolve webgui** | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Radia field integration | `pip install ngsolve` |
+| **Netgen GUI** | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | .vol format / shape and mesh inspection | Bundled with NGSolve |
 
-### ビューワー選択フローチャート
+### Viewer Selection Flowchart
 
 ```
-目的は？
+What is the purpose?
   │
-  ├─ .mshメッシュ確認・デバッグ（開発中）
-  │    → GMSH GUI ⭐⭐⭐⭐⭐ (最優先)
+  ├─ .msh mesh inspection and debugging (during development)
+  │    → GMSH GUI ⭐⭐⭐⭐⭐ (top priority)
   │
-  ├─ Python統合・自動化
-  │    → PyVista ⭐⭐⭐⭐ (推奨)
+  ├─ Python integration and automation
+  │    → PyVista ⭐⭐⭐⭐ (recommended)
   │
-  ├─ 論文図表作成
-  │    → ParaView ⭐⭐⭐⭐⭐ (最高品質)
+  ├─ Publication figure creation
+  │    → ParaView ⭐⭐⭐⭐⭐ (highest quality)
   │
-  ├─ Radiaフィールド探索
-  │    → NGSolve webgui ⭐⭐⭐⭐ (Radia統合)
+  ├─ Radia field exploration
+  │    → NGSolve webgui ⭐⭐⭐⭐ (Radia integration)
   │
-  └─ 形状・メッシュ品質チェック
-       → Netgen GUI ⭐⭐⭐ (軽量・正確)
+  └─ Shape and mesh quality check
+       → Netgen GUI ⭐⭐⭐ (lightweight, accurate)
 ```
 
-### ユースケース別推奨
+### Recommendations by Use Case
 
-| ユースケース | 推奨ビューワー | 理由 |
+| Use Case | Recommended Viewer | Reason |
 |-------------|--------------|------|
-| **.mshメッシュ確認** | **GMSH GUI** | ネイティブ、最速、変換不要 |
-| **デバッグ** | **GMSH GUI** | 軽量、即座に確認 |
-| **フィールドデータ(.msh内)** | **GMSH GUI** | View統合 |
-| **開発中の確認** | PyVista | 迅速、スクリプト統合 |
-| **パラメータスタディ** | PyVista | バッチ処理、自動化 |
-| **メッシュ品質チェック** | Netgen GUI | 軽量、専用機能 |
-| **フィールド分布探索** | NGSolve webgui | インタラクティブ |
-| **論文投稿図** | ParaView | 高品質、ベクトル出力 |
-| **プレゼン資料** | ParaView | 高解像度、美しい |
-| **アニメーション動画** | ParaView | キーフレーム機能 |
-| **Jupyter解析** | PyVista + webgui | ノートブック統合 |
-| **CI/CD回帰テスト** | PyVista (headless) | 自動化可能 |
+| **.msh mesh inspection** | **GMSH GUI** | Native, fastest, no conversion needed |
+| **Debugging** | **GMSH GUI** | Lightweight, instant inspection |
+| **Field data (in .msh)** | **GMSH GUI** | View integration |
+| **Development inspection** | PyVista | Rapid, script integration |
+| **Parameter studies** | PyVista | Batch processing, automation |
+| **Mesh quality check** | Netgen GUI | Lightweight, dedicated features |
+| **Field distribution exploration** | NGSolve webgui | Interactive |
+| **Publication figures** | ParaView | High quality, vector output |
+| **Presentation materials** | ParaView | High resolution, beautiful |
+| **Animation videos** | ParaView | Keyframe functionality |
+| **Jupyter analysis** | PyVista + webgui | Notebook integration |
+| **CI/CD regression testing** | PyVista (headless) | Automatable |
 
 ---
 
@@ -115,34 +115,34 @@ Draw(B_gf, mesh, 'B_field')  # ← ブラウザタブが開く
 
 ### 1. GMSH GUI
 
-**評価**: ⭐⭐⭐⭐⭐ (5/5) - `.msh`ファイル用として最高
+**Rating**: ⭐⭐⭐⭐⭐ (5/5) - Best for `.msh` files
 
-#### なぜGMSH GUIが.mshに最適か
+#### Why GMSH GUI is Optimal for .msh
 
-| 利点 | 詳細 |
+| Advantage | Details |
 |------|------|
-| **ネイティブ統合** | `.msh`形式専用設計、変換不要 |
-| **軽量・高速** | 起動・読込が非常に速い |
-| **フィールドデータ対応** | `.msh`内の解データを直接表示 |
-| **Python API連携** | `gmsh.view`, `gmsh.plugin`で自動化可能 |
-| **ポストプロセス機能** | 等値面、ベクトル、ストリームライン内蔵 |
-| **追加インストール不要** | GMSH同梱、依存関係なし |
+| **Native integration** | Designed specifically for `.msh` format, no conversion needed |
+| **Lightweight and fast** | Very fast startup and loading |
+| **Field data support** | Directly displays solution data within `.msh` |
+| **Python API integration** | Automatable via `gmsh.view`, `gmsh.plugin` |
+| **Post-processing features** | Built-in isosurfaces, vectors, streamlines |
+| **No additional installation** | Bundled with GMSH, no dependencies |
 
-#### 他のビューワーとの違い
+#### Differences from Other Viewers
 
 ```
-GMSH GUI:     .msh → 直接表示 ✅
-PyVista:      .msh → NGSolve → 変換 → 表示 ⚠️
-ParaView:     .msh → 読込 → 表示 ✅（が、GMSH固有機能なし）
+GMSH GUI:     .msh → Direct display ✅
+PyVista:      .msh → NGSolve → Conversion → Display ⚠️
+ParaView:     .msh → Load → Display ✅ (but lacks GMSH-specific features)
 ```
 
-#### 使用例
+#### Usage Examples
 
 ```bash
-# 最も簡単で高速
+# Simplest and fastest
 gmsh geometry.msh
 
-# または Python API経由
+# Or via Python API
 python
 >>> import gmsh
 >>> gmsh.initialize()
@@ -150,9 +150,9 @@ python
 >>> gmsh.fltk.run()
 ```
 
-#### フィールドデータ統合
+#### Field Data Integration
 
-GMSH `.msh`ファイルにはメッシュだけでなく、**フィールドデータ（View）**も含められます：
+GMSH `.msh` files can contain not only meshes but also **field data (Views)**:
 
 ```python
 import gmsh
@@ -160,25 +160,25 @@ import gmsh
 gmsh.initialize()
 gmsh.open('geometry.msh')
 
-# フィールドデータ追加（例: 磁束密度）
+# Add field data (e.g., magnetic flux density)
 view_tag = gmsh.view.add("B_field")
 gmsh.view.addListData(view_tag, "ST", num_elements, data_list)
 
-# 保存（メッシュ+フィールドデータ）
+# Save (mesh + field data)
 gmsh.write('geometry_with_field.msh')
 
-# GMSH GUIで開く → フィールドが自動表示
-gmsh.fltk.run()  # GUIを起動
+# Open in GMSH GUI → Field is displayed automatically
+gmsh.fltk.run()  # Launch GUI
 ```
 
-**GMSH GUIでの操作**:
-- Tools → Visibility: フィールド表示ON/OFF
-- Tools → Options → View: カラーマップ、等値面設定
-- Plugins: Streamlines, Isosurface, Cutなど
+**Operations in GMSH GUI**:
+- Tools → Visibility: Toggle field display ON/OFF
+- Tools → Options → View: Colormap, isosurface settings
+- Plugins: Streamlines, Isosurface, Cut, etc.
 
-#### Python API経由の自動化
+#### Automation via Python API
 
-**スクリプトでの可視化制御**:
+**Visualization control from scripts**:
 
 ```python
 import gmsh
@@ -187,15 +187,15 @@ import numpy as np
 gmsh.initialize()
 gmsh.option.setNumber("General.Terminal", 1)
 
-# メッシュ読込
+# Load mesh
 gmsh.open('coil_surface.msh')
 
-# View追加（例: 電流密度）
+# Add View (e.g., current density)
 view = gmsh.view.add("Current Density")
 
-# データ設定（ST = Scalar Triangle）
-# 各三角形要素に対してスカラー値を設定
-num_triangles = 100  # 例
+# Set data (ST = Scalar Triangle)
+# Set scalar values for each triangle element
+num_triangles = 100  # Example
 data = []
 for i in range(num_triangles):
     # Triangle vertices (x1,y1,z1, x2,y2,z2, x3,y3,z3)
@@ -204,75 +204,75 @@ for i in range(num_triangles):
 
 gmsh.view.addListData(view, "ST", num_triangles, data)
 
-# カラーマップ設定
+# Colormap settings
 gmsh.view.option.setNumber(view, "ColormapNumber", 2)  # Jet colormap
 
-# GUI起動
+# Launch GUI
 gmsh.fltk.run()
 gmsh.finalize()
 ```
 
-#### ポストプロセス機能
+#### Post-Processing Features
 
-**GMSH GUI内蔵機能**:
+**Built-in GMSH GUI features**:
 
-| 機能 | 説明 | メニュー |
+| Feature | Description | Menu |
 |------|------|---------|
-| **Isosurface** | 等値面表示 | Plugins → Isosurface |
-| **Streamlines** | 流線表示 | Plugins → Streamlines |
-| **CutPlane** | 切断面表示 | Plugins → CutPlane |
-| **Skin** | 外側表面のみ表示 | Plugins → Skin |
-| **Smooth** | データ平滑化 | Plugins → Smooth |
+| **Isosurface** | Isosurface display | Plugins → Isosurface |
+| **Streamlines** | Streamline display | Plugins → Streamlines |
+| **CutPlane** | Cut plane display | Plugins → CutPlane |
+| **Skin** | Show outer surface only | Plugins → Skin |
+| **Smooth** | Data smoothing | Plugins → Smooth |
 
-**使用例**:
+**Usage example**:
 ```
-1. GMSH GUIで.mshを開く
+1. Open .msh in GMSH GUI
 2. Plugins → Isosurface
-   - View: B_field を選択
-   - Value: 0.5 (等値面の値)
+   - View: Select B_field
+   - Value: 0.5 (isosurface value)
    - Run
-3. 新しいViewが生成される（等値面のみ）
+3. A new View is generated (isosurface only)
 ```
 
-#### パフォーマンス比較
+#### Performance Comparison
 
-**起動時間比較** (Windows):
+**Startup time comparison** (Windows):
 
-| ビューワー | 起動時間 | メモリ使用量 |
+| Viewer | Startup Time | Memory Usage |
 |----------|---------|------------|
-| **GMSH GUI** | **<1秒** | **~50MB** |
-| ParaView | ~5秒 | ~200MB |
-| PyVista | ~2秒 | ~100MB |
+| **GMSH GUI** | **<1 sec** | **~50MB** |
+| ParaView | ~5 sec | ~200MB |
+| PyVista | ~2 sec | ~100MB |
 
-**大規模メッシュ読込** (100万要素):
+**Large mesh loading** (1 million elements):
 
-| ビューワー | 読込時間 |
+| Viewer | Load Time |
 |----------|---------|
-| **GMSH GUI** | **5秒** |
-| ParaView | 8秒 |
-| PyVista | 10秒（変換含む） |
+| **GMSH GUI** | **5 sec** |
+| ParaView | 8 sec |
+| PyVista | 10 sec (including conversion) |
 
-#### キーボードショートカット
+#### Keyboard Shortcuts
 
-| キー | 機能 |
+| Key | Function |
 |------|------|
-| `0` | メッシュ表示ON/OFF |
-| `1-9` | View 1-9の表示切替 |
-| `Shift+a` | 軸表示ON/OFF |
-| `e` | 要素エッジ表示ON/OFF |
-| `v` | Viewパネル表示 |
-| `t` | Toolsパネル表示 |
+| `0` | Toggle mesh display ON/OFF |
+| `1-9` | Toggle View 1-9 display |
+| `Shift+a` | Toggle axis display ON/OFF |
+| `e` | Toggle element edge display ON/OFF |
+| `v` | Show View panel |
+| `t` | Show Tools panel |
 
-#### マウス操作
+#### Mouse Controls
 
-| 操作 | 機能 |
+| Action | Function |
 |------|------|
-| 左ドラッグ | 回転 |
-| 中ドラッグ | 平行移動 |
-| ホイール | ズーム |
-| ダブルクリック | オブジェクト選択 |
+| Left drag | Rotate |
+| Middle drag | Pan |
+| Scroll wheel | Zoom |
+| Double-click | Select object |
 
-#### スクリプト例: メッシュ品質確認
+#### Script Example: Mesh Quality Check
 
 ```python
 import gmsh
@@ -280,16 +280,16 @@ import gmsh
 gmsh.initialize()
 gmsh.open('coil_surface.msh')
 
-# メッシュ統計表示
+# Display mesh statistics
 gmsh.plugin.setNumber("MeshQuality", "Measure", 1)  # 1=SICN
 gmsh.plugin.run("MeshQuality")
 
-# GUI起動（品質がカラーマップで表示される）
+# Launch GUI (quality is displayed as a colormap)
 gmsh.fltk.run()
 gmsh.finalize()
 ```
 
-#### 実例: メッシュ生成 → 即座に可視化
+#### Example: Mesh Generation → Immediate Visualization
 
 ```python
 import gmsh
@@ -298,21 +298,21 @@ import numpy as np
 gmsh.initialize()
 gmsh.model.add("coil")
 
-# コイル形状生成（前述の方法）
+# Generate coil geometry (using methods described earlier)
 # ... (geometry definition)
 
-# 表面メッシュ生成
+# Generate surface mesh
 gmsh.model.mesh.generate(2)
 
-# ファイル保存せずに直接GUI表示
-gmsh.fltk.run()  # ← これだけ！
+# Display directly in GUI without saving to file
+gmsh.fltk.run()  # ← That's all!
 
 gmsh.finalize()
 ```
 
-**利点**: ファイルI/O不要、生成と同時に確認
+**Advantage**: No file I/O needed, inspect immediately after generation
 
-#### 実例: フィールドデータ可視化
+#### Example: Field Data Visualization
 
 ```python
 import gmsh
@@ -321,11 +321,11 @@ import numpy as np
 gmsh.initialize()
 gmsh.open('coil_surface.msh')
 
-# 電流密度データ生成（例）
+# Generate current density data (example)
 elements_2d = gmsh.model.mesh.getElements(2)
 num_triangles = len(elements_2d[1][0])
 
-# 三角形毎に電流密度を計算（例: 1.5e6 A/m^2）
+# Calculate current density for each triangle (e.g., 1.5e6 A/m^2)
 view = gmsh.view.add("Current Density [A/m^2]")
 data_list = []
 
@@ -344,13 +344,13 @@ for i in range(num_triangles):
 
 gmsh.view.addListData(view, "ST", num_triangles, data_list)
 
-# カラーマップ設定
+# Colormap settings
 gmsh.view.option.setNumber(view, "ColormapNumber", 2)  # Jet
 gmsh.view.option.setNumber(view, "RangeType", 2)  # Custom range
 gmsh.view.option.setNumber(view, "CustomMin", 0)
 gmsh.view.option.setNumber(view, "CustomMax", 2e6)
 
-# GUI起動
+# Launch GUI
 gmsh.fltk.run()
 gmsh.finalize()
 ```
@@ -359,25 +359,25 @@ gmsh.finalize()
 
 ### 2. PyVista
 
-**評価**: ⭐⭐⭐⭐ (4/5) - 開発デフォルト推奨
+**Rating**: ⭐⭐⭐⭐ (4/5) - Recommended as development default
 
-**長所**:
-- ✅ Pythonネイティブ - スクリプト統合が容易
-- ✅ Jupyter Notebook/Lab完全対応
-- ✅ 迅速な可視化（開発イテレーション高速）
-- ✅ VTK全機能へのPythonicアクセス
-- ✅ アニメーション・GIF出力が簡単
-- ✅ インタラクティブウィジェット（スライダー、チェックボックス）
-- ✅ ヘッドレス実行可能（CI/CDパイプライン）
-- ✅ 高速レンダリング
-- ✅ 十分な表示品質
+**Strengths**:
+- ✅ Python native - Easy script integration
+- ✅ Full Jupyter Notebook/Lab support
+- ✅ Rapid visualization (fast development iterations)
+- ✅ Pythonic access to all VTK features
+- ✅ Easy animation and GIF export
+- ✅ Interactive widgets (sliders, checkboxes)
+- ✅ Headless execution possible (CI/CD pipelines)
+- ✅ Fast rendering
+- ✅ Sufficient display quality
 
-**短所**:
-- ❌ 論文品質の微調整はParaViewより劣る
-- ❌ ベクトルグラフィックス出力は限定的
-- ❌ 大規模データ（>10M cells）では遅い
+**Weaknesses**:
+- ❌ Fine-tuning for publication quality is inferior to ParaView
+- ❌ Vector graphics output is limited
+- ❌ Slow for large-scale data (>10M cells)
 
-**Radia-NGSolve統合での使用例**:
+**Usage example with Radia-NGSolve integration**:
 
 ```python
 import pyvista as pv
@@ -386,34 +386,34 @@ from radia_ngsolve import RadiaField
 
 rad.FldUnits('m')
 
-# RadiaフィールドをVTS出力
+# Radia field to VTS output
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 rad.FldVTS(magnet, 'field.vts',
            [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15],
            41, 41, 27, 1, 0, 1.0)
 
-# PyVistaで可視化
+# Visualize with PyVista
 grid = pv.read('field.vts')
 plotter = pv.Plotter()
 plotter.add_mesh(grid, scalars='B_magnitude', cmap='coolwarm', opacity=0.8)
 plotter.add_arrows(grid.points, grid['B_field'], mag=0.01, color='black')
 plotter.show()
 
-# Jupyter統合
+# Jupyter integration
 grid.plot(scalars='B_magnitude', cmap='coolwarm', jupyter_backend='static')
 ```
 
-**.mshファイル読込（NGSolve経由）**:
+**Loading .msh files (via NGSolve)**:
 
 ```python
 from ngsolve import Mesh
 import pyvista as pv
 import numpy as np
 
-# .mshファイル読込（NGSolve経由）
+# Load .msh file (via NGSolve)
 mesh = Mesh('geometry.msh')
 
-# PyVista形式に変換
+# Convert to PyVista format
 points = []
 cells = []
 for el in mesh.Elements3D():
@@ -425,89 +425,89 @@ for el in mesh.Elements3D():
 points_array = np.array(points)
 cells_array = np.hstack(cells)
 
-# PyVistaメッシュ作成
+# Create PyVista mesh
 grid = pv.UnstructuredGrid(cells_array, np.array([10]*len(cells)), points_array)
 
-# 表示
+# Display
 plotter = pv.Plotter()
 plotter.add_mesh(grid, show_edges=True, color='lightblue')
 plotter.show()
 ```
 
-**スライス表示**:
+**Slice display**:
 
 ```python
-# Z=0平面でスライス
+# Slice at the Z=0 plane
 slice_z = grid.slice(normal='z', origin=[0, 0, 0])
 slice_z.plot(show_edges=True)
 ```
 
-**ベストプラクティス**:
-- 開発中の可視化確認
-- パラメータスタディの自動化
-- バッチ処理（複数ケースの比較）
-- CI/CDでの回帰テスト可視化
+**Best practices**:
+- Visualization inspection during development
+- Parameter study automation
+- Batch processing (comparing multiple cases)
+- Regression test visualization in CI/CD
 
 ---
 
 ### 3. ParaView
 
-**評価**: ⭐⭐⭐⭐⭐ (5/5) - 論文品質最高
+**Rating**: ⭐⭐⭐⭐⭐ (5/5) - Highest publication quality
 
-**長所**:
-- ✅ 最高品質のレンダリング
-- ✅ ベクトルグラフィックス出力（SVG, PDF）
-- ✅ 高解像度ラスタ画像（300+ DPI）
-- ✅ 複雑なフィルタチェーン（Glyph, Contour, StreamTracer）
-- ✅ アニメーション・キーフレーム
-- ✅ 大規模データ対応（分散並列）
-- ✅ カメラ・照明の完全制御
+**Strengths**:
+- ✅ Highest quality rendering
+- ✅ Vector graphics output (SVG, PDF)
+- ✅ High-resolution raster images (300+ DPI)
+- ✅ Complex filter chains (Glyph, Contour, StreamTracer)
+- ✅ Animation and keyframes
+- ✅ Large-scale data support (distributed parallel)
+- ✅ Full camera and lighting control
 
-**短所**:
-- ❌ GUI操作が必要（スクリプト化は可能だが複雑）
-- ❌ 迅速なイテレーションには不向き
-- ❌ Jupyter統合は限定的（pvpythonは別プロセス）
+**Weaknesses**:
+- ❌ Requires GUI operation (scripting is possible but complex)
+- ❌ Not suited for rapid iteration
+- ❌ Limited Jupyter integration (pvpython runs as a separate process)
 
-**使用方法**:
+**Usage**:
 
 ```bash
-# ParaViewで開く
+# Open in ParaView
 paraview geometry.msh
 ```
 
-**操作手順**:
+**Operation steps**:
 
 1. **File → Open** → `geometry.msh`
-2. **Apply** をクリック
-3. フィルター適用:
-   - **Filters → Slice**: 断面表示
-   - **Filters → Clip**: 切断表示
-   - **Filters → Glyph**: ベクトル表示
-4. **File → Save Screenshot**: 高解像度エクスポート
+2. Click **Apply**
+3. Apply filters:
+   - **Filters → Slice**: Cross-section display
+   - **Filters → Clip**: Clipping display
+   - **Filters → Glyph**: Vector display
+4. **File → Save Screenshot**: High-resolution export
 
-**Radia-NGSolve統合での使用例**:
+**Usage example with Radia-NGSolve integration**:
 
 ```bash
-# 1. Radiaフィールド → VTS出力（Python）
+# 1. Radia field → VTS output (Python)
 python generate_field_vts.py
 
-# 2. ParaViewで開く
+# 2. Open in ParaView
 paraview field.vts
 
-# 3. ParaView GUI操作:
-#    - Glyph filter: ベクトル矢印
-#    - Contour: 等値面
-#    - Slice: 断面
-#    - Camera: アングル調整
-#    - Lighting: 照明設定
+# 3. ParaView GUI operations:
+#    - Glyph filter: Vector arrows
+#    - Contour: Isosurfaces
+#    - Slice: Cross-sections
+#    - Camera: Angle adjustment
+#    - Lighting: Lighting settings
 
-# 4. 高解像度エクスポート:
+# 4. High-resolution export:
 #    File > Save Screenshot
 #    - Resolution: 3000x2000 (300 DPI at 10x6.67 inch)
 #    - Format: PNG (raster) or SVG (vector)
 ```
 
-**ParaViewスクリプト自動化** (pvpython):
+**ParaView script automation** (pvpython):
 
 ```python
 # publication_figure.py
@@ -532,35 +532,35 @@ view.CameraFocalPoint = [0, 0, 0]
 SaveScreenshot('figure.png', view, ImageResolution=[3000, 2000])
 ```
 
-**ベストプラクティス**:
-- 論文投稿用図表
-- プレゼンテーション資料
-- 高解像度ポスター
-- アニメーション動画（MP4, AVI）
+**Best practices**:
+- Publication submission figures
+- Presentation materials
+- High-resolution posters
+- Animation videos (MP4, AVI)
 
 ---
 
 ### 4. NGSolve webgui
 
-**評価**: ⭐⭐⭐⭐ (4/5) - インタラクティブ探索
+**Rating**: ⭐⭐⭐⭐ (4/5) - Interactive exploration
 
-**長所**:
-- ✅ NGSolve完全統合
-- ✅ メッシュ + フィールド同時表示
-- ✅ WebGL - ブラウザで動作
-- ✅ Jupyter統合（同じノートブック内）
-- ✅ Radia CoefficientFunctionと連携
-- ✅ リアルタイム更新（パラメータ変更）
-- ✅ .pyスクリプトから使用可能
-- ✅ OCC形状を正確に表示（近似なし）
+**Strengths**:
+- ✅ Full NGSolve integration
+- ✅ Simultaneous mesh + field display
+- ✅ WebGL - Runs in browser
+- ✅ Jupyter integration (within the same notebook)
+- ✅ Works with Radia CoefficientFunction
+- ✅ Real-time updates (parameter changes)
+- ✅ Usable from .py scripts
+- ✅ Accurately displays OCC shapes (no approximation)
 
-**短所**:
-- ❌ VTSファイル直接読込不可（NGSolve GridFunctionのみ）
-- ❌ 高度なフィルタ機能なし
-- ❌ 論文品質の微調整困難
-- ❌ エクスポート形式が限定的
+**Weaknesses**:
+- ❌ Cannot directly load VTS files (NGSolve GridFunction only)
+- ❌ No advanced filter features
+- ❌ Difficult to fine-tune for publication quality
+- ❌ Limited export formats
 
-**Radia-NGSolve統合での使用例**:
+**Usage example with Radia-NGSolve integration**:
 
 ```python
 from ngsolve import *
@@ -570,170 +570,170 @@ import radia as rad
 
 rad.FldUnits('m')
 
-# Cubitメッシュ → NGSolve
+# Cubit mesh → NGSolve
 mesh = Mesh('model.msh')
 
-# Radia磁石
+# Radia magnet
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
 # Radia CoefficientFunction
 B_cf = RadiaField(magnet, 'b')
 
-# GridFunctionに投影
+# Project to GridFunction
 fes = HDiv(mesh, order=2)
 B_gf = GridFunction(fes)
 B_gf.Set(B_cf)
 
-# インタラクティブ表示（Jupyter内）
+# Interactive display (in Jupyter)
 Draw(B_gf, mesh, name='B_field', vectors={'grid_size': 10})
 
-# メッシュも同時表示
+# Also display the mesh
 Draw(mesh)
 ```
 
-**OCC形状の正確な表示**:
+**Accurate display of OCC shapes**:
 
 ```python
 from ngsolve.webgui import Draw
 from netgen.occ import Box, Pnt
 
-# OCC形状（正確）
+# OCC shape (accurate)
 occ_magnet = Box(Pnt(-0.02, -0.02, -0.01), Pnt(0.02, 0.02, 0.01))
-Draw(occ_magnet, name='Magnet')  # 形状は完全に正確
+Draw(occ_magnet, name='Magnet')  # Shape is completely accurate
 
-# フィールド（GridFunction）
-Draw(B_gf, mesh, 'B_field')  # ブラウザでインタラクティブ
+# Field (GridFunction)
+Draw(B_gf, mesh, 'B_field')  # Interactive in browser
 ```
 
-**ベストプラクティス**:
-- フィールド分布のクイック確認
-- メッシュ品質チェック
-- パラメータ最適化時のリアルタイムフィードバック
-- 教育・デモンストレーション
+**Best practices**:
+- Quick inspection of field distributions
+- Mesh quality check
+- Real-time feedback during parameter optimization
+- Education and demonstration
 
 ---
 
 ### 5. Netgen GUI
 
-**評価**: ⭐⭐⭐ (3/5) - .vol形式専用、形状・メッシュ確認に最適
+**Rating**: ⭐⭐⭐ (3/5) - Dedicated to .vol format, optimal for shape and mesh inspection
 
-**長所**:
-- ✅ Netgen/NGSolveネイティブ（Tcl/Tk GUI）
-- ✅ 形状（OCC）を**正確に**表示（近似なし）
-- ✅ メッシュ品質可視化（アスペクト比、角度など）
-- ✅ 軽量・高速起動（ブラウザ不要）
-- ✅ STL/STEP/IGES読込
-- ✅ 統合ワークフロー（形状確認→メッシュ生成→品質チェック）
-- ✅ 通常のPythonスクリプト（.py）から使用可能
-- ✅ 表面要素で外形を正確に表示
+**Strengths**:
+- ✅ Netgen/NGSolve native (Tcl/Tk GUI)
+- ✅ Displays shapes (OCC) **accurately** (no approximation)
+- ✅ Mesh quality visualization (aspect ratio, angles, etc.)
+- ✅ Lightweight and fast startup (no browser needed)
+- ✅ STL/STEP/IGES loading
+- ✅ Integrated workflow (shape inspection → mesh generation → quality check)
+- ✅ Usable from regular Python scripts (.py)
+- ✅ Accurately displays exterior via surface elements
 
-**短所**:
-- ❌ `.msh`ファイルは直接読込不可
-- ❌ フィールドデータ表示は限定的
-- ❌ 論文品質レンダリング不可
-- ⚠️ 古いGUI（Tcl/Tk）- ただし軽量で安定
-- ⚠️ 表面要素が必須（通常は問題なし）
+**Weaknesses**:
+- ❌ Cannot directly load `.msh` files
+- ❌ Limited field data display
+- ❌ No publication-quality rendering
+- ⚠️ Older GUI (Tcl/Tk) - but lightweight and stable
+- ⚠️ Surface elements required (usually not an issue)
 
-**使用例**:
+**Usage example**:
 
 ```python
 from netgen.occ import OCCGeometry, Box, Pnt
 from netgen.gui import StartGUI
 
-# Radia磁石をOCC形状に変換
+# Convert Radia magnet to OCC shape
 occ_magnet = Box(Pnt(-0.02, -0.02, -0.01), Pnt(0.02, 0.02, 0.01))
 geo = OCCGeometry(occ_magnet)
 
-# Netgen GUIで確認（ネイティブウィンドウが開く）
+# Inspect in Netgen GUI (opens a native window)
 StartGUI()
-geo.Draw()  # 形状を正確に表示
+geo.Draw()  # Displays shape accurately
 
-# メッシュ生成
+# Generate mesh
 mesh = geo.GenerateMesh(maxh=0.005)
-mesh.Draw()  # メッシュ品質確認
+mesh.Draw()  # Inspect mesh quality
 ```
 
-**.msh → .vol変換（NGSolve経由）**:
+**.msh → .vol conversion (via NGSolve)**:
 
 ```python
 from ngsolve import Mesh
 
 mesh = Mesh('geometry.msh')
-mesh.ngmesh.Save('geometry.vol')  # .vol形式で保存
+mesh.ngmesh.Save('geometry.vol')  # Save in .vol format
 
-# Netgen GUIで開く
+# Open in Netgen GUI
 # python utils/netgen_vol_viewer.py geometry.vol
 ```
 
-**webguiとの使い分け**:
+**Choosing between netgen.gui and webgui**:
 
-| 用途 | netgen.gui | ngsolve.webgui |
+| Purpose | netgen.gui | ngsolve.webgui |
 |------|-----------|---------------|
-| 形状確認 | **✅ 推奨** | ⚠️ ブラウザオーバーヘッド |
-| メッシュ品質 | **✅ 推奨** | ❌ 限定的 |
-| フィールド可視化 | ❌ 不可 | **✅ 推奨** |
-| 軽量・高速 | **✅ ネイティブGUI** | ⚠️ ブラウザ必要 |
+| Shape inspection | **✅ Recommended** | ⚠️ Browser overhead |
+| Mesh quality | **✅ Recommended** | ❌ Limited |
+| Field visualization | ❌ Not available | **✅ Recommended** |
+| Lightweight and fast | **✅ Native GUI** | ⚠️ Requires browser |
 
-**Windowsファイル関連付け**:
+**Windows file association**:
 
-.volファイルをダブルクリックでNetgen GUIで開く設定：
+Setting up .vol files to open in Netgen GUI on double-click:
 
 ```bash
-# 自動設定（管理者権限）
+# Automatic setup (administrator privileges)
 cd S:\Radia\01_GitHub\utils
 setup_vol_file_association.bat
 ```
 
-詳細: [VOL_FILE_ASSOCIATION.md](file://S:/Radia/01_GitHub/utils/VOL_FILE_ASSOCIATION.md)
+Details: [VOL_FILE_ASSOCIATION.md](file://S:/Radia/01_GitHub/utils/VOL_FILE_ASSOCIATION.md)
 
-**ベストプラクティス**:
-- メッシュ生成前の形状確認（**webguiより正確**）
-- メッシュ品質チェック（アスペクト比、角度）
-- 境界条件ラベルの確認
-- CADインポート後の形状検証
-- Cubit → Netgen ワークフローの確認
+**Best practices**:
+- Shape inspection before mesh generation (**more accurate than webgui**)
+- Mesh quality check (aspect ratio, angles)
+- Boundary condition label verification
+- Shape verification after CAD import
+- Cubit → Netgen workflow verification
 
 ---
 
 ## Geometry Accuracy: VTS vs OCC
 
-### 問題: VTS Exportによる形状近似
+### Problem: Shape Approximation in VTS Export
 
-#### rad.FldVTS()の挙動
+#### Behavior of rad.FldVTS()
 
 ```python
-# Radia解析オブジェクト（完全に正確）
+# Radia analysis object (completely accurate)
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
-# VTSエクスポート（格子点でのフィールド値計算）
+# VTS export (computes field values at grid points)
 rad.FldVTS(magnet, 'field.vts',
            [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15],
            41, 41, 27, 1, 0, 1.0)
 ```
 
-**VTSファイルに含まれる情報**:
-- ✅ **フィールド値**: 格子点での B, H, A, Phi（正確）
-- ❌ **形状情報**: 失われる（格子の外形で近似）
+**Information contained in VTS files**:
+- ✅ **Field values**: B, H, A, Phi at grid points (accurate)
+- ❌ **Shape information**: Lost (approximated by grid outline)
 
-**結果**:
-- ParaViewで`field.vts`を開くと、フィールド分布は正確だが、磁石の形状は格子で近似される
-- 長方形磁石が格子状の境界で表示される（完全な長方形ではない）
+**Result**:
+- When opening `field.vts` in ParaView, the field distribution is accurate, but the magnet shape is approximated by the grid
+- A rectangular magnet is displayed with grid-like boundaries (not a perfect rectangle)
 
-### ビューワー別の形状精度
+### Shape Accuracy by Viewer
 
-| 方法 | 形状精度 | フィールド精度 | 手間 | 品質 |
+| Method | Shape Accuracy | Field Accuracy | Effort | Quality |
 |------|---------|--------------|------|-----|
-| **PyVista + VTS** | ❌ 近似 | ✅ 正確 | 低 | 良 |
-| **ParaView + VTS** | ❌ 近似 | ✅ 正確 | 中 | 優 |
-| **webgui + OCC** | ✅ 正確 | ✅ 正確 | 中 | 良 |
-| **ParaView + STL/STEP + VTS** | ✅ 正確 | ✅ 正確 | 高 | 優 |
+| **PyVista + VTS** | ❌ Approximate | ✅ Accurate | Low | Good |
+| **ParaView + VTS** | ❌ Approximate | ✅ Accurate | Medium | Excellent |
+| **webgui + OCC** | ✅ Accurate | ✅ Accurate | Medium | Good |
+| **ParaView + STL/STEP + VTS** | ✅ Accurate | ✅ Accurate | High | Excellent |
 
-### 解決策: ParaView STL+VTS Overlay
+### Solution: ParaView STL+VTS Overlay
 
-形状とフィールドの両方を正確に表示するには：
+To accurately display both shape and field:
 
 ```python
-# 1. 形状をSTL/STEPでエクスポート（正確）
+# 1. Export shape as STL/STEP (accurate)
 from netgen.occ import Box, Pnt, OCCGeometry
 
 box = Box(Pnt(-0.02, -0.02, -0.01), Pnt(0.02, 0.02, 0.01))
@@ -741,117 +741,117 @@ geo = OCCGeometry(box)
 mesh = geo.GenerateMesh(maxh=0.002)
 mesh.Export('magnet_shape.stl', 'STL Format')
 
-# 2. フィールドをVTSでエクスポート
+# 2. Export field as VTS
 rad.FldVTS(magnet, 'field.vts', ...)
 
-# 3. ParaViewで両方をoverlayして高品質図表作成
-# - magnet_shape.stl: 半透明で形状表示
-# - field.vts: カラーマップでフィールド表示
+# 3. Overlay both in ParaView for high-quality figures
+# - magnet_shape.stl: Display shape semi-transparently
+# - field.vts: Display field with colormap
 ```
 
-### 結論
+### Conclusion
 
-**ユーザーの懸念「paraview介すと必ずしも形状がそのままではない」は正しい**:
-- VTS形式は構造格子なので、形状は格子で近似される
-- 解析的な長方形や円柱が、格子の境界で表現される
+**The user's concern that "shapes are not necessarily preserved when going through ParaView" is correct**:
+- VTS format uses structured grids, so shapes are approximated by the grid
+- Analytical rectangles and cylinders are represented by grid boundaries
 
-**解決策**:
-1. **形状不要**: PyVista/ParaView + VTS（現在の実装で十分）
-2. **形状重要（開発）**: NGSolve webgui + OCC形状（`rad.ExportOCC()` TODO）
-3. **形状重要（論文）**: ParaView + STL/STEP + VTS overlay（手動、または自動化TODO）
+**Solutions**:
+1. **Shape not needed**: PyVista/ParaView + VTS (current implementation is sufficient)
+2. **Shape important (development)**: NGSolve webgui + OCC shapes
+3. **Shape important (publication)**: ParaView + STL/STEP + VTS overlay
 
 ---
 
 ## Recommended Workflows by Use Case
 
-### メッシュ生成パターン
+### Mesh Generation Patterns
 
-#### パターンA: Netgen直接生成（推奨）
+#### Pattern A: Direct Netgen Generation (Recommended)
 
 ```python
 from netgen.occ import Box, Pnt, OCCGeometry
 from netgen.gui import StartGUI
 
-# 形状作成
+# Create shape
 box = Box(Pnt(-0.05, -0.05, -0.05), Pnt(0.05, 0.05, 0.05))
 geo = OCCGeometry(box)
 
-# メッシュ生成（表面要素自動）
+# Generate mesh (surface elements automatic)
 mesh = geo.GenerateMesh(maxh=0.01)
 
 print(f"Volume elements:  {mesh.ne}")
-print(f"Surface elements: {mesh.nse}")  # > 0 (自動生成)
+print(f"Surface elements: {mesh.nse}")  # > 0 (auto-generated)
 
-# 保存
-mesh.Save('magnet.vol')  # 表面要素を含む
+# Save
+mesh.Save('magnet.vol')  # Includes surface elements
 
-# Netgen GUIで確認
+# Inspect in Netgen GUI
 StartGUI()
-mesh.Draw()  # ← 問題なく表示される
+mesh.Draw()  # ← Displays without issues
 ```
 
-**結果**: 表面要素が自動的に含まれる ✅
+**Result**: Surface elements are automatically included ✅
 
-#### パターンB: Cubit → Netgen変換
+#### Pattern B: Cubit → Netgen Conversion
 
 ```python
 import cubit
 import cubit_mesh_export
 from ngsolve import Mesh
 
-# Cubitでメッシュ生成
+# Generate mesh in Cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 cubit.cmd("import step 'motor_rotor.step'")
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("mesh volume all")
 
-# Sideset定義（これが表面要素になる）
+# Define sidesets (these become surface elements)
 cubit.cmd("sideset 1 surface all")
 cubit.cmd("sideset 1 name 'boundary'")
 
-# Netgenへ変換（表面要素保持）
+# Convert to Netgen (preserving surface elements)
 ngmesh = cubit_mesh_export.export_netgen(cubit)
 mesh = Mesh(ngmesh)
 
-# 保存
-mesh.ngmesh.Save('motor_rotor.vol')  # 表面要素を含む
+# Save
+mesh.ngmesh.Save('motor_rotor.vol')  # Includes surface elements
 ```
 
-**結果**: Cubit sidesetが表面要素に変換される ✅
+**Result**: Cubit sidesets are converted to surface elements ✅
 
-メッシュ生成と表面要素の詳細については [MESH_GUIDE.md](MESH_GUIDE.md) を参照。
+For details on mesh generation and surface elements, see [MESH_GUIDE.md](MESH_GUIDE.md).
 
-#### パターンC: GMSH → NGSolve
+#### Pattern C: GMSH → NGSolve
 
 ```python
 from ngsolve import Mesh
 
-# GMSHメッシュ読込（NGSolveが自動変換）
+# Load GMSH mesh (NGSolve auto-converts)
 mesh = Mesh('geometry.msh')
 
-# 表面要素は自動的に認識される
+# Surface elements are automatically recognized
 print(f"Surface elements: {mesh.ngmesh.nse}")  # > 0
 
-# .volとして保存
+# Save as .vol
 mesh.ngmesh.Save('geometry.vol')
 ```
 
-**結果**: GMSH境界要素がNetgen表面要素に変換される ✅
+**Result**: GMSH boundary elements are converted to Netgen surface elements ✅
 
-### 可視化ワークフロー（用途別）
+### Visualization Workflows (by Purpose)
 
-#### フロー1: .mshメッシュ確認（最優先）
+#### Flow 1: .msh Mesh Inspection (Top Priority)
 
 ```
 GMSH mesh generate → geometry.msh → **GMSH GUI**
                                         ↓
-                                  即座に確認（変換不要）
+                                  Instant inspection (no conversion needed)
 ```
 
-#### フロー2: 形状・メッシュ確認
+#### Flow 2: Shape and Mesh Inspection
 
 ```
-Netgen / Cubit → .vol → **Netgen GUI** (軽量、形状正確)
+Netgen / Cubit → .vol → **Netgen GUI** (lightweight, accurate shapes)
 ```
 
 ```python
@@ -865,12 +865,12 @@ StartGUI()
 mesh.Draw()
 ```
 
-#### フロー3: 開発・デバッグ
+#### Flow 3: Development and Debugging
 
 ```
 Cubit → Netgen mesh → Radia solve → VTS export → **PyVista**
                                                      ↓
-                                              迅速な確認・修正
+                                              Rapid inspection and correction
 ```
 
 ```python
@@ -879,153 +879,149 @@ import pyvista as pv
 
 rad.FldUnits('m')
 
-# Radia磁石
+# Radia magnet
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
-# VTSエクスポート
+# VTS export
 rad.FldVTS(magnet, 'field.vts', ...)
 
-# PyVista可視化（迅速）
+# PyVista visualization (rapid)
 grid = pv.read('field.vts')
 grid.plot(scalars='B_magnitude', cmap='coolwarm')
 ```
 
-#### フロー4: 論文投稿
+#### Flow 4: Publication Submission
 
 ```
 Cubit → Netgen mesh → Radia solve → VTS export → **ParaView**
                                                      ↓
-                                         高解像度PNG/SVG出力
+                                         High-resolution PNG/SVG output
 ```
 
-形状とフィールドの両方が重要な場合：
+When both shape and field accuracy are important:
 ```
-Radia → ExportOCC() → STL/STEP ──┐
-     ↓                            ├→ ParaView overlay
-     └→ FldVTS() → VTS ───────────┘
+Radia → STL/STEP export ───────────┐
+     ↓                              ├→ ParaView overlay
+     └→ FldVTS() → VTS ────────────┘
                   ↓
-            形状正確 + フィールド正確
+            Accurate shape + Accurate field
 ```
 
-#### フロー5: インタラクティブ探索
+#### Flow 5: Interactive Exploration
 
 ```
 Cubit → Netgen mesh → Radia CF → NGSolve GridFunction → **webgui**
                                                             ↓
-                                                  ブラウザで即座に確認
+                                                  Instant inspection in browser
 ```
 
-### 推奨フローチャート（総合）
+### Recommended Flowchart (Overall)
 
 ```
-メッシュ生成
+Mesh generation
     ↓
-ファイル形式は？
-    ├─ .msh → GMSH GUI（最速確認）
-    └─ .vol → 用途で選択
-                ├─ 形状確認 → Netgen GUI (最軽量)
-                ├─ 開発確認 → PyVista (迅速)
-                ├─ 論文図表 → ParaView (高品質)
-                └─ 統合探索 → webgui (正確)
+What is the file format?
+    ├─ .msh → GMSH GUI (fastest inspection)
+    └─ .vol → Choose by purpose
+                ├─ Shape inspection → Netgen GUI (lightest weight)
+                ├─ Development inspection → PyVista (rapid)
+                ├─ Publication figures → ParaView (high quality)
+                └─ Integrated exploration → webgui (accurate)
 ```
 
-### よくある質問
+### Frequently Asked Questions
 
-#### Q: 表面要素がないと困る？
+#### Q: Is the lack of surface elements a problem?
 
-**A: 実用上は問題ありません。**
+**A: In practice, it is not an issue.**
 
-理由：
-- Netgen生成メッシュ: 自動的に表面要素が含まれる
-- Cubit変換メッシュ: sideset定義で表面要素生成
-- NGSolveサンプル: すべて表面要素を含む
+Reasons:
+- Netgen-generated meshes: Surface elements are automatically included
+- Cubit-converted meshes: Surface elements are generated via sideset definitions
+- NGSolve samples: All include surface elements
 
-稀に体積要素のみの場合: ParaView/PyVistaで切断面表示
+In rare cases with volume elements only: Use cut-plane display in ParaView/PyVista
 
-#### Q: Windowsでダブルクリックで開きたい
+#### Q: I want to open files by double-clicking on Windows
 
-**A: 可能です。**
+**A: This is possible.**
 
 ```bash
-# 自動設定（管理者権限）
+# Automatic setup (administrator privileges)
 cd S:\Radia\01_GitHub\utils
 setup_vol_file_association.bat
 ```
 
-詳細: [VOL_FILE_ASSOCIATION.md](file://S:/Radia/01_GitHub/utils/VOL_FILE_ASSOCIATION.md)
+Details: [VOL_FILE_ASSOCIATION.md](file://S:/Radia/01_GitHub/utils/VOL_FILE_ASSOCIATION.md)
 
-#### Q: ParaViewで形状が近似される問題は？
+#### Q: What about the shape approximation issue in ParaView?
 
-**A: 2つの解決策があります。**
+**A: There are two solutions.**
 
-1. **形状確認にはNetgen GUI使用**（正確、軽量）
-2. **論文図表ではSTL+VTS overlay**（正確、高品質）
+1. **Use Netgen GUI for shape inspection** (accurate, lightweight)
+2. **Use STL+VTS overlay for publication figures** (accurate, high quality)
 
-詳細は上記「Geometry Accuracy: VTS vs OCC」セクションを参照。
+For details, see the "Geometry Accuracy: VTS vs OCC" section above.
 
 ---
 
 ## Implementation Status
 
-### Phase 1: 基本可視化（完成済み）
-- ✅ `rad.FldVTS()` - VTSエクスポート
-- ✅ PyVistaによる基本プロット
-- ✅ ParaViewでの手動可視化
+### Phase 1: Basic Visualization (Completed)
+- ✅ `rad.FldVTS()` - VTS export
+- ✅ Basic plotting with PyVista
+- ✅ Manual visualization in ParaView
 
-### Phase 2: NGSolve統合強化（進行中）
+### Phase 2: Enhanced NGSolve Integration (In Progress)
 - ✅ `RadiaField` CoefficientFunction
-- ⏳ `radia_ngsolve` Python API改善
-- ⏳ webgui連携スクリプト集
+- ⏳ `radia_ngsolve` Python API improvements
+- ⏳ webgui integration script collection
 
-### Phase 3: 高度な可視化（TODO）
-- ⏳ ParaView自動化スクリプト（pvpython）
-- ⏳ PyVistaアニメーション生成
-- ⏳ `rad.ExportOCC()` - Radia解析オブジェクト → OCC形状変換
-  - `ObjRecMag` → `netgen.occ.Box`
-  - `ObjCylMag` → `netgen.occ.Cylinder`
-  - `ObjSphMag` → `netgen.occ.Sphere`
-- ⏳ STL/STEPエクスポート自動化
-- ⏳ ParaView overlay自動化スクリプト
+### Phase 3: Advanced Visualization (Planned)
+- ⏳ ParaView automation scripts (pvpython)
+- ⏳ PyVista animation generation
+- ⏳ STL/STEP export automation
+- ⏳ ParaView overlay automation scripts
 
-### Phase 4: 統合ビューワー（将来）
-- ⏳ カスタムPyVistaインターフェース
-- ⏳ Jupyter Widgetによるパラメータ制御
-- ⏳ WebアプリケーションUI（Dash/Streamlit）
+### Phase 4: Integrated Viewer (Future)
+- ⏳ Custom PyVista interface
+- ⏳ Parameter control via Jupyter Widgets
+- ⏳ Web application UI (Dash/Streamlit)
 
 ---
 
 ## References
 
-### インストールコマンド
+### Installation Commands
 
 ```bash
-# GMSH（メッシュ生成+ビューワー）
-pip install gmsh  # PythonライブラリとGUI両方含む
+# GMSH (mesh generation + viewer)
+pip install gmsh  # Includes both Python library and GUI
 
-# PyVista（開発用推奨）
+# PyVista (recommended for development)
 pip install pyvista
 
-# ParaView（論文用）
-# https://www.paraview.org/download/ からダウンロード
+# ParaView (for publications)
+# Download from https://www.paraview.org/download/
 
-# NGSolve webgui（フィールド探索）
-pip install ngsolve  # webgui同梱
+# NGSolve webgui (field exploration)
+pip install ngsolve  # webgui included
 ```
 
-### 参考実装
+### Reference Implementation
 
 **EMPY_Field** (`S:\NGSolve\EMPY\EMPY_Field`):
-- Radia解析オブジェクトのOCC変換実装例
-- 正確な形状をOCCで表現
+- Example implementation of OCC conversion for Radia analysis objects
+- Represents accurate shapes using OCC
 
-### 関連ドキュメント
+### Related Documents
 
-- [MESH_GUIDE.md](MESH_GUIDE.md) - メッシュ生成と表面要素の詳細
-- [MESH_GUIDE.md](MESH_GUIDE.md) - GMSHメッシュ生成ワークフロー
-- [VOL_FILE_ASSOCIATION.md](file://S:/Radia/01_GitHub/utils/VOL_FILE_ASSOCIATION.md) - .volファイル関連付け設定
+- [MESH_GUIDE.md](MESH_GUIDE.md) - Details on mesh generation and surface elements
+- [MESH_GUIDE.md](MESH_GUIDE.md) - GMSH mesh generation workflow
+- [VOL_FILE_ASSOCIATION.md](file://S:/Radia/01_GitHub/utils/VOL_FILE_ASSOCIATION.md) - .vol file association setup
 
 ---
 
-**作成日**: 2026-02-12
-**更新日**: 2026-02-22
-**対象**: Radia-NGSolve統合フレームワークの可視化ガイド（ビューワー選択、形状精度、ワークフロー）
+**Created**: 2026-02-12
+**Updated**: 2026-02-22
+**Subject**: Visualization guide for the Radia-NGSolve integration framework (viewer selection, shape accuracy, workflows)
