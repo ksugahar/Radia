@@ -1,16 +1,17 @@
 name: Release
 
-# Runs automatically after CI succeeds on master or a version tag.
+# Runs automatically after CI succeeds (master push or version tag).
 on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches: [master]
 
 jobs:
   upload-binaries:
-    # Only run when CI passed (skip on failure / cancellation).
-    if: github.event.workflow_run.conclusion == 'success'
+    # Only on master CI success (not PRs, not tags).
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'master'
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
