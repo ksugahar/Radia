@@ -1,0 +1,58 @@
+name: Release
+
+# Runs automatically after CI succeeds on master.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [master]
+
+jobs:
+  upload-binaries:
+    # Only run when CI passed (skip on failure / cancellation).
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------
+      # Download the .pyd artifact produced by CI
+      # ----------------------------------------------------------------
+      - name: Download .pyd artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-pyd
+          path: pyd-files
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ----------------------------------------------------------------
+      # Upload .pyd to GitHub Releases (tag: binaries)
+      # ----------------------------------------------------------------
+      - name: Upload .pyd to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== Uploading .pyd files to GitHub Releases ==="
+
+          # Ensure 'binaries' release exists
+          if ! gh release view binaries >/dev/null 2>&1; then
+            gh release create binaries --title "Binary Files" \
+              --notes "Pre-built modules. Updated by CI." --latest=false
+          fi
+
+          # Collect .pyd files
+          FILES=$(find pyd-files -name '*.pyd' 2>/dev/null)
+          if [ -z "$FILES" ]; then
+            echo "::warning::No .pyd files found to upload"
+            exit 0
+          fi
+
+          echo "Uploading files..."
+          for f in $FILES; do
+            echo "  Uploading $(basename "$f")..."
+            gh release upload binaries "$f" --clobber
+          done
+          echo "Upload complete."

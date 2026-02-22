@@ -1,16 +1,19 @@
-name: Build & Test
+name: CI
 
 on:
   push:
     branches: [master]
+  pull_request:
+    branches: [master]
 
-# Cancel previous runs on same branch to save runner time
+# On master: never cancel a running build (only pending ones get replaced).
+# On PRs:    cancel the previous run to save runner time.
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
-  build-test-upload:
+  build-test:
     runs-on: [self-hosted, windows-radia]
     timeout-minutes: 15
 
@@ -71,33 +74,12 @@ jobs:
           retention-days: 30
 
       # ----------------------------------------------------------------
-      # Upload .pyd to GitHub Releases (tag: binaries)
+      # Upload .pyd as artifact for the CD workflow to consume
       # ----------------------------------------------------------------
-      - name: Upload .pyd to GitHub Releases
+      - name: Upload .pyd artifact
         if: success()
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          Write-Host "=== Uploading .pyd files to GitHub Releases ==="
-
-          # Ensure 'binaries' release exists
-          gh release view binaries 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create binaries --title "Binary Files" `
-              --notes "Pre-built modules. Updated by CI." --latest=false
-          }
-
-          # Collect .pyd files
-          $files = Get-ChildItem -Path "src\radia\*.pyd" -ErrorAction SilentlyContinue
-          if (-not $files -or $files.Count -eq 0) {
-            Write-Host "::warning::No .pyd files found to upload"
-            exit 0
-          }
-
-          Write-Host "Uploading $($files.Count) file(s)..."
-          foreach ($f in $files) {
-            Write-Host "  Uploading $($f.Name)..."
-            gh release upload binaries $f.FullName --clobber
-          }
-          Write-Host "Upload complete."
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-pyd
+          path: src/radia/*.pyd
+          retention-days: 7
