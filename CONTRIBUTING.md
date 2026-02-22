@@ -78,6 +78,15 @@ These are enforced by CI ([policy-lint.yml](.github/workflows/policy-lint.yml)):
 5. **No Generated Files at Root**: .msh/.vtu/.vtk/.vol go next to source scripts
 6. **No Legacy Paths**: Use `src/radia`, not `src/python`
 
+### Example README Policy
+
+Every example directory under `examples/` must have exactly **one README.md** that lists all Python files with descriptions.
+
+- **Single-topic folder** (e.g., `vtk_export/`): Place `README.md` directly in the folder.
+- **Multi-topic folder** (e.g., `KelvinTransformation/`): Place one top-level `README.md` that summarizes all sub-themes, plus optionally one `README.md` per subfolder.
+- **README must match code**: Every `.py` file on disk must be listed in the README. Remove entries for deleted files. Update the README when adding or removing scripts.
+- **Keep READMEs concise**: 1-line description per script, plus a brief overview of the folder's purpose.
+
 ## Reporting Issues
 
 - Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.yml) for bugs

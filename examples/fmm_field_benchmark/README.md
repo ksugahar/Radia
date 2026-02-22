@@ -106,5 +106,5 @@ This benchmark is designed to match ELF_MAGIC's `examples/fmm_field_benchmark/` 
 | File | Description |
 |------|-------------|
 | `benchmark_fmm_field.py` | Main benchmark script |
-| `readme.md` | This documentation |
+| `README.md` | This documentation |
 | `fmm_benchmark_results.json` | Benchmark output |
