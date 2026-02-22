@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [master]
+    tags: ['v*']
   pull_request:
     branches: [master]
 
@@ -74,6 +75,20 @@ jobs:
           retention-days: 30
 
       # ----------------------------------------------------------------
+      # Build wheel (DryRun: build + verify only, no upload)
+      # ----------------------------------------------------------------
+      - name: Build wheel
+        if: success()
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          & "${{ github.workspace }}\Publish_to_PyPI.ps1" -DryRun
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Wheel build failed"
+            exit $LASTEXITCODE
+          }
+
+      # ----------------------------------------------------------------
       # Upload .pyd as artifact for the CD workflow to consume
       # ----------------------------------------------------------------
       - name: Upload .pyd artifact
@@ -82,4 +97,15 @@ jobs:
         with:
           name: radia-pyd
           path: src/radia/*.pyd
+          retention-days: 7
+
+      # ----------------------------------------------------------------
+      # Upload wheel as artifact for PyPI publishing
+      # ----------------------------------------------------------------
+      - name: Upload wheel artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-wheel
+          path: dist/*.whl
           retention-days: 7

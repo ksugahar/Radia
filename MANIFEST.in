@@ -4,14 +4,14 @@ include COPYRIGHT.txt
 
 # Include documentation
 include README.md
-include README_BUILD.md
+include BUILD.md
 
 
 # Include Python utilities
-recursive-include src/python *.py
+recursive-include src/radia *.py
 
 # Include compiled extension modules (.pyd files)
-recursive-include src/python *.pyd
+recursive-include src/radia *.pyd
 
 # Include examples
 recursive-include examples *.py

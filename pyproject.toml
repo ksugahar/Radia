@@ -56,10 +56,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ksugahar/Radia_NGSolve"
-Documentation = "https://github.com/ksugahar/Radia_NGSolve/blob/master/README.md"
-Repository = "https://github.com/ksugahar/Radia_NGSolve"
-Issues = "https://github.com/ksugahar/Radia_NGSolve/issues"
+Homepage = "https://github.com/ksugahar/Radia"
+Documentation = "https://github.com/ksugahar/Radia/blob/master/README.md"
+Repository = "https://github.com/ksugahar/Radia"
+Issues = "https://github.com/ksugahar/Radia/issues"
 "Original Radia" = "https://github.com/ochubar/Radia"
 "ESRF Radia Page" = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
 
