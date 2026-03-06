@@ -1,0 +1,30 @@
+# TDK MnZn Ferrite PC200 Complex Permeability Data
+# Source: TDK Corporation datasheet "Mn-Zn Ferrite Material characteristics" (May 2022)
+# Document: ferrite_mn-zn_material_characteristics_en.pdf, Page 12
+# REAL MANUFACTURER DATA - Extracted from published datasheet graphs
+#
+# Material: PC200 (Ferrite for high-frequency power supplies)
+# Initial permeability: 800 +/- 25%
+# Curie temperature: >280 C
+# Test conditions: Toroidal core, Temp 23C, Hm=0.4 A/m
+#
+# Data extracted from "Magnetic permeability vs. frequency characteristics (Typ.)" graph
+# mu_real = mu' (real part of complex permeability)
+# mu_imag = mu" (imaginary part, represents losses)
+#
+# Frequency [Hz], mu_real [-], mu_imag [-]
+frequency_Hz,mu_real,mu_imag
+10000,800,3
+20000,800,6
+50000,790,15
+100000,780,35
+200000,760,80
+300000,730,130
+500000,660,230
+700000,580,330
+1000000,460,420
+2000000,250,450
+3000000,160,400
+5000000,80,300
+7000000,50,220
+10000000,30,150

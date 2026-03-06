@@ -19,6 +19,9 @@ from matplotlib import rcParams
 # Add Radia to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
+import radia as rad
+rad.FldUnits('m')
+
 try:
     from peec_matrices import PEECBuilder
     print("Using C++ PEEC implementation")
@@ -31,6 +34,8 @@ from lanczos_reduction import LanczosReducer
 # Physical constants
 MU_0 = 4 * np.pi * 1e-7
 SIGMA_COPPER = 5.8e7
+
+mm = 1e-3  # 1 mm in meters
 
 # Matplotlib settings for publication quality
 rcParams['font.family'] = 'serif'
@@ -59,9 +64,9 @@ def fig1_peec_matrix_verification(output_dir):
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.5))
 
     # Create PEEC matrices for circular loop
-    radius = 0.1
-    width = 2e-3
-    height = 1e-3
+    radius = 100*mm
+    width = 2*mm
+    height = 1*mm
     n_segments = 24
 
     builder = PEECBuilder()
@@ -153,9 +158,9 @@ def fig2_prima_accuracy(output_dir):
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.5))
 
     # Create PEEC matrices
-    length = 0.1
-    width = 2e-3
-    height = 0.5e-3
+    length = 100*mm
+    width = 2*mm
+    height = 0.5*mm
     n_segments = 20
 
     builder = PEECBuilder()
@@ -410,9 +415,9 @@ def fig4_wpt_coil_characteristics(output_dir):
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.5))
 
     # WPT coil parameters
-    radius = 0.15  # 15 cm
-    width = 3e-3
-    height = 1e-3
+    radius = 150*mm  # 15 cm
+    width = 3*mm
+    height = 1*mm
     n_segments = 36
 
     builder = PEECBuilder()
@@ -475,7 +480,7 @@ def fig4_wpt_coil_characteristics(output_dir):
 
     # (c) Quality factor vs radius
     ax = axes[2]
-    radii = np.linspace(0.05, 0.25, 9)  # 5 to 25 cm
+    radii = np.linspace(50*mm, 250*mm, 9)  # 5 to 25 cm
     Q_factors = []
 
     for r in radii:
@@ -502,7 +507,7 @@ def fig4_wpt_coil_characteristics(output_dir):
 
     # Add annotation for typical WPT coil
     ax.axvline(x=15, color='r', linestyle='--', alpha=0.5)
-    idx_15cm = np.argmin(np.abs(radii - 0.15))
+    idx_15cm = np.argmin(np.abs(radii - 150*mm))
     ax.annotate(f'15cm: Q={Q_factors[idx_15cm]:.0f}',
                 (15, Q_factors[idx_15cm]),
                 textcoords='offset points', xytext=(10, 5), fontsize=9)

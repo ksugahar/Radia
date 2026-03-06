@@ -110,6 +110,36 @@ double G = 1.0 / (4.0 * M_PI * r);  // NOT exp(-jkr) / (4*pi*r)
 
 ---
 
+## Binary File Policy: No Binaries in Repository (2026-02-19)
+
+**CRITICAL**: Binary files are NOT stored in the git repository.
+
+**Policy**:
+- **`.pyd`, `.dll`, `.so`, `.lib`, `.exe`**: Hosted on GitHub Releases (tag: `binaries`)
+- **Auto-upload**: Pre-push hook automatically uploads `.pyd` and `fmm3d.lib` to Releases on every `git push`
+- **Download**: After cloning, run `./download_binaries.sh` to fetch pre-built binaries
+- **`.png`, `.pdf`**: Allowed in repository for documentation and examples
+- **`.msh`, `.vtu`, `.vtk`, `.vol`**: Generated files, NOT committed (see File Placement Policy)
+
+**Rationale**: Repository size was reduced from 566 MB to 61 MB by removing all binaries from git history.
+
+---
+
+## File Placement Policy (2026-02-19)
+
+**CRITICAL**: Generated output files (`.png`, `.msh`, `.vtu`, `.vtk`, `.vol`, `.vts`) must be placed **next to their corresponding `.py` script** in the same directory.
+
+**Rules**:
+1. Example output files belong in `examples/<category>/` alongside their `.py` script
+2. Do NOT place generated files at the repository root
+3. `.msh` files in `examples/**/gmsh_models/` are tracked (pre-generated mesh definitions)
+4. All other `.msh`, `.vol`, `.vtu`, `.vtk`, `.vts`, `.npz` files are `.gitignore`d
+5. Build output goes to `build*/` or `dist/` (both gitignored)
+
+**Build folders**: Use `build*/` glob pattern in `.gitignore` to cover `build/`, `build-msvc/`, `build-intel/`, etc.
+
+---
+
 ## Build Policy: MSVC + Intel MKL
 
 ### Compiler Requirement (2025-12-27)
@@ -1337,46 +1367,43 @@ powershell.exe -ExecutionPolicy Bypass -File Publish_to_PyPI.ps1
 
 **Security**: NEVER commit PyPI tokens to repository. NEVER ask user for their token.
 
-### MKL DLL Bundling Policy (2025-12-27)
+### MKL DLL Policy: Do NOT Bundle (2026-02-20)
 
-**Policy**: PyPI packages MUST include Intel MKL runtime DLLs for user convenience.
+**Policy**: PyPI packages MUST NOT bundle Intel MKL DLLs. MKL is installed via pip dependency.
 
-**Required DLLs** (Windows):
-- `mkl_core.2.dll` - MKL core library
-- `mkl_intel_thread.2.dll` - MKL Intel OpenMP threading
-- `mkl_def.2.dll` - MKL definitions
-- `mkl_rt.2.dll` - MKL runtime (optional, for dynamic linking)
-- `libiomp5md.dll` - Intel OpenMP runtime
+**Rationale** (changed from previous bundling policy):
+- `pyproject.toml` declares `mkl>=2024.2.0` and `intel-cmplr-lib-rt>=2024.2.0` as dependencies
+- pip automatically installs MKL DLLs to `{sys.prefix}/Library/bin/`
+- `__init__.py` dynamically adds the MKL DLL directory via `os.add_dll_directory()`
+- Bundling DLLs causes version conflicts with pip-installed MKL
+- Reduces wheel size significantly (~100MB less)
 
-**Source Location** (Intel oneAPI):
-```
-C:\Program Files (x86)\Intel\oneAPI\mkl\latest\bin\
-C:\Program Files (x86)\Intel\oneAPI\compiler\latest\bin\
-```
+**Do NOT**:
+- Copy MKL DLLs (mkl_rt.2.dll, mkl_core.2.dll, etc.) into `src/radia/`
+- Copy Intel OpenMP DLLs (libiomp5md.dll, svml_dispmd.dll, etc.) into `src/radia/`
+- Include `*.dll` in `package_data` or `MANIFEST.in`
+- Bundle any Intel runtime libraries in the wheel
 
-**Package Structure**:
+**Package Structure** (v2.1.0+):
 ```
 src/radia/
-  __init__.py
-  radia.pyd           # C++ extension
-  mkl_core.2.dll      # MKL runtime (bundled)
-  mkl_intel_thread.2.dll
-  mkl_def.2.dll
-  libiomp5md.dll      # Intel OpenMP
+  __init__.py           # DLL path setup + re-export from C++ module
+  _radia_pybind.pyd     # Main C++ extension (links to mkl_rt.lib)
+  radia_ngsolve.pyd     # NGSolve integration (optional)
+  cln_core.pyd          # CLN transient solver
+  mmm_core.pyd          # MMM solver
+  peec_matrices.pyd     # PEEC matrix assembly
+  *.py                  # Python utility modules
+  # NO .dll files - MKL comes from pip dependency
 ```
 
-**Rationale**:
-- Users should NOT need to install Intel oneAPI to use Radia
-- Bundling DLLs ensures consistent behavior across environments
-- Reduces support burden from "DLL not found" errors
-
-**Build Integration**:
-- `BuildWithIntel.ps1` should copy required DLLs to `src/radia/`
-- `setup.py` / `pyproject.toml` should include DLLs in `package_data`
-
-**License Consideration**:
-Intel MKL runtime DLLs are redistributable under Intel oneAPI EULA.
-Include appropriate license notices in the package.
+**DLL Resolution** (at import time):
+```python
+# __init__.py adds MKL DLL path dynamically
+_mkl_bin = os.path.join(sys.prefix, "Library", "bin")
+if os.path.isdir(_mkl_bin):
+    os.add_dll_directory(_mkl_bin)
+```
 
 ---
 
@@ -1830,28 +1857,140 @@ run_all_benchmarks.py             # Orchestrator script
 
 ---
 
+## Examples Folder Documentation Policy
+
+### Requirement: One README.md per Examples Subdirectory
+
+**Policy**: Every subdirectory under `examples/` MUST contain exactly one `README.md` file that serves as the entry point documentation for that example category.
+
+**Rules**:
+1. Each `examples/<category>/` directory must have a `README.md`
+2. The README.md should describe the purpose of the example category, list all scripts with brief descriptions, and note any prerequisites
+3. Do NOT create multiple `.md` files per examples subdirectory — consolidate all documentation into the single `README.md`
+4. When adding a new example script, update the corresponding `README.md` to include it
+
+**Structure**:
+```
+examples/
+├── electromagnet/
+│   ├── README.md              # Required: describes all electromagnet examples
+│   ├── sphere_in_quadrupole.py
+│   └── ...
+├── KelvinTransformation/
+│   ├── README.md              # Required: describes Kelvin transformation examples
+│   ├── H-formulation/
+│   │   ├── README.md          # Required for each subdirectory
+│   │   └── ...
+│   └── ...
+└── ...
+```
+
+---
+
 ## Mesh Generation Tools
 
-### CAD Modeling and Mesh Generation Policy (2026-01-23)
+### Mesh Generation Policy by Element Order (2026-02-14)
 
-**CRITICAL**: Use **Coreform Cubit for CAD modeling**, then import to **Netgen for meshing**.
+**CRITICAL**: Mesh generation workflow is determined by **element order** (polynomial degree).
+
+**2-Tier Policy**:
+
+| Element Order | geominfo | Workflow | Tools |
+|---------------|----------|----------|-------|
+| **1st + 2nd order** | **不要** | **GMSH direct** | GMSH, or Coreform Cubit -> GMSH export |
+| **3rd order+** | **必要** | **Netgen + Coreform via STEP** | Cubit + STEP + Netgen + `mesh.Curve(order)` |
+
+**Rationale**:
+1. **1st + 2nd order**: GMSH handles both. 1st order: Tet4, Hex8, Wedge6. 2nd order: Tet10, Hex20/27. GMSH places mid-edge nodes on CAD surfaces automatically if it has the geometry. Coreform Cubit's GMSH export also handles 2nd order. No geominfo needed.
+2. **3rd order+**: Accurate node placement on curved boundaries requires full OCC geometry information (`geominfo`). Only achievable through `mesh.Curve(order)` with OCC geometry from STEP import. Primary use: NGSolve FEM.
+
+**Hex generation constraint**:
+- GMSH: Only **structured hex** (Transfinite) - limited to simple geometries
+- **Non-structured hex**: Requires Coreform Cubit -> GMSH format export
+- Netgen: Tet only (no hex generation)
+
+**Radia element support status**:
+- **1st order**: Supported (Tet4, Hex8, Wedge6)
+- **2nd order**: Future (Tet10, Hex20 - same GMSH workflow, Radia C++ extension needed)
+
+---
+
+### 1st + 2nd Order Elements: GMSH Direct
+
+**GMSH** is the standard mesh generator for Radia.
+
+**Supported Element Types**:
+
+| Application | Mesh Type | GMSH Command | 1st Order | 2nd Order |
+|-------------|-----------|--------------|-----------|-----------|
+| **Magnetic (MMM/MSC)** | Volume | `generate(3)` | Tet4, Hex8, Wedge6 | Tet10, Hex20/27 |
+| **Conductors (PEEC)** | **Surface ONLY** | `generate(2)` | Tri3, Quad4 | Tri6, Quad8/9 |
+
+**Import Paths**:
+
+```
+Path A: GMSH direct import (no NGSolve dependency)
+  CAD -> GMSH -> .msh file -> gmsh_mesh_import.py -> Radia objects
+
+Path B: GMSH via NGSolve (with NGSolve integration)
+  CAD -> GMSH -> .msh file -> NGSolve Mesh() -> netgen_mesh_import.py -> Radia objects
+
+Path C: Coreform Cubit (complex hex geometry)
+  CAD -> Cubit -> GMSH export (.msh) -> Path A or B
+```
+
+**Path A - Direct GMSH import** (recommended for standalone Radia):
+
+```python
+import radia as rad
+from gmsh_mesh_import import gmsh_to_radia
+
+rad.FldUnits('m')
+
+# Import GMSH mesh directly (no NGSolve needed)
+core = gmsh_to_radia('ferrite_core.msh', mu_r=1000)
+
+# Or with options
+core = gmsh_to_radia('ferrite_core.msh',
+                      mu_r=1000,
+                      physical_group=1,     # Filter by GMSH physical group
+                      unit_scale=0.001)     # mm -> m conversion
+
+rad.Solve(core, 0.0001, 1000, 0)
+```
+
+**Path B - GMSH via NGSolve**:
+
+```python
+from ngsolve import Mesh
+from netgen_mesh_import import netgen_mesh_to_radia
+import radia as rad
+
+rad.FldUnits('m')
+mesh = Mesh('geometry.msh')
+mag_obj = netgen_mesh_to_radia(mesh,
+                                material={'magnetization': [0, 0, 0]},
+                                units='m',
+                                material_filter='magnetic')
+```
+
+**PEEC Surface-Only Rationale**:
+1. **Skin effect**: High-frequency currents concentrate at surface
+2. **SIBC**: Surface Impedance Boundary Condition models interior current distribution
+3. **Efficiency**: Surface mesh provides sufficient accuracy without volume discretization
+
+**CAD Import**: GMSH directly imports STEP, IGES, BREP, STL
+
+---
+
+### 3rd Order+ Elements: Netgen + Coreform via geominfo
+
+**Status**: For NGSolve FEM only. Radia BEM does not need 3rd+ order.
 
 **Workflow**:
 ```
-Cubit (CAD modeling) → STEP export → Netgen (mesh import) → NGSolve (Curve for high-order)
+Cubit (CAD modeling) -> STEP export -> Netgen (import + mesh) -> mesh.Curve(order) -> NGSolve FEM
 ```
-
-**Rationale**:
-1. **Cubit excels at CAD**: Complex geometry creation, Boolean operations, parametric modeling
-2. **Netgen excels at meshing**: High-quality tetrahedral/hexahedral mesh generation
-3. **STEP as interchange**: Standard CAD format, preserves geometry accurately
-4. **High-order elements**: Use `mesh.Curve(order)` for curved boundaries
-
-**Policy**:
-- **Complex CAD**: Create in Cubit, export to STEP, import to Netgen
-- **Simple geometry**: Can use Netgen OCC directly (`netgen.occ.Box`, `Sphere`, etc.)
-- **Curved elements**: Always call `mesh.Curve(order)` after importing STEP geometry
-- **Mesh quality**: Use Cubit's mesh controls for element size grading
 
 **Implementation**:
 
@@ -1867,12 +2006,15 @@ ngmesh = geo.GenerateMesh(maxh=0.05)
 
 # Create NGSolve mesh and curve for high-order accuracy
 mesh = Mesh(ngmesh)
-mesh.Curve(3)  # 3rd order curved elements for accurate geometry
+mesh.Curve(3)  # 3rd order curved elements - requires geominfo from OCC
 
-# Now use with Radia or NGSolve FEM
+# Now use with NGSolve FEM (NOT Radia)
 ```
 
-**Note**: The `mesh.Curve(order)` method is essential for accurate representation of curved boundaries when using high-order finite elements.
+**Key Points**:
+- `mesh.Curve(order)` requires OCC geometry information (geominfo) to place nodes on curved surfaces
+- This is only available when meshing from OCC geometry (STEP import), not from .msh files
+- Primary use case: NGSolve FEM with high-order accuracy for curved domains
 
 ---
 
@@ -1880,62 +2022,18 @@ mesh.Curve(3)  # 3rd order curved elements for accurate geometry
 
 | Element Type | Tool | Notes |
 |--------------|------|-------|
-| **Tetrahedral** | **Netgen** | Simple geometry. Uses `netgen.occ.Box` + `OCCGeometry.GenerateMesh()` |
-| Tetrahedral | **Coreform Cubit** | Complex geometry. Uses `cubit_mesh_export.export_netgen()` |
-| Tetrahedral | **GMSH via NGSolve** | Import .msh files using `ngsolve.Mesh()` |
-| **Hexahedral** | **Coreform Cubit** | Required. Netgen cannot generate 3D hex meshes |
-| Mixed (hex+tet) | **Coreform Cubit** | Required for mixed element meshes |
+| **Tet4/Tet10** | **GMSH** (recommended) | CAD import (STEP/IGES), `generate(3)` |
+| Tet4 | **Netgen** | Simple geometry. `netgen.occ.Box` + `OCCGeometry.GenerateMesh()` |
+| **Hex8/Hex20** | **GMSH** (structured) | Transfinite meshing for simple geometries |
+| Hex8/Hex20 | **Coreform Cubit** (non-structured) | Required for complex hex geometries |
+| **Wedge6** | **GMSH** or **Cubit** | Transition elements |
+| **Surface mesh (PEEC)** | **GMSH** (recommended) | Conductor surface only, `generate(2)` |
+| High-order (3rd+) | **Netgen + Cubit via STEP** | NGSolve FEM only, requires geominfo |
 
-**Note**: Nastran BDF format is **REMOVED**. Use Cubit to read legacy .bdf files if needed.
-
-### GMSH Mesh Import via NGSolve
-
-GMSH meshes can be imported via NGSolve's `Mesh()` function:
-
-```python
-from ngsolve import Mesh
-from netgen_mesh_import import netgen_mesh_to_radia
-import radia as rad
-
-rad.FldUnits('m')
-
-# Import GMSH mesh via NGSolve
-# NGSolve automatically reads .msh format
-mesh = Mesh('geometry.msh')
-
-# Convert to Radia
-mag_obj = netgen_mesh_to_radia(mesh,
-                                material={'magnetization': [0, 0, 0]},
-                                units='m',
-                                material_filter='magnetic')
-```
-
-**Note**: GMSH meshes must use NGSolve-compatible format (Gmsh 2.2 ASCII or later).
-
-### Netgen Tetrahedral Mesh Generation
-
-```python
-from netgen.occ import Box, Pnt, OCCGeometry
-from netgen.meshing import MeshingParameters
-
-# Create box geometry
-p1 = Pnt(-0.5, -0.5, -0.5)
-p2 = Pnt(0.5, 0.5, 0.5)
-box = Box(p1, p2)
-
-# Generate mesh - MUST wrap in OCCGeometry first
-geo = OCCGeometry(box)
-mp = MeshingParameters(maxh=0.3)  # Maximum element size
-mesh = geo.GenerateMesh(mp)
-
-# Extract nodes and tetrahedra
-nodes = [[p[0], p[1], p[2]] for p in mesh.Points()]
-tetrahedra = [[v.nr - 1 for v in el.vertices] for el in mesh.Elements3D()]
-```
-
-**Important Notes**:
-- Use `OCCGeometry(box).GenerateMesh(mp)`, NOT `box.GenerateMesh(mp)`
-- Use `v.nr - 1` for vertex indices, NOT `int(v) - 1`
+**Notes**:
+- Nastran BDF format is **REMOVED**. Use Cubit to read legacy .bdf files if needed.
+- **1st + 2nd order**: Use `gmsh_mesh_import.py` (standalone) or NGSolve `Mesh()` (with NGSolve)
+- **PEEC conductors require surface mesh ONLY** - no volume discretization needed
 
 ### Coreform Cubit Mesh Export
 
@@ -1945,174 +2043,145 @@ For complex hexahedral meshes, use the **Coreform Cubit Mesh Export** tool:
 
 **Features**:
 - Export Cubit meshes directly to Python (no file I/O needed)
-- Export to GMSH format (.msh) for NGSolve import
-- Export to Netgen format for visualization and verification
+- Export to GMSH format (.msh) for Radia import (1st and 2nd order)
+- Export to Netgen format for NGSolve integration
 - Supports hexahedral, tetrahedral, and mixed element meshes
 
 **Usage with Radia**:
 
 ```python
-# Option 1: Direct Python export from Cubit
-from coreform_cubit_mesh_export import get_mesh_data
-mesh_data = get_mesh_data()  # Get mesh directly from Cubit session
+# Option 1: Cubit -> GMSH -> gmsh_mesh_import (no NGSolve needed)
+from gmsh_mesh_import import gmsh_to_radia
+core = gmsh_to_radia('cubit_exported.msh', mu_r=1000)
 
-# Option 2: Export to GMSH, then import via NGSolve
-# In Cubit: export_gmsh("mesh.msh")
+# Option 2: Cubit -> GMSH -> NGSolve (with NGSolve integration)
 from ngsolve import Mesh
 from netgen_mesh_import import netgen_mesh_to_radia
-
-mesh = Mesh('mesh.msh')
+mesh = Mesh('cubit_exported.msh')
 mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
 ```
 
-**Note**: This is the recommended workflow for complex hexahedral geometries that Netgen cannot mesh directly.
+**Note**: This is the recommended workflow for complex hexahedral geometries that GMSH structured meshing cannot handle.
 
-### Coreform Cubit Policy for CplMag (PEEC-MMM Coupling)
+### Coupled PEEC+MMM Mesh Import (2026-02-14)
 
-**Policy (2026-01-11)**: For CplMag (coupled PEEC conductor + MMM magnetic material) simulations, use **Coreform Cubit** for hexahedral mesh generation.
+**Policy**: For coupled PEEC+MMM simulations, use **GMSH** (or Coreform Cubit -> GMSH export) for magnetic core meshes.
 
-**Rationale**:
-1. **High-quality hex meshes**: Cubit produces better quality hexahedral meshes than automatic generators
-2. **Complex geometries**: Magnetic cores often have complex shapes (E-cores, pot cores, toroids)
-3. **Mesh control**: Cubit allows precise control over element size and distribution
-4. **Multi-element MMM**: CplMag requires multiple MMM elements for accurate coupling (NOT single dipole)
-
-**Workflow**:
+**Recommended Workflows**:
 
 ```python
-# Step 1: Generate hex mesh in Cubit (save as .cub or export to Nastran .bdf)
-
-# Step 2: Import mesh using cubit_mesh_export
-import sys
-sys.path.insert(0, 'S:/CoreformCubit/01_GitHub')
-from cubit_mesh_export import get_mesh_data
-
-# Get hex elements from Cubit session
-mesh_data = get_mesh_data()
-hex_elements = mesh_data['hex_elements']  # List of [8 vertices] per element
-
-# Step 3: Create Radia objects
+# Workflow 1: GMSH direct import (simplest)
 import radia as rad
+from gmsh_mesh_import import gmsh_to_radia
+
 rad.FldUnits('m')
+core = gmsh_to_radia('ferrite_core.msh', mu_r=1000)
 
-sub_cores = []
-mat = rad.MatLin(mu_r)
-for vertices in hex_elements:
-    sub_core = rad.ObjHexahedron(vertices, [0, 0, 0])
-    rad.MatApl(sub_core, mat)
-    sub_cores.append(sub_core)
+# Workflow 2: Via FastHenry .magnetic block (type=mesh)
+# .magnetic
+#   type=mesh
+#   file=ferrite_core.msh
+#   mu_r=1000
+# .endmagnetic
 
-# Create container for multi-element core
-core_container = rad.ObjCnt(sub_cores)
-
-# Step 4: Create CplMag solver with multi-element core
-coil = rad.CndLoop([0, 0, 0], radius, [0, 0, 1], 'r', w, h, sigma, n_radial, n_azimuthal)
-solver = rad.CplMagCreate(coil, core_container)
-rad.CplMagSetFrequency(solver, freq)
-rad.CplMagSetMu(solver, mu_r, mu_r_imag)
-result = rad.CplMagSolve(solver)
+# Workflow 3: Complex hex geometry via Cubit -> GMSH
+# In Cubit: create geometry, mesh, export to GMSH
+# In Python:
+core = gmsh_to_radia('cubit_exported.msh', mu_r=1000)
 ```
 
 **Key Points**:
-- **ObjCnt**: Use container to group multiple hex elements for CplMag
+- **ObjCnt**: `gmsh_to_radia()` returns a container grouping all mesh elements
 - **Multi-element**: Each element contributes to MMM interaction matrix
-- **No single dipole**: Full element-to-element coupling is computed
+- **Physical groups**: Use GMSH physical groups to filter materials
+- **GMSH handles hex**: Structured hex (Transfinite) or via Cubit export
+
+**Coreform Cubit** (for complex hex geometries):
 
 **Repository**: `S:\CoreformCubit\01_GitHub` contains `cubit_mesh_export` utilities
 
-### Coreform Cubit Policy for PEEC Conductor Mesh
+```python
+# Cubit -> GMSH -> Radia (recommended for complex hex)
+from gmsh_mesh_import import gmsh_to_radia
+core = gmsh_to_radia('cubit_hex_mesh.msh', mu_r=1000)
+```
 
-**Policy (2026-01-11)**: For PEEC conductor meshes, use **Coreform Cubit** to generate surface meshes exported to Netgen format.
+### PEEC Conductor Mesh Policy
+
+**Policy (2026-02-14)**: For PEEC conductor meshes, use **GMSH** for surface mesh generation.
 
 **Rationale**:
-1. **Unified workflow**: Same tool for both MMM (magnetic) and PEEC (conductor) meshes
-2. **Quality control**: Cubit provides better mesh quality for complex conductor geometries
-3. **Wedge/Prism elements**: Cubit supports wedge elements for thin skin layers (induction heating)
-4. **Curved elements**: Future support via NGSolve high-order curving (PR submitted)
+1. **GMSH**: Native CAD import (STEP, IGES), surface mesh generation `generate(2)`
+2. **Coreform Cubit**: For complex geometries, export to GMSH format
+3. **Surface-only**: PEEC conductors use surface mesh (SIBC handles skin effect)
 
 **Current Limitation**:
 - Radia currently supports **1st order elements only** (linear)
 - Curved surface approximation uses piecewise-linear facets
-- High-order curving (SetDeformation) is planned for future versions
+- 2nd order elements planned (GMSH -> Netgen path)
 
 **Workflow**:
 
 ```python
-# Step 1: Generate conductor mesh in Cubit
-# - Create conductor geometry (coil, wire, trace)
-# - Mesh with surface elements (TRI, QUAD)
-# - Export to Gmsh format
+# GMSH surface mesh for conductors
+# gmsh.model.mesh.generate(2)  # Surface mesh only
+# gmsh.write('conductor.msh')
 
-# Step 2: Import via NGSolve
+# Import surface mesh for PEEC
 from ngsolve import Mesh
-from netgen.read_gmsh import ReadGmsh
-
-mesh = Mesh(ReadGmsh("conductor_mesh.msh"))
-
-# Step 3: Create PEEC conductor from mesh (future API)
-# conductor = rad.CndFromMesh(mesh, sigma=5.8e7)  # Planned API
-
-# Current workaround: Use CndLoop for simple geometries
-coil = rad.CndLoop([0, 0, 0], radius, [0, 0, 1], 'r', w, h, sigma, n_radial, n_azimuthal)
+mesh = Mesh('conductor.msh')
+# Use PEECBuilder for circuit extraction
 ```
 
-**Note**: Full mesh-based PEEC conductor creation (`CndFromMesh`) is planned for future implementation.
+### Mesh Import Functions
 
-### Hexahedral Mesh Import Functions (netgen_mesh_import.py)
+**Functions** for importing meshes into Radia:
 
-**Functions** for importing hexahedral meshes into Radia:
+| Module | Function | Purpose |
+|--------|----------|---------|
+| `gmsh_mesh_import` | `gmsh_to_radia(filename, mu_r, ...)` | **GMSH .msh -> Radia** (recommended, no NGSolve) |
+| `gmsh_mesh_import` | `read_gmsh(filename)` | Parse GMSH .msh file to dict |
+| `gmsh_mesh_import` | `get_mesh_info(filename)` | Get mesh statistics |
+| `netgen_mesh_import` | `netgen_mesh_to_radia(mesh, ...)` | NGSolve mesh -> Radia |
+| `netgen_mesh_import` | `cubit_hex_to_radia(hex_elements, ...)` | Cubit hex data -> Radia |
+| `netgen_mesh_import` | `create_hex_mesh_grid(center, size, divisions, ...)` | Structured hex mesh (no external tool) |
 
-| Function | Purpose |
-|----------|---------|
-| `cubit_hex_to_radia(hex_elements, ...)` | Convert Cubit hex element data to Radia geometry |
-| `create_hex_mesh_grid(center, size, divisions, ...)` | Create structured hex mesh without Cubit |
-
-**Usage with CplMag**:
+**Usage - GMSH direct** (recommended for 1st order):
 
 ```python
 import radia as rad
-from netgen_mesh_import import create_hex_mesh_grid, cubit_hex_to_radia
+from gmsh_mesh_import import gmsh_to_radia
 
 rad.FldUnits('m')
 
-# Create coil conductor
-coil = rad.CndLoop([0, 0, 0], 0.05, [0, 0, 1], 'r', 2e-3, 2e-3, 5.8e7, 8, 36)
+# Simple: import GMSH mesh as magnetic core
+core = gmsh_to_radia('ferrite_core.msh', mu_r=1000)
 
-# Create multi-element magnetic core (no Cubit needed)
+# With options
+core = gmsh_to_radia('ferrite_core.msh',
+                      mu_r=1000,
+                      physical_group=1,   # Filter by GMSH physical group
+                      unit_scale=0.001)   # mm -> m conversion
+```
+
+**Usage - Structured hex grid** (no external tool):
+
+```python
+from netgen_mesh_import import create_hex_mesh_grid
+
 core = create_hex_mesh_grid(
     center=[0, 0, 0],
     size=[0.03, 0.03, 0.03],  # 30mm cube
     divisions=[3, 3, 3],       # 27 elements
-    mu_r=1000                  # mu_r = 1000
+    mu_r=1000
 )
-
-# Solve coupled system
-solver = rad.CplMagCreate(coil, core)
-rad.CplMagSetFrequency(solver, 1000)
-rad.CplMagSetMu(solver, 1000, 0)
-result = rad.CplMagSolve(solver)
-```
-
-**Usage with Cubit**:
-
-```python
-import radia as rad
-from netgen_mesh_import import cubit_hex_to_radia
-
-rad.FldUnits('m')
-
-# Get hex elements from Cubit (via cubit_mesh_export)
-# hex_elements = [[[x1,y1,z1], [x2,y2,z2], ..., [x8,y8,z8]], ...]
-
-# Convert to Radia geometry
-core = cubit_hex_to_radia(hex_elements, mu_r=1000)
 ```
 
 ---
 
-## Mesh Operations Policy: Netgen with Coreform Cubit Integration
+## Mesh Operations Policy (2026-02-14)
 
-### Mesh APIs Dropped (2026-01-11)
+### Mesh APIs Dropped
 
 **CRITICAL**: Radia's internal mesh operation APIs are **NOT SUPPORTED**.
 
@@ -2121,52 +2190,34 @@ core = cubit_hex_to_radia(hex_elements, mu_r=1000)
 - `ObjDivMagPln` - Plane-based subdivision (REMOVED)
 - `ObjCutMag` - Cutting objects by plane (REMOVED from Python API)
 
-**Policy**:
-- **All mesh operations** must use **Netgen with Coreform Cubit integration**
-- Coreform Cubit provides geometry and high-quality hex meshing
-- Netgen/NGSolve provides the mesh import interface to Radia
-- **Repository**: `S:\CoreformCubit\01_GitHub` contains `cubit_mesh_export` utilities
+**Policy**: All mesh operations use external tools:
+- **1st order**: GMSH direct (`gmsh_mesh_import.py`) or Coreform Cubit -> GMSH export
+- **2nd order**: GMSH -> Netgen, or Coreform Cubit -> GMSH export
+- **3rd order+**: Netgen + Coreform Cubit via STEP/geominfo
 
-**Key Functions** (from `netgen_mesh_import.py`):
-| Function | Purpose |
-|----------|---------|
-| `create_hex_mesh_grid()` | Simple structured hex mesh (no Cubit needed) |
-| `cubit_hex_to_radia()` | Import Cubit hex mesh to Radia |
-| `netgen_mesh_to_radia()` | Import Netgen/NGSolve mesh to Radia |
+**Key Mesh Import Modules**:
 
-**Rationale**:
-1. **Cubit produces higher quality meshes**: Professional meshing tool with quality control
-2. **Unified workflow**: Same tool for both conductor (PEEC) and magnetic (MMM) meshes
-3. **Flexibility**: Cubit supports complex geometries, grading, and boundary layers
-4. **NGSolve integration**: Cubit meshes exported to Netgen/NGSolve format via `cubit_mesh_export`
-5. **Maintenance**: Reduces Radia C++ codebase complexity
+| Module | Primary Use | NGSolve Required? |
+|--------|------------|-------------------|
+| `gmsh_mesh_import` | **1st order GMSH .msh -> Radia** | No |
+| `netgen_mesh_import` | NGSolve mesh -> Radia, Cubit hex import | Yes |
 
-**Workflow**:
+**Workflow Summary**:
 
 ```python
 import radia as rad
-from netgen_mesh_import import create_hex_mesh_grid, cubit_hex_to_radia
-
 rad.FldUnits('m')
 
-# Method 1: Simple structured mesh (no Cubit needed)
-core = create_hex_mesh_grid(
-    center=[0, 0, 0],
-    size=[0.1, 0.1, 0.1],
-    divisions=[3, 3, 3],
-    mu_r=1000
-)
+# Method 1: GMSH direct import (recommended, no NGSolve needed)
+from gmsh_mesh_import import gmsh_to_radia
+core = gmsh_to_radia('ferrite_core.msh', mu_r=1000)
 
-# Method 2: Complex geometry via Cubit + Netgen
-# 1. Create geometry and mesh in Cubit
-# 2. Export via cubit_mesh_export.export_netgen()
-# 3. Import to Radia
-core = cubit_hex_to_radia(hex_elements_from_cubit, mu_r=1000)
+# Method 2: Structured hex grid (no external tool)
+from netgen_mesh_import import create_hex_mesh_grid
+core = create_hex_mesh_grid(center=[0,0,0], size=[0.1,0.1,0.1],
+                            divisions=[3,3,3], mu_r=1000)
 
-# Method 3: Tetrahedral mesh via Netgen
-# 1. Create geometry in Cubit, export to STEP
-# 2. Import STEP to Netgen, generate tet mesh
-# 3. Import to Radia
+# Method 3: NGSolve mesh (with NGSolve integration)
 from netgen_mesh_import import netgen_mesh_to_radia
 core = netgen_mesh_to_radia(ngsolve_mesh, material={'magnetization': [0,0,0]})
 ```
@@ -2906,6 +2957,526 @@ where μ(z) = μ(H(z)) for nonlinear materials (e.g., from the B-H curve of a sp
 **Literature Reference**:
 K. Hollaus, V. Hanser, and M. Schobinger, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025.
 
+### PEEC SIBC Implementation (2026-02-13)
+
+**Policy**: Use **scipy.special.jv** for circular conductor SIBC. Boost.Math migration deferred to future.
+
+#### Bessel Function Strategy
+
+| Phase | Implementation | Library | Status |
+|-------|---------------|---------|--------|
+| **Phase 1 (Current)** | **scipy.special.jv** | **scipy (Fortran AMOS)** | **✅ Active** |
+| Phase 2 (Future) | Boost.Math | boost-math:x64-windows | Deferred |
+
+#### Circular Conductor SIBC
+
+**Current Implementation**:
+```python
+# validate_circular_coil_sibc.py
+from scipy.special import jv  # Fortran AMOS Bessel functions
+
+def bessel_impedance_circular(frequency, radius, length, sigma, mu_r=1.0):
+    """
+    Exact impedance for circular wire using Bessel functions.
+
+    Formula: Z = (k*length)/(2*pi*r*sigma) * J0(kr)/J1(kr)
+    """
+    omega = 2 * np.pi * frequency
+    mu = mu_r * MU_0
+    k = np.sqrt(1j * omega * mu * sigma)
+    kr = k * radius
+
+    J0_kr = jv(0, kr)  # Complex Bessel J0
+    J1_kr = jv(1, kr)  # Complex Bessel J1
+
+    Z = (k * length) / (2 * np.pi * radius * sigma) * (J0_kr / J1_kr)
+    return Z
+```
+
+**Why scipy (not Boost.Math)**:
+1. ✅ **No external dependency**: scipy already installed
+2. ✅ **High precision**: Fortran AMOS (NIST-validated, 40+ year track record)
+3. ✅ **Complex argument support**: Native complex Bessel functions
+4. ✅ **Sufficient performance**: ~5 μs/call (3000 calls = 15 ms)
+
+**Why not Intel MKL**: ❌ MKL does not provide Bessel functions
+
+#### Dowell Formula for Rectangular Conductors
+
+**Implementation**: [rad_peec_surface_impedance.cpp](s:/Radia/01_GitHub/src/core/rad_peec_surface_impedance.cpp)
+
+**Formula**:
+```
+F_R = ξ * [sinh(2ξ) + sin(2ξ)] / [cosh(2ξ) - cos(2ξ)]
+
+where ξ = d/δ (conductor thickness / skin depth)
+```
+
+**Valid range**: d << w (thin plate approximation)
+- ✅ Transformer windings: d/w < 0.1
+- ❌ Square cross-section: d/w = 1.0 (200%+ error)
+
+**Use case**: Rectangular conductors with d << w only
+
+#### Validation
+
+**Scripts**:
+- `examples/peec_integration/validation/validate_circular_coil_sibc.py`
+- `examples/peec_integration/validation/cubit_mesh_generation/generate_circular_coil.py`
+
+**DC Results** (Circular coil, 50mm radius, 1mm wire):
+- Inductance error: 2.14%
+- DC resistance error: 0.13%
+
+**AC Results**: Qualitatively correct (skin effect present)
+
+**Bessel SIBC Validation** (2026-02-13):
+- `examples/peec_integration/validation/validate_bessel_sibc.py`
+- PEEC + Bessel SIBC vs Analytical: **0.00% error** (perfect match)
+- PEEC + Dowell vs Analytical @ 1MHz: **242.9% error** (Dowell is for rectangular only)
+- Confirms scipy.special.jv approach is correct for circular conductors
+
+### PEEC Filament-Panel Architecture (FastImp Style) (2026-02-13)
+
+**CRITICAL**: Radia PEEC uses **Filament + Panel** decomposition following the FastImp approach. **Loop-Star basis transformation is NOT needed**.
+
+**Architecture**:
+
+```
+Surface Mesh (Tri3/Quad4)
+  |
+  +-- Face -> Panel  = Star element  -> P matrix (potential coefficient / capacitance)
+  |                                     Where charge accumulates
+  |
+  +-- Edge -> Filament = Loop element -> L matrix (inductance), R matrix (resistance)
+                                         Where current flows
+```
+
+**PEEC System Equation**:
+
+```
+[R + jwL + Zs    jwM_LS  ] [I_filament]   [V]
+[jwM_LS^T        P/(jw)  ] [Q_panel   ] = [0]
+
+where:
+  I_filament = current through filaments (Loop unknowns)
+  Q_panel    = charge on panels (Star unknowns)
+  L          = filament-filament inductance (Neumann formula)
+  R          = filament resistance (DC + SIBC)
+  Zs         = surface impedance (Bessel/Dowell/ESIM)
+  P          = panel-panel potential coefficient (Wilton formula)
+  M_LS       = filament-panel magnetic coupling
+```
+
+**Why Loop-Star Transformation is NOT Needed**:
+
+| Formulation | Loop-Star Separation | Notes |
+|-------------|---------------------|-------|
+| **MoM/BEM (RWG basis)** | **Required** | Single basis function set must be decomposed into solenoidal (loop) and irrotational (star) parts for low-frequency stability |
+| **PEEC Filament+Panel** | **NOT needed** | Loop (filament) and Star (panel) are **inherently separate** from the formulation. No basis transformation required |
+
+**Rationale**:
+1. In MoM/BEM, a single set of basis functions (e.g., RWG) represents both current and charge. At low frequency, the system becomes ill-conditioned because jwL -> 0 and P/(jw) -> infinity. Loop-Star decomposition separates these to restore numerical stability.
+2. In PEEC with filaments and panels, the inductive (Loop) and capacitive (Star) parts are **already separate** unknowns with separate matrices. The MNA system naturally handles the frequency scaling without any basis transformation.
+
+**Mesh-to-PEEC Conversion** (surface mesh → filaments + panels):
+
+```python
+# Step 1: Faces → Panels (direct)
+for face in mesh.faces:
+    builder.add_panel(face.vertices)
+
+# Step 2: Extract unique edges → Filaments (automatic)
+edges = extract_unique_edges(mesh.faces)  # topology-based
+for edge in edges:
+    v0, v1 = vertices[edge[0]], vertices[edge[1]]
+    center = (v0 + v1) / 2
+    direction = (v1 - v0) / np.linalg.norm(v1 - v0)
+    length = np.linalg.norm(v1 - v0)
+    builder.add_segment(center, direction, length, thickness, dual_width, sigma)
+
+# Step 3: Build matrices (no Loop-Star transformation)
+L, R, P, M_LS = builder.build(include_star=True)
+```
+
+**Reference**: Z. Zhu, B. Song, and J. White, "Algorithms in FastImp: A Fast and Wideband Impedance Extraction Program for Complicated 3-D Geometries," IEEE Trans. TCAD, vol. 24, no. 7, 2005.
+
+### PEEC Node-Segment Topology API (2026-02-13)
+
+**Policy**: Use **node-segment topology** for all new PEEC models. Legacy flat segment lists are backward-compatible but topology mode is preferred.
+
+**Architecture**:
+```
+Node-Segment Model (FastHenry-style):
+  Nodes: define positions in 3D space
+  Segments: connect two nodes (node_from -> node_to)
+  Ports: define measurement terminals (node_positive, node_negative)
+
+  Series: filaments share intermediate nodes (junctions)
+    N1 --seg1--> N2 --seg2--> N3   (port: N1-N3)
+
+  Parallel: filaments share same endpoint nodes
+    N1 --seg1--> N2
+    N1 --seg2--> N2   (port: N1-N2)
+```
+
+**C++ API** (`PEECMatrixBuilder`):
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `AddNodeAt(position, area)` | `int` (node ID) | Add node at 3D position |
+| `AddConnectedSegment(node_from, node_to, w, h, sigma, type, nwinc, nhinc)` | void | Add segment connecting two nodes (nwinc/nhinc for multi-filament) |
+| `AddPort(node_positive, node_negative)` | `int` (port ID) | Define port between two nodes |
+| `BuildIncidenceMatrix(matrices)` | void | Build CSR incidence matrix (auto-called by Build) |
+
+**Python API** (`peec_matrices.PyPEECBuilder`):
+
+```python
+from peec_matrices import PyPEECBuilder
+from peec_topology import PEECCircuitSolver
+
+# Build topology
+builder = PyPEECBuilder()
+n1 = builder.add_node_at(0, 0, 0)         # Returns node ID
+n2 = builder.add_node_at(0.05, 0, 0)
+n3 = builder.add_node_at(0.1, 0, 0)
+builder.add_connected_segment(n1, n2, 1e-3, 1e-3)  # width, height
+builder.add_connected_segment(n2, n3, 1e-3, 1e-3)
+builder.add_port(n1, n3)
+
+# Build matrices with topology info
+topo = builder.build_topology()
+# Returns dict: {
+#   'L': ndarray (n_loop x n_loop),
+#   'R': ndarray (n_loop,),
+#   'P': ndarray or None,
+#   'segment_nodes': ndarray (n_seg x 2) of [node_from, node_to],
+#   'n_nodes': int,
+#   'n_loop': int, 'n_star': int,
+#   'incidence_data/indices/indptr': CSR arrays,
+#   'n_junction': int,
+#   'ports': list of (pos, neg, id),
+# }
+
+# Solve port impedance
+solver = PEECCircuitSolver(topo)
+Z = solver.compute_port_impedance(freq=1e6)       # Single frequency
+Z_sweep = solver.frequency_sweep(freqs, Zs_func)  # Frequency sweep with SIBC
+```
+
+**PEECCircuitSolver** (`src/radia/peec_topology.py`):
+
+MNA (Modified Nodal Analysis) formulation:
+```
+Z_branch = diag(R_dc + Zs) + jw*L
+Y_branch = Z_branch^{-1}
+Y_node = A_full * Y_branch * A_full^T
+Ground negative terminal: V[neg] = 0
+Solve: Y_reduced * V = I_ext (1A injection at positive terminal)
+Z_port = V[pos]
+```
+
+Where `A_full` is the full node incidence matrix (n_nodes x n_filaments):
+- `A_full[node, fil] = +1` if filament leaves node (node_from)
+- `A_full[node, fil] = -1` if filament enters node (node_to)
+
+**Validation Results** (0.00% error on all tests):
+
+| Test | Description | Error |
+|------|-------------|-------|
+| Series wire | L/R match vs legacy create_wire | 0.00% |
+| Parallel wires | Z = Z_single/2 | 0.00% |
+| Series analytical | Z = sum(R) + jw*(L11+L22+2*L12) | 0.00% |
+| DC resistance | Series R_total = R1+R2, Parallel R_total = R1*R2/(R1+R2) | 0.00% |
+
+**Backward Compatibility**: Legacy API (add_segment, create_wire, create_loop, build) is unchanged.
+
+**Source Files**:
+- `src/core/rad_peec_matrices.h`: PEECSegment (node_from/to), PEECPort, PEECMatrices (CSR incidence)
+- `src/core/rad_peec_matrices.cpp`: AddNodeAt, AddConnectedSegment, AddPort, BuildIncidenceMatrix
+- `src/lib/rad_peec_matrices_api.cpp`: pybind11 bindings (add_node_at, add_connected_segment, add_port, build_topology)
+- `src/radia/peec_topology.py`: PEECCircuitSolver (MNA nodal admittance)
+- `examples/peec_integration/validation/validate_topology.py`: Validation script
+
+### PEEC Multi-Filament API (nwinc/nhinc) (2026-02-13)
+
+**Policy**: Use **nwinc/nhinc** parameters to subdivide conductor cross-sections into parallel sub-filaments for skin and proximity effect modeling.
+
+**Architecture**:
+```
+Multi-Filament Cross-Section Subdivision:
+
+  Single filament (1x1):        Multi-filament (3x3):
+  ┌─────────────┐               ┌────┬────┬────┐
+  │             │               │ f1 │ f2 │ f3 │
+  │   w x h     │    nwinc=3   ├────┼────┼────┤
+  │             │   ────────>   │ f4 │ f5 │ f6 │
+  │             │    nhinc=3   ├────┼────┼────┤
+  └─────────────┘               │ f7 │ f8 │ f9 │
+                                └────┴────┴────┘
+
+  Each sub-filament: w/nwinc x h/nhinc cross-section
+  All sub-filaments share same node_from/node_to (parallel)
+  Mutual inductance between sub-filaments -> skin/proximity effect
+```
+
+**C++ API** (`PEECMatrixBuilder`):
+
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| `AddConnectedSegment(...)` | `nwinc=1, nhinc=1` | Last two args control subdivision |
+| `ExpandFilaments()` | (internal) | Auto-called by Build(), expands nwinc*nhinc > 1 |
+
+**PEECSegment Fields** (new):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `nwinc` | int | 1 | Width subdivisions |
+| `nhinc` | int | 1 | Height subdivisions |
+| `parent_segment` | int | -1 | Parent segment index (-1 if not sub-filament) |
+
+**Python API**:
+
+```python
+from peec_matrices import PyPEECBuilder
+from peec_topology import PEECCircuitSolver
+
+builder = PyPEECBuilder()
+n1 = builder.add_node_at(0, 0, 0)
+n2 = builder.add_node_at(0.1, 0, 0)
+
+# Single filament (legacy)
+builder.add_connected_segment(n1, n2, 3e-3, 3e-3, sigma=5.8e7)
+
+# Multi-filament: 3x3 = 9 parallel sub-filaments
+builder.add_connected_segment(n1, n2, 3e-3, 3e-3, sigma=5.8e7, nwinc=3, nhinc=3)
+
+builder.add_port(n1, n2)
+topo = builder.build_topology()
+
+# Frequency sweep shows skin effect
+solver = PEECCircuitSolver(topo)
+Z_dc = solver.compute_port_impedance(freq=1.0)    # DC: uniform current
+Z_ac = solver.compute_port_impedance(freq=1e6)    # AC: skin effect
+# R_ac > R_dc due to non-uniform current distribution
+```
+
+**Mutual Inductance Formula**:
+
+For parallel filaments (Rosa/Grover/Neumann analytical):
+```
+M = (mu_0 / (4*pi)) * [2*F(l, d) - F(l+s, d) - F(l-s, d)]
+
+where F(x, d) = x * arsinh(x/d) - sqrt(x^2 + d^2)
+      l = segment length, d = center-to-center distance, s = offset along direction
+```
+
+For non-parallel filaments: 8-point Gauss-Legendre quadrature of Neumann integral.
+
+**Physical Effects**:
+
+| Effect | How It Works | Condition |
+|--------|-------------|-----------|
+| Skin effect | Non-uniform current in sub-filaments at high freq | nwinc*nhinc > 1, freq > 0 |
+| Proximity effect | Mutual inductance between adjacent conductors | Multiple segments |
+| DC resistance | R_sub = rho*l/(w/nwinc * h/nhinc), R_total = R_sub/N | Always exact |
+| Inductance reduction | L_multi < L_single (mutual coupling lowers effective L) | nwinc*nhinc > 1 |
+
+**Validation Results**:
+
+| Test | Description | Result |
+|------|-------------|--------|
+| API test | nwinc*nhinc filament count | PASSED |
+| DC resistance | R_3x3 = R_1x1 (parallel reduction exact) | 0.00% error |
+| Inductance reduction | L_3x3 = 80.6 nH < L_1x1 = 82.1 nH (1.76% reduction) | PASSED |
+| AC resistance | R_ac/R_dc = 2.85 at 1 MHz (3mm x 3mm Cu) | PASSED |
+| Convergence | L_eff converges as nwinc/nhinc increases | PASSED |
+| Series + multifilament | Combined topology works correctly | PASSED |
+
+**Convergence Guidelines**:
+
+| Application | Recommended nwinc x nhinc | Notes |
+|-------------|--------------------------|-------|
+| DC/low frequency | 1x1 | No subdivision needed |
+| Moderate skin effect (d/delta ~ 2-5) | 3x3 | Good balance |
+| Strong skin effect (d/delta > 5) | 5x5 or higher | Higher accuracy |
+| Bus bar (wide, thin) | 5x1 or 7x1 | Width subdivision only |
+
+**Source Files**:
+- `src/core/rad_peec_matrices.h`: PEECSegment (nwinc, nhinc, parent_segment)
+- `src/core/rad_peec_matrices.cpp`: ExpandFilaments(), MutualInductance (Rosa/Grover + Gauss-Legendre)
+- `src/lib/rad_peec_matrices_api.cpp`: pybind11 nwinc/nhinc parameters
+- `examples/peec_integration/validation/validate_multifilament.py`: Validation script
+
+### FastHenry .inp Parser API (2026-02-13)
+
+**Policy**: Use `FastHenryParser` to import FastHenry models for Radia PEEC analysis.
+
+**Supported Directives**:
+
+| Directive | Syntax | Description |
+|-----------|--------|-------------|
+| `.Units` | `.Units mm` | Length unit (m, cm, mm, um, in, mils) |
+| `N<name>` | `N1 x=0 y=0 z=0` | Node definition |
+| `E<name>` | `E1 N1 N2 w=1 h=1 sigma=5.8e7 nwinc=3 nhinc=3` | Segment definition |
+| `.external` | `.external N1 N2` | Port definition |
+| `.freq` | `.freq fmin=1e3 fmax=1e6 ndec=5` | Frequency sweep |
+| `.default` | `.default w=1 h=1 sigma=5.8e7` | Default segment parameters |
+| `.equiv` | `.equiv N1 N3` | Node merge (equivalence) |
+| `.end` | `.end` | End of file |
+| `*` | `* comment` | Comment (to end of line) |
+| `+` | `E1 N1 N2 w=1 +` | Line continuation |
+
+**Python API** (`src/radia/fasthenry_parser.py`):
+
+```python
+from fasthenry_parser import FastHenryParser
+
+# Parse from file or string
+parser = FastHenryParser()
+parser.parse_file('inductor.inp')
+# or: parser.parse_string(inp_text)
+
+# Inspect model
+print(parser.get_summary())  # nodes, segments, ports, freq_spec
+print(parser.get_frequencies())  # numpy array from .freq
+
+# Convert to Radia PEECBuilder
+builder = parser.to_peec_builder()
+topo = builder.build_topology()
+
+# Or solve directly
+result = parser.solve()  # Returns dict: freqs, Z_port, R, L, topology
+```
+
+**One-Step Solve**:
+```python
+from fasthenry_parser import FastHenryParser
+
+parser = FastHenryParser()
+parser.parse_string("""
+.Units mm
+.default sigma=5.8e7
+
+N1 x=0 y=0 z=0
+N2 x=100 y=0 z=0
+
+E1 N1 N2 w=1 h=1 nwinc=3 nhinc=3
+
+.external N1 N2
+.freq fmin=100 fmax=1e6 ndec=5
+.end
+""")
+
+result = parser.solve()
+print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
+```
+
+**Unit Conversion**: All coordinates and dimensions are automatically converted to meters (SI) internally, regardless of `.Units` setting.
+
+**Validation Results** (9/9 tests pass):
+
+| Test | Description | Result |
+|------|-------------|--------|
+| Parser directives | .Units, N, E, .external, .freq | PASSED |
+| .equiv | Node merge | PASSED |
+| Single wire | Parsed vs manual builder (0.00% error) | PASSED |
+| Parallel wires | R_parallel = R_single/2 | PASSED |
+| Multi-filament | nwinc/nhinc from .inp matches manual | PASSED |
+| Series chain | 4 segments in series | PASSED |
+| Frequency sweep | .freq -> Z(f) sweep | PASSED |
+| .default params | Inheritance of default parameters | PASSED |
+| Continuation lines | Line continuation with '+' | PASSED |
+
+**Source Files**:
+- `src/radia/fasthenry_parser.py`: FastHenry .inp parser
+- `examples/peec_integration/validation/validate_fasthenry.py`: Validation script
+
+### Coupled PEEC + MMM Solver (2026-02-13)
+
+**Policy**: Use `CoupledPEECSolver` for conductors near magnetic materials (iron cores, ferrite).
+
+**Physics**:
+```
+Z_eff(f) = diag(R + Zs(f)) + jw * (L_air + Delta_L)
+```
+
+Where Delta_L is the coupling matrix from magnetic material response:
+1. Unit current in segment j -> H-field via Biot-Savart (finite filament)
+2. H-field magnetizes material via `rad.ObjBckg()` + `rad.Solve()`
+3. Vector potential A from magnetized material: `rad.Fld(mag_obj, 'a', point)`
+4. Delta_L[i][j] = dot(A(center_i), dir_i) * length_i
+
+**Key Property**: For linear materials, Delta_L is frequency-independent (computed once).
+
+**Python API**:
+```python
+from peec_coupled import CoupledPEECSolver
+
+solver = CoupledPEECSolver(topology_dict, magnetic_objects=[core_id])
+solver.compute_coupling_matrix()  # N_seg Radia Solve calls
+Z = solver.compute_port_impedance(freq)
+Z_sweep = solver.frequency_sweep(freqs)
+L_total = solver.get_effective_inductance()  # L_air + Delta_L
+```
+
+**FastHenry .magnetic Block**:
+```
+.magnetic
+  type=box
+  center=0.05,0.01,0.0
+  size=0.06,0.01,0.01
+  divisions=2,1,1
+  mu_r=1000
+  mu_r_imag=0
+.endmagnetic
+```
+
+Or explicit hexahedron:
+```
+.magnetic
+  type=hexahedron
+  vertices=x1,y1,z1, x2,y2,z2, ..., x8,y8,z8
+  mu_r=500
+.endmagnetic
+```
+
+**Deleted APIs (2026-02-13)**:
+The following old C++ PEEC/CplMag APIs have been **REMOVED**:
+- `CndLoop`, `CndRecBlock`, `CndLoopFromHelix` - Use PEECBuilder instead
+- `CplMagCreate`, `CplMagSolve`, `CplMagSetFrequency` - Use CoupledPEECSolver instead
+- `CndHexahedron`, `CndWire`, `CndSpiral` - Use PEECBuilder instead
+- `MatSIBC` - Use rad_peec_surface_impedance.cpp directly
+
+**Deleted C++ Files (12 files)**:
+```
+src/core/rad_conductor.h/cpp
+src/core/rad_conductor_fmm.h/cpp
+src/core/rad_coupled_solver.h/cpp
+src/core/rad_peec_mmm_coupled.h/cpp
+src/core/rad_green_fullwave.h/cpp
+src/lib/rad_conductor_api.cpp
+src/lib/rad_peec_mmm_api.cpp
+```
+
+**Validation Results**:
+
+| Test | Description | Result |
+|------|-------------|--------|
+| Biot-Savart | Finite filament formula accuracy | PASSED |
+| mu_r=1 | No coupling with air material | PASSED |
+| High-mu | L increases with magnetic material | PASSED |
+| Symmetry | Delta_L matrix symmetry | PASSED |
+| Freq sweep | Z(f) physically reasonable | PASSED |
+| .magnetic box | FastHenry box block parsing | PASSED |
+| .magnetic hex | FastHenry hexahedron block parsing | PASSED |
+| Coupled solve | Full parser -> coupled solve | PASSED |
+
+**Source Files**:
+- `src/radia/peec_coupled.py`: CoupledPEECSolver class
+- `src/radia/fasthenry_parser.py`: Extended with .magnetic blocks
+- `examples/peec_integration/validation/validate_coupled.py`: Validation script
+
 ---
 
 ## Visualization Policy: NGSolve + VTK (2026-01-16)
@@ -3212,6 +3783,79 @@ plt.savefig('figure.pdf', format='pdf')
 
 ---
 
-**Last Updated**: 2026-01-19 (Added Publication Figure Policy)
+## Python API Usage Checklist (2026-02-19)
+
+### Common Mistakes Identified by Code Review
+
+These rules encode recurring issues found across the `examples/` directory. An MCP server (`tools/mcp_radia_lint/`) automates checking these patterns.
+
+**1. ObjBckg Requires Callable (CRITICAL)**
+
+`rad.ObjBckg()` takes a **Python callable** (lambda or function), NOT a list.
+
+```python
+# ✓ CORRECT
+bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])
+
+# ✗ WRONG - will fail at runtime
+bkg = rad.ObjBckg([0, 0, 0.1])
+```
+
+**2. UtiDelAll() Cleanup (HIGH)**
+
+Every example script must call `rad.UtiDelAll()` before exiting to free Radia C++ objects.
+
+```python
+def main():
+    # ... computation ...
+    rad.UtiDelAll()  # Required cleanup
+
+if __name__ == '__main__':
+    main()
+```
+
+**3. Relative Path Imports (HIGH)**
+
+Never use hardcoded absolute paths. Use `os.path.dirname(__file__)` for relative imports.
+
+```python
+# ✓ CORRECT
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
+
+# ✗ WRONG - machine-specific
+sys.path.insert(0, r'S:\Radia\01_GitHub\src\radia')
+```
+
+**4. Docstring Unit Consistency (MODERATE)**
+
+Public API methods that accept coordinates must NOT hardcode "in mm" in docstrings if the class has a `units` parameter. Use "in constructor length units" instead.
+
+```python
+# ✓ CORRECT
+def get_B(self, point):
+    """
+    Parameters:
+        point: [x, y, z] observation point (in constructor length units)
+    """
+
+# ✗ WRONG - misleading when units='m'
+def get_B(self, point):
+    """
+    Parameters:
+        point: [x, y, z] observation point in mm
+    """
+```
+
+**5. Analytical Magnet Classes: units Parameter (MODERATE)**
+
+All analytical magnet classes (`SphericalMagnet`, `CuboidMagnet`, `CurrentLoop`, `CylindricalMagnet`, `RingMagnet`) accept a `units` parameter (`'mm'` or `'m'`). Subclasses must propagate this parameter to the parent.
+
+**6. State Mutation in Computation Methods (LOW)**
+
+Computation methods (`get_B`, `get_H`, etc.) must NOT leave object state inconsistent on exception. Use `try/finally` when temporarily modifying `self`.
+
+---
+
+**Last Updated**: 2026-02-19 (Added Python API Usage Checklist, MCP lint server)
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation

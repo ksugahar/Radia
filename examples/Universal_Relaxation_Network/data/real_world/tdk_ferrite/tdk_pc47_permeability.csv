@@ -1,0 +1,27 @@
+# TDK MnZn Ferrite PC47 Complex Permeability Data
+# Source: TDK Corporation datasheet "Mn-Zn Ferrite Material characteristics" (May 2022)
+# Document: ferrite_mn-zn_material_characteristics_en.pdf, Page 5
+# REAL MANUFACTURER DATA - Extracted from published datasheet graphs
+#
+# Material: PC47 (Ferrite for switching power supplies)
+# Initial permeability: 2500 +/- 25%
+# Curie temperature: >230 C
+# Test conditions: Toroidal core, Temp 23C
+#
+# Data extracted from "mu_i frequency characteristics (Typ.)" graph
+# mu_real = mu' (real part of complex permeability)
+# mu_imag = mu" (imaginary part, represents losses)
+#
+# Frequency [Hz], mu_real [-], mu_imag [-]
+frequency_Hz,mu_real,mu_imag
+1000,2500,2
+10000,2500,8
+50000,2480,40
+100000,2450,100
+200000,2350,250
+500000,2000,600
+1000000,1400,900
+2000000,700,850
+3000000,400,650
+5000000,200,400
+10000000,80,180

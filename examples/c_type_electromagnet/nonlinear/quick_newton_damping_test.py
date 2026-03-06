@@ -8,10 +8,14 @@ Tests 6x6x6 mesh with three configurations:
 """
 
 import sys
-sys.path.insert(0, r'S:\Radia\01_GitHub\src\radia')
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 import radia as rad
+rad.FldUnits('m')
 import time
+
+mm = 1e-3  # 1 mm in meters
 
 # B-H curve (simplified, 20 points)
 bh_data = [
@@ -27,11 +31,11 @@ def create_simple_ctype(mesh_divs=6):
     mat = rad.MatSatIsoTab(bh_data)
 
     # Simple C-shape using hexahedra
-    # Base dimensions (mm)
-    width = 300.0
-    depth = 300.0
-    height = 300.0
-    gap = 50.0
+    # Base dimensions (mm -> meters)
+    width = 300.0 * mm
+    depth = 300.0 * mm
+    height = 300.0 * mm
+    gap = 50.0 * mm
 
     all_objects = []
 
@@ -122,7 +126,7 @@ def run_single_test(config_name, use_newton=False, use_damping=False):
     print(f"  NL iterations: {n_iter}")
     print(f"  Linear iterations: {solve_stats['total_linear_iter']}")
     print(f"  Avg linear/NL: {solve_stats['total_linear_iter']/n_iter:.1f}")
-    print(f"  Bz: {Bz:.2f} mT")
+    print(f"  Bz: {Bz*1e3:.2f} mT ({Bz:.4f} T)")
     print(f"  Solve time: {t_solve:.2f}s")
 
     return {
@@ -156,10 +160,10 @@ def main():
     print(f"\n{'='*60}")
     print("SUMMARY")
     print(f"{'='*60}")
-    print(f"{'Config':<25} {'NL':<8} {'Linear':<10} {'Time':<8} {'Bz (mT)'}")
+    print(f"{'Config':<25} {'NL':<8} {'Linear':<10} {'Time':<8} {'Bz (T)'}")
     print("-"*60)
     for r in results:
-        print(f"{r['config']:<25} {r['nl_iter']:<8} {r['linear_iter']:<10} {r['time']:<8.1f} {r['Bz']:.2f}")
+        print(f"{r['config']:<25} {r['nl_iter']:<8} {r['linear_iter']:<10} {r['time']:<8.1f} {r['Bz']:.4f}")
 
     # Analysis
     print(f"\n{'='*60}")

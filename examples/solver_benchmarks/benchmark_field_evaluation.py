@@ -24,6 +24,10 @@ except ImportError as e:
 	print("  powershell.exe -ExecutionPolicy Bypass -File Build.ps1")
 	sys.exit(1)
 
+# Set unit system to meters
+rad.FldUnits('m')
+mm = 1e-3  # 1 mm in meters
+
 try:
 	import numpy as np
 except ImportError as e:
@@ -51,7 +55,7 @@ def create_simple_magnet():
 	Permanent magnet with fixed magnetization (no relaxation needed).
 	"""
 	# 20mm cube, subdivided into 5x5x5 = 125 elements
-	size = 20.0
+	size = 20.0 * mm
 	n = 5
 	elem_size = size / n
 
@@ -77,9 +81,9 @@ def generate_evaluation_points(n_points):
 	Generate evaluation points on a grid around the magnet.
 	"""
 	# Grid from -30mm to +30mm (slightly outside the magnet)
-	x = np.linspace(-30, 30, int(np.cbrt(n_points)))
-	y = np.linspace(-30, 30, int(np.cbrt(n_points)))
-	z = np.linspace(-30, 30, int(np.cbrt(n_points)))
+	x = np.linspace(-30 * mm, 30 * mm, int(np.cbrt(n_points)))
+	y = np.linspace(-30 * mm, 30 * mm, int(np.cbrt(n_points)))
+	z = np.linspace(-30 * mm, 30 * mm, int(np.cbrt(n_points)))
 
 	points = []
 	for xi in x:
@@ -260,6 +264,8 @@ def main():
 	# (125 elements would create a large VTK file not needed for benchmarking)
 	print("\n[INFO] VTK export skipped (benchmark script)")
 	print("="*80)
+
+	rad.UtiDelAll()
 
 if __name__ == "__main__":
 	main()

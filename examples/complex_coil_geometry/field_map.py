@@ -13,15 +13,14 @@ from pathlib import Path
 
 # Add paths
 project_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(project_root / 'build' / 'lib' / 'Release'))
-sys.path.insert(0, str(project_root / 'dist'))
-sys.path.insert(0, str(project_root / 'src' / 'python'))
+sys.path.insert(0, str(project_root / 'build' / 'Release'))
+sys.path.insert(0, str(project_root / 'src' / 'radia'))
 
 import numpy as np
 import radia as rad
 
-# Import coil model
-from coil_model import create_beam_steering_coil, get_coil_info
+# Import coil model (sets rad.FldUnits('m') and defines mm = 1e-3)
+from coil_model import create_beam_steering_coil, get_coil_info, mm
 
 print("=" * 70)
 print("MAGNETIC FIELD MAP CALCULATION")
@@ -59,9 +58,9 @@ def calculate_field_grid(coil_obj, grid_params):
 	X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
 
 	print(f"  Grid size: {x_range[2]} × {y_range[2]} × {z_range[2]} = {X.size} points")
-	print(f"  X range: [{x_range[0]}, {x_range[1]}] mm")
-	print(f"  Y range: [{y_range[0]}, {y_range[1]}] mm")
-	print(f"  Z range: [{z_range[0]}, {z_range[1]}] mm")
+	print(f"  X range: [{x_range[0]/mm:.1f}, {x_range[1]/mm:.1f}] mm")
+	print(f"  Y range: [{y_range[0]/mm:.1f}, {y_range[1]/mm:.1f}] mm")
+	print(f"  Z range: [{z_range[0]/mm:.1f}, {z_range[1]/mm:.1f}] mm")
 
 	# Calculate field at each point
 	Bx = np.zeros_like(X)
@@ -178,7 +177,7 @@ def main():
 	print(f"[OK] Coil model loaded")
 	print(f"     Description: {params['description']}")
 	print(f"     Current: {params['current']} A")
-	print(f"     Cross-section: {params['cross_section']['width']}×{params['cross_section']['height']} mm")
+	print(f"     Cross-section: {params['cross_section']['width']/mm:.0f}×{params['cross_section']['height']/mm:.0f} mm")
 	print(f"     Segments: {params['num_segments']}")
 
 	# Get coil bounding box
@@ -188,12 +187,12 @@ def main():
 	print(f"\n" + "-" * 70)
 	print("Coil bounding box:")
 	print("-" * 70)
-	print(f"  X: [{bounds['x_min']:.2f}, {bounds['x_max']:.2f}] mm (span: {info['span']['x']:.2f} mm)")
-	print(f"  Y: [{bounds['y_min']:.2f}, {bounds['y_max']:.2f}] mm (span: {info['span']['y']:.2f} mm)")
-	print(f"  Z: [{bounds['z_min']:.2f}, {bounds['z_max']:.2f}] mm (span: {info['span']['z']:.2f} mm)")
+	print(f"  X: [{bounds['x_min']/mm:.2f}, {bounds['x_max']/mm:.2f}] mm (span: {info['span']['x']/mm:.2f} mm)")
+	print(f"  Y: [{bounds['y_min']/mm:.2f}, {bounds['y_max']/mm:.2f}] mm (span: {info['span']['y']/mm:.2f} mm)")
+	print(f"  Z: [{bounds['z_min']/mm:.2f}, {bounds['z_max']/mm:.2f}] mm (span: {info['span']['z']/mm:.2f} mm)")
 
-	# Define grid parameters with 100mm margin around coil
-	margin = 100.0  # mm
+	# Define grid parameters with 100 mm margin around coil
+	margin = 100 * mm
 
 	# Calculate grid range with margin
 	x_min = bounds['x_min'] - margin
@@ -218,10 +217,10 @@ def main():
 	print("\n" + "=" * 70)
 	print("GRID CONFIGURATION")
 	print("=" * 70)
-	print(f"\nField evaluation region (100mm margin around coil):")
-	print(f"  X: [{x_min:.2f}, {x_max:.2f}] mm")
-	print(f"  Y: [{y_min:.2f}, {y_max:.2f}] mm")
-	print(f"  Z: [{z_min:.2f}, {z_max:.2f}] mm")
+	print(f"\nField evaluation region (100 mm margin around coil):")
+	print(f"  X: [{x_min/mm:.2f}, {x_max/mm:.2f}] mm")
+	print(f"  Y: [{y_min/mm:.2f}, {y_max/mm:.2f}] mm")
+	print(f"  Z: [{z_min/mm:.2f}, {z_max/mm:.2f}] mm")
 
 	total_points = nx * ny * nz
 	print(f"\nTotal grid points: {total_points:,}")

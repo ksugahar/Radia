@@ -22,6 +22,10 @@ import radia as rad
 import time
 import tracemalloc
 
+# Set unit system to meters
+rad.FldUnits('m')
+mm = 1e-3  # 1 mm in meters
+
 
 def hex_vertices(cx, cy, cz, dx, dy, dz):
 	"""Generate hexahedron vertices from center and dimensions."""
@@ -43,7 +47,7 @@ def create_magnet(n_per_side):
 	Returns:
 		Radia object ID
 	"""
-	size = 20.0  # 20mm cube
+	size = 20.0 * mm  # 20mm cube
 	elem_size = size / n_per_side
 
 	n_elem = n_per_side**3

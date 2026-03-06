@@ -46,17 +46,16 @@ find_package(pybind11 REQUIRED)
 
 # Set NGSolve and Netgen directories (only if building radia_ngsolve)
 if(RADIA_BUILD_NGSOLVE)
-	# Try custom NGSolve installation first (local build), then fall back to site-packages
-	set(NGSOLVE_CUSTOM_PATH "S:/NGSolve/01_GitHub/install_ksugahar")
-	if(EXISTS "${NGSOLVE_CUSTOM_PATH}/cmake/NGSolveConfig.cmake")
-		set(NGSolve_DIR "${NGSOLVE_CUSTOM_PATH}/cmake")
-		set(Netgen_DIR "${NGSOLVE_CUSTOM_PATH}/cmake")
-		message(STATUS "Using custom NGSolve: ${NGSolve_DIR}")
-	else()
+	# Use pip-installed NGSolve from site-packages (version-agnostic)
+	# Override with -DNGSolve_DIR=... -DNetgen_DIR=... if needed
+	if(NOT NGSolve_DIR)
 		set(NGSolve_DIR ${PYTHON_SITE_PACKAGES}/ngsolve/cmake)
-		set(Netgen_DIR ${PYTHON_SITE_PACKAGES}/netgen/cmake)
-		message(STATUS "Using site-packages NGSolve: ${NGSolve_DIR}")
 	endif()
+	if(NOT Netgen_DIR)
+		set(Netgen_DIR ${PYTHON_SITE_PACKAGES}/netgen/cmake)
+	endif()
+	message(STATUS "NGSolve_DIR: ${NGSolve_DIR}")
+	message(STATUS "Netgen_DIR: ${Netgen_DIR}")
 
 	# Find NGSolve
 	find_package(NGSolve CONFIG REQUIRED)
@@ -152,21 +151,9 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_polyhedron.cpp            # Polyhedron with magnetization
 	${CORE_DIR}/rad_hacapk.cpp                # HACApK H-matrix manager (Method 2)
 
-	# PEEC Loop-Star + MMM unified solver (Laplace kernel only, HACApK acceleration)
-	${CORE_DIR}/rad_conductor.cpp             # PEEC conductor formulation with Loop-Star
-	${CORE_DIR}/rad_green_fullwave.cpp        # Green's functions (Laplace kernel for quasi-static)
-	${CORE_DIR}/rad_coupled_solver.cpp        # Coupled conductor-magnetic solver
-	${CORE_DIR}/rad_peec_mmm_coupled.cpp      # PEEC-MMM coupled solver (conductor + magnet)
+	# PEEC Loop-Star matrix construction (Laplace kernel only)
 	${CORE_DIR}/rad_peec_matrices.cpp         # PEEC Loop-Star matrix construction
 )
-
-# FMM conductor source (only when ExaFMM is enabled)
-set(RADIA_FMM_CONDUCTOR_SOURCES "")
-if(RADIA_ENABLE_EXAFMM)
-	set(RADIA_FMM_CONDUCTOR_SOURCES
-		${CORE_DIR}/rad_conductor_fmm.cpp     # FMM-accelerated conductor field computation
-	)
-endif()
 
 # Radia ext sources
 set(RADIA_EXT_SOURCES
@@ -189,8 +176,6 @@ set(HACAPK_SOURCES
 # Radia lib sources (main radia module)
 set(RADIA_LIB_SOURCES
 	${LIB_DIR}/radentry.cpp
-	${LIB_DIR}/rad_conductor_api.cpp
-	${LIB_DIR}/rad_peec_mmm_api.cpp       # PEEC-MMM coupled solver API
 )
 
 # PEEC matrices pybind11 module sources (separate module)
@@ -210,7 +195,7 @@ target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
 if(RADIA_BUILD_NGSOLVE)
 add_ngsolve_python_module(radia_ngsolve
 	${RADIA_CORE_SOURCES}
-	${RADIA_FMM_CONDUCTOR_SOURCES}
+
 	${EXT_DIR}/auxparse/auxparse.cpp
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp
@@ -261,7 +246,6 @@ target_compile_definitions(radia_ngsolve PRIVATE
 	_GM_WITHOUT_BASE
 	RADIA_USE_HACAPK
 	HACAPK_RADIA_LOGGING
-	RADIA_MSC_SUPPORT
 	$<$<BOOL:${RADIA_ENABLE_EXAFMM}>:RADIA_USE_EXAFMM>
 	$<$<CONFIG:Debug>:_DEBUG>
 	$<$<CONFIG:Release>:NDEBUG>
@@ -809,7 +793,7 @@ set(RADIA_PYBIND_SOURCES
 
 pybind11_add_module(_radia_pybind
 	${RADIA_CORE_SOURCES}
-	${RADIA_FMM_CONDUCTOR_SOURCES}
+
 	${EXT_DIR}/auxparse/auxparse.cpp
 	${EXT_DIR}/genmath/gmfft.cpp
 	${EXT_DIR}/genmath/gmtrans.cpp
@@ -840,7 +824,6 @@ target_compile_definitions(_radia_pybind PRIVATE
 	ANSI_DECLARATORS
 	RADIA_USE_HACAPK
 	HACAPK_RADIA_LOGGING
-	RADIA_MSC_SUPPORT
 	$<$<BOOL:${RADIA_ENABLE_EXAFMM}>:RADIA_USE_EXAFMM>
 )
 

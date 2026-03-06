@@ -9,30 +9,44 @@
 # pybind11 Migration Complete (2026-01):
 # All bindings now use pybind11 exclusively.
 
-__version__ = "1.8.1"
+__version__ = "2.2.0"
 
-# Add package directory to DLL search path (Windows)
-# This is needed for finding Intel MKL DLL (mkl_rt.2.dll)
+# DLL loader for Windows
+# MKL DLLs are installed via pip dependency (mkl>=2024.2.0)
+# at {sys.prefix}/Library/bin/ (following NGSolve pattern)
 import os
 import sys
 
 _package_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Add DLL directory for Windows (Python 3.8+)
 if sys.platform == 'win32':
-    if hasattr(os, 'add_dll_directory'):
-        os.add_dll_directory(_package_dir)
-        # Add Intel MKL path if available
-        mkl_bin = r'C:\Program Files (x86)\Intel\oneAPI\mkl\latest\bin'
-        if os.path.isdir(mkl_bin):
-            os.add_dll_directory(mkl_bin)
-        # Add Intel Compiler runtime path if available
-        icx_bin = r'C:\Program Files (x86)\Intel\oneAPI\compiler\latest\bin'
-        if os.path.isdir(icx_bin):
-            os.add_dll_directory(icx_bin)
-    # Also add to PATH as fallback for older methods
-    if _package_dir not in os.environ.get('PATH', ''):
-        os.environ['PATH'] = _package_dir + os.pathsep + os.environ.get('PATH', '')
+    _dirs_to_add = []
+
+    # 1. Package directory (for _radia_pybind.pyd and other .pyd files)
+    _dirs_to_add.append(_package_dir)
+
+    # 2. MKL DLLs from pip install mkl (mkl_rt.2.dll, etc.)
+    _mkl_bin = os.path.join(sys.prefix, "Library", "bin")
+    if os.path.isdir(_mkl_bin):
+        _dirs_to_add.append(_mkl_bin)
+
+    # 3. Intel oneAPI (fallback for development builds)
+    for _intel_path in [
+        os.path.join(os.environ.get("MKLROOT", ""), "bin"),
+        r"C:\Program Files (x86)\Intel\oneAPI\mkl\latest\bin",
+        r"C:\Program Files (x86)\Intel\oneAPI\compiler\latest\bin",
+    ]:
+        if os.path.isdir(_intel_path):
+            _dirs_to_add.append(_intel_path)
+
+    # Register directories with OS DLL loader
+    for _d in _dirs_to_add:
+        if hasattr(os, 'add_dll_directory'):
+            os.add_dll_directory(_d)
+        if _d not in os.environ.get('PATH', ''):
+            os.environ['PATH'] = _d + os.pathsep + os.environ.get('PATH', '')
+
+    del _dirs_to_add, _mkl_bin
 
 # Import all symbols from the pybind11 C++ extension module (_radia_pybind.pyd)
 try:
@@ -81,11 +95,8 @@ except ImportError:
     # ESIM requires scipy, which may not be installed
     ESIM_AVAILABLE = False
 
-# RWG-EFIE solver for 3D surface element analysis
-# The Python implementation has been migrated to C++ with OpenMP parallelization.
-# Access via rad.RwgMeshRect(), rad.RwgMeshDisk(), rad.RwgMeshCylinder(),
-# rad.RwgMeshSpiral(), rad.RwgMeshLoop(), rad.RwgSolverCreate(), etc.
-# See docs/API_REFERENCE.md for usage.
+# NOTE: Old conductor API (CndLoop, CndRecBlock, CplMag*, Rwg*) removed (2026-02-13).
+# Use PEEC topology solver (peec_topology.py) and coupled solver (peec_coupled.py).
 
 # VTK Export: Use rad.FldVTS() (C++ implementation)
 # See docs/API_REFERENCE.md for usage

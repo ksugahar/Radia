@@ -20,10 +20,19 @@ Unlike general-purpose FEM tools optimized for motors (rotating machinery) with 
 
 **This is not just a solver; it is a Framework.** We provide the architecture to build specific solvers for your unique magnetic systems.
 
-### Future Scope & Active Development
-We are actively expanding the framework to cover:
-*   **ESIM (Equivalent Source Integral Method)**: Currently prioritizing the implementation of ESIM for advanced source modeling.
-*   **Application Library Expansion**: We are currently building a comprehensive set of reference examples for MagLev, WPT, and Accelerator magnets to serve as starting points for new users.
+### Current Capabilities & Active Development
+
+**Implemented**:
+*   **PEEC Circuit Extraction**: C++ MNA solver with MKL LAPACK for L, R, C, M extraction from conductor geometry.
+*   **Multi-filament Skin Effect**: `nwinc`/`nhinc` cross-section subdivision for skin/proximity effect modeling.
+*   **FastHenry Compatibility**: Parse `.inp` files directly with one-step solve.
+*   **Coupled PEEC+MMM**: Conductor-core coupling via Biot-Savart + Radia magnetostatic solver.
+*   **ESIM (Effective Surface Impedance Method)**: Nonlinear surface impedance for induction heating analysis.
+*   **Templated BiCGSTAB**: Shared between MSC (real) and PEEC (complex) solvers via `rad_bicgstab.h`.
+
+**In Development**:
+*   **HACApK for PEEC**: H-matrix acceleration for large PEEC systems (L matrix compression).
+*   **Application Library**: Reference examples for MagLev, WPT, and Accelerator magnets.
 
 ---
 
@@ -53,13 +62,14 @@ For high-frequency applications (WPT, Induction Heating, Accelerators), traditio
 
 Attempting to mesh both simultaneously results in massive element counts and slow convergence. **We reject this approach.**
 
-**The Radia/FastImp Solution: SIBC + pFFT**
+**The Radia PEEC Solution: SIBC + MKL LAPACK**
 We solve the physics exactly where it happens: **On the Surface.**
 
 1.  **SIBC (Surface Impedance Boundary Condition)**: Mathematical modeling of skin effect physics directly on the boundary. No internal mesh is required inside the conductor.
-2.  **pFFT (Precorrected-FFT)**: Accelerates the dense matrix interactions to $O(N \log N)$.
+2.  **PEEC + MKL LAPACK**: C++ MNA (Modified Nodal Analysis) solver with Intel MKL LAPACK (`zgesv_`, `zgetrf_`, `zgetrs_`) and templated BiCGSTAB for fast impedance extraction.
+3.  **FastHenry Compatibility**: Parse `.inp` files directly, including multi-filament (`nwinc`/`nhinc`) for skin/proximity effect.
 
-**Result**: Simulations that took hours with FEM finish in minutes, with perfect geometric fidelity for Litz wires and complex coils.
+**Result**: Direct circuit parameter extraction (L, R, C, M) from conductor geometry, with SPICE-ready output.
 
 ## 🦁 Academic Heritage & Citations
 
@@ -207,7 +217,7 @@ To handle complex field sources efficiently, the framework employs state-of-the-
 
 *   **Solver Acceleration (Source Definition)**:
     *   **$\mathcal{H}$-Matrix ([HACApK](https://github.com/RIKENGITHUB/ppOpen-HPC) ACA+)**: Used for Magnetostatics (MMM). Compresses dense interaction matrices to $O(N \log N)$, enabling large-scale iron/magnet simulations.
-    *   **pFFT & SIBC**: Used for Conductor Analysis (FastImp). **Surface Impedance Boundary Conditions (SIBC)** combined with Precorrected-FFT allow extremely fast impedance extraction by modeling skin depth effects as surface properties.
+    *   **PEEC + MKL LAPACK**: C++ PEEC solver with Intel MKL LAPACK/BLAS for circuit parameter extraction. SIBC models skin depth effects as surface properties. Templated BiCGSTAB shared between MSC (real) and PEEC (complex) solvers.
 *   **Field Evaluation Acceleration**:
     *   **FMM (ExaFMM-t)**: Fast Multipole Method using Laplace kernel for rapidly computing fields ($B, H, A$) from massive numbers of source elements. This is critical for the `CoefficientFunction` interface to NGSolve.
 *   **Hybrid FEM**: Reduced Potential coupling with NGSolve.
@@ -218,8 +228,8 @@ To handle complex field sources efficiently, the framework employs state-of-the-
 
 ### 3. Visualization & Export
 *   **PyVista Viewer**: Modern, interactive 3D visualization within Python/Jupyter.
-*   **VTK Export**: Compatibile with ParaView.
-*   **Nastran/Step**: Interoperability with CAD tools via [Coreform Cubit integration](https://github.com/ksugahar/Coreform_Cubit_Mesh_Export).
+*   **VTK Export**: Compatible with ParaView.
+*   **GMSH/STEP**: Mesh import via GMSH, CAD interoperability via [Coreform Cubit integration](https://github.com/ksugahar/Coreform_Cubit_Mesh_Export).
 
 ---
 
@@ -256,15 +266,12 @@ pip install radia-ngsolve
 
 *Prerequisites for FEM features: `pip install ngsolve`*
 
-### Example: The "Agentic" Way
-
-Modeling a complex coil doesn't require a GUI. It requires expressive code:
+### Example 1: Magnetostatic Source Field
 
 ```python
 import radia as rad
 
-# Define a Race-Track Coil automatically
-# An LLM can easily tweak parameters like 'current', 'radius', 'turns'
+# Define a Race-Track Coil
 coil = rad.ObjRaceTrk(
     [0,0,0],       # Center
     [10, 30],      # Inner Radii (R_min, R_max)
@@ -279,6 +286,53 @@ coil = rad.ObjRaceTrk(
 rad.FldVTS(coil, "coil_field.vts",
            [-50, 50], [-150, 150], [-20, 30],  # x, y, z ranges [mm]
            21, 31, 11)  # grid points
+```
+
+### Example 2: PEEC Circuit Parameter Extraction
+
+```python
+from peec_matrices import PyPEECBuilder
+from peec_topology import PEECCircuitSolver
+import numpy as np
+
+# Build a simple inductor: 4 segments in series
+builder = PyPEECBuilder()
+n1 = builder.add_node_at(0, 0, 0)
+n2 = builder.add_node_at(0.05, 0, 0)
+n3 = builder.add_node_at(0.05, 0.05, 0)
+n4 = builder.add_node_at(0, 0.05, 0)
+for na, nb in [(n1,n2), (n2,n3), (n3,n4), (n4,n1)]:
+    builder.add_connected_segment(na, nb, w=1e-3, h=1e-3, sigma=5.8e7, nwinc=3, nhinc=3)
+builder.add_port(n1, n1)  # Single-turn loop
+
+topo = builder.build_topology()
+solver = PEECCircuitSolver(topo)
+
+# Extract impedance vs frequency
+freqs = np.logspace(2, 6, 20)
+Z = solver.frequency_sweep(freqs)
+R = np.real(Z)
+L = np.imag(Z) / (2 * np.pi * freqs)
+print(f"DC: R={R[0]*1e3:.2f} mOhm, L={L[0]*1e9:.1f} nH")
+```
+
+### Example 3: FastHenry .inp Import
+
+```python
+from fasthenry_parser import FastHenryParser
+
+parser = FastHenryParser()
+parser.parse_string("""
+.Units mm
+N1 x=0 y=0 z=0
+N2 x=100 y=0 z=0
+E1 N1 N2 w=1 h=1 sigma=5.8e7 nwinc=5 nhinc=5
+.external N1 N2
+.freq fmin=100 fmax=1e6 ndec=5
+.end
+""")
+result = parser.solve()
+print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
 ```
 
 ---

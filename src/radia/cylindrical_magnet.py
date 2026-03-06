@@ -496,7 +496,7 @@ class CylindricalMagnet:
         Get magnetic field B at observation point.
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Bx, By, Bz] magnetic field in Tesla
@@ -565,7 +565,7 @@ class CylindricalMagnet:
         For points inside: this is only approximate.
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Hx, Hy, Hz] H-field in A/m
@@ -582,11 +582,11 @@ class CylindricalMagnet:
         A is not implemented (returns zero).
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
             n_gauss: number of Gauss quadrature points for integration
 
         Returns:
-            [Ax, Ay, Az] vector potential in T*mm
+            [Ax, Ay, Az] vector potential in T*length_unit
         """
         # Transform to local coordinates (cylinder at origin, axis along z)
         p = np.array(point, dtype=float) - self.center
@@ -639,7 +639,7 @@ class CylindricalMagnet:
         Callable interface for use with rad.ObjBckg().
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Bx, By, Bz] magnetic field in Tesla
@@ -657,24 +657,27 @@ class RingMagnet(CylindricalMagnet):
     """
 
     def __init__(self, center: List[float], inner_radius: float, outer_radius: float,
-                 height: float, magnetization: List[float], axis: str = 'z'):
+                 height: float, magnetization: List[float], axis: str = 'z',
+                 units: str = 'mm'):
         """
         Initialize ring magnet.
 
         Parameters:
-            center: [x, y, z] center position in mm
-            inner_radius: inner radius in mm
-            outer_radius: outer radius in mm
-            height: total height in mm
+            center: [x, y, z] center position
+            inner_radius: inner radius (must be positive)
+            outer_radius: outer radius
+            height: total height
             magnetization: [Mx, My, Mz] in A/m
             axis: cylinder axis direction ('x', 'y', or 'z')
+            units: length unit for geometry ('mm' or 'm')
         """
-        super().__init__(center, outer_radius, height, magnetization, axis)
-        self.inner_radius = float(inner_radius)
-        self.outer_radius = float(outer_radius)
-
+        if inner_radius <= 0:
+            raise ValueError("inner_radius must be positive")
         if inner_radius >= outer_radius:
             raise ValueError("inner_radius must be less than outer_radius")
+        super().__init__(center, outer_radius, height, magnetization, axis, units)
+        self.inner_radius = float(inner_radius)
+        self.outer_radius = float(outer_radius)
 
     def get_B(self, point: List[float]) -> List[float]:
         """
@@ -683,21 +686,22 @@ class RingMagnet(CylindricalMagnet):
         Computed as B_outer - B_inner (superposition).
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Bx, By, Bz] magnetic field in Tesla
         """
-        # Field from outer cylinder
-        self.radius = self.outer_radius
-        B_outer = super().get_B(point)
+        saved_radius = self.radius
+        try:
+            # Field from outer cylinder
+            self.radius = self.outer_radius
+            B_outer = super().get_B(point)
 
-        # Field from inner cylinder
-        self.radius = self.inner_radius
-        B_inner = super().get_B(point)
-
-        # Restore radius
-        self.radius = self.outer_radius
+            # Field from inner cylinder
+            self.radius = self.inner_radius
+            B_inner = super().get_B(point)
+        finally:
+            self.radius = saved_radius
 
         return [
             B_outer[0] - B_inner[0],

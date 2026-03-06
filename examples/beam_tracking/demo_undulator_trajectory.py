@@ -28,14 +28,14 @@ except ImportError:
     print("matplotlib not available, skipping plots")
 
 
-def create_planar_undulator(period=50.0, n_periods=5, gap=20.0, B0=0.8):
+def create_planar_undulator(period=0.050, n_periods=5, gap=0.020, B0=0.8):
     """
     Create a simple planar undulator.
 
     Args:
-        period: Undulator period [mm]
+        period: Undulator period [m]
         n_periods: Number of periods
-        gap: Magnetic gap [mm]
+        gap: Magnetic gap [m]
         B0: Peak field [T]
 
     Returns:
@@ -48,10 +48,10 @@ def create_planar_undulator(period=50.0, n_periods=5, gap=20.0, B0=0.8):
 
     magnets = []
 
-    # Magnet block dimensions
-    block_width = 40.0   # x dimension [mm]
-    block_height = 30.0  # z dimension [mm]
-    block_length = period / 4  # y dimension (quarter period)
+    # Magnet block dimensions (convert from mm ratios)
+    block_width = 0.040   # 40 mm
+    block_height = 0.030  # 30 mm
+    block_length = period / 4  # Quarter period
 
     total_length = n_periods * period
     y_start = -total_length / 2
@@ -94,7 +94,7 @@ def analyze_trajectory(trajectory, period):
 
     Args:
         trajectory: NumPy array from particle_trajectory()
-        period: Undulator period [mm]
+        period: Undulator period [m]
 
     Returns:
         dict with analysis results
@@ -113,7 +113,7 @@ def analyze_trajectory(trajectory, period):
     K_from_amplitude = 2 * np.pi * x_amplitude / period
 
     return {
-        'x_amplitude_um': x_amplitude * 1000,  # um
+        'x_amplitude_um': x_amplitude * 1e6,  # um
         'xp_max_urad': np.max(np.abs(xp)) * 1e6,  # urad
         'K_from_angle': K_from_angle,
         'K_from_amplitude': K_from_amplitude
@@ -125,19 +125,19 @@ def main():
     print("Undulator Trajectory Demo")
     print("=" * 60)
 
-    # Set units to millimeters
-    rad.FldUnits('mm')
+    # Set units to meters (SI) - Policy compliance
+    rad.FldUnits('m')
 
     # Undulator parameters
-    period = 50.0      # 50 mm period
-    n_periods = 5      # 5 periods
-    gap = 20.0         # 20 mm gap
-    B0 = 0.5           # 0.5 T peak field
+    period = 0.050      # 50 mm period
+    n_periods = 5       # 5 periods
+    gap = 0.020         # 20 mm gap
+    B0 = 0.5            # 0.5 T peak field
 
     print(f"\nUndulator parameters:")
-    print(f"  Period: {period} mm")
+    print(f"  Period: {period*1000} mm")
     print(f"  Number of periods: {n_periods}")
-    print(f"  Gap: {gap} mm")
+    print(f"  Gap: {gap*1000} mm")
     print(f"  Target peak field: {B0} T")
 
     # Create undulator
@@ -158,7 +158,7 @@ def main():
     margin = 2 * period
     s_start = -n_periods * period / 2 - margin
     s_end = n_periods * period / 2 + margin
-    n_points = int((s_end - s_start) / 0.5) + 1  # 0.5 mm step
+    n_points = int((s_end - s_start) / 0.0005) + 1  # 0.5 mm step -> 0.0005 m
 
     trajectory = bt.particle_trajectory(
         undulator,
@@ -168,9 +168,10 @@ def main():
         n_points
     )
 
-    print(f"Trajectory: {trajectory.shape[0]} points from s={s_start:.1f} to s={s_end:.1f} mm")
+    print(f"Trajectory: {trajectory.shape[0]} points from s={s_start*1000:.1f} to s={s_end*1000:.1f} mm")
 
     # Analyze trajectory
+    # Note: period is passed in meters, so analysis uses meters
     analysis = analyze_trajectory(trajectory, period)
     print(f"\nTrajectory analysis:")
     print(f"  Oscillation amplitude: {analysis['x_amplitude_um']:.2f} um")
@@ -179,7 +180,9 @@ def main():
     print(f"  K parameter (from amplitude): {analysis['K_from_amplitude']:.3f}")
 
     # Theoretical K parameter
-    K_theory = 0.934 * period * Bz_peak / 10  # period in cm, B in T
+    # Formula: K = 0.934 * lambda_cm * B_tesla
+    period_cm = period * 100
+    K_theory = 0.934 * period_cm * Bz_peak 
     print(f"  K parameter (theoretical): {K_theory:.3f}")
 
     # Plot if matplotlib available
@@ -190,10 +193,16 @@ def main():
         x = trajectory[:, 1]
         xp = trajectory[:, 2]
 
+        # Convert to mm/um/urad for plotting
+        s_mm = s * 1000
+        x_um = x * 1e6
+        xp_urad = xp * 1e6
+        y_test_mm = y_test * 1000
+
         # Plot 1: Trajectory x vs s
         ax1 = axes[0]
-        ax1.plot(s, x * 1000, 'b-', linewidth=1)  # Convert to um
-        ax1.axvspan(-n_periods*period/2, n_periods*period/2, alpha=0.2, color='orange', label='Undulator')
+        ax1.plot(s_mm, x_um, 'b-', linewidth=1)
+        ax1.axvspan(-n_periods*period*1000/2, n_periods*period*1000/2, alpha=0.2, color='orange', label='Undulator')
         ax1.set_xlabel('s [mm]')
         ax1.set_ylabel('x [um]')
         ax1.set_title(f'Horizontal Trajectory (E={energy_gev} GeV, K~{K_theory:.2f})')
@@ -202,8 +211,8 @@ def main():
 
         # Plot 2: Angle x' vs s
         ax2 = axes[1]
-        ax2.plot(s, xp * 1e6, 'r-', linewidth=1)  # Convert to urad
-        ax2.axvspan(-n_periods*period/2, n_periods*period/2, alpha=0.2, color='orange')
+        ax2.plot(s_mm, xp_urad, 'r-', linewidth=1)
+        ax2.axvspan(-n_periods*period*1000/2, n_periods*period*1000/2, alpha=0.2, color='orange')
         ax2.set_xlabel('s [mm]')
         ax2.set_ylabel("x' [urad]")
         ax2.set_title('Horizontal Angle')
@@ -211,7 +220,7 @@ def main():
 
         # Plot 3: Field profile
         ax3 = axes[2]
-        ax3.plot(y_test, Bz_axis, 'g-', linewidth=2)
+        ax3.plot(y_test_mm, Bz_axis, 'g-', linewidth=2)
         ax3.set_xlabel('y [mm]')
         ax3.set_ylabel('Bz [T]')
         ax3.set_title('Vertical Field on Axis')
