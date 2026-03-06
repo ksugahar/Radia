@@ -286,8 +286,8 @@ Prefer RAII containers (`std::vector`) over manual `new`/`delete`.
 **POLICY**: Use **MSVC** compiler with **Intel MKL**. Intel oneAPI compiler (icx-cl) is NOT compatible with NGSolve linking.
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File "BuildMSVC.ps1"
-powershell.exe -ExecutionPolicy Bypass -File "BuildMSVC.ps1" -Rebuild  # Clean rebuild
+powershell.exe -ExecutionPolicy Bypass -File "Build.ps1"
+powershell.exe -ExecutionPolicy Bypass -File "Build.ps1" -Rebuild  # Clean rebuild
 ```
 
 **Required Software**: Visual Studio 2022 (MSVC), Intel oneAPI Base Toolkit (MKL only, NOT the compiler).
@@ -296,11 +296,7 @@ powershell.exe -ExecutionPolicy Bypass -File "BuildMSVC.ps1" -Rebuild  # Clean r
 
 **POLICY**: OpenBLAS is NOT supported. MKL provides optimized BLAS/LAPACK. MKL internally uses Intel OpenMP (`libiomp5md.dll`) for its own threading, but Radia no longer links it directly.
 
-**Required MKL DLLs** (auto-copied by BuildMSVC.ps1): `mkl_rt.*.dll`, `mkl_core.*.dll`, `mkl_intel_thread.*.dll`, `mkl_def.*.dll`, `mkl_avx2.*.dll`, `mkl_vml_*.dll`, `libiomp5md.dll` (MKL dependency), `libmmd.dll`, `svml_dispmd.dll`.
-
-### Parallelization: NGSolve TaskManager
-
-**POLICY**: Radia uses **NGSolve TaskManager** for parallelization, NOT OpenMP. All parallel loops use `TaskManager::CreateTask()`. The unified parallelization header is `rad_parallel.h`. MKL internally still uses Intel OpenMP (`libiomp5md.dll`) for BLAS/LAPACK, but Radia does not link or use OpenMP directly.
+**Required MKL DLLs** (loaded at runtime via pip dependency): `mkl_rt.*.dll`, `mkl_core.*.dll`, `mkl_intel_thread.*.dll`, `mkl_def.*.dll`, `mkl_avx2.*.dll`, `mkl_vml_*.dll`, `libiomp5md.dll` (MKL dependency), `libmmd.dll`, `svml_dispmd.dll`.
 
 ### Parallelization: NGSolve TaskManager
 
@@ -335,7 +331,7 @@ for (int i = 0; i < n; i++) { ... }
 ### PyPI Release Workflow
 
 1. Claude Code bumps version in `pyproject.toml` and `src/radia/__init__.py`, updates `CHANGELOG.md`
-2. **CRITICAL**: Run `BuildMSVC.ps1` BEFORE `python -m build`
+2. **CRITICAL**: Run `Build.ps1` BEFORE `python -m build`
 3. **MANDATORY**: Verify wheel contains correct `.pyd` before upload:
    ```python
    import zipfile
@@ -374,7 +370,7 @@ src/radia/
   # NO .dll files
 ```
 
-**Always use `BuildRadiaInternal.ps1`** for building. Never use manual cmake commands -- the script handles the `.pyd` rename from `radia.cp312-win_amd64.pyd` to `radia.pyd`.
+**Always use `Build.ps1`** for building. Never use manual cmake commands -- the script handles CMake configure + build + `.pyd` copy to `src/radia/`.
 
 ---
 

@@ -1271,33 +1271,6 @@ int CALL RadFldCmpPrc(int* n, char* Opt)
 
 //-------------------------------------------------------------------------
 
-int CALL RadFldUnits(char* OutStr)
-{
-	// Deprecated: Radia always uses meters
-	strcpy(OutStr, "m");
-	return 0;
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadFldUnitsSize(int* OutSize)
-{
-	// Deprecated: Radia always uses meters
-	*OutSize = 1; // strlen("m")
-	return 0;
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadFldUnitsSet(const char* UnitStr)
-{
-	// Deprecated: Radia always uses meters. Noop.
-	(void)UnitStr;
-	return 0;
-}
-
-//-------------------------------------------------------------------------
-
 int CALL RadFldFrcShpRtg(int* n, double* pP, double* pW)
 {
 	Rectngl(pP[0], pP[1], pP[2], pW[0], pW[1]);
