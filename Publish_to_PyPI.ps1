@@ -1,42 +1,270 @@
-# PowerShell script to build and publish package to PyPI
+# ============================================================================
+# Publish_to_PyPI.ps1 - Build and publish Radia wheel to PyPI
+# ============================================================================
+#
+# Usage:
+#   1. Set API token:  $env:PYPI_TOKEN = "pypi-..."
+#   2. Run:            .\Publish_to_PyPI.ps1
+#
+# What this script does:
+#   1. Clean previous build artifacts
+#   2. Build wheel (no sdist - source build requires CMake)
+#   3. Remove any accidentally bundled MKL DLLs from wheel
+#   4. Repack wheel with correct platform tag (cp312-cp312-win_amd64)
+#   5. Verify with twine check
+#   6. Upload to PyPI
+#
+# MKL Policy: MKL DLLs are NOT bundled. Users get them via pip dependency.
+# ============================================================================
 
-# Clean dist directory
-if (Test-Path dist) {
-	Remove-Item -Recurse -Force dist
-}
+param(
+    [switch]$DryRun,       # Build and verify only, skip upload
+    [switch]$SkipBuild     # Skip build, use existing wheel in dist/
+)
 
-# Set UTF-8 encoding
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
 $env:PYTHONIOENCODING = "utf-8"
 
-# Build package
-Write-Host "Building package..." -ForegroundColor Cyan
-python -m build
+# Configuration
+$ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$DistDir = Join-Path $ProjectRoot "dist"
+$BuildDir = Join-Path $ProjectRoot "build"
+$BuildLibRadia = Join-Path (Join-Path $BuildDir "lib") "radia"
+$PlatformTag = "cp312-cp312-win_amd64"
 
-if ($LASTEXITCODE -ne 0) {
-	Write-Host "Build failed!" -ForegroundColor Red
-	exit 1
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "  Radia PyPI Publisher" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+# ----------------------------------------------------------------------------
+# Step 0: Check prerequisites
+# ----------------------------------------------------------------------------
+if (-not $DryRun -and -not $env:PYPI_TOKEN) {
+    Write-Host "ERROR: PYPI_TOKEN environment variable not set" -ForegroundColor Red
+    Write-Host 'Set it using: $env:PYPI_TOKEN = "pypi-..."' -ForegroundColor Yellow
+    Write-Host "Or use -DryRun to build and verify without uploading." -ForegroundColor Yellow
+    exit 1
 }
 
-# Upload to PyPI
-Write-Host "Uploading to PyPI..." -ForegroundColor Cyan
-
-# SECURITY: Use environment variable for API token
-# Set the token before running: $env:PYPI_TOKEN = "your-token-here"
-if (-not $env:PYPI_TOKEN) {
-	Write-Host "ERROR: PYPI_TOKEN environment variable not set" -ForegroundColor Red
-	Write-Host "Set it using: `$env:PYPI_TOKEN = `"your-token-here`"" -ForegroundColor Yellow
-	exit 1
-}
-
-python -m twine upload dist/* --username __token__ --password $env:PYPI_TOKEN
-
-if ($LASTEXITCODE -eq 0) {
-	Write-Host "Upload successful!" -ForegroundColor Green
+# Read version from pyproject.toml
+$PyprojectPath = Join-Path $ProjectRoot "pyproject.toml"
+$VersionLine = Select-String -Path $PyprojectPath -Pattern '^version\s*=\s*"(.+)"' | Select-Object -First 1
+if ($VersionLine) {
+    $Version = $VersionLine.Matches[0].Groups[1].Value
 } else {
-	Write-Host "Upload failed!" -ForegroundColor Red
+    Write-Host "ERROR: Could not read version from pyproject.toml" -ForegroundColor Red
+    exit 1
+}
+Write-Host "Version: $Version" -ForegroundColor White
+Write-Host "Platform: $PlatformTag" -ForegroundColor White
+Write-Host ""
+
+if (-not $SkipBuild) {
+    # ------------------------------------------------------------------------
+    # Step 1: Clean previous build artifacts
+    # ------------------------------------------------------------------------
+    Write-Host "[1/6] Cleaning build artifacts..." -ForegroundColor Cyan
+
+    if (Test-Path $DistDir) {
+        Remove-Item -Recurse -Force $DistDir
+        Write-Host "  Removed dist/" -ForegroundColor Gray
+    }
+
+    # Clean MKL DLLs from build/lib/radia/ to prevent accidental bundling
+    if (Test-Path $BuildLibRadia) {
+        $DLLs = Get-ChildItem -Path $BuildLibRadia -Filter "*.dll" -ErrorAction SilentlyContinue
+        if ($DLLs) {
+            $DLLs | Remove-Item -Force
+            Write-Host "  Removed $($DLLs.Count) DLL(s) from build/lib/radia/" -ForegroundColor Yellow
+        }
+    }
+
+    Write-Host "  Done." -ForegroundColor Green
+    Write-Host ""
+
+    # ------------------------------------------------------------------------
+    # Step 2: Build wheel (no sdist)
+    # ------------------------------------------------------------------------
+    Write-Host "[2/6] Building wheel..." -ForegroundColor Cyan
+
+    Push-Location $ProjectRoot
+    try {
+        python -m build --wheel
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: Wheel build failed!" -ForegroundColor Red
+            exit 1
+        }
+    } finally {
+        Pop-Location
+    }
+
+    Write-Host "  Done." -ForegroundColor Green
+    Write-Host ""
+
+    # ------------------------------------------------------------------------
+    # Step 3: Remove DLLs from wheel (safety check)
+    # ------------------------------------------------------------------------
+    Write-Host "[3/6] Checking wheel for bundled DLLs..." -ForegroundColor Cyan
+
+    $OrigWheel = Get-ChildItem -Path $DistDir -Filter "radia-*.whl" | Select-Object -First 1
+    if (-not $OrigWheel) {
+        Write-Host "ERROR: No wheel found in dist/" -ForegroundColor Red
+        exit 1
+    }
+
+    # Extract wheel to temp directory for inspection and repack
+    $TempDir = Join-Path $env:TEMP "radia_wheel_repack"
+    if (Test-Path $TempDir) { Remove-Item -Recurse -Force $TempDir }
+    New-Item -ItemType Directory -Path $TempDir | Out-Null
+
+    # Rename .whl to .zip for extraction
+    $ZipPath = Join-Path $env:TEMP "radia_wheel_temp.zip"
+    Copy-Item $OrigWheel.FullName $ZipPath -Force
+    Expand-Archive -Path $ZipPath -DestinationPath $TempDir -Force
+    Remove-Item $ZipPath
+
+    # Remove any DLLs that snuck in
+    $BundledDLLs = Get-ChildItem -Path $TempDir -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue
+    if ($BundledDLLs) {
+        Write-Host "  WARNING: Found bundled DLLs - removing:" -ForegroundColor Yellow
+        foreach ($dll in $BundledDLLs) {
+            Write-Host "    - $($dll.Name)" -ForegroundColor Yellow
+            Remove-Item $dll.FullName -Force
+        }
+    } else {
+        Write-Host "  No bundled DLLs found (good)." -ForegroundColor Green
+    }
+
+    Write-Host ""
+
+    # ------------------------------------------------------------------------
+    # Step 4: Repack wheel with correct platform tag
+    # ------------------------------------------------------------------------
+    Write-Host "[4/6] Repacking wheel with platform tag: $PlatformTag ..." -ForegroundColor Cyan
+
+    # Fix WHEEL metadata
+    $WheelMetaPath = Get-ChildItem -Path $TempDir -Filter "WHEEL" -Recurse | Select-Object -First 1
+    if ($WheelMetaPath) {
+        $WheelContent = Get-Content $WheelMetaPath.FullName -Raw
+        # Replace Tag line
+        $WheelContent = $WheelContent -replace 'Tag: .+', "Tag: $PlatformTag"
+        # Ensure Root-Is-Purelib is false
+        $WheelContent = $WheelContent -replace 'Root-Is-Purelib: true', 'Root-Is-Purelib: false'
+        Set-Content -Path $WheelMetaPath.FullName -Value $WheelContent -NoNewline
+    }
+
+    # Also fix RECORD file to remove DLL entries if any were removed
+    $RecordPath = Get-ChildItem -Path $TempDir -Filter "RECORD" -Recurse | Select-Object -First 1
+    if ($RecordPath -and $BundledDLLs) {
+        $RecordLines = Get-Content $RecordPath.FullName | Where-Object { $_ -notmatch '\.dll,' }
+        Set-Content -Path $RecordPath.FullName -Value ($RecordLines -join "`n") -NoNewline
+    }
+
+    # Remove old wheel and create new one with correct name
+    Remove-Item $OrigWheel.FullName -Force
+    $NewWheelName = "radia-$Version-$PlatformTag.whl"
+    $NewWheelPath = Join-Path $DistDir $NewWheelName
+
+    # Repack as zip
+    $NewZipPath = Join-Path $env:TEMP "radia_wheel_new.zip"
+    Compress-Archive -Path (Join-Path $TempDir "*") -DestinationPath $NewZipPath -Force
+    Move-Item $NewZipPath $NewWheelPath -Force
+
+    # Cleanup
+    Remove-Item -Recurse -Force $TempDir
+
+    Write-Host "  Created: $NewWheelName" -ForegroundColor Green
+    Write-Host ""
+
+} else {
+    # SkipBuild: use existing wheel
+    $NewWheelPath = Get-ChildItem -Path $DistDir -Filter "radia-*-$PlatformTag.whl" | Select-Object -First 1
+    if (-not $NewWheelPath) {
+        Write-Host "ERROR: No wheel with tag $PlatformTag found in dist/" -ForegroundColor Red
+        exit 1
+    }
+    $NewWheelPath = $NewWheelPath.FullName
+    Write-Host "Using existing wheel: $NewWheelPath" -ForegroundColor Cyan
 }
 
-# Wait for key press before exiting
+# ----------------------------------------------------------------------------
+# Step 5: Verify wheel
+# ----------------------------------------------------------------------------
+Write-Host "[5/6] Verifying wheel..." -ForegroundColor Cyan
+
+# twine check
+python -m twine check $NewWheelPath
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: twine check failed!" -ForegroundColor Red
+    exit 1
+}
+
+# Content summary
+Write-Host ""
+Write-Host "  Wheel contents summary:" -ForegroundColor White
+
+$InspectTempDir = Join-Path $env:TEMP "radia_wheel_inspect"
+if (Test-Path $InspectTempDir) { Remove-Item -Recurse -Force $InspectTempDir }
+$InspectZip = Join-Path $env:TEMP "radia_inspect.zip"
+Copy-Item $NewWheelPath $InspectZip -Force
+Expand-Archive -Path $InspectZip -DestinationPath $InspectTempDir -Force
+Remove-Item $InspectZip
+
+$AllFiles = @(Get-ChildItem -Path $InspectTempDir -Recurse -File)
+$PyFiles = @($AllFiles | Where-Object { $_.Extension -eq ".py" })
+$PydFiles = @($AllFiles | Where-Object { $_.Extension -eq ".pyd" })
+$DllFiles = @($AllFiles | Where-Object { $_.Extension -eq ".dll" })
+$WheelSize = (Get-Item $NewWheelPath).Length
+
+Write-Host "    Total files: $($AllFiles.Count)" -ForegroundColor White
+Write-Host "    .py files:   $($PyFiles.Count)" -ForegroundColor White
+Write-Host "    .pyd files:  $($PydFiles.Count)" -ForegroundColor White
+Write-Host "    .dll files:  $($DllFiles.Count)" -ForegroundColor $(if ($DllFiles.Count -eq 0) { "Green" } else { "Red" })
+Write-Host "    Wheel size:  $([math]::Round($WheelSize / 1MB, 2)) MB" -ForegroundColor White
+
+Remove-Item -Recurse -Force $InspectTempDir
+
+if ($DllFiles.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  ERROR: Wheel contains DLL files! MKL policy violation." -ForegroundColor Red
+    Write-Host "  DLLs found:" -ForegroundColor Red
+    foreach ($dll in $DllFiles) { Write-Host "    - $($dll.Name)" -ForegroundColor Red }
+    exit 1
+}
+
+Write-Host ""
+Write-Host "  Verification PASSED" -ForegroundColor Green
+Write-Host ""
+
+# ----------------------------------------------------------------------------
+# Step 6: Upload to PyPI
+# ----------------------------------------------------------------------------
+if ($DryRun) {
+    Write-Host "[6/6] DRY RUN - Skipping upload." -ForegroundColor Yellow
+    Write-Host "  Wheel ready at: $NewWheelPath" -ForegroundColor White
+    Write-Host ""
+    Write-Host "To upload manually:" -ForegroundColor Cyan
+    Write-Host "  python -m twine upload `"$NewWheelPath`" --username __token__ --password `$env:PYPI_TOKEN" -ForegroundColor White
+} else {
+    Write-Host "[6/6] Uploading to PyPI..." -ForegroundColor Cyan
+
+    python -m twine upload $NewWheelPath --username __token__ --password $env:PYPI_TOKEN
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host ""
+        Write-Host "============================================" -ForegroundColor Green
+        Write-Host "  Upload successful!  radia $Version" -ForegroundColor Green
+        Write-Host "  https://pypi.org/project/radia/$Version/" -ForegroundColor Green
+        Write-Host "============================================" -ForegroundColor Green
+    } else {
+        Write-Host ""
+        Write-Host "Upload failed. To retry manually:" -ForegroundColor Red
+        Write-Host "  python -m twine upload `"$NewWheelPath`" --username __token__ --password `$env:PYPI_TOKEN" -ForegroundColor Yellow
+    }
+}
+
 Write-Host ""
 Write-Host "Press any key to exit..." -ForegroundColor Cyan
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")

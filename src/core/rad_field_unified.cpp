@@ -22,6 +22,7 @@
 #include "rad_exafmm.h"
 #include "rad_type_cast.h"
 #include "rad_poly_analytical.h"  // For MSC integration
+#include "rad_constants.h"       // For RadConst::MU_0, RadConst::FOUR_PI
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -45,8 +46,8 @@ static std::mutex g_fmmCacheMutex;
 static std::unordered_map<int, std::vector<RadPointClassify::ElementData>> g_elemCache;
 static std::mutex g_elemCacheMutex;
 
-// Physical constants
-static const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7; // T*m/A
+// Physical constants (from rad_constants.h)
+static const double MU_0 = RadConst::MU_0; // T*m/A
 
 //-----------------------------------------------------------------------------
 // Helper: Extract element vertices from various Radia element types
@@ -769,7 +770,7 @@ static inline void AddDipoleContribution(
     std::complex<double> m_dot_r = mx * rx + my * ry + mz * rz;
 
     // B = (mu0/4pi) * [3*(m.r)*r/r^5 - m/r^3]
-    const double factor = MU_0 / (4.0 * 3.14159265358979323846);
+    const double factor = RadConst::MU_0_OVER_FOUR_PI;
     double coeff1 = 3.0 / r5;
     double coeff2 = 1.0 / r3;
 
@@ -1116,7 +1117,7 @@ void ComputeBFromConductor(
     // B = (mu0 * I / 4pi) * (cos(theta1) - cos(theta2)) / d * phi_hat
     // where d is perpendicular distance and phi_hat is azimuthal unit vector
 
-    const double factor = MU_0 / (4.0 * 3.14159265358979323846);
+    const double factor = RadConst::MU_0_OVER_FOUR_PI;
 
     for (int i = 0; i < n_segments; ++i) {
         const ConductorSegment& seg = segments[i];

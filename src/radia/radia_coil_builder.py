@@ -7,16 +7,19 @@ This module provides a modern object-oriented design for defining multi-segment
 coil paths with automatic state tracking and seamless Radia integration.
 
 Example:
+	>>> import radia as rad
+	>>> rad.FldUnits('m')  # Use meter units
 	>>> from radia_coil_builder import CoilBuilder
 	>>>
-	>>> # Create a racetrack coil
+	>>> # Create a racetrack coil (dimensions in meters)
+	>>> mm = 1e-3
 	>>> coil = (CoilBuilder(current=1000)
 	...	 .set_start([0, 0, 0])
-	...	 .set_cross_section(width=20, height=20)
-	...	 .add_straight(100)
-	...	 .add_arc(radius=50, arc_angle=180, tilt=90)
-	...	 .add_straight(100)
-	...	 .add_arc(radius=50, arc_angle=180, tilt=90)
+	...	 .set_cross_section(width=20*mm, height=20*mm)
+	...	 .add_straight(100*mm)
+	...	 .add_arc(radius=50*mm, arc_angle=180, tilt=90)
+	...	 .add_straight(100*mm)
+	...	 .add_arc(radius=50*mm, arc_angle=180, tilt=90)
 	...	 .to_radia())
 """
 
@@ -39,10 +42,10 @@ class CoilSegment(ABC):
 
 		Args:
 			current (float): Current in Amperes
-			start_pos (array): Starting position [x, y, z] in mm
+			start_pos (array): Starting position [x, y, z] (in active Radia units)
 			orientation (array): 3x3 orientation matrix (row vectors)
-			width (float): Cross-section width in mm
-			height (float): Cross-section height in mm
+			width (float): Cross-section width (in active Radia units)
+			height (float): Cross-section height (in active Radia units)
 			tilt (float): Tilt angle in degrees (not applied here, applied in subclass)
 		"""
 		self.current = current
@@ -74,7 +77,7 @@ class CoilSegment(ABC):
 
 	@property
 	def current_density(self):
-		"""Current density in A/mm²."""
+		"""Current density: I / (width * height) in A/(active_unit²)."""
 		return self.current / (self.width * self.height)
 
 
@@ -92,11 +95,11 @@ class StraightSegment(CoilSegment):
 
 		Args:
 			current (float): Current in Amperes
-			start_pos (array): Starting position [x, y, z] in mm
+			start_pos (array): Starting position [x, y, z] (in active Radia units)
 			orientation (array): 3x3 orientation matrix (row vectors)
-			width (float): Cross-section width in mm
-			height (float): Cross-section height in mm
-			length (float): Segment length in mm
+			width (float): Cross-section width (in active Radia units)
+			height (float): Cross-section height (in active Radia units)
+			length (float): Segment length (in active Radia units)
 			tilt (float): Tilt angle in degrees (rotation around Y-axis)
 		"""
 		# Apply tilt transformation to orientation
@@ -140,11 +143,11 @@ class ArcSegment(CoilSegment):
 
 		Args:
 			current (float): Current in Amperes
-			start_pos (array): Starting position [x, y, z] in mm
+			start_pos (array): Starting position [x, y, z] (in active Radia units)
 			orientation (array): 3x3 orientation matrix (row vectors)
-			width (float): Cross-section width in mm
-			height (float): Cross-section height in mm
-			radius (float): Arc radius in mm
+			width (float): Cross-section width (in active Radia units)
+			height (float): Cross-section height (in active Radia units)
+			radius (float): Arc radius (in active Radia units)
 			arc_angle (float): Arc angle in degrees
 			tilt (float): Tilt angle in degrees (rotation around Y-axis)
 		"""
@@ -201,13 +204,14 @@ class CoilBuilder:
 	manual state tracking and reduces boilerplate code by ~75%.
 
 	Example:
+		>>> mm = 1e-3  # unit conversion factor
 		>>> builder = CoilBuilder(current=1265)
 		>>> coil_radia_objects = (builder
-		...	 .set_start([218, -16.4, -81])
-		...	 .set_cross_section(width=122, height=122)
-		...	 .add_straight(length=32.9, tilt=0)
-		...	 .add_arc(radius=121, arc_angle=64.6, tilt=90)
-		...	 .add_straight(length=1018.5, tilt=90)
+		...	 .set_start([218*mm, -16.4*mm, -81*mm])
+		...	 .set_cross_section(width=122*mm, height=122*mm)
+		...	 .add_straight(length=32.9*mm, tilt=0)
+		...	 .add_arc(radius=121*mm, arc_angle=64.6, tilt=90)
+		...	 .add_straight(length=1018.5*mm, tilt=90)
 		...	 .to_radia())
 		>>>
 		>>> import radia as rad
@@ -227,15 +231,15 @@ class CoilBuilder:
 		# Initial state (identity orientation at origin)
 		self._position = np.array([0.0, 0.0, 0.0])
 		self._orientation = np.eye(3)
-		self._width = 100.0
-		self._height = 100.0
+		self._width = None
+		self._height = None
 
 	def set_start(self, position, orientation=None):
 		"""
 		Set starting position and orientation.
 
 		Args:
-			position (array): Starting position [x, y, z] in mm
+			position (array): Starting position [x, y, z] (in active Radia units)
 			orientation (array, optional): 3x3 orientation matrix (row vectors).
 										  Defaults to identity (aligned with XYZ axes).
 
@@ -252,8 +256,8 @@ class CoilBuilder:
 		Set cross-section dimensions for subsequent segments.
 
 		Args:
-			width (float): Width in mm
-			height (float): Height in mm
+			width (float): Width (in active Radia units)
+			height (float): Height (in active Radia units)
 
 		Returns:
 			self (for method chaining)
@@ -262,17 +266,29 @@ class CoilBuilder:
 		self._height = height
 		return self
 
+	def _check_cross_section(self):
+		"""Raise ValueError if cross-section has not been set."""
+		if self._width is None or self._height is None:
+			raise ValueError(
+				"Cross-section not set. Call set_cross_section(width, height) "
+				"before adding segments."
+			)
+
 	def add_straight(self, length, tilt=0):
 		"""
 		Add a straight segment.
 
 		Args:
-			length (float): Length in mm
+			length (float): Length (in active Radia units)
 			tilt (float): Tilt angle in degrees (rotation around Y-axis)
 
 		Returns:
 			self (for method chaining)
+
+		Raises:
+			ValueError: If set_cross_section() has not been called.
 		"""
+		self._check_cross_section()
 		segment = StraightSegment(
 			self.current,
 			self._position,
@@ -297,13 +313,17 @@ class CoilBuilder:
 		Add an arc segment.
 
 		Args:
-			radius (float): Arc radius in mm
+			radius (float): Arc radius (in active Radia units)
 			arc_angle (float): Arc angle in degrees
 			tilt (float): Tilt angle in degrees (rotation around Y-axis)
 
 		Returns:
 			self (for method chaining)
+
+		Raises:
+			ValueError: If set_cross_section() has not been called.
 		"""
+		self._check_cross_section()
 		segment = ArcSegment(
 			self.current,
 			self._position,
@@ -360,13 +380,14 @@ class CoilBuilder:
 
 				r_range = [seg.radius - seg.width / 2, seg.radius + seg.width / 2]
 				coil = rad.ObjArcCur(
-					[0, 0, 0],
-					r_range,
-					[phi1, phi2],
-					seg.height,
-					10,  # Number of segments
-					seg.current_density,
-					"auto"
+					[0, 0, 0],       # center
+					r_range,          # radii [r_min, r_max]
+					[phi1, phi2],     # phi range
+					seg.height,       # height
+					10,               # nseg
+					"auto",           # man_auto
+					"z",              # axis (transformed by Euler angles below)
+					seg.current_density  # j (current density)
 				)
 
 				# Build transformation (ZX Euler angles + translation to arc center)

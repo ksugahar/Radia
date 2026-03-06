@@ -73,7 +73,7 @@ python visualize_coils.py
 **Output:**
 - Console: Magnetic field values at test points
 - Console: Field along Z-axis profile
-- File: `coil_geometry.vtk` (62KB, 384 polygons, 1536 points)
+- File: `coil_geometry.vts` (VTS structured grid with field data)
 
 ### field_map.py
 
@@ -120,7 +120,7 @@ The `radia_coil_builder` module provides a modern, elegant interface for buildin
 - **Automatic cross-section transformation with tilt**
 - **Direct conversion to Radia objects**
 
-**Location:** `src/python/radia_coil_builder.py`
+**Location:** `src/radia/radia_coil_builder.py`
 
 ### Basic Example
 
@@ -128,14 +128,17 @@ The `radia_coil_builder` module provides a modern, elegant interface for buildin
 from radia_coil_builder import CoilBuilder
 import radia as rad
 
+rad.FldUnits('m')
+mm = 1e-3  # unit conversion factor
+
 # Simple racetrack coil
 coil_segments = (CoilBuilder(current=1000)
-	.set_start([0, -50, 0])
-	.set_cross_section(width=20, height=20)
-	.add_straight(length=100)
-	.add_arc(radius=50, arc_angle=180, tilt=90)
-	.add_straight(length=100)
-	.add_arc(radius=50, arc_angle=180, tilt=90)
+	.set_start([0, -50*mm, 0])
+	.set_cross_section(width=20*mm, height=20*mm)
+	.add_straight(length=100*mm)
+	.add_arc(radius=50*mm, arc_angle=180, tilt=90)
+	.add_straight(length=100*mm)
+	.add_arc(radius=50*mm, arc_angle=180, tilt=90)
 	.to_radia())
 
 # Combine into Radia container
@@ -145,17 +148,20 @@ coils = rad.ObjCnt(coil_segments)
 ### Complex Example (8-Segment Beam Steering Magnet)
 
 ```python
+rad.FldUnits('m')
+mm = 1e-3
+
 coil = (CoilBuilder(current=1265)
-	.set_start([218, -16.4, -81])
-	.set_cross_section(122, 122)
-	.add_straight(32.9)
-	.add_arc(121, 64.6, tilt=90)
-	.add_straight(1018.5, tilt=90)
-	.add_arc(121, 115.4, tilt=-90)
-	.add_straight(906.9, tilt=90)
-	.add_arc(121, 115.4, tilt=-90)
-	.add_straight(1018.5, tilt=90)
-	.add_arc(121, 64.6, tilt=-90)
+	.set_start([218*mm, -16.4*mm, -81*mm])
+	.set_cross_section(122*mm, 122*mm)
+	.add_straight(32.9*mm)
+	.add_arc(121*mm, 64.6, tilt=90)
+	.add_straight(1018.5*mm, tilt=90)
+	.add_arc(121*mm, 115.4, tilt=-90)
+	.add_straight(906.9*mm, tilt=90)
+	.add_arc(121*mm, 115.4, tilt=-90)
+	.add_straight(1018.5*mm, tilt=90)
+	.add_arc(121*mm, 64.6, tilt=-90)
 	.to_radia())
 ```
 
@@ -213,11 +219,12 @@ COIL.append(cCOIL('ARC', I, x0, V, W, H, R, phi, 90, 0))
 
 **New approach (automatic tracking):**
 ```python
+mm = 1e-3
 segments = (CoilBuilder(current=1000)
 	.set_start([0, 0, 0])
-	.set_cross_section(20, 20)
-	.add_straight(100)
-	.add_arc(50, 180, tilt=90)
+	.set_cross_section(20*mm, 20*mm)
+	.add_straight(100*mm)
+	.add_arc(50*mm, 180, tilt=90)
 	.to_radia())
 ```
 
@@ -276,13 +283,16 @@ The examples demonstrate field calculation at multiple points:
 ```python
 import radia as rad
 
+rad.FldUnits('m')
+mm = 1e-3
+
 # Single point
-B = rad.Fld(obj, 'b', [0, 0, 100])  # Returns [Bx, By, Bz] in Tesla
+B = rad.Fld(obj, 'b', [0, 0, 100*mm])  # Returns [Bx, By, Bz] in Tesla
 
 # Multiple points
-for z in [0, 100, 500]:
-	B = rad.Fld(obj, 'b', [0, 0, z])
-	print(f"At z={z}: B={B}")
+for z_mm in [0, 100, 500]:
+	B = rad.Fld(obj, 'b', [0, 0, z_mm * mm])
+	print(f"At z={z_mm} mm: B={B}")
 ```
 
 **Example output:**
@@ -311,7 +321,7 @@ python visualize_coils.py
 - Y: Horizontal (front-back)
 - Z: Vertical (up)
 
-All dimensions in millimeters (mm).
+All dimensions in meters (with `rad.FldUnits('m')`). Design values use `mm = 1e-3` conversion.
 All fields in Tesla (T).
 
 ## Troubleshooting
@@ -327,7 +337,7 @@ powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 
 ### "No module named 'radia_coil_builder'"
 
-**Solution:** The module is in `src/python/`. The examples automatically add this to the path.
+**Solution:** The module is in `src/radia/`. The examples automatically add this to the path.
 
 ### "No module named 'scipy'"
 
@@ -338,7 +348,7 @@ pip install scipy
 
 ## Further Reading
 
-- [src/python/README.md](../../src/python/README.md) - Visualization utilities and CoilBuilder documentation
+- [src/radia/README.md](../../src/radia/README.md) - Visualization utilities and CoilBuilder documentation
 - [tests/README.md](../../tests/README.md) - Test suite
 - [README_BUILD.md](../../README_BUILD.md) - Build instructions
 
@@ -349,4 +359,4 @@ For a complete electromagnet simulation with magnetic yoke, see:
 
 ---
 
-**Last Updated**: 2025-10-30
+**Last Updated**: 2026-02-19

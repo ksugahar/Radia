@@ -28,17 +28,17 @@ except ImportError:
     print("matplotlib not available, skipping plots")
 
 
-def create_dipole_magnet(gap=20.0, width=100.0, height=50.0, length=200.0, B0=0.01):
+def create_dipole_magnet(gap=0.020, width=0.100, height=0.050, length=0.200, B0=0.01):
     """
     Create a simple dipole magnet (H-type).
 
     The beam travels along y-axis. Bz field causes deflection in x.
 
     Args:
-        gap: Gap between poles [mm]
-        width: Pole width (x) [mm]
-        height: Pole height (z) [mm]
-        length: Magnet length along beam (y) [mm]
+        gap: Gap between poles [m]
+        width: Pole width (x) [m]
+        height: Pole height (z) [m]
+        length: Magnet length along beam (y) [m]
         B0: Approximate field in gap [T]
 
     Returns:
@@ -74,17 +74,17 @@ def main():
     print("Particle Trajectory Demo")
     print("=" * 60)
 
-    # Set units to millimeters
-    rad.FldUnits('mm')
+    # Set units to meters (SI) - Policy compliance
+    rad.FldUnits('m')
 
     # Create dipole magnet
     print("\nCreating dipole magnet...")
     magnet = create_dipole_magnet(
-        gap=20.0,      # 20 mm gap
-        width=100.0,   # 100 mm wide poles
-        height=50.0,   # 50 mm thick poles
-        length=200.0,  # 200 mm long
-        B0=0.01        # ~0.01 T field (weak for demo)
+        gap=0.020,      # 20 mm gap
+        width=0.100,    # 100 mm wide poles
+        height=0.050,   # 50 mm thick poles
+        length=0.200,   # 200 mm long
+        B0=0.01         # ~0.01 T field (weak for demo)
     )
 
     # Check field at center
@@ -96,9 +96,10 @@ def main():
     energy_gev = 6.0  # 6 GeV electron (typical synchrotron)
 
     # Initial conditions: [x0, x'0, z0, z'0]
-    # Start at y=-300mm, on axis, no angle
+    # Start at y=-0.3m (-300mm), on axis, no angle
+    # Units: [m, rad, m, rad]
     initial_cond = [0.0, 0.0, 0.0, 0.0]
-    s_range = [-300.0, 300.0]  # y from -300 to +300 mm
+    s_range = [-0.300, 0.300]  # y from -0.3 to +0.3 m
     n_points = 301
 
     trajectory = bt.particle_trajectory(
@@ -113,23 +114,23 @@ def main():
     print(f"Trajectory columns: [s, x, x', z, z']")
 
     # Extract trajectory data
-    s = trajectory[:, 0]   # Longitudinal position [mm]
-    x = trajectory[:, 1]   # Horizontal position [mm]
+    s = trajectory[:, 0]   # Longitudinal position [m]
+    x = trajectory[:, 1]   # Horizontal position [m]
     xp = trajectory[:, 2]  # Horizontal angle [rad]
-    z = trajectory[:, 3]   # Vertical position [mm]
+    z = trajectory[:, 3]   # Vertical position [m]
     zp = trajectory[:, 4]  # Vertical angle [rad]
 
-    # Print summary
+    # Print summary (convert to mm for readability)
     print(f"\nTrajectory summary:")
-    print(f"  Entry (s={s[0]:.1f} mm): x={x[0]:.4f} mm, z={z[0]:.4f} mm")
-    print(f"  Center (s={s[n_points//2]:.1f} mm): x={x[n_points//2]:.4f} mm, z={z[n_points//2]:.4f} mm")
-    print(f"  Exit (s={s[-1]:.1f} mm): x={x[-1]:.4f} mm, z={z[-1]:.4f} mm")
-    print(f"  Max horizontal deflection: {np.max(np.abs(x)):.4f} mm")
+    print(f"  Entry (s={s[0]*1000:.1f} mm): x={x[0]*1000:.4f} mm, z={z[0]*1000:.4f} mm")
+    print(f"  Center (s={s[n_points//2]*1000:.1f} mm): x={x[n_points//2]*1000:.4f} mm, z={z[n_points//2]*1000:.4f} mm")
+    print(f"  Exit (s={s[-1]*1000:.1f} mm): x={x[-1]*1000:.4f} mm, z={z[-1]*1000:.4f} mm")
+    print(f"  Max horizontal deflection: {np.max(np.abs(x))*1000:.4f} mm")
     print(f"  Exit angle: x'={xp[-1]*1e3:.4f} mrad")
 
     # Batch trajectory: scan initial x positions
     print("\nComputing batch trajectories (phase space scan)...")
-    x_offsets = np.linspace(-5, 5, 5)  # -5 to +5 mm
+    x_offsets = np.linspace(-0.005, 0.005, 5)  # -5 to +5 mm
     init_conds = [[x_off, 0, 0, 0] for x_off in x_offsets]
 
     trajectories = bt.batch_trajectory(
@@ -146,9 +147,15 @@ def main():
     if HAS_MATPLOTLIB:
         fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
+        # Convert to mm for plotting
+        s_mm = s * 1000
+        x_mm = x * 1000
+        z_um = z * 1e6
+        xp_mrad = xp * 1e3
+
         # Plot 1: x vs s (horizontal trajectory)
         ax1 = axes[0, 0]
-        ax1.plot(s, x, 'b-', linewidth=2)
+        ax1.plot(s_mm, x_mm, 'b-', linewidth=2)
         ax1.axvspan(-100, 100, alpha=0.2, color='gray', label='Magnet')
         ax1.set_xlabel('s [mm]')
         ax1.set_ylabel('x [mm]')
@@ -158,7 +165,7 @@ def main():
 
         # Plot 2: z vs s (vertical trajectory)
         ax2 = axes[0, 1]
-        ax2.plot(s, z * 1e6, 'r-', linewidth=2)  # Convert to um for visibility
+        ax2.plot(s_mm, z_um, 'r-', linewidth=2)  # Convert to um for visibility
         ax2.axvspan(-100, 100, alpha=0.2, color='gray', label='Magnet')
         ax2.set_xlabel('s [mm]')
         ax2.set_ylabel('z [um]')
@@ -167,7 +174,7 @@ def main():
 
         # Plot 3: x' vs s (horizontal angle)
         ax3 = axes[1, 0]
-        ax3.plot(s, xp * 1e3, 'b-', linewidth=2)
+        ax3.plot(s_mm, xp_mrad, 'b-', linewidth=2)
         ax3.axvspan(-100, 100, alpha=0.2, color='gray', label='Magnet')
         ax3.set_xlabel('s [mm]')
         ax3.set_ylabel("x' [mrad]")
@@ -177,7 +184,8 @@ def main():
         # Plot 4: Batch trajectories
         ax4 = axes[1, 1]
         for i, (traj, x_off) in enumerate(zip(trajectories, x_offsets)):
-            ax4.plot(traj[:, 0], traj[:, 1], label=f'x0={x_off:.1f}mm')
+            # traj is in meters
+            ax4.plot(traj[:, 0]*1000, traj[:, 1]*1000, label=f'x0={x_off*1000:.1f}mm')
         ax4.axvspan(-100, 100, alpha=0.2, color='gray')
         ax4.set_xlabel('s [mm]')
         ax4.set_ylabel('x [mm]')

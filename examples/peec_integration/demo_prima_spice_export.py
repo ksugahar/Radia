@@ -25,6 +25,9 @@ import numpy as np
 # Add Radia to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
+import radia as rad
+rad.FldUnits('m')
+
 try:
     from peec_matrices import PEECBuilder
     print("Using C++ PEEC implementation")
@@ -40,6 +43,8 @@ from lanczos_reduction import (
 
 # Physical constants
 MU_0 = 4 * np.pi * 1e-7  # H/m
+
+mm = 1e-3  # 1 mm in meters
 
 
 def compute_dowell_ladder_params(d, sigma, mu_r=1.0, n_stages=5):
@@ -403,16 +408,16 @@ def create_straight_wire_peec():
     print("=" * 60)
 
     # Wire parameters
-    length = 0.1      # 10 cm
-    width = 1e-3      # 1 mm
-    height = 1e-3     # 1 mm
+    length = 100*mm    # 10 cm
+    width = 1*mm       # 1 mm
+    height = 1*mm      # 1 mm
     n_segments = 10
     sigma = 5.8e7     # Copper
 
     print(f"\nWire parameters:")
-    print(f"  Length:     {length*1e3:.0f} mm")
-    print(f"  Width:      {width*1e3:.1f} mm")
-    print(f"  Height:     {height*1e3:.1f} mm")
+    print(f"  Length:     {length/mm:.0f} mm")
+    print(f"  Width:      {width/mm:.1f} mm")
+    print(f"  Height:     {height/mm:.1f} mm")
     print(f"  Segments:   {n_segments}")
     print(f"  Sigma:      {sigma:.2e} S/m")
 

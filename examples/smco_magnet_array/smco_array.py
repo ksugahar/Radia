@@ -19,6 +19,8 @@ sys.path.insert(0, str(project_root / 'dist'))
 
 import radia as rad
 
+rad.FldUnits('m')
+mm = 1e-3  # 1 mm in meters
 
 
 def create_meshed_disk(R, H, n_radial, n_angular, n_z=1, x0=0, y0=0, z0=0):
@@ -31,12 +33,12 @@ def create_meshed_disk(R, H, n_radial, n_angular, n_z=1, x0=0, y0=0, z0=0):
 	- n_z layers in vertical (Z) direction
 
 	Args:
-		R: Disk radius (mm)
-		H: Disk height (mm)
+		R: Disk radius (m)
+		H: Disk height (m)
 		n_radial: Number of radial divisions
 		n_angular: Number of angular divisions
 		n_z: Number of vertical (Z) divisions (default: 1)
-		x0, y0, z0: Center position (mm)
+		x0, y0, z0: Center position (m)
 
 	Returns:
 		Radia container object with hexahedral elements
@@ -137,23 +139,23 @@ def create_meshed_disk(R, H, n_radial, n_angular, n_z=1, x0=0, y0=0, z0=0):
 
 
 def create_smco_magnet_array(
-	mag_radius=5,	  # Magnet radius (mm)
-	mag_height=10,	   # Magnet height (mm)
-	mag_M=[0, 0, 1],	   # Magnetization (T)
-	spacing=10,		  # Magnet spacing (mm)
-	array_radius=60,	 # Array radius (mm)
-	base_plate_height=5  # Base plate height (mm)
+	mag_radius=5*mm,	      # Magnet radius (m)
+	mag_height=10*mm,	      # Magnet height (m)
+	mag_M=[0, 0, 1],	      # Magnetization (T)
+	spacing=10*mm,		      # Magnet spacing (m)
+	array_radius=60*mm,	      # Array radius (m)
+	base_plate_height=5*mm    # Base plate height (m)
 ):
 	"""
 	Create a hexagonal array of SmCo magnets on a base plate.
 
 	Args:
-		mag_radius: Individual magnet radius (mm)
-		mag_height: Individual magnet height (mm)
+		mag_radius: Individual magnet radius (m)
+		mag_height: Individual magnet height (m)
 		mag_M: Magnetization vector [Mx, My, Mz] (T)
-		spacing: Distance between magnet centers (mm)
-		array_radius: Radius of the entire array (mm)
-		base_plate_height: Height of the base plate (mm)
+		spacing: Distance between magnet centers (m)
+		array_radius: Radius of the entire array (m)
+		base_plate_height: Height of the base plate (m)
 
 	Returns:
 		tuple: (geometry_object, array_info)
@@ -162,11 +164,11 @@ def create_smco_magnet_array(
 	print("Creating SmCo magnet array...")
 	print("=" * 70)
 
-	print(f"  Magnet radius: {mag_radius:.2f} mm")
-	print(f"  Magnet height: {mag_height:.2f} mm")
+	print(f"  Magnet radius: {mag_radius/mm:.2f} mm")
+	print(f"  Magnet height: {mag_height/mm:.2f} mm")
 	print(f"  Magnetization: {mag_M} T")
-	print(f"  Array radius: {array_radius:.2f} mm")
-	print(f"  Magnet spacing: {spacing:.2f} mm")
+	print(f"  Array radius: {array_radius/mm:.2f} mm")
+	print(f"  Magnet spacing: {spacing/mm:.2f} mm")
 
 	# Create base plate (meshed iron disk with hexahedral elements)
 	print(f"\n  Creating base plate...")
@@ -229,14 +231,14 @@ def main():
 	print("=" * 70)
 	print("\nHexagonal array of cylindrical SmCo magnets\n")
 
-	# Create magnet array (all dimensions in mm for Radia)
+	# Create magnet array (all dimensions in meters, FldUnits='m')
 	geometry, info = create_smco_magnet_array(
-		mag_radius=5,	  # 5 mm radius
-		mag_height=10,	   # 10 mm height
-		mag_M=[0, 0, 1],	   # 1 T vertical magnetization
-		spacing=10,		  # 10 mm spacing
-		array_radius=60,	 # 60 mm array radius
-		base_plate_height=20  # 20 mm base plate
+		mag_radius=5*mm,	   # 5 mm radius
+		mag_height=10*mm,	  # 10 mm height
+		mag_M=[0, 0, 1],	  # 1 T vertical magnetization
+		spacing=10*mm,		 # 10 mm spacing
+		array_radius=60*mm,	# 60 mm array radius
+		base_plate_height=20*mm  # 20 mm base plate
 	)
 
 	# Solve magnetostatics (required for magnetic materials)
@@ -291,7 +293,7 @@ def main():
 		output_path = os.path.join(os.path.dirname(__file__), 'smco_array.vts')
 		# Get bounding box
 		bbox = rad.ObjGeoLim(geometry)
-		margin = 20.0
+		margin = 20.0 * mm
 		x_range = [bbox[0] - margin, bbox[1] + margin]
 		y_range = [bbox[2] - margin, bbox[3] + margin]
 		z_range = [bbox[4] - margin, bbox[5] + margin]
@@ -308,20 +310,20 @@ def main():
 	# Get bounding box of entire geometry
 	bbox = rad.ObjGeoLim(geometry)
 	print(f"  Geometry bounding box:")
-	print(f"    X: [{bbox[0]:.2f}, {bbox[1]:.2f}] mm")
-	print(f"    Y: [{bbox[2]:.2f}, {bbox[3]:.2f}] mm")
-	print(f"    Z: [{bbox[4]:.2f}, {bbox[5]:.2f}] mm")
+	print(f"    X: [{bbox[0]/mm:.2f}, {bbox[1]/mm:.2f}] mm")
+	print(f"    Y: [{bbox[2]/mm:.2f}, {bbox[3]/mm:.2f}] mm")
+	print(f"    Z: [{bbox[4]/mm:.2f}, {bbox[5]/mm:.2f}] mm")
 
 	# Expand bbox by 20mm in all directions
-	margin = 20.0
+	margin = 20.0 * mm
 	x_min, x_max = bbox[0] - margin, bbox[1] + margin
 	y_min, y_max = bbox[2] - margin, bbox[3] + margin
 	z_min, z_max = bbox[4] - margin, bbox[5] + margin
 
 	print(f"\n  Field calculation range (bbox + 20mm):")
-	print(f"    X: [{x_min:.2f}, {x_max:.2f}] mm")
-	print(f"    Y: [{y_min:.2f}, {y_max:.2f}] mm")
-	print(f"    Z: [{z_min:.2f}, {z_max:.2f}] mm")
+	print(f"    X: [{x_min/mm:.2f}, {x_max/mm:.2f}] mm")
+	print(f"    Y: [{y_min/mm:.2f}, {y_max/mm:.2f}] mm")
+	print(f"    Z: [{z_min/mm:.2f}, {z_max/mm:.2f}] mm")
 
 	# Create grid for field calculation
 	nx, ny, nz = 21, 21, 21  # Grid resolution
@@ -378,9 +380,9 @@ def main():
 	print("=" * 70)
 	print(f"\nSummary:")
 	print(f"  Number of magnets: {info['num_magnets']}")
-	print(f"  Array radius: {info['array_radius']:.2f} mm")
-	print(f"  Magnet radius: {info['mag_radius']:.2f} mm")
-	print(f"  Magnet height: {info['mag_height']:.2f} mm")
+	print(f"  Array radius: {info['array_radius']/mm:.2f} mm")
+	print(f"  Magnet radius: {info['mag_radius']/mm:.2f} mm")
+	print(f"  Magnet height: {info['mag_height']/mm:.2f} mm")
 	print(f"\nOutput files:")
 	print(f"  - smco_array.vts (field distribution in VTS format)")
 	print(f"  - smco_field_distribution.vtk (magnetic field vectors)")

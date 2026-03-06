@@ -3,10 +3,14 @@ Minimal test of Newton line search damping using cube model
 """
 
 import sys
-sys.path.insert(0, r'S:\Radia\01_GitHub\src\radia')
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 import radia as rad
+rad.FldUnits('m')
 import time
+
+mm = 1e-3  # 1 mm in meters
 
 # Simple B-H curve
 bh_data = [
@@ -20,7 +24,7 @@ def create_cube(n=6):
     """Create simple cube with n^3 hexahedra"""
     mat = rad.MatSatIsoTab(bh_data)
 
-    cube_size = 1000.0  # 1m
+    cube_size = 1000.0 * mm  # 1m
     dx = cube_size / n
 
     all_hexes = []
@@ -50,7 +54,7 @@ def run_test(name, use_newton, use_damping):
     model = create_cube(n=6)
 
     # Add uniform external field
-    ext_field = rad.ObjBckg([0, 0, 200000])  # 200 kA/m in Z direction
+    ext_field = rad.ObjBckg(lambda p: [0, 0, 200000])  # 200 kA/m in Z direction
     model_with_field = rad.ObjCnt([model, ext_field])
 
     rad.SetSolver(2)  # HACApK

@@ -83,65 +83,48 @@ Extended H-matrix scaling analysis up to N=5000:
 - **Demonstrates**: Speedup increases exponentially with problem size
 - **See**: [SCALING_RESULTS.md](SCALING_RESULTS.md) for detailed analysis
 
-### 7b. `benchmark_hmatrix_scaling_exact.py` ⭐ NEW - EXACT SIZES WITH ACCURACY
-H-matrix scaling at exact requested problem sizes with memory compression and accuracy analysis:
-- **Target sizes**: N=100, 200, 500, 1000, 2000, 5000
-- **Actual cubes**: N=125, 216, 512, 1000, 2197, 4913
-- **Computation accuracy** (vs standard solver):
-  - N=125:  0.0000% relative error (perfect match)
-  - N=216:  0.0000% relative error (perfect match)
-  - Maximum error: 0.0000% (identical results)
-- **Time speedup** (extrapolated O(N³)):
-  - N≈100:  0.15x (construction cost dominates)
-  - N≈200:  0.10x (construction cost dominates)
-  - N≈500:  0.17x speedup
-  - N=1000: 0.38x speedup
-  - N≈2000: 0.82x speedup
-  - N≈5000: 1.99x speedup (6.1 min vs 12.1 minutes)
-- **Measured speedup** (vs standard solver, N≤343):
-  - N=125:  0.05x (4ms vs 79ms, construction overhead)
-  - N=216:  0.02x (11ms vs 606ms, construction overhead)
-- **Memory compression** (vs dense O(N²)):
-  - N≈500:  6.0% (94% reduction)
-  - N=1000: 1.6% (98.4% reduction)
-  - N≈2000: 0.3% (99.7% reduction)
-  - N≈5000: 0.1% (99.9% reduction)
-- **Features**: Standard solver comparison, accuracy verification, memory compression analysis
-- **Demonstrates**: Perfect accuracy (0.0000% error), dramatic memory reduction, speedup for large problems
-
 ### 8. `benchmark_matrix_construction.py`
 Analyzes matrix construction performance:
 - Separates construction from solve time
 - Complexity verification (O(N²) expected)
 - Overhead analysis
 
-### 8. `benchmark_linear_material.py`
+### 9. `benchmark_linear_material.py`
 Tests solver performance with linear materials:
 - Compares nonlinear vs linear material performance
 - Single-iteration convergence for linear problems
 - Matrix construction overhead analysis
 
-### 9. `benchmark_hmatrix_field.py`
-Tests H-matrix field evaluation (experimental):
-- Direct vs H-matrix field computation
-- Accuracy verification
-- Performance comparison
+### 10. `benchmark_dipole_vs_msc.py`
+Compares dipole approximation vs MSC integration:
+- Dipole approximation (far-field, O(N))
+- MSC integration (exact, O(N*faces))
+- Helps determine optimal threshold for adaptive computation
+
+### 11. `benchmark_lu_vs_hmatrix.py`
+Direct LU vs BiCGSTAB vs HACApK comparison:
+- Computational time scaling with problem size
+- Solution accuracy consistency
+- Memory usage estimation
+
+### 12. `benchmark_solver_methods.py`
+Solver methods benchmark with detailed performance metrics:
+- Three solver methods (LU, BiCGSTAB, HACApK)
+- Nonlinear magnetic material with background field
+- Computation time and field accuracy comparison
 
 ### Verification and Utilities
 
-### 10. `verify_field_accuracy.py`
+### 13. `verify_field_accuracy.py`
 Verifies field accuracy for different mesh refinements:
 - Compares N=125 vs N=343 element meshes
 - Maximum relative error: < 0.01%
 - Exports geometry to VTK for visualization
 
-### 11. `run_all_benchmarks.py`
+### 14. `run_all_benchmarks.py`
 Runs all benchmarks in sequence and generates a summary report.
 
-### 12. `run_all_hmatrix_benchmarks.py`
-Comprehensive benchmark suite with detailed error reporting and timing analysis.
-
-### 13. `plot_benchmark_results.py`
+### 15. `plot_benchmark_results.py`
 Generates visualization plots:
 - Solver speedup vs number of elements
 - Field evaluation speedup vs number of points
@@ -188,15 +171,19 @@ python benchmark_parallel_construction.py # Parallel H-matrix construction
 # Advanced analysis benchmarks
 python benchmark_solver_scaling.py        # Scaling analysis
 python benchmark_solver_scaling_extended.py  # Extended scaling (N up to 5000)
-python benchmark_hmatrix_scaling_exact.py    # Exact sizes (N=100,200,500,1000,2000,5000) ⭐ NEW
 python benchmark_matrix_construction.py   # Matrix construction timing
 python benchmark_linear_material.py       # Linear material performance
 
 # Verification
 python verify_field_accuracy.py          # Field accuracy verification
 
+# Additional benchmarks
+python benchmark_dipole_vs_msc.py          # Dipole vs MSC comparison
+python benchmark_lu_vs_hmatrix.py          # LU vs HACApK detailed comparison
+python benchmark_solver_methods.py         # Solver methods comparison
+
 # Run all at once
-python run_all_hmatrix_benchmarks.py
+python run_all_benchmarks.py
 
 # Generate visualization plots
 python plot_benchmark_results.py
@@ -240,11 +227,10 @@ python plot_benchmark_results.py
    - **Gauss-Seidel**: Best for medium problems (100 < N < 200), O(N²) per iteration
    - **H-matrix**: Best for large problems (N > 200), O(N² log N) per iteration, O(N log N) memory
 
-2. **Exponential scaling benefits** (from `benchmark_hmatrix_scaling_exact.py`):
-   - **Computation accuracy**: 0.0000% error (perfect match with standard solver)
-   - **Time performance**: Construction cost dominates for small problems, 2x speedup at N=5000
-   - **Memory compression**: 100% → 0.1% at N=5000 (99.9% reduction vs dense O(N²))
-   - **Triple benefit**: Perfect accuracy + dramatic memory reduction + speedup for large problems
+2. **Exponential scaling benefits** (from `benchmark_solver_scaling_extended.py`):
+   - **Computation accuracy**: Identical results with standard solver
+   - **Time performance**: Construction cost dominates for small problems, significant speedup for large N
+   - **Memory compression**: O(N log N) vs O(N²) - dramatic reduction for large problems
 
 3. **H-matrix is used in solver only**: `rad.Solve()` uses H-matrix, but `rad.Fld()` uses direct summation
 

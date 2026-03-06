@@ -1,0 +1,5 @@
+# Circular wire parameters for PEEC validation
+radius 0.001
+length 1.0
+sigma 5.8e7  # Copper conductivity [S/m]
+n_segments 10

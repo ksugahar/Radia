@@ -14,6 +14,7 @@ import time
 import numpy as np
 
 # Add Radia to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import radia as rad
 
@@ -117,6 +118,8 @@ def main():
     print("  N=1000, M=1000: ~50-100x")
     print("  N=10000, M=10000: ~500-1000x")
     print("\nNote: ExaFMM has ~1000 element threshold for efficiency")
+
+    rad.UtiDelAll()
 
 if __name__ == '__main__':
     main()
