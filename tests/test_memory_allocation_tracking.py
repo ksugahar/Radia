@@ -20,8 +20,6 @@ print("Memory Allocation Tracking Test")
 print("=" * 80)
 print()
 
-rad.FldUnits('m')
-
 # Start tracemalloc
 tracemalloc.start()
 gc.collect()

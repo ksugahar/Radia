@@ -172,7 +172,7 @@ rotating_magnets/
 ### 前提条件 (Prerequisites)
 
 ```bash
-# Radia (with radia_ngsolve)
+# Radia (RadiaField is integrated into the main module since v2.5.0)
 pip install radia
 
 # NGSolve
@@ -273,7 +273,7 @@ curl(A_ext) ≈ B_ext/μ₀  (within numerical accuracy)
 - NGSolve HCurl and nograds documentation
 
 ### Radia-NGSolve連携
-- `radia_ngsolve.RadiaField()` documentation
+- `rad.RadiaField()` documentation (integrated into main radia module since v2.5.0)
 - Radia User's Guide: Field computation methods
 
 ## ライセンス (License)

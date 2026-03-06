@@ -7,8 +7,7 @@
  *
  * Provides a single entry point for field computation that handles:
  * 1. Point classification (inside/outside/near magnetic elements)
- * 2. FMM acceleration (ExaFMM dipole approximation)
- * 3. Direct computation (B_genComp)
+ * 2. Direct computation (B_genComp)
  *
  * This module is used by:
  * - rad.Fld() and rad.FldBatch()
@@ -17,7 +16,7 @@
  *
  * Design Policy:
  * - Points INSIDE magnetic elements return internal magnetization value
- * - Points OUTSIDE use direct computation or FMM
+ * - Points OUTSIDE use direct computation
  * - Points NEAR surface are flagged for potential accuracy issues
  *
  * @version 1.6.0
@@ -41,9 +40,7 @@ namespace RadFieldUnified {
  */
 enum ComputeMethod {
     METHOD_AUTO = 0,       // Automatic selection based on problem size
-    METHOD_DIRECT = 1,     // Direct computation (B_genComp)
-    METHOD_FMM = 2,        // FMM dipole approximation
-    METHOD_ADAPTIVE = 3    // Adaptive: FMM for far, direct for near
+    METHOD_DIRECT = 1      // Direct computation (B_genComp)
 };
 
 /**
@@ -82,7 +79,6 @@ struct FieldResult {
  */
 struct ComputeConfig {
     ComputeMethod method;          // Computation method
-    double fmm_eps;                // FMM tolerance (0 = disabled)
     double near_threshold;         // Distance threshold for "near" classification
     bool check_inside;             // Enable inside/outside classification
     bool return_internal_field;    // If inside, return internal M as field
@@ -91,7 +87,6 @@ struct ComputeConfig {
     // Default configuration
     ComputeConfig()
         : method(METHOD_AUTO)
-        , fmm_eps(0.0)
         , near_threshold(1e-6)
         , check_inside(true)
         , return_internal_field(true)
@@ -194,30 +189,12 @@ bool GetMagnetizationAtPoint(
 );
 
 /**
- * @brief Initialize FMM data structures for a Radia object
- *
- * Extracts dipole data from all elements for FMM computation.
- * Call this once before batch FMM computations.
- *
- * @param container_handle  Radia container handle
- * @return                  true if initialization successful
- */
-bool InitializeFMM(int container_handle);
-
-/**
- * @brief Release FMM data structures
- *
- * @param container_handle  Radia container handle
- */
-void ReleaseFMM(int container_handle);
-
-/**
- * @brief Clear all FMM and element caches
+ * @brief Clear all element caches
  *
  * Must be called when elements are deleted (e.g., UtiDelAll)
  * to prevent stale cache data.
  */
-void ClearAllFMMCaches();
+void ClearAllCaches();
 
 /**
  * @brief Get element data for inside/outside classification
@@ -434,19 +411,19 @@ bool GetMagnetizationInElement(
 );
 
 // ============================================================================
-// PEEC Conductor Field Computation (Biot-Savart with ExaFMM acceleration)
+// PEEC Conductor Field Computation (Biot-Savart)
 // ============================================================================
 
 /**
  * @brief Conductor segment data for Biot-Savart field computation
  *
  * Represents a filament segment carrying current.
- * Can be used directly for FMM acceleration.
+ * Used for Biot-Savart field computation.
  */
 struct ConductorSegment {
     TVector3d start;    // Segment start point
     TVector3d end;      // Segment end point
-    TVector3d center;   // Segment center (for FMM)
+    TVector3d center;   // Segment center
     TVector3d tangent;  // Unit tangent vector (direction of current flow)
     double length;      // Segment length
 };
@@ -456,9 +433,6 @@ struct ConductorSegment {
  *
  * Uses Laplace kernel: B = (mu0/4pi) * I * integral{ dl x r / r^3 }
  *
- * For FMM acceleration, segments are approximated as current dipoles:
- *   m_current = I * dl (magnetic moment equivalent)
- *   B = (mu0/4pi) * [3(m.r)r/r^5 - m/r^3] (same formula as magnetic dipole)
  *
  * @param point        Evaluation point
  * @param segments     Array of conductor segments
@@ -475,17 +449,13 @@ void ComputeBFromConductor(
 );
 
 /**
- * @brief Batch compute B field from conductor (OpenMP + optional FMM)
- *
- * For large numbers of segments and points, uses FMM acceleration.
+ * @brief Batch compute B field from conductor
  *
  * @param points       Evaluation points [x0,y0,z0, ...]
  * @param n_points     Number of points
  * @param segments     Conductor segments
  * @param n_segments   Number of segments
  * @param current      Complex current [A]
- * @param use_fmm      Use FMM acceleration if available
- * @param fmm_eps      FMM tolerance (0 = auto)
  * @param B_out        Output: complex B field [Bx0,By0,Bz0, ...]
  */
 void ComputeBFromConductorBatch(
@@ -494,8 +464,6 @@ void ComputeBFromConductorBatch(
     const ConductorSegment* segments,
     int n_segments,
     std::complex<double> current,
-    bool use_fmm,
-    double fmm_eps,
     std::complex<double>* B_out
 );
 
@@ -505,7 +473,7 @@ void ComputeBFromConductorBatch(
  * Computes total B field from both conductor current and magnetization.
  * B_total = B_conductor + B_magnet
  *
- * Uses shared FMM tree for efficiency when both sources are present.
+ * Combines conductor Biot-Savart and magnet B_genComp contributions.
  *
  * @param point        Evaluation point
  * @param segments     Conductor segments (may be nullptr)
@@ -530,10 +498,7 @@ void ComputeCombinedField(
 );
 
 /**
- * @brief Batch combined PEEC+MMM field with FMM acceleration
- *
- * Most efficient for large-scale coupled problems.
- * Builds unified FMM tree with both current and magnetic dipoles.
+ * @brief Batch combined PEEC+MMM field computation
  *
  * @param points       Evaluation points
  * @param n_points     Number of points
@@ -544,8 +509,6 @@ void ComputeCombinedField(
  * @param mag_volumes  Magnet element volumes
  * @param M_complex    Complex magnetization
  * @param n_mag_elems  Number of magnet elements
- * @param use_fmm      Use FMM acceleration
- * @param fmm_eps      FMM tolerance
  * @param B_out        Output: total complex B field
  */
 void ComputeCombinedFieldBatch(
@@ -558,8 +521,6 @@ void ComputeCombinedFieldBatch(
     const double* mag_volumes,
     const std::complex<double>* M_complex,
     int n_mag_elems,
-    bool use_fmm,
-    double fmm_eps,
     std::complex<double>* B_out
 );
 

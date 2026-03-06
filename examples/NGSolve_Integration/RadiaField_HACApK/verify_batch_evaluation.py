@@ -5,7 +5,7 @@ Verify RadiaField batch evaluation performance
 This script benchmarks the RadiaField CoefficientFunction evaluation
 for use with GridFunction.Set() in NGSolve.
 
-The radia_ngsolve module uses batch evaluation to efficiently compute
+The rad.RadiaField module uses batch evaluation to efficiently compute
 field values at multiple points simultaneously, which is critical for
 GridFunction projection performance.
 
@@ -37,7 +37,6 @@ import radia as rad
 try:
     from ngsolve import *
     from netgen.occ import Box, Pnt, OCCGeometry
-    import radia_ngsolve
     NGSOLVE_AVAILABLE = True
 except ImportError as e:
     print('ERROR: NGSolve not available: %s' % e)
@@ -56,7 +55,6 @@ print('[Step 1] Creating Radia rectangular magnet')
 print('-' * 70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 # Create rectangular magnet using ObjHexahedron
 # Center: [0, 0, 0], Dimensions: [0.04, 0.04, 0.06] m
@@ -108,7 +106,7 @@ geo = OCCGeometry(box)
 mesh = Mesh(geo.GenerateMesh(maxh=0.02))
 
 # Create RadiaField
-B_cf = radia_ngsolve.RadiaField(magnet, 'b')
+B_cf = rad.RadiaField(magnet, 'b')
 
 errors = []
 for pt in test_points:
@@ -171,7 +169,7 @@ for config in mesh_configs:
     gf = GridFunction(fes)
 
     # Create RadiaField
-    B_cf = radia_ngsolve.RadiaField(magnet, 'b')
+    B_cf = rad.RadiaField(magnet, 'b')
 
     # Benchmark Set()
     t_start = time.perf_counter()
@@ -204,7 +202,7 @@ print('  %-15s  %-30s  %15s' % ('Type', 'Description', 'Set() time'))
 print('  ' + '-' * 65)
 
 for field_type, field_name in field_types:
-    cf = radia_ngsolve.RadiaField(magnet, field_type)
+    cf = rad.RadiaField(magnet, field_type)
     gf = GridFunction(HCurl(mesh, order=1))
 
     t_start = time.perf_counter()
@@ -220,7 +218,7 @@ print()
 print('[Step 5] HDiv projection for B field')
 print('-' * 70)
 
-B_cf = radia_ngsolve.RadiaField(magnet, 'b')
+B_cf = rad.RadiaField(magnet, 'b')
 
 # HDiv space (natural for B = div-free)
 fes_hdiv = HDiv(mesh, order=2)

@@ -161,7 +161,6 @@ class TestNetgenMeshImport(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        rad.FldUnits('m')
         rad.UtiDelAll()
 
     @unittest.skipIf(not NETGEN_AVAILABLE, "Netgen not available")
@@ -238,7 +237,6 @@ class TestHexMeshImport(unittest.TestCase):
     """Test hexahedral mesh import via ObjHexahedron."""
 
     def setUp(self):
-        rad.FldUnits('m')
         rad.UtiDelAll()
 
     def test_single_hexahedron_field(self):
@@ -320,7 +318,6 @@ class TestMeshImportSolver(unittest.TestCase):
     """Test mesh import with solver for soft magnetic materials."""
 
     def setUp(self):
-        rad.FldUnits('m')
         rad.UtiDelAll()
 
     @unittest.skipIf(not NETGEN_AVAILABLE, "Netgen not available")
@@ -413,7 +410,6 @@ class TestMethodComparison(unittest.TestCase):
     """Test comparison between tetrahedral and hexahedral mesh accuracy."""
 
     def setUp(self):
-        rad.FldUnits('m')
         rad.UtiDelAll()
 
     @unittest.skipIf(not NETGEN_AVAILABLE, "Netgen not available")

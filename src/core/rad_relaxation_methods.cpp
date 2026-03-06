@@ -20,6 +20,7 @@
 #include "rad_material_def.h"  // For radTNonlinearIsotropMaterial::GetHfromM
 #include "rad_application.h"  // For radTApplication::NonlinearMethod
 #include "rad_constants.h"    // For RadConst::INV_FOUR_PI
+#include "rad_bicgstab.h"     // For templated BiCGSTAB (Method 3 FMM solver)
 
 #include <time.h>
 #include <chrono>   // For timing instrumentation
@@ -177,7 +178,16 @@ bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPt
 		// Get initial chi (ELF style - from BH curve 2nd point)
 		double chi_init = 1.0;
 		radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
-		if(NonlinMater != nullptr)
+		radTEnergyHysteresisMaterial* HystMater = dynamic_cast<radTEnergyHysteresisMaterial*>(MaterPtr);
+		if(HystMater != nullptr)
+		{
+			chi_init = HystMater->GetInitialChi_ELF_Style();
+			if(chi_init <= 0) chi_init = 1.0;
+			ctx.all_materials_linear = false;
+			ctx.B_sat = HystMater->GetBsaturation();
+			if(ctx.B_sat < 1.0e-10) ctx.B_sat = 1.0;
+		}
+		else if(NonlinMater != nullptr)
 		{
 			chi_init = NonlinMater->GetInitialChi_ELF_Style();
 			if(chi_init <= 0) chi_init = 1.0;
@@ -705,6 +715,7 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
 		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
 		radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
+		radTEnergyHysteresisMaterial* HystMater = dynamic_cast<radTEnergyHysteresisMaterial*>(MaterPtr);
 
 		double chi_matrix = ctx.CurrentChiArray[elem];
 		double mu_old = chi_matrix + 1.0;
@@ -715,7 +726,16 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 			TVector3d H_new(ctx.FlatField[offset], ctx.FlatField[offset+1], ctx.FlatField[offset+2]);
 			double H_mag = std::sqrt(H_new.x*H_new.x + H_new.y*H_new.y + H_new.z*H_new.z);
 
-			if(NonlinMater != nullptr)
+			if(HystMater != nullptr)
+			{
+				// Energy-based hysteresis: pass full H vector for correct direction
+				chi_new = HystMater->ComputeChiFromH(H_new);
+				if(ctx.use_newton && !ctx.DifferentialChiArray.empty())
+				{
+					ctx.DifferentialChiArray[elem] = HystMater->ComputeDifferentialChi(H_mag);
+				}
+			}
+			else if(NonlinMater != nullptr)
 			{
 				chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, ctx.relax_param);
 				if(ctx.use_newton && !ctx.DifferentialChiArray.empty())
@@ -764,7 +784,15 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 				        elem, H_mag, M_mag, H_mag > 1e-6 ? M_mag/H_mag : 0.0, mu_old - 1.0);
 #endif
 
-				if(NonlinMater != nullptr)
+				if(HystMater != nullptr)
+				{
+					chi_new = HystMater->ComputeChiFromH(H_new);
+					if(ctx.use_newton && !ctx.DifferentialChiArray.empty())
+					{
+						ctx.DifferentialChiArray[elem] = HystMater->ComputeDifferentialChi(H_mag);
+					}
+				}
+				else if(NonlinMater != nullptr)
 				{
 					chi_new = NonlinMater->ComputeChiDualMethod(H_mag, mu_old, ctx.relax_param);
 					if(ctx.use_newton && !ctx.DifferentialChiArray.empty())
@@ -984,8 +1012,12 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 	}
 
 	// Build base matrix (geometric part without chi)
-	if(!BuildBaseMatrix(ctx, IntrctPtr))
-		return 0;  // Memory allocation failed
+	// Matrix-free solvers (FMM) skip this step
+	if(NeedsDenseMatrix())
+	{
+		if(!BuildBaseMatrix(ctx, IntrctPtr))
+			return 0;  // Memory allocation failed
+	}
 
 	int iterCount = 0;
 	double MisfitE2 = 1.0e30;
@@ -3180,3 +3212,209 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 }
 
 #endif // RADIA_USE_HACAPK
+
+// Method 3 (FMM solver) REMOVED 2026-03-06
+// 87% near-field pairs on compact geometries, no speedup over HACApK.
+// FMM retained for far-field evaluation only (rad_exafmm.h).
+// See CLAUDE.md "FMM: Far-Field Evaluation Only" policy.
+
+#if 0  // REMOVED: FMM solver code preserved for reference but not compiled
+
+int radTRelaxationMethNo_3::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
+{
+	if(IntrctPtr == nullptr) return 0;
+
+	// Build FMM solver on first call
+	if(!m_fmm)
+	{
+		m_fmm = new RadFMMSolver(IntrctPtr);
+		if(!m_fmm->Build(m_fmm_params))
+		{
+			delete m_fmm;
+			m_fmm = nullptr;
+			return 0;  // Build failed
+		}
+	}
+
+	// Use unified nonlinear iteration with FMM linear solve
+	return AutoRelax_Unified(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+}
+
+//-------------------------------------------------------------------------
+// FMM Solver: SolveLinearStep override
+//-------------------------------------------------------------------------
+
+int radTRelaxationMethNo_3::SolveLinearStep(NonlinearContext& ctx, int iterCount)
+{
+	int totalDOF = ctx.totalDOF;
+	int AmOfMainElem = ctx.AmOfMainElem;
+
+	// Update poly->CurrentChi for 6DOF elements
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		if(dof >= 5)
+		{
+			radTPolyhedron* poly = ctx.polyCache[elem];
+			if(poly && poly->Use6DOF_MSC)
+			{
+				poly->CurrentChi = ctx.CurrentChiArray[elem];
+			}
+		}
+	}
+
+	// Call BiCGSTAB with FMM MatVec
+	double residual = 0.0;
+	const double bicg_tol = rad.m_bicg_tol;
+	const int bicg_max_iter = 10000;
+
+	// Newton: use chi_d in system matrix with RHS correction
+	const int newton_start_iter_bicg = 10;
+	bool newton_active = ctx.use_newton && iterCount >= newton_start_iter_bicg
+	                     && !ctx.DifferentialChiArray.empty();
+
+	auto t_bicg_start = std::chrono::high_resolution_clock::now();
+	int n_iter;
+	if(newton_active)
+	{
+		n_iter = SolveBiCGSTAB_FMM_VariableDOF(ctx, totalDOF, bicg_tol, bicg_max_iter, residual,
+		                                         ctx.DifferentialChiArray, true,
+		                                         &ctx.CurrentChiArray, ctx.OldSigma.data());
+	}
+	else
+	{
+		n_iter = SolveBiCGSTAB_FMM_VariableDOF(ctx, totalDOF, bicg_tol, bicg_max_iter, residual,
+		                                         ctx.CurrentChiArray);
+	}
+	auto t_bicg_end = std::chrono::high_resolution_clock::now();
+	rad.m_solve_t_linear_solve += std::chrono::duration<double>(t_bicg_end - t_bicg_start).count();
+
+	return n_iter;
+}
+
+//-------------------------------------------------------------------------
+// SolveBiCGSTAB_FMM_VariableDOF: BiCGSTAB with FMM matrix-vector product
+// Uses the templated BiCGSTAB solver from rad_bicgstab.h
+//-------------------------------------------------------------------------
+
+int radTRelaxationMethNo_3::SolveBiCGSTAB_FMM_VariableDOF(
+    NonlinearContext& ctx,
+    int totalDOF, double tol, int max_iter, double& residual,
+    const std::vector<double>& elemChiArray,
+    bool use_newton,
+    const std::vector<double>* absChiArray,
+    const double* oldSigma)
+{
+	if(!m_fmm || !m_fmm->IsValid()) return 0;
+
+	int AmOfMainElem = ctx.AmOfMainElem;
+
+	// Build inverse chi per DOF (from per-element chi)
+	std::vector<double> inv_chi(totalDOF, 1.0);
+	for(int elem = 0; elem < AmOfMainElem; elem++)
+	{
+		int dof = IntrctPtr->GetElementDOF(elem);
+		int offset = IntrctPtr->GetElementDOFOffset(elem);
+		double chi_val = elemChiArray[elem];
+		double inv_chi_val = (std::abs(chi_val) > 1e-30) ? (1.0 / chi_val) : 1e30;
+
+		for(int d = 0; d < dof; d++)
+		{
+			inv_chi[offset + d] = inv_chi_val;
+		}
+	}
+
+	// Build RHS: rhs = H_ext  (or Newton-corrected RHS)
+	std::vector<double> rhs(totalDOF, 0.0);
+
+	if(use_newton && absChiArray && oldSigma)
+	{
+		// Newton RHS: rhs = H_ext - (A_newton - A_picard) × σ_old
+		// A_newton uses chi_d, A_picard uses chi_abs
+		// Correction: rhs[i] = H_ext[i] + (1/chi_abs - 1/chi_d) × σ_old[i]
+		for(int elem = 0; elem < AmOfMainElem; elem++)
+		{
+			int dof = IntrctPtr->GetElementDOF(elem);
+			int offset = IntrctPtr->GetElementDOFOffset(elem);
+			double chi_abs = (*absChiArray)[elem];
+			double chi_d = elemChiArray[elem];
+			double inv_chi_abs = (std::abs(chi_abs) > 1e-30) ? (1.0 / chi_abs) : 1e30;
+			double inv_chi_d = (std::abs(chi_d) > 1e-30) ? (1.0 / chi_d) : 1e30;
+
+			for(int d = 0; d < dof; d++)
+			{
+				rhs[offset + d] = ctx.FlatExtern[offset + d]
+				                + (inv_chi_abs - inv_chi_d) * oldSigma[offset + d];
+			}
+		}
+	}
+	else
+	{
+		// Picard RHS: rhs = H_ext
+		for(int i = 0; i < totalDOF; i++)
+		{
+			rhs[i] = ctx.FlatExtern[i];
+		}
+	}
+
+	// Debug: compare FMM MatVec against dense MatVec (first call only)
+	static bool debug_done = false;
+	if(!debug_done && m_fmm && m_fmm->IsValid())
+	{
+		fprintf(stderr, "\n========== FMM DEBUG: comparing MatVec ==========\n");
+		m_fmm->DebugCompareMatVec(inv_chi);
+		debug_done = true;
+		fprintf(stderr, "========== FMM DEBUG: done ==========\n\n");
+	}
+
+	// FMM MatVec callback
+	auto matvec = [&](const double* x_ptr, double* y_ptr) {
+		std::vector<double> xv(x_ptr, x_ptr + totalDOF);
+		std::vector<double> yv(totalDOF, 0.0);
+		m_fmm->MatVec(xv, yv, inv_chi);
+		std::memcpy(y_ptr, yv.data(), totalDOF * sizeof(double));
+	};
+
+	// Jacobi preconditioner
+	std::vector<double> diag(totalDOF);
+	m_fmm->GetDiagonal(diag, inv_chi);
+
+	std::vector<double> diag_inv(totalDOF);
+	for(int i = 0; i < totalDOF; i++)
+	{
+		diag_inv[i] = (std::abs(diag[i]) > 1e-15) ? (1.0 / diag[i]) : 1.0;
+	}
+
+	auto precond = [&](const double* x_ptr, double* y_ptr) {
+		for(int i = 0; i < totalDOF; i++)
+		{
+			y_ptr[i] = diag_inv[i] * x_ptr[i];
+		}
+	};
+
+	// Initial guess: current magnetization
+	std::vector<double> sol(totalDOF);
+	for(int i = 0; i < totalDOF; i++)
+	{
+		sol[i] = ctx.FlatMagn[i];
+	}
+
+	// Solve with templated BiCGSTAB
+	auto result = radia::bicgstab::Solve<double>(
+	    totalDOF, matvec, precond,
+	    rhs.data(), sol.data(),
+	    tol, max_iter
+	);
+
+	residual = result.residual;
+
+	// Copy solution back to FlatMagn
+	for(int i = 0; i < totalDOF; i++)
+	{
+		ctx.FlatMagn[i] = sol[i];
+	}
+
+	return result.iterations;
+}
+
+#endif // 0 - REMOVED FMM solver

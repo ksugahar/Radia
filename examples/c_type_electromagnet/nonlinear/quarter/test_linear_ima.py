@@ -47,7 +47,6 @@ def load_elf_geometry(path):
 def test_with_ima(nodes, elements, use_ima=True):
     """Test quarter model with IMA."""
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # LINEAR material
     mat = rad.MatLin(1000)  # mu_r = 1000

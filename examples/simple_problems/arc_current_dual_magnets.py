@@ -19,7 +19,6 @@ import radia as rad
 
 # Clear all objects
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 # Parameters (in meters)
 rmin = 0.100       # 100 mm

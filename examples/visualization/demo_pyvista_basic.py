@@ -28,7 +28,6 @@ def main():
     print("PyVista Basic Visualization Demo")
     print("="*60)
 
-    rad.FldUnits('m')
 
     # Create rectangular permanent magnet
     print("\n[1] Creating magnet...")

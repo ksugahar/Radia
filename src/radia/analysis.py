@@ -2367,7 +2367,7 @@ class UnifiedMMMAnalysis:
         >>> import radia as rad
         >>> from radia.analysis import UnifiedMMMAnalysis
         >>>
-        >>> rad.FldUnits('m')
+        >>> # Radia always uses meters
         >>> mag = rad.ObjHexahedron(vertices, [0, 0, 0])
         >>> mat = rad.MatLin(1000)
         >>> rad.MatApl(mag, mat)

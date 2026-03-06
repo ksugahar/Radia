@@ -19,7 +19,7 @@ sys.path.insert(0, str(project_root / 'src' / 'radia'))
 import numpy as np
 import radia as rad
 
-# Import coil model (sets rad.FldUnits('m') and defines mm = 1e-3)
+# Import coil model (defines mm = 1e-3)
 from coil_model import create_beam_steering_coil, get_coil_info, mm
 
 

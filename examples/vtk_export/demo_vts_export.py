@@ -30,7 +30,6 @@ def main():
     print("=" * 60)
 
     # Set units to meters (required for consistent results)
-    rad.FldUnits('m')
 
     # Create a permanent magnet
     # NdFeB magnet: Br = 1.2 T -> Mr = Br/mu_0 = 954930 A/m

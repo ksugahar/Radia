@@ -39,7 +39,6 @@ BH_DATA = [
 
 def create_tetra_mesh():
     """Create tetrahedral mesh using Netgen"""
-    rad.FldUnits('m')
 
     half = CUBE_SIZE / 2
     box = Box(Pnt(-half, -half, -half), Pnt(half, half, half))

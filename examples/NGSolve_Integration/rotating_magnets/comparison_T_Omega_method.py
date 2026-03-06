@@ -48,8 +48,6 @@ from ngsolve import grad, curl, CF, sqrt, IfPos, x, y, z, Cross
 from ngsolve import BilinearForm, LinearForm, dx
 from netgen.occ import Box, Glue, OCCGeometry
 
-# Import radia_ngsolve from radia package
-from radia import radia_ngsolve
 import numpy as np
 import pandas as pd
 import gc
@@ -83,7 +81,6 @@ initial_memory = print_memory("プログラム起動時")
 print("\n[設定] ELFMAGICモデルパラメータ...")
 
 # Set Radia to use meters (standard for Radia and NGSolve)
-rad.FldUnits('m')
 
 # 磁石のパラメータ (Sample0.maiより)
 magnet_size = 0.001  # m - 立方体の一辺の長さ (1mm x 1mm x 1mm)
@@ -404,7 +401,7 @@ for step in range(0, time_steps + 1):  # 0から180まで
 	w_axis = [0, 0, 1]                    # 回転後のZ軸（変化なし）
 
 	# RadiaField CoefficientFunctionを作成（座標変換を指定）
-	B_cf = radia_ngsolve.RadiaField(magnet, 'b',
+	B_cf = rad.RadiaField(magnet, 'b',
 	                                origin=origin,
 	                                u_axis=u_axis,
 	                                v_axis=v_axis,
@@ -467,7 +464,7 @@ for step in range(0, time_steps + 1):  # 0から180まで
 		print(f"\n  [検証] curl(A_ext) vs B_ext の比較（Radia内部検証）...")
 
 		# RadiaからA_ext（ベクトルポテンシャル）を取得
-		A_cf = radia_ngsolve.RadiaField(magnet, 'a',
+		A_cf = rad.RadiaField(magnet, 'a',
 		                                origin=origin,
 		                                u_axis=u_axis,
 		                                v_axis=v_axis,

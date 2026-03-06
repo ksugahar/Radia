@@ -239,7 +239,6 @@ class CoupledPEECMMM:
         """
         try:
             import radia as rad
-            rad.FldUnits('m')
         except ImportError:
             raise ImportError(
                 "Radia module required for compute_coupling_radia()")

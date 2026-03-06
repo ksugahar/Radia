@@ -11,7 +11,7 @@ Demonstrates:
 Use case: Interactive field exploration, browser-based visualization
 
 Requirements:
-- radia_ngsolve.pyd
+- radia (v2.5.0+ includes RadiaField)
 - NGSolve with webgui
 - Browser (Chrome/Firefox recommended)
 
@@ -28,13 +28,13 @@ from ngsolve import *
 from ngsolve.webgui import Draw
 from netgen.occ import Box, Pnt, OCCGeometry
 
-# Check if radia_ngsolve is available
+# Check if rad.RadiaField is available
 try:
-    from radia_ngsolve import RadiaField
+    rad.RadiaField
     HAS_RADIA_NGSOLVE = True
-except ImportError:
-    print("Warning: radia_ngsolve not available")
-    print("This demo requires radia_ngsolve.pyd")
+except AttributeError:
+    print("Warning: rad.RadiaField not available")
+    print("This demo requires radia v2.5.0+")
     HAS_RADIA_NGSOLVE = False
 
 
@@ -44,11 +44,10 @@ def main():
     print("="*60)
 
     if not HAS_RADIA_NGSOLVE:
-        print("\n[SKIP] radia_ngsolve not available")
-        print("Build radia_ngsolve.pyd to run this demo")
+        print("\n[SKIP] rad.RadiaField not available")
+        print("Requires radia v2.5.0+ to run this demo")
         return
 
-    rad.FldUnits('m')
 
     # Create Radia magnet
     print("\n[1] Creating Radia magnet...")
@@ -64,7 +63,7 @@ def main():
 
     # Radia field as CoefficientFunction
     print("\n[3] Creating Radia CoefficientFunction...")
-    B_cf = RadiaField(magnet, 'b', units='m')
+    B_cf = rad.RadiaField(magnet, 'b', units='m')
     print("    CoefficientFunction created")
 
     # Project to GridFunction for visualization

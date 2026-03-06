@@ -17,7 +17,6 @@ def hex_vertices(cx, cy, cz, dx, dy, dz):
 
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 # Create hexahedral mesh manually (2x2x2 = 8 elements)
 cube_half = 0.015  # m

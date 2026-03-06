@@ -102,7 +102,7 @@ Dictionary with keys:
 ```python
 import radia as rad
 
-rad.FldUnits('m')
+# Radia always uses meters
 
 # Create magnet
 vertices = [[-0.05,-0.05,-0.05], [0.05,-0.05,-0.05], [0.05,0.05,-0.05], [-0.05,0.05,-0.05],

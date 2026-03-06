@@ -4,7 +4,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
 from ngsolve import *
 from netgen.occ import *
 import radia as rad
-import radia_ngsolve
 import numpy as np
 
 print("="*70)
@@ -14,9 +13,6 @@ print("="*70)
 
 # Create magnet at origin
 rad.UtiDelAll()
-
-# Set Radia to use meters (required for NGSolve integration)
-rad.FldUnits('m')
 
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 1.2])
 
@@ -65,7 +61,7 @@ regions = [
 
 # Test HDiv order=2 (best from previous tests)
 fes = HDiv(mesh, order=2)
-B_cf = radia_ngsolve.RadiaField(bg_field, 'b')
+B_cf = rad.RadiaField(bg_field, 'b')
 B_gf = GridFunction(fes)
 B_gf.Set(B_cf)
 

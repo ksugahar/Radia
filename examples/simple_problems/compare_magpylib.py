@@ -37,7 +37,6 @@ def compare_cylindrical_magnet():
 	# Import libraries
 	try:
 		import radia as rad
-		rad.FldUnits('m')
 		print("[OK] Radia imported successfully")
 	except ImportError as e:
 		print(f"[ERROR] Failed to import Radia: {e}")
@@ -58,7 +57,7 @@ def compare_cylindrical_magnet():
 	# Magnet parameters in mm (magpylib uses mm natively)
 	radius_mm = 10.0  # mm
 	height_mm = 20.0  # mm
-	# Convert to meters for Radia (FldUnits('m'))
+	# Convert to meters for Radia (Radia always uses meters)
 	radius = radius_mm / 1000  # 0.010 m
 	height = height_mm / 1000  # 0.020 m
 
@@ -192,7 +191,7 @@ def compare_cylindrical_magnet():
 	print("ANALYSIS")
 	print("=" * 70)
 	print(f"\nImportant: Unit systems:")
-	print(f"  - Radia: FldUnits('m') -> geometry in meters, field in Tesla")
+	print(f"  - Radia: Radia always uses meters, field in Tesla")
 	print(f"    -> For permanent magnets: M = Br (in Tesla)")
 	print(f"    -> Field output: B in Tesla")
 	print(f"  - magpylib: geometry in mm, field in Tesla")

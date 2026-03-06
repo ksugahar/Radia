@@ -73,26 +73,26 @@ def particle_trajectory(
         obj: Radia object key for magnetic field source
         energy_gev: Particle energy [GeV]
         initial_conditions: [x0, x'0, z0, z'0] - initial transverse position and angles
-            - x0: Initial x position [length unit set by FldUnits]
+            - x0: Initial x position [meters]
             - x'0: Initial x angle dx/ds [rad]
-            - z0: Initial z position [length unit]
+            - z0: Initial z position [meters]
             - z'0: Initial z angle dz/ds [rad]
-        s_range: [s0, s1] - longitudinal position range [length unit]
+        s_range: [s0, s1] - longitudinal position range [meters]
         n_points: Number of output points along trajectory
 
     Returns:
         numpy array of shape (n_points, 5):
             [[s, x, x', z, z'], ...]
             where:
-            - s: Longitudinal position [length unit]
-            - x, z: Transverse positions [length unit]
+            - s: Longitudinal position [meters]
+            - x, z: Transverse positions [meters]
             - x', z': Transverse angles [rad]
 
     Example:
         >>> import radia as rad
         >>> from radia.beam_tracking import particle_trajectory
-        >>> rad.FldUnits('mm')
-        >>> magnet = rad.ObjRecMag([0, 0, 0], [100, 10, 20], [0, 0, 1.0])
+        >>> # Radia always uses meters
+        >>> magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.01, 0.02], [0, 0, 1.0])
         >>> traj = particle_trajectory(magnet, 6.0, [0, 0, 0, 0], [-1000, 1000], 101)
         >>> print(traj.shape)
         (101, 5)

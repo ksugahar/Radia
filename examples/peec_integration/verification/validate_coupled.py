@@ -79,7 +79,6 @@ def test_mu_r_1_no_coupling():
     print("-" * 40)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Build wire topology
     topo = build_single_wire_topology()
@@ -122,7 +121,6 @@ def test_high_mu_coupling():
     print("-" * 40)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Build wire along x-axis
     topo = build_single_wire_topology()
@@ -167,7 +165,6 @@ def test_symmetry():
     print("-" * 40)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Build 2-segment wire
     builder = PEECBuilder()
@@ -227,7 +224,6 @@ def test_frequency_sweep():
     print("-" * 40)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     topo = build_single_wire_topology()
 
@@ -384,7 +380,6 @@ def test_fasthenry_coupled_solve():
     print("-" * 40)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # First solve WITHOUT magnetic block
     inp_air = """

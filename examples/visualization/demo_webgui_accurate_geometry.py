@@ -13,8 +13,7 @@ Workflow:
 3. Display in webgui (browser opens automatically)
 
 Requirements:
-- radia
-- radia_ngsolve.pyd
+- radia (v2.5.0+ includes RadiaField)
 - NGSolve with webgui
 """
 
@@ -25,9 +24,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import radia as rad
 
 try:
-    from radia_ngsolve import RadiaField
+    rad.RadiaField
     HAS_RADIA_NGSOLVE = True
-except ImportError:
+except AttributeError:
     HAS_RADIA_NGSOLVE = False
 
 from ngsolve import *
@@ -61,7 +60,6 @@ def main():
     print("NGSolve webgui with Accurate Geometry")
     print("="*60)
 
-    rad.FldUnits('m')
 
     # Create Radia magnet
     print("\n[1] Creating Radia magnet...")
@@ -83,8 +81,8 @@ def main():
     Draw(occ_magnet, name='Magnet_Geometry')
 
     if not HAS_RADIA_NGSOLVE:
-        print("\n[INFO] radia_ngsolve not available")
-        print("       Geometry displayed, but field visualization requires radia_ngsolve.pyd")
+        print("\n[INFO] rad.RadiaField not available")
+        print("       Geometry displayed, but field visualization requires radia v2.5.0+")
         return
 
     # Create observation mesh
@@ -96,7 +94,7 @@ def main():
 
     # Radia field as CoefficientFunction
     print("\n[5] Creating Radia field...")
-    B_cf = RadiaField(magnet, 'b', units='m')
+    B_cf = rad.RadiaField(magnet, 'b', units='m')
 
     # Project to GridFunction
     print("\n[6] Projecting to GridFunction...")

@@ -107,7 +107,6 @@ from fasthenry_parser import FastHenryParser
 from peec_topology import PEECCircuitSolver
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 # Single segment: same bus bar
 inp_text = f""".Units mm

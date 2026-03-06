@@ -35,7 +35,6 @@ def test_single_tetrahedron_with_material():
     print("\n=== Test 1: Single Tetrahedron + Linear Material ===")
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Create tetrahedron
     vertices = [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]]
@@ -63,7 +62,6 @@ def test_multiple_tetrahedra_with_material():
     print("\n=== Test 2: Multiple Tetrahedra + Linear Material ===")
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Create 10 tetrahedra
     vertices_base = [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]]
@@ -93,7 +91,6 @@ def test_tetrahedral_mesh_with_material():
     print("\n=== Test 3: Netgen Tetrahedral Mesh + Linear Material ===")
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Create tetrahedral mesh
     geo = OCCGeometry(Box((0, 0, 0), (0.1, 0.1, 0.1)))
@@ -134,7 +131,6 @@ def test_permanent_magnet_no_solve():
     print("\n=== Test 4: Permanent Magnet Tetrahedra (no Solve) ===")
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Create tetrahedron with permanent magnetization
     vertices = [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]]
@@ -159,39 +155,22 @@ def test_permanent_magnet_no_solve():
         print(f"[WARNING] Field calculation returned NaN (known issue with single tetrahedron)")
 
 
-def test_tetrahedral_methods():
-    """Test different tetrahedral computation methods"""
-    print("\n=== Test 5: Tetrahedral Computation Methods ===")
+def test_tetrahedral_field():
+    """Test tetrahedral field computation."""
+    print("\n=== Test 5: Tetrahedral Field Computation ===")
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     vertices = [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]]
-
     test_pt = [0.15, 0.05, 0.05]
 
-    # Method 0: Original Radia method (polygon-based)
-    rad.SolverTetraMethod(0)
-    tetra0 = rad.ObjTetrahedron(vertices, [0, 0, 12000])
-    H0 = rad.Fld(tetra0, 'h', test_pt)
-    H0_mag = np.linalg.norm(H0)
-    print(f"       Method 0 (polygon-based): |H| = {H0_mag:.2f} A/m")
+    tetra = rad.ObjTetrahedron(vertices, [0, 0, 12000])
+    H = rad.Fld(tetra, 'h', test_pt)
+    H_mag = np.linalg.norm(H)
+    print(f"       |H| = {H_mag:.2f} A/m")
 
-    rad.UtiDelAll()
-
-    # Method 1: Analytical method
-    rad.SolverTetraMethod(1)
-    tetra1 = rad.ObjTetrahedron(vertices, [0, 0, 12000])
-    H1 = rad.Fld(tetra1, 'h', test_pt)
-    H1_mag = np.linalg.norm(H1)
-    print(f"       Method 1 (analytical):    |H| = {H1_mag:.2f} A/m")
-
-    # Compare
-    if not np.isnan(H0_mag) and not np.isnan(H1_mag):
-        rel_diff = abs(H0_mag - H1_mag) / H0_mag * 100
-        print(f"[PASS] Relative difference: {rel_diff:.2f}%")
-    else:
-        print(f"[WARNING] NaN detected in field calculation")
+    assert not np.isnan(H_mag), "Field should not be NaN"
+    assert H_mag > 0, "Field should be non-zero"
 
 
 if __name__ == '__main__':

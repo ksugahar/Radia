@@ -87,7 +87,6 @@ def mirror_vertices(verts, x_mirror=False, z_mirror=False):
 def run_test_full_model(nodes, hex_elements, wedge_elements):
     """Run test with FULL MODEL (explicit 4x mirroring, no IMA)."""
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     mat = rad.MatLin(MU_R)
     all_objects = []
@@ -124,7 +123,6 @@ def run_test_full_model(nodes, hex_elements, wedge_elements):
 def run_test_ima(nodes, hex_elements, wedge_elements):
     """Run test with IMA (quarter model)."""
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     mat = rad.MatLin(MU_R)
     all_objects = []

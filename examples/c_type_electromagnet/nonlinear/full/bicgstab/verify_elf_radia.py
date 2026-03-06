@@ -115,7 +115,6 @@ print("Building Radia Model")
 print("-" * 70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 mat = rad.MatSatIsoTab(bh_data)
 yoke, hex_objects = create_yoke_model(nodes, elements, mat)

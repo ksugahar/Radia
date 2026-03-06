@@ -23,7 +23,6 @@ import radia as rad
 import numpy as np
 
 # Set unit system to meters
-rad.FldUnits('m')
 mm = 1e-3  # 1 mm in meters
 
 

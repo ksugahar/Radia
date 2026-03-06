@@ -84,7 +84,6 @@ class TestCurlAEqualsB:
 
     def setup_method(self):
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
     def teardown_method(self):
         rad.UtiDelAll()
@@ -207,7 +206,6 @@ class TestGradPhiEqualsMinusH:
 
     def setup_method(self):
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
     def teardown_method(self):
         rad.UtiDelAll()
@@ -329,7 +327,6 @@ class TestBHRelation:
 
     def setup_method(self):
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
     def teardown_method(self):
         rad.UtiDelAll()
@@ -403,7 +400,6 @@ class TestFieldRelationsConsistency:
 
     def setup_method(self):
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
     def teardown_method(self):
         rad.UtiDelAll()

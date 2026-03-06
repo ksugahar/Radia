@@ -16,9 +16,6 @@ print("=" * 70)
 print("Vector Potential Test")
 print("=" * 70)
 
-# Set Radia to use meters for consistency
-rad.FldUnits('m')
-
 # Clear all objects
 rad.UtiDelAll()
 
@@ -46,14 +43,14 @@ bg_field = rad.ObjBckg(field_with_A)
 print(f"  Background field object ID: {bg_field}")
 
 # Test field calculation with A
-point = [0.010, 0.020, 0.030]  # m (rad.FldUnits('m'))
+point = [0.010, 0.020, 0.030]  # m (Radia always uses meters)
 result = rad.Fld(bg_field, 'ba', point)  # Request both B and A
 print(f"  Point: {point} m")
 print(f"  B field: [{result[0]:.6f}, {result[1]:.6f}, {result[2]:.6f}] T")
 print(f"  A field: [{result[3]:.6f}, {result[4]:.6f}, {result[5]:.6f}] T*m")
 
 # Verify A
-expected_Ax = -point[1] * 1.0 / 2.0  # T·m (no conversion needed with rad.FldUnits('m'))
+expected_Ax = -point[1] * 1.0 / 2.0  # T*m (Radia always uses meters)
 expected_Ay = point[0] * 1.0 / 2.0
 expected_Az = 0.0
 

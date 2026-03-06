@@ -179,7 +179,7 @@ class LoopStarTransform:
         except ImportError:
             raise ImportError(
                 "LoopStarTransform requires NGSolve. "
-                "Install with: pip install ngsolve==6.2.2405")
+                "Install with: pip install ngsolve>=6.2.2601")
 
         mesh = self.mesh
 

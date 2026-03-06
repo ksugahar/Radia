@@ -156,7 +156,6 @@ def use_with_ngsolve_and_radia(msh_file):
 
     # Convert to Radia (example)
     print("\n[4] Radia field computation...")
-    rad.FldUnits('m')
 
     # Create Radia magnet
     magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 954930])

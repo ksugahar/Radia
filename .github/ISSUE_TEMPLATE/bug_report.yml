@@ -56,7 +56,6 @@ body:
       placeholder: |
         import radia as rad
         rad.UtiDelAll()
-        rad.FldUnits('m')
         # ... minimal reproduction
     validations:
       required: true

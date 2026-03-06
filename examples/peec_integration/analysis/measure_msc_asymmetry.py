@@ -39,7 +39,6 @@ def create_uniform_hex_mesh(n, size=0.1, mu_r=1000):
         n_dof: Expected total DOF (6 * n_elements)
     """
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     half = size / 2.0
     dx = size / n

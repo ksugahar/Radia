@@ -69,7 +69,6 @@ def profile_hacapk():
     print("HACApK Profiling")
     print("=" * 60)
 
-    rad.FldUnits('m')
     rad.UtiDelAll()
 
     # Step 1: Mesh generation

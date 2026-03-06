@@ -112,7 +112,6 @@ print("Building Radia Model")
 print("-" * 70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 # Create nonlinear material
 mat = rad.MatSatIsoTab(bh_data)

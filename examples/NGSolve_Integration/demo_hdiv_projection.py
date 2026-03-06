@@ -11,7 +11,7 @@ WHY HDiv?
   - Best accuracy for magnetic field representation
 
 CLAUDE.md Best Practices:
-1. ALWAYS use rad.FldUnits('m') for NGSolve integration
+1. Radia always uses meters (compatible with NGSolve SI units)
 2. Use HDiv(mesh, order=2) for best accuracy
 3. Evaluate GridFunction at distances > 1 mesh cell from magnet surface
 4. Use CoefficientFunction directly for maximum accuracy near boundaries
@@ -39,13 +39,11 @@ try:
     from ngsolve import *
     from netgen.csg import CSGeometry, OrthoBrick, Pnt
     import radia as rad
-    import radia_ngsolve
     NGSOLVE_AVAILABLE = True
 except ImportError as e:
     print(f"ERROR: Required module not available: {e}")
-    print("This example requires NGSolve and radia_ngsolve.")
+    print("This example requires NGSolve and radia v2.5.0+.")
     print("Install NGSolve: pip install ngsolve")
-    print("Build radia_ngsolve: cmake --build build --target radia_ngsolve")
     sys.exit(1)
 
 print("=" * 70)
@@ -60,13 +58,7 @@ print("\n[Step 1] Setting up Radia with meters")
 print("-" * 70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')  # CRITICAL: Required for NGSolve integration
-
-units_str = rad.FldUnits()
-if units_str is not None:
-    print(f"  Unit system: {units_str.split()[0]}")
-else:
-    print("  Unit system: meters (set via FldUnits('m'))")
+print("  Unit system: meters (Radia always uses meters)")
 
 # ============================================================================
 # Step 2: Create Radia Permanent Magnet
@@ -151,7 +143,7 @@ print(f"  HDiv space DOFs: {fes_hdiv.ndof}")
 print(f"  Polynomial order: 2")
 
 # Create RadiaField CoefficientFunction
-B_cf = radia_ngsolve.RadiaField(magnet, 'b')
+B_cf = rad.RadiaField(magnet, 'b')
 print(f"  RadiaField created: field_type='{B_cf.field_type}'")
 
 # Project to HDiv GridFunction
@@ -263,9 +255,7 @@ print("=" * 70)
 print("""
 Best Practices for NGSolve Integration:
 
-1. ALWAYS call rad.FldUnits('m') before creating Radia objects
-   - NGSolve uses SI units (meters)
-   - Radia default is millimeters
+1. Radia always uses meters (compatible with NGSolve SI units)
 
 2. Use HDiv(mesh, order=2) for magnetic flux density B
    - Preserves div(B) = 0 (no magnetic monopoles)
