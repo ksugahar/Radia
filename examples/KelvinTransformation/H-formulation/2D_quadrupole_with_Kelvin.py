@@ -48,6 +48,9 @@ mag_circle.name = "magnetic"
 # Inner air domain (circle_radius < r < kelvin_radius)
 inner_circle = wp.Circle(kelvin_radius).Face()
 inner_circle.maxh = maxh_fine
+# Name Kelvin boundary edge before subtraction (survives Boolean ops)
+for edge in inner_circle.edges:
+    edge.name = "kelvin_int"
 inner_air = inner_circle - mag_circle
 inner_air.name = "air_inner"
 
@@ -56,6 +59,9 @@ inner_air.name = "air_inner"
 wp = WorkPlane(Axes(Pnt(offset_x, 0, 0), n=Z, h=X))
 outer_circle = wp.Circle(kelvin_radius).Face()
 outer_circle.maxh = maxh_fine
+# Name Kelvin boundary edge before Glue (survives Boolean ops)
+for edge in outer_circle.edges:
+    edge.name = "kelvin_ext"
 outer_circle.name = "air_outer"
 
 # ===== GND VERTEX (center of exterior domain) =====
@@ -76,51 +82,20 @@ shape.faces[1].name = "magnetic"
 shape.faces[2].name = "air_outer"
 
 print("\nIdentifying periodic boundaries...")
-# Find air_inner and air_outer faces by name
-air_inner_face_idx = None
-air_outer_face_idx = None
-for i, face in enumerate(shape.faces):
-    if face.name == "air_inner":
-        air_inner_face_idx = i
-    elif face.name == "air_outer":
-        air_outer_face_idx = i
+# Find Kelvin boundary edges by name (named during geometry construction)
+kelvin_int_edges = [e for e in shape.edges if e.name == "kelvin_int"]
+kelvin_ext_edges = [e for e in shape.edges if e.name == "kelvin_ext"]
 
-if air_inner_face_idx is not None and air_outer_face_idx is not None:
-    # For air_inner: find the edge with largest bounding box (outer circle, r=2.0)
-    air_inner_edge_idx = None
-    max_bbox_size = 0
-    for i, edge in enumerate(shape.faces[air_inner_face_idx].edges):
-        try:
-            bbox = edge.bounding_box
-            # bbox is ((xmin, ymin, zmin), (xmax, ymax, zmax))
-            bbox_size = (bbox[1][0] - bbox[0][0]) * (bbox[1][1] - bbox[0][1])
-            if bbox_size > max_bbox_size:
-                max_bbox_size = bbox_size
-                air_inner_edge_idx = i
-        except:
-            pass
+print(f"  Found {len(kelvin_int_edges)} interior Kelvin edges")
+print(f"  Found {len(kelvin_ext_edges)} exterior Kelvin edges")
 
-    # For air_outer: should have only 1 edge, but check largest bbox to be safe
-    air_outer_edge_idx = None
-    max_bbox_size = 0
-    for i, edge in enumerate(shape.faces[air_outer_face_idx].edges):
-        try:
-            bbox = edge.bounding_box
-            bbox_size = (bbox[1][0] - bbox[0][0]) * (bbox[1][1] - bbox[0][1])
-            if bbox_size > max_bbox_size:
-                max_bbox_size = bbox_size
-                air_outer_edge_idx = i
-        except:
-            pass
-
-    if air_inner_edge_idx is not None and air_outer_edge_idx is not None:
-        print(f"  Identifying: shape.faces[{air_inner_face_idx}].edges[{air_inner_edge_idx}] (air_inner) <-> shape.faces[{air_outer_face_idx}].edges[{air_outer_edge_idx}] (air_outer)")
-        shape.faces[air_inner_face_idx].edges[air_inner_edge_idx].Identify(shape.faces[air_outer_face_idx].edges[air_outer_edge_idx], "periodic", IdentificationType.PERIODIC)
-        print("  Periodic identification applied")
-    else:
-        print("  ERROR: Could not find edges!")
+if len(kelvin_int_edges) > 0 and len(kelvin_ext_edges) > 0:
+    for int_edge, ext_edge in zip(kelvin_int_edges, kelvin_ext_edges):
+        int_edge.Identify(ext_edge, "periodic", IdentificationType.PERIODIC)
+    print(f"  Periodic identification applied ({len(kelvin_int_edges)} edge pairs)")
 else:
-    print("  ERROR: Could not find air_inner or air_outer faces!")
+    raise RuntimeError(f"Could not find Kelvin boundary edges! "
+                       f"(kelvin_int: {len(kelvin_int_edges)}, kelvin_ext: {len(kelvin_ext_edges)})")
 
 # Create geometry
 geo = OCCGeometry(shape, dim=2)
@@ -149,10 +124,22 @@ print(f"  Boundaries: {mesh.GetBoundaries()}")
 print("\nSetting up H-formulation with Periodic BC...")
 
 # Create finite element space with Periodic BC and Dirichlet BC at GND
-fes = H1(mesh, order=3, dirichlet_bbnd="GND")
-fes = Periodic(fes)  # Apply periodic boundary conditions
+fes_before = H1(mesh, order=3, dirichlet_bbnd="GND")
+
+# Check FreeDofs BEFORE Periodic
+freedof_before = sum([1 for d in fes_before.FreeDofs() if d])
+
+fes = Periodic(fes_before)  # Apply periodic boundary conditions
+
+# Check FreeDofs AFTER Periodic
+freedof_after = sum([1 for d in fes.FreeDofs() if d])
 
 print(f"  Number of DOFs: {fes.ndof}")
+print(f"  FreeDofs: {freedof_before} -> {freedof_after} (diff: {freedof_before - freedof_after})")
+if freedof_before == freedof_after:
+    print("  WARNING: Periodic BC may NOT be working!")
+else:
+    print("  Periodic BC is working (FreeDofs reduced)")
 
 mu0 = 4*pi*1e-7
 u = fes.TrialFunction()

@@ -9,7 +9,6 @@ This folder contains basic Radia examples demonstrating fundamental features.
 - [chamfered_pole_piece.py](chamfered_pole_piece.py) - Multiple extrusion with chamfer
 - [cubic_polyhedron_magnet.py](cubic_polyhedron_magnet.py) - Polyhedron (cube) magnet
 - [compare_magpylib.py](compare_magpylib.py) - Comparison with magpylib library
-- [hmatrix_update_magnetization.py](hmatrix_update_magnetization.py) - H-matrix magnetization update
 
 ## How to Run
 

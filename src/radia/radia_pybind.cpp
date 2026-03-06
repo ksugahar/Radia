@@ -1769,7 +1769,10 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Args:
                   obj: Object handle
                   points: Numpy array of shape (N, 3)
-                  method: Computation method (0=direct, 1=FMM)
+                  method: Computation method:
+                      0 = direct (per-point exact, default)
+                      1 = FMM dipole approximation (fast, far-field only).
+                          Silently falls back to direct if IMA is active.
 
               Returns:
                   Dictionary with 'B' and 'H' arrays of shape (N, 3)

@@ -56,7 +56,7 @@ for edge in air_inner.edges:
     dist = sqrt(edge.center.x**2 + edge.center.y**2)
     if x_center < 1e-6:  # On y-axis (x = 0)
         edge.name = "axis_int"
-    elif dist > (kelvin_radius + circle_radius) / 2:
+    elif abs(dist - kelvin_radius) < kelvin_radius * 0.2:
         edge.name = "kelvin_int"
     else:
         edge.name = "circle"

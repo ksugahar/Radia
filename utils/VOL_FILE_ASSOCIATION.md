@@ -150,7 +150,7 @@ pip install ngsolve
 
 1. NGSolveサンプルメッシュを使用:
    ```
-   S:\NGsolve\01_GitHub\install_ksugahar\share\ngsolve\cube.vol
+   S:\NGsolve\01_GitHub\install_ngsolve\share\ngsolve\cube.vol
    ```
 
 2. ダブルクリック

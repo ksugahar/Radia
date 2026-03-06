@@ -212,6 +212,14 @@ bool InitializeFMM(int container_handle);
 void ReleaseFMM(int container_handle);
 
 /**
+ * @brief Clear all FMM and element caches
+ *
+ * Must be called when elements are deleted (e.g., UtiDelAll)
+ * to prevent stale cache data.
+ */
+void ClearAllFMMCaches();
+
+/**
  * @brief Get element data for inside/outside classification
  *
  * Builds element data structures from Radia container.

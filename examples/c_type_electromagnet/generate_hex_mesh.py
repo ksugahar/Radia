@@ -45,7 +45,7 @@ sys.path.insert(0, CUBIT_EXPORT_PATH)
 work_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Use custom NGSolve with GUI support and patches (PR#231, PR#232)
-NGSOLVE_PATH = r'S:\NGSolve\01_GitHub\install_ksugahar\lib\site-packages'
+NGSOLVE_PATH = r'S:\NGSolve\01_GitHub\install_ngsolve\lib\site-packages'
 sys.path.insert(0, NGSOLVE_PATH)
 
 from netgen.occ import OCCGeometry

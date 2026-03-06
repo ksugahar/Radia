@@ -1,0 +1,94 @@
+name: Release
+
+# Runs automatically after CI succeeds (master push or version tag).
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  upload-binaries:
+    # Only on master CI success (not PRs, not tags).
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------
+      # Download the .pyd artifact produced by CI
+      # ----------------------------------------------------------------
+      - name: Download .pyd artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-pyd
+          path: pyd-files
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ----------------------------------------------------------------
+      # Upload .pyd to GitHub Releases (tag: binaries)
+      # ----------------------------------------------------------------
+      - name: Upload .pyd to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== Uploading .pyd files to GitHub Releases ==="
+
+          # Ensure 'binaries' release exists
+          if ! gh release view binaries >/dev/null 2>&1; then
+            gh release create binaries --title "Binary Files" \
+              --notes "Pre-built modules. Updated by CI." --latest=false
+          fi
+
+          # Collect .pyd files
+          FILES=$(find pyd-files -name '*.pyd' 2>/dev/null)
+          if [ -z "$FILES" ]; then
+            echo "::warning::No .pyd files found to upload"
+            exit 0
+          fi
+
+          echo "Uploading files..."
+          for f in $FILES; do
+            echo "  Uploading $(basename "$f")..."
+            gh release upload binaries "$f" --clobber
+          done
+          echo "Upload complete."
+
+  # ==================================================================
+  # Publish to PyPI (only on version tags: v*)
+  # ==================================================================
+  publish-pypi:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-wheel
+          path: dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify wheel exists
+        run: |
+          echo "=== Wheel files ==="
+          ls -la dist/
+          WHL=$(find dist -name '*.whl' | head -1)
+          if [ -z "$WHL" ]; then
+            echo "::error::No wheel found in dist/"
+            exit 1
+          fi
+          echo "Wheel: $WHL"
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
