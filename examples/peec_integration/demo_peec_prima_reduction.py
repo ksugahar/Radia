@@ -1,8 +1,8 @@
 """
-DC PEEC Model Reduction using Lanczos-based CLN Transform
+DC PEEC Model Reduction using Lanczos-based PRIMA Transform
 
 This example demonstrates model order reduction (MOR) for PEEC systems
-using the Lanczos algorithm to reduce CLN I form while preserving
+using the Lanczos algorithm to reduce PRIMA I form while preserving
 port impedance Z(s).
 
 Physical System:
@@ -19,16 +19,16 @@ Conductor Geometry:
 - Total conductor length: N * p
 
 Mathematical Background:
-- CLN I form: (R + sL)I = V where R is diagonal, L is dense symmetric
+- PRIMA I form: (R + sL)I = V where R is diagonal, L is dense symmetric
 - Lanczos algorithm: Simultaneous transformation of two Hermitian matrices
   Input: K = R (diagonal), N = L (dense symmetric)
   Output: R' = LL (transformed R), L' = RR (transformed L)
-- Reduced CLN I impedance: Z(s) = R' + s*L' = LL + s*RR
+- Reduced PRIMA I impedance: Z(s) = R' + s*L' = LL + s*RR
 - Truncation via n_iter parameter controls output dimension
 
 Key Insight:
-- Lanczos with K=R, N=L preserves the CLN I structure
-- Reduced model is STILL CLN I form with smaller dimension
+- Lanczos with K=R, N=L preserves the PRIMA I structure
+- Reduced model is STILL PRIMA I form with smaller dimension
 - Port impedance Z(s) is preserved at low-to-mid frequencies
 - Dense L matrix (mutual inductance) makes reduction non-trivial
 
@@ -44,10 +44,10 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Add CLN library path
+# Add PRIMA library path
 sys.path.insert(0, r'W:\30_CauerLadderNetwork\2021_01_22_CauerI_to_CauerII\Python')
 
-from cln import lanczos, build_tridiagonal, LanczosResult
+from prima import lanczos, build_tridiagonal, LanczosResult
 
 # Physical constants
 MU_0 = 4 * np.pi * 1e-7  # H/m
@@ -137,9 +137,9 @@ def calc_skin_depth(freq, sigma, mu=MU_0):
     return np.sqrt(2.0 / (omega * mu * sigma))
 
 
-def skin_effect_cln_params(d, sigma, mu=MU_0, n_stages=5):
+def skin_effect_prima_params(d, sigma, mu=MU_0, n_stages=5):
     """
-    Calculate CLN I parameters for 1D skin effect (conductive slab).
+    Calculate PRIMA I parameters for 1D skin effect (conductive slab).
 
     Based on the 1D diffusion equation solution for a conducting slab
     with thickness d, this gives a ladder network representation of the
@@ -158,14 +158,14 @@ def skin_effect_cln_params(d, sigma, mu=MU_0, n_stages=5):
 
     Returns:
     --------
-    R_cln : ndarray
-        Resistance values for CLN I (n_stages,) [Ohm * m^2 - per unit area]
-    L_cln : ndarray
-        Inductance values for CLN I (n_stages,) [H * m^2 - per unit area]
+    R_prima : ndarray
+        Resistance values for PRIMA I (n_stages,) [Ohm * m^2 - per unit area]
+    L_prima : ndarray
+        Inductance values for PRIMA I (n_stages,) [H * m^2 - per unit area]
 
     Notes:
     ------
-    The CLN I network represents the impedance of a conducting slab
+    The PRIMA I network represents the impedance of a conducting slab
     as viewed from one surface. The formulas are:
 
         R[0] ~ 0 (first stage has negligible resistance)
@@ -178,30 +178,30 @@ def skin_effect_cln_params(d, sigma, mu=MU_0, n_stages=5):
     Reference:
         Cauer ladder network representation of eddy current problems
     """
-    R_cln = np.zeros(n_stages)
-    L_cln = np.zeros(n_stages)
+    R_prima = np.zeros(n_stages)
+    L_prima = np.zeros(n_stages)
 
     for n in range(1, n_stages + 1):
         if n == 1:
-            R_cln[n-1] = 1e-16  # First stage: nearly zero resistance
+            R_prima[n-1] = 1e-16  # First stage: nearly zero resistance
         else:
-            R_cln[n-1] = (4*n - 5) * 4.0 / (sigma * d)
+            R_prima[n-1] = (4*n - 5) * 4.0 / (sigma * d)
 
-        L_cln[n-1] = d * mu / (4*n - 3)
+        L_prima[n-1] = d * mu / (4*n - 3)
 
-    return R_cln, L_cln
+    return R_prima, L_prima
 
 
 def build_tridiagonal(diag):
     """
     Build a tridiagonal matrix from a diagonal vector.
 
-    This constructs the CLN I inductance matrix from the diagonal L values.
+    This constructs the PRIMA I inductance matrix from the diagonal L values.
     The resulting matrix has the form:
         L[i,i] = diag[i]
         L[i,i+1] = L[i+1,i] = -diag[i+1]  (negative coupling)
 
-    This is the standard form for CLN I inductance matrix.
+    This is the standard form for PRIMA I inductance matrix.
     """
     n = len(diag)
     U = np.eye(n)
@@ -240,9 +240,9 @@ def calc_skin_effect_analytical(d, sigma, mu, freqs):
     return Z
 
 
-def calc_impedance_cln_i(R, L, freqs):
+def calc_impedance_prima_i(R, L, freqs):
     """
-    Calculate CLN I form impedance: Z(s) = (RR + s*LL)^-1 where
+    Calculate PRIMA I form impedance: Z(s) = (RR + s*LL)^-1 where
     RR is diagonal and LL is three-diagonal.
 
     This represents the skin effect ladder network impedance.
@@ -303,15 +303,15 @@ def calc_dowell_impedance_analytical(R_dc, L_int_dc, freqs, h, sigma, mu=MU_0):
     return Z
 
 
-def build_skin_effect_cln_matrices(L_ext, segment_length, segment_width, h, sigma,
+def build_skin_effect_prima_matrices(L_ext, segment_length, segment_width, h, sigma,
                                     mu=MU_0, n_stages=5):
     """
-    Build PEEC matrices with skin effect expanded into CLN I form.
+    Build PEEC matrices with skin effect expanded into PRIMA I form.
 
     Each segment's internal impedance (due to skin effect) is modeled as a
-    CLN ladder network, while external (mutual) inductance is preserved.
+    PRIMA ladder network, while external (mutual) inductance is preserved.
 
-    The CLN I form represents the 1D diffusion equation solution for skin effect.
+    The PRIMA I form represents the 1D diffusion equation solution for skin effect.
 
     Parameters:
     -----------
@@ -343,33 +343,33 @@ def build_skin_effect_cln_matrices(L_ext, segment_length, segment_width, h, sigm
     R_expanded = np.zeros(n_total)
     L_expanded = np.zeros((n_total, n_total))
 
-    # Get CLN parameters for skin effect (per unit area)
-    R_cln_per_area, L_cln_per_area = skin_effect_cln_params(h, sigma, mu, n_stages)
+    # Get PRIMA parameters for skin effect (per unit area)
+    R_prima_per_area, L_prima_per_area = skin_effect_prima_params(h, sigma, mu, n_stages)
 
     # Scale to actual segment dimensions
     # R scales as 1/Area (series resistance), L scales as 1/Area (internal inductance)
-    # The skin effect CLN represents impedance per unit surface area
+    # The skin effect PRIMA represents impedance per unit surface area
     # For a segment: Z_segment = Z_per_area * (length / width)
     area_factor = segment_length / segment_width
 
-    R_cln = R_cln_per_area * area_factor
-    L_cln = L_cln_per_area * area_factor
+    R_prima = R_prima_per_area * area_factor
+    L_prima = L_prima_per_area * area_factor
 
     for i in range(n_seg):
-        # Place skin effect CLN for this segment
+        # Place skin effect PRIMA for this segment
         for k in range(n_stages):
             idx = i * n_stages + k
-            R_expanded[idx] = R_cln[k]
-            L_expanded[idx, idx] = L_cln[k]
+            R_expanded[idx] = R_prima[k]
+            L_expanded[idx, idx] = L_prima[k]
 
-        # Add three-diagonal coupling within segment's CLN
+        # Add three-diagonal coupling within segment's PRIMA
         # (This creates the ladder structure - shunt L connections)
         for k in range(n_stages - 1):
             idx1 = i * n_stages + k
             idx2 = i * n_stages + k + 1
             # Off-diagonal coupling for three-diagonal L matrix
-            L_expanded[idx1, idx2] = -L_cln[k+1]
-            L_expanded[idx2, idx1] = -L_cln[k+1]
+            L_expanded[idx1, idx2] = -L_prima[k+1]
+            L_expanded[idx2, idx1] = -L_prima[k+1]
 
     # Add external (mutual) inductance - only affects first stage of each segment
     # (External inductance is not affected by skin effect)
@@ -454,7 +454,7 @@ def calc_peec_params(n_segments, segment_length, segment_width, segment_height,
     return R, L
 
 
-def calc_cln_i_params_skin_effect(d, sigma, mu, n_stages):
+def calc_prima_i_params_skin_effect(d, sigma, mu, n_stages):
     """
     Calculate Cauer I parameters for skin effect in conducting plate.
     (Legacy function for comparison with analytical solution)
@@ -490,7 +490,7 @@ def calc_cln_i_params_skin_effect(d, sigma, mu, n_stages):
 
 def compute_impedance_peec(R, L, freqs):
     """
-    Compute impedance of PEEC model (CLN I form) - DC parameters only.
+    Compute impedance of PEEC model (PRIMA I form) - DC parameters only.
 
     PEEC structure:
     - R: Diagonal resistance matrix (each segment's DC resistance)
@@ -584,19 +584,19 @@ def compute_impedance_dowell(R_dc, L_dc, freqs, h, sigma, mu=MU_0):
     return Z
 
 
-def compute_impedance_reduced_cln_i(result, freqs):
+def compute_impedance_reduced_prima_i(result, freqs):
     """
-    Compute impedance of reduced CLN I model from Lanczos transformation.
+    Compute impedance of reduced PRIMA I model from Lanczos transformation.
 
     When Lanczos is applied with K=R_mat (diagonal), N=L_mat (tridiagonal):
     - Lanczos transforms K -> LL (tridiagonal structure)
     - Lanczos transforms N -> RR (diagonal structure)
 
-    For CLN I model reduction:
+    For PRIMA I model reduction:
     - R' = LL (reduced resistance, nearly diagonal due to original R being diagonal)
     - L' = RR (reduced inductance, diagonal)
 
-    Reduced CLN I impedance: Z(s) = R' + s*L' = LL + s*RR
+    Reduced PRIMA I impedance: Z(s) = R' + s*L' = LL + s*RR
 
     Parameters:
     -----------
@@ -619,7 +619,7 @@ def compute_impedance_reduced_cln_i(result, freqs):
 
     for i, f in enumerate(freqs):
         s = 1j * 2 * np.pi * f
-        # CLN I: Z = R + s*L
+        # PRIMA I: Z = R + s*L
         Z_matrix = R_reduced + s * L_reduced
         I = np.linalg.solve(Z_matrix, V)
         Z[i] = 1.0 / I[0]
@@ -649,18 +649,18 @@ def calc_analytical_impedance(d, sigma, mu, freqs):
 
 def demo_peec_reduction():
     """
-    Demonstrate PEEC model reduction using Lanczos-based CLN transform.
+    Demonstrate PEEC model reduction using Lanczos-based PRIMA transform.
 
     Uses 1D array of conducting segments with dense L matrix (mutual inductance).
 
     Key insight:
-    - Lanczos with K=R, N=L produces reduced CLN I model
+    - Lanczos with K=R, N=L produces reduced PRIMA I model
     - R' = LL (transformed R), L' = RR (transformed L)
     - Z(s) = R' + s*L' preserves port impedance
     - Lanczos has a natural convergence limit due to numerical precision
     """
     print("="*70)
-    print("PEEC Model Reduction using Lanczos CLN Transform")
+    print("PEEC Model Reduction using Lanczos PRIMA Transform")
     print("="*70)
 
     # Conductor geometry (1D array of copper segments)
@@ -710,43 +710,43 @@ def demo_peec_reduction():
                                          h=segment_height, sigma=sigma)
 
     # ============================================================
-    # Skin Effect CLN Validation (single conductor, no PEEC)
+    # Skin Effect PRIMA Validation (single conductor, no PEEC)
     # ============================================================
-    # The CLN I representation is a continued fraction expansion of the
+    # The PRIMA I representation is a continued fraction expansion of the
     # 1D diffusion equation (heat/eddy current equation):
     #   d^2 H/dz^2 = j*omega*mu*sigma * H
     # The analytical solution gives surface impedance:
     #   Z = s*mu*(2/(k*d))*tan(k*d/2)*d  where k = sqrt(-s*mu*sigma)
     #
-    # The CLN parameters (R[n], L[n]) are derived from eigenvalue expansion
+    # The PRIMA parameters (R[n], L[n]) are derived from eigenvalue expansion
     # of this equation and should match the analytical solution.
     # ============================================================
     print("\n" + "-"*70)
-    print("Skin Effect CLN Validation (1D Diffusion Equation)")
+    print("Skin Effect PRIMA Validation (1D Diffusion Equation)")
     print("-"*70)
-    print("  Theory: CLN I form is the continued fraction expansion of the")
+    print("  Theory: PRIMA I form is the continued fraction expansion of the")
     print("          1D diffusion equation for skin effect in a conducting slab.")
     print("          Z_analytical = s*mu*(2/(k*d))*tan(k*d/2)*d")
 
-    n_skin_stages = 7  # Number of CLN stages for skin effect
-    R_cln, L_cln = skin_effect_cln_params(segment_height, sigma, MU_0, n_skin_stages)
+    n_skin_stages = 7  # Number of PRIMA stages for skin effect
+    R_prima, L_prima = skin_effect_prima_params(segment_height, sigma, MU_0, n_skin_stages)
 
-    print(f"\n  CLN parameters ({n_skin_stages} stages) for h = {segment_height*1e3:.3f} mm:")
-    print(f"    R_cln (first 3): [{R_cln[0]:.2e}, {R_cln[1]:.4e}, {R_cln[2]:.4e}] Ohm*m^2")
-    print(f"    L_cln (first 3): [{L_cln[0]*1e9:.4f}, {L_cln[1]*1e9:.4f}, {L_cln[2]*1e9:.4f}] nH*m^2")
+    print(f"\n  PRIMA parameters ({n_skin_stages} stages) for h = {segment_height*1e3:.3f} mm:")
+    print(f"    R_prima (first 3): [{R_prima[0]:.2e}, {R_prima[1]:.4e}, {R_prima[2]:.4e}] Ohm*m^2")
+    print(f"    L_prima (first 3): [{L_prima[0]*1e9:.4f}, {L_prima[1]*1e9:.4f}, {L_prima[2]*1e9:.4f}] nH*m^2")
 
-    # Calculate CLN I impedance (per unit area)
-    Z_cln_i = calc_impedance_cln_i(R_cln, L_cln, freqs)
+    # Calculate PRIMA I impedance (per unit area)
+    Z_prima_i = calc_impedance_prima_i(R_prima, L_prima, freqs)
 
     # Calculate analytical skin effect impedance (1D diffusion equation)
     Z_diffusion_ana = calc_skin_effect_analytical(segment_height, sigma, MU_0, freqs)
 
-    # Compare CLN vs 1D diffusion analytical
-    err_cln_vs_diffusion = np.abs(Z_cln_i - Z_diffusion_ana) / np.abs(Z_diffusion_ana) * 100
+    # Compare PRIMA vs 1D diffusion analytical
+    err_prima_vs_diffusion = np.abs(Z_prima_i - Z_diffusion_ana) / np.abs(Z_diffusion_ana) * 100
 
-    print(f"\n  CLN vs 1D Diffusion Analytical:")
-    print(f"    Max error: {np.max(err_cln_vs_diffusion):.6f}%")
-    print(f"    (Excellent agreement confirms CLN = continued fraction of diffusion eq.)")
+    print(f"\n  PRIMA vs 1D Diffusion Analytical:")
+    print(f"    Max error: {np.max(err_prima_vs_diffusion):.6f}%")
+    print(f"    (Excellent agreement confirms PRIMA = continued fraction of diffusion eq.)")
 
     # ============================================================
     # Dowell Factor Comparison (different formulation)
@@ -776,14 +776,14 @@ def demo_peec_reduction():
 
     # Compare at high frequencies where both models converge
     print(f"\n  Comparison at selected frequencies (h/delta ratio shown):")
-    print(f"    {'Freq':>10} {'h/delta':>8} {'|Z_CLN|':>12} {'|Z_Dowell|':>12} {'|Z_Diff|':>12}")
+    print(f"    {'Freq':>10} {'h/delta':>8} {'|Z_PRIMA|':>12} {'|Z_Dowell|':>12} {'|Z_Diff|':>12}")
     print(f"    {'-'*58}")
     for f_check in [1e3, 10e3, 100e3, 1e6, 10e6]:
         idx = np.argmin(np.abs(freqs - f_check))
         delta = calc_skin_depth(f_check, sigma)
         h_delta = segment_height / delta
         freq_str = f"{f_check/1e3:.0f} kHz" if f_check < 1e6 else f"{f_check/1e6:.0f} MHz"
-        print(f"    {freq_str:>10} {h_delta:>8.2f} {np.abs(Z_cln_i[idx]):>12.4e} "
+        print(f"    {freq_str:>10} {h_delta:>8.2f} {np.abs(Z_prima_i[idx]):>12.4e} "
               f"{np.abs(Z_dowell_ana[idx]):>12.4e} {np.abs(Z_diffusion_ana[idx]):>12.4e}")
 
     # DC impedance check
@@ -802,28 +802,28 @@ def demo_peec_reduction():
     L_mat = L_dense          # Dense L matrix (with mutual inductance)
 
     print("\n" + "-"*70)
-    print(f"Model Order Reduction: PEEC ({n_full} seg) -> Reduced CLN I")
+    print(f"Model Order Reduction: PEEC ({n_full} seg) -> Reduced PRIMA I")
     print("Using Lanczos with K=R, N=L (dense mutual inductance)")
     print("-"*70)
 
     # Reduce to different orders using Lanczos truncation
     # Lanczos input: K=R_mat (diagonal), N=L_mat (dense)
-    # Lanczos output: R'=LL, L'=RR -> Reduced CLN I
+    # Lanczos output: R'=LL, L'=RR -> Reduced PRIMA I
     # Note: Lanczos has numerical stability limit (typically 5-7 stages safe)
     reduced_orders = [3, 5]  # Conservative: 5 stages max for safety
 
     results = {}
     for n_reduced in reduced_orders:
-        # Apply Lanczos with K=R, N=L to get reduced CLN I
+        # Apply Lanczos with K=R, N=L to get reduced PRIMA I
         result = lanczos(R_mat, L_mat, n_iter=n_reduced)
 
-        # Extract reduced CLN I parameters
+        # Extract reduced PRIMA I parameters
         # R' = LL (K transformed), L' = RR (N transformed)
         R_reduced_diag = np.diag(result.LL)  # Diagonal of R'
         L_reduced_diag = np.diag(result.RR)  # Diagonal of L'
 
-        # Compute reduced CLN I impedance
-        Z_reduced = compute_impedance_reduced_cln_i(result, freqs)
+        # Compute reduced PRIMA I impedance
+        Z_reduced = compute_impedance_reduced_prima_i(result, freqs)
 
         # Compute errors vs full PEEC model (reduction error)
         rel_error_reduction = np.abs(Z_reduced - Z_peec_full) / np.abs(Z_peec_full)
@@ -874,15 +874,15 @@ def demo_peec_reduction():
     ax1.legend(fontsize=7)
     ax1.grid(True, which='both', alpha=0.3)
 
-    # Plot 2: CLN vs 1D Diffusion error (this is the meaningful comparison)
+    # Plot 2: PRIMA vs 1D Diffusion error (this is the meaningful comparison)
     ax2 = axes[0, 1]
-    ax2.semilogx(freqs, err_cln_vs_diffusion, 'b-', linewidth=2, label='CLN vs 1D Diffusion')
+    ax2.semilogx(freqs, err_prima_vs_diffusion, 'b-', linewidth=2, label='PRIMA vs 1D Diffusion')
     ax2.set_xlabel('Frequency [Hz]')
     ax2.set_ylabel('Relative Error [%]')
-    ax2.set_title(f'CLN ({n_skin_stages} stages) vs 1D Diffusion Analytical')
+    ax2.set_title(f'PRIMA ({n_skin_stages} stages) vs 1D Diffusion Analytical')
     ax2.legend(fontsize=8, loc='upper left')
     ax2.grid(True, which='both', alpha=0.3)
-    ax2.set_ylim([0, max(0.01, np.max(err_cln_vs_diffusion) * 1.5)])
+    ax2.set_ylim([0, max(0.01, np.max(err_prima_vs_diffusion) * 1.5)])
     # Add second y-axis showing h/delta ratio
     deltas = calc_skin_depth(freqs, sigma)
     h_delta_ratio = segment_height / deltas
@@ -899,21 +899,21 @@ def demo_peec_reduction():
     ax3.set_title('Dense L Matrix [nH] (Mutual Inductance)')
     plt.colorbar(im, ax=ax3, label='L [nH]')
 
-    # Plot 4: Skin effect impedance (CLN vs Analytical per unit area)
+    # Plot 4: Skin effect impedance (PRIMA vs Analytical per unit area)
     ax4 = axes[1, 1]
-    ax4.loglog(freqs, np.abs(Z_cln_i), 'b-', linewidth=2, label=f'CLN I ({n_skin_stages} stages)')
+    ax4.loglog(freqs, np.abs(Z_prima_i), 'b-', linewidth=2, label=f'PRIMA I ({n_skin_stages} stages)')
     ax4.loglog(freqs, np.abs(Z_diffusion_ana), 'r--', linewidth=2, label='1D Diffusion (exact)')
     ax4.loglog(freqs, np.abs(Z_dowell_ana), 'g:', linewidth=2, label='Dowell (approx)')
     ax4.set_xlabel('Frequency [Hz]')
     ax4.set_ylabel('|Z| [Ohm*m^2]')
-    ax4.set_title('Skin Effect Impedance (per unit area): CLN vs Analytical')
+    ax4.set_title('Skin Effect Impedance (per unit area): PRIMA vs Analytical')
     ax4.legend(fontsize=8)
     ax4.grid(True, which='both', alpha=0.3)
 
     plt.tight_layout()
 
     # Save figure
-    output_path = os.path.join(os.path.dirname(__file__), 'demo_peec_cln_reduction.png')
+    output_path = os.path.join(os.path.dirname(__file__), 'demo_peec_prima_reduction.png')
     plt.savefig(output_path, dpi=150)
     print(f"\n\nSaved: {output_path}")
     plt.close()
@@ -965,7 +965,7 @@ def main():
     print("\nPEEC Model Order Reduction Demo")
     print("Using Lanczos-based Cauer Ladder Network Transform")
     print("\nThis demonstrates reducing a PEEC model with DENSE L matrix")
-    print("(mutual inductance) to smaller CLN I models while preserving")
+    print("(mutual inductance) to smaller PRIMA I models while preserving")
     print("port impedance Z(s).\n")
 
     results, Z_full, freqs = demo_peec_reduction()
@@ -975,8 +975,8 @@ def main():
     print("="*70)
     print("1. PEEC model has dense L matrix (mutual inductance between segments)")
     print("2. Lanczos with K=R (diagonal), N=L (dense) produces")
-    print("   reduced CLN I model with R' = LL, L' = RR")
-    print("3. Reduced CLN I impedance: Z(s) = (R' + s*L')^-1")
+    print("   reduced PRIMA I model with R' = LL, L' = RR")
+    print("3. Reduced PRIMA I impedance: Z(s) = (R' + s*L')^-1")
     print("4. Port impedance is preserved across frequency range")
     print("5. Typical results (20-segment PEEC with mutual inductance):")
     print("   - 20->3 stages: 85% DOF reduction, low error")

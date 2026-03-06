@@ -10,7 +10,7 @@ import sys
 # Add paths for the pybind11 module
 sys.path.insert(0, r'S:\Radia\01_GitHub\src\radia')
 
-# CLN library path (Python implementation for comparison)
+# PRIMA library path (Python implementation for comparison)
 sys.path.insert(0, r'W:\30_CauerLadderNetwork\2021_01_22_CauerI_to_CauerII\Python')
 
 
@@ -164,7 +164,7 @@ def test_compare_python():
         from peec_matrices import PEECBuilder as CppPEECBuilder
 
         # Import Python implementation
-        from cln.peec_matrices import (
+        from prima.peec_matrices import (
             create_simple_wire_segments,
             build_peec_matrices as py_build_peec_matrices
         )

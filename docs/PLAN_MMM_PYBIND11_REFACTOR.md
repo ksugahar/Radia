@@ -138,7 +138,7 @@ stats = hacapk_solver.get_stats()
 
 ### 5.1 PEEC連携
 - H行列をPEEC導体問題にも適用
-- CLN縮約との統合
+- PRIMA縮約との統合
 
 ### 5.2 Netgen OCC連携
 - 要素可視化機能

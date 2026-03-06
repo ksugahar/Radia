@@ -6,7 +6,7 @@ This script verifies that:
    non-symmetric formulation (useSymmetric=False)
 2. The magnetization solution is also identical after scaling recovery
 
-The symmetric formulation enables CLN (Cauer Ladder Network) model order
+The symmetric formulation enables PRIMA (Cauer Ladder Network) model order
 reduction while preserving the physical solution.
 
 Usage:
@@ -77,7 +77,7 @@ def test_symmetry_equivalence():
 
     # Test 2: Symmetric formulation
     print("\n" + "-"*70)
-    print("Solving with SYMMETRIC formulation (for CLN)...")
+    print("Solving with SYMMETRIC formulation (for PRIMA)...")
     print("-"*70)
 
     rad.UtiDelAll()
@@ -93,7 +93,7 @@ def test_symmetry_equivalence():
     rad.CplMagSetFrequency(solver_sym, freq)
     rad.CplMagSetVoltage(solver_sym, 1.0, 0.0)
     rad.CplMagSetMu(solver_sym, mu_r, 0)
-    rad.CplMagSetSymmetric(solver_sym, 1)  # Symmetric (for CLN)
+    rad.CplMagSetSymmetric(solver_sym, 1)  # Symmetric (for PRIMA)
 
     result_sym = rad.CplMagSolve(solver_sym)
     Z_sym = result_sym['Z']
@@ -220,7 +220,7 @@ def main():
     produces IDENTICAL results to the non-symmetric formulation.
 
     Symmetric formulation benefits:
-    - Enables CLN (Cauer Ladder Network) model order reduction
+    - Enables PRIMA (Cauer Ladder Network) model order reduction
     - Passivity guaranteed (important for SPICE export)
     - Physical interpretation as L-C ladder circuit
     """)
@@ -257,7 +257,7 @@ def main():
     if all_passed:
         print("  All tests PASSED!")
         print("  Symmetric and non-symmetric formulations give IDENTICAL results.")
-        print("  CLN model order reduction can be applied safely.")
+        print("  PRIMA model order reduction can be applied safely.")
     else:
         print("  Some tests FAILED. Please investigate.")
 

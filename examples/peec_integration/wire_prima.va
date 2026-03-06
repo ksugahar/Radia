@@ -1,0 +1,48 @@
+// PRIMA-reduced Verilog-A module
+// Wire: L=100mm, w=1.0mm, h=1.0mm
+// Original segments: 10, PRIMA stages: 5
+// WARNING: Verilog-A requires compatible simulator (Spectre, ADS, etc.)
+
+`include "disciplines.vams"
+
+module wire_prima(port_in, port_out);
+    inout port_in, port_out;
+    electrical port_in, port_out;
+
+    electrical n1;
+    electrical n2;
+    electrical n3;
+    electrical n4;
+
+    // Branch currents for inductors
+    branch (port_in_a, n1) br_L1;
+    branch (n1a, n2) br_L2;
+    branch (n2a, n3) br_L3;
+    branch (n3a, n4) br_L4;
+    branch (n4a, port_out) br_L5;
+
+    analog begin
+        // Stage 1: R=1.724138e-04, L=4.547747e-09
+        V(port_in, port_in_a) <+ I(port_in, port_in_a) * 1.724138e-04;
+        V(port_in_a, n1) <+ 4.547747e-09 * ddt(I(port_in_a, n1));
+        // Stage 2: R=1.724138e-04, L=9.002962e-09
+        V(n1, n1_a) <+ I(n1, n1_a) * 1.724138e-04;
+        V(n1_a, n2) <+ 9.002962e-09 * ddt(I(n1_a, n2));
+        // Stage 3: R=1.724138e-04, L=5.635834e-09
+        V(n2, n2_a) <+ I(n2, n2_a) * 1.724138e-04;
+        V(n2_a, n3) <+ 5.635834e-09 * ddt(I(n2_a, n3));
+        // Stage 4: R=1.724138e-04, L=4.804663e-09
+        V(n3, n3_a) <+ I(n3, n3_a) * 1.724138e-04;
+        V(n3_a, n4) <+ 4.804663e-09 * ddt(I(n3_a, n4));
+        // Stage 5: R=1.724138e-04, L=5.522550e-09
+        V(n4, n4_a) <+ I(n4, n4_a) * 1.724138e-04;
+        V(n4_a, port_out) <+ 5.522550e-09 * ddt(I(n4_a, port_out));
+
+        // Note: Mutual inductance requires state-space formulation
+        // for accurate Verilog-A implementation.
+        // K1_2 = 1.190113e-01 (M = 7.615161e-10)
+        // K2_3 = 1.807528e-01 (M = 1.287529e-09)
+        // K3_4 = 8.472436e-02 (M = 4.408784e-10)
+        // K4_5 = 1.081363e-01 (M = 5.570229e-10)
+    end
+endmodule
