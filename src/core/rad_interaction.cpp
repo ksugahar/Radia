@@ -26,7 +26,7 @@
 
 // MSC (Magnetic Surface Charge) support for 6 DOF hexahedra
 // radTPolyhedron hexahedra use 6 DOF MSC (surface charge on each face)
-#define RADIA_MSC_SUPPORT
+// MSC is always enabled (unconditional)
 
 // Note: Dipole-dipole method for tetrahedra was tested but found numerically unstable.
 // Radia production solver uses the surface charge (MSC) method.
@@ -662,27 +662,6 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 				InteractMatrix[StrNo][ColNo] = SubMatrix;
 			}
 		}
-
-		// SELF-INTERACTION NOTE for tetrahedral elements:
-		// For tetrahedral elements with correct coordinate transforms, B_comp() should
-		// compute correct self-demagnetization (~-1/3). If there are issues, they may
-		// be in the coordinate transformation chain, not the diagonal values.
-		// The following code has been disabled pending further investigation.
-		/*
-		const float N_self = -1.0f / 3.0f;
-		for(int diagNo = 0; diagNo < AmOfMainElem; diagNo++)
-		{
-			radTg3dRelax* g3dRelaxPtr = g3dRelaxPtrVect[diagNo];
-			radTPolyhedron* polyPtr = dynamic_cast<radTPolyhedron*>(g3dRelaxPtr);
-			if(polyPtr != nullptr && polyPtr->IsTetrahedron())
-			{
-				TMatrix3df& diag = InteractMatrix[diagNo][diagNo];
-				diag.Str0.x = N_self;
-				diag.Str1.y = N_self;
-				diag.Str2.z = N_self;
-			}
-		}
-		*/
 
 		//--New
 		for(int ClNo=0; ClNo<AmOfMainElem; ClNo++)
@@ -1415,7 +1394,6 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				block[(size_t)2 * m_totalDOF + 1] = SubMatrix.Str2.y;  // (2,1)
 				block[(size_t)2 * m_totalDOF + 2] = SubMatrix.Str2.z;  // (2,2)
 			}
-#ifdef RADIA_MSC_SUPPORT
 			else if(dof_row == 3 && dof_col >= 5)
 			{
 				// 3xN block: Field at tetrahedron (3 DOF) center from MSC element (5 or 6 DOF)
@@ -1596,7 +1574,6 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					}
 				}
 			}
-#endif // RADIA_MSC_SUPPORT
 			else
 			{
 				// Unknown DOF combination - zero out the block (ROW-MAJOR)

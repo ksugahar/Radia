@@ -35,6 +35,10 @@ from coil_model import create_racetrack_coil
 
 ELF_NONLINEAR = r"S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type\nonlinear_20000AT\ELF_MMB8T_EIEM2_1x1x1"
 
+if not os.path.isdir(ELF_NONLINEAR):
+    print(f"Skipping: ELF reference data not found at {ELF_NONLINEAR}")
+    sys.exit(0)
+
 scale = 0.001  # mm to m
 
 

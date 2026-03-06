@@ -7,14 +7,6 @@ import pickle
 import json
 import time
 
-# import matplotlib.pyplot as plt
-# import sys
-# sys.argv=["argv"]
-
-# sys.argv=["temp"]
-# font = {'size'   : 20}
-# matplotlib.rc('font', **font)
-
 linear=True
 # linear=False
 
@@ -23,15 +15,12 @@ Richardson = False
 FixedPoint = True
 # FixedPoint = False
 
-# Z_FP = (1+1j)*0.6e-3*CF(1) # Ohm
 Z_FP = (0.7+0.6j)*1.0e-3*CF(1) # Ohm
-# Z_FP = 0.9e-3 # Ohm
 
 err_rel = 1e-2
 N_it_nl_max = 100  # max. nonlin. iterations 
 
 muAir=4*pi*1e-7
-# muIron=muAir*1000
 muIron=1/420
 sigmaIron=2e6#*1e-6
 sigmaAir=1
@@ -88,26 +77,6 @@ if not linear:
 	ti = loaded["ti"]
 	Z_i = loaded["Z_i"]
 	
-	# plt.plot(H0_amp_i,[Z_i[i].real for i in range(len(Z_i))],"b")
-	# plt.plot(H0_amp_i,[Z_i[i].imag for i in range(len(Z_i))],"b--")
-	
-	# filename = "myZ.p"
-	# with open(filename, "r") as fp:
-		# mydata = json.load(fp)
-		
-		# H0_amp_i = mydata["Hvec"]
-		# Z_i_r = mydata["Zvecreal"]
-		# Z_i_i = mydata["Zvecimag"]
-		# Z_i = [Z_i_r[i] + 1j*Z_i_i[i] for i in range(len(Z_i_r))]
-		# P_eddy_i = mydata["Pvec"]
-		# Q_i = mydata["Qvec"]
-	
-	# plt.plot(H0_amp_i,[Z_i[i].real for i in range(len(Z_i))],"r")
-	# plt.plot(H0_amp_i,[Z_i[i].imag for i in range(len(Z_i))],"r--")
-	# plt.show()
-	# print(sfsff)
-	
-	
 	Z_i[0] = Z_i[1]
 	
 	Hvec = H0_amp_i + [1e6]
@@ -122,9 +91,6 @@ if not linear:
 	
 	Zreal = [Z_i[i].real for i in range(len(Z_i))]
 	Zimag = [Z_i[i].imag for i in range(len(Z_i))]
-	# Zreal = Zimag
-	# Zreal = [0.0005254077432022083 for i in range(len(Z_i))]
-	# Zimag = [0.00040473429476440637 for i in range(len(Z_i))]
 	Zrealcurve = BSpline (2, [0]+Hvec, Zreal)
 	Zimagcurve = BSpline (2, [0]+Hvec, Zimag)
 
@@ -158,7 +124,6 @@ with TaskManager():
 	b2 = 0.4
 	
 	SICube("SICube",farBND,a,b,c,delta)
-	# SICubeHole("SICube",farBND,a,b,c,delta,a2,b2)
 	mesh = Mesh("SICube.vol")
 	
 	Draw(CF([1,2]),mesh,'test')
@@ -173,8 +138,6 @@ with TaskManager():
 	BStemp += J0*BiotSavartCylinder(1,[0,0,-Z2],[0,0,-Z1],Ri,Ro,[pR,pZ],[wR,wZ],nPhi)
 	
 	BSorder = 2
-	# VBS = H1(mesh,order=BSorder)
-	# BS=GridFunction(VBS**3)
 	VBS = HCurl(mesh,order=BSorder)
 	BS = GridFunction(VBS)
 	
@@ -182,18 +145,10 @@ with TaskManager():
 	BS.Save("BSShieldingHole.sol")
 	BS.Load("BSShieldingHole.sol")
 	
-	
-	# Draw(BStemp,mesh,'BS')
-	
-	# print(sfsfsf)
-	
+
 	if not BiotSavart:
 		BS = 0*1000*CF((0,0,1))
-	
-	# BStemp = 1000*CF((0,0,1))
-	# BS.Set(BStemp)
 
-	
 	muvals={mat:muAir for mat in mesh.GetMaterials()}
 	muvals["iron"]=muIron
 	mu = CoefficientFunction([muvals[mat] for mat in mesh.GetMaterials()])
@@ -203,11 +158,7 @@ with TaskManager():
 	sigma = CoefficientFunction([sigmavals[mat] for mat in mesh.GetMaterials()])
 	
 	VSpace = H1(mesh, order=order, dirichlet="top|right|back|bottom", definedon = "air|hole", complex=True)
-	# VSpace = H1(mesh, order=order, dirichlet="top|bottom", definedon = "air|hole", complex=True)
-	# VSpace = H1(mesh, order=order, dirichlet="top|bottom", definedon = "air", complex=True)
 	print("ndof:",sum(VSpace.FreeDofs()))
-	
-	# print(sfsfsf)
 	
 	sol = GridFunction(VSpace)
 	sol.Set(dir*z,BND)
@@ -217,17 +168,11 @@ with TaskManager():
 	if not linear:
 		Z = Zrealcurve(H.Norm()) + 1j*Zimagcurve(H.Norm())
 	
-	# Ztop = Zrealcurve(CF((grad(sol)[0],grad(sol)[1],0)).Norm()) + 1j*Zrealcurve(CF((grad(sol)[0],grad(sol)[1],0)).Norm())
-	# Zright = Zrealcurve(CF((0,grad(sol)[1],grad(sol)[2])).Norm()) + 1j*Zrealcurve(CF((0,grad(sol)[1],grad(sol)[2])).Norm())
-	# Zback = Zrealcurve(CF((grad(sol)[0],0,grad(sol)[2])).Norm()) + 1j*Zrealcurve(CF((grad(sol)[0],0,grad(sol)[2])).Norm())
-	
-	
 	uPhi=VSpace.TrialFunction()
 	vPhi=VSpace.TestFunction()
 	
 	a = BilinearForm(VSpace, symmetric = True)
 	a += SymbolicBFI(1j*omega*mu*grad(uPhi)*grad(vPhi))
-	# a += SymbolicBFI(1e-6*(uPhi*vPhi+uT*vT))
 	
 	f = LinearForm(VSpace)
 	f += SymbolicLFI(1j*omega*mu*BS*grad(vPhi))
@@ -240,33 +185,7 @@ with TaskManager():
 		
 	else:
 		intrule = IntegrationRule(eltype,2*(order+2))
-		
-		# munonlinTop_real=MuNonLinBiro3D(grad(sol).Norm(),Hvec,Zvec_real,0,0,differential=False,field="H")
-		# munonlinTop_imag=MuNonLinBiro3D(grad(sol).Norm(),Hvec,Zvec_imag,0,0,differential=False,field="H")
-		# munonlinSide_real=MuNonLinBiro3D((-grad(sol)+BS).Norm(),Hvec,Zvec_real,0,0,differential=False,field="H")
-		# munonlinSide_imag=MuNonLinBiro3D((-grad(sol)+BS).Norm(),Hvec,Zvec_imag,0,0,differential=False,field="H")
-		
-		
-		# munonlinTop_real.SetUp(mesh,intrule)
-		# munonlinTop_real.SetActiveElements(mesh,["sTop"])
-		# munonlinTop_imag.SetUp(mesh,intrule)
-		# munonlinTop_imag.SetActiveElements(mesh,["sTop"])
-		# munonlinSide_real.SetUp(mesh,intrule)
-		# munonlinSide_real.SetActiveElements(mesh,["sRight","sBack","sLeft","sFront"])
-		# munonlinSide_imag.SetUp(mesh,intrule)
-		# munonlinSide_imag.SetActiveElements(mesh,["sRight","sBack","sLeft","sFront"])
-		
-		# ZTop = munonlinTop_real + 1j*munonlinTop_imag
-		# ZSide = munonlinSide_real +1j*munonlinSide_imag
-		
-		# a += SymbolicBFI(Zright*(uPhi.Trace().Deriv()[1]*vPhi.Trace().Deriv()[1]+uPhi.Trace().Deriv()[2]*vPhi.Trace().Deriv()[2]),definedon=mesh.Boundaries("sRight"))
-		# a += SymbolicBFI(Zback*(uPhi.Trace().Deriv()[0]*vPhi.Trace().Deriv()[0]+uPhi.Trace().Deriv()[2]*vPhi.Trace().Deriv()[2]),definedon=mesh.Boundaries("sBack"))
-		# a += SymbolicBFI(Ztop*(uPhi.Trace().Deriv()[0]*vPhi.Trace().Deriv()[0]+uPhi.Trace().Deriv()[1]*vPhi.Trace().Deriv()[1]),definedon=mesh.Boundaries("sTop"))
-		
-		# a += SymbolicBFI(ZTop*uPhi.Trace().Deriv()*vPhi.Trace().Deriv(),definedon=mesh.Boundaries("sTop")).SetIntegrationRule(eltype,intrule)
-		# a += SymbolicBFI(ZSide*uPhi.Trace().Deriv()*vPhi.Trace().Deriv(),definedon=mesh.Boundaries("sRight|sBack")).SetIntegrationRule(eltype,intrule)
-		# f += SymbolicLFI(ZSide*BS*vPhi.Trace().Deriv(),definedon=mesh.Boundaries("sRight|sBack")).SetIntegrationRule(eltype,intrule)
-	
+
 		if Richardson:
 			a += SymbolicBFI(Z*uPhi.Trace().Deriv()*vPhi.Trace().Deriv(),definedon=mesh.Boundaries("sRight|sBack|sTop|sLeft|sFront"))
 			f += SymbolicLFI(Z*BS*vPhi.Trace().Deriv(),definedon=mesh.Boundaries("sRight|sBack|sTop|sLeft|sFront"))
@@ -277,7 +196,6 @@ with TaskManager():
 		
 	
 	c = Preconditioner(a, type="direct")
-	# c = Preconditioner(a, type="bddc")
 	
 	testvals={mat:0 for mat in mesh.GetMaterials()}
 	testvals["iron"]=1
@@ -290,9 +208,6 @@ with TaskManager():
 		f.Assemble()
 		
 		solvers.BVP(bf=a, lf=f, gf=sol, pre=c, maxsteps=2, needsassembling=False)
-		# solvers.BVP(bf=a, lf=f, gf=sol, pre=c, maxsteps=1000, needsassembling=False)
-		
-		# muCF = mu
 
 	else:
 
@@ -313,8 +228,6 @@ with TaskManager():
 				
 				solvers.BVP(bf=a, lf=f, gf=sol, pre=c, maxsteps=2, needsassembling=False)
 				
-				# sol.vec.data = 0.5*(sol.vec+solold.vec)
-				
 				err = sum([abs(sol.vec[i]-solold.vec[i]) for i in range(len(sol.vec))])/sum([abs(sol.vec[i]) for i in range(len(sol.vec))])
 				if it == 1:
 					err0 = err
@@ -322,9 +235,6 @@ with TaskManager():
 				print("error/error0:",err/err0)
 				if 100*err/err0 < err_rel:
 					break
-					
-				# if it>1 and munonlinTop_real.HasConverged(1,0.1) and munonlinTop_imag.HasConverged(1,0.1) and munonlinSide_real.HasConverged(1,0.1) and munonlinSide_imag.HasConverged(1,0.1):
-					# break
 					
 				if it == N_it_nl_max:
 					print("too many iterations")
@@ -345,8 +255,6 @@ with TaskManager():
 				
 				solvers.BVP(bf=a, lf=f, gf=sol, pre=c, maxsteps=2, needsassembling=False)
 				
-				# sol.vec.data = 0.5*(sol.vec+solold.vec)
-				
 				err = sum([abs(sol.vec[i]-solold.vec[i]) for i in range(len(sol.vec))])/sum([abs(sol.vec[i]) for i in range(len(sol.vec))])
 				if it == 1:
 					err0 = err
@@ -355,19 +263,12 @@ with TaskManager():
 				if 100*err/err0 < err_rel:
 					break
 					
-				# if it>1 and munonlinTop_real.HasConverged(1,0.1) and munonlinTop_imag.HasConverged(1,0.1) and munonlinSide_real.HasConverged(1,0.1) and munonlinSide_imag.HasConverged(1,0.1):
-					# break
-					
 				if it == N_it_nl_max:
 					print("too many iterations")
 					break
 				
-		# muCF=test*munonlin.GetGlobalFunction() + (CoefficientFunction(1)-test)*muAir
-	
-	# sol.Save("sol_N7_O2_ref_z.sol")
 	B = mu*H
-	
-	# Draw(BS,mesh,'BS')
+
 	Draw(H*CF(1),mesh,'H')
 	Draw(B,mesh,'B')
 	Bred = -mu*grad(sol)
@@ -375,24 +276,10 @@ with TaskManager():
 	
 	print("Htest:",Integrate(H,mesh,BND,definedon=mesh.Boundaries("sTop")))
 	
-	# lossesActiveCoef = 0.5*1/sigma*J*Conj(J)
-	# lossesReactiveCoef = omega/2*muCF*H*Conj(H)
-	
-	# print("side")
-	# temp = Integrate(1,mesh,definedon=mesh.Boundaries("sRight|sBack"))
-	# print(Integrate(H/temp,mesh,definedon=mesh.Boundaries("sRight|sBack")))
-	# print("top")
-	# temp = Integrate(1,mesh,definedon=mesh.Boundaries("sTop"))
-	# print(Integrate(grad(sol)/temp,mesh,definedon=mesh.Boundaries("sTop")))
-	
-	# S1Ht=Integrate(0.5*Z*H.Norm()**2,mesh,definedon=mesh.Boundaries("sTop"))
 	Losses1=Integrate(Pcurve(H.Norm()**2),mesh,definedon=mesh.Boundaries("sTop"))
 	Losses2=Integrate(Pcurve(H.Norm()**2),mesh,definedon=mesh.Boundaries("sRight"))
 	Losses3=Integrate(Pcurve(H.Norm()**2),mesh,definedon=mesh.Boundaries("sBack"))
-	# Losses4=Integrate(Pcurve(H.Norm()**2),mesh,definedon=mesh.Boundaries("sLeft"))
-	# Losses5=Integrate(Pcurve(H.Norm()**2),mesh,definedon=mesh.Boundaries("sFront"))
 	print("Losses:")
-	# print("S1Ht:",S1Ht)
 	print("oben:",Losses1)
 	print("rechts:",Losses2)
 	print("hinten:",Losses3)
@@ -405,13 +292,8 @@ with TaskManager():
 	print("oben:",ReactivePower1)
 	print("rechts:",ReactivePower2)
 	print("hinten:",ReactivePower3)
-	ReactivePower=ReactivePower1+ReactivePower2+ReactivePower3 #+ReactivePower4+ReactivePower5
+	ReactivePower=ReactivePower1+ReactivePower2+ReactivePower3
 
-	# ReactivePower1=Integrate(Qcurve((-grad(sol)+BS).Norm()**2),mesh,definedon=mesh.Boundaries("sTop"))
-	# ReactivePower2=Integrate(Qcurve((-grad(sol)+BS).Norm()**2),mesh,definedon=mesh.Boundaries("sRight|sBack|sLeft|sFront"))
-	# ReactivePower=ReactivePower1+ReactivePower2
-	# losses=ReactivePower-1j*lossesActive
-	
 	print("")
 	print("Losses:",Losses)
 	print("Reactive power:",ReactivePower)

@@ -1,0 +1,7 @@
+{
+  "radia-lint": {
+    "command": "python",
+    "args": ["tools/mcp_radia_lint/server.py"],
+    "description": "Radia project code linter - checks Python scripts for API usage issues"
+  }
+}

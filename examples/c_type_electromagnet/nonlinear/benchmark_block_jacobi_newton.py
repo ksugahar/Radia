@@ -12,8 +12,8 @@ Usage: python -u benchmark_block_jacobi_newton.py [6|10|20|all]
 import sys, os, time
 import numpy as np
 
-work_dir = r"S:\Radia\01_GitHub\examples\electromagnet\nonlinear"
-repo_root = r"S:\Radia\01_GitHub"
+work_dir = os.path.dirname(os.path.abspath(__file__))
+repo_root = os.path.join(work_dir, '..', '..', '..')
 sys.path.insert(0, os.path.join(repo_root, 'src'))
 sys.path.insert(0, work_dir)
 

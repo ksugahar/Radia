@@ -13,6 +13,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
 
+# Set unit system to meters
+rad.FldUnits('m')
+mm = 1e-3  # 1 mm in meters
+
 
 def hex_vertices(cx, cy, cz, dx, dy, dz):
 	"""Generate hexahedron vertices from center and dimensions."""
@@ -72,7 +76,7 @@ results = []
 
 for nx, ny, nz in test_cases:
 	n_elem = nx * ny * nz
-	cube_size = 100.0
+	cube_size = 100.0 * mm
 
 	print(f"\nN = {nx}x{ny}x{nz} = {n_elem:4d} elements")
 	print("-" * 70)

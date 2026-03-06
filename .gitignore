@@ -4,17 +4,21 @@
 # Local Development Files (DO NOT COMMIT)
 # ============================================================================
 CLAUDE.md
-.claude/settings.local.json
+.claude/
 publish_to_pypi.cmd
 Publish_to_PyPI.ps1
 Build_PyPI_Package.ps1
 
+# Kelvin transformation reference documents (large PDFs, docx)
+examples/KelvinTransformation/docs/Supplement/Computational Electromagnetism/
+examples/KelvinTransformation/docs/Supplement/*.docx
+examples/KelvinTransformation/docs/digest/
+*.html
+
 # ============================================================================
 # Build Directories
 # ============================================================================
-build/
-build-msvc/
-build-intel/
+build*/
 dist/
 radia-*/
 *.egg-info/
@@ -38,6 +42,8 @@ radia-*/
 *.pdb
 *.iobj
 *.ipdb
+*.zip
+*.whl
 
 # ============================================================================
 # Python Cache
@@ -99,6 +105,11 @@ Makefile
 *.userosscache
 *.sln.docstates
 *.tlog
+*.ipch
+*.sdf
+*.bsc
+*.db-wal
+*.mat
 
 # ============================================================================
 # Build Logs
@@ -174,6 +185,11 @@ file_format_documents/
 !examples/**/radia_components.vtk
 !examples/**/*.pvsm
 
+# Keep example data CSV files
+!examples/Universal_Relaxation_Network/data/**/*.csv
+!examples/Universal_Relaxation_Network/results/*.csv
+!examples/peec_integration/data/*.csv
+
 # ============================================================================
 # IMPORTANT: PyPI Distribution Files - DO NOT IGNORE
 # ============================================================================
@@ -185,6 +201,9 @@ file_format_documents/
 # - COPYRIGHT.txt
 #
 # Note: Build_PyPI_Package.ps1 is now ignored (merged into Publish_to_PyPI.ps1)
+
+# MATLAB files (use Python matplotlib instead)
+*.m
 
 # Reference repositories (local only)
 参考/
@@ -208,8 +227,12 @@ dev/
 # NGSolve integration outputs
 *.ObjBckgCF/
 rad.ObjBckgCF/
-*.vtu
-*.vtk
+
+# Generated mesh/visualization files (keep only if near corresponding .py)
+*.vol
+*.npz
+*.msh
+!examples/**/gmsh_models/*.msh
 
 # Python development files (experimental implementations)
 src/python/*_fast.py

@@ -24,6 +24,7 @@ Author: Radia Development Team
 License: LGPL-2.1
 """
 
+import warnings
 import numpy as np
 from enum import Enum, auto
 from dataclasses import dataclass, field
@@ -160,7 +161,10 @@ class MultiPortResult(AnalysisResult):
             try:
                 S[i] = (Z - Z0 * I) @ np.linalg.inv(Z + Z0 * I)
             except np.linalg.LinAlgError:
-                pass
+                warnings.warn(
+                    f"Singular Z-matrix at f={self.frequencies[i]:.6g} Hz, "
+                    "S-parameters set to zero"
+                )
         return S
 
 

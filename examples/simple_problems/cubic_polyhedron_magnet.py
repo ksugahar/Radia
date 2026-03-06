@@ -21,14 +21,15 @@ import radia as rad
 
 # Clear all objects
 rad.UtiDelAll()
+rad.FldUnits('m')
 
 print("=" * 70)
 print("Case 3: Cubic Magnet using Polyhedron")
 print("=" * 70)
 
 # Define vertices of a cube (20mm x 20mm x 20mm centered at origin)
-# Coordinates in mm
-size = 10  # Half-size: 10mm -> 20mm cube
+# Coordinates in meters
+size = 0.01  # Half-size: 10mm = 0.01m -> 20mm cube
 p1 = [-size, -size, -size]  # Bottom front-left
 p2 = [size, -size, -size]   # Bottom front-right
 p3 = [size, size, -size]    # Bottom back-right
@@ -49,7 +50,7 @@ g1 = rad.ObjHexahedron(vertices, magnetization)
 
 print(f"\nCube magnet created:")
 print(f"  Object ID: {g1}")
-print(f"  Size: {2*size} x {2*size} x {2*size} mm")
+print(f"  Size: {2*size*1000:.0f} x {2*size*1000:.0f} x {2*size*1000:.0f} mm")
 print(f"  Magnetization: {magnetization} T")
 print(f"  Vertices: {len(vertices)}")
 
@@ -59,11 +60,11 @@ print("Magnetic Field Calculation")
 print("=" * 70)
 
 test_points = [
-	[0, 0, 0],      # Center of cube
-	[0, 0, 20],     # 20mm above cube
-	[0, 0, -20],    # 20mm below cube
-	[20, 0, 0],     # 20mm to the right
-	[0, 20, 0],     # 20mm to the back
+	[0, 0, 0],        # Center of cube
+	[0, 0, 0.020],    # 20mm above cube
+	[0, 0, -0.020],   # 20mm below cube
+	[0.020, 0, 0],    # 20mm to the right
+	[0, 0.020, 0],    # 20mm to the back
 ]
 
 print(f"\n{'Point (mm)':<20} {'Bx (mT)':<12} {'By (mT)':<12} {'Bz (mT)':<12} {'|B| (mT)':<12}")
@@ -76,7 +77,7 @@ for point in test_points:
 	Bz_mT = field[2] * 1000
 	B_mag = math.sqrt(Bx_mT**2 + By_mT**2 + Bz_mT**2)
 
-	point_str = f"({point[0]:5.1f}, {point[1]:5.1f}, {point[2]:5.1f})"
+	point_str = f"({point[0]*1000:5.1f}, {point[1]*1000:5.1f}, {point[2]*1000:5.1f})"
 	print(f"{point_str:<20} {Bx_mT:<12.3f} {By_mT:<12.3f} {Bz_mT:<12.3f} {B_mag:<12.3f}")
 
 # Additional test: Verify symmetry
@@ -85,10 +86,10 @@ print("Symmetry Verification (Bz component)")
 print("=" * 70)
 
 symmetric_points = [
-	([0, 0, 15], "Above center"),
-	([0, 0, -15], "Below center"),
-	([10, 0, 15], "Above right"),
-	([-10, 0, 15], "Above left"),
+	([0, 0, 0.015], "Above center"),
+	([0, 0, -0.015], "Below center"),
+	([0.010, 0, 0.015], "Above right"),
+	([-0.010, 0, 0.015], "Above left"),
 ]
 
 print(f"\n{'Location':<20} {'Point (mm)':<20} {'Bz (mT)':<12}")
@@ -97,7 +98,7 @@ print("-" * 55)
 for point, desc in symmetric_points:
 	field = rad.Fld(g1, 'b', point)
 	Bz_mT = field[2] * 1000
-	point_str = f"({point[0]:5.1f}, {point[1]:5.1f}, {point[2]:5.1f})"
+	point_str = f"({point[0]*1000:5.1f}, {point[1]*1000:5.1f}, {point[2]*1000:5.1f})"
 	print(f"{desc:<20} {point_str:<20} {Bz_mT:<12.3f}")
 
 print("\n" + "=" * 70)
@@ -112,9 +113,9 @@ try:
 	vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
 	# Cube is 20mm centered at origin, extend range to 40mm for far-field
-	x_range = [-40, 40]
-	y_range = [-40, 40]
-	z_range = [-40, 40]
+	x_range = [-0.040, 0.040]
+	y_range = [-0.040, 0.040]
+	z_range = [-0.040, 0.040]
 
 	rad.FldVTS(g1, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
 	print(f"\n[VTS] Exported: {vts_filename}")

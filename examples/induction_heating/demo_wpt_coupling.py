@@ -31,6 +31,8 @@ from radia import (
     compute_coupling_coefficient,
     analyze_coil_coupling,
 )
+import radia as rad
+rad.FldUnits('m')
 
 
 def demo_coupling_vs_distance():
