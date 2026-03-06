@@ -88,27 +88,15 @@ void radTIterativeRelaxMeth::MakeN_iter(int IterNum)
 	}
 
 	//radTSend Send;
-	TVector3d* OldMagnArray = NULL;
-	//try
-	//{
-		OldMagnArray = new TVector3d[IntrctPtr->AmOfMainElem];
-	//}
-	//catch (radTException* radExceptionPtr)
-	//{
-	//	Send.ErrorMessage(radExceptionPtr->what());	return;
-	//}
-	//catch (...)
-	//{
-	//	Send.ErrorMessage("Radia::Error999");	return;
-	//}
+	std::vector<TVector3d> vOldMagnArray(IntrctPtr->AmOfMainElem);
+	TVector3d* OldMagnArray = vOldMagnArray.data();
 
 	for(int k=0; k<IntrctPtr->AmOfMainElem; k++) OldMagnArray[k] = (IntrctPtr->g3dRelaxPtrVect[k])->Magn;
 	DefineNewMagnetizations();
-	for(int q=0; q<IntrctPtr->AmOfMainElem; q++) 
+	for(int q=0; q<IntrctPtr->AmOfMainElem; q++)
 		IntrctPtr->NewMagnArray[q] = (IntrctPtr->g3dRelaxPtrVect[q])->Magn;
 
 	ComputeRelaxStatusParam(IntrctPtr->NewMagnArray, OldMagnArray, IntrctPtr->NewFieldArray);
-	delete[] OldMagnArray;
 }
 
 //-------------------------------------------------------------------------
@@ -127,7 +115,7 @@ void radTSimpleRelaxation::DefineNewMagnetizations()
 	}
 
 	double One_mi_RelaxParam = 1.- RelaxParam;
-	radTg3dRelax* g3dRelaxPtr = NULL;
+	radTg3dRelax* g3dRelaxPtr = nullptr;
 	for(int StNo=0; StNo<LocAmOfMainElem; StNo++)
 	{
 		g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[StNo];
@@ -164,7 +152,7 @@ void radTRelaxationMethNo_2::DefineNewMagnetizations()
 
 	TVector3d E_Str0(1.,0.,0.), E_Str1(0.,1.,0.), E_Str2(0.,0.,1.), MagnFromMaterRel, InstantMr; // The later is not actually used here
 	TMatrix3d E(E_Str0, E_Str1, E_Str2), mi_Eta, E_pl_Eta, InvE_pl_Eta;
-	radTg3dRelax* g3dRelaxPtr = NULL;
+	radTg3dRelax* g3dRelaxPtr = nullptr;
 	double One_mi_RelaxParam = 1.- RelaxParam;
 	for(int StNo=0; StNo<LocAmOfMainElem; StNo++)
 	{
@@ -199,8 +187,8 @@ void radTRelaxationMethNo_3::DefineNewMagnetizations()
 	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
-	radTg3dRelax* g3dRelaxPtr = NULL;
-	radTMaterial* MaterPtr = NULL;
+	radTg3dRelax* g3dRelaxPtr = nullptr;
+	radTMaterial* MaterPtr = nullptr;
 
 	int LocAmOfMainElem = IntrctPtr->AmOfMainElem;
 	int AmOfMainElem_mi_One = LocAmOfMainElem - 1; // What for?
@@ -250,7 +238,7 @@ int radTRelaxationMethNo_3::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	}
 
 	IntrctPtr->RelaxStatusParam.MisfitM = -1.;
-	ComputeRelaxStatusParam(IntrctPtr->NewMagnArray, NULL, IntrctPtr->NewFieldArray);
+	ComputeRelaxStatusParam(IntrctPtr->NewMagnArray, nullptr, IntrctPtr->NewFieldArray);
 	IntrctPtr->RelaxStatusParam.MisfitM = InstMisfitM;
 
 	return IterCount-1;
@@ -263,70 +251,58 @@ radTRelaxationMethNo_a5::radTRelaxationMethNo_a5(radTInteraction* InInteractionP
 { 
 	IntrctPtr = InInteractionPtr; InstMisfitM = 1.E+23;
 
-	radTRelaxSubInterval* TmpSubIntervArray;
-	//try
-	//{
-		TmpSubIntervArray = new radTRelaxSubInterval[IntrctPtr->AmOfRelaxSubInterv];
+	std::vector<radTRelaxSubInterval> vTmpSubIntervArray(IntrctPtr->AmOfRelaxSubInterv);
+	radTRelaxSubInterval* TmpSubIntervArray = vTmpSubIntervArray.data();
 
-		int RelaxTogetherCount = 0;
-		int MaxSize = 0;
+	int RelaxTogetherCount = 0;
+	int MaxSize = 0;
 
-		for(int i=0; i<IntrctPtr->AmOfRelaxSubInterv; i++)
+	for(int i=0; i<IntrctPtr->AmOfRelaxSubInterv; i++)
+	{
+		radTRelaxSubInterval& LocSubInterv = IntrctPtr->RelaxSubIntervArray[i];
+		if(LocSubInterv.SubIntervalID == TRelaxSubIntervalID::RelaxTogether)
 		{
-			radTRelaxSubInterval& LocSubInterv = IntrctPtr->RelaxSubIntervArray[i];
-			if(LocSubInterv.SubIntervalID == RelaxTogether) 
-			{
-				TmpSubIntervArray[RelaxTogetherCount] = LocSubInterv;
-				RelaxTogetherCount++;
+			TmpSubIntervArray[RelaxTogetherCount] = LocSubInterv;
+			RelaxTogetherCount++;
 
-				int CurSize = LocSubInterv.FinNo - LocSubInterv.StartNo + 1;
-				if(CurSize>MaxSize) MaxSize = CurSize;
-			}
+			int CurSize = LocSubInterv.FinNo - LocSubInterv.StartNo + 1;
+			if(CurSize>MaxSize) MaxSize = CurSize;
 		}
-		AmOfRelaxTogether = RelaxTogetherCount;
+	}
+	AmOfRelaxTogether = RelaxTogetherCount;
 
-		SizeOfAuxs = 3*MaxSize;
+	SizeOfAuxs = 3*MaxSize;
 
-		MathMethPtr = new radTMathLinAlgEq(SizeOfAuxs);
+	MathMethPtr = new radTMathLinAlgEq(SizeOfAuxs);
 
-		if(AmOfRelaxTogether != 0)
+	if(AmOfRelaxTogether != 0)
+	{
+		vAuxMatr1Storage.resize(SizeOfAuxs);
+		vAuxMatr2Storage.resize(SizeOfAuxs);
+		vAuxMatr1.resize(SizeOfAuxs);
+		vAuxMatr2.resize(SizeOfAuxs);
+
+		vAuxArray.resize(SizeOfAuxs);
+		AuxArray = vAuxArray.data();
+
+		for(int m=0; m<SizeOfAuxs; m++)
 		{
-			AuxMatr1 = new double*[SizeOfAuxs];
-			AuxMatr2 = new double*[SizeOfAuxs];
-			
-			AuxArray = new double[SizeOfAuxs];
-
-			for(int m=0; m<SizeOfAuxs; m++)
-			{
-				AuxMatr1[m] = new double[SizeOfAuxs];
-				AuxMatr2[m] = new double[SizeOfAuxs];
-			}
+			vAuxMatr1Storage[m].resize(SizeOfAuxs);
+			vAuxMatr2Storage[m].resize(SizeOfAuxs);
+			vAuxMatr1[m] = vAuxMatr1Storage[m].data();
+			vAuxMatr2[m] = vAuxMatr2Storage[m].data();
 		}
-	//}
-	//catch (radTException* radExceptionPtr)
-	//{
-	//	Send.ErrorMessage(radExceptionPtr->what());	return;
-	//}
-	//catch (...)
-	//{
-	//	Send.ErrorMessage("Radia::Error999");	return;
-	//}
-
-	delete[] TmpSubIntervArray; 
+		AuxMatr1 = vAuxMatr1.data();
+		AuxMatr2 = vAuxMatr2.data();
+	}
+	// Automatic cleanup via RAII 
 }
 
 //-------------------------------------------------------------------------
 
 radTRelaxationMethNo_a5::~radTRelaxationMethNo_a5()
 {
-	for(int j=0; j<SizeOfAuxs; j++)
-	{
-		delete[] (AuxMatr1[j]);
-		delete[] (AuxMatr2[j]);
-	}
-	delete[] AuxMatr1;
-	delete[] AuxMatr2;
-	delete[] AuxArray;
+	// Automatic cleanup via RAII (std::vector)
 }
 
 //-------------------------------------------------------------------------
@@ -346,8 +322,8 @@ void radTRelaxationMethNo_a5::DefineNewMagnetizations()
 	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
-	radTg3dRelax* g3dRelaxPtr = NULL;
-	radTMaterial* MaterPtr = NULL;
+	radTg3dRelax* g3dRelaxPtr = nullptr;
+	radTMaterial* MaterPtr = nullptr;
 
 	double BufMisfitM=0.;
 
@@ -358,7 +334,7 @@ void radTRelaxationMethNo_a5::DefineNewMagnetizations()
 	{
 		radTRelaxSubInterval& CurrentSubInterv = IntrctPtr->RelaxSubIntervArray[IntrvNo];
 
-		if(CurrentSubInterv.SubIntervalID == RelaxTogether)
+		if(CurrentSubInterv.SubIntervalID == TRelaxSubIntervalID::RelaxTogether)
 		{
 			RelaxTogetherCount++;
 			for(StrNo = CurrentSubInterv.StartNo; StrNo <= CurrentSubInterv.FinNo; StrNo++)
@@ -444,7 +420,7 @@ void radTRelaxationMethNo_a5::DefineNewMagnetizations()
 			}
 		}
 		
-		if(CurrentSubInterv.SubIntervalID == RelaxApart)
+		if(CurrentSubInterv.SubIntervalID == TRelaxSubIntervalID::RelaxApart)
 		{
 			for(StrNo = CurrentSubInterv.StartNo; StrNo <= CurrentSubInterv.FinNo; StrNo++)
 			{
@@ -493,7 +469,7 @@ int radTRelaxationMethNo_a5::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber,
 	}
 
 	IntrctPtr->RelaxStatusParam.MisfitM = -1.;
-	ComputeRelaxStatusParam(IntrctPtr->NewMagnArray, NULL, IntrctPtr->NewFieldArray);
+	ComputeRelaxStatusParam(IntrctPtr->NewMagnArray, nullptr, IntrctPtr->NewFieldArray);
 	IntrctPtr->RelaxStatusParam.MisfitM = InstMisfitM;
 
 	return IterCount-1;
@@ -518,8 +494,8 @@ void radTRelaxationMethNo_4::DefineNewMagnetizations()
 	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
-	radTg3dRelax* g3dRelaxPtr = NULL;
-	radTMaterial* MaterPtr = NULL;
+	radTg3dRelax* g3dRelaxPtr = nullptr;
+	radTMaterial* MaterPtr = nullptr;
 
 	int LocAmOfMainElem = IntrctPtr->AmOfMainElem;
 
@@ -610,8 +586,8 @@ void radTRelaxationMethNo_4::DefineNewMagnetizations()
 	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
-	radTg3dRelax* g3dRelaxPtr = NULL;
-	radTMaterial* MaterPtr = NULL;
+	radTg3dRelax* g3dRelaxPtr = nullptr;
+	radTMaterial* MaterPtr = nullptr;
 
 	int LocAmOfMainElem = IntrctPtr->AmOfMainElem;
 
@@ -703,7 +679,7 @@ void radTRelaxationMethNo_4::DefineNewMagnetizations()
 	////	//		//int j = sprintf(ErrorStr, "mRelaxPar: %g ", mRelaxPar);
 	////	//		//j += sprintf(ErrorStr + j, "          NewInstMisfitMe2: %g   ", NewInstMisfitMe2);
 	////	//		//UINT DlgStyle = MB_OK | MB_ICONSTOP | MB_DEFBUTTON1 | MB_SYSTEMMODAL;
-	////	//		//int MesBoxInf = MessageBox(NULL, ErrorStr, ErrorMesTitle, DlgStyle); 
+	////	//		//int MesBoxInf = MessageBox(nullptr, ErrorStr, ErrorMesTitle, DlgStyle); 
 	////	//		////end test
 	////	//}
 	//}
@@ -827,7 +803,7 @@ int radTRelaxationMethNo_4::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	//}
 
 	IntrctPtr->RelaxStatusParam.MisfitM = -1.;
-	ComputeRelaxStatusParam(IntrctPtr->NewMagnArray, NULL, IntrctPtr->NewFieldArray);
+	ComputeRelaxStatusParam(IntrctPtr->NewMagnArray, nullptr, IntrctPtr->NewFieldArray);
 	
 	IntrctPtr->RelaxStatusParam.MisfitM = sqrt(InstMisfitMe2);
 
@@ -851,8 +827,8 @@ void radTRelaxationMethNo_4::CorrectMagnAndFieldArraysWithRelaxPar() //OC300504
 	TVector3d *tOldMagnAr = IntrctPtr->AuxOldMagnArray;
 	TVector3d *tOldFieldAr = IntrctPtr->AuxOldFieldArray;
 
-	radTg3dRelax* g3dRelaxPtr = NULL;
-	radTMaterial* MaterPtr = NULL;
+	radTg3dRelax* g3dRelaxPtr = nullptr;
+	radTMaterial* MaterPtr = nullptr;
 
 	for(int k=0; k<LocAmOfMainElem; k++)
 	{
@@ -881,8 +857,8 @@ void radTRelaxationMethNo_4::DefineNewMagnetizationsTest()
 	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
 	//TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
-	radTg3dRelax* g3dRelaxPtr = NULL;
-	radTMaterial* MaterPtr = NULL;
+	radTg3dRelax* g3dRelaxPtr = nullptr;
+	radTMaterial* MaterPtr = nullptr;
 
 	int LocAmOfMainElem = IntrctPtr->AmOfMainElem;
 
@@ -928,7 +904,7 @@ void radTRelaxationMethNo_4::DefineNewMagnetizationsTest()
 		//	//int j = sprintf(ErrorStr, "mRelaxPar: %g ", mRelaxPar);
 		//	//j += sprintf(ErrorStr + j, "          NewInstMisfitMe2: %g   ", NewInstMisfitMe2);
 		//	//UINT DlgStyle = MB_OK | MB_ICONSTOP | MB_DEFBUTTON1 | MB_SYSTEMMODAL;
-		//	//int MesBoxInf = MessageBox(NULL, ErrorStr, ErrorMesTitle, DlgStyle); 
+		//	//int MesBoxInf = MessageBox(nullptr, ErrorStr, ErrorMesTitle, DlgStyle); 
 		//	////end test
 		//}
 	}
@@ -1143,7 +1119,7 @@ int radTRelaxationMethNo_8::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	//}
 
 	IntrctPtr->RelaxStatusParam.MisfitM = -1.;
-	ComputeRelaxStatusParam(IntrctPtr->NewMagnArray, NULL, IntrctPtr->NewFieldArray);
+	ComputeRelaxStatusParam(IntrctPtr->NewMagnArray, nullptr, IntrctPtr->NewFieldArray);
 	
 	IntrctPtr->RelaxStatusParam.MisfitM = sqrt(InstMisfitMe2);
 
@@ -1167,8 +1143,8 @@ void radTRelaxationMethNo_8::DefineNewMagnetizations()
 	TVector3d* MagnAr = IntrctPtr->NewMagnArray;
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
-	radTg3dRelax* g3dRelaxPtr = NULL;
-	radTMaterial* MaterPtr = NULL;
+	radTg3dRelax* g3dRelaxPtr = nullptr;
+	radTMaterial* MaterPtr = nullptr;
 
 	int LocAmOfMainElem = IntrctPtr->AmOfMainElem;
 	double NormFact = 1./double(LocAmOfMainElem);
@@ -1227,7 +1203,8 @@ void radTRelaxationMethNo_6::SetupInteractionMatrices(const radThg& hg, const ra
 
 	radThg hEmpty;
 	mAmOfParts = (int)(GroupPtr->GroupMapOfHandlers.size());
-	IntrctPtr = new radTInteraction[mAmOfParts];
+	vIntrctPtr.resize(mAmOfParts);
+	IntrctPtr = vIntrctPtr.data();
 	radTInteraction *tIntrct = IntrctPtr;
 
 	int LocMapCount = 0;
@@ -1236,7 +1213,7 @@ void radTRelaxationMethNo_6::SetupInteractionMatrices(const radThg& hg, const ra
 		tIntrct->Setup((*iter).second, hEmpty, CompCrit, 0, 1, 1);
 		if(tIntrct->SomethingIsWrong)
 		{
-			delete[] IntrctPtr; IntrctPtr = NULL;
+			// RAII: automatic cleanup via vIntrctPtr
 			Send.ErrorMessage("Radia::Error116"); throw 0;
 		}
 
@@ -1341,14 +1318,14 @@ void radTRelaxationMethNo_7::SetupMainInteractionData(const radThg& hg, const ra
 	radTg3d* g3dPtr = radTCast::g3dCast(hg.rep); 
 	if(g3dPtr==0) { radTSend::ErrorMessage("Radia::Error003"); throw 0;}
 
-	mArrAuxQuasiExtField = NULL;
+	mArrAuxQuasiExtField = nullptr;
 
 	DeleteInterMatrData();
 	radThg hEmpty;
 	IntrctPtr = new radTInteraction(hg, hEmpty, CompCrit, 1, 1, 1);
 	if(IntrctPtr->SomethingIsWrong)
 	{
-		delete[] IntrctPtr; IntrctPtr = NULL;
+		delete[] IntrctPtr; IntrctPtr = nullptr;
 	}
 }
 
@@ -1356,17 +1333,20 @@ void radTRelaxationMethNo_7::SetupMainInteractionData(const radThg& hg, const ra
 
 int radTRelaxationMethNo_7::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, double* RelaxStatusParamArray)
 {
-	if(IntrctPtr == NULL) return 0;
+	if(IntrctPtr == nullptr) return 0;
 	int AmOfRelaxElem = IntrctPtr->OutAmOfRelaxObjs();
 	if(AmOfRelaxElem <= 0) return 0;
 
 	int AmOfSubMatr = 0;
-	int *TotArrSubMatrNos = new int[AmOfRelaxElem];
-	int *SubMatrLengths=NULL;
-	int AmOfInitIter = FillInSubMatrixArrays(PrecOnMagnetiz, TotArrSubMatrNos, SubMatrLengths, AmOfSubMatr);
-	if((TotArrSubMatrNos == NULL) || (SubMatrLengths == NULL) || (AmOfSubMatr <= 0)) return 0;
+	std::vector<int> vTotArrSubMatrNos(AmOfRelaxElem);
+	int *TotArrSubMatrNos = vTotArrSubMatrNos.data();
+	std::vector<int> vSubMatrLengths;
+	int *SubMatrLengths=nullptr;
+	int AmOfInitIter = FillInSubMatrixArrays(PrecOnMagnetiz, TotArrSubMatrNos, SubMatrLengths, AmOfSubMatr, vSubMatrLengths);
+	if((TotArrSubMatrNos == nullptr) || (SubMatrLengths == nullptr) || (AmOfSubMatr <= 0)) return 0;
 
-	mArrAuxQuasiExtField = new TVector3d[AmOfRelaxElem];
+	vArrAuxQuasiExtField.resize(AmOfRelaxElem);
+	mArrAuxQuasiExtField = vArrAuxQuasiExtField.data();
 
 	CalcQuasiExtFieldForAll(TotArrSubMatrNos, SubMatrLengths, AmOfSubMatr);
 
@@ -1406,11 +1386,11 @@ int radTRelaxationMethNo_7::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 	}
 	catch(int ErrNo)
 	{
-		DeleteArrays_AutoRelax(TotArrSubMatrNos, SubMatrLengths);
+		// RAII: automatic cleanup via vTotArrSubMatrNos and vSubMatrLengths
 		throw ErrNo;
 	}
 
-	DeleteArrays_AutoRelax(TotArrSubMatrNos, SubMatrLengths);
+	// RAII: automatic cleanup via vTotArrSubMatrNos and vSubMatrLengths
 	return IterCount;
 }
 
@@ -1418,7 +1398,7 @@ int radTRelaxationMethNo_7::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 
 void radTRelaxationMethNo_7::CalcQuasiExtFieldForAll(int* TotArrSubMatrNos, int* SubMatrLengths, int AmOfSubMatr)
 {
-	if((TotArrSubMatrNos == NULL) || (SubMatrLengths == NULL) || (AmOfSubMatr == 0) || (mArrAuxQuasiExtField == NULL)) return;
+	if((TotArrSubMatrNos == nullptr) || (SubMatrLengths == nullptr) || (AmOfSubMatr == 0) || (mArrAuxQuasiExtField == nullptr)) return;
 
 	int *tTotArrSubMatrNos = TotArrSubMatrNos;
 	int *tSubMatrLengths = SubMatrLengths;
@@ -1502,8 +1482,8 @@ int radTRelaxationMethNo_7::RelaxCurrentSubMatrix(int* pTotArrSubMatrNos, int Su
 	TVector3d* ExternFieldAr = IntrctPtr->ExternFieldArray;
 	TVector3d* NewFieldAr = IntrctPtr->NewFieldArray;
 
-	radTg3dRelax* g3dRelaxPtr = NULL;
-	radTMaterial* MaterPtr = NULL;
+	radTg3dRelax* g3dRelaxPtr = nullptr;
+	radTMaterial* MaterPtr = nullptr;
 	TVector3d Mnew_mi_MoldVect, QuasiExtFieldAtElemStrNo;
 
 	double NormFact = 1./double(SubMatrSize);
@@ -1554,9 +1534,9 @@ int radTRelaxationMethNo_7::RelaxCurrentSubMatrix(int* pTotArrSubMatrNos, int Su
 
 //-------------------------------------------------------------------------
 
-int radTRelaxationMethNo_7::FillInSubMatrixArrays(double PrecOnMagnetiz, int*& TotArrSubMatrNos, int*& SubMatrLengths, int& AmOfSubMatr)
+int radTRelaxationMethNo_7::FillInSubMatrixArrays(double PrecOnMagnetiz, int*& TotArrSubMatrNos, int*& SubMatrLengths, int& AmOfSubMatr, std::vector<int>& vSubMatrLengths)
 {
-	if(IntrctPtr == NULL) return 0;
+	if(IntrctPtr == nullptr) return 0;
 	int AmOfRelaxElem = IntrctPtr->OutAmOfRelaxObjs();
 	if(AmOfRelaxElem <= 0) return 0;
 
@@ -1567,14 +1547,15 @@ int radTRelaxationMethNo_7::FillInSubMatrixArrays(double PrecOnMagnetiz, int*& T
 	int ActualIterNum = RelaxMethNo_4.AutoRelax(PrecOnMagnetiz, AmOfInitIter);
 	if(ActualIterNum < AmOfInitIter) return ActualIterNum;
 
-	radTlAuxIndNorm *ArrAuxIndNorm = new radTlAuxIndNorm[AmOfRelaxElem];
+	std::vector<radTlAuxIndNorm> vArrAuxIndNorm(AmOfRelaxElem);
+	radTlAuxIndNorm *ArrAuxIndNorm = vArrAuxIndNorm.data();
 	radTlAuxIndNorm *tAuxIndNorm = ArrAuxIndNorm;
 
-	//radTg3dRelax *g3dRelaxPtr = NULL;
+	//radTg3dRelax *g3dRelaxPtr = nullptr;
 	TMatrix3df** IntrcMat = IntrctPtr->InteractMatrix; //OC250504
 	//TMatrix3d** IntrcMat = IntrctPtr->InteractMatrix; //OC250504
-	TMatrix3df *MatrArrayPtr = NULL; //OC250504
-	//TMatrix3d *MatrArrayPtr = NULL; //OC250504
+	TMatrix3df *MatrArrayPtr = nullptr; //OC250504
+	//TMatrix3d *MatrArrayPtr = nullptr; //OC250504
 
 	TVector3d ContribH;
 	for(int StrNo=0; StrNo<AmOfRelaxElem; StrNo++)
@@ -1613,7 +1594,8 @@ int radTRelaxationMethNo_7::FillInSubMatrixArrays(double PrecOnMagnetiz, int*& T
 	AmOfSubMatr = (int)(AmOfRelaxElem/ApproxAmOfElemInSubMatr);
 	if(AmOfSubMatr <= 0) AmOfSubMatr = 1;
 
-	radTvInt* ArrVectSubMatrNos = new radTvInt[AmOfSubMatr];
+	std::vector<radTvInt> vArrVectSubMatrNos(AmOfSubMatr);
+	radTvInt* ArrVectSubMatrNos = vArrVectSubMatrNos.data();
 
 	radTlAuxIndNorm::iterator it1, it2;
 	tAuxIndNorm = ArrAuxIndNorm;
@@ -1667,25 +1649,12 @@ int radTRelaxationMethNo_7::FillInSubMatrixArrays(double PrecOnMagnetiz, int*& T
 		tAuxIndNorm++;
 	}
 
-	SubMatrLengths = new int[AmOfSubMatr];
+	vSubMatrLengths.resize(AmOfSubMatr);
+	SubMatrLengths = vSubMatrLengths.data();
 	CopyVectSubMatrDataToArrays(ArrVectSubMatrNos, AmOfSubMatr, TotArrSubMatrNos, SubMatrLengths);
 
-	if(ArrAuxIndNorm != NULL)
-	{
-		for(int k=0; k<AmOfRelaxElem; k++) ArrAuxIndNorm[k].erase(ArrAuxIndNorm[k].begin(), ArrAuxIndNorm[k].end());
-		delete[] ArrAuxIndNorm; ArrAuxIndNorm = NULL;
-	}
-	if((ArrVectSubMatrNos != NULL) && (AmOfSubMatr > 0))
-	{
-		radTvInt *tArrVectSubMatrNos = ArrVectSubMatrNos;
-		for(int i=0; i<AmOfSubMatr; i++) 
-		{
-			tArrVectSubMatrNos->erase(tArrVectSubMatrNos->begin(), tArrVectSubMatrNos->end());
-			tArrVectSubMatrNos++;
-		}
-		delete[] ArrVectSubMatrNos;
-		ArrVectSubMatrNos = NULL;
-	}
+	// RAII: automatic cleanup via vArrAuxIndNorm and vArrVectSubMatrNos
+	// Lists are automatically cleaned up when vectors go out of scope
 	return ActualIterNum;
 }
 

@@ -125,8 +125,8 @@ inline void radTRectangle::FunForInnerIntAtSurfInt(double Arg, TVector3d* VectAr
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-enum TBoundOrLine { Bound, ParLine };
-enum TLinesIntrsctCase { PointWithinBound, PointOnBoundEdge, PointOutsideBound, LineIsIntrsct, Zero };
+enum class TBoundOrLine { Bound, ParLine };
+enum class TLinesIntrsctCase { PointWithinBound, PointOnBoundEdge, PointOutsideBound, LineIsIntrsct, Zero };
 
 //-------------------------------------------------------------------------
 
@@ -211,14 +211,14 @@ public:
 
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
-typedef vector<radTPolyg2dIntrsctInfo> radTPolyg2dIntrsctInfoVect;
-typedef vector<TVector2d> radTVect2dVect;
-typedef vector<int> radTVectInt;
+#ifdef __GNUC__
+using radTPolyg2dIntrsctInfoVect = vector<radTPolyg2dIntrsctInfo>;
+using radTVect2dVect = vector<TVector2d>;
+using radTVectInt = vector<int>;
 #else
-typedef vector<radTPolyg2dIntrsctInfo, allocator<radTPolyg2dIntrsctInfo> > radTPolyg2dIntrsctInfoVect;
-typedef vector<TVector2d, allocator<TVector2d> > radTVect2dVect;
-typedef vector<int, allocator<int> > radTVectInt;
+using radTPolyg2dIntrsctInfoVect = vector<radTPolyg2dIntrsctInfo, allocator<radTPolyg2dIntrsctInfo> >;
+using radTVect2dVect = vector<TVector2d, allocator<TVector2d> >;
+using radTVectInt = vector<int, allocator<int> >;
 #endif
 
 #ifdef __MWERKS__
@@ -236,7 +236,7 @@ struct iterator_traits <TVector2d*> {
 
 //-------------------------------------------------------------------------
 
-enum TSpecCaseID { ZeroVxVy, ZeroVxVz, ZeroVyVz, NoSpecCase };
+enum class TSpecCaseID { ZeroVxVy, ZeroVxVz, ZeroVyVz, NoSpecCase };
 
 //-------------------------------------------------------------------------
 

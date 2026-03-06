@@ -392,11 +392,11 @@ void radTPolygon::B_intComp(radTField* FieldPtr)
 	short InitVzIsZero = (Abs(V.z) <= ZeroToler);
 
 // This is the attempt to avoid "divide by zero" problem
-	TSpecCaseID SpecCaseID = NoSpecCase;
-	if(InitVxIsZero && InitVyIsZero) SpecCaseID = ZeroVxVy;
-	else if(InitVxIsZero && InitVzIsZero) SpecCaseID = ZeroVxVz;
-	else if(InitVyIsZero && InitVzIsZero) SpecCaseID = ZeroVyVz;
-	if(SpecCaseID==ZeroVxVy || SpecCaseID==ZeroVxVz || SpecCaseID==ZeroVyVz) { B_intCompSpecCases(FieldPtr, SpecCaseID); return;}
+	TSpecCaseID SpecCaseID = TSpecCaseID::NoSpecCase;
+	if(InitVxIsZero && InitVyIsZero) SpecCaseID = TSpecCaseID::ZeroVxVy;
+	else if(InitVxIsZero && InitVzIsZero) SpecCaseID = TSpecCaseID::ZeroVxVz;
+	else if(InitVyIsZero && InitVzIsZero) SpecCaseID = TSpecCaseID::ZeroVyVz;
+	if(SpecCaseID==TSpecCaseID::ZeroVxVy || SpecCaseID==TSpecCaseID::ZeroVxVz || SpecCaseID==TSpecCaseID::ZeroVyVz) { B_intCompSpecCases(FieldPtr, SpecCaseID); return;}
 
 	double AbsRandX = radCR.AbsRandMagnitude(CentrPoint.x);
 	double AbsRandY = radCR.AbsRandMagnitude(CentrPoint.y);
@@ -588,7 +588,7 @@ void radTPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID& Spe
 
 		if(abs_x2mx1*Max_k > abs_y2my1)
 		{
-			if(SpecCaseID==ZeroVxVy)
+			if(SpecCaseID==TSpecCaseID::ZeroVxVy)
 			{
 				double k = y2my1/x2mx1, b = y1 - k*x1;
 				double ke2 = k*k, bk = b*k;
@@ -608,7 +608,7 @@ void radTPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID& Spe
 				Sx += -2.*((x2*AtanX2 - x1*AtanX1) - bkdke2p1*SumAtans1) - bdke2p1*SumLogs1;
 				Sy += -2.*bdke2p1*SumAtans1 - ((bkdke2p1+x2)*Log2 - (bkdke2p1+x1)*Log1);
 			}
-			else if(SpecCaseID==ZeroVxVz)
+			else if(SpecCaseID==TSpecCaseID::ZeroVxVz)
 			{
 				double k = y2my1/x2mx1, b = y1 - k*x1;
 				double kz = k*z;
@@ -622,7 +622,7 @@ void radTPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID& Spe
 		}
 		if(abs_y2my1*Max_k > abs_x2mx1)
 		{
-			if(SpecCaseID==ZeroVyVz)
+			if(SpecCaseID==TSpecCaseID::ZeroVyVz)
 			{
 				double k1 = x2mx1/y2my1, b1 = x1 - k1*y1;
 				double k1z = k1*z;

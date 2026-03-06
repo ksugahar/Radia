@@ -466,7 +466,7 @@ int radTApplication::SetExtrudedPolygon(double* FirstPoi, long lenFirstPoi, doub
 		radTExtrPolygon* ExtrPgnPtr = new radTExtrPolygon(FirstPoiVect, AxOrnt, Lx, ArrayOfPoints2d, int(lenArrayOfPoints2d), MagnVect);
 		if(ExtrPgnPtr == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 
-		if(((radTPolygon*)(ExtrPgnPtr->BasePolygonHandle.rep))->SomethingIsWrong)
+		if(static_cast<radTPolygon*>(ExtrPgnPtr->BasePolygonHandle.rep)->SomethingIsWrong)
 		{
 			SendingIsRequired = PrevSendingIsRequired;
 			delete ExtrPgnPtr; return 0;
@@ -949,7 +949,8 @@ int radTApplication::SetArcMag(double* CPoi, long lenCPoi, double* Radii, long l
 		ArrayOfPoints2d->x = x11; ArrayOfPoints2d->y = y11;
 		ArrayOfPoints2d[1].x = x12; ArrayOfPoints2d[1].y = y12;
 
-		int* ArrayOfKeys = new int[NumberOfSegm];
+		std::vector<int> vArrayOfKeys(NumberOfSegm);
+		int* ArrayOfKeys = vArrayOfKeys.data();
 
 		short PrevSendingIsRequired = SendingIsRequired; //OC301207
 		SendingIsRequired = 0;
@@ -987,9 +988,9 @@ int radTApplication::SetArcMag(double* CPoi, long lenCPoi, double* Radii, long l
 			SendingIsRequired = 0;
 			ArrayOfKeys[i] = SetExtrudedPolygon(FirstPoi, 3, h, ArrayOfPoints2d, 4, Magn, lenMagn, "x");
 			SendingIsRequired = PrevSendingIsRequired;
-			if(ArrayOfKeys[i] <= 0) 
-			{ 
-				if(ArrayOfKeys != 0) { delete[] ArrayOfKeys; ArrayOfKeys = 0;}
+			if(ArrayOfKeys[i] <= 0)
+			{
+				// RAII: vArrayOfKeys cleaned up automatically
 				Send.Int(0); return 0;
 			}
 
@@ -1009,7 +1010,7 @@ int radTApplication::SetArcMag(double* CPoi, long lenCPoi, double* Radii, long l
 		if(IndTr != 0) GrpInd = ApplySymmetry(GrpInd, IndTr, 1);
 		SendingIsRequired = PrevSendingIsRequired;
 
-		if(ArrayOfKeys != 0) { delete[] ArrayOfKeys; ArrayOfKeys = 0;}
+		// RAII: vArrayOfKeys cleaned up automatically
 
 		if(SendingIsRequired) Send.Int(GrpInd); 
 		return GrpInd;
@@ -1103,12 +1104,14 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 		else RadVect2 = AzAxVect0;
 
 		int AmOfVertexPoints = 2*lenArrayOfPoints2d;
-		VertexPointsArr = new TVector3d[AmOfVertexPoints];
+		std::vector<TVector3d> vVertexPointsArr(AmOfVertexPoints);
+		VertexPointsArr = vVertexPointsArr.data();
 
 		bool RadiusOverlaps = false;
 		bool RadiusIsZeroAtOnePoint = false, RadiusIsZeroAtTwoPoints = false;
 
-		arIndBase2 = new int[lenArrayOfPoints2d];
+		std::vector<int> vArIndBase2(lenArrayOfPoints2d);
+		arIndBase2 = vArIndBase2.data();
 
 		TVector2d *tPoints2d = ArrayOfPoints2d;
 		TVector3d *tVertexPoints = VertexPointsArr, *tVertexPoints2 = VertexPointsArr + lenArrayOfPoints2d;
@@ -1155,13 +1158,19 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 		AmOfFacesOrig = AmOfFaces;
 		if(RadiusIsZeroAtTwoPoints) AmOfFaces--;
 
-		//ArrayOfFaces = new int*[AmOfFaces];
-		ArrayOfFaces = new int*[AmOfFacesOrig];
-		ArrayOfFaces[0] = new int[lenArrayOfPoints2d];
-		ArrayOfFaces[1] = new int[lenArrayOfPoints2d];
+		// RAII: Use std::vector for all allocations
+		std::vector<int*> vArrayOfFaces(AmOfFacesOrig);
+		std::vector<int> vArrayOfNumOfPoInFaces(AmOfFacesOrig);
+		std::vector<std::vector<int>> vFaceStorage(AmOfFacesOrig);
 
-		//ArrayOfNumOfPoInFaces = new int[AmOfFaces];
-		ArrayOfNumOfPoInFaces = new int[AmOfFacesOrig];
+		ArrayOfFaces = vArrayOfFaces.data();
+		ArrayOfNumOfPoInFaces = vArrayOfNumOfPoInFaces.data();
+
+		// Allocate base faces
+		vFaceStorage[0].resize(lenArrayOfPoints2d);
+		vFaceStorage[1].resize(lenArrayOfPoints2d);
+		ArrayOfFaces[0] = vFaceStorage[0].data();
+		ArrayOfFaces[1] = vFaceStorage[1].data();
 		ArrayOfNumOfPoInFaces[0] = lenArrayOfPoints2d;
 		ArrayOfNumOfPoInFaces[1] = lenArrayOfPoints2d;
 
@@ -1174,7 +1183,9 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 		int lenArrayOfPoints2d_mi_1 = lenArrayOfPoints2d - 1;
 		for(int j=0; j<lenArrayOfPoints2d; j++)
 		{
-			*tFaces = new int[4];
+			int faceIdx = 2 + j;
+			vFaceStorage[faceIdx].resize(4);
+			*tFaces = vFaceStorage[faceIdx].data();
 			tMantlePoints = *tFaces;
 			*tNumOfPoInFaces = 4;
 
@@ -1339,42 +1350,14 @@ int radTApplication::SetArcPolygon(double* p2d, const char* OrientStr, TVector2d
 		}
 		SendingIsRequired = PrevSendingIsRequired;
 
-		if(VertexPointsArr != 0) delete[] VertexPointsArr;
-		if((ArrayOfFaces != 0) && (AmOfFaces > 0)) 
-		{
-			int** tFaces = ArrayOfFaces;
-			//for(int i=0; i<AmOfFaces; i++)
-			for(int i=0; i<AmOfFacesOrig; i++)
-			{
-				if(*tFaces != 0) 
-				{ 
-					delete[] (*tFaces); *tFaces = 0;
-				}
-				tFaces++;
-			}
-			delete[] ArrayOfFaces;
-		}
-		if(ArrayOfNumOfPoInFaces != 0) delete[] ArrayOfNumOfPoInFaces;
-		if(arIndBase2 != 0) delete[] arIndBase2;
+		// RAII: vVertexPointsArr, vFaceStorage, vArrayOfFaces, vArrayOfNumOfPoInFaces, vArIndBase2 cleaned up automatically
 
-		if(SendingIsRequired) Send.Int(IndPolyhedr); 
+		if(SendingIsRequired) Send.Int(IndPolyhedr);
 		return IndPolyhedr;
 	}
 	catch(...)
 	{
-		if(VertexPointsArr != 0) delete[] VertexPointsArr;
-		if((ArrayOfFaces != 0) && (AmOfFaces > 0)) 
-		{
-			int** tFaces = ArrayOfFaces;
-			for(int i=0; i<AmOfFaces; i++)
-			{
-				if(*tFaces != 0) { delete[] (*tFaces); *tFaces = 0;}
-				tFaces++;
-			}
-			delete[] ArrayOfFaces;
-		}
-		if(ArrayOfNumOfPoInFaces != 0) delete[] ArrayOfNumOfPoInFaces;
-		if(arIndBase2 != 0) delete[] arIndBase2;
+		// RAII: All vectors cleaned up automatically on exception
 
 		Initialize(); return 0;
 	}
@@ -1451,7 +1434,8 @@ int radTApplication::SetCylMag(double* CPoi, long lenCPoi, double r, double h, i
 		const double TwoPi = 2.*Pi;
 		double AngSegm = TwoPi/NumberOfSegm;
 
-		TVector2d* ArrayOfPoints2d = new TVector2d[NumberOfSegm];
+		std::vector<TVector2d> vArrayOfPoints2d(NumberOfSegm);
+		TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
 		TVector2d *tPoint2D = ArrayOfPoints2d;
 		double CurAng = 0.;
 
@@ -1468,7 +1452,7 @@ int radTApplication::SetCylMag(double* CPoi, long lenCPoi, double r, double h, i
 		int CylInd = SetExtrudedPolygon(FirstPoi, 3, h, ArrayOfPoints2d, NumberOfSegm, Magn, lenMagn, Orient);
 		SendingIsRequired = PrevSendingIsRequired;
 
-		if(ArrayOfPoints2d != 0) { delete[] ArrayOfPoints2d; ArrayOfPoints2d = 0;}
+		// RAII: vArrayOfPoints2d cleaned up automatically
 
 		if(SendingIsRequired) Send.Int(CylInd);
 		return CylInd;
@@ -1852,9 +1836,9 @@ int radTApplication::OutGroupSubObjectKeys(int ElemKey)
 		if(GroupPtr==0) { if(SendingIsRequired) Send.IntList(&ElemKey, 1); return ElemKey;}
 		else
 		{
-			int* GroupSubObjArray = NULL;
 			int lenGroupSubObjArray = (int)(GroupPtr->GroupMapOfHandlers.size());
-			GroupSubObjArray = new int[lenGroupSubObjArray];
+			std::vector<int> vGroupSubObjArray(lenGroupSubObjArray);
+			int* GroupSubObjArray = vGroupSubObjArray.data();
 
 			int* ArrayTravers = GroupSubObjArray;
 			for(radTmhg::const_iterator iter = GroupPtr->GroupMapOfHandlers.begin();
@@ -1862,7 +1846,7 @@ int radTApplication::OutGroupSubObjectKeys(int ElemKey)
 				*(ArrayTravers++) = (*iter).first;
 
 			if(SendingIsRequired) Send.IntList(GroupSubObjArray, lenGroupSubObjArray);
-			delete[] GroupSubObjArray;
+			// RAII: vGroupSubObjArray cleaned up automatically
 			return ElemKey;
 		}
 	}
@@ -1989,8 +1973,8 @@ int radTApplication::SetFlmCur(double I, TVector3d* ArrayOfPoints, int lenArrayO
 		else
 		{
 			int AmOfFlmLinCur = lenArrayOfPoints-1;
-			int* ArrayOfFlmLinCur = NULL;
-			ArrayOfFlmLinCur = new int[AmOfFlmLinCur];
+			std::vector<int> vArrayOfFlmLinCur(AmOfFlmLinCur);
+			int* ArrayOfFlmLinCur = vArrayOfFlmLinCur.data();
 			for(int i=0; i<AmOfFlmLinCur; i++)
 			{
 				radThg hg(new radTFlmLinCur(ArrayOfPoints[i], ArrayOfPoints[i+1], I));
@@ -2055,7 +2039,7 @@ void radTApplication::ComputeMagnOrJ_InCenter(int ElemKey, char MorJ)
 		radThg hgDplWithoutSym;
 		char PutNewStuffIntoGenCont = 0;
 		if(!g3dPtr->CreateFromSym(hgDplWithoutSym, this, PutNewStuffIntoGenCont)) return;
-		radTg3d* g3dDplWithoutSymPtr = (radTg3d*)(hgDplWithoutSym.rep);
+		radTg3d* g3dDplWithoutSymPtr = static_cast<radTg3d*>(hgDplWithoutSym.rep);
 
 		radTvhg vhFlatTransforms; //OC061007_BNL
 		g3dDplWithoutSymPtr->FlattenSpaceTransforms(vhFlatTransforms);

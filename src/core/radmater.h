@@ -38,8 +38,8 @@ public:
 	virtual radTMaterial* SetupMater(double InMr=0) { return 0;}
 };
 
-typedef radTHandle<radTMaterialDB> radTHMatDB;
-typedef vector <radTHMatDB> radTHMatDBVect;
+using radTHMatDB = radTHandle<radTMaterialDB>;
+using radTHMatDBVect = vector <radTHMatDB>;
 
 //-------------------------------------------------------------------------
 
@@ -55,7 +55,7 @@ public:
 
 	void SetParam(const char* InName, double InKsiPar, double InKsiPerp, double InMr)
 	{
-		strcpy(Name, InName);
+		strncpy(Name, InName, 49); Name[49] = '\0';
 		KsiPar = InKsiPar; KsiPerp = InKsiPerp; Mr = InMr;
 	}
 
@@ -76,7 +76,7 @@ public:
 
 	void SetParam(const char* InName, double ms0, double ms1, double ms2, double ks0, double ks1, double ks2)
 	{
-		strcpy(Name, InName);
+		strncpy(Name, InName, 49); Name[49] = '\0';
 		ks[0] = ks0; ms[0] = ms0;
 		ks[1] = ks1; ms[1] = ms1;
 		ks[2] = ks2; ms[2] = ms2;
@@ -418,7 +418,9 @@ class radTNonlinearIsotropMaterial : public radTMaterial {
 	double Ms[3], ks[3];
 	int lenMs_ks;
 
+	std::vector<TVector2d> vgArrayHM;
 	TVector2d* gArrayHM;
+	std::vector<double> vgdMdH;
 	double* gdMdH;
 	int gLenArrayHM;
 
@@ -471,8 +473,8 @@ public:
 		inStr >> cTest;
 		if(cTest > 0)
 		{
-			gArrayHM = new TVector2d[gLenArrayHM];
-			if(gArrayHM == 0) throw 0;
+			vgArrayHM.resize(gLenArrayHM);
+			gArrayHM = vgArrayHM.data();
 			TVector2d *t_gArrayHM = gArrayHM;
 			for(int i=0; i<gLenArrayHM; i++) inStr >> (*(t_gArrayHM++));
 		}
@@ -481,8 +483,8 @@ public:
 		inStr >> cTest;
 		if(cTest > 0)
 		{
-			gdMdH = new double[gLenArrayHM];
-			if(gdMdH == 0) throw 0;
+			vgdMdH.resize(gLenArrayHM);
+			gdMdH = vgdMdH.data();
 			double *t_gdMdH = gdMdH;
 			for(int i=0; i<gLenArrayHM; i++) inStr >> (*(t_gdMdH++));
 		}
@@ -566,18 +568,21 @@ public:
 	{
 		DeallocateArrays();
 		gLenArrayHM = InLenArrayHM;
-		
-		gArrayHM = new TVector2d[gLenArrayHM];
-		if(gArrayHM == 0) return 0;
 
-		gdMdH = new double[gLenArrayHM];
-		if(gdMdH == 0) return 0;
+		vgArrayHM.resize(gLenArrayHM);
+		gArrayHM = vgArrayHM.data();
+
+		vgdMdH.resize(gLenArrayHM);
+		gdMdH = vgdMdH.data();
 		return 1;
 	}
 	void DeallocateArrays()
 	{
-		if(gArrayHM != 0) delete[] gArrayHM; gArrayHM = 0;
-		if(gdMdH != 0) delete[] gdMdH; gdMdH = 0;
+		// RAII: vgArrayHM and vgdMdH cleaned up automatically
+		vgArrayHM.clear();
+		gArrayHM = 0;
+		vgdMdH.clear();
+		gdMdH = 0;
 		gLenArrayHM = 0;
 	}
 

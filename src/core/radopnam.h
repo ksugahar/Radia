@@ -49,78 +49,78 @@ struct radTOptionNames {
 	radTOptionNames()
 	{
 		//partially obsolete definitions:
-		strcpy(B, "PrcB");
-		strcpy(A, "PrcA");
-		strcpy(BInt, "PrcBInt");
-		strcpy(Force, "PrcForce");
-		strcpy(Torque, "PrcTorque");
-		strcpy(Energy, "PrcEnergy");
-		strcpy(Coord, "PrcCoord");
-		strcpy(Angle, "PrcAngle");
+		strncpy(B, "PrcB", 24); B[24] = '\0';
+		strncpy(A, "PrcA", 24); A[24] = '\0';
+		strncpy(BInt, "PrcBInt", 24); BInt[24] = '\0';
+		strncpy(Force, "PrcForce", 24); Force[24] = '\0';
+		strncpy(Torque, "PrcTorque", 24); Torque[24] = '\0';
+		strncpy(Energy, "PrcEnergy", 24); Energy[24] = '\0';
+		strncpy(Coord, "PrcCoord", 24); Coord[24] = '\0';
+		strncpy(Angle, "PrcAngle", 24); Angle[24] = '\0';
 
-		strcpy(Frame, "Frame");
-		strcpy(FrameValues[0], "Loc");
-		strcpy(FrameValues[1], "LabTot");
-		strcpy(FrameValues[2], "Lab");
+		strncpy(Frame, "Frame", 24); Frame[24] = '\0';
+		strncpy(FrameValues[0], "Loc", 24); FrameValues[0][24] = '\0';
+		strncpy(FrameValues[1], "LabTot", 24); FrameValues[1][24] = '\0';
+		strncpy(FrameValues[2], "Lab", 24); FrameValues[2][24] = '\0';
 
-		strcpy(SubdParamCode, "kxkykz");
-		strcpy(SubdParamBorderCode, "ki");
-		strcpy(SubdParamCodeValues[0], "Numb");
-		strcpy(SubdParamCodeValues[1], "Size");
+		strncpy(SubdParamCode, "kxkykz", 24); SubdParamCode[24] = '\0';
+		strncpy(SubdParamBorderCode, "ki", 24); SubdParamBorderCode[24] = '\0';
+		strncpy(SubdParamCodeValues[0], "Numb", 24); SubdParamCodeValues[0][24] = '\0';
+		strncpy(SubdParamCodeValues[1], "Size", 24); SubdParamCodeValues[1][24] = '\0';
 
-		strcpy(SubdCoils, "DivCoils");
-		strcpy(SubdCoilsValues[0], "No");
-		strcpy(SubdCoilsValues[1], "Yes");
-		strcpy(SubdCoilsValues[2], "False");
-		strcpy(SubdCoilsValues[3], "True");
+		strncpy(SubdCoils, "DivCoils", 24); SubdCoils[24] = '\0';
+		strncpy(SubdCoilsValues[0], "No", 24); SubdCoilsValues[0][24] = '\0';
+		strncpy(SubdCoilsValues[1], "Yes", 24); SubdCoilsValues[1][24] = '\0';
+		strncpy(SubdCoilsValues[2], "False", 24); SubdCoilsValues[2][24] = '\0';
+		strncpy(SubdCoilsValues[3], "True", 24); SubdCoilsValues[3][24] = '\0';
 
-		strcpy(ShowLines, "EdgeLines");
-		strcpy(ShowLinesValues[0], "No");
-		strcpy(ShowLinesValues[1], "Yes");
-		strcpy(ShowLinesValues[2], "False");
-		strcpy(ShowLinesValues[3], "True");
+		strncpy(ShowLines, "EdgeLines", 24); ShowLines[24] = '\0';
+		strncpy(ShowLinesValues[0], "No", 24); ShowLinesValues[0][24] = '\0';
+		strncpy(ShowLinesValues[1], "Yes", 24); ShowLinesValues[1][24] = '\0';
+		strncpy(ShowLinesValues[2], "False", 24); ShowLinesValues[2][24] = '\0';
+		strncpy(ShowLinesValues[3], "True", 24); ShowLinesValues[3][24] = '\0';
 
-		strcpy(ShowFaces, "Faces");
-		strcpy(ShowFacesValues[0], "No");
-		strcpy(ShowFacesValues[1], "Yes");
-		strcpy(ShowFacesValues[2], "False");
-		strcpy(ShowFacesValues[3], "True");
+		strncpy(ShowFaces, "Faces", 24); ShowFaces[24] = '\0';
+		strncpy(ShowFacesValues[0], "No", 24); ShowFacesValues[0][24] = '\0';
+		strncpy(ShowFacesValues[1], "Yes", 24); ShowFacesValues[1][24] = '\0';
+		strncpy(ShowFacesValues[2], "False", 24); ShowFacesValues[2][24] = '\0';
+		strncpy(ShowFacesValues[3], "True", 24); ShowFacesValues[3][24] = '\0';
 
-		strcpy(ShowFrameAxes, "Axes");
-		strcpy(ShowFrameAxesValues[0], "No");
-		strcpy(ShowFrameAxesValues[1], "Yes");
-		strcpy(ShowFrameAxesValues[2], "False");
-		strcpy(ShowFrameAxesValues[3], "True");
+		strncpy(ShowFrameAxes, "Axes", 24); ShowFrameAxes[24] = '\0';
+		strncpy(ShowFrameAxesValues[0], "No", 24); ShowFrameAxesValues[0][24] = '\0';
+		strncpy(ShowFrameAxesValues[1], "Yes", 24); ShowFrameAxesValues[1][24] = '\0';
+		strncpy(ShowFrameAxesValues[2], "False", 24); ShowFrameAxesValues[2][24] = '\0';
+		strncpy(ShowFrameAxesValues[3], "True", 24); ShowFrameAxesValues[3][24] = '\0';
 
-		strcpy(ShowSymChilds, "ShowSym");
-		strcpy(ShowSymChildsValues[0], "No");
-		strcpy(ShowSymChildsValues[1], "Yes");
-		strcpy(ShowSymChildsValues[2], "False");
-		strcpy(ShowSymChildsValues[3], "True");
+		strncpy(ShowSymChilds, "ShowSym", 24); ShowSymChilds[24] = '\0';
+		strncpy(ShowSymChildsValues[0], "No", 24); ShowSymChildsValues[0][24] = '\0';
+		strncpy(ShowSymChildsValues[1], "Yes", 24); ShowSymChildsValues[1][24] = '\0';
+		strncpy(ShowSymChildsValues[2], "False", 24); ShowSymChildsValues[2][24] = '\0';
+		strncpy(ShowSymChildsValues[3], "True", 24); ShowSymChildsValues[3][24] = '\0';
 
-		strcpy(FreeSym, "FreeSym");
-		strcpy(FreeSymValues[0], "No");
-		strcpy(FreeSymValues[1], "Yes");
-		strcpy(FreeSymValues[2], "False");
-		strcpy(FreeSymValues[3], "True");
+		strncpy(FreeSym, "FreeSym", 24); FreeSym[24] = '\0';
+		strncpy(FreeSymValues[0], "No", 24); FreeSymValues[0][24] = '\0';
+		strncpy(FreeSymValues[1], "Yes", 24); FreeSymValues[1][24] = '\0';
+		strncpy(FreeSymValues[2], "False", 24); FreeSymValues[2][24] = '\0';
+		strncpy(FreeSymValues[3], "True", 24); FreeSymValues[3][24] = '\0';
 
-		strcpy(ZeroM, "ZeroM");
-		strcpy(ZeroM_Values[0], "No");
-		strcpy(ZeroM_Values[1], "Yes");
-		strcpy(ZeroM_Values[2], "False");
-		strcpy(ZeroM_Values[3], "True");
+		strncpy(ZeroM, "ZeroM", 24); ZeroM[24] = '\0';
+		strncpy(ZeroM_Values[0], "No", 24); ZeroM_Values[0][24] = '\0';
+		strncpy(ZeroM_Values[1], "Yes", 24); ZeroM_Values[1][24] = '\0';
+		strncpy(ZeroM_Values[2], "False", 24); ZeroM_Values[2][24] = '\0';
+		strncpy(ZeroM_Values[3], "True", 24); ZeroM_Values[3][24] = '\0';
 
-		strcpy(TriAngMin, "TriAngMin");
-		strcpy(TriAreaMax, "TriAreaMax");
-		strcpy(TriExtOpt, "TriExtOpt");
+		strncpy(TriAngMin, "TriAngMin", 24); TriAngMin[24] = '\0';
+		strncpy(TriAreaMax, "TriAreaMax", 24); TriAreaMax[24] = '\0';
+		strncpy(TriExtOpt, "TriExtOpt", 24); TriExtOpt[24] = '\0';
 
-		strcpy(LinTreat, "Lin");
-		//strcpy(LinCoefValues[0], "Rel");
-		//strcpy(LinCoefValues[1], "Loc");
-		//strcpy(LinCoefValues[2], "Abs");
-		//strcpy(LinCoefValues[3], "Lab");
+		strncpy(LinTreat, "Lin", 24); LinTreat[24] = '\0';
+		//strncpy(LinCoefValues[0], "Rel", 24); LinCoefValues[0][24] = '\0';
+		//strncpy(LinCoefValues[1], "Loc", 24); LinCoefValues[1][24] = '\0';
+		//strncpy(LinCoefValues[2], "Abs", 24); LinCoefValues[2][24] = '\0';
+		//strncpy(LinCoefValues[3], "Lab", 24); LinCoefValues[3][24] = '\0';
 
-		strcpy(Debug, "Debug");
+		strncpy(Debug, "Debug", 24); Debug[24] = '\0';
 
 		//newer definitions
 		map<string, int> vRealVal;

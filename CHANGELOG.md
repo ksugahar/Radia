@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed (2025-11-02)
+
+- **Package Name Change**
+  - Renamed PyPI package from `radia` to `radia-ngsolve`
+  - Version reset to 1.0.0 for new package
+  - Updated all documentation with new package name
+  - Installation: `pip install radia-ngsolve`
+
+- **Build Scripts Migration**
+  - Migrated from .cmd to PowerShell (.ps1) scripts
+  - Unified build and upload into single `Publish_to_PyPI.ps1` script
+  - Improved error handling and colored output
+  - Updated documentation to reference new scripts
+
+### Added (2025-11-02)
+
+- **PyPI Distribution**
+  - Published to PyPI as `radia-ngsolve`
+  - Includes pre-built binaries for Windows Python 3.12
+  - Complete LGPL-2.1 + Original RADIA BSD-style license
+  - English documentation for international users
+
 ### Added (2025-11-01)
 
 - **rad_ngsolve Unified Interface**

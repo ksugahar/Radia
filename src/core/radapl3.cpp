@@ -22,6 +22,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <vector>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -34,8 +35,8 @@
 void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPoi, long lenStObsPoi, 
 								   double* FiObsPoi, long lenFiObsPoi, int Np, char* ShowArgFlag, double StrtArg)
 {
-	radTField* FieldArray = NULL;
-	double* ArgArray = NULL;
+	radTField* FieldArray = nullptr;
+	double* ArgArray = nullptr;
 	try
 	{
 		radThg hg;
@@ -60,10 +61,17 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPo
 		radTField Field(FieldKey, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 		g3dPtr->B_genComp(&Field);
 
+		std::vector<radTField> vFieldArray;
+		std::vector<double> vArgArray;
 		if(Np>1)
 		{
-			FieldArray = new radTField[Np];
-			if(ArgumentNeeded) ArgArray = new double[Np];
+			vFieldArray.resize(Np);
+			FieldArray = vFieldArray.data();
+			if(ArgumentNeeded)
+			{
+				vArgArray.resize(Np);
+				ArgArray = vArgArray.data();
+			}
 
 			FieldArray[0] = Field;
 			TVector3d TranslVect = (1./double(Np-1))*(FiObsPoiVect-StObsPoiVect);
@@ -86,18 +94,11 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPo
 		else FieldArray = &Field;
 
 		if(SendingIsRequired) Send.OutFieldCompRes(FieldChar, FieldArray, ArgArray, Np);
-		if(Np>1) 
-		{
-			delete[] FieldArray;
-			FieldArray = NULL;
-			if(ArgumentNeeded) delete[] ArgArray;
-			ArgArray = NULL;
-		}
+		// RAII: vFieldArray and vArgArray cleaned up automatically
 	}
-	catch(...) 
-	{ 
-		if(FieldArray != NULL) delete[] FieldArray;
-		if(ArgArray != NULL) delete[] ArgArray;
+	catch(...)
+	{
+		// RAII: vFieldArray and vArgArray cleaned up automatically
 		Initialize(); return;
 	}
 }
@@ -117,8 +118,8 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, radTVectorOfVec
 		if(!ValidateFieldChar(FieldChar, &FieldKey)) return;
 
 		long Np = (long)(VectorOfVector3d.size());
-		FieldArray = new radTField[Np];
-		if(FieldArray == 0) { Send.ErrorMessage("Radia::Error900"); return;}
+		std::vector<radTField> vFieldArray(Np);
+		FieldArray = vFieldArray.data();
 		radTField* tField = FieldArray;
 
 		TVector3d ZeroVect(0.,0.,0.);
@@ -130,15 +131,11 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, radTVectorOfVec
 		}
 
 		if(SendingIsRequired) OutFieldCompRes(FieldChar, FieldArray, Np, VectInputCell);
-		if(FieldArray != 0) 
-		{
-			delete[] FieldArray;
-			FieldArray = 0;
-		}
+		// RAII: vFieldArray cleaned up automatically
 	}
-	catch(...) 
-	{ 
-		if(FieldArray != 0) delete[] FieldArray;
+	catch(...)
+	{
+		// RAII: vFieldArray cleaned up automatically
 		Initialize(); return;
 	}
 }
@@ -158,10 +155,11 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double** Points
 		radTFieldKey FieldKey;
 		if(!ValidateFieldChar(FieldChar, &FieldKey)) return;
 
+		std::vector<radTField> vFieldArray;
 		if(m_nProcMPI < 2) //OC01012020
 		{
-			FieldArray = new radTField[Np];
-			if(FieldArray == 0) { Send.ErrorMessage("Radia::Error900"); return;}
+			vFieldArray.resize(Np);
+			FieldArray = vFieldArray.data();
 			radTField* tField = FieldArray;
 
 			TVector3d ZeroVect(0.,0.,0.), v;
@@ -176,12 +174,12 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double** Points
 				g3dPtr->B_genComp(&(FieldArray[i]));
 			}
 			if(SendingIsRequired) OutFieldCompRes(FieldChar, FieldArray, Np);
-			if(FieldArray != 0) { delete[] FieldArray; FieldArray = 0;}
+			// RAII: vFieldArray cleaned up automatically
 		}
 	}
-	catch(...) 
-	{ 
-		if(FieldArray != 0) delete[] FieldArray;
+	catch(...)
+	{
+		// RAII: vFieldArray cleaned up automatically
 		if(arFldVals != 0) delete[] arFldVals; //OC02012020
 		if(arFldValsRecv != 0) delete[] arFldValsRecv; //OC02012020
 		Initialize(); return;
@@ -483,8 +481,8 @@ void radTApplication::ComputeParticleTrajectory(int ElemKey, double Energy, doub
 		radTg3d* SourcePtr = Cast.g3dCast(hSource.rep);
 		if(SourcePtr==0) { Send.ErrorMessage("Radia::Error003"); return;}
 
-		TrjData = new double[Np*5];
-		if(TrjData==0) { Send.ErrorMessage("Radia::Error900"); return;}
+		std::vector<double> vTrjData(Np*5);
+		TrjData = vTrjData.data();
 
 		short OnPrc = (CompCriterium.AbsPrecTrjCoord > 0.) || (CompCriterium.AbsPrecTrjAngle > 0.);
 		double PrecArray[] = { CompCriterium.AbsPrecTrjCoord, CompCriterium.AbsPrecTrjAngle,
@@ -499,8 +497,7 @@ void radTApplication::ComputeParticleTrajectory(int ElemKey, double Energy, doub
 		int Dims[] = { 5, Np };
 		if(SendingIsRequired) Send.ArbNestedArrays(TrjData, Dims, Depth);
 
-		if(TrjData != 0) delete[] TrjData;
-		TrjData = 0;
+		// TrjData cleaned up automatically by RAII (std::vector)
 	}
 	catch(...) 
 	{ 
@@ -580,11 +577,16 @@ void radTApplication::ComputeFocusKickPer(int ElemKey, double* P1, double* Nlong
 		else if(strcmp(strOutFormat, "fix") && strcmp(strOutFormat, "FIX")) { Send.ErrorMessage("Radia::Error502"); return;}
 
 		long NpKick = np1*np2;
-		pKickData1 = new double[NpKick]; if(pKickData1==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pKickData2 = new double[NpKick]; if(pKickData2==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pBtE2Int = new double[NpKick]; if(pBtE2Int==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pCoordDir1 = new double[np1]; if(pCoordDir1==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pCoordDir2 = new double[np2]; if(pCoordDir2==0) { Send.ErrorMessage("Radia::Error900"); return;}
+		std::vector<double> vKickData1(NpKick);
+		std::vector<double> vKickData2(NpKick);
+		std::vector<double> vBtE2Int(NpKick);
+		std::vector<double> vCoordDir1(np1);
+		std::vector<double> vCoordDir2(np2);
+		pKickData1 = vKickData1.data();
+		pKickData2 = vKickData2.data();
+		pBtE2Int = vBtE2Int.data();
+		pCoordDir1 = vCoordDir1.data();
+		pCoordDir2 = vCoordDir2.data();
 
 		radTPrtclTrj PrtclTrj(SourcePtr, CompCriterium, inEnergyGeV);
 		//PrtclTrj.ComputeSecondOrderKickPer(P1Vect, NlongVect, per, nper, N1Vect, r1, np1, r2, np2, nharm, ns, d1, d2, pCoordDir1, pCoordDir2, pKickData1, pKickData2, pBtE2Int);
@@ -594,26 +596,13 @@ void radTApplication::ComputeFocusKickPer(int ElemKey, double* P1, double* Nlong
 		//radTPrtclTrj::ComposeStrReportSecondOrderKickPer(StrComment, per*nper, np1, np2, pCoordDir1, pCoordDir2, pKickData1, pKickData2, pBtE2Int, pStrReport, cKickUnit);
 		radTPrtclTrj::ComposeStrReportSecondOrderKickPer(StrComment, per*nper, np1, np2, pCoordDir1, pCoordDir2, pKickData1, pKickData2, pBtE2Int, pStrReport, cKickUnit, cOutFormat);
 
-		if(SendingIsRequired) 
+		if(SendingIsRequired)
 		{
-#if defined(__MATHEMATICA__)
-			Send.InitOutList(6);
-
-			int Depth = 2;
-			int Dims[] = { np1, np2 };
-			Send.ArbNestedArrays(pKickData1, Dims, Depth);
-			Send.ArbNestedArrays(pKickData2, Dims, Depth);
-			Send.ArbNestedArrays(pBtE2Int, Dims, Depth); //OC100509
-			Send.DoubleList(pCoordDir1, np1);
-			Send.DoubleList(pCoordDir2, np2);
-
-			char *pStrToSend = pStrReport;
-			if(pStrToSend == 0) pStrToSend = EmptyStr;
-			Send.String(pStrToSend);
-#else
 			//long LenArr = 2*np1*np2 + np1 + np2 + 1;
 			long LenArr = 3*np1*np2 + np1 + np2 + 1;
-			pAuxFlatArr = new double[LenArr]; 
+			// RAII: Use std::vector for automatic cleanup
+			std::vector<double> vAuxFlatArr(LenArr);
+			pAuxFlatArr = vAuxFlatArr.data();
 			double *tAuxFlatArr = pAuxFlatArr;
 			double *tKickData1 = pKickData1;
 			double *tKickData2 = pKickData2;
@@ -632,26 +621,15 @@ void radTApplication::ComputeFocusKickPer(int ElemKey, double* P1, double* Nlong
 			//*tAuxFlatArr += strlen(pStrReport);
 
 			Send.DoubleList(pAuxFlatArr, LenArr);
-			
-			if(pAuxFlatArr != 0) { delete[] pAuxFlatArr; pAuxFlatArr = 0;}
-#endif
+			// RAII: automatic cleanup
 		}
 
-		if(pKickData1 != 0) { delete[] pKickData1; pKickData1 = 0;}
-		if(pKickData2 != 0) { delete[] pKickData2; pKickData2 = 0;}
-		if(pBtE2Int != 0) { delete[] pBtE2Int; pBtE2Int = 0;}
-		if(pCoordDir1 != 0) { delete[] pCoordDir1; pCoordDir1 = 0;}
-		if(pCoordDir2 != 0) { delete[] pCoordDir2; pCoordDir2 = 0;}
+		// pKickData1-5 and pAuxFlatArr cleaned up automatically by RAII (std::vector)
 		if(pStrReport != 0) { delete[] pStrReport; pStrReport = 0;}
-		if(pAuxFlatArr != 0) { delete[] pAuxFlatArr; pAuxFlatArr = 0;}
 	}
-	catch(...) 
-	{ 
-		if(pKickData1 != 0) delete[] pKickData1;
-		if(pKickData2 != 0) delete[] pKickData2;
-		if(pBtE2Int != 0) delete[] pBtE2Int;
-		if(pCoordDir1 != 0) delete[] pCoordDir1;
-		if(pCoordDir2 != 0) delete[] pCoordDir2;
+	catch(...)
+	{
+		// pKickData1-5 cleaned up automatically by RAII (std::vector)
 		if(pStrReport != 0) delete[] pStrReport;
 		if(pAuxFlatArr != 0) delete[] pAuxFlatArr;
 		Initialize(); return;
@@ -716,11 +694,16 @@ void radTApplication::ComputeFocusKick(int ElemKey, double* P1, double* Nlong, d
 		int TotAmOfPairsOfMatr = lenArrLongDist;
 		if(TotAmOfPairsOfMatr > 1) TotAmOfPairsOfMatr++;
 		long NpKick = np1*np2*TotAmOfPairsOfMatr;
-		pKickData1 = new double[NpKick]; if(pKickData1==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pKickData2 = new double[NpKick]; if(pKickData2==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pIBe2 = new double[NpKick]; if(pIBe2==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pCoordDir1 = new double[np1]; if(pCoordDir1==0) { Send.ErrorMessage("Radia::Error900"); return;}
-		pCoordDir2 = new double[np2]; if(pCoordDir2==0) { Send.ErrorMessage("Radia::Error900"); return;}
+		std::vector<double> vKickData1(NpKick);
+		std::vector<double> vKickData2(NpKick);
+		std::vector<double> vIBe2(NpKick);
+		std::vector<double> vCoordDir1(np1);
+		std::vector<double> vCoordDir2(np2);
+		pKickData1 = vKickData1.data();
+		pKickData2 = vKickData2.data();
+		pIBe2 = vIBe2.data();
+		pCoordDir1 = vCoordDir1.data();
+		pCoordDir2 = vCoordDir2.data();
 
 		radTPrtclTrj PrtclTrj(SourcePtr, CompCriterium);
 		PrtclTrj.ComputeSecondOrderKick(P1Vect, NlongVect, ArrLongDist, lenArrLongDist, ns, N1Vect, r1, np1, r2, np2, d1, d2, pCoordDir1, pCoordDir2, pKickData1, pKickData2, pIBe2);
@@ -759,20 +742,12 @@ void radTApplication::ComputeFocusKick(int ElemKey, double* P1, double* Nlong, d
 			Send.String(pStrToSend);
 		}
 
-		if(pKickData1 != 0) { delete[] pKickData1; pKickData1 = 0;}
-		if(pKickData2 != 0) { delete[] pKickData2; pKickData2 = 0;}
-		if(pIBe2 != 0) { delete[] pIBe2; pIBe2 = 0;}
-		if(pCoordDir1 != 0) { delete[] pCoordDir1; pCoordDir1 = 0;}
-		if(pCoordDir2 != 0) { delete[] pCoordDir2; pCoordDir2 = 0;}
+		// pKickData1-5 cleaned up automatically by RAII (std::vector)
 		if(pStrReport != 0) { delete[] pStrReport; pStrReport = 0;}
 	}
-	catch(...) 
-	{ 
-		if(pKickData1 != 0) { delete[] pKickData1; pKickData1 = 0;}
-		if(pKickData2 != 0) { delete[] pKickData2; pKickData2 = 0;}
-		if(pIBe2 != 0) { delete[] pIBe2; pIBe2 = 0;}
-		if(pCoordDir1 != 0) { delete[] pCoordDir1; pCoordDir1 = 0;}
-		if(pCoordDir2 != 0) { delete[] pCoordDir2; pCoordDir2 = 0;}
+	catch(...)
+	{
+		// pKickData1-5 cleaned up automatically by RAII (std::vector)
 		if(pStrReport != 0) { delete[] pStrReport; pStrReport = 0;}
 
 		Initialize(); return;
@@ -819,11 +794,10 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 		if(Np <= 0) { Send.ErrorMessage("Radia::Error079"); return;}
 
 		TVector3d ZeroVect(0.,0.,0.);
-		arr_pField = new radTField*[TwoNp];
-		arr_resField = new radTField[Np];
-
-		radTField **tField = arr_pField;
-		for(int s=0; s<TwoNp; s++) *(tField++) = 0;
+		std::vector<radTField*> vArr_pField(TwoNp, nullptr);
+		arr_pField = vArr_pField.data();
+		std::vector<radTField> vArr_resField(Np);
+		arr_resField = vArr_resField.data();
 
 		TVector3d vTransl = ((Np > 1)? (1./double(Np - 1)) : 1)*(vFiPoi - vStPoi);
 
@@ -840,7 +814,7 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 
 		radTg3d *arrSourceDispPtr[] = {SourcePtr, SourceDispPtr};
 
-		tField = arr_pField;
+		radTField **tField = arr_pField;
 		for(int k=0; k<2; k++)
 		{
 			radTg3d *curSourceDispPtr = arrSourceDispPtr[k];
@@ -877,30 +851,30 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 		{
 			if(FieldKey.Ib_	|| FieldKey.Ih_)
 			{
-				Send.OutFieldIntCompRes(FldID, arr_resField, NULL, Np);
+				Send.OutFieldIntCompRes(FldID, arr_resField, nullptr, Np);
 				//Send.OutFieldIntCompRes(FldID, &Field);
 			}
 			else
 			{
-				Send.OutFieldCompRes(FldID, arr_resField, NULL, Np);
+				Send.OutFieldCompRes(FldID, arr_resField, nullptr, Np);
 			}
 		}
 
 		if(arr_pField != 0) 
 		{
 			for(int i=0; i<TwoNp; i++) if(arr_pField[i] != 0) delete arr_pField[i];
-			delete[] arr_pField;
+			// RAII: vArr_pField cleaned up automatically
 		}
-		if(arr_resField != 0) delete[] arr_resField;
+		// RAII: vArr_resField cleaned up automatically
 	}
 	catch(...) 
 	{ 
 		if(arr_pField != 0) 
 		{
 			for(int i=0; i<TwoNp; i++) if(arr_pField[i] != 0) delete arr_pField[i];
-			delete[] arr_pField;
+			// RAII: vArr_pField cleaned up automatically
 		}
-		if(arr_resField != 0) delete[] arr_resField;
+		// RAII: vArr_resField cleaned up automatically
 		Initialize(); return;
 	}
 }
@@ -921,7 +895,7 @@ int radTApplication::SetAndShowPhysUnits()
 		char FieldStrengthUnitID[] = "Tesla";
 		char FieldForceUnitID[] = "Newton";
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //		ostrstream OutUnitsInfoStream;
 //#else
 		ostringstream OutUnitsInfoStream; // Porting
@@ -941,7 +915,7 @@ int radTApplication::SetAndShowPhysUnits()
 
 		OutUnitsInfoStream << ends;
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //		if(SendingIsRequired) Send.String(OutUnitsInfoStream.str());
 //#else
 		if(SendingIsRequired) Send.String(OutUnitsInfoStream.str().c_str()); // Porting
@@ -960,7 +934,7 @@ int radTApplication::SetAndShowPhysUnits()
 
 void radTApplication::ReplaceInAllGroups(radThg& OldHandle, radThg& NewHandle)
 {
-	radTg3d* g3dOldPtr = (radTg3d*)(OldHandle.rep);
+	radTg3d* g3dOldPtr = static_cast<radTg3d*>(OldHandle.rep);
 
 	try
 	{
@@ -988,7 +962,7 @@ void radTApplication::ReplaceInAllGroups(radThg& OldHandle, radThg& NewHandle)
 
 void radTApplication::ReplaceInGlobalMap(radThg& OldHandle, radThg& NewHandle)
 {
-	radTg3d* g3dOldPtr = (radTg3d*)(OldHandle.rep);
+	radTg3d* g3dOldPtr = static_cast<radTg3d*>(OldHandle.rep);
 
 	try
 	{
@@ -1515,22 +1489,22 @@ int radTApplication::ComputeGeometricalLimits(int ElemKey)
 
 void radTApplication::ReturnInput(double Input, int NumTimes)
 {
-	double* OutArray = NULL;
-
 	try
 	{
-		OutArray = new double[NumTimes];
+		// RAII: Use std::vector for automatic cleanup (exception-safe)
+		std::vector<double> vOutArray(NumTimes);
+		double* OutArray = vOutArray.data();
 
-		for(int i=0; i<NumTimes; ++i) 
+		for(int i=0; i<NumTimes; ++i)
 		{
 			OutArray[i] = Input;
 		}
 		Send.DoubleList(OutArray, NumTimes);
-		if(OutArray != NULL) { delete[] OutArray; OutArray = NULL;}
+		// RAII: automatic cleanup
 	}
 	catch(...)
 	{
-		if(OutArray != NULL) { delete[] OutArray; OutArray = NULL;}
+		// RAII: automatic cleanup even on exception
 		Initialize(); return;
 	}
 }

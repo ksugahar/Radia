@@ -18,6 +18,7 @@
 
 #include "radsend.h"
 #include "radvlpgn.h"
+#include <array>
 #include "radg3dgr.h"
 #include "radsbdvp.h"
 #include "radg3da1.h"
@@ -31,14 +32,13 @@ void radTPolyhedron::FillInVectHandlePgnAndTrans(TVector3d* ArrayOfPoints, int l
 {
 	radTSend Send;
 
-	TVector3d* ArrayOfFacesNormals = new TVector3d[AmOfFaces];
-	if(ArrayOfFacesNormals == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return;}
+	std::vector<TVector3d> vArrayOfFacesNormals(AmOfFaces);
+	TVector3d* ArrayOfFacesNormals = vArrayOfFacesNormals.data();
 
 	if(!CheckIfFacePolygonsArePlanar(ArrayOfPoints, ArrayOfFaces, ArrayOfLengths, ArrayOfFacesNormals)) return;
 	if(!DetermineActualFacesNormals(ArrayOfPoints, lenArrayOfPoints, ArrayOfFaces, ArrayOfLengths, ArrayOfFacesNormals)) return;
 	if(!FillInTransAndFacesInLocFrames(ArrayOfPoints, ArrayOfFaces, ArrayOfLengths, ArrayOfFacesNormals)) return;
-
-	delete[] ArrayOfFacesNormals;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -231,23 +231,21 @@ int radTPolyhedron::DetermineActualFacesNormals(TVector3d* ArrayOfPoints, int Am
 	int NoOfFirstGoodFace = i;
 
 // Determining all the rest normals
-	short** SegmentPassed = new short*[AmOfFaces];
-	if(SegmentPassed == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<std::vector<short>> vSegmentPassed(AmOfFaces);
+	std::vector<short*> vSegmentPassedPtrs(AmOfFaces);
 	for(i=0; i<AmOfFaces; i++)
 	{
 		int CurrentLength = ArrayOfLengths[i];
-		SegmentPassed[i] = new short[CurrentLength];
-		short* LocSegmentPassed = SegmentPassed[i];
-		if(LocSegmentPassed == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return 0;}
-		for(int k=0; k<CurrentLength; k++) LocSegmentPassed[k] = 0;
+		vSegmentPassed[i].resize(CurrentLength, 0);
+		vSegmentPassedPtrs[i] = vSegmentPassed[i].data();
 	}
+	short** SegmentPassed = vSegmentPassedPtrs.data();
 	int ii = NoOfFirstGoodFace;
 
-	char* GenFacesPassed = new char[AmOfFaces];
-	if(GenFacesPassed == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return 0;}
-	char* PossibleNextFaces = new char[AmOfFaces];
-	if(PossibleNextFaces == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return 0;}
-	for(int p=0; p<AmOfFaces; p++) GenFacesPassed[p] = 0;
+	std::vector<char> vGenFacesPassed(AmOfFaces, 0);
+	char* GenFacesPassed = vGenFacesPassed.data();
+	std::vector<char> vPossibleNextFaces(AmOfFaces);
+	char* PossibleNextFaces = vPossibleNextFaces.data();
 
 	for(i=0; i<AmOfFaces; i++)
 	{
@@ -338,8 +336,7 @@ int radTPolyhedron::DetermineActualFacesNormals(TVector3d* ArrayOfPoints, int Am
 	}
 	DeleteAuxInputArrays(SegmentPassed);
 
-	if(GenFacesPassed != 0) delete[] GenFacesPassed;
-	if(PossibleNextFaces != 0) delete[] PossibleNextFaces;
+	// RAII: automatic cleanup via vGenFacesPassed and vPossibleNextFaces
 	return 1;
 }
 
@@ -771,9 +768,10 @@ void radTPolyhedron::B_comp_frJ(radTField* pField)
 
 void radTPolyhedron::B_intComp_frM(radTField* FieldPtr)
 //void radTPolyhedron::B_intComp(radTField* FieldPtr)
-{ 
+{
 	if(FieldPtr->FieldKey.FinInt_) { B_intCompFinNum(FieldPtr); return;}
 
+	TVector3d Zero(0.,0.,0.);
 	for(int i=0; i<AmOfFaces; i++)
 	{
 		radTHandlePgnAndTrans HandlePgnAndTrans = VectHandlePgnAndTrans[i];
@@ -1459,8 +1457,8 @@ int radTPolyhedron::CutItself(TVector3d* InCuttingPlane, radThg& In_hg, radTPair
 		}
 	}
 
-	for(int k=0; k<(int)VectOfTwoPoints3d.size(); k++) delete[] VectOfTwoPoints3d[k];
-	VectOfTwoPoints3d.erase(VectOfTwoPoints3d.begin(), VectOfTwoPoints3d.end());
+	// RAII: std::array cleanup is automatic
+	VectOfTwoPoints3d.clear();
 	LowerNewVectPgnAndTrans.erase(LowerNewVectPgnAndTrans.begin(), LowerNewVectPgnAndTrans.end());
 	UpperNewVectPgnAndTrans.erase(UpperNewVectPgnAndTrans.begin(), UpperNewVectPgnAndTrans.end());
 	return 1;
@@ -1547,7 +1545,7 @@ int radTPolyhedron::FindIntersectionWithFace(int FaceNo, TVector3d* CuttingPlane
 		R1_Bound = FacePgnPtr->EdgePointsVector[NextCircularNumber(i_Bound, AmOfEdgePo)];
 		IntrsctOfTwoLines(VectIntrsctLine, PointOnIntrsctLine, R0_Bound, R1_Bound, IntrsctPo, IntrsctCase, RelAbsTol);
 
-		if(IntrsctCase == PointOnBoundEdge)
+		if(IntrsctCase == TLinesIntrsctCase::PointOnBoundEdge)
 		{
 			if(OneEdgePointAlreadyTrapped)
 			{
@@ -1573,7 +1571,7 @@ int radTPolyhedron::FindIntersectionWithFace(int FaceNo, TVector3d* CuttingPlane
 				}
 			}
 		}
-		else if(IntrsctCase == PointWithinBound)
+		else if(IntrsctCase == TLinesIntrsctCase::PointWithinBound)
 		{
 			AtLeastOnePointIsWithinBounds = 1; //OC291003
 			if(OnePointAlreadyFound)
@@ -1587,7 +1585,7 @@ int radTPolyhedron::FindIntersectionWithFace(int FaceNo, TVector3d* CuttingPlane
 				IntersectingBoundsNos[0] = i_Bound;
 			}
 		}
-		else if(IntrsctCase == LineIsIntrsct) 
+		else if(IntrsctCase == TLinesIntrsctCase::LineIsIntrsct) 
 		{ 
 			TwoGoodPointsFound = 0; 
 
@@ -1597,7 +1595,7 @@ int radTPolyhedron::FindIntersectionWithFace(int FaceNo, TVector3d* CuttingPlane
 			SecondPo3d = FaceTransPtr->TrPoint(SecondPo3d);
 			if(!CheckIfTwoPointAlreadyMapped(FirstPo3d, SecondPo3d, VectOfTwoPoints3d, RelAbsTol))
 			{
-				TVector3d* TwoPoints3d = new TVector3d[2];
+				std::array<TVector3d, 2> TwoPoints3d;
 				TwoPoints3d[0] = FirstPo3d;
 				TwoPoints3d[1] = SecondPo3d;
 				VectOfTwoPoints3d.push_back(TwoPoints3d);
@@ -1622,7 +1620,7 @@ int radTPolyhedron::FindIntersectionWithFace(int FaceNo, TVector3d* CuttingPlane
 		
 		TVector3d FirstPo3d(FirstIntersectPoint2d.x, FirstIntersectPoint2d.y, FacePgnPtr->CoordZ);
 		TVector3d SecondPo3d(SecondIntersectPoint2d.x, SecondIntersectPoint2d.y, FacePgnPtr->CoordZ);
-		TVector3d* TwoPoints3d = new TVector3d[2];
+		std::array<TVector3d, 2> TwoPoints3d;
 		TwoPoints3d[0] = FaceTransPtr->TrPoint(FirstPo3d);
 		TwoPoints3d[1] = FaceTransPtr->TrPoint(SecondPo3d);
 		VectOfTwoPoints3d.push_back(TwoPoints3d);
@@ -1672,7 +1670,7 @@ void radTPolyhedron::IntrsctOfTwoLines(const TVector2d& V1, const TVector2d& R01
 		IntrsctPo.x = -(-R01.y*V1.x*V2.x + R02.y*V1.x*V2.x + R01.x*V1yV2x - R02.x*V1xV2y)/D;
 		IntrsctPo.y = -(R02.y*V1yV2x - R01.y*V1xV2y + R01.x*V1.y*V2.y - R02.x*V1.y*V2.y)/D;
 		double t_Intrsct = (Abs(V2.x) > V_Toler)? (IntrsctPo.x - R02.x)/V2.x : (IntrsctPo.y - R02.y)/V2.y;
-		//IntrsctCase = ((t_Intrsct > t_Toler) && (t_Intrsct + t_Toler < 1.))? PointWithinBound : (((Abs(t_Intrsct) < t_Toler) || (Abs(t_Intrsct-1.) < t_Toler))? PointOnBoundEdge : PointOutsideBound);
+		//IntrsctCase = ((t_Intrsct > t_Toler) && (t_Intrsct + t_Toler < 1.))? TLinesIntrsctCase::PointWithinBound : (((Abs(t_Intrsct) < t_Toler) || (Abs(t_Intrsct-1.) < t_Toler))? TLinesIntrsctCase::PointOnBoundEdge : TLinesIntrsctCase::PointOutsideBound);
 
 			//DEBUG test
 			//TVector2d V2u = V2, V1u = V1;
@@ -1682,25 +1680,25 @@ void radTPolyhedron::IntrsctOfTwoLines(const TVector2d& V1, const TVector2d& R01
 
 		if((t_Intrsct > t_Toler) && (t_Intrsct + t_Toler < 1.))
 		{
-			IntrsctCase = PointWithinBound; return;
+			IntrsctCase = TLinesIntrsctCase::PointWithinBound; return;
 		}
 		else
 		{
 			if(Abs(t_Intrsct) < t_Toler)
 			{
-				IntrsctCase = PointOnBoundEdge;
+				IntrsctCase = TLinesIntrsctCase::PointOnBoundEdge;
 				IntrsctPo = R02;
 				return;
 			}
 			else if(Abs(t_Intrsct-1.) < t_Toler)
 			{
-				IntrsctCase = PointOnBoundEdge;
+				IntrsctCase = TLinesIntrsctCase::PointOnBoundEdge;
 				IntrsctPo = R12;
 				return;
 			}
 			else 
 			{
-				IntrsctCase = PointOutsideBound;
+				IntrsctCase = TLinesIntrsctCase::PointOutsideBound;
 				return;
 			}
 		}
@@ -1722,13 +1720,13 @@ void radTPolyhedron::IntrsctOfTwoLines(const TVector2d& V1, const TVector2d& R01
 
 		if(V3Norm < MaxNormR01R02*t_Toler)
 		{//is this really important?
-			IntrsctCase = LineIsIntrsct; return;
+			IntrsctCase = TLinesIntrsctCase::LineIsIntrsct; return;
 		}
 
 		//double LineCoinsBufToler = V1Norm*t_Toler;
 		double LineCoinsToler = V_Toler*V3Norm;
 		double CompareVal = fabs(V1.x*V3y - V1.y*V3x);
-		IntrsctCase = (CompareVal < LineCoinsToler)? LineIsIntrsct : Zero; // To check !!!
+		IntrsctCase = (CompareVal < LineCoinsToler)? TLinesIntrsctCase::LineIsIntrsct : TLinesIntrsctCase::Zero; // To check !!!
 	}
 }
 
@@ -1742,7 +1740,7 @@ int radTPolyhedron::CheckIfTwoPointAlreadyMapped(
 	short CaseFound = 0;
 	for(radTVectOfPtrToVect3d::iterator iter = VectOfTwoPoints3d.begin(); iter != VectOfTwoPoints3d.end(); ++iter)
 	{
-		TVector3d* aPair = *iter;
+		std::array<TVector3d, 2>& aPair = *iter;
 		TVector3d& p0 = aPair[0];
 		TVector3d& p1 = aPair[1];
 		if((((Abs(p0.x - pp0.x) < AbsZeroToler) && (Abs(p0.y - pp0.y) < AbsZeroToler) && (Abs(p0.z - pp0.z) < AbsZeroToler)) &&
@@ -1862,15 +1860,16 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 
 	radTVectOfPtrToVect3d::iterator VectOfPtrToVect3dIter = VectOfTwoPoints3d.begin();
 
-	TVector3d* P0Ptr = *VectOfPtrToVect3dIter;
-	TVector3d* P1Ptr = P0Ptr + 1;
+	std::array<TVector3d, 2>& firstPair = *VectOfPtrToVect3dIter;
+	TVector3d* P0Ptr = &firstPair[0];
+	TVector3d* P1Ptr = &firstPair[1];
 	++VectOfPtrToVect3dIter;
 
 	radTSend Send;
-	TVector3d** NewFaceFirstList = new TVector3d*[AmOfEdgePoints];
-	if(NewFaceFirstList == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
-	TVector3d** NewFaceSecondList = new TVector3d*[AmOfEdgePoints];
-	if(NewFaceSecondList == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<TVector3d*> vNewFaceFirstList(AmOfEdgePoints);
+	std::vector<TVector3d*> vNewFaceSecondList(AmOfEdgePoints);
+	TVector3d** NewFaceFirstList = vNewFaceFirstList.data();
+	TVector3d** NewFaceSecondList = vNewFaceSecondList.data();
 	NewFaceSecondList[0] = P0Ptr;
 	NewFaceSecondList[1] = P1Ptr;
 
@@ -1897,8 +1896,9 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 
 		for(radTVectOfPtrToVect3d::iterator iter = VectOfPtrToVect3dIter; iter != VectOfTwoPoints3d.end(); ++iter)
 		{
-			TVector3d* TestPoint0Ptr = *iter;
-			TVector3d* TestPoint1Ptr = TestPoint0Ptr + 1;
+			std::array<TVector3d, 2>& testPair = *iter;
+			TVector3d* TestPoint0Ptr = &testPair[0];
+			TVector3d* TestPoint1Ptr = &testPair[1];
 			
 			//TVector3d BufVect00 = *TestPoint0Ptr - *P0Ptr;
 			//if(NormAbs(BufVect00) < AbsZeroToler) 
@@ -1949,8 +1949,9 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 			radTVectOfPtrToVect3d::iterator iterClosest = VectOfPtrToVect3dIter;
 			for(radTVectOfPtrToVect3d::iterator iter = VectOfPtrToVect3dIter; iter != VectOfTwoPoints3d.end(); ++iter)
 			{
-				TVector3d* TestPoint0Ptr = *iter;
-				TVector3d* TestPoint1Ptr = TestPoint0Ptr + 1;
+				std::array<TVector3d, 2>& testPairAlt = *iter;
+				TVector3d* TestPoint0Ptr = &testPairAlt[0];
+				TVector3d* TestPoint1Ptr = &testPairAlt[1];
 
 				auxR = *TestPoint0Ptr - *P0Ptr; testDistE2 = auxR.AmpE2();
 				if(curMinDistE2 > testDistE2) { curMinDistE2 = testDistE2; choiceCase = 0; iterClosest = iter;}
@@ -1966,25 +1967,29 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 			}
 			if(choiceCase == 0)
 			{
-				NewFaceFirstList[FirstCount++] = P0Ptr = (*iterClosest) + 1; //TestPoint1Ptr;
+				std::array<TVector3d, 2>& closestPair = *iterClosest;
+				NewFaceFirstList[FirstCount++] = P0Ptr = &closestPair[1]; //TestPoint1Ptr;
 			}
 			else if(choiceCase == 1)
 			{
-				NewFaceSecondList[SecondCount++] = P1Ptr = (*iterClosest) + 1; //TestPoint1Ptr;
+				std::array<TVector3d, 2>& closestPair = *iterClosest;
+				NewFaceSecondList[SecondCount++] = P1Ptr = &closestPair[1]; //TestPoint1Ptr;
 			}
 			else if(choiceCase == 2)
 			{
-				NewFaceFirstList[FirstCount++] = P0Ptr = *iterClosest; //TestPoint0Ptr;
+				std::array<TVector3d, 2>& closestPair = *iterClosest;
+				NewFaceFirstList[FirstCount++] = P0Ptr = &closestPair[0]; //TestPoint0Ptr;
 			}
 			else //if(choiceCase == 3)
 			{
-				NewFaceSecondList[SecondCount++] = P1Ptr = *iterClosest; //TestPoint0Ptr;
+				std::array<TVector3d, 2>& closestPair = *iterClosest;
+				NewFaceSecondList[SecondCount++] = P1Ptr = &closestPair[0]; //TestPoint0Ptr;
 			}
 			VectOfTwoPoints3d.erase(iterClosest);
 		}
 	}
-	TVector3d** ArrayOf3dEdgePo = new TVector3d*[AmOfEdgePoints];
-	if(ArrayOf3dEdgePo == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<TVector3d*> vArrayOf3dEdgePo(AmOfEdgePoints);
+	TVector3d** ArrayOf3dEdgePo = vArrayOf3dEdgePo.data();
 
 	//Filling-in the array of actual edge points of the new polygon
 	//TVector3d** TraversMain = &(ArrayOf3dEdgePo[FirstCount-1]);
@@ -2032,9 +2037,6 @@ int radTPolyhedron::DetermineNewFaceAndTrans(
 	else FilledOK = FillInNewHandlePgnAndTransFrom3d(ArrayOf3dEdgePo, AmOfEdgePoints, NormalForUpper, UpperNewHandlePgnAndTrans, RelAbsTol);
 	if(!FilledOK) { SomethingIsWrong = 1; return 0;}
 
-	delete[] ArrayOf3dEdgePo;
-	delete[] NewFaceSecondList;
-	delete[] NewFaceFirstList;
 	return 1;
 }
 
@@ -2134,8 +2136,8 @@ int radTPolyhedron::KsFromSizeToNumb(double* SubdivArray, int AmOfDir, radTSubdi
 
 	TransfShouldBeTreated = (TransfShouldBeTreated && SomethingFound);
 
-	TVector3d* Directions = new TVector3d[AmOfDir];
-	if(Directions == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<TVector3d> vDirections(AmOfDir);
+	TVector3d* Directions = vDirections.data();
 	TVector3d* tDirections = Directions;
 	double* tSubdivArray = SubdivArray;
 	for(int i=0; i<AmOfDir; i++)
@@ -2149,8 +2151,8 @@ int radTPolyhedron::KsFromSizeToNumb(double* SubdivArray, int AmOfDir, radTSubdi
 		tSubdivArray += 2;
 	}
 
-	double* Sizes = new double[AmOfDir];
-	if(Sizes == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<double> vSizes(AmOfDir);
+	double* Sizes = vSizes.data();
 
 	EstimateSize(Directions, Sizes, AmOfDir);
 
@@ -2165,8 +2167,7 @@ int radTPolyhedron::KsFromSizeToNumb(double* SubdivArray, int AmOfDir, radTSubdi
 		tSubdivArray +=2;
 	}
 
-	if(Directions != 0) delete[] Directions;
-	if(Sizes != 0) delete[] Sizes;
+	// RAII: automatic cleanup via vDirections and vSizes
 	return 1;
 }
 
@@ -2175,12 +2176,13 @@ int radTPolyhedron::KsFromSizeToNumb(double* SubdivArray, int AmOfDir, radTSubdi
 int radTPolyhedron::SubdivideItselfByParPlanes(double* InSubdivArray, int AmOfDir, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
 {
 	double* SubdivArray = InSubdivArray;
+	std::vector<double> vSubdivArrayToDelete;
 	double* SubdivArrayToDelete = 0;
 	radTSend Send;
-	if(pSubdivOptions->SubdivisionParamCode == 1) 
+	if(pSubdivOptions->SubdivisionParamCode == 1)
 	{
-		SubdivArrayToDelete = new double[AmOfDir*5];
-		if(SubdivArrayToDelete == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+		vSubdivArrayToDelete.resize(AmOfDir*5);
+		SubdivArrayToDelete = vSubdivArrayToDelete.data();
 		SubdivArray = SubdivArrayToDelete;
 
 		double* tSubdivArray = SubdivArray;
@@ -2226,8 +2228,8 @@ int radTPolyhedron::SubdivideItselfByParPlanes(double* InSubdivArray, int AmOfDi
 		if(AmOfPieces > 1)
 		{
 			int AmOfPieces_mi_1 = AmOfPieces - 1;
-			TVector3d* PointsOnCuttingPlanes = new TVector3d[AmOfPieces_mi_1];
-			if(PointsOnCuttingPlanes == 0) { SomethingIsWrong = 1; Send.ErrorMessage("Radia::Error900"); return 0;}
+			std::vector<TVector3d> vPointsOnCuttingPlanes(AmOfPieces_mi_1);
+			TVector3d* PointsOnCuttingPlanes = vPointsOnCuttingPlanes.data();
 
 			// The following may change the PlanesNormal
 			if(!DeterminePointsOnCuttingPlanes(PlanesNormal, SubdivisionParam, SubdInLocFrame, PointsOnCuttingPlanes))
@@ -2286,7 +2288,7 @@ int radTPolyhedron::SubdivideItselfByParPlanes(double* InSubdivArray, int AmOfDi
 				OneDirectionAlreadyPassed = 1;
 				LocElemCount = (int)(((radTGroup*)(AuxGroupHandle.rep))->GroupMapOfHandlers.size());
 			}
-			delete[] PointsOnCuttingPlanes;
+			// RAII: automatic cleanup via vPointsOnCuttingPlanes
 		}
 	}
 	if(GroupInPlaceOfThisPtr != 0) 
@@ -2302,7 +2304,7 @@ int radTPolyhedron::SubdivideItselfByParPlanes(double* InSubdivArray, int AmOfDi
 		In_hg = GroupHandle;
 	}
 
-	if(SubdivArrayToDelete != 0) delete[] SubdivArrayToDelete;
+	// RAII: automatic cleanup via vSubdivArrayToDelete
 	return 1;
 }
 
@@ -2887,8 +2889,8 @@ int radTPolyhedron::SubdivideItselfByEllipticCylinder(double* SubdivArray, radTC
 		radThg OldAuxGroupHandle = AuxGroupHandle;
 		radTvhg VectOfHgChanged;
 		int AmOfPieces_mi_1 = int(kz) - 1;
-		TVector3d* PointsOnCuttingPlanes = new TVector3d[AmOfPieces_mi_1];
-		if(PointsOnCuttingPlanes==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+		std::vector<TVector3d> vPointsOnCuttingPlanes(AmOfPieces_mi_1);
+		TVector3d* PointsOnCuttingPlanes = vPointsOnCuttingPlanes.data();
 
 		const double AbsZeroTol = 5.E-12;
 		double DelZ = Limits[3] - Limits[2];
@@ -2916,7 +2918,7 @@ int radTPolyhedron::SubdivideItselfByEllipticCylinder(double* SubdivArray, radTC
 			radTApplication* Loc_radPtr = 0; // No operations on Global Container !
 			pGroup->FlattenNestedStructure(Loc_radPtr, RespectKeys);
 		}
-		if(PointsOnCuttingPlanes!=0) delete[] PointsOnCuttingPlanes;
+		// RAII: automatic cleanup via vPointsOnCuttingPlanes
 	}
 
 	if(AuxGroupHandle.rep != this) //OC030504
@@ -3802,9 +3804,9 @@ void radTPolyhedron::VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool Ensu
 			bool ThisPtAlreadyExists = false;
 			if(EnsureUnique)
 			{
-				for(int k=0; k<(int)LocPts.size(); k++)
+				for(const auto& pt : LocPts)
 				{
-					TVector3d dp = LocPts[k] - p3d;
+					TVector3d dp = pt - p3d;
 					if((dp.x*dp.x + dp.y*dp.y + dp.z*dp.z) <= AbsTolE2)
 					{
 						ThisPtAlreadyExists = true;

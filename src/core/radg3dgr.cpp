@@ -26,15 +26,15 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <sstream>
+#include <iomanip>
 
 //-------------------------------------------------------------------------
 
 radTSend radTg3dGraphPresent::Send;
 
-//#ifdef _WITH_QD3D
 radTVectOfDrawAttr radTg3dGraphPresent::DrawAttrStack;
 radRGB radTg3dGraphPresent::SbdLineColor = radRGB(0,0,0); //ensure BLACK lines
-//#endif
 
 //-------------------------------------------------------------------------
 
@@ -87,10 +87,7 @@ void radTg3dGraphPresent::NestedFor_Draw(radTrans* BaseTransPtr, const radTlphg:
 
 void radTg3dGraphPresent::GenDraw()
 {
-//#ifdef _WITH_QD3D
-	//if(DrawAttrAreSet) DrawAttrStack.push_back(DrawAttr);
 	if(DrawAttrAreSet && (!GraphPresOptions.doDebug)) DrawAttrStack.push_back(DrawAttr); //OC130709
-//#endif
 
 	//radTCast Cast;
 	if(GraphPresOptions.ShowSymmetryChilds)
@@ -99,7 +96,7 @@ void radTg3dGraphPresent::GenDraw()
 		for(radTlphg::iterator iter = g3dPtr->g3dListOfTransform.begin();
 			iter != g3dPtr->g3dListOfTransform.end(); ++iter) NumberOfSymChilds_pl_Orig *= (*iter).m;
 
-		if(radTCast::FlmLinCurCast(g3dPtr) != NULL) // To separate Linear primitives (since DrawAttr apply differently to them)
+		if(radTCast::FlmLinCurCast(g3dPtr) != nullptr) // To separate Linear primitives (since DrawAttr apply differently to them)
 			Send.InitDrawLinElem(DrawAttrAreSet, DrawAttr, NumberOfSymChilds_pl_Orig, DrawFacilityInd);
 		else Send.InitDrawSurfElem(DrawAttrAreSet, DrawAttr, NumberOfSymChilds_pl_Orig, DrawFacilityInd);
 
@@ -108,16 +105,13 @@ void radTg3dGraphPresent::GenDraw()
 	}
 	else
 	{
-		if(radTCast::FlmLinCurCast(g3dPtr) != NULL) // To separate Linear primitives (since DrawAttr apply diferently to them)
+		if(radTCast::FlmLinCurCast(g3dPtr) != nullptr) // To separate Linear primitives (since DrawAttr apply diferently to them)
 			Send.InitDrawLinElem(DrawAttrAreSet, DrawAttr, 1, DrawFacilityInd);
 		else Send.InitDrawSurfElem(DrawAttrAreSet, DrawAttr, 1, DrawFacilityInd);
 		Draw(&GenTrans);
 	}
 
-//#ifdef _WITH_QD3D
-	//if(DrawAttrAreSet) DrawAttrStack.pop_back();
 	if(DrawAttrAreSet && (!GraphPresOptions.doDebug)) DrawAttrStack.pop_back(); //OC130709
-//#endif
 }
 
 //-------------------------------------------------------------------------
@@ -442,22 +436,15 @@ void radTg3dGraphPresent::DrawTickNumbers(TVector3d& P0, TVector3d& Vpar, TVecto
 
 	TVector3d VectFromCenToLowerLeft = (HalfAllCharWidth*UnitVper) - HalfHeightVect;
 	TVector3d CharTranslVect = ((-1 - IntervToWidthRat)*AbsCharWidth)*UnitVper;
-	char FormStr[6];
-	strcpy(FormStr, "%");
-	if(PerDir > 0) 
+	bool leftAlign = false;
+	if(PerDir > 0)
 	{
 		VectFromCenToLowerLeft = (-1)*VectFromCenToLowerLeft;
 		CharTranslVect = (-1)*CharTranslVect;
-		strcat(FormStr, "-");
+		leftAlign = true;
 	}
 	TVector3d StartLowerLeftP = StartCenP + VectFromCenToLowerLeft;
 
-	char ExtraStrBuf[3];
-	sprintf(ExtraStrBuf, "%d", AmOfNumChar);
-	strcat(FormStr, ExtraStrBuf);
-	strcat(FormStr, "g");
-
-	char NumStrBuf[10];
 	int AmOfTicks = (int)(TickNumPositions.size());
 	for(int i=0; i<AmOfTicks; i++)
 	{
@@ -465,8 +452,12 @@ void radTg3dGraphPresent::DrawTickNumbers(TVector3d& P0, TVector3d& Vpar, TVecto
 		double CurTickOffset = CurTickNum - TickOffsetPos;
 		TVector3d CurLowerLeftP = StartLowerLeftP + (CurTickOffset*UnitVpar);
 
-		int AmOfChar = sprintf(NumStrBuf, FormStr, CurTickNum);
-		char *tStrBuf = NumStrBuf;
+		std::ostringstream oss;
+		if(leftAlign) oss << std::left;
+		oss << std::setw(AmOfNumChar) << std::setprecision(AmOfNumChar-2) << CurTickNum;
+		std::string numStr = oss.str();
+		int AmOfChar = static_cast<int>(numStr.length());
+		const char *tStrBuf = numStr.c_str();
 
 		for(int k=0; k<AmOfChar; k++)
 		{
@@ -754,7 +745,6 @@ void radTRecMagGraphPresent::Draw(radTrans* BaseTransPtr)
 		for(int k=0; k<6; k++) if(!InternalFaces[k]) AmOfNonInternalFaces++;
 	}
 
-	//char SendExtraContourLines = (ShowEdgeLinesInQD3D && (DrawFacilityInd == 1));
 	char SendExtraContourLines = (ShowEdgeLines && ((DrawFacilityInd == 1) || (DrawFacilityInd == 2)));
 
 	if(AmOfNonInternalFaces > 0)
@@ -881,7 +871,7 @@ void radTRecMagGraphPresent::Draw(radTrans* BaseTransPtr)
 void radTExtrPolygonGraphPresent::Draw(radTrans* BaseTransPtr)
 {
 	radTExtrPolygon* ExtrPolygonP = (radTExtrPolygon*)g3dPtr;
-	radTPolygon* BasePolygonPtr = (radTPolygon*)(ExtrPolygonP->BasePolygonHandle.rep);
+	radTPolygon* BasePolygonPtr = static_cast<radTPolygon*>(ExtrPolygonP->BasePolygonHandle.rep);
 
 	radTPolygonGraphPresent* PolygonGraphPresentPtr = (radTPolygonGraphPresent*)(BasePolygonPtr->CreateGraphPresent());
 	PolygonGraphPresentPtr->DrawFacilityInd = DrawFacilityInd;
@@ -951,7 +941,6 @@ void radTExtrPolygonGraphPresent::Draw(radTrans* BaseTransPtr)
 	TVector3d AuxVect(0.,0.,0.);
 
 	int LocParity = BaseTransPtr->ShowParity();
-	//char SendExtraContourLines = (ShowEdgeLinesInQD3D && (DrawFacilityInd == 1));
 	char SendExtraContourLines = (ShowEdgeLines && ((DrawFacilityInd == 1) || (DrawFacilityInd == 2)));
 
 	FirstEdgePoint = TransForBasePgn.TrPoint(FirstEdgePoint);
@@ -1037,7 +1026,7 @@ void radTPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 			//char ErrorStr[100];
 			//int j = sprintf(ErrorStr, "Polyhedron: AmOfFacesToDraw: %d", AmOfFacesToDraw);
 			//UINT DlgStyle = MB_OK | MB_ICONSTOP | MB_DEFBUTTON1 | MB_SYSTEMMODAL;
-			//int MesBoxInf = MessageBox(NULL, ErrorStr, ErrorMesTitle, DlgStyle); 
+			//int MesBoxInf = MessageBox(nullptr, ErrorStr, ErrorMesTitle, DlgStyle); 
 			//end test
 
 	if(AmOfFacesToDraw > 0)
@@ -1196,15 +1185,20 @@ void radTArcCurGraphPresent::Draw(radTrans* BaseTransPtr)
 
 	int lenEdgeLine = ArcCurP->NumberOfSectors + 1;
 	TVector3d *LowerCloseEdgeLine=0, *LowerFarEdgeLine=0, *UpperCloseEdgeLine=0, *UpperFarEdgeLine=0;
+	std::vector<TVector3d> vLowerCloseEdgeLine, vLowerFarEdgeLine, vUpperCloseEdgeLine, vUpperFarEdgeLine;
 	TVector3d FrontLine[] = { SideFrontEnd[0], SideFrontEnd[1], SideFrontEnd[2], SideFrontEnd[3], SideFrontEnd[0] };
 	if(!OutlineSegments)
 	{
 		if(AmOfNonInternalLongFaces > 0)
 		{
-			LowerCloseEdgeLine = new TVector3d[lenEdgeLine];
-			LowerFarEdgeLine = new TVector3d[lenEdgeLine];
-			UpperCloseEdgeLine = new TVector3d[lenEdgeLine];
-			UpperFarEdgeLine = new TVector3d[lenEdgeLine];
+			vLowerCloseEdgeLine.resize(lenEdgeLine);
+			vLowerFarEdgeLine.resize(lenEdgeLine);
+			vUpperCloseEdgeLine.resize(lenEdgeLine);
+			vUpperFarEdgeLine.resize(lenEdgeLine);
+			LowerCloseEdgeLine = vLowerCloseEdgeLine.data();
+			LowerFarEdgeLine = vLowerFarEdgeLine.data();
+			UpperCloseEdgeLine = vUpperCloseEdgeLine.data();
+			UpperFarEdgeLine = vUpperFarEdgeLine.data();
 
 			LowerCloseEdgeLine[0] = SideBottom[0];
 			LowerFarEdgeLine[0] = SideBottom[3];
@@ -1332,10 +1326,7 @@ void radTArcCurGraphPresent::Draw(radTrans* BaseTransPtr)
 		if(Face5 || Face3) Send.Line(UpperFarEdgeLine, lenEdgeLine, DrawFacilityInd);
 		if(Face1Line) Send.Line(EndLine, 5, DrawFacilityInd);
 
-		if(LowerCloseEdgeLine != 0) delete[] LowerCloseEdgeLine;
-		if(LowerFarEdgeLine != 0) delete[] LowerFarEdgeLine;
-		if(UpperCloseEdgeLine != 0) delete[] UpperCloseEdgeLine;
-		if(UpperFarEdgeLine != 0) delete[] UpperFarEdgeLine;
+		// RAII: vLowerCloseEdgeLine, vLowerFarEdgeLine, vUpperCloseEdgeLine, vUpperFarEdgeLine cleaned up automatically
 	}
 }
 
@@ -1350,7 +1341,8 @@ void radTGroupGraphPresent::Draw(radTrans* BaseTransPtr)
 	int *ItemIsNotFullyInternal, *tItemIsNotFullyInternal;
 	ItemIsNotFullyInternal = tItemIsNotFullyInternal = 0;
 
-	ItemIsNotFullyInternal = new int[AmOfElemToDraw]; //OC071002
+	std::vector<int> vItemIsNotFullyInternal(AmOfElemToDraw); //OC071002
+	ItemIsNotFullyInternal = vItemIsNotFullyInternal.data();
 	for(int k=0; k<AmOfElemToDraw; k++) ItemIsNotFullyInternal[k] = 1; //OC071002
 
 	if(!ShowInternalFacesAfterCut)
@@ -1374,7 +1366,7 @@ void radTGroupGraphPresent::Draw(radTrans* BaseTransPtr)
 		//char ErrorStr[100];
 		//int j = sprintf(ErrorStr, "AmOfElemToDraw: %d", AmOfElemToDraw);
 		//UINT DlgStyle = MB_OK | MB_ICONSTOP | MB_DEFBUTTON1 | MB_SYSTEMMODAL;
-		//int MesBoxInf = MessageBox(NULL, ErrorStr, ErrorMesTitle, DlgStyle); 
+		//int MesBoxInf = MessageBox(nullptr, ErrorStr, ErrorMesTitle, DlgStyle); 
 		//end test
 
 	if(AmOfElemToDraw > 0)
@@ -1389,7 +1381,7 @@ void radTGroupGraphPresent::Draw(radTrans* BaseTransPtr)
 			{
 				radTg3d* g3dPtrLoc = (radTg3d*)(((*iter).second).rep);
 				radTg3dGraphPresent* g3dGraphPresentPtr = g3dPtrLoc->CreateGraphPresent();
-				if(g3dGraphPresentPtr != NULL)
+				if(g3dGraphPresentPtr != nullptr)
 				{
 					if(!ShowInternalFacesAfterCut) g3dGraphPresentPtr->ShowInternalFacesAfterCut = false;
 
@@ -1415,7 +1407,7 @@ void radTGroupGraphPresent::Draw(radTrans* BaseTransPtr)
 			}
 		}
 	}
-	if(ItemIsNotFullyInternal != 0) delete[] ItemIsNotFullyInternal;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -1464,7 +1456,6 @@ void radTSubdivRecMagGraphPresent::Draw(radTrans* BaseTransPtr)
 		Send.InitOutList(AmOfNonInternalFaces + 1, DrawFacilityInd);
 		TVector3d Side[5];
 
-		//char SendExtraContourLines = (ShowEdgeLinesInQD3D && (DrawFacilityInd == 1));
 		char SendExtraContourLines = (ShowEdgeLines && ((DrawFacilityInd == 1) || (DrawFacilityInd == 2)));
 
 		int LocParity = BaseTransPtr->ShowParity();
@@ -1702,7 +1693,7 @@ void radTSubdivRecMagGraphPresent::DrawSubdivisionLines(radTSubdividedRecMag* Su
 	for(radTmhg::const_iterator iter = SubdividedRecMagP->GroupMapOfHandlers.begin();
 		iter != SubdividedRecMagP->GroupMapOfHandlers.end(); ++iter)
 	{
-		radTg3d* g3dPtr = (radTg3d*)((*iter).second.rep);
+		radTg3d* g3dPtr = static_cast<radTg3d*>(iter->second.rep);
 		radTGroup* GroupPtr = radTCast::GroupCast(g3dPtr); // Because Subdivided ExtrPolygons (and Subd. RecMags) are placed to the general container through the Group branch
 		radTSubdividedRecMag* SubdividedRecMagPtr = (GroupPtr!=0)? radTCast::SubdividedRecMagCast(GroupPtr) : 0;
 		if(SubdividedRecMagPtr != 0)
@@ -1735,7 +1726,7 @@ void radTSubdivRecMagGraphPresent::DrawSubdivisionLines(radTSubdividedRecMag* Su
 void radTSubdivExtrPolygGraphPresent::Draw(radTrans* BaseTransPtr)
 {
 	radTSubdividedExtrPolygon* SubdExtrPolygonP = (radTSubdividedExtrPolygon*)((radTGroup*)g3dPtr);
-	radTPolygon* BasePolygonPtr = (radTPolygon*)(SubdExtrPolygonP->BasePolygonHandle.rep);
+	radTPolygon* BasePolygonPtr = static_cast<radTPolygon*>(SubdExtrPolygonP->BasePolygonHandle.rep);
 	radTPolygonGraphPresent* PolygonGraphPresentPtr = (radTPolygonGraphPresent*)(BasePolygonPtr->CreateGraphPresent());
 	PolygonGraphPresentPtr->DrawFacilityInd = DrawFacilityInd;
 	
@@ -1804,7 +1795,6 @@ void radTSubdivExtrPolygGraphPresent::Draw(radTrans* BaseTransPtr)
 	TVector3d AuxVect(0.,0.,0.);
 
 	int LocParity = BaseTransPtr->ShowParity();
-	//char SendExtraContourLines = (ShowEdgeLinesInQD3D && (DrawFacilityInd == 1));
 	char SendExtraContourLines = (ShowEdgeLines && ((DrawFacilityInd == 1) || (DrawFacilityInd == 2)));
 
 	FirstEdgePoint = TransForBasePgn.TrPoint(FirstEdgePoint);
@@ -1896,7 +1886,7 @@ void radTSubdivExtrPolygGraphPresent::DrawSubdivisionLines(radTSubdividedExtrPol
 
 		if(ExtrPolygPtr != 0)
 		{
-			PolygPtr = (radTPolygon*)(ExtrPolygPtr->BasePolygonHandle.rep);
+			PolygPtr = static_cast<radTPolygon*>(ExtrPolygPtr->BasePolygonHandle.rep);
 			if(SubdExtrPolygonP->AxOrnt==ParallelToX) SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.x - SubdExtrPolygonP->FirstPoint.x) < PointCoinsToler)? 1 : 0;
 			else if(SubdExtrPolygonP->AxOrnt==ParallelToY) SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.y - SubdExtrPolygonP->FirstPoint.y) < PointCoinsToler)? 1 : 0;
 			else SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.z - SubdExtrPolygonP->FirstPoint.z) < PointCoinsToler)? 1 : 0;
@@ -1905,7 +1895,7 @@ void radTSubdivExtrPolygGraphPresent::DrawSubdivisionLines(radTSubdividedExtrPol
 		{
 			AmOfSubdExtrPolygInTheGroup++;
 
-			PolygPtr = (radTPolygon*)(SubdividedExtrPolygPtr->BasePolygonHandle.rep);
+			PolygPtr = static_cast<radTPolygon*>(SubdividedExtrPolygPtr->BasePolygonHandle.rep);
 			if(SubdExtrPolygonP->AxOrnt==ParallelToX) SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.x - SubdExtrPolygonP->FirstPoint.x) < PointCoinsToler)? 1 : 0;
 			else if(SubdExtrPolygonP->AxOrnt==ParallelToY) SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.y - SubdExtrPolygonP->FirstPoint.y) < PointCoinsToler)? 1 : 0;
 			else SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.z - SubdExtrPolygonP->FirstPoint.z) < PointCoinsToler)? 1 : 0;
@@ -1937,7 +1927,7 @@ void radTSubdivExtrPolygGraphPresent::DrawSubdivisionLines(radTSubdividedExtrPol
 
 	TVector2d* AuxVect2dPtr;
 	TVector3d AuxVect(0.,0.,0.), ZeroVect(0.,0.,0.);
-	radTPolygon* BasePolygonPtr = (radTPolygon*)(SubdExtrPolygonP->BasePolygonHandle.rep);
+	radTPolygon* BasePolygonPtr = static_cast<radTPolygon*>(SubdExtrPolygonP->BasePolygonHandle.rep);
 
 	for(int ii=0; ii<BasePolygonPtr->AmOfEdgePoints; ii++)
 	{
@@ -1965,21 +1955,21 @@ void radTSubdivExtrPolygGraphPresent::DrawSubdivisionLines(radTSubdividedExtrPol
 			radTPolygon* PolygPtr;
 			short SubPolygonsAreOnTheBase=0;
 
-			radTg3d* g3dPtr = (radTg3d*)((*iter).second.rep);
+			radTg3d* g3dPtr = static_cast<radTg3d*>(iter->second.rep);
 			radTGroup* GroupPtr = radTCast::GroupCast(g3dPtr); // Because Subdivided ExtrPolygons (and Subd. RecMags) are placed to the general container through the Group branch
 			radTSubdividedExtrPolygon* SubdividedExtrPolygPtr = (GroupPtr!=0)? radTCast::SubdExtrPolygonCastFromGroup(GroupPtr) : 0;
 			radTExtrPolygon* ExtrPolygPtr = (GroupPtr==0)? radTCast::ExtrPolygonCast((radTg3dRelax*)g3dPtr) : 0;
 
 			if(ExtrPolygPtr != 0)
 			{
-				PolygPtr = (radTPolygon*)(ExtrPolygPtr->BasePolygonHandle.rep);
+				PolygPtr = static_cast<radTPolygon*>(ExtrPolygPtr->BasePolygonHandle.rep);
 				if(SubdExtrPolygonP->AxOrnt==ParallelToX) SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.x - SubdExtrPolygonP->FirstPoint.x) < PointCoinsToler)? 1 : 0;
 				else if(SubdExtrPolygonP->AxOrnt==ParallelToY) SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.y - SubdExtrPolygonP->FirstPoint.y) < PointCoinsToler)? 1 : 0;
 				else SubPolygonsAreOnTheBase = (Abs(ExtrPolygPtr->FirstPoint.z - SubdExtrPolygonP->FirstPoint.z) < PointCoinsToler)? 1 : 0;
 			}
 			else if(SubdividedExtrPolygPtr != 0)
 			{
-				PolygPtr = (radTPolygon*)(SubdividedExtrPolygPtr->BasePolygonHandle.rep);
+				PolygPtr = static_cast<radTPolygon*>(SubdividedExtrPolygPtr->BasePolygonHandle.rep);
 				if(SubdExtrPolygonP->AxOrnt==ParallelToX) SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.x - SubdExtrPolygonP->FirstPoint.x) < PointCoinsToler)? 1 : 0;
 				else if(SubdExtrPolygonP->AxOrnt==ParallelToY) SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.y - SubdExtrPolygonP->FirstPoint.y) < PointCoinsToler)? 1 : 0;
 				else SubPolygonsAreOnTheBase = (Abs(SubdividedExtrPolygPtr->FirstPoint.z - SubdExtrPolygonP->FirstPoint.z) < PointCoinsToler)? 1 : 0;
@@ -2035,7 +2025,8 @@ void radTSubdivPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 	radTSubdividedPolyhedron* SubdPolyhedronP = (radTSubdividedPolyhedron*)((radTGroup*)g3dPtr);
 
 	int AmOfElemToDraw = 0, ElemCount = 0;
-	int* ItemIsNotFullyInternal = new int[SubdPolyhedronP->GroupMapOfHandlers.size()];
+	std::vector<int> vItemIsNotFullyInternal(SubdPolyhedronP->GroupMapOfHandlers.size());
+	int* ItemIsNotFullyInternal = vItemIsNotFullyInternal.data();
 
 	radTmhg& GrMapOfHndl = SubdPolyhedronP->GroupMapOfHandlers;
 	radTmhg::const_iterator iter;
@@ -2052,7 +2043,7 @@ void radTSubdivPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 			//char ErrorStr[100];
 			//int j = sprintf(ErrorStr, "SubdivPolyhedron: AmOfElemToDraw: %d", AmOfElemToDraw);
 			//UINT DlgStyle = MB_OK | MB_ICONSTOP | MB_DEFBUTTON1 | MB_SYSTEMMODAL;
-			//int MesBoxInf = MessageBox(NULL, ErrorStr, ErrorMesTitle, DlgStyle); 
+			//int MesBoxInf = MessageBox(nullptr, ErrorStr, ErrorMesTitle, DlgStyle); 
 			//end test
 
 	if(AmOfElemToDraw > 0)
@@ -2065,7 +2056,7 @@ void radTSubdivPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 			{
 				radTg3d* Loc_g3dPtr = (radTg3d*)(((*iter).second).rep);
 				radTg3dGraphPresent* g3dGraphPresentPtr = Loc_g3dPtr->CreateGraphPresent();
-				if(g3dGraphPresentPtr != NULL)
+				if(g3dGraphPresentPtr != nullptr)
 				{
 					g3dGraphPresentPtr->DrawFacilityInd = DrawFacilityInd;
 					g3dGraphPresentPtr->ShowInternalFacesAfterCut = false;
@@ -2090,7 +2081,7 @@ void radTSubdivPolyhedronGraphPresent::Draw(radTrans* BaseTransPtr)
 			}
 		}
 	}
-	if(ItemIsNotFullyInternal != 0) delete[] ItemIsNotFullyInternal;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -2101,7 +2092,8 @@ void radTSubdivArcCurGraphPresent::Draw(radTrans* BaseTransPtr)
 	radTSubdividedArcCur* SubdArcCurP = (radTSubdividedArcCur*)((radTGroup*)g3dPtr);
 
 	int AmOfElemToDraw = 0, ElemCount = 0;
-	int* ItemIsNotFullyInternal = new int[SubdArcCurP->GroupMapOfHandlers.size()];
+	std::vector<int> vItemIsNotFullyInternal(SubdArcCurP->GroupMapOfHandlers.size());
+	int* ItemIsNotFullyInternal = vItemIsNotFullyInternal.data();
 
 	radTmhg& GrMapOfHndl = SubdArcCurP->GroupMapOfHandlers;
 	radTmhg::const_iterator iter;
@@ -2123,7 +2115,7 @@ void radTSubdivArcCurGraphPresent::Draw(radTrans* BaseTransPtr)
 			{
 				radTg3d* Loc_g3dPtr = (radTg3d*)(((*iter).second).rep);
 				radTg3dGraphPresent* g3dGraphPresentPtr = Loc_g3dPtr->CreateGraphPresent();
-				if(g3dGraphPresentPtr != NULL)
+				if(g3dGraphPresentPtr != nullptr)
 				{
 					g3dGraphPresentPtr->DrawFacilityInd = DrawFacilityInd;
 					g3dGraphPresentPtr->ShowInternalFacesAfterCut = false;
@@ -2144,7 +2136,7 @@ void radTSubdivArcCurGraphPresent::Draw(radTrans* BaseTransPtr)
 			}
 		}
 	}
-	if(ItemIsNotFullyInternal != 0) delete[] ItemIsNotFullyInternal;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -2177,8 +2169,8 @@ void radTRectangleGraphPresent::Draw(radTrans* BaseTransPtr)
 void radTPolygonGraphPresent::Draw(radTrans* BaseTransPtr)
 {
 	radTPolygon* PolygonP = (radTPolygon*)g3dPtr;
-	TVector3d* PolygonArray = NULL;
-	PolygonArray = new TVector3d[PolygonP->AmOfEdgePoints + 1];
+	std::vector<TVector3d> vPolygonArray(PolygonP->AmOfEdgePoints + 1);
+	TVector3d* PolygonArray = vPolygonArray.data();
 
 	TVector2d AuxVect2d;
 	TVector3d AuxVect(0.,0., PolygonP->CoordZ);
@@ -2206,7 +2198,6 @@ void radTPolygonGraphPresent::Draw(radTrans* BaseTransPtr)
 
 	Send.Polygon(PolygonArray, PolygonP->AmOfEdgePoints, DrawFacilityInd);
 
-	//char SendExtraContourLines = (ShowEdgeLinesInQD3D && (DrawFacilityInd == 1));
 	char SendExtraContourLines = (ShowEdgeLines && ((DrawFacilityInd == 1) || (DrawFacilityInd == 2)));
 
 	if(SendExtraContourLines) 
@@ -2217,7 +2208,7 @@ void radTPolygonGraphPresent::Draw(radTrans* BaseTransPtr)
 		RemoveCurrentColorFromStack();
 	}
 
-	delete[] PolygonArray;
+	// RAII: vPolygonArray cleaned up automatically
 }
 
 //-------------------------------------------------------------------------
@@ -2230,19 +2221,12 @@ void radTFlmLinCurGraphPresent::Draw(radTrans* BaseTransPtr)
 	aLine[0] = BaseTransPtr->TrPoint(FlmLinCurP->StartPoint);
 	aLine[1] = BaseTransPtr->TrPoint(FlmLinCurP->EndPoint);
 
-#ifdef _WITH_QD3D
-	//char OldShowLinesInQD3D = Send.ShowLinesInQD3D;
-	//Send.ShowLinesInQD3D = 1;
 	char OldShowLines = Send.ShowLines;
 	Send.ShowLines = 1;
-#endif
 
 	Send.Line(aLine, 2, DrawFacilityInd);
 
-#ifdef _WITH_QD3D
-	//Send.ShowLinesInQD3D = OldShowLinesInQD3D;
 	Send.ShowLines = OldShowLines;
-#endif
 }
 
 //-------------------------------------------------------------------------

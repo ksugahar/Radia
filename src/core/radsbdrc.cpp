@@ -42,8 +42,8 @@ radTSubdividedRecMag::radTSubdividedRecMag(const TVector3d& InCPoiVect, const TV
 	InternalFacesAfterCut = 0;
 
 	FldCmpMeth = 0;
-	Q_forM = NULL;
-	FormCenPoPtrArray = NULL;
+	Q_forM = nullptr;
+	FormCenPoPtrArray = nullptr;
 	AmOfSubElem = int(kx)*int(ky)*int(kz);
 	CenPoLoopCounter = IntrcMatrConstrCounter = FormIntrctMembCounter = -1;
 
@@ -64,8 +64,8 @@ radTSubdividedRecMag::radTSubdividedRecMag(const TVector3d& InCPoiVect, const TV
 	InternalFacesAfterCut = 0;
 
 	FldCmpMeth = 0;
-	Q_forM = NULL;
-	FormCenPoPtrArray = NULL;
+	Q_forM = nullptr;
+	FormCenPoPtrArray = nullptr;
 	AmOfSubElem = int(kx)*int(ky)*int(kz);
 	CenPoLoopCounter = IntrcMatrConstrCounter = FormIntrctMembCounter = -1;
 
@@ -96,8 +96,8 @@ radTSubdividedRecMag::radTSubdividedRecMag(const radTRecMag* RecMagPtr, const do
 	qx = InSubdivArray[1]; qy = InSubdivArray[3]; qz = InSubdivArray[5];
 
 	FldCmpMeth = 0;
-	Q_forM = NULL;
-	FormCenPoPtrArray = NULL;
+	Q_forM = nullptr;
+	FormCenPoPtrArray = nullptr;
 	AmOfSubElem = int(kx)*int(ky)*int(kz);
 	CenPoLoopCounter = IntrcMatrConstrCounter = FormIntrctMembCounter = -1;
 
@@ -125,8 +125,8 @@ radTSubdividedRecMag::radTSubdividedRecMag(const radTRecMag* RecMagPtr)
 	AlgsBasedOnKsQsMayNotWork = true;
 
 	FldCmpMeth = 0;
-	Q_forM = NULL;
-	FormCenPoPtrArray = NULL;
+	Q_forM = nullptr;
+	FormCenPoPtrArray = nullptr;
 	CenPoLoopCounter = IntrcMatrConstrCounter = FormIntrctMembCounter = -1;
 }
 
@@ -137,8 +137,8 @@ radTSubdividedRecMag::radTSubdividedRecMag()
 	InternalFacesAfterCut = 0;
 
 	FldCmpMeth = 0;
-	Q_forM = NULL;
-	FormCenPoPtrArray = NULL;
+	Q_forM = nullptr;
+	FormCenPoPtrArray = nullptr;
 
 	CenPoLoopCounter = IntrcMatrConstrCounter = FormIntrctMembCounter = -1;
 	AlgsBasedOnKsQsMayNotWork = true;
@@ -166,17 +166,17 @@ void radTSubdividedRecMag::B_comp(radTField* FieldPtr)
 		{
 			IntrcMatrConstrCounter++;
 			int SubElemNo = int(double(IntrcMatrConstrCounter)/double(FieldPtr->AmOfIntrctElemWithSym));
-			
+
 			int IndxInCont = -1;
 			if(IntrcMatrConstrCounter >= FieldPtr->AmOfIntrctElemWithSym)
 				IndxInCont = IntrcMatrConstrCounter - SubElemNo*FieldPtr->AmOfIntrctElemWithSym;
 
 			if(IndxInCont==-1)
 			{
-				TVector3d* NewArrayOfT = new TVector3d[AmOfSubElem]; // Wrap with try-catch?
-				TVector3d* NewArrayOfS = new TVector3d[AmOfSubElem];
-				VectOfTsComputed.push_back(NewArrayOfT);
-				VectOfSsComputed.push_back(NewArrayOfS);
+				VectOfTsStorage.push_back(std::vector<TVector3d>(AmOfSubElem));
+				VectOfSsStorage.push_back(std::vector<TVector3d>(AmOfSubElem));
+				VectOfTsComputed.push_back(VectOfTsStorage.back().data());
+				VectOfSsComputed.push_back(VectOfSsStorage.back().data());
 
 				B_compPolynomial(FieldPtr); // This fills-in last arrays in VectOfTs(Ss)Computed
 				IndxInCont = IntrcMatrConstrCounter;
@@ -194,13 +194,10 @@ void radTSubdividedRecMag::B_comp(radTField* FieldPtr)
 			if(IntrcMatrConstrCounter == (FieldPtr->AmOfIntrctElemWithSym)*AmOfSubElem-1)
 			{
 				IntrcMatrConstrCounter = -1;
-				for(int i=0; i<(FieldPtr->AmOfIntrctElemWithSym); i++)
-				{
-					delete[] (VectOfTsComputed[i]);
-					delete[] (VectOfSsComputed[i]);
-				}
-				VectOfTsComputed.erase(VectOfTsComputed.begin(), VectOfTsComputed.end());
-				VectOfSsComputed.erase(VectOfSsComputed.begin(), VectOfSsComputed.end());
+				VectOfTsComputed.clear();
+				VectOfSsComputed.clear();
+				VectOfTsStorage.clear();
+				VectOfSsStorage.clear();
 			}
 			return;
 		}
@@ -921,24 +918,29 @@ int radTSubdividedRecMag::SetupFldCmpData(short InFldCmpMeth, int SubLevel)
 
 	if(FldCmpMeth==0)
 	{
-		if(Q_forM!=NULL)
-		{
-			for(int j=0; j<AmOfSubElem; j++) delete[] (Q_forM[j]);
-			delete[] Q_forM;
-		}
-		if(FormCenPoPtrArray!=NULL) delete[] FormCenPoPtrArray;
+		// RAII: automatic cleanup
+		vFormCenPoPtrArray.clear();
+		FormCenPoPtrArray = nullptr;
 
 		return 1;
 	}
 
-	Q_forM = new double*[AmOfSubElem];
-	double** DirQ = new double*[AmOfSubElem];
+	// RAII: Use std::vector for both Q_forM and DirQ
+	vQ_forM.resize(AmOfSubElem);
+	vQ_forMPtrs.resize(AmOfSubElem);
+	std::vector<std::vector<double>> vDirQ(AmOfSubElem);
+	std::vector<double*> vDirQPtrs(AmOfSubElem);
 	for(int j=0; j<AmOfSubElem; j++)
 	{
-		Q_forM[j] = new double[AmOfSubElem];
-		DirQ[j] = new double[AmOfSubElem];
+		vQ_forM[j].resize(AmOfSubElem);
+		vQ_forMPtrs[j] = vQ_forM[j].data();
+		vDirQ[j].resize(AmOfSubElem);
+		vDirQPtrs[j] = vDirQ[j].data();
 	}
-	FormCenPoPtrArray = new TVector3d*[AmOfSubElem];
+	Q_forM = vQ_forMPtrs.data();
+	double** DirQ = vDirQPtrs.data();
+	vFormCenPoPtrArray.resize(AmOfSubElem);
+	FormCenPoPtrArray = vFormCenPoPtrArray.data();
 
 	if(FldCmpMeth==1)
 	{
@@ -958,9 +960,12 @@ int radTSubdividedRecMag::SetupFldCmpData(short InFldCmpMeth, int SubLevel)
 
 		double Xj, Yj, Zj, MultCx, MultCy, MultCz;
 
-		double* Cx = new double[int(kx)];
-		double* Cy = new double[int(ky)];
-		double* Cz = new double[int(kz)];
+		std::vector<double> vCx(kx);
+		std::vector<double> vCy(ky);
+		std::vector<double> vCz(kz);
+		double* Cx = vCx.data();
+		double* Cy = vCy.data();
+		double* Cz = vCz.data();
 
 		int ColNo, StrNo, ix, iy, iz;
 		StrNo = 0;
@@ -1007,7 +1012,7 @@ int radTSubdividedRecMag::SetupFldCmpData(short InFldCmpMeth, int SubLevel)
 			ax *= q0x;
 			Xj += 0.5*ax;
 		}
-		delete[] Cx; delete[] Cy; delete[] Cz;
+		// RAII: vCx, vCy, vCz cleaned up automatically
 
 		radTMathLinAlgEq MathMet(AmOfSubElem);
 		MathMet.InverseMatrix(DirQ, AmOfSubElem, Q_forM);
@@ -1022,9 +1027,8 @@ int radTSubdividedRecMag::SetupFldCmpData(short InFldCmpMeth, int SubLevel)
 			FormCenPoPtrArray[StrNo++] = (GroupPtr == 0)? &(((radTg3dRelax*)g3dPtr)->CentrPoint) : &(GroupPtr->CentrPoint); //OC061008
 		}
 	}
-	
-	for(int jj=0; jj<AmOfSubElem; jj++) delete[] (DirQ[jj]);
-	delete[] DirQ;
+
+	// RAII: vDirQ and vDirQPtrs cleaned up automatically
 
 	return 1;
 }
@@ -1041,7 +1045,7 @@ radTg3dRelax* radTSubdividedRecMag::FormalIntrctMemberPtr()
 			FormIntrctMembCounter = -1; // ??
 		}
 
-		radTg3dRelax* FormIntrctMembPtr = NULL;
+		radTg3dRelax* FormIntrctMembPtr = nullptr;
 		radTg3d* g3dPtr = (radTg3d*)(((*FormIntrctMembIter).second).rep);
 
 		//radTCast Cast;

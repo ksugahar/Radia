@@ -26,10 +26,10 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
-typedef vector<TVector3d*> radTVectPtrVect3d;
+#ifdef __GNUC__
+using radTVectPtrVect3d = vector<TVector3d*>;
 #else
-typedef vector<TVector3d*, allocator<TVector3d*> > radTVectPtrVect3d;
+using radTVectPtrVect3d = vector<TVector3d*, allocator<TVector3d*> >;
 #endif
 
 //-------------------------------------------------------------------------
@@ -37,12 +37,16 @@ typedef vector<TVector3d*, allocator<TVector3d*> > radTVectPtrVect3d;
 
 class radTSubdividedRecMag : public radTGroup, public radTRecMag {
 
+	std::vector<std::vector<double>> vQ_forM;
+	std::vector<double*> vQ_forMPtrs;
 	double** Q_forM;
+	std::vector<TVector3d*> vFormCenPoPtrArray;
 	TVector3d** FormCenPoPtrArray;
 	int AmOfSubElem;
 	int CenPoLoopCounter, IntrcMatrConstrCounter, FormIntrctMembCounter;
 	radTmhg::const_iterator FormIntrctMembIter;
 	radTVectPtrVect3d VectOfTsComputed, VectOfSsComputed;
+	vector<vector<TVector3d>> VectOfTsStorage, VectOfSsStorage;
 	short GroupMembersArePureRecMags;
 
 public:

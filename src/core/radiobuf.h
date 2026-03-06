@@ -42,20 +42,27 @@ class radTIOBuffer /*: public ErrorWarning*/ {
 	vector<double> DoubleBuffer;
 	vector<string> StringBuffer;
 
+	std::vector<double> vDoubleBufferMulti;
 	double *DoubleBufferMulti;
+	std::vector<int> vDimsDoubleBufferMulti;
 	int *DimsDoubleBufferMulti, NumDimsDoubleBufferMulti;
 
+	std::vector<int> vIntBufferMulti;
 	int *IntBufferMulti;
+	std::vector<int> vDimsIntBufferMulti;
 	int *DimsIntBufferMulti, NumDimsIntBufferMulti;
 
 	map<int, double*, less<int> > m_DoubleBufferMulti; //OC04112019
 	map<int, vector<int>, less<int> > m_DimsDoubleBufferMulti; //OC04112019
+	map<int, vector<double>, less<int> > m_VectDoubleBufferMulti; // Vector storage for ownership
 
 	map<int, float*, less<int> > m_FloatBufferMulti; //OC04112019
 	map<int, vector<int>, less<int> > m_DimsFloatBufferMulti; //OC04112019
+	map<int, vector<float>, less<int> > m_VectFloatBufferMulti; // Vector storage for ownership
 
 	map<int, int*, less<int> > m_IntBufferMulti; //OC04112019
 	map<int, vector<int>, less<int> > m_DimsIntBufferMulti; //OC04112019
+	map<int, vector<int>, less<int> > m_VectIntBufferMulti; // Vector storage for ownership
 
 	map<int, vector<int>, less<int> > m_IntBuffer; //OC04112019
 
@@ -79,7 +86,7 @@ public:
 	int GetErrorSize(int e)
 	{
 		const char* ErrStr = GetError(e);
-		if(ErrStr == NULL) return 0;
+		if(ErrStr == nullptr) return 0;
 		return (int)strlen(ErrStr);
 	}
 
@@ -94,7 +101,7 @@ public:
 	int GetWarningSize(int e)
 	{
 		const char* ErrStr = GetWarning(e);
-		if(ErrStr == NULL) return 0;
+		if(ErrStr == nullptr) return 0;
 		return (int)strlen(ErrStr);
 	}
 
@@ -115,10 +122,10 @@ public:
 	}
 	void StoreMultiDimArrayOfInt(int* Array, int* Dims, int NumDims)
 	{
-		DimsIntBufferMulti = new int[NumDims];
-		if(DimsIntBufferMulti == 0) { StoreErrorMessage("Radia::Error900"); return;}
+		vDimsIntBufferMulti.resize(NumDims);
+		DimsIntBufferMulti = vDimsIntBufferMulti.data();
 		long TotLen = 1;
-		for(int i=0; i<NumDims; i++) 
+		for(int i=0; i<NumDims; i++)
 		{
 			int aDim = Dims[i];
 			TotLen *= aDim;
@@ -126,8 +133,8 @@ public:
 		}
 		NumDimsIntBufferMulti = NumDims;
 
-		IntBufferMulti = new int[TotLen];
-		if(IntBufferMulti == 0) { StoreErrorMessage("Radia::Error900"); return;}
+		vIntBufferMulti.resize(TotLen);
+		IntBufferMulti = vIntBufferMulti.data();
 		int *tIntBufferMulti = IntBufferMulti;
 		int *tArray = Array;
 		for(int k=0; k<TotLen; k++) *(tIntBufferMulti++) = *(tArray++);
@@ -138,10 +145,10 @@ public:
 	}
 	void StoreMultiDimArrayOfDouble(double* Array, int* Dims, int NumDims)
 	{
-		DimsDoubleBufferMulti = new int[NumDims];
-		if(DimsDoubleBufferMulti == 0) { StoreErrorMessage("Radia::Error900"); return;}
+		vDimsDoubleBufferMulti.resize(NumDims);
+		DimsDoubleBufferMulti = vDimsDoubleBufferMulti.data();
 		long TotLen = 1;
-		for(int i=0; i<NumDims; i++) 
+		for(int i=0; i<NumDims; i++)
 		{
 			int aDim = Dims[i];
 			TotLen *= aDim;
@@ -149,8 +156,8 @@ public:
 		}
 		NumDimsDoubleBufferMulti = NumDims;
 
-		DoubleBufferMulti = new double[TotLen];
-		if(DoubleBufferMulti == 0) { StoreErrorMessage("Radia::Error900"); return;}
+		vDoubleBufferMulti.resize(TotLen);
+		DoubleBufferMulti = vDoubleBufferMulti.data();
 		double *tDoubleBufferMulti = DoubleBufferMulti;
 		double *tArray = Array;
 		for(int k=0; k<TotLen; k++) *(tDoubleBufferMulti++) = *(tArray++);
@@ -176,10 +183,13 @@ public:
 		for(int i=0; i<Npg; i++) Nv += GeomPolygons[i].Nv;
 		if(Nv <= 0) return;
 
-		double *arVertCoord = new double[3*Nv];
+		std::vector<double> vArVertCoord(3*Nv);
+		double *arVertCoord = vArVertCoord.data();
 		//VertInd = new int[Nv];
-		int *arPgLen = new int[Npg];
-		float *arPgColors = new float[3*Npg];
+		std::vector<int> vArPgLen(Npg);
+		int *arPgLen = vArPgLen.data();
+		std::vector<float> vArPgColors(3*Npg);
+		float *arPgColors = vArPgColors.data();
 
 		double *tVertCoord = arVertCoord;
 		//int *tVertInd = VertInd;
@@ -209,15 +219,18 @@ public:
 			}
 		}
 
-		m_DoubleBufferMulti[key] = arVertCoord;
+		m_VectDoubleBufferMulti[key] = std::move(vArVertCoord);
+		m_DoubleBufferMulti[key] = m_VectDoubleBufferMulti[key].data();
 		vector<int> vNumVertCoord; vNumVertCoord.push_back(3*Nv);
 		m_DimsDoubleBufferMulti[key] = vNumVertCoord;
 
-		m_IntBufferMulti[key] = arPgLen;
+		m_VectIntBufferMulti[key] = std::move(vArPgLen);
+		m_IntBufferMulti[key] = m_VectIntBufferMulti[key].data();
 		vector<int> vNumPg; vNumPg.push_back(Npg);
 		m_DimsIntBufferMulti[key] = vNumPg;
 
-		m_FloatBufferMulti[key] = arPgColors;
+		m_VectFloatBufferMulti[key] = std::move(vArPgColors);
+		m_FloatBufferMulti[key] = m_VectFloatBufferMulti[key].data();
 		vector<int> vNumPgCol; vNumPgCol.push_back(3*Npg);
 		m_DimsFloatBufferMulti[key] = vNumPgCol;
 		
@@ -449,7 +462,7 @@ public:
 				return RemoveDecorFromErrWarnStr(CurStr);
 			}
 		}
-		return NULL;
+		return nullptr;
 	}
 	const char* DecodeWarningText(const char* ErrorTitle)
 	{
@@ -467,7 +480,7 @@ public:
 				return RemoveDecorFromErrWarnStr(CurStr);
 			}
 		}
-		return NULL;
+		return nullptr;
 	}
 
 	void PrepErrWarnMesageForMathematica(char* ErrMesForMath, const char* ErrorTitle, char e_or_w)
@@ -549,14 +562,20 @@ private:
 
 	void EraseIntBufferMulti()
 	{
-		if(IntBufferMulti != 0) delete[] IntBufferMulti; IntBufferMulti = 0;
-		if(DimsIntBufferMulti != 0) delete[] DimsIntBufferMulti; DimsIntBufferMulti = 0;
+		// RAII: vIntBufferMulti and vDimsIntBufferMulti cleaned up automatically
+		vIntBufferMulti.clear();
+		IntBufferMulti = 0;
+		vDimsIntBufferMulti.clear();
+		DimsIntBufferMulti = 0;
 		NumDimsIntBufferMulti = 0;
 	}
 	void EraseDoubleBufferMulti()
 	{
-		if(DoubleBufferMulti != 0) delete[] DoubleBufferMulti; DoubleBufferMulti = 0;
-		if(DimsDoubleBufferMulti != 0) delete[] DimsDoubleBufferMulti; DimsDoubleBufferMulti = 0;
+		// RAII: vDoubleBufferMulti and vDimsDoubleBufferMulti cleaned up automatically
+		vDoubleBufferMulti.clear();
+		DoubleBufferMulti = 0;
+		vDimsDoubleBufferMulti.clear();
+		DimsDoubleBufferMulti = 0;
 		NumDimsDoubleBufferMulti = 0;
 	}
 
@@ -566,13 +585,13 @@ private:
 		int LenStrSepar = (int)strlen(StrSepar);
 
 		int LenDecoratedStr = (int)strlen(DecoratedStr);
-		if(LenDecoratedStr <= LenStrSepar) return NULL;
+		if(LenDecoratedStr <= LenStrSepar) return nullptr;
 
 		const char* StrSeparAndNonDecoratedStr = strstr(DecoratedStr, StrSepar);
-		if(StrSeparAndNonDecoratedStr == NULL) return NULL;
+		if(StrSeparAndNonDecoratedStr == nullptr) return nullptr;
 
 		int LenStrSeparAndNonDecoratedStr = (int)strlen(StrSeparAndNonDecoratedStr);
-		if(LenStrSeparAndNonDecoratedStr <= LenStrSepar) return NULL;
+		if(LenStrSeparAndNonDecoratedStr <= LenStrSepar) return nullptr;
 		
 		return StrSeparAndNonDecoratedStr + LenStrSepar;
 	}

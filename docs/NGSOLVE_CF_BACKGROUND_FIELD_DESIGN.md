@@ -2,7 +2,6 @@
 
 **Date**: 2025-10-31
 **Status**: Design Phase
-**Authors**: User + Claude Code
 
 ## Overview
 

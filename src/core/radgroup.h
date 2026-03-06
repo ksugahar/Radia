@@ -24,11 +24,7 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
-typedef vector<int> radTVectOfInt;
-#else
-typedef vector<int, allocator<int> > radTVectOfInt;
-#endif
+using radTVectOfInt = vector<int>;
 
 //-------------------------------------------------------------------------
 
@@ -40,12 +36,12 @@ public:
 	radTGroup() {}
 	~radTGroup() {}
 
-	int Type_g3d() { return 2;}
+	int Type_g3d() override { return 2;}
 	virtual int Type_Group() { return 0;}
 
 	inline void AddElement(int, const radThg&);
-	
-	inline void B_comp(radTField*);  // Modified by P. Elleaume 8 Nov 96
+
+	inline void B_comp(radTField*) override;  // Modified by P. Elleaume 8 Nov 96
 	void B_intComp(radTField* FieldPtr) { B_comp(FieldPtr);} // This is not an Error!!!
 
 	void Dump(std::ostream&, int =0);
@@ -56,9 +52,9 @@ public:
 	//void DumpBin(CAuxBinStrVect& oStr, radTmhg& mEl, radThg& hg);
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 
-	radTg3dGraphPresent* CreateGraphPresent();
+	radTg3dGraphPresent* CreateGraphPresent() override;
 
-	int DuplicateItself(radThg& hg, radTApplication* radPtr, char PutNewStuffIntoGenCont)
+	int DuplicateItself(radThg& hg, radTApplication* radPtr, char PutNewStuffIntoGenCont) override
 	{
 		return DuplicateGroupStuff(new radTGroup(*this), hg, radPtr, PutNewStuffIntoGenCont);
 	}
@@ -75,12 +71,12 @@ public:
 
 	int CreateFromSym(radThg&, radTApplication*, char);
 
-	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);
+	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*) override;
 	int SubdivideItselfAsWholeInLabFrame(double*, radThg&, radTApplication*, radTSubdivOptions*);
 	int SetUpCuttingPlanes(TVector3d&, double*, radTSubdivOptions*, TVector3d*);
 	int FindLowestAndUppestVertices(TVector3d&, radTSubdivOptions*, TVector3d&, TVector3d&, radTrans&, char&, char&);
 
-	int SubdivideItselfByEllipticCylinder(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
+	int SubdivideItselfByEllipticCylinder(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*) override;
 	int SubdivideItselfByEllipticCylinderAsWholeInLabFrame(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
 	int FindEdgePointsOverPhiAndAxForCylSubd(radTCylindricSubdivSpec*, TVector3d*, double*);
 	int ConvertToPolyhedron(radThg&, radTApplication*, char);
@@ -95,22 +91,22 @@ public:
 
 	int CutItself(TVector3d*, radThg&, radTPair_int_hg&, radTPair_int_hg&, radTApplication*, radTSubdivOptions*);
 
-	int SubdivideItselfByParPlanes(double*, int, radThg&, radTApplication*, radTSubdivOptions*);
+	int SubdivideItselfByParPlanes(double*, int, radThg&, radTApplication*, radTSubdivOptions*) override;
 	int SubdivideItselfByParPlanesAsWholeInLabFrame(double*, int, radThg&, radTApplication*, radTSubdivOptions*);
 
-	int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions*, radTvhg*);
+	int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions*, radTvhg*) override;
 
-	int SetMaterial(radThg&, radTApplication*);
-	void SetM(TVector3d& M); //virtual
-	inline int ScaleCurrent(double); //virtual in radTg3d
+	int SetMaterial(radThg&, radTApplication*) override;
+	void SetM(TVector3d& M) override; //virtual
+	inline int ScaleCurrent(double) override; //virtual in radTg3d
 
 	void FlattenNestedStructure(radTApplication*, char);
 	void CollectNonGroupElements(radTmhg*, int&, radTApplication*, char);
 
 	inline int ItemIsNotFullyInternalAfterCut();
 
-	inline int NumberOfDegOfFreedom();
-	inline int SizeOfThis();
+	inline int NumberOfDegOfFreedom() override;
+	inline int SizeOfThis() override;
 
 	void Push_backCenterPointAndField(radTFieldKey*, radTVectPairOfVect3d*, radTrans*, radTg3d*, radTApplication*);
 
@@ -133,10 +129,10 @@ public:
 
 //-------------------------------------------------------------------------
 
-inline void radTGroup::AddElement(int ElemKey, const radThg& hg) 
-{ 
+inline void radTGroup::AddElement(int ElemKey, const radThg& hg)
+{
 	GroupMapOfHandlers[ElemKey] = hg;
-	((radTg3d*)(hg.rep))->IsGroupMember = 1;
+	static_cast<radTg3d*>(hg.rep)->IsGroupMember = 1;
 }
 
 //-------------------------------------------------------------------------
@@ -145,17 +141,16 @@ inline void radTGroup::B_comp(radTField* FieldPtr)
 {
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->B_genComp(FieldPtr);  // To check carefully!!!
+		static_cast<radTg3d*>(iter->second.rep)->B_genComp(FieldPtr);
 }
 
 //-------------------------------------------------------------------------
 
-inline int radTGroup::NumberOfDegOfFreedom() 
+inline int radTGroup::NumberOfDegOfFreedom()
 {
 	int DegFrCount = 0;
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-		DegFrCount += ((radTg3d*)(((*iter).second).rep))->NumberOfDegOfFreedom();  // To check carefully!!!
+	for(const auto& pair : GroupMapOfHandlers)
+		DegFrCount += static_cast<radTg3d*>(pair.second.rep)->NumberOfDegOfFreedom();
 	return DegFrCount;
 }
 
@@ -164,9 +159,8 @@ inline int radTGroup::NumberOfDegOfFreedom()
 inline int radTGroup::SizeOfThis()
 {
 	int GenSize = sizeof(*this);
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-		GenSize += (((*iter).second).rep)->SizeOfThis();
+	for(const auto& pair : GroupMapOfHandlers)
+		GenSize += pair.second.rep->SizeOfThis();
 	return GenSize;
 }
 
@@ -176,7 +170,7 @@ inline int radTGroup::ItemIsNotFullyInternalAfterCut()
 {
 	for(radTmhg::iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		if(((radTg3d*)(((*iter).second).rep))->ItemIsNotFullyInternalAfterCut()) return 1;
+		if(static_cast<radTg3d*>(iter->second.rep)->ItemIsNotFullyInternalAfterCut()) return 1;
 	return 0;
 }
 
@@ -186,8 +180,8 @@ inline double radTGroup::Volume()
 {
 	double SumVol = 0.;
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
-		//SumVol += ((radTg3d*)(((*iter).second).rep))->Volume();
-		SumVol += ((radTg3d*)(((*iter).second).rep))->VolumeWithSym();
+		//SumVol += static_cast<radTg3d*>(iter->second.rep)->Volume();
+		SumVol += static_cast<radTg3d*>(iter->second.rep)->VolumeWithSym();
 
 	return SumVol;
 }
@@ -206,7 +200,7 @@ inline void radTGroup::LimitsAtTransform(radTrans* pExtTr, double* LimArr)
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 	{
 		double LocLimArr[6];
-		((radTg3d*)(((*iter).second).rep))->Limits(pExtTr, LocLimArr);
+		static_cast<radTg3d*>(iter->second.rep)->Limits(pExtTr, LocLimArr);
 		if(xMin > LocLimArr[0]) xMin = LocLimArr[0];
 		if(xMax < LocLimArr[1]) xMax = LocLimArr[1];
 		if(yMin > LocLimArr[2]) yMin = LocLimArr[2];
@@ -222,7 +216,7 @@ inline void radTGroup::VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool En
 {
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->VerticesInLocFrame(OutVect, EnsureUnique);
+		static_cast<radTg3d*>(iter->second.rep)->VerticesInLocFrame(OutVect, EnsureUnique);
 }
 
 //-------------------------------------------------------------------------
@@ -232,7 +226,7 @@ inline void radTGroup::SimpleEnergyComp(radTField* FieldPtr)
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
 	{
-		radTg3d* g3dPtr = (radTg3d*)(((*iter).second).rep);
+		auto* g3dPtr = static_cast<radTg3d*>(iter->second.rep);
 		if(g3dPtr->g3dListOfTransform.empty()) g3dPtr->SimpleEnergyComp(FieldPtr);
 		else
 		{
@@ -249,7 +243,7 @@ inline void radTGroup::MarkFurtherSubdNeed(char SubdNeedX, char SubdNeedY, char 
 
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->MarkFurtherSubdNeed(SubdNeedX, SubdNeedY, SubdNeedZ);
+		static_cast<radTg3d*>(iter->second.rep)->MarkFurtherSubdNeed(SubdNeedX, SubdNeedY, SubdNeedZ);
 }
 
 //-------------------------------------------------------------------------
@@ -260,7 +254,7 @@ inline void radTGroup::MarkFurtherSubdNeed1D(char SubdNeed, char XorYorZ)
 
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->MarkFurtherSubdNeed1D(SubdNeed, XorYorZ);
+		static_cast<radTg3d*>(iter->second.rep)->MarkFurtherSubdNeed1D(SubdNeed, XorYorZ);
 }
 
 //-------------------------------------------------------------------------
@@ -271,7 +265,7 @@ inline void radTGroup::SetupFurtherSubdInd(char InSubdInd)
 
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->SetupFurtherSubdInd(InSubdInd);
+		static_cast<radTg3d*>(iter->second.rep)->SetupFurtherSubdInd(InSubdInd);
 }
 
 //-------------------------------------------------------------------------
@@ -281,7 +275,7 @@ inline void radTGroup::SetMessageChar(char InMessageChar)
 	MessageChar = InMessageChar;
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
 		iter != GroupMapOfHandlers.end(); ++iter)
-		((radTg3d*)(((*iter).second).rep))->SetMessageChar(InMessageChar);
+		static_cast<radTg3d*>(iter->second.rep)->SetMessageChar(InMessageChar);
 }
 
 //-------------------------------------------------------------------------
@@ -291,7 +285,7 @@ inline int radTGroup::ScaleCurrent(double scaleCoef)
 	int scalingWasApplied = 0;
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 	{
-		if(((radTg3d*)(((*iter).second).rep))->ScaleCurrent(scaleCoef)) scalingWasApplied = 1;
+		if(static_cast<radTg3d*>(iter->second.rep)->ScaleCurrent(scaleCoef)) scalingWasApplied = 1;
 	}
 	return scalingWasApplied;
 }

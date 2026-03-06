@@ -208,7 +208,7 @@ int radTGroup::DuplicateGroupStuff(radTGroup* NewGroupPtr, radThg& hg, radTAppli
 int radTGroup::SetMaterial(radThg& InMatHandle, radTApplication* ApPtr)
 {
 	char PutNewStuffIntoGenCont = 1; // For Material: Maybe not necessary?
-	radTMaterial* pMat = (radTMaterial*)(InMatHandle.rep);
+	radTMaterial* pMat = static_cast<radTMaterial*>(InMatHandle.rep);
 	char EasyAxisDefinedInMat = pMat->EasyAxisDefined;
 
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
@@ -251,12 +251,12 @@ int radTGroup::SubdivideItself(double* SubdivArray, radThg& In_hg, radTApplicati
 	{
 		radThg& NewHandle = (*iter).second;
 		radThg OldHandle = NewHandle;
-		int SubdOK = ((radTg3d*)(OldHandle.rep))->SubdivideItself(SubdivArray, NewHandle, radPtr, pSubdivOptions);
+		int SubdOK = (static_cast<radTg3d*>(OldHandle.rep))->SubdivideItself(SubdivArray, NewHandle, radPtr, pSubdivOptions);
 		if(!SubdOK) return 0;
 		if(pSubdivOptions->PutNewStuffIntoGenCont)
 		{
 			radPtr->ReplaceInGlobalMap(OldHandle, NewHandle);
-			if(((radTg3d*)(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
+			if((static_cast<radTg3d*>(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
 		}
 	}
 	return 1;
@@ -305,8 +305,8 @@ int radTGroup::SubdivideItselfAsWholeInLabFrame(double* SubdivArray, radThg& In_
 		if(AmOfPieces > 1)
 		{
 			int AmOfPieces_mi_1 = AmOfPieces - 1;
-			TVector3d* PointsOnCuttingPlanes = new TVector3d[AmOfPieces_mi_1];
-			if(PointsOnCuttingPlanes == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+			std::vector<TVector3d> vPointsOnCuttingPlanes(AmOfPieces_mi_1);
+			TVector3d* PointsOnCuttingPlanes = vPointsOnCuttingPlanes.data();
 
 			double q0 = (fabs(kk-1.)>RelZeroTol)? pow(qq, 1./(kk-1.)) : qq;
 			double Buf = qq*q0 - 1.;
@@ -324,7 +324,7 @@ int radTGroup::SubdivideItselfAsWholeInLabFrame(double* SubdivArray, radThg& In_
 				radThg OldHandle = NewHandle;
 				radTg* gPtrOld = OldHandle.rep;
 
-				int SubdOK = ((radTg3d*)(OldHandle.rep))->SubdivideItselfByOneSetOfParPlanes(Directions[k], PointsOnCuttingPlanes, AmOfPieces_mi_1, NewHandle, radPtr, &LocSubdivOptions, &AuxVectOfHgChanged);
+				int SubdOK = (static_cast<radTg3d*>(OldHandle.rep))->SubdivideItselfByOneSetOfParPlanes(Directions[k], PointsOnCuttingPlanes, AmOfPieces_mi_1, NewHandle, radPtr, &LocSubdivOptions, &AuxVectOfHgChanged);
 				if(!SubdOK) return 0;
 				
 				if(gPtrOld != NewHandle.rep) 
@@ -332,11 +332,11 @@ int radTGroup::SubdivideItselfAsWholeInLabFrame(double* SubdivArray, radThg& In_
 					if(pSubdivOptions->PutNewStuffIntoGenCont) 
 					{
 						radPtr->ReplaceInGlobalMap(OldHandle, NewHandle);
-						if(((radTg3d*)(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
+						if((static_cast<radTg3d*>(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
 					}
 				}
 			}
-			delete[] PointsOnCuttingPlanes;
+			// RAII: automatic cleanup
 		}
 	}
 
@@ -352,7 +352,7 @@ int radTGroup::SubdivideItselfAsWholeInLabFrame(double* SubdivArray, radThg& In_
 			{
 				radThg& hg = (*iter).second;
 				AuxMapOfElem[radPtr->AddElementToContainer(hg)] = hg;
-				((radTg3d*)(hg.rep))->IsGroupMember = 1;
+				(static_cast<radTg3d*>(hg.rep))->IsGroupMember = 1;
 			}
 			pGroup->GroupMapOfHandlers = AuxMapOfElem;
 		}
@@ -464,12 +464,12 @@ int radTGroup::SubdivideItselfByOneSetOfParPlanes(
 	{
 		radThg& NewHandle = (*iter).second;
 		radThg OldHandle = NewHandle;
-		int SubdOK = ((radTg3d*)(OldHandle.rep))->SubdivideItselfByOneSetOfParPlanes(PlanesNormal, PointsOnCuttingPlanes, AmOfPieces_mi_1, NewHandle, radPtr, pSubdivOptions, VectOfHgChanged);
+		int SubdOK = (static_cast<radTg3d*>(OldHandle.rep))->SubdivideItselfByOneSetOfParPlanes(PlanesNormal, PointsOnCuttingPlanes, AmOfPieces_mi_1, NewHandle, radPtr, pSubdivOptions, VectOfHgChanged);
 		if(!SubdOK) return 0;
 		if(pSubdivOptions->PutNewStuffIntoGenCont) 
 		{
 			radPtr->ReplaceInGlobalMap(OldHandle, NewHandle);
-			if(((radTg3d*)(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
+			if((static_cast<radTg3d*>(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
 		}
 	}
 
@@ -521,12 +521,12 @@ int radTGroup::CutItself(TVector3d* CuttingPlane, radThg& In_hg, radTPair_int_hg
 
 		radThg& NewHandle = (*iter).second;
 		radThg OldHandle = NewHandle;
-		int SubdOK = ((radTg3d*)(OldHandle.rep))->CutItself(LocCuttingPlane, NewHandle, LocLowerNewPair_int_hg, LocUpperNewPair_int_hg, radPtr, pSubdivOptions); // Change this !!!
+		int SubdOK = (static_cast<radTg3d*>(OldHandle.rep))->CutItself(LocCuttingPlane, NewHandle, LocLowerNewPair_int_hg, LocUpperNewPair_int_hg, radPtr, pSubdivOptions); // Change this !!!
 		if(!SubdOK) return 0;
 		if(ReplaceOldStuff) 
 		{
 			radPtr->ReplaceInGlobalMap(OldHandle, NewHandle);
-			if(((radTg3d*)(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
+			if((static_cast<radTg3d*>(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
 		}
 		if(SeparatePiecesAtCutting)
 		{
@@ -652,13 +652,13 @@ int radTGroup::SubdivideItselfByParPlanes(double* SubdivArray, int AmOfDir, radT
 	{
 		radThg& NewHandle = (*iter).second;
 		radThg OldHandle = NewHandle;
-		int SubdOK = ((radTg3d*)(OldHandle.rep))->SubdivideItselfByParPlanes(LocSubdivArray, AmOfDir, NewHandle, radPtr, pSubdivOptions);
+		int SubdOK = (static_cast<radTg3d*>(OldHandle.rep))->SubdivideItselfByParPlanes(LocSubdivArray, AmOfDir, NewHandle, radPtr, pSubdivOptions);
 		if(!SubdOK) return 0;
 
 		if(PutNewStuffIntoGenCont) 
 		{
 			radPtr->ReplaceInGlobalMap(OldHandle, NewHandle);
-			if(((radTg3d*)(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
+			if((static_cast<radTg3d*>(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
 		}
 	}
 	return 1;
@@ -669,8 +669,8 @@ int radTGroup::SubdivideItselfByParPlanes(double* SubdivArray, int AmOfDir, radT
 int radTGroup::SubdivideItselfByParPlanesAsWholeInLabFrame(double* SubdivArray, int AmOfDir, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
 {
 	radTSend Send;
-	TVector3d* Directions = new TVector3d[AmOfDir];
-	if(Directions == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<TVector3d> vDirections(AmOfDir);
+	TVector3d* Directions = vDirections.data();
 
 	TVector3d* tDirections = Directions;
 	double* tSubdivArray = SubdivArray;
@@ -716,8 +716,8 @@ int radTGroup::SubdivideItselfByParPlanesAsWholeInLabFrame(double* SubdivArray, 
 		if(AmOfPieces > 1)
 		{
 			int AmOfPieces_mi_1 = AmOfPieces - 1;
-			TVector3d* PointsOnCuttingPlanes = new TVector3d[AmOfPieces_mi_1];
-			if(PointsOnCuttingPlanes == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+			std::vector<TVector3d> vPointsOnCuttingPlanes2(AmOfPieces_mi_1);
+			TVector3d* PointsOnCuttingPlanes = vPointsOnCuttingPlanes2.data();
 
 			double q0 = (fabs(kk-1.)>RelZeroTol)? pow(qq, 1./(kk-1.)) : qq;
 			double Buf = qq*q0 - 1.;
@@ -735,7 +735,7 @@ int radTGroup::SubdivideItselfByParPlanesAsWholeInLabFrame(double* SubdivArray, 
 				radThg OldHandle = NewHandle;
 				radTg* gPtrOld = OldHandle.rep;
 
-				int SubdOK = ((radTg3d*)(OldHandle.rep))->SubdivideItselfByOneSetOfParPlanes(Directions[k], PointsOnCuttingPlanes, AmOfPieces_mi_1, NewHandle, radPtr, &LocSubdivOptions, &AuxVectOfHgChanged);
+				int SubdOK = (static_cast<radTg3d*>(OldHandle.rep))->SubdivideItselfByOneSetOfParPlanes(Directions[k], PointsOnCuttingPlanes, AmOfPieces_mi_1, NewHandle, radPtr, &LocSubdivOptions, &AuxVectOfHgChanged);
 				if(!SubdOK) return 0;
 				
 				if(gPtrOld != NewHandle.rep) 
@@ -743,11 +743,11 @@ int radTGroup::SubdivideItselfByParPlanesAsWholeInLabFrame(double* SubdivArray, 
 					if(pSubdivOptions->PutNewStuffIntoGenCont) 
 					{
 						radPtr->ReplaceInGlobalMap(OldHandle, NewHandle);
-						if(((radTg3d*)(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
+						if((static_cast<radTg3d*>(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
 					}
 				}
 			}
-			delete[] PointsOnCuttingPlanes;
+			// RAII: automatic cleanup
 		}
 	}
 	//radTCast Cast;
@@ -763,14 +763,14 @@ int radTGroup::SubdivideItselfByParPlanesAsWholeInLabFrame(double* SubdivArray, 
 			{
 				radThg& hg = (*iter).second;
 				AuxMapOfElem[radPtr->AddElementToContainer(hg)] = hg;
-				((radTg3d*)(hg.rep))->IsGroupMember = 1;
+				(static_cast<radTg3d*>(hg.rep))->IsGroupMember = 1;
 			}
 			pGroup->GroupMapOfHandlers = AuxMapOfElem;
 		}
 	}
 
 	SetMessageChar(0);
-	if(Directions != 0) delete[] Directions;
+	// RAII: automatic cleanup
 	return 1;
 }
 
@@ -806,7 +806,7 @@ void radTGroup::CollectNonGroupElements(radTmhg* pMapOfNonGroupElem, int& Member
 	{
 		radThg hg = (*iter).second;
 		int ElemKey = (*iter).first;
-		radTg3d* g3dPtr = (radTg3d*)(hg.rep);
+		radTg3d* g3dPtr = static_cast<radTg3d*>(hg.rep);
 
 		if(GroupHasTransforms)
 		{
@@ -868,12 +868,12 @@ int radTGroup::SubdivideItselfByEllipticCylinder(double* SubdivArray, radTCylind
 	{
 		radThg& NewHandle = (*iter).second;
 		radThg OldHandle = NewHandle;
-		int SubdOK = ((radTg3d*)(OldHandle.rep))->SubdivideItselfByEllipticCylinder(SubdivArray, &LocCylSpec, NewHandle, radPtr, pSubdivOptions);
+		int SubdOK = (static_cast<radTg3d*>(OldHandle.rep))->SubdivideItselfByEllipticCylinder(SubdivArray, &LocCylSpec, NewHandle, radPtr, pSubdivOptions);
 		if(!SubdOK) return 0;
 		if(pSubdivOptions->PutNewStuffIntoGenCont)
 		{
 			radPtr->ReplaceInGlobalMap(OldHandle, NewHandle);
-			if(((radTg3d*)(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
+			if((static_cast<radTg3d*>(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
 		}
 	}
 	return 1;
@@ -1001,7 +1001,7 @@ int radTGroup::FindEdgePointsOverPhiAndAxForCylSubd(radTCylindricSubdivSpec* pSu
 
 		char SomethingWasExecuted = 0;
 		radThg hg = (*iter).second;
-		radTg3d* g3dPtr = (radTg3d*)(hg.rep);
+		radTg3d* g3dPtr = static_cast<radTg3d*>(hg.rep);
 
 		radTCylindricSubdivSpec LocCylSpec = *pSubdivSpec;
 		char BackTransformIsNeeded = 0;
@@ -1094,9 +1094,8 @@ int radTGroup::FindEdgePointsOverPhiAndAxForCylSubd(radTCylindricSubdivSpec* pSu
 				else
 				{
 					CleanPhiSectorsDupl.erase(CleanPhiSectorsDupl.begin(), CleanPhiSectorsDupl.end());
-					for(int j=0; j<(int)(CleanPhiSectors.size()); j++)
+					for(auto& CurSect : CleanPhiSectors)
 					{
-						radTPairOfDouble& CurSect = CleanPhiSectors[j];
 						double& CurSectSt = CurSect.First;
 						double& CurSectFi = CurSect.Second;
 
@@ -1180,7 +1179,7 @@ int radTGroup::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr, char 
 	for(radTmhg::iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 	{
 		radThg& NewHandle = (*iter).second;
-		radTGroup* pGroup = radTCast::GroupCast((radTg3d*)(NewHandle.rep));
+		radTGroup* pGroup = radTCast::GroupCast(static_cast<radTg3d*>(NewHandle.rep));
 		if(pGroup != 0)
 		{
 			radThg OldHandle = NewHandle;
@@ -1188,7 +1187,7 @@ int radTGroup::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr, char 
 		}
 		else
 		{
-			radTg3dRelax* g3dRelaxPtr = radTCast::g3dRelaxCast((radTg3d*)(NewHandle.rep));
+			radTg3dRelax* g3dRelaxPtr = radTCast::g3dRelaxCast(static_cast<radTg3d*>(NewHandle.rep));
 			if(g3dRelaxPtr != 0)
 			{
 				radThg OldHandle = NewHandle;
@@ -1197,7 +1196,7 @@ int radTGroup::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr, char 
 				if(ReplaceOldStuff)
 				{
 					radPtr->ReplaceInGlobalMap(OldHandle, NewHandle);
-					if(((radTg3d*)(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
+					if((static_cast<radTg3d*>(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
 				}
 			}
 		}
@@ -1215,7 +1214,7 @@ int radTGroup::EstimateCenterPointOverRelaxables(TVector3d& CenterPoint)
 	for(radTmhg::iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 	{
 		radThg& NewHandle = (*iter).second;
-		radTg3d* g3dPtr = (radTg3d*)(NewHandle.rep);
+		radTg3d* g3dPtr = static_cast<radTg3d*>(NewHandle.rep);
 
 		char SomethingWasExecuted = 0;
 		TVector3d LocCP;
@@ -1297,7 +1296,7 @@ int radTGroup::SubdivideItselfOverAzimuth(double* kPhi_qPhi, double* Limits, rad
 	for(radTmhg::iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 	{
 		radThg& NewHandle = (*iter).second;
-		radTg3d* g3dPtr = (radTg3d*)(NewHandle.rep);
+		radTg3d* g3dPtr = static_cast<radTg3d*>(NewHandle.rep);
 
 		radTCylindricSubdivSpec LocCylSpec = *pCylSubdivSpec;
 		if(!g3dPtr->g3dListOfTransform.empty())
@@ -1335,7 +1334,7 @@ int radTGroup::SubdivideItselfOverAzimuth(double* kPhi_qPhi, double* Limits, rad
 					if(pSubdivOptions->ReplaceOldStuff && (OldHandle.rep != NewHandle.rep))
 					{
 						radPtr->ReplaceInGlobalMap(OldHandle, NewHandle);
-						if(((radTg3d*)(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
+						if((static_cast<radTg3d*>(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
 					}
 				}
 			}
@@ -1389,7 +1388,7 @@ int radTGroup::FindEdgePointsOverEllipseSet(double* SubdivArray, radTCylindricSu
 	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 	{
 		radThg hgLoc = (*iter).second;
-		radTg3d* g3dPtr = (radTg3d*)(hgLoc.rep);
+		radTg3d* g3dPtr = static_cast<radTg3d*>(hgLoc.rep);
 
 		radTCylindricSubdivSpec LocCylSpec = *pSubdivSpec;
 		if(!g3dPtr->g3dListOfTransform.empty())
@@ -1455,7 +1454,7 @@ int radTGroup::SubdivideByEllipses(double* ka_qa, double* aLimits, radTCylindric
 	for(radTmhg::iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 	{
 		radThg& NewHandle = (*iter).second;
-		radTg3d* g3dPtr = (radTg3d*)(NewHandle.rep);
+		radTg3d* g3dPtr = static_cast<radTg3d*>(NewHandle.rep);
 
 		radTCylindricSubdivSpec LocCylSpec = *pCylSubdivSpec;
 		if(!g3dPtr->g3dListOfTransform.empty())
@@ -1498,7 +1497,7 @@ int radTGroup::SubdivideByEllipses(double* ka_qa, double* aLimits, radTCylindric
 					if(pSubdivOptions->ReplaceOldStuff && (OldHandle.rep != NewHandle.rep))
 					{
 						radPtr->ReplaceInGlobalMap(OldHandle, NewHandle);
-						if(((radTg3d*)(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
+						if((static_cast<radTg3d*>(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
 					}
 				}
 			}
@@ -1521,8 +1520,8 @@ int radTGroup::SubdivideByPlanesPerpToCylAx(double* kz_qz, double* Limits, TVect
 
 	radTSend Send;
 	int AmOfPieces_mi_1 = int(kz) - 1;
-	TVector3d* PointsOnCuttingPlanes = new TVector3d[AmOfPieces_mi_1];
-	if(PointsOnCuttingPlanes==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<TVector3d> vPointsOnCuttingPlanes(AmOfPieces_mi_1);
+	TVector3d* PointsOnCuttingPlanes = vPointsOnCuttingPlanes.data();
 
 	const double AbsZeroTol = 5.E-12;
 	double DelZ = Limits[1] - Limits[0];
@@ -1552,7 +1551,7 @@ int radTGroup::SubdivideByPlanesPerpToCylAx(double* kz_qz, double* Limits, TVect
 	{
 		radThg& NewHandle = (*iter).second;
 		radThg OldHandle = NewHandle;
-		radTg3d* g3dPtr = (radTg3d*)(OldHandle.rep);
+		radTg3d* g3dPtr = static_cast<radTg3d*>(OldHandle.rep);
 
 		int SubdOK = g3dPtr->SubdivideItselfByOneSetOfParPlanes(pSubdivSpec->CylAxVect, PointsOnCuttingPlanes, AmOfPieces_mi_1, NewHandle, radPtr, &SubdivOptionsForCutByParPlanes, &DummyVectOfHgChanged);
 		if(!SubdOK) return 0;
@@ -1567,11 +1566,11 @@ int radTGroup::SubdivideByPlanesPerpToCylAx(double* kz_qz, double* Limits, TVect
 		if(pSubdivOptions->ReplaceOldStuff && (OldHandle.rep != NewHandle.rep)) 
 		{
 			radPtr->ReplaceInGlobalMap(OldHandle, NewHandle);
-			if(((radTg3d*)(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
+			if((static_cast<radTg3d*>(OldHandle.rep))->IsGroupMember) radPtr->ReplaceInAllGroups(OldHandle, NewHandle);
 		}
 	}
 
-	if(PointsOnCuttingPlanes!=0) delete[] PointsOnCuttingPlanes;
+	// RAII: vPointsOnCuttingPlanes cleaned up automatically
 	return 1;
 }
 		
@@ -1593,7 +1592,7 @@ void radTGroup::FlattenNestedStructureIfMessageCharIsSet(radTApplication* radPtr
 				radThg hg = (*iter).second;
 
 				AuxGroupMapOfHandlers[radPtr->AddElementToContainer(hg)] = hg;
-				((radTg3d*)(hg.rep))->IsGroupMember = 1;
+				(static_cast<radTg3d*>(hg.rep))->IsGroupMember = 1;
 			}
 			GroupMapOfHandlers.erase(GroupMapOfHandlers.begin(), GroupMapOfHandlers.end());
 			GroupMapOfHandlers = AuxGroupMapOfHandlers;
@@ -1605,7 +1604,7 @@ void radTGroup::FlattenNestedStructureIfMessageCharIsSet(radTApplication* radPtr
 		for(radTmhg::iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 		{
 			radThg OldHandle = (*iter).second;
-			radTg3d* g3dPtr = (radTg3d*)(OldHandle.rep);
+			radTg3d* g3dPtr = static_cast<radTg3d*>(OldHandle.rep);
 
 			radTGroup* pGroup = radTCast::GroupCast(g3dPtr);
 			if(pGroup != 0)
@@ -1624,7 +1623,7 @@ void radTGroup::JustTraverse()
 	for(radTmhg::iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 	{
 		radThg hg = (*iter).second;
-		radTg3d* g3dPtr = (radTg3d*)(hg.rep);
+		radTg3d* g3dPtr = static_cast<radTg3d*>(hg.rep);
 
 		radTGroup* pGroup = radTCast::GroupCast(g3dPtr);
 		if(pGroup != 0)
@@ -1640,7 +1639,7 @@ int radTGroup::CreateFromSym(radThg& In_hg, radTApplication* radPtr, char PutNew
 {
 	radThg hgDpl;
 	if(!DuplicateWithoutDuplicatingGroupStuff(hgDpl)) return 0;
-	radTGroup* pGroupDpl = (radTGroup*)((radTg3d*)(hgDpl.rep));
+	radTGroup* pGroupDpl = (radTGroup*)(static_cast<radTg3d*>(hgDpl.rep));
 
 	pGroupDpl->GroupMapOfHandlers.erase(pGroupDpl->GroupMapOfHandlers.begin(), pGroupDpl->GroupMapOfHandlers.end());
 
@@ -1649,7 +1648,7 @@ int radTGroup::CreateFromSym(radThg& In_hg, radTApplication* radPtr, char PutNew
 	{
 		radThg hgNew = (*iter).second;
 		radThg hgOld = hgNew;
-		((radTg3d*)(hgOld.rep))->CreateFromSym(hgNew, radPtr, PutNewStuffIntoGenCont);
+		(static_cast<radTg3d*>(hgOld.rep))->CreateFromSym(hgNew, radPtr, PutNewStuffIntoGenCont);
 
 		if(PutNewStuffIntoGenCont)
 		{
@@ -1709,14 +1708,14 @@ void radTGroup::Push_backCenterPointAndField(radTFieldKey* pFieldKey, radTVectPa
 	for(radTmhg::iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
 	{
 		radThg hg = (*iter).second;
-		radTg3d* g3dPtr = (radTg3d*)(hg.rep);
+		radTg3d* g3dPtr = static_cast<radTg3d*>(hg.rep);
 		//g3dPtr->Push_backCenterPointAndField(pFieldKey, pVectPairOfVect3d, pTrans, g3dSrcPtr);
 
 		radThg hgDplWithoutSym; //OC061007_BNL
 		char PutNewStuffIntoGenCont = 0;
 		if(!g3dPtr->CreateFromSym(hgDplWithoutSym, pAppl, PutNewStuffIntoGenCont)) return;
 
-		radTg3d* g3dDplWithoutSymPtr = (radTg3d*)(hgDplWithoutSym.rep);
+		radTg3d* g3dDplWithoutSymPtr = static_cast<radTg3d*>(hgDplWithoutSym.rep);
 
 		radTvhg vhFlatTransforms; //OC061007_BNL
 		g3dDplWithoutSymPtr->FlattenSpaceTransforms(vhFlatTransforms);
@@ -1751,7 +1750,7 @@ int radTGroup::NextStepEnergyForceTorqueComp(double* TotSubdArr, radThg& HandleO
 		radThg &hg = (*iter).second;
 		radThg hgOld = hg;
 
-		radTg3d* OldPtr = (radTg3d*)(hgOld.rep);
+		radTg3d* OldPtr = static_cast<radTg3d*>(hgOld.rep);
 		radTlphg Oldg3dListOfTransform = OldPtr->g3dListOfTransform;
 		if(ThisListOfTransformNotEmpty) // Modif. 01.04.99
 		{ // Modif. 01.04.99
@@ -1761,7 +1760,7 @@ int radTGroup::NextStepEnergyForceTorqueComp(double* TotSubdArr, radThg& HandleO
 
 		if(!OldPtr->NextStepEnergyForceTorqueComp(TotSubdArr, hg, FieldPtr, LocMoreSubdNeeded)) return 0;
 
-		((radTg3d*)(hg.rep))->g3dListOfTransform = Oldg3dListOfTransform;
+		(static_cast<radTg3d*>(hg.rep))->g3dListOfTransform = Oldg3dListOfTransform;
 		MoreSubdNeeded |= LocMoreSubdNeeded;
 	}
 	OutMoreSubdNeeded = MoreSubdNeeded;
@@ -1787,7 +1786,7 @@ int radTGroup::ProceedNextStepEnergyForceTorqueComp(double* SubdArr, radThg& Han
 		radThg &hg = (*iter).second;
 		radThg hgOld = hg;
 
-		radTg3d* OldPtr = (radTg3d*)(hgOld.rep);
+		radTg3d* OldPtr = static_cast<radTg3d*>(hgOld.rep);
 		radTlphg Oldg3dListOfTransform = OldPtr->g3dListOfTransform;
 
 		if(ThisListOfTransformNotEmpty)
@@ -1798,7 +1797,7 @@ int radTGroup::ProceedNextStepEnergyForceTorqueComp(double* SubdArr, radThg& Han
 
 		if(!OldPtr->ProceedNextStepEnergyForceTorqueComp(SubdArr, hg, LocFieldPtr, FieldPtr, LocSubdNeed, XorYorZ)) return 0;
 
-		((radTg3d*)(hg.rep))->g3dListOfTransform = Oldg3dListOfTransform;
+		(static_cast<radTg3d*>(hg.rep))->g3dListOfTransform = Oldg3dListOfTransform;
 		SubdNeed |= LocSubdNeed;
 	}
 
@@ -1817,7 +1816,7 @@ void radTGroup::ActualEnergyForceTorqueCompWithAdd(radTField* FieldPtr)
 		iter != GroupMapOfHandlers.end(); ++iter)
 	{
 		radThg &hg = (*iter).second;
-		radTg3d* Ptr = (radTg3d*)(hg.rep);
+		radTg3d* Ptr = static_cast<radTg3d*>(hg.rep);
 		radTlphg Oldg3dListOfTransform = Ptr->g3dListOfTransform;
 
 		if(ThisListOfTransformNotEmpty)

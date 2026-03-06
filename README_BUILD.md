@@ -1,5 +1,37 @@
 # Radia Python モジュール ビルドガイド
 
+## プラットフォーム対応
+
+このプロジェクトは **Windows、macOS、Linux** でビルド可能です。
+
+### プラットフォーム別の要件
+
+#### Windows
+- Visual Studio 2022 (Community以上)
+- CMake 3.21以上
+- Python 3.x (64-bit)
+- FFTW library (同梱: `src/ext/fftw/fftw64_f.lib`)
+
+#### macOS
+- Xcode Command Line Tools
+- CMake 3.21以上 (`brew install cmake`)
+- Python 3.x
+- FFTW library: `brew install fftw`
+
+#### Linux (Ubuntu/Debian)
+- GCC/G++ compiler
+- CMake 3.21以上 (`sudo apt-get install cmake`)
+- Python 3.x development headers (`sudo apt-get install python3-dev`)
+- FFTW library: `sudo apt-get install libfftw3-dev`
+
+### クロスプラットフォーム対応の詳細
+
+CMakeLists.txtは以下のようにプラットフォームを自動検出します：
+
+- **コンパイラ**: MSVC (Windows), GCC (Linux), Clang (macOS)
+- **FFTW**: プラットフォーム固有のパスで自動検出
+- **システムライブラリ**: プラットフォーム固有のライブラリを条件分岐
+
 ## Pythonバージョンの互換性について
 
 ### 重要な制約
@@ -18,9 +50,9 @@
 
 ## ビルド方法
 
-### 方法1: 単一バージョン用ビルド
+### Windows
 
-現在インストールされているPythonバージョン用にビルド：
+#### 方法1: PowerShellスクリプト（推奨）
 
 ```powershell
 # 基本ビルド
@@ -35,6 +67,46 @@
 
 **出力:**
 - `build/lib/Release/radia.pyd` - 現在のPython用
+
+#### 方法2: CMake直接実行
+
+```powershell
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Release
+```
+
+### macOS / Linux
+
+#### 基本ビルド手順
+
+```bash
+# 1. 依存関係のインストール
+
+# macOS:
+brew install cmake fftw python3
+
+# Ubuntu/Debian:
+sudo apt-get update
+sudo apt-get install cmake libfftw3-dev python3-dev
+
+# 2. ビルド
+mkdir build
+cd build
+cmake ..
+make -j$(nproc)  # Linux
+make -j$(sysctl -n hw.ncpu)  # macOS
+
+# 3. 出力
+# build/radia.cpXX-<platform>.so が生成される
+```
+
+**プラットフォーム別の出力ファイル名:**
+- Windows: `radia.cp312-win_amd64.pyd`
+- macOS (Apple Silicon): `radia.cp312-darwin.so` (arm64)
+- macOS (Intel): `radia.cp312-darwin.so` (x86_64)
+- Linux: `radia.cp312-linux_x86_64.so`
 
 ### 方法2: 複数バージョン一括ビルド（推奨）
 

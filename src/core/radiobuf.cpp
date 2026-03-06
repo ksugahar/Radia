@@ -137,7 +137,6 @@ string radTIOBuffer::err_ar[] = {
 	"Radia::Error110::::Failed to generate convex polyhedron(s) from the given input.\0",
 	"Radia::Error111::::Multiple extruded polygon can not be generated from this input: Non-convex horizontal slice polygon encountered.\0",
 	"Radia::Error112::::Multiple extruded polygon can not be generated from this input: More than three points belonging to one line encountered in the horizontal slice polygon.\0",
-	"Radia::Error113::::Can not start QuickDraw 3D library. Please check whether the QuickDraw 3D 1.5 or later from Apple Computer is properly installed on your system.\0",
 	"Radia::Error114::::This function is not implemented on that platform.\0",
 	"Radia::Error115::::Can not start Glut OpenGL shared library.\0",
 	"Radia::Error116::::Failed to create Interaction Matrices for solving by parts.\0",

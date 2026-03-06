@@ -188,12 +188,8 @@ void radTExtrPolygon::B_comp(radTField* FieldPtr)
 	double z1e2 = z1*z1, z2e2 = z2*z2;
 	double absz1 = Abs(z1), absz2 = Abs(z2);
 
-#ifdef __GCC__
-	vector<TVector2d>::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#else
-	vector<TVector2d, allocator<TVector2d> >::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#endif
-	
+	auto BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
+
 	TVector2d First2d(FirstPoint.y - ObsPo.y, FirstPoint.z - ObsPo.z);
 	TVector2d Vect2dToAdd(First2d.x - (*BaseIter).x, First2d.y - (*BaseIter).y);
 
@@ -727,11 +723,11 @@ void radTExtrPolygon::B_intComp(radTField* FieldPtr)
 	short InitVzIsZero = (Abs(V.z) <= ZeroToler);
 
 // This is the attempt to avoid "divide by zero" problem
-	TSpecCaseID SpecCaseID = NoSpecCase;
-	if(InitVxIsZero && InitVyIsZero) SpecCaseID = ZeroVxVz;
-	else if(InitVxIsZero && InitVzIsZero) SpecCaseID = ZeroVyVz;
-	else if(InitVyIsZero && InitVzIsZero) SpecCaseID = ZeroVxVy;
-	if(SpecCaseID==ZeroVxVy || SpecCaseID==ZeroVxVz || SpecCaseID==ZeroVyVz) { B_intCompSpecCases(FieldPtr, SpecCaseID); return;}
+	TSpecCaseID SpecCaseID = TSpecCaseID::NoSpecCase;
+	if(InitVxIsZero && InitVyIsZero) SpecCaseID = TSpecCaseID::ZeroVxVz;
+	else if(InitVxIsZero && InitVzIsZero) SpecCaseID = TSpecCaseID::ZeroVyVz;
+	else if(InitVyIsZero && InitVzIsZero) SpecCaseID = TSpecCaseID::ZeroVxVy;
+	if(SpecCaseID==TSpecCaseID::ZeroVxVy || SpecCaseID==TSpecCaseID::ZeroVxVz || SpecCaseID==TSpecCaseID::ZeroVyVz) { B_intCompSpecCases(FieldPtr, SpecCaseID); return;}
 
 	double AbsRandX = radCR.AbsRandMagnitude(FirstPoint.x - CentrPoint.x);
 	double AbsRandY = radCR.AbsRandMagnitude(FirstPoint.y - CentrPoint.y);
@@ -763,11 +759,7 @@ void radTExtrPolygon::B_intComp(radTField* FieldPtr)
 
 	radTPolygon* BasePolygonPtr = (radTPolygon*)(BasePolygonHandle.rep);
 
-#ifdef __GCC__
-	vector<TVector2d>::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#else
-	vector<TVector2d, allocator<TVector2d> >::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#endif
+	auto BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
 
 	int AmOfEdPoInBase = BasePolygonPtr->AmOfEdgePoints;
 	int AmOfEdPoInBase_mi_1 = AmOfEdPoInBase - 1;
@@ -993,11 +985,7 @@ void radTExtrPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID&
 
 	radTPolygon* BasePolygonPtr = (radTPolygon*)(BasePolygonHandle.rep);
 
-#ifdef __GCC__
-	vector<TVector2d>::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#else
-	vector<TVector2d, allocator<TVector2d> >::iterator BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
-#endif
+	auto BaseIter = (BasePolygonPtr->EdgePointsVector).begin();
 
 	int AmOfEdPoInBase = BasePolygonPtr->AmOfEdgePoints;
 	int AmOfEdPoInBase_mi_1 = AmOfEdPoInBase - 1;
@@ -1046,7 +1034,7 @@ void radTExtrPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID&
 
 		if(abs_x2mx1*Max_k > abs_y2my1)
 		{
-			if(SpecCaseID==ZeroVxVz)
+			if(SpecCaseID==TSpecCaseID::ZeroVxVz)
 			{
 				double k = y2my1/x2mx1, b = y1 - k*x1;
 				
@@ -1067,7 +1055,7 @@ void radTExtrPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID&
 		}
 		if(abs_y2my1*Max_k > abs_x2mx1)
 		{
-			if(SpecCaseID==ZeroVxVy)
+			if(SpecCaseID==TSpecCaseID::ZeroVxVy)
 			{
 				double k1 = x2mx1/y2my1, b1 = x1 - k1*y1;
 
@@ -1091,7 +1079,7 @@ void radTExtrPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID&
 				S12 += z2mz1*(2.*k1*SumAtans1 + SumLogs1)/k1e2p1;
 				S22 += Buf1;
 			}
-			else if(SpecCaseID==ZeroVyVz)
+			else if(SpecCaseID==TSpecCaseID::ZeroVyVz)
 			{
 				double k1 = x2mx1/y2my1, b1 = x1 - k1*y1;
 
@@ -1260,16 +1248,19 @@ int radTExtrPolygon::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr,
 
 	int AmOfVertexPoints = 2*AmOfEdgePoInBase;
 
-	TVector3d* ArrayOfPoints = new TVector3d[AmOfVertexPoints];
-	if(ArrayOfPoints == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<TVector3d> vArrayOfPoints(AmOfVertexPoints);
+	TVector3d* ArrayOfPoints = vArrayOfPoints.data();
 	TVector3d* ArrayOfPointsTravers1 = ArrayOfPoints;
 	TVector3d* ArrayOfPointsTravers2 = &(ArrayOfPoints[AmOfEdgePoInBase]);
 
 	int AmOfFaces = AmOfEdgePoInBase+2;
-	int** ArrayOfFaces = new int*[AmOfFaces];
-	if(ArrayOfFaces == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 
-	int* FacesIndexes = new int[AmOfEdgePoInBase*7+2];
+	// RAII: Use std::vector for all allocations
+	std::vector<int*> vArrayOfFaces(AmOfFaces);
+	int** ArrayOfFaces = vArrayOfFaces.data();
+
+	std::vector<int> vFacesIndexes(AmOfEdgePoInBase*7+2);
+	int* FacesIndexes = vFacesIndexes.data();
 
 	int* BaseFace1 = &(FacesIndexes[0]);
 	int* BaseFace2 = &(FacesIndexes[AmOfEdgePoInBase]);
@@ -1349,9 +1340,7 @@ int radTExtrPolygon::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr,
 	radThg NewHandle(PolyhedronPtr);
 	In_hg = NewHandle;
 
-	if(ArrayOfPoints != 0) delete[] ArrayOfPoints;
-	if(ArrayOfFaces != 0) delete[] ArrayOfFaces;
-	if(FacesIndexes != 0) delete[] FacesIndexes;
+	// RAII: vArrayOfPoints, vArrayOfFaces, vFacesIndexes cleaned up automatically
 	return 1;
 }
 

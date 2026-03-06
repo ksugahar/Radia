@@ -1,19 +1,19 @@
 # Wolfram Language to Python Conversion Notes
 
-## 変換日: 2025-01-29
+## Conversion Date: 2025-01-29
 
-## 変換したファイル
+## Converted Files
 
-| Wolfram Language | Python | 状態 | 備考 |
+| Wolfram Language | Python | Status | Notes |
 |-----------------|--------|------|------|
-| case0.wls | case0.py | ✓ 完了 | 正常動作確認済み |
-| case1.wls | case1.py | ✓ 完了 | 正常動作確認済み |
-| case2.wls | case2.py | ✓ 完了 | g2未定義の問題をコメント化 |
-| case3.wls | case3.py | ✓ 完了 | g2未定義の問題をコメント化 |
+| case0.wls | case0.py | ✓ Complete | Verified working |
+| case1.wls | case1.py | ✓ Complete | Verified working |
+| case2.wls | case2.py | ✓ Complete | g2 undefined issue commented out |
+| case3.wls | case3.py | ✓ Complete | g2 undefined issue commented out |
 
-## 主な変換内容
+## Main Conversion Details
 
-### 1. 基本構文の変換
+### 1. Basic Syntax Conversion
 
 ```mathematica
 (* Wolfram Language *)
@@ -31,46 +31,46 @@ rmin = 100
 g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
 ```
 
-### 2. 数学関数・定数
+### 2. Mathematical Functions and Constants
 
-| Wolfram | Python | 説明 |
+| Wolfram | Python | Description |
 |---------|--------|------|
-| `Pi` | `math.pi` | 円周率 |
-| `Sin[x]` | `math.sin(x)` | 正弦関数 |
-| `Cos[x]` | `math.cos(x)` | 余弦関数 |
+| `Pi` | `math.pi` | Pi constant |
+| `Sin[x]` | `math.sin(x)` | Sine function |
+| `Cos[x]` | `math.cos(x)` | Cosine function |
 
-### 3. Radia関数のマッピング
+### 3. Radia Function Mapping
 
-| Wolfram Language | Python | 機能 |
+| Wolfram Language | Python | Function |
 |-----------------|--------|------|
-| `radUtiDelAll[]` | `rad.UtiDelAll()` | 全オブジェクト削除 |
-| `radObjArcCur[...]` | `rad.ObjArcCur(...)` | アーク電流作成 |
-| `radObjRecMag[...]` | `rad.ObjRecMag(...)` | 矩形磁石作成 |
-| `radMatLin[...]` | `rad.MatLin(...)` | 線形材料定義 |
-| `radMatSatIso[...]` | `rad.MatSatIso(...)` | 非線形等方性材料 |
-| `radMatApl[obj, mat]` | `rad.MatApl(obj, mat)` | 材料適用 |
-| `radObjDrwAtr[...]` | `rad.ObjDrwAtr(...)` | 描画属性設定 |
-| `radObjCnt[{...}]` | `rad.ObjCnt([...])` | コンテナ作成 |
-| `radObjMltExtRtg[...]` | `rad.ObjMltExtRtg(...)` | 多重押出 |
-| `radObjDivMag[...]` | `rad.ObjDivMag(...)` | 磁石分割 |
-| `radObjPolyhdr[...]` | `rad.ObjPolyhdr(...)` | 多面体作成 |
-| `radFld[obj, "bxbybz", pt]` | `rad.Fld(obj, 'b', pt)` | 磁場計算 |
+| `radUtiDelAll[]` | `rad.UtiDelAll()` | Delete all objects |
+| `radObjArcCur[...]` | `rad.ObjArcCur(...)` | Create arc current |
+| `radObjRecMag[...]` | `rad.ObjRecMag(...)` | Create rectangular magnet |
+| `radMatLin[...]` | `rad.MatLin(...)` | Define linear material |
+| `radMatSatIso[...]` | `rad.MatSatIso(...)` | Nonlinear isotropic material |
+| `radMatApl[obj, mat]` | `rad.MatApl(obj, mat)` | Apply material |
+| `radObjDrwAtr[...]` | `rad.ObjDrwAtr(...)` | Set drawing attributes |
+| `radObjCnt[{...}]` | `rad.ObjCnt([...])` | Create container |
+| `radObjMltExtRtg[...]` | `rad.ObjMltExtRtg(...)` | Multiple extrusion |
+| `radObjDivMag[...]` | `rad.ObjDivMag(...)` | Subdivide magnet |
+| `radObjPolyhdr[...]` | `rad.ObjPolyhdr(...)` | Create polyhedron |
+| `radFld[obj, "bxbybz", pt]` | `rad.Fld(obj, 'b', pt)` | Calculate magnetic field |
 
-### 4. データ構造の変換
+### 4. Data Structure Conversion
 
 ```mathematica
-(* Wolfram: リスト *)
+(* Wolfram: Lists *)
 points = {{1,2,3}, {4,5,6}};
 faces = {{1,2,3,4}, {5,6,7,8}};
 ```
 
 ```python
-# Python: リスト
+# Python: Lists
 points = [[1, 2, 3], [4, 5, 6]]
 faces = [[1, 2, 3, 4], [5, 6, 7, 8]]
 ```
 
-### 5. 可視化
+### 5. Visualization
 
 **Wolfram Language:**
 ```mathematica
@@ -79,12 +79,12 @@ Export["3DPlot.png", t];
 ```
 
 **Python:**
-現時点では直接的な等価機能なし。将来的には以下のライブラリを使用可能：
+No direct equivalent functionality at this time. Future options include:
 - matplotlib + mplot3d
 - mayavi
 - plotly
 
-### 6. ファイル出力
+### 6. File Output
 
 **Wolfram Language:**
 ```mathematica
@@ -99,15 +99,15 @@ with open('out.dat', 'w') as f:
 	f.write(f"{field[0]}\t{field[1]}\t{field[2]}\n")
 ```
 
-## 発見された問題点
+## Issues Discovered
 
-### case2.wls と case3.wls
+### case2.wls and case3.wls
 
-**問題:** `g2` オブジェクトが定義されていないのに `radFld[g2, ...]` を呼び出している
+**Issue:** `radFld[g2, ...]` is called but `g2` object is not defined
 
-**対応:** 
-- Python版では該当部分をコメントアウト
-- README.mdに注意事項を記載
+**Resolution:**
+- Commented out the relevant section in Python version
+- Added note to README.md
 
 ```python
 # Note: g2 is not defined in the original script
@@ -115,15 +115,15 @@ with open('out.dat', 'w') as f:
 print("Note: Field calculation requires defining g2 object")
 ```
 
-## コーディングスタイル
+## Coding Style
 
-- インデント: タブ（1タブ = 4スペース相当）
-- エンコーディング: UTF-8
-- 行末: LF (Unix style)
-- ドキュメント文字列: 英語で記述
-- コメント: 日本語・英語併用
+- Indentation: TAB characters (1 TAB = 4 spaces equivalent)
+- Encoding: UTF-8
+- Line endings: LF (Unix style)
+- Documentation strings: Written in English
+- Comments: Japanese and English mixed
 
-## テスト結果
+## Test Results
 
 ### case0.py
 ```
@@ -131,7 +131,7 @@ Container object ID: 4
 Magnetic field at origin: Bx=0.000000e+00, By=0.000000e+00, Bz=0.000000e+00 T
 Calculation complete. Field data saved to out.dat
 ```
-✓ 正常動作
+✓ Working correctly
 
 ### case1.py
 ```
@@ -139,7 +139,7 @@ Container object ID: 6
 Magnetic field at origin: Bx=0.000000e+00, By=0.000000e+00, Bz=0.000000e+00 T
 Calculation complete. Field data saved to out.dat
 ```
-✓ 正常動作
+✓ Working correctly
 
 ### case2.py
 ```
@@ -147,7 +147,7 @@ Object ID: 3
 Geometry created and subdivided successfully
 Note: Field calculation requires defining g2 object
 ```
-✓ 正常動作（g2未定義の警告付き）
+✓ Working correctly (with g2 undefined warning)
 
 ### case3.py
 ```
@@ -157,30 +157,30 @@ Vertices: 8
 Faces: 6
 Note: Field calculation requires defining g2 object
 ```
-✓ 正常動作（g2未定義の警告付き）
+✓ Working correctly (with g2 undefined warning)
 
-## 今後の改善点
+## Future Improvements
 
-1. **3D可視化機能の追加**
-   - matplotlib による基本的な3Dプロット
-   - インタラクティブな可視化（mayavi, plotly）
+1. **3D Visualization Features**
+   - Basic 3D plotting with matplotlib
+   - Interactive visualization (mayavi, plotly)
 
-2. **エラーハンドリングの強化**
-   - より詳細なエラーメッセージ
-   - 例外処理の追加
+2. **Enhanced Error Handling**
+   - More detailed error messages
+   - Additional exception handling
 
-3. **追加機能**
-   - フィールドマップの生成
-   - 等高線プロット
-   - データのCSV出力
+3. **Additional Features**
+   - Field map generation
+   - Contour plotting
+   - CSV data output
 
-4. **ドキュメントの充実**
-   - 各関数の詳細な使用例
-   - Radiaの概念説明
-   - チュートリアルの追加
+4. **Documentation Enhancement**
+   - Detailed usage examples for each function
+   - Radia concept explanations
+   - Additional tutorials
 
 ---
 
-**変換ツール:** 手動変換 + Python スクリプト（タブ変換）
-**検証:** Python 3.12 + Radia 4.32
-**状態:** 完了
+**Conversion Tools:** Manual conversion + Python script (tab conversion)
+**Verification:** Python 3.12 + Radia 4.32
+**Status:** Complete

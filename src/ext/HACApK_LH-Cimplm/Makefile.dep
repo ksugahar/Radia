@@ -1,0 +1,16 @@
+HACApK_lib.o : HACApK_lib.f90 
+bem-bb-fw-HACApK-0.100.4.o : bem-bb-fw-HACApK-0.100.4.f90 m_stl.o m_ppohBEM_bembb2hacapk.o 
+cHACApK_calc_entry_ij.o : cHACApK_calc_entry_ij.f90 m_HACApK_calc_entry_ij.o m_HACApK_calc_entry_record.o 
+m_HACApK_base.o : m_HACApK_base.f90 m_HACApK_calc_entry_ij.o 
+m_HACApK_base_c.o : m_HACApK_base_c.f90 m_HACApK_calc_entry_record.o m_HACApK_base.o 
+m_HACApK_calc_entry_ij.o : m_HACApK_calc_entry_ij.f90 m_ppohBEM_matrix_element_ij.o 
+m_HACApK_calc_entry_record.o : m_HACApK_calc_entry_record.f90 m_HACApK_calc_entry_ij.o 
+m_HACApK_solve.o : m_HACApK_solve.f90 m_HACApK_base.o 
+m_HACApK_use.o : m_HACApK_use.f90 m_HACApK_base_c.o m_HACApK_base.o m_HACApK_solve.o 
+m_ppohBEM_bembb2hacapk.o : m_ppohBEM_bembb2hacapk.f90 m_HACApK_use.o 
+m_ppohBEM_matrix_element_ij.o : m_ppohBEM_matrix_element_ij.f90 m_ppohBEM_user_func.o 
+m_ppohBEM_user_func.o : m_ppohBEM_user_func.f90 
+cHACApK_base.o: cHACApK_base.c cHACApK_base.h cHACApK_calc_entry_ij.h \
+ cHACApK_lib.h
+cHACApK_base_if.o: cHACApK_base_if.c cHACApK_base.h
+cHACApK_lib.o: cHACApK_lib.c cHACApK_lib.h

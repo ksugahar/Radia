@@ -7,11 +7,7 @@
 * Description:    CoefficientFunction-based background field source
 *                 (Python callback support)
 *
-* Author(s):      Claude Code
-*
 * First release:  2025
-*
-* Copyright (C):  2025
 *
 *-------------------------------------------------------------------------*/
 
@@ -22,7 +18,7 @@
 
 // Forward declaration to avoid Python.h dependency in header
 struct _object;
-typedef _object PyObject;
+using PyObject = _object;
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------

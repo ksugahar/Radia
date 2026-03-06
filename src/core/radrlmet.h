@@ -123,13 +123,17 @@ struct radTRelaxAuxData { //OC140103
 class radTRelaxationMethNo_4 : public radTIterativeRelaxMeth {
 	
 	double InstMisfitMe2, DesiredPrecOnMagnetizE2;
+	std::vector<radTRelaxAuxData> vmpRelaxAuxData; //OC140103
 	radTRelaxAuxData *mpRelaxAuxData; //OC140103
 
 	double mRelaxPar, mRelaxParMin, mRelaxParModFact, mMisfitE2RatToStartModifRelaxPar, mSysEnergy, mSysEnergyMin;
 	int mNumConvergPasses, mNumConvergPassesMax, mNumDivergPasses, mNumDivergPassesMax, mMethNo, mIterCount;
 	bool mKeepPrevOldValues, mBadConverg;
 
+	std::vector<double> vmElemVolumeArray; //OC010604
 	double *mElemVolumeArray; //OC010604
+	std::vector<TVector3d> vmOptMagnArray;
+	std::vector<TVector3d> vmOptFieldArray;
 	TVector3d *mOptMagnArray, *mOptFieldArray;
 
 public:
@@ -183,7 +187,8 @@ public:
 		DeleteAuxArrays();
 
 		long AmOfMainEl = IntrctPtr->AmOfMainElem;
-		mpRelaxAuxData = new radTRelaxAuxData[AmOfMainEl];
+		vmpRelaxAuxData.resize(AmOfMainEl);
+		mpRelaxAuxData = vmpRelaxAuxData.data();
 
 		radTRelaxAuxData *tRelaxAuxData = mpRelaxAuxData;
 		for(long i=0; i<AmOfMainEl; i++) 
@@ -193,20 +198,22 @@ public:
 	}
 	void DeleteAuxArrays() //OC140103
 	{
-		if(mpRelaxAuxData != 0) { delete[] mpRelaxAuxData; mpRelaxAuxData = 0;}
+		vmpRelaxAuxData.clear();
+		mpRelaxAuxData = 0;
 	}
 
 	void SetupElemVolumeArray()
 	{
 		DeleteElemVolumeArray();
 
-		if(IntrctPtr != NULL)
+		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
-			mElemVolumeArray = new double[AmOfMainEl];
+			vmElemVolumeArray.resize(AmOfMainEl);
+			mElemVolumeArray = vmElemVolumeArray.data();
 
 			double *tElemVolumeArray = mElemVolumeArray;
-			radTg3dRelax* g3dRelaxPtr = NULL;
+			radTg3dRelax* g3dRelaxPtr = nullptr;
 			for(long i=0; i<AmOfMainEl; i++) 
 			{
 				g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
@@ -216,18 +223,21 @@ public:
 	}
 	void DeleteElemVolumeArray() //OC140103
 	{
-		if(mElemVolumeArray != 0) { delete[] mElemVolumeArray; mElemVolumeArray = 0;}
+		vmElemVolumeArray.clear();
+		mElemVolumeArray = 0;
 	}
 
 	void SetupOptimValuesArrays()
 	{
 		DeleteOptimValuesArrays();
 
-		if(IntrctPtr != NULL)
+		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
-			mOptMagnArray = new TVector3d[AmOfMainEl];
-			mOptFieldArray = new TVector3d[AmOfMainEl];
+			vmOptMagnArray.resize(AmOfMainEl);
+			mOptMagnArray = vmOptMagnArray.data();
+			vmOptFieldArray.resize(AmOfMainEl);
+			mOptFieldArray = vmOptFieldArray.data();
 		}
 	}
 	void StoreOptimValuesFromOldArrays()
@@ -257,8 +267,10 @@ public:
 	}
 	void DeleteOptimValuesArrays()
 	{
-		if(mOptMagnArray != 0) { delete[] mOptMagnArray; mOptMagnArray = 0;}
-		if(mOptFieldArray != 0) { delete[] mOptFieldArray; mOptFieldArray = 0;}
+		vmOptMagnArray.clear();
+		mOptMagnArray = 0;
+		vmOptFieldArray.clear();
+		mOptFieldArray = 0;
 	}
 };
 
@@ -332,7 +344,8 @@ public:
 		DeleteAuxArrays();
 
 		long AmOfMainEl = IntrctPtr->AmOfMainElem;
-		mpRelaxAuxData = new radTRelaxAuxData[AmOfMainEl];
+		vmpRelaxAuxData.resize(AmOfMainEl);
+		mpRelaxAuxData = vmpRelaxAuxData.data();
 
 		radTRelaxAuxData *tRelaxAuxData = mpRelaxAuxData;
 		for(long i=0; i<AmOfMainEl; i++) 
@@ -342,20 +355,22 @@ public:
 	}
 	void DeleteAuxArrays() //OC140103
 	{
-		if(mpRelaxAuxData != 0) { delete[] mpRelaxAuxData; mpRelaxAuxData = 0;}
+		vmpRelaxAuxData.clear();
+		mpRelaxAuxData = 0;
 	}
 
 	void SetupElemVolumeArray()
 	{
 		DeleteElemVolumeArray();
 
-		if(IntrctPtr != NULL)
+		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
-			mElemVolumeArray = new double[AmOfMainEl];
+			vmElemVolumeArray.resize(AmOfMainEl);
+			mElemVolumeArray = vmElemVolumeArray.data();
 
 			double *tElemVolumeArray = mElemVolumeArray;
-			radTg3dRelax* g3dRelaxPtr = NULL;
+			radTg3dRelax* g3dRelaxPtr = nullptr;
 			for(long i=0; i<AmOfMainEl; i++) 
 			{
 				g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
@@ -365,18 +380,21 @@ public:
 	}
 	void DeleteElemVolumeArray() //OC140103
 	{
-		if(mElemVolumeArray != 0) { delete[] mElemVolumeArray; mElemVolumeArray = 0;}
+		vmElemVolumeArray.clear();
+		mElemVolumeArray = 0;
 	}
 
 	void SetupOptimValuesArrays()
 	{
 		DeleteOptimValuesArrays();
 
-		if(IntrctPtr != NULL)
+		if(IntrctPtr != nullptr)
 		{
 			long AmOfMainEl = IntrctPtr->AmOfMainElem;
-			mOptMagnArray = new TVector3d[AmOfMainEl];
-			mOptFieldArray = new TVector3d[AmOfMainEl];
+			vmOptMagnArray.resize(AmOfMainEl);
+			mOptMagnArray = vmOptMagnArray.data();
+			vmOptFieldArray.resize(AmOfMainEl);
+			mOptFieldArray = vmOptFieldArray.data();
 		}
 	}
 	void StoreOptimValuesFromOldArrays()
@@ -406,8 +424,10 @@ public:
 	}
 	void DeleteOptimValuesArrays()
 	{
-		if(mOptMagnArray != 0) { delete[] mOptMagnArray; mOptMagnArray = 0;}
-		if(mOptFieldArray != 0) { delete[] mOptFieldArray; mOptFieldArray = 0;}
+		vmOptMagnArray.clear();
+		mOptMagnArray = 0;
+		vmOptFieldArray.clear();
+		mOptFieldArray = 0;
 	}
 **/
 };
@@ -417,9 +437,12 @@ public:
 
 class radTRelaxationMethNo_a5 : public radTIterativeRelaxMeth {
 	double InstMisfitM;
+	std::vector<std::vector<double>> vAuxMatr1Storage, vAuxMatr2Storage;
+	std::vector<double*> vAuxMatr1, vAuxMatr2;
 	double** AuxMatr1;
 	double** AuxMatr2;
 
+	std::vector<double> vAuxArray;
 	double* AuxArray;
 
 	int AmOfRelaxTogether;
@@ -440,6 +463,7 @@ public:
 
 class radTRelaxationMethNo_6 : public radTIterativeRelaxMeth {
 
+	std::vector<radTInteraction> vIntrctPtr;
 	int mAmOfParts;
 	radTmhg mMapOfPartHandlers;
 	radThg mhGroup;
@@ -452,9 +476,9 @@ public:
 	{
 		SetupInteractionMatrices(hObj, CompCrit);
 	}; 
-	~radTRelaxationMethNo_6() 
+	~radTRelaxationMethNo_6()
 	{
-		if(IntrctPtr != NULL) delete[] IntrctPtr;
+		// RAII: automatic cleanup via vIntrctPtr
 		mMapOfPartHandlers.erase(mMapOfPartHandlers.begin(), mMapOfPartHandlers.end());
 	}; 
 
@@ -506,13 +530,13 @@ inline bool radTAuxIndNorm::greater(const radTAuxIndNorm& P1, const radTAuxIndNo
 
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
-typedef list <radTAuxIndNorm> radTlAuxIndNorm;
-typedef vector <int> radTvInt;
+#ifdef __GNUC__
+using radTlAuxIndNorm = list <radTAuxIndNorm>;
+using radTvInt = vector <int>;
 //typedef vector <radTvInt> radTvvInt;
 #else
-typedef list <radTAuxIndNorm, allocator<radTAuxIndNorm> > radTlAuxIndNorm;
-typedef vector <int, allocator<int> > radTvInt;
+using radTlAuxIndNorm = list <radTAuxIndNorm, allocator<radTAuxIndNorm> >;
+using radTvInt = vector <int, allocator<int> >;
 //typedef vector <radTvInt, allocator<radTvInt> > radTvvInt;
 #endif
 
@@ -520,6 +544,7 @@ typedef vector <int, allocator<int> > radTvInt;
 
 class radTRelaxationMethNo_7 : public radTIterativeRelaxMeth {
 
+	std::vector<TVector3d> vArrAuxQuasiExtField;
 	TVector3d* mArrAuxQuasiExtField;
 
 public:
@@ -534,7 +559,7 @@ public:
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, double* RelaxStatusParamArray);
 	void SetupMainInteractionData(const radThg& hg, const radTCompCriterium& CompCrit);
-	int FillInSubMatrixArrays(double PrecOnMagnetiz, int*& TotArrSubMatrNos, int*& SubMatrLengths, int& AmOfSubMatr);
+	int FillInSubMatrixArrays(double PrecOnMagnetiz, int*& TotArrSubMatrNos, int*& SubMatrLengths, int& AmOfSubMatr, std::vector<int>& vSubMatrLengths);
 	void FindSubMatricesToWhichElemCanBeAdded(radTlAuxIndNorm* pAuxIndNorm, int ApproxAmOfElemInSubMatr, radTvInt* ArrVectSubMatrNos, int AmOfSubMatr, radTvInt& VectIndPossibleSubMatr);
 	int FindSubMatrWithSmallestNumOfElem(radTvInt& VectIndPossibleSubMatr, radTvInt* ArrVectSubMatrNos, int AmOfSubMatr);
 	int RelaxCurrentSubMatrix(int* pTotArrSubMatrNos, int SubMatrSize, double PrecOnMagnetizE2, int MaxIterNumForSubMatr);
@@ -650,23 +675,21 @@ public:
 
 	void DeleteArrays_AutoRelax(int* TotArrSubMatrNos, int* SubMatrLengths)
 	{
-		if(TotArrSubMatrNos != NULL)
+		if(TotArrSubMatrNos != nullptr)
 		{
-			delete[] TotArrSubMatrNos; TotArrSubMatrNos = NULL;
+			delete[] TotArrSubMatrNos; TotArrSubMatrNos = nullptr;
 		}
-		if(SubMatrLengths != NULL)
+		if(SubMatrLengths != nullptr)
 		{
-			delete[] SubMatrLengths; SubMatrLengths = NULL;
+			delete[] SubMatrLengths; SubMatrLengths = nullptr;
 		}
-		if(mArrAuxQuasiExtField != NULL)
-		{
-			delete[] mArrAuxQuasiExtField; mArrAuxQuasiExtField = NULL;
-		}
+		// RAII: automatic cleanup via vArrAuxQuasiExtField
+		mArrAuxQuasiExtField = nullptr;
 	}
 
 	void DeleteInterMatrData()
 	{
-		if(IntrctPtr != NULL) { delete IntrctPtr; IntrctPtr = NULL;}
+		if(IntrctPtr != nullptr) { delete IntrctPtr; IntrctPtr = nullptr;}
 	}
 
 };

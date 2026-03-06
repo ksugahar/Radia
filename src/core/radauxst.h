@@ -35,7 +35,7 @@ using namespace std; // Porting
 #ifdef __MWERKS__
 using namespace std; // Porting
 #endif
-#ifdef __GCC__
+#ifdef __GNUC__
 //#define std
 using namespace std; // Porting
 #endif
@@ -91,17 +91,10 @@ struct radTPairIntDouble {
 
 //-------------------------------------------------------------------------
 
-#ifdef __GCC__
-typedef vector <radTInputCell> radTVectInputCell;
-typedef vector <TVector3d> radTVectorOfVector3d;
-typedef vector<radTPairOfDouble> radTVectPairOfDouble;
-typedef vector<radTPairOfVect3d> radTVectPairOfVect3d;
-#else
-typedef vector <radTInputCell, allocator<radTInputCell> > radTVectInputCell;
-typedef vector <TVector3d, allocator<TVector3d> > radTVectorOfVector3d;
-typedef vector<radTPairOfDouble, allocator<radTPairOfDouble> > radTVectPairOfDouble;
-typedef vector<radTPairOfVect3d, allocator<radTPairOfVect3d> > radTVectPairOfVect3d;
-#endif
+using radTVectInputCell = vector<radTInputCell>;
+using radTVectorOfVector3d = vector<TVector3d>;
+using radTVectPairOfDouble = vector<radTPairOfDouble>;
+using radTVectPairOfVect3d = vector<radTPairOfVect3d>;
 
 #ifdef __MWERKS__
 /*
@@ -127,6 +120,7 @@ struct iterator_traits <radTPairOfDouble*> {
 //-------------------------------------------------------------------------
 
 struct radTGeomPolygon {
+	std::vector<double> vVertCoords; // Vector for ownership
 	double* VertCoords;
 	int Nv;
 	float ColRGB[3];
@@ -137,13 +131,15 @@ struct radTGeomPolygon {
 		Nv = 0;
 		ColRGB[0] = ColRGB[1] = ColRGB[2] = -1;
 	}
+
+	// Destructor to ensure cleanup (though vector handles it automatically)
+	~radTGeomPolygon()
+	{
+		// RAII: vector cleanup is automatic
+	}
 };
 
-#ifdef __GCC__
-typedef vector <radTGeomPolygon> radTVectGeomPolygon;
-#else
-typedef vector <radTGeomPolygon, allocator<radTGeomPolygon> > radTVectGeomPolygon;
-#endif
+using radTVectGeomPolygon = vector<radTGeomPolygon>;
 
 //-------------------------------------------------------------------------
 

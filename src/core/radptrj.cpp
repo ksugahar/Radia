@@ -34,18 +34,24 @@ radTPrtclTrj::radTPrtclTrj(double InEnergy, radTg3d* InFldSrcPtr, const radTComp
 	Field.CompCriterium = InCompCriterium;
 
 	OnPrc = InOnPrc; AmOfEq = 4;
-	
-	dym_rk4 = new double[AmOfEq];
-	dyt_rk4 = new double[AmOfEq];
-	yt_rk4 = new double[AmOfEq];
 
-	Y = new double[AmOfEq];
-	dYdx = new double[AmOfEq];
+	vDym_rk4.resize(AmOfEq);
+	vDyt_rk4.resize(AmOfEq);
+	vYt_rk4.resize(AmOfEq);
+	dym_rk4 = vDym_rk4.data();
+	dyt_rk4 = vDyt_rk4.data();
+	yt_rk4 = vYt_rk4.data();
+
+	vY.resize(AmOfEq);
+	vDYdx.resize(AmOfEq);
+	Y = vY.data();
+	dYdx = vDYdx.data();
 
 	if(OnPrc)
 	{
-		PrecArray = new double[AmOfEq];
-		for(int i=0; i<AmOfEq; i++) 
+		vPrecArray.resize(AmOfEq);
+		PrecArray = vPrecArray.data();
+		for(int i=0; i<AmOfEq; i++)
 		{
 			PrecArray[i] = InPrecArray[i];
 			if(PrecArray[i]==0.) PrecArray[i] = 1.E+23;
@@ -53,15 +59,20 @@ radTPrtclTrj::radTPrtclTrj(double InEnergy, radTg3d* InFldSrcPtr, const radTComp
 		EpsTol = InEpsTol;
 		MaxAutoStp = InMaxAutoStp;
 
-		dysav_rks5 = new double[AmOfEq];
-		ysav_rks5 = new double[AmOfEq];
-		ytemp_rks5 = new double[AmOfEq];
+		vDysav_rks5.resize(AmOfEq);
+		vYsav_rks5.resize(AmOfEq);
+		vYtemp_rks5.resize(AmOfEq);
+		dysav_rks5 = vDysav_rks5.data();
+		ysav_rks5 = vYsav_rks5.data();
+		ytemp_rks5 = vYtemp_rks5.data();
 
-		y_ap = new double[AmOfEq];
-		dydx_ap = new double[AmOfEq];
+		vY_ap.resize(AmOfEq);
+		vDydx_ap.resize(AmOfEq);
+		y_ap = vY_ap.data();
+		dydx_ap = vDydx_ap.data();
 
 		kmax_ap = count_ap = 0;                    // To allow storage of intermediate results in AutoPropagate,
-		xp_ap = NULL; yp_ap = NULL; dxsav_ap = 0.; // set this to desired values and allocate memory
+		xp_ap = nullptr; yp_ap = nullptr; dxsav_ap = 0.; // set this to desired values and allocate memory
 	}
 }
 
@@ -69,24 +80,7 @@ radTPrtclTrj::radTPrtclTrj(double InEnergy, radTg3d* InFldSrcPtr, const radTComp
 
 radTPrtclTrj::~radTPrtclTrj()
 {
-	if(dym_rk4!=NULL) delete[] dym_rk4;
-	if(dyt_rk4!=NULL) delete[] dyt_rk4;
-	if(yt_rk4!=NULL) delete[] yt_rk4;
-
-	if(Y!=NULL) delete[] Y; 
-	if(dYdx!=NULL) delete[] dYdx;
-
-	if(OnPrc)
-	{
-		delete[] PrecArray;
-
-		delete[] dysav_rks5;
-		delete[] ysav_rks5;
-		delete[] ytemp_rks5;
-
-		delete[] y_ap;
-		delete[] dydx_ap;
-	}
+	// Automatic cleanup via RAII (std::vector)
 }
 
 //-------------------------------------------------------------------------
@@ -290,12 +284,12 @@ void radTPrtclTrj::ComputeSecondOrderKickPer(const TVector3d& P1Vect, const TVec
 	long AmOfPtsFocPot = 0;
 	SetupTransverseMeshForKickCalc(r1, np1, r2, np2, d1, d2, step1, step2, UseSpecStepForDeriv1, UseSpecStepForDeriv2, pCoordDir1, pCoordDir2, AmOfPtsFocPot);
 
-	double *pFocPotData = new double[AmOfPtsFocPot];
+	std::vector<double> vFocPotData(AmOfPtsFocPot);
+	double *pFocPotData = vFocPotData.data();
 	ComputeFocusPotentPerOnMesh2D(P1Vect, NlongVect, per, nper, N1Vect, np1, step1, d1, np2, step2, d2, nharm, ns, pFocPotData, pBtE2Int);
 	//ComputeFocusPotentDerivOnMesh2D(pFocPotData, np1, d1, UseSpecStepForDeriv1, np2, d2, UseSpecStepForDeriv2, pKickData1, pKickData2);
 	ComputeFocusPotentDerivOnMesh2D(pFocPotData, np1, d1, UseSpecStepForDeriv1, np2, d2, UseSpecStepForDeriv2, pKickData1, pKickData2, cKickUnit); //OC050413
-
-	if(pFocPotData != 0) delete[] pFocPotData;
+	// pFocPotData cleaned up automatically by RAII
 }
 
 //-------------------------------------------------------------------------
@@ -337,7 +331,8 @@ void radTPrtclTrj::ComputeFocusPotentPerOnMesh2D(const TVector3d& P1Vect, const 
 	int twoNs = ns << 1;
 	if(twoNs < 4) twoNs = 4;
 
-	double *pAuxBuffer = new double[twoNs];
+	std::vector<double> vAuxBuffer(twoNs);
+	double *pAuxBuffer = vAuxBuffer.data();
 	double *tFocPotData = pFocPotData;
 
 	double Arg2Min = -0.5*step2*(np2 - 1), Arg1Min = -0.5*step1*(np1 - 1);
@@ -364,7 +359,7 @@ void radTPrtclTrj::ComputeFocusPotentPerOnMesh2D(const TVector3d& P1Vect, const 
 		}
 		arg2 += step2;
 	}
-	if(pAuxBuffer != 0) delete[] pAuxBuffer;
+	// pAuxBuffer cleaned up automatically by RAII
 }
 
 //-------------------------------------------------------------------------
@@ -500,15 +495,11 @@ void radTPrtclTrj::AnalyzeForHarmonics(double* pB, int AmOfPts, double Per, doub
 {
 	if((pB == 0) || (AmOfPts <= 0) || (Per <= 0) || (RelPrec <= 0)) return;
 
-	float *AuxDataContIn=0, *AuxDataContOut=0;
-	double *CkArr=0, *PhikArr=0;
-	int *HarmNoArr=0;
-
-	AuxDataContIn = new float[AmOfPts << 1];
-	if(AuxDataContIn == 0) throw 0;
-
-	AuxDataContOut = new float[AmOfPts << 1];
-	if(AuxDataContOut == 0) throw 0;
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<float> vAuxDataContIn(AmOfPts << 1);
+	std::vector<float> vAuxDataContOut(AmOfPts << 1);
+	float *AuxDataContIn = vAuxDataContIn.data();
+	float *AuxDataContOut = vAuxDataContOut.data();
 	double *tB = pB;
 	float *tIn = AuxDataContIn;
 	double MaxAbsB = 0;
@@ -522,8 +513,7 @@ void radTPrtclTrj::AnalyzeForHarmonics(double* pB, int AmOfPts, double Per, doub
 	}
 	if(MaxAbsB <= 0)
 	{
-	    AnalyzeForHarmonics_DeleteAuxArrays(AuxDataContIn, AuxDataContOut, CkArr, PhikArr, HarmNoArr);
-		return;
+		return; // RAII: std::vector cleanup automatic
 	}
 
 	double Step = Per/double(AmOfPts);
@@ -548,14 +538,13 @@ void radTPrtclTrj::AnalyzeForHarmonics(double* pB, int AmOfPts, double Per, doub
 	int MaxAmOfHarm = AmOfHarm;
 	if(MaxAmOfHarm >= HalfAmOfPts) MaxAmOfHarm = HalfAmOfPts - 1;
 
-	CkArr = new double[MaxAmOfHarm];
-	if(CkArr == 0) throw MEMORY_ALLOCATION_FAILURE;
-
-	PhikArr = new double[MaxAmOfHarm];
-	if(PhikArr == 0) throw MEMORY_ALLOCATION_FAILURE;
-
-	HarmNoArr = new int[MaxAmOfHarm];
-	if(HarmNoArr == 0) throw MEMORY_ALLOCATION_FAILURE;
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<double> vCkArr(MaxAmOfHarm);
+	std::vector<double> vPhikArr(MaxAmOfHarm);
+	std::vector<int> vHarmNoArr(MaxAmOfHarm);
+	double *CkArr = vCkArr.data();
+	double *PhikArr = vPhikArr.data();
+	int *HarmNoArr = vHarmNoArr.data();
 
 	double CoefMult = 2./Per;
 	double AbsThreshold = RelPrec*MaxAbsB/CoefMult;
@@ -578,10 +567,9 @@ void radTPrtclTrj::AnalyzeForHarmonics(double* pB, int AmOfPts, double Per, doub
 		*(tHarmNoArr++) = (j + 1);
 		HarmCount++;
 	}
-	if(HarmCount <= 0) 
+	if(HarmCount <= 0)
 	{
-		AnalyzeForHarmonics_DeleteAuxArrays(AuxDataContIn, AuxDataContOut, CkArr, PhikArr, HarmNoArr);
-		return;
+		return; // RAII: std::vector cleanup automatic
 	}
 
 	MagHarmArr = new radTMagHarm[HarmCount];
@@ -598,7 +586,7 @@ void radTPrtclTrj::AnalyzeForHarmonics(double* pB, int AmOfPts, double Per, doub
 		tMagHarmArr++;
 	}
 	AmOfHarm = HarmCount;
-	AnalyzeForHarmonics_DeleteAuxArrays(AuxDataContIn, AuxDataContOut, CkArr, PhikArr, HarmNoArr);
+	// RAII: std::vector cleanup automatic
 }
 
 //-------------------------------------------------------------------------
@@ -764,25 +752,28 @@ void radTPrtclTrj::ComputeSecondOrderKick(const TVector3d& P1Vect, const TVector
 	long AmOfTrPtsFocPot = 0;
 	SetupTransverseMeshForKickCalc(r1, np1, r2, np2, d1, d2, TrGridStep1, TrGridStep2, UseSpecStepForDeriv1, UseSpecStepForDeriv2, pCoordDir1, pCoordDir2, AmOfTrPtsFocPot);
 
-	double *pFocPotData = new double[AmOfTrPtsFocPot*AmOfLongGridPts];
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<double> vFocPotData(AmOfTrPtsFocPot*AmOfLongGridPts);
+	double *pFocPotData = vFocPotData.data();
 	ComputeFocusPotentOnMesh3D(P1Vect, NlongVect, ArrLongDist, AmOfLongGridPts, ns, N1Vect, np1, TrGridStep1, d1, np2, TrGridStep2, d2, UseSpecStepForDeriv1, UseSpecStepForDeriv2, pFocPotData, pIBe2);
 	ComputeFocusPotentDerivOnMesh3D(pFocPotData, AmOfLongGridPts, np1, d1, UseSpecStepForDeriv1, np2, d2, UseSpecStepForDeriv2, pKickData1, pKickData2);
 
 	if(AmOfLongGridPts > 1)
 	{
 		long AmOfTransvPts = np1*np2;
-		double *pAuxTotKickData1 = new double[AmOfTransvPts];
-		double *pAuxTotKickData2 = new double[AmOfTransvPts];
-		double *pAuxTotIBe2 = new double[AmOfTransvPts];
+		// RAII: Use std::vector for automatic cleanup
+		std::vector<double> vAuxTotKickData1(AmOfTransvPts);
+		std::vector<double> vAuxTotKickData2(AmOfTransvPts);
+		std::vector<double> vAuxTotIBe2(AmOfTransvPts);
+		double *pAuxTotKickData1 = vAuxTotKickData1.data();
+		double *pAuxTotKickData2 = vAuxTotKickData2.data();
+		double *pAuxTotIBe2 = vAuxTotIBe2.data();
 
 		SumUpPartialSecondOrderKicks(AmOfLongGridPts, AmOfTransvPts, pKickData1, pKickData2, pIBe2, pAuxTotKickData1, pAuxTotKickData2, pAuxTotIBe2);
 		ArrangeAllSecondOrderKickData(AmOfLongGridPts, AmOfTransvPts, pAuxTotKickData1, pAuxTotKickData2, pAuxTotIBe2, pKickData1, pKickData2, pIBe2);
-
-		if(pAuxTotKickData1 != 0) delete[] pAuxTotKickData1;
-		if(pAuxTotKickData2 != 0) delete[] pAuxTotKickData2;
-		if(pAuxTotIBe2 != 0) delete[] pAuxTotIBe2;
+		// RAII: automatic cleanup
 	}
-	if(pFocPotData != 0) delete[] pFocPotData;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -811,8 +802,11 @@ void radTPrtclTrj::ComputeFocusPotentOnMesh3D(const TVector3d& P1Vect, const TVe
 	}
 	double invNumFocPotArrPerTrPoint = 1./NumFocPotArrPerTrPoint;
 
-	int *ArrLongNumPts = new int[AmOfLongGridPts];
-	double *auxArIntBtrE2 = new double[AmOfLongGridPts];
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<int> vArrLongNumPts(AmOfLongGridPts);
+	std::vector<double> vAuxArIntBtrE2(AmOfLongGridPts);
+	int *ArrLongNumPts = vArrLongNumPts.data();
+	double *auxArIntBtrE2 = vAuxArIntBtrE2.data();
 	SetupLongNumPointsArray(ArrLongDist, AmOfLongGridPts, ns, ArrLongNumPts);
 
 	double Arg2Min = -0.5*TrGridStep2*(np2 - 1), Arg1Min = -0.5*TrGridStep1*(np1 - 1);
@@ -855,8 +849,7 @@ void radTPrtclTrj::ComputeFocusPotentOnMesh3D(const TVector3d& P1Vect, const TVe
 		}
 		arg2 += TrGridStep2;
 	}
-	delete[] ArrLongNumPts;
-	delete[] auxArIntBtrE2;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -1107,9 +1100,13 @@ void radTPrtclTrj::SumUpPartialSecondOrderKicks(long AmOfLongGridPts, long AmOfT
 void radTPrtclTrj::ArrangeAllSecondOrderKickData(long AmOfLongGridPts, long AmOfTransvPts, double* pTotKickData1, double* pTotKickData2, double* pTotIBe2, double* pKickData1, double* pKickData2, double* pIBe2)
 {
 	long TotAmOfData = (AmOfLongGridPts + 1)*AmOfTransvPts;
-	double *pAuxContKick1 = new double[TotAmOfData];
-	double *pAuxContKick2 = new double[TotAmOfData];
-	double *pAuxContIBe2 = new double[TotAmOfData];
+	// RAII: Use std::vector for automatic cleanup
+	std::vector<double> vAuxContKick1(TotAmOfData);
+	std::vector<double> vAuxContKick2(TotAmOfData);
+	std::vector<double> vAuxContIBe2(TotAmOfData);
+	double *pAuxContKick1 = vAuxContKick1.data();
+	double *pAuxContKick2 = vAuxContKick2.data();
+	double *pAuxContIBe2 = vAuxContIBe2.data();
 
 	double *tAuxContKick1 = pAuxContKick1;
 	double *tAuxContKick2 = pAuxContKick2;
@@ -1155,10 +1152,7 @@ void radTPrtclTrj::ArrangeAllSecondOrderKickData(long AmOfLongGridPts, long AmOf
 			*(tIBe2++) = *(tAuxContIBe2++);
 		}
 	}
-
-	if(pAuxContKick1 != 0) delete[] pAuxContKick1;
-	if(pAuxContKick2 != 0) delete[] pAuxContKick2;
-	if(pAuxContIBe2 != 0) delete[] pAuxContIBe2;
+	// RAII: automatic cleanup
 }
 
 //-------------------------------------------------------------------------
@@ -1173,7 +1167,7 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer(const char* StrComment, do
 	if(cKickUnit == 2) psKickUnit = sKickUnit_microrad;
 	else if(cKickUnit == 3) psKickUnit = sKickUnit_rad;
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //	ostrstream OutStream;
 //#else
 	ostringstream OutStream;
@@ -1217,7 +1211,7 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer(const char* StrComment, do
 
 //-------------------------------------------------------------------------
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostrstream& OutStream, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData)
 //#else
 //void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream& OutStream, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData)
@@ -1246,8 +1240,8 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream&
 		dVal = 0.001*ApplyZeroTol(pCoordDir1[i], AbsZeroTol);
 		if(cOutFormat == 1)
 		{
-			//sprintf(BufStr, FormatStr, 0.001*ApplyZeroTol(pCoordDir1[i], AbsZeroTol));
-			sprintf(BufStr, FormatStr, dVal);
+			//snprintf(BufStr, 16, FormatStr, 0.001*ApplyZeroTol(pCoordDir1[i], AbsZeroTol));
+			snprintf(BufStr, 16, FormatStr, dVal);
 			OutStream << BufStr;
 		}
 		else if(cOutFormat == 2)
@@ -1266,8 +1260,8 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream&
 
 		if(cOutFormat == 1)
 		{
-			//sprintf(BufStr, FormatStr, 0.001*ApplyZeroTol(pCoordDir2[IndRow], AbsZeroTol));
-			sprintf(BufStr, FormatStr, dVal);
+			//snprintf(BufStr, 16, FormatStr, 0.001*ApplyZeroTol(pCoordDir2[IndRow], AbsZeroTol));
+			snprintf(BufStr, 16, FormatStr, dVal);
 			OutStream << BufStr;
 		}
 		else if(cOutFormat == 2)
@@ -1282,8 +1276,8 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream&
 
 			if(cOutFormat == 1)
 			{
-				//sprintf(BufStr, FormatStr, ApplyZeroTol(tKickData[k], AbsZeroTol));
-				sprintf(BufStr, FormatStr, dVal);
+				//snprintf(BufStr, 16, FormatStr, ApplyZeroTol(tKickData[k], AbsZeroTol));
+				snprintf(BufStr, 16, FormatStr, dVal);
 				OutStream << BufStr;
 			}
 			else if(cOutFormat == 2)
@@ -1300,7 +1294,7 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream&
 
 void radTPrtclTrj::ComposeStrReportSecondOrderKick(const char* StrComment, double* ArrLongDist, int lenArrLongDist, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData1, double* pKickData2, double* pIBe2Data, char*& pStrReport)
 {// coordinates expected in mm at input
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //	ostrstream OutStream;
 //#else
 	ostringstream OutStream;
@@ -1350,9 +1344,9 @@ void radTPrtclTrj::ComposeStrReportSecondOrderKick(const char* StrComment, doubl
 	        OutStream << "# " << endl;
 
 			double CurPos = ArrLongDist[i];
-			sprintf(BufStr, FormatStr, 0.001*ApplyZeroTol(PrevPos, AbsZeroTol));
+			snprintf(BufStr, 16, FormatStr, 0.001*ApplyZeroTol(PrevPos, AbsZeroTol));
 			OutStream << BufStr;
-			sprintf(BufStr, FormatStr, 0.001*ApplyZeroTol(CurPos, AbsZeroTol));
+			snprintf(BufStr, 16, FormatStr, 0.001*ApplyZeroTol(CurPos, AbsZeroTol));
 			OutStream << BufStr;
 			OutStream << endl;
 			PrevPos = CurPos;

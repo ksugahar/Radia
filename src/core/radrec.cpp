@@ -33,7 +33,7 @@
 #include <math.h>
 #endif
 
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //#include <strstream.h>
 //#else
 #include <sstream>
@@ -853,26 +853,30 @@ void radTRecMag::IntOverSurf(radTField* FieldPtr)
 	int LenValp2 = LenVal+2;
 	TVector3d ZeroVect(0.,0.,0.);
 
-	TVector3d* InnerIntegVal[6]; 
+	TVector3d* InnerIntegVal[6];
 	TVector3d* OuterIntegVal[6];
 
-	short* InnerElemCompNotFinished;
-	short* OuterElemCompNotFinished;
-	double* InnerAbsPrecAndLimitsArray;
-	double* OuterAbsPrecAndLimitsArray;
-	TVector3d* LocalVectArray;
+	std::vector<std::vector<TVector3d>> vInnerIntegValStorage(6);
+	std::vector<std::vector<TVector3d>> vOuterIntegValStorage(6);
+	std::vector<short> vInnerElemCompNotFinished(LenVal);
+	std::vector<short> vOuterElemCompNotFinished(LenVal);
+	std::vector<double> vInnerAbsPrecAndLimitsArray(LenValp2);
+	std::vector<double> vOuterAbsPrecAndLimitsArray(LenValp2);
+	std::vector<TVector3d> vLocalVectArray(LenVal);
 
 	int j;
 	for(j=0; j<6; j++)
 	{
-		InnerIntegVal[j] = new TVector3d[LenVal];
-		OuterIntegVal[j] = new TVector3d[LenVal];
+		vInnerIntegValStorage[j].resize(LenVal);
+		vOuterIntegValStorage[j].resize(LenVal);
+		InnerIntegVal[j] = vInnerIntegValStorage[j].data();
+		OuterIntegVal[j] = vOuterIntegValStorage[j].data();
 	}
-	InnerElemCompNotFinished = new short[LenVal];
-	OuterElemCompNotFinished = new short[LenVal];
-	InnerAbsPrecAndLimitsArray = new double[LenValp2];
-	OuterAbsPrecAndLimitsArray = new double[LenValp2];
-	LocalVectArray = new TVector3d[LenVal];
+	short* InnerElemCompNotFinished = vInnerElemCompNotFinished.data();
+	short* OuterElemCompNotFinished = vOuterElemCompNotFinished.data();
+	double* InnerAbsPrecAndLimitsArray = vInnerAbsPrecAndLimitsArray.data();
+	double* OuterAbsPrecAndLimitsArray = vOuterAbsPrecAndLimitsArray.data();
+	TVector3d* LocalVectArray = vLocalVectArray.data();
 	SurfIntDataPtr = new radTParallelepSurfIntData();
 
 	SurfIntDataPtr->IntegrandLen = LenVal;
@@ -944,17 +948,7 @@ void radTRecMag::IntOverSurf(radTField* FieldPtr)
 	FormalOneFoldInteg(this, &radTRecMag::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
 	for(i=0; i<LenVal; i++) OutVectArray[i] += (OuterIntegVal[0])[i];
 
-// Delete everything created above:
-	delete[] InnerElemCompNotFinished;
-	delete[] OuterElemCompNotFinished;
-	delete[] InnerAbsPrecAndLimitsArray;
-	delete[] OuterAbsPrecAndLimitsArray;
-	for(j=0; j<6; j++)
-	{
-		delete[] InnerIntegVal[j];
-		delete[] OuterIntegVal[j];
-	}
-	delete[] LocalVectArray;
+// Automatic cleanup via RAII
 	delete SurfIntDataPtr;
 }
 
@@ -1331,12 +1325,12 @@ int radTRecMag::SubdivideItselfByOneSetOfParPlanes(
 //-------------------------------------------------------------------------
 
 int radTRecMag::SubdivideItselfByPlanesParToFace(
-	short DirNo, TVector3d* PointsOnCuttingPlanes, int AmOfPieces_mi_1, 
+	short DirNo, TVector3d* PointsOnCuttingPlanes, int AmOfPieces_mi_1,
 	radThg& In_hg, radTApplication* radPtr, char SubdivideCoils, char PutNewStuffIntoGenCont)
 {
 	radTSend Send;
-	double* CutCoords = new double[AmOfPieces_mi_1];
-	if(CutCoords==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+	std::vector<double> vCutCoords(AmOfPieces_mi_1);
+	double* CutCoords = vCutCoords.data();
 
 	double RelAbsTol[2];
 	DefineRelAndAbsTol(RelAbsTol);
@@ -1439,8 +1433,7 @@ int radTRecMag::SubdivideItselfByPlanesParToFace(
 	}
 
 	In_hg = NewHandle;
-
-	if(CutCoords != 0) delete[] CutCoords;
+	// RAII: automatic cleanup
 	return 1;
 }
 

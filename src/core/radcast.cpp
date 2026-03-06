@@ -27,7 +27,7 @@
 radTInteraction* radTCast::InteractCast(radTg* gPtr)
 {
 	radTInteraction Interact;
-	if(gPtr->Type_g()==Interact.Type_g()) return (radTInteraction*)gPtr;
-	else return 0;
+	if(gPtr->Type_g()==Interact.Type_g()) return static_cast<radTInteraction*>(gPtr);
+	else return nullptr;
 	// Do not move it to the .h file: compilation problems may appear!
 }

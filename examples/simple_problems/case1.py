@@ -12,6 +12,7 @@ import numpy as np
 # Add parent directory to path to import radia
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'dist'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'build', 'lib', 'Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "build", "Release"))
 
 import radia as rad
 
@@ -30,18 +31,17 @@ j = 10
 # Create arc with current
 g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
 
-# Define linear material
-m1 = rad.MatLin([0.001, 0.001], [0, 0, 0])
-
 # Create two rectangular magnets with magnetization
-g2 = rad.ObjRecMag([0, 0, -50], [300, 300, 5], [0, 0, 800])
-g3 = rad.ObjRecMag([0, 0, 50], [200, 200, 5], [0, 0, 600])
+# Note: Radia magnetization unit is Tesla (T), not A/m
+# For permanent magnets, set magnetization directly (no material needed)
+g2 = rad.ObjRecMag([0, 0, -50], [300, 300, 5], [0, 0, 1.0])
+g3 = rad.ObjRecMag([0, 0, 50], [200, 200, 5], [0, 0, 0.8])
 
 # Combine magnets into a container
 g2 = rad.ObjCnt([g2, g3])
 
-# Apply material to magnet container
-rad.MatApl(g2, m1)
+# Note: Material properties (MatLin, MatSatIso) are for soft magnetic materials
+# like iron yokes, NOT for permanent magnets with fixed magnetization
 
 # Set drawing attributes
 rad.ObjDrwAtr(g1, [1, 0, 0], 0.001)  # Red for arc current

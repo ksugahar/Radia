@@ -18,10 +18,6 @@
 #ifndef __RADSEND_H
 #define __RADSEND_H
 
-#ifdef _WITH_QD3D
-#include "radq3ld.h"
-#endif
-
 #include "radauxst.h"
 
 //-------------------------------------------------------------------------
@@ -45,23 +41,10 @@ public:
 	radTVectGeomPolygon GeomPolygons;
 	radTVectGeomPolygon GeomLines;
 
-#ifdef _WITH_QD3D
-	TQ3GroupObject QD3D_GroupToDraw;
-	//char ShowLinesInQD3D;
-	//char ShowFacesInQD3D;
-
-	radTrans* pSmallRotForQD3D;
-#endif
-
-	radTSend() 
+	radTSend()
 	{
 		ShowLines = 0; ShowFaces = 1;
 		InitLimits3D();
-
-#ifdef _WITH_QD3D
-		QD3D_GroupToDraw = 0; 
-		pSmallRotForQD3D = 0;
-#endif
 	}
 
 	static void ErrorMessage(const char*);
@@ -112,11 +95,9 @@ public:
 	void InitLimits3D()
 	{
 		Limits3D[0] = 1.E+23; Limits3D[1] = -1.E+23; 
-		Limits3D[2] = 1.E+23; Limits3D[3] = -1.E+23; 
-		Limits3D[4] = 1.E+23; Limits3D[5] = -1.E+23; 
+		Limits3D[2] = 1.E+23; Limits3D[3] = -1.E+23;
+		Limits3D[4] = 1.E+23; Limits3D[5] = -1.E+23;
 	}
-	int InitSmallRotForQD3D();
-	void DelSmallRotForQD3D();
 
 	//void DrawCharacter(char, double, TVector3d*, char);
 	//void DrawPyramidArrow(TVector3d*, char);

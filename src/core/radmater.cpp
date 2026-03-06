@@ -741,12 +741,12 @@ int radTMaterial::GetMaterIndexDB(const char* InName)
 
 	char cLocBuffer[100], cInLocBuffer[100];
 	cLocBuffer[0] = '\0';
-	strcpy(cInLocBuffer, InName);
+	strncpy(cInLocBuffer, InName, 99); cInLocBuffer[99] = '\0';
 	CAuxParse::toUpperCase(cInLocBuffer);
 
 	for(int i=0; i<(int)(MaterDB.size()); i++)
 	{
-		strcpy(cLocBuffer, MaterDB[i].rep->Name);
+		strncpy(cLocBuffer, MaterDB[i].rep->Name, 99); cLocBuffer[99] = '\0';
 		CAuxParse::toUpperCase(cLocBuffer);
 		if(strcmp(cInLocBuffer, cLocBuffer) == 0) return i;
 	}

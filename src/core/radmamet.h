@@ -24,6 +24,7 @@
 
 #include <time.h>
 #include <stdlib.h>
+#include <vector>
 
 #ifndef NEGATIVE_NUM_INTEG_OF_MODIF_BESSEL_FUNC //in line with SRW
 #define NEGATIVE_NUM_INTEG_OF_MODIF_BESSEL_FUNC 67 + 23000
@@ -35,9 +36,10 @@
 class radTMathLinAlgEq {
 	int SizeOfMatr;
 
-	double* vvLU_Dcmp;
-	double* colInverseMatrix;
-	int* indxInverseMatrix;
+	// RAII: Use std::vector for automatic memory management
+	std::vector<double> vvLU_Dcmp;
+	std::vector<double> colInverseMatrix;
+	std::vector<int> indxInverseMatrix;
 
 public:
 	radTMathLinAlgEq(int);
@@ -53,12 +55,15 @@ public:
 //-------------------------------------------------------------------------
 /**
 template<class T> class radTMathOrdDifEq {
-	
+
+	std::vector<double> vdym_rk4, vdyt_rk4, vyt_rk4;
 	double *dym_rk4, *dyt_rk4, *yt_rk4;
+	std::vector<double> vdysav_rks5, vysav_rks5, vytemp_rks5;
 	double *dysav_rks5, *ysav_rks5, *ytemp_rks5;
+	std::vector<double> vy_ap, vdydx_ap;
 	double *y_ap, *dydx_ap;
 	int kmax_ap, count_ap;
-	double *xp_ap, **yp_ap, dxsav_ap; 
+	double *xp_ap, **yp_ap, dxsav_ap;
 
 	radTSend Send;
 	T* PtrT;
@@ -66,11 +71,12 @@ template<class T> class radTMathOrdDifEq {
 	int AmOfEq;
 
 	short OnPrc;
+	std::vector<double> vPrecArray;
 	double *PrecArray, EpsTol;
 	int MaxAutoStp;
 
 public:
-	radTMathOrdDifEq(int, T*, void (T::*)(double,double*,double*), short, double* =NULL, double =1., int =5000);
+	radTMathOrdDifEq(int, T*, void (T::*)(double,double*,double*), short, double* =nullptr, double =1., int =5000);
 	~radTMathOrdDifEq();
 
 	void RungeKutta4(double*, double*, double, double, double*);
@@ -87,15 +93,19 @@ template <class T> radTMathOrdDifEq<T>::
 {
 	OnPrc = InOnPrc; AmOfEq = InAmOfEq;
 	PtrT = InPtrT; FunDerivs = InFunDerivs;
-	
-	dym_rk4 = new double[AmOfEq];
-	dyt_rk4 = new double[AmOfEq];
-	yt_rk4 = new double[AmOfEq];
+
+	vdym_rk4.resize(AmOfEq);
+	dym_rk4 = vdym_rk4.data();
+	vdyt_rk4.resize(AmOfEq);
+	dyt_rk4 = vdyt_rk4.data();
+	vyt_rk4.resize(AmOfEq);
+	yt_rk4 = vyt_rk4.data();
 
 	if(OnPrc)
 	{
-		PrecArray = new double[AmOfEq];
-		for(int i=0; i<AmOfEq; i++) 
+		vPrecArray.resize(AmOfEq);
+		PrecArray = vPrecArray.data();
+		for(int i=0; i<AmOfEq; i++)
 		{
 			PrecArray[i] = InPrecArray[i];
 			if(PrecArray[i]==0.) PrecArray[i] = 1.E+23;
@@ -103,15 +113,20 @@ template <class T> radTMathOrdDifEq<T>::
 		EpsTol = InEpsTol;
 		MaxAutoStp = InMaxAutoStp;
 
-		dysav_rks5 = new double[AmOfEq];
-		ysav_rks5 = new double[AmOfEq];
-		ytemp_rks5 = new double[AmOfEq];
+		vdysav_rks5.resize(AmOfEq);
+		dysav_rks5 = vdysav_rks5.data();
+		vysav_rks5.resize(AmOfEq);
+		ysav_rks5 = vysav_rks5.data();
+		vytemp_rks5.resize(AmOfEq);
+		ytemp_rks5 = vytemp_rks5.data();
 
-		y_ap = new double[AmOfEq];
-		dydx_ap = new double[AmOfEq];
+		vy_ap.resize(AmOfEq);
+		y_ap = vy_ap.data();
+		vdydx_ap.resize(AmOfEq);
+		dydx_ap = vdydx_ap.data();
 
 		kmax_ap = count_ap = 0;                    // To allow storage of intermediate results in AutoPropagate,
-		xp_ap = NULL; yp_ap = NULL; dxsav_ap = 0.; // set this to desired values and allocate memory
+		xp_ap = nullptr; yp_ap = nullptr; dxsav_ap = 0.; // set this to desired values and allocate memory
 	}
 }
 
@@ -119,21 +134,10 @@ template <class T> radTMathOrdDifEq<T>::
 
 template <class T> radTMathOrdDifEq<T>::~radTMathOrdDifEq()
 {
-	delete[] dym_rk4;
-	delete[] dyt_rk4;
-	delete[] yt_rk4;
-
-	if(OnPrc)
-	{
-		delete[] PrecArray;
-
-		delete[] dysav_rks5;
-		delete[] ysav_rks5;
-		delete[] ytemp_rks5;
-
-		delete[] y_ap;
-		delete[] dydx_ap;
-	}
+	// RAII: All vectors cleaned up automatically
+	// vdym_rk4, vdyt_rk4, vyt_rk4
+	// vPrecArray, vdysav_rks5, vysav_rks5, vytemp_rks5
+	// vy_ap, vdydx_ap
 }
 
 //-------------------------------------------------------------------------
@@ -165,9 +169,14 @@ template <class T> void radTMathOrdDifEq<T>::
 {
 	double Step_x = (Xmax-Xmin)/double(Np-1);
 	double x = Xmin;
-	double* Y = new double[AmOfEq];
-	double* dYdx;
-	if(!OnPrc) dYdx = new double[AmOfEq];
+	std::vector<double> vY(AmOfEq);
+	double* Y = vY.data();
+	std::vector<double> vdYdx;
+	double* dYdx = nullptr;
+	if(!OnPrc) {
+		vdYdx.resize(AmOfEq);
+		dYdx = vdYdx.data();
+	}
 
 	double MinStepAllowed = 1.E-10 * Step_x;
 	int Nok=0, Nbad=0;
@@ -194,8 +203,7 @@ template <class T> void radTMathOrdDifEq<T>::
 			x = x1;
 		}
 	}
-	delete[] Y; 
-	if(!OnPrc) delete[] dYdx;
+	// RAII: vY and vdYdx cleaned up automatically
 }
 
 //-------------------------------------------------------------------------
@@ -582,7 +590,9 @@ public:
 
 class TMathInterpol1D {
 
+	std::vector<double> vAllCf;
 	double* AllCf;
+	std::vector<double*> vPlnCf;
 	double** PlnCf;
 	double Orig_sStart, Orig_sStep, InvStep;
 	int OrigNp;
@@ -702,10 +712,11 @@ private:
 		if((OrigF == 0) || (OrigNp <= 0)) throw 0;
 		AllocateMemoryForCfs();
 
-		double* DerF = new double[OrigNp];
+		std::vector<double> vDerF(OrigNp);
+		double* DerF = vDerF.data();
 		CompDerivForOrigData(OrigF, DerF);
 		CalcPlnCfs(OrigF, DerF);
-		if(DerF != 0) delete[] DerF;
+		// RAII: vDerF cleaned up automatically
 	}
 	void CalcPlnCfs(double* OrigF, double* DerF)
 	{
@@ -727,17 +738,20 @@ private:
 		DeallocateMemoryForCfs();
 		int LenFieldData_m_1 = OrigNp - 1;
 
-		PlnCf = new double*[LenFieldData_m_1];
-		if(PlnCf == 0) throw 0;
-		AllCf = new double[LenFieldData_m_1*4];
-		if(AllCf == 0) { delete[] PlnCf; throw 0;}
+		vPlnCf.resize(LenFieldData_m_1);
+		PlnCf = vPlnCf.data();
+		vAllCf.resize(LenFieldData_m_1*4);
+		AllCf = vAllCf.data();
 		double* tAllCf = AllCf;
 		for(int i=0; i<LenFieldData_m_1; i++) { PlnCf[i] = tAllCf; tAllCf += 4;}
 	}
 	void DeallocateMemoryForCfs()
 	{
-		if(AllCf != 0) { delete[] AllCf; AllCf = 0;}
-		if(PlnCf != 0) { delete[] PlnCf; PlnCf = 0;}
+		// RAII: vAllCf and vPlnCf cleaned up automatically
+		vAllCf.clear();
+		AllCf = 0;
+		vPlnCf.clear();
+		PlnCf = 0;
 	}
 };
 

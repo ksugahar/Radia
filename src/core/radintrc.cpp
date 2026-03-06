@@ -40,16 +40,16 @@ radTInteraction::radTInteraction()
 {
 	AmOfMainElem = 0;
 	AmOfExtElem = 0;
-	InteractMatrix = NULL;
-	ExternFieldArray = NULL;
-	AuxOldMagnArray = NULL;
-	AuxOldFieldArray = NULL;
+	InteractMatrix = nullptr;
+	ExternFieldArray = nullptr;
+	AuxOldMagnArray = nullptr;
+	AuxOldFieldArray = nullptr;
 
-	NewMagnArray = NULL;
-	NewFieldArray = NULL;
-	IdentTransPtr = NULL;
+	NewMagnArray = nullptr;
+	NewFieldArray = nullptr;
+	IdentTransPtr = nullptr;
 
-	RelaxSubIntervArray = NULL; // New
+	RelaxSubIntervArray = nullptr; // New
 	mKeepTransData = 0;
 }
 
@@ -62,16 +62,16 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 
 	AmOfMainElem = 0;
 	AmOfExtElem = 0;
-	InteractMatrix = NULL;
-	ExternFieldArray = NULL;
-	AuxOldMagnArray = NULL;
-	AuxOldFieldArray = NULL;
+	InteractMatrix = nullptr;
+	ExternFieldArray = nullptr;
+	AuxOldMagnArray = nullptr;
+	AuxOldFieldArray = nullptr;
 
-	NewMagnArray = NULL;
-	NewFieldArray = NULL;
-	IdentTransPtr = NULL;
+	NewMagnArray = nullptr;
+	NewFieldArray = nullptr;
+	IdentTransPtr = nullptr;
 
-	RelaxSubIntervArray = NULL; // New
+	RelaxSubIntervArray = nullptr; // New
 	AmOfRelaxSubInterv = 0; // New
 
 	SourceHandle = In_hg;
@@ -86,7 +86,7 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	IdentTransPtr = new radIdentTrans();
 
 	radTlphgPtr NewListOfTransPtr;
-	CountMainRelaxElems((radTg3d*)(SourceHandle.rep), &NewListOfTransPtr);
+	CountMainRelaxElems(static_cast<radTg3d*>(SourceHandle.rep), &NewListOfTransPtr);
 
 	if(!NotEmpty()) return 0;
 
@@ -152,45 +152,19 @@ radTInteraction::~radTInteraction()
 
 void radTInteraction::DeallocateMemory() //OC27122019
 {
-	if(MemAllocTotAtOnce)
-	{
-		if(InteractMatrix != NULL)
-		{
-			if(InteractMatrix[0] != NULL) delete[](InteractMatrix[0]);
-			delete[] InteractMatrix;
-		}
-	}
-	else
-	{
-		if(InteractMatrix != NULL)
-		{
-			for(int i=0; i<AmOfMainElem; i++)
-			{
-				TMatrix3df* Matrix3dPtr = InteractMatrix[i]; //OC250504
-				//TMatrix3d* Matrix3dPtr = InteractMatrix[i]; //OC250504
-				if(Matrix3dPtr != NULL) delete[] Matrix3dPtr;
-			}
-			delete[] InteractMatrix;
-		}
-	}
+	// RAII: automatic cleanup via vInteractMatrix, vInteractMatrixPtrs, and vGenMatrStorage
 
 	g3dExternPtrVect.erase(g3dExternPtrVect.begin(), g3dExternPtrVect.end()); //OC240408, to enable current scaling/update
 
-	if(ExternFieldArray != NULL) delete[] ExternFieldArray;
-	if(AuxOldMagnArray != NULL) delete[] AuxOldMagnArray;
-	if(AuxOldFieldArray != NULL) delete[] AuxOldFieldArray;
-
-	if(NewMagnArray != NULL) delete[] NewMagnArray;
-	if(NewFieldArray != NULL) delete[] NewFieldArray;
-
-	if(RelaxSubIntervArray != NULL) delete[] RelaxSubIntervArray;
+	// Automatic cleanup via RAII for vector arrays
+	// RelaxSubIntervArray: automatic cleanup via vRelaxSubIntervArray
 
 	if(mKeepTransData) //OC021103
 	{
 		DestroyMainTransPtrArray();
 		EmptyVectOfPtrToListsOfTrans();
 	}
-	if(IdentTransPtr != NULL) delete IdentTransPtr; //required by EmptyVectOfPtrToListsOfTrans();
+	if(IdentTransPtr != nullptr) delete IdentTransPtr; //required by EmptyVectOfPtrToListsOfTrans();
 }
 
 //-------------------------------------------------------------------------
@@ -251,7 +225,7 @@ void radTInteraction::CountMainRelaxElems(radTg3d* g3dPtr, radTlphgPtr* CurrList
 
 				if(RelaxSubIntervConstrVect.empty())
 				{
-					radTRelaxSubInterval RlxSbIntrv(SubIntervStart, SubIntervFin, RelaxTogether);
+					radTRelaxSubInterval RlxSbIntrv(SubIntervStart, SubIntervFin, TRelaxSubIntervalID::RelaxTogether);
 					RelaxSubIntervConstrVect.push_back(RlxSbIntrv);
 				}
 				else
@@ -259,7 +233,7 @@ void radTInteraction::CountMainRelaxElems(radTg3d* g3dPtr, radTlphgPtr* CurrList
 					radTRelaxSubInterval& LastEnteredSubIntrv = RelaxSubIntervConstrVect.back();
 					if((SubIntervStart != LastEnteredSubIntrv.StartNo) && (SubIntervFin != LastEnteredSubIntrv.FinNo))
 					{
-						radTRelaxSubInterval RlxSbIntrv(SubIntervStart, SubIntervFin, RelaxTogether);
+						radTRelaxSubInterval RlxSbIntrv(SubIntervStart, SubIntervFin, TRelaxSubIntervalID::RelaxTogether);
 						RelaxSubIntervConstrVect.push_back(RlxSbIntrv);
 					}
 				}
@@ -281,7 +255,7 @@ void radTInteraction::CountMainRelaxElems(radTg3d* g3dPtr, radTlphgPtr* CurrList
 
 			for(radTmhg::iterator iter = GroupPtr->GroupMapOfHandlers.begin();
 				iter != GroupPtr->GroupMapOfHandlers.end(); ++iter) 
-				CountMainRelaxElems((radTg3d*)((*iter).second.rep), LocListOfTransPtrPtr);
+				CountMainRelaxElems(static_cast<radTg3d*>(iter->second.rep), LocListOfTransPtrPtr);
 
 			if(GroupListOfTransIsNotEmpty) delete LocListOfTransPtrPtr;
 		//--New
@@ -299,24 +273,18 @@ void radTInteraction::FillInRelaxSubIntervArray() // New
 	int CurrentStartNo = 0;
 	int PlainCount = -1;
 
-#ifdef __GCC__
-	vector<radTRelaxSubInterval>::iterator Iter;
-#else
-	vector<radTRelaxSubInterval, allocator<radTRelaxSubInterval> >::iterator Iter;
-#endif
-
-	for(Iter = RelaxSubIntervConstrVect.begin(); Iter != RelaxSubIntervConstrVect.end(); ++Iter)
+	for(auto Iter = RelaxSubIntervConstrVect.begin(); Iter != RelaxSubIntervConstrVect.end(); ++Iter)
 	{
 		int LocStartNo = (*Iter).StartNo;
 		if(LocStartNo != CurrentStartNo)
 		{
-			RelaxSubIntervArray[++PlainCount] = radTRelaxSubInterval(CurrentStartNo, LocStartNo-1, RelaxApart);
+			RelaxSubIntervArray[++PlainCount] = radTRelaxSubInterval(CurrentStartNo, LocStartNo-1, TRelaxSubIntervalID::RelaxApart);
 		}
 		RelaxSubIntervArray[++PlainCount] = *Iter;
 		CurrentStartNo = (*Iter).FinNo + 1;
 	}
 	if(CurrentStartNo != AmOfMainElem)
-		RelaxSubIntervArray[++PlainCount] = radTRelaxSubInterval(CurrentStartNo, AmOfMainElem-1, RelaxApart);
+		RelaxSubIntervArray[++PlainCount] = radTRelaxSubInterval(CurrentStartNo, AmOfMainElem-1, TRelaxSubIntervalID::RelaxApart);
 	
 	AmOfRelaxSubInterv = ++PlainCount;
 
@@ -327,81 +295,55 @@ void radTInteraction::FillInRelaxSubIntervArray() // New
 
 void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded)
 {
-	//try
-	//{
-		ExternFieldArray = new TVector3d[AmOfMainElem];
-		if(AuxOldMagnArrayIsNeeded) 
-		{
-			AuxOldMagnArray = new TVector3d[AmOfMainElem];
-			AuxOldFieldArray = new TVector3d[AmOfMainElem];
-		}
+	vExternFieldArray.resize(AmOfMainElem);
+	ExternFieldArray = vExternFieldArray.data();
 
-		NewMagnArray = new TVector3d[AmOfMainElem];
-		NewFieldArray = new TVector3d[AmOfMainElem];
-		InteractMatrix = new TMatrix3df*[AmOfMainElem]; //OC250504
-		//InteractMatrix = new TMatrix3d*[AmOfMainElem]; //OC250504
+	if(AuxOldMagnArrayIsNeeded)
+	{
+		vAuxOldMagnArray.resize(AmOfMainElem);
+		vAuxOldFieldArray.resize(AmOfMainElem);
+		AuxOldMagnArray = vAuxOldMagnArray.data();
+		AuxOldFieldArray = vAuxOldFieldArray.data();
+	}
 
-		for(int k=0; k<AmOfMainElem; k++) InteractMatrix[k] = NULL;
-	//}
-	//catch (radTException* radExceptionPtr)
-	//{
-	//	Send.ErrorMessage(radExceptionPtr->what());	return;
-	//}
-	//catch (...)
-	//{
-	//	Send.ErrorMessage("Radia::Error999"); return;
-	//}
+	vNewMagnArray.resize(AmOfMainElem);
+	vNewFieldArray.resize(AmOfMainElem);
+	NewMagnArray = vNewMagnArray.data();
+	NewFieldArray = vNewFieldArray.data();
+
+	vInteractMatrixPtrs.resize(AmOfMainElem, nullptr);
+	InteractMatrix = vInteractMatrixPtrs.data();
 
 	if(MemAllocTotAtOnce)
 	{
-		TMatrix3df* GenMatrPtr = 0; //OC250504
-		//TMatrix3d* GenMatrPtr = 0; //OC250504
-		//try
-		//{
-			GenMatrPtr = new TMatrix3df[AmOfMainElem*AmOfMainElem]; //OC250504
-			//GenMatrPtr = new TMatrix3d[AmOfMainElem*AmOfMainElem]; //OC250504
-		//}
-		//catch (radTException* radExceptionPtr)
-		//{
-		//	InteractMatrix[0] = NULL;
-		//	SomethingIsWrong = 1;
-		//	Send.ErrorMessage(radExceptionPtr->what());	return;
-		//}
-		//catch (...)
-		//{
-		//	Send.ErrorMessage("Radia::Error999"); return;
-		//}
+		vGenMatrStorage.resize(AmOfMainElem * AmOfMainElem);
+		TMatrix3df* GenMatrPtr = vGenMatrStorage.data();
 
-		if(GenMatrPtr != 0) // Check for allocation failure
-			for(int i=0; i<AmOfMainElem; i++) InteractMatrix[i] = &(GenMatrPtr[i*AmOfMainElem]);
-		else
+		for(int i=0; i<AmOfMainElem; i++)
 		{
-			InteractMatrix[0] = NULL;
-			SomethingIsWrong = 1;
-			Send.ErrorMessage("Radia::Error900"); return;
+			InteractMatrix[i] = &(GenMatrPtr[i*AmOfMainElem]);
+			vInteractMatrixPtrs[i] = InteractMatrix[i];
 		}
 	}
 	else
 	{
+		vInteractMatrix.resize(AmOfMainElem);
 		for(int i=0; i<AmOfMainElem; i++)
 		{
-			InteractMatrix[i] = new TMatrix3df[AmOfMainElem]; //OC250504
-			//InteractMatrix[i] = new TMatrix3d[AmOfMainElem]; //OC250504
-			if(InteractMatrix[i] == 0) // Check for allocation failure
-			{
-				for(int k=0; k<i; k++) delete[] (InteractMatrix[i]);
-				delete[] InteractMatrix;
-
-				SomethingIsWrong = 1;
-				Send.ErrorMessage("Radia::Error900"); return;
-			}
+			vInteractMatrix[i].resize(AmOfMainElem);
+			InteractMatrix[i] = vInteractMatrix[i].data();
+			vInteractMatrixPtrs[i] = InteractMatrix[i];
 		}
 	}
 
 	int MaxSubIntervArraySize = 2 * ((int)(RelaxSubIntervConstrVect.size())) + 1; // New
 	//try
 	//{
-		if(MaxSubIntervArraySize > 1) RelaxSubIntervArray = new radTRelaxSubInterval[MaxSubIntervArraySize]; // New
+		if(MaxSubIntervArraySize > 1)
+		{
+			vRelaxSubIntervArray.resize(MaxSubIntervArraySize);
+			RelaxSubIntervArray = vRelaxSubIntervArray.data();
+		}
 	//}
 	//catch (radTException* radExceptionPtr)
 	//{
@@ -447,7 +389,8 @@ void radTInteraction::NestedFor_Trans(radTrans* BaseTransPtr, const radTlphgPtr:
 
 void radTInteraction::FillInMainTransPtrArray()
 {
-	MainTransPtrArray = new radTrans*[AmOfMainElem];
+	vMainTransPtrArray.resize(AmOfMainElem);
+	MainTransPtrArray = vMainTransPtrArray.data();
 	FillInMainTransOnly = 1;
 
 	for(int i=0; i<AmOfMainElem; i++)
@@ -603,7 +546,7 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 			InitObsPoiVect = MainTransPtrArray[StrNo]->TrPoint((g3dRelaxPtrVect[StrNo])->CentrPoint);
 			radTField Field(FieldKeyExtern, CompCriterium, InitObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.); // Improve
 
-			((radTg3d*)(MoreExtSourceHandle.rep))->B_genComp(&Field);
+			(static_cast<radTg3d*>(MoreExtSourceHandle.rep))->B_genComp(&Field);
 
 			//TVector3d BufVect = ExternFieldArray[StrNo];
 
@@ -618,7 +561,7 @@ void radTInteraction::AddMoreExternField(const radThg& hExtraExtSrc)
 {
 	if(hExtraExtSrc.rep == 0) return;
 
-	radTg3d* pExtraExtSrc = (radTg3d*)(hExtraExtSrc.rep);
+	radTg3d* pExtraExtSrc = static_cast<radTg3d*>(hExtraExtSrc.rep);
 
 	radTFieldKey FieldKeyExtern; FieldKeyExtern.H_=1;
 	TVector3d ZeroVect(0.,0.,0.), InitObsPoiVect(0.,0.,0.);
@@ -641,7 +584,7 @@ void radTInteraction::ZeroAuxOldArrays()
 {
 	if(AmOfMainElem <= 0) return;
 
-	if(AuxOldMagnArray != NULL)
+	if(AuxOldMagnArray != nullptr)
 	{
 		TVector3d *tAuxOldMagn = AuxOldMagnArray;
 		for(int StrNo=0; StrNo<AmOfMainElem; StrNo++) 
@@ -651,7 +594,7 @@ void radTInteraction::ZeroAuxOldArrays()
 			(tAuxOldMagn++)->z = 0;
 		}
 	}
-	if(AuxOldFieldArray != NULL)
+	if(AuxOldFieldArray != nullptr)
 	{
 		TVector3d *tAuxOldField = AuxOldFieldArray;
 		for(int StrNo=0; StrNo<AmOfMainElem; StrNo++) 
@@ -667,7 +610,7 @@ void radTInteraction::ZeroAuxOldArrays()
 
 void radTInteraction::SubstractOldMagn()
 {
-	if((AuxOldMagnArray == NULL) || (AmOfMainElem <= 0)) return;
+	if((AuxOldMagnArray == nullptr) || (AmOfMainElem <= 0)) return;
 
 	TVector3d *tAuxOldMagn = AuxOldMagnArray;
 	for(int StNo=0; StNo<AmOfMainElem; StNo++)
@@ -681,7 +624,7 @@ void radTInteraction::SubstractOldMagn()
 
 void radTInteraction::AddOldMagn()
 {
-	if((AuxOldMagnArray == NULL) || (AmOfMainElem <= 0)) return;
+	if((AuxOldMagnArray == nullptr) || (AmOfMainElem <= 0)) return;
 
 	TVector3d *tAuxOldMagn = AuxOldMagnArray;
 	for(int StNo=0; StNo<AmOfMainElem; StNo++)
@@ -695,7 +638,7 @@ void radTInteraction::AddOldMagn()
 
 double radTInteraction::CalcQuadNewOldMagnDif()
 {
-	if((AuxOldMagnArray == NULL) || (AmOfMainElem <= 0)) return 0;
+	if((AuxOldMagnArray == nullptr) || (AmOfMainElem <= 0)) return 0;
 
 	double SumE2 = 0;
 	TVector3d *tAuxOldMagn = AuxOldMagnArray;
@@ -1001,13 +944,13 @@ void radTInteraction::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, m
 
 	//TMatrix3df** InteractMatrix; //OC250504
 	////TMatrix3d** InteractMatrix; //OC250504
-	if(InteractMatrix != NULL)
+	if(InteractMatrix != nullptr)
 	{
 		oStr << (char)1;
 		for(int i=0; i<AmOfMainElem; i++)
 		{
 			TMatrix3df *pLineInteractMatrix = InteractMatrix[i];
-			if(pLineInteractMatrix != NULL)
+			if(pLineInteractMatrix != nullptr)
 			{
 				oStr << (char)1;
 				for(int j=0; j<AmOfMainElem; j++)
@@ -1021,7 +964,7 @@ void radTInteraction::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, m
 	else oStr << (char)0;
 
 	//TVector3d* ExternFieldArray;
-	if(ExternFieldArray != NULL)
+	if(ExternFieldArray != nullptr)
 	{
 		oStr << (char)1;
 		for(int i=0; i<AmOfMainElem; i++) oStr << ExternFieldArray[i];
@@ -1029,7 +972,7 @@ void radTInteraction::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, m
 	else oStr << (char)0;
 
 	//TVector3d* NewMagnArray;
-	if(NewMagnArray != NULL)
+	if(NewMagnArray != nullptr)
 	{
 		oStr << (char)1;
 		for(int i=0; i<AmOfMainElem; i++) oStr << NewMagnArray[i];
@@ -1037,7 +980,7 @@ void radTInteraction::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, m
 	else oStr << (char)0;
 
 	//TVector3d* NewFieldArray;
-	if(NewFieldArray != NULL)
+	if(NewFieldArray != nullptr)
 	{
 		oStr << (char)1;
 		for(int i=0; i<AmOfMainElem; i++) oStr << NewFieldArray[i];
@@ -1045,7 +988,7 @@ void radTInteraction::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, m
 	else oStr << (char)0;
 
 	//TVector3d* AuxOldMagnArray;
-	if(AuxOldMagnArray != NULL)
+	if(AuxOldMagnArray != nullptr)
 	{
 		oStr << (char)1;
 		for(int i=0; i<AmOfMainElem; i++) oStr << AuxOldMagnArray[i];
@@ -1053,7 +996,7 @@ void radTInteraction::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, m
 	else oStr << (char)0;
 
 	//TVector3d* AuxOldFieldArray;
-	if(AuxOldFieldArray != NULL)
+	if(AuxOldFieldArray != nullptr)
 	{
 		oStr << (char)1;
 		for(int i=0; i<AmOfMainElem; i++) oStr << AuxOldFieldArray[i];
@@ -1074,7 +1017,7 @@ void radTInteraction::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, m
 		}
 
 		//radTRelaxSubInterval* RelaxSubIntervArray; // New 
-		if(RelaxSubIntervArray != NULL)
+		if(RelaxSubIntervArray != nullptr)
 		{
 			int MaxSubIntervArraySize = 2*sizeRelaxSubIntervConstrVect + 1;
 			oStr << (int)MaxSubIntervArraySize;
@@ -1290,19 +1233,20 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> matrixExists;
 	if(matrixExists && (AmOfMainElem > 0))
 	{
-		InteractMatrix = new TMatrix3df*[AmOfMainElem];
-		TMatrix3df **pLineInteractMatrix = InteractMatrix;
+		vInteractMatrixPtrs.resize(AmOfMainElem, nullptr);
+		vInteractMatrix.resize(AmOfMainElem);
+		InteractMatrix = vInteractMatrixPtrs.data();
 
 		for(int i=0; i<AmOfMainElem; i++)
 		{
 			char matrixRowExists = 0;
-			*pLineInteractMatrix = NULL;
-
 			inStr >> matrixRowExists;
 			if(matrixRowExists)
 			{
-				*pLineInteractMatrix = new TMatrix3df[AmOfMainElem];
-				TMatrix3df *tLine = *(pLineInteractMatrix++);
+				vInteractMatrix[i].resize(AmOfMainElem);
+				InteractMatrix[i] = vInteractMatrix[i].data();
+				vInteractMatrixPtrs[i] = InteractMatrix[i];
+				TMatrix3df *tLine = InteractMatrix[i];
 				for(int j=0; j<AmOfMainElem; j++)
 				{
 					inStr >> *(tLine++);
@@ -1317,7 +1261,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> externFieldArrayExists;
 	if(externFieldArrayExists && (AmOfMainElem > 0))
 	{
-		ExternFieldArray = new TVector3d[AmOfMainElem];
+		vExternFieldArray.resize(AmOfMainElem);
+		ExternFieldArray = vExternFieldArray.data();
 		for(int i=0; i<AmOfMainElem; i++) inStr >> ExternFieldArray[i];
 	}
 
@@ -1327,7 +1272,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> newMagnArrayExists;
 	if(newMagnArrayExists && (AmOfMainElem > 0))
 	{
-		NewMagnArray = new TVector3d[AmOfMainElem];
+		vNewMagnArray.resize(AmOfMainElem);
+		NewMagnArray = vNewMagnArray.data();
 		for(int i=0; i<AmOfMainElem; i++) inStr >> NewMagnArray[i];
 	}
 
@@ -1337,7 +1283,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> newFieldArrayExists;
 	if(newFieldArrayExists && (AmOfMainElem > 0))
 	{
-		NewFieldArray = new TVector3d[AmOfMainElem];
+		vNewFieldArray.resize(AmOfMainElem);
+		NewFieldArray = vNewFieldArray.data();
 		for(int i=0; i<AmOfMainElem; i++) inStr >> NewFieldArray[i];
 	}
 
@@ -1347,7 +1294,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> auxOldMagnArrayExists;
 	if(auxOldMagnArrayExists && (AmOfMainElem > 0))
 	{
-		AuxOldMagnArray = new TVector3d[AmOfMainElem];
+		vAuxOldMagnArray.resize(AmOfMainElem);
+		AuxOldMagnArray = vAuxOldMagnArray.data();
 		for(int i=0; i<AmOfMainElem; i++) inStr >> AuxOldMagnArray[i];
 	}
 
@@ -1357,7 +1305,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> auxOldFieldArrayExists;
 	if(auxOldFieldArrayExists && (AmOfMainElem > 0))
 	{
-		AuxOldFieldArray = new TVector3d[AmOfMainElem];
+		vAuxOldFieldArray.resize(AmOfMainElem);
+		AuxOldFieldArray = vAuxOldFieldArray.data();
 		for(int i=0; i<AmOfMainElem; i++) inStr >> AuxOldFieldArray[i];
 	}
 
@@ -1384,7 +1333,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 		inStr >> MaxSubIntervArraySize;
 		if(MaxSubIntervArraySize > 0)
 		{
-			RelaxSubIntervArray = new radTRelaxSubInterval[MaxSubIntervArraySize];
+			vRelaxSubIntervArray.resize(MaxSubIntervArraySize);
+			RelaxSubIntervArray = vRelaxSubIntervArray.data();
 			radTRelaxSubInterval *t_RelaxSubIntervArray = RelaxSubIntervArray;
 			for(int i=0; i<MaxSubIntervArraySize; i++)
 			{
@@ -1419,7 +1369,8 @@ radTInteraction::radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldN
 	inStr >> size_vIndMainTrans;
 	if(size_vIndMainTrans > 0)
 	{
-		MainTransPtrArray = new radTrans*[AmOfMainElem];
+		vMainTransPtrArray.resize(AmOfMainElem);
+		MainTransPtrArray = vMainTransPtrArray.data();
 
 		for(int i=0; i<AmOfMainElem; i++)
 		{

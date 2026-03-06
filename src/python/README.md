@@ -20,7 +20,7 @@ High-performance NGSolve CoefficientFunction wrappers for Radia magnetostatics f
 **Build:**
 ```bash
 cd S:\radia\01_GitHub
-.\build_ngsolve.ps1
+.\Build_NGSolve.ps1
 ```
 
 **Usage:**

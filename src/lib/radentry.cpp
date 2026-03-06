@@ -110,8 +110,6 @@ void TolForConvergence( double, double, double );
 void ShimSignature( int, char*, double,double,double, double,double,double, double,double,double, int, double,double,double );
 
 int GraphicsForElemVTK( int, const char*, const char*, const char* );
-void QuickDraw3D_ViewerOpt( int, const char*, const char*, const char* );
-void OpenGL_3D_ViewerOpt( int, const char*, const char*, const char* );
 
 void ApplyDrawAttrToElem( int, double,double,double, double );
 
@@ -1346,55 +1344,6 @@ int CALL RadFldLenTol(int* n, double AbsVal, double RelVal, double ZeroVal)
 	TolForConvergence(AbsVal, RelVal, ZeroVal);
 
 	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjDrwQD3D(int Obj, char* Opt)
-{
-	const char *Opt1=0, *Opt2=0, *Opt3=0;
-	vector<string> AuxStrings;
-	if(Opt != 0)
-	{
-		//char *SepStrArr[] = {";", ","};
-		char *SepStrArr[] = {(char*)";", (char*)","}; //OC04082018 (to please GCC 4.9)
-		CAuxParse::StringSplit(Opt, SepStrArr, 2, (char*)" ", AuxStrings);
-		int AmOfTokens = (int)AuxStrings.size();
-		if(AmOfTokens > 0) Opt1 = (AuxStrings[0]).c_str();
-		if(AmOfTokens > 1) Opt2 = (AuxStrings[1]).c_str();
-		if(AmOfTokens > 2) Opt3 = (AuxStrings[2]).c_str();
-	}
-
-	QuickDraw3D_ViewerOpt(Obj, Opt1, Opt2, Opt3);
-	ioBuffer.OutInt(); // to clear buffer
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjDrwOpenGL(int Obj, char* Opt)
-{
-	const char *Opt1=0, *Opt2=0, *Opt3=0;
-	vector<string> AuxStrings;
-	if(Opt != 0)
-	{
-		char *SepStrArr[] = {(char*)";", (char*)","};
-		CAuxParse::StringSplit(Opt, SepStrArr, 2, (char*)" ", AuxStrings);
-		int AmOfTokens = (int)AuxStrings.size();
-		if(AmOfTokens > 0) 
-		{
-			Opt1 = (AuxStrings[0]).c_str();
-			if(AmOfTokens > 1) 
-			{
-				Opt2 = (AuxStrings[1]).c_str();
-				if(AmOfTokens > 2) Opt3 = (AuxStrings[2]).c_str();
-			}
-		}
-	}
-
-	OpenGL_3D_ViewerOpt(Obj, Opt1, Opt2, Opt3);
-	ioBuffer.OutInt(); // to clear buffer
 	return ioBuffer.OutErrorStatus();
 }
 

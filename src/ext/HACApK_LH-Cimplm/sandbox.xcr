@@ -1,0 +1,171 @@
+# A sample of the sandbox module: automatically create a directrory for each job
+# and execute jobs in the directoryies (sandboxes).
+# Derived from range.xcr:
+# * Added 'sandbox' in the use statement in the first line
+# * Added 'copiedfile0' or 'linkedfile0' parameter.
+# * (Changed the value of exe0)
+# * (Changed the value of id}
+use base qw (sandbox core);
+use base qw (limit core);
+use POSIX qw/ceil/;
+limit::initialize(10);
+$env1 = get_local_env();
+print "$env1->{sched}\n";
+
+%template = (
+#'RANGE0' => [864,432,128,112,96,80,64,48,32,16], Number of total cores
+#    'RANGE0' => [1936,2304,2704,3136,3600,4096,4624,5184,5776,6400,7056,7744,8464,9216,10000],
+#    'RANGE0' => [32,128,288,512,800,1152,2048,3200,5408,8192,10368,15488],
+#    'RANGE0' => [1296,1600,1936,2304,3600,4096,5184,6400],
+#    'RANGE0' => [16,64,144,256,400,576,784,1024,1296,1600,1936,2304,3136,3600],
+#    'RANGE0' => [12,20,30,56,110,132,240,380,462,552,702,1056,1406,1560,2352,2862,3422],
+#    'RANGE0' => [15,48,80,143,224,399,528,783,1088,1295,1520],
+#    'RANGE0' => [3422,2352,2862],
+    'RANGE0' => [2704],
+#'RANGE5' => [1,2,4,8,16,18,36], Number of cores for OMP
+    'RANGE5' => [1],
+#'RANGE6' => [1,2,4], Number of threads per a core
+    'RANGE6' => [1],
+#'RANGE7' => [15], cluster size
+    'RANGE7' => [50],
+#'RANGE8' => [15,30,60,90,120,150], block size
+    'RANGE8' => [0],
+#    'RANGE8' => [300,500,750,1000,1500,2000,3000,4000,6000,8000,12500,25000],
+#'RANGE4' => ['blrmtx'], Tag for H-matrix type
+    'RANGE4' => ['blrleaf'],     
+#    'RANGE4' => ['blrmtx'],     
+#    'RANGE4' => ['lfmtx'],     
+#    'RANGE4' => ['hlfmtx'],     
+#'RANGE9' => ['T1,T2,T3'], Test number
+   'RANGE9' => ['T3'],
+#'RANGE1' => ['1ms'], Name of input files
+#    'RANGE1' => ['20ms','8ms'],      
+#    'RANGE1' => ['600','2400','1ts'],      
+#    'RANGE1' => ['10ks_diel'],      
+#    'RANGE1' => ['26','600'],      
+#    'RANGE1' => ['20ms','human_6x20','1188kp25'],      
+#    'RANGE1' => ['human_6x20','1188kp25'],      
+#    'RANGE1' => ['2ms','4ms'],  
+#    'RANGE1' => ['196kp26'],      
+#    'RANGE1' => ['10ts','108kp22','1188kp25','1ms'],      
+#    'RANGE1' => ['100ts'],      
+#    'RANGE1' => ['108kp22'],      
+#    'RANGE1' => ['216h','100ts'],      
+#    'RANGE1' => ['10ts','216h','54tp6','100ts','338ts','648kp','1ms','1188kp25','human_6x20'],      
+#    'RANGE1' => ['1ms'],      
+#    'RANGE1' => ['human_5x5','human_6x6','human_7x7','human_8x8','human_9x9','human_10x10'],      
+#    'RANGE1' => ['1188kp25','human_5x5'],      
+    'RANGE1' => ['human_1x30','676th'],      
+    'RANGE2' => [4],
+    'RANGE3' => ['BN'],     
+    'id@' => sub{if($VALUE[4] eq 'blrleaf') {
+                   return
+                   "bb$VALUE[1]_e$VALUE[2]$VALUE[3]_$VALUE[0]_$VALUE[5]_$VALUE[6]_$VALUE[4]_$VALUE[7]_$VALUE[8]_$VALUE[9]"
+                 } elsif($VALUE[4] eq 'lfmtx') {
+                   return
+                   "bb$VALUE[1]_e$VALUE[2]$VALUE[3]_$VALUE[0]_$VALUE[5]_$VALUE[6]_$VALUE[4]_$VALUE[7]_$VALUE[9]"
+                 }},
+    ':ncore@'  => sub {"$VALUE[0]"},
+    ':cpc@' => sub {"$VALUE[6]"},
+    'JS_thread@' => sub {"$VALUE[5]"},
+#    'JS_memory' => '32G',
+    'JS_limit_time' => ':29:59',
+    'JS_group'      => 'gc26',
+#    'JS_group'      => 'gc26f',
+#    'JS_group'      => 'jh160022',
+#    'exe0@' => sub{"export TMPDIR=/LARGE0/gr10034/b31886/tmp"},
+    'exe1@' => sub{"ulimit -s unlimited"},
+    'exe2@' => sub{"cd ./$id"},
+    'exe3@' => sub{
+    if($env1->{sched} eq'kyoto-laurel' ) {
+    } elsif($env1->{sched} eq 'reedbush' ) {
+      return
+      "mpiexec.hydra ../bem-bb-SCM.out input_$VALUE[1].pbf $VALUE[7] $VALUE[8]"
+    } elsif($env1->{sched} eq 'torque_knsc' ) {
+      return
+      "mpiexec.hydra ../bem-bb-SCM.out input_$VALUE[1].pbf 1.0e-$VALUE[2] 1"
+    } elsif ($env1->{sched} eq 'kyoto-magnolia') {
+      return
+      "aprun -n \$LSB_PROCS -d \$LSB_CPUS -N \$LSB_PPN  ../bem-bb-SCM.out input_$VALUE[1].txt 1.0e-$VALUE[2] 1.0"
+    } elsif ($env1->{sched} eq 'tokyo-fx10') {
+      return
+      "mpiexec ../bem-bb-SCM.out input_$VALUE[1].pbf $VALUE[7] $VALUE[8]"
+       }
+    },
+    'linkedfile0' => './bem-bb',
+    'linkedfile1@' => sub{"../bem_bb_inputs/input_$VALUE[1].pbf"},
+#    'linkedfile1@' => sub{"./input_$VALUE[1].txt"},
+    'linkedfile2@' => sub{"./bem-bb-config.txt"},
+
+ 
+    # Exectuted asynchronously before submitting a job
+    'before' => sub {
+        print "Submitting $self->{id}\n";
+    },
+    # Exectuted asynchronously after the job is done
+    'after' => sub {
+        print "$self->{id} finished\n";
+    } 
+    );
+my @jobs=prepare (%template); 
+foreach my $j (@jobs) {
+  my $PCORE = 16;
+  my $PMEM = 28000;
+  if($env1->{sched} eq 'kyoto-laurel' ) {
+     $PMEM = 60000;
+  } elsif ($env1->{sched} eq 'kyoto-magnolia') {
+     $PMEM = 60000;
+     $PCORE = 28;
+  } elsif ($env1->{sched} eq 'tokyo-fx10') {
+     $PMEM = 28000;
+  } elsif ($env1->{sched} eq 'reedbush') {
+     $PMEM = 256000;
+     $PCORE = 36;
+  }
+#  print "$PMEM\n";
+  ## # Cores
+  my $ncore = $j->{':ncore'} || 1;  
+  ## # Threads
+  my $nthr = $j->{JS_thread} || 1;  
+  ## # cores / Ccore.
+  my $cpc = $j->{':cpc'} || 1;
+  ## # cores*cpc;
+  my $cpu = $nthr*$cpc;  
+#   print "$cpu\n";
+  ## # MPI processes
+  my $nproc = ceil($ncore/$nthr);  
+#   print "$nproc\n";
+  ## # physical nodes
+  my $phnode = ceil(($nproc*$cpu)/$PCORE);
+  ## memory/proc
+   my $cmem = ceil($PMEM/$nproc)*$phnode; 
+#   print "$cmem\n";
+  $j->{JS_node}= "$nproc";
+  $j->{JS_cpu}= "$cpu";
+  if($env1->{sched} eq 'kyoto-laurel' ) {
+     $j->{JS_memory}= "$cmem"."M";
+  } elsif ($env1->{sched} eq 'kyoto-magnolia') {
+     $j->{JS_memory}= "$cmem"."M";
+  } elsif ($env1->{sched} eq 'tokyo-fx10') {
+    if ($phnode>240) {
+       $j->{JS_queue}='regular';
+       $j->{JS_limit_time}='29:59';
+    } elsif ($phnode>1) {
+       $j->{JS_queue}='debug';
+       $j->{JS_limit_time}='29:59';
+    } else { 
+       $j->{JS_queue}='short';
+       $j->{JS_limit_time}='3:29:59';
+    }
+  } elsif ($env1->{sched} eq 'reedbush') {
+    if ($phnode>24) {
+       $j->{JS_queue}='u-regular';
+       $j->{JS_limit_time}='6:59:00';
+    } else {
+       $j->{JS_queue}='u-debug';
+       $j->{JS_limit_time}='0:29:59';
+    }
+  }
+}
+submit_sync (@jobs);
+

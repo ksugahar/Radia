@@ -53,12 +53,16 @@ class radTPrtclTrj {
 	radTField Field;
 	TVector3d ZeroVect;
 
+	std::vector<double> vDym_rk4, vDyt_rk4, vYt_rk4;
+	std::vector<double> vDysav_rks5, vYsav_rks5, vYtemp_rks5;
+	std::vector<double> vY_ap, vDydx_ap;
 	double *dym_rk4, *dyt_rk4, *yt_rk4;
 	double *dysav_rks5, *ysav_rks5, *ytemp_rks5;
 	double *y_ap, *dydx_ap;
 	int kmax_ap, count_ap;
-	double *xp_ap, **yp_ap, dxsav_ap; 
+	double *xp_ap, **yp_ap, dxsav_ap;
 
+	std::vector<double> vY, vDYdx;
 	double* Y;
 	double* dYdx;
 
@@ -66,19 +70,21 @@ class radTPrtclTrj {
 	int AmOfEq;
 
 	short OnPrc;
+	std::vector<double> vPrecArray;
 	double *PrecArray, EpsTol;
 	int MaxAutoStp;
 
 public:
-	radTPrtclTrj(double, radTg3d*, const radTCompCriterium&, short, double* =NULL, double =1., int =5000);
+	radTPrtclTrj(double, radTg3d*, const radTCompCriterium&, short, double* =nullptr, double =1., int =5000);
 	radTPrtclTrj(radTg3d* InFldSourcePtr, const radTCompCriterium& InCompCrit, double inEnergyGeV =0) // For Focusing Potential
 	{
 		FldSrcPtr = InFldSourcePtr;
-		
+
 		Field.CompCriterium = InCompCrit; //? OC050413
 		Energy = inEnergyGeV;
 
-		dym_rk4 = dyt_rk4 = yt_rk4 = Y = dYdx = NULL;
+		// Vectors are empty by default
+		dym_rk4 = dyt_rk4 = yt_rk4 = Y = dYdx = nullptr;
 		OnPrc = 0;
 	}
 	~radTPrtclTrj();
@@ -167,7 +173,7 @@ public:
 
 
 	static void ComposeStrReportSecondOrderKickPer(const char* StrComment, double len, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData1, double* pKickData2, double* pBtE2Int, char*& StrReport, char cKickUnit=1, char cOutFormat=1);
-//#ifdef __GCC__
+//#ifdef __GNUC__
 //	static void ComposeStrReportSecondOrderKickPer_AddMainData(ostrstream& OutStream, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData);
 //#else
 	//static void ComposeStrReportSecondOrderKickPer_AddMainData(ostringstream& OutStream, int np1, int np2, double* pCoordDir1, double* pCoordDir2, double* pKickData);
