@@ -2,33 +2,38 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
     tags: ['v*']
   pull_request:
-    branches: [master]
+    branches: [main]
 
-# On master: never cancel a running build (only pending ones get replaced).
+# On main: never cancel a running build (only pending ones get replaced).
 # On PRs:    cancel the previous run to save runner time.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   build-test:
     runs-on: [self-hosted, windows-radia]
     timeout-minutes: 30
 
+    # NGSolve from source build (UNC path — S: drive not mapped for service account)
+    env:
+      NGSOLVE_ROOT: '\\192.168.11.100\work\00_CAE\NGSolve\01_GitHub\install_ngsolve'
+      NGSOLVE_DIR: '\\192.168.11.100\work\00_CAE\NGSolve\01_GitHub\install_ngsolve\cmake'
+
     steps:
       - uses: actions/checkout@v4
 
       # ----------------------------------------------------------------
-      # Build: MSVC + MKL (RadiaOnly mode for speed)
+      # Build: MSVC + MKL + NGSolve TaskManager
       # ----------------------------------------------------------------
       - name: Build with MSVC + MKL
         shell: pwsh
         run: |
-          Write-Host "Starting Radia build (RadiaOnly mode)..."
-          & "${{ github.workspace }}\Build.ps1" -RadiaOnly -Verbose
+          Write-Host "Starting Radia build..."
+          & "${{ github.workspace }}\Build.ps1" -Verbose
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Build failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
@@ -55,6 +60,8 @@ jobs:
       - name: Run basic tests
         shell: pwsh
         working-directory: ${{ github.workspace }}
+        env:
+          PYTHONPATH: '${{ env.NGSOLVE_ROOT }}\Lib\site-packages;${{ github.workspace }}\src'
         run: |
           Write-Host "Running pytest -m basic..."
           python -m pytest tests/ -m "basic" -v --tb=short --junitxml=test-results.xml

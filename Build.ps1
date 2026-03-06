@@ -24,7 +24,8 @@
 param(
     [switch]$Rebuild,
     [switch]$Test,
-    [switch]$Verbose
+    [switch]$Verbose,
+    [switch]$RadiaOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +47,13 @@ if (-not (Test-Path "$INTEL_MKL\lib\mkl_rt.lib")) {
     Write-Host "ERROR: Intel MKL not found at $INTEL_MKL" -ForegroundColor Red
     Write-Host "Install Intel oneAPI Base Toolkit (MKL component)" -ForegroundColor Yellow
     exit 1
+}
+
+# NGSolve (optional override via NGSOLVE_DIR environment variable)
+$NGSolveCMakeArgs = ""
+if ($env:NGSOLVE_DIR -and (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
+    $NGSolveCMakeArgs = " ^`n    -DNGSolve_DIR=`"$env:NGSOLVE_DIR`" ^`n    -DNetgen_DIR=`"$env:NGSOLVE_DIR`""
+    Write-Host "NGSolve: $env:NGSOLVE_DIR (from env)" -ForegroundColor Gray
 }
 
 # CMake (from Visual Studio 2022)
@@ -113,7 +121,7 @@ echo ========================================
     -G "Ninja" ^
     -DCMAKE_C_COMPILER=cl ^
     -DCMAKE_CXX_COMPILER=cl ^
-    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_BUILD_TYPE=Release$NGSolveCMakeArgs
 
 if errorlevel 1 (
     echo ERROR: CMake configuration failed
