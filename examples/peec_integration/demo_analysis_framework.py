@@ -4,7 +4,7 @@ Demonstration of the Unified Analysis Framework
 This script demonstrates the three analysis types:
 1. Static (DC) Analysis
 2. Frequency Response Analysis
-3. Transient Analysis (CLN method)
+3. Transient Analysis (PRIMA method)
 
 The example uses a simple rectangular coil PEEC model.
 
@@ -170,9 +170,9 @@ def demo_frequency_analysis(analysis):
 
 
 def demo_transient_analysis(analysis):
-    """Demonstrate transient analysis using CLN method."""
+    """Demonstrate transient analysis using PRIMA method."""
     print("\n" + "="*60)
-    print("3. TRANSIENT ANALYSIS (CLN Method)")
+    print("3. TRANSIENT ANALYSIS (PRIMA Method)")
     print("="*60)
 
     # Time parameters
@@ -284,7 +284,7 @@ def main():
 
     # Initialize analysis framework
     analysis = UnifiedAnalysis()
-    analysis.set_peec_model(L, R, cln_order=5)
+    analysis.set_peec_model(L, R, prima_order=5)
 
     # Configure skin effect (optional)
     analysis.set_skin_effect(

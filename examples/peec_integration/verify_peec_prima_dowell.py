@@ -1,13 +1,13 @@
 """
-PEEC + Dowell vs CLN + F_R/F_L の一致検証
+PEEC + Dowell vs PRIMA + F_R/F_L の一致検証
 
 PEEC with Dowell:
   Z_matrix(s) = R_dc * F_R(s) + s * L_matrix * F_L(s)
   (内部インダクタンスのみF_Lで変化、外部インダクタンスは変化しない)
 
-CLN with F_R/F_L:
-  R_cln = R_dc として、F_R(s)で周波数依存性を表現
-  L_cln を F_L(s) で変化させる
+PRIMA with F_R/F_L:
+  R_prima = R_dc として、F_R(s)で周波数依存性を表現
+  L_prima を F_L(s) で変化させる
 
 単一導体の場合で一致を確認。
 """
@@ -123,7 +123,7 @@ def calc_dowell_impedance(R_dc, L_int_dc, d, sigma, mu, freqs):
 
 
 # =============================================
-# CLN I form (周波数非依存のR, L)
+# PRIMA I form (周波数非依存のR, L)
 # =============================================
 def build_tridiagonal(L):
     n = len(L)
@@ -133,11 +133,11 @@ def build_tridiagonal(L):
     return U.T @ np.diag(L) @ U
 
 
-def calc_cln_impedance(R_cln, L_cln, freqs):
-    """CLN I impedance: (R + sL)I = V, Z = 1/I[0]"""
-    RR = np.diag(R_cln)
-    LL = build_tridiagonal(L_cln)
-    n = len(R_cln)
+def calc_prima_impedance(R_prima, L_prima, freqs):
+    """PRIMA I impedance: (R + sL)I = V, Z = 1/I[0]"""
+    RR = np.diag(R_prima)
+    LL = build_tridiagonal(L_prima)
+    n = len(R_prima)
     V = np.zeros(n)
     V[0] = 1.0
 
@@ -151,24 +151,24 @@ def calc_cln_impedance(R_cln, L_cln, freqs):
     return Z
 
 
-def skin_effect_cln_params(d, sigma, mu=MU_0, n_stages=7):
-    """元のCLN I パラメータ (1D拡散式由来)"""
-    R_cln = np.zeros(n_stages)
-    L_cln = np.zeros(n_stages)
+def skin_effect_prima_params(d, sigma, mu=MU_0, n_stages=7):
+    """元のPRIMA I パラメータ (1D拡散式由来)"""
+    R_prima = np.zeros(n_stages)
+    L_prima = np.zeros(n_stages)
 
     for n in range(1, n_stages + 1):
         if n == 1:
-            R_cln[n-1] = 1e-16
+            R_prima[n-1] = 1e-16
         else:
-            R_cln[n-1] = (4*n - 5) * 4.0 / (sigma * d)
-        L_cln[n-1] = d * mu / (4*n - 3)
+            R_prima[n-1] = (4*n - 5) * 4.0 / (sigma * d)
+        L_prima[n-1] = d * mu / (4*n - 3)
 
-    return R_cln, L_cln
+    return R_prima, L_prima
 
 
 def main():
     print("="*70)
-    print("PEEC + Dowell vs CLN 一致検証")
+    print("PEEC + Dowell vs PRIMA 一致検証")
     print("="*70)
 
     d = 0.1e-3      # 導体厚さ
@@ -197,28 +197,28 @@ def main():
     # Pure Dowell (no external L)
     Z_dowell_only = calc_dowell_impedance(R_dc, L_int_dc, d, sigma, mu, freqs)
 
-    # CLN (元の1D拡散式由来)
+    # PRIMA (元の1D拡散式由来)
     n_stages = 10
-    R_cln, L_cln = skin_effect_cln_params(d, sigma, mu, n_stages)
-    Z_cln = calc_cln_impedance(R_cln, L_cln, freqs)
+    R_prima, L_prima = skin_effect_prima_params(d, sigma, mu, n_stages)
+    Z_prima = calc_prima_impedance(R_prima, L_prima, freqs)
 
-    print(f"\n--- Dowell式のみ (外部Lなし) vs CLN ---")
-    print(f"{'Freq':>12} {'|Z_Dowell|':>14} {'|Z_CLN|':>14} {'Err':>10}")
+    print(f"\n--- Dowell式のみ (外部Lなし) vs PRIMA ---")
+    print(f"{'Freq':>12} {'|Z_Dowell|':>14} {'|Z_PRIMA|':>14} {'Err':>10}")
     print("-"*55)
 
     test_freqs = [1, 10, 100, 1e3, 10e3, 100e3, 1e6, 10e6]
     for f in test_freqs:
         idx = np.argmin(np.abs(freqs - f))
         z_dow = Z_dowell_only[idx]
-        z_cln = Z_cln[idx]
-        err = np.abs(z_cln - z_dow) / np.abs(z_dow) * 100
+        z_prima = Z_prima[idx]
+        err = np.abs(z_prima - z_dow) / np.abs(z_dow) * 100
         freq_str = f"{f:.0f} Hz" if f < 1000 else f"{f/1e3:.0f} kHz" if f < 1e6 else f"{f/1e6:.0f} MHz"
-        print(f"  {freq_str:>10} {np.abs(z_dow):>14.6e} {np.abs(z_cln):>14.6e} {err:>9.2f}%")
+        print(f"  {freq_str:>10} {np.abs(z_dow):>14.6e} {np.abs(z_prima):>14.6e} {err:>9.2f}%")
 
     # F_R, F_L の比較
     print(f"\n--- F_R, F_L 比較 ---")
-    print(f"CLNからF_R, F_Lを逆算: F_R = Re(Z)/R_dc, F_L = Im(Z)/(omega*L_int_dc)")
-    print(f"{'Freq':>12} {'xi':>8} {'F_R(CLN)':>12} {'F_R(Dow)':>12} {'F_L(CLN)':>12} {'F_L(Dow)':>12}")
+    print(f"PRIMAからF_R, F_Lを逆算: F_R = Re(Z)/R_dc, F_L = Im(Z)/(omega*L_int_dc)")
+    print(f"{'Freq':>12} {'xi':>8} {'F_R(PRIMA)':>12} {'F_R(Dow)':>12} {'F_L(PRIMA)':>12} {'F_L(Dow)':>12}")
     print("-"*75)
 
     for f in test_freqs:
@@ -227,37 +227,37 @@ def main():
         delta = calc_skin_depth(f, sigma, mu)
         xi = d / delta
 
-        z_cln_val = Z_cln[idx]
-        F_R_cln = z_cln_val.real / R_dc if R_dc > 0 else 1.0
-        F_L_cln = z_cln_val.imag / (omega * L_int_dc) if omega * L_int_dc > 1e-30 else 1.0
+        z_prima_val = Z_prima[idx]
+        F_R_prima = z_prima_val.real / R_dc if R_dc > 0 else 1.0
+        F_L_prima = z_prima_val.imag / (omega * L_int_dc) if omega * L_int_dc > 1e-30 else 1.0
 
         F_R_dow = dowell_F_R(xi)
         F_L_dow = dowell_F_L(xi)
 
         freq_str = f"{f:.0f} Hz" if f < 1000 else f"{f/1e3:.0f} kHz" if f < 1e6 else f"{f/1e6:.0f} MHz"
-        print(f"  {freq_str:>10} {xi:>8.4f} {F_R_cln:>12.4f} {F_R_dow:>12.4f} {F_L_cln:>12.4f} {F_L_dow:>12.4f}")
+        print(f"  {freq_str:>10} {xi:>8.4f} {F_R_prima:>12.4f} {F_R_dow:>12.4f} {F_L_prima:>12.4f} {F_L_dow:>12.4f}")
 
     # プロット
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     ax1 = axes[0, 0]
     ax1.loglog(freqs, np.abs(Z_dowell_only), 'r-', linewidth=2, label='Dowell')
-    ax1.loglog(freqs, np.abs(Z_cln), 'b--', linewidth=2, label='CLN (1D diff)')
+    ax1.loglog(freqs, np.abs(Z_prima), 'b--', linewidth=2, label='PRIMA (1D diff)')
     ax1.set_xlabel('Frequency [Hz]')
     ax1.set_ylabel('|Z| [Ohm*m^2]')
-    ax1.set_title('Internal Impedance: Dowell vs CLN')
+    ax1.set_title('Internal Impedance: Dowell vs PRIMA')
     ax1.legend()
     ax1.grid(True, which='both', alpha=0.3)
 
     ax2 = axes[0, 1]
     # F_R, F_L vs xi
     xi_arr = np.array([d / calc_skin_depth(f, sigma, mu) for f in freqs])
-    F_R_cln_arr = np.real(Z_cln) / R_dc
-    F_L_cln_arr = np.imag(Z_cln) / (2 * np.pi * freqs * L_int_dc)
+    F_R_prima_arr = np.real(Z_prima) / R_dc
+    F_L_prima_arr = np.imag(Z_prima) / (2 * np.pi * freqs * L_int_dc)
     F_R_dow_arr = dowell_F_R(xi_arr)
     F_L_dow_arr = dowell_F_L(xi_arr)
 
-    ax2.plot(xi_arr, F_R_cln_arr, 'b-', linewidth=2, label='F_R (CLN)')
+    ax2.plot(xi_arr, F_R_prima_arr, 'b-', linewidth=2, label='F_R (PRIMA)')
     ax2.plot(xi_arr, F_R_dow_arr, 'r--', linewidth=2, label='F_R (Dowell)')
     ax2.set_xlabel('xi = d/delta')
     ax2.set_ylabel('F_R')
@@ -267,7 +267,7 @@ def main():
     ax2.set_xlim([0, 10])
 
     ax3 = axes[1, 0]
-    ax3.plot(xi_arr, F_L_cln_arr, 'b-', linewidth=2, label='F_L (CLN)')
+    ax3.plot(xi_arr, F_L_prima_arr, 'b-', linewidth=2, label='F_L (PRIMA)')
     ax3.plot(xi_arr, F_L_dow_arr, 'r--', linewidth=2, label='F_L (Dowell)')
     ax3.set_xlabel('xi = d/delta')
     ax3.set_ylabel('F_L')
@@ -277,16 +277,16 @@ def main():
     ax3.set_xlim([0, 10])
 
     ax4 = axes[1, 1]
-    err = np.abs(Z_cln - Z_dowell_only) / np.abs(Z_dowell_only) * 100
+    err = np.abs(Z_prima - Z_dowell_only) / np.abs(Z_dowell_only) * 100
     ax4.semilogx(freqs, err, 'b-', linewidth=2)
     ax4.set_xlabel('Frequency [Hz]')
     ax4.set_ylabel('Relative Error [%]')
-    ax4.set_title('CLN vs Dowell Error')
+    ax4.set_title('PRIMA vs Dowell Error')
     ax4.grid(True, which='both', alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig('verify_peec_cln_dowell.png', dpi=150)
-    print(f"\nSaved: verify_peec_cln_dowell.png")
+    plt.savefig('verify_peec_prima_dowell.png', dpi=150)
+    print(f"\nSaved: verify_peec_prima_dowell.png")
     plt.close()
 
 

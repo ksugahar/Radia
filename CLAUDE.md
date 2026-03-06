@@ -42,6 +42,74 @@ double G = 1.0 / (4.0 * M_PI * r);  // NOT exp(-jkr) / (4*pi*r)
 
 ---
 
+## Development Strategy: Complement NGSolve (2026-01-16)
+
+### Radia Focuses on What NGSolve Cannot Do Well
+
+**CRITICAL**: Radia's role is to **complement NGSolve**, not compete with it. Focus development on areas where NGSolve (FEM) is weak.
+
+**Strategic Positioning**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Electromagnetic Analysis                      │
+├─────────────────────────────────────────────────────────────────┤
+│  NGSolve (FEM)              │  Radia (BEM/Integral Methods)     │
+│  ───────────────────────────│──────────────────────────────────│
+│  OK: Bounded domains        │  OK: Unbounded domains (open BC) │
+│  OK: Complex geometry       │  OK: Permanent magnets (no mesh) │
+│  OK: Nonlinear materials    │  OK: Thin conductors (PEEC)      │
+│  OK: Transient analysis     │  OK: SPICE circuit extraction    │
+│  OK: Multi-physics coupling │  OK: Model order reduction (MOR) │
+│  WEAK: Open boundary (PML)  │  OK: Natural open boundary       │
+│  WEAK: Thin structures      │  OK: Surface impedance (SIBC)    │
+│  WEAK: Circuit parameters   │  OK: L, R, C, M extraction       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Radia Core Competencies** (where NGSolve is weak):
+
+| Capability | Why NGSolve Struggles | Radia's Approach |
+|------------|----------------------|------------------|
+| **Open boundaries** | Requires PML/ABC, adds DOFs | Natural with BEM |
+| **Permanent magnets** | Needs volume mesh | Analytical (ObjRecMag) |
+| **Thin conductors** | Mesh aspect ratio issues | PEEC (surface only) |
+| **Circuit extraction** | Post-processing needed | Direct L,R,C,M output |
+| **SPICE export** | Not supported | Verilog-A generation |
+| **Model order reduction** | Manual implementation | PRIMA/Lanczos built-in |
+
+### No Reinventing the Wheel
+
+**Policy**: Use established libraries, do NOT implement from scratch.
+
+| Component | Decision | Library |
+|-----------|----------|---------|
+| **PEEC Solver** | External | PAMELA |
+| **H-matrix/ACA** | External | HACApK (integrated) |
+| **BLAS/LAPACK** | External | Intel MKL |
+| **FEM** | External | NGSolve |
+| **MOR** | Python | scipy + numpy |
+
+**Radia C++ Core** (maintain and enhance):
+1. **MMM** - Magnetic Moment Method for permanent magnets and soft iron
+2. **MSC** - Magnetic Surface Charge for hexahedra/tetrahedra
+3. **Field computation** - B, H, A, Phi in unbounded domains
+4. **NGSolve integration** - RadiaField CoefficientFunction
+
+**Do NOT Implement**:
+- FEM solvers (use NGSolve)
+- General sparse solvers (use MKL/MUMPS)
+- Full-wave BEM (use ngbem for high frequency)
+- CAD geometry kernels (use OpenCASCADE via NGSolve)
+- PEEC from scratch (use PAMELA)
+
+**Rationale**:
+1. NGSolve already excels at FEM - don't duplicate
+2. Focus resources on unique value: BEM + circuit extraction
+3. Integration > reinvention
+
+---
+
 ## Build Policy: MSVC + Intel MKL
 
 ### Compiler Requirement (2025-12-27)
@@ -485,6 +553,82 @@ Vector potential A satisfies `B = curl(A)` (verified numerically).
 - `rad_rectangular_block.cpp`: ObjRecMag A/Phi/B field computation
 - `rad_poly_analytical.cpp`: ObjHexahedron/ObjTetrahedron A/Phi field computation
 - `rad_arc_current.cpp`: Biot-Savart field from arc currents
+
+### Unified Field Computation Architecture (2026-01-16)
+
+**POLICY**: All field computation MUST use `rad_field_unified.h/cpp` as the central module.
+
+**Architecture**:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    rad_field_unified.h/cpp                       │
+│  ─────────────────────────────────────────────────────────────  │
+│  ComputeFieldSingle()     - Single point, static field          │
+│  ComputeFieldBatch()      - Batch points, OpenMP parallelized   │
+│  ComputeComplexFieldSingle() - Complex (AC) field               │
+│  ComputeComplexFieldBatch()  - Complex batch with OpenMP        │
+│  IsPointInsideAnyElement() - Inside/outside classification      │
+│  ComputeBFromMagnetization() - Dipole field from M (complex)    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+           ┌──────────────────┼──────────────────┐
+           ▼                  ▼                  ▼
+    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+    │ rad.Fld()   │    │ rad.FldVTS()│    │ CplMagFld() │
+    │ rad.FldBatch│    │ VTS export  │    │ PEEC+MMM    │
+    └─────────────┘    └─────────────┘    └─────────────┘
+           │                  │                  │
+           ▼                  ▼                  ▼
+    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+    │ radentry.cpp│    │ radentry.cpp│    │ rad_peec_   │
+    │ Python API  │    │ VTS output  │    │ mmm_coupled │
+    └─────────────┘    └─────────────┘    └─────────────┘
+```
+
+**Users of rad_field_unified**:
+| Component | Function Used | Purpose |
+|-----------|--------------|---------|
+| `rad.Fld()` | `ComputeFieldSingle` | Python API single-point field |
+| `rad.FldBatch()` | `ComputeFieldBatch` | Python API batch field |
+| `rad.FldVTS()` | `ComputeFieldBatch` | VTS export grid field |
+| `radia_ngsolve` | `ComputeFieldSingle` | RadiaField CoefficientFunction |
+| `rad_particle_trajectory` | `ComputeFieldForTrajectory` | Beam tracking |
+| `CplMagFld()` | `ComputeComplexFieldSingle` | PEEC+MMM coupled field |
+
+**Key Features**:
+1. **Inside/Outside Classification**: Uses solid angle method for accurate determination
+2. **OpenMP Parallelization**: Batch computations parallelized with `#pragma omp parallel for`
+3. **Complex Field Support**: For PEEC+MMM AC analysis with complex magnetization
+4. **FMM Acceleration**: Optional dipole approximation for large problems
+
+**Inside/Outside Handling**:
+```cpp
+// Automatic inside/outside handling
+RadFieldUnified::ComputeConfig config;
+config.check_inside = true;           // Enable inside check
+config.return_internal_field = true;  // Return M*mu0 for inside points
+
+RadFieldUnified::FieldResult result =
+    RadFieldUnified::ComputeFieldSingle(g3dPtr, point, FIELD_B, config);
+
+if (result.status == RadFieldUnified::STATUS_INSIDE) {
+    // Point is inside element result.element_id
+    // result.Bx/By/Bz contains internal field (mu0 * M)
+}
+```
+
+**Complex Field Computation (PEEC+MMM)**:
+```cpp
+// For coupled PEEC+MMM with complex magnetization
+std::complex<double>* M_complex = ...;  // From coupled solver solution
+int n_elements = ...;
+
+RadFieldUnified::ComplexFieldResult result =
+    RadFieldUnified::ComputeComplexFieldSingle(
+        g3dPtr, point, M_complex, n_elements, config);
+
+// result.Bx, By, Bz are std::complex<double>
+```
 
 ---
 
@@ -1089,93 +1233,145 @@ Include appropriate license notices in the package.
 
 ---
 
-## Nastran Mesh Import Unification (2025-11-23)
+## Nastran Format Policy: REMOVED (2026-01-16)
 
-### Migration: nastran_reader.py → nastran_mesh_import.py
+### Nastran BDF Support Removed from Radia
 
-**Date**: 2025-11-23
-**Status**: Complete
+**CRITICAL**: Nastran BDF format support is **REMOVED** from Radia. Use **Coreform Cubit → Netgen direct export** exclusively.
 
-### Changes
+**Policy**:
+- **Nastran import modules REMOVED** from Radia codebase
+- **All Nastran workflows REMOVED** - no backwards compatibility
+- **Use Coreform Cubit** for all mesh operations (hex/tet)
+- **Cubit can read legacy .bdf** files if needed
 
-**Removed**:
-- `src/python/nastran_reader.py` - Legacy Nastran reader (deprecated)
+**Rationale**:
+1. **Legacy format**: Nastran BDF is a decades-old format with limitations
+2. **Complexity**: Fixed-width fields, multiple continuation styles, error-prone parsing
+3. **Better alternatives**: Cubit `export_netgen()` provides direct in-memory mesh transfer
+4. **No users yet**: No backwards compatibility concerns
 
-**Enhanced**:
-- `src/python/nastran_mesh_import.py` - Unified Nastran import module
+**Removed Files**:
+- `src/radia/nastran_mesh_import.py` - REMOVED
+- `src/radia/nastran_reader.py` - REMOVED (already deprecated)
+- All examples using `import_nastran_mesh()` - REMOVED or refactored
 
-### Supported Element Types
-
-`nastran_mesh_import.py` now supports all major 3D element types:
-
-| Element Type | Nastran Card | Nodes | Status |
-|--------------|--------------|-------|--------|
-| Hexahedron | CHEXA | 8 | ✓ Supported |
-| Wedge/Prism | CPENTA | 6 | ✓ Supported |
-| Pyramid | CPYRAM | 5 | ✓ Supported |
-| Tetrahedron | CTETRA | 4 | ✓ Supported |
-| Triangle (Surface) | CTRIA3 | 3 | ✓ Supported |
-
-### CTRIA3 Surface Mesh Support
-
-**Key Feature**: CTRIA3 elements are grouped by material ID (property ID).
-
-- Each material ID creates **one polyhedron** from all its triangles
-- Enables surface-based magnetic analysis
-- Compatible with sphere.bdf (8 material groups, 7408 total faces)
-
-**Usage**:
-```python
-from nastran_mesh_import import import_nastran_mesh, create_radia_from_nastran
-
-# Read mesh
-mesh_data = import_nastran_mesh('sphere.bdf', units='mm')
-
-# Access triangle groups
-tria_groups = mesh_data['tria_groups']
-# Format: {material_id: {'faces': [[n1,n2,n3], ...], 'node_ids': set(...)}}
-
-# Create Radia objects automatically
-mag_obj = create_radia_from_nastran('sphere.bdf',
-                                     material={'magnetization': [0, 0, 1.2]},
-                                     units='mm')
+**Correct Workflow** (2026-01-16):
+```
+Cubit geometry → export_netgen() → Netgen mesh → Radia
+                 (direct, no file)
 ```
 
-### Migration Guide
-
-**Before** (using nastran_reader.py):
-```python
-from nastran_reader import read_nastran_mesh, TETRA_FACES
-
-mesh = read_nastran_mesh(nas_file)
-nodes = mesh['nodes']  # numpy array
-tetra_elements = mesh['tetra_elements']  # list
-tria_groups = mesh['tria_groups']  # dict
+**For Legacy .bdf Files**:
+```
+Legacy .bdf → Cubit (import nastran) → export_netgen() → Netgen → Radia
+              (Cubit handles .bdf reading)
 ```
 
-**After** (using nastran_mesh_import.py):
+### Cubit → Netgen Workflow
+
+**Standard workflow** (recommended):
 ```python
-from nastran_mesh_import import import_nastran_mesh, create_radia_from_nastran
-from netgen_mesh_import import TETRA_FACES, WEDGE_FACES, PYRAMID_FACES
+# RECOMMENDED - Use Cubit direct export
+import cubit
+import cubit_mesh_export
+from ngsolve import Mesh
+from netgen_mesh_import import netgen_mesh_to_radia
 
-# Option 1: Parse only
-mesh = import_nastran_mesh(nas_file, units='mm')
-vertices = mesh['vertices']  # list of [x,y,z]
-tet_elements = mesh['tet_elements']  # list of vertex indices
-tria_groups = mesh['tria_groups']  # dict (same format)
+# Generate mesh in Cubit, export directly to Netgen
+cubit.init(['cubit', '-nojournal', '-batch'])
+cubit.cmd("import geometry 'model.step'")
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("mesh volume all")
 
-# Option 2: Create Radia objects directly (recommended)
-mag_obj = create_radia_from_nastran(nas_file,
-                                     material={'magnetization': [0, 0, 1.2]},
-                                     units='mm')
+# Direct export to Netgen (no intermediate file)
+ngmesh = cubit_mesh_export.export_netgen(cubit)
+mesh = Mesh(ngmesh)
+
+# Convert to Radia
+mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
 ```
 
-### Affected Files
+### Reading Legacy Nastran Files via Cubit
 
-**Deprecated**:
-- `examples/background_fields/sphere_nastran_analysis.py` - Marked as DEPRECATED, kept for reference
+**If you have existing Nastran .bdf files**, use Coreform Cubit to read them and add boundary condition labels before exporting to Netgen:
 
-**Note**: If issues arise with Nastran import, refer to `nastran_mesh_import.py` as the single source of truth.
+```python
+# RECOMMENDED - Read legacy Nastran via Cubit, add labels, export to Netgen
+import cubit
+import cubit_mesh_export
+from ngsolve import Mesh
+
+cubit.init(['cubit', '-nojournal', '-batch'])
+
+# Read legacy Nastran mesh into Cubit
+cubit.cmd("import nastran 'legacy_mesh.bdf'")
+
+# Add boundary condition labels (sidesets/nodesets) in Cubit
+cubit.cmd("sideset 1 surface 1 2 3")
+cubit.cmd("sideset 1 name 'conductor'")
+cubit.cmd("sideset 2 surface 4 5 6")
+cubit.cmd("sideset 2 name 'ferrite'")
+cubit.cmd("sideset 3 surface 7 8")
+cubit.cmd("sideset 3 name 'shield'")
+
+# Export to Netgen with boundary labels preserved
+ngmesh = cubit_mesh_export.export_netgen(cubit)
+mesh = Mesh(ngmesh)
+
+# Boundary labels are now accessible as mesh.GetBoundaries()
+print(mesh.GetBoundaries())  # ['conductor', 'ferrite', 'shield']
+```
+
+**Benefits of Cubit as intermediary**:
+1. **Label management**: Add/modify boundary condition names
+2. **Mesh repair**: Fix mesh quality issues
+3. **Visualization**: Inspect mesh before export
+4. **Format flexibility**: Read various legacy formats (Nastran, ANSYS, Abaqus)
+5. **CAD format support**: Import STEP, IGES, SAT, and other CAD formats directly
+6. **Modern workflow**: No custom parsers needed in Radia
+```
+
+### CAD Format Support via Cubit
+
+Coreform Cubit supports direct import of CAD formats, eliminating need for custom importers:
+
+**Supported CAD Formats**:
+- STEP (.step, .stp) - ISO standard, recommended
+- IGES (.iges, .igs) - Legacy CAD exchange
+- Parasolid (.x_t, .x_b) - Siemens/NX native
+- ACIS SAT (.sat) - Spatial native
+- STL (.stl) - Triangulated surface
+- BREP (.brep) - OpenCascade native
+
+**Workflow with CAD files**:
+```python
+import cubit
+import cubit_mesh_export
+from ngsolve import Mesh
+from netgen_mesh_import import netgen_mesh_to_radia
+
+cubit.init(['cubit', '-nojournal', '-batch'])
+
+# Import CAD file (STEP, IGES, etc.)
+cubit.cmd("import step 'motor_rotor.step' heal")
+
+# Set up mesh
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("volume all size auto factor 5")
+cubit.cmd("mesh volume all")
+
+# Add boundary condition labels
+cubit.cmd("sideset 1 surface with z_coord > 0")
+cubit.cmd("sideset 1 name 'north_pole'")
+
+# Export directly to Netgen
+ngmesh = cubit_mesh_export.export_netgen(cubit)
+mesh = Mesh(ngmesh)
+
+# Convert to Radia
+mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
+```
 
 ---
 
@@ -1493,11 +1689,13 @@ run_all_benchmarks.py             # Orchestrator script
 
 | Element Type | Tool | Notes |
 |--------------|------|-------|
-| **Tetrahedral** | **Netgen** | Recommended. Uses `netgen.occ.Box` + `OCCGeometry.GenerateMesh()` |
+| **Tetrahedral** | **Netgen** | Simple geometry. Uses `netgen.occ.Box` + `OCCGeometry.GenerateMesh()` |
+| Tetrahedral | **Coreform Cubit** | Complex geometry. Uses `cubit_mesh_export.export_netgen()` |
 | Tetrahedral | **GMSH via NGSolve** | Import .msh files using `ngsolve.Mesh()` |
-| Tetrahedral | Nastran | DEPRECATED - Use Netgen or GMSH instead |
-| **Hexahedral** | **Netgen** | Recommended for structured hex mesh |
-| Hexahedral | Nastran | DEPRECATED - Use Netgen instead |
+| **Hexahedral** | **Coreform Cubit** | Required. Netgen cannot generate 3D hex meshes |
+| Mixed (hex+tet) | **Coreform Cubit** | Required for mixed element meshes |
+
+**Note**: Nastran BDF format is **REMOVED**. Use Cubit to read legacy .bdf files if needed.
 
 ### GMSH Mesh Import via NGSolve
 
@@ -2114,79 +2312,120 @@ def get_peak_memory_mb():
 
 ---
 
-## RWG-EFIE Conductor Solver Policy
+## Conductor Solver Policy: PEEC + Surface Impedance
 
-### Target Application: Power Electronics (2026-01-09)
+**Approach**:
+- **PEEC (Partial Element Equivalent Circuit)**: Loop-Star decomposition for coils and conductors
+- **SIBC (Surface Impedance Boundary Condition)**: Skin effect via analytical formulas
+- **ESIM (Effective Surface Impedance Method)**: Nonlinear/H-dependent surface impedance
 
-**Policy**: The RWG-EFIE conductor solver is designed for **power electronics applications** (DC to ~1 MHz).
-
-**Target Applications**:
+**Target Applications** (PEEC + SIBC covers):
 - **Induction heating**: 1 kHz - 500 kHz
-- **Wireless power transfer (WPT)**: 6.78 MHz, 13.56 MHz (industrial standards)
+- **Wireless power transfer (WPT)**: 6.78 MHz, 13.56 MHz
 - **Power electronics**: DC - 1 MHz (inverters, converters, transformers)
 - **Eddy current analysis**: Low to medium frequency
 
-**NOT Designed For**:
-- RF/Microwave applications (> 10 MHz)
-- Antenna design
-- High-frequency EMC/EMI analysis
+### NGSolve ngbem Integration
 
-**Rationale**: For RF applications, specialized tools (HFSS, CST, FEKO) are more appropriate. Radia focuses on power-frequency electromagnetics where quasi-static approximations are valid.
+Radia PEEC is designed to work alongside **NGSolve ngbem** for unified electromagnetic analysis.
 
-### Loop-Star Decomposition: Mandatory (No Option to Disable)
+**ngbem** features:
+- Helmholtz kernel (full-wave)
+- H-matrix acceleration (HLib/H2Lib)
+- EFIE/MFIE/CFIE formulations
+- Native NGSolve integration
 
-**Policy (2026-01-09)**: Loop-Star decomposition is **mandatory** for all RWG-EFIE solves. The legacy direct RWG solver has been **removed**.
+**Current frequency allocation**:
 
-**Implementation** (in `RWGEFIESolver`):
-```cpp
-// Constructor - Loop-Star is always used
-useMQS_ = true;  // MQS mode enabled by default for power electronics
+| Range | Solver | Use Case |
+|-------|--------|----------|
+| DC - 1 MHz | Radia PEEC + SIBC | Power electronics, WPT, transformers |
+| 1 MHz - GHz | ngbem | RF heating, antennas, EMC/shielding |
 
-// Solve() always calls SolveLoopStar()
-// Legacy SolveLinearSystem() has been REMOVED
+**Future: ngbem low-frequency support** (requested via NGSolve issue):
+- Loop-Star decomposition for MQS stability
+- Laplace kernel option for quasi-static problems
+- SIBC/ESIM integration
+
+### Radia PEEC Unique Features
+
+Even with ngbem low-frequency support, Radia PEEC provides:
+
+| Feature | Radia PEEC | ngbem |
+|---------|------------|-------|
+| **Circuit extraction** | Direct (L, R, C) | Post-processing needed |
+| **SPICE netlist** | Native output | Conversion needed |
+| **Lanczos MOR** | Implemented | Separate implementation |
+| **KAN/CFE learning** | Implemented | Not available |
+| **MMM coupling** | CplMag | FEM-BEM coupling |
+| **Schur complement** | Port extraction | Manual extraction |
+
+### Integration Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  NGSolve Geometry & Mesh                                        │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+           ┌───────────────┴───────────────┐
+           ▼                               ▼
+┌─────────────────────┐         ┌─────────────────────┐
+│  Radia PEEC         │         │  ngbem              │
+│  - Loop-Star        │         │  - EFIE/MFIE        │
+│  - SIBC/ESIM        │  <--->  │  - H-matrix         │
+│  - Lanczos MOR      │ coupling│  - Helmholtz/Laplace│
+│  - SPICE output     │         │                     │
+└─────────────────────┘         └─────────────────────┘
+           │                               │
+           └───────────────┬───────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Unified Solution (NGSolve GridFunction)                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### PRIMA Model Order Reduction
+
+**Policy**: Use PRIMA (not CLN/Cauer) terminology for model order reduction.
+
+**PRIMA vs CLN Equivalence**:
+- Both use **Lanczos tridiagonalization** to produce RL ladder networks
+- Mathematically identical: tridiagonal matrix -> series RL ladder
+- PRIMA (1998, IEEE TCAD) is the standard academic reference
+- CLN is a later repackaging with potential patent ambiguity
+
+**Implementation** (in `lanczos_reduction.py`):
+```python
+# PRIMASchurExtractor class handles:
+# - PRIMA Lanczos with re-orthogonalization (higher accuracy)
+# - Per-group ACA tolerance (magnetic, dielectric, conductor)
+# - Schur complement for port impedance extraction
+# - SPICE netlist generation
+```
+
+**Key Classes**:
+- `SPICEExtractionConfig`: Configuration with Lanczos order and ACA tolerances
+- `PRIMASchurExtractor`: Full SPICE extraction workflow
+- `LoopStarMagneticCoupled`: Loop-Star basis transformation
+
+**Configuration Example**:
+```python
+config = SPICEExtractionConfig(
+    n_lanczos_loop=20,          # Lanczos order for conductor loops
+    n_lanczos_star=10,          # Lanczos order for capacitive nodes
+    aca_tol_magnetic=1e-3,      # ACA tolerance for magnetic elements
+    aca_tol_dielectric=1e-4,    # ACA tolerance for dielectric elements
+    aca_tol_conductor=1e-5,     # ACA tolerance for conductor/shield
+    port_indices=[0, 1],
+)
 ```
 
 **Rationale**:
-1. **Target frequency range**: Power electronics (DC - 1 MHz) requires Loop-Star
-2. **Low-frequency stability**: Eliminates EFIE low-frequency breakdown (jωL → 0)
-3. **MQS validity**: At power frequencies, displacement current is negligible (div J ≈ 0)
-4. **Reduced DOF**: MQS mode solves only Loop equations (fewer unknowns)
-5. **Code simplicity**: Single solver path, no conditional branching
-
-**MQS Mode Control**:
-- `useMQS_ = true` (default): Solve Loop equations only (I_S = 0)
-- `useMQS_ = false`: Solve full Loop-Star system (for higher frequencies where capacitive effects matter)
-
-### Loop-Star Technical Details
-
-**Basis Transformation**:
-```
-RWG basis → Loop (solenoidal) + Star (irrotational)
-
-Loop functions: Formed from co-tree edges (create closed current loops)
-Star functions: Formed from tree edges (create divergent currents)
-```
-
-**MQS Mode** (useMQS_ = true):
-- Solves only Loop equations: `Z_LL * I_L = V_L`
-- Sets Star currents to zero: `I_S = 0`
-- Valid when: `ω * ε << σ` (conduction dominates displacement)
-
-**Full EFIE Mode** (useMQS_ = false):
-- Solves coupled system:
-  ```
-  [Z_LL  Z_LS] [I_L]   [V_L]
-  [Z_SL  Z_SS] [I_S] = [V_S]
-  ```
-- Required when capacitive effects are significant
-
-**Performance Impact**:
-
-| Mode | DOF Reduction | Accuracy (f < 1MHz) | Overhead |
-|------|---------------|---------------------|----------|
-| MQS (Loop-only) | ~50% | Excellent | Minimal |
-| Full Loop-Star | 0% | Exact | ~10% matrix transform |
-| No Loop-Star | 0% | Poor at low-f | None |
+1. **Low-frequency stability**: Eliminates breakdown at DC (jomega*L -> 0)
+2. **MQS validity**: At power frequencies, displacement current is negligible
+3. **Circuit extraction**: Direct mapping to RLC ladder elements
+4. **Passivity**: PRIMA Lanczos preserves passivity
+5. **Re-orthogonalization**: Higher accuracy than plain Lanczos
 
 ---
 
@@ -2273,28 +2512,83 @@ K. Hollaus, M. Kaltenbacher, J. Schoberl, "A Nonlinear Effective Surface Impedan
 
 ---
 
-## VTK/VTS Export Policy
+## Visualization Policy: NGSolve + VTK (2026-01-16)
 
-### VTS Only for Field Export (2026-01-09)
+### Unified Visualization Framework
 
-**Policy**: Radia uses **VTS (VTK XML Structured Grid)** format only for magnetic field export. Legacy VTK geometry export has been removed.
+**CRITICAL**: Radia uses **NGSolve/Netgen** and **VTK (PyVista/ParaView)** for all visualization needs.
 
-**Rationale**:
-1. **Performance**: VTS export is implemented in C++ with OpenMP parallelization for large grids
-2. **Simplicity**: Single format (VTS) for all field visualization needs
-3. **ParaView Compatibility**: VTS is the standard format for structured 3D field grids
+**Policy**:
+- **Default visualization**: PyVista (quick, interactive, Jupyter-friendly)
+- **Publication-quality**: ParaView (fine-tuned rendering, high-resolution export)
+- **Geometry visualization**: Netgen OCC + NGSolve Draw()
+- **Field visualization**: VTS export + PyVista (default) / ParaView (publication)
+- **Mesh visualization**: NGSolve mesh + Netgen GUI
+- **DO NOT** implement custom visualization in Radia C++ code
 
-**Removed APIs** (2026-01-09):
-- `rad.ObjDrwVTK()` - C++ geometry export removed
-- `exportGeometryToVTK()` - Python geometry export removed
-- `exportFieldToVTK()` - Python legacy field export removed
-- `radia_pyvista_viewer.py` - PyVista viewer removed (depended on ObjDrwVTK)
+**Tool Selection**:
+| Purpose | Tool | Notes |
+|---------|------|-------|
+| Quick visualization | **PyVista** | Default, Jupyter integration |
+| Interactive exploration | **PyVista** | Python scripting |
+| Publication figures | **ParaView** | Fine control over rendering |
+| High-resolution export | **ParaView** | Vector graphics (SVG, PDF) |
+| Animation | **ParaView** | Keyframe animation |
 
-**VTS Export API**:
+### Visualization Stack
 
-`rad.FldVTS()` - C++ implementation with OpenMP parallelization
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Visualization Framework                       │
+├─────────────────────────────────────────────────────────────────┤
+│  Geometry (CAD)        │  Field Data          │  Interactive    │
+│  ──────────────────────│─────────────────────│────────────────│
+│  Netgen OCC shapes     │  rad.FldVTS()       │  NGSolve Draw() │
+│  STEP import (Cubit)   │  PyVista meshes     │  Netgen GUI     │
+│  ObjRecMag -> OCC      │  ParaView VTS/VTU   │  webgui         │
+│  ObjCylinder -> OCC    │                     │                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-**Usage**:
+### Analytical Objects → OCC Shapes (TODO)
+
+**Goal**: Export Radia analytical objects (no mesh) as OCC shapes for unified visualization.
+
+**Planned Implementation**:
+```python
+from netgen.occ import Box, Cylinder, Sphere
+import radia as rad
+
+# Radia analytical object
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
+
+# Export as OCC shape for visualization
+occ_shape = rad.ExportOCC(magnet)  # Returns netgen.occ shape
+
+# Combine with Cubit-imported geometry
+from ngsolve import Mesh
+mesh = Mesh(...)  # From Cubit export_netgen
+
+# Unified visualization
+from ngsolve.webgui import Draw
+Draw(mesh)
+Draw(occ_shape)  # Analytical object as CAD
+```
+
+**Supported Conversions** (TODO):
+| Radia Object | OCC Shape | Notes |
+|--------------|-----------|-------|
+| ObjRecMag | Box | Rectangular permanent magnet |
+| ObjCylMag | Cylinder | Cylindrical permanent magnet |
+| ObjSphMag | Sphere | Spherical permanent magnet |
+| ObjArcCur | Torus section | Arc current coil |
+| ObjRaceTrk | Composite | Racetrack coil |
+
+**Reference**: EMPY_Field implementation at `S:\NGSolve\EMPY\EMPY_Field`
+
+### VTS Field Export
+
+**Policy**: Use `rad.FldVTS()` for field data export.
 
 ```python
 import radia as rad
@@ -2303,21 +2597,225 @@ rad.FldUnits('m')
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
 # Export field grid to VTS
-# FldVTS(obj, filename, x_range, y_range, z_range, nx, ny, nz, include_B, include_H, unit_scale)
 rad.FldVTS(magnet, 'field_output.vts',
            [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15],
            41, 41, 27, 1, 0, 1.0)
-# Output: field_output.vts
 ```
 
-**VTS File Format**:
-- XML-based structured grid format
-- Coordinates automatically converted to meters (VTK standard)
-- Supports B field, H field, and scalar magnitudes
-- Compatible with ParaView, VisIt, and other VTK viewers
+### PyVista Integration (Default)
+
+**Policy**: Use PyVista as the **default** visualization tool.
+
+```python
+import pyvista as pv
+
+# Read VTS field data
+grid = pv.read('field_output.vts')
+
+# Quick visualization (default workflow)
+plotter = pv.Plotter()
+plotter.add_mesh(grid, scalars='B_magnitude', cmap='coolwarm')
+plotter.add_arrows(grid.points, grid['B_field'], mag=0.01)
+plotter.show()
+
+# Jupyter notebook integration
+grid.plot(scalars='B_magnitude', cmap='coolwarm', jupyter_backend='static')
+```
+
+**Why PyVista as default**:
+- Python-native, integrates with Jupyter notebooks
+- Quick iterative visualization during development
+- Scriptable for batch processing
+- Good enough quality for most use cases
+
+### ParaView (Publication Quality)
+
+**Policy**: Use ParaView for **publication-quality** figures.
+
+```bash
+# Open VTS file in ParaView
+paraview field_output.vts
+```
+
+**ParaView workflow for publications**:
+1. Open VTS file in ParaView
+2. Apply filters (Glyph, Contour, Slice, StreamTracer)
+3. Adjust rendering (lighting, camera, colormap)
+4. Export high-resolution image (PNG, TIFF) or vector graphics (SVG, PDF)
+
+**When to use ParaView**:
+- Journal paper figures (fine control over appearance)
+- High-resolution exports (>300 DPI)
+- Vector graphics export (SVG, PDF for LaTeX)
+- Complex visualizations (streamlines, isosurfaces)
+- Animation sequences
+
+### NGSolve webgui
+
+**Policy**: Use NGSolve webgui for interactive visualization.
+
+```python
+from ngsolve import *
+from ngsolve.webgui import Draw
+
+# Mesh from Cubit
+mesh = Mesh(...)
+
+# Field from Radia
+from radia_ngsolve import RadiaField
+B_cf = RadiaField(magnet, 'b')
+
+# GridFunction projection
+B_gf = GridFunction(HDiv(mesh, order=2))
+B_gf.Set(B_cf)
+
+# Interactive visualization
+Draw(B_gf, mesh, name='B_field')
+```
+
+### Removed Legacy Visualization
+
+**Removed APIs** (2026-01-09):
+- `rad.ObjDrwVTK()` - Use NGSolve Draw() instead
+- `exportGeometryToVTK()` - Use OCC export instead
+- `radia_pyvista_viewer.py` - Use PyVista directly
 
 ---
 
-**Last Updated**: 2026-01-09 (VTS export API unified to rad.FldVTS only)
+## Universal Relaxation Network (URN) Policy (2026-01-19)
+
+### URN Examples Directory
+
+**CRITICAL**: All URN-related examples, data, and scripts MUST be placed in:
+```
+examples/Universal_Relaxation_Network/
+```
+
+**Directory Structure**:
+```
+examples/Universal_Relaxation_Network/
+  data/
+    synthetic/                    # Synthetic benchmark data
+      liion_battery_eis.csv       # Physics-based synthetic Li-ion EIS
+      mnzn_ferrite_impedance.csv  # Physics-based synthetic ferrite data
+    real_world/                   # Publicly available real datasets
+      nasa_battery/               # NASA Li-ion Battery Aging Dataset
+      mendeley_eis/               # Mendeley SoC EIS Dataset
+  universal_relaxation_network.py # Main URN implementation
+  validate_urn_vs_vf.py           # Validation script (URN vs VF comparison)
+  demo_spice_timedomain.py        # Time-domain SPICE simulation demo
+```
+
+**Policy**:
+1. **All paper data here**: Data mentioned in `docs/paper/urn_paper.tex` MUST exist in this directory
+2. **Synthetic data labeled**: Synthetic data MUST be clearly marked as synthetic in file headers
+3. **Real data with attribution**: Real-world datasets MUST include license and citation info
+4. **Reproducibility**: All paper results MUST be reproducible from scripts in this directory
+
+**Do NOT**:
+- Place URN examples in `examples/peec_integration/` (legacy location)
+- Claim synthetic data as real measurements
+- Use proprietary datasets without proper licensing
+
+**Paper-Data Consistency**:
+Any data file referenced in `urn_paper.tex` MUST:
+1. Exist in `examples/Universal_Relaxation_Network/data/`
+2. Have matching parameters (frequency range, impedance values)
+3. Include header comments explaining data source
+
+---
+
+## Publication-Quality Figure Generation Policy (2026-01-19)
+
+### Matplotlib Settings for IEEE/Academic Papers
+
+**CRITICAL**: When generating figures for academic papers, use the following matplotlib settings for publication-quality PDF output.
+
+**Required Settings**:
+
+```python
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
+
+# Font settings: Times New Roman, 10pt at 8cm width
+rcParams['font.family'] = 'serif'
+rcParams['font.serif'] = ['Times New Roman']
+rcParams['font.size'] = 10
+rcParams['axes.labelsize'] = 10
+rcParams['axes.titlesize'] = 10
+rcParams['xtick.labelsize'] = 9
+rcParams['ytick.labelsize'] = 9
+rcParams['legend.fontsize'] = 8
+
+# High quality output
+rcParams['figure.dpi'] = 300
+rcParams['savefig.dpi'] = 300
+rcParams['savefig.bbox'] = 'tight'
+rcParams['savefig.pad_inches'] = 0.02  # Minimal margins
+
+# PDF font embedding: Type 42 (TrueType) for Acrobat compatibility
+rcParams['pdf.fonttype'] = 42
+rcParams['ps.fonttype'] = 42
+
+# Tick settings: INWARD on ALL sides
+rcParams['xtick.direction'] = 'in'
+rcParams['ytick.direction'] = 'in'
+rcParams['xtick.top'] = True
+rcParams['xtick.bottom'] = True
+rcParams['ytick.left'] = True
+rcParams['ytick.right'] = True
+
+# Line widths
+rcParams['axes.linewidth'] = 0.5
+rcParams['xtick.major.width'] = 0.5
+rcParams['ytick.major.width'] = 0.5
+rcParams['xtick.minor.width'] = 0.3
+rcParams['ytick.minor.width'] = 0.3
+
+# Figure size: 8cm width (standard single-column)
+CM_TO_INCH = 1 / 2.54
+FIG_WIDTH = 8 * CM_TO_INCH   # 8cm = 3.15 inches
+FIG_HEIGHT = 6 * CM_TO_INCH  # Adjustable
+
+fig, ax = plt.subplots(figsize=(FIG_WIDTH, FIG_HEIGHT))
+# ... plot code ...
+plt.savefig('figure.pdf', format='pdf')
+```
+
+**Key Requirements**:
+
+| Setting | Value | Rationale |
+|---------|-------|-----------|
+| Font | Times New Roman | IEEE standard |
+| Font size | 10pt at 8cm | Readable in print |
+| Tick direction | Inward | Professional appearance |
+| Ticks | All 4 sides | Complete axis frame |
+| Margins | Minimal (0.02 in) | Maximize data area |
+| Output | PDF | Vector graphics, scalable |
+| DPI | 300 | High quality |
+
+**Figure Dimensions**:
+
+| Column Type | Width (cm) | Width (inch) |
+|-------------|-----------|--------------|
+| Single column | 8.0 | 3.15 |
+| Double column | 17.0 | 6.69 |
+| Full page | 19.0 | 7.48 |
+
+**Do NOT**:
+- Use PNG for paper figures (use PDF)
+- Use default matplotlib fonts (use Times New Roman)
+- Use outward ticks (use inward)
+- Leave large margins (use minimal padding)
+- Forget ticks on top/right axes
+
+**Example Script Location**:
+- `examples/Universal_Relaxation_Network/generate_paper_figures.py`
+
+---
+
+**Last Updated**: 2026-01-19 (Added Publication Figure Policy)
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation
