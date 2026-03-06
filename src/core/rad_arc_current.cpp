@@ -156,7 +156,9 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 	TVector3d P_mi_CenPo = FieldPtr->P - CircleCentrPoint;
 
 	const double SmallPositive = 1.E-10;
-	double r = sqrt(P_mi_CenPo.x*P_mi_CenPo.x + P_mi_CenPo.y*P_mi_CenPo.y + SmallPositive);
+	double r2_xy = P_mi_CenPo.x*P_mi_CenPo.x + P_mi_CenPo.y*P_mi_CenPo.y;
+	double r = sqrt(r2_xy + SmallPositive);  // SmallPositive avoids division by zero in B-field
+	double r_exact = sqrt(r2_xy);  // Exact r for solid angle (no offset)
 	double phi_obs = ((P_mi_CenPo.y < 0)? (TwoPi - acos(P_mi_CenPo.x/r)) : (acos(P_mi_CenPo.x/r)));
 	double z = P_mi_CenPo.z;
 
@@ -234,9 +236,7 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 				// Magnetic scalar potential: Phi = I * Omega / (4*pi)
 				// Omega is the solid angle subtended by the loop
 				if (FieldPtr->FieldKey.Phi_) {
-					double dOmega = RadElliptic::CircularLoopSolidAngle(r, z, r_coil, z_coil);
-					// Phi = I * Omega / (4*pi)
-					// Units: dI [A] * Omega [sr] / (4*pi) = [A] (since Omega has max 4*pi sr)
+					double dOmega = RadElliptic::CircularLoopSolidAngle(r_exact, z, r_coil, z_coil);
 					IntForPhi += dI * dOmega / (4.0 * Pi);
 				}
 			}
