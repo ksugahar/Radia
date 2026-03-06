@@ -952,101 +952,8 @@ void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Dis
 
 //-------------------------------------------------------------------------
 
-int radTApplication::SetAndShowPhysUnits()
-{
-	try
-	{
-		// Use current length unit setting
-		const char* LengthUnitID = m_lengthUnitName;
-		char AngleUnitID[] = "radian";
-		char CurrentUnitID[] = "A";
-
-		// Current density depends on length unit
-		// Radia v1.4.3+: m_lengthUnitScale is 1.0 for m (default), 0.001 for mm
-		char CurrentDensityUnitID[32];
-		if (m_lengthUnitScale == 1.0) // m (internal SI units)
-			strcpy(CurrentDensityUnitID, "A/m^2");
-		else // mm
-			strcpy(CurrentDensityUnitID, "A/mm^2");
-
-		char MagnetizationUnitID[] = "Tesla";
-		char FieldInductionUnitID[] = "Tesla";
-		char FieldStrengthUnitID[] = "Tesla";
-		char FieldForceUnitID[] = "Newton";
-
-//#ifdef __GNUC__
-//		ostrstream OutUnitsInfoStream;
-//#else
-		ostringstream OutUnitsInfoStream; // Porting
-//#endif
-
-		OutUnitsInfoStream << "Physical units currently in use:" << endl;
-		OutUnitsInfoStream << "Length:  " << LengthUnitID << endl;
-		OutUnitsInfoStream << "Angle:  " << AngleUnitID << endl;
-		OutUnitsInfoStream << "Electric current:  " << CurrentUnitID << endl;
-		OutUnitsInfoStream << "Electric current density:  " << CurrentDensityUnitID << endl;
-		OutUnitsInfoStream << "Magnetization:  " << MagnetizationUnitID << endl;
-		OutUnitsInfoStream << "Magnetic field induction:  " << FieldInductionUnitID << endl;
-		OutUnitsInfoStream << "Magnetic field strength:  " << FieldInductionUnitID << endl;
-		OutUnitsInfoStream << "Magnetic field integral along a line:  " << FieldInductionUnitID << " " << LengthUnitID << endl;
-		OutUnitsInfoStream << "Magnetic field vector-potential:  " << FieldInductionUnitID << " " << LengthUnitID << endl;
-		OutUnitsInfoStream << "Force:  " << FieldForceUnitID << endl;
-
-		OutUnitsInfoStream << ends;
-
-//#ifdef __GNUC__
-//		if(SendingIsRequired) Send.String(OutUnitsInfoStream.str());
-//#else
-		if(SendingIsRequired) Send.String(OutUnitsInfoStream.str().c_str()); // Porting
-//#endif
-
-		return 1;
-	}
-	catch(...) 
-	{ 
-		Initialize(); return 0;
-	}
-}
-
-//-------------------------------------------------------------------------
-
-int radTApplication::SetPhysUnits(const char* unitStr)
-{
-	try
-	{
-		if (unitStr == NULL || strlen(unitStr) == 0)
-		{
-			// No argument - just show current units
-			return SetAndShowPhysUnits();
-		}
-
-		// Parse unit string
-		// Radia v1.4.3+: Internal unit system is SI (meters), matching ELF
-		// m_lengthUnitScale converts user input to internal meters
-		if (strcmp(unitStr, "mm") == 0 || strcmp(unitStr, "millimeter") == 0 || strcmp(unitStr, "millimeters") == 0)
-		{
-			m_lengthUnitScale = 0.001;  // mm -> m: multiply by 0.001
-			m_lengthUnitName = "mm";
-		}
-		else if (strcmp(unitStr, "m") == 0 || strcmp(unitStr, "meter") == 0 || strcmp(unitStr, "meters") == 0)
-		{
-			m_lengthUnitScale = 1.0;  // m -> m: no conversion needed
-			m_lengthUnitName = "m";
-		}
-		else
-		{
-			Send.ErrorMessage("Radia::Error999: Unknown length unit. Supported units: 'mm', 'm'");
-			return 0;
-		}
-
-		// Show updated units
-		return SetAndShowPhysUnits();
-	}
-	catch(...)
-	{
-		Initialize(); return 0;
-	}
-}
+// FldUnits is deprecated. Radia always uses meters.
+// These functions are kept as no-ops for backward compatibility.
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -1555,8 +1462,8 @@ int radTApplication::DeleteAllElements(int DeletionMethNo)
 		m_cached_interact_key = 0;
 		m_cached_obj_key = 0;
 
-		// Clear FMM and element caches (stale after element deletion)
-		RadFieldUnified::ClearAllFMMCaches();
+		// Clear element caches (stale after element deletion)
+		RadFieldUnified::ClearAllCaches();
 
 		if(SendingIsRequired) Send.Int(0);
 		return 1;

@@ -195,7 +195,6 @@ E1 N1 N2 w=1e-3 h=1e-3
     print("Case 3: Coupled (mu_r=1000, mu_r_imag=0, no SIBC)")
 
     import radia as rad
-    rad.FldUnits('m')
 
     # Build magnetic objects manually (without mu_r_imag for comparison)
     rad.UtiDelAll()

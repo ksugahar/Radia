@@ -11,7 +11,7 @@ tests/
 ├── test_radia.py                    # Comprehensive test suite
 ├── test_advanced.py                 # Advanced features and edge cases
 ├── test_parallel_performance.py     # TaskManager parallelization tests
-├── test_radia_ngsolve.py              # NGSolve integration tests
+├── test_radia_ngsolve.py              # NGSolve integration tests (RadiaField is now in main radia module)
 ├── test_magpylib_comparison.py      # Comparison with magpylib library
 ├── conftest.py                      # pytest configuration
 ├── test_utils.py                    # Shared path utilities
@@ -81,11 +81,11 @@ python tests/test_parallel_performance.py
 ### NGSolve Integration Test
 
 ```bash
-# Test radia_ngsolve module (requires NGSolve)
+# Test RadiaField NGSolve integration (requires NGSolve)
 python tests/test_radia_ngsolve.py
 ```
 
-**Note:** This test requires NGSolve to be installed. If NGSolve is not available, the test will be skipped.
+**Note:** This test requires NGSolve to be installed. If NGSolve is not available, the test will be skipped. Since v2.5.0, `RadiaField` is integrated into the main `radia` module and accessed as `rad.RadiaField()`.
 
 **Expected output:**
 ```

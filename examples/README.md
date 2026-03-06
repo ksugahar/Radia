@@ -90,8 +90,8 @@ paraview arc_current_with_magnet.vts
 
 ### Unit Convention
 
-- **Radia**: millimeters (mm) — call `rad.FldUnits('m')` at script start
-- **NGSolve**: meters (m) — automatic conversion via `radia_ngsolve`
+- **Radia**: meters (m) — Radia always uses meters
+- **NGSolve**: meters (m) — automatic conversion via `rad.RadiaField()`
 
 ### VTS Export
 
@@ -123,7 +123,7 @@ rad.MatSatIsoTab([[0, 0], [100, 0.1], [1000, 1.2]])  # Nonlinear BH curve
 |-------|----------|
 | `ModuleNotFoundError: radia` | Build Radia: `powershell Build.ps1` |
 | `ImportError: DLL load failed` | Install Visual C++ 2022 Redistributable |
-| `ModuleNotFoundError: radia_ngsolve` | Build NGSolve integration: `powershell Build_NGSolve.ps1` |
+| `ModuleNotFoundError: radia` (RadiaField) | Build Radia: `powershell Build.ps1` (RadiaField is now part of the main radia module since v2.5.0) |
 
 ---
 

@@ -41,9 +41,8 @@ import radia as rad
 from radia import beam_tracking as bt
 import numpy as np
 
-# Create magnetic field source
-rad.FldUnits('mm')
-magnet = rad.ObjRecMag([0, 0, 0], [100, 10, 20], [0, 0, 1.0])
+# Create magnetic field source (coordinates in meters)
+magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.01, 0.02], [0, 0, 954930])
 
 # Compute trajectory (returns numpy array)
 trajectory = bt.particle_trajectory(

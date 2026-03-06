@@ -18,7 +18,6 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 import radia as rad
-rad.FldUnits('m')
 
 try:
     from peec_matrices import PEECBuilder

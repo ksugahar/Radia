@@ -29,7 +29,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import radia as rad
 import numpy as np
 
-rad.FldUnits('m')
 
 
 def demo_mesh_creation():

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "2.4.0"
+version = "2.5.0"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -31,18 +31,16 @@ dependencies = [
     "numpy>=1.20",
     "mkl>=2024.2.0",
     "intel-cmplr-lib-rt>=2024.2.0",
+    # NGSolve 6.2.2406~2.2501 had a regression bug in Periodic BC (Identify lost during mesh generation)
+    # See: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
+    # Fixed in 6.2.2601+. Verified: geominfo, Periodic BC, vol-to-gmsh all pass.
+    "ngsolve>=6.2.2601",
 ]
 
 [project.optional-dependencies]
 viz = [
     "pyvista>=0.40",
     "matplotlib>=3.5",
-]
-ngsolve = [
-    # NGSolve 6.2.2406~2.2501 had a regression bug in Periodic BC (Identify lost during mesh generation)
-    # See: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
-    # Fixed in 6.2.2601+. Verified: geominfo, Periodic BC, vol-to-gmsh all pass.
-    "ngsolve>=6.2.2601",
 ]
 test = [
     "pytest>=7.0",

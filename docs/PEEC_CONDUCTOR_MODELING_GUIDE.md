@@ -480,7 +480,7 @@ print(f"Z @ 50 kHz: {Z:.4e} Ohm")
    - Future: Automatic via nodesets? Named ports?
 
 4. **Units**:
-   - Current: SI meters (via `rad.FldUnits('m')`)
+   - Radia always uses meters (SI)
    - Keep consistent with Radia convention
 
 ---

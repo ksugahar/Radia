@@ -55,7 +55,6 @@ def verify_reciprocity_single_element():
 
     # Create conductor (loop)
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Create loop with 36 segments for accuracy
     n_segments = 36
@@ -97,7 +96,6 @@ def verify_reciprocity_single_element():
 
     # Set unit magnetization in z-direction
     rad.UtiDelAll()
-    rad.FldUnits('m')
     magnet = rad.ObjRecMag([0, 0, 0], core_size, [0, 0, 1.0])  # M = 1 A/m in z
 
     # Compute B field at loop center (as approximation for flux)
@@ -173,7 +171,6 @@ def verify_symmetrization_equivalence():
 
     # Solve using CplMag
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     coil = rad.CndLoop([0, 0, 0], loop_radius, [0, 0, 1], 'r',
                        2e-3, 2e-3, 5.8e7, 8, 36)
@@ -227,7 +224,6 @@ def verify_symmetrization_equivalence():
 
     # Compare with air core
     rad.UtiDelAll()
-    rad.FldUnits('m')
     coil_air = rad.CndLoop([0, 0, 0], loop_radius, [0, 0, 1], 'r',
                            2e-3, 2e-3, 5.8e7, 8, 36)
     rad.CndSetFrequency(coil_air, freq)

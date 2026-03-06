@@ -39,7 +39,6 @@ def demo_python_api():
 
     # --- Air-core case ---
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     builder = PEECBuilder()
     n1 = builder.add_node_at(0, 0, 0)
@@ -59,7 +58,6 @@ def demo_python_api():
 
     # --- With magnetic core ---
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Rebuild topology (Radia state was cleared)
     builder2 = PEECBuilder()
@@ -110,7 +108,6 @@ def demo_mu_r_sweep():
 
     for mu_r in mu_r_values:
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
         builder = PEECBuilder()
         n1 = builder.add_node_at(0, 0, 0)
@@ -173,7 +170,6 @@ def demo_distance_sweep():
 
     for d in distances:
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
         builder = PEECBuilder()
         n1 = builder.add_node_at(0, 0, 0)
@@ -301,7 +297,6 @@ def demo_gmsh_mesh():
 
     # --- Direct Python API with gmsh_mesh_import ---
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     from gmsh_mesh_import import gmsh_to_radia, get_mesh_info
 

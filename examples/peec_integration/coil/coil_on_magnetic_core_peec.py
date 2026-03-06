@@ -68,7 +68,6 @@ def run_peec_only_analysis():
     import radia as rad
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     print("=" * 60)
     print("PEEC Analysis: Coil WITHOUT Magnetic Core (Baseline)")
@@ -163,7 +162,6 @@ def run_cplmag_analysis():
     import radia as rad
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     print("\n" + "=" * 60)
     print("CplMag Analysis: Coil WITH Magnetic Core")

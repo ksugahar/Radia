@@ -360,7 +360,6 @@ def run_peec(freqs, include_shield=False, shield_center_z_mm=10.0,
     from scipy.special import iv
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Coil definition (matches demo)
     sigma_cu = 5.8e7
@@ -453,7 +452,6 @@ def run_peec_core():
     from fasthenry_parser import FastHenryParser
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     sigma_cu = 5.8e7
     coil_inp = generate_circular_coil_inp(
@@ -481,7 +479,6 @@ def run_peec_core():
     L_air = result_air['L'][0]
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # With core (.magnetic block)
     inp_core = f"""\

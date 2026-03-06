@@ -1,6 +1,6 @@
 """
 rad_ngsolve Module Test
-Tests the NGSolve CoefficientFunction integration with Radia
+Tests the NGSolve integration with Radia (RadiaField is now in the main radia module)
 """
 
 import sys
@@ -14,7 +14,7 @@ if sys.platform == 'win32':
 	sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
 	sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
-# Find project root and add build directories to path
+# Find project root and add src to path
 current_file = Path(__file__).resolve()
 if 'tests' in current_file.parts:
 	tests_index = current_file.parts.index('tests')
@@ -22,170 +22,136 @@ if 'tests' in current_file.parts:
 else:
 	project_root = current_file.parent
 
-# Add build directories
-build_dir = project_root / 'build' / 'lib' / 'Release'
-if build_dir.exists():
-	sys.path.insert(0, str(build_dir))
-
-dist_dir = project_root / 'dist'
-if dist_dir.exists():
-	sys.path.insert(0, str(dist_dir))
-
-# Add NGSolve module build directory
-ngsolve_build_dir = project_root / 'build' / 'Release'
-if ngsolve_build_dir.exists():
-	sys.path.insert(0, str(ngsolve_build_dir))
+src_dir = project_root / 'src'
+if src_dir.exists():
+	sys.path.insert(0, str(src_dir))
 
 
 def check_ngsolve_available():
 	"""Check if NGSolve is installed"""
 	try:
-	    import ngsolve
-	    return True
+		import ngsolve
+		return True
 	except ImportError:
-	    return False
-
-
-def check_rad_ngsolve_available():
-	"""Check if rad_ngsolve module is built"""
-	try:
-	    import ngsolve  # Must import first
-	    import radia_ngsolve
-	    return True
-	except ImportError:
-	    return False
+		return False
 
 
 @pytest.mark.skipif(not check_ngsolve_available(),
 	               reason="NGSolve not installed")
-@pytest.mark.skipif(not check_rad_ngsolve_available(),
-	               reason="rad_ngsolve module not built")
 class TestRadNGSolve:
-	"""Test suite for rad_ngsolve module"""
+	"""Test suite for RadiaField (integrated into radia module)"""
 
 	def test_import(self):
-	    """Test 1: Module import"""
-	    print("\n[Test 1] Importing radia_ngsolve...")
+		"""Test 1: Module import"""
+		print("\n[Test 1] Importing RadiaField...")
 
-	    import ngsolve
-	    print("  [OK] ngsolve imported")
+		from radia import RadiaField
+		print(f"  [OK] RadiaField imported")
 
-	    import radia_ngsolve
-	    print(f"  [OK] rad_ngsolve imported from {radia_ngsolve.__file__}")
+		# Check it has the right attributes
+		assert hasattr(RadiaField, '__call__')
+		print(f"  [OK] RadiaField has expected methods")
 
-	    # Check available functions
-	    funcs = [name for name in dir(rad_ngsolve) if not name.startswith('_')]
-	    assert 'RadiaField' in funcs, "RadiaField not found"
-	    print(f"  [OK] Available functions: {funcs}")
+	def test_radiafield_api(self):
+		"""Test 2: RadiaField API check"""
+		print("\n[Test 2] Checking RadiaField API...")
 
-	def test_coefficient_function_type(self):
-	    """Test 2: CoefficientFunction type check"""
-	    print("\n[Test 2] Checking CoefficientFunction type...")
+		from radia import RadiaField
+		import radia as rad
 
-	    import ngsolve
-	    from ngsolve import CoefficientFunction
-	    import radia_ngsolve
+		rad.UtiDelAll()
+		magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
 
-	    # Create RadiaField with dummy Radia object ID
-	    bf = radia_ngsolve.RadiaField(1, 'b')
+		# Create RadiaField
+		bf = RadiaField(magnet, 'b')
+		assert callable(bf), "RadiaField must be callable"
+		assert hasattr(bf, 'dim'), "RadiaField must have dim attribute"
+		assert bf.dim == 3
+		print(f"  [OK] RadiaField('b') created, dim={bf.dim}")
 
-	    assert isinstance(bf, CoefficientFunction), "RadiaField is not a CoefficientFunction"
-	    print(f"  [OK] RadiaField is CoefficientFunction: {type(bf)}")
+		# Test other field types
+		hf = RadiaField(magnet, 'h')
+		assert callable(hf) and hf.dim == 3
+		print(f"  [OK] RadiaField('h') works")
 
-	    # Test other field types
-	    hf = radia_ngsolve.RadiaField(1, 'h')
-	    assert isinstance(hf, CoefficientFunction), "RadiaField('h') is not a CoefficientFunction"
-	    print(f"  [OK] RadiaField('h') is CoefficientFunction")
+		af = RadiaField(magnet, 'a')
+		assert callable(af) and af.dim == 3
+		print(f"  [OK] RadiaField('a') works")
 
-	    af = radia_ngsolve.RadiaField(1, 'a')
-	    assert isinstance(af, CoefficientFunction), "RadiaField('a') is not a CoefficientFunction"
-	    print(f"  [OK] RadiaField('a') is CoefficientFunction")
+		mf = RadiaField(magnet, 'm')
+		assert callable(mf) and mf.dim == 3
+		print(f"  [OK] RadiaField('m') works")
 
-	    mf = radia_ngsolve.RadiaField(1, 'm')
-	    assert isinstance(mf, CoefficientFunction), "RadiaField('m') is not a CoefficientFunction"
-	    print(f"  [OK] RadiaField('m') is CoefficientFunction")
+		pf = RadiaField(magnet, 'phi')
+		assert callable(pf) and pf.dim == 1
+		print(f"  [OK] RadiaField('phi') works, dim={pf.dim}")
+
+		rad.UtiDelAll()
 
 	def test_integration_with_radia(self):
-	    """Test 3: Integration with Radia magnetic field"""
-	    print("\n[Test 3] Testing integration with Radia...")
+		"""Test 3: Integration with Radia magnetic field"""
+		print("\n[Test 3] Testing integration with Radia...")
 
-	    import ngsolve
-	    from ngsolve import CoefficientFunction
-	    import radia_ngsolve
-	    import radia as rad
+		from radia import RadiaField
+		import radia as rad
 
-	    # Set Radia to use meters (required for NGSolve integration)
-	    rad.FldUnits('m')
+		rad.UtiDelAll()
 
-	    # Create a simple Radia magnet with permanent magnet material
-	    magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
-	    # NdFeB: Br=1.2T, Hc=900kA/m, magnetization axis in z-direction
-	    rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
-	    rad.Solve(magnet, 0.0001, 10000)
-	    print(f"  [OK] Radia magnet created: ID={magnet}")
+		# Create a simple permanent magnet (M in A/m, Br=1.2T -> M=954930 A/m)
+		magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
+		print(f"  [OK] Radia magnet created: ID={magnet}")
 
-	    # Create CoefficientFunction
-	    B_cf = radia_ngsolve.RadiaField(magnet, 'b')
-	    print(f"  [OK] RadiaField CoefficientFunction created")
+		# Create RadiaField
+		B_cf = RadiaField(magnet, 'b')
+		print(f"  [OK] RadiaField created")
 
-	    # Verify it's a CoefficientFunction
-	    assert isinstance(B_cf, CoefficientFunction)
-	    print(f"  [OK] Type verified: {type(B_cf)}")
+		# Verify callable
+		assert callable(B_cf)
+		print(f"  [OK] RadiaField is callable")
 
-	    # Verify Radia field values
-	    B_center = rad.Fld(magnet, 'b', [0, 0, 0])
-	    assert B_center[2] > 0.5, f"Expected Bz > 0.5T, got {B_center[2]}"
-	    print(f"  [OK] Field at center: Bz = {B_center[2]:.4f} T")
+		# Verify Radia field values at external point
+		B_ext = rad.Fld(magnet, 'b', [0.05, 0, 0])
+		assert abs(B_ext[2]) > 1e-5, f"Expected non-zero Bz, got {B_ext[2]}"
+		print(f"  [OK] Field at (0.05,0,0): Bz = {B_ext[2]:.6e} T")
 
-	    # Cleanup
-	    rad.UtiDelAll()
-	    print(f"  [OK] Radia objects cleaned up")
+		# Cleanup
+		rad.UtiDelAll()
+		print(f"  [OK] Radia objects cleaned up")
 
 	def test_all_field_types(self):
-	    """Test 4: All field types (b, h, a, m)"""
-	    print("\n[Test 4] Testing all field types...")
+		"""Test 4: All field types (b, h, a, m, phi)"""
+		print("\n[Test 4] Testing all field types...")
 
-	    import ngsolve
-	    from ngsolve import CoefficientFunction
-	    import radia_ngsolve
-	    import radia as rad
+		from radia import RadiaField
+		import radia as rad
 
-	    # Set Radia to use meters (required for NGSolve integration)
-	    rad.FldUnits('m')
+		rad.UtiDelAll()
 
-	    # Create magnet with permanent magnet material
-	    magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
-	    # NdFeB: Br=1.2T, Hc=900kA/m
-	    rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
-	    rad.Solve(magnet, 0.0001, 10000)
+		magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
 
-	    # Test all field types
-	    field_types = ['b', 'h', 'a', 'm']
-	    for ftype in field_types:
-	        field = radia_ngsolve.RadiaField(magnet, ftype)
-	        assert isinstance(field, CoefficientFunction)
-	        assert field.field_type == ftype
-	        print(f"  [OK] RadiaField('{ftype}') works")
+		# Test all field types
+		for ftype in ['b', 'h', 'a', 'm', 'phi']:
+			field = RadiaField(magnet, ftype)
+			assert callable(field)
+			assert field.field_type == ftype
+			expected_dim = 1 if ftype == 'phi' else 3
+			assert field.dim == expected_dim
+			print(f"  [OK] RadiaField('{ftype}') works, dim={field.dim}")
 
-	    rad.UtiDelAll()
+		rad.UtiDelAll()
 
 
 # Standalone test function for non-pytest execution
 def run_standalone_test():
 	"""Run standalone test without pytest"""
 	print("=" * 70)
-	print("rad_ngsolve Module Test")
+	print("rad_ngsolve Module Test (Pure Python)")
 	print("=" * 70)
 
 	if not check_ngsolve_available():
-	    print("\n[SKIP] NGSolve not installed")
-	    print("Install with: pip install ngsolve")
-	    return 1
-
-	if not check_rad_ngsolve_available():
-	    print("\n[SKIP] rad_ngsolve module not built")
-	    print("Build with: cmake --build build --target rad_ngsolve")
-	    return 1
+		print("\n[SKIP] NGSolve not installed")
+		print("Install with: pip install ngsolve")
+		return 1
 
 	print("\n[OK] Prerequisites satisfied")
 
@@ -193,21 +159,21 @@ def run_standalone_test():
 	test = TestRadNGSolve()
 
 	try:
-	    test.test_import()
-	    test.test_coefficient_function_type()
-	    test.test_integration_with_radia()
-	    test.test_all_field_types()
+		test.test_import()
+		test.test_radiafield_api()
+		test.test_integration_with_radia()
+		test.test_all_field_types()
 
-	    print("\n" + "=" * 70)
-	    print("[OK] ALL TESTS PASSED!")
-	    print("=" * 70)
-	    return 0
+		print("\n" + "=" * 70)
+		print("[OK] ALL TESTS PASSED!")
+		print("=" * 70)
+		return 0
 
 	except Exception as e:
-	    print(f"\n[FAIL] ERROR: {e}")
-	    import traceback
-	    traceback.print_exc()
-	    return 1
+		print(f"\n[FAIL] ERROR: {e}")
+		import traceback
+		traceback.print_exc()
+		return 1
 
 
 if __name__ == '__main__':

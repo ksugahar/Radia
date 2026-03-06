@@ -1,11 +1,11 @@
 """Coordinate transformation example for NGSolve integration.
 
 This example demonstrates how to use the coordinate transformation
-parameters (origin, u_axis, v_axis, w_axis) in radia_ngsolve.RadiaField.
+parameters (origin, u_axis, v_axis, w_axis) in rad.RadiaField.
 
 Requirements:
     - NGSolve installed
-    - radia_ngsolve module built and available
+    - radia v2.5.0+ (RadiaField integrated into main module)
 """
 
 import sys
@@ -20,7 +20,6 @@ import radia as rad
 
 
 # Set units to meters for NGSolve compatibility
-rad.FldUnits('m')
 
 print("="*70)
 print("NGSolve Integration Demo: Coordinate Transformation")
@@ -54,97 +53,91 @@ B_global = rad.Fld(magnet, 'b', test_point_global)
 print(f"\nField at {test_point_global} (global coords):")
 print(f"  B = [{B_global[0]:.6f}, {B_global[1]:.6f}, {B_global[2]:.6f}] T")
 
-# Try to import radia_ngsolve
+# Use rad.RadiaField (integrated since v2.5.0)
+print("\nrad.RadiaField available")
+
+# Example 1: Translation only (shifted origin)
+print("\n--- Example 1: Translation (origin shift) ---")
+B_cf_shifted = rad.RadiaField(
+    magnet, 'b',
+    origin=[0.1, 0, 0],  # Origin shifted to (0.1, 0, 0)
+    units='m'
+)
+print("  Created RadiaField with origin=[0.1, 0, 0]")
+print("  Point (0, 0, 0) in local coords -> (0.1, 0, 0) in global coords")
+
+# Example 2: 90-degree rotation (local z-axis aligned with global x-axis)
+print("\n--- Example 2: 90-degree rotation ---")
+B_cf_rotated = rad.RadiaField(
+    magnet, 'b',
+    origin=[0, 0, 0],
+    u_axis=[0, 1, 0],   # local x -> global y
+    v_axis=[0, 0, 1],   # local y -> global z
+    w_axis=[1, 0, 0],   # local z -> global x
+    units='m'
+)
+print("  Created RadiaField with 90-degree rotation:")
+print("    u_axis (local x) -> global y")
+print("    v_axis (local y) -> global z")
+print("    w_axis (local z) -> global x")
+
+# Example 3: Combined translation and rotation
+print("\n--- Example 3: Translation + Rotation ---")
+B_cf_combined = rad.RadiaField(
+    magnet, 'b',
+    origin=[0.2, 0.1, 0],  # Origin at (0.2, 0.1, 0)
+    u_axis=[1, 0, 0],      # Keep local x aligned with global x
+    v_axis=[0, 0, 1],      # local y -> global z
+    w_axis=[0, -1, 0],     # local z -> -global y
+    units='m'
+)
+print("  Created RadiaField with origin=[0.2, 0.1, 0] and rotation")
+
+# Practical example: Evaluate field in cylindrical-like coordinates
+print("\n--- Practical Example: Multiple observation points ---")
+print("  Evaluating field at points along a circle around the magnet:")
+
+radius = 0.08  # 80mm radius
+n_points = 8
+for i in range(n_points):
+    theta = 2 * np.pi * i / n_points
+    x = radius * np.cos(theta)
+    y = radius * np.sin(theta)
+    z = 0.0
+
+    B = rad.Fld(magnet, 'b', [x, y, z])
+    B_mag = np.sqrt(B[0]**2 + B[1]**2 + B[2]**2)
+    print(f"    theta={np.degrees(theta):5.1f} deg: |B|={B_mag*1000:.3f} mT")
+
+# Try NGSolve mesh-based evaluation
 try:
-    import radia_ngsolve
-    print("\nradia_ngsolve module loaded successfully")
+    from ngsolve import *
+    from netgen.csg import unit_cube
 
-    # Example 1: Translation only (shifted origin)
-    print("\n--- Example 1: Translation (origin shift) ---")
-    B_cf_shifted = radia_ngsolve.RadiaField(
-        magnet, 'b',
-        origin=[0.1, 0, 0],  # Origin shifted to (0.1, 0, 0)
-        units='m'
+    print("\n--- NGSolve Mesh Evaluation ---")
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
+
+    # Evaluate at mesh center with different transformations
+    mip = mesh(0.5, 0.5, 0.5)
+
+    # Global (no transform)
+    B_cf_global = rad.RadiaField(magnet, 'b', units='m')
+    B1 = B_cf_global(mip)
+    print(f"  B at (0.5, 0.5, 0.5) - no transform: {B1}")
+
+    # With origin shift
+    B_cf_shifted = rad.RadiaField(
+        magnet, 'b', origin=[-0.5, -0.5, -0.5], units='m'
     )
-    print("  Created RadiaField with origin=[0.1, 0, 0]")
-    print("  Point (0, 0, 0) in local coords -> (0.1, 0, 0) in global coords")
+    B2 = B_cf_shifted(mip)
+    print(f"  B at (0.5, 0.5, 0.5) - origin=[-0.5,-0.5,-0.5]: {B2}")
+    print("    (Equivalent to evaluating at (0, 0, 0) in magnet frame)")
 
-    # Example 2: 90-degree rotation (local z-axis aligned with global x-axis)
-    print("\n--- Example 2: 90-degree rotation ---")
-    B_cf_rotated = radia_ngsolve.RadiaField(
-        magnet, 'b',
-        origin=[0, 0, 0],
-        u_axis=[0, 1, 0],   # local x -> global y
-        v_axis=[0, 0, 1],   # local y -> global z
-        w_axis=[1, 0, 0],   # local z -> global x
-        units='m'
-    )
-    print("  Created RadiaField with 90-degree rotation:")
-    print("    u_axis (local x) -> global y")
-    print("    v_axis (local y) -> global z")
-    print("    w_axis (local z) -> global x")
-
-    # Example 3: Combined translation and rotation
-    print("\n--- Example 3: Translation + Rotation ---")
-    B_cf_combined = radia_ngsolve.RadiaField(
-        magnet, 'b',
-        origin=[0.2, 0.1, 0],  # Origin at (0.2, 0.1, 0)
-        u_axis=[1, 0, 0],      # Keep local x aligned with global x
-        v_axis=[0, 0, 1],      # local y -> global z
-        w_axis=[0, -1, 0],     # local z -> -global y
-        units='m'
-    )
-    print("  Created RadiaField with origin=[0.2, 0.1, 0] and rotation")
-
-    # Practical example: Evaluate field in cylindrical-like coordinates
-    print("\n--- Practical Example: Multiple observation points ---")
-    print("  Evaluating field at points along a circle around the magnet:")
-
-    radius = 0.08  # 80mm radius
-    n_points = 8
-    for i in range(n_points):
-        theta = 2 * np.pi * i / n_points
-        x = radius * np.cos(theta)
-        y = radius * np.sin(theta)
-        z = 0.0
-
-        B = rad.Fld(magnet, 'b', [x, y, z])
-        B_mag = np.sqrt(B[0]**2 + B[1]**2 + B[2]**2)
-        print(f"    theta={np.degrees(theta):5.1f} deg: |B|={B_mag*1000:.3f} mT")
-
-    # Try NGSolve mesh-based evaluation
-    try:
-        from ngsolve import *
-        from netgen.csg import unit_cube
-
-        print("\n--- NGSolve Mesh Evaluation ---")
-        mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
-
-        # Evaluate at mesh center with different transformations
-        mip = mesh(0.5, 0.5, 0.5)
-
-        # Global (no transform)
-        B_cf_global = radia_ngsolve.RadiaField(magnet, 'b', units='m')
-        B1 = B_cf_global(mip)
-        print(f"  B at (0.5, 0.5, 0.5) - no transform: {B1}")
-
-        # With origin shift
-        B_cf_shifted = radia_ngsolve.RadiaField(
-            magnet, 'b', origin=[-0.5, -0.5, -0.5], units='m'
-        )
-        B2 = B_cf_shifted(mip)
-        print(f"  B at (0.5, 0.5, 0.5) - origin=[-0.5,-0.5,-0.5]: {B2}")
-        print("    (Equivalent to evaluating at (0, 0, 0) in magnet frame)")
-
-        print("\nNGSolve coordinate transformation test PASSED")
-
-    except ImportError as e:
-        print(f"\nNGSolve not available: {e}")
-        print("Skipping mesh-based tests")
+    print("\nNGSolve coordinate transformation test PASSED")
 
 except ImportError as e:
-    print(f"\nradia_ngsolve not available: {e}")
-    print("Build radia_ngsolve module first using Build_NGSolve.ps1")
+    print(f"\nNGSolve not available: {e}")
+    print("Skipping mesh-based tests")
 
 print("\n" + "="*70)
 print("Coordinate transformation demo complete")

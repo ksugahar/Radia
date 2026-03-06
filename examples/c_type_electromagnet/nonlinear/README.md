@@ -75,7 +75,7 @@ Using a quarter coil with IMA double-counts the symmetry reduction, leading to i
 import radia as rad
 import numpy as np
 
-rad.FldUnits('m')
+# Radia always uses meters
 
 # Create full model geometry (52 elements)
 yoke = rad.ObjCnt(hex_elements)

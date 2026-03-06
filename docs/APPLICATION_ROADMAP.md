@@ -272,7 +272,7 @@ SPICE netlist / Verilog-A
 
 ```python
 # Example: Analytical cylinder field as NGSolve CoefficientFunction
-from radia_ngsolve import AnalyticalCylinderField
+from radia import AnalyticalCylinderField
 
 # Create magnetized cylinder source (analytical)
 cyl_field = AnalyticalCylinderField(

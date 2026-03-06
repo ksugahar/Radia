@@ -7,8 +7,7 @@ magnetic fields at many observation points. This is significantly faster
 than calling rad.Fld() in a loop because:
 
 1. Single Python->C++ call overhead instead of N calls
-2. OpenMP parallelization across evaluation points
-3. Future: FMM (Fast Multipole Method) acceleration for large point counts
+2. TaskManager parallelization across evaluation points
 
 Use Case:
 - Netgen/NGSolve tetrahedral mesh -> Radia solve -> air field distribution
@@ -43,7 +42,6 @@ def create_magnetized_cube(size=0.1, n_div=3, magnetization=[0, 0, 1e6]):
         container: Radia container object with n_div^3 hexahedral elements
     """
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     half = size / 2
     step = size / n_div
@@ -129,7 +127,7 @@ def main():
     # Method 1: FldBatch (recommended for many points)
     print(f"\n3. Computing field with FldBatch...")
     t0 = time.time()
-    result = rad.FldBatch(container, points, 0)  # method=0 (direct)
+    result = rad.FldBatch(container, points)
     t_batch = time.time() - t0
 
     B_batch = np.array(result['B'])

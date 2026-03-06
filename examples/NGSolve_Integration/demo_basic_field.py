@@ -1,11 +1,11 @@
 """Basic NGSolve integration example with Radia.
 
-This example demonstrates how to use radia_ngsolve.RadiaField
+This example demonstrates how to use rad.RadiaField
 to create an NGSolve CoefficientFunction from a Radia magnet.
 
 Requirements:
     - NGSolve installed
-    - radia_ngsolve module built and available
+    - radia v2.5.0+ (RadiaField integrated into main module)
 """
 
 import sys
@@ -20,7 +20,6 @@ import radia as rad
 
 
 # Set units to meters for NGSolve compatibility
-rad.FldUnits('m')
 
 print("="*70)
 print("NGSolve Integration Demo: Basic Field Evaluation")
@@ -57,45 +56,39 @@ B_direct = rad.Fld(magnet, 'b', test_point)
 print(f"\nField at {test_point} (rad.Fld):")
 print(f"  B = [{B_direct[0]:.6f}, {B_direct[1]:.6f}, {B_direct[2]:.6f}] T")
 
-# Try to import radia_ngsolve
+# Use rad.RadiaField (integrated since v2.5.0)
+print("\nCreating RadiaField CoefficientFunction...")
+
+# Create CoefficientFunction
+B_cf = rad.RadiaField(magnet, 'b', units='m')
+print(f"  RadiaField created with units='m'")
+
+# Import NGSolve for mesh creation
 try:
-    import radia_ngsolve
-    print("\nradia_ngsolve module loaded successfully")
+    from ngsolve import *
+    from netgen.csg import unit_cube
 
-    # Create CoefficientFunction
-    B_cf = radia_ngsolve.RadiaField(magnet, 'b', units='m')
-    print(f"  RadiaField created with units='m'")
+    # Create a simple mesh for testing
+    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
 
-    # Import NGSolve for mesh creation
-    try:
-        from ngsolve import *
-        from netgen.csg import unit_cube
+    # Evaluate field on mesh
+    print("\nEvaluating field on NGSolve mesh...")
 
-        # Create a simple mesh for testing
-        mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
+    # Integrate field magnitude over mesh
+    B_mag = sqrt(B_cf[0]**2 + B_cf[1]**2 + B_cf[2]**2)
+    integral = Integrate(B_mag, mesh)
+    print(f"  Integral of |B| over unit cube: {integral:.6f} T*m^3")
 
-        # Evaluate field on mesh
-        print("\nEvaluating field on NGSolve mesh...")
+    # Evaluate at mesh center
+    mip = mesh(0.5, 0.5, 0.5)
+    B_at_center = B_cf(mip)
+    print(f"  B at mesh center (0.5, 0.5, 0.5): {B_at_center}")
 
-        # Integrate field magnitude over mesh
-        B_mag = sqrt(B_cf[0]**2 + B_cf[1]**2 + B_cf[2]**2)
-        integral = Integrate(B_mag, mesh)
-        print(f"  Integral of |B| over unit cube: {integral:.6f} T*m^3")
-
-        # Evaluate at mesh center
-        mip = mesh(0.5, 0.5, 0.5)
-        B_at_center = B_cf(mip)
-        print(f"  B at mesh center (0.5, 0.5, 0.5): {B_at_center}")
-
-        print("\nNGSolve integration test PASSED")
-
-    except ImportError as e:
-        print(f"\nNGSolve not available: {e}")
-        print("Skipping mesh-based tests")
+    print("\nNGSolve integration test PASSED")
 
 except ImportError as e:
-    print(f"\nradia_ngsolve not available: {e}")
-    print("Build radia_ngsolve module first using Build_NGSolve.ps1")
+    print(f"\nNGSolve not available: {e}")
+    print("Skipping mesh-based tests")
 
 print("\n" + "="*70)
 print("Demo complete")

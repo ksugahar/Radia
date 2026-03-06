@@ -200,7 +200,6 @@ def get_coil_field_at_origin(coil):
 if __name__ == "__main__":
     # Test the coil model
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     print("=" * 60)
     print("Racetrack Coil Model Test")

@@ -139,7 +139,6 @@ def run_benchmark(nodes, hex_elements, bh_data, solver_method, solver_name,
         True for quarter model with image='+x-z'
     """
     rad.UtiDelAll()
-    rad.FldUnits('m')
     mat = rad.MatSatIsoTab(bh_data)
     all_objects = []
     for elem_id, node_ids in hex_elements:

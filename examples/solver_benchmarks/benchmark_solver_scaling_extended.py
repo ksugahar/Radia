@@ -23,7 +23,6 @@ import time
 import tracemalloc
 
 # Set unit system to meters
-rad.FldUnits('m')
 mm = 1e-3  # 1 mm in meters
 
 

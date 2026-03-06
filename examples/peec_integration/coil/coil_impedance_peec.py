@@ -571,7 +571,6 @@ def export_radia_coil_vts(loop_radius, current=1.0):
     print("Exporting B field using Radia FldVTS")
     print("="*60)
 
-    rad.FldUnits('m')
 
     # Create circular coil using multiple arc segments
     # ObjArcCur(center, radii, phi_range, nseg, current, 'man'|'auto')
@@ -659,7 +658,6 @@ def run_peec_solver_analysis():
     print("PEEC Solver Coil Impedance Analysis (C++ Solver)")
     print("="*60)
 
-    rad.FldUnits('m')
 
     # Coil parameters
     loop_radius = 0.05      # 50 mm

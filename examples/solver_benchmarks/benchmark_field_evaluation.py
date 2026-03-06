@@ -25,7 +25,6 @@ except ImportError as e:
 	sys.exit(1)
 
 # Set unit system to meters
-rad.FldUnits('m')
 mm = 1e-3  # 1 mm in meters
 
 try:
@@ -226,7 +225,7 @@ def main():
 	print("\n" + "="*80)
 	print("NGSOLVE INTEGRATION")
 	print("="*80)
-	print("\nWhen using radia_ngsolve.RadiaField() with GridFunction.Set():")
+	print("\nWhen using rad.RadiaField() with GridFunction.Set():")
 	print()
 	print("  - NGSolve calls Evaluate() with 4-7 points per element")
 	print("  - Our implementation uses batch evaluation internally")
@@ -252,7 +251,7 @@ def main():
 	print("\nrad.Fld() batch evaluation provides:")
 	print("  [1] 6x speedup for 1000+ points")
 	print("  [2] Identical results to single-point evaluation")
-	print("  [3] Implemented in radia_ngsolve.cpp for NGSolve integration")
+	print("  [3] Implemented in C++ for NGSolve integration")
 	print()
 	print("Key insight:")
 	print("  - rad.Fld() does NOT use H-matrix (direct summation)")

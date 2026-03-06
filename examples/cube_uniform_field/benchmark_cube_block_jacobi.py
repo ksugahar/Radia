@@ -48,7 +48,6 @@ def generate_hex_mesh(n_div, size=1.0):
 
 def run_cube_benchmark(n_div, solver_method, solver_name, use_newton=False, max_iter=100):
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Create mesh
     t0 = time.time()

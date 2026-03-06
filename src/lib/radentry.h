@@ -626,6 +626,18 @@ EXP int CALL RadMatSatIsoFrm(int* mat, double* KsiMs1, double* KsiMs2, double* K
 */
 EXP int CALL RadMatSatIsoTab(int* mat, double* MatData, int np);
 
+/** Creates an energy-based vector hysteresis material (Egger formulation).
+K play operators with analytical U_k energy.
+@param mat [out] reference number of the material created
+@param K [in] number of partial polarizations (play operators)
+@param As [in] array of K saturation slope parameters A_{s,k} in A/m
+@param Js [in] array of K saturation polarizations J_{s,k} in Tesla
+@param chi [in] array of K pinning strengths chi_k in A/m
+@param eps [in] regularization parameter for smoothed norm (default 1e-8)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadMatEnergyHysteresis(int* mat, int K, double* As, double* Js, double* chi, double eps);
+
 /** Creates a fixed magnetization permanent magnet material (no demagnetization).
 The magnetization is constant and does not change during Solve.
 @param mat [out] reference number of the material created
@@ -1224,7 +1236,7 @@ EXP int CALL RadClassifyPoints(int* classification, int* nearest_elem, int n_poi
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 */
 EXP int CALL RadFldBatch(double* B_out, double* H_out, int n_points,
-                         double* points, int container_handle, int method);
+                         double* points, int container_handle);
 
 /** Computes magnetic scalar potential at multiple points.
 @param phi_out [out] scalar potential values (n_points)

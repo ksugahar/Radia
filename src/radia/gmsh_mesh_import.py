@@ -17,7 +17,7 @@ Usage:
     import radia as rad
     from gmsh_mesh_import import gmsh_to_radia
 
-    rad.FldUnits('m')
+    # Radia always uses meters
     core = gmsh_to_radia('ferrite_core.msh', mu_r=1000)
     rad.Solve(core, 0.0001, 1000, 0)
 

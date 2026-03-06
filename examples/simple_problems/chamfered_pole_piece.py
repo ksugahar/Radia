@@ -24,7 +24,6 @@ import radia as rad
 
 # Clear all objects
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 print("=" * 70)
 print("Case 2: Chamfered Pole Piece using Multiple Extrusion")

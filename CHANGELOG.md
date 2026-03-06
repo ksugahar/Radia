@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### 2026-03-06
+- **FldUnits deprecated**: Removed all unit conversion from C++ code. Radia always uses meters. `rad.FldUnits('m')` is a silent noop; other unit strings issue DeprecationWarning and are ignored. Removed `m_lengthUnitScale`, `GetLengthUnitScale()`, `SetPhysUnits()` from C++.
+- **ExaFMM removed**: Deleted ExaFMM source (`src/core/exafmm/`), FMM wrapper (`rad_exafmm.h/cpp`), dipole collector (`rad_dipole_collect.h/cpp`), FMM solver (`rad_fmm_solver.h/cpp`), and fmm3d (`src/ext/fmm3d/`). Dipole approximation accuracy was insufficient for practical use. HACApK (Method 2) covers all large-scale acceleration needs.
+- **FldBatch API simplified**: Removed `method` parameter (was 0=direct, 1=FMM). Now always uses direct computation with TaskManager parallelization.
+- **RadiaFieldCF integrated into `_radia_pybind.pyd`**: NGSolve CoefficientFunction (`RadiaField`) now part of the main module. Supports B, H, A, phi, and VoxelCoefficient. Separate `radia_ngsolve.pyd` no longer needed.
+- **Phi/A field support in RadiaFieldCF**: Scalar potential (`phi`) and vector potential (`A`) correctly handled as dim=1 and dim=3 CoefficientFunctions respectively.
+- **TaskManager parallelization**: `ComputeScalarPotentialBatch` and `ComputeVectorPotentialBatch` now use `ngcore::ParallelFor`.
+- **Version 2.5.0**: NGSolve is now a required dependency.
+
 ### 2026-03-01
 - **Parallelization: OpenMP -> NGSolve TaskManager**
   - Migrated all parallel loops from OpenMP to NGSolve TaskManager

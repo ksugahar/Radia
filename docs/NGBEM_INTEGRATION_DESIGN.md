@@ -1157,7 +1157,7 @@ The PEEC+BEM results are validated by independent NGSolve FEM computation:
 
 ```bash
 # NGSolve (base)
-pip install ngsolve==6.2.2405
+pip install ngsolve>=6.2.2601
 
 # NGBEM add-on
 pip install ngbem

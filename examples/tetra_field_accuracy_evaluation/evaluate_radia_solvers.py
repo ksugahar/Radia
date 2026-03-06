@@ -122,7 +122,6 @@ def create_hexa_solution(test_points):
     Create hexahedral mesh manually and solve with Radia.
     """
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     print()
     print('Creating hexahedral mesh (n_div=%d)...' % HEXA_NDIV)
@@ -203,7 +202,6 @@ def create_tetra_solution(test_points):
         return None
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     print()
     print('Creating tetrahedral mesh (maxh=%.2f)...' % TETRA_MAXH)

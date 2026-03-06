@@ -44,7 +44,6 @@ except ImportError:
 def compute_static_coupling():
     """Compute static Delta_L using Radia MMM."""
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Wire: 100 mm along x, 1x1 mm cross-section
     inp = """\

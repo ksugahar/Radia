@@ -24,7 +24,6 @@ from ngsolve import *
 from netgen.csg import CSGeometry, OrthoBrick, Pnt
 import numpy as np
 import radia as rad
-import radia_ngsolve
 import argparse
 
 
@@ -44,7 +43,6 @@ print(f"Mesh size: {args.maxh} m ({args.maxh*1000} mm)")
 print()
 
 # Set Radia to use meters (required for NGSolve integration)
-rad.FldUnits('m')
 
 # ============================================================================
 # Step 1: Create Radia Magnet Geometry
@@ -86,7 +84,7 @@ print(f"  Material: NdFeB, Br = 1.2 T")
 print("\n[Step 2] Creating NGSolve Coefficient Function")
 print("-" * 70)
 
-B_cf = radia_ngsolve.RadiaField(magnet, 'b')
+B_cf = rad.RadiaField(magnet, 'b')
 print(f"B-field CoefficientFunction created: {type(B_cf).__name__}")
 
 # Test evaluation using Radia directly

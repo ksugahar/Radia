@@ -31,8 +31,7 @@ Usage:
     builder.add_port(n1, n2)
     topo = builder.build_topology()
 
-    # Create magnetic object
-    rad.FldUnits('m')
+    # Create magnetic object (coordinates in meters)
     verts = [[-0.02,-0.02,-0.02],[0.02,-0.02,-0.02],[0.02,0.02,-0.02],[-0.02,0.02,-0.02],
              [-0.02,-0.02,0.02],[0.02,-0.02,0.02],[0.02,0.02,0.02],[-0.02,0.02,0.02]]
     core = rad.ObjHexahedron(verts, [0, 0, 0])
@@ -227,8 +226,7 @@ class CoupledPEECSolver(PEECCircuitSolver):
             import sys
             import os
             sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
-            from _radia_pybind import (ObjBckg, ObjCnt, Solve, Fld, UtiDel,
-                                       FldUnits)
+            from _radia_pybind import (ObjBckg, ObjCnt, Solve, Fld, UtiDel)
         except ImportError:
             import radia as rad
             ObjBckg = rad.ObjBckg

@@ -2,27 +2,27 @@
 
 ## 動作環境 / Requirements
 
-現時点では、以下のバージョンのNGSolveでのみ動作確認済みです：
+以下のバージョンのNGSolveを使用してください：
 
-**NGSolve 6.2.2405**
+**NGSolve 6.2.2601 以降**
 
 ```bash
-pip install ngsolve==6.2.2405
+pip install ngsolve>=6.2.2601
 ```
 
-新しいバージョンでは互換性の問題が発生する可能性があります。
+注意: バージョン 6.2.2406~6.2.2501 には周期境界条件の後退バグがありましたが、6.2.2601 で修正されています。
 
 ---
 
-Currently, the following version of NGSolve is confirmed to work:
+Use the following version of NGSolve:
 
-**NGSolve 6.2.2405**
+**NGSolve 6.2.2601 or later**
 
 ```bash
-pip install ngsolve==6.2.2405
+pip install ngsolve>=6.2.2601
 ```
 
-Compatibility issues may occur with newer versions.
+Note: Versions 6.2.2406~6.2.2501 had a Periodic BC regression bug, which is fixed in 6.2.2601+.
 
 ## コーディングスタイル / Coding Style
 

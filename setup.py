@@ -3,11 +3,12 @@
 Setup script for Radia-NGSolve package
 
 This setup.py is used for building binary distributions (wheels) that include
-the pre-compiled C++ extension modules (_radia_pybind.pyd, radia_ngsolve.pyd).
+the pre-compiled C++ extension module (_radia_pybind.pyd).
+radia_ngsolve is now pure Python (no C++ build needed).
 
 For development builds, use the CMake build scripts:
 - Build.ps1 for _radia_pybind.pyd (main module)
-- Build.ps1 for radia_ngsolve.pyd (NGSolve integration)
+- radia_ngsolve.py is pure Python (no build needed)
 
 Module naming: The C++ extension is named '_radia_pybind' (with underscore) so that
 'import radia' uses the Python package with __init__.py, which then imports
@@ -24,7 +25,7 @@ import sys
 
 # Version is read from pyproject.toml by setuptools
 # This fallback is only used if pyproject.toml is not available
-version = "2.4.0"
+version = "2.5.0"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -63,13 +64,7 @@ def prepare_package_data():
 	if not radia_pyd_found:
 		print(f"Warning: _radia_pybind.pyd not found. Run Build.ps1 first.")
 
-	# Copy radia_ngsolve.pyd
-	radia_ngsolve_pyd = build_dir / "radia_ngsolve.pyd"
-	if radia_ngsolve_pyd.exists():
-		shutil.copy2(radia_ngsolve_pyd, package_dir / "radia_ngsolve.pyd")
-		print(f"Copied {radia_ngsolve_pyd} to {package_dir}")
-	else:
-		print(f"Info: radia_ngsolve.pyd not found. This is optional.")
+	# radia_ngsolve is now pure Python (radia_ngsolve.py), no .pyd needed
 
 	return package_dir
 
@@ -81,7 +76,7 @@ if "sdist" not in sys.argv:
 setup(
 	name="radia",
 	version=version,
-	description="Radia 3D Magnetostatics with NGSolve Integration and OpenMP Parallelization",
+	description="Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization",
 	long_description=long_description,
 	long_description_content_type="text/markdown",
 	author="Oleg Chubar, Pascal Elleaume",
@@ -122,6 +117,7 @@ setup(
 		"numpy>=1.20",
 		"mkl>=2024.2.0",
 		"intel-cmplr-lib-rt>=2024.2.0",
+		"ngsolve>=6.2.2601",
 	],
 	extras_require={
 		"viz": [

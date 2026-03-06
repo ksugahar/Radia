@@ -212,6 +212,13 @@ protected:
 	 * @return Number of linear iterations (0 for direct solvers like LU)
 	 */
 	virtual int SolveLinearStep(NonlinearContext& ctx, int iterCount) { return 0; }
+
+	/**
+	 * Whether this solver requires the dense base matrix (ctx.BaseMatrix).
+	 * LU and BiCGSTAB need it.
+	 * Override to return false for matrix-free solvers.
+	 */
+	virtual bool NeedsDenseMatrix() const { return true; }
 };
 
 //-------------------------------------------------------------------------

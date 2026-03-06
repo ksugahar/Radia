@@ -48,7 +48,7 @@ Radia's `ObjBckg` function allows you to define arbitrary background magnetic fi
 import radia as rd
 import numpy as np
 
-rd.FldUnits('m')  # Use meters for positions
+# Radia always uses meters
 
 # Define background field function
 def quadrupole_field(pos):
@@ -56,7 +56,7 @@ def quadrupole_field(pos):
 	Quadrupole field: B = g*(y*ex + x*ey)
 
 	Args:
-		pos: [x, y, z] in the units set by FldUnits (meters here)
+		pos: [x, y, z] in meters (Radia always uses meters)
 
 	Returns:
 		[Bx, By, Bz] in Tesla
@@ -100,8 +100,7 @@ B_total = rd.Fld(system, 'b', [20*mm, 0, 0])
 def my_field(pos):
 	"""
 	Args:
-		pos: [x, y, z] in the units set by rd.FldUnits()
-		     (meters if FldUnits('m'), millimeters if default)
+		pos: [x, y, z] in meters (Radia always uses meters)
 
 	Returns:
 		[Bx, By, Bz] in Tesla
@@ -114,7 +113,7 @@ def my_field(pos):
 ### Important Notes
 
 1. **Units**:
-   - Input position units match the `rd.FldUnits()` setting (default: millimeters, or meters if `FldUnits('m')`)
+   - Input position units are always in meters (Radia always uses meters)
    - Output: **Magnetic flux density B in Tesla**
    - Internal conversion: Radia automatically converts B→H using H = B/μ₀
 
@@ -134,7 +133,7 @@ def my_field(pos):
 
 ## Common Background Field Types
 
-All examples below assume `rd.FldUnits('m')` (positions in meters).
+All examples below use positions in meters (Radia always uses meters).
 
 ### Uniform Field
 
@@ -189,7 +188,7 @@ def sextupole_field(pos):
 |---------|-------------------------------|---------------------|
 | Direction | Python → Radia | Radia → NGSolve |
 | Use Case | Add external fields to Radia | Use Radia fields in NGSolve FEM |
-| Function | `rd.ObjBckg()` | `radia_ngsolve.RadiaField()` |
+| Function | `rd.ObjBckg()` | `rad.RadiaField()` |
 | Input | Python callback | Radia object |
 | Output | Radia field source | NGSolve CoefficientFunction |
 | Location | `examples/background_fields/` | `examples/ngsolve_integration/` |

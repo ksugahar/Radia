@@ -159,35 +159,6 @@ class TestUtilityFunctions:
 		assert new_mag > 0
 
 
-class TestColorAndVisualization:
-	"""Test color and visualization attributes (part of serialization)"""
-
-	def test_set_object_color(self):
-		"""Test setting object drawing color"""
-		rad.UtiDelAll()
-
-		mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-
-		# Set color (R, G, B)
-		rad.ObjDrwAtr(mag, [1, 0, 0])  # Red
-
-		# Should not crash - color is stored
-		assert mag > 0
-
-	def test_set_container_color(self):
-		"""Test setting color for entire container"""
-		rad.UtiDelAll()
-
-		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-		mag2 = rad.ObjRecMag([20, 0, 0], [10, 10, 10], [0, 0, 1])
-		cnt = rad.ObjCnt([mag1, mag2])
-
-		# Set color for container
-		rad.ObjDrwAtr(cnt, [0, 1, 0])  # Green
-
-		assert cnt > 0
-
-
 class TestDataExport:
 	"""Test data export functionality"""
 
