@@ -144,7 +144,7 @@ def test_iron_core():
 	print(f"   Core created: ID={core}")
 
 	# Create iron material (Steel37 equivalent)
-	mat_iron = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
+	mat_iron = rad.MatSatIsoFrm([[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]])
 	rad.MatApl(core, mat_iron)
 	print(f"   Iron material applied")
 
