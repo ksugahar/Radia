@@ -281,94 +281,100 @@ double CircularLoopAPhi(double R, double Z, double CR, double CZ, double CI)
 //-------------------------------------------------------------------------
 // Circular loop solid angle for magnetic scalar potential calculation
 //
-// Radia now uses SI units (meters) internally, matching ELF.
-// All coordinates (R, Z, CR, CZ) are in meters.
+// All coordinates (R, Z, CR, CZ) are in meters (SI).
 // Output is in steradians [sr].
 //
 // The magnetic scalar potential is related to solid angle by:
 //   Phi = I * Omega / (4*pi)   [A]
 //
-// References:
-//   [1] J.D. Jackson, "Classical Electrodynamics," 3rd ed., Wiley, 1998,
-//       Chapter 5.6.
-//   [2] MIT OpenCourseWare, 6.013 Electromagnetics, Section 8.3,
-//       "The Scalar Magnetic Potential"
-//   [3] J.T. Conway, "Analytical solutions for the self-inductance of a
-//       circular disk coil using complete elliptic integrals," J. Phys. A,
-//       Vol. 34, pp. 3687-3695, 2001.
+// Method: Omega = integral over disk bounded by loop of z*dA/|r|^3.
+//   Inner integral (radial) is computed analytically.
+//   Outer integral (azimuthal) uses 32-point Gauss-Legendre quadrature.
 //
-// Formula:
-//   On-axis (R=0): Omega = 2*pi * (1 - z/sqrt(CR^2 + z^2)) * sign(z)
-//   Off-axis:      Omega = sign(z) * (2*pi/k) * ((2-k^2)*K - 2*E)
-//                  where k^2 = 4*CR*R / ((CR+R)^2 + z^2)
-//
-// Note: The solid angle has a discontinuity of 2*pi when crossing
+// Note: The solid angle has a discontinuity of 4*pi when crossing
 //       the loop plane (z=0) inside the loop (R < CR).
-//       This is physically correct - the scalar potential is multivalued.
+//
+// References:
+//   [1] J.D. Jackson, "Classical Electrodynamics," 3rd ed., Ch. 5.6
+//   [2] J.T. Conway, J. Phys. A, Vol. 34, pp. 3687-3695, 2001.
 //-------------------------------------------------------------------------
 double CircularLoopSolidAngle(double R, double Z, double CR, double CZ)
 {
-    double dz = Z - CZ;  // z relative to coil center
+    double dz = Z - CZ;
 
-    // Handle z = 0 case (on the loop plane)
-    // Inside loop (R < CR): Omega = +-2*pi depending on approach direction
-    // Outside loop (R > CR): Omega = 0
-    // On loop (R = CR): Omega = +-pi (half the discontinuity)
-    double dz_check = dz + 1.0;
-    if (dz_check == 1.0) {  // dz is essentially zero
-        // On the loop plane, return 0 (limit from either side averages to 0 outside)
-        // Inside the loop, this is a singular/multivalued point
-        // For numerical stability, return 0
+    if (fabs(dz) < 1.0e-15) {
         return 0.0;
     }
 
-    // Sign of z determines the sign of the solid angle
-    double sign_z = (dz > 0.0) ? 1.0 : -1.0;
-    double z_abs = fabs(dz);
-
-    // On-axis case (R = 0 or R << CR)
-    // Use tolerance based on coil radius: R < CR * 1e-6 is "on-axis"
-    double on_axis_tol = CR * 1.0e-6;
-    if (on_axis_tol < 1.0e-10) on_axis_tol = 1.0e-10;  // Minimum tolerance
+    // On-axis analytical formula
+    double on_axis_tol = CR * 1.0e-8;
+    if (on_axis_tol < 1.0e-15) on_axis_tol = 1.0e-15;
 
     if (R < on_axis_tol) {
         double dist = sqrt(CR * CR + dz * dz);
-        // Omega = 2*pi * (1 - |z|/dist) * sign(z)
-        // For z > 0 (above loop): positive solid angle (loop seen from front)
-        // For z < 0 (below loop): negative solid angle (loop seen from back)
-        double Omega = 2.0 * PI * (1.0 - z_abs / dist) * sign_z;
-        return Omega;
+        double sign_z = (dz > 0.0) ? 1.0 : -1.0;
+        return sign_z * 2.0 * PI * (1.0 - fabs(dz) / dist);
     }
 
-    // General off-axis case using elliptic integrals
-    // k^2 = 4*CR*R / ((CR+R)^2 + z^2)
-    double sum_r = CR + R;
-    double denom = sum_r * sum_r + dz * dz;
-    double k2 = 4.0 * CR * R / denom;
-
-    // Avoid k2 >= 1 which would make elliptic integrals singular
-    if (k2 >= 1.0) {
-        k2 = 1.0 - 1.0e-10;
-    }
-
-    double ELPK, ELPE;
-    int IER = CompleteEllipticIntegrals(k2, ELPK, ELPE);
-
-    if (IER != 0) {
-        return 0.0;
-    }
-
-    // Omega = sign(z) * (2*pi/k) * ((2-k^2)*K - 2*E)
-    // This can also be written as:
-    // Omega = sign(z) * (4*pi/k) * ((1-k^2/2)*K - E)
+    // General off-axis: numerical azimuthal quadrature with analytical radial integral
     //
-    // Alternative form using Heuman's Lambda function:
-    // Omega = 2*pi * (1 - Lambda0(beta, k)) * sign(z)
-    // where sin(beta) = z / sqrt((R-CR)^2 + z^2)
+    // Omega = integral_0^{2*pi} I(phi) dphi
+    // where I(phi) = z * integral_0^CR r_d/(r_d^2 - 2*r_d*R*cos(phi) + R^2 + z^2)^{3/2} dr_d
     //
-    // We use the direct elliptic integral form:
-    double k = sqrt(k2);
-    double Omega = sign_z * (2.0 * PI / k) * ((2.0 - k2) * ELPK - 2.0 * ELPE);
+    // Antiderivative: integral r/(r^2+Br+C)^{3/2} dr = -(C + Br/2) / (D * sqrt(r^2+Br+C))
+    // where B = -2*R*cos(phi), C = R^2+z^2, D = C - B^2/4 = R^2*sin^2(phi) + z^2
+    //
+    // I(phi) = dz * [-(C - CR*R*cos(phi))/(D*R_a) + C/(D*R_0)]
+    //        = dz/D * [C/R_0 - (C - CR*R*cos(phi))/R_a]
+    // where R_a = sqrt(CR^2 - 2*CR*R*cos(phi) + R^2 + z^2)
+    //       R_0 = sqrt(R^2 + z^2)
+    //       C   = R^2 + z^2 = R_0^2
+
+    // 32-point Gauss-Legendre quadrature on [0, 2*pi]
+    static const int N_GAUSS = 32;
+    static const double gp32[] = {
+        -0.9972638618494816, -0.9856115115452684, -0.9647622555875064, -0.9349060759377397,
+        -0.8963211557660521, -0.8493676137325700, -0.7944837959679424, -0.7321821187402897,
+        -0.6630442669302152, -0.5877157572407623, -0.5068999089322294, -0.4213512761306353,
+        -0.3318686022821276, -0.2392873622521371, -0.1444719615827965, -0.0483076656877383,
+         0.0483076656877383,  0.1444719615827965,  0.2392873622521371,  0.3318686022821276,
+         0.4213512761306353,  0.5068999089322294,  0.5877157572407623,  0.6630442669302152,
+         0.7321821187402897,  0.7944837959679424,  0.8493676137325700,  0.8963211557660521,
+         0.9349060759377397,  0.9647622555875064,  0.9856115115452684,  0.9972638618494816
+    };
+    static const double gw32[] = {
+        0.0070186100094701,  0.0162743947309057,  0.0253920653092621,  0.0342738629130214,
+        0.0428358980222267,  0.0509980592623762,  0.0586840934785355,  0.0658222227763618,
+        0.0723457941088485,  0.0781938957870703,  0.0833119242269467,  0.0876520930044038,
+        0.0911738786957639,  0.0938443990808046,  0.0956387200792749,  0.0965400885147278,
+        0.0965400885147278,  0.0956387200792749,  0.0938443990808046,  0.0911738786957639,
+        0.0876520930044038,  0.0833119242269467,  0.0781938957870703,  0.0723457941088485,
+        0.0658222227763618,  0.0586840934785355,  0.0509980592623762,  0.0428358980222267,
+        0.0342738629130214,  0.0253920653092621,  0.0162743947309057,  0.0070186100094701
+    };
+
+    double C = R * R + dz * dz;
+    double R_0 = sqrt(C);
+
+    double Omega = 0.0;
+    for (int j = 0; j < N_GAUSS; ++j) {
+        // Map [-1,1] to [0, 2*pi]: phi = pi + pi*x
+        double phi = PI + PI * gp32[j];
+        double cos_phi = cos(phi);
+
+        double D = R * R * (1.0 - cos_phi * cos_phi) + dz * dz;  // R^2*sin^2(phi) + z^2
+        if (D < 1.0e-30) D = 1.0e-30;
+
+        double R_a = sqrt(CR * CR - 2.0 * CR * R * cos_phi + C);
+
+        // I(phi) = dz/D * [C/R_0 - (C - CR*R*cos(phi))/R_a]
+        double I_phi = (dz / D) * (C / R_0 - (C - CR * R * cos_phi) / R_a);
+
+        Omega += gw32[j] * I_phi;
+    }
+
+    // Scale by pi (half-interval width for mapping [-1,1] -> [0,2*pi])
+    Omega *= PI;
 
     return Omega;
 }
