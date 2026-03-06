@@ -724,43 +724,31 @@ private:
 };
 ```
 
-### Python API (Implemented)
+### Python API
+
+The old C++ conductor APIs (`CndSpiral`, `CndLoop`, etc.) are **removed**.
+Use the Python-based PEEC solver:
 
 ```python
-import radia as rad
+from radia.peec_topology import PEECCircuitSolver
+from radia.peec_coupled import CoupledPEECSolver
 
-# Create conductor (PEEC)
-coil = rad.CndSpiral([0,0,0], 0.02, 0.05, 0.005, 3, [0,0,1], 'r', 0.003, 0.002, 5.8e7, 8)
-rad.CndSetFrequency(coil, 50000)
+# Build PEEC topology
+from peec_matrices import PyPEECBuilder
+builder = PyPEECBuilder()
+# ... add nodes, segments, ports ...
+topo = builder.build_topology()
 
 # Create magnet (MMM)
+import radia as rad
 magnet = rad.ObjRecMag([0,0,-0.01], [0.1,0.1,0.01], [0,0,0])
-mat = rad.MatLin(1000)  # mu_r = 1000
+mat = rad.MatLin(1000)
 rad.MatApl(magnet, mat)
 
-# Create coupled solver
-solver = rad.PEECMMMCreate(coil, magnet)
-rad.PEECMMMSetFrequency(solver, 50000)
-rad.PEECMMMSetVoltage(solver, 1.0, 0.0)  # 1V excitation
-
-# Solve coupled system
-result = rad.PEECMMMSolve(solver)
-# result = [Z_real, Z_imag, P_cond, P_mag, n_iter]
-
-# Get impedance
-Z = rad.PEECMMMImpedance(solver)  # Returns [Z_real, Z_imag]
-
-# Get field
-B = rad.PEECMMMFld(solver, [0, 0, 0.05])
-# B = [Bx_re, By_re, Bz_re, Bx_im, By_im, Bz_im]
-
-# Frequency sweep
-freqs = [1000, 10000, 50000, 100000]
-sweep = rad.PEECMMMSweep(solver, freqs)
-# sweep = [Z_re1, Z_im1, Z_re2, Z_im2, ...]
-
-# Clean up
-rad.PEECMMMDelete(solver)
+# Coupled PEEC + MMM solve
+solver = CoupledPEECSolver(topo, magnetic_objects=[magnet])
+Z = solver.compute_port_impedance(freq=50000)
+Z_sweep = solver.frequency_sweep([1000, 10000, 50000, 100000])
 ```
 
 ### API Reference

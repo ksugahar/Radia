@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.6.0] - 2026-03-06
+
+### Changed
+- **Unified Field API (`Fld`)**: Merged `FldBatch`, `FldA`, `FldPhi` into single `rad.Fld(obj, type, points)`. Pass shape `(3,)` for single point, shape `(N,3)` or flat `(3*N,)` for batch. Returns scalar/vector or NumPy array accordingly.
+- **Unified Solver Configuration (`SolverConfig`/`GetSolverConfig`)**: Replaced 10 individual setter/getter functions (`SetHACApKParams`, `SetHMatrixEpsilon`, `SetBiCGSTABTol`, `SetRelaxParam`, `SetNewtonMethod`, `SetNewtonDamping`, `GetBiCGSTABTol`, `GetRelaxParam`, `GetNewtonMethod`, `GetNewtonDampingStats`) with `rad.SolverConfig(**kwargs)` and `rad.GetSolverConfig()`.
+
+### Removed
+- `FldBatch()`, `FldA()`, `FldPhi()` -- use `rad.Fld()` with batch points
+- `SetHACApKParams()`, `SetHMatrixEpsilon()`, `SetBiCGSTABTol()`, `GetBiCGSTABTol()`, `SetRelaxParam()`, `GetRelaxParam()`, `SetNewtonMethod()`, `GetNewtonMethod()`, `SetNewtonDamping()`, `GetNewtonDampingStats()`, `SetHMatrixFieldEval()` -- use `rad.SolverConfig()` / `rad.GetSolverConfig()`
+
+### Documentation
+- Updated all docs/ markdown files to reflect unified APIs
+- Updated all examples and tests to use new API
+- MCP server knowledge base and lint rules updated for removed APIs
+
 ## [2.5.0] - 2026-03-06
 
 ### Added

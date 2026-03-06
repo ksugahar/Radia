@@ -76,13 +76,14 @@ def run_radia_hacapk(eps):
     rad.ObjRecMag(container, [0, 0, H_EXT])
 
     # Set HACApK parameters
-    rad.SetHACApKParams(eps, 10, 2.0)  # eps, leaf_size, eta
+    rad.SolverConfig(hacapk_eps=eps, hacapk_leaf=10, hacapk_eta=2.0)
 
     # Solve with HACApK
     result = rad.Solve(container, 0.001, 100, 2)  # Method 2 = HACApK
 
     # Get statistics
-    stats = rad.GetHACApKStats()
+    config = rad.GetSolverConfig()
+    stats = config.get('hacapk_stats')
 
     return {
         'n_elem': n_elem,

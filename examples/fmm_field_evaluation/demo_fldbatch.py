@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """
-Demo: FldBatch - Batch Field Evaluation for Multiple Points
+Demo: Batch Field Evaluation with rad.Fld()
 
-This example demonstrates how to use rad.FldBatch() to efficiently compute
-magnetic fields at many observation points. This is significantly faster
-than calling rad.Fld() in a loop because:
+This example demonstrates how to use rad.Fld() with batch points to efficiently
+compute magnetic fields at many observation points. Passing an (N,3) array is
+significantly faster than calling rad.Fld() in a loop because:
 
 1. Single Python->C++ call overhead instead of N calls
 2. TaskManager parallelization across evaluation points
@@ -24,7 +24,6 @@ import time
 import numpy as np
 
 # Add Radia path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
@@ -77,7 +76,7 @@ def create_observation_grid(center, extent, n_points_per_axis):
         n_points_per_axis: Number of points per axis
 
     Returns:
-        points: List of [x, y, z] points
+        points: numpy array of shape (N, 3)
         shape: (nx, ny, nz) tuple for reshaping
     """
     cx, cy, cz = center
@@ -88,12 +87,12 @@ def create_observation_grid(center, extent, n_points_per_axis):
     xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
     points = np.stack([xx.ravel(), yy.ravel(), zz.ravel()], axis=1)
 
-    return points.tolist(), (n_points_per_axis, n_points_per_axis, n_points_per_axis)
+    return points, (n_points_per_axis, n_points_per_axis, n_points_per_axis)
 
 
 def main():
     print("=" * 70)
-    print("FldBatch Demo: Batch Field Evaluation")
+    print("Batch Field Evaluation Demo")
     print("=" * 70)
 
     # Create magnetized cube
@@ -124,19 +123,16 @@ def main():
     print(f"   Extent: +/- {extent*1000:.0f} mm")
     print(f"   Grid: {n_pts} x {n_pts} x {n_pts} = {n_total} points")
 
-    # Method 1: FldBatch (recommended for many points)
-    print(f"\n3. Computing field with FldBatch...")
+    # Method 1: Batch Fld (recommended for many points)
+    print(f"\n3. Computing B field with batch Fld()...")
     t0 = time.time()
-    result = rad.FldBatch(container, points)
+    B_batch = np.asarray(rad.Fld(container, 'b', points))
     t_batch = time.time() - t0
-
-    B_batch = np.array(result['B'])
-    H_batch = np.array(result['H'])
 
     print(f"   Time: {t_batch:.3f} s")
     print(f"   Points/sec: {n_total/t_batch:.0f}")
 
-    # Method 2: Loop with Fld (for comparison)
+    # Method 2: Loop with single-point Fld (for comparison)
     print(f"\n4. Computing field with Fld loop (for comparison)...")
     t0 = time.time()
     B_loop = []
@@ -173,10 +169,10 @@ def main():
     print("\n" + "=" * 70)
     print("SUMMARY")
     print("=" * 70)
-    print(f"FldBatch is {t_loop_estimated/t_batch:.1f}x faster than Fld loop")
+    print(f"Batch Fld() is {t_loop_estimated/t_batch:.1f}x faster than single-point loop")
     print(f"for {n_total} evaluation points.")
     print()
-    print("Use FldBatch when:")
+    print("Use batch Fld(obj, 'b', points_Nx3) when:")
     print("  - Computing field at many observation points (>100)")
     print("  - Visualization grids")
     print("  - Trajectory field evaluation")

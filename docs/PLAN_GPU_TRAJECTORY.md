@@ -6,7 +6,7 @@
 
 ## Background
 
-Radia integrates ExaFMM-t for O(N log N) field evaluation via `FldBatch(method=1)`.
+Radia integrates ExaFMM-t for O(N log N) field evaluation via `Fld (batch)(method=1)`.
 The goal is multi-particle trajectory calculation (single-pass, not circular accelerator)
 with >10,000 dipole elements.
 
@@ -16,7 +16,7 @@ with >10,000 dipole elements.
 |-----------|--------|-------|
 | ExaFMM-t | CPU-only | OpenMP + AVX SIMD, no GPU in any ExaFMM variant |
 | Particle trajectory | Single-particle | RK4/5 adaptive, calls `ComputeFieldForTrajectory()` per step |
-| FldBatch | Working | OpenMP + FMM auto-switch (N>=1000) |
+| Fld (batch) | Working | OpenMP + FMM auto-switch (N>=1000) |
 | nvcc | Not installed | CUDA Toolkit not present on machine |
 | CuPy/Numba | Not installed | PyTorch CPU-only installed |
 
@@ -34,7 +34,7 @@ Pre-solved Radia model (fixed dipoles after Solve())
   -> Build FMM source tree ONCE
   -> For each RK4 step:
        Collect all N_particle positions
-       FldBatch(positions, method=FMM)  -> O(N_dipole + N_particle)
+       Fld (batch)(positions, method=FMM)  -> O(N_dipole + N_particle)
        Update all particles with B_all
 ```
 
@@ -57,7 +57,7 @@ def multi_particle_trajectory(radia_obj, particles, ds, n_steps):
         points = np.array([[p.x, 0.0, p.z] for p in particles])
 
         # Batch FMM evaluation - O(N_dipole + N_particle)
-        B_all = rad.FldBatch(radia_obj, 'b', points.flatten(), method=1)
+        B_all = np.asarray(rad.Fld(radia_obj, 'b', points))
 
         # RK4 update each particle
         for i, p in enumerate(particles):
@@ -67,7 +67,7 @@ def multi_particle_trajectory(radia_obj, particles, ds, n_steps):
 
 ### Files to Modify
 - New: `src/radia/particle_trajectory_batch.py` (Python multi-particle driver)
-- Existing: `rad_field_unified.cpp` (optional: cache FMM source tree across FldBatch calls)
+- Existing: `rad_field_unified.cpp` (optional: cache FMM source tree across Fld (batch) calls)
 
 ## Stage 2: GPU Acceleration of ExaFMM P2P Kernel
 

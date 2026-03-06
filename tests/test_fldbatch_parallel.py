@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
 """
-Test script for FldBatch batch field computation.
-Verifies that batch field computation produces correct results matching single-point Fld().
-
-Note: OpenMP parallelization is currently disabled due to Intel OpenMP runtime deadlock issues.
-The batch API still provides significant speedup by reducing Python-C++ call overhead.
+Test script for batch field computation via unified Fld().
+Verifies that batch Fld(obj, 'b', points_Nx3) produces correct results
+matching single-point Fld(obj, 'b', point).
 """
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src'))
 import radia as rad
 import time
 import numpy as np
 
 def run_test():
-    """Test FldBatch batch field computation."""
+    """Test batch field computation."""
     print("=" * 70)
-    print("FldBatch Batch Field Computation Test")
+    print("Batch Field Computation Test")
     print("=" * 70)
 
     # Clear any existing objects
@@ -49,35 +47,26 @@ def run_test():
     for n_points in test_configs:
         # Generate random observation points outside the magnet
         np.random.seed(42)  # Reproducible results
-        points = []
-        for i in range(n_points):
-            # Points on a sphere around the magnet at radius 0.15m
-            r = 0.15
-            theta = np.random.uniform(0, np.pi)
-            phi = np.random.uniform(0, 2*np.pi)
-            x = r * np.sin(theta) * np.cos(phi)
-            y = r * np.sin(theta) * np.sin(phi)
-            z = r * np.cos(theta)
-            points.append([x, y, z])
+        r = 0.15
+        theta = np.random.uniform(0, np.pi, n_points)
+        phi = np.random.uniform(0, 2*np.pi, n_points)
+        points = np.column_stack([
+            r * np.sin(theta) * np.cos(phi),
+            r * np.sin(theta) * np.sin(phi),
+            r * np.cos(theta),
+        ])
 
-        # Run FldBatch
+        # Run batch Fld
         t0 = time.time()
-        result = rad.FldBatch(magnet, points)
+        B_batch = np.asarray(rad.Fld(magnet, 'b', points))
         t1 = time.time()
         elapsed_ms = (t1 - t0) * 1000
 
-        # Verify result structure
-        has_B = "B" in result
-        has_H = "H" in result
-        correct_shape = len(result["B"]) == n_points if has_B else False
-
-        # Check first point result is reasonable
-        B0 = result["B"][0] if has_B else [0, 0, 0]
+        correct_shape = B_batch.shape == (n_points, 3)
+        B0 = B_batch[0]
         B0_str = f"[{B0[0]:.2e}, {B0[1]:.2e}, {B0[2]:.2e}]"
-
-        # Basic sanity check: field should be non-zero
-        B_mag = np.sqrt(B0[0]**2 + B0[1]**2 + B0[2]**2)
-        is_correct = has_B and has_H and correct_shape and B_mag > 0
+        B_mag = np.linalg.norm(B0)
+        is_correct = correct_shape and B_mag > 0
 
         status = "PASS" if is_correct else "FAIL"
         all_passed = all_passed and is_correct
@@ -86,31 +75,26 @@ def run_test():
 
     print("-" * 60)
 
-    # Verification test: compare with single-point Fld()
-    print("\n[Verification] Comparing FldBatch with single-point Fld()")
-    test_points = [
+    # Verification test: compare batch with single-point
+    print("\n[Verification] Comparing batch Fld with single-point Fld()")
+    test_points = np.array([
         [0, 0, 0.15],
         [0.1, 0, 0.1],
         [0, 0.1, 0.1],
-    ]
+    ])
 
-    result_batch = rad.FldBatch(magnet, test_points)
+    B_batch = np.asarray(rad.Fld(magnet, 'b', test_points))
 
     max_rel_error = 0.0
-    for i, pt in enumerate(test_points):
-        B_single = rad.Fld(magnet, 'b', pt)
-        B_batch = result_batch["B"][i]
-
-        # Calculate relative error
-        B_single_mag = np.sqrt(sum(b**2 for b in B_single))
-        diff = [B_batch[j] - B_single[j] for j in range(3)]
-        diff_mag = np.sqrt(sum(d**2 for d in diff))
-
+    for i in range(len(test_points)):
+        B_single = np.asarray(rad.Fld(magnet, 'b', test_points[i]))
+        diff_mag = np.linalg.norm(B_batch[i] - B_single)
+        B_single_mag = np.linalg.norm(B_single)
         rel_error = diff_mag / B_single_mag if B_single_mag > 0 else 0
         max_rel_error = max(max_rel_error, rel_error)
 
-        print(f"  Point {i+1}: Fld={[f'{b:.6e}' for b in B_single]}")
-        print(f"         Batch={[f'{b:.6e}' for b in B_batch]}")
+        print(f"  Point {i+1}: Fld={B_single}")
+        print(f"         Batch={B_batch[i]}")
         print(f"         Rel error: {rel_error:.2e}")
 
     accuracy_pass = max_rel_error < 1e-10
