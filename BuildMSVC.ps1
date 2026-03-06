@@ -105,13 +105,15 @@ if ($NoExaFMM) {
     Write-Host "ExaFMM: ENABLED" -ForegroundColor Green
 }
 
-# Determine build targets
+# Determine build targets and NGSolve flag
 if ($RadiaOnly) {
-    $BUILD_TARGETS = "radia"
-    Write-Host "Build target: radia only" -ForegroundColor Gray
+    $BUILD_TARGETS = "_radia"
+    $NGSOLVE_FLAG = "OFF"
+    Write-Host "Build target: _radia only (no NGSolve)" -ForegroundColor Gray
 } else {
-    $BUILD_TARGETS = "radia radia_ngsolve"
-    Write-Host "Build targets: radia, radia_ngsolve" -ForegroundColor Gray
+    $BUILD_TARGETS = "_radia radia_ngsolve"
+    $NGSOLVE_FLAG = "ON"
+    Write-Host "Build targets: _radia, radia_ngsolve" -ForegroundColor Gray
 }
 
 # Create batch file to run with Visual Studio environment
@@ -145,24 +147,17 @@ echo.
     -DCMAKE_CXX_COMPILER=cl ^
     -DCMAKE_BUILD_TYPE=Release ^
     -DRADIA_ENABLE_OPENMP=$OPENMP_FLAG ^
-    -DRADIA_ENABLE_EXAFMM=$EXAFMM_FLAG
+    -DRADIA_ENABLE_EXAFMM=$EXAFMM_FLAG ^
+    -DRADIA_BUILD_NGSOLVE=$NGSOLVE_FLAG
 
 if errorlevel 1 (
     echo ERROR: CMake configuration failed
     exit /b 1
 )
 
-echo.
-echo ========================================
-echo   Building radia...
-echo ========================================
-echo.
-"$CMAKE_EXE" --build . --config Release --target radia -j
-
-if errorlevel 1 (
-    echo ERROR: radia build failed
-    exit /b 1
-)
+REM Legacy _radia module is no longer built
+REM pybind11 module (_radia_pybind) is now the default
+REM See __init__.py which imports from _radia_pybind
 
 "@
 
@@ -213,6 +208,35 @@ echo.
 
 if errorlevel 1 (
     echo WARNING: mmm_core build failed
+)
+
+echo.
+echo ========================================
+echo   Building _radia_pybind...
+echo ========================================
+echo.
+"$CMAKE_EXE" --build . --config Release --target _radia_pybind -j
+
+if errorlevel 1 (
+    echo ERROR: _radia_pybind build failed
+    exit /b 1
+)
+
+"@
+} else {
+    # RadiaOnly mode: Just build _radia_pybind
+    $BatchContent += @"
+
+echo.
+echo ========================================
+echo   Building _radia_pybind (RadiaOnly)...
+echo ========================================
+echo.
+"$CMAKE_EXE" --build . --config Release --target _radia_pybind -j
+
+if errorlevel 1 (
+    echo ERROR: _radia_pybind build failed
+    exit /b 1
 )
 
 "@
@@ -267,16 +291,9 @@ try {
         throw "Build failed with exit code $BuildResult"
     }
 
-    # Copy radia.pyd to package directory
-    $PYD_SOURCE = "$BUILD_DIR\radia.cp312-win_amd64.pyd"
-    $PYD_DEST = "$PROJECT_DIR\src\radia\radia.pyd"
-
-    if (Test-Path $PYD_SOURCE) {
-        Copy-Item $PYD_SOURCE $PYD_DEST -Force
-        Write-Host "Copied radia.pyd to src/radia/" -ForegroundColor Green
-    } else {
-        Write-Host "WARNING: Could not find $PYD_SOURCE" -ForegroundColor Yellow
-    }
+    # Legacy _radia.pyd is no longer built or copied
+    # pybind11 module (_radia_pybind.pyd) is now the default
+    # __init__.py imports from _radia_pybind
 
     # Copy radia_ngsolve.pyd to package directory
     # NGSolve uses add_ngsolve_python_module which may not add version tag
@@ -328,6 +345,18 @@ try {
         Write-Host "Copied mmm_core.pyd to src/radia/" -ForegroundColor Green
     } else {
         Write-Host "WARNING: Could not find $MMM_PYD_SOURCE" -ForegroundColor Yellow
+    }
+
+    # Copy _radia_pybind.pyd to package directory (main Python module)
+    # This is the primary pybind11 module that __init__.py imports
+    $RADIA_PYBIND_SOURCE = "$BUILD_DIR\_radia_pybind.cp312-win_amd64.pyd"
+    $RADIA_PYBIND_DEST = "$PROJECT_DIR\src\radia\_radia_pybind.pyd"
+
+    if (Test-Path $RADIA_PYBIND_SOURCE) {
+        Copy-Item $RADIA_PYBIND_SOURCE $RADIA_PYBIND_DEST -Force
+        Write-Host "Copied _radia_pybind.pyd to src/radia/" -ForegroundColor Green
+    } else {
+        Write-Host "ERROR: _radia_pybind.pyd not found - build failed?" -ForegroundColor Red
     }
 
     # Copy Intel MKL DLLs for distribution
@@ -388,11 +417,11 @@ try {
     Write-Host ""
 
     # Show PYD file info
-    if (Test-Path $PYD_DEST) {
-        $pydInfo = Get-Item $PYD_DEST
-        Write-Host "Output:" -ForegroundColor Yellow
-        Write-Host "  radia.pyd: $([math]::Round($pydInfo.Length / 1MB, 2)) MB" -ForegroundColor Gray
-        Write-Host "  Modified:  $($pydInfo.LastWriteTime)" -ForegroundColor Gray
+    Write-Host "Output:" -ForegroundColor Yellow
+    if (Test-Path $RADIA_PYBIND_DEST) {
+        $pybindInfo = Get-Item $RADIA_PYBIND_DEST
+        Write-Host "  _radia_pybind.pyd: $([math]::Round($pybindInfo.Length / 1MB, 2)) MB" -ForegroundColor Gray
+        Write-Host "  Modified:  $($pybindInfo.LastWriteTime)" -ForegroundColor Gray
     }
     if (Test-Path $NGSOLVE_PYD_DEST) {
         $ngInfo = Get-Item $NGSOLVE_PYD_DEST

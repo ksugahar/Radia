@@ -385,7 +385,8 @@ def _current_loop_vector_potential(rho: float, z: float, a: float, I: float) -> 
 
 
 def _axial_cylinder_vector_potential(rho: float, z: float, R: float, L: float,
-                                      Mz: float, n_gauss: int = 20) -> float:
+                                      Mz: float, n_gauss: int = 20,
+                                      length_to_m: float = 0.001) -> float:
     """
     Vector potential A_phi of an axially magnetized cylinder.
 
@@ -407,13 +408,13 @@ def _axial_cylinder_vector_potential(rho: float, z: float, R: float, L: float,
         n_gauss: number of Gauss quadrature points
 
     Returns:
-        A_phi: azimuthal vector potential [T*mm]
+        A_phi: azimuthal vector potential in T*user_length_unit
 
     Unit Analysis:
         - Surface current density: K = Mz [A/m]
-        - Current element: dI = K * dz' = Mz [A/m] * dz' [m] = Mz * dz'/1000 [A]
-        - _current_loop_vector_potential returns [T*mm]
-        - Result needs to be scaled by 1000 to match B-field units
+        - Current element: dI = K * dz' [m] = Mz * dz * length_to_m [A]
+        - _current_loop_vector_potential returns A in T*m (SI)
+        - Result converted to user units: A_phi / length_to_m
     """
     from numpy.polynomial.legendre import leggauss
 
@@ -435,19 +436,16 @@ def _axial_cylinder_vector_potential(rho: float, z: float, R: float, L: float,
         dz = L * wi[i]  # dz is in mm
 
         # Surface current density K = Mz [A/m]
-        # Current element dI = K * dz' where dz' is in meters
-        # dI = Mz [A/m] * (dz [mm] / 1000 [mm/m]) = Mz * dz * 1e-3 [A]
-        dI = Mz * dz * 1.0e-3  # [A]
+        # Current element dI = K * dz' [m] = Mz * dz * length_to_m [A]
+        dI = Mz * dz * length_to_m  # [A]
 
         # Vector potential from this loop element
         A_loop = _current_loop_vector_potential(rho, z - z_prime, R, dI)
         A_phi += A_loop
 
-    # Scale factor: the formula returns A in T*mm, but we need to account for
-    # the factor of 1000 from the mm->m conversion in curl calculation
-    # curl(A) in mm coordinates: dA/d(mm) = dA/d(m) * 1000
-    # So A should be scaled by 1000 to give B in Tesla
-    return A_phi * 1000.0
+    # _current_loop_vector_potential returns A in T*m (SI).
+    # Convert to user length units: T*m / length_to_m = T*user_unit
+    return A_phi / length_to_m
 
 
 class CylindricalMagnet:
@@ -458,9 +456,9 @@ class CylindricalMagnet:
     cylinder using analytical formulas based on elliptic integrals.
 
     Attributes:
-        center: [x, y, z] center position in mm
-        radius: cylinder radius in mm
-        height: cylinder height in mm (half-height = height/2)
+        center: [x, y, z] center position
+        radius: cylinder radius
+        height: cylinder height (half-height = height/2)
         magnetization: [Mx, My, Mz] magnetization in A/m
         axis: 'x', 'y', or 'z' - cylinder axis direction
 
@@ -469,17 +467,20 @@ class CylindricalMagnet:
     """
 
     def __init__(self, center: List[float], radius: float, height: float,
-                 magnetization: List[float], axis: str = 'z'):
+                 magnetization: List[float], axis: str = 'z',
+                 units: str = 'mm'):
         """
         Initialize cylindrical magnet.
 
         Parameters:
-            center: [x, y, z] center position in mm
-            radius: cylinder radius in mm
-            height: total height in mm
+            center: [x, y, z] center position
+            radius: cylinder radius
+            height: total height
             magnetization: [Mx, My, Mz] in A/m
             axis: cylinder axis direction ('x', 'y', or 'z')
+            units: length unit for geometry ('mm' or 'm')
         """
+        self._length_to_m = 0.001 if units == 'mm' else 1.0
         self.center = np.array(center, dtype=float)
         self.radius = float(radius)
         self.height = float(height)
@@ -612,7 +613,8 @@ class CylindricalMagnet:
         Mz_local = M_local[2]
         if abs(Mz_local) > 1.0e-15:
             A_phi = _axial_cylinder_vector_potential(
-                rho, z_local, self.radius, self.half_height, Mz_local, n_gauss
+                rho, z_local, self.radius, self.half_height, Mz_local, n_gauss,
+                self._length_to_m
             )
             # Convert A_phi to Cartesian: Ax = -A_phi * sin(phi), Ay = A_phi * cos(phi)
             Ax_local = -A_phi * np.sin(phi)

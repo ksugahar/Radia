@@ -33,9 +33,10 @@
 * For linear materials: M = chi * H_int = chi * (H_ext + N * M)
 * Rearranging: (I - chi*N) * M = chi * H_ext
 *
-* Or equivalently (ELF formulation):
-*   (N_demag + 1/chi * I) * M = H_ext
+* ELF-compatible formulation (adopted 2025-01):
+*   (N_demag - 1/chi * I) * M = H_ext
 * where N_demag = -N (demagnetization convention)
+* Note: Diagonal is NEGATIVE (-1/chi), matching ELF convention
 *
 * The interaction matrix elements are computed from solid angle integrals:
 *

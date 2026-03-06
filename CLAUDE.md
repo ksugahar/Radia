@@ -208,6 +208,64 @@ for dll in process.memory_maps():
 
 ---
 
+## Matrix Storage Convention: Row-Major (2026-01-31)
+
+### Unified Row-Major Matrix Format
+
+**CRITICAL**: Radia uses **row-major [target][source] format** for all interaction matrices.
+
+**Format Definition**:
+- Matrix element `A[i][j]` is stored at index `i * stride + j` (row-major, C-style)
+- `A[i][j]` represents the effect **ON target i FROM source j**
+- This matches ELF convention and is optimal for C++ cache efficiency
+
+**Memory Layout**:
+```
+Row-major: A[0][0], A[0][1], A[0][2], ..., A[1][0], A[1][1], ...
+           ^^^^^^^^^^^^^^^^^^^^^^^^       ^^^^^^^^^^^^^^^^^^^^^^^^
+           Row 0 (contiguous)              Row 1 (contiguous)
+```
+
+**BLAS Convention**:
+All BLAS calls use `CblasRowMajor`:
+```cpp
+cblas_dgemv(CblasRowMajor, CblasNoTrans, nrows, ncols, alpha, A, lda, x, 1, beta, y, 1);
+```
+
+**Why Row-Major**:
+
+| Aspect | Row-Major | Column-Major |
+|--------|-----------|--------------|
+| C/C++ native | Yes | No |
+| Python/NumPy native | Yes | No (Fortran order) |
+| Cache efficiency for matvec | Optimal | Suboptimal |
+| ELF compatibility | Yes | No |
+| BiCGSTAB performance | Optimal | Suboptimal |
+
+**Source Files Using Row-Major**:
+- `rad_interaction.cpp`: Interaction matrix construction
+- `rad_relaxation_methods.cpp`: BiCGSTAB, LU solver (via BLAS)
+- `rad_hacapk.cpp`: H-matrix element access
+
+**Block Storage Example**:
+```cpp
+// 6x6 hexahedral block storage
+double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
+for (int i = 0; i < 6; i++) {
+    for (int j = 0; j < 6; j++) {
+        // K_block is already [target][source] format
+        block[(size_t)i * m_totalDOF + j] = K_block[i * 6 + j];
+    }
+}
+```
+
+**Policy**:
+- **All new matrix code** MUST use row-major format
+- **BLAS calls** MUST use `CblasRowMajor`
+- **Python interface**: Returns NumPy array in C-contiguous (row-major) order
+
+---
+
 ## Radia Solver Methods: MMM and MSC
 
 Radia supports two solver methods:
@@ -225,9 +283,9 @@ Radia supports two solver methods:
 
 **Note**: Radia does NOT use BEM (Boundary Element Method). The MSC method uses surface charges but differs from classical BEM.
 
-### Mixed Hex/Tetra Element Support (2025-12-26)
+### Mixed Element Support (2025-12-26, Updated 2026-02-07)
 
-Radia supports **mixed meshes** containing both hexahedral (6DOF) and tetrahedral (3DOF) elements.
+Radia supports **mixed meshes** containing hexahedral (6DOF), wedge (5DOF), and tetrahedral (3DOF) elements.
 
 **Solver Compatibility**:
 
@@ -235,15 +293,26 @@ Radia supports **mixed meshes** containing both hexahedral (6DOF) and tetrahedra
 |--------|----------------|-------|
 | LU (Method 0) | **Supported** | Dense LU with variable DOF blocks |
 | BiCGSTAB (Method 1) | **Supported** | Iterative solver with variable DOF |
-| HACApK (Method 2) | NOT Supported | HACApK cluster tree requires uniform DOF |
+| HACApK (Method 2) | **Supported** | Variable DOF mode with flat matrix precomputation |
 
-**Note**: HACApK's cluster tree algorithm assumes fixed DOF per element. For mixed meshes, use LU (small problems) or BiCGSTAB (large problems).
+**Note**: HACApK uses variable DOF mode (`m_is_mixed_dof`) for meshes containing wedges or mixed element types.
+
+**IMA (Image Method of Analysis) Compatibility**:
+
+| Element Type | IMA Support | Notes |
+|--------------|-------------|-------|
+| Hexahedron (6DOF) | **Supported** | Fast path with precomputed triangle data |
+| Wedge (5DOF) | **Supported** | Generic path with FieldFromFaceMirrored |
+| Tetrahedron (3DOF) | **Supported** | MMM dipole mirror |
+| Mixed (hex+wedge) | **Supported** | Variable DOF IMA matrix building |
 
 **Interaction Matrix Blocks**:
 - **3x3 block** (tetra-tetra): Standard demagnetization tensor
-- **6x6 block** (hex-hex): Surface charge interaction (MSC)
-- **3x6 block** (tetra from hex): H-field at tetra center from hex face charges
-- **6x3 block** (hex from tetra): Normal dot N_matrix at hex eval points
+- **5x5 block** (wedge-wedge): Surface charge interaction (MSC, 5 faces)
+- **6x6 block** (hex-hex): Surface charge interaction (MSC, 6 faces)
+- **5x6 / 6x5 block** (wedge-hex): Cross-element MSC interaction
+- **3x6 / 3x5 block** (tetra from hex/wedge): H-field at tetra center from face charges
+- **6x3 / 5x3 block** (hex/wedge from tetra): Normal dot N_matrix at eval points
 
 **Usage**:
 ```python
@@ -269,6 +338,46 @@ rad.Solve(container, 0.001, 100, 0)  # Method 0 = LU
 - `RADIA_MSC_SUPPORT` compile flag enables mixed element support
 - Variable DOF offset arrays: `m_elemDOF`, `m_elemDOFOffset`, `m_totalDOF`
 - Block interaction computation in `SetupInteractMatrix_VariableDOF()`
+
+### BiCGSTAB Block Jacobi Preconditioner (2026-02-06)
+
+**Problem**: For meshes with distorted hexahedral elements (high aspect ratio, skewed faces), the scalar Jacobi preconditioner fails and BiCGSTAB diverges.
+
+**Solution**: Automatic **block Jacobi preconditioner** that inverts each element's diagonal block exactly.
+
+**Automatic Detection**:
+BiCGSTAB automatically switches to block Jacobi when:
+- Diagonal ratio (max/min) > 10, OR
+- Min diagonal dominance < 0.1
+
+**Conditioning Metrics**:
+
+| Mesh Type | Diagonal Ratio | Min Dominance | Preconditioner |
+|-----------|----------------|---------------|----------------|
+| Uniform cube | ~1.0 | >0.15 | Scalar Jacobi |
+| Distorted mesh (V304) | ~100 | <0.05 | **Block Jacobi** |
+
+**Implementation**:
+- `BuildBlockJacobiPreconditioner_VariableDOF()`: Extracts and inverts each 6x6 (hex) or 3x3 (tetra) diagonal block using LAPACK `dgetrf_`/`dgetri_`
+- `ApplyBlockJacobiPreconditioner_VariableDOF()`: Applies block-diagonal inverse as preconditioner
+
+**When Block Jacobi is Needed**:
+1. **Distorted elements**: High aspect ratio (>5) or skewed faces (>30°)
+2. **Non-uniform meshes**: Large variation in element sizes
+3. **Complex geometries**: C-type magnets, E-cores with curved surfaces
+
+**Debug Output**:
+```
+[BiCG Conditioning] DOF=444
+[BiCG Conditioning] Diagonal: min=1.929e-01, max=2.014e+01, ratio=104.4
+[BiCG Conditioning] Min dominance: 0.0434, weak rows: 13/444 (2.9%)
+[BiCG] Using BLOCK Jacobi preconditioner (better for ill-conditioned matrix)
+```
+
+**Performance**:
+- Block Jacobi adds O(N) overhead for building block inverses (one-time cost)
+- Each preconditioner application is O(N) with small constant factor
+- Overall: Slightly slower per iteration, but converges when scalar Jacobi fails
 
 ---
 
@@ -459,17 +568,25 @@ magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])  # meters, A/m
 
 ## Radia Field Computation Limitations
 
-### rad.Fld() Accuracy Inside Magnets
+### rad.Fld() Behavior Inside Magnetic Materials
 
-**Important Limitation**: `rad.Fld()` does **NOT** accurately compute field values **inside** permanent magnets.
+**Important Note**: The field computed by `rad.Fld()` **inside** magnetic materials has different characteristics depending on the method:
 
-**Rationale**:
-- Radia MMM is designed for field calculation in **air regions** (outside magnetic materials)
-- Inside magnets, `rad.Fld()` returns inaccurate values (known limitation, not a bug)
+**MMM (Magnetic Moment Method) - Tetrahedra**:
+- Designed for field calculation in **air regions** (outside magnetic materials)
+- Inside materials, `rad.Fld()` returns approximations based on dipole fields
+- Not recommended for quantitative analysis inside materials
+
+**MSC (Magnetic Surface Charge) - Hexahedra**:
+- Inside materials, the field is **uniform within each element**
+- This uniform field is derived from the **surface charge distribution** (sigma), which is the MSC solution
+- The internal field represents `H_internal = -grad(Phi)` from the surface charge potential
+- For validation, compare the **sigma values** (surface charges) or the **external field**, not internal field values
 
 **Testing Strategy**:
-- X **Avoid**: Direct comparison of `rad.Fld()` inside magnets
-- OK **Use**: Large magnet with small mesh region (field approximately uniform)
+- **Solver comparison**: Compare sigma (surface charge) values OR external field points
+- **Avoid**: Direct comparison of `rad.Fld()` inside materials for validation
+- **OK**: Use external observation points (outside all magnetic materials)
 
 ### Vector Potential A Field Implementation (2025-12-31)
 
@@ -681,6 +798,30 @@ mat2 = rad.MatLin([5001, 101], [0, 0, 1])  # Easy axis along z
 rad.MatApl(cube2, mat2)
 ```
 
+### Magnetization Units: A/m (NOT Tesla)
+
+**CRITICAL**: Radia uses **M in A/m** (Amperes per meter), the same units as H field.
+
+| Quantity | Symbol | SI Unit | Radia Convention |
+|----------|--------|---------|------------------|
+| Magnetization | M | A/m | M = chi * H |
+| Field strength | H | A/m | Internal + external field |
+| Flux density | B | Tesla | B = mu_0 * (H + M) |
+| Susceptibility | chi | - | chi = mu_r - 1 |
+
+**Common conversion** (NdFeB permanent magnet):
+```python
+# Br = 1.2 T (remanence in Tesla)
+# M = Br / mu_0 = 1.2 / (4*pi*1e-7) = 954930 A/m
+Mr = 954930  # A/m - use this in ObjHexahedron
+
+pm = rad.ObjHexahedron(vertices, [0, 0, Mr])  # Magnetization in A/m
+```
+
+**Do NOT confuse** M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M
+
+**Reference**: See [docs/ELF_CONVENTIONS.md](docs/ELF_CONVENTIONS.md) for detailed unit system documentation.
+
 ### MatSatIsoTab - Nonlinear Materials (B-H Curve)
 
 `rad.MatSatIsoTab()` defines **nonlinear isotropic magnetic materials** using a B-H curve.
@@ -818,23 +959,28 @@ B = rad.Fld(assembly, 'b', [0, 0, 0.1])
 
 ## Python Script Path Import Policy
 
-**Policy**: Use relative paths for module imports (not absolute paths).
+**Policy**: Import from `src/radia` package directory (not build directories).
 
 ```python
-# ✓ CORRECT - Relative path
+# ✓ CORRECT - Import from src/radia package
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import radia as rad
 
-# ✗ WRONG - Absolute path
-sys.path.insert(0, r"S:\Radia\01_GitHub\build\Release")
+# ✗ WRONG - Import from build directory (may be outdated)
+sys.path.insert(0, r"S:\Radia\01_GitHub\build-msvc")
 import radia as rad
 ```
 
 **Path patterns**:
-- Examples folder: `'../../build/Release'`
-- Tests folder: `'../build/Release'`
+- Examples folder: `'../../src/radia'`
+- Tests folder: `'../src/radia'`
+
+**Rationale**:
+- `src/radia/` contains the latest .pyd files copied by BuildMSVC.ps1
+- Build directories may contain outdated or version-tagged .pyd files
+- `build/Release/` is REMOVED - do not use
 
 ---
 
@@ -1177,8 +1323,9 @@ if os.path.exists(msvc_pyd):
 Solution: Always run `BuildMSVC.ps1` immediately before `python -m build`.
 
 **Build Path Priority** (setup.py):
-1. `build-msvc/` (MSVC + Intel MKL - PREFERRED)
-2. `build/Release/` (legacy CMake - fallback)
+1. `build-msvc/` (MSVC + Intel MKL - ONLY supported path)
+
+**Note**: `build/Release/` is REMOVED. Only `build-msvc/` is supported.
 
 ```powershell
 # Set PyPI API token (keep secure!)
@@ -1685,6 +1832,50 @@ run_all_benchmarks.py             # Orchestrator script
 
 ## Mesh Generation Tools
 
+### CAD Modeling and Mesh Generation Policy (2026-01-23)
+
+**CRITICAL**: Use **Coreform Cubit for CAD modeling**, then import to **Netgen for meshing**.
+
+**Workflow**:
+```
+Cubit (CAD modeling) → STEP export → Netgen (mesh import) → NGSolve (Curve for high-order)
+```
+
+**Rationale**:
+1. **Cubit excels at CAD**: Complex geometry creation, Boolean operations, parametric modeling
+2. **Netgen excels at meshing**: High-quality tetrahedral/hexahedral mesh generation
+3. **STEP as interchange**: Standard CAD format, preserves geometry accurately
+4. **High-order elements**: Use `mesh.Curve(order)` for curved boundaries
+
+**Policy**:
+- **Complex CAD**: Create in Cubit, export to STEP, import to Netgen
+- **Simple geometry**: Can use Netgen OCC directly (`netgen.occ.Box`, `Sphere`, etc.)
+- **Curved elements**: Always call `mesh.Curve(order)` after importing STEP geometry
+- **Mesh quality**: Use Cubit's mesh controls for element size grading
+
+**Implementation**:
+
+```python
+from netgen.occ import OCCGeometry
+from ngsolve import Mesh
+
+# Import STEP file (created in Cubit)
+geo = OCCGeometry('model.step')
+
+# Generate mesh
+ngmesh = geo.GenerateMesh(maxh=0.05)
+
+# Create NGSolve mesh and curve for high-order accuracy
+mesh = Mesh(ngmesh)
+mesh.Curve(3)  # 3rd order curved elements for accurate geometry
+
+# Now use with Radia or NGSolve FEM
+```
+
+**Note**: The `mesh.Curve(order)` method is essential for accurate representation of curved boundaries when using high-order finite elements.
+
+---
+
 ### Tool Selection by Element Type
 
 | Element Type | Tool | Notes |
@@ -1992,13 +2183,15 @@ Radia uses **MSC (Magnetic Surface Charge)** for all hexahedral elements:
 
 | Element Type | Faces | DOF | Python API | Use Case |
 |--------------|-------|-----|------------|----------|
-| **Tetrahedron** | 4 triangular | 3 (Mx, My, Mz) | `netgen_mesh_to_radia()` | Complex curved geometry |
-| **Hexahedron** | 6 quadrilateral | 6 (sigma per face) | `netgen_mesh_to_radia()` | Permanent magnets, soft iron |
+| **Tetrahedron** | 4 triangular | 3 (Mx, My, Mz) | `ObjTetrahedron()` | Complex curved geometry |
+| **Wedge** | 5 (2 tri + 3 quad) | 5 (sigma per face) | `ObjWedge()` | Transition elements in EIEM2 meshes |
+| **Hexahedron** | 6 quadrilateral | 6 (sigma per face) | `ObjHexahedron()` | Permanent magnets, soft iron |
 
-**Policy (2025-12-27, updated 2025-12-31)**:
-- **Python API**: Use `ObjHexahedron()` and `ObjTetrahedron()` for individual elements
+**Policy (2025-12-27, updated 2026-02-07)**:
+- **Python API**: Use `ObjHexahedron()`, `ObjWedge()`, and `ObjTetrahedron()` for individual elements
 - **Mesh import**: Use `netgen_mesh_to_radia()` for Netgen meshes
 - **Tetrahedron**: 3 DOF (Mx, My, Mz) - MMM method with uniform magnetization
+- **Wedge**: 5 DOF (sigma per face) - MSC method with surface charges on 2 tri + 3 quad faces
 - **Hexahedron**: 6 DOF (sigma per face) - MSC method with surface charges
 - 3 DOF hexahedron (MMM) is NOT supported - all hexahedra use 6 DOF MSC
 
@@ -2021,6 +2214,27 @@ Radia uses **MSC (Magnetic Surface Charge)** for all hexahedral elements:
 - Uses **global coordinates** directly (no local coordinate transformations)
 - Computes field using **solid angle integration** formula (van Oosterom & Strackee, 1983)
 - Handles **outward normal orientation** automatically
+
+### EIEM2 Evaluation Point Convention (2026-02-08)
+
+**CRITICAL**: Radia's MSC implementation matches **ELF's EIEM2** (Element Integral Equation Method, Order 2) exactly.
+
+**Evaluation Point**: The interaction matrix evaluation point for face `i` is the **midpoint between the face center and the element center**:
+
+```cpp
+EvalPt = 0.5 * (FaceCenter[i] + ElementCenter)
+```
+
+**Do NOT change this evaluation point**. This is the correct EIEM2 convention used in ELF.
+
+**Face Center**: Geometric centroid (arithmetic mean of 4 face vertices in global 3D coordinates). Matches ELF convention.
+
+**Element Center (CentrPoint)**: Arithmetic mean of all 8 hex vertices in global 3D coordinates.
+
+**Source Files**:
+- `rad_interaction.cpp`: `PrecomputeHexaGeometry()` stores eval points in `m_hexaEvalPoints`
+- `rad_interaction.cpp`: `SetupInteractMatrix_VariableDOF()` uses same eval point formula
+- `rad_hacapk.cpp`: On-demand 6x6 block computation uses same eval point formula
 
 ### Quick Start
 
@@ -2096,6 +2310,125 @@ rad.Solve(mag_obj, 0.0001, 1000, 1)
 - Hexahedron: 6 DOF (sigma per face) - surface charge density
 - LU solver (Method 0) and BiCGSTAB (Method 1) both work
 
+### IMA Symmetry and Field Direction (2026-01-29)
+
+**Important**: IMA (Image Method of Analysis) behavior depends on the relationship between field direction and mirror plane. This is an **electromagnetic phenomenon**, not an MSC-specific limitation.
+
+**Physical Phenomenon**:
+
+For Z-mirror symmetry with Z-directed field:
+- Magnetization M is the **SAME** in both cubes (M1 = M2) - physically correct
+- But MSC uses surface charge sigma = M · n as DOF
+- When geometry is Z-mirrored, z-face normals flip: n_mirror = -n_original
+- Therefore: sigma_mirror = M · n_mirror = -sigma_original
+
+| Configuration | M relationship | sigma relationship | IMA |
+|---------------|----------------|-------------------|-----|
+| X-mirror + Z-field | M1 = M2 | sigma_m = sigma_o | **Works** |
+| Z-mirror + Z-field | M1 = M2 | sigma_m = -sigma_o | Uses explicit elements |
+
+**Electromagnetic Basis**:
+- The induced magnetization M is symmetric regardless of field direction
+- The surface charge sigma = M · n depends on face normal direction
+- When field is perpendicular to mirror, sigma becomes antisymmetric (opposite signs)
+- This is correct physics, not a bug
+
+**IMA Sign Selection Policy** (2026-02-05):
+
+| Field Direction vs Mirror Plane | IMA Sign | Physical Meaning |
+|--------------------------------|----------|------------------|
+| Field **parallel** to mirror plane | **+** (symmetric) | Same field on both sides |
+| Field **perpendicular** to mirror plane | **-** (antisymmetric) | Field reverses across plane |
+
+**Example - Quarter Model with Z-field**:
+```python
+# Z-directed field with X-Z quarter model
+# - X-mirror (yz plane): Bz is PARALLEL to mirror plane -> use +x
+# - Z-mirror (xy plane): Bz is PERPENDICULAR to mirror plane -> use -z
+rad.Solve(container, 0.0001, 100, 0, image='+x-z')  # Correct for Z-field
+```
+
+**Example - Quarter Model with X-field**:
+```python
+# X-directed field with X-Z quarter model
+# - X-mirror (yz plane): Bx is PERPENDICULAR to mirror plane -> use -x
+# - Z-mirror (xy plane): Bx is PARALLEL to mirror plane -> use +z
+rad.Solve(container, 0.0001, 100, 0, image='-x+z')  # Correct for X-field
+```
+
+**Additional Recommendations**:
+1. **MMM (3-DOF tetrahedra)**: Uses M as DOF, IMA works for all field directions
+2. **MSC (6-DOF hexahedra)**: Follow the sign policy strictly
+3. **Boundary elements**: Avoid elements with faces ON the symmetry plane
+
+### IMA Boundary Element Limitation (2026-02-03, Updated 2026-02-04)
+
+**Known Limitation**: IMA field computation produces incorrect results for **boundary elements** (elements with faces ON the symmetry plane) when observation points are **also on the symmetry plane**.
+
+**Partial Fix (2026-02-04)**: Boundary faces now correctly handle off-plane observation points by negating sigma to account for the opposite normal direction of the mirror element's boundary face.
+
+**Problem Description**:
+- When a hexahedral element has a face at z=0 (the symmetry plane) and observation point is also at z=0
+- The mirrored geometry coincides with the original geometry
+- The solid angle computation for points ON the face plane produces incorrect results
+- Result: Field magnitude is approximately **half** of the correct value (ratio ~0.5)
+
+**Affected Cases** (verified 2026-02-04 after fix):
+
+| Element Position | Mirror Type | Observation Point | IMA Result | Status |
+|------------------|-------------|-------------------|------------|--------|
+| Face at z=0 | -z (antisym) | **On z=0 plane** | **~0.5x** | **FAIL** |
+| Face at z=0 | -z (antisym) | Off z=0 (z offset) | ~1.0x | **PASS (fixed)** |
+| Face at z=0 | -z (antisym) | Off z=0 (x offset) | ~1.0x | **PASS** |
+| No boundary face | -z (antisym) | Any location | ~1.0x | **PASS** |
+| No boundary face | +x (sym) | Any location | ~1.0x | **PASS** |
+
+**Key Finding**: IMA now works correctly for boundary elements when observation points are OFF the symmetry plane. The remaining limitation only affects observation points exactly ON the symmetry plane.
+
+**Root Cause Analysis**:
+For boundary faces (face at z=0 under z-mirror):
+1. mirrorVerts[i] has SAME geometry as faceVertices[i] (vertices at z=0 don't move)
+2. The computed normal from cross product is n_computed (same as original)
+3. But the mirror element's boundary face has opposite normal: n_c2 = -n_computed
+4. The sigma for the mirror face is: sigma_c2 = M . n_c2 = -Sigma[i]
+5. **Fixed**: Use mirrorSigma = -Sigma[i] for boundary faces (negated sigma)
+6. **Remaining issue**: Solid angle computation fails for observation points ON the face plane
+
+**This remaining limitation is fundamental** - it's a geometric singularity in the MSC formulation:
+- The solid angle from a point ON a face has special behavior
+- The full model handles this correctly because c1's face 0 and c2's face 1 are geometrically distinct
+- In IMA, the mirrored boundary face overlaps exactly with the original, causing numerical issues
+
+**Workaround**: Use explicit element duplication for models with boundary elements:
+
+```python
+# INSTEAD of using IMA:
+# rad.Solve(container, 0.0001, 100, 0, image='+x-z')  # May fail for boundary elements
+
+# USE explicit element duplication:
+def x_mirror(verts):
+    return [[-v[0], v[1], v[2]] for v in verts]
+
+def z_mirror(verts):
+    return [[v[0], v[1], -v[2]] for v in verts]
+
+def xz_mirror(verts):
+    return [[-v[0], v[1], -v[2]] for v in verts]
+
+c1 = rad.ObjHexahedron(v_sheared, [0, 0, 0])
+c2 = rad.ObjHexahedron(x_mirror(v_sheared), [0, 0, 0])
+c3 = rad.ObjHexahedron(z_mirror(v_sheared), [0, 0, 0])
+c4 = rad.ObjHexahedron(xz_mirror(v_sheared), [0, 0, 0])
+
+container = rad.ObjCnt([c1, c2, c3, c4, bkg])
+rad.Solve(container, 0.0001, 100, 0)  # No image parameter - correct result
+```
+
+**When IMA is Safe**:
+1. **Non-boundary elements only**: All elements are offset from symmetry planes
+2. **Observation points off-plane**: Observation points are not on symmetry planes
+3. **MMM (tetrahedra)**: 3-DOF magnetization method does not have this limitation
+
 ### Documentation
 
 - [docs/MSC_QUICK_START.md](docs/MSC_QUICK_START.md): Quick start guide
@@ -2169,17 +2502,17 @@ powershell.exe -ExecutionPolicy Bypass -File BuildRadiaInternal.ps1 -Verbose  # 
 
 **What the Script Does**:
 1. Runs CMake configure and build
-2. Finds `radia.cp312-win_amd64.pyd` in `build/Release/`
+2. Finds `radia.cp312-win_amd64.pyd` in `build-msvc/`
 3. Copies it to `src/radia/radia.pyd` (with rename)
 4. Verifies the copy with timestamp check
 
 **NEVER Do This**:
 ```powershell
 # WRONG - Does NOT copy .pyd to src/radia
-cmake --build build --config Release --target radia
+cmake --build build-msvc --config Release --target radia
 
 # WRONG - Manual copy forgets the rename
-copy build\Release\radia.cp312-win_amd64.pyd src\radia\
+copy build-msvc\radia.cp312-win_amd64.pyd src\radia\
 ```
 
 **If You Must Use Manual Commands** (not recommended):
@@ -2253,6 +2586,53 @@ def get_peak_memory_mb():
   "M_avg_z": 149846.0
 }
 ```
+
+---
+
+## Field Comparison Policy (2026-02-06)
+
+### Vector Difference, Not Magnitude
+
+**CRITICAL**: When comparing magnetic field values between solvers or models, use **vector difference**, not scalar magnitude difference.
+
+**Correct Formula**:
+```python
+import numpy as np
+
+# Compare two field vectors B1 and B2
+B1 = np.array([Bx1, By1, Bz1])  # e.g., from LU solver
+B2 = np.array([Bx2, By2, Bz2])  # e.g., from BiCGSTAB solver
+
+# Vector difference (CORRECT)
+diff_vector = np.linalg.norm(B1 - B2)
+rel_diff = diff_vector / np.linalg.norm(B1) * 100  # Percentage
+
+# Magnitude-only comparison (INCOMPLETE - avoids)
+# diff_mag = abs(np.linalg.norm(B1) - np.linalg.norm(B2))  # WRONG
+```
+
+**Rationale**:
+1. **Direction matters**: Two vectors with same magnitude but different directions are NOT equal
+2. **Physical accuracy**: Magnetic field is a vector quantity
+3. **IMA validation**: Mirror symmetry may affect field direction differently than magnitude
+
+**Example**:
+```python
+# Good - vector comparison
+B_lu = np.array(rad.Fld(model_lu, 'b', point))
+B_bicg = np.array(rad.Fld(model_bicg, 'b', point))
+vector_diff = np.linalg.norm(B_lu - B_bicg)
+rel_diff = vector_diff / np.linalg.norm(B_lu) * 100
+print(f"Vector difference: {rel_diff:.4f}%")
+
+# Avoid - scalar comparison only
+# diff_z = abs(B_lu[2] - B_bicg[2]) / abs(B_lu[2]) * 100  # Incomplete
+```
+
+**Acceptance Criteria**:
+- Solver comparison (LU vs BiCGSTAB): < 0.1% vector difference
+- IMA vs Full model: < 1.0% vector difference
+- ELF reference comparison: < 5.0% vector difference (different implementations)
 
 ---
 
@@ -2480,9 +2860,25 @@ solver = ESIMCellProblemSolver(
 
 **Policy**: ESIM is the recommended method for nonlinear magnetic materials in conductor problems.
 
+**Field-Dependent Surface Impedance**:
+```
+Zs(H) = Re{Zs(H)} + j·Im{Zs(H)}
+```
+
+The surface impedance is field-dependent, not just frequency-dependent.
+
+**1D Cell Problem**:
+ESIM solves the 1D cell problem in the depth direction:
+
+```
+d/dz[(1/μ(z)) · dH/dz] = jωσ·H
+```
+
+where μ(z) = μ(H(z)) for nonlinear materials (e.g., from the B-H curve of a specific material).
+
 **What ESIM Does**:
 1. Solves 1D Cell Problem in depth direction for each surface H-field value
-2. Computes effective surface impedance Z(H0) that accounts for:
+2. Computes effective surface impedance Zs(H0) that accounts for:
    - Skin effect (nonuniform current distribution)
    - Magnetic saturation (H-dependent μ)
    - Magnetic losses (complex μ = μ' - jμ")
@@ -2508,7 +2904,7 @@ solver = ESIMCellProblemSolver(
 - `src/radia/esim_coupled_solver.py`: 3D coupled solver using ESIM
 
 **Literature Reference**:
-K. Hollaus, M. Kaltenbacher, J. Schoberl, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025.
+K. Hollaus, V. Hanser, and M. Schobinger, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," IEEE Trans. Magnetics, 2025.
 
 ---
 

@@ -16,6 +16,7 @@ build/
 build-msvc/
 build-intel/
 dist/
+radia-*/
 *.egg-info/
 .eggs/
 

@@ -2545,21 +2545,112 @@ def generate_spice_netlist(model: UniversalRelaxationNetwork, port_name: str = "
             tau = comp['tau']
             w = comp['weight_magnitude'] * model.Z_ref
             R = w  # Approximate
-            C = tau / R if R > 0 else 1e-12
+            C = tau / R if R > 1e-12 else 1e-12
             lines.append(f"* Debye {i}: tau = {tau:.2e} s")
             lines.append(f"R_debye{i} {node} {node+1} {R:.6g}")
             lines.append(f"C_debye{i} {node} {node+1} {C:.6g}")
             node += 1
 
-    # CPE -> RC ladder approximation (simplified)
+    # Cole-Cole -> Multi-stage RC ladder (Charef approximation)
+    # Reference: Charef et al., "Fractal system as represented by singularity function", 1992
+    if 'cole_cole' in active:
+        import math
+        for i, comp in enumerate(active['cole_cole']):
+            tau = comp['tau']
+            alpha = comp['alpha']  # Cole-Cole exponent (0 < alpha <= 1)
+            w_mag = comp.get('weight_magnitude', 1.0)
+
+            lines.append(f"* Cole-Cole {i}: tau = {tau:.2e} s, alpha = {alpha:.3f}")
+            lines.append(f"* Charef RC ladder approximation (5 stages)")
+
+            # Charef method: approximate (1 + (jw*tau)^alpha)^-1
+            # with RC ladder having logarithmically spaced time constants
+            n_stages = 5
+            omega_c = 1.0 / tau
+
+            for j in range(n_stages):
+                decade_offset = j - n_stages // 2
+                tau_j = tau * (10 ** (decade_offset * alpha))
+
+                # Weight for each stage based on alpha
+                stage_weight = (1.0 / n_stages) * math.sin(alpha * math.pi / 2)
+                R_j = w_mag * model.Z_ref * stage_weight
+                C_j = tau_j / R_j if R_j > 1e-12 else 1e-12
+
+                R_j = max(1e-3, min(1e9, R_j))
+                C_j = max(1e-15, min(1e-3, C_j))
+
+                lines.append(f"R_cc{i}_{j} {node} {node+1} {R_j:.6g}")
+                lines.append(f"C_cc{i}_{j} {node+1} 0 {C_j:.6g}")
+                node += 1
+
+    # Warburg -> RC ladder (special case of CPE with n=0.5)
+    if 'warburg' in active:
+        import math
+        for i, comp in enumerate(active['warburg']):
+            Aw = comp['Aw']  # Warburg coefficient
+            w_mag = comp.get('weight_magnitude', 1.0)
+
+            lines.append(f"* Warburg {i}: Aw = {Aw:.4e}")
+            lines.append(f"* Warburg RC ladder approximation (5 stages, n=0.5)")
+
+            # Warburg is CPE with n=0.5: Z_W = Aw / sqrt(jw)
+            omega_c = model.omega_ref if hasattr(model, 'omega_ref') else 1000.0
+            n_stages = 5
+            n_exp = 0.5  # Warburg exponent
+
+            for j in range(n_stages):
+                decade_offset = j - n_stages // 2
+                omega_j = omega_c * (10 ** decade_offset)
+                tau_j = 1.0 / omega_j
+
+                # R_j proportional to Aw * omega^(-0.5)
+                R_j = Aw * (omega_j ** -0.5) * math.sin(0.5 * math.pi / 2) / n_stages
+                R_j = R_j * w_mag * model.Z_ref
+                C_j = tau_j / R_j if R_j > 1e-12 else 1e-12
+
+                R_j = max(1e-3, min(1e9, R_j))
+                C_j = max(1e-15, min(1e-3, C_j))
+
+                lines.append(f"R_warburg{i}_{j} {node} {node+1} {R_j:.6g}")
+                lines.append(f"C_warburg{i}_{j} {node+1} 0 {C_j:.6g}")
+                node += 1
+
+    # CPE -> RC ladder approximation using Valsa method
+    # Reference: Valsa & Vlach, "RC models of a constant phase element", 2013
     if 'cpe' in active:
         for i, comp in enumerate(active['cpe']):
-            n_exp = comp['n']
-            lines.append(f"* CPE {i}: n = {n_exp:.3f} (approximated)")
-            # Use 3-stage RC ladder approximation
-            for j in range(3):
-                R_j = 10 ** (j - 1) * model.Z_ref
-                C_j = 1e-9 * 10 ** (1 - j)
+            n_exp = comp['n']  # CPE exponent (0 < n < 1)
+            Q = comp['Q']      # CPE coefficient
+            w_mag = comp.get('weight_magnitude', 1.0)
+
+            lines.append(f"* CPE {i}: Q = {Q:.4e}, n = {n_exp:.3f}, weight = {w_mag:.4f}")
+            lines.append(f"* Valsa RC ladder approximation (5 stages)")
+
+            # Valsa method: Z_CPE = 1/(Q*(jw)^n)
+            # Approximate with 5-stage RC ladder covering 5 decades
+            # Center frequency from omega_ref
+            omega_c = model.omega_ref if hasattr(model, 'omega_ref') else 1000.0
+            n_stages = 5
+
+            for j in range(n_stages):
+                # Logarithmically spaced time constants
+                decade_offset = j - n_stages // 2  # -2, -1, 0, 1, 2
+                omega_j = omega_c * (10 ** decade_offset)
+                tau_j = 1.0 / omega_j
+
+                # Valsa formula for R and C at each stage
+                # R_j = (1/Q) * omega_j^(n-1) * sin(n*pi/2) / n_stages
+                # C_j = tau_j / R_j
+                import math
+                R_j = (1.0 / Q) * (omega_j ** (n_exp - 1)) * math.sin(n_exp * math.pi / 2) / n_stages
+                R_j = R_j * w_mag * model.Z_ref  # Scale by weight and reference
+                C_j = tau_j / R_j if R_j > 1e-12 else 1e-12
+
+                # Clamp to reasonable values
+                R_j = max(1e-3, min(1e9, R_j))
+                C_j = max(1e-15, min(1e-3, C_j))
+
                 lines.append(f"R_cpe{i}_{j} {node} {node+1} {R_j:.6g}")
                 lines.append(f"C_cpe{i}_{j} {node+1} 0 {C_j:.6g}")
                 node += 1

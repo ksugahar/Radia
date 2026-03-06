@@ -234,6 +234,69 @@ void radTGroup::SetM(TVector3d& M)
 }
 
 //-------------------------------------------------------------------------
+// B_genComp override for radTGroup
+// Propagates container's transformations to children before computing field.
+//-------------------------------------------------------------------------
+void radTGroup::B_genComp(radTField* FieldPtr)
+{
+	radTFieldKey& FieldKey = FieldPtr->FieldKey;
+
+	// If no transformations, just iterate through children
+	if(g3dListOfTransform.empty())
+	{
+		if(FieldKey.Ib_ || FieldKey.Ih_) B_intComp(FieldPtr);
+		else if(FieldKey.Force_) IntOverShape(FieldPtr);
+		else B_comp(FieldPtr);
+		return;
+	}
+
+	// Handle Force computation with transformations using standard approach
+	if(FieldKey.Force_)
+	{
+		NestedFor_IntOverShape(FieldPtr, g3dListOfTransform.begin());
+		return;
+	}
+
+	// For B/H field computation with transformations:
+	// Propagate transformations to children
+
+	// Save children's original transformation lists
+	std::vector<radTlphg> savedTransforms;
+	savedTransforms.reserve(GroupMapOfHandlers.size());
+
+	for(radTmhg::iterator iter = GroupMapOfHandlers.begin();
+		iter != GroupMapOfHandlers.end(); ++iter)
+	{
+		radTg3d* g3dPtr = static_cast<radTg3d*>(iter->second.rep);
+		savedTransforms.push_back(g3dPtr->g3dListOfTransform);
+
+		// Propagate container's transformations to each child
+		// (prepend in reverse order to maintain correct order)
+		for(radTlphg::reverse_iterator riter = g3dListOfTransform.rbegin();
+			riter != g3dListOfTransform.rend(); ++riter)
+		{
+			g3dPtr->g3dListOfTransform.push_front(*riter);
+		}
+	}
+
+	// Compute field from each child (each will use its own B_genComp)
+	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
+		iter != GroupMapOfHandlers.end(); ++iter)
+	{
+		static_cast<radTg3d*>(iter->second.rep)->B_genComp(FieldPtr);
+	}
+
+	// Restore children's original transformation lists
+	size_t idx = 0;
+	for(radTmhg::iterator iter = GroupMapOfHandlers.begin();
+		iter != GroupMapOfHandlers.end(); ++iter, ++idx)
+	{
+		radTg3d* g3dPtr = static_cast<radTg3d*>(iter->second.rep);
+		g3dPtr->g3dListOfTransform = savedTransforms[idx];
+	}
+}
+
+//-------------------------------------------------------------------------
 
 int radTGroup::SubdivideItself(double* SubdivArray, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
 {

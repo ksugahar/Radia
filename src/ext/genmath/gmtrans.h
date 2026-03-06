@@ -14,6 +14,7 @@
 #define __GMTRANS_H
 
 #include "gmvect.h"
+#include <cstdio>  // DEBUG
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -62,11 +63,17 @@ public:
 
 	virtual TVector3d TrPoint(const TVector3d& P) { return M*P+V;}
 	virtual TVector3d TrBiPoint(const TVector3d& P) { return M*P;}
-	virtual TVector3d TrVectField(const TVector3d& B) { return s*(M*B);}
+	virtual TVector3d TrVectField(const TVector3d& B) {
+		// Geometric transformation for field vectors
+		return s * (M * B);
+	}
 	virtual TVector3d TrVectPoten(const TVector3d& A) { return /* s*detM*(M_inv*A); */ s*detM*(M*A);}
 	virtual TVector3d TrPoint_inv(const TVector3d& P) { return M_inv*(P-V);}
 	virtual TVector3d TrBiPoint_inv(const TVector3d& P) { return M_inv*P;}
-	virtual TVector3d TrVectField_inv(const TVector3d& B) { return s*(M_inv*B);}
+	virtual TVector3d TrVectField_inv(const TVector3d& B) {
+		// Geometric transformation for field vectors (inverse)
+		return s * (M_inv * B);
+	}
 	virtual TVector3d TrVectPoten_inv(const TVector3d& A) { return /* (s/detM)*(M*A); */ (s/detM)*(M_inv*A);}
 
 	virtual TVector3d TrAxialVect(const TVector3d& A) { return detM*(M*A);}
@@ -74,8 +81,8 @@ public:
 
 	virtual void TrMatrixGeom(TMatrix3d& Matrix) { Matrix = M*Matrix;}
 	virtual void TrMatrixGeom_inv(TMatrix3d& Matrix) { Matrix = M_inv*Matrix;}
-	virtual void TrMatrix(TMatrix3d& Matrix) { Matrix = s*M*Matrix;}
-	virtual void TrMatrix_inv(TMatrix3d& Matrix) { Matrix = s*M_inv*Matrix;}
+	virtual void TrMatrix(TMatrix3d& Matrix) { Matrix = s * M * Matrix;}
+	virtual void TrMatrix_inv(TMatrix3d& Matrix) { Matrix = s * M_inv * Matrix;}
 
 	virtual void TrMatrixGeomLeft(TMatrix3d& Matrix) { Matrix = Matrix*M;}
 	virtual void TrMatrixGeomLeft_inv(TMatrix3d& Matrix) { Matrix = Matrix*M_inv;}

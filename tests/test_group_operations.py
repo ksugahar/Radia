@@ -10,7 +10,7 @@ Tests ObjCnt (Container/Group) functionality:
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../build/Release"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 import pytest
 import radia as rad
@@ -151,7 +151,7 @@ class TestGroupMaterialApplication:
 		group = rad.ObjCnt(mags)
 
 		# Apply material to group (anisotropic material with easy axis in [1,1,1] direction)
-		mat = rad.MatLin([1000, 0], [1, 1, 1])  # Easy axis direction
+		mat = rad.MatLin([1000, 1], [1, 1, 1])  # Easy axis direction
 		rad.MatApl(group, mat)
 
 		# Field should be computed
@@ -169,10 +169,10 @@ class TestGroupFieldEvaluation:
 
 		# Create individual magnets
 		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-		rad.MatApl(mag1, rad.MatLin([1000, 0], [1, 1, 1]))  # Anisotropic, easy axis [1,1,1]
+		rad.MatApl(mag1, rad.MatLin([1000, 1], [1, 1, 1]))  # Anisotropic, easy axis [1,1,1]
 
 		mag2 = rad.ObjRecMag([20, 0, 0], [10, 10, 10], [0, 0, 1])
-		rad.MatApl(mag2, rad.MatLin([1000, 0], [1, 1, 1]))  # Anisotropic, easy axis [1,1,1]
+		rad.MatApl(mag2, rad.MatLin([1000, 1], [1, 1, 1]))  # Anisotropic, easy axis [1,1,1]
 
 		# Field from individual objects
 		H1 = np.array(rad.Fld(mag1, 'h', [30, 0, 0]))
@@ -193,7 +193,7 @@ class TestGroupFieldEvaluation:
 		mags = []
 		for i in range(5):
 			mag = rad.ObjRecMag([i*15, 0, 0], [10, 10, 10], [0, 0, 1])
-			rad.MatApl(mag, rad.MatLin([1000, 0], [1, 1, 1]))  # Anisotropic, easy axis [1,1,1]
+			rad.MatApl(mag, rad.MatLin([1000, 1], [1, 1, 1]))  # Anisotropic, easy axis [1,1,1]
 			mags.append(mag)
 
 		group = rad.ObjCnt(mags)

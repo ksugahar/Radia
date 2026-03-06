@@ -10,7 +10,7 @@ Tests message handling and serialization:
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../build/Release"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 import pytest
 import radia as rad
@@ -53,10 +53,10 @@ class TestErrorHandling:
 		rad.UtiDelAll()
 
 		try:
-			# Invalid ksi array (wrong length)
+			# Invalid mu_r array (wrong length)
 			mat = rad.MatLin([1000], [0, 0, 1])
 			# Should fail
-			assert False, "Should have raised error for invalid ksi array"
+			assert False, "Should have raised error for invalid mu_r array"
 		except:
 			# Expected
 			pass
@@ -89,7 +89,7 @@ class TestObjectDuplication:
 
 		# Create magnet with material
 		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-		mat = rad.MatLin([1000, 0], [1, 1, 1])  # Anisotropic, easy axis [1,1,1]
+		mat = rad.MatLin([1000, 1], [1, 1, 1])  # Anisotropic, easy axis [1,1,1]
 		rad.MatApl(mag1, mat)
 
 		# Duplicate

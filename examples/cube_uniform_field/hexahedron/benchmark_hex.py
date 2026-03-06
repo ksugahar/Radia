@@ -32,7 +32,7 @@ os.environ['MKL_NUM_THREADS'] = '8'
 
 # Add parent directory for benchmark_common
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src'))
 
 import radia as rad
 from benchmark_common import (

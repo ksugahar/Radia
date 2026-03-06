@@ -211,8 +211,9 @@ def run_benchmark(mesh_type, mesh_param, n_grid):
     rad.MatApl(container, mat)
 
     # Add external field (B_ext = mu0 * H_ext)
+    # ObjBckg callback returns B in Tesla
     B_ext = MU_0 * H_EXT
-    ext = rad.ObjBckg([0, 0, B_ext])
+    ext = rad.ObjBckg(lambda p: [0, 0, B_ext])
     grp = rad.ObjCnt([container, ext])
 
     t_mesh = time.perf_counter() - t_start
