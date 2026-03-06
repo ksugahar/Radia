@@ -6,57 +6,39 @@ Complete 3D magnetostatic simulation of beam steering electromagnet with racetra
 
 This directory contains a complete electromagnet simulation workflow:
 
-1. **Mesh Generation**: Generate Nastran mesh from Cubit journal file
+1. **Mesh Generation**: Generate Netgen mesh directly from Cubit (no intermediate files)
 2. **Magnetostatic Simulation**: Solve field distribution with Radia
-3. **Visualization**: Export geometry and fields for ParaView
+3. **Visualization**: Export field distribution for ParaView
+
+**Workflow**: Cubit geometry -> export_netgen() -> Netgen mesh -> Radia
 
 ## Files
 
 ### Main Simulation
 
 - **`main_simulation_workflow.py`** - Main simulation script
+  - Loads magnetic yoke via Cubit -> Netgen direct export
   - Creates racetrack coil geometry
-  - Loads magnetic yoke from Nastran mesh
   - Solves magnetostatic problem
-  - Exports geometry (VTK) and field distribution (VTK)
+  - Exports field distribution (VTS)
 
 ### Mesh Generation
 
-- **`york_cubit_mesh.py`** - Generate York.bdf from Cubit journal file
-  - Input: `york.jou` (Cubit journal file)
-  - Output: `York.bdf` (Nastran format), `York.vtk` (visualization)
+- **`york_cubit_mesh.py`** - Generate Netgen mesh from Cubit journal file
+  - Input: `York.jou` (Cubit journal file)
+  - Output: Netgen mesh (in-memory), `York.vtk` (visualization)
   - Creates hexahedral and pentahedral mesh for magnetic yoke
 
 - **`York.jou`** - Cubit journal file with yoke geometry definition
 
-### Utilities (in `src/radia/`)
-
-- **`nastran_mesh_import.py`** - Nastran mesh import and conversion to Radia
-
 ## Complete Workflow
 
-### Step 1: Generate Mesh from Cubit Journal
+### Step 1: Run Simulation (includes mesh generation)
 
 ```bash
 cd examples/electromagnet
 
-# Generate Nastran mesh from Cubit journal
-python york_cubit_mesh.py
-```
-
-**Output**:
-- `York.bdf` - Nastran mesh for Radia simulation (569 vertices, 288 elements)
-- `York.vtk` - VTK mesh for ParaView visualization
-- `York.msh` - Gmsh format (optional)
-
-**Requirements**:
-- Coreform Cubit 2025.3 (or compatible version)
-- `york.jou` - Cubit journal file with geometry definition
-
-### Step 2: Run Magnetostatic Simulation
-
-```bash
-# Run complete simulation
+# Run complete simulation (Cubit -> Netgen -> Radia)
 python main_simulation_workflow.py
 ```
 
@@ -66,11 +48,9 @@ python main_simulation_workflow.py
 ELECTROMAGNET SIMULATION WORKFLOW
 ======================================================================
 
-[Step 1/5] Importing yoke mesh from York.bdf...
-[Nastran Import] Reading file: York.bdf
-                 Vertices: 569
-                 Hexahedral elements: 288
-                 Wedge elements: 8
+[Step 1/5] Importing yoke mesh via Cubit -> Netgen...
+  Reading: York.jou
+  Exporting to Netgen mesh...
   [OK] Yoke imported: ID=297
 
 [Step 2/5] Creating racetrack coil...
@@ -80,17 +60,11 @@ ELECTROMAGNET SIMULATION WORKFLOW
 [Step 3/5] Combining coil + yoke...
   [OK] Combined model: ID=605
 
-[Step 4/5] Exporting Radia_model.vtk...
-  Polygons: 1848
-  Points: 7376
-
-[Step 5/5] Calculating magnetic field distribution...
-  Grid: 21x31x21 = 13671 points
-  Solving magnetostatics...
+[Step 4/5] Solving magnetostatics...
   [OK] Solution converged
-  Calculating magnetic field...
-  [OK] Field calculated at 13671 points
-  [OK] Exported: field_distribution.vtk
+
+[Step 5/5] Exporting field distribution...
+  [OK] Field distribution exported to field_distribution.vts
 
 ======================================================================
 SIMULATION COMPLETE
@@ -98,34 +72,19 @@ SIMULATION COMPLETE
 ```
 
 **Output Files**:
-- `Radia_model.vtk` - Combined geometry (coil + yoke) in VTK Legacy format
-- `field_distribution.vtk` - 3D magnetic field distribution with vectors
+- `field_distribution.vts` - 3D magnetic field distribution (VTS format)
 
-### Step 3: Visualize in ParaView
-
-#### Method 1: Open Combined Geometry
-
-```bash
-# Open combined geometry
-paraview Radia_model.vtk
-```
-
-**In ParaView**:
-1. Click "Apply"
-2. Adjust colors using "Radia_colours" field
-3. Rotate view to inspect coil and yoke geometry
-
-#### Method 2: Open Field Distribution
+### Step 2: Visualize in ParaView
 
 ```bash
 # Open magnetic field distribution
-paraview field_distribution.vtk
+paraview field_distribution.vts
 ```
 
 **In ParaView**:
 1. Click "Apply"
 2. Add **Glyph** filter:
-   - Filters → Common → Glyph
+   - Filters -> Common -> Glyph
    - Glyph Type: Arrow
    - Scalars: None
    - Vectors: B_field
@@ -136,14 +95,20 @@ paraview field_distribution.vtk
 **Visualization Tips**:
 - Use **Slice** filter to view field on cutting planes
 - Use **Contour** filter for field magnitude iso-surfaces
-- Use **Calculator** to compute |B| magnitude: `sqrt(B_field_X^2 + B_field_Y^2 + B_field_Z^2)`
+- Use **Calculator** to compute |B| magnitude
+
+## Requirements
+
+- **Coreform Cubit 2025.3+** - For hex mesh generation
+- **cubit_mesh_export** - From S:\CoreformCubit\01_GitHub
+- **NGSolve** - For Netgen mesh wrapper
+- **ParaView** - For visualization
 
 ## Geometry Specifications
 
 ### Racetrack Coil
 
 ```python
-# From racetrack_coil_model.py
 Center: [0, 131.25, 0] mm
 X dimensions: inner=5 mm, outer=40 mm
 Y dimensions: inner=50 mm, outer=62.5 mm
@@ -154,80 +119,35 @@ Current density: -0.544218 A/mm^2
 Arc approximation: 3 segments
 ```
 
-**Bounding box**: X[-65, 65], Y[60, 202.5], Z[-52.5, 52.5] mm
-
 ### Magnetic Yoke
 
-**Source**: `york.jou` (Cubit journal file)
+**Source**: `York.jou` (Cubit journal file)
 
 **Mesh**:
-- Format: Nastran bulk data (.bdf)
+- Format: Netgen (direct from Cubit via export_netgen)
 - Elements: 240 hexahedra + 48 pentahedra = 288 total
 - Nodes: ~495
 
 **Material**:
-- Type: Linear isotropic
-- Relative permeability: μr = 1000
-- No remanent magnetization
-
-## Solver Configuration
-
-```python
-# Magnetostatic solver settings
-Precision: 0.01
-Max iterations: 1000
-Method: 4 (relaxation)
-```
-
-**Typical convergence**: ~20-30 iterations
-
-## Field Calculation
-
-**Field points**: Three positions along Z-axis
-- Origin: [0, 0, 0]
-- Z=100mm: [0, 0, 100]
-- Z=500mm: [0, 0, 500]
-
-**Field distribution grid**:
-- Range: Geometry bbox + 50mm margin
-- Resolution: 21 × 31 × 21 = 13,671 points
-- Format: VTK STRUCTURED_POINTS with vector data
-
-## File Formats
-
-### VTK Legacy (ASCII)
-
-**Current format** - Used for all outputs
-
-**Advantages**:
-- Human-readable ASCII
-- Compatible with all VTK tools and ParaView versions
-- Single combined file for geometry
-- Point data format for field distribution
-
-**Files**:
-- `Radia_model.vtk` - Combined coil + yoke geometry (POLYDATA)
-- `field_distribution.vtk` - Structured point cloud with vector field data (POLYDATA with VECTORS)
+- Type: Nonlinear isotropic (saturation model)
+- Applied via `rad.MatSatIsoFrm()`
 
 ## Troubleshooting
 
-### "York.bdf not found"
+### "Cubit not found"
 
-**Solution**: Run mesh generation first:
-```bash
-python york_cubit_mesh.py
-```
-
-This will generate `York.bdf` from `york.jou` using Cubit.
-
-### "Cubit not found" (york_cubit_mesh.py)
-
-**Solution**: Install Coreform Cubit or adjust path in `york_cubit_mesh.py`:
+**Solution**: Install Coreform Cubit or adjust paths:
 ```python
-sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")
+CUBIT_PATH = "C:/Program Files/Coreform Cubit 2025.3/bin"
+CUBIT_EXPORT_PATH = "S:/CoreformCubit/01_GitHub"
 ```
 
-**Alternative**: Use pre-generated `York.bdf` (already provided in repository)
+### "cubit_mesh_export not found"
+
+**Solution**: Clone the Coreform Cubit Mesh Export repository:
+```bash
+git clone https://github.com/ksugahar/Coreform_Cubit_Mesh_Export S:/CoreformCubit/01_GitHub
+```
 
 ### Solver returns NaN
 
@@ -237,20 +157,8 @@ sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")
 3. Material property errors
 
 **Solution**:
-- Verify mesh quality in ParaView: `paraview York_mesh.vtk`
+- Verify mesh quality in ParaView: `paraview York.vtk`
 - Check coil and yoke bounding boxes overlap correctly
-- Verify material properties in `yoke_model.py`
-
-### Field distribution file is huge
-
-**Issue**: 13,671 points × 3 components = ~40KB (normal size)
-
-If file is >10MB, grid resolution may be too high. Adjust in `main_simulation_workflow.py`:
-```python
-x_range = np.linspace(-100, 100, 21)  # Reduce number of points
-y_range = np.linspace(0, 250, 31)
-z_range = np.linspace(-100, 100, 21)
-```
 
 ## Coordinate System
 
@@ -259,31 +167,17 @@ z_range = np.linspace(-100, 100, 21)
 - **Z**: Vertical
 
 All dimensions in **millimeters (mm)**.
-
 All magnetic field values in **Tesla (T)**.
-
-## Performance Notes
-
-**VTK export timing** (typical):
-- Radia_model.vtk: ~1-2 seconds (combined coil + yoke, 1848 polygons)
-
-**Field calculation timing**:
-- 13,671 points: ~5-10 seconds (depending on CPU)
-
-## Further Reading
-
-- [Radia Python API](../../README.md)
-- [Nastran Mesh Import](../../src/radia/nastran_mesh_import.py)
 
 ## References
 
 - **Radia**: https://github.com/ochubar/Radia
 - **Coreform Cubit**: https://coreform.com/products/coreform-cubit/
+- **Coreform Cubit Mesh Export**: https://github.com/ksugahar/Coreform_Cubit_Mesh_Export
 - **ParaView**: https://www.paraview.org/
-- **Nastran**: MSC Nastran Bulk Data format
 
 ---
 
-**Last Updated**: 2025-11-26
-**Workflow**: Cubit → Nastran → Radia → VTK → ParaView
-**Status**: ✓ Working - All bugs fixed (face duplication resolved)
+**Last Updated**: 2026-01-16
+**Workflow**: Cubit -> Netgen (direct) -> Radia -> VTS -> ParaView
+**Status**: Updated to use Cubit -> Netgen direct export (no Nastran)

@@ -1,6 +1,4 @@
 """
-Historical example: the CLN reduction route is retired and is not a validation route.
-Independent caller algebra is retained; external PEEC assembly is not bundled.
 PEEC Loop-Star行列のテスト
 
 Loop（インダクタンス）とStar（ポテンシャル係数/容量）行列を構築し、
@@ -13,17 +11,13 @@ Loop（インダクタンス）とStar（ポテンシャル係数/容量）行�
 4. 周波数特性（低周波: 誘導性、高周波: 容量性）
 """
 
-def _retired_field_reduction(*args, **kwargs):
-    raise RuntimeError("This historical CLN reduction route has been retired.")
-
-
 import numpy as np
 import sys
 
-# CLNライブラリへのパス
-# External research package is not auto-loaded from a private drive.
+# PRIMAライブラリへのパス
+sys.path.insert(0, r'W:\30_CauerLadderNetwork\2021_01_22_CauerI_to_CauerII\Python')
 
-from cln.peec_matrices import (
+from prima.peec_matrices import (
     PEECSegment,
     PEECNode,
     build_peec_matrices,
@@ -184,16 +178,16 @@ def test_frequency_response():
     return True
 
 
-def test_cln_with_star():
-    """CLN変換とStar行列の結合テスト
+def test_prima_with_star():
+    """PRIMA変換とStar行列の結合テスト
 
-    Loop部分をCLN変換し、Star部分との結合を検証
+    Loop部分をPRIMA変換し、Star部分との結合を検証
     """
     print("\n" + "=" * 60)
-    print("Test 4: CLN Transformation with Star Coupling")
+    print("Test 4: PRIMA Transformation with Star Coupling")
     print("=" * 60)
 
-    lanczos = _retired_field_reduction
+    from prima.lanczos import lanczos
 
     # ワイヤパラメータ（より多くのセグメント）
     length = 0.1
@@ -207,13 +201,13 @@ def test_cln_with_star():
 
     print(f"Original dimensions: n_loop={matrices.n_loop}, n_star={matrices.n_star}")
 
-    # Loop部分のCLN変換
+    # Loop部分のPRIMA変換
     # lanczos(K=R, N=L) -> R_diag, L_tridiag
     n_reduced = min(5, matrices.n_loop)
 
     result = lanczos(matrices.R, matrices.L, n_iter=n_reduced)
 
-    print(f"CLN reduced dimensions: {n_reduced}")
+    print(f"PRIMA reduced dimensions: {n_reduced}")
     print(f"R_diag shape: {result.R_diag.shape}")
     print(f"L_tridiag shape: {result.L_tridiag.shape}")
 
@@ -231,7 +225,7 @@ def test_cln_with_star():
     print(f"M_LS reduced shape: {M_LS_reduced.shape}")
 
     # 周波数特性の比較
-    print("\nComparing frequency response (original vs CLN-reduced)...")
+    print("\nComparing frequency response (original vs PRIMA-reduced)...")
 
     port_vector_original = np.zeros(matrices.n_loop)
     port_vector_original[0] = 1.0
@@ -249,7 +243,7 @@ def test_cln_with_star():
         # オリジナル
         Z_orig = compute_port_impedance(matrices, omega, port_vector_original)
 
-        # CLN縮約版のインピーダンス計算
+        # PRIMA縮約版のインピーダンス計算
         # Z_LL_reduced = R_diag + jw*L_tridiag
         Z_LL_red = result.R_diag + 1j * omega * result.L_tridiag
 
@@ -293,7 +287,7 @@ def main():
         ("Simple Wire", test_simple_wire),
         ("Circular Loop", test_circular_loop),
         ("Frequency Response", test_frequency_response),
-        ("CLN with Star", test_cln_with_star),
+        ("PRIMA with Star", test_prima_with_star),
     ]
 
     results = []

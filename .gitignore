@@ -188,6 +188,9 @@ file_format_documents/
 # Reference repositories (local only)
 参考/
 
+# Large external datasets (DO NOT COMMIT)
+examples/Universal_Relaxation_Network/data/5. Battery Data Set/
+
 # Debug and development outputs (DO NOT COMMIT)
 debug/
 *_output.txt

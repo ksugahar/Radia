@@ -28,6 +28,7 @@
 #include "rad_point_classify.h"
 #include <vector>
 #include <cstdint>
+#include <complex>
 
 // Forward declarations
 class radTg3d;
@@ -222,6 +223,352 @@ void ReleaseFMM(int container_handle);
 bool BuildElementData(
     int container_handle,
     std::vector<RadPointClassify::ElementData>& elements
+);
+
+// ============================================================================
+// Complex Field Computation (for PEEC+MMM coupling)
+// ============================================================================
+
+/**
+ * @brief Complex field result for AC/frequency domain analysis
+ */
+struct ComplexFieldResult {
+    std::complex<double> Bx, By, Bz;  // B field [Tesla]
+    std::complex<double> Hx, Hy, Hz;  // H field [A/m]
+    std::complex<double> Ax, Ay, Az;  // Vector potential [T*m]
+    PointStatus status;                // Point classification
+    int element_id;                    // Containing element (-1 if outside)
+};
+
+/**
+ * @brief Compute complex B field at a single point
+ *
+ * For static (DC) analysis, imaginary parts are zero.
+ * For AC analysis with sinusoidal magnetization, this handles phase.
+ *
+ * @param g3dPtr      Pointer to Radia 3D object
+ * @param point       Evaluation point [x, y, z]
+ * @param M_complex   Optional: complex magnetization values for each element
+ *                    Format: [Mx0_re, My0_re, Mz0_re, Mx0_im, My0_im, Mz0_im, ...]
+ *                    If nullptr, use static magnetization from elements
+ * @param n_elements  Number of elements (only used if M_complex is provided)
+ * @param config      Computation configuration
+ * @return            ComplexFieldResult with B, H field values
+ */
+ComplexFieldResult ComputeComplexFieldSingle(
+    radTg3d* g3dPtr,
+    const TVector3d& point,
+    const std::complex<double>* M_complex = nullptr,
+    int n_elements = 0,
+    const ComputeConfig& config = ComputeConfig()
+);
+
+/**
+ * @brief Batch compute complex B field at multiple points (OpenMP parallelized)
+ *
+ * Used by PEEC+MMM coupled solver for efficient field evaluation.
+ *
+ * @param g3dPtr      Pointer to Radia 3D object
+ * @param points      Array of evaluation points [x0,y0,z0, x1,y1,z1, ...]
+ * @param n_points    Number of points
+ * @param M_complex   Optional: complex magnetization for each element
+ * @param n_elements  Number of elements (for M_complex array)
+ * @param config      Computation configuration
+ * @param B_out       Output: complex B field [Bx0,By0,Bz0, Bx1,By1,Bz1, ...]
+ * @param status_out  Output: point status array (may be nullptr)
+ */
+void ComputeComplexFieldBatch(
+    radTg3d* g3dPtr,
+    const double* points,
+    int n_points,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    const ComputeConfig& config,
+    std::complex<double>* B_out,
+    PointStatus* status_out = nullptr
+);
+
+/**
+ * @brief Element face data for MSC (Magnetic Surface Charge) integration
+ *
+ * Stores face geometry for accurate near-field computation.
+ * For tetrahedra: 4 triangular faces
+ * For hexahedra: 6 quadrilateral faces (split into 2 triangles each)
+ */
+struct ElementFaceData {
+    int n_faces;                              // Number of faces (4 for tet, 6 for hex)
+    std::vector<std::vector<TVector3d>> face_vertices;  // Vertices per face
+    TVector3d centroid;                       // Element centroid
+    double characteristic_size;               // Element size for distance check
+};
+
+/**
+ * @brief Compute B field from MMM elements with complex magnetization
+ *
+ * ADAPTIVE METHOD: Uses MSC integration for near-field, dipole for far-field.
+ * - Near field (r < 3 * element_size): MSC surface charge integration (high accuracy)
+ * - Far field (r >= 3 * element_size): Dipole approximation (fast, <5% error)
+ *
+ * @param point       Evaluation point
+ * @param centers     Element centers [x0,y0,z0, x1,y1,z1, ...]
+ * @param volumes     Element volumes
+ * @param M_complex   Complex magnetization [Mx0,My0,Mz0, Mx1,My1,Mz1, ...]
+ * @param n_elements  Number of elements
+ * @param B_out       Output: complex B field [Bx, By, Bz]
+ */
+void ComputeBFromMagnetization(
+    const TVector3d& point,
+    const double* centers,
+    const double* volumes,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Compute B field with error-controlled adaptive method
+ *
+ * Switches between MSC integration and dipole approximation based on
+ * TARGET ERROR specification. The dipole approximation error scales as:
+ *   error ~ (element_size / distance)^3
+ *
+ * Distance threshold is computed from target error:
+ *   r_threshold = element_size / target_error^(1/3)
+ *
+ * Examples:
+ *   target_error = 0.01 (1%)  -> r > 4.6 * element_size uses dipole
+ *   target_error = 0.05 (5%)  -> r > 2.7 * element_size uses dipole
+ *   target_error = 0.10 (10%) -> r > 2.2 * element_size uses dipole
+ *
+ * Special values:
+ *   target_error = 0.0  -> Always use MSC (exact, slow)
+ *   target_error = 1.0  -> Always use dipole (fast, approximate)
+ *
+ * @param point          Evaluation point
+ * @param face_data      Element face data array
+ * @param M_complex      Complex magnetization [Mx0,My0,Mz0, Mx1,My1,Mz1, ...]
+ * @param n_elements     Number of elements
+ * @param target_error   Target relative error (0.0 to 1.0, default: 0.05 = 5%)
+ * @param B_out          Output: complex B field [Bx, By, Bz]
+ */
+void ComputeBFromMagnetizationAdaptive(
+    const TVector3d& point,
+    const ElementFaceData* face_data,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    double target_error,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Convert target error to distance threshold factor
+ *
+ * Based on dipole approximation error: error ~ (a/r)^3
+ * -> r/a = 1 / error^(1/3)
+ *
+ * @param target_error  Target relative error (0.0 to 1.0)
+ * @return              Distance threshold as multiple of element size
+ */
+inline double ErrorToThresholdFactor(double target_error) {
+    if (target_error <= 0.0) return 1e10;  // Always MSC
+    if (target_error >= 1.0) return 0.0;   // Always dipole
+    return 1.0 / std::pow(target_error, 1.0/3.0);
+}
+
+/**
+ * @brief Build element face data from Radia 3D object
+ *
+ * Extracts face geometry from all elements for MSC integration.
+ *
+ * @param g3dPtr     Pointer to Radia 3D object
+ * @param face_data  Output: face data array (one per element)
+ * @return           Number of elements processed
+ */
+int BuildElementFaceData(
+    radTg3d* g3dPtr,
+    std::vector<ElementFaceData>& face_data
+);
+
+/**
+ * @brief Check if point is inside any element (with element data cache)
+ *
+ * Shared by both static MMM and PEEC+MMM solvers for inside/outside
+ * classification. Uses solid angle method for accurate determination.
+ *
+ * @param point           Point to check
+ * @param elements        Pre-built element data (from BuildElementData)
+ * @param containing_elem Output: index of containing element (-1 if outside)
+ * @return                true if point is inside any element
+ */
+bool IsPointInsideAnyElement(
+    const TVector3d& point,
+    const std::vector<RadPointClassify::ElementData>& elements,
+    int& containing_elem
+);
+
+/**
+ * @brief Get magnetization at point inside an element
+ *
+ * For points inside magnetic elements, returns the element's magnetization.
+ * For PEEC+MMM, this uses the complex solution magnetization.
+ *
+ * @param containing_elem Index of containing element
+ * @param M_complex       Complex magnetization array (nullptr for static)
+ * @param n_elements      Number of elements
+ * @param M_out           Output: magnetization [Mx, My, Mz] (complex)
+ * @return                true if successful
+ */
+bool GetMagnetizationInElement(
+    int containing_elem,
+    const std::complex<double>* M_complex,
+    int n_elements,
+    std::complex<double>* M_out
+);
+
+// ============================================================================
+// PEEC Conductor Field Computation (Biot-Savart with ExaFMM acceleration)
+// ============================================================================
+
+/**
+ * @brief Conductor segment data for Biot-Savart field computation
+ *
+ * Represents a filament segment carrying current.
+ * Can be used directly for FMM acceleration.
+ */
+struct ConductorSegment {
+    TVector3d start;    // Segment start point
+    TVector3d end;      // Segment end point
+    TVector3d center;   // Segment center (for FMM)
+    TVector3d tangent;  // Unit tangent vector (direction of current flow)
+    double length;      // Segment length
+};
+
+/**
+ * @brief Compute B field from conductor current using Biot-Savart
+ *
+ * Uses Laplace kernel: B = (mu0/4pi) * I * integral{ dl x r / r^3 }
+ *
+ * For FMM acceleration, segments are approximated as current dipoles:
+ *   m_current = I * dl (magnetic moment equivalent)
+ *   B = (mu0/4pi) * [3(m.r)r/r^5 - m/r^3] (same formula as magnetic dipole)
+ *
+ * @param point        Evaluation point
+ * @param segments     Array of conductor segments
+ * @param n_segments   Number of segments
+ * @param current      Complex current [A]
+ * @param B_out        Output: complex B field [Bx, By, Bz]
+ */
+void ComputeBFromConductor(
+    const TVector3d& point,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Batch compute B field from conductor (OpenMP + optional FMM)
+ *
+ * For large numbers of segments and points, uses FMM acceleration.
+ *
+ * @param points       Evaluation points [x0,y0,z0, ...]
+ * @param n_points     Number of points
+ * @param segments     Conductor segments
+ * @param n_segments   Number of segments
+ * @param current      Complex current [A]
+ * @param use_fmm      Use FMM acceleration if available
+ * @param fmm_eps      FMM tolerance (0 = auto)
+ * @param B_out        Output: complex B field [Bx0,By0,Bz0, ...]
+ */
+void ComputeBFromConductorBatch(
+    const double* points,
+    int n_points,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    bool use_fmm,
+    double fmm_eps,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Combined PEEC+MMM field computation
+ *
+ * Computes total B field from both conductor current and magnetization.
+ * B_total = B_conductor + B_magnet
+ *
+ * Uses shared FMM tree for efficiency when both sources are present.
+ *
+ * @param point        Evaluation point
+ * @param segments     Conductor segments (may be nullptr)
+ * @param n_segments   Number of conductor segments
+ * @param current      Conductor current [A]
+ * @param mag_centers  Magnet element centers (may be nullptr)
+ * @param mag_volumes  Magnet element volumes
+ * @param M_complex    Complex magnetization
+ * @param n_mag_elems  Number of magnet elements
+ * @param B_out        Output: total complex B field [Bx, By, Bz]
+ */
+void ComputeCombinedField(
+    const TVector3d& point,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    const double* mag_centers,
+    const double* mag_volumes,
+    const std::complex<double>* M_complex,
+    int n_mag_elems,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Batch combined PEEC+MMM field with FMM acceleration
+ *
+ * Most efficient for large-scale coupled problems.
+ * Builds unified FMM tree with both current and magnetic dipoles.
+ *
+ * @param points       Evaluation points
+ * @param n_points     Number of points
+ * @param segments     Conductor segments
+ * @param n_segments   Number of conductor segments
+ * @param current      Conductor current [A]
+ * @param mag_centers  Magnet element centers
+ * @param mag_volumes  Magnet element volumes
+ * @param M_complex    Complex magnetization
+ * @param n_mag_elems  Number of magnet elements
+ * @param use_fmm      Use FMM acceleration
+ * @param fmm_eps      FMM tolerance
+ * @param B_out        Output: total complex B field
+ */
+void ComputeCombinedFieldBatch(
+    const double* points,
+    int n_points,
+    const ConductorSegment* segments,
+    int n_segments,
+    std::complex<double> current,
+    const double* mag_centers,
+    const double* mag_volumes,
+    const std::complex<double>* M_complex,
+    int n_mag_elems,
+    bool use_fmm,
+    double fmm_eps,
+    std::complex<double>* B_out
+);
+
+/**
+ * @brief Extract conductor segments from radTConductor
+ *
+ * Converts conductor wire path to segment array for unified field computation.
+ *
+ * @param wirePath     Wire centerline path (from radTConductor)
+ * @param n_path_pts   Number of path points
+ * @param segments     Output: segment array (caller must allocate n_path_pts-1)
+ * @return             Number of segments created
+ */
+int ExtractConductorSegments(
+    const TVector3d* wirePath,
+    int n_path_pts,
+    ConductorSegment* segments
 );
 
 } // namespace RadFieldUnified

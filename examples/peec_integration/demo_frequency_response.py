@@ -97,7 +97,7 @@ def demo_peec_frequency_response():
 
     # Create analysis object
     analysis = UnifiedAnalysis()
-    analysis.set_peec_model(L, R, cln_order=5)
+    analysis.set_peec_model(L, R, prima_order=5)
     analysis.set_skin_effect(
         sigma=5.8e7,
         use_dowell=True,

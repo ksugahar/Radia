@@ -1,18 +1,20 @@
-# PEEC + CLN + Dowell連分数展開によるコイルモデル縮約
+# PEEC + PRIMA + Dowell連分数展開によるコイルモデル縮約
 
 ## 概要
 
-本Exampleでは、PEEC（Partial Element Equivalent Circuit）法とCauer Ladder Network（CLN）を組み合わせ、Dowellの連分数展開を用いたコイルモデル縮約の実装と検証を行う。
+本Exampleでは、PEEC（Partial Element Equivalent Circuit）法とPRIMA（Passive Reduced-order Interconnect Macromodeling Algorithm）を組み合わせ、Dowellの連分数展開を用いたコイルモデル縮約の実装と検証を行う。
+
+> **Note**: 本実装では「CLN (Cauer Ladder Network)」という用語の代わりに「PRIMA」を使用しています。両者は数学的に同等（Lanczos三重対角化によるラダー回路表現）ですが、PRIMAは1998年のIEEE論文で広く認知されており、特許問題を回避できます。
 
 **理論的背景**: [docs/PEEC_SURFACE_IMPEDANCE.md](../../docs/PEEC_SURFACE_IMPEDANCE.md) を参照。
 
 ## 主要な検証結果
 
-### 1. CLN(DC) + Dowell補正 = Dowell式（完全一致）
+### 1. PRIMA(DC) + Dowell補正 = Dowell式（完全一致）
 
-`cln_with_dowell_correction.py` による検証結果:
+`prima_with_dowell_correction.py` による検証結果:
 
-| 周波数 | |Z_Dowell| | |Z_CLN+Dowell| | 誤差 |
+| 周波数 | |Z_Dowell| | |Z_PRIMA+Dowell| | 誤差 |
 |--------|------------|---------------|------|
 | 1 Hz | 1.724e-04 | 1.724e-04 | 0% |
 | 1 kHz | 1.724e-04 | 1.724e-04 | 0% |
@@ -63,25 +65,25 @@ z*coth(z) = 1 + w/(3 + w/(5 + w/(7 + w/(9 + ...))))
 
 | ファイル | 説明 |
 |----------|------|
-| `cln_with_dowell_correction.py` | CLN(DC) + Dowell補正とDowell式の一致検証 |
+| `prima_with_dowell_correction.py` | PRIMA(DC) + Dowell補正とDowell式の一致検証 |
 | `derive_dowell_cf_algorithm.py` | Viskovatovアルゴリズムによる連分数係数導出 |
 | `derive_dowell_pade.py` | Pade近似による有理関数展開 |
-| `derive_dowell_cf.py` | Taylor展開の解析 |
+| `derive_dowell_prima.py` | Taylor展開の解析 |
 
-### PEEC-CLN統合デモ
+### PEEC-PRIMA統合デモ
 
 | ファイル | 説明 |
 |----------|------|
-| `demo_peec_cln_reduction.py` | PEEC + CLN + Dowellによるモデル次数削減デモ |
-| `verify_peec_cln_dowell.py` | PEEC-CLN-Dowell統合の検証 |
+| `demo_peec_prima_reduction.py` | PEEC + PRIMA + Dowellによるモデル次数削減デモ |
+| `verify_peec_prima_dowell.py` | PEEC-PRIMA-Dowell統合の検証 |
 
 ### 補助スクリプト
 
 | ファイル | 説明 |
 |----------|------|
-| `analyze_dowell_cln.py` | DowellファクターとCLNの関係分析 |
-| `verify_cln_dowell_correct.py` | CLN vs Dowell詳細比較 |
-| `verify_cln_dowell_form.py` | CLNからF_R, F_L抽出 |
+| `analyze_dowell_prima.py` | DowellファクターとPRIMAの関係分析 |
+| `verify_prima_dowell_correct.py` | PRIMA vs Dowell詳細比較 |
+| `verify_prima_dowell_form.py` | PRIMAからF_R, F_L抽出 |
 | `verify_dowell_diffusion.py` | Dowell vs 1D拡散方程式 |
 
 ### PEECコイル解析
@@ -91,29 +93,52 @@ z*coth(z) = 1 + w/(3 + w/(5 + w/(7 + w/(9 + ...))))
 | `coil_impedance_peec.py` | PEECによるコイルインピーダンス解析 |
 | `coil_on_magnetic_core_peec.py` | 磁性体コア上のコイル解析 |
 
+### SPICE/Verilog-A出力
+
+| ファイル | 説明 |
+|----------|------|
+| `demo_prima_spice_export.py` | PRIMA縮約モデルのSPICE/Verilog-A出力 |
+| `wire_full.sp` | フルPEECモデルのSPICE netlist |
+| `wire_prima.sp` | PRIMA縮約モデルのSPICE netlist |
+| `wire_prima.va` | PRIMA縮約モデルのVerilog-Aモジュール |
+
+### WPT検証
+
+| ファイル | 説明 |
+|----------|------|
+| `verify_frequency_response_85khz.py` | 85kHz WPT周波数応答検証 |
+| `demo_wpt.py` | WPTシステムのデモ |
+| `wpt_85khz_cubit_mesh.py` | Cubitメッシュを使用したWPTモデル |
+
+### 論文用図表
+
+| ファイル | 説明 |
+|----------|------|
+| `generate_paper_figures.py` | 論文用図表の一括生成 |
+
 ## 使用方法
 
 ### 基本的な検証の実行
 
 ```bash
-# CLN + Dowell補正の検証
+# PRIMA + Dowell補正の検証
 cd examples/peec_integration
-python cln_with_dowell_correction.py
+python prima_with_dowell_correction.py
 
 # 連分数係数の導出と検証
 python derive_dowell_cf_algorithm.py
 
-# PEEC + CLN統合デモ
-python demo_peec_cln_reduction.py
+# PEEC + PRIMA統合デモ
+python demo_peec_prima_reduction.py
 ```
 
 ### 出力ファイル
 
 各スクリプトは `.png` 画像ファイルを出力:
 
-- `cln_with_dowell_correction.png` - CLN vs Dowell比較
+- `prima_with_dowell_correction.png` - PRIMA vs Dowell比較
 - `derive_dowell_cf_algorithm.png` - 連分数展開の検証
-- `demo_peec_cln_reduction.png` - モデル次数削減結果
+- `demo_peec_prima_reduction.png` - モデル次数削減結果
 
 ## 理論的背景
 
@@ -217,8 +242,111 @@ R_mag = omega * L_mag_0 * mu"_r / mu_0  [磁性体損失]
 - リアルタイムシミュレーション向け
 - 制御系設計への応用
 
+## SPICE/Verilog-A出力
+
+### 概要
+
+PEECモデルおよびPRIMA縮約モデルをSPICE netlistおよびVerilog-Aモジュールとして出力できます。
+
+### 出力フォーマット
+
+| フォーマット | 拡張子 | 互換性 | 用途 |
+|-------------|--------|--------|------|
+| SPICE netlist | `.sp` | 高い（LTspice, PSpice, ngspice等） | 回路シミュレーション |
+| Verilog-A | `.va` | 限定的（Spectre, ADS, HSPICE等） | 高度なモデリング |
+
+### 使用方法
+
+```bash
+# 基本的なSPICE出力
+python demo_prima_spice_export.py
+
+# Verilog-A出力を有効化
+python demo_prima_spice_export.py --verilog-a
+
+# Lanczos次数を指定
+python demo_prima_spice_export.py --lanczos 10
+```
+
+### 出力ファイル例
+
+**SPICE netlist** (`wire_prima.sp`):
+```spice
+.SUBCKT WIRE_PRIMA port_in port_out
+* PRIMA Ladder Network
+R1 port_in port_ina 1.724138e-04
+L1 port_ina n1 7.481454e-09
+...
+K1_2 L1 L2 3.204657e-01
+.ENDS
+```
+
+**Verilog-A** (`wire_prima.va`):
+```verilog
+module wire_prima(port_in, port_out);
+    inout port_in, port_out;
+    electrical port_in, port_out;
+    // Implementation using ddt() for inductors
+endmodule
+```
+
+### 注意事項
+
+- **Verilog-Aの互換性**: Verilog-Aは全てのシミュレータでサポートされているわけではありません。確認済みシミュレータ：Cadence Spectre, Keysight ADS, Synopsys HSPICE
+- **標準SPICE推奨**: 互換性を重視する場合は標準SPICE netlist (`.sp`) を使用してください
+
+## 85kHz WPT周波数応答検証
+
+### 概要
+
+ワイヤレス電力伝送(WPT)の標準周波数である85kHzでのPEECモデル精度を検証しています。
+
+### 検証項目
+
+| テスト | 内容 | 結果 |
+|--------|------|------|
+| 直線導体 | R, L vs 解析解 | R誤差 < 1%, L誤差 < 10% |
+| 円形ループ | インピーダンス特性 | PASS |
+| 周波数掃引 | 1kHz - 1MHz | 位相角 > 80° (高周波) |
+
+### 実行方法
+
+```bash
+python verify_frequency_response_85khz.py
+```
+
+### 検証結果
+
+```
+Wire parameters:
+  Length: 100mm, Width: 2mm, Height: 0.5mm
+
+85kHz Results:
+  Skin depth: 234 um
+  R_DC: 0.172 mOhm
+  L: 56.0 nH
+  |Z|: 30.2 mOhm @ 85kHz
+  Phase: 89.7 deg (strongly inductive)
+```
+
+## 論文用図表生成
+
+`generate_paper_figures.py` で以下の図を生成できます:
+
+| 図 | 内容 | 出力ファイル |
+|----|------|-------------|
+| fig1 | PEECマトリクス検証 | `figures/fig1_peec_matrix_verification.pdf` |
+| fig2 | PRIMA精度比較 | `figures/fig2_prima_accuracy.pdf` |
+| fig3 | 適応的MSC誤差 | `figures/fig3_adaptive_msc_error.pdf` |
+| fig4 | WPTコイル(85kHz) | `figures/fig4_wpt_coil_85khz.pdf` |
+
+```bash
+python generate_paper_figures.py
+```
+
 ## 参考文献
 
 1. P.L. Dowell, "Effects of eddy currents in transformer windings," Proc. IEE, 1966.
 2. J.A. Ferreira, "Electromagnetic Modelling of Power Electronic Converters," 1989.
 3. A. Ruehli, "Equivalent Circuit Models for Three-Dimensional Multiconductor Systems," IEEE Trans. MTT, 1974.
+4. A. Odabasioglu et al., "PRIMA: Passive Reduced-Order Interconnect Macromodeling Algorithm," IEEE Trans. CAD, 1998.

@@ -1,9 +1,9 @@
 """
-Dowell式からCLNパラメータを導出
+Dowell式からPRIMAパラメータを導出
 
 Dowell式: Z = R_dc * F_R(xi) + j*omega * L_int_dc * F_L(xi)
 
-これをCLN I形式で表現できるか検討。
+これをPRIMA I形式で表現できるか検討。
 
 問題: 1D拡散式 Z = s*mu*(2/(k*d))*tan(k*d/2)*d は
       DC極限で Z -> j*omega*mu*d （抵抗成分なし）
@@ -216,8 +216,8 @@ def main():
     ax4.grid(True, which='both', alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig('derive_dowell_cln.png', dpi=150)
-    print(f"\nSaved: derive_dowell_cln.png")
+    plt.savefig('derive_dowell_prima.png', dpi=150)
+    print(f"\nSaved: derive_dowell_prima.png")
     plt.close()
 
 

@@ -16,7 +16,7 @@ print("Dowell F_R(xi) and F_L(xi) Taylor Expansion")
 print("="*70)
 
 # ============================================================
-# Dowell formulas (same as cln_with_dowell_correction.py)
+# Dowell formulas (same as prima_with_dowell_correction.py)
 # ============================================================
 
 def dowell_F_R(xi):
@@ -116,7 +116,7 @@ Convention B (Dowell 1966):
 
 The relationship: xi = sqrt(2) * Delta
 
-In cln_with_dowell_correction.py, we use small-xi approximation F_R = 1.0
+In prima_with_dowell_correction.py, we use small-xi approximation F_R = 1.0
 when xi < 0.001. But this is mathematically inconsistent with the formula.
 
 The physical meaning:
@@ -242,7 +242,7 @@ Taylor expansion in terms of xi:
 
   F_L(xi) = 1 - xi^4/45 + O(xi^8)  [by similar analysis]
 
-This matches what was assumed in cln_with_dowell_correction.py!
+This matches what was assumed in prima_with_dowell_correction.py!
 """)
 
 # Final verification
@@ -285,8 +285,8 @@ print("""
 5. These are NOT rational functions of s.
    Exact finite continued fraction expansion is impossible.
 
-6. Practical approach: "DC CLN + Dowell correction"
-   - Build CLN with DC parameters
+6. Practical approach: "DC PRIMA + Dowell correction"
+   - Build PRIMA with DC parameters
    - Apply F_R(omega), F_L(omega) directly at each frequency
    - This is EXACT for frequency-domain analysis
 """)
