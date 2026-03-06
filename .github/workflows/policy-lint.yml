@@ -1,0 +1,81 @@
+name: Policy Lint
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  policy-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------
+      # Policy 1: Unit System
+      #   All examples/*.py that import radia must call FldUnits
+      # ----------------------------------------------------------------
+      - name: "Policy 1: FldUnits('m') in examples"
+        run: |
+          FAIL=0
+          while IFS= read -r -d '' file; do
+            if grep -q 'import radia' "$file"; then
+              if ! grep -q "FldUnits" "$file"; then
+                echo "FAIL: $file imports radia but missing FldUnits"
+                FAIL=1
+              fi
+            fi
+          done < <(find examples/ -name '*.py' -print0 2>/dev/null)
+          [ "$FAIL" -eq 0 ] || { echo "::error::Policy 1 failed: example scripts must call rad.FldUnits('m')"; exit 1; }
+          echo "PASS: All example scripts that import radia call FldUnits"
+
+      # ----------------------------------------------------------------
+      # Policy 2: Binary Files
+      #   No .pyd/.dll/.so/.lib/.exe/.obj tracked in git
+      # ----------------------------------------------------------------
+      - name: "Policy 2: No binary files in git"
+        run: |
+          BINS=$(git ls-files -- '*.pyd' '*.dll' '*.so' '*.lib' '*.exe' '*.obj')
+          [ -z "$BINS" ] || { echo "$BINS"; echo "::error::Policy 2 failed: binary files must not be tracked in git"; exit 1; }
+          echo "PASS: No binary files tracked in git"
+
+      # ----------------------------------------------------------------
+      # Policy 3: Green's Function (Laplace only)
+      #   No "Helmholtz" in C++ core source
+      # ----------------------------------------------------------------
+      - name: "Policy 3: No Helmholtz in C++ core"
+        run: |
+          HITS=$(grep -rl -i 'Helmholtz' src/core/ --include='*.cpp' --include='*.h' 2>/dev/null || true)
+          [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 3 failed: Laplace kernel only in C++ core"; exit 1; }
+          echo "PASS: No Helmholtz kernel in C++ core"
+
+      # ----------------------------------------------------------------
+      # Policy 4: Matrix Storage (Row-Major)
+      #   No CblasColMajor in core source
+      #   Exception: rad_mmm_matrices.cpp (uses LAPACK which requires col-major)
+      # ----------------------------------------------------------------
+      - name: "Policy 4: No CblasColMajor in core (except MMM/LAPACK)"
+        run: |
+          HITS=$(grep -rn 'CblasColMajor' src/core/ --include='*.cpp' --include='*.h' 2>/dev/null \
+                 | grep -v 'rad_mmm_matrices.cpp' || true)
+          [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 4 failed: use CblasRowMajor in core"; exit 1; }
+          echo "PASS: No CblasColMajor in core (MMM/LAPACK excepted)"
+
+      # ----------------------------------------------------------------
+      # Policy 5: File Placement
+      #   No generated files at repo root
+      # ----------------------------------------------------------------
+      - name: "Policy 5: No generated files at repo root"
+        run: |
+          HITS=$(find . -maxdepth 1 \( -name '*.msh' -o -name '*.vtu' -o -name '*.vtk' -o -name '*.vol' -o -name '*.vts' \) 2>/dev/null)
+          [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 5 failed: no generated files at repo root"; exit 1; }
+          echo "PASS: No generated files at repository root"
+
+      # ----------------------------------------------------------------
+      # Policy 6: Import Path
+      #   No sys.path.insert with 'src/python' (should be 'src/radia')
+      # ----------------------------------------------------------------
+      - name: "Policy 6: No legacy src/python path"
+        run: |
+          HITS=$(grep -rn 'src/python' --include='*.py' . 2>/dev/null | grep 'sys\.path' || true)
+          [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 6 failed: use src/radia not src/python"; exit 1; }
+          echo "PASS: No legacy src/python import path"

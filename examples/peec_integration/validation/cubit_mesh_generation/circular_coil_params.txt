@@ -1,0 +1,6 @@
+# Circular coil parameters for PEEC validation
+coil_radius 0.05
+wire_radius 0.001
+sigma 5.8e7  # Copper conductivity [S/m]
+n_segments 36
+n_turns 1  # Single turn

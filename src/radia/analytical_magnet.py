@@ -95,7 +95,7 @@ class SphericalMagnet:
         Get magnetic field B at observation point.
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Bx, By, Bz] magnetic field in Tesla
@@ -129,7 +129,7 @@ class SphericalMagnet:
         Get H-field at observation point.
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Hx, Hy, Hz] H-field in A/m
@@ -154,7 +154,7 @@ class SphericalMagnet:
         - Inside: A = (mu0/3) * (M x r)
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Ax, Ay, Az] vector potential in T*m (SI units)
@@ -376,7 +376,7 @@ class CuboidMagnet:
         Get magnetic field B at observation point.
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Bx, By, Bz] magnetic field in Tesla
@@ -403,7 +403,7 @@ class CuboidMagnet:
         Get H-field at observation point.
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Hx, Hy, Hz] H-field in A/m
@@ -433,7 +433,7 @@ class CuboidMagnet:
         expressions involving logarithms (NIST formula).
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Ax, Ay, Az] vector potential in T*m (SI units)
@@ -808,7 +808,7 @@ class CurrentLoop:
         Get magnetic field B at observation point.
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Bx, By, Bz] magnetic field in Tesla
@@ -856,7 +856,7 @@ class CurrentLoop:
         Get H-field at observation point.
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Hx, Hy, Hz] H-field in A/m
@@ -932,7 +932,7 @@ class CurrentLoop:
         The vector potential of a current loop has only an azimuthal component A_phi.
 
         Parameters:
-            point: [x, y, z] observation point in mm
+            point: [x, y, z] observation point (in constructor length units)
 
         Returns:
             [Ax, Ay, Az] vector potential in T*m (SI units for curl(A) = B)

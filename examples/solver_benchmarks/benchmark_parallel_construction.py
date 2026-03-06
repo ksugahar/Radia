@@ -15,6 +15,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
 import time
+import numpy as np
+
+# Set unit system to meters
+rad.FldUnits('m')
+mm = 1e-3  # 1 mm in meters
 
 
 def hex_vertices(cx, cy, cz, dx, dy, dz):
@@ -31,7 +36,7 @@ def create_magnet(n_per_side):
 	"""
 	Create a cubic magnet subdivided into n x n x n elements.
 	"""
-	size = 20.0  # 20mm cube
+	size = 20.0 * mm  # 20mm cube
 	elem_size = size / n_per_side
 
 	container = rad.ObjCnt([])
@@ -229,6 +234,7 @@ def main():
 	print("  - See H_MATRIX_PARALLEL_OPTIMIZATION.md for details")
 	print()
 
+	rad.UtiDelAll()
+
 if __name__ == "__main__":
-	import numpy as np
 	main()

@@ -26,6 +26,8 @@ from radia import (
     create_esim_block,
     create_esim_cylinder,
 )
+import radia as rad
+rad.FldUnits('m')
 
 
 def demo_complex_permeability():

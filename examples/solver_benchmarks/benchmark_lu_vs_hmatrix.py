@@ -22,6 +22,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import radia as rad
 
+# Set unit system to meters
+rad.FldUnits('m')
+mm = 1e-3  # 1 mm in meters
+
 
 def hex_vertices(cx, cy, cz, dx, dy, dz):
     """Generate hexahedron vertices from center and dimensions."""
@@ -67,7 +71,7 @@ def benchmark_solver(n, method, tol=1e-4, max_iter=1000):
     rad.UtiDelAll()
     gc.collect()
 
-    size = 40.0  # mm cube
+    size = 40.0 * mm  # 40mm cube
     B_bg = [0, 0, 1.0]  # Background field in Tesla
 
     container = create_geometry(n, size, B_bg)
@@ -83,7 +87,7 @@ def benchmark_solver(n, method, tol=1e-4, max_iter=1000):
 
     # Get field at evaluation points
     B_center = rad.Fld(container, 'b', [0, 0, 0])
-    B_outside = rad.Fld(container, 'b', [0, 0, 60])
+    B_outside = rad.Fld(container, 'b', [0, 0, 60 * mm])
 
     iterations = int(res[1]) if isinstance(res, (list, tuple)) and len(res) > 1 else 1
 

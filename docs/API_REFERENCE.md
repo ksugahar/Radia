@@ -2,8 +2,8 @@
 
 Complete reference for Radia Python API.
 
-**Version**: 1.4.4
-**Date**: 2026-01-09
+**Version**: 1.8.1
+**Date**: 2026-02-16
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
 ---
@@ -20,6 +20,7 @@ Complete reference for Radia Python API.
 - [NGSolve Integration](#ngsolve-integration)
 - [Utilities](#utilities)
 - [VTK Export](#vtk-export)
+- [PEEC Solver](#peec-solver)
 - [ESIM (Effective Surface Impedance Method)](#esim-effective-surface-impedance-method)
 
 ---
@@ -1010,6 +1011,199 @@ rad.FldVTS(magnet, 'magnet_field.vts',
 
 ---
 
+## PEEC Solver
+
+The PEEC (Partial Element Equivalent Circuit) solver provides circuit parameter extraction from conductor geometries. The solver is implemented in C++ with MKL LAPACK/BLAS and exposed via pybind11.
+
+### Overview
+
+| Module | Description |
+|--------|-------------|
+| `peec_matrices.PyPEECBuilder` | C++ matrix builder (L, R, P, M_LS) |
+| `peec_matrices.MNASolver` | C++ MNA multi-port solver (LAPACK zgesv_) |
+| `peec_topology.PEECCircuitSolver` | Python API for port impedance/coupling |
+| `fasthenry_parser.FastHenryParser` | FastHenry .inp file parser |
+| `peec_coupled.CoupledPEECSolver` | PEEC + MMM coupled solver |
+
+### PyPEECBuilder - Matrix Construction
+
+Build PEEC matrices from node-segment topology:
+
+```python
+from peec_matrices import PyPEECBuilder
+
+builder = PyPEECBuilder()
+
+# Add nodes at 3D positions
+n1 = builder.add_node_at(0, 0, 0)         # Returns node ID (int)
+n2 = builder.add_node_at(0.05, 0, 0)
+n3 = builder.add_node_at(0.1, 0, 0)
+
+# Add segments connecting nodes
+builder.add_connected_segment(n1, n2, w=1e-3, h=1e-3, sigma=5.8e7)
+builder.add_connected_segment(n2, n3, w=1e-3, h=1e-3, sigma=5.8e7)
+
+# Multi-filament: subdivide cross-section for skin/proximity effect
+builder.add_connected_segment(n1, n2, w=3e-3, h=3e-3, sigma=5.8e7, nwinc=3, nhinc=3)
+
+# Add ports (measurement terminals)
+port_id = builder.add_port(n1, n3)
+
+# Build matrices with topology information
+topo = builder.build_topology()
+# Returns dict with: L, R, P, segment_nodes, n_nodes, ports, etc.
+```
+
+**add_node_at Parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `x, y, z` | float | 3D position (meters) |
+
+**add_connected_segment Parameters**:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `node_from` | int | required | Start node ID |
+| `node_to` | int | required | End node ID |
+| `w` | float | required | Width (meters) |
+| `h` | float | required | Height (meters) |
+| `sigma` | float | 5.8e7 | Conductivity (S/m) |
+| `seg_type` | str | 'normal' | Segment type |
+| `nwinc` | int | 1 | Width subdivisions |
+| `nhinc` | int | 1 | Height subdivisions |
+
+### PEECCircuitSolver - Port Impedance
+
+Solve for port impedance using MNA (Modified Nodal Analysis):
+
+```python
+from peec_topology import PEECCircuitSolver
+
+solver = PEECCircuitSolver(topo)
+
+# Single frequency
+Z = solver.compute_port_impedance(freq=1e6)
+R = Z.real   # Resistance (Ohm)
+L = Z.imag / (2 * np.pi * 1e6)  # Inductance (H)
+
+# Multi-port Z-matrix
+Z_matrix = solver.compute_Z_matrix(freq=1e6)  # (n_ports x n_ports) complex
+
+# Coupling coefficient
+result = solver.compute_coupling_coefficient(freq=1e6)
+k = result['k']      # Coupling coefficient
+L1 = result['L1']    # Self-inductance port 1
+L2 = result['L2']    # Self-inductance port 2
+M = result['M']      # Mutual inductance
+
+# Frequency sweep
+freqs = np.logspace(2, 6, 50)
+Z_sweep = solver.frequency_sweep(freqs)
+
+# Frequency sweep with surface impedance (Zs callback)
+def Zs_func(freq, n_loop):
+    """Return per-filament surface impedance array."""
+    omega = 2 * np.pi * freq
+    delta = np.sqrt(2 / (omega * MU_0 * sigma))
+    Zs_val = (1 + 1j) / (sigma * delta)
+    return np.full(n_loop, Zs_val)
+
+Z_sweep = solver.frequency_sweep(freqs, Zs_func=Zs_func)
+
+# Multi-port frequency sweep
+Z_matrix_sweep = solver.frequency_sweep_multiport(freqs)
+```
+
+**Solver Method Selection**:
+
+```python
+solver.set_solver_method(0)  # LU (LAPACK zgesv_, default)
+solver.set_solver_method(1)  # BiCGSTAB (templated, MKL BLAS)
+
+solver.set_bicgstab_params(tol=1e-10, max_iter=1000)
+```
+
+### FastHenryParser - FastHenry .inp Import
+
+Parse FastHenry input files and solve:
+
+```python
+from fasthenry_parser import FastHenryParser
+
+parser = FastHenryParser()
+
+# Parse from file or string
+parser.parse_file('inductor.inp')
+# or:
+parser.parse_string("""
+.Units mm
+.default sigma=5.8e7
+
+N1 x=0 y=0 z=0
+N2 x=100 y=0 z=0
+
+E1 N1 N2 w=1 h=1 nwinc=3 nhinc=3
+
+.external N1 N2
+.freq fmin=100 fmax=1e6 ndec=5
+.end
+""")
+
+# Inspect model
+print(parser.get_summary())
+freqs = parser.get_frequencies()
+
+# Convert to PEECBuilder
+builder = parser.to_peec_builder()
+topo = builder.build_topology()
+
+# Or one-step solve
+result = parser.solve()
+# Returns: {'freqs': array, 'Z_port': array, 'R': array, 'L': array, 'topology': dict}
+```
+
+**Supported Directives**:
+
+| Directive | Example | Description |
+|-----------|---------|-------------|
+| `.Units` | `.Units mm` | Length unit |
+| `N<name>` | `N1 x=0 y=0 z=0` | Node definition |
+| `E<name>` | `E1 N1 N2 w=1 h=1` | Segment definition |
+| `.external` | `.external N1 N2` | Port definition |
+| `.freq` | `.freq fmin=1e3 fmax=1e6 ndec=5` | Frequency sweep |
+| `.default` | `.default w=1 h=1 sigma=5.8e7` | Default parameters |
+| `.equiv` | `.equiv N1 N3` | Node merge |
+| `.magnetic` | See below | Magnetic material block |
+
+**Magnetic material blocks** (for coupled PEEC+MMM):
+```
+.magnetic
+  type=box
+  center=0.05,0.01,0.0
+  size=0.06,0.01,0.01
+  divisions=2,1,1
+  mu_r=1000
+.endmagnetic
+```
+
+### CoupledPEECSolver - PEEC + MMM Coupling
+
+Couple PEEC conductors with magnetic materials:
+
+```python
+from peec_coupled import CoupledPEECSolver
+
+solver = CoupledPEECSolver(topology_dict, magnetic_objects=[core_id])
+solver.compute_coupling_matrix()  # N_seg Radia Solve calls
+
+Z = solver.compute_port_impedance(freq=1e6)
+Z_sweep = solver.frequency_sweep(freqs)
+L_total = solver.get_effective_inductance()  # L_air + Delta_L
+```
+
+---
+
 ## ESIM (Effective Surface Impedance Method)
 
 The ESIM module provides specialized tools for **induction heating analysis** with nonlinear magnetic materials. It implements the Effective Surface Impedance Method for computing eddy current losses and coil-workpiece coupled impedance.
@@ -1851,5 +2045,5 @@ B = cuboid.get_B([25, 0, 0])
 
 ---
 
-**Last Updated**: 2026-01-15
+**Last Updated**: 2026-02-16
 **License**: LGPL-2.1 (modifications), BSD-style (original RADIA from ESRF)
