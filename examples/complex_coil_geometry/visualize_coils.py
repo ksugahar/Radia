@@ -23,18 +23,6 @@ import radia as rad
 # Import coil model
 from coil_model import create_beam_steering_coil, get_coil_info
 
-# Try to import visualization tools
-try:
-	from radia_pyvista_viewer import view_radia_object
-	HAS_PYVISTA = True
-except ImportError:
-	HAS_PYVISTA = False
-
-try:
-	from radia_vtk_export import exportGeometryToVTK
-	HAS_VTK_EXPORT = True
-except ImportError:
-	HAS_VTK_EXPORT = False
 
 
 def calculate_field_at_test_points(coil_obj):
@@ -117,32 +105,25 @@ def main():
 	# Calculate magnetic field at test points
 	calculate_field_at_test_points(coil)
 
-	# Export to VTK
-	if HAS_VTK_EXPORT:
-		print("\n" + "-" * 70)
-		print("Exporting to VTK format...")
-		print("-" * 70)
-		output_file = 'coil_geometry'
-		exportGeometryToVTK(coil, output_file)
-		print(f"  [OK] Created: {output_file}.vtk")
+	# Export to VTS (field distribution)
+	print("\n" + "-" * 70)
+	print("Exporting field distribution to VTS format...")
+	print("-" * 70)
+	try:
+		output_file = 'coil_geometry.vts'
+		output_path = os.path.join(os.path.dirname(__file__), output_file)
 
-	# Visualize with PyVista
-	if HAS_PYVISTA:
-		print("\n" + "-" * 70)
-		print("Opening PyVista viewer...")
-		print("-" * 70)
-		print("\nControls:")
-		print("  - Left click + drag: Rotate")
-		print("  - Right click + drag: Pan")
-		print("  - Scroll wheel: Zoom")
-		print("  - 'q': Quit\n")
+		# Based on bounding box, extend ranges with margin
+		bbox = info['bbox']
+		margin = 100.0
+		x_range = [bbox['x_min'] - margin, bbox['x_max'] + margin]
+		y_range = [bbox['y_min'] - margin, bbox['y_max'] + margin]
+		z_range = [bbox['z_min'] - margin, bbox['z_max'] + margin]
 
-		view_radia_object(coil)
-	else:
-		print("\n" + "-" * 70)
-		print("PyVista not available.")
-		print("-" * 70)
-		print("Install with: pip install pyvista")
+		rad.FldVTS(coil, output_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+		print(f"  [OK] Created: {output_file}")
+	except Exception as e:
+		print(f"  [WARNING] Export failed: {e}")
 
 	print("\n" + "=" * 70)
 	print("VISUALIZATION COMPLETE")

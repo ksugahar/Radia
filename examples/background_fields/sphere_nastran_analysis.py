@@ -31,7 +31,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../dist'))
 import numpy as np
 import radia as rd
 from nastran_reader import read_nastran_mesh
-from radia_vtk_export import exportGeometryToVTK
 
 print("=" * 70)
 print("Magnetizable Sphere in Quadrupole Field - Nastran Mesh Analysis")
@@ -216,15 +215,25 @@ rd.Solve(container, 1e-5, 5000)
 print(f"  [OK] Solution converged")
 
 # ============================================================================
-# Step 5: Export Sphere Geometry
+# Step 5: Export Sphere Field Distribution
 # ============================================================================
 
-print(f"\n[Step 5] Exporting Sphere Geometry to VTK")
+print(f"\n[Step 5] Exporting Field Distribution to VTS")
 print("-" * 70)
 
-geometry_filename = 'sphere_nastran_geometry'
-exportGeometryToVTK(sphere, geometry_filename)
-print(f"  [OK] Exported to {geometry_filename}.vtk")
+# Sphere radius is R=10mm, extend range for far-field
+vts_filename = 'sphere_nastran_field.vts'
+vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
+
+x_range = [-30, 30]
+y_range = [-30, 30]
+z_range = [-30, 30]
+
+try:
+	rd.FldVTS(container, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+	print(f"  [OK] Exported to {vts_filename}")
+except Exception as e:
+	print(f"  [WARNING] Export failed: {e}")
 
 # ============================================================================
 # Step 6: Field Verification

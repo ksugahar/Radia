@@ -296,26 +296,13 @@ Position (mm)             Bx (mT)         By (mT)         Bz (mT)
 
 ## Visualization Options
 
-### PyVista (Interactive)
+### VTS Export (For ParaView)
 
-Real-time 3D visualization with mouse controls:
-- Rotate: Left click + drag
-- Pan: Right click + drag
-- Zoom: Scroll wheel
-- Quit: Press 'q'
-
-**Install:**
+Export field distribution to `.vts` file for publication-quality figures:
 ```bash
-pip install pyvista
-```
-
-### VTK Export (For ParaView)
-
-Export geometry to `.vtk` file for publication-quality figures:
-```bash
-# Automatically creates .vtk file
+# Automatically creates .vts file
 python visualize_coils.py
-# Opens: coil_geometry.vtk in ParaView
+# Opens: coil_geometry.vts in ParaView
 ```
 
 ## Coordinate System
@@ -341,15 +328,6 @@ powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 ### "No module named 'radia_coil_builder'"
 
 **Solution:** The module is in `src/python/`. The examples automatically add this to the path.
-
-### "No module named 'pyvista'"
-
-**Solution:** Install PyVista (optional):
-```bash
-pip install pyvista
-```
-
-Or use VTK export instead - script creates `.vtk` file automatically.
 
 ### "No module named 'scipy'"
 

@@ -43,10 +43,6 @@ g2 = rad.ObjHexahedron(vertices, [0, 0, 1.0])
 # Note: Material properties (MatLin, MatSatIso) are for soft magnetic materials
 # like iron yokes, NOT for permanent magnets with fixed magnetization
 
-# Set drawing attributes
-rad.ObjDrwAtr(g1, [1, 0, 0], 0.001)  # Red for g1
-rad.ObjDrwAtr(g2, [0, 0, 1], 0.001)  # Blue for g2
-
 # Create container with both objects
 g = rad.ObjCnt([g1, g2])
 
@@ -62,20 +58,21 @@ print(f"Magnetic field at origin: Bx={field[0]:.6e}, By={field[1]:.6e}, Bz={fiel
 
 print("Calculation complete.")
 
-# VTK Export - Export geometry with same filename as script
+# VTS Export - Export field distribution with same filename as script
 try:
-	from radia_vtk_export import exportGeometryToVTK
-
 	# Get script basename without extension
 	script_name = os.path.splitext(os.path.basename(__file__))[0]
-	vtk_filename = f"{script_name}.vtk"
-	vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+	vts_filename = f"{script_name}.vts"
+	vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
-	# Export geometry
-	exportGeometryToVTK(g, vtk_path)
-	print(f"\n[VTK] Exported: {vtk_filename}")
-	print(f"      View with: paraview {vtk_filename}")
-except ImportError:
-	print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+	# Geometry: arc current rmin=100, rmax=150, magnet 300x300x5 at z=-50
+	# Extend range to cover geometry
+	x_range = [-200, 200]
+	y_range = [-200, 200]
+	z_range = [-100, 50]
+
+	rad.FldVTS(g, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+	print(f"\n[VTS] Exported: {vts_filename}")
+	print(f"      View with: paraview {vts_filename}")
 except Exception as e:
-	print(f"\n[VTK] Warning: Export failed: {e}")
+	print(f"\n[VTS] Warning: Export failed: {e}")

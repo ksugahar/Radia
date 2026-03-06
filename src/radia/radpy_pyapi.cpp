@@ -895,10 +895,14 @@ static PyObject* radia_PreRelax(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Set relaxation sub-interval for LU decomposition solver
+ * DEPRECATED: Set relaxation sub-interval for LU decomposition solver
+ * Use Solve() with method=0 (LU) instead.
  ***************************************************************************/
 static PyObject* radia_SetRelaxSubInterval(PyObject* self, PyObject* args)
 {
+	// Print deprecation warning
+	PySys_WriteStderr("Warning: SetRelaxSubInterval() is deprecated. Use Solve(obj, prec, maxiter, 0) for LU solver.\n");
+
 	PyObject* oRes = 0;
 	try
 	{
@@ -1189,40 +1193,8 @@ static PyObject* radia_ObjSetM(PyObject* self, PyObject* args)
 	return oResInd;
 }
 
-/************************************************************************//**
- * Cuts the object obj by a plane passing through a given point perpendicularly to a given vector.
- ***************************************************************************/
-static PyObject* radia_ObjCutMag(PyObject* self, PyObject* args)
-{
-	PyObject *oP=0, *oN=0, *oOpt=0, *oRes=0;
-	try
-	{
-		int ind = 0;
-		if(!PyArg_ParseTuple(args, "iOO|O:ObjCutMag", &ind, &oP, &oN, &oOpt)) throw CombErStr(strEr_BadFuncArg, ": ObjCutMag");
-		if(ind == 0) throw CombErStr(strEr_BadFuncArg, ": ObjCutMag");
-
-		double arP[3];
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oP, 'd', arP, 3, CombErStr(strEr_BadFuncArg, ": ObjCutMag, incorrect definition of point in the cutting plane"));
-		double arN[3];
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oN, 'd', arN, 3, CombErStr(strEr_BadFuncArg, ": ObjCutMag, incorrect definition of cutting plane normal"));
-
-		char sOpt[1024]; *sOpt = '\0';
-		if(oOpt != 0) CPyParse::CopyPyStringToC(oOpt, sOpt, 1024);
-
-		int arInds[10];
-		int nObj = 0;
-		g_pyParse.ProcRes(RadObjCutMag(arInds, &nObj, ind, arP, arN, sOpt));
-
-		oRes = CPyParse::SetDataListOfLists(arInds, nObj, 1, (char*)"i");
-		Py_XINCREF(oRes); //?
-	}
-	catch(const char* erText) 
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
-	}
-	return oRes;
-}
+// ObjCutMag REMOVED (2026-01-11)
+// Policy: Use Cubit for mesh operations. See CLAUDE.md "Mesh Subdivision Policy"
 
 /************************************************************************//**
  * Computes geometrical volume of a 3D object.
@@ -1302,148 +1274,8 @@ static PyObject* radia_ObjDegFre(PyObject* self, PyObject* args)
 	return oRes;
 }
 
-/************************************************************************//**
- * Magnetic Field Sources: Assigns drawing attributes - RGB color (r,g,b) and line thickness thcn - to a Magnetic Field Source object
- ***************************************************************************/
-static PyObject* radia_ObjDrwAtr(PyObject* self, PyObject* args)
-{
-	PyObject *oInd=0, *oRGB=0;
-	try
-	{
-		double thcn=0.001;
-		if(!PyArg_ParseTuple(args, "OO|d:ObjDrwAtr", &oInd, &oRGB, &thcn)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwAtr");
-		if((oInd == 0) || (oRGB == 0)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwAtr");
-
-		if(!PyNumber_Check(oInd)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwAtr");
-		int ind = (int)PyLong_AsLong(oInd);
-
-		double arRGB[3];
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oRGB, 'd', arRGB, 3, CombErStr(strEr_BadFuncArg, ": ObjDrwAtr, incorrect definition of RGB color"));
-
-		g_pyParse.ProcRes(RadObjDrwAtr(ind, arRGB, thcn));
-		Py_XINCREF(oInd); //?
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
-	}
-	return oInd;
-}
-
-/************************************************************************//**
- * Magnetic Field Sources: outputs data for viewing of 3D geometry of an object using the VTK software system
- ***************************************************************************/
-static PyObject* ParseGeomDataDrwVTK(double* arCrdV, int nV, int* arLenP, float* arColP, int nP) //OC05112019 (from by R. Nagler's static PyObject* radia_ObjGeometry_helper)
-{
-	PyObject *lengths = PyList_New(nP);
-	PyObject *colors = PyList_New(nP*3);
-	PyObject *vertices = PyList_New(nV*3);
-	if(!vertices || !lengths || !colors) throw strEr_MAF;
-
-	for(Py_ssize_t i = PyList_Size(lengths); --i >= 0;) 
-	{
-		PyObject *o = PyLong_FromLong(arLenP[i]);
-		if(o == NULL || PyList_SetItem(lengths, i, o) < 0) throw strEr_MAF;
-	}
-
-	for(Py_ssize_t i = PyList_Size(colors); --i >= 0;) 
-	{
-		PyObject *o = PyFloat_FromDouble(arColP[i]); //OC04062020 (from Dan Abell) //why colors are float at input if they are casted to long here?
-		//PyObject *o = PyLong_FromDouble(arColP[i]); //why colors are float at input if they are casted to long here?
-		if(o == NULL || PyList_SetItem(colors, i, o) < 0) throw strEr_MAF;
-	}
-
-	for(Py_ssize_t i = PyList_Size(vertices); --i >= 0;) 
-	{
-		PyObject *o = PyFloat_FromDouble(arCrdV[i]);
-		if(o == NULL || PyList_SetItem(vertices, i, o) < 0) throw strEr_MAF;
-	}
-
-	PyObject *oRes = Py_BuildValue(
-		"{s:N,s:N,s:N}",
-		"colors",
-		colors,
-		"lengths",
-		lengths,
-		"vertices",
-		vertices
-	);
-	if(oRes == NULL) throw strEr_MAF;
-	return oRes;
-}
-
-/************************************************************************//**
- * Magnetic Field Sources: outputs data for viewing of 3D geometry of an object using the VTK software system
- ***************************************************************************/
-static PyObject* radia_ObjDrwVTK(PyObject* self, PyObject* args) //OC03112019 (requested by R. Nagler)
-//static PyObject* radia_ObjGeometry(PyObject *self, PyObject *args) 
-{
-	PyObject *oInd=0, *oOpt=0, *oRes=0;
-	double *arCrdVP=0, *arCrdVL=0;
-	float *arColP=0, *arColL=0;
-	int *arLenP=0, *arLenL=0;
-
-	try
-	{
-		if(!PyArg_ParseTuple(args, "O|O:ObjDrwVTK", &oInd, &oOpt)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwVTK");
-		//if(!PyArg_ParseTuple(args, "O|O:ObjGeometry", &oInd, &oOpt)) throw CombErStr(strEr_BadFuncArg, ": ObjGeometry");
-		if(oInd == 0) throw CombErStr(strEr_BadFuncArg, ": ObjDrwVTK");
-
-		if(!PyNumber_Check(oInd)) throw CombErStr(strEr_BadFuncArg, ": ObjDrwVTK");
-		int ind = (int)PyLong_AsLong(oInd);
-
-		char sOpt[1024]; *sOpt = '\0';
-		if(oOpt != 0) CPyParse::CopyPyStringToC(oOpt, sOpt, 1024);
-
-		int nVertPgns=0, nPgns=0, nVertLines=0, nLines=0, key=-1;
-		g_pyParse.ProcRes(RadObjDrwVTK(&nVertPgns, &nPgns, &nVertLines, &nLines, &key, ind, sOpt));
-
-		if(nVertPgns > 0) arCrdVP = new double[nVertPgns*3];
-		if(nPgns > 0)
-		{
-			arLenP = new int[nPgns];
-			arColP = new float[nPgns*3];
-		}
-		if(nVertLines > 0) arCrdVL = new double[nVertLines*3];
-		if(nLines > 0)
-		{
-			arLenL = new int[nLines];
-			arColL = new float[nLines*3];
-		}
-
-		g_pyParse.ProcRes(RadObjDrwDataGetVTK(arCrdVP, arLenP, arColP, arCrdVL, arLenL, arColL, key));
-
-		PyObject* polygons_obj = ParseGeomDataDrwVTK(arCrdVP, nVertPgns, arLenP, arColP, nPgns);
-		PyObject* lines_obj = ParseGeomDataDrwVTK(arCrdVL, nVertLines, arLenL, arColL, nLines);
-
-		oRes = Py_BuildValue(
-			"{s:N,s:N}",
-			"polygons",
-			polygons_obj,
-			"lines",
-			lines_obj
-		);
-		if(oRes == NULL) throw strEr_MAF;
-		//TODO(robnagler) ref counts are invalid at this point,
-		//  but then this is a malloc error...
-
-		Py_XINCREF(oRes); //? NOTE: seem to have experienced crashes without this
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-	}
-
-	if(arCrdVP != 0) delete[] arCrdVP;
-	if(arCrdVL != 0) delete[] arCrdVL;
-	if(arColP != 0) delete[] arColP;
-	if(arColL != 0) delete[] arColL;
-	if(arLenP != 0) delete[] arLenP;
-	if(arLenL != 0) delete[] arLenL;
-
-	return oRes;
-}
+// radia_ObjDrwAtr REMOVED (2026-01-14) - Drawing attributes no longer used
+// Use VTK export (FldVTS) with ParaView for visualization
 
 /************************************************************************//**
  * Space Transformations: Creates a symmetry with respect to plane defined by a point and a normal vector.
@@ -2263,10 +2095,14 @@ static PyObject* radia_MatMvsH(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Field Calculation Methods: Builds interaction matrix for an object.
+ * DEPRECATED: Builds interaction matrix for an object.
+ * Use Solve() instead - it handles matrix construction internally.
  ***************************************************************************/
 static PyObject* radia_RlxPre(PyObject* self, PyObject* args)
 {
+	// Print deprecation warning
+	PySys_WriteStderr("Warning: RlxPre() is deprecated. Use Solve() instead.\n");
+
 	PyObject *oResInd=0;
 	try
 	{
@@ -2290,10 +2126,14 @@ static PyObject* radia_RlxPre(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Field Calculation Methods: Executes manual relaxation procedure for the interaction matrix intrc.
+ * DEPRECATED: Executes manual relaxation procedure for the interaction matrix intrc.
+ * Use Solve() instead with method parameter (0=LU, 1=BiCGSTAB, 2=HACApK).
  ***************************************************************************/
 static PyObject* radia_RlxMan(PyObject* self, PyObject* args)
 {
+	// Print deprecation warning
+	PySys_WriteStderr("Warning: RlxMan() is deprecated. Use Solve(obj, prec, maxiter, method) instead.\n");
+
 	PyObject *oResInd=0;
 	try
 	{
@@ -2319,10 +2159,14 @@ static PyObject* radia_RlxMan(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Field Calculation Methods: Executes automatic relaxation procedure for the interaction matrix intrc.
+ * DEPRECATED: Executes automatic relaxation procedure for the interaction matrix intrc.
+ * Use Solve() instead - it provides automatic relaxation with better convergence.
  ***************************************************************************/
 static PyObject* radia_RlxAuto(PyObject* self, PyObject* args)
 {
+	// Print deprecation warning
+	PySys_WriteStderr("Warning: RlxAuto() is deprecated. Use Solve(obj, prec, maxiter, method) instead.\n");
+
 	PyObject *oOpt=0, *oResInd=0;
 	try
 	{
@@ -2353,10 +2197,14 @@ static PyObject* radia_RlxAuto(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
- * Magnetic Field Calculation Methods: Updates external field data for the relaxation (to take into account e.g. modification of currents in coils, if any) without rebuilding the interaction matrix.
+ * DEPRECATED: Updates external field data for the relaxation.
+ * Use Solve() instead - it automatically handles field updates.
  ***************************************************************************/
 static PyObject* radia_RlxUpdSrc(PyObject* self, PyObject* args)
 {
+	// Print deprecation warning
+	PySys_WriteStderr("Warning: RlxUpdSrc() is deprecated. Use Solve() for re-solving with updated sources.\n");
+
 	PyObject *oResInd = 0;
 
 	try
@@ -2917,6 +2765,64 @@ static PyObject* radia_FldBatch(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
+ * VTS Export: Export magnetic field on structured 3D grid to VTS format
+ ***************************************************************************/
+static PyObject* radia_FldVTS(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	char *sFilename=0;
+	try
+	{
+		int container_handle=0;
+		double x_min=0, x_max=0, y_min=0, y_max=0, z_min=0, z_max=0;
+		int nx=21, ny=21, nz=21;
+		int include_B=1, include_H=0;
+		double unit_scale=1.0;
+
+		// Parse: obj, filename, x_range, y_range, z_range, [nx, ny, nz, include_B, include_H, unit_scale]
+		PyObject *oXRange=0, *oYRange=0, *oZRange=0;
+		if(!PyArg_ParseTuple(args, "isOOO|iiiiid:FldVTS",
+		                     &container_handle, &sFilename,
+		                     &oXRange, &oYRange, &oZRange,
+		                     &nx, &ny, &nz, &include_B, &include_H, &unit_scale))
+			throw CombErStr(strEr_BadFuncArg, ": FldVTS");
+
+		if((container_handle == 0) || (sFilename == 0))
+			throw CombErStr(strEr_BadFuncArg, ": FldVTS");
+
+		// Parse ranges
+		if(!PySequence_Check(oXRange) || PySequence_Length(oXRange) != 2)
+			throw CombErStr(strEr_BadFuncArg, ": FldVTS: x_range must be [x_min, x_max]");
+		if(!PySequence_Check(oYRange) || PySequence_Length(oYRange) != 2)
+			throw CombErStr(strEr_BadFuncArg, ": FldVTS: y_range must be [y_min, y_max]");
+		if(!PySequence_Check(oZRange) || PySequence_Length(oZRange) != 2)
+			throw CombErStr(strEr_BadFuncArg, ": FldVTS: z_range must be [z_min, z_max]");
+
+		x_min = PyFloat_AsDouble(PySequence_GetItem(oXRange, 0));
+		x_max = PyFloat_AsDouble(PySequence_GetItem(oXRange, 1));
+		y_min = PyFloat_AsDouble(PySequence_GetItem(oYRange, 0));
+		y_max = PyFloat_AsDouble(PySequence_GetItem(oYRange, 1));
+		z_min = PyFloat_AsDouble(PySequence_GetItem(oZRange, 0));
+		z_max = PyFloat_AsDouble(PySequence_GetItem(oZRange, 1));
+
+		// Call C API
+		g_pyParse.ProcRes(RadFldVTS(container_handle, sFilename,
+		                            x_min, x_max, nx,
+		                            y_min, y_max, ny,
+		                            z_min, z_max, nz,
+		                            include_B, include_H, unit_scale));
+
+		// Return filename
+		oRes = PyUnicode_FromString(sFilename);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
  * Scalar Potential Computation: Computes magnetic scalar potential at multiple points
  ***************************************************************************/
 static PyObject* radia_FldPhi(PyObject* self, PyObject* args)
@@ -3004,6 +2910,1005 @@ static PyObject* radia_FldA(PyObject* self, PyObject* args)
 	if(arA != 0) delete[] arA;
 	return oRes;
 }
+
+//=========================================================================
+// Conductor Analysis API (FastImp-based)
+//=========================================================================
+
+/************************************************************************//**
+ * Creates a conductor from a rectangular block
+ ***************************************************************************/
+static PyObject* radia_CndRecBlock(PyObject* self, PyObject* args)
+{
+	PyObject *oP=0, *oL=0, *oResInd=0;
+	try
+	{
+		double sigma = 5.8e7;  // Default: copper
+		int num_panels = 4;
+		if(!PyArg_ParseTuple(args, "OO|di:CndRecBlock", &oP, &oL, &sigma, &num_panels))
+			throw CombErStr(strEr_BadFuncArg, ": CndRecBlock");
+		if((oP == 0) || (oL == 0)) throw CombErStr(strEr_BadFuncArg, ": CndRecBlock");
+
+		double arP[3], arL[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oP, 'd', arP, 3,
+			CombErStr(strEr_BadFuncArg, ": CndRecBlock, incorrect definition of center point"));
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oL, 'd', arL, 3,
+			CombErStr(strEr_BadFuncArg, ": CndRecBlock, incorrect definition of dimensions"));
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadCndRecBlock(&ind, arP, arL, sigma, num_panels));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Creates a conductor from hexahedron vertices
+ ***************************************************************************/
+static PyObject* radia_CndHexahedron(PyObject* self, PyObject* args)
+{
+	PyObject *oVerts=0, *oResInd=0;
+	double *arCrd=0;
+	try
+	{
+		double sigma = 5.8e7;  // Default: copper
+		int num_panels = 4;
+		if(!PyArg_ParseTuple(args, "O|di:CndHexahedron", &oVerts, &sigma, &num_panels))
+			throw CombErStr(strEr_BadFuncArg, ": CndHexahedron");
+		if(oVerts == 0) throw CombErStr(strEr_BadFuncArg, ": CndHexahedron");
+
+		int nCrd = 0;
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oVerts, 'd', arCrd, nCrd))
+			throw CombErStr(strEr_BadFuncArg, ": CndHexahedron, incorrect vertex definition");
+		if(nCrd != 24) throw CombErStr(strEr_BadFuncArg, ": CndHexahedron, requires 8 vertices");
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadCndHexahedron(&ind, arCrd, sigma, num_panels));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arCrd != 0) delete[] arCrd;
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Creates a circular loop conductor
+ ***************************************************************************/
+static PyObject* radia_CndLoop(PyObject* self, PyObject* args)
+{
+	PyObject *oCenter=0, *oNormal=0, *oCrossSection=0, *oResInd=0;
+	try
+	{
+		double radius = 0, wire_width = 0, wire_height = 0, sigma = 5.8e7;
+		int num_panels_around = 8, num_panels_loop = 30;
+
+		if(!PyArg_ParseTuple(args, "OdOOd|ddii:CndLoop", &oCenter, &radius, &oNormal,
+		                     &oCrossSection, &wire_width, &wire_height, &sigma,
+		                     &num_panels_around, &num_panels_loop))
+			throw CombErStr(strEr_BadFuncArg, ": CndLoop");
+
+		double arCenter[3], arNormal[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oCenter, 'd', arCenter, 3,
+			CombErStr(strEr_BadFuncArg, ": CndLoop, incorrect center point"));
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oNormal, 'd', arNormal, 3,
+			CombErStr(strEr_BadFuncArg, ": CndLoop, incorrect normal vector"));
+
+		char sCS[64]; *sCS = '\0';
+		CPyParse::CopyPyStringToC(oCrossSection, sCS, 64);
+		char cs_char = (sCS[0] == 'c' || sCS[0] == 'C') ? 'c' : 'r';
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadCndLoop(&ind, arCenter, radius, arNormal, cs_char,
+		                              wire_width, wire_height, sigma,
+		                              num_panels_around, num_panels_loop));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Creates a wire conductor from path points
+ ***************************************************************************/
+static PyObject* radia_CndWire(PyObject* self, PyObject* args)
+{
+	PyObject *oPath=0, *oCrossSection=0, *oResInd=0;
+	double *arPath=0;
+	try
+	{
+		double width = 0, height = 0, sigma = 5.8e7;
+		int num_panels_around = 8;
+
+		if(!PyArg_ParseTuple(args, "OOdd|di:CndWire", &oPath, &oCrossSection,
+		                     &width, &height, &sigma, &num_panels_around))
+			throw CombErStr(strEr_BadFuncArg, ": CndWire");
+
+		int nPath = 0;
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oPath, 'd', arPath, nPath))
+			throw CombErStr(strEr_BadFuncArg, ": CndWire, incorrect path definition");
+		if(nPath < 6 || (nPath % 3) != 0)
+			throw CombErStr(strEr_BadFuncArg, ": CndWire, path must have at least 2 points");
+
+		char sCS[64]; *sCS = '\0';
+		CPyParse::CopyPyStringToC(oCrossSection, sCS, 64);
+		char cs_char = (sCS[0] == 'c' || sCS[0] == 'C') ? 'c' : 'r';
+
+		int np = nPath / 3;
+		int ind = 0;
+		g_pyParse.ProcRes(RadCndWire(&ind, arPath, np, cs_char, width, height, sigma, num_panels_around));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arPath != 0) delete[] arPath;
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Creates a spiral conductor
+ ***************************************************************************/
+static PyObject* radia_CndSpiral(PyObject* self, PyObject* args)
+{
+	PyObject *oCenter=0, *oAxis=0, *oCrossSection=0, *oResInd=0;
+	try
+	{
+		double inner_radius = 0, outer_radius = 0, pitch = 0;
+		int num_turns = 0;
+		double wire_width = 0, wire_height = 0, sigma = 5.8e7;
+		int num_panels_around = 8;
+
+		if(!PyArg_ParseTuple(args, "OdddiOOdd|di:CndSpiral", &oCenter, &inner_radius,
+		                     &outer_radius, &pitch, &num_turns, &oAxis, &oCrossSection,
+		                     &wire_width, &wire_height, &sigma, &num_panels_around))
+			throw CombErStr(strEr_BadFuncArg, ": CndSpiral");
+
+		double arCenter[3], arAxis[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oCenter, 'd', arCenter, 3,
+			CombErStr(strEr_BadFuncArg, ": CndSpiral, incorrect center point"));
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oAxis, 'd', arAxis, 3,
+			CombErStr(strEr_BadFuncArg, ": CndSpiral, incorrect axis vector"));
+
+		char sCS[64]; *sCS = '\0';
+		CPyParse::CopyPyStringToC(oCrossSection, sCS, 64);
+		char cs_char = (sCS[0] == 'c' || sCS[0] == 'C') ? 'c' : 'r';
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadCndSpiral(&ind, arCenter, inner_radius, outer_radius,
+		                                pitch, num_turns, arAxis, cs_char,
+		                                wire_width, wire_height, sigma, num_panels_around));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Sets analysis frequency for conductor
+ ***************************************************************************/
+static PyObject* radia_CndSetFrequency(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		double frequency = 0;
+		if(!PyArg_ParseTuple(args, "id:CndSetFrequency", &cond, &frequency))
+			throw CombErStr(strEr_BadFuncArg, ": CndSetFrequency");
+
+		g_pyParse.ProcRes(RadCndSetFrequency(cond, frequency));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets analysis formulation for conductor
+ ***************************************************************************/
+static PyObject* radia_CndSetFormulation(PyObject* self, PyObject* args)
+{
+	PyObject *oForm=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "iO:CndSetFormulation", &cond, &oForm))
+			throw CombErStr(strEr_BadFuncArg, ": CndSetFormulation");
+
+		char sForm[64]; *sForm = '\0';
+		CPyParse::CopyPyStringToC(oForm, sForm, 64);
+
+		g_pyParse.ProcRes(RadCndSetFormulation(cond, sForm));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets relative permeability for conductor (mu_r)
+ * Following Karl Hollaus's ESIM formulation
+ ***************************************************************************/
+static PyObject* radia_CndSetMuR(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		double mu_r = 1.0;
+		if(!PyArg_ParseTuple(args, "id:CndSetMuR", &cond, &mu_r))
+			throw CombErStr(strEr_BadFuncArg, ": CndSetMuR");
+
+		g_pyParse.ProcRes(RadCndSetMuR(cond, mu_r));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Gets skin depth at current frequency
+ * delta = sqrt(2 / (omega * mu_0 * mu_r * sigma))
+ ***************************************************************************/
+static PyObject* radia_CndGetSkinDepth(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndGetSkinDepth", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndGetSkinDepth");
+
+		double delta = 0;
+		g_pyParse.ProcRes(RadCndGetSkinDepth(&delta, cond));
+
+		oRes = Py_BuildValue("d", delta);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Gets surface impedance Z = (1+j) * Rs
+ * Following Karl Hollaus's ESIM formulation
+ ***************************************************************************/
+static PyObject* radia_CndGetSurfaceImpedance(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndGetSurfaceImpedance", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndGetSurfaceImpedance");
+
+		double Z_real = 0, Z_imag = 0;
+		g_pyParse.ProcRes(RadCndGetSurfaceImpedance(&Z_real, &Z_imag, cond));
+
+		// Return as complex number
+		oRes = PyComplex_FromDoubles(Z_real, Z_imag);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Sets voltage excitation for conductor
+ ***************************************************************************/
+static PyObject* radia_CndSetVoltage(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		double V_real = 0, V_imag = 0;
+		if(!PyArg_ParseTuple(args, "idd:CndSetVoltage", &cond, &V_real, &V_imag))
+			throw CombErStr(strEr_BadFuncArg, ": CndSetVoltage");
+
+		g_pyParse.ProcRes(RadCndSetVoltage(cond, V_real, V_imag));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets current excitation for conductor
+ ***************************************************************************/
+static PyObject* radia_CndSetCurrent(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		double I_real = 0, I_imag = 0;
+		if(!PyArg_ParseTuple(args, "idd:CndSetCurrent", &cond, &I_real, &I_imag))
+			throw CombErStr(strEr_BadFuncArg, ": CndSetCurrent");
+
+		g_pyParse.ProcRes(RadCndSetCurrent(cond, I_real, I_imag));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Gets total current after solve
+ ***************************************************************************/
+static PyObject* radia_CndGetTotalCurrent(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndGetTotalCurrent", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndGetTotalCurrent");
+
+		double I_real = 0, I_imag = 0;
+		g_pyParse.ProcRes(RadCndGetTotalCurrent(&I_real, &I_imag, cond));
+
+		// Return as complex number
+		oRes = PyComplex_FromDoubles(I_real, I_imag);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Solves conductor system
+ ***************************************************************************/
+static PyObject* radia_CndSolve(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndSolve", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndSolve");
+
+		g_pyParse.ProcRes(RadCndSolve(cond));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Gets port impedance after solve
+ ***************************************************************************/
+static PyObject* radia_CndGetImpedance(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndGetImpedance", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndGetImpedance");
+
+		double Z_real = 0, Z_imag = 0;
+		g_pyParse.ProcRes(RadCndGetImpedance(&Z_real, &Z_imag, cond));
+
+		// Return as complex number
+		oRes = PyComplex_FromDoubles(Z_real, Z_imag);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Defines port terminals for conductor
+ ***************************************************************************/
+static PyObject* radia_CndDefinePort(PyObject* self, PyObject* args)
+{
+	PyObject *oT1=0, *oT2=0;
+	int *arT1=0, *arT2=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "iOO:CndDefinePort", &cond, &oT1, &oT2))
+			throw CombErStr(strEr_BadFuncArg, ": CndDefinePort");
+
+		int n1 = 0, n2 = 0;
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oT1, 'i', arT1, n1))
+			throw CombErStr(strEr_BadFuncArg, ": CndDefinePort, incorrect terminal1 list");
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oT2, 'i', arT2, n2))
+			throw CombErStr(strEr_BadFuncArg, ": CndDefinePort, incorrect terminal2 list");
+
+		g_pyParse.ProcRes(RadCndDefinePort(cond, arT1, n1, arT2, n2));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arT1 != 0) delete[] arT1;
+	if(arT2 != 0) delete[] arT2;
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Auto-defines port terminals for conductor (first and last panels)
+ ***************************************************************************/
+static PyObject* radia_CndDefinePortAuto(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndDefinePortAuto", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndDefinePortAuto");
+
+		g_pyParse.ProcRes(RadCndDefinePortAuto(cond));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Performs frequency sweep
+ ***************************************************************************/
+static PyObject* radia_CndImpedanceSweep(PyObject* self, PyObject* args)
+{
+	PyObject *oFreqs=0, *oRes=0;
+	double *arFreqs=0, *arZ_real=0, *arZ_imag=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "iO:CndImpedanceSweep", &cond, &oFreqs))
+			throw CombErStr(strEr_BadFuncArg, ": CndImpedanceSweep");
+
+		int nFreq = 0;
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oFreqs, 'd', arFreqs, nFreq))
+			throw CombErStr(strEr_BadFuncArg, ": CndImpedanceSweep, incorrect frequency list");
+
+		arZ_real = new double[nFreq];
+		arZ_imag = new double[nFreq];
+
+		g_pyParse.ProcRes(RadCndImpedanceSweep(arZ_real, arZ_imag, cond, arFreqs, nFreq));
+
+		// Return list of complex numbers
+		oRes = PyList_New(nFreq);
+		for(int i = 0; i < nFreq; i++)
+		{
+			PyList_SetItem(oRes, i, PyComplex_FromDoubles(arZ_real[i], arZ_imag[i]));
+		}
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arFreqs != 0) delete[] arFreqs;
+	if(arZ_real != 0) delete[] arZ_real;
+	if(arZ_imag != 0) delete[] arZ_imag;
+	return oRes;
+}
+
+/* NOTE: radia_CndFld has been removed.
+   Use rad.Fld(cond, field_type, point) for conductor field computation.
+   The unified Fld() API automatically detects conductor objects and returns
+   complex fields [Fx_re, Fy_re, Fz_re, Fx_im, Fy_im, Fz_im] for AC analysis.
+*/
+
+/************************************************************************//**
+ * Gets number of panels in conductor
+ ***************************************************************************/
+static PyObject* radia_CndNumPanels(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int cond = 0;
+		if(!PyArg_ParseTuple(args, "i:CndNumPanels", &cond))
+			throw CombErStr(strEr_BadFuncArg, ": CndNumPanels");
+
+		int npanels = 0;
+		g_pyParse.ProcRes(RadCndNumPanels(&npanels, cond));
+
+		oRes = Py_BuildValue("i", npanels);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Creates SIBC material
+ ***************************************************************************/
+static PyObject* radia_MatSIBC(PyObject* self, PyObject* args)
+{
+	PyObject *oResInd=0;
+	try
+	{
+		double sigma = 0, mu_r = 1;
+		if(!PyArg_ParseTuple(args, "dd:MatSIBC", &sigma, &mu_r))
+			throw CombErStr(strEr_BadFuncArg, ": MatSIBC");
+
+		int mat = 0;
+		g_pyParse.ProcRes(RadMatSIBC(&mat, sigma, mu_r));
+
+		oResInd = Py_BuildValue("i", mat);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oResInd;
+}
+
+/************************************************************************//**
+ * Enables or disables FMM acceleration for conductor field computation
+ ***************************************************************************/
+static PyObject* radia_CndFmmSetEnabled(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int enabled = 1;
+		if(!PyArg_ParseTuple(args, "i:CndFmmSetEnabled", &enabled))
+			throw CombErStr(strEr_BadFuncArg, ": CndFmmSetEnabled");
+
+		g_pyParse.ProcRes(RadCndFmmSetEnabled(enabled));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+		return NULL;
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Gets current FMM enabled status
+ ***************************************************************************/
+static PyObject* radia_CndFmmGetEnabled(PyObject* self, PyObject* /*args*/)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int enabled = 0;
+		g_pyParse.ProcRes(RadCndFmmGetEnabled(&enabled));
+		oRes = Py_BuildValue("i", enabled);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Sets FMM parameters
+ ***************************************************************************/
+static PyObject* radia_CndFmmSetParameters(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int p = 6, ncrit = 64, threshold = 500;
+		if(!PyArg_ParseTuple(args, "|iii:CndFmmSetParameters", &p, &ncrit, &threshold))
+			throw CombErStr(strEr_BadFuncArg, ": CndFmmSetParameters");
+
+		g_pyParse.ProcRes(RadCndFmmSetParameters(p, ncrit, threshold));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+		return NULL;
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Gets current FMM parameters
+ ***************************************************************************/
+static PyObject* radia_CndFmmGetParameters(PyObject* self, PyObject* /*args*/)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int p = 0, ncrit = 0, threshold = 0;
+		g_pyParse.ProcRes(RadCndFmmGetParameters(&p, &ncrit, &threshold));
+		oRes = Py_BuildValue("(iii)", p, ncrit, threshold);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+//=========================================================================
+// Coupled Solver API (PEEC + MMM, extensible for future couplings)
+//=========================================================================
+
+/************************************************************************//**
+ * Creates coupled solver (conductor + magnetic material)
+ ***************************************************************************/
+static PyObject* radia_CplMagCreate(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int conductor = 0, magnet = 0;
+		if(!PyArg_ParseTuple(args, "ii:CoupledCreate", &conductor, &magnet))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledCreate");
+
+		double out[1];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagCreate(out, &nout, conductor, magnet));
+
+		oRes = Py_BuildValue("i", (int)out[0]);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Sets frequency for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSetFrequency(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		double frequency = 0;
+		if(!PyArg_ParseTuple(args, "id:CoupledSetFrequency", &solver, &frequency))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetFrequency");
+
+		g_pyParse.ProcRes(RadCplMagSetFrequency(solver, frequency));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets voltage excitation for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSetVoltage(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		double V_real = 0, V_imag = 0;
+		if(!PyArg_ParseTuple(args, "idd:CoupledSetVoltage", &solver, &V_real, &V_imag))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetVoltage");
+
+		g_pyParse.ProcRes(RadCplMagSetVoltage(solver, V_real, V_imag));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets current excitation for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSetCurrent(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		double I_real = 0, I_imag = 0;
+		if(!PyArg_ParseTuple(args, "idd:CoupledSetCurrent", &solver, &I_real, &I_imag))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetCurrent");
+
+		g_pyParse.ProcRes(RadCplMagSetCurrent(solver, I_real, I_imag));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets external H field for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSetExtField(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		double Hx = 0, Hy = 0, Hz = 0;
+		if(!PyArg_ParseTuple(args, "iddd:CoupledSetExtField", &solver, &Hx, &Hy, &Hz))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetExtField");
+
+		g_pyParse.ProcRes(RadCplMagSetExtField(solver, Hx, Hy, Hz));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets complex permeability for coupled solver
+ * Complex permeability: mu = mu' - j*mu" (engineering convention)
+ ***************************************************************************/
+static PyObject* radia_CplMagSetMu(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		double mu_r_real = 1.0, mu_r_imag = 0.0;
+		if(!PyArg_ParseTuple(args, "idd:CoupledSetMu", &solver, &mu_r_real, &mu_r_imag))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetMu");
+
+		g_pyParse.ProcRes(RadCplMagSetMu(solver, mu_r_real, mu_r_imag));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Enable/disable matrix symmetrization for coupled solver
+ * Symmetrization enables CLN model order reduction while giving same results
+ ***************************************************************************/
+static PyObject* radia_CplMagSetSymmetric(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0, use_symmetric = 0;
+		if(!PyArg_ParseTuple(args, "ii:CplMagSetSymmetric", &solver, &use_symmetric))
+			throw CombErStr(strEr_BadFuncArg, ": CplMagSetSymmetric");
+
+		g_pyParse.ProcRes(RadCplMagSetSymmetric(solver, use_symmetric));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Sets conductor for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSetConductor(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0, conductor = 0;
+		if(!PyArg_ParseTuple(args, "ii:CoupledSetConductor", &solver, &conductor))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSetConductor");
+
+		g_pyParse.ProcRes(RadCplMagSetConductor(solver, conductor));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+/************************************************************************//**
+ * Solves coupled system
+ ***************************************************************************/
+static PyObject* radia_CplMagSolve(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "i:CoupledSolve", &solver))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSolve");
+
+		double out[5];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagSolve(out, &nout, solver));
+
+		// Return dict with Z (complex), P_conductor, P_magnet, iterations
+		oRes = PyDict_New();
+		PyDict_SetItemString(oRes, "Z", PyComplex_FromDoubles(out[0], out[1]));
+		PyDict_SetItemString(oRes, "P_conductor", PyFloat_FromDouble(out[2]));
+		PyDict_SetItemString(oRes, "P_magnet", PyFloat_FromDouble(out[3]));
+		PyDict_SetItemString(oRes, "iterations", PyLong_FromLong((long)out[4]));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Gets impedance from coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagImpedance(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "i:CoupledImpedance", &solver))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledImpedance");
+
+		double out[2];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagImpedance(out, &nout, solver));
+
+		oRes = PyComplex_FromDoubles(out[0], out[1]);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Gets power losses from coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagPower(PyObject* self, PyObject* args)
+{
+	PyObject *oRes=0;
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "i:CoupledPower", &solver))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledPower");
+
+		double out[2];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagPower(out, &nout, solver));
+
+		// Return tuple (P_conductor, P_magnet)
+		oRes = Py_BuildValue("(dd)", out[0], out[1]);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Computes B field from coupled system
+ ***************************************************************************/
+static PyObject* radia_CplMagFld(PyObject* self, PyObject* args)
+{
+	PyObject *oCoord=0, *oRes=0;
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "iO:CoupledFld", &solver, &oCoord))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledFld");
+
+		double arCoord[3];
+		CPyParse::CopyPyListElemsToNumArrayKnownLen(oCoord, 'd', arCoord, 3,
+			CombErStr(strEr_BadFuncArg, ": CoupledFld, incorrect point"));
+
+		double out[6];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagFld(out, &nout, solver, arCoord));
+
+		// Return dict with B_real and B_imag
+		oRes = PyDict_New();
+		PyObject *oBreal = PyList_New(3);
+		PyObject *oBimag = PyList_New(3);
+		for(int i = 0; i < 3; i++) {
+			PyList_SetItem(oBreal, i, PyFloat_FromDouble(out[i]));
+			PyList_SetItem(oBimag, i, PyFloat_FromDouble(out[3+i]));
+		}
+		PyDict_SetItemString(oRes, "B_real", oBreal);
+		PyDict_SetItemString(oRes, "B_imag", oBimag);
+		Py_DECREF(oBreal);
+		Py_DECREF(oBimag);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	return oRes;
+}
+
+/************************************************************************//**
+ * Performs frequency sweep for coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagSweep(PyObject* self, PyObject* args)
+{
+	PyObject *oFreqs=0, *oRes=0;
+	double *arFreqs=0, *arOut=0;
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "iO:CoupledSweep", &solver, &oFreqs))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSweep");
+
+		int nFreq = 0;
+		if(!CPyParse::CopyPyNestedListElemsToNumAr(oFreqs, 'd', arFreqs, nFreq))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledSweep, incorrect frequency list");
+
+		arOut = new double[2 * nFreq];
+		int nout = 0;
+		g_pyParse.ProcRes(RadCplMagSweep(arOut, &nout, solver, arFreqs, nFreq));
+
+		// Return list of complex impedances
+		oRes = PyList_New(nFreq);
+		for(int i = 0; i < nFreq; i++) {
+			PyList_SetItem(oRes, i, PyComplex_FromDoubles(arOut[2*i], arOut[2*i+1]));
+		}
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arFreqs != 0) delete[] arFreqs;
+	if(arOut != 0) delete[] arOut;
+	return oRes;
+}
+
+/************************************************************************//**
+ * Deletes coupled solver
+ ***************************************************************************/
+static PyObject* radia_CplMagDelete(PyObject* self, PyObject* args)
+{
+	try
+	{
+		int solver = 0;
+		if(!PyArg_ParseTuple(args, "i:CoupledDelete", &solver))
+			throw CombErStr(strEr_BadFuncArg, ": CoupledDelete");
+
+		g_pyParse.ProcRes(RadCplMagDelete(solver));
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	Py_RETURN_NONE;
+}
+
+//=========================================================================
 
 /************************************************************************//**
  * Magnetic Field Calculation Methods: Computes field created by the object obj at one or many points
@@ -3906,7 +4811,7 @@ static PyMethodDef radia_methods[] = {
 	{"ObjAddToCnt", radia_ObjAddToCnt, METH_VARARGS, "ObjAddToCnt(cnt,[obj1,obj2,...]) adds objects [obj1,obj2,...] to the container object cnt."},
 	{"ObjCntStuf", radia_ObjCntStuf, METH_VARARGS, "ObjCntStuf(obj) returns list of general indexes of the objects present in container if obj is a container; or returns [obj] if obj is not a container."}, 
 	{"ObjCntSize", radia_ObjCntSize, METH_VARARGS, "ObjCntSize(cnt) calculates the number of objects in the container cnt."},
-	{"ObjCutMag", radia_ObjCutMag, METH_VARARGS, "ObjCutMag(obj,[x,y,z],[nx,ny,nz],'Frame->Loc|Lab|LabTot') cuts 3D object by a plane normal to the vector [nx,ny,nz] and passing through the point [x,y,z]. The 'Frame->Loc', 'Frame->Lab' or 'Frame->LabTot' option specifies whether the cuting plane is defined in the local frame of the object obj or in the laboratory frame (default). The actions of 'Frame->Lab' and 'Frame->LabTot' differ for containers only: 'Frame->Lab' means that each of the objects in the container is cut separately; 'Frame->LabTot' means that the objects in the container are cut as one object, by the same plane. The function returns a list of indexes of the objects produced by the cutting."},
+	// ObjCutMag REMOVED (2026-01-11) - Use Cubit for mesh operations
 	{"ObjDpl", radia_ObjDpl, METH_VARARGS, "ObjDpl(obj,'FreeSym->False|True') duplicates 3D object obj. The option 'FreeSym->False|True' specifies whether the symmetries (transformations with multiplicity more than one) previously applied to the object obj should be simply copied at the duplication ('FreeSym->False', default), or a container of new independent objects should be created in place of any symmetry previously applied to the object obj. In both cases the final object created by the duplication has exactly the same geometry as the initial object obj."},
 	{"ObjGeoVol", radia_ObjGeoVol, METH_VARARGS, "ObjGeoVol(obj) computes geometrical volume of 3D object obj."},
 	{"ObjGeoLim", radia_ObjGeoLim, METH_VARARGS, "ObjGeoLim(obj) computes geometrical limits of 3D object obj in the laboratory frame. Returns [xmin, xmax, ymin, ymax, zmin, zmax]."},
@@ -3915,8 +4820,7 @@ static PyMethodDef radia_methods[] = {
 	{"ObjCenFld", radia_ObjCenFld, METH_VARARGS, "ObjCenFld(obj,'A|B|H|J|M') provides coordinates of geometrical center point of the object obj and a field characteristic vector at that point. The type of field characteristic is defined by the second parameter (character); it can be one of the following: 'A' for vector potential, 'B' for magnetic field induction, 'H' for magnetic field strength, 'J' for current density, 'M' for magnetization. If obj is a container, a list of the container members' center points and their field characteristics is returned."},
 	{"ObjSetM", radia_ObjSetM, METH_VARARGS, "ObjSetM(obj,[mx,my,mz]) sets magnetization [mx,my,mz] in 3D object obj."},
 	{"ObjScaleCur", radia_ObjScaleCur, METH_VARARGS, "ObjScaleCur(obj,k) scales current (density) in 3D object obj by multiplying it by constant k (if obj is a current-carying object). If obj is a container, the current (density) scaling applies to all its members."},
-	{"ObjDrwAtr", radia_ObjDrwAtr, METH_VARARGS, "ObjDrwAtr(obj,[r,g,b],thcn) assigns drawing attributes - RGB color [r,g,b] and line thickness thcn - to 3D object obj."},
-	{"ObjDrwVTK", radia_ObjDrwVTK, METH_VARARGS, "ObjDrwVTK(obj,'EdgeLines->True|False,Faces->True|False,Axes->True|False') exports data for viewing 3D geometry of the object obj. The data is in the format compatible with VTK graphics library. The option 'EdgeLines->True|False' (default 'EdgeLines->True') highlights the edge lines of objects; the option 'Faces->True|False' (default 'Faces->True') shows faces of the objects; the option 'Axes->True|False' (default 'Axes->True') shows the Cartesian frame axes."},
+	// ObjDrwAtr REMOVED (2026-01-14) - Use VTK export with ParaView for visualization
 
 	{"TrfTrsl", radia_TrfTrsl, METH_VARARGS, "TrfTrsl([vx,vy,vz]) creates a translation by vector [vx,vy,vz]."},
 	{"TrfRot", radia_TrfRot, METH_VARARGS, "TrfRot([x,y,z],[vx,vy,vz],phi) creates a rotation of angle phi around the axis defined by the point [x,y,z] and the vector [vx,vy,vz]."},
@@ -3962,6 +4866,7 @@ static PyMethodDef radia_methods[] = {
 
 	{"ClassifyPoints", radia_ClassifyPoints, METH_VARARGS, "ClassifyPoints(obj, points, near_threshold=3.0) classifies evaluation points relative to mesh elements. Returns dict with 'classification' (0=inside, 1=near, 2=far) and 'nearest_elem' (index of nearest element). Used for FMM field computation."},
 	{"FldBatch", radia_FldBatch, METH_VARARGS, "FldBatch(obj, points, method=0) computes B and H fields at multiple points. Returns dict with 'B' and 'H' arrays. method: 0=direct, 1=FMM (future). More efficient than calling Fld() in a loop."},
+	{"FldVTS", radia_FldVTS, METH_VARARGS, "FldVTS(obj, filename, x_range, y_range, z_range, nx=21, ny=21, nz=21, include_B=1, include_H=0, unit_scale=1.0) exports magnetic field on structured 3D grid to VTS (VTK XML Structured Grid) format. More efficient than Python-based export for large grids. Returns filename."},
 	{"FldPhi", radia_FldPhi, METH_VARARGS, "FldPhi(obj, points) computes magnetic scalar potential phi_m at multiple points. Returns list of scalar values. phi_m = (1/4pi) * integral(M . r / r^3) dV. Units: Ampere (A)."},
 	{"FldA", radia_FldA, METH_VARARGS, "FldA(obj, points) computes magnetic vector potential A at multiple points. Returns list of [Ax, Ay, Az] values. Note: Currently returns zero for ObjPolyhdr (MSC method) - implementation in progress."},
 
@@ -3989,6 +4894,50 @@ static PyMethodDef radia_methods[] = {
 	{"UtiDelAll", radia_UtiDelAll, METH_VARARGS, "UtiDelAll() deletes all previously created elements."},
 	{"UtiVer", radia_UtiVer, METH_VARARGS, "UtiVer() returns version number of the Radia library."},
 	{"UtiMPI", radia_UtiMPI, METH_VARARGS, "UtiMPI('on|off|share',data,rankFrom,rankTo) initializes (if argument is 'on') or finalizes (in argument is 'off') the Message Passing Inteface (MPI) for parallel calculations and returns list of basic MPI process parameters (in the case of initialization): rank of a process and total number of processes. In the case of first argument is 'share', the function will send data (list or array) from rankFrom (by default 0) to all processes (by default) of to rankTo."},
+
+	// Conductor (FastImp) functions
+	{"CndRecBlock", radia_CndRecBlock, METH_VARARGS, "CndRecBlock([x,y,z],[Lx,Ly,Lz],sigma,num_panels) creates a conductor from rectangular block with center [x,y,z], dimensions [Lx,Ly,Lz], conductivity sigma [S/m], and num_panels per face. Default sigma=5.8e7 (copper)."},
+	{"CndHexahedron", radia_CndHexahedron, METH_VARARGS, "CndHexahedron([[x1,y1,z1],...,[x8,y8,z8]],sigma,num_panels) creates a conductor from hexahedral vertices. Returns conductor handle."},
+	{"CndLoop", radia_CndLoop, METH_VARARGS, "CndLoop([x,y,z],radius,[nx,ny,nz],cross_section,wire_width,wire_height,sigma,num_panels_around,num_panels_loop) creates a circular loop conductor. cross_section: 'r'=rectangular, 'c'=circular."},
+	{"CndWire", radia_CndWire, METH_VARARGS, "CndWire([[x1,y1,z1],[x2,y2,z2],...],cross_section,width,height,sigma,num_panels_around) creates a wire conductor along path points. cross_section: 'r'=rectangular, 'c'=circular. Default sigma=5.8e7 (copper)."},
+	{"CndSpiral", radia_CndSpiral, METH_VARARGS, "CndSpiral([x,y,z],inner_radius,outer_radius,pitch,num_turns,[ax,ay,az],cross_section,wire_width,wire_height,sigma,num_panels_around) creates a spiral conductor. Pitch is the height gain per turn."},
+	{"CndSetFrequency", radia_CndSetFrequency, METH_VARARGS, "CndSetFrequency(cond,freq) sets frequency [Hz] for conductor cond. Must be called before CndSolve."},
+	{"CndSetMuR", radia_CndSetMuR, METH_VARARGS, "CndSetMuR(cond,mu_r) sets relative permeability mu_r for conductor cond. Default is 1.0 (non-magnetic). For ferromagnetic materials like steel, use mu_r >> 1. Affects skin depth calculation."},
+	{"CndGetSkinDepth", radia_CndGetSkinDepth, METH_VARARGS, "CndGetSkinDepth(cond) returns skin depth [m] = sqrt(2/(omega*mu_0*mu_r*sigma)). Call after CndSetFrequency."},
+	{"CndGetSurfaceImpedance", radia_CndGetSurfaceImpedance, METH_VARARGS, "CndGetSurfaceImpedance(cond) returns complex surface impedance Z = (1+j)*Rs [Ohm], where Rs = 1/(sigma*delta). Follows ESIM (Effective Surface Impedance Model) formulation."},
+	{"CndSetVoltage", radia_CndSetVoltage, METH_VARARGS, "CndSetVoltage(cond,V_real,V_imag) sets voltage excitation [V] for conductor. Use before CndSolve for voltage-driven analysis."},
+	{"CndSetCurrent", radia_CndSetCurrent, METH_VARARGS, "CndSetCurrent(cond,I_real,I_imag) sets current excitation [A] for conductor. Use before CndSolve for current-driven analysis."},
+	{"CndGetTotalCurrent", radia_CndGetTotalCurrent, METH_VARARGS, "CndGetTotalCurrent(cond) returns total current [A] through conductor after solve. Returns complex number."},
+	{"CndSolve", radia_CndSolve, METH_VARARGS, "CndSolve(cond) solves the EFIE + charge continuity equations for conductor cond using FastImp pFFT method."},
+	{"CndGetImpedance", radia_CndGetImpedance, METH_VARARGS, "CndGetImpedance(cond) returns complex impedance Z = R + jX [Ohm] as a complex number."},
+	{"CndDefinePort", radia_CndDefinePort, METH_VARARGS, "CndDefinePort(cond,[t1_panels],[t2_panels]) defines port terminals for impedance calculation. t1_panels and t2_panels are lists of panel indices."},
+	{"CndDefinePortAuto", radia_CndDefinePortAuto, METH_VARARGS, "CndDefinePortAuto(cond) auto-defines port using first and last panels (for wire-like conductors)."},
+	{"CndImpedanceSweep", radia_CndImpedanceSweep, METH_VARARGS, "CndImpedanceSweep(cond,[f1,f2,...]) computes impedance at multiple frequencies. Returns list of complex impedances."},
+	// NOTE: CndFld removed - use Fld(cond, field_type, point) for conductor fields
+	{"CndNumPanels", radia_CndNumPanels, METH_VARARGS, "CndNumPanels(cond) returns the number of panels in the conductor discretization."},
+	{"MatSIBC", radia_MatSIBC, METH_VARARGS, "MatSIBC(sigma,mu_r) creates a Surface Impedance Boundary Condition material. sigma: conductivity [S/m], mu_r: relative permeability. For high-conductivity regions in magnetic materials."},
+
+	// FMM (Fast Multipole Method) acceleration functions
+	{"CndFmmSetEnabled", radia_CndFmmSetEnabled, METH_VARARGS, "CndFmmSetEnabled(enabled) enables (1) or disables (0) FMM acceleration for conductor field computation."},
+	{"CndFmmGetEnabled", radia_CndFmmGetEnabled, METH_NOARGS, "CndFmmGetEnabled() returns current FMM enabled status (1=enabled, 0=disabled)."},
+	{"CndFmmSetParameters", radia_CndFmmSetParameters, METH_VARARGS, "CndFmmSetParameters(p,ncrit,threshold) sets FMM parameters: p=expansion order (default 6), ncrit=particles per leaf (default 64), threshold=min problem size for FMM (default 500)."},
+	{"CndFmmGetParameters", radia_CndFmmGetParameters, METH_NOARGS, "CndFmmGetParameters() returns tuple (p, ncrit, threshold) of current FMM parameters."},
+
+	// CplMag Solver (Coupled Conductor + Magnetic Material, using PEEC + MMM)
+	{"CplMagCreate", radia_CplMagCreate, METH_VARARGS, "CplMagCreate(conductor,magnet) creates coupled solver for coil with magnetic core. Returns solver handle."},
+	{"CplMagSetFrequency", radia_CplMagSetFrequency, METH_VARARGS, "CplMagSetFrequency(solver,freq) sets analysis frequency [Hz]."},
+	{"CplMagSetVoltage", radia_CplMagSetVoltage, METH_VARARGS, "CplMagSetVoltage(solver,V_real,V_imag) sets voltage excitation [V]."},
+	{"CplMagSetCurrent", radia_CplMagSetCurrent, METH_VARARGS, "CplMagSetCurrent(solver,I_real,I_imag) sets current excitation [A]."},
+	{"CplMagSetExtField", radia_CplMagSetExtField, METH_VARARGS, "CplMagSetExtField(solver,Hx,Hy,Hz) sets external H field [A/m]."},
+	{"CplMagSetMu", radia_CplMagSetMu, METH_VARARGS, "CplMagSetMu(solver,mu_r_real,mu_r_imag) sets complex permeability. mu = mu' - j*mu'' (engineering convention)."},
+	{"CplMagSetSymmetric", radia_CplMagSetSymmetric, METH_VARARGS, "CplMagSetSymmetric(solver,use_symmetric) enables matrix symmetrization (1) for CLN model order reduction. Default: 0 (non-symmetric)."},
+	{"CplMagSetConductor", radia_CplMagSetConductor, METH_VARARGS, "CplMagSetConductor(solver,conductor) sets conductor for solver."},
+	{"CplMagSolve", radia_CplMagSolve, METH_VARARGS, "CplMagSolve(solver) solves coupled system. Returns dict with Z, P_conductor, P_magnet, iterations."},
+	{"CplMagImpedance", radia_CplMagImpedance, METH_VARARGS, "CplMagImpedance(solver) returns impedance as complex number [Ohm]."},
+	{"CplMagPower", radia_CplMagPower, METH_VARARGS, "CplMagPower(solver) returns (P_conductor, P_magnet) power losses [W]."},
+	{"CplMagFld", radia_CplMagFld, METH_VARARGS, "CplMagFld(solver,[x,y,z]) computes B field. Returns dict with B_real, B_imag [T]."},
+	{"CplMagSweep", radia_CplMagSweep, METH_VARARGS, "CplMagSweep(solver,[f1,f2,...]) frequency sweep. Returns list of complex impedances."},
+	{"CplMagDelete", radia_CplMagDelete, METH_VARARGS, "CplMagDelete(solver) deletes coupled solver."},
 
 	{NULL, NULL}
 };

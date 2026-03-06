@@ -6,86 +6,53 @@ Verification script for the Maxwell relation B = curl(A) using Radia and NGSolve
 
 This script verifies that:
 1. Vector potential A is correctly computed by Radia for ObjHexahedron permanent magnets
-2. The Maxwell relation B = curl(A) holds when proper unit conversion is applied
-3. The radia_ngsolve integration correctly handles A field scaling
+2. The Maxwell relation B = curl(A) holds with proper unit handling
+3. The radia_ngsolve integration correctly handles coordinate unit conversion
 
-## Unit Conversion (Critical)
+## Unit Handling in radia_ngsolve
 
-**Radia ALWAYS uses mm internally**, regardless of `FldUnits()` setting:
+The `radia_ngsolve.cpp` implementation handles unit conversion as follows:
 
-| Field | Radia Internal | With `FldUnits('m')` | NGSolve Expected |
-|-------|---------------|---------------------|------------------|
-| B | Tesla | Tesla | Tesla |
-| H | A/m | A/m | A/m |
-| **A** | **T*mm** | **T*mm** (not auto-scaled!) | **T*m** |
+### Coordinate Conversion
 
-### Why A Needs Scaling
+| Setting | NGSolve Input | Radia Call | Notes |
+|---------|---------------|------------|-------|
+| `units='m'` (default) | meters | meters (coord_scale_=1.0) | Standard SI units |
+| `units='mm'` | millimeters | millimeters (coord_scale_=1000.0) | For mm-based meshes |
 
-1. Vector potential A has dimensions [T*length]
-2. Radia computes A using mm-based geometry internally
-3. NGSolve differentiates in meters: `curl(A) = dA/dx [m^-1]`
-4. For B = curl(A) to hold: `A_SI [T*m] = A_radia [T*mm] / 1000`
+### Field Values
 
-### radia_ngsolve.cpp Fix
+All field types (B, H, A, M, phi) are returned **without additional scaling**:
 
-The fix in `src/radia/radia_ngsolve.cpp` applies automatic scaling:
+| Field | Units | Notes |
+|-------|-------|-------|
+| B | Tesla | Magnetic flux density |
+| H | A/m | Magnetic field strength |
+| A | T*m | Vector potential (consistent with `FldUnits` setting) |
+| M | A/m | Magnetization |
+| phi | A | Magnetic scalar potential |
+
+### Why No A-field Scaling is Needed
+
+The implementation in `radia_ngsolve.cpp` (lines 483-490) explicitly states:
 
 ```cpp
-// Vector potential A unit scaling:
-// Radia ALWAYS uses mm internally, so A is always in T*mm
-// NGSolve differentiates in meters: curl(A) = dA/dx_m
-// To get correct B = curl(A), we scale A by 0.001:
-double scale = (field_type == "a") ? 0.001 : 1.0;
+// Vector potential A: No additional scaling needed
+// Radia returns A in T*m when FldUnits('m') is set, or T*mm when FldUnits('mm')
+// The numerical value is the same, but units match the FldUnits setting
+// Since we use coord_scale_ to convert coords to Radia's unit system,
+// the returned A is already in the correct units (T*m for NGSolve)
 ```
 
-## Test Results
-
-### Current Status (radia_ngsolve.pyd needs rebuild)
-
-The fix has been applied to `radia_ngsolve.cpp` source code, but `radia_ngsolve.pyd` needs to be rebuilt.
-
-**With OLD radia_ngsolve.pyd (without scaling fix):**
-
-| maxh [m] | Elements | HCurl DOF | |curl(A)|/|B| | Std Dev | Note |
-|----------|----------|-----------|--------------|---------|------|
-| 0.020 | 135 | 1,734 | 4.59e+06 | 6.3e+05 | ~5.8x 1/mu_0 |
-| 0.015 | 264 | 3,246 | 4.64e+06 | 6.0e+05 | ~5.8x 1/mu_0 |
-| 0.010 | 1,105 | 12,393 | 4.61e+06 | 5.5e+05 | ~5.8x 1/mu_0 |
-| 0.008 | 1,560 | 17,733 | 4.61e+06 | 5.4e+05 | ~5.8x 1/mu_0 |
-| 0.006 | 5,540 | 57,618 | 4.61e+06 | 5.5e+05 | ~5.8x 1/mu_0 |
-| 0.005 | 8,348 | 86,826 | 4.61e+06 | 5.4e+05 | ~5.8x 1/mu_0 |
-
-**Key observations:**
-- Ratio is ~4.6e6, which is approximately `5.8 / mu_0` (instead of expected 1.0)
-- Ratio is **consistent** across all mesh sizes (std dev ~12%)
-- Mesh refinement does **not** change the ratio significantly
-- This confirms the issue is unit scaling, not numerical discretization
-
-### Expected Results (after radia_ngsolve.pyd rebuild)
-
-With proper A field scaling (`scale = 0.001` for A field):
-
-| Metric | Expected | Note |
-|--------|----------|------|
-| |curl(A)| / |B| ratio | ~1.0 | Maxwell relation satisfied |
-| Ratio variation | < 10% | Due to FE discretization |
-
-### Mesh Convergence Behavior
-
-The ratio does **not** depend on mesh density because:
-1. The discrepancy is purely a **unit scaling issue**, not numerical error
-2. Both curl(A) and B scale together as mesh is refined
-3. The ratio remains constant at ~4.6e6 regardless of maxh
-
-After the fix is applied, mesh refinement should:
-- Ratio approaches 1.0 for all mesh sizes
-- Smaller deviation with finer mesh (improved FE approximation)
-- Error dominated by HCurl/HDiv projection accuracy
+For FMM-accelerated computation (lines 719-759), the dipole formula handles units consistently:
+- Dipole moment m is in A*m^2 (SI units)
+- Positions are converted to match the coordinate system
+- The formula `A = (mu0/4pi) * (m x r) / |r|^3` gives A in T*m when using SI units
 
 ## Running the Test
 
 ```bash
-cd examples/ngsolve_integration/verify_curl_A_equals_B
+cd examples/NGSolve_Integration/verify_curl_A_equals_B
 python verify_curl_A_equals_B.py
 ```
 
@@ -102,31 +69,24 @@ python verify_curl_A_equals_B.py
 4. Compute curl(A) using NGSolve curl() operator
 5. Project B onto HDiv space using RadiaField
 6. Compare |curl(A)| with |B| at test points
-7. Verify ratio is consistent (~1.0)
+7. Verify ratio is approximately 1.0
 
-## Key Findings
+## Expected Results
 
-1. **Radia always uses mm internally** - `FldUnits('m')` only scales coordinate input, not A output
-2. **A field requires /1000 scaling** - to convert from T*mm to T*m for correct curl(A) = B
-3. **B and H fields need no scaling** - they are dimensionally correct in all unit systems
-4. **The fix is in radia_ngsolve.cpp** - automatic scaling applied when field_type == "a"
-5. **Mesh refinement does not affect the ratio** - the issue is unit scaling, not discretization error
-6. **Consistent ratio (~4.6e6) confirms the analysis** - systematic scaling factor, not random error
+With the current implementation, the |curl(A)|/|B| ratio should be close to 1.0, confirming that the Maxwell relation B = curl(A) is satisfied.
 
-## Build Status
+| Metric | Expected | Notes |
+|--------|----------|-------|
+| \|curl(A)\| / \|B\| ratio | ~1.0 | Maxwell relation satisfied |
+| Ratio variation | < 10-20% | Due to FE discretization error |
 
-**Source code fix applied**: `src/radia/radia_ngsolve.cpp` (3 locations)
+## Key Implementation Details
 
-```cpp
-// Line 252, 416, 505:
-double scale = (field_type == "a") ? 0.001 : 1.0;
-```
-
-**radia_ngsolve.pyd status**: Needs rebuild with Intel oneAPI compiler
-
-The rebuild requires resolving linker issues with NGSolve library dependencies.
-Until rebuilt, the verification will show ratio ~4.6e6 instead of ~1.0.
+1. **Coordinate conversion** - `coord_scale_` handles m <-> mm conversion for input coordinates
+2. **FldUnits setting** - Radia's `FldUnits('m')` ensures consistent field output units
+3. **No explicit A scaling** - The implementation uses `scale = 1.0` for all field types
+4. **FMM path** - Dipole approximation uses SI units consistently (m, A*m^2, T*m)
 
 ---
 
-**Last Updated**: 2025-12-27
+**Last Updated**: 2026-01-09

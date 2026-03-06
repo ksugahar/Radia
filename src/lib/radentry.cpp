@@ -43,7 +43,7 @@ void AddToGroup( int, int*, long );
 void OutGroupSize( int );
 void OutGroupSubObjectKeys( int );
 void DuplicateElementG3DOpt( int, const char* );
-void CutElementG3DOpt( int, double,double,double, double,double,double, const char* );
+// CutElementG3DOpt REMOVED (2026-01-14) - Use Cubit/Netgen for mesh operations
 void SubdivideElementG3DOpt( int, double*, char, double*, int, const char*, const char*, const char* );
 void GeometricalVolume( int );
 void GeometricalLimits( int );
@@ -546,18 +546,7 @@ int CALL RadObjSetM(int obj, double* pM)
 
 //-------------------------------------------------------------------------
 
-int CALL RadObjCutMag(int* pIndexes, int* pAmOfIndexes, int Obj, double* pP, double* pN, char* Opt1)
-{
-	CutElementG3DOpt(Obj, pP[0], pP[1], pP[2], pN[0], pN[1], pN[2], Opt1);
-
-	int ErrStat = ioBuffer.OutErrorStatus();
-	if(ErrStat > 0) return ErrStat;
-
-	int Dims[20], NumDims;
-	ioBuffer.OutMultiDimArrayOfInt(pIndexes, Dims, NumDims);
-	*pAmOfIndexes = Dims[0];
-	return ErrStat;
-}
+// RadObjCutMag REMOVED (2026-01-14) - Use Cubit/Netgen for mesh operations
 
 //-------------------------------------------------------------------------
 
@@ -962,11 +951,62 @@ EXP int CALL RadRlxUpdSrc(int intrc)
 
 //-------------------------------------------------------------------------
 
+// Forward declarations for conductor field computation (defined in rad_conductor_api.cpp)
+bool IsConductorHandle(int handle);
+bool ComputeConductorField(double* pB, int* pNb, int cond, const char* fieldId, double* pCoord);
+
 int CALL RadFld(double* pB, int* pNb, int Obj, char* ID, double* pCoord, int Np)
 {
+	//=========================================================================
+	// Check if object is a conductor - dispatch to conductor field computation
+	//=========================================================================
+	if(IsConductorHandle(Obj))
+	{
+		// Conductor field computation (AC analysis)
+		// For single point, compute directly
+		// For multiple points, loop and concatenate results
+		if(Np == 1)
+		{
+			if(ComputeConductorField(pB, pNb, Obj, ID, pCoord))
+			{
+				return 0;  // Success
+			}
+			// Fall through to magnetic object handling if conductor computation fails
+		}
+		else
+		{
+			// Multiple points: batch computation
+			int totalNb = 0;
+			double* pOut = pB;
+
+			for(int i = 0; i < Np; i++)
+			{
+				int nb = 0;
+				double tempB[14];  // Max field components
+				double* pPt = pCoord + i * 3;
+
+				if(ComputeConductorField(tempB, &nb, Obj, ID, pPt))
+				{
+					for(int j = 0; j < nb; j++)
+					{
+						pOut[j] = tempB[j];
+					}
+					pOut += nb;
+					if(i == 0) totalNb = nb;  // Set size from first point
+				}
+			}
+
+			*pNb = totalNb * Np;
+			return 0;  // Success
+		}
+	}
+
+	//=========================================================================
+	// Standard magnetic object field computation
+	//=========================================================================
 	double **PointsArray = new double*[Np];
-	if(PointsArray == 0) 
-	{ 
+	if(PointsArray == 0)
+	{
 		ioBuffer.StoreErrorMessage("Radia::Error900"); return ioBuffer.OutErrorStatus();
 	}
 	double **tPointsArray = PointsArray;
@@ -978,7 +1018,7 @@ int CALL RadFld(double* pB, int* pNb, int Obj, char* ID, double* pCoord, int Np)
 	}
 
 	FieldArbitraryPointsArray((long)Obj, ID, PointsArray, (long)Np);
-	
+
 	int ErrStat = ioBuffer.OutErrorStatus();
 	if(ErrStat > 0)
 	{
@@ -1348,57 +1388,8 @@ int CALL RadFldLenTol(int* n, double AbsVal, double RelVal, double ZeroVal)
 }
 
 //-------------------------------------------------------------------------
-
-int CALL RadObjDrwVTK(int* pNvp, int* pNp, int* pNvl, int* pNl, int* pKey, int obj, char* opt)
-{
-	const char *Opt1=0, *Opt2=0, *Opt3=0;
-	vector<string> AuxStrings;
-	if(opt != 0)
-	{
-		char *SepStrArr[] = {(char*)";", (char*)","};
-		CAuxParse::StringSplit(opt, SepStrArr, 2, (char*)" ", AuxStrings);
-		int AmOfTokens = (int)AuxStrings.size();
-		if(AmOfTokens > 0)
-		{
-			Opt1 = (AuxStrings[0]).c_str();
-			if(AmOfTokens > 1)
-			{
-				Opt2 = (AuxStrings[1]).c_str();
-				if(AmOfTokens > 2) Opt3 = (AuxStrings[2]).c_str();
-			}
-		}
-	}
-
-	*pNvp = 0; *pNp = 0; *pNvl = 0; *pNl = 0;
-	*pKey = GraphicsForElemVTK(obj, Opt1, Opt2, Opt3);
-
-	if(*pKey != 0)
-	{
-		ioBuffer.OutGeomPolygLen(*pKey, pNvp, pNp);
-		ioBuffer.OutGeomPolygLen(*pKey + 1, pNvl, pNl);
-	}
-
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjDrwDataGetVTK(double* arCrdVP, int* arLenP, float* arColP, double* arCrdVL, int* arLenL, float* arColL, int key)
-{
-	ioBuffer.OutGeomPolygData(key, arCrdVP, arLenP, arColP);
-	ioBuffer.OutGeomPolygData(key+1, arCrdVL, arLenL, arColL);
-	return 0;
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjDrwAtr(int Obj, double* pRGB, double Thcn)
-{
-	ApplyDrawAttrToElem(Obj, *pRGB, *(pRGB + 1), *(pRGB + 2), Thcn);
-	ioBuffer.OutInt(); // to clear buffer
-	return ioBuffer.OutErrorStatus();
-}
-
+// RadObjDrwAtr REMOVED (2026-01-14) - Drawing attributes no longer used
+// Use VTK export with ParaView for visualization
 //-------------------------------------------------------------------------
 
 int CALL RadUtiDel(int* n, int Elem)
@@ -1781,6 +1772,446 @@ int CALL RadFldPhi(double* phi_out, int n_points, double* points, int container_
 int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle)
 {
 	ComputeVectorPotentialBatch(A_out, n_points, points, container_handle);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadFldVTS(int container_handle, const char* filename,
+                   double x_min, double x_max, int nx,
+                   double y_min, double y_max, int ny,
+                   double z_min, double z_max, int nz,
+                   int include_B, int include_H, double unit_scale)
+{
+	// Compute total number of points
+	int n_points = nx * ny * nz;
+
+	// Allocate arrays for field computation
+	double* points = new double[n_points * 3];
+	double* B_out = include_B ? new double[n_points * 3] : nullptr;
+	double* H_out = include_H ? new double[n_points * 3] : nullptr;
+
+	// Generate grid points in VTS order (i varies fastest, then j, then k)
+	double dx = (nx > 1) ? (x_max - x_min) / (nx - 1) : 0.0;
+	double dy = (ny > 1) ? (y_max - y_min) / (ny - 1) : 0.0;
+	double dz = (nz > 1) ? (z_max - z_min) / (nz - 1) : 0.0;
+
+	int idx = 0;
+	for(int k = 0; k < nz; k++) {
+		for(int j = 0; j < ny; j++) {
+			for(int i = 0; i < nx; i++) {
+				points[idx * 3 + 0] = x_min + i * dx;
+				points[idx * 3 + 1] = y_min + j * dy;
+				points[idx * 3 + 2] = z_min + k * dz;
+				idx++;
+			}
+		}
+	}
+
+	// Compute fields using batch API (OpenMP parallelized)
+	ComputeFieldBatch(B_out, H_out, n_points, points, container_handle, 0);
+
+	// Write VTS file
+	FILE* f = fopen(filename, "w");
+	if(f == nullptr) {
+		delete[] points;
+		if(B_out) delete[] B_out;
+		if(H_out) delete[] H_out;
+		ioBuffer.StoreErrorMessage("Radia::Error000");
+		return ioBuffer.OutErrorStatus();
+	}
+
+	// XML header
+	fprintf(f, "<?xml version=\"1.0\"?>\n");
+	fprintf(f, "<VTKFile type=\"StructuredGrid\" version=\"0.1\" byte_order=\"LittleEndian\">\n");
+	fprintf(f, "  <StructuredGrid WholeExtent=\"0 %d 0 %d 0 %d\">\n", nx-1, ny-1, nz-1);
+	fprintf(f, "    <Piece Extent=\"0 %d 0 %d 0 %d\">\n", nx-1, ny-1, nz-1);
+
+	// Points (apply unit scale for conversion to meters)
+	fprintf(f, "      <Points>\n");
+	fprintf(f, "        <DataArray type=\"Float64\" NumberOfComponents=\"3\" format=\"ascii\">\n");
+	for(int i = 0; i < n_points; i++) {
+		fprintf(f, "          %.15e %.15e %.15e\n",
+		        points[i*3+0] * unit_scale,
+		        points[i*3+1] * unit_scale,
+		        points[i*3+2] * unit_scale);
+	}
+	fprintf(f, "        </DataArray>\n");
+	fprintf(f, "      </Points>\n");
+
+	// Point data
+	fprintf(f, "      <PointData>\n");
+
+	// B field
+	if(include_B && B_out) {
+		fprintf(f, "        <DataArray type=\"Float64\" Name=\"B\" NumberOfComponents=\"3\" format=\"ascii\">\n");
+		for(int i = 0; i < n_points; i++) {
+			fprintf(f, "          %.15e %.15e %.15e\n", B_out[i*3+0], B_out[i*3+1], B_out[i*3+2]);
+		}
+		fprintf(f, "        </DataArray>\n");
+
+		// B magnitude
+		fprintf(f, "        <DataArray type=\"Float64\" Name=\"B_magnitude\" format=\"ascii\">\n");
+		for(int i = 0; i < n_points; i++) {
+			double Bx = B_out[i*3+0], By = B_out[i*3+1], Bz = B_out[i*3+2];
+			double B_mag = sqrt(Bx*Bx + By*By + Bz*Bz);
+			fprintf(f, "          %.15e\n", B_mag);
+		}
+		fprintf(f, "        </DataArray>\n");
+	}
+
+	// H field
+	if(include_H && H_out) {
+		fprintf(f, "        <DataArray type=\"Float64\" Name=\"H\" NumberOfComponents=\"3\" format=\"ascii\">\n");
+		for(int i = 0; i < n_points; i++) {
+			fprintf(f, "          %.15e %.15e %.15e\n", H_out[i*3+0], H_out[i*3+1], H_out[i*3+2]);
+		}
+		fprintf(f, "        </DataArray>\n");
+
+		// H magnitude
+		fprintf(f, "        <DataArray type=\"Float64\" Name=\"H_magnitude\" format=\"ascii\">\n");
+		for(int i = 0; i < n_points; i++) {
+			double Hx = H_out[i*3+0], Hy = H_out[i*3+1], Hz = H_out[i*3+2];
+			double H_mag = sqrt(Hx*Hx + Hy*Hy + Hz*Hz);
+			fprintf(f, "          %.15e\n", H_mag);
+		}
+		fprintf(f, "        </DataArray>\n");
+	}
+
+	fprintf(f, "      </PointData>\n");
+	fprintf(f, "    </Piece>\n");
+	fprintf(f, "  </StructuredGrid>\n");
+	fprintf(f, "</VTKFile>\n");
+
+	fclose(f);
+
+	// Cleanup
+	delete[] points;
+	if(B_out) delete[] B_out;
+	if(H_out) delete[] H_out;
+
+	return ioBuffer.OutErrorStatus();
+}
+
+//=========================================================================
+// Conductor Analysis API Implementation (FastImp-based)
+//=========================================================================
+
+// Forward declarations for conductor functions (implemented in rad_conductor_api.cpp)
+void CndRecBlock(double* P, double* L, double sigma, int num_panels);
+void CndHexahedron(double* FlatVert, double sigma, int num_panels);
+void CndWire(double* FlatPath, int np, char cross_section, double width, double height, double sigma, int num_panels_around);
+void CndLoop(double* center, double radius, double* normal, char cross_section, double wire_width, double wire_height, double sigma, int num_panels_around, int num_panels_loop);
+void CndSpiral(double* center, double inner_radius, double outer_radius, double pitch, int num_turns, double* axis, char cross_section, double wire_width, double wire_height, double sigma, int num_panels_around);
+void CndCnt(int* Conds, int ncond);
+void CndCntAdd(int cnt, int* Conds, int ncond);
+void CndSetFormulation(int cond, const char* formulation);
+void CndSetFrequency(int cond, double frequency);
+void CndSetMuR(int cond, double mu_r);
+void CndGetSkinDepth(double* delta, int cond);
+void CndGetSurfaceImpedance(double* Z_real, double* Z_imag, int cond);
+void CndSetVoltage(int cond, double V_real, double V_imag);
+void CndSetCurrent(int cond, double I_real, double I_imag);
+void CndGetTotalCurrent(double* I_real, double* I_imag, int cond);
+void CndSetPfft(int cond, int enable);
+void CndDefinePort(int cond, int* terminal1, int n1, int* terminal2, int n2);
+void CndDefinePortAuto(int cond);
+void CndSolve(int cond);
+void CndGetImpedance(double* Z_real, double* Z_imag, int cond);
+void CndImpedanceSweep(double* Z_real, double* Z_imag, int cond, double* freqs, int nfreq);
+// NOTE: IsConductorHandle and ComputeConductorField declared before RadFld()
+void CndGetSurfaceCurrent(double* K_real, double* K_imag, int* npanels, int cond);
+void CndGetSurfaceCharge(double* sigma_real, double* sigma_imag, int* npanels, int cond);
+void CndNumPanels(int* npanels, int cond);
+void CndGetPanelInfo(double* centers, double* areas, int cond);
+void CoupledSolve(int cond_cnt, int mag_cnt, double precision, int max_iter);
+void MatSIBC(double sigma, double mu_r);
+void SIBCSetType(int mat, const char* sibc_type);
+void SIBCSetCrossSection(int mat, const char* shape, double* params, int nparams);
+void CndFmmSetEnabled(int enabled);
+void CndFmmGetEnabled(int* enabled);
+void CndFmmSetParameters(int p, int ncrit, int threshold);
+void CndFmmGetParameters(int* p, int* ncrit, int* threshold);
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndRecBlock(int* n, double* P, double* L, double sigma, int num_panels)
+{
+	CndRecBlock(P, L, sigma, num_panels);
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndHexahedron(int* n, double* FlatVert, double sigma, int num_panels)
+{
+	CndHexahedron(FlatVert, sigma, num_panels);
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndWire(int* n, double* FlatPath, int np, char cross_section,
+                    double width, double height, double sigma, int num_panels_around)
+{
+	CndWire(FlatPath, np, cross_section, width, height, sigma, num_panels_around);
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndLoop(int* n, double* center, double radius, double* normal,
+                    char cross_section, double wire_width, double wire_height,
+                    double sigma, int num_panels_around, int num_panels_loop)
+{
+	CndLoop(center, radius, normal, cross_section, wire_width, wire_height,
+	        sigma, num_panels_around, num_panels_loop);
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndSpiral(int* n, double* center, double inner_radius, double outer_radius,
+                      double pitch, int num_turns, double* axis,
+                      char cross_section, double wire_width, double wire_height,
+                      double sigma, int num_panels_around)
+{
+	CndSpiral(center, inner_radius, outer_radius, pitch, num_turns, axis,
+	          cross_section, wire_width, wire_height, sigma, num_panels_around);
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndCnt(int* n, int* Conds, int ncond)
+{
+	CndCnt(Conds, ncond);
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndCntAdd(int cnt, int* Conds, int ncond)
+{
+	CndCntAdd(cnt, Conds, ncond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndSetFormulation(int cond, const char* formulation)
+{
+	CndSetFormulation(cond, formulation);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndSetFrequency(int cond, double frequency)
+{
+	CndSetFrequency(cond, frequency);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndSetMuR(int cond, double mu_r)
+{
+	CndSetMuR(cond, mu_r);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndGetSkinDepth(double* delta, int cond)
+{
+	CndGetSkinDepth(delta, cond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndGetSurfaceImpedance(double* Z_real, double* Z_imag, int cond)
+{
+	CndGetSurfaceImpedance(Z_real, Z_imag, cond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndSetVoltage(int cond, double V_real, double V_imag)
+{
+	CndSetVoltage(cond, V_real, V_imag);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndSetCurrent(int cond, double I_real, double I_imag)
+{
+	CndSetCurrent(cond, I_real, I_imag);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndGetTotalCurrent(double* I_real, double* I_imag, int cond)
+{
+	CndGetTotalCurrent(I_real, I_imag, cond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndSetPfft(int cond, int enable)
+{
+	CndSetPfft(cond, enable);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndDefinePort(int cond, int* terminal1, int n1, int* terminal2, int n2)
+{
+	CndDefinePort(cond, terminal1, n1, terminal2, n2);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndDefinePortAuto(int cond)
+{
+	CndDefinePortAuto(cond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndSolve(int cond)
+{
+	CndSolve(cond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndGetImpedance(double* Z_real, double* Z_imag, int cond)
+{
+	CndGetImpedance(Z_real, Z_imag, cond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndImpedanceSweep(double* Z_real, double* Z_imag, int cond,
+                               double* freqs, int nfreq)
+{
+	CndImpedanceSweep(Z_real, Z_imag, cond, freqs, nfreq);
+	return ioBuffer.OutErrorStatus();
+}
+
+// NOTE: RadCndFld* functions removed - use unified RadFld() API with conductor detection
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndGetSurfaceCurrent(double* K_real, double* K_imag, int* npanels, int cond)
+{
+	CndGetSurfaceCurrent(K_real, K_imag, npanels, cond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndGetSurfaceCharge(double* sigma_real, double* sigma_imag, int* npanels, int cond)
+{
+	CndGetSurfaceCharge(sigma_real, sigma_imag, npanels, cond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndNumPanels(int* npanels, int cond)
+{
+	CndNumPanels(npanels, cond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndGetPanelInfo(double* centers, double* areas, int cond)
+{
+	CndGetPanelInfo(centers, areas, cond);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCoupledSolve(int cond_cnt, int mag_cnt, double precision, int max_iter)
+{
+	CoupledSolve(cond_cnt, mag_cnt, precision, max_iter);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadMatSIBC(int* mat, double sigma, double mu_r)
+{
+	MatSIBC(sigma, mu_r);
+	*mat = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadSIBCSetType(int mat, const char* sibc_type)
+{
+	SIBCSetType(mat, sibc_type);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadSIBCSetCrossSection(int mat, const char* shape, double* params, int nparams)
+{
+	SIBCSetCrossSection(mat, shape, params, nparams);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFmmSetEnabled(int enabled)
+{
+	CndFmmSetEnabled(enabled);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFmmGetEnabled(int* enabled)
+{
+	CndFmmGetEnabled(enabled);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFmmSetParameters(int p, int ncrit, int threshold)
+{
+	CndFmmSetParameters(p, ncrit, threshold);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadCndFmmGetParameters(int* p, int* ncrit, int* threshold)
+{
+	CndFmmGetParameters(p, ncrit, threshold);
 	return ioBuffer.OutErrorStatus();
 }
 

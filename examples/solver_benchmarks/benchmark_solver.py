@@ -1,11 +1,12 @@
 """
 H-Matrix Solver Performance Benchmark
 
-Compares standard relaxation solver vs H-matrix accelerated solver.
-Demonstrates the speedup and memory reduction from H-matrix acceleration.
+Compares three solver methods:
+1. Method 0 (LU): Direct solver
+2. Method 1 (BiCGSTAB): Iterative solver
+3. Method 2 (HACApK): H-matrix accelerated solver
 
-Author: Claude Code
-Date: 2025-11-08
+Demonstrates the speedup and memory reduction from H-matrix acceleration.
 """
 
 import sys
@@ -15,250 +16,197 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
 import time
-import tracemalloc
+import numpy as np
 
 
 def hex_vertices(cx, cy, cz, dx, dy, dz):
-	"""Generate hexahedron vertices from center and dimensions."""
-	hx, hy, hz = dx/2, dy/2, dz/2
-	return [
-		[cx-hx, cy-hy, cz-hz], [cx+hx, cy-hy, cz-hz],
-		[cx+hx, cy+hy, cz-hz], [cx-hx, cy+hy, cz-hz],
-		[cx-hx, cy-hy, cz+hz], [cx+hx, cy-hy, cz+hz],
-		[cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz]
-	]
+    """Generate hexahedron vertices from center and dimensions."""
+    hx, hy, hz = dx/2, dy/2, dz/2
+    return [
+        [cx-hx, cy-hy, cz-hz], [cx+hx, cy-hy, cz-hz],
+        [cx+hx, cy+hy, cz-hz], [cx-hx, cy+hy, cz-hz],
+        [cx-hx, cy-hy, cz+hz], [cx+hx, cy-hy, cz+hz],
+        [cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz]
+    ]
+
 
 def create_magnet(n_per_side):
-	"""
-	Create a cubic magnet subdivided into n x n x n elements.
+    """
+    Create a cubic magnet subdivided into n x n x n elements.
 
-	Args:
-		n_per_side: Number of subdivisions per side
+    Args:
+        n_per_side: Number of subdivisions per side
 
-	Returns:
-		Radia object ID
-	"""
-	size = 20.0  # 20mm cube
-	elem_size = size / n_per_side
+    Returns:
+        Radia object ID
+    """
+    size = 20.0  # 20mm cube
+    elem_size = size / n_per_side
 
-	print(f"Creating {n_per_side}x{n_per_side}x{n_per_side} = {n_per_side**3} elements...")
+    print(f"Creating {n_per_side}x{n_per_side}x{n_per_side} = {n_per_side**3} elements...")
 
-	container = rad.ObjCnt([])
+    mat = rad.MatSatIsoFrm([2000, 2], [0.1, 2], [0.1, 2])
 
-	start_time = time.time()
+    elements = []
+    start_time = time.time()
 
-	for i in range(n_per_side):
-		for j in range(n_per_side):
-			for k in range(n_per_side):
-				# Element center
-				x = (i - n_per_side/2 + 0.5) * elem_size
-				y = (j - n_per_side/2 + 0.5) * elem_size
-				z = (k - n_per_side/2 + 0.5) * elem_size
+    for i in range(n_per_side):
+        for j in range(n_per_side):
+            for k in range(n_per_side):
+                # Element center
+                x = (i - n_per_side/2 + 0.5) * elem_size
+                y = (j - n_per_side/2 + 0.5) * elem_size
+                z = (k - n_per_side/2 + 0.5) * elem_size
 
-				# Create element with magnetization (elem_size x elem_size x elem_size)
-				vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-				block = rad.ObjHexahedron(vertices, [0, 0, 1])
-				rad.ObjAddToCnt(container, [block])
+                # Create element
+                vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
+                block = rad.ObjHexahedron(vertices, [0, 0, 1])
+                rad.MatApl(block, mat)
+                elements.append(block)
 
-	creation_time = time.time() - start_time
-	print(f"  Magnet created in {creation_time:.3f} s")
+    container = rad.ObjCnt(elements)
 
-	# Set material
-	mat = rad.MatSatIsoFrm([2000, 2], [0.1, 2], [0.1, 2])
-	rad.MatApl(container, mat)
+    creation_time = time.time() - start_time
+    print(f"  Magnet created in {creation_time:.3f} s")
 
-	return container
+    return container
 
-def benchmark_standard_solver(magnet, precision=0.0001, max_iter=1000):
-	"""
-	Benchmark standard relaxation solver (no H-matrix).
-	"""
-	print("\n" + "="*80)
-	print("STANDARD RELAXATION SOLVER (No H-Matrix)")
-	print("="*80)
 
-	# Start memory tracking
-	tracemalloc.start()
-	mem_before = tracemalloc.get_traced_memory()[0]
+def benchmark_solver(magnet, method, precision=0.0001, max_iter=1000):
+    """
+    Benchmark solver with specified method.
+    """
+    method_names = {0: "LU", 1: "BiCGSTAB", 2: "HACApK"}
+    method_name = method_names.get(method, f"Method {method}")
 
-	# Solve
-	start_time = time.time()
-	result = rad.Solve(magnet, precision, max_iter)
-	solve_time = time.time() - start_time
+    print("\n" + "="*80)
+    print(f"SOLVER: {method_name} (Method {method})")
+    print("="*80)
 
-	# Memory usage
-	mem_after, mem_peak = tracemalloc.get_traced_memory()
-	tracemalloc.stop()
-	mem_used = (mem_peak - mem_before) / 1024 / 1024  # MB
+    # Configure HACApK if method 2
+    if method == 2:
+        rad.SetHACApKParams(1e-4, 10, 2.0)
 
-	print(f"\nSolver result: {result}")
-	print(f"  Solving time: {solve_time*1000:.1f} ms")
-	print(f"  Memory used:  {mem_used:.1f} MB")
+    # Solve
+    start_time = time.time()
+    result = rad.Solve(magnet, precision, max_iter, method)
+    solve_time = time.time() - start_time
 
-	# Check field at center
-	B_center = rad.Fld(magnet, 'b', [0, 0, 0])
-	print(f"  B at center:  [{B_center[0]:.6f}, {B_center[1]:.6f}, {B_center[2]:.6f}] T")
+    iterations = int(result[1]) if isinstance(result, (list, tuple)) and len(result) > 1 else 1
 
-	return {
-		'time': solve_time,
-		'memory': mem_used,
-		'result': result,
-		'B_center': B_center
-	}
+    print(f"\nSolver result: {result}")
+    print(f"  Solving time: {solve_time*1000:.1f} ms")
+    print(f"  Iterations: {iterations}")
 
-def benchmark_hmatrix_solver(magnet, precision=0.0001, max_iter=1000):
-	"""
-	Benchmark H-matrix accelerated relaxation solver.
-	"""
-	print("\n" + "="*80)
-	print("H-MATRIX ACCELERATED SOLVER")
-	print("="*80)
+    # Check field at center
+    B_center = rad.Fld(magnet, 'b', [0, 0, 0])
+    print(f"  B at center:  [{B_center[0]:.6f}, {B_center[1]:.6f}, {B_center[2]:.6f}] T")
 
-	# Start memory tracking
-	tracemalloc.start()
-	mem_before = tracemalloc.get_traced_memory()[0]
+    return {
+        'time': solve_time,
+        'iterations': iterations,
+        'result': result,
+        'B_center': B_center
+    }
 
-	# Explicitly enable H-matrix acceleration
-	rad.SolverHMatrixEnable(1, eps=1e-4, max_rank=30)
 
-	# Solve with H-matrix
-	start_time = time.time()
-	result = rad.Solve(magnet, precision, max_iter)
-	solve_time = time.time() - start_time
+def print_comparison(results):
+    """
+    Print comparison between solver methods.
+    """
+    print("\n" + "="*80)
+    print("COMPARISON")
+    print("="*80)
 
-	# Disable H-matrix after use
-	rad.SolverHMatrixDisable()
+    # Reference is LU (Method 0)
+    ref_time = results[0]['time'] if results[0]['time'] > 0 else 1e-10
+    ref_B = results[0]['B_center']
 
-	# Memory usage
-	mem_after, mem_peak = tracemalloc.get_traced_memory()
-	tracemalloc.stop()
-	mem_used = (mem_peak - mem_before) / 1024 / 1024  # MB
+    print(f"\n{'Method':<15} {'Time (ms)':<12} {'Iterations':<12} {'B_z (T)':<15} {'Speedup':<10}")
+    print("-" * 70)
 
-	print(f"\nSolver result: {result}")
-	print(f"  Solving time: {solve_time*1000:.1f} ms")
-	print(f"  Memory used:  {mem_used:.1f} MB")
+    for i, r in enumerate(results):
+        method_names = ["LU", "BiCGSTAB", "HACApK"]
+        speedup = ref_time / r['time'] if r['time'] > 0 else 0
 
-	# Check field at center
-	B_center = rad.Fld(magnet, 'b', [0, 0, 0])
-	print(f"  B at center:  [{B_center[0]:.6f}, {B_center[1]:.6f}, {B_center[2]:.6f}] T")
+        print(f"{method_names[i]:<15} {r['time']*1000:<12.1f} {r['iterations']:<12} "
+              f"{r['B_center'][2]:<15.6f} {speedup:<10.2f}x")
 
-	return {
-		'time': solve_time,
-		'memory': mem_used,
-		'result': result,
-		'B_center': B_center
-	}
+    print("-" * 70)
 
-def print_comparison(standard_result, hmatrix_result):
-	"""
-	Print comparison between standard and H-matrix solvers.
-	"""
-	print("\n" + "="*80)
-	print("COMPARISON")
-	print("="*80)
+    # Field accuracy check (vs LU reference)
+    for i, r in enumerate(results):
+        if i == 0:
+            continue
+        B_diff = [abs(ref_B[j] - r['B_center'][j]) for j in range(3)]
+        B_rel_error = max(B_diff) / abs(ref_B[2]) * 100 if ref_B[2] != 0 else 0
+        method_names = ["LU", "BiCGSTAB", "HACApK"]
+        print(f"  {method_names[i]} vs LU error: {B_rel_error:.4f}%")
 
-	time_speedup = standard_result['time'] / hmatrix_result['time']
-	mem_reduction = standard_result['memory'] / hmatrix_result['memory']
-
-	print(f"\n{'Method':<20} {'Time (ms)':<15} {'Memory (MB)':<15} {'B_z at center (T)':<20}")
-	print("-" * 80)
-	print(f"{'Standard':<20} {standard_result['time']*1000:<15.1f} {standard_result['memory']:<15.1f} {standard_result['B_center'][2]:<20.6f}")
-	print(f"{'H-Matrix':<20} {hmatrix_result['time']*1000:<15.1f} {hmatrix_result['memory']:<15.1f} {hmatrix_result['B_center'][2]:<20.6f}")
-	print("-" * 80)
-	print(f"{'Speedup':<20} {time_speedup:<15.2f}x {mem_reduction:<15.2f}x")
-	print()
-
-	# Field accuracy check
-	B_diff = [abs(standard_result['B_center'][i] - hmatrix_result['B_center'][i])
-	          for i in range(3)]
-	B_rel_error = max(B_diff) / abs(standard_result['B_center'][2]) * 100
-
-	print(f"Field accuracy:")
-	print(f"  Max absolute difference: {max(B_diff):.6e} T")
-	print(f"  Relative error:          {B_rel_error:.4f} %")
-
-	if B_rel_error < 0.1:
-		print("  [OK] H-matrix solution is accurate")
-	else:
-		print("  [WARNING] Large error detected")
 
 def main():
-	"""
-	Main benchmark routine.
-	"""
-	print("="*80)
-	print("H-MATRIX SOLVER BENCHMARK")
-	print("="*80)
-	print("\nThis benchmark compares:")
-	print("  1. Standard relaxation solver (no H-matrix)")
-	print("  2. H-matrix accelerated solver (with parallel construction)")
-	print()
+    """
+    Main benchmark routine.
+    """
+    print("="*80)
+    print("SOLVER BENCHMARK")
+    print("="*80)
+    print("\nThis benchmark compares three solver methods:")
+    print("  Method 0: LU (direct solver)")
+    print("  Method 1: BiCGSTAB (iterative solver)")
+    print("  Method 2: HACApK (H-matrix accelerated)")
+    print()
 
-	# Test configuration
-	n_per_side = 7  # 7x7x7 = 343 elements
-	precision = 0.0001
-	max_iter = 1000
+    # Test configuration
+    n_per_side = 5  # 5x5x5 = 125 elements
+    precision = 0.0001
+    max_iter = 1000
 
-	print(f"Configuration:")
-	print(f"  Elements:     {n_per_side}x{n_per_side}x{n_per_side} = {n_per_side**3}")
-	print(f"  Precision:    {precision}")
-	print(f"  Max iter:     {max_iter}")
-	print()
+    print(f"Configuration:")
+    print(f"  Elements:     {n_per_side}x{n_per_side}x{n_per_side} = {n_per_side**3}")
+    print(f"  Precision:    {precision}")
+    print(f"  Max iter:     {max_iter}")
+    print()
 
-	# Create magnet
-	magnet = create_magnet(n_per_side)
+    results = []
 
-	# Note: For n_elem > 100, Radia automatically uses H-matrix
-	# For fair comparison, we need to test with n_elem <= 100 (standard)
-	# and n_elem > 100 (H-matrix)
+    # Method 0: LU
+    rad.UtiDelAll()
+    magnet = create_magnet(n_per_side)
+    results.append(benchmark_solver(magnet, method=0, precision=precision, max_iter=max_iter))
 
-	# Since we have 343 elements, H-matrix is automatically used
-	# We'll simulate "standard" by using smaller magnet
+    # Method 1: BiCGSTAB
+    rad.UtiDelAll()
+    magnet = create_magnet(n_per_side)
+    results.append(benchmark_solver(magnet, method=1, precision=precision, max_iter=max_iter))
 
-	print("\n" + "="*80)
-	print("TEST 1: Small Magnet (N=125, Standard Solver)")
-	print("="*80)
+    # Method 2: HACApK
+    try:
+        rad.UtiDelAll()
+        magnet = create_magnet(n_per_side)
+        results.append(benchmark_solver(magnet, method=2, precision=precision, max_iter=max_iter))
+    except Exception as e:
+        print(f"\nHACApK not available: {e}")
+        results.append({'time': float('inf'), 'iterations': 0, 'result': None, 'B_center': [0, 0, 0]})
 
-	magnet_small = create_magnet(5)  # 5x5x5 = 125 elements
-	standard_result = benchmark_standard_solver(magnet_small, precision, max_iter)
+    # Print comparison
+    print_comparison(results)
 
-	print("\n" + "="*80)
-	print("TEST 2: Medium Magnet (N=343, H-Matrix Solver)")
-	print("="*80)
+    print("\n" + "="*80)
+    print("SUMMARY")
+    print("="*80)
+    print("\nSolver Selection Guidelines:")
+    print("  - Method 0 (LU): Best for small problems (N < 200)")
+    print("  - Method 1 (BiCGSTAB): Good for medium problems (200 < N < 2000)")
+    print("  - Method 2 (HACApK): Best for large problems (N > 1000)")
+    print()
+    print("Usage:")
+    print("  rad.Solve(obj, precision, max_iterations, method)")
+    print("  rad.Solve(container, 0.0001, 1000, 2)  # HACApK for large problem")
+    print()
 
-	hmatrix_result = benchmark_hmatrix_solver(magnet, precision, max_iter)
+    rad.UtiDelAll()
 
-	# Extrapolated comparison
-	print("\n" + "="*80)
-	print("EXTRAPOLATED COMPARISON (N=343)")
-	print("="*80)
-	print("\nNote: Standard solver time is extrapolated from N=125 using O(N^3) scaling")
-
-	# O(N^3) scaling for standard solver
-	n_ratio = 343 / 125
-	extrapolated_time = standard_result['time'] * (n_ratio ** 3)
-	extrapolated_mem = standard_result['memory'] * (n_ratio ** 2)
-
-	print(f"\n{'Method':<20} {'Time (ms)':<15} {'Memory (MB)':<15} {'Speedup':<15}")
-	print("-" * 80)
-	print(f"{'Standard (extrap.)':<20} {extrapolated_time*1000:<15.1f} {extrapolated_mem:<15.1f} {'1.0x':<15}")
-	print(f"{'H-Matrix (actual)':<20} {hmatrix_result['time']*1000:<15.1f} {hmatrix_result['memory']:<15.1f} {extrapolated_time/hmatrix_result['time']:<15.2f}x")
-	print()
-
-	print("\n" + "="*80)
-	print("SUMMARY")
-	print("="*80)
-	print("\nH-Matrix provides:")
-	print(f"  [1] Solver speedup:   ~{extrapolated_time/hmatrix_result['time']:.1f}x for N=343")
-	print(f"  [2] Memory reduction: ~{extrapolated_mem/hmatrix_result['memory']:.1f}x")
-	print(f"  [3] Parallel construction: 9 H-matrices built in parallel (OpenMP)")
-	print(f"  [4] Accuracy:         Same as standard solver (< 0.1% error)")
-	print()
-	print("Key insight:")
-	print("  - H-matrix is used in rad.Solve() only")
-	print("  - Field evaluation (rad.Fld) still uses direct summation")
-	print("  - For batch field evaluation speedup, see benchmark_field_evaluation.py")
-	print()
 
 if __name__ == "__main__":
-	main()
+    main()

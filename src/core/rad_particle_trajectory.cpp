@@ -20,8 +20,8 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-radTPrtclTrj::radTPrtclTrj(double InEnergy, radTg3d* InFldSrcPtr, const radTCompCriterium& InCompCriterium, 
-						   short InOnPrc, double* InPrecArray, double InEpsTol, int InMaxAutoStp) 
+radTPrtclTrj::radTPrtclTrj(double InEnergy, radTg3d* InFldSrcPtr, const radTCompCriterium& InCompCriterium,
+						   short InOnPrc, double* InPrecArray, double InEpsTol, int InMaxAutoStp)
 {
 	Energy = InEnergy;
 	ChargeToMomentum = -2.99792458E+05/(1.E+09 * Energy); // Electron has negative charge
@@ -31,6 +31,11 @@ radTPrtclTrj::radTPrtclTrj(double InEnergy, radTg3d* InFldSrcPtr, const radTComp
 	radTFieldKey LocFieldKey; LocFieldKey.B_= 1;
 	Field.FieldKey = LocFieldKey;
 	Field.CompCriterium = InCompCriterium;
+
+	// Initialize unified field computation settings
+	CheckInsideMagnet = true;   // Enable inside/outside check by default
+	TrajectoryInMagnet = false;
+	InsideElementIndex = -1;
 
 	OnPrc = InOnPrc; AmOfEq = 4;
 

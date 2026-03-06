@@ -2,7 +2,7 @@
 # This module re-exports all symbols from the C++ extension module (radia.pyd)
 # so that 'import radia' works correctly when installed via pip
 
-__version__ = "1.4.4"
+__version__ = "1.6.0"
 
 # Add package directory to DLL search path (Windows)
 # This is needed for finding Intel MKL DLL (mkl_rt.2.dll)
@@ -40,3 +40,92 @@ except ImportError:
             "Ensure the package was built correctly with Build.ps1 before installation. "
             f"Package directory: {_package_dir}"
         ) from e
+
+# ESIM (Effective Surface Impedance Method) for induction heating analysis
+# Import convenience functions for ESIM workpiece creation
+try:
+    from .esim_cell_problem import (
+        ESIMCellProblemSolver,
+        BHCurveInterpolator,
+        ComplexPermeabilityInterpolator,
+        ESITable,
+        generate_esi_table_from_bh_curve,
+    )
+    from .esim_workpiece import (
+        ESIMWorkpiece,
+        SurfacePanel,
+        create_esim_block,
+        create_esim_cylinder,
+    )
+    from .esim_coupled_solver import (
+        InductionHeatingCoil,
+        ESIMCoupledSolver,
+        solve_induction_heating,
+        # WPT (Wireless Power Transfer) analysis
+        WPTCoupledSolver,
+        compute_mutual_inductance,
+        compute_coupling_coefficient,
+        analyze_coil_coupling,
+    )
+    from .esim_vtk_export import (
+        ESIMVTKOutput,
+        export_esim_workpiece_vtk,
+        export_esim_coil_field_vtk,
+        export_esim_combined_vtk,
+    )
+    ESIM_AVAILABLE = True
+except ImportError:
+    # ESIM requires scipy, which may not be installed
+    ESIM_AVAILABLE = False
+
+# RWG-EFIE solver for 3D surface element analysis
+# The Python implementation has been migrated to C++ with OpenMP parallelization.
+# Access via rad.RwgMeshRect(), rad.RwgMeshDisk(), rad.RwgMeshCylinder(),
+# rad.RwgMeshSpiral(), rad.RwgMeshLoop(), rad.RwgSolverCreate(), etc.
+# See docs/API_REFERENCE.md for usage.
+
+# VTK Export: Use rad.FldVTS() (C++ implementation)
+# See docs/API_REFERENCE.md for usage
+
+# Beam Tracking: NumPy-based particle trajectory computation
+# Import beam_tracking submodule for accelerator physics applications
+try:
+    from . import beam_tracking
+    BEAM_TRACKING_AVAILABLE = True
+except ImportError:
+    # beam_tracking requires numpy
+    BEAM_TRACKING_AVAILABLE = False
+
+# Analysis Framework: Static, Frequency Response, Transient (CLN)
+# Unified interface for electromagnetic analysis
+try:
+    from .analysis import (
+        # Analysis types
+        AnalysisType,
+        SolverType,
+        # Result classes
+        AnalysisResult,
+        StaticResult,
+        FrequencyResult,
+        TransientResult,
+        # PEEC solver classes
+        PEECAnalysisSolver,
+        UnifiedAnalysis,
+        # MMM result classes
+        MMMStaticResult,
+        MMMFrequencyResult,
+        # MMM solver classes
+        MMMAnalysisSolver,
+        UnifiedMMMAnalysis,
+        # MMM utility functions
+        build_magnetic_circuit_from_mmm,
+        # Convenience waveform generators
+        step_voltage,
+        pulse_voltage,
+        sinusoidal_voltage,
+        ramp_voltage,
+    )
+    ANALYSIS_AVAILABLE = True
+except ImportError:
+    # Analysis requires numpy
+    ANALYSIS_AVAILABLE = False

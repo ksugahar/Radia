@@ -18,6 +18,7 @@
 #define __RAD_PARTICLE_TRAJECTORY_H
 
 #include "rad_geometry_3d.h"
+#include "rad_field_unified.h"
 #include <math.h>
 
 //-------------------------------------------------------------------------
@@ -73,6 +74,11 @@ class radTPrtclTrj {
 	double *PrecArray, EpsTol;
 	int MaxAutoStp;
 
+	// Unified field computation settings
+	bool CheckInsideMagnet;      // Enable inside/outside check
+	bool TrajectoryInMagnet;     // Flag: trajectory entered magnet
+	int InsideElementIndex;      // Index of element if inside
+
 public:
 	radTPrtclTrj(double, radTg3d*, const radTCompCriterium&, short, double* =nullptr, double =1., int =5000);
 	radTPrtclTrj(radTg3d* InFldSourcePtr, const radTCompCriterium& InCompCrit, double inEnergyGeV =0) // For Focusing Potential
@@ -81,6 +87,11 @@ public:
 
 		Field.CompCriterium = InCompCrit; //? OC050413
 		Energy = inEnergyGeV;
+
+		// Initialize unified field computation settings
+		CheckInsideMagnet = false;  // Disable for focusing potential (uses direct B_genComp)
+		TrajectoryInMagnet = false;
+		InsideElementIndex = -1;
 
 		// Vectors are empty by default
 		dym_rk4 = dyt_rk4 = yt_rk4 = Y = dYdx = nullptr;
@@ -99,9 +110,25 @@ public:
 		double xdxd=xd*xd, zdzd=zd*zd, xdzd=xd*zd;
 		double Buf = ChargeToMomentum * sqrt(1.+xdxd+zdzd);
 
-		Field.P = TVector3d(F[0], s, F[2]);
-		Field.B = ZeroVect;
-		FldSrcPtr->B_genComp(&Field); TVector3d& rB = Field.B;
+		TVector3d P(F[0], s, F[2]);
+		TVector3d rB(0, 0, 0);
+
+		// Use unified field computation with optional inside check
+		if (CheckInsideMagnet) {
+			// Use unified routine that checks inside/outside
+			bool success = RadFieldUnified::ComputeFieldForTrajectory(FldSrcPtr, P, rB);
+			if (!success) {
+				// Point is inside magnet - set flag and use zero field
+				TrajectoryInMagnet = true;
+				rB = TVector3d(0, 0, 0);
+			}
+		} else {
+			// Direct field computation (legacy behavior)
+			Field.P = P;
+			Field.B = ZeroVect;
+			FldSrcPtr->B_genComp(&Field);
+			rB = Field.B;
+		}
 
 		dFds[0] = xd;
 		dFds[1] = -Buf*(zd*rB.y - (1.+xdxd)*rB.z + xdzd*rB.x);

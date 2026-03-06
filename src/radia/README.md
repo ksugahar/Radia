@@ -184,14 +184,6 @@ B = B_cf(mesh(0, 0, 0.02))  # Auto converts m->mm
 
 **See also:** `examples/ngsolve_integration/` for complete examples.
 
-### radia_ngsolve_py.py
-
-**Pure Python implementation (alternative).**
-
-Python-only NGSolve wrappers without requiring C++ compilation. Same interface as C++ version.
-
-**Note:** C++ version is recommended for production (better performance, automatic unit conversion).
-
 ### radia_coil_builder.py
 
 **Modern fluent interface for constructing complex coil geometries.**
@@ -219,66 +211,43 @@ coil = (CoilBuilder(current=1000)
 	.to_radia())
 ```
 
-### radia_vtk_export.py
+### VTS Export (rad.FldVTS)
 
-**VTK export utilities for ParaView visualization.**
+**VTS export for ParaView visualization.**
 
-Export Radia geometry to VTK Legacy format.
-
-**Usage:**
-```python
-from radia_vtk_export import exportGeometryToVTK
-import radia as rad
-
-# Create hexahedral magnet (30x30x10 mm, magnetization 1 T in z)
-# ObjHexahedron auto-generates face topology from 8 vertices
-vertices = [[-15,-15,-5], [15,-15,-5], [15,15,-5], [-15,15,-5],
-            [-15,-15,5], [15,-15,5], [15,15,5], [-15,15,5]]
-mag = rad.ObjHexahedron(vertices, [0, 0, 1])
-exportGeometryToVTK(mag, 'my_magnet')
-```
-
-### radia_pyvista_viewer.py
-
-**Interactive 3D viewer using PyVista.**
-
-Real-time interactive visualization of Radia objects.
-
-**Requirements:**
-```bash
-pip install pyvista
-```
+Export Radia magnetic field to VTS (VTK XML Structured Grid) format using C++ implementation.
 
 **Usage:**
 ```python
-from radia_pyvista_viewer import view_radia_object
 import radia as rad
 
-# Create hexahedral magnet (30x30x10 mm, magnetization 1 T in z)
-# ObjHexahedron auto-generates face topology from 8 vertices
-vertices = [[-15,-15,-5], [15,-15,-5], [15,15,-5], [-15,15,-5],
-            [-15,-15,5], [15,-15,5], [15,15,5], [-15,15,5]]
-mag = rad.ObjHexahedron(vertices, [0, 0, 1])
-view_radia_object(mag)
+rad.FldUnits('m')
+
+# Create hexahedral magnet (30x30x10 mm, magnetization 1.2T in z)
+vertices = [[-0.015,-0.015,-0.005], [0.015,-0.015,-0.005], [0.015,0.015,-0.005], [-0.015,0.015,-0.005],
+            [-0.015,-0.015,0.005], [0.015,-0.015,0.005], [0.015,0.015,0.005], [-0.015,0.015,0.005]]
+mag = rad.ObjHexahedron(vertices, [0, 0, 954930])
+
+# Export to VTS
+rad.FldVTS(mag, 'my_magnet.vts',
+           [-0.05, 0.05], [-0.05, 0.05], [0.01, 0.05],
+           21, 21, 11)
 ```
 
 ## Visualization Workflow
 
-### Option 1: ParaView (Static Export)
+### Option 1: ParaView (VTS Export)
 Best for publication-quality figures, batch processing.
 ```python
-from radia_vtk_export import exportGeometryToVTK
-exportGeometryToVTK(my_object, 'output')
+import radia as rad
+rad.FldUnits('m')
+# ... create magnet ...
+rad.FldVTS(my_object, 'output.vts',
+           [-0.1, 0.1], [-0.1, 0.1], [0.0, 0.2],
+           21, 21, 21)
 ```
 
-### Option 2: PyVista (Interactive)
-Best for quick inspection, interactive exploration.
-```python
-from radia_pyvista_viewer import view_radia_object
-view_radia_object(my_object)
-```
-
-### Option 3: NGSolve Integration
+### Option 2: NGSolve Integration
 For coupled FEM simulations.
 ```python
 import radia_ngsolve
@@ -292,4 +261,4 @@ B_cf = radia_ngsolve.RadBfield(magnet)
 - **ParaView**: https://www.paraview.org/
 - **PyVista**: https://docs.pyvista.org/
 
-Last Updated: 2025-10-31
+Last Updated: 2026-01-09

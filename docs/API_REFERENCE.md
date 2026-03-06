@@ -2,8 +2,8 @@
 
 Complete reference for Radia Python API.
 
-**Version**: 1.4.3
-**Date**: 2025-12-31
+**Version**: 1.4.4
+**Date**: 2026-01-09
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
 ---
@@ -19,6 +19,8 @@ Complete reference for Radia Python API.
 - [Mesh Import](#mesh-import)
 - [NGSolve Integration](#ngsolve-integration)
 - [Utilities](#utilities)
+- [VTK Export](#vtk-export)
+- [ESIM (Effective Surface Impedance Method)](#esim-effective-surface-impedance-method)
 
 ---
 
@@ -765,8 +767,8 @@ rad.FldUnits('m')  # REQUIRED: NGSolve uses meters
 import ngsolve
 from ngsolve import *
 
-# 3. NOW import radia_ngsolve
-from radia import radia_ngsolve
+# 3. NOW import radia_ngsolve (separate C++ module)
+import radia_ngsolve
 ```
 
 Wrong order causes `ImportError: DLL load failed`.
@@ -822,6 +824,547 @@ rad.UtiDelAll()
 
 ```python
 version = rad.UtiVer()
+```
+
+---
+
+## VTK/VTS Export
+
+Export Radia magnetic field to VTS (VTK XML Structured Grid) format for visualization in ParaView.
+
+### rad.FldVTS()
+
+Export magnetic field on a structured 3D grid to VTS format (C++ implementation with OpenMP):
+
+```python
+import radia as rad
+
+rad.FldUnits('m')
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
+
+# FldVTS(obj, filename, x_range, y_range, z_range, nx, ny, nz, include_B, include_H, unit_scale)
+rad.FldVTS(magnet, 'B_field.vts',
+           [-0.08, 0.08], [-0.08, 0.08], [0.03, 0.12],  # x, y, z ranges
+           33, 33, 19,    # grid points
+           1, 0,          # include_B=True, include_H=False
+           1.0)           # unit_scale (1.0 for meters)
+# -> B_field.vts
+```
+
+**Parameters**:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `obj` | int | required | Radia object handle |
+| `filename` | str | required | Output filename (.vts) |
+| `x_range` | [float, float] | required | X range [min, max] |
+| `y_range` | [float, float] | required | Y range [min, max] |
+| `z_range` | [float, float] | required | Z range [min, max] |
+| `nx` | int | 21 | Grid points in X |
+| `ny` | int | 21 | Grid points in Y |
+| `nz` | int | 21 | Grid points in Z |
+| `include_B` | int | 1 | Include B field (0/1) |
+| `include_H` | int | 0 | Include H field (0/1) |
+| `unit_scale` | float | 1.0 | Coordinate scale factor |
+
+**Output Fields**:
+
+| Field | Type | Unit | Description |
+|-------|------|------|-------------|
+| `B` | Vector (3) | T | Magnetic flux density |
+| `B_magnitude` | Scalar | T | \|B\| |
+| `H` | Vector (3) | A/m | Magnetic field (if include_H=1) |
+| `H_magnitude` | Scalar | A/m | \|H\| (if include_H=1) |
+
+**Example** - Complete workflow:
+
+```python
+import radia as rad
+
+rad.FldUnits('m')
+
+# Create permanent magnet
+vertices = [
+    [-0.02, -0.02, -0.01], [0.02, -0.02, -0.01],
+    [0.02, 0.02, -0.01], [-0.02, 0.02, -0.01],
+    [-0.02, -0.02, 0.01], [0.02, -0.02, 0.01],
+    [0.02, 0.02, 0.01], [-0.02, 0.02, 0.01],
+]
+magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])
+
+# Export field to VTS
+rad.FldVTS(magnet, 'magnet_field.vts',
+           [-0.05, 0.05], [-0.05, 0.05], [0.02, 0.08],
+           21, 21, 13, 1, 1, 1.0)
+
+# View in ParaView:
+# 1. File -> Open -> magnet_field.vts
+# 2. Apply
+# 3. Color by B_magnitude or use Glyph filter for B vectors
+```
+
+---
+
+## ESIM (Effective Surface Impedance Method)
+
+The ESIM module provides specialized tools for **induction heating analysis** with nonlinear magnetic materials. It implements the Effective Surface Impedance Method for computing eddy current losses and coil-workpiece coupled impedance.
+
+**Availability**: Requires `scipy` package. Check `radia.ESIM_AVAILABLE` to verify.
+
+### Overview
+
+| Module | Description |
+|--------|-------------|
+| `ESIMCellProblemSolver` | Solve 1D cell problem for effective surface impedance |
+| `BHCurveInterpolator` | B-H curve interpolation with H-dependent permeability |
+| `ComplexPermeabilityInterpolator` | Complex permeability mu' - j*mu" support |
+| `ESIMWorkpiece` | Workpiece geometry with surface panels |
+| `InductionHeatingCoil` | Coil geometry (spiral, loop, etc.) |
+| `ESIMCoupledSolver` | Coupled coil-workpiece impedance solver |
+| `ESIMVTKOutput` | VTK export for visualization |
+
+### ESIMCellProblemSolver - Cell Problem Solver
+
+Solves the 1D boundary value problem for effective surface impedance Z(H0):
+
+```python
+from radia import ESIMCellProblemSolver
+
+solver = ESIMCellProblemSolver(
+    sigma=5e6,           # Conductivity [S/m]
+    frequency=50000,     # Frequency [Hz]
+    mu_r=100,            # Relative permeability (constant)
+    # OR
+    bh_curve=bh_data,    # H-dependent permeability [[H, B], ...]
+    # OR
+    complex_mu=(1000, 100)  # (mu'_r, mu"_r) for magnetic loss
+)
+
+result = solver.solve(H0=5000)  # Surface field [A/m]
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `sigma` | float | Electrical conductivity [S/m] |
+| `frequency` | float | Analysis frequency [Hz] |
+| `mu_r` | float | Constant real relative permeability (optional) |
+| `bh_curve` | list | H-dependent B-H data [[H, B], ...] (optional) |
+| `complex_mu` | tuple/list | Complex permeability - see below (optional) |
+
+**complex_mu Parameter Formats**:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| Tuple `(mu'_r, mu"_r)` | `(1000, 100)` | Constant complex mu |
+| List of lists | `[[H, mu'_r, mu"_r], ...]` | H-dependent complex mu |
+
+**Returns** (dict):
+
+| Key | Description |
+|-----|-------------|
+| `Z` | Complex surface impedance [Ohm] |
+| `P_prime` | Total power density [W/m^2] |
+| `P_ohmic` | Ohmic (Joule) loss from sigma [W/m^2] |
+| `P_magnetic` | Magnetic loss from mu" [W/m^2] |
+| `delta` | Effective skin depth [m] |
+| `iterations` | Number of iterations (nonlinear) |
+
+**Example - Constant Permeability**:
+
+```python
+from radia import ESIMCellProblemSolver
+
+solver = ESIMCellProblemSolver(
+    sigma=5e6,        # 5 MS/m (hot steel)
+    frequency=50000,  # 50 kHz
+    mu_r=100
+)
+
+result = solver.solve(H0=5000)
+print(f"Z = {result['Z'].real:.4f} + j{result['Z'].imag:.4f} Ohm")
+print(f"Power density = {result['P_prime']:.0f} W/m^2")
+```
+
+**Example - Nonlinear B-H Curve**:
+
+```python
+bh_curve = [
+    [0, 0], [100, 0.2], [500, 0.9], [1000, 1.3],
+    [2500, 1.6], [5000, 1.8], [10000, 1.95]
+]
+
+solver = ESIMCellProblemSolver(
+    sigma=2e6,
+    frequency=50000,
+    bh_curve=bh_curve
+)
+
+result = solver.solve(H0=5000)
+```
+
+**Example - Complex Permeability (Magnetic Loss)**:
+
+```python
+# Constant complex mu
+solver = ESIMCellProblemSolver(
+    sigma=1e6,
+    frequency=50000,
+    complex_mu=(1000, 100)  # mu'_r=1000, mu"_r=100
+)
+
+# H-dependent complex mu
+complex_mu_data = [
+    [0, 2000, 200],      # [H, mu'_r, mu"_r]
+    [1000, 1500, 150],
+    [5000, 500, 50],
+]
+solver = ESIMCellProblemSolver(
+    sigma=1e6,
+    frequency=50000,
+    complex_mu=complex_mu_data
+)
+```
+
+### BHCurveInterpolator - B-H Curve Interpolation
+
+Interpolates B-H curves and computes derived quantities:
+
+```python
+from radia import BHCurveInterpolator
+
+interp = BHCurveInterpolator(bh_data)
+
+B = interp.get_B(H=5000)           # B at given H
+mu_r = interp.get_mu_r(H=5000)     # Relative permeability
+dB_dH = interp.get_dB_dH(H=5000)   # Differential permeability
+```
+
+| Method | Returns |
+|--------|---------|
+| `get_B(H)` | B [T] at field H [A/m] |
+| `get_mu_r(H)` | Relative permeability mu_r at H |
+| `get_dB_dH(H)` | Differential dB/dH at H |
+| `get_B_sat()` | Saturation B [T] |
+| `get_H_sat()` | Saturation H [A/m] |
+
+### ComplexPermeabilityInterpolator - Complex mu Support
+
+For materials with magnetic hysteresis loss (ferrites, amorphous metals, laminated steel):
+
+**Complex Permeability**: mu = mu' - j*mu"
+
+| Component | Symbol | Physical Meaning |
+|-----------|--------|------------------|
+| Real part | mu' | Energy storage (reactive power) |
+| Imaginary part | mu" | Energy loss (hysteresis, domain wall motion) |
+| Loss tangent | tan(delta_m) = mu"/mu' | Ratio of loss to storage |
+
+**Power loss from magnetic hysteresis**:
+```
+P_magnetic = (omega/2) * mu_0 * mu"_r * |H|^2  [W/m^3]
+```
+
+```python
+from radia import ComplexPermeabilityInterpolator
+
+# Constant complex mu
+interp = ComplexPermeabilityInterpolator(
+    complex_mu=(1000, 100)  # (mu'_r, mu"_r)
+)
+
+# H-dependent complex mu
+complex_mu_data = [
+    [0, 2000, 200],      # [H, mu'_r, mu"_r]
+    [1000, 1000, 100],
+    [10000, 200, 20],
+]
+interp = ComplexPermeabilityInterpolator(complex_mu=complex_mu_data)
+
+mu_prime = interp.get_mu_prime(H=5000)   # Real part mu'
+mu_double_prime = interp.get_mu_double_prime(H=5000)  # Imaginary part mu"
+loss_tangent = mu_double_prime / mu_prime
+```
+
+**Typical Material Properties**:
+
+| Material | mu'_r | mu"_r | tan(delta_m) | Application |
+|----------|-------|-------|--------------|-------------|
+| MnZn Ferrite (1 kHz) | 2500 | 25 | 0.01 | Power transformers |
+| MnZn Ferrite (100 kHz) | 2000 | 400 | 0.2 | Switching supplies |
+| NiZn Ferrite (1 MHz) | 150 | 75 | 0.5 | EMI suppression |
+| Amorphous Metal | 10000 | 100 | 0.01 | High-efficiency cores |
+| Laminated Steel (60 Hz) | 4000 | 40 | 0.01 | Power transformers |
+
+### InductionHeatingCoil - Coil Geometry
+
+Creates coil geometry for field computation:
+
+```python
+from radia import InductionHeatingCoil
+
+# Spiral (pancake) coil
+coil = InductionHeatingCoil(
+    coil_type='spiral',
+    center=[0, 0, 0.02],       # [m]
+    inner_radius=0.03,         # 30mm
+    outer_radius=0.06,         # 60mm
+    pitch=0.005,               # 5mm
+    num_turns=4,
+    axis=[0, 0, 1],
+    wire_width=0.004,          # 4mm
+    wire_height=0.002,         # 2mm
+    conductivity=5.8e7,        # Copper
+)
+coil.set_current(150)  # 150 A
+
+# Single-turn loop coil
+coil = InductionHeatingCoil(
+    coil_type='loop',
+    center=[0, 0, 0.015],
+    radius=0.04,               # 40mm radius
+    normal=[0, 0, 1],
+    wire_width=0.005,
+    wire_height=0.003,
+)
+coil.set_current(300)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `coil_type` | str | `'spiral'` or `'loop'` |
+| `center` | list | Coil center [x, y, z] in meters |
+| `inner_radius` | float | Inner radius (spiral only) [m] |
+| `outer_radius` | float | Outer radius (spiral only) [m] |
+| `radius` | float | Loop radius (loop only) [m] |
+| `pitch` | float | Axial pitch per turn (spiral) [m] |
+| `num_turns` | int | Number of turns (spiral) |
+| `axis` / `normal` | list | Coil axis direction |
+| `wire_width` | float | Wire width [m] |
+| `wire_height` | float | Wire height [m] |
+| `conductivity` | float | Wire conductivity [S/m] |
+
+**Methods**:
+
+| Method | Description |
+|--------|-------------|
+| `set_current(I)` | Set coil current [A] |
+| `get_B_field(point)` | Compute B at point [T] |
+| `get_self_inductance()` | Self-inductance [H] |
+| `get_ac_resistance(freq)` | AC resistance [Ohm] |
+
+### ESIMWorkpiece - Workpiece Geometry
+
+Represents workpiece with surface panels for ESIM analysis:
+
+```python
+from radia import create_esim_block, create_esim_cylinder
+
+# Rectangular block workpiece
+workpiece = create_esim_block(
+    center=[0, 0, -0.01],          # 10mm below origin
+    dimensions=[0.12, 0.12, 0.02], # 120mm x 120mm x 20mm
+    bh_curve=bh_curve,
+    sigma=2e6,                      # 2 MS/m
+    frequency=50000,
+    panels_per_side=5
+)
+
+# Cylindrical workpiece
+workpiece = create_esim_cylinder(
+    center=[0, 0, 0],
+    radius=0.05,                    # 50mm radius
+    height=0.03,                    # 30mm height
+    bh_curve=bh_curve,
+    sigma=2e6,
+    frequency=50000,
+    panels_radial=4,
+    panels_axial=3
+)
+```
+
+### ESIMCoupledSolver - Coupled Impedance Solver
+
+Solves coupled coil-workpiece system and computes impedance:
+
+```python
+from radia import ESIMCoupledSolver
+
+solver = ESIMCoupledSolver(coil, workpiece, frequency)
+result = solver.solve(tol=1e-4, max_iter=30, verbose=True)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `coil` | InductionHeatingCoil | Coil object |
+| `workpiece` | ESIMWorkpiece | Workpiece object |
+| `frequency` | float | Analysis frequency [Hz] |
+
+**solve() Parameters**:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `tol` | 1e-4 | Convergence tolerance |
+| `max_iter` | 30 | Maximum iterations |
+| `verbose` | False | Print iteration info |
+
+**Returns** (dict):
+
+| Key | Description |
+|-----|-------------|
+| `P_total` | Total power to workpiece [W] |
+| `Q_total` | Reactive power [var] |
+| `power_factor` | Power factor |
+| `impedance` | Impedance analysis dict |
+| `converged` | Convergence flag |
+| `iterations` | Iteration count |
+
+**Impedance Analysis** (`result['impedance']`):
+
+| Key | Description |
+|-----|-------------|
+| `L_coil_uH` | Coil inductance [uH] |
+| `R_coil_mOhm` | Coil AC resistance [mOhm] |
+| `R_reflected_mOhm` | Reflected resistance [mOhm] |
+| `X_reflected_mOhm` | Reflected reactance [mOhm] |
+| `Z_total_magnitude_mOhm` | Total |Z| [mOhm] |
+| `phase_deg` | Impedance phase [deg] |
+| `efficiency` | Heating efficiency |
+
+**Example - Complete Analysis**:
+
+```python
+from radia import (
+    ESIMCoupledSolver, InductionHeatingCoil, create_esim_block
+)
+
+# Steel B-H curve
+bh_curve = [
+    [0, 0], [100, 0.2], [500, 0.9], [1000, 1.3],
+    [2500, 1.6], [5000, 1.8], [10000, 1.95],
+]
+
+# Create coil
+coil = InductionHeatingCoil(
+    coil_type='spiral',
+    center=[0, 0, 0.02],
+    inner_radius=0.03,
+    outer_radius=0.06,
+    pitch=0.005,
+    num_turns=4,
+    axis=[0, 0, 1],
+    wire_width=0.004,
+    wire_height=0.002,
+    conductivity=5.8e7,
+)
+coil.set_current(150)
+
+# Create workpiece
+workpiece = create_esim_block(
+    center=[0, 0, -0.01],
+    dimensions=[0.12, 0.12, 0.02],
+    bh_curve=bh_curve,
+    sigma=2e6,
+    frequency=50000,
+    panels_per_side=5
+)
+
+# Solve
+solver = ESIMCoupledSolver(coil, workpiece, 50000)
+result = solver.solve(tol=1e-4, max_iter=30, verbose=True)
+
+# Results
+imp = result['impedance']
+print(f"Power to workpiece: {result['P_total']:.0f} W")
+print(f"Coil inductance: {imp['L_coil_uH']:.3f} uH")
+print(f"Reflected resistance: {imp['R_reflected_mOhm']:.3f} mOhm")
+print(f"Efficiency: {imp['efficiency']*100:.1f}%")
+
+# Resonance capacitor
+C_res = 1 / (solver.omega**2 * solver.L_coil)
+print(f"Resonance capacitor: {C_res*1e6:.2f} uF")
+```
+
+### VTK Export Functions
+
+Export ESIM results for visualization:
+
+```python
+from radia import (
+    export_esim_workpiece_vtk,
+    export_esim_coil_field_vtk,
+    export_esim_combined_vtk,
+)
+
+# Export workpiece with surface fields
+export_esim_workpiece_vtk(
+    workpiece,
+    'workpiece.vtk',
+    fields=['H_tan', 'P_density', 'Z_surface']
+)
+
+# Export coil field on a plane
+export_esim_coil_field_vtk(
+    coil,
+    'coil_field.vtk',
+    plane='xy',
+    z_level=0.0,
+    extent=[-0.1, 0.1, -0.1, 0.1],
+    resolution=50
+)
+
+# Combined export
+export_esim_combined_vtk(
+    coil, workpiece, result,
+    'combined.vtk'
+)
+```
+
+### Frequency Sweep Example
+
+```python
+from radia import ESIMCoupledSolver, InductionHeatingCoil, create_esim_block
+
+frequencies = [10000, 25000, 50000, 100000]  # 10-100 kHz
+
+for freq in frequencies:
+    workpiece = create_esim_block(
+        center=[0, 0, -0.01],
+        dimensions=[0.08, 0.08, 0.015],
+        bh_curve=bh_curve,
+        sigma=sigma,
+        frequency=freq,
+        panels_per_side=4
+    )
+
+    solver = ESIMCoupledSolver(coil, workpiece, freq)
+    result = solver.solve(tol=1e-3, max_iter=20)
+
+    imp = result['impedance']
+    print(f"{freq/1000:.0f} kHz: P={result['P_total']:.0f} W, "
+          f"Eff={imp['efficiency']*100:.1f}%")
+```
+
+### Physical Background
+
+The ESIM method is based on:
+
+1. **Cell Problem**: 1D BVP for electromagnetic field penetration into conductor
+2. **Surface Impedance**: Z = E_tan / H_tan at surface
+3. **Power Density**: P' = Re(Z) * |H_tan|^2
+
+**Skin Depth**:
+```
+delta = sqrt(2 / (omega * mu * sigma))
+```
+
+**Surface Impedance** (linear material):
+```
+Z = (1 + j) / (sigma * delta) = (1 + j) * sqrt(omega * mu / (2 * sigma))
+```
+
+**Complex Permeability Loss**:
+```
+P_magnetic = (omega * mu_0 * mu"_r / 2) * integral |H|^2 dV
 ```
 
 ---
@@ -1143,16 +1686,30 @@ B = cuboid.get_B([25, 0, 0])
 
 12. **van Oosterom, A., Strackee, J.** (1983). "The solid angle of a plane triangle." IEEE Trans. Biomed. Eng. 30(2), 125-126. - Efficient solid angle computation
 
-### Potential Integrals on Triangles
+### Potential Integrals on Triangles (PEEC)
 
-13. **Carley, M.** (2013). "Potential integrals on triangles." arXiv:1201.4938. - Analytical formula for 1/r integral over triangular surfaces
+13. **Wilton, D.R., Rao, S.M., Glisson, A.W., Schaubert, D.H., Al-Bundak, O.M., Butler, C.M.** (1984). "Potential Integrals for Uniform and Linear Source Distributions on Polygonal and Polyhedral Domains." IEEE Trans. Antennas Propag. 32(3), 276-281. - Analytical 1/R integral over triangular panels using edge-based logarithm and arctangent formulas
+
+14. **Graglia, R.D.** (1993). "On the Numerical Integration of the Linear Shape Functions Times the 3-D Green's Function or its Gradient on a Plane Triangle." IEEE Trans. Antennas Propag. 41(10), 1448-1455. - Higher-order integration formulas
+
+15. **Carley, M.** (2013). "Potential integrals on triangles." arXiv:1201.4938. - Alternative analytical formula for 1/r integral
+
+### Arc Coil Analytical Formulas
+
+16. **Kameari, A.** (1990). "Calculation of Transient 3D Eddy Current using Edge-Elements." IEEE Trans. Magn. 26(2), 466-469. - Analytical formula for arc coil B-field using incomplete elliptic integrals, and 1/r integral over rectangular cross-sections. Also provides the analytical cross-section integration formula using distances to 4 corners (R[0-3]) at each azimuthal angle.
+
+17. **Abramowitz, M., Stegun, I.A.** (1964). "Handbook of Mathematical Functions with Formulas, Graphs, and Mathematical Tables." National Bureau of Standards, Chapter 17. - Incomplete elliptic integrals F(phi,m) and E(phi,m), arithmetic-geometric mean algorithm
+
+18. **Nakata, T., Takahashi, N., Fujiwara, K.** (1990). "Summary of Results for TEAM Problem 7." COMPEL 9(2), 137-154. - Validation of arc coil formulas
+
+19. **Piessens, R., de Doncker-Kapenga, E., Überhuber, C.W., Kahaner, D.K.** (1983). "QUADPACK: A Subroutine Package for Automatic Integration." Springer-Verlag. - Gauss-Kronrod 7-15 adaptive quadrature for azimuthal integration in near-field arc coil calculation
 
 ### General References
 
-14. [ESRF Radia Reference Guide](https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html)
-15. [examples/cube_uniform_field/](../examples/cube_uniform_field/) - Benchmark examples
+20. [ESRF Radia Reference Guide](https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html)
+21. [examples/cube_uniform_field/](../examples/cube_uniform_field/) - Benchmark examples
 
 ---
 
-**Last Updated**: 2025-12-30
+**Last Updated**: 2026-01-15
 **License**: LGPL-2.1 (modifications), BSD-style (original RADIA from ESRF)
