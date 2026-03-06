@@ -121,16 +121,11 @@ python run_all_hmatrix_benchmarks.py
 ```python
 import radia as rad
 
-# Enable full H-matrix serialization
-rad.SolverHMatrixCacheFull(1)
-rad.SolverHMatrixEnable(1, 1e-4, 30)
+# Set H-matrix parameters (eps=1e-4, leaf_size=10, eta=2.0)
+rad.SetHACApKParams(1e-4, 10, 2.0)
 
-# First run: Builds H-matrix and saves to disk
-rad.RlxPre(geometry, 1)
-
-# Restart program...
-# Second run: Loads H-matrix from disk instantly!
-rad.RlxPre(geometry, 1)  # ~10x faster startup
+# Solve with HACApK H-matrix (Method 2)
+rad.Solve(geometry, 0.0001, 1000, 2)
 ```
 
 ---

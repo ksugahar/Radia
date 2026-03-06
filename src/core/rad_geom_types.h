@@ -17,9 +17,15 @@
 #ifndef __RADGEOM_TYPES_H
 #define __RADGEOM_TYPES_H
 
+#include <vector>
+#include <utility>
+
 #ifndef __GMVECT_H
 #include "gmvect.h"
 #endif
+
+using std::vector;
+using std::allocator;
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------

@@ -6,8 +6,8 @@ Radia magnetostatic solver benchmark for a soft iron cube in uniform external fi
 
 | Item | Specification |
 |------|---------------|
-| **CPU** | Intel Core i7-10700 (8 cores, 8 threads @ 2.90 GHz) |
-| **Memory** | 64 GB DDR4 |
+| **CPU** | Intel Core i7-9700K (8 cores, 8 threads @ 3.60 GHz) |
+| **Memory** | 128 GB DDR4 |
 | **OS** | Windows 10/11 |
 | **OpenMP** | OMP_NUM_THREADS=8, MKL_NUM_THREADS=8 |
 | **Compiler** | MSVC 2022 + Intel MKL |

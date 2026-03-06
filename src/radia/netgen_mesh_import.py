@@ -573,14 +573,254 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
         return polyhedra
 
 
+def cubit_hex_to_radia(hex_elements, magnetization=None, mu_r=None, combine=True, verbose=True):
+    """
+    Convert Cubit hexahedral mesh data to Radia geometry for CplMag solver.
+
+    This function takes hex element data (list of vertex lists) from Cubit
+    and creates Radia ObjHexahedron objects suitable for CplMag (PEEC-MMM coupling).
+
+    Parameters
+    ----------
+    hex_elements : list of list
+        List of hexahedral elements, each element is a list of 8 vertices:
+        [[[x1,y1,z1], [x2,y2,z2], ..., [x8,y8,z8]], ...]
+        Vertices should be in meters (consistent with rad.FldUnits('m')).
+
+    magnetization : list, optional
+        Initial magnetization vector [Mx, My, Mz] in A/m.
+        Default: [0, 0, 0] (soft magnetic material, no remanent magnetization)
+
+    mu_r : float, optional
+        Relative permeability for soft magnetic material.
+        If provided, creates and applies MatLin(mu_r) to all elements.
+        Default: None (no material applied, user must apply material separately)
+
+    combine : bool, default=True
+        If True, return rad.ObjCnt() container of all elements.
+        If False, return list of individual hexahedron object IDs.
+
+    verbose : bool, default=True
+        If True, print progress information during conversion.
+
+    Returns
+    -------
+    int or list
+        - If combine=True: Radia container object ID (int)
+        - If combine=False: List of individual hexahedron object IDs (list of int)
+
+    Examples
+    --------
+    Basic usage with Cubit hex mesh:
+
+    >>> import radia as rad
+    >>> from netgen_mesh_import import cubit_hex_to_radia
+    >>>
+    >>> rad.FldUnits('m')
+    >>>
+    >>> # Hex elements from Cubit (or manual creation)
+    >>> hex_elements = [
+    ...     [[-0.01,-0.01,-0.01], [0.01,-0.01,-0.01], [0.01,0.01,-0.01], [-0.01,0.01,-0.01],
+    ...      [-0.01,-0.01,0.01], [0.01,-0.01,0.01], [0.01,0.01,0.01], [-0.01,0.01,0.01]],
+    ... ]
+    >>>
+    >>> # Create Radia objects with mu_r=1000
+    >>> core = cubit_hex_to_radia(hex_elements, mu_r=1000)
+
+    Usage with CplMag solver:
+
+    >>> # Create coil
+    >>> coil = rad.CndLoop([0, 0, 0], 0.05, [0, 0, 1], 'r', 2e-3, 2e-3, 5.8e7, 8, 36)
+    >>>
+    >>> # Create multi-element core from Cubit mesh
+    >>> core = cubit_hex_to_radia(hex_elements, mu_r=1000)
+    >>>
+    >>> # Solve coupled system
+    >>> solver = rad.CplMagCreate(coil, core)
+    >>> rad.CplMagSetFrequency(solver, 1000)
+    >>> rad.CplMagSetMu(solver, 1000, 0)
+    >>> result = rad.CplMagSolve(solver)
+
+    Notes
+    -----
+    - IMPORTANT: Call rad.FldUnits('m') before using this function
+    - Vertices should follow standard hexahedron numbering convention
+    - For CplMag, use with ObjCnt container (combine=True)
+    - Multi-element meshes enable proper MMM demagnetization coupling
+
+    See Also
+    --------
+    netgen_mesh_to_radia : For Netgen mesh import
+    create_radia_hexahedron : Create single hexahedron
+    """
+    if magnetization is None:
+        magnetization = [0, 0, 0]
+
+    if verbose:
+        print(f"[Cubit Hex Import] Processing {len(hex_elements)} hexahedral elements...")
+
+    polyhedra = []
+
+    for i, vertices in enumerate(hex_elements):
+        if len(vertices) != 8:
+            raise ValueError(
+                f"Element {i}: Expected 8 vertices for hexahedron, got {len(vertices)}"
+            )
+
+        try:
+            obj_id = create_radia_hexahedron(vertices, magnetization)
+            polyhedra.append(obj_id)
+        except RuntimeError as e:
+            raise RuntimeError(f"Failed to create hexahedron for element {i}: {e}")
+
+        if verbose and (i + 1) % 100 == 0:
+            print(f"                  Progress: {i+1}/{len(hex_elements)}", end='\r')
+
+    if verbose:
+        print(f"                  Progress: {len(hex_elements)}/{len(hex_elements)}")
+        print(f"                  [OK] Created {len(polyhedra)} hexahedra")
+
+    # Apply material if mu_r is specified
+    if mu_r is not None:
+        if verbose:
+            print(f"[Cubit Hex Import] Applying material (mu_r = {mu_r})...")
+
+        mat = rad.MatLin(mu_r)
+        for obj_id in polyhedra:
+            rad.MatApl(obj_id, mat)
+
+        if verbose:
+            print(f"                  [OK] Material applied to all elements")
+
+    # Return result
+    if combine:
+        if verbose:
+            print(f"[Cubit Hex Import] Combining into container...")
+
+        container = rad.ObjCnt(polyhedra)
+
+        if verbose:
+            print(f"                  [OK] Container object ID: {container}")
+
+        return container
+    else:
+        if verbose:
+            print(f"[Cubit Hex Import] Returning list of {len(polyhedra)} object IDs")
+
+        return polyhedra
+
+
+def create_hex_mesh_grid(center, size, divisions, magnetization=None, mu_r=None,
+                          combine=True, verbose=True):
+    """
+    Create a structured hexahedral mesh grid for CplMag testing.
+
+    This function creates a regular grid of hexahedral elements, useful for
+    testing CplMag solver without requiring Cubit.
+
+    Parameters
+    ----------
+    center : list
+        Center position [cx, cy, cz] in meters
+
+    size : list
+        Total size [Lx, Ly, Lz] in meters
+
+    divisions : list
+        Number of divisions [nx, ny, nz] along each axis
+
+    magnetization : list, optional
+        Initial magnetization vector [Mx, My, Mz] in A/m.
+        Default: [0, 0, 0]
+
+    mu_r : float, optional
+        Relative permeability. If provided, applies MatLin(mu_r) to all elements.
+
+    combine : bool, default=True
+        If True, return container. If False, return list of object IDs.
+
+    verbose : bool, default=True
+        If True, print progress information.
+
+    Returns
+    -------
+    int or list
+        Radia container or list of object IDs
+
+    Examples
+    --------
+    Create a 3x3x3 mesh core:
+
+    >>> import radia as rad
+    >>> from netgen_mesh_import import create_hex_mesh_grid
+    >>>
+    >>> rad.FldUnits('m')
+    >>>
+    >>> # 30mm cube with 3x3x3 = 27 elements
+    >>> core = create_hex_mesh_grid(
+    ...     center=[0, 0, 0],
+    ...     size=[0.03, 0.03, 0.03],
+    ...     divisions=[3, 3, 3],
+    ...     mu_r=1000
+    ... )
+    """
+    cx, cy, cz = center
+    Lx, Ly, Lz = size
+    nx, ny, nz = divisions
+
+    # Element sizes
+    dx = Lx / nx
+    dy = Ly / ny
+    dz = Lz / nz
+
+    # Starting corner
+    x0 = cx - Lx / 2
+    y0 = cy - Ly / 2
+    z0 = cz - Lz / 2
+
+    hex_elements = []
+
+    for iz in range(nz):
+        for iy in range(ny):
+            for ix in range(nx):
+                # Corners of this element
+                x_lo = x0 + ix * dx
+                x_hi = x0 + (ix + 1) * dx
+                y_lo = y0 + iy * dy
+                y_hi = y0 + (iy + 1) * dy
+                z_lo = z0 + iz * dz
+                z_hi = z0 + (iz + 1) * dz
+
+                # 8 vertices in standard hexahedron order
+                vertices = [
+                    [x_lo, y_lo, z_lo],
+                    [x_hi, y_lo, z_lo],
+                    [x_hi, y_hi, z_lo],
+                    [x_lo, y_hi, z_lo],
+                    [x_lo, y_lo, z_hi],
+                    [x_hi, y_lo, z_hi],
+                    [x_hi, y_hi, z_hi],
+                    [x_lo, y_hi, z_hi],
+                ]
+                hex_elements.append(vertices)
+
+    if verbose:
+        print(f"[Hex Grid] Creating {nx}x{ny}x{nz} = {len(hex_elements)} elements")
+
+    return cubit_hex_to_radia(hex_elements, magnetization=magnetization, mu_r=mu_r,
+                              combine=combine, verbose=verbose)
+
+
 # Module-level constants for external use
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 __all__ = [
     'netgen_mesh_to_radia',
     'extract_elements',
     'compute_element_centroid',
     'create_radia_tetrahedron',
     'create_radia_hexahedron',
+    'cubit_hex_to_radia',
+    'create_hex_mesh_grid',
     'TETRA_FACES',
     'HEX_FACES',
     'WEDGE_FACES',

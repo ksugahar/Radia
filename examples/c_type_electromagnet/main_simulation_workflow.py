@@ -28,7 +28,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/python'))
 
 import radia as rad
 from nastran_mesh_import import create_radia_from_nastran
-from radia_vtk_export import exportGeometryToVTK, exportFieldToVTK
 
 # Set Radia unit system to millimeters (default, but explicit for clarity)
 rad.FldUnits('mm')
@@ -59,9 +58,6 @@ yoke = create_radia_from_nastran(nastran_file, material={'magnetization': [0, 0,
 yoke_mat = rad.MatSatIsoFrm([20000, 2], [0.1, 2], [0.1, 2])
 rad.MatApl(yoke, yoke_mat)
 
-# Set yoke color to cyan
-rad.ObjDrwAtr(yoke, [0, 1, 1])  # RGB: cyan
-
 print(f"  [OK] Yoke imported: ID={yoke}")
 
 # ========================================================================
@@ -78,9 +74,6 @@ coil = rad.ObjRaceTrk(
     -2000/105/35     # current density (A/mm^2): -2000A total
 )
 
-# Set coil color to red
-rad.ObjDrwAtr(coil, [1, 0, 0])  # RGB: red
-
 print(f"  [OK] Coil created: ID={coil}")
 print(f"  Total current: -2000 A")
 
@@ -93,52 +86,34 @@ g = rad.ObjCnt([coil, yoke])
 print(f"  [OK] Combined model: ID={g}")
 
 # ========================================================================
-# Step 4: Export Radia_model.vtk (Geometry)
+# Step 4: Export Radia_model.vts (Field Distribution)
 # ========================================================================
-print("\n[Step 4/5] Exporting Radia_model.vtk...")
-
-radia_model_vtk = os.path.join(script_dir, 'Radia_model')
-exportGeometryToVTK(g, radia_model_vtk)
+print("\n[Step 4/5] Exporting Radia_model.vts...")
 
 # ========================================================================
 # Step 5: Calculate and Export Field Distribution
 # ========================================================================
 print("\n[Step 5/5] Calculating magnetic field distribution...")
 
-# Define field evaluation grid
-# Combined geometry bbox: X[-40, 40], Y[-25, 193.8], Z[-52.5, 162.5] mm
-# Add 50mm margin around geometry
-x_range = np.linspace(-90, 90, 21)      # 21 points in X (mm)
-y_range = np.linspace(-75, 245, 31)     # 31 points in Y (mm, along axis)
-z_range = np.linspace(-105, 215, 21)    # 21 points in Z (mm)
-
-print(f"  Grid: {len(x_range)}x{len(y_range)}x{len(z_range)} = {len(x_range)*len(y_range)*len(z_range)} points")
-
 # Solve magnetostatics
 print(f"  Solving magnetostatics...")
 rad.Solve(g, 0.0001, 10000)
 print(f"  [OK] Solution converged")
 
-# Calculate field at grid points
-print(f"  Calculating magnetic field...")
-obs_points = []
-B_field = []
+# Define field evaluation grid
+# Combined geometry bbox: X[-40, 40], Y[-25, 193.8], Z[-52.5, 162.5] mm
+# Add 50mm margin around geometry
+x_range_bounds = [-90, 90]
+y_range_bounds = [-75, 245]
+z_range_bounds = [-105, 215]
 
-for x in x_range:
-    for y in y_range:
-        for z in z_range:
-            obs_points.append([x, y, z])
-            B = rad.Fld(g, 'b', [x, y, z])
-            B_field.append(B)
-
-B_field = np.array(B_field)
-obs_points = np.array(obs_points)
-
-print(f"  [OK] Field calculated at {len(obs_points)} points")
-
-# Export field_distribution.vtk using radia_vtk_export
-field_vtk = os.path.join(script_dir, 'field_distribution')
-exportFieldToVTK(obs_points, B_field, field_vtk, 'B_field')
+# Export field distribution to VTS format
+try:
+    vts_path = os.path.join(script_dir, 'field_distribution.vts')
+    rad.FldVTS(g, vts_path, x_range_bounds, y_range_bounds, z_range_bounds, 21, 31, 21, 1, 0, 1.0)
+    print(f"  [OK] Field distribution exported to field_distribution.vts")
+except Exception as e:
+    print(f"  [WARNING] VTS export failed: {e}")
 
 # ========================================================================
 # Summary
@@ -147,10 +122,7 @@ print("\n" + "=" * 70)
 print("SIMULATION COMPLETE")
 print("=" * 70)
 print(f"\nGenerated files:")
-print(f"  1. Radia_model.vtk - Geometry (coil + yoke)")
-print(f"  2. field_distribution.vtk - Magnetic field data")
+print(f"  1. field_distribution.vts - Magnetic field data (VTS format)")
 print(f"\nVisualize with ParaView:")
-print(f"  paraview Radia_model.vtk field_distribution.vtk")
-print(f"\nOr run the automated visualization script:")
-print(f"  pvpython visualize_paraview.py")
+print(f"  paraview field_distribution.vts")
 print("=" * 70)

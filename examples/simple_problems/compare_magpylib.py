@@ -210,23 +210,23 @@ def compare_cylindrical_magnet():
 	else:
 		passed = False
 
-	# VTK Export - Export geometry before cleanup
+	# VTS Export - Export field distribution before cleanup
 	try:
-		from radia_vtk_export import exportGeometryToVTK
-
 		# Get script basename without extension
 		script_name = os.path.splitext(os.path.basename(__file__))[0]
-		vtk_filename = f"{script_name}.vtk"
-		vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+		vts_filename = f"{script_name}.vts"
+		vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
-		# Export geometry
-		exportGeometryToVTK(radia_mag, vtk_path)
-		print(f"\n[VTK] Exported: {vtk_filename}")
-		print(f"      View with: paraview {vtk_filename}")
-	except ImportError:
-		print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+		# Cylindrical magnet: radius=10mm, height=20mm, extend range for far-field
+		x_range = [-50, 50]
+		y_range = [-50, 50]
+		z_range = [-50, 50]
+
+		rad.FldVTS(radia_mag, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+		print(f"\n[VTS] Exported: {vts_filename}")
+		print(f"      View with: paraview {vts_filename}")
 	except Exception as e:
-		print(f"\n[VTK] Warning: Export failed: {e}")
+		print(f"\n[VTS] Warning: Export failed: {e}")
 
 	# Cleanup Radia
 	rad.UtiDelAll()

@@ -53,9 +53,6 @@ print(f"  Size: {2*size} x {2*size} x {2*size} mm")
 print(f"  Magnetization: {magnetization} T")
 print(f"  Vertices: {len(vertices)}")
 
-# Set drawing attributes (blue color)
-rad.ObjDrwAtr(g1, [0, 0, 1], 0.001)
-
 # Calculate magnetic field at various points
 print("\n" + "=" * 70)
 print("Magnetic Field Calculation")
@@ -107,20 +104,20 @@ print("\n" + "=" * 70)
 print("Calculation complete.")
 print("=" * 70)
 
-# VTK Export - Export geometry with same filename as script
+# VTS Export - Export field distribution with same filename as script
 try:
-	from radia_vtk_export import exportGeometryToVTK
-
 	# Get script basename without extension
 	script_name = os.path.splitext(os.path.basename(__file__))[0]
-	vtk_filename = f"{script_name}.vtk"
-	vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+	vts_filename = f"{script_name}.vts"
+	vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
-	# Export geometry
-	exportGeometryToVTK(g1, vtk_path)
-	print(f"\n[VTK] Exported: {vtk_filename}")
-	print(f"      View with: paraview {vtk_filename}")
-except ImportError:
-	print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+	# Cube is 20mm centered at origin, extend range to 40mm for far-field
+	x_range = [-40, 40]
+	y_range = [-40, 40]
+	z_range = [-40, 40]
+
+	rad.FldVTS(g1, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+	print(f"\n[VTS] Exported: {vts_filename}")
+	print(f"      View with: paraview {vts_filename}")
 except Exception as e:
-	print(f"\n[VTK] Warning: Export failed: {e}")
+	print(f"\n[VTS] Warning: Export failed: {e}")

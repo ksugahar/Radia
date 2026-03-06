@@ -288,7 +288,7 @@ int HACApK_build_hmatrix_wrapper(
     /* Initialize leaf structures (indices 1 to nlf, 0 is unused sentinel) */
     st_leafmtx[0] = NULL;  /* Explicit sentinel */
     for (ip = 1; ip <= nlf; ip++) {
-        st_leafmtx[ip] = (st_cHACApK_leafmtx)calloc(1, sizeof(struct st_cHACApK_leafmtx));
+        st_leafmtx[ip] = (st_cHACApK_leafmtx)calloc(1, sizeof(st_cHACApK_leafmtx_t));
         if (!st_leafmtx[ip]) {
             fprintf(stderr, "[HACApK] Error: Memory allocation for leaf %d failed\n", ip);
             return -1;
@@ -736,7 +736,7 @@ int HACApK_build_hmatrix_varDOF_wrapper(
 
     st_leafmtx[0] = NULL;
     for (ip = 1; ip <= nlf_max; ip++) {
-        st_leafmtx[ip] = (st_cHACApK_leafmtx)calloc(1, sizeof(struct st_cHACApK_leafmtx));
+        st_leafmtx[ip] = (st_cHACApK_leafmtx)calloc(1, sizeof(st_cHACApK_leafmtx_t));
         if (!st_leafmtx[ip]) {
             fprintf(stderr, "[HACApK] Error: Memory allocation for leaf %d failed\n", ip);
             return -1;
@@ -857,6 +857,11 @@ void HACApK_matvec_wrapper(
     const double d_zero = 0.0;
     const int i_one = 1;
 
+    /* Validate pointers */
+    if (!leafmtxp || !ctl || !lod || !st_lf || !x || !y) {
+        return;
+    }
+
 #ifdef _OPENMP
     nthr = omp_get_max_threads();
 #endif
@@ -891,6 +896,8 @@ void HACApK_matvec_wrapper(
         #pragma omp for schedule(dynamic, 32)
         for (ip = 1; ip <= nlf; ip++) {
             st_cHACApK_leafmtx leaf = st_lf[ip];
+            if (!leaf) continue;
+
             int ndl = leaf->ndl;
             int ndt = leaf->ndt;
             int nstrtl = leaf->nstrtl;
@@ -905,6 +912,7 @@ void HACApK_matvec_wrapper(
                  * U is stored column-major: U[i,k] = a2[i + ndl*k]
                  */
                 int kt = leaf->kt;
+                if (!a1 || !a2 || kt <= 0) continue;
 
                 /* tmp_vec = V^T * x_sub  using BLAS dgemv
                  * V is ndt x kt, stored column-major
@@ -928,6 +936,7 @@ void HACApK_matvec_wrapper(
                  * We need y_local(ndl) += A(ndl x ndt) * x_sub(ndt)
                  * But A is stored as A^T (ndt x ndl), so use trans='T'
                  */
+                if (!a1) continue;
                 dgemv_("T", &ndt, &ndl, &d_one, a1, &ndt,
                        &g_x_perm[nstrtt - 1], &i_one,
                        &d_one, &y_local[nstrtl - 1], &i_one);
@@ -986,11 +995,11 @@ void HACApK_free_hmatrix_wrapper(
  *=========================================================================*/
 
 void* HACApK_alloc_leafmtxp(void) {
-    return calloc(1, sizeof(struct st_cHACApK_leafmtxp));
+    return calloc(1, sizeof(st_cHACApK_leafmtxp_t));
 }
 
 void* HACApK_alloc_lcontrol(void) {
-    return calloc(1, sizeof(struct st_cHACApK_lcontrol));
+    return calloc(1, sizeof(st_cHACApK_lcontrol_t));
 }
 
 void HACApK_free_leafmtxp(void *ptr) {

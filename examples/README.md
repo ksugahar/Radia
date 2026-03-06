@@ -234,24 +234,28 @@ sys.path.insert(0, os.path.join(project_root, 'src', 'python'))
 import radia as rad
 ```
 
-### VTK Export
+### VTS Export
 
-All simple_problems and demonstration scripts include VTK export:
+All simple_problems and demonstration scripts include VTS field distribution export:
 
 ```python
-# VTK Export - Export geometry with same filename as script
+# VTS Export - Export field distribution with same filename as script
 try:
-    from radia_vtk_export import exportGeometryToVTK
-
     script_name = os.path.splitext(os.path.basename(__file__))[0]
-    vtk_filename = f"{script_name}.vtk"
-    vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+    vts_filename = f"{script_name}.vts"
+    vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
-    exportGeometryToVTK(g, vtk_path)
-    print(f"\n[VTK] Exported: {vtk_filename}")
-    print(f"      View with: paraview {vtk_filename}")
-except ImportError:
-    print("\n[VTK] Warning: radia_vtk_export not available")
+    # Define observation grid ranges based on geometry
+    x_range = [-40, 40]
+    y_range = [-40, 40]
+    z_range = [-40, 40]
+
+    # FldVTS(obj, filename, x_range, y_range, z_range, nx, ny, nz, include_B, include_H, unit_scale)
+    rad.FldVTS(g, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+    print(f"\n[VTS] Exported: {vts_filename}")
+    print(f"      View with: paraview {vts_filename}")
+except Exception as e:
+    print(f"\n[VTS] Warning: Export failed: {e}")
 ```
 
 ### Material API
@@ -292,8 +296,7 @@ rad.MatApl(obj, mat)
 
 **Optional:**
 - NGSolve (for NGSolve_Integration/ examples)
-- PyVista (for interactive 3D visualization)
-- ParaView (for viewing VTK files)
+- ParaView (for viewing VTS files)
 
 ### Build Radia First
 
@@ -315,14 +318,11 @@ python arc_current_with_magnet.py
 
 ### View Output in ParaView
 
-Most examples generate VTK files:
+Most examples generate VTS files for field visualization:
 
 ```bash
-# Open geometry
-paraview arc_current_with_magnet.vtk
-
 # Open field distribution
-paraview field_distribution.vtk
+paraview field_output.vts
 ```
 
 ---
@@ -361,7 +361,7 @@ paraview field_distribution.vtk
 
 Free, open-source 3D visualization:
 
-1. Open `.vtk` file in ParaView
+1. Open `.vts` file in ParaView
 2. Apply filters:
    - **Glyph** - Vector field arrows
    - **StreamTracer** - Field lines
@@ -369,17 +369,6 @@ Free, open-source 3D visualization:
    - **Slice** - Cutting planes
 
 Download: https://www.paraview.org/
-
-### PyVista (Interactive)
-
-Python-based interactive 3D viewer:
-
-```python
-from radia_pyvista_viewer import view_radia_object
-view_radia_object(mag)
-```
-
-Install: `pip install pyvista`
 
 ---
 
@@ -428,14 +417,11 @@ powershell.exe -ExecutionPolicy Bypass -File Build_NGSolve.ps1
 
 Requires NGSolve installed.
 
-### VTK export not available
+### VTS export failed
 
-**Cause:** `radia_vtk_export.py` not in path
+**Cause:** rad.FldVTS() not available in older Radia versions
 
-**Solution:** Examples automatically add `src/python/` to path. Verify file exists:
-```bash
-ls src/python/radia_vtk_export.py
-```
+**Solution:** Update to the latest Radia version that includes FldVTS support.
 
 ---
 
@@ -447,9 +433,9 @@ When adding new examples:
    - Use descriptive names: `arc_current_with_magnet.py`
    - Avoid generic names: `test.py`, `example.py`
 
-2. **Include VTK export:**
-   - Use consistent VTK export pattern (see above)
-   - Export geometry to `{script_name}.vtk`
+2. **Include VTS export:**
+   - Use consistent VTS export pattern (see above)
+   - Export field distribution to `{script_name}.vts`
 
 3. **Add docstrings:**
    - Module-level docstring describing the example

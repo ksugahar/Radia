@@ -191,29 +191,30 @@ def main():
 	print("  4. Implementation difficulty: HIGH (requires HACApK extension)")
 	print()
 
-	# VTK Export - Export geometry with same filename as script
+	# VTS Export - Export field distribution with same filename as script
 	try:
-		from radia_vtk_export import exportGeometryToVTK
-
 		script_name = os.path.splitext(os.path.basename(__file__))[0]
 
-		# Export small magnet
-		vtk_filename_small = f"{script_name}_small.vtk"
-		vtk_path_small = os.path.join(os.path.dirname(__file__), vtk_filename_small)
-		exportGeometryToVTK(magnet_small, vtk_path_small)
-		print(f"\n[VTK] Exported: {vtk_filename_small}")
+		# Magnet is 20mm cube, extend range to 50mm for far-field
+		x_range = [-50, 50]
+		y_range = [-50, 50]
+		z_range = [-50, 50]
 
-		# Export medium magnet
-		vtk_filename_medium = f"{script_name}_medium.vtk"
-		vtk_path_medium = os.path.join(os.path.dirname(__file__), vtk_filename_medium)
-		exportGeometryToVTK(magnet_medium, vtk_path_medium)
-		print(f"[VTK] Exported: {vtk_filename_medium}")
+		# Export small magnet field
+		vts_filename_small = f"{script_name}_small.vts"
+		vts_path_small = os.path.join(os.path.dirname(__file__), vts_filename_small)
+		rad.FldVTS(magnet_small, vts_path_small, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+		print(f"\n[VTS] Exported: {vts_filename_small}")
 
-		print(f"      View with: paraview {vtk_filename_small} {vtk_filename_medium}")
-	except ImportError:
-		print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+		# Export medium magnet field
+		vts_filename_medium = f"{script_name}_medium.vts"
+		vts_path_medium = os.path.join(os.path.dirname(__file__), vts_filename_medium)
+		rad.FldVTS(magnet_medium, vts_path_medium, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+		print(f"[VTS] Exported: {vts_filename_medium}")
+
+		print(f"      View with: paraview {vts_filename_small} {vts_filename_medium}")
 	except Exception as e:
-		print(f"\n[VTK] Warning: Export failed: {e}")
+		print(f"\n[VTS] Warning: Export failed: {e}")
 
 if __name__ == "__main__":
 	main()

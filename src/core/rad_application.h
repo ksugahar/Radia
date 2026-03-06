@@ -194,7 +194,6 @@ public:
 	int SetArcCur(double* CPoi, long lenCPoi, double* Radii, long lenRadii, double* Angles, long lenAngles, double InHeight, double InJ_azim, int NumberOfSegm, char* ManOrAuto, char* Orient);
 	int SetArcMag(double* CPoi, long lenCPoi, double* Radii, long lenRadii, double* Angles, long lenAngles, double InHeight, int InNumberOfSegm, double* Magn, long lenMagn, char* Orient);
 	int SetCylMag(double* CPoi, long lenCPoi, double r, double h, int NumberOfSegm, double* Magn, long lenMagn, char* Orient);
-	//int OrientObjAlongMainAxis(int ObjInd, double* CPoi, char DefOrient, char Orient);
 	int FindSpaceTransToOrientObjAlongMainAxis(double* CPoi, char DefOrient, char Orient);
 	void TransformBackMagnOrCurDensArr(int IndTr, double* Magn, long lenMagn);
 	void TransformBackPointArr(int IndTr, double* arP, long lenP);
@@ -204,21 +203,15 @@ public:
 	int SetPlanarPolygon(double CoordZ, TVector2d* ArrayOfPoints2d, long lenArrayOfPoints2d, double* Magn, long lenMagn);
 	
 	int SetPolyhedron1(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfNumOfPoInFaces, int lenArrayOfFaces, double* Magn, double* arM_LinCoef=0, double* J=0, double* arJ_LinCoef=0, const char** OptionNames=0, const char** OptionValues=0, int OptionCount=0);
-	//int SetPolyhedron1(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfNumOfPoInFaces, int lenArrayOfFaces, double* Magn, long lenMagn);
-	
 	int SetPolyhedron2(TVector3d** ArrayOfFaces, int* ArrayOfNumOfPoInFaces, long lenArrayOfFaces, double* Magn, long lenMagn);
 	int SetArcPolygon(double* CenP, const char* OrientStr, TVector2d* ArrayOfPoints2d, long lenArrayOfPoints2d, double* Angles, int NumberOfSegm, const char* SymOrNoSymStr, double* Magn);
 
 	int SetMultGenExtrPolygon(TVector2d** LayerPolygons, int* PtsNumbersInLayerPgns, double* CoordsZ, int AmOfLayerPolygons, double* Magn, long lenMagn);
-	//int SetMultGenExtrPolygonCur(double zc, const char* strOrient, TVector2d* arPoints2d, int lenArPoints2d, double*** arPtrTrfParInExtrSteps, char** arStrTrfOrderInExtrSteps, int* arNumTrfInExtrSteps, int NumSteps, double avgCur, const char** arOptionNames=0, const char** arOptionValues=0, int numOptions=0);
 	int SetMultGenExtrPolygonCur(double zc, const char* strOrient, TVector2d* arPoints2d, int lenArPoints2d, double* arSubdData, double*** arPtrTrfParInExtrSteps, char** arStrTrfOrderInExtrSteps, int* arNumTrfInExtrSteps, int NumSteps, double avgCur, double* arMagnCompInSteps, const char** arOptionNames=0, const char** arOptionValues=0, int numOptions=0);
 	
 	int SetMultGenExtrRectangle(TVector3d* RectCenPoints, TVector2d* RectDims, int AmOfLayerRect, double* Magn, long lenMagn);
 	int SetMultGenExtrTriangle(double* FirstPoi, long lenFirstPoi, double Lx, TVector2d* ArrayOfPoints2d, long lenArrayOfPoints2d, double* arSubdData, double* Magn, long lenMagn, const char* OrientStr, const char** OptionNames, const char** OptionValues, int OptionCount);
-	//int TriangulatePolygon(TVector2d* ArrayOfPoints2d, long lenArrayOfPoints2d, double* arSubdData, const char** OptionNames, const char** OptionValues, int OptionCount, TVector2d*& arTriVertPt, int& numTriVertPt, int*& arTriVertInd, int& numTri);
 	int TriangulatePolygon(TVector2d* ArrayOfPoints2d, long lenArrayOfPoints2d, double* arSubdData, char triSubdParamBorderCode, double triAngMin, double triAreaMax, const char* sTriExtOpt, TVector2d*& arTriVertPt, int& numTriVertPt, int*& arTriVertInd, int& numTri);
-	
-	//int SetUpPolyhedronsFromBaseFacePolygons(double zc, const char* strOrient, TVector2d* arPoints2d, int lenArPoints2d, double*** arPtrTrfParInExtrSteps, char** arStrTrfOrderInExtrSteps, int* arNumTrfInExtrSteps, int NumSteps, double avgCur, char frame, radThg& hgOut);
 	int SetUpPolyhedronsFromBaseFacePolygons(double zc, const char* strOrient, TVector2d* arPoints2d, int lenArPoints2d, double*** arPtrTrfParInExtrSteps, char** arStrTrfOrderInExtrSteps, int* arNumTrfInExtrSteps, int NumSteps, double avgCur, double* arMagnCompInSteps, char frame, radThg& hgOut);
 	int SetUpPolyhedronsFromBaseFacePolygonsTri(double zc, const char* strOrient, TVector2d* arPoints2d, int lenArPoints2d, TVector2d* arTriVertPt, int numTriVertPt, int* arTriVertInd, int numTri, double*** arPtrTrfParInExtrSteps, char** arStrTrfOrderInExtrSteps, int* arNumTrfInExtrSteps, int NumSteps, double avgCur, double* arMagnCompInExtrSteps, char frame, radThg& hgOut);
 
@@ -242,7 +235,6 @@ public:
 	int SetGroup(int* ArrayOfKeys, long lenArrayOfKeys);
 	int AddToGroup(int GroupKey, int* ArrayOfKeys, long lenArrayOfKeys);
 	int OutGroupSize(int ElemKey);
-	//int OutGroupSize(int ElemKey, char deep=0);
 	int OutGroupSubObjectKeys(int ElemKey);
 
 	int SetRaceTrack(double* CPoi, long lenCPoi, double* Radii, long lenRadii, double* StrPartDims, long lenStrPartDims, double InHeight, double InJ_azim, int NumberOfSegm, char* ManOrAuto, char* Orient);
@@ -254,7 +246,6 @@ public:
 	int ComputeNumberOfDegOfFreedom(int ElemKey);
 	int ComputeGeometricalVolume(int ElemKey);
 	int ComputeGeometricalLimits(int ElemKey);
-	//void ComputeMagnInCenter(int ElemKey);
 	void ComputeMagnOrJ_InCenter(int ElemKey, char MorJ);
 	int ScaleCurrent(int ElemKey, double scaleCoef);
 	int SetObjMagn(int ElemKey, double Mx, double My, double Mz);
@@ -290,7 +281,6 @@ public:
 
 	int ApplyMaterial(int g3dRelaxElemKey, int MaterElemKey);
 	void ComputeMvsH(int g3dRelaxOrMaterElemKey, char* MagnChar, double* H, long lenH);
-	//void OutMagnetizCompRes(char* MagnChar, TVector3d& M_vect);
 
 	int PreRelax(int ElemKey, int SrcElemKey, char skipDenseMatrix=0);
 	int SetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
@@ -330,23 +320,19 @@ public:
 	void ComputeFieldEnergy(int DestElemKey, int SourceElemKey, int* SubdArray, long lenSubdivArray);
 	void ComputeFieldForceThroughEnergy(int DestElemKey, int SourceElemKey, char* ForceComponID, int* SubdArray, long lenSubdivArray);
 	void ComputeFieldTorqueThroughEnergy(int DestElemKey, int SourceElemKey, char* TorqueComponID, int* SubdArray, long lenSubdivArray, double* TorqueCenPo, long lenTorqueCenPo);
-	//void OutFieldForceOrTorqueThroughEnergyCompRes(char* ForceComponID, TVector3d& Force, char ID);
 	inline char CheckForAutoDestSubdivision(double* SubdivArray);
 
 	void ComputeParticleTrajectory(int ElemKey, double E, double x0, double dxdy0, double z0, double dzdy0, double y0, double y1, int Np);
 	void ComputeFocusPotent(int ElemKey, double* StPoi, long lenStPoi, double* FiPoi, long lenFiPoi, int Np);
-	//void ComputeFocusKickPer(int ElemKey, double* P1, double* Nlong, double per, int nper, double* N1, double r1, int np1, double r2, int np2, const char* Comment, int nharm, int ns, double d1, double d2, const char* strKickUnit, double inEnergyGeV=0);
 	void ComputeFocusKickPer(int ElemKey, double* P1, double* Nlong, double per, double nper, double* N1, double r1, int np1, double r2, int np2, const char* Comment, int nharm, int ns, double d1, double d2, const char* strKickUnit, double inEnergyGeV=0, const char* strOutFormat=0);
 	void ComposeFocusKickPerFormStrRep(double* pKickData1, double* pKickData2, double* pBtE2Int, double* pCoordDir1, double* pCoordDir2, int np1, int np2, double per, int nper, const char* Comment);
 	void ComputeFocusKick(int ElemKey, double* P1, double* Nlong, double* ArrLongDist, int lenArrLongDist, int ns, double* Ntr1, double r1, int np1, double r2, int np2, const char* StrComment, double d1, double d2);
 	void ComputeShimSignature(int ElemKey, char* FldID, double* V, double* StPoi, double* FiPoi, int Np, double* Vi);
 
-	//void OutFieldCompRes(char* FieldChar, radTField* FieldPtr, double* ArgArray, int Np);
 	void OutFieldCompRes(char* FieldChar, radTField* FieldArray, long Np, radTVectInputCell& VectInputCell);
 	void OutFieldCompRes(char* FieldChar, radTField* FieldArray, long Np);
 	void ParseAndSendOneFieldValue(radTField* tField, char* BufChar, int AmOfItem);
 
-	//void OutFieldIntCompRes(char* FieldIntChar, radTField* FieldPtr);
 	void OutFieldEnergyForceCompRes(char* ComponIDChar, radTField* FieldPtr);
 
 	int SetCompPrecisions(const char** ValNames, double* Values, int ValCount);
@@ -360,7 +346,6 @@ public:
 	double GetLengthUnitScale() const { return m_lengthUnitScale; }
 	const char* GetLengthUnitName() const { return m_lengthUnitName; }
 
-	//void DumpElem(int ElemKey);
 	void DumpElem(int* arKeys, int nElem, const char* strFormat, bool arKeysAllocInMathLink=false);
 	int DumpElemParse(const unsigned char *bstr, int bstrLen);
 	void GenDump();
@@ -392,12 +377,15 @@ public:
 	void ReplaceInGlobalMap(radThg& OldHandle, radThg& NewHandle);
 	inline void CopyDrawAttr(int OldElemKey, int NewElemKey);
 
-	int ProcMPI(const char* OnOrOff, double* arData=0, long* pnData=0, long* pRankFrom=0, long* pRankTo=0); //OC19032020
-	//int ProcMPI(const char* OnOrOff);
+	int ProcMPI(const char* OnOrOff, double* arData=0, long* pnData=0, long* pRankFrom=0, long* pRankTo=0);
 
 	// Get element handle by key (for FMM dipole collection)
 	// Returns true if element found, false otherwise
 	bool UnsafeGetElemByKey(int ElemKey, radThg& outHandle);
+
+	// Get interaction pointer by key (for CplMag solver)
+	// Returns nullptr if not found or not an interaction
+	radTInteraction* GetInteractionByKey(int interactKey);
 };
 
 //-------------------------------------------------------------------------

@@ -1,11 +1,11 @@
 /*
  * C++ Compatible Wrapper for HACApK
  *
- * This header provides C++ compatible type definitions for HACApK.
- * The original cHACApK_base.h uses C-style typedefs that conflict
- * with C++ name lookup rules.
+ * This header provides C++ compatible interface for HACApK.
+ * It includes cHACApK_base.h which now uses standard C/C++ compatible
+ * struct definitions (st_cHACApK_*_t types with separate pointer typedefs).
  *
- * Usage: Include this header in C++ code instead of cHACApK_base.h
+ * Usage: Include this header in C++ code for HACApK integration.
  *
  * Copyright (c) 2025 Radia Project
  * License: MIT
@@ -20,70 +20,17 @@
 extern "C" {
 #endif
 
+/* Include the base HACApK header which defines all structures */
+#include "cHACApK_base.h"
+
 /*
- * Structure definitions (must match cHACApK_base.h exactly)
- * Using struct tags directly to avoid typedef conflicts
+ * C++ compatible type aliases
+ * These provide cleaner names for C++ usage
  */
-
-/* Forward declarations */
-struct st_cHACApK_cluster_s;
-struct st_cHACApK_leafmtx_s;
-struct st_cHACApK_leafmtxp_s;
-struct st_cHACApK_lcontrol_s;
-
-/* Cluster structure for hierarchical partitioning */
-struct st_cHACApK_cluster_s {
-    int ndim;
-    int nstrt, nsize, ndpth, nnson, nmbr;
-    int ndscd;
-    double *bmin;
-    double *bmax;
-    double zwdth;
-    struct st_cHACApK_cluster_s *pc_sons;
-};
-
-/* Leaf matrix structure (low-rank or dense block) */
-struct st_cHACApK_leafmtx_s {
-    int ltmtx;  /* kind of the matrix; 1:rk 2:full */
-    int kt;     /* rank for low-rank blocks */
-    int nstrtl, ndl;  /* row start and dimension */
-    int nstrtt, ndt;  /* column start and dimension */
-    double *a1, *a2;  /* U and V for low-rank, or A for dense */
-
-    int nlf; /* number of leaves(sub-matrices) in the MPI process */
-    struct st_cHACApK_leafmtx_s **st_lf;  /* Array of pointers (matches C typedef) */
-};
-
-/* Leaf matrix collection structure */
-struct st_cHACApK_leafmtxp_s {
-    int nd;     /* number of unknowns of whole matrix */
-    int nlf;    /* number of leaves(sub-matrices) in the MPI process */
-    int nlfkt;  /* number of low-rank sub matrices in the MPI process */
-    int ktmax;  /* maximum rank */
-    int nbl;    /* number of blocks for MPI assignment */
-    int nlfalt; /* number of leaves in row(column) of whole matrix */
-    int nlfl, nlft;   /* number of leaves in row and column in the MPI process */
-    int ndlfs, ndtfs; /* vector sizes in the MPI process */
-    struct st_cHACApK_leafmtx_s **st_lf;  /* Array of pointers (matches C typedef) */
-    int64_t **lnlfl2g_t;  /* 2D array */
-    int *lbstrtl, *lbstrtt; /* Start points of each block in row and column */
-    int *lbndl, *lbndt;     /* vector sizes of each block in row and column */
-    int *lbndlfs, *lbndtfs; /* vector sizes of each MPI process in row and column */
-    int *lbl2t; /* bit vector for receiving data on each MPI process */
-};
-
-/* Control structure for HACApK */
-struct st_cHACApK_lcontrol_s {
-    int *lod, *lsp, *lnp, *lthr, *lpmd;
-    double *param, *time;
-    int lf_umpi;
-};
-
-/* C++ compatible type aliases */
-typedef struct st_cHACApK_cluster_s  HACApK_cluster;
-typedef struct st_cHACApK_leafmtx_s  HACApK_leafmtx;
-typedef struct st_cHACApK_leafmtxp_s HACApK_leafmtxp;
-typedef struct st_cHACApK_lcontrol_s HACApK_lcontrol;
+typedef st_cHACApK_cluster_t  HACApK_cluster;
+typedef st_cHACApK_leafmtx_t  HACApK_leafmtx;
+typedef st_cHACApK_leafmtxp_t HACApK_leafmtxp;
+typedef st_cHACApK_lcontrol_t HACApK_lcontrol;
 
 /*
  * Entry function callback type
@@ -282,30 +229,32 @@ int HACApK_get_current_lod_size(void);
  * This follows ELF_MAGIC's HACApK_update_diagonal_omp pattern.
  */
 void HACApK_update_diagonal_wrapper(
-    void *leafmtxp,            /* st_cHACApK_leafmtxp* */
-    void *ctl,                 /* st_cHACApK_lcontrol* */
+    void *leafmtxp,            /* st_cHACApK_leafmtxp_t* */
+    void *ctl,                 /* st_cHACApK_lcontrol_t* */
     HACApK_entry_func entry_func);
 
-/**
- * Fast diagonal update: only update true diagonal elements (i==j)
- *
- * This is much faster than HACApK_update_diagonal_wrapper because:
- * - Only updates diagonal entries, not entire blocks
- * - Uses pre-computed N_ii values (passed as diag_N array)
- * - Just adds new inv_chi[i] to stored N_ii values
- *
- * @param leafmtxp  H-matrix leaf pointer
- * @param ctl       H-matrix control structure
- * @param diag_N    Pre-computed diagonal N values (size = ndof)
- * @param inv_chi   New inverse susceptibility values (size = ndof)
- * @param ndof      Total degrees of freedom
+/*
+ * Fast diagonal update using pre-computed N_ii values
+ * Only updates true diagonal entries (i==j) using: a1[il + ndt*il] = diag_N[orig_i-1] - inv_chi[orig_i-1]
+ * This is O(ndof) instead of O(block_size^2 * n_diag_blocks)
  */
 void HACApK_update_diagonal_fast_wrapper(
-    void *leafmtxp,
-    void *ctl,
-    const double *diag_N,
-    const double *inv_chi,
-    int ndof);
+    void *leafmtxp,            /* st_cHACApK_leafmtxp_t* */
+    void *ctl,                 /* st_cHACApK_lcontrol_t* */
+    const double *diag_N,      /* Pre-computed N_ii diagonal elements [ndof] */
+    const double *inv_chi,     /* Inverse susceptibility diagonal [ndof] */
+    int ndof);                 /* Total DOF count */
+
+/**
+ * Set entry function for cHACApK_entry_ij callback
+ * Must be called before HACApK_build_hmatrix_wrapper
+ */
+void HACApK_set_entry_func(HACApK_entry_func func);
+
+/**
+ * Clear entry function callback
+ */
+void HACApK_clear_entry_func(void);
 
 #ifdef __cplusplus
 }

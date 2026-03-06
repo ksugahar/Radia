@@ -147,7 +147,7 @@ void cHACApK_generate_frame_blrleaf(
     goto error;
   }
   for(il=1; il<=nblall; il++) {
-    st_leafmtx[il] = (st_cHACApK_leafmtx) calloc(1,sizeof(struct st_cHACApK_leafmtx));
+    st_leafmtx[il] = (st_cHACApK_leafmtx) calloc(1,sizeof(st_cHACApK_leafmtx_t));
     if(st_leafmtx[il]==NULL) {
       fprintf(stderr, "Error: cHACApK_generate_frame_blrleaf: malloc st_leafmtx[%d]\n",il);
       goto error;
@@ -1305,7 +1305,7 @@ void cHACApK_count_blrleaf(
       goto error;
     }
     for(il=1; il<=iblnlf; il++) {
-      st_leafmtx[ibl]->st_lf[il] = (st_cHACApK_leafmtx) calloc(1,sizeof(struct st_cHACApK_leafmtx));
+      st_leafmtx[ibl]->st_lf[il] = (st_cHACApK_leafmtx) calloc(1,sizeof(st_cHACApK_leafmtx_t));
       if(st_leafmtx[ibl]->st_lf[il]==NULL) {
         fprintf(stderr, "Error: cHACApK_count_blrleaf: malloc st_leafmtx[%d]->st_lf[il]\n",ibl,il);
         goto error;
@@ -1687,7 +1687,7 @@ st_cHACApK_cluster cHACApK_generate_cluster(
   int nmbr;
   nmbr=*p_nmbr;
 
-  st_clt = (st_cHACApK_cluster) calloc(1,sizeof(struct st_cHACApK_cluster));
+  st_clt = (st_cHACApK_cluster) calloc(1,sizeof(st_cHACApK_cluster_t));
   if(st_clt==NULL) {
     fprintf(stderr, "Error: cHACApK_generate_cluster: malloc st_clt\n");
     goto error;

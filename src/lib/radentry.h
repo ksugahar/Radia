@@ -409,17 +409,8 @@ EXP int CALL RadObjCenFld(double* B, int* arMesh, int obj, char type); //OC27092
 */
 EXP int CALL RadObjSetM(int obj, double* M);
 
-/** Cuts the object obj by a plane passing through a given point normally to a given vector.
-@param Objs [out] array of reference numbers of the objects produced by the cutting
-@param nobj [out] amount of the objects produced by the cutting
-@param obj [in] reference number of the object to cut
-@param P [in] array of 3 cartesian coordinates of a point the cutting plane passes through
-@param N [in] array of 3 cartesian coordinates of the vector normal to the cutting plane
-@param opt [in] pointer to an option string, which can be "Frame->Lab", "Frame->Loc" or 0. This specifies whether the cuting plane is defined in the laboratory frame ("Frame->Lab" or 0) or in the local frame of the object obj. 
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjCutMag(int* Objs, int* nobj, int obj, double* P, double* N, char* opt);
+// RadObjCutMag REMOVED (2026-01-14) - Use Cubit/Netgen for mesh operations
+// See CLAUDE.md "Mesh Operations Policy" for details
 
 /** Computes geometrical volume of a 3D object.
 @param v [out] volume (in mm^3)
@@ -445,47 +436,11 @@ EXP int CALL RadObjGeoLim(double* L, int obj);
 */
 EXP int CALL RadObjDegFre(int* num, int obj);
 
-/** Starts an application for viewing of 3D geometry of the object obj. The viewer is based on the QuickDraw 3D graphics library. 
-@param obj [in] reference number of the object to be viewed
-@param opt [in] pointer to options string, which can be "Axes->True" (default) or "Axes->False" for showing or not the axes of the Cartesian laboratory frame; "Faces->True" (default) or "Faces->False" for showing or not visible faces of 3D objects; "EdgeLines->True" (default) or "EdgeLines->False" for highlighting or not the edge lines of 3D objects. opt can contain composition of these option sub-strings separated by ";".
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjDrwQD3D(int obj, char* opt);
+// RadObjDrwQD3D REMOVED (2026-01-14) - QuickDraw 3D is obsolete
+// Use VTK export (rad.FldVTS) for visualization instead
 
-/** Generates data for viewing 3D geometry of an object obj as polygons and lines with VTK (or compatible) viewer, and outputs integer parameters defining the lengths / sizes of these polygons' and lines' data. The data itself has to be "taken" using the function RadObjDrwDataGetVTK
-@param nVP [out] number of polygon vertices
-@param nP [out] number of polygons
-@param nVL [out] number of line vertices
-@param nL [out] number of lines
-@param obj [in] reference number of the object to be viewed
-@param opt [in] pointer to options string, which can be "Axes->True" (default) or "Axes->False" for showing or not the axes of the Cartesian laboratory frame; "Faces->True" (default) or "Faces->False" for showing or not visible faces of 3D objects; "EdgeLines->True" (default) or "EdgeLines->False" for highlighting or not the edge lines of 3D objects. opt can contain composition of these option sub-strings separated by ";".
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjDrwVTK(int* nVP, int* nP, int* nVL, int* nL, int* pKey, int obj, char* opt);
-
-/** Extracts data for viewing 3D geometry of an object obj as polygons and lines with VTK (or compatible) viewer; to be called after the function RadObjDrwVTK
-@param arCrdVP [out] array of coordinates of polygons' vertex points
-@param arLenP [out] array of numbers of vertex points in polygons
-@param arColP [out] array of polygons' RGB colors
-@param arCrdVL [out] array of coordinates of lines' vertex points
-@param arLenL [out] array of numbers of vertex points in lines' (segments)
-@param arColL [out] array of lines' RGB colors
-@param key [in] reference number of data to be extracted for viewing
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjDrwDataGetVTK(double* arCrdVP, int* arLenP, float* arColP, double* arCrdVL, int* arLenL, float* arColL, int key);
-
-/** Applies drawing attributes - RGB color (r,g,b) and line thickness thcn - to object obj.
-@param obj [in] reference number of the object to which drawing attributes should be applied
-@param RGB [in] array of 3 numbers from 0 to 1 specifying intensities of red, green and blue colors
-@param thcn [in] line thickness parameter
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadObjDrwAtr(int obj, double* RGB, double thcn);
+// RadObjDrwAtr REMOVED (2026-01-14) - Drawing attributes no longer used
+// Use VTK export with ParaView for visualization
 
 /** Creates a parallelepiped block with center point {P[0],P[1],P[2]}, dimensions {L[0],L[1],L[2]} and color {RGB[0],RGB[1],RGB[2]}. 
 The block is magnetized according to {M[0],M[1],M[2]} then subdivided according to {K[0],K[1],K[2]} and added into the container grp. grp should be defined in advance by calling RadObjCnt().
@@ -1253,6 +1208,653 @@ EXP int CALL RadFldPhi(double* phi_out, int n_points, double* points, int contai
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 */
 EXP int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle);
+
+/** Export magnetic field on structured 3D grid to VTS (VTK XML Structured Grid) format.
+Computes B and/or H fields at grid points and writes directly to VTS file.
+This is more efficient than calling FldBatch and writing in Python for large grids.
+@param container_handle [in] Radia container handle
+@param filename [in] output filename (with .vts extension)
+@param x_min, x_max [in] X range in current Radia units
+@param nx [in] number of grid points in X
+@param y_min, y_max [in] Y range in current Radia units
+@param ny [in] number of grid points in Y
+@param z_min, z_max [in] Z range in current Radia units
+@param nz [in] number of grid points in Z
+@param include_B [in] 1 to include B field, 0 to skip
+@param include_H [in] 1 to include H field, 0 to skip
+@param unit_scale [in] scale factor for coordinates (e.g., 0.001 for mm to m)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadFldVTS(int container_handle, const char* filename,
+                       double x_min, double x_max, int nx,
+                       double y_min, double y_max, int ny,
+                       double z_min, double z_max, int nz,
+                       int include_B, int include_H, double unit_scale);
+
+//=========================================================================
+// Conductor Analysis API (FastImp-based)
+// For AC/RF impedance extraction and field computation
+//=========================================================================
+
+/** Creates a conductor from a rectangular block.
+@param n [out] reference number of the conductor created
+@param P [in] array of 3 cartesian coordinates of the block center
+@param L [in] array of 3 dimensions of the block [Lx, Ly, Lz]
+@param sigma [in] electrical conductivity [S/m]
+@param num_panels [in] number of panels per face direction (default: 4)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndRecBlock(int* n, double* P, double* L, double sigma, int num_panels);
+
+/** Creates a conductor from hexahedron vertices.
+@param n [out] reference number of the conductor created
+@param FlatVert [in] flat array of 8 vertex coordinates (24 doubles: x1,y1,z1,...,x8,y8,z8)
+@param sigma [in] electrical conductivity [S/m]
+@param num_panels [in] number of panels per face direction (default: 4)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndHexahedron(int* n, double* FlatVert, double sigma, int num_panels);
+
+/** Creates a wire conductor along a path.
+@param n [out] reference number of the conductor created
+@param FlatPath [in] flat array of path point coordinates (3*np doubles)
+@param np [in] number of path points
+@param cross_section [in] cross-section type: 'c' for circular, 'r' for rectangular
+@param width [in] wire width (or diameter for circular)
+@param height [in] wire height (ignored for circular, use 0)
+@param sigma [in] electrical conductivity [S/m]
+@param num_panels_around [in] number of panels around circumference (default: 8)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndWire(int* n, double* FlatPath, int np, char cross_section,
+                        double width, double height, double sigma, int num_panels_around);
+
+/** Creates a circular loop conductor.
+@param n [out] reference number of the conductor created
+@param center [in] array of 3 cartesian coordinates of loop center
+@param radius [in] loop radius
+@param normal [in] array of 3 components of loop normal direction
+@param cross_section [in] cross-section type: 'c' for circular, 'r' for rectangular
+@param wire_width [in] wire width (or diameter for circular)
+@param wire_height [in] wire height (ignored for circular, use 0)
+@param sigma [in] electrical conductivity [S/m]
+@param num_panels_around [in] number of panels around wire circumference (default: 8)
+@param num_panels_loop [in] number of panels along loop (default: 30)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndLoop(int* n, double* center, double radius, double* normal,
+                        char cross_section, double wire_width, double wire_height,
+                        double sigma, int num_panels_around, int num_panels_loop);
+
+/** Creates a spiral coil conductor.
+@param n [out] reference number of the conductor created
+@param center [in] array of 3 cartesian coordinates of spiral center
+@param inner_radius [in] inner radius of spiral
+@param outer_radius [in] outer radius of spiral
+@param pitch [in] axial distance per turn
+@param num_turns [in] number of turns
+@param axis [in] array of 3 components of spiral axis direction
+@param cross_section [in] cross-section type: 'c' for circular, 'r' for rectangular
+@param wire_width [in] wire width (or diameter for circular)
+@param wire_height [in] wire height (ignored for circular, use 0)
+@param sigma [in] electrical conductivity [S/m]
+@param num_panels_around [in] number of panels around wire circumference (default: 8)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSpiral(int* n, double* center, double inner_radius, double outer_radius,
+                          double pitch, int num_turns, double* axis,
+                          char cross_section, double wire_width, double wire_height,
+                          double sigma, int num_panels_around);
+
+/** Creates a conductor container.
+@param n [out] reference number of the container created
+@param Conds [in] array of conductor reference numbers
+@param ncond [in] number of conductors
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndCnt(int* n, int* Conds, int ncond);
+
+/** Adds conductors to an existing container.
+@param cnt [in] reference number of the container
+@param Conds [in] array of conductor reference numbers to add
+@param ncond [in] number of conductors to add
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndCntAdd(int cnt, int* Conds, int ncond);
+
+/** Sets the analysis formulation for a conductor.
+@param cond [in] conductor reference number
+@param formulation [in] formulation type: "dc", "mqs", "emqs", "fullwave"
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSetFormulation(int cond, const char* formulation);
+
+/** Sets the analysis frequency for a conductor.
+@param cond [in] conductor reference number
+@param frequency [in] frequency in Hz (0 for DC)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSetFrequency(int cond, double frequency);
+
+/** Sets relative permeability for a conductor (following Karl Hollaus's ESIM formulation).
+@param cond [in] conductor reference number
+@param mu_r [in] relative permeability (>= 1.0, default 1.0 for non-magnetic)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@note For ferromagnetic materials like steel, mu_r >> 1. Affects skin depth calculation.
+*/
+EXP int CALL RadCndSetMuR(int cond, double mu_r);
+
+/** Gets skin depth at current frequency.
+@param delta [out] skin depth in meters = sqrt(2/(omega*mu_0*mu_r*sigma))
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@note Call after CndSetFrequency and optionally CndSetMuR.
+*/
+EXP int CALL RadCndGetSkinDepth(double* delta, int cond);
+
+/** Gets surface impedance Z = (1+j)*Rs following ESIM (Effective Surface Impedance Model).
+@param Z_real [out] real part of surface impedance [Ohm]
+@param Z_imag [out] imaginary part of surface impedance [Ohm]
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@note Rs = 1/(sigma*delta), where delta is skin depth.
+*/
+EXP int CALL RadCndGetSurfaceImpedance(double* Z_real, double* Z_imag, int cond);
+
+/** Sets voltage excitation for a conductor.
+@param cond [in] conductor reference number
+@param V_real [in] real part of voltage [V]
+@param V_imag [in] imaginary part of voltage [V]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSetVoltage(int cond, double V_real, double V_imag);
+
+/** Sets current excitation for a conductor.
+@param cond [in] conductor reference number
+@param I_real [in] real part of current [A]
+@param I_imag [in] imaginary part of current [A]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSetCurrent(int cond, double I_real, double I_imag);
+
+/** Gets total current through conductor after solve.
+@param I_real [out] real part of current [A]
+@param I_imag [out] imaginary part of current [A]
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndGetTotalCurrent(double* I_real, double* I_imag, int cond);
+
+/** Enables or disables pFFT acceleration.
+@param cond [in] conductor reference number
+@param enable [in] 1 to enable, 0 to disable
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSetPfft(int cond, int enable);
+
+/** Defines port terminals for impedance extraction.
+@param cond [in] conductor reference number
+@param terminal1 [in] array of panel indices for terminal 1 (NULL for auto)
+@param n1 [in] number of panels in terminal 1
+@param terminal2 [in] array of panel indices for terminal 2 (NULL for auto)
+@param n2 [in] number of panels in terminal 2
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndDefinePort(int cond, int* terminal1, int n1, int* terminal2, int n2);
+
+/** Auto-detects port terminals for wire/loop conductors.
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndDefinePortAuto(int cond);
+
+/** Solves the conductor system at the current frequency.
+@param cond [in] conductor (or container) reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndSolve(int cond);
+
+/** Gets the port impedance after solve.
+@param Z_real [out] real part of impedance [Ohm]
+@param Z_imag [out] imaginary part of impedance [Ohm]
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndGetImpedance(double* Z_real, double* Z_imag, int cond);
+
+/** Performs frequency sweep and returns impedances.
+@param Z_real [out] real parts of impedances (nfreq values)
+@param Z_imag [out] imaginary parts of impedances (nfreq values)
+@param cond [in] conductor reference number
+@param freqs [in] array of frequencies [Hz]
+@param nfreq [in] number of frequencies
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndImpedanceSweep(double* Z_real, double* Z_imag, int cond,
+                                   double* freqs, int nfreq);
+
+/* NOTE: CndFld functions have been removed.
+   Use rad.Fld(cond, field_type, point) for conductor field computation.
+   The unified Fld() API automatically detects conductor objects and returns
+   complex fields [Fx_re, Fy_re, Fz_re, Fx_im, Fy_im, Fz_im] for AC analysis.
+*/
+
+/** Gets surface current density K from solved conductor.
+@param K_real [out] real parts of K vectors (npanels * 3)
+@param K_imag [out] imaginary parts of K vectors (npanels * 3)
+@param npanels [out] number of panels
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndGetSurfaceCurrent(double* K_real, double* K_imag, int* npanels, int cond);
+
+/** Gets surface charge density sigma from solved conductor.
+@param sigma_real [out] real parts of sigma values (npanels)
+@param sigma_imag [out] imaginary parts of sigma values (npanels)
+@param npanels [out] number of panels
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndGetSurfaceCharge(double* sigma_real, double* sigma_imag, int* npanels, int cond);
+
+/** Gets number of panels in conductor.
+@param npanels [out] number of panels
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndNumPanels(int* npanels, int cond);
+
+/** Gets panel centers and areas.
+@param centers [out] panel center coordinates (npanels * 3)
+@param areas [out] panel areas (npanels)
+@param cond [in] conductor reference number
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndGetPanelInfo(double* centers, double* areas, int cond);
+
+//=========================================================================
+// Coupled Conductor-Magnetic Solver API
+//=========================================================================
+
+/** Solves the coupled conductor-magnetic system.
+@param cond_cnt [in] conductor container reference number
+@param mag_cnt [in] magnetic container reference number
+@param precision [in] convergence precision
+@param max_iter [in] maximum iterations
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCoupledSolve(int cond_cnt, int mag_cnt, double precision, int max_iter);
+
+//=========================================================================
+// SIBC Material API (Surface Impedance Boundary Condition)
+//=========================================================================
+
+/** Creates a conductive magnetic material with SIBC.
+@param mat [out] material reference number
+@param sigma [in] electrical conductivity [S/m]
+@param mu_r [in] relative permeability
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadMatSIBC(int* mat, double sigma, double mu_r);
+
+/** Sets SIBC type (local or nonlocal).
+@param mat [in] material reference number
+@param sibc_type [in] "local" or "nonlocal"
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadSIBCSetType(int mat, const char* sibc_type);
+
+/** Sets cross-section for nonlocal SIBC.
+@param mat [in] material reference number
+@param shape [in] "rectangle" or "circle"
+@param params [in] parameters: [width, height] for rectangle, [radius] for circle
+@param nparams [in] number of parameters (2 for rectangle, 1 for circle)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadSIBCSetCrossSection(int mat, const char* shape, double* params, int nparams);
+
+//=========================================================================
+// FMM (Fast Multipole Method) Acceleration API
+//=========================================================================
+
+/** Enables or disables FMM acceleration for conductor field computation.
+@param enabled [in] 1 to enable, 0 to disable
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFmmSetEnabled(int enabled);
+
+/** Gets current FMM enabled status.
+@param enabled [out] 1 if enabled, 0 if disabled
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFmmGetEnabled(int* enabled);
+
+/** Sets FMM parameters.
+@param p [in] expansion order (accuracy, default 6)
+@param ncrit [in] particles per leaf node (default 64)
+@param threshold [in] minimum problem size to use FMM (default 500)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFmmSetParameters(int p, int ncrit, int threshold);
+
+/** Gets current FMM parameters.
+@param p [out] expansion order
+@param ncrit [out] particles per leaf node
+@param threshold [out] minimum problem size for FMM
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCndFmmGetParameters(int* p, int* ncrit, int* threshold);
+
+
+// ========================================================================
+// RWG-EFIE Coupled Solver for Induction Heating (OpenMP Parallelized)
+// ========================================================================
+
+/** Creates an RWG mesh from triangles.
+@param n [out] mesh handle
+@param vertices [in] flat array of vertex coordinates [x0,y0,z0,x1,y1,z1,...]
+@param nv [in] number of vertices
+@param triangles [in] flat array of triangle vertex indices [t0_v0,t0_v1,t0_v2,t1_v0,...]
+@param nt [in] number of triangles
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshCreate(int* n, double* vertices, int nv, int* triangles, int nt);
+
+/** Creates an RWG mesh for a rectangular surface.
+@param n [out] mesh handle
+@param center [in] center point [x,y,z]
+@param Lx [in] dimension in local x direction
+@param Ly [in] dimension in local y direction
+@param normal [in] normal vector [nx,ny,nz]
+@param nx [in] number of divisions in x
+@param ny [in] number of divisions in y
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshRect(int* n, double* center, double Lx, double Ly, double* normal, int nx, int ny);
+
+/** Creates an RWG mesh for a circular disk.
+@param n [out] mesh handle
+@param center [in] center point [x,y,z]
+@param radius [in] disk radius
+@param normal [in] normal vector [nx,ny,nz]
+@param nr [in] number of radial divisions
+@param ntheta [in] number of angular divisions
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshDisk(int* n, double* center, double radius, double* normal, int nr, int ntheta);
+
+/** Creates an RWG mesh for a cylindrical shell surface.
+@param n [out] mesh handle
+@param center [in] center point [x,y,z]
+@param radius [in] cylinder radius
+@param height [in] cylinder height
+@param axis [in] axis vector [ax,ay,az]
+@param nz [in] number of divisions along axis
+@param ntheta [in] number of angular divisions
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshCylinder(int* n, double* center, double radius, double height, double* axis, int nz, int ntheta);
+
+/** Creates an RWG mesh for a spiral coil surface.
+@param n [out] mesh handle
+@param center [in] center point [x,y,z]
+@param inner_radius [in] inner radius
+@param outer_radius [in] outer radius
+@param pitch [in] height per turn
+@param num_turns [in] number of turns
+@param axis [in] axis vector [ax,ay,az]
+@param wire_radius [in] wire cross-section radius (for surface mesh)
+@param num_around [in] number of panels around wire
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshSpiral(int* n, double* center, double inner_radius, double outer_radius,
+                              double pitch, int num_turns, double* axis, double wire_radius, int num_around);
+
+/** Creates an RWG mesh for a circular loop coil surface.
+@param n [out] mesh handle
+@param center [in] center point [x,y,z]
+@param radius [in] loop radius
+@param normal [in] normal vector [nx,ny,nz]
+@param wire_radius [in] wire cross-section radius
+@param num_around [in] number of panels around wire
+@param num_along [in] number of panels along loop circumference
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgMeshLoop(int* n, double* center, double radius, double* normal,
+                            double wire_radius, int num_around, int num_along);
+
+/** Creates a coupled EFIE solver.
+@param n [out] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSolverCreate(int* n);
+
+/** Sets coil mesh for coupled solver.
+@param solver [in] solver handle
+@param coil_mesh [in] coil mesh handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetCoilMesh(int solver, int coil_mesh);
+
+/** Sets workpiece mesh for coupled solver.
+@param solver [in] solver handle
+@param workpiece_mesh [in] workpiece mesh handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetWorkpieceMesh(int solver, int workpiece_mesh);
+
+/** Sets frequency for coupled solver.
+@param solver [in] solver handle
+@param freq [in] frequency [Hz]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetFrequency(int solver, double freq);
+
+/** Sets coil conductivity.
+@param solver [in] solver handle
+@param sigma [in] conductivity [S/m]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetCoilConductivity(int solver, double sigma);
+
+/** Sets workpiece conductivity.
+@param solver [in] solver handle
+@param sigma [in] conductivity [S/m]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetWorkpieceConductivity(int solver, double sigma);
+
+/** Sets workpiece relative permeability.
+@param solver [in] solver handle
+@param mu_r [in] relative permeability
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetWorkpiecePermeability(int solver, double mu_r);
+
+/** Sets voltage excitation for coupled solver.
+@param solver [in] solver handle
+@param V_real [in] real part of voltage [V]
+@param V_imag [in] imaginary part of voltage [V]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSetVoltage(int solver, double V_real, double V_imag);
+
+/** Solves the coupled EFIE system.
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSolve(int solver);
+
+/** Gets impedance from coupled solver.
+@param Z_real [out] real part of impedance [Ohm]
+@param Z_imag [out] imaginary part of impedance [Ohm]
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgGetImpedance(double* Z_real, double* Z_imag, int solver);
+
+/** Gets workpiece power from coupled solver.
+@param power [out] power dissipated in workpiece [W]
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgGetWorkpiecePower(double* power, int solver);
+
+/** Computes B field from coupled solver.
+@param Bx_real [out] real part of Bx [T]
+@param Bx_imag [out] imaginary part of Bx [T]
+@param By_real [out] real part of By [T]
+@param By_imag [out] imaginary part of By [T]
+@param Bz_real [out] real part of Bz [T]
+@param Bz_imag [out] imaginary part of Bz [T]
+@param solver [in] solver handle
+@param x [in] x coordinate [m]
+@param y [in] y coordinate [m]
+@param z [in] z coordinate [m]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgComputeB(double* Bx_real, double* Bx_imag,
+                            double* By_real, double* By_imag,
+                            double* Bz_real, double* Bz_imag,
+                            int solver, double x, double y, double z);
+
+/** High-level induction heating solver: creates model and solves.
+@param result [out] result array [R, L, P_workpiece, coil_DOF, workpiece_DOF]
+@param coil_type [in] coil type string ("spiral" or "loop")
+@param coil_params [in] coil parameters (type-dependent array)
+@param workpiece_type [in] workpiece type string ("disk", "rect", "cylinder")
+@param workpiece_params [in] workpiece parameters (type-dependent array)
+@param frequency [in] frequency [Hz]
+@param coil_sigma [in] coil conductivity [S/m]
+@param workpiece_sigma [in] workpiece conductivity [S/m]
+@param workpiece_mu_r [in] workpiece relative permeability
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadRwgSolveInductionHeating(double* result,
+                                         const char* coil_type, double* coil_params,
+                                         const char* workpiece_type, double* workpiece_params,
+                                         double frequency, double coil_sigma,
+                                         double workpiece_sigma, double workpiece_mu_r);
+
+// ========================================================================
+// CplMag Solver API (Coupled Conductor + Magnetic Material Solver)
+// Uses Loop-Star PEEC for conductors + MMM for magnetic materials
+// ========================================================================
+
+/** Creates a coupled solver for conductor + magnetic material problems.
+@param pOut [out] output array containing solver handle
+@param pNout [out] number of outputs (1)
+@param conductor [in] conductor handle (from CndLoop, CndRecBlock, etc.)
+@param magnet [in] magnet handle (from ObjRecMag, ObjHexahedron, etc.)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagCreate(double* pOut, int* pNout, int conductor, int magnet);
+
+/** Sets frequency for CplMag solver.
+@param solver [in] solver handle
+@param frequency [in] analysis frequency [Hz]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetFrequency(int solver, double frequency);
+
+/** Sets voltage excitation for CplMag solver.
+@param solver [in] solver handle
+@param V_real [in] real part of voltage [V]
+@param V_imag [in] imaginary part of voltage [V]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetVoltage(int solver, double V_real, double V_imag);
+
+/** Sets current excitation for CplMag solver.
+@param solver [in] solver handle
+@param I_real [in] real part of current [A]
+@param I_imag [in] imaginary part of current [A]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetCurrent(int solver, double I_real, double I_imag);
+
+/** Sets external magnetic field for CplMag solver.
+@param solver [in] solver handle
+@param Hx [in] x component of H field [A/m]
+@param Hy [in] y component of H field [A/m]
+@param Hz [in] z component of H field [A/m]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetExtField(int solver, double Hx, double Hy, double Hz);
+
+/** Sets complex permeability for CplMag solver.
+Complex permeability: mu = mu' - j*mu" (engineering convention)
+@param solver [in] solver handle
+@param mu_r_real [in] real part of relative permeability (mu')
+@param mu_r_imag [in] imaginary part of relative permeability (mu", positive for loss)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetMu(int solver, double mu_r_real, double mu_r_imag);
+
+/** Enables/disables matrix symmetrization for CLN model order reduction.
+@param solver [in] solver handle
+@param use_symmetric [in] 1 for symmetric (enables CLN), 0 for non-symmetric (default)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@note Symmetrization uses variable scaling M' = sqrt(mu0*V)*M to make Z_LM' = Z_ML'^T.
+      The physical solution (I, M) is IDENTICAL to non-symmetric formulation.
+*/
+EXP int CALL RadCplMagSetSymmetric(int solver, int use_symmetric);
+
+/** Sets conductor for CplMag solver.
+@param solver [in] solver handle
+@param conductor [in] conductor handle (from CndLoop, CndRecBlock, etc.)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSetConductor(int solver, int conductor);
+
+/** Solves CplMag system.
+@param pOut [out] output array [Z_real, Z_imag, P_conductor, P_magnet, n_iterations]
+@param pNout [out] number of outputs (5)
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSolve(double* pOut, int* pNout, int solver);
+
+/** Gets impedance from CplMag solver.
+@param pOut [out] output array [Z_real, Z_imag]
+@param pNout [out] number of outputs (2)
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagImpedance(double* pOut, int* pNout, int solver);
+
+/** Gets power losses from CplMag solver.
+@param pOut [out] output array [P_conductor, P_magnet]
+@param pNout [out] number of outputs (2)
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagPower(double* pOut, int* pNout, int solver);
+
+/** Computes B field from CplMag system.
+@param pOut [out] output array [Bx_re, By_re, Bz_re, Bx_im, By_im, Bz_im]
+@param pNout [out] number of outputs (6)
+@param solver [in] solver handle
+@param pCoord [in] evaluation point [x, y, z]
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagFld(double* pOut, int* pNout, int solver, double* pCoord);
+
+/** Performs frequency sweep for CplMag solver.
+@param pOut [out] output array [Z_re1, Z_im1, Z_re2, Z_im2, ...]
+@param pNout [out] number of outputs (2 * nFreq)
+@param solver [in] solver handle
+@param pFreq [in] array of frequencies [Hz]
+@param nFreq [in] number of frequencies
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagSweep(double* pOut, int* pNout, int solver, double* pFreq, int nFreq);
+
+/** Deletes CplMag solver.
+@param solver [in] solver handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadCplMagDelete(int solver);
 
 #ifdef __cplusplus
 }

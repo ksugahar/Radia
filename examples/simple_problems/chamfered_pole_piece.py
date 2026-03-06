@@ -13,7 +13,6 @@ This example demonstrates:
 import sys
 import os
 import math
-import numpy as np
 
 # Add parent directory to path to import radia
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'dist'))
@@ -79,16 +78,7 @@ print(f"  Level 3 (z={gap/2 + lz1} mm): size=[{thick/2}, {width}] mm (full)")
 g1 = rad.ObjMltExtRtg([k1, k2, k3], magnetization)
 
 print(f"\nMagnet object created: ID = {g1}")
-
-# Subdivide the magnet for accurate field calculation
-# [nx, ny, nz] - number of subdivisions in each direction
-n1 = [2, 3, 2]
-rad.ObjDivMag(g1, n1)
-
-print(f"Subdivisions applied: {n1[0]} × {n1[1]} × {n1[2]} = {n1[0]*n1[1]*n1[2]} segments")
-
-# Set drawing attributes (blue color)
-rad.ObjDrwAtr(g1, [0, 0, 1], 0.001)
+print("Note: ObjMltExtRtg creates a single element (no subdivision)")
 
 # Calculate magnetic field at various points
 print("\n" + "=" * 70)
@@ -122,20 +112,21 @@ print("=" * 70)
 print("Calculation complete.")
 print("=" * 70)
 
-# VTK Export - Export geometry with same filename as script
+# VTS Export - Export field distribution with same filename as script
 try:
-	from radia_vtk_export import exportGeometryToVTK
-
 	# Get script basename without extension
 	script_name = os.path.splitext(os.path.basename(__file__))[0]
-	vtk_filename = f"{script_name}.vtk"
-	vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+	vts_filename = f"{script_name}.vts"
+	vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
-	# Export geometry
-	exportGeometryToVTK(g1, vtk_path)
-	print(f"\n[VTK] Exported: {vtk_filename}")
-	print(f"      View with: paraview {vtk_filename}")
-except ImportError:
-	print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+	# Geometry: pole piece with gap=10, thick=50, width=40, lz1=20
+	# Extend range to cover geometry with margin
+	x_range = [-40, 40]
+	y_range = [-40, 40]
+	z_range = [0, 50]
+
+	rad.FldVTS(g1, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+	print(f"\n[VTS] Exported: {vts_filename}")
+	print(f"      View with: paraview {vts_filename}")
 except Exception as e:
-	print(f"\n[VTK] Warning: Export failed: {e}")
+	print(f"\n[VTS] Warning: Export failed: {e}")

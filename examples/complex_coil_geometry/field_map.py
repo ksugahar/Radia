@@ -235,22 +235,19 @@ def main():
 	# Export to VTK
 	export_field_to_vtk(field_data, 'field_map')
 
-	# VTK Export - Export geometry with same filename as script
+	# VTS Export - Export field distribution with same filename as script
 	try:
-		from radia_vtk_export import exportGeometryToVTK
 		import os
 
 		script_name = os.path.splitext(os.path.basename(__file__))[0]
-		vtk_filename = f"{script_name}_geometry.vtk"
-		vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+		vts_filename = f"{script_name}_field.vts"
+		vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
 
-		exportGeometryToVTK(coil, vtk_path)
-		print(f"\n[VTK] Exported geometry: {vtk_filename}")
-		print(f"      View with: paraview {vtk_filename}")
-	except ImportError:
-		print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+		rad.FldVTS(coil, vts_path, [x_min, x_max], [y_min, y_max], [z_min, z_max], nx, ny, nz, 1, 0, 1.0)
+		print(f"\n[VTS] Exported field: {vts_filename}")
+		print(f"      View with: paraview {vts_filename}")
 	except Exception as e:
-		print(f"\n[VTK] Warning: Export failed: {e}")
+		print(f"\n[VTS] Warning: Export failed: {e}")
 
 	# Cleanup
 	rad.UtiDelAll()

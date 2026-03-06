@@ -19,13 +19,6 @@ sys.path.insert(0, str(project_root / 'dist'))
 
 import radia as rad
 
-try:
-	sys.path.insert(0, str(project_root / 'src' / 'python'))
-	from radia_vtk_export import exportGeometryToVTK
-	HAS_VTK_EXPORT = True
-except ImportError:
-	HAS_VTK_EXPORT = False
-	print("Warning: VTK export not available")
 
 
 def create_meshed_disk(R, H, n_radial, n_angular, n_z=1, x0=0, y0=0, z0=0):
@@ -183,7 +176,6 @@ def create_smco_magnet_array(
 	base_plate = create_meshed_disk(
 		array_radius, base_plate_height, n_radial, n_angular, n_z, 0, 0, 0
 	)
-	rad.ObjDrwAtr(base_plate, [0.5, 0.5, 0.5], 0.1)  # Gray color
 
 	# Apply iron material properties for magnetic yoke behavior
 	mat = rad.MatLin(1000)  # μr = 1000 (isotropic)
@@ -217,9 +209,6 @@ def create_smco_magnet_array(
 
 	# Combine all objects into container
 	geometry = rad.ObjCnt(magnets)
-
-	# Set visualization color for magnets (blue)
-	rad.ObjDrwAtr(geometry, [0.3, 0.3, 1.0], 0.1)
 
 	array_info = {
 		'num_magnets': magnet_count,
@@ -294,14 +283,22 @@ def main():
 		pos_str = f"({pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f})"
 		print(f"{pos_str:<25} {Bx:<15.6f} {By:<15.6f} {Bz:<15.6f} {B_mag:<15.6f}")
 
-	# Export to VTK
-	if HAS_VTK_EXPORT:
-		print("\n" + "=" * 70)
-		print("Exporting to VTK...")
-		print("=" * 70)
-		output_path = os.path.join(os.path.dirname(__file__), 'smco_array')
-		exportGeometryToVTK(geometry, output_path)
-		print(f"  [OK] Created: smco_array.vtk")
+	# Export to VTS
+	print("\n" + "=" * 70)
+	print("Exporting field distribution to VTS...")
+	print("=" * 70)
+	try:
+		output_path = os.path.join(os.path.dirname(__file__), 'smco_array.vts')
+		# Get bounding box
+		bbox = rad.ObjGeoLim(geometry)
+		margin = 20.0
+		x_range = [bbox[0] - margin, bbox[1] + margin]
+		y_range = [bbox[2] - margin, bbox[3] + margin]
+		z_range = [bbox[4] - margin, bbox[5] + margin]
+		rad.FldVTS(geometry, output_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
+		print(f"  [OK] Created: smco_array.vts")
+	except Exception as e:
+		print(f"  [WARNING] Export failed: {e}")
 
 	# Export field distribution to VTK
 	print("\n" + "=" * 70)
@@ -385,8 +382,7 @@ def main():
 	print(f"  Magnet radius: {info['mag_radius']:.2f} mm")
 	print(f"  Magnet height: {info['mag_height']:.2f} mm")
 	print(f"\nOutput files:")
-	if HAS_VTK_EXPORT:
-		print(f"  - smco_array.vtk (geometry)")
+	print(f"  - smco_array.vts (field distribution in VTS format)")
 	print(f"  - smco_field_distribution.vtk (magnetic field vectors)")
 	print("=" * 70 + "\n")
 
