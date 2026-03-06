@@ -27,7 +27,7 @@ python test_hex_mesh_import.py
 ```
 
 **Features:**
-- Nastran (.bdf) hexahedral mesh import
+- Cubit -> Netgen direct hex mesh import
 - Netgen tetrahedral mesh import
 - Built-in primitive comparison
 
@@ -106,9 +106,18 @@ gf.Set(B_cf)  # Project field to GridFunction
 Import external meshes to Radia:
 
 ```python
-# Hexahedral mesh (Nastran format)
-from nastran_mesh_import import create_radia_from_nastran
-cube = create_radia_from_nastran('cube.bdf', units='m')
+# Hexahedral mesh (via Cubit -> Netgen direct export)
+import cubit
+import cubit_mesh_export
+from ngsolve import Mesh
+from netgen_mesh_import import netgen_mesh_to_radia
+
+cubit.init(['cubit', '-nojournal', '-batch'])
+cubit.cmd("import geometry 'model.step'")
+cubit.cmd("mesh volume all")
+ngmesh = cubit_mesh_export.export_netgen(cubit)
+mesh = Mesh(ngmesh)
+cube = netgen_mesh_to_radia(mesh, material={'magnetization': [0,0,0]}, units='m')
 
 # Tetrahedral mesh (NGSolve)
 from netgen_mesh_import import netgen_mesh_to_radia, extract_elements, compute_element_centroid
@@ -120,6 +129,8 @@ for el in elements:
     vertices = el['vertices']  # Correctly extracted coordinates
     centroid = compute_element_centroid(vertices)
 ```
+
+**NOTE**: Nastran BDF format is REMOVED. Use Cubit -> Netgen direct export for hex meshes.
 
 **CRITICAL POLICY - NGSolve Mesh Access**:
 
@@ -289,12 +300,13 @@ When adding new examples:
 
 ## Related
 
-- `src/python/radia_ngsolve.cpp` - C++ pybind11 implementation
-- `src/python/netgen_mesh_import.py` - Tetrahedral mesh importer
-- `src/python/nastran_mesh_import.py` - Hexahedral mesh importer
+- `src/radia/radia_ngsolve.cpp` - C++ pybind11 implementation
+- `src/radia/netgen_mesh_import.py` - Mesh importer (tet/hex)
+- `S:/CoreformCubit/01_GitHub/cubit_mesh_export.py` - Cubit -> Netgen export
 - `tests/` - Unit tests for integration features
 
 ---
 
 **Author**: Radia Development Team
-**Last Updated**: 2025-11-22
+**Last Updated**: 2026-01-16
+**Mesh Workflow**: Cubit -> Netgen (direct) -> Radia

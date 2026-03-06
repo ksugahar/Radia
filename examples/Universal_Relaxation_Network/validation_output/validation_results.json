@@ -1,0 +1,63 @@
+{
+  "timestamp": "2026-01-19 10:02:33",
+  "datasets": {
+    "battery_eis": {
+      "n_points": 47,
+      "freq_range": [
+        0.1,
+        4999.999999999999
+      ],
+      "vf": {
+        "nrmse": 1.9437340171133974,
+        "n_poles": 10,
+        "time_s": 0.002079010009765625
+      },
+      "urn": {
+        "nrmse": 0.26925081570274345,
+        "n_active_params": 16,
+        "mechanisms": [
+          "debye",
+          "cole_cole",
+          "cole_davidson",
+          "cpe",
+          "warburg",
+          "skin_effect",
+          "debye_parallel",
+          "cole_cole_parallel",
+          "cpe_parallel",
+          "warburg_parallel"
+        ],
+        "time_s": 125.97001647949219
+      }
+    },
+    "ferrite_impedance": {
+      "n_points": 14,
+      "freq_range": [
+        10000.0,
+        10000000.0
+      ],
+      "vf": {
+        "nrmse": 0.4366954005102087,
+        "n_poles": 12,
+        "time_s": 0.0010552406311035156
+      },
+      "urn": {
+        "nrmse": 0.010225431191229524,
+        "n_active_params": 17,
+        "mechanisms": [
+          "debye",
+          "cole_cole",
+          "cole_davidson",
+          "cpe",
+          "warburg",
+          "skin_effect",
+          "debye_parallel",
+          "cole_cole_parallel",
+          "cpe_parallel",
+          "warburg_parallel"
+        ],
+        "time_s": 184.2258665561676
+      }
+    }
+  }
+}
