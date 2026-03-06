@@ -300,7 +300,6 @@ The IMA implementation produces **identical results** to the full model (0.00% d
 import radia as rad
 
 # Build model with full geometry
-rad.FldUnits('m')
 hex_objects = [rad.ObjHexahedron(verts, [0,0,0]) for verts in all_vertices]
 container = rad.ObjCnt(hex_objects + [coil])
 

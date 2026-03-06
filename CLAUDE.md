@@ -17,7 +17,7 @@ This document contains development guidelines and policies for the Radia project
 
 Skin depth is computed from frequency for SIBC, but field propagation uses quasi-static approximation.
 
-**Affected Components**: `rad_green_fullwave.h/cpp`, `rad_conductor.cpp` (`GreenFunction()`), `rad_hacapk.cpp`, `rad_exafmm.h/cpp`.
+**Affected Components**: `rad_green_fullwave.h/cpp`, `rad_conductor.cpp` (`GreenFunction()`), `rad_hacapk.cpp`.
 
 ### Matrix Storage: Row-Major (C-style)
 
@@ -32,7 +32,7 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 
 **POLICY**: No binary files (`.pyd`, `.dll`, `.so`, `.lib`, `.exe`) in the git repository.
 - Hosted on GitHub Releases (tag: `binaries`)
-- Pre-push hook auto-uploads `.pyd` and `fmm3d.lib` on `git push`
+- Pre-push hook auto-uploads `.pyd` on `git push`
 - After cloning, run `./download_binaries.sh` to fetch binaries
 - `.png`, `.pdf` allowed in repository; `.msh`, `.vtu`, `.vtk`, `.vol` are gitignored
 
@@ -46,22 +46,22 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 
 ### Unit System Policy
 
-**POLICY**: Always use meters. All examples MUST call `rad.FldUnits('m')`. NGSolve integration ALWAYS requires meters.
+**POLICY**: Radia always uses **meters**. There is no unit conversion in C++. All coordinates are in meters, all current densities in A/m^2.
 
-**No hard-coded unit conversions**: All unit conversions must go through `rad.FldUnits()`, never through hard-coded factors like `*1000` or `/1000`.
+**`FldUnits` is removed**: Do NOT call `rad.FldUnits()` in any code. Radia always uses meters with no configuration needed.
 
 ```python
 # CORRECT
-rad.FldUnits('m')
 magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])  # meters, A/m
 
 # WRONG - hard-coded conversion
 x_mm = x_m * 1000.0  # DO NOT DO THIS
 ```
 
-**Radia Internal Units**:
-- All coordinates in meters after `FldUnits` conversion
+**Radia Units** (always meters, no conversion):
+- All coordinates in meters
 - B in Tesla, H in A/m, A in T*m
+- Current density J in A/m^2
 - Physical constants in `rad_constants.h`: `MU_0_OVER_FOUR_PI = 1e-7`, `INV_FOUR_PI = 1/(4*pi)`
 
 ### Magnetization Units: A/m (NOT Tesla)
@@ -85,6 +85,22 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 ### Field Comparison: Vector Difference
 
 **POLICY**: Compare magnetic fields using **vector difference** `norm(B1 - B2)`, not scalar magnitude difference `abs(|B1| - |B2|)`. Magnetic field is a vector quantity.
+
+### FMM (Fast Multipole Method): Removed (2026-03-06)
+
+**ExaFMM-t was removed from the repository**. Do NOT re-implement FMM acceleration.
+
+**Why FMM failed for Radia**:
+
+1. **Dipole approximation accuracy is poor for MSC elements**: MSC (surface charge) elements have distributed charge on 4-8 faces. A single dipole m=M*V approximates this poorly at intermediate distances (r ~ 2-5 element sizes). The O((a/r)^2) error is unacceptable for engineering accuracy.
+
+2. **FMM Solve (Method 3) was useless**: Compact geometries (C-type magnets, iron yokes) have 87% near-field pairs. Near-field correction memory equals the full dense matrix, eliminating FMM's O(N log N) advantage. HACApK (H-matrix, Method 2) is 10-100x faster because ACA+ compression works on the same near-field blocks.
+
+3. **FMM field evaluation had no benefit over direct**: For typical Radia models (N < 10,000 elements), direct B_genComp with TaskManager parallelization is fast enough. FMM overhead (tree build, M2L translation) exceeds direct computation time for these sizes.
+
+4. **HACApK covers all large-scale needs**: H-matrix acceleration (ACA+) provides O(N log N) memory and O(N log^2 N) MatVec for the interaction matrix, which is the actual bottleneck.
+
+**Lesson**: FMM is effective for point charges/dipoles in unbounded space (N-body). It is NOT effective for BEM/MSC where source distributions are extended (face integrals) and geometries are compact.
 
 ---
 
@@ -166,9 +182,9 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
     └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
-**Users**: `rad.Fld()`, `rad.FldBatch()`, `rad.FldVTS()`, `radia_ngsolve` RadiaField, `rad_particle_trajectory`, `CplMagFld()`.
+**Users**: `rad.Fld()`, `rad.FldBatch()`, `rad.FldVTS()`, `rad.RadiaField()`, `rad_particle_trajectory`, `CplMagFld()`.
 
-**Key Features**: Inside/outside classification (solid angle method), TaskManager parallelized batch, complex field support (PEEC+MMM AC), optional FMM acceleration.
+**Key Features**: Inside/outside classification (solid angle method), TaskManager parallelized batch, complex field support (PEEC+MMM AC).
 
 ### Field Calculation: Surface Current vs Surface Charge
 
@@ -286,6 +302,36 @@ powershell.exe -ExecutionPolicy Bypass -File "BuildMSVC.ps1" -Rebuild  # Clean r
 
 **POLICY**: Radia uses **NGSolve TaskManager** for parallelization, NOT OpenMP. All parallel loops use `TaskManager::CreateTask()`. The unified parallelization header is `rad_parallel.h`. MKL internally still uses Intel OpenMP (`libiomp5md.dll`) for BLAS/LAPACK, but Radia does not link or use OpenMP directly.
 
+### Parallelization: NGSolve TaskManager
+
+**POLICY**: Use **NGSolve TaskManager** for thread-level parallelization, NOT raw OpenMP parallel regions.
+
+NGSolve's TaskManager provides work-stealing task-based parallelism that integrates with MKL and avoids nested OpenMP issues. All new parallel code in Radia should use TaskManager.
+
+```cpp
+// CORRECT: NGSolve TaskManager
+#include <ngstd.hpp>
+TaskManager::CreateJob([&](const TaskInfo& ti) {
+    // work-stealing parallel loop
+    for (size_t i = ti.task_nr; i < n; i += ti.ntasks) {
+        // compute...
+    }
+});
+
+// AVOID: Raw OpenMP parallel for (legacy code only)
+#pragma omp parallel for
+for (int i = 0; i < n; i++) { ... }
+```
+
+**When to use TaskManager**:
+- Field computation loops (ComputeFieldBatch)
+- Interaction matrix assembly
+- Any embarrassingly parallel loop
+
+**When OpenMP is acceptable**:
+- MKL internal threading (controlled by `mkl_set_num_threads`)
+- Legacy code not yet migrated
+
 ### PyPI Release Workflow
 
 1. Claude Code bumps version in `pyproject.toml` and `src/radia/__init__.py`, updates `CHANGELOG.md`
@@ -320,8 +366,7 @@ powershell.exe -ExecutionPolicy Bypass -File "BuildMSVC.ps1" -Rebuild  # Clean r
 ```
 src/radia/
   __init__.py           # DLL path setup + re-export from C++ module
-  _radia_pybind.pyd     # Main C++ extension
-  radia_ngsolve.pyd     # NGSolve integration (optional)
+  _radia_pybind.pyd     # Main C++ extension (includes RadiaField CoefficientFunction)
   cln_core.pyd          # CLN transient solver
   mmm_core.pyd          # MMM solver
   peec_matrices.pyd     # PEEC matrix assembly
@@ -337,13 +382,12 @@ src/radia/
 
 ### NGSolve Version Requirement
 
-**CRITICAL**: Use NGSolve **6.2.2405** only. Version 6.2.2406+ has a regression in Periodic Boundary Conditions (`Identify()` lost during `Glue()`).
+**CRITICAL**: Use NGSolve **6.2.2601** or later. Version 6.2.2406~6.2.2501 had a regression in Periodic Boundary Conditions (`Identify()` lost during `Glue()`), fixed in 6.2.2601+.
 
 Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
 
 ```bash
-pip install radia[ngsolve]  # Installs with correct version constraint
-# OR: pip install ngsolve==6.2.2405
+pip install radia  # NGSolve is a required dependency (>=6.2.2601)
 ```
 
 ### NGSolve Recommended Configuration
@@ -351,12 +395,58 @@ pip install radia[ngsolve]  # Installs with correct version constraint
 ```python
 fes = HDiv(mesh, order=2)  # Best accuracy
 B_gf = GridFunction(fes)
-B_gf.Set(radia_ngsolve.RadiaField(radia_obj, 'b'))
+B_gf.Set(rad.RadiaField(radia_obj, 'b'))  # C++ CoefficientFunction in _radia_pybind.pyd
 ```
 
 - Evaluate GridFunction at distances > 1 mesh cell from magnet surface
 - Use CoefficientFunction directly for maximum accuracy near boundaries
 - Avoid GridFunction evaluation within 1 mesh cell of magnet surface
+
+### NGSolve Magnetization → Radia Open Boundary Field Evaluation
+
+NGSolve FEM solves M(x) inside bounded domains but struggles with open boundary (PML needed). Radia provides natural open boundary evaluation using **exact analytical formulas** (NOT dipole approximation).
+
+```
+NGSolve FEM Solve → M per element → netgen_mesh_to_radia() → Radia objects → rad.Fld()
+```
+
+**POLICY**: Do NOT use dipole approximation (m=M*V) for NGSolve → Radia pipeline. Register elements as proper Radia ObjHexahedron/ObjTetrahedron with solved magnetization. Radia's surface charge/surface current analytical formulas are exact for constant M per element, with no approximation error at any distance.
+
+**Use cases**:
+- External field from FEM-solved nonlinear iron core (no PML needed)
+- Stray field evaluation at large distances (exact, not approximate)
+- Particle trajectory through FEM-solved magnet assembly
+- NGSolve CoefficientFunction for coupling back into FEM
+
+**Workflow**:
+```python
+import radia as rad
+from ngsolve import *
+from radia.netgen_mesh_import import netgen_mesh_to_radia
+
+rad.UtiDelAll()
+
+# 1. NGSolve solves nonlinear problem → M per element
+# (user's FEM solve code here)
+
+# 2. Convert mesh to Radia objects with per-element magnetization
+def material_from_ngsolve(el_idx):
+    M = get_element_magnetization(gf_M, mesh, el_idx)  # user function
+    return {'magnetization': M.tolist()}
+
+container = netgen_mesh_to_radia(mesh, material=material_from_ngsolve, units='m')
+# No Solve() needed - M is already known from NGSolve
+
+# 3. Evaluate field at arbitrary external points (exact analytical formulas)
+B = rad.Fld(container, 'b', [0, 0, 0.1])          # single point
+B_batch = rad.FldBatch(container, obs_points, 0)   # batch
+rad.FldVTS(container, 'field.vts', ...)             # VTK export
+```
+
+**Why Radia objects, not dipoles**:
+- Surface charge model: exact for constant M, zero approximation error
+- Near-field: no distance limitation (dipoles fail at r < 2*element_size)
+- `netgen_mesh_to_radia()` already supports per-element material via callable
 
 ### NGSolve Mesh Access Policy
 

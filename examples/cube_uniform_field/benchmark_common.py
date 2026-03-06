@@ -22,7 +22,6 @@ sys.path.insert(0, _src_path)
 import numpy as np
 import radia as rad
 
-rad.FldUnits('m')
 
 try:
     import psutil

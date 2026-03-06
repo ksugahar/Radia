@@ -35,7 +35,7 @@ via EFIE + SIBC for both magnetic cores and conducting shields.
 ## Prerequisites
 
 ```bash
-pip install ngsolve==6.2.2405
+pip install ngsolve>=6.2.2601
 pip install ngsolve-ngsbem
 pip install matplotlib numpy scipy
 ```

@@ -58,7 +58,6 @@ def main():
     print("ParaView Visualization with Accurate Geometry")
     print("="*60)
 
-    rad.FldUnits('m')
 
     # Create magnet
     print("\n[1] Creating magnet...")

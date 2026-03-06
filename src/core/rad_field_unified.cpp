@@ -4,8 +4,7 @@
  *
  * Implements the unified field computation with:
  * 1. Point classification (inside/outside/near)
- * 2. FMM acceleration via ExaFMM
- * 3. Direct computation via B_genComp
+ * 2. Direct computation via B_genComp
  *
  * @version 1.6.0
  * @date 2026-01-14
@@ -18,8 +17,6 @@
 #include "rad_rectangular_block.h"
 #include "rad_application.h"
 #include "rad_point_classify.h"
-#include "rad_dipole_collect.h"
-#include "rad_exafmm.h"
 #include "rad_type_cast.h"
 #include "rad_poly_analytical.h"  // For MSC integration
 #include "rad_constants.h"       // For RadConst::MU_0, RadConst::FOUR_PI
@@ -35,10 +32,6 @@
 extern radTApplication rad;
 
 namespace RadFieldUnified {
-
-// Global cache for FMM dipole data per container
-static std::unordered_map<int, RadDipoleCollect::DipoleCollection> g_fmmCache;
-static std::mutex g_fmmCacheMutex;
 
 // Global cache for element data per container
 static std::unordered_map<int, std::vector<RadPointClassify::ElementData>> g_elemCache;
@@ -562,57 +555,12 @@ void ComputeFieldBatch(
 }
 
 //-----------------------------------------------------------------------------
-// InitializeFMM: Setup FMM dipole data
+// ClearAllCaches: Clear element caches (called from DeleteAllElements)
 //-----------------------------------------------------------------------------
-bool InitializeFMM(int container_handle)
+void ClearAllCaches()
 {
-    std::lock_guard<std::mutex> lock(g_fmmCacheMutex);
-
-    // Check if already initialized
-    if (g_fmmCache.find(container_handle) != g_fmmCache.end()) {
-        return true;
-    }
-
-    // Use CollectDipolesFromKey which correctly uses relaxPtr->Volume()
-    // instead of AABB estimation (which overestimates tetrahedra by ~6x)
-    RadDipoleCollect::DipoleCollection dipoles;
-    if (!RadDipoleCollect::CollectDipolesFromKey(container_handle, dipoles)) {
-        return false;
-    }
-
-    if (dipoles.count() > 0) {
-        g_fmmCache[container_handle] = std::move(dipoles);
-        return true;
-    }
-
-    return false;
-}
-
-//-----------------------------------------------------------------------------
-// ReleaseFMM: Release FMM data
-//-----------------------------------------------------------------------------
-void ReleaseFMM(int container_handle)
-{
-    std::lock_guard<std::mutex> lock(g_fmmCacheMutex);
-    g_fmmCache.erase(container_handle);
-
-    std::lock_guard<std::mutex> lock2(g_elemCacheMutex);
-    g_elemCache.erase(container_handle);
-}
-
-//-----------------------------------------------------------------------------
-// ClearAllFMMCaches: Clear all caches (called from DeleteAllElements)
-//-----------------------------------------------------------------------------
-void ClearAllFMMCaches()
-{
-    {
-        std::lock_guard<std::mutex> lock(g_fmmCacheMutex);
-        g_fmmCache.clear();
-    }
-    {
-        std::lock_guard<std::mutex> lock(g_elemCacheMutex);
-        g_elemCache.clear();
-    }
+    std::lock_guard<std::mutex> lock(g_elemCacheMutex);
+    g_elemCache.clear();
 }
 
 // ============================================================================
@@ -1126,8 +1074,6 @@ void ComputeBFromConductorBatch(
     const ConductorSegment* segments,
     int n_segments,
     std::complex<double> current,
-    bool use_fmm,
-    double fmm_eps,
     std::complex<double>* B_out
 )
 {
@@ -1139,11 +1085,6 @@ void ComputeBFromConductorBatch(
     }
 
     if (!segments || n_segments <= 0) return;
-
-    // For now, use direct computation (FMM integration would go here)
-    // FMM for Biot-Savart treats segments as current dipoles
-    (void)use_fmm;  // Reserved for future FMM integration
-    (void)fmm_eps;
 
     ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
         TVector3d pt(points[i * 3], points[i * 3 + 1], points[i * 3 + 2]);
@@ -1207,8 +1148,6 @@ void ComputeCombinedFieldBatch(
     const double* mag_volumes,
     const std::complex<double>* M_complex,
     int n_mag_elems,
-    bool use_fmm,
-    double fmm_eps,
     std::complex<double>* B_out
 )
 {
@@ -1218,10 +1157,6 @@ void ComputeCombinedFieldBatch(
     for (int i = 0; i < n_points * 3; ++i) {
         B_out[i] = std::complex<double>(0, 0);
     }
-
-    // FMM integration point - would build unified tree here
-    (void)use_fmm;
-    (void)fmm_eps;
 
     ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
         TVector3d pt(points[i * 3], points[i * 3 + 1], points[i * 3 + 2]);

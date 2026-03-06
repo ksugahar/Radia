@@ -20,7 +20,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import numpy as np
 import radia as rd
 
-rd.FldUnits('m')
 mm = 1e-3  # 1 mm in meters
 
 print("=" * 80)
@@ -54,7 +53,7 @@ test_points = [
 
 def quadrupole_field(pos):
 	"""Quadrupole field: Bx = g*y, By = g*x, Bz = 0"""
-	x, y, z = pos  # Position in meters (FldUnits='m')
+	x, y, z = pos  # Position in meters (Radia always uses meters)
 	Bx = gradient * y  # [T]
 	By = gradient * x  # [T]
 	Bz = 0.0

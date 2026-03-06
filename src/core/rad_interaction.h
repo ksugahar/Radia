@@ -402,10 +402,23 @@ public:
 	bool HasPEECElements() const { return m_hasPEECElements; }
 	void SetHasPEECElements(bool flag) { m_hasPEECElements = flag; }
 
+	// Element accessors
+	int GetAmOfMainElem() const { return AmOfMainElem; }
+	radTg3dRelax* GetElement(int idx) { return g3dRelaxPtrVect[idx]; }
+
 	// Triangle precomputation accessors (for HACApK sharing)
 	const double* GetHexaTriData() const { return m_hexaTriData.data(); }
 	bool IsHexaTriDataReady() const { return m_hexaTriDataReady; }
 	int GetNumHexElements() const { return (int)m_hexaElemIndices.size(); }
+	const std::vector<int>& GetHexaElemIndices() const { return m_hexaElemIndices; }
+
+	// Triangle vertex/sign accessors (for FMM quadrature)
+	const std::vector<double>& GetHexaTriVertices() const { return m_hexaTriVertices; }
+	const std::vector<double>& GetHexaTriSigns() const { return m_hexaTriSigns; }
+	const std::vector<double>& GetHexaCenters() const { return m_hexaCenters; }
+	const std::vector<double>& GetHexaFaceAreas() const { return m_hexaFaceAreas; }
+	const std::vector<double>& GetHexaEvalPoints() const { return m_hexaEvalPoints; }
+	const std::vector<double>& GetHexaFaceNormals() const { return m_hexaFaceNormals; }
 
 	// Flat matrix/array accessors for solvers
 	double* GetFlatInteractMatrix() { return m_flatInteractMatrix.data(); }

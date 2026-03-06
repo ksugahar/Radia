@@ -33,7 +33,6 @@ Complete reference for Radia Python API.
 import radia as rad
 import numpy as np
 
-rad.FldUnits('m')
 rad.UtiDelAll()
 
 MU_0 = 4 * np.pi * 1e-7
@@ -69,7 +68,6 @@ rad.Solve(grp, 0.001, 1000, 1)
 
 ```python
 import radia as rad
-rad.FldUnits('m')
 
 # Import NGSolve BEFORE radia modules
 from netgen.occ import Box, Pnt, OCCGeometry
@@ -775,14 +773,13 @@ Phi = rad.Fld(magnet, 'p', [0, 0, 0.1])  # Scalar potential Phi
 ### FldBatch - Batch Field Computation (v1.3.16+)
 
 ```python
-result = rad.FldBatch(obj, points, method=0)
+result = rad.FldBatch(obj, points)
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `obj` | int | Object or container |
-| `points` | [[x,y,z], ...] | List of evaluation points |
-| `method` | int | `0` = direct (default), `1` = FMM (future) |
+| `points` | [[x,y,z], ...] | List of evaluation points (meters) |
 
 | Returns | Description |
 |---------|-------------|
@@ -942,59 +939,100 @@ for el in elements:
 ### Import Order (CRITICAL)
 
 ```python
-# 1. Import radia first
+# 1. Import radia (includes RadiaField CoefficientFunction)
 import radia as rad
-rad.FldUnits('m')  # REQUIRED: NGSolve uses meters
 
-# 2. Import ngsolve BEFORE radia_ngsolve
+# 2. Import ngsolve
 import ngsolve
 from ngsolve import *
 
-# 3. NOW import radia_ngsolve (separate C++ module)
-import radia_ngsolve
+# RadiaField is available as rad.RadiaField (no separate module needed since v2.5.0)
 ```
-
-Wrong order causes `ImportError: DLL load failed`.
 
 ### NGSolve Version Requirement
 
-**Use NGSolve 6.2.2405 only** (6.2.2406+ has Periodic BC bug).
+**Use NGSolve 6.2.2601 or later**. Version 6.2.2406~6.2.2501 had a Periodic BC regression, fixed in 6.2.2601+.
 
 ```bash
-pip install ngsolve==6.2.2405
+pip install ngsolve>=6.2.2601
 ```
 
-### RadiaField - CoefficientFunction
+### RadiaField - CoefficientFunction (v2.5.0+)
+
+`RadiaField` is an NGSolve `CoefficientFunction` subclass that evaluates Radia fields at arbitrary points. It is now part of `_radia_pybind.pyd` (no separate `radia_ngsolve.pyd` needed).
 
 ```python
-cf = radia_ngsolve.RadiaField(radia_obj, field_type='b')
+cf = rad.RadiaField(radia_obj, field_type='b', origin=None, u=None, v=None, w=None,
+                    precision=None, units='m')
 ```
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `radia_obj` | int | Radia object ID |
-| `field_type` | str | `'b'`, `'h'`, `'a'`, or `'m'` |
+| `field_type` | str | `'b'`, `'h'`, `'a'`, `'m'`, or `'phi'` |
+| `origin` | [x,y,z] | Origin for coordinate transform (optional) |
+| `u`, `v`, `w` | [x,y,z] | Local axes for coordinate transform (optional) |
+| `precision` | float | Field computation precision (optional) |
+| `units` | str | Must be `'m'` |
+
+**Dimensions**: `dim=3` for B/H/A/M (vector), `dim=1` for phi (scalar).
+
+**Batch evaluation**: When NGSolve calls `gf.Set(cf)`, the batch `Evaluate(mir, result)` is used internally. This calls:
+- **B, H**: `rad.FldBatch()` (TaskManager-parallelized in C++)
+- **phi**: `rad.FldPhi()` (TaskManager-parallelized)
+- **A**: `rad.FldA()` (TaskManager-parallelized)
+- **M**: per-point `rad.Fld()` fallback
 
 ```python
-# Create CoefficientFunction for B field
-B_cf = radia_ngsolve.RadiaField(magnet, 'b')
-
-# Use in NGSolve
+# Basic usage
+B_cf = rad.RadiaField(magnet, 'b')
 fes = HDiv(mesh, order=2)
 gf = GridFunction(fes)
 gf.Set(B_cf)
+
+# Scalar potential
+phi_cf = rad.RadiaField(magnet, 'phi')
+fes_h1 = H1(mesh, order=2)
+gf_phi = GridFunction(fes_h1)
+gf_phi.Set(phi_cf)
+
+# With coordinate transform (rotated magnet)
+B_rotated = rad.RadiaField(magnet, 'b',
+    origin=[0.1, 0, 0],
+    u=[cos_a, sin_a, 0], v=[-sin_a, cos_a, 0])
+```
+
+#### VoxelCoefficient (`as_voxel_cf`)
+
+Creates a trilinearly-interpolated voxel grid for fast repeated evaluation (e.g., particle trajectory tracking).
+
+```python
+B_voxel = B_cf.as_voxel_cf(mesh, resolution=61)
+# B_voxel is a VoxelCoefficient - fast evaluation at any point
+```
+
+#### Point Cache
+
+Pre-cache field values at known points for faster `gf.Set()`:
+
+```python
+B_cf.PrepareCache(integration_points)
+gf.Set(B_cf)  # Uses cache
+stats = B_cf.GetCacheStats()  # {'enabled': True, 'hits': ..., 'hit_rate': ...}
+B_cf.ClearCache()
 ```
 
 ---
 
 ## Utilities
 
-### FldUnits - Unit System
+### FldUnits - Unit System (Deprecated)
+
+**Deprecated**: `FldUnits` is deprecated. Radia always uses meters. The function is kept for backward compatibility but has no effect.
 
 ```python
-rad.FldUnits('m')   # Use meters (required for NGSolve)
-rad.FldUnits('mm')  # Use millimeters (default)
-rad.FldUnits()      # Get current units
+rad.FldUnits('m')   # No-op (Radia always uses meters)
+rad.FldUnits()      # Returns 'm'
 ```
 
 ### UtiDelAll - Clear Memory
@@ -1022,7 +1060,6 @@ Export magnetic field on a structured 3D grid to VTS format (C++ implementation 
 ```python
 import radia as rad
 
-rad.FldUnits('m')
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
 # FldVTS(obj, filename, x_range, y_range, z_range, nx, ny, nz, include_B, include_H, unit_scale)
@@ -1063,8 +1100,6 @@ rad.FldVTS(magnet, 'B_field.vts',
 
 ```python
 import radia as rad
-
-rad.FldUnits('m')
 
 # Create permanent magnet
 vertices = [
@@ -1814,18 +1849,15 @@ See [IMA_SYMMETRY_DESIGN.md](IMA_SYMMETRY_DESIGN.md) for implementation details.
 
 ### 1. Coordinates Off by 1000x
 
-**Cause**: Unit mismatch (NGSolve uses meters, Radia defaults to mm)
+**Cause**: Legacy scripts may have used millimeters. Radia always uses meters now.
 
-**Solution**:
-```python
-rad.FldUnits('m')  # Set at start of script
-```
+**Solution**: Ensure all coordinates are specified in meters. No `FldUnits` call is needed.
 
 ### 2. DLL Load Failed
 
-**Cause**: Wrong import order
+**Cause**: Wrong import order or missing MKL DLLs
 
-**Solution**: Import ngsolve BEFORE radia_ngsolve
+**Solution**: Import ngsolve before radia. Since v2.5.0, RadiaField is in the main radia module (no separate radia_ngsolve needed).
 
 ### 3. ObjPolyhdr Face Error (Internal API)
 
@@ -1845,30 +1877,25 @@ rad.FldUnits('m')  # Set at start of script
 
 ## Units
 
-### Unit System (v1.4.3+)
+### Unit System
 
-**IMPORTANT**: Starting from v1.4.3, Radia uses SI units (meters) internally, matching ELF.
+Radia always uses SI units (meters) internally.
 
 | Quantity | Unit | Notes |
 |----------|------|-------|
-| Length | m (default) or mm with `FldUnits('mm')` | User-selectable |
-| B (flux density) | Tesla (T) | **Fixed to SI** |
-| H (field) | A/m | **Fixed to SI** |
-| M (magnetization) | A/m | **Fixed to SI** |
-| A (vector potential) | T*m | **Fixed to SI** |
-| Current | Ampere (A) | **Fixed to SI** |
-| Current density | A/m^2 (or A/mm^2) | Depends on length unit |
+| Length | m | Always meters |
+| B (flux density) | Tesla (T) | SI |
+| H (field) | A/m | SI |
+| M (magnetization) | A/m | SI |
+| A (vector potential) | T*m | SI |
+| Current | Ampere (A) | SI |
+| Current density | A/m^2 | SI |
 
 ### Design Principles
 
-1. **Length unit only**: `FldUnits()` controls **only the length unit** (m or mm)
+1. **Always meters**: All coordinates are in meters. The `FldUnits` function is deprecated and has no effect.
 2. **Field values are always SI**: B, H, and A are always in SI units (T, A/m, T*m)
-3. **No field scaling**: Changing length unit does NOT change B, H, or A values
-
-| Setting | Coordinate Input | B, H Output | A Output |
-|---------|------------------|-------------|----------|
-| `FldUnits('m')` (default) | meters | T, A/m | T*m |
-| `FldUnits('mm')` | millimeters | T, A/m | T*m |
+3. **No field scaling**: Field values (B, H, A) are always in SI units
 
 ### Maxwell Relation: B = curl(A)
 
@@ -1877,8 +1904,6 @@ With the new SI internal units, the Maxwell relation `B = curl(A)` is satisfied 
 ```python
 import radia as rad
 import numpy as np
-
-rad.FldUnits('m')  # Default: meters
 
 # Create magnet
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 954930])
@@ -2007,8 +2032,6 @@ B = loop.get_B([0, 0, 25])
 ```python
 import radia as rad
 from radia.analytical_magnet import CuboidMagnet
-
-rad.FldUnits('m')
 
 # Define permanent magnet as background field
 pm = CuboidMagnet(

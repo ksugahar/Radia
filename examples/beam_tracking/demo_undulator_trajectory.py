@@ -126,7 +126,6 @@ def main():
     print("=" * 60)
 
     # Set units to meters (SI) - Policy compliance
-    rad.FldUnits('m')
 
     # Undulator parameters
     period = 0.050      # 50 mm period

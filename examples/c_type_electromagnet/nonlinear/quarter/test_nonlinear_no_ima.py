@@ -51,7 +51,6 @@ def load_bh_curve(filepath):
 def test_nonlinear(nodes, elements, bh_data, use_ima=False):
     """Test quarter model with nonlinear material."""
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # NONLINEAR material
     mat = rad.MatSatIsoTab(bh_data)

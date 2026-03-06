@@ -38,7 +38,6 @@ def scenario_1_air():
     print("=" * 65)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     inp = """\
 .Units mm
@@ -79,7 +78,6 @@ def scenario_2_iron_core():
     print("=" * 65)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     inp = """\
 .Units mm
@@ -133,7 +131,6 @@ def scenario_3_ferrite_core():
     print("=" * 65)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     inp = """\
 .Units mm
@@ -195,7 +192,6 @@ def scenario_4_multi_segment_coil():
     print("=" * 65)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Rectangular coil: 4 segments forming a near-loop around the core
     # Port at a gap between N5 (=N1 position) and N1:

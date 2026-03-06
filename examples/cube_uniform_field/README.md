@@ -135,39 +135,39 @@ cube_uniform_field/
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
-| 702,114 | LU | 51 MB | - | 0 | 6 | 0.07s | 0.42s | **0.49s** |
-| 702,114 | BiCGSTAB | 46 MB | - | 0 | 3 | 0.03s | 0.01s | **0.03s** |
-| 702,114 | HACApK | 42 MB | 97% | 21 | 3 | 0.03s | 3ms | **0.04s** |
+| 702,132 | LU | 51 MB | - | 0 | 6 | 0.05s | 0.03s | **0.09s** |
+| 702,148 | BiCGSTAB | 46 MB | - | 0 | 3 | 0.07s | 0.15s | **0.22s** |
+| 702,143 | HACApK | 42 MB | 97% | 18 | 3 | 0.51s | 0.03s | **0.54s** |
 
 #### N=10 (1,000 elements, 6,000 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
-| 716,281 | LU | 933 MB | - | 0 | 13 | 1.1s | 5.7s | **7.7s** |
-| 716,316 | BiCGSTAB | 632 MB | - | 0 | 5 | 1.0s | 0.9s | **2.0s** |
-| 716,353 | HACApK | 193 MB | **50%** | 31 | 4 | 1.3s | 0.3s | **1.6s** |
+| 716,281 | LU | 931 MB | - | 0 | 13 | 1.1s | 7.3s | **9.3s** |
+| 716,334 | BiCGSTAB | 631 MB | - | 0 | 4 | 1.1s | 0.4s | **1.7s** |
+| 716,335 | HACApK | 189 MB | **49%** | 19 | 4 | 1.4s | 0.3s | **1.7s** |
 
 #### N=15 (3,375 elements, 20,250 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
-| 719,832 | LU | 9926 MB | - | 0 | 35 | 10.7s | 587s | **598s** |
-| 719,902 | BiCGSTAB | 6724 MB | - | 0 | 27 | 10.5s | 24s | **34s** |
-| 719,883 | HACApK | 912 MB | **26%** | 85 | 29 | 8.7s | 5.5s | **14s** |
+| 719,832 | LU | 9925 MB | - | 0 | 35 | 12.5s | 726s | **767s** |
+| 719,804 | BiCGSTAB | 6725 MB | - | 0 | 43 | 13.1s | 21.6s | **36s** |
+| 719,809 | HACApK | 905 MB | **25%** | 72 | 43 | 9.4s | 6.4s | **16s** |
 
 #### N=20 (8,000 elements, 48,000 DOF)
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
-| - | LU | - | - | - | - | - | - | **(~4h estimated)** |
-| 721,269 | BiCGSTAB | 37485 MB | - | 0 | 30 | 57.8s | 166s | **224s** |
-| 721,299 | HACApK | 2799 MB | **15%** | 120 | 30 | 32.1s | 24.6s | **57s** |
+| - | LU | - | - | - | - | - | - | **(>1h estimated)** |
+| 721,240 | BiCGSTAB | 37486 MB | - | 0 | 34 | 68.3s | 111s | **185s** |
+| 721,285 | HACApK | 2794 MB | **15%** | 75 | 32 | 35.0s | 17.3s | **53s** |
 
 #### N=25 (15,625 elements, 93,750 DOF) - HACApK only
 
 | M_avg_z | Solver | Memory | Compress | Linear | Nonl | MatBuild | LinSolve | Total |
 |--------:|--------|-------:|---------:|-------:|-----:|---------:|---------:|------:|
-| 722,114 | HACApK | 6310 MB | **9%** | 152 | 29 | 78.3s | 70.4s | **149s** |
+| 722,166 | HACApK | 6384 MB | **9%** | 148 | 26 | 79.1s | 67.9s | **148s** |
 
 ---
 
@@ -245,10 +245,10 @@ cube_uniform_field/
 
 ### Performance Summary
 
-1. **HACApK vs LU**: HACApK is **43x faster** for hex N=15 nonlinear (14s vs 598s)
-2. **HACApK vs BiCGSTAB**: HACApK is **3.9x faster** for hex N=20 nonlinear (57s vs 224s)
+1. **HACApK vs LU**: HACApK is **48x faster** for hex N=15 nonlinear (16s vs 767s)
+2. **HACApK vs BiCGSTAB**: HACApK is **3.5x faster** for hex N=20 nonlinear (53s vs 185s)
 3. **Memory Efficiency**: HACApK uses **13x less memory** at hex N=20 (2.8 GB vs 37.5 GB)
-4. **Compression Ratio**: Improves with problem size (50% at N=10, 26% at N=15, 15% at N=20)
+4. **Compression Ratio**: Improves with problem size (49% at N=10, 25% at N=15, 15% at N=20)
 5. **Tetra HACApK Optimization (v1.4.1)**: ELF-style face basis caching provides **12-20x speedup** in H-matrix build
 
 ### Solver Recommendations
@@ -295,7 +295,7 @@ cube_uniform_field/
 
 ## Computational Complexity
 
-### Theoretical (per operation)
+### Theoretical Complexity
 
 | Solver | Time Complexity | Memory Complexity |
 |--------|-----------------|-------------------|
@@ -303,20 +303,25 @@ cube_uniform_field/
 | Dense BiCGSTAB | O(N^2) per iter | O(N^2) |
 | BiCGSTAB+H-matrix | **O(N log N)** per iter | **O(N log N)** |
 
-### Measured Scaling (nonlinear cube model, hexahedral elements)
+### Measured Scaling Exponents (Nonlinear, last 9 data points)
 
-Power-law fit `t = a * DOF^alpha` on benchmark data (2026-02-11).
+Power-law fit: `t = a * N^alpha` in log-log space.
 
-| Solver | Time | Memory | Notes |
-|--------|------|--------|-------|
-| LU | **O(N^3.9)** | O(N^2.0) | NL iteration count also grows with N |
-| BiCGSTAB | **O(N^1.9)** | O(N^2.0) | Consistent with theoretical O(N^2) |
-| HACApK | **O(N^1.5)** | **O(N^1.3)** | H-matrix compression effect |
+#### Hexahedral Elements
 
-- Fit method: last-5 data points (asymptotic regime, higher accuracy)
-- LU time exceeds O(N^3) because NL iteration count also increases with N
-- HACApK time is between O(N) and O(N^2) due to H-matrix compression
-- Analysis script: `../../原稿/scaling_analysis.py`, results: `scaling_analysis_results.json`
+| Solver | Time Exponent | Time R² | Memory Exponent | Memory R² |
+|--------|--------------|---------|-----------------|-----------|
+| LU | 3.48 | 0.996 | 1.91 | 1.000 |
+| BiCGSTAB | 2.33 | 0.989 | 1.98 | 1.000 |
+| **HACApK** | **1.58** | 0.985 | **1.28** | 0.999 |
+
+#### Tetrahedral Elements
+
+| Solver | Time Exponent | Time R² | Memory Exponent | Memory R² |
+|--------|--------------|---------|-----------------|-----------|
+| **HACApK** | **1.48** | 0.995 | **1.26** | 0.999 |
+
+**Note**: HACApK memory exponent ~1.3 is consistent with O(N log N). The time exponent ~1.5 is higher than memory due to increasing BiCGSTAB iterations and nonlinear iteration count variation with problem size. See `hexahedron/plot_scaling.py` and `tetrahedron/plot_scaling.py` for details.
 
 ---
 
@@ -443,4 +448,4 @@ The "Compression" column shows: **H-matrix memory / Dense matrix memory x 100%**
 
 ---
 
-**Last Updated**: 2025-12-31 (Added ACA+ algorithm documentation, test environment specs, column definitions)
+**Last Updated**: 2026-03-03 (Added measured scaling exponents for hexahedral and tetrahedral benchmarks)

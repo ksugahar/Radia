@@ -123,6 +123,7 @@ void NonlinearAnisotropMaterialOpt0( double*, int, double*, int );
 void NonlinearAnisotropMaterialOpt1( double**, double** );
 void NonlinearAnisotropMaterialOpt2( double**, double );
 void NonlinearAnisotropMaterialOpt3( double, double** );
+void EnergyHysteresisMaterial( int, double*, double*, double*, double );
 void ApplyMaterial( int, int );
 void MvsH( int, char*, double,double,double );
 
@@ -168,7 +169,7 @@ void GetNewtonDampingStats( bool*, int*, double* );
 int SetIMASymmetry(int, const char*);
 int BuildIMAMatrix(int);
 void ClassifyPoints( int*, int*, int, double*, int, double );
-void ComputeFieldBatch( double*, double*, int, double*, int, int );
+void ComputeFieldBatch( double*, double*, int, double*, int );
 void ComputeScalarPotentialBatch( double*, int, double*, int );
 void ComputeVectorPotentialBatch( double*, int, double*, int );
 void ParticleTrajectory( int, double, double,double,double,double, double,double, int );
@@ -297,16 +298,12 @@ void RecMag(double xc, double yc, double zc,
 {
 	double J[] = {0.,0.,0.};
 
-	// Apply unit scaling: convert user units to internal mm
-	double scale = rad.GetLengthUnitScale();
-	double CPoi[] = {radCR.Double(xc * scale), radCR.Double(yc * scale), radCR.Double(zc * scale)};
-	//double CPoi[] = {xc, yc, zc};
+	double CPoi[] = {radCR.Double(xc), radCR.Double(yc), radCR.Double(zc)};
 
 	short OldActOnDoubles = radCR.ActOnDoubles;
 	if(rad.TreatRecMagsAsExtrPolygons) radCR.ActOnDoubles = 0;
 
-	double Dims[] = {radCR.Double(Lx * scale), radCR.Double(Ly * scale), radCR.Double(Lz * scale)};
-	//double Dims[] = {Lx, Ly, Lz};
+	double Dims[] = {radCR.Double(Lx), radCR.Double(Ly), radCR.Double(Lz)};
 	double Magn[] = {Mx, My, Mz};
 	rad.SetRecMag(CPoi, 3, Dims, 3, Magn, 3, J, 3, 0);
 
@@ -320,14 +317,9 @@ void RecCur(double xc, double yc, double zc,
 			double Jx, double Jy, double Jz)
 {
 	double Magn[] = {0.,0.,0.};
-	// Apply unit scaling: convert user units to internal mm
-	double scale = rad.GetLengthUnitScale();
-	double CPoi[] = {radCR.Double(xc * scale), radCR.Double(yc * scale), radCR.Double(zc * scale)};
-	double Dims[] = {radCR.Double(Lx * scale), radCR.Double(Ly * scale), radCR.Double(Lz * scale)};
-	// Current density J is in A/mm^2 or A/m^2 depending on units - need to scale
-	// J_mm^2 = J_m^2 / scale^2 (since area scales as length^2)
-	double currentDensityScale = scale * scale;
-	double J[] = {Jx / currentDensityScale, Jy / currentDensityScale, Jz / currentDensityScale};
+	double CPoi[] = {radCR.Double(xc), radCR.Double(yc), radCR.Double(zc)};
+	double Dims[] = {radCR.Double(Lx), radCR.Double(Ly), radCR.Double(Lz)};
+	double J[] = {Jx, Jy, Jz};
 	rad.SetRecMag(CPoi, 3, Dims, 3, Magn, 3, J, 3, 1);
 }
 
@@ -478,9 +470,6 @@ void Polyhedron1()
 
 void PolyhedronOpt(double** Vertices, int AmOfVertices, int** Faces, int* AmOfPoInFaces, int AmOfFaces, double* M)
 {
-	// Apply unit scaling: convert user units to internal mm
-	double scale = rad.GetLengthUnitScale();
-
 	std::vector<TVector3d> vArrayOfPoints(AmOfVertices);
 	TVector3d* ArrayOfPoints = vArrayOfPoints.data();
 	TVector3d* tArrayOfPoints = ArrayOfPoints;
@@ -488,9 +477,9 @@ void PolyhedronOpt(double** Vertices, int AmOfVertices, int** Faces, int* AmOfPo
 	for(int i=0; i<AmOfVertices; i++)
 	{
 		double* tPoint = *(tVertices++);
-		tArrayOfPoints->x = (*(tPoint++)) * scale;
-		tArrayOfPoints->y = (*(tPoint++)) * scale;
-		(tArrayOfPoints++)->z = (*(tPoint++)) * scale;
+		tArrayOfPoints->x = *(tPoint++);
+		tArrayOfPoints->y = *(tPoint++);
+		(tArrayOfPoints++)->z = *(tPoint++);
 	}
 
 	rad.SetPolyhedron1(ArrayOfPoints, AmOfVertices, Faces, AmOfPoInFaces, AmOfFaces, M, 0, 0, 0);
@@ -512,9 +501,6 @@ void PolyhedronDLL(double* Vertices, int AmOfVertices, int* InFaces, int* AmOfPo
 	int **Faces=0, **tFaces=0, *tInFaces=0;
 	double *pJ=0, *pJ_LinCoef=0;
 
-	// Apply unit scaling: convert user units to internal mm
-	double scale = rad.GetLengthUnitScale();
-
 	std::vector<TVector3d> vArrayOfPoints(AmOfVertices);
 	TVector3d* ArrayOfPoints = vArrayOfPoints.data();
 	//TVector3d* tArrayOfPoints = ArrayOfPoints;
@@ -523,9 +509,9 @@ void PolyhedronDLL(double* Vertices, int AmOfVertices, int* InFaces, int* AmOfPo
 	tVertices = Vertices;
 	for(int i=0; i<AmOfVertices; i++)
 	{
-		tArrayOfPoints->x = (*(tVertices++)) * scale;
-		tArrayOfPoints->y = (*(tVertices++)) * scale;
-		(tArrayOfPoints++)->z = (*(tVertices++)) * scale;
+		tArrayOfPoints->x = *(tVertices++);
+		tArrayOfPoints->y = *(tVertices++);
+		(tArrayOfPoints++)->z = *(tVertices++);
 	}
 
 	//int** Faces = new int*[AmOfFaces];
@@ -578,15 +564,7 @@ void PolyhedronDLL(double* Vertices, int AmOfVertices, int* InFaces, int* AmOfPo
 	//double *pJ = JisDefined? J : 0;
 	//double *pJ_LinCoef = J_LinCoefDefined? J_LinCoef : 0;
 
-	// Scale current density if present: J_mm^2 = J_m^2 / scale^2
-	double currentDensityScale = scale * scale;
-	double J_scaled[3] = {0., 0., 0.};
-	if(JisDefined) {
-		J_scaled[0] = J[0] / currentDensityScale;
-		J_scaled[1] = J[1] / currentDensityScale;
-		J_scaled[2] = J[2] / currentDensityScale;
-		pJ = J_scaled;
-	}
+	if(JisDefined) pJ = J;
 	if(J_LinCoefDefined) pJ_LinCoef = J_LinCoef;
 
 	rad.SetPolyhedron1(ArrayOfPoints, AmOfVertices, Faces, AmOfPoInFaces, AmOfFaces, M, 0, pJ, pJ_LinCoef);
@@ -846,41 +824,31 @@ void ArcPolygonDLL(double xc, double yc, char a, double* pFlatVert, int nv, doub
 
 void CylMag(double xc, double yc, double zc, double r, double h, int NumberOfSegm, char* Orient, double mx, double my, double mz)
 {
-	// Apply unit scaling: convert user units to internal mm
-	double scale = rad.GetLengthUnitScale();
-	double CPoi[] = {radCR.Double(xc * scale), radCR.Double(yc * scale), radCR.Double(zc * scale)};
+	double CPoi[] = {radCR.Double(xc), radCR.Double(yc), radCR.Double(zc)};
 	double Magn[] = {mx, my, mz};
-	rad.SetCylMag(CPoi, 3, r * scale, h * scale, NumberOfSegm, Magn, 3, Orient);
+	rad.SetCylMag(CPoi, 3, r, h, NumberOfSegm, Magn, 3, Orient);
 }
 
 //-------------------------------------------------------------------------
 
 void ArcCur(double xc, double yc, double zc, double rmin, double rmax, double phimin, double phimax, double Height, int NumberOfSegm, double J_azim, char* ManOrAuto, char* Orient)
 {
-	// Apply unit scaling: convert user units to internal mm
-	double scale = rad.GetLengthUnitScale();
-	double CPoi[] = {radCR.Double(xc * scale), radCR.Double(yc * scale), radCR.Double(zc * scale)};
-	double Radii[] = {fabs(radCR.Double(rmin * scale)), fabs(radCR.Double(rmax * scale))};
-	double Angles[] = {phimin, phimax}; // Consider shrinking this
-	// Current density J is in A/mm^2 or A/m^2 depending on units
-	double currentDensityScale = scale * scale;
-	rad.SetArcCur(CPoi, 3, Radii, 2, Angles, 2, Height * scale, J_azim / currentDensityScale, NumberOfSegm, ManOrAuto, Orient);
+	double CPoi[] = {radCR.Double(xc), radCR.Double(yc), radCR.Double(zc)};
+	double Radii[] = {fabs(radCR.Double(rmin)), fabs(radCR.Double(rmax))};
+	double Angles[] = {phimin, phimax};
+	rad.SetArcCur(CPoi, 3, Radii, 2, Angles, 2, Height, J_azim, NumberOfSegm, ManOrAuto, Orient);
 }
 
 //-------------------------------------------------------------------------
 
 void RaceTrack(double xc, double yc, double zc, double rmin, double rmax, double Lx, double Ly, double Height, int NumberOfSegm, double J_azim, char* ManOrAuto, char* Orient)
 {
-	// Apply unit scaling: convert user units to internal meters
 	// DON'T perturb CPoi here - perturbation is applied to final arc centers in SetRaceTrack
 	// This ensures arc centers get identical perturbation to manually created arcs
-	double scale = rad.GetLengthUnitScale();
-	double CPoi[] = {xc * scale, yc * scale, zc * scale};  // Unperturbed!
-	double Radii[] = {fabs(radCR.Double(rmin * scale)), fabs(radCR.Double(rmax * scale))};
-	double StrPartDims[] = {Lx * scale, Ly * scale};  // Unperturbed
-	// Current density J is in A/mm^2 or A/m^2 depending on units
-	double currentDensityScale = scale * scale;
-	rad.SetRaceTrack(CPoi, 3, Radii, 2, StrPartDims, 2, Height * scale, J_azim / currentDensityScale, NumberOfSegm, ManOrAuto, Orient);
+	double CPoi[] = {xc, yc, zc};  // Unperturbed!
+	double Radii[] = {fabs(radCR.Double(rmin)), fabs(radCR.Double(rmax))};
+	double StrPartDims[] = {Lx, Ly};  // Unperturbed
+	rad.SetRaceTrack(CPoi, 3, Radii, 2, StrPartDims, 2, Height, J_azim, NumberOfSegm, ManOrAuto, Orient);
 }
 
 //-------------------------------------------------------------------------
@@ -1406,6 +1374,13 @@ void NonlinearIsotropMaterial3Opt(double** HandB_Array, long LenHandB_Array)
 
 //-------------------------------------------------------------------------
 
+void EnergyHysteresisMaterial(int K, double* As, double* Js, double* chi, double eps)
+{
+	rad.SetEnergyHysteresisMaterial(K, As, Js, chi, eps);
+}
+
+//-------------------------------------------------------------------------
+
 void NonlinearLaminatedMaterialML()
 {
 
@@ -1883,10 +1858,8 @@ void MultipoleThresholds(double a0, double a1, double a2, double a3)
 void Field(int ElemKey, char* FieldChar, double x1, double y1, double z1,
 		   double x2, double y2, double z2, int Np, char* ShowArgFlag, double StrtArg)
 {
-	// Apply unit scaling: convert user units to internal mm
-	double scale = rad.GetLengthUnitScale();
-	double StObsPoi[] = {radCR.Double(x1 * scale), radCR.Double(y1 * scale), radCR.Double(z1 * scale)};
-	double FiObsPoi[] = {radCR.Double(x2 * scale), radCR.Double(y2 * scale), radCR.Double(z2 * scale)};
+	double StObsPoi[] = {radCR.Double(x1), radCR.Double(y1), radCR.Double(z1)};
+	double FiObsPoi[] = {radCR.Double(x2), radCR.Double(y2), radCR.Double(z2)};
 	rad.ComputeField(ElemKey, FieldChar, StObsPoi, 3, FiObsPoi, 3, Np, ShowArgFlag, radCR.Double(StrtArg));
 }
 
@@ -1936,29 +1909,7 @@ void FieldArbitraryPointsArray(long ElemKey, const char* FieldChar, double** Poi
 	strncpy(LocStr, FieldChar, 49);
 	LocStr[49] = '\0';
 
-	// Apply unit scaling: convert user units to internal mm
-	double scale = rad.GetLengthUnitScale();
-	if(scale != 1.0) {
-		// Scale all points in place
-		for(long i = 0; i < LenPoints; i++) {
-			double* pt = Points[i];
-			pt[0] *= scale;
-			pt[1] *= scale;
-			pt[2] *= scale;
-		}
-	}
-
 	rad.ComputeField((int)ElemKey, LocStr, Points, LenPoints);
-
-	// Restore original coordinates
-	if(scale != 1.0) {
-		for(long i = 0; i < LenPoints; i++) {
-			double* pt = Points[i];
-			pt[0] /= scale;
-			pt[1] /= scale;
-			pt[2] /= scale;
-		}
-	}
 }
 
 //-------------------------------------------------------------------------
@@ -2072,14 +2023,15 @@ void RandomizationOnOrOff(char* OnOrOff)
 
 void PhysicalUnits()
 {
-	rad.SetAndShowPhysUnits();
+	// Deprecated: Radia always uses meters. Noop for backward compatibility.
 }
 
 //-------------------------------------------------------------------------
 
 void PhysicalUnitsSet(const char* unitStr)
 {
-	rad.SetPhysUnits(unitStr);
+	// Deprecated: Radia always uses meters. Noop for backward compatibility.
+	(void)unitStr;
 }
 
 //-------------------------------------------------------------------------
@@ -2269,9 +2221,9 @@ void ClassifyPoints(int* classification, int* nearest_elem, int n_points,
 //-------------------------------------------------------------------------
 
 void ComputeFieldBatch(double* B_out, double* H_out, int n_points,
-                       double* points, int container_handle, int method)
+                       double* points, int container_handle)
 {
-	rad.ComputeFieldBatch(B_out, H_out, n_points, points, container_handle, method);
+	rad.ComputeFieldBatch(B_out, H_out, n_points, points, container_handle);
 }
 
 //-------------------------------------------------------------------------

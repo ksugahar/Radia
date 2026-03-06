@@ -143,7 +143,7 @@ The division of labor is clear:
 
 **How the integration works**:
 1.  Radia computes the source field analytically (no mesh, no discretization error).
-2.  `radia_ngsolve.RadiaField()` wraps the result as an NGSolve `CoefficientFunction` — a native C++ object evaluated directly inside NGSolve's element assembly loop.
+2.  `rad.RadiaField()` wraps the result as an NGSolve `CoefficientFunction` — a native C++ object evaluated directly inside NGSolve's element assembly loop. Since v2.5.0, `RadiaField` is integrated into the main `_radia_pybind.pyd` module; no separate `radia_ngsolve` module is needed.
 3.  NGSolve / NGbem solve the reaction problem driven by this source.
 4.  Result = Source Field (Radia) + Reaction Field (NGSolve).
 
@@ -196,7 +196,7 @@ Unlike FEM, which uses uniform element formulations, IEM allows the combination 
 > **Design**: The coupling is intentionally one-way (Radia Sources $\rightarrow$ NGSolve/NGbem). Radia provides the source; NGSolve and NGbem solve the reaction. This clean separation keeps the architecture composable and each solver optimal for its role.
 
 ### NGSolve Integration Details (Weak Coupling Mechanism)
-The `radia_ngsolve` module implements a high-performance **Weak Coupling** bridge using a native C++ `CoefficientFunction`. This allows Radia fields to be evaluated directly during NGSolve's finite element assembly process.
+The `rad.RadiaField()` function (integrated into `_radia_pybind.pyd` since v2.5.0) implements a high-performance **Weak Coupling** bridge using a native C++ `CoefficientFunction`. This allows Radia fields to be evaluated directly during NGSolve's finite element assembly process.
 
 **Implementation Architecture:**
 *   **Native C++ Shim**: A `RadiaFieldCF` class (inheriting from `ngfem::CoefficientFunction`) sits between NGSolve and Radia.

@@ -58,7 +58,6 @@ print("[1] Full Model (2 cubes with gap)")
 print("="*70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 c1 = rad.ObjHexahedron(v1, [0, 0, 0])
 c2 = rad.ObjHexahedron(v2, [0, 0, 0])
@@ -98,7 +97,6 @@ print("[2] IMA -z (antisymmetric)")
 print("="*70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 c1_ima = rad.ObjHexahedron(v1, [0, 0, 0])
 mat_ima = rad.MatLin(MU_R)

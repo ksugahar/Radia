@@ -1,21 +1,21 @@
 """
-Test radia_ngsolve field types: B, H, A, M, and Phi.
+Test rad.RadiaField field types: B, H, A, M, and Phi.
 
 This test verifies that all field types can be correctly passed from Radia
 to NGSolve via the RadiaFieldCF coefficient function.
 """
 
 import sys
+import os
 import numpy as np
 
-# Add the build directory to path
-sys.path.insert(0, r"s:\Radia\01_GitHub\src\radia")
+# Add the src/radia directory to path (relative)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
 
 # Import NGSolve first to set up DLL paths
 import ngsolve  # noqa: F401
 
 import radia as rad
-import radia_ngsolve
 
 # Physical constants
 PI = np.pi
@@ -25,17 +25,17 @@ MU0 = 4.0 * np.pi * 1.0e-7  # H/m
 def test_coil_fields():
     """Test all field types for a circular coil."""
     print("=" * 60)
-    print("Test: Circular coil field types in radia_ngsolve")
+    print("Test: Circular coil field types via rad.RadiaField")
     print("=" * 60)
 
-    # Coil parameters (Radia uses mm)
-    R = 50.0  # mm
-    height = 1.0  # mm
-    radial_width = 1.0  # mm
+    # Coil parameters (meters)
+    R = 0.050  # m
+    height = 0.001  # m
+    radial_width = 0.001  # m
     current = 1000.0  # A
-    J_azim = current / (height * radial_width)  # A/mm^2
+    J_azim = current / (height * radial_width)  # A/m^2
 
-    print(f"Coil: R={R} mm, I={current} A")
+    print(f"Coil: R={R} m, I={current} A")
 
     # Create full circle coil
     center = [0, 0, 0]
@@ -45,11 +45,10 @@ def test_coil_fields():
     coil = rad.ObjArcCur(center, radii, angles, height, 100, J_azim)
     print(f"Created coil with handle: {coil}")
 
-    # Test point on axis at z = 50 mm = 0.05 m
-    test_point_mm = [0, 0, 50]
-    test_point_m = [0, 0, 0.05]
+    # Test point on axis at z = 0.050 m
+    test_point = [0, 0, 0.050]
 
-    print(f"\nTest point: {test_point_mm} mm = {test_point_m} m")
+    print(f"\nTest point: {test_point} m")
     print("-" * 60)
 
     # Test each field type
@@ -59,12 +58,12 @@ def test_coil_fields():
     for ftype in field_types:
         print(f"\nField type: '{ftype}'")
 
-        # Direct Radia call (mm units)
-        radia_result = rad.Fld(coil, ftype, test_point_mm)
+        # Direct Radia call (meters)
+        radia_result = rad.Fld(coil, ftype, test_point)
         print(f"  rad.Fld result: {radia_result}")
 
-        # RadiaField (units='mm' to match Radia)
-        cf = radia_ngsolve.RadiaField(coil, ftype, units='mm')
+        # RadiaField (units='m', the only supported mode)
+        cf = rad.RadiaField(coil, ftype)
         print(f"  RadiaField dimension: {cf.dim}")
 
         # Evaluate at test point
@@ -83,7 +82,7 @@ def test_coil_fields():
             print(f"  [OK] {ftype.upper()} is vector (dim=3)")
 
     print("\n" + "=" * 60)
-    print("Summary of field values at z=50 mm on axis")
+    print("Summary of field values at z=0.050 m on axis")
     print("=" * 60)
 
     # B field
@@ -100,7 +99,7 @@ def test_coil_fields():
 
     # A field
     A = results['a']['radia']
-    print(f"A = [{A[0]:.6e}, {A[1]:.6e}, {A[2]:.6e}] T*mm")
+    print(f"A = [{A[0]:.6e}, {A[1]:.6e}, {A[2]:.6e}] T*m")
 
     # M field (should be 0 for coil)
     M = results['m']['radia']
@@ -149,14 +148,16 @@ def test_coil_fields():
 def test_magnet_fields():
     """Test all field types for a permanent magnet."""
     print("\n" + "=" * 60)
-    print("Test: Permanent magnet field types in radia_ngsolve")
+    print("Test: Permanent magnet field types via rad.RadiaField")
     print("=" * 60)
 
-    # Create a simple cubic permanent magnet (10 mm cube)
+    # Create a simple cubic permanent magnet (0.010 m cube)
     # Using ObjHexahedron with magnetization
     vertices = [
-        [-5, -5, -5], [5, -5, -5], [5, 5, -5], [-5, 5, -5],
-        [-5, -5, 5], [5, -5, 5], [5, 5, 5], [-5, 5, 5]
+        [-0.005, -0.005, -0.005], [0.005, -0.005, -0.005],
+        [0.005, 0.005, -0.005], [-0.005, 0.005, -0.005],
+        [-0.005, -0.005, 0.005], [0.005, -0.005, 0.005],
+        [0.005, 0.005, 0.005], [-0.005, 0.005, 0.005]
     ]
 
     # Magnetization: 1.0 T equivalent in z-direction
@@ -166,9 +167,9 @@ def test_magnet_fields():
     magnet = rad.ObjHexahedron(vertices, [0, 0, Mz])
     print(f"Created magnet with handle: {magnet}, M = [0, 0, {Mz:.0f}] A/m")
 
-    # Test point above the magnet at z = 20 mm
-    test_point_mm = [0, 0, 20]
-    print(f"Test point: {test_point_mm} mm")
+    # Test point above the magnet at z = 0.020 m
+    test_point = [0, 0, 0.020]
+    print(f"Test point: {test_point} m")
     print("-" * 60)
 
     # Test each field type
@@ -178,12 +179,12 @@ def test_magnet_fields():
     for ftype in field_types:
         print(f"\nField type: '{ftype}'")
 
-        # Direct Radia call (mm units)
-        radia_result = rad.Fld(magnet, ftype, test_point_mm)
+        # Direct Radia call (meters)
+        radia_result = rad.Fld(magnet, ftype, test_point)
         print(f"  rad.Fld result: {radia_result}")
 
-        # RadiaField
-        cf = radia_ngsolve.RadiaField(magnet, ftype, units='mm')
+        # RadiaField (units='m', the only supported mode)
+        cf = rad.RadiaField(magnet, ftype)
         print(f"  RadiaField dimension: {cf.dim}")
 
         results[ftype] = {
@@ -198,7 +199,7 @@ def test_magnet_fields():
             assert cf.dim == 3, f"Expected dim=3 for {ftype}, got {cf.dim}"
 
     print("\n" + "=" * 60)
-    print("Summary of field values at z=20 mm on axis")
+    print("Summary of field values at z=0.020 m on axis")
     print("=" * 60)
 
     B = results['b']['radia']
@@ -210,7 +211,7 @@ def test_magnet_fields():
 
     print(f"B = [{B[0]:.6e}, {B[1]:.6e}, {B[2]:.6e}] T")
     print(f"H = [{H[0]:.6e}, {H[1]:.6e}, {H[2]:.6e}] A/m")
-    print(f"A = [{A[0]:.6e}, {A[1]:.6e}, {A[2]:.6e}] T*mm")
+    print(f"A = [{A[0]:.6e}, {A[1]:.6e}, {A[2]:.6e}] T*m")
     print(f"M = [{M[0]:.6e}, {M[1]:.6e}, {M[2]:.6e}] A/m")
     print(f"Phi = {Phi:.6f} A")
 
@@ -234,7 +235,7 @@ def test_magnet_fields():
 
 
 if __name__ == "__main__":
-    print("radia_ngsolve Field Types Test Suite")
+    print("RadiaField Field Types Test Suite")
     print("=" * 60)
 
     results = []

@@ -49,13 +49,6 @@ class radTApplication {
 
 	int m_nProcMPI, m_rankMPI; //OC01012020
 
-	// Physical units
-	// Radia v1.4.3+: Internal unit system is SI (meters), matching ELF
-	// m_lengthUnitScale converts user input to internal meters
-	// Default: m (scale = 1.0), for mm input: scale = 0.001
-	double m_lengthUnitScale;
-	const char* m_lengthUnitName; // "mm" or "m"
-
 public:
 
 	short SendingIsRequired;
@@ -131,6 +124,8 @@ public:
 	int m_linear_iterations;         // Total BiCGSTAB iterations (cumulative)
 #endif
 
+	// FMM solver (Method 3) REMOVED 2026-03-06
+
 	radTApplication()
 	{
 		Initialize();
@@ -172,11 +167,6 @@ public:
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
 
-		// Initialize to default units (SI: meters)
-		// Radia v1.4.3+: Default is meters (matching ELF)
-		m_lengthUnitScale = 1.0;
-		m_lengthUnitName = "m";
-
 #ifdef RADIA_USE_HACAPK
 		// HACApK default parameters
 		m_hacapk_eps = 1.0e-4;
@@ -196,6 +186,7 @@ public:
 		m_timing_linear_solve = 0.0;
 		m_linear_iterations = 0;
 #endif
+
 	}
 
 	int ValidateVector3d(double* ArrayToCheck, long LenArray, TVector3d* VectorPtr);
@@ -302,6 +293,8 @@ public:
 	int SetNonlinearAnisotropMaterial(double** Ksi, double** Ms, double* Hc, int lenHc, char* DependenceIsNonlinear);
 	int SetNonlinearAnisotropMaterial0(double* pDataPar, int lenDataPar, double* pDataPer, int lenDataPer);
 
+	int SetEnergyHysteresisMaterial(int K, const double* As, const double* Js, const double* chi, double eps);
+
 	int ApplyMaterial(int g3dRelaxElemKey, int MaterElemKey);
 	void ComputeMvsH(int g3dRelaxOrMaterElemKey, char* MagnChar, double* H, long lenH);
 
@@ -335,7 +328,7 @@ public:
 	void ClassifyPoints(int* classification, int* nearest_elem, int n_points,
 	                    double* points, int container_handle, double near_threshold);
 	void ComputeFieldBatch(double* B_out, double* H_out, int n_points,
-	                       double* points, int container_handle, int method);
+	                       double* points, int container_handle);
 	void ComputeScalarPotentialBatch(double* phi_out, int n_points,
 	                                 double* points, int container_handle);
 	void ComputeVectorPotentialBatch(double* A_out, int n_points,
@@ -370,11 +363,6 @@ public:
 	int SetMltplThresh(double* InMltplThresh); // Maybe to be removed later
 	int SetTolForConvergence(double AbsRandMagnitude, double RelRandMagnitude, double ZeroRandMagnitude);
 	int RandomizationOnOrOff(char* OnOrOff);
-
-	int SetAndShowPhysUnits();
-	int SetPhysUnits(const char* unitStr); // Set physical units (mm or m)
-	double GetLengthUnitScale() const { return m_lengthUnitScale; }
-	const char* GetLengthUnitName() const { return m_lengthUnitName; }
 
 	void DumpElem(int* arKeys, int nElem, const char* strFormat, bool arKeysAllocInMathLink=false);
 	int DumpElemParse(const unsigned char *bstr, int bstrLen);

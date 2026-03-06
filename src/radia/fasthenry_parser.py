@@ -961,8 +961,7 @@ class FastHenryParser:
         import os
         try:
             sys.path.insert(0, os.path.dirname(__file__))
-            from _radia_pybind import (ObjHexahedron, ObjCnt, MatLin, MatApl,
-                                       FldUnits)
+            from _radia_pybind import (ObjHexahedron, ObjCnt, MatLin, MatApl)
         except ImportError:
             import radia as rad
             ObjHexahedron = rad.ObjHexahedron

@@ -72,7 +72,6 @@ print("[1] Full Model (2 cubes)")
 print("="*70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 c1 = rad.ObjHexahedron(v1, [0, 0, 0])
 c2 = rad.ObjHexahedron(v2, [0, 0, 0])
@@ -108,7 +107,6 @@ print("[2] IMA -z (antisymmetric) = 異極対称 - SHOULD BE CORRECT")
 print("="*70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 c1_ima = rad.ObjHexahedron(v1, [0, 0, 0])
 mat_ima = rad.MatLin(MU_R)
@@ -141,7 +139,6 @@ print("[3] IMA +z (symmetric) = 同極対称 - SHOULD BE WRONG")
 print("="*70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 c1_ima2 = rad.ObjHexahedron(v1, [0, 0, 0])
 mat_ima2 = rad.MatLin(MU_R)

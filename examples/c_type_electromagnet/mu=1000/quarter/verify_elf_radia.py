@@ -105,7 +105,6 @@ print(f"ELF matrix loaded: {elf_mat.shape}")
 
 # Create Radia model
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 hex_objects = []
 for elem_id, node_ids in elements:
@@ -179,7 +178,6 @@ if elf_B is not None:
 
 # Create new model with racetrack coil and image symmetry
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 hex_objects = []
 for elem_id, node_ids in elements:

@@ -24,7 +24,6 @@ from ngsolve import *
 from netgen.csg import CSGeometry, OrthoBrick, Pnt
 import numpy as np
 import radia as rad
-import radia_ngsolve
 
 
 print("=" * 70)
@@ -32,7 +31,6 @@ print("Radia Field Types Demo")
 print("=" * 70)
 
 # Set Radia to use meters (required for NGSolve integration)
-rad.FldUnits('m')
 
 # ============================================================================
 # Step 1: Create Radia Magnet Geometry
@@ -75,10 +73,10 @@ print("\n[Step 2] Creating CoefficientFunctions for All Field Types")
 print("-" * 70)
 
 # Method 1: New unified interface (recommended)
-B_cf = radia_ngsolve.RadiaField(magnet, 'b')  # Magnetic flux density
-H_cf = radia_ngsolve.RadiaField(magnet, 'h')  # Magnetic field
-A_cf = radia_ngsolve.RadiaField(magnet, 'a')  # Vector potential
-M_cf = radia_ngsolve.RadiaField(magnet, 'm')  # Magnetization
+B_cf = rad.RadiaField(magnet, 'b')  # Magnetic flux density
+H_cf = rad.RadiaField(magnet, 'h')  # Magnetic field
+A_cf = rad.RadiaField(magnet, 'a')  # Vector potential
+M_cf = rad.RadiaField(magnet, 'm')  # Magnetization
 
 print(f"Created CoefficientFunctions:")
 print(f"  B (flux density):  {type(B_cf).__name__}, field_type='{B_cf.field_type}'")
@@ -195,7 +193,7 @@ print("Summary")
 print("=" * 70)
 
 print("\nNew Unified Interface:")
-print("  radia_ngsolve.RadiaField(radia_obj, field_type)")
+print("  rad.RadiaField(radia_obj, field_type)")
 print("\nField types:")
 print("  'b' - Magnetic flux density B (Tesla)")
 print("  'h' - Magnetic field H (A/m)")

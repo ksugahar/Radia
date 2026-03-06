@@ -19,7 +19,6 @@ sys.path.insert(0, str(project_root / 'dist'))
 
 import radia as rad
 
-rad.FldUnits('m')
 mm = 1e-3  # 1 mm in meters
 
 
@@ -231,7 +230,7 @@ def main():
 	print("=" * 70)
 	print("\nHexagonal array of cylindrical SmCo magnets\n")
 
-	# Create magnet array (all dimensions in meters, FldUnits='m')
+	# Create magnet array (all dimensions in meters, Radia always uses meters)
 	geometry, info = create_smco_magnet_array(
 		mag_radius=5*mm,	   # 5 mm radius
 		mag_height=10*mm,	  # 10 mm height

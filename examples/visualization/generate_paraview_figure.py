@@ -41,7 +41,6 @@ def generate_field_vts():
     print("Generating Radia Field VTS")
     print("="*60)
 
-    rad.FldUnits('m')
 
     # Create magnet
     print("\n[1] Creating magnet...")

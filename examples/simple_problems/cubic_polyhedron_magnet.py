@@ -21,7 +21,6 @@ import radia as rad
 
 # Clear all objects
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 print("=" * 70)
 print("Case 3: Cubic Magnet using Polyhedron")

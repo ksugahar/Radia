@@ -53,7 +53,6 @@ def benchmark_hexahedra(n_div, solver_type, output_dir, is_linear=False,
         hmat_leaf_size: H-matrix leaf size
         hmat_eta: H-matrix admissibility parameter
     """
-    rad.FldUnits('m')
     rad.UtiDelAll()
 
     n_elements = n_div ** 3

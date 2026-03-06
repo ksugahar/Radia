@@ -22,7 +22,6 @@ import radia as rad
 try:
 	from ngsolve import *
 	from netgen.occ import *
-	import radia_ngsolve
 	NGSOLVE_AVAILABLE = True
 except ImportError:
 	print("ERROR: NGSolve not available. This example requires NGSolve.")
@@ -42,9 +41,6 @@ print("\n[Step 1] Creating Radia rectangular magnet")
 print("-" * 80)
 
 rad.UtiDelAll()
-
-# Set Radia to use meters (required for NGSolve integration)
-rad.FldUnits('m')
 
 # Rectangular magnet with significant field
 magnet = rad.ObjRecMag(
@@ -109,8 +105,8 @@ for maxh in mesh_sizes:
 	print(f"    H(div) DOFs: {fes_hdiv.ndof}")
 
 	# Get CoefficientFunctions
-	A_cf = radia_ngsolve.RadiaField(bg_field, 'a')
-	B_cf = radia_ngsolve.RadiaField(bg_field, 'b')
+	A_cf = rad.RadiaField(bg_field, 'a')
+	B_cf = rad.RadiaField(bg_field, 'b')
 
 	# Project A to H(curl) space
 	A_gf = GridFunction(fes_hcurl)
@@ -228,8 +224,8 @@ fes_hcurl = HCurl(mesh, order=2)
 fes_hdiv = HDiv(mesh, order=2)
 fes_h1 = H1(mesh, order=2)
 
-A_cf = radia_ngsolve.RadiaField(bg_field, 'a')
-B_cf = radia_ngsolve.RadiaField(bg_field, 'b')
+A_cf = rad.RadiaField(bg_field, 'a')
+B_cf = rad.RadiaField(bg_field, 'b')
 
 A_gf = GridFunction(fes_hcurl)
 A_gf.Set(A_cf)

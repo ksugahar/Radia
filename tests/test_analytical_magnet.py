@@ -85,12 +85,8 @@ def test_spherical_magnet():
                   f"{B_ours[2]:>12.6e} {B_magpy[2]:>12.6e} {error:>12.2f}")
 
         print("-" * 65)
-        if max_error < 1.0:
-            print(f"TEST PASSED: Maximum error {max_error:.4f}%")
-            return True
-        else:
-            print(f"TEST FAILED: Maximum error {max_error:.2f}%")
-            return False
+        assert max_error < 1.0, f"TEST FAILED: Maximum error {max_error:.2f}%"
+        print(f"TEST PASSED: Maximum error {max_error:.4f}%")
     else:
         print(f"\n{'Point [mm]':>25} {'Bx [T]':>12} {'By [T]':>12} {'Bz [T]':>12}")
         print("-" * 70)
@@ -102,7 +98,6 @@ def test_spherical_magnet():
 
         print("-" * 70)
         print("TEST INFO: Values shown (no magpylib for comparison)")
-        return True
 
 
 def test_cuboid_magnet():
@@ -160,12 +155,8 @@ def test_cuboid_magnet():
                   f"{B_ours[2]:>12.6e} {B_magpy[2]:>12.6e} {error:>12.2f}")
 
         print("-" * 65)
-        if max_error < 1.0:
-            print(f"TEST PASSED: Maximum error {max_error:.4f}%")
-            return True
-        else:
-            print(f"TEST FAILED: Maximum error {max_error:.2f}%")
-            return False
+        assert max_error < 1.0, f"TEST FAILED: Maximum error {max_error:.2f}%"
+        print(f"TEST PASSED: Maximum error {max_error:.4f}%")
     else:
         print(f"\n{'Point [mm]':>25} {'Bx [T]':>12} {'By [T]':>12} {'Bz [T]':>12}")
         print("-" * 70)
@@ -177,7 +168,6 @@ def test_cuboid_magnet():
 
         print("-" * 70)
         print("TEST INFO: Values shown (no magpylib for comparison)")
-        return True
 
 
 def test_current_loop():
@@ -236,12 +226,8 @@ def test_current_loop():
                   f"{B_ours[2]:>12.6e} {B_magpy[2]:>12.6e} {error:>12.2f}")
 
         print("-" * 65)
-        if max_error < 1.0:
-            print(f"TEST PASSED: Maximum error {max_error:.4f}%")
-            return True
-        else:
-            print(f"TEST FAILED: Maximum error {max_error:.2f}%")
-            return False
+        assert max_error < 1.0, f"TEST FAILED: Maximum error {max_error:.2f}%"
+        print(f"TEST PASSED: Maximum error {max_error:.4f}%")
     else:
         print(f"\n{'Point [mm]':>25} {'Bx [T]':>12} {'By [T]':>12} {'Bz [T]':>12}")
         print("-" * 70)
@@ -253,7 +239,6 @@ def test_current_loop():
 
         print("-" * 70)
         print("TEST INFO: Values shown (no magpylib for comparison)")
-        return True
 
 
 def test_vector_potentials():
@@ -339,12 +324,8 @@ def test_vector_potentials():
         all_passed = False
 
     print("-" * 60)
-    if all_passed:
-        print("TEST PASSED: All vector potentials satisfy curl(A) ~= B")
-        return True
-    else:
-        print("TEST FAILED: Some vector potentials do not satisfy curl(A) = B")
-        return False
+    assert all_passed, "TEST FAILED: Some vector potentials do not satisfy curl(A) = B"
+    print("TEST PASSED: All vector potentials satisfy curl(A) ~= B")
 
 
 if __name__ == "__main__":
@@ -353,12 +334,21 @@ if __name__ == "__main__":
     print(f"magpylib available: {HAS_MAGPYLIB}")
     print()
 
-    results = []
+    tests = [
+        ("Spherical Magnet", test_spherical_magnet),
+        ("Cuboid Magnet", test_cuboid_magnet),
+        ("Current Loop", test_current_loop),
+        ("Vector Potentials", test_vector_potentials),
+    ]
 
-    results.append(("Spherical Magnet", test_spherical_magnet()))
-    results.append(("Cuboid Magnet", test_cuboid_magnet()))
-    results.append(("Current Loop", test_current_loop()))
-    results.append(("Vector Potentials", test_vector_potentials()))
+    results = []
+    for name, func in tests:
+        try:
+            func()
+            results.append((name, True))
+        except AssertionError as e:
+            print(str(e))
+            results.append((name, False))
 
     print("\n" + "=" * 60)
     print("Summary")

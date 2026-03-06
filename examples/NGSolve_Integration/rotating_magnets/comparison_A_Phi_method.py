@@ -30,7 +30,7 @@ A-Φ法 (ベクトルポテンシャル-スカラーポテンシャル法):
   -(σ/Δt)∫(A_ext - A_ext,old)·∇ψ  (式2: 外部ポテンシャル変化)
 
 重要: A_extの正しい取得方法
-- radia_ngsolve.RadiaField(magnet, 'a') でA_extを直接取得可能
+- rad.RadiaField(magnet, 'a') でA_extを直接取得可能
 - これによりA-Phi法の正しい実装が実現される
 - 従来のB_extを使う方法は次元が不一致で誤り（README.md参照）
 
@@ -76,7 +76,6 @@ import psutil
 # Radiaのインポート
 try:
     import radia as rad
-    from radia import radia_ngsolve
     print(f"Radia version: {rad.UtiVer()}")
 except ImportError as e:
     print(f"Error importing Radia: {e}")
@@ -360,7 +359,6 @@ for step in range(time_steps + 1):
 
     # Delete all previous Radia objects (T-Omega法のline 420と同じ)
     rad.UtiDelAll()
-    rad.FldUnits('m')  # 単位をメートルに設定
 
     # 回転角度（ラジアン）
     theta = np.deg2rad(rotation_angle)
@@ -393,7 +391,7 @@ for step in range(time_steps + 1):
     # ------------------------------------------------------------------
 
     # T-Omega法のline 455-459と同じパターンでRadiaField作成
-    A_cf = radia_ngsolve.RadiaField(magnet, 'a',
+    A_cf = rad.RadiaField(magnet, 'a',
                                     origin=origin,
                                     u_axis=u_axis,
                                     v_axis=v_axis,
@@ -409,7 +407,7 @@ for step in range(time_steps + 1):
 
     # ★修正: 外部磁場BもRadiaFieldから直接取得（T-Ω法と同様）
     # curl(A_ext)ではなく、Radiaから直接Bを取得することで数値微分誤差を回避
-    B_ext_cf = radia_ngsolve.RadiaField(magnet, 'b',
+    B_ext_cf = rad.RadiaField(magnet, 'b',
                                         origin=origin,
                                         u_axis=u_axis,
                                         v_axis=v_axis,
@@ -424,7 +422,7 @@ for step in range(time_steps + 1):
             test_point_world = [x_pos, y_fixed + 0.002, z_fixed - 0.002]  # 磁石の少し上方 (m)
             mip_center = mesh(test_point_world[0], test_point_world[1], test_point_world[2])
 
-            # radia_ngsolve経由で取得（変換を適用した座標系）
+            # rad.RadiaField経由で取得（変換を適用した座標系）
             A_ext_val = gfA_ext(mip_center)
             print(f"  [NGSolve] A_ext: ({A_ext_val[0]:.6e}, {A_ext_val[1]:.6e}, {A_ext_val[2]:.6e})")
 
@@ -433,14 +431,14 @@ for step in range(time_steps + 1):
             B_from_curl_A = curl(gfA_ext)(mip_center)
 
             # B_directも同じ変換を使用
-            B_cf = radia_ngsolve.RadiaField(magnet, 'b',
+            B_cf = rad.RadiaField(magnet, 'b',
                                             origin=origin,
                                             u_axis=u_axis,
                                             v_axis=v_axis,
                                             w_axis=w_axis)
             B_direct = B_cf(mip_center)
             print(f"  [検証] curl(A_ext) (NGSolve): ({B_from_curl_A[0]:.6e}, {B_from_curl_A[1]:.6e}, {B_from_curl_A[2]:.6e})")
-            print(f"  [検証] B_direct (radia_ngsolve): ({B_direct[0]:.6e}, {B_direct[1]:.6e}, {B_direct[2]:.6e})")
+            print(f"  [検証] B_direct (rad.RadiaField): ({B_direct[0]:.6e}, {B_direct[1]:.6e}, {B_direct[2]:.6e})")
 
             # curl(A)/B比は 1/μ₀ になるはず
             B_ratio = [B_from_curl_A[i] / B_direct[i] if abs(B_direct[i]) > 1e-12 else 0
@@ -472,7 +470,7 @@ for step in range(time_steps + 1):
         valid_points = 0
         rel_errors = []
 
-        B_cf = radia_ngsolve.RadiaField(magnet, 'b',
+        B_cf = rad.RadiaField(magnet, 'b',
                                         origin=origin,
                                         u_axis=u_axis,
                                         v_axis=v_axis,

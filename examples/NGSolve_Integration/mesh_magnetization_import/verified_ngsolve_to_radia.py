@@ -355,7 +355,6 @@ print("[Step 6] Creating Radia tetrahedral mesh")
 print("-" * 70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 # IMPORTANT: Radia magnetization units
 # Radia API accepts magnetization values that are numerically equivalent to A/m
@@ -397,7 +396,6 @@ debug_geo = DebugOCCGeo(debug_sphere)
 debug_ngmesh = Mesh(debug_geo.GenerateMesh(maxh=0.15))  # Coarse for speed
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 # Use netgen_mesh_to_radia for correct mesh extraction
 debug_container = netgen_mesh_to_radia(
     debug_ngmesh,
@@ -411,7 +409,6 @@ print("    Expected (dipole): %.6e T" % (mu0/(4*np.pi) * (4/3*np.pi*sphere_radiu
 
 # Recreate the main container for comparison
 rad.UtiDelAll()
-rad.FldUnits('m')
 radia_objects_new = []
 for i, (verts, mag) in enumerate(zip(tetra_vertices, tetra_magnetization)):
     try:

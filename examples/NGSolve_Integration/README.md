@@ -35,7 +35,7 @@ python test_hex_mesh_import.py
 
 ### 2. Field Evaluation
 
-Test radia_ngsolve.RadiaField functionality:
+Test rad.RadiaField functionality:
 
 ```bash
 cd field_evaluation
@@ -77,17 +77,17 @@ python demo_field_types.py
 
 ## Features
 
-### radia_ngsolve Module
+### RadiaField (integrated into main radia module since v2.5.0)
 
-The `radia_ngsolve` Python module provides:
+`RadiaField` is accessed as `rad.RadiaField()` from the main radia module:
 
 ```python
-from radia_ngsolve import RadiaField
+import radia as rad
 
 # Create CoefficientFunction from Radia object
-B_cf = RadiaField(radia_obj, 'b')  # Magnetic field
-A_cf = RadiaField(radia_obj, 'a')  # Vector potential
-H_cf = RadiaField(radia_obj, 'h')  # Magnetic field intensity
+B_cf = rad.RadiaField(radia_obj, 'b')  # Magnetic field
+A_cf = rad.RadiaField(radia_obj, 'a')  # Vector potential
+H_cf = rad.RadiaField(radia_obj, 'h')  # Magnetic field intensity
 
 # Use in NGSolve
 from ngsolve import *
@@ -176,7 +176,7 @@ H_values = rad.FldBatch(obj, 'h', points, use_hmatrix=1)
 
 ```python
 # Efficient field projection
-B_cf = RadiaField(magnet, 'b')
+B_cf = rad.RadiaField(magnet, 'b')
 gf.Set(B_cf)  # Optimized batch evaluation
 ```
 
@@ -186,14 +186,7 @@ gf.Set(B_cf)  # Optimized batch evaluation
 
 ### Units
 
-**Always use meters for NGSolve integration:**
-
-```python
-import radia as rad
-rad.FldUnits('m')  # REQUIRED for NGSolve integration
-```
-
-NGSolve uses SI units (meters), so Radia must match.
+**Radia always uses meters, which is compatible with NGSolve SI units.**
 
 ### Finite Element Spaces
 
@@ -205,12 +198,12 @@ from ngsolve import *
 # Vector potential (A) → HCurl
 A_space = HCurl(mesh, order=2)
 A_gf = GridFunction(A_space)
-A_gf.Set(RadiaField(magnet, 'a'))
+A_gf.Set(rad.RadiaField(magnet, 'a'))
 
 # Magnetic field (B) → HDiv
 B_space = HDiv(mesh, order=2)
 B_gf = GridFunction(B_space)
-B_gf.Set(RadiaField(magnet, 'b'))
+B_gf.Set(rad.RadiaField(magnet, 'b'))
 ```
 
 **Why:**
@@ -236,24 +229,25 @@ B_gf.Set(RadiaField(magnet, 'b'))
 ### Large errors (>10%)
 
 **Check:**
-1. Units: `rad.FldUnits('m')` set?
+1. Units: all dimensions in meters?
 2. Mesh size: h < 0.015m for 0.1m magnet?
 3. Evaluation points: >1 mesh cell from boundaries?
 4. FE space: HCurl for A, HDiv for B?
 
-### ModuleNotFoundError: radia_ngsolve
+### RadiaField not found
 
-**Cause:** Module not built or not in path.
+**Cause:** Radia module not built with NGSolve support, or outdated version.
 
-**Solution:**
+**Solution:** Since v2.5.0, `RadiaField` is integrated into the main `radia` module:
+```python
+import radia as rad
+B_cf = rad.RadiaField(magnet, 'b')  # No separate module needed
+```
+
+If using an older version, rebuild:
 ```bash
-# Build radia_ngsolve module
 cd S:/Radia/01_GitHub
-cmake --build build --config Release --target radia_ngsolve
-
-# Add to path
-import sys
-sys.path.insert(0, 'S:/Radia/01_GitHub/build/Release')
+.\Build.ps1
 ```
 
 ### GridFunction.Set() hangs
@@ -300,7 +294,7 @@ When adding new examples:
 
 ## Related
 
-- `src/radia/radia_ngsolve.cpp` - C++ pybind11 implementation
+- `src/radia/radia_pybind.cpp` - C++ pybind11 implementation (includes RadiaField)
 - `src/radia/netgen_mesh_import.py` - Mesh importer (tet/hex)
 - `S:/CoreformCubit/01_GitHub/cubit_mesh_export.py` - Cubit -> Netgen export
 - `tests/` - Unit tests for integration features
