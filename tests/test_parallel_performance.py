@@ -82,7 +82,7 @@ def test_relaxation_performance():
 	start_time = time.perf_counter()
 
 	# Create a nonlinear material (required for relaxation solver)
-	mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
+	mat = rad.MatSatIsoFrm([[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]])
 
 	# Create multiple magnetic elements (grid of 10x10, spacing 10 mm = 0.010 m)
 	elements = []
