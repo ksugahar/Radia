@@ -809,7 +809,7 @@ py::dict GetSolveStats() {
 
     int err = RadGetSolveStats(stats, &n);
     if (err != 0 || n == 0) {
-        return py::none().cast<py::dict>();
+        return py::dict();
     }
 
     py::dict result;
@@ -818,6 +818,16 @@ py::dict GetSolveStats() {
         result["t_linear_solve"] = stats[1];
         result["linear_iterations"] = static_cast<int>(stats[2]);
         result["nonl_iterations"] = static_cast<int>(stats[3]);
+    }
+    if (n >= 6) {
+        result["taskmanager_enabled"] = (stats[4] > 0.5);
+        result["num_threads"] = static_cast<int>(stats[5]);
+    }
+    if (n >= 7) {
+        result["t_lu_decomp"] = stats[6];
+    }
+    if (n >= 8) {
+        result["t_hmatrix_build"] = stats[7];
     }
 
     return result;

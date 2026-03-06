@@ -97,6 +97,7 @@ public:
 	double m_solve_t_linear_solve;   // Total linear solver time [s]
 	int m_solve_linear_iterations;   // Total linear iterations (BiCGSTAB only)
 	int m_solve_nonl_iterations;     // Total nonlinear iterations
+	int m_solve_num_threads;         // Number of threads used during solve
 	bool m_solve_stats_valid;        // Whether stats are available
 
 	// Interaction matrix cache for avoiding rebuild on repeated Solve() calls
@@ -161,6 +162,7 @@ public:
 		m_solve_t_linear_solve = 0.0;
 		m_solve_linear_iterations = 0;
 		m_solve_nonl_iterations = 0;
+		m_solve_num_threads = 1;
 		m_solve_stats_valid = false;
 
 		// Interaction matrix cache init

@@ -456,7 +456,7 @@ where:
 | File | Change |
 |------|--------|
 | `tests/test_msc_matrix.py` | Expected value sign changes |
-| `examples/electromagnet/mu=1000/verify_matrix.py` | ELF comparison test |
+| `examples/c_type_electromagnet/mu=1000/verify_matrix.py` | ELF comparison test |
 
 ### 3.6 Implementation Details
 
@@ -667,8 +667,8 @@ def compare_matrices(radia_matrix, elf_matrix):
 - ELF/MAGIC source code: `S:\ELF_MAGIC\01_GitHub\src\legacy\magic.f90`
 - Radia source code: `S:\radia\01_GitHub\src\core\rad_relaxation_methods.cpp`
 - Paper reference: SA-26-010 (IEEJ Technical Meeting on Static Apparatus and Rotating Machinery, 2026)
-- Analysis script: `examples/electromagnet/mu=1000/analyze_elf_face_ordering.py`
-- Single element comparison: `examples/electromagnet/mu=1000/compare_single_element.py`
+- Analysis script: `examples/c_type_electromagnet/mu=1000/analyze_elf_face_ordering.py`
+- Single element comparison: `examples/c_type_electromagnet/mu=1000/compare_single_element.py`
 - ELF MEG file example: `S:\ELF_MAGIC\...\single\ELF_MAGIC.meg`
 
 ## Change History

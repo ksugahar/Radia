@@ -32,7 +32,6 @@ if build_dir.exists():
 def run_test_with_threads(num_threads):
 	"""Run the performance test with specified number of threads"""
 	env = os.environ.copy()
-	env['OMP_NUM_THREADS'] = str(num_threads)
 
 	print(f"\n{'=' * 70}")
 	print(f"TESTING WITH {num_threads} THREAD(S)")

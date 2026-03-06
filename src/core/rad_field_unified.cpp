@@ -24,9 +24,7 @@
 #include "rad_poly_analytical.h"  // For MSC integration
 #include "rad_constants.h"       // For RadConst::MU_0, RadConst::FOUR_PI
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "rad_parallel.h"
 
 #include <cmath>
 #include <unordered_map>
@@ -520,11 +518,8 @@ void ComputeFieldBatch(
 
     TVector3d ZeroVect(0, 0, 0);
 
-    // OpenMP parallelization
-    #ifdef _OPENMP
-    #pragma omp parallel for schedule(static) if(n_points > 100)
-    #endif
-    for (int i = 0; i < n_points; i++) {
+    // TaskManager parallelization
+    ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
         TVector3d pt(points[i*3], points[i*3+1], points[i*3+2]);
 
         // Check inside if enabled
@@ -544,7 +539,7 @@ void ComputeFieldBatch(
                     break;
                 }
             }
-            if (is_inside) continue;  // Skip to next point
+            if (is_inside) return;  // Skip to next point
         }
 
         // Compute field (point is outside)
@@ -563,7 +558,7 @@ void ComputeFieldBatch(
             H_out[i*3 + 1] = Field.H.y;
             H_out[i*3 + 2] = Field.H.z;
         }
-    }
+    });
 }
 
 //-----------------------------------------------------------------------------
@@ -950,11 +945,8 @@ void ComputeComplexFieldBatch(
         volumes[i] = s * s * s / 6.0;
     }
 
-    // OpenMP parallel computation
-    #ifdef _OPENMP
-    #pragma omp parallel for schedule(static) if(n_points > 100)
-    #endif
-    for (int i = 0; i < n_points; ++i) {
+    // TaskManager parallel computation
+    ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
         TVector3d pt(points[i * 3], points[i * 3 + 1], points[i * 3 + 2]);
 
         // Check inside
@@ -970,7 +962,7 @@ void ComputeComplexFieldBatch(
                     B_out[i * 3 + 1] = MU_0 * M_elem[1];
                     B_out[i * 3 + 2] = MU_0 * M_elem[2];
                 }
-                continue;
+                return;
             }
         }
 
@@ -997,7 +989,7 @@ void ComputeComplexFieldBatch(
             B_out[i * 3 + 1] = std::complex<double>(Field.B.y, 0);
             B_out[i * 3 + 2] = std::complex<double>(Field.B.z, 0);
         }
-    }
+    });
 }
 
 // ============================================================================
@@ -1153,10 +1145,7 @@ void ComputeBFromConductorBatch(
     (void)use_fmm;  // Reserved for future FMM integration
     (void)fmm_eps;
 
-    #ifdef _OPENMP
-    #pragma omp parallel for schedule(static) if(n_points > 100)
-    #endif
-    for (int i = 0; i < n_points; ++i) {
+    ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
         TVector3d pt(points[i * 3], points[i * 3 + 1], points[i * 3 + 2]);
 
         std::complex<double> B_pt[3];
@@ -1165,7 +1154,7 @@ void ComputeBFromConductorBatch(
         B_out[i * 3 + 0] = B_pt[0];
         B_out[i * 3 + 1] = B_pt[1];
         B_out[i * 3 + 2] = B_pt[2];
-    }
+    });
 }
 
 //-----------------------------------------------------------------------------
@@ -1234,10 +1223,7 @@ void ComputeCombinedFieldBatch(
     (void)use_fmm;
     (void)fmm_eps;
 
-    #ifdef _OPENMP
-    #pragma omp parallel for schedule(static) if(n_points > 100)
-    #endif
-    for (int i = 0; i < n_points; ++i) {
+    ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
         TVector3d pt(points[i * 3], points[i * 3 + 1], points[i * 3 + 2]);
 
         std::complex<double> B_pt[3];
@@ -1248,7 +1234,7 @@ void ComputeCombinedFieldBatch(
         B_out[i * 3 + 0] = B_pt[0];
         B_out[i * 3 + 1] = B_pt[1];
         B_out[i * 3 + 2] = B_pt[2];
-    }
+    });
 }
 
 // ============================================================================

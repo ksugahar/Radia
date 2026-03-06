@@ -11,9 +11,7 @@
 #include <algorithm>
 #include <limits>
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "rad_parallel.h"
 
 // Access to global Radia application
 extern radTApplication rad;
@@ -305,10 +303,7 @@ void ClassifyPoints(int n_points,
     double margin = avg_size * near_threshold;
 
     // Classify each point
-    #ifdef _OPENMP
-    #pragma omp parallel for schedule(dynamic)
-    #endif
-    for (int i = 0; i < n_points; ++i) {
+    ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
         TVector3d pt;
         pt.x = points[i * 3 + 0];
         pt.y = points[i * 3 + 1];
@@ -323,7 +318,7 @@ void ClassifyPoints(int n_points,
         if (pt.x < global_min.x - margin || pt.x > global_max.x + margin ||
             pt.y < global_min.y - margin || pt.y > global_max.y + margin ||
             pt.z < global_min.z - margin || pt.z > global_max.z + margin) {
-            continue;  // FAR
+            return;  // FAR
         }
 
         // Step 2: Find nearest element by center distance
@@ -342,7 +337,7 @@ void ClassifyPoints(int n_points,
             }
         }
 
-        if (best_eid < 0) continue;
+        if (best_eid < 0) return;
 
         results[i].nearest_elem_id = best_eid;
         results[i].distance = min_dist;
@@ -377,7 +372,7 @@ void ClassifyPoints(int n_points,
                 }
             }
 
-            if (results[i].classification == INSIDE) continue;
+            if (results[i].classification == INSIDE) return;
         }
 
         // Step 4: Near/Far classification
@@ -387,7 +382,7 @@ void ClassifyPoints(int n_points,
         else {
             results[i].classification = FAR;
         }
-    }
+    });
 }
 
 //-----------------------------------------------------------------------------

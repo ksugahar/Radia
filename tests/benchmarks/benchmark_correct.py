@@ -119,7 +119,6 @@ if __name__ == '__main__':
 def run_with_threads(num_threads):
 	"""Run benchmark with specified thread count"""
 	env = os.environ.copy()
-	env['OMP_NUM_THREADS'] = str(num_threads)
 
 	script = create_benchmark_script()
 	with open('_temp_bench.py', 'w') as f:

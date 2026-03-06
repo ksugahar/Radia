@@ -25,9 +25,7 @@
 #include <string.h>
 #include <vector>
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "rad_parallel.h"
 
 
 //-------------------------------------------------------------------------
@@ -101,14 +99,12 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double* StObsPo
 				StepArg	= sqrt(TranslVect.x*TranslVect.x + TranslVect.y*TranslVect.y + TranslVect.z*TranslVect.z);
 			}
 
-		#pragma omp parallel for if(Np > 100)
-			for(int i=1; i<Np; i++)
-			{
+		ngcore::ParallelFor(ngcore::IntRange(1, Np), [&](size_t i) {
 			TVector3d LocalObsPoiVect = StObsPoiVect + double(i) * TranslVect;
 				FieldArray[i] = radTField(FieldKey, CompCriterium, LocalObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 				g3dPtr->B_genComp(&(FieldArray[i]));
 				if(ArgumentNeeded) ArgArray[i] = StrtArg + double(i) * StepArg;
-			}
+			});
 		}
 		else FieldArray = &Field;
 
@@ -165,12 +161,10 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, radTVectorOfVec
 		radTField* tField = FieldArray;
 
 		TVector3d ZeroVect(0.,0.,0.);
-		#pragma omp parallel for if(Np > 100)
-		for(long i=0; i<Np; i++)
-		{
+		ngcore::ParallelFor(ngcore::IntRange(Np), [&](size_t i) {
 			FieldArray[i] = radTField(FieldKey, CompCriterium, VectorOfVector3d[i], ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 			g3dPtr->B_genComp(&(FieldArray[i]));
-		}
+		});
 
 		if(SendingIsRequired) OutFieldCompRes(FieldChar, FieldArray, Np, VectInputCell);
 
@@ -229,15 +223,13 @@ void radTApplication::ComputeField(int ElemKey, char* FieldChar, double** Points
 
 			TVector3d ZeroVect(0.,0.,0.), v;
 			double **tPoints = Points;
-			#pragma omp parallel for if(Np > 100)
-			for(long i=0; i<Np; i++)
-			{
+			ngcore::ParallelFor(ngcore::IntRange(Np), [&](size_t i) {
 				double *t = Points[i];
 				TVector3d v; v.x = *(t++); v.y = *(t++); v.z = *t;
 
 				FieldArray[i] = radTField(FieldKey, CompCriterium, v, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 				g3dPtr->B_genComp(&(FieldArray[i]));
-			}
+			});
 			if(SendingIsRequired) OutFieldCompRes(FieldChar, FieldArray, Np);
 			// RAII: vFieldArray cleaned up automatically
 		}

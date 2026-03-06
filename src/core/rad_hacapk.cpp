@@ -24,6 +24,7 @@
 #include <iostream>
 #include <chrono>
 #include <atomic>
+#include "rad_parallel.h"
 
 // Include C++ compatible HACApK wrapper header
 extern "C" {
@@ -444,9 +445,11 @@ void RadHACApKManager::PrecomputeFlatInteractMatrix() {
     //
     // For row k of the 3x3 block, we need N[i][j] element (k, l) = dH_k/dM_l
     // This requires transposed access: row k gets Str0[k], Str1[k], Str2[k]
-    #pragma omp parallel for collapse(2)
-    for (int i = 0; i < m_n_elem; i++) {
-        for (int j = 0; j < m_n_elem; j++) {
+    int total_collapse = m_n_elem * m_n_elem;
+    ngcore::ParallelFor(ngcore::IntRange(total_collapse), [&](size_t idx)
+    {
+        int i = (int)(idx / m_n_elem);
+        int j = (int)(idx % m_n_elem);
             const TMatrix3df& M = m_interaction->InteractMatrix[i][j];
             int64_t base_idx = ((int64_t)i * m_n_elem + j) * 9;
 
@@ -462,8 +465,7 @@ void RadHACApKManager::PrecomputeFlatInteractMatrix() {
             m_flat_N_data[base_idx + 6] = -static_cast<double>(M.Str0.z);  // -dHz/dMx
             m_flat_N_data[base_idx + 7] = -static_cast<double>(M.Str1.z);  // -dHz/dMy
             m_flat_N_data[base_idx + 8] = -static_cast<double>(M.Str2.z);  // -dHz/dMz
-        }
-    }
+    });
 
     m_flat_N_ready = true;
 }
@@ -682,10 +684,9 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     // Cache diagonal elements N_ii for Jacobi preconditioner
     // This is computed once and reused in every BiCGSTAB iteration
     m_diag_N.resize(m_ndof);
-    #pragma omp parallel for
-    for (int i = 0; i < m_ndof; i++) {
-        m_diag_N[i] = GetInteractionMatrixElement(i, i);
-    }
+    ngcore::ParallelFor(ngcore::IntRange(m_ndof), [&](size_t i) {
+        m_diag_N[(int)i] = GetInteractionMatrixElement((int)i, (int)i);
+    });
     m_diag_cached = true;
 
     m_valid = true;

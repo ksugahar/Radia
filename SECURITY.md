@@ -39,5 +39,5 @@ This policy covers:
 
 ## Known Considerations
 
-- Radia uses Intel MKL shared libraries (`mkl_rt.dll`, `libiomp5md.dll`). Ensure these are obtained from official Intel channels.
+- Radia uses Intel MKL shared libraries (`mkl_rt.dll`). MKL internally depends on `libiomp5md.dll` (Intel OpenMP). Ensure these are obtained from official Intel channels.
 - The `_radia_pybind.pyd` binary is distributed via GitHub Releases. Verify checksums when downloading pre-built binaries.

@@ -190,7 +190,13 @@ struct PEECMatrices {
     // Port definitions
     std::vector<PEECPort> ports;
 
-    PEECMatrices() : n_loop(0), n_star(0), n_junction(0) {}
+    // Gathered capacitance for proper MNA (n_nodes x n_nodes, row-major, real)
+    // C_gathered = G × (P/eps_eff)⁻¹ × G^T
+    // Used in MNA: Y_node = A × Y_branch⁻¹ × A^T + jω × C_gathered
+    std::vector<double> C_gathered;
+    int n_nodes_gathered;               // Number of nodes in C_gathered
+
+    PEECMatrices() : n_loop(0), n_star(0), n_junction(0), n_nodes_gathered(0) {}
 
     // Access L(i,j)
     double& L_at(int i, int j) { return L[i * n_loop + j]; }
@@ -253,6 +259,17 @@ public:
      * Creates nodes at segment start/end points, merging coincident points.
      */
     void AutoGenerateNodes();
+
+    /**
+     * @brief Auto-generate face panels from existing segments
+     *
+     * Creates quadrilateral panels on segment surfaces for accurate
+     * capacitance extraction (panel-based P matrix).
+     *
+     * @param mode 0=all 6 faces, 1=top+bottom (2 per seg), 2=4 long faces (no end caps)
+     * @param eps_r Relative permittivity for dielectric substrate (default: 1.0 = vacuum)
+     */
+    void GenerateFacePanels(int mode = 2, double eps_r = 1.0);
 
     /**
      * @brief Clear all geometry
@@ -321,9 +338,12 @@ public:
     /**
      * @brief Build all PEEC matrices (frequency-independent: L, R_dc, P, M_LS)
      * @param includeStar If true, compute P and M_LS matrices
+     * @param eps_eff Effective permittivity for gathered capacitance (default 1.0).
+     *               If > 0 and panels present, also computes C_gathered.
+     *               For PCB half-space model: eps_eff = (1 + eps_r) / 2.
      * @return PEECMatrices structure
      */
-    PEECMatrices Build(bool includeStar = true);
+    PEECMatrices Build(bool includeStar = true, double eps_eff = 1.0);
 
     /**
      * @brief Compute L matrix only (inductance)
@@ -345,6 +365,18 @@ public:
      */
     void ComputeM_LS(PEECMatrices& matrices);
 
+    /**
+     * @brief Compute gathered capacitance C_eff = G × (P/eps_eff)⁻¹ × G^T
+     *
+     * G is the gathering matrix (n_nodes × n_star) that maps panel charges to nodes.
+     * Each panel's charge is split 50/50 between its parent segment's endpoint nodes.
+     *
+     * @param matrices Must have P already computed. C_gathered is written here.
+     * @param eps_eff Effective permittivity for half-space model (default 1.0).
+     *               For PCB: eps_eff = (1 + eps_r) / 2
+     */
+    void ComputeGatheredCapacitance(PEECMatrices& matrices, double eps_eff = 1.0);
+
     // ========== Query ==========
 
     int NumSegments() const { return static_cast<int>(segments_.size()); }
@@ -359,8 +391,10 @@ private:
     std::vector<PEECSegment> segments_;
     std::vector<PEECNode> nodes_;
     std::vector<PEECPanel> panels_;
+    std::vector<int> panel_segment_ids_;  // panel index -> parent segment index
     std::vector<PEECPort> ports_;
     int nextPortId_;
+    double eps_r_;  // Relative permittivity for P matrix scaling (default: 1.0)
 
     // Compute self-inductance (dispatches to rectangular or circular)
     double SelfInductance(const PEECSegment& seg) const;
@@ -384,6 +418,9 @@ private:
     double SelfPotentialPanelTriangle(const PEECPanel& panel) const;
     double SelfPotentialPanelQuad(const PEECPanel& panel) const;
     double MutualPotentialPanelTriangle(const PEECPanel& panel_i, const PEECPanel& panel_j) const;
+
+    // Generalized mutual potential between any panel types (triangle or quad)
+    double MutualPotentialPanel(const PEECPanel& panel_i, const PEECPanel& panel_j) const;
 
     // Hess-Smith analytical single-layer potential from a flat polygon
     // evaluated at a given observation point (Hess & Smith, 1967; Newman, 1986)
@@ -535,6 +572,20 @@ public:
         bicgstab_max_iter_ = max_iter;
     }
 
+    // ========== Gathered Capacitance (proper MNA) ==========
+
+    /**
+     * @brief Set pre-computed gathered capacitance for proper MNA
+     *
+     * When set, MNA uses: Y_node = A * Y_branch^{-1} * A^T + jw * C_gathered
+     * instead of the Schur complement (which cannot represent resonance).
+     *
+     * @param C_gath Gathered capacitance matrix (n_nodes x n_nodes, row-major, real)
+     * @param n_nodes Number of nodes
+     */
+    void SetGatheredCapacitance(const std::vector<double>& C_gath, int n_nodes);
+    bool HasGatheredCapacitance() const { return hasGatheredCapacitance_; }
+
     // ========== Query ==========
 
     int NumPorts() const { return static_cast<int>(ports_.size()); }
@@ -552,6 +603,10 @@ private:
     int n_nodes_;
     std::vector<PEECPort> ports_;
     bool hasTopology_;
+
+    // Gathered capacitance for proper MNA
+    bool hasGatheredCapacitance_;
+    std::vector<double> C_gathered_;    // n_nodes x n_nodes, real, row-major
 
     // Solver method: 0 = LU, 1 = BiCGSTAB
     int solverMethod_;
@@ -604,12 +659,14 @@ private:
      *
      * 1. Invert Z_eff -> Y_branch (via zgesv_)
      * 2. Y_node = A * Y_branch * A^T (via cblas_zgemm)
+     * 2b. If gathered capacitance: Y_node += jw * C_gathered
      * 3. Ground selection (one per connected component)
      * 4. LU factorize Y_reduced (zgetrf_)
      * 5. Solve for each port excitation (zgetrs_)
      * 6. Extract Z_mat from voltage solutions
      */
     void MNASolveMultiPort(const std::vector<std::complex<double>>& Z_eff,
+                           double omega,
                            std::complex<double>* Z_out, int n_ports_out);
 };
 

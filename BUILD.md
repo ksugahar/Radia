@@ -56,7 +56,7 @@ Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 | `-Test` | switch | false | Run import tests after build |
 | `-RadiaOnly` | switch | false | Build only radia.pyd (skip radia_ngsolve) |
 | `-Verbose` | switch | false | Show detailed build output |
-| `-NoOpenMP` | switch | false | Disable OpenMP (for debugging) |
+| `-NoParallel` | switch | false | Disable TaskManager parallelization (for debugging) |
 | `-NoExaFMM` | switch | false | Disable ExaFMM (for debugging) |
 
 **Examples**:
@@ -72,7 +72,7 @@ Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 **Features**:
 - Uses MSVC compiler for NGSolve ABI compatibility
 - Links Intel MKL for BLAS/LAPACK operations
-- Uses Intel OpenMP (`libiomp5md.dll`) for parallelization
+- Uses NGSolve TaskManager for parallelization
 - Automatically copies required DLLs to output directory
 - Build log saved to `build_log.txt` for debugging
 - Shows PYD file size and timestamp on success
@@ -90,13 +90,13 @@ Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 - **Python**: 3.8+ (64-bit)
 - **Intel oneAPI Base Toolkit**: Required for Intel MKL
   - Download from [Intel oneAPI](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html)
-  - Provides: Intel MKL (BLAS/LAPACK/FFT), Intel OpenMP
+  - Provides: Intel MKL (BLAS/LAPACK/FFT)
 
 **Required Intel Components**:
 | Component | Purpose |
 |-----------|---------|
 | Intel MKL | BLAS, LAPACK, DFTI (FFT) operations |
-| Intel OpenMP (`libiomp5md.dll`) | Thread parallelization |
+| NGSolve TaskManager | Thread parallelization (replaces OpenMP) |
 
 ### macOS
 
@@ -104,7 +104,7 @@ Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 - **Tools**: Xcode Command Line Tools
 - **CMake**: `brew install cmake`
 - **Python**: 3.8+
-- **Intel oneAPI Base Toolkit**: For Intel MKL and OpenMP
+- **Intel oneAPI Base Toolkit**: For Intel MKL
   - Download from [Intel oneAPI](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html)
   - Note: Apple Silicon (arm64) requires Rosetta 2 for Intel MKL
 
@@ -114,7 +114,7 @@ Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 - **Compiler**: GCC/G++ 9+
 - **CMake**: `sudo apt install cmake`
 - **Python**: `sudo apt install python3-dev`
-- **Intel oneAPI Base Toolkit**: For Intel MKL and OpenMP
+- **Intel oneAPI Base Toolkit**: For Intel MKL
   - Add Intel APT repository and install: `sudo apt install intel-oneapi-mkl-devel`
   - Or download from [Intel oneAPI](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html)
 
@@ -321,19 +321,10 @@ import radia_ngsolve  # Now this will work
 .\Build.ps1 -Rebuild
 ```
 
-#### OpenMP issues (two OpenMP runtimes)
+#### Threading issues
 **Symptom**: Random crashes or incorrect parallel execution
-**Cause**: Both `libiomp5md.dll` (Intel) and `vcomp140.dll` (MSVC) loaded
-**Solution**: Verify only Intel OpenMP is loaded:
-```python
-import psutil, os
-process = psutil.Process(os.getpid())
-for dll in process.memory_maps():
-    if 'omp' in dll.path.lower():
-        print(dll.path)
-# Should show: libiomp5md.dll
-# Should NOT show: vcomp140.dll
-```
+**Cause**: Threading conflict between MKL's internal OpenMP and other runtimes
+**Solution**: Radia uses NGSolve TaskManager for parallelization. MKL threading is managed internally (mkl_set_num_threads(1) during TaskManager regions). If you see `vcomp140.dll` loaded, there may be a configuration error.
 
 #### Build fails with linking errors
 ```powershell
@@ -525,7 +516,7 @@ rad.CndSolve(cond)
 ### Windows (Primary Platform)
 
 - **Intel MKL** for all BLAS/LAPACK/FFT operations
-- **Intel OpenMP** (`libiomp5md.dll`) for parallelization
+- **NGSolve TaskManager** for parallelization
 - **MSVC** compiler for NGSolve ABI compatibility
 - Build.ps1 automatically copies required DLLs
 - Supports both cmd.exe and PowerShell
@@ -537,20 +528,19 @@ rad.CndSolve(cond)
 | `mkl_core.2.dll` | MKL core |
 | `mkl_intel_thread.2.dll` | MKL threading |
 | `mkl_def.2.dll`, `mkl_avx2.dll` | CPU-specific kernels |
-| `libiomp5md.dll` | Intel OpenMP runtime |
 
 ### macOS
 
 - Intel (x86_64) fully supported with Intel MKL
 - Apple Silicon (arm64) requires Rosetta 2 for Intel MKL
-- Uses Intel OpenMP (`libiomp5`) for parallelization
+- Uses NGSolve TaskManager for parallelization
 - Source `setvars.sh` before building: `source /opt/intel/oneapi/setvars.sh`
 
 ### Linux
 
 - Tested on Ubuntu 20.04+ and Debian 11+
 - Uses Intel MKL for BLAS/LAPACK/FFT operations
-- Uses Intel OpenMP (`libiomp5`) for parallelization
+- Uses NGSolve TaskManager for parallelization
 - Source `setvars.sh` before building: `source /opt/intel/oneapi/setvars.sh`
 - May need to set `LD_LIBRARY_PATH` for Intel libraries
 
@@ -601,7 +591,7 @@ Remove-Item -Recurse -Force build-msvc
 
 **Last Updated**: 2026-01-09
 **Build System**: CMake 3.21+ with MSVC / GCC / Clang
-**Primary Platform**: Windows with Intel MKL + Intel OpenMP
+**Primary Platform**: Windows with Intel MKL + NGSolve TaskManager
 **Supported Platforms**: Windows (primary), macOS, Linux
 **Supported Python**: 3.8, 3.9, 3.10, 3.11, 3.12
 **C++ Standard**: C++17 (required for ExaFMM-t inline variables)
