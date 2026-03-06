@@ -328,28 +328,47 @@ for (int i = 0; i < n; i++) { ... }
 - MKL internal threading (controlled by `mkl_set_num_threads`)
 - Legacy code not yet migrated
 
-### PyPI Release Workflow
+### PyPI Release Workflow (Automated via GitHub Actions)
 
-1. Claude Code bumps version in `pyproject.toml` and `src/radia/__init__.py`, updates `CHANGELOG.md`
-2. **CRITICAL**: Run `Build.ps1` BEFORE `python -m build`
-3. **MANDATORY**: Verify wheel contains correct `.pyd` before upload:
-   ```python
-   import zipfile
-   whl = zipfile.ZipFile('dist/radia-X.Y.Z-py3-none-any.whl')
-   for info in whl.infolist():
-       if info.filename == 'radia/radia.pyd':
-           print(f'Wheel .pyd: {info.file_size} bytes')  # Must match build output
+**POLICY**: PyPI publishing is automatic. Push a version tag (`v*`) and CI/CD handles the rest.
+
+**Release Steps**:
+1. Bump version in `pyproject.toml` AND `src/radia/__init__.py` (must match)
+2. Update `CHANGELOG.md`
+3. Build locally: `Build.ps1 -Rebuild -Test` (verify tests pass)
+4. Commit, tag, and push:
+   ```bash
+   git commit -m "Release vX.Y.Z: description"
+   git tag vX.Y.Z
+   git push origin main vX.Y.Z
    ```
-4. **User manually executes** `Publish_to_PyPI.ps1` (Claude Code does NOT upload)
-5. NEVER commit PyPI tokens to repository
+5. CI builds, tests, builds wheel, then Release workflow publishes to PyPI
+6. Monitor: `gh run list --limit 5`
 
-**Build Path**: Only `build-msvc/` is supported. `build/Release/` is REMOVED.
+**CI/CD Pipeline** (`.github/workflows/`):
+```
+git push v* tag
+  -> CI (build-test.yml): Build.ps1 -> pytest -> Build_Wheel.ps1 -DryRun -> upload artifacts
+  -> Release (release.yml): download wheel artifact -> pypa/gh-action-pypi-publish (OIDC Trusted Publishers)
+```
 
-**Testing Checklist** (before PyPI upload):
-1. `python -m build`
-2. Inspect wheel contents (must show `radia/radia.pyd`, NOT `python/radia.pyd`)
-3. `pip install dist/radia-x.y.z-py3-none-any.whl`
-4. `python -c "import radia; print(radia.__version__)"`
+**No API tokens stored**. Uses PyPI OIDC Trusted Publishers (id-token: write).
+
+**NGSolve on CI runner**: The self-hosted runner (NETWORK SERVICE) cannot access S: drive. NGSolve must be copied locally:
+```powershell
+robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
+```
+
+**Wheel Verification** (automated by Build_Wheel.ps1, also manual):
+```python
+import zipfile
+whl = zipfile.ZipFile('dist/radia-X.Y.Z-cp312-cp312-win_amd64.whl')
+for info in whl.infolist():
+    if info.filename.endswith('.pyd'):
+        print(f'{info.filename}: {info.file_size} bytes')
+# Must contain radia/_radia_pybind.pyd (> 2 MB)
+# Must NOT contain any .dll files (MKL policy)
+```
 
 ### MKL DLL Policy: Do NOT Bundle
 
