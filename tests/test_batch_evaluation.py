@@ -47,13 +47,6 @@ def main():
     mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.010))
     print(f"[Setup] Mesh: {mesh.ne} elements, {mesh.nv} vertices")
 
-    # H-matrix field evaluation (if available)
-    if hasattr(rad, 'SetHMatrixFieldEval'):
-        rad.SetHMatrixFieldEval(1, 1e-6)
-        print("[Setup] H-matrix enabled (eps=1e-6)")
-    else:
-        print("[Setup] H-matrix field eval not available, using direct")
-
     # Test 1: Standard evaluation (element-by-element)
     print("\n" + "=" * 70)
     print("TEST 1: Standard GridFunction.Set() (element-by-element)")

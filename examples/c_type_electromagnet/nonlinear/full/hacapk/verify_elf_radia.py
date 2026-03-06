@@ -125,7 +125,7 @@ B_coil = np.array(rad.Fld(coil, 'b', [0, 0, 0]))
 print(f"Coil-only Bz: {B_coil[2]*1000:.4f} mT")
 
 # Set HACApK parameters
-rad.SetHACApKParams(1e-4, 10, 2.0)
+rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 
 # Solve with HACApK
 print("\n" + "-" * 70)

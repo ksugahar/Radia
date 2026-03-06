@@ -875,7 +875,7 @@ Radia uses **HACApK** library for H-matrix operations:
 import radia as rad
 
 # Enable H-matrix solver
-rad.SetHACApKParams(eps=1e-4, leaf_size=10, eta=2.0)
+rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 
 # Solve with H-matrix acceleration
 rad.Solve(container, precision=0.0001, max_iter=1000, method=2)  # method=2 = HACApK

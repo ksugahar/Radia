@@ -446,29 +446,16 @@ int ObjBckg(py::function callback) {
 namespace radia_field {
 
 /**
- * @brief Compute field at a single point
- *
- * @param obj Object handle
- * @param field_type Field type: "b", "h", "a", "m", "bx", "by", "bz", etc.
- * @param point Evaluation point [x, y, z]
- * @return Field value (scalar or vector depending on field_type)
+ * @brief Single-point field computation (internal helper)
  */
-py::object Fld(int obj, const std::string& field_type, py::array_t<double> point) {
-    auto p = point.unchecked<1>();
-    if (p.size() != 3) {
-        throw std::runtime_error("point must have 3 coordinates");
-    }
-
-    double coords[3] = {p(0), p(1), p(2)};
-    double result[6] = {0};  // Max size for any field type
+static py::object FldSingle(int obj, const std::string& field_type, const double* coords) {
+    double result[6] = {0};
     int nResult = 0;
 
-    // Map multi-char field type names to single-char C API identifiers
-    // "phi" -> "p" (scalar potential only; use "h" for H components)
     std::string ft = field_type;
     if (ft == "phi") ft = "p";
     char* id = const_cast<char*>(ft.c_str());
-    int err = RadFld(result, &nResult, obj, id, coords, 1);
+    int err = RadFld(result, &nResult, obj, id, const_cast<double*>(coords), 1);
     check_error(err);
 
     if (nResult == 1) {
@@ -484,123 +471,145 @@ py::object Fld(int obj, const std::string& field_type, py::array_t<double> point
 }
 
 /**
- * @brief Batch field computation at multiple points
+ * @brief Batch field computation for B or H (internal helper)
  *
- * @param obj Object handle
- * @param points Numpy array of shape (N, 3)
- * @return Dictionary with 'B' and 'H' arrays of shape (N, 3)
+ * Returns only the requested component (B or H), not both.
  */
-py::dict FldBatch(int obj, py::array_t<double> points) {
-    py::buffer_info buf = points.request();
-
-    if (buf.ndim != 2 || buf.shape[1] != 3) {
-        throw std::runtime_error("points must be array of shape (N, 3)");
-    }
-
-    int n_points = static_cast<int>(buf.shape[0]);
-    double* pts = static_cast<double*>(buf.ptr);
-
-    // Allocate output arrays
+static py::array_t<double> FldBatchBorH(int obj, const std::string& field_type,
+                                         int n_points, double* pts) {
     std::vector<double> B_out(n_points * 3);
     std::vector<double> H_out(n_points * 3);
 
-    // Release GIL for long computation
     {
         py::gil_scoped_release release;
         int err = RadFldBatch(B_out.data(), H_out.data(), n_points, pts, obj);
         check_error(err);
     }
 
-    // Create numpy arrays
-    py::array_t<double> B_arr({n_points, 3});
-    py::array_t<double> H_arr({n_points, 3});
-
-    auto B_buf = B_arr.mutable_unchecked<2>();
-    auto H_buf = H_arr.mutable_unchecked<2>();
-
-    for (int i = 0; i < n_points; i++) {
-        for (int j = 0; j < 3; j++) {
-            B_buf(i, j) = B_out[i * 3 + j];
-            H_buf(i, j) = H_out[i * 3 + j];
-        }
-    }
-
-    py::dict result;
-    result["B"] = B_arr;
-    result["H"] = H_arr;
-    return result;
-}
-
-/**
- * @brief Compute vector potential A at multiple points
- *
- * @param obj Object handle
- * @param points Numpy array of shape (N, 3)
- * @return Numpy array of shape (N, 3) with A vectors
- */
-py::array_t<double> FldA(int obj, py::array_t<double> points) {
-    py::buffer_info buf = points.request();
-
-    if (buf.ndim != 2 || buf.shape[1] != 3) {
-        throw std::runtime_error("points must be array of shape (N, 3)");
-    }
-
-    int n_points = static_cast<int>(buf.shape[0]);
-    double* pts = static_cast<double*>(buf.ptr);
-
-    std::vector<double> A_out(n_points * 3);
-
-    {
-        py::gil_scoped_release release;
-        int err = RadFldA(A_out.data(), n_points, pts, obj);
-        check_error(err);
-    }
+    // Select requested field
+    double* src = (field_type == "h") ? H_out.data() : B_out.data();
 
     py::array_t<double> result({n_points, 3});
-    auto r = result.mutable_unchecked<2>();
-
+    auto buf = result.mutable_unchecked<2>();
     for (int i = 0; i < n_points; i++) {
-        for (int j = 0; j < 3; j++) {
-            r(i, j) = A_out[i * 3 + j];
-        }
+        buf(i, 0) = src[i * 3 + 0];
+        buf(i, 1) = src[i * 3 + 1];
+        buf(i, 2) = src[i * 3 + 2];
     }
-
     return result;
 }
 
 /**
- * @brief Compute scalar potential Phi at multiple points
+ * @brief Unified field computation at single point or multiple points
+ *
+ * Auto-detects single point (shape (3,)) vs batch (shape (N,3)).
+ * For batch mode, returns only the requested field type as an array.
  *
  * @param obj Object handle
- * @param points Numpy array of shape (N, 3)
- * @return Numpy array of shape (N,) with Phi values
+ * @param field_type Field type: "b", "h", "a", "phi", "m", "bx", "by", "bz", etc.
+ * @param points Evaluation point(s): [x,y,z] or array of shape (N,3)
+ * @return Single point: scalar or [Fx,Fy,Fz]. Batch: array of shape (N,3) or (N,)
  */
-py::array_t<double> FldPhi(int obj, py::array_t<double> points) {
+py::object Fld(int obj, const std::string& field_type, py::array_t<double> points) {
     py::buffer_info buf = points.request();
 
+    // --- Single point: shape (3,) ---
+    if (buf.ndim == 1) {
+        if (buf.shape[0] != 3) {
+            throw std::runtime_error("Single point must have 3 coordinates");
+        }
+        double* p = static_cast<double*>(buf.ptr);
+        return FldSingle(obj, field_type, p);
+    }
+
+    // --- Batch: shape (N, 3) ---
     if (buf.ndim != 2 || buf.shape[1] != 3) {
-        throw std::runtime_error("points must be array of shape (N, 3)");
+        throw std::runtime_error("points must be shape (3,) for single point or (N,3) for batch");
     }
 
     int n_points = static_cast<int>(buf.shape[0]);
     double* pts = static_cast<double*>(buf.ptr);
 
-    std::vector<double> phi_out(n_points);
+    // Dispatch by field type
+    if (field_type == "b" || field_type == "h") {
+        return FldBatchBorH(obj, field_type, n_points, pts);
+    }
 
+    if (field_type == "a") {
+        std::vector<double> A_out(n_points * 3);
+        {
+            py::gil_scoped_release release;
+            int err = RadFldA(A_out.data(), n_points, pts, obj);
+            check_error(err);
+        }
+        py::array_t<double> result({n_points, 3});
+        auto r = result.mutable_unchecked<2>();
+        for (int i = 0; i < n_points; i++) {
+            r(i, 0) = A_out[i * 3 + 0];
+            r(i, 1) = A_out[i * 3 + 1];
+            r(i, 2) = A_out[i * 3 + 2];
+        }
+        return result;
+    }
+
+    if (field_type == "phi") {
+        std::vector<double> phi_out(n_points);
+        {
+            py::gil_scoped_release release;
+            int err = RadFldPhi(phi_out.data(), n_points, pts, obj);
+            check_error(err);
+        }
+        py::array_t<double> result(n_points);
+        auto r = result.mutable_unchecked<1>();
+        for (int i = 0; i < n_points; i++) {
+            r(i) = phi_out[i];
+        }
+        return result;
+    }
+
+    // Fallback: per-point evaluation for "m", "bx", "by", "bz", etc.
+    // Determine result dimension from first point
+    double first_result[6] = {0};
+    int nResult = 0;
     {
-        py::gil_scoped_release release;
-        int err = RadFldPhi(phi_out.data(), n_points, pts, obj);
+        std::string ft = field_type;
+        if (ft == "phi") ft = "p";
+        char* id = const_cast<char*>(ft.c_str());
+        int err = RadFld(first_result, &nResult, obj, id, pts, 1);
         check_error(err);
     }
 
-    py::array_t<double> result(n_points);
-    auto r = result.mutable_unchecked<1>();
-
-    for (int i = 0; i < n_points; i++) {
-        r(i) = phi_out[i];
+    if (nResult == 1) {
+        // Scalar field (bx, by, bz, etc.)
+        py::array_t<double> result(n_points);
+        auto r = result.mutable_unchecked<1>();
+        r(0) = first_result[0];
+        for (int i = 1; i < n_points; i++) {
+            double res[6] = {0};
+            int nr = 0;
+            std::string ft = field_type;
+            char* id = const_cast<char*>(ft.c_str());
+            int err = RadFld(res, &nr, obj, id, pts + i * 3, 1);
+            check_error(err);
+            r(i) = res[0];
+        }
+        return result;
+    } else {
+        // Vector field (m, etc.)
+        py::array_t<double> result({n_points, 3});
+        auto r = result.mutable_unchecked<2>();
+        for (int j = 0; j < nResult && j < 3; j++) r(0, j) = first_result[j];
+        for (int i = 1; i < n_points; i++) {
+            double res[6] = {0};
+            int nr = 0;
+            std::string ft = field_type;
+            char* id = const_cast<char*>(ft.c_str());
+            int err = RadFld(res, &nr, obj, id, pts + i * 3, 1);
+            check_error(err);
+            for (int j = 0; j < nr && j < 3; j++) r(i, j) = res[j];
+        }
+        return result;
     }
-
-    return result;
 }
 
 /**
@@ -1553,6 +1562,98 @@ py::dict GetNewtonDampingStats() {
 // SetIMASymmetry, BuildIMAMatrix REMOVED (2026-01-31)
 // Use BuildMatrix(obj, image="+x-z") or Solve(obj, ..., image="+x-z") instead
 
+// ---- Unified SolverConfig / GetSolverConfig ----
+
+void SolverConfig(py::kwargs kwargs) {
+    // HACApK parameters
+    if (kwargs.contains("hacapk_eps") || kwargs.contains("hacapk_leaf") || kwargs.contains("hacapk_eta")) {
+        double eps = kwargs.contains("hacapk_eps") ? kwargs["hacapk_eps"].cast<double>() : -1;
+        int leaf = kwargs.contains("hacapk_leaf") ? kwargs["hacapk_leaf"].cast<int>() : -1;
+        double eta = kwargs.contains("hacapk_eta") ? kwargs["hacapk_eta"].cast<double>() : -1;
+        // Get current values for unset params
+        if (eps < 0 || leaf < 0 || eta < 0) {
+            double cur_eps = 1e-4; int cur_leaf = 10; double cur_eta = 2.0;
+            // Read current from stats if available
+            double dOut[20] = {0}; int nOut = 0;
+            RadGetHACApKStats(dOut, &nOut);
+            // Defaults used if not previously set
+            if (eps < 0) eps = cur_eps;
+            if (leaf < 0) leaf = cur_leaf;
+            if (eta < 0) eta = cur_eta;
+        }
+        SetHACApKParams(eps, leaf, eta);
+    }
+
+    if (kwargs.contains("hmatrix_eps")) {
+        SetHMatrixEpsilon(kwargs["hmatrix_eps"].cast<double>());
+    }
+
+    if (kwargs.contains("bicgstab_tol")) {
+        SetBiCGSTABTol(kwargs["bicgstab_tol"].cast<double>());
+    }
+
+    if (kwargs.contains("relax_param")) {
+        SetRelaxParam(kwargs["relax_param"].cast<double>());
+    }
+
+    if (kwargs.contains("newton_method")) {
+        SetNewtonMethod(kwargs["newton_method"].cast<bool>());
+    }
+
+    if (kwargs.contains("newton_damping") || kwargs.contains("newton_damping_max_iter") || kwargs.contains("newton_damping_min_omega")) {
+        bool enabled = kwargs.contains("newton_damping") ? kwargs["newton_damping"].cast<bool>() : true;
+        int max_iter = kwargs.contains("newton_damping_max_iter") ? kwargs["newton_damping_max_iter"].cast<int>() : 5;
+        double min_omega = kwargs.contains("newton_damping_min_omega") ? kwargs["newton_damping_min_omega"].cast<double>() : 0.01;
+        SetNewtonDamping(enabled, max_iter, min_omega);
+    }
+}
+
+py::dict GetSolverConfig() {
+    py::dict config;
+
+    // BiCGSTAB tolerance
+    { double tol = 1e-4;
+      RadGetBiCGSTABTol(&tol);
+      config["bicgstab_tol"] = tol; }
+
+    // Relaxation parameter
+    { double relax = 0.0;
+      RadGetRelaxParam(&relax);
+      config["relax_param"] = relax; }
+
+    // Newton method
+    { int use_newton = 0;
+      RadGetNewtonMethod(&use_newton);
+      config["newton_method"] = (use_newton != 0); }
+
+    // Newton damping
+    { int enabled = 0; int max_iter = 5; double min_omega = 0.01;
+      RadGetNewtonDampingStats(&enabled, &max_iter, &min_omega);
+      config["newton_damping"] = (enabled != 0);
+      config["newton_damping_max_iter"] = max_iter;
+      config["newton_damping_min_omega"] = min_omega; }
+
+    // HACApK stats (if available)
+    { double dOut[20] = {0}; int nOut = 0;
+      RadGetHACApKStats(dOut, &nOut);
+      if (nOut > 0) {
+          py::dict stats;
+          stats["n_lowrank"] = static_cast<int>(dOut[0]);
+          stats["n_dense"] = static_cast<int>(dOut[1]);
+          stats["max_rank"] = static_cast<int>(dOut[2]);
+          stats["n_leaves"] = static_cast<int>(dOut[3]);
+          stats["n_dof"] = static_cast<int>(dOut[4]);
+          stats["compression"] = dOut[5];
+          stats["build_time"] = dOut[6];
+          stats["hmatrix_build_time"] = dOut[7];
+          stats["linear_iterations"] = static_cast<int>(dOut[9]);
+          stats["memory_mb"] = dOut[10];
+          stats["dense_memory_mb"] = dOut[11];
+          config["hacapk_stats"] = stats;
+      } }
+
+    return config;
+}
 
 } // namespace radia_solver_ext
 
@@ -1808,35 +1909,18 @@ public:
 			pts_buf(i, 2) = p_local[2];
 		}
 
+		// Use unified Fld(obj, field_type, points_array)
+		py::object fld_result = rad_module_.attr("Fld")(radia_obj, field_type, pts_arr);
+
 		if (field_type == "phi") {
-			// Scalar cache for phi
-			py::array_t<double> phi_arr = rad_module_.attr("FldPhi")(radia_obj, pts_arr);
+			py::array_t<double> phi_arr = fld_result.cast<py::array_t<double>>();
 			auto phi = phi_arr.unchecked<1>();
 			for (size_t i = 0; i < npts; i++) {
 				uint64_t hash = hash_point(globals[i*3], globals[i*3+1], globals[i*3+2]);
 				point_cache_[hash] = {phi(i), 0.0, 0.0};
 			}
 		} else {
-			py::array_t<double> fld_arr;
-			if (field_type == "b" || field_type == "h") {
-				py::dict batch_result = rad_module_.attr("FldBatch")(radia_obj, pts_arr);
-				const char* key = (field_type == "b") ? "B" : "H";
-				fld_arr = batch_result[key].cast<py::array_t<double>>();
-			} else if (field_type == "a") {
-				fld_arr = rad_module_.attr("FldA")(radia_obj, pts_arr).cast<py::array_t<double>>();
-			} else {
-				fld_arr = py::array_t<double>({(py::ssize_t)npts, (py::ssize_t)3});
-				auto fld_buf = fld_arr.mutable_unchecked<2>();
-				for (size_t i = 0; i < npts; i++) {
-					py::array_t<double> coords(3);
-					auto cb = coords.mutable_unchecked<1>();
-					cb(0) = pts_buf(i, 0); cb(1) = pts_buf(i, 1); cb(2) = pts_buf(i, 2);
-					py::object f = rad_module_.attr("Fld")(radia_obj, field_type, coords);
-					auto fa = f.cast<py::array_t<double>>().unchecked<1>();
-					fld_buf(i, 0) = fa(0); fld_buf(i, 1) = fa(1); fld_buf(i, 2) = fa(2);
-				}
-			}
-
+			py::array_t<double> fld_arr = fld_result.cast<py::array_t<double>>();
 			auto fld = fld_arr.unchecked<2>();
 			for (size_t i = 0; i < npts; i++) {
 				double f_local[3] = {fld(i, 0), fld(i, 1), fld(i, 2)};
@@ -1922,35 +2006,18 @@ public:
 		py::tuple start = py::make_tuple(pmin[0], pmin[1], pmin[2]);
 		py::tuple end = py::make_tuple(pmax[0], pmax[1], pmax[2]);
 
+		// Use unified Fld(obj, field_type, points_array)
+		py::object fld_result = rad_module_.attr("Fld")(radia_obj, field_type, pts_arr);
+
 		if (field_type == "phi") {
-			// Scalar: use FldPhi batch
-			py::array_t<double> phi_arr = rad_module_.attr("FldPhi")(radia_obj, pts_arr);
+			py::array_t<double> phi_arr = fld_result.cast<py::array_t<double>>();
 			py::object data = phi_arr.attr("reshape")(nx, ny, nz);
 			data = np.attr("ascontiguousarray")(data.attr("transpose")(2, 1, 0));
 			return VoxelCoefficient(start, end, data, "linear"_a = true);
 		}
 
-		// Vector fields: batch compute
-		py::array_t<double> field_arr;
-		if (field_type == "b" || field_type == "h") {
-			py::dict batch_result = rad_module_.attr("FldBatch")(radia_obj, pts_arr);
-			const char* key = (field_type == "b") ? "B" : "H";
-			field_arr = batch_result[key].cast<py::array_t<double>>();
-		} else if (field_type == "a") {
-			field_arr = rad_module_.attr("FldA")(radia_obj, pts_arr).cast<py::array_t<double>>();
-		} else {
-			// 'm' fallback
-			field_arr = py::array_t<double>({(py::ssize_t)total, (py::ssize_t)3});
-			auto fld_buf = field_arr.mutable_unchecked<2>();
-			for (size_t i = 0; i < total; i++) {
-				py::array_t<double> coords(3);
-				auto cb = coords.mutable_unchecked<1>();
-				cb(0) = pts(i, 0); cb(1) = pts(i, 1); cb(2) = pts(i, 2);
-				py::object f = rad_module_.attr("Fld")(radia_obj, field_type, coords);
-				auto fa = f.cast<py::array_t<double>>().unchecked<1>();
-				fld_buf(i, 0) = fa(0); fld_buf(i, 1) = fa(1); fld_buf(i, 2) = fa(2);
-			}
-		}
+		// Vector fields
+		py::array_t<double> field_arr = fld_result.cast<py::array_t<double>>();
 
 		{
 			// Vector: 3 components, each (nz, ny, nx)
@@ -2100,36 +2167,19 @@ public:
 				pts_buf(i, 2) = p_local[2];
 			}
 
-			// Batch compute
+			// Batch compute via unified Fld(obj, field_type, points_array)
+			py::object fld_result = rad_module_.attr("Fld")(radia_obj, field_type, pts_arr);
+
 			if (field_type == "phi") {
-				// Scalar: use FldPhi batch (TaskManager-parallelized)
-				py::array_t<double> phi_arr = rad_module_.attr("FldPhi")(radia_obj, pts_arr);
+				// Scalar result: shape (N,)
+				py::array_t<double> phi_arr = fld_result.cast<py::array_t<double>>();
 				auto phi = phi_arr.unchecked<1>();
 				for (size_t i = 0; i < npts; i++) {
 					result(i, 0) = phi(i);
 				}
 			} else {
-				py::array_t<double> field_arr;
-				if (field_type == "b" || field_type == "h") {
-					py::dict batch_result = rad_module_.attr("FldBatch")(radia_obj, pts_arr);
-					const char* key = (field_type == "b") ? "B" : "H";
-					field_arr = batch_result[key].cast<py::array_t<double>>();
-				} else if (field_type == "a") {
-					field_arr = rad_module_.attr("FldA")(radia_obj, pts_arr).cast<py::array_t<double>>();
-				} else {
-					// 'm' fallback: per-point evaluation
-					field_arr = py::array_t<double>({(py::ssize_t)npts, (py::ssize_t)3});
-					auto fld_buf = field_arr.mutable_unchecked<2>();
-					for (size_t i = 0; i < npts; i++) {
-						py::array_t<double> coords(3);
-						auto cb = coords.mutable_unchecked<1>();
-						cb(0) = pts_buf(i, 0); cb(1) = pts_buf(i, 1); cb(2) = pts_buf(i, 2);
-						py::object f = rad_module_.attr("Fld")(radia_obj, field_type, coords);
-						auto fa = f.cast<py::array_t<double>>().unchecked<1>();
-						fld_buf(i, 0) = fa(0); fld_buf(i, 1) = fa(1); fld_buf(i, 2) = fa(2);
-					}
-				}
-
+				// Vector result: shape (N, 3)
+				py::array_t<double> field_arr = fld_result.cast<py::array_t<double>>();
 				auto fld = field_arr.unchecked<2>();
 				for (size_t i = 0; i < npts; i++) {
 					double f_local[3] = {fld(i, 0), fld(i, 1), fld(i, 2)};
@@ -2290,58 +2340,27 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // ========================================================================
 
     m.def("Fld", &radia_field::Fld,
-          py::arg("obj"), py::arg("field_type"), py::arg("point"),
+          py::arg("obj"), py::arg("field_type"), py::arg("points"),
           R"pbdoc(
-              Compute field at a single point.
+              Compute field at single point or multiple points.
+
+              Auto-detects single vs batch from input shape:
+              - Shape (3,): single point evaluation
+              - Shape (N, 3): batch evaluation (TaskManager-parallelized)
 
               Args:
                   obj: Object handle
-                  field_type: "b", "h", "a", "m", "bx", "by", "bz", etc.
-                  point: Evaluation point [x, y, z]
+                  field_type: "b", "h", "a", "phi", "m", "bx", "by", "bz", etc.
+                  points: [x,y,z] for single point, or array of shape (N,3) for batch
 
               Returns:
-                  Field value (scalar or vector)
-          )pbdoc");
+                  Single point: scalar or array [Fx, Fy, Fz]
+                  Batch: array of shape (N, 3) for vector fields, (N,) for scalar fields
 
-    m.def("FldBatch", &radia_field::FldBatch,
-          py::arg("obj"), py::arg("points"),
-          R"pbdoc(
-              Batch field computation at multiple points.
-
-              More efficient than calling Fld() in a loop.
-
-              Args:
-                  obj: Object handle
-                  points: Numpy array of shape (N, 3)
-
-              Returns:
-                  Dictionary with 'B' and 'H' arrays of shape (N, 3)
-          )pbdoc");
-
-    m.def("FldA", &radia_field::FldA,
-          py::arg("obj"), py::arg("points"),
-          R"pbdoc(
-              Compute vector potential A at multiple points.
-
-              Args:
-                  obj: Object handle
-                  points: Numpy array of shape (N, 3)
-
-              Returns:
-                  Numpy array of shape (N, 3) with A vectors in T*m
-          )pbdoc");
-
-    m.def("FldPhi", &radia_field::FldPhi,
-          py::arg("obj"), py::arg("points"),
-          R"pbdoc(
-              Compute scalar potential Phi at multiple points.
-
-              Args:
-                  obj: Object handle
-                  points: Numpy array of shape (N, 3)
-
-              Returns:
-                  Numpy array of shape (N,) with Phi values in A
+              Examples:
+                  B = rad.Fld(obj, "b", [0, 0, 0.1])        # Single point -> [Bx, By, Bz]
+                  B = rad.Fld(obj, "b", points_Nx3)          # Batch -> (N, 3) array
+                  phi = rad.Fld(obj, "phi", points_Nx3)      # Batch scalar -> (N,) array
           )pbdoc");
 
     m.def("FldVTS", &radia_field::FldVTS,
@@ -2858,70 +2877,41 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   Tuple (residual, max_M, avg_M, iterations)
           )pbdoc");
 
-    m.def("SetHACApKParams", &radia_solver_ext::SetHACApKParams,
-          py::arg("eps"), py::arg("leaf_size"), py::arg("eta"),
+    m.def("SolverConfig", &radia_solver_ext::SolverConfig,
           R"pbdoc(
-              Set H-matrix (HACApK) parameters.
+              Configure solver parameters (unified API).
 
-              Args:
-                  eps: ACA tolerance (default: 1e-4)
-                  leaf_size: Minimum cluster size (default: 10)
-                  eta: Admissibility parameter (default: 2.0)
+              All parameters are optional keyword arguments. Only specified
+              parameters are changed; others retain their current values.
+
+              Keyword Args:
+                  hacapk_eps (float): H-matrix ACA tolerance (default: 1e-4)
+                  hacapk_leaf (int): H-matrix minimum cluster size (default: 10)
+                  hacapk_eta (float): H-matrix admissibility parameter (default: 2.0)
+                  hmatrix_eps (float): H-matrix field evaluation epsilon
+                  bicgstab_tol (float): BiCGSTAB convergence tolerance (default: 1e-4)
+                  relax_param (float): Under-relaxation (0=full step, <1=damped)
+                  newton_method (bool): True=Newton-Raphson, False=Picard (default)
+                  newton_damping (bool): Enable Newton line search damping
+                  newton_damping_max_iter (int): Max line search iterations (default: 5)
+                  newton_damping_min_omega (float): Minimum omega (default: 0.01)
+
+              Example:
+                  rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
+                  rad.SolverConfig(bicgstab_tol=1e-6, relax_param=0.3)
+                  rad.SolverConfig(newton_method=True, newton_damping=True)
           )pbdoc");
 
-    m.def("SetHMatrixEpsilon", &radia_solver_ext::SetHMatrixEpsilon,
-          py::arg("eps"),
-          "Set H-matrix ACA tolerance.");
-
-    m.def("GetHACApKStats", &radia_solver_ext::GetHACApKStats,
+    m.def("GetSolverConfig", &radia_solver_ext::GetSolverConfig,
           R"pbdoc(
-              Get H-matrix statistics from last solve.
+              Get current solver configuration.
 
               Returns:
-                  Dictionary with n_lowrank, n_dense, max_rank, compression, build_time
+                  Dictionary with all solver parameters:
+                  - bicgstab_tol, relax_param, newton_method
+                  - newton_damping, newton_damping_max_iter, newton_damping_min_omega
+                  - hacapk_stats (if H-matrix solve has been performed)
           )pbdoc");
-
-    
-    m.def("SetBiCGSTABTol", &radia_solver_ext::SetBiCGSTABTol,
-          py::arg("tol"),
-          "Set BiCGSTAB convergence tolerance.");
-
-    m.def("GetBiCGSTABTol", &radia_solver_ext::GetBiCGSTABTol,
-          "Get BiCGSTAB convergence tolerance.");
-
-    m.def("SetRelaxParam", &radia_solver_ext::SetRelaxParam,
-          py::arg("relax"),
-          "Set under-relaxation parameter (0=full step, <1=damped).");
-
-    m.def("GetRelaxParam", &radia_solver_ext::GetRelaxParam,
-          "Get under-relaxation parameter.");
-
-    m.def("SetNewtonMethod", &radia_solver_ext::SetNewtonMethod,
-          py::arg("use_newton"),
-          "Enable/disable Newton-Raphson nonlinear iteration (default: False=Picard).");
-
-    m.def("GetNewtonMethod", &radia_solver_ext::GetNewtonMethod,
-          "Get Newton method setting (True=Newton, False=Picard).");
-
-    m.def("SetNewtonDamping", &radia_solver_ext::SetNewtonDamping,
-          py::arg("enabled") = true,
-          py::arg("max_iter") = 5,
-          py::arg("min_omega") = 0.01,
-          R"pbdoc(
-              Configure Newton-Raphson line search damping.
-
-              Parameters:
-                  enabled: Enable adaptive damping (default: True)
-                  max_iter: Max line search iterations (default: 5)
-                  min_omega: Minimum omega threshold (default: 0.01)
-
-              Newton line search finds optimal damping factor omega in [min_omega, 1.0]:
-                  sigma_new = omega * sigma_trial + (1-omega) * sigma_old
-              Uses backtracking with omega *= 0.5 until residual decreases.
-          )pbdoc");
-
-    m.def("GetNewtonDampingStats", &radia_solver_ext::GetNewtonDampingStats,
-          "Get Newton line search damping configuration (returns dict with enabled, max_iter, min_omega).");
 
     // Image symmetry functions REMOVED (2026-01-31)
     // SetIMASymmetry, BuildIMAMatrix, etc. are replaced by the unified API:

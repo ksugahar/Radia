@@ -186,7 +186,7 @@ for test in test_cases:
     try:
         rad.UtiDelAll()
         container = create_geometry(n, size, mat_params, B_bg)
-        rad.SetHACApKParams(1e-4, 10, 2.0)
+        rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 
         t_start = time.perf_counter()
         solve_result = rad.Solve(container, precision, max_iter, 2)

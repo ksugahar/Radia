@@ -77,7 +77,7 @@ def benchmark_solver(n, method, tol=1e-4, max_iter=1000):
 
     # Configure HACApK if method 2
     if method == 2:
-        rad.SetHACApKParams(1e-4, 10, 2.0)
+        rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 
     # Solve
     start_total = time.perf_counter()

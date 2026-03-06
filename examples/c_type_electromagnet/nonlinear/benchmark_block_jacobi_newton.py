@@ -158,11 +158,11 @@ def run_benchmark(nodes, hex_elements, bh_data, solver_method, solver_name,
     # Configure HACApK
     hmatrix_enabled = (solver_method == 2)
     if hmatrix_enabled:
-        rad.SetHACApKParams(HMAT_EPS, HMAT_LEAF_SIZE, HMAT_ETA)
+        rad.SolverConfig(hacapk_eps=HMAT_EPS, hacapk_leaf=HMAT_LEAF_SIZE, hacapk_eta=HMAT_ETA)
 
     # HACApK uses Newton (hybrid Picard+Newton)
     use_newton = hmatrix_enabled
-    rad.SetNewtonMethod(use_newton)
+    rad.SolverConfig(newton_method=use_newton)
 
     # Measure memory before solve
     mem_before = get_current_memory_mb()
@@ -201,12 +201,13 @@ def run_benchmark(nodes, hex_elements, bh_data, solver_method, solver_name,
     hmat_info = None
     if hmatrix_enabled:
         try:
-            hmat_info = rad.GetHACApKStats()
+            config = rad.GetSolverConfig()
+            hmat_info = config.get('hacapk_stats')
         except (AttributeError, Exception):
             pass
 
     # Reset Newton method
-    rad.SetNewtonMethod(False)
+    rad.SolverConfig(newton_method=False)
 
     # ELF reference
     elf_ref = ELF_REFERENCE.get(mesh_name)

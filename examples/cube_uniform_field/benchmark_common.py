@@ -211,7 +211,7 @@ def run_benchmark(
     hmatrix_enabled = False
     if solver_method == 2:
         try:
-            rad.SetHACApKParams(hmat_eps, hmat_leaf_size, hmat_eta)
+            rad.SolverConfig(hacapk_eps=hmat_eps, hacapk_leaf=hmat_leaf_size, hacapk_eta=hmat_eta)
             hmatrix_enabled = True
             print('H-matrix: Enabled (eps=%.0e, leaf_size=%d, eta=%.1f)' % (
                 hmat_eps, hmat_leaf_size, hmat_eta))
@@ -220,8 +220,7 @@ def run_benchmark(
 
     # Set solver tolerances
     MAX_ITER = 100
-    rad.SetBiCGSTABTol(bicg_tol)
-    rad.SetRelaxParam(0.0)
+    rad.SolverConfig(bicgstab_tol=bicg_tol, relax_param=0.0)
 
     # Solve
     print('Solving...')
@@ -254,7 +253,8 @@ def run_benchmark(
     hmat_info = None
     if hmatrix_enabled:
         try:
-            hmat_info = rad.GetHACApKStats()
+            config = rad.GetSolverConfig()
+            hmat_info = config.get('hacapk_stats')
         except AttributeError:
             pass
 

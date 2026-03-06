@@ -99,7 +99,7 @@ class ScalarPotentialSolver:
     def set_source_from_radia(self, radia_obj, resolution=41):
         """Set source field H_s from a Radia object.
 
-        Computes H_s on a voxel grid via ``rad.FldBatch()`` and creates
+        Computes H_s on a voxel grid via ``rad.Fld()`` and creates
         a VoxelCoefficient for efficient FEM integration.
 
         Parameters
@@ -129,8 +129,7 @@ class ScalarPotentialSolver:
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         points = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
 
-        result = rad.FldBatch(radia_obj, points)
-        H_field = np.asarray(result['H'])
+        H_field = np.asarray(rad.Fld(radia_obj, 'h', points))
 
         start = (bbox[0][0], bbox[1][0], bbox[2][0])
         end = (bbox[0][1], bbox[1][1], bbox[2][1])

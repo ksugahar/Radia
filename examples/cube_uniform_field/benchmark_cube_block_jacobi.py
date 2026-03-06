@@ -70,9 +70,9 @@ def run_cube_benchmark(n_div, solver_method, solver_name, use_newton=False, max_
     t_mesh = time.time() - t0
 
     if solver_method == 2:
-        rad.SetHACApKParams(1e-4, 10, 2.0)
+        rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 
-    rad.SetNewtonMethod(use_newton)
+    rad.SolverConfig(newton_method=use_newton)
 
     t0 = time.time()
     try:
@@ -93,7 +93,8 @@ def run_cube_benchmark(n_div, solver_method, solver_name, use_newton=False, max_
     hacapk_stats = None
     if solver_method == 2:
         try:
-            hacapk_stats = rad.GetHACApKStats()
+            config = rad.GetSolverConfig()
+            hacapk_stats = config.get('hacapk_stats')
         except:
             pass
 
@@ -106,7 +107,7 @@ def run_cube_benchmark(n_div, solver_method, solver_name, use_newton=False, max_
     elif solver_method in [0, 1]:
         mem_mb = f"{n_dof * n_dof * 8 / 1024 / 1024:.0f}"
 
-    rad.SetNewtonMethod(False)
+    rad.SolverConfig(newton_method=False)
 
     return {
         'name': solver_name,
