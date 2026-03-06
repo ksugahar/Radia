@@ -190,6 +190,9 @@ void HACApK_free_hmatrix_wrapper(
     void *leafmtxp,
     void *ctl);
 
+/* Reset all HACApK global state (call between solves) */
+void HACApK_reset_global_state(void);
+
 /* Accessor functions for opaque structure fields */
 int HACApK_leafmtxp_get_nd(void *ptr);
 int HACApK_leafmtxp_get_nlf(void *ptr);

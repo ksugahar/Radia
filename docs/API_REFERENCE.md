@@ -59,7 +59,7 @@ container = rad.ObjCnt(elements)
 mat = rad.MatLin(1000)  # mu_r = 1000
 rad.MatApl(container, mat)
 
-ext = rad.ObjBckg([0, 0, MU_0 * 50000])
+ext = rad.ObjBckg(lambda p: [0, 0, MU_0 * 50000])  # B field in Tesla
 grp = rad.ObjCnt([container, ext])
 rad.Solve(grp, 0.001, 1000, 1)
 ```
@@ -242,16 +242,33 @@ vertices = [[0,0,0], [1,0,0], [0.5,0.866,0], [0,0,1], [1,0,1], [0.5,0.866,1]]
 wedge = rad.ObjPolyhdr(vertices, WEDGE_FACES, [0, 0, 1e6])
 ```
 
-### ObjBckg - Uniform Background Field
+### ObjBckg - Background Field (Callback)
 
 ```python
-field_src = rad.ObjBckg([Bx, By, Bz])
+field_src = rad.ObjBckg(lambda p: [Bx, By, Bz])  # Uniform field
+field_src = rad.ObjBckg(callback_function)        # Non-uniform field
 ```
 
+The callback function receives a point `[x, y, z]` in current units and returns `[Bx, By, Bz]` in Tesla.
+
+**Uniform Background Field**:
 ```python
 MU_0 = 4 * np.pi * 1e-7
-ext = rad.ObjBckg([0, 0, MU_0 * 50000])  # 50,000 A/m in z
+H_ext = 50000  # A/m
+ext = rad.ObjBckg(lambda p: [0, 0, MU_0 * H_ext])  # B = mu_0 * H in Tesla
 ```
+
+**Non-uniform Background Field** (e.g., quadrupole):
+```python
+def quadrupole_field(point):
+    x, y, z = point
+    G = 10.0  # T/m gradient
+    return [G * y, G * x, 0]
+
+ext = rad.ObjBckg(quadrupole_field)
+```
+
+**IMPORTANT**: The callback returns **B field in Tesla**, NOT H field in A/m.
 
 ### ObjCnt - Container
 
@@ -330,7 +347,7 @@ mat = rad.MatLin([mu_r_par, mu_r_perp], [ex, ey, ez])
 
 ```python
 # Easy axis in z-direction
-mat = rad.MatLin([5001, 101], [0, 0, 1])
+mat = rad.MatLin([5000, 100], [0, 0, 1])
 ```
 
 ### MatSatIsoTab - Nonlinear (B-H Table)
@@ -368,6 +385,8 @@ mat = rad.MatSatIsoFrm([ksi1, ms1], [ksi2, ms2], [ksi3, ms3])
 
 Formula: `M = ms1*tanh(ksi1*H/ms1) + ms2*tanh(ksi2*H/ms2) + ms3*tanh(ksi3*H/ms3)`
 
+**Note**: `ksi` here is a **fitting parameter** for the tanh saturation formula (initial susceptibility of each term), not the same as the bulk susceptibility chi = mu_r - 1.
+
 ```python
 # Steel37 (C<0.13%)
 mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
@@ -394,7 +413,7 @@ result = rad.Solve(obj, tolerance, max_iter, method=1)
 | `obj` | int | Object or container |
 | `tolerance` | float | Convergence threshold (0.001 = 0.1%) |
 | `max_iter` | int | Maximum iterations |
-| `method` | int | `0` = LU, `1` = BiCGSTAB (default) |
+| `method` | int | `0` = LU, `1` = BiCGSTAB (default), `2` = HACApK |
 
 | Returns | Description |
 |---------|-------------|
@@ -405,9 +424,14 @@ result = rad.Solve(obj, tolerance, max_iter, method=1)
 
 | Problem Size | Elements | Method | Code |
 |--------------|----------|--------|------|
-| Small | < 1,000 | LU | `rad.Solve(grp, 0.001, 100, 0)` |
-| Medium | 1,000-10,000 | BiCGSTAB | `rad.Solve(grp, 0.001, 1000, 1)` |
-| Large | > 10,000 | BiCGSTAB | `rad.Solve(grp, 0.001, 1000, 1)` |
+| Small | < 500 | LU | `rad.Solve(grp, 0.001, 100, 0)` |
+| Medium | 500-5,000 | BiCGSTAB | `rad.Solve(grp, 0.001, 1000, 1)` |
+| Large | > 5,000 | HACApK | `rad.Solve(grp, 0.001, 1000, 2)` |
+
+**HACApK Advantages** (for large problems):
+- O(N log N) memory vs O(N^2) for dense
+- 10-20% of dense matrix memory at 10,000+ elements
+- 5-10x faster than BiCGSTAB for 10,000+ elements
 
 **Iteration counts**:
 - Linear materials: 1-2 iterations
@@ -518,7 +542,7 @@ rad.SetRelaxParam(relax)
 **Notes:**
 - Affects all solver methods (0=LU, 1=BiCGSTAB, 2=HACApK)
 - `relax=0.0`: Full Newton step (default, fastest convergence when stable)
-- `relax>0.0`: Damped update: `chi_new = chi_new*(1-relax) + chi_old*relax`
+- `relax>0.0`: Damped update: `M_new = M_computed*(1-relax) + M_old*relax`
 - Use under-relaxation (e.g., 0.2-0.5) when:
   - Convergence is slow or oscillating
   - Material has steep B-H curve
@@ -533,6 +557,99 @@ rad.Solve(container, 0.001, 100, 1)
 
 # Reset to full step for normal cases
 rad.SetRelaxParam(0.0)
+```
+
+### SetNewtonMethod - Newton-Raphson Method (v1.4.4+)
+
+```python
+rad.SetNewtonMethod(enabled)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | bool | False | Enable Newton-Raphson with differential susceptibility |
+
+**Notes:**
+- Uses tangent stiffness matrix based on differential susceptibility χ_d = (dB/dH)/μ₀ - 1
+- Reduces linear iterations per nonlinear step compared to Picard (fixed-point) method
+- Recommended for large-scale problems (>10,000 DOF) with HACApK solver (Method 2)
+- Combine with `SetNewtonDamping()` for robust convergence
+- Call BEFORE `rad.Solve()`
+
+**Example:**
+```python
+rad.SetSolver(2)  # HACApK
+rad.SetNewtonMethod(True)
+rad.SetNewtonDamping(True)  # Enable line search damping
+rad.Solve(container, 0.001, 100)
+```
+
+### GetNewtonMethod - Query Newton-Raphson Status (v1.4.4+)
+
+```python
+enabled = rad.GetNewtonMethod()
+```
+
+Returns `True` if Newton-Raphson is enabled, `False` otherwise.
+
+### SetNewtonDamping - Line Search Damping (v1.4.4+)
+
+```python
+rad.SetNewtonDamping(enabled=True, max_iter=5, min_omega=0.01)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | bool | True | Enable backtracking line search |
+| `max_iter` | int | 5 | Maximum line search iterations |
+| `min_omega` | float | 0.01 | Minimum damping factor (1%) |
+
+**Notes:**
+- Only active when Newton-Raphson is enabled (`SetNewtonMethod(True)`)
+- Uses backtracking line search: σ_new = ω × σ_trial + (1-ω) × σ_old
+- Starts with ω=1.0 (full Newton step), reduces by ω *= 0.5 if residual increases
+- Ensures monotonic residual reduction, improves nonlinear convergence
+- Particularly effective for highly nonlinear problems
+- Call BEFORE `rad.Solve()`
+
+**Algorithm:**
+1. Solve linear system: (D(1/χ_d) + G) σ_trial = RHS
+2. Try full step ω=1.0
+3. If residual increases: ω *= 0.5, retry with damped update
+4. Repeat up to `max_iter` times
+5. Force accept if ω < `min_omega`
+
+**Example:**
+```python
+# Enable Newton with line search damping (recommended)
+rad.SetNewtonMethod(True)
+rad.SetNewtonDamping(True, max_iter=5, min_omega=0.01)
+rad.Solve(container, 0.001, 100, 2)  # HACApK + Newton + Damping
+
+# Disable damping for full Newton steps
+rad.SetNewtonDamping(False)
+rad.Solve(container, 0.001, 100, 2)  # HACApK + Newton (no damping)
+```
+
+### GetNewtonDampingStats - Query Damping Statistics (v1.4.4+)
+
+```python
+stats = rad.GetNewtonDampingStats()
+```
+
+Returns a dictionary with damping configuration:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `'enabled'` | bool | Damping enabled status |
+| `'max_iter'` | int | Maximum line search iterations |
+| `'min_omega'` | float | Minimum damping factor |
+
+**Example:**
+```python
+stats = rad.GetNewtonDampingStats()
+print(f"Damping: {stats['enabled']}, max_iter={stats['max_iter']}, min_omega={stats['min_omega']}")
+# Output: Damping: True, max_iter=5, min_omega=0.01
 ```
 
 ### BiCGSTAB Performance
@@ -739,18 +856,6 @@ for el in elements:
 | `compute_element_centroid()` | Compute centroid from vertex list |
 | `create_radia_tetrahedron()` | Create single Radia tetrahedron |
 | `create_radia_hexahedron()` | Create single Radia hexahedron |
-
-### create_radia_from_nastran - Nastran Import
-
-```python
-from nastran_mesh_import import create_radia_from_nastran
-
-mag_obj = create_radia_from_nastran('model.bdf',
-                                     material={'magnetization': [0, 0, 1e6]},
-                                     units='m')
-```
-
-**Supported Nastran elements**: CTETRA, CHEXA, CPENTA, CPYRAM, CTRIA3
 
 ---
 
@@ -1383,11 +1488,46 @@ rad.TrfTrsl(obj, [dx, dy, dz])
 rad.TrfRot(obj, [x, y, z], [nx, ny, nz], angle)
 ```
 
-### TrfMlt - Multiple Copies
+### TrfOrnt - Apply Transformation
 
 ```python
-array = rad.TrfMlt(obj, transformation, n_copies)
+rad.TrfOrnt(obj, trf)  # Apply transformation to orient object
 ```
+
+### Image Symmetry (Replaces TrfMlt)
+
+**Note**: `TrfMlt` has been removed (2026-01-31). Use `rad.Image()` for plane symmetry:
+
+```python
+intrc = rad.PreRelax(container, container)
+n_ima = rad.Image(intrc, '+x')  # Symmetric x-mirror (tangent field)
+rad.BuildImageMatrix(intrc)
+rad.Solve(container, 0.0001, 100, 0)
+```
+
+**Symmetry String Format**: `[+|-]axis`
+
+| String | Description | Boundary Condition |
+|--------|-------------|-------------------|
+| `+x`, `x` | x-mirror (symmetric) | Field tangent to YZ plane |
+| `-x` | x-mirror (antisymmetric) | Field normal to YZ plane |
+| `+y`, `y` | y-mirror (symmetric) | Field tangent to XZ plane |
+| `-y` | y-mirror (antisymmetric) | Field normal to XZ plane |
+| `+z`, `z` | z-mirror (symmetric) | Field tangent to XY plane |
+| `-z` | z-mirror (antisymmetric) | Field normal to XY plane |
+| `+xy`, `xy` | Quarter model (symmetric) | Both tangent |
+| `-xz` | xz-mirror (antisymmetric) | Both normal |
+| `+xyz` | Eighth model (symmetric) | All tangent |
+
+**Matrix Construction**:
+- Symmetric (+): `N_Image[i,j] = N[i,j] + N[i, mirror_j] @ P`
+- Antisymmetric (-): `N_Image[i,j] = N[i,j] - N[i, mirror_j] @ P`
+
+**Legacy API** (deprecated):
+- `SetIMASymmetry()` -> Use `Image()`
+- `BuildIMAMatrix()` -> Use `BuildImageMatrix()`
+
+See [IMA_SYMMETRY_DESIGN.md](IMA_SYMMETRY_DESIGN.md) for details.
 
 ---
 

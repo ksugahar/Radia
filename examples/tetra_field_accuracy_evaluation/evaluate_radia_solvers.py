@@ -150,7 +150,7 @@ def create_hexa_solution(test_points):
     rad.MatApl(cube, mat)
 
     # External field
-    ext = rad.ObjBckg([0, 0, B_EXT])
+    ext = rad.ObjBckg(lambda p: [0, 0, B_EXT])
     grp = rad.ObjCnt([cube, ext])
 
     # Solve
@@ -230,7 +230,7 @@ def create_tetra_solution(test_points):
     rad.MatApl(cube, mat)
 
     # External field
-    ext = rad.ObjBckg([0, 0, B_EXT])
+    ext = rad.ObjBckg(lambda p: [0, 0, B_EXT])
     grp = rad.ObjCnt([cube, ext])
 
     # Solve

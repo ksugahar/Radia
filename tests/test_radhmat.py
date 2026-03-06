@@ -19,7 +19,7 @@ import numpy as np
 
 # Add build directory to path
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../build/Release"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 try:
 	import radia as rad

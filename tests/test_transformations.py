@@ -11,7 +11,7 @@ Tests transformation creation and application:
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../build/Release"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 import pytest
 import radia as rad
@@ -174,25 +174,9 @@ class TestCombinedTransformations:
 		H = rad.Fld(mag, 'h', [50, 10, 0])
 		assert len(H) == 3
 
-	def test_multiply_transformation(self):
-		"""Test TrfMlt - multiply transformation (create array)"""
-		rad.UtiDelAll()
-
-		# Create magnet
-		mag = rad.ObjRecMag([10, 0, 0], [5, 5, 5], [0, 0, 1])
-
-		# Create rotation transformation
-		tr = rad.TrfRot([0, 0, 0], [0, 0, 1], np.pi/4)  # 45 degrees
-
-		# Multiply to create 8 copies around circle (8 * 45deg = 360deg)
-		result = rad.TrfMlt(mag, tr, 8)
-
-		# Result should be a container with multiple magnets
-		assert result > 0
-
-		# Should be able to compute field
-		H = rad.Fld(result, 'h', [0, 0, 20])
-		assert len(H) == 3
+	# test_multiply_transformation REMOVED (2026-01-31)
+	# TrfMlt has been removed - use IMA symmetry instead
+	# See docs/IMA_SYMMETRY_DESIGN.md for the correct approach
 
 
 class TestInversion:
@@ -262,40 +246,13 @@ class TestTransformationOnGroups:
 		assert len(H) == 3
 
 
-class TestTransformationSymmetry:
-	"""Test using transformations for creating symmetric structures"""
-
-	def test_create_quadrupole_with_rotations(self):
-		"""Test creating 4-pole structure using rotations"""
-		rad.UtiDelAll()
-
-		# Create one pole
-		pole = rad.ObjRecMag([10, 0, 0], [5, 5, 20], [1, 0, 0])
-
-		# Rotate to create 4 poles
-		tr = rad.TrfRot([0, 0, 0], [0, 0, 1], np.pi/2)
-		quad = rad.TrfMlt(pole, tr, 4)
-
-		# Should have quadrupole symmetry
-		H_center = rad.Fld(quad, 'h', [0, 0, 0])
-
-		# Field at center should be close to zero (symmetry)
-		assert np.allclose(H_center, [0, 0, 0], atol=1e-6)
-
-	def test_create_array_with_translation(self):
-		"""Test creating array using translation multiplication"""
-		rad.UtiDelAll()
-
-		# Create single magnet
-		mag = rad.ObjRecMag([0, 0, 0], [5, 5, 5], [0, 0, 1])
-
-		# Create array along x-axis
-		tr = rad.TrfTrsl([10, 0, 0])
-		array = rad.TrfMlt(mag, tr, 5)
-
-		# Should compute field from array
-		H = rad.Fld(array, 'h', [25, 0, 20])
-		assert len(H) == 3
+# TestTransformationSymmetry REMOVED (2026-01-31)
+# TrfMlt has been removed - use IMA symmetry instead
+# See docs/IMA_SYMMETRY_DESIGN.md for the correct approach
+#
+# For symmetric structures (quadrupole, arrays), use:
+# 1. Explicit element creation (recommended)
+# 2. IMA symmetry for plane symmetry with SetIMASymmetry() and BuildIMAMatrix()
 
 
 if __name__ == "__main__":

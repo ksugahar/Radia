@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(handle64.exe:*)",
+      "Bash(handle.exe:*)",
+      "Bash(powershell.exe -NoProfile -Command \"Get-Process | Where-Object {$_ProcessName -match ''pdf|acro|sumatr|fox|edge|chrome''} | Format-Table Id, ProcessName, MainWindowTitle -AutoSize\")",
+      "Bash(Get-ChildItem C:Users -Directory)",
+      "Bash(Where-Object { $_Name -notmatch '^\\(Public|Default|Default User|All Users\\)$' })",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "Bash(echo:*)",
+      "Bash(where:*)",
+      "Bash(pandoc:*)",
+      "Bash(choco:*)",
+      "Bash(\"/c/Program Files/Pandoc/pandoc.exe\" \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.md\" -o \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.docx\")",
+      "Bash(\"/c/Tools/pandoc-3.6.2/pandoc.exe\" \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.md\" -o \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.docx\")",
+      "Bash(\"/c/Tools/pandoc-3.6.2/pandoc.exe\" \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.md\" -o \"S:/NGSolve/01_GitHub/SparseSolv/docs/README.pdf\" --pdf-engine=xelatex)",
+      "Bash(\"/c/Tools/pandoc-3.6.2/pandoc.exe\":*)",
+      "Bash($PSVersionTable)"
+    ]
+  }
+}

@@ -128,6 +128,49 @@ struct iterator_traits <radTRelaxSubInterval*> {
 
 //-------------------------------------------------------------------------
 
+//-------------------------------------------------------------------------
+// Global IMA Context for Field Computation
+// When IMA is active, field computation needs to include contributions
+// from virtual mirror elements. This context stores the IMA settings
+// and is checked during B_comp() to add mirror contributions.
+//-------------------------------------------------------------------------
+class RadIMAFieldContext {
+public:
+	// Current IMA settings for field computation
+	static bool s_active;           // True if IMA field computation is enabled
+	static int s_symmetry;          // IMA symmetry flags (IMA_X, IMA_Z, etc.)
+	static int s_signX;             // Sign for X mirror: +1 (symmetric) or -1 (antisymmetric)
+	static int s_signY;             // Sign for Y mirror
+	static int s_signZ;             // Sign for Z mirror
+
+	// Set IMA context before field computation
+	static void Set(int symmetry, int signX, int signY, int signZ) {
+		s_active = (symmetry != 0);
+		s_symmetry = symmetry;
+		s_signX = signX;
+		s_signY = signY;
+		s_signZ = signZ;
+	}
+
+	// Clear IMA context after field computation
+	static void Clear() {
+		s_active = false;
+		s_symmetry = 0;
+		s_signX = s_signY = s_signZ = 1;
+	}
+
+	// Check if IMA is active
+	static bool IsActive() { return s_active; }
+
+	// Get symmetry flags
+	static int GetSymmetry() { return s_symmetry; }
+	static int GetSignX() { return s_signX; }
+	static int GetSignY() { return s_signY; }
+	static int GetSignZ() { return s_signZ; }
+};
+
+//-------------------------------------------------------------------------
+
 class radTInteraction : public radTg {
 	friend class radTHMatrixACA;    // Allow H-matrix to access interaction data
 	friend class RadHACApKManager;  // Allow HACApK manager to access interaction data
@@ -137,7 +180,9 @@ class radTInteraction : public radTg {
 	friend bool BuildBaseMatrix(struct NonlinearContext&, radTInteraction*);
 	friend void StoreOldValuesAndComputeBnorm(struct NonlinearContext&, radTInteraction*);
 	friend void UpdateMagnAndComputeH(struct NonlinearContext&, radTInteraction*);
+	friend void ComputeActualHFieldFromSigma(struct NonlinearContext&, radTInteraction*);
 	friend double UpdateChiAndCheckConvergence(struct NonlinearContext&, radTInteraction*);
+	friend double ApplyLineSearchDamping(struct NonlinearContext&, radTInteraction*, const std::vector<double>&);
 
 	int AmOfMainElem;
 	int AmOfExtElem;
@@ -244,7 +289,76 @@ class radTInteraction : public radTg {
 	std::vector<double> m_hexaTriData;            // n_hex * 12 * 32: pre-computed triangle data
 	bool m_hexaTriDataReady;                      // True if triangle data is pre-computed
 
+	//-------------------------------------------------------------------------
+	// IMA (Image) Symmetry for MSC hexahedra (private member variables)
+	//-------------------------------------------------------------------------
+	int m_imaSymmetry;                            // IMA symmetry flags
+	int m_imaSignX;                               // IMA sign for X-axis: +1 (symmetric) or -1 (antisymmetric)
+	int m_imaSignY;                               // IMA sign for Y-axis: +1 (symmetric) or -1 (antisymmetric)
+	int m_imaSignZ;                               // IMA sign for Z-axis: +1 (symmetric) or -1 (antisymmetric)
+	bool m_imaEnabled;                            // True if IMA mode is active
+	int m_imaNumElements;                         // Number of elements in IMA region (reduced set)
+	std::vector<int> m_imaToFull;                 // IMA element index -> full element index
+	std::vector<int> m_imaMirrorMap;              // For each IMA element, its mirror element index in full model
+	std::vector<bool> m_imaUseVirtualMirror;      // True if element needs virtual mirror (quarter model)
+
 public:
+
+	//-------------------------------------------------------------------------
+	// IMA (Image) Symmetry for MSC hexahedra
+	// Reference: ELF_MAGIC IMA approach with image summation during matrix assembly
+	// Enables half-model (x-mirror), quarter-model (xy), eighth-model (xyz) analysis
+	//-------------------------------------------------------------------------
+	enum IMASymmetryFlags {
+		IMA_NONE = 0,
+		IMA_X = 1,    // Mirror in X=0 plane (YZ plane)
+		IMA_Y = 2,    // Mirror in Y=0 plane (XZ plane)
+		IMA_Z = 4,    // Mirror in Z=0 plane (XY plane)
+		IMA_XY = 3,   // Quarter model (X and Y mirrors)
+		IMA_XZ = 5,   // Quarter model (X and Z mirrors)
+		IMA_YZ = 6,   // Quarter model (Y and Z mirrors)
+		IMA_XYZ = 7   // Eighth model (all three mirrors)
+	};
+
+	// IMA (Image Method of Analysis) implementation notes:
+	// Netgen face ordering: DOFs [0, 1, 2, 3, 4, 5] = z-, x+, y-, x-, y+, z+
+	// (Matches NETGEN_FACES in radia_pybind.cpp)
+	//
+	// IMA simply adds mirrored kernel contributions:
+	//   K_IMA[i,j] = K[i,j] + K[i, mirror(j)] * sign
+	//
+	// The mirrored geometry automatically handles face position changes.
+	// No DOF permutation matrices are needed - the kernel-based approach
+	// computes field contributions directly from mirrored face positions.
+	//
+	// Legacy permutation arrays (DEPRECATED - kept for reference only)
+	static constexpr int IMA_PERM_X[6] = {0, 3, 2, 1, 4, 5};  // Swap x+ and x- (faces 1,3)
+	static constexpr int IMA_PERM_Y[6] = {0, 1, 4, 3, 2, 5};  // Swap y- and y+ (faces 2,4)
+	static constexpr int IMA_PERM_Z[6] = {5, 1, 2, 3, 4, 0};  // Swap z- and z+ (faces 0,5)
+
+	// IMA kernel formula (no permutation needed):
+	//            = K_AA + Q @ K_BA
+	//
+	// IMA row permutation based on Netgen face ordering: 0=z-, 1=x+, 2=y-, 3=x-, 4=y+, 5=z+
+	// Using Compute6x6BlockMirroredTarget to get K_BA directly,
+	// we apply the Q row permutation that accounts for face swapping after mirroring.
+	// NOTE: Compute6x6BlockIMA (which uses these arrays) is currently dead code.
+	// The active IMA path uses kernel-based Compute6x6BlockFast which needs no permutation.
+	//
+	// For x-mirror: faces 1 (x+) and 3 (x-) swap
+	//   Q_x = [0, 3, 2, 1, 4, 5]
+	static constexpr int IMA_ROW_PERM_X[6] = {0, 3, 2, 1, 4, 5};  // Swap Face 1 <-> Face 3
+	static constexpr int IMA_COL_PERM_X[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
+
+	// For y-mirror: faces 2 (y-) and 4 (y+) swap
+	//   Q_y = [0, 1, 4, 3, 2, 5]
+	static constexpr int IMA_ROW_PERM_Y[6] = {0, 1, 4, 3, 2, 5};  // Swap Face 2 <-> Face 4
+	static constexpr int IMA_COL_PERM_Y[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
+
+	// For z-mirror: faces 0 (z-) and 5 (z+) swap
+	//   Q_z = [5, 1, 2, 3, 4, 0]
+	static constexpr int IMA_ROW_PERM_Z[6] = {5, 1, 2, 3, 4, 0};  // Swap Face 0 <-> Face 5
+	static constexpr int IMA_COL_PERM_Z[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
 
 	int AmOfRelaxSubInterv;
 
@@ -376,6 +490,55 @@ public:
 	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 
+	//-------------------------------------------------------------------------
+	// IMA (Image) Symmetry Methods
+	// Reference: ELF_MAGIC IMA approach - matrix construction with image summation
+	//-------------------------------------------------------------------------
+
+	// Configure IMA symmetry mode
+	// symmetry: IMA_X, IMA_Y, IMA_Z, IMA_XY, etc.
+	// signX, signY, signZ: +1 for symmetric BC, -1 for antisymmetric BC per axis
+	// Returns: number of elements in IMA region (reduced set)
+	int SetIMASymmetry(int symmetry, int signX = 1, int signY = 1, int signZ = 1);
+
+	// Check if element is in IMA region (positive half-space for all active mirrors)
+	bool IsElementInIMARegion(int elemIdx) const;
+
+	// Get mirror element index for a given element and symmetry axis
+	int GetMirrorElementIndex(int elemIdx, int symmetryAxis) const;
+
+	// Build IMA interaction matrix (with image summation)
+	// N_IMA[i,j] = N[i,j] ± N[i, mirror_j] @ P
+	// Sign determined by m_imaSign: +1 (symmetric BC) or -1 (antisymmetric BC)
+	int SetupInteractMatrix_IMA(bool skipDenseMatrix = false);
+
+	// Apply DOF permutation to 6x6 block: result = input @ P
+	// perm: permutation array (e.g., IMA_PERM_X)
+	void ApplyDOFPermutation(const double* input, const int* perm, double* result) const;
+
+	// Compute IMA 6x6 block: direct + sum of mirror contributions
+	void Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) const;
+
+	// Compute 6x6 block with virtually mirrored source element j (DEPRECATED - not ELF compatible)
+	// For quarter model support: element j's geometry is mirrored on-the-fly
+	void Compute6x6BlockMirrored(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const;
+
+	// Compute 6x6 block with virtually mirrored target element i (ELF-compatible)
+	// K_BA = K[mirror(i), j]: field at mirrored target from original source
+	void Compute6x6BlockMirroredTarget(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const;
+
+	// Apply row permutation Q: result[perm[i], j] = input[i, j]
+	// Used for ELF IMA formula: K_IMA = K_AA + Q @ K_BA
+	void ApplyRowPermutation(const double* input, const int* perm, double* result) const;
+
+	// IMA accessors
+	bool IsIMAEnabled() const { return m_imaEnabled; }
+	int GetIMASymmetry() const { return m_imaSymmetry; }
+	int GetIMASignX() const { return m_imaSignX; }
+	int GetIMASignY() const { return m_imaSignY; }
+	int GetIMASignZ() const { return m_imaSignZ; }
+	int GetIMANumElements() const { return m_imaNumElements; }
+
 	void SetupExternFieldArray();
 	void AddExternFieldFromMoreExtSource();
 	void AddMoreExternField(const radThg& hExtraExtSrc);
@@ -447,7 +610,7 @@ public:
 
 inline void radTInteraction::PushFrontNativeElemTransList(radTg3d* g3dPtr, radTlphgPtr* ListOfPtrToTransPtr)
 {
-	for(radTlphg::iterator TrIter = g3dPtr->g3dListOfTransform.begin();	
+	for(radTlphg::iterator TrIter = g3dPtr->g3dListOfTransform.begin();
 		TrIter != g3dPtr->g3dListOfTransform.end(); ++TrIter)
 		ListOfPtrToTransPtr->push_back(&(*TrIter)); // Improve dereferentiation?
 }

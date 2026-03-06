@@ -18,6 +18,7 @@
 #include "rad_subdivided_rectangle.h"
 #include "rad_polyhedron.h"  // For IsTetrahedron() check in N_self fix
 #include "rad_constants.h"   // For RadConst::INV_FOUR_PI
+#include <array>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -29,6 +30,15 @@
 
 // Note: Dipole-dipole method for tetrahedra was tested but found numerically unstable.
 // Radia production solver uses the surface charge (MSC) method.
+
+//-------------------------------------------------------------------------
+// Static member definitions for RadIMAFieldContext
+//-------------------------------------------------------------------------
+bool RadIMAFieldContext::s_active = false;
+int RadIMAFieldContext::s_symmetry = 0;
+int RadIMAFieldContext::s_signX = 1;
+int RadIMAFieldContext::s_signY = 1;
+int RadIMAFieldContext::s_signZ = 1;
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -70,6 +80,14 @@ radTInteraction::radTInteraction()
 
 	// PEEC element flag
 	m_hasPEECElements = false;
+
+	// IMA flags - initialize to disabled
+	m_imaEnabled = false;
+	m_imaSymmetry = 0;
+	m_imaSignX = 1;
+	m_imaSignY = 1;
+	m_imaSignZ = 1;
+	m_imaNumElements = 0;
 }
 
 //-------------------------------------------------------------------------
@@ -97,6 +115,14 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	m_tetraGeomReady = false;
 	m_hexaGeomReady = false;
 	m_hexaTriDataReady = false;
+
+	// IMA flags - initialize to disabled
+	m_imaEnabled = false;
+	m_imaSymmetry = 0;
+	m_imaSignX = 1;
+	m_imaSignY = 1;
+	m_imaSignZ = 1;
+	m_imaNumElements = 0;
 
 	SourceHandle = In_hg;
 	CompCriterium = InCompCriterium;
@@ -709,16 +735,17 @@ void radTInteraction::ComputeDOFOffsets()
 double* radTInteraction::GetInteractBlock(int row_elem, int col_elem)
 {
 	// Return pointer to interaction block (row_elem, col_elem) in flattened matrix
-	// Matrix is COLUMN-MAJOR: A(i,j) at index [j * m_totalDOF + i]
+	// Matrix is ROW-MAJOR: A(i,j) at index [i * m_totalDOF + j]
 	if(m_flatInteractMatrix.empty()) return nullptr;
 
 	int offset_row = m_elemDOFOffset[row_elem];
 	int offset_col = m_elemDOFOffset[col_elem];
 
 	// Block starts at row offset_row, column offset_col in the totalDOF x totalDOF matrix
-	// Column-major: element at (row, col) is at index [col * m_totalDOF + row]
+	// ROW-MAJOR: element at (row, col) is at index [row * m_totalDOF + col]
+	// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 	// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-	return &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+	return &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 }
 
 const double* radTInteraction::GetInteractBlock(int row_elem, int col_elem) const
@@ -728,9 +755,10 @@ const double* radTInteraction::GetInteractBlock(int row_elem, int col_elem) cons
 	int offset_row = m_elemDOFOffset[row_elem];
 	int offset_col = m_elemDOFOffset[col_elem];
 
-	// Column-major: element at (row, col) is at index [col * m_totalDOF + row]
+	// ROW-MAJOR: element at (row, col) is at index [row * m_totalDOF + col]
+	// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 	// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-	return &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+	return &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 }
 
 //-------------------------------------------------------------------------
@@ -829,12 +857,12 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	// If no symmetries, we can use simplified global coordinate computation with OpenMP
 	bool hasSymmetry = (AmOfElemWithSym > AmOfMainElem);
 
-	// Check if we have any 6 DOF (MSC hexahedra) elements
+	// Check if we have any MSC elements (5 DOF wedges or 6 DOF hexahedra)
 	// MSC elements require Yano-Sugahara midpoint evaluation which is more complex
 	bool hasMSCElements = false;
 	for(int i = 0; i < AmOfMainElem && !hasMSCElements; i++)
 	{
-		if(m_elemDOF[i] == 6) hasMSCElements = true;
+		if(m_elemDOF[i] >= 5) hasMSCElements = true;
 	}
 
 	// Build interaction matrix with variable-size blocks
@@ -861,25 +889,26 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					int offset_row = m_elemDOFOffset[row];
 
 					// Get pointer to this block in the flattened matrix
-					// COLUMN-MAJOR: A(row, col) at index [col * m_totalDOF + row]
+					// ROW-MAJOR: A(row, col) at index [row * m_totalDOF + col]
+					// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 					// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-					double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+					double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 
 					// Compute 3x3 block using cached geometry
 					double N_mat[9];
 					Compute3x3BlockFast(row, col, N_mat);
 
-					// Copy to flat matrix (Compute3x3BlockFast returns row-major)
-					// Need to transpose to column-major for LAPACK
+					// Copy to flat matrix (both row-major, direct copy)
+					// N_mat is [target][source] row-major, matrix is [target][source] row-major
 					// CRITICAL: Use size_t cast for all indexing with m_totalDOF
 					block[(size_t)0 * m_totalDOF + 0] = N_mat[0];  // (0,0)
-					block[(size_t)0 * m_totalDOF + 1] = N_mat[3];  // (1,0)
-					block[(size_t)0 * m_totalDOF + 2] = N_mat[6];  // (2,0)
-					block[(size_t)1 * m_totalDOF + 0] = N_mat[1];  // (0,1)
+					block[(size_t)0 * m_totalDOF + 1] = N_mat[1];  // (0,1)
+					block[(size_t)0 * m_totalDOF + 2] = N_mat[2];  // (0,2)
+					block[(size_t)1 * m_totalDOF + 0] = N_mat[3];  // (1,0)
 					block[(size_t)1 * m_totalDOF + 1] = N_mat[4];  // (1,1)
-					block[(size_t)1 * m_totalDOF + 2] = N_mat[7];  // (2,1)
-					block[(size_t)2 * m_totalDOF + 0] = N_mat[2];  // (0,2)
-					block[(size_t)2 * m_totalDOF + 1] = N_mat[5];  // (1,2)
+					block[(size_t)1 * m_totalDOF + 2] = N_mat[5];  // (1,2)
+					block[(size_t)2 * m_totalDOF + 0] = N_mat[6];  // (2,0)
+					block[(size_t)2 * m_totalDOF + 1] = N_mat[7];  // (2,1)
 					block[(size_t)2 * m_totalDOF + 2] = N_mat[8];  // (2,2)
 				}
 			}
@@ -901,9 +930,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				int offset_row = m_elemDOFOffset[row];
 
 				// Get pointer to this block in the flattened matrix
-				// COLUMN-MAJOR: A(row, col) at index [col * m_totalDOF + row]
+				// ROW-MAJOR: A(row, col) at index [row * m_totalDOF + col]
+				// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 				// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-				double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+				double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 
 				// Compute the interaction block based on DOF types
 				// FAST PATH: Only for 3x3 blocks (tetrahedra)
@@ -911,27 +941,47 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				// (MSC requires Yano-Sugahara midpoint evaluation and proper transforms)
 				if(dof_row == 3 && dof_col == 3)
 				{
-					// Standard 3x3 interaction: use existing B_comp method
-					// Direct global coordinate computation (no transforms needed)
+					// 3x3 N-matrix computation: H_field at row center from col magnetization
+					// Must compute N[:, k] = H-field from unit magnetization M_k
+					// This is required for wedge and other 3DOF polyhedra
 					TVector3d ObsPoiVect = elem_row->ReturnCentrPoint();
 
-					// Thread-local Field object to avoid race conditions
-					radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-					Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
+					// Save original magnetization
+					radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
+					TVector3d orig_magn(0., 0., 0.);
+					if(poly_col) {
+						orig_magn = poly_col->Magn;
+					}
 
-					elem_col->B_comp(&Field);
+					// Compute N-matrix columns by setting unit magnetizations
+					for(int m_dir = 0; m_dir < 3; m_dir++)
+					{
+						// Set unit magnetization in direction m_dir
+						TVector3d unit_M(0., 0., 0.);
+						if(m_dir == 0) unit_M.x = 1.0;
+						else if(m_dir == 1) unit_M.y = 1.0;
+						else unit_M.z = 1.0;
 
-					// Store result directly (no transformation)
-					// CRITICAL: Use size_t cast for all indexing with m_totalDOF
-					block[(size_t)0 * m_totalDOF + 0] = Field.B.x;  // (0,0)
-					block[(size_t)0 * m_totalDOF + 1] = Field.H.x;  // (1,0)
-					block[(size_t)0 * m_totalDOF + 2] = Field.A.x;  // (2,0)
-					block[(size_t)1 * m_totalDOF + 0] = Field.B.y;  // (0,1)
-					block[(size_t)1 * m_totalDOF + 1] = Field.H.y;  // (1,1)
-					block[(size_t)1 * m_totalDOF + 2] = Field.A.y;  // (2,1)
-					block[(size_t)2 * m_totalDOF + 0] = Field.B.z;  // (0,2)
-					block[(size_t)2 * m_totalDOF + 1] = Field.H.z;  // (1,2)
-					block[(size_t)2 * m_totalDOF + 2] = Field.A.z;  // (2,2)
+						if(poly_col) {
+							poly_col->Magn = unit_M;
+						}
+
+						// Compute H field at observation point
+						radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+						Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
+						elem_col->B_comp(&Field);
+
+						// Store H-field as column m_dir of N-matrix (row-major storage)
+						// N[i][m_dir] = H_i from unit M in direction m_dir
+						block[(size_t)0 * m_totalDOF + m_dir] = Field.H.x;
+						block[(size_t)1 * m_totalDOF + m_dir] = Field.H.y;
+						block[(size_t)2 * m_totalDOF + m_dir] = Field.H.z;
+					}
+
+					// Restore original magnetization
+					if(poly_col) {
+						poly_col->Magn = orig_magn;
+					}
 				}
 				// Note: MSC blocks (3x6, 6x3, 6x6) not handled in fast path
 				// They will fall through and be computed in slow path below
@@ -969,16 +1019,16 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					double K_block[36];
 					Compute6x6BlockFast(hex_row, hex_col, K_block);
 
-					// Copy to column-major flat matrix (transpose from row-major)
+					// Copy to row-major flat matrix (both row-major, direct copy pattern)
+					// K_block is [target][source] row-major, matrix is [target][source] row-major
 					// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-					double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+					double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 					for(int i = 0; i < 6; i++)
 					{
 						for(int j = 0; j < 6; j++)
 						{
-							// K_block is row-major: K[i][j] at i*6+j
-							// block is column-major: block[j*stride+i]
-							block[(size_t)j * m_totalDOF + i] = K_block[i * 6 + j];
+							// Both row-major: K[i][j] at i*6+j -> A[target_i][source_j] at i*stride+j
+							block[(size_t)i * m_totalDOF + j] = K_block[i * 6 + j];
 						}
 					}
 				}
@@ -994,7 +1044,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	if(!hasSymmetry && hasMSCElements)
 	{
 		// Use unified 1/(4*pi) constant for all MSC interactions
-		// (Following ELF convention: all matrix elements use -K_ij / (4*pi))
+		// (ELF-compatible sign convention: K_ij / (4*pi))
 
 		#pragma omp parallel for schedule(dynamic) if(AmOfMainElem > 20)
 		for(int col = 0; col < AmOfMainElem; col++)
@@ -1003,9 +1053,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			int dof_col = m_elemDOF[col];
 			int offset_col = m_elemDOFOffset[col];
 
-			// Check if source is MSC hexahedron
+			// Check if source is MSC element (wedge: 5 DOF, hexahedron: 6 DOF)
 			radTPolyhedron* poly_col = nullptr;
-			if(dof_col == 6)
+			if(dof_col >= 5)
 			{
 				poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
 			}
@@ -1016,34 +1066,60 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				int dof_row = m_elemDOF[row];
 				int offset_row = m_elemDOFOffset[row];
 
+				// ROW-MAJOR: A(row, col) at index [row * m_totalDOF + col]
+				// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 				// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-				double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+				double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 
-				// Check if target is MSC hexahedron
+				// Check if target is MSC element (wedge: 5 DOF, hexahedron: 6 DOF)
 				radTPolyhedron* poly_row = nullptr;
-				if(dof_row == 6)
+				if(dof_row >= 5)
 				{
 					poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
 				}
 
 				if(dof_row == 3 && dof_col == 3)
 				{
-					// 3x3 block: tetrahedron to tetrahedron
+					// 3x3 N-matrix block: H-field at row center from col magnetization
+					// Must compute N[:, k] = H-field from unit magnetization M_k
 					TVector3d ObsPoiVect = elem_row->ReturnCentrPoint();
-					radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-					Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
-					elem_col->B_comp(&Field);
 
-					// CRITICAL: Use size_t cast for all indexing with m_totalDOF
-					block[(size_t)0 * m_totalDOF + 0] = Field.B.x;
-					block[(size_t)0 * m_totalDOF + 1] = Field.H.x;
-					block[(size_t)0 * m_totalDOF + 2] = Field.A.x;
-					block[(size_t)1 * m_totalDOF + 0] = Field.B.y;
-					block[(size_t)1 * m_totalDOF + 1] = Field.H.y;
-					block[(size_t)1 * m_totalDOF + 2] = Field.A.y;
-					block[(size_t)2 * m_totalDOF + 0] = Field.B.z;
-					block[(size_t)2 * m_totalDOF + 1] = Field.H.z;
-					block[(size_t)2 * m_totalDOF + 2] = Field.A.z;
+					// Save original magnetization
+					radTPolyhedron* poly_col_3dof = dynamic_cast<radTPolyhedron*>(elem_col);
+					TVector3d orig_magn(0., 0., 0.);
+					if(poly_col_3dof) {
+						orig_magn = poly_col_3dof->Magn;
+					}
+
+					// Compute N-matrix columns by setting unit magnetizations
+					for(int m_dir = 0; m_dir < 3; m_dir++)
+					{
+						// Set unit magnetization in direction m_dir
+						TVector3d unit_M(0., 0., 0.);
+						if(m_dir == 0) unit_M.x = 1.0;
+						else if(m_dir == 1) unit_M.y = 1.0;
+						else unit_M.z = 1.0;
+
+						if(poly_col_3dof) {
+							poly_col_3dof->Magn = unit_M;
+						}
+
+						// Compute H field at observation point
+						radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+						Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
+						elem_col->B_comp(&Field);
+
+						// Store H-field as column m_dir of N-matrix (row-major storage)
+						// N[i][m_dir] = H_i from unit M in direction m_dir
+						block[(size_t)0 * m_totalDOF + m_dir] = Field.H.x;
+						block[(size_t)1 * m_totalDOF + m_dir] = Field.H.y;
+						block[(size_t)2 * m_totalDOF + m_dir] = Field.H.z;
+					}
+
+					// Restore original magnetization
+					if(poly_col_3dof) {
+						poly_col_3dof->Magn = orig_magn;
+					}
 				}
 				else if(dof_row == 6 && dof_col == 6 && poly_row && poly_col)
 				{
@@ -1075,8 +1151,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 							              H_total.y * poly_row->FaceNormal[face_i].y +
 							              H_total.z * poly_row->FaceNormal[face_i].z;
 
-							// CRITICAL: Use size_t cast for indexing with m_totalDOF
-							block[(size_t)face_j * m_totalDOF + face_i] = -K_ij * RadConst::INV_FOUR_PI;
+							// ROW-MAJOR: A[target_face_i][source_face_j] at face_i*stride+face_j
+							// Store K/(4pi) - the solver will negate when building system matrix
+							block[(size_t)face_i * m_totalDOF + face_j] = K_ij * RadConst::INV_FOUR_PI;
 						}
 					}
 				}
@@ -1096,15 +1173,24 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						H_total.y = H_face.y + H_point.y;
 						H_total.z = H_face.z + H_point.z;
 
-						// CRITICAL: Use size_t cast for indexing with m_totalDOF
-						block[(size_t)face_j * m_totalDOF + 0] = H_total.x * RadConst::INV_FOUR_PI;
-						block[(size_t)face_j * m_totalDOF + 1] = H_total.y * RadConst::INV_FOUR_PI;
-						block[(size_t)face_j * m_totalDOF + 2] = H_total.z * RadConst::INV_FOUR_PI;
+						// ROW-MAJOR: A[target_i][source_face_j] at target_i*stride+face_j
+						block[(size_t)0 * m_totalDOF + face_j] = H_total.x * RadConst::INV_FOUR_PI;
+						block[(size_t)1 * m_totalDOF + face_j] = H_total.y * RadConst::INV_FOUR_PI;
+						block[(size_t)2 * m_totalDOF + face_j] = H_total.z * RadConst::INV_FOUR_PI;
 					}
 				}
 				else if(dof_row == 6 && dof_col == 3 && poly_row)
 				{
-					// 6x3 block: MSC hexahedron from tetrahedron
+					// 6x3 block: MSC hexahedron from 3DOF polyhedron (tetra/wedge)
+					// K(face_i, Mj) = normal_i · H_j where H_j is H-field from unit M in direction j
+
+					// Save original magnetization
+					radTPolyhedron* poly_col_3dof = dynamic_cast<radTPolyhedron*>(elem_col);
+					TVector3d orig_magn(0., 0., 0.);
+					if(poly_col_3dof) {
+						orig_magn = poly_col_3dof->Magn;
+					}
+
 					for(int face_i = 0; face_i < 6; face_i++)
 					{
 						// Yano-Sugahara evaluation point
@@ -1113,20 +1199,141 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
 						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
 
-						radTField Field(FieldKeyInteract, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-						Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
-						elem_col->B_comp(&Field);
-
-						// K(face_i, Mj) = normal · N_mat(:, j)
 						TVector3d& n = poly_row->FaceNormal[face_i];
-						double K_Mx = n.x * Field.B.x + n.y * Field.B.y + n.z * Field.B.z;
-						double K_My = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
-						double K_Mz = n.x * Field.A.x + n.y * Field.A.y + n.z * Field.A.z;
 
-						// CRITICAL: Use size_t cast for indexing with m_totalDOF
-						block[(size_t)0 * m_totalDOF + face_i] = K_Mx * RadConst::INV_FOUR_PI;
-						block[(size_t)1 * m_totalDOF + face_i] = K_My * RadConst::INV_FOUR_PI;
-						block[(size_t)2 * m_totalDOF + face_i] = K_Mz * RadConst::INV_FOUR_PI;
+						// Compute K(face_i, Mj) for each unit magnetization direction
+						for(int m_dir = 0; m_dir < 3; m_dir++)
+						{
+							// Set unit magnetization in direction m_dir
+							TVector3d unit_M(0., 0., 0.);
+							if(m_dir == 0) unit_M.x = 1.0;
+							else if(m_dir == 1) unit_M.y = 1.0;
+							else unit_M.z = 1.0;
+
+							if(poly_col_3dof) {
+								poly_col_3dof->Magn = unit_M;
+							}
+
+							radTField Field(FieldKeyInteract, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+							Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
+							elem_col->B_comp(&Field);
+
+							// K(face_i, m_dir) = normal · H
+							// NOTE: Field.H from B_comp_wedge_analytical already includes 1/(4pi) factor
+							// (from RadFieldFromTriangleFaceGlobal -> RadAnalyticalFieldFromPolygonCharge)
+							// Do NOT multiply by INV_FOUR_PI again - this was a bug causing wedge
+							// contribution to hex to be too weak by factor of 1/(4pi) ≈ 0.08
+							double K_val = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
+
+							// ROW-MAJOR: A[target_face_i][source_m_dir]
+							block[(size_t)face_i * m_totalDOF + m_dir] = K_val;  // No INV_FOUR_PI - already included in H
+						}
+					}
+
+					// Restore original magnetization
+					if(poly_col_3dof) {
+						poly_col_3dof->Magn = orig_magn;
+					}
+				}
+				else if(dof_row >= 5 && dof_col >= 5 && poly_row && poly_col)
+				{
+					// NxM block: MSC-to-MSC (covers 5x5, 5x6, 6x5 wedge/hex combinations)
+					// Uses FieldFromFace for generalized tri/quad face handling
+					int nFacesRow = dof_row;  // 5 for wedge, 6 for hex
+					int nFacesCol = dof_col;
+
+					for(int face_i = 0; face_i < nFacesRow; face_i++)
+					{
+						// Yano-Sugahara evaluation point: midpoint between face center and element center
+						TVector3d EvalPt;
+						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
+						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
+						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+
+						for(int face_j = 0; face_j < nFacesCol; face_j++)
+						{
+							// Field from unit sigma on face j (handles both tri and quad)
+							TVector3d H_face = poly_col->FieldFromFace(EvalPt, face_j, 1.0);
+
+							// Point charge contribution: m = -sigma * area
+							double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
+							TVector3d H_point = poly_col->FieldFromPointCharge(EvalPt, unit_point_charge);
+
+							TVector3d H_total;
+							H_total.x = H_face.x + H_point.x;
+							H_total.y = H_face.y + H_point.y;
+							H_total.z = H_face.z + H_point.z;
+
+							// K_ij = normal_i dot H_total
+							double K_ij = H_total.x * poly_row->FaceNormal[face_i].x +
+							              H_total.y * poly_row->FaceNormal[face_i].y +
+							              H_total.z * poly_row->FaceNormal[face_i].z;
+
+							block[(size_t)face_i * m_totalDOF + face_j] = K_ij * RadConst::INV_FOUR_PI;
+						}
+					}
+				}
+				else if(dof_row == 3 && dof_col == 5 && poly_col)
+				{
+					// 3x5 block: tetrahedron from MSC wedge
+					TVector3d ObsPoiVect = elem_row->ReturnCentrPoint();
+
+					for(int face_j = 0; face_j < 5; face_j++)
+					{
+						TVector3d H_face = poly_col->FieldFromFace(ObsPoiVect, face_j, 1.0);
+						double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
+						TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
+
+						TVector3d H_total;
+						H_total.x = H_face.x + H_point.x;
+						H_total.y = H_face.y + H_point.y;
+						H_total.z = H_face.z + H_point.z;
+
+						block[(size_t)0 * m_totalDOF + face_j] = H_total.x * RadConst::INV_FOUR_PI;
+						block[(size_t)1 * m_totalDOF + face_j] = H_total.y * RadConst::INV_FOUR_PI;
+						block[(size_t)2 * m_totalDOF + face_j] = H_total.z * RadConst::INV_FOUR_PI;
+					}
+				}
+				else if(dof_row == 5 && dof_col == 3 && poly_row)
+				{
+					// 5x3 block: MSC wedge from 3DOF polyhedron (tetra)
+					radTPolyhedron* poly_col_3dof = dynamic_cast<radTPolyhedron*>(elem_col);
+					TVector3d orig_magn(0., 0., 0.);
+					if(poly_col_3dof) {
+						orig_magn = poly_col_3dof->Magn;
+					}
+
+					for(int face_i = 0; face_i < 5; face_i++)
+					{
+						TVector3d EvalPt;
+						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
+						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
+						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+
+						TVector3d& n = poly_row->FaceNormal[face_i];
+
+						for(int m_dir = 0; m_dir < 3; m_dir++)
+						{
+							TVector3d unit_M(0., 0., 0.);
+							if(m_dir == 0) unit_M.x = 1.0;
+							else if(m_dir == 1) unit_M.y = 1.0;
+							else unit_M.z = 1.0;
+
+							if(poly_col_3dof) {
+								poly_col_3dof->Magn = unit_M;
+							}
+
+							radTField Field(FieldKeyInteract, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+							Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
+							elem_col->B_comp(&Field);
+
+							double K_val = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
+							block[(size_t)face_i * m_totalDOF + m_dir] = K_val;
+						}
+					}
+
+					if(poly_col_3dof) {
+						poly_col_3dof->Magn = orig_magn;
 					}
 				}
 				else
@@ -1136,8 +1343,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					{
 						for(int j = 0; j < dof_col; j++)
 						{
-							// CRITICAL: Use size_t cast for indexing with m_totalDOF
-							block[(size_t)j * m_totalDOF + i] = 0.0;
+							// ROW-MAJOR: A[i][j] at i*stride+j
+							block[(size_t)i * m_totalDOF + j] = 0.0;
 						}
 					}
 				}
@@ -1150,6 +1357,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	for(int col = 0; col < AmOfMainElem; col++)
 	{
 		FillInTransPtrVectForElem(col, 'I');
+
 		radTg3dRelax* elem_col = g3dRelaxPtrVect[col];
 		int dof_col = m_elemDOF[col];
 		int offset_col = m_elemDOFOffset[col];
@@ -1161,9 +1369,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			int offset_row = m_elemDOFOffset[row];
 
 			// Get pointer to this block in the flattened matrix
-			// COLUMN-MAJOR: A(row, col) at index [col * m_totalDOF + row]
+			// ROW-MAJOR: A(row, col) at index [row * m_totalDOF + col]
+			// A[target][source] format: ELF-compatible, BiCGSTAB/HACApK-optimal
 			// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-			double* block = &m_flatInteractMatrix[(size_t)offset_col * m_totalDOF + offset_row];
+			double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 
 			// Compute the interaction block based on DOF types
 			// For now, only support 3x3 blocks (standard elements)
@@ -1193,81 +1402,79 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				}
 				MainTransPtrArray[row]->TrMatrix_inv(SubMatrix);
 
-				// Copy 3x3 matrix to flattened block (COLUMN-MAJOR)
-				// A(i,j) at [j * stride + i] where stride = m_totalDOF
+				// Copy 3x3 matrix to flattened block (ROW-MAJOR)
+				// A[i][j] at [i * stride + j] where stride = m_totalDOF
 				// CRITICAL: Use size_t cast for indexing with m_totalDOF
 				block[(size_t)0 * m_totalDOF + 0] = SubMatrix.Str0.x;  // (0,0)
-				block[(size_t)0 * m_totalDOF + 1] = SubMatrix.Str1.x;  // (1,0)
-				block[(size_t)0 * m_totalDOF + 2] = SubMatrix.Str2.x;  // (2,0)
-				block[(size_t)1 * m_totalDOF + 0] = SubMatrix.Str0.y;  // (0,1)
+				block[(size_t)0 * m_totalDOF + 1] = SubMatrix.Str0.y;  // (0,1)
+				block[(size_t)0 * m_totalDOF + 2] = SubMatrix.Str0.z;  // (0,2)
+				block[(size_t)1 * m_totalDOF + 0] = SubMatrix.Str1.x;  // (1,0)
 				block[(size_t)1 * m_totalDOF + 1] = SubMatrix.Str1.y;  // (1,1)
-				block[(size_t)1 * m_totalDOF + 2] = SubMatrix.Str2.y;  // (2,1)
-				block[(size_t)2 * m_totalDOF + 0] = SubMatrix.Str0.z;  // (0,2)
-				block[(size_t)2 * m_totalDOF + 1] = SubMatrix.Str1.z;  // (1,2)
+				block[(size_t)1 * m_totalDOF + 2] = SubMatrix.Str1.z;  // (1,2)
+				block[(size_t)2 * m_totalDOF + 0] = SubMatrix.Str2.x;  // (2,0)
+				block[(size_t)2 * m_totalDOF + 1] = SubMatrix.Str2.y;  // (2,1)
 				block[(size_t)2 * m_totalDOF + 2] = SubMatrix.Str2.z;  // (2,2)
 			}
 #ifdef RADIA_MSC_SUPPORT
-			else if(dof_row == 3 && dof_col == 6)
+			else if(dof_row == 3 && dof_col >= 5)
 			{
-				// 3x6 block: Field at tetrahedron (3 DOF) center from MSC hexahedron (6 DOF)
-				// K(Mk, face_j) = H_field_k at tetra center due to unit sigma on hex face j
-				// Matrix stores: -H_field(k) / (4*pi) (following ELF convention)
+				// 3xN block: Field at tetrahedron (3 DOF) center from MSC element (5 or 6 DOF)
+				// K(Mk, face_j) = H_field_k at tetra center due to unit sigma on face j
+				// Matrix stores: H_field(k) / (4*pi) (following ELF convention)
 
 				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
 				if(poly_col && poly_col->Use6DOF_MSC)
 				{
 					TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(elem_row->ReturnCentrPoint());
 
-					for(int face_j = 0; face_j < 6; face_j++)
+					for(int face_j = 0; face_j < dof_col; face_j++)
 					{
 						TVector3d H_total(0., 0., 0.);
 
 						for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
 						{
+							// Transform obs point from world frame to column element's local frame
 							TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
 
-							// Field from unit sigma on face j (quad face + point charge)
-							TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
-
-							// Point charge contribution (m = -sigma * area) - Yano-Sugahara MSC method
+							// Field from source at observation point (both in column's local frame)
+							// FieldFromFace handles both tri and quad faces
+							TVector3d H_face = poly_col->FieldFromFace(ObsPoiVect, face_j, 1.0);
 							double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
 							TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
 
+							// Sum field contributions (in column's local frame)
 							TVector3d H_local;
 							H_local.x = H_face.x + H_point.x;
 							H_local.y = H_face.y + H_point.y;
 							H_local.z = H_face.z + H_point.z;
 
-							// Transform back to global
-							H_total.x += TransPtrVect[tr]->TrVectField(H_local).x;
-							H_total.y += TransPtrVect[tr]->TrVectField(H_local).y;
-							H_total.z += TransPtrVect[tr]->TrVectField(H_local).z;
+							// Transform field from column's local frame back to world frame
+							TVector3d H_world = TransPtrVect[tr]->TrAxialVect(H_local);
+
+							H_total.x += H_world.x;
+							H_total.y += H_world.y;
+							H_total.z += H_world.z;
 						}
 
-						// Transform by row's main transform (inverse)
-						TVector3d H_final = MainTransPtrArray[row]->TrVectField_inv(H_total);
+						// Transform field from world frame to row element's local frame
+						TVector3d H_final = MainTransPtrArray[row]->TrAxialVect_inv(H_total);
 
-						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
-						// row is component (0,1,2 = Mx,My,Mz), col is face_j
-						// Sign convention: +K/(4*pi) for tetra-hex (following ELF)
-						// CRITICAL: Use size_t cast for indexing with m_totalDOF
-						block[(size_t)face_j * m_totalDOF + 0] = H_final.x * RadConst::INV_FOUR_PI;  // (Mx, face_j)
-						block[(size_t)face_j * m_totalDOF + 1] = H_final.y * RadConst::INV_FOUR_PI;  // (My, face_j)
-						block[(size_t)face_j * m_totalDOF + 2] = H_final.z * RadConst::INV_FOUR_PI;  // (Mz, face_j)
+						// Store in block (ROW-MAJOR): A[i][j] at [i * stride + j]
+						block[(size_t)0 * m_totalDOF + face_j] = H_final.x * RadConst::INV_FOUR_PI;
+						block[(size_t)1 * m_totalDOF + face_j] = H_final.y * RadConst::INV_FOUR_PI;
+						block[(size_t)2 * m_totalDOF + face_j] = H_final.z * RadConst::INV_FOUR_PI;
 					}
 				}
 			}
-			else if(dof_row == 6 && dof_col == 3)
+			else if(dof_row >= 5 && dof_col == 3)
 			{
-				// 6x3 block: Field at MSC hexahedron (6 DOF) eval points from tetrahedron (3 DOF)
-				// K(face_i, Mj) = normal_i · N_mat(:, j) where N_mat is the demagnetization tensor
-				// from the tetrahedron source element at the evaluation point
-				// Matrix stores: -dot_val / (4*pi) (following ELF convention)
+				// Nx3 block: Field at MSC element (5 or 6 DOF) eval points from tetrahedron (3 DOF)
+				// K(face_i, Mj) = normal_i dot N_mat(:, j)
 
 				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
 				if(poly_row && poly_row->Use6DOF_MSC)
 				{
-					for(int face_i = 0; face_i < 6; face_i++)
+					for(int face_i = 0; face_i < dof_row; face_i++)
 					{
 						// Yano-Sugahara evaluation point: midpoint between face center and element center
 						TVector3d EvalPt;
@@ -1316,69 +1523,75 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						double K_face_My = n.x * SubMatrix.Str1.x + n.y * SubMatrix.Str1.y + n.z * SubMatrix.Str1.z;
 						double K_face_Mz = n.x * SubMatrix.Str2.x + n.y * SubMatrix.Str2.y + n.z * SubMatrix.Str2.z;
 
-						// Store in block (COLUMN-MAJOR): A(i,j) at [j * stride + i]
+						// Store in block (ROW-MAJOR): A[face_i][col] at [face_i * stride + col]
 						// row is face_i (0-5), col is component (0,1,2 = Mx,My,Mz)
 						// Sign convention: +K/(4*pi) for hex-tetra (following ELF)
 						// CRITICAL: Use size_t cast for indexing with m_totalDOF
-						block[(size_t)0 * m_totalDOF + face_i] = K_face_Mx * RadConst::INV_FOUR_PI;  // (face_i, Mx)
-						block[(size_t)1 * m_totalDOF + face_i] = K_face_My * RadConst::INV_FOUR_PI;  // (face_i, My)
-						block[(size_t)2 * m_totalDOF + face_i] = K_face_Mz * RadConst::INV_FOUR_PI;  // (face_i, Mz)
+						block[(size_t)face_i * m_totalDOF + 0] = K_face_Mx * RadConst::INV_FOUR_PI;  // (face_i, Mx)
+						block[(size_t)face_i * m_totalDOF + 1] = K_face_My * RadConst::INV_FOUR_PI;  // (face_i, My)
+						block[(size_t)face_i * m_totalDOF + 2] = K_face_Mz * RadConst::INV_FOUR_PI;  // (face_i, Mz)
 					}
 				}
 			}
-			else if(dof_row == 6 && dof_col == 6)
+			else if(dof_row >= 5 && dof_col >= 5)
 			{
-				// 6x6 block: Field at MSC hexahedron (6 DOF) eval points from MSC hexahedron (6 DOF)
+				// NxM block: MSC-to-MSC (covers 5x5, 5x6, 6x5, 6x6 combinations)
 				// K(face_i, face_j) = normal_i dot H_field(eval_pt_i, src_face_j)
-				// Field functions return values WITHOUT 4pi divisor
-				// Matrix stores: -K_ij / (4*pi) (following ELF convention)
 
 				radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
 				radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
 
 				if(poly_row && poly_row->Use6DOF_MSC && poly_col && poly_col->Use6DOF_MSC)
 				{
-					for(int face_i = 0; face_i < 6; face_i++)
+					for(int face_i = 0; face_i < dof_row; face_i++)
 					{
 						// Yano-Sugahara evaluation point: midpoint between face center and element center
+						// FaceCenter and CentrPoint are already in GLOBAL frame
 						TVector3d EvalPt;
 						EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
 						EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
 						EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
 
-						TVector3d InitObsPoiVect = MainTransPtrArray[row]->TrPoint(EvalPt);
+						// EvalPt is already in GLOBAL frame - no transform needed
+						TVector3d InitObsPoiVect = EvalPt;
 
-						for(int face_j = 0; face_j < 6; face_j++)
+						for(int face_j = 0; face_j < dof_col; face_j++)
 						{
-							double K_ij = 0.0;
+							TVector3d H_total(0., 0., 0.);
 
 							for(unsigned tr = 0; tr < TransPtrVect.size(); tr++)
 							{
+								// Transform obs point from GLOBAL frame to column element's local frame
 								TVector3d ObsPoiVect = TransPtrVect[tr]->TrPoint_inv(InitObsPoiVect);
 
-								// Field from unit sigma on face j (quad face + point charge)
-								// Field functions return values WITHOUT 4pi divisor
-								TVector3d H_face = poly_col->FieldFromQuadFace(ObsPoiVect, face_j, 1.0);
-
-								// Point charge contribution: m = -sigma * area (Yano-Sugahara MSC method)
+								// FieldFromFace handles both tri and quad faces
+								TVector3d H_face = poly_col->FieldFromFace(ObsPoiVect, face_j, 1.0);
 								double unit_point_charge = -1.0 * poly_col->FaceArea[face_j];
 								TVector3d H_point = poly_col->FieldFromPointCharge(ObsPoiVect, unit_point_charge);
 
+								// Sum field contributions (in column's local frame)
 								TVector3d H_local;
 								H_local.x = H_face.x + H_point.x;
 								H_local.y = H_face.y + H_point.y;
 								H_local.z = H_face.z + H_point.z;
 
-								// Transform back
-								TVector3d H_global = TransPtrVect[tr]->TrVectField(H_local);
-								K_ij += H_global.x * poly_row->FaceNormal[face_i].x +
-								        H_global.y * poly_row->FaceNormal[face_i].y +
-								        H_global.z * poly_row->FaceNormal[face_i].z;
+								// Transform field from column's local frame back to GLOBAL frame
+								TVector3d H_world = TransPtrVect[tr]->TrAxialVect(H_local);
+
+								H_total.x += H_world.x;
+								H_total.y += H_world.y;
+								H_total.z += H_world.z;
 							}
 
-							// Store -K_ij / (4*pi) (COLUMN-MAJOR): A(i,j) at [j * stride + i]
-							// CRITICAL: Use size_t cast for indexing with m_totalDOF
-							block[(size_t)face_j * m_totalDOF + face_i] = -K_ij * RadConst::INV_FOUR_PI;
+							// K_ij = normal_i dot H_total (both in GLOBAL frame)
+							// FaceNormal is already in GLOBAL frame (from SetupFaceGeometry)
+							double K_ij = H_total.x * poly_row->FaceNormal[face_i].x +
+							              H_total.y * poly_row->FaceNormal[face_i].y +
+							              H_total.z * poly_row->FaceNormal[face_i].z;
+
+							// Store K_ij / (4*pi) (ROW-MAJOR): A[face_i][face_j] at [face_i * stride + face_j]
+							double K_val = K_ij * RadConst::INV_FOUR_PI;
+							block[(size_t)face_i * m_totalDOF + face_j] = K_val;
 						}
 					}
 				}
@@ -1386,13 +1599,13 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 #endif // RADIA_MSC_SUPPORT
 			else
 			{
-				// Unknown DOF combination - zero out the block (COLUMN-MAJOR)
+				// Unknown DOF combination - zero out the block (ROW-MAJOR)
 				for(int i = 0; i < dof_row; i++)
 				{
 					for(int j = 0; j < dof_col; j++)
 					{
-						// CRITICAL: Use size_t cast for indexing with m_totalDOF
-						block[(size_t)j * m_totalDOF + i] = 0.0;
+						// ROW-MAJOR: A[i][j] at [i * stride + j]
+						block[(size_t)i * m_totalDOF + j] = 0.0;
 					}
 				}
 			}
@@ -1440,9 +1653,11 @@ void radTInteraction::SetupExternFieldArray()
 				TVector3d ObsPoiVect = TransPtrVect[i]->TrPoint_inv(InitObsPoiVect);
 				radTField Field(FieldKeyExtern, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.); // Improve
 				ExtElPtr->B_comp(&Field);
-				BufVect += TransPtrVect[i]->TrVectField(Field.H);
+				// H field is a pseudo-vector (axial vector): H' = det(T) * T * H
+				BufVect += TransPtrVect[i]->TrAxialVect(Field.H);
 			}
-			ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrVectField_inv(BufVect);
+			// Inverse pseudo-vector transformation: H_local = det(T) * T_inv * H_world
+			ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrAxialVect_inv(BufVect);
 		}
 		EmptyTransPtrVect();
 	}
@@ -1464,36 +1679,55 @@ void radTInteraction::SetupExternFieldArray()
 				m_flatExternFieldArray[offset + 1] += H_ext.y;
 				m_flatExternFieldArray[offset + 2] += H_ext.z;
 			}
-			else if(dof == 6)
+			else if(dof >= 5)
 			{
-				// MSC hexahedron: compute H_ext dot n at each face
+				// MSC element (5=wedge, 6=hex): compute H_ext dot n at each face
+				// External field is evaluated at element positions
 				radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
 				if(poly && poly->Use6DOF_MSC)
 				{
-					for(int face_i = 0; face_i < 6; face_i++)
+					for(int face_i = 0; face_i < dof; face_i++)
 					{
 						// Eval point for face i (midpoint between face center and element center)
+						// This is in element's local coordinates
 						TVector3d EvalPt;
 						EvalPt.x = 0.5 * (poly->FaceCenter[face_i].x + poly->CentrPoint.x);
 						EvalPt.y = 0.5 * (poly->FaceCenter[face_i].y + poly->CentrPoint.y);
 						EvalPt.z = 0.5 * (poly->FaceCenter[face_i].z + poly->CentrPoint.z);
 
+						// Transform EvalPt from element's local coords to world coords
+						TVector3d WorldEvalPt = MainTransPtrArray[StrNo]->TrPoint(EvalPt);
+
 						// Compute H_ext at eval point from all external sources
-						TVector3d H_total(0., 0., 0.);
+						// Use same transform handling as 3DOF elements
+						TVector3d H_world(0., 0., 0.);
 						for(int ExtElNo = 0; ExtElNo < AmOfExtElem; ExtElNo++)
 						{
+							FillInTransPtrVectForElem(ExtElNo, 'E');
 							radTg3d* ExtElPtr = g3dExternPtrVect[ExtElNo];
-							radTField Field(FieldKeyExtern, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-							ExtElPtr->B_comp(&Field);
-							H_total.x += Field.H.x;
-							H_total.y += Field.H.y;
-							H_total.z += Field.H.z;
+
+							TVector3d BufVect(0., 0., 0.);
+							for(unsigned t = 0; t < TransPtrVect.size(); t++)
+							{
+								// Transform obs point to external element's local coords
+								TVector3d ObsPoiVect = TransPtrVect[t]->TrPoint_inv(WorldEvalPt);
+								radTField Field(FieldKeyExtern, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+								ExtElPtr->B_comp(&Field);
+								// Transform field back to world coords using pseudo-vector transformation
+								// H field is a pseudo-vector: H' = det(T) * T * H
+								BufVect += TransPtrVect[t]->TrAxialVect(Field.H);
+							}
+							H_world += BufVect;
+							EmptyTransPtrVect();
 						}
 
-						// H_ext dot n_i
-						double H_dot_n = H_total.x * poly->FaceNormal[face_i].x +
-						                 H_total.y * poly->FaceNormal[face_i].y +
-						                 H_total.z * poly->FaceNormal[face_i].z;
+						// FaceNormal is stored in GLOBAL coordinates (from SetupFaceGeometry)
+						// H_world is already in global coordinates
+						// Compute dot product directly in global coordinates (ELF-compatible)
+						// Note: Do NOT transform H to local coords - FaceNormal is already global!
+						double H_dot_n = H_world.x * poly->FaceNormal[face_i].x +
+						                 H_world.y * poly->FaceNormal[face_i].y +
+						                 H_world.z * poly->FaceNormal[face_i].z;
 
 						m_flatExternFieldArray[offset + face_i] += H_dot_n;
 					}
@@ -1524,7 +1758,8 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 
 			//TVector3d BufVect = ExternFieldArray[StrNo];
 
-			ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrVectField_inv(Field.H);
+			// H field is a pseudo-vector: inverse transformation uses TrAxialVect_inv
+			ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrAxialVect_inv(Field.H);
 		}
 
 		// Also populate m_flatExternFieldArray (always used now with unified solver)
@@ -1553,16 +1788,24 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 						for(int face_i = 0; face_i < 6; face_i++)
 						{
 							// Eval point for face i (midpoint between face center and element center)
+							// This is in element's local coordinates
 							TVector3d EvalPt;
 							EvalPt.x = 0.5 * (poly->FaceCenter[face_i].x + poly->CentrPoint.x);
 							EvalPt.y = 0.5 * (poly->FaceCenter[face_i].y + poly->CentrPoint.y);
 							EvalPt.z = 0.5 * (poly->FaceCenter[face_i].z + poly->CentrPoint.z);
 
-							// Compute H_ext at eval point
-							radTField Field(FieldKeyExtern, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+							// Transform EvalPt to world coords (same as 3DOF code on line 1520)
+							TVector3d WorldEvalPt = MainTransPtrArray[StrNo]->TrPoint(EvalPt);
+
+							// Compute H_ext at world eval point
+							// B_genComp handles internal transforms recursively
+							radTField Field(FieldKeyExtern, CompCriterium, WorldEvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
 							(static_cast<radTg3d*>(MoreExtSourceHandle.rep))->B_genComp(&Field);
 
-							// H_ext dot n_i
+							// FaceNormal is stored in GLOBAL coordinates (from SetupFaceGeometry)
+							// Field.H from B_genComp is already in global coordinates
+							// Compute dot product directly in global coordinates (ELF-compatible)
+							// Note: Do NOT transform H to local coords - FaceNormal is already global!
 							double H_dot_n = Field.H.x * poly->FaceNormal[face_i].x +
 							                 Field.H.y * poly->FaceNormal[face_i].y +
 							                 Field.H.z * poly->FaceNormal[face_i].z;
@@ -1595,7 +1838,8 @@ void radTInteraction::AddMoreExternField(const radThg& hExtraExtSrc)
 		radTField Field(FieldKeyExtern, CompCriterium, InitObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.); // Improve
 		pExtraExtSrc->B_genComp(&Field);
 
-		ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrVectField_inv(Field.H);
+		// H field is a pseudo-vector: inverse transformation uses TrAxialVect_inv
+		ExternFieldArray[StrNo] += MainTransPtrArray[StrNo]->TrAxialVect_inv(Field.H);
 	}
 }
 
@@ -2758,7 +3002,7 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 		H_from_Mz[0] += H_point_Mz[0]; H_from_Mz[1] += H_point_Mz[1]; H_from_Mz[2] += H_point_Mz[2];
 	}
 
-	// Store in ROW-MAJOR format (different from COLUMN-MAJOR flat matrix!)
+	// Store in ROW-MAJOR format (same as flat matrix)
 	// N[i][j] = H_i due to unit M_j (i = Hx,Hy,Hz; j = Mx,My,Mz)
 	// Row 0: Hx from Mx, Hx from My, Hx from Mz
 	// Row 1: Hy from Mx, Hy from My, Hy from Mz
@@ -3121,6 +3365,13 @@ void radTInteraction::FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, con
 // Compute6x6BlockFast: Fast 6x6 interaction block for hexahedra
 // Uses pre-computed geometry (avoiding FieldFromQuadFace overhead)
 // Reference: Yano-Sugahara MSC method
+//
+// When IMA is enabled (m_imaEnabled=true), this function computes:
+//   K[i,j] = field at target i from original source j + field from mirrored source j
+// This is the kernel-based IMA approach (user suggestion 2026-01-31):
+// - Mirroring is done directly in the kernel, not via virtual elements/DOFs
+// - No permutation arrays needed - coordinates are mirrored directly
+// - HACApK compatible - kernel returns correct IMA value directly
 //=========================================================================
 
 void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const
@@ -3133,7 +3384,9 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 	if(hex_i < 0 || hex_i >= nHex || hex_j < 0 || hex_j >= nHex) return;
 
 	// Source element center (for point charge)
-	const double* src_center = &m_hexaCenters[hex_j * 3];
+	const double src_center_orig[3] = {m_hexaCenters[hex_j * 3 + 0],
+	                                   m_hexaCenters[hex_j * 3 + 1],
+	                                   m_hexaCenters[hex_j * 3 + 2]};
 
 	// Check if pre-computed triangle data is available
 	const bool usePrecomputed = m_hexaTriDataReady;
@@ -3159,6 +3412,7 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 			// Field from unit sigma on source face j
 			double H_total[3] = {0.0, 0.0, 0.0};
 
+			// =========== Original source contribution ===========
 			// Sum contributions from 2 triangles of face j
 			for(int t = 0; t < 2; t++)
 			{
@@ -3189,6 +3443,595 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 			// Point charge contribution: m = -sigma * area
 			// H_point = -area * (r - p) / |r - p|^3
 			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
+			{
+				double r[3] = {obs[0] - src_center_orig[0],
+				               obs[1] - src_center_orig[1],
+				               obs[2] - src_center_orig[2]};
+				double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+
+				if(dist_sq > 1e-30)
+				{
+					double dist = sqrt(dist_sq);
+					double inv_dist3 = 1.0 / (dist * dist_sq);
+					double coef = -area_j * inv_dist3;
+					H_total[0] += coef * r[0];
+					H_total[1] += coef * r[1];
+					H_total[2] += coef * r[2];
+				}
+			}
+
+			// =========== IMA: Mirrored source contributions ===========
+			// Kernel-based IMA: compute field from mirrored source coordinates directly
+			// This avoids virtual elements/DOFs and permutation arrays
+			if(m_imaEnabled)
+			{
+				// Helper lambda: add field contribution from mirrored source
+				auto addMirroredSourceContribution = [&](int mirrorAxis, int sign) {
+					// Mirror sign: +1 for symmetric BC, -1 for antisymmetric BC
+					double imaSign = (double)sign;
+
+					// Mirrored source center
+					double src_mirror[3] = {src_center_orig[0], src_center_orig[1], src_center_orig[2]};
+					if(mirrorAxis & IMA_X) src_mirror[0] = -src_mirror[0];
+					if(mirrorAxis & IMA_Y) src_mirror[1] = -src_mirror[1];
+					if(mirrorAxis & IMA_Z) src_mirror[2] = -src_mirror[2];
+
+					// Count number of mirror axes for winding correction
+					int numMirrors = 0;
+					if(mirrorAxis & IMA_X) numMirrors++;
+					if(mirrorAxis & IMA_Y) numMirrors++;
+					if(mirrorAxis & IMA_Z) numMirrors++;
+					bool flipWinding = (numMirrors % 2 == 1);
+
+					// Field from mirrored triangles
+					for(int t = 0; t < 2; t++)
+					{
+						int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
+						double V0[3] = {m_hexaTriVertices[tvIdx + 0],
+						                m_hexaTriVertices[tvIdx + 1],
+						                m_hexaTriVertices[tvIdx + 2]};
+						double V1[3] = {m_hexaTriVertices[tvIdx + 3],
+						                m_hexaTriVertices[tvIdx + 4],
+						                m_hexaTriVertices[tvIdx + 5]};
+						double V2[3] = {m_hexaTriVertices[tvIdx + 6],
+						                m_hexaTriVertices[tvIdx + 7],
+						                m_hexaTriVertices[tvIdx + 8]};
+
+						// Mirror vertices
+						if(mirrorAxis & IMA_X) { V0[0] = -V0[0]; V1[0] = -V1[0]; V2[0] = -V2[0]; }
+						if(mirrorAxis & IMA_Y) { V0[1] = -V0[1]; V1[1] = -V1[1]; V2[1] = -V2[1]; }
+						if(mirrorAxis & IMA_Z) { V0[2] = -V0[2]; V1[2] = -V1[2]; V2[2] = -V2[2]; }
+
+						// Swap V1/V2 to restore winding if odd number of mirrors
+						if(flipWinding) {
+							std::swap(V1[0], V2[0]);
+							std::swap(V1[1], V2[1]);
+							std::swap(V1[2], V2[2]);
+						}
+
+						double sign_tri = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
+						double H_tri[3];
+						FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign_tri, H_tri);
+
+						H_total[0] += imaSign * H_tri[0];
+						H_total[1] += imaSign * H_tri[1];
+						H_total[2] += imaSign * H_tri[2];
+					}
+
+					// Point charge from mirrored center
+					double r[3] = {obs[0] - src_mirror[0],
+					               obs[1] - src_mirror[1],
+					               obs[2] - src_mirror[2]};
+					double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+
+					if(dist_sq > 1e-30)
+					{
+						double dist = sqrt(dist_sq);
+						double inv_dist3 = 1.0 / (dist * dist_sq);
+						double coef = -area_j * inv_dist3 * imaSign;
+						H_total[0] += coef * r[0];
+						H_total[1] += coef * r[1];
+						H_total[2] += coef * r[2];
+					}
+				};
+
+				// Add contributions based on active symmetry axes
+				bool hasX = (m_imaSymmetry & IMA_X) != 0;
+				bool hasY = (m_imaSymmetry & IMA_Y) != 0;
+				bool hasZ = (m_imaSymmetry & IMA_Z) != 0;
+
+				// Single axis mirrors
+				if(hasX) addMirroredSourceContribution(IMA_X, m_imaSignX);
+				if(hasY) addMirroredSourceContribution(IMA_Y, m_imaSignY);
+				if(hasZ) addMirroredSourceContribution(IMA_Z, m_imaSignZ);
+
+				// Dual axis mirrors (for quarter models)
+				if(hasX && hasY) addMirroredSourceContribution(IMA_XY, m_imaSignX * m_imaSignY);
+				if(hasX && hasZ) addMirroredSourceContribution(IMA_XZ, m_imaSignX * m_imaSignZ);
+				if(hasY && hasZ) addMirroredSourceContribution(IMA_YZ, m_imaSignY * m_imaSignZ);
+
+				// Triple axis mirror (for eighth models)
+				if(hasX && hasY && hasZ) addMirroredSourceContribution(IMA_XYZ, m_imaSignX * m_imaSignY * m_imaSignZ);
+			}
+
+			// K_ij = n_i dot H_total / (4*pi)
+			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
+			              * RadConst::INV_FOUR_PI;
+
+			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
+			// The solver will negate when building system matrix
+			K_mat[face_i * 6 + face_j] = K_ij;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+// IMA (Image) Symmetry Implementation
+// Reference: IMA approach - matrix construction with image summation
+//-------------------------------------------------------------------------
+
+// Note: Static constexpr arrays IMA_PERM_X/Y/Z are defined inline in rad_interaction.h
+
+//-------------------------------------------------------------------------
+// SetIMASymmetry: Configure IMA symmetry mode
+// symmetry: IMA_X, IMA_Y, IMA_Z, etc.
+// signX, signY, signZ: +1 for symmetric BC, -1 for antisymmetric BC per axis
+// Returns: number of elements in IMA region
+//-------------------------------------------------------------------------
+int radTInteraction::SetIMASymmetry(int symmetry, int signX, int signY, int signZ)
+{
+	m_imaSymmetry = symmetry;
+	m_imaSignX = (signX >= 0) ? 1 : -1;  // Normalize to +1 or -1
+	m_imaSignY = (signY >= 0) ? 1 : -1;
+	m_imaSignZ = (signZ >= 0) ? 1 : -1;
+	m_imaEnabled = (symmetry != IMA_NONE);
+
+	if(!m_imaEnabled)
+	{
+		m_imaNumElements = AmOfMainElem;
+		m_imaToFull.clear();
+		m_imaMirrorMap.clear();
+		m_imaUseVirtualMirror.clear();
+		return m_imaNumElements;
+	}
+
+	// Build mapping of elements in IMA region
+	// Elements in IMA region have positive coordinates for each active symmetry axis
+	m_imaToFull.clear();
+	m_imaMirrorMap.clear();
+	m_imaUseVirtualMirror.clear();
+
+	for(int i = 0; i < AmOfMainElem; i++)
+	{
+		if(IsElementInIMARegion(i))
+		{
+			m_imaToFull.push_back(i);
+		}
+	}
+
+	m_imaNumElements = (int)m_imaToFull.size();
+
+	// Build mirror map: for each IMA element, find its mirror in full model
+	// For quarter models, there may be no physical mirror - use virtual mirror
+	m_imaMirrorMap.resize(m_imaNumElements);
+	m_imaUseVirtualMirror.resize(m_imaNumElements, false);
+
+	const double eps = 1e-6;  // Tolerance for matching
+	int numVirtualMirrors = 0;
+
+	for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
+	{
+		int full_i = m_imaToFull[ima_i];
+		TVector3d center = g3dRelaxPtrVect[full_i]->ReturnCentrPoint();
+
+		// Compute mirrored center
+		TVector3d mirror_center = center;
+		if(m_imaSymmetry & IMA_X) mirror_center.x = -center.x;
+		if(m_imaSymmetry & IMA_Y) mirror_center.y = -center.y;
+		if(m_imaSymmetry & IMA_Z) mirror_center.z = -center.z;
+
+		// Find element closest to mirror_center
+		double min_dist_sq = 1e30;
+		int best_match = -1;
+
+		for(int i = 0; i < AmOfMainElem; i++)
+		{
+			TVector3d c = g3dRelaxPtrVect[i]->ReturnCentrPoint();
+			double dx = c.x - mirror_center.x;
+			double dy = c.y - mirror_center.y;
+			double dz = c.z - mirror_center.z;
+			double dist_sq = dx*dx + dy*dy + dz*dz;
+
+			if(dist_sq < min_dist_sq)
+			{
+				min_dist_sq = dist_sq;
+				best_match = i;
+			}
+		}
+
+		// Check if we found a physical mirror element
+		if(min_dist_sq > eps * eps)
+		{
+			// No physical mirror found - use virtual mirror
+			m_imaMirrorMap[ima_i] = full_i;  // Store self for reference
+			m_imaUseVirtualMirror[ima_i] = true;
+			numVirtualMirrors++;
+		}
+		else
+		{
+			// Physical mirror found
+			m_imaMirrorMap[ima_i] = best_match;
+			m_imaUseVirtualMirror[ima_i] = false;
+		}
+	}
+
+	// IMA symmetry enabled (silent in production)
+
+	return m_imaNumElements;
+}
+
+//-------------------------------------------------------------------------
+// IsElementInIMARegion: Check if element center is in positive half-space
+// for all active symmetry axes
+//-------------------------------------------------------------------------
+bool radTInteraction::IsElementInIMARegion(int elemIdx) const
+{
+	if(elemIdx < 0 || elemIdx >= AmOfMainElem) return false;
+
+	TVector3d center = g3dRelaxPtrVect[elemIdx]->ReturnCentrPoint();
+
+	// For x-mirror: element must have x >= 0 (or x > -epsilon to handle centerline elements)
+	const double eps = 1e-10;
+
+	if(m_imaSymmetry & IMA_X)
+	{
+		if(center.x < -eps) return false;
+	}
+	if(m_imaSymmetry & IMA_Y)
+	{
+		if(center.y < -eps) return false;
+	}
+	if(m_imaSymmetry & IMA_Z)
+	{
+		if(center.z < -eps) return false;
+	}
+
+	return true;
+}
+
+//-------------------------------------------------------------------------
+// GetMirrorElementIndex: Find element that is mirror image of given element
+// For x-mirror: find element with center at (-x, y, z)
+//-------------------------------------------------------------------------
+int radTInteraction::GetMirrorElementIndex(int elemIdx, int symmetryAxis) const
+{
+	if(elemIdx < 0 || elemIdx >= AmOfMainElem) return -1;
+
+	TVector3d center = g3dRelaxPtrVect[elemIdx]->ReturnCentrPoint();
+
+	// Compute mirrored center
+	TVector3d mirror_center = center;
+	if(symmetryAxis & IMA_X) mirror_center.x = -center.x;
+	if(symmetryAxis & IMA_Y) mirror_center.y = -center.y;
+	if(symmetryAxis & IMA_Z) mirror_center.z = -center.z;
+
+	// Find element closest to mirror_center
+	const double eps = 1e-6;  // Tolerance for matching
+	double min_dist_sq = 1e30;
+	int best_match = -1;
+
+	for(int i = 0; i < AmOfMainElem; i++)
+	{
+		TVector3d c = g3dRelaxPtrVect[i]->ReturnCentrPoint();
+		double dx = c.x - mirror_center.x;
+		double dy = c.y - mirror_center.y;
+		double dz = c.z - mirror_center.z;
+		double dist_sq = dx*dx + dy*dy + dz*dz;
+
+		if(dist_sq < min_dist_sq)
+		{
+			min_dist_sq = dist_sq;
+			best_match = i;
+		}
+	}
+
+	// Verify match is close enough
+	if(min_dist_sq > eps * eps)
+	{
+		return -1;  // No physical mirror found
+	}
+
+	return best_match;
+}
+
+//-------------------------------------------------------------------------
+// ApplyDOFPermutation: Apply permutation to 6x6 block columns
+// result[i][perm[j]] = input[i][j]  (permute columns)
+// For IMA: we need result = input @ P, where P is permutation matrix
+// This is equivalent to: result[i][k] = input[i][j] where perm[j] = k
+// i.e., result[i][perm[j]] = input[i][j]
+//-------------------------------------------------------------------------
+void radTInteraction::ApplyDOFPermutation(const double* input, const int* perm, double* result) const
+{
+	// result = input @ P
+	// P[j][k] = 1 if perm[j] == k, else 0
+	// (input @ P)[i][k] = sum_j input[i][j] * P[j][k] = input[i][perm^-1[k]]
+	//
+	// Alternative interpretation: column j of input goes to column perm[j] of result
+	// result[:, perm[j]] = input[:, j]
+
+	// Initialize result to zero
+	for(int k = 0; k < 36; k++) result[k] = 0.0;
+
+	// For each column j of input, copy to column perm[j] of result
+	for(int j = 0; j < 6; j++)
+	{
+		int k = perm[j];  // column j maps to column k
+		for(int i = 0; i < 6; i++)
+		{
+			// input[i][j] -> result[i][k]
+			result[i * 6 + k] = input[i * 6 + j];
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+// ApplyRowPermutation: Apply row permutation Q to 6x6 block
+// result[i, :] = input[perm[i], :]
+// For ELF IMA: result = Q @ K_BA
+// Q[i] = row index in K_BA that becomes row i in result
+//-------------------------------------------------------------------------
+void radTInteraction::ApplyRowPermutation(const double* input, const int* perm, double* result) const
+{
+	// result = Q @ input
+	// Q[i][k] = 1 if perm[i] == k, else 0
+	// (Q @ input)[i][j] = sum_k Q[i][k] * input[k][j] = input[perm[i]][j]
+
+	// For each row i of result, copy from row perm[i] of input
+	for(int i = 0; i < 6; i++)
+	{
+		int k = perm[i];  // row i comes from row k
+		for(int j = 0; j < 6; j++)
+		{
+			// input[k][j] -> result[i][j]
+			result[i * 6 + j] = input[k * 6 + j];
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+// Compute6x6BlockIMA: Compute IMA block with image summation (ELF-compatible)
+// ELF formula: K_IMA[i,j] = K[i,j] + sign * Q @ K[mirror(i), j]
+// where K[mirror(i), j] = K_BA (field at mirrored target from original source)
+// For single axis: K_IMA[i,j] = K[i,j] + sign * Q @ K[mirror(i), j]
+// For dual axis (e.g., XZ):
+//   K_IMA[i,j] = K[i,j] + sign_x * K[i, mx(j)] @ Px
+//                       + sign_z * K[i, mz(j)] @ Pz
+//                       + sign_x * sign_z * K[i, mxz(j)] @ Pxz
+// For quarter models: if no physical mirror exists, compute virtual mirror
+//-------------------------------------------------------------------------
+void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) const
+{
+	if(!m_hexaGeomReady)
+	{
+		std::cerr << "[Radia] Error: Hexahedron geometry not precomputed for IMA" << std::endl;
+		for(int k = 0; k < 36; k++) K_ima[k] = 0.0;
+		return;
+	}
+
+	int full_i = m_imaToFull[ima_i];
+	int full_j = m_imaToFull[ima_j];
+
+	// Find hex indices in precomputed arrays
+	int hex_i = -1, hex_j = -1;
+	for(int h = 0; h < (int)m_hexaElemIndices.size(); h++)
+	{
+		if(m_hexaElemIndices[h] == full_i) hex_i = h;
+		if(m_hexaElemIndices[h] == full_j) hex_j = h;
+	}
+
+	if(hex_i < 0 || hex_j < 0)
+	{
+		std::cerr << "[Radia] Error: Element not found in hex arrays" << std::endl;
+		for(int k = 0; k < 36; k++) K_ima[k] = 0.0;
+		return;
+	}
+
+	// Start with direct interaction: K[full_i][full_j] = K_AA
+	Compute6x6BlockFast(hex_i, hex_j, K_ima);
+
+	// ELF-compatible IMA formula:
+	// K_IMA[i,i] = K[i,i] + sign * Q @ K[mirror(i), i]
+	//            = K_AA + sign * Q @ K_BA
+	//
+	// where K_BA = K[mirror(i), i] is computed by Compute6x6BlockMirroredTarget
+	// Q is the row permutation to reorder faces after mirroring
+	//
+	// For x-mirror: Q = [0, 3, 2, 1, 4, 5] (swap x+ (face 1) and x- (face 3))
+
+	// Helper lambda to add mirror contribution using ELF formula
+	auto addMirrorContributionELF = [&](int mirrorAxis, int sign, const int* rowPerm, const int* colPerm) {
+		double K_BA[36];        // K[mirror(i), j] from Compute6x6BlockMirroredTarget
+		double K_BA_perm[36];   // After row permutation: Q @ K_BA
+
+		// Compute K_BA: mirrored TARGET element i
+		Compute6x6BlockMirroredTarget(hex_i, hex_j, mirrorAxis, K_BA);
+
+		// Apply row permutation Q: K_BA_perm[i, :] = K_BA[rowPerm[i], :]
+		ApplyRowPermutation(K_BA, rowPerm, K_BA_perm);
+
+		// Add contribution: K_ima += sign * Q @ K_BA
+		for(int k = 0; k < 36; k++)
+		{
+			K_ima[k] += sign * K_BA_perm[k];
+		}
+	};
+
+	// Add contributions based on active symmetry axes
+	bool hasX = (m_imaSymmetry & IMA_X) != 0;
+	bool hasY = (m_imaSymmetry & IMA_Y) != 0;
+	bool hasZ = (m_imaSymmetry & IMA_Z) != 0;
+
+	// Single axis contributions using ELF permutations
+	if(hasX) addMirrorContributionELF(IMA_X, m_imaSignX, IMA_ROW_PERM_X, IMA_COL_PERM_X);
+	if(hasY) addMirrorContributionELF(IMA_Y, m_imaSignY, IMA_ROW_PERM_Y, IMA_COL_PERM_Y);
+	if(hasZ) addMirrorContributionELF(IMA_Z, m_imaSignZ, IMA_ROW_PERM_Z, IMA_COL_PERM_Z);
+
+	// Dual axis contributions (combined permutations)
+	if(hasX && hasY)
+	{
+		// XY mirror: apply column perms, then row perms
+		double K_AB[36], K_col1[36], K_col2[36], K_row1[36], K_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XY, K_AB);
+		ApplyDOFPermutation(K_AB, IMA_COL_PERM_X, K_col1);
+		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Y, K_col2);
+		ApplyRowPermutation(K_col2, IMA_ROW_PERM_X, K_row1);
+		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Y, K_perm);
+		int sign = m_imaSignX * m_imaSignY;
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
+	}
+	if(hasX && hasZ)
+	{
+		// XZ mirror: apply column perms, then row perms
+		double K_AB[36], K_col1[36], K_col2[36], K_row1[36], K_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XZ, K_AB);
+		ApplyDOFPermutation(K_AB, IMA_COL_PERM_X, K_col1);
+		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Z, K_col2);
+		ApplyRowPermutation(K_col2, IMA_ROW_PERM_X, K_row1);
+		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Z, K_perm);
+		int sign = m_imaSignX * m_imaSignZ;
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
+	}
+	if(hasY && hasZ)
+	{
+		// YZ mirror: apply column perms, then row perms
+		double K_AB[36], K_col1[36], K_col2[36], K_row1[36], K_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_YZ, K_AB);
+		ApplyDOFPermutation(K_AB, IMA_COL_PERM_Y, K_col1);
+		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Z, K_col2);
+		ApplyRowPermutation(K_col2, IMA_ROW_PERM_Y, K_row1);
+		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Z, K_perm);
+		int sign = m_imaSignY * m_imaSignZ;
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
+	}
+
+	// Triple axis contribution (eighth model)
+	if(hasX && hasY && hasZ)
+	{
+		double K_AB[36], K_col1[36], K_col2[36], K_col3[36];
+		double K_row1[36], K_row2[36], K_perm[36];
+		Compute6x6BlockMirrored(hex_i, hex_j, IMA_XYZ, K_AB);
+		ApplyDOFPermutation(K_AB, IMA_COL_PERM_X, K_col1);
+		ApplyDOFPermutation(K_col1, IMA_COL_PERM_Y, K_col2);
+		ApplyDOFPermutation(K_col2, IMA_COL_PERM_Z, K_col3);
+		ApplyRowPermutation(K_col3, IMA_ROW_PERM_X, K_row1);
+		ApplyRowPermutation(K_row1, IMA_ROW_PERM_Y, K_row2);
+		ApplyRowPermutation(K_row2, IMA_ROW_PERM_Z, K_perm);
+		int sign = m_imaSignX * m_imaSignY * m_imaSignZ;
+		for(int k = 0; k < 36; k++) K_ima[k] += sign * K_perm[k];
+	}
+}
+
+//-------------------------------------------------------------------------
+// Compute6x6BlockMirrored: Compute interaction with virtually mirrored element j
+// For quarter model support: element j's geometry is mirrored on-the-fly
+// mirrorAxis: IMA_X, IMA_Y, IMA_Z, or combinations
+//-------------------------------------------------------------------------
+void radTInteraction::Compute6x6BlockMirrored(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const
+{
+	std::memset(K_mat, 0, 36 * sizeof(double));
+
+	if(!m_hexaGeomReady) return;
+
+	int nHex = (int)m_hexaElemIndices.size();
+	if(hex_i < 0 || hex_i >= nHex || hex_j < 0 || hex_j >= nHex) return;
+
+	// Mirror source element center
+	double src_center[3] = {m_hexaCenters[hex_j * 3 + 0],
+	                        m_hexaCenters[hex_j * 3 + 1],
+	                        m_hexaCenters[hex_j * 3 + 2]};
+	if(mirrorAxis & IMA_X) src_center[0] = -src_center[0];
+	if(mirrorAxis & IMA_Y) src_center[1] = -src_center[1];
+	if(mirrorAxis & IMA_Z) src_center[2] = -src_center[2];
+
+	// For each target face i (unchanged)
+	for(int face_i = 0; face_i < 6; face_i++)
+	{
+		// Yano-Sugahara evaluation point for target face
+		int epIdx = (hex_i * 6 + face_i) * 3;
+		const double obs[3] = {m_hexaEvalPoints[epIdx + 0],
+		                       m_hexaEvalPoints[epIdx + 1],
+		                       m_hexaEvalPoints[epIdx + 2]};
+
+		// Target face normal
+		int fnIdx_i = (hex_i * 6 + face_i) * 3;
+		const double n_i[3] = {m_hexaFaceNormals[fnIdx_i + 0],
+		                       m_hexaFaceNormals[fnIdx_i + 1],
+		                       m_hexaFaceNormals[fnIdx_i + 2]};
+
+		// For each source face j (mirrored)
+		for(int face_j = 0; face_j < 6; face_j++)
+		{
+			// Field from unit sigma on mirrored source face j
+			double H_total[3] = {0.0, 0.0, 0.0};
+
+			// Sum contributions from 2 triangles of mirrored face j
+			for(int t = 0; t < 2; t++)
+			{
+				// Get original triangle vertices
+				int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
+				double V0[3] = {m_hexaTriVertices[tvIdx + 0],
+				                m_hexaTriVertices[tvIdx + 1],
+				                m_hexaTriVertices[tvIdx + 2]};
+				double V1[3] = {m_hexaTriVertices[tvIdx + 3],
+				                m_hexaTriVertices[tvIdx + 4],
+				                m_hexaTriVertices[tvIdx + 5]};
+				double V2[3] = {m_hexaTriVertices[tvIdx + 6],
+				                m_hexaTriVertices[tvIdx + 7],
+				                m_hexaTriVertices[tvIdx + 8]};
+
+				// Mirror vertices
+				if(mirrorAxis & IMA_X)
+				{
+					V0[0] = -V0[0]; V1[0] = -V1[0]; V2[0] = -V2[0];
+				}
+				if(mirrorAxis & IMA_Y)
+				{
+					V0[1] = -V0[1]; V1[1] = -V1[1]; V2[1] = -V2[1];
+				}
+				if(mirrorAxis & IMA_Z)
+				{
+					V0[2] = -V0[2]; V1[2] = -V1[2]; V2[2] = -V2[2];
+				}
+
+				// Original sign (for orientation)
+				double sign = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
+
+				// Mirror reverses winding -> flip sign
+				// Count number of mirror axes (odd = flip, even = no flip)
+				int numMirrors = 0;
+				if(mirrorAxis & IMA_X) numMirrors++;
+				if(mirrorAxis & IMA_Y) numMirrors++;
+				if(mirrorAxis & IMA_Z) numMirrors++;
+				if(numMirrors % 2 == 1)
+				{
+					// Odd number of mirrors: swap V1 and V2 to restore winding
+					std::swap(V1[0], V2[0]);
+					std::swap(V1[1], V2[1]);
+					std::swap(V1[2], V2[2]);
+				}
+
+				double H_tri[3];
+				FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign, H_tri);
+
+				H_total[0] += H_tri[0];
+				H_total[1] += H_tri[1];
+				H_total[2] += H_tri[2];
+			}
+
+			// Point charge contribution from mirrored element center
+			// (Same approximation as Compute6x6BlockFast: use element center for all faces)
+			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
 			double r[3] = {obs[0] - src_center[0],
 			               obs[1] - src_center[1],
 			               obs[2] - src_center[2]};
@@ -3204,14 +4047,425 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 				H_total[2] += coef * r[2];
 			}
 
-			// K_ij = -n_i dot H_total / (4*pi)
-			double K_ij = -(n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
+			// K_ij = n_i dot H_total / (4*pi)
+			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
 			              * RadConst::INV_FOUR_PI;
 
 			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
+			// The solver will negate when building system matrix
 			K_mat[face_i * 6 + face_j] = K_ij;
 		}
 	}
+}
+
+//-------------------------------------------------------------------------
+// Compute6x6BlockMirroredTarget: Compute K[mirror(i), j] for ELF IMA formula
+// This mirrors the TARGET element i, keeping SOURCE element j unchanged.
+// K_BA[face_i, face_j] = n'_i dot H_j / (4*pi)
+// where n'_i is the mirrored target face normal,
+// and H_j is computed at the mirrored target evaluation point
+// mirrorAxis: IMA_X, IMA_Y, IMA_Z, or combinations
+//-------------------------------------------------------------------------
+void radTInteraction::Compute6x6BlockMirroredTarget(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const
+{
+	std::memset(K_mat, 0, 36 * sizeof(double));
+
+	if(!m_hexaGeomReady) return;
+
+	int nHex = (int)m_hexaElemIndices.size();
+	if(hex_i < 0 || hex_i >= nHex || hex_j < 0 || hex_j >= nHex) return;
+
+	// Source element center (unchanged)
+	double src_center[3] = {m_hexaCenters[hex_j * 3 + 0],
+	                        m_hexaCenters[hex_j * 3 + 1],
+	                        m_hexaCenters[hex_j * 3 + 2]};
+
+	// For each target face i (MIRRORED evaluation point and normal)
+	for(int face_i = 0; face_i < 6; face_i++)
+	{
+		// Get original target evaluation point and mirror it
+		int epIdx = (hex_i * 6 + face_i) * 3;
+		double obs[3] = {m_hexaEvalPoints[epIdx + 0],
+		                 m_hexaEvalPoints[epIdx + 1],
+		                 m_hexaEvalPoints[epIdx + 2]};
+
+		// Mirror the evaluation point
+		if(mirrorAxis & IMA_X) obs[0] = -obs[0];
+		if(mirrorAxis & IMA_Y) obs[1] = -obs[1];
+		if(mirrorAxis & IMA_Z) obs[2] = -obs[2];
+
+		// Get original target face normal and mirror it
+		int fnIdx_i = (hex_i * 6 + face_i) * 3;
+		double n_i[3] = {m_hexaFaceNormals[fnIdx_i + 0],
+		                 m_hexaFaceNormals[fnIdx_i + 1],
+		                 m_hexaFaceNormals[fnIdx_i + 2]};
+
+		// Mirror the normal (flip component in mirror axis)
+		if(mirrorAxis & IMA_X) n_i[0] = -n_i[0];
+		if(mirrorAxis & IMA_Y) n_i[1] = -n_i[1];
+		if(mirrorAxis & IMA_Z) n_i[2] = -n_i[2];
+
+		// For each source face j (unchanged geometry)
+		for(int face_j = 0; face_j < 6; face_j++)
+		{
+			// Field from unit sigma on ORIGINAL source face j
+			double H_total[3] = {0.0, 0.0, 0.0};
+
+			// Sum contributions from 2 triangles of original source face j
+			for(int t = 0; t < 2; t++)
+			{
+				// Get original triangle vertices (NOT mirrored)
+				int tvIdx = ((hex_j * 6 + face_j) * 2 + t) * 3 * 3;
+				double V0[3] = {m_hexaTriVertices[tvIdx + 0],
+				                m_hexaTriVertices[tvIdx + 1],
+				                m_hexaTriVertices[tvIdx + 2]};
+				double V1[3] = {m_hexaTriVertices[tvIdx + 3],
+				                m_hexaTriVertices[tvIdx + 4],
+				                m_hexaTriVertices[tvIdx + 5]};
+				double V2[3] = {m_hexaTriVertices[tvIdx + 6],
+				                m_hexaTriVertices[tvIdx + 7],
+				                m_hexaTriVertices[tvIdx + 8]};
+
+				double sign = m_hexaTriSigns[(hex_j * 6 + face_j) * 2 + t];
+
+				double H_tri[3];
+				FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign, H_tri);
+
+				H_total[0] += H_tri[0];
+				H_total[1] += H_tri[1];
+				H_total[2] += H_tri[2];
+			}
+
+			// Point charge contribution from original source element center
+			double area_j = m_hexaFaceAreas[hex_j * 6 + face_j];
+			double r[3] = {obs[0] - src_center[0],
+			               obs[1] - src_center[1],
+			               obs[2] - src_center[2]};
+			double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+
+			if(dist_sq > 1e-30)
+			{
+				double dist = sqrt(dist_sq);
+				double inv_dist3 = 1.0 / (dist * dist_sq);
+				double coef = -area_j * inv_dist3;
+				H_total[0] += coef * r[0];
+				H_total[1] += coef * r[1];
+				H_total[2] += coef * r[2];
+			}
+
+			// K_ij = n'_i dot H_total / (4*pi)
+			// where n'_i is the mirrored normal
+			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2])
+			              * RadConst::INV_FOUR_PI;
+
+			// Store in ROW-MAJOR format: K[i][j] at index i*6 + j
+			// The solver will negate when building system matrix
+			K_mat[face_i * 6 + face_j] = K_ij;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+// SetupInteractMatrix_IMA: Build IMA interaction matrix
+// Matrix size is (n_ima * 6) x (n_ima * 6)
+// N_IMA[i,j] = N[full_i, full_j] + sign * N[full_i, mirror_j] @ P
+// sign = +1 for symmetric BC, -1 for antisymmetric BC
+//-------------------------------------------------------------------------
+int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
+{
+	if(!m_imaEnabled)
+	{
+		std::cerr << "[Radia] Error: IMA not enabled" << std::endl;
+		return 0;
+	}
+
+	// Check all elements are MSC (DOF >= 5)
+	bool allHex = true;
+	for(int i = 0; i < AmOfMainElem; i++)
+	{
+		if(m_elemDOF[i] < 5)
+		{
+			std::cerr << "[Radia] Error: IMA requires MSC elements (DOF >= 5)" << std::endl;
+			return 0;
+		}
+		if(m_elemDOF[i] != 6) allHex = false;
+	}
+
+	// Pre-compute hexahedron geometry for hex elements
+	if(!m_hexaGeomReady && allHex)
+	{
+		PrecomputeHexaGeometry();
+	}
+
+	// Compute IMA DOF count from actual element DOFs
+	int imaDOF = 0;
+	for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
+	{
+		int full_i = m_imaToFull[ima_i];
+		imaDOF += m_elemDOF[full_i];
+	}
+
+	// Build IMA interaction matrix (imaDOF x imaDOF)
+
+	// Allocate IMA matrix (skip for HACApK - kernel computes entries on demand)
+	if(!skipDenseMatrix)
+	{
+		size_t matrix_size = (size_t)imaDOF * (size_t)imaDOF;
+		try {
+			m_flatInteractMatrix.resize(matrix_size, 0.0);
+		} catch(const std::bad_alloc&) {
+			std::cerr << "[Radia] Error: Memory allocation failed for IMA matrix" << std::endl;
+			return 0;
+		}
+	}
+
+	// Save original values
+	int originalAmOfMainElem = AmOfMainElem;
+	std::vector<int> originalElemDOF = m_elemDOF;
+	std::vector<int> originalElemDOFOffset = m_elemDOFOffset;
+	radTVectPtrg3dRelax originalG3dRelaxPtrVect = g3dRelaxPtrVect;
+
+	// Save external field values for IMA elements BEFORE resizing
+	std::vector<double> savedExternField(imaDOF, 0.0);
+	if(!m_flatExternFieldArray.empty())
+	{
+		int ima_offset = 0;
+		for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
+		{
+			int full_i = m_imaToFull[ima_i];
+			int full_offset = originalElemDOFOffset[full_i];
+			int elem_dof = originalElemDOF[full_i];
+
+			for(int dof = 0; dof < elem_dof; dof++)
+			{
+				if((size_t)(full_offset + dof) < m_flatExternFieldArray.size())
+				{
+					savedExternField[ima_offset + dof] = m_flatExternFieldArray[full_offset + dof];
+				}
+			}
+			ima_offset += elem_dof;
+		}
+	}
+
+	// Resize arrays
+	m_flatExternFieldArray = std::move(savedExternField);
+	m_flatMagnArray.resize(imaDOF, 0.0);
+	m_flatFieldArray.resize(imaDOF, 0.0);
+
+	// Update AmOfMainElem to IMA element count
+	AmOfMainElem = m_imaNumElements;
+
+	// Rebuild m_elemDOF and m_elemDOFOffset for IMA elements (variable DOF)
+	m_elemDOF.resize(m_imaNumElements);
+	m_elemDOFOffset.resize(m_imaNumElements + 1);
+	int acc = 0;
+	for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
+	{
+		int full_i = m_imaToFull[ima_i];
+		m_elemDOF[ima_i] = originalElemDOF[full_i];
+		m_elemDOFOffset[ima_i] = acc;
+		acc += m_elemDOF[ima_i];
+	}
+	m_elemDOFOffset[m_imaNumElements] = acc;
+
+	m_totalDOF = imaDOF;
+
+	// Remap g3dRelaxPtrVect to only contain IMA elements
+	g3dRelaxPtrVect.resize(m_imaNumElements);
+	for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
+	{
+		int full_i = m_imaToFull[ima_i];
+		g3dRelaxPtrVect[ima_i] = originalG3dRelaxPtrVect[full_i];
+	}
+
+	// IMA: AmOfMainElem updated, m_totalDOF set
+
+	// For HACApK: skip dense matrix fill, kernel handles IMA via Compute6x6BlockFast
+	if(skipDenseMatrix)
+	{
+		// Reset precomputed geometry so HACApK recomputes for the reduced IMA elements
+		m_hexaGeomReady = false;
+		return 1;
+	}
+
+	// Build mapping from IMA index to hex index (for Compute6x6BlockFast fast path)
+	// Uses geometry precomputed from the full model (before system reduction)
+	std::vector<int> imaToHex(m_imaNumElements, -1);
+	if(allHex && m_hexaGeomReady)
+	{
+		for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
+		{
+			int full_i = m_imaToFull[ima_i];
+			for(int h = 0; h < (int)m_hexaElemIndices.size(); h++)
+			{
+				if(m_hexaElemIndices[h] == full_i)
+				{
+					imaToHex[ima_i] = h;
+					break;
+				}
+			}
+		}
+	}
+
+	// Build IMA interaction matrix with OpenMP
+	#pragma omp parallel for schedule(dynamic) if(m_imaNumElements > 10)
+	for(int ima_col = 0; ima_col < m_imaNumElements; ima_col++)
+	{
+		int offset_col = m_elemDOFOffset[ima_col];
+		int dof_col = m_elemDOF[ima_col];
+
+		radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[ima_col]);
+		if(!poly_col) continue;
+
+		for(int ima_row = 0; ima_row < m_imaNumElements; ima_row++)
+		{
+			int offset_row = m_elemDOFOffset[ima_row];
+			int dof_row = m_elemDOF[ima_row];
+
+			radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[ima_row]);
+			if(!poly_row) continue;
+
+			double* block = &m_flatInteractMatrix[(size_t)offset_row * imaDOF + offset_col];
+
+			// Fast path: 6DOF-6DOF hex with precomputed geometry
+			if(dof_row == 6 && dof_col == 6)
+			{
+				int hex_row = imaToHex[ima_row];
+				int hex_col = imaToHex[ima_col];
+				if(hex_row >= 0 && hex_col >= 0)
+				{
+					double K_ima[36];
+					Compute6x6BlockFast(hex_row, hex_col, K_ima);
+					for(int i = 0; i < 6; i++)
+						for(int j = 0; j < 6; j++)
+							block[(size_t)i * imaDOF + j] = K_ima[i * 6 + j];
+					continue;
+				}
+			}
+
+			// Generic variable DOF path: MSC-to-MSC with IMA mirror contributions
+			// Extract source face vertices
+			int nFacesCol = dof_col;
+			std::array<int, 8> colFaceNumVerts;
+			std::array<std::array<TVector3d, 4>, 8> colFaceVerts;
+			for(int f = 0; f < nFacesCol; f++)
+			{
+				const radTHandlePgnAndTrans& hpt = poly_col->VectHandlePgnAndTrans[f];
+				radTPolygon* pgn = hpt.PgnHndl.rep;
+				radTrans* tr = hpt.TransHndl.rep;
+				const radTVect2dVect& v2d = pgn->EdgePointsVector;
+				int nv = (int)v2d.size();
+				if(nv > 4) nv = 4;
+				colFaceNumVerts[f] = nv;
+				for(int v = 0; v < nv; v++)
+					colFaceVerts[f][v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
+			}
+
+			for(int face_i = 0; face_i < dof_row; face_i++)
+			{
+				// Yano-Sugahara evaluation point
+				TVector3d EvalPt;
+				EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
+				EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
+				EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
+
+				for(int face_j = 0; face_j < dof_col; face_j++)
+				{
+					// Direct contribution
+					TVector3d H_face = poly_col->FieldFromFace(EvalPt, face_j, 1.0);
+					double unit_charge = -1.0 * poly_col->FaceArea[face_j];
+					TVector3d H_point = poly_col->FieldFromPointCharge(EvalPt, unit_charge);
+
+					TVector3d H_total;
+					H_total.x = H_face.x + H_point.x;
+					H_total.y = H_face.y + H_point.y;
+					H_total.z = H_face.z + H_point.z;
+
+					// IMA mirror contributions
+					auto addMirrorContribution = [&](int mirrorAxis, int sign) {
+						// Mirror source face vertices
+						TVector3d mirVerts[4];
+						int nv = colFaceNumVerts[face_j];
+						for(int v = 0; v < nv; v++)
+						{
+							mirVerts[v] = colFaceVerts[face_j][v];
+							if(mirrorAxis & IMA_X) mirVerts[v].x = -mirVerts[v].x;
+							if(mirrorAxis & IMA_Y) mirVerts[v].y = -mirVerts[v].y;
+							if(mirrorAxis & IMA_Z) mirVerts[v].z = -mirVerts[v].z;
+						}
+
+						int numAxes = 0;
+						if(mirrorAxis & IMA_X) numAxes++;
+						if(mirrorAxis & IMA_Y) numAxes++;
+						if(mirrorAxis & IMA_Z) numAxes++;
+						bool reverseWinding = (numAxes % 2 == 1);
+
+						TVector3d mirCenter = poly_col->CentrPoint;
+						if(mirrorAxis & IMA_X) mirCenter.x = -mirCenter.x;
+						if(mirrorAxis & IMA_Y) mirCenter.y = -mirCenter.y;
+						if(mirrorAxis & IMA_Z) mirCenter.z = -mirCenter.z;
+
+						// Field from mirrored face
+						TVector3d H_mir = poly_col->FieldFromFaceMirrored(
+							EvalPt, mirVerts, nv, (double)sign, reverseWinding, mirCenter);
+
+						// Mirror point charge (at mirrored ELEMENT center, not face center)
+						TVector3d mirPCPt = poly_col->CentrPoint;
+						if(mirrorAxis & IMA_X) mirPCPt.x = -mirPCPt.x;
+						if(mirrorAxis & IMA_Y) mirPCPt.y = -mirPCPt.y;
+						if(mirrorAxis & IMA_Z) mirPCPt.z = -mirPCPt.z;
+						TVector3d r;
+						r.x = EvalPt.x - mirPCPt.x;
+						r.y = EvalPt.y - mirPCPt.y;
+						r.z = EvalPt.z - mirPCPt.z;
+						double dist = sqrt(r.x*r.x + r.y*r.y + r.z*r.z);
+						TVector3d H_mir_pc(0., 0., 0.);
+						if(dist > 1e-20) {
+							double mir_charge = (double)sign * unit_charge;
+							double coeff = mir_charge / (dist * dist * dist);
+							H_mir_pc.x = coeff * r.x;
+							H_mir_pc.y = coeff * r.y;
+							H_mir_pc.z = coeff * r.z;
+						}
+
+						H_total.x += H_mir.x + H_mir_pc.x;
+						H_total.y += H_mir.y + H_mir_pc.y;
+						H_total.z += H_mir.z + H_mir_pc.z;
+					};
+
+					int imaSym = m_imaSymmetry;
+					int signX = m_imaSignX;
+					int signY = m_imaSignY;
+					int signZ = m_imaSignZ;
+
+					// Single axis
+					if(imaSym & IMA_X) addMirrorContribution(IMA_X, signX);
+					if(imaSym & IMA_Y) addMirrorContribution(IMA_Y, signY);
+					if(imaSym & IMA_Z) addMirrorContribution(IMA_Z, signZ);
+					// Dual axis
+					if((imaSym & IMA_X) && (imaSym & IMA_Y))
+						addMirrorContribution(IMA_XY, signX * signY);
+					if((imaSym & IMA_X) && (imaSym & IMA_Z))
+						addMirrorContribution(IMA_XZ, signX * signZ);
+					if((imaSym & IMA_Y) && (imaSym & IMA_Z))
+						addMirrorContribution(IMA_YZ, signY * signZ);
+					// Triple axis
+					if((imaSym & IMA_X) && (imaSym & IMA_Y) && (imaSym & IMA_Z))
+						addMirrorContribution(IMA_XYZ, signX * signY * signZ);
+
+					// K_ij = normal_i dot H_total * INV_FOUR_PI
+					double K_ij = H_total.x * poly_row->FaceNormal[face_i].x +
+					              H_total.y * poly_row->FaceNormal[face_i].y +
+					              H_total.z * poly_row->FaceNormal[face_i].z;
+
+					block[(size_t)face_i * imaDOF + face_j] = K_ij * RadConst::INV_FOUR_PI;
+				}
+			}
+		}
+	}
+
+	// IMA interaction matrix built successfully
+	return 1;
 }
 
 //-------------------------------------------------------------------------
