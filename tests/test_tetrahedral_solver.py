@@ -42,7 +42,7 @@ def test_single_tetrahedron_with_material():
     tetra = rad.ObjTetrahedron(vertices, [0, 0, 1])  # Small initial M
 
     # Apply linear material
-    mat = rad.MatLin([0.1, 0.1], [0, 0, 12000])  # Isotropic, Mr=1.2T
+    mat = rad.MatLin([1.1, 1.1], [0, 0, 12000])  # mu_r=1.1 isotropic
     rad.MatApl(tetra, mat)
 
     # Solve
@@ -73,7 +73,7 @@ def test_multiple_tetrahedra_with_material():
         x_offset = i * 0.1
         vertices = [[v[0] + x_offset, v[1], v[2]] for v in vertices_base]
         tetra = rad.ObjTetrahedron(vertices, [0, 0, 1])
-        mat = rad.MatLin([0.1, 0.1], [0, 0, 12000])
+        mat = rad.MatLin([1.1, 1.1], [0, 0, 12000])
         rad.MatApl(tetra, mat)
         tetra_list.append(tetra)
 
@@ -111,7 +111,7 @@ def test_tetrahedral_mesh_with_material():
 
     # Apply linear material to all elements
     members = rad.ObjCntStuf(mag_obj)
-    mat = rad.MatLin([0.1, 0.1], [0, 0, 12000])
+    mat = rad.MatLin([1.1, 1.1], [0, 0, 12000])  # mu_r = 1.1 isotropic
     for member_id in members:
         rad.MatApl(member_id, mat)
 

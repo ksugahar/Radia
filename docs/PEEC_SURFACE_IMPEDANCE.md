@@ -24,6 +24,8 @@ This document describes Radia's integrated electromagnetic solver framework comb
 +-------------------------------------------------------------+
 ```
 
+**Note**: Surface impedance is also **field-dependent**: Zs(H) = Re{Zs(H)} + j·Im{Zs(H)}
+
 **Target Applications**: Power electronics (DC - 10 MHz)
 - Wireless Power Transfer (WPT)
 - Induction Heating
@@ -1738,6 +1740,8 @@ d/dz[(1/μ(z)) · dH/dz] = jωσ·H
 with μ(z) = μ(H(z)) for nonlinear materials
 ```
 
+**Note**: μ(H) can be obtained from the B-H curve of a specific material.
+
 ### Effect on Surface Impedance
 
 ```
@@ -2678,7 +2682,7 @@ $$
 
 ### ESIM and Nonlinear Materials
 
-4. **K. Hollaus, M. Kaltenbacher, J. Schoberl**, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," *IEEE Trans. Magnetics*, 2025.
+4. **K. Hollaus, V. Hanser, and M. Schobinger**, "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation," *IEEE Trans. Magnetics*, 2025.
    - ESIM homogenization for nonlinear mu(H) materials
    - Key reference for ESIM implementation in Radia
 

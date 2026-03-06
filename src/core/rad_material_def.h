@@ -478,6 +478,10 @@ public:
 	// relax: under-relaxation parameter (0.0 = full step, >0 = under-relaxation)
 	double ComputeChiDualMethod(double H_mag, double mu_old, double relax = 0.0) const;
 
+	// Compute differential susceptibility chi_d = (dB/dH)/mu_0 - 1 at given H
+	// Used for Newton-Raphson nonlinear iteration (tangent linearization)
+	double ComputeDifferentialChi(double H_mag) const;
+
 	// Public wrapper for inverse B-H lookup (used by relaxation methods)
 	double GetHfromM(double AbsM) const
 	{

@@ -63,8 +63,8 @@ class SphericalMagnet:
     - Inside: A uniform field B = (2/3) * mu0 * M
 
     Attributes:
-        center: [x, y, z] center position in mm
-        diameter: sphere diameter in mm
+        center: [x, y, z] center position
+        diameter: sphere diameter
         magnetization: [Mx, My, Mz] magnetization in A/m
 
     Note: Magnetization in A/m. For NdFeB with Br=1.2T:
@@ -72,15 +72,17 @@ class SphericalMagnet:
     """
 
     def __init__(self, center: List[float], diameter: float,
-                 magnetization: List[float]):
+                 magnetization: List[float], units: str = 'mm'):
         """
         Initialize spherical magnet.
 
         Parameters:
-            center: [x, y, z] center position in mm
-            diameter: sphere diameter in mm
+            center: [x, y, z] center position
+            diameter: sphere diameter
             magnetization: [Mx, My, Mz] in A/m
+            units: length unit for geometry ('mm' or 'm')
         """
+        self._length_to_m = 0.001 if units == 'mm' else 1.0
         self.center = np.array(center, dtype=float)
         self.diameter = float(diameter)
         self.radius = diameter / 2.0
@@ -157,10 +159,10 @@ class SphericalMagnet:
         Returns:
             [Ax, Ay, Az] vector potential in T*m (SI units)
         """
-        # Convert mm to m for SI calculation
-        r_vec_m = (np.array(point, dtype=float) - self.center) / 1000.0  # [m]
+        # Convert to meters for SI calculation
+        r_vec_m = (np.array(point, dtype=float) - self.center) * self._length_to_m  # [m]
         r_m = np.linalg.norm(r_vec_m)  # [m]
-        radius_m = self.radius / 1000.0  # [m]
+        radius_m = self.radius * self._length_to_m  # [m]
 
         # Magnetic moment: m = (4/3)*pi*R^3 * M [A*m^2]
         m = (4.0 / 3.0) * PI * (radius_m ** 3) * self.magnetization
@@ -331,21 +333,23 @@ class CuboidMagnet:
     Uses the Yang/Engel-Herbert/Camacho formulation based on magnetic surface charges.
 
     Attributes:
-        center: [x, y, z] center position in mm
-        dimensions: [a, b, c] side lengths in mm
+        center: [x, y, z] center position
+        dimensions: [a, b, c] side lengths
         magnetization: [Mx, My, Mz] magnetization in A/m
     """
 
     def __init__(self, center: List[float], dimensions: List[float],
-                 magnetization: List[float]):
+                 magnetization: List[float], units: str = 'mm'):
         """
         Initialize cuboid magnet.
 
         Parameters:
-            center: [x, y, z] center position in mm
-            dimensions: [a, b, c] side lengths in mm (NOT half-dimensions)
+            center: [x, y, z] center position
+            dimensions: [a, b, c] side lengths (NOT half-dimensions)
             magnetization: [Mx, My, Mz] in A/m
+            units: length unit for geometry ('mm' or 'm')
         """
+        self._length_to_m = 0.001 if units == 'mm' else 1.0
         self.center = np.array(center, dtype=float)
         self.dimensions = np.array(dimensions, dtype=float)
         self.half_dim = self.dimensions / 2.0
@@ -459,10 +463,10 @@ class CuboidMagnet:
         This uses the analytical formula for integrating 1/|r - r'| over a rectangle.
         """
         # Convert to SI units (meters)
-        p = (np.array(point, dtype=float) - self.center) / 1000.0  # [m]
-        a = self.half_dim[0] / 1000.0  # half-width in x [m]
-        b = self.half_dim[1] / 1000.0  # half-width in y [m]
-        c = self.half_dim[2] / 1000.0  # half-width in z [m]
+        p = (np.array(point, dtype=float) - self.center) * self._length_to_m  # [m]
+        a = self.half_dim[0] * self._length_to_m  # half-width in x [m]
+        b = self.half_dim[1] * self._length_to_m  # half-width in y [m]
+        c = self.half_dim[2] * self._length_to_m  # half-width in z [m]
         M = self.magnetization  # [A/m]
 
         Ax, Ay, Az = 0.0, 0.0, 0.0
@@ -707,23 +711,25 @@ class CurrentLoop:
     generalized complete elliptic integrals.
 
     Attributes:
-        center: [x, y, z] center position in mm
-        diameter: loop diameter in mm
+        center: [x, y, z] center position
+        diameter: loop diameter
         current: current in Amperes
         axis: loop axis direction ('x', 'y', or 'z')
     """
 
     def __init__(self, center: List[float], diameter: float, current: float,
-                 axis: str = 'z'):
+                 axis: str = 'z', units: str = 'mm'):
         """
         Initialize current loop.
 
         Parameters:
-            center: [x, y, z] center position in mm
-            diameter: loop diameter in mm
+            center: [x, y, z] center position
+            diameter: loop diameter
             current: current in Amperes (positive = CCW when viewed from +axis)
             axis: loop axis direction ('x', 'y', or 'z')
+            units: length unit for geometry ('mm' or 'm')
         """
+        self._length_to_m = 0.001 if units == 'mm' else 1.0
         self.center = np.array(center, dtype=float)
         self.diameter = float(diameter)
         self.radius = diameter / 2.0
@@ -748,10 +754,10 @@ class CurrentLoop:
         Returns:
             (Hr, Hz) in A/m
         """
-        # Convert mm to m for SI calculations
-        r0 = self.radius / 1000.0  # loop radius [m]
-        rho_m = rho / 1000.0  # [m]
-        z_m = z / 1000.0  # [m]
+        # Convert to meters for SI calculations
+        r0 = self.radius * self._length_to_m  # loop radius [m]
+        rho_m = rho * self._length_to_m  # [m]
+        z_m = z * self._length_to_m  # [m]
         I = self.current  # current [A]
 
         if r0 == 0:
@@ -876,10 +882,10 @@ class CurrentLoop:
         """
         from scipy.special import ellipe, ellipk
 
-        # Convert mm to m for SI calculation
-        a = self.radius / 1000.0  # loop radius [m]
-        rho_m = rho / 1000.0  # [m]
-        z_m = z / 1000.0  # [m]
+        # Convert to meters for SI calculation
+        a = self.radius * self._length_to_m  # loop radius [m]
+        rho_m = rho * self._length_to_m  # [m]
+        z_m = z * self._length_to_m  # [m]
         I = self.current  # [A]
 
         # On-axis singularity: A_phi = 0 by symmetry

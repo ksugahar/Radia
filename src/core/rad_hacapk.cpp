@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <iostream>
 #include <chrono>
+#include <atomic>
 
 // Include C++ compatible HACApK wrapper header
 extern "C" {
@@ -39,7 +40,11 @@ extern "C" {
 //=========================================================================
 
 namespace {
-    // Thread-local storage for callback state
+    // Global callback state shared across all OpenMP threads.
+    // NOT thread_local: HACApK calls cHACApK_entry_ij from OpenMP worker threads,
+    // which must see the same manager/invChi/interaction set by the main thread.
+    // Thread safety for concurrent BuildHMatrix calls (multiple Python threads)
+    // is ensured by Python's GIL; standalone C++ use would require a mutex.
     RadHACApKManager* g_currentManager = nullptr;
     std::vector<double> g_invChi;
     radTInteraction* g_interaction = nullptr;
@@ -48,6 +53,12 @@ namespace {
     // Note: lod (DOF permutation array) is now accessed via C-side accessors:
     //   HACApK_get_current_lod() and HACApK_get_current_lod_size()
     // Set during H-matrix build by HACApK_build_hmatrix_varDOF_wrapper
+
+    // FIX (2025-02-04): Generation counter for thread-local cache invalidation
+    // Incremented each time a new HACApK manager is created or BuildHMatrix is called.
+    // Thread-local caches check this counter to invalidate stale entries.
+    // Using a counter instead of pointer comparison prevents issues with memory reuse.
+    std::atomic<uint64_t> g_hacapk_generation{0};
 }
 
 namespace RadHACApKCallback {
@@ -86,15 +97,35 @@ void ClearLod() {
     // This function is kept for API compatibility but does nothing
 }
 
+void ClearGlobalState() {
+    // Clear all global callback state to prevent interference between solves
+    g_currentManager = nullptr;
+    g_interaction = nullptr;
+    g_nElem = 0;
+    g_nffc = 3;
+    g_invChi.clear();
+    // Note: g_hacapk_generation is NOT reset here - it continues incrementing
+}
+
+// FIX (2025-02-04): Get current generation for cache invalidation
+uint64_t GetGeneration() {
+    return g_hacapk_generation.load(std::memory_order_acquire);
+}
+
+// FIX (2025-02-04): Increment generation to invalidate all thread-local caches
+void IncrementGeneration() {
+    g_hacapk_generation.fetch_add(1, std::memory_order_release);
+}
+
 double ComputeEntry(int i, int j) {
     // i, j are 1-based ORIGINAL indices from HACApK
     // The lod conversion is already done by cHACApK_fill_leafmtx_hyp:
     //   val = cHACApK_entry_ij(lodl[permuted_pos], lodt[permuted_pos], i_bemv)
     // So we receive original indices, NOT permuted indices!
     //
-    // Matrix element: A(i,j) = N(i,j) + delta_ij/chi_i
+    // Matrix element: A(i,j) = N(i,j) - delta_ij/chi_i (ELF-compatible)
     // where N already contains -K/(4*pi) from GetInteractionMatrixElement()
-    // So the equation is: (-K/(4pi) + 1/chi * I) * sigma = H_ext_n
+    // So the equation is: (-K/(4pi) - 1/chi * I) * sigma = H_ext_n (ELF-compatible)
 
     if (g_currentManager == nullptr) {
         std::cerr << "[HACApK] Error: g_currentManager is null in ComputeEntry" << std::endl;
@@ -115,13 +146,15 @@ double ComputeEntry(int i, int j) {
     }
 
     // Get N matrix element through manager (friend class access)
-    // GetInteractionMatrixElement() returns -K_ij/(4*pi) for MSC hexahedra
+    // GetInteractionMatrixElement() returns K_ij/(4*pi) for MSC hexahedra
     double N_val = g_currentManager->GetInteractionMatrixElement(i0, j0);
 
-    // A = N + diag(1/chi) (N already has correct sign: -K/(4pi))
-    double A_val = N_val;
+    // A = -K/(4pi) + diag(1/chi) (Physically correct sign)
+    // Physical equation: (-K/(4pi) + 1/chi) * sigma = H_ext_n
+    // N_val contains K/(4pi), so we negate it
+    double A_val = -N_val;
     if (i0 == j0 && i0 < (int)g_invChi.size()) {
-        A_val += g_invChi[i0];
+        A_val += g_invChi[i0];  // Physically correct: +1/chi
     }
 
     return A_val;
@@ -169,6 +202,9 @@ RadHACApKManager::~RadHACApKManager() {
 }
 
 void RadHACApKManager::FreeResources() {
+    // Clear global callback state first (prevents stale state in next solve)
+    RadHACApKCallback::ClearGlobalState();
+
     if (m_leafmtxp || m_control) {
         HACApK_free_hmatrix_wrapper(m_leafmtxp, m_control);
     }
@@ -180,6 +216,10 @@ void RadHACApKManager::FreeResources() {
         HACApK_free_lcontrol(m_control);
         m_control = nullptr;
     }
+
+    // Reset HACApK global state (persistent matvec buffers, lod)
+    HACApK_reset_global_state();
+
     m_valid = false;
 }
 
@@ -206,11 +246,11 @@ void RadHACApKManager::ExtractElementCoordinates() {
 
         if (elem_dof == 3) {
             n_3dof++;
-        } else if (elem_dof == 6) {
-            n_6dof++;
+        } else if (elem_dof >= 5) {
+            n_6dof++;  // Count all MSC elements (5-DOF wedges and 6-DOF hexahedra)
         } else {
             std::cerr << "[HACApK] Error: Element " << i << " has " << elem_dof
-                      << " DOF, expected 3 or 6" << std::endl;
+                      << " DOF, expected 3, 5, or 6" << std::endl;
             m_ndof = 0;
             m_nffc = 0;
             m_is_6dof = false;
@@ -221,20 +261,36 @@ void RadHACApKManager::ExtractElementCoordinates() {
     m_dof_offset[m_n_elem] = total_dof;
     m_ndof = total_dof;
 
-    // Support mixed DOF elements (hex + tetra)
+    // Support mixed DOF elements (hex + tetra + wedge)
     if (n_3dof > 0 && n_6dof > 0) {
-        // Mixed mode: variable DOF per element
+        // Mixed mode: variable DOF per element (tetra + MSC)
         m_nffc = 0;  // Indicates variable DOF
-        m_is_6dof = false;  // Not uniform 6DOF
+        m_is_6dof = false;
         m_is_mixed_dof = true;
 #ifdef HACAPK_RADIA_LOGGING
         std::cout << "[HACApK] Mixed DOF mode: " << n_3dof << " tetrahedra (3DOF) + "
-                  << n_6dof << " hexahedra (6DOF), total " << total_dof << " DOF" << std::endl;
+                  << n_6dof << " MSC elements (5/6DOF), total " << total_dof << " DOF" << std::endl;
 #endif
     } else if (n_6dof > 0) {
-        m_nffc = 6;
-        m_is_6dof = true;
-        m_is_mixed_dof = false;
+        // Check if ALL are 6DOF hexahedra or if we have 5DOF wedges
+        bool allHex = true;
+        for (int i = 0; i < m_n_elem && allHex; i++) {
+            if (m_interaction->GetElementDOF(i) != 6) allHex = false;
+        }
+        if (allHex) {
+            m_nffc = 6;
+            m_is_6dof = true;  // Pure hex (fast path with Compute6x6BlockFast)
+            m_is_mixed_dof = false;
+        } else {
+            // Has 5DOF wedges: use variable DOF mode
+            m_nffc = 0;
+            m_is_6dof = false;
+            m_is_mixed_dof = true;
+#ifdef HACAPK_RADIA_LOGGING
+            std::cout << "[HACApK] Variable DOF mode (wedge+hex): total "
+                      << total_dof << " DOF" << std::endl;
+#endif
+        }
     } else {
         m_nffc = 3;
         m_is_6dof = false;
@@ -378,7 +434,7 @@ void RadHACApKManager::PrecomputeFlatInteractMatrix() {
     m_flat_N_data.resize(total_size);
 
     // Copy from InteractMatrix[i][j] to flat array with sign flip (-N)
-    // The system matrix is A = -N + diag(1/chi), so we store -N
+    // The system matrix is A = -N - diag(1/chi) (ELF-compatible), so we store -N
     //
     // MATRIX LAYOUT FIX (2025-12-24):
     // InteractMatrix[i][j] stores TMatrix3df where:
@@ -449,6 +505,10 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     RadHACApKCallback::SetInteraction(m_interaction, m_n_elem, m_nffc);
     RadHACApKCallback::SetCurrentManager(this);
 
+    // FIX (2025-02-04): Increment generation counter to invalidate thread-local caches
+    // This ensures that matrix element caches from previous solves are not reused
+    RadHACApKCallback::IncrementGeneration();
+
     // Verify DOF was configured correctly (3DOF, 6DOF, or mixed=0)
     if (m_ndof == 0 || (m_nffc != 0 && m_nffc != 3 && m_nffc != 6)) {
         std::cerr << "[HACApK] Error: Invalid DOF configuration (nffc=" << m_nffc << ")" << std::endl;
@@ -471,8 +531,13 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     // FIX (2025-12-26): For 3DOF tetrahedra, use PrecomputeFlatInteractMatrix()
     // if InteractMatrix was already computed (fallback path)
     // This provides O(1) matrix element access during H-matrix construction
-    if (!m_is_6dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
+    if (!m_is_6dof && !m_is_mixed_dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
         PrecomputeFlatInteractMatrix();
+    }
+    // For mixed DOF mode (including 5-DOF wedges): precompute flat interaction matrix
+    // This provides O(1) element access for H-matrix ACA+ fill via GetGenericElement()
+    if (m_is_mixed_dof && m_interaction->m_flatInteractMatrix.empty()) {
+        m_interaction->SetupInteractMatrix_VariableDOF();
     }
 
     // Initialize inverse susceptibility with ELF-style initial chi from BH curve point 2
@@ -731,8 +796,9 @@ void RadHACApKManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) co
                           H_total.y * poly_row->FaceNormal[fi].y +
                           H_total.z * poly_row->FaceNormal[fi].z;
 
-            // Store -K_ij / (4*pi) in row-major order: K_mat[row * 6 + col]
-            K_mat[fi * 6 + fj] = -K_ij * RadConst::INV_FOUR_PI;
+            // Store K_ij / (4*pi) in row-major order: K_mat[row * 6 + col]
+            // The solver will negate when building system matrix
+            K_mat[fi * 6 + fj] = K_ij * RadConst::INV_FOUR_PI;
         }
     }
 }
@@ -746,6 +812,10 @@ void RadHACApKManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) co
 // - NO global cache, NO critical sections
 //
 // This is THE key optimization: hash lookup + no locking = fast scaling
+//
+// FIX (2025-02-04): Added interaction pointer tracking to invalidate cache
+// when IMA settings change between solves. Previously, stale cache values
+// from non-IMA solves were incorrectly used for IMA solves.
 //=========================================================================
 
 // Hash-based cache size (must be power of 2 for fast modulo)
@@ -753,6 +823,12 @@ static constexpr int TL_HASH_SIZE = 1024;
 static constexpr int TL_HASH_MASK = TL_HASH_SIZE - 1;
 
 double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const {
+    // FIX (2025-02-04): Use generation counter for cache invalidation.
+    // The generation counter is incremented each time a new HACApK manager builds its H-matrix.
+    // This properly handles memory reuse where a new interaction object might have the
+    // same pointer value as a previous (deleted) object.
+    static thread_local uint64_t tl_cached_generation = 0;
+
     // Thread-local single-entry cache (most common case: same block accessed multiple times)
     static thread_local int tl_single_elem_i = -1;
     static thread_local int tl_single_elem_j = -1;
@@ -763,6 +839,21 @@ double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i,
     static thread_local int tl_cache_elem_j[TL_HASH_SIZE];
     static thread_local double tl_cache_K_mat[TL_HASH_SIZE][36];
     static thread_local bool tl_initialized = false;
+
+    // Check if generation changed (new solve with different settings)
+    // This handles IMA vs non-IMA transitions and geometry changes
+    uint64_t current_gen = RadHACApKCallback::GetGeneration();
+    if (tl_cached_generation != current_gen) {
+        // Invalidate all caches
+        tl_single_elem_i = -1;
+        tl_single_elem_j = -1;
+        for (int i = 0; i < TL_HASH_SIZE; i++) {
+            tl_cache_elem_i[i] = -1;
+            tl_cache_elem_j[i] = -1;
+        }
+        tl_cached_generation = current_gen;
+        tl_initialized = true;  // Skip redundant initialization below
+    }
 
     // Initialize thread-local cache on first access
     if (!tl_initialized) {
@@ -853,13 +944,18 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
         return GetMixed6x3Element(elem_i, elem_j, local_i, local_j);
     }
 
-    return 0.0;
+    // Generic path for variable DOF (5-DOF wedges, mixed wedge+hex, etc.)
+    // Uses pre-computed flat interaction matrix for O(1) access
+    return GetGenericElement(elem_i, elem_j, local_i, local_j);
 }
 
 //=========================================================================
 // GetCached3x3Element: On-demand 3x3 block computation with thread-local hash cache
 // Similar to GetCached6x6Element for 6DOF hexahedra
 // Uses O(1) hash lookup instead of O(n) LRU search
+//
+// FIX (2025-02-04): Added interaction pointer tracking to invalidate cache
+// when IMA settings change between solves.
 //=========================================================================
 
 // Hash-based cache size for 3DOF (must be power of 2 for fast modulo)
@@ -877,6 +973,9 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
     // On-demand computation with thread-local hash cache
     // This path is used when SetupInteractMatrix() is NOT called (HACApK optimization)
 
+    // FIX (2025-02-04): Use generation counter for cache invalidation
+    static thread_local uint64_t tl_cached_generation = 0;
+
     // Thread-local single-entry cache (most common case: same block accessed multiple times)
     static thread_local int tl_single_elem_i = -1;
     static thread_local int tl_single_elem_j = -1;
@@ -887,6 +986,20 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
     static thread_local int tl_cache_elem_j[TL_HASH_SIZE_3DOF];
     static thread_local double tl_cache_N_mat[TL_HASH_SIZE_3DOF][9];
     static thread_local bool tl_initialized = false;
+
+    // Check if generation changed (new solve with different settings)
+    uint64_t current_gen = RadHACApKCallback::GetGeneration();
+    if (tl_cached_generation != current_gen) {
+        // Invalidate all caches
+        tl_single_elem_i = -1;
+        tl_single_elem_j = -1;
+        for (int i = 0; i < TL_HASH_SIZE_3DOF; i++) {
+            tl_cache_elem_i[i] = -1;
+            tl_cache_elem_j[i] = -1;
+        }
+        tl_cached_generation = current_gen;
+        tl_initialized = true;
+    }
 
     // Initialize thread-local cache on first access
     if (!tl_initialized) {
@@ -956,7 +1069,7 @@ void RadHACApKManager::Compute3x3Block(int elem_i, int elem_j, double* N_mat) co
     // This requires transposed access: row k gets Str0[k], Str1[k], Str2[k]
     //
     // IMPORTANT: Radia's InteractMatrix stores positive N, but the system matrix is:
-    //   A = -N + diag(1/chi)
+    //   A = -N - diag(1/chi) (ELF-compatible)
     // The LU solver uses: BaseMatrix = -Nij
     // For HACApK, GetInteractionMatrixElement should return -N to match.
 
@@ -994,7 +1107,7 @@ void RadHACApKManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* 
     // Compute interaction from element j to observation at element i center
     // using B_comp() directly (same approach as SetupInteractMatrix)
     //
-    // IMPORTANT: Returns -N to match system matrix A = -N + diag(1/chi)
+    // IMPORTANT: Returns -N to match system matrix A = -N - diag(1/chi) (ELF-compatible)
 
     std::memset(N_mat, 0, 9 * sizeof(double));
 
@@ -1158,8 +1271,9 @@ double RadHACApKManager::GetMixed3x6Element(int elem_tetra, int elem_hex, int co
     int offset_j = m_dof_offset[elem_hex];
     int total_dof = m_interaction->m_totalDOF;
 
-    // COLUMN-MAJOR access: A(row, col) at [col * total_dof + row]
-    return m_interaction->m_flatInteractMatrix[(offset_j + face) * total_dof + (offset_i + comp)];
+    // ROW-MAJOR access: A(row, col) at [row * total_dof + col]
+    // Row = offset_i + comp (tetra target), Col = offset_j + face (hex source)
+    return m_interaction->m_flatInteractMatrix[(offset_i + comp) * total_dof + (offset_j + face)];
 }
 
 double RadHACApKManager::GetMixed6x3Element(int elem_hex, int elem_tetra, int face, int comp) const {
@@ -1180,8 +1294,23 @@ double RadHACApKManager::GetMixed6x3Element(int elem_hex, int elem_tetra, int fa
     int offset_j = m_dof_offset[elem_tetra];
     int total_dof = m_interaction->m_totalDOF;
 
-    // COLUMN-MAJOR access
-    return m_interaction->m_flatInteractMatrix[(offset_j + comp) * total_dof + (offset_i + face)];
+    // ROW-MAJOR access: A(row, col) at [row * total_dof + col]
+    // Row = offset_i + face (hex target), Col = offset_j + comp (tetra source)
+    return m_interaction->m_flatInteractMatrix[(offset_i + face) * total_dof + (offset_j + comp)];
+}
+
+double RadHACApKManager::GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const {
+    // Generic path for any DOF combination (5-DOF wedges, mixed wedge+hex, etc.)
+    // Uses pre-computed flat interaction matrix from SetupInteractMatrix_VariableDOF()
+
+    if (!m_interaction || m_interaction->m_flatInteractMatrix.empty()) return 0.0;
+
+    int offset_i = m_dof_offset[elem_i];
+    int offset_j = m_dof_offset[elem_j];
+    int total_dof = m_interaction->m_totalDOF;
+
+    // ROW-MAJOR access: A(row, col) at [row * total_dof + col]
+    return m_interaction->m_flatInteractMatrix[(offset_i + local_i) * total_dof + (offset_j + local_j)];
 }
 
 void RadHACApKManager::Compute3x6Block(int elem_tetra, int elem_hex, double* K_mat) const {

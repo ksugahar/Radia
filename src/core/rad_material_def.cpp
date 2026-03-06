@@ -702,9 +702,16 @@ double radTNonlinearIsotropMaterial::AbsMvsAbsH_Interpol(double AbsH, TVector2d*
 	}
 	else if(Indx >= (LenArrayHB - 1))
 	{
-		// Above last point: use last point's value (saturation)
-		TVector2d *pHB = ArrayHB + (LenArrayHB - 1);
-		B = pHB->y;  // Saturated B value
+		// Above last point: linear extrapolation using last slope (ELF-compatible)
+		// ELF magic.f90 line 4241-4245: continues linear interpolation beyond last point
+		TVector2d *pHB_last = ArrayHB + (LenArrayHB - 1);
+		TVector2d *pHB_prev = ArrayHB + (LenArrayHB - 2);
+		double H_last = pHB_last->x;
+		double B_last = pHB_last->y;
+		double H_prev = pHB_prev->x;
+		double B_prev = pHB_prev->y;
+		double dBdH_last = (B_last - B_prev) / (H_last - H_prev);
+		B = B_last + dBdH_last * (AbsH - H_last);  // Linear extrapolation
 	}
 	else
 	{
@@ -970,6 +977,62 @@ double radTNonlinearIsotropMaterial::ComputeChiDualMethod(double H_mag, double m
 	if(chi_new < 1.0e-6) chi_new = 1.0e-6;
 
 	return chi_new;
+}
+
+//-------------------------------------------------------------------------
+// Compute differential susceptibility chi_d = (dB/dH)/mu_0 - 1
+// Uses piecewise linear B-H curve: dB/dH is constant within each interval
+//-------------------------------------------------------------------------
+
+double radTNonlinearIsotropMaterial::ComputeDifferentialChi(double H_mag) const
+{
+	const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+
+	if(gLenArrayHB < 2 || gArrayHB == nullptr)
+	{
+		return 0.0;  // Linear material: dB/dH = mu_0, chi_d = 0
+	}
+
+	double dBdH;
+
+	if(H_mag <= gArrayHB[0].x)
+	{
+		// Below first point: use slope from origin to first point
+		if(gArrayHB[0].x > 1.0e-15)
+			dBdH = gArrayHB[0].y / gArrayHB[0].x;
+		else
+			dBdH = MU_0;
+	}
+	else if(H_mag >= gArrayHB[gLenArrayHB - 1].x)
+	{
+		// Above last point: use slope from last two points
+		int n = gLenArrayHB;
+		double dH = gArrayHB[n-1].x - gArrayHB[n-2].x;
+		if(std::fabs(dH) > 1.0e-15)
+			dBdH = (gArrayHB[n-1].y - gArrayHB[n-2].y) / dH;
+		else
+			dBdH = MU_0;
+	}
+	else
+	{
+		// Find interval and compute piecewise linear slope
+		for(int i = 0; i < gLenArrayHB - 1; i++)
+		{
+			if(H_mag >= gArrayHB[i].x && H_mag < gArrayHB[i+1].x)
+			{
+				double dH = gArrayHB[i+1].x - gArrayHB[i].x;
+				if(std::fabs(dH) > 1.0e-15)
+					dBdH = (gArrayHB[i+1].y - gArrayHB[i].y) / dH;
+				else
+					dBdH = MU_0;
+				break;
+			}
+		}
+	}
+
+	double chi_d = dBdH / MU_0 - 1.0;
+	if(chi_d < 1.0e-6) chi_d = 1.0e-6;
+	return chi_d;
 }
 
 //-------------------------------------------------------------------------

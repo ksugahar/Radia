@@ -367,9 +367,29 @@ EXP int CALL RadObjCntSize(int* n, int cnt);
 */
 EXP int CALL RadObjCntStuf(int* Objs, int cnt);
 
-// Relaxation sub-interval control for LU decomposition solver
-EXP int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey);
-EXP int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
+/** Builds interaction matrix for magnetostatic problem.
+@param n [out] reference number of the interaction matrix (for GetInteractMatrix)
+@param ElemKey [in] reference number of the object to build matrix for
+@param image [in] image symmetry string (e.g., "+x", "-z", "+x-z") or nullptr for no symmetry
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@note This replaces PreRelax + Image + BuildImageMatrix workflow
+*/
+EXP int CALL RadBuildMatrix(int* n, int ElemKey, const char* image);
+
+/** Gets the interaction matrix built by BuildMatrix or Solve.
+@param pMatrix [out] flat array to receive matrix data (column-major), or nullptr to query size
+@param pDOF [out] number of DOF (matrix is pDOF x pDOF)
+@param InteractElemKey [in] interaction handle from BuildMatrix, or 0 for last cached matrix
+@return integer error code
+*/
+EXP int CALL RadGetInteractMatrix(double* pMatrix, int* pDOF, int InteractElemKey);
+
+// RadPreRelax REMOVED (2026-01-31) - Use RadBuildMatrix instead
+// The new API is: int handle = RadBuildMatrix(obj, image);
+// where image is "+x", "-z", "+x-z", etc. for IMA symmetry
+
+// DEPRECATED: Use RadSolve with method parameter instead
+// EXP int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
 
 /** Duplicates the object obj. 
 @param n [out] reference number of the object created
@@ -458,14 +478,8 @@ The block is magnetized according to {M[0],M[1],M[2]} then subdivided according 
 */
 EXP int CALL RadObjFullMag(int* n, double* P, double* L, double* M, double* K, int nK, int grp, int mat, double* RGB);
 
-/** Creates a symmetry with respect to plane defined by a point and a normal vector.
-@param trf [out] reference number of the symmetry object created
-@param P [in] array of 3 numbers representing cartesian coordinates of a point in the plane
-@param N [in] array of 3 numbers representing cartesian coordinates of a vector normal to the plane
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadTrfPlSym(int* trf, double* P, double* N);
+// RadTrfPlSym REMOVED (2026-01-31) - Use Image symmetry instead
+// Use: RadSolve(..., image="+x") or RadBuildMatrix(obj, image="+x")
 
 /** Creates a rotation.
 @param trf [out] reference number of the symmetry object created
@@ -510,15 +524,9 @@ EXP int CALL RadTrfCmbL(int* fintrf, int origtrf, int trf);
 */
 EXP int CALL RadTrfCmbR(int* fintrf, int origtrf, int trf);
 
-/** Creates mlt-1 symmetry objects of the object obj. Each symmetry object is derived from the previous one by applying the transformation trf to it. Following this, the object obj becomes equivalent to mlt different objects.
-@param objout [out] reference number of the final object with symmetries applied
-@param obj [in] reference number of the original object to which symmetries should be applied
-@param trf [in] reference number of a space transformation
-@param mlt [in] multiplicity of the space transformation
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadTrfMlt(int* objout, int obj, int trf, int mlt);
+// RadTrfMlt REMOVED (2026-01-31) - Use Image symmetry instead
+// The shared-DOF approach was fundamentally incompatible with MSC 6DOF hexahedra
+// Use: RadSolve(..., image="+x-z") or RadBuildMatrix(obj, image="+x-z")
 
 /** Orients object obj by applying transformation trf to it once.
 @param objout [out] reference number of the final object with space transformation applied
@@ -527,25 +535,10 @@ EXP int CALL RadTrfMlt(int* objout, int obj, int trf, int mlt);
 */
 EXP int CALL RadTrfOrnt(int* objout, int obj, int trf);
 
-/** Creates an object mirror with respect to a plane. The object mirror possesses the same geometry as obj, but its magnetization and/or current densities are modified in such a way that the magnetic field produced by the obj and its mirror in the plane of mirroring is perpendicular to this plane.
-@param objout [out] reference number of the final object
-@param obj [in] an integer number referencing the original object
-@param P [in] array of 3 cartesian coordinates of a pointg in the mirror plane
-@param N [in] array of 3 cartesian coordinates of a vector normal to the mirror plane
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author P.E., O.C.
-*/ 
-EXP int CALL RadTrfZerPara(int* objout, int obj, double* P, double* N);
-
-/** Creates an object mirror with respect to a plane. The object mirror possesses the same geometry as obj, but its magnetization and/or current densities are modified in such a way that the magnetic field produced by the obj and its mirror in the plane of mirroring is parallel to this plane.
-@param objout [out] reference number of the object
-@param obj [in] an integer number referencing the original object
-@param P [in] array of 3 cartesian coordinates of a pointg in the mirror plane
-@param N [in] array of 3 cartesian coordinates of a vector normal to the mirror plane
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author P.E., O.C.
-*/ 
-EXP int CALL RadTrfZerPerp(int* objout, int obj, double* P, double* N);
+// RadTrfZerPara REMOVED (2026-01-31) - Use Image symmetry instead
+// RadTrfZerPerp REMOVED (2026-01-31) - Use Image symmetry instead
+// These functions used RadTrfMlt internally, which has fundamental issues with MSC 6DOF hexahedra
+// Use: RadSolve(..., image="+x-z") or RadBuildMatrix(obj, image="+x-z")
 
 /** Applies material mat to object obj.
 @param objout [out] reference number of the final object with material applied
@@ -695,14 +688,9 @@ EXP int CALL RadMatSatLamTab(int* n, double* MatData, int np, double p, double* 
 */
 EXP int CALL RadMatSatAniso(int* mat, double* DataPar, int nDataPar, double* DataPer, int nDataPer);
 
-/** Builds interaction matrix for the object obj.
-@param n [out] reference number of the interaction matrix created
-@param obj [in] reference number of the object for which the interaction matrix should be created
-@param srcobj [in] reference number of the object creating additional constant magnetic field 
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadRlxPre(int* n, int obj, int srcobj);
+// RadRlxPre REMOVED (2026-01-31) - Use RadBuildMatrix instead
+// The new API is: int handle = RadBuildMatrix(obj, image);
+// where image is "+x", "-z", "+x-z", etc. for Image symmetry
 
 /** Executes manual relaxation procedure for the interaction matrix intrc.
 @param D [out] an array of four numbers specifying: [0] average absolute change in magnetization after previous iteration over all the objects participating in the relaxation, [1] maximum absolute value of magnetization over all the objects participating in the relaxation, [2] maximum absolute value of magnetic field strength over central points of all the objects participating in the relaxation, and [3] actual number of iterations done. The values [0]-[2] are those of last iteration.
@@ -744,11 +732,12 @@ The relaxation stops whenever the change of magnetization (averaged over all sub
 @param obj [in] an integer number specifying the object to solve for magnetization
 @param prec [in] a real number specifying an absolute precision value for magnetization (in Tesla), to be reached by the end of the relaxation
 @param iter [in] maximum number of iterations permitted to reach the specified precision
-@param meth [in] an integer number specifying the method of relaxation to be used (values 0, 3, 4, 5, 8, 9, 10; 0 means default method = 10 BiCGSTAB)
+@param meth [in] solver method: 0=LU, 1=BiCGSTAB, 2=HACApK
+@param image [in] image symmetry string (e.g., "+x", "-z", "+x-z") or nullptr for no symmetry
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 @author P.E., O.C.
 */
-EXP int CALL RadSolve(double* D, int* n, int obj, double prec, int iter, int meth);
+EXP int CALL RadSolve(double* D, int* n, int obj, double prec, int iter, int meth, const char* image);
 
 /** Builds an interaction matrix and performs a relaxation procedure with nonlinear method selection.
 Similar to RadSolve but with additional nonlinear_method parameter for selecting convergence criterion.
@@ -759,10 +748,22 @@ Similar to RadSolve but with additional nonlinear_method parameter for selecting
 @param iter [in] maximum number of iterations
 @param meth [in] linear solver method: 0=LU, 1=BiCGSTAB
 @param nonl_method [in] nonlinear convergence method: 0=mucal1 (chi-change), 1=mucal2 (B-change/Newton)
+@param image [in] image symmetry string (e.g., "+x", "-z", "+x-z") or nullptr for no symmetry
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 @author Radia Development Team
 */
-EXP int CALL RadSolveNonl(double* D, int* n, int obj, double prec, int iter, int meth, int nonl_method);
+EXP int CALL RadSolveNonl(double* D, int* n, int obj, double prec, int iter, int meth, int nonl_method, const char* image);
+
+/** Builds interaction matrix for magnetostatic problem without solving.
+Allows inspection of the matrix before solving. The matrix is cached for subsequent Solve() calls.
+@param n [out] reference number of the interaction matrix (for GetInteractMatrix)
+@param ElemKey [in] reference number of the object to build matrix for
+@param image [in] image symmetry string (e.g., "+x", "-z", "+x-z") or nullptr for no symmetry
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+@note This replaces the deprecated PreRelax + Image + BuildImageMatrix workflow
+@author Radia Development Team
+*/
+EXP int CALL RadBuildMatrix(int* n, int ElemKey, const char* image);
 
 /** Returns solve statistics from the last Solve() call.
 @param dOut [out] array of statistics: [t_matrix_build, t_linear_solve, linear_iterations, nonl_iterations, openmp_enabled, openmp_max_threads]
@@ -1166,6 +1167,40 @@ EXP int CALL RadSetRelaxParam(int* n, double relax);
 @author Radia Development Team
 */
 EXP int CALL RadGetRelaxParam(double* relax);
+
+/** Enables/disables Newton-Raphson nonlinear iteration.
+When enabled, uses differential susceptibility chi_d = (dB/dH)/mu_0 - 1 for the system matrix
+and adds a correction term to the RHS for quadratic convergence.
+@param use_newton [in] 1 to enable Newton, 0 for Picard (default)
+*/
+EXP int CALL RadSetNewtonMethod(int* n, int use_newton);
+
+/** Gets current Newton method setting.
+@param use_newton [out] 1 if Newton is enabled, 0 if Picard
+*/
+EXP int CALL RadGetNewtonMethod(int* use_newton);
+
+/** Configure Newton-Raphson line search damping.
+@param n [out] Number of elements modified (always 1)
+@param enabled [in] 1 to enable damping, 0 to disable
+@param max_iter [in] Max line search iterations (default: 5)
+@param min_omega [in] Minimum omega threshold (default: 0.01)
+*/
+EXP int CALL RadSetNewtonDamping(int* n, int enabled, int max_iter, double min_omega);
+
+/** Get Newton line search damping configuration.
+@param enabled [out] 1 if damping enabled, 0 otherwise
+@param max_iter [out] Max line search iterations
+@param min_omega [out] Minimum omega threshold
+*/
+EXP int CALL RadGetNewtonDampingStats(int* enabled, int* max_iter, double* min_omega);
+
+// RadSetIMASymmetry REMOVED (2026-01-31) - Use RadBuildMatrix(obj, image) instead
+// The new unified API handles both interaction creation and Image symmetry
+// Example: int handle = RadBuildMatrix(obj, "+x-z");
+
+// RadBuildIMAMatrix REMOVED (2026-01-31) - Use RadBuildMatrix(obj, image) instead
+// The new unified API builds the Image matrix in a single call
 
 /** Classifies evaluation points as inside/near/far relative to mesh elements.
 @param classification [out] array of classification (0=inside, 1=near, 2=far)

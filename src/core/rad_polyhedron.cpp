@@ -30,6 +30,7 @@
 #include "radentry.h"  // For RadSolverGetTetraMethod()
 #include "rad_point_classify.h"  // For solid angle point-in-polyhedron test
 #include "rad_constants.h"  // Unified mathematical/physical constants
+#include "rad_interaction.h"  // For RadIMAFieldContext (IMA field computation)
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -715,6 +716,208 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
+void radTPolyhedron::B_comp_wedge_analytical(radTField* FieldPtr)
+{
+	// =========================================================================
+	// GLOBAL COORDINATE METHOD for wedge/prism elements (5 faces: 2 tri + 3 quad)
+	// =========================================================================
+	// This method computes fields using GLOBAL coordinates only.
+	// Wedges are 3DOF elements (same as tetrahedra) so they use the same
+	// magnetization-based approach.
+	//
+	// Face types:
+	//   - 2 triangular end faces (3 vertices each)
+	//   - 3 quadrilateral side faces (4 vertices each, split into 2 triangles)
+	//
+	// For PreRelax mode (interaction matrix construction):
+	//   - Compute dH/dM for all 3 unit magnetization directions
+	//
+	// For Normal mode:
+	//   - Compute H field from current magnetization
+
+	radTFieldKey& FldKey = FieldPtr->FieldKey;
+	TVector3d& obsPoint = FieldPtr->P;
+
+	// Get face vertices in GLOBAL coordinates
+	// For a wedge, we have 5 faces with variable number of vertices
+	// Use fixed-size array to avoid heap allocation (better for OpenMP)
+	std::array<int, 8> faceNumVerts;          // Number of vertices per face
+	std::array<std::array<TVector3d, 4>, 8> faceVertices;  // Max 4 vertices per face
+	int nFaces = (AmOfFaces <= 8) ? AmOfFaces : 8;
+
+	for(int i = 0; i < nFaces; i++)
+	{
+		// Use const reference to avoid radTHandle copy (which modifies reference count)
+		// This is critical for OpenMP thread safety
+		const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[i];
+		radTPolygon* pgn = hpt.PgnHndl.rep;
+		radTrans* tr = hpt.TransHndl.rep;
+
+		// Get 2D vertices from polygon and transform to global 3D
+		const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+		int nv = (int)verts2d.size();
+		if(nv > 4) nv = 4;  // Limit to 4 vertices
+		faceNumVerts[i] = nv;
+
+		for(int j = 0; j < nv; j++)
+		{
+			faceVertices[i][j] = tr->TrPoint(TVector3d(verts2d[j].x, verts2d[j].y, pgn->CoordZ));
+		}
+	}
+
+	if(FldKey.PreRelax_)
+	{
+		// =====================================================================
+		// PreRelax mode: Compute interaction matrix coefficients
+		// =====================================================================
+		// The interaction matrix code calls B_comp with the element's Magn set to
+		// a unit vector (1,0,0), (0,1,0), or (0,0,1), and expects the H field
+		// to be returned in FieldPtr->H.
+		//
+		// We compute H from the current Magn and also store the result in B
+		// for compatibility with both old and new matrix formats.
+
+		TVector3d H_total(0., 0., 0.);
+
+		for(int i = 0; i < nFaces; i++)
+		{
+			int nv = faceNumVerts[i];
+			if(nv == 3)
+			{
+				// Triangular face: use directly
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
+			}
+			else if(nv == 4)
+			{
+				// Quadrilateral face: split into 2 triangles (V0,V1,V2) and (V0,V2,V3)
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+				const TVector3d& V3 = faceVertices[i][3];
+
+				// Triangle 1: V0, V1, V2
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
+
+				// Triangle 2: V0, V2, V3
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V2, V3, Magn, obsPoint, CentrPoint);
+			}
+		}
+
+		// Store in both H (for new interaction matrix code) and B (for old matrix format)
+		FieldPtr->H += H_total;
+		FieldPtr->B += H_total;
+	}
+	else
+	{
+		// =====================================================================
+		// Normal mode: Compute actual H field from current magnetization
+		// =====================================================================
+		TVector3d H_total(0., 0., 0.);
+
+		for(int i = 0; i < nFaces; i++)
+		{
+			int nv = faceNumVerts[i];
+			if(nv == 3)
+			{
+				// Triangular face
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
+			}
+			else if(nv == 4)
+			{
+				// Quadrilateral face: split into 2 triangles
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+				const TVector3d& V3 = faceVertices[i][3];
+
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V2, V3, Magn, obsPoint, CentrPoint);
+			}
+		}
+
+		if(FldKey.H_) FieldPtr->H += H_total;
+
+		// For B field, check if observation point is inside the wedge
+		if(FldKey.B_)
+		{
+			FieldPtr->B += H_total;
+
+			// Use solid angle method to check if point is inside
+			// Sum solid angles of all faces - should be 4*pi if inside
+			double totalSolidAngle = 0.0;
+			for(int i = 0; i < nFaces; i++)
+			{
+				int nv = faceNumVerts[i];
+				if(nv == 3)
+				{
+					const TVector3d& V0 = faceVertices[i][0];
+					const TVector3d& V1 = faceVertices[i][1];
+					const TVector3d& V2 = faceVertices[i][2];
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V1, V2);
+				}
+				else if(nv == 4)
+				{
+					const TVector3d& V0 = faceVertices[i][0];
+					const TVector3d& V1 = faceVertices[i][1];
+					const TVector3d& V2 = faceVertices[i][2];
+					const TVector3d& V3 = faceVertices[i][3];
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V1, V2);
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V2, V3);
+				}
+			}
+
+			const double FOUR_PI = 4.0 * RadConst::PI;
+			if(std::abs(totalSolidAngle - FOUR_PI) < 0.1)  // Inside check with tolerance
+			{
+				// B = mu_0 * (H + M), H_total is H, so add M to B
+				FieldPtr->B += Magn;
+			}
+		}
+
+		// M field (magnetization at observation point)
+		if(FldKey.M_)
+		{
+			// Same solid angle check as B field
+			double totalSolidAngle = 0.0;
+			for(int i = 0; i < nFaces; i++)
+			{
+				int nv = faceNumVerts[i];
+				if(nv == 3)
+				{
+					const TVector3d& V0 = faceVertices[i][0];
+					const TVector3d& V1 = faceVertices[i][1];
+					const TVector3d& V2 = faceVertices[i][2];
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V1, V2);
+				}
+				else if(nv == 4)
+				{
+					const TVector3d& V0 = faceVertices[i][0];
+					const TVector3d& V1 = faceVertices[i][1];
+					const TVector3d& V2 = faceVertices[i][2];
+					const TVector3d& V3 = faceVertices[i][3];
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V1, V2);
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(obsPoint, V0, V2, V3);
+				}
+			}
+
+			const double FOUR_PI = 4.0 * RadConst::PI;
+			if(std::abs(totalSolidAngle - FOUR_PI) < 0.1)
+			{
+				FieldPtr->M += Magn;
+			}
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+
 void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 {
 	// =========================================================================
@@ -807,21 +1010,61 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 	else
 	{
 		// =====================================================================
-		// Normal mode: Compute actual H field from current magnetization
+		// Normal mode: Compute actual H field
+		// =====================================================================
+		// For permanent magnets (no material, fixed M): compute sigma = M · n
+		// For soft materials (after Solve): use solved Sigma[i] values
 		// =====================================================================
 		TVector3d H_total(0., 0., 0.);
 
-		for(int i = 0; i < nFaces; i++)
-		{
-			const TVector3d& V0 = faceVertices[i][0];
-			const TVector3d& V1 = faceVertices[i][1];
-			const TVector3d& V2 = faceVertices[i][2];
-			const TVector3d& V3 = faceVertices[i][3];
+		// Check if Sigma values have been set (by Solve or directly)
+		// If all Sigma = 0 and Magn != 0, this is a permanent magnet - compute sigma from M
+		bool sigmaIsZero = true;
+		for(int i = 0; i < nFaces && sigmaIsZero; i++) {
+			if(Sigma[i] != 0.0) sigmaIsZero = false;
+		}
+		bool magnIsNotZero = (Magn.x != 0.0 || Magn.y != 0.0 || Magn.z != 0.0);
 
-			// Triangle 1: V0, V1, V2
-			H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
-			// Triangle 2: V0, V2, V3
-			H_total += RadFieldFromTriangleFaceGlobal(V0, V2, V3, Magn, obsPoint, CentrPoint);
+		if(sigmaIsZero && magnIsNotZero)
+		{
+			// Permanent magnet: compute sigma = M · n for each face
+			// Use triangle-based field computation (like tetrahedron)
+			for(int i = 0; i < nFaces; i++)
+			{
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+				const TVector3d& V3 = faceVertices[i][3];
+
+				// Split quad into 2 triangles and use triangle field formula
+				// Triangle 1: V0, V1, V2
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
+				// Triangle 2: V0, V2, V3
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V2, V3, Magn, obsPoint, CentrPoint);
+			}
+		}
+		else
+		{
+			// Soft material (solved): use Sigma values directly
+			// The solver uses A = -K/(4pi) - 1/chi * I (ELF-compatible), giving sigma with correct sign
+			// Field formula: H = 2 * (sigma / 4pi) * solid_angle_integral
+			//
+			// Factor of 2 explanation (verified against ELF full model):
+			// The MSC sigma represents sum of charges on both sides of each face.
+			// ELF uses this convention for efficiency in the matrix computation.
+			// When computing field, we need 2x to account for both charge sheets.
+			for(int i = 0; i < nFaces; i++)
+			{
+				TVector3d H_face = FieldFromQuadFace(obsPoint, i, Sigma[i]);
+				H_total.x += H_face.x;
+				H_total.y += H_face.y;
+				H_total.z += H_face.z;
+			}
+
+			// Apply 1/(4*pi) factor - consistent with matrix construction (ELF uses same factor for both)
+			H_total.x *= RadConst::INV_FOUR_PI;
+			H_total.y *= RadConst::INV_FOUR_PI;
+			H_total.z *= RadConst::INV_FOUR_PI;
 		}
 
 		if(FldKey.H_) FieldPtr->H += H_total;
@@ -951,7 +1194,717 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 
 			FieldPtr->Phi += Phi_total;
 		}
+
+		// =====================================================================
+		// IMA (Image Method) Field Contributions
+		// =====================================================================
+		// When IMA is active, we need to add contributions from virtual mirror
+		// elements. Each mirror element has:
+		// 1. Mirrored geometry (negate x, y, or z coordinates)
+		// 2. Permuted DOF values (face sigma values swapped)
+		// 3. Sign based on symmetry type (+1 symmetric, -1 antisymmetric)
+		// =====================================================================
+		// DEBUG: Check if IMA is active for this B_comp call
+		static int totalCalls = 0;
+		static int imaActiveCalls = 0;
+		totalCalls++;
+		if(RadIMAFieldContext::IsActive() && !FldKey.PreRelax_) {
+			imaActiveCalls++;
+			if(imaActiveCalls <= 5 && std::abs(H_total.z) < 1.0) {  // Only for reasonable field values
+				std::cout << "[IMA UserFld] H_total.z=" << H_total.z*1000 << " mT" << std::endl;
+			}
+		}
+		if(totalCalls == 1000000) {  // Print stats periodically
+			std::cout << "[IMA Stats] total=" << totalCalls << " imaActive=" << imaActiveCalls << std::endl;
+			totalCalls = 0;
+			imaActiveCalls = 0;
+		}
+
+		if(RadIMAFieldContext::IsActive() && !FldKey.PreRelax_)
+		{
+			int imaSym = RadIMAFieldContext::GetSymmetry();
+			int signX = RadIMAFieldContext::GetSignX();
+			int signY = RadIMAFieldContext::GetSignY();
+			int signZ = RadIMAFieldContext::GetSignZ();
+
+			// Helper lambda to compute field from mirrored geometry
+			// The 'sign' parameter (+1 or -1) indicates the symmetry type:
+			// +1 = symmetric BC (magnetization preserved)
+			// -1 = antisymmetric BC (magnetization negated)
+			auto computeMirroredField = [&](int mirrorAxis, int sign) -> TVector3d {
+				TVector3d H_mirror(0., 0., 0.);
+
+				// Create mirrored face vertices
+				std::array<std::array<TVector3d, 4>, 8> mirrorVerts;
+				for(int i = 0; i < nFaces; i++)
+				{
+					for(int j = 0; j < 4; j++)
+					{
+						mirrorVerts[i][j] = faceVertices[i][j];
+						if(mirrorAxis & radTInteraction::IMA_X) mirrorVerts[i][j].x = -mirrorVerts[i][j].x;
+						if(mirrorAxis & radTInteraction::IMA_Y) mirrorVerts[i][j].y = -mirrorVerts[i][j].y;
+						if(mirrorAxis & radTInteraction::IMA_Z) mirrorVerts[i][j].z = -mirrorVerts[i][j].z;
+					}
+				}
+
+				// Count number of mirror axes (odd number = need winding reversal)
+				int numAxes = 0;
+				if(mirrorAxis & radTInteraction::IMA_X) numAxes++;
+				if(mirrorAxis & radTInteraction::IMA_Y) numAxes++;
+				if(mirrorAxis & radTInteraction::IMA_Z) numAxes++;
+				bool reverseWinding = (numAxes % 2 == 1);  // Odd number of reflections
+
+				// Compute mirrored center point
+				TVector3d mirrorCenter = CentrPoint;
+				if(mirrorAxis & radTInteraction::IMA_X) mirrorCenter.x = -mirrorCenter.x;
+				if(mirrorAxis & radTInteraction::IMA_Y) mirrorCenter.y = -mirrorCenter.y;
+				if(mirrorAxis & radTInteraction::IMA_Z) mirrorCenter.z = -mirrorCenter.z;
+
+				// Compute field from mirrored geometry
+				if(sigmaIsZero && magnIsNotZero)
+				{
+					// Permanent magnet: use mirrored magnetization with sign
+					TVector3d mirrorMagn = Magn;
+					// For permanent magnets, the magnetization is a pseudo-vector
+					// Mirror transformation: M -> M - 2*(M.n)*n for reflection across plane with normal n
+					// For axis-aligned planes, this flips the perpendicular component
+					if(mirrorAxis & radTInteraction::IMA_X) mirrorMagn.x = -mirrorMagn.x;
+					if(mirrorAxis & radTInteraction::IMA_Y) mirrorMagn.y = -mirrorMagn.y;
+					if(mirrorAxis & radTInteraction::IMA_Z) mirrorMagn.z = -mirrorMagn.z;
+					// Apply BC sign: antisymmetric BC negates the entire magnetization
+					mirrorMagn = mirrorMagn * (double)sign;
+
+					for(int i = 0; i < nFaces; i++)
+					{
+						// Get vertex positions for this face
+						const TVector3d& MV0 = mirrorVerts[i][0];
+						const TVector3d& MV1 = mirrorVerts[i][1];
+						const TVector3d& MV2 = mirrorVerts[i][2];
+						const TVector3d& MV3 = mirrorVerts[i][3];
+
+						if(reverseWinding)
+						{
+							// Reverse winding: use V0, V3, V2, V1 order
+							// Triangle 1: (V0, V3, V2), Triangle 2: (V0, V2, V1)
+							H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV3, MV2, mirrorMagn, obsPoint, mirrorCenter);
+							H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV2, MV1, mirrorMagn, obsPoint, mirrorCenter);
+						}
+						else
+						{
+							// Keep original winding
+							H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV1, MV2, mirrorMagn, obsPoint, mirrorCenter);
+							H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV2, MV3, mirrorMagn, obsPoint, mirrorCenter);
+						}
+					}
+				}
+				else
+				{
+					// Soft material: compute mirror contributions for field
+					const double BOUNDARY_TOL = 1.0e-6;
+
+					for(int i = 0; i < nFaces; i++)
+					{
+						const TVector3d& MV0 = mirrorVerts[i][0];
+						const TVector3d& MV1 = mirrorVerts[i][1];
+						const TVector3d& MV2 = mirrorVerts[i][2];
+						const TVector3d& MV3 = mirrorVerts[i][3];
+
+						// Check if this face is ON the symmetry plane (boundary face)
+						double faceCenterX = 0.25 * (MV0.x + MV1.x + MV2.x + MV3.x);
+						double faceCenterY = 0.25 * (MV0.y + MV1.y + MV2.y + MV3.y);
+						double faceCenterZ = 0.25 * (MV0.z + MV1.z + MV2.z + MV3.z);
+
+						bool isBoundaryFace = false;
+						if((mirrorAxis & radTInteraction::IMA_X) && std::abs(faceCenterX) < BOUNDARY_TOL)
+							isBoundaryFace = true;
+						if((mirrorAxis & radTInteraction::IMA_Y) && std::abs(faceCenterY) < BOUNDARY_TOL)
+							isBoundaryFace = true;
+						if((mirrorAxis & radTInteraction::IMA_Z) && std::abs(faceCenterZ) < BOUNDARY_TOL)
+							isBoundaryFace = true;
+
+						TVector3d H_face;
+						// DEBUG: Skip boundary face special handling to test if non-boundary works
+						if(false && isBoundaryFace)  // TEMPORARILY DISABLED
+						{
+							// BOUNDARY FACE FIX:
+							// For boundary faces at symmetry plane (e.g., z=0 under z-mirror):
+							// - c1's face 0 (z-) at z=0: normal = (0,0,-1), sigma = -Mz
+							// - c2's face 1 (z+) at z=0: normal = (0,0,+1), sigma = +Mz
+							//
+							// When we mirror c1's face 0 vertices, they stay at z=0.
+							// The cross product with forward winding gives normal (0,0,-1) - WRONG.
+							// We need normal (0,0,+1) to match c2's face 1.
+							//
+							// Solution:
+							// - mirrorSigma = -Sigma[i] = -(-Mz) = +Mz (matches sigma_c2_f1)
+							// - reverseWinding = true to flip normal from (0,0,-1) to (0,0,+1)
+							double mirrorSigma = -Sigma[i];  // Negate sigma for boundary faces
+							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, mirrorSigma, true, mirrorCenter);  // true = reverse winding
+						}
+						else
+						{
+							// NON-BOUNDARY FACE:
+							// Mirror sigma = sign * Sigma (accounts for IMA symmetry type)
+							// Use winding reversal to flip the computed normal
+							double mirrorSigma = sign * Sigma[i];
+							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, mirrorSigma, reverseWinding, mirrorCenter);
+						}
+
+						H_mirror.x += H_face.x;
+						H_mirror.y += H_face.y;
+						H_mirror.z += H_face.z;
+					}
+
+					// Apply 1/(4*pi) factor - same as main field computation
+					H_mirror.x *= RadConst::INV_FOUR_PI;
+					H_mirror.y *= RadConst::INV_FOUR_PI;
+					H_mirror.z *= RadConst::INV_FOUR_PI;
+				}
+
+				return H_mirror;  // No additional sign multiplication
+			};
+
+			TVector3d H_ima(0., 0., 0.);
+
+			// Single axis contributions
+			if(imaSym & radTInteraction::IMA_X)
+				H_ima += computeMirroredField(radTInteraction::IMA_X, signX);
+			if(imaSym & radTInteraction::IMA_Y)
+				H_ima += computeMirroredField(radTInteraction::IMA_Y, signY);
+			if(imaSym & radTInteraction::IMA_Z)
+				H_ima += computeMirroredField(radTInteraction::IMA_Z, signZ);
+
+			// Dual axis contributions
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Y))
+				H_ima += computeMirroredField(radTInteraction::IMA_XY, signX * signY);
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_XZ, signX * signZ);
+			if((imaSym & radTInteraction::IMA_Y) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_YZ, signY * signZ);
+
+			// Triple axis contribution
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Y) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_XYZ, signX * signY * signZ);
+
+			// Add IMA contributions
+			if(FldKey.H_) FieldPtr->H += H_ima;
+			if(FldKey.B_) FieldPtr->B += H_ima;
+		}
 	}
+}
+
+//-------------------------------------------------------------------------
+// B_comp_wedge_MSC: 5-DOF MSC method for wedge elements (2 tri + 3 quad faces)
+// Each face has one surface charge sigma as DOF (total 5 DOF)
+//-------------------------------------------------------------------------
+void radTPolyhedron::B_comp_wedge_MSC(radTField* FieldPtr)
+{
+	radTFieldKey& FldKey = FieldPtr->FieldKey;
+	TVector3d& obsPoint = FieldPtr->P;
+
+	// Get face vertices in GLOBAL coordinates
+	// Wedges have 5 faces with variable vertex count (3 or 4)
+	std::array<int, 8> faceNumVerts;
+	std::array<std::array<TVector3d, 4>, 8> faceVertices;
+	int nFaces = (AmOfFaces <= 8) ? AmOfFaces : 8;
+
+	for(int i = 0; i < nFaces; i++)
+	{
+		const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[i];
+		radTPolygon* pgn = hpt.PgnHndl.rep;
+		radTrans* tr = hpt.TransHndl.rep;
+
+		const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+		int nv = (int)verts2d.size();
+		if(nv > 4) nv = 4;
+		faceNumVerts[i] = nv;
+
+		for(int j = 0; j < nv; j++)
+		{
+			faceVertices[i][j] = tr->TrPoint(TVector3d(verts2d[j].x, verts2d[j].y, pgn->CoordZ));
+		}
+	}
+
+	if(FldKey.PreRelax_)
+	{
+		// PreRelax mode: Compute N-matrix (dH/dM) for cross-type interaction blocks
+		// Same computation as B_comp_wedge_analytical PreRelax
+		TVector3d H_total(0., 0., 0.);
+
+		for(int i = 0; i < nFaces; i++)
+		{
+			int nv = faceNumVerts[i];
+			if(nv == 3)
+			{
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
+			}
+			else if(nv == 4)
+			{
+				const TVector3d& V0 = faceVertices[i][0];
+				const TVector3d& V1 = faceVertices[i][1];
+				const TVector3d& V2 = faceVertices[i][2];
+				const TVector3d& V3 = faceVertices[i][3];
+
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
+				H_total += RadFieldFromTriangleFaceGlobal(V0, V2, V3, Magn, obsPoint, CentrPoint);
+			}
+		}
+
+		FieldPtr->H += H_total;
+		FieldPtr->B += H_total;
+	}
+	else
+	{
+		// Normal mode: Compute field from sigma values or magnetization
+		TVector3d H_total(0., 0., 0.);
+
+		// Check if Sigma values have been set (by Solve or directly)
+		bool sigmaIsZero = true;
+		for(int i = 0; i < nFaces && sigmaIsZero; i++) {
+			if(Sigma[i] != 0.0) sigmaIsZero = false;
+		}
+		bool magnIsNotZero = (Magn.x != 0.0 || Magn.y != 0.0 || Magn.z != 0.0);
+
+		if(sigmaIsZero && magnIsNotZero)
+		{
+			// Permanent magnet: compute field from M using triangle faces
+			for(int i = 0; i < nFaces; i++)
+			{
+				int nv = faceNumVerts[i];
+				if(nv == 3)
+				{
+					const TVector3d& V0 = faceVertices[i][0];
+					const TVector3d& V1 = faceVertices[i][1];
+					const TVector3d& V2 = faceVertices[i][2];
+					H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
+				}
+				else if(nv == 4)
+				{
+					const TVector3d& V0 = faceVertices[i][0];
+					const TVector3d& V1 = faceVertices[i][1];
+					const TVector3d& V2 = faceVertices[i][2];
+					const TVector3d& V3 = faceVertices[i][3];
+					H_total += RadFieldFromTriangleFaceGlobal(V0, V1, V2, Magn, obsPoint, CentrPoint);
+					H_total += RadFieldFromTriangleFaceGlobal(V0, V2, V3, Magn, obsPoint, CentrPoint);
+				}
+			}
+		}
+		else
+		{
+			// Soft material (solved): use Sigma values via FieldFromFace
+			for(int i = 0; i < nFaces; i++)
+			{
+				TVector3d H_face = FieldFromFace(obsPoint, i, Sigma[i]);
+				H_total.x += H_face.x;
+				H_total.y += H_face.y;
+				H_total.z += H_face.z;
+			}
+
+			// Apply 1/(4*pi) factor - consistent with matrix construction
+			H_total.x *= RadConst::INV_FOUR_PI;
+			H_total.y *= RadConst::INV_FOUR_PI;
+			H_total.z *= RadConst::INV_FOUR_PI;
+		}
+
+		if(FldKey.H_) FieldPtr->H += H_total;
+
+		// B field with inside check using solid angle
+		if(FldKey.B_)
+		{
+			FieldPtr->B += H_total;
+
+			double totalSolidAngle = 0.0;
+			for(int i = 0; i < nFaces; i++)
+			{
+				int nv = faceNumVerts[i];
+				if(nv == 3)
+				{
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(
+						obsPoint, faceVertices[i][0], faceVertices[i][1], faceVertices[i][2]);
+				}
+				else if(nv == 4)
+				{
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(
+						obsPoint, faceVertices[i][0], faceVertices[i][1], faceVertices[i][2]);
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(
+						obsPoint, faceVertices[i][0], faceVertices[i][2], faceVertices[i][3]);
+				}
+			}
+
+			const double FOUR_PI = 4.0 * RadConst::PI;
+			if(std::abs(totalSolidAngle - FOUR_PI) < 0.1)
+			{
+				FieldPtr->B += Magn;
+			}
+		}
+
+		// M field
+		if(FldKey.M_)
+		{
+			double totalSolidAngle = 0.0;
+			for(int i = 0; i < nFaces; i++)
+			{
+				int nv = faceNumVerts[i];
+				if(nv == 3)
+				{
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(
+						obsPoint, faceVertices[i][0], faceVertices[i][1], faceVertices[i][2]);
+				}
+				else if(nv == 4)
+				{
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(
+						obsPoint, faceVertices[i][0], faceVertices[i][1], faceVertices[i][2]);
+					totalSolidAngle += RadPointClassify::ComputeTriangleSolidAngle(
+						obsPoint, faceVertices[i][0], faceVertices[i][2], faceVertices[i][3]);
+				}
+			}
+
+			const double FOUR_PI = 4.0 * RadConst::PI;
+			if(std::abs(totalSolidAngle - FOUR_PI) < 0.1)
+			{
+				FieldPtr->M += Magn;
+			}
+		}
+
+		// A field (vector potential)
+		if(FldKey.A_)
+		{
+			TVector3d A_total(0., 0., 0.);
+			for(int i = 0; i < nFaces; i++)
+			{
+				int nv = faceNumVerts[i];
+				if(nv == 3)
+				{
+					const TVector3d& V0 = faceVertices[i][0];
+					const TVector3d& V1 = faceVertices[i][1];
+					const TVector3d& V2 = faceVertices[i][2];
+					A_total += RadVectorPotentialFromTriangleFaceGlobal(
+						V0, V1, V2, Magn, obsPoint, CentrPoint);
+				}
+				else if(nv == 4)
+				{
+					const TVector3d& V0 = faceVertices[i][0];
+					const TVector3d& V1 = faceVertices[i][1];
+					const TVector3d& V2 = faceVertices[i][2];
+					const TVector3d& V3 = faceVertices[i][3];
+					A_total += RadVectorPotentialFromTriangleFaceGlobal(
+						V0, V1, V2, Magn, obsPoint, CentrPoint);
+					A_total += RadVectorPotentialFromTriangleFaceGlobal(
+						V0, V2, V3, Magn, obsPoint, CentrPoint);
+				}
+			}
+			FieldPtr->A += A_total;
+		}
+
+		// Scalar potential (phi)
+		if(FldKey.Phi_)
+		{
+			double Phi_total = 0.0;
+			for(int i = 0; i < nFaces; i++)
+			{
+				int nv = faceNumVerts[i];
+				if(nv == 3)
+				{
+					const TVector3d& V0 = faceVertices[i][0];
+					const TVector3d& V1 = faceVertices[i][1];
+					const TVector3d& V2 = faceVertices[i][2];
+					Phi_total += RadScalarPotentialFromTriangleFaceGlobal(
+						V0, V1, V2, Magn, obsPoint, CentrPoint);
+				}
+				else if(nv == 4)
+				{
+					const TVector3d& V0 = faceVertices[i][0];
+					const TVector3d& V1 = faceVertices[i][1];
+					const TVector3d& V2 = faceVertices[i][2];
+					const TVector3d& V3 = faceVertices[i][3];
+					Phi_total += RadScalarPotentialFromTriangleFaceGlobal(
+						V0, V1, V2, Magn, obsPoint, CentrPoint);
+					Phi_total += RadScalarPotentialFromTriangleFaceGlobal(
+						V0, V2, V3, Magn, obsPoint, CentrPoint);
+				}
+			}
+			FieldPtr->Phi += Phi_total;
+		}
+
+		// =====================================================================
+		// IMA (Image Method) Field Contributions for wedge elements
+		// Same pattern as B_comp_hexahedron_MSC IMA, adapted for variable face vertex count
+		// =====================================================================
+		if(RadIMAFieldContext::IsActive() && !FldKey.PreRelax_)
+		{
+			int imaSym = RadIMAFieldContext::GetSymmetry();
+			int signX = RadIMAFieldContext::GetSignX();
+			int signY = RadIMAFieldContext::GetSignY();
+			int signZ = RadIMAFieldContext::GetSignZ();
+
+			auto computeMirroredField = [&](int mirrorAxis, int sign) -> TVector3d {
+				TVector3d H_mirror(0., 0., 0.);
+
+				// Create mirrored face vertices (handle variable numVerts per face)
+				std::array<std::array<TVector3d, 4>, 8> mirrorVerts;
+				for(int i = 0; i < nFaces; i++)
+				{
+					for(int j = 0; j < faceNumVerts[i]; j++)
+					{
+						mirrorVerts[i][j] = faceVertices[i][j];
+						if(mirrorAxis & radTInteraction::IMA_X) mirrorVerts[i][j].x = -mirrorVerts[i][j].x;
+						if(mirrorAxis & radTInteraction::IMA_Y) mirrorVerts[i][j].y = -mirrorVerts[i][j].y;
+						if(mirrorAxis & radTInteraction::IMA_Z) mirrorVerts[i][j].z = -mirrorVerts[i][j].z;
+					}
+				}
+
+				// Count number of mirror axes (odd number = need winding reversal)
+				int numAxes = 0;
+				if(mirrorAxis & radTInteraction::IMA_X) numAxes++;
+				if(mirrorAxis & radTInteraction::IMA_Y) numAxes++;
+				if(mirrorAxis & radTInteraction::IMA_Z) numAxes++;
+				bool reverseWinding = (numAxes % 2 == 1);
+
+				// Compute mirrored center point
+				TVector3d mirrorCenter = CentrPoint;
+				if(mirrorAxis & radTInteraction::IMA_X) mirrorCenter.x = -mirrorCenter.x;
+				if(mirrorAxis & radTInteraction::IMA_Y) mirrorCenter.y = -mirrorCenter.y;
+				if(mirrorAxis & radTInteraction::IMA_Z) mirrorCenter.z = -mirrorCenter.z;
+
+				if(sigmaIsZero && magnIsNotZero)
+				{
+					// Permanent magnet path
+					TVector3d mirrorMagn = Magn;
+					if(mirrorAxis & radTInteraction::IMA_X) mirrorMagn.x = -mirrorMagn.x;
+					if(mirrorAxis & radTInteraction::IMA_Y) mirrorMagn.y = -mirrorMagn.y;
+					if(mirrorAxis & radTInteraction::IMA_Z) mirrorMagn.z = -mirrorMagn.z;
+					mirrorMagn = mirrorMagn * (double)sign;
+
+					for(int i = 0; i < nFaces; i++)
+					{
+						int nv = faceNumVerts[i];
+						const TVector3d& MV0 = mirrorVerts[i][0];
+						const TVector3d& MV1 = mirrorVerts[i][1];
+						const TVector3d& MV2 = mirrorVerts[i][2];
+
+						if(nv == 3)
+						{
+							// Triangular face: single call
+							if(reverseWinding)
+								H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV2, MV1, mirrorMagn, obsPoint, mirrorCenter);
+							else
+								H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV1, MV2, mirrorMagn, obsPoint, mirrorCenter);
+						}
+						else if(nv == 4)
+						{
+							// Quad face: split into 2 triangles
+							const TVector3d& MV3 = mirrorVerts[i][3];
+							if(reverseWinding)
+							{
+								H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV3, MV2, mirrorMagn, obsPoint, mirrorCenter);
+								H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV2, MV1, mirrorMagn, obsPoint, mirrorCenter);
+							}
+							else
+							{
+								H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV1, MV2, mirrorMagn, obsPoint, mirrorCenter);
+								H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV2, MV3, mirrorMagn, obsPoint, mirrorCenter);
+							}
+						}
+					}
+				}
+				else
+				{
+					// Soft material path: use FieldFromFaceMirrored
+					for(int i = 0; i < nFaces; i++)
+					{
+						double mirrorSigma = sign * Sigma[i];
+						TVector3d H_face = FieldFromFaceMirrored(obsPoint,
+						                                          mirrorVerts[i].data(), faceNumVerts[i],
+						                                          mirrorSigma, reverseWinding,
+						                                          mirrorCenter);
+						H_mirror.x += H_face.x;
+						H_mirror.y += H_face.y;
+						H_mirror.z += H_face.z;
+					}
+
+					// Apply 1/(4*pi) factor
+					H_mirror.x *= RadConst::INV_FOUR_PI;
+					H_mirror.y *= RadConst::INV_FOUR_PI;
+					H_mirror.z *= RadConst::INV_FOUR_PI;
+				}
+
+				return H_mirror;
+			};
+
+			TVector3d H_ima(0., 0., 0.);
+
+			// Single axis contributions
+			if(imaSym & radTInteraction::IMA_X)
+				H_ima += computeMirroredField(radTInteraction::IMA_X, signX);
+			if(imaSym & radTInteraction::IMA_Y)
+				H_ima += computeMirroredField(radTInteraction::IMA_Y, signY);
+			if(imaSym & radTInteraction::IMA_Z)
+				H_ima += computeMirroredField(radTInteraction::IMA_Z, signZ);
+
+			// Dual axis contributions
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Y))
+				H_ima += computeMirroredField(radTInteraction::IMA_XY, signX * signY);
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_XZ, signX * signZ);
+			if((imaSym & radTInteraction::IMA_Y) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_YZ, signY * signZ);
+
+			// Triple axis contribution
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Y) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_XYZ, signX * signY * signZ);
+
+			// Add IMA contributions
+			if(FldKey.H_) FieldPtr->H += H_ima;
+			if(FldKey.B_) FieldPtr->B += H_ima;
+		}
+	}
+}
+
+//-------------------------------------------------------------------------
+// FieldFromQuadFaceMirrored: Helper for IMA field computation
+// Computes field from a quad face with explicit vertex positions
+// Uses mirrorCenter to determine correct outward normal direction
+// If flipNormal is true, swaps triangle vertex order to flip normal direction
+//-------------------------------------------------------------------------
+TVector3d radTPolyhedron::FieldFromQuadFaceMirrored(const TVector3d& obs,
+                                                     const TVector3d& V0,
+                                                     const TVector3d& V1,
+                                                     const TVector3d& V2,
+                                                     const TVector3d& V3,
+                                                     double sigma,
+                                                     bool flipNormal,
+                                                     const TVector3d& mirrorCenter) const
+{
+	// Split quad into 2 triangles, applying sign_factor correction
+	// based on whether triangle normal points outward from mirrorCenter.
+	// This matches the logic in FieldFromQuadFace().
+
+	TVector3d H_total(0.0, 0.0, 0.0);
+
+	// Triangle split: (V0,V1,V2) and (V0,V2,V3) - or reversed if flipNormal
+	TVector3d tri_verts[2][3];
+	if(flipNormal)
+	{
+		// Flip normal by swapping second and third vertex
+		tri_verts[0][0] = V0; tri_verts[0][1] = V2; tri_verts[0][2] = V1;
+		tri_verts[1][0] = V0; tri_verts[1][1] = V3; tri_verts[1][2] = V2;
+	}
+	else
+	{
+		tri_verts[0][0] = V0; tri_verts[0][1] = V1; tri_verts[0][2] = V2;
+		tri_verts[1][0] = V0; tri_verts[1][1] = V2; tri_verts[1][2] = V3;
+	}
+
+	for(int iTri = 0; iTri < 2; iTri++)
+	{
+		const TVector3d& T0 = tri_verts[iTri][0];
+		const TVector3d& T1 = tri_verts[iTri][1];
+		const TVector3d& T2 = tri_verts[iTri][2];
+
+		// Compute triangle normal
+		TVector3d edge1, edge2, tri_normal;
+		edge1.x = T1.x - T0.x; edge1.y = T1.y - T0.y; edge1.z = T1.z - T0.z;
+		edge2.x = T2.x - T0.x; edge2.y = T2.y - T0.y; edge2.z = T2.z - T0.z;
+
+		tri_normal.x = edge1.y * edge2.z - edge1.z * edge2.y;
+		tri_normal.y = edge1.z * edge2.x - edge1.x * edge2.z;
+		tri_normal.z = edge1.x * edge2.y - edge1.y * edge2.x;
+
+		double norm_len = sqrt(tri_normal.x*tri_normal.x + tri_normal.y*tri_normal.y + tri_normal.z*tri_normal.z);
+		if(norm_len < 1e-20) continue;
+
+		// Normalize
+		tri_normal.x /= norm_len;
+		tri_normal.y /= norm_len;
+		tri_normal.z /= norm_len;
+
+		// Compute triangle center
+		TVector3d tri_center;
+		tri_center.x = (T0.x + T1.x + T2.x) / 3.0;
+		tri_center.y = (T0.y + T1.y + T2.y) / 3.0;
+		tri_center.z = (T0.z + T1.z + T2.z) / 3.0;
+
+		// Check if normal points outward (away from MIRROR element center)
+		TVector3d to_center;
+		to_center.x = tri_center.x - mirrorCenter.x;
+		to_center.y = tri_center.y - mirrorCenter.y;
+		to_center.z = tri_center.z - mirrorCenter.z;
+
+		double dot_prod = tri_normal.x * to_center.x + tri_normal.y * to_center.y + tri_normal.z * to_center.z;
+
+		// Sign factor: +1 if normal points outward, -1 if inward
+		double sign_factor = (dot_prod >= 0.0) ? 1.0 : -1.0;
+
+		// Compute field from this triangle with sign-corrected sigma
+		TVector3d H_tri = FieldFromChargedTriangle(obs, T0, T1, T2, sigma * sign_factor);
+
+		H_total.x += H_tri.x;
+		H_total.y += H_tri.y;
+		H_total.z += H_tri.z;
+	}
+
+	return H_total;
+}
+
+TVector3d radTPolyhedron::FieldFromFaceMirrored(const TVector3d& obs,
+                                                 const TVector3d* mirrorVerts, int numVerts,
+                                                 double sigma, bool flipNormal,
+                                                 const TVector3d& mirrorCenter) const
+{
+	// Generalized mirrored face field: dispatches to tri or quad based on numVerts
+	if(numVerts == 3)
+	{
+		// Triangular face: apply flipNormal by swapping V1/V2, then check outward normal
+		TVector3d T0, T1, T2;
+		if(flipNormal)
+		{
+			T0 = mirrorVerts[0]; T1 = mirrorVerts[2]; T2 = mirrorVerts[1];
+		}
+		else
+		{
+			T0 = mirrorVerts[0]; T1 = mirrorVerts[1]; T2 = mirrorVerts[2];
+		}
+
+		// Compute triangle normal from cross product
+		TVector3d edge1, edge2, tri_normal;
+		edge1.x = T1.x - T0.x; edge1.y = T1.y - T0.y; edge1.z = T1.z - T0.z;
+		edge2.x = T2.x - T0.x; edge2.y = T2.y - T0.y; edge2.z = T2.z - T0.z;
+
+		tri_normal.x = edge1.y * edge2.z - edge1.z * edge2.y;
+		tri_normal.y = edge1.z * edge2.x - edge1.x * edge2.z;
+		tri_normal.z = edge1.x * edge2.y - edge1.y * edge2.x;
+
+		double norm_len = sqrt(tri_normal.x*tri_normal.x + tri_normal.y*tri_normal.y + tri_normal.z*tri_normal.z);
+		if(norm_len < 1e-20) return TVector3d(0., 0., 0.);
+
+		// Check if normal points outward (away from MIRROR element center)
+		TVector3d tri_center;
+		tri_center.x = (T0.x + T1.x + T2.x) / 3.0;
+		tri_center.y = (T0.y + T1.y + T2.y) / 3.0;
+		tri_center.z = (T0.z + T1.z + T2.z) / 3.0;
+
+		TVector3d to_center;
+		to_center.x = tri_center.x - mirrorCenter.x;
+		to_center.y = tri_center.y - mirrorCenter.y;
+		to_center.z = tri_center.z - mirrorCenter.z;
+
+		double dot_prod = tri_normal.x * to_center.x + tri_normal.y * to_center.y + tri_normal.z * to_center.z;
+		double sign_factor = (dot_prod >= 0.0) ? 1.0 : -1.0;
+
+		return FieldFromChargedTriangle(obs, T0, T1, T2, sigma * sign_factor);
+	}
+	else if(numVerts >= 4)
+	{
+		// Quad face: delegate to FieldFromQuadFaceMirrored (already has sign_factor)
+		return FieldFromQuadFaceMirrored(obs, mirrorVerts[0], mirrorVerts[1],
+		                                  mirrorVerts[2], mirrorVerts[3],
+		                                  sigma, flipNormal, mirrorCenter);
+	}
+
+	return TVector3d(0., 0., 0.);
 }
 
 //-------------------------------------------------------------------------
@@ -1113,6 +2066,173 @@ TVector3d radTPolyhedron::FieldFromChargedTriangle(const TVector3d& obs,
 }
 
 //-------------------------------------------------------------------------
+// FieldFromChargedTriangleWithNormal: Version with explicit normal for IMA boundary faces
+// When vertices don't move under mirroring (boundary faces), the computed normal from
+// cross product would be wrong. This version uses an explicit transformed normal.
+//-------------------------------------------------------------------------
+TVector3d radTPolyhedron::FieldFromChargedTriangleWithNormal(const TVector3d& obs,
+                                                              const TVector3d& v0,
+                                                              const TVector3d& v1,
+                                                              const TVector3d& v2,
+                                                              double sigma,
+                                                              const TVector3d& explicitNormal) const
+{
+	// Analytic field from uniformly charged triangle with explicit normal direction
+	// Used for IMA boundary faces where the mirrored geometry doesn't give correct normal
+	// Returns field WITHOUT 4pi divisor (4pi is applied in matrix assembly)
+
+	const double EPS = 1.0e-20;
+
+	// Use the provided explicit normal as basis_c (local Z axis)
+	TVector3d basis_c = explicitNormal;
+	double cLen = sqrt(basis_c.x*basis_c.x + basis_c.y*basis_c.y + basis_c.z*basis_c.z);
+	if(cLen < EPS) return TVector3d(0.0, 0.0, 0.0);
+	basis_c.x /= cLen; basis_c.y /= cLen; basis_c.z /= cLen;
+
+	// Build local coordinate system using explicit normal
+	// basis_a = edge (v1-v0) normalized (local X)
+	TVector3d e1, e2;
+	e1.x = v1.x - v0.x; e1.y = v1.y - v0.y; e1.z = v1.z - v0.z;
+	e2.x = v2.x - v0.x; e2.y = v2.y - v0.y; e2.z = v2.z - v0.z;
+
+	TVector3d basis_a = e1;
+	double aLen = sqrt(basis_a.x*basis_a.x + basis_a.y*basis_a.y + basis_a.z*basis_a.z);
+	if(aLen < EPS) return TVector3d(0.0, 0.0, 0.0);
+	basis_a.x /= aLen; basis_a.y /= aLen; basis_a.z /= aLen;
+
+	// basis_b = basis_c x basis_a (local Y)
+	TVector3d basis_b;
+	basis_b.x = basis_c.y * basis_a.z - basis_c.z * basis_a.y;
+	basis_b.y = basis_c.z * basis_a.x - basis_c.x * basis_a.z;
+	basis_b.z = basis_c.x * basis_a.y - basis_c.y * basis_a.x;
+	double bLen = sqrt(basis_b.x*basis_b.x + basis_b.y*basis_b.y + basis_b.z*basis_b.z);
+	if(bLen < EPS) return TVector3d(0.0, 0.0, 0.0);
+	basis_b.x /= bLen; basis_b.y /= bLen; basis_b.z /= bLen;
+
+	TVector3d AA = basis_a;  // Local X
+	TVector3d BB = basis_b;  // Local Y
+
+	// Convert vertices to local 2D coordinates (v0 = origin)
+	double xy0_x = 0.0, xy0_y = 0.0;
+
+	double xy1_x = e1.x*AA.x + e1.y*AA.y + e1.z*AA.z;
+	double xy1_y = e1.x*BB.x + e1.y*BB.y + e1.z*BB.z;
+
+	double xy2_x = e2.x*AA.x + e2.y*AA.y + e2.z*AA.z;
+	double xy2_y = e2.x*BB.x + e2.y*BB.y + e2.z*BB.z;
+
+	// Edge parameters (3 edges for triangle)
+	double XY[3][2] = {{xy0_x, xy0_y}, {xy1_x, xy1_y}, {xy2_x, xy2_y}};
+	double DS[3], AM[3], SM[3], XD[3], YD[3];
+	double EPSG = 0.0;
+
+	for(int j = 0; j < 3; j++)
+	{
+		int l = (j + 1) % 3;
+		double dx = XY[l][0] - XY[j][0];
+		double dy = XY[l][1] - XY[j][1];
+		if(fabs(dx) < EPS) dx = (dx >= 0) ? EPS : -EPS;
+
+		DS[j] = sqrt(dx*dx + dy*dy);
+		AM[j] = dy / dx;
+		SM[j] = sqrt(AM[j]*AM[j] + 1.0);
+		XD[j] = -dx / DS[j];
+		YD[j] =  dy / DS[j];
+
+		if(DS[j] > EPSG) EPSG = DS[j];
+	}
+	EPSG *= 1.0e-12;
+
+	// Transform observation point to local coordinates
+	TVector3d d;
+	d.x = obs.x - v0.x;
+	d.y = obs.y - v0.y;
+	d.z = obs.z - v0.z;
+
+	double EE1 = d.x*AA.x + d.y*AA.y + d.z*AA.z;  // local X
+	double EE2 = d.x*BB.x + d.y*BB.y + d.z*BB.z;  // local Y
+	double EE3 = d.x*basis_c.x + d.y*basis_c.y + d.z*basis_c.z;  // local Z (height)
+
+	// Distances from observation point to vertices
+	double X[3], Y[3], H[3], E[3], R[3];
+	for(int j = 0; j < 3; j++)
+	{
+		X[j] = EE1 - XY[j][0];
+		Y[j] = EE2 - XY[j][1];
+		H[j] = Y[j] * X[j];
+		E[j] = EE3*EE3 + X[j]*X[j];
+		R[j] = sqrt(X[j]*X[j] + Y[j]*Y[j] + EE3*EE3);
+	}
+
+	double Z = EE3;
+
+	// Edge contributions
+	double RM[3], RP[3], RR[3], AL[3];
+	for(int j = 0; j < 3; j++)
+	{
+		int jp1 = (j + 1) % 3;
+		RM[j] = R[j] + R[jp1] - DS[j];
+		RP[j] = R[j] + R[jp1] + DS[j];
+		RR[j] = (RM[j] / RP[j] > EPS) ? (RM[j] / RP[j]) : EPS;
+		AL[j] = log(RR[j]);
+	}
+
+	// Field components in local frame WITHOUT 4pi divisor
+	double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
+	double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
+	double HH3 = 0.0;
+
+	// Normal component (atan terms) - only if not on surface
+	if(fabs(Z) > EPSG)
+	{
+		double ZR[3];
+		for(int j = 0; j < 3; j++)
+		{
+			ZR[j] = Z * R[j];
+		}
+
+		double AT[3], BT[3];
+		for(int j = 0; j < 3; j++)
+		{
+			int jp1 = (j + 1) % 3;
+			AT[j] = (AM[j]*E[j] - H[j]) / ZR[j];
+			BT[j] = (AM[j]*E[jp1] - H[jp1]) / ZR[jp1];
+		}
+
+		HH3 = sigma * (-atan(AT[0]) - atan(AT[1]) - atan(AT[2])
+		               +atan(BT[0]) + atan(BT[1]) + atan(BT[2]));
+	}
+
+	// Transform back to global coordinates
+	TVector3d Hfield;
+	Hfield.x = HH1*AA.x + HH2*BB.x + HH3*basis_c.x;
+	Hfield.y = HH1*AA.y + HH2*BB.y + HH3*basis_c.y;
+	Hfield.z = HH1*AA.z + HH2*BB.z + HH3*basis_c.z;
+
+	return Hfield;
+}
+
+//-------------------------------------------------------------------------
+// FieldFromQuadFaceMirroredWithNormals: Version with explicit normals for IMA boundary faces
+//-------------------------------------------------------------------------
+TVector3d radTPolyhedron::FieldFromQuadFaceMirroredWithNormals(const TVector3d& obs,
+                                                                const TVector3d& V0,
+                                                                const TVector3d& V1,
+                                                                const TVector3d& V2,
+                                                                const TVector3d& V3,
+                                                                double sigma,
+                                                                const TVector3d& tri1Normal,
+                                                                const TVector3d& tri2Normal) const
+{
+	// Split quad into 2 triangles with explicit normals
+	// Triangle 1: V0, V1, V2
+	// Triangle 2: V0, V2, V3
+	TVector3d H1 = FieldFromChargedTriangleWithNormal(obs, V0, V1, V2, sigma, tri1Normal);
+	TVector3d H2 = FieldFromChargedTriangleWithNormal(obs, V0, V2, V3, sigma, tri2Normal);
+	return TVector3d(H1.x + H2.x, H1.y + H2.y, H1.z + H2.z);
+}
+
+//-------------------------------------------------------------------------
 
 TVector3d radTPolyhedron::FieldFromQuadFace(const TVector3d& obs, int faceIdx, double sigma) const
 {
@@ -1198,6 +2318,72 @@ TVector3d radTPolyhedron::FieldFromQuadFace(const TVector3d& obs, int faceIdx, d
 }
 
 //-------------------------------------------------------------------------
+// FieldFromFace: Generalized field from a single face (triangular or quadrilateral)
+// Dispatches based on vertex count. Returns field WITHOUT 4pi divisor.
+//-------------------------------------------------------------------------
+TVector3d radTPolyhedron::FieldFromFace(const TVector3d& obs, int faceIdx, double sigma) const
+{
+	// Get face polygon info
+	const radTHandlePgnAndTrans& hpt = VectHandlePgnAndTrans[faceIdx];
+	radTPolygon* pgn = hpt.PgnHndl.rep;
+	radTrans* tr = hpt.TransHndl.rep;
+
+	const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+	int nv = (int)verts2d.size();
+
+	if(nv >= 4)
+	{
+		// Quadrilateral face - delegate to existing FieldFromQuadFace
+		return FieldFromQuadFace(obs, faceIdx, sigma);
+	}
+	else if(nv == 3)
+	{
+		// Triangular face - compute field from single triangle with outward normal check
+		TVector3d V0 = tr->TrPoint(TVector3d(verts2d[0].x, verts2d[0].y, pgn->CoordZ));
+		TVector3d V1 = tr->TrPoint(TVector3d(verts2d[1].x, verts2d[1].y, pgn->CoordZ));
+		TVector3d V2 = tr->TrPoint(TVector3d(verts2d[2].x, verts2d[2].y, pgn->CoordZ));
+
+		// Compute triangle normal from cross product
+		TVector3d edge1, edge2, tri_normal;
+		edge1.x = V1.x - V0.x; edge1.y = V1.y - V0.y; edge1.z = V1.z - V0.z;
+		edge2.x = V2.x - V0.x; edge2.y = V2.y - V0.y; edge2.z = V2.z - V0.z;
+
+		tri_normal.x = edge1.y * edge2.z - edge1.z * edge2.y;
+		tri_normal.y = edge1.z * edge2.x - edge1.x * edge2.z;
+		tri_normal.z = edge1.x * edge2.y - edge1.y * edge2.x;
+
+		double norm_len = sqrt(tri_normal.x*tri_normal.x + tri_normal.y*tri_normal.y + tri_normal.z*tri_normal.z);
+		if(norm_len < 1e-20) return TVector3d(0.0, 0.0, 0.0);
+
+		tri_normal.x /= norm_len;
+		tri_normal.y /= norm_len;
+		tri_normal.z /= norm_len;
+
+		// Compute triangle center
+		TVector3d tri_center;
+		tri_center.x = (V0.x + V1.x + V2.x) / 3.0;
+		tri_center.y = (V0.y + V1.y + V2.y) / 3.0;
+		tri_center.z = (V0.z + V1.z + V2.z) / 3.0;
+
+		// Check if normal points outward (away from element center)
+		TVector3d to_center;
+		to_center.x = tri_center.x - CentrPoint.x;
+		to_center.y = tri_center.y - CentrPoint.y;
+		to_center.z = tri_center.z - CentrPoint.z;
+
+		double dot_prod = tri_normal.x * to_center.x + tri_normal.y * to_center.y + tri_normal.z * to_center.z;
+
+		// Sign factor: +1 if normal points outward, -1 if inward
+		double sign_factor = (dot_prod >= 0.0) ? 1.0 : -1.0;
+
+		// Compute field from this triangle with sign-corrected sigma
+		return FieldFromChargedTriangle(obs, V0, V1, V2, sigma * sign_factor);
+	}
+
+	return TVector3d(0.0, 0.0, 0.0);
+}
+
+//-------------------------------------------------------------------------
 
 TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double charge) const
 {
@@ -1234,6 +2420,30 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 }
 
 //-------------------------------------------------------------------------
+// B_genComp: Simplified version without TrfMlt support
+// TrfMlt has been removed from Radia - use explicit element duplication instead
+//-------------------------------------------------------------------------
+void radTPolyhedron::B_genComp(radTField* FieldPtr)
+{
+	radTFieldKey& FieldKey = FieldPtr->FieldKey;
+
+	// Handle special field keys
+	if(FieldKey.Ib_ || FieldKey.Ih_)
+	{
+		B_intComp(FieldPtr);
+		return;
+	}
+	if(FieldKey.Force_)
+	{
+		IntOverShape(FieldPtr);
+		return;
+	}
+
+	// Standard B_comp for all cases
+	B_comp(FieldPtr);
+}
+
+//-------------------------------------------------------------------------
 
 void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 //void radTPolyhedron::B_comp(radTField* FieldPtr)
@@ -1262,11 +2472,24 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 		return;
 	}
 
-	// Unsupported polyhedron type - throw error
-	throw std::runtime_error("Unsupported polyhedron type: only tetrahedra (4 faces) and hexahedra (6 faces) are supported. AmOfFaces=" + std::to_string(AmOfFaces));
+	// For wedge elements (5 faces: 2 triangular + 3 quadrilateral)
+	// Use 5-DOF MSC when enabled, otherwise fall back to 3-DOF analytical
+	if(AmOfFaces == 5)
+	{
+		if(Use6DOF_MSC)
+			B_comp_wedge_MSC(FieldPtr);
+		else
+			B_comp_wedge_analytical(FieldPtr);
+		return;
+	}
+	else
+	{
+		// Unsupported polyhedron type - issue warning but continue with generic method
+		// throw std::runtime_error("Unsupported polyhedron type: only tetrahedra (4 faces) and hexahedra (6 faces) are supported. AmOfFaces=" + std::to_string(AmOfFaces));
+	}
 
-	// NOTE: The following code is retained for backward compatibility but will not be reached
-	// for tetra/hexa elements. It may be needed for other polyhedron types in the future.
+	// NOTE: The following code handles wedge elements (5 faces) and other polyhedra
+	// using generic polygon-based field computation (Gauss integration).
 
 	// Use standard polygon-based computation for all polyhedra (including tetrahedra)
 	TVector3d Zero(0.,0.,0.);
@@ -1413,8 +2636,12 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 		
 		// Restore original magnetization
 		Magn = saved_Magn;
-		
-		// Store negated values (N_stored = -N_physical for interaction matrix)
+
+		// Store negated values to match solver convention A = -N + 1/chi
+		// The solver expects N such that H_demag = N * M, but surface charge method
+		// computes H = -N_demag * M, so we need to negate here.
+		// NOTE: This should match the tetrahedron_analytical code which also uses +=
+		// Both tetra and wedge should store the same sign convention.
 		FieldPtr->B.x -= H_from_Mx.x;
 		FieldPtr->B.y -= H_from_Mx.y;
 		FieldPtr->B.z -= H_from_Mx.z;

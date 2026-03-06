@@ -42,7 +42,7 @@ struct RadHACApKParams {
         leaf_size(32),   // Default: 32 (element count, not DOF)
         eta(2.0),
         max_rank(200),
-        print_level(1)   // 1=standard output for debugging
+        print_level(0)   // 0=silent (set to 1 for standard output)
     {}
 };
 
@@ -81,7 +81,7 @@ struct RadHACApKStats {
  *   3. Call MatVec(x, y) for matrix-vector products
  *   4. Call UpdateDiagonal() when chi(H) changes (nonlinear iteration)
  *
- * The H-matrix approximates A = -N + diag(1/chi) using ACA+ compression.
+ * The H-matrix approximates A = -N - diag(1/chi) using ACA+ compression (ELF-compatible).
  * For problems where elements are spatially well-separated, this provides
  * O(N log N) complexity instead of O(N^2) for dense matrix-vector products.
  *
@@ -268,11 +268,14 @@ private:
     void BuildDOFLookupTable();
     void PrecomputeGeometry3DOF();  // ELF-style pre-computation for 3DOF tetrahedra
 
-    // 6DOF hexahedron methods
+    // 6DOF hexahedron methods (public: used by Block Jacobi preconditioner)
     // Note: Uses radTInteraction::Compute6x6BlockFast() for unified implementation
     double GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const;
     void Compute6x6Block(int elem_i, int elem_j, double* K_mat) const;
+
+public:
     void Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const;  // Delegates to radTInteraction
+private:
 
     // 3DOF tetrahedron methods
     double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
@@ -288,6 +291,9 @@ private:
     double GetMixed6x3Element(int elem_hex, int elem_tetra, int face, int comp) const;
     void Compute3x6Block(int elem_tetra, int elem_hex, double* K_mat) const;
     void Compute6x3Block(int elem_hex, int elem_tetra, double* K_mat) const;
+
+    // Generic variable DOF element access (5-DOF wedges, mixed wedge+hex, etc.)
+    double GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const;
 
     // Disable copy
     RadHACApKManager(const RadHACApKManager&) = delete;
@@ -317,7 +323,13 @@ namespace RadHACApKCallback {
     void SetLod(int* lod, int size);
     void ClearLod();
 
-    // Compute matrix element A(i,j) = -N(i,j) + delta_ij/chi_i
+    // Clear all global callback state (called on manager destruction)
+    void ClearGlobalState();
+
+    // Set interaction for callback
+    void SetInteraction(radTInteraction* interaction, int n_elem, int nffc);
+
+    // Compute matrix element A(i,j) = -N(i,j) - delta_ij/chi_i (ELF-compatible)
     // Called from cHACApK_entry_ij
     double ComputeEntry(int i, int j);
 }
