@@ -45,14 +45,15 @@ g1 = rad.ObjArcCur([0, 0, 0], [rmin, rmax], [phimin, phimax], h, nseg, j)
 |-----------------|--------|------|
 | `radUtiDelAll[]` | `rad.UtiDelAll()` | Delete all objects |
 | `radObjArcCur[...]` | `rad.ObjArcCur(...)` | Create arc current |
-| `radObjRecMag[...]` | `rad.ObjPolyhdr(...)` | Create hexahedral magnet (use ObjPolyhdr + HEX_FACES) |
+| `radObjRecMag[...]` | `rad.ObjHexahedron(...)` | Create hexahedral magnet (faces auto-generated) |
+| `radObjPolyhdr[...]` (tetra) | `rad.ObjTetrahedron(...)` | Create tetrahedral magnet (faces auto-generated) |
 | `radMatLin[...]` | `rad.MatLin(...)` | Define linear material |
 | `radMatSatIso[...]` | `rad.MatSatIso(...)` | Nonlinear isotropic material |
 | `radMatApl[obj, mat]` | `rad.MatApl(obj, mat)` | Apply material |
 | `radObjDrwAtr[...]` | `rad.ObjDrwAtr(...)` | Set drawing attributes |
 | `radObjCnt[{...}]` | `rad.ObjCnt([...])` | Create container |
 | `radObjMltExtRtg[...]` | `rad.ObjMltExtRtg(...)` | Multiple extrusion |
-| `radObjPolyhdr[...]` | `rad.ObjPolyhdr(...)` | Create polyhedron |
+| `radObjPolyhdr[...]` | `rad.ObjPolyhdr(...)` | Create polyhedron (internal API, use for wedge/pyramid only) |
 | `radFld[obj, "bxbybz", pt]` | `rad.Fld(obj, 'b', pt)` | Calculate magnetic field |
 
 ### 4. Data Structure Conversion

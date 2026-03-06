@@ -7,8 +7,8 @@ from tetrahedral meshes in Radia using the MSC (Magnetic Surface Charge) method.
 
 ### Key Finding: Tetrahedral MSC Field Computation is ACCURATE
 
-The evaluation confirms that `rad.Fld()` from tetrahedral (ObjPolyhdr) elements
-produces **identical results** to hexahedral (ObjPolyhdr) elements when given
+The evaluation confirms that `rad.Fld()` from tetrahedral (ObjTetrahedron) elements
+produces **identical results** to hexahedral (ObjHexahedron) elements when given
 the same magnetization distribution.
 
 | Metric | Result |
@@ -17,14 +17,14 @@ the same magnetization distribution.
 | Maximum Error | 0.0000% |
 | Test Points | 13 (all outside magnet) |
 | Tetra Elements | 390 (maxh=0.25m) |
-| Hexa Elements | 64 (ObjPolyhdr) |
+| Hexa Elements | 64 (ObjHexahedron) |
 
 ## Test Configuration
 
 - **Geometry**: 1.0m x 1.0m x 1.0m cube centered at origin
 - **Magnetization**: Uniform M = [0, 0, 1.0e6] A/m
 - **Test Points**: On-axis (z=0.6 to 3.0m) and off-axis locations
-- **Reference**: Hexahedral mesh using ObjPolyhdr (MSC method)
+- **Reference**: Hexahedral mesh using ObjHexahedron (MSC method)
 
 ## Scripts
 
@@ -47,7 +47,7 @@ python analytical_reference.py
 
 ### [evaluate_radia_solvers.py](evaluate_radia_solvers.py)
 
-Compares tetrahedral (Netgen) and hexahedral (ObjPolyhdr) meshes with
+Compares tetrahedral (Netgen) and hexahedral (ObjHexahedron) meshes with
 **linear material and external field** - both solved using Radia's BiCGSTAB solver.
 
 **Usage:**
@@ -85,9 +85,9 @@ Use `evaluate_radia_solvers.py` for Radia solver comparison.
    - Field error < 5% compared to hexahedral reference
    - Mesh discretization causes small differences in magnetization
 
-3. **Both tetrahedral (Netgen) and hexahedral (ObjPolyhdr) are validated**
-   - Tetrahedral: Use `netgen_mesh_import.netgen_mesh_to_radia()`
-   - Hexahedral: Use `rad.ObjPolyhdr()` with HEX_FACES for simple geometries
+3. **Both tetrahedral (Netgen) and hexahedral (ObjHexahedron) are validated**
+   - Tetrahedral: Use `rad.ObjTetrahedron()` or `netgen_mesh_import.netgen_mesh_to_radia()`
+   - Hexahedral: Use `rad.ObjHexahedron()` for simple geometries
 
 ## Related Benchmarks
 

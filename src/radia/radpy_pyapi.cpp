@@ -205,84 +205,135 @@ static PyObject* radia_ObjThckPgn(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
-* Creates a uniformly magnetized polyhedron (closed volume limited by planes).
+* Creates a uniformly magnetized tetrahedron from 4 vertices.
+* Vertices: [v1, v2, v3, v4] where v1-v3 are base (counter-clockwise from below)
+* and v4 is the apex. Uses 3 DOF magnetization model (MMM method).
 ***************************************************************************/
-static PyObject* radia_ObjPolyhdr(PyObject* self, PyObject* args)
+static PyObject* radia_ObjTetrahedron(PyObject* self, PyObject* args)
 {
-	PyObject *oVerts=0, *oFaces=0, *oM=0, *odMdr=0, *oJ=0, *odJdr=0, *oRelAbs=0, *oResInd=0;
+	PyObject *oVerts=0, *oM=0, *oResInd=0;
 	double *arCrd=0;
 	int *arFaceInds=0, *arFaceLens=0;
-	double *arM=0, *ar_dMdr=0, *arJ=0, *ar_dJdr=0;
+	double *arM=0;
 
 	try
 	{
-		if(!PyArg_ParseTuple(args, "OO|OOOOO:ObjPolyhdr", &oVerts, &oFaces, &oM, &odMdr, &oJ, &odJdr, &oRelAbs)) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr");
-		if((oVerts == 0) || (oFaces == 0)) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr");
-		if((!PyList_Check(oVerts)) || (!PyList_Check(oFaces))) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr");
+		if(!PyArg_ParseTuple(args, "O|O:ObjTetrahedron", &oVerts, &oM)) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron");
+		if(oVerts == 0) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron");
+		if(!PyList_Check(oVerts)) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron");
 
 		int nVerts = (int)PyList_Size(oVerts);
-		if(nVerts < 4) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, number of vertices should be >= 4");
-
-		int nFaces=0;
-		CPyParse::FindLengthsOfElemListsOrArrays(oFaces, arFaceLens, nFaces);
-		if(nFaces < 4) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, number of faces should be >= 4");
+		if(nVerts != 4) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron, exactly 4 vertices required");
 
 		int nCrd=0;
-		if(!(CPyParse::CopyPyNestedListElemsToNumAr(oVerts, 'd', arCrd, nCrd))) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of vertices");
-		if(nCrd != nVerts*3) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of vertices (each vertex point should be defined by 3 cartesian coordinates)");
+		if(!(CPyParse::CopyPyNestedListElemsToNumAr(oVerts, 'd', arCrd, nCrd))) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron, incorrect definition of vertices");
+		if(nCrd != 12) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron, each vertex must have 3 coordinates");
 
-		int nFaceInds=0;
-		if(!(CPyParse::CopyPyNestedListElemsToNumAr(oFaces, 'i', arFaceInds, nFaceInds))) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of faces");
+		// Standard tetrahedron faces (1-indexed): [[1,2,3], [1,4,2], [2,4,3], [3,4,1]]
+		const int nFaces = 4;
+		arFaceLens = new int[nFaces];
+		arFaceLens[0] = 3; arFaceLens[1] = 3; arFaceLens[2] = 3; arFaceLens[3] = 3;
 
-		int len3 = 3, len9 = 9;
+		arFaceInds = new int[12];
+		// Face 1: bottom [1,2,3]
+		arFaceInds[0] = 1; arFaceInds[1] = 2; arFaceInds[2] = 3;
+		// Face 2: side [1,4,2]
+		arFaceInds[3] = 1; arFaceInds[4] = 4; arFaceInds[5] = 2;
+		// Face 3: side [2,4,3]
+		arFaceInds[6] = 2; arFaceInds[7] = 4; arFaceInds[8] = 3;
+		// Face 4: side [3,4,1]
+		arFaceInds[9] = 3; arFaceInds[10] = 4; arFaceInds[11] = 1;
+
+		int len3 = 3;
 		bool lenIsSmall = false;
 		if(oM != 0)
 		{
 			CPyParse::CopyPyListElemsToNumArray(oM, 'd', arM, len3, lenIsSmall);
-			if((arM == 0) || (len3 != 3) || lenIsSmall) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of magnetization vector");
-		}
-		if(odMdr != 0)
-		{
-			if(!(CPyParse::CopyPyNestedListElemsToNumAr(odMdr, 'd', ar_dMdr, len9))) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of magnetization linear coefficients");
-			if((ar_dMdr == 0) || (len9 != 9)) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of magnetization linear coefficients");
-		}
-		if(oJ != 0)
-		{
-			CPyParse::CopyPyListElemsToNumArray(oJ, 'd', arJ, len3, lenIsSmall);
-			if((arJ == 0) || (len3 != 3) || lenIsSmall) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of magnetization vector");
-		}
-		if(odJdr != 0)
-		{
-			if(!(CPyParse::CopyPyNestedListElemsToNumAr(odJdr, 'd', ar_dJdr, len9))) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of current density linear coefficients");
-			if((ar_dJdr == 0) || (len9 != 9)) throw CombErStr(strEr_BadFuncArg, ": ObjPolyhdr, incorrect definition of current density linear coefficients");
-		}
-
-		char sRelAbs[1024]; 
-		strcpy(sRelAbs, "rel");
-		if(oRelAbs != 0)
-		{
-			CPyParse::CopyPyStringToC(oRelAbs, sRelAbs, 1024);
+			if((arM == 0) || (len3 != 3) || lenIsSmall) throw CombErStr(strEr_BadFuncArg, ": ObjTetrahedron, incorrect definition of magnetization vector");
 		}
 
 		int ind = 0;
-		g_pyParse.ProcRes(RadObjPolyhdr(&ind, arCrd, nVerts, arFaceInds, arFaceLens, nFaces, arM, ar_dMdr, arJ, ar_dJdr));
-		//to add sRelAbs to the end of RadObjPolyhdr!
+		g_pyParse.ProcRes(RadObjPolyhdr(&ind, arCrd, nVerts, arFaceInds, arFaceLens, nFaces, arM, 0, 0, 0));
 
- 		oResInd = Py_BuildValue("i", ind);
-		// Py_XINCREF removed - Py_BuildValue already returns new reference
+		oResInd = Py_BuildValue("i", ind);
 	}
 	catch(const char* erText)
 	{
 		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
 	}
 	if(arCrd != 0) delete[] arCrd;
 	if(arFaceInds != 0) delete[] arFaceInds;
 	if(arFaceLens != 0) delete[] arFaceLens;
 	if(arM != 0) delete[] arM;
-	if(ar_dMdr != 0) delete[] ar_dMdr;
-	if(arJ != 0) delete[] arJ;
-	if(ar_dJdr != 0) delete[] ar_dJdr;
+	return oResInd;
+}
+
+/************************************************************************//**
+* Creates a uniformly magnetized hexahedron from 8 vertices.
+* Vertices: [v1,v2,v3,v4,v5,v6,v7,v8] where v1-v4 are bottom face (CCW from below)
+* and v5-v8 are top face (directly above v1-v4). Uses 6 DOF surface charge model (MSC).
+***************************************************************************/
+static PyObject* radia_ObjHexahedron(PyObject* self, PyObject* args)
+{
+	PyObject *oVerts=0, *oM=0, *oResInd=0;
+	double *arCrd=0;
+	int *arFaceInds=0, *arFaceLens=0;
+	double *arM=0;
+
+	try
+	{
+		if(!PyArg_ParseTuple(args, "O|O:ObjHexahedron", &oVerts, &oM)) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron");
+		if(oVerts == 0) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron");
+		if(!PyList_Check(oVerts)) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron");
+
+		int nVerts = (int)PyList_Size(oVerts);
+		if(nVerts != 8) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron, exactly 8 vertices required");
+
+		int nCrd=0;
+		if(!(CPyParse::CopyPyNestedListElemsToNumAr(oVerts, 'd', arCrd, nCrd))) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron, incorrect definition of vertices");
+		if(nCrd != 24) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron, each vertex must have 3 coordinates");
+
+		// Standard hexahedron faces (1-indexed):
+		// [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+		const int nFaces = 6;
+		arFaceLens = new int[nFaces];
+		for(int i = 0; i < nFaces; i++) arFaceLens[i] = 4;
+
+		arFaceInds = new int[24];
+		// Face 1: bottom (-Z) [1,4,3,2]
+		arFaceInds[0] = 1; arFaceInds[1] = 4; arFaceInds[2] = 3; arFaceInds[3] = 2;
+		// Face 2: top (+Z) [5,6,7,8]
+		arFaceInds[4] = 5; arFaceInds[5] = 6; arFaceInds[6] = 7; arFaceInds[7] = 8;
+		// Face 3: front (-Y) [1,2,6,5]
+		arFaceInds[8] = 1; arFaceInds[9] = 2; arFaceInds[10] = 6; arFaceInds[11] = 5;
+		// Face 4: back (+Y) [3,4,8,7]
+		arFaceInds[12] = 3; arFaceInds[13] = 4; arFaceInds[14] = 8; arFaceInds[15] = 7;
+		// Face 5: left (-X) [1,5,8,4]
+		arFaceInds[16] = 1; arFaceInds[17] = 5; arFaceInds[18] = 8; arFaceInds[19] = 4;
+		// Face 6: right (+X) [2,3,7,6]
+		arFaceInds[20] = 2; arFaceInds[21] = 3; arFaceInds[22] = 7; arFaceInds[23] = 6;
+
+		int len3 = 3;
+		bool lenIsSmall = false;
+		if(oM != 0)
+		{
+			CPyParse::CopyPyListElemsToNumArray(oM, 'd', arM, len3, lenIsSmall);
+			if((arM == 0) || (len3 != 3) || lenIsSmall) throw CombErStr(strEr_BadFuncArg, ": ObjHexahedron, incorrect definition of magnetization vector");
+		}
+
+		int ind = 0;
+		g_pyParse.ProcRes(RadObjPolyhdr(&ind, arCrd, nVerts, arFaceInds, arFaceLens, nFaces, arM, 0, 0, 0));
+
+		oResInd = Py_BuildValue("i", ind);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arCrd != 0) delete[] arCrd;
+	if(arFaceInds != 0) delete[] arFaceInds;
+	if(arFaceLens != 0) delete[] arFaceLens;
+	if(arM != 0) delete[] arM;
 	return oResInd;
 }
 
@@ -756,48 +807,25 @@ static PyObject* radia_ObjScaleCur(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
-* Creates a source of uniform background magnetic field.
+* Creates a source of background magnetic field from callable.
+* Callable should accept [x, y, z] in current units and return [Bx, By, Bz] in Tesla.
+* For uniform field, use: ObjBckg(lambda p: [Bx, By, Bz])
 ***************************************************************************/
 static PyObject* radia_ObjBckg(PyObject* self, PyObject* args)
-{
-	PyObject *oB=0, *oResInd=0;
-	try
-	{
-		if(!PyArg_ParseTuple(args, "O:ObjBckg", &oB)) throw CombErStr(strEr_BadFuncArg, ": ObjBckg");
-		if(oB == 0) throw CombErStr(strEr_BadFuncArg, ": ObjBckg");
-
-		double arB[3];
-		CPyParse::CopyPyListElemsToNumArrayKnownLen(oB, 'd', arB, 3, CombErStr(strEr_BadFuncArg, ": ObjBckg, incorrect definition of magnetic field strength"));
-
-		int ind = 0;
-		g_pyParse.ProcRes(RadObjBckg(&ind, arB));
-		oResInd = Py_BuildValue("i", ind);
-		// Py_XINCREF removed - Py_BuildValue already returns new reference
-	}
-	catch(const char* erText)
-	{
-		PyErr_SetString(PyExc_RuntimeError, erText);
-		//PyErr_PrintEx(1);
-	}
-	return oResInd;
-}
-/************************************************************************//**
-* Creates a source of arbitrary background field from callable.
-* Callable should accept [x, y, z] in mm and return [Bx, By, Bz] in Tesla.
-***************************************************************************/
-static PyObject* radia_ObjBckgCF(PyObject* self, PyObject* args)
 {
 	PyObject *oCallback=0, *oResInd=0;
 	try
 	{
-		if(!PyArg_ParseTuple(args, "O:ObjBckgCF", &oCallback))
-			throw CombErStr(strEr_BadFuncArg, ": ObjBckgCF");
+		if(!PyArg_ParseTuple(args, "O:ObjBckg", &oCallback))
+			throw CombErStr(strEr_BadFuncArg, ": ObjBckg");
 		if(oCallback == 0)
-			throw CombErStr(strEr_BadFuncArg, ": ObjBckgCF");
+			throw CombErStr(strEr_BadFuncArg, ": ObjBckg");
 
 		if(!PyCallable_Check(oCallback))
 			throw CombErStr(strEr_BadFuncArg,
-				": ObjBckgCF requires callable (CF or function)");
+				": ObjBckg requires callable (function or lambda). "
+				"Legacy ObjBckg([Bx,By,Bz]) array form is NOT supported. "
+				"Use ObjBckg(lambda p: [Bx, By, Bz]) instead.");
 
 		int ind = 0;
 		g_pyParse.ProcRes(RadObjBckgCF(&ind, oCallback));
@@ -2775,6 +2803,209 @@ static PyObject* radia_GetSolveStats(PyObject* self, PyObject* args)
 }
 
 /************************************************************************//**
+ * Point Classification for FMM: Classifies evaluation points as inside/near/far
+ ***************************************************************************/
+static PyObject* radia_ClassifyPoints(PyObject* self, PyObject* args)
+{
+	PyObject *oPoints=0, *oRes=0;
+	double *arPoints=0;
+	int *arClass=0, *arNearest=0;
+	try
+	{
+		int container_handle=0;
+		double near_threshold=3.0;
+		if(!PyArg_ParseTuple(args, "iO|d:ClassifyPoints", &container_handle, &oPoints, &near_threshold))
+			throw CombErStr(strEr_BadFuncArg, ": ClassifyPoints");
+		if((container_handle == 0) || (oPoints == 0))
+			throw CombErStr(strEr_BadFuncArg, ": ClassifyPoints");
+
+		int nCoord = 0;
+		char resP = CPyParse::CopyPyNestedListElemsToNumAr(oPoints, 'd', arPoints, nCoord);
+		if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": ClassifyPoints: array / list of points");
+
+		int n_points = nCoord / 3;
+		if(n_points * 3 != nCoord) throw CombErStr(strEr_BadFuncArg, ": ClassifyPoints: array / list of points");
+
+		arClass = new int[n_points];
+		arNearest = new int[n_points];
+
+		g_pyParse.ProcRes(RadClassifyPoints(arClass, arNearest, n_points, arPoints, container_handle, near_threshold));
+
+		// Return dict with classification and nearest_elem arrays
+		oRes = PyDict_New();
+		PyObject* oClass = PyList_New(n_points);
+		PyObject* oNearest = PyList_New(n_points);
+		for(int i = 0; i < n_points; ++i)
+		{
+			PyList_SetItem(oClass, i, PyLong_FromLong(arClass[i]));
+			PyList_SetItem(oNearest, i, PyLong_FromLong(arNearest[i]));
+		}
+		PyDict_SetItemString(oRes, "classification", oClass);
+		PyDict_SetItemString(oRes, "nearest_elem", oNearest);
+		Py_DECREF(oClass);
+		Py_DECREF(oNearest);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arPoints != 0) delete[] arPoints;
+	if(arClass != 0) delete[] arClass;
+	if(arNearest != 0) delete[] arNearest;
+	return oRes;
+}
+
+/************************************************************************//**
+ * Batch Field Computation: Computes B and H fields at multiple points
+ ***************************************************************************/
+static PyObject* radia_FldBatch(PyObject* self, PyObject* args)
+{
+	PyObject *oPoints=0, *oRes=0;
+	double *arPoints=0, *arB=0, *arH=0;
+	try
+	{
+		int container_handle=0;
+		int method=0;  // 0 = direct, 1 = FMM (future)
+		if(!PyArg_ParseTuple(args, "iO|i:FldBatch", &container_handle, &oPoints, &method))
+			throw CombErStr(strEr_BadFuncArg, ": FldBatch");
+		if((container_handle == 0) || (oPoints == 0))
+			throw CombErStr(strEr_BadFuncArg, ": FldBatch");
+
+		int nCoord = 0;
+		char resP = CPyParse::CopyPyNestedListElemsToNumAr(oPoints, 'd', arPoints, nCoord);
+		if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": FldBatch: array / list of points");
+
+		int n_points = nCoord / 3;
+		if(n_points * 3 != nCoord) throw CombErStr(strEr_BadFuncArg, ": FldBatch: array / list of points");
+
+		arB = new double[n_points * 3];
+		arH = new double[n_points * 3];
+
+		g_pyParse.ProcRes(RadFldBatch(arB, arH, n_points, arPoints, container_handle, method));
+
+		// Return dict with B and H arrays
+		oRes = PyDict_New();
+
+		// Create B array as list of [Bx, By, Bz] lists
+		PyObject* oB = PyList_New(n_points);
+		PyObject* oH = PyList_New(n_points);
+		for(int i = 0; i < n_points; ++i)
+		{
+			PyObject* oBi = PyList_New(3);
+			PyObject* oHi = PyList_New(3);
+			for(int j = 0; j < 3; ++j)
+			{
+				PyList_SetItem(oBi, j, PyFloat_FromDouble(arB[i*3 + j]));
+				PyList_SetItem(oHi, j, PyFloat_FromDouble(arH[i*3 + j]));
+			}
+			PyList_SetItem(oB, i, oBi);
+			PyList_SetItem(oH, i, oHi);
+		}
+		PyDict_SetItemString(oRes, "B", oB);
+		PyDict_SetItemString(oRes, "H", oH);
+		Py_DECREF(oB);
+		Py_DECREF(oH);
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arPoints != 0) delete[] arPoints;
+	if(arB != 0) delete[] arB;
+	if(arH != 0) delete[] arH;
+	return oRes;
+}
+
+/************************************************************************//**
+ * Scalar Potential Computation: Computes magnetic scalar potential at multiple points
+ ***************************************************************************/
+static PyObject* radia_FldPhi(PyObject* self, PyObject* args)
+{
+	PyObject *oPoints=0, *oRes=0;
+	double *arPoints=0, *arPhi=0;
+	try
+	{
+		int container_handle=0;
+		if(!PyArg_ParseTuple(args, "iO:FldPhi", &container_handle, &oPoints))
+			throw CombErStr(strEr_BadFuncArg, ": FldPhi");
+		if((container_handle == 0) || (oPoints == 0))
+			throw CombErStr(strEr_BadFuncArg, ": FldPhi");
+
+		int nCoord = 0;
+		char resP = CPyParse::CopyPyNestedListElemsToNumAr(oPoints, 'd', arPoints, nCoord);
+		if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": FldPhi: array / list of points");
+
+		int n_points = nCoord / 3;
+		if(n_points * 3 != nCoord) throw CombErStr(strEr_BadFuncArg, ": FldPhi: array / list of points");
+
+		arPhi = new double[n_points];
+
+		g_pyParse.ProcRes(RadFldPhi(arPhi, n_points, arPoints, container_handle));
+
+		// Return list of scalar potential values
+		oRes = PyList_New(n_points);
+		for(int i = 0; i < n_points; ++i)
+		{
+			PyList_SetItem(oRes, i, PyFloat_FromDouble(arPhi[i]));
+		}
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arPoints != 0) delete[] arPoints;
+	if(arPhi != 0) delete[] arPhi;
+	return oRes;
+}
+
+/************************************************************************//**
+ * Vector Potential Computation: Computes magnetic vector potential at multiple points
+ ***************************************************************************/
+static PyObject* radia_FldA(PyObject* self, PyObject* args)
+{
+	PyObject *oPoints=0, *oRes=0;
+	double *arPoints=0, *arA=0;
+	try
+	{
+		int container_handle=0;
+		if(!PyArg_ParseTuple(args, "iO:FldA", &container_handle, &oPoints))
+			throw CombErStr(strEr_BadFuncArg, ": FldA");
+		if((container_handle == 0) || (oPoints == 0))
+			throw CombErStr(strEr_BadFuncArg, ": FldA");
+
+		int nCoord = 0;
+		char resP = CPyParse::CopyPyNestedListElemsToNumAr(oPoints, 'd', arPoints, nCoord);
+		if(resP == 0) throw CombErStr(strEr_BadFuncArg, ": FldA: array / list of points");
+
+		int n_points = nCoord / 3;
+		if(n_points * 3 != nCoord) throw CombErStr(strEr_BadFuncArg, ": FldA: array / list of points");
+
+		arA = new double[n_points * 3];
+
+		g_pyParse.ProcRes(RadFldA(arA, n_points, arPoints, container_handle));
+
+		// Return list of [Ax, Ay, Az] lists
+		oRes = PyList_New(n_points);
+		for(int i = 0; i < n_points; ++i)
+		{
+			PyObject* oAi = PyList_New(3);
+			for(int j = 0; j < 3; ++j)
+			{
+				PyList_SetItem(oAi, j, PyFloat_FromDouble(arA[i*3 + j]));
+			}
+			PyList_SetItem(oRes, i, oAi);
+		}
+	}
+	catch(const char* erText)
+	{
+		PyErr_SetString(PyExc_RuntimeError, erText);
+	}
+	if(arPoints != 0) delete[] arPoints;
+	if(arA != 0) delete[] arA;
+	return oRes;
+}
+
+/************************************************************************//**
  * Magnetic Field Calculation Methods: Computes field created by the object obj at one or many points
  ***************************************************************************/
 static PyObject* radia_Fld(PyObject* self, PyObject* args)
@@ -3654,7 +3885,8 @@ static PyObject* radia_UtiMPI(PyObject* self, PyObject* args)
 static PyMethodDef radia_methods[] = {
 	{"ObjRecMag", radia_ObjRecMag, METH_VARARGS, "ObjRecMag([x,y,z],[wx,wy,wz],[mx,my,mz]:[0,0,0]) creates a rectangular parallelepiped block with center point [x,y,z], dimensions [wx,wy,wz], and magnetization [mx,my,mz]."},
 	{"ObjThckPgn", radia_ObjThckPgn, METH_VARARGS, "ObjThckPgn(x,lx,[[y1,z1],[y2,z2],...],a:'x',[mx,my,mz]:[0,0,0]) creates an extruded polygon block; x is the position of the block's center of gravity in the extrusion direction, lx is the thickness, [[y1,z1],[y2,z2],...] is a list of points describing the polygon in 2D; the extrusion direction is defined by the character a (which can be 'x', 'y' or 'z'), [mx,my,mz] is the block magnetization."},
-	{"ObjPolyhdr", radia_ObjPolyhdr, METH_VARARGS, "ObjPolyhdr([[x1,y1,z1],[x2,y2,z2],...],[[f1i1,f1i2,...],[f2i1,f2i2,...],...],[mx,my,mz]:[0,0,0],J:[jx,jy,jz]|[[jx,jy,jz],[[djxdy,djxdy,djxdz],[djydy,djydy,djydz],[djzdy,djzdy,djzdz]]],Lin:'Rel') creates a uniformly magnetized polyhedron (closed volume limited by planes). [[x1,y1,z1],[x2,y2,z2],...] is a list of the polyhedron vertex points, [[f1n1,f1n2,...],[f2n1,f2n2,...],...] is a list of lists of indexes of vertex points defining the polyhedron faces, [mx,my,mz] is magnetization inside the polyhedron. The optional parameter J can be used to define constant [jx,jy,jz] or linearly-varying current density vector inside the polyhedron; the linear dependence can be defined through 3x3 matrix of coefficients [[djxdy,djxdy,djxdz],[djydy,djydy,djydz],[djzdy,djzdy,djzdz]]; depending on the value of the optional parameter Lin this linear dependence is treated with respect to the polyhedron center (Lin='Rel', default) or with respect to the origin of the Cartesian frame (Lin='Abs')."},
+	{"ObjTetrahedron", radia_ObjTetrahedron, METH_VARARGS, "ObjTetrahedron([[x1,y1,z1],[x2,y2,z2],[x3,y3,z3],[x4,y4,z4]],[mx,my,mz]:[0,0,0]) creates a uniformly magnetized tetrahedron from 4 vertices. Vertices 1-3 define the base triangle (counter-clockwise when viewed from below), vertex 4 is the apex. Uses 3 DOF magnetization model (MMM method)."},
+	{"ObjHexahedron", radia_ObjHexahedron, METH_VARARGS, "ObjHexahedron([[x1,y1,z1],...,[x8,y8,z8]],[mx,my,mz]:[0,0,0]) creates a uniformly magnetized hexahedron from 8 vertices. Vertices 1-4 define the bottom face (counter-clockwise when viewed from below), vertices 5-8 are directly above vertices 1-4. Uses 6 DOF surface charge model (MSC method)."},
 	{"ObjMltExtPgn", radia_ObjMltExtPgn, METH_VARARGS, "ObjMltExtPgn([[[[x11,y11],[x12,y12],...],z1],[[[x21,y21],[x22,y22],...],z2],...],[mx,my,mz]:[0,0,0]) attempts to create one uniformly magnetized convex polyhedron or a set of convex polyhedrons based on slices. The slice polygons are defined by the nested list [[[[x11,y11],[x12,y12],...],z1],[[[x21,y21],[x22,y22],...],z2],...], with [[x11,y11],[x12,y12],...],... describing the polygons in 2D, and z1, z2,... giving their attitudes (vertical coordinates). [mx,my,mz] is the magnetization inside the polyhedron(s) created."},
 	//{"ObjMltExtPgnCur", radia_ObjMltExtPgnCur, METH_VARARGS, "ObjMltExtPgnCur(z:0,a:\"z\",{{{x1,y1},{x2,y2},...},{{R1,T1,H1},{R2,T2,H2},...}},I,Frame->Loc|Lab) attempts to create a set of current-carrying convex polyhedron objects by applying a generalized extrusion to the initial planar convex polygon. The initial polygon is defined for the \"attitude\" z (0 by default) by the list of 2D points {{x1,y1},{x2,y2},...}, with the  a  character specifying orientation of this polygon normal in 3D space: if a = \"z\" (default orientation), the polygon is assumed to be parallel to XY plane of the laboratory frame (\"y\" for ZX plane, \"x\" for YZ plane). The extrusion can consist of a number of \"steps\", with each step creating one convex polyhedron defined optionally by one (or combination of) rotation(s), and/or translation(s), and/or one homothety: {Rk,Tk,Hk}, k = 1,2,..., applied to the base polygon (i.e. either the initial base polygon, or the polygon obtained by previous extrusion step). In case if k-th extrusion step contains one rotation Rk about an axis, it is defined as {{xRk,yRk,zRk},{vxRk,vyRk,vzRk},phRk}}, where {xRk,yRk,zRk} and {vxRk,vyRk,vzRk} are respectively 3D coordinates of a point and a vector difining the rotation axis, and phRk the rotation angle in radians; in case if Rk is a combination of \"atomic\" rotations about different axes, it should be defined as list: {Rk1,Rk2,...}. If k-th extrusion step includes translation Tk, it must be defined by vector {vxTk,vyTk,vzTk}; optional homothety with respect to the base polygon center of gravity should be defined either by two different coefficients {pxHk,pyHk} with respect to two orthogonal axes of the base polygon local frame, or by nested list {{pxHk,pyHk},phHk}, where phHk is rotation angle of the two homothety axes in radians. A real number I defines average current in Amperes along the extrusion path. The Frame->Loc or Frame->Lab option specifies whether the transformations at each step of the extrusion path are defined in the frame of the previous base polygon (Frame->Loc, default), or all the transformations are defined in the laboratory frame (Frame->Lab)."},
 	//{"ObjMltExtPgnMag", radia_ObjMltExtPgnMag, METH_VARARGS, "ObjMltExtPgnMag(z:0,a:\"z\",{{{x1,y1},{x2,y2},...},{{k1,q1},{k2,q2},...}:{{1,1},{1,1},...},{{R1,T1,H1},{R2,T2,H2},...}},{{mx1,my1,mz1},{mx2,my2,mz2},...}:{{0,0,0},{0,0,0},...},Frame->Loc|Lab,ki->Numb|Size,TriAngMin->...,TriAreaMax->...,TriExtOpt->\"...\") attempts to create a set of uniformly magnetized polyhedron objects by applying a generalized extrusion to the initial planar convex polygon. The initial polygon is defined for the \"altitude\" z (0 by default) by the list of 2D points {{x1,y1},{x2,y2},...}, with the  a  character specifying orientation of this polygon normal in 3D space: if a = \"z\" (default orientation), the polygon is assumed to be parallel to XY plane of the laboratory frame (\"y\" for ZX plane, \"x\" for YZ plane). The extrusion can consist of a number of \"steps\", with each step creating one convex polyhedron defined optionally by one (or combination of) rotation(s), and/or translation(s), and/or one homothety: {Rk,Tk,Hk}, k = 1,2,..., applied to the base polygon (i.e. either the initial base polygon, or the polygon obtained by previous extrusion step). In case if k-th extrusion step contains one rotation Rk about an axis, it is defined as {{xRk,yRk,zRk},{vxRk,vyRk,vzRk},phRk}}, where {xRk,yRk,zRk} and {vxRk,vyRk,vzRk} are respectively 3D coordinates of a point and a vector difining the rotation axis, and phRk the rotation angle in radians; in case if Rk is a combination of \"atomic\" rotations about different axes, it should be defined as a list: {Rk1,Rk2,...}. If k-th extrusion step includes translation Tk, it must be defined by vector {vxTk,vyTk,vzTk}; optional homothety with respect to the base polygon center of gravity should be defined either by two different coefficients {pxHk,pyHk} with respect to two orthogonal axes of the base polygon local frame, or by nested list {{pxHk,pyHk},phHk}, where phHk is rotation angle of the two homothety axes in radians. Optional list {{mx1,my1,mz1},{mx2,my2,mz2},...} defines magnetization vectors in each of polyhedrons to be created. The Frame->Loc or Frame->Lab option specifies whether the transformations at each step of the extrusion path are defined in the frame of the previous base polygon (Frame->Loc, default), or all the transformations are defined in the laboratory frame (Frame->Lab). Optionally, the object can be subdivided by (extruded) triangulation at its creation; this occurs if {{k1,q1},{k2,q2},...} subdivision (triangulation) parameters for each segment of the base polygon border are defined; the meaning of k1, k2,... depends on value of the option ki: if ki->Numb (default), then k1, k2,... are subdivision numbers; if ki->Size, they are average sizes of sub-segments to be produced; q1, q2,... are ratios of the last-to-first sub-segment lengths; the TriAngMin option defines minimal angle of triangles to be produced (in degrees, default is 20); the TriAreaMax option defines maximal area of traingles to be produced (in mm^2, not defined by default); the ExtOpt option allows to specify additional parameters for triangulation function in a string." },
@@ -3666,8 +3898,7 @@ static PyMethodDef radia_methods[] = {
 	{"ObjArcCur", radia_ObjArcCur, METH_VARARGS, "ObjArcCur([x,y,z],[rmin,rmax],[phimin,phimax],h,nseg,j,'man|auto':'man',a:'z') creates a current carrying finite-length arc of rectangular cross-section, with center point [x,y,z], inner and outer radii [rmin,rmax], initial and final angles [phimin,phimax], height h, number of segments nseg, and azimuthal current density j. According to the value of the 'man|auto' switch, the field from the arc is computed based on the number of segments nseg ('man'), or on the general absolute precision level specified by the function FldCmpCrt ('auto'). The orientation of the rotation axis is defined by the character a (which can be either 'x', 'y' or 'z')."},
 	{"ObjRaceTrk", radia_ObjRaceTrk, METH_VARARGS, "ObjRaceTrk([x,y,z],[rmin,rmax],[lx,ly],h,nseg,j,'man|auto':'man',a:'z') creates a current carrying racetrack coil consisting of four 90-degree bents connected by four straight parts of rectangular straight section, center point [x,y,z], inner and outer bent radii [rmin,rmax], straight section lengths [lx,ly], height h, number of segments in bents nseg, and azimuthal current density j. According to the value of the 'man|auto' switch, the field from the bents is computed based on the number of segments nseg ('man'), or on the general absolute precision level specified by the function FldCmpCrt ('auto'). The orientation of the racetrack axis is defined by the character a (which can be either 'x', 'y' or 'z')."},
 	{"ObjFlmCur", radia_ObjFlmCur, METH_VARARGS, "ObjFlmCur([[x1,y1,z1],[x2,y2,z2],...],i) creates a filament polygonal line conductor defined by the sequence of points [[x1,y1,z1],[x2,y2,z2],...] with current i."},
-	{"ObjBckg", radia_ObjBckg, METH_VARARGS, "ObjBckg([Bx,By,Bz]) creates a source of uniform background magnetic flux density B in Tesla. Returns object key that must be added to container with ObjCnt()."},
-	{"ObjBckgCF", radia_ObjBckgCF, METH_VARARGS, "ObjBckgCF(callback) creates a source of arbitrary background field. Callback should accept [x,y,z] in mm and return [Bx,By,Bz] in Tesla."},
+	{"ObjBckg", radia_ObjBckg, METH_VARARGS, "ObjBckg(callback) creates a source of background magnetic field. Callback should accept [x,y,z] in current units and return [Bx,By,Bz] in Tesla. For uniform field, use: ObjBckg(lambda p: [Bx, By, Bz]). Returns object key that must be added to container with ObjCnt()."},
 	{"SolverHMatrixEnable", radia_SolverHMatrixEnable, METH_VARARGS, "SolverHMatrixEnable() enables H-matrix (hierarchical matrix) acceleration for the BiCGSTAB solver. H-matrix uses ACA+ low-rank approximation for far-field interactions."},
 	{"SolverHMatrixDisable", radia_SolverHMatrixDisable, METH_VARARGS, "SolverHMatrixDisable() disables H-matrix acceleration. The solver will use dense matrix-vector products."},
 	{"SolverHMatrixIsEnabled", radia_SolverHMatrixIsEnabled, METH_VARARGS, "SolverHMatrixIsEnabled() returns True if H-matrix acceleration is enabled, False otherwise."},
@@ -3728,6 +3959,11 @@ static PyMethodDef radia_methods[] = {
 	{"SetRelaxParam", radia_SetRelaxParam, METH_VARARGS, "SetRelaxParam(relax) sets under-relaxation coefficient for nonlinear iteration. relax=0.0 (default) means full Newton step. relax=0.0-1.0 applies damping: chi_new = chi_new*(1-relax) + chi_old*relax. Use under-relaxation (e.g., 0.3) if convergence is slow or oscillating. Call before Solve()."},
 	{"GetRelaxParam", radia_GetRelaxParam, METH_VARARGS, "GetRelaxParam() returns current under-relaxation coefficient."},
 	{"GetSolveStats", radia_GetSolveStats, METH_VARARGS, "GetSolveStats() returns solve statistics from last Solve() call. Returns dict with: t_matrix_build (interaction matrix construction time [s]), t_linear_solve (total linear solver time [s]), linear_iterations (BiCGSTAB iterations, 0 for LU), nonl_iterations (nonlinear iterations). Returns None if no solve has been performed."},
+
+	{"ClassifyPoints", radia_ClassifyPoints, METH_VARARGS, "ClassifyPoints(obj, points, near_threshold=3.0) classifies evaluation points relative to mesh elements. Returns dict with 'classification' (0=inside, 1=near, 2=far) and 'nearest_elem' (index of nearest element). Used for FMM field computation."},
+	{"FldBatch", radia_FldBatch, METH_VARARGS, "FldBatch(obj, points, method=0) computes B and H fields at multiple points. Returns dict with 'B' and 'H' arrays. method: 0=direct, 1=FMM (future). More efficient than calling Fld() in a loop."},
+	{"FldPhi", radia_FldPhi, METH_VARARGS, "FldPhi(obj, points) computes magnetic scalar potential phi_m at multiple points. Returns list of scalar values. phi_m = (1/4pi) * integral(M . r / r^3) dV. Units: Ampere (A)."},
+	{"FldA", radia_FldA, METH_VARARGS, "FldA(obj, points) computes magnetic vector potential A at multiple points. Returns list of [Ax, Ay, Az] values. Note: Currently returns zero for ObjPolyhdr (MSC method) - implementation in progress."},
 
 	{"Fld", radia_Fld, METH_VARARGS,  "Fld(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x,y,z]|[[x1,y1,z1],[x2,y2,z2],...]) computes magnetic field created by the object obj in point(s) {x,y,z} ({x1,y1,z1},{x2,y2,z2},...). The field component is specified by the second input variable. The function accepts a list of 3D points of arbitrary nestness: in this case it returns the corresponding list of magnetic field values."},
 	{"FldLst", radia_FldLst, METH_VARARGS,  "FldLst(obj,'bx|by|bz|hx|hy|hz|ax|ay|az|mx|my|mz'|'',[x1,y1,z1],[x2,y2,z2],np,'arg|noarg':'noarg',strt:0.) computes magnetic field created by object obj in np equidistant points along a line segment from [x1,y1,z1] to [x2,y2,z2]; the field component is specified by the second input variable; the 'arg|noarg' string variable specifies whether to output a longitudinal position for each point where the field is computed, and strt gives the start-value for the longitudinal position."},

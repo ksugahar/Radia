@@ -20,7 +20,8 @@
 param(
     [switch]$Rebuild,
     [switch]$Test,
-    [switch]$NoOpenMP   # Disable OpenMP (for debugging)
+    [switch]$NoOpenMP,     # Disable OpenMP (for debugging)
+    [switch]$EnableExaFMM  # Enable ExaFMM library for fast field computation
 )
 
 $ErrorActionPreference = "Stop"
@@ -88,6 +89,15 @@ if ($NoOpenMP) {
     Write-Host "OpenMP: ENABLED" -ForegroundColor Green
 }
 
+# ExaFMM flag
+if ($EnableExaFMM) {
+    $EXAFMM_FLAG = "ON"
+    Write-Host "ExaFMM: ENABLED" -ForegroundColor Green
+} else {
+    $EXAFMM_FLAG = "OFF"
+    Write-Host "ExaFMM: DISABLED" -ForegroundColor Gray
+}
+
 # Create batch file to run with Visual Studio environment
 $BatchContent = @"
 @echo off
@@ -107,7 +117,8 @@ echo Configuring CMake with MSVC...
     -DCMAKE_C_COMPILER=cl ^
     -DCMAKE_CXX_COMPILER=cl ^
     -DCMAKE_BUILD_TYPE=Release ^
-    -DRADIA_ENABLE_OPENMP=$OPENMP_FLAG
+    -DRADIA_ENABLE_OPENMP=$OPENMP_FLAG ^
+    -DRADIA_ENABLE_EXAFMM=$EXAFMM_FLAG
 
 if errorlevel 1 exit /b 1
 
@@ -174,13 +185,14 @@ try {
     Write-Host "Copying Intel MKL DLLs..." -ForegroundColor Cyan
 
     # MKL DLL patterns (version-agnostic)
+    # NOTE: Only essential DLLs are included to reduce package size
+    # Removed: mkl_def.*.dll, mkl_vml_def.*.dll (fallback for non-AVX2 CPUs)
+    # These are not needed on modern CPUs (2013+) with AVX2 support
     $MKL_DLL_PATTERNS = @(
         "mkl_rt.*.dll",            # MKL SDL runtime
         "mkl_core.*.dll",          # MKL core
         "mkl_intel_thread.*.dll",  # MKL threading (Intel OpenMP)
-        "mkl_def.*.dll",           # Default CPU kernels
         "mkl_avx2.*.dll",          # AVX2 optimized kernels
-        "mkl_vml_def.*.dll",       # Vector math library (default)
         "mkl_vml_avx2.*.dll"       # Vector math library (AVX2)
     )
 
@@ -196,12 +208,11 @@ try {
         }
     }
 
-    # Intel OpenMP and compiler runtime DLLs
+    # Intel OpenMP runtime DLL (required)
+    # NOTE: libmmd.dll and svml_dispmd.dll are NOT needed and removed to reduce package size
     $INTEL_COMPILER = "$INTEL_ONEAPI\compiler\latest"
     $RUNTIME_DLL_PATTERNS = @(
-        "libiomp5md.dll",     # Intel OpenMP runtime
-        "libmmd.dll",         # Intel math library
-        "svml_dispmd.dll"     # Intel short vector math library
+        "libiomp5md.dll"      # Intel OpenMP runtime (required)
     )
 
     Write-Host "Copying Intel compiler runtime DLLs..." -ForegroundColor Cyan

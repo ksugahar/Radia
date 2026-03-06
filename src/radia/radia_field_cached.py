@@ -65,7 +65,7 @@ class CachedRadiaField:
         Initialize cached field evaluator
 
         Args:
-            radia_obj: Radia object ID or background field (rad.ObjBckgCF)
+            radia_obj: Radia object ID or background field (rad.ObjBckg)
             field_type: Field type ('b', 'h', 'a', 'm')
             cache_tolerance: Tolerance for coordinate quantization (default: 1e-10 m)
         """

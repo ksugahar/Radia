@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Analytical Solution Comparison for Quadrupole Field with ObjBckgCF
+Analytical Solution Comparison for Quadrupole Field with ObjBckg
 
 Tests magnetizable sphere in quadrupole background field.
 Compares Radia numerical solution with analytical quadrupole field
@@ -15,7 +15,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
 import radia as rd
-from netgen_mesh_import import HEX_FACES
 
 print("=" * 80)
 print("Quadrupole Field - Analytical Solution Comparison")
@@ -48,7 +47,7 @@ vertices = [
 	[-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
 	[-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
 ]
-cube = rd.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+cube = rd.ObjHexahedron(vertices, [0, 0, 0])
 mat = rd.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
 rd.MatApl(cube, mat)
 print(f"  Created {size}x{size}x{size} mm cube (approximates sphere)")
@@ -70,7 +69,7 @@ def quadrupole_field(pos):
 	Bz = 0.0
 	return [Bx, By, Bz]
 
-bckg_cf = rd.ObjBckgCF(quadrupole_field)
+bckg_cf = rd.ObjBckg(quadrupole_field)
 print(f"  Quadrupole field created: Bx = g*y, By = g*x")
 
 # Container with cube and background field
@@ -213,7 +212,7 @@ print("\n" + "=" * 80)
 print("Summary")
 print("=" * 80)
 
-print(f"\n1. ObjBckgCF successfully implements quadrupole background field")
+print(f"\n1. ObjBckg successfully implements quadrupole background field")
 print(f"2. Radia numerical solution compared with analytical quadrupole at {len(test_points)} points")
 print(f"3. Average error: {errors_arr.mean():.4f}%")
 print(f"4. Far-field agreement (r=30mm): {errors_arr[-4:].mean():.4f}%")

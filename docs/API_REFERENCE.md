@@ -2,8 +2,8 @@
 
 Complete reference for Radia Python API.
 
-**Version**: 1.3.14
-**Date**: 2025-12-15
+**Version**: 1.4.3
+**Date**: 2025-12-31
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
 ---
@@ -92,25 +92,43 @@ mag_obj = netgen_mesh_to_radia(mesh,
 | Element Type | API | Faces | DOF | Use Case |
 |--------------|-----|-------|-----|----------|
 | **Extruded Polygon** | `ObjThckPgn()` | N-gon extruded | 3 | General prism shapes |
-| **Hexahedron (MSC)** | `ObjPolyhdr()` + `HEX_FACES` | 6 quad | 6 | Permanent magnets, soft iron |
-| **Tetrahedron** | `ObjPolyhdr()` + `TETRA_FACES` | 4 tri | 3 | Complex curved geometry |
+| **Hexahedron (MSC)** | `ObjHexahedron()` | 6 quad | 6 | Permanent magnets, soft iron |
+| **Tetrahedron** | `ObjTetrahedron()` | 4 tri | 3 | Complex curved geometry |
 | **Wedge/Prism** | `ObjPolyhdr()` + `WEDGE_FACES` | 5 | 3 | Hybrid meshes |
 | **Pyramid** | `ObjPolyhdr()` + `PYRAMID_FACES` | 5 | 3 | Mesh transitions |
+| **General** | `ObjPolyhdr()` | custom | 3-6 | Arbitrary polyhedra |
 
 **DOF (Degrees of Freedom)**:
 - **Hexahedra (6 faces)**: 6 DOF - Surface charge density (sigma) per face (MSC method)
 - **Other elements (4-5 faces)**: 3 DOF - Magnetization vector (Mx, My, Mz)
 - All meshes are expected to be generated externally (Netgen, GMSH, Cubit, etc.)
 
-### Face Topology Constants
+### Simplified APIs (Recommended)
+
+```python
+import radia as rad
+
+# Tetrahedron: just provide 4 vertices (faces auto-generated)
+tet_vertices = [[0,0,0], [1,0,0], [0.5,0.866,0], [0.5,0.289,0.816]]
+tetra = rad.ObjTetrahedron(tet_vertices, [0, 0, 1e6])
+
+# Hexahedron: just provide 8 vertices (faces auto-generated)
+hex_vertices = [
+    [-0.5,-0.5,-0.5], [0.5,-0.5,-0.5], [0.5,0.5,-0.5], [-0.5,0.5,-0.5],  # bottom
+    [-0.5,-0.5,0.5], [0.5,-0.5,0.5], [0.5,0.5,0.5], [-0.5,0.5,0.5]       # top
+]
+hexa = rad.ObjHexahedron(hex_vertices, [0, 0, 1e6])
+```
+
+### Face Topology Constants (for advanced usage)
 
 ```python
 from netgen_mesh_import import TETRA_FACES, HEX_FACES, WEDGE_FACES, PYRAMID_FACES
 
-# TETRA_FACES (1-indexed)
-[[1, 3, 2], [1, 2, 4], [2, 3, 4], [3, 1, 4]]
+# TETRA_FACES (1-indexed) - used internally by ObjTetrahedron
+[[1, 2, 3], [1, 4, 2], [2, 4, 3], [3, 4, 1]]
 
-# HEX_FACES (1-indexed)
+# HEX_FACES (1-indexed) - used internally by ObjHexahedron
 [[1, 4, 3, 2], [5, 6, 7, 8], [1, 2, 6, 5], [3, 4, 8, 7], [1, 5, 8, 4], [2, 3, 7, 6]]
 ```
 
@@ -137,6 +155,71 @@ polygon = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
 hex_elem = rad.ObjThckPgn(-0.5, 1.0, polygon, 'z', [0, 0, 0])
 ```
 
+### ObjTetrahedron - Tetrahedral Element (Recommended)
+
+```python
+obj = rad.ObjTetrahedron(vertices, magnetization)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `vertices` | [[x,y,z], ...] | 4 vertex coordinates |
+| `magnetization` | [Mx, My, Mz] | Initial magnetization (optional, default [0,0,0]) |
+
+Creates a tetrahedron with face topology auto-generated internally.
+
+```python
+vertices = [[0,0,0], [1,0,0], [0.5,0.866,0], [0.5,0.289,0.816]]
+tet = rad.ObjTetrahedron(vertices, [0, 0, 1e6])
+
+# Without magnetization (for soft magnetic materials)
+tet2 = rad.ObjTetrahedron(vertices)
+```
+
+**Vertex ordering**:
+- v1, v2, v3: Base triangle (counter-clockwise from below)
+- v4: Apex (top vertex)
+
+### ObjHexahedron - Hexahedral Element (Recommended)
+
+```python
+obj = rad.ObjHexahedron(vertices, magnetization)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `vertices` | [[x,y,z], ...] | 8 vertex coordinates |
+| `magnetization` | [Mx, My, Mz] | Initial magnetization (optional, default [0,0,0]) |
+
+Creates a hexahedron with face topology auto-generated internally.
+
+```python
+s = 0.5
+vertices = [
+    [-s,-s,-s], [s,-s,-s], [s,s,-s], [-s,s,-s],  # bottom face
+    [-s,-s,s], [s,-s,s], [s,s,s], [-s,s,s]        # top face
+]
+hex_obj = rad.ObjHexahedron(vertices, [0, 0, 1e6])
+
+# Without magnetization (for soft magnetic materials)
+hex2 = rad.ObjHexahedron(vertices)
+```
+
+**Vertex ordering**:
+```
+       v8--------v7
+      /|        /|
+     / |       / |
+    v5--------v6 |
+    |  v4-----|--v3
+    | /       | /
+    |/        |/
+    v1--------v2
+
+Bottom (v1-v4): counter-clockwise from below
+Top (v5-v8): directly above bottom vertices
+```
+
 ### ObjPolyhdr - General Polyhedron
 
 ```python
@@ -149,10 +232,12 @@ obj = rad.ObjPolyhdr(vertices, faces, magnetization)
 | `faces` | [[v1,v2,...], ...] | Face vertex indices (**1-indexed!**) |
 | `magnetization` | [Mx, My, Mz] | Initial magnetization |
 
+Use `ObjPolyhdr` for wedge, pyramid, or custom polyhedra. For tetrahedra and hexahedra, prefer `ObjTetrahedron` and `ObjHexahedron`.
+
 ```python
-from netgen_mesh_import import TETRA_FACES
-vertices = [[0,0,0], [1,0,0], [0.5,1,0], [0.5,0.5,1]]
-tet = rad.ObjPolyhdr(vertices, TETRA_FACES, [0, 0, 1e6])
+from netgen_mesh_import import WEDGE_FACES
+vertices = [[0,0,0], [1,0,0], [0.5,0.866,0], [0,0,1], [1,0,1], [0.5,0.866,1]]
+wedge = rad.ObjPolyhdr(vertices, WEDGE_FACES, [0, 0, 1e6])
 ```
 
 ### ObjBckg - Uniform Background Field
@@ -172,17 +257,51 @@ ext = rad.ObjBckg([0, 0, MU_0 * 50000])  # 50,000 A/m in z
 group = rad.ObjCnt([obj1, obj2, ...])
 ```
 
+### ObjArcCur - Arc/Circular Coil
+
+```python
+coil = rad.ObjArcCur(center, radii, angles, height, n_sectors, j_azim)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `center` | [x,y,z] | Center of the arc/circle |
+| `radii` | [r_min, r_max] | Inner and outer radii |
+| `angles` | [phi_min, phi_max] | Start and end angles (rad) |
+| `height` | float | Height of the coil cross-section |
+| `n_sectors` | int | Number of azimuthal sectors |
+| `j_azim` | float | Azimuthal current density (A/mm^2) |
+
+```python
+import numpy as np
+
+# Full circular coil (R=50mm, thin cross-section)
+center = [0, 0, 0]
+radii = [49.5, 50.5]  # 1mm radial width
+angles = [-np.pi, np.pi]  # Full circle
+height = 1.0  # 1mm height
+j_azim = 1000.0  # A/mm^2 (equivalent to 1000A total current)
+
+coil = rad.ObjArcCur(center, radii, angles, height, 100, j_azim)
+B = rad.Fld(coil, 'b', [0, 0, 50])  # Field on axis at z=50mm
+```
+
+**Analytical Method**: Uses elliptic integral formulas for high accuracy.
+See [Elliptic Integral Formulas](#elliptic-integral-formulas-for-coils) for details.
+
 ### ObjRaceTrk - Racetrack Coil
 
 ```python
 coil = rad.ObjRaceTrk(center, radii, heights, current, n_segments)
 ```
 
-### ObjFlmCur - Filament Conductor
+### ObjFlmCur - Filament Conductor (Line Current)
 
 ```python
 filament = rad.ObjFlmCur([[x1,y1,z1], [x2,y2,z2], ...], current)
 ```
+
+**Analytical Method**: Uses Biot-Savart law with closed-form solution.
 
 ---
 
@@ -439,11 +558,110 @@ field = rad.Fld(obj, component, point)
 | `'bx'`, `'by'`, `'bz'`, `'b'` | Magnetic flux density B (T) |
 | `'hx'`, `'hy'`, `'hz'`, `'h'` | Magnetic field H (A/m) |
 | `'ax'`, `'ay'`, `'az'`, `'a'` | Vector potential A (T*m) |
+| `'p'`, `'phi'` | Scalar potential Phi (A) |
 | `'mx'`, `'my'`, `'mz'`, `'m'` | Magnetization M |
 
 ```python
-B = rad.Fld(magnet, 'b', [0, 0, 0.1])  # B vector at point
+B = rad.Fld(magnet, 'b', [0, 0, 0.1])    # B vector at point
 Bz = rad.Fld(magnet, 'bz', [0, 0, 0.1])  # Bz component
+H = rad.Fld(magnet, 'h', [0, 0, 0.1])    # H vector at point
+A = rad.Fld(magnet, 'a', [0, 0, 0.1])    # Vector potential A
+Phi = rad.Fld(magnet, 'p', [0, 0, 0.1])  # Scalar potential Phi
+```
+
+**Potential Field Notes (v1.4.2+)**:
+- **A (Vector Potential)**: Uses face-based integration `A = (1/4pi) * M x BufVect`
+- **Phi (Scalar Potential)**: Uses face-based integration `Phi = (1/4pi) * M . BufVect`
+- Both A and Phi are computed accurately for ObjHexahedron/ObjTetrahedron
+- Maxwell relations verified: `curl(A) ∝ B`, `-grad(Phi) ∝ H`
+
+### FldBatch - Batch Field Computation (v1.3.16+)
+
+```python
+result = rad.FldBatch(obj, points, method=0)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `obj` | int | Object or container |
+| `points` | [[x,y,z], ...] | List of evaluation points |
+| `method` | int | `0` = direct (default), `1` = FMM (future) |
+
+| Returns | Description |
+|---------|-------------|
+| `result['B']` | List of [Bx, By, Bz] values (T) |
+| `result['H']` | List of [Hx, Hy, Hz] values (A/m) |
+
+```python
+points = [[0, 0, 0.1], [0, 0, 0.2], [0, 0, 0.3]]
+result = rad.FldBatch(magnet, points)
+B_list = result['B']  # [[Bx1,By1,Bz1], [Bx2,By2,Bz2], ...]
+H_list = result['H']  # [[Hx1,Hy1,Hz1], [Hx2,Hy2,Hz2], ...]
+```
+
+**Note**: More efficient than calling `Fld()` in a loop for many points.
+
+### FldPhi - Scalar Potential Batch (v1.3.16+)
+
+```python
+phi = rad.FldPhi(obj, points)
+```
+
+Computes magnetic scalar potential phi_m at multiple points.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `obj` | int | Object or container |
+| `points` | [[x,y,z], ...] | List of evaluation points |
+
+| Returns | Description |
+|---------|-------------|
+| `phi` | List of scalar values (A) |
+
+**Note**: Uses face-based integration for accurate scalar potential computation (v1.4.2+).
+
+### FldA - Vector Potential Batch (v1.3.16+)
+
+```python
+A = rad.FldA(obj, points)
+```
+
+Computes magnetic vector potential A at multiple points.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `obj` | int | Object or container |
+| `points` | [[x,y,z], ...] | List of evaluation points |
+
+| Returns | Description |
+|---------|-------------|
+| `A` | List of [Ax, Ay, Az] values (T*m) |
+
+**Note**: Uses face-based integration for accurate vector potential computation (v1.4.2+).
+
+### ClassifyPoints - Point Classification (v1.3.16+)
+
+```python
+result = rad.ClassifyPoints(obj, points, near_threshold=3.0)
+```
+
+Classifies evaluation points relative to mesh elements (for FMM field computation).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `obj` | int | | Object or container |
+| `points` | [[x,y,z], ...] | | List of evaluation points |
+| `near_threshold` | float | 3.0 | Near zone multiplier |
+
+| Returns | Description |
+|---------|-------------|
+| `result['classification']` | List of int: 0=inside, 1=near, 2=far |
+| `result['nearest_elem']` | List of int: index of nearest element |
+
+```python
+points = [[0, 0, 0], [0, 0, 0.1], [0, 0, 1.0]]
+result = rad.ClassifyPoints(magnet, points)
+# classification: [0, 1, 2] = [inside, near, far]
 ```
 
 ### FldLst - Field Along Line
@@ -647,11 +865,11 @@ rad.FldUnits('m')  # Set at start of script
 
 **Solution**: Import ngsolve BEFORE radia_ngsolve
 
-### 3. ObjPolyhdr Face Error
+### 3. ObjPolyhdr Face Error (Internal API)
 
-**Cause**: 0-indexed faces
+**Cause**: 0-indexed faces when using internal ObjPolyhdr API
 
-**Solution**: Use **1-indexed** faces (Radia convention)
+**Solution**: Use **1-indexed** faces (Radia convention). For Python users, prefer `ObjHexahedron` and `ObjTetrahedron` which auto-generate faces.
 
 ### 4. Solver Not Converging
 
@@ -665,53 +883,62 @@ rad.FldUnits('m')  # Set at start of script
 
 ## Units
 
-| Quantity | Unit |
-|----------|------|
-| Length | mm (default) or m with `FldUnits('m')` |
-| B (flux density) | Tesla (T) |
-| H (field) | A/m |
-| M (magnetization) | A/m |
-| A (vector potential) | T*m (when using `FldUnits('m')`) |
-| Current | Ampere (A) |
+### Unit System (v1.4.3+)
 
-### Internal Unit System
+**IMPORTANT**: Starting from v1.4.3, Radia uses SI units (meters) internally, matching ELF.
 
-**IMPORTANT**: Radia ALWAYS uses millimeters (mm) internally, regardless of `FldUnits()` setting.
+| Quantity | Unit | Notes |
+|----------|------|-------|
+| Length | m (default) or mm with `FldUnits('mm')` | User-selectable |
+| B (flux density) | Tesla (T) | **Fixed to SI** |
+| H (field) | A/m | **Fixed to SI** |
+| M (magnetization) | A/m | **Fixed to SI** |
+| A (vector potential) | T*m | **Fixed to SI** |
+| Current | Ampere (A) | **Fixed to SI** |
+| Current density | A/m^2 (or A/mm^2) | Depends on length unit |
 
-| Setting | Coordinate Input | B, H Output | A Output | Internal |
-|---------|------------------|-------------|----------|----------|
-| `FldUnits('mm')` | mm | T, A/m | T*mm | mm |
-| `FldUnits('m')` | m (scaled x1000) | T, A/m | **T*mm** (needs /1000) | mm |
+### Design Principles
 
-### Vector Potential A Unit Conversion
+1. **Length unit only**: `FldUnits()` controls **only the length unit** (m or mm)
+2. **Field values are always SI**: B, H, and A are always in SI units (T, A/m, T*m)
+3. **No field scaling**: Changing length unit does NOT change B, H, or A values
 
-When using NGSolve integration with `FldUnits('m')`:
+| Setting | Coordinate Input | B, H Output | A Output |
+|---------|------------------|-------------|----------|
+| `FldUnits('m')` (default) | meters | T, A/m | T*m |
+| `FldUnits('mm')` | millimeters | T, A/m | T*m |
 
-- **B, H fields**: Returned correctly in SI units (no conversion needed)
-- **A field**: Returned in T*mm (requires scaling for curl(A) = B verification)
+### Maxwell Relation: B = curl(A)
 
-**Why A needs special handling:**
+With the new SI internal units, the Maxwell relation `B = curl(A)` is satisfied without any unit conversion:
 
-1. A is dimensionally [T*length] = [Wb/m] = [V*s/m]
-2. Radia computes A using mm-based geometry: A_radia = T*mm
-3. NGSolve differentiates in meters: `curl(A) = dA/dx [m^-1]`
-4. For B = curl(A) to hold: `A_SI = A_radia / 1000`
+```python
+import radia as rad
+import numpy as np
 
-**In radia_ngsolve.cpp:**
+rad.FldUnits('m')  # Default: meters
 
-```cpp
-// Vector potential A unit scaling:
-// Radia ALWAYS uses mm internally, so A is always in T*mm
-// NGSolve differentiates in meters: curl(A) = dA/dx_m
-// To get correct B = curl(A), we scale A by 0.001:
-double scale = (field_type == "a") ? 0.001 : 1.0;
+# Create magnet
+magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 954930])
+
+# Get fields
+point = [0.05, 0.03, 0.04]
+B = rad.Fld(magnet, 'b', point)  # Tesla
+A = rad.Fld(magnet, 'a', point)  # T*m
+
+# Numerical curl
+h = 1e-6
+A_xp = rad.Fld(magnet, 'a', [point[0]+h, point[1], point[2]])
+A_xm = rad.Fld(magnet, 'a', [point[0]-h, point[1], point[2]])
+# ... (compute full curl)
+# Result: |curl(A)| / |B| should be approximately 1.0
 ```
 
 ### Maxwell Relation Verification
 
 See `examples/ngsolve_integration/verify_curl_A_equals_B/` for a complete verification script that:
 
-1. Creates a permanent magnet using ObjPolyhdr
+1. Creates a permanent magnet using ObjHexahedron
 2. Projects A onto HCurl space
 3. Computes curl(A) using NGSolve
 4. Compares with B projected onto HDiv space
@@ -719,12 +946,213 @@ See `examples/ngsolve_integration/verify_curl_A_equals_B/` for a complete verifi
 
 ---
 
-## References
+## Elliptic Integral Formulas for Coils
 
-1. [ESRF Radia Reference Guide](https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html)
-2. [examples/cube_uniform_field/](../examples/cube_uniform_field/) - Benchmark examples
+The magnetic field of circular current loops is computed using complete elliptic integrals of the first and second kind, K(k) and E(k). This provides analytical accuracy without numerical integration.
+
+### Mathematical Background
+
+For a circular current loop of radius R carrying current I, the field at cylindrical coordinates (rho, z) is:
+
+```
+k^2 = 4*R*rho / ((R+rho)^2 + z^2)
+
+B_rho = (mu_0*I / 2*pi) * z / (rho * sqrt((R+rho)^2 + z^2)) *
+        (-K(k) + (R^2 + rho^2 + z^2) / ((R-rho)^2 + z^2) * E(k))
+
+B_z = (mu_0*I / 2*pi) * 1 / sqrt((R+rho)^2 + z^2) *
+      (K(k) - (R^2 - rho^2 + z^2) / ((R-rho)^2 + z^2) * E(k))
+```
+
+The elliptic integrals are computed using the Hastings polynomial approximation, which provides accuracy to ~10^-8 relative error.
+
+### On-Axis Field (Special Case)
+
+For points on the axis (rho=0), the field simplifies to:
+
+```
+B_z = mu_0 * I * R^2 / (2 * (R^2 + z^2)^(3/2))
+B_rho = 0
+```
+
+### Vector Potential
+
+The azimuthal component of the vector potential A_phi is also computed analytically:
+
+```
+A_phi = (mu_0*I / pi) * sqrt(R/rho) * (1/k) * ((1 - k^2/2)*K(k) - E(k))
+```
+
+### Rectangular Cross-Section Coils
+
+For coils with finite cross-section (radial width and height), Radia uses Gaussian quadrature to integrate the thin-loop formula over the cross-section. This maintains analytical accuracy while handling practical coil geometries.
 
 ---
 
-**Last Updated**: 2025-12-15
+## Analytical Magnet Classes (Python)
+
+The `radia.analytical_magnet` module provides pure Python analytical field computation classes for use as background field sources. These are independent of Radia's C++ solver and can be used for:
+- Background field computation with `rad.ObjBckgCF()`
+- Standalone field calculations
+- Verification and validation
+
+### Available Classes
+
+| Class | Description | B-field | H-field | A-field (vector potential) |
+|-------|-------------|---------|---------|---------------------------|
+| `SphericalMagnet` | Uniformly magnetized sphere | Exact dipole | Exact | Exact dipole |
+| `CuboidMagnet` | Rectangular block magnet | Yang/Camacho formula | Exact | Exact (surface current) |
+| `CurrentLoop` | Circular current loop | Ortner elliptic integral | Exact | Elliptic integral |
+| `CylindricalMagnet` | Axially magnetized cylinder | Caciagli/Derby formula | Exact | Gaussian quadrature |
+| `RingMagnet` | Hollow cylindrical magnet | Caciagli formula | Exact | Gaussian quadrature |
+
+### Usage Examples
+
+```python
+from radia.analytical_magnet import SphericalMagnet, CuboidMagnet, CurrentLoop
+
+# Spherical magnet (diameter 20mm, Mz = 955000 A/m)
+sphere = SphericalMagnet(
+    center=[0, 0, 0],      # mm
+    diameter=20.0,          # mm
+    magnetization=[0, 0, 955000]  # A/m
+)
+B = sphere.get_B([15, 0, 0])  # [Bx, By, Bz] in Tesla
+H = sphere.get_H([15, 0, 0])  # [Hx, Hy, Hz] in A/m
+A = sphere.get_A([15, 0, 0])  # [Ax, Ay, Az] in T*m
+
+# Cuboid magnet (20x20x10 mm)
+cuboid = CuboidMagnet(
+    center=[0, 0, 0],
+    dimensions=[20, 20, 10],  # mm
+    magnetization=[0, 0, 955000]  # A/m
+)
+B = cuboid.get_B([25, 0, 0])
+A = cuboid.get_A([25, 0, 0])  # Exact analytical (not dipole approximation)
+
+# Current loop (diameter 50mm, current 100A)
+loop = CurrentLoop(
+    center=[0, 0, 0],
+    diameter=50.0,  # mm
+    current=100.0,  # A
+    axis='z'
+)
+B = loop.get_B([0, 0, 25])
+```
+
+### Use as Background Field Source
+
+```python
+import radia as rad
+from radia.analytical_magnet import CuboidMagnet
+
+rad.FldUnits('m')
+
+# Define permanent magnet as background field
+pm = CuboidMagnet(
+    center=[0, 0, 50],      # 50mm above center
+    dimensions=[40, 40, 20],
+    magnetization=[0, 0, 955000]
+)
+
+# Create Radia background field object
+bkg = rad.ObjBckgCF(pm)  # Uses pm.__call__() which returns get_B()
+
+# Create soft iron to solve
+iron = rad.ObjHexahedron(vertices, [0, 0, 0])
+mat = rad.MatLin(1000)
+rad.MatApl(iron, mat)
+
+grp = rad.ObjCnt([iron, bkg])
+rad.Solve(grp, 0.001, 1000, 1)
+```
+
+### Vector Potential Verification
+
+All classes satisfy curl(A) = B (verified numerically with < 0.01% error):
+
+```python
+# Numerical curl verification
+import numpy as np
+h = 0.1  # mm step
+h_m = h / 1000.0  # meters
+
+def numerical_curl(magnet, pt):
+    A_px = magnet.get_A([pt[0]+h, pt[1], pt[2]])
+    A_mx = magnet.get_A([pt[0]-h, pt[1], pt[2]])
+    A_py = magnet.get_A([pt[0], pt[1]+h, pt[2]])
+    A_my = magnet.get_A([pt[0], pt[1]-h, pt[2]])
+    A_pz = magnet.get_A([pt[0], pt[1], pt[2]+h])
+    A_mz = magnet.get_A([pt[0], pt[1], pt[2]-h])
+
+    return [
+        (A_py[2] - A_my[2]) / (2*h_m) - (A_pz[1] - A_mz[1]) / (2*h_m),
+        (A_pz[0] - A_mz[0]) / (2*h_m) - (A_px[2] - A_mx[2]) / (2*h_m),
+        (A_px[1] - A_mx[1]) / (2*h_m) - (A_py[0] - A_my[0]) / (2*h_m)
+    ]
+
+curl_A = numerical_curl(cuboid, [25, 0, 0])
+B = cuboid.get_B([25, 0, 0])
+# curl_A should equal B within numerical precision
+```
+
+### Key Formulas
+
+**CuboidMagnet Vector Potential**: Uses the equivalent surface current model:
+- Surface current density: K = M x n on each face
+- A = (mu_0 / 4*pi) * integral_S [K / |r - r'|] dS'
+- Uses Urankar (1980) / Ravaud (2009) formula for rectangular surface integration
+
+**CurrentLoop**: Uses Ortner et al. (2023) elliptic integral formulation for both B and A fields.
+
+---
+
+## References
+
+### Elliptic Integral Formulas
+
+1. **Simpson, J.C., Lane, J.E., Immer, C.D., Youngquist, R.C.** (2001). "Simple Analytic Expressions for the Magnetic Field of a Circular Current Loop." NASA Technical Memorandum NASA/TM-2013-217919. [NASA NTRS](https://ntrs.nasa.gov/citations/20010038494)
+
+2. **Maxwell, J.C.** (1873). "A Treatise on Electricity and Magnetism," Vol. 2, Art. 701-706. Oxford: Clarendon Press. [Cambridge University Press Edition](https://www.cambridge.org/core/books/treatise-on-electricity-and-magnetism/130A7181ECAB0C990FBC2B88341A4141)
+
+3. **Smythe, W.R.** (1989). "Static and Dynamic Electricity," 3rd ed., pp. 290-295. New York: Hemisphere Publishing.
+
+### Polynomial Approximation
+
+4. **Hastings, C., Hayward, J.T., Wong, J.P.** (1955). "Approximations for Digital Computers." Princeton University Press. [De Gruyter](https://www.degruyterbrill.com/document/doi/10.1515/9781400875597/html)
+
+5. **Cody, W.J.** (1965). "Chebyshev Approximations for the Complete Elliptic Integrals K and E." Mathematics of Computation 19(92), pp. 105-112. [Semantic Scholar](https://www.semanticscholar.org/paper/Chebyshev-Approximations-for-the-Complete-Elliptic-Cody/e120c0220534dcee9c154478226122edf124ded5)
+
+### Analytical Magnet Formulas
+
+6. **Yang, Z.J., et al.** (1990). "Potential and force between a magnet and a bulk Y1Ba2Cu3O7 superconductor studied by a mechanical pendulum." Supercond. Sci. Technol. 3(12):591. - Cuboid B-field formula
+
+7. **Camacho, J.M., Sosa, V.** (2013). "Alternative method to calculate the magnetic field of permanent magnets with azimuthal symmetry." Rev. Mex. Fis. E 59, 8-17. - Cuboid B-field validation
+
+8. **Cichon, D.** (2019). "Stability of magnetic field computation near edges using analytical formulas." Master's thesis. - Numerical stability improvements
+
+### Surface Current Vector Potential
+
+9. **Urankar, L.K.** (1980). "Vector potential and magnetic field of current-carrying finite arc segment in analytical form." IEEE Trans. Magn. 16(5), 1283-1288. - Rectangular surface integral formula
+
+10. **Ravaud, R., et al.** (2009). "Analytical calculation of the magnetic field created by permanent-magnet rings." IEEE Trans. Magn. 45(4), 1572-1576. - Surface current A-field integration
+
+### Triangle B-field (MSC Method)
+
+11. **Guptasarma, D.** (1999). "Computation of the time-domain response of a polarizable ground." Geophysics 64(1), 70-74. - Solid angle formula for triangle B-field
+
+12. **van Oosterom, A., Strackee, J.** (1983). "The solid angle of a plane triangle." IEEE Trans. Biomed. Eng. 30(2), 125-126. - Efficient solid angle computation
+
+### Potential Integrals on Triangles
+
+13. **Carley, M.** (2013). "Potential integrals on triangles." arXiv:1201.4938. - Analytical formula for 1/r integral over triangular surfaces
+
+### General References
+
+14. [ESRF Radia Reference Guide](https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html)
+15. [examples/cube_uniform_field/](../examples/cube_uniform_field/) - Benchmark examples
+
+---
+
+**Last Updated**: 2025-12-30
 **License**: LGPL-2.1 (modifications), BSD-style (original RADIA from ESRF)

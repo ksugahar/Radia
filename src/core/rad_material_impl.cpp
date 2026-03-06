@@ -22,12 +22,15 @@
 #include "rad_particle_trajectory.h"
 #include "rad_operation_names.h"
 #include "rad_material_aux.h"
+#include "rad_point_classify.h"
 #include "gmvbstr.h"
 
 #include <math.h>
 #include <string.h>
+#include <cstring>
 #include <cstdio>
 #include <chrono>
+#include <cmath>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -1114,6 +1117,18 @@ int radTApplication::RetrieveElemKey(const radTg* IngPtr)
 
 //-------------------------------------------------------------------------
 
+bool radTApplication::UnsafeGetElemByKey(int ElemKey, radThg& outHandle)
+{
+	radTmhg::iterator iter = GlobalMapOfHandlers.find(ElemKey);
+	if (iter == GlobalMapOfHandlers.end()) {
+		return false;
+	}
+	outHandle = iter->second;
+	return true;
+}
+
+//-------------------------------------------------------------------------
+
 void radTApplication::GenDump()
 {
 	try
@@ -1966,6 +1981,12 @@ void radTApplication::OutFieldCompRes(char* FieldChar, radTField* FieldArray, lo
 				else if(*BufChar_p_1=='z' || *BufChar_p_1=='Z') { *(t++) = FieldPtr->J.z; InnerCount++;}
 				else { *(t++) = FieldPtr->J.x; *(t++) = FieldPtr->J.y; *(t++) = FieldPtr->J.z; InnerCount += 3;}
 			}
+			else if(*(BufChar)=='P' || *(BufChar)=='p')
+			{
+				// Scalar potential phi_m (units: Ampere)
+				// Reference: ELF_MAGIC implementation (src/dll/m_fmm3d.f90)
+				*(t++) = FieldPtr->Phi; InnerCount++;
+			}
 			else if(*(BufChar)=='Q' || *(BufChar)=='q') //OC161005
 			{
 				*(t++) = FieldPtr->B.x * Mu0; *(t++) = FieldPtr->B.y * Mu0; *(t++) = FieldPtr->B.z * Mu0; InnerCount += 3; // Fix: Convert A/m to Tesla
@@ -2399,6 +2420,263 @@ void radTApplication::GetSolveStats(double* dOut, int* nOut)
 #else
 	*nOut = 7;
 #endif
+}
+
+//-------------------------------------------------------------------------
+
+void radTApplication::ClassifyPoints(int* classification, int* nearest_elem, int n_points,
+                                     double* points, int container_handle, double near_threshold)
+{
+	try
+	{
+		// Validate handle
+		radThg hg;
+		if(!ValidateElemKey(container_handle, hg))
+		{
+			Send.ErrorMessage("Radia::Error003");
+			return;
+		}
+
+		// Convert input points from user units to internal SI units (meters)
+		// Radia v1.4.3+: Internal unit system is SI (meters), matching ELF
+		// m_lengthUnitScale is 1.0 for m (default), 0.001 for mm
+		double scale = m_lengthUnitScale;
+
+		// Create a copy of points in meters (internal SI units)
+		std::vector<double> points_internal(n_points * 3);
+		for(int i = 0; i < n_points * 3; ++i)
+		{
+			points_internal[i] = points[i] * scale;
+		}
+
+		// Use the solid angle implementation from rad_point_classify
+		RadPointClassify::ClassifyPointsFromHandle(
+			n_points,
+			points_internal.data(),
+			container_handle,
+			near_threshold,
+			classification,
+			nearest_elem
+		);
+	}
+	catch(...)
+	{
+		Send.ErrorMessage("Radia::Error000");
+	}
+}
+
+//-------------------------------------------------------------------------
+
+void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_points,
+                                        double* points, int container_handle, int method)
+{
+	try
+	{
+		// Validate handle and get 3D object pointer
+		radThg hg;
+		if(!ValidateElemKey(container_handle, hg))
+		{
+			Send.ErrorMessage("Radia::Error003");
+			return;
+		}
+		radTg3d* g3dPtr = Cast.g3dCast(hg.rep);
+		if(g3dPtr == 0)
+		{
+			Send.ErrorMessage("Radia::Error003");
+			return;
+		}
+
+		// Initialize output arrays to zero
+		std::memset(B_out, 0, n_points * 3 * sizeof(double));
+		std::memset(H_out, 0, n_points * 3 * sizeof(double));
+
+		// Magnetic constant (permeability of free space)
+		// B field is stored internally in A/m (same as H), needs conversion to Tesla
+		const double Mu0 = 4. * 3.1415926535897932 * 1.e-7; // T*m/A
+
+		// Apply unit scaling: convert user units to internal mm
+		// Same as rad_c_interface.cpp Field() function
+		double scale = GetLengthUnitScale();
+
+		// Create field key for B and H computation
+		radTFieldKey FieldKey;
+		FieldKey.B_ = true;
+		FieldKey.H_ = true;
+
+		TVector3d ZeroVect(0., 0., 0.);
+
+		// Compute field at each point using OpenMP parallelization
+		// method: 0 = direct, 1 = FMM (not yet implemented)
+		//
+		// OpenMP parallelization is safe here because:
+		// 1. Each iteration creates its own thread-local radTField object
+		// 2. Each iteration writes to different output array indices
+		// 3. B_genComp() only reads from the g3dPtr object (no writes)
+		// 4. The FieldKey and ZeroVect are copied by value into each thread's radTField
+		//
+		// Note: Exception handling inside parallel region is tricky - we avoid throwing
+		// exceptions inside B_genComp by ensuring g3dPtr is valid before the loop.
+		#ifdef _OPENMP
+		#pragma omp parallel for schedule(static) if(n_points > 100)
+		#endif
+		for(int i = 0; i < n_points; ++i)
+		{
+			TVector3d pt;
+			pt.x = points[i * 3 + 0] * scale;
+			pt.y = points[i * 3 + 1] * scale;
+			pt.z = points[i * 3 + 2] * scale;
+
+			// Create thread-local field object for each point
+			// All members are either values (not pointers/references) or initialized here
+			radTFieldKey localFieldKey;
+			localFieldKey.B_ = true;
+			localFieldKey.H_ = true;
+			TVector3d localZeroVect(0., 0., 0.);
+
+			// Constructor: (FieldKey, CompCriterium, P, B, H, A, M, J=0. -> TVector3d(0,0,0))
+			radTField Field(localFieldKey, CompCriterium, pt, localZeroVect, localZeroVect, localZeroVect, localZeroVect, 0.);
+			g3dPtr->B_genComp(&Field);
+
+			// Convert B from A/m to Tesla (multiply by Mu0)
+			B_out[i * 3 + 0] = Field.B.x * Mu0;
+			B_out[i * 3 + 1] = Field.B.y * Mu0;
+			B_out[i * 3 + 2] = Field.B.z * Mu0;
+
+			// H is already in A/m
+			H_out[i * 3 + 0] = Field.H.x;
+			H_out[i * 3 + 1] = Field.H.y;
+			H_out[i * 3 + 2] = Field.H.z;
+		}
+	}
+	catch(...)
+	{
+		Send.ErrorMessage("Radia::Error000");
+	}
+}
+
+//-------------------------------------------------------------------------
+
+void radTApplication::ComputeScalarPotentialBatch(double* phi_out, int n_points,
+                                                  double* points, int container_handle)
+{
+	try
+	{
+		// Validate handle and get 3D object pointer
+		radThg hg;
+		if(!ValidateElemKey(container_handle, hg))
+		{
+			Send.ErrorMessage("Radia::Error003");
+			return;
+		}
+		radTg3d* g3dPtr = Cast.g3dCast(hg.rep);
+		if(g3dPtr == 0)
+		{
+			Send.ErrorMessage("Radia::Error003");
+			return;
+		}
+
+		// Initialize output array to zero
+		std::memset(phi_out, 0, n_points * sizeof(double));
+
+		// Apply unit scaling: convert user units to internal mm
+		double scale = GetLengthUnitScale();
+
+		// Create field key for Phi computation
+		radTFieldKey FieldKey;
+		FieldKey.Phi_ = true;
+
+		TVector3d ZeroVect(0., 0., 0.);
+
+		// Compute scalar potential at each point
+		// OpenMP parallelization disabled due to Intel OpenMP deadlock issues
+		for(int i = 0; i < n_points; ++i)
+		{
+			TVector3d pt;
+			pt.x = points[i * 3 + 0] * scale;
+			pt.y = points[i * 3 + 1] * scale;
+			pt.z = points[i * 3 + 2] * scale;
+
+			// Create thread-local field key and vectors
+			radTFieldKey localFieldKey;
+			localFieldKey.Phi_ = true;
+			TVector3d localZeroVect(0., 0., 0.);
+
+			radTField Field(localFieldKey, CompCriterium, pt, localZeroVect, localZeroVect, localZeroVect, localZeroVect, 0.);
+			g3dPtr->B_genComp(&Field);
+
+			// Phi is dimensionless (in internal units), convert based on length unit
+			// phi_m = (1/4pi) * integral(M . r / r^3) dV
+			// Units: [phi_m] = A (magnetic scalar potential)
+			phi_out[i] = Field.Phi;
+		}
+	}
+	catch(...)
+	{
+		Send.ErrorMessage("Radia::Error000");
+	}
+}
+
+//-------------------------------------------------------------------------
+
+void radTApplication::ComputeVectorPotentialBatch(double* A_out, int n_points,
+                                                  double* points, int container_handle)
+{
+	try
+	{
+		// Validate handle and get 3D object pointer
+		radThg hg;
+		if(!ValidateElemKey(container_handle, hg))
+		{
+			Send.ErrorMessage("Radia::Error003");
+			return;
+		}
+		radTg3d* g3dPtr = Cast.g3dCast(hg.rep);
+		if(g3dPtr == 0)
+		{
+			Send.ErrorMessage("Radia::Error003");
+			return;
+		}
+
+		// Initialize output array to zero
+		std::memset(A_out, 0, n_points * 3 * sizeof(double));
+
+		// Apply unit scaling: convert user units to internal mm
+		double scale = GetLengthUnitScale();
+
+		// Create field key for A computation
+		radTFieldKey FieldKey;
+		FieldKey.A_ = true;
+
+		TVector3d ZeroVect(0., 0., 0.);
+
+		// Compute vector potential at each point
+		// OpenMP parallelization disabled due to Intel OpenMP deadlock issues
+		for(int i = 0; i < n_points; ++i)
+		{
+			TVector3d pt;
+			pt.x = points[i * 3 + 0] * scale;
+			pt.y = points[i * 3 + 1] * scale;
+			pt.z = points[i * 3 + 2] * scale;
+
+			// Create thread-local field key and vectors
+			radTFieldKey localFieldKey;
+			localFieldKey.A_ = true;
+			TVector3d localZeroVect(0., 0., 0.);
+
+			radTField Field(localFieldKey, CompCriterium, pt, localZeroVect, localZeroVect, localZeroVect, localZeroVect, 0.);
+			g3dPtr->B_genComp(&Field);
+
+			// A has units of T*m (Tesla-meter)
+			// Radia internal A is stored in consistent units
+			A_out[i * 3 + 0] = Field.A.x;
+			A_out[i * 3 + 1] = Field.A.y;
+			A_out[i * 3 + 2] = Field.A.z;
+		}
+	}
+	catch(...)
+	{
+		Send.ErrorMessage("Radia::Error000");
+	}
 }
 
 //-------------------------------------------------------------------------

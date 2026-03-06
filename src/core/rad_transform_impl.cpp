@@ -899,11 +899,12 @@ int radTApplication::SetAndShowPhysUnits()
 		char CurrentUnitID[] = "A";
 
 		// Current density depends on length unit
+		// Radia v1.4.3+: m_lengthUnitScale is 1.0 for m (default), 0.001 for mm
 		char CurrentDensityUnitID[32];
-		if (m_lengthUnitScale == 1.0) // mm
-			strcpy(CurrentDensityUnitID, "A/mm^2");
-		else // m
+		if (m_lengthUnitScale == 1.0) // m (internal SI units)
 			strcpy(CurrentDensityUnitID, "A/m^2");
+		else // mm
+			strcpy(CurrentDensityUnitID, "A/mm^2");
 
 		char MagnetizationUnitID[] = "Tesla";
 		char FieldInductionUnitID[] = "Tesla";
@@ -957,14 +958,16 @@ int radTApplication::SetPhysUnits(const char* unitStr)
 		}
 
 		// Parse unit string
+		// Radia v1.4.3+: Internal unit system is SI (meters), matching ELF
+		// m_lengthUnitScale converts user input to internal meters
 		if (strcmp(unitStr, "mm") == 0 || strcmp(unitStr, "millimeter") == 0 || strcmp(unitStr, "millimeters") == 0)
 		{
-			m_lengthUnitScale = 1.0;
+			m_lengthUnitScale = 0.001;  // mm -> m: multiply by 0.001
 			m_lengthUnitName = "mm";
 		}
 		else if (strcmp(unitStr, "m") == 0 || strcmp(unitStr, "meter") == 0 || strcmp(unitStr, "meters") == 0)
 		{
-			m_lengthUnitScale = 1000.0; // Conversion factor from mm to m
+			m_lengthUnitScale = 1.0;  // m -> m: no conversion needed
 			m_lengthUnitName = "m";
 		}
 		else

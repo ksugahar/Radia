@@ -261,7 +261,7 @@ print("[Step 5] Extracting magnetization from magnetic elements")
 print("-" * 70)
 
 import radia as rad
-from netgen_mesh_import import extract_elements, compute_element_centroid, TETRA_FACES
+from netgen_mesh_import import extract_elements, compute_element_centroid
 
 # Use centralized mesh extraction from netgen_mesh_import module
 # This ensures correct 0-indexed access to mesh.vertices
@@ -364,15 +364,15 @@ rad.FldUnits('m')
 #
 # This was verified by comparing:
 #   - Dipole field at r=0.6m from M=3.15 A/m sphere: ~1.5e-6 T
-#   - Radia ObjPolyhdr with M=3.15: gives ~1.0e-6 T (correct order)
-#   - Radia ObjPolyhdr with M=mu0*3.15: gives ~1e-12 T (wrong!)
+#   - Radia ObjTetrahedron with M=3.15: gives ~1.0e-6 T (correct order)
+#   - Radia ObjTetrahedron with M=mu0*3.15: gives ~1e-12 T (wrong!)
 print("  NOTE: Radia magnetization is passed as-is (A/m values, no mu0 conversion)")
 print("  M_avg [A/m]: [%.4f, %.4f, %.4f]" % tuple(M_avg))
 
 radia_objects = []
 for i, (verts, mag) in enumerate(zip(tetra_vertices, tetra_magnetization)):
     try:
-        poly = rad.ObjPolyhdr(verts, TETRA_FACES, mag)
+        poly = rad.ObjTetrahedron(verts, mag)
         radia_objects.append(poly)
     except Exception as e:
         if i < 5:
@@ -415,7 +415,7 @@ rad.FldUnits('m')
 radia_objects_new = []
 for i, (verts, mag) in enumerate(zip(tetra_vertices, tetra_magnetization)):
     try:
-        tet = rad.ObjPolyhdr(verts, TETRA_FACES, mag)
+        tet = rad.ObjTetrahedron(verts, mag)
         radia_objects_new.append(tet)
     except:
         pass

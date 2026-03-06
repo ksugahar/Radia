@@ -19,7 +19,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
 import radia as rd
-from netgen_mesh_import import HEX_FACES
 
 print("=" * 80)
 print("Permeability Comparison - Analytical Solution Test")
@@ -92,7 +91,7 @@ for mu_r in permeability_values:
 		[-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
 		[-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
 	]
-	cube = rd.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+	cube = rd.ObjHexahedron(vertices, [0, 0, 0])
 
 	# Use linear material with specified permeability
 	# MatLin(mu_r): defines isotropic linear material
@@ -104,7 +103,7 @@ for mu_r in permeability_values:
 	print(f"\n[Step 2] Creating Quadrupole Background Field")
 	print("-" * 80)
 
-	bckg_cf = rd.ObjBckgCF(quadrupole_field)
+	bckg_cf = rd.ObjBckg(quadrupole_field)
 	print(f"  Quadrupole field created: Bx = g*y, By = g*x")
 
 	# Container with cube and background field
@@ -265,7 +264,7 @@ print(f"\n{'=' * 80}")
 print("Final Summary")
 print(f"{'=' * 80}")
 
-print(f"\n1. ObjBckgCF successfully implements quadrupole background field")
+print(f"\n1. ObjBckg successfully implements quadrupole background field")
 print(f"2. Tested with {len(permeability_values)} different permeability values: {permeability_values}")
 print(f"3. All tests show excellent agreement with analytical solution")
 print(f"4. Far-field accuracy < 0.5% for all permeability values")

@@ -1,10 +1,10 @@
 # Radia Background Field Examples
 
-This directory contains examples demonstrating how to use Python callback functions as background magnetic fields in Radia simulations using `rad.ObjBckgCF()`.
+This directory contains examples demonstrating how to use Python callback functions as background magnetic fields in Radia simulations using `rad.ObjBckg()`.
 
 ## Overview
 
-Radia's `ObjBckgCF` function allows you to define arbitrary background magnetic fields using Python callback functions. This enables:
+Radia's `ObjBckg` function allows you to define arbitrary background magnetic fields using Python callback functions. This enables:
 - Integration of analytically defined fields (quadrupole, sextupole, etc.)
 - Coupling with external field solvers
 - Custom field distributions for specific applications
@@ -24,7 +24,7 @@ Radia's `ObjBckgCF` function allows you to define arbitrary background magnetic 
    - Magnetizable sphere in quadrupole background field
    - Compares Radia numerical solution with analytical solution
    - Exports geometry and field distribution to VTK
-   - Uses `rd.ObjBckgCF()` to define quadrupole field
+   - Uses `rd.ObjBckg()` to define quadrupole field
 
 ### Example Scripts
 
@@ -80,13 +80,12 @@ def quadrupole_field(pos):
 	return [Bx, By, Bz]
 
 # Create background field source
-background = rd.ObjBckgCF(quadrupole_field)
+background = rd.ObjBckg(quadrupole_field)
 
-# Create magnetizable object (hexahedron using ObjPolyhdr)
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+# Create magnetizable object using ObjHexahedron (faces auto-generated)
 vertices = [[-5,-5,-5], [5,-5,-5], [5,5,-5], [-5,5,-5],
             [-5,-5,5], [5,-5,5], [5,5,5], [-5,5,5]]
-sphere = rd.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+sphere = rd.ObjHexahedron(vertices, [0, 0, 0])
 # Apply linear isotropic material (mu_r = 1000)
 mat = rd.MatLin(1000)  # relative permeability
 rd.MatApl(sphere, mat)
@@ -230,7 +229,7 @@ paraview sphere_nastran_geometry.vtk sphere_nastran_field_mu10.vtu
 |---------|-------------------------------|---------------------|
 | Direction | Python → Radia | Radia → NGSolve |
 | Use Case | Add external fields to Radia | Use Radia fields in NGSolve FEM |
-| Function | `rd.ObjBckgCF()` | `radia_ngsolve.RadiaField()` |
+| Function | `rd.ObjBckg()` | `radia_ngsolve.RadiaField()` |
 | Input | Python callback | Radia object |
 | Output | Radia field source | NGSolve CoefficientFunction |
 | Location | `examples/background_fields/` | `examples/NGSolve_Integration/` |
@@ -254,7 +253,7 @@ Simple quadrupole background field validation with μᵣ = 1000 (soft iron).
 - Field accuracy: Excellent match at all test points
 
 **Key Findings:**
-- ObjBckgCF correctly implements quadrupole field (Bx = g·y, By = g·x)
+- ObjBckg correctly implements quadrupole field (Bx = g·y, By = g·x)
 - B→H conversion working properly (callback returns B in Tesla)
 - Solver converges with background fields
 
@@ -317,7 +316,7 @@ Accuracy comparison across different permeability values.
 - Higher permeability concentrates field lines through sphere
 - Near-sphere external field slightly reduced (shielding effect)
 - Far-field maintains pure quadrupole symmetry
-- ObjBckgCF implementation validated across wide permeability range
+- ObjBckg implementation validated across wide permeability range
 
 ## Validation Results
 
@@ -410,7 +409,7 @@ Comparison between Radia numerical solution and analytical quadrupole field **ou
 
 5. **Symmetry**: Results show good symmetry between [15,0,0] and [0,15,0] points (errors within 0.001%)
 
-6. **ObjBckgCF Performance**: The callback function approach successfully implements arbitrary background fields with good accuracy
+6. **ObjBckg Performance**: The callback function approach successfully implements arbitrary background fields with good accuracy
 
 ### Physical Interpretation
 

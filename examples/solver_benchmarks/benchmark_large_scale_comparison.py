@@ -26,7 +26,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
 import numpy as np
-from netgen_mesh_import import HEX_FACES
 
 
 def hex_vertices(cx, cy, cz, dx, dy, dz):
@@ -124,7 +123,7 @@ for test in test_cases:
                     z = -size/2 + (k + 0.5) * elem_size
                     # Element with dimensions elem_size x elem_size x elem_size
                     vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-                    elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+                    elem = rad.ObjHexahedron(vertices, [0, 0, 0])
                     rad.MatApl(elem, mat)
                     elements.append(elem)
 
@@ -203,7 +202,7 @@ for test in test_cases:
                 z = -size/2 + (k + 0.5) * elem_size
                 # Element with dimensions elem_size x elem_size x elem_size
                 vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-                elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
                 rad.MatApl(elem, mat)
                 elements.append(elem)
 
@@ -243,7 +242,7 @@ for test in test_cases:
                 z = -size/2 + (k + 0.5) * elem_size
                 # Element with dimensions elem_size x elem_size x elem_size
                 vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-                elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
                 rad.MatApl(elem, mat)
                 elements.append(elem)
     bg_field = rad.ObjBckg(H_bg)
@@ -295,7 +294,7 @@ for test in test_cases:
                 z = -size/2 + (k + 0.5) * elem_size
                 # Element with dimensions elem_size x elem_size x elem_size
                 vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-                elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
                 rad.MatApl(elem, mat)
                 elements.append(elem)
 
@@ -339,7 +338,7 @@ for test in test_cases:
                 z = -size/2 + (k + 0.5) * elem_size
                 # Element with dimensions elem_size x elem_size x elem_size
                 vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
-                elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+                elem = rad.ObjHexahedron(vertices, [0, 0, 0])
                 rad.MatApl(elem, mat)
                 elements.append(elem)
     bg_field = rad.ObjBckg(H_bg)

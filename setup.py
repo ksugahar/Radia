@@ -16,7 +16,7 @@ import shutil
 import sys
 
 # Read version from pyproject.toml
-version = "1.3.16"
+version = "1.4.4"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -28,26 +28,50 @@ def prepare_package_data():
 
 	Note: Package directory is now src/radia (not src/python) so that
 	'import radia' works correctly after pip install.
+
+	Build paths searched (in order):
+	1. build-msvc/ (MSVC + Intel MKL build - PREFERRED)
+	2. build/Release/ (legacy CMake build)
 	"""
 	package_dir = Path(__file__).parent / "src" / "radia"
 	package_dir.mkdir(parents=True, exist_ok=True)
 
-	# Copy radia.pyd from build/Release/ if it exists
-	# Note: CMake builds radia.cp312-win_amd64.pyd, we copy it as radia.pyd
-	radia_pyd = Path(__file__).parent / "build" / "Release" / "radia.cp312-win_amd64.pyd"
-	if radia_pyd.exists():
-		shutil.copy2(radia_pyd, package_dir / "radia.pyd")
-		print(f"Copied {radia_pyd} to {package_dir}")
-	else:
-		print(f"Warning: {radia_pyd} not found. Run Build.ps1 first.")
+	# Try build-msvc first (MSVC + Intel MKL), then fall back to build/Release
+	build_dirs = [
+		Path(__file__).parent / "build-msvc",  # MSVC build (preferred)
+		Path(__file__).parent / "build" / "Release",  # Legacy CMake build
+	]
 
-	# Copy radia_ngsolve.pyd from build/Release/ if it exists
-	radia_ngsolve_pyd = Path(__file__).parent / "build" / "Release" / "radia_ngsolve.pyd"
-	if radia_ngsolve_pyd.exists():
-		shutil.copy2(radia_ngsolve_pyd, package_dir / "radia_ngsolve.pyd")
-		print(f"Copied {radia_ngsolve_pyd} to {package_dir}")
+	# Copy radia.pyd
+	radia_pyd_found = False
+	for build_dir in build_dirs:
+		# Try versioned name first
+		radia_pyd = build_dir / "radia.cp312-win_amd64.pyd"
+		if radia_pyd.exists():
+			shutil.copy2(radia_pyd, package_dir / "radia.pyd")
+			print(f"Copied {radia_pyd} to {package_dir}")
+			radia_pyd_found = True
+			break
+		# Try simple name
+		radia_pyd = build_dir / "radia.pyd"
+		if radia_pyd.exists():
+			shutil.copy2(radia_pyd, package_dir / "radia.pyd")
+			print(f"Copied {radia_pyd} to {package_dir}")
+			radia_pyd_found = True
+			break
+
+	if not radia_pyd_found:
+		print(f"Warning: radia.pyd not found. Run BuildMSVC.ps1 first.")
+
+	# Copy radia_ngsolve.pyd
+	for build_dir in build_dirs:
+		radia_ngsolve_pyd = build_dir / "radia_ngsolve.pyd"
+		if radia_ngsolve_pyd.exists():
+			shutil.copy2(radia_ngsolve_pyd, package_dir / "radia_ngsolve.pyd")
+			print(f"Copied {radia_ngsolve_pyd} to {package_dir}")
+			break
 	else:
-		print(f"Info: {radia_ngsolve_pyd} not found. This is optional.")
+		print(f"Info: radia_ngsolve.pyd not found. This is optional.")
 
 	return package_dir
 

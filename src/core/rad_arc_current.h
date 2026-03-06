@@ -109,11 +109,10 @@ public:
 		if(FieldPtr->FieldKey.J_) J_comp(FieldPtr);
 		if(!(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_ || FieldPtr->FieldKey.A_ || FieldPtr->FieldKey.PreRelax_)) return;
 
-		if(BasedOnPrecLevel) B_compWithNewtonCotes4(FieldPtr);
-		else B_compWithTrapeth(FieldPtr);
+		// Use analytical elliptic integral method
+		B_compElliptic(FieldPtr);
 	}
-	void B_compWithNewtonCotes4(radTField*);
-	void B_compWithTrapeth(radTField*);
+	void B_compElliptic(radTField*);  // Analytical method using elliptic integrals
 
 	void J_comp(radTField* FieldPtr)
 	{
@@ -161,7 +160,10 @@ public:
 
 	void SimpleEnergyComp(radTField* FieldPtr)
 	{
-		const double ConstForJ = -1.E-06;
+		// Energy: E = -integral(J . A) dV
+		// Radia now uses SI units (meters) internally, matching ELF.
+		// J in A/m^2, A in T*m, Volume in m^3 -> Energy in Joules
+		const double ConstForJ = -1.0;
 		radTFieldKey LocFieldKey; LocFieldKey.A_ = 1;
 		radTField LocField(LocFieldKey, FieldPtr->CompCriterium); LocField.P = CentrPoint;
 		((radTg3d*)(FieldPtr->HandleEnergyForceTorqueCompData.rep->hSource.rep))->B_genComp(&LocField);

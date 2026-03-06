@@ -29,8 +29,6 @@ import radia as rad
 import numpy as np
 import time
 
-# Import HEX_FACES for ObjPolyhdr hexahedra
-from netgen_mesh_import import HEX_FACES
 
 try:
     from ngsolve import *
@@ -80,7 +78,7 @@ for i in range(n):
                 [cx - hdx, cy + hdy, cz + hdz],  # vertex 8
             ]
 
-            elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2])
+            elem = rad.ObjHexahedron(vertices, [0, 0, 1.2])
             elements.append(elem)
 
 magnet = rad.ObjCnt(elements)

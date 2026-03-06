@@ -32,7 +32,7 @@ def radia_field_with_A(coords):
     A = rad.Fld(magnet, 'a', [x, y, z])
     return {'B': list(B), 'A': list(A)}
 
-bg_field = rad.ObjBckgCF(radia_field_with_A)
+bg_field = rad.ObjBckg(radia_field_with_A)
 
 # Create larger mesh to include far-field region
 # Domain: x,y,z = [-50, 50] mm = [-0.05, 0.05] m

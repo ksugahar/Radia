@@ -50,7 +50,10 @@ class radTApplication {
 	int m_nProcMPI, m_rankMPI; //OC01012020
 
 	// Physical units
-	double m_lengthUnitScale; // Scale factor: 1.0 for mm (default), 1000.0 for m
+	// Radia v1.4.3+: Internal unit system is SI (meters), matching ELF
+	// m_lengthUnitScale converts user input to internal meters
+	// Default: m (scale = 1.0), for mm input: scale = 0.001
+	double m_lengthUnitScale;
 	const char* m_lengthUnitName; // "mm" or "m"
 
 public:
@@ -146,9 +149,10 @@ public:
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
 
-		// Initialize to default units (mm)
+		// Initialize to default units (SI: meters)
+		// Radia v1.4.3+: Default is meters (matching ELF)
 		m_lengthUnitScale = 1.0;
-		m_lengthUnitName = "mm";
+		m_lengthUnitName = "m";
 
 #ifdef RADIA_USE_HACAPK
 		// HACApK default parameters
@@ -307,6 +311,16 @@ public:
 	// Solve statistics retrieval (always available)
 	void GetSolveStats(double* dOut, int* nOut);
 
+	// Point classification and batch field computation for FMM
+	void ClassifyPoints(int* classification, int* nearest_elem, int n_points,
+	                    double* points, int container_handle, double near_threshold);
+	void ComputeFieldBatch(double* B_out, double* H_out, int n_points,
+	                       double* points, int container_handle, int method);
+	void ComputeScalarPotentialBatch(double* phi_out, int n_points,
+	                                 double* points, int container_handle);
+	void ComputeVectorPotentialBatch(double* A_out, int n_points,
+	                                 double* points, int container_handle);
+
 	void ComputeField(int ElemKey, char* FieldChar, double* StObsPoi, long lenStObsPoi, double* FiObsPoi, long lenFiObsPoi, int Np, char* ShowArgFlag, double StrtArg);
 	void ComputeField(int ElemKey, char* FieldChar, radTVectorOfVector3d& VectorOfVector3d, radTVectInputCell& VectInputCell);
 	void ComputeField(int ElemKey, char* FieldChar, double** Points, long LenPoints);
@@ -380,6 +394,10 @@ public:
 
 	int ProcMPI(const char* OnOrOff, double* arData=0, long* pnData=0, long* pRankFrom=0, long* pRankTo=0); //OC19032020
 	//int ProcMPI(const char* OnOrOff);
+
+	// Get element handle by key (for FMM dipole collection)
+	// Returns true if element found, false otherwise
+	bool UnsafeGetElemByKey(int ElemKey, radThg& outHandle);
 };
 
 //-------------------------------------------------------------------------

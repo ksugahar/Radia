@@ -1212,6 +1212,48 @@ EXP int CALL RadSetRelaxParam(int* n, double relax);
 */
 EXP int CALL RadGetRelaxParam(double* relax);
 
+/** Classifies evaluation points as inside/near/far relative to mesh elements.
+@param classification [out] array of classification (0=inside, 1=near, 2=far)
+@param nearest_elem [out] array of nearest element indices
+@param n_points [in] number of evaluation points
+@param points [in] evaluation point coordinates (n_points * 3)
+@param container_handle [in] Radia container handle
+@param near_threshold [in] near zone multiplier (typically 3.0)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadClassifyPoints(int* classification, int* nearest_elem, int n_points,
+                               double* points, int container_handle, double near_threshold);
+
+/** Computes B and H fields at multiple points (batch computation).
+@param B_out [out] B field values (n_points * 3)
+@param H_out [out] H field values (n_points * 3)
+@param n_points [in] number of evaluation points
+@param points [in] evaluation point coordinates (n_points * 3)
+@param container_handle [in] Radia container handle
+@param method [in] computation method (0=direct, 1=FMM)
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadFldBatch(double* B_out, double* H_out, int n_points,
+                         double* points, int container_handle, int method);
+
+/** Computes magnetic scalar potential at multiple points.
+@param phi_out [out] scalar potential values (n_points)
+@param n_points [in] number of evaluation points
+@param points [in] evaluation point coordinates (n_points * 3)
+@param container_handle [in] Radia container handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadFldPhi(double* phi_out, int n_points, double* points, int container_handle);
+
+/** Computes magnetic vector potential at multiple points.
+@param A_out [out] vector potential values (n_points * 3)
+@param n_points [in] number of evaluation points
+@param points [in] evaluation point coordinates (n_points * 3)
+@param container_handle [in] Radia container handle
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle);
+
 #ifdef __cplusplus
 }
 #endif

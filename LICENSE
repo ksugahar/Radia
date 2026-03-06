@@ -91,3 +91,74 @@ each governed by their respective licenses. Please refer to the individual
 component directories for specific license information.
 
 ================================================================================
+
+================================================================================
+PART 3: ExaFMM-t (Fast Multipole Method Library)
+================================================================================
+
+Software Name : ExaFMM-t
+Location: external/exafmm-t/
+
+BSD 3-Clause License
+
+Copyright (c) 2020, Tingyu Wang, Rio Yokota, Lorena Barba
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+================================================================================
+PART 4: Intel Math Kernel Library (MKL) Runtime
+================================================================================
+
+This software distribution includes Intel Math Kernel Library (Intel MKL)
+runtime libraries for BLAS/LAPACK operations.
+
+Intel MKL License:
+The Intel MKL runtime libraries are redistributed under the terms of the
+Intel Simplified Software License (version August 2021) which allows
+redistribution of the software in binary form.
+
+Copyright (c) Intel Corporation. All rights reserved.
+
+The Intel MKL redistributable libraries included are:
+- mkl_rt.2.dll (or equivalent)
+- mkl_core.2.dll
+- mkl_intel_thread.2.dll
+- mkl_def.2.dll
+- mkl_avx2.2.dll
+- mkl_vml_def.2.dll
+- mkl_vml_avx2.2.dll
+- libiomp5md.dll (Intel OpenMP runtime)
+- libmmd.dll
+- svml_dispmd.dll
+
+Intel, the Intel logo, and Intel MKL are trademarks of Intel Corporation or
+its subsidiaries in the U.S. and/or other countries.
+
+For the full Intel Simplified Software License terms, please visit:
+https://www.intel.com/content/www/us/en/developer/articles/license/end-user-license-agreement.html
+
+================================================================================

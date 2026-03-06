@@ -42,7 +42,7 @@ def field_with_A(coords):
 	return {'B': [Bx, By, Bz], 'A': [Ax, Ay, Az]}
 
 # Create background field source
-bg_field = rad.ObjBckgCF(field_with_A)
+bg_field = rad.ObjBckg(field_with_A)
 print(f"  Background field object ID: {bg_field}")
 
 # Test field calculation with A
@@ -73,7 +73,7 @@ def field_B_only(coords):
 	"""Return only B field (backward compatible)"""
 	return [0.0, 0.0, 1.0]
 
-bg_field2 = rad.ObjBckgCF(field_B_only)
+bg_field2 = rad.ObjBckg(field_B_only)
 print(f"  Background field object ID: {bg_field2}")
 
 result2 = rad.Fld(bg_field2, 'b', point)

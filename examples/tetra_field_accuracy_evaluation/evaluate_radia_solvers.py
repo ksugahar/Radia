@@ -43,7 +43,7 @@ except ImportError as e:
     print('NGSolve/Netgen not available: %s' % e)
     NETGEN_AVAILABLE = False
 
-from netgen_mesh_import import netgen_mesh_to_radia, HEX_FACES
+from netgen_mesh_import import netgen_mesh_to_radia
 
 # =============================================================================
 # Parameters (matching cube_uniform_field/linear benchmarks)
@@ -123,7 +123,7 @@ def create_hexa_solution(test_points):
         [-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
         [-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
     ]
-    cube = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+    cube = rad.ObjHexahedron(vertices, [0, 0, 0])
 
     # Subdivide into hexahedra
     rad.ObjDivMag(cube, [HEXA_NDIV, HEXA_NDIV, HEXA_NDIV])
@@ -248,7 +248,7 @@ def create_tetra_solution(test_points):
             B_values.append([np.nan, np.nan, np.nan])
 
     return {
-        'method': 'tetrahedral (Netgen + ObjPolyhdr)',
+        'method': 'tetrahedral (Netgen + ObjTetrahedron)',
         'n_elements': n_elements,
         'maxh': TETRA_MAXH,
         't_solve': t_solve,

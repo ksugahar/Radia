@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Simple test to verify B→H conversion in rad.ObjBckgCF()
+Simple test to verify B→H conversion in rad.ObjBckg()
 
 Tests that quadrupole background field defined in Tesla is correctly
 converted to H field internally.
@@ -14,10 +14,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import numpy as np
 import radia as rd
-from netgen_mesh_import import HEX_FACES
 
 print("=" * 70)
-print("ObjBckgCF B→H Conversion Test")
+print("ObjBckg B→H Conversion Test")
 print("=" * 70)
 
 # Parameters
@@ -31,14 +30,14 @@ print(f"  Relative permeability: {mu_r}")
 print(f"  Magnetic susceptibility: {chi}")
 
 # ============================================================================
-# Test 1: Create quadrupole background field using ObjBckgCF
+# Test 1: Create quadrupole background field using ObjBckg
 # ============================================================================
 
-print(f"\n[Test 1] Quadrupole Background Field (ObjBckgCF)")
+print(f"\n[Test 1] Quadrupole Background Field (ObjBckg)")
 print("-" * 70)
 
 def quadrupole_field_callback(gradient):
-	"""Create quadrupole field callback for rd.ObjBckgCF
+	"""Create quadrupole field callback for rd.ObjBckg
 
 	Returns B in Tesla
 	"""
@@ -61,8 +60,8 @@ def quadrupole_field_callback(gradient):
 	return field
 
 quad_field = quadrupole_field_callback(gradient)
-bckg_cf = rd.ObjBckgCF(quad_field)
-print(f"  ObjBckgCF created with quadrupole field")
+bckg_cf = rd.ObjBckg(quad_field)
+print(f"  ObjBckg created with quadrupole field")
 
 # ============================================================================
 # Test 2: Create simple cubic element
@@ -79,7 +78,7 @@ vertices = [
 	[-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
 	[-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
 ]
-cube = rd.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+cube = rd.ObjHexahedron(vertices, [0, 0, 0])
 # Use MatSatIsoFrm for isotropic saturable material
 # For soft iron-like material with high permeability
 mat = rd.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
@@ -88,7 +87,7 @@ print(f"  Created {size}x{size}x{size} mm cube with mu_r={mu_r}")
 
 # Create container with cube and background field
 container = rd.ObjCnt([cube, bckg_cf])
-print(f"  Container created with cube + ObjBckgCF")
+print(f"  Container created with cube + ObjBckg")
 
 # ============================================================================
 # Test 3: Solve and verify field
@@ -193,7 +192,7 @@ print("\n" + "=" * 70)
 print("Summary")
 print("=" * 70)
 
-print(f"\n1. ObjBckgCF callback returns B in Tesla")
+print(f"\n1. ObjBckg callback returns B in Tesla")
 print(f"2. Internal conversion: H = B / mu_0 = B x 795774.715459")
 print(f"3. B/H ratio matches mu_0 within numerical precision")
 print(f"4. Background field correctly applied via callback")

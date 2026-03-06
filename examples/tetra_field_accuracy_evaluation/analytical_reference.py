@@ -43,7 +43,7 @@ except ImportError as e:
     NGSOLVE_AVAILABLE = False
     sys.exit(1)
 
-from netgen_mesh_import import netgen_mesh_to_radia, TETRA_FACES, HEX_FACES
+from netgen_mesh_import import netgen_mesh_to_radia
 
 # =============================================================================
 # Parameters
@@ -106,7 +106,7 @@ def compute_hexa_solution(test_points):
         [-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
         [-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
     ]
-    cube = rad.ObjPolyhdr(vertices, HEX_FACES, MAGNETIZATION)
+    cube = rad.ObjHexahedron(vertices, MAGNETIZATION)
 
     # Subdivide into hexahedra
     rad.ObjDivMag(cube, [HEXA_NDIV, HEXA_NDIV, HEXA_NDIV])
@@ -132,7 +132,7 @@ def compute_hexa_solution(test_points):
 
 def compute_tetra_solution(test_points):
     """
-    Compute B field using Radia tetrahedral (ObjPolyhdr) method.
+    Compute B field using Radia tetrahedral (ObjTetrahedron) method.
     Uses Netgen for mesh generation with uniform magnetization.
     """
     rad.UtiDelAll()
@@ -168,7 +168,7 @@ def compute_tetra_solution(test_points):
             B_values.append([np.nan, np.nan, np.nan])
 
     return {
-        'method': 'tetrahedral (ObjPolyhdr MSC)',
+        'method': 'tetrahedral (ObjTetrahedron MSC)',
         'n_elements': n_elements,
         'maxh': TETRA_MAXH,
         'B_values': B_values

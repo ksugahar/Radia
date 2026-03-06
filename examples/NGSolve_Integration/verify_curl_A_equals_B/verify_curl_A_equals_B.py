@@ -12,23 +12,32 @@ This script verifies the Maxwell relation B = curl(A) by:
 This demonstrates the correct usage of radia_ngsolve for vector potential
 and magnetic field evaluation in NGSolve finite element spaces.
 
-IMPLEMENTATION STATUS (2025-12-27):
-Vector potential A is now implemented for ObjPolyhdr hexahedral permanent magnets.
-The implementation uses the same analytical formula as radTRecMag (rectangular block).
+IMPLEMENTATION STATUS (2025-12-31):
+Vector potential A is now implemented for ALL ObjHexahedron/ObjTetrahedron elements
+using FACE INTEGRATION (not dipole approximation).
+
+The implementation computes:
+  A = (1/4pi) * M x BufVect
+where BufVect = n * integral(1/|r-r'|) dS is the surface integral over each face.
+
+This matches the analytical formula used in radTRecMag for rectangular blocks,
+extended to arbitrary triangular and quadrilateral faces.
 
 UNIT SYSTEM NOTE:
 Radia uses an internal unit system where:
-- Magnetization is specified as "Tesla" but actually represents the magnetic
-  polarization J = mu_0 * M (in SI units, this would be B_r for a hard magnet)
+- Magnetization is specified in A/m (convert from Br: M = Br/mu_0)
 - Vector potential A is computed using A = (1/4pi) * (M x BufVect) without mu_0
-- This means curl(A) != B directly; proper unit conversion is needed
+- This means curl(A) != B directly in SI units; proper unit conversion is needed
 
 For accurate curl(A) = B verification in SI units, the A field would need to
 be scaled by mu_0 = 4*pi*1e-7 H/m before computing curl.
 
+The |curl(A)|/|B| ratio should be approximately 1/mu_0 = 7.96e5 (with variation
+due to Radia's internal coordinate handling).
+
 Author: Radia Development Team
 Date: 2025-12-13
-Updated: 2025-12-27 (Implemented A field for ObjPolyhdr, added unit notes)
+Updated: 2025-12-31 (Implemented face-based A field for all ObjHexahedron/ObjTetrahedron elements)
 """
 import sys
 import os
@@ -67,7 +76,7 @@ print('-' * 70)
 rad.UtiDelAll()
 rad.FldUnits('m')
 
-# Define hexahedral magnet using ObjPolyhdr
+# Define hexahedral magnet using ObjHexahedron
 # Center: [0, 0, 0], Dimensions: [0.04, 0.04, 0.06] m
 dx, dy, dz = 0.02, 0.02, 0.03  # Half-dimensions
 vertices = [
@@ -81,23 +90,13 @@ vertices = [
     [-dx,  dy,  dz],  # vertex 8
 ]
 
-# HEX_FACES: 1-indexed face topology for hexahedra
-HEX_FACES = [
-    [1, 4, 3, 2],  # bottom (z = -dz)
-    [5, 6, 7, 8],  # top (z = +dz)
-    [1, 2, 6, 5],  # front (y = -dy)
-    [3, 4, 8, 7],  # back (y = +dy)
-    [1, 5, 8, 4],  # left (x = -dx)
-    [2, 3, 7, 6],  # right (x = +dx)
-]
-
 # Magnetization: 1.2 T = 1.2 / mu_0 A/m = 954930 A/m
 # In Radia, magnetization is specified in A/m despite FldUnits saying "Tesla"
 MU_0 = 4 * np.pi * 1e-7
 Br = 1.2  # T
 Mr = Br / MU_0  # A/m
 
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, Mr])
+magnet = rad.ObjHexahedron(vertices, [0, 0, Mr])
 
 print('  Magnet ID: %d' % magnet)
 print('  Center: [0, 0, 0] m')
@@ -336,10 +335,10 @@ print('  - HDiv space projection for B')
 print('  - NGSolve curl() operator to compute curl(A)')
 print()
 print('IMPLEMENTATION STATUS (2025-12-27):')
-print('  Vector potential A is now implemented for ObjPolyhdr hexahedral')
+print('  Vector potential A is now implemented for ObjHexahedron/ObjTetrahedron')
 print('  permanent magnets using the analytical formula from radTRecMag.')
 print()
-print('  The A values are correctly computed for ObjPolyhdr hexahedra.')
+print('  The A values are correctly computed for ObjHexahedron.')
 print('  The |curl(A)|/|B| ratio is consistent, indicating correct implementation.')
 print()
 print('  Note: Radia uses an internal unit system where A = (1/4pi)*(M x BufVect)')

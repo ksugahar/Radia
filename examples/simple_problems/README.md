@@ -32,7 +32,8 @@ python cubic_polyhedron_magnet.py
 
 **Key Functions:**
 - `rad.ObjArcCur()` - Create arc current element
-- `rad.ObjPolyhdr()` - Create polyhedron (hexahedron, tetrahedron, etc.)
+- `rad.ObjHexahedron()` - Create hexahedron (8 vertices)
+- `rad.ObjTetrahedron()` - Create tetrahedron (4 vertices)
 - `rad.MatLin([mu_r_par, mu_r_perp], [mx,my,mz])` - Define anisotropic linear material
 - `rad.MatApl(obj, mat)` - Apply material to object
 - `rad.Fld(obj, 'b', [x,y,z])` - Calculate magnetic field
@@ -53,11 +54,11 @@ python cubic_polyhedron_magnet.py
 - `rad.ObjMltExtRtg()` - Create multiple extrusion rectangle
 
 ### cubic_polyhedron_magnet.py
-- Creates polyhedron from vertices and faces
+- Creates hexahedron from 8 vertices
 - Cube example
 
 **Key Functions:**
-- `rad.ObjPolyhdr()` - Create polyhedron
+- `rad.ObjHexahedron()` - Create hexahedron (auto-generates faces)
 
 ## Radia Python API Basics
 
@@ -68,11 +69,14 @@ python cubic_polyhedron_magnet.py
 
 2. **Create objects**
    ```python
-   # Hexahedral magnet using ObjPolyhdr
-   HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+   # Hexahedral magnet using ObjHexahedron (faces auto-generated)
    vertices = [[-5,-5,-5], [5,-5,-5], [5,5,-5], [-5,5,-5],
                [-5,-5,5], [5,-5,5], [5,5,5], [-5,5,5]]
-   mag = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.0])  # magnetization [0,0,1.0] T
+   mag = rad.ObjHexahedron(vertices, [0, 0, 1.0])  # magnetization [0,0,1.0] T
+
+   # Tetrahedral magnet using ObjTetrahedron (faces auto-generated)
+   tetra_vertices = [[0,0,0], [1,0,0], [0.5,0.866,0], [0.5,0.289,0.816]]
+   tetra = rad.ObjTetrahedron(tetra_vertices, [0, 0, 1.0])
 
    # Arc current: center, [rmin,rmax], [phimin,phimax], height, segments, current
    arc = rad.ObjArcCur([0,0,0], [100,150], [0, 6.28], 20, 20, 10)

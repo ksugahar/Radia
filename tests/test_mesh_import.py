@@ -3,14 +3,14 @@
 test_mesh_import.py - Test mesh import functionality for tetrahedral and hexahedral elements
 
 This test verifies:
-1. Tetrahedral elements from Netgen mesh (ObjPolyhdr with TETRA_FACES)
-2. Hexahedral elements via ObjPolyhdr (general polyhedron MSC)
+1. Tetrahedral elements from Netgen mesh (ObjTetrahedron)
+2. Hexahedral elements (ObjHexahedron)
 
 The tests verify that mesh import methods produce correct results.
 
 Author: Radia Development Team
 Created: 2025-12-05
-Updated: 2025-12-19 - Removed ObjRecMag references
+Updated: 2025-12-30 - Use ObjTetrahedron and ObjHexahedron APIs
 """
 
 import sys
@@ -24,8 +24,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
 
 import radia as rad
 
-# Import face topologies and mesh utilities
-from netgen_mesh_import import TETRA_FACES, HEX_FACES, extract_elements
+# Import mesh utilities
+from netgen_mesh_import import extract_elements
 
 # Try to import Netgen and NGSolve
 try:
@@ -182,7 +182,7 @@ class TestNetgenMeshImport(unittest.TestCase):
         polyhedra = []
         for tet_indices in tets:
             tet_verts = [nodes[i] for i in tet_indices]
-            obj = rad.ObjPolyhdr(tet_verts, TETRA_FACES, magnetization)
+            obj = rad.ObjTetrahedron(tet_verts, magnetization)
             polyhedra.append(obj)
 
         container = rad.ObjCnt(polyhedra)
@@ -215,7 +215,7 @@ class TestNetgenMeshImport(unittest.TestCase):
             polyhedra = []
             for tet_indices in tets:
                 tet_verts = [nodes[i] for i in tet_indices]
-                obj = rad.ObjPolyhdr(tet_verts, TETRA_FACES, magnetization)
+                obj = rad.ObjTetrahedron(tet_verts, magnetization)
                 polyhedra.append(obj)
 
             container = rad.ObjCnt(polyhedra)
@@ -236,18 +236,18 @@ class TestNetgenMeshImport(unittest.TestCase):
 
 
 class TestHexMeshImport(unittest.TestCase):
-    """Test hexahedral mesh import via ObjPolyhdr."""
+    """Test hexahedral mesh import via ObjHexahedron."""
 
     def setUp(self):
         rad.FldUnits('m')
         rad.UtiDelAll()
 
     def test_single_hexahedron_field(self):
-        """Test field from single ObjPolyhdr hexahedron."""
+        """Test field from single ObjHexahedron."""
 
         magnetization = [0.0, 0.0, 1.0e6]  # 1 MA/m in z
 
-        # ObjPolyhdr with HEX_FACES (MSC)
+        # ObjHexahedron (MSC)
         rad.UtiDelAll()
         vertices = [
             [0.0, 0.0, 0.0],  # 0
@@ -259,7 +259,7 @@ class TestHexMeshImport(unittest.TestCase):
             [1.0, 1.0, 1.0],  # 6
             [0.0, 1.0, 1.0],  # 7
         ]
-        hex_polyhdr = rad.ObjPolyhdr(vertices, HEX_FACES, magnetization)
+        hex_polyhdr = rad.ObjHexahedron(vertices, magnetization)
 
         # Test field at points
         test_points = [
@@ -269,7 +269,7 @@ class TestHexMeshImport(unittest.TestCase):
             [0.5, 2.0, 0.5],   # +y
         ]
 
-        print("\nObjPolyhdr hexahedron field test:")
+        print("\nObjHexahedron field test:")
         print(f"{'Point':^25} | {'Bz':^15}")
         print("-" * 45)
 
@@ -297,7 +297,7 @@ class TestHexMeshImport(unittest.TestCase):
         polyhedra = []
         for hex_indices in hexahedra:
             hex_verts = [nodes[i] for i in hex_indices]
-            obj = rad.ObjPolyhdr(hex_verts, HEX_FACES, magnetization)
+            obj = rad.ObjHexahedron(hex_verts, magnetization)
             polyhedra.append(obj)
 
         container = rad.ObjCnt(polyhedra)
@@ -307,7 +307,7 @@ class TestHexMeshImport(unittest.TestCase):
 
         N_zz = -H[2] / magnetization[2]
 
-        print(f"\nHexahedral mesh (ObjPolyhdr) demagnetization test:")
+        print(f"\nHexahedral mesh (ObjHexahedron) demagnetization test:")
         print(f"  N divisions: {n_div} (total {len(hexahedra)} hexahedra)")
         print(f"  H at center: {H}")
         print(f"  N_zz computed: {N_zz:.6f}")
@@ -339,7 +339,7 @@ class TestMeshImportSolver(unittest.TestCase):
         polyhedra = []
         for tet_indices in tets:
             tet_verts = [nodes[i] for i in tet_indices]
-            obj = rad.ObjPolyhdr(tet_verts, TETRA_FACES, [0, 0, 0])  # Zero initial M
+            obj = rad.ObjTetrahedron(tet_verts, [0, 0, 0])  # Zero initial M
             polyhedra.append(obj)
 
         container = rad.ObjCnt(polyhedra)
@@ -351,7 +351,7 @@ class TestMeshImportSolver(unittest.TestCase):
         # External field
         H_ext = 1000.0  # A/m
         B_ext = MU_0 * H_ext
-        ext_field = rad.ObjBckg([0, 0, B_ext])
+        ext_field = rad.ObjBckg(lambda p: [0, 0, B_ext])
         grp = rad.ObjCnt([container, ext_field])
 
         # Solve
@@ -370,8 +370,8 @@ class TestMeshImportSolver(unittest.TestCase):
         # M should be positive (induced by external field)
         self.assertGreater(M_avg_z, 0, "Magnetization should be positive")
 
-    def test_hex_mesh_polyhdr_solver(self):
-        """Test ObjPolyhdr hex mesh with solver."""
+    def test_hex_mesh_solver(self):
+        """Test ObjHexahedron mesh with solver."""
 
         center = [0.0, 0.0, 0.0]
         size = [1.0, 1.0, 1.0]
@@ -380,34 +380,34 @@ class TestMeshImportSolver(unittest.TestCase):
         H_ext = 1000.0  # A/m
         B_ext = MU_0 * H_ext
 
-        # ObjPolyhdr mesh
+        # ObjHexahedron mesh
         rad.UtiDelAll()
         nodes, hexahedra = create_cube_hex_mesh(center, size, n_div)
 
         polyhedra = []
         for hex_indices in hexahedra:
             hex_verts = [nodes[i] for i in hex_indices]
-            obj = rad.ObjPolyhdr(hex_verts, HEX_FACES, [0, 0, 0])
+            obj = rad.ObjHexahedron(hex_verts, [0, 0, 0])
             polyhedra.append(obj)
 
-        cube_polyhdr = rad.ObjCnt(polyhedra)
+        cube_hex = rad.ObjCnt(polyhedra)
         mat = rad.MatLin(mu_r - 1)
-        rad.MatApl(cube_polyhdr, mat)
-        ext = rad.ObjBckg([0, 0, B_ext])
-        grp_polyhdr = rad.ObjCnt([cube_polyhdr, ext])
+        rad.MatApl(cube_hex, mat)
+        ext = rad.ObjBckg(lambda p: [0, 0, B_ext])
+        grp_hex = rad.ObjCnt([cube_hex, ext])
 
-        result_polyhdr = rad.Solve(grp_polyhdr, 0.001, 100, 1)
-        M_polyhdr = rad.ObjM(cube_polyhdr)
-        M_avg_polyhdr = np.mean([m[1][2] for m in M_polyhdr])
+        result_hex = rad.Solve(grp_hex, 0.001, 100, 1)
+        M_hex = rad.ObjM(cube_hex)
+        M_avg_hex = np.mean([m[1][2] for m in M_hex])
 
-        print(f"\nObjPolyhdr hex mesh solver test:")
+        print(f"\nObjHexahedron mesh solver test:")
         print(f"  N: {n_div} ({n_div**3} elements)")
         print(f"  mu_r: {mu_r}")
         print(f"  H_ext: {H_ext} A/m")
-        print(f"  M_avg_z: {M_avg_polyhdr:.0f} A/m")
+        print(f"  M_avg_z: {M_avg_hex:.0f} A/m")
 
         # M should be positive (induced by external field)
-        self.assertGreater(M_avg_polyhdr, 0, "Magnetization should be positive")
+        self.assertGreater(M_avg_hex, 0, "Magnetization should be positive")
 
 
 class TestMethodComparison(unittest.TestCase):
@@ -432,7 +432,7 @@ class TestMethodComparison(unittest.TestCase):
         print(f"  Theoretical N_zz: {N_theoretical:.6f}")
         print()
 
-        # Hexahedral mesh (ObjPolyhdr)
+        # Hexahedral mesh (ObjHexahedron)
         hex_results = []
         for n_div in [2, 3, 4]:
             rad.UtiDelAll()
@@ -440,7 +440,7 @@ class TestMethodComparison(unittest.TestCase):
             hex_objs = []
             for hex_idx in hexs:
                 hex_verts = [nodes[i] for i in hex_idx]
-                obj = rad.ObjPolyhdr(hex_verts, HEX_FACES, magnetization)
+                obj = rad.ObjHexahedron(hex_verts, magnetization)
                 hex_objs.append(obj)
             cube_hex = rad.ObjCnt(hex_objs)
             H_hex = rad.Fld(cube_hex, 'h', center)
@@ -462,7 +462,7 @@ class TestMethodComparison(unittest.TestCase):
             tet_objs = []
             for tet_idx in tets:
                 tet_verts = [nodes[i] for i in tet_idx]
-                obj = rad.ObjPolyhdr(tet_verts, TETRA_FACES, magnetization)
+                obj = rad.ObjTetrahedron(tet_verts, magnetization)
                 tet_objs.append(obj)
             cube_tet = rad.ObjCnt(tet_objs)
             H_tet = rad.Fld(cube_tet, 'h', center)
@@ -477,7 +477,7 @@ class TestMethodComparison(unittest.TestCase):
             })
 
         # Print comparison table - Hexahedral
-        print("Hexahedral mesh (ObjPolyhdr):")
+        print("Hexahedral mesh (ObjHexahedron):")
         print(f"{'N':^5} | {'#Hex':^6} | {'N_hex':^10} | {'Err%':^10}")
         print("-" * 40)
         for r in hex_results:
@@ -501,7 +501,7 @@ if __name__ == '__main__':
     print("=" * 70)
     print()
     print("Testing tetrahedral and hexahedral mesh import functionality")
-    print("Using ObjPolyhdr (MSC) for all polyhedral elements")
+    print("Using ObjTetrahedron and ObjHexahedron APIs")
     print()
 
     unittest.main(verbosity=2)

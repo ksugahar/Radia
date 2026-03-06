@@ -83,6 +83,10 @@ if(WIN32)
 	endif()
 endif()
 
+# Option to enable ExaFMM acceleration for fast dipole field computation
+# ExaFMM-t is a pure C++ FMM library (no Fortran dependency)
+option(RADIA_ENABLE_EXAFMM "Enable ExaFMM library for fast field computation" ON)
+
 # Radia core sources (organized by API functionality)
 set(RADIA_CORE_SOURCES
 	# API-organized files (new naming convention)
@@ -91,9 +95,13 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_transform_impl.cpp        # Transformations (TrfTrsl, TrfRot, etc.)
 	${CORE_DIR}/rad_field_compute.cpp         # Field computation (Fld, FldLst, FldEnr, etc.)
 	${CORE_DIR}/rad_obj_subdivision.cpp       # Subdivision (ObjDivMag, multi-generation extrusion)
+	${CORE_DIR}/rad_exafmm.cpp                # ExaFMM wrapper for fast multipole acceleration
+	${CORE_DIR}/rad_point_classify.cpp        # Point classification for FMM near/far
+	${CORE_DIR}/rad_dipole_collect.cpp        # Collect dipoles from Radia for FMM
 
 	# Geometry files (descriptive names)
 	${CORE_DIR}/rad_arc_current.cpp           # Arc with azimuthal current
+	${CORE_DIR}/rad_elliptic_integral.cpp     # Elliptic integrals for coil field
 	${CORE_DIR}/rad_coefficient_field.cpp     # CoefficientFunction-based field source
 	${CORE_DIR}/rad_type_cast.cpp             # Dynamic type casting
 	${CORE_DIR}/rad_extruded_polygon.cpp      # Extruded polygon (prism)
@@ -190,6 +198,7 @@ target_include_directories(radia_ngsolve PRIVATE
 	${EXT_DIR}/genmath
 	${EXT_DIR}/triangle
 	${EXT_DIR}/HACApK
+	${CMAKE_CURRENT_SOURCE_DIR}/external/exafmm-t/include
 	${PYTHON_DIR}
 )
 
@@ -204,6 +213,7 @@ target_compile_definitions(radia_ngsolve PRIVATE
 	RADIA_USE_HACAPK
 	HACAPK_RADIA_LOGGING
 	RADIA_MSC_SUPPORT
+	$<$<BOOL:${RADIA_ENABLE_EXAFMM}>:RADIA_USE_EXAFMM>
 	$<$<CONFIG:Debug>:_DEBUG>
 	$<$<CONFIG:Release>:NDEBUG>
 	$<$<PLATFORM_ID:Windows>:WIN32>
@@ -264,6 +274,11 @@ if(WIN32 AND USE_MKL_FOUND)
 	target_include_directories(radia_ngsolve PRIVATE ${BLAS_INCLUDE_DIR})
 	target_compile_definitions(radia_ngsolve PRIVATE HAVE_LAPACK)
 	message(STATUS "Using Intel MKL for radia_ngsolve: ${BLAS_LIB}")
+endif()
+
+# ExaFMM is header-only, no library linking needed
+if(RADIA_ENABLE_EXAFMM)
+	message(STATUS "ExaFMM enabled for radia_ngsolve (header-only library)")
 endif()
 
 # Link Windows system libraries
@@ -374,6 +389,7 @@ target_include_directories(radia PRIVATE
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
 	${EXT_DIR}/HACApK
+	${CMAKE_CURRENT_SOURCE_DIR}/external/exafmm-t/include
 	${FFTW_DIR}
 )
 
@@ -386,6 +402,7 @@ target_compile_definitions(radia PRIVATE
 	RADIA_USE_HACAPK
 	HACAPK_RADIA_LOGGING
 	RADIA_MSC_SUPPORT
+	$<$<BOOL:${RADIA_ENABLE_EXAFMM}>:RADIA_USE_EXAFMM>
 )
 
 # FFTW library - platform-specific detection (same as radia_ngsolve)
@@ -427,6 +444,11 @@ if(WIN32 AND USE_MKL_FOUND)
 	target_include_directories(radia PRIVATE ${BLAS_INCLUDE_DIR})
 	target_compile_definitions(radia PRIVATE HAVE_LAPACK)
 	message(STATUS "Using Intel MKL for radia: ${BLAS_LIB}")
+endif()
+
+# ExaFMM is header-only, no library linking needed
+if(RADIA_ENABLE_EXAFMM)
+	message(STATUS "ExaFMM enabled for radia (header-only library)")
 endif()
 
 # Link Windows system libraries

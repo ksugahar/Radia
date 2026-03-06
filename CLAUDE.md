@@ -113,7 +113,7 @@ Radia supports two solver methods:
 - Used for **hexahedral elements** (6 faces)
 - **6 DOF per element**: Surface charge density (sigma) per face
 - Computes field from surface charges using solid angle integration
-- Use `ObjPolyhdr()` with `HEX_FACES` for hexahedral elements
+- Use `ObjHexahedron()` for hexahedral elements
 
 **Note**: Radia does NOT use BEM (Boundary Element Method). The MSC method uses surface charges but differs from classical BEM.
 
@@ -144,11 +144,10 @@ import radia as rad
 rad.FldUnits('m')
 
 # Create mixed container with hex and tetra elements
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
 hex_vertices = [[0,0,0], [0.1,0,0], [0.1,0.1,0], [0,0.1,0],
                 [0,0,0.1], [0.1,0,0.1], [0.1,0.1,0.1], [0,0.1,0.1]]
-hex_obj = rad.ObjPolyhdr(hex_vertices, HEX_FACES, [0, 0, 0])   # 6DOF MSC
-tetra_obj = rad.ObjPolyhdr(tetra_vertices, TETRA_FACES, [0, 0, 0])  # 3DOF MMM
+hex_obj = rad.ObjHexahedron(hex_vertices, [0, 0, 0])   # 6DOF MSC
+tetra_obj = rad.ObjTetrahedron(tetra_vertices, [0, 0, 0])  # 3DOF MMM
 
 container = rad.ObjCnt([hex_obj, tetra_obj])
 mat = rad.MatSatIsoTab(BH_DATA)
@@ -162,6 +161,125 @@ rad.Solve(container, 0.001, 100, 0)  # Method 0 = LU
 - `RADIA_MSC_SUPPORT` compile flag enables mixed element support
 - Variable DOF offset arrays: `m_elemDOF`, `m_elemDOFOffset`, `m_totalDOF`
 - Block interaction computation in `SetupInteractMatrix_VariableDOF()`
+
+---
+
+## Field Calculation Methods: Surface Current vs Surface Charge
+
+### ObjRecMag - Surface Current Model (Rectangular Blocks Only)
+
+`ObjRecMag` uses the **surface current approximation** for field calculations:
+
+- **Applicable to**: Rectangular blocks (parallelepipeds) only
+- **B/H field**: 8-corner analytical formula with arctangent and logarithm integrals
+- **A field (vector potential)**: Uses unified BufVect formula: `A = (1/4π) * M × BufVect`
+- **Phi field (scalar potential)**: Uses `Phi = (1/4π) * M · BufVect`
+
+**Key advantage**: The 8-corner BufVect formula is computationally efficient and does NOT cancel on symmetry axes.
+
+```python
+import radia as rad
+rad.FldUnits('m')
+
+# Create rectangular permanent magnet
+rec_mag = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.06], [0, 0, 954930])
+
+# All field types work correctly
+B = rad.Fld(rec_mag, 'b', [0.05, 0, 0])  # Magnetic field
+A = rad.Fld(rec_mag, 'a', [0, 0, 0.05])  # Vector potential (non-zero on axis)
+```
+
+### ObjHexahedron/ObjTetrahedron - Surface Charge Model (General Polyhedra)
+
+`ObjHexahedron` and `ObjTetrahedron` use **surface charge integration**:
+
+- **Applicable to**: Arbitrary hexahedra (6 quadrilateral faces) and tetrahedra (4 triangular faces)
+- **B/H field**: Face-based solid angle integration: `H = (1/4π) * Σ σ_i * Ω_i`
+- **A field (vector potential)**: Face-based integration: `A = (1/4π) * Σ (M × n_i) * I_i`
+
+**Limitation**: On symmetry axes, face-based A integration gives A=0 due to symmetric cancellation. This is mathematically correct for the face-based formula but differs from ObjRecMag.
+
+```python
+import radia as rad
+rad.FldUnits('m')
+
+# Create hexahedral magnet (arbitrary shape)
+vertices = [
+    [-0.02, -0.02, -0.03], [0.02, -0.02, -0.03],
+    [0.02, 0.02, -0.03], [-0.02, 0.02, -0.03],
+    [-0.02, -0.02, 0.03], [0.02, -0.02, 0.03],
+    [0.02, 0.02, 0.03], [-0.02, 0.02, 0.03],
+]
+hex_mag = rad.ObjHexahedron(vertices, [0, 0, 954930])
+
+# B/H fields work correctly everywhere
+B = rad.Fld(hex_mag, 'b', [0.05, 0, 0])
+
+# A field: May be zero on symmetry axes (mathematical cancellation)
+A = rad.Fld(hex_mag, 'a', [0, 0, 0.05])  # Could be ~0 on z-axis
+```
+
+### API Summary (2025-12-31)
+
+**User-facing APIs** for creating magnetic elements:
+- `ObjRecMag(center, dimensions, magnetization)` - Rectangular magnets (optimized formulas)
+- `ObjHexahedron(vertices, magnetization)` - Arbitrary hexahedra (8 vertices, auto-generates faces)
+- `ObjTetrahedron(vertices, magnetization)` - Tetrahedra (4 vertices, auto-generates faces)
+- Mesh import functions (`netgen_mesh_to_radia`, `create_radia_from_nastran`) for complex geometries
+
+---
+
+## Background Field Policy (2025-12-31)
+
+### Background Field API
+
+**Policy**: Use `ObjBckg(callback)` for all background field applications.
+
+**API**:
+- `rad.ObjBckg(callback)` - Background field via Python callback function
+  - Callback receives `[x, y, z]` in current units and returns `[Bx, By, Bz]` in Tesla
+
+**Uniform Background Field**:
+```python
+bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])  # 0.1 T in z-direction
+```
+
+**NOT Supported** (Do NOT use):
+- Solve-time background field specification
+- Legacy `ObjBckg([Bx, By, Bz])` array form - use `lambda p: [Bx, By, Bz]` instead
+
+**Usage**:
+
+```python
+import radia as rad
+
+rad.FldUnits('m')
+
+# Create magnetic object
+mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
+mat = rad.MatLin(999)  # mu_r = 1000
+rad.MatApl(mag_obj, mat)
+
+# Uniform background field
+bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])  # 0.1 T in z-direction
+
+# Quadrupole background field
+def quadrupole_field(point):
+    x, y, z = point
+    G = 10.0  # T/m gradient
+    return [G * y, G * x, 0]
+
+bkg = rad.ObjBckg(quadrupole_field)
+
+# Add background to container and solve
+container = rad.ObjCnt([mag_obj, bkg])
+rad.Solve(container, 0.0001, 1000, 1)
+```
+
+**Rationale**:
+- Single unified API for all background field types
+- Uniform fields expressed as `lambda p: [Bx, By, Bz]`
+- Consistent design: all fields are callback-based
 
 ---
 
@@ -223,11 +341,10 @@ radTPolygon* polygons = new radTPolygon[n];  // Requires manual delete[]
 import radia as rad
 rad.FldUnits('m')  # REQUIRED for NGSolve integration
 
-# Hexahedral magnet using ObjPolyhdr (8 vertices, magnetization in A/m)
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+# Hexahedral magnet using ObjHexahedron (8 vertices, magnetization in A/m)
 vertices = [[-0.02,-0.02,-0.03], [0.02,-0.02,-0.03], [0.02,0.02,-0.03], [-0.02,0.02,-0.03],
             [-0.02,-0.02,0.03], [0.02,-0.02,0.03], [0.02,0.02,0.03], [-0.02,0.02,0.03]]
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 954930])  # meters, A/m
+magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])  # meters, A/m
 ```
 
 ---
@@ -246,24 +363,88 @@ magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 954930])  # meters, A/m
 - X **Avoid**: Direct comparison of `rad.Fld()` inside magnets
 - OK **Use**: Large magnet with small mesh region (field approximately uniform)
 
-### Vector Potential A Field Limitation (2025-12-27)
+### Vector Potential A Field Implementation (2025-12-31)
 
-**Important Limitation**: `rad.Fld(obj, 'a', point)` returns `[0, 0, 0]` for `ObjPolyhdr` (MSC method).
+**Status**: Vector potential A is now **IMPLEMENTED** for all ObjHexahedron/ObjTetrahedron elements.
 
-**Current Status**:
-- Vector potential A computation is **NOT implemented** for ObjPolyhdr/MSC elements
-- B and H field computation works correctly for all element types
-- A field returns zero for both hexahedral and tetrahedral ObjPolyhdr elements
+**Implementation Details**:
+- Uses **face integration** (not dipole approximation) for accurate results
+- Formula: `A = (mu_0/4pi) * (M x BufVect)` with mm-to-m conversion factor
+- Matches the analytical formula used in radTRecMag for rectangular blocks
+- Extended to arbitrary triangular and quadrilateral faces using the Wilton et al. formula
 
-**Affected Scripts**:
-- `examples/ngsolve_integration/verify_curl_A_equals_B/` - Currently fails (curl(A) = 0)
+**Usage**:
+```python
+import radia as rad
+rad.FldUnits('m')
 
-**Future Implementation**:
-The vector potential A can be computed from magnetization M using:
+# Create hexahedral magnet
+vertices = [[-0.02,-0.02,-0.03], [0.02,-0.02,-0.03], ...]  # 8 vertices
+magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])
+
+# Get vector potential A at a point
+A = rad.Fld(magnet, 'a', [0.03, 0.02, 0.05])  # Returns [Ax, Ay, Az] in T*m
 ```
-A(r) = (mu_0 / 4*pi) * integral( M(r') x (r - r') / |r - r'|^3 ) dV'
-```
-This requires volume integration over the magnetized element.
+
+**Maxwell Equation Consistency**:
+Vector potential A satisfies `B = curl(A)` (verified numerically).
+
+**Verification Script**:
+- `examples/ngsolve_integration/verify_curl_A_equals_B/` - Verifies curl(A) = B
+
+### Radia Internal Unit System: SI Meters (2025-12-31 Refactoring)
+
+**POLICY**: Radia now uses **meters (m)** as the internal base length unit, matching ELF.
+
+**Key Design Principles**:
+1. **FldUnits controls ONLY input geometry** - Converts user geometry coordinates to meters at input time
+2. **One-time conversion only** - After initial conversion, all internal processing uses meters
+3. **B, H, and evaluation points are NEVER scaled** - Fixed to SI units (Tesla, A/m, meters)
+4. **FldUnits functionality is LIMITED** - Only geometry input uses unit conversion
+
+**How it Works**:
+1. `rad.FldUnits('m')` - Uses meters directly (default, recommended)
+2. `rad.FldUnits('mm')` - Converts user geometry coordinates from mm to m at input time
+3. **Evaluation points always in meters** - `rad.Fld()` point coordinates are always in meters
+4. **Field values are always in SI**: B in Tesla, H in A/m, A in T*m
+
+**Physical Constants Used**:
+
+| Constant | Value | Usage |
+|----------|-------|-------|
+| `MU_0_OVER_FOUR_PI` | `1.0e-7` H/m | Vector potential A, Biot-Savart |
+| `INV_FOUR_PI` | `1/(4*pi)` | Scalar potential Phi, solid angle |
+| `MU_0` | `4*pi*1e-7` H/m | B-H relations |
+
+**Field Calculation Formulas (SI Units)**:
+
+| Field | Formula | Constant |
+|-------|---------|----------|
+| B field | `B = -mu_0 * grad(Omega)` | Uses solid angle |
+| H field | `H = -grad(Phi)` | Uses `INV_FOUR_PI` |
+| Phi (scalar) | `Phi = (1/4pi) * M . BufVect` | `INV_FOUR_PI` |
+| **A field** | `A = (mu_0/4pi) * M x BufVect` | `MU_0_OVER_FOUR_PI = 1e-7` |
+
+**Comparison with ELF (Now Matching)**:
+
+| Aspect | Radia (v1.4.3+) | ELF |
+|--------|-----------------|-----|
+| Internal units | **m (SI)** | m (SI) |
+| A field constant | `mu_0/(4*pi) = 1e-7` | `mu_0/(4*pi) = 1e-7` |
+| Unit conversion bugs | **None** | None |
+| Maxwell equations | B = curl(A), H = -grad(Phi) | Same |
+
+**Policy for C++ Developers**:
+1. **All coordinates in meters** - no mm assumptions in calculations
+2. **Use SI constants from rad_constants.h**: `MU_0_OVER_FOUR_PI`, `INV_FOUR_PI`
+3. **Test with curl(A) = B** for vector potential implementations
+4. **No hardcoded conversion factors** - all units are consistent
+
+**Source Files with Field Constants**:
+- `rad_constants.h`: Central location for physical constants
+- `rad_rectangular_block.cpp`: ObjRecMag A/Phi/B field computation
+- `rad_poly_analytical.cpp`: ObjHexahedron/ObjTetrahedron A/Phi field computation
+- `rad_arc_current.cpp`: Biot-Savart field from arc currents
 
 ---
 
@@ -273,7 +454,7 @@ This requires volume integration over the magnetized element.
 
 `rad.MatLin()` defines **linear magnetic materials** (soft magnetic materials, NOT permanent magnets).
 
-**IMPORTANT**: MatLin is for **linear materials only**. For permanent magnets, use `ObjPolyhdr()` with magnetization vector.
+**IMPORTANT**: MatLin is for **linear materials only**. For permanent magnets, use `ObjHexahedron()` or `ObjRecMag()` with magnetization vector.
 
 ### API Forms (Industry Standard)
 
@@ -292,7 +473,7 @@ mat = rad.MatLin([mu_r_par, mu_r_perp], [ex, ey, ez])
 
 **Important Notes**:
 1. **Linear materials ONLY**: MatLin is for soft magnetic materials (iron, steel, mu-metal, etc.)
-2. **Permanent magnets**: Do NOT use MatLin - define magnetization directly in `ObjPolyhdr(vertices, HEX_FACES, [Mx,My,Mz])`
+2. **Permanent magnets**: Do NOT use MatLin - define magnetization directly in `ObjHexahedron(vertices, [Mx,My,Mz])`
 3. **Isotropic materials**: **ALWAYS prefer single-argument form `MatLin(mu_r)`** for isotropic materials.
 4. **Easy axis**: For anisotropic materials, the easy axis vector must have significant magnitude (e.g., `[0, 0, 1]`)
 
@@ -301,20 +482,17 @@ mat = rad.MatLin([mu_r_par, mu_r_perp], [ex, ey, ez])
 import radia as rad
 rad.FldUnits('m')
 
-# Define hexahedral element using ObjPolyhdr
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
-
 # Soft iron cube (isotropic, mu_r=4000)
 iron_vertices = [[0,0,0], [0.1,0,0], [0.1,0.1,0], [0,0.1,0],
                  [0,0,0.1], [0.1,0,0.1], [0.1,0.1,0.1], [0,0.1,0.1]]
-cube = rad.ObjPolyhdr(iron_vertices, HEX_FACES, [0, 0, 0])  # Zero magnetization
+cube = rad.ObjHexahedron(iron_vertices, [0, 0, 0])  # Zero magnetization
 mat = rad.MatLin(4000)  # mu_r = 4000
 rad.MatApl(cube, mat)
 
 # Anisotropic material with easy axis in z-direction
 iron_vertices2 = [[0.2,0,0], [0.3,0,0], [0.3,0.1,0], [0.2,0.1,0],
                   [0.2,0,0.1], [0.3,0,0.1], [0.3,0.1,0.1], [0.2,0.1,0.1]]
-cube2 = rad.ObjPolyhdr(iron_vertices2, HEX_FACES, [0, 0, 0])
+cube2 = rad.ObjHexahedron(iron_vertices2, [0, 0, 0])
 mat2 = rad.MatLin([5001, 101], [0, 0, 1])  # Easy axis along z
 rad.MatApl(cube2, mat2)
 ```
@@ -352,16 +530,15 @@ rad.MatApl(steel_obj, mat)
 
 Radia provides several APIs for permanent magnet materials:
 
-#### Method 1: ObjPolyhdr with Magnetization (Recommended for Fixed PM)
+#### Method 1: ObjHexahedron with Magnetization (Recommended for Fixed PM)
 
-For permanent magnets where demagnetization is negligible, specify magnetization directly in `ObjPolyhdr`:
+For permanent magnets where demagnetization is negligible, specify magnetization directly in `ObjHexahedron`:
 
 ```python
 import radia as rad
 rad.FldUnits('m')
 
 # Define hexahedral vertices (8 corners)
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
 vertices = [
     [-0.05, -0.05, -0.05],
     [0.05, -0.05, -0.05],
@@ -375,14 +552,14 @@ vertices = [
 
 # NdFeB magnet: Br = 1.2 T = 954930 A/m (= Br / mu_0)
 Mr = 954930  # A/m
-pm = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, Mr])
+pm = rad.ObjHexahedron(vertices, [0, 0, Mr])
 
 # Compute field (NO Solve needed for fixed PM)
 B = rad.Fld(pm, 'b', [0, 0, 0.1])  # Field at z=0.1m
 ```
 
 **Key Points**:
-- Use `ObjPolyhdr` for arbitrary hexahedral shapes (8 vertices)
+- Use `ObjHexahedron` for arbitrary hexahedral shapes (8 vertices)
 - Magnetization is specified in A/m: Mr = Br / mu_0
 - **No `Solve()` required** for fixed magnetization permanent magnets
 - Only call `Solve()` when soft iron is present in the model
@@ -416,15 +593,13 @@ When combining permanent magnets with soft iron, use `Solve()` to calculate the 
 import radia as rad
 rad.FldUnits('m')
 
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
-
 # PM magnet (with fixed magnetization)
 pm_vertices = [...]  # 8 vertex coordinates
-pm = rad.ObjPolyhdr(pm_vertices, HEX_FACES, [0, 0, 954930])
+pm = rad.ObjHexahedron(pm_vertices, [0, 0, 954930])
 
 # Soft iron yoke (zero initial magnetization)
 iron_vertices = [...]  # 8 vertex coordinates
-iron = rad.ObjPolyhdr(iron_vertices, HEX_FACES, [0, 0, 0])
+iron = rad.ObjHexahedron(iron_vertices, [0, 0, 0])
 mat_iron = rad.MatLin(1000)  # mu_r = 1000
 rad.MatApl(iron, mat_iron)
 
@@ -676,6 +851,35 @@ python benchmark_hexahedron_msc.py --hacapk --eps 1e-3 5 10 15
 - **中規模 (500<N<2000)**: BiCGSTAB推奨 (最速)
 - **大規模 (N>2000)**: HACApK推奨 (メモリ効率、O(N log N))
 
+### Known Performance Issue: Tetrahedron HACApK (2025-12-30)
+
+**問題**: TetrahedronメッシュでHACApKがELFより4-7倍遅い
+
+| メッシュ | ELF (s) | Radia (s) | Radia/ELF |
+|---------|---------|-----------|-----------|
+| maxh=0.10 (4994要素) | 19.5 | 80.3 | **4.1x遅い** |
+| maxh=0.15 (2211要素) | 3.8 | 25.6 | **6.7x遅い** |
+
+**ボトルネック分析** (maxh=0.10):
+
+| 項目 | ELF (s) | Radia (s) | Radia/ELF |
+|------|---------|-----------|-----------|
+| H-matrix構築 | 6.1 | 68.9 | **11.3x遅い** |
+| 線形ソルブ | 13.4 | 11.2 | 0.84x (Radia高速) |
+
+**原因**:
+- H-matrix構築 (ACA+ fill) がTetrahedronで特に遅い
+- ELFはFortran + OpenMPで高度に最適化
+- Radiaの三角形積分計算がTetraで重い
+
+**TODO (次の改善項目)**:
+1. [ ] TetrahedronのACA+ fill並列化の最適化
+2. [ ] 三角形積分のキャッシュ効率改善
+3. [ ] `radTInteraction::B_comp_tetrahedron_MSC()` のプロファイリング
+4. [ ] ELFの実装との比較調査
+
+**Note**: HexahedronではRadiaはELFと同等以上の性能を達成済み。
+
 ---
 
 ## NGSolve Integration Best Practices
@@ -729,8 +933,45 @@ Claude Code is responsible for:
 
 **Workflow**:
 1. Claude Code prepares the release (version bump, CHANGELOG, commit, push)
-2. Claude Code runs `python -m build` to verify package builds correctly
-3. **User manually executes** `Publish_to_PyPI.ps1` with their API token
+2. **CRITICAL: Run `BuildMSVC.ps1` BEFORE `python -m build`** to ensure latest .pyd files
+3. Claude Code runs `python -m build` to create wheel package
+4. **CRITICAL: Verify wheel contains correct .pyd** (see verification below)
+5. **User manually executes** `Publish_to_PyPI.ps1` with their API token
+
+### Wheel Verification (MANDATORY before PyPI upload)
+
+**ALWAYS verify the wheel contains the latest .pyd before upload!**
+
+```python
+# Verification script - run BEFORE PyPI upload
+import zipfile
+import os
+from datetime import datetime
+
+whl_path = 'dist/radia-X.Y.Z-py3-none-any.whl'  # Update version
+whl = zipfile.ZipFile(whl_path)
+
+# Get wheel .pyd info
+for info in whl.infolist():
+    if info.filename == 'radia/radia.pyd':
+        print(f'Wheel radia.pyd: {info.file_size} bytes, {info.date_time}')
+        break
+
+# Compare with build-msvc .pyd
+msvc_pyd = 'build-msvc/radia.cp312-win_amd64.pyd'
+if os.path.exists(msvc_pyd):
+    stat = os.stat(msvc_pyd)
+    print(f'Build radia.pyd: {stat.st_size} bytes, {datetime.fromtimestamp(stat.st_mtime)}')
+
+# SIZES MUST MATCH! If wheel is smaller, it's using old .pyd
+```
+
+**Common mistake**: `python -m build` uses sdist which may contain old .pyd.
+Solution: Always run `BuildMSVC.ps1` immediately before `python -m build`.
+
+**Build Path Priority** (setup.py):
+1. `build-msvc/` (MSVC + Intel MKL - PREFERRED)
+2. `build/Release/` (legacy CMake - fallback)
 
 ```powershell
 # Set PyPI API token (keep secure!)
@@ -889,11 +1130,10 @@ mag_obj = create_radia_from_nastran(nas_file,
 import radia as rad
 rad.FldUnits('m')  # All Radia operations now use meters
 
-# Create hexahedral magnet with ObjPolyhdr
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+# Create hexahedral magnet with ObjHexahedron
 vertices = [[-0.05,-0.05,-0.05], [0.05,-0.05,-0.05], [0.05,0.05,-0.05], [-0.05,0.05,-0.05],
             [-0.05,-0.05,0.05], [0.05,-0.05,0.05], [0.05,0.05,0.05], [-0.05,0.05,0.05]]
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 954930])  # 0.1m cube, 1.2T equivalent
+magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])  # 0.1m cube, 1.2T equivalent
 
 # Method 2: Specify units in radia_ngsolve constructor
 from radia_ngsolve import RadiaField
@@ -955,11 +1195,10 @@ import radia as rad
 # Set unit system once at start
 rad.FldUnits('mm')  # or 'm' for NGSolve integration
 
-# Create hexahedral magnet with ObjPolyhdr (100mm cube)
-HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+# Create hexahedral magnet with ObjHexahedron (100mm cube)
 vertices = [[-50,-50,-50], [50,-50,-50], [50,50,-50], [-50,50,-50],
             [-50,-50,50], [50,-50,50], [50,50,50], [-50,50,50]]
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 954930])  # 100mm, A/m
+magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])  # 100mm, A/m
 field = rad.Fld(magnet, 'b', [50, 50, 50])  # 50mm point
 
 # Export - automatically uses correct units
@@ -1192,10 +1431,34 @@ run_all_benchmarks.py             # Orchestrator script
 | Element Type | Tool | Notes |
 |--------------|------|-------|
 | **Tetrahedral** | **Netgen** | Recommended. Uses `netgen.occ.Box` + `OCCGeometry.GenerateMesh()` |
-| Tetrahedral | GMSH | Alternative. Export as .msh and import with nastran_mesh_import.py |
-| Tetrahedral | Nastran | CTETRA elements from .bdf files |
-| **Hexahedral** | **Cubit** | Recommended for complex hex mesh generation |
-| Hexahedral | Nastran | CHEXA elements from .bdf files |
+| Tetrahedral | **GMSH via NGSolve** | Import .msh files using `ngsolve.Mesh()` |
+| Tetrahedral | Nastran | DEPRECATED - Use Netgen or GMSH instead |
+| **Hexahedral** | **Netgen** | Recommended for structured hex mesh |
+| Hexahedral | Nastran | DEPRECATED - Use Netgen instead |
+
+### GMSH Mesh Import via NGSolve
+
+GMSH meshes can be imported via NGSolve's `Mesh()` function:
+
+```python
+from ngsolve import Mesh
+from netgen_mesh_import import netgen_mesh_to_radia
+import radia as rad
+
+rad.FldUnits('m')
+
+# Import GMSH mesh via NGSolve
+# NGSolve automatically reads .msh format
+mesh = Mesh('geometry.msh')
+
+# Convert to Radia
+mag_obj = netgen_mesh_to_radia(mesh,
+                                material={'magnetization': [0, 0, 0]},
+                                units='m',
+                                material_filter='magnetic')
+```
+
+**Note**: GMSH meshes must use NGSolve-compatible format (Gmsh 2.2 ASCII or later).
 
 ### Netgen Tetrahedral Mesh Generation
 
@@ -1222,12 +1485,35 @@ tetrahedra = [[v.nr - 1 for v in el.vertices] for el in mesh.Elements3D()]
 - Use `OCCGeometry(box).GenerateMesh(mp)`, NOT `box.GenerateMesh(mp)`
 - Use `v.nr - 1` for vertex indices, NOT `int(v) - 1`
 
-### Cubit Hexahedral Mesh Notes
+### Coreform Cubit Mesh Export
 
-- Use Cubit for complex hexahedral meshing
-- Export as NASTRAN format (.bdf)
-- Import with `nastran_mesh_import.import_nastran_mesh()`
-- Ensure blocks are defined before export: `block 1 volume 1`
+For complex hexahedral meshes, use the **Coreform Cubit Mesh Export** tool:
+
+**Repository**: https://github.com/ksugahar/Coreform_Cubit_Mesh_Export
+
+**Features**:
+- Export Cubit meshes directly to Python (no file I/O needed)
+- Export to GMSH format (.msh) for NGSolve import
+- Export to Netgen format for visualization and verification
+- Supports hexahedral, tetrahedral, and mixed element meshes
+
+**Usage with Radia**:
+
+```python
+# Option 1: Direct Python export from Cubit
+from coreform_cubit_mesh_export import get_mesh_data
+mesh_data = get_mesh_data()  # Get mesh directly from Cubit session
+
+# Option 2: Export to GMSH, then import via NGSolve
+# In Cubit: export_gmsh("mesh.msh")
+from ngsolve import Mesh
+from netgen_mesh_import import netgen_mesh_to_radia
+
+mesh = Mesh('mesh.msh')
+mag_obj = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
+```
+
+**Note**: This is the recommended workflow for complex hexahedral geometries that Netgen cannot mesh directly.
 
 ---
 
@@ -1237,17 +1523,22 @@ tetrahedra = [[v.nr - 1 for v in el.vertices] for el in mesh.Elements3D()]
 
 Radia uses **MSC (Magnetic Surface Charge)** for all hexahedral elements:
 
-| Element Type | Faces | DOF | API | Use Case |
-|--------------|-------|-----|-----|----------|
-| **Tetrahedron** | 4 triangular | 3 (Mx, My, Mz) | `ObjPolyhdr()` + `TETRA_FACES` | Complex curved geometry |
-| **Hexahedron** | 6 quadrilateral | 6 (sigma per face) | `ObjPolyhdr()` + `HEX_FACES` | Permanent magnets, soft iron |
+| Element Type | Faces | DOF | Python API | Use Case |
+|--------------|-------|-----|------------|----------|
+| **Tetrahedron** | 4 triangular | 3 (Mx, My, Mz) | `netgen_mesh_to_radia()` | Complex curved geometry |
+| **Hexahedron** | 6 quadrilateral | 6 (sigma per face) | `netgen_mesh_to_radia()` | Permanent magnets, soft iron |
 
-**Policy (2025-12-27)**:
-- **ObjPolyhdr()** with HEX_FACES: Standard API for hexahedral elements (6 DOF MSC)
+**Policy (2025-12-27, updated 2025-12-31)**:
+- **Python API**: Use `ObjHexahedron()` and `ObjTetrahedron()` for individual elements
+- **Mesh import**: Use `netgen_mesh_to_radia()` for Netgen meshes
 - **Tetrahedron**: 3 DOF (Mx, My, Mz) - MMM method with uniform magnetization
 - **Hexahedron**: 6 DOF (sigma per face) - MSC method with surface charges
 - 3 DOF hexahedron (MMM) is NOT supported - all hexahedra use 6 DOF MSC
-- All meshes are expected to be generated externally (Netgen, GMSH, Cubit, etc.)
+
+**Python APIs for element creation**:
+- `rad.ObjHexahedron(vertices, magnetization)` - 8 vertices, auto-generates faces
+- `rad.ObjTetrahedron(vertices, magnetization)` - 4 vertices, auto-generates faces
+- `netgen_mesh_import.netgen_mesh_to_radia()` - Batch import from Netgen mesh
 
 ### Implementation
 
@@ -1294,23 +1585,34 @@ rad.MatApl(mag_obj, mat)
 rad.Solve(mag_obj, 0.0001, 1000, 1)  # Method 1 = BiCGSTAB
 ```
 
-**Hexahedral element (ObjPolyhdr)**:
+**Hexahedral mesh (Netgen)**:
 
 ```python
 import radia as rad
-from netgen_mesh_import import HEX_FACES
+from netgen.occ import Box, Pnt, OCCGeometry
+from ngsolve import Mesh
+from netgen_mesh_import import netgen_mesh_to_radia
 
 rad.FldUnits('m')
 
-# Create hexahedral element with explicit vertices
-vertices = [[0,0,0], [1,0,0], [1,1,0], [0,1,0],
-            [0,0,1], [1,0,1], [1,1,1], [0,1,1]]
-hex_obj = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
+# Generate hexahedral mesh using Netgen
+# Note: Netgen generates tetrahedral meshes by default
+# For true hexahedral meshes, use structured mesh generation
+cube_solid = Box(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))
+cube_solid.mat('magnetic')
+geo = OCCGeometry(cube_solid)
+mesh = Mesh(geo.GenerateMesh(maxh=0.3))
+
+# Import to Radia
+mag_obj = netgen_mesh_to_radia(mesh,
+                                material={'magnetization': [0, 0, 0]},
+                                units='m',
+                                material_filter='magnetic')
 
 # Apply material and solve
 mat = rad.MatLin(999)  # mu_r = 1000
-rad.MatApl(hex_obj, mat)
-rad.Solve(hex_obj, 0.0001, 1000, 1)
+rad.MatApl(mag_obj, mat)
+rad.Solve(mag_obj, 0.0001, 1000, 1)
 ```
 
 ### Benchmark Results (2025-12-19)

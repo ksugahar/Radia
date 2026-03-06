@@ -18,8 +18,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import numpy as np
 import radia as rad
 
-# Import HEX_FACES for ObjPolyhdr hexahedra
-from netgen_mesh_import import HEX_FACES
 
 # Set units to meters for NGSolve compatibility
 rad.FldUnits('m')
@@ -28,7 +26,7 @@ print("="*70)
 print("NGSolve Integration Demo: Coordinate Transformation")
 print("="*70)
 
-# Create a simple rectangular magnet at origin using ObjPolyhdr
+# Create a simple rectangular magnet at origin using ObjHexahedron
 # Center: [0, 0, 0], Dimensions: [0.04, 0.04, 0.06] m, Magnetization in z-direction
 cx, cy, cz = 0, 0, 0
 dx, dy, dz = 0.02, 0.02, 0.03  # Half-dimensions
@@ -43,7 +41,7 @@ vertices = [
     [cx - dx, cy + dy, cz + dz],  # vertex 8
 ]
 
-magnet = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1.2e6])
+magnet = rad.ObjHexahedron(vertices, [0, 0, 1.2e6])
 rad.Solve(magnet, 0.0001, 1000)
 
 print("\nRadia magnet created at origin")

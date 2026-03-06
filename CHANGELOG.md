@@ -6,6 +6,146 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-01-01
+
+### Changed
+
+- **API Cleanup: ObjHexahedron/ObjTetrahedron Standardization**
+  - Updated all examples and documentation to use high-level Python APIs
+  - `ObjHexahedron(vertices, magnetization)` for 8-vertex hexahedral elements
+  - `ObjTetrahedron(vertices, magnetization)` for 4-vertex tetrahedral elements
+  - These APIs auto-generate face topology - no need to specify face indices
+  - `ObjPolyhdr` is now internal API only (used for wedge/pyramid/surface meshes)
+
+### Cleaned
+
+- **Repository Cleanup**
+  - Removed 30+ debug/diagnostic scripts from `examples/ngsolve_integration/`
+  - Removed 25+ debug test files from `tests/`
+  - Removed internal design documents (historical info preserved in git)
+  - Removed benchmark result JSON and VTK output files
+
+### Documentation
+
+- **Updated API Examples**
+  - All Python examples now use `ObjHexahedron`/`ObjTetrahedron` consistently
+  - Updated CLAUDE.md, README.md, API_REFERENCE.md
+  - Updated example READMEs with correct API usage
+
+## [1.4.3] - 2025-12-31
+
+### Fixed
+
+- **PyPI Wheel Build Path**
+  - Fixed setup.py to check `build-msvc/` first, then fall back to `build/Release/`
+  - Ensures wheel contains the latest .pyd built with MSVC + Intel MKL
+
+### Added
+
+- **Wheel Verification Policy**
+  - Added mandatory wheel verification steps to CLAUDE.md
+  - Prevents shipping outdated .pyd files in PyPI packages
+
+## [1.4.2] - 2025-12-31
+
+### Fixed
+
+- **Face-based Scalar Potential (Phi) Calculation**
+  - Replaced dipole approximation with accurate face-based integration for ObjHexahedron/ObjTetrahedron
+  - New formula: `Phi = (1/4pi) * M dot BufVect` where `BufVect = n * integral(1/|r-r'|) dS`
+  - Phi on z-axis now matches exactly between ObjRecMag and ObjHexahedron (< 1e-10 error)
+  - Correct symmetry behavior: Phi ~ 0 on x/y axes for z-magnetized blocks (due to face cancellation)
+
+- **Vector Potential (A) Field Consistency**
+  - A field uses same face-based integration: `A = (1/4pi) * M x BufVect`
+  - A = 0 on symmetry axis is physically correct (not a bug)
+  - Off-axis A field matches within 2% between ObjRecMag and ObjHexahedron
+
+### Added
+
+- **New Test Files for Field Verification**
+  - `tests/test_phi_field.py` - 9 tests for scalar potential computation
+  - `tests/test_a_field.py` - 9 tests for vector potential computation
+  - `tests/test_field_relations.py` - 10 tests for Maxwell equation consistency
+
+### Verified
+
+- **Maxwell Equation Consistency**
+  - `curl(A) proportional to B` - verified at multiple points
+  - `-grad(Phi) proportional to H` - verified at multiple points
+  - `B = mu_0 * H` in air region - verified with < 0.01% error
+
+## [1.4.1] - 2025-12-31
+
+### Performance
+
+- **Tetra HACApK 12.9x Speedup**
+  - Implemented ELF-style face basis caching for tetrahedral H-matrix construction
+  - Pre-compute face basis ONCE per face, reuse for all 3 magnetization directions
+  - Pre-compute edge parameters (DS, AM, XD, YD) in RadTriangleFaceBasis struct
+  - Reduces coordinate transformation overhead from 12x to 4x per element pair
+
+### Benchmark Results (maxh=0.15, 2211 elements, 6633 DOF)
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| H-matrix build | 23.96s | 1.86s | **12.9x** |
+| Total solve | 24.33s | 2.24s | **10.9x** |
+
+### Comparison
+
+- Tetra HACApK is now **faster than ELF** (2.24s vs 3.8s)
+- Tetra HACApK is more efficient than Hex HACApK for similar DOF counts
+
+## [1.4.0] - 2025-12-31
+
+### Major Release Highlights
+
+This is a major feature release with significant new APIs, performance improvements, and OpenMP thread-safe batch field evaluation.
+
+### Added
+
+- **Simplified Element Creation APIs**
+  - `ObjTetrahedron(vertices, magnetization)` - Create tetrahedron from 4 vertices (face topology auto-generated)
+  - `ObjHexahedron(vertices, magnetization)` - Create hexahedron from 8 vertices (face topology auto-generated)
+  - No longer need to specify `TETRA_FACES` or `HEX_FACES` constants
+  - Both APIs accept optional magnetization parameter (defaults to [0,0,0])
+
+- **Batch Field Evaluation APIs with OpenMP Parallelization**
+  - `FldBatch(obj, points, method)` - Compute B and H fields at multiple points efficiently
+  - `FldPhi(obj, points)` - Compute magnetic scalar potential at multiple points
+  - `FldA(obj, points)` - Compute magnetic vector potential at multiple points
+  - `ClassifyPoints(obj, points, threshold)` - Classify points as inside/near/far from elements
+  - **OpenMP parallelization enabled** for n_points > 100 (thread-safe implementation)
+
+- **FMM Field Evaluation Example**
+  - New example directory: `examples/fmm_field_evaluation/`
+  - `demo_fldbatch.py` - Demonstrates batch field evaluation
+
+### Fixed
+
+- **FldBatch OpenMP Thread Safety**
+  - Fixed `radTHandle` reference count data race in parallel regions
+  - Changed `radTHandlePgnAndTrans` from value copy to const reference
+  - Changed `std::vector` to `std::array` for stack allocation in B_comp functions
+  - Added GIL release (`Py_BEGIN_ALLOW_THREADS`) for proper Python/C++ threading
+  - Verified working with 20,000+ points and 4 threads
+
+### Changed
+
+- **Documentation Updates**
+  - Updated all README files to use new `ObjTetrahedron`/`ObjHexahedron` APIs
+  - Added comprehensive API documentation for batch field evaluation
+  - Updated `docs/API_REFERENCE.md` with new API signatures
+
+### Performance
+
+- **Batch Field Evaluation**
+  - 1,000 points: ~20ms (4 threads)
+  - 10,000 points: ~93ms (4 threads)
+  - 20,000 points: ~206ms (4 threads)
+  - Linear scaling with point count
+
 ## [1.3.16] - 2025-12-24
 
 ### Fixed
