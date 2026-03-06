@@ -272,17 +272,9 @@
 
 %Defining Pantone SpotColor for blue
 \RequirePackage{color}
-\ifjtehm
-  \definecolor{accessblue}{cmyk}{.24,1,1,0}
-  \definecolor{greycolor}{cmyk}{0,0,0,1}
-\else
-  \RequirePackage{spotcolor}
-  \NewSpotColorSpace{PANTONE}
-  \AddSpotColor{PANTONE} {PANTONE3015C} {PANTONE\SpotSpace 3015\SpotSpace C} {1 0.3 0 0.2}
-  \SetPageColorSpace{PANTONE}%
-  \definecolor{accessblue}{spotcolor}{PANTONE3015C,1.0}%
-  \definecolor{greycolor}{cmyk}{0,0,0,.8}
-\fi
+% Spotcolor disabled for TeX Live 2025 compatibility
+\definecolor{accessblue}{cmyk}{.24,1,1,0}
+\definecolor{greycolor}{cmyk}{0,0,0,.8}
 \definecolor{grey}{cmyk}{0,0,0,.1}
 \definecolor{black}{cmyk}{0,0,0,1}
 

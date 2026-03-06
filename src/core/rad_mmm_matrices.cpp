@@ -215,6 +215,277 @@ void MMMBuilder::AddHexahedron(const double* vertices) {
     AddHexahedron(verts);
 }
 
+void MMMBuilder::AddWedge(const std::vector<Vec3d>& vertices) {
+    if (vertices.size() != 6) {
+        throw std::runtime_error("Wedge requires exactly 6 vertices");
+    }
+
+    MMMElement elem;
+    elem.dof = 5;  // MSC: 5 DOF (sigma per face)
+
+    // Compute centroid (average of 6 vertices)
+    elem.center = Vec3d(0, 0, 0);
+    for (const auto& v : vertices) {
+        elem.center = elem.center + v;
+    }
+    elem.center = elem.center / 6.0;
+
+    // Compute volume using formula for triangular prism
+    // V = (1/2) * |base_cross| * height
+    // Split into 3 tetrahedra for accurate volume
+    Vec3d v0 = vertices[0], v1 = vertices[1], v2 = vertices[2];
+    Vec3d v3 = vertices[3], v4 = vertices[4], v5 = vertices[5];
+
+    // Tetrahedron 1: v0, v1, v2, v3
+    Vec3d a1 = v1 - v0, b1 = v2 - v0, c1 = v3 - v0;
+    double vol1 = std::abs(a1.dot(b1.cross(c1))) / 6.0;
+
+    // Tetrahedron 2: v1, v2, v3, v4
+    Vec3d a2 = v2 - v1, b2 = v3 - v1, c2 = v4 - v1;
+    double vol2 = std::abs(a2.dot(b2.cross(c2))) / 6.0;
+
+    // Tetrahedron 3: v2, v3, v4, v5
+    Vec3d a3 = v3 - v2, b3 = v4 - v2, c3 = v5 - v2;
+    double vol3 = std::abs(a3.dot(b3.cross(c3))) / 6.0;
+
+    elem.volume = vol1 + vol2 + vol3;
+
+    // Wedge face ordering:
+    // Face 0: bottom triangle (v0, v2, v1) - outward normal points down
+    // Face 1: top triangle (v3, v4, v5) - outward normal points up
+    // Face 2: side quad (v0, v1, v4, v3)
+    // Face 3: side quad (v1, v2, v5, v4)
+    // Face 4: side quad (v2, v0, v3, v5)
+
+    // 2 triangle faces + 3 quad faces = 2 + 6 = 8 triangles total
+    elem.triangles.resize(8);
+    elem.face_normals.resize(5);
+    elem.face_areas.resize(5);
+    elem.eval_points.resize(5);
+
+    // Face 0: bottom triangle (v0, v2, v1)
+    {
+        TriangleFace& tri = elem.triangles[0];
+        tri.v0 = v0;
+        tri.v1 = v2;
+        tri.v2 = v1;
+        tri.ComputeDerivedQuantities();
+        elem.face_normals[0] = tri.normal;
+        elem.face_areas[0] = tri.area;
+        elem.eval_points[0] = (v0 + v1 + v2) / 3.0;
+    }
+
+    // Face 1: top triangle (v3, v4, v5)
+    {
+        TriangleFace& tri = elem.triangles[1];
+        tri.v0 = v3;
+        tri.v1 = v4;
+        tri.v2 = v5;
+        tri.ComputeDerivedQuantities();
+        elem.face_normals[1] = tri.normal;
+        elem.face_areas[1] = tri.area;
+        elem.eval_points[1] = (v3 + v4 + v5) / 3.0;
+    }
+
+    // Face 2: side quad (v0, v1, v4, v3) -> 2 triangles
+    {
+        TriangleFace& tri1 = elem.triangles[2];
+        tri1.v0 = v0; tri1.v1 = v1; tri1.v2 = v4;
+        tri1.ComputeDerivedQuantities();
+
+        TriangleFace& tri2 = elem.triangles[3];
+        tri2.v0 = v0; tri2.v1 = v4; tri2.v2 = v3;
+        tri2.ComputeDerivedQuantities();
+
+        elem.face_normals[2] = (tri1.normal + tri2.normal).normalized();
+        elem.face_areas[2] = tri1.area + tri2.area;
+        elem.eval_points[2] = (v0 + v1 + v4 + v3) / 4.0;
+    }
+
+    // Face 3: side quad (v1, v2, v5, v4) -> 2 triangles
+    {
+        TriangleFace& tri1 = elem.triangles[4];
+        tri1.v0 = v1; tri1.v1 = v2; tri1.v2 = v5;
+        tri1.ComputeDerivedQuantities();
+
+        TriangleFace& tri2 = elem.triangles[5];
+        tri2.v0 = v1; tri2.v1 = v5; tri2.v2 = v4;
+        tri2.ComputeDerivedQuantities();
+
+        elem.face_normals[3] = (tri1.normal + tri2.normal).normalized();
+        elem.face_areas[3] = tri1.area + tri2.area;
+        elem.eval_points[3] = (v1 + v2 + v5 + v4) / 4.0;
+    }
+
+    // Face 4: side quad (v2, v0, v3, v5) -> 2 triangles
+    {
+        TriangleFace& tri1 = elem.triangles[6];
+        tri1.v0 = v2; tri1.v1 = v0; tri1.v2 = v3;
+        tri1.ComputeDerivedQuantities();
+
+        TriangleFace& tri2 = elem.triangles[7];
+        tri2.v0 = v2; tri2.v1 = v3; tri2.v2 = v5;
+        tri2.ComputeDerivedQuantities();
+
+        elem.face_normals[4] = (tri1.normal + tri2.normal).normalized();
+        elem.face_areas[4] = tri1.area + tri2.area;
+        elem.eval_points[4] = (v2 + v0 + v3 + v5) / 4.0;
+    }
+
+    // Ensure all face normals point outward
+    for (int f = 0; f < 5; f++) {
+        Vec3d to_center = elem.center - elem.eval_points[f];
+        if (elem.face_normals[f].dot(to_center) > 0) {
+            elem.face_normals[f] = elem.face_normals[f] * (-1.0);
+            // Also flip triangle normals for this face
+            if (f == 0) {
+                elem.triangles[0].normal = elem.triangles[0].normal * (-1.0);
+            } else if (f == 1) {
+                elem.triangles[1].normal = elem.triangles[1].normal * (-1.0);
+            } else {
+                int tri_base = 2 + (f - 2) * 2;
+                elem.triangles[tri_base].normal = elem.triangles[tri_base].normal * (-1.0);
+                elem.triangles[tri_base + 1].normal = elem.triangles[tri_base + 1].normal * (-1.0);
+            }
+        }
+    }
+
+    elements_.push_back(std::move(elem));
+}
+
+void MMMBuilder::AddWedge(const double* vertices) {
+    std::vector<Vec3d> verts(6);
+    for (int i = 0; i < 6; i++) {
+        verts[i] = Vec3d(vertices[i*3], vertices[i*3+1], vertices[i*3+2]);
+    }
+    AddWedge(verts);
+}
+
+void MMMBuilder::AddPermanentMagnetWedge(const std::vector<Vec3d>& vertices,
+                                          const Vec3d& Mr) {
+    if (vertices.size() != 6) {
+        throw std::runtime_error("Wedge requires exactly 6 vertices");
+    }
+
+    MMMElement elem;
+    elem.dof = 0;  // PM elements have 0 DOF in solve
+    elem.material_type = MMMMaterialType::FixedPM;
+    elem.Mr = Mr;
+
+    // Compute centroid
+    elem.center = Vec3d(0, 0, 0);
+    for (const auto& v : vertices) {
+        elem.center = elem.center + v;
+    }
+    elem.center = elem.center / 6.0;
+
+    // Compute volume (same as soft wedge)
+    Vec3d v0 = vertices[0], v1 = vertices[1], v2 = vertices[2];
+    Vec3d v3 = vertices[3], v4 = vertices[4], v5 = vertices[5];
+
+    Vec3d a1 = v1 - v0, b1 = v2 - v0, c1 = v3 - v0;
+    double vol1 = std::abs(a1.dot(b1.cross(c1))) / 6.0;
+    Vec3d a2 = v2 - v1, b2 = v3 - v1, c2 = v4 - v1;
+    double vol2 = std::abs(a2.dot(b2.cross(c2))) / 6.0;
+    Vec3d a3 = v3 - v2, b3 = v4 - v2, c3 = v5 - v2;
+    double vol3 = std::abs(a3.dot(b3.cross(c3))) / 6.0;
+    elem.volume = vol1 + vol2 + vol3;
+
+    // Create faces (same as soft wedge)
+    elem.triangles.resize(8);
+    elem.face_normals.resize(5);
+    elem.face_areas.resize(5);
+    elem.eval_points.resize(5);
+
+    // Face 0: bottom triangle
+    {
+        TriangleFace& tri = elem.triangles[0];
+        tri.v0 = v0; tri.v1 = v2; tri.v2 = v1;
+        tri.ComputeDerivedQuantities();
+        elem.face_normals[0] = tri.normal;
+        elem.face_areas[0] = tri.area;
+        elem.eval_points[0] = (v0 + v1 + v2) / 3.0;
+    }
+
+    // Face 1: top triangle
+    {
+        TriangleFace& tri = elem.triangles[1];
+        tri.v0 = v3; tri.v1 = v4; tri.v2 = v5;
+        tri.ComputeDerivedQuantities();
+        elem.face_normals[1] = tri.normal;
+        elem.face_areas[1] = tri.area;
+        elem.eval_points[1] = (v3 + v4 + v5) / 3.0;
+    }
+
+    // Side faces (same logic as soft wedge)
+    // Face 2
+    {
+        TriangleFace& tri1 = elem.triangles[2];
+        tri1.v0 = v0; tri1.v1 = v1; tri1.v2 = v4;
+        tri1.ComputeDerivedQuantities();
+        TriangleFace& tri2 = elem.triangles[3];
+        tri2.v0 = v0; tri2.v1 = v4; tri2.v2 = v3;
+        tri2.ComputeDerivedQuantities();
+        elem.face_normals[2] = (tri1.normal + tri2.normal).normalized();
+        elem.face_areas[2] = tri1.area + tri2.area;
+        elem.eval_points[2] = (v0 + v1 + v4 + v3) / 4.0;
+    }
+
+    // Face 3
+    {
+        TriangleFace& tri1 = elem.triangles[4];
+        tri1.v0 = v1; tri1.v1 = v2; tri1.v2 = v5;
+        tri1.ComputeDerivedQuantities();
+        TriangleFace& tri2 = elem.triangles[5];
+        tri2.v0 = v1; tri2.v1 = v5; tri2.v2 = v4;
+        tri2.ComputeDerivedQuantities();
+        elem.face_normals[3] = (tri1.normal + tri2.normal).normalized();
+        elem.face_areas[3] = tri1.area + tri2.area;
+        elem.eval_points[3] = (v1 + v2 + v5 + v4) / 4.0;
+    }
+
+    // Face 4
+    {
+        TriangleFace& tri1 = elem.triangles[6];
+        tri1.v0 = v2; tri1.v1 = v0; tri1.v2 = v3;
+        tri1.ComputeDerivedQuantities();
+        TriangleFace& tri2 = elem.triangles[7];
+        tri2.v0 = v2; tri2.v1 = v3; tri2.v2 = v5;
+        tri2.ComputeDerivedQuantities();
+        elem.face_normals[4] = (tri1.normal + tri2.normal).normalized();
+        elem.face_areas[4] = tri1.area + tri2.area;
+        elem.eval_points[4] = (v2 + v0 + v3 + v5) / 4.0;
+    }
+
+    // Ensure normals point outward
+    for (int f = 0; f < 5; f++) {
+        Vec3d to_center = elem.center - elem.eval_points[f];
+        if (elem.face_normals[f].dot(to_center) > 0) {
+            elem.face_normals[f] = elem.face_normals[f] * (-1.0);
+            if (f == 0) {
+                elem.triangles[0].normal = elem.triangles[0].normal * (-1.0);
+            } else if (f == 1) {
+                elem.triangles[1].normal = elem.triangles[1].normal * (-1.0);
+            } else {
+                int tri_base = 2 + (f - 2) * 2;
+                elem.triangles[tri_base].normal = elem.triangles[tri_base].normal * (-1.0);
+                elem.triangles[tri_base + 1].normal = elem.triangles[tri_base + 1].normal * (-1.0);
+            }
+        }
+    }
+
+    elements_.push_back(std::move(elem));
+}
+
+void MMMBuilder::AddPermanentMagnetWedge(const double* vertices, const double* Mr) {
+    std::vector<Vec3d> verts(6);
+    for (int i = 0; i < 6; i++) {
+        verts[i] = Vec3d(vertices[i*3], vertices[i*3+1], vertices[i*3+2]);
+    }
+    Vec3d mr(Mr[0], Mr[1], Mr[2]);
+    AddPermanentMagnetWedge(verts, mr);
+}
+
 //=========================================================================
 // Permanent Magnet Element Methods
 //=========================================================================
@@ -515,6 +786,155 @@ void MMMBuilder::Compute6x3Block(int hexa_idx, int tetra_idx, double* N_block) c
     }
 }
 
+void MMMBuilder::Compute5x5Block(int elem_i, int elem_j, double* K_block) const {
+    // Compute 5x5 MSC interaction block between two wedges
+    const MMMElement& elem_src = elements_[elem_j];  // Source element
+    const MMMElement& elem_obs = elements_[elem_i];  // Observer element
+
+    std::memset(K_block, 0, 25 * sizeof(double));
+
+    // Wedge: 5 faces
+    // Face 0,1: triangular (1 triangle each: triangles[0], triangles[1])
+    // Face 2,3,4: quad (2 triangles each: triangles[2-3], triangles[4-5], triangles[6-7])
+
+    for (int f_obs = 0; f_obs < 5; f_obs++) {
+        Vec3d obs = elem_obs.eval_points[f_obs];
+        Vec3d n_obs = elem_obs.face_normals[f_obs];
+
+        for (int f_src = 0; f_src < 5; f_src++) {
+            Vec3d H_total(0, 0, 0);
+
+            if (f_src < 2) {
+                // Triangular face: 1 triangle
+                const TriangleFace& tri = elem_src.triangles[f_src];
+                H_total = H_total + FieldFromChargedTriangle(tri, obs, 1.0);
+            } else {
+                // Quad face: 2 triangles
+                int tri_base = 2 + (f_src - 2) * 2;
+                const TriangleFace& tri1 = elem_src.triangles[tri_base];
+                const TriangleFace& tri2 = elem_src.triangles[tri_base + 1];
+                H_total = H_total + FieldFromChargedTriangle(tri1, obs, 1.0);
+                H_total = H_total + FieldFromChargedTriangle(tri2, obs, 1.0);
+            }
+
+            K_block[f_obs * 5 + f_src] = n_obs.dot(H_total);
+        }
+    }
+}
+
+void MMMBuilder::Compute3x5Block(int tetra_idx, int wedge_idx, double* N_block) const {
+    // Tetrahedron observer, wedge source
+    // 3 rows (observer DOF), 5 columns (source faces)
+    const MMMElement& elem_src = elements_[wedge_idx];  // Source wedge
+    const MMMElement& elem_obs = elements_[tetra_idx];  // Observer tetrahedron
+
+    std::memset(N_block, 0, 15 * sizeof(double));
+
+    Vec3d obs = elem_obs.center;
+
+    for (int f_src = 0; f_src < 5; f_src++) {
+        Vec3d H_total(0, 0, 0);
+
+        if (f_src < 2) {
+            const TriangleFace& tri = elem_src.triangles[f_src];
+            H_total = H_total + FieldFromChargedTriangle(tri, obs, 1.0);
+        } else {
+            int tri_base = 2 + (f_src - 2) * 2;
+            const TriangleFace& tri1 = elem_src.triangles[tri_base];
+            const TriangleFace& tri2 = elem_src.triangles[tri_base + 1];
+            H_total = H_total + FieldFromChargedTriangle(tri1, obs, 1.0);
+            H_total = H_total + FieldFromChargedTriangle(tri2, obs, 1.0);
+        }
+
+        N_block[0 * 5 + f_src] = H_total.x;
+        N_block[1 * 5 + f_src] = H_total.y;
+        N_block[2 * 5 + f_src] = H_total.z;
+    }
+}
+
+void MMMBuilder::Compute5x3Block(int wedge_idx, int tetra_idx, double* N_block) const {
+    // Wedge observer, tetrahedron source
+    // 5 rows (observer faces), 3 columns (source magnetization)
+    const MMMElement& elem_src = elements_[tetra_idx]; // Source tetrahedron
+    const MMMElement& elem_obs = elements_[wedge_idx]; // Observer wedge
+
+    std::memset(N_block, 0, 15 * sizeof(double));
+
+    for (int f_obs = 0; f_obs < 5; f_obs++) {
+        Vec3d obs = elem_obs.eval_points[f_obs];
+        Vec3d n_obs = elem_obs.face_normals[f_obs];
+
+        for (const auto& tri : elem_src.triangles) {
+            Vec3d H_x = FieldFromChargedTriangle(tri, obs, tri.normal.x);
+            Vec3d H_y = FieldFromChargedTriangle(tri, obs, tri.normal.y);
+            Vec3d H_z = FieldFromChargedTriangle(tri, obs, tri.normal.z);
+
+            N_block[f_obs * 3 + 0] += n_obs.dot(H_x);
+            N_block[f_obs * 3 + 1] += n_obs.dot(H_y);
+            N_block[f_obs * 3 + 2] += n_obs.dot(H_z);
+        }
+    }
+}
+
+void MMMBuilder::Compute5x6Block(int wedge_idx, int hexa_idx, double* K_block) const {
+    // Wedge observer, hexahedron source
+    // 5 rows (observer faces), 6 columns (source faces)
+    const MMMElement& elem_src = elements_[hexa_idx];  // Source hexahedron
+    const MMMElement& elem_obs = elements_[wedge_idx]; // Observer wedge
+
+    std::memset(K_block, 0, 30 * sizeof(double));
+
+    for (int f_obs = 0; f_obs < 5; f_obs++) {
+        Vec3d obs = elem_obs.eval_points[f_obs];
+        Vec3d n_obs = elem_obs.face_normals[f_obs];
+
+        for (int f_src = 0; f_src < 6; f_src++) {
+            Vec3d H_total(0, 0, 0);
+
+            // Hexahedron: 2 triangles per face
+            const TriangleFace& tri1 = elem_src.triangles[f_src * 2];
+            const TriangleFace& tri2 = elem_src.triangles[f_src * 2 + 1];
+            H_total = H_total + FieldFromChargedTriangle(tri1, obs, 1.0);
+            H_total = H_total + FieldFromChargedTriangle(tri2, obs, 1.0);
+
+            K_block[f_obs * 6 + f_src] = n_obs.dot(H_total);
+        }
+    }
+}
+
+void MMMBuilder::Compute6x5Block(int hexa_idx, int wedge_idx, double* K_block) const {
+    // Hexahedron observer, wedge source
+    // 6 rows (observer faces), 5 columns (source faces)
+    const MMMElement& elem_src = elements_[wedge_idx]; // Source wedge
+    const MMMElement& elem_obs = elements_[hexa_idx];  // Observer hexahedron
+
+    std::memset(K_block, 0, 30 * sizeof(double));
+
+    for (int f_obs = 0; f_obs < 6; f_obs++) {
+        Vec3d obs = elem_obs.eval_points[f_obs];
+        Vec3d n_obs = elem_obs.face_normals[f_obs];
+
+        for (int f_src = 0; f_src < 5; f_src++) {
+            Vec3d H_total(0, 0, 0);
+
+            if (f_src < 2) {
+                // Triangular face
+                const TriangleFace& tri = elem_src.triangles[f_src];
+                H_total = H_total + FieldFromChargedTriangle(tri, obs, 1.0);
+            } else {
+                // Quad face: 2 triangles
+                int tri_base = 2 + (f_src - 2) * 2;
+                const TriangleFace& tri1 = elem_src.triangles[tri_base];
+                const TriangleFace& tri2 = elem_src.triangles[tri_base + 1];
+                H_total = H_total + FieldFromChargedTriangle(tri1, obs, 1.0);
+                H_total = H_total + FieldFromChargedTriangle(tri2, obs, 1.0);
+            }
+
+            K_block[f_obs * 5 + f_src] = n_obs.dot(H_total);
+        }
+    }
+}
+
 MMMMatrices MMMBuilder::Build() {
     MMMMatrices result;
     int n_elem = static_cast<int>(elements_.size());
@@ -621,7 +1041,7 @@ void MMMSolver::SetMatrix(const double* N, const int* dof_offset, int total_dof,
 void MMMSolver::BuildSystemMatrix(std::vector<double>& A,
                                    const std::vector<double>& inv_chi,
                                    bool chi_per_element) const {
-    // Build A = diag(inv_chi) - N
+    // Build A = -diag(inv_chi) - N (ELF-compatible)
     size_t n = total_dof_;
     A = N_;  // Copy N
 
@@ -630,7 +1050,7 @@ void MMMSolver::BuildSystemMatrix(std::vector<double>& A,
         A[i] = -A[i];
     }
 
-    // Add diagonal: A += diag(inv_chi)
+    // Add diagonal: A += diag(inv_chi) (physically correct: +1/chi)
     if (chi_per_element) {
         // Broadcast chi from elements to DOF
         for (int e = 0; e < n_elements_; e++) {
@@ -639,13 +1059,13 @@ void MMMSolver::BuildSystemMatrix(std::vector<double>& A,
             int end = dof_offset_[e + 1];
             for (int i = start; i < end; i++) {
                 // Column-major: A[i,i] at i*n + i
-                A[static_cast<size_t>(i) * n + i] += inv_chi_e;
+                A[static_cast<size_t>(i) * n + i] += inv_chi_e;  // Physically correct: +1/chi
             }
         }
     } else {
         // inv_chi is already per-DOF
         for (size_t i = 0; i < n; i++) {
-            A[i * n + i] += inv_chi[i];
+            A[i * n + i] += inv_chi[i];  // Physically correct: +1/chi
         }
     }
 }
@@ -1005,10 +1425,16 @@ Vec3d MMMFieldComputer::SurfaceChargeField(const MMMElement& elem,
 
         double omega = 2.0 * std::atan2(numer, denom);
 
-        // For hexahedra, map triangle to face index
-        // Each quad face has 2 triangles: face_idx = t / 2
-        int face_idx = t / 2;
-        if (face_idx < 6) {
+        // Map triangle index to face index
+        // For hexahedra (dof=6, 12 triangles): all faces are quads, face_idx = t / 2
+        // For wedges (dof=5, 8 triangles): first 3 faces are quads (6 tris), last 2 are single tris
+        int face_idx;
+        if (elem.dof == 5 && t >= 6) {
+            face_idx = 3 + (t - 6);  // Triangular faces at indices 3 and 4
+        } else {
+            face_idx = t / 2;  // Quad faces: 2 triangles per face
+        }
+        if (face_idx < elem.dof) {
             double sigma_f = sigma[face_idx];
             H = H + tri.normal * (sigma_f * omega * constants::INV_FOUR_PI);
         }
@@ -1232,15 +1658,24 @@ std::vector<double> MMMNonlinearSolver::ExpandH_ext(const std::vector<double>& H
                 H_expanded[dof_start + 1] = H_ext[1];
                 H_expanded[dof_start + 2] = H_ext[2];
             } else if (n_dof == 6) {
-                // For MSC hexahedra, set H.n for each face
-                // Simplified: assume face normals align with axes
-                // Face order: -z, +z, -y, +y, -x, +x
+                // For MSC hexahedra: axis-aligned face normal assumption
                 H_expanded[dof_start + 0] = -H_ext[2];  // -z face
                 H_expanded[dof_start + 1] = H_ext[2];   // +z face
                 H_expanded[dof_start + 2] = -H_ext[1];  // -y face
                 H_expanded[dof_start + 3] = H_ext[1];   // +y face
                 H_expanded[dof_start + 4] = -H_ext[0];  // -x face
                 H_expanded[dof_start + 5] = H_ext[0];   // +x face
+            } else if (n_dof == 5) {
+                // For MSC wedges: approximation using dominant axis components
+                // Note: Wedge face normals vary; this standalone module does not
+                // store per-face normals. The HACApK path uses Radia's native
+                // B_comp_wedge_MSC which handles normals correctly.
+                // Here we use H_ext projected onto coordinate axes as approximation.
+                H_expanded[dof_start + 0] = H_ext[1];   // Face 0 (~+y)
+                H_expanded[dof_start + 1] = H_ext[0];   // Face 1 (~+x)
+                H_expanded[dof_start + 2] = -H_ext[0];  // Face 2 (~-x)
+                H_expanded[dof_start + 3] = -H_ext[2];  // Face 3 (~-z tri)
+                H_expanded[dof_start + 4] = H_ext[2];   // Face 4 (~+z tri)
             }
         }
     } else if (H_ext.size() == static_cast<size_t>(total_dof_)) {

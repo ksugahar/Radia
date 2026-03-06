@@ -19,6 +19,7 @@
 #include <Python.h>
 
 #include "rad_application.h"
+#include "rad_interaction.h"
 #include "gmvect.h"
 #include "rad_io_buffer.h"
 
@@ -140,6 +141,7 @@ void CompPrecisionOpt( const char*, const char*, const char*, const char*, const
 void MultipoleThresholds(double, double, double, double); // Maybe to be removed later
 void PreRelax( int, int );
 void ShowInteractMatrix(int);
+int GetInteractMatrix(int, double*, int*);
 void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
 void ManualRelax( int, int, int, double );
@@ -147,8 +149,9 @@ void ManualRelax( int, int, int, double );
 void AutoRelax();
 void AutoRelaxOpt( int, double, int, int, const char* );
 void UpdateSourcesForRelax( int );
-void SolveGen( int, double, int, int );
-void SolveGenNonl( int, double, int, int, int );
+void SolveGen( int, double, int, int, const char* );
+void SolveGenNonl( int, double, int, int, int, const char* );
+int BuildMatrix( int, const char* );
 #ifdef RADIA_USE_HACAPK
 void SetHACApKParams( double, int, double );
 void GetHACApKStats( double*, int* );
@@ -158,6 +161,12 @@ void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
 double GetRelaxParam();
+void SetNewtonMethod( bool );
+bool GetNewtonMethod();
+void SetNewtonDamping( bool, int, double );
+void GetNewtonDampingStats( bool*, int*, double* );
+int SetIMASymmetry(int, const char*);
+int BuildIMAMatrix(int);
 void ClassifyPoints( int*, int*, int, double*, int, double );
 void ComputeFieldBatch( double*, double*, int, double*, int, int );
 void ComputeScalarPotentialBatch( double*, int, double*, int );
@@ -862,11 +871,13 @@ void ArcCur(double xc, double yc, double zc, double rmin, double rmax, double ph
 
 void RaceTrack(double xc, double yc, double zc, double rmin, double rmax, double Lx, double Ly, double Height, int NumberOfSegm, double J_azim, char* ManOrAuto, char* Orient)
 {
-	// Apply unit scaling: convert user units to internal mm
+	// Apply unit scaling: convert user units to internal meters
+	// DON'T perturb CPoi here - perturbation is applied to final arc centers in SetRaceTrack
+	// This ensures arc centers get identical perturbation to manually created arcs
 	double scale = rad.GetLengthUnitScale();
-	double CPoi[] = {radCR.Double(xc * scale), radCR.Double(yc * scale), radCR.Double(zc * scale)};
+	double CPoi[] = {xc * scale, yc * scale, zc * scale};  // Unperturbed!
 	double Radii[] = {fabs(radCR.Double(rmin * scale)), fabs(radCR.Double(rmax * scale))};
-	double StrPartDims[] = {(Lx==0.)? Lx : radCR.Double(Lx * scale), (Ly==0.)? Ly : radCR.Double(Ly * scale)};
+	double StrPartDims[] = {Lx * scale, Ly * scale};  // Unperturbed
 	// Current density J is in A/mm^2 or A/m^2 depending on units
 	double currentDensityScale = scale * scale;
 	rad.SetRaceTrack(CPoi, 3, Radii, 2, StrPartDims, 2, Height * scale, J_azim / currentDensityScale, NumberOfSegm, ManOrAuto, Orient);
@@ -1375,21 +1386,21 @@ void NonlinearIsotropMaterial3()
 
 //-------------------------------------------------------------------------
 
-void NonlinearIsotropMaterial3Opt(double** HandM_Array, long LenHandM_Array)
+void NonlinearIsotropMaterial3Opt(double** HandB_Array, long LenHandB_Array)
 {
-	std::vector<TVector2d> vArrayOfPoints2d(LenHandM_Array);
+	std::vector<TVector2d> vArrayOfPoints2d(LenHandB_Array);
 	TVector2d* ArrayOfPoints2d = vArrayOfPoints2d.data();
 	TVector2d* tArrayOfPoints2d = ArrayOfPoints2d;
-	double** tHandM_Array = HandM_Array;
+	double** tHandB_Array = HandB_Array;
 
-	for(long i=0; i<LenHandM_Array; i++)
+	for(long i=0; i<LenHandB_Array; i++)
 	{
-		tArrayOfPoints2d->x = **tHandM_Array;
-		(tArrayOfPoints2d++)->y = (*tHandM_Array)[1];
-		tHandM_Array++;
+		tArrayOfPoints2d->x = **tHandB_Array;        // H [A/m]
+		(tArrayOfPoints2d++)->y = (*tHandB_Array)[1]; // B [T]
+		tHandB_Array++;
 	}
 
-	rad.SetNonlinearIsotropMaterial(ArrayOfPoints2d, (int)LenHandM_Array);
+	rad.SetNonlinearIsotropMaterial(ArrayOfPoints2d, (int)LenHandB_Array);
 	// RAII: automatic cleanup
 }
 
@@ -1570,6 +1581,13 @@ void ShowInteractMatrix(int InteractElemKey)
 
 //-------------------------------------------------------------------------
 
+int GetInteractMatrix(int InteractElemKey, double* pMatrix, int* pDOF)
+{
+	return rad.GetInteractMatrix(InteractElemKey, pMatrix, pDOF);
+}
+
+//-------------------------------------------------------------------------
+
 void SetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether)
 {
 	rad.SetRelaxSubInterval(InteractElemKey, StartNo, FinNo, RelaxTogether);
@@ -1619,16 +1637,23 @@ void UpdateSourcesForRelax(int InteractElemKey)
 
 //-------------------------------------------------------------------------
 
-void SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo)
+void SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char* image)
 {
-	rad.SolveGen(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
+	rad.SolveGen(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo, image);
 }
 
 //-------------------------------------------------------------------------
 
-void SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod)
+int BuildMatrix(int ObjKey, const char* image)
 {
-	rad.SolveGenNonl(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo, NonlMethod);
+	return rad.BuildMatrix(ObjKey, image);
+}
+
+//-------------------------------------------------------------------------
+
+void SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, int NonlMethod, const char* image)
+{
+	rad.SolveGenNonl(ObjKey, PrecOnMagnetiz, MaxIterNumber, MethNo, NonlMethod, image);
 }
 
 //-------------------------------------------------------------------------
@@ -1677,6 +1702,119 @@ void SetRelaxParam(double relax)
 double GetRelaxParam()
 {
 	return rad.m_relax;
+}
+
+void SetNewtonMethod(bool use_newton)
+{
+	rad.m_use_newton = use_newton;
+}
+
+bool GetNewtonMethod()
+{
+	return rad.m_use_newton;
+}
+
+void SetNewtonDamping(bool enabled, int max_iter, double min_omega)
+{
+	if(enabled) {
+		rad.m_newton_damping_enabled = true;
+		if(max_iter > 0) rad.m_newton_ls_max_iter = max_iter;
+		if(min_omega > 0.0 && min_omega < 1.0) rad.m_newton_ls_min_omega = min_omega;
+	} else {
+		rad.m_newton_damping_enabled = false;
+	}
+}
+
+void GetNewtonDampingStats(bool* enabled, int* max_iter, double* min_omega)
+{
+	*enabled = rad.m_newton_damping_enabled;
+	*max_iter = rad.m_newton_ls_max_iter;
+	*min_omega = rad.m_newton_ls_min_omega;
+}
+
+//-------------------------------------------------------------------------
+// IMA (Image) Symmetry Support
+//-------------------------------------------------------------------------
+
+int SetIMASymmetry(int InteractKey, const char* symmetry)
+{
+	// Convert symmetry string to flag and sign
+	// Format: [+|-]axis (e.g., "+x", "-z", "x", "xy", "+xy", "-xz")
+	// sign = +1 for symmetric BC (default), -1 for antisymmetric BC
+	int symFlag = 0;
+	int sign = 1;  // Default to symmetric (+)
+
+	if(symmetry != nullptr)
+	{
+		std::string symStr(symmetry);
+
+		// Parse optional sign prefix
+		if(!symStr.empty())
+		{
+			if(symStr[0] == '+')
+			{
+				sign = 1;
+				symStr = symStr.substr(1);
+			}
+			else if(symStr[0] == '-')
+			{
+				sign = -1;
+				symStr = symStr.substr(1);
+			}
+		}
+
+		// Convert to lowercase for comparison
+		for(char& c : symStr) c = tolower(c);
+
+		if(symStr == "x") symFlag = radTInteraction::IMA_X;
+		else if(symStr == "y") symFlag = radTInteraction::IMA_Y;
+		else if(symStr == "z") symFlag = radTInteraction::IMA_Z;
+		else if(symStr == "xy" || symStr == "yx") symFlag = radTInteraction::IMA_XY;
+		else if(symStr == "xz" || symStr == "zx") symFlag = radTInteraction::IMA_XZ;
+		else if(symStr == "yz" || symStr == "zy") symFlag = radTInteraction::IMA_YZ;
+		else if(symStr == "xyz" || symStr == "xzy" || symStr == "yxz" ||
+		        symStr == "yzx" || symStr == "zxy" || symStr == "zyx")
+			symFlag = radTInteraction::IMA_XYZ;
+		else if(symStr == "none" || symStr.empty()) symFlag = radTInteraction::IMA_NONE;
+		else
+		{
+			rad.Send.ErrorMessage("Radia::Error051"); // Invalid symmetry string
+			return 0;
+		}
+	}
+
+	// Get interaction object
+	radTInteraction* pIntrc = rad.GetInteractionByKey(InteractKey);
+	if(pIntrc == nullptr)
+	{
+		rad.Send.ErrorMessage("Radia::Error050"); // Invalid interaction handle
+		return 0;
+	}
+
+	// Set IMA symmetry with sign
+	int numElements = pIntrc->SetIMASymmetry(symFlag, sign);
+	return numElements;
+}
+
+int BuildIMAMatrix(int InteractKey)
+{
+	// Get interaction object
+	radTInteraction* pIntrc = rad.GetInteractionByKey(InteractKey);
+	if(pIntrc == nullptr)
+	{
+		rad.Send.ErrorMessage("Radia::Error050"); // Invalid interaction handle
+		return 0;
+	}
+
+	if(!pIntrc->IsIMAEnabled())
+	{
+		rad.Send.ErrorMessage("Radia::Error052"); // IMA not enabled
+		return 0;
+	}
+
+	// Build IMA matrix
+	int result = pIntrc->SetupInteractMatrix_IMA();
+	return result;
 }
 
 //-------------------------------------------------------------------------

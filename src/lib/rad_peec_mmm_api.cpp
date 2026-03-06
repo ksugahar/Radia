@@ -44,9 +44,9 @@ extern std::shared_ptr<radTConductor> GetConductorByHandle(int handle);
  */
 static radTInteraction* CreateInteractionFromMagnetHandle(int magnetHandle)
 {
-    // Get object from handle using PreRelax approach
-    // PreRelax creates the interaction and returns its key
-    int interactKey = rad.PreRelax(magnetHandle, 0, false);
+    // Get object from handle using BuildMatrix approach
+    // BuildMatrix creates the interaction and returns its key
+    int interactKey = rad.BuildMatrix(magnetHandle, nullptr);
     if (interactKey <= 0) {
         return nullptr;  // Failed to create interaction
     }
@@ -89,7 +89,7 @@ static std::shared_ptr<PEECMMMCoupledSolver> GetCplMagSolver(int handle)
 }
 
 //=========================================================================
-// External API Functions (called from radpy_pyapi.cpp)
+// External API Functions (called from radia_pybind.cpp via radentry.h)
 //=========================================================================
 
 /**

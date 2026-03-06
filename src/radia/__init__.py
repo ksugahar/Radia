@@ -1,8 +1,15 @@
 # Radia Python package
-# This module re-exports all symbols from the C++ extension module (radia.pyd)
+# This module re-exports all symbols from the C++ extension module (_radia_pybind.pyd)
 # so that 'import radia' works correctly when installed via pip
+#
+# Module naming: The C++ extension is named '_radia_pybind' (with underscore) so that
+# 'import radia' uses this Python package with __init__.py, which then imports
+# from _radia_pybind. This follows NGSolve's pattern.
+#
+# pybind11 Migration Complete (2026-01):
+# All bindings now use pybind11 exclusively.
 
-__version__ = "1.6.0"
+__version__ = "1.8.1"
 
 # Add package directory to DLL search path (Windows)
 # This is needed for finding Intel MKL DLL (mkl_rt.2.dll)
@@ -27,19 +34,15 @@ if sys.platform == 'win32':
     if _package_dir not in os.environ.get('PATH', ''):
         os.environ['PATH'] = _package_dir + os.pathsep + os.environ.get('PATH', '')
 
-# Import all symbols from the C++ extension module
+# Import all symbols from the pybind11 C++ extension module (_radia_pybind.pyd)
 try:
-    from radia.radia import *
-except ImportError:
-    # Fallback for development: try importing from the same directory
-    try:
-        from .radia import *
-    except ImportError as e:
-        raise ImportError(
-            "Failed to import radia C++ extension module (radia.pyd). "
-            "Ensure the package was built correctly with Build.ps1 before installation. "
-            f"Package directory: {_package_dir}"
-        ) from e
+    from ._radia_pybind import *
+except ImportError as e:
+    raise ImportError(
+        "Failed to import radia pybind11 module (_radia_pybind.pyd). "
+        "Ensure the package was built correctly with BuildMSVC.ps1 before installation. "
+        f"Package directory: {_package_dir}"
+    ) from e
 
 # ESIM (Effective Surface Impedance Method) for induction heating analysis
 # Import convenience functions for ESIM workpiece creation

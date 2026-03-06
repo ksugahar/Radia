@@ -1,183 +1,235 @@
-# Electromagnet Simulation - Complete Workflow
+# Electromagnet Simulation - C-Type Yoke
 
-Complete 3D magnetostatic simulation of beam steering electromagnet with racetrack coil and magnetic yoke.
+Complete 3D magnetostatic simulation of beam steering electromagnet with racetrack coil and C-type magnetic yoke.
+
+Reference: `S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type`
 
 ## Overview
 
-This directory contains a complete electromagnet simulation workflow:
+This example demonstrates the Cubit -> Netgen -> Radia workflow with **separated mesh generation and simulation**.
 
-1. **Mesh Generation**: Generate Netgen mesh directly from Cubit (no intermediate files)
-2. **Magnetostatic Simulation**: Solve field distribution with Radia
-3. **Visualization**: Export field distribution for ParaView
+### Workflow
 
-**Workflow**: Cubit geometry -> export_netgen() -> Netgen mesh -> Radia
+```
+generate_quarter_mesh.py      run_simulation.py
+========================      =================
+Cubit geometry                Load yoke_quarter.vol
+(1/4 model)                        |
+    |                         Convert to Radia
+Hex mesh                           |
+(6x6x6 intervals)             Apply Image symmetry
+    |                              |
+Export Netgen (.vol)          Create coil
+                                   |
+                              Solve with image='+x-z'
+                                   |
+                              Export VTS
+```
+
+## Image Symmetry API (2026-01-31)
+
+The new unified Image symmetry API is implemented and verified against ELF_MAGIC:
+
+```python
+import radia as rad
+
+# Create quarter model geometry (no TrfMlt needed)
+yoke = rad.ObjCnt(hex_elements)
+
+# Solve with Image symmetry - quarter model -> full model
+rad.Solve(yoke, 0.0001, 100, 0, image='+x-z')
+
+# Or build matrix first for inspection
+handle = rad.BuildMatrix(yoke, image='+x-z')
+matrix, dof = rad.GetInteractMatrix(handle)
+```
+
+### Image Parameter Format
+
+| Parameter | Meaning |
+|-----------|---------|
+| `+x` | Symmetric mirror across X=0 plane |
+| `-x` | Antisymmetric mirror across X=0 plane |
+| `+z` | Symmetric mirror across Z=0 plane |
+| `-z` | Antisymmetric mirror across Z=0 plane |
+| `+x-z` | Both mirrors (quarter model) |
+| `+x+y-z` | Three mirrors (eighth model) |
+
+### Verification Results (mu=1000, 13 elements)
+
+**Matrix Comparison:**
+- Radia vs ELF matrix relative error: ~7.2% (after convention fix)
+- Matrix symmetry verified
+
+**Field Results:**
+- Image API correctly changes magnetization solution
+- Field at origin with `image='+x-z'`: Bz = 246.8 mT
+- Field without Image: Bz = -66.3 mT
+- The difference confirms Image symmetry is working
+
+**Expected Difference:**
+- ~0.82% field difference expected due to coil modeling:
+  - ELF: Discretized coil elements (MCL8T)
+  - Radia: Analytical coil (ObjArcCur)
+
+### Key Test Files
+
+| File | Description |
+|------|-------------|
+| `mu=1000/quarter/test_all_solvers_ima.py` | All solvers with IMA (LU/BiCGSTAB/HACApK) |
+| `mu=1000/quarter/test_hacapk_ima_transition.py` | HACApK state management verification |
+| `nonlinear/full/LU/test_all_solvers.py` | Nonlinear solver comparison |
+| `nonlinear/full/LU/verify_full_nonlinear.py` | Full nonlinear model verification |
+
+## Quick Start
+
+### Step 1: Generate Mesh (requires Cubit)
+
+```bash
+python generate_quarter_mesh.py
+```
+
+Output:
+- `yoke_quarter.vol` : Netgen mesh file (1/4 model)
+- `yoke_quarter.vtu` : VTK mesh for ParaView
+
+### Step 2: Run Simulation
+
+```bash
+python run_simulation.py
+```
+
+Output:
+- `field_distribution.vts` : Magnetic field data
+
+### Step 3: Visualize
+
+```bash
+paraview yoke_quarter.vtu field_distribution.vts
+```
+
+## Validation Results
+
+### Reference: ELF_MAGIC Comparison (CEFC 2020)
+
+Gap center Bz field [T] for different mesh densities and permeabilities:
+
+**Linear Material (mu_r constant):**
+
+| Solver | Mesh | Elements | mu_r=100 | mu_r=1000 | mu_r=10000 |
+|--------|------|----------|----------|-----------|------------|
+| ELF    | 1x1x1 | 52 | 0.0403 T | 0.0513 T | 0.0527 T |
+| ELF    | R288 | 288 | 0.1233 T | 0.2318 T | 0.2490 T |
+| ELF    | V4672 | 4672 | 0.1222 T | 0.2308 T | 0.2516 T |
+| Radia  | R288 | 288 | 0.1232 T | 0.2320 T | 0.2492 T |
+| Radia  | V4672 | 4672 | 0.1220 T | 0.2310 T | 0.2519 T |
+
+**Nonlinear Material (1000 AT excitation):**
+
+| Solver | Mesh | Elements | Bz [T] |
+|--------|------|----------|--------|
+| ELF    | 1x1x1 | 52 | 0.0264 T |
+| ELF    | 6x6x6 | 4800 | 0.1019 T |
+| ELF    | R288 | 288 | 0.1246 T |
+| ELF    | R3856 | 3856 | 0.1250 T |
+| ELF    | V4864 | 4864 | 0.1261 T |
+
+### Notes
+
+- R-mesh: Structured rectangular mesh
+- V-mesh: Tetrahedral mesh
+- ELF uses MMM (Magnetic Moment Method) with 8-node hexahedra
+- Radia uses MSC (Magnetic Surface Charge) with 6-DOF hexahedra
 
 ## Files
 
-### Main Simulation
+### Main Workflow
 
-- **`main_simulation_workflow.py`** - Main simulation script
-  - Loads magnetic yoke via Cubit -> Netgen direct export
-  - Creates racetrack coil geometry
-  - Solves magnetostatic problem
-  - Exports field distribution (VTS)
+| File | Description |
+|------|-------------|
+| `generate_quarter_mesh.py` | 1/4 model mesh generation (Cubit) |
+| `run_simulation.py` | Radia simulation with symmetry |
+| `README.md` | This file |
 
-### Mesh Generation
+### Generated Files
 
-- **`york_cubit_mesh.py`** - Generate Netgen mesh from Cubit journal file
-  - Input: `York.jou` (Cubit journal file)
-  - Output: Netgen mesh (in-memory), `York.vtk` (visualization)
-  - Creates hexahedral and pentahedral mesh for magnetic yoke
+| File | Description |
+|------|-------------|
+| `yoke_quarter.vol` | Netgen mesh (1/4 model) |
+| `yoke_quarter.vtu` | VTK mesh for visualization |
+| `field_distribution.vts` | Radia field data |
 
-- **`York.jou`** - Cubit journal file with yoke geometry definition
+### Subdirectories
 
-## Complete Workflow
+| Directory | Description |
+|-----------|-------------|
+| `mu=1000/` | Linear material validation (mu_r=1000) |
+| `mu=1000/full/` | Full model tests |
+| `mu=1000/quarter/` | Quarter model IMA symmetry tests |
+| `mu=1000/single/` | Single element verification |
+| `nonlinear/` | Nonlinear material (B-H curve) tests |
+| `nonlinear/full/` | Full model with LU/BiCGSTAB/HACApK solvers |
+| `nonlinear/quarter/` | Quarter model with all solvers |
 
-### Step 1: Run Simulation (includes mesh generation)
+## Geometry
 
-```bash
-cd examples/electromagnet
+### C-Type Yoke
 
-# Run complete simulation (Cubit -> Netgen -> Radia)
-python main_simulation_workflow.py
+```
+          +-----+
+          |pole |
+    +-----+-----+-----+
+    |   yoke back     |
+    +--+----------+---+
+       |          |
+       |   leg    |  (magnetic gap)
+       |          |
+    +--+----------+---+
+    |   yoke back     |
+    +-----+-----+-----+
+          |pole |
+          +-----+
 ```
 
-**Output**:
-```
-======================================================================
-ELECTROMAGNET SIMULATION WORKFLOW
-======================================================================
-
-[Step 1/5] Importing yoke mesh via Cubit -> Netgen...
-  Reading: York.jou
-  Exporting to Netgen mesh...
-  [OK] Yoke imported: ID=297
-
-[Step 2/5] Creating racetrack coil...
-  [OK] Coil created: ID=600
-  Total current: -2000 A
-
-[Step 3/5] Combining coil + yoke...
-  [OK] Combined model: ID=605
-
-[Step 4/5] Solving magnetostatics...
-  [OK] Solution converged
-
-[Step 5/5] Exporting field distribution...
-  [OK] Field distribution exported to field_distribution.vts
-
-======================================================================
-SIMULATION COMPLETE
-======================================================================
-```
-
-**Output Files**:
-- `field_distribution.vts` - 3D magnetic field distribution (VTS format)
-
-### Step 2: Visualize in ParaView
-
-```bash
-# Open magnetic field distribution
-paraview field_distribution.vts
-```
-
-**In ParaView**:
-1. Click "Apply"
-2. Add **Glyph** filter:
-   - Filters -> Common -> Glyph
-   - Glyph Type: Arrow
-   - Scalars: None
-   - Vectors: B_field
-   - Scale Mode: vector
-   - Scale Factor: 0.1 (adjust for visibility)
-3. Click "Apply" to show field vectors
-
-**Visualization Tips**:
-- Use **Slice** filter to view field on cutting planes
-- Use **Contour** filter for field magnitude iso-surfaces
-- Use **Calculator** to compute |B| magnitude
-
-## Requirements
-
-- **Coreform Cubit 2025.3+** - For hex mesh generation
-- **cubit_mesh_export** - From S:\CoreformCubit\01_GitHub
-- **NGSolve** - For Netgen mesh wrapper
-- **ParaView** - For visualization
-
-## Geometry Specifications
+**Dimensions** (mm):
+- Quarter geometry (before reflection):
+  - Main leg: 62.5 x 105 x 25
+  - Yoke back: 80 x 50 x 25
+  - Pole piece: 40 x 100 x 25
+- Full model: ~262.5 x 105 x 50 (after X and Z reflections)
 
 ### Racetrack Coil
 
-```python
-Center: [0, 131.25, 0] mm
-X dimensions: inner=5 mm, outer=40 mm
-Y dimensions: inner=50 mm, outer=62.5 mm
-Height: 105 mm
-Turns: 105
-Current: -2000 A
-Current density: -0.544218 A/mm^2
-Arc approximation: 3 segments
-```
+- Position: (-12.5, 131.25, 78.75) mm (after coordinate transformation)
+- Inner dimensions: 60 x 72.5 mm
+- Corner radii: 5 mm (inner), 40 mm (outer)
+- Height: 105 mm
+- Current: -2000 A
 
-### Magnetic Yoke
+## Requirements
 
-**Source**: `York.jou` (Cubit journal file)
+- **Coreform Cubit 2025.3+** (for mesh generation only)
+- **cubit_mesh_export**: `S:\CoreformCubit\01_GitHub`
+- **NGSolve / Netgen**
+- **Radia**
 
-**Mesh**:
-- Format: Netgen (direct from Cubit via export_netgen)
-- Elements: 240 hexahedra + 48 pentahedra = 288 total
-- Nodes: ~495
+## Changelog
 
-**Material**:
-- Type: Nonlinear isotropic (saturation model)
-- Applied via `rad.MatSatIsoFrm()`
+### 2026-02-05
+- Cleaned up debug/temporary scripts (114 -> 67 files)
+- Reorganized folder structure: linear in mu=1000/, nonlinear in nonlinear/
+- Fixed HACApK thread-local cache invalidation for IMA transitions
+- Verified all solvers work with quarter model (+x-z)
 
-## Troubleshooting
+### 2026-01-31
+- Implemented new Image symmetry API: `rad.Solve(..., image='+x-z')`
+- Removed old TrfMlt-based symmetry approach
+- Verified against ELF_MAGIC quarter model (7.2% matrix difference)
 
-### "Cubit not found"
-
-**Solution**: Install Coreform Cubit or adjust paths:
-```python
-CUBIT_PATH = "C:/Program Files/Coreform Cubit 2025.3/bin"
-CUBIT_EXPORT_PATH = "S:/CoreformCubit/01_GitHub"
-```
-
-### "cubit_mesh_export not found"
-
-**Solution**: Clone the Coreform Cubit Mesh Export repository:
-```bash
-git clone https://github.com/ksugahar/Coreform_Cubit_Mesh_Export S:/CoreformCubit/01_GitHub
-```
-
-### Solver returns NaN
-
-**Causes**:
-1. Geometry scale mismatch
-2. Invalid polyhedra (degenerate elements)
-3. Material property errors
-
-**Solution**:
-- Verify mesh quality in ParaView: `paraview York.vtk`
-- Check coil and yoke bounding boxes overlap correctly
-
-## Coordinate System
-
-- **X**: Horizontal (perpendicular to beam)
-- **Y**: Beam direction
-- **Z**: Vertical
-
-All dimensions in **millimeters (mm)**.
-All magnetic field values in **Tesla (T)**.
-
-## References
-
-- **Radia**: https://github.com/ochubar/Radia
-- **Coreform Cubit**: https://coreform.com/products/coreform-cubit/
-- **Coreform Cubit Mesh Export**: https://github.com/ksugahar/Coreform_Cubit_Mesh_Export
-- **ParaView**: https://www.paraview.org/
+### 2026-01-29
+- Fixed MSC hexahedron mirror symmetry using reciprocity approach
 
 ---
 
-**Last Updated**: 2026-01-16
-**Workflow**: Cubit -> Netgen (direct) -> Radia -> VTS -> ParaView
-**Status**: Updated to use Cubit -> Netgen direct export (no Nastran)
+**Last Updated**: 2026-02-05
+**Reference**: S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type

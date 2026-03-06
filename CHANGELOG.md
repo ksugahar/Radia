@@ -6,6 +6,81 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-02-09
+
+### Changed
+
+- **radia_ngsolve.cpp: Unit conversion cleanup and modernization**
+  - Removed `coord_scale_` member (always 1.0 for meters-only NGSolve)
+  - Constructor now uses `std::optional` instead of `py::object` for type safety
+  - Removed `parse_vector()` in favor of direct `std::vector<double>` from pybind11
+  - Batch Evaluate/PrepareCache now uses numpy arrays instead of Python lists
+  - Added A-field and M-field support via per-point `rad.Fld()` fallback
+  - Fixed FMM dipole extraction comments (ObjGeoLim returns meters, not mm)
+  - Removed confused FMM scaling blocks (scale was always 1.0)
+  - Cached `rad_module_` to avoid repeated `py::module_::import("radia")`
+  - `units='mm'` now raises `std::invalid_argument` (NGSolve requires meters)
+
+- **MatLin API: mu_r input with automatic chi conversion**
+  - `rad.MatLin(mu_r)` now takes relative permeability (mu_r >= 1.0)
+  - Internally converts to chi = mu_r - 1 before passing to C++ solver
+  - Validation: rejects mu_r < 1.0 with clear error message
+  - Tests updated from `MatLin(999)` to `MatLin(1000)` (mu_r, not chi)
+
+- **Row-major matrix convention enforcement**
+  - Fixed BiCGSTAB MatVec to use row-major indexing (`[row*N+col]`)
+  - Fixed `GetInteractMatrix` pybind11 export (was column-major, now row-major)
+  - Updated all matrix access comments to document row-major convention
+
+- **analytical_magnet.py: Configurable unit conversion**
+  - Added `units='mm'` parameter to SphericalMagnet, CuboidMagnet, CurrentLoop
+  - Replaced 12 hardcoded `/ 1000.0` with `* self._length_to_m`
+  - Backward compatible: default `units='mm'` preserves existing behavior
+
+- **cylindrical_magnet.py: Configurable unit conversion**
+  - Added `units='mm'` parameter to CylindricalMagnet
+  - Replaced hardcoded `* 1e-3` and `* 1000.0` with `length_to_m` factor
+
+- **Physical constants unified via rad_constants.h**
+  - `rad_mmm_matrices.h` now imports from `rad_constants.h` instead of redefining
+
+### Fixed
+
+- **BiCGSTAB Block Jacobi Preconditioner for Ill-Conditioned Matrices**
+  - Added automatic block Jacobi preconditioner for distorted hexahedral meshes
+  - Scalar Jacobi fails when diagonal ratio > 10 or min dominance < 0.1
+  - Block Jacobi inverts each element's 6x6 diagonal block using LAPACK
+  - V304 mesh (74 elements with 45 deg skew): BiCGSTAB now converges (was diverging)
+  - Automatic detection based on matrix conditioning analysis
+
+## [1.7.0] - 2026-02-05
+
+### Fixed
+
+- **IMA (Image Method Analysis) Symmetry - Correct Sign Selection**
+  - Fixed IMA sign selection policy for combined symmetries (+x+y-z, etc.)
+  - Field parallel to mirror plane: use `+` (symmetric)
+  - Field perpendicular to mirror plane: use `-` (antisymmetric)
+  - Verified with 2-element and 8-element test cases (DOF reduction 48 -> 6)
+  - All test ratios = 1.0000 (exact match with full model)
+
+- **Netgen Face Normal Convention**
+  - Removed inside/outside check in `SetupFaceGeometry()`
+  - Face normals now computed mechanically from vertex winding order
+  - Follows Netgen convention: Face ordering 0=z-, 1=z+, 2=y-, 3=y+, 4=x-, 5=x+
+
+### Added
+
+- **IMA Verification Tests**
+  - `test_ima_2elem_linear.py`: 2 elements with shared boundary at z=0
+  - `test_ima_8elem_linear.py`: 8 elements (octants) with IMA +x+y-z
+  - Both tests verify magnetization and field computation match full model
+
+### Documentation
+
+- Updated CLAUDE.md with IMA sign selection policy
+- Documented IMA boundary element limitation (elements with faces ON symmetry plane)
+
 ## [1.6.0] - 2026-01-14
 
 ### Added
@@ -19,12 +94,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `MMMSolver`: Linear solvers for MMM equations
     - `solve_lu(inv_chi, H_ext, chi_per_element)`: Direct LU decomposition
     - `solve_bicgstab(inv_chi, H_ext, tol, max_iter, chi_per_element)`: BiCGSTAB iteration
-  - `MMMHACApKSolver`: H-matrix accelerated solver
-    - `set_from_builder(builder, dof_offset)`: Set elements from MMMBuilder
-    - `build_hmatrix(inv_chi, eps, leaf_size, eta, print_level)`: Build H-matrix with ACA+
-    - `matvec(x)`: H-matrix vector product (O(N log N) complexity)
-    - `solve(inv_chi, H_ext, tol, max_iter)`: Full BiCGSTAB solve with H-matrix
-    - `get_stats()`: H-matrix compression statistics
   - `MMMFieldComputer`: Field computation from solved magnetization
     - `compute_b_field(M, obs_points)`: Compute B field at observation points
     - `compute_h_field(M, obs_points)`: Compute H field at observation points

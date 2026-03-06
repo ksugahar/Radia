@@ -29,6 +29,25 @@ extern radTApplication rad;
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
+void radTg3d::B_genComp(radTField* FieldPtr)
+{
+	radTFieldKey& FieldKey = FieldPtr->FieldKey;
+
+	if(g3dListOfTransform.empty())
+	{
+		if(FieldKey.Ib_ || FieldKey.Ih_) B_intComp(FieldPtr);
+		else if(FieldKey.Force_) IntOverShape(FieldPtr);
+		else B_comp(FieldPtr);
+	}
+	else
+	{
+		if(FieldKey.Force_) NestedFor_IntOverShape(FieldPtr, g3dListOfTransform.begin());
+		else NestedFor_B(FieldPtr, g3dListOfTransform.begin());
+	}
+}
+
+//-------------------------------------------------------------------------
+
 void radTg3d::NestedFor_B(radTField* FieldPtr, const radTlphg::iterator& Iter)
 {
 	radTrans* TransPtr = (radTrans*)(((*Iter).Handler_g).rep);
@@ -78,6 +97,7 @@ void radTg3d::NestedFor_B(radTField* FieldPtr, const radTlphg::iterator& Iter)
 			BufField.P = TransPtr->TrPoint_inv(BufField.P);
 			if(FldIntNeeded) BufField.NextP = TransPtr->TrPoint_inv(BufField.NextP); // Plus this string
 		}
+
 		B_comp_Or_NestedFor(&BufField, LocalNextIter);
 		radTField BufField2 = BufField;
 
