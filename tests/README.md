@@ -334,7 +334,7 @@ If tests fail, please report with:
 
 - pytest documentation: https://docs.pytest.org/
 - Radia documentation: See `docs/` directory
-- Performance reports: `docs/OPENMP_PERFORMANCE_REPORT.md`
+
 - Security fixes: `SECURITY_FIXES.md`
 
 ---

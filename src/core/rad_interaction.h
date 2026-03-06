@@ -23,6 +23,7 @@
 #include "gmtrans.h"
 #include "rad_geometry_3d.h"
 
+#include <atomic>
 #include <sstream>
 #include <vector>
 
@@ -137,36 +138,40 @@ struct iterator_traits <radTRelaxSubInterval*> {
 class RadIMAFieldContext {
 public:
 	// Current IMA settings for field computation
-	static bool s_active;           // True if IMA field computation is enabled
-	static int s_symmetry;          // IMA symmetry flags (IMA_X, IMA_Z, etc.)
-	static int s_signX;             // Sign for X mirror: +1 (symmetric) or -1 (antisymmetric)
-	static int s_signY;             // Sign for Y mirror
-	static int s_signZ;             // Sign for Z mirror
+	// All static members are std::atomic for thread-safety with OpenMP
+	static std::atomic<bool> s_active;     // True if IMA field computation is enabled
+	static std::atomic<int> s_symmetry;    // IMA symmetry flags (IMA_X, IMA_Z, etc.)
+	static std::atomic<int> s_signX;       // Sign for X mirror: +1 (symmetric) or -1 (antisymmetric)
+	static std::atomic<int> s_signY;       // Sign for Y mirror
+	static std::atomic<int> s_signZ;       // Sign for Z mirror
 
-	// Set IMA context before field computation
+	// Set IMA context before field computation (called from main thread)
 	static void Set(int symmetry, int signX, int signY, int signZ) {
-		s_active = (symmetry != 0);
-		s_symmetry = symmetry;
-		s_signX = signX;
-		s_signY = signY;
-		s_signZ = signZ;
+		s_symmetry.store(symmetry, std::memory_order_relaxed);
+		s_signX.store(signX, std::memory_order_relaxed);
+		s_signY.store(signY, std::memory_order_relaxed);
+		s_signZ.store(signZ, std::memory_order_relaxed);
+		// Release fence: all stores above are visible before s_active becomes true
+		s_active.store((symmetry != 0), std::memory_order_release);
 	}
 
 	// Clear IMA context after field computation
 	static void Clear() {
-		s_active = false;
-		s_symmetry = 0;
-		s_signX = s_signY = s_signZ = 1;
+		s_active.store(false, std::memory_order_release);
+		s_symmetry.store(0, std::memory_order_relaxed);
+		s_signX.store(1, std::memory_order_relaxed);
+		s_signY.store(1, std::memory_order_relaxed);
+		s_signZ.store(1, std::memory_order_relaxed);
 	}
 
-	// Check if IMA is active
-	static bool IsActive() { return s_active; }
+	// Check if IMA is active (called from OpenMP worker threads)
+	static bool IsActive() { return s_active.load(std::memory_order_acquire); }
 
-	// Get symmetry flags
-	static int GetSymmetry() { return s_symmetry; }
-	static int GetSignX() { return s_signX; }
-	static int GetSignY() { return s_signY; }
-	static int GetSignZ() { return s_signZ; }
+	// Get symmetry flags (called after IsActive() returns true)
+	static int GetSymmetry() { return s_symmetry.load(std::memory_order_relaxed); }
+	static int GetSignX() { return s_signX.load(std::memory_order_relaxed); }
+	static int GetSignY() { return s_signY.load(std::memory_order_relaxed); }
+	static int GetSignZ() { return s_signZ.load(std::memory_order_relaxed); }
 };
 
 //-------------------------------------------------------------------------

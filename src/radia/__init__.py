@@ -9,7 +9,7 @@
 # pybind11 Migration Complete (2026-01):
 # All bindings now use pybind11 exclusively.
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 
 # DLL loader for Windows
 # MKL DLLs are installed via pip dependency (mkl>=2024.2.0)
@@ -54,7 +54,7 @@ try:
 except ImportError as e:
     raise ImportError(
         "Failed to import radia pybind11 module (_radia_pybind.pyd). "
-        "Ensure the package was built correctly with BuildMSVC.ps1 before installation. "
+        "Ensure the package was built correctly with Build.ps1 before installation. "
         f"Package directory: {_package_dir}"
     ) from e
 

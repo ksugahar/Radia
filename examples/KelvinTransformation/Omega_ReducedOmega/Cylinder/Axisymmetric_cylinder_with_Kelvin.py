@@ -89,7 +89,7 @@ for edge in air_inner.edges:
 
     if x_center < 1e-6:  # On z-axis (r = 0)
         edge.name = "axis_int"
-    elif dist > (kelvin_radius + cylinder_radius) / 2:  # On Kelvin boundary
+    elif abs(dist - kelvin_radius) < kelvin_radius * 0.2:  # On Kelvin boundary
         edge.name = "kelvin_int"
     else:
         # Cylinder surface

@@ -31,9 +31,9 @@ import sys
 import glob
 
 # Set environment for ksugahar's NGSolve build
-os.environ['NETGENDIR'] = r'S:\NGSolve\01_GitHub\install_ksugahar\bin'
-os.environ['PATH'] = r'S:\NGSolve\01_GitHub\install_ksugahar\bin;' + os.environ.get('PATH', '')
-sys.path.insert(0, r'S:\NGSolve\01_GitHub\install_ksugahar\Lib\site-packages')
+os.environ['NETGENDIR'] = r'S:\NGSolve\01_GitHub\install_ngsolve\bin'
+os.environ['PATH'] = r'S:\NGSolve\01_GitHub\install_ngsolve\bin;' + os.environ.get('PATH', '')
+sys.path.insert(0, r'S:\NGSolve\01_GitHub\install_ngsolve\Lib\site-packages')
 
 # Delete existing output files
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -165,7 +165,7 @@ def create_geometry():
     for face in air_inner.faces:
         fc = face.center
         dist = sqrt(fc.x**2 + fc.y**2 + fc.z**2)
-        if dist > kelvin_radius * 0.8:
+        if abs(dist - kelvin_radius) < kelvin_radius * 0.2:
             kelvin_int_face = face
             face.name = "kelvin_int"
             print(f"  Found kelvin_int face at center ({fc.x:.4f}, {fc.y:.4f}, {fc.z:.4f})")
@@ -174,7 +174,7 @@ def create_geometry():
     for face in air_outer.faces:
         fc = face.center
         dist = sqrt((fc.x - offset_x)**2 + fc.y**2 + fc.z**2)
-        if dist > kelvin_radius * 0.8:
+        if abs(dist - kelvin_radius) < kelvin_radius * 0.2:
             kelvin_ext_face = face
             face.name = "kelvin_ext"
             print(f"  Found kelvin_ext face at center ({fc.x:.4f}, {fc.y:.4f}, {fc.z:.4f})")

@@ -1,6 +1,6 @@
 # Radia Documentation
 
-**Version:** 1.4.4
+**Version:** 2.3.0
 
 ## Core Documentation
 
@@ -15,22 +15,18 @@
 | Document | Description |
 |----------|-------------|
 | [PEEC_CONDUCTOR_MODELING_GUIDE.md](PEEC_CONDUCTOR_MODELING_GUIDE.md) | Conductor shape interface and mesh import workflow |
-| [PEEC_PANEL_IMPLEMENTATION.md](PEEC_PANEL_IMPLEMENTATION.md) | 2D panel integration (Wilton formula, Gauss quadrature) |
+| [PEEC_PANEL_IMPLEMENTATION.md](PEEC_PANEL_IMPLEMENTATION.md) | Panel integration (Wilton, Gauss) + FastImp Loop-Star integration |
 | [PEEC_SURFACE_IMPEDANCE.md](PEEC_SURFACE_IMPEDANCE.md) | Surface impedance (SIBC, ESIM, Dowell, PyKAN, SPICE export) |
 | [PEEC_SHIELD_CONDUCTOR.md](PEEC_SHIELD_CONDUCTOR.md) | Shield conductor modeling |
 | [PEEC_MSC_COUPLING.md](PEEC_MSC_COUPLING.md) | PEEC-MSC coupled solver theory |
-| [PEEC_FASTIMPINTEGRATION.md](PEEC_FASTIMPINTEGRATION.md) | FastImp Loop-Star integration |
-| [PEEC_VALIDATION_PLAN.md](PEEC_VALIDATION_PLAN.md) | Systematic validation phases |
+| [PEEC_VALIDATION_PLAN.md](PEEC_VALIDATION_PLAN.md) | Validation phases + formula validation + Grover formula |
 
 ## Mesh & Visualization
 
 | Document | Description |
 |----------|-------------|
-| [GMSH_WORKFLOW.md](GMSH_WORKFLOW.md) | CAD -> GMSH -> NGSolve -> Radia workflow |
-| [VISUALIZATION_WORKFLOW.md](VISUALIZATION_WORKFLOW.md) | Radia-NGSolve visualization workflow |
-| [VIEWER_COMPARISON.md](VIEWER_COMPARISON.md) | Viewer comparison (PyVista, ParaView, GMSH, Netgen) |
-| [MESH_AND_SURFACE_ELEMENTS_GUIDE.md](MESH_AND_SURFACE_ELEMENTS_GUIDE.md) | Surface elements FAQ and Netgen GUI guide |
-| [GEOMETRY_ACCURACY_COMPARISON.md](GEOMETRY_ACCURACY_COMPARISON.md) | VTS export geometry accuracy |
+| [MESH_GUIDE.md](MESH_GUIDE.md) | Mesh types, GMSH workflows, SetGeomInfo API, surface elements |
+| [VISUALIZATION_GUIDE.md](VISUALIZATION_GUIDE.md) | Viewer comparison, workflows, geometry accuracy |
 
 ## ELF Compatibility & Verification
 
@@ -42,11 +38,9 @@
 
 | Document | Description |
 |----------|-------------|
-| [GROVER_FORMULA_IMPLEMENTATION.md](GROVER_FORMULA_IMPLEMENTATION.md) | Grover's formula for self-inductance |
-| [VECTOR_FEMBEM_ANALYSIS.md](VECTOR_FEMBEM_ANALYSIS.md) | VectorEddyCurrentFEMBEM analysis |
-| [NGBEM_INTEGRATION_DESIGN.md](NGBEM_INTEGRATION_DESIGN.md) | NGSolve BEM integration design |
+| [EDDY_CURRENT_METHODS.md](EDDY_CURRENT_METHODS.md) | Eddy current methods + VectorFEMBEM cross-validation |
+| [NGBEM_INTEGRATION_DESIGN.md](NGBEM_INTEGRATION_DESIGN.md) | NGSolve BEM integration + FEM independent verification |
 | [UNIFIED_FIELD_API_DESIGN.md](UNIFIED_FIELD_API_DESIGN.md) | Unified field computation API |
-| [HMATRIX_EVALUATION.md](HMATRIX_EVALUATION.md) | H-matrix acceleration evaluation |
 
 ## Specialized Features
 
@@ -56,14 +50,7 @@
 | [CYLINDRICAL_MAGNET.md](CYLINDRICAL_MAGNET.md) | Cylindrical magnet analytical field |
 | [IMA_SYMMETRY_DESIGN.md](IMA_SYMMETRY_DESIGN.md) | Image symmetry for MSC |
 | [KAN_INSPIRED_URN.md](KAN_INSPIRED_URN.md) | KAN-inspired Universal Relaxation Network |
-| [NPORT_BLOCK_LANCZOS_SPICE.md](NPORT_BLOCK_LANCZOS_SPICE.md) | N-port Block Lanczos SPICE generation |
-
-## Maintenance
-
-| Document | Description |
-|----------|-------------|
-| [PLAN_MMM_PYBIND11_REFACTOR.md](PLAN_MMM_PYBIND11_REFACTOR.md) | MMM pybind11 refactoring plan |
-| [PYBIND11_MIGRATION_LOG.md](PYBIND11_MIGRATION_LOG.md) | pybind11 migration completion log |
+| [NPORT_BLOCK_LANCZOS_SPICE.md](NPORT_BLOCK_LANCZOS_SPICE.md) | N-port Block Lanczos SPICE + CLN I verification |
 
 ## Quick Links
 
@@ -93,4 +80,4 @@
 
 ---
 
-**Last Updated:** 2026-02-19
+**Last Updated:** 2026-02-22

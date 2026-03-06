@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Original Radia (ESRF)
+    url: https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia
+    about: Original Radia documentation and resources from ESRF
+  - name: NGSolve Forum
+    url: https://forum.ngsolve.org/
+    about: For questions about NGSolve/ngbem integration

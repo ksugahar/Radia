@@ -34,11 +34,11 @@
 //-------------------------------------------------------------------------
 // Static member definitions for RadIMAFieldContext
 //-------------------------------------------------------------------------
-bool RadIMAFieldContext::s_active = false;
-int RadIMAFieldContext::s_symmetry = 0;
-int RadIMAFieldContext::s_signX = 1;
-int RadIMAFieldContext::s_signY = 1;
-int RadIMAFieldContext::s_signZ = 1;
+std::atomic<bool> RadIMAFieldContext::s_active{false};
+std::atomic<int> RadIMAFieldContext::s_symmetry{0};
+std::atomic<int> RadIMAFieldContext::s_signX{1};
+std::atomic<int> RadIMAFieldContext::s_signY{1};
+std::atomic<int> RadIMAFieldContext::s_signZ{1};
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -2676,7 +2676,7 @@ void radTInteraction::PrecomputeTetraGeometry()
 		// Store face data for each of the 4 triangular faces
 		for(int f = 0; f < 4; f++)
 		{
-			radTHandlePgnAndTrans hpt = poly->VectHandlePgnAndTrans[f];
+			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
 			radTPolygon* pgn = hpt.PgnHndl.rep;
 			radTrans* tr = hpt.TransHndl.rep;
 
@@ -3060,7 +3060,7 @@ void radTInteraction::PrecomputeHexaGeometry()
 			m_hexaEvalPoints[epIdx + 2] = 0.5 * (poly->FaceCenter[f].z + poly->CentrPoint.z);
 
 			// Get face vertices and split into 2 triangles
-			radTHandlePgnAndTrans hpt = poly->VectHandlePgnAndTrans[f];
+			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
 			radTPolygon* pgn = hpt.PgnHndl.rep;
 			radTrans* tr = hpt.TransHndl.rep;
 

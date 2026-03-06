@@ -499,7 +499,7 @@ This is a major feature release with significant new APIs, performance improveme
 - **Documentation**
   - `docs/MESH_MSC_API_DESIGN.md` - Mesh MSC API design document
   - `docs/MMM_MSC_IMPLEMENTATION.md` - MMM+MSC implementation guide
-  - `docs/SOLVER_METHODS.md` - Solver method documentation
+  - `docs/SOLVER_ARCHITECTURE.md` - Solver method documentation
 
 ### Changed
 
@@ -1127,10 +1127,9 @@ radia core tests: 7/7 passed (100%)
 
 ## Links
 
-- [Coding Standards](claude.md) (not in repository)
-- [Security Fixes Documentation](SECURITY_FIXES.md)
 - [Testing Guide](tests/README.md)
-- [Build Instructions](README_BUILD.md)
+- [Build Instructions](BUILD.md)
+- [Contributing](CONTRIBUTING.md)
 
 ---
 

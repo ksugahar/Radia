@@ -67,6 +67,16 @@ class ShieldedPEECSolver(PEECCircuitSolver):
         self.shield = shield_solver
         self._topology_dict = topology_dict
 
+        # Build full node incidence matrix A_full (n_nodes x n_loop)
+        # A[node, fil] = +1 if current leaves node (node_from)
+        # A[node, fil] = -1 if current enters node (node_to)
+        self.A_full = np.zeros((self.n_nodes, self.n_loop))
+        for j in range(self.n_loop):
+            nf = self.segment_nodes[j, 0]  # node_from
+            nt = self.segment_nodes[j, 1]  # node_to
+            self.A_full[nf, j] = +1.0
+            self.A_full[nt, j] = -1.0
+
         # Cache for Delta_Z at each frequency (avoid recomputing if same freq)
         self._cached_freq = None
         self._cached_Delta_Z = None

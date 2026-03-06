@@ -38,6 +38,11 @@ cube_uniform_field/
 │       ├── bicgstab/
 │       └── hacapk/
 ├── benchmark_common.py         # Shared benchmark functions
+├── run_benchmarks.py           # Run benchmarks from config in subprocesses for accurate memory measurement
+├── compare_hmatrix_stats.py    # Compare H-matrix statistics between ELF and Radia leaf-by-leaf
+├── profile_hacapk.py           # Profile HACApK H-matrix build to identify performance bottlenecks
+├── test_objm_minimal.py        # Minimal test of ObjM with correct benchmark pattern (hex mesh)
+├── benchmark_cube_block_jacobi.py  # Cube benchmark with Block Jacobi preconditioner and Newton-Raphson
 └── README.md                   # This file
 ```
 

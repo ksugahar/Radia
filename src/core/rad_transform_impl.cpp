@@ -19,6 +19,7 @@
 #include "rad_geometry_3d_aux.h"
 #include "rad_operation_names.h"
 #include "rad_interaction.h"
+#include "rad_field_unified.h"
 
 #include <math.h>
 #include <string.h>
@@ -1561,6 +1562,9 @@ int radTApplication::DeleteAllElements(int DeletionMethNo)
 		// Reset solve cache - interaction object keys are now invalid
 		m_cached_interact_key = 0;
 		m_cached_obj_key = 0;
+
+		// Clear FMM and element caches (stale after element deletion)
+		RadFieldUnified::ClearAllFMMCaches();
 
 		if(SendingIsRequired) Send.Int(0);
 		return 1;
