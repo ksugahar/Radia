@@ -644,23 +644,6 @@ std::string FldVTS(int obj, const std::string& filename,
     return filename;
 }
 
-/**
- * @brief Set physical units (deprecated, noop)
- *
- * Radia always uses meters. This function is kept for backward compatibility.
- * Calling FldUnits('m') is a silent noop.
- * Calling FldUnits with any other unit issues a deprecation warning.
- */
-void FldUnits(const std::string& unit_str) {
-    if (!unit_str.empty() && unit_str != "m" && unit_str != "meter" && unit_str != "meters") {
-        py::module_::import("warnings").attr("warn")(
-            "FldUnits is deprecated. Radia always uses meters. This call is ignored.",
-            py::module_::import("builtins").attr("DeprecationWarning")
-        );
-    }
-    // Noop: Radia always uses meters
-}
-
 } // namespace radia_field
 
 
@@ -2380,16 +2363,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   Filename
-          )pbdoc");
-
-    m.def("FldUnits", &radia_field::FldUnits,
-          py::arg("unit_str") = "",
-          R"pbdoc(
-              Deprecated. Radia always uses meters.
-
-              This function is kept for backward compatibility.
-              FldUnits('m') is a silent noop.
-              Any other unit string issues a DeprecationWarning.
           )pbdoc");
 
     // ========================================================================

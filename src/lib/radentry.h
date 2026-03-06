@@ -818,27 +818,6 @@ EXP int CALL RadFldCmpCrt(int* n, double prcB, double prcA, double prcBInt, doub
 */
 EXP int CALL RadFldCmpPrc(int* n, char* opt);
 
-/** Shows the physical units currently in use.
-@param OutStr [out] string of physical units currently in use
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadFldUnits(char* OutStr);
-
-/** Specifies the length of string about physical units currently in use.
-@param size [out] length of string about physical units currently in use
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadFldUnitsSize(int* size);
-
-/** Sets physical length units (mm or m).
-@param UnitStr [in] string containing "mm", "m", "millimeter", "meter", etc.
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadFldUnitsSet(const char* UnitStr);
-
 /** Switches on or off the randomization of all the length values. The randomization magnitude can be set by the function radFldLenTol.
 @param n [out] dummy
 @param OnOrOff [in] string containing either "on" or "off"
