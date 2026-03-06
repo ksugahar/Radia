@@ -34,6 +34,7 @@ if build_dir.exists():
 sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
 sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
+@pytest.mark.basic
 def test_import():
 	"""Test 1: Module import"""
 	print("=" * 60)
@@ -51,6 +52,7 @@ def test_import():
 		print(f"  sys.path: {sys.path}")
 		pytest.fail(f"Cannot import radia module: {e}")
 
+@pytest.mark.basic
 def test_version():
 	"""Test 2: Version information"""
 	import radia as rad
@@ -61,6 +63,7 @@ def test_version():
 	print(f"[OK] SUCCESS: Radia version: {version}")
 	assert version is not None
 
+@pytest.mark.basic
 def test_basic_geometry():
 	"""Test 3: Basic geometry creation"""
 	import radia as rad
@@ -78,6 +81,7 @@ def test_basic_geometry():
 	rad.ObjSetM(block, magnetization)
 	print(f"[OK] SUCCESS: Set magnetization to {magnetization}")
 
+@pytest.mark.basic
 def test_material():
 	"""Test 4: Material definition"""
 	import radia as rad
@@ -95,6 +99,7 @@ def test_material():
 	rad.MatApl(block, mat)
 	print(f"[OK] SUCCESS: Applied material to object")
 
+@pytest.mark.basic
 def test_field_calculation():
 	"""Test 5: Magnetic field calculation"""
 	import radia as rad
@@ -116,6 +121,7 @@ def test_field_calculation():
 	assert field[2] > 0, "Field direction should be positive in z-direction"
 	print(f"[OK] Field direction is correct (Bz > 0)")
 
+@pytest.mark.basic
 def test_solve():
 	"""Test 6: Relaxation/Solve"""
 	import radia as rad
@@ -136,6 +142,7 @@ def test_solve():
 	# rad.Solve returns convergence data (list), not a single int
 	assert result is not None
 
+@pytest.mark.basic
 def test_transformation():
 	"""Test 7: Geometric transformation"""
 	import radia as rad
@@ -154,6 +161,7 @@ def test_transformation():
 	rad.TrfOrnt(block, trans)
 	print(f"[OK] SUCCESS: Applied transformation to object")
 
+@pytest.mark.basic
 def test_cleanup():
 	"""Test 8: Memory cleanup"""
 	import radia as rad

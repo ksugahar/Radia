@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.16] - 2025-12-24
+
+### Fixed
+
+- **BiCGSTAB Convergence Dramatically Improved**
+  - Changed initial guess from zero to previous solution (FlatMagn)
+  - This matches ELF's approach and significantly accelerates convergence
+  - N=10 benchmark: 50 iterations -> 5 iterations (was 10x slower than ELF)
+  - N=5 benchmark: 8 iterations -> 3 iterations
+
+### Changed
+
+- **Debug Logging Policy**
+  - Removed C++ file-based debug logging (policy: debug info via Python only)
+  - All debug information should be managed through Python scripts
+
+### Validation
+
+- N=10 hexahedron benchmark (1000 elements, H_ext = 200,000 A/m):
+  - BiCGSTAB: 5 iterations, M_avg_z = 716,316 A/m (ELF: 4 iterations)
+  - LU: 13 iterations, M_avg_z = 716,281 A/m (matches ELF exactly)
+  - HACApK: 5 iterations, M_avg_z = 715,885 A/m
+
 ## [1.3.15] - 2025-12-22
 
 ### Added
@@ -47,16 +70,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **PyPI Package DLL Loading Issue**
   - Fixed "DLL load failed" error when importing radia from PyPI package
-  - Added `libopenblas.dll` to package distribution
+  - Added Intel MKL runtime DLL (`mkl_rt.2.dll`) to package distribution
   - Added DLL directory to search path via `os.add_dll_directory()` on Windows
-  - Package now correctly loads OpenBLAS dependency
+  - Package now correctly loads Intel MKL dependency
 
 ## [1.3.13] - 2025-12-11
 
 ### Performance
 
-- **Major Performance Optimization with OpenBLAS and OpenMP**
-  - Replaced manual BLAS operations with OpenBLAS calls (cblas_ddot, cblas_dnrm2, cblas_daxpy, cblas_dcopy, cblas_dscal, cblas_dgemv)
+- **Major Performance Optimization with Intel MKL and OpenMP**
+  - Replaced manual BLAS operations with Intel MKL CBLAS calls (cblas_ddot, cblas_dnrm2, cblas_daxpy, cblas_dcopy, cblas_dscal, cblas_dgemv)
   - Added OpenMP parallelization to interaction matrix O(N^2) construction
   - LU solver: Up to **240x faster** (e.g., 410s -> 1.7s for 390 elements)
   - BiCGSTAB solver: Up to **17x faster** (e.g., 29s -> 1.7s for 390 elements)

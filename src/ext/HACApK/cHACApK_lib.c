@@ -29,7 +29,7 @@
 
 /* BLAS dgemv for optimized matrix-vector operations */
 #ifdef HAVE_LAPACK
-/* OpenBLAS/MKL CBLAS interface */
+/* Intel MKL CBLAS interface */
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -48,6 +48,9 @@ extern void cblas_dcopy(int N, const double *X, int incX, double *Y, int incY);
 
 /* CBLAS dnrm2: Euclidean norm */
 extern double cblas_dnrm2(int N, const double *X, int incX);
+
+/* CBLAS idamax: Find index of element with max absolute value (1-indexed in Fortran, 0-indexed in C) */
+extern int cblas_idamax(int N, const double *X, int incX);
 
 #ifdef __cplusplus
 }
@@ -91,7 +94,19 @@ void cHACApK_extract_col(double *dst, const double *src, int row, int ldsrc, int
 
 //***cHACApK_maxabsvalloc_d
 // Find maximum absolute value and its location
+// Optimized with BLAS idamax when available
 void cHACApK_maxabsvalloc_d(double *vec, double *maxval, int *loc, int n) {
+#ifdef HAVE_LAPACK
+  /* Use BLAS idamax for optimized max absolute value search */
+  if (n > 0) {
+    int idx = cblas_idamax(n, vec, 1);  /* Returns 0-indexed location */
+    *loc = idx;
+    *maxval = fabs(vec[idx]);
+  } else {
+    *loc = 0;
+    *maxval = 0.0;
+  }
+#else
   int i;
   *maxval = 0.0;
   *loc = 0;
@@ -102,6 +117,7 @@ void cHACApK_maxabsvalloc_d(double *vec, double *maxval, int *loc, int n) {
       *loc = i;
     }
   }
+#endif
 }
 
 //***cHACApK_minabsvalloc_d
@@ -114,6 +130,23 @@ void cHACApK_minabsvalloc_d(double *vec, double *minval, int *loc, int n) {
     double absval = fabs(vec[i]);
     if (absval < *minval) {
       *minval = absval;
+      *loc = i;
+    }
+  }
+}
+
+//***cHACApK_maxabsvallocm_d
+// Find maximum absolute value and its location, with mask
+// Skip elements where lmask[i]==1
+void cHACApK_maxabsvallocm_d(double *vec, double *maxval, int *loc, int n, int *lmask) {
+  int i;
+  *maxval = 0.0;
+  *loc = 0;
+  for (i = 0; i < n; i++) {
+    if (lmask[i] == 1) continue;  /* Skip masked elements */
+    double absval = fabs(vec[i]);
+    if (absval > *maxval) {
+      *maxval = absval;
       *loc = i;
     }
   }

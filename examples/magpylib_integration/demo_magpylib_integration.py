@@ -15,8 +15,10 @@ import numpy as np
 
 # Add build directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
+from netgen_mesh_import import HEX_FACES
 
 try:
     import magpylib as magpy
@@ -64,7 +66,13 @@ def main():
 
     # Iron cube: 40mm side, centered at origin
     cube_size = 0.04  # 40mm
-    cube = rad.ObjRecMag([0, 0, 0], [cube_size, cube_size, cube_size], [0, 0, 0])
+    half = cube_size / 2
+    # Hexahedron vertices for cube centered at [0, 0, 0] with dimensions [0.04, 0.04, 0.04]
+    vertices = [
+        [-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
+        [-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
+    ]
+    cube = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
 
     # Subdivide for better accuracy
     n_div = 3
@@ -167,8 +175,13 @@ def main():
 
     rad.UtiDelAll()
 
-    # Recreate cube
-    cube2 = rad.ObjRecMag([0, 0, 0], [cube_size, cube_size, cube_size], [0, 0, 0])
+    # Recreate cube: 40mm side, centered at origin
+    # Hexahedron vertices for cube centered at [0, 0, 0] with dimensions [0.04, 0.04, 0.04]
+    vertices2 = [
+        [-half, -half, -half], [half, -half, -half], [half, half, -half], [-half, half, -half],
+        [-half, -half, half], [half, -half, half], [half, half, half], [-half, half, half]
+    ]
+    cube2 = rad.ObjPolyhdr(vertices2, HEX_FACES, [0, 0, 0])
     rad.ObjDivMag(cube2, [n_div, n_div, n_div])
     mat2 = rad.MatLin(mu_r)  # relative permeability
     rad.MatApl(cube2, mat2)

@@ -106,6 +106,9 @@ void LinearMaterial2( double,double, double );
 void LinearMaterialIsotropic( double );
 void LinearMaterialAnisotropic( double,double, double,double,double );
 void PermanentMagnet( double,double, double,double,double );
+void MagFixed( double,double,double );
+void MagLinear( double,double, double,double,double );
+void MagCurve( double*, int, double,double,double );
 void MaterialStd( char*, double );
 void NonlinearIsotropMaterial( double,double,double, double,double,double );
 void NonlinearIsotropMaterial2( double,double, double,double, double,double );
@@ -150,6 +153,7 @@ void SolveGenNonl( int, double, int, int, int );
 void SetHACApKParams( double, int, double );
 void GetHACApKStats( double*, int* );
 #endif
+void GetSolveStats( double*, int* );
 void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
@@ -1311,6 +1315,30 @@ void PermanentMagnet(double Br, double Hc, double Mx, double My, double Mz)
 
 //-------------------------------------------------------------------------
 
+void MagFixed(double Mx, double My, double Mz)
+{
+	double MagnArray[] = {Mx, My, Mz};
+	rad.SetMagFixed(MagnArray, 3);
+}
+
+//-------------------------------------------------------------------------
+
+void MagLinear(double Br, double Hc, double Ex, double Ey, double Ez)
+{
+	double MagAxisArray[] = {Ex, Ey, Ez};
+	rad.SetMagLinear(Br, Hc, MagAxisArray, 3);
+}
+
+//-------------------------------------------------------------------------
+
+void MagCurve(double* pCurveData, int numPoints, double Ex, double Ey, double Ez)
+{
+	double MagAxisArray[] = {Ex, Ey, Ez};
+	rad.SetMagCurve(pCurveData, numPoints, MagAxisArray, 3);
+}
+
+//-------------------------------------------------------------------------
+
 void NonlinearIsotropMaterial(double Ms1, double Ms2, double Ms3,
 							  double ks1, double ks2, double ks3)
 {
@@ -1612,6 +1640,13 @@ void GetHACApKStats(double* dOut, int* nOut)
 	rad.GetHACApKStats(dOut, nOut);
 }
 #endif
+
+//-------------------------------------------------------------------------
+
+void GetSolveStats(double* dOut, int* nOut)
+{
+	rad.GetSolveStats(dOut, nOut);
+}
 
 //-------------------------------------------------------------------------
 

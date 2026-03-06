@@ -67,6 +67,9 @@ void LinearMaterial2( double,double, double );
 void LinearMaterialIsotropic( double );
 void LinearMaterialAnisotropic( double,double, double,double,double );
 void PermanentMagnet( double,double, double,double,double );
+void MagFixed( double,double,double );
+void MagLinear( double,double, double,double,double );
+void MagCurve( double*, int, double,double,double );
 
 void NonlinearIsotropMaterial2( double,double, double,double, double,double );
 void NonlinearIsotropMaterial3Opt( double**, long );
@@ -93,6 +96,7 @@ void SolveGenNonl( int, double, int, int, int );
 void SetHACApKParams( double, int, double );
 void GetHACApKStats( double*, int* );
 #endif
+void GetSolveStats( double*, int* );
 void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
@@ -712,6 +716,41 @@ int CALL RadMatLinAniso(int* n, double* pKsi, double* pEasyAxis)
 int CALL RadMatPM(int* n, double Br, double Hc, double* pMagAxis)
 {
 	PermanentMagnet(Br, Hc, pMagAxis[0], pMagAxis[1], pMagAxis[2]);
+
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+// Fixed magnetization permanent magnet material (Type 100)
+// Magnetization does not change with H field (no demagnetization)
+int CALL RadMatMagFixed(int* n, double* pMagn)
+{
+	MagFixed(pMagn[0], pMagn[1], pMagn[2]);
+
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+// Linear demagnetization permanent magnet material (Type 102)
+// B = Br + mu_0 * mu_rec * H, where mu_rec = Br / (mu_0 * Hc)
+// Currently behaves as fixed magnetization (demagnetization not yet implemented)
+int CALL RadMatMagLinear(int* n, double Br, double Hc, double* pMagAxis)
+{
+	MagLinear(Br, Hc, pMagAxis[0], pMagAxis[1], pMagAxis[2]);
+
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+// User-defined demagnetization curve permanent magnet material (Type 103)
+// B-H curve: [[H1, B1], [H2, B2], ...]
+// Currently behaves as fixed magnetization (demagnetization not yet implemented)
+int CALL RadMatMagCurve(int* n, double* pCurveData, int np, double* pMagAxis)
+{
+	MagCurve(pCurveData, np, pMagAxis[0], pMagAxis[1], pMagAxis[2]);
 
 	*n = ioBuffer.OutInt();
 	return ioBuffer.OutErrorStatus();
@@ -1668,6 +1707,14 @@ int CALL RadGetHACApKStats(double* dOut, int* nOut)
 	return ioBuffer.OutErrorStatus();
 }
 #endif
+
+//-------------------------------------------------------------------------
+
+int CALL RadGetSolveStats(double* dOut, int* nOut)
+{
+	GetSolveStats(dOut, nOut);
+	return ioBuffer.OutErrorStatus();
+}
 
 //-------------------------------------------------------------------------
 

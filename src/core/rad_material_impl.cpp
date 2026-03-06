@@ -27,6 +27,11 @@
 #include <math.h>
 #include <string.h>
 #include <cstdio>
+#include <chrono>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 
 //-------------------------------------------------------------------------
@@ -177,6 +182,129 @@ int radTApplication::SetPermanentMagnet(double Br, double Hc, double* MagAxisArr
 	catch(...)
 	{
 		if(MaterPtr) delete MaterPtr;  // Clean up if exception before radThg ownership transfer
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::SetMagFixed(double* MagnArray, long lenMagnArray)
+{
+	radTMagFixed* MaterPtr = nullptr;
+	try
+	{
+		if(lenMagnArray != 3)
+		{
+			Send.ErrorMessage("Radia::Error104"); return 0;  // Magnetization must have 3 components
+		}
+
+		TVector3d MagnVect;
+		if(!ValidateVector3d(MagnArray, lenMagnArray, &MagnVect)) return 0;
+
+		MaterPtr = new radTMagFixed(MagnVect);
+		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+
+		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		if(MaterPtr) delete MaterPtr;
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::SetMagLinear(double Br, double Hc, double* MagAxisArray, long lenMagAxisArray)
+{
+	radTMagLinear* MaterPtr = nullptr;
+	try
+	{
+		if(lenMagAxisArray != 3)
+		{
+			Send.ErrorMessage("Radia::Error104"); return 0;  // Magnetization axis must have 3 components
+		}
+
+		TVector3d MagAxisVect;
+		if(!ValidateVector3d(MagAxisArray, lenMagAxisArray, &MagAxisVect)) return 0;
+
+		double AbsMagAxis = sqrt(MagAxisVect.x*MagAxisVect.x + MagAxisVect.y*MagAxisVect.y + MagAxisVect.z*MagAxisVect.z);
+		if(AbsMagAxis < 1.E-10)
+		{
+			Send.ErrorMessage("Radia::Error105"); return 0;  // Magnetization axis cannot be zero vector
+		}
+
+		if(Br <= 0 || Hc <= 0)
+		{
+			Send.ErrorMessage("Radia::Error106"); return 0;  // Br and Hc must be positive
+		}
+
+		MaterPtr = new radTMagLinear(Br, Hc, MagAxisVect);
+		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+
+		radThg hg(MaterPtr);
+		MaterPtr = nullptr;  // Ownership transferred to radThg
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		if(MaterPtr) delete MaterPtr;
+		Initialize(); return 0;
+	}
+}
+
+//-------------------------------------------------------------------------
+
+int radTApplication::SetMagCurve(double* pCurveData, int numPoints, double* MagAxisArray, long lenMagAxisArray)
+{
+	radTMagCurve* MaterPtr = nullptr;
+	try
+	{
+		if(lenMagAxisArray != 3)
+		{
+			Send.ErrorMessage("Radia::Error104"); return 0;
+		}
+
+		TVector3d MagAxisVect;
+		if(!ValidateVector3d(MagAxisArray, lenMagAxisArray, &MagAxisVect)) return 0;
+
+		double AbsMagAxis = sqrt(MagAxisVect.x*MagAxisVect.x + MagAxisVect.y*MagAxisVect.y + MagAxisVect.z*MagAxisVect.z);
+		if(AbsMagAxis < 1.E-10)
+		{
+			Send.ErrorMessage("Radia::Error105"); return 0;
+		}
+
+		if(numPoints < 2)
+		{
+			Send.ErrorMessage("Radia::Error024"); return 0;  // Need at least 2 points
+		}
+
+		// Convert flat array to TVector2d array
+		std::vector<TVector2d> vCurve(numPoints);
+		for(int i = 0; i < numPoints; i++)
+		{
+			vCurve[i].x = pCurveData[2*i];     // H value
+			vCurve[i].y = pCurveData[2*i + 1]; // B value
+		}
+
+		MaterPtr = new radTMagCurve(vCurve.data(), numPoints, MagAxisVect);
+		if(MaterPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+
+		radThg hg(MaterPtr);
+		MaterPtr = nullptr;
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		if(MaterPtr) delete MaterPtr;
 		Initialize(); return 0;
 	}
 }
@@ -724,12 +852,6 @@ void radTApplication::DumpElem(int* arKeys, int nElem, const char* strFormat, bo
 			if(nDrwAttrFound > 0) oStr.setFromPos(drwAttrOfst, nDrwAttrFound);
 
 			Send.ByteString(reinterpret_cast<const unsigned char*>(oStr.data()), (long)oStr.size());
-
-			//DEBUG
-			//CAuxBinStrVect inStr(reinterpret_cast<const unsigned char*>(oStr.data()), (long)oStr.size());
-			//int i0, i1, i2, i3, i4, i5, i6;
-			//inStr >> i0; inStr >> i1; inStr >> i2; inStr >> i3; inStr >> i4; inStr >> i5; inStr >> i6;
-			//END DEBUG
 		}
 		else 
 		{
@@ -1406,6 +1528,8 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 				m_hacapk_n_dof = stats.n_dof;
 				m_hacapk_compression = stats.compression;
 				m_hacapk_build_time = stats.build_time;
+				m_hacapk_memory_mb = stats.memory_mb;
+				m_hacapk_dense_memory_mb = stats.dense_memory_mb;
 				m_hacapk_stats_valid = true;
 			}
 			break;
@@ -1429,15 +1553,12 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 
 int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char** arOptionNames, const char** arOptionValues, int numOptions)
 {
-	// Debug: write to log file
-	FILE* debug_log = std::fopen("S:/Radia/01_GitHub/makeautorelax.log", "a");
-	if(debug_log)
-	{
-		std::fprintf(debug_log, "MakeAutoRelax called: key=%d, prec=%g, maxiter=%d, method=%d\n",
-		            InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
-		std::fflush(debug_log);
-		std::fclose(debug_log);
-	}
+	// Initialize solve statistics
+	m_solve_stats_valid = false;
+	m_solve_t_matrix_build = 0.0;
+	m_solve_t_linear_solve = 0.0;
+	m_solve_linear_iterations = 0;
+	m_solve_nonl_iterations = 0;
 
 	try
 	{
@@ -1523,6 +1644,8 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 				m_hacapk_n_dof = stats.n_dof;
 				m_hacapk_compression = stats.compression;
 				m_hacapk_build_time = stats.build_time;
+				m_hacapk_memory_mb = stats.memory_mb;
+				m_hacapk_dense_memory_mb = stats.dense_memory_mb;
 				m_hacapk_stats_valid = true;
 			}
 			break;
@@ -1532,6 +1655,9 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			InteractPtr->OutRelaxStatusParam(RelaxStatusParamArray);
 		}
 
+		// Set solve statistics
+		m_solve_nonl_iterations = ActualIterNum;
+		m_solve_stats_valid = true;
 
 		if(ActualIterNum >= MaxIterNumber) { Send.WarningMessage("Radia::Warning015");}
 		if(SendingIsRequired) Send.OutRelaxResultsInfo(RelaxStatusParamArray, lenRelaxStatusParamArray, ActualIterNum);
@@ -1588,25 +1714,75 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		}
 #endif
 
-		int InteractElemKey = PreRelax(ObjKey, 0, skipDenseMatrix);
-		if(InteractElemKey <= 0) return 0;
+		// Check if we can reuse cached interaction matrix
+		// The interaction matrix N only depends on geometry, not on chi (material)
+		// This avoids the expensive O(N^2) matrix construction on repeated Solve() calls
+		int InteractElemKey = 0;
+		double t_matrix_build = 0.0;
+
+		bool cacheValid = (m_cached_interact_key > 0 && m_cached_obj_key == ObjKey);
+
+		// For HACApK, cache invalidation is handled differently (H-matrix is rebuilt internally)
+		// Also invalidate cache if solver method changed (different matrix type might be needed)
+#ifdef RADIA_USE_HACAPK
+		if(cacheValid && MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
+		{
+			// HACApK builds its own H-matrix, may need to rebuild
+			// For now, keep the cache - HACApK handles its own caching
+		}
+#endif
+
+		if(cacheValid)
+		{
+			// Reuse cached interaction object
+			InteractElemKey = m_cached_interact_key;
+			t_matrix_build = 0.0;  // No rebuild needed
+
+			// Validate the cached key is still valid in GlobalMapOfHandlers
+			radThg hg;
+			if(!ValidateElemKey(InteractElemKey, hg))
+			{
+				// Cache is stale, need to rebuild
+				cacheValid = false;
+				m_cached_interact_key = 0;
+				m_cached_obj_key = 0;
+			}
+		}
+
+		if(!cacheValid)
+		{
+			// Time matrix construction (PreRelax includes SetupInteractMatrix)
+			auto t_prerelax_start = std::chrono::high_resolution_clock::now();
+			InteractElemKey = PreRelax(ObjKey, 0, skipDenseMatrix);
+			auto t_prerelax_end = std::chrono::high_resolution_clock::now();
+			t_matrix_build = std::chrono::duration<double>(t_prerelax_end - t_prerelax_start).count();
+			if(InteractElemKey <= 0) return 0;
+
+			// Cache the interaction key for future reuse
+			m_cached_interact_key = InteractElemKey;
+			m_cached_obj_key = ObjKey;
+		}
 
 		SendingIsRequired = PrevSendingIsRequired;
 
 		try
 		{
 			ActualIterNum = MakeAutoRelax(InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
+			// Store matrix build time (MakeAutoRelax resets m_solve_t_matrix_build to 0)
+			m_solve_t_matrix_build = t_matrix_build;
 		}
 		catch(...)
 		{
 			SendingIsRequired = 0;
-			DeleteElement(InteractElemKey);
+			// Don't delete cached interaction on error - keep for potential retry
 			throw 0;
 		}
 
-		PrevSendingIsRequired = SendingIsRequired; SendingIsRequired = 0;
-		DeleteElement(InteractElemKey);
-		SendingIsRequired = PrevSendingIsRequired;
+		// DON'T delete the interaction element - keep it cached for next Solve() call
+		// The cache will be invalidated when geometry changes or UtiDelAll() is called
+		// PrevSendingIsRequired = SendingIsRequired; SendingIsRequired = 0;
+		// DeleteElement(InteractElemKey);
+		// SendingIsRequired = PrevSendingIsRequired;
 	}
 	catch(...) { Initialize(); return 0;}
 	return ActualIterNum;
@@ -2180,8 +2356,49 @@ void radTApplication::GetHACApKStats(double* dOut, int* nOut)
 	dOut[8] = m_timing_linear_solve;    // Total BiCGSTAB solve time [s]
 	dOut[9] = (double)m_linear_iterations;  // Total BiCGSTAB iterations
 
-	*nOut = 10;
+	// Memory statistics (ELF-compatible)
+	dOut[10] = m_hacapk_memory_mb;       // H-matrix memory [MB]
+	dOut[11] = m_hacapk_dense_memory_mb; // Dense matrix memory [MB]
+
+	*nOut = 12;
 }
 #endif
+
+//-------------------------------------------------------------------------
+
+void radTApplication::GetSolveStats(double* dOut, int* nOut)
+{
+	if(!m_solve_stats_valid)
+	{
+		*nOut = 0;
+		return;
+	}
+
+	// Solve statistics
+	dOut[0] = m_solve_t_matrix_build;   // Interaction matrix build time [s]
+	dOut[1] = m_solve_t_linear_solve;   // Total linear solver time [s]
+	dOut[2] = (double)m_solve_linear_iterations;  // Total linear iterations
+	dOut[3] = (double)m_solve_nonl_iterations;    // Total nonlinear iterations
+
+	// OpenMP status
+#ifdef _OPENMP
+	dOut[4] = 1.0;  // OpenMP enabled
+	dOut[5] = (double)omp_get_max_threads();
+#else
+	dOut[4] = 0.0;  // OpenMP disabled
+	dOut[5] = 1.0;
+#endif
+
+	// LU decomposition time (Method 0 only)
+	dOut[6] = m_solve_t_lu_decomp;
+
+#ifdef RADIA_USE_HACAPK
+	// H-matrix timing (Method 2 only) - ELF-compatible
+	dOut[7] = m_timing_hmatrix_build;   // H-matrix construction time [s]
+	*nOut = 8;
+#else
+	*nOut = 7;
+#endif
+}
 
 //-------------------------------------------------------------------------

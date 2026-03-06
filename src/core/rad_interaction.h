@@ -132,6 +132,13 @@ class radTInteraction : public radTg {
 	friend class radTHMatrixACA;    // Allow H-matrix to access interaction data
 	friend class RadHACApKManager;  // Allow HACApK manager to access interaction data
 
+	// Allow unified nonlinear iteration helpers to access interaction data
+	friend bool InitializeNonlinearContext(struct NonlinearContext&, radTInteraction*, bool);
+	friend bool BuildBaseMatrix(struct NonlinearContext&, radTInteraction*);
+	friend void StoreOldValuesAndComputeBnorm(struct NonlinearContext&, radTInteraction*);
+	friend void UpdateMagnAndComputeH(struct NonlinearContext&, radTInteraction*);
+	friend double UpdateChiAndCheckConvergence(struct NonlinearContext&, radTInteraction*);
+
 	int AmOfMainElem;
 	int AmOfExtElem;
 	radThg SourceHandle;
@@ -197,6 +204,45 @@ class radTInteraction : public radTg {
 	std::vector<double> m_flatMagnArray;         // Size: m_totalDOF (M or sigma values)
 	std::vector<double> m_flatFieldArray;        // Size: m_totalDOF
 
+	//-------------------------------------------------------------------------
+	// Pre-computed tetrahedron geometry for fast 3x3 block computation
+	// Reference: ELF-style optimization avoiding B_comp() overhead
+	//-------------------------------------------------------------------------
+	bool m_tetraGeomReady;                        // True if geometry is pre-computed
+	std::vector<double> m_tetraCenters;           // n_elem * 3: element centers
+	std::vector<double> m_tetraFaceVertices;      // n_elem * 4 * 3 * 3: face vertices (4 faces, 3 verts, xyz)
+	std::vector<double> m_tetraFaceNormals;       // n_elem * 4 * 3: outward face normals
+	std::vector<double> m_tetraFaceAreas;         // n_elem * 4: face areas
+
+	//-------------------------------------------------------------------------
+	// Pre-computed hexahedron geometry for fast 6x6 block computation
+	// Hexahedron faces are quads split into 2 triangles each
+	//-------------------------------------------------------------------------
+	bool m_hexaGeomReady;                         // True if geometry is pre-computed
+	std::vector<double> m_hexaCenters;            // n_hex * 3: element centers
+	std::vector<double> m_hexaEvalPoints;         // n_hex * 6 * 3: Yano-Sugahara eval points per face
+	std::vector<double> m_hexaFaceNormals;        // n_hex * 6 * 3: outward face normals
+	std::vector<double> m_hexaFaceAreas;          // n_hex * 6: face areas
+	std::vector<double> m_hexaTriVertices;        // n_hex * 6 * 2 * 3 * 3: 2 triangles per face, 3 verts, xyz
+	std::vector<double> m_hexaTriSigns;           // n_hex * 6 * 2: sign correction for each triangle
+	std::vector<int> m_hexaElemIndices;           // Maps hex index to element index
+
+	//-------------------------------------------------------------------------
+	// Pre-computed triangle local coordinate systems (for fast field computation)
+	// Eliminates redundant sqrt/div operations during FieldFromChargedTriangle
+	// Layout per triangle (32 doubles):
+	//   basis_a[3], basis_b[3], basis_c[3]  - local coordinate system (9)
+	//   origin[3]                           - triangle origin (v0) (3)
+	//   XY[3][2]                            - 2D vertex coordinates (6)
+	//   DS[3], AM[3], XD[3], YD[3]          - edge parameters (12)
+	//   EPSG                                - geometric epsilon (1)
+	//   sign                                - normal orientation sign (1)
+	//-------------------------------------------------------------------------
+	static constexpr int TRI_DATA_SIZE = 32;      // doubles per triangle
+	static constexpr int TRIS_PER_HEX_ELEM = 12;  // 6 faces * 2 triangles per hexahedron
+	std::vector<double> m_hexaTriData;            // n_hex * 12 * 32: pre-computed triangle data
+	bool m_hexaTriDataReady;                      // True if triangle data is pre-computed
+
 public:
 
 	int AmOfRelaxSubInterv;
@@ -214,7 +260,7 @@ public:
 	//int Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char AuxOldMagnArrayIsNeeded, char KeepTransData);
 
 	void CountMainRelaxElems(radTg3d*, radTlphgPtr*);
-	void AllocateMemory(char ExtraExternFieldArrayIsNeeded);
+	void AllocateMemory(char ExtraExternFieldArrayIsNeeded, char skipInteractMatrix = 0);
 	void DeallocateMemory(); //OC27122019
 
 	int SetupInteractMatrix(); //OC26122019
@@ -234,6 +280,11 @@ public:
 	int GetElementDOFOffset(int elemIdx) const { return m_elemDOFOffset[elemIdx]; }
 	bool HasVariableDOF() const { return m_hasVariableDOF; }
 
+	// Triangle precomputation accessors (for HACApK sharing)
+	const double* GetHexaTriData() const { return m_hexaTriData.data(); }
+	bool IsHexaTriDataReady() const { return m_hexaTriDataReady; }
+	int GetNumHexElements() const { return (int)m_hexaElemIndices.size(); }
+
 	// Flat matrix/array accessors for solvers
 	double* GetFlatInteractMatrix() { return m_flatInteractMatrix.data(); }
 	const double* GetFlatInteractMatrix() const { return m_flatInteractMatrix.data(); }
@@ -245,6 +296,61 @@ public:
 	// Matrix is stored COLUMN-MAJOR for LAPACK compatibility
 	double* GetInteractBlock(int row_elem, int col_elem);
 	const double* GetInteractBlock(int row_elem, int col_elem) const;
+
+	//-------------------------------------------------------------------------
+	// Nonlinear iteration helpers (unified across LU, BiCGSTAB, HACApK solvers)
+	// Reference: ELF mucal0/mucal1/mucal2 pattern (Modern Fortran implementation)
+	//-------------------------------------------------------------------------
+
+	// Initialize chi array for all elements using ELF mucal0 style
+	// Returns: true if all materials are linear (single solve suffices)
+	// polyCache: output vector of cached radTPolyhedron* for 6DOF elements
+	// chiArray: output chi value for each element
+	bool InitializeChiArray(std::vector<double>& chiArray,
+	                        std::vector<radTPolyhedron*>& polyCache);
+
+	// Initialize H field for first iteration (ELF mucal0 style)
+	// Uses H_init_mag as initial field magnitude
+	void InitializeHField(double H_init_mag = 100.0);
+
+	// Store old B-field norms for convergence check (ELF mucal2 style)
+	// Also stores old magnetization values in OldMagn
+	// chiArray: current chi for each element (from InitializeChiArray or UpdateChiAndCheckConvergence)
+	void StoreOldBnorm(std::vector<double>& OldBnorm,
+	                   const std::vector<double>& chiArray,
+	                   const std::vector<radTPolyhedron*>& polyCache);
+
+	// Update element magnetization from FlatMagn (after linear solve)
+	// Copies FlatMagn to element Magn fields (3DOF) or poly->FaceSigma (6DOF)
+	// Also updates FlatField with H = M / chi for chi update loop
+	void UpdateElementMagnetization(const std::vector<radTPolyhedron*>& polyCache,
+	                                const std::vector<double>& chiArray);
+
+	// Update chi from H and check B-field convergence (ELF mucal1+mucal2 combined)
+	// chiArray: input/output chi values (updated with new chi)
+	// OldBnorm: input old B-field norms (from StoreOldBnorm)
+	// relax: under-relaxation parameter (0.0 = full step, 0.0-1.0 damping)
+	// max_B_rel_change: output max |B_new - B_old| / B_sat across all elements
+	// Returns: true if converged (max_B_rel_change < tolerance)
+	void UpdateChiAndCheckConvergence(std::vector<double>& chiArray,
+	                                   const std::vector<double>& OldBnorm,
+	                                   const std::vector<radTPolyhedron*>& polyCache,
+	                                   double relax,
+	                                   double& max_B_rel_change);
+
+	//-------------------------------------------------------------------------
+	// Fast tetrahedron matrix build (avoiding B_comp overhead)
+	//-------------------------------------------------------------------------
+	void PrecomputeTetraGeometry();  // Pre-compute face vertices/normals/areas
+	void Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const;  // Fast 3x3 block
+
+	//-------------------------------------------------------------------------
+	// Fast hexahedron matrix build (avoiding FieldFromQuadFace overhead)
+	//-------------------------------------------------------------------------
+	void PrecomputeHexaGeometry();  // Pre-compute face triangles/normals/eval points
+	void PrecomputeHexaTriangleData();  // Pre-compute triangle local coordinate systems
+	void Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) const;  // Fast 6x6 block
+	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 
 	void SetupExternFieldArray();
 	void AddExternFieldFromMoreExtSource();

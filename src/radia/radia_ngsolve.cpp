@@ -248,6 +248,7 @@ public:
 			py::list results_list = results.cast<py::list>();
 
 			// Store in cache
+			// Vector potential A: Always scale by 0.001 (Radia uses mm internally)
 			double scale = (field_type == "a") ? 0.001 : 1.0;
 			for (size_t i = 0; i < npts; i++) {
 				py::list pt = points_list[i].cast<py::list>();
@@ -405,6 +406,13 @@ public:
 	        f_global[2] = f_local[2];
 	    }
 
+	    // Vector potential A unit scaling:
+	    // Radia ALWAYS uses mm internally, so A is always in T*mm
+	    // NGSolve differentiates in meters: curl(A) = dA/dx_m
+	    // To get correct B = curl(A), we need to divide A by 1000:
+	    //   B [T] = curl(A) = (dA/dx_mm) * (dx_mm/dx_m) = (dA/dx_mm) * 1000
+	    //   If A is in T*mm, then dA/dx_mm gives T, but curl in m gives T*1000
+	    //   So we scale A by 0.001 to get: dA/dx_m = d(A*0.001)/dx_m = correct T
 	    double scale = (field_type == "a") ? 0.001 : 1.0;
 
 	    result(0) = f_global[0] * scale;
@@ -493,6 +501,7 @@ public:
 	        py::list results_list = field_results.cast<py::list>();
 
 	        // Extract results and apply transformations
+	        // Vector potential A: Always scale by 0.001 (Radia uses mm internally)
 	        double scale = (field_type == "a") ? 0.001 : 1.0;
 
 	        for (size_t i = 0; i < npts; i++) {

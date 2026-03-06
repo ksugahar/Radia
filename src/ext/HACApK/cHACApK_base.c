@@ -664,6 +664,7 @@ error:
 //***cHACApK_calc_vec
 // ld==0: row direction, ld==1: column direction
 // Optimized with BLAS dcopy for strided column extraction
+// workspace: pre-allocated buffer of size >= kmax to avoid malloc in hot path
 void cHACApK_calc_vec(
   double *zaa,
   double *zab,
@@ -677,9 +678,9 @@ void cHACApK_calc_vec(
   int *lod,
   int i_bemv,
   int *lmsk,
-  int ld)
+  int ld,
+  double *workspace)  /* Pre-allocated workspace of size >= k */
 {
-  double *zz;
   int ii,ill,itt,il;
 
   for (ii=0; ii<ndp; ii++) {
@@ -693,19 +694,130 @@ void cHACApK_calc_vec(
     }
   }
   if(k==0) return;
-  zz = (double *) calloc(k,sizeof(double));
-  if(zz == NULL) {
-#pragma omp critical
-    printf("sub cHACApK_calc_vec; zz allocation failed !\n");
-    exit(EXIT_FAILURE);
-  }
+  /* Use pre-allocated workspace instead of malloc/free */
   /* Extract column with stride using BLAS dcopy (optimized strided access) */
-  cHACApK_extract_col(zz, zab, ip, ndt, k);
-  cHACApK_adotsub_dsm(vec,zaa,zz,ndp,k,ndp);
+  cHACApK_extract_col(workspace, zab, ip, ndt, k);
+  cHACApK_adotsub_dsm(vec,zaa,workspace,ndp,k,ndp);
   for (il=0; il<ndp; il++) {
     if(lmsk[il]==1) vec[il]=0.0;
   }
-  free(zz);
+}
+
+//***cHACApK_aca
+// Basic Adaptive Cross Approximation (ACA) - simpler and faster than ACA+
+// Based on the Fortran implementation from HACApK
+int cHACApK_aca(
+  double *zaa, // zaa(ndl,kmax) - output left factor
+  double *zab, // zab(ndt,kmax) - output right factor
+  double *param,
+  int ndl,
+  int ndt,
+  int nstrtl,
+  int nstrtt,
+  int *lod,
+  int i_bemv,
+  int kmax,
+  double eps,
+  double znrmmat,
+  double pACA_EPS)
+{
+  int *lrow_msk, *lcol_msk;
+  double *prow, *pcol;
+  double *workspace;
+
+  double znrm, ACA_EPS, col_maxval, row_maxval, zdltinv, zeps;
+  int krank, kstop, k, ist, jst, istn, lstop_aca;
+  int il, it;
+
+  krank = (ndl < ndt) ? ndl : ndt;  /* min(ndl, ndt) */
+  znrm = znrmmat * sqrt((double)ndl * (double)ndt);
+
+  if ((int)param[61] == 1) ACA_EPS = pACA_EPS;
+  else if ((int)param[61] == 2 || (int)param[61] == 3) ACA_EPS = pACA_EPS * znrm;
+  else ACA_EPS = pACA_EPS;
+
+  lrow_msk = (int *) calloc(ndl, sizeof(int));
+  lcol_msk = (int *) calloc(ndt, sizeof(int));
+  if (lrow_msk == NULL || lcol_msk == NULL) {
+    fprintf(stderr, "Error: cHACApK_aca: malloc lrow_msk lcol_msk\n");
+    goto error;
+  }
+
+  /* Pre-allocate workspace for cHACApK_calc_vec */
+  workspace = (double *) calloc(kmax, sizeof(double));
+  if (workspace == NULL) {
+    fprintf(stderr, "Error: cHACApK_aca: malloc workspace\n");
+    goto error;
+  }
+
+  k = 0;  /* 0-indexed (Fortran uses 1-indexed) */
+  lstop_aca = 0;
+  kstop = (kmax < krank) ? kmax : krank;
+
+  /* Initial row index selection */
+  if (nstrtl > nstrtt) {
+    ist = 0;  /* 0-indexed */
+  } else {
+    ist = ndl - 1;  /* 0-indexed */
+  }
+
+  while (k < kstop && lstop_aca == 0) {
+    pcol = zaa + ndl * k;  /* k-th column of zaa */
+    prow = zab + ndt * k;  /* k-th column of zab */
+
+    /* Compute row: prow = A(ist, :) - approximation */
+    cHACApK_calc_vec(zab, zaa, ndt, ndl, k, ist, prow, nstrtl, nstrtt, lod, i_bemv, lcol_msk, 0, workspace);
+
+    /* Find max abs value in prow (with mask) */
+    cHACApK_maxabsvallocm_d(prow, &row_maxval, &jst, ndt, lcol_msk);
+
+    /* Scale row by pivot */
+    if (fabs(prow[jst]) > 1.0e-20) {
+      zdltinv = 1.0 / prow[jst];
+      for (it = 0; it < ndt; it++) prow[it] *= zdltinv;
+    } else {
+      /* Pivot too small, stop */
+      break;
+    }
+
+    /* Compute column: pcol = A(:, jst) - approximation */
+    cHACApK_calc_vec(zaa, zab, ndl, ndt, k, jst, pcol, nstrtl, nstrtt, lod, i_bemv, lrow_msk, 1, workspace);
+
+    /* Mark used indices */
+    lrow_msk[ist] = 1;
+    lcol_msk[jst] = 1;
+
+    /* Find next row index (max abs in pcol with mask) */
+    cHACApK_maxabsvallocm_d(pcol, &col_maxval, &istn, ndl, lrow_msk);
+
+    /* Check stopping criterion */
+    if (fabs(row_maxval) < ACA_EPS && fabs(col_maxval) < ACA_EPS && k >= (int)param[64]) {
+      lstop_aca = 1;
+      break;
+    }
+
+    /* Compute approximation norm */
+    zeps = cHACApK_unrm_d(ndl, pcol) * cHACApK_unrm_d(ndt, prow);
+    if (k == 0 && (int)param[61] == 1) znrm = zeps;
+    zeps = zeps / znrm;
+
+    if (zeps < eps || k == kstop - 1) lstop_aca = 1;
+    if (lstop_aca == 1 && k >= (int)param[64]) {
+      k++;
+      break;
+    }
+
+    ist = istn;  /* Next row index */
+    k++;
+  }
+
+  free(lrow_msk);
+  free(lcol_msk);
+  free(workspace);
+  return k;
+
+error:
+  exit(EXIT_FAILURE);
 }
 
 //***cHACApK_acaplus
@@ -727,6 +839,7 @@ int cHACApK_acaplus(
   int *lrow_msk,*lcol_msk;
   double *pa_ref,*pb_ref;
   double *prow,*pcol;
+  double *workspace;  /* Pre-allocated workspace for cHACApK_calc_vec */
 
   const double za_ACA_EPS=1.0e-30;
   double znrm,ACA_EPS,colnorm,rownorm,apxnorm,col_maxval,row_maxval,zinvmax,blknorm;
@@ -743,6 +856,14 @@ int cHACApK_acaplus(
     fprintf(stderr, "Error: cHACApK_acaplus: malloc lrow_msk lcol_msk\n");
     goto error;
   }
+
+  /* Pre-allocate workspace for cHACApK_calc_vec to avoid malloc/free in hot path */
+  workspace = (double *) calloc(kmax, sizeof(double));
+  if(workspace==NULL) {
+    fprintf(stderr, "Error: cHACApK_acaplus: malloc workspace\n");
+    goto error;
+  }
+
   k = 0;
 
   j_ref=0; // arbitrary j_ref
@@ -752,7 +873,7 @@ int cHACApK_acaplus(
     goto error;
   }
 
-  cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j_ref,pa_ref,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1);
+  cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j_ref,pa_ref,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1,workspace);
   //  print*,'pa_ref=',pa_ref
   colnorm = cHACApK_unrm_d(ndl,pa_ref);
 
@@ -763,7 +884,7 @@ int cHACApK_acaplus(
     fprintf(stderr, "Error: cHACApK_acaplus: malloc pb_ref\n");
     goto error;
   }
-  cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i_ref,pb_ref,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0);
+  cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i_ref,pb_ref,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0,workspace);
   //  print*,'pb_ref=',pb_ref
   rownorm=cHACApK_unrm_d(ndt,pb_ref);
 
@@ -780,17 +901,17 @@ int cHACApK_acaplus(
 
     if(row_maxval>col_maxval) {
       if(j!=j_ref) {
-        cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j,pcol,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1);
+        cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j,pcol,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1,workspace);
       } else {
         for (il=0; il<ndl; il++) pcol[il]=pa_ref[il];
       }
       cHACApK_maxabsvalloc_d(pcol,&col_maxval,&i,ndl);
 
       if(col_maxval < ACA_EPS && k>=param[64]) {
-        lstop_aca = 1; 
+        lstop_aca = 1;
         //         print*,'2***************lstop_aca==1***********************2'
       } else {
-        cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i,prow,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0);
+        cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i,prow,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0,workspace);
         if(fabs(pcol[i])>1.0e-20) {
           zinvmax=1.0/pcol[i];
         } else {
@@ -805,9 +926,9 @@ int cHACApK_acaplus(
       }
     } else {
       if(i!=i_ref) {
-        cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i,prow,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0);
+        cHACApK_calc_vec(zab,zaa,ndt,ndl,k,i,prow,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0,workspace);
       } else {
-        for (it=0; it<ndt; it++) prow[it]=pb_ref[it];  
+        for (it=0; it<ndt; it++) prow[it]=pb_ref[it];
       }
       cHACApK_maxabsvalloc_d(prow,&row_maxval,&j,ndt);
 
@@ -815,7 +936,7 @@ int cHACApK_acaplus(
         lstop_aca = 1;
         //         print*,'3***************lstop_aca==1***********************3'
       } else {
-        cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j,pcol,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1);
+        cHACApK_calc_vec(zaa,zab,ndl,ndt,k,j,pcol,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1,workspace);
         if(fabs(prow[j])>1.0e-20) {
           zinvmax=1.0/prow[j];
         } else {
@@ -846,7 +967,7 @@ int cHACApK_acaplus(
           //          print*,'i=',i,' ii=',mod((i_ref+ndl-2),ndl)+1
           if(lrow_msk[i]==0) {
             //            write(6,1000) 'i=',i
-            cHACApK_calc_vec(zab,zaa,ndt,ndl,k+1,i,pb_ref,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0);
+            cHACApK_calc_vec(zab,zaa,ndt,ndl,k+1,i,pb_ref,nstrtl,nstrtt,lod,i_bemv,lcol_msk,0,workspace);
             rownorm = cHACApK_unrm_d(ndt,pb_ref);
             if(rownorm<ACA_EPS) lrow_msk[i] = 1;
             ntries_row--;
@@ -872,7 +993,7 @@ int cHACApK_acaplus(
         //        print*,'lcol_msk',lcol_msk
         while(j!=(j_ref+ndt-1)%ndt && colnorm<za_ACA_EPS && ntries_col>0) {
           if(lcol_msk[j]==0) {
-            cHACApK_calc_vec(zaa,zab,ndl,ndt,k+1,j,pa_ref,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1);
+            cHACApK_calc_vec(zaa,zab,ndl,ndt,k+1,j,pa_ref,nstrtl,nstrtt,lod,i_bemv,lrow_msk,1,workspace);
             colnorm = cHACApK_unrm_d(ndl,pa_ref);
             if(colnorm<ACA_EPS) lcol_msk[j]=1;
             ntries_col--;
@@ -937,7 +1058,7 @@ int cHACApK_acaplus(
       //    stop
     }
   }
-  free(lrow_msk); free(lcol_msk); free(pa_ref); free(pb_ref);
+  free(lrow_msk); free(lcol_msk); free(pa_ref); free(pb_ref); free(workspace);
   kacaplus=k;
   //  print*,'HACApK_acaplus=',HACApK_acaplus
   //  write(6,2000) 'blknorm=',blknorm/apxnorm,' colnorm=',colnorm/apxnorm,' rownorm=',rownorm/apxnorm
@@ -948,8 +1069,8 @@ error:
 }
 
 //***cHACApK_fill_leafmtx_hyp
-// ELF-compatible OpenMP parallelization: parallelize over leaf blocks directly
-// with schedule(dynamic, 8) for better load balancing
+// OpenMP parallelization over leaf blocks with dynamic scheduling
+// Dynamic scheduling provides better load balancing for variable-size ACA+ operations
 void cHACApK_fill_leafmtx_hyp(
   st_cHACApK_leafmtx *st_lf,
   int i_bemv,
@@ -963,7 +1084,7 @@ void cHACApK_fill_leafmtx_hyp(
   int nlf,
   int *lnps,
   int *lnpe,
-  int *lthr) // [0:]
+  int *lthr) // [0:nthr] - thread-to-block assignment array (unused with dynamic)
 {
   int mpinr,mpilog,nrank,icomm,kparam;
   int ip;
@@ -972,7 +1093,8 @@ void cHACApK_fill_leafmtx_hyp(
   mpinr=lpmd[3]; mpilog=lpmd[4]; nrank=lpmd[2]; icomm=lpmd[1];
   eps=param[71]; ACA_EPS=param[72]*eps; kparam=(int)param[63];
 
-  /* ELF-compatible: Parallelize over leaf blocks directly with schedule(dynamic, 8) */
+  /* Dynamic scheduling with chunk size 8 to reduce scheduling overhead
+   * (ELF uses chunk size 8 which is ~3x faster than chunk size 1) */
 #pragma omp parallel for schedule(dynamic, 8) default(none) \
   shared(st_lf, nlf, kparam, eps, ACA_EPS, znrmmat, param, lodl, lodt, i_bemv) private(ip)
   for (ip = 1; ip <= nlf; ip++) {
@@ -999,8 +1121,10 @@ void cHACApK_fill_leafmtx_hyp(
 
       int kt = 0;
       if(param[60]==1) {
-        // kt=HACApK_aca(...)
+        /* Basic ACA - simpler and faster */
+        kt=cHACApK_aca(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
       } else if(param[60]==2) {
+        /* ACA+ - more robust but slower */
         kt=cHACApK_acaplus(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
       } else if(param[60]==3) {
         kt=cHACApK_SVD(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
@@ -1641,6 +1765,8 @@ error:
 }
 
 //***cHACApK_generate_cbitree
+// ITERATIVE VERSION: Uses explicit stack instead of recursion
+// to avoid stack overflow for large problems (>30,000 elements)
 void cHACApK_generate_cbitree(
   st_cHACApK_cluster *p_st_clt,
   double **zgmid_t, // 2D array [ndim+1][md+1]
@@ -1655,78 +1781,171 @@ void cHACApK_generate_cbitree(
   int ndim,
   int *p_nclst)
 {
-  st_cHACApK_cluster st_clt;
-  double *zlmin,*zlmax;
-  int ndpth,nclst,minsz,nson,id,il,ncut,nl,nr,nh,nsrt1,nd1;
-  double zdiff,zlmid,zg,zidiff;
+  // Stack frame structure for iterative traversal
+  typedef struct {
+    st_cHACApK_cluster *p_result;  // Where to store the cluster
+    int *lod_ptr;                   // Pointer into lod array
+    int nsrt;                       // Start index
+    int nd;                         // Number of elements
+    int ndpth;                      // Current depth
+    int phase;                      // 0=process, 1=after left, 2=after right
+    st_cHACApK_cluster parent_clt;  // Parent cluster for storing result
+    int nl;                         // Split position (saved for phase 1->2)
+  } StackFrame;
 
-  ndpth=*p_ndpth;
-  nclst=*p_nclst;
+  int minsz = param[21];
+  int nclst = *p_nclst;
+  int ndpth_init = *p_ndpth;
 
-  minsz=param[21];
-  // minsz=param[21]/4+1:
-  ndpth=ndpth+1;
-  // ndscd=ndscd+1:
-  // if(i>26) stop
-  // printf("\n");
-  // printf("nsrt=%12d nd=%12d\n",nsrt,nd);
-  if(nd <= minsz) {
-    nson=0;
-    // nclst=nclst+1;
-    st_clt=cHACApK_generate_cluster(&nclst,ndpth,nsrt,nd,ndim,nson);
-  } else {
-    zlmin = (double *) malloc(sizeof(double)*(ndim+1));
-    zlmax = (double *) malloc(sizeof(double)*(ndim+1));
-    if(zlmin==NULL || zlmax==NULL) {
-      fprintf(stderr, "Error: cHACApK_generate_cbitree: malloc zlmin zlmax\n");
-      goto error;
-    }
-    for(id=1; id<=ndim; id++) {
-      zlmin[id]=zgmid_t[id][lod[1]]; zlmax[id]=zlmin[id];
-      for(il=2; il<=nd; il++) {
-        zg=zgmid_t[id][lod[il]];
-        if     (zg<zlmin[id]) { zlmin[id]=zg; }
-        else if(zlmax[id]<zg) { zlmax[id]=zg; }
-      }
-    }
-    // printf("zlmin=%21.6lf\n",zlmin);
-    // printf("zlmax=%21.6lf\n",zlmax);
+  // Estimate max depth: log2(nd/minsz) + safety margin
+  int max_depth = 64;  // Should be enough for billions of elements
 
-    zdiff=zlmax[1]-zlmin[1]; ncut = 1;
-    for(id=1; id<=ndim; id++) {
-      zidiff=zlmax[id]-zlmin[id];
-      if(zidiff>zdiff) {
-        zdiff =zidiff; ncut=id;
-      }
-    }
-    zlmid= (zlmax[ncut]+zlmin[ncut])/2;
-    // printf("ncut=%12d; zlmid=%21.6lf\n",ncut,zlmid);
-
-    nl = 1; nr = nd;
-    while(nl < nr) {
-      while(nl < nd && zgmid_t[ncut][lod[nl]] <= zlmid) { nl=nl+1; }
-      while(nr >= 0 && zgmid_t[ncut][lod[nr]] > zlmid) { nr=nr-1; }
-      if(nl < nr) { nh = lod[nl]; lod[nl] = lod[nr]; lod[nr] = nh; }
-    }
-
-    // printf("nd=%12d;ncut=%12d; nsrt=%12d; nl=%12d\n",nd,ncut,nsrt,nl);
-
-    nson=2;
-    st_clt=cHACApK_generate_cluster(&nclst,ndpth,nsrt,nd,ndim,nson);
-    nsrt1=nsrt; nd1=nl-1;
-    cHACApK_generate_cbitree(&(st_clt->pc_sons[1]),zgmid_t,param,lpmd,lod,&ndpth,ndscd,nsrt1,nd1,md,ndim,&nclst);
-    ndpth=ndpth-1;
-    // ndscd=ndscd+st_clt->pc_sons[1].ndscd;
-    nsrt1=nsrt+nl-1; nd1=nd-nl+1;
-    cHACApK_generate_cbitree(&(st_clt->pc_sons[2]),zgmid_t,param,lpmd,&(lod[nl-1]),&ndpth,ndscd,nsrt1,nd1,md,ndim,&nclst);
-    ndpth=ndpth-1;
-    // ndscd=ndscd+st_clt->pc_sons[2].ndscd;
+  // Allocate stack
+  StackFrame *stack = (StackFrame*)malloc(sizeof(StackFrame) * max_depth);
+  if (!stack) {
+    fprintf(stderr, "Error: cHACApK_generate_cbitree: malloc stack failed\n");
+    exit(EXIT_FAILURE);
   }
-  st_clt->ndscd=nd;
-  *p_st_clt=st_clt;
-  *p_ndpth=ndpth;
-  *p_nclst=nclst;
-  return;
-error:
-  exit(EXIT_FAILURE);
+
+  // Allocate reusable min/max arrays (avoid malloc per call)
+  double *zlmin = (double*)malloc(sizeof(double) * (ndim + 1));
+  double *zlmax = (double*)malloc(sizeof(double) * (ndim + 1));
+  if (!zlmin || !zlmax) {
+    fprintf(stderr, "Error: cHACApK_generate_cbitree: malloc zlmin/zlmax failed\n");
+    free(stack);
+    exit(EXIT_FAILURE);
+  }
+
+  // Initialize stack with root node
+  int sp = 0;
+  stack[sp].p_result = p_st_clt;
+  stack[sp].lod_ptr = lod;
+  stack[sp].nsrt = nsrt;
+  stack[sp].nd = nd;
+  stack[sp].ndpth = ndpth_init;
+  stack[sp].phase = 0;
+  stack[sp].parent_clt = NULL;
+  stack[sp].nl = 0;
+  sp++;
+
+  while (sp > 0) {
+    sp--;
+    StackFrame *f = &stack[sp];
+
+    if (f->phase == 0) {
+      // Phase 0: Process this node
+      int cur_ndpth = f->ndpth + 1;
+      int cur_nd = f->nd;
+      int cur_nsrt = f->nsrt;
+      int *cur_lod = f->lod_ptr;
+
+      if (cur_nd <= minsz) {
+        // Leaf node
+        st_cHACApK_cluster st_clt = cHACApK_generate_cluster(&nclst, cur_ndpth, cur_nsrt, cur_nd, ndim, 0);
+        st_clt->ndscd = cur_nd;
+        *(f->p_result) = st_clt;
+        // Done with this node, continue to next
+      } else {
+        // Internal node: need to split
+        // Find bounding box
+        int id, il;
+        for (id = 1; id <= ndim; id++) {
+          zlmin[id] = zgmid_t[id][cur_lod[1]];
+          zlmax[id] = zlmin[id];
+          for (il = 2; il <= cur_nd; il++) {
+            double zg = zgmid_t[id][cur_lod[il]];
+            if (zg < zlmin[id]) zlmin[id] = zg;
+            else if (zlmax[id] < zg) zlmax[id] = zg;
+          }
+        }
+
+        // Find split dimension (largest extent)
+        double zdiff = zlmax[1] - zlmin[1];
+        int ncut = 1;
+        for (id = 1; id <= ndim; id++) {
+          double zidiff = zlmax[id] - zlmin[id];
+          if (zidiff > zdiff) {
+            zdiff = zidiff;
+            ncut = id;
+          }
+        }
+        double zlmid = (zlmax[ncut] + zlmin[ncut]) / 2.0;
+
+        // Partition lod array
+        int nl = 1, nr = cur_nd;
+        while (nl < nr) {
+          while (nl < cur_nd && zgmid_t[ncut][cur_lod[nl]] <= zlmid) nl++;
+          while (nr >= 0 && zgmid_t[ncut][cur_lod[nr]] > zlmid) nr--;
+          if (nl < nr) {
+            int nh = cur_lod[nl];
+            cur_lod[nl] = cur_lod[nr];
+            cur_lod[nr] = nh;
+          }
+        }
+
+        // Create parent cluster
+        st_cHACApK_cluster st_clt = cHACApK_generate_cluster(&nclst, cur_ndpth, cur_nsrt, cur_nd, ndim, 2);
+        st_clt->ndscd = cur_nd;
+        *(f->p_result) = st_clt;
+
+        // Save state for returning after children
+        f->phase = 1;
+        f->parent_clt = st_clt;
+        f->nl = nl;
+        f->ndpth = cur_ndpth;
+        sp++;  // Push this frame back
+
+        // Check stack overflow
+        if (sp >= max_depth - 2) {
+          fprintf(stderr, "Error: cHACApK_generate_cbitree: stack overflow (depth=%d)\n", sp);
+          free(zlmin);
+          free(zlmax);
+          free(stack);
+          exit(EXIT_FAILURE);
+        }
+
+        // Push left child
+        stack[sp].p_result = &(st_clt->pc_sons[1]);
+        stack[sp].lod_ptr = cur_lod;
+        stack[sp].nsrt = cur_nsrt;
+        stack[sp].nd = nl - 1;
+        stack[sp].ndpth = cur_ndpth;
+        stack[sp].phase = 0;
+        stack[sp].parent_clt = NULL;
+        stack[sp].nl = 0;
+        sp++;
+      }
+    } else if (f->phase == 1) {
+      // Phase 1: After left child, now push right child
+      f->phase = 2;
+      sp++;  // Push this frame back
+
+      st_cHACApK_cluster parent = f->parent_clt;
+      int nl = f->nl;
+      int cur_ndpth = f->ndpth;
+      int cur_nd = f->nd;
+      int cur_nsrt = f->nsrt;
+      int *cur_lod = f->lod_ptr;
+
+      // Push right child
+      stack[sp].p_result = &(parent->pc_sons[2]);
+      stack[sp].lod_ptr = &(cur_lod[nl - 1]);
+      stack[sp].nsrt = cur_nsrt + nl - 1;
+      stack[sp].nd = cur_nd - nl + 1;
+      stack[sp].ndpth = cur_ndpth;
+      stack[sp].phase = 0;
+      stack[sp].parent_clt = NULL;
+      stack[sp].nl = 0;
+      sp++;
+    }
+    // Phase 2: After right child, just continue (parent already set)
+  }
+
+  // Cleanup
+  free(zlmin);
+  free(zlmax);
+  free(stack);
+
+  *p_nclst = nclst;
+  *p_ndpth = ndpth_init;  // Restore original depth (caller expects this)
 }

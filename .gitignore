@@ -230,11 +230,6 @@ examples/cube_uniform_field/nonlinear/*_results.json
 examples/cube_uniform_field/nonlinear/*_summary.json
 
 # ============================================================================
-# External Libraries (not committed)
-# ============================================================================
-src/ext/openblas/
-
-# ============================================================================
 # Temporary debugging scripts
 # ============================================================================
 fix_convergence.py

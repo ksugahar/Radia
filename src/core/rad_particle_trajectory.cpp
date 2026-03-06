@@ -930,8 +930,6 @@ void radTPrtclTrj::ComputeFocusPotentArrayForOneTransvPoint(const TVector3d& Ini
 		}
 		pFocPotData[i] = CurWeight*ExternSum;
 		pIntBtrE2[i] = 0.001*intBtrE2; //to have it in [T^2*m]
-
-		//IntegBtr = ZeroVect; //To leave or to remove???
 	}
 }
 

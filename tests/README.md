@@ -273,10 +273,12 @@ def test_magnet_field_calculation():
 	import sys
 	sys.path.insert(0, 'build/lib/Release')
 	import radia as rad
+	from netgen_mesh_import import HEX_FACES
 
-	# Create magnet
-	mag = rad.ObjRecMag([0,0,0], [10,10,10])
-	rad.ObjSetM(mag, [0,0,1000])
+	# Create hexahedral magnet (10x10x10 mm)
+	vertices = [[-5,-5,-5], [5,-5,-5], [5,5,-5], [-5,5,-5],
+	            [-5,-5,5], [5,-5,5], [5,5,5], [-5,5,5]]
+	mag = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 1000])
 
 	# Calculate field
 	field = rad.Fld(mag, 'b', [0,0,20])

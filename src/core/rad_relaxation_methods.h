@@ -38,6 +38,130 @@ namespace RadSolverMethod {
 }
 
 //-------------------------------------------------------------------------
+// Nonlinear Iteration Context (shared across all solver methods)
+//
+// Phase 1 of unification: Encapsulates common state for Newton-Raphson iteration
+// Reference: internal/design/NONLINEAR_ITERATION_UNIFICATION_PLAN.md
+//-------------------------------------------------------------------------
+
+// Forward declaration
+class radTg3dRelax;
+class radTPolyhedron;
+
+/**
+ * Shared context for nonlinear magnetostatic iteration.
+ *
+ * This struct encapsulates all state vectors and parameters that are
+ * IDENTICAL across LU, BiCGSTAB, and HACApK solvers. By extracting
+ * this common state, we eliminate ~1200 lines of duplicated code.
+ *
+ * The Newton-Raphson iteration solves:
+ *   (I - chi*N) * M = chi * H_ext
+ * where chi is updated each iteration based on the B-H curve.
+ */
+struct NonlinearContext {
+	// Problem dimensions
+	int totalDOF;           // Total degrees of freedom (sum of element DOFs)
+	int AmOfMainElem;       // Number of magnetic elements
+
+	// Pointers to interaction matrix data (owned by IntrctPtr, DO NOT delete)
+	double* FlatMagn;       // Magnetization array [totalDOF]
+	double* FlatField;      // Field array [totalDOF]
+	double* FlatExtern;     // External field array [totalDOF]
+
+	// State vectors for Newton-Raphson iteration
+	std::vector<double> OldMagn;           // Previous iteration magnetization [totalDOF]
+	std::vector<double> OldChi;            // Previous iteration chi [AmOfMainElem]
+	std::vector<double> OldBnorm;          // Previous iteration |B| [AmOfMainElem]
+	std::vector<double> CurrentChiArray;   // Current chi values [AmOfMainElem]
+	std::vector<double> NewFieldArray;     // Computed field after linear solve [totalDOF]
+
+	// Element cache (avoid repeated virtual calls)
+	std::vector<radTPolyhedron*> polyCache;  // Polyhedron pointers [AmOfMainElem]
+
+	// Flags
+	bool all_materials_linear;  // True if all materials are linear (converge in 1 iteration)
+
+	// Convergence tracking
+	double B_sat;               // Saturation B for relative convergence check
+	double max_B_rel_change;    // Maximum relative B change this iteration
+
+	// Under-relaxation parameter (0 = full step, 0.5 = 50% damping)
+	double relax_param;
+
+	// Base matrix for linear system (geometric part without chi)
+	std::vector<double> BaseMatrix;
+
+	// Constructor
+	NonlinearContext()
+		: totalDOF(0)
+		, AmOfMainElem(0)
+		, FlatMagn(nullptr)
+		, FlatField(nullptr)
+		, FlatExtern(nullptr)
+		, all_materials_linear(true)
+		, B_sat(1.0)
+		, max_B_rel_change(0.0)
+		, relax_param(0.0)
+	{}
+};
+
+//-------------------------------------------------------------------------
+// Helper functions for unified nonlinear iteration
+// These functions encapsulate common logic shared across LU/BiCGSTAB/HACApK
+//-------------------------------------------------------------------------
+
+/**
+ * Initialize NonlinearContext with problem dimensions, arrays, and initial chi.
+ * Called once at the start of AutoRelax.
+ *
+ * @param ctx Output context to initialize
+ * @param IntrctPtr Interaction data (provides geometry, materials, arrays)
+ * @param MagnResetIsNotNeeded If false, reset magnetization before solving
+ * @return true if initialization successful, false if problem is empty/invalid
+ */
+bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPtr, bool MagnResetIsNotNeeded);
+
+/**
+ * Build base matrix with correct sign convention for MMM/MSC elements.
+ * MMM (3DOF): negate interaction matrix (stores N, need -N)
+ * MSC (6DOF): use as-is (stores -K/(4pi))
+ *
+ * @param ctx Context with BaseMatrix to fill
+ * @param IntrctPtr Interaction data
+ * @return true on success, false on memory allocation failure
+ */
+bool BuildBaseMatrix(NonlinearContext& ctx, radTInteraction* IntrctPtr);
+
+/**
+ * Store old values (M, chi, B-norm) before linear solve for convergence check.
+ * Called at the start of each nonlinear iteration.
+ *
+ * @param ctx Context with OldMagn, OldChi, OldBnorm to update
+ * @param IntrctPtr Interaction data
+ */
+void StoreOldValuesAndComputeBnorm(NonlinearContext& ctx, radTInteraction* IntrctPtr);
+
+/**
+ * Update element magnetization from flat array and compute H = M/chi.
+ * Called after linear solve to sync element state.
+ *
+ * @param ctx Context with FlatMagn (solution)
+ * @param IntrctPtr Interaction data
+ */
+void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr);
+
+/**
+ * Update chi using ELF-style dual method and check convergence.
+ * Returns max relative B-field change (ELF mucal2 criterion).
+ *
+ * @param ctx Context with CurrentChiArray to update
+ * @param IntrctPtr Interaction data
+ * @return Maximum relative B-field change across all elements
+ */
+double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* IntrctPtr);
+
+//-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
 class radTIterativeRelaxMeth {
@@ -49,9 +173,28 @@ public:
 	radTIterativeRelaxMeth() { IntrctPtr = 0;}
 
 	virtual void DefineNewMagnetizations() {}
-	
+
 	void MakeN_iter(int);
 	void ComputeRelaxStatusParam(const TVector3d*, const TVector3d*, const TVector3d*);
+
+	/**
+	 * Unified nonlinear iteration using helper functions.
+	 * Calls virtual SolveLinearStep which is overridden by each solver.
+	 *
+	 * @return Number of nonlinear iterations performed
+	 */
+	int AutoRelax_Unified(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded = 0);
+
+protected:
+	/**
+	 * Build system matrix and RHS, then solve the linear system.
+	 * This is the ONLY part that differs between LU, BiCGSTAB, and HACApK.
+	 *
+	 * @param ctx Nonlinear context with BaseMatrix, CurrentChiArray, FlatExtern
+	 * @param iterCount Current nonlinear iteration number (0 for first)
+	 * @return Number of linear iterations (0 for direct solvers like LU)
+	 */
+	virtual int SolveLinearStep(NonlinearContext& ctx, int iterCount) { return 0; }
 };
 
 //-------------------------------------------------------------------------
@@ -84,8 +227,9 @@ public:
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 
-	// Variable DOF version for hybrid MSC + standard element analysis
-	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+protected:
+	// Override: LU direct solver for linear step
+	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
 
 private:
 	// Solve linear system Ax=b using LU decomposition with partial pivoting
@@ -127,17 +271,15 @@ public:
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 
-	// Variable DOF version for hybrid MSC + standard element analysis
-	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
+protected:
+	// Override: BiCGSTAB iterative solver for linear step
+	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
 
 private:
-	// BiCGSTAB iterative solver
-	// Solves: A*x = b using BiCGSTAB with Jacobi preconditioner
-	// Returns number of iterations (0 on failure)
-	int SolveBiCGSTAB(int ndof, double tol, int max_iter, double& residual);
-
 	// Variable DOF version of BiCGSTAB
-	int SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, int max_iter, double& residual);
+	// elemChiArray: isotropic chi for each element (3DOF elements use this, 6DOF uses poly->CurrentChi)
+	int SolveBiCGSTAB_VariableDOF(int totalDOF, double tol, int max_iter, double& residual,
+	                              const std::vector<double>& elemChiArray);
 
 	// Matrix-vector product
 	// Computes: y = A * x where A = -N + diag(1/chi)
@@ -228,9 +370,14 @@ private:
 	RadHACApKManager* m_hacapk;
 	RadHACApKParams m_hacapk_params;
 
+	// NOTE: Jacobi preconditioner is now recomputed every iteration (FIX 2025-12-27)
+	// No longer cached. See SolveBiCGSTAB_HMatrix_VariableDOF for details.
+
 	// BiCGSTAB with H-matrix for 6DOF MSC hexahedra
 	// Returns number of iterations (0 on failure)
-	int SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, double tol, int max_iter, double& residual);
+	// elemChiArray: isotropic chi for each element (3DOF elements use this, 6DOF uses poly->CurrentChi)
+	int SolveBiCGSTAB_HMatrix_VariableDOF(int totalDOF, double tol, int max_iter, double& residual,
+	                                       const std::vector<double>& elemChiArray);
 
 	// Matrix-vector product using H-matrix for 6DOF MSC hexahedra
 	void MatVec_HMatrix_VariableDOF(const std::vector<double>& x, std::vector<double>& y, int totalDOF);

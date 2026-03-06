@@ -17,9 +17,22 @@ import sys
 import time
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 import radia as rad
 import numpy as np
+from netgen_mesh_import import HEX_FACES
+
+
+def hex_vertices(cx, cy, cz, dx, dy, dz):
+    """Generate hexahedron vertices from center and dimensions."""
+    hx, hy, hz = dx/2, dy/2, dz/2
+    return [
+        [cx-hx, cy-hy, cz-hz], [cx+hx, cy-hy, cz-hz],
+        [cx+hx, cy+hy, cz-hz], [cx-hx, cy+hy, cz-hz],
+        [cx-hx, cy-hy, cz+hz], [cx+hx, cy-hy, cz+hz],
+        [cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz]
+    ]
 
 print("=" * 80)
 print("Comprehensive Solver Comparison Benchmark")
@@ -90,7 +103,9 @@ for test in test_cases:
                     x = -size/2 + (i + 0.5) * elem_size
                     y = -size/2 + (j + 0.5) * elem_size
                     z = -size/2 + (k + 0.5) * elem_size
-                    elem = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size])
+                    # Element with dimensions elem_size x elem_size x elem_size
+                    vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
+                    elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
                     rad.MatApl(elem, mat)
                     elements.append(elem)
 
@@ -153,7 +168,9 @@ for test in test_cases:
                 x = -size/2 + (i + 0.5) * elem_size
                 y = -size/2 + (j + 0.5) * elem_size
                 z = -size/2 + (k + 0.5) * elem_size
-                elem = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size])
+                # Element with dimensions elem_size x elem_size x elem_size
+                vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
+                elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
                 rad.MatApl(elem, mat)
                 elements.append(elem)
 
@@ -188,7 +205,9 @@ for test in test_cases:
                 x = -size/2 + (i + 0.5) * elem_size
                 y = -size/2 + (j + 0.5) * elem_size
                 z = -size/2 + (k + 0.5) * elem_size
-                elem = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size])
+                # Element with dimensions elem_size x elem_size x elem_size
+                vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
+                elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
                 rad.MatApl(elem, mat)
                 elements.append(elem)
     bg_field = rad.ObjBckg(H_bg)
@@ -227,7 +246,9 @@ for test in test_cases:
                 x = -size/2 + (i + 0.5) * elem_size
                 y = -size/2 + (j + 0.5) * elem_size
                 z = -size/2 + (k + 0.5) * elem_size
-                elem = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size])
+                # Element with dimensions elem_size x elem_size x elem_size
+                vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
+                elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
                 rad.MatApl(elem, mat)
                 elements.append(elem)
 
@@ -262,7 +283,9 @@ for test in test_cases:
                 x = -size/2 + (i + 0.5) * elem_size
                 y = -size/2 + (j + 0.5) * elem_size
                 z = -size/2 + (k + 0.5) * elem_size
-                elem = rad.ObjRecMag([x, y, z], [elem_size, elem_size, elem_size])
+                # Element with dimensions elem_size x elem_size x elem_size
+                vertices = hex_vertices(x, y, z, elem_size, elem_size, elem_size)
+                elem = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
                 rad.MatApl(elem, mat)
                 elements.append(elem)
     bg_field = rad.ObjBckg(H_bg)

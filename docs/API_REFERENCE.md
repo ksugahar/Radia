@@ -92,7 +92,7 @@ mag_obj = netgen_mesh_to_radia(mesh,
 | Element Type | API | Faces | DOF | Use Case |
 |--------------|-----|-------|-----|----------|
 | **Extruded Polygon** | `ObjThckPgn()` | N-gon extruded | 3 | General prism shapes |
-| **Hexahedron (MSC)** | `ObjRecMag()` or `ObjPolyhdr()` | 6 quad | 6 | Permanent magnets, soft iron |
+| **Hexahedron (MSC)** | `ObjPolyhdr()` + `HEX_FACES` | 6 quad | 6 | Permanent magnets, soft iron |
 | **Tetrahedron** | `ObjPolyhdr()` + `TETRA_FACES` | 4 tri | 3 | Complex curved geometry |
 | **Wedge/Prism** | `ObjPolyhdr()` + `WEDGE_FACES` | 5 | 3 | Hybrid meshes |
 | **Pyramid** | `ObjPolyhdr()` + `PYRAMID_FACES` | 5 | 3 | Mesh transitions |
@@ -100,7 +100,7 @@ mag_obj = netgen_mesh_to_radia(mesh,
 **DOF (Degrees of Freedom)**:
 - **Hexahedra (6 faces)**: 6 DOF - Surface charge density (sigma) per face (MSC method)
 - **Other elements (4-5 faces)**: 3 DOF - Magnetization vector (Mx, My, Mz)
-- `ObjRecMag()` automatically uses 6 DOF MSC hexahedron
+- All meshes are expected to be generated externally (Netgen, GMSH, Cubit, etc.)
 
 ### Face Topology Constants
 
@@ -671,7 +671,51 @@ rad.FldUnits('m')  # Set at start of script
 | B (flux density) | Tesla (T) |
 | H (field) | A/m |
 | M (magnetization) | A/m |
+| A (vector potential) | T*m (when using `FldUnits('m')`) |
 | Current | Ampere (A) |
+
+### Internal Unit System
+
+**IMPORTANT**: Radia ALWAYS uses millimeters (mm) internally, regardless of `FldUnits()` setting.
+
+| Setting | Coordinate Input | B, H Output | A Output | Internal |
+|---------|------------------|-------------|----------|----------|
+| `FldUnits('mm')` | mm | T, A/m | T*mm | mm |
+| `FldUnits('m')` | m (scaled x1000) | T, A/m | **T*mm** (needs /1000) | mm |
+
+### Vector Potential A Unit Conversion
+
+When using NGSolve integration with `FldUnits('m')`:
+
+- **B, H fields**: Returned correctly in SI units (no conversion needed)
+- **A field**: Returned in T*mm (requires scaling for curl(A) = B verification)
+
+**Why A needs special handling:**
+
+1. A is dimensionally [T*length] = [Wb/m] = [V*s/m]
+2. Radia computes A using mm-based geometry: A_radia = T*mm
+3. NGSolve differentiates in meters: `curl(A) = dA/dx [m^-1]`
+4. For B = curl(A) to hold: `A_SI = A_radia / 1000`
+
+**In radia_ngsolve.cpp:**
+
+```cpp
+// Vector potential A unit scaling:
+// Radia ALWAYS uses mm internally, so A is always in T*mm
+// NGSolve differentiates in meters: curl(A) = dA/dx_m
+// To get correct B = curl(A), we scale A by 0.001:
+double scale = (field_type == "a") ? 0.001 : 1.0;
+```
+
+### Maxwell Relation Verification
+
+See `examples/ngsolve_integration/verify_curl_A_equals_B/` for a complete verification script that:
+
+1. Creates a permanent magnet using ObjPolyhdr
+2. Projects A onto HCurl space
+3. Computes curl(A) using NGSolve
+4. Compares with B projected onto HDiv space
+5. Verifies `|curl(A)|/|B| ~= 1.0`
 
 ---
 

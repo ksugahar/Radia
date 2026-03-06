@@ -23,7 +23,7 @@
 #endif
 
 /*=========================================================================
- * BLAS declarations (using LAPACK/OpenBLAS conventions)
+ * BLAS declarations (using Intel MKL LAPACK conventions)
  * These are provided by the system BLAS library linked via CMake
  *=========================================================================*/
 #ifdef __cplusplus
@@ -42,6 +42,22 @@ void dgemv_(const char *trans, const int *m, const int *n,
 #ifdef __cplusplus
 }
 #endif
+
+/*
+ * Global lod pointer for C++ callback access during H-matrix build
+ * Set before cHACApK_fill_leafmtx_hyp, cleared after
+ */
+static int* g_hacapk_lod = NULL;
+static int g_hacapk_lod_size = 0;
+
+/* Accessor functions for C++ code */
+int* HACApK_get_current_lod(void) {
+    return g_hacapk_lod;
+}
+
+int HACApK_get_current_lod_size(void) {
+    return g_hacapk_lod_size;
+}
 
 /*
  * Note: This file is compiled as C (not C++)
@@ -178,7 +194,7 @@ int HACApK_build_hmatrix_wrapper(
     ctl->param[42] = 0;                     /* Block size (auto) */
     ctl->param[43] = 1.0;                   /* Block division factor */
     ctl->param[51] = eta;                   /* Admissibility (eta) */
-    ctl->param[60] = 2;                     /* ACA mode (2=ACA+) */
+    ctl->param[60] = 1;                     /* ACA mode (1=ACA, 2=ACA+) */
     ctl->param[61] = 1;                     /* ACA norm (MREM) */
     ctl->param[62] = (double)200;          /* Max rank initial */
     ctl->param[63] = (double)200;          /* Max rank */
@@ -283,15 +299,28 @@ int HACApK_build_hmatrix_wrapper(
     for (il = 0; il < 5; il++) lnmtx[il] = 0;
     ndpth = 0;
     nlf = 0;
+    if (print_level > 0) {
+        printf("[HACApK] Generating leaf matrix structure...\n");
+        fflush(stdout);
+    }
     cHACApK_generate_leafmtx(st_leafmtx, st_clt, st_clt, ctl->param, ctl->lpmd,
                               lnmtx, nofc, nffc, &nlf, &ndpth);
 
     if (print_level > 0) {
         printf("[HACApK] Generated %d leaf matrices\n", nlf);
+        fflush(stdout);
     }
 
     /* Sort leaves for efficient traversal */
+    if (print_level > 0) {
+        printf("[HACApK] Sorting leaf matrices...\n");
+        fflush(stdout);
+    }
     cHACApK_sort_leafmtx(st_leafmtx, nlf);
+    if (print_level > 0) {
+        printf("[HACApK] Sort completed\n");
+        fflush(stdout);
+    }
 
     /*=========================================================================
      * Fill leaf matrices with values using ACA+
@@ -325,9 +354,18 @@ int HACApK_build_hmatrix_wrapper(
         }
 
         /* Fill leaf matrices using ACA+ */
+        if (print_level > 0) {
+            printf("[HACApK] Starting ACA+ fill: nlf=%d, kparam=%d, nd=%d\n",
+                   nlf, (int)ctl->param[63], nd);
+            fflush(stdout);
+        }
         cHACApK_fill_leafmtx_hyp(st_leafmtx, i_bemv, ctl->param, znrmmat,
                                   ctl->lpmd, lnmtx, ctl->lod, ctl->lod, nd, nlf,
                                   lnps, lnpe, ctl->lthr);
+        if (print_level > 0) {
+            printf("[HACApK] ACA+ fill completed\n");
+            fflush(stdout);
+        }
 
         free(lnps);
         free(lnpe);
@@ -358,6 +396,433 @@ int HACApK_build_hmatrix_wrapper(
     }
 
     /* Cleanup temporary arrays */
+    cHACApK_free_st_clt(st_clt);
+    free(lodfc);
+    for (il = 0; il <= ndim; il++) free(gmid_t[il]);
+    free(gmid_t);
+
+    return 0;
+}
+
+/*=========================================================================
+ * Recursive helper for generating leaf matrices with variable DOF
+ * Following ELF's HACApK_generate_leafmtx_varDOF pattern exactly
+ *
+ * Key insight: DOF indices are computed by cumulative sum in permuted order
+ * - perm_dof_start_l = sum of DOFs for elements 1..(elem_start-1) in Morton order
+ * - ndl = sum of DOFs for elements elem_start..elem_end in Morton order
+ *=========================================================================*/
+static void generate_leafmtx_varDOF_recursive(
+    st_cHACApK_leafmtx *st_leafmtx,
+    st_cHACApK_cluster st_cltl,
+    st_cHACApK_cluster st_cltt,
+    double *param,
+    int *lnmtx,
+    int nofc,
+    int *dof_offset,
+    int *lodfc,
+    int *p_nlf,
+    int nlf_max)
+{
+    int il, it, id;
+    int elem_start_l, elem_end_l, elem_start_t, elem_end_t;
+    int perm_dof_start_l, perm_dof_start_t;
+    int ndl, ndt;
+    int nleaf;
+    double eta, zdistlt, zs;
+    double avg_dof;
+    int total_dof = dof_offset[nofc];
+
+    /* Null check for cluster pointers */
+    if (!st_cltl || !st_cltt) return;
+
+    /* Get element ranges for clusters */
+    elem_start_l = st_cltl->nstrt;
+    elem_end_l = st_cltl->nstrt + st_cltl->nsize - 1;
+    elem_start_t = st_cltt->nstrt;
+    elem_end_t = st_cltt->nstrt + st_cltt->nsize - 1;
+
+    /* Debug: print cluster ranges if print_level > 1 */
+    if (param[1] > 1) {
+        printf("[varDOF] Cluster l: nstrt=%d, nsize=%d, nnson=%d, elem_range=[%d,%d]\n",
+               st_cltl->nstrt, st_cltl->nsize, st_cltl->nnson, elem_start_l, elem_end_l);
+        printf("[varDOF] Cluster t: nstrt=%d, nsize=%d, nnson=%d, elem_range=[%d,%d]\n",
+               st_cltt->nstrt, st_cltt->nsize, st_cltt->nnson, elem_start_t, elem_end_t);
+    }
+
+    /* Validate element ranges - handle 0-based vs 1-based */
+    if (st_cltl->nsize <= 0 || st_cltt->nsize <= 0) return;
+    if (elem_start_l < 1 || elem_start_l > nofc) return;
+    if (elem_start_t < 1 || elem_start_t > nofc) return;
+    if (elem_end_l < 1 || elem_end_l > nofc) return;
+    if (elem_end_t < 1 || elem_end_t > nofc) return;
+
+    /*=========================================================================
+     * Calculate permuted DOF start index (1-based) for ROW cluster
+     * ELF pattern: Sum DOFs of all elements before elem_start_l in permuted order
+     *=========================================================================*/
+    perm_dof_start_l = 1;
+    for (il = 1; il < elem_start_l; il++) {
+        int elem = lodfc[il] - 1;  /* 0-based element index */
+        perm_dof_start_l += dof_offset[elem + 1] - dof_offset[elem];
+    }
+
+    /* Total DOFs in row cluster */
+    ndl = 0;
+    for (il = elem_start_l; il <= elem_end_l; il++) {
+        int elem = lodfc[il] - 1;
+        ndl += dof_offset[elem + 1] - dof_offset[elem];
+    }
+
+    /*=========================================================================
+     * Calculate permuted DOF start index (1-based) for COLUMN cluster
+     *=========================================================================*/
+    perm_dof_start_t = 1;
+    for (it = 1; it < elem_start_t; it++) {
+        int elem = lodfc[it] - 1;
+        perm_dof_start_t += dof_offset[elem + 1] - dof_offset[elem];
+    }
+
+    /* Total DOFs in column cluster */
+    ndt = 0;
+    for (it = elem_start_t; it <= elem_end_t; it++) {
+        int elem = lodfc[it] - 1;
+        ndt += dof_offset[elem + 1] - dof_offset[elem];
+    }
+
+    /* Skip empty blocks */
+    if (ndl == 0 || ndt == 0) return;
+
+    /* Compute average DOF and leaf size threshold */
+    avg_dof = (double)total_dof / (double)nofc;
+    nleaf = (int)((param[21] + 1) * avg_dof);
+    if (nleaf < 3) nleaf = 3;
+
+    /* Get admissibility parameter */
+    eta = param[51];
+
+    /* Compute distance between clusters (need valid bmin/bmax) */
+    zs = 0.0;
+    if (st_cltl->bmin && st_cltl->bmax && st_cltt->bmin && st_cltt->bmax) {
+        for (id = 0; id < st_cltl->ndim; id++) {
+            if (st_cltl->bmax[id] < st_cltt->bmin[id]) {
+                double diff = st_cltt->bmin[id] - st_cltl->bmax[id];
+                zs += diff * diff;
+            } else if (st_cltt->bmax[id] < st_cltl->bmin[id]) {
+                double diff = st_cltl->bmin[id] - st_cltt->bmax[id];
+                zs += diff * diff;
+            }
+        }
+    }
+    zdistlt = sqrt(zs);
+
+    /*=========================================================================
+     * Check admissibility: clusters are well-separated if
+     * min(diam_l, diam_t) <= eta * dist(l, t)
+     *=========================================================================*/
+    if ((st_cltl->zwdth <= eta * zdistlt || st_cltt->zwdth <= eta * zdistlt) &&
+        (ndl >= nleaf && ndt >= nleaf)) {
+        /* Admissible: create low-rank block */
+        int nlf = *p_nlf + 1;
+        if (nlf <= nlf_max) {
+            st_cHACApK_leafmtx lf = st_leafmtx[nlf];
+            if (lf) {
+                lf->nstrtl = perm_dof_start_l;
+                lf->ndl = ndl;
+                lf->nstrtt = perm_dof_start_t;
+                lf->ndt = ndt;
+                lf->kt = 0;
+                lf->ltmtx = 1;  /* Low-rank */
+                *p_nlf = nlf;
+                lnmtx[1]++;
+            }
+        }
+    } else {
+        /* Not admissible: check if we should create dense block or recurse */
+        int nnsonl = st_cltl->nnson;
+        int nnsont = st_cltt->nnson;
+
+        if (nnsonl == 0 || nnsont == 0 || ndl <= nleaf || ndt <= nleaf) {
+            /* Create dense block */
+            int nlf = *p_nlf + 1;
+            if (nlf <= nlf_max) {
+                st_cHACApK_leafmtx lf = st_leafmtx[nlf];
+                if (lf) {
+                    lf->nstrtl = perm_dof_start_l;
+                    lf->ndl = ndl;
+                    lf->nstrtt = perm_dof_start_t;
+                    lf->ndt = ndt;
+                    lf->ltmtx = 2;  /* Dense */
+                    *p_nlf = nlf;
+                    lnmtx[2]++;
+                }
+            }
+        } else {
+            /* Recurse into children - check pc_sons is valid */
+            /* NOTE: pc_sons is 1-indexed in HACApK! */
+            if (st_cltl->pc_sons && st_cltt->pc_sons) {
+                for (il = 1; il <= nnsonl; il++) {
+                    for (it = 1; it <= nnsont; it++) {
+                        generate_leafmtx_varDOF_recursive(
+                            st_leafmtx,
+                            st_cltl->pc_sons[il],  /* Already a pointer, not &pc_sons[il] */
+                            st_cltt->pc_sons[it],
+                            param, lnmtx, nofc, dof_offset, lodfc, p_nlf, nlf_max);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/*=========================================================================
+ * Build H-matrix with variable DOF per element (for mixed hex+tetra meshes)
+ * Following ELF_MAGIC's HACApK_generate_varDOF_omp pattern
+ *=========================================================================*/
+int HACApK_build_hmatrix_varDOF_wrapper(
+    void *leafmtxp_void,
+    void *ctl_void,
+    double *coordinates,
+    int n_elem,
+    int *dof_offset,
+    int total_dof,
+    int ndim,
+    double eps,
+    int leaf_size,
+    double eta,
+    int print_level)
+{
+    st_cHACApK_leafmtxp leafmtxp = (st_cHACApK_leafmtxp)leafmtxp_void;
+    st_cHACApK_lcontrol ctl = (st_cHACApK_lcontrol)ctl_void;
+    st_cHACApK_cluster st_clt;
+    st_cHACApK_leafmtx *st_leafmtx;
+    double **gmid_t;
+    int *lodfc;
+    int nofc;
+    int lnmtx[5];
+    int ndpth, nclst, nlf, nlf_max;
+    int i_bemv = 0;
+    int il, ig, ip;
+    double znrmmat;
+    int nthr;
+
+    nofc = n_elem;
+    nthr = get_num_threads();
+
+    if (print_level > 0) {
+        printf("[HACApK] Building H-matrix (varDOF): n_elem=%d, total_dof=%d\n", n_elem, total_dof);
+        printf("[HACApK] Parameters: eps=%.2e, leaf_size=%d, eta=%.2f\n", eps, leaf_size, eta);
+    }
+
+    /* Initialize leaf matrix pointer structure */
+    leafmtxp->nd = total_dof;
+    leafmtxp->nlf = 0;
+    leafmtxp->nlfkt = 0;
+    leafmtxp->ktmax = 0;
+    leafmtxp->st_lf = NULL;
+
+    /* Allocate and set control parameters */
+    ctl->param = (double*)calloc(101, sizeof(double));
+    ctl->lpmd = (int*)calloc(100, sizeof(int));
+    ctl->time = (double*)calloc(100, sizeof(double));
+    ctl->lod = (int*)calloc(total_dof + 1, sizeof(int));
+    ctl->lthr = (int*)calloc(nthr + 10, sizeof(int));
+    ctl->lsp = NULL;
+    ctl->lnp = NULL;
+
+    if (!ctl->param || !ctl->lpmd || !ctl->lod || !ctl->lthr) {
+        fprintf(stderr, "[HACApK] Error: Memory allocation failed\n");
+        return -1;
+    }
+
+    /* Set HACApK parameters */
+    ctl->param[1] = (double)print_level;
+    ctl->param[21] = (double)leaf_size;
+    ctl->param[22] = 1.0;
+    ctl->param[41] = 1.0;
+    ctl->param[42] = 0;
+    ctl->param[43] = 1.0;
+    ctl->param[51] = eta;
+    ctl->param[60] = 1;  /* ACA mode (1=ACA, 2=ACA+) */
+    ctl->param[61] = 1;
+    ctl->param[62] = (double)200;
+    ctl->param[63] = (double)200;
+    ctl->param[64] = 1;
+    ctl->param[71] = eps;
+    ctl->param[72] = 1.0e-3;
+
+    /* MPI stub setup */
+    ctl->lpmd[1] = MPI_COMM_WORLD;
+    ctl->lpmd[2] = 1;
+    ctl->lpmd[3] = 0;
+    ctl->lpmd[4] = 0;
+    ctl->lpmd[20] = nthr;
+
+    /* Allocate 2D coordinate array for HACApK [ndim+1][nofc+1] */
+    gmid_t = (double**)malloc(sizeof(double*) * (ndim + 1));
+    for (il = 0; il <= ndim; il++) {
+        gmid_t[il] = (double*)malloc(sizeof(double) * (nofc + 1));
+    }
+
+    /* Fill coordinates (1-based indexing) */
+    for (il = 0; il < nofc; il++) {
+        for (ig = 0; ig < ndim; ig++) {
+            gmid_t[ig + 1][il + 1] = coordinates[il * ndim + ig];
+        }
+    }
+
+    /* Allocate temporary element ordering array */
+    lodfc = (int*)malloc(sizeof(int) * (nofc + 1));
+    for (il = 1; il <= nofc; il++) {
+        lodfc[il] = il;
+    }
+
+    /*=========================================================================
+     * Generate cluster tree (element-based, same as uniform DOF)
+     *=========================================================================*/
+    ndpth = 0;
+    nclst = 0;
+
+    cHACApK_generate_cbitree(&st_clt, gmid_t, ctl->param, ctl->lpmd, lodfc,
+                              &ndpth, 0, 1, nofc, nofc, ndim, &nclst);
+
+    if (print_level > 0) {
+        printf("[HACApK] Cluster tree: nclst=%d, ndpth=%d\n", nclst, ndpth);
+    }
+
+    /* Compute bounding boxes */
+    cHACApK_bndbox(st_clt, gmid_t, lodfc, nofc);
+
+    /*=========================================================================
+     * Build DOF permutation array (lod)
+     * For each element in Morton order, append its DOFs to lod
+     *=========================================================================*/
+    {
+        int dof_idx = 1;  /* 1-based DOF index for lod */
+        for (il = 1; il <= nofc; il++) {
+            int elem = lodfc[il] - 1;  /* 0-based element index */
+            int elem_dof = dof_offset[elem + 1] - dof_offset[elem];
+            for (ig = 0; ig < elem_dof; ig++) {
+                /* DOF global index (1-based) = dof_offset[elem] + ig + 1 */
+                ctl->lod[dof_idx] = dof_offset[elem] + ig + 1;
+                dof_idx++;
+            }
+        }
+    }
+
+    /*=========================================================================
+     * Estimate maximum number of leaves
+     * Conservative estimate: 4 * nofc (typical for H-matrix)
+     *=========================================================================*/
+    nlf_max = 4 * nofc;
+    if (nlf_max < 100) nlf_max = 100;
+
+    if (print_level > 0) {
+        printf("[HACApK] Allocating up to %d leaf matrices\n", nlf_max);
+    }
+
+    /*=========================================================================
+     * Allocate leaf matrix structure
+     *=========================================================================*/
+    st_leafmtx = (st_cHACApK_leafmtx*)calloc(nlf_max + 1, sizeof(st_cHACApK_leafmtx));
+    if (!st_leafmtx) {
+        fprintf(stderr, "[HACApK] Error: Memory allocation for st_leafmtx failed\n");
+        cHACApK_free_st_clt(st_clt);
+        free(lodfc);
+        for (il = 0; il <= ndim; il++) free(gmid_t[il]);
+        free(gmid_t);
+        return -1;
+    }
+
+    st_leafmtx[0] = NULL;
+    for (ip = 1; ip <= nlf_max; ip++) {
+        st_leafmtx[ip] = (st_cHACApK_leafmtx)calloc(1, sizeof(struct st_cHACApK_leafmtx));
+        if (!st_leafmtx[ip]) {
+            fprintf(stderr, "[HACApK] Error: Memory allocation for leaf %d failed\n", ip);
+            return -1;
+        }
+    }
+
+    /*=========================================================================
+     * Generate leaf matrices using recursive varDOF approach (ELF pattern)
+     *=========================================================================*/
+    for (il = 0; il < 5; il++) lnmtx[il] = 0;
+    nlf = 0;
+
+    generate_leafmtx_varDOF_recursive(
+        st_leafmtx, st_clt, st_clt,
+        ctl->param, lnmtx, nofc, dof_offset, lodfc, &nlf, nlf_max);
+
+    if (print_level > 0) {
+        printf("[HACApK] Generated %d leaf matrices (varDOF): lowrank=%d, dense=%d\n",
+               nlf, lnmtx[1], lnmtx[2]);
+    }
+
+    /* Sort leaves for efficient traversal */
+    cHACApK_sort_leafmtx(st_leafmtx, nlf);
+
+    /*=========================================================================
+     * Fill leaf matrices with values using ACA+
+     *=========================================================================*/
+    znrmmat = 1.0;
+
+    /* Set global lod for C++ callback access during matrix fill */
+    g_hacapk_lod = ctl->lod;
+    g_hacapk_lod_size = total_dof;
+
+    {
+        int *lnps = (int*)calloc(nthr + 1, sizeof(int));
+        int *lnpe = (int*)calloc(nthr + 1, sizeof(int));
+        int nlf_per_thread = nlf / nthr;
+        int remainder = nlf % nthr;
+        int start = 1;
+
+        ctl->lthr[0] = 1;
+
+        for (il = 0; il < nthr; il++) {
+            int this_thread_nlf = nlf_per_thread + (il < remainder ? 1 : 0);
+            lnps[il] = start;
+            lnpe[il] = start + this_thread_nlf - 1;
+            start = lnpe[il] + 1;
+            ctl->lthr[il + 1] = start;
+        }
+
+        cHACApK_fill_leafmtx_hyp(st_leafmtx, i_bemv, ctl->param, znrmmat,
+                                  ctl->lpmd, lnmtx, ctl->lod, ctl->lod, total_dof, nlf,
+                                  lnps, lnpe, ctl->lthr);
+
+        free(lnps);
+        free(lnpe);
+    }
+
+    /* Clear global lod after matrix fill */
+    g_hacapk_lod = NULL;
+    g_hacapk_lod_size = 0;
+
+    /*=========================================================================
+     * Store results
+     *=========================================================================*/
+    leafmtxp->nd = total_dof;
+    leafmtxp->nlf = nlf;
+    leafmtxp->st_lf = st_leafmtx;
+
+    leafmtxp->nlfkt = 0;
+    leafmtxp->ktmax = 0;
+    for (ip = 1; ip <= nlf; ip++) {
+        if (st_leafmtx[ip]->ltmtx == 1) {
+            leafmtxp->nlfkt++;
+            if (st_leafmtx[ip]->kt > leafmtxp->ktmax) {
+                leafmtxp->ktmax = st_leafmtx[ip]->kt;
+            }
+        }
+    }
+
+    if (print_level > 0) {
+        printf("[HACApK] H-matrix built (varDOF): nlf=%d, nlfkt=%d, ktmax=%d\n",
+               leafmtxp->nlf, leafmtxp->nlfkt, leafmtxp->ktmax);
+    }
+
+    /* Cleanup */
     cHACApK_free_st_clt(st_clt);
     free(lodfc);
     for (il = 0; il <= ndim; il++) free(gmid_t[il]);
@@ -566,6 +1031,54 @@ int* HACApK_lcontrol_get_lod(void *ptr) {
 }
 
 /*=========================================================================
+ * Calculate actual H-matrix memory usage (ELF-compatible)
+ *
+ * Returns memory in bytes by iterating over all leaf blocks:
+ * - Low-rank (ltmtx=1): (ndl + ndt) * kt * sizeof(double)
+ * - Dense (ltmtx=2):    ndl * ndt * sizeof(double)
+ *
+ * This matches ELF's HACApK_get_stats implementation exactly.
+ *=========================================================================*/
+void HACApK_get_memory_stats(void *leafmtxp_void,
+                              int64_t *hmat_bytes_out,
+                              int64_t *dense_bytes_out) {
+    st_cHACApK_leafmtxp lp = (st_cHACApK_leafmtxp)leafmtxp_void;
+    int64_t hmat_bytes = 0;
+    int64_t dense_bytes = 0;
+    int ip;
+
+    if (!lp || !lp->st_lf) {
+        if (hmat_bytes_out) *hmat_bytes_out = 0;
+        if (dense_bytes_out) *dense_bytes_out = 0;
+        return;
+    }
+
+    /* Iterate over all leaf blocks (1-indexed) */
+    for (ip = 1; ip <= lp->nlf; ip++) {
+        st_cHACApK_leafmtx leaf = lp->st_lf[ip];
+        if (!leaf) continue;
+
+        int ndl = leaf->ndl;
+        int ndt = leaf->ndt;
+
+        if (leaf->ltmtx == 1) {
+            /* Low-rank block: stores U (ndl x kt) and V (ndt x kt) */
+            int kt = leaf->kt;
+            hmat_bytes += (int64_t)(ndl + ndt) * kt * sizeof(double);
+        } else {
+            /* Dense block: stores full ndl x ndt matrix */
+            hmat_bytes += (int64_t)ndl * ndt * sizeof(double);
+        }
+
+        /* Equivalent dense for this block */
+        dense_bytes += (int64_t)ndl * ndt * sizeof(double);
+    }
+
+    if (hmat_bytes_out) *hmat_bytes_out = hmat_bytes;
+    if (dense_bytes_out) *dense_bytes_out = dense_bytes;
+}
+
+/*=========================================================================
  * Update dense diagonal blocks for nonlinear iteration
  *
  * This function follows ELF_MAGIC's HACApK_update_diagonal_omp pattern:
@@ -594,8 +1107,8 @@ void HACApK_update_diagonal_wrapper(
     lod = ctl->lod;
     if (!lod) return;
 
-    /* Iterate over all leaf blocks (single-threaded for debugging) */
-    /* #pragma omp parallel for schedule(dynamic, 16) reduction(+:n_diag_updated) */
+    /* Iterate over all leaf blocks with OpenMP parallelization */
+    #pragma omp parallel for schedule(dynamic, 16) reduction(+:n_diag_updated)
     for (ip = 1; ip <= leafmtxp->nlf; ip++) {
         st_cHACApK_leafmtx leaf = leafmtxp->st_lf[ip];
 
@@ -622,14 +1135,6 @@ void HACApK_update_diagonal_wrapper(
             n_diag_updated++;
         }
     }
-
-#if 0  /* Debug output - disabled for production */
-    static int update_count = 0;
-    if (update_count < 3) {
-        printf("[HACApK] Updated %d dense diagonal blocks out of %d total leaves\n", n_diag_updated, leafmtxp->nlf);
-        update_count++;
-    }
-#endif
 }
 
 /*=========================================================================

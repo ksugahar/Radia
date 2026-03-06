@@ -82,8 +82,11 @@ def quadrupole_field(pos):
 # Create background field source
 background = rd.ObjBckgCF(quadrupole_field)
 
-# Create magnetizable object
-sphere = rd.ObjRecMag([0, 0, 0], [10, 10, 10])
+# Create magnetizable object (hexahedron using ObjPolyhdr)
+HEX_FACES = [[1,4,3,2], [5,6,7,8], [1,2,6,5], [3,4,8,7], [1,5,8,4], [2,3,7,6]]
+vertices = [[-5,-5,-5], [5,-5,-5], [5,5,-5], [-5,5,-5],
+            [-5,-5,5], [5,-5,5], [5,5,5], [-5,5,5]]
+sphere = rd.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
 # Apply linear isotropic material (mu_r = 1000)
 mat = rd.MatLin(1000)  # relative permeability
 rd.MatApl(sphere, mat)

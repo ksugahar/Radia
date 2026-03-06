@@ -113,8 +113,7 @@ For Radia performance improvement, consider:
    - LU decomposition parallelization
 
 2. **BLAS/LAPACK optimization**
-   - OpenBLAS with optimized kernels
-   - Intel MKL for Intel CPUs
+   - Intel MKL with optimized kernels (required)
 
 3. **Preconditioner improvements**
    - Better Jacobi/block-Jacobi preconditioners

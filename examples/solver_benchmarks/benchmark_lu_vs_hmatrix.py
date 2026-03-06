@@ -20,7 +20,20 @@ import time
 import gc
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import radia as rad
+from netgen_mesh_import import HEX_FACES
+
+
+def hex_vertices(cx, cy, cz, dx, dy, dz):
+    """Generate hexahedron vertices from center and dimensions."""
+    hx, hy, hz = dx/2, dy/2, dz/2
+    return [
+        [cx-hx, cy-hy, cz-hz], [cx+hx, cy-hy, cz-hz],
+        [cx+hx, cy+hy, cz-hz], [cx-hx, cy+hy, cz-hz],
+        [cx-hx, cy-hy, cz+hz], [cx+hx, cy-hy, cz+hz],
+        [cx+hx, cy+hy, cz+hz], [cx-hx, cy+hy, cz+hz]
+    ]
 
 
 def benchmark_lu(subdiv, tol=1e-4, max_iter=1):
@@ -32,8 +45,9 @@ def benchmark_lu(subdiv, tol=1e-4, max_iter=1):
     rad.SolverHMatrixDisable()
     gc.collect()
 
-    # Create geometry
-    cube = rad.ObjRecMag([0, 0, 0], [40, 40, 40], [0, 0, 0])
+    # Create geometry: 40x40x40 cube centered at origin
+    vertices = hex_vertices(0, 0, 0, 40, 40, 40)
+    cube = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
     rad.ObjDivMag(cube, subdiv)
 
     # Apply linear material (mu_r = 1000)
@@ -78,8 +92,9 @@ def benchmark_bicgstab(subdiv, use_hmatrix=False, tol=1e-4, max_iter=1000):
     else:
         rad.SolverHMatrixDisable()
 
-    # Create geometry
-    cube = rad.ObjRecMag([0, 0, 0], [40, 40, 40], [0, 0, 0])
+    # Create geometry: 40x40x40 cube centered at origin
+    vertices = hex_vertices(0, 0, 0, 40, 40, 40)
+    cube = rad.ObjPolyhdr(vertices, HEX_FACES, [0, 0, 0])
     rad.ObjDivMag(cube, subdiv)
 
     # Apply linear material (mu_r = 1000)

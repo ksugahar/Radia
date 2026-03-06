@@ -475,7 +475,8 @@ public:
 	// Method 1: Standard mu = B(H)/(mu_0*H)
 	// Method 2: H+B sum interpolation
 	// Selects method with smaller |mu_new - mu_old|
-	double ComputeChiDualMethod(double H_mag, double mu_old) const;
+	// relax: under-relaxation parameter (0.0 = full step, >0 = under-relaxation)
+	double ComputeChiDualMethod(double H_mag, double mu_old, double relax = 0.0) const;
 
 	// Public wrapper for inverse B-H lookup (used by relaxation methods)
 	double GetHfromM(double AbsM) const
@@ -912,6 +913,455 @@ public:
 	}
 
 	int SizeOfThis() { return sizeof(radTPermanentMagnet);}
+};
+
+//-------------------------------------------------------------------------
+
+//=========================================================================
+// PERMANENT MAGNET MATERIALS
+//=========================================================================
+//
+// Three types of permanent magnet materials are provided:
+//
+// 1. radTMagFixed (Type 100) - Fixed magnetization, no demagnetization
+//    API: rad.MatMagFixed([Mx, My, Mz])
+//    Use case: Ideal permanent magnets, fast simulation
+//
+// 2. radTMagLinear (Type 102) - Linear demagnetization curve (Br/Hc model)
+//    API: rad.MatMagLinear(Br, Hc, [ex, ey, ez])  [NOT YET IMPLEMENTED]
+//    Use case: NdFeB, SmCo with linear recoil behavior
+//
+// 3. radTMagCurve (Type 103) - User-defined demagnetization curve
+//    API: rad.MatMagCurve([[H1,B1], [H2,B2], ...], [ex, ey, ez])  [NOT YET IMPLEMENTED]
+//    Use case: Ferrite, AlNiCo with nonlinear demagnetization
+//
+// Note: radTPermanentMagnet (Type 101) is the legacy Br/Hc implementation
+//       and is retained for backward compatibility.
+//=========================================================================
+
+/**
+ * Fixed magnetization material (no demagnetization, no relaxation)
+ *
+ * This material represents an ideal permanent magnet with fixed magnetization
+ * that does not change during Solve. The element acts as a pure field source.
+ *
+ * Magnetic behavior:
+ *   M = Mr (constant, set at creation time)
+ *   chi = 0 (no susceptibility - magnetization is fixed)
+ *
+ * Use case:
+ *   - Permanent magnets without demagnetization effects
+ *   - Elements that should not participate in self-consistent iteration
+ *   - Fast simulation when demagnetization is negligible
+ *
+ * API: rad.MatMagFixed([Mx, My, Mz])
+ *   Mx, My, Mz: Magnetization components [A/m]
+ *
+ * Note: Elements with this material contribute to the external field
+ * of other elements but their magnetization is not updated by Solve.
+ */
+class radTMagFixed : public radTMaterial {
+	TVector3d FixedMagn;  // Fixed magnetization [A/m]
+
+public:
+	radTMagFixed(const TVector3d& InMagn)
+		: radTMaterial(InMagn, 1)  // EasyAxisDefined = 1 (direction defined by Magn)
+	{
+		FixedMagn = InMagn;
+		RemMagn = InMagn;  // RemMagn is the remanent magnetization
+	}
+
+	radTMagFixed(CAuxBinStrVect& inStr)
+	{
+		DumpBinParse_Material(inStr);
+		inStr >> FixedMagn;
+	}
+
+	radTMagFixed() {}
+
+	int Type_Material() { return 100;}  // Type ID for fixed magnet (non-relaxable)
+
+	// M(H) = Mr (constant, independent of H)
+	TVector3d M(const TVector3d& H)
+	{
+		return FixedMagn;  // Fixed magnetization, does not depend on H
+	}
+
+	// Zero susceptibility - magnetization is fixed
+	void DefineInstantKsiTensor(const TVector3d& InstantH, TMatrix3d& InstantKsiTensor, TVector3d& InstantMr)
+	{
+		// chi = 0 (no induced magnetization from H)
+		InstantKsiTensor.Str0 = TVector3d(0, 0, 0);
+		InstantKsiTensor.Str1 = TVector3d(0, 0, 0);
+		InstantKsiTensor.Str2 = TVector3d(0, 0, 0);
+		InstantMr = FixedMagn;
+	}
+
+	void MultMatrByInstKsiAndMr(const TVector3d& InstantH, const TMatrix3d& Matr, TMatrix3d& MultByKsi, TVector3d& MultByMr)
+	{
+		// chi = 0, so Matr * chi = 0
+		MultByKsi.Str0 = TVector3d(0, 0, 0);
+		MultByKsi.Str1 = TVector3d(0, 0, 0);
+		MultByKsi.Str2 = TVector3d(0, 0, 0);
+		MultByMr = Matr * FixedMagn;
+	}
+
+	void FindNewH(TVector3d& H, const TMatrix3d& Matr, const TVector3d& H_Ext, double DesiredPrecOnMagnetizE2)
+	{
+		// For fixed magnet, H is determined by external field and own remanence
+		// With chi = 0, the equation simplifies to: H = H_Ext + Matr * Mr
+		H = H_Ext + Matr * FixedMagn;
+	}
+
+	int DuplicateItself(radThg& hg, radTApplication*, char)
+	{
+		return FinishDuplication(new radTMagFixed(*this), hg);
+	}
+
+	void Dump(std::ostream& o, int ShortSign =0)
+	{
+		radTMaterial::Dump(o);
+		o << "Fixed magnetization (no relaxation)";
+
+		if(ShortSign==1) return;
+		o << endl;
+		o << "   {Mx,My,Mz}= {" << FixedMagn.x << ',' << FixedMagn.y << ',' << FixedMagn.z << "} A/m" << endl;
+		o << "   Memory occupied: " << SizeOfThis() << " bytes";
+	}
+
+	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
+	{
+		vElemKeysOut.push_back(elemKey);
+		oStr << elemKey;
+
+		// Next 5 bytes define/encode element type
+		oStr << (char)Type_g();
+		oStr << (char)Type_Material();
+		oStr << (char)0;
+		oStr << (char)0;
+		oStr << (char)0;
+
+		// Members of radTMaterial
+		DumpBin_Material(oStr);
+
+		// Members of radTMagFixed
+		oStr << FixedMagn;
+	}
+
+	int SizeOfThis() { return sizeof(radTMagFixed);}
+
+	// Accessor for the fixed magnetization
+	const TVector3d& GetFixedMagn() const { return FixedMagn; }
+};
+
+// Backward compatibility alias
+typedef radTMagFixed radTFixedMagnet;
+
+//-------------------------------------------------------------------------
+
+/**
+ * Linear demagnetization permanent magnet material (Br/Hc model)
+ *
+ * Magnetic behavior along easy axis:
+ *   B = Br + mu_0 * mu_rec * H_parallel
+ *   M = B/mu_0 - H = (Br/mu_0) + (mu_rec - 1) * H_parallel
+ *
+ * where:
+ *   Br = residual flux density [T]
+ *   Hc = coercivity [A/m]
+ *   mu_rec = Br/(mu_0*Hc) = recoil permeability
+ *   H_parallel = component of H along easy axis
+ *
+ * API: rad.MatMagLinear(Br, Hc, [ex, ey, ez])  [NOT YET IMPLEMENTED - uses MatMagFixed]
+ *   Br: Residual flux density [T]
+ *   Hc: Coercivity [A/m]
+ *   [ex, ey, ez]: Easy axis direction (will be normalized)
+ *
+ * Use case: NdFeB, SmCo permanent magnets with linear recoil behavior
+ *
+ * Note: Current implementation falls back to radTMagFixed (no demagnetization).
+ *       Full implementation will be added in future version.
+ */
+class radTMagLinear : public radTMaterial {
+	double Br;           // Residual flux density [T]
+	double Hc;           // Coercivity [A/m]
+	double mu_rec;       // Recoil permeability (calculated from Br/Hc)
+	TVector3d MagAxis;   // Easy magnetization axis (normalized)
+
+	static constexpr double mu_0 = 1.25663706212e-6;  // Permeability of free space [T/(A/m)]
+
+public:
+	radTMagLinear(double InBr, double InHc, const TVector3d& InMagAxis)
+		: radTMaterial(TVector3d(0,0,0), 1)  // EasyAxisDefined = 1
+	{
+		Br = InBr;
+		Hc = InHc;
+		MagAxis = InMagAxis;
+
+		// Normalize easy axis
+		double AbsMagAxis = sqrt(MagAxis.x*MagAxis.x + MagAxis.y*MagAxis.y + MagAxis.z*MagAxis.z);
+		if(AbsMagAxis > 0) MagAxis = (1.0/AbsMagAxis) * MagAxis;
+
+		// Calculate recoil permeability: mu_rec = Br / (mu_0*Hc)
+		if(Hc > 0) mu_rec = Br / (mu_0 * Hc);
+		else mu_rec = 1.0;  // Default to vacuum permeability if Hc = 0
+
+		// Set remanent magnetization Mr = Br/mu_0
+		RemMagn = (Br / mu_0) * MagAxis;
+	}
+
+	radTMagLinear(CAuxBinStrVect& inStr)
+	{
+		DumpBinParse_Material(inStr);
+		inStr >> Br;
+		inStr >> Hc;
+		inStr >> mu_rec;
+		inStr >> MagAxis;
+	}
+
+	radTMagLinear() {}
+
+	int Type_Material() { return 102;}  // Type ID for linear demagnetization PM
+
+	// Current implementation: Fixed magnetization (no demagnetization)
+	// TODO: Implement full linear demagnetization model
+	TVector3d M(const TVector3d& H)
+	{
+		// For now, return fixed magnetization (same as radTMagFixed)
+		return RemMagn;
+
+		// Full implementation would be:
+		// double H_parallel = H.x*MagAxis.x + H.y*MagAxis.y + H.z*MagAxis.z;
+		// TVector3d M_induced = (mu_rec - 1.0) * H_parallel * MagAxis;
+		// return RemMagn + M_induced;
+	}
+
+	void DefineInstantKsiTensor(const TVector3d& InstantH, TMatrix3d& InstantKsiTensor, TVector3d& InstantMr)
+	{
+		// Current implementation: chi = 0 (fixed magnetization)
+		InstantKsiTensor.Str0 = TVector3d(0, 0, 0);
+		InstantKsiTensor.Str1 = TVector3d(0, 0, 0);
+		InstantKsiTensor.Str2 = TVector3d(0, 0, 0);
+		InstantMr = RemMagn;
+	}
+
+	void MultMatrByInstKsiAndMr(const TVector3d& InstantH, const TMatrix3d& Matr, TMatrix3d& MultByKsi, TVector3d& MultByMr)
+	{
+		MultByKsi.Str0 = TVector3d(0, 0, 0);
+		MultByKsi.Str1 = TVector3d(0, 0, 0);
+		MultByKsi.Str2 = TVector3d(0, 0, 0);
+		MultByMr = Matr * RemMagn;
+	}
+
+	void FindNewH(TVector3d& H, const TMatrix3d& Matr, const TVector3d& H_Ext, double DesiredPrecOnMagnetizE2)
+	{
+		H = H_Ext + Matr * RemMagn;
+	}
+
+	int DuplicateItself(radThg& hg, radTApplication*, char)
+	{
+		return FinishDuplication(new radTMagLinear(*this), hg);
+	}
+
+	void Dump(std::ostream& o, int ShortSign =0)
+	{
+		radTMaterial::Dump(o);
+		o << "Linear demagnetization PM (Br/Hc)";
+
+		if(ShortSign==1) return;
+		o << endl;
+		o << "   Br= " << Br << " T, Hc= " << Hc << " A/m, mu_rec= " << mu_rec << endl;
+		o << "   Easy axis: {" << MagAxis.x << ',' << MagAxis.y << ',' << MagAxis.z << "}" << endl;
+		o << "   Remanent magnetization: {" << RemMagn.x << ',' << RemMagn.y << ',' << RemMagn.z << "} A/m" << endl;
+		o << "   Memory occupied: " << SizeOfThis() << " bytes";
+		o << endl << "   [Note: Demagnetization not yet implemented - behaves as fixed magnetization]";
+	}
+
+	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
+	{
+		vElemKeysOut.push_back(elemKey);
+		oStr << elemKey;
+
+		oStr << (char)Type_g();
+		oStr << (char)Type_Material();
+		oStr << (char)0;
+		oStr << (char)0;
+		oStr << (char)0;
+
+		DumpBin_Material(oStr);
+
+		oStr << Br;
+		oStr << Hc;
+		oStr << mu_rec;
+		oStr << MagAxis;
+	}
+
+	int SizeOfThis() { return sizeof(radTMagLinear);}
+
+	// Accessors
+	double GetBr() const { return Br; }
+	double GetHc() const { return Hc; }
+	double GetMuRec() const { return mu_rec; }
+	const TVector3d& GetMagAxis() const { return MagAxis; }
+};
+
+//-------------------------------------------------------------------------
+
+/**
+ * User-defined demagnetization curve permanent magnet material
+ *
+ * Magnetic behavior:
+ *   B = f(H) where f is defined by user-provided B-H curve
+ *   M = B/mu_0 - H
+ *
+ * API: rad.MatMagCurve([[H1,B1], [H2,B2], ...], [ex, ey, ez])  [NOT YET IMPLEMENTED - uses MatMagFixed]
+ *   [[H1,B1], [H2,B2], ...]: B-H curve data points (H in A/m, B in Tesla)
+ *   [ex, ey, ez]: Easy axis direction (will be normalized)
+ *
+ * Use case: Ferrite, AlNiCo permanent magnets with nonlinear demagnetization curves
+ *
+ * Note: Current implementation falls back to radTMagFixed (no demagnetization).
+ *       Full implementation will be added in future version.
+ */
+class radTMagCurve : public radTMaterial {
+	std::vector<TVector2d> vDemagCurve;  // Demagnetization curve [[H1,B1], [H2,B2], ...]
+	TVector2d* DemagCurve;               // Pointer to curve data
+	int LenDemagCurve;                   // Number of points in curve
+	TVector3d MagAxis;                   // Easy magnetization axis (normalized)
+
+	static constexpr double mu_0 = 1.25663706212e-6;  // Permeability of free space [T/(A/m)]
+
+public:
+	radTMagCurve(TVector2d* InCurve, int InLenCurve, const TVector3d& InMagAxis)
+		: radTMaterial(TVector3d(0,0,0), 1)
+	{
+		MagAxis = InMagAxis;
+
+		// Normalize easy axis
+		double AbsMagAxis = sqrt(MagAxis.x*MagAxis.x + MagAxis.y*MagAxis.y + MagAxis.z*MagAxis.z);
+		if(AbsMagAxis > 0) MagAxis = (1.0/AbsMagAxis) * MagAxis;
+
+		// Copy curve data
+		LenDemagCurve = InLenCurve;
+		vDemagCurve.resize(LenDemagCurve);
+		DemagCurve = vDemagCurve.data();
+		for(int i = 0; i < LenDemagCurve; i++)
+		{
+			DemagCurve[i] = InCurve[i];
+		}
+
+		// Set remanent magnetization from Br (B at H=0)
+		// Find Br by interpolating to H=0
+		double Br = 0.0;
+		if(LenDemagCurve >= 2)
+		{
+			// Assume first point is at H=0 or interpolate
+			if(DemagCurve[0].x <= 0.0)
+			{
+				Br = DemagCurve[0].y;
+			}
+			else
+			{
+				// Linear interpolation to H=0
+				double H1 = DemagCurve[0].x, B1 = DemagCurve[0].y;
+				double H2 = DemagCurve[1].x, B2 = DemagCurve[1].y;
+				if(H2 != H1) Br = B1 + (B2 - B1) * (0.0 - H1) / (H2 - H1);
+				else Br = B1;
+			}
+		}
+		RemMagn = (Br / mu_0) * MagAxis;
+	}
+
+	radTMagCurve(CAuxBinStrVect& inStr)
+	{
+		DumpBinParse_Material(inStr);
+		inStr >> LenDemagCurve;
+		vDemagCurve.resize(LenDemagCurve);
+		DemagCurve = vDemagCurve.data();
+		for(int i = 0; i < LenDemagCurve; i++)
+		{
+			inStr >> DemagCurve[i];
+		}
+		inStr >> MagAxis;
+	}
+
+	radTMagCurve() { DemagCurve = nullptr; LenDemagCurve = 0; }
+
+	int Type_Material() { return 103;}  // Type ID for user-defined demagnetization curve PM
+
+	// Current implementation: Fixed magnetization (no demagnetization)
+	// TODO: Implement full demagnetization curve model
+	TVector3d M(const TVector3d& H)
+	{
+		return RemMagn;
+	}
+
+	void DefineInstantKsiTensor(const TVector3d& InstantH, TMatrix3d& InstantKsiTensor, TVector3d& InstantMr)
+	{
+		InstantKsiTensor.Str0 = TVector3d(0, 0, 0);
+		InstantKsiTensor.Str1 = TVector3d(0, 0, 0);
+		InstantKsiTensor.Str2 = TVector3d(0, 0, 0);
+		InstantMr = RemMagn;
+	}
+
+	void MultMatrByInstKsiAndMr(const TVector3d& InstantH, const TMatrix3d& Matr, TMatrix3d& MultByKsi, TVector3d& MultByMr)
+	{
+		MultByKsi.Str0 = TVector3d(0, 0, 0);
+		MultByKsi.Str1 = TVector3d(0, 0, 0);
+		MultByKsi.Str2 = TVector3d(0, 0, 0);
+		MultByMr = Matr * RemMagn;
+	}
+
+	void FindNewH(TVector3d& H, const TMatrix3d& Matr, const TVector3d& H_Ext, double DesiredPrecOnMagnetizE2)
+	{
+		H = H_Ext + Matr * RemMagn;
+	}
+
+	int DuplicateItself(radThg& hg, radTApplication*, char)
+	{
+		return FinishDuplication(new radTMagCurve(*this), hg);
+	}
+
+	void Dump(std::ostream& o, int ShortSign =0)
+	{
+		radTMaterial::Dump(o);
+		o << "User-defined demagnetization curve PM";
+
+		if(ShortSign==1) return;
+		o << endl;
+		o << "   Demagnetization curve: " << LenDemagCurve << " points" << endl;
+		o << "   Easy axis: {" << MagAxis.x << ',' << MagAxis.y << ',' << MagAxis.z << "}" << endl;
+		o << "   Remanent magnetization: {" << RemMagn.x << ',' << RemMagn.y << ',' << RemMagn.z << "} A/m" << endl;
+		o << "   Memory occupied: " << SizeOfThis() << " bytes";
+		o << endl << "   [Note: Demagnetization not yet implemented - behaves as fixed magnetization]";
+	}
+
+	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
+	{
+		vElemKeysOut.push_back(elemKey);
+		oStr << elemKey;
+
+		oStr << (char)Type_g();
+		oStr << (char)Type_Material();
+		oStr << (char)0;
+		oStr << (char)0;
+		oStr << (char)0;
+
+		DumpBin_Material(oStr);
+
+		oStr << LenDemagCurve;
+		for(int i = 0; i < LenDemagCurve; i++)
+		{
+			oStr << DemagCurve[i];
+		}
+		oStr << MagAxis;
+	}
+
+	int SizeOfThis() { return sizeof(radTMagCurve);}
+
+	// Accessors
+	int GetCurveLength() const { return LenDemagCurve; }
+	const TVector3d& GetMagAxis() const { return MagAxis; }
 };
 
 //-------------------------------------------------------------------------

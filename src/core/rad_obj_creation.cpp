@@ -855,9 +855,6 @@ int radTApplication::SetMultGenExtrPolygonCur(double zc, const char* strOrient, 
 			if(SendingIsRequired) Send.Int(ElemKey);
 			return ElemKey;
 		}
-
-		//if(SendingIsRequired) Send.Int(0); //to remove
-		//return 0;
 	}
 	catch(...)
 	{

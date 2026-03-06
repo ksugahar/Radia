@@ -23,16 +23,18 @@
 #include "rad_extruded_polygon_msc.h"
 #include "rad_planar_2d.h"
 #include "rad_io_buffer.h"
+#include "rad_constants.h"  // Unified mathematical/physical constants
 #include <cmath>
 #include <algorithm>
 
 //-------------------------------------------------------------------------
-// Constants
+// Constants - using unified values from rad_constants.h
 //-------------------------------------------------------------------------
 
-static const double PI = 3.14159265358979323846;
-static const double MU_0 = 4.0 * PI * 1e-7;
-static const double INV_4PI = 1.0 / (4.0 * PI);
+// Local aliases for unified constants
+static const double PI = RadConst::PI;
+static const double MU_0 = RadConst::MU_0;
+static const double INV_4PI = RadConst::INV_FOUR_PI;
 
 //-------------------------------------------------------------------------
 // radTMSCFace implementation

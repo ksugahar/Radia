@@ -56,12 +56,15 @@ struct RadHACApKStats {
     int max_rank;        // Maximum rank among low-rank blocks
     int n_leaves;        // Total number of leaf blocks
     int n_dof;           // Total degrees of freedom
-    double compression;  // Compression ratio (memory used / full matrix)
+    double compression;  // Compression ratio (H-matrix memory / dense memory)
     double build_time;   // Time to build H-matrix (seconds)
+    double memory_mb;    // Actual H-matrix memory usage [MB]
+    double dense_memory_mb;  // Full dense matrix memory [MB]
 
     RadHACApKStats() :
         n_lowrank(0), n_dense(0), max_rank(0), n_leaves(0),
-        n_dof(0), compression(1.0), build_time(0.0)
+        n_dof(0), compression(1.0), build_time(0.0),
+        memory_mb(0.0), dense_memory_mb(0.0)
     {}
 };
 
@@ -191,8 +194,9 @@ private:
     bool m_valid;
     int m_ndof;
     int m_n_elem;
-    int m_nffc;  // DOF per element (3 for tetra, 6 for hexa)
+    int m_nffc;  // DOF per element (3 for tetra, 6 for hexa, 0 for mixed)
     bool m_is_6dof;  // true if using 6DOF MSC hexahedra
+    bool m_is_mixed_dof;  // true if mesh contains both 3DOF and 6DOF elements
 
     // DOF permutation for cluster ordering
     std::vector<int> m_permutation;
@@ -216,31 +220,33 @@ private:
     std::vector<double> m_coordinates;  // [n_elem * 3]
 
     // ========================================================================
-    // ELF-style pre-computed geometry (for 6DOF hexahedra)
+    // 6DOF hexahedra: Use radTInteraction's unified precomputation
     // ========================================================================
-    // Pre-computed geometry avoids dynamic_cast and scattered memory access
-    // during matrix element computation (major performance optimization)
+    // radTInteraction::PrecomputeHexaGeometry() provides all geometry data
+    // radTInteraction::Compute6x6BlockFast() provides fast block computation
+    // No local geometry storage needed - delegated to radTInteraction
 
-    // Pre-computed element centers [n_elem * 3]
-    std::vector<double> m_elem_centers;
+    // ========================================================================
+    // Pre-computed geometry for 3DOF tetrahedra (ELF-style optimization)
+    // ========================================================================
+    // Pre-computed tetrahedron face vertices for direct field computation
+    // Avoids calling B_comp() which has significant overhead
 
-    // Pre-computed vertices [n_elem * 8 * 3] (8 vertices per hexa, 3 coords each)
-    std::vector<double> m_elem_vertices;
+    // Pre-computed tetrahedron centers [n_elem * 3]
+    std::vector<double> m_tetra_centers;
 
-    // Pre-computed face centers [n_elem * 6 * 3] (6 faces per hexa)
-    std::vector<double> m_face_centers;
+    // Pre-computed tetrahedron face vertices [n_elem * 4 * 3 * 3]
+    // (4 faces, 3 vertices per face, 3 coords)
+    std::vector<double> m_tetra_face_vertices;
 
-    // Pre-computed face normals [n_elem * 6 * 3]
-    std::vector<double> m_face_normals;
+    // Pre-computed tetrahedron face normals [n_elem * 4 * 3] (outward normals)
+    std::vector<double> m_tetra_face_normals;
 
-    // Pre-computed face areas [n_elem * 6]
-    std::vector<double> m_face_areas;
+    // Pre-computed tetrahedron face areas [n_elem * 4]
+    std::vector<double> m_tetra_face_areas;
 
-    // Pre-computed quad face vertices [n_elem * 6 * 4 * 3] (6 faces, 4 verts, 3 coords)
-    std::vector<double> m_face_vertices;
-
-    // Flag: geometry has been pre-computed
-    bool m_geometry_ready;
+    // Flag: tetrahedron geometry has been pre-computed
+    bool m_geometry_3dof_ready;
 
     // Cached diagonal elements of interaction matrix N_ii (for Jacobi preconditioner)
     // Computed once during BuildHMatrix, reused in every BiCGSTAB iteration
@@ -260,20 +266,28 @@ private:
     void FreeResources();
     void ExtractElementCoordinates();
     void BuildDOFLookupTable();
-    void PrecomputeGeometry();  // ELF-style pre-computation for 6DOF hexahedra
+    void PrecomputeGeometry3DOF();  // ELF-style pre-computation for 3DOF tetrahedra
 
     // 6DOF hexahedron methods
+    // Note: Uses radTInteraction::Compute6x6BlockFast() for unified implementation
     double GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const;
     void Compute6x6Block(int elem_i, int elem_j, double* K_mat) const;
-    void Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const;  // Uses pre-computed geometry
+    void Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const;  // Delegates to radTInteraction
 
     // 3DOF tetrahedron methods
     double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
     void Compute3x3Block(int elem_i, int elem_j, double* N_mat) const;
+    void Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const;  // On-demand without pre-computed matrix
+    void Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const;  // Uses pre-computed geometry
 
-    // Field computation from pre-computed face vertices
-    void FieldFromQuadFaceFast(int elem, int face, const double* obs, double sigma, double* H_out) const;
-    void FieldFromChargedTriangleFast(const double* obs, const double* v0, const double* v1, const double* v2, double sigma, double* H_out) const;
+    // Field computation from pre-computed tetrahedron faces
+    void FieldFromTetraFace(int elem, int face, const double* obs, const double* M_unit, double& H_n) const;
+
+    // Mixed element methods (3DOF tetra + 6DOF hexa)
+    double GetMixed3x6Element(int elem_tetra, int elem_hex, int comp, int face) const;
+    double GetMixed6x3Element(int elem_hex, int elem_tetra, int face, int comp) const;
+    void Compute3x6Block(int elem_tetra, int elem_hex, double* K_mat) const;
+    void Compute6x3Block(int elem_hex, int elem_tetra, double* K_mat) const;
 
     // Disable copy
     RadHACApKManager(const RadHACApKManager&) = delete;
@@ -297,6 +311,11 @@ namespace RadHACApKCallback {
 
     // Get inverse susceptibility
     const std::vector<double>& GetInvChi();
+
+    // Set/clear DOF permutation array for H-matrix build
+    // Must be called BEFORE H-matrix build (lod is populated during build)
+    void SetLod(int* lod, int size);
+    void ClearLod();
 
     // Compute matrix element A(i,j) = -N(i,j) + delta_ij/chi_i
     // Called from cHACApK_entry_ij
