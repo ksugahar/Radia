@@ -66,6 +66,12 @@ jupyter notebook jupyter_visualization_demo.ipynb
 | `demo_ngsolve_webgui.py` | NGSolve webgui demo | radia_ngsolve.pyd |
 | `generate_paraview_figure.py` | ParaView figure automation | ParaView (optional) |
 | `jupyter_visualization_demo.ipynb` | Jupyter notebook demo | pyvista, ipywidgets |
+| `demo_paraview_with_geometry.py` | ParaView visualization with accurate geometry overlay (STL + VTS) | radia, netgen, ParaView |
+| `demo_webgui_accurate_geometry.py` | NGSolve webgui with accurate OCC geometry display | radia, radia_ngsolve, NGSolve |
+| `demo_netgen_gui.py` | Netgen native GUI for geometry and mesh quality verification | NGSolve/Netgen |
+| `demo_gmsh_workflow.py` | GMSH mesh generation and NGSolve/Radia integration workflow | gmsh, ngsolve, radia |
+| `demo_gmsh_cad_import.py` | GMSH CAD import (STEP/IGES) to NGSolve/Radia workflow | gmsh, ngsolve |
+| `demo_mesh_with_surface.py` | Demonstrates Netgen automatic surface element generation | netgen |
 | `README.md` | This file | - |
 
 ---
@@ -210,7 +216,7 @@ Build from source:
 
 ```powershell
 # In S:\Radia\01_GitHub
-powershell.exe -ExecutionPolicy Bypass -File BuildMSVC.ps1
+powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 ```
 
 ---
@@ -293,7 +299,7 @@ Build `radia_ngsolve.pyd`:
 
 ```powershell
 # S:\Radia\01_GitHub
-powershell.exe -ExecutionPolicy Bypass -File BuildMSVC.ps1
+powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 ```
 
 ### ParaView: "pvpython not found"

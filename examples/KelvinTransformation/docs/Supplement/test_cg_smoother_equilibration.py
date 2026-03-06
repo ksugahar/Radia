@@ -16,9 +16,9 @@ import os
 import sys
 
 # NGSolve path setup
-os.environ['NETGENDIR'] = r'S:\NGSolve\01_GitHub\install_ksugahar\bin'
-os.environ['PATH'] = r'S:\NGSolve\01_GitHub\install_ksugahar\bin;' + os.environ.get('PATH', '')
-sys.path.insert(0, r'S:\NGSolve\01_GitHub\install_ksugahar\Lib\site-packages')
+os.environ['NETGENDIR'] = r'S:\NGSolve\01_GitHub\install_ngsolve\bin'
+os.environ['PATH'] = r'S:\NGSolve\01_GitHub\install_ngsolve\bin;' + os.environ.get('PATH', '')
+sys.path.insert(0, r'S:\NGSolve\01_GitHub\install_ngsolve\Lib\site-packages')
 
 from numpy import pi, sqrt, linspace, zeros, nan, isnan, meshgrid
 import time

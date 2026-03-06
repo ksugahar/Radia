@@ -102,7 +102,7 @@ inner_sphere.maxh = maxh_air
 for face in inner_sphere.faces:
     fc = face.center
     dist = sqrt(fc.x**2 + fc.y**2 + fc.z**2)
-    if dist > kelvin_radius - 0.1:
+    if abs(dist - kelvin_radius) < kelvin_radius * 0.1:
         face.name = "kelvin_int"
         print(f"  kelvin_int face at ({fc.x:.2f}, {fc.y:.2f}, {fc.z:.2f})")
     elif abs(fc.x) < 1e-6:
@@ -120,7 +120,7 @@ for face in inner_air.faces:
     fc = face.center
     dist = sqrt(fc.x**2 + fc.y**2 + fc.z**2)
     # Kelvin boundary is the spherical surface
-    if dist > kelvin_radius * 0.8:
+    if abs(dist - kelvin_radius) < kelvin_radius * 0.2:
         face.name = "kelvin_int"
     elif abs(fc.x) < 0.05:
         face.name = "sym_x"
@@ -144,7 +144,7 @@ outer_sphere.mat("air_outer")
 for face in outer_sphere.faces:
     fc = face.center
     dist = sqrt(fc.x**2 + fc.y**2 + (fc.z - offset_z)**2)
-    if dist > kelvin_radius * 0.4:  # Spherical boundary
+    if abs(dist - kelvin_radius) < kelvin_radius * 0.3:  # Spherical boundary
         face.name = "kelvin_ext"
     elif abs(fc.x) < 0.1:
         face.name = "sym_x"

@@ -71,6 +71,15 @@ FldBatch Demo: Batch Field Evaluation
 ======================================================================
 ```
 
+### [verify_fmm_fldbatch.py](verify_fmm_fldbatch.py)
+
+Verifies FMM-accelerated `rad.FldBatch()` by comparing direct (method=0) and FMM dipole approximation (method=1) results for far-field accuracy, near-field behavior, and timing.
+
+**Usage:**
+```bash
+python verify_fmm_fldbatch.py
+```
+
 ## API Reference
 
 ### rad.FldBatch(obj, points, method)

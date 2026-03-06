@@ -52,7 +52,7 @@ For FMM-accelerated computation (lines 719-759), the dipole formula handles unit
 ## Running the Test
 
 ```bash
-cd examples/NGSolve_Integration/verify_curl_A_equals_B
+cd examples/ngsolve_integration/verify_curl_A_equals_B
 python verify_curl_A_equals_B.py
 ```
 

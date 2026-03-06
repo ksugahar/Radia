@@ -1,16 +1,10 @@
 """
 pytest configuration and shared fixtures for Radia tests
 
-This file provides:
-- Automatic path setup for importing radia module
-- Shared fixtures for common test resources
-- pytest hooks for test discovery
-
 Usage:
   pytest tests/                     # Run all tests
   pytest tests/ -m basic            # Run only basic tests
   pytest tests/ -m "not slow"       # Skip slow tests
-  pytest tests/ -k "test_import"    # Run tests matching pattern
 """
 
 import sys
@@ -18,98 +12,135 @@ import os
 from pathlib import Path
 import pytest
 
+
 def setup_radia_path():
-    """
-    Setup Python path to import radia module from build directory.
-
-    This function works regardless of where the test is run from:
-    - Project root: python tests/test_simple.py
-    - Tests directory: python test_simple.py
-    - Benchmarks directory: python benchmark_openmp.py
-
-    Priority order for finding _radia.pyd:
-    1. src/radia/ (package directory - BuildMSVC.ps1 copies here)
-    2. build-msvc/ (MSVC build output)
-    3. build-intel/ (Intel build output)
-    4. build/lib/Release/ (legacy build location)
-    5. build/Release/ (alternative build location)
-    """
-    # Find project root by looking for CMakeLists.txt
+    """Setup Python path to import radia from src/radia/."""
     current = Path(__file__).resolve().parent
-
-    # Go up from tests/ directory to find project root
     while current.parent != current:
         if (current / 'CMakeLists.txt').exists():
             project_root = current
             break
         current = current.parent
     else:
-        # Fallback: assume we're in tests/ and go up one level
         project_root = Path(__file__).resolve().parent.parent
 
-    # Add src/ directory so that 'import radia' finds src/radia/__init__.py
     src_path = project_root / 'src'
     if src_path.exists():
         sys.path.insert(0, str(src_path))
 
+    # Add MKL DLL directory for peec_matrices.pyd etc.
+    mkl_bin = os.path.join(sys.prefix, 'Library', 'bin')
+    if os.path.isdir(mkl_bin) and hasattr(os, 'add_dll_directory'):
+        os.add_dll_directory(mkl_bin)
+
     return project_root
 
-# Setup path when this module is imported
+
 PROJECT_ROOT = setup_radia_path()
 
-# pytest configuration
+
+# ---------------------------------------------------------------
+# collect_ignore: Skip test files that import unavailable packages.
+# This runs BEFORE pytest tries to import test modules, preventing
+# DLL load failures and access violations from crashing the process.
+# ---------------------------------------------------------------
+def _check_module(name):
+    """Check if a module can be imported safely (with src/radia in path)."""
+    try:
+        __import__(name)
+        return True
+    except (ImportError, OSError, Exception):
+        return False
+
+_OPTIONAL_DEPS = {
+    "ngsolve": _check_module("ngsolve"),
+    "radia_ngsolve": _check_module("radia_ngsolve"),
+    "magpylib": _check_module("magpylib"),
+}
+
+# Build the exclusion list by scanning test files for top-level imports
+_tests_dir = Path(__file__).parent
+collect_ignore = []
+
+for _tf in sorted(_tests_dir.glob("test_*.py")):
+    try:
+        _content = _tf.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        continue
+
+    _skip = False
+    for _line in _content.split("\n"):
+        _stripped = _line.lstrip()
+        # Stop scanning at first function/class definition
+        if _stripped.startswith("def ") or _stripped.startswith("class "):
+            break
+        # Check for imports of unavailable modules at any top-level indent
+        # (including inside try/except, because DLL load can segfault)
+        for _mod, _avail in _OPTIONAL_DEPS.items():
+            if not _avail and (f"from {_mod} " in _stripped or
+                               f"import {_mod}" in _stripped):
+                _skip = True
+                break
+        if _skip:
+            break
+        # Check for sys.exit() at module level (crashes pytest collection)
+        if "sys.exit(" in _stripped:
+            _skip = True
+            break
+
+    if _skip:
+        collect_ignore.append(str(_tf))
+
+
+# ---------------------------------------------------------------
+# Markers
+# ---------------------------------------------------------------
 def pytest_configure(config):
-    """Configure pytest with custom markers"""
-    # Markers are also defined in pyproject.toml, but we add them here too for completeness
+    """Configure pytest with custom markers."""
     config.addinivalue_line("markers", "basic: Basic functionality tests (fast)")
     config.addinivalue_line("markers", "comprehensive: Comprehensive test suite")
     config.addinivalue_line("markers", "advanced: Advanced features and edge cases")
     config.addinivalue_line("markers", "performance: Performance and scaling tests")
     config.addinivalue_line("markers", "slow: Tests that take more than 10 seconds")
-    config.addinivalue_line("markers", "benchmark: Performance benchmarks (not run by default)")
-    config.addinivalue_line("markers", "ngsolve: Tests requiring NGSolve integration")
+    config.addinivalue_line("markers", "benchmark: Performance benchmarks")
+    config.addinivalue_line("markers", "ngsolve: Tests requiring NGSolve")
 
 
+# ---------------------------------------------------------------
 # Shared fixtures
+# ---------------------------------------------------------------
 @pytest.fixture(scope="session")
 def radia_module():
-    """
-    Fixture that provides the radia module.
-    Ensures proper import and cleanup.
-    """
+    """Provides the radia module with clean state."""
     import radia as rad
-    rad.UtiDelAll()  # Clean state
+    rad.UtiDelAll()
     yield rad
-    rad.UtiDelAll()  # Cleanup after all tests
+    rad.UtiDelAll()
 
 
 @pytest.fixture
 def radia_clean():
-    """
-    Fixture that provides a clean radia state for each test.
-    """
+    """Provides a clean radia state for each test."""
     import radia as rad
-    rad.UtiDelAll()  # Clean before test
+    rad.UtiDelAll()
     yield rad
-    rad.UtiDelAll()  # Cleanup after test
+    rad.UtiDelAll()
 
 
 @pytest.fixture(scope="session")
 def project_root():
-    """Fixture providing the project root path."""
+    """Provides the project root path."""
     return PROJECT_ROOT
 
 
+# ---------------------------------------------------------------
+# Auto-markers
+# ---------------------------------------------------------------
 def pytest_collection_modifyitems(config, items):
-    """
-    Modify test collection to add markers based on test location.
-    """
+    """Add markers based on test location."""
     for item in items:
-        # Add benchmark marker to tests in benchmarks/ directory
         if "benchmarks" in str(item.fspath):
             item.add_marker(pytest.mark.benchmark)
             item.add_marker(pytest.mark.slow)
-
-        # Add ngsolve marker to tests with ngsolve in name
         if "ngsolve" in item.name.lower() or "ngsolve" in str(item.fspath).lower():
             item.add_marker(pytest.mark.ngsolve)

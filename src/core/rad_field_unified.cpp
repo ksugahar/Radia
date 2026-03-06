@@ -578,78 +578,12 @@ bool InitializeFMM(int container_handle)
         return true;
     }
 
-    // Extract dipoles using RadDipoleCollect
+    // Use CollectDipolesFromKey which correctly uses relaxPtr->Volume()
+    // instead of AABB estimation (which overestimates tetrahedra by ~6x)
     RadDipoleCollect::DipoleCollection dipoles;
-
-    // Get application instance
-    radTApplication& radApp = rad;
-
-    radThg hg;
-    if (!radApp.ValidateElemKey(container_handle, hg)) {
+    if (!RadDipoleCollect::CollectDipolesFromKey(container_handle, dipoles)) {
         return false;
     }
-
-    radTg3d* g3dPtr = radTCast::g3dCast(hg.rep);
-    if (!g3dPtr) return false;
-
-    // Recursive extraction
-    std::function<void(radTg3d*)> extractDipoles = [&](radTg3d* elem) {
-        if (!elem) return;
-
-        // Container
-        radTGroup* group = dynamic_cast<radTGroup*>(elem);
-        if (group) {
-            for (auto& child : group->GroupMapOfHandlers) {
-                extractDipoles(radTCast::g3dCast(child.second.rep));
-            }
-            return;
-        }
-
-        // Single element
-        std::vector<TVector3d> vertices;
-        std::vector<std::vector<int>> faces;
-        int num_faces;
-
-        if (!ExtractElementVertices(elem, vertices, faces, num_faces)) {
-            return;
-        }
-
-        // Get magnetization
-        TVector3d M;
-        if (!GetElementMagnetization(elem, M)) {
-            return;  // No magnetization, skip
-        }
-
-        // Compute center and volume
-        TVector3d center(0, 0, 0);
-        for (const auto& v : vertices) {
-            center = center + v;
-        }
-        center = center * (1.0 / vertices.size());
-
-        // Estimate volume (simplified using AABB)
-        TVector3d aabb_min, aabb_max;
-        RadPointClassify::ComputeElementAABB(vertices.data(), (int)vertices.size(),
-                                             aabb_min, aabb_max);
-        double vol = (aabb_max.x - aabb_min.x) *
-                     (aabb_max.y - aabb_min.y) *
-                     (aabb_max.z - aabb_min.z);
-
-        if (vol > 0.0) {
-            RadDipoleCollect::DipoleData d;
-            d.x = center.x;
-            d.y = center.y;
-            d.z = center.z;
-            d.mx = M.x * vol;
-            d.my = M.y * vol;
-            d.mz = M.z * vol;
-            d.volume = vol;
-            dipoles.dipoles.push_back(d);
-        }
-    };
-
-    extractDipoles(g3dPtr);
-    dipoles.flatten();
 
     if (dipoles.count() > 0) {
         g_fmmCache[container_handle] = std::move(dipoles);
@@ -669,6 +603,21 @@ void ReleaseFMM(int container_handle)
 
     std::lock_guard<std::mutex> lock2(g_elemCacheMutex);
     g_elemCache.erase(container_handle);
+}
+
+//-----------------------------------------------------------------------------
+// ClearAllFMMCaches: Clear all caches (called from DeleteAllElements)
+//-----------------------------------------------------------------------------
+void ClearAllFMMCaches()
+{
+    {
+        std::lock_guard<std::mutex> lock(g_fmmCacheMutex);
+        g_fmmCache.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_elemCacheMutex);
+        g_elemCache.clear();
+    }
 }
 
 // ============================================================================

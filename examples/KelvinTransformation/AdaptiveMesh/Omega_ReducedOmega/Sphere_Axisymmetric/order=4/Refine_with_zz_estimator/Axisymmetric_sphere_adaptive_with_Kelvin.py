@@ -116,7 +116,7 @@ def create_geometry():
         dist = sqrt(edge.center.x**2 + edge.center.y**2)
         if x_center < 1e-6:  # On z-axis (r = 0)
             edge.name = "axis_int"
-        elif dist > (kelvin_radius + sphere_radius) / 2:
+        elif abs(dist - kelvin_radius) < kelvin_radius * 0.2:
             edge.name = "kelvin_int"
         else:
             edge.name = "sphere"

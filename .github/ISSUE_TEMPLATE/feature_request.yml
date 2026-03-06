@@ -1,0 +1,60 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for your suggestion! Please describe the feature you'd like to see.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What problem does this feature solve? What is the use case?
+      placeholder: "I'm trying to ... but currently ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature or API you'd like.
+      placeholder: |
+        A new function `rad.XxxYyy(...)` that ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternative approaches you've considered.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Radia does this relate to?
+      options:
+        - Core (C++ magnetostatics)
+        - PEEC / Conductor solver
+        - NGSolve integration
+        - Python API
+        - Visualization / Export
+        - Build / Packaging
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any other context, references, or screenshots.
+    validations:
+      required: false

@@ -71,15 +71,12 @@ def test_basic_geometry():
 	print("Test 3: Basic Geometry Creation")
 	print("=" * 60)
 	# Create a simple rectangular block with magnetization
-	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
+	magnetization = [0, 0, 1000]  # 1000 A/m in z-direction
+	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], magnetization)
 	print(f"[OK] SUCCESS: Created rectangular block")
 	print(f"  Block ID: {block}")
 	assert block > 0
-
-	# Set magnetization
-	magnetization = [0, 0, 1000]  # 1000 A/m in z-direction
-	rad.ObjSetM(block, magnetization)
-	print(f"[OK] SUCCESS: Set magnetization to {magnetization}")
+	print(f"[OK] SUCCESS: Magnetization set to {magnetization}")
 
 @pytest.mark.basic
 def test_material():
@@ -89,13 +86,13 @@ def test_material():
 	print("Test 4: Material Definition")
 	print("=" * 60)
 	# Create a material (Steel37 equivalent using MatSatIsoFrm)
-	mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
+	mat = rad.MatSatIsoFrm([[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]])
 	print(f"[OK] SUCCESS: Created material")
 	print(f"  Material ID: {mat}")
 	assert mat > 0
 
 	# Create object and apply material
-	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
+	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 0])
 	rad.MatApl(block, mat)
 	print(f"[OK] SUCCESS: Applied material to object")
 
@@ -107,8 +104,7 @@ def test_field_calculation():
 	print("Test 5: Magnetic Field Calculation")
 	print("=" * 60)
 	# Create a simple magnet
-	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
-	rad.ObjSetM(block, [0, 0, 1000])
+	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1000])
 
 	# Calculate field at a point
 	point = [0, 0, 20]  # 20mm above the magnet
@@ -129,8 +125,8 @@ def test_solve():
 	print("Test 6: Relaxation Solver")
 	print("=" * 60)
 	# Create a simple magnetic system
-	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
-	mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
+	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 0])
+	mat = rad.MatSatIsoFrm([[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]])
 	rad.MatApl(block, mat)
 
 	# Solve the system
@@ -150,7 +146,7 @@ def test_transformation():
 	print("Test 7: Geometric Transformation")
 	print("=" * 60)
 	# Create object
-	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
+	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 0])
 
 	# Create translation transformation
 	trans = rad.TrfTrsl([10, 0, 0])
