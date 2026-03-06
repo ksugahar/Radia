@@ -18,10 +18,10 @@ jobs:
     runs-on: [self-hosted, windows-radia]
     timeout-minutes: 30
 
-    # NGSolve from source build (UNC path — S: drive not mapped for service account)
+    # NGSolve source build copied to local path (NETWORK SERVICE can't access S: drive)
     env:
-      NGSOLVE_ROOT: '\\192.168.11.100\work\00_CAE\NGSolve\01_GitHub\install_ngsolve'
-      NGSOLVE_DIR: '\\192.168.11.100\work\00_CAE\NGSolve\01_GitHub\install_ngsolve\cmake'
+      NGSOLVE_ROOT: 'C:\NGSolve'
+      NGSOLVE_DIR: 'C:\NGSolve\cmake'
 
     steps:
       - uses: actions/checkout@v4
