@@ -16,7 +16,7 @@ import shutil
 import sys
 
 # Read version from pyproject.toml
-version = "1.0.7"
+version = "1.3.14"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -25,25 +25,29 @@ long_description = readme_file.read_text(encoding="utf-8") if readme_file.exists
 def prepare_package_data():
 	"""
 	Prepare package data by copying built extension modules to the package directory
+
+	Note: Package directory is now src/radia (not src/python) so that
+	'import radia' works correctly after pip install.
 	"""
-	package_dir = Path(__file__).parent / "src" / "python"
+	package_dir = Path(__file__).parent / "src" / "radia"
 	package_dir.mkdir(parents=True, exist_ok=True)
 
-	# Copy radia.pyd from dist/ if it exists
-	radia_pyd = Path(__file__).parent / "dist" / "radia.pyd"
+	# Copy radia.pyd from build/Release/ if it exists
+	# Note: CMake builds radia.cp312-win_amd64.pyd, we copy it as radia.pyd
+	radia_pyd = Path(__file__).parent / "build" / "Release" / "radia.cp312-win_amd64.pyd"
 	if radia_pyd.exists():
 		shutil.copy2(radia_pyd, package_dir / "radia.pyd")
 		print(f"Copied {radia_pyd} to {package_dir}")
 	else:
 		print(f"Warning: {radia_pyd} not found. Run Build.ps1 first.")
 
-	# Copy rad_ngsolve.pyd from build/Release/ if it exists
-	rad_ngsolve_pyd = Path(__file__).parent / "build" / "Release" / "rad_ngsolve.pyd"
-	if rad_ngsolve_pyd.exists():
-		shutil.copy2(rad_ngsolve_pyd, package_dir / "rad_ngsolve.pyd")
-		print(f"Copied {rad_ngsolve_pyd} to {package_dir}")
+	# Copy radia_ngsolve.pyd from build/Release/ if it exists
+	radia_ngsolve_pyd = Path(__file__).parent / "build" / "Release" / "radia_ngsolve.pyd"
+	if radia_ngsolve_pyd.exists():
+		shutil.copy2(radia_ngsolve_pyd, package_dir / "radia_ngsolve.pyd")
+		print(f"Copied {radia_ngsolve_pyd} to {package_dir}")
 	else:
-		print(f"Info: {rad_ngsolve_pyd} not found. This is optional.")
+		print(f"Info: {radia_ngsolve_pyd} not found. This is optional.")
 
 	return package_dir
 
@@ -53,7 +57,7 @@ if "sdist" not in sys.argv:
 	package_dir = prepare_package_data()
 
 setup(
-	name="radia-ngsolve",
+	name="radia",
 	version=version,
 	description="Radia 3D Magnetostatics with NGSolve Integration and OpenMP Parallelization",
 	long_description=long_description,
@@ -68,11 +72,12 @@ setup(
 		"Repository": "https://github.com/ksugahar/Radia_NGSolve",
 		"Issues": "https://github.com/ksugahar/Radia_NGSolve/issues",
 	},
-	license="LGPL-2.1",
+	license="BSD-style AND MIT",
 	classifiers=[
 		"Development Status :: 5 - Production/Stable",
 		"Intended Audience :: Science/Research",
-		"License :: OSI Approved :: GNU Lesser General Public License v2 (LGPLv2)",
+		"License :: OSI Approved :: BSD License",
+		"License :: OSI Approved :: MIT License",
 		"Programming Language :: Python :: 3.12",
 		"Programming Language :: Python :: 3 :: Only",
 		"Programming Language :: C++",
@@ -84,11 +89,10 @@ setup(
 	packages=find_packages(where="src"),
 	package_dir={"": "src"},
 	package_data={
-		"python": [
-			"*.pyd",  # Include all .pyd files (radia.pyd, rad_ngsolve.pyd)
-			"radia_pyvista_viewer.py",
-			"radia_vtk_export.py",
-			"nastran_reader.py",
+		"radia": [
+			"*.pyd",  # Include all .pyd files (radia.pyd, radia_ngsolve.pyd)
+			"*.dll",  # Include OpenBLAS DLL (libopenblas.dll)
+			"*.py",   # Include all Python utility modules
 		],
 	},
 	include_package_data=True,

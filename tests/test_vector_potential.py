@@ -8,12 +8,16 @@ import os
 
 # Add parent directory to path to import radia
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'build', 'Release'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'python'))
 
 import radia as rad
 
 print("=" * 70)
 print("Vector Potential Test")
 print("=" * 70)
+
+# Set Radia to use meters for consistency
+rad.FldUnits('m')
 
 # Clear all objects
 rad.UtiDelAll()
@@ -42,15 +46,15 @@ bg_field = rad.ObjBckgCF(field_with_A)
 print(f"  Background field object ID: {bg_field}")
 
 # Test field calculation with A
-point = [10.0, 20.0, 30.0]  # mm
+point = [0.010, 0.020, 0.030]  # m (rad.FldUnits('m'))
 result = rad.Fld(bg_field, 'ba', point)  # Request both B and A
-print(f"  Point: {point} mm")
+print(f"  Point: {point} m")
 print(f"  B field: [{result[0]:.6f}, {result[1]:.6f}, {result[2]:.6f}] T")
 print(f"  A field: [{result[3]:.6f}, {result[4]:.6f}, {result[5]:.6f}] T*m")
 
 # Verify A
-expected_Ax = -point[1] * 1.0 / 2.0 / 1000.0  # Convert to T·m
-expected_Ay = point[0] * 1.0 / 2.0 / 1000.0
+expected_Ax = -point[1] * 1.0 / 2.0  # T·m (no conversion needed with rad.FldUnits('m'))
+expected_Ay = point[0] * 1.0 / 2.0
 expected_Az = 0.0
 
 tolerance = 1e-6
@@ -73,7 +77,7 @@ bg_field2 = rad.ObjBckgCF(field_B_only)
 print(f"  Background field object ID: {bg_field2}")
 
 result2 = rad.Fld(bg_field2, 'b', point)
-print(f"  Point: {point} mm")
+print(f"  Point: {point} m")
 print(f"  B field: [{result2[0]:.6f}, {result2[1]:.6f}, {result2[2]:.6f}] T")
 print("  [OK] Backward compatibility maintained")
 

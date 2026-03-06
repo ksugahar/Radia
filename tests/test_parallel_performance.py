@@ -41,8 +41,8 @@ def create_test_magnet():
 	rad.ObjSetM(magnet, [0, 0, 1000])  # 1000 A/m magnetization in Z
 	return magnet
 
-def test_field_computation_1d(magnet, num_points=1000):
-	"""Test field computation along a line"""
+def _field_computation_1d(magnet, num_points=1000):
+	"""Helper: Field computation along a line (not a test)"""
 	start_time = time.perf_counter()
 
 	# Compute field along Z axis from z=0 to z=100mm
@@ -56,8 +56,8 @@ def test_field_computation_1d(magnet, num_points=1000):
 	end_time = time.perf_counter()
 	return end_time - start_time, len(fields)
 
-def test_field_computation_2d(magnet, grid_size=50):
-	"""Test field computation on a 2D grid"""
+def _field_computation_2d(magnet, grid_size=50):
+	"""Helper: Field computation on a 2D grid (not a test)"""
 	start_time = time.perf_counter()
 
 	# Create a grid of points
@@ -80,7 +80,11 @@ def test_field_computation_2d(magnet, grid_size=50):
 
 def test_relaxation_performance():
 	"""Test relaxation solver performance with multiple elements"""
+	rad.UtiDelAll()
 	start_time = time.perf_counter()
+
+	# Create a nonlinear material (required for relaxation solver)
+	mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
 
 	# Create multiple magnetic elements
 	elements = []
@@ -89,17 +93,21 @@ def test_relaxation_performance():
 			x = -50 + i * 10
 			y = -50 + j * 10
 			mag = rad.ObjRecMag([x, y, 0], [8, 8, 10])
-			rad.ObjSetM(mag, [0, 0, 500])
+			rad.MatApl(mag, mat)  # Apply material for relaxation
 			elements.append(mag)
 
 	# Create container
 	container = rad.ObjCnt(elements)
 
 	# Create interaction
-	interaction = rad.Solve(container, 0.0001, 1000)
+	result = rad.Solve(container, 0.0001, 1000)
 
 	end_time = time.perf_counter()
-	return end_time - start_time
+	elapsed_time = end_time - start_time
+
+	# Test passes if solver completes (rad.Solve returns convergence data)
+	assert result is not None
+	assert elapsed_time > 0
 
 def set_thread_count(num_threads):
 	"""Set the number of OpenMP threads"""
@@ -151,25 +159,25 @@ def main():
 	print("TEST 1: Field Computation Along Line (1000 points)")
 	print("=" * 70)
 	magnet = create_test_magnet()
-	time_1d = run_performance_test("1D field computation", test_field_computation_1d, magnet, 1000)
+	time_1d = run_performance_test("1D field computation", _field_computation_1d, magnet, 1000)
 	print()
 
 	print("=" * 70)
 	print("TEST 2: Field Computation on 2D Grid (50x50 = 2500 points)")
 	print("=" * 70)
-	time_2d = run_performance_test("2D field computation", test_field_computation_2d, magnet, 50)
+	time_2d = run_performance_test("2D field computation", _field_computation_2d, magnet, 50)
 	print()
 
 	print("=" * 70)
 	print("TEST 3: Large 1D Field Computation (5000 points)")
 	print("=" * 70)
-	time_1d_large = run_performance_test("Large 1D computation", test_field_computation_1d, magnet, 5000)
+	time_1d_large = run_performance_test("Large 1D computation", _field_computation_1d, magnet, 5000)
 	print()
 
 	print("=" * 70)
 	print("TEST 4: Very Large 1D Field Computation (10000 points)")
 	print("=" * 70)
-	time_1d_xlarge = run_performance_test("Very large 1D computation", test_field_computation_1d, magnet, 10000)
+	time_1d_xlarge = run_performance_test("Very large 1D computation", _field_computation_1d, magnet, 10000)
 	print()
 
 	# Summary

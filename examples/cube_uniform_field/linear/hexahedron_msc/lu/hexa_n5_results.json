@@ -1,0 +1,13 @@
+{
+  "n_div": 5,
+  "n_elements": 125,
+  "ndof": 750,
+  "solver": "lu",
+  "t_mesh": 0.016999483108520508,
+  "t_solve": 0.25899767875671387,
+  "iterations": 2,
+  "converged": true,
+  "M_avg_z": 701899.9094975782,
+  "M_analytical": 598203.5928143712,
+  "error_pct": 17.33461950560116
+}

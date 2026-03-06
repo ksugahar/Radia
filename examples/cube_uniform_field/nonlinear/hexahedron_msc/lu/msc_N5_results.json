@@ -1,0 +1,23 @@
+{
+  "element_type": "hexahedron_msc",
+  "mesh_description": "5x5x5",
+  "n_div": 5,
+  "n_elements": 125,
+  "ndof": 750,
+  "H_ext": 200000.0,
+  "t_mesh": 0.011968612670898438,
+  "t_solve": 0.30097150802612305,
+  "solver_method": 0,
+  "solver_name": "lu",
+  "nonl_tol": 0.001,
+  "bicg_tol": 0.0001,
+  "hmat_eps": null,
+  "leaf_size": null,
+  "eta": null,
+  "hmatrix_enabled": false,
+  "converged": true,
+  "residual": 0.00026961309497708363,
+  "nonl_iterations": 6,
+  "M_avg_z": 702131.9450429794,
+  "peak_memory_mb": 48.57421875
+}

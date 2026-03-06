@@ -50,7 +50,7 @@ def check_rad_ngsolve_available():
 	"""Check if rad_ngsolve module is built"""
 	try:
 	    import ngsolve  # Must import first
-	    import rad_ngsolve
+	    import radia_ngsolve
 	    return True
 	except ImportError:
 	    return False
@@ -65,13 +65,13 @@ class TestRadNGSolve:
 
 	def test_import(self):
 	    """Test 1: Module import"""
-	    print("\n[Test 1] Importing rad_ngsolve...")
+	    print("\n[Test 1] Importing radia_ngsolve...")
 
 	    import ngsolve
 	    print("  [OK] ngsolve imported")
 
-	    import rad_ngsolve
-	    print(f"  [OK] rad_ngsolve imported from {rad_ngsolve.__file__}")
+	    import radia_ngsolve
+	    print(f"  [OK] rad_ngsolve imported from {radia_ngsolve.__file__}")
 
 	    # Check available functions
 	    funcs = [name for name in dir(rad_ngsolve) if not name.startswith('_')]
@@ -84,24 +84,24 @@ class TestRadNGSolve:
 
 	    import ngsolve
 	    from ngsolve import CoefficientFunction
-	    import rad_ngsolve
+	    import radia_ngsolve
 
 	    # Create RadiaField with dummy Radia object ID
-	    bf = rad_ngsolve.RadiaField(1, 'b')
+	    bf = radia_ngsolve.RadiaField(1, 'b')
 
 	    assert isinstance(bf, CoefficientFunction), "RadiaField is not a CoefficientFunction"
 	    print(f"  [OK] RadiaField is CoefficientFunction: {type(bf)}")
 
 	    # Test other field types
-	    hf = rad_ngsolve.RadiaField(1, 'h')
+	    hf = radia_ngsolve.RadiaField(1, 'h')
 	    assert isinstance(hf, CoefficientFunction), "RadiaField('h') is not a CoefficientFunction"
 	    print(f"  [OK] RadiaField('h') is CoefficientFunction")
 
-	    af = rad_ngsolve.RadiaField(1, 'a')
+	    af = radia_ngsolve.RadiaField(1, 'a')
 	    assert isinstance(af, CoefficientFunction), "RadiaField('a') is not a CoefficientFunction"
 	    print(f"  [OK] RadiaField('a') is CoefficientFunction")
 
-	    mf = rad_ngsolve.RadiaField(1, 'm')
+	    mf = radia_ngsolve.RadiaField(1, 'm')
 	    assert isinstance(mf, CoefficientFunction), "RadiaField('m') is not a CoefficientFunction"
 	    print(f"  [OK] RadiaField('m') is CoefficientFunction")
 
@@ -111,17 +111,21 @@ class TestRadNGSolve:
 
 	    import ngsolve
 	    from ngsolve import CoefficientFunction
-	    import rad_ngsolve
+	    import radia_ngsolve
 	    import radia as rad
 
-	    # Create a simple Radia magnet
-	    magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1.2])
-	    rad.MatApl(magnet, rad.MatStd('NdFeB', 1.2))
+	    # Set Radia to use meters (required for NGSolve integration)
+	    rad.FldUnits('m')
+
+	    # Create a simple Radia magnet with permanent magnet material
+	    magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
+	    # NdFeB: Br=1.2T, Hc=900kA/m, magnetization axis in z-direction
+	    rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
 	    rad.Solve(magnet, 0.0001, 10000)
 	    print(f"  [OK] Radia magnet created: ID={magnet}")
 
 	    # Create CoefficientFunction
-	    B_cf = rad_ngsolve.RadiaField(magnet, 'b')
+	    B_cf = radia_ngsolve.RadiaField(magnet, 'b')
 	    print(f"  [OK] RadiaField CoefficientFunction created")
 
 	    # Verify it's a CoefficientFunction
@@ -143,18 +147,22 @@ class TestRadNGSolve:
 
 	    import ngsolve
 	    from ngsolve import CoefficientFunction
-	    import rad_ngsolve
+	    import radia_ngsolve
 	    import radia as rad
 
-	    # Create magnet
-	    magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1.2])
-	    rad.MatApl(magnet, rad.MatStd('NdFeB', 1.2))
+	    # Set Radia to use meters (required for NGSolve integration)
+	    rad.FldUnits('m')
+
+	    # Create magnet with permanent magnet material
+	    magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
+	    # NdFeB: Br=1.2T, Hc=900kA/m
+	    rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
 	    rad.Solve(magnet, 0.0001, 10000)
 
 	    # Test all field types
 	    field_types = ['b', 'h', 'a', 'm']
 	    for ftype in field_types:
-	        field = rad_ngsolve.RadiaField(magnet, ftype)
+	        field = radia_ngsolve.RadiaField(magnet, ftype)
 	        assert isinstance(field, CoefficientFunction)
 	        assert field.field_type == ftype
 	        print(f"  [OK] RadiaField('{ftype}') works")

@@ -3,12 +3,12 @@ requires = ["setuptools>=45", "wheel", "cmake>=3.20"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "radia-ngsolve"
-version = "1.0.7"
+name = "radia"
+version = "1.3.15"
 description = "Radia 3D Magnetostatics with NGSolve Integration and OpenMP Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "LGPL-2.1"}
+license = {text = "BSD-style AND MIT"}
 authors = [
     {name = "Oleg Chubar", email = "chubar@bnl.gov"},
     {name = "Pascal Elleaume"},
@@ -20,6 +20,8 @@ keywords = ["magnetostatics", "magnetic field", "radia", "ngsolve", "fem", "sync
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: C++",
     "Topic :: Scientific/Engineering :: Physics",
@@ -33,6 +35,12 @@ dependencies = [
 viz = [
     "pyvista>=0.40",
     "matplotlib>=3.5",
+]
+ngsolve = [
+    # NGSolve 6.2.2406+ has a regression bug in Periodic BC (Identify lost during mesh generation)
+    # See: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
+    # Working versions: 6.2.2404, 6.2.2405 (recommend 6.2.2405)
+    "ngsolve==6.2.2405",
 ]
 test = [
     "pytest>=7.0",

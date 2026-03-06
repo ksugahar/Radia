@@ -27,8 +27,6 @@ RadObjFullMag
 
 RadObjDpl
 RadObjM
-RadObjDivMagPln
-RadObjDivMagCyl
 RadObjGeoVol
 RadObjGeoLim
 
@@ -46,7 +44,6 @@ RadTrfTrsl
 
 RadMatApl
 RadMatLin
-RadMatStd
 RadMatMvsH
 RadMatSatIsoFrm
 RadMatSatIsoTab

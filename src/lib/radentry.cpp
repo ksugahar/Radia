@@ -1,5 +1,5 @@
 
-#include "radstlon.h"
+#include "rad_string_long.h"
 #include "auxparse.h"
 #include <Python.h>
 
@@ -9,13 +9,11 @@
 //#endif
 
 #include "radentry.h"
-#include "radiobuf.h"
+#include "rad_io_buffer.h"
 
 //DEBUG
 //#include <mpi.h>
 //#endif
-
-//-------------------------------------------------------------------------
 
 extern "C" {
 
@@ -44,7 +42,6 @@ void Group( int*, long );
 void AddToGroup( int, int*, long );
 void OutGroupSize( int );
 void OutGroupSubObjectKeys( int );
-
 void DuplicateElementG3DOpt( int, const char* );
 void CutElementG3DOpt( int, double,double,double, double,double,double, const char* );
 void SubdivideElementG3DOpt( int, double*, char, double*, int, const char*, const char*, const char* );
@@ -67,7 +64,9 @@ void ApplySymmetry( int, int, int );
 
 void LinearMaterial( double,double, double,double,double );
 void LinearMaterial2( double,double, double );
-void MaterialStd( char*, double );
+void LinearMaterialIsotropic( double );
+void LinearMaterialAnisotropic( double,double, double,double,double );
+void PermanentMagnet( double,double, double,double,double );
 
 void NonlinearIsotropMaterial2( double,double, double,double, double,double );
 void NonlinearIsotropMaterial3Opt( double**, long );
@@ -82,12 +81,22 @@ void MvsH( int, char*, double,double,double );
 
 void PreRelax( int, int );
 void ShowInteractMatrix(int);
+void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
 void ManualRelax( int, int, int, double );
 //void AutoRelax( int, double, int, int );
 void AutoRelaxOpt( int, double, int, int, const char* );
 void UpdateSourcesForRelax( int );
 void SolveGen( int, double, int, int );
+void SolveGenNonl( int, double, int, int, int );
+#ifdef RADIA_USE_HACAPK
+void SetHACApKParams( double, int, double );
+void GetHACApKStats( double*, int* );
+#endif
+void SetBiCGSTABTolerance( double );
+double GetBiCGSTABTolerance();
+void SetRelaxParam( double );
+double GetRelaxParam();
 
 void FieldArbitraryPointsArray( long, const char*, double**, long );
 void Field( int, char*, double,double,double, double,double,double, int, char*, double );
@@ -105,6 +114,7 @@ void FieldInt( int, char*, char*, double,double,double, double,double,double );
 void CompCriterium( double, double, double, double, double,double );
 void CompPrecisionOpt( const char*, const char*, const char*, const char*, const char*, const char*, const char*, const char* );
 void PhysicalUnits();
+void PhysicalUnitsSet(const char*);
 void RandomizationOnOrOff( char* );
 void TolForConvergence( double, double, double );
 void ShimSignature( int, char*, double,double,double, double,double,double, double,double,double, int, double,double,double );
@@ -152,6 +162,10 @@ extern radTIOBuffer ioBuffer;
 
 int (*pgRadYieldExternFunc)() = 0;
 
+//-------------------------------------------------------------------------
+// Note: Tetrahedral method selection was removed (2025-12-09).
+// Dipole-dipole method was found numerically unstable.
+// Surface charge (MSC) method is always used.
 //-------------------------------------------------------------------------
 
 int CALL RadUtiYeldFuncSet(int (*pExtFunc)())
@@ -539,97 +553,6 @@ int CALL RadObjCutMag(int* pIndexes, int* pAmOfIndexes, int Obj, double* pP, dou
 
 //-------------------------------------------------------------------------
 
-int CALL RadObjDivMagPln(int* n, int Obj, double* pSbdPar, int nSbdPar, double* pFlatNormals, char* sOpt) //OC22092018
-//int CALL RadObjDivMagPln(int* n, int Obj, double* pSbdPar, int nSbdPar, double* pFlatNormals, char* Opt)
-{
-	const char *sOpt1=0, *sOpt2=0;
-	//const char *Opt1=0, *Opt2=0;
-	vector<string> AuxStrings;
-	if((sOpt != 0) && (strlen(sOpt) > 0)) //OC22092018
-	//if(Opt != 0)
-	{
-		//char *SepStrArr[] = {(char*)";", (char*)","}; //OC04082018 (to please GCC 4.9)
-		//CAuxParse::StringSplit(Opt, SepStrArr, 2, (char*)" ", AuxStrings);
-		//int AmOfTokens = (int)AuxStrings.size();
-		//if(AmOfTokens > 0) Opt1 = (AuxStrings[0]).c_str();
-		//if(AmOfTokens > 1) Opt2 = (AuxStrings[1]).c_str();
-		//OC22092018
-		int lenStrOpt = (int)strlen(sOpt);
-		char *sOptLoc = new char[lenStrOpt + 1];
-		CAuxParse::StringSymbolsRemove(sOpt, (char*)" ", sOptLoc);
-		CAuxParse::StringSplitNested(sOptLoc,";,", AuxStrings);
-		delete[] sOptLoc;
-		int AmOfTokens = (int)AuxStrings.size();
-		if(AmOfTokens > 0) 
-		{
-			sOpt1 = (AuxStrings[0]).c_str();
-			if(AmOfTokens > 1) 
-			{
-				sOpt2 = (AuxStrings[1]).c_str();
-			}
-		}
-	}
-
-	double AuxSbdPar[6];
-	if(nSbdPar == 3)
-	{
-		AuxSbdPar[0] = pSbdPar[0]; AuxSbdPar[1] = 1.;
-		AuxSbdPar[2] = pSbdPar[1]; AuxSbdPar[3] = 1.;
-		AuxSbdPar[4] = pSbdPar[2]; AuxSbdPar[5] = 1.;
-	}
-	else if(nSbdPar == 6)
-	{
-		for(int i=0; i<6; i++) AuxSbdPar[i] = pSbdPar[i];
-	}
-	char TypeExtraSpec = 2; //pln; = 1;//cyl
-	int LenExtraSpec = 9;
-
-	SubdivideElementG3DOpt(Obj, AuxSbdPar, TypeExtraSpec, pFlatNormals, LenExtraSpec, sOpt1, sOpt2, "\0");
-	//SubdivideElementG3DOpt(Obj, AuxSbdPar, TypeExtraSpec, pFlatNormals, LenExtraSpec, Opt1, Opt2, "\0");
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjDivMagCyl(int* n, int Obj, double* pSbdPar, int nSbdPar, double* pFlatCylDefPts, double Rat, char* Opt)
-{
-	const char *Opt1=0, *Opt2=0;
-	vector<string> AuxStrings;
-	if(Opt != 0)
-	{
-		//char *SepStrArr[] = {";", ","};
-		char *SepStrArr[] = {(char*)";", (char*)","};  //OC04082018 (to please GCC 4.9)
-		CAuxParse::StringSplit(Opt, SepStrArr, 2, (char*)" ", AuxStrings);
-		int AmOfTokens = (int)AuxStrings.size();
-		if(AmOfTokens > 0) Opt1 = (AuxStrings[0]).c_str();
-		if(AmOfTokens > 1) Opt2 = (AuxStrings[1]).c_str();
-	}
-
-	double AuxSbdPar[6];
-	if(nSbdPar == 3)
-	{
-		AuxSbdPar[0] = pSbdPar[0]; AuxSbdPar[1] = 1.;
-		AuxSbdPar[2] = pSbdPar[1]; AuxSbdPar[3] = 1.;
-		AuxSbdPar[4] = pSbdPar[2]; AuxSbdPar[5] = 1.;
-	}
-	else if(nSbdPar == 6)
-	{
-		for(int i=0; i<6; i++) AuxSbdPar[i] = pSbdPar[i];
-	}
-	char TypeExtraSpec = 1; //pln; = 1;//cyl
-	int LenExtraSpec = 10;
-	double AuxExtraSpec[10];
-	for(int i=0; i<(LenExtraSpec - 1); i++) AuxExtraSpec[i] = pFlatCylDefPts[i];
-	AuxExtraSpec[LenExtraSpec - 1] = Rat;
-
-	SubdivideElementG3DOpt(Obj, AuxSbdPar, TypeExtraSpec, AuxExtraSpec, LenExtraSpec, Opt1, Opt2, "\0");
-	*n = ioBuffer.OutInt();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
 int CALL RadObjGeoVol(double* Vol, int Obj)
 {
 	GeometricalVolume(Obj);
@@ -766,9 +689,29 @@ int CALL RadMatLin(int* n, double* pKsi, double* pMr, int LenMr)
 
 //-------------------------------------------------------------------------
 
-int CALL RadMatStd(int* n, char* Name, double m)
+int CALL RadMatLinIso(int* n, double ksi)
 {
-	MaterialStd(Name, m);
+	LinearMaterialIsotropic(ksi);
+
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadMatLinAniso(int* n, double* pKsi, double* pEasyAxis)
+{
+	LinearMaterialAnisotropic(pKsi[0], pKsi[1], pEasyAxis[0], pEasyAxis[1], pEasyAxis[2]);
+
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadMatPM(int* n, double Br, double Hc, double* pMagAxis)
+{
+	PermanentMagnet(Br, Hc, pMagAxis[0], pMagAxis[1], pMagAxis[2]);
 
 	*n = ioBuffer.OutInt();
 	return ioBuffer.OutErrorStatus();
@@ -1004,13 +947,16 @@ int CALL RadFld(double* pB, int* pNb, int Obj, char* ID, double* pCoord, int Np)
 	int NumDims=0;
 	ioBuffer.OutMultiDimArrayOfDouble(pB, Dims, NumDims);
 
+	// Clear internal buffer to prevent memory accumulation
+	ioBuffer.EraseDoubleBufferMulti();
+
 	int TotLen = 0; //OC19012020
 	if(NumDims > 0)
 	{
-		TotLen = 1; 
+		TotLen = 1;
 		for(int k=0; k<NumDims; k++) TotLen *= Dims[k];
 	}
-	//int TotLen = 1; 
+	//int TotLen = 1;
 	//for(int k=0; k<NumDims; k++) TotLen *= Dims[k];
 	*pNb = TotLen;
 
@@ -1319,6 +1265,17 @@ int CALL RadFldUnitsSize(int* OutSize)
 
 //-------------------------------------------------------------------------
 
+int CALL RadFldUnitsSet(const char* UnitStr)
+{
+	PhysicalUnitsSet(UnitStr);
+
+	int ErrStat = ioBuffer.OutErrorStatus();
+	ioBuffer.EraseStringBuffer();
+	return ErrStat;
+}
+
+//-------------------------------------------------------------------------
+
 int CALL RadFldFrcShpRtg(int* n, double* pP, double* pW)
 {
 	Rectngl(pP[0], pP[1], pP[2], pW[0], pW[1]);
@@ -1358,10 +1315,10 @@ int CALL RadObjDrwVTK(int* pNvp, int* pNp, int* pNvl, int* pNl, int* pKey, int o
 		char *SepStrArr[] = {(char*)";", (char*)","};
 		CAuxParse::StringSplit(opt, SepStrArr, 2, (char*)" ", AuxStrings);
 		int AmOfTokens = (int)AuxStrings.size();
-		if(AmOfTokens > 0) 
+		if(AmOfTokens > 0)
 		{
 			Opt1 = (AuxStrings[0]).c_str();
-			if(AmOfTokens > 1) 
+			if(AmOfTokens > 1)
 			{
 				Opt2 = (AuxStrings[1]).c_str();
 				if(AmOfTokens > 2) Opt3 = (AuxStrings[2]).c_str();
@@ -1371,6 +1328,7 @@ int CALL RadObjDrwVTK(int* pNvp, int* pNp, int* pNvl, int* pNl, int* pKey, int o
 
 	*pNvp = 0; *pNp = 0; *pNvl = 0; *pNl = 0;
 	*pKey = GraphicsForElemVTK(obj, Opt1, Opt2, Opt3);
+
 	if(*pKey != 0)
 	{
 		ioBuffer.OutGeomPolygLen(*pKey, pNvp, pNp);
@@ -1644,34 +1602,18 @@ int CALL RadSolve(double* dOut, int* nOut, int obj, double prec, int iter, int m
 
 //-------------------------------------------------------------------------
 
-int CALL RadObjFullMag(int* n, double* pP, double* pL, double* pM, double* SbdPar, int nSbdPar, int grp, int mat, double* pRGB)
+int CALL RadSolveNonl(double* dOut, int* nOut, int obj, double prec, int iter, int meth, int nonl_method)
 {
-	int OutRes = 0, LocRes = 0;
+	SolveGenNonl(obj, prec, iter, meth, nonl_method);
 
-	if(LocRes = RadObjRecMag(n, pP, pL, pM)) return LocRes;
-	if(LocRes < 0) OutRes = LocRes;
+	int ErrStat = ioBuffer.OutErrorStatus();
+	if(ErrStat > 0) return ErrStat;
 
-	if(LocRes = RadObjDrwAtr(*n, pRGB, 0.001)) return LocRes;
-	if(LocRes < 0) OutRes = LocRes;
-
-	if(mat > 0)
-	{
-		if(LocRes = RadMatApl(n, *n, mat)) return LocRes;
-		if(LocRes < 0) OutRes = LocRes;
-	}
-
-	double FlatNorm[] = {1,0,0,0,1,0,0,0,1};
-	if(LocRes = RadObjDivMagPln(n, *n, SbdPar, nSbdPar, FlatNorm, 0)) return LocRes;
-	if(LocRes < 0) OutRes = LocRes;
-
-	if(grp > 0)
-	{
-		int KeysArr[] = {*n};
-		if(LocRes = RadObjAddToCnt(grp, KeysArr, 1)) return LocRes;
-		if(LocRes < 0) OutRes = LocRes;
-	}
-
-	return OutRes;
+	int Dims[20];
+	int NumDims;
+	ioBuffer.OutMultiDimArrayOfDouble(dOut, Dims, NumDims);
+	*nOut = Dims[0];
+	return ErrStat;
 }
 
 //-------------------------------------------------------------------------
@@ -1684,6 +1626,77 @@ int CALL RadUtiDataGet(char* pcData, const char typeData[3], long key) //OC04102
 
 	int ErrStat = ioBuffer.OutErrorStatus();
 	return ErrStat;
+}
+
+int CALL RadPreRelax(int* n, int ElemKey, int SrcElemKey)
+{
+	PreRelax(ElemKey, SrcElemKey);
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether)
+{
+	SetRelaxSubInterval(InteractElemKey, StartNo, FinNo, RelaxTogether);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+#ifdef RADIA_USE_HACAPK
+int CALL RadSetHACApKParams(int* n, double eps, int leaf_size, double eta)
+{
+	SetHACApKParams(eps, leaf_size, eta);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadSetHMatrixEpsilon(int* n, double eps)
+{
+	// Set only epsilon, keep other params at default
+	// This is ELF-compatible: magic.set_hmatrix_epsilon(eps)
+	SetHACApKParams(eps, -1, -1.0);  // -1 means keep current value
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetHACApKStats(double* dOut, int* nOut)
+{
+	GetHACApKStats(dOut, nOut);
+	return ioBuffer.OutErrorStatus();
+}
+#endif
+
+//-------------------------------------------------------------------------
+
+int CALL RadSetBiCGSTABTol(int* n, double tol)
+{
+	SetBiCGSTABTolerance(tol);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetBiCGSTABTol(double* tol)
+{
+	*tol = GetBiCGSTABTolerance();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadSetRelaxParam(int* n, double relax)
+{
+	SetRelaxParam(relax);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetRelaxParam(double* relax)
+{
+	*relax = GetRelaxParam();
+	return ioBuffer.OutErrorStatus();
 }
 
 //-------------------------------------------------------------------------

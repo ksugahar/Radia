@@ -13,7 +13,6 @@
 # Copyright (c) 2000 by European Synchrotron Radiation Facility,
 #                       Grenoble, France
 #
-#                       All Rights Reserved
 #
 #********************************************************************** */
 

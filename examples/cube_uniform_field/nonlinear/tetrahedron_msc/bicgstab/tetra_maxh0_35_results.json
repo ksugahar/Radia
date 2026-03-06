@@ -1,0 +1,16 @@
+{
+  "element_type": "tetra",
+  "mesh_description": "maxh=0.35m",
+  "n_elements": 112,
+  "ndof": 336,
+  "H_ext": 50000.0,
+  "t_mesh": 0.028000354766845703,
+  "t_solve": 0.3619968891143799,
+  "solver_method": 1,
+  "solver_name": "bicgstab",
+  "converged": true,
+  "residual": 166634.8754396823,
+  "nonl_iterations": 2,
+  "M_avg_z": 157930.38670122455,
+  "peak_memory_mb": 64.66015625
+}

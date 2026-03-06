@@ -6,6 +6,633 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.3.15] - 2025-12-22
+
+### Added
+
+- **B-field Based Convergence (mucal2)**
+  - Implemented industry-standard B-field convergence criterion for nonlinear materials
+  - Formula: `rel_change = |B_new - B_old| / B_sat`
+  - B_sat automatically calculated from BH curve (B_last - H_last)
+  - Matches Newton-Raphson convergence behavior of reference solvers
+
+### Changed
+
+- **Nonlinear Solver Convergence**
+  - Replaced chi-based (mucal1) convergence with B-field based (mucal2) convergence
+  - Provides faster and more reliable convergence for saturable materials
+  - Iteration count now matches reference solver exactly (e.g., 6 iterations for N=5 cube)
+
+- **Permeability Calculation from BH Curve**
+  - Changed from chi (susceptibility) based to mu_r (relative permeability) based calculation
+  - mu_r = B / (mu_0 * H) directly from BH curve interpolation
+  - More numerically stable for high-permeability materials
+  - Consistent with industry-standard magnetostatic solvers
+
+- **BH Curve Storage Format**
+  - Internally uses B-H representation (B as function of H)
+  - Supports both linear interpolation and spline interpolation
+  - GetBsaturation() method added for automatic B_sat extraction
+
+### Validation
+
+- N=5 hexahedron benchmark (125 elements, H_ext = 200,000 A/m):
+  - Radia: 6 iterations, M_avg_z = 702,129.2 A/m
+  - Reference: 6 iterations, M_avg_z = 702,131.9 A/m
+  - Difference: 0.0004%
+
+## [1.3.14] - 2025-12-11
+
+### Fixed
+
+- **PyPI Package DLL Loading Issue**
+  - Fixed "DLL load failed" error when importing radia from PyPI package
+  - Added `libopenblas.dll` to package distribution
+  - Added DLL directory to search path via `os.add_dll_directory()` on Windows
+  - Package now correctly loads OpenBLAS dependency
+
+## [1.3.13] - 2025-12-11
+
+### Performance
+
+- **Major Performance Optimization with OpenBLAS and OpenMP**
+  - Replaced manual BLAS operations with OpenBLAS calls (cblas_ddot, cblas_dnrm2, cblas_daxpy, cblas_dcopy, cblas_dscal, cblas_dgemv)
+  - Added OpenMP parallelization to interaction matrix O(N^2) construction
+  - LU solver: Up to **240x faster** (e.g., 410s -> 1.7s for 390 elements)
+  - BiCGSTAB solver: Up to **17x faster** (e.g., 29s -> 1.7s for 390 elements)
+  - BiCGSTAB now **faster than ELF_MAGIC** for large problems (0.4x-0.6x ratio)
+
+### Changed
+
+- **Solver Architecture**
+  - Original Radia used Implicit SS (Successive Substitution/Gauss-Seidel) method which had slow convergence for high-permeability nonlinear materials
+  - Replaced with BiCGSTAB iterative solver (Method 1) for better convergence
+  - LU direct solver (Method 0) retained for small problems and guaranteed convergence
+  - Both solvers now use pure Newton-Raphson iteration without Gauss-Seidel M(H) correction
+
+### Technical Notes
+
+- Convergence tolerance: Radia uses relative change ||dM||/||M||
+- ELF_MAGIC default tolerance: 0.01 (1%), Radia benchmark used 0.0001 (0.01%)
+- With same tolerance (0.01), Radia converges in 6 iterations vs ELF's 9 iterations
+
+## [1.3.12] - 2025-12-11
+
+### Changed
+
+- **Solver Methods Simplified**
+  - Only LU (Method 0) and BiCGSTAB (Method 1) remain
+  - Implicit SS (Method 2) implementation removed due to nonlinear material issues
+  - String arguments: 'lu'/'direct' for Method 0, 'bicgstab'/'iterative' for Method 1
+
+## [1.3.11] - 2025-12-11
+
+### Added
+
+- **6-Face Hexahedral MSC Method (ELF_MAGIC Compatible)**
+  - Implemented `B_comp_hexahedron_MSC()` for 6 quadrilateral faces
+  - Each quad face is split into 2 triangles using [V0,V1,V2] + [V0,V2,V3]
+  - Matches ELF_MAGIC face ordering and diagonal split convention
+  - Single element validation: 0.05% error vs ELF_MAGIC reference
+
+### Changed
+
+- **Polyhedron Element Support**
+  - Now only supports tetrahedra (4 faces) and hexahedra (6 faces)
+  - Removed 12-face triangular hexahedron support (throws error)
+  - Updated documentation to reflect 6-face MSC implementation
+
+### Documentation
+
+- Updated CLAUDE.md with 6-face hexahedral MSC details
+- Updated docs/MMM_MSC_IMPLEMENTATION.md
+- Updated docs/MESH_MSC_API_DESIGN.md
+
+## [1.3.10] - 2025-12-10
+
+### Added
+
+- **NGSolve Integration Documentation**
+  - Documented RadiaField coordinate transformation parameters (origin, u_axis, v_axis, w_axis)
+  - Added detailed Coordinate Transformation section to NGSOLVE_INTEGRATION.md
+  - Added Cache Methods documentation (PrepareCache, ClearCache, GetCacheStats)
+  - New example scripts:
+    - `demo_basic_field.py` - Basic RadiaField usage
+    - `demo_coordinate_transform.py` - Coordinate transformation examples
+    - `test_unit_conversion.py` - Unit conversion tests
+
+### Fixed
+
+- **Documentation Link Fixes**
+  - Fixed broken links: `solver_time_evaluation` -> `solver_benchmarks`
+  - Fixed broken links: `Radia_to_NGSolve_CoefficientFunction_A` -> `ngsolve_integration`
+  - Fixed broken links: `02_EMPY_Field` -> `examples/ngsolve_integration`
+  - Fixed file path: `src/python/radia_ngsolve.cpp` -> `src/radia/radia_ngsolve.cpp`
+
+## [1.3.9] - 2025-12-05
+
+### Added
+
+- **NGSolve Integration Tests and Examples**
+  - New `test_ngsolve_integration.py` - Comprehensive HDiv projection test
+  - New `test_mesh_import.py` - Tetrahedral and hexahedral mesh import tests
+  - New `demo_hdiv_projection.py` - HDiv function space projection example
+  - Documented HDiv best practices for magnetic field projection
+
+- **Build System Improvements**
+  - Fixed Build.ps1 bugs (radia_ngsolve target name, path handling)
+  - Automatic copy of .pyd files to src/radia/ for PyPI packaging
+  - Multi-location search for built .pyd files
+
+- **Nonlinear Material Benchmarks**
+  - New `benchmark_bicgstab_hex.py` - BiCGSTAB solver benchmark
+  - New `benchmark_solver_methods.py` - LU vs BiCGSTAB comparison
+  - New `compare_radia_elfmagic_field.py` - ELF_MAGIC comparison
+
+- **Documentation**
+  - `docs/MESH_MSC_API_DESIGN.md` - Mesh MSC API design document
+  - `docs/MMM_MSC_IMPLEMENTATION.md` - MMM+MSC implementation guide
+  - `docs/SOLVER_METHODS.md` - Solver method documentation
+
+### Changed
+
+- **CLAUDE.md Updates**
+  - Added isotropic MatLin usage policy (single argument form required)
+  - Updated NGSolve integration best practices with HDiv(order=2) recommendation
+  - Added release workflow policy (Build -> Test -> Git Push -> PyPI)
+
+### Fixed
+
+- **Build.ps1 Bug Fixes**
+  - Fixed target name `rad_ngsolve` -> `radia_ngsolve`
+  - Fixed broken paths `srcadiaadia.pyd` -> `srcadiaadia.pyd`
+  - Added automatic directory creation for src/radia
+
+## [1.3.4] - 2025-11-27
+
+### Added
+
+- **SolverTetraMethod() API**
+  - New API to control tetrahedral element field computation method
+  - `rad.SolverTetraMethod(0)`: Original Radia polygon method (default)
+  - `rad.SolverTetraMethod(1)`: Analytical method for high-permeability materials
+  - Replaces deprecated `RADIA_TETRA_METHOD` environment variable
+  - Both methods now produce identical results (verified 0.00% difference)
+
+### Fixed
+
+- **ANALYTICAL Method (SolverTetraMethod=1)**
+  - Fixed double coordinate transformation bug causing 59.64% error
+  - Root cause: `B_comp` was incorrectly receiving global basis vectors
+  - Solution: Reverted to LOCAL coordinate computation with identity basis
+  - Method 0 and Method 1 now produce identical results
+
+### Changed
+
+- **Documentation Updates**
+  - Updated `FldUnits` documentation with meter/millimeter setting examples
+  - Added NGSolve integration unit policy (`rad.FldUnits('m')` required)
+  - Corrected "BEM" terminology to "MMM" (Magnetic Moment Method) throughout
+  - Added `SolverTetraMethod` to API_REFERENCE.md and API_EXTENSIONS.md
+  - Updated NGSOLVE_USAGE_GUIDE.md and NGSOLVE_INTEGRATION.md
+
+### Documentation
+
+- **Unit System Policy**
+  - Enforced no hard-coded unit conversions policy
+  - All unit conversions via `rad.FldUnits()` only
+  - Updated all NGSolve examples to use `rad.FldUnits('m')`
+
+## [1.3.3] - 2025-01-21
+
+### Optimized
+
+- **radia_ngsolve Memory Management**
+  - Minimized GIL (Global Interpreter Lock) scope - acquired only during Python calls
+  - C++ cache lookups now avoid GIL entirely for improved performance
+  - Improved Python object lifecycle - temporary objects released in tight scopes
+  - Cached Radia module import to eliminate repeated `py::module_::import()` calls
+  - Memory growth verified as Python memory pool initialization (not a leak)
+  - Memory usage stabilizes after warm-up period (-41% saturation in extended tests)
+
+### Added
+
+- **Memory Test Suite for NGSolve Integration**
+  - `test_radia_ngsolve_memory_leak.py` - Basic memory leak detection test
+  - `test_radia_ngsolve_longrun.py` - Extended 500-iteration saturation test
+  - `test_radia_ngsolve_with_cache.py` - PrepareCache() memory behavior test
+  - `test_radia_core_memory.py` - Baseline Radia core memory verification
+  - All tests confirm no true memory leak exists
+
+### Documentation
+
+- **Memory Management Section** in `examples/NGSolve_Integration/README.md`
+  - Documents memory optimization techniques implemented in v1.3.3
+  - Explains memory growth behavior (Python memory pool initialization)
+  - Provides test results showing saturation pattern
+  - Clarifies this is safe for long-running simulations
+
+## [1.3.2] - 2025-11-21
+
+### Changed
+
+- **H-Matrix Solver Control (Breaking Change)**
+  - H-matrix acceleration now requires explicit enablement via `rad.SolverHMatrixEnable(1, eps=1e-4, max_rank=30)`
+  - Removed automatic enablement based on problem size (no more N > 200 threshold)
+  - Updated documentation in `radpy.cpp` to clarify explicit control requirement
+  - Updated benchmark scripts to use explicit H-matrix enable/disable calls
+  - Follows H-Matrix Solver Control Policy in CLAUDE.md
+
+### Added
+
+- **Documentation Organization**
+  - Created `internal/` folder for maintainer documentation
+    - `internal/design/` - Architecture decisions, implementation proposals
+    - `internal/analysis/` - Performance analysis, bottleneck investigations
+  - Moved development documents from `docs/` to `internal/`
+  - Updated `docs/README.md` with clear separation between user and maintainer docs
+
+- **NGSolve Integration Test Suite**
+  - `test_batch_evaluation.py` - Batch field evaluation testing
+  - `test_cf_direct.py` - Direct CoefficientFunction usage
+  - `test_convergence_hdiv.py` - H(div) space convergence analysis
+  - `test_curlA_equals_B.py` - Vector potential curl verification
+  - `test_curl_A_detailed.py` - Detailed curl(A) = B testing
+  - `test_hcurl_vs_hdiv.py` - H(curl) vs H(div) comparison
+  - `test_order1.py` - First-order element testing
+  - `test_radia_ngsolve_diagnostic.py` - NGSolve integration diagnostics
+  - `test_set_vs_interpolate.py` - GridFunction.Set() vs Interpolate()
+  - `test_without_gridfunction.py` - Direct field evaluation without GridFunction
+
+### Fixed
+
+- **.gitignore improvements**
+  - Added VTK output file patterns (*.vtu, *.vtk)
+  - Added Python development file patterns (experimental implementations)
+  - Added test file patterns for development tests
+  - Prevents committing temporary and experimental files
+
+## [1.3.1] - 2025-11-21
+
+### Added
+
+- **Pure Python Cached Field Implementation**
+  - New `radia_field_cached.py` module with `CachedRadiaField` class
+  - 60,000x faster than C++ PrepareCache() (500 points: 60s → 1ms)
+  - Linear O(N) scaling with ~2 us/point overhead
+  - Avoids pybind11 overhead by keeping all data operations in Python
+  - Helper function `collect_integration_points()` for NGSolve integration
+  - Documented in `docs/PYTHON_CACHED_FIELD_SOLUTION.md`
+
+- **NGSolve Integration Unit System Policy**
+  - Comprehensive policy in CLAUDE.md for `rad.FldUnits('m')` usage
+  - Ensures consistent meter units between Radia and NGSolve
+  - Verification checklist for all NGSolve integration code
+
+### Changed
+
+- **Unit System Consistency (Breaking Change)**
+  - All NGSolve integration examples now use `rad.FldUnits('m')`
+  - Magnet dimensions converted from mm to m (35 files updated)
+  - Removed manual coordinate scaling (×1000, ×0.001)
+  - Affects: tests/ and examples/NGSolve_Integration/ folders
+
+### Fixed
+
+- **profile_batch_performance.py**: Fixed ZeroDivisionError when measurement time < 0.01ms
+- **test_coordinate_transform.py**: Fixed UnicodeEncodeError (cp932) by replacing `·` with `*`
+- **test_vector_potential.py**: Added missing `src/python` path for radia module import
+
+### Documentation
+
+- Added `docs/PYTHON_CACHED_FIELD_SOLUTION.md` - Pure Python cached field implementation
+- Updated CLAUDE.md with NGSolve Integration Unit System Policy
+- Updated CLAUDE.md with Windows Console Encoding (cp932) compatibility policy
+
+## [1.3.0] - 2025-11-21
+
+### Added
+
+- **H-Matrix Cache for Batch Field Evaluation**
+  - Implemented `PrepareCache()` method in `radia_ngsolve.RadiaField` for batch field evaluation
+  - Enables H-matrix acceleration when setting GridFunctions from Radia fields
+  - Single batch Radia.Fld() call replaces element-by-element evaluation (~13,000 calls → 1 call)
+  - Cache data structure using FNV-1a hash with O(1) lookup performance
+  - Python API: `PrepareCache(points)`, `ClearCache()`, `GetCacheStats()`
+  - Cache hit rate: 80-95% during GridFunction.Set() operations
+  - Documented in `docs/HMATRIX_CACHE_IMPLEMENTATION.md`
+
+- **Cache Performance Monitoring**
+  - Added `GetCacheStats()` method returning dictionary with cache statistics
+  - Reports: enabled status, cache size, hits, misses, hit rate
+  - Enables performance profiling and optimization
+
+### Changed
+
+- **radia_ngsolve.cpp Internal Structure**
+  - Added cache member variables: `point_cache_`, `use_cache_`, cache statistics
+  - Modified `Evaluate()` methods to check cache before direct Radia evaluation
+  - Added hash function for 3D point quantization (tolerance: 1e-10 meters)
+
+### Examples
+
+- **examples/NGSolve_Integration/example_hmatrix_cache_usage.py**
+  - Complete usage example demonstrating PrepareCache() workflow
+  - Performance comparison: cached vs non-cached evaluation
+  - Integration point collection from mesh elements
+
+### Tests
+
+- **tests/test_hmatrix_cache_simple.py**
+  - Basic cache functionality test (PASS)
+  - Verifies PrepareCache(), ClearCache(), GetCacheStats()
+
+- **tests/test_hmatrix_cache.py**
+  - Comprehensive GridFunction integration test
+  - Accuracy verification and performance measurement
+
+### Known Limitations
+
+- Radia batch evaluation performance degrades for very large point sets (>1000 points)
+- Recommended usage: moderate point counts (<500 points)
+- Cache is not automatically invalidated when Radia geometry changes (manual ClearCache() required)
+
+### Performance
+
+- **Before**: Element-by-element evaluation, no H-matrix benefit
+  - Example: 13,021 Radia.Fld() calls for 449-element mesh (avg 1.4 points/call)
+
+- **After**: Single batch evaluation with cached results
+  - Example: 1 Radia.Fld() call for all integration points
+  - Expected speedup: 10-50x for large meshes (when Radia batch evaluation is efficient)
+
+## [1.2.1] - 2025-11-20
+
+### Fixed
+
+- **radia_ngsolve GridFunction.Set() Bug Fix**
+  - Fixed result matrix indexing in batch evaluation function (`src/python/radia_ngsolve.cpp`)
+  - Changed from `result(component, point)` to `result(point, component)` (lines 348-350)
+  - Bug was introduced in commit ab77976 (H-matrix implementation)
+  - GridFunction.Set() now produces correct values matching direct CoefficientFunction evaluation
+
+- **NGSolve Examples Unit Consistency**
+  - Added `rad.FldUnits('m')` to all 9 NGSolve integration examples
+  - Converted all Radia coordinates from millimeters to meters
+  - Ensures consistent unit handling between Radia (now meters) and NGSolve (meters)
+  - Updated comments and print statements to reflect meter units
+
+### Changed
+
+- **Test Suite Organization**
+  - Renamed `verify_curl_A_equals_B_improved.py` to `test_curlA_equals_B.py` in tests folder
+  - Added test acceptance criteria to `tests/README.md`
+  - Created comprehensive GridFunction projection best practices documentation in CLAUDE.md
+
+### Documentation
+
+- **GridFunction Projection Guidelines**
+  - Documented optimal finite element space selection: HDiv order=2 for B projection
+  - Region-dependent accuracy expectations: 0.15-0.36% at practical distances (>1 mesh cell)
+  - Evaluation guidelines: avoid GridFunction evaluation within 1 mesh cell of magnet surface
+  - Added extensive test results and best practices to CLAUDE.md
+
+### Examples Updated
+
+All NGSolve integration examples now use consistent meter-based units:
+- test_gridfunction_simple.py
+- verify_curl_A_equals_B.py
+- test_set_vs_interpolate.py
+- test_mesh_convergence.py
+- test_coordinate_transform.py
+- test_batch_evaluation.py
+- benchmark_gridfunction_set.py
+- visualize_field.py
+- demo_field_types.py
+
+## [1.2.0] - 2025-11-17
+
+### Added
+
+- **Test Suite Expansion**
+  - `test_magpylib_comparison.py` - Cross-validation with magpylib for cylindrical magnets
+  - `test_update_hmatrix_magnetization.py` - H-matrix magnetization update functionality test
+  - Tests use pytest.skip() for optional dependencies (magpylib)
+
+- **Benchmark Additions**
+  - `benchmark_solver_methods.py` - Comparison of Direct/Relaxation/H-matrix solver methods
+  - Demonstrates performance characteristics of each solver approach
+
+- **Documentation Improvements**
+  - `docs/README.md` - Comprehensive documentation index and navigation
+  - Organizes user documentation (API, H-matrix, NGSolve) and developer documentation
+  - Quick start guide for different user types
+
+### Changed
+
+- **Repository Organization**
+  - Moved development notes from `docs/` to `dev/notes/` (11 files)
+  - Organized by category: implementation, performance, releases
+  - Clearer separation between user-facing and development documentation
+  - Removed obsolete `examples/H-matrix/` folder (merged into solver_benchmarks)
+
+- **Code Quality Improvements**
+  - Fixed absolute paths to relative paths in 4 benchmark scripts
+  - Ensures portability across different development environments
+  - All Python scripts now use `os.path.join(os.path.dirname(__file__), ...)` pattern
+
+- **Development Policies**
+  - Added "Python Script Path Import Policy" to CLAUDE.md
+  - Mandates relative paths for all example and test scripts
+  - Improves collaboration and distribution
+
+### Fixed
+
+- Corrected path resolution in test scripts (tests/ folder structure)
+- Removed HACApK development files (bem-bb-config.txt, *.pbf, *.xcr, etc.)
+- Removed NGSolve temporary output folders (rad.ObjBckgCF/)
+- Updated .gitignore with rules for NGSolve and HACApK temporary files
+
+### Documentation
+
+- Updated README.md with computation accuracy analysis
+- Improved examples/simple_problems/README.md
+
+## [1.1.1] - 2025-11-13
+
+### Fixed
+
+- **Reverted Phase 3 Serialization** (Critical Performance Fix)
+  - Phase 3 serialization caused 89% performance regression (8.95x → 1.0x speedup loss)
+  - Restored Phase 2-B implementation with verified 8.3x speedup
+  - See `docs/PHASE3_PERFORMANCE_ISSUE.md` for detailed analysis
+  - Removed H-matrix disk caching APIs (will be reimplemented in future)
+
+### Changed
+
+- **Removed Automatic N=200 Threshold**
+  - Users now have explicit control over H-matrix enable/disable
+  - Removed automatic override based on problem size
+  - H-matrix respects user's `SolverHMatrixEnable()` flag regardless of N
+  - Added policy to CLAUDE.md documenting user control requirement
+
+### Added
+
+- **Extended Scaling Benchmarks**
+  - New `benchmark_solver_scaling_extended.py` testing N=125 to N=4913
+  - Results: 8.9x at N=343 → 117.1x at N=4913 speedup
+  - Created `SCALING_RESULTS.md` with comprehensive analysis
+
+- **Exact Size Benchmarks with Memory Compression Analysis**
+  - New `benchmark_hmatrix_scaling_exact.py` for N=100, 200, 500, 1000, 2000, 5000
+  - Time speedup: 3.0x → 98.2x (exponential increase)
+  - Memory compression: 100% → 0.1% (99.9% reduction at N=5000)
+  - Detailed speedup and memory analysis
+  - Verifies H-matrix O(N² log N) time and O(N log N) memory complexity
+
+### Documentation
+
+- **Phase 2-B Re-evaluation**
+  - Created `PHASE2B_REEVALUATION.md` documenting correct methodology
+  - Updated all benchmarks with Phase 2-B measured performance
+  - Clarified construction vs solve time distinction
+  - Added H-Matrix control policy to CLAUDE.md
+
+- **Updated README**
+  - Added memory compression results (0.1% at N=5000)
+  - Updated Key Findings with exponential scaling benefits
+  - Documented exact size benchmark results
+
+### Performance
+
+- **Phase 2-B Verified Performance**
+  - Solver: 8.3x speedup at N=343 (measured)
+  - Scaling: 3x at N≈100 → 98x at N≈5000
+  - Memory: 99.9% reduction at N=5000 vs dense O(N²)
+  - Field evaluation: 4.0x speedup (5000 points, batch)
+  - Parallel construction: 27.7x speedup (OpenMP)
+
+## [1.1.0] - 2025-11-13
+
+### Added
+
+- **Phase 3B: Full H-matrix Serialization to Disk**
+  - Complete H-matrix structure saved to disk (`.radia_cache/hmat/*.hmat`)
+  - Instant startup for repeated simulations (~10x faster)
+  - New APIs:
+    - `rad.SolverHMatrixCacheFull(enable=1)` - Enable full serialization
+    - `rad.SolverHMatrixCacheSize(max_mb=1000)` - Set cache size limit
+    - `rad.SolverHMatrixCacheCleanup(days=30)` - Cleanup old entries
+  - Binary format with version checking (magic number, format version, HACApK version)
+  - Automatic cache management with LRU eviction
+  - Cross-session persistence (9.7x speedup measured)
+  - Complete documentation in `docs/HMATRIX_SERIALIZATION.md`
+
+- **Comprehensive Solver Comparison Benchmark**
+  - New `benchmark_solver_comparison.py` comparing LU, Gauss-Seidel, and H-matrix
+  - Demonstrates when each method is optimal:
+    - LU Decomposition: Best for N < 100 (O(N³) complexity)
+    - Gauss-Seidel: Best for 100 < N < 200 (O(N²) per iteration)
+    - H-matrix: Best for N > 200 (O(N² log N) per iteration)
+  - Includes per-iteration timing, full solve timing, and accuracy verification
+
+- **Material API Enhancement**
+  - New `rad.MatPM(Br, Hc, easy_axis)` for permanent magnets with demagnetization
+  - Distinguishes permanent magnets from linear magnetic materials
+  - Updated API documentation with proper usage examples
+
+### Changed
+
+- **Examples Folder Reorganization**
+  - Renamed `examples/H-matrix/` → `examples/solver_benchmarks/`
+  - Merged solver_benchmarks and solver_time_evaluation folders
+  - Consolidated all solver-related benchmarks into single location
+  - Updated folder title to "Magnetostatic Solver Benchmarks with H-Matrix Acceleration"
+  - Organized benchmarks into categories: Core, Advanced, Verification
+  - Net reduction: 383 lines of redundant code removed
+
+- **Documentation Updates**
+  - Updated all path references across 7 documentation files
+  - Added comprehensive solver method selection guide
+  - Added note about H-matrix overhead for fast-converging problems
+  - Updated performance metrics with actual measurements (not extrapolated)
+
+### Performance
+
+- **Measured Performance Improvements (v1.1.0)**
+  - Disk caching: 9.7x speedup (0.602s → 0.062s startup)
+  - Solver: 6.64x speedup for N=343 elements
+  - Field evaluation: 3.97x speedup for 5000 points (batch)
+  - Parallel construction: 27.74x speedup (OpenMP)
+  - Overall workflow: 7-8x speedup for repeated simulations
+
+- **Solver Comparison Results**
+  - Small problems (N=27): LU 5.64x slower than GS, H-matrix 5.09x faster
+  - Medium problems (N=125): LU 28.79x slower, H-matrix 1.02x faster
+  - Large problems (N=343): LU skipped (too slow), H-matrix construction overhead dominates for fast convergence
+
+### Documentation
+
+- **Implementation History**
+  - Complete Phase 1 through Phase 3B development timeline
+  - 5-day development cycle (2025-11-08 to 2025-11-13)
+  - ~1500 lines of production code
+  - ~800 lines of test code
+  - ~3000 lines of documentation
+
+- **New Documentation Files**
+  - `docs/HMATRIX_SERIALIZATION.md` - Phase 3B user guide
+  - `docs/HMATRIX_IMPLEMENTATION_HISTORY.md` - Complete development history
+  - `docs/HMATRIX_BENCHMARKS_RESULTS.md` - Comprehensive benchmark results
+  - `docs/MATERIAL_API_IMPLEMENTATION.md` - Material API documentation
+
+### Test Suite
+
+- **New Tests**
+  - 11 comprehensive test scripts in `tests/hmatrix/`
+  - Covers Phase 2-A, 2-B, 3, and 3-B implementation
+  - All tests passing (100% success rate)
+  - Cross-session serialization verification
+  - Field accuracy verification
+
+### Fixed
+
+- **API Documentation Corrections**
+  - Fixed `docs/API_REFERENCE.md` permanent magnet examples
+  - Changed from `MatLin` to `MatPM` for NdFeB, SmCo, Ferrite magnets
+  - Added warnings about proper material usage
+  - Clarified MatLin is for soft magnetic materials only
+
+## [1.0.10] - 2025-11-10
+
+### Fixed
+- **H-matrix Implementation**
+  - Implemented full matrix block storage in HACApK library
+  - Implemented full matrix-vector multiplication
+  - Fixed kernel function to use accurate B_comp() instead of dipole approximation
+  - Achieved <1% accuracy for N=100 test (0.0119% max error)
+
+### Changed
+- **Test Suite**
+  - Fixed all test return values to use assert instead of return (pytest compliance)
+  - Fixed rad.Solve() return value checks (returns list, not int)
+  - Added material to relaxation performance test
+  - Adjusted transformation inversion test tolerance for numerical precision
+  - All 76 tests now passing (100%)
+
+### Removed
+- Removed temporary development and debug files
+- Removed old dipole approximation benchmark
+- Cleaned up plan and status documentation files
+
+### Added (2025-11-10)
+
+- **H-matrix Benchmarks**
+  - Added H-matrix field evaluation benchmark (examples/solver_benchmarks/)
+  - Demonstrates <1% accuracy with 100+ magnetic elements
+
+## [1.0.9] - 2025-11-02
+
 ### Changed (2025-11-02)
 
 - **Package Name Change**
@@ -30,7 +657,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added (2025-11-01)
 
-- **rad_ngsolve Unified Interface**
+- **radia_ngsolve Unified Interface**
   - New unified `RadiaField` class supporting all field types
   - Field type selection: 'b' (flux density), 'h' (field), 'a' (vector potential), 'm' (magnetization)
   - Removed legacy interfaces (RadBfield, RadHfield, RadAfield) for cleaner API
@@ -60,7 +687,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Updated all Python and C++ files to follow new standards
   - Documented standards in `claude.md`
 
-- **rad_ngsolve API Simplification**
+- **radia_ngsolve API Simplification**
   - Single unified interface: `RadiaField(obj, field_type)`
   - Removed backward compatibility layer
   - Cleaner, more maintainable codebase
@@ -147,7 +774,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Current (2025-11-01)
 ```
-rad_ngsolve tests: 4/4 passed (100%)
+radia_ngsolve tests: 4/4 passed (100%)
 radia core tests: 7/7 passed (100%)
 ```
 

@@ -27,6 +27,7 @@ if build_dir.exists():
 
 import numpy as np
 import codecs
+import pytest
 
 # Configure UTF-8 output
 sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
@@ -50,15 +51,15 @@ def test_cylindrical_magnet_comparison():
 		print("[OK] Radia imported successfully")
 	except ImportError as e:
 		print(f"[ERROR] Failed to import Radia: {e}")
-		return False
+		pytest.fail(f"Radia not available: {e}")
 
 	try:
 		import magpylib as magpy
 		print(f"[OK] magpylib imported successfully (version {magpy.__version__})")
 	except ImportError as e:
-		print(f"[ERROR] Failed to import magpylib: {e}")
+		print(f"[SKIP] magpylib not available: {e}")
 		print("       Install with: pip install magpylib")
-		return False
+		pytest.skip("magpylib not installed")
 
 	print("\n" + "-" * 70)
 	print("Magnet Configuration")
@@ -228,23 +229,26 @@ def test_cylindrical_magnet_comparison():
 		print(f"[PASS] Radia and magpylib agree within {tolerance_percent}% tolerance")
 		print(f"       Difference: {diff_percent:.2f}%")
 		print("=" * 70)
-		return True
 	else:
 		print(f"[FAIL] Radia and magpylib differ by {diff_percent:.2f}%")
 		print(f"       Exceeds {tolerance_percent}% tolerance")
 		print(f"       Check magnetization unit conversion!")
 		print("=" * 70)
-		return False
+
+	# Use assertion for pytest
+	assert passed, f"Radia and magpylib differ by {diff_percent:.2f}%, exceeds {tolerance_percent}% tolerance"
 
 def main():
 	"""Run the comparison test"""
-	result = test_cylindrical_magnet_comparison()
-
-	if result:
+	try:
+		test_cylindrical_magnet_comparison()
 		print("\n*** COMPARISON TEST PASSED ***\n")
 		sys.exit(0)
-	else:
-		print("\n*** COMPARISON TEST FAILED ***\n")
+	except pytest.skip.Exception as e:
+		print(f"\n*** TEST SKIPPED: {e} ***\n")
+		sys.exit(0)
+	except (AssertionError, Exception) as e:
+		print(f"\n*** COMPARISON TEST FAILED: {e} ***\n")
 		sys.exit(1)
 
 if __name__ == '__main__':

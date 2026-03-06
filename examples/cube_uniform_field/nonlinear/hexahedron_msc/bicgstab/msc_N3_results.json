@@ -1,0 +1,18 @@
+{
+  "element_type": "hexahedron_msc",
+  "mesh_description": "3x3x3",
+  "n_div": 3,
+  "n_elements": 27,
+  "ndof": 162,
+  "H_ext": 200000.0,
+  "t_mesh": 0.0069959163665771484,
+  "t_solve": 0.03599810600280762,
+  "solver_method": 1,
+  "solver_name": "bicgstab",
+  "hmatrix_enabled": false,
+  "converged": true,
+  "residual": 0.0005209842377518203,
+  "nonl_iterations": 4,
+  "M_avg_z": 678577.1623048141,
+  "peak_memory_mb": 28.88671875
+}

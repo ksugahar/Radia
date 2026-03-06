@@ -59,6 +59,7 @@ coverage.xml
 test_output/
 benchmark_results/
 *.csv
+test_radiafield_memory.py
 
 # ============================================================================
 # IDE and Editor Files
@@ -113,6 +114,9 @@ build.log
 *.h.bak
 *.py.bak
 *.old
+git_bisect_test.ps1
+git_bisect_wrapper.ps1
+bisect_test_temp.py
 
 # ============================================================================
 # Python Virtual Environments
@@ -178,3 +182,60 @@ file_format_documents/
 # - COPYRIGHT.txt
 #
 # Note: Build_PyPI_Package.ps1 is now ignored (merged into Publish_to_PyPI.ps1)
+
+# Reference repositories (local only)
+参考/
+
+# Debug and development outputs (DO NOT COMMIT)
+debug/
+*_output.txt
+*_debug.txt
+benchmark_*.txt
+.radia_cache/
+
+# Development folders (DO NOT COMMIT)
+dev/
+
+# Internal documentation (DO COMMIT - for maintainers)
+# internal/  <- Keep this commented, we want to commit internal/
+
+# NGSolve integration outputs
+*.ObjBckgCF/
+rad.ObjBckgCF/
+*.vtu
+*.vtk
+
+# Python development files (experimental implementations)
+src/python/*_fast.py
+src/python/*_cached_wrapper.py
+src/python/*.patch
+src/python/.*[0-9a-f]*
+tests/test_*_debug.py
+tests/test_fast_*.py
+tests/test_minimal_*.py
+tests/test_preparecache_*.py
+tests/test_python_cached_*.py
+tests/verify_*.py
+
+# HACApK development files
+*.pbf
+*.xcr
+bem-bb-config.txt
+hmat-assign.pl
+
+# ============================================================================
+# Benchmark Results (JSON output files)
+# ============================================================================
+examples/cube_uniform_field/nonlinear/*_results.json
+examples/cube_uniform_field/nonlinear/*_summary.json
+
+# ============================================================================
+# External Libraries (not committed)
+# ============================================================================
+src/ext/openblas/
+
+# ============================================================================
+# Temporary debugging scripts
+# ============================================================================
+fix_convergence.py
+optimize_matrix.py

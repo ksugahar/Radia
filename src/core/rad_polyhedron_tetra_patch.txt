@@ -1,0 +1,20 @@
+/**
+ * Tetrahedral Support - Dual Implementation Approach
+ *
+ * Environment Variable: RADIA_TETRA_METHOD
+ * - "CENTROID": Centroid charge cancellation method
+ * - "STANDARD" (default): Radia standard polygon method
+ *
+ * This patch has been applied to rad_polyhedron.cpp and rad_polyhedron.h
+ *
+ * Changes implemented:
+ * 1. Added environment variable switching in B_comp_frM()
+ * 2. Implemented B_comp_tetrahedron_centroid() with centroid charge cancellation
+ * 3. Added total_magnetic_charge tracking in face loop
+ * 4. Applied centroid point charge to cancel interior face contributions
+ *
+ * Usage:
+ * import os
+ * os.environ['RADIA_TETRA_METHOD'] = 'CENTROID'  # or 'STANDARD'
+ * import radia as rad
+ */

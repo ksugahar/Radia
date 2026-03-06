@@ -195,7 +195,7 @@ def create_smco_magnet_array(
 	rad.ObjDrwAtr(base_plate, [0.5, 0.5, 0.5], 0.1)  # Gray color
 
 	# Apply iron material properties for magnetic yoke behavior
-	mat = rad.MatLin([1000, 1000], [0, 0, 1])  # μr = 1000
+	mat = rad.MatLin(1000)  # μr = 1000 (isotropic)
 	rad.MatApl(base_plate, mat)
 
 	# Create hexagonal array of magnets

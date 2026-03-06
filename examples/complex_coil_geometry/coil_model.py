@@ -134,6 +134,23 @@ if __name__ == '__main__':
 	print(f"    Y: {info['span']['y']:.2f} mm")
 	print(f"    Z: {info['span']['z']:.2f} mm")
 
+	# VTK Export - Export geometry with same filename as script
+	try:
+		from radia_vtk_export import exportGeometryToVTK
+		import os
+
+		script_name = os.path.splitext(os.path.basename(__file__))[0]
+		vtk_filename = f"{script_name}.vtk"
+		vtk_path = os.path.join(os.path.dirname(__file__), vtk_filename)
+
+		exportGeometryToVTK(coil, vtk_path)
+		print(f"\n[VTK] Exported: {vtk_filename}")
+		print(f"      View with: paraview {vtk_filename}")
+	except ImportError:
+		print("\n[VTK] Warning: radia_vtk_export not available (VTK export skipped)")
+	except Exception as e:
+		print(f"\n[VTK] Warning: Export failed: {e}")
+
 	# Cleanup
 	rad.UtiDelAll()
 

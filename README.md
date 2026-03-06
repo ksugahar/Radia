@@ -19,6 +19,7 @@ This repository adds NGSolve integration and performance improvements while main
 
 ## Key Features
 
+- ✓ **H-matrix acceleration** - Fast hierarchical matrix solver using [HACApK](https://github.com/Post-Peta-Crest/ppOpenHPC/tree/MATH/HACApK)
 - ✓ OpenMP parallel field computation
 - ✓ NGSolve C++ CoefficientFunction integration
 - ✓ VTK export functionality (`rad.ObjDrwVTK`)
@@ -45,15 +46,15 @@ pip install radia-ngsolve
 # 1. Build radia.pyd (core module)
 .\Build.ps1
 
-# 2. Build rad_ngsolve.pyd (optional, for NGSolve integration)
+# 2. Build radia_ngsolve.pyd (optional, for NGSolve integration)
 .\Build_NGSolve.ps1
 
 # Outputs:
 # - dist/radia.pyd
-# - build/Release/rad_ngsolve.pyd
+# - build/Release/radia_ngsolve.pyd
 ```
 
-See [README_BUILD.md](README_BUILD.md) for detailed build instructions.
+See [BUILD.md](BUILD.md) for detailed build instructions.
 
 ### Basic Usage
 
@@ -74,12 +75,27 @@ print(f"Field: {field} T")
 
 ### NGSolve Integration
 
-The `rad_ngsolve` module provides a C++ CoefficientFunction interface for using Radia magnetic fields in NGSolve FEM analysis.
+The `radia_ngsolve` module provides a C++ CoefficientFunction interface for using Radia magnetic fields in NGSolve FEM analysis.
+
+**Requirements:**
+- NGSolve must be installed separately: `pip install ngsolve`
+- **IMPORTANT**: NGSolve must be imported **before** `radia_ngsolve`
+- Current build is linked against **NGSolve 6.2.2406** (Windows Python 3.12)
+
+**Installation:**
+
+```bash
+# 1. Install NGSolve first
+pip install ngsolve
+
+# 2. Install Radia (includes radia_ngsolve.pyd)
+pip install radia
+```
 
 **Function Specification:**
 
 ```python
-rad_ngsolve.RadiaField(radia_obj, field_type='b')
+radia_ngsolve.RadiaField(radia_obj, field_type='b')
 ```
 
 **Parameters:**
@@ -101,50 +117,50 @@ rad_ngsolve.RadiaField(radia_obj, field_type='b')
 **Example:**
 
 ```python
-# IMPORTANT: Import ngsolve first
+# IMPORTANT: Import ngsolve FIRST (required to load NGSolve DLLs)
 import ngsolve
-from ngsolve import Mesh, H1, GridFunction
+from ngsolve import Mesh, H1, GridFunction, HDiv
 
 import radia as rad
-import rad_ngsolve
+from radia import radia_ngsolve  # or: import radia_ngsolve
 
 # Create Radia magnet
 magnet = rad.ObjRecMag([0,0,0], [20,20,20], [0,0,1.2])  # mm units
-rad.MatApl(magnet, rad.MatStd('NdFeB', 1.2))
+rad.MatApl(magnet, rad.MatPM(1.2, 900000, [0,0,1]))  # NdFeB permanent magnet
 rad.Solve(magnet, 0.0001, 10000)
 
 # Create NGSolve CoefficientFunction for different field types
-B_field = rad_ngsolve.RadiaField(magnet, 'b')  # Flux density [T]
-H_field = rad_ngsolve.RadiaField(magnet, 'h')  # Magnetic field [A/m]
-A_field = rad_ngsolve.RadiaField(magnet, 'a')  # Vector potential [T·m]
-M_field = rad_ngsolve.RadiaField(magnet, 'm')  # Magnetization [A/m]
+B_field = radia_ngsolve.RadiaField(magnet, 'b')  # Flux density [T]
+H_field = radia_ngsolve.RadiaField(magnet, 'h')  # Magnetic field [A/m]
+A_field = radia_ngsolve.RadiaField(magnet, 'a')  # Vector potential [T·m]
+M_field = radia_ngsolve.RadiaField(magnet, 'm')  # Magnetization [A/m]
 
 # Use in FEM analysis (NGSolve mesh in meters)
 gf = GridFunction(fes)
 gf.Set(B_field)  # Automatically converts mesh coordinates m → mm
 ```
 
-See [examples/Radia_to_NGSolve_CoefficientFunction/](examples/Radia_to_NGSolve_CoefficientFunction/) for complete examples.
+See [examples/ngsolve_integration/](examples/ngsolve_integration/) for complete examples.
 
 ## Documentation
 
-### Core
-- [README_BUILD.md](README_BUILD.md) - Build instructions
-- [docs/OPENMP_PERFORMANCE_REPORT.md](docs/OPENMP_PERFORMANCE_REPORT.md) - OpenMP benchmarks
-- [docs/DIRECTORY_STRUCTURE.md](docs/DIRECTORY_STRUCTURE.md) - Project structure
+### Build & Setup
+- [BUILD.md](BUILD.md) - Build instructions (Windows, macOS, Linux)
+
+### User Guides
+- [docs/API_REFERENCE.md](docs/API_REFERENCE.md) - Complete Python API reference
+- [docs/SOLVER_METHODS.md](docs/SOLVER_METHODS.md) - Solver methods (LU, BiCGSTAB, H-matrix)
+- [docs/HMATRIX_USER_GUIDE.md](docs/HMATRIX_USER_GUIDE.md) - H-matrix acceleration guide
 
 ### NGSolve Integration
-- [RAD_NGSOLVE_BUILD_SUCCESS.md](RAD_NGSOLVE_BUILD_SUCCESS.md) - Complete rad_ngsolve documentation
-- [examples/Radia_to_NGSolve_CoefficientFunction/README.md](examples/Radia_to_NGSolve_CoefficientFunction/README.md) - NGSolve examples overview
-- [examples/Radia_to_NGSolve_CoefficientFunction/EXAMPLES_GUIDE.md](examples/Radia_to_NGSolve_CoefficientFunction/EXAMPLES_GUIDE.md) - Detailed usage guide
-- [tests/test_rad_ngsolve.py](tests/test_rad_ngsolve.py) - Integration tests
+- [docs/NGSOLVE_USAGE_GUIDE.md](docs/NGSOLVE_USAGE_GUIDE.md) - How to use Radia with NGSolve
+- [docs/NGSOLVE_INTEGRATION.md](docs/NGSOLVE_INTEGRATION.md) - Integration overview
 
-### Visualization
-- [docs/PYVISTA_VIEWER.md](examples/2024_02_03_振分電磁石/PYVISTA_VIEWER.md) - PyVista viewer guide
-
-### Development
-- [docs/TAB_CONVERSION_REPORT.md](docs/TAB_CONVERSION_REPORT.md) - Code style conversion
-- [docs/CLAUDE.md](docs/CLAUDE.md) - Development notes
+### Examples
+- [examples/ngsolve_integration/](examples/ngsolve_integration/) - NGSolve integration examples
+- [examples/magpylib_integration/](examples/magpylib_integration/) - magpylib background field examples
+- [examples/simple_problems/](examples/simple_problems/) - Basic magnet configurations
+- [tests/README.md](tests/README.md) - Test suite documentation
 
 ## Performance
 
@@ -157,7 +173,7 @@ OpenMP parallelization results (8-core system):
 | 4       | 3.57      | 3.27x   |
 | 8       | 4.33      | 2.70x   |
 
-See [docs/OPENMP_PERFORMANCE_REPORT.md](docs/OPENMP_PERFORMANCE_REPORT.md) for details.
+See [docs/SOLVER_METHODS.md](docs/SOLVER_METHODS.md) for solver performance details.
 
 ## Examples
 
@@ -165,12 +181,12 @@ Practical examples are available in the `examples/` directory:
 
 
 ### NGSolve Integration
-- `examples/Radia_to_NGSolve_CoefficientFunction/` - **Radia → NGSolve: Use Radia fields in FEM**
+- `examples/ngsolve_integration/` - **Radia → NGSolve: Use Radia fields in FEM**
   - `demo_field_types.py` - All field types demonstration
   - `visualize_field.py` - Field visualization and comparison
   - `export_radia_geometry.py` - Export geometry to VTK
 
-- `examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/` - **NGSolve → Radia: Background fields**
+- `examples/background_fields/` - **NGSolve → Radia: Background fields**
   - `test_sphere_in_quadrupole.py` - Magnetizable sphere in quadrupole field
   - Uses Python callbacks to define arbitrary background fields
 
@@ -196,7 +212,7 @@ python tests/test_radia.py
 python tests/test_advanced.py
 
 # NGSolve integration test
-python tests/test_rad_ngsolve.py
+python tests/test_radia_ngsolve.py
 
 # OpenMP performance test
 python tests/test_parallel_performance.py
@@ -205,7 +221,7 @@ python tests/test_parallel_performance.py
 pytest tests/
 
 # Run specific test suite
-pytest tests/test_rad_ngsolve.py -v
+pytest tests/test_radia_ngsolve.py -v
 ```
 
 See [tests/README.md](tests/README.md) for detailed testing documentation.
@@ -216,7 +232,10 @@ See [tests/README.md](tests/README.md) for detailed testing documentation.
 
 ```python
 import sys
-sys.path.insert(0, 'S:/radia/01_GitHub/src/python')
+import os
+
+# Add src/python to path (adjust path as needed for your installation)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'python'))
 
 from radia_pyvista_viewer import view_radia_object
 
@@ -228,7 +247,10 @@ view_radia_object(mag)
 
 ```python
 import sys
-sys.path.insert(0, 'S:/radia/01_GitHub/src/python')
+import os
+
+# Add src/python to path (adjust path as needed for your installation)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'python'))
 
 from radia_vtk_export import export_geometry_to_vtk
 
@@ -247,8 +269,84 @@ export_geometry_to_vtk(mag, 'geometry.vtk')
 ### Runtime Requirements
 - Python 3.12
 - NumPy
-- NGSolve (optional, for FEM coupling via rad_ngsolve)
+- NGSolve (optional, for FEM coupling via radia_ngsolve)
 - PyVista (optional, for 3D visualization)
+
+## Linear Material with External Field (ObjBckgCF)
+
+Radia supports soft magnetic materials (linear materials) in external fields using `ObjBckgCF`.
+
+### Working Example
+
+```python
+import radia as rad
+import numpy as np
+
+rad.UtiDelAll()
+rad.FldUnits('m')  # Use SI units
+
+# Create soft iron cube (10cm side)
+cube = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 0])
+
+# Apply isotropic linear material (mu_r = 100)
+chi = 99.0  # chi = mu_r - 1
+mat = rad.MatLin(chi)  # IMPORTANT: Use single argument for isotropic
+rad.MatApl(cube, mat)
+
+# Create external field (1 Tesla in z-direction)
+def uniform_B(pos):
+    return [0, 0, 1.0]  # Returns B in Tesla
+bg = rad.ObjBckgCF(uniform_B)
+
+# Create system and solve
+system = rad.ObjCnt([cube, bg])
+result = rad.Solve(system, 0.0001, 1000)
+
+# Result: M ~ 2.3 MA/m (correct for cube with mu_r=100 in 1T field)
+M = rad.ObjM(cube)
+print(f"Magnetization: {M[1]} A/m")
+```
+
+### Important Notes
+
+1. **Isotropic materials**: Always use `MatLin(chi)` (single argument)
+   - Do NOT use `MatLin(chi, [0, 0, 1e-10])` - this creates a poorly defined anisotropic tensor
+
+2. **Callback returns B in Tesla**: The callback function for `ObjBckgCF` should return magnetic flux density B in Tesla
+
+3. **Units**: When using `rad.FldUnits('m')`, all coordinates are in meters
+
+4. **Tetrahedral elements**: Also works with `ObjPolyhdr` tetrahedral meshes
+
+### Supported Element Types
+
+| Element | API | External Field Support |
+|---------|-----|----------------------|
+| Hexahedron | `ObjRecMag` | Yes |
+| Tetrahedron | `ObjPolyhdr` | Yes |
+| Extruded Polygon | `ObjThckPgn` | Yes |
+
+## Tetrahedral Mesh Import from NGSolve/Netgen
+
+Radia can import tetrahedral meshes from NGSolve/Netgen for complex geometries.
+
+**Features:**
+- Direct Netgen/OCC mesh import to Radia MMM
+- Independent mesh optimization for FEM vs MMM
+- Nastran CTETRA face connectivity standard
+
+**Usage:** See `examples/cube_uniform_field/linear/` for examples.
+
+**Benchmark** (mu_r=100, B0=1T, 100mm cube):
+
+| Mesh | Elements | M_z (MA/m) | Error |
+|------|----------|------------|-------|
+| 1x1x1 hex | 1 | 2.3171 | 0.00% |
+| 2x2x2 hex | 8 | 2.4180 | 4.36% |
+| 5x5x5 hex | 125 | 2.6652 | 15.02% |
+
+Analytical: M = 2.3171 MA/m (N = 1/3 for cube)
+
 
 ## Changes from Original Radia
 
@@ -261,6 +359,7 @@ export_geometry_to_vtk(mag, 'geometry.vtk')
 - Python 2.7, 3.6, 3.7, 3.8 support
 
 ### Added Features
+- **H-matrix acceleration** - Hierarchical matrix solver using [HACApK library](https://github.com/Post-Peta-Crest/ppOpenHPC/tree/MATH/HACApK) (9-50x speedup for large problems)
 - OpenMP parallelization (2.7x speedup)
 - NGSolve C++ CoefficientFunction integration
 - PyVista viewer support
@@ -271,15 +370,26 @@ export_geometry_to_vtk(mag, 'geometry.vtk')
 
 ## License
 
-This project is licensed under **LGPL-2.1** (to match NGSolve licensing).
+This project contains multiple components with different open-source licenses:
 
-The original RADIA code is licensed under a **BSD-style license** by the European Synchrotron Radiation Facility (ESRF), Copyright © 1997-2018.
+### RADIA Core
+Licensed under a **BSD-style license** by the European Synchrotron Radiation Facility (ESRF).
+- Copyright © 1997-2018, European Synchrotron Radiation Facility
+- Permits redistribution and modification with attribution
 
-Both licenses are included in the `LICENSE` file. The BSD-style license is compatible with and subsumed by the LGPL-2.1 license used for this derivative work.
+### HACApK_LH-Cimplm (H-matrix Library)
+Licensed under the **MIT License**.
+- Copyright © 2015, Akihiro Ida and Takeshi Iwashita
+- Location: `src/ext/HACApK_LH-Cimplm/`
+- ppOpen-HPC project
+
+Both licenses are permissive open-source licenses that allow free use, modification,
+and redistribution.
 
 See:
-- `LICENSE` - Complete license text (LGPL-2.1 + Original RADIA BSD-style)
-- `COPYRIGHT.txt` - Original RADIA copyright notice
+- `LICENSE` - Complete license text for both components
+- `COPYRIGHT.txt` - Original RADIA BSD-style license
+- `src/ext/HACApK_LH-Cimplm/LICENSE` - HACApK MIT license
 
 ## Credits
 
@@ -287,7 +397,7 @@ See:
 
 **This Fork**:
 - OpenMP parallelization
-- NGSolve C++ integration (rad_ngsolve)
+- NGSolve C++ integration (radia_ngsolve)
 - Python 3.12 optimization
 - Build system modernization
 - PyVista integration
@@ -300,7 +410,7 @@ See:
 
 This tool perfectly complements Radia_NGSolve by providing high-quality mesh generation:
 
-- **Nastran Format Export** - Compatible with Radia's `nastran_reader.py` module
+- **Nastran Format Export** - Compatible with Radia's `nastran_mesh_import.py` module
 - **Multiple Format Support** - Gmsh, MEG, VTK, and Nastran exports
 - **2D/3D Meshing** - Supports complex 3D geometries
 - **Second-Order Elements** - High-accuracy mesh generation
@@ -308,10 +418,10 @@ This tool perfectly complements Radia_NGSolve by providing high-quality mesh gen
 **Workflow Example:**
 1. Create complex geometry in Coreform Cubit
 2. Export to Nastran format using `Coreform_Cubit_Mesh_Export`
-3. Import into Radia using `nastran_reader.py`
+3. Import into Radia using `nastran_mesh_import.py`
 4. Couple with NGSolve for FEM analysis
 
-See [examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/](examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/) for Nastran mesh usage examples.
+See [examples/background_fields/](examples/background_fields/) for Nastran mesh usage examples.
 
 ## Links
 
@@ -321,5 +431,5 @@ See [examples/NGSolve_CoefficientFunction_to_Radia_BackgroundField/](examples/NG
 
 ---
 
-**Version**: 1.0 (OpenMP + NGSolve Edition)
-**Last Updated**: 2025-11-02
+**Version**: 1.3.9 (OpenMP + NGSolve Edition)
+**Last Updated**: 2025-12-05
