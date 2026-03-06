@@ -107,7 +107,7 @@ public:
 	void B_comp(radTField* FieldPtr)
 	{
 		if(FieldPtr->FieldKey.J_) J_comp(FieldPtr);
-		if(!(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_ || FieldPtr->FieldKey.A_ || FieldPtr->FieldKey.PreRelax_)) return;
+		if(!(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_ || FieldPtr->FieldKey.A_ || FieldPtr->FieldKey.Phi_ || FieldPtr->FieldKey.PreRelax_)) return;
 
 		// Use analytical elliptic integral method
 		B_compElliptic(FieldPtr);
