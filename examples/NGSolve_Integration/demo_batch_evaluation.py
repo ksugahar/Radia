@@ -33,7 +33,6 @@ import time
 try:
     from ngsolve import *
     from netgen.occ import *
-    import radia_ngsolve
 except ImportError:
     print("NGSolve not available")
     sys.exit(0)
@@ -43,7 +42,6 @@ print("Batch Evaluation Demo for H-Matrix Acceleration")
 print("="*70)
 
 # Set Radia units to meters
-rad.FldUnits('m')
 
 # Create Radia magnet
 rad.UtiDelAll()
@@ -106,7 +104,7 @@ print("="*70)
 
 # Standard GridFunction.Set() with H-matrix
 rad.SetHMatrixFieldEval(1, 1e-6)
-cf_standard = radia_ngsolve.RadiaField(magnet, 'b')
+cf_standard = rad.RadiaField(magnet, 'b')
 
 print(f"\n[3a] Measuring GridFunction.Set() with H-matrix...")
 print(f"     (Element-by-element: {mesh.ne} calls, ~{points_per_elem} points/call)")
@@ -134,7 +132,8 @@ for v in mesh.vertices:
 
 # Single batch evaluation
 t0 = time.time()
-field_values = rad.FldBatch(magnet, 'b', points, 1)  # use_hmatrix=1
+result = rad.FldBatch(magnet, points)
+field_values = result['B']
 t_batch = time.time() - t0
 
 print(f"     Time: {t_batch*1000:.1f} ms")

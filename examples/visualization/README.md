@@ -23,7 +23,7 @@ python demo_pyvista_basic.py
 ### NGSolve webgui (Interactive Explorer - 推奨)
 
 ```bash
-# Requires radia_ngsolve.pyd
+# Requires radia with NGSolve (RadiaField is built into radia.pyd since v2.5.0)
 # ブラウザで自動的に開く
 python demo_ngsolve_webgui.py
 ```
@@ -63,11 +63,11 @@ jupyter notebook jupyter_visualization_demo.ipynb
 | File | Description | Requirements |
 |------|-------------|--------------|
 | `demo_pyvista_basic.py` | PyVista basic visualization | pyvista |
-| `demo_ngsolve_webgui.py` | NGSolve webgui demo | radia_ngsolve.pyd |
+| `demo_ngsolve_webgui.py` | NGSolve webgui demo | radia, NGSolve |
 | `generate_paraview_figure.py` | ParaView figure automation | ParaView (optional) |
 | `jupyter_visualization_demo.ipynb` | Jupyter notebook demo | pyvista, ipywidgets |
 | `demo_paraview_with_geometry.py` | ParaView visualization with accurate geometry overlay (STL + VTS) | radia, netgen, ParaView |
-| `demo_webgui_accurate_geometry.py` | NGSolve webgui with accurate OCC geometry display | radia, radia_ngsolve, NGSolve |
+| `demo_webgui_accurate_geometry.py` | NGSolve webgui with accurate OCC geometry display | radia, NGSolve |
 | `demo_netgen_gui.py` | Netgen native GUI for geometry and mesh quality verification | NGSolve/Netgen |
 | `demo_gmsh_workflow.py` | GMSH mesh generation and NGSolve/Radia integration workflow | gmsh, ngsolve, radia |
 | `demo_gmsh_cad_import.py` | GMSH CAD import (STEP/IGES) to NGSolve/Radia workflow | gmsh, ngsolve |
@@ -210,13 +210,13 @@ Already included in NGSolve installation:
 pip install ngsolve
 ```
 
-### radia_ngsolve (Optional)
+### RadiaField (included in radia.pyd since v2.5.0)
 
-Build from source:
+No separate build step is needed. RadiaField is part of the main radia module:
 
-```powershell
-# In S:\Radia\01_GitHub
-powershell.exe -ExecutionPolicy Bypass -File Build.ps1
+```python
+import radia as rad
+B_cf = rad.RadiaField(magnet, 'b')
 ```
 
 ---
@@ -229,7 +229,7 @@ powershell.exe -ExecutionPolicy Bypass -File Build.ps1
 import pyvista as pv
 import radia as rad
 
-rad.FldUnits('m')
+# Radia always uses meters
 
 # Create magnet and export field
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
@@ -247,15 +247,14 @@ grid.plot(scalars='B_magnitude', cmap='coolwarm')
 ```python
 from ngsolve import *
 from ngsolve.webgui import Draw
-from radia_ngsolve import RadiaField
 import radia as rad
 
-rad.FldUnits('m')
+# Radia always uses meters
 
 # Create mesh and Radia field
 mesh = Mesh('model.msh')
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
-B_cf = RadiaField(magnet, 'b')
+B_cf = rad.RadiaField(magnet, 'b')
 
 # Project and display
 fes = HDiv(mesh, order=2)
@@ -270,7 +269,7 @@ Draw(B_gf, mesh, 'B_field', vectors={'grid_size': 10})
 # 1. Generate VTS
 python -c "
 import radia as rad
-rad.FldUnits('m')
+# Radia always uses meters
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 rad.FldVTS(magnet, 'field.vts', [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15], 41, 41, 27, 1, 0, 1.0)
 "
@@ -293,9 +292,9 @@ paraview field.vts
 pip install pyvista
 ```
 
-### NGSolve webgui: "Cannot import radia_ngsolve"
+### NGSolve webgui: "Cannot use RadiaField"
 
-Build `radia_ngsolve.pyd`:
+Ensure radia is built with NGSolve support. Since v2.5.0, `RadiaField` is integrated into the main `radia.pyd`:
 
 ```powershell
 # S:\Radia\01_GitHub

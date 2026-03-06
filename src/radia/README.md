@@ -25,7 +25,7 @@ Imports Nastran mesh files (.bdf, .nas, .dat) and creates Radia geometry.
 from nastran_mesh_import import create_radia_from_nastran
 import radia as rad
 
-rad.FldUnits('mm')
+# Radia always uses meters
 
 # Import mesh and create Radia objects
 mag_obj = create_radia_from_nastran(
@@ -82,7 +82,7 @@ import radia as rad
 import numpy as np
 
 rad.UtiDelAll()
-rad.FldUnits('m')  # メートル単位を使用
+# Radia always uses meters (メートル単位)
 
 # 四面体の頂点座標 (メートル単位)
 vertices = [
@@ -111,7 +111,6 @@ from ngsolve import Mesh
 from netgen_mesh_import import netgen_mesh_to_radia
 import radia as rad
 
-rad.FldUnits('m')
 rad.UtiDelAll()
 
 # Netgen でメッシュを生成
@@ -137,37 +136,30 @@ M_avg_z = np.mean([m[2] for m in M_list])
 **重要な注意事項:**
 
 1. **1-indexed**: Radia の内部 `ObjPolyhdr` API は **1-indexed** の面定義を要求します (Python では `ObjHexahedron`/`ObjTetrahedron` を使用)
-2. **単位**: `rad.FldUnits('m')` を使用する場合、座標もメートル単位にする
+2. **単位**: Radia always uses meters - 座標はメートル単位にする
 3. **ObjM の戻り値**: コンテナに対する `ObjM` は `[[center1, M1], [center2, M2], ...]` を返す
 
 ### NGSolve Integration
 
-#### radia_ngsolve.cpp
+#### RadiaField (integrated into _radia_pybind.pyd since v2.5.0)
 
-**C++ CoefficientFunction integration for NGSolve (recommended).**
+**C++ CoefficientFunction integration for NGSolve.**
 
-High-performance NGSolve CoefficientFunction wrappers for Radia magnetostatics fields.
+High-performance NGSolve CoefficientFunction wrappers for Radia magnetostatics fields. Since v2.5.0, `RadiaField` is integrated into the main `_radia_pybind.pyd` module and accessed as `rad.RadiaField()`. No separate module is needed.
 
 **Features:**
 - Exact Radia field evaluation in NGSolve
-- Automatic unit conversion (NGSolve meters ↔ Radia millimeters)
+- Both NGSolve and Radia use meters (no unit conversion needed)
 - Thread-safe Python GIL handling
 - Compatible with both 2D and 3D meshes
 - Three field types: B-field, H-field, A-field
-
-**Build:**
-```bash
-cd S:\radia\01_GitHub
-.\Build_NGSolve.ps1
-```
 
 **Usage:**
 ```python
 from ngsolve import *
 import radia as rad
-import radia_ngsolve
 
-# Create Radia hexahedral magnet (mm)
+# Create Radia hexahedral magnet
 # ObjHexahedron auto-generates face topology from 8 vertices
 vertices = [[-10,-10,-15], [10,-10,-15], [10,10,-15], [-10,10,-15],
             [-10,-10,15], [10,-10,15], [10,10,15], [-10,10,15]]
@@ -178,8 +170,8 @@ magnet = rad.ObjHexahedron(vertices, [0, 0, Mr])
 mesh = Mesh(...)
 
 # CoefficientFunction (exact)
-B_cf = radia_ngsolve.RadBfield(magnet)
-B = B_cf(mesh(0, 0, 0.02))  # Auto converts m->mm
+B_cf = rad.RadiaField(magnet, 'b')
+B = B_cf(mesh(0, 0, 0.02))
 ```
 
 **See also:** `examples/ngsolve_integration/` for complete examples.
@@ -221,7 +213,7 @@ Export Radia magnetic field to VTS (VTK XML Structured Grid) format using C++ im
 ```python
 import radia as rad
 
-rad.FldUnits('m')
+# Radia always uses meters
 
 # Create hexahedral magnet (30x30x10 mm, magnetization 1.2T in z)
 vertices = [[-0.015,-0.015,-0.005], [0.015,-0.015,-0.005], [0.015,0.015,-0.005], [-0.015,0.015,-0.005],
@@ -240,7 +232,7 @@ rad.FldVTS(mag, 'my_magnet.vts',
 Best for publication-quality figures, batch processing.
 ```python
 import radia as rad
-rad.FldUnits('m')
+# Radia always uses meters
 # ... create magnet ...
 rad.FldVTS(my_object, 'output.vts',
            [-0.1, 0.1], [-0.1, 0.1], [0.0, 0.2],
@@ -250,8 +242,8 @@ rad.FldVTS(my_object, 'output.vts',
 ### Option 2: NGSolve Integration
 For coupled FEM simulations.
 ```python
-import radia_ngsolve
-B_cf = radia_ngsolve.RadBfield(magnet)
+import radia as rad
+B_cf = rad.RadiaField(magnet, 'b')
 ```
 
 ## References

@@ -15,7 +15,6 @@ def check_delta_z_sign():
     """Check Delta_Z sign for a simple single-wire + shield case."""
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Simple straight wire with close shield
     inp = """\

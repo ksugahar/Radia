@@ -9,7 +9,7 @@ This script verifies the Maxwell relation B = curl(A) by:
 4. Using RadiaField to project B onto HDiv space
 5. Comparing curl(A) with B
 
-This demonstrates the correct usage of radia_ngsolve for vector potential
+This demonstrates the correct usage of rad.RadiaField for vector potential
 and magnetic field evaluation in NGSolve finite element spaces.
 
 IMPLEMENTATION STATUS (2025-12-31):
@@ -55,7 +55,6 @@ import radia as rad
 try:
     from ngsolve import *
     from netgen.occ import Box, Pnt, OCCGeometry
-    import radia_ngsolve
     NGSOLVE_AVAILABLE = True
 except ImportError as e:
     print('ERROR: NGSolve not available: %s' % e)
@@ -74,7 +73,6 @@ print('[Step 1] Creating Radia rectangular magnet')
 print('-' * 70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 # Define hexahedral magnet using ObjHexahedron
 # Center: [0, 0, 0], Dimensions: [0.04, 0.04, 0.06] m
@@ -91,7 +89,7 @@ vertices = [
 ]
 
 # Magnetization: 1.2 T = 1.2 / mu_0 A/m = 954930 A/m
-# In Radia, magnetization is specified in A/m despite FldUnits saying "Tesla"
+# In Radia, magnetization is specified in A/m
 MU_0 = 4 * np.pi * 1e-7
 Br = 1.2  # T
 Mr = Br / MU_0  # A/m
@@ -145,11 +143,11 @@ print('[Step 3] Creating RadiaField CoefficientFunctions')
 print('-' * 70)
 
 # Vector potential A from Radia
-A_cf = radia_ngsolve.RadiaField(magnet, 'a')
+A_cf = rad.RadiaField(magnet, 'a')
 print('  A_cf created (vector potential)')
 
 # Magnetic field B from Radia
-B_cf = radia_ngsolve.RadiaField(magnet, 'b')
+B_cf = rad.RadiaField(magnet, 'b')
 print('  B_cf created (magnetic field)')
 
 # =============================================================================

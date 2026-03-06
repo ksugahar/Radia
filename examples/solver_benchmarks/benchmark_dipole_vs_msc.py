@@ -20,7 +20,6 @@ import radia as rad
 
 def create_test_magnet(size=0.1, magnetization=1e6):
     """Create a hexahedral magnet for testing."""
-    rad.FldUnits('m')
 
     s = size / 2
     vertices = [

@@ -2,15 +2,13 @@
 """
 Radia OpenMP Parallel Performance Test
 Tests field computation performance with different thread counts
+All coordinates in meters, magnetization in A/m.
 """
 
 import sys
 import time
 import os
 
-# Add project root's build directory to path
-import sys
-import os
 from pathlib import Path
 
 # Find project root (works from any test subdirectory)
@@ -36,8 +34,8 @@ import radia as rad
 
 def create_test_magnet():
 	"""Create a test magnet configuration"""
-	# Create a rectangular block magnet
-	magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10])
+	# Create a rectangular block magnet (10x10x10 mm in meters)
+	magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
 	rad.ObjSetM(magnet, [0, 0, 1000])  # 1000 A/m magnetization in Z
 	return magnet
 
@@ -45,11 +43,11 @@ def _field_computation_1d(magnet, num_points=1000):
 	"""Helper: Field computation along a line (not a test)"""
 	start_time = time.perf_counter()
 
-	# Compute field along Z axis from z=0 to z=100mm
+	# Compute field along Z axis from z=0 to z=0.1 m (100 mm)
 	# Use individual point calculations instead of line calculation
 	fields = []
 	for i in range(num_points):
-		z = 100.0 * i / (num_points - 1)
+		z = 0.1 * i / (num_points - 1)
 		field = rad.Fld(magnet, 'b', [0, 0, z])
 		fields.append(field)
 
@@ -60,13 +58,13 @@ def _field_computation_2d(magnet, grid_size=50):
 	"""Helper: Field computation on a 2D grid (not a test)"""
 	start_time = time.perf_counter()
 
-	# Create a grid of points
+	# Create a grid of points (+-25 mm in meters, z=20 mm)
 	points = []
 	for i in range(grid_size):
 		for j in range(grid_size):
-			x = -25 + (50.0 * i / (grid_size - 1))
-			y = -25 + (50.0 * j / (grid_size - 1))
-			z = 20.0
+			x = -0.025 + (0.050 * i / (grid_size - 1))
+			y = -0.025 + (0.050 * j / (grid_size - 1))
+			z = 0.020
 			points.append([x, y, z])
 
 	# Compute field at all points
@@ -86,13 +84,13 @@ def test_relaxation_performance():
 	# Create a nonlinear material (required for relaxation solver)
 	mat = rad.MatSatIsoFrm([1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759])
 
-	# Create multiple magnetic elements
+	# Create multiple magnetic elements (grid of 10x10, spacing 10 mm = 0.010 m)
 	elements = []
 	for i in range(10):
 		for j in range(10):
-			x = -50 + i * 10
-			y = -50 + j * 10
-			mag = rad.ObjRecMag([x, y, 0], [8, 8, 10])
+			x = -0.050 + i * 0.010
+			y = -0.050 + j * 0.010
+			mag = rad.ObjRecMag([x, y, 0], [0.008, 0.008, 0.010], [0, 0, 0])
 			rad.MatApl(mag, mat)  # Apply material for relaxation
 			elements.append(mag)
 

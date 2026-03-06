@@ -148,7 +148,6 @@ def case_1_air(coil_inp, freqs_str, wire_w_m, wire_h_m, sigma):
     print("=" * 65)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     inp = f"""\
 .Units mm
@@ -203,7 +202,6 @@ def case_2_magnetic(coil_inp, freqs_str, wire_w_m, wire_h_m, sigma):
     print("=" * 65)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     inp = f"""\
 .Units mm
@@ -264,7 +262,6 @@ def case_3_shield(coil_inp, freqs_str, wire_w_m, wire_h_m, sigma):
     print("=" * 65)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     inp = f"""\
 .Units mm
@@ -321,7 +318,6 @@ def case_4_magnetic_shield(coil_inp, freqs_str, wire_w_m, wire_h_m, sigma):
     print("=" * 65)
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     inp = f"""\
 .Units mm

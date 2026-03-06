@@ -60,7 +60,6 @@ def main():
     print("Netgen GUI Visualization Demo")
     print("="*60)
 
-    rad.FldUnits('m')
 
     # Create Radia magnet
     print("\n[1] Creating Radia magnet...")

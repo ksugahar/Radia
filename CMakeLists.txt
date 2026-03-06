@@ -1,12 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
-project(radia_ngsolve C CXX)
+project(radia C CXX)
 
-# C++17 required for inline variables in header-only ExaFMM library
+# C++17 required for structured bindings and inline variables
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Option to build radia_ngsolve module (requires NGSolve to be installed)
-option(RADIA_BUILD_NGSOLVE "Build radia_ngsolve integration module" ON)
 
 # FFTW is replaced by Intel MKL DFTI (direct integration in fftw.h)
 # No FFTW library linking required - MKL DFTI provides FFT functionality
@@ -136,17 +133,11 @@ if(WIN32)
 		message(STATUS "Intel MKL found: ${MKL_LIB}")
 		set(BLAS_LIB ${MKL_LIB})
 		set(BLAS_INCLUDE_DIR ${MKL_INCLUDE_DIR})
-		# MKL FFTW3 wrapper for ExaFMM-t compatibility
-		set(MKL_FFTW3_INCLUDE_DIR "${MKL_INCLUDE_DIR}/fftw")
 		set(USE_MKL_FOUND TRUE)
 	else()
 		message(FATAL_ERROR "Intel MKL not found. Please install Intel oneAPI Base Toolkit.")
 	endif()
 endif()
-
-# Option to enable ExaFMM acceleration for fast dipole field computation
-# ExaFMM-t integrated into src/core/exafmm/ (NGSolve TaskManager parallelization)
-option(RADIA_ENABLE_EXAFMM "Enable ExaFMM library for fast field computation" ON)
 
 # Radia core sources (organized by API functionality)
 set(RADIA_CORE_SOURCES
@@ -156,10 +147,8 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_transform_impl.cpp        # Transformations (TrfTrsl, TrfRot, etc.)
 	${CORE_DIR}/rad_field_compute.cpp         # Field computation (Fld, FldLst, FldEnr, etc.)
 	${CORE_DIR}/rad_obj_subdivision.cpp       # Subdivision (ObjDivMag, multi-generation extrusion)
-	${CORE_DIR}/rad_exafmm.cpp                # ExaFMM wrapper for fast multipole acceleration
-	${CORE_DIR}/rad_point_classify.cpp        # Point classification for FMM near/far
-	${CORE_DIR}/rad_dipole_collect.cpp        # Collect dipoles from Radia for FMM
-	${CORE_DIR}/rad_field_unified.cpp         # Unified field computation (inside/outside + FMM)
+	${CORE_DIR}/rad_point_classify.cpp        # Point classification (inside/outside)
+	${CORE_DIR}/rad_field_unified.cpp         # Unified field computation (inside/outside + batch)
 
 	# Geometry files (descriptive names)
 	${CORE_DIR}/rad_arc_current.cpp           # Arc with azimuthal current
@@ -229,142 +218,11 @@ add_library(triangle_lib STATIC ${EXT_DIR}/triangle/triangle.c)
 target_compile_definitions(triangle_lib PRIVATE TRILIBRARY ANSI_DECLARATORS NO_TIMER)
 target_include_directories(triangle_lib PUBLIC ${EXT_DIR}/triangle)
 
-# Create NGSolve Python module using add_ngsolve_python_module
-# (following EMPY_Field pattern exactly)
-# Only build if RADIA_BUILD_NGSOLVE is ON (requires NGSolve to be installed)
-if(RADIA_BUILD_NGSOLVE)
-add_ngsolve_python_module(radia_ngsolve
-	${RADIA_CORE_SOURCES}
-
-	${EXT_DIR}/auxparse/auxparse.cpp
-	${EXT_DIR}/genmath/gmfft.cpp
-	${EXT_DIR}/genmath/gmtrans.cpp
-	${HACAPK_SOURCES}
-	${RADIA_LIB_SOURCES}
-	${PYTHON_DIR}/radia_ngsolve.cpp
-)
-
-# Disable IPO/LTO for Intel compiler (produces LLVM bitcode, not COFF objects)
-# This is required when linking with MSVC-compiled NGSolve libraries
-if(CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
-	set_target_properties(radia_ngsolve PROPERTIES
-		INTERPROCEDURAL_OPTIMIZATION OFF
-	)
-	# Force object file format to COFF (disable LLVM bitcode)
-	# $<$<COMPILE_LANGUAGE:CXX>:-fno-lto> for C++ only
-	# $<$<COMPILE_LANGUAGE:C>:-fno-lto> for C only
-	target_compile_options(radia_ngsolve PRIVATE
-		$<$<COMPILE_LANGUAGE:CXX>:-fno-lto>
-		$<$<COMPILE_LANGUAGE:C>:-fno-lto>
-	)
-	message(STATUS "IPO/LTO disabled for radia_ngsolve (Intel compiler)")
-endif()
-
-# Link triangle library
-target_link_libraries(radia_ngsolve PRIVATE triangle_lib)
-
-# Add include directories
-target_include_directories(radia_ngsolve PRIVATE
-	${CORE_DIR}
-	${LIB_DIR}
-	${EXT_DIR}/auxparse
-	${EXT_DIR}/genmath
-	${EXT_DIR}/triangle
-	${EXT_DIR}/HACApK
-		${PYTHON_DIR}
-	${MKL_FFTW3_INCLUDE_DIR}
-)
-
-# Add compile definitions (from Radia)
-target_compile_definitions(radia_ngsolve PRIVATE
-	ALPHA__LIB__
-	FFTW_ENABLE_FLOAT
-	NO_TIMER
-	ANSI_DECLARATORS
-	TRILIBRARY
-	_GM_WITHOUT_BASE
-	RADIA_USE_HACAPK
-	HACAPK_RADIA_LOGGING
-	$<$<BOOL:${RADIA_ENABLE_EXAFMM}>:RADIA_USE_EXAFMM>
-	$<$<CONFIG:Debug>:_DEBUG>
-	$<$<CONFIG:Release>:NDEBUG>
-	$<$<PLATFORM_ID:Windows>:WIN32>
-	$<$<PLATFORM_ID:Windows>:_WINDOWS>
-)
-
-# FFT functionality provided by Intel MKL DFTI (via fftw.h compatibility layer)
-# No external FFTW library required - MKL is already linked for BLAS/LAPACK
-message(STATUS "Using Intel MKL DFTI for FFT operations (radia_ngsolve)")
-
-# Intel MKL for radia_ngsolve (required)
-if(WIN32 AND USE_MKL_FOUND)
-	target_link_libraries(radia_ngsolve PRIVATE ${BLAS_LIB})
-	target_include_directories(radia_ngsolve PRIVATE ${BLAS_INCLUDE_DIR})
-	target_compile_definitions(radia_ngsolve PRIVATE HAVE_LAPACK)
-	message(STATUS "Using Intel MKL for radia_ngsolve: ${BLAS_LIB}")
-endif()
-
-# ExaFMM is header-only (integrated into src/core/exafmm/)
-if(RADIA_ENABLE_EXAFMM)
-	message(STATUS "ExaFMM enabled (integrated, TaskManager parallelization)")
-endif()
-
-# Link Windows system libraries
-if(WIN32)
-	target_link_libraries(radia_ngsolve PRIVATE version.lib)
-	# Fix LIBCMT conflict warning
-	if(MSVC)
-		target_link_options(radia_ngsolve PRIVATE /NODEFAULTLIB:LIBCMT)
-		# Increase stack size to 16MB for deep HACApK cluster tree recursion
-		# Default is 1MB which causes stack overflow at ~30,000+ elements
-		target_link_options(radia_ngsolve PRIVATE /STACK:16777216)
-	endif()
-endif()
-
-# Parallelization: NGSolve TaskManager (via ngstd, inherited from add_ngsolve_python_module)
-# No explicit linking needed — radia_ngsolve inherits ngstd through NGSolve's CMake targets
-
-# Compiler-specific flags for radia_ngsolve
-# MSVC is preferred for radia_ngsolve due to NGSolve library compatibility
-if(MSVC)
-	# MSVC with Intel MKL (required for NGSolve compatibility)
-	target_compile_options(radia_ngsolve PRIVATE
-		/O2                # Optimization
-		/fp:fast           # Fast floating-point
-		/W0                # Disable warnings
-		/wd4244            # Disable conversion warnings
-		/wd4267            # Disable size_t conversion warnings
-	)
-	message(STATUS "Using MSVC compiler with Intel MKL for radia_ngsolve")
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-	# Intel oneAPI compiler - may have ABI issues with MSVC-compiled NGSolve
-	target_compile_options(radia_ngsolve PRIVATE /O3 /fp:fast /W0)
-	message(STATUS "Using Intel compiler for radia_ngsolve (may have ABI issues)")
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-	# GCC
-	target_compile_options(radia_ngsolve PRIVATE
-		-Wno-conversion
-		-Wno-sign-conversion
-		-Wno-unused-variable
-	)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	# Clang (including Apple Clang)
-	target_compile_options(radia_ngsolve PRIVATE
-		-Wno-conversion
-		-Wno-sign-conversion
-		-Wno-unused-variable
-	)
-endif()
-
-message(STATUS "radia_ngsolve module configured")
-endif() # RADIA_BUILD_NGSOLVE
-
 # ========================================
-# Legacy _radia Python Module (REMOVED)
+# Legacy modules (REMOVED)
 # ========================================
-# The legacy Python C API module (_radia.pyd using radpy_pyapi.cpp) has been
-# removed as of 2026-01. All Python bindings now use pybind11 exclusively
-# via the _radia_pybind module (see below at line ~956).
+# radia_ngsolve: Merged into _radia_pybind (RadiaFieldCF integrated, 2026-03)
+# _radia (radpy_pyapi.cpp): Removed 2026-01, replaced by pybind11
 #
 # For the new pybind11 module, see: _radia_pybind target
 # The Python package (__init__.py) imports from _radia_pybind.
@@ -730,7 +588,6 @@ target_include_directories(_radia_pybind PRIVATE
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
 	${EXT_DIR}/HACApK
-		${MKL_FFTW3_INCLUDE_DIR}
 )
 
 # Add preprocessor definitions
@@ -741,7 +598,6 @@ target_compile_definitions(_radia_pybind PRIVATE
 	ANSI_DECLARATORS
 	RADIA_USE_HACAPK
 	HACAPK_RADIA_LOGGING
-	$<$<BOOL:${RADIA_ENABLE_EXAFMM}>:RADIA_USE_EXAFMM>
 )
 
 # Intel MKL for _radia_pybind
@@ -757,11 +613,14 @@ if(WIN32)
 	target_link_libraries(_radia_pybind PRIVATE version.lib)
 	if(MSVC)
 		target_link_options(_radia_pybind PRIVATE /NODEFAULTLIB:LIBCMT)
+		# Increase stack size to 16MB for deep HACApK cluster tree recursion
+		# Default is 1MB which causes stack overflow at ~30,000+ elements
+		target_link_options(_radia_pybind PRIVATE /STACK:16777216)
 	endif()
 endif()
 
-# Parallelization: NGSolve TaskManager (via ngstd)
-target_link_libraries(_radia_pybind PRIVATE ngstd)
+# NGSolve integration: TaskManager (ngstd) + CoefficientFunction (ngfem, ngcomp)
+target_link_libraries(_radia_pybind PRIVATE ngstd ngfem ngcomp ngbla)
 target_include_directories(_radia_pybind PRIVATE ${NGSolve_INCLUDE_DIRS} ${Netgen_INCLUDE_DIRS})
 
 # Compiler-specific flags

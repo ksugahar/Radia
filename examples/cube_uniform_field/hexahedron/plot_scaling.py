@@ -2,7 +2,7 @@
 """
 Aggregate hexahedron benchmark JSON results and plot solver scaling laws.
 
-Fits power-law scaling t = a * N^alpha using the last 5 data points,
+Fits power-law scaling t = a * N^alpha using the last FIT_LAST_N data points,
 and plots time and memory vs DOF.
 
 Usage:
@@ -202,16 +202,35 @@ def print_summary_table(data):
             ))
 
     print('\n--- SCALING EXPONENTS (last %d points, t = a * N^alpha) ---\n' % FIT_LAST_N)
-    print('%-10s %8s %8s' % ('Solver', 'alpha', 'R^2'))
-    print('-' * 30)
+    print('%-10s %10s %10s %10s %10s' % ('Solver', 'Time_exp', 'Time_R2', 'Mem_exp', 'Mem_R2'))
+    print('-' * 55)
 
     for solver, results in sorted(data.items()):
         ndofs = np.array([r['ndof'] for r in results], dtype=float)
         times = np.array([r['t_solve'] for r in results], dtype=float)
+        mems = []
+        mem_dofs = []
+        for r in results:
+            mem = r.get('peak_memory_mb')
+            if mem is not None and mem > 0:
+                mems.append(mem)
+                mem_dofs.append(r['ndof'])
+
+        n_fit_pts = min(FIT_LAST_N, len(times))
         if len(times) >= 2:
-            n_fit_pts = min(FIT_LAST_N, len(times))
-            alpha, a, r2 = fit_power_law(ndofs[-n_fit_pts:], times[-n_fit_pts:])
-            print('%-10s %8.2f %8.3f' % (solver, alpha, r2))
+            alpha_t, _, r2_t = fit_power_law(ndofs[-n_fit_pts:], times[-n_fit_pts:])
+        else:
+            alpha_t, r2_t = 0, 0
+
+        mem_dofs = np.array(mem_dofs, dtype=float)
+        mems = np.array(mems, dtype=float)
+        n_fit_mem = min(FIT_LAST_N, len(mems))
+        if len(mems) >= 2:
+            alpha_m, _, r2_m = fit_power_law(mem_dofs[-n_fit_mem:], mems[-n_fit_mem:])
+        else:
+            alpha_m, r2_m = 0, 0
+
+        print('%-10s %10.4f %10.5f %10.4f %10.5f' % (solver, alpha_t, r2_t, alpha_m, r2_m))
 
 
 def main():

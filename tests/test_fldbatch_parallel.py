@@ -22,7 +22,6 @@ def run_test():
 
     # Clear any existing objects
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Create a simple hexahedral magnet
     s = 0.05  # 5 cm cube
@@ -63,7 +62,7 @@ def run_test():
 
         # Run FldBatch
         t0 = time.time()
-        result = rad.FldBatch(magnet, points, 0)
+        result = rad.FldBatch(magnet, points)
         t1 = time.time()
         elapsed_ms = (t1 - t0) * 1000
 
@@ -95,7 +94,7 @@ def run_test():
         [0, 0.1, 0.1],
     ]
 
-    result_batch = rad.FldBatch(magnet, test_points, 0)
+    result_batch = rad.FldBatch(magnet, test_points)
 
     max_rel_error = 0.0
     for i, pt in enumerate(test_points):

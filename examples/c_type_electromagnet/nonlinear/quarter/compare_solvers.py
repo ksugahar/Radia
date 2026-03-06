@@ -76,7 +76,6 @@ def load_elf_field_at_origin(path):
 def build_model(nodes, elements, bh_data):
     """Build Radia model with yoke and coil."""
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Create nonlinear material
     mat = rad.MatSatIsoTab(bh_data)

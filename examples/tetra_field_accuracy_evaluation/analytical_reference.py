@@ -108,7 +108,6 @@ def compute_hexa_solution(test_points):
     This uses analytical formulas for rectangular blocks.
     """
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Create uniformly magnetized cube: 1m side, centered at origin
     half = CUBE_SIZE / 2
@@ -152,7 +151,6 @@ def compute_tetra_solution(test_points):
     Uses Netgen for mesh generation with uniform magnetization.
     """
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Generate tetrahedral mesh with Netgen
     cube_solid = Box(Pnt(-CUBE_HALF, -CUBE_HALF, -CUBE_HALF),

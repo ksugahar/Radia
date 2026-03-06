@@ -121,8 +121,6 @@ from ngsolve import Mesh
 from netgen_mesh_import import netgen_mesh_to_radia
 import radia as rad
 
-rad.FldUnits('m')
-
 # GMSH初期化
 gmsh.initialize()
 gmsh.option.setNumber("General.Terminal", 1)
@@ -248,8 +246,6 @@ import gmsh
 from ngsolve import Mesh
 from netgen_mesh_import import netgen_mesh_to_radia
 import radia as rad
-
-rad.FldUnits('m')
 
 # ===============================
 # 1. 鉄心（体積メッシュ）
@@ -438,7 +434,6 @@ The Netgen GUI renders **surface elements**, not volume elements directly:
 ```python
 # 1. Export to VTS
 import radia as rad
-rad.FldUnits('m')
 rad.FldVTS(magnet, 'field.vts', ...)
 
 # 2. Open in ParaView

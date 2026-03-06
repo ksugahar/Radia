@@ -22,7 +22,7 @@ Example
 >>> import radia as rad
 >>> from netgen_mesh_import import netgen_mesh_to_radia
 >>>
->>> rad.FldUnits('m')
+>>> # Radia always uses meters
 >>> geo = OCCGeometry(Box((0, 0, 0), (0.01, 0.01, 0.01)))
 >>> mesh = Mesh(geo.GenerateMesh(maxh=0.003))
 >>> mag_obj = netgen_mesh_to_radia(mesh,
@@ -151,7 +151,7 @@ def create_radia_tetrahedron(vertices, magnetization=None):
     ----------
     vertices : list of list
         4 vertices: [[x1,y1,z1], [x2,y2,z2], [x3,y3,z3], [x4,y4,z4]]
-        Coordinates should be in units matching rad.FldUnits() setting.
+        Coordinates should be in meters.
     magnetization : list, optional
         Magnetization vector [Mx, My, Mz] in Tesla.
         Default: [0, 0, 0] (no magnetization)
@@ -330,8 +330,7 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
     """
     Convert NGSolve/Netgen mesh to Radia geometry.
 
-    IMPORTANT: Call rad.FldUnits() BEFORE using this function to ensure
-    unit consistency between Netgen (meters) and Radia.
+    All coordinates must be in meters. Radia always uses meters.
 
     Parameters
     ----------
@@ -349,12 +348,7 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
         - None: Use default [0, 0, 0] (no magnetization)
 
     units : str, default='m'
-        Unit system: 'm' (meters) or 'mm' (millimeters).
-        Must match rad.FldUnits() setting.
-
-        Note: As of v1.3.4, coordinate scaling is handled automatically by
-        rad.FldUnits(). This parameter is kept for API compatibility but
-        the actual scaling is performed by Radia's unit conversion system.
+        Must be 'm'. Kept for API compatibility.
 
     combine : bool, default=True
         If True, return rad.ObjCnt() container of all elements.
@@ -404,8 +398,7 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
     >>> import radia as rad
     >>> from netgen_mesh_import import netgen_mesh_to_radia
     >>>
-    >>> # IMPORTANT: Set Radia units first!
-    >>> rad.FldUnits('m')
+    >>> # Radia always uses meters
     >>>
     >>> # Create Netgen mesh
     >>> geo = OCCGeometry(Box((0, 0, 0), (0.01, 0.01, 0.01)))
@@ -430,7 +423,7 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
 
     Using millimeters (Radia default):
 
-    >>> rad.FldUnits('mm')  # Set Radia to mm
+    >>> # All coordinates in meters
     >>> mag_obj = netgen_mesh_to_radia(mesh, units='mm')  # Auto-scales coordinates
 
     Notes
@@ -476,12 +469,11 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
         if skipped_count > 0:
             print(f"                Skipped: {skipped_count} elements (filtered by material)")
 
-    # Coordinate scaling is now handled by rad.FldUnits()
-    # No manual scaling needed - Radia automatically converts units
+    # Radia always uses meters - no coordinate scaling needed
     coord_scale = 1.0
 
     if verbose:
-        print(f"                Units: {units} (scaling handled by rad.FldUnits())")
+        print(f"                Units: {units} (Radia always uses meters)")
 
     # Process material specification
     if material is None:
@@ -585,7 +577,7 @@ def cubit_hex_to_radia(hex_elements, magnetization=None, mu_r=None, combine=True
     hex_elements : list of list
         List of hexahedral elements, each element is a list of 8 vertices:
         [[[x1,y1,z1], [x2,y2,z2], ..., [x8,y8,z8]], ...]
-        Vertices should be in meters (consistent with rad.FldUnits('m')).
+        Vertices should be in meters.
 
     magnetization : list, optional
         Initial magnetization vector [Mx, My, Mz] in A/m.
@@ -616,7 +608,7 @@ def cubit_hex_to_radia(hex_elements, magnetization=None, mu_r=None, combine=True
     >>> import radia as rad
     >>> from netgen_mesh_import import cubit_hex_to_radia
     >>>
-    >>> rad.FldUnits('m')
+    >>> # Radia always uses meters
     >>>
     >>> # Hex elements from Cubit (or manual creation)
     >>> hex_elements = [
@@ -643,7 +635,7 @@ def cubit_hex_to_radia(hex_elements, magnetization=None, mu_r=None, combine=True
 
     Notes
     -----
-    - IMPORTANT: Call rad.FldUnits('m') before using this function
+    - All coordinates must be in meters
     - Vertices should follow standard hexahedron numbering convention
     - For CplMag, use with ObjCnt container (combine=True)
     - Multi-element meshes enable proper MMM demagnetization coupling
@@ -754,7 +746,7 @@ def create_hex_mesh_grid(center, size, divisions, magnetization=None, mu_r=None,
     >>> import radia as rad
     >>> from netgen_mesh_import import create_hex_mesh_grid
     >>>
-    >>> rad.FldUnits('m')
+    >>> # Radia always uses meters
     >>>
     >>> # 30mm cube with 3x3x3 = 27 elements
     >>> core = create_hex_mesh_grid(

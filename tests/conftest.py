@@ -54,7 +54,7 @@ def _check_module(name):
 
 _OPTIONAL_DEPS = {
     "ngsolve": _check_module("ngsolve"),
-    "radia_ngsolve": _check_module("radia_ngsolve"),
+    # radia_ngsolve is no longer a separate module; RadiaField is in radia
     "magpylib": _check_module("magpylib"),
 }
 

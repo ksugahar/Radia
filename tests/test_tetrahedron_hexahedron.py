@@ -18,7 +18,6 @@ class TestObjTetrahedron:
 
     def setup_method(self):
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
     def test_basic_creation(self):
         """Test basic tetrahedron creation."""
@@ -33,7 +32,7 @@ class TestObjTetrahedron:
         vertices = [
             [0, 0, 0], [0.1, 0, 0], [0.05, 0.0866, 0], [0.05, 0.0289, 0.0816]
         ]
-        tetra = rad.ObjTetrahedron(vertices)
+        tetra = rad.ObjTetrahedron(vertices, [0, 0, 0])
         assert tetra > 0
 
     def test_field_computation(self):
@@ -81,7 +80,6 @@ class TestObjHexahedron:
 
     def setup_method(self):
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
     def test_basic_creation(self):
         """Test basic hexahedron creation."""
@@ -100,7 +98,7 @@ class TestObjHexahedron:
             [-s, -s, -s], [s, -s, -s], [s, s, -s], [-s, s, -s],
             [-s, -s, s], [s, -s, s], [s, s, s], [-s, s, s]
         ]
-        hex_obj = rad.ObjHexahedron(vertices)
+        hex_obj = rad.ObjHexahedron(vertices, [0, 0, 0])
         assert hex_obj > 0
 
     def test_field_computation(self):
@@ -155,7 +153,6 @@ class TestMaterialApplication:
 
     def setup_method(self):
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
     def test_tetrahedron_with_linear_material(self):
         """Test tetrahedron with linear magnetic material."""
@@ -195,7 +192,6 @@ class TestContainer:
 
     def setup_method(self):
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
     def test_tetrahedra_in_container(self):
         """Test creating container with multiple tetrahedra."""

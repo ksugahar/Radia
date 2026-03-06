@@ -80,6 +80,7 @@ void NonlinearAnisotropMaterialOpt0( double*, int, double*, int );
 void NonlinearAnisotropMaterialOpt1( double**, double** );
 void NonlinearAnisotropMaterialOpt2( double**, double );
 void NonlinearAnisotropMaterialOpt3( double, double** );
+void EnergyHysteresisMaterial( int, double*, double*, double*, double );
 void ApplyMaterial( int, int );
 void MvsH( int, char*, double,double,double );
 
@@ -110,7 +111,7 @@ void SetNewtonDamping( bool, int, double );
 void GetNewtonDampingStats( bool*, int*, double* );
 // SetIMASymmetry, BuildIMAMatrix REMOVED (2026-01-31) - Use BuildMatrix(obj, image) instead
 void ClassifyPoints( int*, int*, int, double*, int, double );
-void ComputeFieldBatch( double*, double*, int, double*, int, int );
+void ComputeFieldBatch( double*, double*, int, double*, int );
 void ComputeScalarPotentialBatch( double*, int, double*, int );
 void ComputeVectorPotentialBatch( double*, int, double*, int );
 
@@ -814,11 +815,20 @@ int CALL RadMatSatIsoTab(int* n, double* pFlatMatDef, int AmOfPts)
 	NonlinearIsotropMaterial3Opt(PointsArray, (long)AmOfPts);
 
 	*n = ioBuffer.OutInt();
-	if(PointsArray != 0) 
+	if(PointsArray != 0)
 	{
 		for(int i=0; i<AmOfPts; i++) if(PointsArray[i] != 0) delete[] (PointsArray[i]);
 		delete[] PointsArray;
 	}
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadMatEnergyHysteresis(int* n, int K, double* As, double* Js, double* chi, double eps)
+{
+	EnergyHysteresisMaterial(K, As, Js, chi, eps);
+	*n = ioBuffer.OutInt();
 	return ioBuffer.OutErrorStatus();
 }
 
@@ -1263,41 +1273,27 @@ int CALL RadFldCmpPrc(int* n, char* Opt)
 
 int CALL RadFldUnits(char* OutStr)
 {
-	PhysicalUnits();
-
-	int ErrStat = ioBuffer.OutErrorStatus();
-	if(ErrStat > 0) return ErrStat;
-
-	strcpy(OutStr, ioBuffer.OutStringPtr()); //OC27092018
-	//strcpy(OutStr, ioBuffer.OutString());
-	ioBuffer.EraseStringBuffer();
-	return ErrStat;
+	// Deprecated: Radia always uses meters
+	strcpy(OutStr, "m");
+	return 0;
 }
 
 //-------------------------------------------------------------------------
 
 int CALL RadFldUnitsSize(int* OutSize)
 {
-	PhysicalUnits();
-
-	int ErrStat = ioBuffer.OutErrorStatus();
-	if(ErrStat > 0) return ErrStat;
-
-	*OutSize = (int)strlen(ioBuffer.OutStringPtr()); //27092018
-	//*OutSize = (int)strlen(ioBuffer.OutString());
-	ioBuffer.EraseStringBuffer();
-	return ErrStat;
+	// Deprecated: Radia always uses meters
+	*OutSize = 1; // strlen("m")
+	return 0;
 }
 
 //-------------------------------------------------------------------------
 
 int CALL RadFldUnitsSet(const char* UnitStr)
 {
-	PhysicalUnitsSet(UnitStr);
-
-	int ErrStat = ioBuffer.OutErrorStatus();
-	ioBuffer.EraseStringBuffer();
-	return ErrStat;
+	// Deprecated: Radia always uses meters. Noop.
+	(void)UnitStr;
+	return 0;
 }
 
 //-------------------------------------------------------------------------
@@ -1725,9 +1721,9 @@ int CALL RadClassifyPoints(int* classification, int* nearest_elem, int n_points,
 //-------------------------------------------------------------------------
 
 int CALL RadFldBatch(double* B_out, double* H_out, int n_points,
-                     double* points, int container_handle, int method)
+                     double* points, int container_handle)
 {
-	ComputeFieldBatch(B_out, H_out, n_points, points, container_handle, method);
+	ComputeFieldBatch(B_out, H_out, n_points, points, container_handle);
 	return ioBuffer.OutErrorStatus();
 }
 
@@ -1785,7 +1781,7 @@ int CALL RadFldVTS(int container_handle, const char* filename,
 	}
 
 	// Compute fields using batch API (OpenMP parallelized)
-	ComputeFieldBatch(B_out, H_out, n_points, points, container_handle, 0);
+	ComputeFieldBatch(B_out, H_out, n_points, points, container_handle);
 
 	// Write VTS file
 	FILE* f = fopen(filename, "w");

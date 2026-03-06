@@ -101,12 +101,8 @@ def test_axial_cylinder_on_axis():
         print(f"{z:>10.1f} {Bz_ours:>15.6e} {Bz_expected:>18.6e} {error:>12.2f}")
 
     print("-" * 65)
-    if max_error < 1.0:
-        print(f"TEST PASSED: Maximum error {max_error:.4f}%")
-        return True
-    else:
-        print(f"TEST FAILED: Maximum error {max_error:.2f}%")
-        return False
+    assert max_error < 1.0, f"TEST FAILED: Maximum error {max_error:.2f}%"
+    print(f"TEST PASSED: Maximum error {max_error:.4f}%")
 
 
 def test_axial_cylinder_off_axis():
@@ -166,12 +162,8 @@ def test_axial_cylinder_off_axis():
                   f"{B_ours[2]:>12.6e} {B_magpy[2]:>12.6e}")
 
         print("-" * 75)
-        if max_error < 1.0:
-            print(f"TEST PASSED: Maximum Bz error {max_error:.4f}%")
-            return True
-        else:
-            print(f"TEST FAILED: Maximum Bz error {max_error:.2f}%")
-            return False
+        assert max_error < 1.0, f"TEST FAILED: Maximum Bz error {max_error:.2f}%"
+        print(f"TEST PASSED: Maximum Bz error {max_error:.4f}%")
     else:
         print(f"\n{'Point [mm]':>25} {'Bx [T]':>12} {'By [T]':>12} {'Bz [T]':>12}")
         print("-" * 70)
@@ -183,7 +175,6 @@ def test_axial_cylinder_off_axis():
 
         print("-" * 70)
         print("TEST INFO: Values shown (no magpylib for comparison)")
-        return True
 
 
 def test_diametric_cylinder():
@@ -243,12 +234,8 @@ def test_diametric_cylinder():
                   f"{B_ours[2]:>12.6e} {B_magpy[2]:>12.6e}")
 
         print("-" * 75)
-        if max_error < 5.0:  # Allow 5% error for diametric case (Taylor expansion)
-            print(f"TEST PASSED: Maximum Bx error {max_error:.4f}%")
-            return True
-        else:
-            print(f"TEST FAILED: Maximum Bx error {max_error:.2f}%")
-            return False
+        assert max_error < 5.0, f"TEST FAILED: Maximum Bx error {max_error:.2f}%"  # Allow 5% error for diametric case (Taylor expansion)
+        print(f"TEST PASSED: Maximum Bx error {max_error:.4f}%")
     else:
         print(f"\n{'Point [mm]':>25} {'Bx [T]':>12} {'By [T]':>12} {'Bz [T]':>12}")
         print("-" * 70)
@@ -260,7 +247,6 @@ def test_diametric_cylinder():
 
         print("-" * 70)
         print("TEST INFO: Values shown (no magpylib for comparison)")
-        return True
 
 
 def test_ring_magnet():
@@ -315,12 +301,8 @@ def test_ring_magnet():
             print(f"{z:>10.1f} {B_ours[2]:>15.6e} {B_magpy[2]:>15.6e} {error:>12.2f}")
 
         print("-" * 55)
-        if max_error < 1.0:
-            print(f"TEST PASSED: Maximum error {max_error:.4f}%")
-            return True
-        else:
-            print(f"TEST FAILED: Maximum error {max_error:.2f}%")
-            return False
+        assert max_error < 1.0, f"TEST FAILED: Maximum error {max_error:.2f}%"
+        print(f"TEST PASSED: Maximum error {max_error:.4f}%")
     else:
         print(f"\n{'z [mm]':>10} {'Bz [T]':>15}")
         print("-" * 30)
@@ -331,7 +313,6 @@ def test_ring_magnet():
 
         print("-" * 30)
         print("TEST INFO: Values shown (no magpylib for comparison)")
-        return True
 
 
 def test_vector_potential():
@@ -430,15 +411,11 @@ def test_vector_potential():
         print(f"  Max relative error: {max_error:.2f}%")
 
         # Allow 5% error due to numerical differentiation
-        if max_error < 5.0 and all_reasonable:
-            print("TEST PASSED: curl(A) ~= B within 5%")
-            return True
-        else:
-            print("TEST FAILED: curl(A) != B or unreasonable A values")
-            return False
+        assert max_error < 5.0 and all_reasonable, "TEST FAILED: curl(A) != B or unreasonable A values"
+        print("TEST PASSED: curl(A) ~= B within 5%")
     else:
         print("TEST INFO: B magnitude too small for meaningful comparison")
-        return all_reasonable
+        assert all_reasonable, "TEST FAILED: unreasonable A values"
 
 
 if __name__ == "__main__":
@@ -447,13 +424,22 @@ if __name__ == "__main__":
     print(f"magpylib available: {HAS_MAGPYLIB}")
     print()
 
-    results = []
+    tests = [
+        ("On-axis B-field", test_axial_cylinder_on_axis),
+        ("Off-axis B-field", test_axial_cylinder_off_axis),
+        ("Diametric B-field", test_diametric_cylinder),
+        ("Ring magnet", test_ring_magnet),
+        ("Vector potential A", test_vector_potential),
+    ]
 
-    results.append(("On-axis B-field", test_axial_cylinder_on_axis()))
-    results.append(("Off-axis B-field", test_axial_cylinder_off_axis()))
-    results.append(("Diametric B-field", test_diametric_cylinder()))
-    results.append(("Ring magnet", test_ring_magnet()))
-    results.append(("Vector potential A", test_vector_potential()))
+    results = []
+    for name, func in tests:
+        try:
+            func()
+            results.append((name, True))
+        except AssertionError as e:
+            print(str(e))
+            results.append((name, False))
 
     print("\n" + "=" * 60)
     print("Summary")

@@ -14,21 +14,19 @@ jobs:
 
       # ----------------------------------------------------------------
       # Policy 1: Unit System
-      #   All examples/*.py that import radia must call FldUnits
+      #   FldUnits is removed. No example should call it.
       # ----------------------------------------------------------------
-      - name: "Policy 1: FldUnits('m') in examples"
+      - name: "Policy 1: No FldUnits() calls (removed)"
         run: |
           FAIL=0
           while IFS= read -r -d '' file; do
-            if grep -q 'import radia' "$file"; then
-              if ! grep -q "FldUnits" "$file"; then
-                echo "FAIL: $file imports radia but missing FldUnits"
-                FAIL=1
-              fi
+            if grep -q 'FldUnits' "$file"; then
+              echo "FAIL: $file contains removed FldUnits() call"
+              FAIL=1
             fi
           done < <(find examples/ -name '*.py' -print0 2>/dev/null)
-          [ "$FAIL" -eq 0 ] || { echo "::error::Policy 1 failed: example scripts must call rad.FldUnits('m')"; exit 1; }
-          echo "PASS: All example scripts that import radia call FldUnits"
+          [ "$FAIL" -eq 0 ] || { echo "::error::Policy 1 failed: FldUnits is removed, delete all calls"; exit 1; }
+          echo "PASS: No example scripts contain FldUnits() calls"
 
       # ----------------------------------------------------------------
       # Policy 2: Binary Files

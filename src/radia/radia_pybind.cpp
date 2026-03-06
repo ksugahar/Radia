@@ -11,6 +11,18 @@
  * @date 2026-01-25
  */
 
+// NGSolve headers MUST be included FIRST, before Radia headers.
+// Radia's radentry.h defines EXP as __declspec(dllexport) which conflicts
+// with the EXP enum value in NGSolve's evalfunc.hpp.
+#include <fem.hpp>
+#include <python_ngstd.hpp>
+
+// Temporarily undefine EXP if NGSolve headers left it undefined
+// (radentry.h will redefine it)
+#ifdef EXP
+#undef EXP
+#endif
+
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
@@ -24,8 +36,10 @@
 #include <string>
 #include <stdexcept>
 #include <memory>
+#include <unordered_map>
+#include <optional>
 
-// Radia core headers
+// Radia core headers (after NGSolve to avoid EXP macro conflict)
 #include "radentry.h"
 #include "rad_constants.h"
 
@@ -470,10 +484,9 @@ py::object Fld(int obj, const std::string& field_type, py::array_t<double> point
  *
  * @param obj Object handle
  * @param points Numpy array of shape (N, 3)
- * @param method Computation method (0=direct, 1=FMM)
  * @return Dictionary with 'B' and 'H' arrays of shape (N, 3)
  */
-py::dict FldBatch(int obj, py::array_t<double> points, int method = 0) {
+py::dict FldBatch(int obj, py::array_t<double> points) {
     py::buffer_info buf = points.request();
 
     if (buf.ndim != 2 || buf.shape[1] != 3) {
@@ -490,7 +503,7 @@ py::dict FldBatch(int obj, py::array_t<double> points, int method = 0) {
     // Release GIL for long computation
     {
         py::gil_scoped_release release;
-        int err = RadFldBatch(B_out.data(), H_out.data(), n_points, pts, obj, method);
+        int err = RadFldBatch(B_out.data(), H_out.data(), n_points, pts, obj);
         check_error(err);
     }
 
@@ -632,26 +645,20 @@ std::string FldVTS(int obj, const std::string& filename,
 }
 
 /**
- * @brief Set physical units
+ * @brief Set physical units (deprecated, noop)
  *
- * @param unit_str Unit string: "mm" or "m"
+ * Radia always uses meters. This function is kept for backward compatibility.
+ * Calling FldUnits('m') is a silent noop.
+ * Calling FldUnits with any other unit issues a deprecation warning.
  */
 void FldUnits(const std::string& unit_str) {
-    if (!unit_str.empty()) {
-        int err = RadFldUnitsSet(unit_str.c_str());
-        check_error(err);
+    if (!unit_str.empty() && unit_str != "m" && unit_str != "meter" && unit_str != "meters") {
+        py::module_::import("warnings").attr("warn")(
+            "FldUnits is deprecated. Radia always uses meters. This call is ignored.",
+            py::module_::import("builtins").attr("DeprecationWarning")
+        );
     }
-}
-
-/**
- * @brief Get current units as string
- * @return Unit information string
- */
-std::string FldUnitsGet() {
-    char buf[1024] = {0};
-    int err = RadFldUnits(buf);
-    check_error(err);
-    return std::string(buf);
+    // Noop: Radia always uses meters
 }
 
 } // namespace radia_field
@@ -1405,6 +1412,40 @@ py::array_t<double> MatMvsH(int obj, const std::string& component, py::array_t<d
     return result;
 }
 
+/**
+ * @brief Create energy-based vector hysteresis material (Egger formulation)
+ *
+ * @param K Number of partial polarizations (play operators)
+ * @param As Saturation slope parameters A_{s,k} [A/m], array of K values
+ * @param Js Saturation polarizations J_{s,k} [T], array of K values
+ * @param chi Pinning strengths chi_k [A/m], array of K values
+ * @param eps Regularization parameter for smoothed norm (default 1e-8)
+ * @return Material handle
+ */
+int MatEnergyHysteresis(int K, py::array_t<double> As, py::array_t<double> Js,
+                         py::array_t<double> chi, double eps) {
+    auto a_As = As.unchecked<1>();
+    auto a_Js = Js.unchecked<1>();
+    auto a_chi = chi.unchecked<1>();
+
+    if (a_As.shape(0) != K || a_Js.shape(0) != K || a_chi.shape(0) != K) {
+        throw std::runtime_error("As, Js, chi arrays must all have length K");
+    }
+
+    // Copy to contiguous arrays
+    std::vector<double> v_As(K), v_Js(K), v_chi(K);
+    for (int k = 0; k < K; k++) {
+        v_As[k] = a_As(k);
+        v_Js[k] = a_Js(k);
+        v_chi[k] = a_chi(k);
+    }
+
+    int handle = 0;
+    int err = RadMatEnergyHysteresis(&handle, K, v_As.data(), v_Js.data(), v_chi.data(), eps);
+    check_error(err);
+    return handle;
+}
+
 } // namespace radia_material_ext
 
 
@@ -1525,6 +1566,7 @@ py::dict GetNewtonDampingStats() {
 // SetIMASymmetry, BuildIMAMatrix REMOVED (2026-01-31)
 // Use BuildMatrix(obj, image="+x-z") or Solve(obj, ..., image="+x-z") instead
 
+
 } // namespace radia_solver_ext
 
 
@@ -1619,6 +1661,512 @@ double UtiVer() {
 
 
 // ============================================================================
+// NGSolve CoefficientFunction: RadiaFieldCF
+// ============================================================================
+
+namespace ngfem
+{
+
+class RadiaFieldCF : public CoefficientFunction
+{
+public:
+	int radia_obj;
+	std::string field_type;
+
+	// Coordinate transformation
+	double origin[3];
+	double u_axis[3];
+	double v_axis[3];
+	double w_axis[3];
+	bool use_transform;
+
+	// Computation settings
+	std::optional<double> precision;
+
+	// Point cache for batch evaluation
+	mutable std::unordered_map<uint64_t, std::array<double,3>> point_cache_;
+	mutable bool use_cache_;
+	double cache_tolerance_;
+	mutable size_t cache_hits_;
+	mutable size_t cache_misses_;
+
+	// Cached Radia module
+	mutable py::module_ rad_module_;
+
+	RadiaFieldCF(int obj, const std::string& ftype = "b",
+	             std::optional<std::vector<double>> opt_origin = std::nullopt,
+	             std::optional<std::vector<double>> opt_u = std::nullopt,
+	             std::optional<std::vector<double>> opt_v = std::nullopt,
+	             std::optional<std::vector<double>> opt_w = std::nullopt,
+	             std::optional<double> opt_precision = std::nullopt,
+	             const std::string& units = "m")
+	    : CoefficientFunction(ftype == "phi" ? 1 : 3),
+	      radia_obj(obj), field_type(ftype), use_transform(false),
+	      precision(opt_precision),
+	      use_cache_(false), cache_tolerance_(1e-10), cache_hits_(0), cache_misses_(0)
+	{
+		if (field_type != "b" && field_type != "h" &&
+		    field_type != "a" && field_type != "m" && field_type != "phi") {
+			throw std::invalid_argument(
+				"Invalid field_type. Must be 'b', 'h', 'a', 'm', or 'phi'");
+		}
+		if (units != "m") {
+			throw std::invalid_argument(
+				"RadiaField requires units='m'. Radia always uses meters.");
+		}
+
+		origin[0] = 0; origin[1] = 0; origin[2] = 0;
+		u_axis[0] = 1; u_axis[1] = 0; u_axis[2] = 0;
+		v_axis[0] = 0; v_axis[1] = 1; v_axis[2] = 0;
+		w_axis[0] = 0; w_axis[1] = 0; w_axis[2] = 1;
+
+		auto apply_vec = [this](const std::optional<std::vector<double>>& opt,
+		                        double dst[3], bool do_normalize) {
+			if (!opt.has_value()) return;
+			const auto& v = opt.value();
+			if (v.size() != 3)
+				throw std::invalid_argument("Vector must have 3 components");
+			dst[0] = v[0]; dst[1] = v[1]; dst[2] = v[2];
+			if (do_normalize) normalize(dst);
+			use_transform = true;
+		};
+
+		apply_vec(opt_origin, origin, false);
+		apply_vec(opt_u, u_axis, true);
+		apply_vec(opt_v, v_axis, true);
+		apply_vec(opt_w, w_axis, true);
+
+		py::gil_scoped_acquire acquire;
+		rad_module_ = py::module_::import("radia");
+
+		if (precision.has_value()) {
+			double prec = precision.value();
+			std::string prec_str = "PrcB->" + std::to_string(prec) +
+			                       ",PrcA->" + std::to_string(prec) +
+			                       ",PrcH->" + std::to_string(prec) +
+			                       ",PrcM->" + std::to_string(prec);
+			rad_module_.attr("FldCmpPrc")(prec_str);
+		}
+	}
+
+private:
+	void normalize(double vec[3]) {
+		double norm = std::sqrt(vec[0]*vec[0] + vec[1]*vec[1] + vec[2]*vec[2]);
+		if (norm < 1e-12)
+			throw std::invalid_argument("Cannot normalize zero vector");
+		vec[0] /= norm; vec[1] /= norm; vec[2] /= norm;
+	}
+
+	double dot(const double a[3], const double b[3]) const {
+		return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+	}
+
+	uint64_t hash_point(double x, double y, double z) const {
+		int64_t ix = static_cast<int64_t>(x / cache_tolerance_);
+		int64_t iy = static_cast<int64_t>(y / cache_tolerance_);
+		int64_t iz = static_cast<int64_t>(z / cache_tolerance_);
+		uint64_t hash = 14695981039346656037ULL;
+		hash ^= static_cast<uint64_t>(ix); hash *= 1099511628211ULL;
+		hash ^= static_cast<uint64_t>(iy); hash *= 1099511628211ULL;
+		hash ^= static_cast<uint64_t>(iz); hash *= 1099511628211ULL;
+		return hash;
+	}
+
+	void transform_to_local(const double p_global[3], double p_local[3]) const {
+		if (use_transform) {
+			double p_t[3] = {p_global[0]-origin[0], p_global[1]-origin[1], p_global[2]-origin[2]};
+			p_local[0] = dot(u_axis, p_t);
+			p_local[1] = dot(v_axis, p_t);
+			p_local[2] = dot(w_axis, p_t);
+		} else {
+			p_local[0] = p_global[0]; p_local[1] = p_global[1]; p_local[2] = p_global[2];
+		}
+	}
+
+	void transform_to_global(const double f_local[3], double f_global[3]) const {
+		if (use_transform) {
+			f_global[0] = u_axis[0]*f_local[0] + v_axis[0]*f_local[1] + w_axis[0]*f_local[2];
+			f_global[1] = u_axis[1]*f_local[0] + v_axis[1]*f_local[1] + w_axis[1]*f_local[2];
+			f_global[2] = u_axis[2]*f_local[0] + v_axis[2]*f_local[1] + w_axis[2]*f_local[2];
+		} else {
+			f_global[0] = f_local[0]; f_global[1] = f_local[1]; f_global[2] = f_local[2];
+		}
+	}
+
+public:
+	void PrepareCache(py::list points_list) {
+		py::gil_scoped_acquire acquire;
+		size_t npts = points_list.size();
+		point_cache_.clear();
+		cache_hits_ = 0;
+		cache_misses_ = 0;
+
+		if (npts == 0) { use_cache_ = false; return; }
+
+		py::array_t<double> pts_arr({(py::ssize_t)npts, (py::ssize_t)3});
+		auto pts_buf = pts_arr.mutable_unchecked<2>();
+		std::vector<double> globals(npts * 3);
+
+		for (size_t i = 0; i < npts; i++) {
+			py::list pt = points_list[i].cast<py::list>();
+			double x = pt[0].cast<double>();
+			double y = pt[1].cast<double>();
+			double z = pt[2].cast<double>();
+			globals[i*3] = x; globals[i*3+1] = y; globals[i*3+2] = z;
+			double p_global[3] = {x, y, z};
+			double p_local[3];
+			transform_to_local(p_global, p_local);
+			pts_buf(i, 0) = p_local[0];
+			pts_buf(i, 1) = p_local[1];
+			pts_buf(i, 2) = p_local[2];
+		}
+
+		if (field_type == "phi") {
+			// Scalar cache for phi
+			py::array_t<double> phi_arr = rad_module_.attr("FldPhi")(radia_obj, pts_arr);
+			auto phi = phi_arr.unchecked<1>();
+			for (size_t i = 0; i < npts; i++) {
+				uint64_t hash = hash_point(globals[i*3], globals[i*3+1], globals[i*3+2]);
+				point_cache_[hash] = {phi(i), 0.0, 0.0};
+			}
+		} else {
+			py::array_t<double> fld_arr;
+			if (field_type == "b" || field_type == "h") {
+				py::dict batch_result = rad_module_.attr("FldBatch")(radia_obj, pts_arr);
+				const char* key = (field_type == "b") ? "B" : "H";
+				fld_arr = batch_result[key].cast<py::array_t<double>>();
+			} else if (field_type == "a") {
+				fld_arr = rad_module_.attr("FldA")(radia_obj, pts_arr).cast<py::array_t<double>>();
+			} else {
+				fld_arr = py::array_t<double>({(py::ssize_t)npts, (py::ssize_t)3});
+				auto fld_buf = fld_arr.mutable_unchecked<2>();
+				for (size_t i = 0; i < npts; i++) {
+					py::array_t<double> coords(3);
+					auto cb = coords.mutable_unchecked<1>();
+					cb(0) = pts_buf(i, 0); cb(1) = pts_buf(i, 1); cb(2) = pts_buf(i, 2);
+					py::object f = rad_module_.attr("Fld")(radia_obj, field_type, coords);
+					auto fa = f.cast<py::array_t<double>>().unchecked<1>();
+					fld_buf(i, 0) = fa(0); fld_buf(i, 1) = fa(1); fld_buf(i, 2) = fa(2);
+				}
+			}
+
+			auto fld = fld_arr.unchecked<2>();
+			for (size_t i = 0; i < npts; i++) {
+				double f_local[3] = {fld(i, 0), fld(i, 1), fld(i, 2)};
+				double f_global[3];
+				transform_to_global(f_local, f_global);
+				uint64_t hash = hash_point(globals[i*3], globals[i*3+1], globals[i*3+2]);
+				point_cache_[hash] = {f_global[0], f_global[1], f_global[2]};
+			}
+		}
+		use_cache_ = true;
+	}
+
+	void ClearCache() {
+		point_cache_.clear();
+		use_cache_ = false;
+		cache_hits_ = 0;
+		cache_misses_ = 0;
+	}
+
+	py::dict GetCacheStats() const {
+		py::dict stats;
+		stats["enabled"] = use_cache_;
+		stats["size"] = point_cache_.size();
+		stats["hits"] = cache_hits_;
+		stats["misses"] = cache_misses_;
+		double total = cache_hits_ + cache_misses_;
+		stats["hit_rate"] = (total > 0) ? (cache_hits_ / total) : 0.0;
+		return stats;
+	}
+
+	// VoxelCoefficient generation for trajectory calculations
+	py::object AsVoxelCF(py::object mesh, int resolution) const {
+		py::gil_scoped_acquire acquire;
+
+		py::module_ ngsolve = py::module_::import("ngsolve");
+		py::object VoxelCoefficient = ngsolve.attr("VoxelCoefficient");
+		py::object CF = ngsolve.attr("CF");
+		py::module_ np = py::module_::import("numpy");
+
+		// Get bounding box from mesh
+		py::object ngmesh = mesh.attr("ngmesh");
+		py::tuple bbox = ngmesh.attr("bounding_box").cast<py::tuple>();
+		py::object pmin_obj = bbox[0];
+		py::object pmax_obj = bbox[1];
+		double pmin[3], pmax[3];
+		for (int i = 0; i < 3; i++) {
+			pmin[i] = pmin_obj[py::int_(i)].cast<double>();
+			pmax[i] = pmax_obj[py::int_(i)].cast<double>();
+		}
+		double max_dim = 0;
+		for (int i = 0; i < 3; i++)
+			max_dim = std::max(max_dim, pmax[i] - pmin[i]);
+		double margin = 0.01 * max_dim;
+		for (int i = 0; i < 3; i++) {
+			pmin[i] -= margin;
+			pmax[i] += margin;
+		}
+
+		int nx = resolution, ny = resolution, nz = resolution;
+		size_t total = (size_t)nx * ny * nz;
+
+		// Generate grid points
+		py::array_t<double> pts_arr({(py::ssize_t)total, (py::ssize_t)3});
+		auto pts = pts_arr.mutable_unchecked<2>();
+		size_t idx = 0;
+		for (int ix = 0; ix < nx; ix++) {
+			double x = pmin[0] + (pmax[0] - pmin[0]) * ix / (nx - 1);
+			for (int iy = 0; iy < ny; iy++) {
+				double y = pmin[1] + (pmax[1] - pmin[1]) * iy / (ny - 1);
+				for (int iz = 0; iz < nz; iz++) {
+					double z = pmin[2] + (pmax[2] - pmin[2]) * iz / (nz - 1);
+					double p_global[3] = {x, y, z};
+					double p_local[3];
+					transform_to_local(p_global, p_local);
+					pts(idx, 0) = p_local[0];
+					pts(idx, 1) = p_local[1];
+					pts(idx, 2) = p_local[2];
+					idx++;
+				}
+			}
+		}
+
+		py::tuple start = py::make_tuple(pmin[0], pmin[1], pmin[2]);
+		py::tuple end = py::make_tuple(pmax[0], pmax[1], pmax[2]);
+
+		if (field_type == "phi") {
+			// Scalar: use FldPhi batch
+			py::array_t<double> phi_arr = rad_module_.attr("FldPhi")(radia_obj, pts_arr);
+			py::object data = phi_arr.attr("reshape")(nx, ny, nz);
+			data = np.attr("ascontiguousarray")(data.attr("transpose")(2, 1, 0));
+			return VoxelCoefficient(start, end, data, "linear"_a = true);
+		}
+
+		// Vector fields: batch compute
+		py::array_t<double> field_arr;
+		if (field_type == "b" || field_type == "h") {
+			py::dict batch_result = rad_module_.attr("FldBatch")(radia_obj, pts_arr);
+			const char* key = (field_type == "b") ? "B" : "H";
+			field_arr = batch_result[key].cast<py::array_t<double>>();
+		} else if (field_type == "a") {
+			field_arr = rad_module_.attr("FldA")(radia_obj, pts_arr).cast<py::array_t<double>>();
+		} else {
+			// 'm' fallback
+			field_arr = py::array_t<double>({(py::ssize_t)total, (py::ssize_t)3});
+			auto fld_buf = field_arr.mutable_unchecked<2>();
+			for (size_t i = 0; i < total; i++) {
+				py::array_t<double> coords(3);
+				auto cb = coords.mutable_unchecked<1>();
+				cb(0) = pts(i, 0); cb(1) = pts(i, 1); cb(2) = pts(i, 2);
+				py::object f = rad_module_.attr("Fld")(radia_obj, field_type, coords);
+				auto fa = f.cast<py::array_t<double>>().unchecked<1>();
+				fld_buf(i, 0) = fa(0); fld_buf(i, 1) = fa(1); fld_buf(i, 2) = fa(2);
+			}
+		}
+
+		{
+			// Vector: 3 components, each (nz, ny, nx)
+			auto fld = field_arr.unchecked<2>();
+			py::list cfs;
+			for (int comp = 0; comp < 3; comp++) {
+				py::array_t<double> comp_data({(py::ssize_t)total});
+				auto cd = comp_data.mutable_unchecked<1>();
+				for (size_t i = 0; i < total; i++) {
+					double f_local[3] = {fld(i, 0), fld(i, 1), fld(i, 2)};
+					double f_global[3];
+					transform_to_global(f_local, f_global);
+					cd(i) = f_global[comp];
+				}
+				py::object data = comp_data.attr("reshape")(nx, ny, nz);
+				data = np.attr("ascontiguousarray")(data.attr("transpose")(2, 1, 0));
+				cfs.append(VoxelCoefficient(start, end, data, "linear"_a = true));
+			}
+			return CF(py::tuple(cfs));
+		}
+	}
+
+	virtual ~RadiaFieldCF() {}
+
+	// Scalar evaluation for 'phi'
+	virtual double Evaluate(const BaseMappedIntegrationPoint& mip) const override
+	{
+		if (field_type != "phi") return 0.0;
+
+		auto pnt = mip.GetPoint();
+		int dim = pnt.Size();
+		double p_global[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
+		double p_local[3];
+		transform_to_local(p_global, p_local);
+
+		double phi_value = 0.0;
+		{
+			py::gil_scoped_acquire acquire;
+			try {
+				py::list coords;
+				coords.append(p_local[0]); coords.append(p_local[1]); coords.append(p_local[2]);
+				// Use 'p' (not 'phi') to get scalar-only return (faster)
+				py::object result = rad_module_.attr("Fld")(radia_obj, "p", coords);
+				phi_value = result.cast<double>();
+			} catch (std::exception&) {
+				return 0.0;
+			}
+		}
+		return phi_value;
+	}
+
+	// Single-point vector evaluation
+	virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
+	                      FlatVector<> result) const override
+	{
+		auto pnt = mip.GetPoint();
+		int dim = pnt.Size();
+		double p_global[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
+
+		if (field_type == "phi") {
+			result(0) = Evaluate(mip);
+			return;
+		}
+
+		// Check cache
+		if (use_cache_) {
+			uint64_t hash = hash_point(p_global[0], p_global[1], p_global[2]);
+			auto it = point_cache_.find(hash);
+			if (it != point_cache_.end()) {
+				cache_hits_++;
+				result(0) = it->second[0];
+				result(1) = it->second[1];
+				result(2) = it->second[2];
+				return;
+			}
+			cache_misses_++;
+		}
+
+		double p_local[3];
+		transform_to_local(p_global, p_local);
+
+		double f_local[3];
+		{
+			py::gil_scoped_acquire acquire;
+			try {
+				py::list coords;
+				coords.append(p_local[0]); coords.append(p_local[1]); coords.append(p_local[2]);
+				py::object field_result = rad_module_.attr("Fld")(radia_obj, field_type, coords);
+				f_local[0] = field_result[py::int_(0)].cast<double>();
+				f_local[1] = field_result[py::int_(1)].cast<double>();
+				f_local[2] = field_result[py::int_(2)].cast<double>();
+			} catch (std::exception&) {
+				result(0) = 0.0; result(1) = 0.0; result(2) = 0.0;
+				return;
+			}
+		}
+
+		double f_global[3];
+		transform_to_global(f_local, f_global);
+		result(0) = f_global[0]; result(1) = f_global[1]; result(2) = f_global[2];
+	}
+
+	// Batch evaluation (called by NGSolve for integration rules)
+	virtual void Evaluate(const BaseMappedIntegrationRule& mir,
+	                      BareSliceMatrix<> result) const override
+	{
+		size_t npts = mir.Size();
+
+		py::gil_scoped_acquire acquire;
+
+		try {
+			// Try cache first
+			if (use_cache_) {
+				bool all_cached = true;
+				for (size_t i = 0; i < npts; i++) {
+					auto pnt = mir[i].GetPoint();
+					int dim = pnt.Size();
+					double p[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
+					uint64_t hash = hash_point(p[0], p[1], p[2]);
+					auto it = point_cache_.find(hash);
+					if (it != point_cache_.end()) {
+						cache_hits_++;
+						result(i,0) = it->second[0];
+						result(i,1) = it->second[1];
+						result(i,2) = it->second[2];
+					} else {
+						cache_misses_++;
+						all_cached = false;
+						break;
+					}
+				}
+				if (all_cached) return;
+			}
+
+			// Build numpy array of local coordinates
+			py::array_t<double> pts_arr({(py::ssize_t)npts, (py::ssize_t)3});
+			auto pts_buf = pts_arr.mutable_unchecked<2>();
+
+			for (size_t i = 0; i < npts; i++) {
+				auto pnt = mir[i].GetPoint();
+				int dim = pnt.Size();
+				double p_global[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
+				double p_local[3];
+				transform_to_local(p_global, p_local);
+				pts_buf(i, 0) = p_local[0];
+				pts_buf(i, 1) = p_local[1];
+				pts_buf(i, 2) = p_local[2];
+			}
+
+			// Batch compute
+			if (field_type == "phi") {
+				// Scalar: use FldPhi batch (TaskManager-parallelized)
+				py::array_t<double> phi_arr = rad_module_.attr("FldPhi")(radia_obj, pts_arr);
+				auto phi = phi_arr.unchecked<1>();
+				for (size_t i = 0; i < npts; i++) {
+					result(i, 0) = phi(i);
+				}
+			} else {
+				py::array_t<double> field_arr;
+				if (field_type == "b" || field_type == "h") {
+					py::dict batch_result = rad_module_.attr("FldBatch")(radia_obj, pts_arr);
+					const char* key = (field_type == "b") ? "B" : "H";
+					field_arr = batch_result[key].cast<py::array_t<double>>();
+				} else if (field_type == "a") {
+					field_arr = rad_module_.attr("FldA")(radia_obj, pts_arr).cast<py::array_t<double>>();
+				} else {
+					// 'm' fallback: per-point evaluation
+					field_arr = py::array_t<double>({(py::ssize_t)npts, (py::ssize_t)3});
+					auto fld_buf = field_arr.mutable_unchecked<2>();
+					for (size_t i = 0; i < npts; i++) {
+						py::array_t<double> coords(3);
+						auto cb = coords.mutable_unchecked<1>();
+						cb(0) = pts_buf(i, 0); cb(1) = pts_buf(i, 1); cb(2) = pts_buf(i, 2);
+						py::object f = rad_module_.attr("Fld")(radia_obj, field_type, coords);
+						auto fa = f.cast<py::array_t<double>>().unchecked<1>();
+						fld_buf(i, 0) = fa(0); fld_buf(i, 1) = fa(1); fld_buf(i, 2) = fa(2);
+					}
+				}
+
+				auto fld = field_arr.unchecked<2>();
+				for (size_t i = 0; i < npts; i++) {
+					double f_local[3] = {fld(i, 0), fld(i, 1), fld(i, 2)};
+					double f_global[3];
+					transform_to_global(f_local, f_global);
+					result(i, 0) = f_global[0];
+					result(i, 1) = f_global[1];
+					result(i, 2) = f_global[2];
+				}
+			}
+		} catch (std::exception&) {
+			size_t dim = (field_type == "phi") ? 1 : 3;
+			for (size_t i = 0; i < npts; i++) {
+				for (size_t j = 0; j < dim; j++)
+					result(i, j) = 0.0;
+			}
+		}
+	}
+};
+
+} // namespace ngfem
+
+
+// ============================================================================
 // Module Definition
 // ============================================================================
 
@@ -1631,9 +2179,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
         Example:
             import radia as rad
-            rad.FldUnits('m')
 
-            # Create rectangular magnet
+            # Create rectangular magnet (all coordinates in meters)
             magnet = rad.ObjRecMag([0,0,0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
             # Compute field
@@ -1770,7 +2317,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
           )pbdoc");
 
     m.def("FldBatch", &radia_field::FldBatch,
-          py::arg("obj"), py::arg("points"), py::arg("method") = 0,
+          py::arg("obj"), py::arg("points"),
           R"pbdoc(
               Batch field computation at multiple points.
 
@@ -1779,10 +2326,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Args:
                   obj: Object handle
                   points: Numpy array of shape (N, 3)
-                  method: Computation method:
-                      0 = direct (per-point exact, default)
-                      1 = FMM dipole approximation (fast, far-field only).
-                          Silently falls back to direct if IMA is active.
 
               Returns:
                   Dictionary with 'B' and 'H' arrays of shape (N, 3)
@@ -1790,7 +2333,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     m.def("FldA", &radia_field::FldA,
           py::arg("obj"), py::arg("points"),
-          py::call_guard<py::gil_scoped_release>(),
           R"pbdoc(
               Compute vector potential A at multiple points.
 
@@ -1804,7 +2346,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     m.def("FldPhi", &radia_field::FldPhi,
           py::arg("obj"), py::arg("points"),
-          py::call_guard<py::gil_scoped_release>(),
           R"pbdoc(
               Compute scalar potential Phi at multiple points.
 
@@ -1844,10 +2385,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("FldUnits", &radia_field::FldUnits,
           py::arg("unit_str") = "",
           R"pbdoc(
-              Set or get physical units.
+              Deprecated. Radia always uses meters.
 
-              Args:
-                  unit_str: "mm" or "m" (empty to get current units)
+              This function is kept for backward compatibility.
+              FldUnits('m') is a silent noop.
+              Any other unit string issues a DeprecationWarning.
           )pbdoc");
 
     // ========================================================================
@@ -2286,6 +2828,23 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   Material handle
           )pbdoc");
 
+    m.def("MatEnergyHysteresis", &radia_material_ext::MatEnergyHysteresis,
+          py::arg("K"), py::arg("As"), py::arg("Js"), py::arg("chi"),
+          py::arg("eps") = 1e-8,
+          R"pbdoc(
+              Create energy-based vector hysteresis material (Egger formulation).
+
+              Args:
+                  K: Number of partial polarizations (play operators)
+                  As: Saturation slope parameters A_{s,k} [A/m], array of K values
+                  Js: Saturation polarizations J_{s,k} [T], array of K values
+                  chi: Pinning strengths chi_k [A/m], array of K values
+                  eps: Regularization parameter (default 1e-8)
+
+              Returns:
+                  Material handle
+          )pbdoc");
+
     m.def("MatMvsH", &radia_material_ext::MatMvsH,
           py::arg("obj"), py::arg("component"), py::arg("h_field"),
           R"pbdoc(
@@ -2345,6 +2904,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   Dictionary with n_lowrank, n_dense, max_rank, compression, build_time
           )pbdoc");
 
+    
     m.def("SetBiCGSTABTol", &radia_solver_ext::SetBiCGSTABTol,
           py::arg("tol"),
           "Set BiCGSTAB convergence tolerance.");
@@ -3163,4 +3723,75 @@ PYBIND11_MODULE(_radia_pybind, m) {
         Returns:
             Object handle or list of handles
     )pbdoc");
+
+    // ========================================================================
+    // NGSolve CoefficientFunction: RadiaField
+    // ========================================================================
+
+    py::class_<ngfem::RadiaFieldCF,
+               std::shared_ptr<ngfem::RadiaFieldCF>,
+               ngfem::CoefficientFunction>(m, "RadiaField")
+        .def(py::init<int, const std::string&,
+                      std::optional<std::vector<double>>,
+                      std::optional<std::vector<double>>,
+                      std::optional<std::vector<double>>,
+                      std::optional<std::vector<double>>,
+                      std::optional<double>,
+                      const std::string&>(),
+             py::arg("radia_obj"),
+             py::arg("field_type") = "b",
+             py::arg("origin") = py::none(),
+             py::arg("u_axis") = py::none(),
+             py::arg("v_axis") = py::none(),
+             py::arg("w_axis") = py::none(),
+             py::arg("precision") = py::none(),
+             py::arg("units") = "m",
+             R"pbdoc(
+                 NGSolve CoefficientFunction for Radia field evaluation.
+
+                 Creates a CoefficientFunction that can be used directly with
+                 GridFunction.Set() for field projection onto FE spaces.
+
+                 Args:
+                     radia_obj: Radia object handle
+                     field_type: 'b', 'h', 'a', 'm', or 'phi'
+                     origin: Translation [x,y,z] in meters
+                     u_axis, v_axis, w_axis: Local coordinate axes (auto-normalized)
+                     precision: Computation precision in Tesla
+                     units: Must be 'm' (meters)
+
+                 Example:
+                     B_cf = rad.RadiaField(magnet, 'b')
+                     gf = GridFunction(HDiv(mesh, order=2))
+                     gf.Set(B_cf)
+
+                     # VoxelCoefficient for trajectory:
+                     B_voxel = B_cf.as_voxel_cf(mesh, resolution=61)
+             )pbdoc")
+        .def_readonly("radia_obj", &ngfem::RadiaFieldCF::radia_obj)
+        .def_readonly("field_type", &ngfem::RadiaFieldCF::field_type)
+        .def_readonly("use_transform", &ngfem::RadiaFieldCF::use_transform)
+        .def_readonly("precision", &ngfem::RadiaFieldCF::precision)
+        .def("PrepareCache", &ngfem::RadiaFieldCF::PrepareCache,
+             py::arg("points"),
+             "Pre-cache field values at given points for fast gf.Set()")
+        .def("ClearCache", &ngfem::RadiaFieldCF::ClearCache,
+             "Clear cached field values")
+        .def("GetCacheStats", &ngfem::RadiaFieldCF::GetCacheStats,
+             "Get cache statistics: enabled, size, hits, misses, hit_rate")
+        .def("as_voxel_cf", &ngfem::RadiaFieldCF::AsVoxelCF,
+             py::arg("mesh"), py::arg("resolution") = 41,
+             R"pbdoc(
+                 Create VoxelCoefficient for fast repeated evaluation.
+
+                 Pre-computes field on a regular grid with trilinear interpolation.
+                 Ideal for trajectory calculations where evaluation speed matters.
+
+                 Args:
+                     mesh: NGSolve mesh (for bounding box)
+                     resolution: Grid points per dimension (default: 41)
+
+                 Returns:
+                     NGSolve CoefficientFunction (VoxelCoefficient-based)
+             )pbdoc");
 }

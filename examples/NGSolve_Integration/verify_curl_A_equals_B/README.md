@@ -7,11 +7,11 @@ Verification script for the Maxwell relation B = curl(A) using Radia and NGSolve
 This script verifies that:
 1. Vector potential A is correctly computed by Radia for ObjHexahedron permanent magnets
 2. The Maxwell relation B = curl(A) holds with proper unit handling
-3. The radia_ngsolve integration correctly handles coordinate unit conversion
+3. The RadiaField integration (now in the main radia module) correctly handles coordinate unit conversion
 
-## Unit Handling in radia_ngsolve
+## Unit Handling in RadiaField
 
-The `radia_ngsolve.cpp` implementation handles unit conversion as follows:
+The RadiaField implementation (integrated into `_radia_pybind.pyd` since v2.5.0) handles unit conversion as follows:
 
 ### Coordinate Conversion
 
@@ -28,18 +28,17 @@ All field types (B, H, A, M, phi) are returned **without additional scaling**:
 |-------|-------|-------|
 | B | Tesla | Magnetic flux density |
 | H | A/m | Magnetic field strength |
-| A | T*m | Vector potential (consistent with `FldUnits` setting) |
+| A | T*m | Vector potential (Radia always uses meters) |
 | M | A/m | Magnetization |
 | phi | A | Magnetic scalar potential |
 
 ### Why No A-field Scaling is Needed
 
-The implementation in `radia_ngsolve.cpp` (lines 483-490) explicitly states:
+The RadiaField implementation explicitly states:
 
 ```cpp
 // Vector potential A: No additional scaling needed
-// Radia returns A in T*m when FldUnits('m') is set, or T*mm when FldUnits('mm')
-// The numerical value is the same, but units match the FldUnits setting
+// Radia always uses meters, so A is returned in T*m
 // Since we use coord_scale_ to convert coords to Radia's unit system,
 // the returned A is already in the correct units (T*m for NGSolve)
 ```
@@ -83,7 +82,7 @@ With the current implementation, the |curl(A)|/|B| ratio should be close to 1.0,
 ## Key Implementation Details
 
 1. **Coordinate conversion** - `coord_scale_` handles m <-> mm conversion for input coordinates
-2. **FldUnits setting** - Radia's `FldUnits('m')` ensures consistent field output units
+2. **Unit system** - Radia always uses meters, ensuring consistent field output units
 3. **No explicit A scaling** - The implementation uses `scale = 1.0` for all field types
 4. **FMM path** - Dipole approximation uses SI units consistently (m, A*m^2, T*m)
 

@@ -15,7 +15,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import numpy as np
 import radia as rd
 
-rd.FldUnits('m')
 mm = 1e-3  # 1 mm in meters
 
 print("=" * 70)
@@ -42,7 +41,7 @@ def quadrupole_field_callback(gradient):
 	"""
 	call_count = [0]  # Mutable to allow modification in nested function
 	def field(pos):
-		x, y, z = pos  # Position in meters (FldUnits='m')
+		x, y, z = pos  # Position in meters (Radia always uses meters)
 		# Quadrupole field: Bx = g*y, By = g*x, Bz = 0
 		Bx = gradient * y  # [T]
 		By = gradient * x  # [T]
@@ -135,7 +134,7 @@ for pt in test_points:
 	H_radia = rd.Fld(container, 'h', pt)
 
 	# Analytical quadrupole field (background only, ignoring stray field from cube)
-	# Positions already in meters (FldUnits='m')
+	# Positions already in meters (Radia always uses meters)
 	Bx_analytical = gradient * pt[1]  # T
 	By_analytical = gradient * pt[0]  # T
 	Bz_analytical = 0.0

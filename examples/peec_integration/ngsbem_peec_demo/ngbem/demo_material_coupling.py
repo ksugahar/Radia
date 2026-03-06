@@ -7,7 +7,7 @@ Demonstrates:
   3. Al shield coupling (BEM+SIBC eddy current solve: Delta_Z)
   4. Combined ferrite + shield
 
-Requires: ngsolve==6.2.2405, ngsolve-ngsbem, matplotlib
+Requires: ngsolve>=6.2.2601, ngsolve-ngsbem, matplotlib
 """
 import sys, os
 import numpy as np

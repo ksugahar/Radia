@@ -36,7 +36,6 @@ def create_mesh_and_get_matrix(n, size=0.1, mu_r=1000):
         element_ids: List of element handles
     """
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     half = size / 2.0
     dx = size / n
@@ -137,7 +136,6 @@ def main():
     # Reference: fine mesh solve with Radia's internal solver
     print("Computing reference (N=8^3 = 512 elements, Radia LU)...")
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     half = size / 2.0
     dx = size / 8
@@ -179,7 +177,6 @@ def main():
 
     for n in test_ns:
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
         half = size / 2.0
         dx = size / n
@@ -253,7 +250,6 @@ def main():
 
     # Inspect matrix for N=2 case
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     n = 2
     half = size / 2.0

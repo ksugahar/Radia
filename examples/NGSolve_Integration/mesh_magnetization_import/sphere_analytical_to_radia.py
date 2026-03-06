@@ -128,7 +128,6 @@ print("[Step 2] Creating Radia tetrahedral mesh")
 print("-" * 70)
 
 rad.UtiDelAll()
-rad.FldUnits('m')
 
 # Use netgen_mesh_import for correct mesh transfer
 radia_container = netgen_mesh_to_radia(

@@ -61,7 +61,6 @@ def benchmark_tetrahedra(maxh, solver_type, output_dir, is_linear=False,
         print('[SKIP] Tetrahedra: %s' % e)
         return None
 
-    rad.FldUnits('m')
     rad.UtiDelAll()
 
     material_type = 'linear' if is_linear else 'nonlinear'

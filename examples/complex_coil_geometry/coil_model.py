@@ -6,7 +6,7 @@ Complex coil model definition
 This module defines the 8-segment beam steering coil geometry.
 The model can be imported by other scripts for visualization or field calculation.
 
-Units: All geometry in meters (rad.FldUnits('m')), current in Amperes.
+Units: All geometry in meters (Radia always uses meters), current in Amperes.
 """
 
 import sys
@@ -22,7 +22,6 @@ import radia as rad
 from radia_coil_builder import CoilBuilder
 
 # Set unit system to meters
-rad.FldUnits('m')
 
 # Unit conversion factor: original design values are in mm
 mm = 1e-3  # 1 mm in meters

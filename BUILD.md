@@ -9,14 +9,14 @@ Complete guide for building Radia Python modules on Windows, macOS, and Linux.
 ### Windows (Recommended: MSVC + Intel MKL)
 
 ```powershell
-# Build both radia and radia_ngsolve (recommended)
+# Build radia (includes RadiaField NGSolve integration)
 .\Build.ps1
 
 # Clean rebuild
 .\Build.ps1 -Rebuild
 ```
 
-**Outputs**: `build-msvc/radia.pyd`, `build-msvc/radia_ngsolve.pyd`
+**Output**: `build-msvc/radia.pyd` (includes `RadiaField` CoefficientFunction for NGSolve)
 
 **Requirements**:
 - Visual Studio 2022 (MSVC compiler)
@@ -46,7 +46,7 @@ make -j$(nproc)
 
 ### Build.ps1 - Primary Build Script (Recommended)
 
-Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
+Builds `radia.pyd` (which includes `RadiaField` NGSolve integration) using MSVC + Intel MKL.
 
 **Parameters**:
 
@@ -54,7 +54,7 @@ Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 |-----------|------|---------|-------------|
 | `-Rebuild` | switch | false | Clean + Configure + Build |
 | `-Test` | switch | false | Run import tests after build |
-| `-RadiaOnly` | switch | false | Build only radia.pyd (skip radia_ngsolve) |
+| `-RadiaOnly` | switch | false | Build only radia.pyd (legacy flag, no longer needed since RadiaField is integrated) |
 | `-Verbose` | switch | false | Show detailed build output |
 | `-NoParallel` | switch | false | Disable TaskManager parallelization (for debugging) |
 | `-NoExaFMM` | switch | false | Disable ExaFMM (for debugging) |
@@ -62,7 +62,7 @@ Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
 **Examples**:
 
 ```powershell
-.\Build.ps1                  # Standard build (radia + radia_ngsolve)
+.\Build.ps1                  # Standard build (radia.pyd with RadiaField)
 .\Build.ps1 -Rebuild         # Clean rebuild
 .\Build.ps1 -RadiaOnly       # Build only radia.pyd
 .\Build.ps1 -Test            # Build and run import tests
@@ -118,10 +118,10 @@ Builds `radia.pyd` and `radia_ngsolve.pyd` using MSVC + Intel MKL.
   - Add Intel APT repository and install: `sudo apt install intel-oneapi-mkl-devel`
   - Or download from [Intel oneAPI](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html)
 
-### For radia_ngsolve (all platforms)
+### For RadiaField NGSolve integration (all platforms)
 
-- **NGSolve**: `pip install ngsolve==6.2.2405`
-- **Note**: NGSolve 6.2.2405 is required (later versions have periodic BC regression)
+- **NGSolve**: `pip install ngsolve`
+- **Note**: RadiaField is now part of the main `radia.pyd` module (since v2.5.0)
 
 ---
 
@@ -190,20 +190,18 @@ field = rad.Fld(magnet, 'b', [10, 10, 10])
 print(f"B = {field} T")
 ```
 
-### radia_ngsolve - NGSolve Integration
+### RadiaField - NGSolve Integration (built into radia.pyd)
 
-**Output**: `build-msvc/radia_ngsolve.pyd` (Windows only currently)
+Since v2.5.0, `RadiaField` is integrated into the main `_radia_pybind.pyd` module and accessed as `rad.RadiaField()`. No separate module is needed.
 
 **Features**:
 - NGSolve CoefficientFunction interface
-- Automatic unit conversion (m ↔ mm)
 - Support for B, H, A, M fields
 - Coordinate transformations
 
 **Usage**:
 ```python
-import ngsolve  # MUST import first
-import radia_ngsolve
+import ngsolve
 import radia as rad
 
 # Create hexahedral magnet (20x20x30 mm, magnetization 1.2 T in z)
@@ -213,9 +211,9 @@ vertices = [[-10,-10,-15], [10,-10,-15], [10,10,-15], [-10,10,-15],
 magnet = rad.ObjHexahedron(vertices, [0, 0, 1.2])
 
 # Create NGSolve CoefficientFunction
-B_cf = radia_ngsolve.RadiaField(magnet, 'b')  # Flux density
-H_cf = radia_ngsolve.RadiaField(magnet, 'h')  # Magnetic field
-A_cf = radia_ngsolve.RadiaField(magnet, 'a')  # Vector potential
+B_cf = rad.RadiaField(magnet, 'b')  # Flux density
+H_cf = rad.RadiaField(magnet, 'h')  # Magnetic field
+A_cf = rad.RadiaField(magnet, 'a')  # Vector potential
 
 # Use in NGSolve mesh
 from netgen.occ import *
@@ -232,7 +230,7 @@ B_gf.Set(B_cf)
 **Field Types**:
 - `'b'`: Magnetic flux density (Tesla)
 - `'h'`: Magnetic field (A/m)
-- `'a'`: Vector potential (T·m)
+- `'a'`: Vector potential (T*m)
 - `'m'`: Magnetization (A/m)
 
 ---
@@ -247,10 +245,6 @@ sys.path.insert(0, r'build-msvc')
 
 import radia as rad
 print(rad.UtiVer())
-
-# If radia_ngsolve was built
-import ngsolve
-import radia_ngsolve
 ```
 
 ### Unix
@@ -301,16 +295,6 @@ python --version  # Should match build version
 
 # Check architecture
 python -c "import struct; print(struct.calcsize('P')*8)"  # Should be 64
-
-# For radia_ngsolve
-python -c "import ngsolve; print(ngsolve.__version__)"
-```
-
-#### "DLL load failed" (radia_ngsolve)
-**Solution**: Import ngsolve before radia_ngsolve:
-```python
-import ngsolve  # Load NGSolve dependencies first
-import radia_ngsolve  # Now this will work
 ```
 
 #### "DLL load failed" (Intel MKL)
@@ -409,12 +393,12 @@ print(f"B = {B} T")
 - Vector potential (A) computation not implemented
 - Infinite integral uses simple trapezoidal rule
 
-### Coordinate Transformations (radia_ngsolve)
+### Coordinate Transformations (RadiaField)
 
 Transform between global and local coordinate systems:
 
 ```python
-B_cf = radia_ngsolve.RadiaField(
+B_cf = rad.RadiaField(
     magnet, 'b',
     origin=[0.05, 0.05, 0.05],      # Translation (meters)
     u_axis=[1, 0, 0],                # Local x-axis
@@ -553,8 +537,8 @@ The following old scripts have been replaced by `Build.ps1`:
 | Old Script | Replacement |
 |------------|-------------|
 | `BuildMSVC.ps1` | `.\Build.ps1` |
-| `Build_NGSolve.ps1` | `.\Build.ps1` |
-| `build_radia_ngsolve.bat` | `.\Build.ps1` |
+| `Build_NGSolve.ps1` | `.\Build.ps1` (RadiaField now built into radia.pyd) |
+| `build_radia_ngsolve.bat` | `.\Build.ps1` (RadiaField now built into radia.pyd) |
 | `build_radia_ngsolve_full.bat` | `.\Build.ps1 -Rebuild` |
 
 Old scripts are removed from the repository.

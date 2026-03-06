@@ -7,7 +7,7 @@ Demonstrates:
   3. Full Loop-Star impedance (includes capacitive P block)
   4. Stabilized mode (Weggler block system, O(1) conditioning)
 
-Requires: ngsolve==6.2.2405, ngsolve-ngsbem, matplotlib
+Requires: ngsolve>=6.2.2601, ngsolve-ngsbem, matplotlib
 """
 import sys, os
 import numpy as np

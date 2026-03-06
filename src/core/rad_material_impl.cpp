@@ -23,8 +23,6 @@
 #include "rad_operation_names.h"
 #include "rad_material_aux.h"
 #include "rad_point_classify.h"
-#include "rad_dipole_collect.h"
-#include "rad_exafmm.h"
 #include "gmvbstr.h"
 
 #include <math.h>
@@ -1531,13 +1529,14 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep); 
 		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
 
-		// Valid methods: LU (0), BICGSTAB (1)
-		// Note: BICGSTAB_HMATRIX (2) requires RADIA_USE_HACAPK to be defined
+		// Valid methods: LU (0), BICGSTAB (1), HACAPK (2), FMM (3)
+		{
+			bool validMethod = (MethNo == RadSolverMethod::LU || MethNo == RadSolverMethod::BICGSTAB);
 #ifdef RADIA_USE_HACAPK
-		if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB && MethNo != RadSolverMethod::BICGSTAB_HMATRIX) { Send.ErrorMessage("Radia::Error028"); return 0;}
-#else
-		if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB) { Send.ErrorMessage("Radia::Error028"); return 0;}
+			validMethod = validMethod || (MethNo == RadSolverMethod::BICGSTAB_HMATRIX);
 #endif
+			if(!validMethod) { Send.ErrorMessage("Radia::Error028"); return 0;}
+		}
 		if(IterNumber<0) { Send.ErrorMessage("Radia::Error019"); return 0;}
 		if((RelaxParam<0.) || (RelaxParam>1.)) { Send.ErrorMessage("Radia::Error018"); return 0;}
 
@@ -1633,13 +1632,14 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			if(PrecOnMagnetiz <= 0.) { Send.ErrorMessage("Radia::Error030"); return 0; }
 			if(MaxIterNumber <= 0) { Send.ErrorMessage("Radia::Error031"); return 0; }
 
-			// Valid methods for AutoRelax: LU (0), BICGSTAB (1)
-			// Note: BICGSTAB_HMATRIX (2) requires RADIA_USE_HACAPK to be defined
+			// Valid methods: LU (0), BICGSTAB (1), HACAPK (2), FMM (3)
+			{
+				bool validMethod = (MethNo == RadSolverMethod::LU || MethNo == RadSolverMethod::BICGSTAB);
 #ifdef RADIA_USE_HACAPK
-			if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB && MethNo != RadSolverMethod::BICGSTAB_HMATRIX) { Send.ErrorMessage("Radia::Error041"); return 0; }
-#else
-			if(MethNo != RadSolverMethod::LU && MethNo != RadSolverMethod::BICGSTAB) { Send.ErrorMessage("Radia::Error041"); return 0; }
+				validMethod = validMethod || (MethNo == RadSolverMethod::BICGSTAB_HMATRIX);
 #endif
+				if(!validMethod) { Send.ErrorMessage("Radia::Error041"); return 0; }
+			}
 
 			radTOptionNames OptNam;
 			const char** BufNameString = arOptionNames;
@@ -1761,8 +1761,8 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		short PrevSendingIsRequired = SendingIsRequired;
 		SendingIsRequired = 0;
 
-		// For HACApK solver (method 2), skip dense matrix construction
-		// HACApK builds its own H-matrix, dense matrix is unnecessary overhead
+		// For HACApK (method 2) and FMM (method 3), skip dense matrix construction
+		// These solvers build their own data structures
 		char skipDenseMatrix = 0;
 #ifdef RADIA_USE_HACAPK
 		if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
@@ -2633,6 +2633,10 @@ void radTApplication::GetHACApKStats(double* dOut, int* nOut)
 
 //-------------------------------------------------------------------------
 
+// SetFMMParams REMOVED 2026-03-06 (FMM solver abolished)
+
+//-------------------------------------------------------------------------
+
 void radTApplication::GetSolveStats(double* dOut, int* nOut)
 {
 	if(!m_solve_stats_valid)
@@ -2678,22 +2682,10 @@ void radTApplication::ClassifyPoints(int* classification, int* nearest_elem, int
 			return;
 		}
 
-		// Convert input points from user units to internal SI units (meters)
-		// Radia v1.4.3+: Internal unit system is SI (meters), matching ELF
-		// m_lengthUnitScale is 1.0 for m (default), 0.001 for mm
-		double scale = m_lengthUnitScale;
-
-		// Create a copy of points in meters (internal SI units)
-		std::vector<double> points_internal(n_points * 3);
-		for(int i = 0; i < n_points * 3; ++i)
-		{
-			points_internal[i] = points[i] * scale;
-		}
-
 		// Use the solid angle implementation from rad_point_classify
 		RadPointClassify::ClassifyPointsFromHandle(
 			n_points,
-			points_internal.data(),
+			points,
 			container_handle,
 			near_threshold,
 			classification,
@@ -2709,7 +2701,7 @@ void radTApplication::ClassifyPoints(int* classification, int* nearest_elem, int
 //-------------------------------------------------------------------------
 
 void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_points,
-                                        double* points, int container_handle, int method)
+                                        double* points, int container_handle)
 {
 	try
 	{
@@ -2755,63 +2747,6 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 		// B field is stored internally in A/m (same as H), needs conversion to Tesla
 		const double Mu0 = 4. * 3.1415926535897932 * 1.e-7; // T*m/A
 
-		// Apply unit scaling: convert user units to internal meters
-		double scale = GetLengthUnitScale();
-
-		// ================================================================
-		// FMM dipole approximation path (method == 1)
-		// ================================================================
-		if(method == 1 && !imaWasSet)
-		{
-			RadDipoleCollect::DipoleCollection dipoles;
-			RadDipoleCollect::CollectDipoles(g3dPtr, dipoles, nullptr);
-			dipoles.flatten();
-
-			if(dipoles.count() > 0)
-			{
-				// Scale target points to internal units (meters)
-				std::vector<double> targets(n_points * 3);
-				for(int i = 0; i < n_points; i++) {
-					targets[i*3+0] = points[i*3+0] * scale;
-					targets[i*3+1] = points[i*3+1] * scale;
-					targets[i*3+2] = points[i*3+2] * scale;
-				}
-
-				// ExaFMM returns H in A/m (INV_FOUR_PI already applied internally)
-				// Auto-selects: FMM for N>=1000, direct O(N*M) otherwise
-				double fmm_eps = 1e-4;
-				RadExaFMM::FMMResult result = RadExaFMM::ComputeDipoleField(
-					fmm_eps,
-					dipoles.positions.data(), dipoles.moments.data(),
-					dipoles.count(),
-					targets.data(), static_cast<int64_t>(n_points));
-
-				if(result.error_code == 0) {
-					for(int i = 0; i < n_points; i++) {
-						if(H_out) {
-							H_out[i*3+0] = result.gradx[i];
-							H_out[i*3+1] = result.grady[i];
-							H_out[i*3+2] = result.gradz[i];
-						}
-						if(B_out) {
-							B_out[i*3+0] = result.gradx[i] * Mu0;
-							B_out[i*3+1] = result.grady[i] * Mu0;
-							B_out[i*3+2] = result.gradz[i] * Mu0;
-						}
-					}
-					if(imaWasSet) RadIMAFieldContext::Clear();
-					return;  // Done - skip direct path
-				}
-				// FMM error: fall through to direct path
-			}
-			// No dipoles: fall through to direct path
-		}
-		// IMA active with method==1: fall through to direct path
-
-		// ================================================================
-		// Direct computation path (method==0 or FMM fallback)
-		// ================================================================
-
 		// Create field key for B and H computation
 		radTFieldKey FieldKey;
 		FieldKey.B_ = true;
@@ -2819,16 +2754,16 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 
 		TVector3d ZeroVect(0., 0., 0.);
 
-		// OpenMP parallelization is safe here because:
+		// TaskManager parallelization is safe here because:
 		// 1. Each iteration creates its own thread-local radTField object
 		// 2. Each iteration writes to different output array indices
 		// 3. B_genComp() only reads from the g3dPtr object (no writes)
 		// 4. The FieldKey and ZeroVect are copied by value into each thread's radTField
 		ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
 			TVector3d pt;
-			pt.x = points[i * 3 + 0] * scale;
-			pt.y = points[i * 3 + 1] * scale;
-			pt.z = points[i * 3 + 2] * scale;
+			pt.x = points[i * 3 + 0];
+			pt.y = points[i * 3 + 1];
+			pt.z = points[i * 3 + 2];
 
 			// Create thread-local field object for each point
 			radTFieldKey localFieldKey;
@@ -2908,25 +2843,19 @@ void radTApplication::ComputeScalarPotentialBatch(double* phi_out, int n_points,
 		// Initialize output array to zero
 		std::memset(phi_out, 0, n_points * sizeof(double));
 
-		// Apply unit scaling: convert user units to internal mm
-		double scale = GetLengthUnitScale();
-
 		// Create field key for Phi computation
 		radTFieldKey FieldKey;
 		FieldKey.Phi_ = true;
 
 		TVector3d ZeroVect(0., 0., 0.);
 
-		// Compute scalar potential at each point
-		// OpenMP parallelization disabled due to Intel OpenMP deadlock issues
-		for(int i = 0; i < n_points; ++i)
-		{
+		// Compute scalar potential at each point (TaskManager parallelized)
+		ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
 			TVector3d pt;
-			pt.x = points[i * 3 + 0] * scale;
-			pt.y = points[i * 3 + 1] * scale;
-			pt.z = points[i * 3 + 2] * scale;
+			pt.x = points[i * 3 + 0];
+			pt.y = points[i * 3 + 1];
+			pt.z = points[i * 3 + 2];
 
-			// Create thread-local field key and vectors
 			radTFieldKey localFieldKey;
 			localFieldKey.Phi_ = true;
 			TVector3d localZeroVect(0., 0., 0.);
@@ -2934,11 +2863,8 @@ void radTApplication::ComputeScalarPotentialBatch(double* phi_out, int n_points,
 			radTField Field(localFieldKey, CompCriterium, pt, localZeroVect, localZeroVect, localZeroVect, localZeroVect, 0.);
 			g3dPtr->B_genComp(&Field);
 
-			// Phi is dimensionless (in internal units), convert based on length unit
-			// phi_m = (1/4pi) * integral(M . r / r^3) dV
-			// Units: [phi_m] = A (magnetic scalar potential)
 			phi_out[i] = Field.Phi;
-		}
+		});
 
 		// Clear IMA context after computation
 		if(imaWasSet) RadIMAFieldContext::Clear();
@@ -2975,25 +2901,19 @@ void radTApplication::ComputeVectorPotentialBatch(double* A_out, int n_points,
 		// Initialize output array to zero
 		std::memset(A_out, 0, n_points * 3 * sizeof(double));
 
-		// Apply unit scaling: convert user units to internal mm
-		double scale = GetLengthUnitScale();
-
 		// Create field key for A computation
 		radTFieldKey FieldKey;
 		FieldKey.A_ = true;
 
 		TVector3d ZeroVect(0., 0., 0.);
 
-		// Compute vector potential at each point
-		// OpenMP parallelization disabled due to Intel OpenMP deadlock issues
-		for(int i = 0; i < n_points; ++i)
-		{
+		// Compute vector potential at each point (TaskManager parallelized)
+		ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
 			TVector3d pt;
-			pt.x = points[i * 3 + 0] * scale;
-			pt.y = points[i * 3 + 1] * scale;
-			pt.z = points[i * 3 + 2] * scale;
+			pt.x = points[i * 3 + 0];
+			pt.y = points[i * 3 + 1];
+			pt.z = points[i * 3 + 2];
 
-			// Create thread-local field key and vectors
 			radTFieldKey localFieldKey;
 			localFieldKey.A_ = true;
 			TVector3d localZeroVect(0., 0., 0.);
@@ -3001,12 +2921,10 @@ void radTApplication::ComputeVectorPotentialBatch(double* A_out, int n_points,
 			radTField Field(localFieldKey, CompCriterium, pt, localZeroVect, localZeroVect, localZeroVect, localZeroVect, 0.);
 			g3dPtr->B_genComp(&Field);
 
-			// A has units of T*m (Tesla-meter)
-			// Radia internal A is stored in consistent units
 			A_out[i * 3 + 0] = Field.A.x;
 			A_out[i * 3 + 1] = Field.A.y;
 			A_out[i * 3 + 2] = Field.A.z;
-		}
+		});
 	}
 	catch(...)
 	{
@@ -3024,6 +2942,501 @@ radTInteraction* radTApplication::GetInteractionByKey(int interactKey)
 		return nullptr;
 	}
 	return Cast.InteractCast(hg.rep);
+}
+
+//=========================================================================
+// radTEnergyHysteresisMaterial implementation
+// Energy-based vector hysteresis (Francois-Lavet / Egger formulation)
+//=========================================================================
+
+static const double EHYST_MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+static const double EHYST_NU_0 = 1.0 / EHYST_MU_0;
+static const double EHYST_PI = 3.14159265358979323846;
+static const double EHYST_HALF_PI = EHYST_PI / 2.0;
+
+//-------------------------------------------------------------------------
+// Constructor
+//-------------------------------------------------------------------------
+
+radTEnergyHysteresisMaterial::radTEnergyHysteresisMaterial(
+	int K, const double* As, const double* Js, const double* chi, double eps)
+	: m_K(K), m_eps(eps), m_last_chi(0), m_last_chi_d(0), m_has_result(false)
+{
+	m_As.resize(K);
+	m_Js.resize(K);
+	m_chi.resize(K);
+	for(int k = 0; k < K; k++)
+	{
+		m_As[k] = As[k];
+		m_Js[k] = Js[k];
+		m_chi[k] = chi[k];
+	}
+
+	TVector3d zero(0, 0, 0);
+	m_Jk_prev.resize(K, zero);
+	m_Jk_pinning.resize(K, zero);
+	m_Jk_current.resize(K, zero);
+	m_last_H = zero;
+	m_last_B = zero;
+}
+
+//-------------------------------------------------------------------------
+// Serialization constructor
+//-------------------------------------------------------------------------
+
+radTEnergyHysteresisMaterial::radTEnergyHysteresisMaterial(CAuxBinStrVect& inStr)
+	: m_last_chi(0), m_last_chi_d(0), m_has_result(false)
+{
+	DumpBinParse_Material(inStr);
+	inStr >> m_K;
+	inStr >> m_eps;
+
+	m_As.resize(m_K);
+	m_Js.resize(m_K);
+	m_chi.resize(m_K);
+	for(int k = 0; k < m_K; k++)
+	{
+		inStr >> m_As[k];
+		inStr >> m_Js[k];
+		inStr >> m_chi[k];
+	}
+
+	TVector3d zero(0, 0, 0);
+	m_Jk_prev.resize(m_K, zero);
+	m_Jk_pinning.resize(m_K, zero);
+	m_Jk_current.resize(m_K, zero);
+
+	// Deserialize state
+	for(int k = 0; k < m_K; k++) inStr >> m_Jk_prev[k];
+	m_Jk_pinning = m_Jk_prev;
+	m_last_H = zero;
+	m_last_B = zero;
+}
+
+//-------------------------------------------------------------------------
+// Serialization
+//-------------------------------------------------------------------------
+
+void radTEnergyHysteresisMaterial::DumpBin(CAuxBinStrVect& oStr,
+	std::vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers,
+	int& gUniqueMapKey, int elemKey)
+{
+	vElemKeysOut.push_back(elemKey);
+	int MatType = Type_Material();
+	oStr << MatType;
+	DumpBin_Material(oStr);
+
+	oStr << m_K;
+	oStr << m_eps;
+	for(int k = 0; k < m_K; k++)
+	{
+		oStr << m_As[k];
+		oStr << m_Js[k];
+		oStr << m_chi[k];
+	}
+	for(int k = 0; k < m_K; k++) oStr << m_Jk_prev[k];
+}
+
+//-------------------------------------------------------------------------
+// Internal energy U_k(|J|) and derivatives
+//-------------------------------------------------------------------------
+
+double radTEnergyHysteresisMaterial::Uk(int k, double J_mag) const
+{
+	if(J_mag < 1e-30) return 0.0;
+	double ratio = EHYST_HALF_PI * J_mag / m_Js[k];
+	if(ratio > EHYST_HALF_PI - 1e-10) ratio = EHYST_HALF_PI - 1e-10;
+	return -(2.0 * m_As[k] * m_Js[k]) / EHYST_PI * log(cos(ratio));
+}
+
+double radTEnergyHysteresisMaterial::dUk(int k, double J_mag) const
+{
+	if(J_mag < 1e-30) return 0.0;
+	double ratio = EHYST_HALF_PI * J_mag / m_Js[k];
+	if(ratio > EHYST_HALF_PI - 1e-10) ratio = EHYST_HALF_PI - 1e-10;
+	return m_As[k] * tan(ratio);
+}
+
+double radTEnergyHysteresisMaterial::d2Uk(int k, double J_mag) const
+{
+	double base = m_As[k] * EHYST_HALF_PI / m_Js[k];
+	if(J_mag < 1e-30) return base;
+	double ratio = EHYST_HALF_PI * J_mag / m_Js[k];
+	if(ratio > EHYST_HALF_PI - 1e-10) ratio = EHYST_HALF_PI - 1e-10;
+	double t = tan(ratio);
+	return base * (1.0 + t * t);
+}
+
+//-------------------------------------------------------------------------
+// Vector gradient and Hessian of U_k
+//-------------------------------------------------------------------------
+
+TVector3d radTEnergyHysteresisMaterial::GradUk(int k, const TVector3d& J) const
+{
+	double J_mag = NormAbs(J);
+	if(J_mag < 1e-30) return TVector3d(0, 0, 0);
+	return (dUk(k, J_mag) / J_mag) * J;
+}
+
+TMatrix3d radTEnergyHysteresisMaterial::HessUk(int k, const TVector3d& J) const
+{
+	double J_mag = NormAbs(J);
+	if(J_mag < 1e-30) return d2Uk(k, 0.0) * Eye();
+
+	TVector3d e = (1.0 / J_mag) * J;
+	double du = dUk(k, J_mag);
+	double d2u = d2Uk(k, J_mag);
+	double du_over_r = du / J_mag;
+
+	// H_U = (d2u - du/|J|) * e*e^T + (du/|J|) * I
+	return (d2u - du_over_r) * OuterProduct(e, e) + du_over_r * Eye();
+}
+
+//-------------------------------------------------------------------------
+// Regularized norm |x|_eps and derivatives
+//-------------------------------------------------------------------------
+
+double radTEnergyHysteresisMaterial::NormEps(const TVector3d& x) const
+{
+	return sqrt(x * x + m_eps);  // x*x is dot product via operator*
+}
+
+TVector3d radTEnergyHysteresisMaterial::GradNormEps(const TVector3d& x) const
+{
+	return (1.0 / NormEps(x)) * x;
+}
+
+TMatrix3d radTEnergyHysteresisMaterial::HessNormEps(const TVector3d& x) const
+{
+	double n = NormEps(x);
+	double inv_n = 1.0 / n;
+	// (I - x*x^T / n^2) / n
+	return inv_n * (Eye() - (1.0 / (n * n)) * OuterProduct(x, x));
+}
+
+//-------------------------------------------------------------------------
+// Objective functions
+//-------------------------------------------------------------------------
+
+double radTEnergyHysteresisMaterial::ObjectiveForwardK(
+	int k, const TVector3d& J, const TVector3d& H) const
+{
+	TVector3d diff = J - m_Jk_prev[k];
+	return Uk(k, NormAbs(J)) - (H * J) + m_chi[k] * NormEps(diff);
+}
+
+double radTEnergyHysteresisMaterial::ObjectiveInverse(
+	const TVector3d& B, const std::vector<TVector3d>& Jk_list) const
+{
+	TVector3d J_sum(0, 0, 0);
+	for(int k = 0; k < m_K; k++) J_sum += Jk_list[k];
+
+	TVector3d diff_B = B - J_sum;
+	double G = 0.5 * EHYST_NU_0 * (diff_B * diff_B);
+
+	for(int k = 0; k < m_K; k++)
+	{
+		TVector3d diff = Jk_list[k] - m_Jk_prev[k];
+		G += Uk(k, NormAbs(Jk_list[k]));
+		G += m_chi[k] * NormEps(diff);
+	}
+	return G;
+}
+
+//-------------------------------------------------------------------------
+// Newton solver for single J_k
+//-------------------------------------------------------------------------
+
+TVector3d radTEnergyHysteresisMaterial::SolveForwardK(int k, const TVector3d& H) const
+{
+	TVector3d Jk = m_Jk_prev[k];
+	const int max_iter = 30;
+	const double tol = 1e-12;
+
+	for(int it = 0; it < max_iter; it++)
+	{
+		TVector3d diff = Jk - m_Jk_prev[k];
+		TVector3d grad = GradUk(k, Jk) - H + m_chi[k] * GradNormEps(diff);
+		double grad_norm = NormAbs(grad);
+		if(grad_norm < tol) break;
+
+		TMatrix3d hess = HessUk(k, Jk) + m_chi[k] * HessNormEps(diff);
+		TVector3d dJ = Solve3x3(hess, (-1.0) * grad);
+
+		// Armijo backtracking
+		double tau = 1.0;
+		double F_curr = ObjectiveForwardK(k, Jk, H);
+		double dir_deriv = grad * dJ;  // directional derivative
+		for(int ls = 0; ls < 20; ls++)
+		{
+			double F_new = ObjectiveForwardK(k, Jk + tau * dJ, H);
+			if(F_new <= F_curr + 0.1 * tau * dir_deriv) break;
+			tau *= 0.5;
+		}
+		Jk += tau * dJ;
+	}
+	return Jk;
+}
+
+//-------------------------------------------------------------------------
+// Forward operator: H -> B
+//-------------------------------------------------------------------------
+
+TVector3d radTEnergyHysteresisMaterial::Forward(const TVector3d& H)
+{
+	// Save pinning reference before update (for Jacobian)
+	for(int k = 0; k < m_K; k++)
+		m_Jk_pinning[k] = m_Jk_prev[k];
+
+	TVector3d J_total(0, 0, 0);
+	for(int k = 0; k < m_K; k++)
+	{
+		TVector3d Jk = SolveForwardK(k, H);
+		m_Jk_current[k] = Jk;
+		J_total += Jk;
+	}
+
+	TVector3d B = EHYST_MU_0 * H + J_total;
+
+	// Update state
+	for(int k = 0; k < m_K; k++)
+		m_Jk_prev[k] = m_Jk_current[k];
+
+	// Cache result
+	m_last_H = H;
+	m_last_B = B;
+	m_has_result = true;
+
+	return B;
+}
+
+//-------------------------------------------------------------------------
+// Inverse operator: B -> H via Schur complement
+//-------------------------------------------------------------------------
+
+TVector3d radTEnergyHysteresisMaterial::Inverse(const TVector3d& B)
+{
+	// Save pinning reference before update
+	for(int k = 0; k < m_K; k++)
+		m_Jk_pinning[k] = m_Jk_prev[k];
+
+	std::vector<TVector3d> Jk_list(m_K);
+	for(int k = 0; k < m_K; k++)
+		Jk_list[k] = m_Jk_prev[k];
+
+	const int max_iter_inv = 100;
+	TMatrix3d I3 = Eye();
+
+	for(int n_iter = 0; n_iter < max_iter_inv; n_iter++)
+	{
+		// Compute common residual
+		TVector3d J_sum(0, 0, 0);
+		for(int k = 0; k < m_K; k++) J_sum += Jk_list[k];
+		TVector3d residual_common = (-EHYST_NU_0) * (B - J_sum);
+
+		// Compute gradients and Hessians
+		std::vector<TVector3d> grad_list(m_K);
+		std::vector<TMatrix3d> hess_list(m_K);
+		double max_grad = 0.0;
+
+		for(int k = 0; k < m_K; k++)
+		{
+			TVector3d diff = Jk_list[k] - m_Jk_prev[k];
+			grad_list[k] = residual_common + GradUk(k, Jk_list[k])
+			               + m_chi[k] * GradNormEps(diff);
+			hess_list[k] = EHYST_NU_0 * I3 + HessUk(k, Jk_list[k])
+			               + m_chi[k] * HessNormEps(diff);
+
+			double gn = NormAbs(grad_list[k]);
+			if(gn > max_grad) max_grad = gn;
+		}
+
+		if(max_grad < 1e-12) break;
+
+		// Schur complement
+		std::vector<TMatrix3d> hk_priv_inv(m_K);
+		for(int k = 0; k < m_K; k++)
+		{
+			TMatrix3d hk_priv = hess_list[k] - EHYST_NU_0 * I3;
+			hk_priv_inv[k] = Matrix3d_inv(hk_priv);
+		}
+
+		TMatrix3d S = I3;
+		TVector3d rhs(0, 0, 0);
+		for(int k = 0; k < m_K; k++)
+		{
+			S += EHYST_NU_0 * (hk_priv_inv[k]);  // Use operator* for matrix*matrix
+			rhs -= hk_priv_inv[k] * grad_list[k];
+		}
+
+		TVector3d delta = Solve3x3(S, rhs);
+
+		// Compute step for each J_k
+		std::vector<TVector3d> dJk_list(m_K);
+		double dir_deriv = 0.0;
+		for(int k = 0; k < m_K; k++)
+		{
+			dJk_list[k] = hk_priv_inv[k] * ((-1.0) * grad_list[k] - EHYST_NU_0 * delta);
+			dir_deriv += grad_list[k] * dJk_list[k];
+		}
+
+		// Armijo backtracking on total objective
+		double G_curr = ObjectiveInverse(B, Jk_list);
+		double tau = 1.0;
+		for(int ls = 0; ls < 30; ls++)
+		{
+			std::vector<TVector3d> Jk_trial(m_K);
+			for(int k = 0; k < m_K; k++)
+				Jk_trial[k] = Jk_list[k] + tau * dJk_list[k];
+
+			double G_trial = ObjectiveInverse(B, Jk_trial);
+			if(G_trial <= G_curr + 0.1 * tau * dir_deriv) break;
+			tau *= 0.5;
+		}
+
+		for(int k = 0; k < m_K; k++)
+			Jk_list[k] += tau * dJk_list[k];
+	}
+
+	// Compute H = nu_0 * (B - sum J_k)
+	TVector3d J_total(0, 0, 0);
+	for(int k = 0; k < m_K; k++) J_total += Jk_list[k];
+	TVector3d H = EHYST_NU_0 * (B - J_total);
+
+	// Update state
+	for(int k = 0; k < m_K; k++)
+	{
+		m_Jk_current[k] = Jk_list[k];
+		m_Jk_prev[k] = Jk_list[k];
+	}
+
+	m_last_H = H;
+	m_last_B = B;
+	m_has_result = true;
+
+	return H;
+}
+
+//-------------------------------------------------------------------------
+// Jacobian dB/dH
+//-------------------------------------------------------------------------
+
+void radTEnergyHysteresisMaterial::ComputeJacobian(TMatrix3d& dBdH, double& chi_d) const
+{
+	dBdH = EHYST_MU_0 * Eye();
+	for(int k = 0; k < m_K; k++)
+	{
+		TVector3d Jk = m_Jk_current[k];
+		TVector3d diff = Jk - m_Jk_pinning[k];
+		TMatrix3d hess = HessUk(k, Jk) + m_chi[k] * HessNormEps(diff);
+		dBdH += Matrix3d_inv(hess);
+	}
+
+	// Scalar differential chi = trace(dBdH) / (3 * mu_0) - 1
+	double trace = dBdH.Str0.x + dBdH.Str1.y + dBdH.Str2.z;
+	chi_d = trace / (3.0 * EHYST_MU_0) - 1.0;
+}
+
+//-------------------------------------------------------------------------
+// M(H) virtual override
+//-------------------------------------------------------------------------
+
+TVector3d radTEnergyHysteresisMaterial::M(const TVector3d& H)
+{
+	TVector3d B = Forward(H);
+	// M = B/mu_0 - H
+	return (1.0 / EHYST_MU_0) * B - H;
+}
+
+//-------------------------------------------------------------------------
+// DefineInstantKsiTensor virtual override
+//-------------------------------------------------------------------------
+
+void radTEnergyHysteresisMaterial::DefineInstantKsiTensor(
+	const TVector3d& H, TMatrix3d& KsiTensor, TVector3d& Mr)
+{
+	TVector3d B = Forward(H);
+	double H_mag = NormAbs(H);
+	double B_mag = NormAbs(B);
+
+	double chi_scalar = 0.0;
+	if(H_mag > 1e-30)
+		chi_scalar = B_mag / (EHYST_MU_0 * H_mag) - 1.0;
+
+	KsiTensor = chi_scalar * Eye();
+	Mr = TVector3d(0, 0, 0);  // No remanence in this formulation
+}
+
+//-------------------------------------------------------------------------
+// Solver integration methods
+//-------------------------------------------------------------------------
+
+double radTEnergyHysteresisMaterial::ComputeChiFromH(const TVector3d& H)
+{
+	TVector3d B = Forward(H);
+	double H_mag = NormAbs(H);
+	double B_mag = NormAbs(B);
+
+	if(H_mag < 1e-30) return GetInitialChi_ELF_Style();
+	m_last_chi = B_mag / (EHYST_MU_0 * H_mag) - 1.0;
+	return m_last_chi;
+}
+
+double radTEnergyHysteresisMaterial::ComputeChiDualMethod(
+	double H_mag, double mu_old, double relax)
+{
+	if(H_mag < 1e-30) return GetInitialChi_ELF_Style();
+
+	// Reconstruct H vector using last known direction
+	TVector3d H;
+	double last_H_mag = NormAbs(m_last_H);
+	if(last_H_mag > 1e-30)
+		H = (H_mag / last_H_mag) * m_last_H;
+	else
+		H = TVector3d(H_mag, 0, 0);  // Default direction
+
+	TVector3d B = Forward(H);
+	double B_mag = NormAbs(B);
+
+	m_last_chi = B_mag / (EHYST_MU_0 * H_mag) - 1.0;
+	if(m_last_chi < 0) m_last_chi = 0;
+	return m_last_chi;
+}
+
+double radTEnergyHysteresisMaterial::ComputeDifferentialChi(double H_mag)
+{
+	TMatrix3d dBdH;
+	double chi_d;
+	ComputeJacobian(dBdH, chi_d);
+	m_last_chi_d = chi_d;
+	return chi_d;
+}
+
+//-------------------------------------------------------------------------
+// Application method
+//-------------------------------------------------------------------------
+
+int radTApplication::SetEnergyHysteresisMaterial(
+	int K, const double* As, const double* Js, const double* chi, double eps)
+{
+	radTEnergyHysteresisMaterial* MaterPtr = nullptr;
+	try
+	{
+		MaterPtr = new radTEnergyHysteresisMaterial(K, As, Js, chi, eps);
+		if(MaterPtr == nullptr) { Send.ErrorMessage("Radia::Error900"); return 0; }
+
+		radThg hg(MaterPtr);
+		MaterPtr = nullptr;
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		if(MaterPtr) delete MaterPtr;
+		Initialize();
+		return 0;
+	}
 }
 
 //-------------------------------------------------------------------------

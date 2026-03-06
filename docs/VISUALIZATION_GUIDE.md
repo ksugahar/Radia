@@ -382,9 +382,6 @@ gmsh.finalize()
 ```python
 import pyvista as pv
 import radia as rad
-from radia_ngsolve import RadiaField
-
-rad.FldUnits('m')
 
 # Radia field to VTS output
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
@@ -565,10 +562,7 @@ SaveScreenshot('figure.png', view, ImageResolution=[3000, 2000])
 ```python
 from ngsolve import *
 from ngsolve.webgui import Draw
-from radia_ngsolve import RadiaField
 import radia as rad
-
-rad.FldUnits('m')
 
 # Cubit mesh → NGSolve
 mesh = Mesh('model.msh')
@@ -576,8 +570,8 @@ mesh = Mesh('model.msh')
 # Radia magnet
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
-# Radia CoefficientFunction
-B_cf = RadiaField(magnet, 'b')
+# Radia CoefficientFunction (integrated into radia module since v2.5.0)
+B_cf = rad.RadiaField(magnet, 'b')
 
 # Project to GridFunction
 fes = HDiv(mesh, order=2)
@@ -877,8 +871,6 @@ Cubit → Netgen mesh → Radia solve → VTS export → **PyVista**
 import radia as rad
 import pyvista as pv
 
-rad.FldUnits('m')
-
 # Radia magnet
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
@@ -972,9 +964,10 @@ For details, see the "Geometry Accuracy: VTS vs OCC" section above.
 - ✅ Basic plotting with PyVista
 - ✅ Manual visualization in ParaView
 
-### Phase 2: Enhanced NGSolve Integration (In Progress)
-- ✅ `RadiaField` CoefficientFunction
-- ⏳ `radia_ngsolve` Python API improvements
+### Phase 2: Enhanced NGSolve Integration
+- ✅ `rad.RadiaField` CoefficientFunction (B, H, A, phi, M)
+- ✅ `as_voxel_cf()` for VoxelCoefficient generation
+- ✅ Coordinate transform support (origin, u, v, w axes)
 - ⏳ webgui integration script collection
 
 ### Phase 3: Advanced Visualization (Planned)

@@ -75,7 +75,6 @@ def main():
     print("=" * 60)
 
     # Set units to meters (SI) - Policy compliance
-    rad.FldUnits('m')
 
     # Create dipole magnet
     print("\nCreating dipole magnet...")

@@ -1369,5 +1369,190 @@ public:
 };
 
 //-------------------------------------------------------------------------
+//-------------------------------------------------------------------------
+// Energy-based vector hysteresis material (Francois-Lavet / Egger formulation)
+// Type_Material() = 5
+//
+// Forward operator: H -> B, O(K) per evaluation (each J_k independent)
+// Inverse operator: B -> H, O(K) via Schur complement
+//
+// Reference:
+//   Egger, Engertsberger, Schafelner: "Efficient evaluation of forward and
+//   inverse energy-based magnetic hysteresis operators", MAGCON-25-07-0171
+//-------------------------------------------------------------------------
+
+class radTEnergyHysteresisMaterial : public radTMaterial {
+
+	// Model parameters (immutable after construction)
+	int m_K;                              // Number of partial polarizations (play operators)
+	std::vector<double> m_As;             // Saturation slope A_{s,k} [A/m]
+	std::vector<double> m_Js;             // Saturation polarization J_{s,k} [T]
+	std::vector<double> m_chi;            // Pinning strength chi_k [A/m]
+	double m_eps;                         // Regularization parameter for |x|_eps
+
+	// Internal state: K partial polarizations (mutable during solve)
+	std::vector<TVector3d> m_Jk_prev;     // Current J_{k,p} [K]
+	std::vector<TVector3d> m_Jk_pinning;  // Pinning reference (saved before forward/inverse) [K]
+	std::vector<TVector3d> m_Jk_current;  // Last computed J_k solution [K]
+
+	// Cached results from last Forward() call
+	TVector3d m_last_H;                   // Last H input
+	TVector3d m_last_B;                   // Last B output
+	double m_last_chi;                    // Scalar chi from last call
+	double m_last_chi_d;                  // Differential chi from last call
+	bool m_has_result;                    // Whether cache is valid
+
+public:
+	// Constructor from analytical parameters
+	radTEnergyHysteresisMaterial(int K, const double* As, const double* Js,
+	                             const double* chi, double eps);
+
+	// Serialization constructor
+	radTEnergyHysteresisMaterial(CAuxBinStrVect& inStr);
+
+	// Default constructor
+	radTEnergyHysteresisMaterial()
+		: m_K(0), m_eps(1e-8), m_last_chi(0), m_last_chi_d(0), m_has_result(false) {}
+
+	int Type_Material() { return 5; }
+
+	// radTMaterial virtual overrides
+	TVector3d M(const TVector3d& H);
+	void DefineInstantKsiTensor(const TVector3d& H, TMatrix3d& KsiTensor, TVector3d& Mr);
+
+	// Solver integration (same interface as radTNonlinearIsotropMaterial)
+	double ComputeChiFromH(const TVector3d& H);
+	double ComputeChiDualMethod(double H_mag, double mu_old, double relax = 0.0);
+	double ComputeDifferentialChi(double H_mag);
+
+	double GetInitialChi_ELF_Style() const
+	{
+		// Compute initial chi from analytical parameters
+		// chi_initial = K * 2*Js[0] / (pi * As[0] * mu_0), capped
+		if(m_K <= 0 || m_As.empty() || m_Js.empty()) return 1.0;
+		const double MU_0_local = 4.0 * 3.14159265358979323846 * 1.0e-7;
+		double chi_init = 0.0;
+		for(int k = 0; k < m_K; k++)
+		{
+			if(m_As[k] > 1e-30)
+				chi_init += (3.14159265358979323846 / 2.0) * m_Js[k] / (m_As[k] * MU_0_local);
+		}
+		if(chi_init < 1.0) chi_init = 1.0;
+		return chi_init;
+	}
+
+	double GetBsaturation() const
+	{
+		// Total saturation: sum of J_{s,k}
+		double Jsat = 0.0;
+		for(int k = 0; k < m_K; k++) Jsat += m_Js[k];
+		if(Jsat < 1e-10) return 1.0;
+		return Jsat;
+	}
+
+	// Core operators (port from Python energy_hysteresis.py)
+	TVector3d Forward(const TVector3d& H);    // H -> B
+	TVector3d Inverse(const TVector3d& B);    // B -> H (Schur complement)
+
+	// State management
+	void SaveState(std::vector<TVector3d>& saved) const
+	{
+		saved.resize(m_K);
+		for(int k = 0; k < m_K; k++) saved[k] = m_Jk_prev[k];
+	}
+	void RestoreState(const std::vector<TVector3d>& saved)
+	{
+		for(int k = 0; k < m_K; k++)
+		{
+			m_Jk_prev[k] = saved[k];
+			m_Jk_pinning[k] = saved[k];
+		}
+		m_has_result = false;
+	}
+	void ResetState()
+	{
+		TVector3d zero(0, 0, 0);
+		for(int k = 0; k < m_K; k++)
+		{
+			m_Jk_prev[k] = zero;
+			m_Jk_pinning[k] = zero;
+			m_Jk_current[k] = zero;
+		}
+		m_has_result = false;
+	}
+
+	// Serialization
+	inline void DumpBin(CAuxBinStrVect& oStr, std::vector<int>& vElemKeysOut,
+	                     radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+
+	int DuplicateItself(radThg& hg, radTApplication*, char)
+	{
+		radTSend Send;
+		radTEnergyHysteresisMaterial* pNew = new radTEnergyHysteresisMaterial();
+		if(pNew == 0) { Send.ErrorMessage("Radia::Error900"); return 0; }
+		*pNew = *this;  // Copy all members
+		return FinishDuplication(pNew, hg);
+	}
+
+	int SizeOfThis() { return sizeof(radTEnergyHysteresisMaterial); }
+
+private:
+	// Internal energy U_k(|J|) and its derivatives (analytical formula)
+	// U_k(r) = -(2 A_s J_s)/pi * log(cos(pi/2 * r/J_s))
+	double Uk(int k, double J_mag) const;
+	// U_k'(r) = A_s * tan(pi/2 * r/J_s)
+	double dUk(int k, double J_mag) const;
+	// U_k''(r) = A_s * pi/(2*J_s) * (1 + tan^2(pi/2 * r/J_s))
+	double d2Uk(int k, double J_mag) const;
+
+	// Vector gradient of U_k(J): grad U_k = U_k'(|J|) * J/|J|
+	TVector3d GradUk(int k, const TVector3d& J) const;
+	// Hessian of U_k(J): d x d matrix
+	// H_U = U_k'' * e*e^T + U_k'/|J| * (I - e*e^T) where e = J/|J|
+	TMatrix3d HessUk(int k, const TVector3d& J) const;
+
+	// Regularized norm |x|_eps = sqrt(|x|^2 + eps) and derivatives
+	double NormEps(const TVector3d& x) const;
+	TVector3d GradNormEps(const TVector3d& x) const;
+	TMatrix3d HessNormEps(const TVector3d& x) const;
+
+	// Newton solver for single J_k: min_J U_k(J) - <H,J> + chi_k |J - J_{k,p}|_eps
+	TVector3d SolveForwardK(int k, const TVector3d& H) const;
+
+	// Objective function for forward k: U_k(J) - <H,J> + chi_k |J - J_{k,p}|_eps
+	double ObjectiveForwardK(int k, const TVector3d& J, const TVector3d& H) const;
+
+	// Objective function for inverse: G*(B, {J_k})
+	double ObjectiveInverse(const TVector3d& B, const std::vector<TVector3d>& Jk_list) const;
+
+	// Jacobian dB/dH: 3x3 tensor + scalar chi_d
+	void ComputeJacobian(TMatrix3d& dBdH, double& chi_d) const;
+
+	// Helper: outer product a*b^T -> 3x3 matrix
+	static TMatrix3d OuterProduct(const TVector3d& a, const TVector3d& b)
+	{
+		return TMatrix3d(
+			TVector3d(a.x*b.x, a.x*b.y, a.x*b.z),
+			TVector3d(a.y*b.x, a.y*b.y, a.y*b.z),
+			TVector3d(a.z*b.x, a.z*b.y, a.z*b.z));
+	}
+
+	// Helper: 3x3 identity matrix
+	static TMatrix3d Eye()
+	{
+		return TMatrix3d(
+			TVector3d(1, 0, 0),
+			TVector3d(0, 1, 0),
+			TVector3d(0, 0, 1));
+	}
+
+	// Helper: solve 3x3 system A*x = b via inverse
+	static TVector3d Solve3x3(const TMatrix3d& A, const TVector3d& b)
+	{
+		return Matrix3d_inv(A) * b;
+	}
+};
+
+//-------------------------------------------------------------------------
 
 #endif

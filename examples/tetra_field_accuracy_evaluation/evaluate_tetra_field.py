@@ -266,7 +266,6 @@ def create_radia_tetra_mesh(elements):
     print('Creating Radia tetrahedral mesh...')
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     polyhedra = []
     for el in elements:

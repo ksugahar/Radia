@@ -13,15 +13,13 @@
 # Options:
 #   -Rebuild    Clean build directory before building
 #   -Test       Run import test after build
-#   -NoExaFMM   Disable ExaFMM (for debugging, ExaFMM is ON by default)
-#   -RadiaOnly  Build only radia.pyd (skip radia_ngsolve)
+#   -RadiaOnly  Build only radia.pyd
 #   -Verbose    Show detailed build output
 #==============================================================================
 
 param(
     [switch]$Rebuild,
     [switch]$Test,
-    [switch]$NoExaFMM,     # Disable ExaFMM (for debugging, ExaFMM is enabled by default)
     [switch]$RadiaOnly,    # Build only radia.pyd
     [switch]$Verbose       # Show detailed build output
 )
@@ -104,24 +102,13 @@ if (-not (Test-Path $CMAKE_EXE)) {
 # Parallelization: NGSolve TaskManager (OpenMP removed)
 Write-Host "Parallelization: NGSolve TaskManager" -ForegroundColor Green
 
-# ExaFMM flag (enabled by default for FMM-accelerated conductor field computation)
-if ($NoExaFMM) {
-    $EXAFMM_FLAG = "OFF"
-    Write-Host "ExaFMM: DISABLED (debug mode)" -ForegroundColor Yellow
-} else {
-    $EXAFMM_FLAG = "ON"
-    Write-Host "ExaFMM: ENABLED" -ForegroundColor Green
-}
-
-# Determine build targets and NGSolve flag
+# Determine build targets
 if ($RadiaOnly) {
     $BUILD_TARGETS = "_radia"
-    $NGSOLVE_FLAG = "OFF"
-    Write-Host "Build target: _radia only (no NGSolve)" -ForegroundColor Gray
+    Write-Host "Build target: _radia only" -ForegroundColor Gray
 } else {
-    $BUILD_TARGETS = "_radia radia_ngsolve"
-    $NGSOLVE_FLAG = "ON"
-    Write-Host "Build targets: _radia, radia_ngsolve" -ForegroundColor Gray
+    $BUILD_TARGETS = "_radia_pybind peec_matrices cln_core mmm_core"
+    Write-Host "Build targets: _radia_pybind, peec_matrices, cln_core, mmm_core" -ForegroundColor Gray
 }
 
 # Create batch file to run with Visual Studio environment
@@ -153,9 +140,7 @@ echo.
     -G "Ninja" ^
     -DCMAKE_C_COMPILER=cl ^
     -DCMAKE_CXX_COMPILER=cl ^
-    -DCMAKE_BUILD_TYPE=Release ^
-    -DRADIA_ENABLE_EXAFMM=$EXAFMM_FLAG ^
-    -DRADIA_BUILD_NGSOLVE=$NGSOLVE_FLAG
+    -DCMAKE_BUILD_TYPE=Release
 
 if errorlevel 1 (
     echo ERROR: CMake configuration failed
@@ -171,18 +156,6 @@ REM See __init__.py which imports from _radia_pybind
 # Add radia_ngsolve build if not RadiaOnly
 if (-not $RadiaOnly) {
     $BatchContent += @"
-
-echo.
-echo ========================================
-echo   Building radia_ngsolve...
-echo ========================================
-echo.
-"$CMAKE_EXE" --build . --config Release --target radia_ngsolve -j
-
-if errorlevel 1 (
-    echo WARNING: radia_ngsolve build failed (NGSolve may not be installed)
-    REM Continue anyway - radia.pyd is the main target
-)
 
 echo.
 echo ========================================
@@ -302,23 +275,12 @@ try {
     # pybind11 module (_radia_pybind.pyd) is now the default
     # __init__.py imports from _radia_pybind
 
-    # Copy radia_ngsolve.pyd to package directory
-    # NGSolve uses add_ngsolve_python_module which may not add version tag
-    $NGSOLVE_PYD_SOURCE = "$BUILD_DIR\radia_ngsolve.pyd"
+    # radia_ngsolve is now pure Python (radia_ngsolve.py) - no .pyd needed
+    # Delete any stale radia_ngsolve.pyd to prevent import conflicts (.pyd takes priority over .py)
     $NGSOLVE_PYD_DEST = "$PROJECT_DIR\src\radia\radia_ngsolve.pyd"
-
-    if (Test-Path $NGSOLVE_PYD_SOURCE) {
-        Copy-Item $NGSOLVE_PYD_SOURCE $NGSOLVE_PYD_DEST -Force
-        Write-Host "Copied radia_ngsolve.pyd to src/radia/" -ForegroundColor Green
-    } else {
-        # Try with version tag
-        $NGSOLVE_PYD_SOURCE_VERSIONED = "$BUILD_DIR\radia_ngsolve.cp312-win_amd64.pyd"
-        if (Test-Path $NGSOLVE_PYD_SOURCE_VERSIONED) {
-            Copy-Item $NGSOLVE_PYD_SOURCE_VERSIONED $NGSOLVE_PYD_DEST -Force
-            Write-Host "Copied radia_ngsolve.pyd to src/radia/" -ForegroundColor Green
-        } else {
-            Write-Host "WARNING: Could not find radia_ngsolve.pyd" -ForegroundColor Yellow
-        }
+    if (Test-Path $NGSOLVE_PYD_DEST) {
+        Remove-Item $NGSOLVE_PYD_DEST -Force
+        Write-Host "Removed stale radia_ngsolve.pyd (now pure Python)" -ForegroundColor Yellow
     }
 
     # Copy peec_matrices.pyd to package directory (pybind11 module)

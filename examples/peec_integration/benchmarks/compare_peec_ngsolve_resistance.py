@@ -262,7 +262,6 @@ def test_peec_resistance():
 
     # PEEC calculation
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     # Create loop with rectangular cross-section
     # CndLoop: center, radius, normal, cross_section, width, height, sigma, n_radial, n_azimuthal
@@ -303,7 +302,6 @@ def test_peec_resistance():
 
     for f in frequencies:
         rad.UtiDelAll()
-        rad.FldUnits('m')
 
         coil = rad.CndLoop([0, 0, 0], loop_radius, [0, 0, 1], 'r',
                            wire_width, wire_height, sigma, 4, 36)

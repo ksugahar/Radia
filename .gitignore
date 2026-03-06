@@ -9,6 +9,7 @@ publish_to_pypi.cmd
 Build_PyPI_Package.ps1
 build_log.txt
 src/FastMaxwellv1.0/
+examples/peec_integration/spiral_inductor/
 
 # Kelvin transformation reference documents (large PDFs, docx)
 examples/KelvinTransformation/docs/Supplement/Computational Electromagnetism/
@@ -45,6 +46,10 @@ radia-*/
 *.ipdb
 *.zip
 *.whl
+
+# ExaFMM-t precomputed matrices (regenerated at runtime)
+laplace_*.dat
+dipole_*.dat
 
 # ============================================================================
 # Python Cache

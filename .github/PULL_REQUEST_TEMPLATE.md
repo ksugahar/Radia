@@ -21,7 +21,7 @@
 
 - [ ] CI passes (build + basic tests)
 - [ ] No binary files (.pyd, .dll, .so) committed
-- [ ] Examples call `rad.FldUnits('m')` where applicable
+- [ ] No `rad.FldUnits()` calls (removed; Radia always uses meters)
 - [ ] `CHANGELOG.md` updated under `[Unreleased]` (if user-facing)
 - [ ] Documentation updated (if applicable)
 

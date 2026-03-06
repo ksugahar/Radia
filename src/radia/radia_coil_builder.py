@@ -8,7 +8,7 @@ coil paths with automatic state tracking and seamless Radia integration.
 
 Example:
 	>>> import radia as rad
-	>>> rad.FldUnits('m')  # Use meter units
+	>>> # Radia always uses meters
 	>>> from radia_coil_builder import CoilBuilder
 	>>>
 	>>> # Create a racetrack coil (dimensions in meters)

@@ -128,7 +128,7 @@ The `radia_coil_builder` module provides a modern, elegant interface for buildin
 from radia_coil_builder import CoilBuilder
 import radia as rad
 
-rad.FldUnits('m')
+# Radia always uses meters
 mm = 1e-3  # unit conversion factor
 
 # Simple racetrack coil
@@ -148,7 +148,7 @@ coils = rad.ObjCnt(coil_segments)
 ### Complex Example (8-Segment Beam Steering Magnet)
 
 ```python
-rad.FldUnits('m')
+# Radia always uses meters
 mm = 1e-3
 
 coil = (CoilBuilder(current=1265)
@@ -283,7 +283,7 @@ The examples demonstrate field calculation at multiple points:
 ```python
 import radia as rad
 
-rad.FldUnits('m')
+# Radia always uses meters
 mm = 1e-3
 
 # Single point
@@ -321,7 +321,7 @@ python visualize_coils.py
 - Y: Horizontal (front-back)
 - Z: Vertical (up)
 
-All dimensions in meters (with `rad.FldUnits('m')`). Design values use `mm = 1e-3` conversion.
+All dimensions in meters (Radia always uses meters). Design values use `mm = 1e-3` conversion.
 All fields in Tesla (T).
 
 ## Troubleshooting

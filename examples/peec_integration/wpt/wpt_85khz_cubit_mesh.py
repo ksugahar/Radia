@@ -234,7 +234,6 @@ def analyze_wpt_system():
     """
     import radia as rad
 
-    rad.FldUnits('m')
 
     print("=" * 70)
     print("WPT 85 kHz System Analysis with Cubit Mesh")

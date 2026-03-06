@@ -48,7 +48,7 @@ pip install -e ".[dev]"
 ### PR Checklist
 - [ ] Code follows the project coding standards
 - [ ] No binary files (.pyd, .dll, .so) committed to git
-- [ ] All example scripts that import radia call `FldUnits('m')`
+- [ ] No `rad.FldUnits()` calls (removed; Radia always uses meters)
 - [ ] No `CblasColMajor` in core source (except MMM/LAPACK)
 - [ ] Tests pass locally: `pytest tests/ -m basic`
 
@@ -71,7 +71,7 @@ Test markers: `basic`, `comprehensive`, `advanced`, `performance`, `slow`, `benc
 
 These are enforced by CI ([policy-lint.yml](.github/workflows/policy-lint.yml)):
 
-1. **Unit System**: All examples must call `rad.FldUnits('m')`
+1. **Unit System**: Radia always uses meters. No `FldUnits()` call needed
 2. **No Binaries in Git**: .pyd/.dll/.so hosted on GitHub Releases
 3. **Laplace Kernel Only**: No Helmholtz in C++ core
 4. **Row-Major Matrices**: No `CblasColMajor` in core (except MMM/LAPACK)

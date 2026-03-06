@@ -42,6 +42,12 @@
 | [NGBEM_INTEGRATION_DESIGN.md](NGBEM_INTEGRATION_DESIGN.md) | NGSolve BEM integration + FEM independent verification |
 | [UNIFIED_FIELD_API_DESIGN.md](UNIFIED_FIELD_API_DESIGN.md) | Unified field computation API |
 
+## Hysteresis & Nonlinear Materials
+
+| Document | Description |
+|----------|-------------|
+| [ENERGY_HYSTERESIS.md](ENERGY_HYSTERESIS.md) | Energy-based vector hysteresis (Egger/Francois-Lavet formulation, Play model integration) |
+
 ## Specialized Features
 
 | Document | Description |
@@ -80,4 +86,4 @@
 
 ---
 
-**Last Updated:** 2026-02-22
+**Last Updated:** 2026-03-05

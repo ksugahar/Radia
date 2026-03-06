@@ -69,7 +69,6 @@ def get_memory_mb():
 def create_hex_mesh(n_div, size=1.0):
     """Create hexahedral mesh for a cube using Radia ObjHexahedron."""
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     dx = size / n_div
     offset = size / 2
@@ -105,7 +104,6 @@ def create_tetra_mesh(maxh, size=1.0):
         raise RuntimeError("Netgen is required for tetrahedral mesh generation")
 
     rad.UtiDelAll()
-    rad.FldUnits('m')
 
     half = size / 2
     box = occ.Box(occ.Pnt(-half, -half, -half), occ.Pnt(half, half, half))

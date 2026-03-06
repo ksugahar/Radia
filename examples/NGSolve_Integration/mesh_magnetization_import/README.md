@@ -5,14 +5,14 @@ tetrahedral meshes and evaluating magnetic fields.
 
 ## NGSolve Version Requirement
 
-**CRITICAL**: Use NGSolve **6.2.2405** only.
+**CRITICAL**: Use NGSolve **6.2.2601** or later.
 
 ```bash
-pip install ngsolve==6.2.2405
+pip install ngsolve>=6.2.2601
 ```
 
-**Reason**: NGSolve 6.2.2406+ has a regression bug in Periodic Boundary Conditions.
-The `Identify()` information is lost during mesh generation with `Glue()`.
+**Note**: NGSolve 6.2.2406~6.2.2501 had a regression bug in Periodic Boundary Conditions
+where `Identify()` information was lost during mesh generation with `Glue()`. This is fixed in 6.2.2601+.
 
 **Reference**: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
 
@@ -126,7 +126,7 @@ for v in el.vertices:
 ```python
 from netgen_mesh_import import netgen_mesh_to_radia, extract_elements, compute_element_centroid
 
-rad.FldUnits('m')  # REQUIRED for NGSolve integration
+# Radia always uses meters (compatible with NGSolve SI units)
 
 # Option 1: Direct conversion (recommended)
 mag_obj = netgen_mesh_to_radia(
@@ -161,12 +161,9 @@ magnetization = [0, 0, 1000.0]  # 1000 A/m
 # magnetization = [0, 0, 1.2]  # This would be interpreted as 1.2 A/m
 ```
 
-### 3. Always Use `rad.FldUnits('m')` with NGSolve
+### 3. Radia Always Uses Meters
 
-Netgen uses meters, Radia defaults to millimeters. Always set:
-```python
-rad.FldUnits('m')
-```
+Radia always uses meters, which is compatible with NGSolve/Netgen SI units.
 
 ## Physics
 
