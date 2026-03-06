@@ -215,55 +215,28 @@ Where α is line search damping factor.
 
 ---
 
-## Relation to CplMag
+## Relation to Legacy CplMag
 
-### Existing CplMag Implementation
+The old C++ CplMag APIs (`CndLoop`, `CplMagCreate`, `CplMagSolve`, etc.) are **removed**.
+Use the Python-based `CoupledPEECSolver` and `PEECBuilder` instead.
 
-**CplMag** (Coupled Magnetic) is Radia's current PEEC-MMM solver:
+### PEEC-MSC Architecture
+
+| Aspect | Description |
+|--------|------------|
+| Conductor | Arbitrary PEEC mesh via `PEECBuilder` |
+| Magnetic | MSC (hex 6-DOF) + MMM (tet 3-DOF) |
+| Coupling | General B_pm, M_mp matrices |
+| Mesh | Netgen/Cubit mixed mesh |
+| Solver | LU, BiCGSTAB, HACApK |
 
 ```python
-coil = rad.CndLoop([0,0,0], radius, [0,0,1], 'r', w, h, sigma, n_r, n_theta)
-core = rad.ObjCnt([hex1, hex2, ...])  # Multi-element container
+from radia.peec_topology import PEECCircuitSolver
+from radia.peec_coupled import CoupledPEECSolver
 
-solver = rad.CplMagCreate(coil, core)
-rad.CplMagSetFrequency(solver, freq)
-rad.CplMagSetMu(solver, mu_r_real, mu_r_imag)
-result = rad.CplMagSolve(solver)
+solver = CoupledPEECSolver(topology_dict, magnetic_objects=[core_id])
+Z = solver.compute_port_impedance(freq)
 ```
-
-**CplMag characteristics**:
-- **PEEC**: Rectangular loop conductor (analytical)
-- **Magnetic**: MMM (3-DOF tetrahedral elements OR multi-element hex containers)
-- **Coupling**: Hardcoded for loop geometry
-- **Solver**: Dense LU or iterative
-
-### PEEC-MSC Extension
-
-**Generalization**:
-
-| Aspect | CplMag | PEEC-MSC |
-|--------|--------|----------|
-| Conductor | Rectangular loop only | Arbitrary PEEC mesh |
-| Magnetic | MMM (tet) or hex container | MSC (hex 6-DOF) + MMM (tet 3-DOF) |
-| Coupling | Analytical loop-element | General B_pm, M_mp matrices |
-| Mesh | Cubit hex grid | Netgen/Cubit mixed mesh |
-| Solver | Dense LU | LU, BiCGSTAB, HACApK |
-
-**API evolution**:
-```python
-# CplMag (current)
-solver = rad.CplMagCreate(coil_loop, core_container)
-
-# PEEC-MSC (future)
-peec_mesh = rad.PEECFromMesh(conductor_mesh, sigma, ports)
-msc_mesh = rad.netgen_mesh_to_radia(core_mesh, material)
-solver = rad.CoupledPEECMSC(peec_mesh, msc_mesh)
-```
-
-**Migration path**:
-1. Keep CplMag for backward compatibility
-2. Implement PEEC-MSC as generalization
-3. CplMag internally calls PEEC-MSC with analytical loop mesh
 
 ---
 

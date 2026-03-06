@@ -14,13 +14,15 @@ Radia does **not** implement its own RWG-EFIE; ngbem's product space provides th
 ## Design Philosophy
 
 ```python
-# Unified API — rad.Fld() handles everything in Radia core
-B = rad.Fld(obj, 'b', [0, 0, 0.1])
+import numpy as np
 
-# For AC PEEC conductors, set frequency first
-rad.CndSetFrequency(obj, 50000)  # 50 kHz
-B_complex = rad.Fld(obj, 'b', [0, 0, 0.1])
-# Returns [Bx_re, By_re, Bz_re, Bx_im, By_im, Bz_im] for conductors
+# Unified API — rad.Fld() handles everything in Radia core
+# Single point: shape (3,)
+B = rad.Fld(obj, 'b', np.array([0, 0, 0.1]))
+
+# Batch: shape (N, 3) — auto-detected, parallelized
+points = np.array([[0, 0, 0.1], [0, 0, 0.2], [0, 0, 0.3]])
+B_batch = rad.Fld(obj, 'b', points)   # returns (N, 3) array
 ```
 
 ## Architecture
@@ -54,10 +56,10 @@ B_complex = rad.Fld(obj, 'b', [0, 0, 0.1])
     │ Static Magneto    │         │ PEEC Conductor    │
     │ (Biot-Savart/MSC) │         │ (Loop-Star)       │
     │                   │         │                   │
-    │ - ObjRecMag       │         │ - CndLoop         │
-    │ - ObjHexahedron   │         │ - CndSpiral       │
-    │ - ObjTetrahedron  │         │ - CndWire         │
-    │ - MatLin/Nonlin   │         │ - SIBC skin effect│
+    │ - ObjRecMag       │         │ - PEECBuilder     │
+    │ - ObjHexahedron   │         │ - PEECCircuit     │
+    │ - ObjTetrahedron  │         │ - SIBC skin effect│
+    │ - MatLin/Nonlin   │         │                   │
     └───────────────────┘         └───────────────────┘
 
 
@@ -119,50 +121,36 @@ Radia MMM via `ngbem_coupled.py`. Field computation uses ngbem's `GridFunction.E
 
 ## API Reference
 
-### Conductor Creation
-
-| Function | Description |
-|----------|-------------|
-| `CndLoop(center, R, normal, cs, w, h, sigma, na, nl)` | Circular loop |
-| `CndSpiral(center, Ri, Ro, pitch, turns, axis, cs, w, h, sigma, na)` | Spiral coil |
-| `CndWire(path, cs, w, h, sigma, na)` | Wire along path |
-
-### Analysis
-
-| Function | Description |
-|----------|-------------|
-| `CndSetFrequency(cnd, freq)` | Set analysis frequency |
-| `CndSolve(cnd)` | Solve impedance |
-| `CndGetImpedance(cnd)` | Get port impedance |
-
 ### Field Computation (Unified)
 
 | Function | Description |
 |----------|-------------|
-| `Fld(obj, type, pt)` | **Unified** — handles all Radia object types |
-| `FldBatch(obj, type, pts)` | Batch computation at multiple points |
+| `Fld(obj, 'b', point)` | Single point — shape (3,) |
+| `Fld(obj, 'b', points)` | Batch — shape (N, 3), auto-detected |
+| `Fld(obj, 'h', ...)` | H field (A/m) |
+| `Fld(obj, 'a', ...)` | Vector potential A (T*m) |
+| `Fld(obj, 'phi', ...)` | Scalar potential (A) |
+
+### PEEC Conductors (Python API)
+
+PEEC conductors use Python-based `PEECBuilder` and `PEECCircuitSolver` (see `peec_topology.py`).
+The old C++ conductor APIs (`CndLoop`, `CndSpiral`, `CndWire`) are removed.
 
 ## Usage Examples
 
 ```python
 import radia as rad
+import numpy as np
 
-# 1. Static magnetostatics
+# 1. Static magnetostatics — single point
 magnet = rad.ObjRecMag([0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 1e6])
-B_static = rad.Fld(magnet, 'b', [0, 0, 0.15])  # [Bx, By, Bz]
+B_static = rad.Fld(magnet, 'b', np.array([0, 0, 0.15]))
 
-# 2. AC PEEC conductor
-coil = rad.CndLoop([0, 0, 0], 0.05, [0, 0, 1], 'c', 0.002, 0.002, 5.8e7, 8, 30)
-rad.CndSetFrequency(coil, 50000)
-rad.CndSolve(coil)
-B_ac = rad.Fld(coil, 'b', [0, 0, 0.1])  # [Bx_re, ..., Bz_im]
+# 2. Batch evaluation — shape (N, 3) auto-detected
+points = np.array([[0, 0, 0.1], [0, 0, 0.2], [0, 0, 0.3]])
+B_batch = np.asarray(rad.Fld(magnet, 'b', points))  # (3, 3) array
 
-# 3. Combined static + AC
-container = rad.ObjCnt([magnet])
-rad.ObjCntAdd(container, coil)
-B_total = rad.Fld(container, 'b', [0, 0, 0.1])  # Sum of all fields
-
-# 4. Surface BEM (via ngbem, not rad.Fld)
+# 3. Surface BEM (via ngbem, not rad.Fld)
 # See examples/peec_integration/ngsbem_peec_demo/
 ```
 

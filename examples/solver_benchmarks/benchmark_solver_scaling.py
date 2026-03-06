@@ -106,7 +106,7 @@ for nx, ny, nz in test_cases:
 	try:
 		mat = rad.MatSatIsoTab(MH_data)
 		grp = create_geometry(nx, ny, nz, cube_size, mat)
-		rad.SetHACApKParams(1e-4, 10, 2.0)
+		rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 		t_start = perf_counter()
 		rad.Solve(grp, 0.0001, 100, 2)
 		t_hacapk = perf_counter() - t_start

@@ -102,8 +102,7 @@ print("\n" + "="*70)
 print("MEASUREMENT 1: Element-by-element evaluation (current method)")
 print("="*70)
 
-# Standard GridFunction.Set() with H-matrix
-rad.SetHMatrixFieldEval(1, 1e-6)
+# Standard GridFunction.Set()
 cf_standard = rad.RadiaField(magnet, 'b')
 
 print(f"\n[3a] Measuring GridFunction.Set() with H-matrix...")
@@ -132,8 +131,8 @@ for v in mesh.vertices:
 
 # Single batch evaluation
 t0 = time.time()
-result = rad.FldBatch(magnet, points)
-field_values = result['B']
+points_arr = np.array(points)
+field_values = np.asarray(rad.Fld(magnet, 'b', points_arr))
 t_batch = time.time() - t0
 
 print(f"     Time: {t_batch*1000:.1f} ms")
@@ -182,7 +181,7 @@ Current situation:
 
 Optimized approach (requires C++ implementation):
 - Collect all ~{actual_eval_points} integration points
-- Single FldBatch() call
+- Single Fld() call
 - Full H-matrix acceleration
 - Expected time: ~{t_batch*actual_eval_points/len(points):.1f} ms
 - Expected speedup: ~{t_standard/(t_batch*actual_eval_points/len(points)):.1f}x
@@ -190,7 +189,7 @@ Optimized approach (requires C++ implementation):
 Implementation path:
 1. Add PrepareCache() method to RadiaFieldCF (C++)
 2. PrepareCache() collects all mesh integration points
-3. PrepareCache() calls FldBatch() once
+3. PrepareCache() calls Fld() once
 4. Evaluate() returns cached values
 5. User calls PrepareCache(mesh) before gf.Set(cf)
 """)

@@ -158,11 +158,8 @@ For large problems (N > 200 elements):
 ```python
 import radia as rad
 
-# Enable H-matrix field evaluation
-rad.SetHMatrixFieldEval(1, eps=1e-6)
-
-# Batch evaluation with H-matrix
-H_values = rad.FldBatch(obj, 'h', points, use_hmatrix=1)
+# Batch field evaluation (auto-detected from input shape)
+H_values = rad.Fld(obj, 'h', points)  # points shape (N, 3) -> batch
 ```
 
 **Performance:**

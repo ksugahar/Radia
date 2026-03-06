@@ -107,7 +107,7 @@ def profile_hacapk():
 
     # Step 5: Configure HACApK
     print("\n5. Configuring HACApK...")
-    rad.SetHACApKParams(1e-4, 10, 2.0)
+    rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 
     # Profile solve with HACApK (Method 2)
     print("\n6. Running HACApK solve...")
@@ -122,12 +122,16 @@ def profile_hacapk():
 
     # Get H-matrix stats
     try:
-        stats = rad.GetHACApKStats()
-        print(f"\n   H-matrix stats:")
-        print(f"   - n_lowrank: {stats.get('n_lowrank', 'N/A')}")
-        print(f"   - n_dense: {stats.get('n_dense', 'N/A')}")
-        print(f"   - max_rank: {stats.get('max_rank', 'N/A')}")
-        print(f"   - build_time: {stats.get('build_time', 'N/A'):.4f}s")
+        config = rad.GetSolverConfig()
+        stats = config.get('hacapk_stats')
+        if stats:
+            print(f"\n   H-matrix stats:")
+            print(f"   - n_lowrank: {stats.get('n_lowrank', 'N/A')}")
+            print(f"   - n_dense: {stats.get('n_dense', 'N/A')}")
+            print(f"   - max_rank: {stats.get('max_rank', 'N/A')}")
+            print(f"   - build_time: {stats.get('build_time', 'N/A'):.4f}s")
+        else:
+            print("   (H-matrix stats not available)")
     except:
         print("   (H-matrix stats not available)")
 

@@ -460,195 +460,109 @@ Radia provides three tolerance parameters for controlling solver behavior:
 #    Set via Solve() - controls when Newton-Raphson iterations stop
 rad.Solve(obj, nonl_tol, max_iter, method)  # nonl_tol = 0.001 recommended
 
-# 2. BiCGSTAB inner loop tolerance
-#    Set via SetBiCGSTABTol() BEFORE Solve() - controls linear system accuracy
-rad.SetBiCGSTABTol(bicg_tol)  # Default: 1e-4
-
-# 3. H-matrix ACA tolerance (Method 2 only)
-#    Set via SetHACApKParams() BEFORE Solve() - controls low-rank approximation
-rad.SetHACApKParams(hmat_eps, leaf_size, eta)  # Default: 1e-4, 10, 2.0
+# 2. Solver parameters (all in one call)
+rad.SolverConfig(bicgstab_tol=1e-4, hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 ```
 
-| Parameter | API | Default | Description |
-|-----------|-----|---------|-------------|
+| Parameter | Keyword | Default | Description |
+|-----------|---------|---------|-------------|
 | `nonl_tol` | `rad.Solve(obj, nonl_tol, ...)` | 0.001 | Nonlinear convergence threshold |
-| `bicg_tol` | `rad.SetBiCGSTABTol(tol)` | 1e-4 | BiCGSTAB relative residual tolerance |
-| `hmat_eps` | `rad.SetHACApKParams(eps, ...)` | 1e-4 | H-matrix ACA compression tolerance |
+| `bicgstab_tol` | `rad.SolverConfig(bicgstab_tol=...)` | 1e-4 | BiCGSTAB relative residual tolerance |
+| `hacapk_eps` | `rad.SolverConfig(hacapk_eps=...)` | 1e-4 | H-matrix ACA compression tolerance |
 
 **Example - Full solver configuration:**
 
 ```python
 import radia as rad
 
-# Configure tolerances BEFORE Solve()
-rad.SetBiCGSTABTol(1e-4)           # BiCGSTAB tolerance
-rad.SetHACApKParams(1e-4, 10, 2.0) # H-matrix: eps=1e-4, leaf=10, eta=2.0
+# Configure all solver parameters in one call BEFORE Solve()
+rad.SolverConfig(
+    bicgstab_tol=1e-4,
+    hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0,
+    newton_method=True,
+    newton_damping=True, newton_damping_max_iter=5, newton_damping_min_omega=0.01,
+    relax_param=0.0
+)
 
-# Solve with nonlinear tolerance
-rad.Solve(grp, 0.001, 100, 2)      # nonl_tol=0.001, max_iter=100, method=2 (HACApK)
+# Solve
+rad.Solve(grp, 0.001, 100, 2)  # nonl_tol=0.001, max_iter=100, method=2 (HACApK)
+
+# Query all settings
+config = rad.GetSolverConfig()
+print(config)
 ```
 
-### SetBiCGSTABTol - BiCGSTAB Inner Loop Tolerance
+### SolverConfig - Unified Solver Parameter Configuration
 
 ```python
-rad.SetBiCGSTABTol(tol)
+rad.SolverConfig(**kwargs)
 ```
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `tol` | float | 1e-4 | Relative residual tolerance for BiCGSTAB |
+All parameters are optional keyword arguments. Only specified parameters are changed.
 
-**Notes:**
-- Affects Method 1 (BiCGSTAB) and Method 2 (HACApK)
-- Lower values = higher accuracy but more iterations
-- Call BEFORE `rad.Solve()`
+| Keyword | Type | Default | Description |
+|---------|------|---------|-------------|
+| `hacapk_eps` | float | 1e-4 | ACA+ compression tolerance (Method 2 only) |
+| `hacapk_leaf` | int | 10 | Minimum cluster size in elements |
+| `hacapk_eta` | float | 2.0 | Admissibility parameter |
+| `hmatrix_eps` | float | - | H-matrix field evaluation epsilon |
+| `bicgstab_tol` | float | 1e-4 | BiCGSTAB relative residual tolerance |
+| `relax_param` | float | 0.0 | Under-relaxation (0=full step, <1=damped) |
+| `newton_method` | bool | False | True=Newton-Raphson, False=Picard |
+| `newton_damping` | bool | True | Enable Newton line search damping |
+| `newton_damping_max_iter` | int | 5 | Max line search iterations |
+| `newton_damping_min_omega` | float | 0.01 | Minimum damping factor |
 
-### SetHACApKParams - H-Matrix Parameters (Method 2)
-
-```python
-rad.SetHACApKParams(eps, leaf_size, eta)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `eps` | float | 1e-4 | ACA+ compression tolerance |
-| `leaf_size` | int | 32 (C++ default), **10 recommended for MSC 6DOF** | Minimum cluster size in elements |
-| `eta` | float | 2.0 | Admissibility parameter |
-
-**Notes:**
-- Only affects Method 2 (HACApK H-matrix solver)
-- Lower `eps` = higher accuracy, larger ranks, more memory
-- Call BEFORE `rad.Solve()`
-
-**Parameter Rationale:**
+**HACApK Parameter Rationale:**
 
 | Parameter | Default | Rationale |
 |-----------|---------|-----------|
-| `eps` | 1e-4 | Balance between accuracy and compression. Lower values (1e-6, 1e-8) for higher accuracy, higher values (1e-3) for faster computation. |
-| `leaf_size` | 32 (C++), **10 (recommended)** | C++ default is 32 (element count). For MSC 6DOF hexahedra, leaf_size=10 → actual leaves up to 11 elements × 6DOF = **66 DOF/leaf** (binary tree splitting). C++ default 32 would give 192 DOF/leaf, too large for effective ACA+ compression. leaf_size=10 (66 DOF) balances compression ratio and per-leaf cost. ELF reference also uses 10. All Radia benchmarks use `rad.SetHACApKParams(1e-4, 10, 2.0)`. |
-| `eta` | 2.0 | Standard admissibility criterion: clusters are "well-separated" when `dist(c1,c2) >= eta * max(diam(c1), diam(c2))`. eta=2.0 is conservative, ensuring accurate low-rank approximations. Lower values (1.0) allow more aggressive compression but may reduce accuracy. |
+| `hacapk_eps` | 1e-4 | Balance between accuracy and compression. Lower values (1e-6, 1e-8) for higher accuracy. |
+| `hacapk_leaf` | 10 | For MSC 6DOF hexahedra, leaf_size=10 gives ~66 DOF/leaf (binary tree splitting). |
+| `hacapk_eta` | 2.0 | Admissibility: clusters are "well-separated" when dist >= eta * max(diam). eta=2.0 is conservative. |
 
-### SetRelaxParam - Under-Relaxation Coefficient
+**Examples:**
 
 ```python
-rad.SetRelaxParam(relax)
-```
+# H-matrix solver with default parameters
+rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `relax` | float | 0.0 | Under-relaxation coefficient (0.0-1.0) |
-
-**Notes:**
-- Affects all solver methods (0=LU, 1=BiCGSTAB, 2=HACApK)
-- `relax=0.0`: Full Newton step (default, fastest convergence when stable)
-- `relax>0.0`: Damped update: `M_new = M_computed*(1-relax) + M_old*relax`
-- Use under-relaxation (e.g., 0.2-0.5) when:
-  - Convergence is slow or oscillating
-  - Material has steep B-H curve
-  - Problem is highly nonlinear
-- Call BEFORE `rad.Solve()`
-
-**Example:**
-```python
-# For difficult nonlinear problems, use under-relaxation
-rad.SetRelaxParam(0.3)  # 30% damping
+# Under-relaxation for difficult nonlinear problems
+rad.SolverConfig(relax_param=0.3)
 rad.Solve(container, 0.001, 100, 1)
+rad.SolverConfig(relax_param=0.0)  # Reset to full step
 
-# Reset to full step for normal cases
-rad.SetRelaxParam(0.0)
-```
-
-### SetNewtonMethod - Newton-Raphson Method (v1.4.4+)
-
-```python
-rad.SetNewtonMethod(enabled)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `enabled` | bool | False | Enable Newton-Raphson with differential susceptibility |
-
-**Notes:**
-- Uses tangent stiffness matrix based on differential susceptibility χ_d = (dB/dH)/μ₀ - 1
-- Reduces linear iterations per nonlinear step compared to Picard (fixed-point) method
-- Recommended for large-scale problems (>10,000 DOF) with HACApK solver (Method 2)
-- Combine with `SetNewtonDamping()` for robust convergence
-- Call BEFORE `rad.Solve()`
-
-**Example:**
-```python
-rad.SetSolver(2)  # HACApK
-rad.SetNewtonMethod(True)
-rad.SetNewtonDamping(True)  # Enable line search damping
-rad.Solve(container, 0.001, 100)
-```
-
-### GetNewtonMethod - Query Newton-Raphson Status (v1.4.4+)
-
-```python
-enabled = rad.GetNewtonMethod()
-```
-
-Returns `True` if Newton-Raphson is enabled, `False` otherwise.
-
-### SetNewtonDamping - Line Search Damping (v1.4.4+)
-
-```python
-rad.SetNewtonDamping(enabled=True, max_iter=5, min_omega=0.01)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `enabled` | bool | True | Enable backtracking line search |
-| `max_iter` | int | 5 | Maximum line search iterations |
-| `min_omega` | float | 0.01 | Minimum damping factor (1%) |
-
-**Notes:**
-- Only active when Newton-Raphson is enabled (`SetNewtonMethod(True)`)
-- Uses backtracking line search: σ_new = ω × σ_trial + (1-ω) × σ_old
-- Starts with ω=1.0 (full Newton step), reduces by ω *= 0.5 if residual increases
-- Ensures monotonic residual reduction, improves nonlinear convergence
-- Particularly effective for highly nonlinear problems
-- Call BEFORE `rad.Solve()`
-
-**Algorithm:**
-1. Solve linear system: (D(1/χ_d) + G) σ_trial = RHS
-2. Try full step ω=1.0
-3. If residual increases: ω *= 0.5, retry with damped update
-4. Repeat up to `max_iter` times
-5. Force accept if ω < `min_omega`
-
-**Example:**
-```python
-# Enable Newton with line search damping (recommended)
-rad.SetNewtonMethod(True)
-rad.SetNewtonDamping(True, max_iter=5, min_omega=0.01)
+# Newton-Raphson with line search damping (recommended for large problems)
+rad.SolverConfig(newton_method=True, newton_damping=True)
 rad.Solve(container, 0.001, 100, 2)  # HACApK + Newton + Damping
-
-# Disable damping for full Newton steps
-rad.SetNewtonDamping(False)
-rad.Solve(container, 0.001, 100, 2)  # HACApK + Newton (no damping)
 ```
 
-### GetNewtonDampingStats - Query Damping Statistics (v1.4.4+)
+### GetSolverConfig - Query All Solver Parameters
 
 ```python
-stats = rad.GetNewtonDampingStats()
+config = rad.GetSolverConfig()
 ```
 
-Returns a dictionary with damping configuration:
+Returns a dictionary with all current solver parameters:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `'enabled'` | bool | Damping enabled status |
-| `'max_iter'` | int | Maximum line search iterations |
-| `'min_omega'` | float | Minimum damping factor |
+| `'bicgstab_tol'` | float | BiCGSTAB tolerance |
+| `'relax_param'` | float | Under-relaxation coefficient |
+| `'newton_method'` | bool | Newton-Raphson enabled |
+| `'newton_damping'` | bool | Newton damping enabled |
+| `'newton_damping_max_iter'` | int | Max line search iterations |
+| `'newton_damping_min_omega'` | float | Minimum damping factor |
+| `'hacapk_stats'` | dict | H-matrix statistics (only after HACApK solve) |
 
 **Example:**
 ```python
-stats = rad.GetNewtonDampingStats()
-print(f"Damping: {stats['enabled']}, max_iter={stats['max_iter']}, min_omega={stats['min_omega']}")
-# Output: Damping: True, max_iter=5, min_omega=0.01
+config = rad.GetSolverConfig()
+print(f"BiCGSTAB tol: {config['bicgstab_tol']}")
+print(f"Newton: {config['newton_method']}, damping: {config['newton_damping']}")
+if 'hacapk_stats' in config:
+    stats = config['hacapk_stats']
+    print(f"Compression: {stats['compression']:.1%}, Memory: {stats['memory_mb']:.1f} MB")
 ```
 
 ### BiCGSTAB Performance
@@ -770,68 +684,31 @@ Phi = rad.Fld(magnet, 'p', [0, 0, 0.1])  # Scalar potential Phi
 - Both A and Phi are computed accurately for ObjHexahedron/ObjTetrahedron
 - Maxwell relations verified: `curl(A) ∝ B`, `-grad(Phi) ∝ H`
 
-### FldBatch - Batch Field Computation (v1.3.16+)
+### Fld - Unified Field Computation (Batch)
+
+`rad.Fld()` auto-detects single-point vs batch from input shape:
 
 ```python
-result = rad.FldBatch(obj, points)
+# Single point: shape (3,) -> returns array
+B = rad.Fld(obj, 'b', np.array([0, 0, 0.1]))
+
+# Batch: shape (N, 3) -> returns (N, 3) array
+points = np.array([[0, 0, 0.1], [0, 0, 0.2], [0, 0, 0.3]])
+B_batch = rad.Fld(obj, 'b', points)   # (3, 3) array of B values
+H_batch = rad.Fld(obj, 'h', points)   # (3, 3) array of H values
+A_batch = rad.Fld(obj, 'a', points)   # (3, 3) array of A values
+phi_batch = rad.Fld(obj, 'phi', points)  # (3,) array of scalar potential
 ```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `obj` | int | Object or container |
-| `points` | [[x,y,z], ...] | List of evaluation points (meters) |
+| Field type | Returns | Units |
+|------------|---------|-------|
+| `'b'` | B field | Tesla |
+| `'h'` | H field | A/m |
+| `'a'` | Vector potential A | T*m |
+| `'phi'` | Scalar potential | A |
+| `'m'` | Magnetization | A/m |
 
-| Returns | Description |
-|---------|-------------|
-| `result['B']` | List of [Bx, By, Bz] values (T) |
-| `result['H']` | List of [Hx, Hy, Hz] values (A/m) |
-
-```python
-points = [[0, 0, 0.1], [0, 0, 0.2], [0, 0, 0.3]]
-result = rad.FldBatch(magnet, points)
-B_list = result['B']  # [[Bx1,By1,Bz1], [Bx2,By2,Bz2], ...]
-H_list = result['H']  # [[Hx1,Hy1,Hz1], [Hx2,Hy2,Hz2], ...]
-```
-
-**Note**: More efficient than calling `Fld()` in a loop for many points.
-
-### FldPhi - Scalar Potential Batch (v1.3.16+)
-
-```python
-phi = rad.FldPhi(obj, points)
-```
-
-Computes magnetic scalar potential phi_m at multiple points.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `obj` | int | Object or container |
-| `points` | [[x,y,z], ...] | List of evaluation points |
-
-| Returns | Description |
-|---------|-------------|
-| `phi` | List of scalar values (A) |
-
-**Note**: Uses face-based integration for accurate scalar potential computation (v1.4.2+).
-
-### FldA - Vector Potential Batch (v1.3.16+)
-
-```python
-A = rad.FldA(obj, points)
-```
-
-Computes magnetic vector potential A at multiple points.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `obj` | int | Object or container |
-| `points` | [[x,y,z], ...] | List of evaluation points |
-
-| Returns | Description |
-|---------|-------------|
-| `A` | List of [Ax, Ay, Az] values (T*m) |
-
-**Note**: Uses face-based integration for accurate vector potential computation (v1.4.2+).
+**Note**: `FldBatch`, `FldA`, `FldPhi` are removed. Use `Fld()` with appropriate field type and batch points.
 
 ### ClassifyPoints - Point Classification (v1.3.16+)
 
@@ -977,11 +854,7 @@ cf = rad.RadiaField(radia_obj, field_type='b', origin=None, u=None, v=None, w=No
 
 **Dimensions**: `dim=3` for B/H/A/M (vector), `dim=1` for phi (scalar).
 
-**Batch evaluation**: When NGSolve calls `gf.Set(cf)`, the batch `Evaluate(mir, result)` is used internally. This calls:
-- **B, H**: `rad.FldBatch()` (TaskManager-parallelized in C++)
-- **phi**: `rad.FldPhi()` (TaskManager-parallelized)
-- **A**: `rad.FldA()` (TaskManager-parallelized)
-- **M**: per-point `rad.Fld()` fallback
+**Batch evaluation**: When NGSolve calls `gf.Set(cf)`, the batch `Evaluate(mir, result)` is used internally. This calls `rad.Fld(obj, field_type, points)` with batch points (shape N x 3), which is TaskManager-parallelized in C++.
 
 ```python
 # Basic usage
@@ -1025,15 +898,6 @@ B_cf.ClearCache()
 ---
 
 ## Utilities
-
-### FldUnits - Unit System (Deprecated)
-
-**Deprecated**: `FldUnits` is deprecated. Radia always uses meters. The function is kept for backward compatibility but has no effect.
-
-```python
-rad.FldUnits('m')   # No-op (Radia always uses meters)
-rad.FldUnits()      # Returns 'm'
-```
 
 ### UtiDelAll - Clear Memory
 
