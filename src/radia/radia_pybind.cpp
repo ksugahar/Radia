@@ -463,7 +463,11 @@ py::object Fld(int obj, const std::string& field_type, py::array_t<double> point
     double result[6] = {0};  // Max size for any field type
     int nResult = 0;
 
-    char* id = const_cast<char*>(field_type.c_str());
+    // Map multi-char field type names to single-char C API identifiers
+    // "phi" -> "p" (scalar potential only; use "h" for H components)
+    std::string ft = field_type;
+    if (ft == "phi") ft = "p";
+    char* id = const_cast<char*>(ft.c_str());
     int err = RadFld(result, &nResult, obj, id, coords, 1);
     check_error(err);
 
