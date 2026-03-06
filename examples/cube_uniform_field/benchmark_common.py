@@ -15,10 +15,6 @@ import time
 import json
 from typing import List, Dict, Any, Optional
 
-# Set OpenMP threads BEFORE importing radia (must be done before MKL/OpenMP init)
-os.environ['OMP_NUM_THREADS'] = '8'
-os.environ['MKL_NUM_THREADS'] = '8'
-
 # Add Radia to path
 _src_path = os.path.join(os.path.dirname(__file__), '../../src')
 sys.path.insert(0, _src_path)
@@ -344,7 +340,9 @@ def run_benchmark(
         't_hmatrix_frame': stats.get('t_hmatrix_frame', 0.0),
         't_hmatrix_fill': stats.get('t_hmatrix_fill', 0.0),
         't_linear_solve': stats.get('t_linear_solve', 0.0),
-        't_total': t_solve
+        't_total': t_solve,
+        'num_threads': stats.get('num_threads', 1),
+        'taskmanager_enabled': stats.get('taskmanager_enabled', False),
     }
 
     # Add H-matrix stats if available

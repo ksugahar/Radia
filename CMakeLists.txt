@@ -5,26 +5,16 @@ project(radia_ngsolve C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Option to disable OpenMP (for debugging)
-option(RADIA_ENABLE_OPENMP "Enable OpenMP parallelization" ON)
-
 # Option to build radia_ngsolve module (requires NGSolve to be installed)
 option(RADIA_BUILD_NGSOLVE "Build radia_ngsolve integration module" ON)
 
 # FFTW is replaced by Intel MKL DFTI (direct integration in fftw.h)
 # No FFTW library linking required - MKL DFTI provides FFT functionality
 
-# Find OpenMP for parallel matrix construction
-if(RADIA_ENABLE_OPENMP)
-    find_package(OpenMP)
-    if(OpenMP_CXX_FOUND)
-        message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
-    else()
-        message(WARNING "OpenMP not found - parallel matrix construction disabled")
-    endif()
-else()
-    message(STATUS "OpenMP disabled by RADIA_ENABLE_OPENMP=OFF")
-endif()
+# Parallelization: NGSolve TaskManager (replaces OpenMP)
+# NGSolve is a hard prerequisite for this fork.
+# TaskManager provides work-stealing parallel loops via ngstd library.
+message(STATUS "Parallelization: NGSolve TaskManager (OpenMP removed)")
 
 # Find Python3 first to get the installation path
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
@@ -44,22 +34,71 @@ set(pybind11_DIR ${PYTHON_SITE_PACKAGES}/pybind11/share/cmake/pybind11)
 message("Finding pybind11...")
 find_package(pybind11 REQUIRED)
 
-# Set NGSolve and Netgen directories (only if building radia_ngsolve)
-if(RADIA_BUILD_NGSOLVE)
-	# Use pip-installed NGSolve from site-packages (version-agnostic)
-	# Override with -DNGSolve_DIR=... -DNetgen_DIR=... if needed
-	if(NOT NGSolve_DIR)
+# NGSolve is always required (provides TaskManager for parallelization)
+# Auto-detect via Python import, override with -DNGSolve_DIR=... -DNetgen_DIR=...
+if(NOT NGSolve_DIR)
+	# Try to find NGSolve cmake config via Python import
+	execute_process(
+		COMMAND ${Python3_EXECUTABLE} -c "import ngsolve, os; print(os.path.dirname(ngsolve.__file__))"
+		OUTPUT_VARIABLE _NGSOLVE_PY_PATH
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		RESULT_VARIABLE _NGSOLVE_PY_RESULT
+		ERROR_QUIET
+	)
+	if(_NGSOLVE_PY_RESULT EQUAL 0)
+		# pip-installed: site-packages/ngsolve/cmake/
+		if(EXISTS "${_NGSOLVE_PY_PATH}/cmake/NGSolveConfig.cmake")
+			set(NGSolve_DIR "${_NGSOLVE_PY_PATH}/cmake")
+		else()
+			# Source-installed: go up from .../Lib/site-packages/ngsolve to install root
+			cmake_path(GET _NGSOLVE_PY_PATH PARENT_PATH _SP_DIR)
+			cmake_path(GET _SP_DIR PARENT_PATH _LIB_DIR)
+			cmake_path(GET _LIB_DIR PARENT_PATH _INSTALL_ROOT)
+			if(EXISTS "${_INSTALL_ROOT}/cmake/NGSolveConfig.cmake")
+				set(NGSolve_DIR "${_INSTALL_ROOT}/cmake")
+			else()
+				set(NGSolve_DIR ${PYTHON_SITE_PACKAGES}/ngsolve/cmake)
+			endif()
+		endif()
+	else()
 		set(NGSolve_DIR ${PYTHON_SITE_PACKAGES}/ngsolve/cmake)
 	endif()
-	if(NOT Netgen_DIR)
-		set(Netgen_DIR ${PYTHON_SITE_PACKAGES}/netgen/cmake)
-	endif()
-	message(STATUS "NGSolve_DIR: ${NGSolve_DIR}")
-	message(STATUS "Netgen_DIR: ${Netgen_DIR}")
-
-	# Find NGSolve
-	find_package(NGSolve CONFIG REQUIRED)
 endif()
+if(NOT Netgen_DIR)
+	# Netgen config is typically in the same directory as NGSolve config
+	if(EXISTS "${NGSolve_DIR}/NetgenConfig.cmake")
+		set(Netgen_DIR "${NGSolve_DIR}")
+	else()
+		execute_process(
+			COMMAND ${Python3_EXECUTABLE} -c "import netgen, os; print(os.path.dirname(netgen.__file__))"
+			OUTPUT_VARIABLE _NETGEN_PY_PATH
+			OUTPUT_STRIP_TRAILING_WHITESPACE
+			RESULT_VARIABLE _NETGEN_PY_RESULT
+			ERROR_QUIET
+		)
+		if(_NETGEN_PY_RESULT EQUAL 0)
+			if(EXISTS "${_NETGEN_PY_PATH}/cmake/NetgenConfig.cmake")
+				set(Netgen_DIR "${_NETGEN_PY_PATH}/cmake")
+			else()
+				cmake_path(GET _NETGEN_PY_PATH PARENT_PATH _SP_DIR2)
+				cmake_path(GET _SP_DIR2 PARENT_PATH _LIB_DIR2)
+				cmake_path(GET _LIB_DIR2 PARENT_PATH _INSTALL_ROOT2)
+				if(EXISTS "${_INSTALL_ROOT2}/cmake/NetgenConfig.cmake")
+					set(Netgen_DIR "${_INSTALL_ROOT2}/cmake")
+				else()
+					set(Netgen_DIR ${PYTHON_SITE_PACKAGES}/netgen/cmake)
+				endif()
+			endif()
+		else()
+			set(Netgen_DIR ${PYTHON_SITE_PACKAGES}/netgen/cmake)
+		endif()
+	endif()
+endif()
+message(STATUS "NGSolve_DIR: ${NGSolve_DIR}")
+message(STATUS "Netgen_DIR: ${Netgen_DIR}")
+
+# Find NGSolve (required for TaskManager parallelization in all targets)
+find_package(NGSolve CONFIG REQUIRED)
 
 # Radia source directories
 set(CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/core")
@@ -106,7 +145,7 @@ if(WIN32)
 endif()
 
 # Option to enable ExaFMM acceleration for fast dipole field computation
-# ExaFMM-t is a pure C++ FMM library (no Fortran dependency)
+# ExaFMM-t integrated into src/core/exafmm/ (NGSolve TaskManager parallelization)
 option(RADIA_ENABLE_EXAFMM "Enable ExaFMM library for fast field computation" ON)
 
 # Radia core sources (organized by API functionality)
@@ -166,11 +205,12 @@ set(RADIA_EXT_SOURCES
 # HACApK sources (H-matrix with ACA+ compression)
 # Note: C files compiled as C (not C++) to avoid typedef struct * compatibility issues
 # Using standard HACApK 1.0.0 (same ACA+ implementation as ELF)
-# MPI replaced with stub (single-process), OpenMP only, unified logging
+# MPI replaced with stub (single-process), TaskManager parallelization, unified logging
 set(HACAPK_SOURCES
 	${EXT_DIR}/HACApK/cHACApK_base.c
 	${EXT_DIR}/HACApK/cHACApK_lib.c
 	${EXT_DIR}/HACApK/cHACApK_cpp_impl.c
+	${CORE_DIR}/rad_hacapk_parallel.cpp  # C++ TaskManager wrappers for HACApK C code
 )
 
 # Radia lib sources (main radia module)
@@ -231,8 +271,7 @@ target_include_directories(radia_ngsolve PRIVATE
 	${EXT_DIR}/genmath
 	${EXT_DIR}/triangle
 	${EXT_DIR}/HACApK
-	${CMAKE_CURRENT_SOURCE_DIR}/external/exafmm-t/include
-	${PYTHON_DIR}
+		${PYTHON_DIR}
 	${MKL_FFTW3_INCLUDE_DIR}
 )
 
@@ -265,9 +304,9 @@ if(WIN32 AND USE_MKL_FOUND)
 	message(STATUS "Using Intel MKL for radia_ngsolve: ${BLAS_LIB}")
 endif()
 
-# ExaFMM is header-only, no library linking needed
+# ExaFMM is header-only (integrated into src/core/exafmm/)
 if(RADIA_ENABLE_EXAFMM)
-	message(STATUS "ExaFMM enabled for radia_ngsolve (header-only library)")
+	message(STATUS "ExaFMM enabled (integrated, TaskManager parallelization)")
 endif()
 
 # Link Windows system libraries
@@ -282,26 +321,8 @@ if(WIN32)
 	endif()
 endif()
 
-# Link OpenMP for radia_ngsolve
-# Use Intel OpenMP (libiomp5md.dll) for better performance with Intel MKL
-if(RADIA_ENABLE_OPENMP)
-	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-		# MSVC: Link Intel OpenMP directly instead of using OpenMP::OpenMP_CXX
-		# OpenMP::OpenMP_CXX would link to vcomp140.dll (MSVC OpenMP)
-		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
-		if(EXISTS ${INTEL_OPENMP_LIB})
-			target_link_libraries(radia_ngsolve PRIVATE ${INTEL_OPENMP_LIB})
-			target_compile_definitions(radia_ngsolve PRIVATE _OPENMP)
-			message(STATUS "OpenMP enabled for radia_ngsolve (Intel OpenMP: ${INTEL_OPENMP_LIB})")
-		elseif(OpenMP_CXX_FOUND)
-			target_link_libraries(radia_ngsolve PRIVATE OpenMP::OpenMP_CXX)
-			message(STATUS "OpenMP enabled for radia_ngsolve (MSVC OpenMP - fallback)")
-		endif()
-	elseif(OpenMP_CXX_FOUND)
-		target_link_libraries(radia_ngsolve PRIVATE OpenMP::OpenMP_CXX)
-		message(STATUS "OpenMP enabled for radia_ngsolve")
-	endif()
-endif()
+# Parallelization: NGSolve TaskManager (via ngstd, inherited from add_ngsolve_python_module)
+# No explicit linking needed — radia_ngsolve inherits ngstd through NGSolve's CMake targets
 
 # Compiler-specific flags for radia_ngsolve
 # MSVC is preferred for radia_ngsolve due to NGSolve library compatibility
@@ -314,26 +335,10 @@ if(MSVC)
 		/wd4244            # Disable conversion warnings
 		/wd4267            # Disable size_t conversion warnings
 	)
-	if(RADIA_ENABLE_OPENMP)
-		# Use standard /openmp flag - Intel OpenMP runtime is linked separately
-		# The libiomp5md.lib is linked via target_link_libraries above
-		target_compile_options(radia_ngsolve PRIVATE /openmp)
-	endif()
 	message(STATUS "Using MSVC compiler with Intel MKL for radia_ngsolve")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
 	# Intel oneAPI compiler - may have ABI issues with MSVC-compiled NGSolve
-	set(RADIA_NGSOLVE_INTEL_FLAGS
-		/O3                # Maximum optimization
-		/fp:fast           # Fast floating-point model
-		/W0                # Disable warnings
-	)
-	if(RADIA_ENABLE_OPENMP)
-		list(APPEND RADIA_NGSOLVE_INTEL_FLAGS /Qopenmp)
-	endif()
-	target_compile_options(radia_ngsolve PRIVATE ${RADIA_NGSOLVE_INTEL_FLAGS})
-	if(RADIA_ENABLE_OPENMP)
-		target_link_options(radia_ngsolve PRIVATE /Qopenmp)
-	endif()
+	target_compile_options(radia_ngsolve PRIVATE /O3 /fp:fast /W0)
 	message(STATUS "Using Intel compiler for radia_ngsolve (may have ABI issues)")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	# GCC
@@ -486,23 +491,9 @@ if(WIN32)
 	endif()
 endif()
 
-# Link OpenMP for parallel matrix construction
-if(RADIA_ENABLE_OPENMP)
-	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
-		if(EXISTS ${INTEL_OPENMP_LIB})
-			target_link_libraries(peec_matrices PRIVATE ${INTEL_OPENMP_LIB})
-			target_compile_definitions(peec_matrices PRIVATE _OPENMP)
-			message(STATUS "OpenMP enabled for peec_matrices (Intel OpenMP)")
-		elseif(OpenMP_CXX_FOUND)
-			target_link_libraries(peec_matrices PRIVATE OpenMP::OpenMP_CXX)
-			message(STATUS "OpenMP enabled for peec_matrices (MSVC OpenMP)")
-		endif()
-	elseif(OpenMP_CXX_FOUND)
-		target_link_libraries(peec_matrices PRIVATE OpenMP::OpenMP_CXX)
-		message(STATUS "OpenMP enabled for peec_matrices")
-	endif()
-endif()
+# Parallelization: NGSolve TaskManager (via ngstd)
+target_link_libraries(peec_matrices PRIVATE ngstd)
+target_include_directories(peec_matrices PRIVATE ${NGSolve_INCLUDE_DIRS} ${Netgen_INCLUDE_DIRS})
 
 # Compiler-specific flags
 if(MSVC)
@@ -513,16 +504,9 @@ if(MSVC)
 		/wd4244
 		/wd4267
 	)
-	if(RADIA_ENABLE_OPENMP)
-		target_compile_options(peec_matrices PRIVATE /openmp)
-	endif()
 	message(STATUS "Using MSVC compiler for peec_matrices")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
 	target_compile_options(peec_matrices PRIVATE /O3 /fp:fast /W0)
-	if(RADIA_ENABLE_OPENMP)
-		target_compile_options(peec_matrices PRIVATE /Qopenmp)
-		target_link_options(peec_matrices PRIVATE /Qopenmp)
-	endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(peec_matrices PRIVATE
 		-Wno-conversion
@@ -543,14 +527,6 @@ if(WIN32 AND USE_MKL_FOUND)
 			"$<TARGET_FILE_DIR:peec_matrices>"
 		COMMENT "Copying mkl_rt.2.dll for peec_matrices"
 	)
-	if(EXISTS "${INTEL_COMPILER_BIN}/libiomp5md.dll")
-		add_custom_command(TARGET peec_matrices POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-				"${INTEL_COMPILER_BIN}/libiomp5md.dll"
-				"$<TARGET_FILE_DIR:peec_matrices>"
-			COMMENT "Copying libiomp5md.dll for peec_matrices"
-		)
-	endif()
 endif()
 
 message(STATUS "peec_matrices module configured")
@@ -599,23 +575,9 @@ if(WIN32)
 	endif()
 endif()
 
-# Link OpenMP for parallel frequency sweep
-if(RADIA_ENABLE_OPENMP)
-	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
-		if(EXISTS ${INTEL_OPENMP_LIB})
-			target_link_libraries(cln_core PRIVATE ${INTEL_OPENMP_LIB})
-			target_compile_definitions(cln_core PRIVATE _OPENMP)
-			message(STATUS "OpenMP enabled for cln_core (Intel OpenMP)")
-		elseif(OpenMP_CXX_FOUND)
-			target_link_libraries(cln_core PRIVATE OpenMP::OpenMP_CXX)
-			message(STATUS "OpenMP enabled for cln_core (MSVC OpenMP)")
-		endif()
-	elseif(OpenMP_CXX_FOUND)
-		target_link_libraries(cln_core PRIVATE OpenMP::OpenMP_CXX)
-		message(STATUS "OpenMP enabled for cln_core")
-	endif()
-endif()
+# Parallelization: NGSolve TaskManager (via ngstd)
+target_link_libraries(cln_core PRIVATE ngstd)
+target_include_directories(cln_core PRIVATE ${NGSolve_INCLUDE_DIRS} ${Netgen_INCLUDE_DIRS})
 
 # Compiler-specific flags
 if(MSVC)
@@ -626,16 +588,9 @@ if(MSVC)
 		/wd4244
 		/wd4267
 	)
-	if(RADIA_ENABLE_OPENMP)
-		target_compile_options(cln_core PRIVATE /openmp)
-	endif()
 	message(STATUS "Using MSVC compiler for cln_core")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
 	target_compile_options(cln_core PRIVATE /O3 /fp:fast /W0)
-	if(RADIA_ENABLE_OPENMP)
-		target_compile_options(cln_core PRIVATE /Qopenmp)
-		target_link_options(cln_core PRIVATE /Qopenmp)
-	endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(cln_core PRIVATE
 		-Wno-conversion
@@ -656,14 +611,6 @@ if(WIN32 AND USE_MKL_FOUND)
 			"$<TARGET_FILE_DIR:cln_core>"
 		COMMENT "Copying mkl_rt.2.dll for cln_core"
 	)
-	if(EXISTS "${INTEL_COMPILER_BIN}/libiomp5md.dll")
-		add_custom_command(TARGET cln_core POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-				"${INTEL_COMPILER_BIN}/libiomp5md.dll"
-				"$<TARGET_FILE_DIR:cln_core>"
-			COMMENT "Copying libiomp5md.dll for cln_core"
-		)
-	endif()
 endif()
 
 message(STATUS "cln_core module configured")
@@ -712,23 +659,9 @@ if(WIN32)
 	endif()
 endif()
 
-# Link OpenMP for parallel matrix construction
-if(RADIA_ENABLE_OPENMP)
-	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
-		if(EXISTS ${INTEL_OPENMP_LIB})
-			target_link_libraries(mmm_core PRIVATE ${INTEL_OPENMP_LIB})
-			target_compile_definitions(mmm_core PRIVATE _OPENMP)
-			message(STATUS "OpenMP enabled for mmm_core (Intel OpenMP)")
-		elseif(OpenMP_CXX_FOUND)
-			target_link_libraries(mmm_core PRIVATE OpenMP::OpenMP_CXX)
-			message(STATUS "OpenMP enabled for mmm_core (MSVC OpenMP)")
-		endif()
-	elseif(OpenMP_CXX_FOUND)
-		target_link_libraries(mmm_core PRIVATE OpenMP::OpenMP_CXX)
-		message(STATUS "OpenMP enabled for mmm_core")
-	endif()
-endif()
+# Parallelization: NGSolve TaskManager (via ngstd)
+target_link_libraries(mmm_core PRIVATE ngstd)
+target_include_directories(mmm_core PRIVATE ${NGSolve_INCLUDE_DIRS} ${Netgen_INCLUDE_DIRS})
 
 # Compiler-specific flags
 if(MSVC)
@@ -739,16 +672,9 @@ if(MSVC)
 		/wd4244
 		/wd4267
 	)
-	if(RADIA_ENABLE_OPENMP)
-		target_compile_options(mmm_core PRIVATE /openmp)
-	endif()
 	message(STATUS "Using MSVC compiler for mmm_core")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
 	target_compile_options(mmm_core PRIVATE /O3 /fp:fast /W0)
-	if(RADIA_ENABLE_OPENMP)
-		target_compile_options(mmm_core PRIVATE /Qopenmp)
-		target_link_options(mmm_core PRIVATE /Qopenmp)
-	endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(mmm_core PRIVATE
 		-Wno-conversion
@@ -769,14 +695,6 @@ if(WIN32 AND USE_MKL_FOUND)
 			"$<TARGET_FILE_DIR:mmm_core>"
 		COMMENT "Copying mkl_rt.2.dll for mmm_core"
 	)
-	if(EXISTS "${INTEL_COMPILER_BIN}/libiomp5md.dll")
-		add_custom_command(TARGET mmm_core POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-				"${INTEL_COMPILER_BIN}/libiomp5md.dll"
-				"$<TARGET_FILE_DIR:mmm_core>"
-			COMMENT "Copying libiomp5md.dll for mmm_core"
-		)
-	endif()
 endif()
 
 message(STATUS "mmm_core module configured")
@@ -812,8 +730,7 @@ target_include_directories(_radia_pybind PRIVATE
 	${EXT_DIR}/auxparse
 	${EXT_DIR}/genmath
 	${EXT_DIR}/HACApK
-	${CMAKE_CURRENT_SOURCE_DIR}/external/exafmm-t/include
-	${MKL_FFTW3_INCLUDE_DIR}
+		${MKL_FFTW3_INCLUDE_DIR}
 )
 
 # Add preprocessor definitions
@@ -843,23 +760,9 @@ if(WIN32)
 	endif()
 endif()
 
-# Link OpenMP for parallel operations
-if(RADIA_ENABLE_OPENMP)
-	if(WIN32 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-		set(INTEL_OPENMP_LIB "${INTEL_COMPILER_DIR}/lib/libiomp5md.lib")
-		if(EXISTS ${INTEL_OPENMP_LIB})
-			target_link_libraries(_radia_pybind PRIVATE ${INTEL_OPENMP_LIB})
-			target_compile_definitions(_radia_pybind PRIVATE _OPENMP)
-			message(STATUS "OpenMP enabled for _radia_pybind (Intel OpenMP)")
-		elseif(OpenMP_CXX_FOUND)
-			target_link_libraries(_radia_pybind PRIVATE OpenMP::OpenMP_CXX)
-			message(STATUS "OpenMP enabled for _radia_pybind (MSVC OpenMP)")
-		endif()
-	elseif(OpenMP_CXX_FOUND)
-		target_link_libraries(_radia_pybind PRIVATE OpenMP::OpenMP_CXX)
-		message(STATUS "OpenMP enabled for _radia_pybind")
-	endif()
-endif()
+# Parallelization: NGSolve TaskManager (via ngstd)
+target_link_libraries(_radia_pybind PRIVATE ngstd)
+target_include_directories(_radia_pybind PRIVATE ${NGSolve_INCLUDE_DIRS} ${Netgen_INCLUDE_DIRS})
 
 # Compiler-specific flags
 if(MSVC)
@@ -870,15 +773,8 @@ if(MSVC)
 		/wd4244
 		/wd4267
 	)
-	if(RADIA_ENABLE_OPENMP)
-		target_compile_options(_radia_pybind PRIVATE /openmp)
-	endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
 	target_compile_options(_radia_pybind PRIVATE /O3 /fp:fast /W0)
-	if(RADIA_ENABLE_OPENMP)
-		target_compile_options(_radia_pybind PRIVATE /Qopenmp)
-		target_link_options(_radia_pybind PRIVATE /Qopenmp)
-	endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	target_compile_options(_radia_pybind PRIVATE
 		-Wno-conversion

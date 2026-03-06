@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "rad_parallel.h"
+
 // Intel MKL
 #include <mkl.h>
 
@@ -261,11 +263,10 @@ void compute_cln_impedance_sweep(
     int n_freqs,
     std::complex<double>* Z_out
 ) {
-    // OpenMP parallelization for frequency sweep
-    #pragma omp parallel for
-    for (int f = 0; f < n_freqs; ++f) {
+    // TaskManager parallelization for frequency sweep
+    ngcore::ParallelFor(ngcore::IntRange(n_freqs), [&](size_t f) {
         Z_out[f] = compute_cln_impedance(R_diag, L_tridiag, n, freqs[f]);
-    }
+    });
 }
 
 std::vector<double> transform_coupling(

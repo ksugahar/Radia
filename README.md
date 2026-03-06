@@ -358,55 +358,6 @@ print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
 *   **[NGbem Integration](docs/NGBEM_INTEGRATION_DESIGN.md)**: Eddy current solver via NGSolve BEM.
 *   **[Original Radia](https://github.com/ochubar/Radia)**: The core physics engine developed at ESRF.
 
-## MCP Server for Claude Code
-
-Radia includes an MCP (Model Context Protocol) server that provides Claude Code with:
-- **21 lint rules** for Radia + NGSolve convention checking
-- **Radia API documentation** (geometry, materials, solvers, PEEC, ngbem)
-- **NGSolve usage guide** (12 topics, 35 pitfalls)
-- **Kelvin transformation** and **ngsolve-sparsesolv** references
-
-### Setup
-
-**1. Install the MCP dependency:**
-
-```bash
-pip install mcp
-```
-
-**2. Register the server with Claude Code:**
-
-```bash
-# If you have the repository cloned:
-claude mcp add radia-lint -- python /path/to/Radia/tools/mcp_radia_lint/server.py
-
-# Lab users (S: drive):
-claude mcp add radia-lint -- python S:/Radia/01_GitHub/tools/mcp_radia_lint/server.py
-```
-
-**3. Verify** (inside Claude Code):
-
-```
-/mcp
-```
-
-You should see `radia-lint` listed with 6 tools: `lint_radia_script`, `lint_radia_directory`, `get_radia_lint_rules`, `radia_usage`, `ngsolve_usage`, `kelvin_transformation`, `sparsesolv_usage`, `sparsesolv_code_example`.
-
-### Alternative: Project-Level Configuration
-
-Add a `.mcp.json` file to your project root:
-
-```json
-{
-  "radia-lint": {
-    "command": "python",
-    "args": ["/path/to/Radia/tools/mcp_radia_lint/server.py"]
-  }
-}
-```
-
-Claude Code will automatically start the server when working in that project.
-
 ---
 
 ## License

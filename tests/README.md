@@ -10,13 +10,13 @@ tests/
 ├── test_simple.py                   # Basic functionality tests (quick)
 ├── test_radia.py                    # Comprehensive test suite
 ├── test_advanced.py                 # Advanced features and edge cases
-├── test_parallel_performance.py     # OpenMP parallelization tests
+├── test_parallel_performance.py     # TaskManager parallelization tests
 ├── test_radia_ngsolve.py              # NGSolve integration tests
 ├── test_magpylib_comparison.py      # Comparison with magpylib library
 ├── conftest.py                      # pytest configuration
 ├── test_utils.py                    # Shared path utilities
 ├── benchmarks/                      # Performance benchmarks
-│   ├── benchmark_openmp.py         # OpenMP scaling tests
+│   ├── benchmark_parallel.py        # TaskManager scaling tests
 │   ├── benchmark_correct.py        # Correctness vs performance
 │   ├── benchmark_heavy.py          # Heavy computation tests
 │   └── benchmark_threads.py        # Thread scaling tests
@@ -74,7 +74,7 @@ python tests/test_advanced.py
 ### Performance Tests
 
 ```bash
-# Test OpenMP parallelization performance
+# Test TaskManager parallelization performance
 python tests/test_parallel_performance.py
 ```
 
@@ -140,10 +140,10 @@ pytest -k "material" tests/
 
 Performance benchmarking scripts are in `tests/benchmarks/`:
 
-### OpenMP Scaling Benchmark
+### Parallel Scaling Benchmark
 
 ```bash
-python tests/benchmarks/benchmark_openmp.py
+python tests/benchmarks/benchmark_parallel.py
 ```
 
 Tests field calculation performance with different thread counts (1, 2, 4, 8 cores).
@@ -205,7 +205,7 @@ Edge cases and advanced functionality:
 
 ### 4. Parallel Performance (`test_parallel_performance.py`)
 
-OpenMP parallelization validation:
+TaskManager parallelization validation:
 - Single-threaded baseline
 - Multi-threaded scaling
 - Performance regression detection
@@ -311,9 +311,9 @@ ls build/lib/Release/radia.pyd  # Should exist
 
 Check:
 - Build configuration (should be Release, not Debug)
-- OpenMP enabled: Check CMakeLists.txt
+- TaskManager enabled: Check CMakeLists.txt
 - System load: Close other applications
-- Thread count: Set `OMP_NUM_THREADS` environment variable
+- Thread count: TaskManager uses NGSolve's thread pool configuration
 
 ## Test Coverage Goals
 

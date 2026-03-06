@@ -355,7 +355,7 @@ pip install scipy
 ## See Also
 
 For a complete electromagnet simulation with magnetic yoke, see:
-- [examples/electromagnet/](../electromagnet/) - Beam steering electromagnet with Cubit-generated yoke
+- [examples/c_type_electromagnet/](../c_type_electromagnet/) - C-type electromagnet with Cubit-generated yoke
 
 ---
 

@@ -15,7 +15,7 @@ This benchmark suite compares three solver methods:
 H-matrix (Hierarchical Matrix) provides significant benefits for large problems:
 1. **Solver acceleration**: O(N² log N) instead of O(N³) for direct solvers
 2. **Memory reduction**: O(N log N) instead of O(N²) for interaction matrices
-3. **Parallel construction**: OpenMP parallelization of H-matrix blocks (27x speedup)
+3. **Parallel construction**: TaskManager parallelization of H-matrix blocks (27x speedup)
 
 ## Benchmark Files
 
@@ -211,14 +211,14 @@ python plot_benchmark_results.py
 
 **Verified results**: Identical to single-point evaluation (0.000000% error)
 
-### Parallel Construction (N=343, OpenMP)
+### Parallel Construction (N=343, TaskManager)
 
 | Method | Time (ms) | Speedup |
 |--------|-----------|---------|
 | Expected sequential | 27.7 | 1.0x |
 | Actual parallel | 1.0 | **27.7x** |
 
-**Note**: Actual speedup depends on CPU core count and OpenMP scheduling
+**Note**: Actual speedup depends on CPU core count and TaskManager scheduling
 
 ## Key Findings
 
@@ -236,7 +236,7 @@ python plot_benchmark_results.py
 
 4. **Batch evaluation is critical**: Evaluating multiple points at once provides 4x speedup
 
-5. **Parallel construction**: OpenMP parallelization provides 27x speedup for H-matrix construction
+5. **Parallel construction**: TaskManager parallelization provides 27x speedup for H-matrix construction
 
 6. **H-matrix overhead**: For fast-converging problems (< 5 iterations), H-matrix construction overhead may dominate. However, for typical nonlinear problems requiring many iterations, the per-solve speedup (8-9x) outweighs construction cost.
 
@@ -256,7 +256,7 @@ python plot_benchmark_results.py
 
 - Python 3.12+
 - Radia v1.1.2+ with H-matrix support (HACApK library)
-- OpenMP-enabled build
+- NGSolve TaskManager-enabled build
 - 8GB+ RAM recommended for large benchmarks
 
 ## References

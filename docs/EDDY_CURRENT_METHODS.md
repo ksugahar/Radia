@@ -338,20 +338,6 @@ L = Integrate(Mu * (gfT + grad(gfOmega))**2 * dx, mesh)
 Z = R + s * L
 ```
 
-### MCP Server Tools
-
-The NGSolve MCP server provides eddy current tools based on the EMPY implementation:
-
-```
-eddy_create_conductor_mesh  -- Create conductor + air mesh
-eddy_solve_a_phi            -- A-Phi formulation solver
-eddy_solve_t_omega          -- T-Omega formulation solver
-eddy_compute_loss           -- Compute eddy current loss
-eddy_extract_impedance      -- Extract R, L, Z
-eddy_frequency_sweep        -- Frequency sweep analysis
-eddy_export_vtk             -- Export B, J, H to VTK
-```
-
 ### Advantages
 
 - **No BEM needed** (pure FEM, all standard NGSolve tools available)
@@ -460,16 +446,6 @@ eddy_export_vtk             -- Export B, J, H to VTK
 | EddyCurrentBEMSIBC | V, K, D (cached) | ngbem or ngsolve.bem |
 | ShieldBEMSIBC | MaxwellSingleLayerPotentialOperator | ngbem |
 | FEM + Kelvin | (none -- pure FEM) | NGSolve only |
-
-## MCP Server Tool Summary
-
-| Tool Category | Prefix | Eddy Current | Tools |
-|---|---|---|---|
-| **Mesh generation** | `ngsolve_mesh_` | N/A | Create/import mesh |
-| **Kelvin (magnetostatic)** | `kelvin_` | No | Omega-Reduced Omega, energy |
-| **Eddy current (FEM+Kelvin)** | `eddy_` | **Yes** | A-Phi, T-Omega, loss, Z, sweep |
-| **ngbem (BEM)** | `ngbem_` | **Yes** | Maxwell stabilized, FEM-BEM coupling |
-| **Radia coupling** | `ngsolve_radia_` | No | Magnetostatic field coupling |
 
 ## Cross-Method Validation
 

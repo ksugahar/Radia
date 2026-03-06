@@ -86,6 +86,7 @@ class PEECCircuitSolver:
             topology_dict: Dict from PEECBuilder.build_topology() containing:
                 L, R, segment_nodes, n_nodes, ports, n_loop
                 Optional: P, M_LS, n_star (for full RLCM mode)
+                Optional: C_gathered (for proper MNA with resonance)
         """
         self.L = np.array(topology_dict['L'])
         self.R_dc = np.array(topology_dict['R'])
@@ -115,12 +116,21 @@ class PEECCircuitSolver:
         else:
             self.M_LS = None
 
+        # Gathered capacitance (optional - enables proper MNA with resonance)
+        C_gathered_raw = topology_dict.get('C_gathered', None)
+        if C_gathered_raw is not None and not isinstance(C_gathered_raw, type(None)):
+            self.C_gathered = np.array(C_gathered_raw)
+        else:
+            self.C_gathered = None
+
         # Create C++ MNA solver from raw arrays
         seg_nodes_int = np.ascontiguousarray(self.segment_nodes, dtype=np.int32)
         port_tuples = [(int(p[0]), int(p[1]), int(p[2])) for p in self.ports]
 
         P_arg = self.P if self.has_panels else None
         M_LS_arg = self.M_LS if (self.has_panels and self.M_LS is not None) else None
+        C_gath_arg = (np.ascontiguousarray(self.C_gathered, dtype=np.float64)
+                      if self.C_gathered is not None else None)
 
         self._solver = MNASolver(
             np.ascontiguousarray(self.L, dtype=np.float64),
@@ -130,6 +140,7 @@ class PEECCircuitSolver:
             port_tuples,
             P_arg,
             M_LS_arg,
+            C_gath_arg,
         )
 
     def set_solver_method(self, method):

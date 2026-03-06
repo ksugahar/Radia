@@ -653,7 +653,7 @@ struct PEECSegment {
 | **Newman method** | LOW | Very close panels |
 | **True quad integration formulas** | LOW | Replace averaging with proper quad Gauss quadrature |
 | **Higher-order Gauss rules** | LOW | 4-point or 7-point rules for very close panels |
-| **Performance optimization** | LOW | OpenMP parallelization, ACA for large panel counts |
+| **Performance optimization** | LOW | TaskManager parallelization, ACA for large panel counts |
 
 ### Files Modified
 

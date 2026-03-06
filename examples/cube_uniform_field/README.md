@@ -9,7 +9,7 @@ Radia magnetostatic solver benchmark for a soft iron cube in uniform external fi
 | **CPU** | Intel Core i7-9700K (8 cores, 8 threads @ 3.60 GHz) |
 | **Memory** | 128 GB DDR4 |
 | **OS** | Windows 10/11 |
-| **OpenMP** | OMP_NUM_THREADS=8, MKL_NUM_THREADS=8 |
+| **Parallelization** | NGSolve TaskManager (8 threads), MKL_NUM_THREADS=8 |
 | **Compiler** | MSVC 2022 + Intel MKL |
 | **Python** | 3.12 |
 
@@ -295,11 +295,28 @@ cube_uniform_field/
 
 ## Computational Complexity
 
+### Theoretical (per operation)
+
 | Solver | Time Complexity | Memory Complexity |
 |--------|-----------------|-------------------|
 | Dense LU | O(N^3) | O(N^2) |
 | Dense BiCGSTAB | O(N^2) per iter | O(N^2) |
 | BiCGSTAB+H-matrix | **O(N log N)** per iter | **O(N log N)** |
+
+### Measured Scaling (nonlinear cube model, hexahedral elements)
+
+Power-law fit `t = a * DOF^alpha` on benchmark data (2026-02-11).
+
+| Solver | Time | Memory | Notes |
+|--------|------|--------|-------|
+| LU | **O(N^3.9)** | O(N^2.0) | NL iteration count also grows with N |
+| BiCGSTAB | **O(N^1.9)** | O(N^2.0) | Consistent with theoretical O(N^2) |
+| HACApK | **O(N^1.5)** | **O(N^1.3)** | H-matrix compression effect |
+
+- Fit method: last-5 data points (asymptotic regime, higher accuracy)
+- LU time exceeds O(N^3) because NL iteration count also increases with N
+- HACApK time is between O(N) and O(N^2) due to H-matrix compression
+- Analysis script: `../../原稿/scaling_analysis.py`, results: `scaling_analysis_results.json`
 
 ---
 

@@ -26,10 +26,6 @@ import argparse
 import subprocess
 import json
 
-# Set OpenMP threads BEFORE importing radia (must be done before MKL/OpenMP init)
-os.environ['OMP_NUM_THREADS'] = '8'
-os.environ['MKL_NUM_THREADS'] = '8'
-
 # Add parent directory for benchmark_common
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))

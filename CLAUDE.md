@@ -151,9 +151,9 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
 │                    rad_field_unified.h/cpp                       │
 │  ─────────────────────────────────────────────────────────────  │
 │  ComputeFieldSingle()     - Single point, static field          │
-│  ComputeFieldBatch()      - Batch points, OpenMP parallelized   │
+│  ComputeFieldBatch()      - Batch points, TaskManager parallelized │
 │  ComputeComplexFieldSingle() - Complex (AC) field               │
-│  ComputeComplexFieldBatch()  - Complex batch with OpenMP        │
+│  ComputeComplexFieldBatch()  - Complex batch with TaskManager   │
 │  IsPointInsideAnyElement() - Inside/outside classification      │
 │  ComputeBFromMagnetization() - Dipole field from M (complex)    │
 └─────────────────────────────────────────────────────────────────┘
@@ -168,7 +168,7 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
 
 **Users**: `rad.Fld()`, `rad.FldBatch()`, `rad.FldVTS()`, `radia_ngsolve` RadiaField, `rad_particle_trajectory`, `CplMagFld()`.
 
-**Key Features**: Inside/outside classification (solid angle method), OpenMP parallelized batch, complex field support (PEEC+MMM AC), optional FMM acceleration.
+**Key Features**: Inside/outside classification (solid angle method), TaskManager parallelized batch, complex field support (PEEC+MMM AC), optional FMM acceleration.
 
 ### Field Calculation: Surface Current vs Surface Charge
 
@@ -278,13 +278,13 @@ powershell.exe -ExecutionPolicy Bypass -File "BuildMSVC.ps1" -Rebuild  # Clean r
 
 ### BLAS/LAPACK: Intel MKL Only
 
-**POLICY**: OpenBLAS is NOT supported. MKL provides optimized BLAS/LAPACK and integrates with Intel OpenMP.
+**POLICY**: OpenBLAS is NOT supported. MKL provides optimized BLAS/LAPACK. MKL internally uses Intel OpenMP (`libiomp5md.dll`) for its own threading, but Radia no longer links it directly.
 
-**Required MKL DLLs** (auto-copied by BuildMSVC.ps1): `mkl_rt.*.dll`, `mkl_core.*.dll`, `mkl_intel_thread.*.dll`, `mkl_def.*.dll`, `mkl_avx2.*.dll`, `mkl_vml_*.dll`, `libiomp5md.dll`, `libmmd.dll`, `svml_dispmd.dll`.
+**Required MKL DLLs** (auto-copied by BuildMSVC.ps1): `mkl_rt.*.dll`, `mkl_core.*.dll`, `mkl_intel_thread.*.dll`, `mkl_def.*.dll`, `mkl_avx2.*.dll`, `mkl_vml_*.dll`, `libiomp5md.dll` (MKL dependency), `libmmd.dll`, `svml_dispmd.dll`.
 
-### OpenMP: Intel OpenMP Only
+### Parallelization: NGSolve TaskManager
 
-**POLICY**: Use Intel OpenMP (`libiomp5md.dll`), NOT MSVC OpenMP (`vcomp140.dll`). Mixing causes DLL conflicts. If both are loaded, there is a configuration error.
+**POLICY**: Radia uses **NGSolve TaskManager** for parallelization, NOT OpenMP. All parallel loops use `TaskManager::CreateTask()`. The unified parallelization header is `rad_parallel.h`. MKL internally still uses Intel OpenMP (`libiomp5md.dll`) for BLAS/LAPACK, but Radia does not link or use OpenMP directly.
 
 ### PyPI Release Workflow
 
@@ -470,11 +470,13 @@ From `src/radia/netgen_mesh_import.py`:
 rad.SetHACApKParams(eps, leaf_size, eta)
 ```
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| eps | 1e-4 | ACA tolerance (1e-6 to 1e-2) |
-| leaf_size | 10 | Minimum cluster size |
-| eta | 2.0 | Admissibility parameter |
+| Parameter | C++ Default | Recommended | Description |
+|-----------|-------------|-------------|-------------|
+| eps | 1e-4 | 1e-4 | ACA tolerance (1e-6 to 1e-2) |
+| leaf_size | 32 | **10** | Minimum cluster size (elements). 10 for MSC 6DOF hex (60 DOF/leaf), ELF-compatible |
+| eta | 2.0 | 2.0 | Admissibility parameter |
+
+**leaf_size=10 の根拠**: C++ デフォルトは 32 だが、MSC 6DOF ヘキサヘドロンでは leaf_size=10 → 実際のリーフは最大 11 要素 × 6DOF = **66 DOF/leaf** となる（二分木分割の端数）。C++ デフォルト 32 では 32×6=192 DOF/leaf で leaf が大きすぎ、ACA+ の低ランク近似の恩恵が小さくなる。leaf_size=10 (66 DOF) が圧縮効率と per-leaf 計算コストのバランスが良い。全ベンチマークで `rad.SetHACApKParams(1e-4, 10, 2.0)` を使用。
 
 See `docs/HMATRIX_EVALUATION.md` for full evaluation report.
 
@@ -829,6 +831,6 @@ All URN examples, data, and scripts in `examples/Universal_Relaxation_Network/`.
 
 ---
 
-**Last Updated**: 2026-02-22
+**Last Updated**: 2026-03-01
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation

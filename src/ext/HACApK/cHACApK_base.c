@@ -43,9 +43,7 @@
 #include <math.h>
 #include "mpi_stub.h"
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "rad_hacapk_parallel.h"
 
 /* Windows defines min/max as macros - undefine to avoid conflicts */
 #ifdef min
@@ -1020,8 +1018,7 @@ int cHACApK_acaplus(
         } else if(param[61]==2 || param[61]==3) {
           apxnorm =znrm;
         } else {
-#pragma omp critical
-          printf("ERROR!:: invalid param[61]=%lf\n",param[61]);
+          fprintf(stderr, "ERROR!:: invalid param[61]=%lf\n",param[61]);
           exit(EXIT_FAILURE);
         }
       } else {
@@ -1032,7 +1029,6 @@ int cHACApK_acaplus(
       }
     }
     if(0) {
-#pragma omp critical
       {
         printf("pcol\n");
         for (il=0; il<ndl; il++) printf("%lf\n",pcol[il]);
@@ -1048,12 +1044,11 @@ int cHACApK_acaplus(
   //  endif
 
   if(k<param[64]) {
-#pragma omp critical
     {
-      printf("colnorm=%lf rownorm=%lf ACA_EPS=%lf\n",colnorm,rownorm,ACA_EPS);
-      printf("col_maxval=%lf, row_maxval=%lf\n",col_maxval,row_maxval);
-      printf("ntries_row=%d ntries_col=%d ntries=%d\n",ntries_row,ntries_col,ntries);
-      printf("k=%d\n",k);
+      fprintf(stderr, "colnorm=%lf rownorm=%lf ACA_EPS=%lf\n",colnorm,rownorm,ACA_EPS);
+      fprintf(stderr, "col_maxval=%lf, row_maxval=%lf\n",col_maxval,row_maxval);
+      fprintf(stderr, "ntries_row=%d ntries_col=%d ntries=%d\n",ntries_row,ntries_col,ntries);
+      fprintf(stderr, "k=%d\n",k);
       //    k=k-1; if(k<1) stop
       //    stop
     }
@@ -1068,9 +1063,96 @@ error:
   exit(EXIT_FAILURE);
 }
 
+/* Context and callback for parallel leaf fill via TaskManager */
+typedef struct {
+  st_cHACApK_leafmtx *st_lf;
+  int kparam;
+  double eps, ACA_EPS, znrmmat;
+  double *param;
+  int *lodl, *lodt;
+  int i_bemv;
+} fill_leaf_ctx;
+
+static void fill_one_leaf_block(int idx, void *data) {
+  fill_leaf_ctx *ctx = (fill_leaf_ctx*)data;
+  int ip = idx + 1;  /* 0-based idx to 1-based ip */
+  st_cHACApK_leafmtx *st_lf = ctx->st_lf;
+  int kparam = ctx->kparam;
+  double eps = ctx->eps;
+  double ACA_EPS = ctx->ACA_EPS;
+  double znrmmat = ctx->znrmmat;
+  double *param = ctx->param;
+  int *lodl = ctx->lodl;
+  int *lodt = ctx->lodt;
+  int i_bemv = ctx->i_bemv;
+
+  int ndl   = st_lf[ip]->ndl;
+  int ndt   = st_lf[ip]->ndt;
+  int nstrtl= st_lf[ip]->nstrtl;
+  int nstrtt= st_lf[ip]->nstrtt;
+  int ltmtx = st_lf[ip]->ltmtx;
+
+  if(ltmtx==1) {
+    /* Low-rank block: use ACA+ */
+    double *zab = (double *) calloc(ndt*kparam, sizeof(double));
+    double *zaa = (double *) calloc(ndl*kparam, sizeof(double));
+    if(zab == NULL || zaa == NULL) {
+      fprintf(stderr, "sub cHACApK_fill_leafmtx_hyp; zab,zaa Memory allocation failed !\n");
+      fprintf(stderr, "ip=%d ndt=%d ndl=%d kparam=%d\n",ip,ndt,ndl,kparam);
+      if(zab) free(zab);
+      if(zaa) free(zaa);
+      return;
+    }
+
+    int kt = 0;
+    if(param[60]==1) {
+      kt=cHACApK_aca(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
+    } else if(param[60]==2) {
+      kt=cHACApK_acaplus(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
+    } else if(param[60]==3) {
+      kt=cHACApK_SVD(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
+    } else if(param[60]==5) {
+      kt=cHACApK_RRQR(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
+    } else {
+      fprintf(stderr, "Only ACA and ACA+ is available! Set param[60]=1-5.\n");
+      free(zab); free(zaa);
+      return;
+    }
+
+    st_lf[ip]->kt=kt;
+    st_lf[ip]->a1 = (double *) calloc(ndt*kt,sizeof(double));
+    st_lf[ip]->a2 = (double *) calloc(ndl*kt,sizeof(double));
+    if(st_lf[ip]->a1 == NULL || st_lf[ip]->a2 == NULL) {
+      fprintf(stderr, "sub cHACApK_fill_leafmtx_hyp; a1,a2 Memory allocation failed !\n");
+      fprintf(stderr, "ip=%d ndt=%d ndl=%d kt=%d\n",ip,ndt,ndl,kt);
+      free(zab); free(zaa);
+      return;
+    }
+    for (int il=0; il<ndt*kt; il++) st_lf[ip]->a1[il]=zab[il];
+    for (int il=0; il<ndl*kt; il++) st_lf[ip]->a2[il]=zaa[il];
+    free(zab); free(zaa);
+
+  } else if(ltmtx==2) {
+    /* Dense block */
+    st_lf[ip]->a1 = (double *) calloc(ndt*ndl,sizeof(double));
+    if(st_lf[ip]->a1 == NULL) {
+      fprintf(stderr, "sub cHACApK_fill_leafmtx_hyp; a1 Memory allocation failed !\n");
+      fprintf(stderr, "ip=%d ndt=%d ndl=%d\n",ip,ndt,ndl);
+      return;
+    }
+    for (int il=0; il<ndl; il++) {
+      int ill=il+nstrtl;
+      for (int it=0; it<ndt; it++) {
+        int itt=it+nstrtt;
+        double val = cHACApK_entry_ij(lodl[ill],lodt[itt],i_bemv);
+        st_lf[ip]->a1[it+ndt*il] = val;
+      }
+    }
+  }
+}
+
 //***cHACApK_fill_leafmtx_hyp
-// OpenMP parallelization over leaf blocks with dynamic scheduling
-// Dynamic scheduling provides better load balancing for variable-size ACA+ operations
+// TaskManager parallelization over leaf blocks (replaces OpenMP dynamic scheduling)
 void cHACApK_fill_leafmtx_hyp(
   st_cHACApK_leafmtx *st_lf,
   int i_bemv,
@@ -1093,87 +1175,22 @@ void cHACApK_fill_leafmtx_hyp(
   mpinr=lpmd[3]; mpilog=lpmd[4]; nrank=lpmd[2]; icomm=lpmd[1];
   eps=param[71]; ACA_EPS=param[72]*eps; kparam=(int)param[63];
 
-  /* Dynamic scheduling with chunk size 8 to reduce scheduling overhead
-   * (ELF uses chunk size 8 which is ~3x faster than chunk size 1) */
-#pragma omp parallel for schedule(dynamic, 8) default(none) \
-  shared(st_lf, nlf, kparam, eps, ACA_EPS, znrmmat, param, lodl, lodt, i_bemv) private(ip)
-  for (ip = 1; ip <= nlf; ip++) {
-    int ndl   = st_lf[ip]->ndl;
-    int ndt   = st_lf[ip]->ndt;
-    int nstrtl= st_lf[ip]->nstrtl;
-    int nstrtt= st_lf[ip]->nstrtt;
-    int ltmtx = st_lf[ip]->ltmtx;
+  /* Parallel leaf fill using TaskManager (via C wrapper)
+   * Each leaf block is filled independently */
+  {
+    fill_leaf_ctx fctx;
+    fctx.st_lf = st_lf;
+    fctx.kparam = kparam;
+    fctx.eps = eps;
+    fctx.ACA_EPS = ACA_EPS;
+    fctx.znrmmat = znrmmat;
+    fctx.param = param;
+    fctx.lodl = lodl;
+    fctx.lodt = lodt;
+    fctx.i_bemv = i_bemv;
 
-    if(ltmtx==1) {
-      /* Low-rank block: use ACA+ */
-      double *zab = (double *) calloc(ndt*kparam, sizeof(double));
-      double *zaa = (double *) calloc(ndl*kparam, sizeof(double));
-      if(zab == NULL || zaa == NULL) {
-#pragma omp critical
-        {
-          printf("sub cHACApK_fill_leafmtx_hyp; zab,zaa Memory allocation failed !\n");
-          printf("ip=%d ndt=%d ndl=%d kparam=%d\n",ip,ndt,ndl,kparam);
-        }
-        if(zab) free(zab);
-        if(zaa) free(zaa);
-        continue;  /* Skip this block instead of exit */
-      }
-
-      int kt = 0;
-      if(param[60]==1) {
-        /* Basic ACA - simpler and faster */
-        kt=cHACApK_aca(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
-      } else if(param[60]==2) {
-        /* ACA+ - more robust but slower */
-        kt=cHACApK_acaplus(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
-      } else if(param[60]==3) {
-        kt=cHACApK_SVD(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
-      } else if(param[60]==5) {
-        kt=cHACApK_RRQR(zaa,zab,param,ndl,ndt,nstrtl,nstrtt,lodl,i_bemv,kparam,eps,znrmmat,ACA_EPS);
-      } else {
-#pragma omp critical
-        printf("Only ACA and ACA+ is available! Set param[60]=1-5.\n");
-        free(zab); free(zaa);
-        continue;
-      }
-
-      st_lf[ip]->kt=kt;
-      st_lf[ip]->a1 = (double *) calloc(ndt*kt,sizeof(double));
-      st_lf[ip]->a2 = (double *) calloc(ndl*kt,sizeof(double));
-      if(st_lf[ip]->a1 == NULL || st_lf[ip]->a2 == NULL) {
-#pragma omp critical
-        {
-          printf("sub cHACApK_fill_leafmtx_hyp; a1,a2 Memory allocation failed !\n");
-          printf("ip=%d ndt=%d ndl=%d kt=%d\n",ip,ndt,ndl,kt);
-        }
-        free(zab); free(zaa);
-        continue;
-      }
-      for (int il=0; il<ndt*kt; il++) st_lf[ip]->a1[il]=zab[il];
-      for (int il=0; il<ndl*kt; il++) st_lf[ip]->a2[il]=zaa[il];
-      free(zab); free(zaa);
-
-    } else if(ltmtx==2) {
-      /* Dense block */
-      st_lf[ip]->a1 = (double *) calloc(ndt*ndl,sizeof(double));
-      if(st_lf[ip]->a1 == NULL) {
-#pragma omp critical
-        {
-          printf("sub cHACApK_fill_leafmtx_hyp; a1 Memory allocation failed !\n");
-          printf("ip=%d ndt=%d ndl=%d\n",ip,ndt,ndl);
-        }
-        continue;
-      }
-      for (int il=0; il<ndl; il++) {
-        int ill=il+nstrtl;
-        for (int it=0; it<ndt; it++) {
-          int itt=it+nstrtt;
-          double val = cHACApK_entry_ij(lodl[ill],lodt[itt],i_bemv);
-          st_lf[ip]->a1[it+ndt*il] = val;
-        }
-      }
-    }
-  }  /* End of OpenMP parallel for */
+    hacapk_parallel_for(nlf, fill_one_leaf_block, &fctx);
+  }
 
   /* Update lnps/lnpe (sequential post-processing) */
   for (int ip=1; ip<=nlf; ip++) {
