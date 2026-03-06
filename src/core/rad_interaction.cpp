@@ -20,9 +20,7 @@
 #include "rad_constants.h"   // For RadConst::INV_FOUR_PI
 #include <array>
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "rad_parallel.h"
 
 // MSC (Magnetic Surface Charge) support for 6 DOF hexahedra
 // radTPolyhedron hexahedra use 6 DOF MSC (surface charge on each face)
@@ -636,10 +634,9 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 		// Parallelize outer loop only (MSVC OpenMP 2.0 doesn't support collapse)
 		// Each ColNo iteration is independent, enabling parallel computation.
 
-		#pragma omp parallel for if(AmOfMainElem > 20)
-		for(int ColNo=0; ColNo<AmOfMainElem; ColNo++)
+		ngcore::ParallelFor(ngcore::IntRange(AmOfMainElem), [&](size_t ColNo)
 		{
-			radTg3dRelax* g3dRelaxPtrColNo = g3dRelaxPtrVect[ColNo];
+			radTg3dRelax* g3dRelaxPtrColNo = g3dRelaxPtrVect[(int)ColNo];
 
 			for(int StrNo=0; StrNo<AmOfMainElem; StrNo++)
 			{
@@ -659,9 +656,9 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 				SubMatrix.Str1 = Field.H;  // dH/dMy
 				SubMatrix.Str2 = Field.A;  // dH/dMz
 
-				InteractMatrix[StrNo][ColNo] = SubMatrix;
+				InteractMatrix[StrNo][(int)ColNo] = SubMatrix;
 			}
-		}
+		});
 
 		//--New
 		for(int ClNo=0; ClNo<AmOfMainElem; ClNo++)
@@ -858,10 +855,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 		{
 			// ULTRA-FAST PATH: Use pre-computed geometry
 			// Compute3x3BlockFast uses cached geometry arrays (no B_comp overhead)
-			#pragma omp parallel for schedule(dynamic) if(AmOfMainElem > 20)
-			for(int col = 0; col < AmOfMainElem; col++)
+			ngcore::ParallelFor(ngcore::IntRange(AmOfMainElem), [&](size_t col)
 			{
-				int offset_col = m_elemDOFOffset[col];
+				int offset_col = m_elemDOFOffset[(int)col];
 
 				for(int row = 0; row < AmOfMainElem; row++)
 				{
@@ -875,7 +871,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 					// Compute 3x3 block using cached geometry
 					double N_mat[9];
-					Compute3x3BlockFast(row, col, N_mat);
+					Compute3x3BlockFast(row, (int)col, N_mat);
 
 					// Copy to flat matrix (both row-major, direct copy)
 					// N_mat is [target][source] row-major, matrix is [target][source] row-major
@@ -890,17 +886,16 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					block[(size_t)2 * m_totalDOF + 1] = N_mat[7];  // (2,1)
 					block[(size_t)2 * m_totalDOF + 2] = N_mat[8];  // (2,2)
 				}
-			}
+			});
 			return 1;
 		}
 
 		// Fallback: FAST PATH without geometry cache (original B_comp method)
-		#pragma omp parallel for schedule(dynamic) if(AmOfMainElem > 20)
-		for(int col = 0; col < AmOfMainElem; col++)
+		ngcore::ParallelFor(ngcore::IntRange(AmOfMainElem), [&](size_t col)
 		{
-			radTg3dRelax* elem_col = g3dRelaxPtrVect[col];
-			int dof_col = m_elemDOF[col];
-			int offset_col = m_elemDOFOffset[col];
+			radTg3dRelax* elem_col = g3dRelaxPtrVect[(int)col];
+			int dof_col = m_elemDOF[(int)col];
+			int offset_col = m_elemDOFOffset[(int)col];
 
 			for(int row = 0; row < AmOfMainElem; row++)
 			{
@@ -965,7 +960,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				// Note: MSC blocks (3x6, 6x3, 6x6) not handled in fast path
 				// They will fall through and be computed in slow path below
 			}
-		}
+		});
 		return 1;
 	}
 
@@ -984,10 +979,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 		{
 			int nHex = (int)m_hexaElemIndices.size();
 
-			#pragma omp parallel for schedule(dynamic) if(nHex > 20)
-			for(int hex_col = 0; hex_col < nHex; hex_col++)
+			ngcore::ParallelFor(ngcore::IntRange(nHex), [&](size_t hex_col)
 			{
-				int col = m_hexaElemIndices[hex_col];
+				int col = m_hexaElemIndices[(int)hex_col];
 				int offset_col = m_elemDOFOffset[col];
 
 				for(int hex_row = 0; hex_row < nHex; hex_row++)
@@ -996,7 +990,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					int offset_row = m_elemDOFOffset[row];
 
 					double K_block[36];
-					Compute6x6BlockFast(hex_row, hex_col, K_block);
+					Compute6x6BlockFast(hex_row, (int)hex_col, K_block);
 
 					// Copy to row-major flat matrix (both row-major, direct copy pattern)
 					// K_block is [target][source] row-major, matrix is [target][source] row-major
@@ -1011,7 +1005,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						}
 					}
 				}
-			}
+			});
 
 			return 1;
 		}
@@ -1025,12 +1019,11 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 		// Use unified 1/(4*pi) constant for all MSC interactions
 		// (ELF-compatible sign convention: K_ij / (4*pi))
 
-		#pragma omp parallel for schedule(dynamic) if(AmOfMainElem > 20)
-		for(int col = 0; col < AmOfMainElem; col++)
+		ngcore::ParallelFor(ngcore::IntRange(AmOfMainElem), [&](size_t col)
 		{
-			radTg3dRelax* elem_col = g3dRelaxPtrVect[col];
-			int dof_col = m_elemDOF[col];
-			int offset_col = m_elemDOFOffset[col];
+			radTg3dRelax* elem_col = g3dRelaxPtrVect[(int)col];
+			int dof_col = m_elemDOF[(int)col];
+			int offset_col = m_elemDOFOffset[(int)col];
 
 			// Check if source is MSC element (wedge: 5 DOF, hexahedron: 6 DOF)
 			radTPolyhedron* poly_col = nullptr;
@@ -1328,7 +1321,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 					}
 				}
 			}
-		}
+		});
 		return 1;
 	}
 
@@ -4284,15 +4277,14 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		}
 	}
 
-	// Build IMA interaction matrix with OpenMP
-	#pragma omp parallel for schedule(dynamic) if(m_imaNumElements > 10)
-	for(int ima_col = 0; ima_col < m_imaNumElements; ima_col++)
+	// Build IMA interaction matrix with TaskManager parallelization
+	ngcore::ParallelFor(ngcore::IntRange(m_imaNumElements), [&](size_t ima_col)
 	{
-		int offset_col = m_elemDOFOffset[ima_col];
-		int dof_col = m_elemDOF[ima_col];
+		int offset_col = m_elemDOFOffset[(int)ima_col];
+		int dof_col = m_elemDOF[(int)ima_col];
 
-		radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[ima_col]);
-		if(!poly_col) continue;
+		radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[(int)ima_col]);
+		if(!poly_col) return;
 
 		for(int ima_row = 0; ima_row < m_imaNumElements; ima_row++)
 		{
@@ -4439,7 +4431,7 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 				}
 			}
 		}
-	}
+	});
 
 	// IMA interaction matrix built successfully
 	return 1;

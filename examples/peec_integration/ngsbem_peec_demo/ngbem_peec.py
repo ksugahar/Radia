@@ -18,7 +18,8 @@ where:
 
 Modes:
     'mqs':  Loop-only (Z = R + jwL), valid for DC - 1 MHz
-    'full': Full Loop-Star with capacitive effects
+    'full': Full Loop-Star (reformulated Schur complement, numerically stable)
+    'stabilized': Weggler's stabilized BEM (Q_0 from LaplaceSL, most robust)
 
 Usage:
     from ngsolve import Mesh
@@ -42,6 +43,7 @@ import time
 # Physical constants
 MU_0 = 4.0 * np.pi * 1e-7   # H/m
 EPS_0 = 8.854187817e-12      # F/m
+C_0 = 1.0 / np.sqrt(MU_0 * EPS_0)  # speed of light [m/s]
 
 
 # ============================================================
@@ -271,8 +273,11 @@ class NGBEMPEECSolver:
         # Matrices (populated by assemble())
         self.L = None       # Inductance [H], (n_loop x n_loop)
         self.P = None       # Potential coefficients [1/F], (n_star x n_star)
-        self.M_LS = None    # Loop-Star coupling, (n_star x n_loop)
+        self.M_LS = None    # Loop-Star coupling (FEM), (n_star x n_loop)
+        self.Q_0 = None     # BEM coupling LaplaceSL(div(J), rho), (n_star x n_loop)
+        self.V_0 = None     # Raw LaplaceSL on SurfaceL2, (n_star x n_star)
         self.R_loop = None  # Loop resistance [Ohm], (n_loop,) diagonal
+        self._P_inv_M_LS = None  # Precomputed P^{-1} @ M_LS for Schur complement
 
         # DOF counts
         self.n_loop = 0     # Edge DOFs (HDivSurface)
@@ -282,10 +287,18 @@ class NGBEMPEECSolver:
         self.t_assemble = 0.0
 
     def assemble(self):
-        """Assemble L, P, M_LS, R matrices using ngbem.
+        """Assemble L, P, Q_0, M_LS, R matrices using ngbem.
 
         This is the main computation step. Call once, then use
         solve_frequency() for multiple frequency sweeps.
+
+        Assembles:
+        - L: mu_0 * LaplaceSL(HDivSurface) — inductance
+        - P: LaplaceSL(SurfaceL2) / eps_0 — potential coefficient
+        - V_0: LaplaceSL(SurfaceL2) — raw BEM scalar SL
+        - Q_0: LaplaceSL(div(HDivSurface), SurfaceL2) — BEM coupling
+        - M_LS: int div(J) * phi dS — local FEM coupling
+        - R_loop: DC resistance per edge
         """
         from ngsolve import HDivSurface, SurfaceL2, TaskManager, ds
         from ngsolve import BilinearForm, BND
@@ -307,21 +320,37 @@ class NGBEMPEECSolver:
         j_test = self._fes_hdiv.TestFunction()
 
         with TaskManager():
-            L_op = LaplaceSL(j_trial * ds(label)) * j_test * ds(label)
+            # .Trace() is required for correct BEM integration.
+            # Without it, boundary-edge DOFs get corrupted diagonal
+            # entries (e.g. -1e+11) due to incorrect kernel evaluation.
+            L_op = LaplaceSL(
+                j_trial.Trace() * ds(label)
+            ) * j_test.Trace() * ds(label)
 
         L_dense = extract_dense_matrix(L_op.mat, self.n_loop)
         self.L = MU_0 * L_dense
 
-        # --- P matrix: scalar single layer on SurfaceL2 / eps_0 ---
+        # --- V_0 / P: scalar single layer on SurfaceL2 ---
         with TaskManager():
             V_op = SingleLayerPotentialOperator(self._fes_l2,
                                                 intorder=self.intorder)
 
         V_dense = extract_dense_matrix(V_op.mat, self.n_star)
-        self.P = V_dense / EPS_0
+        self.V_0 = V_dense              # Raw LaplaceSL (for stabilized mode)
+        self.P = V_dense / EPS_0         # Potential coefficient P = V_0/eps_0
+
+        # --- Q_0: BEM coupling LaplaceSL(div(HDivSurface), SurfaceL2) ---
+        self.Q_0 = self._build_bem_coupling()
 
         # --- M_LS: divergence coupling (FEM bilinear form, NOT BEM) ---
         self.M_LS = self._build_divergence_coupling()
+
+        # --- Precompute P^{-1} @ M_LS for Schur complement (mode='full') ---
+        try:
+            self._P_inv_M_LS = scipy.linalg.solve(
+                self.P, self.M_LS, assume_a='sym')
+        except np.linalg.LinAlgError:
+            self._P_inv_M_LS = None
 
         # --- R: resistance from conductivity and geometry ---
         if self.thickness is not None and self.sigma > 0:
@@ -376,6 +405,49 @@ class NGBEMPEECSolver:
 
         return M_LS
 
+    def _build_bem_coupling(self):
+        """Build BEM coupling matrix Q_0 using LaplaceSL.
+
+        Q_0[i,j] = LaplaceSL(div(J_edge_j), phi_cell_i)
+                 = int_S int_S div(J_j(r')) * G_0(r,r') * phi_i(r) dS dS'
+
+        where G_0(r,r') = 1/(4*pi*|r-r'|) is the Laplace Green's function.
+
+        This is a BEM operator (involves Green's function), unlike M_LS
+        which is a local FEM bilinear form. Q_0 is needed for the
+        stabilized formulation (Weggler).
+
+        Uses the product space (HDivSurface * SurfaceL2) approach
+        from Lucy Weggler's demo notebook.
+
+        Returns:
+            Q_0: numpy array (n_star x n_loop), real
+        """
+        from ngsolve import TaskManager, ds, div
+        from ngsolve.bem import LaplaceSL
+
+        # Product space for BEM coupling operator
+        fes_hdiv_r = type(self._fes_hdiv)(self.mesh, order=self.order)
+        fes_l2_r = type(self._fes_l2)(self.mesh, order=self.order,
+                                       dual_mapping=False)
+        fes_prod = fes_hdiv_r * fes_l2_r
+        (uHDiv, uL2), (vHDiv, vL2) = fes_prod.TnT()
+
+        n_total = fes_prod.ndof
+
+        with TaskManager():
+            Q_op = LaplaceSL(
+                div(uHDiv.Trace()) * ds(bonus_intorder=self.intorder)
+            ) * vL2 * ds(bonus_intorder=self.intorder)
+
+        # Extract the full product-space matrix and get the (1,0) block
+        Q_full = extract_dense_matrix(Q_op.mat, n_total)
+
+        # Q_op maps HDivSurface trial [0:n_loop] to SurfaceL2 test [n_loop:]
+        Q_0 = np.real(Q_full[self.n_loop:, :self.n_loop])
+
+        return Q_0
+
     def _compute_edge_resistance(self):
         """Compute per-edge DC resistance from conductivity and thickness.
 
@@ -419,7 +491,10 @@ class NGBEMPEECSolver:
 
         Args:
             freqs: Array of frequencies [Hz]
-            mode: 'mqs' for Loop-only (fast), 'full' for Loop-Star
+            mode: Solver mode:
+                'mqs': Loop-only (Z = R + jwL), fastest, valid DC - 1 MHz
+                'full': Full Loop-Star with reformulated Schur complement
+                'stabilized': Weggler's stabilized BEM (most robust)
             Zs_func: Optional callable(freq) returning Zs array (n_loop,)
                      for frequency-dependent surface impedance (e.g. Dowell).
                      If None, only DC resistance is used.
@@ -439,7 +514,9 @@ class NGBEMPEECSolver:
 
             if mode == 'mqs':
                 Z_port[i] = self._solve_mqs(omega, Zs=Zs)
-            else:
+            elif mode == 'stabilized':
+                Z_port[i] = self._solve_stabilized(omega, Zs=Zs)
+            else:  # 'full'
                 Z_port[i] = self._solve_full_loop_star(omega, Zs=Zs)
 
         return Z_port
@@ -474,20 +551,14 @@ class NGBEMPEECSolver:
     def _solve_full_loop_star(self, omega, Zs=None):
         """Full Loop-Star: includes capacitive (Star) DOFs.
 
-        Block system (complex symmetric: A = A^T):
-            | Z_LL    M_LS^T  |   | I_L |   | V_port |
-            | M_LS    Z_SS    | * | Q_S | = | 0      |
+        Reformulated Schur complement (numerically stable):
+            Z_eff = Z_LL - jw * M_LS^T * P^{-1} * M_LS
 
-        where:
-            Z_LL = diag(R + Zs) + jw*L   (n_loop x n_loop)
-            Z_SS = P / (jw)               (n_star x n_star)
-            M_LS                           (n_star x n_loop)
+        The key fix: instead of forming Z_SS = P/(jw) (blows up at low freq),
+        we precompute P^{-1} * M_LS once and multiply by jw at each frequency.
 
-        Port impedance via Schur complement:
-            Z_eff = Z_LL - M_LS^T * Z_SS^{-1} * M_LS
-            Z_port = 1 / (e^T * Z_eff^{-1} * e)
-
-        All linear solves use LDL^T (Bunch-Kaufman) for complex symmetric matrices.
+        This gives the exact same mathematical result but avoids the
+        O(1/omega) conditioning issue in the intermediate linear solve.
         """
         # Loop-Loop block
         R_diag = self.R_loop.astype(complex)
@@ -501,22 +572,85 @@ class NGBEMPEECSolver:
             x = scipy.linalg.solve(np.diag(self.R_loop), e)
             return 1.0 / (e @ x) + 0j
 
-        # Star-Star block
-        Z_SS = self.P / (1j * omega)
+        # Schur complement: Z_eff = Z_LL - jw * M_LS^T @ P^{-1} @ M_LS
+        # P^{-1} @ M_LS is precomputed in assemble() as self._P_inv_M_LS
+        if self._P_inv_M_LS is not None:
+            cap_correction = (1j * omega) * (self.M_LS.T @ self._P_inv_M_LS)
+        else:
+            # Fallback: solve at each frequency (slower but always works)
+            X = scipy.linalg.solve(self.P, self.M_LS, assume_a='sym')
+            cap_correction = (1j * omega) * (self.M_LS.T @ X)
 
-        # Schur complement: Z_eff = Z_LL - M_LS^T * Z_SS^{-1} * M_LS
-        # Solve Z_SS * X = M_LS via LDL^T (complex symmetric)
-        X = scipy.linalg.solve(Z_SS, self.M_LS, assume_a='sym')
-        Schur = Z_LL - self.M_LS.T @ X
+        Schur = Z_LL - cap_correction
 
-        # Port extraction via LDL^T (complex symmetric)
+        # Port extraction
         e = np.ones(self.n_loop) / self.n_loop
         x = scipy.linalg.solve(Schur, e, assume_a='sym')
         Z_port = 1.0 / (e @ x)
 
         return Z_port
 
-    def solve_loop_star(self, freq):
+    def _solve_stabilized(self, omega, Zs=None):
+        """Stabilized formulation using BEM Q_0 coupling (Weggler).
+
+        Uses Q_0 = LaplaceSL(div(J), rho) instead of local FEM M_LS.
+        At MQS (k->0): the system is a saddle-point [L, Q_0; Q_0^T, 0]
+        which enforces divergence-free current (no charge accumulation).
+
+        For finite frequency: includes k^2*V_0 capacitive block.
+
+        Reference:
+            L. Weggler, "Stabilized DtN formulation for low-frequency BEM"
+            https://github.com/Weggler/docu-ngsbem/blob/main/demos/
+            Maxwell_DtN_Stabilized.ipynb
+        """
+        if self.Q_0 is None:
+            raise RuntimeError("Q_0 not assembled. Call assemble() first.")
+
+        R_diag = self.R_loop.astype(complex)
+        if Zs is not None:
+            R_diag = R_diag + np.asarray(Zs, dtype=complex)
+
+        if omega < 1e-10:
+            # DC limit: only resistance
+            e = np.ones(self.n_loop) / self.n_loop
+            x = scipy.linalg.solve(np.diag(self.R_loop), e)
+            return 1.0 / (e @ x) + 0j
+
+        # Build full stabilized block system
+        n = self.n_loop + self.n_star
+        Z_full = np.zeros((n, n), dtype=complex)
+
+        # (1,1): Z_LL = diag(R+Zs) + jw*L
+        Z_full[:self.n_loop, :self.n_loop] = (
+            np.diag(R_diag) + 1j * omega * self.L)
+
+        # Off-diagonal: mu_0 * Q_0 coupling (BEM, not local FEM)
+        # Scale by jw*mu_0 to match EFIE formulation
+        scale = 1j * omega * MU_0
+        Z_full[:self.n_loop, self.n_loop:] = scale * self.Q_0.T
+        Z_full[self.n_loop:, :self.n_loop] = scale * self.Q_0
+
+        # (2,2): jw*mu_0*k^2*V_0 (saddle-point at k=0, stabilized at finite k)
+        k = omega / C_0
+        Z_full[self.n_loop:, self.n_loop:] = (
+            scale * k**2 * self.V_0)
+
+        # RHS: port excitation in loop DOFs
+        rhs = np.zeros(n, dtype=complex)
+        e = np.ones(self.n_loop) / self.n_loop
+        rhs[:self.n_loop] = e
+
+        # Solve full system (well-conditioned by stabilization)
+        sol = scipy.linalg.solve(Z_full, rhs)
+
+        # Port impedance from loop DOFs
+        I_L = sol[:self.n_loop]
+        Z_port = 1.0 / (e @ I_L)
+
+        return Z_port
+
+    def solve_loop_star(self, freq, mode='full'):
         """Solve full Loop-Star system and return solution vectors.
 
         This method exposes the internal current and charge distributions,
@@ -524,6 +658,7 @@ class NGBEMPEECSolver:
 
         Args:
             freq: Frequency [Hz]
+            mode: 'full' (reformulated Schur) or 'stabilized' (Weggler BEM)
 
         Returns:
             I_loop: Complex array (n_loop,) — edge current coefficients
@@ -533,8 +668,6 @@ class NGBEMPEECSolver:
             raise RuntimeError("Call assemble() before solve_loop_star()")
 
         omega = 2.0 * np.pi * freq
-
-        Z_LL = np.diag(self.R_loop.astype(complex)) + 1j * omega * self.L
         e = np.ones(self.n_loop) / self.n_loop
 
         if omega < 1e-10:
@@ -543,18 +676,41 @@ class NGBEMPEECSolver:
             Q_star = np.zeros(self.n_star, dtype=complex)
             return I_loop, Q_star
 
-        Z_SS = self.P / (1j * omega)
+        if mode == 'stabilized':
+            # Solve full stabilized system
+            n = self.n_loop + self.n_star
+            Z_full = np.zeros((n, n), dtype=complex)
+            Z_full[:self.n_loop, :self.n_loop] = (
+                np.diag(self.R_loop.astype(complex)) + 1j * omega * self.L)
+            scale = 1j * omega * MU_0
+            Z_full[:self.n_loop, self.n_loop:] = scale * self.Q_0.T
+            Z_full[self.n_loop:, :self.n_loop] = scale * self.Q_0
+            k = omega / C_0
+            Z_full[self.n_loop:, self.n_loop:] = scale * k**2 * self.V_0
 
-        # Schur complement: Z_eff = Z_LL - M_LS^T * Z_SS^{-1} * M_LS
-        X = scipy.linalg.solve(Z_SS, self.M_LS, assume_a='sym')
-        Schur = Z_LL - self.M_LS.T @ X
+            rhs = np.zeros(n, dtype=complex)
+            rhs[:self.n_loop] = e
+            sol = scipy.linalg.solve(Z_full, rhs)
+            return sol[:self.n_loop], sol[self.n_loop:]
+
+        # mode='full': reformulated Schur complement
+        Z_LL = np.diag(self.R_loop.astype(complex)) + 1j * omega * self.L
+
+        # Schur complement: Z_eff = Z_LL - jw * M_LS^T @ P^{-1} @ M_LS
+        if self._P_inv_M_LS is not None:
+            cap_correction = (1j * omega) * (self.M_LS.T @ self._P_inv_M_LS)
+        else:
+            X = scipy.linalg.solve(self.P, self.M_LS, assume_a='sym')
+            cap_correction = (1j * omega) * (self.M_LS.T @ X)
+
+        Schur = Z_LL - cap_correction
 
         # Solve for loop currents
         I_loop = scipy.linalg.solve(Schur, e, assume_a='sym')
 
-        # Back-substitute for star charges: Z_SS * Q = -M_LS * I
-        Q_star = -scipy.linalg.solve(Z_SS, self.M_LS @ I_loop,
-                                      assume_a='sym')
+        # Back-substitute for star charges: Q = -jw * P^{-1} * M_LS * I
+        Q_star = -(1j * omega) * scipy.linalg.solve(
+            self.P, self.M_LS @ I_loop, assume_a='sym')
 
         return I_loop, Q_star
 
@@ -614,11 +770,22 @@ class NGBEMPEECSolver:
         print()
 
         # M_LS properties
-        print(f"  M_LS matrix ({self.n_star}x{self.n_loop}):")
+        print(f"  M_LS matrix ({self.n_star}x{self.n_loop}) [local FEM]:")
         print(f"    Range: [{np.min(self.M_LS):.4e}, {np.max(self.M_LS):.4e}]")
         print(f"    Nonzeros: {np.count_nonzero(np.abs(self.M_LS) > 1e-15)}"
               f" / {self.M_LS.size}")
         print()
+
+        # Q_0 properties
+        if self.Q_0 is not None:
+            print(f"  Q_0 matrix ({self.Q_0.shape[0]}x{self.Q_0.shape[1]}) "
+                  f"[BEM LaplaceSL]:")
+            print(f"    Range: [{np.min(self.Q_0):.4e}, "
+                  f"{np.max(self.Q_0):.4e}]")
+            print(f"    Nonzeros: "
+                  f"{np.count_nonzero(np.abs(self.Q_0) > 1e-15)}"
+                  f" / {self.Q_0.size}")
+            print()
 
         # Resistance
         print(f"  R_loop: [{np.min(self.R_loop):.4e}, "

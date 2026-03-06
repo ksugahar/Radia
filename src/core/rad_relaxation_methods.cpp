@@ -36,9 +36,7 @@ extern radTApplication rad;
 
 //-------------------------------------------------------------------------
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "rad_parallel.h"
 
 #ifdef HAVE_LAPACK
 // Intel MKL headers (includes dgesv_ declaration)
@@ -58,41 +56,33 @@ void radTIterativeRelaxMeth::ComputeRelaxStatusParam(const TVector3d* NewMagnArr
 	double BufMisfitM, BufMaxModM, BufMaxModH, TestBufMaxModM, TestBufMaxModH;
 	BufMisfitM=0.;
 	BufMaxModM=BufMaxModH=TestBufMaxModM=TestBufMaxModH=1.E-17;
-	TVector3d Mnew_mi_MoldVect;
 
 	radTRelaxStatusParam& RelStatParR = IntrctPtr->RelaxStatusParam;
 
-	#pragma omp parallel for reduction(+:BufMisfitM) if(IntrctPtr->AmOfMainElem > 100)
-	for(int i=0; i<IntrctPtr->AmOfMainElem; i++)
-	{
+	ngcore::ParallelFor(ngcore::IntRange(IntrctPtr->AmOfMainElem), [&](size_t i) {
 		double LocalTestBufMaxModM = 0., LocalTestBufMaxModH = 0.;
 		if(RelStatParR.MisfitM >= 0. && OldMagnArray != nullptr)
 		{
-			Mnew_mi_MoldVect = NewMagnArray[i] - OldMagnArray[i];
-			BufMisfitM += Mnew_mi_MoldVect.x*Mnew_mi_MoldVect.x + Mnew_mi_MoldVect.y*Mnew_mi_MoldVect.y
+			TVector3d Mnew_mi_MoldVect = NewMagnArray[i] - OldMagnArray[i];
+			double local_misfit = Mnew_mi_MoldVect.x*Mnew_mi_MoldVect.x + Mnew_mi_MoldVect.y*Mnew_mi_MoldVect.y
 						+ Mnew_mi_MoldVect.z*Mnew_mi_MoldVect.z;
+			ngcore::AtomicAdd(BufMisfitM, local_misfit);
 		}
 		if(RelStatParR.MaxModM >= 0.)
 		{
 			LocalTestBufMaxModM = sqrt(NewMagnArray[i].x*NewMagnArray[i].x
 								+ NewMagnArray[i].y*NewMagnArray[i].y
 								+ NewMagnArray[i].z*NewMagnArray[i].z);
-			#pragma omp critical
-			{
-				if(LocalTestBufMaxModM > BufMaxModM) BufMaxModM = LocalTestBufMaxModM;
-			}
+			ngcore::AtomicMax(BufMaxModM, LocalTestBufMaxModM);
 		}
 		if(RelStatParR.MaxModH >= 0.)
 		{
 			LocalTestBufMaxModH = sqrt(NewFieldArray[i].x*NewFieldArray[i].x
 								+ NewFieldArray[i].y*NewFieldArray[i].y
 								+ NewFieldArray[i].z*NewFieldArray[i].z);
-			#pragma omp critical
-			{
-				if(LocalTestBufMaxModH > BufMaxModH) BufMaxModH = LocalTestBufMaxModH;
-			}
+			ngcore::AtomicMax(BufMaxModH, LocalTestBufMaxModH);
 		}
-	}
+	});
 	if(RelStatParR.MisfitM >= 0.) RelStatParR.MisfitM = sqrt(BufMisfitM/IntrctPtr->AmOfMainElem);
 	if(RelStatParR.MaxModM >= 0.) RelStatParR.MaxModM = BufMaxModM;
 	if(RelStatParR.MaxModH >= 0.) RelStatParR.MaxModH = BufMaxModH;
@@ -1074,11 +1064,13 @@ double radTRelaxationMethNo_1::Dot(const std::vector<double>& a, const std::vect
 	return cblas_ddot(n, a.data(), 1, b.data(), 1);
 #else
 	double sum = 0.0;
-	#pragma omp parallel for reduction(+:sum) if(n > 100)
-	for(int i = 0; i < n; i++)
-	{
-		sum += a[i] * b[i];
-	}
+	ngcore::ParallelForRange(ngcore::IntRange(n), [&](ngcore::IntRange r) {
+		double local_sum = 0.0;
+		for (auto i : r) {
+			local_sum += a[i] * b[i];
+		}
+		ngcore::AtomicAdd(sum, local_sum);
+	});
 	return sum;
 #endif
 }
@@ -1099,11 +1091,9 @@ void radTRelaxationMethNo_1::Axpy(double alpha, const std::vector<double>& x, st
 	// Use Intel MKL CBLAS cblas_daxpy: y = alpha*x + y
 	cblas_daxpy(n, alpha, x.data(), 1, y.data(), 1);
 #else
-	#pragma omp parallel for if(n > 100)
-	for(int i = 0; i < n; i++)
-	{
+	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		y[i] += alpha * x[i];
-	}
+	});
 #endif
 }
 
@@ -1113,11 +1103,9 @@ void radTRelaxationMethNo_1::Copy(const std::vector<double>& src, std::vector<do
 	// Use Intel MKL CBLAS cblas_dcopy for optimized copy
 	cblas_dcopy(n, src.data(), 1, dst.data(), 1);
 #else
-	#pragma omp parallel for if(n > 100)
-	for(int i = 0; i < n; i++)
-	{
+	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		dst[i] = src[i];
-	}
+	});
 #endif
 }
 
@@ -1127,11 +1115,9 @@ void radTRelaxationMethNo_1::Scale(double alpha, std::vector<double>& x, int n)
 	// Use Intel MKL CBLAS cblas_dscal for optimized scale
 	cblas_dscal(n, alpha, x.data(), 1);
 #else
-	#pragma omp parallel for if(n > 100)
-	for(int i = 0; i < n; i++)
-	{
+	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		x[i] *= alpha;
-	}
+	});
 #endif
 }
 
@@ -1198,9 +1184,7 @@ void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vect
 	if(IntrcMat != nullptr)
 	{
 		// Dense matrix-vector product: O(N^2)
-		#pragma omp parallel for if(n_elem > 50)
-		for(int i = 0; i < n_elem; i++)
-		{
+		ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
 			// Use pre-computed 1/chi values
 			double inv_chi_x = inv_chi[3*i + 0];
 			double inv_chi_y = inv_chi[3*i + 1];
@@ -1230,7 +1214,7 @@ void radTRelaxationMethNo_1::DenseMatVec(const std::vector<double>& x, std::vect
 			y[3*i + 0] = y0;
 			y[3*i + 1] = y1;
 			y[3*i + 2] = y2;
-		}
+		});
 	}
 }
 
@@ -1256,9 +1240,7 @@ void radTRelaxationMethNo_1::BuildFlatMatrix(std::vector<double>& A_flat, const 
 
 	if(IntrcMat != nullptr)
 	{
-		#pragma omp parallel for if(n_elem > 50)
-		for(int i = 0; i < n_elem; i++)
-		{
+		ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
 			for(int j = 0; j < n_elem; j++)
 			{
 				TMatrix3df& Nij = IntrcMat[i][j];
@@ -1287,7 +1269,7 @@ void radTRelaxationMethNo_1::BuildFlatMatrix(std::vector<double>& A_flat, const 
 			A_flat[(3*i + 0)*ndof + (3*i + 0)] += inv_chi[3*i + 0];
 			A_flat[(3*i + 1)*ndof + (3*i + 1)] += inv_chi[3*i + 1];
 			A_flat[(3*i + 2)*ndof + (3*i + 2)] += inv_chi[3*i + 2];
-		}
+		});
 	}
 }
 
@@ -1355,7 +1337,11 @@ int radTRelaxationMethNo_0::SolveLU_Flat(std::vector<double>& A, std::vector<dou
 	int nrhs = 1;
 	int info = 0;
 
-	dgesv_(&n, &nrhs, A_col.data(), &n, ipiv.data(), b.data(), &n, &info);
+	{
+		ngcore::SuspendTaskManager stm;
+		radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
+		dgesv_(&n, &nrhs, A_col.data(), &n, ipiv.data(), b.data(), &n, &info);
+	}
 
 	return (info == 0) ? 0 : -1;
 #else
@@ -1529,7 +1515,11 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	}
 
 	// dgesv overwrites SystemMatrix with LU factors and RHS with solution
-	dgesv_(&totalDOF, &nrhs, SystemMatrix.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
+	{
+		ngcore::SuspendTaskManager stm;
+		radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
+		dgesv_(&totalDOF, &nrhs, SystemMatrix.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
+	}
 
 	if(info != 0) return -1;  // Singular matrix
 #else
@@ -1628,11 +1618,9 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 
 		// Add diagonal contribution: y[i] += inv_chi[i] * x[i] (physically correct)
 		// This is element-wise multiplication and addition
-		#pragma omp parallel for if(totalDOF > 1000)
-		for(int i = 0; i < totalDOF; i++)
-		{
+		ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
 			y[i] += inv_chi[i] * x[i];  // Physically correct: +1/chi
-		}
+		});
 		return;
 	}
 
@@ -1658,11 +1646,9 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 		            y.data(), 1);
 
 		// Add diagonal contribution (physically correct: +1/chi)
-		#pragma omp parallel for if(totalDOF > 1000)
-		for(int i = 0; i < totalDOF; i++)
-		{
+		ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
 			y[i] += inv_chi[i] * x[i];  // Physically correct: +1/chi
-		}
+		});
 		return;
 	}
 #endif
@@ -1671,9 +1657,7 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 	// This handles the case where 3DOF and 6DOF elements are mixed
 	std::fill(y.begin(), y.end(), 0.0);
 
-	#pragma omp parallel for if(AmOfMainElem > 50)
-	for(int row_elem = 0; row_elem < AmOfMainElem; row_elem++)
-	{
+	ngcore::ParallelFor(ngcore::IntRange(AmOfMainElem), [&](size_t row_elem) {
 		int dof_row = IntrctPtr->GetElementDOF(row_elem);
 		int offset_row = IntrctPtr->GetElementDOFOffset(row_elem);
 
@@ -1709,7 +1693,7 @@ void radTRelaxationMethNo_1::MatVec_VariableDOF(const std::vector<double>& x, st
 				y[offset_row + i] += sign * sum;
 			}
 		}
-	}
+	});
 }
 
 void radTRelaxationMethNo_1::GetDiagonalElements_VariableDOF(std::vector<double>& diag,
@@ -1844,9 +1828,7 @@ void radTRelaxationMethNo_1::ApplyBlockJacobiPreconditioner_VariableDOF(
 	// where M is the block-diagonal of A
 	int AmOfMainElem = IntrctPtr->AmOfMainElem;
 
-	#pragma omp parallel for if(AmOfMainElem > 20)
-	for(int elem = 0; elem < AmOfMainElem; elem++)
-	{
+	ngcore::ParallelFor(ngcore::IntRange(AmOfMainElem), [&](size_t elem) {
 		int dof = IntrctPtr->GetElementDOF(elem);
 		int mat_offset = IntrctPtr->GetElementDOFOffset(elem);
 		int block_offset = blockOffsets[elem];
@@ -1861,7 +1843,7 @@ void radTRelaxationMethNo_1::ApplyBlockJacobiPreconditioner_VariableDOF(
 			}
 			y[mat_offset + i] = sum;
 		}
-	}
+	});
 }
 #endif
 
@@ -2011,11 +1993,9 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
 		else
 #endif
 		{
-			#pragma omp parallel for if(totalDOF > 100)
-			for(int i = 0; i < totalDOF; i++)
-			{
+			ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
 				p_hat[i] = diag_inv[i] * p[i];
-			}
+			});
 		}
 
 		MatVec_VariableDOF(p_hat, v, inv_chi, totalDOF);
@@ -2048,11 +2028,9 @@ int radTRelaxationMethNo_1::SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
 		else
 #endif
 		{
-			#pragma omp parallel for if(totalDOF > 100)
-			for(int i = 0; i < totalDOF; i++)
-			{
+			ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
 				s_hat[i] = diag_inv[i] * s[i];
-			}
+			});
 		}
 
 		MatVec_VariableDOF(s_hat, t, inv_chi, totalDOF);
@@ -2175,11 +2153,13 @@ double radTRelaxationMethNo_2::Dot(const std::vector<double>& a, const std::vect
 	return cblas_ddot(n, a.data(), 1, b.data(), 1);
 #else
 	double sum = 0.0;
-	#pragma omp parallel for reduction(+:sum) if(n > 100)
-	for(int i = 0; i < n; i++)
-	{
-		sum += a[i] * b[i];
-	}
+	ngcore::ParallelForRange(ngcore::IntRange(n), [&](ngcore::IntRange r) {
+		double local_sum = 0.0;
+		for (auto i : r) {
+			local_sum += a[i] * b[i];
+		}
+		ngcore::AtomicAdd(sum, local_sum);
+	});
 	return sum;
 #endif
 }
@@ -2198,11 +2178,9 @@ void radTRelaxationMethNo_2::Axpy(double alpha, const std::vector<double>& x, st
 #ifdef HAVE_LAPACK
 	cblas_daxpy(n, alpha, x.data(), 1, y.data(), 1);
 #else
-	#pragma omp parallel for if(n > 100)
-	for(int i = 0; i < n; i++)
-	{
+	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		y[i] += alpha * x[i];
-	}
+	});
 #endif
 }
 
@@ -2211,11 +2189,9 @@ void radTRelaxationMethNo_2::Copy(const std::vector<double>& src, std::vector<do
 #ifdef HAVE_LAPACK
 	cblas_dcopy(n, src.data(), 1, dst.data(), 1);
 #else
-	#pragma omp parallel for if(n > 100)
-	for(int i = 0; i < n; i++)
-	{
+	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		dst[i] = src[i];
-	}
+	});
 #endif
 }
 
@@ -2224,11 +2200,9 @@ void radTRelaxationMethNo_2::Scale(double alpha, std::vector<double>& x, int n)
 #ifdef HAVE_LAPACK
 	cblas_dscal(n, alpha, x.data(), 1);
 #else
-	#pragma omp parallel for if(n > 100)
-	for(int i = 0; i < n; i++)
-	{
+	ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
 		x[i] *= alpha;
-	}
+	});
 #endif
 }
 
@@ -2386,11 +2360,9 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 		}
 		else
 		{
-			#pragma omp parallel for if(totalDOF > 100)
-			for(int i = 0; i < totalDOF; i++)
-			{
+			ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
 				p_hat[i] = diag_inv[i] * p[i];
-			}
+			});
 		}
 
 		// v = A * p_hat using H-matrix
@@ -2421,11 +2393,9 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 		}
 		else
 		{
-			#pragma omp parallel for if(totalDOF > 100)
-			for(int i = 0; i < totalDOF; i++)
-			{
+			ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
 				s_hat[i] = diag_inv[i] * s[i];
-			}
+			});
 		}
 
 		// t = A * s_hat using H-matrix
@@ -2486,11 +2456,9 @@ void radTRelaxationMethNo_2::GetDiagonalElements_HMatrix_VariableDOF(std::vector
 	if(m_hacapk->IsDiagonalCached())
 	{
 		const std::vector<double>& diag_N = m_hacapk->GetDiagonalN();
-		#pragma omp parallel for if(totalDOF > 100)
-		for(int i = 0; i < totalDOF; i++)
-		{
+		ngcore::ParallelFor(ngcore::IntRange(totalDOF), [&](size_t i) {
 			diag[i] = -diag_N[i] + inv_chi[i];  // Physical: -K/(4pi) + 1/chi
-		}
+		});
 	}
 	else
 	{
@@ -2598,9 +2566,7 @@ void radTRelaxationMethNo_2::ApplyBlockJacobiPreconditioner_HMatrix(
 {
 	int AmOfMainElem = IntrctPtr->AmOfMainElem;
 
-	#pragma omp parallel for if(AmOfMainElem > 20)
-	for(int elem = 0; elem < AmOfMainElem; elem++)
-	{
+	ngcore::ParallelFor(ngcore::IntRange(AmOfMainElem), [&](size_t elem) {
 		int dof = IntrctPtr->GetElementDOF(elem);
 		int mat_offset = IntrctPtr->GetElementDOFOffset(elem);
 		int block_offset = blockOffsets[elem];
@@ -2614,7 +2580,7 @@ void radTRelaxationMethNo_2::ApplyBlockJacobiPreconditioner_HMatrix(
 			}
 			y[mat_offset + i] = sum;
 		}
-	}
+	});
 }
 
 //-------------------------------------------------------------------------

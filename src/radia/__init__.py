@@ -25,12 +25,32 @@ if sys.platform == 'win32':
     # 1. Package directory (for _radia_pybind.pyd and other .pyd files)
     _dirs_to_add.append(_package_dir)
 
-    # 2. MKL DLLs from pip install mkl (mkl_rt.2.dll, etc.)
+    # 2. NGSolve DLLs (ngcore.dll, libngsolve.dll, etc.)
+    #    _radia_pybind links against ngstd, so NGSolve DLLs must be loadable.
+    #    Detect via ngsolve Python package location → install_root/bin/
+    try:
+        import ngsolve as _ngsolve_mod
+        _ngsolve_pkg_dir = os.path.dirname(_ngsolve_mod.__file__)
+        # pip-installed: site-packages/ngsolve/ → bin/ is at ../../Library/bin/
+        # source-installed: .../Lib/site-packages/ngsolve/ → bin/ is at ../../../bin/
+        for _up in [
+            os.path.join(_ngsolve_pkg_dir, '..', '..', '..', 'bin'),     # source install
+            os.path.join(_ngsolve_pkg_dir, '..', '..', 'Library', 'bin'),# pip install
+        ]:
+            _ng_bin = os.path.normpath(_up)
+            if os.path.isdir(_ng_bin) and os.path.isfile(os.path.join(_ng_bin, 'ngcore.dll')):
+                _dirs_to_add.append(_ng_bin)
+                break
+        del _ngsolve_mod, _ngsolve_pkg_dir
+    except ImportError:
+        pass
+
+    # 3. MKL DLLs from pip install mkl (mkl_rt.2.dll, etc.)
     _mkl_bin = os.path.join(sys.prefix, "Library", "bin")
     if os.path.isdir(_mkl_bin):
         _dirs_to_add.append(_mkl_bin)
 
-    # 3. Intel oneAPI (fallback for development builds)
+    # 4. Intel oneAPI (fallback for development builds)
     for _intel_path in [
         os.path.join(os.environ.get("MKLROOT", ""), "bin"),
         r"C:\Program Files (x86)\Intel\oneAPI\mkl\latest\bin",

@@ -7,7 +7,7 @@ Test Categories:
 - test_simple.py: Basic functionality tests
 - test_radia.py: Comprehensive test suite
 - test_advanced.py: Advanced features and edge cases
-- test_parallel_performance.py: OpenMP parallelization tests
+- test_parallel_performance.py: TaskManager parallelization tests
 - benchmarks/: Performance benchmarking scripts
 
 Usage:
@@ -21,7 +21,7 @@ Usage:
 	pytest -v tests/
 
 	# Run benchmarks
-	python tests/benchmarks/benchmark_openmp.py
+	python tests/benchmarks/benchmark_parallel.py
 """
 
 __version__ = "4.32"

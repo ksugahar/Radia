@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### 2026-03-01
+- **Parallelization: OpenMP -> NGSolve TaskManager**
+  - Migrated all parallel loops from OpenMP to NGSolve TaskManager
+  - Resolved MKL threading conflict (NGSolve mkl_set_num_threads(1))
+  - HACApK: C wrapper functions for TaskManager integration
+  - Removed OpenMP dependency (libiomp5md.dll no longer linked by Radia)
+  - Added rad_parallel.h unified parallelization header
+  - MKL LAPACK calls (dgesv_) now properly restore thread count
+
 ## [1.8.1] - 2026-02-09
 
 ### Changed

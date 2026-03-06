@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "radia"
 version = "2.4.0"
-description = "Radia 3D Magnetostatics with NGSolve Integration and OpenMP Parallelization"
+description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "BSD-style AND MIT"}

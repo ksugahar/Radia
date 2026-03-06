@@ -32,16 +32,14 @@
 #include <vector>
 #include <cstdint>
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "rad_parallel.h"
 
 // ExaFMM-t headers must be included OUTSIDE of any namespace
 // to avoid std:: namespace conflicts with MSVC
 #ifdef RADIA_USE_EXAFMM
-#include "dipole.h"
-#include "build_tree.h"
-#include "build_list.h"
+#include "exafmm/dipole.h"
+#include "exafmm/build_tree.h"
+#include "exafmm/build_list.h"
 #endif
 
 namespace RadExaFMM {
@@ -155,11 +153,8 @@ FMMResult ComputeDipoleFieldDirect(
     result.grady.resize(ntarget, 0.0);
     result.gradz.resize(ntarget, 0.0);
 
-    // Direct O(N*M) computation with OpenMP parallelization
-    #ifdef _OPENMP
-    #pragma omp parallel for schedule(dynamic, 64)
-    #endif
-    for (int64_t i = 0; i < ntarget; ++i) {
+    // Direct O(N*M) computation with TaskManager parallelization
+    ngcore::ParallelFor(ngcore::IntRange(ntarget), [&](size_t i) {
         double tx = targets[i * 3 + 0];
         double ty = targets[i * 3 + 1];
         double tz = targets[i * 3 + 2];
@@ -185,7 +180,7 @@ FMMResult ComputeDipoleFieldDirect(
         result.gradx[i] = gx * RadConst::INV_FOUR_PI;
         result.grady[i] = gy * RadConst::INV_FOUR_PI;
         result.gradz[i] = gz * RadConst::INV_FOUR_PI;
-    }
+    });
 
     return result;
 }
@@ -225,11 +220,8 @@ FMMResult ComputeDipoleVectorPotentialDirect(
     result.grady.resize(ntarget, 0.0);  // Ay
     result.gradz.resize(ntarget, 0.0);  // Az
 
-    // Direct O(N*M) computation with OpenMP parallelization
-    #ifdef _OPENMP
-    #pragma omp parallel for schedule(dynamic, 64)
-    #endif
-    for (int64_t i = 0; i < ntarget; ++i) {
+    // Direct O(N*M) computation with TaskManager parallelization
+    ngcore::ParallelFor(ngcore::IntRange(ntarget), [&](size_t i) {
         double tx = targets[i * 3 + 0];
         double ty = targets[i * 3 + 1];
         double tz = targets[i * 3 + 2];
@@ -253,7 +245,7 @@ FMMResult ComputeDipoleVectorPotentialDirect(
         result.gradx[i] = Ax * RadConst::MU_0_OVER_FOUR_PI;
         result.grady[i] = Ay * RadConst::MU_0_OVER_FOUR_PI;
         result.gradz[i] = Az * RadConst::MU_0_OVER_FOUR_PI;
-    }
+    });
 
     return result;
 }

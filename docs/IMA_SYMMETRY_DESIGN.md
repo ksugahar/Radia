@@ -324,21 +324,30 @@ rad.BuildImageMatrix(intrc)
 rad.Solve(container, 0.0001, 100, 0)
 ```
 
-### Phase 2: HACApK Image - FUTURE ENHANCEMENT
+### Phase 2: HACApK Image - COMPLETED (2026-02-05)
 
-HACApK Image support requires modifying the on-demand matrix element computation to include the Image formula. This involves:
+HACApK IMA is implemented via the unified `image=` parameter in `rad.Solve()` and
+`rad.BuildMatrix()`. The on-demand matrix element computation (`GetCached6x6Element`,
+`GetCached3x3Element`) transparently includes IMA contributions through the
+interaction matrix infrastructure.
 
-1. Adding Image state to RadHACApKManager
-2. Modifying GetInteractionMatrixElement() to compute K_Image = K_direct + sign * K_mirror @ P
-3. Building cluster tree on reduced element set
+**Key fix**: Thread-local cache invalidation for IMA transitions (2026-02-05).
+Previously, stale cache values from non-IMA solves were incorrectly used for IMA
+solves. Fixed by generation-based cache invalidation in `rad_hacapk.cpp`.
 
-This is planned for large-scale problems (N > 2000 elements) where memory savings are significant.
+Verified: All three solvers (LU, BiCGSTAB, HACApK) produce identical results with
+IMA quarter model (`image='+x-z'`). See `examples/c_type_electromagnet/mu=1000/quarter/test_all_solvers_ima.py`.
 
-### Phase 3: Multi-axis Symmetry - FUTURE ENHANCEMENT
+### Phase 3: Multi-axis Symmetry - COMPLETED (2026-01-31)
 
-Extension to xy (quarter model) and xyz (eighth model) symmetry is straightforward:
-- Apply multiple permutations for combined symmetries
-- Filter elements by positive half-spaces for all active axes
+Combined symmetries are supported via the unified `image=` string parameter:
+- `image='+x'`: x-mirror only (half model)
+- `image='+x-z'`: x + z mirror (quarter model)
+- `image='+x+y-z'`: x + y + z mirror (eighth model)
+
+Sign selection policy:
+- `+` for field parallel to mirror plane (symmetric)
+- `-` for field perpendicular to mirror plane (antisymmetric)
 
 ## References
 

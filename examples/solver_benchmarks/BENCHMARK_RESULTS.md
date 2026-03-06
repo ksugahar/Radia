@@ -98,7 +98,7 @@ python run_all_hmatrix_benchmarks.py
 **Parallel Speedup**: 27.74x for N=343 (expected sequential: 27.7 ms → actual parallel: 1.0 ms)
 
 **Key Findings**:
-- OpenMP parallel construction enabled for n_elem > 100
+- TaskManager parallel construction enabled for n_elem > 100
 - 9 H-matrices (3×3 tensor components) built in parallel
 - Construction overhead becomes negligible for larger problems
 
@@ -185,7 +185,7 @@ rad.Solve(geometry, 0.0001, 1000, 2)
 - **Platform**: Windows (MINGW64)
 - **Python**: 3.12
 - **Compiler**: MSVC 2022
-- **OpenMP**: Enabled
+- **Parallelization**: NGSolve TaskManager
 - **CPU Cores**: 4-8 (parallel construction active)
 - **Disk**: SSD (for cache I/O)
 
@@ -195,7 +195,7 @@ rad.Solve(geometry, 0.0001, 1000, 2)
 
 - Python 3.12+
 - Radia v1.1.0+ with H-matrix support (HACApK library)
-- OpenMP-enabled build
+- NGSolve TaskManager-enabled build
 - 8GB+ RAM recommended for large benchmarks
 - SSD recommended for disk caching performance
 

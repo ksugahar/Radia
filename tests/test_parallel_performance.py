@@ -110,10 +110,12 @@ def test_relaxation_performance():
 	assert elapsed_time > 0
 
 def set_thread_count(num_threads):
-	"""Set the number of OpenMP threads"""
-	os.environ['OMP_NUM_THREADS'] = str(num_threads)
-	# Note: This needs to be set before importing radia
-	# So we'll need to test this by restarting Python
+	"""Set the number of threads for parallel computation.
+
+	Note: With TaskManager, thread count is managed automatically.
+	This function is retained for compatibility but may not be needed.
+	"""
+	pass
 
 def run_performance_test(test_name, test_func, *args):
 	"""Run a performance test and return timing"""
@@ -142,9 +144,8 @@ def main():
 	print("=" * 70)
 	print()
 
-	# Check current thread setting
-	num_threads = os.environ.get('OMP_NUM_THREADS', 'not set')
-	print(f"Current OMP_NUM_THREADS: {num_threads}")
+	# Thread management is now handled by TaskManager
+	print(f"Thread management: TaskManager (automatic)")
 	print()
 
 	# Get Radia version

@@ -276,45 +276,6 @@ curl(A_ext) ≈ B_ext/μ₀  (within numerical accuracy)
 - `radia_ngsolve.RadiaField()` documentation
 - Radia User's Guide: Field computation methods
 
-## MCP サーバーへの統合 (MCP Server Integration)
-
-これらの検証例は、NGSolve MCP サーバーの以下のツールで再現可能です：
-
-### A-Φ法の再現
-
-現在、NGSolve MCP サーバーには **2-scalar method** (Reduced-Total scalar potential) と **T-Omega method** が実装されていますが、**A-Φ法**（Vector-Scalar potential method）はまだ実装されていません。
-
-**今後の実装候補**:
-- `ngsolve_a_phi_setup` - A-Φ FE空間セットアップ
-- `ngsolve_a_phi_solve_transient` - 過渡A-Φ解析
-- `ngsolve_compute_eddy_current_a_phi` - A-Φ法での渦電流計算
-
-### T-Ω法の再現
-
-**既存のMCPツール**（v1.2.0以降）:
-```python
-# 1. Topology analysis (if multiply-connected)
-ngsolve_compute_genus(mesh_name="mesh")
-
-# 2. Loop fields (for holes)
-ngsolve_compute_loop_fields(mesh_name="mesh", domain="conductor", order=2)
-
-# 3. T-Omega FE space setup
-ngsolve_t_omega_setup(
-    mesh_name="mesh",
-    conductor_domain="copper",
-    order=2
-)
-
-# 4. Solve T-Omega system
-ngsolve_t_omega_solve_coupled(
-    fespace_name="t_omega_space",
-    sigma=5.8e7,
-    mu=1.257e-6,
-    conductor_domain="copper"
-)
-```
-
 ## ライセンス (License)
 
 このコードはRadiaとNGSolveのライセンスに従います。
