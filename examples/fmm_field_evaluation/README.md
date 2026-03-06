@@ -178,7 +178,7 @@ List of integers:
 ### Performance Factors
 
 1. **Python call overhead**: FldBatch has single Python-C++ call vs N calls for loop
-2. **OpenMP parallelization**: FldBatch uses OpenMP for multi-threading
+2. **TaskManager parallelization**: FldBatch uses NGSolve TaskManager for multi-threading
 3. **Memory access patterns**: FldBatch optimizes memory access for batch operations
 
 ### Typical Speedups

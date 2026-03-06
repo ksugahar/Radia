@@ -109,6 +109,27 @@ public:
     }
 
     /**
+     * Generate face panels from segment box surfaces
+     *
+     * Automatically creates quad panels from each segment's rectangular
+     * cross-section extruded along its length.
+     *
+     * Args:
+     *   mode: Panel generation mode
+     *     0 = 6 faces (all box surfaces)
+     *     1 = 2 faces (top + bottom) — inter-layer capacitance
+     *     2 = 4 faces (top + bottom + left + right) — inter-turn + inter-layer
+     *   eps_r: Relative permittivity for P matrix scaling (e.g., 4.4 for FR4)
+     *
+     * Returns number of panels generated.
+     */
+    int generate_face_panels(int mode = 2, double eps_r = 1.0) {
+        builder_->GenerateFacePanels(mode, eps_r);
+        matrices_built_ = false;
+        return builder_->NumPanels();
+    }
+
+    /**
      * Create wire segments along a straight path
      *
      * Returns number of segments created.
@@ -202,8 +223,8 @@ public:
      *
      * Returns dict with L, R, P (optional), incidence matrix (CSR), ports.
      */
-    py::dict build_topology(bool include_star = false) {
-        matrices_ = builder_->Build(include_star);
+    py::dict build_topology(bool include_star = false, double eps_eff = 1.0) {
+        matrices_ = builder_->Build(include_star, eps_eff);
         matrices_built_ = true;
 
         int n_loop = matrices_.n_loop;
@@ -351,6 +372,25 @@ public:
 
         // Total number of nodes
         result["n_nodes"] = static_cast<int>(builder_->GetNodes().size());
+
+        // Gathered capacitance C_eff = G × (P/eps_eff)⁻¹ × G^T
+        if (!matrices_.C_gathered.empty() && matrices_.n_nodes_gathered > 0) {
+            int ng = matrices_.n_nodes_gathered;
+            py::array_t<double> C_np({ng, ng});
+            auto C_buf = C_np.mutable_unchecked<2>();
+            for (int i = 0; i < ng; ++i) {
+                for (int j = 0; j < ng; ++j) {
+                    C_buf(i, j) = matrices_.C_gathered[i * ng + j];
+                }
+            }
+            result["C_gathered"] = C_np;
+            // Override n_nodes from C_gathered if it provides a better count
+            if (ng > static_cast<int>(builder_->GetNodes().size())) {
+                result["n_nodes"] = ng;
+            }
+        } else {
+            result["C_gathered"] = py::none();
+        }
 
         return result;
     }
@@ -751,7 +791,8 @@ public:
                 int n_nodes,
                 py::list ports,
                 py::object P_obj = py::none(),
-                py::object M_LS_obj = py::none()) {
+                py::object M_LS_obj = py::none(),
+                py::object C_gathered_obj = py::none()) {
 
         auto L_buf = L.unchecked<2>();
         auto R_buf = R.unchecked<1>();
@@ -824,6 +865,20 @@ public:
         solver_->SetMatrices(matrices_);
         solver_->SetSegmentNodes(seg_nodes_vec, n_nodes);
         solver_->SetPorts(port_vec);
+
+        // Set gathered capacitance (enables proper MNA with resonance)
+        if (!C_gathered_obj.is_none()) {
+            auto C_arr = C_gathered_obj.cast<py::array_t<double>>();
+            auto C_buf = C_arr.unchecked<2>();
+            int ng = static_cast<int>(C_buf.shape(0));
+            std::vector<double> C_vec(ng * ng);
+            for (int i = 0; i < ng; ++i) {
+                for (int j = 0; j < ng; ++j) {
+                    C_vec[i * ng + j] = C_buf(i, j);
+                }
+            }
+            solver_->SetGatheredCapacitance(C_vec, ng);
+        }
 
         n_ports_ = static_cast<int>(port_vec.size());
     }
@@ -906,6 +961,24 @@ public:
     void set_bicgstab_params(double tol, int max_iter) {
         solver_->SetBiCGSTABParams(tol, max_iter);
     }
+
+    /**
+     * Set gathered capacitance for proper MNA (enables resonance).
+     * C_gathered = G × (P/eps_eff)⁻¹ × G^T
+     */
+    void set_gathered_capacitance(py::array_t<double> C_gathered) {
+        auto C_buf = C_gathered.unchecked<2>();
+        int ng = static_cast<int>(C_buf.shape(0));
+        std::vector<double> C_vec(ng * ng);
+        for (int i = 0; i < ng; ++i) {
+            for (int j = 0; j < ng; ++j) {
+                C_vec[i * ng + j] = C_buf(i, j);
+            }
+        }
+        solver_->SetGatheredCapacitance(C_vec, ng);
+    }
+
+    bool has_gathered_capacitance() const { return solver_->HasGatheredCapacitance(); }
 
 private:
     PEECMatrices matrices_;
@@ -1016,6 +1089,32 @@ Example:
 
                  # Quadrilateral panel
                  builder.add_panel([[0,0,0], [0.01,0,0], [0.01,0.01,0], [0,0.01,0]])
+             )doc")
+
+        .def("generate_face_panels", &PyPEECBuilder::generate_face_panels,
+             py::arg("mode") = 2,
+             py::arg("eps_r") = 1.0,
+             R"doc(
+             Generate face panels from segment box surfaces.
+
+             Automatically creates quad panels from each segment's rectangular
+             cross-section extruded along its length. Must be called after
+             adding all segments and before build/build_topology.
+
+             Args:
+                 mode: Panel generation mode
+                     0 = 6 faces (all box surfaces)
+                     1 = 2 faces (top + bottom) — inter-layer capacitance
+                     2 = 4 faces (top + bottom + left + right) — inter-turn + inter-layer
+                     3 = 2 faces (left + right) — inter-turn only (single-layer PCB)
+                     4 = 1 face (top only) — simplified single-side
+                 eps_r: Relative permittivity for P matrix scaling (e.g., 4.4 for FR4)
+
+             Returns:
+                 Number of panels generated.
+
+             Example:
+                 builder.generate_face_panels(mode=1, eps_r=4.4)  # FR4 PCB
              )doc")
 
         .def("create_wire", &PyPEECBuilder::create_wire,
@@ -1169,13 +1268,21 @@ Example:
 
         .def("build_topology", &PyPEECBuilder::build_topology,
              py::arg("include_star") = false,
+             py::arg("eps_eff") = 1.0,
              R"doc(
              Build PEEC matrices with topology information.
+
+             Args:
+                 include_star: If True, compute P and M_LS matrices
+                 eps_eff: Effective permittivity for gathered capacitance.
+                     For PCB half-space model: eps_eff = (1 + eps_r) / 2.
+                     If > 0 and panels present, also computes C_gathered.
 
              Returns a dict containing:
                  L: Inductance matrix [H] (n_loop x n_loop)
                  R: DC resistance vector [Ohm] (n_loop,)
                  P: Potential coefficient [1/F] or None
+                 C_gathered: Gathered capacitance (n_nodes x n_nodes) or None
                  incidence_indptr: CSR row pointers for incidence matrix
                  incidence_indices: CSR column indices
                  incidence_data: CSR values (+1 or -1)
@@ -1283,7 +1390,7 @@ Example:
         )doc")
         .def(py::init<py::array_t<double>, py::array_t<double>,
                        py::array_t<int>, int, py::list,
-                       py::object, py::object>(),
+                       py::object, py::object, py::object>(),
              py::arg("L"),
              py::arg("R"),
              py::arg("segment_nodes"),
@@ -1291,6 +1398,7 @@ Example:
              py::arg("ports"),
              py::arg("P") = py::none(),
              py::arg("M_LS") = py::none(),
+             py::arg("C_gathered") = py::none(),
              R"doc(
              Create MNA solver from raw matrices.
 
@@ -1302,6 +1410,8 @@ Example:
                  ports: List of (node_positive, node_negative, port_id)
                  P: Optional potential coefficient (n_star x n_star)
                  M_LS: Optional Loop-Star coupling (n_loop x n_star)
+                 C_gathered: Optional gathered capacitance (n_nodes x n_nodes).
+                     Enables proper MNA with resonance.
              )doc")
 
         .def("solve_z_matrix", &PyMNASolver::solve_z_matrix,
@@ -1356,7 +1466,24 @@ Example:
              Args:
                  tol: Convergence tolerance (default 1e-10)
                  max_iter: Maximum iterations (default 1000)
-             )doc");
+             )doc")
+
+        .def("set_gathered_capacitance", &PyMNASolver::set_gathered_capacitance,
+             py::arg("C_gathered"),
+             R"doc(
+             Set gathered capacitance for proper MNA.
+
+             When set, MNA uses: Y_node = A * Y_branch^{-1} * A^T + jw * C_gathered
+             instead of the Schur complement, enabling resonance (SRF) prediction.
+
+             Args:
+                 C_gathered: Gathered capacitance matrix (n_nodes x n_nodes) float64.
+                     C_gathered = G * inv(P / eps_eff) * G^T
+             )doc")
+
+        .def_property_readonly("has_gathered_capacitance",
+             &PyMNASolver::has_gathered_capacitance,
+             "Whether gathered capacitance is set (proper MNA mode)");
 
     // Convenience function for wire PEEC
     m.def("create_wire_peec",

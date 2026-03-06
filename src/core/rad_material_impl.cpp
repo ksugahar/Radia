@@ -34,9 +34,7 @@
 #include <chrono>
 #include <cmath>
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "rad_parallel.h"
 
 
 //-------------------------------------------------------------------------
@@ -1617,6 +1615,7 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 	m_solve_t_lu_decomp = 0.0;  // Reset LU decomposition time
 	m_solve_linear_iterations = 0;
 	m_solve_nonl_iterations = 0;
+	m_solve_num_threads = radia::GetNumThreads();  // Record while TaskManager is active
 
 	try
 	{
@@ -2648,14 +2647,9 @@ void radTApplication::GetSolveStats(double* dOut, int* nOut)
 	dOut[2] = (double)m_solve_linear_iterations;  // Total linear iterations
 	dOut[3] = (double)m_solve_nonl_iterations;    // Total nonlinear iterations
 
-	// OpenMP status
-#ifdef _OPENMP
-	dOut[4] = 1.0;  // OpenMP enabled
-	dOut[5] = (double)omp_get_max_threads();
-#else
-	dOut[4] = 0.0;  // OpenMP disabled
-	dOut[5] = 1.0;
-#endif
+	// Parallelism status
+	dOut[4] = 1.0;  // TaskManager enabled
+	dOut[5] = (double)m_solve_num_threads;
 
 	// LU decomposition time (Method 0 only)
 	dOut[6] = m_solve_t_lu_decomp;
@@ -2830,11 +2824,7 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 		// 2. Each iteration writes to different output array indices
 		// 3. B_genComp() only reads from the g3dPtr object (no writes)
 		// 4. The FieldKey and ZeroVect are copied by value into each thread's radTField
-		#ifdef _OPENMP
-		#pragma omp parallel for schedule(static) if(n_points > 100)
-		#endif
-		for(int i = 0; i < n_points; ++i)
-		{
+		ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
 			TVector3d pt;
 			pt.x = points[i * 3 + 0] * scale;
 			pt.y = points[i * 3 + 1] * scale;
@@ -2862,7 +2852,7 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 				H_out[i * 3 + 1] = Field.H.y;
 				H_out[i * 3 + 2] = Field.H.z;
 			}
-		}
+		});
 
 		// Clear IMA context after computation
 		if(imaWasSet) RadIMAFieldContext::Clear();

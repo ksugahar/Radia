@@ -92,7 +92,6 @@ if __name__ == '__main__':
 
 def run_with_threads(num_threads):
 	env = os.environ.copy()
-	env['OMP_NUM_THREADS'] = str(num_threads)
 
 	script = create_heavy_benchmark()
 	with open('_temp_heavy.py', 'w') as f:

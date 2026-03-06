@@ -267,7 +267,7 @@ Each magnet is represented by an nseg-sided prism:
 ## Further Reading
 
 - [examples/complex_coil_geometry/](../complex_coil_geometry/) - CoilBuilder examples
-- [examples/electromagnet/](../electromagnet/) - Yoke + coil simulation
+- [examples/c_type_electromagnet/](../c_type_electromagnet/) - Yoke + coil simulation
 - [src/python/README.md](../../src/python/README.md) - Radia utilities
 
 ## References

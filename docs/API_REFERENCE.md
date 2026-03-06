@@ -514,7 +514,7 @@ rad.SetHACApKParams(eps, leaf_size, eta)
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `eps` | float | 1e-4 | ACA+ compression tolerance |
-| `leaf_size` | int | 10 | Minimum cluster size in elements |
+| `leaf_size` | int | 32 (C++ default), **10 recommended for MSC 6DOF** | Minimum cluster size in elements |
 | `eta` | float | 2.0 | Admissibility parameter |
 
 **Notes:**
@@ -527,7 +527,7 @@ rad.SetHACApKParams(eps, leaf_size, eta)
 | Parameter | Default | Rationale |
 |-----------|---------|-----------|
 | `eps` | 1e-4 | Balance between accuracy and compression. Lower values (1e-6, 1e-8) for higher accuracy, higher values (1e-3) for faster computation. |
-| `leaf_size` | 10 | Minimum cluster size. Smaller values allow deeper tree but increase H-matrix overhead. 10 provides good balance for typical element counts. ELF-compatible default. |
+| `leaf_size` | 32 (C++), **10 (recommended)** | C++ default is 32 (element count). For MSC 6DOF hexahedra, leaf_size=10 → actual leaves up to 11 elements × 6DOF = **66 DOF/leaf** (binary tree splitting). C++ default 32 would give 192 DOF/leaf, too large for effective ACA+ compression. leaf_size=10 (66 DOF) balances compression ratio and per-leaf cost. ELF reference also uses 10. All Radia benchmarks use `rad.SetHACApKParams(1e-4, 10, 2.0)`. |
 | `eta` | 2.0 | Standard admissibility criterion: clusters are "well-separated" when `dist(c1,c2) >= eta * max(diam(c1), diam(c2))`. eta=2.0 is conservative, ensuring accurate low-rank approximations. Lower values (1.0) allow more aggressive compression but may reduce accuracy. |
 
 ### SetRelaxParam - Under-Relaxation Coefficient
@@ -662,6 +662,83 @@ Typical solve times (nonlinear BH curve material):
 | 1,000 | 0.55s | 5-6 |
 | 3,375 | 7.30s | 5-6 |
 | 8,000 | 51.81s | 5-6 |
+
+---
+
+## Parallelization (TaskManager)
+
+Radia uses NGSolve's TaskManager for all parallelism. There is no OpenMP dependency.
+
+### Thread Control
+
+Thread count is determined by the TaskManager (default: all available cores).
+
+```python
+import ngsolve
+ngsolve.SetNumThreads(8)  # Set thread count BEFORE solving
+```
+
+**Import order**: `import radia` before `import ngsolve`. Radia's `__init__.py`
+imports ngsolve internally for DLL resolution (ngcore.dll), which initializes the
+TaskManager.
+
+### Solver-Specific Parallelization
+
+| Solver | Method | Parallelization |
+|--------|--------|-----------------|
+| LU (method=0) | MKL `dgesv_` | `SuspendTaskManager` + `MKLThreadGuard` (MKL multi-threading) |
+| BiCGSTAB (method=1) | Matrix-vector product | `ParallelFor` via TaskManager |
+| HACApK (method=2) | H-matrix build + BiCGSTAB | `ParallelFor` / `ParallelForRange` via TaskManager |
+
+### GetSolveStats - Query Solve Statistics
+
+```python
+stats = rad.GetSolveStats()
+```
+
+Returns a dictionary after `rad.Solve()`:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `'t_matrix_build'` | float | Matrix construction time [s] |
+| `'t_linear_solve'` | float | Linear solver time [s] |
+| `'t_lu_decomp'` | float | LU decomposition time [s] (LU only) |
+| `'t_hmatrix_build'` | float | H-matrix build time [s] (HACApK only) |
+| `'linear_iterations'` | int | BiCGSTAB iterations |
+| `'nonl_iterations'` | int | Nonlinear iterations |
+| `'num_threads'` | int | Number of TaskManager threads |
+| `'taskmanager_enabled'` | bool | TaskManager was active |
+
+### Other Parallelized Operations
+
+| Operation | Parallelization |
+|-----------|-----------------|
+| Interaction matrix build | `ParallelFor` |
+| Field computation (`Fld`, `FldLst`, `FldVTS`) | `ParallelFor` |
+| Analytical polygon integrals | `ParallelFor` |
+| FMM field evaluation (ExaFMM) | `ParallelFor` |
+
+### NGSolve Compatibility
+
+Radia and NGSolve share the same TaskManager instance, so they coexist naturally:
+
+```python
+import radia as rad
+from ngsolve import *
+
+rad.Solve(grp, 0.001, 100, 2)  # Uses TaskManager internally
+
+with TaskManager():
+    V_op = LaplaceSL(j_trial.Trace() * ds) * j_test.Trace() * ds  # Also uses TaskManager
+```
+
+### Scaling Benchmarks (8 threads, cube hexahedron nonlinear)
+
+| Solver | Time Scaling | Memory Scaling |
+|--------|-------------|----------------|
+| LU | O(N^3.5) | O(N^1.8) |
+| BiCGSTAB | O(N^2.5) | O(N^1.9) |
+| HACApK | O(N^1.7) | O(N^1.2) |
 
 ---
 
@@ -940,7 +1017,7 @@ Export Radia magnetic field to VTS (VTK XML Structured Grid) format for visualiz
 
 ### rad.FldVTS()
 
-Export magnetic field on a structured 3D grid to VTS format (C++ implementation with OpenMP):
+Export magnetic field on a structured 3D grid to VTS format (C++ implementation with TaskManager parallelization):
 
 ```python
 import radia as rad
@@ -1688,40 +1765,48 @@ rad.TrfRot(obj, [x, y, z], [nx, ny, nz], angle)
 rad.TrfOrnt(obj, trf)  # Apply transformation to orient object
 ```
 
-### Image Symmetry (Replaces TrfMlt)
+### Image Symmetry (IMA)
 
-**Note**: `TrfMlt` has been removed (2026-01-31). Use `rad.Image()` for plane symmetry:
+IMA exploits mirror symmetry to reduce problem size. The `image=` parameter is
+supported by all solvers (LU, BiCGSTAB, HACApK) via `rad.Solve()` and `rad.BuildMatrix()`.
+
+**Note**: The old API (`TrfMlt`, `SetIMASymmetry`, `BuildIMAMatrix`, `PreRelax`, `Image`) has been
+removed (2026-01-31). Use the unified `image=` parameter instead.
 
 ```python
-intrc = rad.PreRelax(container, container)
-n_ima = rad.Image(intrc, '+x')  # Symmetric x-mirror (tangent field)
-rad.BuildImageMatrix(intrc)
-rad.Solve(container, 0.0001, 100, 0)
+# Quarter model: x-mirror (symmetric) + z-mirror (antisymmetric)
+rad.Solve(container, 0.0001, 100, 2, image='+x-z')
+
+# Pre-build matrix with IMA (for inspection)
+handle = rad.BuildMatrix(model, image='+x-z')
+matrix, dof = rad.GetInteractMatrix(handle)
 ```
 
-**Symmetry String Format**: `[+|-]axis`
+**IMA Sign Selection Policy**:
 
-| String | Description | Boundary Condition |
-|--------|-------------|-------------------|
-| `+x`, `x` | x-mirror (symmetric) | Field tangent to YZ plane |
-| `-x` | x-mirror (antisymmetric) | Field normal to YZ plane |
-| `+y`, `y` | y-mirror (symmetric) | Field tangent to XZ plane |
-| `-y` | y-mirror (antisymmetric) | Field normal to XZ plane |
-| `+z`, `z` | z-mirror (symmetric) | Field tangent to XY plane |
-| `-z` | z-mirror (antisymmetric) | Field normal to XY plane |
-| `+xy`, `xy` | Quarter model (symmetric) | Both tangent |
-| `-xz` | xz-mirror (antisymmetric) | Both normal |
-| `+xyz` | Eighth model (symmetric) | All tangent |
+| Field vs Mirror Plane | IMA Sign | Description |
+|----------------------|----------|-------------|
+| Field **parallel** to mirror | **+** (symmetric) | Field tangent to mirror plane |
+| Field **perpendicular** to mirror | **-** (antisymmetric) | Field normal to mirror plane |
+
+**Symmetry Combinations**:
+
+| `image=` | Model Reduction | Example Use |
+|----------|----------------|-------------|
+| `'+x'` | Half model | Single mirror |
+| `'+x-z'` | Quarter model | Two mirrors (e.g., C-type electromagnet) |
+| `'+x+y-z'` | Eighth model | Three mirrors |
 
 **Matrix Construction**:
 - Symmetric (+): `N_Image[i,j] = N[i,j] + N[i, mirror_j] @ P`
 - Antisymmetric (-): `N_Image[i,j] = N[i,j] - N[i, mirror_j] @ P`
 
-**Legacy API** (deprecated):
-- `SetIMASymmetry()` -> Use `Image()`
-- `BuildIMAMatrix()` -> Use `BuildImageMatrix()`
+**IMA Boundary Element Limitation**:
+IMA may produce incorrect results (~0.5x magnitude) for boundary elements whose faces
+lie ON the symmetry plane, when observation points are also on that plane. MMM (tetrahedra)
+has no such limitation.
 
-See [IMA_SYMMETRY_DESIGN.md](IMA_SYMMETRY_DESIGN.md) for details.
+See [IMA_SYMMETRY_DESIGN.md](IMA_SYMMETRY_DESIGN.md) for implementation details.
 
 ---
 

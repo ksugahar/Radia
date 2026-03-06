@@ -9,9 +9,6 @@ Usage: python -u benchmark_cube_block_jacobi.py [5|10|15|20|25|all]
 import sys, os, time
 import numpy as np
 
-os.environ['OMP_NUM_THREADS'] = '8'
-os.environ['MKL_NUM_THREADS'] = '8'
-
 repo_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
 sys.path.insert(0, os.path.join(repo_root, 'src'))
 

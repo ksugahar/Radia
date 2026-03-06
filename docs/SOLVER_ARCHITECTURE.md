@@ -118,7 +118,8 @@ Z = solver.compute_port_impedance(freq=1e6)
 - **Nonlinear materials supported** (B-H curve via MatSatIsoTab)
 - Unbounded domain (no PML/ABC needed)
 - Multiple solver methods (LU, BiCGSTAB, HACApK)
-- IMA (Image Method) for symmetry exploitation
+- IMA (Image Method) for symmetry exploitation (all solvers, `image='+x-z'`)
+- NGSolve TaskManager parallelization (no OpenMP dependency)
 
 **Element types**:
 
@@ -398,3 +399,21 @@ The fundamental constraint is:
 - **Nonlinear materials require volume-based methods** (MMM/MSC or FEM)
 - **Radia's unique value**: integral equation + nonlinear iteration in unbounded domains
 - **PEEC's unique value**: direct circuit parameter extraction (L, R, C, M) from geometry
+
+---
+
+## Parallelization
+
+Radia uses **NGSolve TaskManager** (work-stealing thread pool) for all parallelism.
+No OpenMP dependency. See `src/core/rad_parallel.h` for the abstraction layer.
+
+| Solver | Parallelization Strategy |
+|--------|------------------------|
+| LU (method=0) | `SuspendTaskManager` + `MKLThreadGuard` for multi-threaded `dgesv_` |
+| BiCGSTAB (method=1) | `ParallelFor` for matrix-vector products |
+| HACApK (method=2) | `ParallelFor` for H-matrix build, ACA+ compression, and BiCGSTAB |
+| Field computation | `ParallelFor` for `Fld`, `FldLst`, `FldVTS`, analytical integrals |
+| FMM (ExaFMM) | `ParallelFor` for tree traversal and field evaluation |
+
+Thread count: controlled by `ngsolve.SetNumThreads(n)` or TaskManager default (all cores).
+Query via `rad.GetSolveStats()` → `num_threads`, `taskmanager_enabled`.

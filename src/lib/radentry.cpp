@@ -10,6 +10,7 @@
 
 #include "radentry.h"
 #include "rad_io_buffer.h"
+#include "rad_parallel.h"  // RegionTaskManager for auto-starting TaskManager
 
 //DEBUG
 //#include <mpi.h>
@@ -1531,6 +1532,10 @@ int CALL RadUtiMPI(int* arPar, char* sOnOff, double* arData, long* pnData, long*
 
 int CALL RadSolve(double* dOut, int* nOut, int obj, double prec, int iter, int meth, const char* image)
 {
+#ifdef HAVE_LAPACK
+	mkl_set_num_threads(1);  // BLAS calls from TaskManager threads must be single-threaded
+#endif
+	ngcore::RegionTaskManager rtm;  // auto-start TaskManager if not running
 	SolveGen(obj, prec, iter, meth, image);
 
 	int ErrStat = ioBuffer.OutErrorStatus();
@@ -1547,6 +1552,10 @@ int CALL RadSolve(double* dOut, int* nOut, int obj, double prec, int iter, int m
 
 int CALL RadSolveNonl(double* dOut, int* nOut, int obj, double prec, int iter, int meth, int nonl_method, const char* image)
 {
+#ifdef HAVE_LAPACK
+	mkl_set_num_threads(1);  // BLAS calls from TaskManager threads must be single-threaded
+#endif
+	ngcore::RegionTaskManager rtm;  // auto-start TaskManager if not running
 	SolveGenNonl(obj, prec, iter, meth, nonl_method, image);
 
 	int ErrStat = ioBuffer.OutErrorStatus();
@@ -1563,6 +1572,10 @@ int CALL RadSolveNonl(double* dOut, int* nOut, int obj, double prec, int iter, i
 
 int CALL RadBuildMatrix(int* n, int ElemKey, const char* image)
 {
+#ifdef HAVE_LAPACK
+	mkl_set_num_threads(1);  // BLAS calls from TaskManager threads must be single-threaded
+#endif
+	ngcore::RegionTaskManager rtm;  // auto-start TaskManager if not running
 	int result = BuildMatrix(ElemKey, image);
 	*n = result;
 	return ioBuffer.OutErrorStatus();
@@ -1742,6 +1755,10 @@ int CALL RadFldVTS(int container_handle, const char* filename,
                    double z_min, double z_max, int nz,
                    int include_B, int include_H, double unit_scale)
 {
+#ifdef HAVE_LAPACK
+	mkl_set_num_threads(1);  // BLAS calls from TaskManager threads must be single-threaded
+#endif
+	ngcore::RegionTaskManager rtm;  // auto-start TaskManager if not running
 	// Compute total number of points
 	int n_points = nx * ny * nz;
 

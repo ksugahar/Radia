@@ -13,9 +13,7 @@
 #include <set>
 #include <queue>
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "rad_parallel.h"
 
 #ifdef HAVE_LAPACK
 #include "mkl_cblas.h"
@@ -123,7 +121,7 @@ void PEECPanel::ComputeGeometry() {
 // PEECMatrixBuilder
 // ============================================================================
 
-PEECMatrixBuilder::PEECMatrixBuilder() : nextPortId_(0) {}
+PEECMatrixBuilder::PEECMatrixBuilder() : nextPortId_(0), eps_r_(1.0) {}
 
 PEECMatrixBuilder::~PEECMatrixBuilder() {}
 
@@ -444,7 +442,7 @@ void PEECMatrixBuilder::BuildIncidenceMatrix(PEECMatrices& matrices) {
     matrices.ports = ports_;
 }
 
-PEECMatrices PEECMatrixBuilder::Build(bool includeStar) {
+PEECMatrices PEECMatrixBuilder::Build(bool includeStar, double eps_eff) {
     // Expand multi-filament segments before computing matrices
     ExpandFilaments();
 
@@ -488,6 +486,11 @@ PEECMatrices PEECMatrixBuilder::Build(bool includeStar) {
         // Allocate and compute M_LS
         matrices.M_LS.resize(n_loop * n_star, 0.0);
         ComputeM_LS(matrices);
+
+        // Compute gathered capacitance for proper MNA (if panels with topology)
+        if (!panels_.empty() && !panel_segment_ids_.empty() && eps_eff > 0) {
+            ComputeGatheredCapacitance(matrices, eps_eff);
+        }
     } else {
         matrices.n_star = 0;
     }
@@ -507,20 +510,17 @@ PEECMatrices PEECMatrixBuilder::Build(bool includeStar) {
 void PEECMatrixBuilder::ComputeL(PEECMatrices& matrices) {
     int n = static_cast<int>(segments_.size());
 
-#ifdef _OPENMP
-#pragma omp parallel for schedule(dynamic)
-#endif
-    for (int i = 0; i < n; ++i) {
+    ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
         // Self-inductance
-        matrices.L[i * n + i] = SelfInductance(segments_[i]);
+        matrices.L[i * n + i] = SelfInductance(segments_[(int)i]);
 
         // Mutual inductance (upper triangle)
-        for (int j = i + 1; j < n; ++j) {
-            double Lij = MutualInductance(segments_[i], segments_[j]);
+        for (int j = (int)i + 1; j < n; ++j) {
+            double Lij = MutualInductance(segments_[(int)i], segments_[j]);
             matrices.L[i * n + j] = Lij;
             matrices.L[j * n + i] = Lij;  // Symmetric
         }
-    }
+    });
 }
 
 void PEECMatrixBuilder::ComputeP(PEECMatrices& matrices) {
@@ -529,11 +529,8 @@ void PEECMatrixBuilder::ComputeP(PEECMatrices& matrices) {
         // Panel-based P matrix (analytical surface integration)
         int n = static_cast<int>(panels_.size());
 
-#ifdef _OPENMP
-#pragma omp parallel for schedule(dynamic)
-#endif
-        for (int i = 0; i < n; ++i) {
-            const PEECPanel& panel_i = panels_[i];
+        ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
+            const PEECPanel& panel_i = panels_[(int)i];
 
             // Self-potential (analytical integration)
             if (panel_i.type == PEECPanel::Triangle) {
@@ -541,36 +538,40 @@ void PEECMatrixBuilder::ComputeP(PEECMatrices& matrices) {
             } else if (panel_i.type == PEECPanel::Quadrilateral) {
                 matrices.P[i * n + i] = SelfPotentialPanelQuad(panel_i);
             } else {
-                // Fallback to zero for unknown panel types
                 matrices.P[i * n + i] = 0.0;
             }
 
-            // Mutual potential (upper triangle)
-            for (int j = i + 1; j < n; ++j) {
+            // Mutual potential (upper triangle) — handles both triangle and quad
+            for (int j = (int)i + 1; j < n; ++j) {
                 const PEECPanel& panel_j = panels_[j];
-                double Pij = MutualPotentialPanelTriangle(panel_i, panel_j);
+                double Pij = MutualPotentialPanel(panel_i, panel_j);
                 matrices.P[i * n + j] = Pij;
                 matrices.P[j * n + i] = Pij;  // Symmetric
+            }
+        });
+
+        // Apply dielectric scaling: P /= eps_r
+        if (eps_r_ > 0 && eps_r_ != 1.0) {
+            double inv_eps_r = 1.0 / eps_r_;
+            for (int i = 0; i < n * n; ++i) {
+                matrices.P[i] *= inv_eps_r;
             }
         }
     } else {
         // Node-based P matrix (point approximation - legacy)
         int n = static_cast<int>(nodes_.size());
 
-#ifdef _OPENMP
-#pragma omp parallel for schedule(dynamic)
-#endif
-        for (int i = 0; i < n; ++i) {
+        ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
             // Self-potential
-            matrices.P[i * n + i] = SelfPotential(nodes_[i]);
+            matrices.P[i * n + i] = SelfPotential(nodes_[(int)i]);
 
             // Mutual potential (upper triangle)
-            for (int j = i + 1; j < n; ++j) {
-                double Pij = MutualPotential(nodes_[i], nodes_[j]);
+            for (int j = (int)i + 1; j < n; ++j) {
+                double Pij = MutualPotential(nodes_[(int)i], nodes_[j]);
                 matrices.P[i * n + j] = Pij;
                 matrices.P[j * n + i] = Pij;  // Symmetric
             }
-        }
+        });
     }
 }
 
@@ -586,31 +587,144 @@ void PEECMatrixBuilder::ComputeR(PEECMatrices& matrices) {
 
 void PEECMatrixBuilder::ComputeM_LS(PEECMatrices& matrices) {
     int n_loop = static_cast<int>(segments_.size());
-    int n_star = static_cast<int>(nodes_.size());
-
     double coeff = PEEC_MU_0 * PEEC_INV_FOUR_PI;
 
-#ifdef _OPENMP
-#pragma omp parallel for schedule(dynamic)
-#endif
-    for (int i = 0; i < n_loop; ++i) {
-        const PEECSegment& seg = segments_[i];
-        double l_i = seg.length;
+    if (!panels_.empty()) {
+        // Panel mode: use panel centroids as Star DOF positions
+        int n_star = static_cast<int>(panels_.size());
 
-        for (int j = 0; j < n_star; ++j) {
-            const PEECNode& node = nodes_[j];
+        ngcore::ParallelFor(ngcore::IntRange(n_loop), [&](size_t i) {
+            const PEECSegment& seg = segments_[(int)i];
+            double l_i = seg.length;
 
-            // Distance from segment center to node
-            double dx = seg.center.x - node.position.x;
-            double dy = seg.center.y - node.position.y;
-            double dz = seg.center.z - node.position.z;
-            double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            for (int j = 0; j < n_star; ++j) {
+                const PEECPanel& panel = panels_[j];
 
-            if (r > 1e-15) {
-                matrices.M_LS[i * n_star + j] = coeff * l_i / r;
+                // Distance from segment center to panel centroid
+                double dx = seg.center.x - panel.center.x;
+                double dy = seg.center.y - panel.center.y;
+                double dz = seg.center.z - panel.center.z;
+                double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+
+                if (r > 1e-15) {
+                    matrices.M_LS[i * n_star + j] = coeff * l_i / r;
+                }
             }
+        });
+    } else {
+        // Node mode: use node positions (legacy/topology mode)
+        int n_star = static_cast<int>(nodes_.size());
+
+        ngcore::ParallelFor(ngcore::IntRange(n_loop), [&](size_t i) {
+            const PEECSegment& seg = segments_[(int)i];
+            double l_i = seg.length;
+
+            for (int j = 0; j < n_star; ++j) {
+                const PEECNode& node = nodes_[j];
+
+                // Distance from segment center to node
+                double dx = seg.center.x - node.position.x;
+                double dy = seg.center.y - node.position.y;
+                double dz = seg.center.z - node.position.z;
+                double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+
+                if (r > 1e-15) {
+                    matrices.M_LS[i * n_star + j] = coeff * l_i / r;
+                }
+            }
+        });
+    }
+}
+
+void PEECMatrixBuilder::ComputeGatheredCapacitance(PEECMatrices& matrices, double eps_eff) {
+    // Compute C_gathered = G × (P / eps_eff)⁻¹ × G^T
+    //
+    // G is the gathering matrix (n_nodes × n_star) that maps panel charges to nodes.
+    // Each panel's charge is split 50/50 between its parent segment's endpoint nodes.
+    //
+    // Requires:
+    //   - panels_ and panel_segment_ids_ (from GenerateFacePanels)
+    //   - segments_ with valid node_from/node_to (topology mode)
+    //   - matrices.P already computed
+
+    if (panels_.empty() || panel_segment_ids_.empty() || matrices.P.empty()) {
+        return;
+    }
+
+    int n_star = matrices.n_star;
+    if (n_star <= 0) return;
+
+    // Count unique nodes
+    int n_nodes = 0;
+    for (const auto& seg : segments_) {
+        if (seg.node_from >= 0) n_nodes = std::max(n_nodes, seg.node_from + 1);
+        if (seg.node_to >= 0) n_nodes = std::max(n_nodes, seg.node_to + 1);
+    }
+    if (n_nodes <= 0) return;
+
+    // Step 1: Build gathering matrix G (n_nodes × n_star, row-major)
+    std::vector<double> G(n_nodes * n_star, 0.0);
+    for (int p = 0; p < n_star; ++p) {
+        int seg_idx = panel_segment_ids_[p];
+        if (seg_idx < 0 || seg_idx >= static_cast<int>(segments_.size())) continue;
+        int nf = segments_[seg_idx].node_from;
+        int nt = segments_[seg_idx].node_to;
+        if (nf >= 0 && nf < n_nodes) G[nf * n_star + p] += 0.5;
+        if (nt >= 0 && nt < n_nodes) G[nt * n_star + p] += 0.5;
+    }
+
+#ifdef HAVE_LAPACK
+    // Step 2: P_eff = P / eps_eff (column-major copy for LAPACK)
+    std::vector<double> P_col(n_star * n_star);
+    double inv_eps = (eps_eff > 0 && eps_eff != 1.0) ? (1.0 / eps_eff) : 1.0;
+    for (int i = 0; i < n_star; ++i) {
+        for (int j = 0; j < n_star; ++j) {
+            P_col[j * n_star + i] = matrices.P[i * n_star + j] * inv_eps;  // row->col major
         }
     }
+
+    // Step 3: Solve P_eff × X = G^T using dgesv_
+    // G^T is (n_star × n_nodes). Store in column-major for LAPACK.
+    // RHS columns = nodes, each column = G[node, :] transposed
+    std::vector<double> X(n_star * n_nodes);
+    for (int i = 0; i < n_star; ++i) {
+        for (int j = 0; j < n_nodes; ++j) {
+            X[j * n_star + i] = G[j * n_star + i];  // X = G^T in column-major
+        }
+    }
+
+    int ln_star = n_star, nrhs = n_nodes, info = 0;
+    std::vector<int> ipiv(n_star);
+    dgesv_(&ln_star, &nrhs, P_col.data(), &ln_star,
+           ipiv.data(), X.data(), &ln_star, &info);
+
+    if (info != 0) {
+        // P inversion failed (singular or ill-conditioned)
+        return;
+    }
+    // X is now P_eff⁻¹ × G^T (n_star × n_nodes) in column-major
+
+    // Step 4: C_gathered = G × X (n_nodes × n_nodes)
+    // G is row-major (n_nodes × n_star), X is column-major (n_star × n_nodes)
+    // Convert X back to row-major for cblas_dgemm
+    std::vector<double> X_row(n_star * n_nodes);
+    for (int i = 0; i < n_star; ++i) {
+        for (int j = 0; j < n_nodes; ++j) {
+            X_row[i * n_nodes + j] = X[j * n_star + i];
+        }
+    }
+
+    // C_gathered = G (n_nodes × n_star) × X_row (n_star × n_nodes)
+    std::vector<double> C_gathered(n_nodes * n_nodes, 0.0);
+    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                n_nodes, n_nodes, n_star,
+                1.0, G.data(), n_star,
+                X_row.data(), n_nodes,
+                0.0, C_gathered.data(), n_nodes);
+
+    matrices.C_gathered = std::move(C_gathered);
+    matrices.n_nodes_gathered = n_nodes;
+#endif
 }
 
 double PEECMatrixBuilder::SelfInductance(const PEECSegment& seg) const {
@@ -781,12 +895,10 @@ double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
         //   b2 = p + l_j/2, a2 = p - l_j/2 (filament j limits shifted by axial offset p)
         //   M = (mu_0/(4*pi)) * [F(b1-a2) + F(a1-b2) - F(b1-b2) - F(a1-a2)]
 
-        // Axial offset: projection of r onto direction
+        // Axial offset: projection of r (center-to-center) onto seg_i direction
         double p = rx * seg_i.direction.x + ry * seg_i.direction.y + rz * seg_i.direction.z;
-        if (dot < 0) p = -p;  // Account for anti-parallel
 
-        // Perpendicular distance
-        // d_perp = |r - p*d_i|
+        // Perpendicular distance: d_perp = |r - p*d_i|
         double px = p * seg_i.direction.x;
         double py = p * seg_i.direction.y;
         double pz = p * seg_i.direction.z;
@@ -798,28 +910,37 @@ double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
         if (d_perp < 1e-15) {
             // Collinear filaments - use Gauss quadrature (falls through below)
         } else {
+            // Following FastMaxwell (calcaoneoverr.h lines 859-920):
+            // Project seg_j's endpoints onto seg_i's axis direction.
+            // For same-direction (dot=+1): a2 < b2 (normal order)
+            // For anti-parallel (dot=-1): a2 > b2 (reversed order)
+            // The four-term formula naturally produces signed M:
+            //   positive for same-direction, negative for anti-parallel.
+            //
             // F(x, d) = x * arsinh(x/d) - sqrt(x^2 + d^2)
-            // F is even in x, so F(-x, d) = F(x, d)
-            // F(x, d) = x * arsinh(x/d) - sqrt(x^2 + d^2)
-            // Note: x + sqrt(x^2+d^2) > 0 for all x when d > 0, so log is safe.
-            // Do NOT use abs(x) here - it breaks the formula for negative x.
+            // F is even in x, so swapping a2/b2 flips the sign of M.
+            // Reference: FastMaxwell mut_rect() = -F(), same formula.
             auto F = [](double x, double d) -> double {
                 double x2d2 = x*x + d*d;
                 return x * std::log((x + std::sqrt(x2d2)) / d) - std::sqrt(x2d2);
             };
 
-            // Filament i: from -l_i/2 to +l_i/2
-            // Filament j: from p - l_j/2 to p + l_j/2
+            // Filament i: from a1 to b1 along dir_i
             double b1 = l_i / 2.0;
             double a1 = -l_i / 2.0;
-            double b2 = p + l_j / 2.0;
-            double a2 = p - l_j / 2.0;
+            // Filament j: endpoint projections onto dir_i
+            //   seg_j endpoint "loc0" = center_j - (l_j/2)*dir_j
+            //   projection onto dir_i = p - (l_j/2)*dot
+            //   seg_j endpoint "loc1" = center_j + (l_j/2)*dir_j
+            //   projection onto dir_i = p + (l_j/2)*dot
+            double a2 = p - (l_j / 2.0) * dot;  // loc0 projection
+            double b2 = p + (l_j / 2.0) * dot;  // loc1 projection
 
             double M = (PEEC_MU_0 * PEEC_INV_FOUR_PI) *
                        (F(b1 - a2, d_perp) + F(a1 - b2, d_perp) -
                         F(b1 - b2, d_perp) - F(a1 - a2, d_perp));
 
-            return dot * M;  // Preserve sign for anti-parallel filaments
+            return M;  // Signed: positive for same-dir, negative for anti-parallel
         }
     }
 
@@ -872,6 +993,8 @@ double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
 
     // Scale: integral was over [-1,1]x[-1,1], actual limits are [-l/2,l/2]
     // Jacobian: (l_i/2) * (l_j/2)
+    // dot = d_hat_i . d_hat_j (signed cosine, like FastMaxwell's 'cose')
+    // M = (mu_0/4pi) * dot * ∫∫ 1/|r| dt ds  (Neumann formula)
     return (PEEC_MU_0 * PEEC_INV_FOUR_PI) * dot * sum * (l_i / 2.0) * (l_j / 2.0);
 }
 
@@ -925,6 +1048,7 @@ double PEECMatrixBuilder::MutualInductanceFourfil(const PEECSegment& seg_i,
                 if (dist > 1e-15) sum += gw[ki] * gw[kj] / dist;
             }
         }
+        // dot = d_hat_i . d_hat_j (signed cosine, like FastMaxwell's 'cose')
         return (PEEC_MU_0 * PEEC_INV_FOUR_PI) * dot * sum * (l_i / 2.0) * (l_j / 2.0);
     }
 
@@ -1059,10 +1183,10 @@ double PEECMatrixBuilder::HessSmithPotential(const std::vector<TVector3d>& verti
         double ty = ey / l_edge;
         double tz = ez / l_edge;
 
-        // Outward edge normal in panel plane: m = n × t
-        double mx = normal.y * tz - normal.z * ty;
-        double my = normal.z * tx - normal.x * tz;
-        double mz = normal.x * ty - normal.y * tx;
+        // Outward edge normal in panel plane: m = t × n  (Hess-Smith convention)
+        double mx = ty * normal.z - tz * normal.y;
+        double my = tz * normal.x - tx * normal.z;
+        double mz = tx * normal.y - ty * normal.x;
 
         // Projections onto edge coordinate system
         double d = r0x * mx + r0y * my + r0z * mz;  // perpendicular distance to edge line
@@ -1156,8 +1280,10 @@ double PEECMatrixBuilder::SelfPotentialPanelTriangle(const PEECPanel& panel) con
         sum += q7_w[q] * val;
     }
 
-    // Jacobian: 2*A for triangle quadrature
-    return (2.0 * panel.area * sum) / (4.0 * RadConst::PI * PEEC_EPS_0);
+    // Jacobian: 2*A for triangle quadrature gives ∫∫ 1/|r-r'| dS dS'
+    // P_ii = (1/(4πε₀ A²)) * ∫∫ 1/|r-r'| dS dS'  (charge-based PEEC)
+    double raw_integral = 2.0 * panel.area * sum;
+    return raw_integral / (4.0 * RadConst::PI * PEEC_EPS_0 * panel.area * panel.area);
 }
 
 double PEECMatrixBuilder::SelfPotentialPanelQuad(const PEECPanel& panel) const {
@@ -1216,7 +1342,9 @@ double PEECMatrixBuilder::SelfPotentialPanelQuad(const PEECPanel& panel) const {
         sum += val * jac;  // weight = 1.0 for 2x2 Gauss
     }
 
-    return sum / (4.0 * RadConst::PI * PEEC_EPS_0);
+    // sum ≈ ∫∫ 1/|r-r'| dS dS'
+    // P_ii = (1/(4πε₀ A²)) * ∫∫ 1/|r-r'| dS dS'  (charge-based PEEC)
+    return sum / (4.0 * RadConst::PI * PEEC_EPS_0 * panel.area * panel.area);
 }
 
 double PEECMatrixBuilder::MutualPotentialPanelTriangle(const PEECPanel& panel_i,
@@ -1240,7 +1368,8 @@ double PEECMatrixBuilder::MutualPotentialPanelTriangle(const PEECPanel& panel_i,
 
     if (dist > 5.0 * char_size) {
         // Far-field: centroid approximation
-        return (panel_i.area * panel_j.area) / (4.0 * RadConst::PI * PEEC_EPS_0 * dist);
+        // P_ij = 1/(4πε₀ r)  (charge-based PEEC)
+        return 1.0 / (4.0 * RadConst::PI * PEEC_EPS_0 * dist);
     }
 
     // 7-point Gauss quadrature on test panel_i (Strang & Fix)
@@ -1274,8 +1403,125 @@ double PEECMatrixBuilder::MutualPotentialPanelTriangle(const PEECPanel& panel_i,
         sum += q7_w[q] * val;
     }
 
-    // Jacobian: 2*A_i for triangle quadrature on test panel
-    return (2.0 * panel_i.area * sum) / (4.0 * RadConst::PI * PEEC_EPS_0);
+    // Jacobian: 2*A_i gives ∫_Si (∫_Sj 1/|r-r'| dSj) dSi
+    // P_ij = (1/(4πε₀ A_i A_j)) * ∫∫ 1/|r-r'| dSi dSj  (charge-based PEEC)
+    double raw_integral = 2.0 * panel_i.area * sum;
+    return raw_integral / (4.0 * RadConst::PI * PEEC_EPS_0 * panel_i.area * panel_j.area);
+}
+
+double PEECMatrixBuilder::MutualPotentialPanel(const PEECPanel& panel_i,
+                                                const PEECPanel& panel_j) const {
+    // Generalized mutual potential between any panel types (triangle or quad).
+    // Uses Gauss quadrature on test panel + HessSmith analytical on source panel.
+    //
+    // P_ij = (1/(4πε₀ A_i A_j)) * ∫∫ 1/|r-r'| dSi dSj  (charge-based PEEC)
+    //
+    // Far-field (distance > 5 * panel_size): centroid approximation 1/(4πε₀ r).
+    // Near/mid-field: Gauss + HessSmith (no singularity issues).
+
+    double dx = panel_i.center.x - panel_j.center.x;
+    double dy = panel_i.center.y - panel_j.center.y;
+    double dz = panel_i.center.z - panel_j.center.z;
+    double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+
+    double char_size = std::max(std::sqrt(panel_i.area), std::sqrt(panel_j.area));
+
+    if (dist > 5.0 * char_size) {
+        // Far-field: centroid approximation P_ij = 1/(4πε₀ r)
+        return 1.0 / (4.0 * RadConst::PI * PEEC_EPS_0 * dist);
+    }
+
+    double sum = 0.0;
+    double area_product = panel_i.area * panel_j.area;
+
+    if (panel_i.type == PEECPanel::Triangle && panel_i.vertices.size() == 3) {
+        // 7-point Gauss quadrature for triangle test panel (Strang & Fix)
+        const double q7_w[7] = {
+            0.225 / 2.0,
+            0.13239415, 0.13239415, 0.13239415,
+            0.12593918, 0.12593918, 0.12593918
+        };
+        const double q7_bc[7][3] = {
+            {1.0/3.0, 1.0/3.0, 1.0/3.0},
+            {0.05971587, 0.47014206, 0.47014206},
+            {0.47014206, 0.05971587, 0.47014206},
+            {0.47014206, 0.47014206, 0.05971587},
+            {0.79742699, 0.10128651, 0.10128651},
+            {0.10128651, 0.79742699, 0.10128651},
+            {0.10128651, 0.10128651, 0.79742699}
+        };
+
+        const TVector3d& v0 = panel_i.vertices[0];
+        const TVector3d& v1 = panel_i.vertices[1];
+        const TVector3d& v2 = panel_i.vertices[2];
+
+        for (int q = 0; q < 7; ++q) {
+            TVector3d obs;
+            obs.x = q7_bc[q][0]*v0.x + q7_bc[q][1]*v1.x + q7_bc[q][2]*v2.x;
+            obs.y = q7_bc[q][0]*v0.y + q7_bc[q][1]*v1.y + q7_bc[q][2]*v2.y;
+            obs.z = q7_bc[q][0]*v0.z + q7_bc[q][1]*v1.z + q7_bc[q][2]*v2.z;
+
+            double val = HessSmithPotential(panel_j.vertices, panel_j.normal, obs);
+            sum += q7_w[q] * val;
+        }
+
+        // Jacobian: 2*A_i for triangle quadrature
+        double raw_integral = 2.0 * panel_i.area * sum;
+        return raw_integral / (4.0 * RadConst::PI * PEEC_EPS_0 * area_product);
+
+    } else if (panel_i.type == PEECPanel::Quadrilateral && panel_i.vertices.size() == 4) {
+        // 2x2 Gauss-Legendre on quad test panel (bilinear mapping)
+        const double gp = 1.0 / std::sqrt(3.0);
+        const double quad_pts[4][2] = {
+            {-gp, -gp}, {gp, -gp}, {gp, gp}, {-gp, gp}
+        };
+
+        const TVector3d& v0 = panel_i.vertices[0];
+        const TVector3d& v1 = panel_i.vertices[1];
+        const TVector3d& v2 = panel_i.vertices[2];
+        const TVector3d& v3 = panel_i.vertices[3];
+
+        for (int q = 0; q < 4; ++q) {
+            double xi = quad_pts[q][0];
+            double eta = quad_pts[q][1];
+
+            // Bilinear shape functions
+            double N0 = 0.25 * (1 - xi) * (1 - eta);
+            double N1 = 0.25 * (1 + xi) * (1 - eta);
+            double N2 = 0.25 * (1 + xi) * (1 + eta);
+            double N3 = 0.25 * (1 - xi) * (1 + eta);
+
+            TVector3d obs;
+            obs.x = N0*v0.x + N1*v1.x + N2*v2.x + N3*v3.x;
+            obs.y = N0*v0.y + N1*v1.y + N2*v2.y + N3*v3.y;
+            obs.z = N0*v0.z + N1*v1.z + N2*v2.z + N3*v3.z;
+
+            // Jacobian for bilinear mapping
+            double dxdxi  = 0.25*(-(1-eta)*v0.x + (1-eta)*v1.x + (1+eta)*v2.x - (1+eta)*v3.x);
+            double dydxi  = 0.25*(-(1-eta)*v0.y + (1-eta)*v1.y + (1+eta)*v2.y - (1+eta)*v3.y);
+            double dzdxi  = 0.25*(-(1-eta)*v0.z + (1-eta)*v1.z + (1+eta)*v2.z - (1+eta)*v3.z);
+            double dxdeta = 0.25*(-(1-xi)*v0.x - (1+xi)*v1.x + (1+xi)*v2.x + (1-xi)*v3.x);
+            double dydeta = 0.25*(-(1-xi)*v0.y - (1+xi)*v1.y + (1+xi)*v2.y + (1-xi)*v3.y);
+            double dzdeta = 0.25*(-(1-xi)*v0.z - (1+xi)*v1.z + (1+xi)*v2.z + (1-xi)*v3.z);
+
+            double cx = dydxi*dzdeta - dzdxi*dydeta;
+            double cy = dzdxi*dxdeta - dxdxi*dzdeta;
+            double cz = dxdxi*dydeta - dydxi*dxdeta;
+            double jac = std::sqrt(cx*cx + cy*cy + cz*cz);
+
+            double val = HessSmithPotential(panel_j.vertices, panel_j.normal, obs);
+            sum += val * jac;  // weight = 1.0 for 2x2 Gauss
+        }
+
+        // sum ≈ ∫_Si (∫_Sj 1/|r-r'| dSj) dSi
+        return sum / (4.0 * RadConst::PI * PEEC_EPS_0 * area_product);
+    }
+
+    // Fallback: centroid approximation
+    if (dist > 1e-15) {
+        return 1.0 / (4.0 * RadConst::PI * PEEC_EPS_0 * dist);
+    }
+    return 0.0;
 }
 
 // ============================================================================
@@ -1287,13 +1533,24 @@ double PEECMatrixBuilder::MutualPotentialPanelTriangle(const PEECPanel& panel_i,
 
 PEECSolver::PEECSolver()
     : frequency_(0), omega_(0), hasSurfaceImpedance_(false),
-      n_nodes_(0), hasTopology_(false),
+      n_nodes_(0), hasTopology_(false), hasGatheredCapacitance_(false),
       solverMethod_(0), bicgstab_tol_(1e-10), bicgstab_max_iter_(1000) {}
 
 PEECSolver::~PEECSolver() {}
 
 void PEECSolver::SetMatrices(const PEECMatrices& matrices) {
     matrices_ = matrices;
+
+    // Auto-detect gathered capacitance from matrices
+    if (!matrices.C_gathered.empty() && matrices.n_nodes_gathered > 0) {
+        C_gathered_ = matrices.C_gathered;
+        hasGatheredCapacitance_ = true;
+    }
+}
+
+void PEECSolver::SetGatheredCapacitance(const std::vector<double>& C_gath, int n_nodes) {
+    C_gathered_ = C_gath;
+    hasGatheredCapacitance_ = (n_nodes > 0 && !C_gath.empty());
 }
 
 void PEECSolver::SetSegmentNodes(const std::vector<std::pair<int,int>>& seg_nodes, int n_nodes) {
@@ -1640,6 +1897,7 @@ void PEECSolver::BuildZEff(double freq,
 }
 
 void PEECSolver::MNASolveMultiPort(const std::vector<std::complex<double>>& Z_eff,
+                                    double omega,
                                     std::complex<double>* Z_out, int n_ports_out) {
     int n_loop = matrices_.n_loop;
     int n_ports = static_cast<int>(ports_.size());
@@ -1720,6 +1978,18 @@ void PEECSolver::MNASolveMultiPort(const std::vector<std::complex<double>>& Z_ef
                 &alpha, A_cmplx.data(), n_loop,
                 temp.data(), n_nodes_,
                 &beta_zero, Y_node.data(), n_nodes_);
+
+    // Step 3b: Add gathered capacitance Y_node += jω × C_gathered
+    if (hasGatheredCapacitance_ && std::abs(omega) > 1e-10 &&
+        static_cast<int>(C_gathered_.size()) >= n_nodes_ * n_nodes_) {
+        std::complex<double> jw(0, omega);
+        for (int i = 0; i < n_nodes_; ++i) {
+            for (int j = 0; j < n_nodes_; ++j) {
+                Y_node[i * n_nodes_ + j] += jw *
+                    std::complex<double>(C_gathered_[i * n_nodes_ + j], 0);
+            }
+        }
+    }
 
     // Step 4: Find connected components and select ground nodes
     std::vector<std::vector<int>> components;
@@ -1820,9 +2090,19 @@ void PEECSolver::ComputeZMatrix(double freq,
                                  std::complex<double>* Z_out, int n_ports_out) {
     if (!hasTopology_) return;
 
-    std::vector<std::complex<double>> Z_eff;
-    BuildZEff(freq, Zs, n_Zs, Z_eff);
-    MNASolveMultiPort(Z_eff, Z_out, n_ports_out);
+    double omega = 2.0 * RadConst::PI * freq;
+    std::vector<std::complex<double>> Z_branch;
+
+    if (hasGatheredCapacitance_) {
+        // Proper MNA path: use Z_branch only (no Schur complement).
+        // Capacitance is added as jω × C_gathered inside MNASolveMultiPort.
+        BuildZBranch(freq, Zs, n_Zs, Z_branch);
+    } else {
+        // Legacy path: Schur complement (backward compatible for inductive-only).
+        BuildZEff(freq, Zs, n_Zs, Z_branch);
+    }
+
+    MNASolveMultiPort(Z_branch, omega, Z_out, n_ports_out);
 }
 
 void PEECSolver::ComputeCouplingCoefficient(double freq,
@@ -1981,6 +2261,127 @@ std::vector<PEECSegment> CreateLoopSegments(
     }
 
     return segments;
+}
+
+void PEECMatrixBuilder::GenerateFacePanels(int mode, double eps_r) {
+    // Generate quad face panels from segment box surfaces.
+    // Each segment is a rectangular filament with center, direction, length, width, height.
+    //
+    // Box vertex numbering (looking along +dir):
+    //   v0 = center - d*L/2 - e_w*w/2 - e_h*h/2  (back-left-bottom)
+    //   v1 = center - d*L/2 + e_w*w/2 - e_h*h/2  (back-right-bottom)
+    //   v2 = center - d*L/2 + e_w*w/2 + e_h*h/2  (back-right-top)
+    //   v3 = center - d*L/2 - e_w*w/2 + e_h*h/2  (back-left-top)
+    //   v4 = center + d*L/2 - e_w*w/2 - e_h*h/2  (front-left-bottom)
+    //   v5 = center + d*L/2 + e_w*w/2 - e_h*h/2  (front-right-bottom)
+    //   v6 = center + d*L/2 + e_w*w/2 + e_h*h/2  (front-right-top)
+    //   v7 = center + d*L/2 - e_w*w/2 + e_h*h/2  (front-left-top)
+    //
+    // mode=0: 6 faces (all)
+    // mode=1: 2 faces (top + bottom) — captures inter-layer capacitance
+    // mode=2: 4 faces (top + bottom + left + right) — also captures inter-turn
+    // mode=3: 2 faces (left + right) — inter-turn only (single-layer PCB)
+    // mode=4: 1 face (top only) — simplified single-side
+
+    panels_.clear();
+    panel_segment_ids_.clear();
+    eps_r_ = eps_r;
+
+    for (int seg_idx = 0; seg_idx < static_cast<int>(segments_.size()); ++seg_idx) {
+        const auto& seg = segments_[seg_idx];
+        if (seg.length <= 0 || seg.width <= 0 || seg.height <= 0) continue;
+
+        TVector3d dir = seg.direction;
+        double half_L = seg.length * 0.5;
+        double half_w = seg.width * 0.5;
+        double half_h = seg.height * 0.5;
+
+        // Build local coordinate system (same as ExpandFilaments)
+        TVector3d ref;
+        if (std::abs(dir.x) < 0.9) {
+            ref = TVector3d(1, 0, 0);
+        } else {
+            ref = TVector3d(0, 1, 0);
+        }
+
+        // e_w = ref x dir (normalized)
+        TVector3d e_w;
+        e_w.x = ref.y * dir.z - ref.z * dir.y;
+        e_w.y = ref.z * dir.x - ref.x * dir.z;
+        e_w.z = ref.x * dir.y - ref.y * dir.x;
+        double e_w_len = std::sqrt(e_w.x*e_w.x + e_w.y*e_w.y + e_w.z*e_w.z);
+        if (e_w_len < 1e-15) continue;
+        e_w.x /= e_w_len;
+        e_w.y /= e_w_len;
+        e_w.z /= e_w_len;
+
+        // e_h = dir x e_w
+        TVector3d e_h;
+        e_h.x = dir.y * e_w.z - dir.z * e_w.y;
+        e_h.y = dir.z * e_w.x - dir.x * e_w.z;
+        e_h.z = dir.x * e_w.y - dir.y * e_w.x;
+
+        // 8 box vertices
+        // Helper: c + a*dir + b*e_w + c_h*e_h
+        auto make_vertex = [&](double a, double b, double c_h) -> TVector3d {
+            TVector3d v;
+            v.x = seg.center.x + a * dir.x + b * e_w.x + c_h * e_h.x;
+            v.y = seg.center.y + a * dir.y + b * e_w.y + c_h * e_h.y;
+            v.z = seg.center.z + a * dir.z + b * e_w.z + c_h * e_h.z;
+            return v;
+        };
+
+        TVector3d v0 = make_vertex(-half_L, -half_w, -half_h);
+        TVector3d v1 = make_vertex(-half_L, +half_w, -half_h);
+        TVector3d v2 = make_vertex(-half_L, +half_w, +half_h);
+        TVector3d v3 = make_vertex(-half_L, -half_w, +half_h);
+        TVector3d v4 = make_vertex(+half_L, -half_w, -half_h);
+        TVector3d v5 = make_vertex(+half_L, +half_w, -half_h);
+        TVector3d v6 = make_vertex(+half_L, +half_w, +half_h);
+        TVector3d v7 = make_vertex(+half_L, -half_w, +half_h);
+
+        // Top face (normal = +e_h): v3, v7, v6, v2
+        if (mode == 0 || mode == 1 || mode == 2 || mode == 4) {
+            std::vector<TVector3d> top_verts = {v3, v7, v6, v2};
+            panels_.push_back(PEECPanel(top_verts));
+            panel_segment_ids_.push_back(seg_idx);
+        }
+
+        // Bottom face (normal = -e_h): v0, v1, v5, v4
+        if (mode == 0 || mode == 1 || mode == 2) {
+            std::vector<TVector3d> bot_verts = {v0, v1, v5, v4};
+            panels_.push_back(PEECPanel(bot_verts));
+            panel_segment_ids_.push_back(seg_idx);
+        }
+
+        // Left face (normal = -e_w): v0, v4, v7, v3
+        if (mode == 0 || mode == 2 || mode == 3) {
+            std::vector<TVector3d> left_verts = {v0, v4, v7, v3};
+            panels_.push_back(PEECPanel(left_verts));
+            panel_segment_ids_.push_back(seg_idx);
+        }
+
+        // Right face (normal = +e_w): v1, v2, v6, v5
+        if (mode == 0 || mode == 2 || mode == 3) {
+            std::vector<TVector3d> right_verts = {v1, v2, v6, v5};
+            panels_.push_back(PEECPanel(right_verts));
+            panel_segment_ids_.push_back(seg_idx);
+        }
+
+        // Back face (normal = -dir): v0, v3, v2, v1
+        if (mode == 0) {
+            std::vector<TVector3d> back_verts = {v0, v3, v2, v1};
+            panels_.push_back(PEECPanel(back_verts));
+            panel_segment_ids_.push_back(seg_idx);
+        }
+
+        // Front face (normal = +dir): v4, v5, v6, v7
+        if (mode == 0) {
+            std::vector<TVector3d> front_verts = {v4, v5, v6, v7};
+            panels_.push_back(PEECPanel(front_verts));
+            panel_segment_ids_.push_back(seg_idx);
+        }
+    }
 }
 
 } // namespace radia

@@ -16,9 +16,7 @@
 // Intel MKL for BLAS/LAPACK
 #include <mkl.h>
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "rad_parallel.h"
 
 namespace radia {
 namespace mmm {
@@ -974,10 +972,9 @@ MMMMatrices MMMBuilder::Build() {
     result.N.resize(matrix_size, 0.0);
 
     // Build matrix blocks
-    #pragma omp parallel for schedule(dynamic) if(n_elem > 10)
-    for (int col = 0; col < n_elem; col++) {
-        int dof_col = elements_[col].dof;
-        int offset_col = result.dof_offset[col];
+    ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t col) {
+        int dof_col = elements_[(int)col].dof;
+        int offset_col = result.dof_offset[(int)col];
 
         for (int row = 0; row < n_elem; row++) {
             int dof_row = elements_[row].dof;
@@ -988,13 +985,13 @@ MMMMatrices MMMBuilder::Build() {
 
             // Compute block based on element types
             if (dof_row == 3 && dof_col == 3) {
-                Compute3x3Block(row, col, block.data());
+                Compute3x3Block(row, (int)col, block.data());
             } else if (dof_row == 6 && dof_col == 6) {
-                Compute6x6Block(row, col, block.data());
+                Compute6x6Block(row, (int)col, block.data());
             } else if (dof_row == 3 && dof_col == 6) {
-                Compute3x6Block(row, col, block.data());
+                Compute3x6Block(row, (int)col, block.data());
             } else if (dof_row == 6 && dof_col == 3) {
-                Compute6x3Block(row, col, block.data());
+                Compute6x3Block(row, (int)col, block.data());
             }
 
             // Copy block to matrix (transpose for column-major storage)
@@ -1007,7 +1004,7 @@ MMMMatrices MMMBuilder::Build() {
                 }
             }
         }
-    }
+    });
 
     return result;
 }
@@ -1453,8 +1450,7 @@ std::vector<double> MMMFieldComputer::ComputeHField(
     int n_elem = static_cast<int>(elements_.size());
     bool has_material_data = !material_types_.empty();
 
-    #pragma omp parallel for schedule(dynamic) if(n_points > 100)
-    for (int p = 0; p < n_points; p++) {
+    ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t p) {
         Vec3d obs(obs_points[p * 3], obs_points[p * 3 + 1], obs_points[p * 3 + 2]);
         Vec3d H_total(0, 0, 0);
 
@@ -1489,7 +1485,7 @@ std::vector<double> MMMFieldComputer::ComputeHField(
         H_field[p * 3 + 0] = H_total.x;
         H_field[p * 3 + 1] = H_total.y;
         H_field[p * 3 + 2] = H_total.z;
-    }
+    });
 
     return H_field;
 }

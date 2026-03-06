@@ -18,9 +18,7 @@
 #include <iostream>
 #include "rad_constants.h"  // Unified mathematical/physical constants
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include "rad_parallel.h"
 
 //-------------------------------------------------------------------------
 // Helper functions
@@ -125,9 +123,8 @@ void RadAnalyticalFieldFromPolygonCharge(
 		YD[3] = ZER;
 	}
 
-	// Main loop over observation points (can be parallelized)
-	#pragma omp parallel for if(MXX > 100)
-	for(int I = 0; I < MXX; I++) {
+	// Main loop over observation points (parallelized via TaskManager)
+	ngcore::ParallelFor(ngcore::IntRange(MXX), [&](size_t I) {
 		// Transform observation point to local coordinates
 		TVector3d DD = XX[I] - YY;
 
@@ -206,7 +203,7 @@ void RadAnalyticalFieldFromPolygonCharge(
 		FGH[I].x += HH1*AA.x + HH2*BB.x + HH3*CC.x;
 		FGH[I].y += HH1*AA.y + HH2*BB.y + HH3*CC.y;
 		FGH[I].z += HH1*AA.z + HH2*BB.z + HH3*CC.z;
-	}
+	});
 }
 
 //-------------------------------------------------------------------------

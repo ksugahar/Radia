@@ -13,7 +13,6 @@
 # Options:
 #   -Rebuild    Clean build directory before building
 #   -Test       Run import test after build
-#   -NoOpenMP   Disable OpenMP (for debugging)
 #   -NoExaFMM   Disable ExaFMM (for debugging, ExaFMM is ON by default)
 #   -RadiaOnly  Build only radia.pyd (skip radia_ngsolve)
 #   -Verbose    Show detailed build output
@@ -22,7 +21,6 @@
 param(
     [switch]$Rebuild,
     [switch]$Test,
-    [switch]$NoOpenMP,     # Disable OpenMP (for debugging)
     [switch]$NoExaFMM,     # Disable ExaFMM (for debugging, ExaFMM is enabled by default)
     [switch]$RadiaOnly,    # Build only radia.pyd
     [switch]$Verbose       # Show detailed build output
@@ -103,14 +101,8 @@ if (-not (Test-Path $CMAKE_EXE)) {
     exit 1
 }
 
-# OpenMP flag
-if ($NoOpenMP) {
-    $OPENMP_FLAG = "OFF"
-    Write-Host "OpenMP: DISABLED (debug mode)" -ForegroundColor Yellow
-} else {
-    $OPENMP_FLAG = "ON"
-    Write-Host "OpenMP: ENABLED" -ForegroundColor Green
-}
+# Parallelization: NGSolve TaskManager (OpenMP removed)
+Write-Host "Parallelization: NGSolve TaskManager" -ForegroundColor Green
 
 # ExaFMM flag (enabled by default for FMM-accelerated conductor field computation)
 if ($NoExaFMM) {
@@ -162,7 +154,6 @@ echo.
     -DCMAKE_C_COMPILER=cl ^
     -DCMAKE_CXX_COMPILER=cl ^
     -DCMAKE_BUILD_TYPE=Release ^
-    -DRADIA_ENABLE_OPENMP=$OPENMP_FLAG ^
     -DRADIA_ENABLE_EXAFMM=$EXAFMM_FLAG ^
     -DRADIA_BUILD_NGSOLVE=$NGSOLVE_FLAG
 
