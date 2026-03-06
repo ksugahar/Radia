@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectOutputs>
+    <ProjectOutput>
+      <FullPath>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\x64\Release\ZERO_CHECK</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>S:\Visual_Studio\02_Visual_Studio_2022_コマンドライン_コンパイル\04_Radia\build\lib\Release\radia.pyd</FullPath>
+    </ProjectOutput>
+  </ProjectOutputs>
+  <ContentFiles />
+  <SatelliteDlls />
+  <NonRecipeFileRefs />
+</Project>

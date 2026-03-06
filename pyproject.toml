@@ -1,0 +1,118 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "cmake>=3.20"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "radia"
+version = "4.32"
+description = "3D Magnetostatics Computer Code with OpenMP Parallelization"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "ESRF License"}
+authors = [
+    {name = "Oleg Chubar", email = "chubar@bnl.gov"},
+    {name = "Pascal Elleaume"},
+]
+maintainers = [
+    {name = "Radia Development Team"},
+]
+keywords = ["magnetostatics", "magnetic field", "radia", "synchrotron"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: C++",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+dependencies = [
+    "numpy>=1.20",
+]
+
+[project.optional-dependencies]
+viz = [
+    "pyvista>=0.40",
+    "matplotlib>=3.5",
+]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pyvista>=0.40",
+    "matplotlib>=3.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/ochubar/Radia"
+Documentation = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
+Repository = "https://github.com/ochubar/Radia"
+Issues = "https://github.com/ochubar/Radia/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+markers = [
+    "basic: Basic functionality tests (fast)",
+    "comprehensive: Comprehensive test suite",
+    "advanced: Advanced features and edge cases",
+    "performance: Performance and scaling tests",
+    "slow: Tests that take more than 10 seconds",
+    "benchmark: Performance benchmarks (not run by default)",
+]
+minversion = "7.0"
+norecursedirs = [
+    ".git",
+    ".tox",
+    "dist",
+    "build",
+    "*.egg",
+    "__pycache__",
+]
+
+[tool.coverage.run]
+source = ["radia"]
+omit = [
+    "tests/*",
+    "examples/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
