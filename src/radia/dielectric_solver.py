@@ -23,7 +23,7 @@ References:
     [2] Harrington, "Field Computation by Moment Methods", 1968.
 
 Author: Radia Development Team
-License: LGPL-2.1
+License: BSD-style AND MIT
 """
 
 import numpy as np

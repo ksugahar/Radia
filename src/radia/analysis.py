@@ -21,7 +21,7 @@ References:
         TU Wien, 2003.
 
 Author: Radia Development Team
-License: LGPL-2.1
+License: BSD-style AND MIT
 """
 
 import warnings

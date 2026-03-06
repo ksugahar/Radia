@@ -74,6 +74,14 @@ Evaluates tetrahedral field accuracy using NGSolve H-formulation magnetization.
 **Note:** This script has known issues with NGSolve magnetization extraction.
 Use `evaluate_radia_solvers.py` for Radia solver comparison.
 
+### [ngsolve_reference.py](ngsolve_reference.py)
+
+Computes the magnetic field from a uniformly magnetized cube using NGSolve's A-formulation (vector potential) as an independent reference solution.
+
+### [compare_all.py](compare_all.py)
+
+Loads results from `evaluate_tetra_field.py` and `ngsolve_reference.py` and creates a comprehensive comparison table of Radia tetrahedral MSC, hexahedral, and NGSolve reference solutions.
+
 ## Conclusions
 
 1. **rad.Fld from tetrahedral mesh is ACCURATE**

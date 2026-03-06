@@ -1,18 +1,22 @@
-name: Build & Test
+name: CI
 
 on:
   push:
     branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
 
-# Cancel previous runs on same branch to save runner time
+# On master: never cancel a running build (only pending ones get replaced).
+# On PRs:    cancel the previous run to save runner time.
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
-  build-test-upload:
+  build-test:
     runs-on: [self-hosted, windows-radia]
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +28,7 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Starting Radia build (RadiaOnly mode)..."
-          & "${{ github.workspace }}\BuildMSVC.ps1" -RadiaOnly -Verbose
+          & "${{ github.workspace }}\Build.ps1" -RadiaOnly -Verbose
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Build failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
@@ -71,32 +75,37 @@ jobs:
           retention-days: 30
 
       # ----------------------------------------------------------------
-      # Upload .pyd to GitHub Releases (tag: binaries)
+      # Build wheel (DryRun: build + verify only, no upload)
       # ----------------------------------------------------------------
-      - name: Upload .pyd to GitHub Releases
+      - name: Build wheel
         if: success()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
         run: |
-          echo "=== Uploading .pyd files to GitHub Releases ==="
+          & "${{ github.workspace }}\Build_Wheel.ps1" -DryRun
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Wheel build failed"
+            exit $LASTEXITCODE
+          }
 
-          # Ensure 'binaries' release exists
-          gh release view binaries >/dev/null 2>&1 || \
-            gh release create binaries --title "Binary Files" \
-              --notes "Pre-built modules. Updated by CI." --latest=false
+      # ----------------------------------------------------------------
+      # Upload .pyd as artifact for the CD workflow to consume
+      # ----------------------------------------------------------------
+      - name: Upload .pyd artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-pyd
+          path: src/radia/*.pyd
+          retention-days: 7
 
-          # Collect .pyd files
-          FILES=()
-          for f in src/radia/*.pyd; do
-            [ -f "$f" ] && FILES+=("$f")
-          done
-
-          if [ ${#FILES[@]} -eq 0 ]; then
-            echo "::warning::No .pyd files found to upload"
-            exit 0
-          fi
-
-          echo "Uploading ${#FILES[@]} file(s)..."
-          gh release upload binaries "${FILES[@]}" --clobber
-          echo "Upload complete."
+      # ----------------------------------------------------------------
+      # Upload wheel as artifact for PyPI publishing
+      # ----------------------------------------------------------------
+      - name: Upload wheel artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-wheel
+          path: dist/*.whl
+          retention-days: 7

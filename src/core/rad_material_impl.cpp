@@ -23,6 +23,8 @@
 #include "rad_operation_names.h"
 #include "rad_material_aux.h"
 #include "rad_point_classify.h"
+#include "rad_dipole_collect.h"
+#include "rad_exafmm.h"
 #include "gmvbstr.h"
 
 #include <math.h>
@@ -2736,15 +2738,6 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 		// Otherwise, we'd incorrectly add mirror contributions for models that weren't solved with IMA
 		bool imaWasSet = false;
 
-		// DEBUG: Check IMA setup conditions
-		static int imaDebugCount = 0;
-		if(imaDebugCount < 3) {
-			std::cout << "[IMA Setup Batch] cached_key=" << m_cached_interact_key
-			          << " cached_obj=" << m_cached_obj_key
-			          << " handle=" << container_handle << std::endl;
-			imaDebugCount++;
-		}
-
 		if(m_cached_interact_key > 0 && m_cached_obj_key == container_handle)
 		{
 			radTInteraction* pIntrc = GetInteractionByKey(m_cached_interact_key);
@@ -2757,9 +2750,6 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 					pIntrc->GetIMASignZ()
 				);
 				imaWasSet = true;
-				if(imaDebugCount <= 3) {
-					std::cout << "[IMA Setup Batch] Context SET! sym=" << pIntrc->GetIMASymmetry() << std::endl;
-				}
 			}
 		}
 
@@ -2771,9 +2761,62 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 		// B field is stored internally in A/m (same as H), needs conversion to Tesla
 		const double Mu0 = 4. * 3.1415926535897932 * 1.e-7; // T*m/A
 
-		// Apply unit scaling: convert user units to internal mm
-		// Same as rad_c_interface.cpp Field() function
+		// Apply unit scaling: convert user units to internal meters
 		double scale = GetLengthUnitScale();
+
+		// ================================================================
+		// FMM dipole approximation path (method == 1)
+		// ================================================================
+		if(method == 1 && !imaWasSet)
+		{
+			RadDipoleCollect::DipoleCollection dipoles;
+			RadDipoleCollect::CollectDipoles(g3dPtr, dipoles, nullptr);
+			dipoles.flatten();
+
+			if(dipoles.count() > 0)
+			{
+				// Scale target points to internal units (meters)
+				std::vector<double> targets(n_points * 3);
+				for(int i = 0; i < n_points; i++) {
+					targets[i*3+0] = points[i*3+0] * scale;
+					targets[i*3+1] = points[i*3+1] * scale;
+					targets[i*3+2] = points[i*3+2] * scale;
+				}
+
+				// ExaFMM returns H in A/m (INV_FOUR_PI already applied internally)
+				// Auto-selects: FMM for N>=1000, direct O(N*M) otherwise
+				double fmm_eps = 1e-4;
+				RadExaFMM::FMMResult result = RadExaFMM::ComputeDipoleField(
+					fmm_eps,
+					dipoles.positions.data(), dipoles.moments.data(),
+					dipoles.count(),
+					targets.data(), static_cast<int64_t>(n_points));
+
+				if(result.error_code == 0) {
+					for(int i = 0; i < n_points; i++) {
+						if(H_out) {
+							H_out[i*3+0] = result.gradx[i];
+							H_out[i*3+1] = result.grady[i];
+							H_out[i*3+2] = result.gradz[i];
+						}
+						if(B_out) {
+							B_out[i*3+0] = result.gradx[i] * Mu0;
+							B_out[i*3+1] = result.grady[i] * Mu0;
+							B_out[i*3+2] = result.gradz[i] * Mu0;
+						}
+					}
+					if(imaWasSet) RadIMAFieldContext::Clear();
+					return;  // Done - skip direct path
+				}
+				// FMM error: fall through to direct path
+			}
+			// No dipoles: fall through to direct path
+		}
+		// IMA active with method==1: fall through to direct path
+
+		// ================================================================
+		// Direct computation path (method==0 or FMM fallback)
+		// ================================================================
 
 		// Create field key for B and H computation
 		radTFieldKey FieldKey;
@@ -2782,17 +2825,11 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 
 		TVector3d ZeroVect(0., 0., 0.);
 
-		// Compute field at each point using OpenMP parallelization
-		// method: 0 = direct, 1 = FMM (not yet implemented)
-		//
 		// OpenMP parallelization is safe here because:
 		// 1. Each iteration creates its own thread-local radTField object
 		// 2. Each iteration writes to different output array indices
 		// 3. B_genComp() only reads from the g3dPtr object (no writes)
 		// 4. The FieldKey and ZeroVect are copied by value into each thread's radTField
-		//
-		// Note: Exception handling inside parallel region is tricky - we avoid throwing
-		// exceptions inside B_genComp by ensuring g3dPtr is valid before the loop.
 		#ifdef _OPENMP
 		#pragma omp parallel for schedule(static) if(n_points > 100)
 		#endif
@@ -2804,13 +2841,11 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 			pt.z = points[i * 3 + 2] * scale;
 
 			// Create thread-local field object for each point
-			// All members are either values (not pointers/references) or initialized here
 			radTFieldKey localFieldKey;
 			localFieldKey.B_ = true;
 			localFieldKey.H_ = true;
 			TVector3d localZeroVect(0., 0., 0.);
 
-			// Constructor: (FieldKey, CompCriterium, P, B, H, A, M, J=0. -> TVector3d(0,0,0))
 			radTField Field(localFieldKey, CompCriterium, pt, localZeroVect, localZeroVect, localZeroVect, localZeroVect, 0.);
 			g3dPtr->B_genComp(&Field);
 

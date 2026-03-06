@@ -49,6 +49,9 @@ offset_x = 3.0  # Offset to place exterior domain away from interior
 # Inner air domain (circle_radius < r < kelvin_radius)
 inner_sphere = Sphere(Pnt(0, 0, 0), kelvin_radius)
 inner_sphere.maxh = maxh_fine
+# Name Kelvin boundary face before subtraction (survives Boolean ops)
+for face in inner_sphere.faces:
+    face.name = "kelvin_int"
 inner_air = inner_sphere - mag_sphere
 inner_air.mat("air_inner")
 
@@ -56,6 +59,9 @@ inner_air.mat("air_inner")
 # Outer boundary sphere (no cutoff sphere - solid domain)
 outer_sphere = Sphere(Pnt(offset_x, 0, 0), kelvin_radius)
 outer_sphere.maxh = maxh_fine
+# Name Kelvin boundary face before Glue (survives Boolean ops)
+for face in outer_sphere.faces:
+    face.name = "kelvin_ext"
 outer_sphere.mat("air_outer")
 
 # GND vertex at center (represents r'=0, which maps to r=infinity)
@@ -75,76 +81,28 @@ geo.solids[1].name = "magnetic"
 geo.solids[2].name = "air_outer"
 
 print("\nIdentifying periodic boundaries...")
-# DEBUG: Print solid and face information
+# Find Kelvin boundary faces by name (named during geometry construction)
 print(f"  Number of solids: {len(geo.solids)}")
 for i, solid in enumerate(geo.solids):
     print(f"  Solid[{i}] ({solid.name}): {len(solid.faces)} faces")
-    for j, face in enumerate(solid.faces):
-        # Get face center, area, and bounding box
-        try:
-            center = face.center
-            bbox = face.bounding_box
-            bbox_size = (bbox[1][0] - bbox[0][0]) * (bbox[1][1] - bbox[0][1]) * (bbox[1][2] - bbox[0][2])
-            # Approximate area from mass (assuming unit density)
-            try:
-                mass = face.mass
-                print(f"    Face[{j}]: center=({center.x:.2f}, {center.y:.2f}, {center.z:.2f}), area≈{mass:.4f}, bbox_vol={bbox_size:.2f}")
-            except:
-                print(f"    Face[{j}]: center=({center.x:.2f}, {center.y:.2f}, {center.z:.2f}), bbox_vol={bbox_size:.2f}")
-        except:
-            print(f"    Face[{j}]: (cannot get info)")
 
-# Identify periodic faces: inner domain outer face (r=R) <-> outer domain outer face (r'=R)
-# Find air_inner and air_outer solids by name
-air_inner_solid_idx = None
-air_outer_solid_idx = None
-for i, solid in enumerate(geo.solids):
-    if solid.name == "air_inner":
-        air_inner_solid_idx = i
-    elif solid.name == "air_outer":
-        air_outer_solid_idx = i
+kelvin_int_face = None
+kelvin_ext_face = None
+for solid in geo.solids:
+    for face in solid.faces:
+        if face.name == "kelvin_int":
+            kelvin_int_face = face
+            print(f"  Found kelvin_int face in solid '{solid.name}'")
+        elif face.name == "kelvin_ext":
+            kelvin_ext_face = face
+            print(f"  Found kelvin_ext face in solid '{solid.name}'")
 
-if air_inner_solid_idx is not None and air_outer_solid_idx is not None:
-    # For air_inner: find the face with largest bounding box (outer sphere, r=2.0)
-    air_inner_outer_face_idx = None
-    max_bbox_size = 0
-    for i, face in enumerate(geo.solids[air_inner_solid_idx].faces):
-        try:
-            bbox = face.bounding_box
-            # bbox is a tuple: ((xmin, ymin, zmin), (xmax, ymax, zmax))
-            bbox_size = (bbox[1][0] - bbox[0][0]) * (bbox[1][1] - bbox[0][1]) * (bbox[1][2] - bbox[0][2])
-            print(f"  air_inner face[{i}]: bbox_size = {bbox_size:.2f}")
-            if bbox_size > max_bbox_size:
-                max_bbox_size = bbox_size
-                air_inner_outer_face_idx = i
-        except Exception as e:
-            print(f"  air_inner face[{i}]: error getting bbox - {e}")
-
-    # For air_outer: find the face with largest bounding box (should be only 1 face, but be safe)
-    air_outer_outer_face_idx = None
-    max_bbox_size = 0
-    for i, face in enumerate(geo.solids[air_outer_solid_idx].faces):
-        try:
-            bbox = face.bounding_box
-            # bbox is a tuple: ((xmin, ymin, zmin), (xmax, ymax, zmax))
-            bbox_size = (bbox[1][0] - bbox[0][0]) * (bbox[1][1] - bbox[0][1]) * (bbox[1][2] - bbox[0][2])
-            print(f"  air_outer face[{i}]: bbox_size = {bbox_size:.2f}")
-            if bbox_size > max_bbox_size:
-                max_bbox_size = bbox_size
-                air_outer_outer_face_idx = i
-        except Exception as e:
-            print(f"  air_outer face[{i}]: error getting bbox - {e}")
-
-    print(f"  Selected: air_inner_outer_face_idx = {air_inner_outer_face_idx}, air_outer_outer_face_idx = {air_outer_outer_face_idx}")
-
-    if air_inner_outer_face_idx is not None and air_outer_outer_face_idx is not None:
-        print(f"  Identifying: geo.solids[{air_inner_solid_idx}].faces[{air_inner_outer_face_idx}] (air_inner) <-> geo.solids[{air_outer_solid_idx}].faces[{air_outer_outer_face_idx}] (air_outer)")
-        geo.solids[air_inner_solid_idx].faces[air_inner_outer_face_idx].Identify(geo.solids[air_outer_solid_idx].faces[air_outer_outer_face_idx], "periodic", IdentificationType.PERIODIC)
-        print("  Periodic identification applied")
-    else:
-        print("  ERROR: Could not find faces!")
+if kelvin_int_face is not None and kelvin_ext_face is not None:
+    kelvin_int_face.Identify(kelvin_ext_face, "periodic", IdentificationType.PERIODIC)
+    print("  Periodic identification applied between kelvin_int and kelvin_ext")
 else:
-    print("  ERROR: Could not find air_inner or air_outer solids!")
+    raise RuntimeError(f"Could not find Kelvin boundary faces! "
+                       f"(kelvin_int: {kelvin_int_face is not None}, kelvin_ext: {kelvin_ext_face is not None})")
 
 # ============================================================
 # Mesh Generation
@@ -177,10 +135,22 @@ except Exception as e:
 print("\nSetting up H-formulation with Periodic BC...")
 
 # Create finite element space with Periodic BC and GND boundary
-fes = H1(mesh, order=3, dirichlet="GND")
-fes = Periodic(fes)  # Apply periodic boundary conditions
+fes_before = H1(mesh, order=3, dirichlet="GND")
+
+# Check FreeDofs BEFORE Periodic
+freedof_before = sum([1 for d in fes_before.FreeDofs() if d])
+
+fes = Periodic(fes_before)  # Apply periodic boundary conditions
+
+# Check FreeDofs AFTER Periodic
+freedof_after = sum([1 for d in fes.FreeDofs() if d])
 
 print(f"  Number of DOFs: {fes.ndof}")
+print(f"  FreeDofs: {freedof_before} -> {freedof_after} (diff: {freedof_before - freedof_after})")
+if freedof_before == freedof_after:
+    print("  WARNING: Periodic BC may NOT be working!")
+else:
+    print("  Periodic BC is working (FreeDofs reduced)")
 
 mu0 = 4*pi*1e-7
 u = fes.TrialFunction()

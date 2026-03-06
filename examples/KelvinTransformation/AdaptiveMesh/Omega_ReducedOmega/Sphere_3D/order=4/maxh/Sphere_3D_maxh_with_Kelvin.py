@@ -177,7 +177,7 @@ def create_geometry():
 	for face in air_inner.faces:
 		fc = face.center
 		dist = sqrt(fc.x**2 + fc.y**2 + fc.z**2)
-		if dist > kelvin_radius * 0.8:
+		if abs(dist - kelvin_radius) < kelvin_radius * 0.2:
 			face.name = "kelvin_int"
 		elif dist < air_total_radius * 1.2 and dist > air_total_radius * 0.5:
 			face.name = "total_reduced"

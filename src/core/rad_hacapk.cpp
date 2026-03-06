@@ -362,7 +362,7 @@ void RadHACApKManager::PrecomputeGeometry3DOF() {
 
         // Store face data for each of the 4 triangular faces
         for (int f = 0; f < 4; f++) {
-            radTHandlePgnAndTrans hpt = poly->VectHandlePgnAndTrans[f];
+            const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
             radTPolygon* pgn = hpt.PgnHndl.rep;
             radTrans* tr = hpt.TransHndl.rep;
 

@@ -6,8 +6,8 @@ This setup.py is used for building binary distributions (wheels) that include
 the pre-compiled C++ extension modules (_radia_pybind.pyd, radia_ngsolve.pyd).
 
 For development builds, use the CMake build scripts:
-- BuildMSVC.ps1 for _radia_pybind.pyd (main module)
-- BuildMSVC.ps1 for radia_ngsolve.pyd (NGSolve integration)
+- Build.ps1 for _radia_pybind.pyd (main module)
+- Build.ps1 for radia_ngsolve.pyd (NGSolve integration)
 
 Module naming: The C++ extension is named '_radia_pybind' (with underscore) so that
 'import radia' uses the Python package with __init__.py, which then imports
@@ -24,7 +24,7 @@ import sys
 
 # Version is read from pyproject.toml by setuptools
 # This fallback is only used if pyproject.toml is not available
-version = "2.2.0"
+version = "2.4.0"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -61,7 +61,7 @@ def prepare_package_data():
 			radia_pyd_found = True
 
 	if not radia_pyd_found:
-		print(f"Warning: _radia_pybind.pyd not found. Run BuildMSVC.ps1 first.")
+		print(f"Warning: _radia_pybind.pyd not found. Run Build.ps1 first.")
 
 	# Copy radia_ngsolve.pyd
 	radia_ngsolve_pyd = build_dir / "radia_ngsolve.pyd"

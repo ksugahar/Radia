@@ -1,0 +1,14 @@
+# Default owner for everything
+* @ksugahar
+
+# C++ core
+src/core/ @ksugahar
+
+# Python bindings
+src/radia/ @ksugahar
+
+# CI/CD workflows
+.github/workflows/ @ksugahar
+
+# Documentation
+docs/ @ksugahar

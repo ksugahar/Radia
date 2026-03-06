@@ -380,10 +380,21 @@ private:
     // Compute mutual potential coefficient
     double MutualPotential(const PEECNode& node_i, const PEECNode& node_j) const;
 
-    // Analytical panel integration (Wilton et al., 1984)
+    // Analytical panel integration (Hess-Smith / Wilton)
     double SelfPotentialPanelTriangle(const PEECPanel& panel) const;
-    double SelfPotentialPanelQuad(const PEECPanel& panel) const;  // Split into 2 triangles
+    double SelfPotentialPanelQuad(const PEECPanel& panel) const;
     double MutualPotentialPanelTriangle(const PEECPanel& panel_i, const PEECPanel& panel_j) const;
+
+    // Hess-Smith analytical single-layer potential from a flat polygon
+    // evaluated at a given observation point (Hess & Smith, 1967; Newman, 1986)
+    double HessSmithPotential(const std::vector<TVector3d>& vertices,
+                              const TVector3d& normal,
+                              const TVector3d& obs_point) const;
+
+    // Recursive fourfil mutual inductance (Romberg subdivision)
+    double MutualInductanceFourfil(const PEECSegment& seg_i,
+                                   const PEECSegment& seg_j,
+                                   int depth) const;
 };
 
 /**
