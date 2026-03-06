@@ -166,7 +166,7 @@ def main():
 
         # Set HACApK parameters if needed
         if solver['method'] == 2:
-            rad.SetHACApKParams(1e-4, 10, 2.0)
+            rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 
         # Run solver
         result = run_solver(model, solver['method'])

@@ -51,8 +51,7 @@ ext = rad.ObjBckg(lambda p: [0, 0, B_ext])
 grp = rad.ObjCnt([radia_obj, ext])
 
 # Set solver params
-rad.SetBiCGSTABTol(1e-4)
-rad.SetRelaxParam(0.0)
+rad.SolverConfig(bicgstab_tol=1e-4, relax_param=0.0)
 
 # Solve LU
 print("Solving LU...")

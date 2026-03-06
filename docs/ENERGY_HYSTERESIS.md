@@ -17,7 +17,7 @@ providing both forward (H -> B) and inverse (B -> H) operators with O(K) complex
 | Iron loss definition | Approximate (loop area) | **Direct from local energy dissipation** |
 | Inverse operator | Requires fminsearch | **O(K) via Schur complement** |
 | Parameters | Shape functions + eta | U_k (internal energy) + chi_k (pinning) |
-| Congruency | Congruent in B-space | **Structurally guaranteed** |
+| Congruency | **H-axis congruent** (see Section 2-5) | **Structurally guaranteed** |
 | Vector extension | 2D -> 3D natural | **Arbitrary dimension (d <= 3)** |
 
 The B-input Play shape functions f_k are reused as U_k' (derivative of internal energy),
@@ -79,6 +79,69 @@ Conversion from B-input Play data:
 U_k(r) = integral_0^r f_k(s) ds
 chi_k = eta_k
 ```
+
+### 2-5. Congruency Property (合同性)
+
+**B-input Play model satisfies H-axis congruency** (H軸方向の合同性).
+
+The Play operators work in B-space with thresholds eta_k defined in B. For minor loops
+with the same B-amplitude at different DC bias points:
+
+```
+Same delta-B  →  Same delta-p_k  →  Same H output shape
+```
+
+This is because the play operator state update depends only on the B excursion:
+```
+p_k = B - eta_k * (B - p_k_prev) / max(eta_k, |B - p_k_prev|)
+```
+When |B - B_dc| = const (same amplitude), the delta-p_k trajectory is identical
+regardless of B_dc, producing congruent H output loops.
+
+| Model | Input | Output | Congruency Direction |
+|-------|-------|--------|---------------------|
+| H-input Play | H | B (M) | Not congruent (non-physical) |
+| **B-input Play** | **B** | **H** | **H-axis congruent** |
+| Energy-based (Egger) | H <-> B | both | Structurally guaranteed |
+
+**Verification procedure**: Drive the material at different DC bias points with the
+same AC amplitude, compare the resulting H minor loops. They should be congruent
+(same shape, only translated in B).
+
+```python
+import radia as rad
+import numpy as np
+
+MU_0 = 4e-7 * np.pi
+
+rad.UtiDelAll()
+mat = rad.MatEnergyHysteresis(K, As, Js, chi, eps)
+
+H_dc_list = [0, 200, 500]  # Different DC bias [A/m]
+H_ac = 100.0                # Same AC amplitude
+
+minor_loops = {}
+for H_dc in H_dc_list:
+    # Drive to bias point
+    for H_val in np.linspace(0, H_dc, 50):
+        rad.MatMvsH(mat, 'm', [H_val, 0, 0])
+
+    # Trace minor loop
+    t = np.linspace(0, 2 * np.pi, 200)
+    H_loop = H_dc + H_ac * np.sin(t)
+    B_loop = []
+    for H_val in H_loop:
+        M = rad.MatMvsH(mat, 'm', [H_val, 0, 0])
+        B_loop.append(MU_0 * (H_val + M[0]))
+    minor_loops[H_dc] = (H_loop, np.array(B_loop))
+
+# Compare: H_loop shapes at different bias should be congruent
+# (same delta-B produces same delta-H)
+```
+
+**Collaboration note**: Experimental congruency measurements are ongoing at
+Sugahara Lab (Kindai University) in collaboration with Prof. Hane's group,
+including amorphous materials where non-congruency has been observed.
 
 ---
 
@@ -482,6 +545,113 @@ C++ is **1000x+ faster** than the Python prototype (0.07ms vs 78ms for K=50).
 
 ---
 
+## 12. Future: Magnetic Aftereffect (磁気余効)
+
+The Sugahara laboratory (Kindai University) plans to extend the energy-based
+hysteresis model to include **magnetic aftereffect** (magnetic viscosity).
+
+### Physical Background
+
+Magnetic aftereffect is the time-dependent relaxation of magnetization after
+a change in applied field. It is an intrinsic material property originating
+from thermal activation over pinning energy barriers -- distinct from eddy
+current effects (which are extrinsic/geometric).
+
+After a field change, M(t) relaxes logarithmically:
+```
+M(t) = M_0 + S * ln(t / t_0)
+```
+where S is the magnetic viscosity coefficient and t_0 is a microscopic time constant.
+
+### Energy-Based Formulation
+
+The pinning potential U_k naturally provides the energy barrier landscape for
+thermal activation. Each partial polarization J_k can evolve via Arrhenius-type
+rate equations:
+
+```
+dJ_k/dt = f_0 * exp(-Delta_U_k(J_k) / (k_B * T)) * direction
+```
+
+where:
+- `f_0`: attempt frequency (~10^9 Hz for domain wall processes)
+- `Delta_U_k(J_k)`: energy barrier from U_k + chi_k pinning
+- `k_B * T`: thermal energy (~4.1e-21 J at 300K)
+
+The energy-based framework is well-suited for this extension because:
+1. Energy barriers are **already computed** (U_k and chi_k define the landscape)
+2. Thermodynamic consistency is **preserved** (rates satisfy detailed balance)
+3. The O(K) Schur complement structure is **unchanged** (each J_k still evolves independently in the aftereffect regime)
+
+### Target Applications
+
+| Application | Description |
+|-------------|-------------|
+| Post-magnetization relaxation (着磁後の緩和) | M decay after pulse magnetization |
+| Long-term stability of PM (経年減磁予測) | Irreversible flux loss over years |
+| Temperature-dependent demagnetization (温度減磁) | Accelerated aging at elevated T |
+| Accommodation / reptation | Minor loop drift under repeated cycling |
+
+### Accelerator Magnet Applications
+
+Radia originates from accelerator magnet design (ESRF). Magnetic aftereffect
+directly impacts accelerator operation where ppm-level field stability is required:
+
+| Capability | Current (rate-independent) | With aftereffect |
+|-----------|--------------------------|-----------------|
+| PM undulator design | Static M only | **Long-term flux loss prediction** |
+| Iron yoke design | Reversible B-H only | **Post-magnetization drift M(t)** |
+| Field stability | Cannot evaluate | **ppm-level temporal variation** |
+| Temperature compensation | Manual estimation | **T-dependent M(t) simulation** |
+
+Radia's BEM (no air mesh) computes fields along long beamlines with natural
+open boundary -- this combination (hysteresis + open boundary + far-field
+accuracy) is extremely difficult with FEM.
+
+### Parameter Identification via Fourier Separation
+
+The energy-based model has a key advantage: **all aftereffect parameters can
+be identified experimentally** using Taka's Fourier separation method
+(see `MAGNETIC_AFTEREFFECT_RESEARCH.md`):
+
+```
+Measured B-H loops at multiple frequencies
+  |
+  v
+Taka's Fourier separation: h = (a_i * db/dt) + (c_i * b)
+  |
+  v
+Static parameters:                    Dynamic parameters:
+  c_i(Bmax) -> shape functions f_k      a_i(f) decomposition:
+            -> U_k' = f_k                 f-proportional = eddy current
+            -> chi_k = eta_k              f->0 intercept = aftereffect
+                                          |
+                                          v
+                                        f_0 from a_i(f) slope
+                                        Delta_U_k from chi_k (already known)
+```
+
+| Parameter | Conventional | With Fourier separation |
+|-----------|-------------|------------------------|
+| U_k | B-H loop fitting | Same (from c_i static component) |
+| chi_k | B-H loop fitting | Same + independent verification via a_i intercept |
+| f_0 | Literature value (~10^9, assumed) | **Experimentally determined from a_i(f) slope** |
+
+No assumed parameters -- the complete model is identified from measurement.
+
+### Relationship to Experimental Work
+
+Congruency measurements with Prof. Hane's group (amorphous materials) have
+revealed non-congruency behavior that may be explained by thermal aftereffect:
+the time-dependent barrier crossing modifies the effective shape functions,
+breaking ideal congruency.
+
+For detailed research plan, see `MAGNETIC_AFTEREFFECT_RESEARCH.md`.
+
+**Status**: Planned. Not yet implemented.
+
+---
+
 ## References
 
 1. Egger, Engertsberger, Schafelner: "Efficient evaluation of forward and inverse energy-based magnetic hysteresis operators", MAGCON-25-07-0171 (Compumag 2025)
@@ -493,4 +663,4 @@ C++ is **1000x+ faster** than the Python prototype (0.07ms vs 78ms for K=50).
 
 ---
 
-**Last Updated:** 2026-03-05
+**Last Updated:** 2026-03-06

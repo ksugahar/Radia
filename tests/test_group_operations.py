@@ -181,7 +181,7 @@ class TestGroupFieldEvaluation:
 		assert np.allclose(H_sum, H_group, rtol=1e-10)
 
 	def test_batch_field_from_group(self):
-		"""Test FldBatch with groups"""
+		"""Test batch Fld with groups"""
 		rad.UtiDelAll()
 
 		mags = []
@@ -192,14 +192,11 @@ class TestGroupFieldEvaluation:
 
 		group = rad.ObjCnt(mags)
 
-		# Evaluate at multiple points
-		points = [[x, 0, 0] for x in [10, 20, 30, 40]]
-		result = rad.FldBatch(group, points)
-		H_batch = result['H']
+		# Evaluate at multiple points using unified Fld with (N,3) array
+		points = np.array([[x, 0, 0] for x in [10, 20, 30, 40]], dtype=float)
+		H_batch = np.asarray(rad.Fld(group, 'h', points))
 
-		assert len(H_batch) == 4, "Should return 4 field vectors"
-		for H in H_batch:
-			assert len(H) == 3, "Each field should be 3D"
+		assert H_batch.shape == (4, 3), "Should return (4, 3) array"
 
 
 class TestGroupEdgeCases:

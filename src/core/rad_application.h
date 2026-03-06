@@ -68,18 +68,18 @@ public:
 	// Relaxation coefficient for nonlinear iteration (default: 0.0 = full step)
 	// 0.0 = full step (no under-relaxation)
 	// 0.0-1.0 = under-relaxation: chi_new = chi_new*(1-relax) + chi_old*relax
-	// Can be set via Python API: rad.SetRelaxParam(value)
+	// Can be set via Python API: rad.SolverConfig(relax_param=value)
 	double m_relax;
 
 	// Newton-Raphson nonlinear iteration (default: false = Picard/fixed-point)
 	// When true, uses differential susceptibility chi_d = (dB/dH)/mu_0 - 1 for system matrix
 	// and adds correction term to RHS for quadratic convergence
-	// Can be set via Python API: rad.SetNewtonMethod(True/False)
+	// Can be set via Python API: rad.SolverConfig(newton_method=True/False)
 	bool m_use_newton;
 
 	// Newton line search damping parameters
 	// Enables adaptive backtracking line search to improve nonlinear convergence
-	// Can be configured via Python API: rad.SetNewtonDamping(enabled, max_iter, min_omega)
+	// Can be configured via Python API: rad.SolverConfig(newton_damping=True, ...)
 	bool m_newton_damping_enabled;   // Enable line search damping (default: true when Newton active)
 	int m_newton_ls_max_iter;        // Max line search backtracks (default: 5)
 	double m_newton_ls_min_omega;    // Minimum omega threshold (default: 0.01)

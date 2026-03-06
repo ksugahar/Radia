@@ -10,7 +10,7 @@
  * 2. Direct computation (B_genComp)
  *
  * This module is used by:
- * - rad.Fld() and rad.FldBatch()
+ * - rad.Fld() (unified single-point and batch)
  * - rad_particle_trajectory.cpp (beam tracking)
  * - radia_ngsolve.cpp (RadiaField CoefficientFunction)
  *

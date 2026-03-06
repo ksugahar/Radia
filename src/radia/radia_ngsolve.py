@@ -70,22 +70,7 @@ def create_voxel_cf(radia_obj, field_type='b', mesh=None, bbox=None,
     xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
     points = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
 
-    if field_type in ('b', 'h'):
-        result = rad.FldBatch(radia_obj, points)
-        key = 'B' if field_type == 'b' else 'H'
-        field = np.asarray(result[key])
-    elif field_type == 'a':
-        field = np.asarray(rad.FldA(radia_obj, points))
-    elif field_type == 'phi':
-        field = np.asarray(rad.FldPhi(radia_obj, points))
-    else:
-        n = len(points)
-        field = np.zeros((n, 3))
-        for i in range(n):
-            field[i] = rad.Fld(
-                radia_obj, field_type,
-                [float(points[i, 0]), float(points[i, 1]),
-                 float(points[i, 2])])[:3]
+    field = np.asarray(rad.Fld(radia_obj, field_type, points))
 
     start = (bbox[0][0], bbox[1][0], bbox[2][0])
     end = (bbox[0][1], bbox[1][1], bbox[2][1])

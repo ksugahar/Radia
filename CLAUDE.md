@@ -178,11 +178,11 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
            ▼                  ▼                  ▼
     ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
     │ rad.Fld()   │    │ rad.FldVTS()│    │ CplMagFld() │
-    │ rad.FldBatch│    │ VTS export  │    │ PEEC+MMM    │
+    │ (unified)   │    │ VTS export  │    │ PEEC+MMM    │
     └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
-**Users**: `rad.Fld()`, `rad.FldBatch()`, `rad.FldVTS()`, `rad.RadiaField()`, `rad_particle_trajectory`, `CplMagFld()`.
+**Users**: `rad.Fld()` (unified single/batch), `rad.FldVTS()`, `rad.RadiaField()`, `rad_particle_trajectory`, `CplMagFld()`.
 
 **Key Features**: Inside/outside classification (solid angle method), TaskManager parallelized batch, complex field support (PEEC+MMM AC).
 
@@ -453,8 +453,8 @@ container = netgen_mesh_to_radia(mesh, material=material_from_ngsolve, units='m'
 # No Solve() needed - M is already known from NGSolve
 
 # 3. Evaluate field at arbitrary external points (exact analytical formulas)
-B = rad.Fld(container, 'b', [0, 0, 0.1])          # single point
-B_batch = rad.FldBatch(container, obs_points, 0)   # batch
+B = rad.Fld(container, 'b', [0, 0, 0.1])          # single point (shape (3,))
+B_batch = rad.Fld(container, 'b', obs_points)      # batch (shape (N,3))
 rad.FldVTS(container, 'field.vts', ...)             # VTK export
 ```
 
@@ -569,28 +569,32 @@ From `src/radia/netgen_mesh_import.py`:
 - **中規模 (500<N<2000)**: BiCGSTAB推奨 (最速)
 - **大規模 (N>2000)**: HACApK推奨 (メモリ効率)
 
-### HACApK Parameters
+### Solver Configuration (Unified API)
 
 ```python
-rad.SetHACApKParams(eps, leaf_size, eta)
+rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
+rad.SolverConfig(bicgstab_tol=1e-4, relax_param=0.3, newton_method=True)
+config = rad.GetSolverConfig()  # Returns dict with all settings
 ```
 
-| Parameter | C++ Default | Recommended | Description |
-|-----------|-------------|-------------|-------------|
-| eps | 1e-4 | 1e-4 | ACA tolerance (1e-6 to 1e-2) |
-| leaf_size | 32 | **10** | Minimum cluster size (elements). 10 for MSC 6DOF hex (60 DOF/leaf), ELF-compatible |
-| eta | 2.0 | 2.0 | Admissibility parameter |
-
-**leaf_size=10 の根拠**: C++ デフォルトは 32 だが、MSC 6DOF ヘキサヘドロンでは leaf_size=10 → 実際のリーフは最大 11 要素 × 6DOF = **66 DOF/leaf** となる（二分木分割の端数）。C++ デフォルト 32 では 32×6=192 DOF/leaf で leaf が大きすぎ、ACA+ の低ランク近似の恩恵が小さくなる。leaf_size=10 (66 DOF) が圧縮効率と per-leaf 計算コストのバランスが良い。全ベンチマークで `rad.SetHACApKParams(1e-4, 10, 2.0)` を使用。
+| Keyword | Default | Description |
+|---------|---------|-------------|
+| `hacapk_eps` | 1e-4 | ACA tolerance (1e-6 to 1e-2) |
+| `hacapk_leaf` | 10 | Minimum cluster size (elements). 10 for MSC 6DOF hex (~66 DOF/leaf) |
+| `hacapk_eta` | 2.0 | Admissibility parameter |
+| `bicgstab_tol` | 1e-4 | BiCGSTAB convergence tolerance |
+| `relax_param` | 0.0 | Under-relaxation (0=full step, <1=damped) |
+| `newton_method` | False | True=Newton-Raphson, False=Picard |
+| `newton_damping` | True | Enable Newton line search damping |
 
 See `docs/HMATRIX_EVALUATION.md` for full evaluation report.
 
 ### Under-Relaxation for Nonlinear Problems
 
 ```python
-rad.SetRelaxParam(0.3)  # 30% damping (0.0 = full step)
+rad.SolverConfig(relax_param=0.3)  # 30% damping (0.0 = full step)
 rad.Solve(container, 0.0001, 1000, 1)
-rad.SetRelaxParam(0.0)  # Reset to full step
+rad.SolverConfig(relax_param=0.0)  # Reset to full step
 ```
 
 ---

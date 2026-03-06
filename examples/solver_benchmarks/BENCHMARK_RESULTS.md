@@ -121,8 +121,8 @@ python run_all_hmatrix_benchmarks.py
 ```python
 import radia as rad
 
-# Set H-matrix parameters (eps=1e-4, leaf_size=10, eta=2.0)
-rad.SetHACApKParams(1e-4, 10, 2.0)
+# Set H-matrix parameters
+rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 
 # Solve with HACApK H-matrix (Method 2)
 rad.Solve(geometry, 0.0001, 1000, 2)
