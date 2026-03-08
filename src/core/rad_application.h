@@ -84,6 +84,19 @@ public:
 	int m_newton_ls_max_iter;        // Max line search backtracks (default: 5)
 	double m_newton_ls_min_omega;    // Minimum omega threshold (default: 0.01)
 
+	// B-input Newton-Raphson for energy-based hysteresis
+	// When true and all materials are radTEnergyHysteresisMaterial,
+	// uses Inverse(B) + analytical Jacobian instead of chi-based Picard/Newton.
+	// Can be set via Python API: rad.SolverConfig(b_input_newton=True)
+	bool m_b_input_newton;
+
+	// B-input Hantila polarization method for energy-based hysteresis
+	// Constant LHS (I - alpha*N), LU factored once → O(N^2) per iteration
+	// Can be set via Python API: rad.SolverConfig(b_input_hantila=True)
+	bool m_b_input_hantila;
+	double m_hantila_alpha;   // Polarization parameter (0 = auto-compute from initial susceptibility)
+	double m_hantila_relax;   // Under-relaxation (0 = full step)
+
 	// Solve statistics (always available)
 	double m_solve_t_matrix_build;   // Interaction matrix build time [s]
 	double m_solve_t_lu_decomp;      // LU decomposition time [s] (Method 0 only)
@@ -150,6 +163,14 @@ public:
 		m_newton_damping_enabled = true;  // Default: enabled when Newton is active
 		m_newton_ls_max_iter = 5;
 		m_newton_ls_min_omega = 0.01;
+
+		// B-input Newton init
+		m_b_input_newton = false;
+
+		// B-input Hantila init
+		m_b_input_hantila = false;
+		m_hantila_alpha = 0.0;   // 0 = auto-compute
+		m_hantila_relax = 0.0;   // 0 = full step
 
 		// Solve statistics init
 		m_solve_t_matrix_build = 0.0;
@@ -293,10 +314,20 @@ public:
 	int SetNonlinearAnisotropMaterial(double** Ksi, double** Ms, double* Hc, int lenHc, char* DependenceIsNonlinear);
 	int SetNonlinearAnisotropMaterial0(double* pDataPar, int lenDataPar, double* pDataPer, int lenDataPer);
 
-	int SetEnergyHysteresisMaterial(int K, const double* As, const double* Js, const double* chi, double eps);
+	int SetEnergyHysteresisMaterial(int K, const double* chi,
+	                                const std::vector<std::vector<double>>& r_tables,
+	                                const std::vector<std::vector<double>>& f_tables,
+	                                double eps);
+
+	int SetPlayHysteresisMaterial(int K, const double* eta,
+	                              const std::vector<std::vector<double>>& r_tables,
+	                              const std::vector<std::vector<double>>& f_tables);
 
 	int ApplyMaterial(int g3dRelaxElemKey, int MaterElemKey);
 	void ComputeMvsH(int g3dRelaxOrMaterElemKey, char* MagnChar, double* H, long lenH);
+	int MatHysSaveState(int MaterElemKey, double* pState, int* pLen);
+	int MatHysRestoreState(int MaterElemKey, const double* pState, int Len);
+	int MatHysCommitState(int MaterElemKey);
 
 	int PreRelax(int ElemKey, int SrcElemKey, char skipDenseMatrix=0);
 	int SetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
