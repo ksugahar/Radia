@@ -46,7 +46,7 @@
 
 | Document | Description |
 |----------|-------------|
-| [ENERGY_HYSTERESIS.md](ENERGY_HYSTERESIS.md) | Energy-based vector hysteresis (Egger/Francois-Lavet formulation, Play model integration) |
+| [B_INPUT_PLAY_MODEL.md](B_INPUT_PLAY_MODEL.md) | B-input Play hysteresis model (direct Play + energy-based approximation) |
 
 ## Specialized Features
 

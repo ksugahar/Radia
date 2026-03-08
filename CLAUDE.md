@@ -597,6 +597,53 @@ rad.Solve(container, 0.0001, 1000, 1)
 rad.SolverConfig(relax_param=0.0)  # Reset to full step
 ```
 
+### Hantila Polarization Method
+
+Hantila (1975) splits the constitutive relation into constant linear part + residual:
+
+```
+B = mu_0*(1+alpha)*H + mu_0*R    where R = M - alpha*H
+```
+
+For Radia BEM, the interaction matrix N maps M -> H_demag (constant, geometry-only):
+
+```
+H = H_ext + N*M
+Substituting M = alpha*H + R:
+(I - alpha*N)*H = H_ext + N*R    <- constant LHS, LU factored ONCE
+```
+
+**Advantages over Picard/Newton**:
+
+| Feature | Picard (rad.Solve) | Newton | Hantila |
+|---------|-------------------|--------|---------|
+| Matrix factorization | Every iteration | Every iteration | **Once** |
+| Jacobian needed | No | Yes (dM/dH) | **No** |
+| BH curves | Yes | Yes | **Yes** |
+| Hysteresis | No | No | **Yes** |
+| Cost per iteration | O(N^3) LU | O(N^3) LU | **O(N^2) back-sub** |
+
+**Current limitation**: MMM (tetrahedra, 3 DOF) only. MSC (hexahedra, 6 DOF) requires sigma-M conversion (future).
+
+**Usage**:
+```python
+from radia.hantila_solver import solve_hantila
+
+# BH curve case
+result = solve_hantila(iron_container, source=coil,
+                       bh_data=BH_DATA, alpha=500.0, tol=1e-4)
+
+# Hysteresis case (per-element material handles)
+result = solve_hantila(iron_container, source=coil,
+                       mat_handles=handles, alpha=500.0, relax=0.5)
+
+# Result: M and H per element, convergence info
+M = result['M']  # (n_elem, 3) in A/m
+B = rad.Fld(iron_container, 'b', [0, 0, 0.05])  # Field evaluation
+```
+
+Reference: F.I. Hantila, Rev. Roum. Sci. Techn. - Electrotechn. et Energ., 1975.
+
 ---
 
 ## IMA (Image Method of Analysis)
@@ -876,16 +923,52 @@ All example scripts should export VTK files with the same basename as the script
 
 ### Benchmark Policy
 
-ベンチマーク実行ルール:
+**POLICY**: 全てのベンチマークスクリプト (`bench_*.py`) は JSON 形式の結果ファイルを出力すること。
+
+**実行ルール**:
 1. 1ケース毎に実行（並列実行しない、メモリ測定の正確性のため）
 2. メモリ使用量を記録（`psutil` を使用、`tracemalloc` はC++メモリを追跡しない）
-3. 結果JSONに含める: `n_elements`, `solver_method`, `t_solve`, `peak_memory_mb`, `iterations`
+3. 結果JSONファイル名: `results_{benchmark_name}.json` (スクリプトと同じディレクトリ)
+
+**JSON必須フィールド**:
+
+| フィールド | 型 | 説明 |
+|-----------|------|------|
+| `peak_memory_mb` | `float` | ピークメモリ使用量 (psutil peak_wset/rss) |
+| `t_setup` | `float` | 前処理セットアップ時間 (秒) |
+| `t_solve` | `float` | 線形ソルバー実行時間 (秒) |
+| `iterations` | `int` | 反復回数 |
+| `converged` | `bool` | 収束判定 |
+
+**JSONメタデータ** (トップレベル):
+
+| フィールド | 型 | 説明 |
+|-----------|------|------|
+| `timestamp` | `str` | ISO 8601形式 |
+| `hostname` | `str` | `platform.node()` |
+| `benchmark` | `str` | ベンチマーク名 |
+| `problem` | `dict` | 問題パラメータ (ndof, ne, order等) |
+| `results` | `list[dict]` | 各ケースの結果 |
 
 ```python
-import psutil, os
+import json, os, platform, psutil, time
+from datetime import datetime
+
 def get_peak_memory_mb():
     mem = psutil.Process(os.getpid()).memory_info()
     return mem.peak_wset / (1024 * 1024) if hasattr(mem, 'peak_wset') else mem.rss / (1024 * 1024)
+
+def save_benchmark_results(filename, benchmark_name, problem, results):
+    data = {
+        "timestamp": datetime.now().isoformat(),
+        "hostname": platform.node(),
+        "benchmark": benchmark_name,
+        "problem": problem,
+        "results": results,
+    }
+    with open(filename, "w") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    print(f"Results saved to {filename}")
 ```
 
 ---

@@ -626,17 +626,57 @@ EXP int CALL RadMatSatIsoFrm(int* mat, double* KsiMs1, double* KsiMs2, double* K
 */
 EXP int CALL RadMatSatIsoTab(int* mat, double* MatData, int np);
 
-/** Creates an energy-based vector hysteresis material (Egger formulation).
-K play operators with analytical U_k energy.
+/** Creates an energy-based vector hysteresis material with table-based shape functions.
+K play operators with tabulated f_k(r) = U_k'(r) shape functions.
 @param mat [out] reference number of the material created
 @param K [in] number of partial polarizations (play operators)
-@param As [in] array of K saturation slope parameters A_{s,k} in A/m
-@param Js [in] array of K saturation polarizations J_{s,k} in Tesla
 @param chi [in] array of K pinning strengths chi_k in A/m
+@param r_flat [in] concatenated r grid points for all K operators
+@param f_flat [in] concatenated f_k values for all K operators
+@param table_sizes [in] array of K integers giving the size of each table
 @param eps [in] regularization parameter for smoothed norm (default 1e-8)
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 */
-EXP int CALL RadMatEnergyHysteresis(int* mat, int K, double* As, double* Js, double* chi, double eps);
+EXP int CALL RadMatEnergyHysteresis(int* mat, int K, double* chi,
+	double* r_flat, double* f_flat, int* table_sizes, double eps);
+
+/** Creates a direct B-input play hysteresis material with K play operators
+and tabulated f_k(r) shape functions (sign-unconstrained).
+Forward: B->H is O(K) direct evaluation, Inverse: H->B uses Newton.
+@param mat [out] reference number of the material created
+@param K [in] number of play operators
+@param eta [in] array of K play thresholds [Tesla]
+@param r_flat [in] concatenated |p| grid points for all K operators
+@param f_flat [in] concatenated f_k values for all K operators
+@param table_sizes [in] array of K integers giving the size of each table
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadMatPlayHysteresis(int* mat, int K, double* eta,
+	double* r_flat, double* f_flat, int* table_sizes);
+
+/** Saves the internal state of an energy hysteresis material to an array.
+Call with pState=NULL first to get the required array size in *pLen.
+@param mat [in] reference number of the material
+@param pState [out] array to receive state (or NULL to query size)
+@param pLen [out] number of doubles in the state array
+@return integer error code (0 : no error, <0 : error)
+*/
+EXP int CALL RadMatHysSaveState(int mat, double* pState, int* pLen);
+
+/** Restores the internal state of an energy hysteresis material from an array.
+@param mat [in] reference number of the material
+@param pState [in] array of state values (from RadMatHysSaveState)
+@param Len [in] number of doubles in the state array
+@return integer error code (0 : no error, <0 : error)
+*/
+EXP int CALL RadMatHysRestoreState(int mat, const double* pState, int Len);
+
+/** Commits the current state as the reference for the next time step.
+Call after Picard convergence before moving to the next NI step.
+@param mat [in] reference number of the material
+@return integer error code (0 : no error, <0 : error)
+*/
+EXP int CALL RadMatHysCommitState(int mat);
 
 /** Creates a fixed magnetization permanent magnet material (no demagnetization).
 The magnetization is constant and does not change during Solve.
@@ -1185,6 +1225,50 @@ EXP int CALL RadSetNewtonDamping(int* n, int enabled, int max_iter, double min_o
 @param min_omega [out] Minimum omega threshold
 */
 EXP int CALL RadGetNewtonDampingStats(int* enabled, int* max_iter, double* min_omega);
+
+/** Enable/disable B-input Newton-Raphson for energy-based hysteresis.
+@param n [out] always 1
+@param enabled [in] 1 to enable B-input Newton, 0 to disable
+*/
+EXP int CALL RadSetBInputNewton(int* n, int enabled);
+
+/** Get B-input Newton setting.
+@param enabled [out] 1 if enabled, 0 otherwise
+*/
+EXP int CALL RadGetBInputNewton(int* enabled);
+
+/** Enable/disable B-input Hantila polarization method for energy-based hysteresis.
+@param n [out] always 1
+@param enabled [in] 1 to enable, 0 to disable
+*/
+EXP int CALL RadSetBInputHantila(int* n, int enabled);
+
+/** Get B-input Hantila setting.
+@param enabled [out] 1 if enabled, 0 otherwise
+*/
+EXP int CALL RadGetBInputHantila(int* enabled);
+
+/** Set Hantila polarization parameter alpha.
+@param n [out] always 1
+@param alpha [in] polarization parameter (0 = auto-compute)
+*/
+EXP int CALL RadSetHantilaAlpha(int* n, double alpha);
+
+/** Get Hantila alpha parameter.
+@param alpha [out] current alpha value
+*/
+EXP int CALL RadGetHantilaAlpha(double* alpha);
+
+/** Set Hantila under-relaxation parameter.
+@param n [out] always 1
+@param relax [in] under-relaxation (0 = full step)
+*/
+EXP int CALL RadSetHantilaRelax(int* n, double relax);
+
+/** Get Hantila relaxation parameter.
+@param relax [out] current relax value
+*/
+EXP int CALL RadGetHantilaRelax(double* relax);
 
 // RadSetIMASymmetry REMOVED (2026-01-31) - Use RadBuildMatrix(obj, image) instead
 // The new unified API handles both interaction creation and Image symmetry
