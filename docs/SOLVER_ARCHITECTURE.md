@@ -133,9 +133,12 @@ Z = solver.compute_port_impedance(freq=1e6)
 - `MatLin(mu_r)`: Linear isotropic
 - `MatLin([mu_par, mu_perp], axis)`: Linear anisotropic
 - `MatSatIsoTab(BH_data)`: **Nonlinear** (B-H curve)
+- `MatEnergyHysteresis(K, chi, f_k_tables, eps)`: **Vector hysteresis** (energy-based Play, table-based)
 - `MatMagFixed(M)`: Permanent magnet (fixed M)
 
 **Key advantage**: **Only Radia can handle nonlinear materials** in the integral equation framework.
+This includes **vector hysteresis** with energy-based Play operators -- a novel capability
+for BEM (see `docs/B_INPUT_PLAY_MODEL.md` Section 12).
 FEM-BEM (ngbem) is limited to linear materials because BEM requires a known Green's function.
 
 ### 3. ngbem (NGSolve BEM): Linear Materials Only
@@ -331,6 +334,7 @@ For power electronics and WPT, **PEEC + SIBC is the optimal choice**:
 | Copper coil | N/A | PEEC + SIBC | sigma parameter |
 | Ferrite core | Yes (usually) | MMM/MSC or ngbem | MatLin(mu_r) |
 | Silicon steel | Nonlinear | **MMM/MSC only** | MatSatIsoTab(BH) |
+| Soft iron (hysteresis) | Nonlinear | **MMM only** | MatEnergyHysteresis + b_input_hantila |
 | NdFeB PM | Fixed M | MMM/MSC | ObjHexahedron(v, M) |
 | Aluminum shield | Linear | PEEC or ngbem | sigma parameter |
 | Mu-metal | Nonlinear | **MMM/MSC only** | MatSatIsoTab(BH) |
@@ -361,6 +365,8 @@ For power electronics and WPT, **PEEC + SIBC is the optimal choice**:
 | SIBC (Bessel) | **Implemented** | Python: `scipy.special.jv` |
 | Panel (capacitance) | **Implemented** | `src/core/rad_peec_matrices.cpp` |
 | Radia MMM (nonlinear) | **Implemented** | `src/core/rad_relaxation_methods.cpp` |
+| B-input Newton (hysteresis) | **Implemented** | `src/core/rad_relaxation_methods.cpp` |
+| B-input Hantila hybrid (hysteresis) | **Implemented** | `src/core/rad_relaxation_methods.cpp` |
 | Radia MSC (hex/tet/wedge) | **Implemented** | `src/core/rad_polyhedron.cpp` |
 | Templated BiCGSTAB (real+complex) | **Implemented** | `src/core/rad_bicgstab.h` |
 | ngbem Galerkin PEEC | **Implemented** | `src/radia/ngbem_peec.py` |
@@ -402,6 +408,46 @@ The fundamental constraint is:
 
 ---
 
+## Nonlinear Solver Options
+
+### Standard Picard / Newton (B-H Curves)
+
+For `MatLin` and `MatSatIsoTab` materials, `rad.Solve()` uses chi-based iteration:
+
+```python
+rad.SolverConfig(newton_method=False)   # Picard (default)
+rad.SolverConfig(newton_method=True)    # Newton (faster, needs dM/dH)
+rad.Solve(container, 1e-4, 100, 0)
+```
+
+### B-input Newton / Hantila (Energy Hysteresis)
+
+For `MatEnergyHysteresis` materials, specialized B-input solvers are available.
+These use the Inverse(B) operator with analytical Jacobian from the energy Hessian.
+
+```python
+# B-input Newton (2-4 iterations, O(N^3) per iter)
+rad.SolverConfig(b_input_newton=True)
+
+# B-input Hantila hybrid (RECOMMENDED for hysteresis)
+# Newton(3) warmup + Hantila O(N^2) refinement
+rad.SolverConfig(b_input_hantila=True, hantila_alpha=0)  # auto-alpha
+rad.Solve(container, 1e-4, 5000, 0)
+```
+
+**Novel contribution**: B-input formulation directly uses the Play model's natural
+B-space domain, with analytical Jacobian from `ComputeJacobian(dBdH)`. See
+`docs/B_INPUT_PLAY_MODEL.md` Section 12 for full details.
+
+| Solver | Materials | Cost/iter | Convergence |
+|--------|-----------|-----------|-------------|
+| Picard | MatLin, MatSatIsoTab | O(N^3) | 10-100 iter |
+| Newton | MatLin, MatSatIsoTab | O(N^3) | 3-10 iter |
+| B-input Newton | MatEnergyHysteresis | O(N^3) | **2-4 iter** |
+| B-input Hantila | MatEnergyHysteresis | O(N^2) after LU | **3-47 iter** |
+
+---
+
 ## Parallelization
 
 Radia uses **NGSolve TaskManager** (work-stealing thread pool) for all parallelism.
@@ -413,7 +459,6 @@ No OpenMP dependency. See `src/core/rad_parallel.h` for the abstraction layer.
 | BiCGSTAB (method=1) | `ParallelFor` for matrix-vector products |
 | HACApK (method=2) | `ParallelFor` for H-matrix build, ACA+ compression, and BiCGSTAB |
 | Field computation | `ParallelFor` for `Fld`, `FldLst`, `FldVTS`, analytical integrals |
-| FMM (ExaFMM) | `ParallelFor` for tree traversal and field evaluation |
 
 Thread count: controlled by `ngsolve.SetNumThreads(n)` or TaskManager default (all cores).
 Query via `rad.GetSolveStats()` → `num_threads`, `taskmanager_enabled`.
