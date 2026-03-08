@@ -313,30 +313,14 @@ def convert_play_to_energy(eta, f_k_tables):
     Returns
     -------
     params : dict
-        Keys: 'K', 'As', 'Js', 'chi', 'f_k_tables'
-        Ready for EnergyBasedHysteresis.from_shape_functions() or
-        rad.MatEnergyHyst().
+        Keys: 'K', 'chi', 'f_k_tables'
+        Ready for rad.MatEnergyHysteresis(**params).
     """
     K = len(f_k_tables)
     chi = eta.copy()
 
-    As = np.zeros(K)
-    Js = np.zeros(K)
-
-    for k in range(K):
-        r, f_vals = f_k_tables[k]
-        if len(r) > 1 and r[-1] > 0:
-            # A_s ~ slope at origin
-            # Find first nonzero r
-            idx = np.argmax(r > 0)
-            if idx > 0 or r[0] > 0:
-                As[k] = f_vals[idx] / r[idx] if r[idx] > 0 else 0.0
-            Js[k] = r[-1]
-
     return {
         'K': K,
-        'As': As,
-        'Js': Js,
         'chi': chi,
         'f_k_tables': f_k_tables,
     }
@@ -363,7 +347,7 @@ def hys_to_radia(filepath, K=None, eps=1e-8):
     Returns
     -------
     params : dict
-        Keys: 'K', 'As', 'Js', 'chi', 'eps'.
+        Keys: 'K', 'chi', 'f_k_tables', 'eps'.
         Usage: rad.MatEnergyHysteresis(**params)
     """
     loops = load_hys(filepath)
@@ -375,8 +359,8 @@ def hys_to_radia(filepath, K=None, eps=1e-8):
         eta = eta[indices]
 
     p = convert_play_to_energy(eta, f_k_tables)
-    return {'K': p['K'], 'As': p['As'], 'Js': p['Js'],
-            'chi': p['chi'], 'eps': eps}
+    return {'K': p['K'], 'chi': p['chi'],
+            'f_k_tables': p['f_k_tables'], 'eps': eps}
 
 
 def mat_to_radia(filepath, eps=1e-8):
@@ -392,12 +376,12 @@ def mat_to_radia(filepath, eps=1e-8):
     Returns
     -------
     params : dict
-        Keys: 'K', 'As', 'Js', 'chi', 'eps'.
+        Keys: 'K', 'chi', 'f_k_tables', 'eps'.
         Usage: rad.MatEnergyHysteresis(**params)
     """
     loops, dB, BMax = load_mat(filepath)
     eta, f_k_tables, Bplay = build_shape_functions(loops, dB=dB)
 
     p = convert_play_to_energy(eta, f_k_tables)
-    return {'K': p['K'], 'As': p['As'], 'Js': p['Js'],
-            'chi': p['chi'], 'eps': eps}
+    return {'K': p['K'], 'chi': p['chi'],
+            'f_k_tables': p['f_k_tables'], 'eps': eps}

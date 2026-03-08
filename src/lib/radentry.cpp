@@ -80,9 +80,13 @@ void NonlinearAnisotropMaterialOpt0( double*, int, double*, int );
 void NonlinearAnisotropMaterialOpt1( double**, double** );
 void NonlinearAnisotropMaterialOpt2( double**, double );
 void NonlinearAnisotropMaterialOpt3( double, double** );
-void EnergyHysteresisMaterial( int, double*, double*, double*, double );
+void EnergyHysteresisMaterial( int, double*, double*, double*, int*, double );
+void PlayHysteresisMaterial( int, double*, double*, double*, int* );
 void ApplyMaterial( int, int );
 void MvsH( int, char*, double,double,double );
+int MatHysSaveState( int, double*, int* );
+int MatHysRestoreState( int, const double*, int );
+int MatHysCommitState( int );
 
 void PreRelax( int, int );
 void ShowInteractMatrix(int);
@@ -109,6 +113,14 @@ void SetNewtonMethod( bool );
 bool GetNewtonMethod();
 void SetNewtonDamping( bool, int, double );
 void GetNewtonDampingStats( bool*, int*, double* );
+void SetBInputNewton( bool );
+bool GetBInputNewton();
+void SetBInputHantila( bool );
+bool GetBInputHantila();
+void SetHantilaAlpha( double );
+double GetHantilaAlpha();
+void SetHantilaRelax( double );
+double GetHantilaRelax();
 // SetIMASymmetry, BuildIMAMatrix REMOVED (2026-01-31) - Use BuildMatrix(obj, image) instead
 void ClassifyPoints( int*, int*, int, double*, int, double );
 void ComputeFieldBatch( double*, double*, int, double*, int );
@@ -825,11 +837,39 @@ int CALL RadMatSatIsoTab(int* n, double* pFlatMatDef, int AmOfPts)
 
 //-------------------------------------------------------------------------
 
-int CALL RadMatEnergyHysteresis(int* n, int K, double* As, double* Js, double* chi, double eps)
+int CALL RadMatEnergyHysteresis(int* n, int K, double* chi,
+	double* r_flat, double* f_flat, int* table_sizes, double eps)
 {
-	EnergyHysteresisMaterial(K, As, Js, chi, eps);
+	EnergyHysteresisMaterial(K, chi, r_flat, f_flat, table_sizes, eps);
 	*n = ioBuffer.OutInt();
 	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadMatPlayHysteresis(int* n, int K, double* eta,
+	double* r_flat, double* f_flat, int* table_sizes)
+{
+	PlayHysteresisMaterial(K, eta, r_flat, f_flat, table_sizes);
+	*n = ioBuffer.OutInt();
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadMatHysSaveState(int mat, double* pState, int* pLen)
+{
+	return MatHysSaveState(mat, pState, pLen);
+}
+
+int CALL RadMatHysRestoreState(int mat, const double* pState, int Len)
+{
+	return MatHysRestoreState(mat, pState, Len);
+}
+
+int CALL RadMatHysCommitState(int mat)
+{
+	return MatHysCommitState(mat);
 }
 
 //-------------------------------------------------------------------------
@@ -1671,6 +1711,58 @@ int CALL RadGetNewtonDampingStats(int* enabled, int* max_iter, double* min_omega
 	bool enabled_bool;
 	GetNewtonDampingStats(&enabled_bool, max_iter, min_omega);
 	*enabled = enabled_bool ? 1 : 0;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadSetBInputNewton(int* n, int enabled)
+{
+	SetBInputNewton(enabled != 0);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetBInputNewton(int* enabled)
+{
+	*enabled = GetBInputNewton() ? 1 : 0;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadSetBInputHantila(int* n, int enabled)
+{
+	SetBInputHantila(enabled != 0);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetBInputHantila(int* enabled)
+{
+	*enabled = GetBInputHantila() ? 1 : 0;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadSetHantilaAlpha(int* n, double alpha)
+{
+	SetHantilaAlpha(alpha);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetHantilaAlpha(double* alpha)
+{
+	*alpha = GetHantilaAlpha();
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadSetHantilaRelax(int* n, double relax)
+{
+	SetHantilaRelax(relax);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetHantilaRelax(double* relax)
+{
+	*relax = GetHantilaRelax();
 	return ioBuffer.OutErrorStatus();
 }
 

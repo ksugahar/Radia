@@ -1409,37 +1409,166 @@ py::array_t<double> MatMvsH(int obj, const std::string& component, py::array_t<d
 }
 
 /**
- * @brief Create energy-based vector hysteresis material (Egger formulation)
+ * @brief Create energy-based vector hysteresis material with table-based shape functions
  *
  * @param K Number of partial polarizations (play operators)
- * @param As Saturation slope parameters A_{s,k} [A/m], array of K values
- * @param Js Saturation polarizations J_{s,k} [T], array of K values
  * @param chi Pinning strengths chi_k [A/m], array of K values
+ * @param f_k_tables List of K tuples (r_array, f_array), shape function tables
  * @param eps Regularization parameter for smoothed norm (default 1e-8)
  * @return Material handle
  */
-int MatEnergyHysteresis(int K, py::array_t<double> As, py::array_t<double> Js,
-                         py::array_t<double> chi, double eps) {
-    auto a_As = As.unchecked<1>();
-    auto a_Js = Js.unchecked<1>();
+int MatEnergyHysteresis(int K, py::array_t<double> chi,
+                         py::list f_k_tables, double eps) {
     auto a_chi = chi.unchecked<1>();
 
-    if (a_As.shape(0) != K || a_Js.shape(0) != K || a_chi.shape(0) != K) {
-        throw std::runtime_error("As, Js, chi arrays must all have length K");
+    if (a_chi.shape(0) != K) {
+        throw std::runtime_error("chi array must have length K");
+    }
+    if ((int)f_k_tables.size() != K) {
+        throw std::runtime_error("f_k_tables must have length K");
     }
 
-    // Copy to contiguous arrays
-    std::vector<double> v_As(K), v_Js(K), v_chi(K);
+    // Copy chi
+    std::vector<double> v_chi(K);
     for (int k = 0; k < K; k++) {
-        v_As[k] = a_As(k);
-        v_Js[k] = a_Js(k);
         v_chi[k] = a_chi(k);
     }
 
+    // Extract table data and flatten for C interface
+    std::vector<int> table_sizes(K);
+    std::vector<double> r_flat, f_flat;
+
+    for (int k = 0; k < K; k++) {
+        py::tuple tab = f_k_tables[k].cast<py::tuple>();
+        if (tab.size() != 2) {
+            throw std::runtime_error("Each f_k_tables entry must be a (r, f) tuple");
+        }
+        py::array_t<double> r_arr = tab[0].cast<py::array_t<double>>();
+        py::array_t<double> f_arr = tab[1].cast<py::array_t<double>>();
+        auto r = r_arr.unchecked<1>();
+        auto f = f_arr.unchecked<1>();
+
+        if (r.shape(0) != f.shape(0)) {
+            throw std::runtime_error("r and f arrays must have same length");
+        }
+
+        int n = (int)r.shape(0);
+        table_sizes[k] = n;
+        for (int i = 0; i < n; i++) {
+            r_flat.push_back(r(i));
+            f_flat.push_back(f(i));
+        }
+    }
+
     int handle = 0;
-    int err = RadMatEnergyHysteresis(&handle, K, v_As.data(), v_Js.data(), v_chi.data(), eps);
+    int err = RadMatEnergyHysteresis(&handle, K, v_chi.data(),
+                                      r_flat.data(), f_flat.data(),
+                                      table_sizes.data(), eps);
     check_error(err);
     return handle;
+}
+
+/**
+ * @brief Create a direct B-input play hysteresis material.
+ *
+ * Unlike energy-based hysteresis, the play model evaluates B->H directly
+ * in O(K) without Newton iteration. Shape functions f_k can be negative.
+ * Inverse (H->B) uses Newton with analytical Jacobian.
+ *
+ * @param K Number of play operators
+ * @param eta Play thresholds [Tesla], array of K values
+ * @param f_k_tables List of K tuples (r_array, f_array), shape function tables
+ * @return Material handle
+ */
+int MatPlayHysteresis(int K, py::array_t<double> eta,
+                       py::list f_k_tables) {
+    auto a_eta = eta.unchecked<1>();
+
+    if (a_eta.shape(0) != K) {
+        throw std::runtime_error("eta array must have length K");
+    }
+    if ((int)f_k_tables.size() != K) {
+        throw std::runtime_error("f_k_tables must have length K");
+    }
+
+    // Copy eta
+    std::vector<double> v_eta(K);
+    for (int k = 0; k < K; k++) {
+        v_eta[k] = a_eta(k);
+    }
+
+    // Extract table data and flatten for C interface
+    std::vector<int> table_sizes(K);
+    std::vector<double> r_flat, f_flat;
+
+    for (int k = 0; k < K; k++) {
+        py::tuple tab = f_k_tables[k].cast<py::tuple>();
+        if (tab.size() != 2) {
+            throw std::runtime_error("Each f_k_tables entry must be a (r, f) tuple");
+        }
+        py::array_t<double> r_arr = tab[0].cast<py::array_t<double>>();
+        py::array_t<double> f_arr = tab[1].cast<py::array_t<double>>();
+        auto r = r_arr.unchecked<1>();
+        auto f = f_arr.unchecked<1>();
+
+        if (r.shape(0) != f.shape(0)) {
+            throw std::runtime_error("r and f arrays must have same length");
+        }
+
+        int n = (int)r.shape(0);
+        table_sizes[k] = n;
+        for (int i = 0; i < n; i++) {
+            r_flat.push_back(r(i));
+            f_flat.push_back(f(i));
+        }
+    }
+
+    int handle = 0;
+    int err = RadMatPlayHysteresis(&handle, K, v_eta.data(),
+                                    r_flat.data(), f_flat.data(),
+                                    table_sizes.data());
+    check_error(err);
+    return handle;
+}
+
+/**
+ * @brief Save the internal state of an energy hysteresis material.
+ *
+ * Returns the state as a flat numpy array. Use with MatHysRestoreState()
+ * to save/restore state during Picard iteration for FEM hysteresis solves.
+ */
+py::array_t<double> MatHysSaveState(int mat) {
+    // First query the size
+    int len = 0;
+    int err = RadMatHysSaveState(mat, nullptr, &len);
+    if (err < 0) throw std::runtime_error("MatHysSaveState: invalid material handle");
+
+    // Allocate and fill
+    py::array_t<double> state(len);
+    auto s = state.mutable_unchecked<1>();
+    err = RadMatHysSaveState(mat, s.mutable_data(0), &len);
+    if (err < 0) throw std::runtime_error("MatHysSaveState: save failed");
+    return state;
+}
+
+/**
+ * @brief Restore the internal state of an energy hysteresis material.
+ */
+void MatHysRestoreState(int mat, py::array_t<double> state) {
+    auto s = state.unchecked<1>();
+    int err = RadMatHysRestoreState(mat, s.data(0), (int)s.shape(0));
+    if (err < 0) throw std::runtime_error("MatHysRestoreState: restore failed");
+}
+
+/**
+ * @brief Commit the current state for the next time step.
+ *
+ * After Picard iteration converges, call this to commit the converged
+ * state as the reference for the next quasi-static step.
+ */
+void MatHysCommitState(int mat) {
+    int err = RadMatHysCommitState(mat);
+    if (err < 0) throw std::runtime_error("MatHysCommitState: commit failed");
 }
 
 } // namespace radia_material_ext
@@ -1559,6 +1688,58 @@ py::dict GetNewtonDampingStats() {
     return stats;
 }
 
+void SetBInputNewton(bool enabled) {
+    int n = 0;
+    int err = RadSetBInputNewton(&n, enabled ? 1 : 0);
+    check_error(err);
+}
+
+bool GetBInputNewton() {
+    int enabled = 0;
+    int err = RadGetBInputNewton(&enabled);
+    check_error(err);
+    return enabled != 0;
+}
+
+void SetBInputHantila(bool enabled) {
+    int n = 0;
+    int err = RadSetBInputHantila(&n, enabled ? 1 : 0);
+    check_error(err);
+}
+
+bool GetBInputHantila() {
+    int enabled = 0;
+    int err = RadGetBInputHantila(&enabled);
+    check_error(err);
+    return enabled != 0;
+}
+
+void SetHantilaAlpha(double alpha) {
+    int n = 0;
+    int err = RadSetHantilaAlpha(&n, alpha);
+    check_error(err);
+}
+
+double GetHantilaAlpha() {
+    double alpha = 0.0;
+    int err = RadGetHantilaAlpha(&alpha);
+    check_error(err);
+    return alpha;
+}
+
+void SetHantilaRelax(double relax) {
+    int n = 0;
+    int err = RadSetHantilaRelax(&n, relax);
+    check_error(err);
+}
+
+double GetHantilaRelax() {
+    double relax = 0.0;
+    int err = RadGetHantilaRelax(&relax);
+    check_error(err);
+    return relax;
+}
+
 // SetIMASymmetry, BuildIMAMatrix REMOVED (2026-01-31)
 // Use BuildMatrix(obj, image="+x-z") or Solve(obj, ..., image="+x-z") instead
 
@@ -1606,6 +1787,22 @@ void SolverConfig(py::kwargs kwargs) {
         double min_omega = kwargs.contains("newton_damping_min_omega") ? kwargs["newton_damping_min_omega"].cast<double>() : 0.01;
         SetNewtonDamping(enabled, max_iter, min_omega);
     }
+
+    if (kwargs.contains("b_input_newton")) {
+        SetBInputNewton(kwargs["b_input_newton"].cast<bool>());
+    }
+
+    if (kwargs.contains("b_input_hantila")) {
+        SetBInputHantila(kwargs["b_input_hantila"].cast<bool>());
+    }
+
+    if (kwargs.contains("hantila_alpha")) {
+        SetHantilaAlpha(kwargs["hantila_alpha"].cast<double>());
+    }
+
+    if (kwargs.contains("hantila_relax")) {
+        SetHantilaRelax(kwargs["hantila_relax"].cast<double>());
+    }
 }
 
 py::dict GetSolverConfig() {
@@ -1632,6 +1829,24 @@ py::dict GetSolverConfig() {
       config["newton_damping"] = (enabled != 0);
       config["newton_damping_max_iter"] = max_iter;
       config["newton_damping_min_omega"] = min_omega; }
+
+    // B-input Newton for hysteresis
+    { int b_input = 0;
+      RadGetBInputNewton(&b_input);
+      config["b_input_newton"] = (b_input != 0); }
+
+    // B-input Hantila for hysteresis
+    { int b_hantila = 0;
+      RadGetBInputHantila(&b_hantila);
+      config["b_input_hantila"] = (b_hantila != 0); }
+
+    { double alpha = 0.0;
+      RadGetHantilaAlpha(&alpha);
+      config["hantila_alpha"] = alpha; }
+
+    { double relax = 0.0;
+      RadGetHantilaRelax(&relax);
+      config["hantila_relax"] = relax; }
 
     // HACApK stats (if available)
     { double dOut[20] = {0}; int nOut = 0;
@@ -2825,17 +3040,38 @@ PYBIND11_MODULE(_radia_pybind, m) {
           )pbdoc");
 
     m.def("MatEnergyHysteresis", &radia_material_ext::MatEnergyHysteresis,
-          py::arg("K"), py::arg("As"), py::arg("Js"), py::arg("chi"),
+          py::arg("K"), py::arg("chi"), py::arg("f_k_tables"),
           py::arg("eps") = 1e-8,
           R"pbdoc(
-              Create energy-based vector hysteresis material (Egger formulation).
+              Create energy-based vector hysteresis material with table-based shape functions.
 
               Args:
                   K: Number of partial polarizations (play operators)
-                  As: Saturation slope parameters A_{s,k} [A/m], array of K values
-                  Js: Saturation polarizations J_{s,k} [T], array of K values
                   chi: Pinning strengths chi_k [A/m], array of K values
+                  f_k_tables: List of K tuples (r_array, f_array), shape function tables.
+                      r_array: |J| grid points [0, r_max], monotonically increasing.
+                      f_array: f_k(r) = U_k'(r) shape function values.
                   eps: Regularization parameter (default 1e-8)
+
+              Returns:
+                  Material handle
+          )pbdoc");
+
+    m.def("MatPlayHysteresis", &radia_material_ext::MatPlayHysteresis,
+          py::arg("K"), py::arg("eta"), py::arg("f_k_tables"),
+          R"pbdoc(
+              Create direct B-input play hysteresis material.
+
+              Unlike energy-based hysteresis, this model evaluates B->H directly
+              in O(K) without Newton iteration. Shape functions f_k can be negative
+              (sign-unconstrained). Inverse (H->B) uses Newton with analytical Jacobian.
+
+              Args:
+                  K: Number of play operators
+                  eta: Play thresholds [Tesla], array of K values
+                  f_k_tables: List of K tuples (r_array, f_array), shape function tables.
+                      r_array: |p| grid points [0, r_max], monotonically increasing.
+                      f_array: f_k(|p|) shape function values (can be negative).
 
               Returns:
                   Material handle
@@ -2853,6 +3089,44 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   Magnetization component(s)
+          )pbdoc");
+
+    m.def("MatHysSaveState", &radia_material_ext::MatHysSaveState,
+          py::arg("mat"),
+          R"pbdoc(
+              Save internal state of an energy hysteresis material.
+
+              Returns the full state (J_k_prev, J_k_pinning, J_k_current for all K
+              operators) as a flat numpy array. Use with MatHysRestoreState() to
+              save/restore state during Picard iteration.
+
+              Args:
+                  mat: Material handle from MatEnergyHysteresis()
+
+              Returns:
+                  numpy array of state values (length K*9)
+          )pbdoc");
+
+    m.def("MatHysRestoreState", &radia_material_ext::MatHysRestoreState,
+          py::arg("mat"), py::arg("state"),
+          R"pbdoc(
+              Restore internal state of an energy hysteresis material.
+
+              Args:
+                  mat: Material handle from MatEnergyHysteresis()
+                  state: State array from MatHysSaveState()
+          )pbdoc");
+
+    m.def("MatHysCommitState", &radia_material_ext::MatHysCommitState,
+          py::arg("mat"),
+          R"pbdoc(
+              Commit current state for the next time step.
+
+              After Picard iteration converges, call this to commit the converged
+              state as the reference for the next quasi-static step.
+
+              Args:
+                  mat: Material handle from MatEnergyHysteresis()
           )pbdoc");
 
     // ========================================================================
@@ -2895,11 +3169,17 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   newton_damping (bool): Enable Newton line search damping
                   newton_damping_max_iter (int): Max line search iterations (default: 5)
                   newton_damping_min_omega (float): Minimum omega (default: 0.01)
+                  b_input_newton (bool): Enable B-input Newton for hysteresis (default: False)
+                  b_input_hantila (bool): Enable B-input Hantila for hysteresis (default: False)
+                  hantila_alpha (float): Hantila polarization parameter (0=auto, default: 0)
+                  hantila_relax (float): Hantila under-relaxation (0=full step, default: 0)
 
               Example:
                   rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
                   rad.SolverConfig(bicgstab_tol=1e-6, relax_param=0.3)
                   rad.SolverConfig(newton_method=True, newton_damping=True)
+                  rad.SolverConfig(b_input_newton=True)  # For energy-based hysteresis
+                  rad.SolverConfig(b_input_hantila=True)  # Hantila polarization (faster)
           )pbdoc");
 
     m.def("GetSolverConfig", &radia_solver_ext::GetSolverConfig,
@@ -2908,7 +3188,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   Dictionary with all solver parameters:
-                  - bicgstab_tol, relax_param, newton_method
+                  - bicgstab_tol, relax_param, newton_method, b_input_newton, b_input_hantila
                   - newton_damping, newton_damping_max_iter, newton_damping_min_omega
                   - hacapk_stats (if H-matrix solve has been performed)
           )pbdoc");
