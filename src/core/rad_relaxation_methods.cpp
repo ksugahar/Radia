@@ -178,7 +178,7 @@ bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPt
 		// Get initial chi (ELF style - from BH curve 2nd point)
 		double chi_init = 1.0;
 		radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
-		radTEnergyHysteresisMaterial* HystMater = dynamic_cast<radTEnergyHysteresisMaterial*>(MaterPtr);
+		radTHysteresisMaterial* HystMater = dynamic_cast<radTHysteresisMaterial*>(MaterPtr);
 		if(HystMater != nullptr)
 		{
 			chi_init = HystMater->GetInitialChi_ELF_Style();
@@ -715,7 +715,7 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
 		radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
 		radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
-		radTEnergyHysteresisMaterial* HystMater = dynamic_cast<radTEnergyHysteresisMaterial*>(MaterPtr);
+		radTHysteresisMaterial* HystMater = dynamic_cast<radTHysteresisMaterial*>(MaterPtr);
 
 		double chi_matrix = ctx.CurrentChiArray[elem];
 		double mu_old = chi_matrix + 1.0;
@@ -1074,6 +1074,702 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 }
 
 //=========================================================================
+// B-input Newton-Raphson Solver for Energy-Based Hysteresis
+//
+// Solves: F(M) = M - Inverse(mu_0*(H_ext + N*M + M)) / mu_0 = 0
+// Jacobian: dF/dM = I - (dJ/dB) * (N + I)
+// where dJ/dB is block-diagonal (3x3 per element), computed analytically
+// from ComputeJacobian(dBdH, chi_d) -> dJ/dB = I - mu_0 * inv(dB/dH)
+//
+// Converges in 2-4 Newton iterations (vs hundreds for Hantila/Picard).
+// Requires all elements to have radTEnergyHysteresisMaterial.
+//=========================================================================
+
+int radTIterativeRelaxMeth::AutoRelax_BInput_Newton(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
+{
+	if(IntrctPtr == nullptr) return 0;
+
+	static const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+	static const double NU_0 = 1.0 / MU_0;
+
+	// Initialize context
+	// For B-input Newton, NEVER reset magnetization.
+	// Element M and hysteresis material state (m_Jk_prev, m_Jk_current) must
+	// persist between Solve() calls for proper hysteresis stepping.
+	// Virgin state has M=0 naturally (no explicit reset needed).
+	NonlinearContext ctx;
+	if(!InitializeNonlinearContext(ctx, IntrctPtr, /*MagnResetIsNotNeeded=*/1))
+		return 0;
+
+	ctx.use_b_input = true;
+
+	int n_elem = ctx.AmOfMainElem;
+	int dof = ctx.totalDOF;
+
+	// Verify all elements are hysteresis materials (energy or play)
+	std::vector<radTHysteresisMaterial*> hys_mats(n_elem, nullptr);
+	for(int i = 0; i < n_elem; i++)
+	{
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
+		radTMaterial* mat = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+		hys_mats[i] = dynamic_cast<radTHysteresisMaterial*>(mat);
+		if(hys_mats[i] == nullptr) return 0;  // Not all hysteresis - abort
+	}
+
+	// Build base matrix (geometric interaction matrix N)
+	if(NeedsDenseMatrix())
+	{
+		if(!BuildBaseMatrix(ctx, IntrctPtr))
+			return 0;
+	}
+
+	// Build NpI = N + I (column-major, dof x dof)
+	// BaseMatrix stores the geometric part: -N for MMM (negated during BuildBaseMatrix)
+	// So NpI = -BaseMatrix + I  (to get N + I)
+	// Actually BaseMatrix = -N for MMM, so N = -BaseMatrix, and NpI = -BaseMatrix + I
+	std::vector<double> NpI(static_cast<size_t>(dof) * dof, 0.0);
+	for(size_t j = 0; j < (size_t)dof; j++)
+	{
+		for(size_t i = 0; i < (size_t)dof; i++)
+		{
+			// BaseMatrix is column-major: A(i,j) at index [j*dof + i]
+			// For MMM: BaseMatrix = -N, so N = -BaseMatrix
+			double N_ij = -ctx.BaseMatrix[j * dof + i];
+			NpI[j * dof + i] = N_ij + (i == j ? 1.0 : 0.0);
+		}
+	}
+
+	// Save hysteresis states for all elements (reference point for play operators)
+	ctx.saved_hys_states.resize(n_elem);
+	for(int i = 0; i < n_elem; i++)
+		hys_mats[i]->SaveState(ctx.saved_hys_states[i]);
+
+	// Initialize M: use current element magnetization as initial guess
+	// This is much better than Forward(H_ext_only) for hysteresis stepping,
+	// because M changes gradually between field steps.
+	// On first solve (virgin state), element M is already zero (correct start).
+	{
+		bool all_zero = true;
+		for(int i = 0; i < n_elem; i++)
+		{
+			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
+			int offset = IntrctPtr->GetElementDOFOffset(i);
+			ctx.FlatMagn[offset+0] = g3dRelaxPtr->Magn.x;
+			ctx.FlatMagn[offset+1] = g3dRelaxPtr->Magn.y;
+			ctx.FlatMagn[offset+2] = g3dRelaxPtr->Magn.z;
+			if(g3dRelaxPtr->Magn.x != 0 || g3dRelaxPtr->Magn.y != 0 || g3dRelaxPtr->Magn.z != 0)
+				all_zero = false;
+		}
+
+		// If all M = 0 (virgin state), initialize from Forward(H_ext)
+		if(all_zero)
+		{
+			for(int i = 0; i < n_elem; i++)
+			{
+				int offset = IntrctPtr->GetElementDOFOffset(i);
+				TVector3d H_ext_i(ctx.FlatExtern[offset], ctx.FlatExtern[offset+1], ctx.FlatExtern[offset+2]);
+
+				hys_mats[i]->RestoreState(ctx.saved_hys_states[i]);
+				TVector3d B = hys_mats[i]->Inverse(H_ext_i);  // H -> B
+				TVector3d M_init = (1.0 / MU_0) * B - H_ext_i;
+
+				ctx.FlatMagn[offset+0] = M_init.x;
+				ctx.FlatMagn[offset+1] = M_init.y;
+				ctx.FlatMagn[offset+2] = M_init.z;
+			}
+		}
+	}
+
+	// Working arrays
+	std::vector<double> M_vec(dof);
+	std::vector<double> H_vec(dof);
+	std::vector<double> B_vec(dof);
+	std::vector<double> M_model(dof);
+	std::vector<double> F_vec(dof);
+	std::vector<double> dJdB_blocks(n_elem * 9);  // n_elem 3x3 blocks, column-major
+	std::vector<double> dM(dof);
+
+	// Copy initial M
+	for(int i = 0; i < dof; i++)
+		M_vec[i] = ctx.FlatMagn[i];
+
+#ifdef DEBUG_BINPUT_NEWTON
+	fprintf(stderr, "[B-input Newton] n_elem=%d dof=%d tol=%.2e maxiter=%d\n", n_elem, dof, PrecOnMagnetiz, MaxIterNumber);
+	fprintf(stderr, "[B-input Newton] H_ext[0..2] = %.6f %.6f %.6f\n", ctx.FlatExtern[0], ctx.FlatExtern[1], ctx.FlatExtern[2]);
+	fprintf(stderr, "[B-input Newton] M_init[0..2] = %.6f %.6f %.6f\n", M_vec[0], M_vec[1], M_vec[2]);
+	// Print N matrix diagonal (first element 3x3 block)
+	fprintf(stderr, "[B-input Newton] N[0,0]=%.6e N[1,1]=%.6e N[2,2]=%.6e\n",
+		-ctx.BaseMatrix[0], -ctx.BaseMatrix[(size_t)1*dof+1], -ctx.BaseMatrix[(size_t)2*dof+2]);
+#endif
+
+	int iterCount = 0;
+	double final_residual = 1.0;
+
+	// Interaction matrix N (column-major): stored as -BaseMatrix for MMM
+	// For MatVec: H = H_ext + N*M, where N = -BaseMatrix
+	// So H = H_ext - BaseMatrix*M
+
+	for(iterCount = 0; iterCount < MaxIterNumber; iterCount++)
+	{
+		// Restore all hysteresis states to beginning-of-step reference
+		for(int i = 0; i < n_elem; i++)
+			hys_mats[i]->RestoreState(ctx.saved_hys_states[i]);
+
+		// Compute H = H_ext + N*M
+		// N*M = -BaseMatrix*M (since BaseMatrix = -N for MMM)
+#ifdef HAVE_LAPACK
+		{
+			// H = H_ext (copy)
+			cblas_dcopy(dof, ctx.FlatExtern, 1, H_vec.data(), 1);
+			// H += (-1) * BaseMatrix * M  (column-major MatVec)
+			cblas_dgemv(CblasColMajor, CblasNoTrans, dof, dof,
+			            -1.0, ctx.BaseMatrix.data(), dof,
+			            M_vec.data(), 1,
+			            1.0, H_vec.data(), 1);
+		}
+#else
+		{
+			for(int i = 0; i < dof; i++) H_vec[i] = ctx.FlatExtern[i];
+			for(int j = 0; j < dof; j++)
+			{
+				double Mj = M_vec[j];
+				for(int i = 0; i < dof; i++)
+					H_vec[i] -= ctx.BaseMatrix[(size_t)j * dof + i] * Mj;
+			}
+		}
+#endif
+
+		// Compute B = mu_0 * (H + M)
+		for(int i = 0; i < dof; i++)
+			B_vec[i] = MU_0 * (H_vec[i] + M_vec[i]);
+
+		// Evaluate Forward(B) per element -> M_model, and compute dJ/dB analytically
+		for(int i = 0; i < n_elem; i++)
+		{
+			int offset = IntrctPtr->GetElementDOFOffset(i);
+			TVector3d B_i(B_vec[offset], B_vec[offset+1], B_vec[offset+2]);
+
+			// Restore to start-of-step reference state before each Forward.
+			// Forward() overwrites m_Jk_prev, so without this the pinning
+			// reference drifts across Newton iterations.
+			hys_mats[i]->RestoreState(ctx.saved_hys_states[i]);
+
+			// Forward(B) -> H (natural for B-input Play), sets m_Jk_current internally
+			TVector3d H_inv = hys_mats[i]->Forward(B_i);
+
+			// M_model = J_total / mu_0 = (B - mu_0*H) / mu_0
+			TVector3d M_i = (1.0 / MU_0) * B_i - H_inv;
+			M_model[offset+0] = M_i.x;
+			M_model[offset+1] = M_i.y;
+			M_model[offset+2] = M_i.z;
+
+			// Analytical Jacobian: ComputeJacobian gives dB/dH (3x3)
+			// dJ/dB = I - mu_0 * inv(dB/dH)
+			TMatrix3d dBdH;
+			double chi_d;
+			hys_mats[i]->ComputeJacobian(dBdH, chi_d);
+
+			TMatrix3d dBdH_inv = Matrix3d_inv(dBdH);
+			// dJ/dB = I - mu_0 * dBdH_inv
+			// Store as column-major 3x3 block
+			int blk = i * 9;
+			// Column 0: dJ/dB[:, 0]
+			dJdB_blocks[blk + 0] = 1.0 - MU_0 * dBdH_inv.Str0.x;
+			dJdB_blocks[blk + 1] =      - MU_0 * dBdH_inv.Str1.x;
+			dJdB_blocks[blk + 2] =      - MU_0 * dBdH_inv.Str2.x;
+			// Column 1: dJ/dB[:, 1]
+			dJdB_blocks[blk + 3] =      - MU_0 * dBdH_inv.Str0.y;
+			dJdB_blocks[blk + 4] = 1.0 - MU_0 * dBdH_inv.Str1.y;
+			dJdB_blocks[blk + 5] =      - MU_0 * dBdH_inv.Str2.y;
+			// Column 2: dJ/dB[:, 2]
+			dJdB_blocks[blk + 6] =      - MU_0 * dBdH_inv.Str0.z;
+			dJdB_blocks[blk + 7] =      - MU_0 * dBdH_inv.Str1.z;
+			dJdB_blocks[blk + 8] = 1.0 - MU_0 * dBdH_inv.Str2.z;
+		}
+
+		// Compute residual F = M - M_model
+		double F_norm = 0.0;
+		double M_norm = 0.0;
+		for(int i = 0; i < dof; i++)
+		{
+			F_vec[i] = M_vec[i] - M_model[i];
+			F_norm += F_vec[i] * F_vec[i];
+			M_norm += M_model[i] * M_model[i];
+		}
+		F_norm = std::sqrt(F_norm);
+		M_norm = std::sqrt(M_norm);
+		if(M_norm < 1.0) M_norm = 1.0;
+
+		double rel_residual = F_norm / M_norm;
+		final_residual = rel_residual;
+
+#ifdef DEBUG_BINPUT_NEWTON
+		fprintf(stderr, "[B-input Newton] iter=%d |F|/|M|=%.6e |F|=%.6e |M|=%.6e\n",
+			iterCount, rel_residual, F_norm, M_norm);
+		// Print per-element: M, H, B, M_model, dJdB diag for first element
+		if(n_elem > 0) {
+			fprintf(stderr, "  elem0: M=[%.2f, %.2f, %.2f] H=[%.2f, %.2f, %.2f]\n",
+				M_vec[0], M_vec[1], M_vec[2], H_vec[0], H_vec[1], H_vec[2]);
+			fprintf(stderr, "  elem0: B=[%.6e, %.6e, %.6e]\n", B_vec[0], B_vec[1], B_vec[2]);
+			fprintf(stderr, "  elem0: M_model=[%.2f, %.2f, %.2f]\n", M_model[0], M_model[1], M_model[2]);
+			fprintf(stderr, "  elem0: dJdB diag=[%.6f, %.6f, %.6f]\n",
+				dJdB_blocks[0], dJdB_blocks[4], dJdB_blocks[8]);
+		}
+#endif
+
+		// Check convergence
+		if(rel_residual < PrecOnMagnetiz)
+		{
+			// Use model M for consistency
+			for(int i = 0; i < dof; i++)
+				M_vec[i] = M_model[i];
+			iterCount++;
+			break;
+		}
+
+		// Solve J_F * dM = -F where J_F = I - dJ/dB * (N+I)
+		int solve_err = SolveBInputLinearStep(ctx, NpI, dJdB_blocks, F_vec, dM);
+		if(solve_err != 0) break;
+
+		// Line search: find step that reduces ||F||
+		double step = 1.0;
+		bool ls_success = false;
+		for(int ls = 0; ls < 10; ls++)
+		{
+			// M_trial = M + step * dM
+			std::vector<double> M_trial(dof);
+			for(int i = 0; i < dof; i++)
+				M_trial[i] = M_vec[i] + step * dM[i];
+
+			// Compute H_trial = H_ext + N*M_trial
+			std::vector<double> H_trial(dof);
+#ifdef HAVE_LAPACK
+			cblas_dcopy(dof, ctx.FlatExtern, 1, H_trial.data(), 1);
+			cblas_dgemv(CblasColMajor, CblasNoTrans, dof, dof,
+			            -1.0, ctx.BaseMatrix.data(), dof,
+			            M_trial.data(), 1,
+			            1.0, H_trial.data(), 1);
+#else
+			for(int i = 0; i < dof; i++) H_trial[i] = ctx.FlatExtern[i];
+			for(int j = 0; j < dof; j++)
+			{
+				double Mj = M_trial[j];
+				for(int i = 0; i < dof; i++)
+					H_trial[i] -= ctx.BaseMatrix[(size_t)j * dof + i] * Mj;
+			}
+#endif
+
+			// B_trial = mu_0*(H_trial + M_trial)
+			std::vector<double> B_trial(dof);
+			for(int i = 0; i < dof; i++)
+				B_trial[i] = MU_0 * (H_trial[i] + M_trial[i]);
+
+			// Evaluate F_trial: restore states, call Forward (B->H)
+			double F_trial_norm2 = 0.0;
+			for(int i = 0; i < n_elem; i++)
+			{
+				hys_mats[i]->RestoreState(ctx.saved_hys_states[i]);
+				int offset = IntrctPtr->GetElementDOFOffset(i);
+				TVector3d B_i(B_trial[offset], B_trial[offset+1], B_trial[offset+2]);
+				TVector3d H_inv = hys_mats[i]->Forward(B_i);
+				TVector3d M_mod = (1.0 / MU_0) * B_i - H_inv;
+				double fx = M_trial[offset+0] - M_mod.x;
+				double fy = M_trial[offset+1] - M_mod.y;
+				double fz = M_trial[offset+2] - M_mod.z;
+				F_trial_norm2 += fx*fx + fy*fy + fz*fz;
+			}
+
+			if(std::sqrt(F_trial_norm2) < F_norm)
+			{
+				ls_success = true;
+				break;
+			}
+			step *= 0.5;
+		}
+
+#ifdef DEBUG_BINPUT_NEWTON
+		fprintf(stderr, "  line_search: step=%.4f ls_success=%d\n", step, ls_success ? 1 : 0);
+		fprintf(stderr, "  dM[0..2] = [%.2f, %.2f, %.2f]\n", dM[0], dM[1], dM[2]);
+#endif
+
+		// Update M
+		for(int i = 0; i < dof; i++)
+			M_vec[i] += step * dM[i];
+
+		// Check for user abort
+		if(radYield.Check() == 0)
+			break;
+	}
+
+	// Store converged M back to elements
+	for(int i = 0; i < dof; i++)
+		ctx.FlatMagn[i] = M_vec[i];
+
+	// Final Inverse + CommitState: set definitive play operator state for each element
+	// The last Newton iteration did RestoreState + Inverse at converged B,
+	// so m_Jk_current is correct. But we must ensure RestoreState + Inverse
+	// is done with the final converged B (not line search trial B).
+	for(int i = 0; i < n_elem; i++)
+	{
+		int offset = IntrctPtr->GetElementDOFOffset(i);
+		TVector3d M_final(M_vec[offset], M_vec[offset+1], M_vec[offset+2]);
+
+		// Update element magnetization
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
+		g3dRelaxPtr->SetM(M_final);
+
+		// Restore state to beginning-of-step, then Forward(B_converged)
+		// to set m_Jk_current to the definitive values
+		hys_mats[i]->RestoreState(ctx.saved_hys_states[i]);
+		TVector3d B_final = MU_0 * TVector3d(
+			H_vec[offset] + M_vec[offset],
+			H_vec[offset+1] + M_vec[offset+1],
+			H_vec[offset+2] + M_vec[offset+2]);
+		hys_mats[i]->Forward(B_final);  // B -> H (natural)
+
+		// CommitState: m_Jk_prev = m_Jk_current
+		// This ensures the next Solve() step starts from the correct reference
+		hys_mats[i]->CommitState();
+	}
+
+	// Recompute final H for all elements
+	{
+#ifdef HAVE_LAPACK
+		cblas_dcopy(dof, ctx.FlatExtern, 1, H_vec.data(), 1);
+		cblas_dgemv(CblasColMajor, CblasNoTrans, dof, dof,
+		            -1.0, ctx.BaseMatrix.data(), dof,
+		            M_vec.data(), 1,
+		            1.0, H_vec.data(), 1);
+#else
+		for(int i = 0; i < dof; i++) H_vec[i] = ctx.FlatExtern[i];
+		for(int j = 0; j < dof; j++)
+		{
+			double Mj = M_vec[j];
+			for(int i = 0; i < dof; i++)
+				H_vec[i] -= ctx.BaseMatrix[(size_t)j * dof + i] * Mj;
+		}
+#endif
+		for(int i = 0; i < n_elem; i++)
+		{
+			int offset = IntrctPtr->GetElementDOFOffset(i);
+			ctx.FlatField[offset+0] = H_vec[offset+0];
+			ctx.FlatField[offset+1] = H_vec[offset+1];
+			ctx.FlatField[offset+2] = H_vec[offset+2];
+		}
+	}
+
+	// Update RelaxStatusParam
+	IntrctPtr->RelaxStatusParam.MisfitM = final_residual;
+
+	return iterCount;
+}
+
+//=========================================================================
+// B-input Hantila Solver for Energy-Based Hysteresis
+//
+// Uses constant LHS (I - alpha*N), LU-factored ONCE.
+// Each iteration: O(N^2) back-substitution + Forward(B) per element.
+// Hantila splits M = alpha*H + R, so LHS = (I - alpha*N) is constant.
+//
+// Algorithm:
+//   LHS = I + alpha * BaseMatrix  (where BaseMatrix = -N)
+//   LU factor LHS once
+//   Each iteration:
+//     1. H = LU_solve(H_ext - BaseMatrix * R)   [= (I-alpha*N)^{-1} * (H_ext + N*R)]
+//     2. M = R + alpha * H
+//     3. B = mu_0 * (H + M)
+//     4. Forward(B_i) -> Jk, M_new_i = J/mu_0
+//     5. R_new = M_new - alpha * H
+//     6. Convergence: max|dB|/B_sat < tol
+//=========================================================================
+
+int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
+	double PrecOnMagnetiz, int MaxIterNumber,
+	double alpha, double relax, char MagnResetIsNotNeeded)
+{
+	if(IntrctPtr == nullptr) return 0;
+
+	static const double MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+
+	// Initialize context (preserve element M for hysteresis state continuity)
+	NonlinearContext ctx;
+	if(!InitializeNonlinearContext(ctx, IntrctPtr, /*MagnResetIsNotNeeded=*/1))
+		return 0;
+
+	ctx.use_b_input = true;
+
+	int dof = ctx.totalDOF;
+	int n_elem = ctx.AmOfMainElem;
+	if(n_elem <= 0 || dof <= 0) return 0;
+
+	// Collect hysteresis material pointers (energy or play)
+	std::vector<radTHysteresisMaterial*> hys_mats(n_elem);
+	for(int i = 0; i < n_elem; i++)
+	{
+		radTg3dRelax* g3d = IntrctPtr->g3dRelaxPtrVect[i];
+		radTMaterial* mat = (radTMaterial*)(g3d->MaterHandle.rep);
+		hys_mats[i] = dynamic_cast<radTHysteresisMaterial*>(mat);
+		if(!hys_mats[i]) return 0;
+	}
+
+	// Build base matrix (geometric interaction matrix N)
+	if(NeedsDenseMatrix())
+	{
+		if(!BuildBaseMatrix(ctx, IntrctPtr))
+			return 0;
+	}
+
+	// Auto-compute alpha if not provided: alpha >= max(dM/dH)
+	// Probe multiple H values to find max susceptibility across full range
+	// (descending hysteresis branch can have much higher chi than ascending)
+	if(alpha <= 0.0)
+	{
+		double max_chi = 0.0;
+		// Probe H magnitudes: logarithmically spaced from 10 to 100000 A/m
+		double H_probes[] = {10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 50000.0};
+		int n_probes = 7;
+		for(int i = 0; i < n_elem; i++)
+		{
+			// Also check at actual H_ext
+			int offset = IntrctPtr->GetElementDOFOffset(i);
+			TVector3d H_ext_i(ctx.FlatExtern[offset], ctx.FlatExtern[offset+1], ctx.FlatExtern[offset+2]);
+
+			// Save state before probing (probes are temporary)
+			std::vector<TVector3d> probe_save;
+			int ss = hys_mats[i]->GetStateSize();
+			probe_save.resize(ss);
+			hys_mats[i]->SaveState(probe_save);
+
+			for(int p = -1; p < n_probes; p++)
+			{
+				TVector3d H_probe;
+				if(p < 0)
+					H_probe = H_ext_i;
+				else
+					H_probe = TVector3d(0.0, 0.0, H_probes[p]);
+
+				hys_mats[i]->RestoreState(probe_save);
+				hys_mats[i]->Inverse(H_probe);  // H -> B (probing for max chi)
+				TMatrix3d dBdH; double chi_d;
+				hys_mats[i]->ComputeJacobian(dBdH, chi_d);
+				if(chi_d > max_chi) max_chi = chi_d;
+			}
+			// Restore original state
+			hys_mats[i]->RestoreState(probe_save);
+		}
+		alpha = max_chi * 1.5;  // 50% safety margin for hysteresis state variations
+		if(alpha < 10.0) alpha = 10.0;
+	}
+
+	// Save hysteresis states (start-of-step reference)
+	ctx.saved_hys_states.resize(n_elem);
+	for(int i = 0; i < n_elem; i++)
+	{
+		int state_size = hys_mats[i]->GetStateSize();
+		ctx.saved_hys_states[i].resize(state_size);
+		// SaveState returns m_Jk_prev as flat TVector3d array
+		hys_mats[i]->SaveState(ctx.saved_hys_states[i]);
+	}
+
+	// Build LHS = I + alpha * BaseMatrix  (BaseMatrix = -N, so LHS = I - alpha*N)
+	size_t mat_size = (size_t)dof * dof;
+	std::vector<double> LHS(mat_size);
+	for(size_t k = 0; k < mat_size; k++)
+		LHS[k] = alpha * ctx.BaseMatrix[k];
+	for(int i = 0; i < dof; i++)
+		LHS[(size_t)i * dof + i] += 1.0;
+
+	// LU factorize LHS ONCE
+#ifdef HAVE_LAPACK
+	std::vector<int> ipiv(dof);
+	{
+		int info = 0;
+		int n = dof;
+		dgetrf_(&n, &n, LHS.data(), &n, ipiv.data(), &info);
+		if(info != 0) return 0;
+	}
+#else
+	return 0;  // Hantila requires LAPACK for LU
+#endif
+
+	// Initialize: M from element current magnetization, R = M - alpha * H
+	std::vector<double> M_vec(dof);
+	std::vector<double> H_vec(dof);
+	std::vector<double> R_vec(dof, 0.0);
+
+	// Get current element M
+	for(int i = 0; i < dof; i++)
+		M_vec[i] = ctx.FlatMagn[i];
+
+	// If M is all zero (virgin), initialize via Forward(H_ext)
+	{
+		double M_norm2 = 0.0;
+		for(int i = 0; i < dof; i++) M_norm2 += M_vec[i] * M_vec[i];
+		if(M_norm2 < 1e-30)
+		{
+			for(int i = 0; i < n_elem; i++)
+			{
+				int offset = IntrctPtr->GetElementDOFOffset(i);
+				TVector3d H_ext_i(ctx.FlatExtern[offset], ctx.FlatExtern[offset+1], ctx.FlatExtern[offset+2]);
+
+				hys_mats[i]->RestoreState(ctx.saved_hys_states[i]);
+				TVector3d B_fwd = hys_mats[i]->Inverse(H_ext_i);  // H -> B
+				TVector3d M_fwd = (1.0 / MU_0) * B_fwd - H_ext_i;
+				M_vec[offset+0] = M_fwd.x;
+				M_vec[offset+1] = M_fwd.y;
+				M_vec[offset+2] = M_fwd.z;
+			}
+		}
+	}
+
+	// Compute initial H = H_ext + N*M, then R = M - alpha*H
+#ifdef HAVE_LAPACK
+	cblas_dcopy(dof, ctx.FlatExtern, 1, H_vec.data(), 1);
+	cblas_dgemv(CblasColMajor, CblasNoTrans, dof, dof,
+	            -1.0, ctx.BaseMatrix.data(), dof,
+	            M_vec.data(), 1, 1.0, H_vec.data(), 1);
+#endif
+	for(int i = 0; i < dof; i++)
+		R_vec[i] = M_vec[i] - alpha * H_vec[i];
+
+	// Estimate B_sat for convergence check
+	double B_sat = 2.0;
+	{
+		double Js_sum = 0.0;
+		for(int i = 0; i < n_elem; i++)
+			Js_sum = std::max(Js_sum, hys_mats[i]->GetBsaturation());
+		if(Js_sum > B_sat) B_sat = Js_sum;
+	}
+
+	double final_residual = 1.0;
+	int iterCount = 0;
+
+	for(int iter = 0; iter < MaxIterNumber; iter++)
+	{
+		iterCount = iter + 1;
+
+		// Step 1: Solve (I - alpha*N)*H = H_ext + N*R
+		// RHS = H_ext + N*R = H_ext - BaseMatrix*R
+		std::vector<double> rhs(dof);
+#ifdef HAVE_LAPACK
+		cblas_dcopy(dof, ctx.FlatExtern, 1, rhs.data(), 1);
+		cblas_dgemv(CblasColMajor, CblasNoTrans, dof, dof,
+		            -1.0, ctx.BaseMatrix.data(), dof,
+		            R_vec.data(), 1, 1.0, rhs.data(), 1);
+
+		// Back-substitution with pre-factored LHS
+		{
+			int n = dof;
+			int nrhs = 1;
+			int info = 0;
+			cblas_dcopy(dof, rhs.data(), 1, H_vec.data(), 1);
+			char trans = 'N';
+			dgetrs_(&trans, &n, &nrhs, LHS.data(), &n, ipiv.data(),
+			        H_vec.data(), &n, &info);
+			if(info != 0) break;
+		}
+#endif
+
+		// Step 2: M = R + alpha * H
+		for(int i = 0; i < dof; i++)
+			M_vec[i] = R_vec[i] + alpha * H_vec[i];
+
+		// Step 3: B = mu_0 * (H + M), then Forward(B) per element
+		std::vector<double> M_new(dof);
+
+		for(int i = 0; i < n_elem; i++)
+		{
+			int offset = IntrctPtr->GetElementDOFOffset(i);
+			TVector3d H_i(H_vec[offset], H_vec[offset+1], H_vec[offset+2]);
+			TVector3d M_i(M_vec[offset], M_vec[offset+1], M_vec[offset+2]);
+			TVector3d B_i = MU_0 * (H_i + M_i);
+
+			// Forward(B) -> H with restored start-of-step state
+			hys_mats[i]->RestoreState(ctx.saved_hys_states[i]);
+			TVector3d H_inv = hys_mats[i]->Forward(B_i);
+			TVector3d M_model = (1.0 / MU_0) * B_i - H_inv;
+
+			M_new[offset+0] = M_model.x;
+			M_new[offset+1] = M_model.y;
+			M_new[offset+2] = M_model.z;
+		}
+
+		// Convergence: ||M_model - M_linear||^2 / ||M_model||^2
+		double sum_dM2 = 0.0, sum_M2 = 0.0;
+		for(int i = 0; i < dof; i++)
+		{
+			double dM = M_new[i] - M_vec[i];
+			sum_dM2 += dM * dM;
+			sum_M2 += M_new[i] * M_new[i];
+		}
+		double rel_residual = (sum_M2 > 1e-30) ? std::sqrt(sum_dM2 / sum_M2) : std::sqrt(sum_dM2);
+
+		// Step 4: Update R = M_new - alpha * H  (with optional under-relaxation)
+		double omega = 1.0 - relax;
+		for(int i = 0; i < dof; i++)
+		{
+			double R_target = M_new[i] - alpha * H_vec[i];
+			if(relax > 0.0 && iter > 0)
+				R_vec[i] = (1.0 - omega) * R_vec[i] + omega * R_target;
+			else
+				R_vec[i] = R_target;
+		}
+
+		// Convergence check (skip first iteration to let B_old settle)
+		if(iter > 0)
+		{
+			final_residual = rel_residual;
+			if(rel_residual < PrecOnMagnetiz)
+				break;
+		}
+
+		if(radYield.Check() == 0) break;
+	}
+
+	// Store converged M back to elements and commit hysteresis state
+	for(int i = 0; i < n_elem; i++)
+	{
+		int offset = IntrctPtr->GetElementDOFOffset(i);
+		TVector3d M_final(M_vec[offset], M_vec[offset+1], M_vec[offset+2]);
+		ctx.FlatMagn[offset+0] = M_final.x;
+		ctx.FlatMagn[offset+1] = M_final.y;
+		ctx.FlatMagn[offset+2] = M_final.z;
+
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
+		g3dRelaxPtr->SetM(M_final);
+
+		// Final Forward at converged B + CommitState
+		hys_mats[i]->RestoreState(ctx.saved_hys_states[i]);
+		TVector3d B_final = MU_0 * TVector3d(
+			H_vec[offset] + M_final.x,
+			H_vec[offset+1] + M_final.y,
+			H_vec[offset+2] + M_final.z);
+		hys_mats[i]->Forward(B_final);
+		hys_mats[i]->CommitState();
+	}
+
+	// Update field arrays
+#ifdef HAVE_LAPACK
+	{
+		cblas_dcopy(dof, ctx.FlatExtern, 1, H_vec.data(), 1);
+		cblas_dgemv(CblasColMajor, CblasNoTrans, dof, dof,
+		            -1.0, ctx.BaseMatrix.data(), dof,
+		            M_vec.data(), 1, 1.0, H_vec.data(), 1);
+		for(int i = 0; i < n_elem; i++)
+		{
+			int offset = IntrctPtr->GetElementDOFOffset(i);
+			ctx.FlatField[offset+0] = H_vec[offset+0];
+			ctx.FlatField[offset+1] = H_vec[offset+1];
+			ctx.FlatField[offset+2] = H_vec[offset+2];
+		}
+	}
+#endif
+
+	IntrctPtr->RelaxStatusParam.MisfitM = final_residual;
+	return iterCount;
+}
+
+//=========================================================================
 // Method 0: LU Direct Solver (Entry Point)
 //=========================================================================
 
@@ -1083,6 +1779,95 @@ int radTRelaxationMethNo_0::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, 
 
 	// Use unified nonlinear iteration with LU linear solve
 	return AutoRelax_Unified(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+}
+
+//=========================================================================
+// Method 0: B-input Newton Linear Step (dense Jacobian + LAPACK dgesv_)
+//
+// Assembles J_F = I - block_diag(dJ/dB) * (N+I)  (dof x dof)
+// Solves J_F * dM = -F via LAPACK dgesv_ (LU with partial pivoting)
+//=========================================================================
+
+int radTRelaxationMethNo_0::SolveBInputLinearStep(
+	NonlinearContext& ctx,
+	const std::vector<double>& NpI,
+	const std::vector<double>& dJdB_blocks,
+	const std::vector<double>& F,
+	std::vector<double>& dM)
+{
+	int dof = ctx.totalDOF;
+	int n_elem = ctx.AmOfMainElem;
+	size_t matrix_size = (size_t)dof * dof;
+
+	// Allocate Jacobian matrix J_F (column-major for LAPACK)
+	std::vector<double> J_F;
+	try {
+		J_F.resize(matrix_size, 0.0);
+	} catch (const std::bad_alloc&) {
+		return -2;
+	}
+
+	// Initialize J_F = I
+	for(int i = 0; i < dof; i++)
+		J_F[(size_t)i * dof + i] = 1.0;
+
+	// Subtract dJ/dB * (N+I) block by block
+	// J_F[o_i:o_i+3, :] -= dJdB_i @ NpI[o_i:o_i+3, :]
+	for(int elem = 0; elem < n_elem; elem++)
+	{
+		int o_i = IntrctPtr->GetElementDOFOffset(elem);
+		const double* dJdB_i = &dJdB_blocks[elem * 9];  // 3x3, column-major
+
+#ifdef HAVE_LAPACK
+		// BLAS dgemm: C(3,dof) -= A(3,3) * B(3,dof)
+		// In column-major:
+		//   A = dJdB_i at pointer, lda=3
+		//   B = NpI rows o_i..o_i+2 = NpI + o_i, ldb=dof
+		//   C = J_F rows o_i..o_i+2 = J_F + o_i, ldc=dof
+		cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+		            3, dof, 3,
+		            -1.0,
+		            dJdB_i, 3,
+		            &NpI[o_i], dof,
+		            1.0,
+		            &J_F[o_i], dof);
+#else
+		// Manual: J_F[o_i+r, c] -= sum_d dJdB_i[r,d] * NpI[o_i+d, c]
+		for(int c = 0; c < dof; c++)
+		{
+			for(int r = 0; r < 3; r++)
+			{
+				double sum = 0.0;
+				for(int d = 0; d < 3; d++)
+					sum += dJdB_i[d * 3 + r] * NpI[(size_t)c * dof + o_i + d];
+				J_F[(size_t)c * dof + o_i + r] -= sum;
+			}
+		}
+#endif
+	}
+
+	// RHS = -F (will be overwritten with solution by dgesv)
+	dM.resize(dof);
+	for(int i = 0; i < dof; i++)
+		dM[i] = -F[i];
+
+	// Solve J_F * dM = -F via LAPACK dgesv_
+#ifdef HAVE_LAPACK
+	std::vector<int> ipiv(dof);
+	int nrhs = 1;
+	int info = 0;
+
+	{
+		ngcore::SuspendTaskManager stm;
+		radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
+		dgesv_(&dof, &nrhs, J_F.data(), &dof, ipiv.data(), dM.data(), &dof, &info);
+	}
+
+	return (info == 0) ? 0 : -1;
+#else
+	// Fallback: use SolveLU_Flat
+	return SolveLU_Flat(J_F, dM, dof);
+#endif
 }
 
 //=========================================================================

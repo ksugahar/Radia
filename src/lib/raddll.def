@@ -45,11 +45,15 @@ RadTrfTrsl
 RadMatApl
 RadMatLin
 RadMatMvsH
+RadMatHysSaveState
+RadMatHysRestoreState
+RadMatHysCommitState
 RadMatSatIsoFrm
 RadMatSatIsoTab
 RadMatSatLamFrm
 RadMatSatLamTab
 RadMatSatAniso
+RadMatPlayHysteresis
 
 ; RadRlxPre REMOVED (2026-01-31) - Use RadBuildMatrix instead
 RadRlxMan

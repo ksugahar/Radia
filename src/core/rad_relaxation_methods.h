@@ -104,6 +104,10 @@ struct NonlinearContext {
 	int total_ls_backtracks;                   // Statistics: cumulative backtracks
 	std::vector<double> accepted_omegas;       // ω values per iteration (for debugging)
 
+	// B-input Newton-Raphson fields (energy-based hysteresis)
+	bool use_b_input;                          // True for B-input Newton solver
+	std::vector<std::vector<TVector3d>> saved_hys_states;  // Per-element saved Jk states
+
 	// Constructor
 	NonlinearContext()
 		: totalDOF(0)
@@ -120,6 +124,7 @@ struct NonlinearContext {
 		, newton_ls_max_iter(5)
 		, newton_ls_min_omega(0.01)
 		, total_ls_backtracks(0)
+		, use_b_input(false)
 	{}
 };
 
@@ -202,6 +207,40 @@ public:
 	 */
 	int AutoRelax_Unified(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded = 0);
 
+	/**
+	 * B-input Newton-Raphson solver for energy-based hysteresis materials.
+	 *
+	 * Solves F(M) = M - Inverse(mu_0*(H_ext + N*M + M))/mu_0 = 0
+	 * using Newton-Raphson with analytical Jacobian dJ/dB from ComputeJacobian().
+	 *
+	 * Requires ALL elements to have radTEnergyHysteresisMaterial.
+	 * Converges in 2-4 iterations (vs hundreds for Hantila/Picard).
+	 *
+	 * @param PrecOnMagnetiz Convergence tolerance (||F||/||M||)
+	 * @param MaxIterNumber Maximum Newton iterations
+	 * @param MagnResetIsNotNeeded If 0, reset magnetization before solving
+	 * @return Number of Newton iterations performed
+	 */
+	int AutoRelax_BInput_Newton(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded = 0);
+
+	/**
+	 * B-input Hantila solver for energy-based hysteresis materials.
+	 *
+	 * Uses constant LHS (I - alpha*N), LU-factored ONCE.
+	 * Each iteration: O(N^2) back-substitution + Inverse(B) per element.
+	 * More iterations than Newton, but cheaper per iteration for large N.
+	 *
+	 * @param PrecOnMagnetiz Convergence tolerance (max|dB|/B_sat)
+	 * @param MaxIterNumber Maximum Hantila iterations
+	 * @param alpha Polarization parameter (>= max dM/dH). 0 = auto-compute.
+	 * @param relax Under-relaxation (0 = full step)
+	 * @param MagnResetIsNotNeeded If 0, reset magnetization before solving
+	 * @return Number of iterations performed
+	 */
+	int AutoRelax_BInput_Hantila(double PrecOnMagnetiz, int MaxIterNumber,
+	                             double alpha = 0.0, double relax = 0.0,
+	                             char MagnResetIsNotNeeded = 0);
+
 protected:
 	/**
 	 * Build system matrix and RHS, then solve the linear system.
@@ -212,6 +251,23 @@ protected:
 	 * @return Number of linear iterations (0 for direct solvers like LU)
 	 */
 	virtual int SolveLinearStep(NonlinearContext& ctx, int iterCount) { return 0; }
+
+	/**
+	 * Solve the B-input Newton linear step: J_F * dM = -F
+	 * where J_F = I - block_diag(dJ/dB) * (N + I)
+	 *
+	 * @param ctx Nonlinear context
+	 * @param NpI Interaction matrix + identity (column-major, dof x dof)
+	 * @param dJdB_blocks Block-diagonal dJ/dB (n_elem * 9 doubles, column-major 3x3)
+	 * @param F Residual vector (dof)
+	 * @param dM Output: Newton step (dof)
+	 * @return 0 on success
+	 */
+	virtual int SolveBInputLinearStep(NonlinearContext& ctx,
+	                                  const std::vector<double>& NpI,
+	                                  const std::vector<double>& dJdB_blocks,
+	                                  const std::vector<double>& F,
+	                                  std::vector<double>& dM) { return 0; }
 
 	/**
 	 * Whether this solver requires the dense base matrix (ctx.BaseMatrix).
@@ -254,6 +310,13 @@ public:
 protected:
 	// Override: LU direct solver for linear step
 	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
+
+	// Override: Dense Jacobian assembly + LAPACK dgesv_ for B-input Newton
+	int SolveBInputLinearStep(NonlinearContext& ctx,
+	                          const std::vector<double>& NpI,
+	                          const std::vector<double>& dJdB_blocks,
+	                          const std::vector<double>& F,
+	                          std::vector<double>& dM) override;
 
 private:
 	// Solve linear system Ax=b using LU decomposition with partial pivoting

@@ -767,6 +767,67 @@ void radTApplication::ComputeMvsH(int g3dRelaxOrMaterElemKey, char* MagnChar, do
 }
 
 //-------------------------------------------------------------------------
+
+int radTApplication::MatHysSaveState(int MaterElemKey, double* pState, int* pLen)
+{
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(MaterElemKey, hg)) return -1;
+
+		radTMaterial* MaterPtr = Cast.MaterCast(hg.rep);
+		if(MaterPtr==nullptr) { Send.ErrorMessage("Radia::Error025"); return -1; }
+
+		radTHysteresisMaterial* HysPtr = dynamic_cast<radTHysteresisMaterial*>(MaterPtr);
+		if(HysPtr==nullptr) { Send.ErrorMessage("Radia::Error025"); return -1; }
+
+		*pLen = HysPtr->GetStateSize();
+		if(pState != nullptr) HysPtr->SaveStateToArray(pState);
+		return 0;
+	}
+	catch(...) { Initialize(); return -1; }
+}
+
+int radTApplication::MatHysRestoreState(int MaterElemKey, const double* pState, int Len)
+{
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(MaterElemKey, hg)) return -1;
+
+		radTMaterial* MaterPtr = Cast.MaterCast(hg.rep);
+		if(MaterPtr==nullptr) { Send.ErrorMessage("Radia::Error025"); return -1; }
+
+		radTHysteresisMaterial* HysPtr = dynamic_cast<radTHysteresisMaterial*>(MaterPtr);
+		if(HysPtr==nullptr) { Send.ErrorMessage("Radia::Error025"); return -1; }
+
+		if(Len != HysPtr->GetStateSize()) { Send.ErrorMessage("Radia::Error000"); return -1; }
+		HysPtr->RestoreStateFromArray(pState);
+		return 0;
+	}
+	catch(...) { Initialize(); return -1; }
+}
+
+int radTApplication::MatHysCommitState(int MaterElemKey)
+{
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(MaterElemKey, hg)) return -1;
+
+		radTMaterial* MaterPtr = Cast.MaterCast(hg.rep);
+		if(MaterPtr==nullptr) { Send.ErrorMessage("Radia::Error025"); return -1; }
+
+		radTHysteresisMaterial* HysPtr = dynamic_cast<radTHysteresisMaterial*>(MaterPtr);
+		if(HysPtr==nullptr) { Send.ErrorMessage("Radia::Error025"); return -1; }
+
+		HysPtr->CommitState();
+		return 0;
+	}
+	catch(...) { Initialize(); return -1; }
+}
+
+//-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
 //void radTApplication::DumpElem(int ElemKey)
@@ -1661,6 +1722,64 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 
 			//int ActualIterNum = 0;
 
+			// B-input solvers for hysteresis (energy or play)
+			// Auto-activates when b_input_newton=True or b_input_hantila=True
+			// and all materials are radTHysteresisMaterial
+			if(m_b_input_newton || m_b_input_hantila)
+			{
+				// Check if all elements have hysteresis materials
+				bool all_hysteresis = true;
+				int n_elem = InteractPtr->GetAmOfMainElem();
+				for(int i = 0; i < n_elem && all_hysteresis; i++)
+				{
+					radTg3dRelax* g3d = InteractPtr->GetElement(i);
+					radTMaterial* mat = (radTMaterial*)(g3d->MaterHandle.rep);
+					if(dynamic_cast<radTHysteresisMaterial*>(mat) == nullptr)
+						all_hysteresis = false;
+				}
+
+				if(all_hysteresis && n_elem > 0)
+				{
+					radTRelaxationMethNo_0 RelaxMethNo_0(InteractPtr);
+
+					if(m_b_input_hantila)
+					{
+						// Hybrid: Newton warmup (3 iter) -> Hantila refinement
+						// Newton gets close quickly (quadratic convergence),
+						// then Hantila refines with constant LHS (O(N^2) per iter)
+						int newton_warmup = 3;
+						int newton_iters = RelaxMethNo_0.AutoRelax_BInput_Newton(
+							PrecOnMagnetiz, newton_warmup, MagnResetIsNotNeeded);
+
+						// If Newton already converged, skip Hantila
+						double rsp[3]; InteractPtr->OutRelaxStatusParam(rsp);
+						double newton_residual = rsp[0];  // MisfitM
+						if(newton_iters < newton_warmup || newton_residual >= PrecOnMagnetiz)
+						{
+							// Newton didn't fully converge -> refine with Hantila
+							ActualIterNum = newton_iters + RelaxMethNo_0.AutoRelax_BInput_Hantila(
+								PrecOnMagnetiz, MaxIterNumber,
+								m_hantila_alpha, m_hantila_relax,
+								/*MagnResetIsNotNeeded=*/1);
+						}
+						else
+						{
+							// Newton converged within warmup -> use Newton result
+							ActualIterNum = newton_iters;
+						}
+					}
+					else
+					{
+						// Use B-input Newton (full Jacobian each iteration)
+						ActualIterNum = RelaxMethNo_0.AutoRelax_BInput_Newton(
+							PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
+					}
+
+					// Skip standard solver
+					goto binput_done;
+				}
+			}
+
 			switch(MethNo)
 			{
 						case RadSolverMethod::LU:
@@ -1709,6 +1828,7 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 #endif
 			}
 
+			binput_done:
 			InteractPtr->OutRelaxStatusParam(RelaxStatusParamArray);
 		}
 
@@ -1816,6 +1936,15 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 				m_cached_interact_key = 0;
 				m_cached_obj_key = 0;
 				m_cached_image_spec.clear();
+			}
+			else
+			{
+				// Re-evaluate external field (ObjBckg callback may have changed)
+				// The interaction matrix N is geometry-only and can be cached,
+				// but external fields must be refreshed for hysteresis stepping
+				radTInteraction* pIntrc = dynamic_cast<radTInteraction*>(hg.rep);
+				if(pIntrc != nullptr)
+					pIntrc->SetupExternFieldArray();
 			}
 		}
 
@@ -2951,25 +3080,90 @@ radTInteraction* radTApplication::GetInteractionByKey(int interactKey)
 
 static const double EHYST_MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
 static const double EHYST_NU_0 = 1.0 / EHYST_MU_0;
-static const double EHYST_PI = 3.14159265358979323846;
-static const double EHYST_HALF_PI = EHYST_PI / 2.0;
 
 //-------------------------------------------------------------------------
-// Constructor
+// Table interpolation helper: binary search + linear interpolation
+//-------------------------------------------------------------------------
+
+static double InterpolateTable(const std::vector<double>& x,
+                                const std::vector<double>& y,
+                                int n, double xi)
+{
+	if(n <= 0) return 0.0;
+	if(xi <= x[0]) return y[0];
+	if(xi >= x[n-1]) return y[n-1];  // clamp (flat extrapolation)
+	// Binary search
+	int lo = 0, hi = n - 1;
+	while(hi - lo > 1)
+	{
+		int mid = (lo + hi) / 2;
+		if(x[mid] <= xi) lo = mid; else hi = mid;
+	}
+	double t = (xi - x[lo]) / (x[hi] - x[lo]);
+	return y[lo] + t * (y[hi] - y[lo]);
+}
+
+//-------------------------------------------------------------------------
+// Precompute U (integral) and df (derivative) tables from r, f data
+//-------------------------------------------------------------------------
+
+void radTEnergyHysteresisMaterial::PrecomputeOperatorTable(OperatorTable& tab)
+{
+	int n = tab.n;
+	tab.U.resize(n);
+	tab.df.resize(n);
+
+	// U[0] = 0, trapezoidal integration: U[i] = U[i-1] + 0.5*(f[i-1]+f[i])*(r[i]-r[i-1])
+	tab.U[0] = 0.0;
+	for(int i = 1; i < n; i++)
+		tab.U[i] = tab.U[i-1] + 0.5 * (tab.f[i-1] + tab.f[i]) * (tab.r[i] - tab.r[i-1]);
+
+	// df: finite differences
+	if(n == 1)
+	{
+		tab.df[0] = 0.0;
+	}
+	else if(n == 2)
+	{
+		double d = (tab.f[1] - tab.f[0]) / (tab.r[1] - tab.r[0]);
+		tab.df[0] = d;
+		tab.df[1] = d;
+	}
+	else
+	{
+		// Forward difference for first point
+		tab.df[0] = (tab.f[1] - tab.f[0]) / (tab.r[1] - tab.r[0]);
+		// Central differences for interior
+		for(int i = 1; i < n - 1; i++)
+			tab.df[i] = (tab.f[i+1] - tab.f[i-1]) / (tab.r[i+1] - tab.r[i-1]);
+		// Backward difference for last point
+		tab.df[n-1] = (tab.f[n-1] - tab.f[n-2]) / (tab.r[n-1] - tab.r[n-2]);
+	}
+}
+
+//-------------------------------------------------------------------------
+// Constructor from table-based shape functions
 //-------------------------------------------------------------------------
 
 radTEnergyHysteresisMaterial::radTEnergyHysteresisMaterial(
-	int K, const double* As, const double* Js, const double* chi, double eps)
+	int K, const double* chi,
+	const std::vector<std::vector<double>>& r_tables,
+	const std::vector<std::vector<double>>& f_tables,
+	double eps)
 	: m_K(K), m_eps(eps), m_last_chi(0), m_last_chi_d(0), m_has_result(false)
 {
-	m_As.resize(K);
-	m_Js.resize(K);
 	m_chi.resize(K);
+	m_tables.resize(K);
 	for(int k = 0; k < K; k++)
 	{
-		m_As[k] = As[k];
-		m_Js[k] = Js[k];
 		m_chi[k] = chi[k];
+		auto& tab = m_tables[k];
+		int n = (int)r_tables[k].size();
+		tab.n = n;
+		tab.r = r_tables[k];
+		tab.f = f_tables[k];
+		tab.r_max = (n > 0) ? tab.r[n-1] : 0.0;
+		PrecomputeOperatorTable(tab);
 	}
 
 	TVector3d zero(0, 0, 0);
@@ -2991,14 +3185,19 @@ radTEnergyHysteresisMaterial::radTEnergyHysteresisMaterial(CAuxBinStrVect& inStr
 	inStr >> m_K;
 	inStr >> m_eps;
 
-	m_As.resize(m_K);
-	m_Js.resize(m_K);
 	m_chi.resize(m_K);
+	m_tables.resize(m_K);
 	for(int k = 0; k < m_K; k++)
 	{
-		inStr >> m_As[k];
-		inStr >> m_Js[k];
 		inStr >> m_chi[k];
+		auto& tab = m_tables[k];
+		inStr >> tab.n;
+		tab.r.resize(tab.n);
+		tab.f.resize(tab.n);
+		for(int i = 0; i < tab.n; i++) inStr >> tab.r[i];
+		for(int i = 0; i < tab.n; i++) inStr >> tab.f[i];
+		tab.r_max = (tab.n > 0) ? tab.r[tab.n-1] : 0.0;
+		PrecomputeOperatorTable(tab);  // Recompute U and df
 	}
 
 	TVector3d zero(0, 0, 0);
@@ -3030,41 +3229,33 @@ void radTEnergyHysteresisMaterial::DumpBin(CAuxBinStrVect& oStr,
 	oStr << m_eps;
 	for(int k = 0; k < m_K; k++)
 	{
-		oStr << m_As[k];
-		oStr << m_Js[k];
 		oStr << m_chi[k];
+		oStr << m_tables[k].n;
+		for(int i = 0; i < m_tables[k].n; i++) oStr << m_tables[k].r[i];
+		for(int i = 0; i < m_tables[k].n; i++) oStr << m_tables[k].f[i];
 	}
 	for(int k = 0; k < m_K; k++) oStr << m_Jk_prev[k];
 }
 
 //-------------------------------------------------------------------------
-// Internal energy U_k(|J|) and derivatives
+// Internal energy U_k(|J|) and derivatives (table interpolation)
 //-------------------------------------------------------------------------
 
 double radTEnergyHysteresisMaterial::Uk(int k, double J_mag) const
 {
 	if(J_mag < 1e-30) return 0.0;
-	double ratio = EHYST_HALF_PI * J_mag / m_Js[k];
-	if(ratio > EHYST_HALF_PI - 1e-10) ratio = EHYST_HALF_PI - 1e-10;
-	return -(2.0 * m_As[k] * m_Js[k]) / EHYST_PI * log(cos(ratio));
+	return InterpolateTable(m_tables[k].r, m_tables[k].U, m_tables[k].n, J_mag);
 }
 
 double radTEnergyHysteresisMaterial::dUk(int k, double J_mag) const
 {
 	if(J_mag < 1e-30) return 0.0;
-	double ratio = EHYST_HALF_PI * J_mag / m_Js[k];
-	if(ratio > EHYST_HALF_PI - 1e-10) ratio = EHYST_HALF_PI - 1e-10;
-	return m_As[k] * tan(ratio);
+	return InterpolateTable(m_tables[k].r, m_tables[k].f, m_tables[k].n, J_mag);
 }
 
 double radTEnergyHysteresisMaterial::d2Uk(int k, double J_mag) const
 {
-	double base = m_As[k] * EHYST_HALF_PI / m_Js[k];
-	if(J_mag < 1e-30) return base;
-	double ratio = EHYST_HALF_PI * J_mag / m_Js[k];
-	if(ratio > EHYST_HALF_PI - 1e-10) ratio = EHYST_HALF_PI - 1e-10;
-	double t = tan(ratio);
-	return base * (1.0 + t * t);
+	return InterpolateTable(m_tables[k].r, m_tables[k].df, m_tables[k].n, J_mag);
 }
 
 //-------------------------------------------------------------------------
@@ -3125,7 +3316,7 @@ double radTEnergyHysteresisMaterial::ObjectiveForwardK(
 	return Uk(k, NormAbs(J)) - (H * J) + m_chi[k] * NormEps(diff);
 }
 
-double radTEnergyHysteresisMaterial::ObjectiveInverse(
+double radTEnergyHysteresisMaterial::ObjectiveForward(
 	const TVector3d& B, const std::vector<TVector3d>& Jk_list) const
 {
 	TVector3d J_sum(0, 0, 0);
@@ -3144,10 +3335,10 @@ double radTEnergyHysteresisMaterial::ObjectiveInverse(
 }
 
 //-------------------------------------------------------------------------
-// Newton solver for single J_k
+// Newton solver for single J_k (used by Inverse: H -> B)
 //-------------------------------------------------------------------------
 
-TVector3d radTEnergyHysteresisMaterial::SolveForwardK(int k, const TVector3d& H) const
+TVector3d radTEnergyHysteresisMaterial::SolveInverseK(int k, const TVector3d& H) const
 {
 	TVector3d Jk = m_Jk_prev[k];
 	const int max_iter = 30;
@@ -3174,15 +3365,24 @@ TVector3d radTEnergyHysteresisMaterial::SolveForwardK(int k, const TVector3d& H)
 			tau *= 0.5;
 		}
 		Jk += tau * dJ;
+		// Clamp to saturation bound
+		double Jmax = 0.9999 * m_tables[k].r_max;
+		if(Jk.x > Jmax) Jk.x = Jmax;
+		else if(Jk.x < -Jmax) Jk.x = -Jmax;
+		if(Jk.y > Jmax) Jk.y = Jmax;
+		else if(Jk.y < -Jmax) Jk.y = -Jmax;
+		if(Jk.z > Jmax) Jk.z = Jmax;
+		else if(Jk.z < -Jmax) Jk.z = -Jmax;
 	}
 	return Jk;
 }
 
 //-------------------------------------------------------------------------
-// Forward operator: H -> B
+// Inverse operator: H -> B (energy-based approximation of B-input Play)
+// Each J_k solved independently -- no Schur needed
 //-------------------------------------------------------------------------
 
-TVector3d radTEnergyHysteresisMaterial::Forward(const TVector3d& H)
+TVector3d radTEnergyHysteresisMaterial::Inverse(const TVector3d& H)
 {
 	// Save pinning reference before update (for Jacobian)
 	for(int k = 0; k < m_K; k++)
@@ -3191,7 +3391,7 @@ TVector3d radTEnergyHysteresisMaterial::Forward(const TVector3d& H)
 	TVector3d J_total(0, 0, 0);
 	for(int k = 0; k < m_K; k++)
 	{
-		TVector3d Jk = SolveForwardK(k, H);
+		TVector3d Jk = SolveInverseK(k, H);
 		m_Jk_current[k] = Jk;
 		J_total += Jk;
 	}
@@ -3211,10 +3411,10 @@ TVector3d radTEnergyHysteresisMaterial::Forward(const TVector3d& H)
 }
 
 //-------------------------------------------------------------------------
-// Inverse operator: B -> H via Schur complement
+// Forward operator: B -> H (natural for B-input Play, Schur complement)
 //-------------------------------------------------------------------------
 
-TVector3d radTEnergyHysteresisMaterial::Inverse(const TVector3d& B)
+TVector3d radTEnergyHysteresisMaterial::Forward(const TVector3d& B)
 {
 	// Save pinning reference before update
 	for(int k = 0; k < m_K; k++)
@@ -3281,7 +3481,7 @@ TVector3d radTEnergyHysteresisMaterial::Inverse(const TVector3d& B)
 		}
 
 		// Armijo backtracking on total objective
-		double G_curr = ObjectiveInverse(B, Jk_list);
+		double G_curr = ObjectiveForward(B, Jk_list);
 		double tau = 1.0;
 		for(int ls = 0; ls < 30; ls++)
 		{
@@ -3289,13 +3489,23 @@ TVector3d radTEnergyHysteresisMaterial::Inverse(const TVector3d& B)
 			for(int k = 0; k < m_K; k++)
 				Jk_trial[k] = Jk_list[k] + tau * dJk_list[k];
 
-			double G_trial = ObjectiveInverse(B, Jk_trial);
+			double G_trial = ObjectiveForward(B, Jk_trial);
 			if(G_trial <= G_curr + 0.1 * tau * dir_deriv) break;
 			tau *= 0.5;
 		}
 
 		for(int k = 0; k < m_K; k++)
+		{
 			Jk_list[k] += tau * dJk_list[k];
+			// Clamp each component to saturation bound (matches Python L-BFGS-B bounds)
+			double Jmax = 0.9999 * m_tables[k].r_max;
+			if(Jk_list[k].x > Jmax) Jk_list[k].x = Jmax;
+			else if(Jk_list[k].x < -Jmax) Jk_list[k].x = -Jmax;
+			if(Jk_list[k].y > Jmax) Jk_list[k].y = Jmax;
+			else if(Jk_list[k].y < -Jmax) Jk_list[k].y = -Jmax;
+			if(Jk_list[k].z > Jmax) Jk_list[k].z = Jmax;
+			else if(Jk_list[k].z < -Jmax) Jk_list[k].z = -Jmax;
+		}
 	}
 
 	// Compute H = nu_0 * (B - sum J_k)
@@ -3343,7 +3553,7 @@ void radTEnergyHysteresisMaterial::ComputeJacobian(TMatrix3d& dBdH, double& chi_
 
 TVector3d radTEnergyHysteresisMaterial::M(const TVector3d& H)
 {
-	TVector3d B = Forward(H);
+	TVector3d B = Inverse(H);  // H -> B
 	// M = B/mu_0 - H
 	return (1.0 / EHYST_MU_0) * B - H;
 }
@@ -3355,7 +3565,7 @@ TVector3d radTEnergyHysteresisMaterial::M(const TVector3d& H)
 void radTEnergyHysteresisMaterial::DefineInstantKsiTensor(
 	const TVector3d& H, TMatrix3d& KsiTensor, TVector3d& Mr)
 {
-	TVector3d B = Forward(H);
+	TVector3d B = Inverse(H);  // H -> B
 	double H_mag = NormAbs(H);
 	double B_mag = NormAbs(B);
 
@@ -3373,7 +3583,7 @@ void radTEnergyHysteresisMaterial::DefineInstantKsiTensor(
 
 double radTEnergyHysteresisMaterial::ComputeChiFromH(const TVector3d& H)
 {
-	TVector3d B = Forward(H);
+	TVector3d B = Inverse(H);  // H -> B
 	double H_mag = NormAbs(H);
 	double B_mag = NormAbs(B);
 
@@ -3395,7 +3605,7 @@ double radTEnergyHysteresisMaterial::ComputeChiDualMethod(
 	else
 		H = TVector3d(H_mag, 0, 0);  // Default direction
 
-	TVector3d B = Forward(H);
+	TVector3d B = Inverse(H);  // H -> B
 	double B_mag = NormAbs(B);
 
 	m_last_chi = B_mag / (EHYST_MU_0 * H_mag) - 1.0;
@@ -3417,12 +3627,571 @@ double radTEnergyHysteresisMaterial::ComputeDifferentialChi(double H_mag)
 //-------------------------------------------------------------------------
 
 int radTApplication::SetEnergyHysteresisMaterial(
-	int K, const double* As, const double* Js, const double* chi, double eps)
+	int K, const double* chi,
+	const std::vector<std::vector<double>>& r_tables,
+	const std::vector<std::vector<double>>& f_tables,
+	double eps)
 {
 	radTEnergyHysteresisMaterial* MaterPtr = nullptr;
 	try
 	{
-		MaterPtr = new radTEnergyHysteresisMaterial(K, As, Js, chi, eps);
+		MaterPtr = new radTEnergyHysteresisMaterial(K, chi, r_tables, f_tables, eps);
+		if(MaterPtr == nullptr) { Send.ErrorMessage("Radia::Error900"); return 0; }
+
+		radThg hg(MaterPtr);
+		MaterPtr = nullptr;
+		int ElemKey = AddElementToContainer(hg);
+		if(SendingIsRequired) Send.Int(ElemKey);
+		return ElemKey;
+	}
+	catch(...)
+	{
+		if(MaterPtr) delete MaterPtr;
+		Initialize();
+		return 0;
+	}
+}
+
+//=========================================================================
+// radTPlayHysteresisMaterial implementation
+//=========================================================================
+
+static const double PLAY_MU_0 = 4.0 * 3.14159265358979323846 * 1.0e-7;
+
+void radTPlayHysteresisMaterial::PrecomputePlayTable(PlayTable& tab)
+{
+	int n = tab.n;
+	tab.df.resize(n);
+	if(n == 1) {
+		tab.df[0] = 0.0;
+	} else if(n == 2) {
+		double d = (tab.f[1] - tab.f[0]) / (tab.r[1] - tab.r[0]);
+		tab.df[0] = d;
+		tab.df[1] = d;
+	} else {
+		tab.df[0] = (tab.f[1] - tab.f[0]) / (tab.r[1] - tab.r[0]);
+		for(int i = 1; i < n - 1; i++)
+			tab.df[i] = (tab.f[i+1] - tab.f[i-1]) / (tab.r[i+1] - tab.r[i-1]);
+		tab.df[n-1] = (tab.f[n-1] - tab.f[n-2]) / (tab.r[n-1] - tab.r[n-2]);
+	}
+}
+
+void radTPlayHysteresisMaterial::ComputeMonotoneLimits()
+{
+	// Scan virgin initial curve (1D, all p_k start at 0) to find where dH/dB <= 0.
+	// On virgin ascending: p_k = max(0, B - eta_k), dp_k/dB = 1 if B > eta_k.
+	// H(B) = sum_{k: B > eta_k} f_k(B - eta_k)
+	// dH/dB = sum_{k: B > eta_k} f'_k(B - eta_k)
+	double B_sat = GetBsaturation();
+	if(B_sat < 1e-10) { m_B_mono_max = 1.0; m_H_mono_max = 0; return; }
+
+	int n_scan = 500;
+	double dB_step = B_sat / n_scan;
+	m_B_mono_max = B_sat;
+	m_H_mono_max = 0;
+
+	double H_prev = 0;
+	for(int i = 1; i <= n_scan; i++)
+	{
+		double B_val = i * dB_step;
+		double H_val = 0;
+		double dHdB_val = 0;
+
+		for(int k = 0; k < m_K; k++)
+		{
+			double pk_val = B_val - m_eta[k];
+			if(pk_val <= 1e-30) continue;  // stuck operator
+			H_val += fk(k, pk_val);
+			dHdB_val += dfk(k, pk_val);
+		}
+
+		if(dHdB_val <= 0 && i > 1)
+		{
+			// Non-monotone detected: previous point is the safe limit
+			m_B_mono_max = (i - 1) * dB_step;
+			m_H_mono_max = H_prev;
+			return;
+		}
+		H_prev = H_val;
+	}
+	// No non-monotonicity found: full range is monotone
+	m_H_mono_max = H_prev;
+}
+
+radTPlayHysteresisMaterial::radTPlayHysteresisMaterial(
+	int K, const double* eta,
+	const std::vector<std::vector<double>>& r_tables,
+	const std::vector<std::vector<double>>& f_tables)
+	: m_K(K), m_B_mono_max(1.0), m_H_mono_max(0),
+	  m_last_chi(0), m_last_chi_d(0), m_has_result(false)
+{
+	m_eta.resize(K);
+	m_tables.resize(K);
+	for(int k = 0; k < K; k++)
+	{
+		m_eta[k] = eta[k];
+		auto& tab = m_tables[k];
+		int n = (int)r_tables[k].size();
+		tab.n = n;
+		tab.r = r_tables[k];
+		tab.f = f_tables[k];
+		tab.r_max = (n > 0) ? tab.r[n-1] : 0.0;
+		PrecomputePlayTable(tab);
+	}
+
+	TVector3d zero(0, 0, 0);
+	m_pk_prev.resize(K, zero);
+	m_pk_pinning.resize(K, zero);
+	m_pk_current.resize(K, zero);
+	m_last_H = zero;
+	m_last_B = zero;
+	m_last_dHdB = Eye();
+
+	ComputeMonotoneLimits();
+}
+
+double radTPlayHysteresisMaterial::fk(int k, double r_mag) const
+{
+	return InterpolateTable(m_tables[k].r, m_tables[k].f, m_tables[k].n, r_mag);
+}
+
+double radTPlayHysteresisMaterial::dfk(int k, double r_mag) const
+{
+	return InterpolateTable(m_tables[k].r, m_tables[k].df, m_tables[k].n, r_mag);
+}
+
+//-------------------------------------------------------------------------
+// Forward: B -> H, O(K) direct evaluation
+// Also computes and caches analytical Jacobian dH/dB
+//-------------------------------------------------------------------------
+TVector3d radTPlayHysteresisMaterial::Forward(const TVector3d& B)
+{
+	TVector3d H(0, 0, 0);
+	TMatrix3d dHdB(TVector3d(0,0,0), TVector3d(0,0,0), TVector3d(0,0,0));
+
+	for(int k = 0; k < m_K; k++)
+	{
+		double eta_k = m_eta[k];
+		TVector3d q = B - m_pk_pinning[k];
+		double q_mag = sqrt(q.x*q.x + q.y*q.y + q.z*q.z);
+
+		TVector3d pk;
+		TMatrix3d dpk_dB(TVector3d(0,0,0), TVector3d(0,0,0), TVector3d(0,0,0));
+
+		if(eta_k < 1e-30)
+		{
+			// eta=0: p_k always tracks B exactly
+			pk = B;
+			dpk_dB = Eye();
+		}
+		else if(q_mag <= eta_k)
+		{
+			// Stuck: p_k doesn't move
+			pk = m_pk_pinning[k];
+			// dpk_dB = 0 (already zeros)
+		}
+		else
+		{
+			// Following: p_k = B - eta_k * q / |q|
+			double ratio = eta_k / q_mag;
+			pk.x = B.x - ratio * q.x;
+			pk.y = B.y - ratio * q.y;
+			pk.z = B.z - ratio * q.z;
+
+			// dp/dB = (1 - eta/|q|)*I + (eta/|q|) * q_hat * q_hat^T
+			TVector3d q_hat(q.x/q_mag, q.y/q_mag, q.z/q_mag);
+			double c1 = 1.0 - ratio;
+			dpk_dB = c1 * Eye() + ratio * OuterProduct(q_hat, q_hat);
+		}
+		m_pk_current[k] = pk;
+
+		double pk_mag = sqrt(pk.x*pk.x + pk.y*pk.y + pk.z*pk.z);
+		if(pk_mag > 1e-30)
+		{
+			double f_val = fk(k, pk_mag);
+			double df_val = dfk(k, pk_mag);
+			TVector3d pk_hat(pk.x/pk_mag, pk.y/pk_mag, pk.z/pk_mag);
+
+			// H contribution: f_k(|p_k|) * p_k / |p_k|
+			H.x += f_val * pk_hat.x;
+			H.y += f_val * pk_hat.y;
+			H.z += f_val * pk_hat.z;
+
+			// dh_k/dp_k = df_k * p_hat*p_hat^T + (f_k/|p_k|)*(I - p_hat*p_hat^T)
+			double f_over_r = f_val / pk_mag;
+			TMatrix3d pp = OuterProduct(pk_hat, pk_hat);
+			TMatrix3d I_pp = Eye() - pp;
+			TMatrix3d dhk_dpk = df_val * pp + f_over_r * I_pp;
+
+			// dH/dB += dh_k/dp_k * dp_k/dB (chain rule)
+			dHdB = dHdB + dhk_dpk * dpk_dB;
+		}
+	}
+
+	m_last_dHdB = dHdB;
+	m_last_H = H;
+	m_last_B = B;
+	m_has_result = true;
+	return H;
+}
+
+//-------------------------------------------------------------------------
+// Inverse: H -> B, Newton iteration with analytical Jacobian
+//-------------------------------------------------------------------------
+TVector3d radTPlayHysteresisMaterial::Inverse(const TVector3d& H_target)
+{
+	// Ensure pinning is set from committed state
+	for(int k = 0; k < m_K; k++)
+		m_pk_pinning[k] = m_pk_prev[k];
+
+	double H_target_mag = sqrt(H_target.x*H_target.x + H_target.y*H_target.y + H_target.z*H_target.z);
+
+	// Monotone constraint: B clamped to [0, m_B_mono_max] where dH/dB > 0.
+	// For H > m_H_mono_max (beyond model range), return B_mono_max directly.
+	double B_max = m_B_mono_max;
+	double max_dB_step = 0.05 * B_max;  // max |dB| per Newton iteration
+
+	// Early return: H_target beyond monotone range -> saturated at B_mono_max
+	if(H_target_mag > m_H_mono_max && m_H_mono_max > 1e-10)
+	{
+		TVector3d B_sat_dir;
+		if(H_target_mag > 1e-20)
+		{
+			double sc = m_B_mono_max / H_target_mag;
+			B_sat_dir.x = sc * H_target.x;
+			B_sat_dir.y = sc * H_target.y;
+			B_sat_dir.z = sc * H_target.z;
+		}
+		else
+		{
+			B_sat_dir.x = B_sat_dir.y = B_sat_dir.z = 0;
+		}
+		Forward(B_sat_dir);
+		// Auto-commit
+		for(int k = 0; k < m_K; k++)
+			m_pk_prev[k] = m_pk_current[k];
+		return m_last_B;
+	}
+
+	// Initial guess
+	TVector3d B;
+	if(m_has_result && H_target_mag > 1e-20)
+	{
+		B = m_last_B;
+	}
+	else
+	{
+		// B = mu_0 * (1 + chi_init) * H
+		double chi_init = GetInitialChi_ELF_Style();
+		if(chi_init < 1.0) chi_init = 1.0;
+		double mu_r = 1.0 + chi_init;
+		B.x = PLAY_MU_0 * mu_r * H_target.x;
+		B.y = PLAY_MU_0 * mu_r * H_target.y;
+		B.z = PLAY_MU_0 * mu_r * H_target.z;
+	}
+
+	// Clamp initial guess
+	double B_init_mag = sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
+	if(B_init_mag > B_max)
+	{
+		double scale = B_max / B_init_mag;
+		B.x *= scale; B.y *= scale; B.z *= scale;
+	}
+
+	if(H_target_mag < 1e-20)
+	{
+		// H=0: B=0 for virgin state, otherwise use Forward at B=0
+		if(!m_has_result)
+		{
+			B.x = B.y = B.z = 0;
+			Forward(B);
+			// Auto-commit
+			for(int k = 0; k < m_K; k++)
+				m_pk_prev[k] = m_pk_current[k];
+			return m_last_B;
+		}
+	}
+
+	const int max_iter = 100;
+	const double tol = 1e-10;
+
+	// Track best solution (lowest residual) for fallback
+	TVector3d B_best = B;
+	double best_res = 1e30;
+
+	for(int it = 0; it < max_iter; it++)
+	{
+		TVector3d H_comp = Forward(B);
+		TVector3d res(H_comp.x - H_target.x, H_comp.y - H_target.y, H_comp.z - H_target.z);
+		double res_norm = sqrt(res.x*res.x + res.y*res.y + res.z*res.z);
+
+		if(res_norm < best_res)
+		{
+			best_res = res_norm;
+			B_best = B;
+		}
+		if(res_norm < tol) break;
+
+		double trace_dHdB = m_last_dHdB.Str0.x + m_last_dHdB.Str1.y + m_last_dHdB.Str2.z;
+
+		// Non-monotone detection: if dH/dB becomes negative despite B_mono_max clamp
+		// (can happen on non-virgin branches), retreat toward lower |B|
+		if(trace_dHdB < -1e-6)
+		{
+			double B_mag = sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
+			double retreat = 0.05 * B_max;
+			if(B_mag > retreat)
+			{
+				double sc = (B_mag - retreat) / B_mag;
+				B.x *= sc; B.y *= sc; B.z *= sc;
+			}
+			continue;
+		}
+
+		double dHdB_scale = fabs(trace_dHdB) / 3.0;
+
+		TVector3d dB;
+		if(dHdB_scale > 1e-6)
+		{
+			// Newton step: dB = -inv(dH/dB) * residual
+			TMatrix3d dHdB_reg = m_last_dHdB;
+			double reg = 1e-8 * dHdB_scale;
+			dHdB_reg.Str0.x += reg;
+			dHdB_reg.Str1.y += reg;
+			dHdB_reg.Str2.z += reg;
+
+			TMatrix3d dBdH = Matrix3d_inv(dHdB_reg);
+			dB = (-1.0) * (dBdH * res);
+		}
+		else
+		{
+			// Jacobian too small: steepest descent
+			double step = (H_target_mag > 1.0) ? PLAY_MU_0 * H_target_mag * 0.05 : 0.005;
+			if(H_target_mag > 1e-20)
+			{
+				TVector3d H_hat(H_target.x/H_target_mag, H_target.y/H_target_mag, H_target.z/H_target_mag);
+				double res_proj = res.x*H_hat.x + res.y*H_hat.y + res.z*H_hat.z;
+				double sign = (res_proj > 0) ? -1.0 : 1.0;
+				dB.x = sign * step * H_hat.x;
+				dB.y = sign * step * H_hat.y;
+				dB.z = sign * step * H_hat.z;
+			}
+			else
+			{
+				dB.x = (res.x > 0) ? -step : step;
+				dB.y = (res.y > 0) ? -step : step;
+				dB.z = (res.z > 0) ? -step : step;
+			}
+		}
+
+		// NaN check
+		if(dB.x != dB.x || dB.y != dB.y || dB.z != dB.z)
+		{
+			double chi = GetInitialChi_ELF_Style();
+			if(chi < 1.0) chi = 1.0;
+			B.x = PLAY_MU_0 * (1.0 + chi) * H_target.x;
+			B.y = PLAY_MU_0 * (1.0 + chi) * H_target.y;
+			B.z = PLAY_MU_0 * (1.0 + chi) * H_target.z;
+			continue;
+		}
+
+		// Trust region: limit step magnitude
+		double dB_mag = sqrt(dB.x*dB.x + dB.y*dB.y + dB.z*dB.z);
+		if(dB_mag > max_dB_step)
+		{
+			double sc = max_dB_step / dB_mag;
+			dB.x *= sc; dB.y *= sc; dB.z *= sc;
+		}
+
+		// Armijo backtracking with B-magnitude clamping
+		double tau = 1.0;
+		bool accepted = false;
+		for(int ls = 0; ls < 20; ls++)
+		{
+			TVector3d B_trial(B.x + tau*dB.x, B.y + tau*dB.y, B.z + tau*dB.z);
+
+			// Clamp trial B magnitude to B_max
+			double B_trial_mag = sqrt(B_trial.x*B_trial.x + B_trial.y*B_trial.y + B_trial.z*B_trial.z);
+			if(B_trial_mag > B_max)
+			{
+				double sc = B_max / B_trial_mag;
+				B_trial.x *= sc; B_trial.y *= sc; B_trial.z *= sc;
+			}
+
+			TVector3d H_trial = Forward(B_trial);
+			TVector3d res_trial(H_trial.x - H_target.x, H_trial.y - H_target.y, H_trial.z - H_target.z);
+			double res_trial_norm = sqrt(res_trial.x*res_trial.x + res_trial.y*res_trial.y + res_trial.z*res_trial.z);
+			if(res_trial_norm < res_norm)
+			{
+				B = B_trial;
+				accepted = true;
+				break;
+			}
+			tau *= 0.5;
+		}
+		if(!accepted)
+		{
+			// All backtracking failed: take tiny step
+			B.x += 0.001 * dB.x;
+			B.y += 0.001 * dB.y;
+			B.z += 0.001 * dB.z;
+		}
+	}
+
+	// If Newton didn't converge well, use best B found
+	{
+		TVector3d H_final = Forward(B);
+		TVector3d res_final(H_final.x - H_target.x, H_final.y - H_target.y, H_final.z - H_target.z);
+		double res_final_norm = sqrt(res_final.x*res_final.x + res_final.y*res_final.y + res_final.z*res_final.z);
+		if(res_final_norm > best_res * 1.01)
+		{
+			Forward(B_best);  // restore best state
+		}
+	}
+
+	// Auto-commit state: advance play operators for next step
+	for(int k = 0; k < m_K; k++)
+		m_pk_prev[k] = m_pk_current[k];
+
+	return m_last_B;
+}
+
+//-------------------------------------------------------------------------
+// ComputeJacobian: returns dB/dH = inv(dH/dB), compatible with solver
+//-------------------------------------------------------------------------
+void radTPlayHysteresisMaterial::ComputeJacobian(TMatrix3d& dBdH, double& chi_d) const
+{
+	if(!m_has_result)
+	{
+		dBdH = PLAY_MU_0 * Eye();
+		chi_d = 0.0;
+		return;
+	}
+	dBdH = Matrix3d_inv(m_last_dHdB);
+	double trace = dBdH.Str0.x + dBdH.Str1.y + dBdH.Str2.z;
+	chi_d = trace / (3.0 * PLAY_MU_0) - 1.0;
+}
+
+//-------------------------------------------------------------------------
+// Material interface methods (same pattern as energy model)
+//-------------------------------------------------------------------------
+TVector3d radTPlayHysteresisMaterial::M(const TVector3d& H)
+{
+	TVector3d B = Inverse(H);
+	double inv_mu0 = 1.0 / PLAY_MU_0;
+	return TVector3d(B.x * inv_mu0 - H.x, B.y * inv_mu0 - H.y, B.z * inv_mu0 - H.z);
+}
+
+void radTPlayHysteresisMaterial::DefineInstantKsiTensor(
+	const TVector3d& H, TMatrix3d& KsiTensor, TVector3d& Mr)
+{
+	TVector3d Mv = M(H);
+	Mr = Mv;
+
+	TMatrix3d dBdH;
+	double chi_d;
+	ComputeJacobian(dBdH, chi_d);
+
+	// KsiTensor = dM/dH = dB/dH / mu_0 - I
+	double inv_mu0 = 1.0 / PLAY_MU_0;
+	KsiTensor = inv_mu0 * dBdH - Eye();
+}
+
+double radTPlayHysteresisMaterial::ComputeChiFromH(const TVector3d& H)
+{
+	TVector3d B = Inverse(H);
+	double H_mag = sqrt(H.x*H.x + H.y*H.y + H.z*H.z);
+	if(H_mag < 1e-30) return GetInitialChi_ELF_Style();
+	double B_mag = sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
+	return B_mag / (PLAY_MU_0 * H_mag) - 1.0;
+}
+
+double radTPlayHysteresisMaterial::ComputeChiDualMethod(double H_mag, double mu_old, double relax)
+{
+	TVector3d Hv(H_mag, 0, 0);
+	return ComputeChiFromH(Hv);
+}
+
+double radTPlayHysteresisMaterial::ComputeDifferentialChi(double H_mag)
+{
+	TVector3d Hv(H_mag, 0, 0);
+	Inverse(Hv);
+	TMatrix3d dBdH;
+	double chi_d;
+	ComputeJacobian(dBdH, chi_d);
+	return chi_d;
+}
+
+//-------------------------------------------------------------------------
+// Serialization
+//-------------------------------------------------------------------------
+void radTPlayHysteresisMaterial::DumpBin(CAuxBinStrVect& oStr,
+	std::vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers,
+	int& gUniqueMapKey, int elemKey)
+{
+	vElemKeysOut.push_back(elemKey);
+	int matType = Type_Material();
+	oStr << matType;
+	oStr << m_K;
+	for(int k = 0; k < m_K; k++) oStr << m_eta[k];
+	for(int k = 0; k < m_K; k++)
+	{
+		oStr << m_tables[k].n;
+		for(int i = 0; i < m_tables[k].n; i++) oStr << m_tables[k].r[i];
+		for(int i = 0; i < m_tables[k].n; i++) oStr << m_tables[k].f[i];
+	}
+	// Save state
+	for(int k = 0; k < m_K; k++)
+	{
+		oStr << m_pk_prev[k].x << m_pk_prev[k].y << m_pk_prev[k].z;
+	}
+}
+
+radTPlayHysteresisMaterial::radTPlayHysteresisMaterial(CAuxBinStrVect& inStr)
+	: m_last_chi(0), m_last_chi_d(0), m_has_result(false)
+{
+	inStr >> m_K;
+	m_eta.resize(m_K);
+	for(int k = 0; k < m_K; k++) inStr >> m_eta[k];
+	m_tables.resize(m_K);
+	for(int k = 0; k < m_K; k++)
+	{
+		int n;
+		inStr >> n;
+		m_tables[k].n = n;
+		m_tables[k].r.resize(n);
+		m_tables[k].f.resize(n);
+		for(int i = 0; i < n; i++) inStr >> m_tables[k].r[i];
+		for(int i = 0; i < n; i++) inStr >> m_tables[k].f[i];
+		m_tables[k].r_max = (n > 0) ? m_tables[k].r[n-1] : 0.0;
+		PrecomputePlayTable(m_tables[k]);
+	}
+	TVector3d zero(0, 0, 0);
+	m_pk_prev.resize(m_K, zero);
+	m_pk_pinning.resize(m_K, zero);
+	m_pk_current.resize(m_K, zero);
+	for(int k = 0; k < m_K; k++)
+	{
+		inStr >> m_pk_prev[k].x >> m_pk_prev[k].y >> m_pk_prev[k].z;
+		m_pk_pinning[k] = m_pk_prev[k];
+	}
+	m_last_H = zero;
+	m_last_B = zero;
+	m_last_dHdB = Eye();
+}
+
+//-------------------------------------------------------------------------
+// Application method: create and register play hysteresis material
+//-------------------------------------------------------------------------
+int radTApplication::SetPlayHysteresisMaterial(
+	int K, const double* eta,
+	const std::vector<std::vector<double>>& r_tables,
+	const std::vector<std::vector<double>>& f_tables)
+{
+	radTPlayHysteresisMaterial* MaterPtr = nullptr;
+	try
+	{
+		MaterPtr = new radTPlayHysteresisMaterial(K, eta, r_tables, f_tables);
 		if(MaterPtr == nullptr) { Send.ErrorMessage("Radia::Error900"); return 0; }
 
 		radThg hg(MaterPtr);
