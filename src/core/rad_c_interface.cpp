@@ -123,9 +123,13 @@ void NonlinearAnisotropMaterialOpt0( double*, int, double*, int );
 void NonlinearAnisotropMaterialOpt1( double**, double** );
 void NonlinearAnisotropMaterialOpt2( double**, double );
 void NonlinearAnisotropMaterialOpt3( double, double** );
-void EnergyHysteresisMaterial( int, double*, double*, double*, double );
+void EnergyHysteresisMaterial( int, double*, double*, double*, int*, double );
+void PlayHysteresisMaterial( int, double*, double*, double*, int* );
 void ApplyMaterial( int, int );
 void MvsH( int, char*, double,double,double );
+int MatHysSaveState( int, double*, int* );
+int MatHysRestoreState( int, const double*, int );
+int MatHysCommitState( int );
 
 void Field( int, char*, double,double,double, double,double,double, int, char*, double );
 //void FieldArbitraryPointsStruct();
@@ -166,6 +170,14 @@ void SetNewtonMethod( bool );
 bool GetNewtonMethod();
 void SetNewtonDamping( bool, int, double );
 void GetNewtonDampingStats( bool*, int*, double* );
+void SetBInputNewton( bool );
+bool GetBInputNewton();
+void SetBInputHantila( bool );
+bool GetBInputHantila();
+void SetHantilaAlpha( double );
+double GetHantilaAlpha();
+void SetHantilaRelax( double );
+double GetHantilaRelax();
 int SetIMASymmetry(int, const char*);
 int BuildIMAMatrix(int);
 void ClassifyPoints( int*, int*, int, double*, int, double );
@@ -1374,9 +1386,38 @@ void NonlinearIsotropMaterial3Opt(double** HandB_Array, long LenHandB_Array)
 
 //-------------------------------------------------------------------------
 
-void EnergyHysteresisMaterial(int K, double* As, double* Js, double* chi, double eps)
+void EnergyHysteresisMaterial(int K, double* chi,
+	double* r_flat, double* f_flat, int* table_sizes, double eps)
 {
-	rad.SetEnergyHysteresisMaterial(K, As, Js, chi, eps);
+	// Reconstruct per-operator tables from flat arrays
+	std::vector<std::vector<double>> r_tables(K), f_tables(K);
+	int offset = 0;
+	for(int k = 0; k < K; k++)
+	{
+		int n = table_sizes[k];
+		r_tables[k].assign(r_flat + offset, r_flat + offset + n);
+		f_tables[k].assign(f_flat + offset, f_flat + offset + n);
+		offset += n;
+	}
+	rad.SetEnergyHysteresisMaterial(K, chi, r_tables, f_tables, eps);
+}
+
+//-------------------------------------------------------------------------
+
+void PlayHysteresisMaterial(int K, double* eta,
+	double* r_flat, double* f_flat, int* table_sizes)
+{
+	// Reconstruct per-operator tables from flat arrays
+	std::vector<std::vector<double>> r_tables(K), f_tables(K);
+	int offset = 0;
+	for(int k = 0; k < K; k++)
+	{
+		int n = table_sizes[k];
+		r_tables[k].assign(r_flat + offset, r_flat + offset + n);
+		f_tables[k].assign(f_flat + offset, f_flat + offset + n);
+		offset += n;
+	}
+	rad.SetPlayHysteresisMaterial(K, eta, r_tables, f_tables);
 }
 
 //-------------------------------------------------------------------------
@@ -1538,6 +1579,23 @@ void MvsH(int g3dRelaxOrMaterElemKey, char* MagnChar, double hx, double hy, doub
 {
 	double H[] = {hx, hy, hz};
 	rad.ComputeMvsH(g3dRelaxOrMaterElemKey, MagnChar, H, 3);
+}
+
+//-------------------------------------------------------------------------
+
+int MatHysSaveState(int MaterElemKey, double* pState, int* pLen)
+{
+	return rad.MatHysSaveState(MaterElemKey, pState, pLen);
+}
+
+int MatHysRestoreState(int MaterElemKey, const double* pState, int Len)
+{
+	return rad.MatHysRestoreState(MaterElemKey, pState, Len);
+}
+
+int MatHysCommitState(int MaterElemKey)
+{
+	return rad.MatHysCommitState(MaterElemKey);
 }
 
 //-------------------------------------------------------------------------
@@ -1705,6 +1763,46 @@ void GetNewtonDampingStats(bool* enabled, int* max_iter, double* min_omega)
 	*enabled = rad.m_newton_damping_enabled;
 	*max_iter = rad.m_newton_ls_max_iter;
 	*min_omega = rad.m_newton_ls_min_omega;
+}
+
+void SetBInputNewton(bool enabled)
+{
+	rad.m_b_input_newton = enabled;
+}
+
+bool GetBInputNewton()
+{
+	return rad.m_b_input_newton;
+}
+
+void SetBInputHantila(bool enabled)
+{
+	rad.m_b_input_hantila = enabled;
+}
+
+bool GetBInputHantila()
+{
+	return rad.m_b_input_hantila;
+}
+
+void SetHantilaAlpha(double alpha)
+{
+	rad.m_hantila_alpha = alpha;
+}
+
+double GetHantilaAlpha()
+{
+	return rad.m_hantila_alpha;
+}
+
+void SetHantilaRelax(double relax)
+{
+	rad.m_hantila_relax = relax;
+}
+
+double GetHantilaRelax()
+{
+	return rad.m_hantila_relax;
 }
 
 //-------------------------------------------------------------------------

@@ -1,51 +1,32 @@
-"""Two-scalar-potential (phi-reduced/phi) solver for Radia + NGSolve.
+"""Simkin-Trowbridge reduced scalar potential solver (Radia + NGSolve).
 
 Implements the Simkin-Trowbridge (1979) method for magnetostatic
 field computation combining Radia BEM source fields with NGSolve FEM.
 
-Method overview:
-    - Air region:  H = H_s - grad(phi_r)     [reduced potential]
-    - Iron region: H = -grad(psi)             [total potential]
-    - Interface: normal B and tangential H continuous
+Method:
+    H = H_s - grad(phi)
+    B = mu * H
+    Weak form: int(mu * grad(phi) . grad(v)) = int(mu * H_s . grad(v))
 
-The source field H_s is computed by Radia using MMM (Magnetic Moment
-Method) or MSC (Magnetic Surface Charge).  NGSolve solves for the
-correction potentials that enforce div(B) = 0 in the presence of
-soft iron.
-
-Two formulations are provided:
-
-1. ``solve_single_potential()``: Single H1 space on the full domain.
-   Simple, works well for moderate mu_r (< 5000).  Equation:
-       integral(mu * grad(phi) . grad(v)) = integral(mu * H_s . grad(v))
-   Result: H = H_s - grad(phi), B = mu * H.
-
-2. ``solve_two_potential()``: Compound H1 space with separate unknowns
-   on air and iron.  Avoids cancellation error for high mu_r iron.
-   Air:  integral(mu_0 * grad(phi_r) . grad(v_a), Omega_air)
-   Iron: integral(mu * grad(psi) . grad(v_i), Omega_iron)
-   Coupling: penalty on air-iron interface.
+Features:
+    - Linear materials (mu_r per domain)
+    - Nonlinear materials (B-H curve, Picard iteration)
+    - Energy-based hysteresis (rad.MatEnergyHysteresis, Picard iteration)
+    - Kelvin transform for open boundary
+    - BDDC+CG iterative solver for large problems
+    - Two-potential variant for high mu_r (> 5000)
 
 Usage:
     import radia as rad
-    from ngsolve import *
     from radia.scalar_potential_solver import ScalarPotentialSolver
 
-    # Build Radia model (permanent magnets, MMM/MSC integral method)
-    # Radia always uses meters
-    mag = rad.ObjRecMag([0,0,0], [0.01,0.01,0.01], [0,0,954930])
-
-    # Create NGSolve mesh with labeled iron region
-    mesh = Mesh(...)  # must have material labels
-
-    # Solve (Radia H_s as source -> NGSolve FEM correction)
-    solver = ScalarPotentialSolver(mesh, iron_domains='iron', mu_r=1000)
-    solver.set_source_from_radia(mag)
-    solver.solve()
-
-    # Get results
+    solver = ScalarPotentialSolver(
+        mesh, mu_r_dict={'iron': 1000}, order=3,
+        kelvin_region='kelvin', kelvin_radius=0.3,
+        kelvin_center=[0, 0.07, 0])
+    solver.set_source_from_radia(coil)
+    solver.solve(dirichlet='outer')
     B_cf = solver.get_B()
-    H_cf = solver.get_H()
 
 Reference:
     J. Simkin and C. W. Trowbridge, "On the use of the total scalar
@@ -54,34 +35,57 @@ Reference:
 """
 
 import numpy as np
+from math import sqrt as msqrt
 
 MU_0 = 4 * np.pi * 1e-7
 
 
 class ScalarPotentialSolver:
-    """Two-scalar-potential magnetostatic solver (Radia + NGSolve).
+    """Simkin-Trowbridge magnetostatic solver (Radia + NGSolve).
 
     Parameters
     ----------
     mesh : ngsolve.Mesh
-        FEM mesh.  Must have material labels for iron regions.
+        FEM mesh with material labels.
     iron_domains : str or list of str
-        Material name(s) for iron regions.  All other regions are treated
-        as air (mu_r = 1).
+        Material name(s) for iron regions.
     mu_r : float
-        Relative permeability of iron.
+        Default relative permeability for iron (used when mu_r_dict not given).
+    mu_r_dict : dict, optional
+        Per-domain mu_r, e.g. {'iron': 1000, 'steel': 500}.
+        Overrides mu_r and iron_domains when provided.
     order : int
-        Finite element polynomial order (default: 2).
+        FEM polynomial order (default: 2).
+    kelvin_region : str, optional
+        Material name of Kelvin shell region.
+    kelvin_radius : float, optional
+        Inner radius R of Kelvin shell [m].
+    kelvin_center : list/tuple, optional
+        Center of Kelvin shell [x, y, z] in meters.
     """
 
-    def __init__(self, mesh, iron_domains='iron', mu_r=1000.0, order=2):
+    def __init__(self, mesh, iron_domains='iron', mu_r=1000.0, order=2,
+                 mu_r_dict=None, kelvin_region=None, kelvin_radius=None,
+                 kelvin_center=None):
         self.mesh = mesh
         self.order = order
 
-        if isinstance(iron_domains, str):
-            iron_domains = [iron_domains]
-        self.iron_domains = iron_domains
-        self.mu_r = float(mu_r)
+        # Material setup
+        if mu_r_dict is not None:
+            self._mu_r_dict = dict(mu_r_dict)
+            self.iron_domains = list(mu_r_dict.keys())
+            self.mu_r = max(mu_r_dict.values())
+        else:
+            if isinstance(iron_domains, str):
+                iron_domains = [iron_domains]
+            self.iron_domains = iron_domains
+            self.mu_r = float(mu_r)
+            self._mu_r_dict = {d: float(mu_r) for d in self.iron_domains}
+
+        # Kelvin transform
+        self._kelvin_region = kelvin_region
+        self._kelvin_radius = kelvin_radius
+        self._kelvin_center = kelvin_center or [0, 0, 0]
 
         # Source field (set by set_source_*)
         self._H_source_cf = None
@@ -96,7 +100,7 @@ class ScalarPotentialSolver:
     # Source field setup
     # ------------------------------------------------------------------
 
-    def set_source_from_radia(self, radia_obj, resolution=41):
+    def set_source_from_radia(self, radia_obj, resolution=41, bbox=None):
         """Set source field H_s from a Radia object.
 
         Computes H_s on a voxel grid via ``rad.Fld()`` and creates
@@ -105,21 +109,29 @@ class ScalarPotentialSolver:
         Parameters
         ----------
         radia_obj : int
-            Radia object handle (after ``rad.Solve()`` if soft iron present).
+            Radia object handle (coil, after Solve() if soft iron present).
         resolution : int
             Voxel grid resolution per dimension.
+        bbox : list of [min, max] pairs, optional
+            Custom bounding box [[xmin,xmax],[ymin,ymax],[zmin,zmax]].
+            If None, auto-computed from physical (non-Kelvin) domains.
         """
         import radia as rad
         from ngsolve import VoxelCoefficient, CF
 
         self._radia_obj = radia_obj
 
-        # Get mesh bounding box with margin
-        pmin, pmax = self.mesh.ngmesh.bounding_box
-        pmin = [pmin[i] for i in range(3)]
-        pmax = [pmax[i] for i in range(3)]
-        margin = 0.05 * max(pmax[i] - pmin[i] for i in range(3))
-        bbox = [[pmin[i] - margin, pmax[i] + margin] for i in range(3)]
+        if bbox is not None:
+            pass  # use provided bbox
+        elif self._kelvin_region:
+            # Exclude Kelvin shell: use only iron + air bounding box
+            bbox = self._compute_physical_bbox()
+        else:
+            pmin, pmax = self.mesh.ngmesh.bounding_box
+            pmin = [pmin[i] for i in range(3)]
+            pmax = [pmax[i] for i in range(3)]
+            margin = 0.05 * max(pmax[i] - pmin[i] for i in range(3))
+            bbox = [[pmin[i] - margin, pmax[i] + margin] for i in range(3)]
 
         nx = ny = nz = resolution
         x = np.linspace(bbox[0][0], bbox[0][1], nx)
@@ -199,13 +211,12 @@ class ScalarPotentialSolver:
     def solve_single_potential(self, dirichlet='default'):
         """Solve using a single reduced potential on the full domain.
 
-        Finds phi in H1(Omega) satisfying:
-            integral(mu * grad(phi) . grad(v)) = integral(mu * H_s . grad(v))
+        Finds phi in H1 satisfying:
+            int(mu * grad(phi) . grad(v)) = int(mu * H_s . grad(v))
 
         Then: H = H_s - grad(phi), B = mu * H.
 
-        Works well for moderate mu_r (< 5000).  For higher mu_r, use
-        ``solve_two_potential()`` to avoid cancellation error in iron.
+        Includes Kelvin transform if configured.
 
         Parameters
         ----------
@@ -214,7 +225,7 @@ class ScalarPotentialSolver:
             'default' uses all outer boundaries.
         """
         from ngsolve import (H1, GridFunction, BilinearForm, LinearForm,
-                             grad, dx)
+                             grad, dx, x, y, z, sqrt, Preconditioner)
 
         if self._H_source_cf is None:
             raise RuntimeError("Set source field first (set_source_from_radia)")
@@ -229,16 +240,41 @@ class ScalarPotentialSolver:
         phi = fes.TrialFunction()
         v = fes.TestFunction()
 
+        # Physical materials (exclude kelvin)
+        all_mats = list(set(self.mesh.GetMaterials()))
+        phys_mats = [m for m in all_mats if m != self._kelvin_region]
+
+        # Bilinear form
         a = BilinearForm(fes)
-        a += mu_cf * grad(phi) * grad(v) * dx
+        for mat in phys_mats:
+            a += mu_cf * grad(phi) * grad(v) * dx(mat)
+
+        # Kelvin shell term
+        kelvin_weight = None
+        if self._kelvin_region:
+            kelvin_weight = self._build_kelvin_weight(x, y, z, sqrt)
+            a += MU_0 * kelvin_weight * grad(phi) * grad(v) * dx(
+                self._kelvin_region)
+
+        # BDDC preconditioner for large problems
+        pre = None
+        use_iterative = fes.ndof > 200_000
+        if use_iterative:
+            pre = Preconditioner(a, 'bddc')
         a.Assemble()
 
+        # Source
         f = LinearForm(fes)
-        f += mu_cf * self._H_source_cf * grad(v) * dx
+        for mat in phys_mats:
+            f += mu_cf * self._H_source_cf * grad(v) * dx(mat)
+        if self._kelvin_region and kelvin_weight is not None:
+            f += MU_0 * kelvin_weight * self._H_source_cf * grad(v) * dx(
+                self._kelvin_region)
         f.Assemble()
 
+        # Solve
         self._phi_gf = GridFunction(fes, name='phi_reduced')
-        self._phi_gf.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
+        self._solve_system(a, f, fes, self._phi_gf, pre, use_iterative)
 
         self._H_cf = self._H_source_cf - grad(self._phi_gf)
         self._B_cf = mu_cf * self._H_cf
@@ -256,13 +292,7 @@ class ScalarPotentialSolver:
             - phi_r on full domain (reduced potential): H = H_s - grad(phi_r)
             - psi on iron only (total potential):       H = -grad(psi)
 
-        The formulation uses a compound space X = V_full * V_iron where
-        V_full is a standard H1 on the whole domain and V_iron is H1
-        restricted to iron.  In iron, the solution uses psi (total potential)
-        so grad(psi) gives H directly without cancellation.
-
-        The coupling is enforced via: in iron elements, phi_r is constrained
-        to equal (psi - phi_s), linking the two unknowns.
+        Better for high mu_r (> 5000) to avoid cancellation error.
 
         Parameters
         ----------
@@ -270,15 +300,13 @@ class ScalarPotentialSolver:
             Boundary label for Dirichlet BC on outer boundary.
         """
         from ngsolve import (H1, GridFunction, BilinearForm, LinearForm,
-                             grad, dx, CF)
+                             grad, dx, CF, x, y, z, sqrt, Preconditioner)
 
         if self._H_source_cf is None:
             raise RuntimeError("Set source field first (set_source_from_radia)")
 
         iron_re = '|'.join(self.iron_domains)
-        mu_iron_val = MU_0 * self.mu_r
 
-        # Full-domain space for phi_r, iron-only space for psi
         if dirichlet == 'default':
             V_full = H1(self.mesh, order=self.order, dirichlet='.*')
         else:
@@ -288,38 +316,54 @@ class ScalarPotentialSolver:
         X = V_full * V_iron
         (phi_r, psi), (v_f, v_i) = X.TnT()
 
+        # Physical materials (exclude kelvin)
+        all_mats = list(set(self.mesh.GetMaterials()))
+        air_mats = [m for m in all_mats
+                    if m not in self.iron_domains and m != self._kelvin_region]
+
         a = BilinearForm(X)
 
-        # Air region: mu_0 * grad(phi_r) . grad(v_f)
-        # Only on air elements (exclude iron)
-        air_mats = [m for m in self.mesh.GetMaterials()
-                    if m not in self.iron_domains]
+        # Air region
         for mat in air_mats:
             a += MU_0 * grad(phi_r) * grad(v_f) * dx(mat)
 
-        # Iron region: mu * grad(psi) . grad(v_i)
-        a += mu_iron_val * grad(psi) * grad(v_i) * dx(iron_re)
+        # Iron region
+        for dom, mu_r_val in self._mu_r_dict.items():
+            a += (MU_0 * mu_r_val) * grad(psi) * grad(v_i) * dx(dom)
 
-        # Coupling in iron: phi_r and psi share the same interface nodes.
-        # Penalize (phi_r - psi) in iron to enforce phi_r = psi there,
-        # making the transition continuous.
+        # Coupling penalty
         penalty = 1e3 * self.mu_r * MU_0
         a += penalty * (phi_r - psi) * (v_f - v_i) * dx(iron_re)
 
+        # Kelvin shell
+        kelvin_weight = None
+        if self._kelvin_region:
+            kelvin_weight = self._build_kelvin_weight(x, y, z, sqrt)
+            a += MU_0 * kelvin_weight * grad(phi_r) * grad(v_f) * dx(
+                self._kelvin_region)
+
+        pre = None
+        use_iterative = X.ndof > 200_000
+        if use_iterative:
+            pre = Preconditioner(a, 'bddc')
         a.Assemble()
 
-        # Source: H_s contribution in air only
+        # Source: H_s in air only
         f = LinearForm(X)
         for mat in air_mats:
             f += MU_0 * self._H_source_cf * grad(v_f) * dx(mat)
+        if self._kelvin_region and kelvin_weight is not None:
+            f += MU_0 * kelvin_weight * self._H_source_cf * grad(v_f) * dx(
+                self._kelvin_region)
         f.Assemble()
 
         gf = GridFunction(X, name='two_potential')
-        gf.vec.data = a.mat.Inverse(X.FreeDofs()) * f.vec
+        self._solve_system(a, f, X, gf, pre, use_iterative)
 
         phi_r_gf, psi_gf = gf.components
         self._phi_r_gf = phi_r_gf
         self._psi_gf = psi_gf
+        self._phi_gf = gf
 
         # Build domain-wise result fields
         iron_ind = self._build_domain_indicator()
@@ -339,7 +383,7 @@ class ScalarPotentialSolver:
     # ------------------------------------------------------------------
 
     def solve(self, method='auto', **kwargs):
-        """Solve the magnetostatic problem.
+        """Solve the magnetostatic problem (linear materials).
 
         Parameters
         ----------
@@ -355,7 +399,434 @@ class ScalarPotentialSolver:
         elif method == 'two':
             return self.solve_two_potential(**kwargs)
         else:
-            raise ValueError(f"method must be 'single', 'two', or 'auto'")
+            raise ValueError("method must be 'single', 'two', or 'auto'")
+
+    # ------------------------------------------------------------------
+    # Nonlinear solver (B-H curve, Picard iteration)
+    # ------------------------------------------------------------------
+
+    def solve_nonlinear(self, bh_data, tol=1e-4, maxiter=50, relax=0.0,
+                        dirichlet='default', verbose=True):
+        """Nonlinear Picard iteration with tabulated B-H curve.
+
+        Iterates: solve linear -> evaluate H -> update mu from B-H -> repeat.
+
+        Parameters
+        ----------
+        bh_data : list of [H, B] pairs
+            Tabulated B-H curve. H in A/m, B in Tesla. Must be monotonic.
+        tol : float
+            Convergence tolerance (max relative B change).
+        maxiter : int
+            Maximum Picard iterations.
+        relax : float
+            Under-relaxation (0=full step, 0.3=30% damping).
+        dirichlet : str
+            Boundary label for Dirichlet BC.
+        verbose : bool
+            Print iteration progress.
+        """
+        from ngsolve import (H1, GridFunction, BilinearForm, LinearForm,
+                             L2, grad, dx, x, y, z, sqrt, Preconditioner,
+                             VOL)
+        from scipy.interpolate import interp1d
+
+        if self._H_source_cf is None:
+            raise RuntimeError("Set source field first")
+
+        # Build B(H) interpolator from table
+        bh = np.array(bh_data)
+        H_tab, B_tab = bh[:, 0], bh[:, 1]
+        B_of_H = interp1d(H_tab, B_tab, kind='linear',
+                          fill_value='extrapolate')
+        B_sat = float(B_tab[-1])
+
+        # Initial mu_r from second B-H point (ELF convention)
+        if len(H_tab) >= 2 and H_tab[1] > 0:
+            mu_r_init = B_tab[1] / (MU_0 * H_tab[1])
+        else:
+            mu_r_init = self.mu_r
+
+        return self._picard_loop(
+            material_eval=lambda H_vec, idx: self._eval_bh_curve(H_vec, B_of_H),
+            mu_r_init=mu_r_init,
+            B_sat=B_sat,
+            tol=tol, maxiter=maxiter, relax=relax,
+            dirichlet=dirichlet, verbose=verbose)
+
+    # ------------------------------------------------------------------
+    # Nonlinear solver (Newton + SymbolicEnergy)
+    # ------------------------------------------------------------------
+
+    def solve_nonlinear_newton(self, bh_data, tol=1e-4, maxiter=50,
+                               dirichlet='default', verbose=True):
+        """Newton iteration with SymbolicEnergy for nonlinear B-H curve.
+
+        Uses BSpline.Integrate() for exact energy density and NGSolve
+        automatic differentiation for the Jacobian. Energy-based line
+        search guarantees monotone convergence.
+
+        Much faster than Picard (solve_nonlinear): quadratic convergence.
+
+        Parameters
+        ----------
+        bh_data : list of [H, B] pairs
+            Tabulated B-H curve. H in A/m, B in Tesla. Must be monotonic.
+        tol : float
+            Convergence tolerance (energy residual).
+        maxiter : int
+            Maximum Newton iterations.
+        dirichlet : str
+            Boundary label for Dirichlet BC.
+        verbose : bool
+            Print iteration progress.
+        """
+        from ngsolve import (H1, GridFunction, BilinearForm, BSpline,
+                             SymbolicEnergy, SymbolicBFI, InnerProduct,
+                             grad, dx, x, y, z, sqrt, Preconditioner,
+                             TaskManager)
+        from ngsolve.krylovspace import CGSolver
+
+        if self._H_source_cf is None:
+            raise RuntimeError("Set source field first")
+
+        # Build BSpline B(H) and energy density w(H) = integral B(H') dH'
+        bh = np.array(bh_data)
+        H_tab, B_tab = bh[:, 0].tolist(), bh[:, 1].tolist()
+
+        # Extend BH curve beyond table range with vacuum slope (mu_0).
+        # NGSolve BSpline returns 0 outside [knot_min, knot_max], so
+        # without this extension, B=0 for H > H_max which breaks the
+        # Newton solver for saturated iron (e.g. NI=20000).
+        H_max_ext = max(H_tab[-1] * 10, 5e6)
+        B_max_ext = B_tab[-1] + MU_0 * (H_max_ext - H_tab[-1])
+        H_tab_ext = H_tab + [H_max_ext]
+        B_tab_ext = B_tab + [B_max_ext]
+
+        bh_spline = BSpline(2, [0] + H_tab_ext, B_tab_ext)
+        w_H = bh_spline.Integrate()  # w(H) = integral_0^H B(H') dH'
+
+        # FE space
+        if dirichlet == 'default':
+            fes = H1(self.mesh, order=self.order, dirichlet='.*')
+        else:
+            fes = H1(self.mesh, order=self.order, dirichlet=dirichlet)
+
+        phi = fes.TrialFunction()
+        v = fes.TestFunction()
+
+        # H = H_s - grad(phi) -- the primary variable
+        H_trial = self._H_source_cf - grad(phi)
+        H2 = InnerProduct(H_trial, H_trial)
+
+        # Physical materials
+        all_mats = list(set(self.mesh.GetMaterials()))
+        phys_mats = [m for m in all_mats if m != self._kelvin_region]
+        iron_mats = [m for m in phys_mats if m in self._mu_r_dict]
+        air_mats = [m for m in phys_mats if m not in self._mu_r_dict]
+
+        # Bilinear form: energy-based (symmetric for Newton)
+        a = BilinearForm(fes, symmetric=True)
+
+        # Air regions: linear energy mu_0/2 * |H|^2
+        for mat in air_mats:
+            a += SymbolicEnergy(MU_0 / 2 * H2,
+                                definedon=self.mesh.Materials(mat))
+
+        # Iron regions: nonlinear energy w(|H|)
+        for mat in iron_mats:
+            a += SymbolicEnergy(w_H(sqrt(H2 + 1e-12)),
+                                definedon=self.mesh.Materials(mat))
+
+        # Kelvin shell: linear with weight
+        if self._kelvin_region:
+            kelvin_weight = self._build_kelvin_weight(x, y, z, sqrt)
+            a += SymbolicEnergy(
+                MU_0 / 2 * kelvin_weight * H2,
+                definedon=self.mesh.Materials(self._kelvin_region))
+
+        # BDDC preconditioner
+        c = Preconditioner(a, type='bddc', inverse='sparsecholesky')
+
+        # Newton iteration with energy line search
+        sol = GridFunction(fes, name='phi_newton')
+        sol.vec[:] = 0
+
+        au = sol.vec.CreateVector()
+        r = sol.vec.CreateVector()
+        w = sol.vec.CreateVector()
+        sol_new = sol.vec.CreateVector()
+
+        converged = False
+        with TaskManager():
+            for it in range(maxiter):
+                E0 = a.Energy(sol.vec)
+
+                a.AssembleLinearization(sol.vec)
+                a.Apply(sol.vec, au)
+                r.data = -au
+
+                inv = CGSolver(mat=a.mat, pre=c.mat,
+                               maxiter=2000, tol=1e-10,
+                               printrates=False)
+                w.data = inv * r
+
+                err = InnerProduct(w, r)
+                if verbose:
+                    print(f"   Newton {it}: err = {err:.2e}, "
+                          f"E = {E0:.6e}")
+
+                if abs(err) < tol:
+                    converged = True
+                    if verbose:
+                        print(f"   Converged at Newton iteration {it}")
+                    break
+
+                # Energy line search
+                sol_new.data = sol.vec + w
+                E = a.Energy(sol_new)
+                tau = 1.0
+                while E > E0 and tau > 1e-10:
+                    tau *= 0.5
+                    sol_new.data = sol.vec + tau * w
+                    E = a.Energy(sol_new)
+                    if verbose and tau < 0.5:
+                        print(f"     line search: tau = {tau:.2e}, "
+                              f"E = {E:.6e}")
+
+                sol.vec.data = sol_new
+
+        if not converged and verbose:
+            print(f"   WARNING: Not converged after {maxiter} iterations")
+
+        # Store results
+        self._phi_gf = sol
+        H_cf = self._H_source_cf - grad(sol)
+        self._H_cf = H_cf
+
+        # B in iron: B = mu(|H|)*|H| * H_hat, where mu from B-H curve
+        # B in air: B = mu_0 * H
+        H_mag = sqrt(InnerProduct(H_cf, H_cf) + 1e-30)
+        # mu_eff(|H|) = B(|H|) / |H| from BSpline
+        mu_eff = bh_spline(H_mag) / H_mag
+        iron_indicator = self._build_domain_indicator()
+        from ngsolve import CF
+        mu_total = iron_indicator * mu_eff + (1 - iron_indicator) * MU_0
+        self._B_cf = mu_total * H_cf
+
+        return sol
+
+    # ------------------------------------------------------------------
+    # Hysteresis solver (energy play model, Picard iteration)
+    # ------------------------------------------------------------------
+
+    def solve_hysteresis(self, mat_factory, tol=1e-4, maxiter=50, alpha=500.0,
+                         dirichlet='default', verbose=True, relax=0.0):
+        """Polarization-method Picard iteration with energy hysteresis material.
+
+        Uses the Hantila (1975) polarization method for guaranteed convergence:
+            LHS: mu_0*(1+alpha) * grad(phi).grad(v) dx(iron)
+                 + mu_0 * grad(phi).grad(v) dx(air)     -- CONSTANT
+            RHS: mu_0*(1+alpha) * H_s.grad(v) dx(iron)
+                 + mu_0 * H_s.grad(v) dx(air)
+                 + mu_0 * (M^n - alpha*H^n) . grad(v) dx(iron) -- polarization residual
+
+        Key: at H=0, residual = mu_0*M_rem -> remanence captured.
+        Convergence guaranteed when alpha >= max(dM/dH).
+
+        Parameters
+        ----------
+        mat_factory : callable
+            Factory: mat_factory() -> int (Radia material handle).
+        tol : float
+            Convergence tolerance (max relative B change).
+        maxiter : int
+            Maximum Picard iterations.
+        alpha : float
+            Polarization parameter (>= max susceptibility). Default 500.
+        dirichlet : str
+            Boundary label for Dirichlet BC.
+        verbose : bool
+            Print iteration progress.
+        relax : float
+            Under-relaxation factor for R update (0.0 = full step, 0.5 = half).
+            Helps convergence when local dM/dH exceeds alpha near play
+            model pinning thresholds.
+        """
+        if self._H_source_cf is None:
+            raise RuntimeError("Set source field first")
+
+        import radia as rad
+        from ngsolve import (H1, GridFunction, BilinearForm, LinearForm,
+                             L2, VectorL2, grad, dx, x, y, z, sqrt,
+                             Preconditioner, VOL)
+
+        # Create per-element material handles on first call
+        if not hasattr(self, '_hys_handles') or self._hys_handles is None:
+            n_iron = 0
+            for el in self.mesh.Elements(VOL):
+                if str(el.mat) in self._mu_r_dict:
+                    n_iron += 1
+            self._hys_handles = [mat_factory() for _ in range(n_iron)]
+            if verbose:
+                print(f"   Created {n_iron} per-element material handles")
+
+        handles = self._hys_handles
+
+        # Setup FEM spaces
+        if dirichlet == 'default':
+            fes = H1(self.mesh, order=self.order, dirichlet='.*')
+        else:
+            fes = H1(self.mesh, order=self.order, dirichlet=dirichlet)
+
+        phi_trial = fes.TrialFunction()
+        v = fes.TestFunction()
+
+        # Per-element polarization residual R = M - alpha*H as VectorL2
+        fes_vec = VectorL2(self.mesh, order=0)
+        R_gf = GridFunction(fes_vec, name='R_polar')
+        R_gf.vec[:] = 0
+
+        # Kelvin weight
+        kelvin_weight = None
+        if self._kelvin_region:
+            kelvin_weight = self._build_kelvin_weight(x, y, z, sqrt)
+
+        # Physical mats
+        all_mats = list(set(self.mesh.GetMaterials()))
+        phys_mats = [m for m in all_mats if m != self._kelvin_region]
+        iron_mats = [m for m in phys_mats if m in self._mu_r_dict]
+        air_mats = [m for m in phys_mats if m not in self._mu_r_dict]
+
+        # Iron element indices and centroids
+        iron_els = []
+        for el in self.mesh.Elements(VOL):
+            if str(el.mat) in self._mu_r_dict:
+                centroid = self._element_centroid(el)
+                iron_els.append((el.nr, centroid))
+
+        # Bilinear form: CONSTANT, assembled once
+        # Iron: mu_0*(1+alpha), Air: mu_0
+        a = BilinearForm(fes)
+        for mat in iron_mats:
+            a += MU_0 * (1 + alpha) * grad(phi_trial) * grad(v) * dx(mat)
+        for mat in air_mats:
+            a += MU_0 * grad(phi_trial) * grad(v) * dx(mat)
+        if self._kelvin_region and kelvin_weight is not None:
+            a += MU_0 * kelvin_weight * grad(phi_trial) * grad(v) * dx(
+                self._kelvin_region)
+
+        pre = None
+        use_iterative = fes.ndof > 200_000
+        if use_iterative:
+            pre = Preconditioner(a, 'bddc')
+        a.Assemble()
+
+        # Total elements for VectorL2 block DOF mapping
+        nel = len(list(self.mesh.Elements(VOL)))
+
+        # Save states before iteration
+        saved_states = [rad.MatHysSaveState(h) for h in handles]
+
+        phi_gf = GridFunction(fes, name='phi_hysteresis')
+        B_old = np.zeros(len(iron_els))
+
+        converged = False
+        for iteration in range(maxiter):
+            # RHS: mu_0*(1+alpha)*H_s [iron] + mu_0*H_s [air] + mu_0*R [iron]
+            f = LinearForm(fes)
+            for mat in iron_mats:
+                f += MU_0 * (1 + alpha) * self._H_source_cf * grad(v) * dx(mat)
+                f += MU_0 * R_gf * grad(v) * dx(mat)
+            for mat in air_mats:
+                f += MU_0 * self._H_source_cf * grad(v) * dx(mat)
+            if self._kelvin_region and kelvin_weight is not None:
+                f += MU_0 * kelvin_weight * self._H_source_cf * grad(v) * dx(
+                    self._kelvin_region)
+            f.Assemble()
+
+            # Solve (LHS pre-assembled)
+            self._solve_system(a, f, fes, phi_gf, pre, use_iterative)
+
+            # H = H_s - grad(phi)
+            H_cf = self._H_source_cf - grad(phi_gf)
+
+            # Restore states before Forward(H)
+            for h, s in zip(handles, saved_states):
+                rad.MatHysRestoreState(h, s)
+
+            # Evaluate M and update polarization residual R = M - alpha*H
+            B_new = np.zeros(len(iron_els))
+            for idx, (el_nr, centroid) in enumerate(iron_els):
+                try:
+                    mip = self.mesh(*centroid)
+                    H_val = [float(H_cf(mip)[i]) for i in range(3)]
+                except Exception:
+                    H_val = [0.0, 0.0, 0.0]
+
+                # Forward(H) -> M
+                M_val = list(rad.MatMvsH(handles[idx], 'm', H_val))
+                B_vec = [MU_0 * (H_val[i] + M_val[i]) for i in range(3)]
+                B_mag = msqrt(B_vec[0]**2 + B_vec[1]**2 + B_vec[2]**2)
+                B_new[idx] = B_mag
+
+                # R = M - alpha * H (polarization residual)
+                # VectorL2 order=0: block layout [all_x | all_y | all_z]
+                omega = 1.0 - relax
+                for d in range(3):
+                    R_target = M_val[d] - alpha * H_val[d]
+                    if relax > 0 and iteration > 0:
+                        R_gf.vec[d * nel + el_nr] = (
+                            (1 - omega) * R_gf.vec[d * nel + el_nr]
+                            + omega * R_target)
+                    else:
+                        R_gf.vec[d * nel + el_nr] = R_target
+
+            # Convergence check
+            if iteration > 0:
+                max_change = np.max(np.abs(B_new - B_old)) / max(2.0, 1e-10)
+                if verbose:
+                    print(f"   iter {iteration}: max |dB|/B_sat = {max_change:.2e}")
+                if max_change < tol:
+                    converged = True
+                    if verbose:
+                        print(f"   Converged at iteration {iteration}")
+                    break
+            elif verbose:
+                print(f"   iter 0: initial solve")
+
+            B_old[:] = B_new
+
+        if not converged and verbose:
+            print(f"   WARNING: Not converged after {maxiter} iterations")
+
+        # Commit converged states for next step
+        if converged:
+            for h in handles:
+                rad.MatHysCommitState(h)
+
+        # Store final results (M from last iteration's R: M = R + alpha*H)
+        self._phi_gf = phi_gf
+        H_cf = self._H_source_cf - grad(phi_gf)
+        self._H_cf = H_cf
+        # B = mu_0*(H + M), approximate from last R: M ≈ R + alpha*H in iron
+        M_approx = R_gf + alpha * H_cf
+        # Build domain-selective B: iron has M contribution, air/kelvin doesn't
+        iron_indicator = self._build_domain_indicator()
+        self._B_cf = MU_0 * H_cf + MU_0 * iron_indicator * M_approx
+
+        # Save per-element M for to_radia() pipeline
+        self._M_per_element = {}
+        for idx, (el_nr, centroid) in enumerate(iron_els):
+            try:
+                mip = self.mesh(*centroid)
+                H_val = [float(H_cf(mip)[i]) for i in range(3)]
+            except Exception:
+                H_val = [0.0, 0.0, 0.0]
+            M_val = list(rad.MatMvsH(handles[idx], 'm', H_val))
+            self._M_per_element[el_nr] = M_val
+
+        return phi_gf
 
     # ------------------------------------------------------------------
     # Result access
@@ -410,16 +881,297 @@ class ScalarPotentialSolver:
         B_gf.Set(self._B_cf)
         return B_gf
 
+    def get_M_per_element(self):
+        """Get per-element magnetization from hysteresis solve.
+
+        Returns
+        -------
+        dict
+            {element_nr: [Mx, My, Mz]} in A/m.
+        """
+        if not hasattr(self, '_M_per_element') or self._M_per_element is None:
+            raise RuntimeError("Call solve_hysteresis() first")
+        return self._M_per_element
+
+    def to_radia(self, coil=None):
+        """Convert solved magnetization to Radia objects for analytical field.
+
+        Creates Radia ObjTetrahedron/ObjHexahedron elements with per-element
+        magnetization from solve_hysteresis(). The resulting Radia objects
+        evaluate B using exact analytical surface charge formulas -- no mesh
+        needed in the gap region.
+
+        Parameters
+        ----------
+        coil : int, optional
+            Radia coil object handle to combine with iron contribution.
+
+        Returns
+        -------
+        int
+            Radia container object handle.
+        """
+        import radia as rad
+        from radia.netgen_mesh_import import netgen_mesh_to_radia
+
+        M_dict = self.get_M_per_element()
+
+        def material_func(el_idx):
+            if el_idx in M_dict:
+                return {'magnetization': M_dict[el_idx]}
+            return {'magnetization': [0, 0, 0]}
+
+        iron_domains = list(self._mu_r_dict.keys())
+        container = netgen_mesh_to_radia(
+            self.mesh, material=material_func,
+            material_filter=iron_domains, verbose=False)
+
+        if coil is not None:
+            container = rad.ObjCnt([container, coil])
+
+        return container
+
+    # ------------------------------------------------------------------
+    # Internal: Picard iteration loop (shared by nonlinear/hysteresis)
+    # ------------------------------------------------------------------
+
+    def _picard_loop(self, material_eval, mu_r_init, B_sat, tol, maxiter,
+                     relax, dirichlet, verbose,
+                     save_states=None, restore_states=None,
+                     commit_states=None):
+        """Picard fixed-point iteration for nonlinear materials.
+
+        Parameters
+        ----------
+        material_eval : callable
+            material_eval([Hx, Hy, Hz], idx) -> (B_mag, mu_r_eff)
+            where idx is the iron element index (0-based).
+        mu_r_init : float
+            Initial mu_r for first linear solve.
+        B_sat : float
+            Saturation B for relative convergence criterion.
+        save_states : callable or None
+            save_states() -> saved_state. Saves material states.
+        restore_states : callable or None
+            restore_states(saved_state). Restores material states.
+        commit_states : callable or None
+            commit_states(). Commits converged states for next step.
+        """
+        from ngsolve import (H1, GridFunction, BilinearForm, LinearForm,
+                             L2, grad, dx, x, y, z, sqrt, Preconditioner,
+                             VOL)
+
+        if dirichlet == 'default':
+            fes = H1(self.mesh, order=self.order, dirichlet='.*')
+        else:
+            fes = H1(self.mesh, order=self.order, dirichlet=dirichlet)
+
+        phi_trial = fes.TrialFunction()
+        v = fes.TestFunction()
+
+        # Per-element mu as L2(order=0) GridFunction
+        fes_mu = L2(self.mesh, order=0)
+        mu_gf = GridFunction(fes_mu, name='mu')
+
+        # Initialize mu for all elements
+        for el in self.mesh.Elements(VOL):
+            mat_name = str(el.mat)
+            if mat_name in self._mu_r_dict:
+                mu_gf.vec[el.nr] = MU_0 * mu_r_init
+            else:
+                mu_gf.vec[el.nr] = MU_0
+
+        # Kelvin weight CF
+        kelvin_weight = None
+        if self._kelvin_region:
+            kelvin_weight = self._build_kelvin_weight(x, y, z, sqrt)
+
+        # Physical mats (exclude kelvin)
+        all_mats = list(set(self.mesh.GetMaterials()))
+        phys_mats = [m for m in all_mats if m != self._kelvin_region]
+
+        # Iron element indices and centroids (precompute)
+        iron_els = []
+        for el in self.mesh.Elements(VOL):
+            mat_name = str(el.mat)
+            if mat_name in self._mu_r_dict:
+                centroid = self._element_centroid(el)
+                iron_els.append((el.nr, centroid))
+
+        # B tracking for convergence
+        B_old = np.zeros(len(iron_els))
+
+        phi_gf = GridFunction(fes, name='phi_nonlinear')
+
+        # Save material states before iteration (for hysteresis)
+        saved_state = None
+        if save_states is not None:
+            saved_state = save_states()
+
+        converged = False
+        for iteration in range(maxiter):
+            # Assemble with current mu_gf
+            a = BilinearForm(fes)
+            for mat in phys_mats:
+                a += mu_gf * grad(phi_trial) * grad(v) * dx(mat)
+            if self._kelvin_region and kelvin_weight is not None:
+                a += MU_0 * kelvin_weight * grad(phi_trial) * grad(v) * dx(
+                    self._kelvin_region)
+
+            pre = None
+            use_iterative = fes.ndof > 200_000
+            if use_iterative:
+                pre = Preconditioner(a, 'bddc')
+            a.Assemble()
+
+            f = LinearForm(fes)
+            for mat in phys_mats:
+                f += mu_gf * self._H_source_cf * grad(v) * dx(mat)
+            if self._kelvin_region and kelvin_weight is not None:
+                f += MU_0 * kelvin_weight * self._H_source_cf * grad(v) * dx(
+                    self._kelvin_region)
+            f.Assemble()
+
+            # Solve
+            self._solve_system(a, f, fes, phi_gf, pre, use_iterative)
+
+            # Compute H = H_s - grad(phi)
+            H_cf = self._H_source_cf - grad(phi_gf)
+
+            # Restore states before material evaluation (hysteresis)
+            # so Forward(H) starts from the committed state, not from
+            # the state left by the previous iteration
+            if restore_states is not None and saved_state is not None:
+                restore_states(saved_state)
+
+            # Update mu at iron element centroids
+            B_new = np.zeros(len(iron_els))
+            for idx, (el_nr, centroid) in enumerate(iron_els):
+                try:
+                    mip = self.mesh(*centroid)
+                    H_val = [float(H_cf(mip)[i]) for i in range(3)]
+                except Exception:
+                    H_val = [0.0, 0.0, 0.0]
+
+                B_mag, mu_r_new = material_eval(H_val, idx)
+                B_new[idx] = B_mag
+
+                if relax > 0 and iteration > 0:
+                    mu_r_old = mu_gf.vec[el_nr] / MU_0
+                    mu_r_new = (1 - relax) * mu_r_new + relax * mu_r_old
+
+                mu_gf.vec[el_nr] = MU_0 * mu_r_new
+
+            # Convergence check
+            if iteration > 0:
+                max_change = np.max(np.abs(B_new - B_old)) / max(B_sat, 1e-10)
+                if verbose:
+                    print(f"   iter {iteration}: max |dB|/B_sat = {max_change:.2e}")
+                if max_change < tol:
+                    converged = True
+                    if verbose:
+                        print(f"   Converged at iteration {iteration}")
+                    break
+            elif verbose:
+                print(f"   iter 0: initial solve")
+
+            B_old[:] = B_new
+
+        if not converged and verbose:
+            print(f"   WARNING: Not converged after {maxiter} iterations")
+
+        # Commit converged states for next step (hysteresis)
+        if converged and commit_states is not None:
+            commit_states()
+
+        # Store final results
+        self._phi_gf = phi_gf
+        self._H_cf = H_cf
+        self._B_cf = mu_gf * H_cf
+
+        return phi_gf
+
+    # ------------------------------------------------------------------
+    # Internal: material evaluation callbacks
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _eval_bh_curve(H_vec, B_of_H):
+        """Evaluate B-H table: H -> (B_mag, mu_r_eff)."""
+        H_mag = msqrt(H_vec[0]**2 + H_vec[1]**2 + H_vec[2]**2)
+        if H_mag < 1e-10:
+            return 0.0, 1.0
+        B_mag = float(B_of_H(H_mag))
+        mu_r = B_mag / (MU_0 * H_mag)
+        return B_mag, mu_r
+
+    @staticmethod
+    def _eval_hysteresis(H_vec, mat_handle):
+        """Evaluate energy hysteresis: H -> Forward(H) -> (B_mag, mu_r_eff)."""
+        import radia as rad
+        H_mag = msqrt(H_vec[0]**2 + H_vec[1]**2 + H_vec[2]**2)
+        if H_mag < 1e-10:
+            return 0.0, 1.0
+        M = rad.MatMvsH(mat_handle, 'm', H_vec)
+        B = [MU_0 * (H_vec[i] + M[i]) for i in range(3)]
+        B_mag = msqrt(B[0]**2 + B[1]**2 + B[2]**2)
+        mu_r = B_mag / (MU_0 * H_mag)
+        return B_mag, mu_r
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _build_mu_cf(self):
-        """Build domain-wise mu CoefficientFunction."""
-        iron_dict = {d: MU_0 * self.mu_r for d in self.iron_domains}
+        """Build domain-wise mu CoefficientFunction (linear)."""
+        iron_dict = {d: MU_0 * mr for d, mr in self._mu_r_dict.items()}
         return self.mesh.MaterialCF(iron_dict, default=MU_0)
 
     def _build_domain_indicator(self):
-        """Build indicator CF: 1.0 in iron, 0.0 in air."""
+        """Build indicator CF: 1.0 in iron, 0.0 elsewhere."""
         iron_dict = {d: 1.0 for d in self.iron_domains}
         return self.mesh.MaterialCF(iron_dict, default=0.0)
+
+    def _compute_physical_bbox(self):
+        """Compute bounding box of physical (non-Kelvin) domains."""
+        from ngsolve import VOL
+        pmin = [1e30, 1e30, 1e30]
+        pmax = [-1e30, -1e30, -1e30]
+        for el in self.mesh.Elements(VOL):
+            mat = el.mat if hasattr(el, 'mat') else str(self.mesh.GetMaterials()[el.nr])
+            if mat == self._kelvin_region:
+                continue
+            for v in el.vertices:
+                pt = self.mesh.vertices[v.nr].point
+                for i in range(3):
+                    pmin[i] = min(pmin[i], pt[i])
+                    pmax[i] = max(pmax[i], pt[i])
+        margin = 0.1 * max(pmax[i] - pmin[i] for i in range(3))
+        return [[pmin[i] - margin, pmax[i] + margin] for i in range(3)]
+
+    def _build_kelvin_weight(self, x, y, z, sqrt_cf):
+        """Build Kelvin shell weight CF: (R/r)^2."""
+        cx, cy, cz = self._kelvin_center
+        r_sq = (x - cx)**2 + (y - cy)**2 + (z - cz)**2 + 1e-30
+        R = self._kelvin_radius
+        return (R * R) / r_sq
+
+    def _solve_system(self, a, f, fes, gf, pre, use_iterative):
+        """Solve assembled linear system (direct or iterative)."""
+        if use_iterative:
+            from ngsolve.krylovspace import CGSolver
+            inv = CGSolver(mat=a.mat, pre=pre.mat, maxiter=2000,
+                           printrates=False, tol=1e-10)
+            gf.vec.data = inv * f.vec
+        else:
+            gf.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
+
+    def _element_centroid(self, el):
+        """Compute centroid of a volume element."""
+        verts = el.vertices
+        coords = np.zeros(3)
+        for v in verts:
+            pt = self.mesh.vertices[v.nr].point
+            coords += np.array([pt[0], pt[1], pt[2]])
+        coords /= len(verts)
+        return tuple(coords)
