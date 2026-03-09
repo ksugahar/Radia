@@ -54,6 +54,7 @@ RadMatSatLamFrm
 RadMatSatLamTab
 RadMatSatAniso
 RadMatPlayHysteresis
+RadMatEnergyHysteresis
 
 ; RadRlxPre REMOVED (2026-01-31) - Use RadBuildMatrix instead
 RadRlxMan
