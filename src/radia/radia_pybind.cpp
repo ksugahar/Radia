@@ -3094,14 +3094,14 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("MatHysSaveState", &radia_material_ext::MatHysSaveState,
           py::arg("mat"),
           R"pbdoc(
-              Save internal state of an energy hysteresis material.
+              Save internal state of a hysteresis material (Energy or Play model).
 
-              Returns the full state (J_k_prev, J_k_pinning, J_k_current for all K
+              Returns the full state (prev, pinning, current vectors for all K
               operators) as a flat numpy array. Use with MatHysRestoreState() to
               save/restore state during Picard iteration.
 
               Args:
-                  mat: Material handle from MatEnergyHysteresis()
+                  mat: Material handle from MatEnergyHysteresis() or MatPlayHysteresis()
 
               Returns:
                   numpy array of state values (length K*9)
@@ -3110,10 +3110,10 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("MatHysRestoreState", &radia_material_ext::MatHysRestoreState,
           py::arg("mat"), py::arg("state"),
           R"pbdoc(
-              Restore internal state of an energy hysteresis material.
+              Restore internal state of a hysteresis material (Energy or Play model).
 
               Args:
-                  mat: Material handle from MatEnergyHysteresis()
+                  mat: Material handle from MatEnergyHysteresis() or MatPlayHysteresis()
                   state: State array from MatHysSaveState()
           )pbdoc");
 
@@ -3126,7 +3126,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
               state as the reference for the next quasi-static step.
 
               Args:
-                  mat: Material handle from MatEnergyHysteresis()
+                  mat: Material handle from MatEnergyHysteresis() or MatPlayHysteresis()
           )pbdoc");
 
     // ========================================================================
