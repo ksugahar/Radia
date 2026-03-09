@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.7.0] - 2026-03-10
+
+### Added
+- **B-input Play hysteresis model (`MatPlayHysteresis`)**: Direct B->H evaluation in O(K) with analytical dH/dB Jacobian. Newton H->B inverse with analytical Jacobian (10-47 us/eval, 11x faster than Energy model). No sign constraint on shape functions (negative f_k OK).
+- **Abstract hysteresis base class (`radTHysteresisMaterial`)**: Shared interface for Play (Type 6) and Energy (Type 5) models. All solver paths use polymorphic dispatch.
+- **Play convenience functions**: `hys_to_play_radia()`, `mat_to_play_radia()` in `hysteresis_io.py`.
+- **Monotone limit detection**: `ComputeMonotoneLimits()` finds safe B range for Newton convergence.
+- **NGSolve integration examples**: Cohomology-cut scalar potential, Simkin-Trowbridge, A-formulation, nonlinear, hysteresis demos.
+- **Vector potential solver** (`vector_potential_solver.py`): Reduced A_r formulation with Picard/Hantila iteration.
+- **Cohomology cut solver** (`cohomology_cut.py`): Total scalar potential with Gmsh cohomology cuts.
+- **Pytest hysteresis test suite** (`tests/test_hysteresis.py`): 13 tests covering Play and Energy models.
+- **GmshBuilder mesh generation examples** (`examples/mesh_generation/`).
+- **Nodal force computation example** (`examples/nodal_force/`).
+
+### Fixed
+- Serialization constructor for Play model now initializes `m_B_mono_max`/`m_H_mono_max` and calls `ComputeMonotoneLimits()`.
+- `ComputeDifferentialChi` no longer clobbers play operator state (saves/restores around synthetic 1D Inverse).
+- Added `RadMatEnergyHysteresis` to DLL export list (`raddll.def`).
+- Fixed `radTMagCurve` dangling pointer in copy constructor (`DemagCurve` raw pointer now repoints to copied vector data).
+- Updated `MatHysSaveState`/`MatHysRestoreState`/`MatHysCommitState` docstrings to reference both Energy and Play models.
+
+### Documentation
+- Added hysteresis material APIs to `CLAUDE.md` Material Specification section.
+- Fixed Bessel SIBC reference in `SOLVER_ARCHITECTURE.md`: I0/I1 (`scipy.special.iv`), not J0/J1.
+- Updated `SOLVER_ARCHITECTURE.md` and `B_INPUT_PLAY_MODEL.md` to cover both Play and Energy models.
+- Hysteresis verification results (B-input Play, coenergy feasibility, Egger inverse).
+
 ## [2.6.0] - 2026-03-06
 
 ### Changed
