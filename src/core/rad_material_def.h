@@ -1321,6 +1321,13 @@ public:
 		H = H_Ext + Matr * RemMagn;
 	}
 
+	radTMagCurve(const radTMagCurve& other)
+		: radTMaterial(other), vDemagCurve(other.vDemagCurve),
+		  LenDemagCurve(other.LenDemagCurve), MagAxis(other.MagAxis)
+	{
+		DemagCurve = vDemagCurve.data();
+	}
+
 	int DuplicateItself(radThg& hg, radTApplication*, char)
 	{
 		return FinishDuplication(new radTMagCurve(*this), hg);

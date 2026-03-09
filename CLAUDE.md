@@ -646,6 +646,47 @@ Reference: F.I. Hantila, Rev. Roum. Sci. Techn. - Electrotechn. et Energ., 1975.
 
 ---
 
+## Compact HX Preconditioner (ngsolve-sparsesolv)
+
+### Policy: Compact HX for HCurl Problems
+
+**POLICY**: Use **Compact HX** (Compact Hiptmair-Xu) as the default preconditioner for HCurl curl-curl + mass systems in ngsolve-sparsesolv. Compact HX is a HYPRE-free, TaskManager-native AMS implementation.
+
+**Name origin**: HX = Hiptmair-Xu (2007), "Nodal auxiliary space preconditioning in H(curl) and H(div) spaces", SIAM J. Numer. Anal. 45(6). "Compact" = lightweight, HYPRE-free, TaskManager-native.
+
+**Configuration** (validated on complex eddy current @ 30 kHz, 155k-1.44M DOFs):
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| Cycle type | 1 (01210) | pre-smooth, G-correct, Pi-correct, G-correct, post-smooth |
+| Outer solver | BiCGStab | Non-symmetric Krylov solver |
+| Fine smoother | l1-Jacobi | Fully parallel (TaskManager) |
+| Subspace solver | CompactAMG | PMIS + classical interp + l1-Jacobi V-cycle |
+| Pi mode | Separate Pix/Piy/Piz | Multiplicative correction |
+| AMG theta | 0.25 | Strength-of-connection threshold |
+| Correction weight | 1.0 | No damping |
+
+**Performance** (mesh1_3.5T, 197k DOFs, BiCGStab, tol=1e-10):
+- Compact HX + CompactAMG: 25 iterations (matches HYPRE AMS)
+- HYPRE AMS + BoomerAMG: 25 iterations (reference)
+
+**Source files** (ngsolve-sparsesolv):
+
+| File | Description |
+|------|-------------|
+| `compact_amg.hpp` | Algebraic multigrid (PMIS, classical interp, l1-Jacobi) |
+| `compact_ams.hpp` | AMS cycle (Pi, G subspace corrections, l1-Jacobi smoother) |
+| `complex_compact_ams.hpp` | Complex Re/Im parallel wrapper (TaskManager) |
+
+**Do NOT**:
+- Add HYPRE dependency for new AMS features (use CompactAMG)
+- Use sequential Gauss-Seidel in the fine smoother (breaks TaskManager parallelism)
+- Use combined Pi with CompactAMG (combined Pi requires BoomerAMG num_functions=3)
+
+**HYPRE option**: BoomerAMG subspace solver remains available behind `#ifdef SPARSESOLV_USE_HYPRE` for comparison benchmarks (subspace_solver=2).
+
+---
+
 ## IMA (Image Method of Analysis)
 
 ### IMA Sign Selection Policy
@@ -877,6 +918,48 @@ Call `Solve()` only when soft iron is present alongside permanent magnets.
 PM material classes (`MatMagFixed`, `MatMagLinear`, `MatMagCurve`) are available but currently all behave as fixed magnetization. Full demagnetization is planned.
 
 See `docs/ELF_CONVENTIONS.md` for detailed unit system documentation.
+
+### Hysteresis Materials (Play and Energy Models)
+
+Two B-input play hysteresis models are available. The Play model is recommended (faster, no sign constraints).
+
+```python
+# Play model (recommended): B-input, direct Forward O(K)
+from radia.hysteresis_io import load_hys_file
+K, eta, f_k_tables = load_hys_file('material.hys')
+mat = rad.MatPlayHysteresis(K, eta, f_k_tables)
+# K: number of play operators
+# eta: ndarray[K], play thresholds in Tesla
+# f_k_tables: list of (r_array, f_array) tuples (shape functions)
+
+# Energy model: B-input, Egger Schur complement Newton
+mat = rad.MatEnergyHysteresis(K, eta, f_k_tables, eps=1e-6)
+# Same parameters + eps convergence tolerance
+# Requires non-negative, monotonically increasing shape functions (convex U_k)
+```
+
+**State management** (works for both Energy and Play models):
+```python
+rad.MatApl(iron, mat)
+# ... solve quasi-static step ...
+state = rad.MatHysSaveState(mat)     # Save state (ndarray, length K*9)
+rad.MatHysRestoreState(mat, state)   # Restore state
+rad.MatHysCommitState(mat)           # Commit converged state for next step
+```
+
+**Play vs Energy model comparison**:
+
+| Feature | Play Model | Energy Model |
+|---------|-----------|--------------|
+| Forward (B->H) | O(K) direct | Newton (100 iter) |
+| Inverse (H->B) | Newton + analytical Jacobian | K independent Newton |
+| Shape functions | No sign constraint (negative OK) | Must be non-negative |
+| Speed | 4-9 us/eval (Forward) | 100-500 us/eval |
+
+**MatMvsH** - Query M(H) for any material:
+```python
+M = rad.MatMvsH(mat, [Hx, Hy, Hz])  # Returns [Mx, My, Mz] in A/m
+```
 
 ### Permanent Magnet + Soft Iron Interaction
 

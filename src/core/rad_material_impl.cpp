@@ -4114,11 +4114,29 @@ double radTPlayHysteresisMaterial::ComputeChiDualMethod(double H_mag, double mu_
 
 double radTPlayHysteresisMaterial::ComputeDifferentialChi(double H_mag)
 {
+	// Save state so the synthetic 1D Inverse doesn't clobber real 3D state
+	std::vector<TVector3d> saved_prev = m_pk_prev;
+	std::vector<TVector3d> saved_pinning = m_pk_pinning;
+	std::vector<TVector3d> saved_current = m_pk_current;
+	TVector3d saved_H = m_last_H, saved_B = m_last_B;
+	TMatrix3d saved_dHdB = m_last_dHdB;
+	double saved_chi = m_last_chi, saved_chi_d = m_last_chi_d;
+	bool saved_has = m_has_result;
+
 	TVector3d Hv(H_mag, 0, 0);
 	Inverse(Hv);
 	TMatrix3d dBdH;
 	double chi_d;
 	ComputeJacobian(dBdH, chi_d);
+
+	// Restore state
+	m_pk_prev = saved_prev;
+	m_pk_pinning = saved_pinning;
+	m_pk_current = saved_current;
+	m_last_H = saved_H; m_last_B = saved_B;
+	m_last_dHdB = saved_dHdB;
+	m_last_chi = saved_chi; m_last_chi_d = saved_chi_d;
+	m_has_result = saved_has;
 	return chi_d;
 }
 
@@ -4148,7 +4166,8 @@ void radTPlayHysteresisMaterial::DumpBin(CAuxBinStrVect& oStr,
 }
 
 radTPlayHysteresisMaterial::radTPlayHysteresisMaterial(CAuxBinStrVect& inStr)
-	: m_last_chi(0), m_last_chi_d(0), m_has_result(false)
+	: m_B_mono_max(1.0), m_H_mono_max(0),
+	  m_last_chi(0), m_last_chi_d(0), m_has_result(false)
 {
 	inStr >> m_K;
 	m_eta.resize(m_K);
@@ -4178,6 +4197,8 @@ radTPlayHysteresisMaterial::radTPlayHysteresisMaterial(CAuxBinStrVect& inStr)
 	m_last_H = zero;
 	m_last_B = zero;
 	m_last_dHdB = Eye();
+
+	ComputeMonotoneLimits();
 }
 
 //-------------------------------------------------------------------------

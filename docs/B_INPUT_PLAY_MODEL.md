@@ -181,7 +181,7 @@ import numpy as np
 MU_0 = 4e-7 * np.pi
 rad.UtiDelAll()
 tables = [(r_k, f_k) for r_k, f_k in zip(r_tables, f_tables)]
-mat = rad.MatEnergyHysteresis(K, chi, tables, eps)
+mat = rad.MatPlayHysteresis(K, eta, tables)
 
 H_dc_list = [0, 200, 500]  # Different DC bias [A/m]
 H_ac = 100.0                # Same AC amplitude
@@ -323,14 +323,16 @@ approximation.
 ```python
 import radia as rad
 
-# Create material from table-based shape functions
+# Play model (recommended): table-based shape functions
 # f_k_tables: list of (r_array, f_array) tuples, one per play operator
-mat = rad.MatEnergyHysteresis(K=10, chi=chi, f_k_tables=tables, eps=1e-8)
+mat = rad.MatPlayHysteresis(K=10, eta=eta, f_k_tables=tables)
 
-# Or from .hys file (B-input Play data -> table-based energy parameters)
-from hysteresis_io import hys_to_radia
-params = hys_to_radia('material.hys', K=20)  # f_k tables + eta_k -> chi_k
-mat = rad.MatEnergyHysteresis(**params)
+# Energy model: requires non-negative f_k (convex U_k)
+mat = rad.MatEnergyHysteresis(K=10, eta=eta, f_k_tables=tables, eps=1e-8)
+
+# From .hys file
+from hysteresis_io import load_hys_file
+K, eta, tables = load_hys_file('material.hys')
 
 # Apply to element and solve
 iron = rad.ObjRecMag([0,0,0], [0.01,0.01,0.01], [0,0,0])
@@ -370,24 +372,36 @@ Line 4: Units ("tesla;A/m" or "A/m;tesla")
 Line 5+: col1  col2        (nx * ny data rows, descending branch)
 ```
 
-### C++ Class
+### C++ Class Hierarchy
 
 ```cpp
-class radTEnergyHysteresisMaterial : public radTMaterial {
-    int m_K;                              // Number of play operators
-    std::vector<double> m_As, m_Js, m_chi;  // Energy params (from B-input Play)
-    double m_eps;                         // Regularization
-    std::vector<TVector3d> m_Jk_prev;     // Current J_{k,p} (≈ play state)
-    std::vector<TVector3d> m_Jk_pinning;  // Pinning reference
-    std::vector<TVector3d> m_Jk_current;  // Last computed J_k
+// Abstract base class (shared by Energy and Play models)
+class radTHysteresisMaterial : public radTMaterial {
+    virtual TVector3d Forward(const TVector3d& B) = 0;
+    virtual TVector3d Inverse(const TVector3d& H) = 0;
+    virtual void ComputeJacobian(TMatrix3d& dBdH, double& chi_d) const = 0;
+    virtual void SaveState/RestoreState/ResetState/CommitState() = 0;
+    // ...
+};
 
-    // Core operators (B-input Play naming: B is the natural input)
-    TVector3d Forward(const TVector3d& B);   // B -> H (natural, Schur complement)
-    TVector3d Inverse(const TVector3d& H);   // H -> B (each J_k independent)
+// Play model (recommended, Type 6)
+class radTPlayHysteresisMaterial : public radTHysteresisMaterial {
+    int m_K;
+    std::vector<PlayTable> m_tables;      // Shape function tables
+    std::vector<double> m_eta;            // Play thresholds [Tesla]
+    std::vector<TVector3d> m_pk_prev;     // Committed play operator state
+    std::vector<TVector3d> m_pk_pinning;  // Pinning reference
+    std::vector<TVector3d> m_pk_current;  // Last Forward result
+    double m_B_mono_max, m_H_mono_max;    // Monotone limits
 
-    // Solver interface
-    double ComputeChiFromH(const TVector3d& H);     // Forward -> scalar chi
-    void ComputeJacobian(TMatrix3d& dBdH, double& chi_d);  // Analytical
+    TVector3d Forward(const TVector3d& B);   // B -> H, O(K) direct
+    TVector3d Inverse(const TVector3d& H);   // H -> B, Newton + analytical Jacobian
+};
+
+// Energy model (Type 5, requires non-negative f_k)
+class radTEnergyHysteresisMaterial : public radTHysteresisMaterial {
+    // Uses Egger Schur complement Newton for Forward
+    // Each J_k independently solved for Inverse
 };
 ```
 
@@ -524,8 +538,8 @@ import radia as rad
 from hysteresis_io import hys_to_radia
 
 # 1. Create hysteresis material from B-input Play data
-model = hys_to_radia('NdFeB.hys', K=20)
-mat = rad.MatEnergyHyst(model.K, model.As, model.Js, model.chi)
+K, eta, tables = load_hys_file('NdFeB.hys')
+mat = rad.MatPlayHysteresis(K, eta, tables)
 
 # 2. Unmagnetized blank
 magnet = rad.ObjHexahedron(vertices, [0, 0, 0])
@@ -535,13 +549,13 @@ rad.MatApl(magnet, mat)
 coil = rad.ObjBckg(lambda p: magnetizing_field(p, I_peak))
 assembly = rad.ObjCnt([magnet, coil])
 rad.Solve(assembly, 0.0001, 100, 0)
-rad.HystCommit(mat)
+rad.MatHysCommitState(mat)
 
 # 4. Remove external field -> remanence
 coil_off = rad.ObjBckg(lambda p: [0, 0, 0])
 assembly_off = rad.ObjCnt([magnet, coil_off])
 rad.Solve(assembly_off, 0.0001, 100, 0)
-rad.HystCommit(mat)
+rad.MatHysCommitState(mat)
 
 # 5. Remanent magnetization pattern
 B_ext = rad.Fld(magnet, 'b', observation_point)
@@ -955,18 +969,19 @@ rad.MatHysRestoreState(mat, state)
 | `src/core/rad_material_impl.cpp` | Forward/Inverse, trust-region Newton, state management |
 | `src/core/rad_relaxation_methods.cpp` | Uses `radTHysteresisMaterial*` (both types) |
 | `src/radia/radia_pybind.cpp` | `MatPlayHysteresis` binding |
-| `examples/hysteresis/verify_cpp_play_model.py` | Verification suite (10 tests) |
+| `examples/hysteresis/verify_cpp_play_model.py` | Verification suite (13 tests) |
 
 ### 14-12. Verification Results
 
-All 10 tests PASS:
+All 13 tests PASS:
 
 | Test | Description | Result |
 |------|-------------|--------|
 | 1-4 | Forward M(H) at various H vectors | M > 0, ferromagnetic |
 | 5 | C++ Play vs Python play_hysteron (B < 1.3 T) | **0.000% error** |
-| 6 | B-H loop with sinusoidal H drive | Hysteresis width = 1.89 T |
+| 6 | B-H loop with sinusoidal H drive | Hysteresis width > 0 |
 | 7-8 | State Save/Restore lifecycle | err = 0.000000 A/m |
+| 9-13 | Monotone limits, Jacobian, round-trip | All PASS |
 | 9 | Solver integration (MatApl + Solve) | Converged |
 | 10 | Performance (K=80, 100 evaluations) | 0.005 ms/eval |
 
