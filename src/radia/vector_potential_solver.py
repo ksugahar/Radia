@@ -1,0 +1,1184 @@
+"""Reduced vector potential solver (A_r formulation, Radia + NGSolve).
+
+Implements the reduced vector potential method for magnetostatic
+field computation combining Radia BEM source fields with NGSolve FEM.
+
+Method:
+    B = B_s + curl(A_r)
+    H = nu * B
+    Weak form: int(nu * curl(A_r) . curl(v)) = int((nu_0 - nu) * B_s . curl(v))
+
+Features:
+    - Linear materials (mu_r per domain)
+    - Nonlinear materials (B-H curve, Newton with coenergy)
+    - Nonlinear Picard iteration with under-relaxation
+    - HCurl FE space with nograds=True gauge
+    - BDDC+CG iterative solver for large problems
+
+Usage:
+    import radia as rad
+    from radia.vector_potential_solver import VectorPotentialSolver
+
+    solver = VectorPotentialSolver(mesh, mu_r_dict={'iron': 1000}, order=2)
+    solver.set_source_from_radia(coil, resolution=41)
+    solver.solve_linear(dirichlet='outer')
+    B_cf = solver.get_B()
+
+Comparison with ScalarPotentialSolver (Simkin):
+    ScalarPotentialSolver: H = H_s - grad(phi),  source = H_s
+    VectorPotentialSolver: B = B_s + curl(A_r),   source = B_s
+"""
+
+import numpy as np
+from math import sqrt as msqrt
+
+MU_0 = 4 * np.pi * 1e-7
+
+
+class VectorPotentialSolver:
+    """Reduced vector potential magnetostatic solver (Radia + NGSolve).
+
+    Parameters
+    ----------
+    mesh : ngsolve.Mesh
+        FEM mesh with material labels.
+    iron_domains : str or list of str
+        Material name(s) for iron regions.
+    mu_r : float
+        Default relative permeability for iron.
+    mu_r_dict : dict, optional
+        Per-domain mu_r, e.g. {'iron': 1000, 'steel': 500}.
+    order : int
+        FEM polynomial order (default: 2).
+    kelvin_region : str, optional
+        Material name of Kelvin shell region (reserved for future use).
+    kelvin_radius : float, optional
+        Inner radius R of Kelvin shell [m].
+    kelvin_center : list/tuple, optional
+        Center of Kelvin shell [x, y, z] in meters.
+    ams_options : dict, optional
+        AMS preconditioner options. Keys:
+        - 'chebyshev_degree' (int, default 3): Chebyshev smoother degree.
+        - 'num_smooth' (int, default 2): Pre/post smoothing steps.
+        - 'h1_solver' (str, default 'auto'): H1 subspace solver.
+          'auto' selects direct (sparsecholesky) for ndof_h1 < 100k,
+          h1amg otherwise. Can be 'direct' or 'h1amg'.
+        - 'eigenratio' (float, default 30.0): Chebyshev smoothing
+          interval [lambda_max/eigenratio, lambda_max].
+    """
+
+    def __init__(self, mesh, iron_domains='iron', mu_r=1000.0, order=2,
+                 mu_r_dict=None, kelvin_region=None, kelvin_radius=None,
+                 kelvin_center=None, ams_options=None):
+        self.mesh = mesh
+        self.order = order
+
+        # Material setup
+        if mu_r_dict is not None:
+            self._mu_r_dict = dict(mu_r_dict)
+            self.iron_domains = list(mu_r_dict.keys())
+            self.mu_r = max(mu_r_dict.values())
+        else:
+            if isinstance(iron_domains, str):
+                iron_domains = [iron_domains]
+            self.iron_domains = iron_domains
+            self.mu_r = float(mu_r)
+            self._mu_r_dict = {d: float(mu_r) for d in self.iron_domains}
+
+        # Kelvin transform (stored, not used in initial implementation)
+        self._kelvin_region = kelvin_region
+        self._kelvin_radius = kelvin_radius
+        self._kelvin_center = kelvin_center or [0, 0, 0]
+
+        # AMS preconditioner options
+        self._ams_options = {
+            'chebyshev_degree': 3,
+            'num_smooth': 2,
+            'h1_solver': 'auto',
+            'eigenratio': 30.0,
+        }
+        if ams_options:
+            self._ams_options.update(ams_options)
+        self._ams_cache = {}
+
+        # Source field: B_s (vector, 3 components)
+        self._B_source_cf = None
+        self._radia_obj = None
+
+        # Solution storage
+        self._A_gf = None
+        self._B_cf = None
+        self._H_cf = None
+
+    # ------------------------------------------------------------------
+    # Source field setup
+    # ------------------------------------------------------------------
+
+    def set_source_from_radia(self, radia_obj, resolution=41, bbox=None):
+        """Set source field B_s from a Radia coil object.
+
+        Computes B_s on a voxel grid via ``rad.Fld(obj, 'b', points)``
+        and creates a VoxelCoefficient for efficient FEM integration.
+
+        Parameters
+        ----------
+        radia_obj : int
+            Radia object handle (coil).
+        resolution : int
+            Voxel grid resolution per dimension.
+        bbox : list of [min, max] pairs, optional
+            Custom bounding box [[xmin,xmax],[ymin,ymax],[zmin,zmax]].
+        """
+        import radia as rad
+        from ngsolve import VoxelCoefficient, CF
+
+        self._radia_obj = radia_obj
+
+        if bbox is not None:
+            pass
+        elif self._kelvin_region:
+            bbox = self._compute_physical_bbox()
+        else:
+            pmin, pmax = self.mesh.ngmesh.bounding_box
+            pmin = [pmin[i] for i in range(3)]
+            pmax = [pmax[i] for i in range(3)]
+            margin = 0.05 * max(pmax[i] - pmin[i] for i in range(3))
+            bbox = [[pmin[i] - margin, pmax[i] + margin] for i in range(3)]
+
+        nx = ny = nz = resolution
+        x = np.linspace(bbox[0][0], bbox[0][1], nx)
+        y = np.linspace(bbox[1][0], bbox[1][1], ny)
+        z = np.linspace(bbox[2][0], bbox[2][1], nz)
+
+        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
+        points = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
+
+        B_field = np.asarray(rad.Fld(radia_obj, 'b', points))
+
+        start = (bbox[0][0], bbox[1][0], bbox[2][0])
+        end = (bbox[0][1], bbox[1][1], bbox[2][1])
+
+        cfs = []
+        for comp in range(3):
+            data = B_field[:, comp].reshape(nx, ny, nz)
+            data = np.ascontiguousarray(data.transpose(2, 1, 0))
+            cfs.append(VoxelCoefficient(start, end, data, linear=True))
+
+        self._B_source_cf = CF(tuple(cfs))
+
+    def set_source_from_callback(self, b_func, resolution=41):
+        """Set source field B_s from a Python callback.
+
+        Parameters
+        ----------
+        b_func : callable
+            ``b_func(x, y, z) -> (Bx, By, Bz)`` returning B in Tesla.
+        resolution : int
+            Voxel grid resolution per dimension.
+        """
+        from ngsolve import VoxelCoefficient, CF
+
+        pmin, pmax = self.mesh.ngmesh.bounding_box
+        pmin = [pmin[i] for i in range(3)]
+        pmax = [pmax[i] for i in range(3)]
+        margin = 0.05 * max(pmax[i] - pmin[i] for i in range(3))
+        bbox = [[pmin[i] - margin, pmax[i] + margin] for i in range(3)]
+
+        nx = ny = nz = resolution
+        x = np.linspace(bbox[0][0], bbox[0][1], nx)
+        y = np.linspace(bbox[1][0], bbox[1][1], ny)
+        z = np.linspace(bbox[2][0], bbox[2][1], nz)
+
+        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
+        pts_flat = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
+        B_field = np.zeros((len(pts_flat), 3))
+        for i in range(len(pts_flat)):
+            B_field[i] = b_func(pts_flat[i, 0], pts_flat[i, 1], pts_flat[i, 2])
+
+        start = (bbox[0][0], bbox[1][0], bbox[2][0])
+        end = (bbox[0][1], bbox[1][1], bbox[2][1])
+
+        cfs = []
+        for comp in range(3):
+            data = B_field[:, comp].reshape(nx, ny, nz)
+            data = np.ascontiguousarray(data.transpose(2, 1, 0))
+            cfs.append(VoxelCoefficient(start, end, data, linear=True))
+
+        self._B_source_cf = CF(tuple(cfs))
+
+    def set_source_cf(self, B_source_cf):
+        """Set source field B_s directly from an NGSolve CoefficientFunction.
+
+        Parameters
+        ----------
+        B_source_cf : ngsolve.CoefficientFunction
+            Vector CF of dimension 3 giving B_s in Tesla.
+        """
+        self._B_source_cf = B_source_cf
+
+    # ------------------------------------------------------------------
+    # Linear solver
+    # ------------------------------------------------------------------
+
+    def solve_linear(self, dirichlet='default', eps=1e-10, solver='auto'):
+        """Solve the linear A_r formulation.
+
+        Finds A_r in HCurl satisfying:
+            int(nu * curl(A_r) . curl(v)) = int((nu_0 - nu) * B_s . curl(v))
+
+        Then: B = B_s + curl(A_r), H = nu * B.
+
+        Parameters
+        ----------
+        dirichlet : str
+            Boundary label for Dirichlet BC (A x n = 0).
+        eps : float
+            Gauge regularization strength.
+        solver : str
+            'auto' (AMS if available, else BDDC for large, direct for small),
+            'ams' (Chebyshev AMS + TaskManager), 'bddc', or 'direct'.
+        """
+        from ngsolve import (HCurl, GridFunction, BilinearForm, LinearForm,
+                             curl, InnerProduct, dx, Preconditioner,
+                             TaskManager)
+        from ngsolve.krylovspace import CGSolver
+
+        if self._B_source_cf is None:
+            raise RuntimeError("Set source field first (set_source_from_radia)")
+
+        nu_cf = self._build_nu_cf()
+        nu_0 = 1.0 / MU_0
+
+        if dirichlet == 'default':
+            fes = HCurl(self.mesh, order=self.order, dirichlet='.*',
+                        nograds=True)
+        else:
+            fes = HCurl(self.mesh, order=self.order, dirichlet=dirichlet,
+                        nograds=True)
+
+        solver = self._select_solver(fes.ndof, solver)
+
+        A = fes.TrialFunction()
+        v = fes.TestFunction()
+
+        # Physical materials (exclude kelvin)
+        all_mats = list(set(self.mesh.GetMaterials()))
+        phys_mats = [m for m in all_mats if m != self._kelvin_region]
+
+        # Bilinear form: nu * curl(A) . curl(v) + eps * A . v
+        a = BilinearForm(fes)
+        for mat in phys_mats:
+            a += nu_cf * InnerProduct(curl(A), curl(v)) * dx(mat)
+            a += eps * InnerProduct(A, v) * dx(mat)
+
+        pre_bddc = None
+        if solver == 'bddc':
+            pre_bddc = Preconditioner(a, 'bddc')
+        a.Assemble()
+
+        # RHS: (nu_0 - nu) * B_s . curl(v)
+        nu_contrast = nu_0 - nu_cf
+        f = LinearForm(fes)
+        for mat in phys_mats:
+            f += nu_contrast * InnerProduct(self._B_source_cf, curl(v)) * dx(mat)
+        f.Assemble()
+
+        self._A_gf = GridFunction(fes, name='A_reduced')
+
+        with TaskManager():
+            if solver == 'ams':
+                pre = self._setup_ams_preconditioner(a.mat, fes, eps)
+                inv = CGSolver(mat=a.mat, pre=pre, maxiter=2000,
+                               tol=1e-10, printrates=False)
+                self._A_gf.vec.data = inv * f.vec
+            elif solver == 'bddc':
+                inv = CGSolver(mat=a.mat, pre=pre_bddc.mat, maxiter=2000,
+                               tol=1e-10, printrates=False)
+                self._A_gf.vec.data = inv * f.vec
+            else:
+                self._A_gf.vec.data = (
+                    a.mat.Inverse(fes.FreeDofs()) * f.vec)
+
+        self._B_cf = self._B_source_cf + curl(self._A_gf)
+        self._H_cf = nu_cf * self._B_cf
+
+        return self._A_gf
+
+    # ------------------------------------------------------------------
+    # Newton nonlinear solver (coenergy)
+    # ------------------------------------------------------------------
+
+    def solve_nonlinear_newton(self, bh_data, tol=1e-4, maxiter=50,
+                               dirichlet='default', verbose=True,
+                               solver='auto'):
+        """Newton iteration with SymbolicEnergy for nonlinear B-H curve.
+
+        Uses magnetic coenergy w*(B) = integral_0^B H(B') dB' and NGSolve
+        automatic differentiation for the Jacobian. Energy-based line
+        search guarantees monotone convergence.
+
+        Parameters
+        ----------
+        bh_data : list of [H, B] pairs
+            Tabulated B-H curve. H in A/m, B in Tesla.
+        tol : float
+            Convergence tolerance (energy residual).
+        maxiter : int
+            Maximum Newton iterations.
+        dirichlet : str
+            Boundary label for Dirichlet BC.
+        verbose : bool
+            Print iteration progress.
+        solver : str
+            'auto', 'ams', 'bddc', or 'direct'.
+        """
+        from ngsolve import (HCurl, GridFunction, BilinearForm, BSpline,
+                             SymbolicEnergy, InnerProduct, curl, dx,
+                             sqrt, Preconditioner, TaskManager)
+        from ngsolve.krylovspace import CGSolver
+
+        if self._B_source_cf is None:
+            raise RuntimeError("Set source field first")
+
+        # Build H(B) BSpline and coenergy w*(B) = integral_0^B H(B') dB'
+        # Same pattern as ScalarPotentialSolver but with inverted curve.
+        bh = np.array(bh_data)
+        H_tab, B_tab = bh[:, 0], bh[:, 1]
+
+        # Sort by B (invert the B-H curve)
+        sort_idx = np.argsort(B_tab)
+        B_sorted = B_tab[sort_idx].tolist()
+        H_sorted = H_tab[sort_idx].tolist()
+
+        # Remove duplicate B values
+        B_unique, H_unique = [B_sorted[0]], [H_sorted[0]]
+        for i in range(1, len(B_sorted)):
+            if B_sorted[i] > B_unique[-1]:
+                B_unique.append(B_sorted[i])
+                H_unique.append(H_sorted[i])
+
+        # Extend to high B with vacuum slope (dH/dB ~ 1/mu_0)
+        B_max_ext = max(B_unique[-1] * 3, 5.0)
+        H_max_ext = H_unique[-1] + (1.0 / MU_0) * (B_max_ext - B_unique[-1])
+        B_tab_ext = B_unique + [B_max_ext]
+        H_tab_ext = H_unique + [H_max_ext]
+
+        # BSpline for H(B): len(knots) = len(values) + 1
+        h_of_b_spline = BSpline(2, [0] + B_tab_ext, H_tab_ext)
+        # Coenergy: w*(B) = integral_0^B H(B') dB'
+        w_star_bspline = h_of_b_spline.Integrate()
+
+        # FE space: HCurl with nograds gauge
+        if dirichlet == 'default':
+            fes = HCurl(self.mesh, order=self.order, dirichlet='.*',
+                        nograds=True)
+        else:
+            fes = HCurl(self.mesh, order=self.order, dirichlet=dirichlet,
+                        nograds=True)
+
+        if verbose:
+            print(f"  HCurl DOFs: {fes.ndof}")
+
+        A = fes.TrialFunction()
+
+        # B_total = B_s + curl(A_r)
+        B_total = self._B_source_cf + curl(A)
+        B2 = InnerProduct(B_total, B_total)
+        B_mag_safe = sqrt(B2 + 1e-12)
+
+        # Physical materials
+        all_mats = list(set(self.mesh.GetMaterials()))
+        phys_mats = [m for m in all_mats if m != self._kelvin_region]
+        iron_mats = [m for m in phys_mats if m in self._mu_r_dict]
+        air_mats = [m for m in phys_mats if m not in self._mu_r_dict]
+
+        # Energy functional (symmetric for Newton)
+        a = BilinearForm(fes, symmetric=True)
+
+        # Air: w*(B) = B^2 / (2*mu_0)
+        for mat in air_mats:
+            a += SymbolicEnergy(
+                (1.0 / (2.0 * MU_0)) * InnerProduct(B_total, B_total),
+                definedon=self.mesh.Materials(mat))
+
+        # Iron: w*(|B|) from BSpline
+        for mat in iron_mats:
+            a += SymbolicEnergy(
+                w_star_bspline(B_mag_safe),
+                definedon=self.mesh.Materials(mat))
+
+        # Source coupling: -nu_0 * B_s . curl(A_r)
+        # Without this, the energy stationarity gives curl(H) = 0 (wrong).
+        # With it, stationarity gives curl(H - H_s) = 0, i.e. curl(H_r) = 0 (correct).
+        # Derivation: E_total = int w*(|curl A|) - J.A;  A = A_s + A_r;
+        #   J.A_r = (1/mu_0)*curl(B_s).A_r = (1/mu_0)*B_s.curl(A_r) + boundary
+        nu_0 = 1.0 / MU_0
+        a += SymbolicEnergy(
+            -nu_0 * InnerProduct(self._B_source_cf, curl(A)))
+
+        # Gauge regularization: eps * |A|^2 / 2
+        eps = 1e-10
+        a += SymbolicEnergy(
+            eps / 2.0 * InnerProduct(A, A))
+
+        # Newton iteration with energy line search
+        sol = GridFunction(fes, name='A_newton')
+        sol.vec[:] = 0
+
+        au = sol.vec.CreateVector()
+        r = sol.vec.CreateVector()
+        w = sol.vec.CreateVector()
+        sol_new = sol.vec.CreateVector()
+
+        solver = self._select_solver(fes.ndof, solver)
+
+        pre_bddc = None
+        if solver == 'bddc':
+            pre_bddc = Preconditioner(a, type='bddc',
+                                      inverse='sparsecholesky')
+
+        converged = False
+        with TaskManager():
+            for it in range(maxiter):
+                E0 = a.Energy(sol.vec)
+
+                a.AssembleLinearization(sol.vec)
+                a.Apply(sol.vec, au)
+                r.data = -au
+
+                if solver == 'ams':
+                    eps_gauge = 1e-10
+                    pre = self._setup_ams_preconditioner(
+                        a.mat, fes, eps_gauge)
+                    inv = CGSolver(mat=a.mat, pre=pre,
+                                   maxiter=2000, tol=1e-10,
+                                   printrates=False)
+                    w.data = inv * r
+                elif solver == 'bddc':
+                    inv = CGSolver(mat=a.mat, pre=pre_bddc.mat,
+                                   maxiter=2000, tol=1e-10,
+                                   printrates=False)
+                    w.data = inv * r
+                else:
+                    inv = a.mat.Inverse(fes.FreeDofs(),
+                                        inverse='pardiso')
+                    w.data = inv * r
+
+                err = InnerProduct(w, r)
+                if verbose:
+                    print(f"   Newton {it}: err = {err:.2e}, "
+                          f"E = {E0:.6e}")
+
+                if abs(err) < tol:
+                    converged = True
+                    if verbose:
+                        print(f"   Converged at Newton iteration {it}")
+                    break
+
+                # Energy line search
+                sol_new.data = sol.vec + w
+                E = a.Energy(sol_new)
+                tau = 1.0
+                while E > E0 and tau > 1e-10:
+                    tau *= 0.5
+                    sol_new.data = sol.vec + tau * w
+                    E = a.Energy(sol_new)
+                    if verbose and tau < 0.5:
+                        print(f"     line search: tau = {tau:.2e}, "
+                              f"E = {E:.6e}")
+
+                sol.vec.data = sol_new
+
+        if not converged and verbose:
+            print(f"   WARNING: Not converged after {maxiter} iterations")
+
+        # Store results
+        self._A_gf = sol
+        B_cf = self._B_source_cf + curl(sol)
+        self._B_cf = B_cf
+
+        # H from inverted B-H: H = nu_eff * B where nu_eff = H(|B|) / |B|
+        B_mag_post = sqrt(InnerProduct(B_cf, B_cf) + 1e-30)
+        nu_eff = h_of_b_spline(B_mag_post) / B_mag_post
+        iron_indicator = self._build_domain_indicator()
+        from ngsolve import CF
+        nu_total = iron_indicator * nu_eff + (1 - iron_indicator) * (1.0 / MU_0)
+        self._H_cf = nu_total * B_cf
+
+        return sol
+
+    # ------------------------------------------------------------------
+    # Picard nonlinear solver
+    # ------------------------------------------------------------------
+
+    def solve_nonlinear(self, bh_data, tol=1e-4, maxiter=50, relax=0.3,
+                        dirichlet='default', verbose=True, solver='auto'):
+        """Picard iteration for nonlinear A_r formulation.
+
+        Each iteration: solve linear -> evaluate |B| -> update nu -> repeat.
+
+        Weak form per iteration:
+            (nu_k * curl A_{k+1}, curl v) = ((1/mu_0 - nu_k) * B_s, curl v)
+
+        Parameters
+        ----------
+        bh_data : list of [H, B] pairs
+            Tabulated B-H curve. H in A/m, B in Tesla.
+        tol : float
+            Convergence tolerance (max |dB|/B_sat).
+        maxiter : int
+            Maximum Picard iterations.
+        relax : float
+            Under-relaxation for nu update (0.3 = 30% damping).
+        dirichlet : str
+            Boundary label for Dirichlet BC.
+        verbose : bool
+            Print iteration progress.
+        solver : str
+            'auto', 'ams', 'bddc', or 'direct'.
+        """
+        from ngsolve import (HCurl, L2, GridFunction, BilinearForm, LinearForm,
+                             curl, InnerProduct, Norm, dx, VOL, Preconditioner,
+                             TaskManager)
+        from scipy.interpolate import interp1d
+
+        if self._B_source_cf is None:
+            raise RuntimeError("Set source field first")
+
+        # Build nu(B) interpolation from B-H curve
+        bh = np.array(bh_data)
+        H_tab, B_tab = bh[:, 0], bh[:, 1]
+
+        sort_idx = np.argsort(B_tab)
+        B_sorted = B_tab[sort_idx]
+        H_sorted = H_tab[sort_idx]
+
+        mask = np.diff(B_sorted, prepend=-1) > 0
+        B_unique = B_sorted[mask]
+        H_unique = H_sorted[mask]
+
+        # nu(B) = H(B) / B
+        nu_arr = np.zeros_like(B_unique)
+        if B_unique[0] == 0 and H_unique[0] == 0:
+            nu_arr[0] = (H_unique[1] / B_unique[1]
+                         if B_unique[1] > 0 else 1.0 / (MU_0 * 1000))
+        else:
+            nu_arr[0] = (H_unique[0] / B_unique[0]
+                         if B_unique[0] > 0 else 1.0 / (MU_0 * 1000))
+        for i in range(1, len(B_unique)):
+            nu_arr[i] = H_unique[i] / B_unique[i]
+
+        # Extend to high B
+        B_ext = list(B_unique)
+        nu_ext = list(nu_arr)
+        if B_unique[-1] < 5.0:
+            dH_dB_end = ((H_unique[-1] - H_unique[-2]) /
+                         (B_unique[-1] - B_unique[-2]))
+            for B_val in np.linspace(B_unique[-1] + 0.1, 10.0, 50):
+                H_val = H_unique[-1] + dH_dB_end * (B_val - B_unique[-1])
+                nu_ext.append(H_val / B_val)
+                B_ext.append(B_val)
+
+        nu_interp = interp1d(B_ext, nu_ext, kind='linear',
+                             fill_value='extrapolate')
+        nu_iron_init = nu_ext[0]
+        nu_air = 1.0 / MU_0
+        B_sat = B_unique[-1]
+
+        # FE space
+        if dirichlet == 'default':
+            fes = HCurl(self.mesh, order=self.order, dirichlet='.*',
+                        nograds=True)
+        else:
+            fes = HCurl(self.mesh, order=self.order, dirichlet=dirichlet,
+                        nograds=True)
+
+        if verbose:
+            print(f"  HCurl DOFs: {fes.ndof}")
+
+        A_trial = fes.TrialFunction()
+        v = fes.TestFunction()
+
+        # Per-element nu (L2, order=0)
+        fes_nu = L2(self.mesh, order=0)
+        nu_gf = GridFunction(fes_nu)
+
+        # Initialize nu
+        for el in self.mesh.Elements(VOL):
+            mat = str(el.mat) if hasattr(el, 'mat') else str(
+                self.mesh.GetMaterials()[el.nr])
+            if mat in self._mu_r_dict:
+                nu_gf.vec[el.nr] = nu_iron_init
+            else:
+                nu_gf.vec[el.nr] = nu_air
+
+        A_gf = GridFunction(fes, name='A_picard')
+        A_gf.vec[:] = 0
+
+        B_old_arr = None
+        eps = 1e-10
+        solver = self._select_solver(fes.ndof, solver)
+
+        if verbose:
+            solver_names = {'ams': 'AMS+CG', 'bddc': 'BDDC+CG',
+                            'direct': 'pardiso'}
+            print(f"  Picard iteration (solver: {solver_names.get(solver, solver)}):")
+
+        for it in range(maxiter):
+            # Assemble: nu * curl(A) . curl(v) + eps * A . v
+            a = BilinearForm(fes)
+            a += nu_gf * InnerProduct(curl(A_trial), curl(v)) * dx
+            a += eps * InnerProduct(A_trial, v) * dx
+
+            # RHS: (1/mu_0 - nu) * B_s . curl(v)
+            nu_contrast = 1.0 / MU_0 - nu_gf
+            f = LinearForm(fes)
+            f += nu_contrast * InnerProduct(self._B_source_cf, curl(v)) * dx
+
+            if solver == 'bddc':
+                pre_bddc = Preconditioner(a, 'bddc')
+
+            with TaskManager():
+                a.Assemble()
+                f.Assemble()
+
+                if solver == 'ams':
+                    from ngsolve.krylovspace import CGSolver
+                    pre = self._setup_ams_preconditioner(
+                        a.mat, fes, eps)
+                    inv = CGSolver(a.mat, pre, maxiter=2000, tol=1e-8,
+                                   printrates=False)
+                    A_gf.vec.data = inv * f.vec
+                elif solver == 'bddc':
+                    from ngsolve.krylovspace import CGSolver
+                    inv = CGSolver(a.mat, pre_bddc.mat, maxiter=2000,
+                                   tol=1e-8, printrates=False)
+                    A_gf.vec.data = inv * f.vec
+                else:
+                    A_gf.vec.data = a.mat.Inverse(
+                        fes.FreeDofs(), inverse='pardiso') * f.vec
+
+            # B_total = B_s + curl(A_r)
+            B_total_cf = self._B_source_cf + curl(A_gf)
+
+            # Update nu in iron from |B|
+            B_new_list = []
+            for el in self.mesh.Elements(VOL):
+                mat = str(el.mat) if hasattr(el, 'mat') else str(
+                    self.mesh.GetMaterials()[el.nr])
+                if mat not in self._mu_r_dict:
+                    continue
+
+                cx, cy, cz = self._element_centroid(el)
+                try:
+                    mip = self.mesh(cx, cy, cz)
+                    B_val = B_total_cf(mip)
+                    B_mag = float(np.sqrt(
+                        B_val[0]**2 + B_val[1]**2 + B_val[2]**2))
+                except Exception:
+                    B_mag = 0.0
+
+                if B_mag > 1e-10:
+                    nu_new = float(nu_interp(B_mag))
+                else:
+                    nu_new = nu_iron_init
+
+                # Under-relaxation
+                alpha = relax
+                nu_old = nu_gf.vec[el.nr]
+                nu_gf.vec[el.nr] = alpha * nu_new + (1.0 - alpha) * nu_old
+                B_new_list.append(B_mag)
+
+            B_new_arr = np.array(B_new_list)
+
+            # Convergence check
+            if B_old_arr is not None and len(B_old_arr) == len(B_new_arr):
+                max_change = np.max(np.abs(B_new_arr - B_old_arr)) / B_sat
+                if verbose:
+                    mip_0 = self.mesh(0, 0, 0)
+                    Bz_now = B_total_cf(mip_0)[2]
+                    print(f"   iter {it}: max |dB|/B_sat = {max_change:.2e}, "
+                          f"Bz = {Bz_now * 1e3:.1f} mT")
+                if max_change < tol:
+                    if verbose:
+                        print(f"   Converged at iteration {it}")
+                    break
+            else:
+                if verbose:
+                    mip_0 = self.mesh(0, 0, 0)
+                    Bz_now = B_total_cf(mip_0)[2]
+                    print(f"   iter {it}: initial, "
+                          f"Bz = {Bz_now * 1e3:.1f} mT")
+
+            B_old_arr = B_new_arr.copy()
+
+        # Store results
+        self._A_gf = A_gf
+        B_cf = self._B_source_cf + curl(A_gf)
+        self._B_cf = B_cf
+        self._H_cf = nu_gf * B_cf
+
+        return A_gf
+
+    # ------------------------------------------------------------------
+    # Hysteresis solver (Hantila polarization method for A_r)
+    # ------------------------------------------------------------------
+
+    def solve_hysteresis(self, mat_factory, tol=1e-4, maxiter=50, alpha=500.0,
+                         dirichlet='default', verbose=True, solver='auto',
+                         relax=0.0):
+        """Hantila polarization iteration for A_r with energy hysteresis.
+
+        Uses the Hantila (1975) polarization method adapted for the
+        vector potential formulation. The LHS is assembled once (constant
+        reluctivity nu_alpha in iron, nu_0 in air). The RHS is updated
+        each iteration from the polarization residual R = M - alpha*H.
+
+        H is derived from B without needing Inverse(B->H):
+            H = (B/mu_0 - R_prev) / (1 + alpha)
+
+        Parameters
+        ----------
+        mat_factory : callable
+            Factory: mat_factory() -> int (Radia material handle).
+        tol : float
+            Convergence tolerance (max |dB| / B_sat).
+        maxiter : int
+            Maximum Picard iterations.
+        alpha : float
+            Polarization parameter (>= max susceptibility). Default 500.
+        dirichlet : str
+            Boundary label for Dirichlet BC (A x n = 0).
+        verbose : bool
+            Print iteration progress.
+        solver : str
+            'auto', 'ams', 'bddc', or 'direct'.
+        relax : float
+            Under-relaxation for R update (0.0 = full step, 0.5 = half).
+        """
+        import radia as rad
+        from ngsolve import (HCurl, VectorL2, GridFunction, BilinearForm,
+                             LinearForm, curl, InnerProduct, dx, VOL,
+                             Preconditioner, TaskManager, CF)
+
+        if self._B_source_cf is None:
+            raise RuntimeError("Set source field first")
+
+        nu_0 = 1.0 / MU_0
+        nu_alpha = 1.0 / (MU_0 * (1 + alpha))
+
+        # Per-element material handles (persistent across time steps)
+        n_iron = 0
+        for el in self.mesh.Elements(VOL):
+            if str(el.mat) in self._mu_r_dict:
+                n_iron += 1
+
+        if not hasattr(self, '_hys_handles') or self._hys_handles is None:
+            self._hys_handles = [mat_factory() for _ in range(n_iron)]
+            if verbose:
+                print(f"   Created {n_iron} per-element material handles")
+
+        handles = self._hys_handles
+
+        # FE space: HCurl with nograds gauge
+        if dirichlet == 'default':
+            fes = HCurl(self.mesh, order=self.order, dirichlet='.*',
+                        nograds=True)
+        else:
+            fes = HCurl(self.mesh, order=self.order, dirichlet=dirichlet,
+                        nograds=True)
+
+        if verbose:
+            print(f"   HCurl DOFs: {fes.ndof}")
+
+        A_trial = fes.TrialFunction()
+        v = fes.TestFunction()
+
+        # Polarization residual R = M - alpha*H (VectorL2 order=0)
+        fes_vec = VectorL2(self.mesh, order=0)
+        R_gf = GridFunction(fes_vec, name='R_polar')
+        R_gf.vec[:] = 0
+
+        # Material classification
+        all_mats = list(set(self.mesh.GetMaterials()))
+        phys_mats = [m for m in all_mats if m != self._kelvin_region]
+        iron_mats = [m for m in phys_mats if m in self._mu_r_dict]
+        air_mats = [m for m in phys_mats if m not in self._mu_r_dict]
+
+        # Iron element indices and centroids
+        iron_els = []
+        for el in self.mesh.Elements(VOL):
+            if str(el.mat) in self._mu_r_dict:
+                iron_els.append((el.nr, self._element_centroid(el)))
+
+        # Bilinear form: CONSTANT LHS (assembled once)
+        eps = 1e-10
+        a = BilinearForm(fes)
+        for mat in iron_mats:
+            a += nu_alpha * InnerProduct(curl(A_trial), curl(v)) * dx(mat)
+        for mat in air_mats:
+            a += nu_0 * InnerProduct(curl(A_trial), curl(v)) * dx(mat)
+        a += eps * InnerProduct(A_trial, v) * dx  # gauge
+
+        solver_type = self._select_solver(fes.ndof, solver)
+        pre_bddc = None
+        if solver_type == 'bddc':
+            pre_bddc = Preconditioner(a, 'bddc')
+        a.Assemble()
+
+        nel = len(list(self.mesh.Elements(VOL)))
+
+        # Save material states before iteration
+        saved_states = [rad.MatHysSaveState(h) for h in handles]
+
+        A_gf = GridFunction(fes, name='A_hysteresis')
+        A_gf.vec[:] = 0
+        B_old = np.zeros(len(iron_els))
+
+        converged = False
+        for iteration in range(maxiter):
+            # RHS: contrast + polarization residual
+            f = LinearForm(fes)
+            for mat in iron_mats:
+                f += (nu_0 - nu_alpha) * InnerProduct(
+                    self._B_source_cf, curl(v)) * dx(mat)
+                f += (1.0 / (1 + alpha)) * InnerProduct(
+                    R_gf, curl(v)) * dx(mat)
+            f.Assemble()
+
+            # Solve (LHS pre-assembled)
+            with TaskManager():
+                if solver_type == 'ams':
+                    from ngsolve.krylovspace import CGSolver
+                    pre = self._setup_ams_preconditioner(a.mat, fes, eps)
+                    inv = CGSolver(a.mat, pre, maxiter=2000, tol=1e-10,
+                                   printrates=False)
+                    A_gf.vec.data = inv * f.vec
+                elif solver_type == 'bddc':
+                    from ngsolve.krylovspace import CGSolver
+                    inv = CGSolver(a.mat, pre_bddc.mat, maxiter=2000,
+                                   tol=1e-10, printrates=False)
+                    A_gf.vec.data = inv * f.vec
+                else:
+                    A_gf.vec.data = a.mat.Inverse(
+                        fes.FreeDofs(), inverse='pardiso') * f.vec
+
+            # B = B_s + curl(A_r) at centroids
+            B_total_cf = self._B_source_cf + curl(A_gf)
+
+            # Restore states before Forward(H)
+            for h, s in zip(handles, saved_states):
+                rad.MatHysRestoreState(h, s)
+
+            # Derive H from B, Forward(H) -> M, update R
+            B_new = np.zeros(len(iron_els))
+            for idx, (el_nr, centroid) in enumerate(iron_els):
+                try:
+                    mip = self.mesh(*centroid)
+                    B_val = [float(B_total_cf(mip)[i]) for i in range(3)]
+                except Exception:
+                    B_val = [0.0, 0.0, 0.0]
+
+                # H = (B/mu_0 - R_prev) / (1 + alpha)
+                R_prev = [R_gf.vec[d * nel + el_nr] for d in range(3)]
+                H_val = [(B_val[i] / MU_0 - R_prev[i]) / (1 + alpha)
+                         for i in range(3)]
+
+                # Forward(H) -> M
+                M_val = list(rad.MatMvsH(handles[idx], 'm', H_val))
+
+                B_mag = msqrt(B_val[0]**2 + B_val[1]**2 + B_val[2]**2)
+                B_new[idx] = B_mag
+
+                # R = M - alpha * H (with optional under-relaxation)
+                omega = 1.0 - relax
+                for d in range(3):
+                    R_target = M_val[d] - alpha * H_val[d]
+                    if relax > 0 and iteration > 0:
+                        R_gf.vec[d * nel + el_nr] = (
+                            (1 - omega) * R_gf.vec[d * nel + el_nr]
+                            + omega * R_target)
+                    else:
+                        R_gf.vec[d * nel + el_nr] = R_target
+
+            # Convergence check
+            if iteration > 0:
+                max_change = np.max(np.abs(B_new - B_old)) / max(2.0, 1e-10)
+                if verbose:
+                    print(f"   iter {iteration}: "
+                          f"max |dB|/B_sat = {max_change:.2e}")
+                if max_change < tol:
+                    converged = True
+                    if verbose:
+                        print(f"   Converged at iteration {iteration}")
+                    break
+            elif verbose:
+                print(f"   iter 0: initial solve")
+
+            B_old[:] = B_new
+
+        if not converged and verbose:
+            print(f"   WARNING: Not converged after {maxiter} iterations")
+
+        # Commit converged states for next time step
+        if converged:
+            for h in handles:
+                rad.MatHysCommitState(h)
+
+        # Store results
+        self._A_gf = A_gf
+        B_cf = self._B_source_cf + curl(A_gf)
+        self._B_cf = B_cf
+
+        # H = nu_alpha*B - R/(1+alpha) in iron, nu_0*B in air
+        iron_indicator = self._build_domain_indicator()
+        H_iron = nu_alpha * B_cf - (1.0 / (1 + alpha)) * R_gf
+        H_air = nu_0 * B_cf
+        self._H_cf = iron_indicator * H_iron + (1 - iron_indicator) * H_air
+
+        # Save per-element M for to_radia() pipeline
+        self._M_per_element = {}
+        for idx, (el_nr, centroid) in enumerate(iron_els):
+            try:
+                mip = self.mesh(*centroid)
+                B_val = [float(B_cf(mip)[i]) for i in range(3)]
+            except Exception:
+                B_val = [0.0, 0.0, 0.0]
+            R_prev = [R_gf.vec[d * nel + el_nr] for d in range(3)]
+            H_val = [(B_val[i] / MU_0 - R_prev[i]) / (1 + alpha)
+                     for i in range(3)]
+            M_val = list(rad.MatMvsH(handles[idx], 'm', H_val))
+            self._M_per_element[el_nr] = M_val
+
+        return A_gf
+
+    # ------------------------------------------------------------------
+    # Result access
+    # ------------------------------------------------------------------
+
+    def get_B(self):
+        """Get B field CoefficientFunction (Tesla, dim=3).
+
+        B = B_s + curl(A_r).
+        """
+        if self._B_cf is None:
+            raise RuntimeError("Call solve_linear() or solve_nonlinear_newton() first")
+        return self._B_cf
+
+    def get_H(self):
+        """Get H field CoefficientFunction (A/m, dim=3).
+
+        H = nu * B.
+        """
+        if self._H_cf is None:
+            raise RuntimeError("Call solve_linear() or solve_nonlinear_newton() first")
+        return self._H_cf
+
+    def get_A(self):
+        """Get reduced vector potential GridFunction (HCurl)."""
+        if self._A_gf is None:
+            raise RuntimeError("Call solve_linear() or solve_nonlinear_newton() first")
+        return self._A_gf
+
+    def project_to_hdiv(self, order=None):
+        """Project B field onto HDiv GridFunction (ensures div(B)=0).
+
+        Parameters
+        ----------
+        order : int, optional
+            HDiv polynomial order. Default: same as solver order.
+
+        Returns
+        -------
+        ngsolve.GridFunction
+            B field in HDiv space.
+        """
+        from ngsolve import HDiv, GridFunction
+
+        if self._B_cf is None:
+            raise RuntimeError("Call solve first")
+
+        if order is None:
+            order = self.order
+        fes_hdiv = HDiv(self.mesh, order=order)
+        B_gf = GridFunction(fes_hdiv, name='B')
+        B_gf.Set(self._B_cf)
+        return B_gf
+
+    def get_M_per_element(self):
+        """Get per-element magnetization from hysteresis solve.
+
+        Returns
+        -------
+        dict
+            {element_nr: [Mx, My, Mz]} in A/m.
+        """
+        if not hasattr(self, '_M_per_element') or self._M_per_element is None:
+            raise RuntimeError("Call solve_hysteresis() first")
+        return self._M_per_element
+
+    def to_radia(self, coil=None):
+        """Convert solved magnetization to Radia objects for analytical field.
+
+        Creates Radia ObjTetrahedron/ObjHexahedron elements with per-element
+        magnetization from solve_hysteresis(). The resulting Radia objects
+        evaluate B using exact analytical surface charge formulas -- no mesh
+        needed in the gap region.
+
+        Parameters
+        ----------
+        coil : int, optional
+            Radia coil object handle to combine with iron contribution.
+
+        Returns
+        -------
+        int
+            Radia container object handle.
+        """
+        import radia as rad
+        from radia.netgen_mesh_import import netgen_mesh_to_radia
+
+        M_dict = self.get_M_per_element()
+
+        def material_func(el_idx):
+            if el_idx in M_dict:
+                return {'magnetization': M_dict[el_idx]}
+            return {'magnetization': [0, 0, 0]}
+
+        iron_domains = list(self._mu_r_dict.keys())
+        container = netgen_mesh_to_radia(
+            self.mesh, material=material_func,
+            material_filter=iron_domains, verbose=False)
+
+        if coil is not None:
+            container = rad.ObjCnt([container, coil])
+
+        return container
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _build_nu_cf(self):
+        """Build domain-wise nu CoefficientFunction (linear).
+
+        nu = 1/(mu_0 * mu_r) for iron, 1/mu_0 for air.
+        """
+        nu_dict = {d: 1.0 / (MU_0 * mr) for d, mr in self._mu_r_dict.items()}
+        return self.mesh.MaterialCF(nu_dict, default=1.0 / MU_0)
+
+    def _build_domain_indicator(self):
+        """Build indicator CF: 1.0 in iron, 0.0 elsewhere."""
+        iron_dict = {d: 1.0 for d in self.iron_domains}
+        return self.mesh.MaterialCF(iron_dict, default=0.0)
+
+    def _compute_physical_bbox(self):
+        """Compute bounding box of physical (non-Kelvin) domains."""
+        from ngsolve import VOL
+        pmin = [1e30, 1e30, 1e30]
+        pmax = [-1e30, -1e30, -1e30]
+        for el in self.mesh.Elements(VOL):
+            mat = (el.mat if hasattr(el, 'mat')
+                   else str(self.mesh.GetMaterials()[el.nr]))
+            if mat == self._kelvin_region:
+                continue
+            for v in el.vertices:
+                pt = self.mesh.vertices[v.nr].point
+                for i in range(3):
+                    pmin[i] = min(pmin[i], pt[i])
+                    pmax[i] = max(pmax[i], pt[i])
+        margin = 0.1 * max(pmax[i] - pmin[i] for i in range(3))
+        return [[pmin[i] - margin, pmax[i] + margin] for i in range(3)]
+
+    def _setup_ams_preconditioner(self, a_mat, fes, h1_mass_coeff):
+        """Set up AMS preconditioner with Chebyshev smoother.
+
+        Parameters
+        ----------
+        a_mat : BaseMatrix
+            Assembled HCurl system matrix.
+        fes : HCurl FESpace
+            HCurl finite element space.
+        h1_mass_coeff : CoefficientFunction or float
+            Coefficient for H1 gradient subspace problem.
+            Magnetostatic: eps (gauge regularization).
+            Eddy current: eps * nu + omega * sigma.
+        """
+        import sparsesolv_ngsolve as ssn
+        from ngsolve import BilinearForm, Preconditioner, grad, dx
+
+        opts = self._ams_options
+
+        # Cache G_mat and h1_fes (invariant across Newton/Picard iterations)
+        if self._ams_cache.get('fes_id') != id(fes):
+            G_mat, h1_fes = fes.CreateGradient()
+            self._ams_cache = {
+                'G_mat': G_mat, 'h1_fes': h1_fes, 'fes_id': id(fes),
+            }
+        G_mat = self._ams_cache['G_mat']
+        h1_fes = self._ams_cache['h1_fes']
+
+        gs = a_mat.CreateSmoother(fes.FreeDofs())
+
+        # H1 subspace: h1_mass_coeff * (grad u, grad v)
+        u_h1, v_h1 = h1_fes.TnT()
+        a_h1 = BilinearForm(h1_fes)
+        a_h1 += h1_mass_coeff * grad(u_h1) * grad(v_h1) * dx
+
+        # H1 solver auto-selection
+        h1_choice = opts.get('h1_solver', 'auto')
+        if h1_choice == 'auto':
+            h1_choice = 'direct' if h1_fes.ndof < 100_000 else 'h1amg'
+
+        if h1_choice == 'direct':
+            a_h1.Assemble()
+            h1_inv = a_h1.mat.Inverse(h1_fes.FreeDofs(),
+                                       inverse='sparsecholesky')
+        else:
+            h1amg = Preconditioner(a_h1, 'h1amg')
+            a_h1.Assemble()
+            h1amg.Update()
+            h1_inv = h1amg.mat
+
+        return ssn.TaskManagerAMSPreconditioner(
+            A_real=a_mat,
+            grad_mat=G_mat,
+            gs_smoother=gs,
+            h1_inv=h1_inv,
+            num_smooth=opts['num_smooth'],
+            cycle_type=0,
+            chebyshev_degree=opts['chebyshev_degree'],
+            eigenratio=opts['eigenratio'],
+        )
+
+    def _select_solver(self, fes_ndof, solver):
+        """Select solver type based on DOF count and availability."""
+        if solver != 'auto':
+            return solver
+        if fes_ndof <= 200_000:
+            return 'direct'
+        try:
+            import sparsesolv_ngsolve  # noqa: F401
+            return 'ams'
+        except ImportError:
+            return 'bddc'
+
+    def _solve_system(self, a, f, fes, gf, pre, use_iterative):
+        """Solve assembled linear system (direct or iterative)."""
+        if use_iterative:
+            from ngsolve.krylovspace import CGSolver
+            inv = CGSolver(mat=a.mat, pre=pre.mat, maxiter=2000,
+                           printrates=False, tol=1e-10)
+            gf.vec.data = inv * f.vec
+        else:
+            gf.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
+
+    def _element_centroid(self, el):
+        """Compute centroid of a volume element."""
+        verts = el.vertices
+        coords = np.zeros(3)
+        for v in verts:
+            pt = self.mesh.vertices[v.nr].point
+            coords += np.array([pt[0], pt[1], pt[2]])
+        coords /= len(verts)
+        return tuple(coords)

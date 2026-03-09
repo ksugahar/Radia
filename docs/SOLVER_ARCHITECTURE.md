@@ -83,7 +83,7 @@ where:
 
 **SIBC (Surface Impedance Boundary Condition)**:
 - Rectangular conductors: Dowell formula `F_R = xi * [sinh(2xi) + sin(2xi)] / [cosh(2xi) - cos(2xi)]`
-- Circular conductors: Bessel function `Z = (k*l)/(2*pi*r*sigma) * J0(kr)/J1(kr)` (scipy.special.jv)
+- Circular conductors: Bessel function `Z = (k*l)/(2*pi*r*sigma) * I0(kr)/I1(kr)` (scipy.special.iv)
 - Skin depth: `delta = sqrt(2/(omega*mu*sigma))`
 
 **Node-Segment Topology API**:
@@ -133,12 +133,13 @@ Z = solver.compute_port_impedance(freq=1e6)
 - `MatLin(mu_r)`: Linear isotropic
 - `MatLin([mu_par, mu_perp], axis)`: Linear anisotropic
 - `MatSatIsoTab(BH_data)`: **Nonlinear** (B-H curve)
-- `MatEnergyHysteresis(K, chi, f_k_tables, eps)`: **Vector hysteresis** (energy-based Play, table-based)
+- `MatPlayHysteresis(K, eta, f_k_tables)`: **Vector hysteresis** (B-input Play, recommended)
+- `MatEnergyHysteresis(K, eta, f_k_tables, eps)`: **Vector hysteresis** (energy-based Play)
 - `MatMagFixed(M)`: Permanent magnet (fixed M)
 
 **Key advantage**: **Only Radia can handle nonlinear materials** in the integral equation framework.
-This includes **vector hysteresis** with energy-based Play operators -- a novel capability
-for BEM (see `docs/B_INPUT_PLAY_MODEL.md` Section 12).
+This includes **vector hysteresis** with Play operators -- a novel capability
+for BEM (see `docs/B_INPUT_PLAY_MODEL.md`).
 FEM-BEM (ngbem) is limited to linear materials because BEM requires a known Green's function.
 
 ### 3. ngbem (NGSolve BEM): Linear Materials Only
@@ -334,7 +335,7 @@ For power electronics and WPT, **PEEC + SIBC is the optimal choice**:
 | Copper coil | N/A | PEEC + SIBC | sigma parameter |
 | Ferrite core | Yes (usually) | MMM/MSC or ngbem | MatLin(mu_r) |
 | Silicon steel | Nonlinear | **MMM/MSC only** | MatSatIsoTab(BH) |
-| Soft iron (hysteresis) | Nonlinear | **MMM only** | MatEnergyHysteresis + b_input_hantila |
+| Soft iron (hysteresis) | Nonlinear | **MMM only** | MatPlayHysteresis / MatEnergyHysteresis + b_input_hantila |
 | NdFeB PM | Fixed M | MMM/MSC | ObjHexahedron(v, M) |
 | Aluminum shield | Linear | PEEC or ngbem | sigma parameter |
 | Mu-metal | Nonlinear | **MMM/MSC only** | MatSatIsoTab(BH) |
@@ -362,7 +363,7 @@ For power electronics and WPT, **PEEC + SIBC is the optimal choice**:
 | FastHenry .inp parser | **Implemented** | `src/radia/fasthenry_parser.py` |
 | Coupled PEEC+MMM | **Implemented** | `src/radia/peec_coupled.py` |
 | SIBC (Dowell) | **Implemented** | `src/core/rad_peec_surface_impedance.cpp` |
-| SIBC (Bessel) | **Implemented** | Python: `scipy.special.jv` |
+| SIBC (Bessel) | **Implemented** | Python: `scipy.special.iv` |
 | Panel (capacitance) | **Implemented** | `src/core/rad_peec_matrices.cpp` |
 | Radia MMM (nonlinear) | **Implemented** | `src/core/rad_relaxation_methods.cpp` |
 | B-input Newton (hysteresis) | **Implemented** | `src/core/rad_relaxation_methods.cpp` |
@@ -420,10 +421,10 @@ rad.SolverConfig(newton_method=True)    # Newton (faster, needs dM/dH)
 rad.Solve(container, 1e-4, 100, 0)
 ```
 
-### B-input Newton / Hantila (Energy Hysteresis)
+### B-input Newton / Hantila (Hysteresis)
 
-For `MatEnergyHysteresis` materials, specialized B-input solvers are available.
-These use the Inverse(B) operator with analytical Jacobian from the energy Hessian.
+For `MatPlayHysteresis` or `MatEnergyHysteresis` materials, specialized B-input solvers are available.
+These use the Inverse(B) operator with analytical Jacobian.
 
 ```python
 # B-input Newton (2-4 iterations, O(N^3) per iter)
@@ -443,8 +444,8 @@ B-space domain, with analytical Jacobian from `ComputeJacobian(dBdH)`. See
 |--------|-----------|-----------|-------------|
 | Picard | MatLin, MatSatIsoTab | O(N^3) | 10-100 iter |
 | Newton | MatLin, MatSatIsoTab | O(N^3) | 3-10 iter |
-| B-input Newton | MatEnergyHysteresis | O(N^3) | **2-4 iter** |
-| B-input Hantila | MatEnergyHysteresis | O(N^2) after LU | **3-47 iter** |
+| B-input Newton | MatPlayHysteresis / MatEnergyHysteresis | O(N^3) | **2-4 iter** |
+| B-input Hantila | MatPlayHysteresis / MatEnergyHysteresis | O(N^2) after LU | **3-47 iter** |
 
 ---
 

@@ -385,3 +385,63 @@ def mat_to_radia(filepath, eps=1e-8):
     p = convert_play_to_energy(eta, f_k_tables)
     return {'K': p['K'], 'chi': p['chi'],
             'f_k_tables': p['f_k_tables'], 'eps': eps}
+
+
+# =====================================================================
+# Convenience: one-step file -> Play model params
+# =====================================================================
+
+def hys_to_play_radia(filepath, K=None):
+    """Convert .hys file to Play model parameters.
+
+    Returns (K, eta, f_k_tables) ready for rad.MatPlayHysteresis().
+
+    Parameters
+    ----------
+    filepath : str or Path
+        Path to .hys file.
+    K : int, optional
+        Number of play operators. If None, determined from data.
+
+    Returns
+    -------
+    K : int
+        Number of play operators.
+    eta : ndarray
+        Play thresholds in Tesla.
+    f_k_tables : list of (r_array, f_array) tuples
+        Shape function tables.
+    """
+    loops = load_hys(filepath)
+    eta, f_k_tables, Bplay = build_shape_functions(loops)
+
+    if K is not None and K < len(f_k_tables):
+        indices = np.linspace(0, len(f_k_tables) - 1, K, dtype=int)
+        f_k_tables = [f_k_tables[i] for i in indices]
+        eta = eta[indices]
+
+    return len(f_k_tables), eta, f_k_tables
+
+
+def mat_to_play_radia(filepath):
+    """Convert MATLAB .mat file (Potter-Schmulian) to Play model parameters.
+
+    Returns (K, eta, f_k_tables) ready for rad.MatPlayHysteresis().
+
+    Parameters
+    ----------
+    filepath : str or Path
+        Path to B_input.mat.
+
+    Returns
+    -------
+    K : int
+        Number of play operators.
+    eta : ndarray
+        Play thresholds in Tesla.
+    f_k_tables : list of (r_array, f_array) tuples
+        Shape function tables.
+    """
+    loops, dB, BMax = load_mat(filepath)
+    eta, f_k_tables, Bplay = build_shape_functions(loops, dB=dB)
+    return len(f_k_tables), eta, f_k_tables
