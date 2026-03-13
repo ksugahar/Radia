@@ -102,6 +102,26 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 **Lesson**: FMM is effective for point charges/dipoles in unbounded space (N-body). It is NOT effective for BEM/MSC where source distributions are extended (face integrals) and geometries are compact.
 
+### GmshBuilder: Removed (2026-03-13)
+
+**GmshBuilder was removed from the repository**. Do NOT re-implement GMSH-based mesh generation.
+
+**POLICY**: GMSH is used for **visualization and post-processing only**, NOT for mesh generation.
+
+**Mesh generation is 2-path only**:
+1. **STEP -> Netgen** (via NGSolve OCC): For tet meshes with `mesh.Curve(order)` support
+2. **STEP -> Cubit** (Coreform Cubit): For structured hex meshes and complex topology
+
+**Do NOT**:
+- Use GMSH Python API (`gmsh.model.occ.*`) for geometry or mesh creation
+- Import `from radia.gmsh_builder import GmshBuilder` (removed)
+- Write new GMSH mesh generation scripts
+
+**GMSH is allowed for**:
+- Opening and visualizing `.msh` files (GMSH GUI)
+- Post-processing field data (GMSH views)
+- Reading `.msh` file format via `gmsh_mesh_import.py` (pure file reader, no GMSH dependency)
+
 ---
 
 ## Architecture Overview
@@ -132,6 +152,7 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
 - General sparse solvers (use MKL/MUMPS)
 - Full-wave BEM (use ngbem for high frequency)
 - CAD geometry kernels (use OpenCASCADE via NGSolve)
+- Mesh generation wrappers (use Netgen or Cubit directly, NOT GMSH)
 - PEEC from scratch (use PAMELA)
 - Custom H-matrix algorithms (use HACApK)
 
@@ -478,35 +499,34 @@ pt = mesh.ngmesh.Points()[v.nr]  # Off-by-one!
 
 ### Mesh Generation Policy
 
-**2-Tier workflow by element order**:
+**POLICY**: Mesh generation uses **2 paths only**. GMSH is NOT used for mesh generation.
 
-| Element Order | Workflow | Tools |
-|---------------|----------|-------|
-| **1st + 2nd order** | GMSH direct | GMSH, or Cubit -> GMSH export |
-| **3rd order+** | Netgen + Cubit via STEP | `mesh.Curve(order)` with OCC geometry (NGSolve FEM only) |
+| Path | Workflow | Element Types | Use Case |
+|------|----------|---------------|----------|
+| **STEP -> Netgen** | STEP -> NGSolve OCC -> `Mesh()` | Tet4 (+ `mesh.Curve(order)`) | General purpose, curved boundaries |
+| **STEP -> Cubit** | STEP -> Coreform Cubit -> `.msh` export | Hex8, Wedge6, Tet4 | Structured hex, complex topology |
 
 **Radia supports 1st order only** (Tet4, Hex8, Wedge6). 2nd order planned.
+
+**CRITICAL**: For curved geometries, use `mesh.Curve(3)` after Netgen meshing. Without it, polygon approximation of circles loses ~2% area -> ~9% force error.
 
 ### Mesh Import Paths
 
 ```
-Path A: GMSH direct (no NGSolve needed)
-  CAD -> GMSH -> .msh -> gmsh_mesh_import.py -> Radia
+Path A: Netgen (recommended for tet)
+  STEP -> NGSolve OCC -> Mesh() -> netgen_mesh_import.py -> Radia
 
-Path B: GMSH via NGSolve
-  CAD -> GMSH -> .msh -> NGSolve Mesh() -> netgen_mesh_import.py -> Radia
-
-Path C: Cubit for complex hex
-  CAD -> Cubit -> GMSH export -> Path A or B
+Path B: Cubit (recommended for hex)
+  STEP -> Cubit -> .msh export -> gmsh_mesh_import.py -> Radia
 ```
 
 **Key import functions**:
 
 | Module | Function | Purpose |
 |--------|----------|---------|
-| `gmsh_mesh_import` | `gmsh_to_radia(file, mu_r, ...)` | GMSH .msh -> Radia (no NGSolve) |
-| `netgen_mesh_import` | `netgen_mesh_to_radia(mesh, ...)` | NGSolve mesh -> Radia |
-| `netgen_mesh_import` | `create_hex_mesh_grid(...)` | Structured hex (no external tool) |
+| `netgen_mesh_import` | `netgen_mesh_to_radia(mesh, ...)` | NGSolve mesh -> Radia (recommended) |
+| `netgen_mesh_import` | `create_hex_mesh_grid(...)` | Structured hex grid (no external tool) |
+| `gmsh_mesh_import` | `gmsh_to_radia(file, mu_r, ...)` | .msh file -> Radia (for Cubit exports) |
 
 ### Coreform Cubit Mesh Export
 
@@ -515,7 +535,7 @@ For complex hexahedral meshes, use the **Coreform Cubit Mesh Export** tool.
 **Repository**: https://github.com/ksugahar/Coreform_Cubit_Mesh_Export
 
 ```python
-# Cubit -> GMSH -> Radia (recommended for complex hex)
+# Cubit -> .msh -> Radia (recommended for complex hex)
 from gmsh_mesh_import import gmsh_to_radia
 core = gmsh_to_radia('cubit_exported.msh', mu_r=1000)
 ```
@@ -524,15 +544,15 @@ Cubit workflow for journal files: define blocks before export, use `cubit_mesh_e
 
 ### PEEC Conductor Mesh
 
-PEEC conductors use **surface mesh only** (SIBC handles skin effect). Use GMSH `generate(2)` for surface meshes. Supported: Tri3, Quad4 (1st order), Tri6, Quad8/9 (2nd order).
+PEEC conductors use **surface mesh only** (SIBC handles skin effect). Generate surface meshes via Netgen or Cubit. Supported: Tri3, Quad4 (1st order), Tri6, Quad8/9 (2nd order).
 
 ### Nastran Format: REMOVED
 
-Nastran BDF support is **REMOVED**. Use Cubit -> Netgen direct export. Cubit can read legacy `.bdf` files if needed.
+Nastran BDF support is **REMOVED**. Use Cubit -> `.msh` export or Netgen direct. Cubit can read legacy `.bdf` files if needed.
 
 ### Mesh Operations: Dropped APIs
 
-`ObjDivMag`, `ObjDivMagPln`, `ObjCutMag` are NOT supported. All mesh operations use external tools (GMSH, Cubit).
+`ObjDivMag`, `ObjDivMagPln`, `ObjCutMag` are NOT supported. All mesh operations use external tools (Netgen, Cubit).
 
 ### Mesh File Preservation
 
