@@ -3,8 +3,8 @@ gmsh_mesh_import.py
 
 Direct GMSH .msh file reader for Radia MMM/MSC solver.
 
-Reads GMSH 2.x ASCII format and creates Radia hexahedral/tetrahedral objects.
-Does NOT require NGSolve as a dependency.
+Reads GMSH 2.x ASCII format and creates Radia hexahedral/tetrahedral
+objects. Does NOT require NGSolve or GMSH library as a dependency.
 
 Supported element types:
   - Tet4  (GMSH type 4): 4-node tetrahedron -> ObjTetrahedron (3 DOF, MMM)
