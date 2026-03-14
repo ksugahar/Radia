@@ -422,9 +422,22 @@ src/radia/
 
 Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
 
+Official PyPI ngsolve 6.2.2601+ includes: **MKL**, **PARDISO**, Periodic BC fix.
+No fork or custom build is needed.
+
 ```bash
 pip install radia  # NGSolve is a required dependency (>=6.2.2601)
+# Compact AMS/COCR solvers are now in ngsolve.la (since ngsolve-sparsesolv 3.1.0)
+# from ngsolve.la import CompactAMSPreconditioner, COCRSolver
 ```
+
+### SetGeomInfo API (Netgen PR#232)
+
+For high-order mesh curving of externally imported meshes (from Cubit, GMSH),
+the SetGeomInfo API patch is needed. It is maintained in the `ksugahar/netgen` fork
+(branch `add-setgeominfo-api`). PR: https://github.com/NGSolve/netgen/pull/232
+
+When the PR is merged upstream, the fork becomes unnecessary.
 
 ### NGSolve Recommended Configuration
 
@@ -666,11 +679,14 @@ Reference: F.I. Hantila, Rev. Roum. Sci. Techn. - Electrotechn. et Energ., 1975.
 
 ---
 
-## Compact HX Preconditioner (ngsolve-sparsesolv)
+## Compact HX Preconditioner (ngsolve.la)
+
+Since ngsolve-sparsesolv 3.1.0, Compact AMS/AMG/COCR types are unified into `ngsolve.la`.
+Import: `from ngsolve.la import CompactAMSPreconditioner, COCRSolver`
 
 ### Policy: Compact HX for HCurl Problems
 
-**POLICY**: Use **Compact HX** (Compact Hiptmair-Xu) as the default preconditioner for HCurl curl-curl + mass systems in ngsolve-sparsesolv. Compact HX is a HYPRE-free, TaskManager-native AMS implementation.
+**POLICY**: Use **Compact HX** (Compact Hiptmair-Xu) as the default preconditioner for HCurl curl-curl + mass systems. Compact HX is a HYPRE-free, TaskManager-native AMS implementation available via `ngsolve.la`.
 
 **Name origin**: HX = Hiptmair-Xu (2007), "Nodal auxiliary space preconditioning in H(curl) and H(div) spaces", SIAM J. Numer. Anal. 45(6). "Compact" = lightweight, HYPRE-free, TaskManager-native.
 
