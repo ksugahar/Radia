@@ -267,22 +267,26 @@ class BEMExtractor:
         print(f"  Materials: {', '.join(materials)}")
         print(f"  Curve order: {curve_order}")
 
-    def load_cubit_surface(self, cubit, sideset_name="conductor",
+    def load_cubit_surface(self, cubit, block_name="conductor",
                            geometry_file=None, curve_order=1):
         """Load Cubit surface mesh directly for BEM analysis.
 
         For BEM, only the conductor surface is needed (not the volume).
-        This extracts triangular/quad surface elements from a Cubit sideset.
+        This extracts triangular/quad surface elements from a Cubit block.
+
+        Blocks are the only Cubit entity type that supports element type
+        specification (TRI6, QUAD8 for 2nd order elements).
 
         Cubit workflow:
             cubit.cmd("surface 1 2 3 4 5 6 size 0.002")
             cubit.cmd("mesh surface 1 2 3 4 5 6")
-            cubit.cmd("sideset 1 name 'conductor' surface 1 2 3 4 5 6")
-            ext.load_cubit_surface(cubit, sideset_name="conductor")
+            cubit.cmd("block 1 name 'conductor' surface 1 2 3 4 5 6")
+            cubit.cmd("block 1 element type TRI6")
+            ext.load_cubit_surface(cubit, block_name="conductor")
 
         Args:
             cubit: Cubit Python interface
-            sideset_name: Name of the sideset containing conductor surfaces
+            block_name: Name of the block containing conductor surfaces
             geometry_file: STEP file for mesh.Curve() (optional)
             curve_order: Polynomial order for curved elements
         """
@@ -290,25 +294,35 @@ class BEMExtractor:
         from netgen.csg import Pnt
         from ngsolve import Mesh
 
-        # Find the sideset
-        ss_ids = cubit.get_sideset_id_list()
-        target_ss = None
-        for ss_id in ss_ids:
-            name = cubit.get_sideset_name(ss_id)
-            if name == sideset_name:
-                target_ss = ss_id
+        # Find the block
+        block_ids = cubit.get_block_id_list()
+        target_block = None
+        block_names_available = []
+        for bid in block_ids:
+            name = cubit.get_block_name(bid)
+            block_names_available.append(name)
+            if name == block_name:
+                target_block = bid
                 break
 
-        if target_ss is None:
-            raise ValueError(f"Sideset '{sideset_name}' not found. "
-                             f"Available: {[cubit.get_sideset_name(i) for i in ss_ids]}")
+        if target_block is None:
+            raise ValueError(f"Block '{block_name}' not found. "
+                             f"Available: {block_names_available}")
 
-        # Get surface elements from sideset
-        tri_ids = cubit.get_sideset_tris(target_ss)
-        quad_ids = cubit.get_sideset_quads(target_ss)
+        # Get surface elements from block
+        tri_ids = []
+        quad_ids = []
+        try:
+            tri_ids = list(cubit.get_block_tris(target_block))
+        except Exception:
+            pass
+        try:
+            quad_ids = list(cubit.get_block_quads(target_block))
+        except Exception:
+            pass
 
         if len(tri_ids) == 0 and len(quad_ids) == 0:
-            raise ValueError(f"Sideset '{sideset_name}' contains no surface elements")
+            raise ValueError(f"Block '{block_name}' contains no surface elements")
 
         # Collect unique nodes
         node_set = set()
@@ -322,7 +336,7 @@ class BEMExtractor:
         # Build Netgen surface mesh
         ngmesh = NetgenMesh(dim=3)
         fd = FaceDescriptor(surfnr=1, domin=0, domout=0, bc=1)
-        fd.bcname = sideset_name
+        fd.bcname = block_name
         ngmesh.Add(fd)
 
         node_map = {}
@@ -343,7 +357,7 @@ class BEMExtractor:
             ngmesh.Add(Element2D(index=1, vertices=[verts[0], verts[1], verts[2]]))
             ngmesh.Add(Element2D(index=1, vertices=[verts[0], verts[2], verts[3]]))
 
-        ngmesh.SetBCName(0, sideset_name)
+        ngmesh.SetBCName(0, block_name)
         self.mesh = Mesh(ngmesh)
         self._cubit = cubit
         self._curve_order = curve_order
@@ -352,7 +366,7 @@ class BEMExtractor:
             self.mesh.Curve(curve_order)
 
         n_surf = len(tri_ids) + len(quad_ids)
-        print(f"BEMExtractor: Loaded surface mesh from sideset '{sideset_name}'")
+        print(f"BEMExtractor: Loaded surface mesh from block '{block_name}'")
         print(f"  {n_surf} surface elements ({len(tri_ids)} tri + {len(quad_ids)} quad)")
         print(f"  {len(node_set)} nodes")
         print(f"  Curve order: {curve_order}")
@@ -412,7 +426,7 @@ class BEMExtractor:
             print(f"  Magnetic core '{block_name}': mu_r={mu_r}")
 
     def set_port(self, name, block=None, source_nodes=None, sink_nodes=None,
-                 source_sideset=None, sink_sideset=None):
+                 source_block=None, sink_block=None):
         """Define an extraction port.
 
         Port types:
@@ -420,29 +434,35 @@ class BEMExtractor:
              Current is uniformly distributed on the conductor surface.
              L = total self-inductance of the loop.
 
-          2. Open conductor (busbar): Specify source/sink nodes or sidesets.
-             Current enters at source, exits at sink.
+          2. Open conductor (busbar): Specify source/sink blocks.
+             Current enters at source block, exits at sink block.
              L = partial inductance between source and sink.
 
-        For Cubit workflow, use sidesets to define source/sink:
-            cubit.cmd("sideset 1 name 'source' surface 5")
-            cubit.cmd("sideset 2 name 'sink' surface 10")
-            ext.set_port("port1", block="busbar",
-                         source_sideset="source", sink_sideset="sink")
+        For Cubit workflow, use blocks to define source/sink:
+            cubit.cmd("block 1 name 'conductor' volume 1")
+            cubit.cmd("block 2 name 'source1' surface 5")
+            cubit.cmd("block 2 element type TRI6")
+            cubit.cmd("block 3 name 'sink1' surface 10")
+            cubit.cmd("block 3 element type TRI6")
+            ext.set_port("port1", block="conductor",
+                         source_block="source1", sink_block="sink1")
+
+        Blocks are the only Cubit entity type that supports element type
+        specification (e.g., TRI6, QUAD8 for 2nd order elements).
 
         Args:
             name: Port name (e.g., "port1", "primary", "secondary")
             block: Conductor block name. If None, uses the first conductor.
             source_nodes: List of source vertex indices (0-indexed). Current enters.
             sink_nodes: List of sink vertex indices (0-indexed). Current exits.
-            source_sideset: Cubit sideset name for source (alternative to source_nodes).
-            sink_sideset: Cubit sideset name for sink (alternative to sink_nodes).
+            source_block: Cubit block name for source (alternative to source_nodes).
+            sink_block: Cubit block name for sink (alternative to sink_nodes).
         """
         if block is None and self._conductors:
             block = list(self._conductors.keys())[0]
 
         port_type = 'closed'  # default: closed loop, uniform excitation
-        if (source_nodes is not None or source_sideset is not None):
+        if (source_nodes is not None or source_block is not None):
             port_type = 'open'  # open conductor, source/sink excitation
 
         port_info = {
@@ -451,16 +471,16 @@ class BEMExtractor:
             'type': port_type,
             'source_nodes': source_nodes,
             'sink_nodes': sink_nodes,
-            'source_sideset': source_sideset,
-            'sink_sideset': sink_sideset,
+            'source_block': source_block,
+            'sink_block': sink_block,
         }
         self._ports.append(port_info)
 
         if port_type == 'closed':
             print(f"  Port '{name}' -> block '{block}' (closed loop, uniform excitation)")
         else:
-            src = source_sideset or f"nodes {source_nodes}"
-            snk = sink_sideset or f"nodes {sink_nodes}"
+            src = source_block or f"nodes {source_nodes}"
+            snk = sink_block or f"nodes {sink_nodes}"
             print(f"  Port '{name}' -> block '{block}' (open: {src} -> {snk})")
 
     def extract(self, freqs, mode='mqs', use_esim=False):
@@ -627,13 +647,13 @@ class BEMExtractor:
             source_nodes = port_info['source_nodes']
             sink_nodes = port_info['sink_nodes']
 
-            # Resolve sideset names to node lists (Cubit)
-            if source_nodes is None and port_info.get('source_sideset'):
-                source_nodes = self._resolve_sideset_nodes(
-                    port_info['source_sideset'])
-            if sink_nodes is None and port_info.get('sink_sideset'):
-                sink_nodes = self._resolve_sideset_nodes(
-                    port_info['sink_sideset'])
+            # Resolve block names to node lists (Cubit)
+            if source_nodes is None and port_info.get('source_block'):
+                source_nodes = self._resolve_block_nodes(
+                    port_info['source_block'])
+            if sink_nodes is None and port_info.get('sink_block'):
+                sink_nodes = self._resolve_block_nodes(
+                    port_info['sink_block'])
 
             if source_nodes is None or sink_nodes is None:
                 print(f"  WARNING: Port '{port_info['name']}' has no source/sink, "
@@ -712,67 +732,88 @@ class BEMExtractor:
 
         return e
 
-    def _resolve_sideset_nodes(self, sideset_name):
-        """Resolve a Cubit sideset name to NGSolve vertex indices.
+    def _resolve_block_nodes(self, block_name):
+        """Resolve a Cubit block name to NGSolve vertex indices.
 
-        Uses the stored cubit object and node mapping from load_cubit_surface().
+        Blocks are the only Cubit entity type that supports element type
+        specification (TRI6, QUAD8, HEX20, etc.), making them suitable
+        for 2nd-order element workflows.
 
         Args:
-            sideset_name: Name of the Cubit sideset
+            block_name: Name of the Cubit block
 
         Returns:
             list of NGSolve vertex indices (0-indexed), or None
         """
         if self._cubit is None:
-            print(f"  WARNING: Cannot resolve sideset '{sideset_name}' - "
+            print(f"  WARNING: Cannot resolve block '{block_name}' - "
                   f"mesh was not loaded from Cubit")
             return None
 
         cubit = self._cubit
 
-        # Find sideset by name
-        ss_ids = cubit.get_sideset_id_list()
-        target_ss = None
-        for ss_id in ss_ids:
-            name = cubit.get_sideset_name(ss_id)
-            if name == sideset_name:
-                target_ss = ss_id
+        # Find block by name
+        block_ids = cubit.get_block_id_list()
+        target_block = None
+        block_names_available = []
+        for bid in block_ids:
+            name = cubit.get_block_name(bid)
+            block_names_available.append(name)
+            if name == block_name:
+                target_block = bid
                 break
 
-        if target_ss is None:
-            print(f"  WARNING: Sideset '{sideset_name}' not found in Cubit. "
-                  f"Available: {[cubit.get_sideset_name(i) for i in ss_ids]}")
+        if target_block is None:
+            print(f"  WARNING: Block '{block_name}' not found in Cubit. "
+                  f"Available: {block_names_available}")
             return None
 
-        # Collect all nodes from sideset surface elements
+        # Collect all nodes from block elements
         cubit_nodes = set()
-        for tri_id in cubit.get_sideset_tris(target_ss):
-            cubit_nodes.update(cubit.get_connectivity("tri", tri_id))
-        for quad_id in cubit.get_sideset_quads(target_ss):
-            cubit_nodes.update(cubit.get_connectivity("quad", quad_id))
 
-        # Also check for directly assigned nodes
+        # Try different element types that blocks can contain
+        # Surface elements (for source/sink faces)
         try:
-            direct_nodes = cubit.get_sideset_nodes(target_ss)
-            cubit_nodes.update(direct_nodes)
+            tri_ids = cubit.get_block_tris(target_block)
+            for tri_id in tri_ids:
+                cubit_nodes.update(cubit.get_connectivity("tri", tri_id))
+        except Exception:
+            pass
+
+        try:
+            quad_ids = cubit.get_block_quads(target_block)
+            for quad_id in quad_ids:
+                cubit_nodes.update(cubit.get_connectivity("quad", quad_id))
+        except Exception:
+            pass
+
+        # Volume elements (if block contains volumes)
+        try:
+            tet_ids = cubit.get_block_tets(target_block)
+            for tet_id in tet_ids:
+                cubit_nodes.update(cubit.get_connectivity("tet", tet_id))
+        except Exception:
+            pass
+
+        try:
+            hex_ids = cubit.get_block_hexes(target_block)
+            for hex_id in hex_ids:
+                cubit_nodes.update(cubit.get_connectivity("hex", hex_id))
         except Exception:
             pass
 
         if not cubit_nodes:
-            print(f"  WARNING: Sideset '{sideset_name}' has no nodes")
+            print(f"  WARNING: Block '{block_name}' has no nodes")
             return None
 
         # Map Cubit node IDs to NGSolve vertex indices
         if hasattr(self, '_cubit_node_map'):
-            # Use mapping from load_cubit_surface()
             ngsolve_nodes = []
             for nid in cubit_nodes:
                 if nid in self._cubit_node_map:
-                    # _cubit_node_map values are 1-indexed Netgen point IDs
                     ngsolve_nodes.append(self._cubit_node_map[nid] - 1)
             return ngsolve_nodes if ngsolve_nodes else None
         else:
-            # Fallback: match by coordinate (for load_cubit_mesh path)
             return self._match_nodes_by_coordinate(cubit_nodes)
 
     def _match_nodes_by_coordinate(self, cubit_node_ids):
