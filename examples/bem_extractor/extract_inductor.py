@@ -42,8 +42,7 @@ def create_circular_loop_mesh(radius, wire_radius, maxh=None, label="coil"):
     Returns:
         NGSolve Mesh (surface mesh in 3D)
     """
-    from netgen.occ import WorkPlane, Axes, Pnt, Dir, OCCGeometry
-    from netgen.occ import Cylinder, Sphere
+    from netgen.occ import WorkPlane, Axes, Axis, Pnt, Dir, OCCGeometry
     from ngsolve import Mesh
 
     if maxh is None:
@@ -57,8 +56,8 @@ def create_circular_loop_mesh(radius, wire_radius, maxh=None, label="coil"):
     circle = wp.Circle(wire_radius).Face()
     circle.name = label
 
-    # Revolve around Z axis to create torus
-    torus = circle.Revolve(Axes(p=Pnt(0, 0, 0), n=Dir(0, 0, 1)), 360)
+    # Revolve around Z axis to create torus (Axis, not Axes)
+    torus = circle.Revolve(Axis(p=Pnt(0, 0, 0), d=Dir(0, 0, 1)), 360)
 
     geo = OCCGeometry(torus)
     ngmesh = geo.GenerateMesh(maxh=maxh)
