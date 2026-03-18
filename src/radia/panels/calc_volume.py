@@ -41,7 +41,10 @@ def _setup_cubit():
     _remove_cubit_site_packages()
 
     import cubit
-    cubit.init(["cubit", "-nojournal", "-batch"])
+    # Suppress cubit.init() banner on stderr
+    import io, contextlib
+    with contextlib.redirect_stderr(io.StringIO()):
+        cubit.init(["cubit", "-nojournal", "-batch"])
 
     # Clean up again (cubit.init may re-add paths)
     _remove_cubit_site_packages()
