@@ -39,9 +39,11 @@ def _setup_cubit():
 
     import cubit
     # Suppress cubit.init() banner on stderr
+    # Use -noinit to prevent .cubit startup file from being played
+    # (it tries to load register_toolbar.py which imports Qt)
     import io, contextlib
     with contextlib.redirect_stderr(io.StringIO()):
-        cubit.init(["cubit", "-nojournal", "-batch"])
+        cubit.init(["cubit", "-nojournal", "-batch", "-noinit"])
 
     for p in list(sys.path):
         if "site-packages" in p and ("cubit" in p.lower() or "Cubit" in p):

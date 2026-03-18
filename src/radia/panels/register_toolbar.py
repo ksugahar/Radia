@@ -41,7 +41,13 @@ except NameError:
 		else:
 			_this_dir = os.getcwd()
 
-# Qt bindings FIRST (before any sys.path changes or cubit import)
+_pkg_root = os.path.dirname(_this_dir)  # radia package root (src/radia/)
+if _pkg_root not in sys.path:
+	sys.path.insert(0, _pkg_root)
+
+import cubit
+
+# Qt bindings: prefer PySide6, fall back to PyQt5 (Cubit ships PyQt5)
 try:
 	from PySide6.QtWidgets import (
 		QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -60,12 +66,6 @@ except ImportError:
 		QAction,
 	)
 	from PyQt5.QtCore import Qt
-
-_pkg_root = os.path.dirname(_this_dir)  # radia package root (src/radia/)
-if _pkg_root not in sys.path:
-	sys.path.insert(0, _pkg_root)
-
-import cubit
 
 
 def _find_main_window():
