@@ -2935,11 +2935,22 @@ def export_netgen_with_names(cubit: Any, geometry: Any) -> Any:
 def _auto_register_panels():
     """Register Cubit toolbar panels if not already registered.
 
-    This runs once when cubit_mesh_export is first imported inside Cubit.
+    This runs once when cubit_mesh_export is first imported inside Cubit GUI.
     It checks ~/.cubit for the marker block and adds it if missing.
     Only takes effect when Cubit is restarted (modifies startup file).
+    Skipped in batch/subprocess mode (no GUI).
     """
     import os
+
+    # Skip in batch/subprocess mode (no GUI available)
+    if not os.environ.get("DISPLAY") and os.name != "nt":
+        return  # Linux without display
+    if any(arg in os.sys.argv for arg in ["-batch", "--batch", "-nojournal"]):
+        return  # Cubit batch mode
+    # Skip if running as subprocess (calc_volume.py, calc_inductance.py)
+    if os.sys.argv and os.path.basename(os.sys.argv[0]).startswith("calc_"):
+        return
+
     marker = "## BEGIN cubit_mesh_export toolbar"
     cubit_file = os.path.join(os.path.expanduser("~"), ".cubit")
 
