@@ -394,7 +394,7 @@ class VolumeCalculatorDialog(QDialog):
 					cad_vol = float(cad_vol_text)
 					if cad_vol != 0:
 						error_pct = (ng_vol - cad_vol) / cad_vol * 100
-						text = f"{ng_vol:.6e} ({error_pct:+.2f}%)"
+						text = f"{ng_vol:.6e} ({error_pct:+.4f}%)"
 					else:
 						text = f"{ng_vol:.6e}"
 					item = QTableWidgetItem(text)
@@ -405,7 +405,7 @@ class VolumeCalculatorDialog(QDialog):
 			total_row = len(vol_ids)
 			if self._cad_total != 0:
 				error_pct = (ng_total - self._cad_total) / self._cad_total * 100
-				text = f"{ng_total:.6e} ({error_pct:+.2f}%)"
+				text = f"{ng_total:.6e} ({error_pct:+.4f}%)"
 			else:
 				text = f"{ng_total:.6e}"
 			item = QTableWidgetItem(text)
@@ -437,10 +437,18 @@ def register_toolbar():
 		print("WARNING: Could not find Cubit main window. Toolbar not registered.")
 		return
 
+	# Check if already registered (avoid duplicates on re-play)
+	for existing in main_window.findChildren(QToolBar):
+		if existing.objectName() == "RadiaToolsToolbar":
+			existing.setVisible(True)
+			print("Radia Tools toolbar already registered, made visible.")
+			return
+
 	# Create toolbar
 	toolbar = QToolBar("Radia Tools")
 	toolbar.setObjectName("RadiaToolsToolbar")
 	main_window.addToolBar(toolbar)
+	toolbar.setVisible(True)
 
 	# Export Gmsh action
 	action_gmsh = QAction("Export Gmsh", main_window)
