@@ -146,13 +146,20 @@ def main():
     parser.add_argument("--freq", type=float, default=0.0, help="Frequency [Hz]")
     args = parser.parse_args()
 
+    # Redirect ALL stdout to stderr during computation,
+    # then print JSON result to real stdout at the end.
+    import io
+    real_stdout = sys.stdout
+    sys.stdout = io.StringIO()  # capture BEMExtractor print output
     try:
         result = extract_inductance(
             args.cub5, args.source, args.sink,
             args.sigma, args.order, args.freq
         )
+        sys.stdout = real_stdout
         print(json.dumps(result))
     except Exception as e:
+        sys.stdout = real_stdout
         print(json.dumps({"error": str(e)}))
         sys.exit(1)
 
