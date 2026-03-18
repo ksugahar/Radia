@@ -52,6 +52,12 @@ def _check_module(name):
     except (ImportError, OSError, Exception):
         return False
 
+# Add CUBIT_PATH to sys.path before checking cubit availability
+# (CI runner sets CUBIT_PATH env var; cubit test files also do this individually)
+_cubit_path = os.environ.get("CUBIT_PATH")
+if _cubit_path and _cubit_path not in sys.path:
+    sys.path.append(_cubit_path)
+
 _OPTIONAL_DEPS = {
     "ngsolve": _check_module("ngsolve"),
     # radia_ngsolve is no longer a separate module; RadiaField is in radia
@@ -59,11 +65,11 @@ _OPTIONAL_DEPS = {
     "cubit": _check_module("cubit"),
 }
 
-# Skip entire tests/cubit/ directory if cubit module is not available
-# or if cubit.init() fails (e.g., no license under NETWORK SERVICE account).
-# Cubit tests call cubit.init() at module level, which crashes collection.
+# Skip entire tests/cubit/ directory if cubit is not available or init fails.
+# Cubit tests call cubit.init() at module level, which crashes collection
+# if cubit is missing or license is unavailable.
 def _check_cubit_init():
-    """Check if cubit can be initialized (import + init)."""
+    """Check if cubit can be imported and initialized."""
     if not _OPTIONAL_DEPS["cubit"]:
         return False
     try:
