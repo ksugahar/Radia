@@ -1735,6 +1735,8 @@ def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry:
 		# Build mapping: OCC face index -> Cubit block name
 		# so that boundary labels use Cubit block names (for ds('label'))
 		occ_face_to_block_name = {}
+
+		# Method 1: Use elem_to_occ_face mapping (when geometry mapping succeeded)
 		for block_id in cubit.get_block_id_list():
 			block_name = cubit.get_exodus_entity_name("block", block_id)
 			for tri_id in _get_block_elements(cubit, block_id, "tri"):
@@ -1745,6 +1747,17 @@ def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry:
 				key = ('quad', quad_id)
 				if key in elem_to_occ_face and elem_to_occ_face[key] is not None:
 					occ_face_to_block_name[elem_to_occ_face[key]] = block_name
+
+		# Method 2: Fallback - if no mapping found, use first surface block name
+		if not occ_face_to_block_name:
+			for block_id in cubit.get_block_id_list():
+				block_name = cubit.get_exodus_entity_name("block", block_id)
+				n_surf = len(_get_block_elements(cubit, block_id, "tri")) + \
+				         len(_get_block_elements(cubit, block_id, "face"))
+				if n_surf > 0:
+					for info in occ_face_info:
+						occ_face_to_block_name[info['index']] = block_name
+					break
 
 		# Create one FaceDescriptor per OCC face
 		# surfnr is 1-indexed in Netgen (OCC Face i -> surfnr=i+1)
