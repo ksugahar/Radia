@@ -264,7 +264,7 @@ python plot_benchmark_results.py
 - [H-Matrix Implementation History](../../docs/HMATRIX_IMPLEMENTATION_HISTORY.md)
 - [Phase 3 Performance Issue](../../docs/PHASE3_PERFORMANCE_ISSUE.md)
 - [Comprehensive Benchmark Results](../../docs/HMATRIX_BENCHMARKS_RESULTS.md)
-- [API Reference](../../docs/API_REFERENCE.md)
+- [API Reference](../../docs/api/API_REFERENCE.md)
 
 ---
 

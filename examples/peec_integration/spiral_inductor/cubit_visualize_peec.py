@@ -19,7 +19,9 @@ import numpy as np
 import pandas as pd
 
 # --- Cubit setup ---
-sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")
+cubit_path = os.environ.get("CUBIT_PATH")
+if cubit_path:
+	sys.path.append(cubit_path)
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 

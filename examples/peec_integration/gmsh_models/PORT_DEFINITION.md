@@ -187,7 +187,7 @@ Z_port = 1.0 / I_port  # V=1.0を印加したので Z = V/I = 1/I
 
 ```bash
 cd gmsh_models
-"C:/Program Files/Coreform Cubit 2025.3/bin/python3/python.exe" generate_coil_with_ports.py
+"${CUBIT_PATH:-C:/Program Files/Coreform Cubit 2025.3/bin}/python3/python.exe" generate_coil_with_ports.py
 ```
 
 **出力**: `circular_coil_with_ports.msh`

@@ -8,7 +8,7 @@ For N-port systems (N >= 2), use Block Lanczos classes:
   - NPortCoupledDielectricSPICE
   - NPortFullCoupledSPICE
 
-See docs/NPORT_BLOCK_LANCZOS_SPICE.md for details.
+See docs/peec/NPORT_BLOCK_LANCZOS_SPICE.md for details.
 
 Demonstrates the complete workflow:
 1. PEEC matrix generation (Loop-Star)

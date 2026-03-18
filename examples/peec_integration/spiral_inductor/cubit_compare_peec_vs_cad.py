@@ -22,7 +22,9 @@ sys.path.insert(0, r"S:\Radia\01_GitHub\examples\peec_integration\spiral_inducto
 from spiral_peec import generate_rectangular_spiral, generate_two_layer_spiral
 
 # --- Cubit ---
-sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")
+cubit_path = os.environ.get("CUBIT_PATH")
+if cubit_path:
+	sys.path.append(cubit_path)
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
