@@ -20,21 +20,49 @@ import sys
 import tempfile
 
 
+def _find_cubit_path():
+    """Find Cubit bin directory from env var or common install locations."""
+    # 1. CUBIT_PATH env var (explicit)
+    cubit_path = os.environ.get("CUBIT_PATH")
+    if cubit_path and os.path.isdir(cubit_path):
+        return cubit_path
+
+    # 2. Search common installation directories
+    if sys.platform == "win32":
+        base = os.environ.get("ProgramFiles", r"C:\Program Files")
+        import glob
+        candidates = sorted(glob.glob(os.path.join(base, "Coreform Cubit *", "bin")),
+                            reverse=True)  # newest first
+        for c in candidates:
+            if os.path.isfile(os.path.join(c, "cubit.py")):
+                return c
+    else:
+        for prefix in ["/opt/coreform", "/usr/local"]:
+            import glob
+            candidates = sorted(glob.glob(os.path.join(prefix, "cubit*", "bin")),
+                                reverse=True)
+            for c in candidates:
+                if os.path.isfile(os.path.join(c, "cubit.py")):
+                    return c
+
+    return None
+
+
 def _setup_cubit():
     """Import cubit with path cleanup (NGSolve already imported)."""
-    cubit_path = os.environ.get(
-        "CUBIT_PATH", r"C:\Program Files\Coreform Cubit 2025.3\bin"
-    )
-    if cubit_path not in sys.path:
+    cubit_path = _find_cubit_path()
+    if cubit_path and cubit_path not in sys.path:
         sys.path.append(cubit_path)
 
-    cubit_site = os.path.join(cubit_path, "python3", "lib", "site-packages")
-    if cubit_site in sys.path:
-        sys.path.remove(cubit_site)
+    # Block Cubit's bundled site-packages (may contain incompatible numpy)
+    for p in list(sys.path):
+        if "Coreform Cubit" in p and "site-packages" in p:
+            sys.path.remove(p)
 
     import cubit
     cubit.init(["cubit", "-nojournal", "-batch"])
 
+    # Clean up again (cubit.init may re-add paths)
     for p in list(sys.path):
         if "Coreform Cubit" in p and "site-packages" in p:
             sys.path.remove(p)
