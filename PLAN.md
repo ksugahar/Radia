@@ -185,6 +185,32 @@ Parameters: R=0.05, a=0.005, R/a=10 (Neumann accurate).
 
 CEFC 2026 Thessaloniki: Cubit hex mesh + BEM inductance extraction + Curve order comparison
 
+### BEM neg diag: Deep Investigation (2026-03-19)
+
+**Confirmed facts:**
+- Cubit tri winding is correct (verified via tet 4th node outward check)
+- STEP reimport reverses `surface.normal_at()` but NOT tri winding
+- NormalizeNumbering (rotate to smallest vertex first) causes segfault
+- brick (flat surfaces): neg=0 always — BEM works perfectly
+- torus (curved): neg=1 consistently with Cubit mesh
+- OCC native torus: neg=0 always — BEM works
+- Save/Load .vol doesn't fix neg
+- Compress() doesn't fix neg
+- geometry=OCC vs no geometry: same neg count
+- SetGeomInfo doesn't fix neg (it sets UV for Curve, not edge orientation)
+
+**Remaining hypothesis:**
+- Netgen's OCC mesh generator handles degenerated/seam edges specially
+  (libsrc/occ/occgeom.cpp: seam detection, BRep_Tool::Degenerated)
+- export_NetgenMesh doesn't replicate this special handling
+- The neg DOF corresponds to an edge near the OCC seam line
+- May need Netgen C++ level fix or a Python-accessible API
+
+**Workarounds:**
+1. Use brick/flat geometries (neg=0, fully working)
+2. For curved: exclude neg DOFs from L matrix (1-2 DOFs only)
+3. Request Netgen patch for Element2D edge orientation normalization
+
 ### Root Cause FOUND: ds(label) mismatch (2026-03-19)
 
 - `export_NetgenMesh(geometry=OCC)` sets boundary names from OCC face names
