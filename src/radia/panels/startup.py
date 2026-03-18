@@ -1,1 +1,1 @@
-import sys, os; cubit_site = os.path.join(os.environ.get("CUBIT_PATH", r"C:\Program Files\Coreform Cubit 2025.3\bin"), "python3", "lib", "site-packages"); sys.path.insert(0, cubit_site) if cubit_site not in sys.path else None; __file__ = r"S:/Radia/01_GitHub/src/radia/panels/startup.py"; exec(open(r"S:/Radia/01_GitHub/src/radia/panels/register_toolbar.py").read())
+import sys; exec(open(r"S:/Radia/01_GitHub/src/radia/panels/register_toolbar.py").read()) if "PyQt5.QtCore" in sys.modules or "PySide6.QtCore" in sys.modules else None
