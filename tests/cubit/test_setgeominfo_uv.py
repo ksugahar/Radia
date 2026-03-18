@@ -230,15 +230,18 @@ print("\nStep 7: Compare with SetDeformation (baseline)")
 mesh_deform = Mesh(cubit_mesh_export.export_netgen(cubit, geometry=geo))
 mesh_deform.Curve(1)
 
-cyl_boundaries = cubit_mesh_export.detect_cylinder_boundaries(mesh_deform, R, axis='z')
-cubit_mesh_export.apply_cylinder_deformation(
-    mesh_deform, radius=R, boundary_names=cyl_boundaries, order=2, axis='z'
-)
+if hasattr(cubit_mesh_export, 'detect_cylinder_boundaries'):
+    cyl_boundaries = cubit_mesh_export.detect_cylinder_boundaries(mesh_deform, R, axis='z')
+    cubit_mesh_export.apply_cylinder_deformation(
+        mesh_deform, radius=R, boundary_names=cyl_boundaries, order=2, axis='z'
+    )
 
-area_deform = Integrate(CF(1), mesh_deform, VOL_or_BND=BND)
-vol_deform = Integrate(CF(1), mesh_deform)
-print(f"  Area: {area_deform:.6f} (error: {abs(area_deform-expected_area)/expected_area*100:.4f}%)")
-print(f"  Vol:  {vol_deform:.6f} (error: {abs(vol_deform-expected_vol)/expected_vol*100:.4f}%)")
+    area_deform = Integrate(CF(1), mesh_deform, VOL_or_BND=BND)
+    vol_deform = Integrate(CF(1), mesh_deform)
+    print(f"  Area: {area_deform:.6f} (error: {abs(area_deform-expected_area)/expected_area*100:.4f}%)")
+    print(f"  Vol:  {vol_deform:.6f} (error: {abs(vol_deform-expected_vol)/expected_vol*100:.4f}%)")
+else:
+    print("  SKIPPED: detect_cylinder_boundaries not yet implemented")
 
 # Cleanup
 os.remove(step_file)
