@@ -602,11 +602,11 @@ class SurfaceAreaDialog(QDialog):
 # ================================================================
 
 class InductanceDialog(QDialog):
-	"""Dialog for ngbem inductance extraction."""
+	"""Dialog for ngsolve.bem inductance extraction."""
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
-		self.setWindowTitle("Inductance Extractor (ngbem)")
+		self.setWindowTitle("Inductance Extractor (ngsolve.bem)")
 		self.setMinimumWidth(500)
 		self._ext_python = _find_external_python()
 		self._setup_ui()
@@ -857,7 +857,7 @@ def register_menu():
 
 	# Inductance Extractor action
 	action_ind = QAction("Inductance...", main_window)
-	action_ind.setStatusTip("Extract inductance using ngbem LaplaceSL BEM")
+	action_ind.setStatusTip("Extract inductance using ngsolve.bem LaplaceSL BEM")
 	action_ind.triggered.connect(lambda: InductanceDialog(main_window).exec())
 	radia_menu.addAction(action_ind)
 

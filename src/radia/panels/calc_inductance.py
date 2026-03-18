@@ -1,5 +1,5 @@
 """
-Inductance extractor using ngbem LaplaceSL BEM.
+Inductance extractor using ngsolve.bem LaplaceSL BEM.
 
 Called as subprocess from Cubit panel:
     python calc_inductance.py --cub5 model.cub5 --source src --sink snk
@@ -137,7 +137,7 @@ def extract_inductance(cub5_file, source_block, sink_block, sigma, order, freq):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="ngbem inductance extractor")
+    parser = argparse.ArgumentParser(description="ngsolve.bem inductance extractor")
     parser.add_argument("--cub5", required=True, help="Cubit .cub5 model file")
     parser.add_argument("--source", default="", help="Source block name")
     parser.add_argument("--sink", default="", help="Sink block name")
