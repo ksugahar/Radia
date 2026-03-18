@@ -52,7 +52,7 @@ try:
 	from PySide6.QtWidgets import (
 		QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
 		QLabel, QLineEdit, QComboBox, QPushButton, QSpinBox,
-		QFileDialog, QMainWindow, QToolBar, QMessageBox,
+		QFileDialog, QMainWindow, QMessageBox,
 		QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
 	)
 	from PySide6.QtGui import QAction
@@ -61,7 +61,7 @@ except ImportError:
 	from PyQt5.QtWidgets import (
 		QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
 		QLabel, QLineEdit, QComboBox, QPushButton, QSpinBox,
-		QFileDialog, QMainWindow, QToolBar, QMessageBox,
+		QFileDialog, QMainWindow, QMessageBox,
 		QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
 		QAction,
 	)
@@ -439,50 +439,43 @@ class VolumeCalculatorDialog(QDialog):
 
 
 # ================================================================
-# Toolbar Registration
+# Menu Registration
 # ================================================================
 
-def register_toolbar():
-	"""Add mesh export toolbar to Cubit's main window."""
+def register_menu():
+	"""Add 'Radia' menu to Cubit's menu bar."""
 	main_window = _find_main_window()
 	if main_window is None:
-		print("WARNING: Could not find Cubit main window. Toolbar not registered.")
+		print("WARNING: Could not find Cubit main window. Menu not registered.")
 		return
 
+	menu_bar = main_window.menuBar()
+
 	# Check if already registered (avoid duplicates on re-play)
-	for existing in main_window.findChildren(QToolBar):
-		if existing.objectName() == "RadiaToolsToolbar":
-			existing.setVisible(True)
-			print("Radia Tools toolbar already registered, made visible.")
+	for existing_menu in menu_bar.findChildren(type(menu_bar).addMenu.__func__ and object):
+		pass  # findChildren doesn't easily filter QMenu by title
+	for action in menu_bar.actions():
+		if action.text() == "Radia":
+			print("Radia menu already registered.")
 			return
 
-	# Create toolbar
-	toolbar = QToolBar("Radia Tools")
-	toolbar.setObjectName("RadiaToolsToolbar")
-	main_window.addToolBar(toolbar)
-	toolbar.setVisible(True)
+	# Create Radia menu
+	radia_menu = menu_bar.addMenu("Radia")
 
 	# Export Gmsh action
-	action_gmsh = QAction("Export Gmsh", main_window)
-	action_gmsh.setToolTip("Export mesh to Gmsh format (.msh)")
+	action_gmsh = QAction("Export Gmsh...", main_window)
+	action_gmsh.setStatusTip("Export mesh to Gmsh format (.msh)")
 	action_gmsh.triggered.connect(lambda: ExportGmshDialog(main_window).exec())
-	toolbar.addAction(action_gmsh)
+	radia_menu.addAction(action_gmsh)
 
 	# Volume Calculator action
-	action_vol = QAction("Volume", main_window)
-	action_vol.setToolTip("Calculate volume of selected volumes (CAD + NGSolve)")
+	action_vol = QAction("Volume Calculator...", main_window)
+	action_vol.setStatusTip("Calculate volume of selected volumes (CAD + NGSolve)")
 	action_vol.triggered.connect(lambda: VolumeCalculatorDialog(main_window).exec())
-	toolbar.addAction(action_vol)
+	radia_menu.addAction(action_vol)
 
-	# Force visibility after Cubit finishes restoring its layout
-	try:
-		from PyQt5.QtCore import QTimer
-	except ImportError:
-		from PySide6.QtCore import QTimer
-	QTimer.singleShot(500, lambda: toolbar.setVisible(True))
-
-	print("Radia Tools toolbar registered.")
+	print("Radia menu registered.")
 
 
 # Auto-register when this script is executed
-register_toolbar()
+register_menu()
