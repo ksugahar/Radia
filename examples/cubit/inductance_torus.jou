@@ -18,10 +18,10 @@ move Volume 2 x {R} y 0 z 0 include_merged
 ## Subtract to create gap
 subtract volume 2 from volume 1
 
-## Mesh
-volume 1 scheme tetmesh
-volume 1 size {R/2}
-mesh volume 1
+## Surface mesh only (BEM needs surface elements, not volume)
+surface all scheme trimesh
+curve all interval 2
+mesh surface all
 
 ## Allow elements in multiple blocks
 set duplicate block elements on
