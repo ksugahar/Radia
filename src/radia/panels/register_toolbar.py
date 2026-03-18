@@ -464,12 +464,12 @@ def register_menu():
 
 	# Check if already registered (avoid duplicates on re-play)
 	for action in tools_menu.actions():
-		if action.text() == "Radia":
+		if action.text() == "Radia-NGSolve":
 			print("Radia menu already registered.")
 			return
 
 	# Create Radia submenu under Tools
-	radia_menu = tools_menu.addMenu("Radia")
+	radia_menu = tools_menu.addMenu("Radia-NGSolve")
 
 	# Export Gmsh action
 	action_gmsh = QAction("Export Gmsh...", main_window)
