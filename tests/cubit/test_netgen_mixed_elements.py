@@ -99,7 +99,7 @@ print(f"    Quad:    {num_quad}")
 
 # Step 3: Export geometry to STEP
 print("\nStep 3: Exporting geometry to STEP...")
-step_file = "s:/CoreformCubit/01_GitHub/test_mixed.step"
+step_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_mixed.step")
 cubit.cmd(f'export step "{step_file}" overwrite')
 print(f"  [OK] Exported to {step_file}")
 
