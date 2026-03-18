@@ -21,6 +21,7 @@ import cubit
 # Add parent directory to path for cubit_mesh_export
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
 import cubit_mesh_export
+import netgen.meshing as netgen
 
 # Initialize Cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
@@ -181,7 +182,7 @@ def test_node_coordinates():
 	# Export and verify Netgen coordinates
 	netgen_mesh = cubit_mesh_export.export_NetgenMesh(cubit)
 
-	netgen_coords = [netgen_mesh.Points()[i].p for i in range(len(netgen_mesh.Points()))]
+	netgen_coords = [netgen_mesh.Points()[netgen.PointId(i+1)].p for i in range(len(netgen_mesh.Points()))]
 	netgen_x = [p[0] for p in netgen_coords]
 	netgen_y = [p[1] for p in netgen_coords]
 	netgen_z = [p[2] for p in netgen_coords]
@@ -275,7 +276,7 @@ def test_ngsolve_integration():
 
 	print(f"  NGSolve mesh created successfully")
 	print(f"  Elements: {ngmesh.ne}")
-	print(f"  Vertices: {len(ngmesh.Points())}")
+	print(f"  Vertices: {ngmesh.nv}")
 
 	# Try creating a simple FE space
 	try:
@@ -319,7 +320,7 @@ def test_curve_high_order():
 
 	# Convert to NGSolve mesh
 	ngmesh = ngsolve.Mesh(netgen_mesh)
-	print(f"  Mesh created: ne={ngmesh.ne}, nv={len(ngmesh.Points())}")
+	print(f"  Mesh created: ne={ngmesh.ne}, nv={ngmesh.nv}")
 
 	# Test Curve with different orders
 	for order in [2, 3, 4]:
