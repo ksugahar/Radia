@@ -1,1 +1,1 @@
-import sys, os; _cs = r"C:/Program Files/Coreform Cubit 2025.3/bin/python3/lib/site-packages"; sys.path.insert(0, _cs) if _cs not in sys.path else None; __file__ = r"S:/Radia/01_GitHub/src/radia/panels/register_toolbar.py"; exec(open(r"S:/Radia/01_GitHub/src/radia/panels/register_toolbar.py").read())
+__file__ = r"S:/Radia/01_GitHub/src/radia/panels/register_toolbar.py"; exec(open(r"S:/Radia/01_GitHub/src/radia/panels/register_toolbar.py").read())
