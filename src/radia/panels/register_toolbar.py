@@ -452,8 +452,6 @@ def register_menu():
 	menu_bar = main_window.menuBar()
 
 	# Check if already registered (avoid duplicates on re-play)
-	for existing_menu in menu_bar.findChildren(type(menu_bar).addMenu.__func__ and object):
-		pass  # findChildren doesn't easily filter QMenu by title
 	for action in menu_bar.actions():
 		if action.text() == "Radia":
 			print("Radia menu already registered.")
