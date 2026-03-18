@@ -56,7 +56,26 @@ _OPTIONAL_DEPS = {
     "ngsolve": _check_module("ngsolve"),
     # radia_ngsolve is no longer a separate module; RadiaField is in radia
     "magpylib": _check_module("magpylib"),
+    "cubit": _check_module("cubit"),
 }
+
+# Skip entire tests/cubit/ directory if cubit module is not available
+# or if cubit.init() fails (e.g., no license under NETWORK SERVICE account).
+# Cubit tests call cubit.init() at module level, which crashes collection.
+def _check_cubit_init():
+    """Check if cubit can be initialized (import + init)."""
+    if not _OPTIONAL_DEPS["cubit"]:
+        return False
+    try:
+        import cubit
+        cubit.init(['cubit', '-nojournal', '-batch'])
+        return True
+    except Exception:
+        return False
+
+_CUBIT_INIT_OK = _check_cubit_init()
+if not _CUBIT_INIT_OK:
+    collect_ignore_glob = ["cubit/test_*.py"]
 
 # Build the exclusion list by scanning test files for top-level imports
 _tests_dir = Path(__file__).parent
