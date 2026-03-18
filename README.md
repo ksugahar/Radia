@@ -242,7 +242,7 @@ To handle complex field sources efficiently, the framework employs state-of-the-
 ### 3. Visualization & Export
 *   **PyVista Viewer**: Modern, interactive 3D visualization within Python/Jupyter.
 *   **VTK Export**: Compatible with ParaView.
-*   **GMSH/STEP**: Mesh import via GMSH, CAD interoperability via [Coreform Cubit integration](https://github.com/ksugahar/Coreform_Cubit_Mesh_Export).
+*   **GMSH/STEP**: Mesh import via GMSH, CAD interoperability via Coreform Cubit (integrated `cubit_mesh_export` module).
 
 ---
 
@@ -381,14 +381,22 @@ mesh.Curve(3)  # 3rd order curved elements
 
 ### Installation
 
+The `cubit_mesh_export` module is included in Radia:
+
 ```bash
-pip install coreform-cubit-mesh-export
+pip install radia
 ```
 
-To install the Cubit toolbar panels for GUI access:
+To install the Cubit toolbar panels for GUI access (optional, requires Cubit installed):
 
 ```bash
 cubit-mesh-export-install-panels
+```
+
+This registers a toolbar in `~/.cubit` so that export buttons appear in Cubit's GUI on next startup. To uninstall:
+
+```bash
+cubit-mesh-export-install-panels --uninstall
 ```
 
 ### Setup
