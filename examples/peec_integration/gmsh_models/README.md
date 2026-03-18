@@ -12,7 +12,7 @@ Coreform Cubit → .msh ファイル → Python (NGSolve) → PEEC 解析
 
 ```bash
 # Run with Coreform Cubit's Python
-"C:/Program Files/Coreform Cubit 2025.3/bin/python3/python.exe" generate_coil_cubit.py
+"${CUBIT_PATH:-C:/Program Files/Coreform Cubit 2025.3/bin}/python3/python.exe" generate_coil_cubit.py
 ```
 
 **Output**: `circular_coil.msh` (GMSH v2.2 format, surface mesh only)

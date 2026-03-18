@@ -9,7 +9,10 @@ Date: 2026-02-13
 """
 
 import sys
-sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")
+import os
+cubit_path = os.environ.get("CUBIT_PATH")
+if cubit_path:
+	sys.path.append(cubit_path)
 import cubit
 
 # Add cubit_mesh_export to path

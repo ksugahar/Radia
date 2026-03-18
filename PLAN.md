@@ -90,13 +90,13 @@ Radia も NGSolve と同じ TaskManager に移行することで、スレッデ�
 | `README.md` | 要確認 | 概要の並列化説明 |
 | `pyproject.toml` | 1 | description: "OpenMP Parallelization" を変更 |
 | `SECURITY.md` | 1 | libiomp5md.dll の記述 |
-| `docs/API_REFERENCE.md` | 1 | FldVTS の OpenMP 記述 |
+| `docs/api/API_REFERENCE.md` | 1 | FldVTS の OpenMP 記述 |
 | `tests/README.md` | ~10 | テスト説明、OpenMP ベンチマーク |
 | `examples/cube_uniform_field/README.md` | 1 | OMP_NUM_THREADS 設定 |
 | `examples/fmm_field_evaluation/README.md` | 1 | OpenMP 並列化説明 |
 | `examples/solver_benchmarks/README.md` | ~5 | OpenMP 並列構築説明 |
 | `examples/solver_benchmarks/BENCHMARK_RESULTS.md` | 3 | OpenMP 有効記述 |
-| `docs/PEEC_PANEL_IMPLEMENTATION.md` | 1 | OpenMP 最適化記述 |
+| `docs/peec/PEEC_PANEL_IMPLEMENTATION.md` | 1 | OpenMP 最適化記述 |
 
 ### 4. Python スクリプト（OMP_NUM_THREADS 設定）
 
@@ -457,7 +457,7 @@ description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager 
 30. `CHANGELOG.md`: 移行エントリ追加
 31. `pyproject.toml`: description 更新
 32. `SECURITY.md`: libiomp5md.dll 記述更新
-33. `docs/API_REFERENCE.md`: OpenMP 記述更新
+33. `docs/api/API_REFERENCE.md`: OpenMP 記述更新
 34. `tests/README.md`: テスト説明更新
 35. テストファイルリネーム (`test_fldbatch_openmp.py` 等)
 36. `examples/*/README.md`: OpenMP 記述更新 (4 ファイル)

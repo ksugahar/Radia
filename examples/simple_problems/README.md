@@ -134,5 +134,5 @@ python -m pip install .
 ## See Also
 
 - [Radia Official Documentation](https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia)
-- [API Reference](../../docs/API_REFERENCE.md)
+- [API Reference](../../docs/api/API_REFERENCE.md)
 - [H-Matrix User Guide](../../docs/HMATRIX_USER_GUIDE.md)

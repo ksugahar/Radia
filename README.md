@@ -353,12 +353,64 @@ print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
 ## Documentation & Resources
 
 *   **[Installation Guide](BUILD.md)**: Build from source (Windows/Linux/macOS).
-*   **[API Reference](docs/API_REFERENCE.md)**: Full Python API documentation.
+*   **[API Reference](docs/api/API_REFERENCE.md)**: Full Python API documentation.
 *   **[NGSolve Integration](docs/NGSOLVE_INTEGRATION.md)**: Theory and usage of the hybrid FEM-Integral method.
-*   **[NGbem Integration](docs/NGBEM_INTEGRATION_DESIGN.md)**: Eddy current solver via NGSolve BEM.
+*   **[NGbem Integration](docs/solver/NGBEM_INTEGRATION_DESIGN.md)**: Eddy current solver via NGSolve BEM.
 *   **[Original Radia](https://github.com/ochubar/Radia)**: The core physics engine developed at ESRF.
 
 ---
+
+## Cubit Mesh Export
+
+Radia includes a mesh export module for [Coreform Cubit](https://coreform.com/products/coreform-cubit/), supporting **Gmsh**, **Nastran BDF**, **VTK/VTU**, **Netgen/NGSolve (.vol)**, **Exodus II**, and **MEG** formats.
+
+### Quick Usage
+
+```python
+import cubit
+import cubit_mesh_export
+
+# Export to Gmsh v2.2 (for Radia import) or v4.1 (for visualization)
+cubit_mesh_export.export_gmesh(cubit, "model.msh", version="2.2")
+
+# Export to NGSolve mesh with high-order curving
+ngmesh = cubit_mesh_export.export_netgen(cubit, geometry_file="geometry.step")
+mesh = ngsolve.Mesh(ngmesh)
+mesh.Curve(3)  # 3rd order curved elements
+```
+
+### Installation
+
+```bash
+pip install coreform-cubit-mesh-export
+```
+
+To install the Cubit toolbar panels for GUI access:
+
+```bash
+cubit-mesh-export-install-panels
+```
+
+### Setup
+
+Cubit scripts require the `cubit` Python module. Either:
+1. Add Cubit's `bin` directory to your system PATH, or
+2. Set the `CUBIT_PATH` environment variable:
+
+```bash
+# Windows
+set CUBIT_PATH=C:\Program Files\Coreform Cubit 2025.3\bin
+
+# Linux/Mac
+export CUBIT_PATH=/opt/coreform/cubit/bin
+```
+
+**Important**: When using both NGSolve and Cubit in the same script, import NGSolve **before** Cubit to avoid DLL conflicts.
+
+### Documentation
+
+- **[Function Reference](docs/cubit/Function_Reference.md)** -- Full API documentation
+- **[Examples](examples/cubit/)** -- Export examples for all supported formats
 
 ## License
 

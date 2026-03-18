@@ -1,0 +1,41 @@
+reset
+brick x 1 
+brick x 1.5 
+subtract volume 1 from volume 2  keep_tool 
+imprint all
+merge all
+compress
+
+volume all scheme tetmesh
+group "work_skin" add surface in volume 1
+create boundary_layer 1
+modify boundary_layer 1 uniform height 0.1 growth 1.2 layers 2
+modify boundary_layer 1 add surface in group with name "work_skin" volume 1
+modify boundary_layer 1 continuity on
+surface in group with name "coil_skin" size 0.25
+volume 1 size 0.3
+mesh volume 1
+
+volume 2  size auto factor 8
+mesh volume 2 
+
+block 1 add wedge all in volume 1
+block 1 name "work_wedge"
+
+block 2 add tet all in volume 1
+block 2 name "work_tet"
+
+block 3 add tet all in volume 2
+block 3 name "air"
+
+block 1 element type wedge15
+block 2 3 element type tetra10
+
+block 4 add tri all in surface  1 2 3 4 5 6
+block 4 name "default"
+block 4 element type tri6
+
+block 5 add tri all in surface 7 8 9 10 11 12
+block 5 name "outer"
+block 5 element type tri6
+

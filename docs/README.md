@@ -2,88 +2,54 @@
 
 **Version:** 2.3.0
 
-## Core Documentation
+## API Reference
 
-| Document | Description |
-|----------|-------------|
-| [API_REFERENCE.md](API_REFERENCE.md) | **Main documentation** - Quick start, API, elements, solvers, NGSolve |
-| [SOLVER_ARCHITECTURE.md](SOLVER_ARCHITECTURE.md) | Solver design philosophy and architecture |
-| [APPLICATION_ROADMAP.md](APPLICATION_ROADMAP.md) | Research applications and collaboration roadmap |
+- [API_REFERENCE.md](api/API_REFERENCE.md) - Complete Python API reference: quick start, elements, solvers, NGSolve integration
+- [UNIFIED_FIELD_API_DESIGN.md](api/UNIFIED_FIELD_API_DESIGN.md) - Unified `rad.Fld()` dispatch design for static and PEEC solvers
 
-## PEEC Solver
+## Solver Architecture
 
-| Document | Description |
-|----------|-------------|
-| [PEEC_CONDUCTOR_MODELING_GUIDE.md](PEEC_CONDUCTOR_MODELING_GUIDE.md) | Conductor shape interface and mesh import workflow |
-| [PEEC_PANEL_IMPLEMENTATION.md](PEEC_PANEL_IMPLEMENTATION.md) | Panel integration (Wilton, Gauss) + FastImp Loop-Star integration |
-| [PEEC_SURFACE_IMPEDANCE.md](PEEC_SURFACE_IMPEDANCE.md) | Surface impedance (SIBC, ESIM, Dowell, PyKAN, SPICE export) |
-| [PEEC_SHIELD_CONDUCTOR.md](PEEC_SHIELD_CONDUCTOR.md) | Shield conductor modeling |
-| [PEEC_MSC_COUPLING.md](PEEC_MSC_COUPLING.md) | PEEC-MSC coupled solver theory |
-| [PEEC_VALIDATION_PLAN.md](PEEC_VALIDATION_PLAN.md) | Validation phases + formula validation + Grover formula |
+- [SOLVER_ARCHITECTURE.md](solver/SOLVER_ARCHITECTURE.md) - Solver design philosophy and architecture overview
+- [BEAM_TRACKING_DESIGN.md](solver/BEAM_TRACKING_DESIGN.md) - Beam tracking design for charged particle trajectories
+- [EDDY_CURRENT_METHODS.md](solver/EDDY_CURRENT_METHODS.md) - Conductor eddy current modeling: method comparison (NGSolve + ngbem)
+- [ELF_COMPATIBILITY_GUIDE.md](solver/ELF_COMPATIBILITY_GUIDE.md) - Compatibility guide between Radia and ELF/MAGIC solvers
+- [IMA_SYMMETRY_DESIGN.md](solver/IMA_SYMMETRY_DESIGN.md) - Image symmetry implementation for MSC hexahedra
+- [NGBEM_INTEGRATION_DESIGN.md](solver/NGBEM_INTEGRATION_DESIGN.md) - Unified PEEC Loop-Star + MMM + MSC architecture with ngbem
+- [PLAN_GPU_TRAJECTORY.md](solver/PLAN_GPU_TRAJECTORY.md) - GPU-accelerated multi-particle trajectory plan (CUDA/RTX)
 
-## Mesh & Visualization
+## PEEC (Partial Element Equivalent Circuit)
 
-| Document | Description |
-|----------|-------------|
-| [MESH_GUIDE.md](MESH_GUIDE.md) | Mesh types, GMSH workflows, SetGeomInfo API, surface elements |
-| [VISUALIZATION_GUIDE.md](VISUALIZATION_GUIDE.md) | Viewer comparison, workflows, geometry accuracy |
+- [PEEC_PANEL_IMPLEMENTATION.md](peec/PEEC_PANEL_IMPLEMENTATION.md) - Panel-based 2D surface integration implementation
+- [PEEC_CONDUCTOR_MODELING_GUIDE.md](peec/PEEC_CONDUCTOR_MODELING_GUIDE.md) - Conductor modeling guide and implementation plan
+- [PEEC_MSC_COUPLING.md](peec/PEEC_MSC_COUPLING.md) - PEEC conductor + MSC magnetic material coupled solver
+- [PEEC_SHIELD_CONDUCTOR.md](peec/PEEC_SHIELD_CONDUCTOR.md) - Shield conductor modeling (`peec_shield.py`)
+- [PEEC_SURFACE_IMPEDANCE.md](peec/PEEC_SURFACE_IMPEDANCE.md) - Surface impedance formulation and SPICE export
+- [PEEC_VALIDATION_PLAN.md](peec/PEEC_VALIDATION_PLAN.md) - Systematic validation plan for PEEC solver and PEEC-MSC coupling
+- [NPORT_BLOCK_LANCZOS_SPICE.md](peec/NPORT_BLOCK_LANCZOS_SPICE.md) - N-port Block Lanczos algorithm for SPICE-compatible circuit extraction
 
-## ELF Compatibility & Verification
+## Visualization
 
-| Document | Description |
-|----------|-------------|
-| [ELF_COMPATIBILITY_GUIDE.md](ELF_COMPATIBILITY_GUIDE.md) | Unit systems, mesh conventions, matrix formulation |
+- [VISUALIZATION_GUIDE.md](visualization/VISUALIZATION_GUIDE.md) - Radia-NGSolve viewer selection and visualization workflows
+- [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows for GMSH, Netgen, and Cubit
 
-## Advanced Solvers & Methods
+## Research
 
-| Document | Description |
-|----------|-------------|
-| [EDDY_CURRENT_METHODS.md](EDDY_CURRENT_METHODS.md) | Eddy current methods + VectorFEMBEM cross-validation |
-| [NGBEM_INTEGRATION_DESIGN.md](NGBEM_INTEGRATION_DESIGN.md) | NGSolve BEM integration + FEM independent verification |
-| [UNIFIED_FIELD_API_DESIGN.md](UNIFIED_FIELD_API_DESIGN.md) | Unified field computation API |
+- [APPLICATION_ROADMAP.md](research/APPLICATION_ROADMAP.md) - Research laboratory applications and collaboration roadmap
+- [B_INPUT_PLAY_MODEL.md](research/B_INPUT_PLAY_MODEL.md) - B-input Play hysteresis model definition and formulation
+- [CYLINDRICAL_MAGNET.md](research/CYLINDRICAL_MAGNET.md) - Analytical field computation for uniformly magnetized cylindrical magnets
+- [Handover_EnergyHysteresis.md](research/Handover_EnergyHysteresis.md) - Table-based energy hysteresis model handover notes
+- [KAN_INSPIRED_URN.md](research/KAN_INSPIRED_URN.md) - KAN-inspired Universal Relaxation Network for circuit synthesis from frequency data
+- [MAGNETIC_AFTEREFFECT_RESEARCH.md](research/MAGNETIC_AFTEREFFECT_RESEARCH.md) - Magnetic aftereffect research plan (Sugahara Lab / Hane Lab collaboration)
 
-## Hysteresis & Nonlinear Materials
+## Cubit Mesh Export
 
-| Document | Description |
-|----------|-------------|
-| [B_INPUT_PLAY_MODEL.md](B_INPUT_PLAY_MODEL.md) | B-input Play hysteresis model (direct Play + energy-based approximation) |
-
-## Specialized Features
-
-| Document | Description |
-|----------|-------------|
-| [BEAM_TRACKING_DESIGN.md](BEAM_TRACKING_DESIGN.md) | Beam tracking in magnetic fields |
-| [CYLINDRICAL_MAGNET.md](CYLINDRICAL_MAGNET.md) | Cylindrical magnet analytical field |
-| [IMA_SYMMETRY_DESIGN.md](IMA_SYMMETRY_DESIGN.md) | Image symmetry for MSC |
-| [KAN_INSPIRED_URN.md](KAN_INSPIRED_URN.md) | KAN-inspired Universal Relaxation Network |
-| [NPORT_BLOCK_LANCZOS_SPICE.md](NPORT_BLOCK_LANCZOS_SPICE.md) | N-port Block Lanczos SPICE + CLN I verification |
-
-## Quick Links
-
-- [Main README](../README.md) - Project overview and installation
-- [CHANGELOG](../CHANGELOG.md) - Version history
-- [Examples](../examples/) - Working code examples
-
-## References
-
-### MSC (Magnetic Surface Charge) Method
-
-- **Newell, A. J., Williams, W., & Dunlop, D. J.** (1993).
-  "A generalization of the demagnetizing tensor for nonuniform magnetization."
-  *Journal of Geophysical Research: Solid Earth*, 98(B6), 9551-9555.
-  DOI: [10.1029/93JB00694](https://doi.org/10.1029/93JB00694)
-
-- **Yano, T. & Sugahara, K.** (2023).
-  "MMM with the Idea of Magnetic Surface Charge Method."
-  *Journal of the Magnetics Society of Japan*, 47(4), 89-94.
-
-### ESIM (Effective Surface Impedance Method)
-
-- **Hollaus, K., Kaltenbacher, M., & Schoberl, J.** (2025).
-  "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation."
-  *IEEE Transactions on Magnetics*.
-  DOI: [10.1109/TMAG.2025.3613932](https://doi.org/10.1109/TMAG.2025.3613932)
-
----
-
-**Last Updated:** 2026-03-05
+- [Function_Reference.md](cubit/Function_Reference.md) - Function reference index for `cubit_mesh_export` module
+- [Cubit_Element_Order.md](cubit/Cubit_Element_Order.md) - Element order control (1st/2nd order) in Coreform Cubit
+- [export_Gmsh_ver2.md](cubit/export_Gmsh_ver2.md) - Export to Gmsh format version 2.2
+- [export_Gmsh_ver4.md](cubit/export_Gmsh_ver4.md) - Export to Gmsh format version 4.1
+- [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Export Cubit mesh to Netgen with high-order curving support
+- [export_VTK.md](cubit/export_VTK.md) - Export to VTK/VTU format for ParaView
+- [export_Nastran.md](cubit/export_Nastran.md) - Export to NX Nastran bulk data format
+- [export_exodus.md](cubit/export_exodus.md) - Export to Exodus II format
+- [export_meg.md](cubit/export_meg.md) - Export to ELF/MAGIC MEG format
+- [BUGFIX_cubit_mesh_export_vtk_indexing.md](cubit/BUGFIX_cubit_mesh_export_vtk_indexing.md) - Bug fix: VTK node index mapping for non-contiguous Cubit IDs

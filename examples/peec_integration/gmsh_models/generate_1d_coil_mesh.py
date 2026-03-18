@@ -20,7 +20,9 @@ import os
 import numpy as np
 
 # Add Cubit to path
-sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")
+cubit_path = os.environ.get("CUBIT_PATH")
+if cubit_path:
+	sys.path.append(cubit_path)
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])

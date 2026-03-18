@@ -110,6 +110,14 @@ setup(
 			"*.pyd",  # Include all .pyd files (_radia_pybind.pyd, radia_ngsolve.pyd, etc.)
 			"*.py",   # Include all Python utility modules
 			# MKL DLLs are NOT bundled - installed via pip dependency (mkl>=2024.2.0)
+			"panels/**/*.py",   # Cubit toolbar panel scripts
+			"panels/**/*.ui",   # Cubit toolbar panel UI files
+			"panels/**/*.txt",  # Cubit toolbar panel marker files
+		],
+	},
+	entry_points={
+		"console_scripts": [
+			"cubit-mesh-export-install-panels=radia.install_panels:main",
 		],
 	},
 	include_package_data=True,
