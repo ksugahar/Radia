@@ -43,6 +43,15 @@ Cubit GUI (PyQt5)                    External Python (NGSolve + Cubit)
 - `L_total = 1 / (e @ solve(L_matrix, e))`
 - Result: pipeline works end-to-end
 
+### Error Investigation (3154% error)
+- **Root cause**: Cubit volume mesh -> `export_NetgenMesh` creates dim=3 mesh
+  with `HDivSurface` having ndof=2448 (all edges) but FreeDofs=870 (boundary only)
+- The full matrix includes interior DOFs with zero interaction -> L matrix is rank-deficient
+- **Working code** (`verify_inductance.py`): uses Netgen OCC surface mesh (dim=2),
+  `HDivSurface` ndof = surface edges only, no interior DOFs
+- **Solution**: Cubit -> surface mesh export as dim=2 Netgen mesh (not dim=3 volume)
+  OR: use `definedon=mesh.Boundaries(label)` + filter FreeDofs correctly
+
 ## Remaining Steps
 
 ### Step 4: Source/Sink port vector
