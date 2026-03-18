@@ -487,14 +487,17 @@ class InductanceDialog(QDialog):
 
 		layout.addLayout(grid)
 
-		# Result group
-		result_group = QGroupBox("Result")
-		result_layout = QVBoxLayout()
-		self.result_label = QLabel("(not yet computed)")
-		self.result_label.setWordWrap(True)
-		result_layout.addWidget(self.result_label)
-		result_group.setLayout(result_layout)
-		layout.addWidget(result_group)
+		# Result table
+		self.result_table = QTableWidget()
+		self.result_table.setColumnCount(2)
+		self.result_table.setHorizontalHeaderLabels(["Parameter", "Value"])
+		self.result_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+		self.result_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+		self.result_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.result_table.setRowCount(1)
+		self.result_table.setItem(0, 0, QTableWidgetItem("Status"))
+		self.result_table.setItem(0, 1, QTableWidgetItem("(not yet computed)"))
+		layout.addWidget(self.result_table)
 
 		# Python info
 		py_label = QLabel(f"Python: {self._ext_python or 'Not found'}")
@@ -512,6 +515,12 @@ class InductanceDialog(QDialog):
 		close_btn.clicked.connect(self.accept)
 		btn_row.addWidget(close_btn)
 		layout.addLayout(btn_row)
+
+	def _set_result(self, param, value):
+		"""Set a single-row result in the table."""
+		self.result_table.setRowCount(1)
+		self.result_table.setItem(0, 0, QTableWidgetItem(param))
+		self.result_table.setItem(0, 1, QTableWidgetItem(value))
 
 	def _populate_blocks(self):
 		"""Populate combo boxes with Cubit block names."""
@@ -598,10 +607,10 @@ class InductanceDialog(QDialog):
 
 			if "error" in data:
 				QMessageBox.critical(self, "Error", data["error"])
-				self.result_label.setText("Error (see message)")
+				self._set_result("Status", "Error")
 				return
 
-			# Display result
+			# Display result in table
 			L = data["inductance_H"]
 			R = data.get("resistance_ohm", 0.0)
 
@@ -623,22 +632,31 @@ class InductanceDialog(QDialog):
 			else:
 				R_str = f"{R:.4e} Ohm"
 
-			text = f"L = {L_str}\nR = {R_str}"
+			rows = [
+				("Inductance", L_str),
+				("Resistance", R_str),
+				("Port", f"{data['source_block']} -> {data['sink_block']}"),
+				("Curve order", str(order)),
+			]
 			if freq > 0:
-				text += f"\nf = {freq:.2e} Hz"
-			text += f"\nOrder = {order}"
-			text += f"\nPort: {data['source_block']} -> {data['sink_block']}"
-			self.result_label.setText(text)
+				rows.append(("Frequency", f"{freq:.2e} Hz"))
+
+			self.result_table.setRowCount(len(rows))
+			for i, (param, val) in enumerate(rows):
+				self.result_table.setItem(i, 0, QTableWidgetItem(param))
+				item = QTableWidgetItem(val)
+				item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+				self.result_table.setItem(i, 1, item)
 
 		except subprocess.TimeoutExpired:
 			QMessageBox.critical(self, "Timeout", "Extraction timed out (300s).")
-			self.result_label.setText("Timeout")
+			self._set_result("Status", "Timeout")
 		except json.JSONDecodeError as e:
 			QMessageBox.critical(self, "Error", f"Failed to parse output:\n{e}")
-			self.result_label.setText("Parse error")
+			self._set_result("Status", "Parse error")
 		except Exception as e:
 			QMessageBox.critical(self, "Error", str(e))
-			self.result_label.setText("Error")
+			self._set_result("Status", "Error")
 		finally:
 			self.extract_btn.setEnabled(True)
 			self.extract_btn.setText("Extract")
