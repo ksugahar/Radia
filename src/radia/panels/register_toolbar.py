@@ -369,21 +369,20 @@ class VolumeCalculatorDialog(QDialog):
 				cmd, capture_output=True, text=True, timeout=120
 			)
 
-			if result.returncode != 0:
-				# Filter out NGSolve/Netgen version warnings from stderr
-				stderr = result.stderr.strip()
-				stderr_lines = [l for l in stderr.split("\n")
-				                if l.strip() and "WARNING" not in l
-				                and "=====" not in l and "version" not in l]
-				error_msg = "\n".join(stderr_lines) or result.stdout.strip()
-				if error_msg:
-					QMessageBox.critical(self, "NGSolve Error", error_msg[:1000])
-					return
-
-			# Parse JSON from last line of stdout (skip cubit/ngsolve banner)
+			# Parse JSON from last line of stdout (ignore stderr entirely)
+			# stderr contains cubit banner + NGSolve warnings (not errors)
 			stdout_lines = result.stdout.strip().split("\n")
-			json_line = stdout_lines[-1]
-			data = json.loads(json_line)
+			if not stdout_lines or not stdout_lines[-1].strip():
+				QMessageBox.critical(self, "Error", "No output from calculation.\n"
+				                     + (result.stderr.strip()[-500:] if result.stderr else ""))
+				return
+
+			try:
+				data = json.loads(stdout_lines[-1])
+			except json.JSONDecodeError:
+				QMessageBox.critical(self, "Error",
+				                     f"Unexpected output:\n{stdout_lines[-1][:500]}")
+				return
 
 			if "error" in data:
 				QMessageBox.critical(self, "NGSolve Error", data["error"])
@@ -581,20 +580,21 @@ class InductanceDialog(QDialog):
 				cmd, capture_output=True, text=True, timeout=300
 			)
 
-			if result.returncode != 0:
-				stderr = result.stderr.strip()
-				stderr_lines = [l for l in stderr.split("\n")
-				                if l.strip() and "WARNING" not in l
-				                and "=====" not in l and "version" not in l]
-				error_msg = "\n".join(stderr_lines) or result.stdout.strip()
-				if error_msg:
-					QMessageBox.critical(self, "Error", error_msg[:1000])
-					self.result_label.setText("Error (see message)")
-					return
-
-			# Parse JSON from last line
+			# Parse JSON from last line of stdout (ignore stderr entirely)
 			stdout_lines = result.stdout.strip().split("\n")
-			data = json.loads(stdout_lines[-1])
+			if not stdout_lines or not stdout_lines[-1].strip():
+				QMessageBox.critical(self, "Error", "No output from calculation.\n"
+				                     + (result.stderr.strip()[-500:] if result.stderr else ""))
+				self.result_label.setText("Error (see message)")
+				return
+
+			try:
+				data = json.loads(stdout_lines[-1])
+			except json.JSONDecodeError:
+				QMessageBox.critical(self, "Error",
+				                     f"Unexpected output:\n{stdout_lines[-1][:500]}")
+				self.result_label.setText("Error (see message)")
+				return
 
 			if "error" in data:
 				QMessageBox.critical(self, "Error", data["error"])
