@@ -1732,15 +1732,31 @@ def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry:
 
 	# Create FaceDescriptors and add boundary elements
 	if occ_face_info is not None:
+		# Build mapping: OCC face index -> Cubit block name
+		# so that boundary labels use Cubit block names (for ds('label'))
+		occ_face_to_block_name = {}
+		for block_id in cubit.get_block_id_list():
+			block_name = cubit.get_exodus_entity_name("block", block_id)
+			for tri_id in _get_block_elements(cubit, block_id, "tri"):
+				key = ('tri', tri_id)
+				if key in elem_to_occ_face and elem_to_occ_face[key] is not None:
+					occ_face_to_block_name[elem_to_occ_face[key]] = block_name
+			for quad_id in _get_block_elements(cubit, block_id, "face"):
+				key = ('quad', quad_id)
+				if key in elem_to_occ_face and elem_to_occ_face[key] is not None:
+					occ_face_to_block_name[elem_to_occ_face[key]] = block_name
+
 		# Create one FaceDescriptor per OCC face
 		# surfnr is 1-indexed in Netgen (OCC Face i -> surfnr=i+1)
 		occ_to_fd_index = {}
 		for info in occ_face_info:
 			fd_index += 1
+			# Use Cubit block name if available, otherwise OCC face name
+			bc_name = occ_face_to_block_name.get(info['index'], f"face_{info['index']}")
 			fd = FaceDescriptor(bc=fd_index, surfnr=info['index'] + 1)
-			fd.bcname = f"face_{info['index']}"
+			fd.bcname = bc_name
 			ngmesh.Add(fd)
-			ngmesh.SetBCName(fd_index - 1, f"face_{info['index']}")
+			ngmesh.SetBCName(fd_index - 1, bc_name)
 			occ_to_fd_index[info['index']] = fd_index
 
 		# Create a special FaceDescriptor for seam-crossing elements (surfnr=0)
