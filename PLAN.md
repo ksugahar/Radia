@@ -50,17 +50,24 @@ Cubit GUI (PyQt5)                    External Python (NGSolve + Cubit)
 - Surface-only mesh (El3D=0, El2D=N): FreeDofs = 100%
 - Fix: Build Netgen mesh with only Element2D from Cubit surface tris
 
-**Phase 2: Surface normal orientation (CURRENT ISSUE)**
-- Surface-only mesh: ndof=1224, FreeDofs=100%, 1 bad DOF (negative diagonal)
-- Even excluding bad DOF: L_BEM=1608nH vs L_Neumann=63nH (+2470% error)
-- L matrix has negative eigenvalues -> not positive definite
-- **Root cause**: Cubit `get_connectivity('tri', tid)` returns node order that
-  does NOT guarantee outward-pointing normal. Netgen OCC automatically ensures
-  consistent outward normals; manual Element2D construction does not.
-- **Solution**: Use Cubit's surface normal to check/fix triangle orientation:
-  1. `cubit.surface(sid).normal_at(centroid)` -> expected outward normal
-  2. Compare with cross product of tri edges -> flip if opposite
-  3. OR use `domin`/`domout` FaceDescriptor to let Netgen know orientation
+**Phase 2: Seam edge issue (INVESTIGATED)**
+- Cubit normals are ALL correct (verified on brick, cylinder, sphere, torus)
+- Bad DOF is on ACIS seam line (y~0.03, z~0, 2 tris sharing seam edge)
+- Surface-only mesh: 1 negative diagonal DOF at seam
+- STEP reimport changes seam position but doesn't eliminate it (2 neg DOFs)
+- OCC-generated mesh has NO seam issues (verified: 0 neg DOFs)
+
+**Phase 3: Surface Area SUCCESS with volume mesh + SetGeomInfo**
+- STEP reimport + tetmesh + export_NetgenMesh(geometry=OCC) + SetGeomInfo
+- Cylinder (R=0.5, H=1): Order 1=-0.30%, Order 2=-0.0006%, Order 3=+0.0001%
+- This workflow is correct and validated for Integrate(CF(1), BND)
+
+**Phase 4: BEM LaplaceSL with volume mesh (IN PROGRESS)**
+- Same workflow as Phase 3 but with LaplaceSL instead of Integrate
+- LaplaceSL operator construction + MatVec is slow (~minutes for 1323 FreeDofs)
+- Need to verify neg diagonal count with STEP reimport + volume mesh
+- If neg=0: BEM works on this foundation
+- If neg>0: seam still affects HDivSurface edge orientation for BEM
 
 ## Fundamental Workflow (ALL tools must use this)
 
