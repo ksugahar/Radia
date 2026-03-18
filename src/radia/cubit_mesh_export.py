@@ -1864,6 +1864,17 @@ def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry:
 					ng_nodes = [node_map[n] for n in nodes]
 					ngmesh.Add(Element1D(ng_nodes, index=fd_index))
 
+	# ============================================================
+	# Rebuild internal topology tables
+	# Required for HDivSurface (BEM) after manual Element2D addition.
+	# Without this, edge orientation is inconsistent -> LaplaceSL fails.
+	# ============================================================
+	try:
+		ngmesh.CalcSurfacesOfNode()
+		ngmesh.RebuildSurfaceElementLists()
+	except AttributeError:
+		pass  # API not available in standard netgen (requires ksugahar/netgen fork)
+
 	return ngmesh
 
 ########################################################################
