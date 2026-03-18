@@ -146,11 +146,11 @@ def main():
     parser.add_argument("--freq", type=float, default=0.0, help="Frequency [Hz]")
     args = parser.parse_args()
 
-    # Redirect ALL stdout to stderr during computation,
-    # then print JSON result to real stdout at the end.
+    # Redirect stdout during computation to capture BEMExtractor print output.
+    # JSON result is printed to real stdout at the end.
     import io
     real_stdout = sys.stdout
-    sys.stdout = io.StringIO()  # capture BEMExtractor print output
+    sys.stdout = io.StringIO()
     try:
         result = extract_inductance(
             args.cub5, args.source, args.sink,

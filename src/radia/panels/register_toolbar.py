@@ -123,6 +123,20 @@ def _find_external_python():
 	return None
 
 
+def _parse_json_output(process):
+	"""Parse JSON from QProcess stdout. Finds the line starting with '{'."""
+	stdout = process.readAllStandardOutput().data().decode("utf-8", errors="replace")
+	for line in stdout.strip().split("\n"):
+		line = line.strip()
+		if line.startswith("{"):
+			try:
+				return json.loads(line)
+			except json.JSONDecodeError:
+				continue
+	QMessageBox.critical(None, "Error", f"No JSON output found:\n{stdout[:500]}")
+	return None
+
+
 def _get_selected_volume_ids():
 	"""Get currently selected volume IDs. Returns all if none selected."""
 	selected = cubit.parse_cubit_list("volume", "selected")
@@ -371,19 +385,9 @@ class VolumeCalculatorDialog(QDialog):
 		self.calc_btn.setEnabled(True)
 		self.calc_btn.setText("Calculate")
 
-		stdout = self._process.readAllStandardOutput().data().decode("utf-8", errors="replace")
+		data = _parse_json_output(self._process)
 		self._process = None
-
-		stdout_lines = stdout.strip().split("\n")
-		if not stdout_lines or not stdout_lines[-1].strip():
-			QMessageBox.critical(self, "Error", "No output from calculation.")
-			return
-
-		try:
-			data = json.loads(stdout_lines[-1])
-		except json.JSONDecodeError:
-			QMessageBox.critical(self, "Error",
-			                     f"Unexpected output:\n{stdout_lines[-1][:500]}")
+		if data is None:
 			return
 
 		if "error" in data:
@@ -586,20 +590,9 @@ class InductanceDialog(QDialog):
 		self.extract_btn.setEnabled(True)
 		self.extract_btn.setText("Extract")
 
-		stdout = self._process.readAllStandardOutput().data().decode("utf-8", errors="replace")
+		data = _parse_json_output(self._process)
 		self._process = None
-
-		stdout_lines = stdout.strip().split("\n")
-		if not stdout_lines or not stdout_lines[-1].strip():
-			QMessageBox.critical(self, "Error", "No output from extraction.")
-			self._set_result("Status", "Error")
-			return
-
-		try:
-			data = json.loads(stdout_lines[-1])
-		except json.JSONDecodeError:
-			QMessageBox.critical(self, "Error",
-			                     f"Unexpected output:\n{stdout_lines[-1][:500]}")
+		if data is None:
 			self._set_result("Status", "Error")
 			return
 
