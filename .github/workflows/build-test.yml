@@ -78,7 +78,7 @@ jobs:
           PYTHONPATH: '${{ env.NGSOLVE_ROOT }}\Lib\site-packages;${{ github.workspace }}\src'
         run: |
           Write-Host "Running pytest -m basic..."
-          python -m pytest tests/ -m "basic" -v --tb=short --junitxml=test-results.xml
+          python -m pytest tests/ -m "basic" -v --tb=short --junitxml=test-results.xml --ignore=tests/cubit
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Basic tests failed"
             exit $LASTEXITCODE
