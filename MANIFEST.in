@@ -10,6 +10,9 @@ include BUILD.md
 # Include Python utilities
 recursive-include src/radia *.py
 
+# Include Cubit toolbar panels
+recursive-include src/radia/panels *.txt *.ui
+
 # Include compiled extension modules (.pyd files)
 recursive-include src/radia *.pyd
 
@@ -18,6 +21,9 @@ recursive-include examples *.py
 recursive-include examples *.pvsm
 recursive-include examples *.md
 recursive-include examples *.vtk
+
+# Include Cubit example sample files
+recursive-include examples/cubit *.exo *.msh *.bdf *.meg *.vol *.jou
 
 # Include tests
 recursive-include tests *.py

@@ -119,7 +119,7 @@ except ImportError:
 # Use PEEC topology solver (peec_topology.py) and coupled solver (peec_coupled.py).
 
 # VTK Export: Use rad.FldVTS() (C++ implementation)
-# See docs/API_REFERENCE.md for usage
+# See docs/api/API_REFERENCE.md for usage
 
 # Beam Tracking: NumPy-based particle trajectory computation
 # Import beam_tracking submodule for accelerator physics applications

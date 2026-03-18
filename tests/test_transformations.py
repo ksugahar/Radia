@@ -189,7 +189,7 @@ class TestCombinedTransformations:
 
 	# test_multiply_transformation REMOVED (2026-01-31)
 	# TrfMlt has been removed - use IMA symmetry instead
-	# See docs/IMA_SYMMETRY_DESIGN.md for the correct approach
+	# See docs/solver/IMA_SYMMETRY_DESIGN.md for the correct approach
 
 
 # TestInversion REMOVED (2026-03-06)
@@ -242,7 +242,7 @@ class TestTransformationOnGroups:
 
 # TestTransformationSymmetry REMOVED (2026-01-31)
 # TrfMlt has been removed - use IMA symmetry instead
-# See docs/IMA_SYMMETRY_DESIGN.md for the correct approach
+# See docs/solver/IMA_SYMMETRY_DESIGN.md for the correct approach
 #
 # For symmetric structures (quadrupole, arrays), use:
 # 1. Explicit element creation (recommended)

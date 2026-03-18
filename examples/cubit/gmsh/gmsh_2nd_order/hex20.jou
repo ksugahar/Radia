@@ -1,0 +1,16 @@
+reset
+brick x 1 
+imprint all
+merge all
+compress
+volume all size auto factor 10
+mesh volume all
+
+block 1 add hex all in volume 1
+block 1 name "air_hex"
+block 1 element type hex20
+
+block 2 add face in (surface with not is_merged)
+block 2 name "outer"
+block 2 element type quad8
+

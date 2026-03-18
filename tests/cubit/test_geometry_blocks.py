@@ -1,0 +1,241 @@
+"""
+Test export with geometry-based blocks (volume, surface, curve, vertex in blocks).
+
+This module tests that export functions work correctly when blocks contain
+geometry references instead of direct mesh element references.
+
+Run with Cubit Python:
+    "C:/Program Files/Coreform Cubit 2025.3/bin/python3/python.exe" tests/test_geometry_blocks.py
+"""
+
+import sys
+import os
+cubit_path = os.environ.get("CUBIT_PATH")
+if cubit_path:
+	sys.path.append(cubit_path)
+
+import cubit
+import tempfile
+
+# Add parent directory to path for cubit_mesh_export
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
+import cubit_mesh_export
+
+# Initialize Cubit
+cubit.init(['cubit', '-nojournal', '-batch'])
+
+all_passed = True
+
+def test_helper_function():
+	"""Test _get_block_elements helper function."""
+	global all_passed
+	print("=" * 60)
+	print("Test 1: _get_block_elements helper function")
+	print("=" * 60)
+
+	cubit.cmd("reset")
+	cubit.cmd("create brick x 1 y 1 z 1")
+	cubit.cmd("volume 1 scheme tetmesh")
+	cubit.cmd("volume 1 size 0.5")
+	cubit.cmd("mesh volume 1")
+
+	num_tets = cubit.get_tet_count()
+	num_tris = cubit.get_tri_count()
+
+	# Test with mesh elements block
+	cubit.cmd("block 1 add tet all")
+	cubit.cmd("block 2 add tri all in surface all")
+
+	tets_from_mesh_block = len(cubit_mesh_export._get_block_elements(cubit, 1, "tet"))
+	tris_from_mesh_block = len(cubit_mesh_export._get_block_elements(cubit, 2, "tri"))
+
+	print(f"  Mesh element blocks:")
+	print(f"    Block 1 tets: {tets_from_mesh_block} (expected: {num_tets})")
+	print(f"    Block 2 tris: {tris_from_mesh_block} (expected: {num_tris})")
+
+	if tets_from_mesh_block == num_tets and tris_from_mesh_block == num_tris:
+		print("  PASS: Mesh element blocks work correctly")
+	else:
+		print("  FAIL: Mesh element blocks")
+		all_passed = False
+
+	# Reset and test with geometry blocks
+	cubit.cmd("reset")
+	cubit.cmd("create brick x 1 y 1 z 1")
+	cubit.cmd("volume 1 scheme tetmesh")
+	cubit.cmd("volume 1 size 0.5")
+	cubit.cmd("mesh volume 1")
+
+	num_tets = cubit.get_tet_count()
+	num_tris_surf1 = len(cubit.parse_cubit_list("tri", "in surface 1"))
+
+	# Test with geometry blocks
+	cubit.cmd("block 1 add volume 1")
+	cubit.cmd("block 2 add surface 1")
+
+	tets_from_geom_block = len(cubit_mesh_export._get_block_elements(cubit, 1, "tet"))
+	tris_from_geom_block = len(cubit_mesh_export._get_block_elements(cubit, 2, "tri"))
+
+	print(f"\n  Geometry blocks:")
+	print(f"    Block 1 (volume) tets: {tets_from_geom_block} (expected: {num_tets})")
+	print(f"    Block 2 (surface) tris: {tris_from_geom_block} (expected: {num_tris_surf1})")
+
+	if tets_from_geom_block == num_tets and tris_from_geom_block == num_tris_surf1:
+		print("  PASS: Geometry blocks work correctly")
+	else:
+		print("  FAIL: Geometry blocks")
+		all_passed = False
+
+
+def test_vtk_with_volume_block():
+	"""Test VTK export with block containing volume (geometry)."""
+	global all_passed
+	print("\n" + "=" * 60)
+	print("Test 2: VTK export with volume-based block")
+	print("=" * 60)
+
+	cubit.cmd("reset")
+	cubit.cmd("create brick x 1 y 1 z 1")
+	cubit.cmd("volume 1 scheme tetmesh")
+	cubit.cmd("volume 1 size 0.5")
+	cubit.cmd("mesh volume 1")
+
+	# Add VOLUME to block (not mesh elements)
+	cubit.cmd("block 1 add volume 1")
+	cubit.cmd("block 1 name 'solid'")
+
+	num_tets_expected = cubit.get_tet_count()
+	print(f"  Total tets in mesh: {num_tets_expected}")
+	print(f"  Block contains: volume 1 (geometry)")
+
+	# Export to VTK
+	with tempfile.NamedTemporaryFile(suffix='.vtk', delete=False) as f:
+		vtk_file = f.name
+
+	cubit_mesh_export.export_vtk(cubit, vtk_file)
+
+	# Verify file exists and has content
+	with open(vtk_file, 'r') as f:
+		content = f.read()
+
+	# Check if tets are in the file (VTK_TETRA=10)
+	has_tets = '10' in content.split('CELL_TYPES')[1] if 'CELL_TYPES' in content else False
+
+	if has_tets and len(content) > 100:
+		print("  PASS: VTK file generated with geometry block")
+	else:
+		print("  FAIL: VTK file not generated correctly")
+		all_passed = False
+
+	os.unlink(vtk_file)
+
+
+def test_gmsh_with_volume_block():
+	"""Test Gmsh export with volume-based block."""
+	global all_passed
+	print("\n" + "=" * 60)
+	print("Test 3: Gmsh export with volume-based block")
+	print("=" * 60)
+
+	cubit.cmd("reset")
+	cubit.cmd("create brick x 1 y 1 z 1")
+	cubit.cmd("volume 1 scheme tetmesh")
+	cubit.cmd("volume 1 size 0.5")
+	cubit.cmd("mesh volume 1")
+
+	# Add VOLUME to block
+	cubit.cmd("block 1 add volume 1")
+	cubit.cmd("block 1 name 'solid'")
+
+	num_tets_expected = cubit.get_tet_count()
+
+	# Export to Gmsh
+	with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
+		msh_file = f.name
+
+	cubit_mesh_export.export_Gmesh(cubit, msh_file, version="2.2")
+
+	# Verify file
+	with open(msh_file, 'r') as f:
+		content = f.read()
+
+	# Find Elements section and count tet elements (type 4 for TET4)
+	lines = content.split('\n')
+	in_elements = False
+	tet_count = 0
+	for line in lines:
+		if line.strip() == '$Elements':
+			in_elements = True
+			continue
+		if line.strip() == '$EndElements':
+			break
+		if in_elements and line.strip():
+			parts = line.split()
+			if len(parts) >= 2:
+				try:
+					elem_type = int(parts[1])
+					# Type 4 = TET4, Type 11 = TET10
+					if elem_type in [4, 11]:
+						tet_count += 1
+				except:
+					pass
+
+	print(f"  Expected tets: {num_tets_expected}")
+	print(f"  Gmsh tet elements: {tet_count}")
+
+	if tet_count == num_tets_expected:
+		print("  PASS: Gmsh export with volume block works")
+	else:
+		print(f"  FAIL: Tet count mismatch")
+		all_passed = False
+
+	os.unlink(msh_file)
+
+
+def test_no_cross_contamination():
+	"""Test that elements from one block don't appear in another."""
+	global all_passed
+	print("\n" + "=" * 60)
+	print("Test 4: No cross-contamination between blocks")
+	print("=" * 60)
+
+	cubit.cmd("reset")
+	cubit.cmd("create brick x 1 y 1 z 1")
+	cubit.cmd("volume 1 scheme tetmesh")
+	cubit.cmd("volume 1 size 0.5")
+	cubit.cmd("mesh volume 1")
+
+	# Block 1: tets only
+	cubit.cmd("block 1 add tet all")
+	# Block 2: tris only
+	cubit.cmd("block 2 add tri all in surface all")
+
+	# Check that block 1 has no tris and block 2 has no tets
+	block1_tets = len(cubit_mesh_export._get_block_elements(cubit, 1, "tet"))
+	block1_tris = len(cubit_mesh_export._get_block_elements(cubit, 1, "tri"))
+	block2_tets = len(cubit_mesh_export._get_block_elements(cubit, 2, "tet"))
+	block2_tris = len(cubit_mesh_export._get_block_elements(cubit, 2, "tri"))
+
+	print(f"  Block 1: {block1_tets} tets, {block1_tris} tris (expect tets>0, tris=0)")
+	print(f"  Block 2: {block2_tets} tets, {block2_tris} tris (expect tets=0, tris>0)")
+
+	if block1_tets > 0 and block1_tris == 0 and block2_tets == 0 and block2_tris > 0:
+		print("  PASS: No cross-contamination")
+	else:
+		print("  FAIL: Cross-contamination detected")
+		all_passed = False
+
+
+# Run tests
+if __name__ == "__main__":
+	test_helper_function()
+	test_vtk_with_volume_block()
+	test_gmsh_with_volume_block()
+	test_no_cross_contamination()
+
+	print("\n" + "=" * 60)
+	if all_passed:
+		print("All tests PASSED!")
+	else:
+		print("Some tests FAILED!")
+	print("=" * 60)

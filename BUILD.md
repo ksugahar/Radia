@@ -569,7 +569,7 @@ Remove-Item -Recurse -Force build-msvc
 - **Documentation**: See `docs/` folder
 - **Examples**: See `examples/` folder
 - **Issues**: GitHub Issues
-- **API Reference**: `docs/API.md`
+- **API Reference**: `docs/api/API_REFERENCE.md`
 
 ---
 
