@@ -20,54 +20,41 @@ import sys
 import tempfile
 
 
-def _find_cubit_path():
-    """Find Cubit bin directory from env var or common install locations."""
-    # 1. CUBIT_PATH env var (explicit)
-    cubit_path = os.environ.get("CUBIT_PATH")
-    if cubit_path and os.path.isdir(cubit_path):
-        return cubit_path
-
-    # 2. Search common installation directories
-    if sys.platform == "win32":
-        base = os.environ.get("ProgramFiles", r"C:\Program Files")
-        import glob
-        candidates = sorted(glob.glob(os.path.join(base, "Coreform Cubit *", "bin")),
-                            reverse=True)  # newest first
-        for c in candidates:
-            if os.path.isfile(os.path.join(c, "cubit.py")):
-                return c
-    else:
-        for prefix in ["/opt/coreform", "/usr/local"]:
-            import glob
-            candidates = sorted(glob.glob(os.path.join(prefix, "cubit*", "bin")),
-                                reverse=True)
-            for c in candidates:
-                if os.path.isfile(os.path.join(c, "cubit.py")):
-                    return c
-
-    return None
-
-
 def _setup_cubit():
-    """Import cubit with path cleanup (NGSolve already imported)."""
-    cubit_path = _find_cubit_path()
+    """Import cubit with path cleanup (NGSolve already imported).
+
+    Uses install_panels.find_cubit_bin() for cross-platform detection.
+    Removes Cubit's bundled site-packages from sys.path to avoid
+    numpy DLL conflicts between Cubit's Python and system Python.
+    """
+    # Find Cubit bin directory (cross-platform)
+    radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    if os.path.abspath(radia_src) not in sys.path:
+        sys.path.insert(0, os.path.abspath(radia_src))
+    from install_panels import find_cubit_bin
+
+    cubit_path = find_cubit_bin()
     if cubit_path and cubit_path not in sys.path:
         sys.path.append(cubit_path)
 
     # Block Cubit's bundled site-packages (may contain incompatible numpy)
-    for p in list(sys.path):
-        if "Coreform Cubit" in p and "site-packages" in p:
-            sys.path.remove(p)
+    _remove_cubit_site_packages()
 
     import cubit
     cubit.init(["cubit", "-nojournal", "-batch"])
 
     # Clean up again (cubit.init may re-add paths)
-    for p in list(sys.path):
-        if "Coreform Cubit" in p and "site-packages" in p:
-            sys.path.remove(p)
+    _remove_cubit_site_packages()
 
     return cubit
+
+
+def _remove_cubit_site_packages():
+    """Remove Cubit's bundled site-packages from sys.path."""
+    for p in list(sys.path):
+        # Match any Cubit installation's site-packages
+        if "site-packages" in p and ("cubit" in p.lower() or "Cubit" in p):
+            sys.path.remove(p)
 
 
 def _get_mesh_size(cubit, vol_ids):
