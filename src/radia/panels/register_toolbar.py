@@ -443,7 +443,7 @@ class VolumeCalculatorDialog(QDialog):
 # ================================================================
 
 def register_menu():
-	"""Add 'Radia' menu to Cubit's menu bar."""
+	"""Add 'Radia' submenu to Cubit's Tools menu."""
 	main_window = _find_main_window()
 	if main_window is None:
 		print("WARNING: Could not find Cubit main window. Menu not registered.")
@@ -451,14 +451,25 @@ def register_menu():
 
 	menu_bar = main_window.menuBar()
 
-	# Check if already registered (avoid duplicates on re-play)
+	# Find Tools menu
+	tools_menu = None
 	for action in menu_bar.actions():
+		if action.text() == "Tools":
+			tools_menu = action.menu()
+			break
+
+	if tools_menu is None:
+		# Fallback: add to menu bar directly
+		tools_menu = menu_bar
+
+	# Check if already registered (avoid duplicates on re-play)
+	for action in tools_menu.actions():
 		if action.text() == "Radia":
 			print("Radia menu already registered.")
 			return
 
-	# Create Radia menu
-	radia_menu = menu_bar.addMenu("Radia")
+	# Create Radia submenu under Tools
+	radia_menu = tools_menu.addMenu("Radia")
 
 	# Export Gmsh action
 	action_gmsh = QAction("Export Gmsh...", main_window)
@@ -472,7 +483,7 @@ def register_menu():
 	action_vol.triggered.connect(lambda: VolumeCalculatorDialog(main_window).exec())
 	radia_menu.addAction(action_vol)
 
-	print("Radia menu registered.")
+	print("Radia menu registered under Tools.")
 
 
 # Auto-register when this script is executed
