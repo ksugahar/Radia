@@ -439,6 +439,212 @@ class VolumeCalculatorDialog(QDialog):
 
 
 # ================================================================
+# Inductance Extractor Dialog
+# ================================================================
+
+class InductanceDialog(QDialog):
+	"""Dialog for ngbem inductance extraction."""
+
+	def __init__(self, parent=None):
+		super().__init__(parent)
+		self.setWindowTitle("Inductance Extractor (ngbem)")
+		self.setMinimumWidth(500)
+		self._ext_python = _find_external_python()
+		self._setup_ui()
+		self._populate_blocks()
+
+	def _setup_ui(self):
+		layout = QVBoxLayout(self)
+
+		# Block selection
+		grid = QGridLayout()
+
+		grid.addWidget(QLabel("Source block:"), 0, 0)
+		self.source_combo = QComboBox()
+		self.source_combo.setEditable(True)
+		grid.addWidget(self.source_combo, 0, 1)
+
+		grid.addWidget(QLabel("Sink block:"), 1, 0)
+		self.sink_combo = QComboBox()
+		self.sink_combo.setEditable(True)
+		self.sink_combo.addItem("(closed loop)")
+		grid.addWidget(self.sink_combo, 1, 1)
+
+		grid.addWidget(QLabel("Conductivity:"), 2, 0)
+		self.sigma_edit = QLineEdit("5.8e7")
+		grid.addWidget(self.sigma_edit, 2, 1)
+		grid.addWidget(QLabel("S/m"), 2, 2)
+
+		grid.addWidget(QLabel("Curve order:"), 3, 0)
+		self.order_spin = QSpinBox()
+		self.order_spin.setRange(1, 5)
+		self.order_spin.setValue(1)
+		grid.addWidget(self.order_spin, 3, 1)
+
+		grid.addWidget(QLabel("Frequency:"), 4, 0)
+		self.freq_edit = QLineEdit("0")
+		grid.addWidget(self.freq_edit, 4, 1)
+		grid.addWidget(QLabel("Hz (0 = DC)"), 4, 2)
+
+		layout.addLayout(grid)
+
+		# Result group
+		result_group = QGroupBox("Result")
+		result_layout = QVBoxLayout()
+		self.result_label = QLabel("(not yet computed)")
+		self.result_label.setWordWrap(True)
+		result_layout.addWidget(self.result_label)
+		result_group.setLayout(result_layout)
+		layout.addWidget(result_group)
+
+		# Python info
+		py_label = QLabel(f"Python: {self._ext_python or 'Not found'}")
+		py_label.setStyleSheet("color: green;" if self._ext_python else "color: red;")
+		layout.addWidget(py_label)
+
+		# Buttons
+		btn_row = QHBoxLayout()
+		btn_row.addStretch()
+		self.extract_btn = QPushButton("Extract")
+		self.extract_btn.clicked.connect(self._extract)
+		self.extract_btn.setEnabled(self._ext_python is not None)
+		btn_row.addWidget(self.extract_btn)
+		close_btn = QPushButton("Close")
+		close_btn.clicked.connect(self.accept)
+		btn_row.addWidget(close_btn)
+		layout.addLayout(btn_row)
+
+	def _populate_blocks(self):
+		"""Populate combo boxes with Cubit block names."""
+		try:
+			block_count = cubit.get_block_count()
+			for bid in range(1, block_count + 1):
+				try:
+					name = cubit.get_exodus_entity_name("block", bid)
+					if name:
+						self.source_combo.addItem(name)
+						self.sink_combo.addItem(name)
+				except Exception:
+					pass
+		except Exception:
+			pass
+
+	def _extract(self):
+		"""Run inductance extraction via external Python."""
+		if not self._ext_python:
+			QMessageBox.warning(self, "Error", "External Python not found.")
+			return
+
+		source = self.source_combo.currentText().strip()
+		sink = self.sink_combo.currentText().strip()
+		if sink == "(closed loop)":
+			sink = ""
+
+		try:
+			sigma = float(self.sigma_edit.text())
+		except ValueError:
+			QMessageBox.warning(self, "Error", "Invalid conductivity value.")
+			return
+
+		try:
+			freq = float(self.freq_edit.text())
+		except ValueError:
+			QMessageBox.warning(self, "Error", "Invalid frequency value.")
+			return
+
+		order = self.order_spin.value()
+
+		self.extract_btn.setEnabled(False)
+		self.extract_btn.setText("Extracting...")
+		self.result_label.setText("Computing...")
+		QApplication.processEvents()
+
+		try:
+			# Save cub5
+			tmpdir = tempfile.mkdtemp(prefix="radia_ind_")
+			cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
+			cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
+
+			# Build command
+			calc_script = os.path.join(_this_dir, "calc_inductance.py")
+			cmd = [
+				self._ext_python, calc_script,
+				"--cub5", cub5_file,
+				"--source", source,
+				"--sink", sink,
+				"--sigma", str(sigma),
+				"--order", str(order),
+				"--freq", str(freq),
+			]
+
+			result = subprocess.run(
+				cmd, capture_output=True, text=True, timeout=300
+			)
+
+			if result.returncode != 0:
+				stderr = result.stderr.strip()
+				stderr_lines = [l for l in stderr.split("\n")
+				                if l.strip() and "WARNING" not in l
+				                and "=====" not in l and "version" not in l]
+				error_msg = "\n".join(stderr_lines) or result.stdout.strip()
+				if error_msg:
+					QMessageBox.critical(self, "Error", error_msg[:1000])
+					self.result_label.setText("Error (see message)")
+					return
+
+			# Parse JSON from last line
+			stdout_lines = result.stdout.strip().split("\n")
+			data = json.loads(stdout_lines[-1])
+
+			if "error" in data:
+				QMessageBox.critical(self, "Error", data["error"])
+				self.result_label.setText("Error (see message)")
+				return
+
+			# Display result
+			L = data["inductance_H"]
+			R = data.get("resistance_ohm", 0.0)
+
+			# Auto-format inductance
+			if abs(L) >= 1e-3:
+				L_str = f"{L*1e3:.4f} mH"
+			elif abs(L) >= 1e-6:
+				L_str = f"{L*1e6:.4f} uH"
+			elif abs(L) >= 1e-9:
+				L_str = f"{L*1e9:.4f} nH"
+			else:
+				L_str = f"{L:.4e} H"
+
+			# Auto-format resistance
+			if abs(R) >= 1.0:
+				R_str = f"{R:.4f} Ohm"
+			elif abs(R) >= 1e-3:
+				R_str = f"{R*1e3:.4f} mOhm"
+			else:
+				R_str = f"{R:.4e} Ohm"
+
+			text = f"L = {L_str}\nR = {R_str}"
+			if freq > 0:
+				text += f"\nf = {freq:.2e} Hz"
+			text += f"\nOrder = {order}"
+			text += f"\nPort: {data['source_block']} -> {data['sink_block']}"
+			self.result_label.setText(text)
+
+		except subprocess.TimeoutExpired:
+			QMessageBox.critical(self, "Timeout", "Extraction timed out (300s).")
+			self.result_label.setText("Timeout")
+		except json.JSONDecodeError as e:
+			QMessageBox.critical(self, "Error", f"Failed to parse output:\n{e}")
+			self.result_label.setText("Parse error")
+		except Exception as e:
+			QMessageBox.critical(self, "Error", str(e))
+			self.result_label.setText("Error")
+		finally:
+			self.extract_btn.setEnabled(True)
+			self.extract_btn.setText("Extract")
+
+
+# ================================================================
 # Menu Registration
 # ================================================================
 
@@ -483,7 +689,13 @@ def register_menu():
 	action_vol.triggered.connect(lambda: VolumeCalculatorDialog(main_window).exec())
 	radia_menu.addAction(action_vol)
 
-	print("Radia menu registered under Tools.")
+	# Inductance Extractor action
+	action_ind = QAction("Inductance...", main_window)
+	action_ind.setStatusTip("Extract inductance using ngbem LaplaceSL BEM")
+	action_ind.triggered.connect(lambda: InductanceDialog(main_window).exec())
+	radia_menu.addAction(action_ind)
+
+	print("Radia-NGSolve menu registered under Tools.")
 
 
 # Auto-register when this script is executed
