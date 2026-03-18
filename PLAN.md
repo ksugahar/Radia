@@ -62,6 +62,29 @@ Cubit GUI (PyQt5)                    External Python (NGSolve + Cubit)
   2. Compare with cross product of tri edges -> flip if opposite
   3. OR use `domin`/`domout` FaceDescriptor to let Netgen know orientation
 
+## Fundamental Workflow (ALL tools must use this)
+
+```
+Cubit create geometry
+  → STEP export
+  → reset + STEP reimport heal (ACIS→OCC seam fix)
+  → Cubit mesh (tet/hex/surface)
+  → export_netgen(cubit, geometry=OCCGeometry(step_file))
+  → SetGeomInfo (cylinder/torus/sphere)
+  → mesh.Curve(order)
+  → Integrate / LaplaceSL / etc.
+```
+
+**Without this workflow**:
+- mesh.Curve(order) has no effect (no geometry reference)
+- BEM LaplaceSL gets seam artifacts (negative L diagonal)
+- High-order elements don't improve accuracy (defeats CEFC presentation purpose)
+
+**Current violations to fix**:
+- calc_volume.py Order>1: creates OCC mesh instead of using Cubit mesh (WRONG)
+- calc_surface.py Order>1: same (WRONG)
+- calc_inductance.py: no STEP reimport (seam breaks BEM)
+
 ## Next Steps
 
 ### Step 4: Cubit surface mesh -> dim=2 Netgen mesh [CRITICAL]
