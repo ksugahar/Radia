@@ -5,9 +5,9 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-BSD%20%2B%20MIT-green.svg)](LICENSE)
 
-**A Python-native electromagnetic source framework for [NGSolve](https://ngsolve.org/) and [NGbem](https://docu.ngsolve.org/latest/i-tutorials/unit-8.1-ngbem/ngbem.html).**
+**A Python-native electromagnetic source framework for [NGSolve](https://ngsolve.org/) and [ngsolve.bem](https://docu.ngsolve.org/latest/i-tutorials/unit-8.1-ngbem/ngbem.html).**
 
-Radia provides **analytical field sources** ($B$, $H$, $A$, $\Phi$) as native C++ `CoefficientFunction` objects that NGSolve and NGbem consume directly during finite element assembly. Where FEM needs boundary conditions and source terms, Radia delivers them — analytically, without meshing the source region.
+Radia provides **analytical field sources** ($B$, $H$, $A$, $\Phi$) as native C++ `CoefficientFunction` objects that NGSolve and ngsolve.bem consume directly during finite element assembly. Where FEM needs boundary conditions and source terms, Radia delivers them — analytically, without meshing the source region.
 
 ## 🚀 Mission: The Design Tool for Open-Space Magnetics
 
@@ -55,7 +55,7 @@ Commercially available Finite Element Method (FEM) tools are powerful, but they 
     *   *Our Solution*: Sources are analytical objects. Moving them is a simple coordinate transformation, free of discretization error.
 
 **We do not replace FEM; We are the Source Provider for FEM.**
-Radia actively feeds NGSolve and NGbem with high-fidelity electromagnetic sources — coils, magnets, and conductor impedances — so that FEM can focus on what it does best: solving material-dominated PDEs (saturation, eddy currents, thermal coupling). The integration is not a loose coupling; Radia's fields are evaluated **inside** NGSolve's assembly loop as native `CoefficientFunction` objects.
+Radia actively feeds NGSolve and ngsolve.bem with high-fidelity electromagnetic sources — coils, magnets, and conductor impedances — so that FEM can focus on what it does best: solving material-dominated PDEs (saturation, eddy currents, thermal coupling). The integration is not a loose coupling; Radia's fields are evaluated **inside** NGSolve's assembly loop as native `CoefficientFunction` objects.
 
 ---
 
@@ -130,7 +130,7 @@ Combined with **SIBC (Surface Impedance Boundary Condition)**, this reduces the 
 
 ## 🧘 Philosophy: The Source Provider for NGSolve
 
-**Radia exists to give NGSolve and NGbem the best possible electromagnetic sources.**
+**Radia exists to give NGSolve and ngsolve.bem the best possible electromagnetic sources.**
 
 The division of labor is clear:
 
@@ -138,18 +138,18 @@ The division of labor is clear:
 | :--- | :--- | :--- |
 | **Source Provider** | **Radia** | $H_s$, $B_s$, $A_s$, $\Phi_s$ from coils, magnets, conductors — analytically |
 | **Material Solver** | **NGSolve** | Reaction fields in iron/dielectric via FEM ($\nabla \cdot \mu \nabla \phi = -\nabla \cdot \mu H_s$) |
-| **Eddy Current Solver** | **NGbem** | Surface eddy currents via BEM (HDivSurface $\times$ SurfaceL2) |
+| **Eddy Current Solver** | **ngsolve.bem** | Surface eddy currents via BEM (HDivSurface $\times$ SurfaceL2) |
 | **Circuit Extraction** | **Radia PEEC** | Impedance (L, R, C, M) from conductor geometry for SPICE |
 
 **How the integration works**:
 1.  Radia computes the source field analytically (no mesh, no discretization error).
 2.  `rad.RadiaField()` wraps the result as an NGSolve `CoefficientFunction` — a native C++ object evaluated directly inside NGSolve's element assembly loop. Since v2.5.0, `RadiaField` is integrated into the main `_radia_pybind.pyd` module; no separate `radia_ngsolve` module is needed.
-3.  NGSolve / NGbem solve the reaction problem driven by this source.
+3.  NGSolve / ngsolve.bem solve the reaction problem driven by this source.
 4.  Result = Source Field (Radia) + Reaction Field (NGSolve).
 
 We bridge the gap between distinct mathematical communities:
 *   **Integral Codes**: Radia (ESRF) & FastImp (MIT) $\rightarrow$ *Analytical source fields.*
-*   **Finite Element Codes**: NGSolve (TU Wien) & NGbem $\rightarrow$ *Material & eddy current solvers.*
+*   **Finite Element Codes**: NGSolve (TU Wien) & ngsolve.bem $\rightarrow$ *Material & eddy current solvers.*
 
 ---
 
@@ -183,7 +183,7 @@ Unlike FEM, which uses uniform element formulations, IEM allows the combination 
 | :--- | :--- | :--- | :--- |
 | **Source Layer** | **IEM** (Radia) | **Laplace Kernels** ($1/r$): Volume Magnets, Coils, SIBC Surfaces. Provides $H_s$, $B_s$, $A_s$ as `CoefficientFunction`. | **Composable & Analytical.** No mesh needed for sources. |
 | **Material Layer** | **FEM** (NGSolve) | **Differential Operators** ($\nabla \cdot \mu \nabla$): Saturation, Hysteresis, Thermal. | **Non-Linear & Multi-Physics.** |
-| **Eddy Current Layer** | **BEM** (NGbem) | **Surface BEM** (HDivSurface $\times$ SurfaceL2): Eddy currents, shielding. | **No volume mesh in conductors.** |
+| **Eddy Current Layer** | **BEM** (ngsolve.bem) | **Surface BEM** (HDivSurface $\times$ SurfaceL2): Eddy currents, shielding. | **No volume mesh in conductors.** |
 
 **The Workflow:**
 1.  **Radia**: Computes the source field ($H_s$ or $T_s$) analytically.
@@ -193,7 +193,7 @@ Unlike FEM, which uses uniform element formulations, IEM allows the combination 
 3.  **Result**: Superposition of Source Field + Reaction Field.
 
 > [!NOTE]
-> **Design**: The coupling is intentionally one-way (Radia Sources $\rightarrow$ NGSolve/NGbem). Radia provides the source; NGSolve and NGbem solve the reaction. This clean separation keeps the architecture composable and each solver optimal for its role.
+> **Design**: The coupling is intentionally one-way (Radia Sources $\rightarrow$ NGSolve/ngsolve.bem). Radia provides the source; NGSolve and ngsolve.bem solve the reaction. This clean separation keeps the architecture composable and each solver optimal for its role.
 
 ### NGSolve Integration Details (Weak Coupling Mechanism)
 The `rad.RadiaField()` function (integrated into `_radia_pybind.pyd` since v2.5.0) implements a high-performance **Weak Coupling** bridge using a native C++ `CoefficientFunction`. This allows Radia fields to be evaluated directly during NGSolve's finite element assembly process.
@@ -355,7 +355,7 @@ print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
 *   **[Installation Guide](BUILD.md)**: Build from source (Windows/Linux/macOS).
 *   **[API Reference](docs/api/API_REFERENCE.md)**: Full Python API documentation.
 *   **[NGSolve Integration](docs/NGSOLVE_INTEGRATION.md)**: Theory and usage of the hybrid FEM-Integral method.
-*   **[NGbem Integration](docs/solver/NGBEM_INTEGRATION_DESIGN.md)**: Eddy current solver via NGSolve BEM.
+*   **[ngsolve.bem Integration](docs/solver/NGBEM_INTEGRATION_DESIGN.md)**: Eddy current solver via ngsolve.bem.
 *   **[Original Radia](https://github.com/ochubar/Radia)**: The core physics engine developed at ESRF.
 
 ---
