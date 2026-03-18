@@ -47,7 +47,7 @@ if _pkg_root not in sys.path:
 
 import cubit
 
-# Qt bindings: prefer PySide6, fall back to PyQt5 (Cubit 2025.3 ships PyQt5)
+# Qt bindings: prefer PySide6, fall back to PyQt5 (Cubit ships PyQt5)
 try:
 	from PySide6.QtWidgets import (
 		QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,

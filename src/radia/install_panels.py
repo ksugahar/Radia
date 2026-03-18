@@ -17,6 +17,7 @@ Usage:
     install_panels()
 """
 
+import glob
 import os
 import sys
 
@@ -26,10 +27,77 @@ _MARKER_BEGIN = "## BEGIN cubit_mesh_export toolbar"
 _MARKER_END = "## END cubit_mesh_export toolbar"
 
 
+def find_cubit_bin():
+	"""Find Cubit bin directory (cross-platform).
+
+	Search order:
+	  1. CUBIT_PATH environment variable
+	  2. Platform-specific common install locations (newest version first)
+
+	Returns:
+	  Path to Cubit bin/ directory, or None if not found.
+	"""
+	# 1. Explicit env var (highest priority, all platforms)
+	cubit_path = os.environ.get("CUBIT_PATH")
+	if cubit_path and os.path.isdir(cubit_path):
+		return cubit_path
+
+	# 2. Platform-specific search
+	search_patterns = []
+	if sys.platform == "win32":
+		for base in [os.environ.get("ProgramFiles", ""),
+		             os.environ.get("ProgramFiles(x86)", "")]:
+			if base:
+				search_patterns.append(os.path.join(base, "Coreform Cubit *", "bin"))
+	elif sys.platform == "darwin":
+		search_patterns += [
+			"/Applications/Coreform-Cubit-*/Coreform Cubit.app/Contents/MacOS",
+			"/Applications/Coreform Cubit */bin",
+		]
+	else:  # Linux
+		search_patterns += [
+			"/opt/Coreform-Cubit-*/bin",
+			"/opt/coreform/cubit-*/bin",
+			"/usr/local/Coreform-Cubit-*/bin",
+		]
+
+	for pattern in search_patterns:
+		candidates = sorted(glob.glob(pattern), reverse=True)  # newest first
+		for c in candidates:
+			if os.path.isfile(os.path.join(c, "cubit.py")):
+				return c
+
+	return None
+
+
+def find_cubit_site_packages(cubit_bin=None):
+	"""Find Cubit's bundled Python site-packages directory.
+
+	Args:
+	  cubit_bin: Cubit bin/ path (auto-detected if None)
+
+	Returns:
+	  Path to site-packages, or None if not found.
+	"""
+	if cubit_bin is None:
+		cubit_bin = find_cubit_bin()
+	if not cubit_bin:
+		return None
+
+	# Search for site-packages under Cubit's bundled Python
+	# Structure varies: python3/lib/site-packages (Windows/Linux)
+	#                   python3/lib/python3.X/site-packages (some Linux)
+	candidates = glob.glob(os.path.join(cubit_bin, "python*", "lib", "site-packages"))
+	candidates += glob.glob(os.path.join(cubit_bin, "python*", "lib", "python*", "site-packages"))
+	if candidates:
+		return candidates[0]
+
+	return None
+
+
 def _get_cubit_startup_file():
 	"""Get the path to the user's .cubit startup file."""
-	home = os.path.expanduser("~")
-	return os.path.join(home, ".cubit")
+	return os.path.join(os.path.expanduser("~"), ".cubit")
 
 
 def _get_panels_dir():
@@ -41,25 +109,25 @@ def _get_panels_dir():
 
 
 def _generate_startup_script(panels_dir):
-	"""Generate startup.py with paths baked in (avoids __file__ issues in Cubit play)."""
+	"""Generate startup.py with paths baked in (avoids __file__ issues in Cubit play).
+
+	Paths are determined at install time, not hardcoded in source.
+	"""
 	register_path = os.path.join(panels_dir, "register_toolbar.py").replace("\\", "/")
 	startup_path = os.path.join(panels_dir, "startup.py")
 
-	# Find Cubit's site-packages for PyQt5
-	cubit_path = os.environ.get("CUBIT_PATH", "")
-	if not cubit_path:
-		import glob
-		base = os.environ.get("ProgramFiles", "C:/Program Files")
-		candidates = sorted(glob.glob(os.path.join(base, "Coreform Cubit *", "bin")),
-		                    reverse=True)
-		cubit_path = candidates[0] if candidates else ""
-	cubit_site = os.path.join(cubit_path, "python3", "lib", "site-packages").replace("\\", "/")
+	# Find Cubit's site-packages for PyQt5/PySide6
+	cubit_site = find_cubit_site_packages()
+	if cubit_site:
+		cubit_site = cubit_site.replace("\\", "/")
+		site_line = f'_cs = r"{cubit_site}"; sys.path.insert(0, _cs) if _cs not in sys.path else None; '
+	else:
+		site_line = ""
 
 	# Write startup.py as a single-line script (Cubit play executes line by line)
 	content = (
 		f'import sys, os; '
-		f'_cs = r"{cubit_site}"; '
-		f'sys.path.insert(0, _cs) if _cs not in sys.path else None; '
+		f'{site_line}'
 		f'__file__ = r"{register_path}"; '
 		f'exec(open(r"{register_path}").read())\n'
 	)
@@ -116,6 +184,9 @@ def install_panels():
 	startup_script = _generate_startup_script(panels_dir)
 	print(f"Toolbar script: {register_script}")
 	print(f"Startup script: {startup_script}")
+
+	cubit_bin = find_cubit_bin()
+	print(f"Cubit bin:      {cubit_bin or 'not found (set CUBIT_PATH)'}")
 
 	# Step 2: Update ~/.cubit
 	cubit_file = _get_cubit_startup_file()
