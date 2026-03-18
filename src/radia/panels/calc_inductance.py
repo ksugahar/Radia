@@ -38,7 +38,10 @@ def _setup_cubit():
             sys.path.remove(p)
 
     import cubit
-    cubit.init(["cubit", "-nojournal", "-batch"])
+    # Suppress cubit.init() banner on stderr
+    import io, contextlib
+    with contextlib.redirect_stderr(io.StringIO()):
+        cubit.init(["cubit", "-nojournal", "-batch"])
 
     for p in list(sys.path):
         if "site-packages" in p and ("cubit" in p.lower() or "Cubit" in p):
