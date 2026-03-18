@@ -22,6 +22,7 @@ jobs:
     env:
       NGSOLVE_ROOT: 'C:\NGSolve'
       NGSOLVE_DIR: 'C:\NGSolve\cmake'
+      CUBIT_PATH: 'C:\Program Files\Coreform Cubit 2025.3\bin'
 
     steps:
       - uses: actions/checkout@v4
@@ -75,10 +76,10 @@ jobs:
         shell: pwsh
         working-directory: ${{ github.workspace }}
         env:
-          PYTHONPATH: '${{ env.NGSOLVE_ROOT }}\Lib\site-packages;${{ github.workspace }}\src'
+          PYTHONPATH: '${{ env.NGSOLVE_ROOT }}\Lib\site-packages;${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
         run: |
-          Write-Host "Running pytest -m basic..."
-          python -m pytest tests/ -m "basic" -v --tb=short --junitxml=test-results.xml --ignore=tests/cubit
+          Write-Host "Running pytest..."
+          python -m pytest tests/ -v --tb=short --junitxml=test-results.xml
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Basic tests failed"
             exit $LASTEXITCODE
