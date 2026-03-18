@@ -24,14 +24,20 @@ except NameError:
 		else:
 			raise ImportError
 	except (ImportError, AttributeError):
-		# Last resort: common installation path
-		for _candidate in [
-			os.path.join(sys.prefix, "Lib", "site-packages", "radia", "panels"),
-			os.path.join(os.path.expanduser("~"), ".local", "lib", "python3.12", "site-packages", "radia", "panels"),
+		# Last resort: search site-packages for radia/panels/
+		import glob as _glob
+		for _base in [
+			os.path.join(sys.prefix, "Lib", "site-packages"),
+			os.path.join(sys.prefix, "lib", "python*", "site-packages"),
+			os.path.join(os.path.expanduser("~"), ".local", "lib", "python*", "site-packages"),
 		]:
-			if os.path.isdir(_candidate):
-				_this_dir = _candidate
-				break
+			for _candidate in _glob.glob(os.path.join(_base, "radia", "panels")):
+				if os.path.isdir(_candidate):
+					_this_dir = _candidate
+					break
+			else:
+				continue
+			break
 		else:
 			_this_dir = os.getcwd()
 
@@ -364,9 +370,15 @@ class VolumeCalculatorDialog(QDialog):
 			)
 
 			if result.returncode != 0:
-				error_msg = result.stderr.strip() or result.stdout.strip()
-				QMessageBox.critical(self, "NGSolve Error", error_msg[:1000])
-				return
+				# Filter out NGSolve/Netgen version warnings from stderr
+				stderr = result.stderr.strip()
+				stderr_lines = [l for l in stderr.split("\n")
+				                if l.strip() and "WARNING" not in l
+				                and "=====" not in l and "version" not in l]
+				error_msg = "\n".join(stderr_lines) or result.stdout.strip()
+				if error_msg:
+					QMessageBox.critical(self, "NGSolve Error", error_msg[:1000])
+					return
 
 			# Parse JSON from last line of stdout (skip cubit/ngsolve banner)
 			stdout_lines = result.stdout.strip().split("\n")
