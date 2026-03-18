@@ -1,0 +1,39 @@
+## Torus with gap - inductance extraction test model
+## Run: playback "S:/Radia/01_GitHub/examples/cubit/inductance_torus.jou"
+
+reset
+
+## Parameters
+#{R = 0.05}
+#{a = 0.005}
+#{gap = 0.005}
+
+## Create torus
+create torus major radius {R} minor radius {a}
+
+## Create cutting brick for gap
+brick x {3*a} y {gap} z {3*a}
+move Volume 2 x {R} y 0 z 0 include_merged
+
+## Subtract to create gap
+subtract volume 2 from volume 1
+
+## Mesh
+volume 1 scheme tetmesh
+volume 1 size {R/2}
+mesh volume 1
+
+## Allow elements in multiple blocks
+set duplicate block elements on
+
+## Source/Sink: the planar cut faces created by subtract
+play "S:/Radia/01_GitHub/examples/cubit/inductance_torus_blocks.py"
+
+## Conductor volume + full boundary
+block 3 add volume 1
+block 3 name "conductor"
+block 4 add tri all
+block 4 name "boundary"
+
+## Save
+save cub5 "S:/Radia/01_GitHub/examples/cubit/inductance_torus.cub5" overwrite
