@@ -435,6 +435,161 @@ class VolumeCalculatorDialog(QDialog):
 
 
 # ================================================================
+# Surface Area Calculator Dialog
+# ================================================================
+
+class SurfaceAreaDialog(QDialog):
+	"""Dialog for surface area calculation with optional NGSolve integration."""
+
+	def __init__(self, parent=None):
+		super().__init__(parent)
+		self.setWindowTitle("Surface Area Calculator")
+		self.setMinimumWidth(550)
+		self.setMinimumHeight(350)
+		self._ext_python = _find_external_python()
+		self._setup_ui()
+		self._calculate_cad_areas()
+
+	def _setup_ui(self):
+		layout = QVBoxLayout(self)
+
+		# Surface table
+		self.table = QTableWidget()
+		self.table.setColumnCount(4)
+		self.table.setHorizontalHeaderLabels(["ID", "Name", "CAD Area", "NGSolve Area"])
+		self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+		self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+		self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+		self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.table.setSelectionBehavior(QTableWidget.SelectRows)
+		layout.addWidget(self.table)
+
+		# NGSolve group
+		ngsolve_group = QGroupBox("NGSolve Surface Area (external Python)")
+		ngsolve_layout = QHBoxLayout()
+		ngsolve_layout.addWidget(QLabel("Order:"))
+		self.order_spin = QSpinBox()
+		self.order_spin.setRange(1, 5)
+		self.order_spin.setValue(1)
+		ngsolve_layout.addWidget(self.order_spin)
+		self.calc_btn = QPushButton("Calculate")
+		self.calc_btn.clicked.connect(self._calculate_ngsolve)
+		self.calc_btn.setEnabled(self._ext_python is not None)
+		ngsolve_layout.addWidget(self.calc_btn)
+		ngsolve_group.setLayout(ngsolve_layout)
+		layout.addWidget(ngsolve_group)
+
+		# Close
+		btn_row = QHBoxLayout()
+		btn_row.addStretch()
+		close_btn = QPushButton("Close")
+		close_btn.clicked.connect(self.accept)
+		btn_row.addWidget(close_btn)
+		layout.addLayout(btn_row)
+
+	def _calculate_cad_areas(self):
+		"""Calculate CAD surface areas."""
+		vol_ids = _get_selected_volume_ids()
+		self.table.setRowCount(len(vol_ids) + 1)
+		total = 0.0
+		self._vol_ids = vol_ids
+
+		for row, vid in enumerate(vol_ids):
+			surfaces = cubit.get_relatives("volume", vid, "surface")
+			area = sum(cubit.surface(sid).area() for sid in surfaces)
+			name = cubit.get_entity_name("volume", vid) or f"Volume {vid}"
+			total += area
+
+			self.table.setItem(row, 0, QTableWidgetItem(str(vid)))
+			self.table.setItem(row, 1, QTableWidgetItem(name))
+			item = QTableWidgetItem(f"{area:.6e}")
+			item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+			self.table.setItem(row, 2, item)
+			self.table.setItem(row, 3, QTableWidgetItem("--"))
+
+		# Total row
+		total_row = len(vol_ids)
+		font_bold = self.table.font()
+		font_bold.setBold(True)
+		item_label = QTableWidgetItem("Total")
+		item_label.setFont(font_bold)
+		self.table.setItem(total_row, 1, item_label)
+		item_total = QTableWidgetItem(f"{total:.6e}")
+		item_total.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+		item_total.setFont(font_bold)
+		self.table.setItem(total_row, 2, item_total)
+		self.table.setItem(total_row, 0, QTableWidgetItem(""))
+		self.table.setItem(total_row, 3, QTableWidgetItem("--"))
+		self._cad_total = total
+
+	def _calculate_ngsolve(self):
+		"""Run NGSolve surface area calculation via QProcess."""
+		if not self._ext_python:
+			return
+
+		self.calc_btn.setEnabled(False)
+		self.calc_btn.setText("Calculating...")
+
+		tmpdir = tempfile.mkdtemp(prefix="radia_surf_")
+		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
+		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
+
+		calc_script = os.path.join(_this_dir, "calc_surface.py")
+		order = self.order_spin.value()
+		args = ["--cub5", cub5_file, "--order", str(order)]
+
+		self._process = QProcess(self)
+		self._process.finished.connect(self._on_calc_finished)
+		self._process.start(self._ext_python, [calc_script] + args)
+
+	def _on_calc_finished(self, exit_code, exit_status):
+		"""Handle async result."""
+		self.calc_btn.setEnabled(True)
+		self.calc_btn.setText("Calculate")
+
+		data = _parse_json_output(self._process)
+		self._process = None
+		if data is None or "error" in data:
+			if data and "error" in data:
+				QMessageBox.critical(self, "Error", data["error"])
+			return
+
+		ng_total = data["ngsolve_total"]
+		ng_volumes = data.get("volumes", [])
+		vol_ids = self._vol_ids
+		n_bnd = data.get("n_bnd_elements", 0)
+
+		if ng_volumes and len(ng_volumes) == len(vol_ids):
+			for row, vol_info in enumerate(ng_volumes):
+				ng_area = vol_info.get("ngsolve_area")
+				if ng_area is None:
+					continue
+				cad_area = float(self.table.item(row, 2).text())
+				if cad_area != 0:
+					error_pct = (ng_area - cad_area) / cad_area * 100
+					text = f"{ng_area:.6e} ({error_pct:+.2e}%)"
+				else:
+					text = f"{ng_area:.6e}"
+				item = QTableWidgetItem(text)
+				item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+				self.table.setItem(row, 3, item)
+
+		# Total row
+		total_row = len(vol_ids)
+		if self._cad_total != 0:
+			error_pct = (ng_total - self._cad_total) / self._cad_total * 100
+			text = f"{ng_total:.6e} ({error_pct:+.2e}%) [{n_bnd} elems]"
+		else:
+			text = f"{ng_total:.6e}"
+		item = QTableWidgetItem(text)
+		item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+		font_bold = self.table.font()
+		font_bold.setBold(True)
+		item.setFont(font_bold)
+		self.table.setItem(total_row, 3, item)
+
+
+# ================================================================
 # Inductance Extractor Dialog
 # ================================================================
 
@@ -685,6 +840,12 @@ def register_menu():
 	action_vol.setStatusTip("Calculate volume of selected volumes (CAD + NGSolve)")
 	action_vol.triggered.connect(lambda: VolumeCalculatorDialog(main_window).exec())
 	radia_menu.addAction(action_vol)
+
+	# Surface Area Calculator action
+	action_surf = QAction("Surface Area...", main_window)
+	action_surf.setStatusTip("Calculate surface area (CAD + NGSolve)")
+	action_surf.triggered.connect(lambda: SurfaceAreaDialog(main_window).exec())
+	radia_menu.addAction(action_surf)
 
 	# Inductance Extractor action
 	action_ind = QAction("Inductance...", main_window)
