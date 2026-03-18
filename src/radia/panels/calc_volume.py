@@ -42,9 +42,11 @@ def _setup_cubit():
 
     import cubit
     # Suppress cubit.init() banner on stderr
+    # Use -noinit to prevent .cubit startup file from being played
+    # (it loads register_toolbar.py which imports Qt, unavailable here)
     import io, contextlib
     with contextlib.redirect_stderr(io.StringIO()):
-        cubit.init(["cubit", "-nojournal", "-batch"])
+        cubit.init(["cubit", "-nojournal", "-batch", "-noinit"])
 
     # Clean up again (cubit.init may re-add paths)
     _remove_cubit_site_packages()
