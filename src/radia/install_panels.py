@@ -46,9 +46,7 @@ def _build_startup_block(script_path):
 	script_path = script_path.replace("\\", "/")
 	return (
 		f"{_MARKER_BEGIN}\n"
-		f"#{{python\n"
-		f"exec(open(r\"{script_path}\").read())\n"
-		f"#}}python\n"
+		f"play \"{script_path}\"\n"
 		f"{_MARKER_END}\n"
 	)
 
