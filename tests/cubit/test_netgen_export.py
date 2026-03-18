@@ -73,7 +73,7 @@ def test_basic_tet_export():
 
 	# Verify Netgen mesh
 	num_netgen_elements = netgen_mesh.ne
-	num_netgen_points = netgen_mesh.nv
+	num_netgen_points = len(netgen_mesh.Points())
 	print(f"  Netgen mesh: {num_netgen_elements} elements, {num_netgen_points} points")
 
 	assert num_netgen_elements == num_tets, f"Element count mismatch: {num_netgen_elements} vs {num_tets}"
@@ -181,7 +181,7 @@ def test_node_coordinates():
 	# Export and verify Netgen coordinates
 	netgen_mesh = cubit_mesh_export.export_NetgenMesh(cubit)
 
-	netgen_coords = [netgen_mesh.Points()[i].p for i in range(netgen_mesh.nv)]
+	netgen_coords = [netgen_mesh.Points()[i].p for i in range(len(netgen_mesh.Points()))]
 	netgen_x = [p[0] for p in netgen_coords]
 	netgen_y = [p[1] for p in netgen_coords]
 	netgen_z = [p[2] for p in netgen_coords]
@@ -242,7 +242,7 @@ def test_element_connectivity():
 
 		# Verify vertex indices are valid
 		for v in nodes:
-			assert 0 < v.nr <= netgen_mesh.nv, f"Invalid vertex index {v.nr}"
+			assert 0 < v.nr <= len(netgen_mesh.Points()), f"Invalid vertex index {v.nr}"
 
 	print(f"  Netgen mesh: {netgen_mesh.ne} elements verified")
 	print("  PASS: Element connectivity correct")
@@ -275,7 +275,7 @@ def test_ngsolve_integration():
 
 	print(f"  NGSolve mesh created successfully")
 	print(f"  Elements: {ngmesh.ne}")
-	print(f"  Vertices: {ngmesh.nv}")
+	print(f"  Vertices: {len(ngmesh.Points())}")
 
 	# Try creating a simple FE space
 	try:
@@ -319,7 +319,7 @@ def test_curve_high_order():
 
 	# Convert to NGSolve mesh
 	ngmesh = ngsolve.Mesh(netgen_mesh)
-	print(f"  Mesh created: ne={ngmesh.ne}, nv={ngmesh.nv}")
+	print(f"  Mesh created: ne={ngmesh.ne}, nv={len(ngmesh.Points())}")
 
 	# Test Curve with different orders
 	for order in [2, 3, 4]:
