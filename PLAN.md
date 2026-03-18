@@ -52,33 +52,66 @@ Cubit GUI (PyQt5)                    External Python (NGSolve + Cubit)
 - **Solution**: Cubit -> surface mesh export as dim=2 Netgen mesh (not dim=3 volume)
   OR: use `definedon=mesh.Boundaries(label)` + filter FreeDofs correctly
 
-## Remaining Steps
+## Next Steps
 
-### Step 4: Source/Sink port vector
-- Gap のある導体: source 面に +1, sink 面に -1 の電流を注入
-- Port vector `e[i]` は source/sink 面の edge DOFs にのみ非ゼロ
-- 内部 edge の電流は BEM が自動的に決定
-- 参考: `ngbem_peec.py` の `_build_source_sink_vector()`
+### Step 4: Cubit surface mesh -> dim=2 Netgen mesh [CRITICAL]
 
-### Step 5: Cubit block -> boundary label mapping
-- Cubit block "source"/"sink" -> NGSolve boundary label
-- `cubit_mesh_export.export_netgen()` でブロック名が boundary label になる
-- `mesh.Boundaries("source")` で source 面の DOFs を取得
+**Problem**: `export_NetgenMesh()` creates dim=3 volume mesh.
+`HDivSurface` on dim=3 mesh gives ndof for ALL edges (interior + boundary).
+BEM only needs boundary edges -> interior DOFs have zero L entries -> rank-deficient.
 
-### Step 6: calc_inductance.py 書き直し
-- BEMExtractor 不使用（直接 LaplaceSL を使う、シンプル）
-- Surface mesh only (volume mesh 不要)
-- stdout redirect で print 抑制
-- JSON 出力: L, R, port info
+**Solution**: Create `export_surface_netgen()` in `cubit_mesh_export.py`:
+1. Read surface triangles/quads from Cubit blocks
+2. Build `Netgen Mesh(dim=2)` with `Element2D` only (no `Element3D`)
+3. Map Cubit block names to Netgen boundary/material labels
 
-### Step 7: GUI テスト
-- Cubit で torus+gap モデル
+```python
+# Target API
+ngmesh = cubit_mesh_export.export_surface_netgen(cubit)  # dim=2
+mesh = Mesh(ngmesh)
+# HDivSurface(mesh, order=0) -> ndof = surface edges only
+```
+
+**Reference**: `verify_inductance.py` creates dim=2 mesh via OCC Revolve.
+Netgen `Mesh(dim=2)` + `Element2D` is the correct pattern.
+
+**Verification**: After export, check:
+- `mesh.dim == 2`
+- `fes.ndof == n_edges` (no interior DOFs)
+- `np.min(np.diag(L_matrix)) > 0` (positive definite)
+
+### Step 5: Validate with closed torus (no gap)
+
+Use `export_surface_netgen()` to export Cubit's closed torus surface mesh.
+Compare L_BEM vs Neumann formula. Should match `verify_inductance.py` results.
+
+Parameters: R=0.05, a=0.005, R/a=10 (Neumann accurate).
+
+### Step 6: Source/Sink port vector (gap model)
+
+- Cubit blocks "source"/"sink" -> boundary labels in dim=2 mesh
+- Port vector: +1 on source edges, -1 on sink edges
+- L = 1 / (e^T @ L^{-1} @ e)
+- Reference: `ngbem_peec.py` `_build_source_sink_vector()`
+
+### Step 7: calc_inductance.py 書き直し
+
+- `export_surface_netgen(cubit)` for dim=2 mesh
+- Direct LaplaceSL (not BEMExtractor)
+- stdout redirect, JSON output
+- Same QProcess pattern as Volume/Surface Area
+
+### Step 8: GUI テスト
+
+- Cubit torus+gap model
 - Tools > Radia-NGSolve > Inductance
-- Source/Sink 選択 -> Extract -> 結果表示
+- Source/Sink block selection -> Extract -> result table
 
-### Step 8: Curve order 対応
-- Cubit quad mesh + SetGeomInfo -> mesh.Curve(order)
-- 高次要素で BEM 精度向上
+### Step 9: Curve order + quad elements
+
+- Cubit quad mesh (pave/map scheme) + SetGeomInfo
+- mesh.Curve(order) for high-order BEM
+- Compare L vs order (convergence study for CEFC paper)
 
 ## Key Lessons Learned
 
