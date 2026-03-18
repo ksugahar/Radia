@@ -2942,14 +2942,14 @@ def _auto_register_panels():
     """
     import os
 
-    # Skip in batch/subprocess mode (no GUI available)
-    if not os.environ.get("DISPLAY") and os.name != "nt":
-        return  # Linux without display
-    if any(arg in os.sys.argv for arg in ["-batch", "--batch", "-nojournal"]):
-        return  # Cubit batch mode
-    # Skip if running as subprocess (calc_volume.py, calc_inductance.py)
-    if os.sys.argv and os.path.basename(os.sys.argv[0]).startswith("calc_"):
-        return
+    # Only run in Cubit GUI environment (PySide6 or PyQt5 must be available)
+    try:
+        try:
+            import PySide6
+        except ImportError:
+            import PyQt5
+    except ImportError:
+        return  # No Qt available -- not in Cubit GUI
 
     marker = "## BEGIN cubit_mesh_export toolbar"
     cubit_file = os.path.join(os.path.expanduser("~"), ".cubit")
