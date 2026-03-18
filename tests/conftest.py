@@ -65,24 +65,6 @@ _OPTIONAL_DEPS = {
     "cubit": _check_module("cubit"),
 }
 
-# Skip entire tests/cubit/ directory if cubit is not available or init fails.
-# Cubit tests call cubit.init() at module level, which crashes collection
-# if cubit is missing or license is unavailable.
-def _check_cubit_init():
-    """Check if cubit can be imported and initialized."""
-    if not _OPTIONAL_DEPS["cubit"]:
-        return False
-    try:
-        import cubit
-        cubit.init(['cubit', '-nojournal', '-batch'])
-        return True
-    except Exception:
-        return False
-
-_CUBIT_INIT_OK = _check_cubit_init()
-if not _CUBIT_INIT_OK:
-    collect_ignore_glob = ["cubit/test_*.py"]
-
 # Build the exclusion list by scanning test files for top-level imports
 _tests_dir = Path(__file__).parent
 collect_ignore = []
