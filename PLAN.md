@@ -43,14 +43,24 @@ Cubit GUI (PyQt5)                    External Python (NGSolve + Cubit)
 - `L_total = 1 / (e @ solve(L_matrix, e))`
 - Result: pipeline works end-to-end
 
-### Error Investigation (3154% error)
-- **Root cause**: Cubit volume mesh -> `export_NetgenMesh` creates dim=3 mesh
-  with `HDivSurface` having ndof=2448 (all edges) but FreeDofs=870 (boundary only)
-- The full matrix includes interior DOFs with zero interaction -> L matrix is rank-deficient
-- **Working code** (`verify_inductance.py`): uses Netgen OCC surface mesh (dim=2),
-  `HDivSurface` ndof = surface edges only, no interior DOFs
-- **Solution**: Cubit -> surface mesh export as dim=2 Netgen mesh (not dim=3 volume)
-  OR: use `definedon=mesh.Boundaries(label)` + filter FreeDofs correctly
+### Error Investigation (3154% -> 2470% error)
+
+**Phase 1: FreeDofs mismatch (SOLVED)**
+- Volume mesh (dim=3): HDivSurface ndof includes interior edges -> FreeDofs < 100%
+- Surface-only mesh (El3D=0, El2D=N): FreeDofs = 100%
+- Fix: Build Netgen mesh with only Element2D from Cubit surface tris
+
+**Phase 2: Surface normal orientation (CURRENT ISSUE)**
+- Surface-only mesh: ndof=1224, FreeDofs=100%, 1 bad DOF (negative diagonal)
+- Even excluding bad DOF: L_BEM=1608nH vs L_Neumann=63nH (+2470% error)
+- L matrix has negative eigenvalues -> not positive definite
+- **Root cause**: Cubit `get_connectivity('tri', tid)` returns node order that
+  does NOT guarantee outward-pointing normal. Netgen OCC automatically ensures
+  consistent outward normals; manual Element2D construction does not.
+- **Solution**: Use Cubit's surface normal to check/fix triangle orientation:
+  1. `cubit.surface(sid).normal_at(centroid)` -> expected outward normal
+  2. Compare with cross product of tri edges -> flip if opposite
+  3. OR use `domin`/`domout` FaceDescriptor to let Netgen know orientation
 
 ## Next Steps
 
