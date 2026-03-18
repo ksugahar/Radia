@@ -275,3 +275,15 @@ examples/cube_uniform_field/nonlinear/*_summary.json
 # ============================================================================
 fix_convergence.py
 optimize_matrix.py
+
+# ============================================================================
+# Cubit Mesh Export - Sample Output Files (pre-generated, version-controlled)
+# ============================================================================
+!examples/cubit/**/*.msh
+!examples/cubit/**/*.exo
+!examples/cubit/**/*.bdf
+!examples/cubit/**/*.meg
+!examples/cubit/**/*.vtk
+!examples/cubit/**/*.vtu
+!examples/cubit/**/*.jou
+!examples/cubit/netgen/README_ja.html

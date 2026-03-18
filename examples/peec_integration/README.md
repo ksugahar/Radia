@@ -8,7 +8,7 @@ combined with PRIMA model order reduction and Dowell continued-fraction expansio
 > (Lanczos tridiagonalization for ladder network representation), but PRIMA is
 > the widely recognized term from the 1998 IEEE paper and avoids patent issues.
 
-**Theory**: See [docs/PEEC_SURFACE_IMPEDANCE.md](../../docs/PEEC_SURFACE_IMPEDANCE.md).
+**Theory**: See [docs/PEEC_SURFACE_IMPEDANCE.md](../../docs/peec/PEEC_SURFACE_IMPEDANCE.md).
 
 ## Directory Structure
 

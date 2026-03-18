@@ -29,7 +29,7 @@ All H-matrix benchmarks have been successfully executed with **measured** perfor
 **Additional Documentation:**
 - [docs/HMATRIX_IMPLEMENTATION_HISTORY.md](../../docs/HMATRIX_IMPLEMENTATION_HISTORY.md) - Complete implementation history from Phase 1 to 3B
 - [docs/HMATRIX_SERIALIZATION.md](../../docs/HMATRIX_SERIALIZATION.md) - User guide for Phase 3B disk caching features
-- [docs/API_REFERENCE.md](../../docs/API_REFERENCE.md) - Complete Radia API reference
+- [docs/API_REFERENCE.md](../../docs/api/API_REFERENCE.md) - Complete Radia API reference
 
 ---
 

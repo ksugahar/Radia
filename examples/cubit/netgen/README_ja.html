@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netgen/NGSolve サンプル</title>
+    <style>
+        body {
+            font-family: "Segoe UI", "Meiryo", sans-serif;
+            line-height: 1.8;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h1 { font-size: 2em; }
+        h2 { font-size: 1.5em; margin-top: 40px; }
+        h3 { font-size: 1.2em; border-bottom: 1px solid #bdc3c7; }
+        code {
+            background-color: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: "Consolas", "MS Gothic", monospace;
+        }
+        pre {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        pre code {
+            background-color: transparent;
+            padding: 0;
+            color: inherit;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #bdc3c7;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #ecf0f1;
+        }
+        .note {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px 15px;
+            margin: 15px 0;
+        }
+        .important {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 10px 15px;
+            margin: 15px 0;
+        }
+        ul, ol {
+            padding-left: 25px;
+        }
+        li {
+            margin: 8px 0;
+        }
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        hr {
+            border: none;
+            border-top: 2px solid #3498db;
+            margin: 40px 0;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Netgen/NGSolve サンプル</h1>
+
+<p>このフォルダには、CubitメッシュをNetgen/NGSolveにエクスポートするサンプルが含まれています。</p>
+
+<h2>基本的な制限事項</h2>
+
+<div class="important">
+    <strong>CubitはACISカーネル、Netgen/NGSolveはOpenCASCADE (OCC)を使用しています。</strong>
+</div>
+
+<p>これらのCADカーネルはジオメトリを直接共有できません：</p>
+
+<ul>
+    <li>ACISからOCCへの直接的なジオメトリ転送は不可</li>
+    <li>データ交換にはSTEP/IGES中間フォーマットが必要</li>
+    <li>STEPは円筒面/球面に<strong>シーム線</strong>を追加（STEP仕様）</li>
+    <li><code>mesh.Curve()</code>はNetgen生成メッシュのみが持つUVパラメータを必要とする</li>
+</ul>
+
+<h3>STEPが問題を引き起こす理由</h3>
+
+<p>STEPは「最小公倍数」フォーマットです。エクスポート時：</p>
+
+<ol>
+    <li><strong>シーム線の追加</strong>：円筒（ACISでは1つの面）がSTEPでは2つ以上の面になる</li>
+    <li><strong>トポロジーの変化</strong>：面/エッジIDがACISとOCCで異なる</li>
+    <li><strong>精度の低下</strong>：浮動小数点座標がわずかにずれる可能性</li>
+</ol>
+
+<p>STEPの再インポート回避策を使用しても、根本的な不一致は残ります：CubitのメッシュはACISジオメトリで生成されましたが、NGSolveの<code>mesh.Curve()</code>はOCCジオメトリを使用します。UVパラメータは転送できません。</p>
+
+<h3>現在の実用的な解決策</h3>
+
+<p>これらの制限を踏まえ、2つの実用的なアプローチを提供します：</p>
+
+<table>
+    <tr>
+        <th>アプローチ</th>
+        <th>利点</th>
+        <th>欠点</th>
+    </tr>
+    <tr>
+        <td><strong>Gmsh 2次要素</strong></td>
+        <td>シンプル、高精度（0.001%）</td>
+        <td>2次要素に限定</td>
+    </tr>
+    <tr>
+        <td><strong>SetDeformation</strong></td>
+        <td>解析的形状で正確、Wedge対応</td>
+        <td>手動、形状固有</td>
+    </tr>
+</table>
+
+<p>どちらも完璧ではありませんが、工学的応用において十分な精度を達成できます。</p>
+
+<hr>
+
+<h2>推奨ワークフロー：Gmsh 2次要素</h2>
+
+<p>曲面には、<code>ReadGmsh()</code>と<strong>Gmsh 2次要素</strong>を使用します：</p>
+
+<pre><code>import cubit
+import cubit_mesh_export
+from netgen.read_gmsh import ReadGmsh
+from ngsolve import Mesh
+
+# 1. Cubitでジオメトリとメッシュを作成
+cubit.init(['cubit', '-nojournal', '-batch'])
+cubit.cmd("create cylinder height 2 radius 0.5")
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("volume all size 0.1")
+cubit.cmd("mesh volume all")
+
+# 2. 2次要素でブロックを登録
+cubit.cmd("block 1 add tet all")
+cubit.cmd("block 2 add tri all")
+cubit.cmd("block 1 element type tetra10")
+cubit.cmd("block 2 element type tri6")
+
+# 3. Gmshにエクスポートし、NGSolveに読み込み
+cubit_mesh_export.export_Gmsh_ver2(cubit, "mesh.msh")
+mesh = Mesh(ReadGmsh("mesh.msh"))</code></pre>
+
+<p>このワークフローの特徴：</p>
+<ul>
+    <li>Cubitの2次要素を使用（曲面上の中間エッジノード）</li>
+    <li><strong>CADジオメトリ交換なし</strong> - STEPの問題を完全に回避</li>
+    <li>Tet、Hex、Wedge、Pyramidに対応</li>
+</ul>
+
+<h3>精度（体積誤差）</h3>
+
+<table>
+    <tr>
+        <th>要素タイプ</th>
+        <th>1次要素</th>
+        <th>2次要素（Gmsh）</th>
+    </tr>
+    <tr>
+        <td>Tet</td>
+        <td>約1.4%</td>
+        <td><strong>0.001%</strong></td>
+    </tr>
+    <tr>
+        <td>Hex</td>
+        <td>約1.6%</td>
+        <td><strong>0.002%</strong></td>
+    </tr>
+    <tr>
+        <td>Wedge</td>
+        <td>約1.6%</td>
+        <td>約1.1%（注意）</td>
+    </tr>
+</table>
+
+<div class="note">
+    <strong>注意</strong>：CubitはWedgeの中間エッジノードを曲面に投影しません。
+</div>
+
+<hr>
+
+<h2>代替手法：SetDeformation</h2>
+
+<p>解析的形状とWedge要素には、<code>SetDeformation</code>が正確な投影を提供します：</p>
+
+<pre><code>import cubit_mesh_export
+from netgen.occ import OCCGeometry
+from ngsolve import Mesh
+
+# OCCジオメトリ参照でエクスポート
+geo = OCCGeometry("geometry.step")
+ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)
+mesh = Mesh(ngmesh)
+mesh.Curve(1)  # 線形のみ！
+
+# 解析的変形を適用
+cyl_boundaries = cubit_mesh_export.detect_cylinder_boundaries(mesh, radius=0.5, axis='z')
+cubit_mesh_export.apply_cylinder_deformation(
+    mesh, radius=0.5, boundary_names=cyl_boundaries, order=2, axis='z'
+)</code></pre>
+
+<h3>比較</h3>
+
+<table>
+    <tr>
+        <th>ケース</th>
+        <th>Gmsh 2次</th>
+        <th>SetDeformation</th>
+    </tr>
+    <tr>
+        <td>円筒上のTet</td>
+        <td><strong>0.001%</strong></td>
+        <td>0.02%</td>
+    </tr>
+    <tr>
+        <td>円筒上のWedge</td>
+        <td>1.1%</td>
+        <td><strong>0.02%</strong></td>
+    </tr>
+</table>
+
+<p><strong>SetDeformationを使用する場合</strong>：</p>
+<ul>
+    <li>曲面上のWedge要素（誘導加熱など）</li>
+    <li>正確な解析的投影が必要な場合（円筒、球、円錐、トーラス）</li>
+</ul>
+
+<h3>STEP再インポート回避策</h3>
+
+<p>STEPジオメトリで<code>export_netgen()</code>を使用する場合、トポロジーを揃えるためにメッシュ作成前にSTEPを再インポートします：</p>
+
+<pre><code># 1. ジオメトリを作成
+cubit.cmd("create cylinder height 2 radius 0.5")
+
+# 2. STEPにエクスポート
+cubit.cmd('export step "geometry.step" overwrite')
+
+# 3. STEPを再インポート（CubitがOCCと同じシーム線を認識）
+cubit.cmd("reset")
+cubit.cmd('import step "geometry.step" heal')
+
+# 4. シーム線を考慮したジオメトリをメッシュ化
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("mesh volume all")</code></pre>
+
+<p>これにより面の境界が揃いますが、UVパラメータがないため<code>mesh.Curve(2+)</code>は機能しません。</p>
+
+<hr>
+
+<h2>サンプルファイル</h2>
+
+<table>
+    <tr>
+        <th>ファイル</th>
+        <th>説明</th>
+    </tr>
+    <tr>
+        <td><code>netgen_cylinder_example.py</code></td>
+        <td>Tetメッシュ + SetDeformationを使用した円筒</td>
+    </tr>
+    <tr>
+        <td><code>netgen_sphere_example.py</code></td>
+        <td>Tetメッシュ + SetDeformationを使用した球</td>
+    </tr>
+    <tr>
+        <td><code>netgen_hex_cylinder_example.py</code></td>
+        <td>Hexメッシュを使用した円筒</td>
+    </tr>
+    <tr>
+        <td><code>netgen_torus_example.py</code></td>
+        <td>SetDeformationを使用したトーラス</td>
+    </tr>
+    <tr>
+        <td><code>netgen_complex_example.py</code></td>
+        <td>円筒穴のある直方体</td>
+    </tr>
+</table>
+
+<h2>必要条件</h2>
+
+<ul>
+    <li>NGSolve：<code>pip install ngsolve</code></li>
+    <li>Coreform Cubit 2025.3以上</li>
+    <li>Cubitパス：<code>sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")</code></li>
+</ul>
+
+<h2>関連情報</h2>
+
+<ul>
+    <li><a href="../../docs/export_NetgenMesh.md">docs/export_NetgenMesh.md</a> - 完全なドキュメント</li>
+    <li><a href="https://docu.ngsolve.org/">NGSolve ドキュメント</a></li>
+</ul>
+
+</body>
+</html>

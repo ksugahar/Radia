@@ -90,6 +90,6 @@ Verifies batch `rad.Fld()` by comparing results with single-point evaluation.
 
 ## See Also
 
-- [API Reference](../../docs/API_REFERENCE.md)
+- [API Reference](../../docs/api/API_REFERENCE.md)
 - [Simple Problems Examples](../simple_problems/)
 - [NGSolve Integration Examples](../ngsolve_integration/)

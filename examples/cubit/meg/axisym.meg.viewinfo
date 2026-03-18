@@ -1,0 +1,35 @@
+[Form]
+DrawMode      = 1
+DefAction     = 5
+SelectMode    = 3
+SymmImages    = 0
+ShapeFront    = 0
+ViewTitle     = 1
+TimeStep      = 1
+ViewCenter    = 0
+BeamPathOnly  = 0
+DrawInterval  = 1
+AxesPosition  = 3
+RevBackColor  = 0
+VisibleIDs    = 0
+IntervalIndex = 2
+[View]
+Scale = 0.001
+Av = 22.92353201
+Ah = 2.58904545
+Ap = 0.48120989
+Tx = 0.01212121
+Ty = -0.05454546
+Tz = 0.0
+Zm = 1.0
+[Data0]
+AUX = 4
+NL1 = 2
+PL1 = 2(1)
+PL1.1 = 2
+NL2 = 4
+PL2 = 4
+BL1 = 0
+XD  = 1
+XL1 = 1
+XL2 = 0

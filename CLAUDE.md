@@ -1142,6 +1142,66 @@ All URN examples, data, and scripts in `examples/Universal_Relaxation_Network/`.
 
 ---
 
-**Last Updated**: 2026-03-01
+---
+
+## Cubit Mesh Export Module
+
+The `cubit_mesh_export` module (originally a separate repository) provides mesh export from Coreform Cubit to various formats.
+
+### Module Location
+
+- **Main module**: `src/radia/cubit_mesh_export.py`
+- **BEM extractor**: `src/radia/cubit_bem_extractor.py`
+- **Panel installer**: `src/radia/install_panels.py`
+- **Toolbar panels**: `src/radia/panels/`
+- **Documentation**: `docs/cubit/`
+- **Examples**: `examples/cubit/`
+- **Tests**: `tests/cubit/`
+
+### Coding Conventions (cubit_mesh_export)
+
+- **Indentation**: Tab characters (different from Radia's main codebase)
+- **Single module**: All export functions are in `cubit_mesh_export.py`
+
+### Testing with System Python
+
+Cubit scripts require the `cubit` module. Either:
+1. Add Cubit's `bin` directory to your system PATH, or
+2. Set the `CUBIT_PATH` environment variable
+
+Then run tests with system Python (which provides both NGSolve and Cubit access):
+
+```bash
+python tests/cubit/test_xxx.py
+```
+
+Test files use `sys.path` to locate the module:
+```python
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
+import cubit_mesh_export
+```
+
+**Important**: When both NGSolve and Cubit are used in the same script, NGSolve must be imported BEFORE adding Cubit to sys.path and importing cubit. This avoids DLL conflicts on Windows.
+
+### Important Notes (cubit_mesh_export)
+
+- Use `cubit.cmd()` to execute Cubit commands
+- Convert elements to 2nd order using `block X element type tetra10` (not `modify mesh volume X order 2`)
+- `get_connectivity()` returns 1st order nodes only (e.g., 4 for TET)
+- `get_expanded_connectivity()` returns all nodes including mid-edge nodes (e.g., 10 for TET10)
+
+### Block Registration Design Policy
+
+This module uses **blocks only** for mesh export (not nodesets or sidesets), because only blocks support element order specification via `block X element type tetra10`.
+
+The module supports blocks containing either **mesh elements** or **geometry** (volumes, surfaces, curves, vertices). The `_get_block_elements()` helper handles both cases.
+
+### Sample Output Files
+
+Each `examples/cubit/` subfolder contains pre-generated sample output files (.exo, .msh, .bdf, .meg, .vol, .vtk, .vtu) alongside the scripts that generate them.
+
+---
+
+**Last Updated**: 2026-03-18
 **For**: Claude Code AI Assistant
 **Project**: Radia Magnetic Field Computation

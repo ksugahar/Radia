@@ -97,4 +97,4 @@ Tested against analytical formulas:
 
 - `verification/verify_frequency_response_85khz.py` - Full validation script
 - `wpt/demo_wpt.py` - WPT system demo with multiple coils
-- [PEEC_SURFACE_IMPEDANCE.md](../../docs/PEEC_SURFACE_IMPEDANCE.md) - Theory documentation
+- [PEEC_SURFACE_IMPEDANCE.md](../../docs/peec/PEEC_SURFACE_IMPEDANCE.md) - Theory documentation
