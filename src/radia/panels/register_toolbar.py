@@ -69,14 +69,19 @@ except ImportError:
 
 
 def _find_main_window():
-	"""Find Cubit's main QMainWindow."""
+	"""Find Cubit's main QMainWindow (the one with the most menu items)."""
 	app = QApplication.instance()
 	if app is None:
 		return None
+	best = None
+	best_count = 0
 	for widget in app.topLevelWidgets():
 		if isinstance(widget, QMainWindow):
-			return widget
-	return None
+			count = len(widget.menuBar().actions())
+			if count > best_count:
+				best_count = count
+				best = widget
+	return best
 
 
 def _find_external_python():
