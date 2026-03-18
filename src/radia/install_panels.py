@@ -125,14 +125,23 @@ def _generate_startup_script(panels_dir):
 		site_line = ""
 
 	# Write startup.py as a single-line script (Cubit play executes line by line)
-	# Guard: only execute in Cubit GUI (PyQt5/PySide6 already in sys.modules)
-	# This prevents errors when external Python opens a .cub5 file
-	# (which triggers .cubit replay)
+	# Uses try/except to silently skip if Qt is not available
+	# (e.g., when external Python opens a .cub5 and triggers .cubit replay)
 	content = (
-		f'import sys; '
-		f'exec(open(r"{register_path}").read()) '
-		f'if "PyQt5.QtCore" in sys.modules or "PySide6.QtCore" in sys.modules '
-		f'else None\n'
+		f'import sys, os; '
+	)
+	if cubit_site:
+		cubit_site_fwd = cubit_site.replace("\\", "/")
+		content += (
+			f'_cs = r"{cubit_site_fwd}"; '
+			f'sys.path.insert(0, _cs) if _cs not in sys.path else None; '
+		)
+	content += (
+		f'__file__ = r"{register_path}"; '
+		f"exec(\"try:\\n"
+		f" exec(open(r'{register_path}').read())\\n"
+		f"except:\\n"
+		f" pass\")\n"
 	)
 
 	with open(startup_path, "w", encoding="utf-8") as f:
