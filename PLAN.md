@@ -184,3 +184,12 @@ Parameters: R=0.05, a=0.005, R/a=10 (Neumann accurate).
 ## Presentation Target
 
 CEFC 2026 Thessaloniki: Cubit hex mesh + BEM inductance extraction + Curve order comparison
+
+### Root Cause FOUND: ds(label) mismatch (2026-03-19)
+
+- `export_NetgenMesh(geometry=OCC)` sets boundary names from OCC face names
+  (e.g. 'face_0', 'face_1'), NOT from Cubit block names
+- `ds('conductor')` finds no matching boundary → LaplaceSL HANGS
+- `ds('face_0')` works; `ds` (no label, all boundaries) works
+- This is the same issue for ALL labeled ds operations on geometry-mapped meshes
+- **Fix**: Use `ds` (all boundaries) or query `mesh.GetBoundaries()` for actual names
