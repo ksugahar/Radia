@@ -99,11 +99,8 @@ def calculate_volume(cub5_file, order):
     # 3. Load model
     cubit.cmd(f'open "{cub5_file}"')
 
-    # 4. Get volume info
-    selected = cubit.parse_cubit_list("volume", "selected")
-    if not selected:
-        selected = cubit.get_entities("volume")
-    vol_ids = list(selected)
+    # 4. Get volume IDs (all volumes in the loaded model)
+    vol_ids = list(cubit.get_entities("volume"))
 
     if not vol_ids:
         return {"error": "No volumes found in model"}
