@@ -406,7 +406,7 @@ class VolumeCalculatorDialog(QDialog):
 					cad_vol = float(cad_vol_text)
 					if cad_vol != 0:
 						error_pct = (ng_vol - cad_vol) / cad_vol * 100
-						text = f"{ng_vol:.6e} ({error_pct:+.4f}%)"
+						text = f"{ng_vol:.6e} ({error_pct:+.2e}%)"
 					else:
 						text = f"{ng_vol:.6e}"
 					item = QTableWidgetItem(text)
@@ -417,7 +417,7 @@ class VolumeCalculatorDialog(QDialog):
 			total_row = len(vol_ids)
 			if self._cad_total != 0:
 				error_pct = (ng_total - self._cad_total) / self._cad_total * 100
-				text = f"{ng_total:.6e} ({error_pct:+.4f}%)"
+				text = f"{ng_total:.6e} ({error_pct:+.2e}%)"
 			else:
 				text = f"{ng_total:.6e}"
 			item = QTableWidgetItem(text)
