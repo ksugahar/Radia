@@ -2926,3 +2926,42 @@ def export_netgen_with_names(cubit: Any, geometry: Any) -> Any:
     ngmesh.SetGeometry(geometry)
 
     return ngmesh
+
+
+########################################################################
+###	Auto-register Cubit toolbar panels on first import
+########################################################################
+
+def _auto_register_panels():
+    """Register Cubit toolbar panels if not already registered.
+
+    This runs once when cubit_mesh_export is first imported inside Cubit.
+    It checks ~/.cubit for the marker block and adds it if missing.
+    Only takes effect when Cubit is restarted (modifies startup file).
+    """
+    import os
+    marker = "## BEGIN cubit_mesh_export toolbar"
+    cubit_file = os.path.join(os.path.expanduser("~"), ".cubit")
+
+    # Check if already registered
+    if os.path.isfile(cubit_file):
+        try:
+            with open(cubit_file, "r", encoding="utf-8", errors="ignore") as f:
+                if marker in f.read():
+                    return  # Already registered
+        except Exception:
+            return
+
+    # Register panels silently
+    try:
+        from radia.install_panels import install_panels
+        install_panels()
+    except Exception:
+        try:
+            # Fallback: direct import when running from src/radia/
+            from install_panels import install_panels
+            install_panels()
+        except Exception:
+            pass  # Not critical -- user can run manually
+
+_auto_register_panels()
