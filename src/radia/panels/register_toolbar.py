@@ -56,7 +56,7 @@ try:
 		QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
 	)
 	from PySide6.QtGui import QAction
-	from PySide6.QtCore import Qt
+	from PySide6.QtCore import Qt, QProcess
 except ImportError:
 	from PyQt5.QtWidgets import (
 		QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -65,7 +65,7 @@ except ImportError:
 		QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
 		QAction,
 	)
-	from PyQt5.QtCore import Qt
+	from PyQt5.QtCore import Qt, QProcess
 
 
 def _find_main_window():
@@ -349,92 +349,85 @@ class VolumeCalculatorDialog(QDialog):
 
 		self.calc_btn.setEnabled(False)
 		self.calc_btn.setText("Calculating...")
-		QApplication.processEvents()
+
+		# Save current model to temp cub5
+		tmpdir = tempfile.mkdtemp(prefix="radia_vol_")
+		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
+		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
+
+		# Build command
+		calc_script = os.path.join(_this_dir, "calc_volume.py")
+		args = ["--cub5", cub5_file, "--order", str(order)]
+		if step_file:
+			args += ["--step", step_file]
+
+		# Run async via QProcess
+		self._process = QProcess(self)
+		self._process.finished.connect(self._on_calc_finished)
+		self._process.start(self._ext_python, [calc_script] + args)
+
+	def _on_calc_finished(self, exit_code, exit_status):
+		"""Handle async calculation result."""
+		self.calc_btn.setEnabled(True)
+		self.calc_btn.setText("Calculate")
+
+		stdout = self._process.readAllStandardOutput().data().decode("utf-8", errors="replace")
+		self._process = None
+
+		stdout_lines = stdout.strip().split("\n")
+		if not stdout_lines or not stdout_lines[-1].strip():
+			QMessageBox.critical(self, "Error", "No output from calculation.")
+			return
 
 		try:
-			# Save current model to temp cub5
-			tmpdir = tempfile.mkdtemp(prefix="radia_vol_")
-			cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
-			cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
+			data = json.loads(stdout_lines[-1])
+		except json.JSONDecodeError:
+			QMessageBox.critical(self, "Error",
+			                     f"Unexpected output:\n{stdout_lines[-1][:500]}")
+			return
 
-			# Build command
-			calc_script = os.path.join(_this_dir, "calc_volume.py")
-			cmd = [self._ext_python, calc_script,
-			       "--cub5", cub5_file, "--order", str(order)]
-			if step_file:
-				cmd += ["--step", step_file]
+		if "error" in data:
+			QMessageBox.critical(self, "NGSolve Error", data["error"])
+			return
 
-			# Run external Python
-			result = subprocess.run(
-				cmd, capture_output=True, text=True, timeout=120
-			)
+		if "warning" in data:
+			QMessageBox.warning(self, "Warning", data["warning"])
 
-			# Parse JSON from last line of stdout (ignore stderr entirely)
-			# stderr contains cubit banner + NGSolve warnings (not errors)
-			stdout_lines = result.stdout.strip().split("\n")
-			if not stdout_lines or not stdout_lines[-1].strip():
-				QMessageBox.critical(self, "Error", "No output from calculation.\n"
-				                     + (result.stderr.strip()[-500:] if result.stderr else ""))
-				return
+		# Update table with NGSolve results
+		ng_total = data["ngsolve_total"]
+		ng_volumes = data.get("volumes", [])
+		vol_ids = self._vol_ids
 
-			try:
-				data = json.loads(stdout_lines[-1])
-			except json.JSONDecodeError:
-				QMessageBox.critical(self, "Error",
-				                     f"Unexpected output:\n{stdout_lines[-1][:500]}")
-				return
+		# Update per-volume NGSolve results
+		if ng_volumes and len(ng_volumes) == len(vol_ids):
+			for row, vol_info in enumerate(ng_volumes):
+				ng_vol = vol_info.get("ngsolve_volume")
+				if ng_vol is None:
+					continue
+				cad_vol_text = self.table.item(row, 2).text()
+				cad_vol = float(cad_vol_text)
+				if cad_vol != 0:
+					error_pct = (ng_vol - cad_vol) / cad_vol * 100
+					text = f"{ng_vol:.6e} ({error_pct:+.2e}%)"
+				else:
+					text = f"{ng_vol:.6e}"
+				item = QTableWidgetItem(text)
+				item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+				self.table.setItem(row, 3, item)
 
-			if "error" in data:
-				QMessageBox.critical(self, "NGSolve Error", data["error"])
-				return
-
-			if "warning" in data:
-				QMessageBox.warning(self, "Warning", data["warning"])
-
-			# Update table with NGSolve results
-			ng_total = data["ngsolve_total"]
-			ng_volumes = data.get("volumes", [])
-
-			# Update per-volume NGSolve results
-			if ng_volumes and len(ng_volumes) == len(vol_ids):
-				for row, vol_info in enumerate(ng_volumes):
-					ng_vol = vol_info.get("ngsolve_volume")
-					if ng_vol is None:
-						continue
-					cad_vol_text = self.table.item(row, 2).text()
-					cad_vol = float(cad_vol_text)
-					if cad_vol != 0:
-						error_pct = (ng_vol - cad_vol) / cad_vol * 100
-						text = f"{ng_vol:.6e} ({error_pct:+.2e}%)"
-					else:
-						text = f"{ng_vol:.6e}"
-					item = QTableWidgetItem(text)
-					item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-					self.table.setItem(row, 3, item)
-
-			# Update total row
-			total_row = len(vol_ids)
-			if self._cad_total != 0:
-				error_pct = (ng_total - self._cad_total) / self._cad_total * 100
-				text = f"{ng_total:.6e} ({error_pct:+.2e}%)"
-			else:
-				text = f"{ng_total:.6e}"
-			item = QTableWidgetItem(text)
-			item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-			font_bold = self.table.font()
-			font_bold.setBold(True)
-			item.setFont(font_bold)
-			self.table.setItem(total_row, 3, item)
-
-		except subprocess.TimeoutExpired:
-			QMessageBox.critical(self, "Timeout", "NGSolve calculation timed out (120s).")
-		except json.JSONDecodeError as e:
-			QMessageBox.critical(self, "Error", f"Failed to parse NGSolve output:\n{e}")
-		except Exception as e:
-			QMessageBox.critical(self, "Error", str(e))
-		finally:
-			self.calc_btn.setEnabled(True)
-			self.calc_btn.setText("Calculate")
+		# Update total row
+		total_row = len(vol_ids)
+		if self._cad_total != 0:
+			error_pct = (ng_total - self._cad_total) / self._cad_total * 100
+			text = f"{ng_total:.6e} ({error_pct:+.2e}%)"
+		else:
+			text = f"{ng_total:.6e}"
+		item = QTableWidgetItem(text)
+		item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+		font_bold = self.table.font()
+		font_bold.setBold(True)
+		item.setFont(font_bold)
+		self.table.setItem(total_row, 3, item)
 
 
 # ================================================================
@@ -564,102 +557,95 @@ class InductanceDialog(QDialog):
 
 		self.extract_btn.setEnabled(False)
 		self.extract_btn.setText("Extracting...")
-		self.result_label.setText("Computing...")
-		QApplication.processEvents()
+		self._set_result("Status", "Computing...")
+
+		# Save cub5
+		tmpdir = tempfile.mkdtemp(prefix="radia_ind_")
+		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
+		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
+
+		# Build command
+		calc_script = os.path.join(_this_dir, "calc_inductance.py")
+		args = [
+			calc_script,
+			"--cub5", cub5_file,
+			"--source", source,
+			"--sink", sink,
+			"--sigma", str(sigma),
+			"--order", str(order),
+			"--freq", str(freq),
+		]
+
+		# Run async via QProcess (non-blocking)
+		self._process = QProcess(self)
+		self._process.finished.connect(self._on_extract_finished)
+		self._process.start(self._ext_python, args)
+
+	def _on_extract_finished(self, exit_code, exit_status):
+		"""Handle async extraction result."""
+		self.extract_btn.setEnabled(True)
+		self.extract_btn.setText("Extract")
+
+		stdout = self._process.readAllStandardOutput().data().decode("utf-8", errors="replace")
+		self._process = None
+
+		stdout_lines = stdout.strip().split("\n")
+		if not stdout_lines or not stdout_lines[-1].strip():
+			QMessageBox.critical(self, "Error", "No output from extraction.")
+			self._set_result("Status", "Error")
+			return
 
 		try:
-			# Save cub5
-			tmpdir = tempfile.mkdtemp(prefix="radia_ind_")
-			cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
-			cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
-
-			# Build command
-			calc_script = os.path.join(_this_dir, "calc_inductance.py")
-			cmd = [
-				self._ext_python, calc_script,
-				"--cub5", cub5_file,
-				"--source", source,
-				"--sink", sink,
-				"--sigma", str(sigma),
-				"--order", str(order),
-				"--freq", str(freq),
-			]
-
-			result = subprocess.run(
-				cmd, capture_output=True, text=True, timeout=300
-			)
-
-			# Parse JSON from last line of stdout (ignore stderr entirely)
-			stdout_lines = result.stdout.strip().split("\n")
-			if not stdout_lines or not stdout_lines[-1].strip():
-				QMessageBox.critical(self, "Error", "No output from calculation.\n"
-				                     + (result.stderr.strip()[-500:] if result.stderr else ""))
-				self.result_label.setText("Error (see message)")
-				return
-
-			try:
-				data = json.loads(stdout_lines[-1])
-			except json.JSONDecodeError:
-				QMessageBox.critical(self, "Error",
-				                     f"Unexpected output:\n{stdout_lines[-1][:500]}")
-				self.result_label.setText("Error (see message)")
-				return
-
-			if "error" in data:
-				QMessageBox.critical(self, "Error", data["error"])
-				self._set_result("Status", "Error")
-				return
-
-			# Display result in table
-			L = data["inductance_H"]
-			R = data.get("resistance_ohm", 0.0)
-
-			# Auto-format inductance
-			if abs(L) >= 1e-3:
-				L_str = f"{L*1e3:.4f} mH"
-			elif abs(L) >= 1e-6:
-				L_str = f"{L*1e6:.4f} uH"
-			elif abs(L) >= 1e-9:
-				L_str = f"{L*1e9:.4f} nH"
-			else:
-				L_str = f"{L:.4e} H"
-
-			# Auto-format resistance
-			if abs(R) >= 1.0:
-				R_str = f"{R:.4f} Ohm"
-			elif abs(R) >= 1e-3:
-				R_str = f"{R*1e3:.4f} mOhm"
-			else:
-				R_str = f"{R:.4e} Ohm"
-
-			rows = [
-				("Inductance", L_str),
-				("Resistance", R_str),
-				("Port", f"{data['source_block']} -> {data['sink_block']}"),
-				("Curve order", str(order)),
-			]
-			if freq > 0:
-				rows.append(("Frequency", f"{freq:.2e} Hz"))
-
-			self.result_table.setRowCount(len(rows))
-			for i, (param, val) in enumerate(rows):
-				self.result_table.setItem(i, 0, QTableWidgetItem(param))
-				item = QTableWidgetItem(val)
-				item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-				self.result_table.setItem(i, 1, item)
-
-		except subprocess.TimeoutExpired:
-			QMessageBox.critical(self, "Timeout", "Extraction timed out (300s).")
-			self._set_result("Status", "Timeout")
-		except json.JSONDecodeError as e:
-			QMessageBox.critical(self, "Error", f"Failed to parse output:\n{e}")
-			self._set_result("Status", "Parse error")
-		except Exception as e:
-			QMessageBox.critical(self, "Error", str(e))
+			data = json.loads(stdout_lines[-1])
+		except json.JSONDecodeError:
+			QMessageBox.critical(self, "Error",
+			                     f"Unexpected output:\n{stdout_lines[-1][:500]}")
 			self._set_result("Status", "Error")
-		finally:
-			self.extract_btn.setEnabled(True)
-			self.extract_btn.setText("Extract")
+			return
+
+		if "error" in data:
+			QMessageBox.critical(self, "Error", data["error"])
+			self._set_result("Status", "Error")
+			return
+
+		# Display result in table
+		L = data["inductance_H"]
+		R = data.get("resistance_ohm", 0.0)
+
+		# Auto-format inductance
+		if abs(L) >= 1e-3:
+			L_str = f"{L*1e3:.4f} mH"
+		elif abs(L) >= 1e-6:
+			L_str = f"{L*1e6:.4f} uH"
+		elif abs(L) >= 1e-9:
+			L_str = f"{L*1e9:.4f} nH"
+		else:
+			L_str = f"{L:.4e} H"
+
+		# Auto-format resistance
+		if abs(R) >= 1.0:
+			R_str = f"{R:.4f} Ohm"
+		elif abs(R) >= 1e-3:
+			R_str = f"{R*1e3:.4f} mOhm"
+		else:
+			R_str = f"{R:.4e} Ohm"
+
+		rows = [
+			("Inductance", L_str),
+			("Resistance", R_str),
+			("Port", f"{data['source_block']} -> {data['sink_block']}"),
+			("Curve order", str(data.get('order', ''))),
+		]
+		freq = data.get("frequency_Hz", 0)
+		if freq > 0:
+			rows.append(("Frequency", f"{freq:.2e} Hz"))
+
+		self.result_table.setRowCount(len(rows))
+		for i, (param, val) in enumerate(rows):
+			self.result_table.setItem(i, 0, QTableWidgetItem(param))
+			item = QTableWidgetItem(val)
+			item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+			self.result_table.setItem(i, 1, item)
 
 
 # ================================================================
