@@ -2942,12 +2942,14 @@ def _auto_register_panels():
     """
     import os
 
-    # Only run in Cubit GUI environment (PySide6 or PyQt5 must be available)
+    # Only run in Cubit GUI environment — silently skip if no Qt
+    import io, contextlib
     try:
-        try:
-            import PySide6
-        except ImportError:
-            import PyQt5
+        with contextlib.redirect_stderr(io.StringIO()):
+            try:
+                import PySide6
+            except ImportError:
+                import PyQt5
     except ImportError:
         return  # No Qt available -- not in Cubit GUI
 
