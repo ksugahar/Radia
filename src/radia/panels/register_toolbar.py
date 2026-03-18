@@ -11,21 +11,55 @@ import json
 import subprocess
 import tempfile
 
-# Add package root to path
-_pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Determine script location (__file__ is not defined when run via Cubit 'play')
+try:
+	_this_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+	# Fallback: find panels/ directory via radia package or known path
+	import importlib
+	try:
+		_radia_spec = importlib.util.find_spec("radia")
+		if _radia_spec and _radia_spec.origin:
+			_this_dir = os.path.join(os.path.dirname(_radia_spec.origin), "panels")
+		else:
+			raise ImportError
+	except (ImportError, AttributeError):
+		# Last resort: common installation path
+		for _candidate in [
+			os.path.join(sys.prefix, "Lib", "site-packages", "radia", "panels"),
+			os.path.join(os.path.expanduser("~"), ".local", "lib", "python3.12", "site-packages", "radia", "panels"),
+		]:
+			if os.path.isdir(_candidate):
+				_this_dir = _candidate
+				break
+		else:
+			_this_dir = os.getcwd()
+
+_pkg_root = os.path.dirname(_this_dir)  # radia package root (src/radia/)
 if _pkg_root not in sys.path:
 	sys.path.insert(0, _pkg_root)
 
 import cubit
 
-from PySide6.QtWidgets import (
-	QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-	QLabel, QLineEdit, QComboBox, QPushButton, QSpinBox,
-	QFileDialog, QMainWindow, QToolBar, QMessageBox,
-	QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
-)
-from PySide6.QtGui import QAction
-from PySide6.QtCore import Qt
+# Qt bindings: prefer PySide6, fall back to PyQt5 (Cubit 2025.3 ships PyQt5)
+try:
+	from PySide6.QtWidgets import (
+		QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
+		QLabel, QLineEdit, QComboBox, QPushButton, QSpinBox,
+		QFileDialog, QMainWindow, QToolBar, QMessageBox,
+		QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
+	)
+	from PySide6.QtGui import QAction
+	from PySide6.QtCore import Qt
+except ImportError:
+	from PyQt5.QtWidgets import (
+		QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
+		QLabel, QLineEdit, QComboBox, QPushButton, QSpinBox,
+		QFileDialog, QMainWindow, QToolBar, QMessageBox,
+		QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
+		QAction,
+	)
+	from PyQt5.QtCore import Qt
 
 
 def _find_main_window():
@@ -318,9 +352,7 @@ class VolumeCalculatorDialog(QDialog):
 			cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
 
 			# Build command
-			calc_script = os.path.join(
-				os.path.dirname(os.path.abspath(__file__)), "calc_volume.py"
-			)
+			calc_script = os.path.join(_this_dir, "calc_volume.py")
 			cmd = [self._ext_python, calc_script,
 			       "--cub5", cub5_file, "--order", str(order)]
 			if step_file:

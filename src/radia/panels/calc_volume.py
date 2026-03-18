@@ -2,9 +2,15 @@
 Volume calculator using NGSolve mesh integration + Cubit.
 
 Called as subprocess from Cubit panel:
-    python calc_volume.py --cub5 model.cub5 --order 3 [--step geometry.step]
+    python calc_volume.py --cub5 model.cub5 --order 3
+
+Workflow:
+  Order 1: Cubit mesh -> export_NetgenMesh -> Integrate (uses Cubit mesh as-is)
+  Order >1: STEP export -> Netgen OCC GenerateMesh -> Curve(order) -> Integrate
+            (Netgen OCC mesh has proper geometry mapping for high-order curving)
 
 IMPORTANT: NGSolve must be imported BEFORE cubit to avoid numpy DLL conflict.
+Outputs JSON to stdout (last line).
 """
 
 import argparse
@@ -15,14 +21,13 @@ import tempfile
 
 
 def _setup_cubit():
-    """Import cubit with path cleanup (NGSolve already imported by caller)."""
+    """Import cubit with path cleanup (NGSolve already imported)."""
     cubit_path = os.environ.get(
         "CUBIT_PATH", r"C:\Program Files\Coreform Cubit 2025.3\bin"
     )
     if cubit_path not in sys.path:
         sys.path.append(cubit_path)
 
-    # Block Cubit's site-packages (contains incompatible numpy for Python 3.10)
     cubit_site = os.path.join(cubit_path, "python3", "lib", "site-packages")
     if cubit_site in sys.path:
         sys.path.remove(cubit_site)
@@ -30,7 +35,6 @@ def _setup_cubit():
     import cubit
     cubit.init(["cubit", "-nojournal", "-batch"])
 
-    # Clean up paths cubit.init() may have added
     for p in list(sys.path):
         if "Coreform Cubit" in p and "site-packages" in p:
             sys.path.remove(p)
@@ -38,13 +42,24 @@ def _setup_cubit():
     return cubit
 
 
-def calculate_volume(cub5_file, order, step_file=None):
-    """Calculate volume of Cubit model using NGSolve integration.
+def _get_mesh_size(cubit, vol_ids):
+    """Estimate mesh size from existing mesh."""
+    for vid in vol_ids:
+        tets = cubit.get_volume_tets(vid)
+        hexes = cubit.get_volume_hexes(vid)
+        ne = len(tets) + len(hexes)
+        if ne > 0:
+            bb = cubit.get_bounding_box("volume", vid)
+            diag = bb[9] if len(bb) > 9 else 1.0
+            return diag / max(ne ** (1.0 / 3.0), 1.0)
+    return 0.1
 
-    Args:
-        cub5_file: Path to .cub5 file (saved from Cubit GUI)
-        order: Polynomial order for mesh.Curve()
-        step_file: STEP file for geometry (auto-exported if omitted)
+
+def calculate_volume(cub5_file, order):
+    """Calculate volume using NGSolve integration.
+
+    For order 1: uses Cubit mesh directly (fast, shows linear mesh accuracy).
+    For order >1: uses Netgen OCC mesh (proper geometry mapping for Curve()).
     """
     # 1. Import NGSolve FIRST
     from ngsolve import Mesh, Integrate, CF
@@ -56,7 +71,7 @@ def calculate_volume(cub5_file, order, step_file=None):
     # 3. Load model
     cubit.cmd(f'open "{cub5_file}"')
 
-    # 4. Get selected volumes (or all)
+    # 4. Get volume info
     selected = cubit.parse_cubit_list("volume", "selected")
     if not selected:
         selected = cubit.get_entities("volume")
@@ -74,72 +89,85 @@ def calculate_volume(cub5_file, order, step_file=None):
             "name": cubit.get_entity_name("volume", vid) or f"Volume {vid}",
             "cad_volume": v.volume(),
         })
+    cad_total = sum(r["cad_volume"] for r in results)
 
-    # 6. Check if meshed
-    total_elems = sum(
-        len(cubit.get_volume_tets(vid)) + len(cubit.get_volume_hexes(vid))
-        for vid in vol_ids
-    )
-    if total_elems == 0:
-        return {
-            "volumes": results,
-            "cad_total": sum(r["cad_volume"] for r in results),
-            "error": "Volumes are not meshed. Mesh before calculating NGSolve volume.",
-        }
-
-    # 7. Register blocks
-    cubit.cmd("delete block all")
-    for i, vid in enumerate(vol_ids):
-        cubit.cmd(f"block {i + 1} add volume {vid}")
-    cubit.cmd(f"block {len(vol_ids) + 1} add tri all")
-
-    # 8. Export STEP if not provided
+    # 6. Export STEP (needed for both order 1 and order > 1)
     tmpdir = tempfile.mkdtemp(prefix="radia_vol_")
-    if not step_file:
-        step_file = os.path.join(tmpdir, "geometry.step")
-        vol_list = " ".join(str(v) for v in vol_ids)
-        cubit.cmd(f'export step "{step_file}" volume {vol_list} overwrite')
+    step_file = os.path.join(tmpdir, "geometry.step").replace("\\", "/")
+    vol_list = " ".join(str(v) for v in vol_ids)
+    cubit.cmd(f'export step "{step_file}" volume {vol_list} overwrite')
 
-    # 9. Build Netgen mesh with geometry
-    radia_src = os.path.join(os.path.dirname(__file__), "..")
-    if os.path.abspath(radia_src) not in sys.path:
-        sys.path.insert(0, os.path.abspath(radia_src))
-    import cubit_mesh_export
+    if order == 1:
+        # Order 1: Use Cubit mesh (shows linear mesh accuracy)
+        total_elems = sum(
+            len(cubit.get_volume_tets(vid)) + len(cubit.get_volume_hexes(vid))
+            for vid in vol_ids
+        )
+        if total_elems == 0:
+            return {
+                "volumes": results,
+                "cad_total": cad_total,
+                "error": "Volumes are not meshed.",
+            }
 
-    geo = OCCGeometry(step_file)
-    ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)
+        # Register blocks
+        cubit.cmd("delete block all")
+        for i, vid in enumerate(vol_ids):
+            cubit.cmd(f"block {i + 1} add volume {vid}")
+        cubit.cmd(f"block {len(vol_ids) + 1} add tri all")
 
-    # 10. NGSolve volume integration
-    mesh = Mesh(ngmesh)
-    if order > 1:
+        # Export Cubit mesh to Netgen
+        radia_src = os.path.join(os.path.dirname(__file__), "..")
+        if os.path.abspath(radia_src) not in sys.path:
+            sys.path.insert(0, os.path.abspath(radia_src))
+        import cubit_mesh_export
+
+        ngmesh = cubit_mesh_export.export_NetgenMesh(cubit)
+        mesh = Mesh(ngmesh)
+        total_vol = Integrate(CF(1), mesh)
+
+        # Per-material volumes
+        mats = mesh.GetMaterials()
+        for i, mat in enumerate(mats):
+            if i < len(results):
+                try:
+                    vol = Integrate(CF(1), mesh, definedon=mesh.Materials(mat))
+                    results[i]["ngsolve_volume"] = vol
+                except Exception:
+                    results[i]["ngsolve_volume"] = None
+
+    else:
+        # Order > 1: Use Netgen OCC mesh (proper geometry for Curve)
+        # Netgen's OCC mesher creates mesh with correct UV mapping,
+        # so mesh.Curve(order) works correctly.
+        mesh_size = _get_mesh_size(cubit, vol_ids)
+        geo = OCCGeometry(step_file)
+
+        try:
+            ngmesh = geo.GenerateMesh(maxh=mesh_size)
+        except Exception as e:
+            return {
+                "volumes": results,
+                "cad_total": cad_total,
+                "error": f"Netgen OCC meshing failed: {e}",
+            }
+
+        mesh = Mesh(ngmesh)
         try:
             mesh.Curve(order)
         except Exception as e:
-            # Still return order-1 result with warning
-            vol_1 = Integrate(CF(1), mesh)
-            for r in results:
-                r["ngsolve_volume"] = None
             return {
                 "volumes": results,
-                "cad_total": sum(r["cad_volume"] for r in results),
-                "ngsolve_total": vol_1,
-                "order": 1,
-                "warning": f"mesh.Curve({order}) failed: {e}. Showing order 1.",
+                "cad_total": cad_total,
+                "error": f"mesh.Curve({order}) failed: {e}",
             }
 
-    total_vol = Integrate(CF(1), mesh)
+        total_vol = Integrate(CF(1), mesh)
 
-    # Per-material volumes
-    mats = mesh.GetMaterials()
-    for i, mat in enumerate(mats):
-        if i < len(results):
-            try:
-                vol = Integrate(CF(1), mesh, definedon=mesh.Materials(mat))
-                results[i]["ngsolve_volume"] = vol
-            except Exception:
-                results[i]["ngsolve_volume"] = None
-
-    cad_total = sum(r["cad_volume"] for r in results)
+        # For OCC mesh, per-material mapping may differ from Cubit blocks
+        # Just report total for now
+        if len(results) == 1:
+            results[0]["ngsolve_volume"] = total_vol
 
     return {
         "volumes": results,
@@ -153,11 +181,10 @@ def main():
     parser = argparse.ArgumentParser(description="NGSolve volume calculator")
     parser.add_argument("--cub5", required=True, help="Cubit .cub5 model file")
     parser.add_argument("--order", type=int, default=1, help="Curve order (1-5)")
-    parser.add_argument("--step", default=None, help="STEP file (auto-exported if omitted)")
     args = parser.parse_args()
 
     try:
-        result = calculate_volume(args.cub5, args.order, args.step)
+        result = calculate_volume(args.cub5, args.order)
         print(json.dumps(result))
     except Exception as e:
         print(json.dumps({"error": str(e)}))
