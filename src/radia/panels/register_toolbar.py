@@ -474,6 +474,13 @@ def register_toolbar():
 	action_vol.triggered.connect(lambda: VolumeCalculatorDialog(main_window).exec())
 	toolbar.addAction(action_vol)
 
+	# Force visibility after Cubit finishes restoring its layout
+	try:
+		from PyQt5.QtCore import QTimer
+	except ImportError:
+		from PySide6.QtCore import QTimer
+	QTimer.singleShot(500, lambda: toolbar.setVisible(True))
+
 	print("Radia Tools toolbar registered.")
 
 
