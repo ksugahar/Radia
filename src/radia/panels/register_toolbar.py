@@ -144,9 +144,12 @@ def _parse_json_output(process):
 
 def _get_selected_volume_ids():
 	"""Get currently selected volume IDs. Returns all if none selected."""
-	selected = cubit.parse_cubit_list("volume", "selected")
-	if selected:
-		return list(selected)
+	try:
+		selected = cubit.parse_cubit_list("volume", "selected")
+		if selected:
+			return list(selected)
+	except Exception:
+		pass
 	return list(cubit.get_entities("volume"))
 
 
