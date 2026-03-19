@@ -181,6 +181,16 @@ Parameters: R=0.05, a=0.005, R/a=10 (Neumann accurate).
 - JSON stdout (cubit C-level 出力と混在 -> `{` 行検索)
 - _find_main_window: menu count 最大のウィンドウを選択
 
+## Next: Current Density Visualization
+
+**cubit.set_nodal_variable(node_ids, "J_magnitude", values)** で Cubit に直接設定。
+1. calc_inductance.py が per-node 電流密度を JSON で返す
+2. パネル側（Cubit Python）で set_nodal_variable を呼ぶ
+3. Cubit の結果表示ボタン（虹色アイコン）で可視化
+4. Exodus export にも nodal variable が含まれる
+
+GMSH post-processing export も並行サポート（GmshPostExport 既存）。
+
 ## Presentation Target
 
 CEFC 2026 Thessaloniki: Cubit hex mesh + BEM inductance extraction + Curve order comparison
