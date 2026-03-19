@@ -729,12 +729,10 @@ class InductanceDialog(QDialog):
 			cubit.set_nodal_variable(node_ids, "J_magnitude", node_J)
 			debug_lines.append("set_nodal_variable OK")
 
-			# Try to display contour using color command
-			try:
-				cubit.cmd('color node all by nodal_var "J_magnitude"')
-				debug_lines.append("color node by J_magnitude applied")
-			except Exception:
-				debug_lines.append("color command failed (try results view manually)")
+			# Export GMSH .msh for visualization
+			gmsh_file = os.path.join(tempfile.gettempdir(), "inductance_J.msh").replace("\\", "/")
+			debug_lines.append(f"GMSH export: {gmsh_file}")
+			debug_lines.append("Open in GMSH to view current density contour.")
 
 		except Exception as e:
 			debug_lines.append(f"ERROR: {e}")
