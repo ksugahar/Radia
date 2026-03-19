@@ -182,16 +182,24 @@ def main():
     parser.add_argument("--sink", default="", help="Sink block name (future)")
     parser.add_argument("--sigma", type=float, default=5.8e7, help="Conductivity (future)")
     parser.add_argument("--freq", type=float, default=0.0, help="Frequency (future)")
-    parser.add_argument("--output", required=True, help="Output JSON file path")
+    parser.add_argument("--output", default="", help="Output JSON file (optional)")
     args = parser.parse_args()
 
+    # Redirect stdout during computation (suppress Cubit/BEM print output)
+    import io as _io
+    real_stdout = sys.stdout
+    sys.stdout = _io.StringIO()
     try:
         result = extract_inductance(args.cub5, args.order)
     except Exception as e:
         result = {"error": str(e)}
+    sys.stdout = real_stdout
 
-    with open(args.output, "w", encoding="utf-8") as f:
-        json.dump(result, f)
+    # Output: file if specified, otherwise stdout
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            json.dump(result, f)
+    print(json.dumps(result))
 
 
 if __name__ == "__main__":
