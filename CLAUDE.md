@@ -122,6 +122,18 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 - Post-processing field data (GMSH views)
 - Reading `.msh` file format via `gmsh_mesh_import.py` (pure file reader, no GMSH dependency)
 
+### GMSH .msh Format Version Policy
+
+| Direction | Format | Purpose | Tool |
+|-----------|--------|---------|------|
+| **Input** (→ NGSolve) | **v2.2** | Mesh import into NGSolve | `export_gmsh_v2()` → `ReadGmsh()` |
+| **Output** (NGSolve →) | **v4.1** | Field visualization in GMSH | `GmshPostExport` → GMSH GUI |
+
+- `ReadGmsh()` supports v2.2 only (NGSolve limitation)
+- v4.1 has structured Physical Groups + NodeData, better for post-processing
+- Element type codes (Tri6=9, Quad9=10, Tet10=11, Hex20=17) are identical in both versions
+- High-order elements (2nd order) are supported in both v2.2 and v4.1
+
 ---
 
 ## Architecture Overview
@@ -1147,20 +1159,65 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 
 ## Visualization Policy
 
-### Tool Selection
+### Standard Output Format: GMSH .msh v4.1
+
+**POLICY**: The standard field output format for this fork of Radia is **GMSH .msh v4.1** via `GmshPostExport`. All field visualization (BEM, FEM, Radia) should use this format.
+
+**Why GMSH, not VTK/VTS**:
+- GMSH natively supports **high-order elements** (Tri6, Tri10, Tri15, ..., arbitrary p)
+- VTK approximates high-order elements as linear facets — no curved surface rendering
+- GMSH has per-material Physical Groups for selective field display
+- GMSH .msh is both input (v2.2 → NGSolve) and output (v4.1 ← NGSolve) format
 
 | Purpose | Tool |
 |---------|------|
-| Quick/interactive | **PyVista** (default) |
-| Publication figures | **ParaView** |
+| **Standard field output** | **GmshPostExport** (.msh v4.1) -> GMSH GUI |
+| Radia structured grid | `rad.FldVTS()` (legacy, VTS format) |
 | Geometry | Netgen OCC + NGSolve Draw() |
-| Field data | `rad.FldVTS()` -> PyVista/ParaView |
+| Interactive | NGSolve webgui, Netgen GUI |
 
 **Do NOT** implement custom visualization in Radia C++ code.
 
 **Removed APIs**: `rad.ObjDrwVTK()`, `exportGeometryToVTK()`, `radia_pyvista_viewer.py`.
 
-### VTS Field Export
+### GmshPostExport: High-Order Field Visualization
+
+```python
+from radia.gmsh_post_export import GmshPostExport
+
+# BEM/FEM surface visualization (arbitrary order curved elements)
+post = GmshPostExport(mesh, boundary=True)  # boundary=True for BND from volume mesh
+post.add_field("|J|", node_J, ncomp=1)      # per-vertex scalar
+post.add_vector_field("J", gf_J)            # vector field
+post.write("results.msh")
+# -> GMSH renders Tri6/Tri10/Tri15/... with correct curved interpolation
+```
+
+**Key features**:
+- `boundary=True`: exports BND surface elements from a volume mesh (BEM use case)
+- **Arbitrary order** support: Curve(p) → Tri type auto-selected (p=2: Tri6, p=3: Tri10, p=4: Tri15, p=5: Tri21)
+- High-order nodes extracted via **GetTrafo + GMSH reference coordinates** (exact curved positions)
+- Per-material Physical Groups for selective field display in GMSH GUI
+- NodeData and ElementData support
+- 2-phase output: mesh first (before solve), field added after solve
+
+**Supported GMSH triangle types**:
+
+| Order | GMSH Type | Nodes | Nodes/edge | Interior |
+|-------|-----------|-------|------------|----------|
+| 1 | 2 (Tri3) | 3 | 0 | 0 |
+| 2 | 9 (Tri6) | 6 | 1 | 0 |
+| 3 | 21 (Tri10) | 10 | 2 | 1 |
+| 4 | 23 (Tri15) | 15 | 3 | 3 |
+| 5 | 25 (Tri21) | 21 | 4 | 6 |
+
+**Implementation note**: High-order node positions are extracted via `mesh.GetTrafo(el)` evaluated at GMSH reference coordinates (obtained from `gmsh.model.mesh.getElementProperties()`). Each BND element's transformation is evaluated at equidistant reference points matching GMSH's Lagrange node layout. Edge nodes are cached across shared edges with direction correction. H1 order=p GridFunction approach was found **unreliable for p>=4** (`Set()` L2 projection + averaging corrupts coordinates).
+
+**GMSH display setting**: `Mesh.NumSubEdges = 4` required to render curved surfaces (default=1 draws straight lines). Set via GMSH console: `Mesh.NumSubEdges = 4;`
+
+### VTS Field Export (Legacy, Radia Structured Grid)
+
+`rad.FldVTS()` outputs structured grid VTS files. Use only for Radia's own structured grid evaluation (not for mesh-based fields).
 
 ```python
 rad.FldVTS(magnet, 'field_output.vts',
@@ -1176,9 +1233,10 @@ rad.FldVTS(magnet, 'field_output.vts',
 ├─────────────────────────────────────────────────────────────────┤
 │  Geometry (CAD)        │  Field Data          │  Interactive    │
 │  ──────────────────────│─────────────────────│────────────────│
-│  Netgen OCC shapes     │  rad.FldVTS()       │  NGSolve Draw() │
-│  STEP import (Cubit)   │  PyVista meshes     │  Netgen GUI     │
-│  ObjRecMag -> OCC      │  ParaView VTS/VTU   │  webgui         │
+│  Netgen OCC shapes     │  GmshPostExport     │  NGSolve Draw() │
+│  STEP import (Cubit)   │  (standard output)  │  Netgen GUI     │
+│  ObjRecMag -> OCC      │  rad.FldVTS(legacy) │  webgui         │
+│                        │                     │  GMSH GUI       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
