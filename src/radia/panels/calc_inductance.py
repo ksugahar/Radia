@@ -140,11 +140,12 @@ def extract_inductance(cub5_file, order):
     bnd_label = list(set(mesh.GetBoundaries()))
     label = bnd_label[0] if bnd_label else None
 
-    with TaskManager():
-        if label:
-            L_op = LaplaceSL(u.Trace() * ds(label)) * v.Trace() * ds(label)
-        else:
-            L_op = LaplaceSL(u.Trace() * ds) * v.Trace() * ds
+    # NOTE: Do NOT use TaskManager() with LaplaceSL - it is not thread-safe
+    # and produces non-deterministic results (sign flips in L matrix).
+    if label:
+        L_op = LaplaceSL(u.Trace() * ds(label)) * v.Trace() * ds(label)
+    else:
+        L_op = LaplaceSL(u.Trace() * ds) * v.Trace() * ds
 
     # Extract free-DOF L matrix
     L_free = np.zeros((n_free, n_free))
