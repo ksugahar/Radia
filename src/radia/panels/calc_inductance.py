@@ -158,8 +158,10 @@ def extract_inductance(cub5_file, order):
     # Uniform current excitation -> self-inductance
     e = np.ones(n_free) / n_free
     try:
-        L_total = 1.0 / (e @ np.linalg.solve(L_matrix, e))
+        x = np.linalg.solve(L_matrix, e)
+        L_total = 1.0 / (e @ x)
     except np.linalg.LinAlgError:
+        x = np.zeros(n_free)
         L_total = 0.0
 
     # Surface area for verification
