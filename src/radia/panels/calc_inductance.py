@@ -188,6 +188,16 @@ def extract_inductance(cub5_file, order):
             node_cnt[v.nr] += 1
     node_J = np.where(node_cnt > 0, node_sum / node_cnt, 0.0)
 
+    # Export GMSH .msh for visualization
+    gmsh_file = os.path.join(tempfile.gettempdir(), "inductance_J.msh").replace("\\", "/")
+    try:
+        from gmsh_post_export import GmshPostExport
+        post = GmshPostExport(mesh)
+        post.add_field("J_surface", gf)
+        post.write(gmsh_file)
+    except Exception:
+        gmsh_file = ""
+
     return {
         "inductance_H": float(L_total),
         "n_free_dofs": n_free,
@@ -195,6 +205,7 @@ def extract_inductance(cub5_file, order):
         "surface_area": area,
         "order": order,
         "node_J": node_J.tolist(),
+        "gmsh_file": gmsh_file,
     }
 
 

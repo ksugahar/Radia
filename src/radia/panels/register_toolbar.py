@@ -729,10 +729,17 @@ class InductanceDialog(QDialog):
 			cubit.set_nodal_variable(node_ids, "J_magnitude", node_J)
 			debug_lines.append("set_nodal_variable OK")
 
-			# Export GMSH .msh for visualization
-			gmsh_file = os.path.join(tempfile.gettempdir(), "inductance_J.msh").replace("\\", "/")
-			debug_lines.append(f"GMSH export: {gmsh_file}")
-			debug_lines.append("Open in GMSH to view current density contour.")
+			# GMSH visualization
+			gmsh_file = data.get("gmsh_file", "")
+			if gmsh_file and os.path.exists(gmsh_file):
+				debug_lines.append(f"GMSH: {gmsh_file}")
+				# Try to open GMSH
+				try:
+					import subprocess as _sp
+					_sp.Popen(["gmsh", gmsh_file])
+					debug_lines.append("GMSH launched")
+				except Exception:
+					debug_lines.append("GMSH not found in PATH. Open manually.")
 
 		except Exception as e:
 			debug_lines.append(f"ERROR: {e}")
