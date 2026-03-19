@@ -765,8 +765,7 @@ class InductanceDialog(QDialog):
 			return
 
 		# Display result in table
-		L = data["inductance_H"]
-		R = data.get("resistance_ohm", 0.0)
+		L = data.get("inductance_H", 0.0)
 
 		# Auto-format inductance
 		if abs(L) >= 1e-3:
@@ -778,23 +777,13 @@ class InductanceDialog(QDialog):
 		else:
 			L_str = f"{L:.4e} H"
 
-		# Auto-format resistance
-		if abs(R) >= 1.0:
-			R_str = f"{R:.4f} Ohm"
-		elif abs(R) >= 1e-3:
-			R_str = f"{R*1e3:.4f} mOhm"
-		else:
-			R_str = f"{R:.4e} Ohm"
-
 		rows = [
 			("Inductance", L_str),
-			("Resistance", R_str),
-			("Port", f"{data['source_block']} -> {data['sink_block']}"),
-			("Curve order", str(data.get('order', ''))),
+			("DOFs", str(data.get("n_free_dofs", ""))),
+			("Neg diag", str(data.get("neg_diag", ""))),
+			("Surface area", f"{data.get('surface_area', 0):.4e}"),
+			("Curve order", str(data.get("order", ""))),
 		]
-		freq = data.get("frequency_Hz", 0)
-		if freq > 0:
-			rows.append(("Frequency", f"{freq:.2e} Hz"))
 
 		self.result_table.setRowCount(len(rows))
 		for i, (param, val) in enumerate(rows):
