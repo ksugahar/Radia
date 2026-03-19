@@ -610,6 +610,7 @@ class InductanceDialog(QDialog):
 		self.setMinimumWidth(500)
 		self._ext_python = _find_external_python()
 		self._result_file = os.path.join(tempfile.gettempdir(), "radia_inductance_result.json")
+		self._solve_start_time = None
 		self._setup_ui()
 		self._populate_blocks()
 		self._try_load_existing_result()
@@ -679,6 +680,9 @@ class InductanceDialog(QDialog):
 		self.solve_btn.clicked.connect(self._extract)
 		self.solve_btn.setEnabled(self._ext_python is not None)
 		btn_row.addWidget(self.solve_btn)
+		self.dash_btn = QPushButton("Dashboard")
+		self.dash_btn.clicked.connect(self._launch_dashboard)
+		btn_row.addWidget(self.dash_btn)
 		close_btn = QPushButton("Close")
 		close_btn.clicked.connect(self.accept)
 		btn_row.addWidget(close_btn)
@@ -748,14 +752,19 @@ class InductanceDialog(QDialog):
 		self.solve_btn.setText("Solving...")
 		self._set_result("Status", "Computing...")
 
+		from datetime import datetime
+		self._solve_start_time = datetime.now()
+
 		# Save cub5
 		tmpdir = tempfile.mkdtemp(prefix="radia_ind_")
 		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
 		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
 
-		# Output .msh next to the original cub5 (not temp)
-		# Use Cubit's working directory as output location
-		msh_output = os.path.join(os.getcwd(), "inductance_J.msh").replace("\\", "/")
+		# Output .msh with timestamp (one file per solve, linked to Optuna trial)
+		ts = self._solve_start_time.strftime("%Y%m%d_%H%M%S")
+		msh_output = os.path.join(
+			os.getcwd(), f"inductance_J_{ts}.msh"
+		).replace("\\", "/")
 
 		# Build command
 		calc_script = os.path.join(_this_dir, "calc_inductance.py")
@@ -772,8 +781,32 @@ class InductanceDialog(QDialog):
 
 		# Run async via QProcess (non-blocking)
 		self._process = QProcess(self)
+		self._process.readyReadStandardError.connect(self._on_stderr)
 		self._process.finished.connect(self._on_extract_finished)
+		self._gmsh_launched = False
 		self._process.start(self._ext_python, args)
+
+	def _on_stderr(self):
+		"""Handle stderr from subprocess — watch for MESH_READY signal."""
+		if self._process is None:
+			return
+		data = self._process.readAllStandardError().data().decode("utf-8", errors="replace")
+		for line in data.splitlines():
+			if line.startswith("MESH_READY:") and not self._gmsh_launched:
+				gmsh_file = line.split(":", 1)[1].strip()
+				if os.path.exists(gmsh_file):
+					try:
+						import subprocess as _sp
+						import shutil
+						gmsh_exe = shutil.which("gmsh") or shutil.which("gmsh.bat")
+						if gmsh_exe:
+							_sp.Popen([gmsh_exe, gmsh_file])
+							self._gmsh_launched = True
+							self.debug_text.setText(f"GMSH launched (mesh): {gmsh_file}")
+					except Exception:
+						pass
+			elif line.startswith("FIELD_READY:"):
+				self.debug_text.setText("Field data written — reload in GMSH (F5)")
 
 	def _on_extract_finished(self, exit_code, exit_status):
 		"""Handle async extraction result."""
@@ -792,26 +825,99 @@ class InductanceDialog(QDialog):
 
 		self._display_result(data)
 
+		# Record to Optuna study
+		self._record_to_optuna(data)
+
 		# Save result + open GMSH visualization
 		with open(self._result_file, "w") as f:
 			json.dump(data, f)
 
 		gmsh_file = data.get("gmsh_file", "")
 		if gmsh_file and os.path.exists(gmsh_file):
-			self.debug_text.setText(f"GMSH: {gmsh_file}")
-			try:
-				import subprocess as _sp
-				import shutil
-				gmsh_exe = shutil.which("gmsh") or shutil.which("gmsh.bat")
-				if gmsh_exe:
-					_sp.Popen([gmsh_exe, gmsh_file])
-					self.debug_text.setText(f"GMSH launched: {gmsh_file}")
-				else:
+			if not self._gmsh_launched:
+				# GMSH not yet launched (MESH_READY signal missed) — launch now
+				try:
+					import subprocess as _sp
+					import shutil
+					gmsh_exe = shutil.which("gmsh") or shutil.which("gmsh.bat")
+					if gmsh_exe:
+						_sp.Popen([gmsh_exe, gmsh_file])
+						self.debug_text.setText(f"GMSH launched: {gmsh_file}")
+				except Exception:
 					self.debug_text.setText(f"Open in GMSH: {gmsh_file}")
-			except Exception:
-				self.debug_text.setText(f"Open in GMSH: {gmsh_file}")
+			else:
+				self.debug_text.setText(
+					f"Field updated: {gmsh_file} — reload in GMSH (F5)"
+				)
 		else:
 			self.debug_text.setText(f"Result saved: {self._result_file}")
+
+	def _get_cub5_path(self):
+		"""Get real cub5 path from Cubit (or fallback to cwd)."""
+		try:
+			path = cubit.get_file_name()
+			if path:
+				return path
+		except Exception:
+			pass
+		return os.path.join(os.getcwd(), "untitled.cub5")
+
+	def _record_to_optuna(self, data):
+		"""Record result as Optuna trial. No-op if optuna not installed."""
+		try:
+			from optuna_study_helper import InductanceStudy
+		except ImportError:
+			return
+
+		cub5_path = self._get_cub5_path()
+		study = InductanceStudy(cub5_path)
+		if not study.available:
+			return
+
+		params = {
+			"curve_order": self.order_spin.value(),
+			"conductivity": float(self.sigma_edit.text()),
+			"frequency": float(self.freq_edit.text()),
+			"source_block": self.source_combo.currentText().strip(),
+			"sink_block": self.sink_combo.currentText().strip(),
+		}
+
+		trial_num = study.record_trial(params, data, self._solve_start_time)
+		n = study.n_trials
+		self.debug_text.setText(
+			f"Trial #{trial_num} recorded ({n} total) -> {study.db_path}"
+		)
+
+	def _launch_dashboard(self):
+		"""Launch optuna-dashboard for the current model."""
+		try:
+			from optuna_study_helper import InductanceStudy
+		except ImportError:
+			QMessageBox.warning(
+				self, "Dashboard",
+				"optuna not installed.\npip install optuna optuna-dashboard"
+			)
+			return
+
+		cub5_path = self._get_cub5_path()
+		study = InductanceStudy(cub5_path)
+		if not study.available or study.n_trials == 0:
+			QMessageBox.information(
+				self, "Dashboard",
+				"No study data yet. Run Solve first."
+			)
+			return
+
+		import webbrowser
+		url = study.launch_dashboard()
+		if url:
+			webbrowser.open(url)
+			self.debug_text.setText(f"Dashboard: {url}")
+		else:
+			QMessageBox.warning(
+				self, "Dashboard",
+				"Failed to launch optuna-dashboard."
+			)
 
 	def _display_result(self, data):
 		"""Display extraction result in the table."""
