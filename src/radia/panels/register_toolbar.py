@@ -736,10 +736,16 @@ class InductanceDialog(QDialog):
 				# Try to open GMSH
 				try:
 					import subprocess as _sp
-					_sp.Popen(["gmsh", gmsh_file])
-					debug_lines.append("GMSH launched")
-				except Exception:
-					debug_lines.append("GMSH not found in PATH. Open manually.")
+					# Try gmsh.bat from Python Scripts, then gmsh from PATH
+					import shutil
+					gmsh_exe = shutil.which("gmsh") or shutil.which("gmsh.bat")
+					if gmsh_exe:
+						_sp.Popen([gmsh_exe, gmsh_file])
+						debug_lines.append(f"GMSH launched: {gmsh_exe}")
+					else:
+						debug_lines.append(f"GMSH not found. Open manually: {gmsh_file}")
+				except Exception as e:
+					debug_lines.append(f"GMSH launch error: {e}")
 
 		except Exception as e:
 			debug_lines.append(f"ERROR: {e}")
