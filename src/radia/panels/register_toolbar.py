@@ -664,6 +664,12 @@ class InductanceDialog(QDialog):
 		py_label.setStyleSheet("color: green;" if self._ext_python else "color: red;")
 		layout.addWidget(py_label)
 
+		# Debug output
+		self.debug_text = QLabel("")
+		self.debug_text.setWordWrap(True)
+		self.debug_text.setStyleSheet("color: gray; font-size: 10px;")
+		layout.addWidget(self.debug_text)
+
 		# Buttons
 		btn_row = QHBoxLayout()
 		btn_row.addStretch()
@@ -671,6 +677,10 @@ class InductanceDialog(QDialog):
 		self.extract_btn.clicked.connect(self._extract)
 		self.extract_btn.setEnabled(self._ext_python is not None)
 		btn_row.addWidget(self.extract_btn)
+		self.load_btn = QPushButton("Load Results")
+		self.load_btn.clicked.connect(self._load_results)
+		self.load_btn.setEnabled(False)
+		btn_row.addWidget(self.load_btn)
 		close_btn = QPushButton("Close")
 		close_btn.clicked.connect(self.accept)
 		btn_row.addWidget(close_btn)
@@ -681,6 +691,51 @@ class InductanceDialog(QDialog):
 		self.result_table.setRowCount(1)
 		self.result_table.setItem(0, 0, QTableWidgetItem(param))
 		self.result_table.setItem(0, 1, QTableWidgetItem(value))
+
+	def _load_results(self):
+		"""Load saved results and set nodal variable for visualization."""
+		debug_lines = []
+		try:
+			# Read result file
+			result_file = getattr(self, '_result_file', None)
+			if not result_file or not os.path.exists(result_file):
+				debug_lines.append("No result file found. Run Extract first.")
+				self.debug_text.setText("\n".join(debug_lines))
+				return
+
+			with open(result_file, "r") as f:
+				data = json.load(f)
+			debug_lines.append(f"Loaded: {result_file}")
+
+			node_J = data.get("node_J")
+			if not node_J:
+				debug_lines.append("ERROR: node_J not in result data")
+				self.debug_text.setText("\n".join(debug_lines))
+				return
+
+			debug_lines.append(f"node_J: len={len(node_J)}, min={min(node_J):.2e}, max={max(node_J):.2e}")
+			debug_lines.append(f"nonzero: {sum(1 for v in node_J if v > 0)}/{len(node_J)}")
+
+			node_ids = list(cubit.get_entities("node"))
+			debug_lines.append(f"Cubit nodes: {len(node_ids)}")
+
+			if len(node_J) != len(node_ids):
+				debug_lines.append(f"ERROR: mismatch node_J({len(node_J)}) vs cubit({len(node_ids)})")
+				self.debug_text.setText("\n".join(debug_lines))
+				return
+
+			cubit.set_nodal_variable(node_ids, "J_magnitude", node_J)
+			debug_lines.append("set_nodal_variable OK")
+
+			# Export Exodus with nodal variable
+			exo_file = os.path.join(tempfile.gettempdir(), "inductance_result.exo").replace("\\", "/")
+			cubit.cmd(f'export mesh "{exo_file}" overwrite')
+			debug_lines.append(f"Exodus: {exo_file}")
+
+		except Exception as e:
+			debug_lines.append(f"ERROR: {e}")
+
+		self.debug_text.setText("\n".join(debug_lines))
 
 	def _populate_blocks(self):
 		"""Populate combo boxes with Cubit block names."""
@@ -791,15 +846,13 @@ class InductanceDialog(QDialog):
 			item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 			self.result_table.setItem(i, 1, item)
 
-		# Set current density as nodal variable for visualization
-		node_J = data.get("node_J")
-		if node_J:
-			try:
-				node_ids = list(cubit.get_entities("node"))
-				if len(node_J) == len(node_ids):
-					cubit.set_nodal_variable(node_ids, "J_magnitude", node_J)
-			except Exception:
-				pass
+		# Save result data for Load button
+		self._last_result = data
+		self._result_file = os.path.join(tempfile.gettempdir(), "radia_inductance_result.json")
+		with open(self._result_file, "w") as f:
+			json.dump(data, f)
+		self.load_btn.setEnabled(True)
+		self.debug_text.setText(f"Result saved: {self._result_file}")
 
 
 # ================================================================
