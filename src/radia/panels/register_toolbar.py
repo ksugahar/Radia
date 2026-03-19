@@ -729,15 +729,12 @@ class InductanceDialog(QDialog):
 			cubit.set_nodal_variable(node_ids, "J_magnitude", node_J)
 			debug_lines.append("set_nodal_variable OK")
 
-			# Export Exodus with nodal variable, then reimport for results display
-			exo_file = os.path.join(tempfile.gettempdir(), "inductance_result.exo").replace("\\", "/")
-			cubit.cmd(f'export mesh "{exo_file}" overwrite')
-			debug_lines.append(f"Exported: {exo_file}")
-
-			# Reimport with nodal variable for contour display
-			cubit.cmd("reset")
-			cubit.cmd(f'import mesh "{exo_file}" no_geom')
-			debug_lines.append("Reimported Exodus with nodal_var")
+			# Try to display contour using color command
+			try:
+				cubit.cmd('color node all by nodal_var "J_magnitude"')
+				debug_lines.append("color node by J_magnitude applied")
+			except Exception:
+				debug_lines.append("color command failed (try results view manually)")
 
 		except Exception as e:
 			debug_lines.append(f"ERROR: {e}")
