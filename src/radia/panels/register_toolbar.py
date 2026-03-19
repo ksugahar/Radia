@@ -791,16 +791,15 @@ class InductanceDialog(QDialog):
 			item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 			self.result_table.setItem(i, 1, item)
 
-		# Visualize current density in Cubit
+		# Set current density as nodal variable for visualization
 		node_J = data.get("node_J")
 		if node_J:
 			try:
 				node_ids = list(cubit.get_entities("node"))
 				if len(node_J) == len(node_ids):
 					cubit.set_nodal_variable(node_ids, "J_magnitude", node_J)
-					cubit.cmd('display nodal variable "J_magnitude"')
 			except Exception:
-				pass  # Visualization is optional, don't fail on error
+				pass
 
 
 # ================================================================
