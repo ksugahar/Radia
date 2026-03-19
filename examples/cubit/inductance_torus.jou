@@ -1,29 +1,46 @@
-## Torus - inductance extraction test model
+## Torus with gap - inductance extraction test model
 ## Run: playback "S:/Radia/01_GitHub/examples/cubit/inductance_torus.jou"
 ##
-## STEP reimport is included (required for OCC seam fix + BEM)
+## Includes STEP reimport (required for OCC seam fix + BEM)
 
 reset
 
 ## Parameters
 #{R = 0.1}
 #{a = 0.01}
+#{gap = 0.01}
 
-## Create torus + STEP reimport (ACIS -> OCC seam fix)
+## Create torus
 create torus major radius {R} minor radius {a}
+
+## Create cutting brick for gap
+brick x {3*a} y {gap} z {3*a}
+move Volume 2 x {R} y 0 z 0 include_merged
+
+## Subtract to create gap
+subtract volume 2 from volume 1
+
+## STEP reimport (ACIS -> OCC seam fix, required for BEM)
 export step "temp_torus.step" overwrite
 reset
 import step "temp_torus.step" heal
 
-## Volume mesh
+## Volume mesh (curve interval controls mesh density for BEM)
 volume all scheme tetmesh
 curve all interval 6
 mesh volume all
 
-## Blocks
-block 1 add volume all
-block 2 add tri all
-block 2 name "conductor"
+## Allow elements in multiple blocks
+set duplicate block elements on
+
+## Source/Sink: the planar cut faces created by subtract
+play "S:/Radia/01_GitHub/examples/cubit/inductance_torus_blocks.py"
+
+## Conductor volume + full boundary
+block 3 add volume 1
+block 3 name "conductor"
+block 4 add tri all
+block 4 name "boundary"
 
 ## Save
 save cub5 "S:/Radia/01_GitHub/examples/cubit/inductance_torus.cub5" overwrite
