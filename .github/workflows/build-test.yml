@@ -18,25 +18,24 @@ jobs:
     runs-on: [self-hosted, windows-radia]
     timeout-minutes: 30
 
-    # NGSolve source build copied to local path (NETWORK SERVICE can't access S: drive)
+    # NGSolve from pip install (6.2.2602, includes Kelvin transform support)
     env:
-      NGSOLVE_ROOT: 'C:\NGSolve'
-      NGSOLVE_DIR: 'C:\NGSolve\cmake'
+      NGSOLVE_ROOT: 'C:\Program Files\Python312\Lib\site-packages\ngsolve'
+      NGSOLVE_DIR: 'C:\Program Files\Python312\Lib\site-packages\ngsolve\cmake'
       CUBIT_PATH: 'C:\Program Files\Coreform Cubit 2025.3\bin'
 
     steps:
       - uses: actions/checkout@v4
 
       # ----------------------------------------------------------------
-      # Verify NGSolve: check local copy exists (synced from NAS by admin)
-      # To update: robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
+      # Verify NGSolve: pip-installed version (6.2.2602+)
       # ----------------------------------------------------------------
       - name: Verify NGSolve
         shell: pwsh
         run: |
-          if (-not (Test-Path "$env:NGSOLVE_ROOT\cmake\NGSolveConfig.cmake")) {
-            Write-Host "::error::NGSolve not found at $env:NGSOLVE_ROOT"
-            Write-Host "Run as admin: robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR"
+          if (-not (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
+            Write-Host "::error::NGSolve not found at $env:NGSOLVE_DIR"
+            Write-Host "Install: pip install ngsolve"
             exit 1
           }
           Write-Host "NGSolve: $env:NGSOLVE_ROOT"
