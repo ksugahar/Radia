@@ -18,10 +18,11 @@ jobs:
     runs-on: [self-hosted, windows-radia]
     timeout-minutes: 30
 
-    # NGSolve from pip install (6.2.2602, includes Kelvin transform support)
+    # NGSolve + Netgen from pip install (6.2.2602)
     env:
       NGSOLVE_ROOT: 'C:\Program Files\Python312\Lib\site-packages\ngsolve'
       NGSOLVE_DIR: 'C:\Program Files\Python312\Lib\site-packages\ngsolve\cmake'
+      Netgen_DIR: 'C:\Program Files\Python312\Lib\site-packages\netgen\cmake'
       CUBIT_PATH: 'C:\Program Files\Coreform Cubit 2025.3\bin'
 
     steps:
