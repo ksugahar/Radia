@@ -71,7 +71,7 @@ def extract_inductance(cub5_file, order):
     """
     import numpy as np
     import math
-    from ngsolve import Mesh, HDivSurface, TaskManager, ds, Integrate, CF, BND
+    from ngsolve import Mesh, HDivSurface, TaskManager, ds, Integrate, CF, BND, GridFunction, Norm
     from ngsolve.bem import LaplaceSL
     from netgen.occ import OCCGeometry
 
@@ -165,12 +165,34 @@ def extract_inductance(cub5_file, order):
     # Surface area for verification
     area = float(Integrate(CF(1), mesh, VOL_or_BND=BND))
 
+    # Per-node |J| for visualization
+    # Solve L*x = e -> x is the current coefficient vector
+    gf = GridFunction(fes)
+    for il, ig in enumerate(free_idx):
+        gf.vec[ig] = x[il]
+
+    # Element-wise |J| integral / area -> average |J| per element
+    elem_J = Integrate(Norm(gf), mesh, VOL_or_BND=BND, element_wise=True)
+    elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
+
+    # Distribute to nodes (average over adjacent elements)
+    num_nodes = mesh.nv
+    node_sum = np.zeros(num_nodes)
+    node_cnt = np.zeros(num_nodes)
+    for el in mesh.Elements(BND):
+        avg_J = abs(elem_J[el.nr]) / max(abs(elem_A[el.nr]), 1e-30)
+        for v in el.vertices:
+            node_sum[v.nr] += avg_J
+            node_cnt[v.nr] += 1
+    node_J = np.where(node_cnt > 0, node_sum / node_cnt, 0.0)
+
     return {
         "inductance_H": float(L_total),
         "n_free_dofs": n_free,
         "neg_diag": neg_count,
         "surface_area": area,
         "order": order,
+        "node_J": node_J.tolist(),
     }
 
 
