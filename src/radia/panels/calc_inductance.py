@@ -99,11 +99,17 @@ def extract_inductance(cub5_file, order, msh_output=""):
     cubit.cmd(f'export step "{step_file}" volume {vol_list} overwrite')
 
     # Register blocks (use existing mesh, no remesh)
-    cubit.cmd("delete block all")
+    # Support both tri (tet mesh) and quad (hex mesh) surface elements
+    cubit.cmd("set duplicate block elements on")
+    for bid in list(cubit.get_block_id_list()):
+        cubit.cmd(f"delete block {bid}")
     for i, vid in enumerate(vol_ids):
         cubit.cmd(f"block {i + 1} add volume {vid}")
-    cubit.cmd(f"block {len(vol_ids) + 1} add tri all")
-    cubit.cmd(f'block {len(vol_ids) + 1} name "conductor"')
+    bnd_id = len(vol_ids) + 1
+    # Always try both tri and face(quad) - Cubit silently skips if none exist
+    cubit.cmd(f"block {bnd_id} add tri all")
+    cubit.cmd(f"block {bnd_id} add face all")
+    cubit.cmd(f'block {bnd_id} name "conductor"')
 
     # Export to Netgen with OCC geometry
     radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -112,7 +118,7 @@ def extract_inductance(cub5_file, order, msh_output=""):
     import cubit_mesh_export
 
     geo = OCCGeometry(step_file)
-    ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, geometry=geo)
+    ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, geometry=geo, split_quads=True)
     # CalcSurfacesOfNode is now called inside export_NetgenMesh
 
     mesh = Mesh(ngmesh)
@@ -135,6 +141,20 @@ def extract_inductance(cub5_file, order, msh_output=""):
     bnd_label = list(set(mesh.GetBoundaries()))
     label = bnd_label[0] if bnd_label else None
 
+    # --- Phase 1: Export mesh to GMSH immediately (before solve) ---
+    gmsh_file = msh_output if msh_output else os.path.join(
+        os.path.dirname(os.path.abspath(cub5_file)), "inductance_J.msh"
+    ).replace("\\", "/")
+    try:
+        from gmsh_post_export import GmshPostExport
+        post = GmshPostExport(mesh, boundary=True)
+        post.write_mesh(gmsh_file)
+        sys.stderr.write(f"MESH_READY:{gmsh_file}\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+
+    # --- Phase 2: BEM solve ---
     # NOTE: Do NOT use TaskManager() with LaplaceSL - it is not thread-safe
     # and produces non-deterministic results (sign flips in L matrix).
     if label:
@@ -167,17 +187,15 @@ def extract_inductance(cub5_file, order, msh_output=""):
     # Surface area for verification
     area = float(Integrate(CF(1), mesh, VOL_or_BND=BND))
 
+    # --- Phase 3: Rewrite .msh with field data ---
     # Per-node |J| for visualization
-    # Solve L*x = e -> x is the current coefficient vector
     gf = GridFunction(fes)
     for il, ig in enumerate(free_idx):
         gf.vec[ig] = x[il]
 
-    # Element-wise |J| integral / area -> average |J| per element
     elem_J = Integrate(Norm(gf), mesh, VOL_or_BND=BND, element_wise=True)
     elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
 
-    # Distribute to nodes (average over adjacent elements)
     num_nodes = mesh.nv
     node_sum = np.zeros(num_nodes)
     node_cnt = np.zeros(num_nodes)
@@ -188,16 +206,13 @@ def extract_inductance(cub5_file, order, msh_output=""):
             node_cnt[v.nr] += 1
     node_J = np.where(node_cnt > 0, node_sum / node_cnt, 0.0)
 
-    # Export GMSH .msh with per-node |J| as NodeData
-    gmsh_file = msh_output if msh_output else os.path.join(
-        os.path.dirname(os.path.abspath(cub5_file)), "inductance_J.msh"
-    ).replace("\\", "/")
+    # Overwrite mesh-only .msh with mesh + field data
     try:
-        from gmsh_post_export import GmshPostExport
-        post = GmshPostExport(mesh)
-        # Use pre-computed node_J array (per-node scalar from BND integration)
+        post = GmshPostExport(mesh, boundary=True)
         post.add_field("|J|", node_J, ncomp=1)
         post.write(gmsh_file)
+        sys.stderr.write(f"FIELD_READY:{gmsh_file}\n")
+        sys.stderr.flush()
     except Exception:
         gmsh_file = ""
 

@@ -49,9 +49,14 @@ _NGSOLVE_TO_GMSH_2ND = {
     'TRIG': 9, 'QUAD': 10, 'TET': 11, 'HEX': 17, 'PRISM': 18, 'PYRAMID': 19,
 }
 
+# High-order Lagrange triangle types (order -> GMSH type code)
+# Verified via gmsh.model.mesh.getElementType('Triangle', order)
+_TRIG_GMSH_TYPE_BY_ORDER = {1: 2, 2: 9, 3: 21, 4: 23, 5: 25}
+
 _GMSH_NODES_PER_TYPE = {
     2: 3, 3: 4, 4: 4, 5: 8, 6: 6, 7: 5,
     9: 6, 10: 9, 11: 10, 17: 20, 18: 15, 19: 13,
+    21: 10, 23: 15, 25: 21,  # high-order triangles
 }
 
 _NGSOLVE_TO_GMSH_NODE_ORDER = {
@@ -77,6 +82,9 @@ class GmshPostExport:
 
     Args:
         mesh: NGSolve Mesh object (volume or surface mesh)
+        boundary: If True, export boundary surface elements (BND) from a volume
+                  mesh. Enables high-order surface export for BEM visualization.
+                  Default False (export VOL elements for volume meshes).
 
     Example:
         post = GmshPostExport(mesh)
@@ -84,10 +92,16 @@ class GmshPostExport:
         post.add_field("B", gf_B, material="core")    # core elements only
         post.add_scalar_field("T", temp_cf)            # all elements
         post.write("results.msh")
+
+        # BEM surface export with high-order elements:
+        post = GmshPostExport(mesh, boundary=True)
+        post.add_field("|J|", node_J, ncomp=1)
+        post.write("bem_results.msh")
     """
 
-    def __init__(self, mesh):
+    def __init__(self, mesh, boundary=False):
         self.mesh = mesh
+        self._boundary = boundary
         # (name, ncomp, data_array, is_cell, material_name_or_None)
         self._fields = []
 
@@ -131,7 +145,7 @@ class GmshPostExport:
             filename += '.msh'
 
         mesh = self.mesh
-        is_surface = _is_surface_mesh(mesh)
+        is_surface = _is_surface_mesh(mesh) or self._boundary
 
         # Extract mesh topology grouped by material
         nodes, mat_names, elem_data = _extract_mesh_data_grouped(
@@ -267,6 +281,9 @@ def _detect_ncomp(data):
 def _extract_mesh_data_grouped(mesh, is_surface):
     """Extract mesh topology grouped by material/boundary.
 
+    For curved meshes (order > 1), generates mid-edge nodes and uses
+    2nd order GMSH element types (Tri6, Quad9, etc.).
+
     Returns:
         nodes: list of (x, y, z) tuples
         mat_names: list of unique material names (preserving order)
@@ -277,6 +294,16 @@ def _extract_mesh_data_grouped(mesh, is_surface):
         pt = v.point
         nodes.append((pt[0], pt[1], pt[2]))
 
+    # Detect if mesh is curved (order > 1)
+    curve_order = _detect_curve_order(mesh)
+    use_highorder = (curve_order >= 2) and is_surface
+
+    # For curved meshes: precompute high-order node positions via GetTrafo
+    elem_ho_nodes = {}
+    if use_highorder:
+        elem_ho_nodes = _compute_highorder_nodes(
+            mesh, nodes, curve_order, is_surface)
+
     mat_names = []
     elem_data = []
 
@@ -284,13 +311,27 @@ def _extract_mesh_data_grouped(mesh, is_surface):
         from ngsolve import BND
         for idx, el in enumerate(mesh.Elements(BND)):
             et_name = str(el.type).split('.')[-1]
-            gmsh_type = _NGSOLVE_TO_GMSH_1ST.get(et_name)
+
+            if use_highorder and et_name == 'TRIG':
+                gmsh_type = _TRIG_GMSH_TYPE_BY_ORDER.get(
+                    curve_order, _NGSOLVE_TO_GMSH_1ST.get(et_name))
+            elif use_highorder and et_name in _NGSOLVE_TO_GMSH_2ND:
+                gmsh_type = _NGSOLVE_TO_GMSH_2ND[et_name]
+            else:
+                gmsh_type = _NGSOLVE_TO_GMSH_1ST.get(et_name)
             if gmsh_type is None:
                 continue
+
             verts = [v.nr for v in el.vertices]
             perm = _NGSOLVE_TO_GMSH_NODE_ORDER.get(
                 et_name, list(range(len(verts))))
             reordered = [verts[i] for i in perm]
+
+            if use_highorder:
+                reordered = _build_highorder_connectivity(
+                    el, reordered, et_name, curve_order,
+                    elem_ho_nodes, None, nodes)
+
             mat_name = _get_element_material(mesh, el, is_surface)
             elem_data.append((mat_name, gmsh_type, reordered, idx))
             if mat_name not in mat_names:
@@ -312,6 +353,191 @@ def _extract_mesh_data_grouped(mesh, is_surface):
                 mat_names.append(mat_name)
 
     return nodes, mat_names, elem_data
+
+
+def _detect_curve_order(mesh):
+    """Detect the curve order of the mesh."""
+    try:
+        # NGSolve mesh stores curve order
+        return mesh.GetCurveOrder()
+    except Exception:
+        return 1
+
+
+def _get_gmsh_trig_ref_points(p):
+    """Get GMSH Lagrange triangle reference points for order p.
+
+    Uses GMSH Python API to get the exact node positions in the reference
+    triangle. Falls back to computed equidistant points if API unavailable.
+
+    Returns list of (u, v) tuples in GMSH node ordering.
+    """
+    try:
+        import gmsh
+        gmsh.initialize()
+        etype = gmsh.model.mesh.getElementType('Triangle', p)
+        props = gmsh.model.mesh.getElementProperties(etype)
+        num_nodes = props[3]
+        ref_coords = np.array(props[4]).reshape(num_nodes, -1)
+        gmsh.finalize()
+        return [(float(ref_coords[i, 0]), float(ref_coords[i, 1]))
+                for i in range(num_nodes)]
+    except Exception:
+        pass
+
+    # Fallback: compute equidistant points manually
+    # Order: corners, edge 0->1, edge 1->2, edge 2->0, interior (row by row)
+    pts = []
+    # Corners
+    pts.extend([(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)])
+    # Edge 0->1: (k/p, 0) for k=1..p-1
+    for k in range(1, p):
+        pts.append((k / p, 0.0))
+    # Edge 1->2: (1-k/p, k/p) for k=1..p-1
+    for k in range(1, p):
+        pts.append((1.0 - k / p, k / p))
+    # Edge 2->0: (0, 1-k/p) for k=1..p-1
+    for k in range(1, p):
+        pts.append((0.0, 1.0 - k / p))
+    # Interior: equidistant points (i/p, j/p) for i>0, j>0, i+j<p
+    for j in range(1, p):
+        for i in range(1, p - j):
+            pts.append((i / p, j / p))
+    return pts
+
+
+def _compute_highorder_nodes(mesh, nodes, curve_order, is_surface):
+    """Precompute high-order node positions using GetTrafo + GMSH reference coords.
+
+    For each BND element, evaluates the curved mesh transformation at the
+    GMSH reference points (skipping corners which are already in nodes[]).
+    Edge nodes are cached across shared edges.
+
+    Args:
+        mesh: NGSolve mesh (must have Curve(p) applied)
+        nodes: master node list (appended in-place)
+        curve_order: polynomial order (2, 3, 4, 5)
+        is_surface: True if exporting BND elements
+
+    Returns:
+        elem_ho_nodes: dict { el.nr -> list of node indices for non-corner nodes }
+    """
+    from ngsolve import BND, IntegrationRule
+
+    p = curve_order
+    gmsh_ref = _get_gmsh_trig_ref_points(p)
+    n_total = len(gmsh_ref)  # (p+1)(p+2)/2
+    n_edge_per = p - 1
+    # GMSH layout: 3 corners, then 3*(p-1) edge nodes, then interior
+    # Edge nodes: indices 3..3+3*(p-1)-1
+    # Interior nodes: indices 3+3*(p-1)..end
+
+    # Determine which ref points are edge vs interior (skip corners 0,1,2)
+    # Edge 0->1: indices 3 .. 3+(p-1)-1
+    # Edge 1->2: indices 3+(p-1) .. 3+2*(p-1)-1
+    # Edge 2->0: indices 3+2*(p-1) .. 3+3*(p-1)-1
+    # Interior: indices 3+3*(p-1) .. end
+
+    # For vertex matching: evaluate corners and match to el.vertices
+    elem_ho_nodes = {}  # el.nr -> [node_idx for gmsh nodes 3..end]
+
+    # Edge cache: (min_v, max_v) -> (start_vertex, [node_indices])
+    edge_cache = {}
+
+    for el in mesh.Elements(BND):
+        verts = [v.nr for v in el.vertices]
+        if len(verts) != 3:
+            continue  # TRIG only for now
+
+        trafo = mesh.GetTrafo(el)
+
+        # Match ref corners to physical vertices
+        corner_mapped = []
+        for ci in range(3):
+            u, v = gmsh_ref[ci]
+            ir = IntegrationRule([(u, v)], [1.0])
+            for ip in ir:
+                mip = trafo(ip)
+                corner_mapped.append(
+                    np.array([mip.point[0], mip.point[1], mip.point[2]]))
+
+        # Find permutation: ref_corner[i] -> which vertex?
+        ref_to_vert = []
+        for ci in range(3):
+            dists = [np.linalg.norm(corner_mapped[ci] -
+                     np.array(mesh.vertices[verts[vi]].point))
+                     for vi in range(3)]
+            ref_to_vert.append(verts[np.argmin(dists)])
+
+        # Process 3 GMSH edges
+        ho_indices = []
+        gmsh_edge_defs = [(0, 1), (1, 2), (2, 0)]  # ref corner pairs
+
+        for edge_i, (rc0, rc1) in enumerate(gmsh_edge_defs):
+            va = ref_to_vert[rc0]
+            vb = ref_to_vert[rc1]
+            edge_key = (min(va, vb), max(va, vb))
+
+            start_idx = 3 + edge_i * n_edge_per
+
+            if edge_key in edge_cache:
+                cached_start, cached_nodes = edge_cache[edge_key]
+                # Determine direction
+                if cached_start == va:
+                    ho_indices.extend(cached_nodes)
+                else:
+                    ho_indices.extend(reversed(cached_nodes))
+            else:
+                # Evaluate at edge ref points
+                edge_nodes = []
+                for k in range(n_edge_per):
+                    ref_idx = start_idx + k
+                    u, v = gmsh_ref[ref_idx]
+                    ir = IntegrationRule([(u, v)], [1.0])
+                    for ip in ir:
+                        mip = trafo(ip)
+                        pt = (mip.point[0], mip.point[1], mip.point[2])
+                        nidx = len(nodes)
+                        nodes.append(pt)
+                        edge_nodes.append(nidx)
+                edge_cache[edge_key] = (va, edge_nodes)
+                ho_indices.extend(edge_nodes)
+
+        # Interior nodes
+        int_start = 3 + 3 * n_edge_per
+        for ri in range(int_start, n_total):
+            u, v = gmsh_ref[ri]
+            ir = IntegrationRule([(u, v)], [1.0])
+            for ip in ir:
+                mip = trafo(ip)
+                pt = (mip.point[0], mip.point[1], mip.point[2])
+                nidx = len(nodes)
+                nodes.append(pt)
+                ho_indices.append(nidx)
+
+        elem_ho_nodes[el.nr] = ho_indices
+
+    return elem_ho_nodes
+
+
+def _build_highorder_connectivity(el, corner_nodes, et_name, curve_order,
+                                  elem_ho_nodes, _unused, nodes):
+    """Build GMSH high-order element connectivity.
+
+    Args:
+        el: NGSolve BND element
+        corner_nodes: [c0, c1, c2] in GMSH order
+        et_name: 'TRIG' or 'QUAD'
+        curve_order: p
+        elem_ho_nodes: from _compute_highorder_nodes
+        _unused: kept for API compatibility
+        nodes: master node list
+
+    Returns:
+        Full connectivity list for GMSH high-order element.
+    """
+    ho = elem_ho_nodes.get(el.nr, [])
+    return list(corner_nodes) + ho
 
 
 def _get_element_material(mesh, el, is_surface):

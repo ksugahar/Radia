@@ -4,12 +4,29 @@ Torus with gap - inductance extraction test model.
 Creates a torus (ring conductor) with a small section subtracted
 to define source and sink faces for BEM inductance extraction.
 
-Run in Cubit: play "inductance_torus.py"
-Or standalone: python inductance_torus.py
+Supports both tet (tri surface) and hex (quad surface) mesh types.
+
+Usage:
+    python inductance_torus.py              # tet mesh (default)
+    python inductance_torus.py --mesh hex   # hex sweep mesh
+
+Run in Cubit: play "inductance_torus.py"  (uses tet mesh)
 """
 
+import argparse
 import sys
 import os
+
+# Parse args (only when run standalone, not from Cubit playback)
+mesh_type = "tet"
+if __name__ == "__main__" or "__main__" not in dir():
+	try:
+		parser = argparse.ArgumentParser(description="Create torus model")
+		parser.add_argument("--mesh", choices=["tet", "hex"], default="tet")
+		args, _ = parser.parse_known_args()
+		mesh_type = args.mesh
+	except:
+		pass  # Cubit playback: no argparse
 
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
@@ -43,35 +60,36 @@ cubit.cmd(f'move Volume 2 x {R} y 0 z 0 include_merged')
 # Subtract to create gap
 cubit.cmd('subtract volume 2 from volume 1')
 
-print(f"Torus: R={R}, a={a}, gap={gap}")
-print(f"  Volume ID: 1")
+print(f"Torus: R={R}, a={a}, gap={gap}, mesh={mesh_type}")
 
 # ============================================================
-# Step 2: Mesh
+# Step 2: Mesh (tet or hex)
 # ============================================================
-cubit.cmd('volume 1 scheme tetmesh')
-cubit.cmd(f'volume 1 size {a/3}')
-cubit.cmd('mesh volume 1')
+vol_ids = list(cubit.get_entities("volume"))
+vid = vol_ids[0]
 
-ne_tet = len(cubit.get_volume_tets(1))
-print(f"  Mesh: {ne_tet} tets")
+if mesh_type == "hex":
+	cubit.cmd(f'volume {vid} scheme sweep')
+	cubit.cmd('curve all interval 8')
+else:
+	cubit.cmd(f'volume {vid} scheme tetmesh')
+	cubit.cmd(f'volume {vid} size {a/3}')
+cubit.cmd(f'mesh volume {vid}')
+
+ne_hex = len(cubit.get_volume_hexes(vid))
+ne_tet = len(cubit.get_volume_tets(vid))
+print(f"  Mesh: {ne_hex} hexes, {ne_tet} tets")
 
 # ============================================================
 # Step 3: Find source and sink surfaces (cut faces at gap)
 # ============================================================
-# The subtract creates two planar surfaces at y ~ +gap/2 and y ~ -gap/2.
-# All other surfaces on the torus are curved (not planar).
-# Find them by checking which surfaces are planar.
-
-surfaces = cubit.get_relatives("volume", 1, "surface")
+surfaces = cubit.get_relatives("volume", vid, "surface")
 source_surfs = []
 sink_surfs = []
-tol = gap * 0.1
 
 for sid in surfaces:
 	s = cubit.surface(sid)
 	if s.is_planar():
-		# Get surface centroid y-coordinate
 		cx, cy, cz = s.center_point()
 		if cy > 0:
 			source_surfs.append(sid)
@@ -82,42 +100,51 @@ for sid in surfaces:
 
 if not source_surfs or not sink_surfs:
 	print("ERROR: Could not find source/sink surfaces.")
-	print("  Planar surfaces found:")
-	for sid in surfaces:
-		s = cubit.surface(sid)
-		if s.is_planar():
-			cx, cy, cz = s.center_point()
-			print(f"    Surface {sid}: centroid=({cx:.4f}, {cy:.4f}, {cz:.4f})")
 
 # ============================================================
-# Step 4: Register blocks
+# Step 4: Register blocks (tri AND quad for universal support)
 # ============================================================
-cubit.cmd('block 1 add volume 1')
+cubit.cmd('set duplicate block elements on')
+
+cubit.cmd(f'block 1 add volume {vid}')
 cubit.cmd('block 1 name "conductor"')
 
-cubit.cmd('block 2 add tri all')
+# Boundary block: both tri and quad
+has_tri = len(cubit.get_entities("tri")) > 0
+has_quad = len(cubit.get_entities("quad")) > 0
+if has_tri:
+	cubit.cmd('block 2 add tri all')
+if has_quad:
+	cubit.cmd('block 2 add quad all')
 cubit.cmd('block 2 name "boundary"')
 
-# Source block: triangles on source surfaces
+# Source block
 for sid in source_surfs:
-	cubit.cmd(f'block 3 add tri in surface {sid}')
+	if has_tri:
+		cubit.cmd(f'block 3 add tri in surface {sid}')
+	if has_quad:
+		cubit.cmd(f'block 3 add quad in surface {sid}')
 cubit.cmd('block 3 name "source"')
 
-# Sink block: triangles on sink surfaces
+# Sink block
 for sid in sink_surfs:
-	cubit.cmd(f'block 4 add tri in surface {sid}')
+	if has_tri:
+		cubit.cmd(f'block 4 add tri in surface {sid}')
+	if has_quad:
+		cubit.cmd(f'block 4 add quad in surface {sid}')
 cubit.cmd('block 4 name "sink"')
 
-n_src = sum(len(cubit.get_surface_tris(sid)) for sid in source_surfs)
-n_snk = sum(len(cubit.get_surface_tris(sid)) for sid in sink_surfs)
-print(f"  Source block: {n_src} tris")
-print(f"  Sink block:   {n_snk} tris")
+# Count surface elements
+n_tri = len(cubit.get_entities("tri"))
+n_quad = len(cubit.get_entities("quad"))
+print(f"  Surface elements: {n_tri} tris, {n_quad} quads")
 
 # ============================================================
 # Step 5: Save
 # ============================================================
 script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
-cub5_file = os.path.join(script_dir, 'inductance_torus.cub5')
+suffix = "_hex" if mesh_type == "hex" else ""
+cub5_file = os.path.join(script_dir, f'inductance_torus{suffix}.cub5')
 cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
 
 print(f"\nSaved: {cub5_file}")

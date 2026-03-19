@@ -1427,7 +1427,7 @@ def export_vtk(cubit: Any, FileName: str) -> Any:
 ###	NGSolve/Netgen format
 ########################################################################
 
-def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry: Any = None) -> Any:
+def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry: Any = None, split_quads: bool = False) -> Any:
 	"""Export Cubit mesh to Netgen mesh format.
 
 	Creates a netgen.meshing.Mesh object directly from Cubit mesh data.
@@ -1445,6 +1445,8 @@ def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry:
 		geometry: An netgen.occ.OCCGeometry object. If provided, this takes
 		          precedence over geometry_file. Useful for avoiding seam
 		          issues with cylindrical surfaces (see note below).
+		split_quads: If True, split each quad surface element into 2 triangles.
+		             Required for ngsolve.bem (LaplaceSL segfaults on quads).
 
 	Returns:
 		netgen.meshing.Mesh: Netgen mesh object ready for use with NGSolve
@@ -1610,6 +1612,10 @@ def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry:
 		# Analyze OCC faces to build mapping
 		occ_faces = list(geo.shape.faces)
 		occ_face_info = []
+		# Compute geometry bounding box diagonal for relative tolerance
+		geo_bb = geo.shape.bounding_box
+		geo_diag = sum((geo_bb[1][j] - geo_bb[0][j])**2 for j in range(3)) ** 0.5
+		planar_tol = max(geo_diag * 0.001, 1e-10)  # 0.1% of diagonal
 		for i, face in enumerate(occ_faces):
 			center = face.center
 			bb = face.bounding_box
@@ -1623,7 +1629,7 @@ def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry:
 				'z_range': z_range,
 				'y_min': y_min,
 				'y_max': y_max,
-				'is_planar': z_range < 0.01,
+				'is_planar': z_range < planar_tol,
 			})
 
 		# Build tri_id -> Cubit surface_id mapping
@@ -1813,7 +1819,12 @@ def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry:
 							bc_idx = occ_to_fd_index[occ_idx]
 					else:
 						bc_idx = 1  # Fallback
-					ngmesh.Add(Element2D(bc_idx, ng_nodes))
+					if split_quads:
+						# Split quad (a,b,c,d) into 2 triangles for BEM compatibility
+						ngmesh.Add(Element2D(bc_idx, [ng_nodes[0], ng_nodes[1], ng_nodes[2]]))
+						ngmesh.Add(Element2D(bc_idx, [ng_nodes[0], ng_nodes[2], ng_nodes[3]]))
+					else:
+						ngmesh.Add(Element2D(bc_idx, ng_nodes))
 	else:
 		# No geometry file - use simple block-based FaceDescriptors
 		for block_id in cubit.get_block_id_list():
@@ -1842,7 +1853,11 @@ def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry:
 					nodes = cubit.get_connectivity("quad", quad_id)
 					if all(n in node_map for n in nodes):
 						ng_nodes = [node_map[nodes[i]] for i in QUAD_ORDERING]
-						ngmesh.Add(Element2D(fd_index, ng_nodes))
+						if split_quads:
+							ngmesh.Add(Element2D(fd_index, [ng_nodes[0], ng_nodes[1], ng_nodes[2]]))
+							ngmesh.Add(Element2D(fd_index, [ng_nodes[0], ng_nodes[2], ng_nodes[3]]))
+						else:
+							ngmesh.Add(Element2D(fd_index, ng_nodes))
 
 	# ============================================================
 	# Add 1D edge elements (if any)
