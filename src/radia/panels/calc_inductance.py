@@ -189,7 +189,9 @@ def extract_inductance(cub5_file, order):
     node_J = np.where(node_cnt > 0, node_sum / node_cnt, 0.0)
 
     # Export GMSH .msh with per-node |J| as NodeData
-    gmsh_file = os.path.join(tempfile.gettempdir(), "inductance_J.msh").replace("\\", "/")
+    # Place .msh next to input cub5 file
+    cub5_dir = os.path.dirname(os.path.abspath(cub5_file))
+    gmsh_file = os.path.join(cub5_dir, "inductance_J.msh").replace("\\", "/")
     try:
         from gmsh_post_export import GmshPostExport
         post = GmshPostExport(mesh)
