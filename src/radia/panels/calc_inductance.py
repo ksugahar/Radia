@@ -62,7 +62,7 @@ def _get_mesh_size(cubit, vol_ids):
     return 0.1
 
 
-def extract_inductance(cub5_file, order):
+def extract_inductance(cub5_file, order, msh_output=""):
     """Extract self-inductance using BEM LaplaceSL.
 
     Uses the full STEP reimport workflow:
@@ -189,9 +189,9 @@ def extract_inductance(cub5_file, order):
     node_J = np.where(node_cnt > 0, node_sum / node_cnt, 0.0)
 
     # Export GMSH .msh with per-node |J| as NodeData
-    # Place .msh next to input cub5 file
-    cub5_dir = os.path.dirname(os.path.abspath(cub5_file))
-    gmsh_file = os.path.join(cub5_dir, "inductance_J.msh").replace("\\", "/")
+    gmsh_file = msh_output if msh_output else os.path.join(
+        os.path.dirname(os.path.abspath(cub5_file)), "inductance_J.msh"
+    ).replace("\\", "/")
     try:
         from gmsh_post_export import GmshPostExport
         post = GmshPostExport(mesh)
@@ -220,6 +220,7 @@ def main():
     parser.add_argument("--sink", default="", help="Sink block name (future)")
     parser.add_argument("--sigma", type=float, default=5.8e7, help="Conductivity (future)")
     parser.add_argument("--freq", type=float, default=0.0, help="Frequency (future)")
+    parser.add_argument("--msh-output", default="", help="GMSH .msh output path")
     parser.add_argument("--output", default="", help="Output JSON file (optional)")
     args = parser.parse_args()
 
@@ -228,7 +229,7 @@ def main():
     real_stdout = sys.stdout
     sys.stdout = _io.StringIO()
     try:
-        result = extract_inductance(args.cub5, args.order)
+        result = extract_inductance(args.cub5, args.order, args.msh_output)
     except Exception as e:
         result = {"error": str(e)}
     sys.stdout = real_stdout
