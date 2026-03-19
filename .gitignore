@@ -287,3 +287,4 @@ optimize_matrix.py
 !examples/cubit/**/*.vtu
 !examples/cubit/**/*.jou
 !examples/cubit/netgen/README_ja.html
+examples/cubit/inductance_torus_result.cub5
