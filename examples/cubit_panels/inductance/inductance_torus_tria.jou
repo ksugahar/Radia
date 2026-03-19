@@ -1,0 +1,33 @@
+## Torus with gap - tet mesh (tri surface) for BEM inductance
+## Run: playback "inductance_torus_tria.jou"
+
+reset
+
+## Parameters
+#{R = 0.05}
+#{a = 0.005}
+#{gap = 0.005}
+
+## Create torus
+create torus major radius {R} minor radius {a}
+
+## Create cutting brick for gap
+brick x {3*a} y {gap} z {3*a}
+move Volume 2 x {R} y 0 z 0 include_merged
+
+## Subtract to create gap
+subtract volume 2 from volume 1
+
+## Tet mesh
+volume all scheme tetmesh
+volume all size {a/3}
+mesh volume all
+
+## Allow elements in multiple blocks
+set duplicate block elements on
+
+## Register blocks (tri surface elements)
+block 1 add volume all
+block 1 name "conductor"
+block 2 add tri all
+block 2 name "boundary"
