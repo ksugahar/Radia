@@ -178,6 +178,10 @@ def main():
     parser = argparse.ArgumentParser(description="ngsolve.bem inductance extractor")
     parser.add_argument("--cub5", required=True, help="Cubit .cub5 model file")
     parser.add_argument("--order", type=int, default=1, help="Curve order (1-5)")
+    parser.add_argument("--source", default="", help="Source block name (future)")
+    parser.add_argument("--sink", default="", help="Sink block name (future)")
+    parser.add_argument("--sigma", type=float, default=5.8e7, help="Conductivity (future)")
+    parser.add_argument("--freq", type=float, default=0.0, help="Frequency (future)")
     args = parser.parse_args()
 
     # Redirect stdout during computation (suppress Cubit/BEM print output)
