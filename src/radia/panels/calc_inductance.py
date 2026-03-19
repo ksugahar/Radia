@@ -84,31 +84,26 @@ def extract_inductance(cub5_file, order):
     if not vol_ids:
         return {"error": "No volumes found in model"}
 
-    # Get mesh size before reimport
-    mesh_size = _get_mesh_size(cubit, vol_ids)
+    # Check if meshed
+    total_elems = sum(
+        len(cubit.get_volume_tets(vid)) + len(cubit.get_volume_hexes(vid))
+        for vid in vol_ids
+    )
+    if total_elems == 0:
+        return {"error": "Volumes are not meshed."}
 
-    # Export STEP
+    # Export STEP (for OCC geometry reference only, no reimport)
     tmpdir = tempfile.mkdtemp(prefix="radia_ind_")
     step_file = os.path.join(tmpdir, "geometry.step").replace("\\", "/")
     vol_list = " ".join(str(v) for v in vol_ids)
     cubit.cmd(f'export step "{step_file}" volume {vol_list} overwrite')
 
-    # STEP reimport (ACIS -> OCC seam fix)
-    cubit.cmd("reset")
-    cubit.cmd(f'import step "{step_file}" heal')
-
-    # Remesh
-    cubit.cmd("volume all scheme tetmesh")
-    cubit.cmd(f"volume all size {mesh_size}")
-    cubit.cmd("mesh volume all")
-
-    # Register blocks
-    new_vol_ids = list(cubit.get_entities("volume"))
+    # Register blocks (use existing mesh, no remesh)
     cubit.cmd("delete block all")
-    for i, vid in enumerate(new_vol_ids):
+    for i, vid in enumerate(vol_ids):
         cubit.cmd(f"block {i + 1} add volume {vid}")
-    cubit.cmd(f"block {len(new_vol_ids) + 1} add tri all")
-    cubit.cmd(f'block {len(new_vol_ids) + 1} name "conductor"')
+    cubit.cmd(f"block {len(vol_ids) + 1} add tri all")
+    cubit.cmd(f'block {len(vol_ids) + 1} name "conductor"')
 
     # Export to Netgen with OCC geometry
     radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
