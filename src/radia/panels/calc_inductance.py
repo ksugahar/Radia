@@ -142,6 +142,15 @@ def extract_inductance(cub5_file, order):
     else:
         L_op = LaplaceSL(u.Trace() * ds) * v.Trace() * ds
 
+    # Check DOF count - dense extraction is O(N^2), limit for practical use
+    MAX_DOFS = 1000
+    if n_free > MAX_DOFS:
+        return {
+            "error": f"Too many DOFs ({n_free}) for dense BEM extraction. "
+                     f"Maximum: {MAX_DOFS}. Use coarser mesh (curve all interval N).",
+            "n_free_dofs": n_free,
+        }
+
     # Extract free-DOF L matrix
     L_free = np.zeros((n_free, n_free))
     ei = L_op.mat.CreateColVector()
