@@ -729,23 +729,19 @@ class InductanceDialog(QDialog):
 		# Save cub5
 		tmpdir = tempfile.mkdtemp(prefix="radia_ind_")
 		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
-		output_file = os.path.join(tmpdir, "result.json").replace("\\", "/")
 		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
 
-		# Build command (result via --output file, not stdout)
+		# Build command
 		calc_script = os.path.join(_this_dir, "calc_inductance.py")
 		args = [
 			calc_script,
 			"--cub5", cub5_file,
-			"--output", output_file,
 			"--source", source,
 			"--sink", sink,
 			"--sigma", str(sigma),
 			"--order", str(order),
 			"--freq", str(freq),
 		]
-
-		self._output_file = output_file
 
 		# Run async via QProcess (non-blocking)
 		self._process = QProcess(self)
@@ -756,18 +752,8 @@ class InductanceDialog(QDialog):
 		"""Handle async extraction result."""
 		self.extract_btn.setEnabled(True)
 		self.extract_btn.setText("Extract")
+		data = _parse_json_output(self._process)
 		self._process = None
-
-		# Read result from file (not stdout - avoids C-level stdout pollution)
-		data = None
-		try:
-			with open(self._output_file, "r", encoding="utf-8") as f:
-				data = json.load(f)
-		except Exception as e:
-			QMessageBox.critical(self, "Error", f"Failed to read result:\n{e}")
-			self._set_result("Status", "Error")
-			return
-
 		if data is None:
 			self._set_result("Status", "Error")
 			return
