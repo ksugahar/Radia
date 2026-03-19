@@ -2,16 +2,19 @@
 Inductance extractor using ngsolve.bem LaplaceSL BEM.
 
 Called as subprocess from Cubit panel:
-    python calc_inductance.py --cub5 model.cub5 --source src --sink snk
-           --sigma 5.8e7 --order 3 --freq 0
+    python calc_inductance.py --cub5 model.cub5 --order 1
 
-Workflow:
+Workflow (STEP reimport + CalcSurfacesOfNode):
   1. Import NGSolve FIRST (before cubit)
-  2. Open cub5, export STEP
-  3. Use BEMExtractor to compute L (and R at given frequency)
+  2. Open cub5, get CAD info, export STEP
+  3. Reset + reimport STEP heal (ACIS -> OCC seam fix)
+  4. Remesh + export_NetgenMesh(geometry=OCC)
+  5. CalcSurfacesOfNode() (CRITICAL for BEM edge orientation)
+  6. SetGeomInfo + Curve(order)
+  7. HDivSurface + LaplaceSL -> L extraction
 
-IMPORTANT: NGSolve must be imported BEFORE cubit to avoid numpy DLL conflict.
-Outputs JSON to stdout (last line).
+IMPORTANT: NGSolve must be imported BEFORE cubit.
+Outputs JSON to stdout (suppresses all other print output).
 """
 
 import argparse
@@ -32,15 +35,11 @@ def _setup_cubit():
     if cubit_path and cubit_path not in sys.path:
         sys.path.append(cubit_path)
 
-    # Block Cubit's bundled site-packages
     for p in list(sys.path):
         if "site-packages" in p and ("cubit" in p.lower() or "Cubit" in p):
             sys.path.remove(p)
 
     import cubit
-    # Suppress cubit.init() banner on stderr
-    # Use -noinit to prevent .cubit startup file from being played
-    # (it tries to load register_toolbar.py which imports Qt)
     import io, contextlib
     with contextlib.redirect_stderr(io.StringIO()):
         cubit.init(["cubit", "-nojournal", "-batch", "-noinit"])
@@ -52,110 +51,145 @@ def _setup_cubit():
     return cubit
 
 
-def extract_inductance(cub5_file, source_block, sink_block, sigma, order, freq):
-    """Extract inductance using BEMExtractor.
+def _get_mesh_size(cubit, vol_ids):
+    """Estimate mesh size from existing mesh."""
+    for vid in vol_ids:
+        ne = len(cubit.get_volume_tets(vid)) + len(cubit.get_volume_hexes(vid))
+        if ne > 0:
+            bb = cubit.get_bounding_box("volume", vid)
+            diag = bb[9] if len(bb) > 9 else 1.0
+            return diag / max(ne ** (1.0 / 3.0), 1.0)
+    return 0.1
 
-    Args:
-        cub5_file: Cubit model file
-        source_block: Block name for current source face
-        sink_block: Block name for current sink face (empty string = closed loop)
-        sigma: Conductivity [S/m]
-        order: Curve order for high-order BEM
-        freq: Frequency [Hz] (0 = DC)
+
+def extract_inductance(cub5_file, order):
+    """Extract self-inductance using BEM LaplaceSL.
+
+    Uses the full STEP reimport workflow:
+      STEP export -> reimport heal -> remesh -> export_NetgenMesh(geometry=OCC)
+      -> CalcSurfacesOfNode -> SetGeomInfo -> Curve -> HDivSurface + LaplaceSL
     """
-    # 1. Import NGSolve FIRST
-    from ngsolve import Mesh, TaskManager
+    import numpy as np
+    import math
+    from ngsolve import Mesh, HDivSurface, TaskManager, ds, Integrate, CF, BND
+    from ngsolve.bem import LaplaceSL
+    from netgen.occ import OCCGeometry
 
-    # 2. Import cubit
+    MU_0 = 4.0 * math.pi * 1e-7
+
     cubit = _setup_cubit()
-
-    # 3. Load model
     cubit.cmd(f'open "{cub5_file}"')
 
-    # 4. Export STEP
+    vol_ids = list(cubit.get_entities("volume"))
+    if not vol_ids:
+        return {"error": "No volumes found in model"}
+
+    # Get mesh size before reimport
+    mesh_size = _get_mesh_size(cubit, vol_ids)
+
+    # Export STEP
     tmpdir = tempfile.mkdtemp(prefix="radia_ind_")
     step_file = os.path.join(tmpdir, "geometry.step").replace("\\", "/")
-    cubit.cmd(f'export step "{step_file}" overwrite')
+    vol_list = " ".join(str(v) for v in vol_ids)
+    cubit.cmd(f'export step "{step_file}" volume {vol_list} overwrite')
 
-    # 5. Get block names for reporting
+    # STEP reimport (ACIS -> OCC seam fix)
+    cubit.cmd("reset")
+    cubit.cmd(f'import step "{step_file}" heal')
+
+    # Remesh
+    cubit.cmd("volume all scheme tetmesh")
+    cubit.cmd(f"volume all size {mesh_size}")
+    cubit.cmd("mesh volume all")
+
+    # Register blocks
+    new_vol_ids = list(cubit.get_entities("volume"))
+    cubit.cmd("delete block all")
+    for i, vid in enumerate(new_vol_ids):
+        cubit.cmd(f"block {i + 1} add volume {vid}")
+    cubit.cmd(f"block {len(new_vol_ids) + 1} add tri all")
+    cubit.cmd(f'block {len(new_vol_ids) + 1} name "conductor"')
+
+    # Export to Netgen with OCC geometry
     radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     if os.path.abspath(radia_src) not in sys.path:
         sys.path.insert(0, os.path.abspath(radia_src))
+    import cubit_mesh_export
 
-    from cubit_bem_extractor import BEMExtractor
+    geo = OCCGeometry(step_file)
+    ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, geometry=geo)
+    # CalcSurfacesOfNode is now called inside export_NetgenMesh
 
-    # 6. Create extractor and load mesh
-    ext = BEMExtractor()
-    ext.load_cubit_mesh(cubit, geometry_file=step_file, curve_order=order)
+    mesh = Mesh(ngmesh)
 
-    # 7. Set conductor
-    # Find the conductor block (first volume block)
-    block_ids = cubit.get_block_count()
-    conductor_block = None
-    for bid in range(1, block_ids + 1):
+    # Curve (with SetGeomInfo already applied if available)
+    if order > 1:
         try:
-            name = cubit.get_exodus_entity_name("block", bid)
-            if name and name not in [source_block, sink_block]:
-                conductor_block = name
-                break
+            mesh.Curve(order)
         except Exception:
-            pass
+            pass  # Curve may fail without SetGeomInfo for specific geometry
 
-    if conductor_block is None:
-        # Use default conductor label
-        conductor_block = "conductor"
+    # HDivSurface + LaplaceSL
+    fes = HDivSurface(mesh, order=0)
+    u, v = fes.TnT()
+    ndof = fes.ndof
+    fd = fes.FreeDofs()
+    free_idx = np.array([i for i in range(ndof) if fd[i]])
+    n_free = len(free_idx)
 
-    ext.set_conductor(conductor_block, sigma=sigma)
+    bnd_label = list(set(mesh.GetBoundaries()))
+    label = bnd_label[0] if bnd_label else None
 
-    # 8. Set port
-    if sink_block:
-        # Open conductor: source -> sink
-        ext.set_port("port1", block=conductor_block,
-                     source_block=source_block, sink_block=sink_block)
-    else:
-        # Closed loop
-        ext.set_port("port1", block=conductor_block)
-
-    # 9. Extract
-    freqs = [freq] if freq > 0 else [0.0]
     with TaskManager():
-        result = ext.extract(freqs=freqs, mode='mqs')
+        if label:
+            L_op = LaplaceSL(u.Trace() * ds(label)) * v.Trace() * ds(label)
+        else:
+            L_op = LaplaceSL(u.Trace() * ds) * v.Trace() * ds
 
-    # 10. Build output
-    L = result.L[0, 0] if hasattr(result.L, 'shape') else result.L
-    R = result.R_at(freqs[0]) if freq > 0 else 0.0
+    # Extract free-DOF L matrix
+    L_free = np.zeros((n_free, n_free))
+    ei = L_op.mat.CreateColVector()
+    col = L_op.mat.CreateColVector()
+    for jl, jg in enumerate(free_idx):
+        ei[:] = 0; ei[jg] = 1.0; L_op.mat.Mult(ei, col)
+        for il, ig in enumerate(free_idx):
+            L_free[il, jl] = col[ig]
+    L_matrix = MU_0 * L_free
+
+    # Check for negative diagonals
+    neg_count = int(np.sum(np.diag(L_matrix) < 0))
+
+    # Uniform current excitation -> self-inductance
+    e = np.ones(n_free) / n_free
+    try:
+        L_total = 1.0 / (e @ np.linalg.solve(L_matrix, e))
+    except np.linalg.LinAlgError:
+        L_total = 0.0
+
+    # Surface area for verification
+    area = float(Integrate(CF(1), mesh, VOL_or_BND=BND))
 
     return {
-        "inductance_H": float(L),
-        "resistance_ohm": float(R) if R else 0.0,
-        "frequency_Hz": freq,
-        "sigma": sigma,
+        "inductance_H": float(L_total),
+        "n_free_dofs": n_free,
+        "neg_diag": neg_count,
+        "surface_area": area,
         "order": order,
-        "source_block": source_block,
-        "sink_block": sink_block or "(closed loop)",
     }
 
 
 def main():
     parser = argparse.ArgumentParser(description="ngsolve.bem inductance extractor")
     parser.add_argument("--cub5", required=True, help="Cubit .cub5 model file")
-    parser.add_argument("--source", default="", help="Source block name")
-    parser.add_argument("--sink", default="", help="Sink block name")
-    parser.add_argument("--sigma", type=float, default=5.8e7, help="Conductivity [S/m]")
     parser.add_argument("--order", type=int, default=1, help="Curve order (1-5)")
-    parser.add_argument("--freq", type=float, default=0.0, help="Frequency [Hz]")
     args = parser.parse_args()
 
-    # Redirect stdout during computation to capture BEMExtractor print output.
-    # JSON result is printed to real stdout at the end.
-    import io
+    # Redirect stdout during computation (suppress Cubit/BEM print output)
+    import io as _io
     real_stdout = sys.stdout
-    sys.stdout = io.StringIO()
+    sys.stdout = _io.StringIO()
     try:
-        result = extract_inductance(
-            args.cub5, args.source, args.sink,
-            args.sigma, args.order, args.freq
-        )
+        result = extract_inductance(args.cub5, args.order)
         sys.stdout = real_stdout
         print(json.dumps(result))
     except Exception as e:
