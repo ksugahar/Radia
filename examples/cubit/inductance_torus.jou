@@ -27,7 +27,7 @@ import step "temp_torus.step" heal
 
 ## Volume mesh (curve interval controls mesh density for BEM)
 volume all scheme tetmesh
-curve all interval 6
+volume all size {a/2}
 mesh volume all
 
 ## Allow elements in multiple blocks
