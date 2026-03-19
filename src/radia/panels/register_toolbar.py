@@ -606,7 +606,7 @@ class InductanceDialog(QDialog):
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
-		self.setWindowTitle("Inductance Extractor (ngsolve.bem)")
+		self.setWindowTitle("Inductance Solver (ngsolve.bem)")
 		self.setMinimumWidth(500)
 		self._ext_python = _find_external_python()
 		self._result_file = os.path.join(tempfile.gettempdir(), "radia_inductance_result.json")
@@ -675,14 +675,10 @@ class InductanceDialog(QDialog):
 		# Buttons
 		btn_row = QHBoxLayout()
 		btn_row.addStretch()
-		self.extract_btn = QPushButton("Extract")
-		self.extract_btn.clicked.connect(self._extract)
-		self.extract_btn.setEnabled(self._ext_python is not None)
-		btn_row.addWidget(self.extract_btn)
-		self.load_btn = QPushButton("Load Results")
-		self.load_btn.clicked.connect(self._load_results)
-		self.load_btn.setEnabled(False)
-		btn_row.addWidget(self.load_btn)
+		self.solve_btn = QPushButton("Solve")
+		self.solve_btn.clicked.connect(self._extract)
+		self.solve_btn.setEnabled(self._ext_python is not None)
+		btn_row.addWidget(self.solve_btn)
 		close_btn = QPushButton("Close")
 		close_btn.clicked.connect(self.accept)
 		btn_row.addWidget(close_btn)
@@ -694,63 +690,6 @@ class InductanceDialog(QDialog):
 		self.result_table.setItem(0, 0, QTableWidgetItem(param))
 		self.result_table.setItem(0, 1, QTableWidgetItem(value))
 
-	def _load_results(self):
-		"""Load saved results and set nodal variable for visualization."""
-		debug_lines = []
-		try:
-			# Read result file
-			result_file = getattr(self, '_result_file', None)
-			if not result_file or not os.path.exists(result_file):
-				debug_lines.append("No result file found. Run Extract first.")
-				self.debug_text.setText("\n".join(debug_lines))
-				return
-
-			with open(result_file, "r") as f:
-				data = json.load(f)
-			debug_lines.append(f"Loaded: {result_file}")
-
-			node_J = data.get("node_J")
-			if not node_J:
-				debug_lines.append("ERROR: node_J not in result data")
-				self.debug_text.setText("\n".join(debug_lines))
-				return
-
-			debug_lines.append(f"node_J: len={len(node_J)}, min={min(node_J):.2e}, max={max(node_J):.2e}")
-			debug_lines.append(f"nonzero: {sum(1 for v in node_J if v > 0)}/{len(node_J)}")
-
-			node_ids = list(cubit.get_entities("node"))
-			debug_lines.append(f"Cubit nodes: {len(node_ids)}")
-
-			if len(node_J) != len(node_ids):
-				debug_lines.append(f"ERROR: mismatch node_J({len(node_J)}) vs cubit({len(node_ids)})")
-				self.debug_text.setText("\n".join(debug_lines))
-				return
-
-			cubit.set_nodal_variable(node_ids, "J_magnitude", node_J)
-			debug_lines.append("set_nodal_variable OK")
-
-			# GMSH visualization
-			gmsh_file = data.get("gmsh_file", "")
-			if gmsh_file and os.path.exists(gmsh_file):
-				debug_lines.append(f"GMSH: {gmsh_file}")
-				# Try to open GMSH
-				try:
-					import subprocess as _sp
-					# Try gmsh.bat from Python Scripts, then gmsh from PATH
-					import shutil
-					gmsh_exe = shutil.which("gmsh") or shutil.which("gmsh.bat")
-					if gmsh_exe:
-						_sp.Popen([gmsh_exe, gmsh_file])
-						debug_lines.append(f"GMSH launched: {gmsh_exe}")
-					else:
-						debug_lines.append(f"GMSH not found. Open manually: {gmsh_file}")
-				except Exception as e:
-					debug_lines.append(f"GMSH launch error: {e}")
-
-		except Exception as e:
-			debug_lines.append(f"ERROR: {e}")
-
-		self.debug_text.setText("\n".join(debug_lines))
 
 	def _try_load_existing_result(self):
 		"""Load existing result JSON if available (from previous Extract)."""
@@ -760,7 +699,7 @@ class InductanceDialog(QDialog):
 					data = json.load(f)
 				if "inductance_H" in data:
 					self._display_result(data)
-					self.load_btn.setEnabled(True)
+					# Results available
 					self.debug_text.setText(f"Previous result loaded: {self._result_file}")
 			except Exception:
 				pass
@@ -805,8 +744,8 @@ class InductanceDialog(QDialog):
 
 		order = self.order_spin.value()
 
-		self.extract_btn.setEnabled(False)
-		self.extract_btn.setText("Extracting...")
+		self.solve_btn.setEnabled(False)
+		self.solve_btn.setText("Solving...")
 		self._set_result("Status", "Computing...")
 
 		# Save cub5
@@ -833,8 +772,8 @@ class InductanceDialog(QDialog):
 
 	def _on_extract_finished(self, exit_code, exit_status):
 		"""Handle async extraction result."""
-		self.extract_btn.setEnabled(True)
-		self.extract_btn.setText("Extract")
+		self.solve_btn.setEnabled(True)
+		self.solve_btn.setText("Solve")
 		data = _parse_json_output(self._process)
 		self._process = None
 		if data is None:
@@ -848,11 +787,26 @@ class InductanceDialog(QDialog):
 
 		self._display_result(data)
 
-		# Save result data for Load button
+		# Save result + open GMSH visualization
 		with open(self._result_file, "w") as f:
 			json.dump(data, f)
-		self.load_btn.setEnabled(True)
-		self.debug_text.setText(f"Result saved: {self._result_file}")
+
+		gmsh_file = data.get("gmsh_file", "")
+		if gmsh_file and os.path.exists(gmsh_file):
+			self.debug_text.setText(f"GMSH: {gmsh_file}")
+			try:
+				import subprocess as _sp
+				import shutil
+				gmsh_exe = shutil.which("gmsh") or shutil.which("gmsh.bat")
+				if gmsh_exe:
+					_sp.Popen([gmsh_exe, gmsh_file])
+					self.debug_text.setText(f"GMSH launched: {gmsh_file}")
+				else:
+					self.debug_text.setText(f"Open in GMSH: {gmsh_file}")
+			except Exception:
+				self.debug_text.setText(f"Open in GMSH: {gmsh_file}")
+		else:
+			self.debug_text.setText(f"Result saved: {self._result_file}")
 
 	def _display_result(self, data):
 		"""Display extraction result in the table."""
@@ -936,7 +890,7 @@ def register_menu():
 
 	# Inductance Extractor action
 	action_ind = QAction("Inductance...", main_window)
-	action_ind.setStatusTip("Extract inductance using ngsolve.bem LaplaceSL BEM")
+	action_ind.setStatusTip("Solve inductance using ngsolve.bem LaplaceSL BEM")
 	action_ind.triggered.connect(lambda: InductanceDialog(main_window).exec())
 	radia_menu.addAction(action_ind)
 
