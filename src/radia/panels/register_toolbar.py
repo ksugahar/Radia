@@ -609,8 +609,10 @@ class InductanceDialog(QDialog):
 		self.setWindowTitle("Inductance Extractor (ngsolve.bem)")
 		self.setMinimumWidth(500)
 		self._ext_python = _find_external_python()
+		self._result_file = os.path.join(tempfile.gettempdir(), "radia_inductance_result.json")
 		self._setup_ui()
 		self._populate_blocks()
+		self._try_load_existing_result()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -727,15 +729,33 @@ class InductanceDialog(QDialog):
 			cubit.set_nodal_variable(node_ids, "J_magnitude", node_J)
 			debug_lines.append("set_nodal_variable OK")
 
-			# Export Exodus with nodal variable
+			# Export Exodus with nodal variable, then reimport for results display
 			exo_file = os.path.join(tempfile.gettempdir(), "inductance_result.exo").replace("\\", "/")
 			cubit.cmd(f'export mesh "{exo_file}" overwrite')
-			debug_lines.append(f"Exodus: {exo_file}")
+			debug_lines.append(f"Exported: {exo_file}")
+
+			# Reimport with nodal variable for contour display
+			cubit.cmd("reset")
+			cubit.cmd(f'import mesh "{exo_file}" no_geom')
+			debug_lines.append("Reimported Exodus with nodal_var")
 
 		except Exception as e:
 			debug_lines.append(f"ERROR: {e}")
 
 		self.debug_text.setText("\n".join(debug_lines))
+
+	def _try_load_existing_result(self):
+		"""Load existing result JSON if available (from previous Extract)."""
+		if os.path.exists(self._result_file):
+			try:
+				with open(self._result_file, "r") as f:
+					data = json.load(f)
+				if "inductance_H" in data:
+					self._display_result(data)
+					self.load_btn.setEnabled(True)
+					self.debug_text.setText(f"Previous result loaded: {self._result_file}")
+			except Exception:
+				pass
 
 	def _populate_blocks(self):
 		"""Populate combo boxes with Cubit block names."""
@@ -818,10 +838,18 @@ class InductanceDialog(QDialog):
 			self._set_result("Status", "Error")
 			return
 
-		# Display result in table
+		self._display_result(data)
+
+		# Save result data for Load button
+		with open(self._result_file, "w") as f:
+			json.dump(data, f)
+		self.load_btn.setEnabled(True)
+		self.debug_text.setText(f"Result saved: {self._result_file}")
+
+	def _display_result(self, data):
+		"""Display extraction result in the table."""
 		L = data.get("inductance_H", 0.0)
 
-		# Auto-format inductance
 		if abs(L) >= 1e-3:
 			L_str = f"{L*1e3:.4f} mH"
 		elif abs(L) >= 1e-6:
@@ -845,14 +873,6 @@ class InductanceDialog(QDialog):
 			item = QTableWidgetItem(val)
 			item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 			self.result_table.setItem(i, 1, item)
-
-		# Save result data for Load button
-		self._last_result = data
-		self._result_file = os.path.join(tempfile.gettempdir(), "radia_inductance_result.json")
-		with open(self._result_file, "w") as f:
-			json.dump(data, f)
-		self.load_btn.setEnabled(True)
-		self.debug_text.setText(f"Result saved: {self._result_file}")
 
 
 # ================================================================
