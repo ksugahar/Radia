@@ -753,11 +753,16 @@ class InductanceDialog(QDialog):
 		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
 		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
 
+		# Output .msh next to the original cub5 (not temp)
+		# Use Cubit's working directory as output location
+		msh_output = os.path.join(os.getcwd(), "inductance_J.msh").replace("\\", "/")
+
 		# Build command
 		calc_script = os.path.join(_this_dir, "calc_inductance.py")
 		args = [
 			calc_script,
 			"--cub5", cub5_file,
+			"--msh-output", msh_output,
 			"--source", source,
 			"--sink", sink,
 			"--sigma", str(sigma),
