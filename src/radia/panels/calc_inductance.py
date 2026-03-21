@@ -7,7 +7,7 @@ Called as subprocess from Cubit panel:
 Workflow:
   1. Import NGSolve FIRST (before cubit)
   2. Open cub5, register blocks
-  3. export_curved(order=N, surface_only=True) -> NGSolve Mesh
+  3. export_NGSolveCurvedMesh(order=N, surface_only=True) -> NGSolve Mesh
   4. HDivSurface + LaplaceSL -> L extraction
 
 IMPORTANT: NGSolve must be imported BEFORE cubit.
@@ -61,8 +61,8 @@ def _get_mesh_size(cubit, vol_ids):
 def extract_inductance(cub5_file, order, msh_output=""):
     """Extract self-inductance using BEM LaplaceSL.
 
-    Uses export_curved() for mesh export with automatic curving:
-      export_curved(order=N, surface_only=True) -> HDivSurface + LaplaceSL
+    Uses export_NGSolveCurvedMesh() for mesh export with automatic curving:
+      export_NGSolveCurvedMesh(order=N, surface_only=True) -> HDivSurface + LaplaceSL
     """
     import numpy as np
     import math
@@ -105,7 +105,7 @@ def extract_inductance(cub5_file, order, msh_output=""):
         sys.path.insert(0, os.path.abspath(radia_src))
     import cubit_mesh_export
 
-    mesh = cubit_mesh_export.export_curved(
+    mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
         cubit, order=order, surface_only=True,
         split_quads=True)
 

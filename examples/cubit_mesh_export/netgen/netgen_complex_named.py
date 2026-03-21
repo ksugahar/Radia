@@ -1,13 +1,13 @@
 """
 Netgen Export Example: Complex Geometry with High-Order Curving
 
-Uses export_curved() for automatic geometry association and curving.
+Uses export_NGSolveCurvedMesh() for automatic geometry association and curving.
 
 Workflow:
 1. OCC: Create geometry (brick with cylindrical hole)
 2. OCC: Export STEP -> Cubit imports STEP (geometry transfer)
 3. Cubit: Mesh
-4. export_curved(order=N): Export with curving (uses Cubit's ACIS kernel)
+4. export_NGSolveCurvedMesh(order=N): Export with curving (uses Cubit's ACIS kernel)
 5. Accuracy test via volume integration
 
 Run: python netgen_complex_named.py
@@ -41,7 +41,7 @@ BRICK_SIZE = 2.0   # Brick dimension
 R_HOLE = 0.3       # Cylindrical hole radius
 ORDER = 2          # Curving order
 
-print("=== Netgen Export: Complex Geometry (export_curved) ===")
+print("=== Netgen Export: Complex Geometry (export_NGSolveCurvedMesh) ===")
 print(f"(Brick {BRICK_SIZE}x{BRICK_SIZE}x{BRICK_SIZE} with cylindrical hole R={R_HOLE})")
 print()
 
@@ -94,9 +94,9 @@ print(f"  Tets: {cubit.get_tet_count()}")
 # ============================================================
 # Step 4: Export with curving and accuracy test
 # ============================================================
-print(f"\nStep 4: export_curved(order={ORDER}) and accuracy")
+print(f"\nStep 4: export_NGSolveCurvedMesh(order={ORDER}) and accuracy")
 
-mesh = cubit_mesh_export.export_curved(cubit, order=ORDER)
+mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=ORDER)
 
 expected_vol = BRICK_SIZE**3 - math.pi * R_HOLE**2 * BRICK_SIZE
 vol = Integrate(CF(1), mesh)
@@ -107,7 +107,7 @@ print(f"  Error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 
 # Compare with order=3
 print("\nCompare with order=3:")
-mesh3 = cubit_mesh_export.export_curved(cubit, order=3)
+mesh3 = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
 vol3 = Integrate(CF(1), mesh3)
 print(f"  Error: {abs(vol3-expected_vol)/expected_vol*100:.4f}%")
 

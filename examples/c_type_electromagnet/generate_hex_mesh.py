@@ -225,7 +225,7 @@ print(f"  Volumes: {cubit.get_volume_count()}")
 # ============================================================
 print("\nStep 4: Export hex mesh to Netgen (for Radia)")
 
-mesh = cubit_mesh_export.export_curved(cubit, order=1)
+mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
 ngmesh = mesh.ngmesh
 
 print(f"  Hex elements: {mesh.ne}")

@@ -1954,7 +1954,7 @@ def _build_cubit_callbacks(cubit, surfnr_to_cubit_sid):
 	return cubit_project, cubit_normal
 
 
-def export_curved(cubit, order: int = 3, surface_only: bool = False,
+def export_NGSolveCurvedMesh(cubit, order: int = 3, surface_only: bool = False,
                   split_quads: bool = False):
 	"""Export Cubit mesh with automatic high-order curving via ACIS.
 
@@ -1971,10 +1971,10 @@ def export_curved(cubit, order: int = 3, surface_only: bool = False,
 		ngsolve.Mesh: Curved mesh ready for FEM or BEM
 
 	Example (FEM volume mesh):
-		mesh = cubit_mesh_export.export_curved(cubit, order=3)
+		mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
 
 	Example (BEM surface mesh for inductance extraction):
-		mesh = cubit_mesh_export.export_curved(
+		mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
 		    cubit, order=2, surface_only=True, split_quads=True)
 	"""
 	from netgen.meshing import (Mesh as NetgenMesh, MeshPoint, Element3D,
