@@ -467,12 +467,14 @@ src/radia/
 Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
 
 Official PyPI ngsolve 6.2.2601+ includes: **MKL**, **PARDISO**, Periodic BC fix.
-No fork or custom build is needed.
+
+**REQUIRED**: ksugahar/netgen fork for `export_curved()` (CallbackGeometry + SetGeomInfo).
+Standard pip netgen does NOT include these APIs.
 
 ```bash
 pip install radia  # NGSolve is a required dependency (>=6.2.2601)
-# Compact AMS/COCR solvers are now in ngsolve.la (since ngsolve-sparsesolv 3.1.0)
-# from ngsolve.la import CompactAMSPreconditioner, COCRSolver
+# Then replace netgen-mesher with the fork:
+pip install <wheel> --force-reinstall  # from https://github.com/ksugahar/netgen/releases
 ```
 
 ### SetGeomInfo API (Netgen PR#232)
