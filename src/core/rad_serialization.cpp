@@ -15,6 +15,7 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_serialization.h"
+#include "rad_geometry_3d.h"
 #include <stdio.h>
 #include <string.h>
 #include <vector>
