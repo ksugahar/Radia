@@ -413,6 +413,17 @@ git push v* tag
 robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
 ```
 
+### CI Testing Policy
+
+**POLICY**: CI/CD のテストだけでは不十分。Cubit が必要な機能（`export_curved`, panels, BEM extractor）は **Cubit 環境でのローカルテストが必須**。CI は C++ ビルドと基本テスト（Cubit 不要なもの）のみ。
+
+**リリース前の必須テスト**:
+1. CI: C++ ビルド + pytest（Cubit 不要テスト）
+2. ローカル: Cubit + system Python で `export_curved` テスト（球、トーラス）
+3. ローカル: Cubit パネルの動作確認
+
+CI が通っても Cubit テストに通らなければリリースしない。
+
 **Wheel Verification** (automated by Build_Wheel.ps1, also manual):
 ```python
 import zipfile
