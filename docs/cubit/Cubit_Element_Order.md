@@ -85,20 +85,7 @@ print(f"get_expanded_connectivity: {len(nodes_2nd)} nodes")  # 10
 
 ## Impact on Export Functions
 
-### export_vtk()
-
-Uses `get_expanded_connectivity()` to export the actual element order:
-
-- TET4 ↁE4 nodes ↁEVTK type 10
-- TET10 ↁE10 nodes ↁEVTK type 24
-
-```python
-# Exports 2nd order elements correctly
-cubit.cmd("block 1 element type tetra10")
-cubit_mesh_export.export_vtk(cubit, "mesh.vtk")  # Auto-detects TET10
-```
-
-### export_netgen()
+### export_NGSolveCurvedMesh()
 
 Uses `get_connectivity()` to export **only 1st order elements**:
 
@@ -135,14 +122,6 @@ This separation provides:
 - Nodes placed exactly on CAD geometry
 - No need for Cubit-Netgen node ordering conversion for high-order nodes
 
-### Why export_vtk Uses Actual Element Order
-
-The design philosophy for `export_vtk()`:
-
-1. **Preserve user intent**: If user creates TET10, export TET10
-2. **Automatic detection**: No manual ORDER parameter needed
-3. **Mixed-order support**: Different elements can have different orders
-
 ## Complete Example
 
 ```python
@@ -174,8 +153,8 @@ tet_id = cubit.get_block_tets(1)[0]
 print(f"1st order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id))}")
 print(f"1st order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
-# Export 1st order VTK
-cubit_mesh_export.export_vtk(cubit, "sphere_1st.vtk")
+# Export 1st order Gmsh
+cubit_mesh_export.export_gmsh_v2(cubit, "sphere_1st.msh")
 
 # Convert to 2nd order
 cubit.cmd("block 1 element type tetra10")
@@ -185,12 +164,8 @@ cubit.cmd("block 2 element type tri6")
 print(f"2nd order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id))}")
 print(f"2nd order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
-# Export 2nd order VTK
-cubit_mesh_export.export_vtk(cubit, "sphere_2nd.vtk")
-
-# Export for Netgen (always 1st order, regardless of block element type)
-cubit.cmd('export step "sphere.step" overwrite')
-# ngmesh = cubit_mesh_export.export_netgen(cubit, "sphere.step")  # Requires ngsolve
+# Export 2nd order Gmsh
+cubit_mesh_export.export_gmsh_v2(cubit, "sphere_2nd.msh")
 ```
 
 Output:
@@ -205,9 +180,8 @@ Output:
 
 | Export Function | API Used | Respects Block Element Type |
 |----------------|----------|----------------------------|
-| `export_vtk()` | `get_expanded_connectivity()` | Yes - exports actual order |
-| `export_netgen()` | `get_connectivity()` | No - always 1st order |
 | `export_Gmsh_ver2()` | `get_expanded_connectivity()` | Yes - exports actual order |
+| `export_NGSolveCurvedMesh()` | `get_connectivity()` | No - curves via ACIS |
 | `export_Nastran()` | `get_connectivity()` | No - 1st order only |
 
 ## See Also

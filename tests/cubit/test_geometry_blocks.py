@@ -87,11 +87,11 @@ def test_helper_function():
 		all_passed = False
 
 
-def test_vtk_with_volume_block():
-	"""Test VTK export with block containing volume (geometry)."""
+def test_gmsh_v2_with_volume_block():
+	"""Test Gmsh v2 export with block containing volume (geometry)."""
 	global all_passed
 	print("\n" + "=" * 60)
-	print("Test 2: VTK export with volume-based block")
+	print("Test 2: Gmsh v2 export with volume-based block")
 	print("=" * 60)
 
 	cubit.cmd("reset")
@@ -108,26 +108,26 @@ def test_vtk_with_volume_block():
 	print(f"  Total tets in mesh: {num_tets_expected}")
 	print(f"  Block contains: volume 1 (geometry)")
 
-	# Export to VTK
-	with tempfile.NamedTemporaryFile(suffix='.vtk', delete=False) as f:
-		vtk_file = f.name
+	# Export to Gmsh
+	with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
+		msh_file = f.name
 
-	cubit_mesh_export.export_vtk(cubit, vtk_file)
+	cubit_mesh_export.export_gmsh_v2(cubit, msh_file)
 
 	# Verify file exists and has content
-	with open(vtk_file, 'r') as f:
+	with open(msh_file, 'r') as f:
 		content = f.read()
 
-	# Check if tets are in the file (VTK_TETRA=10)
-	has_tets = '10' in content.split('CELL_TYPES')[1] if 'CELL_TYPES' in content else False
+	# Check if elements are in the file
+	has_elements = '$Elements' in content
 
-	if has_tets and len(content) > 100:
-		print("  PASS: VTK file generated with geometry block")
+	if has_elements and len(content) > 100:
+		print("  PASS: Gmsh file generated with geometry block")
 	else:
-		print("  FAIL: VTK file not generated correctly")
+		print("  FAIL: Gmsh file not generated correctly")
 		all_passed = False
 
-	os.unlink(vtk_file)
+	os.unlink(msh_file)
 
 
 def test_gmsh_with_volume_block():
@@ -229,7 +229,7 @@ def test_no_cross_contamination():
 # Run tests
 if __name__ == "__main__":
 	test_helper_function()
-	test_vtk_with_volume_block()
+	test_gmsh_v2_with_volume_block()
 	test_gmsh_with_volume_block()
 	test_no_cross_contamination()
 

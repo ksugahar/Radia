@@ -941,7 +941,7 @@ void ComputeComplexFieldBatch(
 }
 
 // ============================================================================
-// PEEC Conductor Field Computation (Biot-Savart with ExaFMM acceleration)
+// PEEC Conductor Field Computation (Biot-Savart)
 // ============================================================================
 
 //-----------------------------------------------------------------------------

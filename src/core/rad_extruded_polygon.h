@@ -68,7 +68,6 @@ public:
 	void DumpBin_ExtrPolygon(CAuxBinStrVect& oStr);
 	void DumpBinParse_ExtrPolygon(CAuxBinStrVect& inStr);
 
-	radTg3dGraphPresent* CreateGraphPresent();
 
 	double Volume() { return Thickness*(((radTPolygon*)(BasePolygonHandle.rep))->Area());}
 	void VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique);

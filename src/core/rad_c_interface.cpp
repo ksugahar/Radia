@@ -198,16 +198,7 @@ void RandomizationOnOrOff( char* );
 void PhysicalUnits();
 void PhysicalUnitsSet(const char*);
 
-void GraphicsForElemWithoutSymChilds(int);
-//void GraphicsForElemWithSymChilds(int);
-void GraphicsForElemWithSymChildsExt();
-void GraphicsForAllWithoutSymChilds();
-void GraphicsForAllWithSymChilds();
-int GraphicsForElemVTK( int, const char*, const char*, const char* );
-
-void ApplyDrawAttrToElem( int, double,double,double, double );
-void ApplyColorToElem( int, double,double,double );
-void RemoveDrawAttrFromElem(int);
+// Graphics3D C interface functions removed (GraphicsForElem*, ApplyDrawAttr*, RemoveDrawAttr*)
 
 void DeleteElement( int );
 void DeleteAllElements1();
@@ -2174,73 +2165,7 @@ void GenDump()
 
 //-------------------------------------------------------------------------
 
-void GraphicsForElemWithoutSymChilds(int ElemKey)
-{
-	rad.GraphicsForElem_g3d(ElemKey, 0);
-}
-
-//-------------------------------------------------------------------------
-
-//void GraphicsForElemWithSymChilds(int ElemKey)
-//{
-//	rad.GraphicsForElem_g3d(ElemKey, 1);
-//}
-
-void GraphicsForElemWithSymChildsExt()
-{
-
-}
-
-//-------------------------------------------------------------------------
-
-int GraphicsForElemVTK(int ElemKey, const char* Opt1, const char* Opt2, const char* Opt3) //OC04112019 (requested by R.Nagler)
-{
-	std::array<char, 200> CharBuf1, CharBuf2, CharBuf3;
-	const char* OptionNames[] ={ CharBuf1.data(), CharBuf2.data(), CharBuf3.data() };
-	const char* OptionValues[] ={ 0, 0, 0 };
-	const char* NonParsedOpts[] ={ Opt1, Opt2, Opt3 };
-	int OptionCount = 3;
-	AuxParseOptionNamesAndValues(NonParsedOpts, OptionNames, OptionValues, OptionCount);
-
-	return rad.GraphicsForElem_g3d_VTK(ElemKey, OptionNames, OptionValues, OptionCount); //rad.GoObjGeometry in Rob's version
-}
-
-//-------------------------------------------------------------------------
-
-void GraphicsForAllWithoutSymChilds()
-{
-	rad.GraphicsForAll_g3d(0);
-}
-
-//-------------------------------------------------------------------------
-
-void GraphicsForAllWithSymChilds()
-{
-	rad.GraphicsForAll_g3d(1);
-}
-
-//-------------------------------------------------------------------------
-
-void ApplyDrawAttrToElem(int ElemKey, double R, double G, double B, double Thickness)
-{
-	double RGB_col[] = {R, G, B};
-	rad.ApplyDrawAttrToElem_g3d(ElemKey, RGB_col, 3, Thickness);
-}
-
-//-------------------------------------------------------------------------
-
-void ApplyColorToElem(int ElemKey, double R, double G, double B)
-{
-	double RGB_col[] = {R, G, B};
-	rad.ApplyDrawAttrToElem_g3d(ElemKey, RGB_col, 3);
-}
-
-//-------------------------------------------------------------------------
-
-void RemoveDrawAttrFromElem(int ElemKey)
-{
-	rad.RemoveDrawAttrFromElem_g3d(ElemKey);
-}
+// Graphics3D C interface implementations removed (GraphicsForElem*, ApplyDrawAttr*, etc.)
 
 //-------------------------------------------------------------------------
 

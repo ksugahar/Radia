@@ -412,7 +412,7 @@ public:
 	int GetNumHexElements() const { return (int)m_hexaElemIndices.size(); }
 	const std::vector<int>& GetHexaElemIndices() const { return m_hexaElemIndices; }
 
-	// Triangle vertex/sign accessors (for FMM quadrature)
+	// Triangle vertex/sign accessors
 	const std::vector<double>& GetHexaTriVertices() const { return m_hexaTriVertices; }
 	const std::vector<double>& GetHexaTriSigns() const { return m_hexaTriSigns; }
 	const std::vector<double>& GetHexaCenters() const { return m_hexaCenters; }

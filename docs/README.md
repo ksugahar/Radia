@@ -48,8 +48,6 @@
 - [export_Gmsh_ver2.md](cubit/export_Gmsh_ver2.md) - Export to Gmsh format version 2.2
 - [export_Gmsh_ver4.md](cubit/export_Gmsh_ver4.md) - Export to Gmsh format version 4.1
 - [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Export Cubit mesh to Netgen with high-order curving support
-- [export_VTK.md](cubit/export_VTK.md) - Export to VTK/VTU format for ParaView
 - [export_Nastran.md](cubit/export_Nastran.md) - Export to NX Nastran bulk data format
 - [export_exodus.md](cubit/export_exodus.md) - Export to Exodus II format
 - [export_meg.md](cubit/export_meg.md) - Export to ELF/MAGIC MEG format
-- [BUGFIX_cubit_mesh_export_vtk_indexing.md](cubit/BUGFIX_cubit_mesh_export_vtk_indexing.md) - Bug fix: VTK node index mapping for non-contiguous Cubit IDs

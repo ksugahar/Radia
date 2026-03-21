@@ -488,7 +488,6 @@ public:
 	void EstimateSize(TVector3d*, double*, int);
 	void FindTypicalSize(TVector3d*, int, double&);
 
-	radTg3dGraphPresent* CreateGraphPresent();
 	void Dump(std::ostream&, int ShortSign =0);
 	void DumpPureObjInfo(std::ostream&, int);
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);

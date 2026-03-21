@@ -39,7 +39,6 @@ public:
 
 	void B_intComp(radTField* FieldPtr);
 
-	radTg3dGraphPresent* CreateGraphPresent();
 
 	void Dump(std::ostream& o, int ShortSign = 0);
 

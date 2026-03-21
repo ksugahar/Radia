@@ -24,7 +24,6 @@ using PyObject = _object;
 #include "rad_serialization.h"
 #include "rad_geometry_base.h"
 #include "rad_type_cast.h"
-#include "rad_graphics_3d.h"
 #include "rad_yield.h"
 #include "rad_convergence.h"
 #include "rad_geom_types.h"
@@ -136,8 +135,6 @@ public:
 	double m_timing_linear_solve;    // Total BiCGSTAB solve time
 	int m_linear_iterations;         // Total BiCGSTAB iterations (cumulative)
 #endif
-
-	// FMM solver (Method 3) REMOVED 2026-03-06
 
 	radTApplication()
 	{
@@ -355,7 +352,7 @@ public:
 	// Solve statistics retrieval (always available)
 	void GetSolveStats(double* dOut, int* nOut);
 
-	// Point classification and batch field computation for FMM
+	// Point classification and batch field computation
 	void ClassifyPoints(int* classification, int* nearest_elem, int n_points,
 	                    double* points, int container_handle, double near_threshold);
 	void ComputeFieldBatch(double* B_out, double* H_out, int n_points,
@@ -404,14 +401,9 @@ public:
 	void ReturnInput(double Input, int NumTimes);
 	int SetMemAllocMethForIntrctMatr(char* TotOrParts);
 
-	int ApplyDrawAttrToElem_g3d(int ElemKey, double* RGB_col, long lenRGB_col, double LineThickness =-1.);
-	int RemoveDrawAttrFromElem_g3d(int ElemKey);
-	int GraphicsForElem_g3d(int ElemKey, int InShowSymmetryChilds, const char** arOptionNames =0, const char** arOptionValues =0, int numOptions =0);
-	int GraphicsForElem_g3d_VTK(int ElemKey, const char** OptionNames =0, const char** OptionValues =0, int OptionCount =0); //OC04112019
-	int DecodeViewingOptions(const char** OptionNames, const char** OptionValues, int OptionCount, char* OptBits);
-	void DeallocateAuxPgnViewData(double** dArr, int** iArr1, int** iArr2, float** fArr);
-
-	void GraphicsForAll_g3d(int InShowSymmetryChilds);
+	// Graphics3D functions removed (ApplyDrawAttrToElem_g3d, RemoveDrawAttrFromElem_g3d,
+	// GraphicsForElem_g3d, GraphicsForElem_g3d_VTK, DecodeViewingOptions,
+	// DeallocateAuxPgnViewData, GraphicsForAll_g3d)
 
 	int SubdivideElement_g3d(int ElemKey, double* SubdivArray, long lenSubdivArray, char TypeExtraSpec, double* ExtraSpec, long lenExtraSpec, const char** OptionNames, const char** OptionValues, int OptionCount);
 	int CutElement_g3d(int ElemKey, double* PointOnPlane, long lenPointOnPlane, double* PlaneNormal, long lenPlaneNormal, const char** OptionNames, const char** OptionValues, int OptionCount);
@@ -428,7 +420,7 @@ public:
 
 	int ProcMPI(const char* OnOrOff, double* arData=0, long* pnData=0, long* pRankFrom=0, long* pRankTo=0);
 
-	// Get element handle by key (for FMM dipole collection)
+	// Get element handle by key
 	// Returns true if element found, false otherwise
 	bool UnsafeGetElemByKey(int ElemKey, radThg& outHandle);
 

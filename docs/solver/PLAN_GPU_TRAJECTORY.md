@@ -6,7 +6,6 @@
 
 ## Background
 
-Radia integrates ExaFMM-t for O(N log N) field evaluation via `Fld (batch)(method=1)`.
 The goal is multi-particle trajectory calculation (single-pass, not circular accelerator)
 with >10,000 dipole elements.
 
@@ -14,34 +13,31 @@ with >10,000 dipole elements.
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| ExaFMM-t | CPU-only | OpenMP + AVX SIMD, no GPU in any ExaFMM variant |
 | Particle trajectory | Single-particle | RK4/5 adaptive, calls `ComputeFieldForTrajectory()` per step |
-| Fld (batch) | Working | OpenMP + FMM auto-switch (N>=1000) |
+| Fld (batch) | Working | TaskManager parallelized |
 | nvcc | Not installed | CUDA Toolkit not present on machine |
 | CuPy/Numba | Not installed | PyTorch CPU-only installed |
 
-## Stage 1: Multi-Particle Batch Trajectory (CPU, ExaFMM)
+## Stage 1: Multi-Particle Batch Trajectory (CPU)
 
-**Goal**: Use ExaFMM's FMM tree properly by batching all particle positions per RK step.
+**Goal**: Batch all particle positions per RK step for efficient field evaluation.
 
-**Why this comes first**: The current single-particle code calls `Fld()` one point at a time,
-wasting FMM's O(N+M) advantage. Fixing the algorithm is more impactful than changing hardware.
+**Why this comes first**: The current single-particle code calls `Fld()` one point at a time.
+Fixing the algorithm is more impactful than changing hardware.
 
 ### Design
 
 ```
 Pre-solved Radia model (fixed dipoles after Solve())
-  -> Build FMM source tree ONCE
   -> For each RK4 step:
        Collect all N_particle positions
-       Fld (batch)(positions, method=FMM)  -> O(N_dipole + N_particle)
+       Fld(batch)(positions)  -> TaskManager parallelized
        Update all particles with B_all
 ```
 
 ### Key Properties
 - Particles are independent (no inter-particle forces)
-- Source tree (dipoles) is static -> build once, reuse every step
-- Target positions change each step -> target tree rebuilt (cheap for clustered beam)
+- Source (dipoles) is static -> computed once
 - Python-level implementation sufficient (field eval dominates, not loop overhead)
 
 ### Implementation Sketch
@@ -56,7 +52,7 @@ def multi_particle_trajectory(radia_obj, particles, ds, n_steps):
         # Collect all particle positions
         points = np.array([[p.x, 0.0, p.z] for p in particles])
 
-        # Batch FMM evaluation - O(N_dipole + N_particle)
+        # Batch evaluation - TaskManager parallelized
         B_all = np.asarray(rad.Fld(radia_obj, 'b', points))
 
         # RK4 update each particle
@@ -67,29 +63,19 @@ def multi_particle_trajectory(radia_obj, particles, ds, n_steps):
 
 ### Files to Modify
 - New: `src/radia/particle_trajectory_batch.py` (Python multi-particle driver)
-- Existing: `rad_field_unified.cpp` (optional: cache FMM source tree across Fld (batch) calls)
+- Existing: `rad_field_unified.cpp` (batch evaluation)
 
-## Stage 2: GPU Acceleration of ExaFMM P2P Kernel
+## Stage 2: GPU Acceleration of P2P Kernel
 
-**Goal**: GPU-accelerate the near-field direct computation (P2P), which is 60-80% of FMM runtime.
+**Goal**: GPU-accelerate the near-field direct computation (P2P) for large element counts.
 
 **Prerequisite**: Stage 1 must be complete (batch evaluation provides GPU-worthy workload).
 
-### Options
-
-| Approach | nvcc Required | Effort | Performance |
-|----------|:------------:|--------|-------------|
-| **A. CUDA P2P kernel** | Yes | Medium | Best |
-| **B. CuPy RawKernel** | No | Low | Good |
-| **C. jaxFMM replacement** | No | High | Good (Laplace only, no dipole) |
-
-### Recommended: Option B (CuPy RawKernel)
+### Recommended: CuPy RawKernel
 
 - No nvcc installation needed
 - `pip install cupy-cuda12x` only
-- Write P2P dipole kernel in CUDA syntax as Python string
-- ExaFMM-t tree traversal stays on CPU
-- P2P interaction list handed to GPU
+- Write dipole kernel in CUDA syntax as Python string
 
 ```python
 import cupy as cp
@@ -122,22 +108,13 @@ void dipole_p2p(const double* src, const double* mom,
 ''', 'dipole_p2p')
 ```
 
-### Integration Point
-
-In `rad_exafmm.cpp`, the P2P direct computation loop (lines 155-200) would be
-replaced by a GPU call when CuPy is available. The FMM tree (M2L, M2M, L2L)
-stays on CPU since it's already fast.
-
 ## Performance Estimates
 
-| Scenario | Current (1-particle seq.) | Stage 1 (batch FMM) | Stage 2 (+ GPU P2P) |
+| Scenario | Current (1-particle seq.) | Stage 1 (batch CPU) | Stage 2 (+ GPU P2P) |
 |----------|:---:|:---:|:---:|
-| 1000 particles, 10K dipoles | ~1000x FMM calls/step | 1x FMM call/step | 1x FMM + GPU P2P |
+| 1000 particles, 10K dipoles | ~1000x Fld calls/step | 1x batch call/step | 1x GPU kernel |
 | Speedup vs current | 1x | ~100-1000x | ~500-5000x |
 
 ## References
 
-- ExaFMM-t: https://github.com/exafmm/exafmm-t
 - CuPy RawKernel: https://docs.cupy.dev/en/stable/user_guide/kernel.html
-- jaxFMM: https://pypi.org/project/jaxFMM/
-- Yokota & Barba, "Treecode and FMM for N-Body Simulation with CUDA", GPU Computing Gems

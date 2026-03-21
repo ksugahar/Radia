@@ -55,7 +55,6 @@ public:
 	void B_comp(radTField* FieldPtr) { radTGroup::B_comp(FieldPtr);}
 	void B_intComp(radTField* FieldPtr) { radTGroup::B_intComp(FieldPtr);}
 
-	radTg3dGraphPresent* CreateGraphPresent();
 
 	int SubdivideItself(double* SubdivArray, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions) 
 	{
