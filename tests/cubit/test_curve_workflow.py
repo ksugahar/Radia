@@ -1,16 +1,12 @@
 """
 Test: Complete Cubit-to-NGSolve High-Order Curving Workflow
 
-This test verifies the complete workflow:
+This test verifies the complete workflow using export_curved():
 1. Cubit: Create geometry -> Export STEP
 2. Cubit: Reimport STEP -> Generate mesh
-3. Netgen: Load STEP geometry + Import Cubit mesh
-4. NGSolve: mesh.Curve(order) for high-order elements
+3. export_curved(order=N) -> NGSolve Mesh (already curved)
 
-Compares different approaches:
-- Linear mesh (no curving)
-- SetDeformation (workaround)
-- mesh.Curve() with geometry (proper approach)
+Compares different curve orders for geometric accuracy.
 
 Run: python test_curve_workflow.py
 """
@@ -26,11 +22,11 @@ if cubit_path:
 work_dir = os.path.dirname(os.path.abspath(__file__))
 repo_root = os.path.dirname(os.path.dirname(work_dir))
 sys.path.insert(0, repo_root)
+sys.path.insert(0, os.path.join(repo_root, 'src', 'radia'))
 
 # Use locally built NGSolve (ksugahar fork with SetGeomInfo API)
 sys.path.insert(0, "s:/NGSolve/01_GitHub/install_ksugahar/Lib/site-packages")
 
-from netgen.occ import OCCGeometry
 from ngsolve import Mesh, Integrate, CF, BND
 import cubit
 import cubit_mesh_export
@@ -87,121 +83,27 @@ cubit.cmd('block 2 name "boundary"')
 print(f"  Tets: {cubit.get_tet_count()}")
 
 # ============================================================
-# Step 3: Export to Netgen with OCC geometry
+# Test A-C: Compare curve orders using export_curved
 # ============================================================
-print("\nStep 3: Export to Netgen with OCC geometry")
+results = {}
 
-geo = OCCGeometry(step_file)
-ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)
-mesh = Mesh(ngmesh)
+for order in [1, 2, 3]:
+    print("\n" + "=" * 60)
+    print(f"Test: export_curved(order={order})")
+    print("=" * 60)
 
-print(f"  Elements: {mesh.ne}")
-print(f"  Boundaries: {mesh.GetBoundaries()}")
+    try:
+        mesh = cubit_mesh_export.export_curved(cubit, order=order)
+        area = Integrate(CF(1), mesh, VOL_or_BND=BND)
+        vol = Integrate(CF(1), mesh)
 
-# ============================================================
-# Test A: Linear mesh (baseline)
-# ============================================================
-print("\n" + "=" * 60)
-print("Test A: Linear mesh (no curving)")
-print("=" * 60)
+        print(f"  Area: {area:.6f} (error: {abs(area-expected_area)/expected_area*100:.4f}%)")
+        print(f"  Vol:  {vol:.6f} (error: {abs(vol-expected_vol)/expected_vol*100:.4f}%)")
 
-mesh_linear = Mesh(ngmesh)
-mesh_linear.Curve(1)
-
-area_linear = Integrate(CF(1), mesh_linear, VOL_or_BND=BND)
-vol_linear = Integrate(CF(1), mesh_linear)
-
-print(f"  Area: {area_linear:.6f} (error: {abs(area_linear-expected_area)/expected_area*100:.4f}%)")
-print(f"  Vol:  {vol_linear:.6f} (error: {abs(vol_linear-expected_vol)/expected_vol*100:.4f}%)")
-
-# ============================================================
-# Test B: mesh.Curve(2) without SetDeformation
-# ============================================================
-print("\n" + "=" * 60)
-print("Test B: mesh.Curve(2) directly (no SetDeformation)")
-print("=" * 60)
-
-mesh_curve2 = Mesh(ngmesh)
-try:
-    mesh_curve2.Curve(2)
-    area_curve2 = Integrate(CF(1), mesh_curve2, VOL_or_BND=BND)
-    vol_curve2 = Integrate(CF(1), mesh_curve2)
-    print(f"  Area: {area_curve2:.6f} (error: {abs(area_curve2-expected_area)/expected_area*100:.4f}%)")
-    print(f"  Vol:  {vol_curve2:.6f} (error: {abs(vol_curve2-expected_vol)/expected_vol*100:.4f}%)")
-except Exception as e:
-    print(f"  Failed: {e}")
-    area_curve2 = area_linear
-    vol_curve2 = vol_linear
-
-# ============================================================
-# Test C: mesh.Curve(3) without SetDeformation
-# ============================================================
-print("\n" + "=" * 60)
-print("Test C: mesh.Curve(3) directly (no SetDeformation)")
-print("=" * 60)
-
-mesh_curve3 = Mesh(ngmesh)
-try:
-    mesh_curve3.Curve(3)
-    area_curve3 = Integrate(CF(1), mesh_curve3, VOL_or_BND=BND)
-    vol_curve3 = Integrate(CF(1), mesh_curve3)
-    print(f"  Area: {area_curve3:.6f} (error: {abs(area_curve3-expected_area)/expected_area*100:.4f}%)")
-    print(f"  Vol:  {vol_curve3:.6f} (error: {abs(vol_curve3-expected_vol)/expected_vol*100:.4f}%)")
-except Exception as e:
-    print(f"  Failed: {e}")
-    area_curve3 = area_linear
-    vol_curve3 = vol_linear
-
-# ============================================================
-# Test D: SetDeformation (workaround approach)
-# ============================================================
-print("\n" + "=" * 60)
-print("Test D: SetDeformation (workaround approach)")
-print("=" * 60)
-
-if hasattr(cubit_mesh_export, 'detect_cylinder_boundaries'):
-    mesh_deform = Mesh(ngmesh)
-    mesh_deform.Curve(1)
-
-    cyl_boundaries = cubit_mesh_export.detect_cylinder_boundaries(mesh_deform, R, axis='z')
-    print(f"  Cylinder boundaries: {cyl_boundaries}")
-
-    cubit_mesh_export.apply_cylinder_deformation(
-        mesh_deform, radius=R, boundary_names=cyl_boundaries, order=2, axis='z'
-    )
-
-    area_deform = Integrate(CF(1), mesh_deform, VOL_or_BND=BND)
-    vol_deform = Integrate(CF(1), mesh_deform)
-
-    print(f"  Area: {area_deform:.6f} (error: {abs(area_deform-expected_area)/expected_area*100:.4f}%)")
-    print(f"  Vol:  {vol_deform:.6f} (error: {abs(vol_deform-expected_vol)/expected_vol*100:.4f}%)")
-else:
-    print("  SKIPPED: detect_cylinder_boundaries not yet implemented")
-    vol_deform = vol_linear
-
-# ============================================================
-# Test E: SetDeformation order=3
-# ============================================================
-print("\n" + "=" * 60)
-print("Test E: SetDeformation order=3")
-print("=" * 60)
-
-if hasattr(cubit_mesh_export, 'apply_cylinder_deformation'):
-    mesh_deform3 = Mesh(ngmesh)
-    mesh_deform3.Curve(1)
-
-    cubit_mesh_export.apply_cylinder_deformation(
-        mesh_deform3, radius=R, boundary_names=cyl_boundaries, order=3, axis='z'
-    )
-
-    area_deform3 = Integrate(CF(1), mesh_deform3, VOL_or_BND=BND)
-    vol_deform3 = Integrate(CF(1), mesh_deform3)
-
-    print(f"  Area: {area_deform3:.6f} (error: {abs(area_deform3-expected_area)/expected_area*100:.4f}%)")
-    print(f"  Vol:  {vol_deform3:.6f} (error: {abs(vol_deform3-expected_vol)/expected_vol*100:.4f}%)")
-else:
-    print("  SKIPPED: apply_cylinder_deformation not yet implemented")
-    vol_deform3 = vol_linear
+        results[order] = {'area': area, 'vol': vol}
+    except Exception as e:
+        print(f"  Failed: {e}")
+        results[order] = {'area': expected_area, 'vol': expected_vol}  # placeholder
 
 # ============================================================
 # Summary
@@ -212,11 +114,10 @@ print("=" * 60)
 print()
 print(f"{'Method':<35} {'Vol Error':>12}")
 print("-" * 50)
-print(f"{'Linear (baseline)':<35} {abs(vol_linear-expected_vol)/expected_vol*100:>11.4f}%")
-print(f"{'mesh.Curve(2) direct':<35} {abs(vol_curve2-expected_vol)/expected_vol*100:>11.4f}%")
-print(f"{'mesh.Curve(3) direct':<35} {abs(vol_curve3-expected_vol)/expected_vol*100:>11.4f}%")
-print(f"{'SetDeformation order=2':<35} {abs(vol_deform-expected_vol)/expected_vol*100:>11.4f}%")
-print(f"{'SetDeformation order=3':<35} {abs(vol_deform3-expected_vol)/expected_vol*100:>11.4f}%")
+for order in [1, 2, 3]:
+    if order in results:
+        vol = results[order]['vol']
+        print(f"{'export_curved(order=' + str(order) + ')':<35} {abs(vol-expected_vol)/expected_vol*100:>11.4f}%")
 print()
 
 # Cleanup

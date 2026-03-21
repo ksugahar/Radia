@@ -7,6 +7,9 @@ to enable mesh.Curve() for externally imported meshes.
 The SetGeomInfo API allows setting UV parameters on surface elements,
 which is required for proper high-order curving of external meshes.
 
+NOTE: For most use cases, export_curved() handles SetGeomInfo internally.
+This test exercises the low-level SetGeomInfo API directly.
+
 Run: python test_setgeominfo.py
 """
 
@@ -126,26 +129,20 @@ print("  PASSED: Quad SetGeomInfo works")
 print()
 
 # ============================================================
-# Test 5: Use with Cubit hex mesh
+# Test 5: Use with Cubit hex mesh via export_curved
 # ============================================================
-print("Test 5: Cubit hex mesh with SetGeomInfo")
+print("Test 5: Cubit hex mesh with export_curved")
 
 try:
     import cubit
+    sys.path.insert(0, os.path.join(repo_root, 'src', 'radia'))
     import cubit_mesh_export
-    from netgen.occ import OCCGeometry
 
     # Create simple box in Cubit
     cubit.init(['cubit', '-nojournal', '-batch'])
     cubit.cmd("reset")
     cubit.cmd("brick x 1 y 1 z 1")
     cubit.cmd("move volume 1 x 0.5 y 0.5 z 0.5")
-
-    # Export STEP
-    step_file = os.path.join(work_dir, "test_box.step")
-    cubit.cmd(f'export step "{step_file}" overwrite')
-    cubit.cmd("reset")
-    cubit.cmd(f'import step "{step_file}" heal')
 
     # Hex mesh
     cubit.cmd("volume 1 scheme map")
@@ -158,39 +155,10 @@ try:
 
     print(f"  Created {cubit.get_hex_count()} hex elements")
 
-    # Export to Netgen with geometry
-    geo = OCCGeometry(step_file)
-    ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, geometry=geo)
-
-    num_vol = ngmesh.ne
-    num_surf = len(list(ngmesh.Elements2D()))
-    print(f"  Netgen mesh: {num_vol} volume elements, {num_surf} surface elements")
-
-    # Get surface elements and set geominfo
-    # For a box, we can use simple planar UV mapping
-    surface_elements_modified = 0
-    for el in ngmesh.Elements2D():
-        # For each vertex, set UV based on position
-        for vi in range(len(el.vertices)):
-            # Simple mapping: just use some UV values
-            # In real use, you'd compute proper UV from geometry
-            el.SetGeomInfo(vi, 0.5, 0.5)
-        surface_elements_modified += 1
-
-    print(f"  Modified geominfo on {surface_elements_modified} surface elements")
-
-    # Try to curve the mesh
-    try:
-        from ngsolve import Mesh as NGSMesh
-        ngs_mesh = NGSMesh(ngmesh)
-        ngs_mesh.Curve(2)
-        print("  PASSED: mesh.Curve() succeeded with SetGeomInfo")
-    except Exception as e:
-        # NGSolve might not be available, that's OK
-        print(f"  Note: mesh.Curve() test skipped ({type(e).__name__})")
-
-    # Cleanup
-    os.remove(step_file)
+    # Export via export_curved (handles geometry + curving internally)
+    ngs_mesh = cubit_mesh_export.export_curved(cubit, order=2)
+    print(f"  NGSolve mesh: ne={ngs_mesh.ne}, nv={ngs_mesh.nv}")
+    print("  PASSED: export_curved with curving succeeded")
 
 except ImportError as e:
     print(f"  Skipped (Cubit not available): {e}")

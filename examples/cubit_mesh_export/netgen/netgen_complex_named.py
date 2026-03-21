@@ -1,19 +1,14 @@
 """
-Netgen Export Example: Complex Geometry with Name-based Face Mapping
+Netgen Export Example: Complex Geometry with High-Order Curving
 
-This example demonstrates the NEW workflow using name-based face mapping
-for complex geometries (Boolean operations). This achieves Netgen-native
-accuracy for any geometry.
+Uses export_curved() for automatic geometry association and curving.
 
 Workflow:
-1. OCC: Create geometry
-2. OCC: Name faces with name_occ_faces()
-3. OCC: Export STEP
-4. Cubit: Import STEP (names preserved)
-5. Cubit: Mesh
-6. export_netgen_with_names(): Export with correct face mapping
-7. SetGeomInfo: Set UV for curved surfaces
-8. mesh.Curve(): High-order curving
+1. OCC: Create geometry (brick with cylindrical hole)
+2. OCC: Export STEP -> Cubit imports STEP (geometry transfer)
+3. Cubit: Mesh
+4. export_curved(order=N): Export with curving (uses Cubit's ACIS kernel)
+5. Accuracy test via volume integration
 
 Run: python netgen_complex_named.py
 """
@@ -29,11 +24,12 @@ if cubit_path:
 work_dir = os.path.dirname(os.path.abspath(__file__))
 repo_root = os.path.dirname(os.path.dirname(work_dir))
 sys.path.insert(0, repo_root)
+sys.path.insert(0, os.path.join(repo_root, 'src', 'radia'))
 
 # Use locally built NGSolve (ksugahar fork with SetGeomInfo API)
 sys.path.insert(0, "s:/NGSolve/01_GitHub/install_ksugahar/Lib/site-packages")
 
-from netgen.occ import OCCGeometry, Box, Cylinder, gp_Ax2, gp_Dir, gp_Pnt
+from netgen.occ import Box, Cylinder, gp_Ax2, gp_Dir, gp_Pnt
 from ngsolve import Mesh, Integrate, CF, BND
 import cubit
 import cubit_mesh_export
@@ -45,12 +41,12 @@ BRICK_SIZE = 2.0   # Brick dimension
 R_HOLE = 0.3       # Cylindrical hole radius
 ORDER = 2          # Curving order
 
-print("=== Netgen Export: Complex Geometry (Name-based) ===")
+print("=== Netgen Export: Complex Geometry (export_curved) ===")
 print(f"(Brick {BRICK_SIZE}x{BRICK_SIZE}x{BRICK_SIZE} with cylindrical hole R={R_HOLE})")
 print()
 
 # ============================================================
-# Step 1: Create geometry in OCC (NOT Cubit)
+# Step 1: Create geometry in OCC
 # ============================================================
 print("Step 1: Create geometry in OCC")
 
@@ -63,45 +59,26 @@ shape = brick - cyl
 print(f"  OCC faces: {len(shape.faces)}")
 
 # ============================================================
-# Step 2: Name OCC faces
+# Step 2: Export STEP from OCC
 # ============================================================
-print("\nStep 2: Name OCC faces")
-
-num_named = cubit_mesh_export.name_occ_faces(shape)
-print(f"  Named {num_named} faces")
-
-# ============================================================
-# Step 3: Export STEP from OCC
-# ============================================================
-print("\nStep 3: Export STEP from OCC")
+print("\nStep 2: Export STEP from OCC")
 
 step_file = os.path.join(work_dir, "complex_named.step")
 shape.WriteStep(step_file)
 print(f"  Exported: {step_file}")
 
 # ============================================================
-# Step 4: Load OCCGeometry (for mesh reference)
+# Step 3: Import STEP into Cubit and mesh
 # ============================================================
-print("\nStep 4: Load OCCGeometry")
-
-geo = OCCGeometry(step_file)
-print(f"  Faces: {len(geo.shape.faces)}")
-
-# ============================================================
-# Step 5: Import STEP into Cubit and mesh
-# ============================================================
-print("\nStep 5: Import and mesh in Cubit")
+print("\nStep 3: Import and mesh in Cubit")
 
 cubit.init(['cubit', '-nojournal', '-batch'])
 cubit.cmd("reset")
 cubit.cmd(f'import step "{step_file}" noheal')
 
-# Verify names are preserved
+# Verify surfaces
 surface_ids = cubit.get_entities('surface')
 print(f"  Cubit surfaces: {len(surface_ids)}")
-for sid in surface_ids:
-    name = cubit.get_entity_name('surface', sid)
-    print(f"    Surface {sid}: {name}")
 
 # Mesh
 cubit.cmd("volume all scheme tetmesh")
@@ -115,33 +92,11 @@ cubit.cmd('block 2 name "boundary"')
 print(f"  Tets: {cubit.get_tet_count()}")
 
 # ============================================================
-# Step 6: Export to Netgen with name-based mapping
+# Step 4: Export with curving and accuracy test
 # ============================================================
-print("\nStep 6: Export to Netgen (name-based)")
+print(f"\nStep 4: export_curved(order={ORDER}) and accuracy")
 
-ngmesh = cubit_mesh_export.export_netgen_with_names(cubit, geo)
-print(f"  Elements: {ngmesh.ne}")
-
-face_indices = sorted(set(el.index for el in ngmesh.Elements2D()))
-print(f"  Face indices: {face_indices}")
-
-# ============================================================
-# Step 7: Set UV parameters for cylindrical hole
-# ============================================================
-print("\nStep 7: Set UV parameters (SetGeomInfo)")
-
-modified = cubit_mesh_export.set_cylinder_geominfo(
-    ngmesh, radius=R_HOLE, height=BRICK_SIZE, center=(0, 0, 0), axis='z'
-)
-print(f"  Modified {modified} entries for cylindrical surface")
-
-# ============================================================
-# Step 8: mesh.Curve() and accuracy test
-# ============================================================
-print(f"\nStep 8: mesh.Curve({ORDER}) and accuracy")
-
-mesh = Mesh(ngmesh)
-mesh.Curve(ORDER)
+mesh = cubit_mesh_export.export_curved(cubit, order=ORDER)
 
 expected_vol = BRICK_SIZE**3 - math.pi * R_HOLE**2 * BRICK_SIZE
 vol = Integrate(CF(1), mesh)
@@ -152,8 +107,7 @@ print(f"  Error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 
 # Compare with order=3
 print("\nCompare with order=3:")
-mesh3 = Mesh(ngmesh)
-mesh3.Curve(3)
+mesh3 = cubit_mesh_export.export_curved(cubit, order=3)
 vol3 = Integrate(CF(1), mesh3)
 print(f"  Error: {abs(vol3-expected_vol)/expected_vol*100:.4f}%")
 

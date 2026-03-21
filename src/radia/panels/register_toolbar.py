@@ -279,21 +279,12 @@ class VolumeCalculatorDialog(QDialog):
 		self.order_spin.setValue(1)
 		ngsolve_layout.addWidget(self.order_spin, 0, 1)
 
-		ngsolve_layout.addWidget(QLabel("STEP file:"), 1, 0)
-		self.step_edit = QLineEdit()
-		self.step_edit.setPlaceholderText("(optional, required for order > 1)")
-		ngsolve_layout.addWidget(self.step_edit, 1, 1)
-		self.step_browse = QPushButton("...")
-		self.step_browse.setFixedWidth(30)
-		self.step_browse.clicked.connect(self._browse_step)
-		ngsolve_layout.addWidget(self.step_browse, 1, 2)
-
-		ngsolve_layout.addWidget(QLabel("Python:"), 2, 0)
+		ngsolve_layout.addWidget(QLabel("Python:"), 1, 0)
 		self.python_label = QLabel(self._ext_python or "Not found")
 		self.python_label.setStyleSheet(
 			"color: green;" if self._ext_python else "color: red;"
 		)
-		ngsolve_layout.addWidget(self.python_label, 2, 1)
+		ngsolve_layout.addWidget(self.python_label, 1, 1)
 
 		self.calc_btn = QPushButton("Calculate")
 		self.calc_btn.clicked.connect(self._calculate_ngsolve)
@@ -310,13 +301,6 @@ class VolumeCalculatorDialog(QDialog):
 		close_btn.clicked.connect(self.accept)
 		btn_row.addWidget(close_btn)
 		layout.addLayout(btn_row)
-
-	def _browse_step(self):
-		path, _ = QFileDialog.getOpenFileName(
-			self, "Select STEP File", "", "STEP Files (*.step *.stp);;All Files (*)"
-		)
-		if path:
-			self.step_edit.setText(path)
 
 	def _calculate_cad_volumes(self):
 		"""Calculate CAD volumes for selected volumes."""
@@ -367,7 +351,6 @@ class VolumeCalculatorDialog(QDialog):
 			return
 
 		order = self.order_spin.value()
-		step_file = self.step_edit.text().strip() or None
 
 		self.calc_btn.setEnabled(False)
 		self.calc_btn.setText("Calculating...")
@@ -380,8 +363,6 @@ class VolumeCalculatorDialog(QDialog):
 		# Build command
 		calc_script = os.path.join(_this_dir, "calc_volume.py")
 		args = ["--cub5", cub5_file, "--order", str(order)]
-		if step_file:
-			args += ["--step", step_file]
 
 		# Run async via QProcess
 		self._process = QProcess(self)
