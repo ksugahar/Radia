@@ -145,7 +145,7 @@ print(f"  Transformation applied (moved and rotated)")
 # ============================================================
 print("\nStep 4: Export hex mesh to Netgen")
 
-mesh = cubit_mesh_export.export_curved(cubit, order=1)
+mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
 
 # Scale to meters via ngmesh
 ngmesh = mesh.ngmesh

@@ -1,7 +1,7 @@
 """
-Netgen Export Example: Sphere with export_curved()
+Netgen Export Example: Sphere with export_NGSolveCurvedMesh()
 
-Demonstrates automatic high-order curving for a sphere using export_curved().
+Demonstrates automatic high-order curving for a sphere using export_NGSolveCurvedMesh().
 
 Run: python netgen_sphere_setgeominfo.py
 """
@@ -27,7 +27,7 @@ import cubit_mesh_export
 # ============================================================
 R = 0.5  # Radius
 
-print("=== Netgen Export: Sphere with export_curved() ===")
+print("=== Netgen Export: Sphere with export_NGSolveCurvedMesh() ===")
 print(f"Parameters: R={R}")
 print()
 
@@ -57,8 +57,8 @@ expected_area = 4 * math.pi * R * R
 expected_vol = 4 / 3 * math.pi * R * R * R
 
 for order in [2, 3]:
-	print(f"\nexport_curved(order={order})")
-	mesh = cubit_mesh_export.export_curved(cubit, order=order)
+	print(f"\nexport_NGSolveCurvedMesh(order={order})")
+	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
 
 	area = Integrate(CF(1), mesh, VOL_or_BND=BND)
 	vol = Integrate(CF(1), mesh)

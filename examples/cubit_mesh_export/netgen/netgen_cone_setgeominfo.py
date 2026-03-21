@@ -1,7 +1,7 @@
 """
-Netgen Export Example: Cone with export_curved()
+Netgen Export Example: Cone with export_NGSolveCurvedMesh()
 
-Demonstrates automatic high-order curving for a cone using export_curved().
+Demonstrates automatic high-order curving for a cone using export_NGSolveCurvedMesh().
 
 Run: python netgen_cone_setgeominfo.py
 """
@@ -28,7 +28,7 @@ import cubit_mesh_export
 R = 0.5  # Base radius
 H = 2.0  # Height
 
-print("=== Netgen Export: Cone with export_curved() ===")
+print("=== Netgen Export: Cone with export_NGSolveCurvedMesh() ===")
 print(f"Parameters: base_radius={R}, height={H}")
 print()
 
@@ -59,8 +59,8 @@ expected_area = math.pi * R * R + math.pi * R * slant_height
 expected_vol = (1/3) * math.pi * R * R * H
 
 for order in [2, 3]:
-	print(f"\nexport_curved(order={order})")
-	mesh = cubit_mesh_export.export_curved(cubit, order=order)
+	print(f"\nexport_NGSolveCurvedMesh(order={order})")
+	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
 
 	area = Integrate(CF(1), mesh, VOL_or_BND=BND)
 	vol = Integrate(CF(1), mesh)

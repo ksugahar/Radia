@@ -5,7 +5,7 @@ Called as subprocess from Cubit panel:
     python calc_volume.py --cub5 model.cub5 --order 3
 
 Workflow:
-  export_curved(cubit, order=N) -> NGSolve Mesh -> Integrate
+  export_NGSolveCurvedMesh(cubit, order=N) -> NGSolve Mesh -> Integrate
   Uses Cubit's ACIS kernel for high-order curving. No STEP files needed.
 
 IMPORTANT: NGSolve must be imported BEFORE cubit to avoid numpy DLL conflict.
@@ -64,7 +64,7 @@ def _remove_cubit_site_packages():
 def calculate_volume(cub5_file, order):
     """Calculate volume using NGSolve integration.
 
-    Uses export_curved() which works directly with Cubit's ACIS kernel
+    Uses export_NGSolveCurvedMesh() which works directly with Cubit's ACIS kernel
     for high-order curving. No STEP files or OCC geometry needed.
     """
     # 1. Import NGSolve FIRST
@@ -112,12 +112,12 @@ def calculate_volume(cub5_file, order):
     import cubit_mesh_export
 
     try:
-        mesh = cubit_mesh_export.export_curved(cubit, order=order)
+        mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
     except Exception as e:
         return {
             "volumes": results,
             "cad_total": cad_total,
-            "error": f"export_curved(order={order}) failed: {e}",
+            "error": f"export_NGSolveCurvedMesh(order={order}) failed: {e}",
         }
 
     total_vol = Integrate(CF(1), mesh)

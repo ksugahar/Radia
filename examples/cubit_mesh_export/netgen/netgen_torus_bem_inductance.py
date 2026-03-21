@@ -11,8 +11,8 @@ Key comparison:
 
 Workflow:
     1. Create torus in Cubit (inductor coil model)
-    2. Tet mesh -> export to Netgen via export_curved()
-    3. For each curve order: export_curved(order=N)
+    2. Tet mesh -> export to Netgen via export_NGSolveCurvedMesh()
+    3. For each curve order: export_NGSolveCurvedMesh(order=N)
        a. Compute surface area (analytical: 4*pi^2*R*a)
        b. Compute BEM inductance via ngsolve.bem.LaplaceSL
        c. Compare with Neumann formula: L = mu_0*R*(ln(8R/a) - 2)
@@ -197,9 +197,9 @@ def main():
 
     results = []
     for order in [1, 2, 3]:
-        print(f"\n  export_curved(order={order}):")
+        print(f"\n  export_NGSolveCurvedMesh(order={order}):")
 
-        mesh = cubit_mesh_export.export_curved(cubit, order=order)
+        mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
 
         # Surface area
         area = Integrate(CF(1), mesh, VOL_or_BND=BND)

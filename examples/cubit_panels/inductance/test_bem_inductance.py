@@ -101,11 +101,11 @@ def create_and_mesh(mesh_type="tet", interval=8):
 def run_bem(order=1):
 	"""Export to NGSolve, run LaplaceSL BEM."""
 	t0 = time.perf_counter()
-	mesh = cubit_mesh_export.export_curved(
+	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
 		cubit, order=order, surface_only=True,
 		split_quads=True)
 	t_export = time.perf_counter() - t0
-	print(f"  export_curved(order={order}): {t_export:.2f}s")
+	print(f"  export_NGSolveCurvedMesh(order={order}): {t_export:.2f}s")
 
 	print(f"  NGSolve mesh: dim={mesh.dim}, ne={mesh.ne}, nse={mesh.GetNE(BND)}, nv={mesh.nv}")
 
