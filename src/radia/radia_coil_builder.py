@@ -469,6 +469,239 @@ class CoilBuilder:
 		shape.WriteStep(filename)
 		return filename
 
+	# ============================================================
+	# Loop closure and symmetry
+	# ============================================================
+
+	@property
+	def gap(self):
+		"""Distance between end position and start position."""
+		if len(self.segments) == 0:
+			return 0.0
+		start = self.segments[0].start_pos
+		end = self._position
+		return np.linalg.norm(end - start)
+
+	@property
+	def is_closed(self):
+		"""Check if the coil path forms a closed loop (within tolerance)."""
+		return self.gap < 1e-10
+
+	def close(self, tolerance=1e-6):
+		"""Verify loop closure or optimize last arc to close the gap.
+
+		If the gap is within tolerance, does nothing.
+		If the gap is larger, adjusts the last arc segment's angle
+		to close the loop using scipy optimization.
+
+		Args:
+			tolerance: Maximum allowed gap in meters
+
+		Returns:
+			self (for method chaining)
+
+		Raises:
+			ValueError: If no arc segments exist to adjust, or
+			            if optimization fails to close the gap.
+		"""
+		if self.gap <= tolerance:
+			return self
+
+		# Find last arc segment to adjust
+		arc_idx = None
+		for i in range(len(self.segments) - 1, -1, -1):
+			if isinstance(self.segments[i], ArcSegment):
+				arc_idx = i
+				break
+
+		if arc_idx is None:
+			raise ValueError(
+				f"Gap = {self.gap:.6e} m but no arc segment to adjust. "
+				f"Add an arc segment or close manually.")
+
+		# Optimize arc_angle to minimize gap
+		from scipy.optimize import minimize_scalar
+		original_arc = self.segments[arc_idx]
+		start_pos_0 = self.segments[0].start_pos
+
+		def gap_func(angle):
+			# Rebuild from arc_idx with new angle
+			test_seg = ArcSegment(
+				original_arc.current, original_arc.start_pos,
+				original_arc.orientation, original_arc.width,
+				original_arc.height, original_arc.radius, angle)
+			# Propagate through remaining segments
+			pos = test_seg.end_pos
+			orient = test_seg.end_orientation
+			for seg in self.segments[arc_idx + 1:]:
+				if isinstance(seg, StraightSegment):
+					test = StraightSegment(
+						seg.current, pos, orient,
+						seg.width, seg.height, seg.length)
+				else:
+					test = ArcSegment(
+						seg.current, pos, orient,
+						seg.width, seg.height, seg.radius, seg.arc_angle)
+				pos = test.end_pos
+				orient = test.end_orientation
+			return np.linalg.norm(pos - start_pos_0)
+
+		result = minimize_scalar(gap_func,
+			bounds=(original_arc.arc_angle - 90, original_arc.arc_angle + 90),
+			method='bounded')
+
+		if result.fun > tolerance:
+			raise ValueError(
+				f"Could not close loop. Residual gap = {result.fun:.6e} m")
+
+		# Replace the arc segment with optimized angle
+		new_arc = ArcSegment(
+			original_arc.current, original_arc.start_pos,
+			original_arc.orientation, original_arc.width,
+			original_arc.height, original_arc.radius, result.x)
+		self.segments[arc_idx] = new_arc
+
+		# Rebuild state from the replaced segment onward
+		pos = new_arc.end_pos
+		orient = new_arc.end_orientation
+		for i in range(arc_idx + 1, len(self.segments)):
+			seg = self.segments[i]
+			if isinstance(seg, StraightSegment):
+				new_seg = StraightSegment(
+					seg.current, pos, orient,
+					seg.width, seg.height, seg.length)
+			else:
+				new_seg = ArcSegment(
+					seg.current, pos, orient,
+					seg.width, seg.height, seg.radius, seg.arc_angle)
+			self.segments[i] = new_seg
+			pos = new_seg.end_pos
+			orient = new_seg.end_orientation
+
+		self._position = pos
+		self._orientation = orient
+		return self
+
+	def mirror(self, plane='xz'):
+		"""Create a mirrored copy of the coil.
+
+		Returns a new CoilBuilder containing mirrored segments.
+		The mirror operation reverses current direction.
+
+		Args:
+			plane: Mirror plane ('xz', 'yz', or 'xy')
+
+		Returns:
+			New CoilBuilder with mirrored coil (current reversed)
+		"""
+		mirror_matrix = {
+			'xz': np.diag([1, -1, 1]),   # mirror across XZ (flip Y)
+			'yz': np.diag([-1, 1, 1]),    # mirror across YZ (flip X)
+			'xy': np.diag([1, 1, -1]),    # mirror across XY (flip Z)
+		}
+		if plane not in mirror_matrix:
+			raise ValueError(f"Unknown plane '{plane}'. Use 'xz', 'yz', or 'xy'.")
+
+		M = mirror_matrix[plane]
+		mirrored = CoilBuilder(current=-self.current)
+		mirrored._width = self._width
+		mirrored._height = self._height
+
+		for seg in self.segments:
+			new_start = M @ seg.start_pos
+			# Mirror flips handedness. Fix by negating one row to restore
+			# right-handed orientation, then negate arc_angle to compensate.
+			new_orient = M @ seg.orientation
+			# Restore right-handedness: ensure det > 0
+			if np.linalg.det(new_orient) < 0:
+				new_orient = -new_orient  # flip all axes = equivalent rotation
+
+			if isinstance(seg, StraightSegment):
+				new_seg = StraightSegment.__new__(StraightSegment)
+				CoilSegment.__init__(new_seg, -seg.current, new_start,
+				                     new_orient, seg.width, seg.height)
+				new_seg.length = seg.length
+			elif isinstance(seg, ArcSegment):
+				new_seg = ArcSegment.__new__(ArcSegment)
+				CoilSegment.__init__(new_seg, -seg.current, new_start,
+				                     new_orient, seg.width, seg.height)
+				new_seg.radius = seg.radius
+				new_seg.arc_angle = -seg.arc_angle
+				new_seg.arc_center = M @ seg.arc_center
+
+			mirrored.segments.append(new_seg)
+
+		if len(mirrored.segments) > 0:
+			last = mirrored.segments[-1]
+			mirrored._position = last.end_pos
+			mirrored._orientation = last.end_orientation
+
+		return mirrored
+
+	def rotate_copies(self, axis='z', n_copies=4):
+		"""Create rotational copies of the coil.
+
+		Returns a list of CoilBuilders, each rotated by 360/n_copies degrees.
+		The first element is the original (unrotated).
+
+		Args:
+			axis: Rotation axis ('x', 'y', or 'z')
+			n_copies: Total number of copies (including original)
+
+		Returns:
+			List of CoilBuilder objects
+		"""
+		angle_step = 360.0 / n_copies
+		axis_vec = {'x': np.array([1, 0, 0]),
+		            'y': np.array([0, 1, 0]),
+		            'z': np.array([0, 0, 1])}[axis]
+
+		copies = [self]
+		for i in range(1, n_copies):
+			angle_rad = np.deg2rad(i * angle_step)
+			R = Rotation.from_rotvec(angle_rad * axis_vec).as_matrix()
+
+			rotated = CoilBuilder(current=self.current)
+			rotated._width = self._width
+			rotated._height = self._height
+
+			for seg in self.segments:
+				new_start = R @ seg.start_pos
+				new_orient = R @ seg.orientation
+				if isinstance(seg, StraightSegment):
+					new_seg = StraightSegment(
+						seg.current, new_start, new_orient,
+						seg.width, seg.height, seg.length)
+				elif isinstance(seg, ArcSegment):
+					new_seg = ArcSegment(
+						seg.current, new_start, new_orient,
+						seg.width, seg.height, seg.radius, seg.arc_angle)
+				rotated.segments.append(new_seg)
+
+			if len(rotated.segments) > 0:
+				last = rotated.segments[-1]
+				rotated._position = last.end_pos
+				rotated._orientation = last.end_orientation
+			copies.append(rotated)
+
+		return copies
+
+	def combined_occ(self, others=None):
+		"""Combine this coil with others into a single OCC shape.
+
+		Args:
+			others: List of CoilBuilder objects to combine with
+
+		Returns:
+			Combined OCC shape
+		"""
+		from netgen.occ import Glue
+		shapes = [self.to_occ()]
+		if others:
+			for other in others:
+				shapes.append(other.to_occ())
+		return Glue(shapes)
+
 
 # Export public API
 __all__ = ['CoilBuilder', 'CoilSegment', 'StraightSegment', 'ArcSegment']
