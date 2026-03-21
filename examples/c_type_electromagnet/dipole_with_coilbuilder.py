@@ -110,21 +110,34 @@ cubit.cmd("reset")
 # Yoke (C-shape): outer box minus gap region
 cubit.cmd(f"brick x {YOKE_WIDTH} y {YOKE_DEPTH} z {YOKE_HEIGHT}")
 cubit.cmd(f"brick x {POLE_WIDTH} y {YOKE_DEPTH*1.1} z {GAP}")
+
+# Air region (box around everything)
+air_size = max(YOKE_WIDTH, YOKE_HEIGHT, YOKE_DEPTH) * 3
+cubit.cmd(f"brick x {air_size} y {air_size} z {air_size}")
+
+# Imprint and merge to create shared surfaces
+cubit.cmd("imprint all")
+cubit.cmd("merge all")
+
+# Subtract gap from yoke (volume 1 - volume 2)
 cubit.cmd("subtract volume 2 from volume 1")
-# After subtract, yoke is the remaining volume
-yoke_vols = cubit.get_entities("volume")
-yoke_id = yoke_vols[0]
-print(f"  Yoke volume ID: {yoke_id}")
 
-# Air region (sphere around yoke)
-air_radius = max(YOKE_WIDTH, YOKE_HEIGHT, YOKE_DEPTH) * 1.5
-cubit.cmd(f"sphere radius {air_radius}")
-air_id = max(cubit.get_entities("volume"))
-cubit.cmd(f"subtract volume {yoke_id} from volume {air_id}")
-air_vols = [v for v in cubit.get_entities("volume") if v != yoke_id]
-air_id = air_vols[0] if air_vols else None
+# Now: yoke = what's left of vol 1, air = vol 3 minus yoke
+# Get volume IDs
+all_vols = list(cubit.get_entities("volume"))
+print(f"  Volumes after boolean: {all_vols}")
 
-print(f"  Volumes: {cubit.get_volume_count()}")
+# Identify yoke and air by bounding box size
+def vol_bbox_size(vid):
+    bb = cubit.get_bounding_box("volume", vid)
+    # bb = [xmin, xmax, dx, ymin, ymax, dy, zmin, zmax, dz, diag]
+    return bb[2] * bb[5] * bb[8]  # dx * dy * dz
+
+vol_sizes = [(v, vol_bbox_size(v)) for v in all_vols]
+vol_sizes.sort(key=lambda x: x[1])
+yoke_id = vol_sizes[0][0]  # smaller bbox = yoke
+air_id = vol_sizes[-1][0]  # larger bbox = air
+
 print(f"  Yoke = {yoke_id}, Air = {air_id}")
 
 # ============================================================
