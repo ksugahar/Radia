@@ -35,6 +35,10 @@ dependencies = [
     # See: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
     # Fixed in 6.2.2601+. Verified: geominfo, Periodic BC, vol-to-gmsh all pass.
     "ngsolve>=6.2.2601",
+    # REQUIRED: ksugahar/netgen fork (CallbackGeometry + SetGeomInfo)
+    # pip cannot install from GitHub URLs, so install manually:
+    #   pip install <wheel> from https://github.com/ksugahar/netgen/releases
+    # Without the fork, export_curved() will raise ImportError.
 ]
 
 [project.optional-dependencies]
