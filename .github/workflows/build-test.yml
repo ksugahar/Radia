@@ -46,6 +46,7 @@ jobs:
       # ----------------------------------------------------------------
       - name: Build with MSVC + MKL
         shell: pwsh
+        timeout-minutes: 25
         run: |
           Write-Host "Starting Radia build..."
           & "${{ github.workspace }}\Build.ps1" -Verbose
@@ -53,6 +54,8 @@ jobs:
             Write-Host "::error::Build failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
           }
+          # Kill orphan vctip.exe (VS telemetry) that blocks step completion
+          Get-Process vctip -ErrorAction SilentlyContinue | Stop-Process -Force
           Write-Host "Build completed successfully."
 
       # ----------------------------------------------------------------
