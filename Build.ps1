@@ -69,6 +69,11 @@ if (Test-Path $VSWHERE) {
     }
 }
 if (-not $CMAKE_EXE) {
+    # Try BuildTools edition
+    $CMAKE_EXE = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+}
+if (-not (Test-Path $CMAKE_EXE)) {
+    # Try Community edition
     $CMAKE_EXE = "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 }
 if (-not (Test-Path $CMAKE_EXE)) {
