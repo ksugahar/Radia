@@ -413,11 +413,23 @@ class CoilBuilder:
 			elif isinstance(seg, ArcSegment):
 				# Create arc current segment
 				phi1 = np.deg2rad(seg.euler_angles[0])
-				if phi1 <= 0:
-					phi1 += 2 * np.pi
-
 				phi2 = np.deg2rad(seg.euler_angles[0] + seg.arc_angle)
-				if phi1 > phi2 or phi2 <= 0:
+				j_density = seg.current_density
+
+				# Radia requires 0 <= phi1 < phi2 <= 2*pi
+				# For negative arc_angle: swap phi1/phi2 and negate current
+				if phi1 > phi2:
+					phi1, phi2 = phi2, phi1
+					j_density = -j_density
+
+				# Normalize to [0, 2*pi]
+				while phi1 < 0:
+					phi1 += 2 * np.pi
+					phi2 += 2 * np.pi
+				while phi1 >= 2 * np.pi:
+					phi1 -= 2 * np.pi
+					phi2 -= 2 * np.pi
+				if phi2 <= 0:
 					phi2 += 2 * np.pi
 
 				r_range = [seg.radius - seg.width / 2, seg.radius + seg.width / 2]
@@ -429,7 +441,7 @@ class CoilBuilder:
 					10,               # nseg
 					"auto",           # man_auto
 					"z",              # axis (transformed by Euler angles below)
-					seg.current_density  # j (current density)
+					j_density         # j (current density, sign handles direction)
 				)
 
 				# Build transformation (ZX Euler angles + translation to arc center)
