@@ -1978,9 +1978,17 @@ def export_curved(cubit, order: int = 3, surface_only: bool = False,
 		    cubit, order=2, surface_only=True, split_quads=True)
 	"""
 	from netgen.meshing import (Mesh as NetgenMesh, MeshPoint, Element3D,
-	                            Element2D, Element1D, FaceDescriptor,
-	                            CallbackGeometry)
+	                            Element2D, Element1D, FaceDescriptor)
 	from netgen.csg import Pnt
+
+	try:
+		from netgen.meshing import CallbackGeometry
+	except ImportError:
+		raise ImportError(
+			"CallbackGeometry not found. Install the ksugahar/netgen fork:\n"
+			"  pip install <wheel> from https://github.com/ksugahar/netgen/releases\n"
+			"Standard pip netgen does not include CallbackGeometry."
+		)
 
 	_warn_mixed_element_types_in_blocks(cubit)
 
