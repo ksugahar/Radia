@@ -117,7 +117,11 @@ $BatchContent = @"
 @echo off
 setlocal enabledelayedexpansion
 
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" > nul 2>&1
+if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" (
+    call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" > nul 2>&1
+) else (
+    call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" > nul 2>&1
+)
 
 set LIB=$INTEL_MKL\lib;%LIB%
 set INCLUDE=$INTEL_MKL\include;%INCLUDE%
