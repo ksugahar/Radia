@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build-test:
     runs-on: [self-hosted, windows-radia]
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     # NGSolve + Netgen from pip install (6.2.2602)
     env:
