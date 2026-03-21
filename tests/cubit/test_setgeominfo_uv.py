@@ -4,7 +4,7 @@ Test: SetGeomInfo API with UV parameters from OCC Geometry
 This test attempts to use the SetGeomInfo API to set proper UV parameters
 from the OCC geometry, enabling mesh.Curve() to work correctly.
 
-NOTE: For most use cases, export_curved() handles all of this internally.
+NOTE: For most use cases, export_NGSolveCurvedMesh() handles all of this internally.
 This test exercises the low-level SetGeomInfo API with manual UV computation.
 
 The workflow:
@@ -79,20 +79,20 @@ cubit.cmd("block 2 add tri all")
 print(f"  Tets: {cubit.get_tet_count()}")
 
 # ============================================================
-# Step 2: Export mesh using export_curved for different orders
+# Step 2: Export mesh using export_NGSolveCurvedMesh for different orders
 # ============================================================
-print("\nStep 2: Export mesh using export_curved")
+print("\nStep 2: Export mesh using export_NGSolveCurvedMesh")
 
-print("  Testing export_curved(order=1)...")
-mesh1 = cubit_mesh_export.export_curved(cubit, order=1)
+print("  Testing export_NGSolveCurvedMesh(order=1)...")
+mesh1 = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
 area1 = Integrate(CF(1), mesh1, VOL_or_BND=BND)
 vol1 = Integrate(CF(1), mesh1)
 print(f"    Area: {area1:.6f} (error: {abs(area1-expected_area)/expected_area*100:.4f}%)")
 print(f"    Vol:  {vol1:.6f} (error: {abs(vol1-expected_vol)/expected_vol*100:.4f}%)")
 
-print("  Testing export_curved(order=2)...")
+print("  Testing export_NGSolveCurvedMesh(order=2)...")
 try:
-    mesh2 = cubit_mesh_export.export_curved(cubit, order=2)
+    mesh2 = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)
     area2 = Integrate(CF(1), mesh2, VOL_or_BND=BND)
     vol2 = Integrate(CF(1), mesh2)
     print(f"    Area: {area2:.6f} (error: {abs(area2-expected_area)/expected_area*100:.4f}%)")
@@ -100,9 +100,9 @@ try:
 except Exception as e:
     print(f"    Failed: {e}")
 
-print("  Testing export_curved(order=3)...")
+print("  Testing export_NGSolveCurvedMesh(order=3)...")
 try:
-    mesh3 = cubit_mesh_export.export_curved(cubit, order=3)
+    mesh3 = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
     area3 = Integrate(CF(1), mesh3, VOL_or_BND=BND)
     vol3 = Integrate(CF(1), mesh3)
     print(f"    Area: {area3:.6f} (error: {abs(area3-expected_area)/expected_area*100:.4f}%)")
@@ -118,5 +118,5 @@ print("Test Complete")
 print("=" * 60)
 print()
 print("Conclusion:")
-print("  export_curved() handles SetGeomInfo and mesh.Curve() internally.")
+print("  export_NGSolveCurvedMesh() handles SetGeomInfo and mesh.Curve() internally.")
 print("  Higher order gives better geometric accuracy for curved surfaces.")

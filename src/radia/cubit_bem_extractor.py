@@ -5,10 +5,10 @@ BEM Impedance Extractor for inductors/transformers.
 
 Extracts L(f), R(f), M (mutual inductance) from Cubit mesh using
 ngbem BEM solver. Supports high-order curved elements via Cubit's ACIS kernel +
-export_curved().
+export_NGSolveCurvedMesh().
 
 Architecture:
-    Cubit -> export_curved() -> NGSolve Mesh -> ngbem BEM -> L, R, M
+    Cubit -> export_NGSolveCurvedMesh() -> NGSolve Mesh -> ngbem BEM -> L, R, M
 
 Solver: ngbem (Lucy Weggler's stabilized formulation)
 ESIM:   Karl Hollaus's nonlinear surface impedance for magnetic cores
@@ -224,17 +224,17 @@ class BEMExtractor:
     def load_cubit_mesh(self, cubit, curve_order=3):
         """Load Cubit mesh as NGSolve mesh with curved elements.
 
-        Uses export_curved() which works directly with Cubit's ACIS kernel
+        Uses export_NGSolveCurvedMesh() which works directly with Cubit's ACIS kernel
         for high-order curving. No STEP files or OCC geometry needed.
 
         Args:
             cubit: Cubit Python interface object
             curve_order: Polynomial order for curved elements (1-5)
         """
-        from cubit_mesh_export import export_curved
+        from cubit_mesh_export import export_NGSolveCurvedMesh
 
         # Export Cubit mesh with curving via ACIS kernel
-        self.mesh = export_curved(cubit, order=curve_order)
+        self.mesh = export_NGSolveCurvedMesh(cubit, order=curve_order)
         self._cubit = cubit
         self._curve_order = curve_order
 
@@ -252,7 +252,7 @@ class BEMExtractor:
         For BEM, only the conductor surface is needed (not the volume).
         This extracts triangular/quad surface elements from a Cubit block.
 
-        For high-order curved surface meshes, use export_curved() with
+        For high-order curved surface meshes, use export_NGSolveCurvedMesh() with
         surface_only=True instead of this method.
 
         Blocks are the only Cubit entity type that supports element type

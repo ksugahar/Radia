@@ -1,7 +1,7 @@
 """
-Netgen Export Example: Cylinder with export_curved()
+Netgen Export Example: Cylinder with export_NGSolveCurvedMesh()
 
-Demonstrates the unified high-order curving workflow using export_curved(),
+Demonstrates the unified high-order curving workflow using export_NGSolveCurvedMesh(),
 which works directly with Cubit's ACIS kernel for UV parameter computation
 and mesh.Curve(order). No STEP files needed.
 
@@ -30,7 +30,7 @@ import cubit_mesh_export
 R = 0.5  # Radius
 H = 2.0  # Height
 
-print("=== Netgen Export: Cylinder with export_curved() ===")
+print("=== Netgen Export: Cylinder with export_NGSolveCurvedMesh() ===")
 print(f"Parameters: R={R}, H={H}")
 print()
 
@@ -56,9 +56,9 @@ print(f"  Tets: {cubit.get_tet_count()}")
 # ============================================================
 # Step 2: Export with automatic curving (order=2)
 # ============================================================
-print("\nStep 2: export_curved(order=2)")
+print("\nStep 2: export_NGSolveCurvedMesh(order=2)")
 
-mesh2 = cubit_mesh_export.export_curved(cubit, order=2)
+mesh2 = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)
 print(f"  Boundaries: {mesh2.GetBoundaries()}")
 
 # ============================================================
@@ -79,9 +79,9 @@ print(f"  order=2:   Area={area2:.6f} ({abs(area2-expected_area)/expected_area*1
 # ============================================================
 # Step 3: Compare with order=3
 # ============================================================
-print("\nStep 3: export_curved(order=3)")
+print("\nStep 3: export_NGSolveCurvedMesh(order=3)")
 
-mesh3 = cubit_mesh_export.export_curved(cubit, order=3)
+mesh3 = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
 
 area3 = Integrate(CF(1), mesh3, VOL_or_BND=BND)
 vol3 = Integrate(CF(1), mesh3)

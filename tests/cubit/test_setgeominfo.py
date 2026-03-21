@@ -7,7 +7,7 @@ to enable mesh.Curve() for externally imported meshes.
 The SetGeomInfo API allows setting UV parameters on surface elements,
 which is required for proper high-order curving of external meshes.
 
-NOTE: For most use cases, export_curved() handles SetGeomInfo internally.
+NOTE: For most use cases, export_NGSolveCurvedMesh() handles SetGeomInfo internally.
 This test exercises the low-level SetGeomInfo API directly.
 
 Run: python test_setgeominfo.py
@@ -129,9 +129,9 @@ print("  PASSED: Quad SetGeomInfo works")
 print()
 
 # ============================================================
-# Test 5: Use with Cubit hex mesh via export_curved
+# Test 5: Use with Cubit hex mesh via export_NGSolveCurvedMesh
 # ============================================================
-print("Test 5: Cubit hex mesh with export_curved")
+print("Test 5: Cubit hex mesh with export_NGSolveCurvedMesh")
 
 try:
     import cubit
@@ -155,10 +155,10 @@ try:
 
     print(f"  Created {cubit.get_hex_count()} hex elements")
 
-    # Export via export_curved (handles geometry + curving internally)
-    ngs_mesh = cubit_mesh_export.export_curved(cubit, order=2)
+    # Export via export_NGSolveCurvedMesh (handles geometry + curving internally)
+    ngs_mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)
     print(f"  NGSolve mesh: ne={ngs_mesh.ne}, nv={ngs_mesh.nv}")
-    print("  PASSED: export_curved with curving succeeded")
+    print("  PASSED: export_NGSolveCurvedMesh with curving succeeded")
 
 except ImportError as e:
     print(f"  Skipped (Cubit not available): {e}")

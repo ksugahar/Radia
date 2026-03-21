@@ -1,8 +1,8 @@
 """
-Netgen Export Example: Hex Cylinder with export_curved()
+Netgen Export Example: Hex Cylinder with export_NGSolveCurvedMesh()
 
 Key use case: Cubit's hex meshing + NGSolve high-order elements.
-Demonstrates that export_curved() works with hexahedral meshes too.
+Demonstrates that export_NGSolveCurvedMesh() works with hexahedral meshes too.
 
 Run: python netgen_hex_cylinder_setgeominfo.py
 """
@@ -29,7 +29,7 @@ import cubit_mesh_export
 R = 0.5  # Radius
 H = 2.0  # Height
 
-print("=== Netgen Export: Hex Cylinder with export_curved() ===")
+print("=== Netgen Export: Hex Cylinder with export_NGSolveCurvedMesh() ===")
 print(f"Parameters: R={R}, H={H}")
 print("(Cubit hex meshing + NGSolve high-order)")
 print()
@@ -61,8 +61,8 @@ expected_area = 2 * math.pi * R * H + 2 * math.pi * R * R
 expected_vol = math.pi * R * R * H
 
 for order in [2, 3]:
-	print(f"\nexport_curved(order={order})")
-	mesh = cubit_mesh_export.export_curved(cubit, order=order)
+	print(f"\nexport_NGSolveCurvedMesh(order={order})")
+	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
 
 	area = Integrate(CF(1), mesh, VOL_or_BND=BND)
 	vol = Integrate(CF(1), mesh)

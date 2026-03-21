@@ -1,10 +1,10 @@
 """
 Test: Complete Cubit-to-NGSolve High-Order Curving Workflow
 
-This test verifies the complete workflow using export_curved():
+This test verifies the complete workflow using export_NGSolveCurvedMesh():
 1. Cubit: Create geometry -> Export STEP
 2. Cubit: Reimport STEP -> Generate mesh
-3. export_curved(order=N) -> NGSolve Mesh (already curved)
+3. export_NGSolveCurvedMesh(order=N) -> NGSolve Mesh (already curved)
 
 Compares different curve orders for geometric accuracy.
 
@@ -83,17 +83,17 @@ cubit.cmd('block 2 name "boundary"')
 print(f"  Tets: {cubit.get_tet_count()}")
 
 # ============================================================
-# Test A-C: Compare curve orders using export_curved
+# Test A-C: Compare curve orders using export_NGSolveCurvedMesh
 # ============================================================
 results = {}
 
 for order in [1, 2, 3]:
     print("\n" + "=" * 60)
-    print(f"Test: export_curved(order={order})")
+    print(f"Test: export_NGSolveCurvedMesh(order={order})")
     print("=" * 60)
 
     try:
-        mesh = cubit_mesh_export.export_curved(cubit, order=order)
+        mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
         area = Integrate(CF(1), mesh, VOL_or_BND=BND)
         vol = Integrate(CF(1), mesh)
 
@@ -117,7 +117,7 @@ print("-" * 50)
 for order in [1, 2, 3]:
     if order in results:
         vol = results[order]['vol']
-        print(f"{'export_curved(order=' + str(order) + ')':<35} {abs(vol-expected_vol)/expected_vol*100:>11.4f}%")
+        print(f"{'export_NGSolveCurvedMesh(order=' + str(order) + ')':<35} {abs(vol-expected_vol)/expected_vol*100:>11.4f}%")
 print()
 
 # Cleanup

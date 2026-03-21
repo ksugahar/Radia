@@ -10,11 +10,11 @@ Mesh components:
 3. Aluminum shields (hex mesh) - PEEC conductor with eddy currents
 
 Workflow:
-    Cubit geometry -> NGSolve mesh (direct via export_curved) -> Radia PEEC+MMM
+    Cubit geometry -> NGSolve mesh (direct via export_NGSolveCurvedMesh) -> Radia PEEC+MMM
 
 Note: Netgen alone cannot create 3D hexahedral meshes.
       Cubit is required for hex mesh generation.
-      Use cubit_mesh_export.export_curved() for direct Cubit -> NGSolve conversion.
+      Use cubit_mesh_export.export_NGSolveCurvedMesh() for direct Cubit -> NGSolve conversion.
 
 Requirements:
     - Coreform Cubit 2025.3+
@@ -54,7 +54,7 @@ def create_wpt_geometry_cubit():
 
     Returns NGSolve Mesh objects directly (no intermediate file format).
 
-    Uses cubit_mesh_export.export_curved() for direct Cubit -> NGSolve conversion.
+    Uses cubit_mesh_export.export_NGSolveCurvedMesh() for direct Cubit -> NGSolve conversion.
     """
     if not CUBIT_AVAILABLE:
         return None
@@ -127,7 +127,7 @@ def create_wpt_geometry_cubit():
 
     # Export Tx assembly to NGSolve directly (no Nastran intermediate)
     print("Exporting Tx assembly to NGSolve mesh...")
-    tx_mesh = cubit_mesh_export.export_curved(cubit, order=1)
+    tx_mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
 
     # ============================================================
     # Create Rx Assembly (mirror of Tx)
@@ -169,7 +169,7 @@ def create_wpt_geometry_cubit():
 
     # Export Rx assembly to NGSolve directly (no Nastran intermediate)
     print("Exporting Rx assembly to NGSolve mesh...")
-    rx_mesh = cubit_mesh_export.export_curved(cubit, order=1)
+    rx_mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
 
     return {
         'tx_mesh': tx_mesh,
@@ -183,7 +183,7 @@ def load_mesh_to_radia(mesh, material_type='conductor'):
     Load NGSolve mesh and create Radia objects.
 
     Parameters:
-        mesh: NGSolve Mesh object (from cubit_mesh_export.export_curved())
+        mesh: NGSolve Mesh object (from cubit_mesh_export.export_NGSolveCurvedMesh())
         material_type: 'conductor', 'ferrite', or 'shield'
 
     Returns:
@@ -199,7 +199,7 @@ def load_mesh_to_radia(mesh, material_type='conductor'):
     container = netgen_mesh_to_radia(
         mesh,
         material={'magnetization': magnetization},
-        units='m'  # Cubit exports in mm, but export_curved converts to m
+        units='m'  # Cubit exports in mm, but export_NGSolveCurvedMesh converts to m
     )
 
     if container is None:

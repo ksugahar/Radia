@@ -27,7 +27,7 @@ class TestModuleImport(unittest.TestCase):
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_Gmesh'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_gmesh'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_nastran'))
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_curved'))
+		self.assertTrue(hasattr(cubit_mesh_export, 'export_NGSolveCurvedMesh'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_meg'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_vtk'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_vtu'))
@@ -38,7 +38,7 @@ class TestModuleImport(unittest.TestCase):
 		self.assertTrue(callable(cubit_mesh_export.export_Gmesh))
 		self.assertTrue(callable(cubit_mesh_export.export_gmesh))
 		self.assertTrue(callable(cubit_mesh_export.export_nastran))
-		self.assertTrue(callable(cubit_mesh_export.export_curved))
+		self.assertTrue(callable(cubit_mesh_export.export_NGSolveCurvedMesh))
 		self.assertTrue(callable(cubit_mesh_export.export_meg))
 		self.assertTrue(callable(cubit_mesh_export.export_vtk))
 		self.assertTrue(callable(cubit_mesh_export.export_vtu))
@@ -93,10 +93,10 @@ class TestFunctionSignatures(unittest.TestCase):
 		sig = inspect.signature(cubit_mesh_export.export_vtu)
 		self.assertEqual(sig.parameters['binary'].default, False)
 
-	def test_export_curved_signature(self):
-		"""Test export_curved has correct parameters."""
+	def test_export_NGSolveCurvedMesh_signature(self):
+		"""Test export_NGSolveCurvedMesh has correct parameters."""
 		import inspect
-		sig = inspect.signature(cubit_mesh_export.export_curved)
+		sig = inspect.signature(cubit_mesh_export.export_NGSolveCurvedMesh)
 		params = list(sig.parameters.keys())
 		self.assertIn('cubit', params)
 		self.assertIn('order', params)
