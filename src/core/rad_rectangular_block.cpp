@@ -23,7 +23,6 @@
 //-------------------------------------------------------------------------
 
 #include "rad_rectangular_block.h"
-#include "rad_graphics_3d.h"
 #include "rad_group.h"
 #include "rad_application.h"
 #include "rad_geometry_3d_aux.h"
@@ -1017,11 +1016,6 @@ void radTRecMag::IntOverSurf(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTRecMag::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = new radTRecMagGraphPresent(this);
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 

@@ -628,7 +628,6 @@ Returns a dictionary after `rad.Solve()`:
 | Interaction matrix build | `ParallelFor` |
 | Field computation (`Fld`, `FldLst`, `FldVTS`) | `ParallelFor` |
 | Analytical polygon integrals | `ParallelFor` |
-| FMM field evaluation (ExaFMM) | `ParallelFor` |
 
 ### NGSolve Compatibility
 
@@ -716,7 +715,7 @@ phi_batch = rad.Fld(obj, 'phi', points)  # (3,) array of scalar potential
 result = rad.ClassifyPoints(obj, points, near_threshold=3.0)
 ```
 
-Classifies evaluation points relative to mesh elements (for FMM field computation).
+Classifies evaluation points relative to mesh elements (for batch field computation).
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|

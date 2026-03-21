@@ -84,7 +84,6 @@ public:
 	int Type_Group() { return 2;}
 	int Type_g3dRelax() { return 4;}
 
-	radTg3dGraphPresent* CreateGraphPresent();
 
 	int SubdivideItself(double* SubdivArray, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions) 
 	{

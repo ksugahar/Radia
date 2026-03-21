@@ -105,19 +105,6 @@ def main():
     print("- Use dipole approximation when r > 3*element_size")
     print("- Use MSC integration when r < 3*element_size")
 
-    # Estimate speedup from ExaFMM
-    print("\n" + "=" * 60)
-    print("ExaFMM Speedup Estimation")
-    print("=" * 60)
-    print("\nFor N elements and M evaluation points:")
-    print("  Direct dipole: O(N * M) operations")
-    print("  ExaFMM dipole: O(N + M) operations (with O(N log N) setup)")
-    print("\nTypical speedup factors:")
-    print("  N=100, M=100:   ~5-10x")
-    print("  N=1000, M=1000: ~50-100x")
-    print("  N=10000, M=10000: ~500-1000x")
-    print("\nNote: ExaFMM has ~1000 element threshold for efficiency")
-
     rad.UtiDelAll()
 
 if __name__ == '__main__':

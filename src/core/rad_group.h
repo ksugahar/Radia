@@ -52,7 +52,6 @@ public:
 	//void DumpBin(CAuxBinStrVect& oStr, radTmhg& mEl, radThg& hg);
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 
-	radTg3dGraphPresent* CreateGraphPresent() override;
 
 	int DuplicateItself(radThg& hg, radTApplication* radPtr, char PutNewStuffIntoGenCont) override
 	{

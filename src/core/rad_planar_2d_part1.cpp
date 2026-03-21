@@ -15,7 +15,6 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_planar_2d.h"
-#include "rad_graphics_3d.h"
 #include "rad_application.h"
 
 //-------------------------------------------------------------------------
@@ -101,11 +100,6 @@ void radTRectangle::IntOverSurf(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTRectangle::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = new radTRectangleGraphPresent(this);
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -255,11 +249,6 @@ radTPolygon::radTPolygon(CAuxBinStrVect& inStr)
 
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTPolygon::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = new radTPolygonGraphPresent(this);
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 

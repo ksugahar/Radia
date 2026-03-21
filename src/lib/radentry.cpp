@@ -148,9 +148,7 @@ void RandomizationOnOrOff( char* );
 void TolForConvergence( double, double, double );
 void ShimSignature( int, char*, double,double,double, double,double,double, double,double,double, int, double,double,double );
 
-int GraphicsForElemVTK( int, const char*, const char*, const char* );
-
-void ApplyDrawAttrToElem( int, double,double,double, double );
+// GraphicsForElemVTK and ApplyDrawAttrToElem removed (Graphics3D code)
 
 void DeleteElement( int );
 void DeleteAllElements1();

@@ -16,7 +16,6 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_subdivided_rectangle.h"
-#include "rad_graphics_3d.h"
 #include "rad_math_methods.h"
 #include "rad_type_cast.h"
 #include "rad_application.h"
@@ -145,14 +144,6 @@ radTSubdividedRecMag::radTSubdividedRecMag()
 
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTSubdividedRecMag::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = 0;
-	if(!AlgsBasedOnKsQsMayNotWork) g3dGraphPresentPtr = new radTSubdivRecMagGraphPresent((radTGroup*)this);
-	else g3dGraphPresentPtr = new radTGroupGraphPresent((radTGroup*)this);
-	g3dGraphPresentPtr->ShowInternalFacesAfterCut = false;
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 

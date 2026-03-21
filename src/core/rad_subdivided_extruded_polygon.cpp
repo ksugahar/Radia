@@ -16,19 +16,10 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_subdivided_extruded_polygon.h"
-#include "rad_graphics_3d.h"
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTSubdividedExtrPolygon::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = 0;
-	if(!AlgsBasedOnKsQsMayNotWork) g3dGraphPresentPtr = new radTSubdivExtrPolygGraphPresent((radTGroup*)this);
-	else g3dGraphPresentPtr = new radTGroupGraphPresent((radTGroup*)this);
-	g3dGraphPresentPtr->ShowInternalFacesAfterCut = false;
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 

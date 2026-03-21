@@ -5,7 +5,7 @@
 This document describes the design for beam tracking in Radia, including:
 1. Current B-field based Lorentz force integration
 2. Future A-field based Hamiltonian formulation
-3. FMM/GPU acceleration plans (2026 roadmap)
+3. GPU acceleration plans (2026 roadmap)
 
 **Scope**: Magnetic field only (no electric field). Energy is conserved during tracking.
 
@@ -87,7 +87,7 @@ For symplectic integration and GPU parallelization, the **Hamiltonian formulatio
 
 **Advantages**:
 1. **Symplectic integrators**: Preserve phase space volume (important for long-term tracking)
-2. **A is smoother than B**: Better convergence for FMM/multipole expansion
+2. **A is smoother than B**: Better convergence for numerical evaluation
 3. **Natural for periodic systems**: Hamiltonian averaged over period gives tune/beta functions
 4. **GPU parallelization**: A-field evaluation is embarrassingly parallel
 
@@ -138,7 +138,7 @@ This recovers the Lorentz force equation, but the A-based form enables symplecti
 
 ```python
 # New API (future)
-tracker = rad.BeamTracker(obj, field_method='fmm')  # or 'direct'
+tracker = rad.BeamTracker(obj, field_method='direct')
 
 # B-field based (current, default)
 traj = tracker.track_lorentz(E_GeV, [x0, x'0, z0, z'0], [s0, s1],
@@ -158,66 +158,16 @@ trajs = tracker.track_batch(E_GeV, initial_conditions, [s0, s1],
 
 ---
 
-## 3. FMM Acceleration for Beam Tracking
+## 3. Symplectic Integrators
 
-### 3.1 Current Field Evaluation
-
-```
-B(r) = sum over all elements { B_element(r) }
-```
-- Complexity: O(N_elements) per evaluation point
-- For trajectory: O(N_elements × N_steps)
-
-### 3.2 FMM-Accelerated Evaluation
-
-Using ExaFMM (already integrated in Radia):
-
-```
-# Precompute FMM tree (once)
-fmm_tree = build_fmm_tree(magnetization_sources)
-
-# Fast field evaluation (O(log N) per point)
-B(r) = fmm_tree.evaluate(r)
-```
-
-### 3.3 Implementation Plan
-
-**Phase 1: FMM for B-field** (2026 Q1)
-- Use existing ExaFMM integration (`rad_exafmm.cpp`)
-- Add batch evaluation for trajectory points
-- Benchmark vs direct computation
-
-**Phase 2: FMM for A-field** (2026 Q2)
-- Extend ExaFMM to compute A = (μ₀/4π) ∫ M×r/r³ dV
-- Validate curl(A) = B
-- Integrate with Hamiltonian tracker
-
-**Phase 3: GPU Acceleration** (2026 Q3-Q4)
-- Port FMM to CUDA (ExaFMM already has GPU support)
-- Implement symplectic integrators on GPU
-- Batch particle tracking
-
-### 3.4 Performance Targets
-
-| Method | N_elements | N_steps | Current | Target (FMM) | Target (GPU) |
-|--------|------------|---------|---------|--------------|--------------|
-| Direct | 1000 | 10000 | 100s | - | - |
-| FMM (CPU) | 1000 | 10000 | - | 10s | - |
-| FMM (GPU) | 1000 | 10000 | - | - | 0.5s |
-| FMM (GPU) | 10000 | 100000 | - | - | 5s |
-
----
-
-## 4. Symplectic Integrators
-
-### 4.1 Why Symplectic?
+### 3.1 Why Symplectic?
 
 Standard RK4/RK5 integrators do NOT preserve phase space volume. For long-term tracking (1000+ turns), this causes:
 - Artificial damping/growth
 - Incorrect tune calculation
 - Wrong dynamic aperture
 
-### 4.2 Proposed Integrators
+### 3.2 Proposed Integrators
 
 | Method | Order | Stages | Accuracy | Speed |
 |--------|-------|--------|----------|-------|
@@ -226,7 +176,7 @@ Standard RK4/RK5 integrators do NOT preserve phase space volume. For long-term t
 | Forest-Ruth 4th | 4 | 4 | High | Medium |
 | Yoshida 6th | 6 | 8 | Very High | Slow |
 
-### 4.3 Implementation Sketch
+### 3.3 Implementation Sketch
 
 ```cpp
 // Symplectic 4th order (Forest-Ruth)
@@ -251,9 +201,9 @@ class SymplecticIntegrator4 {
 
 ---
 
-## 5. Data Structures
+## 4. Data Structures
 
-### 5.1 Current
+### 4.1 Current
 
 ```cpp
 class radTPrtclTrj {
@@ -263,7 +213,7 @@ class radTPrtclTrj {
 };
 ```
 
-### 5.2 Proposed
+### 4.2 Proposed
 
 ```cpp
 namespace radia::beam {
@@ -280,11 +230,6 @@ public:
 // Direct evaluator (current)
 class DirectFieldEvaluator : public FieldEvaluator {
     radTg3d* source_;
-};
-
-// FMM evaluator (future)
-class FMMFieldEvaluator : public FieldEvaluator {
-    FMMTree tree_;
 };
 
 // Particle state (magnetic field only - energy conserved)
@@ -324,48 +269,41 @@ public:
 
 ---
 
-## 6. Migration Path
+## 5. Migration Path
 
-### 6.1 Phase 1: Refactor Current Code (2026 Q1)
+### 5.1 Phase 1: Refactor Current Code (2026 Q1)
 
 1. Extract `FieldEvaluator` interface
 2. Create `DirectFieldEvaluator` from existing code
 3. Add A-field evaluation to `radTg3d`
 4. Unit tests for B = curl(A)
 
-### 6.2 Phase 2: Add Symplectic Integrators (2026 Q2)
+### 5.2 Phase 2: Add Symplectic Integrators (2026 Q2)
 
 1. Implement `SymplecticIntegrator` base class
 2. Add Forest-Ruth 4th order
 3. Add Yoshida 6th order for validation
 4. Benchmark against RK45
 
-### 6.3 Phase 3: FMM Integration (2026 Q3)
+### 5.3 Phase 3: GPU Acceleration (2026 Q3-Q4)
 
-1. Create `FMMFieldEvaluator`
-2. Add batch B/A evaluation
-3. Validate accuracy vs direct
-4. Performance benchmarks
-
-### 6.4 Phase 4: GPU Acceleration (2026 Q4)
-
-1. Port FMM to CUDA (or use ExaFMM-GPU)
+1. Implement GPU dipole kernel (CuPy RawKernel)
 2. Implement GPU symplectic kernel
 3. Multi-particle batch tracking
 4. Performance optimization
 
 ---
 
-## 7. Compatibility
+## 6. Compatibility
 
-### 7.1 Backward Compatibility
+### 6.1 Backward Compatibility
 
 The existing API will be preserved:
 ```python
 rad.FldPtcTrj(obj, E, initial, range, np)  # Still works
 ```
 
-### 7.2 New API (Additive)
+### 6.2 New API (Additive)
 
 ```python
 # New module
@@ -377,12 +315,11 @@ traj = tracker.track(...)
 
 ---
 
-## 8. References
+## 7. References
 
 1. Forest & Ruth, "Fourth-order symplectic integration", Physica D 43 (1990)
 2. Yoshida, "Construction of higher order symplectic integrators", Phys. Lett. A 150 (1990)
-3. ExaFMM: https://github.com/exafmm/exafmm-t
-4. Wolski, "Beam Dynamics in High Energy Particle Accelerators"
+3. Wolski, "Beam Dynamics in High Energy Particle Accelerators"
 
 ---
 

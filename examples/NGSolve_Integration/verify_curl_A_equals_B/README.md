@@ -43,11 +43,6 @@ The RadiaField implementation explicitly states:
 // the returned A is already in the correct units (T*m for NGSolve)
 ```
 
-For FMM-accelerated computation (lines 719-759), the dipole formula handles units consistently:
-- Dipole moment m is in A*m^2 (SI units)
-- Positions are converted to match the coordinate system
-- The formula `A = (mu0/4pi) * (m x r) / |r|^3` gives A in T*m when using SI units
-
 ## Running the Test
 
 ```bash
@@ -84,7 +79,7 @@ With the current implementation, the |curl(A)|/|B| ratio should be close to 1.0,
 1. **Coordinate conversion** - `coord_scale_` handles m <-> mm conversion for input coordinates
 2. **Unit system** - Radia always uses meters, ensuring consistent field output units
 3. **No explicit A scaling** - The implementation uses `scale = 1.0` for all field types
-4. **FMM path** - Dipole approximation uses SI units consistently (m, A*m^2, T*m)
+4. **Dipole path** - Dipole approximation uses SI units consistently (m, A*m^2, T*m)
 
 ---
 
