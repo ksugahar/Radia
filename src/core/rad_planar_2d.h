@@ -82,7 +82,6 @@ public:
 		o << endl;
 		o << "   Memory occupied: " << SizeOfThis() << " bytes";
 	}
-	radTg3dGraphPresent* CreateGraphPresent();
 
 	int SizeOfThis() { return sizeof(radTRectangle);}
 };
@@ -286,7 +285,6 @@ public:
 
 	//void B_comp_frJ(radTField*);
 
-	radTg3dGraphPresent* CreateGraphPresent();
 	void Dump(std::ostream& o, int ShortSign) // Porting
 	{
 		radTg3d::Dump(o, ShortSign);

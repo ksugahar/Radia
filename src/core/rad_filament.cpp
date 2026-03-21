@@ -16,7 +16,6 @@
 
 #include "rad_application.h"
 #include "rad_filament.h"
-#include "rad_graphics_3d.h"
 
 #include <math.h>
 #include <sstream>
@@ -236,11 +235,6 @@ FinalDefinitionOfFieldIntegrals:
 
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTFlmLinCur::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = new radTFlmLinCurGraphPresent(this);
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 

@@ -19,11 +19,29 @@
 
 #include "rad_auxiliary_structures.h"
 
+#include <map>
+#include <vector>
+
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-struct radRGB;
-struct radTDrawAttr;
+// Drawing attribute types (kept for binary serialization compatibility)
+struct radRGB {
+	double Red, Green, Blue;
+	radRGB(double InRed =0, double InGreen =0, double InBlue =0)
+	{
+		Red = InRed; Green = InGreen; Blue = InBlue;
+	}
+};
+
+struct radTDrawAttr {
+	radRGB RGB_col;
+	double LineThickness;
+};
+
+using radTMapOfDrawAttr = std::map<int, radTDrawAttr, std::less<int>>;
+using radTVectOfDrawAttr = std::vector<radTDrawAttr>;
+
 class radTrans;
 class radTField;
 
@@ -32,19 +50,7 @@ class radTField;
 class radTSend {
 public:
 
-	double Limits3D[6];
-
-	char ShowLines;
-	char ShowFaces;
-
-	radTVectGeomPolygon GeomPolygons;
-	radTVectGeomPolygon GeomLines;
-
-	radTSend()
-	{
-		ShowLines = 0; ShowFaces = 1;
-		InitLimits3D();
-	}
+	radTSend() {}
 
 	static void ErrorMessage(const char*);
 	void OrdinaryMessage(const char*);
@@ -78,33 +84,11 @@ public:
 
 	void MyMLPutDouble(double);
 
-	void GenInitDraw(char =0);
-	void InitDrawSurfElem(int, radTDrawAttr&, int, char =0);
-	void InitDrawLinElem(int, radTDrawAttr&, int, char =0);
-	void InitOutList(int, char =0);
-	void DrawEdgesSuppression(char =0);
-	void InitDrawLineWithThickness(int, radTDrawAttr&, char =0);
-
-	void Color(const radRGB&, char =0);
-	void Polygon(const TVector3d*, int, char =0);
-	void Line(const TVector3d*, int, char =0);
-	int GeomDataToBuffer(); //OC04112019
-
-	//void FrameLines(char);
-	void InitLimits3D()
-	{
-		Limits3D[0] = 1.E+23; Limits3D[1] = -1.E+23; 
-		Limits3D[2] = 1.E+23; Limits3D[3] = -1.E+23;
-		Limits3D[4] = 1.E+23; Limits3D[5] = -1.E+23;
-	}
-
-	//void DrawCharacter(char, double, TVector3d*, char);
-	//void DrawPyramidArrow(TVector3d*, char);
+	void InitOutList(int);
 
 	int GetInteger(int&);
 	int GetDouble(double&);
 	int GetString(const char*&);
-	//int GetString(char*&);
 	void DisownString(char* Str);
 	int GetArbitraryListOfVector3d(radTVectorOfVector3d&, radTVectInputCell&);
 
@@ -118,9 +102,6 @@ public:
 	int GetArrayOfArrayOfInt(int**&, int*&, int&);
 
 	int GetArrayOfDouble(double*&, long&);
-
-	void AddGeomPolygon(const TVector3d* Side, int lenSide, radTVectGeomPolygon& VectGeomPolygons);
-	void DeallocateGeomPolygonData();
 };
 
 //-------------------------------------------------------------------------

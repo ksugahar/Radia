@@ -1227,216 +1227,8 @@ void radTApplication::GenDump()
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-int radTApplication::ApplyDrawAttrToElem_g3d(int ElemKey, double* RGB_col, long lenRGB_col, double InLineThickness)
-{
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(ElemKey, hg)) return 0;
-		radTg3d* g3dPtr = Cast.g3dCast(hg.rep); if(g3dPtr==0) { Send.ErrorMessage("Radia::Error003"); return 0;}
-		TVector3d RGB_colVect;
-		if(!ValidateVector3d(RGB_col, lenRGB_col, &RGB_colVect)) return 0;
-		// May be not necessary?
-		if((RGB_col[0]<0.) || (RGB_col[1]<0.) || (RGB_col[2]<0.) || 
-		   (RGB_col[0]>1.) || (RGB_col[1]>1.) || (RGB_col[2]>1.))
-		{
-			Send.ErrorMessage("Radia::Error008"); return 0;
-		}
-
-		radTMapOfDrawAttr::iterator iter = MapOfDrawAttr.find(ElemKey);
-		if(!(iter == MapOfDrawAttr.end())) MapOfDrawAttr.erase(iter);
-
-		radRGB ColRGB(RGB_colVect.x, RGB_colVect.y, RGB_colVect.z);
-		radTDrawAttr DrawAttr;
-		DrawAttr.RGB_col = ColRGB;
-		DrawAttr.LineThickness = (InLineThickness<0)? 0.001 : InLineThickness;
-
-		MapOfDrawAttr[ElemKey] = DrawAttr;
-
-		if(SendingIsRequired) Send.Int(ElemKey);
-		return ElemKey;
-	}
-	catch(...)
-	{
-		Initialize(); return 0;
-	}
-}
-
-//-------------------------------------------------------------------------
-
-int radTApplication::RemoveDrawAttrFromElem_g3d(int ElemKey)
-{
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(ElemKey, hg)) return 0;
-		radTg3d* g3dPtr = Cast.g3dCast(hg.rep); if(g3dPtr==0) { Send.ErrorMessage("Radia::Error003"); return 0;}
-
-		radTMapOfDrawAttr::iterator iter = MapOfDrawAttr.find(ElemKey);
-		if(iter == MapOfDrawAttr.end()) 
-		{
-			Send.ErrorMessage("Radia::Error013");
-			return 0;
-		}
-		else
-		{
-			MapOfDrawAttr.erase(iter);
-			if(SendingIsRequired) Send.Int(ElemKey);
-			return ElemKey;
-		}
-	}
-	catch(...)
-	{
-		Initialize(); return 0;
-	}
-}
-
-//-------------------------------------------------------------------------
-
-int radTApplication::GraphicsForElem_g3d(int ElemKey, int InShowSymmetryChilds, const char** arOptionNames, const char** arOptionValues, int numOptions)
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = nullptr;
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(ElemKey, hg)) return 0;
-		radTg3d* g3dPtr = Cast.g3dCast(hg.rep); if(g3dPtr==0) { Send.ErrorMessage("Radia::Error003"); return 0;}
-
-		radTOptionNames OptNam;
-		const char* OptNamesToFind[] = {OptNam.Debug};
-		char OptValsFoundParsed[] = {0};
-		char &doDebug = OptValsFoundParsed[0]; // 0- No; 1- Yes;
-		if(!OptNam.findParseOptionValues(arOptionNames, arOptionValues, numOptions, OptNamesToFind, 1, OptValsFoundParsed, 0, 0))
-		{
-			Send.ErrorMessage("Radia::Error062"); return 0;
-		}
-
-		radGraphPresOptions InGraphPresOptions((char)InShowSymmetryChilds, doDebug);
-
-		Send.GenInitDraw();
-
-		g3dGraphPresentPtr = g3dPtr->CreateGraphPresent();
-
-		g3dGraphPresentPtr->SetGraphPresOptions(InGraphPresOptions);
-		g3dGraphPresentPtr->MapOfDrawAttrPtr = &MapOfDrawAttr;
-		g3dGraphPresentPtr->RetrieveDrawAttr(ElemKey);
-
-		g3dGraphPresentPtr->GenDraw();
-
-		delete g3dGraphPresentPtr;
-		g3dGraphPresentPtr = nullptr;
-		return ElemKey;
-	}
-	catch(...)
-	{
-		if(g3dGraphPresentPtr) delete g3dGraphPresentPtr;
-		Initialize(); return 0;
-	}
-}
-
-//-------------------------------------------------------------------------
-
-int radTApplication::GraphicsForElem_g3d_VTK(int ElemKey, const char** OptionNames, const char** OptionValues, int OptionCount) //OC04112019 (from R. Nagler's radTApplication::GoObjGeometry)
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = nullptr;
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(ElemKey, hg)) return 0;
-		radTg3d* g3dPtr = Cast.g3dCast(hg.rep); if(g3dPtr==0) { Send.ErrorMessage("Radia::Error003"); return 0;}
-
-		//bool SendingWasAlreadyDone = false;
-
-		char OptBits[4];
-		char& DoShowLines = OptBits[0];
-		char& DoShowFaces = OptBits[1];
-		char& DoShowFrameAxes = OptBits[2];
-		char& DoShowSymChilds = OptBits[3];
-		if(!DecodeViewingOptions(OptionNames, OptionValues, OptionCount, OptBits)) return 0;
-
-		radGraphPresOptions InGraphPresOptions(DoShowSymChilds);
-		g3dGraphPresentPtr = g3dPtr->CreateGraphPresent();
-
-		char DrawFacilityInd = 2; // VTK export facility index
-		g3dGraphPresentPtr->DrawFacilityInd = DrawFacilityInd;
-
-		radTg3dGraphPresent::Send = Send;
-
-		g3dGraphPresentPtr->SetGraphPresOptionsExt(InGraphPresOptions, DoShowLines, DoShowFaces);
-		g3dGraphPresentPtr->MapOfDrawAttrPtr = &MapOfDrawAttr;
-		g3dGraphPresentPtr->RetrieveDrawAttr(ElemKey);
-
-		g3dGraphPresentPtr->GenDraw();
-		if(DoShowFrameAxes) g3dGraphPresentPtr->DrawFrameLines();
-
-		int keyGeomData = (radTg3dGraphPresent::Send).GeomDataToBuffer();
-
-		delete g3dGraphPresentPtr;
-		g3dGraphPresentPtr = nullptr;
-		return keyGeomData;
-	}
-	catch(...)
-	{
-		if(g3dGraphPresentPtr) delete g3dGraphPresentPtr;
-		Initialize(); return 0;
-	}
-}
-
-//-------------------------------------------------------------------------
-
-void radTApplication::GraphicsForAll_g3d(int InShowSymmetryChilds)
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = nullptr;
-	try
-	{
-		int TotalElem = (int)(GlobalMapOfHandlers.size());
-		// RAII: Use std::vector for automatic cleanup
-		std::vector<radTg3d*> vG3dPtrPtr(TotalElem);
-		std::vector<int> vKeyPtr(TotalElem);
-		radTg3d** g3dPtrPtr = vG3dPtrPtr.data();
-		int* KeyPtr = vKeyPtr.data();
-
-		radGraphPresOptions InGraphPresOptions((char)InShowSymmetryChilds);
-
-		int g3dPresElemCount = 0;
-		for(radTmhg::const_iterator iter = GlobalMapOfHandlers.begin();
-			iter != GlobalMapOfHandlers.end(); ++iter)
-		{
-			radTg* gPtr = ((*iter).second).rep;
-			radTg3d g3d;
-			if(gPtr->Type_g() == g3d.Type_g())
-				if(!static_cast<radTg3d*>(gPtr)->IsGroupMember)
-				{
-					g3dPtrPtr[g3dPresElemCount] = static_cast<radTg3d*>(gPtr);
-					KeyPtr[g3dPresElemCount++] = (*iter).first;
-				}
-		}
-		if(g3dPresElemCount != 0)
-		{
-			Send.GenInitDraw();
-
-			Send.InitOutList(g3dPresElemCount);
-			for(int i = 0; i < g3dPresElemCount; i++)
-			{
-				g3dGraphPresentPtr = g3dPtrPtr[i]->CreateGraphPresent();
-
-				g3dGraphPresentPtr->SetGraphPresOptions(InGraphPresOptions);
-				g3dGraphPresentPtr->MapOfDrawAttrPtr = &MapOfDrawAttr;
-				g3dGraphPresentPtr->RetrieveDrawAttr(KeyPtr[i]);
-				g3dGraphPresentPtr->GenDraw();
-				delete g3dGraphPresentPtr;
-				g3dGraphPresentPtr = nullptr;
-			}
-		}
-		else Send.ErrorMessage("Radia::Error101");
-		// RAII: automatic cleanup (also fixes missing delete[] KeyPtr!)
-	}
-	catch(...)
-	{
-		if(g3dGraphPresentPtr) delete g3dGraphPresentPtr;
-		Initialize(); return;
-	}
-}
+// Graphics3D functions removed: ApplyDrawAttrToElem_g3d, RemoveDrawAttrFromElem_g3d,
+// GraphicsForElem_g3d, GraphicsForElem_g3d_VTK, GraphicsForAll_g3d
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -1590,7 +1382,7 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep); 
 		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
 
-		// Valid methods: LU (0), BICGSTAB (1), HACAPK (2), FMM (3)
+		// Valid methods: LU (0), BICGSTAB (1), HACAPK (2)
 		{
 			bool validMethod = (MethNo == RadSolverMethod::LU || MethNo == RadSolverMethod::BICGSTAB);
 #ifdef RADIA_USE_HACAPK
@@ -1693,7 +1485,7 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			if(PrecOnMagnetiz <= 0.) { Send.ErrorMessage("Radia::Error030"); return 0; }
 			if(MaxIterNumber <= 0) { Send.ErrorMessage("Radia::Error031"); return 0; }
 
-			// Valid methods: LU (0), BICGSTAB (1), HACAPK (2), FMM (3)
+			// Valid methods: LU (0), BICGSTAB (1), HACAPK (2)
 			{
 				bool validMethod = (MethNo == RadSolverMethod::LU || MethNo == RadSolverMethod::BICGSTAB);
 #ifdef RADIA_USE_HACAPK
@@ -1881,8 +1673,8 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		short PrevSendingIsRequired = SendingIsRequired;
 		SendingIsRequired = 0;
 
-		// For HACApK (method 2) and FMM (method 3), skip dense matrix construction
-		// These solvers build their own data structures
+		// For HACApK (method 2), skip dense matrix construction
+		// HACApK builds its own data structures
 		char skipDenseMatrix = 0;
 #ifdef RADIA_USE_HACAPK
 		if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
@@ -2359,7 +2151,6 @@ void radTApplication::OutFieldCompRes(char* FieldChar, radTField* FieldArray, lo
 			else if(*(BufChar)=='P' || *(BufChar)=='p')
 			{
 				// Scalar potential phi_m (units: Ampere)
-				// Reference: ELF_MAGIC implementation (src/dll/m_fmm3d.f90)
 				*(t++) = FieldPtr->Phi; InnerCount++;
 			}
 			else if(*(BufChar)=='Q' || *(BufChar)=='q') //OC161005
@@ -2616,11 +2407,11 @@ void radTApplication::OutCenFieldCompRes(radTVectPairOfVect3d* pVectPairOfVect3d
 {
 	int AmOfPoints = (int)(pVectPairOfVect3d->size());
 	radTSend Send;
-	Send.InitOutList(AmOfPoints, 0);
+	Send.InitOutList(AmOfPoints);
 
 	for(int i=0; i<AmOfPoints; i++)
 	{
-		Send.InitOutList(2, 0);
+		Send.InitOutList(2);
 		radTPairOfVect3d& Pair = (*pVectPairOfVect3d)[i];
 		Send.Vector3d(&(Pair.V1));
 		Send.Vector3d(&(Pair.V2));
@@ -2761,8 +2552,6 @@ void radTApplication::GetHACApKStats(double* dOut, int* nOut)
 #endif
 
 //-------------------------------------------------------------------------
-
-// SetFMMParams REMOVED 2026-03-06 (FMM solver abolished)
 
 //-------------------------------------------------------------------------
 

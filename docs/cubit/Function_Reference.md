@@ -9,8 +9,6 @@ Reference documentation for `cubit_mesh_export` module functions.
 | `export_exodus()` | Exodus II (.exo) | Yes | Yes | Yes |
 | `export_netgen()` | Netgen mesh object | Yes | Yes (via Curve) | Yes (via Curve) |
 | `export_netgen_with_names()` | Netgen mesh object | Yes | Yes (via Curve) | Yes (via Curve) |
-| `export_vtk()` | VTK Legacy (.vtk) | Yes | Yes | No |
-| `export_vtu()` | VTK XML (.vtu) | Yes | Yes | No |
 | `export_gmesh()` | Gmsh v2.2/v4.1 | Yes | Yes | No |
 | `export_nastran()` | Nastran BDF | Yes | No | No |
 | `export_meg()` | MEG (ELF) | Yes | No | No |
@@ -133,38 +131,6 @@ export_meg(cubit, FileName, DIM='T', MGR2=None)
 
 ---
 
-## VTK Export
-
-### Legacy Format (.vtk)
-
-```python
-export_vtk(cubit, FileName)
-```
-
-### XML Format (.vtu)
-
-```python
-export_vtu(cubit, FileName)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `FileName` | str | required | Output file path |
-
-**VTK vs VTU**:
-| Feature | VTK Legacy | VTK XML |
-|---------|------------|---------|
-| Format | ASCII text | XML |
-| Metadata | Basic | BlockID, NodeID |
-| ParaView | Compatible | **Recommended** |
-
-**Auto-detection**: Element order detected from node count.
-
-[Full documentation](export_VTK.md) | [Examples](../../examples/cubit/vtk/)
-
----
-
 ## Netgen Export
 
 ### Standard Export
@@ -277,8 +243,3 @@ Blocks can contain either mesh elements or geometry:
 
 ---
 
-## Bug Fix Records
-
-| Document | Description |
-|----------|-------------|
-| [BUGFIX_cubit_mesh_export_vtk_indexing.md](BUGFIX_cubit_mesh_export_vtk_indexing.md) | VTK node indexing fix for non-contiguous node IDs |

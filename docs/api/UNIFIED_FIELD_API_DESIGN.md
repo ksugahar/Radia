@@ -107,7 +107,7 @@ B_batch = rad.Fld(obj, 'b', points)   # returns (N, 3) array
 1. ngbem provides high-order H(div) elements, H-matrix acceleration, singular quadrature
 2. Product space (HDivSurface × SurfaceL2) naturally gives Loop-Star decomposition
 3. No low-frequency breakdown — condition number O(1) from DC to RF
-4. Avoids reimplementing BEM infrastructure (quadrature, FMM, etc.)
+4. Avoids reimplementing BEM infrastructure (quadrature, H-matrix, etc.)
 
 **Integration point**: Python level. ngbem matrices are assembled in Python, coupled with
 Radia MMM via `ngbem_coupled.py`. Field computation uses ngbem's `GridFunction.Evaluate()`.

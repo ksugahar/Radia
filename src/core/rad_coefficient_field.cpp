@@ -253,11 +253,6 @@ void radTCoefficientFunctionFieldSource::B_intComp(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTCoefficientFunctionFieldSource::CreateGraphPresent()
-{
-	// No geometry to display for field source
-	return 0;
-}
 
 //-------------------------------------------------------------------------
 

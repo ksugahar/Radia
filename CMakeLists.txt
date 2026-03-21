@@ -158,7 +158,6 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_extruded_polygon.cpp      # Extruded polygon (prism)
 	${CORE_DIR}/rad_filament.cpp              # Filament conductor
 	${CORE_DIR}/rad_geometry_3d.cpp           # 3D geometry base class
-	${CORE_DIR}/rad_graphics_3d.cpp           # 3D graphics/visualization
 	${CORE_DIR}/rad_group.cpp                 # Container/group of field sources
 	${CORE_DIR}/rad_c_interface.cpp           # C-style interface functions
 	${CORE_DIR}/rad_interaction.cpp           # Magnetic interaction between objects

@@ -41,7 +41,6 @@
 
 #include "rad_application.h"
 #include "rad_arc_current.h"
-#include "rad_graphics_3d.h"
 #include "rad_subdivided_arc_current.h"
 #include "rad_elliptic_integral.h"
 
@@ -519,11 +518,6 @@ void radTArcCur::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmh
 
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTArcCur::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = new radTArcCurGraphPresent(this);
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 
@@ -740,10 +734,5 @@ void radTArcCur::VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUn
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTBackgroundFieldSource::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = new radTBackgroundFldSrcGraphPresent(this);
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------

@@ -17,7 +17,6 @@
 #include "rad_application.h"
 #include "rad_constants.h"  // Unified mathematical/physical constants
 #include "rad_extruded_polygon.h"
-#include "rad_graphics_3d.h"
 #include "rad_subdivided_extruded_polygon.h"
 #include "rad_geometry_3d_aux.h"
 
@@ -152,11 +151,6 @@ void radTExtrPolygon::DumpBinParse_ExtrPolygon(CAuxBinStrVect& inStr)
 
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTExtrPolygon::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = new radTExtrPolygonGraphPresent(this);
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 

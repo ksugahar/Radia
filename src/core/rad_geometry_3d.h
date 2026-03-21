@@ -148,7 +148,6 @@ struct radTCylindricSubdivSpec {
 
 using radTHandleAuxCompDataG3D = radTHandle<radTAuxCompDataG3D>;
 class radTApplication;
-class radTg3dGraphPresent;
 class radTField;
 struct radTFieldKey;
 class radTrans;
@@ -233,8 +232,6 @@ public:
 	}
 	void NestedFor_IntOverShape(radTField*, const radTlphg::iterator&);
 	virtual void IntOverShape(radTField*) {}
-
-	virtual radTg3dGraphPresent* CreateGraphPresent() { return nullptr;}
 
 	virtual int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*) { return 1;}
 	virtual int CutItself(TVector3d*, radThg&, radTPair_int_hg&, radTPair_int_hg&, radTApplication*, radTSubdivOptions*) { return 1;}

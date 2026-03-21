@@ -88,5 +88,4 @@ Integration is performed using Runge-Kutta methods (RK4 or adaptive RK5).
 
 - Hamiltonian formulation with vector potential A
 - Symplectic integrators (Forest-Ruth, Yoshida)
-- FMM acceleration for large field models
 - GPU parallel batch tracking

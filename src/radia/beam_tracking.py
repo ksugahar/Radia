@@ -36,7 +36,6 @@ Example:
 Future extensions (2026 roadmap):
 - Hamiltonian formulation (A-field based)
 - Symplectic integrators (Forest-Ruth, Yoshida)
-- FMM acceleration for large field models
 - GPU parallel batch tracking
 """
 

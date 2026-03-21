@@ -16,16 +16,10 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_subdivided_arc_current.h"
-#include "rad_graphics_3d.h"
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTSubdividedArcCur::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = new radTSubdivArcCurGraphPresent((radTGroup*)this);
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 

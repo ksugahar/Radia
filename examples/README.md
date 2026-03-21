@@ -41,8 +41,6 @@ paraview arc_current_with_magnet.vts
 | Directory | Scripts | Description |
 |-----------|---------|-------------|
 | [solver_benchmarks/](solver_benchmarks/) | 15 | LU vs BiCGSTAB performance, scaling studies |
-| [fmm_field_benchmark/](fmm_field_benchmark/) | 1 | FMM field computation benchmark (ELF comparison) |
-| [fmm_field_evaluation/](fmm_field_evaluation/) | 2 | FldBatch demo and FMM accuracy verification |
 | [tetra_field_accuracy_evaluation/](tetra_field_accuracy_evaluation/) | 5 | Tetrahedron field accuracy vs analytical/NGSolve reference |
 
 ### NGSolve Integration
@@ -81,7 +79,7 @@ paraview arc_current_with_magnet.vts
 | FEM coupling | `ngsolve_integration/`, `KelvinTransformation/` |
 | PEEC conductors | `peec_integration/`, `induction_heating/` |
 | Eddy currents / shielding | `ngbem_diagnostics/`, `Effective_Surface_Impedance/` |
-| Solver performance | `solver_benchmarks/`, `fmm_field_benchmark/` |
+| Solver performance | `solver_benchmarks/` |
 | Visualization | `visualization/`, `vtk_export/` |
 
 ---
