@@ -1,17 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Radia Coil Builder - Elegant fluent interface for constructing complex coil geometries.
+Radia Coil Builder - Fluent interface for constructing complex coil geometries.
 
-This module provides a modern object-oriented design for defining multi-segment
-coil paths with automatic state tracking and seamless Radia integration.
+Provides a beam-optics-inspired path builder for multi-segment coils.
+Each segment's end state (position, orientation) automatically becomes
+the next segment's start state, enabling continuous coil path definition
+without manual coordinate tracking.
+
+Outputs:
+  - to_radia(): Radia field source objects (ObjRecCur, ObjArcCur)
+  - to_occ(): OCC shape for STEP export / GMSH visualization
+  - write_step(): Direct STEP file export
 
 Example:
-	>>> import radia as rad
-	>>> # Radia always uses meters
 	>>> from radia_coil_builder import CoilBuilder
 	>>>
-	>>> # Create a racetrack coil (dimensions in meters)
 	>>> mm = 1e-3
 	>>> coil = (CoilBuilder(current=1000)
 	...	 .set_start([0, 0, 0])
@@ -19,8 +23,11 @@ Example:
 	...	 .add_straight(100*mm)
 	...	 .add_arc(radius=50*mm, arc_angle=180, tilt=90)
 	...	 .add_straight(100*mm)
-	...	 .add_arc(radius=50*mm, arc_angle=180, tilt=90)
-	...	 .to_radia())
+	...	 .add_arc(radius=50*mm, arc_angle=180, tilt=90))
+	>>>
+	>>> radia_objects = coil.to_radia()      # Radia field sources
+	>>> occ_shape = coil.to_occ()            # OCC shape for visualization
+	>>> coil.write_step("racetrack.step")    # STEP export
 """
 
 import numpy as np
@@ -80,6 +87,11 @@ class CoilSegment(ABC):
 		"""Current density: I / (width * height) in A/(active_unit²)."""
 		return self.current / (self.width * self.height)
 
+	@abstractmethod
+	def to_occ_shape(self):
+		"""Generate OCC shape for this segment."""
+		pass
+
 
 class StraightSegment(CoilSegment):
 	"""
@@ -127,6 +139,20 @@ class StraightSegment(CoilSegment):
 	def end_orientation(self):
 		"""End orientation: same as start (no rotation)."""
 		return self.orientation
+
+	def to_occ_shape(self):
+		"""Generate OCC Box for this straight segment."""
+		from netgen.occ import Box, Pnt, Axis, Vec, Z, X, Y
+		# Create box at origin aligned with XYZ
+		shape = Box(Pnt(-self.width/2, 0, -self.height/2),
+		            Pnt(self.width/2, self.length, self.height/2))
+		# Apply ZXZ Euler rotation + translation to match segment pose
+		ea = self.euler_angles
+		shape = shape.Rotate(Axis(Pnt(0,0,0), Z), ea[2])
+		shape = shape.Rotate(Axis(Pnt(0,0,0), X), ea[1])
+		shape = shape.Rotate(Axis(Pnt(0,0,0), Z), ea[0])
+		shape = shape.Move(Vec(*self.start_pos))
+		return shape
 
 
 class ArcSegment(CoilSegment):
@@ -193,6 +219,22 @@ class ArcSegment(CoilSegment):
 			[0, 0, 1]
 		])
 		return rotation_matrix @ self.orientation
+
+	def to_occ_shape(self):
+		"""Generate OCC revolved shape for this arc segment."""
+		from netgen.occ import WorkPlane, Axes, Pnt, Axis, Vec, Z, X, Y
+		# Cross-section rectangle at (radius, 0) in local frame
+		r_inner = self.radius - self.width / 2
+		wp = WorkPlane(Axes(Pnt(r_inner, 0, -self.height/2), n=-Y, h=X))
+		face = wp.Rectangle(self.width, self.height).Face()
+		# Revolve around Z axis
+		shape = face.Revolve(Axis(Pnt(0, 0, 0), Z), self.arc_angle)
+		# Apply ZX Euler rotation + translation to arc center
+		ea = self.euler_angles
+		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[2])
+		shape = shape.Rotate(Axis(Pnt(0, 0, 0), X), ea[1])
+		shape = shape.Move(Vec(*self.arc_center))
+		return shape
 
 
 class CoilBuilder:
@@ -398,6 +440,34 @@ class CoilBuilder:
 				radia_objects.append(rad.TrfOrnt(coil, trf))
 
 		return radia_objects
+
+
+	def to_occ(self):
+		"""Convert all segments to a combined OCC shape.
+
+		Returns:
+			OCC shape (can be exported to STEP, displayed in GMSH, etc.)
+		"""
+		from netgen.occ import Glue
+		shapes = [seg.to_occ_shape() for seg in self.segments]
+		if len(shapes) == 0:
+			raise ValueError("No segments added")
+		if len(shapes) == 1:
+			return shapes[0]
+		return Glue(shapes)
+
+	def write_step(self, filename):
+		"""Export coil geometry to STEP file.
+
+		Args:
+			filename: Output .step file path
+
+		Returns:
+			filename
+		"""
+		shape = self.to_occ()
+		shape.WriteStep(filename)
+		return filename
 
 
 # Export public API
