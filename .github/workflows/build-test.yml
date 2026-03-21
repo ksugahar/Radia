@@ -78,8 +78,8 @@ jobs:
         env:
           PYTHONPATH: '${{ env.NGSOLVE_ROOT }}\Lib\site-packages;${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
         run: |
-          Write-Host "Running pytest..."
-          python -m pytest tests/ -v --tb=short --junitxml=test-results.xml
+          Write-Host "Running pytest (excluding cubit tests - require Cubit + netgen fork)..."
+          python -m pytest tests/ -v --tb=short --junitxml=test-results.xml --ignore=tests/cubit
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Basic tests failed"
             exit $LASTEXITCODE
