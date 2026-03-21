@@ -6,7 +6,7 @@ Called as subprocess from Cubit panel:
 
 Workflow:
   1. Open cub5, get CAD areas
-  2. export_curved(cubit, order=N) -> NGSolve Mesh (curved via ACIS kernel)
+  2. export_NGSolveCurvedMesh(cubit, order=N) -> NGSolve Mesh (curved via ACIS kernel)
   3. Integrate(CF(1), mesh, BND) for surface area
 
 IMPORTANT: NGSolve must be imported BEFORE cubit.
@@ -48,9 +48,9 @@ def _setup_cubit():
 
 
 def calculate_surface(cub5_file, order):
-    """Calculate surface area using Cubit mesh + export_curved().
+    """Calculate surface area using Cubit mesh + export_NGSolveCurvedMesh().
 
-    Uses export_curved() which works directly with Cubit's ACIS kernel
+    Uses export_NGSolveCurvedMesh() which works directly with Cubit's ACIS kernel
     for high-order curving. No STEP files or OCC geometry needed.
     """
     from ngsolve import Integrate, CF, BND
@@ -90,10 +90,10 @@ def calculate_surface(cub5_file, order):
     import cubit_mesh_export
 
     try:
-        mesh = cubit_mesh_export.export_curved(cubit, order=order)
+        mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
     except Exception as e:
         return {"volumes": results, "cad_total": cad_total,
-                "error": f"export_curved(order={order}) failed: {e}"}
+                "error": f"export_NGSolveCurvedMesh(order={order}) failed: {e}"}
 
     # Integrate
     total_area = Integrate(CF(1), mesh, VOL_or_BND=BND)

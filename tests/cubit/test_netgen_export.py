@@ -1,5 +1,5 @@
 """
-Test export_curved() function.
+Test export_NGSolveCurvedMesh() function.
 
 Tests:
 1. 3D tet mesh export
@@ -67,8 +67,8 @@ def test_basic_tet_export():
 		print("  PASS: Cubit data extraction works correctly")
 		return True
 
-	# Export via export_curved
-	mesh = cubit_mesh_export.export_curved(cubit, order=1)
+	# Export via export_NGSolveCurvedMesh
+	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
 
 	# Verify mesh
 	num_elements = mesh.ne
@@ -81,11 +81,11 @@ def test_basic_tet_export():
 
 
 def test_1st_order_output_with_2nd_order_mesh():
-	"""Test that export_curved(order=1) outputs 1st order even with 2nd order Cubit mesh."""
+	"""Test that export_NGSolveCurvedMesh(order=1) outputs 1st order even with 2nd order Cubit mesh."""
 	print("\n" + "=" * 60)
 	print("Test 2: 1st Order Output with 2nd Order Cubit Mesh")
 	print("=" * 60)
-	print("  This is the CRITICAL test for export_curved design")
+	print("  This is the CRITICAL test for export_NGSolveCurvedMesh design")
 	print("-" * 60)
 
 	cubit.cmd("reset")
@@ -112,15 +112,15 @@ def test_1st_order_output_with_2nd_order_mesh():
 	if not NGSOLVE_AVAILABLE:
 		print("  Skipping export (NGSolve not available)")
 		print("  KEY VERIFICATION: get_connectivity returns 4 nodes even for TET10")
-		print("  export_curved uses get_connectivity, so it will output 1st order")
+		print("  export_NGSolveCurvedMesh uses get_connectivity, so it will output 1st order")
 		print("  PASS: Design verified (Cubit side)")
 		return True
 
-	# Export via export_curved(order=1)
-	mesh = cubit_mesh_export.export_curved(cubit, order=1)
+	# Export via export_NGSolveCurvedMesh(order=1)
+	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
 
 	print(f"  NGSolve mesh: {mesh.ne} elements, {mesh.nv} vertices")
-	print("  PASS: export_curved(order=1) outputs 1st order elements")
+	print("  PASS: export_NGSolveCurvedMesh(order=1) outputs 1st order elements")
 	return True
 
 
@@ -172,7 +172,7 @@ def test_node_coordinates():
 		return True
 
 	# Export and verify coordinates
-	mesh = cubit_mesh_export.export_curved(cubit, order=1)
+	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
 
 	print(f"  NGSolve mesh: {mesh.ne} elements, {mesh.nv} vertices")
 	print("  PASS: Node coordinates correctly exported")
@@ -215,7 +215,7 @@ def test_element_connectivity():
 		return True
 
 	# Export and verify
-	mesh = cubit_mesh_export.export_curved(cubit, order=1)
+	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
 
 	print(f"  NGSolve mesh: {mesh.ne} elements verified")
 	print("  PASS: Element connectivity correct")
@@ -240,8 +240,8 @@ def test_ngsolve_integration():
 
 	cubit.cmd("block 1 add tet all")
 
-	# Export via export_curved
-	mesh = cubit_mesh_export.export_curved(cubit, order=1)
+	# Export via export_NGSolveCurvedMesh
+	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
 
 	print(f"  NGSolve mesh created successfully")
 	print(f"  Elements: {mesh.ne}")
@@ -262,7 +262,7 @@ def test_ngsolve_integration():
 def test_curve_high_order():
 	"""Test high-order curving with geometry."""
 	print("\n" + "=" * 60)
-	print("Test 6: High-Order Curving via export_curved")
+	print("Test 6: High-Order Curving via export_NGSolveCurvedMesh")
 	print("=" * 60)
 
 	if not NGSOLVE_AVAILABLE:
@@ -284,13 +284,13 @@ def test_curve_high_order():
 	step_file = "test_sphere_curve.step"
 	cubit.cmd(f'export step "{step_file}" overwrite')
 
-	# Export mesh with curving via export_curved
+	# Export mesh with curving via export_NGSolveCurvedMesh
 	for order in [1, 2, 3]:
 		try:
-			mesh = cubit_mesh_export.export_curved(cubit, order=order)
-			print(f"  export_curved(order={order}) succeeded! ne={mesh.ne}, nv={mesh.nv}")
+			mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
+			print(f"  export_NGSolveCurvedMesh(order={order}) succeeded! ne={mesh.ne}, nv={mesh.nv}")
 		except Exception as e:
-			print(f"  export_curved(order={order}) failed: {e}")
+			print(f"  export_NGSolveCurvedMesh(order={order}) failed: {e}")
 
 	# Cleanup
 	os.remove(step_file)
@@ -333,8 +333,8 @@ def test_multiple_blocks():
 		print("  PASS: Multiple blocks created")
 		return True
 
-	# Export via export_curved
-	mesh = cubit_mesh_export.export_curved(cubit, order=1)
+	# Export via export_NGSolveCurvedMesh
+	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
 
 	print(f"  NGSolve mesh: {mesh.ne} elements")
 	print("  PASS: Multiple blocks exported")
@@ -343,7 +343,7 @@ def test_multiple_blocks():
 
 if __name__ == "__main__":
 	print("\n" + "=" * 60)
-	print("export_curved() Test Suite")
+	print("export_NGSolveCurvedMesh() Test Suite")
 	print("=" * 60)
 
 	all_passed = True

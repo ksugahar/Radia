@@ -1,7 +1,7 @@
 """
-Netgen Export Example: Torus with export_curved()
+Netgen Export Example: Torus with export_NGSolveCurvedMesh()
 
-Demonstrates automatic high-order curving for a torus using export_curved().
+Demonstrates automatic high-order curving for a torus using export_NGSolveCurvedMesh().
 
 Run: python netgen_torus_setgeominfo.py
 """
@@ -28,7 +28,7 @@ import cubit_mesh_export
 R_major = 1.0  # Major radius
 R_minor = 0.3  # Minor radius
 
-print("=== Netgen Export: Torus with export_curved() ===")
+print("=== Netgen Export: Torus with export_NGSolveCurvedMesh() ===")
 print(f"Parameters: R_major={R_major}, R_minor={R_minor}")
 print()
 
@@ -58,8 +58,8 @@ expected_area = 4 * math.pi**2 * R_major * R_minor
 expected_vol = 2 * math.pi**2 * R_major * R_minor**2
 
 for order in [2, 3]:
-	print(f"\nexport_curved(order={order})")
-	mesh = cubit_mesh_export.export_curved(cubit, order=order)
+	print(f"\nexport_NGSolveCurvedMesh(order={order})")
+	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
 
 	area = Integrate(CF(1), mesh, VOL_or_BND=BND)
 	vol = Integrate(CF(1), mesh)
