@@ -72,7 +72,14 @@ if (-not $CMAKE_EXE) {
     $CMAKE_EXE = "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 }
 if (-not (Test-Path $CMAKE_EXE)) {
-    Write-Host "ERROR: CMake not found. Install Visual Studio 2022 with CMake." -ForegroundColor Red
+    # Fallback: pip-installed cmake
+    $PIP_CMAKE = & python -c "import shutil; print(shutil.which('cmake') or '')" 2>$null
+    if ($PIP_CMAKE -and (Test-Path $PIP_CMAKE)) {
+        $CMAKE_EXE = $PIP_CMAKE
+    }
+}
+if (-not (Test-Path $CMAKE_EXE)) {
+    Write-Host "ERROR: CMake not found. Install Visual Studio 2022 with CMake or pip install cmake." -ForegroundColor Red
     exit 1
 }
 
