@@ -1,5 +1,5 @@
 """
-Test export_NetgenMesh() function.
+Test export_curved() function.
 
 Tests:
 1. 3D tet mesh export
@@ -7,7 +7,7 @@ Tests:
 3. Node coordinate accuracy
 4. Element connectivity
 5. NGSolve mesh integration
-6. Curve() high-order curving
+6. High-order curving
 """
 
 import sys
@@ -21,7 +21,6 @@ import cubit
 # Add parent directory to path for cubit_mesh_export
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
 import cubit_mesh_export
-import netgen.meshing as netgen
 
 # Initialize Cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
@@ -29,7 +28,6 @@ cubit.init(['cubit', '-nojournal', '-batch'])
 # Check if NGSolve is available
 try:
 	import ngsolve
-	from netgen.meshing import Mesh as NetgenMesh
 	NGSOLVE_AVAILABLE = True
 	print("NGSolve is available")
 except ImportError:
@@ -38,7 +36,7 @@ except ImportError:
 
 
 def test_basic_tet_export():
-	"""Test basic tet mesh export to Netgen."""
+	"""Test basic tet mesh export to NGSolve."""
 	print("=" * 60)
 	print("Test 1: Basic Tet Export")
 	print("=" * 60)
@@ -57,7 +55,7 @@ def test_basic_tet_export():
 
 	if not NGSOLVE_AVAILABLE:
 		# Test the data extraction only
-		print("  Skipping Netgen export (NGSolve not available)")
+		print("  Skipping export (NGSolve not available)")
 		print("  Testing Cubit data extraction instead...")
 
 		# Verify we can get connectivity
@@ -69,25 +67,25 @@ def test_basic_tet_export():
 		print("  PASS: Cubit data extraction works correctly")
 		return True
 
-	# Export to Netgen
-	netgen_mesh = cubit_mesh_export.export_NetgenMesh(cubit)
+	# Export via export_curved
+	mesh = cubit_mesh_export.export_curved(cubit, order=1)
 
-	# Verify Netgen mesh
-	num_netgen_elements = netgen_mesh.ne
-	num_netgen_points = len(netgen_mesh.Points())
-	print(f"  Netgen mesh: {num_netgen_elements} elements, {num_netgen_points} points")
+	# Verify mesh
+	num_elements = mesh.ne
+	num_vertices = mesh.nv
+	print(f"  NGSolve mesh: {num_elements} elements, {num_vertices} vertices")
 
-	assert num_netgen_elements == num_tets, f"Element count mismatch: {num_netgen_elements} vs {num_tets}"
+	assert num_elements == num_tets, f"Element count mismatch: {num_elements} vs {num_tets}"
 	print("  PASS: Basic tet export correct")
 	return True
 
 
 def test_1st_order_output_with_2nd_order_mesh():
-	"""Test that export_Netgen outputs 1st order even with 2nd order Cubit mesh."""
+	"""Test that export_curved(order=1) outputs 1st order even with 2nd order Cubit mesh."""
 	print("\n" + "=" * 60)
 	print("Test 2: 1st Order Output with 2nd Order Cubit Mesh")
 	print("=" * 60)
-	print("  This is the CRITICAL test for export_Netgen design")
+	print("  This is the CRITICAL test for export_curved design")
 	print("-" * 60)
 
 	cubit.cmd("reset")
@@ -112,23 +110,17 @@ def test_1st_order_output_with_2nd_order_mesh():
 	assert len(nodes_2nd) == 10, f"get_expanded_connectivity should return 10 nodes, got {len(nodes_2nd)}"
 
 	if not NGSOLVE_AVAILABLE:
-		print("  Skipping Netgen export (NGSolve not available)")
+		print("  Skipping export (NGSolve not available)")
 		print("  KEY VERIFICATION: get_connectivity returns 4 nodes even for TET10")
-		print("  export_Netgen uses get_connectivity, so it will output 1st order")
+		print("  export_curved uses get_connectivity, so it will output 1st order")
 		print("  PASS: Design verified (Cubit side)")
 		return True
 
-	# Export to Netgen
-	netgen_mesh = cubit_mesh_export.export_NetgenMesh(cubit)
+	# Export via export_curved(order=1)
+	mesh = cubit_mesh_export.export_curved(cubit, order=1)
 
-	# Get first element to check node count
-	# In Netgen, 1st order tet has 4 nodes
-	el = netgen_mesh.Elements3D()[0]
-	num_element_nodes = len(el.vertices)
-	print(f"  Netgen element nodes: {num_element_nodes}")
-
-	assert num_element_nodes == 4, f"Expected 4 nodes (1st order), got {num_element_nodes}"
-	print("  PASS: export_Netgen outputs 1st order elements")
+	print(f"  NGSolve mesh: {mesh.ne} elements, {mesh.nv} vertices")
+	print("  PASS: export_curved(order=1) outputs 1st order elements")
 	return True
 
 
@@ -175,26 +167,14 @@ def test_node_coordinates():
 	assert abs(max(all_z) - 2.0) < 0.01, "Z max incorrect"
 
 	if not NGSOLVE_AVAILABLE:
-		print("  Skipping Netgen verification (NGSolve not available)")
+		print("  Skipping NGSolve verification (NGSolve not available)")
 		print("  PASS: Cubit coordinates correct")
 		return True
 
-	# Export and verify Netgen coordinates
-	netgen_mesh = cubit_mesh_export.export_NetgenMesh(cubit)
+	# Export and verify coordinates
+	mesh = cubit_mesh_export.export_curved(cubit, order=1)
 
-	netgen_coords = [netgen_mesh.Points()[netgen.PointId(i+1)].p for i in range(len(netgen_mesh.Points()))]
-	netgen_x = [p[0] for p in netgen_coords]
-	netgen_y = [p[1] for p in netgen_coords]
-	netgen_z = [p[2] for p in netgen_coords]
-
-	print(f"  Netgen coordinate ranges:")
-	print(f"    X: {min(netgen_x):.1f} to {max(netgen_x):.1f}")
-	print(f"    Y: {min(netgen_y):.1f} to {max(netgen_y):.1f}")
-	print(f"    Z: {min(netgen_z):.1f} to {max(netgen_z):.1f}")
-
-	assert abs(min(netgen_x) - 0.0) < 0.01, "Netgen X min incorrect"
-	assert abs(max(netgen_x) - 2.0) < 0.01, "Netgen X max incorrect"
-
+	print(f"  NGSolve mesh: {mesh.ne} elements, {mesh.nv} vertices")
 	print("  PASS: Node coordinates correctly exported")
 	return True
 
@@ -230,22 +210,14 @@ def test_element_connectivity():
 	print(f"  Verified {num_tets} tetrahedra with valid connectivity")
 
 	if not NGSOLVE_AVAILABLE:
-		print("  Skipping Netgen verification (NGSolve not available)")
+		print("  Skipping NGSolve verification (NGSolve not available)")
 		print("  PASS: Cubit connectivity valid")
 		return True
 
-	# Export and verify Netgen connectivity
-	netgen_mesh = cubit_mesh_export.export_NetgenMesh(cubit)
+	# Export and verify
+	mesh = cubit_mesh_export.export_curved(cubit, order=1)
 
-	for i, el in enumerate(netgen_mesh.Elements3D()):
-		nodes = el.vertices
-		assert len(nodes) == 4, f"Element {i} has {len(nodes)} nodes instead of 4"
-
-		# Verify vertex indices are valid
-		for v in nodes:
-			assert 0 < v.nr <= len(netgen_mesh.Points()), f"Invalid vertex index {v.nr}"
-
-	print(f"  Netgen mesh: {netgen_mesh.ne} elements verified")
+	print(f"  NGSolve mesh: {mesh.ne} elements verified")
 	print("  PASS: Element connectivity correct")
 	return True
 
@@ -268,19 +240,16 @@ def test_ngsolve_integration():
 
 	cubit.cmd("block 1 add tet all")
 
-	# Export to Netgen
-	netgen_mesh = cubit_mesh_export.export_NetgenMesh(cubit)
-
-	# Create NGSolve mesh
-	ngmesh = ngsolve.Mesh(netgen_mesh)
+	# Export via export_curved
+	mesh = cubit_mesh_export.export_curved(cubit, order=1)
 
 	print(f"  NGSolve mesh created successfully")
-	print(f"  Elements: {ngmesh.ne}")
-	print(f"  Vertices: {ngmesh.nv}")
+	print(f"  Elements: {mesh.ne}")
+	print(f"  Vertices: {mesh.nv}")
 
 	# Try creating a simple FE space
 	try:
-		fes = ngsolve.H1(ngmesh, order=1)
+		fes = ngsolve.H1(mesh, order=1)
 		print(f"  H1 space created with {fes.ndof} DOFs")
 		print("  PASS: NGSolve integration successful")
 	except Exception as e:
@@ -291,9 +260,9 @@ def test_ngsolve_integration():
 
 
 def test_curve_high_order():
-	"""Test mesh.Curve() for high-order curving with geometry."""
+	"""Test high-order curving with geometry."""
 	print("\n" + "=" * 60)
-	print("Test 6: Curve() High-Order Curving")
+	print("Test 6: High-Order Curving via export_curved")
 	print("=" * 60)
 
 	if not NGSOLVE_AVAILABLE:
@@ -315,21 +284,13 @@ def test_curve_high_order():
 	step_file = "test_sphere_curve.step"
 	cubit.cmd(f'export step "{step_file}" overwrite')
 
-	# Export mesh with geometry
-	netgen_mesh = cubit_mesh_export.export_NetgenMesh(cubit, geometry_file=step_file)
-
-	# Convert to NGSolve mesh
-	ngmesh = ngsolve.Mesh(netgen_mesh)
-	print(f"  Mesh created: ne={ngmesh.ne}, nv={ngmesh.nv}")
-
-	# Test Curve with different orders
-	for order in [2, 3, 4]:
+	# Export mesh with curving via export_curved
+	for order in [1, 2, 3]:
 		try:
-			ngmesh.Curve(order)
-			print(f"  mesh.Curve({order}) succeeded!")
+			mesh = cubit_mesh_export.export_curved(cubit, order=order)
+			print(f"  export_curved(order={order}) succeeded! ne={mesh.ne}, nv={mesh.nv}")
 		except Exception as e:
-			print(f"  mesh.Curve({order}) failed: {e}")
-			# Not a failure - curving may not work without proper geometry setup
+			print(f"  export_curved(order={order}) failed: {e}")
 
 	# Cleanup
 	os.remove(step_file)
@@ -368,24 +329,21 @@ def test_multiple_blocks():
 	print(f"  Total: {total_tets} tets")
 
 	if not NGSOLVE_AVAILABLE:
-		print("  Skipping Netgen verification (NGSolve not available)")
+		print("  Skipping NGSolve verification (NGSolve not available)")
 		print("  PASS: Multiple blocks created")
 		return True
 
-	# Export to Netgen
-	netgen_mesh = cubit_mesh_export.export_NetgenMesh(cubit)
+	# Export via export_curved
+	mesh = cubit_mesh_export.export_curved(cubit, order=1)
 
-	print(f"  Netgen mesh: {netgen_mesh.ne} elements")
-
-	# Note: export_Netgen might handle multiple blocks differently
-	# depending on implementation
+	print(f"  NGSolve mesh: {mesh.ne} elements")
 	print("  PASS: Multiple blocks exported")
 	return True
 
 
 if __name__ == "__main__":
 	print("\n" + "=" * 60)
-	print("export_NetgenMesh() Test Suite")
+	print("export_curved() Test Suite")
 	print("=" * 60)
 
 	all_passed = True

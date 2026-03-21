@@ -11,9 +11,8 @@ Key comparison:
 
 Workflow:
     1. Create torus in Cubit (inductor coil model)
-    2. Tet mesh -> export to Netgen with STEP geometry
-    3. SetGeomInfo for torus UV parameters
-    4. For each curve order: mesh.Curve(order)
+    2. Tet mesh -> export to Netgen via export_curved()
+    3. For each curve order: export_curved(order=N)
        a. Compute surface area (analytical: 4*pi^2*R*a)
        b. Compute BEM inductance via ngsolve.bem.LaplaceSL
        c. Compare with Neumann formula: L = mu_0*R*(ln(8R/a) - 2)
@@ -45,7 +44,6 @@ work_dir = os.path.dirname(os.path.abspath(__file__))
 repo_root = os.path.dirname(os.path.dirname(work_dir))
 sys.path.insert(0, repo_root)
 
-from netgen.occ import OCCGeometry
 from ngsolve import Mesh, Integrate, CF, BND, HDivSurface, TaskManager, ds
 import cubit
 import cubit_mesh_export
@@ -175,20 +173,9 @@ def main():
     print(f"  Surfaces: {cubit.get_surface_count()}")
 
     # ============================================================
-    # Step 2: Export STEP
+    # Step 2: Tet mesh
     # ============================================================
-    print("\n--- Step 2: Export/reimport STEP ---")
-
-    step_file = os.path.join(work_dir, "torus_bem.step")
-    cubit.cmd(f'export step "{step_file}" overwrite')
-    cubit.cmd("reset")
-    cubit.cmd(f'import step "{step_file}" heal')
-    print(f"  Surfaces after reimport: {cubit.get_surface_count()}")
-
-    # ============================================================
-    # Step 3: Tet mesh
-    # ============================================================
-    print("\n--- Step 3: Tet mesh ---")
+    print("\n--- Step 2: Tet mesh ---")
 
     cubit.cmd("volume all scheme tetmesh")
     cubit.cmd(f"volume all size {MESH_SIZE}")
@@ -204,36 +191,15 @@ def main():
     print(f"  Surface tris: {n_tris}")
 
     # ============================================================
-    # Step 4: Export to Netgen with geometry
+    # Step 3: Curve order comparison
     # ============================================================
-    print("\n--- Step 4: Export to Netgen with STEP geometry ---")
-
-    geo = OCCGeometry(step_file)
-    ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, geometry=geo)
-    print(f"  Netgen elements: {ngmesh.ne}")
-
-    # ============================================================
-    # Step 5: SetGeomInfo for torus
-    # ============================================================
-    print("\n--- Step 5: SetGeomInfo (torus UV parameters) ---")
-
-    modified = cubit_mesh_export.set_torus_geominfo(
-        ngmesh, major_radius=R, minor_radius=a,
-        center=(0, 0, 0), axis='z'
-    )
-    print(f"  Modified {modified} vertex geominfo entries")
-
-    # ============================================================
-    # Step 6: Curve order comparison
-    # ============================================================
-    print("\n--- Step 6: Curve order comparison ---")
+    print("\n--- Step 3: Curve order comparison ---")
 
     results = []
     for order in [1, 2, 3]:
-        print(f"\n  Curve({order}):")
+        print(f"\n  export_curved(order={order}):")
 
-        mesh = Mesh(ngmesh)
-        mesh.Curve(order)
+        mesh = cubit_mesh_export.export_curved(cubit, order=order)
 
         # Surface area
         area = Integrate(CF(1), mesh, VOL_or_BND=BND)
@@ -287,12 +253,6 @@ def main():
         print(f"  Curve(3) reduces L error by {improvement:.1f}pp vs Curve(1)")
     print("  SetGeomInfo (PR#232) enables mesh.Curve() on Cubit meshes")
     print("  -> High-order curved surfaces -> Better BEM accuracy")
-
-    # Cleanup
-    try:
-        os.remove(step_file)
-    except OSError:
-        pass
 
     print("\n=== DONE ===")
     return results

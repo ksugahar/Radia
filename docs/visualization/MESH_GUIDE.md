@@ -351,24 +351,17 @@ geo = OCCGeometry("geometry.step")
 # 6. Export with name-based mapping
 ngmesh = cubit_mesh_export.export_netgen_with_names(cubit, geo)
 
-# 7. Set UV for curved surfaces
-cubit_mesh_export.set_cylinder_geominfo(ngmesh, radius=0.3, height=4.0,
-                                         center=(0,0,-2), axis='z')
-
-# 8. High-order curving
+# 7. High-order curving (export_curved handles SetGeomInfo automatically)
+ngmesh = cubit_mesh_export.export_curved(cubit, order=2)
 mesh = Mesh(ngmesh)
-mesh.Curve(2)  # Now works correctly!
 ```
 
-### 3.5 Available SetGeomInfo Helper Functions
+### 3.5 Automatic Curving
 
-From `cubit_mesh_export` ([PyPI](https://pypi.org/project/Coreform-Cubit-Mesh-Export/)):
+Use `export_curved()` which handles SetGeomInfo automatically:
 
 ```python
-set_cylinder_geominfo(ngmesh, radius, height, center=(0,0,0), axis='z')
-set_sphere_geominfo(ngmesh, radius, center=(0,0,0))
-set_torus_geominfo(ngmesh, major_radius, minor_radius, center=(0,0,0), axis='z')
-set_cone_geominfo(ngmesh, base_radius, height, center=(0,0,0), axis='z')
+ngmesh = cubit_mesh_export.export_curved(cubit, order=2)
 ```
 
 ### 3.6 Accuracy Results

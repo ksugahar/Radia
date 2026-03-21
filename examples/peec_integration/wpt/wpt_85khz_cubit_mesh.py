@@ -10,11 +10,11 @@ Mesh components:
 3. Aluminum shields (hex mesh) - PEEC conductor with eddy currents
 
 Workflow:
-    Cubit geometry -> Netgen mesh (direct via export_netgen) -> Radia PEEC+MMM
+    Cubit geometry -> NGSolve mesh (direct via export_curved) -> Radia PEEC+MMM
 
 Note: Netgen alone cannot create 3D hexahedral meshes.
       Cubit is required for hex mesh generation.
-      Use cubit_mesh_export.export_netgen() for direct Cubit -> Netgen conversion.
+      Use cubit_mesh_export.export_curved() for direct Cubit -> NGSolve conversion.
 
 Requirements:
     - Coreform Cubit 2025.3+
@@ -52,9 +52,9 @@ def create_wpt_geometry_cubit():
     """
     Create WPT system geometry in Cubit.
 
-    Returns Netgen mesh objects directly (no intermediate file format).
+    Returns NGSolve Mesh objects directly (no intermediate file format).
 
-    Uses cubit_mesh_export.export_netgen() for direct Cubit -> Netgen conversion.
+    Uses cubit_mesh_export.export_curved() for direct Cubit -> NGSolve conversion.
     """
     if not CUBIT_AVAILABLE:
         return None
@@ -125,9 +125,9 @@ def create_wpt_geometry_cubit():
     cubit.cmd("block 3 add hex in volume 3")
     cubit.cmd("block 3 name 'tx_coil'")
 
-    # Export Tx assembly to Netgen directly (no Nastran intermediate)
-    print("Exporting Tx assembly to Netgen mesh...")
-    tx_ngmesh = cubit_mesh_export.export_netgen(cubit)
+    # Export Tx assembly to NGSolve directly (no Nastran intermediate)
+    print("Exporting Tx assembly to NGSolve mesh...")
+    tx_mesh = cubit_mesh_export.export_curved(cubit, order=1)
 
     # ============================================================
     # Create Rx Assembly (mirror of Tx)
@@ -167,23 +167,23 @@ def create_wpt_geometry_cubit():
     cubit.cmd("block 3 add hex in volume 3")
     cubit.cmd("block 3 name 'rx_coil'")
 
-    # Export Rx assembly to Netgen directly (no Nastran intermediate)
-    print("Exporting Rx assembly to Netgen mesh...")
-    rx_ngmesh = cubit_mesh_export.export_netgen(cubit)
+    # Export Rx assembly to NGSolve directly (no Nastran intermediate)
+    print("Exporting Rx assembly to NGSolve mesh...")
+    rx_mesh = cubit_mesh_export.export_curved(cubit, order=1)
 
     return {
-        'tx_mesh': tx_ngmesh,
-        'rx_mesh': rx_ngmesh,
+        'tx_mesh': tx_mesh,
+        'rx_mesh': rx_mesh,
         'air_gap': air_gap
     }
 
 
-def load_netgen_to_radia(ngmesh, material_type='conductor'):
+def load_mesh_to_radia(mesh, material_type='conductor'):
     """
-    Load Netgen mesh and create Radia objects.
+    Load NGSolve mesh and create Radia objects.
 
     Parameters:
-        ngmesh: Netgen mesh object (from cubit_mesh_export.export_netgen())
+        mesh: NGSolve Mesh object (from cubit_mesh_export.export_curved())
         material_type: 'conductor', 'ferrite', or 'shield'
 
     Returns:
@@ -192,14 +192,6 @@ def load_netgen_to_radia(ngmesh, material_type='conductor'):
     import radia as rad
     from netgen_mesh_import import netgen_mesh_to_radia
 
-    # Convert Netgen mesh to NGSolve mesh for Radia import
-    try:
-        from ngsolve import Mesh
-        mesh = Mesh(ngmesh)
-    except ImportError:
-        print("  Warning: NGSolve not available for mesh import")
-        return None
-
     # Use netgen_mesh_to_radia for direct conversion
     # This handles hex/tet elements automatically
     magnetization = [0, 0, 0]  # Zero initial magnetization
@@ -207,7 +199,7 @@ def load_netgen_to_radia(ngmesh, material_type='conductor'):
     container = netgen_mesh_to_radia(
         mesh,
         material={'magnetization': magnetization},
-        units='m'  # Cubit exports in mm, but export_netgen converts to m
+        units='m'  # Cubit exports in mm, but export_curved converts to m
     )
 
     if container is None:
@@ -310,7 +302,7 @@ def main():
         print("\nCubit available. Will generate meshes directly to Netgen format.")
         mesh_info = create_wpt_geometry_cubit()
         if mesh_info:
-            print(f"\nNetgen meshes created in memory:")
+            print(f"\nNGSolve meshes created in memory:")
             print(f"  Tx mesh: {type(mesh_info['tx_mesh'])}")
             print(f"  Rx mesh: {type(mesh_info['rx_mesh'])}")
             print(f"  Air gap: {mesh_info['air_gap']} mm")
