@@ -1,8 +1,8 @@
 """
-Test export_NetgenMesh() with NGSolve integration.
+Test export_curved() with NGSolve integration.
 
 This test requires NGSolve to be installed in the system Python.
-It tests the full Cubit -> Netgen -> NGSolve workflow.
+It tests the full Cubit -> NGSolve workflow via export_curved().
 
 Run with system Python (not Cubit Python):
   python tests/test_netgen_with_ngsolve.py
@@ -28,13 +28,13 @@ except ImportError as e:
 
 
 def test_manual_netgen_mesh_creation():
-	"""Test creating a Netgen mesh manually (mimics export_Netgen behavior)."""
+	"""Test creating a Netgen mesh manually (mimics export_curved behavior)."""
 	print("=" * 60)
 	print("Test 1: Manual Netgen Mesh Creation")
 	print("=" * 60)
 
 	# Create a simple tetrahedron mesh manually
-	# This mimics what export_Netgen does
+	# This mimics what export_curved does internally
 
 	mesh = NetgenMesh(dim=3)
 
@@ -262,10 +262,10 @@ def test_high_order_curving():
 
 if __name__ == "__main__":
 	print("\n" + "=" * 60)
-	print("export_NetgenMesh() NGSolve Integration Tests")
+	print("export_curved() NGSolve Integration Tests")
 	print("=" * 60)
 	print("These tests verify Netgen mesh creation patterns")
-	print("used by export_NetgenMesh() function")
+	print("used by export_curved() function")
 	print("=" * 60)
 
 	all_passed = True

@@ -27,15 +27,10 @@ class TestModuleImport(unittest.TestCase):
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_Gmesh'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_gmesh'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_nastran'))
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_netgen'))
+		self.assertTrue(hasattr(cubit_mesh_export, 'export_curved'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_meg'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_vtk'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_vtu'))
-
-	def test_legacy_functions_exist(self):
-		"""Test that legacy PascalCase function names still exist."""
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_Nastran'))
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_NetgenMesh'))
 
 	def test_functions_callable(self):
 		"""Test that export functions are callable."""
@@ -43,7 +38,7 @@ class TestModuleImport(unittest.TestCase):
 		self.assertTrue(callable(cubit_mesh_export.export_Gmesh))
 		self.assertTrue(callable(cubit_mesh_export.export_gmesh))
 		self.assertTrue(callable(cubit_mesh_export.export_nastran))
-		self.assertTrue(callable(cubit_mesh_export.export_netgen))
+		self.assertTrue(callable(cubit_mesh_export.export_curved))
 		self.assertTrue(callable(cubit_mesh_export.export_meg))
 		self.assertTrue(callable(cubit_mesh_export.export_vtk))
 		self.assertTrue(callable(cubit_mesh_export.export_vtu))
@@ -52,7 +47,6 @@ class TestModuleImport(unittest.TestCase):
 		"""Test that snake_case aliases point to the same functions."""
 		self.assertIs(cubit_mesh_export.export_gmesh, cubit_mesh_export.export_Gmesh)
 		self.assertIs(cubit_mesh_export.export_nastran, cubit_mesh_export.export_Nastran)
-		self.assertIs(cubit_mesh_export.export_netgen, cubit_mesh_export.export_NetgenMesh)
 
 	def test_export_gmesh_signature(self):
 		"""Test export_Gmesh has correct parameters."""
@@ -99,11 +93,13 @@ class TestFunctionSignatures(unittest.TestCase):
 		sig = inspect.signature(cubit_mesh_export.export_vtu)
 		self.assertEqual(sig.parameters['binary'].default, False)
 
-	def test_export_netgen_defaults(self):
-		"""Test export_netgen has correct default parameters."""
+	def test_export_curved_signature(self):
+		"""Test export_curved has correct parameters."""
 		import inspect
-		sig = inspect.signature(cubit_mesh_export.export_netgen)
-		self.assertEqual(sig.parameters['geometry_file'].default, None)
+		sig = inspect.signature(cubit_mesh_export.export_curved)
+		params = list(sig.parameters.keys())
+		self.assertIn('cubit', params)
+		self.assertIn('order', params)
 
 	def test_export_exodus_defaults(self):
 		"""Test export_exodus has correct default parameters."""

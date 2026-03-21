@@ -1,5 +1,5 @@
 """
-Test script for export_NetgenMesh() with mixed element types (Hex, Wedge, Pyramid, Tet)
+Test script for export_curved() with mixed element types (Hex, Wedge, Pyramid, Tet)
 
 Run this script:
   python test_ngsolve_mixed_elements.py
@@ -16,7 +16,7 @@ if cubit_path:
 	sys.path.append(cubit_path)
 
 print("=" * 60)
-print("Testing export_NetgenMesh() with mixed elements")
+print("Testing export_curved() with mixed elements")
 print("=" * 60)
 
 # Step 1: Import and initialize Cubit
@@ -103,41 +103,28 @@ step_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_mixed
 cubit.cmd(f'export step "{step_file}" overwrite')
 print(f"  [OK] Exported to {step_file}")
 
-# Step 4: Use export_Netgen function
-print("\nStep 4: Using export_NetgenMesh() function...")
+# Step 4: Use export_curved function
+print("\nStep 4: Using export_curved() function...")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
 import cubit_mesh_export
 
-ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, geometry_file=step_file)
-print(f"  [OK] Created netgen.Mesh: ne={ngmesh.ne}")
+mesh = cubit_mesh_export.export_curved(cubit, order=2)
+print(f"  [OK] Created ngsolve.Mesh: ne={mesh.ne}, nv={mesh.nv}")
 
-# Step 5: Convert to ngsolve.Mesh
-print("\nStep 5: Converting to ngsolve.Mesh...")
-ngs_mesh = ngsolve.Mesh(ngmesh)
-print(f"  [OK] Converted: nv={ngs_mesh.nv}, ne={ngs_mesh.ne}")
+# Step 5: Check materials and boundaries
+print("\nStep 5: Checking materials and boundaries...")
+print(f"  Materials: {mesh.GetMaterials()}")
+print(f"  Boundaries: {mesh.GetBoundaries()}")
 
-# Step 6: Test Curve() with different orders
-print("\nStep 6: Testing mesh.Curve() with different orders...")
-for order in [2, 3, 4]:
-	try:
-		ngs_mesh.Curve(order)
-		print(f"  [OK] mesh.Curve({order}) succeeded!")
-	except Exception as e:
-		print(f"  [FAIL] mesh.Curve({order}) error: {e}")
-
-# Step 7: Check materials and boundaries
-print("\nStep 7: Checking materials and boundaries...")
-print(f"  Materials: {ngs_mesh.GetMaterials()}")
-print(f"  Boundaries: {ngs_mesh.GetBoundaries()}")
-
-# Step 8: Verify element counts
-print("\nStep 8: Verifying element counts...")
+# Step 6: Verify element counts
+print("\nStep 6: Verifying element counts...")
 total_vol_elements = num_hex + num_tet + num_wedge + num_pyramid
 print(f"  Cubit total 3D elements: {total_vol_elements}")
-print(f"  NGSolve ne: {ngs_mesh.ne}")
-if ngs_mesh.ne == total_vol_elements:
+print(f"  NGSolve ne: {mesh.ne}")
+if mesh.ne == total_vol_elements:
 	print("  [OK] Element counts match!")
 else:
-	print(f"  [WARN] Element count mismatch: expected {total_vol_elements}, got {ngs_mesh.ne}")
+	print(f"  [WARN] Element count mismatch: expected {total_vol_elements}, got {mesh.ne}")
 
 print("\n" + "=" * 60)
 print("Test complete!")

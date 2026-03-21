@@ -83,12 +83,9 @@ cubit.cmd("block 2 add tri all")
 # 6. Export with name-based mapping
 ngmesh = cubit_mesh_export.export_netgen_with_names(cubit, geo)
 
-# 7. Set UV for curved surfaces
-cubit_mesh_export.set_cylinder_geominfo(ngmesh, radius=0.3, height=2.0, axis='z')
-
-# 8. High-order curving
+# 7. High-order curving (export_curved handles SetGeomInfo automatically)
+ngmesh = cubit_mesh_export.export_curved(cubit, order=2)
 mesh = Mesh(ngmesh)
-mesh.Curve(2)  # Now works correctly!
 ```
 
 ## Available Functions
@@ -103,14 +100,11 @@ name_occ_faces(shape, prefix="occ_face_")
 export_netgen_with_names(cubit, geometry) -> ngmesh
 ```
 
-### SetGeomInfo Functions
+### Automatic High-Order Curving
 
 ```python
-# Set UV for analytic surfaces
-set_cylinder_geominfo(ngmesh, radius, height, center=(0,0,0), axis='z')
-set_sphere_geominfo(ngmesh, radius, center=(0,0,0))
-set_torus_geominfo(ngmesh, major_radius, minor_radius, center=(0,0,0), axis='z')
-set_cone_geominfo(ngmesh, base_radius, height, center=(0,0,0), axis='z')
+# Automatic curving (replaces manual set_*_geominfo functions)
+ngmesh = cubit_mesh_export.export_curved(cubit, order=2)
 ```
 
 ## Why This Works

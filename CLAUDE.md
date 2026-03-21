@@ -100,7 +100,7 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 4. **HACApK covers all large-scale needs**: H-matrix acceleration (ACA+) provides O(N log N) memory and O(N log^2 N) MatVec for the interaction matrix, which is the actual bottleneck.
 
-**Lesson**: FMM is effective for point charges/dipoles in unbounded space (N-body). It is NOT effective for BEM/MSC where source distributions are extended (face integrals) and geometries are compact.
+**Lesson**: FMM is effective for point charges/dipoles in unbounded space (N-body). It is NOT effective for MSC where source distributions are extended (face integrals) and geometries are compact.
 
 ### GmshBuilder: Removed (2026-03-13)
 
@@ -138,6 +138,27 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 ## Architecture Overview
 
+### Terminology: MMM/MSC vs BEM
+
+**POLICY**: Radia's core solvers (MMM, MSC) are **NOT** BEM (Boundary Element Method). Use precise terminology:
+
+| Term | Method | Library | Description |
+|------|--------|---------|-------------|
+| **MMM** | Magnetic Moment Method | Radia C++ | Volume magnetization M as DOF, dipole interaction |
+| **MSC** | Magnetic Surface Charge | Radia C++ | Surface charge sigma as DOF, solid angle integration |
+| **BEM** | Boundary Element Method | **ngsolve.bem** | EFIE/MFIE, HDivSurface, Maxwell/Laplace kernels |
+| **PEEC** | Partial Element Equivalent Circuit | Radia Python + C++ | Loop-Star, circuit extraction (L,R,C,M) |
+
+**Do NOT** call MMM/MSC "BEM". They are integral equation methods but with different formulations:
+- BEM (ngsolve.bem): surface integral equations (EFIE/MFIE) on conductor/dielectric boundaries
+- MMM: volume integral equation for magnetization, solved element-by-element
+- MSC: surface charge on element faces, solved via solid angle kernel
+
+**When to use which**:
+- Permanent magnets, soft iron → **MMM/MSC** (Radia)
+- Eddy currents, shielding, impedance extraction → **BEM** (ngsolve.bem) or **PEEC** (Radia)
+- High-frequency scattering → **BEM** (ngsolve.bem, Helmholtz kernel)
+
 ### Development Strategy: Complement NGSolve
 
 Radia's role is to **complement NGSolve**, not compete with it. Focus on areas where FEM is weak.
@@ -146,7 +167,7 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Electromagnetic Analysis                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  NGSolve (FEM)              │  Radia (BEM/Integral Methods)     │
+│  NGSolve (FEM)              │  Radia (MMM/MSC/PEEC)             │
 │  ───────────────────────────│──────────────────────────────────│
 │  OK: Bounded domains        │  OK: Unbounded domains (open BC) │
 │  OK: Complex geometry       │  OK: Permanent magnets (no mesh) │
@@ -650,7 +671,7 @@ Hantila (1975) splits the constitutive relation into constant linear part + resi
 B = mu_0*(1+alpha)*H + mu_0*R    where R = M - alpha*H
 ```
 
-For Radia BEM, the interaction matrix N maps M -> H_demag (constant, geometry-only):
+For Radia MMM, the interaction matrix N maps M -> H_demag (constant, geometry-only):
 
 ```
 H = H_ext + N*M
