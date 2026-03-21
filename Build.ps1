@@ -237,6 +237,9 @@ try {
         }
     }
 
+    # Kill orphan vctip.exe (VS BuildTools telemetry) that may block process exit
+    Get-Process vctip -ErrorAction SilentlyContinue | Stop-Process -Force
+
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Green
     Write-Host "  Build Completed" -ForegroundColor Green
