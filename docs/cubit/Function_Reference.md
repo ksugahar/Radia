@@ -227,41 +227,15 @@ name_occ_faces(shape, prefix="occ_face_")
 
 ---
 
-## SetGeomInfo UV Utilities
+## Automatic High-Order Curving
 
-These functions set UV parameters on Netgen mesh elements, enabling `mesh.Curve(order)` for high-order geometry approximation on curved surfaces.
-
-### Surface Detection Functions
+Use `export_curved()` for automatic high-order curving of curved surfaces. This replaces the removed manual `set_*_geominfo()` and `compute_*_uv()` functions.
 
 ```python
-set_cylinder_geominfo(ngmesh, radius, height, center=(0,0,0), axis='z', tol=0.01)
-set_sphere_geominfo(ngmesh, radius, center=(0,0,0), tol=0.01)
-set_torus_geominfo(ngmesh, major_radius, minor_radius, center=(0,0,0), axis='z', tol=0.01)
-set_cone_geominfo(ngmesh, base_radius, height, center=(0,0,0), axis='z', tol=0.01)
+ngmesh = cubit_mesh_export.export_curved(cubit, order=2)
 ```
 
-**Returns**: Number of vertex geominfo entries modified.
-
-| Parameter | Description |
-|-----------|-------------|
-| `ngmesh` | Netgen mesh object |
-| `radius` / `base_radius` | Surface radius |
-| `height` | Cylinder/cone height |
-| `major_radius`, `minor_radius` | Torus radii |
-| `center` | Center coordinates |
-| `axis` | 'x', 'y', or 'z' |
-| `tol` | Tolerance for detecting surface vertices |
-
-### UV Computation Functions
-
-```python
-compute_cylinder_uv(x, y, z, radius, height, center=(0,0,0), axis='z')
-compute_sphere_uv(x, y, z, radius, center=(0,0,0))
-compute_torus_uv(x, y, z, major_radius, minor_radius, center=(0,0,0), axis='z')
-compute_cone_uv(x, y, z, base_radius, height, center=(0,0,0), axis='z')
-```
-
-**Returns**: `(u, v)` tuple of UV parameters for the given point.
+`export_curved()` automatically detects curved surfaces (cylinders, spheres, tori, cones) and sets the correct UV parameters for `mesh.Curve(order)`.
 
 [Full documentation](export_NetgenMesh.md) | [Examples](../../examples/cubit/netgen/)
 

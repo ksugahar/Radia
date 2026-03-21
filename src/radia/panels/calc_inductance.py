@@ -4,14 +4,11 @@ Inductance extractor using ngsolve.bem LaplaceSL BEM.
 Called as subprocess from Cubit panel:
     python calc_inductance.py --cub5 model.cub5 --order 1
 
-Workflow (STEP reimport + CalcSurfacesOfNode):
+Workflow:
   1. Import NGSolve FIRST (before cubit)
-  2. Open cub5, get CAD info, export STEP
-  3. Reset + reimport STEP heal (ACIS -> OCC seam fix)
-  4. Remesh + export_NetgenMesh(geometry=OCC)
-  5. CalcSurfacesOfNode() (CRITICAL for BEM edge orientation)
-  6. SetGeomInfo + Curve(order)
-  7. HDivSurface + LaplaceSL -> L extraction
+  2. Open cub5, register blocks
+  3. export_curved(order=N, surface_only=True) -> NGSolve Mesh
+  4. HDivSurface + LaplaceSL -> L extraction
 
 IMPORTANT: NGSolve must be imported BEFORE cubit.
 Outputs JSON to stdout (suppresses all other print output).
@@ -21,7 +18,6 @@ import argparse
 import json
 import os
 import sys
-import tempfile
 
 
 def _setup_cubit():
@@ -65,15 +61,13 @@ def _get_mesh_size(cubit, vol_ids):
 def extract_inductance(cub5_file, order, msh_output=""):
     """Extract self-inductance using BEM LaplaceSL.
 
-    Uses the full STEP reimport workflow:
-      STEP export -> reimport heal -> remesh -> export_NetgenMesh(geometry=OCC)
-      -> CalcSurfacesOfNode -> SetGeomInfo -> Curve -> HDivSurface + LaplaceSL
+    Uses export_curved() for mesh export with automatic curving:
+      export_curved(order=N, surface_only=True) -> HDivSurface + LaplaceSL
     """
     import numpy as np
     import math
-    from ngsolve import Mesh, HDivSurface, TaskManager, ds, Integrate, CF, BND, GridFunction, Norm
+    from ngsolve import HDivSurface, TaskManager, ds, Integrate, CF, BND, GridFunction, Norm
     from ngsolve.bem import LaplaceSL
-    from netgen.occ import OCCGeometry
 
     MU_0 = 4.0 * math.pi * 1e-7
 
@@ -92,12 +86,6 @@ def extract_inductance(cub5_file, order, msh_output=""):
     if total_elems == 0:
         return {"error": "Volumes are not meshed."}
 
-    # Export STEP (for OCC geometry reference only, no reimport)
-    tmpdir = tempfile.mkdtemp(prefix="radia_ind_")
-    step_file = os.path.join(tmpdir, "geometry.step").replace("\\", "/")
-    vol_list = " ".join(str(v) for v in vol_ids)
-    cubit.cmd(f'export step "{step_file}" volume {vol_list} overwrite')
-
     # Register blocks (use existing mesh, no remesh)
     # Support both tri (tet mesh) and quad (hex mesh) surface elements
     cubit.cmd("set duplicate block elements on")
@@ -111,24 +99,15 @@ def extract_inductance(cub5_file, order, msh_output=""):
     cubit.cmd(f"block {bnd_id} add face all")
     cubit.cmd(f'block {bnd_id} name "conductor"')
 
-    # Export to Netgen with OCC geometry
+    # Export to NGSolve mesh with curving
     radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     if os.path.abspath(radia_src) not in sys.path:
         sys.path.insert(0, os.path.abspath(radia_src))
     import cubit_mesh_export
 
-    geo = OCCGeometry(step_file)
-    ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, geometry=geo, split_quads=True)
-    # CalcSurfacesOfNode is now called inside export_NetgenMesh
-
-    mesh = Mesh(ngmesh)
-
-    # Curve (with SetGeomInfo already applied if available)
-    if order > 1:
-        try:
-            mesh.Curve(order)
-        except Exception:
-            pass  # Curve may fail without SetGeomInfo for specific geometry
+    mesh = cubit_mesh_export.export_curved(
+        cubit, order=order, surface_only=True,
+        split_quads=True)
 
     # HDivSurface + LaplaceSL
     fes = HDivSurface(mesh, order=0)

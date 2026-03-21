@@ -4,13 +4,10 @@ Surface area calculator using NGSolve mesh integration.
 Called as subprocess from Cubit panel:
     python calc_surface.py --cub5 model.cub5 --order 1
 
-Workflow (STEP reimport for all orders):
-  1. Open cub5, get CAD areas, export STEP
-  2. Reset + reimport STEP heal (ACIS -> OCC seam fix)
-  3. Remesh with same size
-  4. export_netgen(cubit, geometry=OCCGeometry(step)) + SetGeomInfo
-  5. mesh.Curve(order)
-  6. Integrate(CF(1), mesh, BND) for surface area
+Workflow:
+  1. Open cub5, get CAD areas
+  2. export_curved(cubit, order=N) -> NGSolve Mesh (curved via ACIS kernel)
+  3. Integrate(CF(1), mesh, BND) for surface area
 
 IMPORTANT: NGSolve must be imported BEFORE cubit.
 Outputs JSON to stdout.
@@ -20,7 +17,6 @@ import argparse
 import json
 import os
 import sys
-import tempfile
 
 
 def _setup_cubit():
@@ -50,25 +46,14 @@ def _setup_cubit():
     return cubit
 
 
-def _get_mesh_size(cubit, vol_ids):
-    """Estimate mesh size from existing mesh."""
-    for vid in vol_ids:
-        ne = len(cubit.get_volume_tets(vid)) + len(cubit.get_volume_hexes(vid))
-        if ne > 0:
-            bb = cubit.get_bounding_box("volume", vid)
-            diag = bb[9] if len(bb) > 9 else 1.0
-            return diag / max(ne ** (1.0 / 3.0), 1.0)
-    return 0.1
-
 
 def calculate_surface(cub5_file, order):
-    """Calculate surface area using Cubit mesh + STEP reimport workflow.
+    """Calculate surface area using Cubit mesh + export_curved().
 
-    All orders use the same Cubit mesh with proper geometry mapping:
-      STEP reimport -> export_netgen(geometry=OCC) -> Curve(order) -> Integrate
+    Uses export_curved() which works directly with Cubit's ACIS kernel
+    for high-order curving. No STEP files or OCC geometry needed.
     """
-    from ngsolve import Mesh, Integrate, CF, BND
-    from netgen.occ import OCCGeometry
+    from ngsolve import Integrate, CF, BND
 
     cubit = _setup_cubit()
     cubit.cmd(f'open "{cub5_file}"')
@@ -98,53 +83,17 @@ def calculate_surface(cub5_file, order):
         return {"volumes": results, "cad_total": cad_total,
                 "error": "Volumes are not meshed."}
 
-    # Get mesh size before reimport
-    mesh_size = _get_mesh_size(cubit, vol_ids)
-
-    # --- STEP reimport workflow (MCP knowledge) ---
-    tmpdir = tempfile.mkdtemp(prefix="radia_surf_")
-    step_file = os.path.join(tmpdir, "geometry.step").replace("\\", "/")
-    vol_list = " ".join(str(v) for v in vol_ids)
-    cubit.cmd(f'export step "{step_file}" volume {vol_list} overwrite')
-
-    # Reimport STEP (ACIS -> OCC seam compatibility)
-    cubit.cmd("reset")
-    cubit.cmd(f'import step "{step_file}" heal')
-
-    # Remesh with same size
-    cubit.cmd("volume all scheme tetmesh")
-    cubit.cmd(f"volume all size {mesh_size}")
-    cubit.cmd("mesh volume all")
-
-    # Register blocks
-    new_vol_ids = list(cubit.get_entities("volume"))
-    cubit.cmd("delete block all")
-    for i, vid in enumerate(new_vol_ids):
-        cubit.cmd(f"block {i + 1} add volume {vid}")
-    cubit.cmd(f"block {len(new_vol_ids) + 1} add tri all")
-    cubit.cmd(f'block {len(new_vol_ids) + 1} name "boundary"')
-
-    # Export to Netgen with OCC geometry
+    # Export to NGSolve mesh with curving (ACIS kernel, no STEP needed)
     radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     if os.path.abspath(radia_src) not in sys.path:
         sys.path.insert(0, os.path.abspath(radia_src))
     import cubit_mesh_export
 
-    geo = OCCGeometry(step_file)
-    ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, geometry=geo)
-
-    # TODO: SetGeomInfo for curved surfaces (cylinder, torus, sphere)
-    # cubit_mesh_export.set_torus_geominfo(ngmesh, ...)
-
-    mesh = Mesh(ngmesh)
-
-    # Curve (only effective with geometry + SetGeomInfo)
-    if order > 1:
-        try:
-            mesh.Curve(order)
-        except Exception as e:
-            return {"volumes": results, "cad_total": cad_total,
-                    "error": f"mesh.Curve({order}) failed: {e}"}
+    try:
+        mesh = cubit_mesh_export.export_curved(cubit, order=order)
+    except Exception as e:
+        return {"volumes": results, "cad_total": cad_total,
+                "error": f"export_curved(order={order}) failed: {e}"}
 
     # Integrate
     total_area = Integrate(CF(1), mesh, VOL_or_BND=BND)

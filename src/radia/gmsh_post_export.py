@@ -220,6 +220,102 @@ class GmshPostExport:
         print(f"  Materials: {mat_str}")
         return filename
 
+    def write_v22(self, filename):
+        """Write mesh + field data to GMSH .msh v2.2 format.
+
+        Supports high-order elements (p >= 2) via the same internal
+        node computation as write() (v4.1).
+
+        v2.2 is required for NGSolve ReadGmsh() import.
+
+        Args:
+            filename: Output .msh file path
+        """
+        if not filename.endswith('.msh'):
+            filename += '.msh'
+
+        mesh = self.mesh
+        is_surface = _is_surface_mesh(mesh) or self._boundary
+
+        nodes, mat_names, elem_data = _extract_mesh_data_grouped(
+            mesh, is_surface)
+        n_nodes = len(nodes)
+        n_elems = len(elem_data)
+
+        # Build material -> physical tag mapping (1-indexed)
+        mat_to_tag = {name: i + 1 for i, name in enumerate(mat_names)}
+
+        # Determine dimension
+        dim = 2 if is_surface else 3
+
+        with open(filename, 'w', encoding='utf-8') as f:
+            # Header
+            f.write('$MeshFormat\n2.2 0 8\n$EndMeshFormat\n')
+
+            # Physical names
+            f.write('$PhysicalNames\n')
+            f.write(f'{len(mat_names)}\n')
+            for name in mat_names:
+                tag = mat_to_tag[name]
+                f.write(f'{dim} {tag} "{name}"\n')
+            f.write('$EndPhysicalNames\n')
+
+            # Nodes
+            f.write('$Nodes\n')
+            f.write(f'{n_nodes}\n')
+            for i, (x, y, z) in enumerate(nodes):
+                f.write(f'{i + 1} {x:.15e} {y:.15e} {z:.15e}\n')
+            f.write('$EndNodes\n')
+
+            # Elements
+            f.write('$Elements\n')
+            f.write(f'{n_elems}\n')
+            for elem_idx, (mat_name, gmsh_type, conn, _) in enumerate(elem_data):
+                elem_id = elem_idx + 1
+                phys_tag = mat_to_tag[mat_name]
+                # v2.2 format: id type n_tags tag1 tag2 node1 node2 ...
+                # tag1 = physical group, tag2 = elementary entity (= same)
+                node_str = ' '.join(str(c + 1) for c in conn)
+                f.write(f'{elem_id} {gmsh_type} 2 {phys_tag} {phys_tag} '
+                        f'{node_str}\n')
+            f.write('$EndElements\n')
+
+            # NodeData (field data)
+            for name, ncomp, data, is_cell, material in self._fields:
+                if is_cell:
+                    continue  # v2.2 NodeData only for simplicity
+                arr = self._resolve_data(data, ncomp, False)
+                if ncomp is None:
+                    ncomp = 1 if arr.ndim == 1 else arr.shape[1]
+
+                if material is not None:
+                    node_set = set()
+                    for mn, _, conn, _ in elem_data:
+                        if mn == material:
+                            node_set.update(conn)
+                    out_nodes = sorted(node_set)
+                else:
+                    out_nodes = list(range(n_nodes))
+
+                f.write('$NodeData\n')
+                f.write(f'1\n"{name}"\n')
+                f.write(f'1\n0.0\n')
+                f.write(f'3\n0\n{ncomp}\n{len(out_nodes)}\n')
+                for ni in out_nodes:
+                    if ncomp == 1:
+                        val = float(arr[ni]) if arr.ndim == 1 else float(arr[ni, 0])
+                        f.write(f'{ni + 1} {val:.15e}\n')
+                    else:
+                        vals = ' '.join(f'{float(arr[ni, c]):.15e}'
+                                        for c in range(ncomp))
+                        f.write(f'{ni + 1} {vals}\n')
+                f.write('$EndNodeData\n')
+
+        print(f"GMSH v2.2 export: {filename}")
+        print(f"  {n_elems} elements, {n_nodes} nodes, "
+              f"{len(self._fields)} fields")
+        return filename
+
     def write_mesh(self, filename):
         """Write mesh only (no field data)."""
         fields_backup = self._fields

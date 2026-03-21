@@ -48,7 +48,6 @@ work_dir = os.path.dirname(os.path.abspath(__file__))
 NGSOLVE_PATH = r'S:\NGSolve\01_GitHub\install_ngsolve\lib\site-packages'
 sys.path.insert(0, NGSOLVE_PATH)
 
-from netgen.occ import OCCGeometry
 from ngsolve import Mesh, VTKOutput
 import cubit
 import cubit_mesh_export
@@ -226,8 +225,8 @@ print(f"  Volumes: {cubit.get_volume_count()}")
 # ============================================================
 print("\nStep 4: Export hex mesh to Netgen (for Radia)")
 
-ngmesh = cubit_mesh_export.export_netgen(cubit)
-mesh = Mesh(ngmesh)
+mesh = cubit_mesh_export.export_curved(cubit, order=1)
+ngmesh = mesh.ngmesh
 
 print(f"  Hex elements: {mesh.ne}")
 print(f"  Vertices: {mesh.nv}")

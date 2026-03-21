@@ -4,6 +4,7 @@
 # Local Development Files (DO NOT COMMIT)
 # ============================================================================
 CLAUDE.md
+ROADMAP.md
 .claude/
 publish_to_pypi.cmd
 Build_PyPI_Package.ps1

@@ -17,14 +17,12 @@ import argparse
 import math
 import os
 import sys
-import tempfile
 import time
 
 # NGSolve MUST be imported BEFORE cubit (DLL conflict avoidance)
 import numpy as np
 from ngsolve import Mesh, HDivSurface, ds, Integrate, CF, BND, GridFunction, Norm
 from ngsolve.bem import LaplaceSL
-from netgen.occ import OCCGeometry
 
 # Setup paths
 radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'src', 'radia')
@@ -61,19 +59,12 @@ gap = 0.005 # Gap width [m]
 
 
 def create_and_mesh(mesh_type="tet", interval=8):
-	"""Create torus with gap, STEP reimport, mesh."""
+	"""Create torus with gap, mesh."""
 	cubit.cmd('reset')
 	cubit.cmd(f'create torus major radius {R} minor radius {a}')
 	cubit.cmd(f'brick x {3*a} y {gap} z {3*a}')
 	cubit.cmd(f'move Volume 2 x {R} y 0 z 0 include_merged')
 	cubit.cmd('subtract volume 2 from volume 1')
-
-	# STEP reimport (ACIS -> OCC seam fix)
-	tmpdir = tempfile.mkdtemp(prefix="radia_bem_")
-	step_file = os.path.join(tmpdir, "torus.step").replace("\\", "/")
-	cubit.cmd(f'export step "{step_file}" overwrite')
-	cubit.cmd('reset')
-	cubit.cmd(f'import step "{step_file}" heal')
 
 	# Mesh
 	vol_ids = list(cubit.get_entities("volume"))
@@ -104,33 +95,19 @@ def create_and_mesh(mesh_type="tet", interval=8):
 	n_quad = len(cubit.get_block_faces(bnd_id))
 	print(f"  Surface elements: {n_tri} tris, {n_quad} quads")
 
-	return step_file, vol_ids
+	return vol_ids
 
 
-def run_bem(step_file, order=1):
+def run_bem(order=1):
 	"""Export to NGSolve, run LaplaceSL BEM."""
-	geo = OCCGeometry(step_file)
 	t0 = time.perf_counter()
-	ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, geometry=geo, split_quads=True)
+	mesh = cubit_mesh_export.export_curved(
+		cubit, order=order, surface_only=True,
+		split_quads=True)
 	t_export = time.perf_counter() - t0
-	print(f"  export_NetgenMesh: {t_export:.2f}s")
+	print(f"  export_curved(order={order}): {t_export:.2f}s")
 
-	# SetGeomInfo: map UV from OCC geometry for mesh.Curve() support
-	# Required for high-order elements on curved surfaces
-	from cubit_mesh_export import set_torus_geominfo
-	n_modified = set_torus_geominfo(ngmesh, major_radius=R, minor_radius=a, tol=a*0.5)
-	print(f"  SetGeomInfo (torus): {n_modified} vertex-UV pairs set")
-
-	mesh = Mesh(ngmesh)
 	print(f"  NGSolve mesh: dim={mesh.dim}, ne={mesh.ne}, nse={mesh.GetNE(BND)}, nv={mesh.nv}")
-
-	# Curve for high-order (requires SetGeomInfo)
-	if order > 1:
-		try:
-			mesh.Curve(order)
-			print(f"  mesh.Curve({order}) OK")
-		except Exception as e:
-			print(f"  mesh.Curve({order}) failed: {e}")
 
 	# Surface area verification
 	area = float(Integrate(CF(1), mesh, VOL_or_BND=BND))
@@ -249,5 +226,5 @@ if __name__ == "__main__":
 	print(f"BEM Inductance Test: mesh={args.mesh}, order={args.order}")
 	print(f"Torus: R={R*1e3:.1f}mm, a={a*1e3:.1f}mm, gap={gap*1e3:.1f}mm")
 
-	step_file, vol_ids = create_and_mesh(args.mesh, args.interval)
-	result = run_bem(step_file, args.order)
+	vol_ids = create_and_mesh(args.mesh, args.interval)
+	result = run_bem(args.order)

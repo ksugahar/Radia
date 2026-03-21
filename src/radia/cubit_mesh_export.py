@@ -1427,475 +1427,6 @@ def export_vtk(cubit: Any, FileName: str) -> Any:
 ###	NGSolve/Netgen format
 ########################################################################
 
-def export_NetgenMesh(cubit: Any, geometry_file: Optional[str] = None, geometry: Any = None, split_quads: bool = False) -> Any:
-	"""Export Cubit mesh to Netgen mesh format.
-
-	Creates a netgen.meshing.Mesh object directly from Cubit mesh data.
-	When geometry is provided (file or OCC object), the mesh can be curved
-	using ngsolve.Mesh.Curve(order) for high-order geometry approximation.
-
-	Note: netgen.meshing.Mesh is the core mesh data structure.
-	      ngsolve.Mesh is a wrapper/view for FEM analysis.
-
-	Args:
-		cubit: Cubit Python interface object
-		geometry_file: Path to geometry file (.step, .stp, .brep, .iges) for
-		               mesh.Curve() support. If None, mesh is created without
-		               geometry reference (Curve() will not work).
-		geometry: An netgen.occ.OCCGeometry object. If provided, this takes
-		          precedence over geometry_file. Useful for avoiding seam
-		          issues with cylindrical surfaces (see note below).
-		split_quads: If True, split each quad surface element into 2 triangles.
-		             Required for ngsolve.bem (LaplaceSL segfaults on quads).
-
-	Returns:
-		netgen.meshing.Mesh: Netgen mesh object ready for use with NGSolve
-
-	Supported elements:
-		- 3D: Tetrahedron (4-node), Hexahedron (8-node), Wedge (6-node), Pyramid (5-node)
-		- 2D boundary: Triangle (3-node), Quadrilateral (4-node)
-		- 1D boundary: Edge (2-node)
-
-	Usage:
-		# Basic usage with STEP file
-		ngmesh = export_NetgenMesh(cubit, geometry_file="geometry.step")
-		mesh = ngsolve.Mesh(ngmesh)
-		mesh.Curve(3)
-
-		# Using OCC geometry directly (recommended for cylinders)
-		from netgen import occ
-		from netgen.occ import OCCGeometry
-		cyl = occ.Cylinder(occ.Pnt(0,0,-1), occ.Vec(0,0,1), radius=0.5, height=2)
-		geo = OCCGeometry(cyl)
-		ngmesh = export_NetgenMesh(cubit, geometry=geo)
-		mesh = ngsolve.Mesh(ngmesh)
-		mesh.Curve(3)
-
-		# Without geometry (no Curve support)
-		ngmesh = export_NetgenMesh(cubit)
-		mesh = ngsolve.Mesh(ngmesh)
-
-	Note:
-		- Only 1st order elements are transferred; use mesh.Curve(order) for
-		  high-order geometry approximation
-		- The geometry should match the geometry used to create the mesh
-		- Block names are used as Materials/Boundaries in NGSolve
-
-	Cylindrical Surface Note:
-		When using STEP files exported from Cubit with cylindrical surfaces,
-		OCC may split the surface at the seam line (y=0), creating 2 faces
-		where Cubit has 1 surface. Mesh elements crossing this seam may not
-		curve correctly. To avoid this:
-		1. Use OCC primitives (occ.Cylinder) via the geometry parameter, or
-		2. Ensure mesh elements don't cross y=0 on cylindrical surfaces
-	"""
-	_warn_mixed_element_types_in_blocks(cubit)
-
-	from netgen.meshing import Mesh, MeshPoint, Element3D, Element2D, Element1D, FaceDescriptor
-	from netgen.csg import Pnt
-
-	# ============================================================
-	# Node ordering conversion tables: Cubit -> Netgen
-	# ============================================================
-
-	# Tetrahedron: Cubit [0,1,2,3] -> Netgen [0,1,2,3]
-	TET_ORDERING = [0, 1, 2, 3]
-
-	# Hexahedron: Cubit [0,1,2,3,4,5,6,7] -> Netgen [0,1,5,4,3,2,6,7]
-	HEX_ORDERING = [0, 1, 5, 4, 3, 2, 6, 7]
-
-	# Wedge/Prism: Cubit [0,1,2,3,4,5] -> Netgen [0,2,1,3,5,4]
-	WEDGE_ORDERING = [0, 2, 1, 3, 5, 4]
-
-	# Pyramid: Cubit [0,1,2,3,4] -> Netgen [3,2,1,0,4]
-	PYRAMID_ORDERING = [3, 2, 1, 0, 4]
-
-	# Triangle: Cubit [0,1,2] -> Netgen [0,1,2]
-	TRI_ORDERING = [0, 1, 2]
-
-	# Quadrilateral: Cubit [0,1,2,3] -> Netgen [0,1,2,3]
-	QUAD_ORDERING = [0, 1, 2, 3]
-
-	# ============================================================
-	# Create netgen mesh
-	# ============================================================
-
-	ngmesh = Mesh(dim=3)
-
-	# Load and attach geometry if provided
-	# Priority: geometry parameter > geometry_file parameter
-	geo = None
-	if geometry is not None:
-		# Use provided OCC geometry object directly
-		geo = geometry
-		ngmesh.SetGeometry(geo)
-	elif geometry_file is not None:
-		from netgen.occ import OCCGeometry
-		geo = OCCGeometry(geometry_file)
-		ngmesh.SetGeometry(geo)
-
-	# ============================================================
-	# Collect all nodes from blocks
-	# ============================================================
-
-	node_map = {}  # Cubit node ID -> netgen point index
-	all_nodes = set()
-
-	for block_id in cubit.get_block_id_list():
-		elem_types = ["hex", "tet", "wedge", "pyramid", "tri", "face", "edge", "node"]
-		for elem_type in elem_types:
-			for element_id in _get_block_elements(cubit, block_id, elem_type):
-				# Use get_connectivity for 1st order nodes only
-				node_ids = cubit.get_connectivity(elem_type, element_id)
-				all_nodes.update(node_ids)
-
-	# Add nodes to netgen mesh
-	for node_id in sorted(all_nodes):
-		coord = cubit.get_nodal_coordinates(node_id)
-		pnt_idx = ngmesh.Add(MeshPoint(Pnt(coord[0], coord[1], coord[2])))
-		node_map[node_id] = pnt_idx
-
-	# ============================================================
-	# Add 3D volume elements
-	# ============================================================
-
-	material_index = 0
-
-	for block_id in cubit.get_block_id_list():
-		block_name = cubit.get_exodus_entity_name("block", block_id)
-
-		tet_list = _get_block_elements(cubit, block_id, "tet")
-		hex_list = _get_block_elements(cubit, block_id, "hex")
-		wedge_list = _get_block_elements(cubit, block_id, "wedge")
-		pyramid_list = _get_block_elements(cubit, block_id, "pyramid")
-
-		# Only process blocks with 3D elements
-		if len(tet_list) + len(hex_list) + len(wedge_list) + len(pyramid_list) > 0:
-			material_index += 1
-			ngmesh.SetMaterial(material_index, block_name)
-
-			# Add tetrahedra
-			for tet_id in tet_list:
-				nodes = cubit.get_connectivity("tet", tet_id)
-				ng_nodes = [node_map[nodes[i]] for i in TET_ORDERING]
-				ngmesh.Add(Element3D(material_index, ng_nodes))
-
-			# Add hexahedra
-			for hex_id in hex_list:
-				nodes = cubit.get_connectivity("hex", hex_id)
-				ng_nodes = [node_map[nodes[i]] for i in HEX_ORDERING]
-				ngmesh.Add(Element3D(material_index, ng_nodes))
-
-			# Add wedges/prisms
-			for wedge_id in wedge_list:
-				nodes = cubit.get_connectivity("wedge", wedge_id)
-				ng_nodes = [node_map[nodes[i]] for i in WEDGE_ORDERING]
-				ngmesh.Add(Element3D(material_index, ng_nodes))
-
-			# Add pyramids
-			for pyramid_id in pyramid_list:
-				nodes = cubit.get_connectivity("pyramid", pyramid_id)
-				ng_nodes = [node_map[nodes[i]] for i in PYRAMID_ORDERING]
-				ngmesh.Add(Element3D(material_index, ng_nodes))
-
-	# ============================================================
-	# Add 2D surface elements (boundary faces)
-	# ============================================================
-
-	fd_index = 0
-
-	# Build OCC face mapping when geometry is provided (for Curve() support)
-	occ_face_info = None
-	elem_to_occ_face = {}  # (elem_type, elem_id) -> OCC face index
-
-	if geo is not None:
-		# Analyze OCC faces to build mapping
-		occ_faces = list(geo.shape.faces)
-		occ_face_info = []
-		# Compute geometry bounding box diagonal for relative tolerance
-		geo_bb = geo.shape.bounding_box
-		geo_diag = sum((geo_bb[1][j] - geo_bb[0][j])**2 for j in range(3)) ** 0.5
-		planar_tol = max(geo_diag * 0.001, 1e-10)  # 0.1% of diagonal
-		for i, face in enumerate(occ_faces):
-			center = face.center
-			bb = face.bounding_box
-			# bb is ((xmin, ymin, zmin), (xmax, ymax, zmax))
-			z_range = bb[1][2] - bb[0][2]
-			y_min, y_max = bb[0][1], bb[1][1]
-			occ_face_info.append({
-				'index': i,
-				'center': (center.x, center.y, center.z),
-				'bbox': bb,
-				'z_range': z_range,
-				'y_min': y_min,
-				'y_max': y_max,
-				'is_planar': z_range < planar_tol,
-			})
-
-		# Build tri_id -> Cubit surface_id mapping
-		tri_to_surface = {}
-		surface_ids = cubit.get_entities("surface")
-		for sid in surface_ids:
-			for tri_id in cubit.get_surface_tris(sid):
-				tri_to_surface[tri_id] = sid
-
-		# Build quad_id -> Cubit surface_id mapping
-		quad_to_surface = {}
-		for sid in surface_ids:
-			for quad_id in cubit.get_surface_quads(sid):
-				quad_to_surface[quad_id] = sid
-
-		# Helper function to get element centroid
-		def get_elem_centroid(elem_type, elem_id):
-			nodes = cubit.get_connectivity(elem_type, elem_id)
-			coords = [cubit.get_nodal_coordinates(n) for n in nodes]
-			return [sum(c[i] for c in coords) / len(coords) for i in range(3)]
-
-		# Helper function to check if element crosses y=0 seam
-		def crosses_seam(elem_type, elem_id, tolerance=0.001):
-			nodes = cubit.get_connectivity(elem_type, elem_id)
-			coords = [cubit.get_nodal_coordinates(n) for n in nodes]
-			y_vals = [c[1] for c in coords]
-			y_min, y_max = min(y_vals), max(y_vals)
-			# Element crosses seam if vertices are on both sides of y=0
-			return y_min < -tolerance and y_max > tolerance
-
-		# Map Cubit surfaces to OCC faces based on centroid
-		surface_to_occ = {}
-		for sid in surface_ids:
-			surf_centroid = cubit.get_surface_centroid(sid)
-			surf_type = cubit.get_surface_type(sid).lower()
-
-			# For planar surfaces, match by z-coordinate
-			if "plane" in surf_type:
-				for info in occ_face_info:
-					if info['is_planar']:
-						if abs(info['center'][2] - surf_centroid[2]) < 0.1:
-							surface_to_occ[sid] = [info['index']]
-							break
-			else:
-				# For curved surfaces (cone, cylinder, etc.), find all matching OCC faces
-				# OCC may split curved surfaces into multiple faces
-				matching = []
-				for info in occ_face_info:
-					if not info['is_planar']:
-						# Check if centroid z-range overlaps
-						if (info['bbox'][0][2] <= surf_centroid[2] <= info['bbox'][1][2]):
-							matching.append(info['index'])
-				if matching:
-					surface_to_occ[sid] = matching
-
-		# Map each triangle to its OCC face
-		seam_crossing_count = 0
-		for tri_id, sid in tri_to_surface.items():
-			if sid not in surface_to_occ:
-				continue
-			occ_faces_for_surface = surface_to_occ[sid]
-			if len(occ_faces_for_surface) == 1:
-				elem_to_occ_face[('tri', tri_id)] = occ_faces_for_surface[0]
-			else:
-				# Multiple OCC faces for this surface (e.g., cylinder split)
-				# Check if element crosses the seam (y=0)
-				if crosses_seam("tri", tri_id):
-					# Element crosses seam - mark as None to exclude from Curve()
-					elem_to_occ_face[('tri', tri_id)] = None
-					seam_crossing_count += 1
-				else:
-					# Determine by y-coordinate of triangle centroid
-					centroid = get_elem_centroid("tri", tri_id)
-					for occ_idx in occ_faces_for_surface:
-						info = occ_face_info[occ_idx]
-						# Check if centroid y is within OCC face bbox
-						if info['y_min'] - 0.01 <= centroid[1] <= info['y_max'] + 0.01:
-							elem_to_occ_face[('tri', tri_id)] = occ_idx
-							break
-
-		# Map each quad to its OCC face
-		for quad_id, sid in quad_to_surface.items():
-			if sid not in surface_to_occ:
-				continue
-			occ_faces_for_surface = surface_to_occ[sid]
-			if len(occ_faces_for_surface) == 1:
-				elem_to_occ_face[('quad', quad_id)] = occ_faces_for_surface[0]
-			else:
-				# Check if element crosses the seam (y=0)
-				if crosses_seam("face", quad_id):
-					# Element crosses seam - mark as None to exclude from Curve()
-					elem_to_occ_face[('quad', quad_id)] = None
-					seam_crossing_count += 1
-				else:
-					centroid = get_elem_centroid("face", quad_id)
-					for occ_idx in occ_faces_for_surface:
-						info = occ_face_info[occ_idx]
-						if info['y_min'] - 0.01 <= centroid[1] <= info['y_max'] + 0.01:
-							elem_to_occ_face[('quad', quad_id)] = occ_idx
-							break
-
-		# Print warning if seam-crossing elements found
-		if seam_crossing_count > 0:
-			print(f"  Note: {seam_crossing_count} boundary element(s) cross y=0 seam - excluded from Curve()")
-			print(f"  For better results, use OCC geometry primitives (geometry= parameter)")
-
-	# Create FaceDescriptors and add boundary elements
-	if occ_face_info is not None:
-		# Build mapping: OCC face index -> Cubit block name
-		# so that boundary labels use Cubit block names (for ds('label'))
-		occ_face_to_block_name = {}
-
-		# Method 1: Use elem_to_occ_face mapping (when geometry mapping succeeded)
-		for block_id in cubit.get_block_id_list():
-			block_name = cubit.get_exodus_entity_name("block", block_id)
-			for tri_id in _get_block_elements(cubit, block_id, "tri"):
-				key = ('tri', tri_id)
-				if key in elem_to_occ_face and elem_to_occ_face[key] is not None:
-					occ_face_to_block_name[elem_to_occ_face[key]] = block_name
-			for quad_id in _get_block_elements(cubit, block_id, "face"):
-				key = ('quad', quad_id)
-				if key in elem_to_occ_face and elem_to_occ_face[key] is not None:
-					occ_face_to_block_name[elem_to_occ_face[key]] = block_name
-
-		# Method 2: Fallback - if no mapping found, use first surface block name
-		if not occ_face_to_block_name:
-			for block_id in cubit.get_block_id_list():
-				block_name = cubit.get_exodus_entity_name("block", block_id)
-				n_surf = len(_get_block_elements(cubit, block_id, "tri")) + \
-				         len(_get_block_elements(cubit, block_id, "face"))
-				if n_surf > 0:
-					for info in occ_face_info:
-						occ_face_to_block_name[info['index']] = block_name
-					break
-
-		# Create one FaceDescriptor per OCC face
-		# surfnr is 1-indexed in Netgen (OCC Face i -> surfnr=i+1)
-		occ_to_fd_index = {}
-		for info in occ_face_info:
-			fd_index += 1
-			# Use Cubit block name if available, otherwise OCC face name
-			bc_name = occ_face_to_block_name.get(info['index'], f"face_{info['index']}")
-			fd = FaceDescriptor(bc=fd_index, surfnr=info['index'] + 1)
-			fd.bcname = bc_name
-			ngmesh.Add(fd)
-			ngmesh.SetBCName(fd_index - 1, bc_name)
-			occ_to_fd_index[info['index']] = fd_index
-
-		# Create a special FaceDescriptor for seam-crossing elements (surfnr=0)
-		fd_index += 1
-		fd_seam = FaceDescriptor(bc=fd_index, surfnr=0)  # surfnr=0 -> no geometry curving
-		fd_seam.bcname = "seam_crossing"
-		ngmesh.Add(fd_seam)
-		ngmesh.SetBCName(fd_index - 1, "seam_crossing")
-		fd_seam_index = fd_index
-
-		# Add boundary elements with correct FaceDescriptor
-		for block_id in cubit.get_block_id_list():
-			tri_list = _get_block_elements(cubit, block_id, "tri")
-			quad_list = _get_block_elements(cubit, block_id, "face")
-
-			for tri_id in tri_list:
-				nodes = cubit.get_connectivity("tri", tri_id)
-				if all(n in node_map for n in nodes):
-					ng_nodes = [node_map[nodes[i]] for i in TRI_ORDERING]
-					key = ('tri', tri_id)
-					if key in elem_to_occ_face:
-						occ_idx = elem_to_occ_face[key]
-						if occ_idx is None:
-							bc_idx = fd_seam_index  # Seam-crossing element
-						else:
-							bc_idx = occ_to_fd_index[occ_idx]
-					else:
-						bc_idx = 1  # Fallback
-					ngmesh.Add(Element2D(bc_idx, ng_nodes))
-
-			for quad_id in quad_list:
-				nodes = cubit.get_connectivity("quad", quad_id)
-				if all(n in node_map for n in nodes):
-					ng_nodes = [node_map[nodes[i]] for i in QUAD_ORDERING]
-					key = ('quad', quad_id)
-					if key in elem_to_occ_face:
-						occ_idx = elem_to_occ_face[key]
-						if occ_idx is None:
-							bc_idx = fd_seam_index  # Seam-crossing element
-						else:
-							bc_idx = occ_to_fd_index[occ_idx]
-					else:
-						bc_idx = 1  # Fallback
-					if split_quads:
-						# Split quad (a,b,c,d) into 2 triangles for BEM compatibility
-						ngmesh.Add(Element2D(bc_idx, [ng_nodes[0], ng_nodes[1], ng_nodes[2]]))
-						ngmesh.Add(Element2D(bc_idx, [ng_nodes[0], ng_nodes[2], ng_nodes[3]]))
-					else:
-						ngmesh.Add(Element2D(bc_idx, ng_nodes))
-	else:
-		# No geometry file - use simple block-based FaceDescriptors
-		for block_id in cubit.get_block_id_list():
-			block_name = cubit.get_exodus_entity_name("block", block_id)
-
-			tri_list = _get_block_elements(cubit, block_id, "tri")
-			quad_list = _get_block_elements(cubit, block_id, "face")
-
-			# Only process blocks with 2D elements
-			if len(tri_list) + len(quad_list) > 0:
-				fd_index += 1
-				fd = FaceDescriptor(bc=fd_index, surfnr=fd_index)
-				fd.bcname = block_name
-				ngmesh.Add(fd)
-				ngmesh.SetBCName(fd_index - 1, block_name)
-
-				# Add triangles
-				for tri_id in tri_list:
-					nodes = cubit.get_connectivity("tri", tri_id)
-					if all(n in node_map for n in nodes):
-						ng_nodes = [node_map[nodes[i]] for i in TRI_ORDERING]
-						ngmesh.Add(Element2D(fd_index, ng_nodes))
-
-				# Add quadrilaterals
-				for quad_id in quad_list:
-					nodes = cubit.get_connectivity("quad", quad_id)
-					if all(n in node_map for n in nodes):
-						ng_nodes = [node_map[nodes[i]] for i in QUAD_ORDERING]
-						if split_quads:
-							ngmesh.Add(Element2D(fd_index, [ng_nodes[0], ng_nodes[1], ng_nodes[2]]))
-							ngmesh.Add(Element2D(fd_index, [ng_nodes[0], ng_nodes[2], ng_nodes[3]]))
-						else:
-							ngmesh.Add(Element2D(fd_index, ng_nodes))
-
-	# ============================================================
-	# Add 1D edge elements (if any)
-	# ============================================================
-
-	for block_id in cubit.get_block_id_list():
-		block_name = cubit.get_exodus_entity_name("block", block_id)
-		edge_list = _get_block_elements(cubit, block_id, "edge")
-
-		if len(edge_list) > 0:
-			fd_index += 1
-			fd = FaceDescriptor(bc=fd_index, surfnr=fd_index)
-			fd.bcname = block_name
-			ngmesh.Add(fd)
-
-			for edge_id in edge_list:
-				nodes = cubit.get_connectivity("edge", edge_id)
-				if all(n in node_map for n in nodes):
-					ng_nodes = [node_map[n] for n in nodes]
-					ngmesh.Add(Element1D(ng_nodes, index=fd_index))
-
-	# ============================================================
-	# Rebuild internal topology tables
-	# Required for HDivSurface (BEM) after manual Element2D addition.
-	# Without this, edge orientation is inconsistent -> LaplaceSL fails.
-	# ============================================================
-	try:
-		ngmesh.CalcSurfacesOfNode()
-		ngmesh.RebuildSurfaceElementLists()
-	except AttributeError:
-		pass  # API not available in standard netgen (requires ksugahar/netgen fork)
-
-	return ngmesh
-
-########################################################################
-###	VTK XML format (VTU)
-########################################################################
-
 def export_vtu(cubit: Any, FileName: str, binary: bool = False) -> Any:
 	"""Export mesh to VTK XML format (VTU - Unstructured Grid).
 
@@ -2387,606 +1918,265 @@ export_gmesh = export_Gmesh
 export_nastran = export_Nastran
 
 # Netgen format alias
-export_netgen = export_NetgenMesh
 
 
 # ============================================================
-# SetGeomInfo UV Utilities (for mesh.Curve() support)
+# CallbackGeometry-based Curving (ACIS direct, no OCC/STEP)
 # ============================================================
 
-def compute_cylinder_uv(x: float, y: float, z: float, radius: float, height: float,
-                        center: tuple = (0, 0, 0), axis: str = 'z') -> tuple:
-    """
-    Compute UV parameters for a cylindrical surface.
-
-    Parameters:
-    - x, y, z: Point coordinates
-    - radius: Cylinder radius
-    - height: Cylinder height
-    - center: Center of cylinder (default origin)
-    - axis: Cylinder axis ('x', 'y', or 'z')
-
-    Returns:
-    - (u, v): UV parameters where u is angle [0,1] and v is height [0,1]
-    """
-    cx, cy, cz = center
-
-    if axis == 'z':
-        dx, dy, dz = x - cx, y - cy, z - cz
-        theta = math.atan2(dy, dx)
-        if theta < 0:
-            theta += 2 * math.pi
-        u = theta / (2 * math.pi)
-        v = (dz + height/2) / height
-    elif axis == 'y':
-        dx, dy, dz = x - cx, y - cy, z - cz
-        theta = math.atan2(dz, dx)
-        if theta < 0:
-            theta += 2 * math.pi
-        u = theta / (2 * math.pi)
-        v = (dy + height/2) / height
-    else:  # x-axis
-        dx, dy, dz = x - cx, y - cy, z - cz
-        theta = math.atan2(dz, dy)
-        if theta < 0:
-            theta += 2 * math.pi
-        u = theta / (2 * math.pi)
-        v = (dx + height/2) / height
-
-    return u, max(0, min(1, v))
-
-
-def compute_sphere_uv(x: float, y: float, z: float, radius: float,
-                      center: tuple = (0, 0, 0)) -> tuple:
-    """
-    Compute UV parameters for a spherical surface.
-
-    Parameters:
-    - x, y, z: Point coordinates
-    - radius: Sphere radius
-    - center: Center of sphere (default origin)
-
-    Returns:
-    - (u, v): UV parameters (azimuth [0,1], polar [0,1])
-    """
-    cx, cy, cz = center
-    dx, dy, dz = x - cx, y - cy, z - cz
-
-    # Azimuthal angle (u)
-    theta = math.atan2(dy, dx)
-    if theta < 0:
-        theta += 2 * math.pi
-    u = theta / (2 * math.pi)
-
-    # Polar angle (v)
-    r = math.sqrt(dx*dx + dy*dy + dz*dz)
-    if r > 1e-10:
-        phi = math.acos(max(-1, min(1, dz / r)))
-        v = phi / math.pi
-    else:
-        v = 0.5
-
-    return u, v
-
-
-def compute_torus_uv(x: float, y: float, z: float, major_radius: float, minor_radius: float,
-                     center: tuple = (0, 0, 0), axis: str = 'z') -> tuple:
-    """
-    Compute UV parameters for a toroidal surface.
-
-    Parameters:
-    - x, y, z: Point coordinates
-    - major_radius: Distance from center to tube center
-    - minor_radius: Tube radius
-    - center: Center of torus (default origin)
-    - axis: Torus axis ('x', 'y', or 'z')
-
-    Returns:
-    - (u, v): UV parameters (major angle [0,1], minor angle [0,1])
-    """
-    cx, cy, cz = center
-    dx, dy, dz = x - cx, y - cy, z - cz
-
-    if axis == 'z':
-        # Major angle (around the torus)
-        theta = math.atan2(dy, dx)
-        if theta < 0:
-            theta += 2 * math.pi
-        u = theta / (2 * math.pi)
-
-        # Minor angle (around the tube)
-        r_major = math.sqrt(dx*dx + dy*dy)
-        phi = math.atan2(dz, r_major - major_radius)
-        if phi < 0:
-            phi += 2 * math.pi
-        v = phi / (2 * math.pi)
-    elif axis == 'y':
-        theta = math.atan2(dz, dx)
-        if theta < 0:
-            theta += 2 * math.pi
-        u = theta / (2 * math.pi)
-
-        r_major = math.sqrt(dx*dx + dz*dz)
-        phi = math.atan2(dy, r_major - major_radius)
-        if phi < 0:
-            phi += 2 * math.pi
-        v = phi / (2 * math.pi)
-    else:  # x-axis
-        theta = math.atan2(dz, dy)
-        if theta < 0:
-            theta += 2 * math.pi
-        u = theta / (2 * math.pi)
-
-        r_major = math.sqrt(dy*dy + dz*dz)
-        phi = math.atan2(dx, r_major - major_radius)
-        if phi < 0:
-            phi += 2 * math.pi
-        v = phi / (2 * math.pi)
-
-    return u, v
-
-
-def set_cylinder_geominfo(ngmesh: Any, radius: float, height: float,
-                          center: tuple = (0, 0, 0), axis: str = 'z',
-                          tol: float = 0.01) -> int:
-    """
-    Set geominfo (UV parameters) for cylindrical surface elements.
-
-    This enables mesh.Curve() to work correctly on external meshes.
-
-    Parameters:
-    - ngmesh: Netgen mesh
-    - radius: Cylinder radius
-    - height: Cylinder height
-    - center: Center of cylinder
-    - axis: Cylinder axis ('x', 'y', or 'z')
-    - tol: Tolerance for detecting cylinder surface
-
-    Returns:
-    - Number of elements modified
-    """
-    points = [(p.p[0], p.p[1], p.p[2]) for p in ngmesh.Points()]
-    cx, cy, cz = center
-    modified = 0
-
-    for el in ngmesh.Elements2D():
-        verts = list(el.vertices)
-
-        # Check if all vertices are on cylindrical surface
-        on_cylinder = True
-        for v in verts:
-            x, y, z = points[v.nr - 1]
-            dx, dy, dz = x - cx, y - cy, z - cz
-
-            if axis == 'z':
-                r = math.sqrt(dx*dx + dy*dy)
-            elif axis == 'y':
-                r = math.sqrt(dx*dx + dz*dz)
-            else:
-                r = math.sqrt(dy*dy + dz*dz)
-
-            if abs(r - radius) > tol:
-                on_cylinder = False
-                break
-
-        if on_cylinder:
-            for i, v in enumerate(verts):
-                x, y, z = points[v.nr - 1]
-                u, uv_v = compute_cylinder_uv(x, y, z, radius, height, center, axis)
-                el.SetGeomInfo(i, u, uv_v)
-                modified += 1
-
-    return modified
-
-
-def set_sphere_geominfo(ngmesh: Any, radius: float, center: tuple = (0, 0, 0),
-                        tol: float = 0.01) -> int:
-    """
-    Set geominfo (UV parameters) for spherical surface elements.
-
-    Parameters:
-    - ngmesh: Netgen mesh
-    - radius: Sphere radius
-    - center: Center of sphere
-    - tol: Tolerance for detecting sphere surface
-
-    Returns:
-    - Number of elements modified
-    """
-    points = [(p.p[0], p.p[1], p.p[2]) for p in ngmesh.Points()]
-    cx, cy, cz = center
-    modified = 0
-
-    for el in ngmesh.Elements2D():
-        verts = list(el.vertices)
-
-        # Check if all vertices are on sphere surface
-        on_sphere = True
-        for v in verts:
-            x, y, z = points[v.nr - 1]
-            dx, dy, dz = x - cx, y - cy, z - cz
-            r = math.sqrt(dx*dx + dy*dy + dz*dz)
-
-            if abs(r - radius) > tol:
-                on_sphere = False
-                break
-
-        if on_sphere:
-            for i, v in enumerate(verts):
-                x, y, z = points[v.nr - 1]
-                u, uv_v = compute_sphere_uv(x, y, z, radius, center)
-                el.SetGeomInfo(i, u, uv_v)
-                modified += 1
-
-    return modified
-
-
-def set_torus_geominfo(ngmesh: Any, major_radius: float, minor_radius: float,
-                       center: tuple = (0, 0, 0), axis: str = 'z',
-                       tol: float = 0.01) -> int:
-    """
-    Set geominfo (UV parameters) for toroidal surface elements.
-
-    Parameters:
-    - ngmesh: Netgen mesh
-    - major_radius: Distance from center to tube center
-    - minor_radius: Tube radius
-    - center: Center of torus
-    - axis: Torus axis ('x', 'y', or 'z')
-    - tol: Tolerance for detecting torus surface
-
-    Returns:
-    - Number of elements modified
-    """
-    points = [(p.p[0], p.p[1], p.p[2]) for p in ngmesh.Points()]
-    cx, cy, cz = center
-    modified = 0
-
-    for el in ngmesh.Elements2D():
-        verts = list(el.vertices)
-
-        # Check if all vertices are on torus surface
-        on_torus = True
-        for v in verts:
-            x, y, z = points[v.nr - 1]
-            dx, dy, dz = x - cx, y - cy, z - cz
-
-            if axis == 'z':
-                r_major = math.sqrt(dx*dx + dy*dy)
-                dist = math.sqrt((r_major - major_radius)**2 + dz*dz)
-            elif axis == 'y':
-                r_major = math.sqrt(dx*dx + dz*dz)
-                dist = math.sqrt((r_major - major_radius)**2 + dy*dy)
-            else:
-                r_major = math.sqrt(dy*dy + dz*dz)
-                dist = math.sqrt((r_major - major_radius)**2 + dx*dx)
-
-            if abs(dist - minor_radius) > tol:
-                on_torus = False
-                break
-
-        if on_torus:
-            for i, v in enumerate(verts):
-                x, y, z = points[v.nr - 1]
-                u, uv_v = compute_torus_uv(x, y, z, major_radius, minor_radius, center, axis)
-                el.SetGeomInfo(i, u, uv_v)
-                modified += 1
-
-    return modified
-
-
-def compute_cone_uv(x: float, y: float, z: float, base_radius: float, height: float,
-                    center: tuple = (0, 0, 0), axis: str = 'z') -> tuple:
-    """
-    Compute UV parameters for a point on a cone surface.
-
-    The cone has its apex at center + (0, 0, height/2) and base at center + (0, 0, -height/2)
-    for axis='z'.
-
-    Parameters:
-    - x, y, z: Point coordinates
-    - base_radius: Radius at the base of the cone
-    - height: Height of the cone
-    - center: Center of the cone (midpoint of axis)
-    - axis: Cone axis ('x', 'y', or 'z')
-
-    Returns:
-    - (u, v) UV parameters where u is angle [0, 2*pi] and v is height [0, 1]
-    """
-    cx, cy, cz = center
-    dx, dy, dz = x - cx, y - cy, z - cz
-
-    if axis == 'z':
-        u = math.atan2(dy, dx)
-        v = (dz + height/2) / height  # 0 at base, 1 at apex
-    elif axis == 'y':
-        u = math.atan2(dx, dz)
-        v = (dy + height/2) / height
-    else:  # axis == 'x'
-        u = math.atan2(dz, dy)
-        v = (dx + height/2) / height
-
-    # Normalize u to [0, 2*pi]
-    if u < 0:
-        u += 2 * math.pi
-
-    return u, v
-
-
-def set_cone_geominfo(ngmesh: Any, base_radius: float, height: float,
-                      center: tuple = (0, 0, 0), axis: str = 'z',
-                      tol: float = 0.01) -> int:
-    """
-    Set geominfo (UV parameters) for conical surface elements.
-
-    Parameters:
-    - ngmesh: Netgen mesh
-    - base_radius: Radius at the base of the cone
-    - height: Height of the cone
-    - center: Center of cone (midpoint of axis)
-    - axis: Cone axis ('x', 'y', or 'z')
-    - tol: Tolerance for detecting cone surface
-
-    Returns:
-    - Number of vertex geominfo entries modified
-    """
-    points = [(p.p[0], p.p[1], p.p[2]) for p in ngmesh.Points()]
-    cx, cy, cz = center
-    modified = 0
-
-    for el in ngmesh.Elements2D():
-        verts = list(el.vertices)
-
-        # Check if all vertices are on cone surface (not base)
-        on_cone = True
-        for v in verts:
-            x, y, z = points[v.nr - 1]
-            dx, dy, dz = x - cx, y - cy, z - cz
-
-            if axis == 'z':
-                local_h = dz + height / 2  # 0 at base, height at apex
-                expected_r = base_radius * (1 - local_h / height)
-                actual_r = math.sqrt(dx*dx + dy*dy)
-            elif axis == 'y':
-                local_h = dy + height / 2
-                expected_r = base_radius * (1 - local_h / height)
-                actual_r = math.sqrt(dx*dx + dz*dz)
-            else:
-                local_h = dx + height / 2
-                expected_r = base_radius * (1 - local_h / height)
-                actual_r = math.sqrt(dy*dy + dz*dz)
-
-            # Check if point is on cone surface (not at apex or base)
-            if local_h < 0 or local_h > height:
-                on_cone = False
-                break
-            if expected_r < tol and actual_r < tol:
-                # At apex, skip
-                on_cone = False
-                break
-            if abs(actual_r - expected_r) > tol:
-                on_cone = False
-                break
-
-        if on_cone:
-            for i, v in enumerate(verts):
-                x, y, z = points[v.nr - 1]
-                u, uv_v = compute_cone_uv(x, y, z, base_radius, height, center, axis)
-                el.SetGeomInfo(i, u, uv_v)
-                modified += 1
-
-    return modified
+
+def _build_cubit_callbacks(cubit, surfnr_to_cubit_sid):
+	"""Create projection and normal callbacks for CallbackGeometry.
+
+	Args:
+		cubit: Cubit Python interface
+		surfnr_to_cubit_sid: dict {surfnr (1-indexed) -> Cubit surface ID}
+
+	Returns:
+		(project_func, normal_func) tuple for CallbackGeometry
+	"""
+	def cubit_project(surfnr, x, y, z, u_hint, v_hint):
+		sid = surfnr_to_cubit_sid.get(surfnr)
+		if sid is None:
+			return x, y, z, u_hint, v_hint
+		coords = [x, y, z]
+		uv = cubit.surface(sid).u_v_from_position(coords)
+		pos = cubit.surface(sid).position_from_u_v(uv[0], uv[1])
+		return pos[0], pos[1], pos[2], uv[0], uv[1]
+
+	def cubit_normal(surfnr, x, y, z):
+		sid = surfnr_to_cubit_sid.get(surfnr)
+		if sid is None:
+			return 0.0, 0.0, 1.0
+		n = cubit.surface(sid).normal_at([x, y, z])
+		return n[0], n[1], n[2]
+
+	return cubit_project, cubit_normal
+
+
+def export_curved(cubit, order: int = 3, surface_only: bool = False,
+                  split_quads: bool = False):
+	"""Export Cubit mesh with automatic high-order curving via ACIS.
+
+	Uses CallbackGeometry to delegate surface projection to Cubit's ACIS
+	kernel directly. No OCC geometry, no STEP files, no seam problems.
+
+	Args:
+		cubit: Cubit Python interface object
+		order: Polynomial order for mesh.Curve() (default 3)
+		surface_only: If True, export surface mesh only (for BEM/PEEC)
+		split_quads: If True, split quads into triangles (for ngsolve.bem)
+
+	Returns:
+		ngsolve.Mesh: Curved mesh ready for FEM or BEM
+
+	Example (FEM volume mesh):
+		mesh = cubit_mesh_export.export_curved(cubit, order=3)
+
+	Example (BEM surface mesh for inductance extraction):
+		mesh = cubit_mesh_export.export_curved(
+		    cubit, order=2, surface_only=True, split_quads=True)
+	"""
+	from netgen.meshing import (Mesh as NetgenMesh, MeshPoint, Element3D,
+	                            Element2D, Element1D, FaceDescriptor,
+	                            CallbackGeometry)
+	from netgen.csg import Pnt
+
+	_warn_mixed_element_types_in_blocks(cubit)
+
+	# Node ordering conversion tables: Cubit -> Netgen
+	TET_ORDERING = [0, 1, 2, 3]
+	HEX_ORDERING = [0, 1, 5, 4, 3, 2, 6, 7]
+	WEDGE_ORDERING = [0, 2, 1, 3, 5, 4]
+	PYRAMID_ORDERING = [3, 2, 1, 0, 4]
+
+	# ============================================================
+	# Phase 1: Build Netgen mesh from Cubit elements
+	# ============================================================
+	ngmesh = NetgenMesh(dim=3)
+
+	# Collect all nodes
+	node_map = {}
+	all_nodes = set()
+	for block_id in cubit.get_block_id_list():
+		elem_types = ["hex", "tet", "wedge", "pyramid", "tri", "face", "edge"]
+		for elem_type in elem_types:
+			for element_id in _get_block_elements(cubit, block_id, elem_type):
+				node_ids = cubit.get_connectivity(elem_type, element_id)
+				all_nodes.update(node_ids)
+
+	for node_id in sorted(all_nodes):
+		coord = cubit.get_nodal_coordinates(node_id)
+		pnt_idx = ngmesh.Add(MeshPoint(Pnt(coord[0], coord[1], coord[2])))
+		node_map[node_id] = pnt_idx
+
+	# Add 3D volume elements (skip if surface_only)
+	if not surface_only:
+		material_index = 0
+		for block_id in cubit.get_block_id_list():
+			block_name = cubit.get_exodus_entity_name("block", block_id)
+			tet_list = _get_block_elements(cubit, block_id, "tet")
+			hex_list = _get_block_elements(cubit, block_id, "hex")
+			wedge_list = _get_block_elements(cubit, block_id, "wedge")
+			pyramid_list = _get_block_elements(cubit, block_id, "pyramid")
+
+			if len(tet_list) + len(hex_list) + len(wedge_list) + len(pyramid_list) > 0:
+				material_index += 1
+				ngmesh.SetMaterial(material_index, block_name)
+				for tet_id in tet_list:
+					nodes = cubit.get_connectivity("tet", tet_id)
+					ngmesh.Add(Element3D(material_index,
+					           [node_map[nodes[i]] for i in TET_ORDERING]))
+				for hex_id in hex_list:
+					nodes = cubit.get_connectivity("hex", hex_id)
+					ngmesh.Add(Element3D(material_index,
+					           [node_map[nodes[i]] for i in HEX_ORDERING]))
+				for wedge_id in wedge_list:
+					nodes = cubit.get_connectivity("wedge", wedge_id)
+					ngmesh.Add(Element3D(material_index,
+					           [node_map[nodes[i]] for i in WEDGE_ORDERING]))
+				for pyramid_id in pyramid_list:
+					nodes = cubit.get_connectivity("pyramid", pyramid_id)
+					ngmesh.Add(Element3D(material_index,
+					           [node_map[nodes[i]] for i in PYRAMID_ORDERING]))
+
+	# ============================================================
+	# Phase 2: Map Cubit surfaces to surfnr and create FaceDescriptors
+	# ============================================================
+	fd_index = 0
+	surfnr_to_cubit_sid = {}  # surfnr (1-indexed) -> Cubit surface ID
+	cubit_sid_to_fd = {}      # Cubit surface ID -> fd_index
+
+	# Build tri/quad -> Cubit surface mapping
+	tri_to_surface = {}
+	quad_to_surface = {}
+	surface_ids = cubit.get_entities("surface")
+	for sid in surface_ids:
+		for tri_id in cubit.get_surface_tris(sid):
+			tri_to_surface[tri_id] = sid
+		for quad_id in cubit.get_surface_quads(sid):
+			quad_to_surface[quad_id] = sid
+
+	# One FaceDescriptor per Cubit surface (surfnr = sequential 1-indexed)
+	for sid in sorted(surface_ids):
+		fd_index += 1
+		surfnr = fd_index  # 1-indexed
+		surfnr_to_cubit_sid[surfnr] = sid
+		cubit_sid_to_fd[sid] = fd_index
+		fd = FaceDescriptor(bc=fd_index, surfnr=surfnr)
+		fd.bcname = f"surface_{sid}"
+		ngmesh.Add(fd)
+		ngmesh.SetBCName(fd_index - 1, f"surface_{sid}")
+
+	# FaceDescriptor for elements not on any surface (surfnr=0)
+	fd_index += 1
+	fd_unmatched = FaceDescriptor(bc=fd_index, surfnr=0)
+	fd_unmatched.bcname = "unmatched"
+	ngmesh.Add(fd_unmatched)
+	ngmesh.SetBCName(fd_index - 1, "unmatched")
+	fd_unmatched_idx = fd_index
+
+	# ============================================================
+	# Phase 3: Add boundary elements with SetGeomInfo (ACIS UV)
+	# ============================================================
+	has_setgeominfo = True
+	try:
+		# Test if SetGeomInfo API is available (PR#232)
+		test_el = Element2D(1, [1, 2, 3])
+		test_el.SetGeomInfo(0, 0.0, 0.0)
+	except AttributeError:
+		has_setgeominfo = False
+		print("  Warning: SetGeomInfo not available (requires ksugahar/netgen fork)")
+
+	ngmesh_points = list(ngmesh.Points())
+	modified = 0
+
+	for block_id in cubit.get_block_id_list():
+		tri_list = _get_block_elements(cubit, block_id, "tri")
+		quad_list = _get_block_elements(cubit, block_id, "face")
+
+		for tri_id in tri_list:
+			nodes = cubit.get_connectivity("tri", tri_id)
+			ng_nodes = [node_map[n] for n in nodes]
+			sid = tri_to_surface.get(tri_id)
+			bc_idx = cubit_sid_to_fd.get(sid, fd_unmatched_idx) if sid else fd_unmatched_idx
+
+			el = Element2D(bc_idx, ng_nodes)
+			if has_setgeominfo and sid and sid in cubit_sid_to_fd:
+				for i, nid in enumerate(nodes):
+					coords = cubit.get_nodal_coordinates(nid)
+					uv = cubit.surface(sid).u_v_from_position(list(coords))
+					el.SetGeomInfo(i, uv[0], uv[1])
+					modified += 1
+			ngmesh.Add(el)
+
+		for quad_id in quad_list:
+			nodes = cubit.get_connectivity("face", quad_id)
+			ng_nodes = [node_map[n] for n in nodes]
+			sid = quad_to_surface.get(quad_id)
+			bc_idx = cubit_sid_to_fd.get(sid, fd_unmatched_idx) if sid else fd_unmatched_idx
+
+			if split_quads:
+				for tri_nodes_idx in [(0,1,2), (0,2,3)]:
+					sub_ng = [ng_nodes[j] for j in tri_nodes_idx]
+					sub_cubit = [nodes[j] for j in tri_nodes_idx]
+					el = Element2D(bc_idx, sub_ng)
+					if has_setgeominfo and sid and sid in cubit_sid_to_fd:
+						for i, nid in enumerate(sub_cubit):
+							coords = cubit.get_nodal_coordinates(nid)
+							uv = cubit.surface(sid).u_v_from_position(list(coords))
+							el.SetGeomInfo(i, uv[0], uv[1])
+							modified += 1
+					ngmesh.Add(el)
+			else:
+				el = Element2D(bc_idx, ng_nodes)
+				if has_setgeominfo and sid and sid in cubit_sid_to_fd:
+					for i, nid in enumerate(nodes):
+						coords = cubit.get_nodal_coordinates(nid)
+						uv = cubit.surface(sid).u_v_from_position(list(coords))
+						el.SetGeomInfo(i, uv[0], uv[1])
+						modified += 1
+				ngmesh.Add(el)
+
+	if modified > 0:
+		print(f"  SetGeomInfo: {modified} vertex UV parameters set via ACIS")
+
+	# Add 1D edge elements
+	for block_id in cubit.get_block_id_list():
+		edge_list = _get_block_elements(cubit, block_id, "edge")
+		if len(edge_list) > 0:
+			block_name = cubit.get_exodus_entity_name("block", block_id)
+			fd_index += 1
+			fd = FaceDescriptor(bc=fd_index, surfnr=fd_index)
+			fd.bcname = block_name
+			ngmesh.Add(fd)
+			for edge_id in edge_list:
+				nodes = cubit.get_connectivity("edge", edge_id)
+				ng_nodes = [node_map[n] for n in nodes]
+				ngmesh.Add(Element1D(ng_nodes, index=fd_index))
+
+	# ============================================================
+	# Phase 4: Attach CallbackGeometry and Curve
+	# ============================================================
+	project_func, normal_func = _build_cubit_callbacks(cubit, surfnr_to_cubit_sid)
+	geo = CallbackGeometry(project_func, normal_func, len(surfnr_to_cubit_sid))
+	ngmesh.SetGeometry(geo)
+
+	try:
+		ngmesh.CalcSurfacesOfNode()
+		ngmesh.RebuildSurfaceElementLists()
+	except AttributeError:
+		pass
+
+	from ngsolve import Mesh
+	mesh = Mesh(ngmesh)
+	mesh.Curve(order)
+
+	return mesh
 
 
 ########################################################################
 ###	Name-based face mapping for OCC-Cubit interoperability
-########################################################################
-
-def name_occ_faces(shape: Any, prefix: str = "occ_face_") -> int:
-    """
-    Assign unique names to all faces of an OCC shape.
-
-    This enables reliable face mapping between OCC and Cubit through STEP.
-    The names are preserved when exporting/importing STEP files.
-
-    Parameters:
-    - shape: OCC shape (from netgen.occ)
-    - prefix: Name prefix (default: "occ_face_")
-
-    Returns:
-    - Number of faces named
-
-    Example:
-        from netgen.occ import Box, Cylinder, gp_Pnt, gp_Ax2, gp_Dir
-
-        # Create geometry
-        brick = Box(gp_Pnt(-1,-1,-1), gp_Pnt(1,1,1))
-        cyl = Cylinder(gp_Ax2(gp_Pnt(0,0,-2), gp_Dir(0,0,1)), 0.3, 4)
-        shape = brick - cyl
-
-        # Name faces before STEP export
-        cubit_mesh_export.name_occ_faces(shape)
-        shape.WriteStep("geometry.step")
-    """
-    count = 0
-    for i, face in enumerate(shape.faces):
-        face.name = f"{prefix}{i}"
-        count += 1
-    return count
-
-
-def export_netgen_with_names(cubit: Any, geometry: Any) -> Any:
-    """
-    Export Cubit mesh to Netgen format using name-based face mapping.
-
-    This function uses face names in STEP to establish exact correspondence
-    between OCC faces and Cubit surfaces. Use this after:
-    1. Creating geometry in OCC with name_occ_faces()
-    2. Exporting STEP from OCC
-    3. Importing STEP into Cubit
-    4. Meshing in Cubit
-
-    Parameters:
-    - cubit: Cubit Python interface
-    - geometry: OCCGeometry object (loaded from the same STEP file)
-
-    Returns:
-    - Netgen mesh with correct face indices
-
-    Example:
-        from netgen.occ import OCCGeometry
-        import cubit_mesh_export
-
-        # After OCC created and exported STEP with named faces
-        geo = OCCGeometry("geometry.step")
-
-        # After Cubit imported STEP and meshed
-        ngmesh = cubit_mesh_export.export_netgen_with_names(cubit, geo)
-
-        # Apply SetGeomInfo for curved surfaces
-        cubit_mesh_export.set_cylinder_geominfo(ngmesh, radius=0.3, height=2.0)
-
-        # Now mesh.Curve() works correctly
-        mesh = Mesh(ngmesh)
-        mesh.Curve(2)
-    """
-    _warn_mixed_element_types_in_blocks(cubit)
-
-    import re
-    from netgen.meshing import Mesh as NetgenMesh, MeshPoint, Element3D, Element2D, FaceDescriptor
-    from netgen.csg import Pnt
-
-    # Node ordering conversion tables: Cubit -> Netgen
-    TET_ORDERING = [0, 1, 2, 3]
-    HEX_ORDERING = [0, 1, 5, 4, 3, 2, 6, 7]
-    WEDGE_ORDERING = [0, 2, 1, 3, 5, 4]
-    PYRAMID_ORDERING = [3, 2, 1, 0, 4]
-    TRI_ORDERING = [0, 1, 2]
-    QUAD_ORDERING = [0, 1, 2, 3]
-
-    # Build Cubit surface ID -> OCC face index mapping using names
-    surface_to_occ = {}
-    surface_ids = cubit.get_entities('surface')
-    for sid in surface_ids:
-        name = cubit.get_entity_name('surface', sid)
-        match = re.match(r'occ_face_(\d+)', name)
-        if match:
-            surface_to_occ[sid] = int(match.group(1))
-
-    if not surface_to_occ:
-        raise ValueError(
-            "No OCC face names found in Cubit surfaces. "
-            "Make sure to use name_occ_faces() before exporting STEP from OCC."
-        )
-
-    # Create Netgen mesh
-    ngmesh = NetgenMesh()
-    ngmesh.dim = 3
-
-    # Collect all nodes from all blocks
-    node_map = {}
-    all_nodes = set()
-
-    for block_id in cubit.get_block_id_list():
-        elem_types = ["hex", "tet", "wedge", "pyramid", "tri", "face"]
-        for elem_type in elem_types:
-            for element_id in _get_block_elements(cubit, block_id, elem_type):
-                node_ids = cubit.get_connectivity(elem_type, element_id)
-                all_nodes.update(node_ids)
-
-    # Add nodes to mesh
-    for nid in sorted(all_nodes):
-        coords = cubit.get_nodal_coordinates(nid)
-        pi = ngmesh.Add(MeshPoint(Pnt(*coords)))
-        node_map[nid] = pi
-
-    # Add 3D volume elements (iterate all blocks)
-    material_index = 0
-
-    for block_id in cubit.get_block_id_list():
-        block_name = cubit.get_exodus_entity_name("block", block_id)
-
-        tet_list = _get_block_elements(cubit, block_id, "tet")
-        hex_list = _get_block_elements(cubit, block_id, "hex")
-        wedge_list = _get_block_elements(cubit, block_id, "wedge")
-        pyramid_list = _get_block_elements(cubit, block_id, "pyramid")
-
-        if len(tet_list) + len(hex_list) + len(wedge_list) + len(pyramid_list) > 0:
-            material_index += 1
-            ngmesh.SetMaterial(material_index, block_name)
-
-            for tet_id in tet_list:
-                nodes = cubit.get_connectivity("tet", tet_id)
-                ng_nodes = [node_map[nodes[i]] for i in TET_ORDERING]
-                ngmesh.Add(Element3D(material_index, ng_nodes))
-
-            for hex_id in hex_list:
-                nodes = cubit.get_connectivity("hex", hex_id)
-                ng_nodes = [node_map[nodes[i]] for i in HEX_ORDERING]
-                ngmesh.Add(Element3D(material_index, ng_nodes))
-
-            for wedge_id in wedge_list:
-                nodes = cubit.get_connectivity("wedge", wedge_id)
-                ng_nodes = [node_map[nodes[i]] for i in WEDGE_ORDERING]
-                ngmesh.Add(Element3D(material_index, ng_nodes))
-
-            for pyramid_id in pyramid_list:
-                nodes = cubit.get_connectivity("pyramid", pyramid_id)
-                ng_nodes = [node_map[nodes[i]] for i in PYRAMID_ORDERING]
-                ngmesh.Add(Element3D(material_index, ng_nodes))
-
-    # Create FaceDescriptors for each OCC face
-    num_occ_faces = len(geometry.shape.faces)
-    fd_map = {}
-    for occ_idx in range(num_occ_faces):
-        fd = FaceDescriptor(bc=occ_idx+1, surfnr=occ_idx+1)
-        fd.bcname = f'face_{occ_idx}'
-        fd_idx = ngmesh.Add(fd)
-        ngmesh.SetBCName(fd_idx - 1, f'face_{occ_idx}')
-        fd_map[occ_idx] = fd_idx
-
-    # Build element -> surface mapping
-    tri_to_surface = {}
-    quad_to_surface = {}
-    for sid in surface_ids:
-        for tri_id in cubit.get_surface_tris(sid):
-            tri_to_surface[tri_id] = sid
-        for quad_id in cubit.get_surface_quads(sid):
-            quad_to_surface[quad_id] = sid
-
-    # Add 2D boundary elements with correct face indices (iterate all blocks)
-    for block_id in cubit.get_block_id_list():
-        tri_list = _get_block_elements(cubit, block_id, "tri")
-        quad_list = _get_block_elements(cubit, block_id, "face")
-
-        for tri_id in tri_list:
-            nodes = cubit.get_connectivity('tri', tri_id)
-            if all(n in node_map for n in nodes):
-                ng_nodes = [node_map[nodes[i]] for i in TRI_ORDERING]
-                sid = tri_to_surface.get(tri_id)
-                if sid and sid in surface_to_occ:
-                    occ_idx = surface_to_occ[sid]
-                    ngmesh.Add(Element2D(fd_map[occ_idx], ng_nodes))
-
-        for quad_id in quad_list:
-            nodes = cubit.get_connectivity('face', quad_id)
-            if all(n in node_map for n in nodes):
-                ng_nodes = [node_map[nodes[i]] for i in QUAD_ORDERING]
-                sid = quad_to_surface.get(quad_id)
-                if sid and sid in surface_to_occ:
-                    occ_idx = surface_to_occ[sid]
-                    ngmesh.Add(Element2D(fd_map[occ_idx], ng_nodes))
-
-    # Set geometry reference
-    ngmesh.SetGeometry(geometry)
-
-    return ngmesh
-
-
-########################################################################
-###	Auto-register Cubit toolbar panels on first import
-########################################################################
-
 def _auto_register_panels():
     """Register Cubit toolbar panels if not already registered.
 

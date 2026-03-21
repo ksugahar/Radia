@@ -32,7 +32,6 @@ work_dir = os.path.dirname(os.path.abspath(__file__))
 NGSOLVE_PATH = r'S:\NGSolve\01_GitHub\install_ngsolve\lib\site-packages'
 sys.path.insert(0, NGSOLVE_PATH)
 
-from netgen.meshing import Mesh as NetgenMesh
 from ngsolve import Mesh, VTKOutput, Draw
 import netgen.gui
 import cubit
@@ -146,11 +145,11 @@ print(f"  Transformation applied (moved and rotated)")
 # ============================================================
 print("\nStep 4: Export hex mesh to Netgen")
 
-ngmesh = cubit_mesh_export.export_netgen(cubit)
+mesh = cubit_mesh_export.export_curved(cubit, order=1)
 
-# Scale to meters
+# Scale to meters via ngmesh
+ngmesh = mesh.ngmesh
 ngmesh.Scale(0.001)
-
 mesh = Mesh(ngmesh)
 
 print(f"  Hex elements: {mesh.ne}")

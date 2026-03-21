@@ -4,11 +4,11 @@ cubit_bem_extractor.py
 BEM Impedance Extractor for inductors/transformers.
 
 Extracts L(f), R(f), M (mutual inductance) from Cubit mesh using
-ngbem BEM solver. Supports high-order curved elements via Cubit +
-SetGeomInfo + mesh.Curve(order).
+ngbem BEM solver. Supports high-order curved elements via Cubit's ACIS kernel +
+export_curved().
 
 Architecture:
-    Cubit -> export_netgen() -> NGSolve Mesh -> ngbem BEM -> L, R, M
+    Cubit -> export_curved() -> NGSolve Mesh -> ngbem BEM -> L, R, M
 
 Solver: ngbem (Lucy Weggler's stabilized formulation)
 ESIM:   Karl Hollaus's nonlinear surface impedance for magnetic cores
@@ -18,7 +18,7 @@ Usage:
     from radia.cubit_bem_extractor import BEMExtractor
 
     ext = BEMExtractor()
-    ext.load_cubit_mesh(cubit, geometry_file="inductor.step", curve_order=3)
+    ext.load_cubit_mesh(cubit, curve_order=3)
     ext.set_conductor("coil", sigma=5.8e7)
     ext.set_port("port1", block="coil")
     result = ext.extract(freqs=[1e3, 10e3, 100e3])
@@ -204,7 +204,7 @@ class BEMExtractor:
 
     Example:
         ext = BEMExtractor()
-        ext.load_cubit_mesh(cubit, "inductor.step", curve_order=3)
+        ext.load_cubit_mesh(cubit, curve_order=3)
         ext.set_conductor("coil", sigma=5.8e7)
         ext.set_port("port1", block="coil")
         result = ext.extract(freqs=[1e3, 10e3, 100e3])
@@ -221,44 +221,22 @@ class BEMExtractor:
         self._result = None
         self._curve_order = 1
 
-    def load_cubit_mesh(self, cubit, geometry_file=None, curve_order=3):
+    def load_cubit_mesh(self, cubit, curve_order=3):
         """Load Cubit mesh as NGSolve mesh with curved elements.
+
+        Uses export_curved() which works directly with Cubit's ACIS kernel
+        for high-order curving. No STEP files or OCC geometry needed.
 
         Args:
             cubit: Cubit Python interface object
-            geometry_file: STEP/BREP file for geometry association
             curve_order: Polynomial order for curved elements (1-5)
         """
-        import sys
-        # Try to import cubit_mesh_export
-        cubit_export_paths = [
-            os.path.join(os.path.dirname(__file__), '..', '..', '..',
-                         'CoreformCubit', '01_GitHub'),
-            r'S:\CoreformCubit\01_GitHub',
-        ]
-        for p in cubit_export_paths:
-            if os.path.isdir(p) and p not in sys.path:
-                sys.path.insert(0, p)
+        from cubit_mesh_export import export_curved
 
-        from cubit_mesh_export import export_netgen
-        from ngsolve import Mesh
-
-        # Export Cubit mesh to Netgen format
-        if geometry_file:
-            from netgen.occ import OCCGeometry
-            geo = OCCGeometry(geometry_file)
-            ngmesh = export_netgen(cubit, geometry=geo)
-        else:
-            ngmesh = export_netgen(cubit)
-
-        self.mesh = Mesh(ngmesh)
+        # Export Cubit mesh with curving via ACIS kernel
+        self.mesh = export_curved(cubit, order=curve_order)
         self._cubit = cubit
-
-        # Apply curved elements
         self._curve_order = curve_order
-        if curve_order > 1 and geometry_file:
-            self.mesh.Curve(curve_order)
-            print(f"  Mesh curved to order {curve_order}")
 
         nv = self.mesh.nv
         ne = self.mesh.ne
@@ -268,11 +246,14 @@ class BEMExtractor:
         print(f"  Curve order: {curve_order}")
 
     def load_cubit_surface(self, cubit, block_name="conductor",
-                           geometry_file=None, curve_order=1):
+                           curve_order=1):
         """Load Cubit surface mesh directly for BEM analysis.
 
         For BEM, only the conductor surface is needed (not the volume).
         This extracts triangular/quad surface elements from a Cubit block.
+
+        For high-order curved surface meshes, use export_curved() with
+        surface_only=True instead of this method.
 
         Blocks are the only Cubit entity type that supports element type
         specification (TRI6, QUAD8 for 2nd order elements).
@@ -287,7 +268,6 @@ class BEMExtractor:
         Args:
             cubit: Cubit Python interface
             block_name: Name of the block containing conductor surfaces
-            geometry_file: STEP file for mesh.Curve() (optional)
             curve_order: Polynomial order for curved elements
         """
         from netgen.meshing import Mesh as NetgenMesh, MeshPoint, Element2D, FaceDescriptor
@@ -361,9 +341,6 @@ class BEMExtractor:
         self.mesh = Mesh(ngmesh)
         self._cubit = cubit
         self._curve_order = curve_order
-
-        if curve_order > 1 and geometry_file:
-            self.mesh.Curve(curve_order)
 
         n_surf = len(tri_ids) + len(quad_ids)
         print(f"BEMExtractor: Loaded surface mesh from block '{block_name}'")
