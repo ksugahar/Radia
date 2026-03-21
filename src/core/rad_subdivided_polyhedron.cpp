@@ -16,16 +16,10 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_subdivided_polyhedron.h"
-#include "rad_graphics_3d.h"
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTSubdividedPolyhedron::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = new radTSubdivPolyhedronGraphPresent((radTGroup*)this);
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 

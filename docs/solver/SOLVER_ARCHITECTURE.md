@@ -151,7 +151,6 @@ FEM-BEM (ngbem) is limited to linear materials because BEM requires a known Gree
 - SingleLayerPotentialOperator on SurfaceL2 -> potential P
 - Stabilized low-frequency formulation (Weggler 2026)
 - High-order elements (order 0, 1, 2, ...)
-- FMM acceleration for large problems
 
 **CRITICAL LIMITATION: Linear materials only**.
 

@@ -17,7 +17,6 @@
 
 #include "rad_application.h"
 #include "rad_group.h"
-#include "rad_graphics_3d.h"
 #include "rad_geometry_3d_aux.h"
 
 //-------------------------------------------------------------------------
@@ -167,11 +166,6 @@ radTGroup::radTGroup(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg&
 
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTGroup::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = new radTGroupGraphPresent(this);
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 

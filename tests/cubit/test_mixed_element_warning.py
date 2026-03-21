@@ -38,11 +38,11 @@ cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 name 'solid'")
 
-with tempfile.NamedTemporaryFile(suffix='.vtk', delete=False) as f:
+with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 	vtk_file = f.name
 
-print("  Calling export_vtk (should see no warning):")
-cubit_mesh_export.export_vtk(cubit, vtk_file)
+print("  Calling export_gmsh_v2 (should see no warning):")
+cubit_mesh_export.export_gmsh_v2(cubit, vtk_file)
 os.unlink(vtk_file)
 
 # Test 2: Mixed element types in block (warning expected)
@@ -66,11 +66,11 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 add hex all")
 cubit.cmd("block 1 name 'mixed'")
 
-with tempfile.NamedTemporaryFile(suffix='.vtk', delete=False) as f:
+with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 	vtk_file = f.name
 
-print("  Calling export_vtk (should see warning about mixed types):")
-cubit_mesh_export.export_vtk(cubit, vtk_file)
+print("  Calling export_gmsh_v2 (should see warning about mixed types):")
+cubit_mesh_export.export_gmsh_v2(cubit, vtk_file)
 os.unlink(vtk_file)
 
 # Test 3: Multiple separate blocks (no warning expected)
@@ -94,11 +94,11 @@ cubit.cmd("block 1 name 'tets'")
 cubit.cmd("block 2 add hex all")
 cubit.cmd("block 2 name 'hexes'")
 
-with tempfile.NamedTemporaryFile(suffix='.vtk', delete=False) as f:
+with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 	vtk_file = f.name
 
-print("  Calling export_vtk (should see no warning):")
-cubit_mesh_export.export_vtk(cubit, vtk_file)
+print("  Calling export_gmsh_v2 (should see no warning):")
+cubit_mesh_export.export_gmsh_v2(cubit, vtk_file)
 os.unlink(vtk_file)
 
 print("\n" + "=" * 70)

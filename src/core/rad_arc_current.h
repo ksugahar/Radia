@@ -171,7 +171,6 @@ public:
 	void DumpPureObjInfo(std::ostream&, int);
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 
-	radTg3dGraphPresent* CreateGraphPresent();
 
 	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);
 	int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions* pSubdivOptions, radTvhg*) 
@@ -314,7 +313,6 @@ public:
 		}
 		// Infinite integral is set to zero (though, formally, its contribution is infinite)
 	}
-	radTg3dGraphPresent* CreateGraphPresent();
 
 	void Dump(std::ostream& o, int ShortSign =0) // Porting
 	{

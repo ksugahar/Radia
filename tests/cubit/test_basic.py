@@ -29,8 +29,6 @@ class TestModuleImport(unittest.TestCase):
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_nastran'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_NGSolveCurvedMesh'))
 		self.assertTrue(hasattr(cubit_mesh_export, 'export_meg'))
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_vtk'))
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_vtu'))
 
 	def test_functions_callable(self):
 		"""Test that export functions are callable."""
@@ -40,8 +38,6 @@ class TestModuleImport(unittest.TestCase):
 		self.assertTrue(callable(cubit_mesh_export.export_nastran))
 		self.assertTrue(callable(cubit_mesh_export.export_NGSolveCurvedMesh))
 		self.assertTrue(callable(cubit_mesh_export.export_meg))
-		self.assertTrue(callable(cubit_mesh_export.export_vtk))
-		self.assertTrue(callable(cubit_mesh_export.export_vtu))
 
 	def test_aliases_point_to_same_function(self):
 		"""Test that snake_case aliases point to the same functions."""
@@ -77,21 +73,6 @@ class TestFunctionSignatures(unittest.TestCase):
 		sig = inspect.signature(cubit_mesh_export.export_meg)
 		self.assertEqual(sig.parameters['DIM'].default, 'T')
 		self.assertEqual(sig.parameters['MGR2'].default, None)
-
-	def test_export_vtk_signature(self):
-		"""Test export_vtk has correct parameters."""
-		import inspect
-		sig = inspect.signature(cubit_mesh_export.export_vtk)
-		params = list(sig.parameters.keys())
-		self.assertIn('cubit', params)
-		self.assertIn('FileName', params)
-		# Note: ORDER parameter was removed in v1.5.1 (auto-detection)
-
-	def test_export_vtu_defaults(self):
-		"""Test export_vtu has correct default parameters."""
-		import inspect
-		sig = inspect.signature(cubit_mesh_export.export_vtu)
-		self.assertEqual(sig.parameters['binary'].default, False)
 
 	def test_export_NGSolveCurvedMesh_signature(self):
 		"""Test export_NGSolveCurvedMesh has correct parameters."""

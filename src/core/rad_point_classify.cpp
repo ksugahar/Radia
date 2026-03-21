@@ -1,6 +1,6 @@
 /**
  * @file rad_point_classify.cpp
- * @brief Point classification implementation for FMM field computation
+ * @brief Point classification implementation for batch field computation
  */
 
 #include "rad_point_classify.h"

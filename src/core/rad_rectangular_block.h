@@ -147,7 +147,6 @@ public:
 	void DumpBinParse_RecMag(CAuxBinStrVect& inStr);
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 
-	radTg3dGraphPresent* CreateGraphPresent();
 
 	int DuplicateItself(radThg& hg, radTApplication*, char) 
 	{

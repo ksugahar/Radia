@@ -73,7 +73,6 @@ public:
 
 	void Dump(std::ostream&, int ShortSign =0); // Porting
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
-	radTg3dGraphPresent* CreateGraphPresent();
 
 	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);
 	int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions* pSubdivOptions, radTvhg*) 

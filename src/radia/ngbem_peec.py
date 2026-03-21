@@ -240,7 +240,7 @@ class NGBEMPEECSolver:
     - Galerkin discretization (symmetric matrices by construction)
     - High-order elements (order > 0)
     - Natural Loop-Star decomposition (no explicit basis transformation)
-    - FMM acceleration available for large problems
+
 
     Solver notes:
     - Dense direct: LDL^T (Bunch-Kaufman) for complex symmetric A = A^T

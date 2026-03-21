@@ -21,7 +21,6 @@
 #include <cstdlib>    // std::getenv
 #include <string>     // std::string
 #include <stdexcept>  // std::runtime_error
-#include "rad_graphics_3d.h"
 #include "rad_subdivided_polyhedron.h"
 #include "rad_geometry_3d_aux.h"
 #include "rad_application.h"
@@ -3320,11 +3319,6 @@ void radTPolyhedron::B_intComp_frJ(radTField* pField)
 
 //-------------------------------------------------------------------------
 
-radTg3dGraphPresent* radTPolyhedron::CreateGraphPresent()
-{
-	radTg3dGraphPresent* g3dGraphPresentPtr = new radTPolyhedronGraphPresent(this);
-	return g3dGraphPresentPtr;
-}
 
 //-------------------------------------------------------------------------
 
