@@ -155,6 +155,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_elliptic_integral.cpp     # Elliptic integrals for coil field
 	${CORE_DIR}/rad_coefficient_field.cpp     # CoefficientFunction-based field source
 	${CORE_DIR}/rad_type_cast.cpp             # Dynamic type casting
+	${CORE_DIR}/rad_highorder_nodes.cpp       # High-order BND nodes for GMSH export
 	${CORE_DIR}/rad_extruded_polygon.cpp      # Extruded polygon (prism)
 	${CORE_DIR}/rad_filament.cpp              # Filament conductor
 	${CORE_DIR}/rad_geometry_3d.cpp           # 3D geometry base class
