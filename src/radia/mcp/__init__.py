@@ -1,11 +1,8 @@
 """
-mcp-server-cae-ai: MCP servers for CAE simulation workflows.
+Radia MCP Servers: domain-specific AI assistants for CAE workflows.
 
-Consolidates domain knowledge from Kindai University Sugahara Lab:
-- Radia BEM/PEEC magnetostatics (fork) - linting & API docs
-- NGSolve/ngsolve.bem FEM/BEM - usage patterns & pitfalls
+Bundled with Radia monorepo. Provides MCP servers for:
+- Radia magnetostatics (MMM/MSC/PEEC) - linting & API docs
+- NGSolve FEM/BEM + sparsesolv - usage patterns & pitfalls
 - Coreform Cubit meshing - export workflows & scripting
-- Cubit-to-Netgen high-order curving workflows
 """
-
-__version__ = "2.0.0"
