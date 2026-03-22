@@ -773,7 +773,7 @@ Reference: F.I. Hantila, Rev. Roum. Sci. Techn. - Electrotechn. et Energ., 1975.
 
 ## Compact HX Preconditioner (ngsolve.la)
 
-Since ngsolve-sparsesolv 3.1.0, Compact AMS/AMG/COCR types are unified into `ngsolve.la`.
+Compact AMS/AMG/COCR types are in `ngsolve.la`. Source: `src/ext/sparsesolv/` (monorepo integrated).
 Import: `from ngsolve.la import CompactAMSPreconditioner, COCRSolver`
 
 ### Policy: Compact HX for HCurl Problems
@@ -798,7 +798,7 @@ Import: `from ngsolve.la import CompactAMSPreconditioner, COCRSolver`
 - Compact HX + CompactAMG: 25 iterations (matches HYPRE AMS)
 - HYPRE AMS + BoomerAMG: 25 iterations (reference)
 
-**Source files** (ngsolve-sparsesolv):
+**Source files** (`src/ext/sparsesolv/`):
 
 | File | Description |
 |------|-------------|

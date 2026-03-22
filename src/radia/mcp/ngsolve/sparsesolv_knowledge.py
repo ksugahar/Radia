@@ -6,8 +6,8 @@ Version: 3.1.1
 License: MPL 2.0
 Based on: JP-MARs/SparseSolv
 
-Import: from sparsesolv_ngsolve import CompactAMSPreconditioner, COCRSolver, etc.
-Install: pip install sparsesolv-ngsolve (PyPI standalone add-on package)
+Import: from ngsolve.la import CompactAMSPreconditioner, COCRSolver, etc.
+Install: Bundled with radia (pip install radia). Source: src/ext/sparsesolv/
 Requires: ngsolve >= 6.2.2601
 """
 
@@ -16,13 +16,13 @@ SPARSESOLV_OVERVIEW = """
 
 ## What It Is
 
-A standalone PyPI add-on package for NGSolve providing iterative solvers
-and preconditioners. Install: `pip install sparsesolv-ngsolve`
+Bundled with Radia, providing iterative solvers
+and preconditioners. Install: `pip install radia`
 
 ```python
-import sparsesolv_ngsolve as ssn
+from ngsolve.la import CompactAMSPreconditioner, COCRSolver
 # or:
-from sparsesolv_ngsolve import (
+from ngsolve.la import (
     SparseSolvSolver, ICPreconditioner, SGSPreconditioner,
     CompactAMSPreconditioner, ComplexCompactAMSPreconditioner,
     CompactAMGPreconditioner, COCRSolver, GMRESSolver,
@@ -47,7 +47,7 @@ Based on: JP-MARs/SparseSolv (https://github.com/JP-MARs/SparseSolv)
 ## Architecture
 
 - **Header-only C++17 core**: `include/sparsesolv/` (no separate .cpp compilation)
-- **Standalone PyPI package**: `pip install sparsesolv-ngsolve`, lightweight add-on
+- **Bundled with Radia**: `pip install radia` includes sparsesolv
 - **NGSolve integration**: Links against NGSolve's `SparseMatrix`, `BaseVector`,
   `BitArray`, `BilinearForm`, `FESpace` for seamless interop
 - **Parallel backend**: Compile-time dispatch to NGSolve TaskManager, OpenMP, or serial
@@ -96,8 +96,8 @@ SPARSESOLV_API = """
 ## Import
 
 ```python
-# sparsesolv-ngsolve is a standalone PyPI package
-from sparsesolv_ngsolve import (
+# sparsesolv is bundled with Radia (source: src/ext/sparsesolv/)
+from ngsolve.la import (
     SparseSolvSolver,      # All-in-one solver factory
     ICPreconditioner,      # IC preconditioner for use with NGSolve CGSolver
     SGSPreconditioner,     # SGS preconditioner for use with NGSolve CGSolver
@@ -113,7 +113,7 @@ from sparsesolv_ngsolve import (
 )
 ```
 
-Note: `import ngsolve` must be done before `import sparsesolv_ngsolve`.
+Note: `import ngsolve` must be done before `import ngsolve.la`.
 
 ## SparseSolvSolver
 
@@ -226,7 +226,7 @@ SPARSESOLV_EXAMPLES = """
 
 ```python
 from ngsolve import *
-from sparsesolv_ngsolve import SparseSolvSolver
+from ngsolve.la import SparseSolvSolver
 
 mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
 fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
@@ -530,13 +530,13 @@ SPARSESOLV_BUILD = """
 
 ```bash
 pip install ngsolve>=6.2.2601     # Required dependency
-pip install sparsesolv-ngsolve    # Standalone add-on package
+pip install radia    # Includes sparsesolv
 ```
 
 Verify:
 
 ```bash
-python -c "from sparsesolv_ngsolve import SparseSolvSolver, CompactAMSPreconditioner; print('OK')"
+python -c "from ngsolve.la import SparseSolvSolver, CompactAMSPreconditioner; print('OK')"
 ```
 
 ## Building from source (development only)
@@ -553,7 +553,7 @@ Repository: https://github.com/ksugahar/ngsolve-sparsesolv
 
 SPARSESOLV_EXAMPLE_POISSON = '''# 2D Poisson Problem with ICCG
 from ngsolve import *
-from sparsesolv_ngsolve import SparseSolvSolver
+from ngsolve.la import SparseSolvSolver
 
 mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
 fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
@@ -583,7 +583,7 @@ print(f"Final residual: {result.final_residual:.2e}")
 SPARSESOLV_EXAMPLE_CURLCURL = '''# 3D Curl-Curl (Electromagnetic) with Auto-Shift ICCG
 from ngsolve import *
 from netgen.occ import Box, Pnt
-from sparsesolv_ngsolve import SparseSolvSolver
+from ngsolve.la import SparseSolvSolver
 
 box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
 for face in box.faces:
@@ -618,7 +618,7 @@ print(f"Converged: {result.converged}, Iterations: {result.iterations}")
 SPARSESOLV_EXAMPLE_EDDY = '''# Complex Eddy Current Problem
 from ngsolve import *
 from netgen.occ import Box, Pnt, OCCGeometry
-from sparsesolv_ngsolve import SparseSolvSolver
+from ngsolve.la import SparseSolvSolver
 
 box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
 for face in box.faces:
@@ -655,7 +655,7 @@ print(f"Converged: {result.converged}, Iterations: {result.iterations}")
 SPARSESOLV_EXAMPLE_PRECOND = '''# Using IC/SGS Preconditioners with NGSolve CGSolver
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
-from sparsesolv_ngsolve import ICPreconditioner, SGSPreconditioner
+from ngsolve.la import ICPreconditioner, SGSPreconditioner
 
 mesh = Mesh(unit_square.GenerateMesh(maxh=0.05))
 fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
@@ -688,7 +688,7 @@ print(f"SGS+CG done")
 
 SPARSESOLV_EXAMPLE_DIVERGENCE = '''# Divergence Detection and Early Termination
 from ngsolve import *
-from sparsesolv_ngsolve import SparseSolvSolver
+from ngsolve.la import SparseSolvSolver
 
 mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
 fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
@@ -910,7 +910,7 @@ ICCG iteration count **grows** as O(h^-1).
 ## Python API
 
 ```python
-import sparsesolv_ngsolve as ssn
+from ngsolve.la import CompactAMSPreconditioner, COCRSolver
 
 # Real Compact AMS (for real SPD HCurl magnetostatics)
 pre_real = ssn.CompactAMSPreconditioner(
@@ -983,7 +983,7 @@ SPARSESOLV_EXAMPLE_COMPACT_AMS = '''# Compact AMS + COCR for Complex Eddy Curren
 #   Case A: Uniform sigma (all conducting) -> no regularization needed
 #   Case B: Conductor-in-air -> mass regularization required for COCR
 from ngsolve import *
-import sparsesolv_ngsolve as ssn
+from ngsolve.la import CompactAMSPreconditioner, COCRSolver
 import math
 
 # --- Case B: Conductor-in-Air (common real-world setup) ---

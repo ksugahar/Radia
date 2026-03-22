@@ -6,7 +6,7 @@ Provides tools for:
 - Radia BEM library usage documentation
 - md2html converter documentation (MathJax, reference links, styled HTML)
 
-NGSolve FEM documentation is in the separate mcp-server-ngsolve.
+NGSolve FEM documentation is in the bundled mcp-server-ngsolve (radia.mcp.ngsolve).
 
 Usage:
     mcp-server-radia              # Start MCP server (stdio transport)
