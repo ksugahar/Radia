@@ -1589,6 +1589,16 @@ int MatHysCommitState(int MaterElemKey)
 	return rad.MatHysCommitState(MaterElemKey);
 }
 
+int MatHysGetNuRev(int MaterElemKey, double* pNuRev)
+{
+	return rad.MatHysGetNuRev(MaterElemKey, pNuRev);
+}
+
+int MatHysIrreversible(int MaterElemKey, double* pB, double* pHirr)
+{
+	return rad.MatHysIrreversible(MaterElemKey, pB, pHirr);
+}
+
 //-------------------------------------------------------------------------
 
 void PreRelax(int ElemKey, int SrcElemKey)

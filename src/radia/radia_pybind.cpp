@@ -1571,6 +1571,34 @@ void MatHysCommitState(int mat) {
     if (err < 0) throw std::runtime_error("MatHysCommitState: commit failed");
 }
 
+/**
+ * Get the reversible reluctivity nu_rev for energy-based decomposition.
+ * H = nu_rev * B + H_irr(B)
+ */
+double MatHysGetNuRev(int mat) {
+    double nu_rev = 0;
+    int err = RadMatHysGetNuRev(mat, &nu_rev);
+    if (err < 0) throw std::runtime_error("MatHysGetNuRev: not a Play hysteresis material");
+    return nu_rev;
+}
+
+/**
+ * Compute irreversible field H_irr = H(B) - nu_rev * B.
+ * For Hantila solver: constant matrix uses nu_rev, residual uses H_irr.
+ */
+py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
+    auto b = B.unchecked<1>();
+    if (b.shape(0) != 3) throw std::runtime_error("B must have 3 components");
+    double pB[3] = {b(0), b(1), b(2)};
+    double pHirr[3] = {0, 0, 0};
+    int err = RadMatHysIrreversible(mat, pB, pHirr);
+    if (err < 0) throw std::runtime_error("MatHysIrreversible: not a Play hysteresis material");
+    auto result = py::array_t<double>(3);
+    auto r = result.mutable_unchecked<1>();
+    r(0) = pHirr[0]; r(1) = pHirr[1]; r(2) = pHirr[2];
+    return result;
+}
+
 } // namespace radia_material_ext
 
 
@@ -3127,6 +3155,41 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Args:
                   mat: Material handle from MatEnergyHysteresis() or MatPlayHysteresis()
+          )pbdoc");
+
+    m.def("MatHysGetNuRev", &radia_material_ext::MatHysGetNuRev,
+          py::arg("mat"),
+          R"pbdoc(
+              Get reversible reluctivity nu_rev for energy-based decomposition.
+
+              H(B) = nu_rev * B + H_irr(B, history)
+
+              nu_rev is computed automatically at material construction as the
+              maximum dH/dB on the virgin curve. Used by Hantila solver for
+              the constant stiffness matrix (LU factored once).
+
+              Args:
+                  mat: Material handle from MatPlayHysteresis()
+
+              Returns:
+                  float: nu_rev in A/m/T
+          )pbdoc");
+
+    m.def("MatHysIrreversible", &radia_material_ext::MatHysIrreversible,
+          py::arg("mat"), py::arg("B"),
+          R"pbdoc(
+              Compute irreversible field H_irr(B) = H(B) - nu_rev * B.
+
+              For Hantila polarization method:
+              - Constant matrix: nu_rev (LU factored once)
+              - Nonlinear residual: H_irr (updated each iteration)
+
+              Args:
+                  mat: Material handle from MatPlayHysteresis()
+                  B: numpy array [Bx, By, Bz] in Tesla
+
+              Returns:
+                  numpy array [Hx_irr, Hy_irr, Hz_irr] in A/m
           )pbdoc");
 
     // ========================================================================
