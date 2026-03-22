@@ -41,7 +41,7 @@ pip install radia               # Basic: without netgen fork
 ```
 
 **Deleted repositories** (integrated into Radia):
-- ~~ksugahar/mcp-server-cae-ai~~ → `src/radia/mcp/`
+- ~~ksugahar/mcp-server-cae-ai~~ → `src/radia/mcp_server/`
 - ~~ksugahar/ngsolve-sparsesolv~~ → `src/ext/sparsesolv/` (source only, build is separate)
 
 ---
@@ -80,7 +80,7 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 
 ### File Placement Policy
 
-**POLICY**: Generated output files (`.png`, `.msh`, `.vtu`, `.vtk`, `.vol`, `.vts`) must be placed **next to their corresponding `.py` script**.
+**POLICY**: Generated output files (`.png`, `.msh`, `.vtu`, `.vol`) must be placed **next to their corresponding `.py` script**.
 - Example outputs belong in `examples/<category>/` alongside their script
 - Do NOT place generated files at the repository root
 - `.msh` files in `examples/**/gmsh_models/` are tracked (pre-generated mesh definitions)
@@ -316,7 +316,6 @@ The complete pipeline for accelerator electromagnet analysis:
            ┌──────────────────┼──────────────────┐
            ▼                  ▼                  ▼
     ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-    │ (unified)   │    │ VTS export  │    │ PEEC+MMM    │
     └─────────────┘    └─────────────┘    └─────────────┘
 ```
 

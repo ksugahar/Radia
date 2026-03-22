@@ -73,7 +73,6 @@ python visualize_coils.py
 **Output:**
 - Console: Magnetic field values at test points
 - Console: Field along Z-axis profile
-- File: `coil_geometry.vts` (VTS structured grid with field data)
 
 ### field_map.py
 
@@ -308,11 +307,8 @@ Position (mm)             Bx (mT)         By (mT)         Bz (mT)
 
 ### VTS Export (For ParaView)
 
-Export field distribution to `.vts` file for publication-quality figures:
 ```bash
-# Automatically creates .vts file
 python visualize_coils.py
-# Opens: coil_geometry.vts in ParaView
 ```
 
 ## Coordinate System
