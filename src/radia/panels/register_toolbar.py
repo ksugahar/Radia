@@ -1007,17 +1007,22 @@ class InductanceDialog(QDialog):
 			self.debug_text.setText(f"Result saved: {self._result_file}")
 
 	def _open_gmsh_result(self):
-		"""Open the latest GMSH result file."""
+		"""Open the latest GMSH result file in GMSH GUI."""
 		gmsh_file = getattr(self, '_gmsh_file', '')
 		if not gmsh_file or not os.path.exists(gmsh_file):
 			QMessageBox.warning(self, "Error", "No GMSH result file found. Run Solve first.")
 			return
 		try:
 			import subprocess as _sp
-			# Launch GMSH via external Python (Cubit's Python can't run gmsh.bat)
+			# GMSH GUI: external python -c "import gmsh; gmsh.initialize([..., file], run=True)"
 			ext_py = self._ext_python
 			if ext_py:
-				_sp.Popen([ext_py, "-m", "gmsh", gmsh_file])
+				code = (
+					"import sys, gmsh; "
+					"gmsh.initialize(sys.argv, run=True); "
+					"gmsh.finalize()"
+				)
+				_sp.Popen([ext_py, "-c", code, gmsh_file])
 				self.debug_text.setText(f"GMSH: {os.path.basename(gmsh_file)}")
 			else:
 				os.startfile(gmsh_file)
