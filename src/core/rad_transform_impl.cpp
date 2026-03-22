@@ -540,7 +540,6 @@ void radTApplication::OutFieldForceOrTorqueThroughEnergyCompRes(char* ForceCompo
 }
 **/
 // NOTE: ComputeParticleTrajectory, ComputeFocusingPotential, ComputeSecondOrderKickPer,
-// ComputeSecondOrderKick all REMOVED (2026-03-22). Use CERN Xsuite/Xtrack.
 void radTApplication::ComputeShimSignature(int ElemKey, char* FldID, double* Disp, double* StPoi, double* FiPoi, int Np, double* Vi)
 {
 	radTField **arr_pField = 0, *arr_resField = 0;

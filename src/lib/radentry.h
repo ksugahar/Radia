@@ -961,9 +961,7 @@ EXP int CALL RadFldInt(double* f, int* nf, int obj, char* InfOrFin, char* id, do
 */
 EXP int CALL RadFldLst(double* B, int* nB, int obj, char* id, double* P1, double* P2, int np, char* ArgOrNoArg, double start);
 
-// NOTE: RadFldPtcTrj (particle trajectory) REMOVED (2026-03-22). Use CERN Xsuite/Xtrack.
 
-// NOTE: RadFldFocKickPer, RadFldFocKickPerFormStr REMOVED (2026-03-22).
 
 /** Computes a virtual "shim signature", i.e. variation of a given magnetic field component introduced by given displacement of magnetic field source object.
 @param f [out] computed array of field component values
@@ -1266,9 +1264,7 @@ EXP int CALL RadFldPhi(double* phi_out, int n_points, double* points, int contai
 */
 EXP int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle);
 
-// NOTE: RadFldVTS() REMOVED (2026-03-22). Use NGSolve + GmshPostExport for visualization.
 
-// NOTE: Conductor Analysis API (CndLoop, CndRecBlock, CplMag*, RWG*) REMOVED (2026-02-13)
 // Replaced by Python-based PEEC topology solver (peec_topology.py, peec_coupled.py)
 // and FastHenry .inp parser (fasthenry_parser.py).
 // See CLAUDE.md for the new PEEC API reference.
