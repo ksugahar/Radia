@@ -101,9 +101,9 @@ def main():
     print(f"  Platform: {sys.platform} {platform.machine()}")
     print()
 
-    # Step 1: Install radia from PyPI (pulls NGSolve, sparsesolv, MKL)
+    # Step 1: Install radia from PyPI (pulls NGSolve, MKL, MCP servers)
     print("[1/2] Installing radia from PyPI...")
-    print("  (includes NGSolve, ngsolve-sparsesolv, MKL, MCP servers)")
+    print("  (includes NGSolve, MKL, MCP servers)")
     if args.dry_run:
         print("  [DRY RUN] pip install radia")
     else:
