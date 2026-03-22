@@ -515,9 +515,12 @@ Official PyPI ngsolve 6.2.2601+ includes: **MKL**, **PARDISO**, Periodic BC fix.
 Standard pip netgen does NOT include these APIs.
 
 ```bash
-pip install radia  # NGSolve is a required dependency (>=6.2.2601)
-# Then replace netgen-mesher with the fork:
-pip install <wheel> --force-reinstall  # from https://github.com/ksugahar/netgen/releases
+# Recommended: one-command full installation
+python install_full.py
+
+# Or manual:
+pip install radia  # NGSolve, sparsesolv, MKL, MCP servers
+pip install <wheel> --force-reinstall  # netgen fork from https://github.com/ksugahar/netgen/releases
 ```
 
 ### SetGeomInfo API (Netgen PR#232)
