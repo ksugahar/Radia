@@ -111,22 +111,3 @@ print("      The chamfer creates a smooth transition from narrow to full width")
 print("=" * 70)
 print("Calculation complete.")
 print("=" * 70)
-
-# VTS Export - Export field distribution with same filename as script
-try:
-	# Get script basename without extension
-	script_name = os.path.splitext(os.path.basename(__file__))[0]
-	vts_filename = f"{script_name}.vts"
-	vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
-
-	# Geometry: pole piece with gap=10mm, thick=50mm, width=40mm, lz1=20mm
-	# Extend range to cover geometry with margin
-	x_range = [-0.040, 0.040]
-	y_range = [-0.040, 0.040]
-	z_range = [0, 0.050]
-
-	rad.FldVTS(g1, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
-	print(f"\n[VTS] Exported: {vts_filename}")
-	print(f"      View with: paraview {vts_filename}")
-except Exception as e:
-	print(f"\n[VTS] Warning: Export failed: {e}")

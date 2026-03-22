@@ -239,24 +239,4 @@ print("\n" + "=" * 80)
 print("Test Complete")
 print("=" * 80)
 
-# ============================================================================
-# VTS Export - Export field distribution for visualization
-# ============================================================================
-
-try:
-	script_name = os.path.splitext(os.path.basename(__file__))[0]
-	vts_filename = f"{script_name}.vts"
-	vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
-
-	# Geometry: 10mm cube centered at origin, extend range to 40mm for far-field
-	x_range = [-40*mm, 40*mm]
-	y_range = [-40*mm, 40*mm]
-	z_range = [-40*mm, 40*mm]
-
-	rd.FldVTS(container, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
-	print(f"\n[VTS] Exported: {vts_filename}")
-	print(f"      View with: paraview {vts_filename}")
-except Exception as e:
-	print(f"\n[VTS] Warning: Export failed: {e}")
-
 rd.UtiDelAll()

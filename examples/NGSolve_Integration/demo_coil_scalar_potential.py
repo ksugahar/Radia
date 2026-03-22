@@ -269,19 +269,6 @@ def main():
     except Exception as e:
         print(f"   VTK export skipped: {e}")
 
-    # Step 7: Radia VTS export (field on grid)
-    print()
-    print("7. Exporting Radia field to VTS (coil field only, no iron)...")
-    vts_file = os.path.join(os.path.dirname(__file__),
-                            'demo_coil_scalar_potential_radia.vts')
-    try:
-        rad.FldVTS(coil, vts_file,
-                   [-0.04, 0.04], [-0.04, 0.04], [-0.04, 0.04],
-                   31, 31, 31, 1, 0, 1.0)
-        print(f"   Written: {vts_file}")
-    except Exception as e:
-        print(f"   VTS export skipped: {e}")
-
     print()
     print("=== Done ===")
     print()

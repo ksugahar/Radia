@@ -626,7 +626,7 @@ Returns a dictionary after `rad.Solve()`:
 | Operation | Parallelization |
 |-----------|-----------------|
 | Interaction matrix build | `ParallelFor` |
-| Field computation (`Fld`, `FldLst`, `FldVTS`) | `ParallelFor` |
+| Field computation (`Fld`, `FldLst`) | `ParallelFor` |
 | Analytical polygon integrals | `ParallelFor` |
 
 ### NGSolve Compatibility
@@ -912,77 +912,7 @@ version = rad.UtiVer()
 
 ---
 
-## VTK/VTS Export
-
-Export Radia magnetic field to VTS (VTK XML Structured Grid) format for visualization in ParaView.
-
-### rad.FldVTS()
-
-Export magnetic field on a structured 3D grid to VTS format (C++ implementation with TaskManager parallelization):
-
-```python
-import radia as rad
-
-magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
-
-# FldVTS(obj, filename, x_range, y_range, z_range, nx, ny, nz, include_B, include_H, unit_scale)
-rad.FldVTS(magnet, 'B_field.vts',
-           [-0.08, 0.08], [-0.08, 0.08], [0.03, 0.12],  # x, y, z ranges
-           33, 33, 19,    # grid points
-           1, 0,          # include_B=True, include_H=False
-           1.0)           # unit_scale (1.0 for meters)
-# -> B_field.vts
-```
-
-**Parameters**:
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `obj` | int | required | Radia object handle |
-| `filename` | str | required | Output filename (.vts) |
-| `x_range` | [float, float] | required | X range [min, max] |
-| `y_range` | [float, float] | required | Y range [min, max] |
-| `z_range` | [float, float] | required | Z range [min, max] |
-| `nx` | int | 21 | Grid points in X |
-| `ny` | int | 21 | Grid points in Y |
-| `nz` | int | 21 | Grid points in Z |
-| `include_B` | int | 1 | Include B field (0/1) |
-| `include_H` | int | 0 | Include H field (0/1) |
-| `unit_scale` | float | 1.0 | Coordinate scale factor |
-
-**Output Fields**:
-
-| Field | Type | Unit | Description |
-|-------|------|------|-------------|
-| `B` | Vector (3) | T | Magnetic flux density |
-| `B_magnitude` | Scalar | T | \|B\| |
-| `H` | Vector (3) | A/m | Magnetic field (if include_H=1) |
-| `H_magnitude` | Scalar | A/m | \|H\| (if include_H=1) |
-
-**Example** - Complete workflow:
-
-```python
-import radia as rad
-
-# Create permanent magnet
-vertices = [
-    [-0.02, -0.02, -0.01], [0.02, -0.02, -0.01],
-    [0.02, 0.02, -0.01], [-0.02, 0.02, -0.01],
-    [-0.02, -0.02, 0.01], [0.02, -0.02, 0.01],
-    [0.02, 0.02, 0.01], [-0.02, 0.02, 0.01],
-]
-magnet = rad.ObjHexahedron(vertices, [0, 0, 954930])
-
-# Export field to VTS
-rad.FldVTS(magnet, 'magnet_field.vts',
-           [-0.05, 0.05], [-0.05, 0.05], [0.02, 0.08],
-           21, 21, 13, 1, 1, 1.0)
-
-# View in ParaView:
-# 1. File -> Open -> magnet_field.vts
-# 2. Apply
-# 3. Color by B_magnitude or use Glyph filter for B vectors
-```
+<!-- NOTE: FldVTS() removed (2026-03-22). Use NGSolve + GmshPostExport for visualization. -->
 
 ---
 

@@ -458,7 +458,7 @@ No OpenMP dependency. See `src/core/rad_parallel.h` for the abstraction layer.
 | LU (method=0) | `SuspendTaskManager` + `MKLThreadGuard` for multi-threaded `dgesv_` |
 | BiCGSTAB (method=1) | `ParallelFor` for matrix-vector products |
 | HACApK (method=2) | `ParallelFor` for H-matrix build, ACA+ compression, and BiCGSTAB |
-| Field computation | `ParallelFor` for `Fld`, `FldLst`, `FldVTS`, analytical integrals |
+| Field computation | `ParallelFor` for `Fld`, `FldLst`, analytical integrals |
 
 Thread count: controlled by `ngsolve.SetNumThreads(n)` or TaskManager default (all cores).
 Query via `rad.GetSolveStats()` → `num_threads`, `taskmanager_enabled`.

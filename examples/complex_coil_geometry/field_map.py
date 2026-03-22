@@ -234,20 +234,6 @@ def main():
 	# Export to VTK
 	export_field_to_vtk(field_data, 'field_map')
 
-	# VTS Export - Export field distribution with same filename as script
-	try:
-		import os
-
-		script_name = os.path.splitext(os.path.basename(__file__))[0]
-		vts_filename = f"{script_name}_field.vts"
-		vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
-
-		rad.FldVTS(coil, vts_path, [x_min, x_max], [y_min, y_max], [z_min, z_max], nx, ny, nz, 1, 0, 1.0)
-		print(f"\n[VTS] Exported field: {vts_filename}")
-		print(f"      View with: paraview {vts_filename}")
-	except Exception as e:
-		print(f"\n[VTS] Warning: Export failed: {e}")
-
 	# Cleanup
 	rad.UtiDelAll()
 
