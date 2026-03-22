@@ -166,15 +166,19 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 ### GMSH .msh Format Version Policy
 
+**POLICY**: v2.2 が標準フォーマット。v4.1 は大規模・将来拡張用。
+
 | Direction | Format | Purpose | Tool |
 |-----------|--------|---------|------|
-| **Input** (→ NGSolve) | **v2.2** | Mesh import into NGSolve | `export_gmsh_v2()` → `ReadGmsh()` |
-| **Output** (NGSolve →) | **v4.1** | Field visualization in GMSH | `GmshPostExport` → GMSH GUI |
+| **Input** (→ NGSolve) | **v2.2** | Mesh import into NGSolve | `ReadGmsh()` |
+| **Output** (default) | **v2.2** | NGSolve ReadGmsh(), COMSOL import, GMSH GUI | `GmshPostExport.write()` |
+| **Output** (optional) | **v4.1** | Large-scale, structured Physical Groups | `GmshPostExport.write(version="4.1")` |
 
-- `ReadGmsh()` supports v2.2 only (NGSolve limitation)
-- v4.1 has structured Physical Groups + NodeData, better for post-processing
-- Element type codes (Tri6=9, Quad9=10, Tet10=11, Hex20=17) are identical in both versions
-- High-order elements (2nd order) are supported in both v2.2 and v4.1
+- `GmshPostExport.write()` defaults to v2.2 (changed from v4.1, 2026-03-22)
+- v2.2 includes NodeData (field data: |J|, |B| etc.) for physics import
+- Element type codes (Tri6=9, Tri10=21, Tri15=23, Tri21=25) are identical in both versions
+- High-order elements (arbitrary order) are supported in both v2.2 and v4.1
+- COMSOL can import v2.2 with NodeData directly
 
 ---
 
