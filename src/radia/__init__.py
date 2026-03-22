@@ -59,21 +59,6 @@ if sys.platform == 'win32':
         if os.path.isdir(_intel_path):
             _dirs_to_add.append(_intel_path)
 
-    # 5. Coreform Cubit (optional: C++ surface projection)
-    _cubit_bin = os.environ.get("CUBIT_PATH", "")
-    if not _cubit_bin:
-        # Auto-detect common installation paths
-        import glob as _glob
-        for _pattern in [r"C:\Program Files\Coreform Cubit *\bin"]:
-            _matches = sorted(_glob.glob(_pattern), reverse=True)
-            if _matches:
-                _cubit_bin = _matches[0]
-                break
-    elif not _cubit_bin.endswith("bin"):
-        _cubit_bin = os.path.join(_cubit_bin, "bin")
-    if os.path.isdir(_cubit_bin):
-        _dirs_to_add.append(_cubit_bin)
-
     # Register directories with OS DLL loader
     for _d in _dirs_to_add:
         if hasattr(os, 'add_dll_directory'):
