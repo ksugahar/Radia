@@ -855,6 +855,25 @@ Import: `from ngsolve.la import CompactAMSPreconditioner, COCRSolver`
 
 **HYPRE option**: BoomerAMG subspace solver remains available behind `#ifdef SPARSESOLV_USE_HYPRE` for comparison benchmarks (subspace_solver=2).
 
+### Shifted Preconditioner for Air+Conductor Problems
+
+**POLICY**: For HCurl eddy current with air regions (σ=0), use **Shifted Preconditioner** instead of system regularization. Add ε·mass to the preconditioner only, not the system matrix.
+
+```python
+# Preconditioner: shifted (non-singular)
+a_shifted += eps * nu * u * v * dx   # eps = 1e-6 * nu
+
+# System: original (singular in air, but physically correct)
+a += nu * curl(u) * curl(v) * dx
+a += 1j * omega * sigma_cf * u * v * dx("cond")  # no eps here
+
+# Solve original system with shifted preconditioner
+c = Preconditioner(a_shifted, "bddc")
+inv = CGSolver(a.mat, c.mat, ...)
+```
+
+**Verified**: eps value does NOT affect the solution (1e-4 to 1e-8 give identical ||B||²). Without shift: diverges (nan). See `src/ext/sparsesolv/examples/hiruma/shifted_ams_experiment.py`.
+
 ---
 
 ## IMA (Image Method of Analysis)
