@@ -1,14 +1,16 @@
 """
-BEM inductance extraction test - works with tri OR quad mesh, any order.
+BEM inductance extraction test - energy method with LaplaceSL.
 
 Creates a torus with gap in Cubit, meshes (tet or hex), exports to NGSolve,
-runs LaplaceSL BEM to extract self-inductance.
+runs LaplaceSL BEM to extract self-inductance via energy method:
+    L = mu_0 * J^T * SL * J   (for I=1 toroidal current)
+
+Verified against Neumann formula: L = mu_0 * R * (ln(8R/a) - 2).
 
 Usage:
     python test_bem_inductance.py                    # tet mesh, order=1
     python test_bem_inductance.py --mesh hex         # hex sweep mesh, order=1
     python test_bem_inductance.py --mesh tet --order 2  # tet mesh, order=2
-    python test_bem_inductance.py --mesh hex --order 2  # hex mesh, order=2
 
 Requires: NGSolve (imported FIRST), Cubit, netgen fork with CalcSurfacesOfNode
 """
@@ -21,7 +23,8 @@ import time
 
 # NGSolve MUST be imported BEFORE cubit (DLL conflict avoidance)
 import numpy as np
-from ngsolve import Mesh, HDivSurface, ds, Integrate, CF, BND, GridFunction, Norm
+from ngsolve import (Mesh, HDivSurface, TaskManager, ds,
+                     Integrate, CF, BND, GridFunction, Norm, sqrt, x, y, z)
 from ngsolve.bem import LaplaceSL
 
 # Setup paths
@@ -86,7 +89,6 @@ def create_and_mesh(mesh_type="tet", interval=8):
 	for i, vid in enumerate(vol_ids):
 		cubit.cmd(f"block {i + 1} add volume {vid}")
 	bnd_id = len(vol_ids) + 1
-	# Always try both tri and face(quad) - Cubit silently skips if none exist
 	cubit.cmd(f"block {bnd_id} add tri all")
 	cubit.cmd(f"block {bnd_id} add face all")
 	cubit.cmd(f'block {bnd_id} name "conductor"')
@@ -99,7 +101,7 @@ def create_and_mesh(mesh_type="tet", interval=8):
 
 
 def run_bem(order=1):
-	"""Export to NGSolve, run LaplaceSL BEM."""
+	"""Export to NGSolve, run LaplaceSL BEM with energy method."""
 	t0 = time.perf_counter()
 	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
 		cubit, order=order, surface_only=True,
@@ -114,80 +116,63 @@ def run_bem(order=1):
 	area_exact = 4 * math.pi**2 * R * a  # Full torus (gap is small)
 	print(f"  Surface area: {area*1e4:.4f} cm^2 (exact ~{area_exact*1e4:.4f} cm^2)")
 
-	# HDivSurface + LaplaceSL
+	# HDivSurface
 	fes = HDivSurface(mesh, order=0)
 	u, v = fes.TnT()
 	ndof = fes.ndof
-	fd = fes.FreeDofs()
-	free_idx = np.array([i for i in range(ndof) if fd[i]])
-	n_free = len(free_idx)
-	print(f"  HDivSurface: ndof={ndof}, free={n_free}")
+	print(f"  HDivSurface: ndof={ndof}")
 
-	if n_free == 0:
-		print("  ERROR: No free DOFs. Check mesh export.")
-		return None
+	# Toroidal current for I=1: J = e_phi / (2*pi*a)
+	# e_phi = (-y, x, 0) / sqrt(x^2 + y^2)
+	r_cf = sqrt(x*x + y*y)
+	J_toroidal = CF((-y/r_cf, x/r_cf, 0)) / (2 * math.pi * a)
 
-	bnd_labels = list(set(mesh.GetBoundaries()))
-	print(f"  Boundary labels: {bnd_labels[:5]}...")
+	# Project onto HDivSurface
+	gf_J = GridFunction(fes)
+	gf_J.Set(J_toroidal, definedon=mesh.Boundaries(".*"), dual=True)
+	J_vec = gf_J.vec.FV().NumPy().copy()
 
-	# LaplaceSL operator (NO TaskManager - not thread-safe)
+	# LaplaceSL operator (use_fmm=False for reproducibility and faster dense extraction)
+	# TaskManager must be used for BOTH setup and extraction, or neither.
+	# See: Joachim Schoeberl feedback (2026-03-22)
 	t0 = time.perf_counter()
-	L_op = LaplaceSL(u.Trace() * ds) * v.Trace() * ds
+	with TaskManager():
+		L_op = LaplaceSL(u.Trace() * ds, use_fmm=False) * v.Trace() * ds
 	t_op = time.perf_counter() - t0
-	print(f"  LaplaceSL operator: {t_op:.2f}s")
+	print(f"  LaplaceSL operator (use_fmm=False): {t_op:.2f}s")
 
-	# Dense L matrix extraction
-	print(f"  Extracting {n_free}x{n_free} dense matrix...")
+	# Dense SL matrix extraction using ToDense() (optimized for BEM operators)
+	print(f"  Extracting {ndof}x{ndof} dense matrix via ToDense()...")
 	t0 = time.perf_counter()
-	L_free = np.zeros((n_free, n_free))
-	ei = L_op.mat.CreateColVector()
-	col = L_op.mat.CreateColVector()
-	for jl, jg in enumerate(free_idx):
-		ei[:] = 0; ei[jg] = 1.0; L_op.mat.Mult(ei, col)
-		for il, ig in enumerate(free_idx):
-			L_free[il, jl] = col[ig]
-		if (jl + 1) % 200 == 0:
-			elapsed = time.perf_counter() - t0
-			eta = elapsed / (jl + 1) * (n_free - jl - 1)
-			print(f"    col {jl+1}/{n_free} ({elapsed:.0f}s elapsed, ~{eta:.0f}s remaining)")
-	L_matrix = MU_0 * L_free
+	with TaskManager():
+		SL = L_op.mat.ToDense().NumPy()
 	t_extract = time.perf_counter() - t0
 	print(f"  Dense extraction: {t_extract:.1f}s")
 
-	# Diagnostics
-	neg_count = int(np.sum(np.diag(L_matrix) < 0))
-	print(f"  Negative diagonals: {neg_count}")
+	# Energy method: L = mu_0 * J^T * SL * J  (for I=1)
+	L_total = MU_0 * float(J_vec @ SL @ J_vec)
 
-	# Uniform current -> self-inductance
-	e = np.ones(n_free) / n_free
-	try:
-		x = np.linalg.solve(L_matrix, e)
-		L_total = 1.0 / (e @ x)
-	except np.linalg.LinAlgError:
-		L_total = 0.0
-		print("  WARNING: Singular matrix")
-
-	# Neumann formula (external inductance only, BEM computes surface current)
+	# Neumann formula (external inductance, thin torus R >> a)
 	L_neumann = MU_0 * R * (math.log(8 * R / a) - 2)
+
+	# Diagnostics
+	sym_err = np.linalg.norm(SL - SL.T) / np.linalg.norm(SL)
 
 	print(f"\n{'='*50}")
 	print(f"Results (order={order}):")
-	print(f"  L (BEM):      {L_total*1e9:.4f} nH")
-	print(f"  L (Neumann):  {L_neumann*1e9:.4f} nH")
-	print(f"  Error:        {(L_total - L_neumann) / L_neumann * 100:.1f}%")
-	print(f"  Neg diag:     {neg_count}")
-	print(f"  Free DOFs:    {n_free}")
-	print(f"  Total time:   {t_export + t_op + t_extract:.1f}s")
+	print(f"  L (BEM energy): {L_total*1e9:.4f} nH")
+	print(f"  L (Neumann):    {L_neumann*1e9:.4f} nH")
+	print(f"  Error:          {(L_total - L_neumann) / L_neumann * 100:.2f}%")
+	print(f"  SL symmetry:    ||SL-SL^T||/||SL|| = {sym_err:.2e}")
+	print(f"  DOFs:           {ndof}")
+	print(f"  Total time:     {t_export + t_op + t_extract:.1f}s")
 	print(f"{'='*50}")
 
-	# GMSH export
+	# GMSH export: surface current distribution |J|
 	try:
 		from gmsh_post_export import GmshPostExport
-		gf = GridFunction(fes)
-		for il, ig in enumerate(free_idx):
-			gf.vec[ig] = x[il]
 
-		elem_J = Integrate(Norm(gf), mesh, VOL_or_BND=BND, element_wise=True)
+		elem_J = Integrate(Norm(gf_J), mesh, VOL_or_BND=BND, element_wise=True)
 		elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
 
 		num_nodes = mesh.nv
@@ -202,7 +187,7 @@ def run_bem(order=1):
 
 		gmsh_file = os.path.join(
 			os.path.dirname(os.path.abspath(__file__)),
-			f"inductance_J.msh"
+			"inductance_J.msh"
 		)
 		post = GmshPostExport(mesh, boundary=True)
 		post.add_field("|J|", node_J, ncomp=1)
@@ -212,18 +197,19 @@ def run_bem(order=1):
 		print(f"  GMSH export failed: {ex}")
 
 	return {"L_nH": L_total * 1e9, "L_neumann_nH": L_neumann * 1e9,
-	        "neg_diag": neg_count, "n_free": n_free, "order": order}
+	        "error_pct": (L_total - L_neumann) / L_neumann * 100,
+	        "ndof": ndof, "order": order}
 
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description="BEM inductance test (tri/quad, any order)")
+	parser = argparse.ArgumentParser(description="BEM inductance test (energy method)")
 	parser.add_argument("--mesh", choices=["tet", "hex"], default="tet",
 	                    help="Mesh type: tet (tri surface) or hex (quad surface)")
 	parser.add_argument("--order", type=int, default=1, help="Curve order (1-5)")
 	parser.add_argument("--interval", type=int, default=8, help="Curve interval for hex mesh")
 	args = parser.parse_args()
 
-	print(f"BEM Inductance Test: mesh={args.mesh}, order={args.order}")
+	print(f"BEM Inductance Test (energy method): mesh={args.mesh}, order={args.order}")
 	print(f"Torus: R={R*1e3:.1f}mm, a={a*1e3:.1f}mm, gap={gap*1e3:.1f}mm")
 
 	vol_ids = create_and_mesh(args.mesh, args.interval)
