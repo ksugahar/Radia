@@ -35,7 +35,8 @@ dependencies = [
     # See: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
     # Fixed in 6.2.2601+. Verified: geominfo, Periodic BC, vol-to-gmsh all pass.
     "ngsolve>=6.2.2601",
-    "ngsolve-sparsesolv>=3.1.0",
+    # sparsesolv source is in src/ext/sparsesolv/ (monorepo integrated)
+    # Build separately: cd src/ext/sparsesolv && pip install .
     # REQUIRED: ksugahar/netgen fork (CallbackGeometry + SetGeomInfo)
     # pip cannot install from GitHub URLs, so install manually:
     #   pip install <wheel> from https://github.com/ksugahar/netgen/releases
