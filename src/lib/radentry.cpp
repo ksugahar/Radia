@@ -1124,7 +1124,6 @@ int CALL RadFldFrc(double* pF, int* pNf, int Obj, int Shape)
 	return ErrStat;
 }
 
-// NOTE: RadFldFocPot, RadFldFocKickPer, RadFldFocKickPerFormStr REMOVED (2026-03-22).
 
 //-------------------------------------------------------------------------
 
@@ -1164,7 +1163,6 @@ int CALL RadFldLst(double* pF, int* pNf, int Obj, char* id, double* P1, double* 
 	return ErrStat;
 }
 
-// NOTE: RadFldPtcTrj REMOVED (2026-03-22). Use CERN Xsuite/Xtrack.
 
 //-------------------------------------------------------------------------
 
@@ -1738,6 +1736,5 @@ int CALL RadFldA(double* A_out, int n_points, double* points, int container_hand
 
 //-------------------------------------------------------------------------
 
-// NOTE: RadFldVTS() REMOVED (2026-03-22). Use NGSolve + GmshPostExport for visualization.
 
 
