@@ -4,6 +4,48 @@ This document contains development guidelines and policies for the Radia project
 
 ---
 
+## Monorepo Structure
+
+Radia is a **monorepo** containing all components. Only 2 repositories exist:
+
+| Repository | Purpose |
+|-----------|---------|
+| **ksugahar/Radia** | Everything (C++, Python, MCP servers, sparsesolv) |
+| **ksugahar/netgen** | Netgen fork (CallbackGeometry + SetGeomInfo, PR pending) |
+
+```
+S:\Radia\01_GitHub\
+  src/radia/              # Python package (pip install radia)
+    _radia_pybind.pyd     # C++ extension
+    mcp/                  # MCP servers (radia, ngsolve, cubit)
+      radia/server.py     # mcp-server-radia
+      ngsolve/server.py   # mcp-server-ngsolve
+      cubit/server.py     # mcp-server-cubit
+    panels/               # Cubit GUI panels
+    *.py                  # Python modules
+  src/core/               # C++ source
+  src/ext/
+    HACApK_LH-Cimplm/    # H-matrix library (MIT)
+    sparsesolv/           # Compact AMS/COCR (source, build is separate PyPI)
+  tests/                  # Radia tests + tests/mcp/
+  examples/
+  docs/
+  Build.ps1               # MSVC + MKL build
+  install_full.py          # One-command full setup
+```
+
+**Installation**:
+```bash
+python install_full.py          # Full (recommended): radia + netgen fork
+pip install radia               # Basic: without netgen fork
+```
+
+**Deleted repositories** (integrated into Radia):
+- ~~ksugahar/mcp-server-cae-ai~~ → `src/radia/mcp/`
+- ~~ksugahar/ngsolve-sparsesolv~~ → `src/ext/sparsesolv/` (source only, build is separate)
+
+---
+
 ## Critical Policies
 
 ### Green's Function: Laplace Kernel Only (MQS/Darwin)
@@ -1337,7 +1379,7 @@ All URN examples, data, and scripts in `examples/Universal_Relaxation_Network/`.
 
 ## Cubit Mesh Export Module
 
-The `cubit_mesh_export` module (originally a separate repository) provides mesh export from Coreform Cubit to various formats.
+The `cubit_mesh_export` module provides mesh export from Coreform Cubit to various formats.
 
 ### Module Location
 
