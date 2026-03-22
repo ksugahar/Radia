@@ -662,6 +662,8 @@ Call with pState=NULL first to get the required array size in *pLen.
 @return integer error code (0 : no error, <0 : error)
 */
 EXP int CALL RadMatHysSaveState(int mat, double* pState, int* pLen);
+EXP int CALL RadMatHysGetNuRev(int mat, double* pNuRev);
+EXP int CALL RadMatHysIrreversible(int mat, double* pB, double* pHirr);
 
 /** Restores the internal state of an energy hysteresis material from an array.
 @param mat [in] reference number of the material
