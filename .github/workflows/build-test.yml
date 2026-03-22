@@ -46,7 +46,7 @@ jobs:
       # ----------------------------------------------------------------
       - name: Build with MSVC + MKL
         shell: pwsh
-        timeout-minutes: 25
+        timeout-minutes: 20
         run: |
           Write-Host "Starting Radia build..."
           & "${{ github.workspace }}\Build.ps1"
