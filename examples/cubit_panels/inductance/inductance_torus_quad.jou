@@ -1,33 +1,33 @@
 ## Torus with gap - hex sweep mesh (quad surface) for BEM inductance
 ## Run: playback "inductance_torus_quad.jou"
+## Result: 736 surface quads, ~2208 BEM DOFs
 
 reset
 
 ## Parameters
 #{R = 0.05}
 #{a = 0.005}
-#{gap = 0.005}
+#{angle = 355}
 
-## Create torus
-create torus major radius {R} minor radius {a}
+## Create gapped torus by revolving circle
+create surface circle radius {a} yplane
+move surface 1 x {R} include_merged
+sweep surface 1 zaxis angle {angle}
 
-## Create cutting brick for gap
-brick x {3*a} y {gap} z {3*a}
-move Volume 2 x {R} y 0 z 0 include_merged
+## Hex sweep mesh (coarse)
+volume 1 scheme sweep source surface 1 target surface 3
+surface 1 size {a}
+surface 1 scheme pave
+mesh surface 1
+mesh volume 1
 
-## Subtract to create gap
-subtract volume 2 from volume 1
-
-## Hex sweep mesh
-volume all scheme sweep
-curve all interval 8
-mesh volume all
-
-## Allow elements in multiple blocks
+## Blocks: source/sink BEFORE boundary (subset before superset)
 set duplicate block elements on
-
-## Register blocks (quad surface elements)
 block 1 add volume all
 block 1 name "conductor"
-block 2 add quad all
-block 2 name "boundary"
+block 2 add face in surface 1
+block 2 name "source"
+block 3 add face in surface 3
+block 3 name "sink"
+block 4 add face in surface all
+block 4 name "boundary"
