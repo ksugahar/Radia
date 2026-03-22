@@ -5,8 +5,8 @@ import sys
 from io import StringIO
 from pathlib import Path
 
-from radia.mcp.radia.server import _lint_file as _lint_file_radia
-from radia.mcp.ngsolve.server import _lint_file as _lint_file_ngsolve
+from radia.mcp_server.radia.server import _lint_file as _lint_file_radia
+from radia.mcp_server.ngsolve.server import _lint_file as _lint_file_ngsolve
 
 
 # ============================================================
@@ -16,9 +16,9 @@ from radia.mcp.ngsolve.server import _lint_file as _lint_file_ngsolve
 def test_radia_selftest_uses_fixtures(monkeypatch):
     """Radia selftest should use fixtures when examples/ not found."""
     monkeypatch.setattr(
-        'radia.mcp.radia.server.PROJECT_ROOT', Path("/nonexistent")
+        'radia.mcp_server.radia.server.PROJECT_ROOT', Path("/nonexistent")
     )
-    from radia.mcp.radia.server import _selftest
+    from radia.mcp_server.radia.server import _selftest
 
     captured = StringIO()
     monkeypatch.setattr('sys.stdout', captured)
@@ -30,9 +30,9 @@ def test_radia_selftest_uses_fixtures(monkeypatch):
 def test_ngsolve_selftest_uses_fixtures(monkeypatch):
     """NGSolve selftest should use fixtures when examples/ not found."""
     monkeypatch.setattr(
-        'radia.mcp.ngsolve.server.PROJECT_ROOT', Path("/nonexistent")
+        'radia.mcp_server.ngsolve.server.PROJECT_ROOT', Path("/nonexistent")
     )
-    from radia.mcp.ngsolve.server import _selftest
+    from radia.mcp_server.ngsolve.server import _selftest
 
     captured = StringIO()
     monkeypatch.setattr('sys.stdout', captured)
@@ -44,9 +44,9 @@ def test_ngsolve_selftest_uses_fixtures(monkeypatch):
 def test_cubit_selftest_skips_without_examples(tmp_path, monkeypatch):
     """Cubit selftest should print SKIP when examples/ not found."""
     monkeypatch.setattr(
-        'radia.mcp.cubit.server.PROJECT_ROOT', tmp_path
+        'radia.mcp_server.cubit.server.PROJECT_ROOT', tmp_path
     )
-    from radia.mcp.cubit.server import _selftest
+    from radia.mcp_server.cubit.server import _selftest
 
     captured = StringIO()
     monkeypatch.setattr('sys.stdout', captured)

@@ -100,12 +100,10 @@ python run_simulation.py
 ```
 
 Output:
-- `field_distribution.vts` : Magnetic field data
 
 ### Step 3: Visualize
 
 ```bash
-paraview yoke_quarter.vtu field_distribution.vts
 ```
 
 ## Validation Results
@@ -157,7 +155,6 @@ Gap center Bz field [T] for different mesh densities and permeabilities:
 |------|-------------|
 | `yoke_quarter.vol` | Netgen mesh (1/4 model) |
 | `yoke_quarter.vtu` | VTK mesh for visualization |
-| `field_distribution.vts` | Radia field data |
 
 ### Subdirectories
 

@@ -218,7 +218,6 @@ With complex mu_r = mu_r' - j*mu_r'':
 +---------------------------------------------------+
 |  Existing Radia Infrastructure                    |
 |  - PEEC Loop-Star + MMM (current)                 |
-|  - Visualization (VTK export)                     |
 |  - Material database                              |
 +---------------------------------------------------+
 ```

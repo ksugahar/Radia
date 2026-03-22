@@ -237,7 +237,6 @@ magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
            41, 41, 27, 1, 0, 1.0)
 
 # Visualize
-grid = pv.read('field.vts')
 grid.plot(scalars='B_magnitude', cmap='coolwarm')
 ```
 
@@ -273,7 +272,6 @@ magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 "
 
 # 2. Open in ParaView
-paraview field.vts
 
 # 3. Apply filters (Glyph, Contour, etc.) via GUI
 
