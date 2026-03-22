@@ -500,11 +500,12 @@ class CoilBuilder:
 		return self.gap < 1e-10
 
 	def close(self, tolerance=1e-6):
-		"""Verify loop closure or optimize last arc to close the gap.
+		"""Verify loop closure or optimize arc angles to close the gap.
 
 		If the gap is within tolerance, does nothing.
-		If the gap is larger, adjusts the last arc segment's angle
-		to close the loop using scipy optimization.
+		If the gap is larger, adjusts ALL arc segment angles simultaneously
+		to close the loop. This handles 3D paths (tilt, helical) where
+		a single arc adjustment is insufficient.
 
 		Args:
 			tolerance: Maximum allowed gap in meters
@@ -519,34 +520,34 @@ class CoilBuilder:
 		if self.gap <= tolerance:
 			return self
 
-		# Find last arc segment to adjust
-		arc_idx = None
-		for i in range(len(self.segments) - 1, -1, -1):
-			if isinstance(self.segments[i], ArcSegment):
-				arc_idx = i
-				break
+		# Find all arc segment indices
+		arc_indices = [i for i, seg in enumerate(self.segments)
+		               if isinstance(seg, ArcSegment)]
 
-		if arc_idx is None:
+		if not arc_indices:
 			raise ValueError(
-				f"Gap = {self.gap:.6e} m but no arc segment to adjust. "
-				f"Add an arc segment or close manually.")
+				f"Gap = {self.gap:.6e} m but no arc segments to adjust. "
+				f"Add arc segments or close manually.")
 
-		# Optimize arc_angle to minimize gap
-		from scipy.optimize import minimize_scalar
-		original_arc = self.segments[arc_idx]
+		from scipy.optimize import minimize
+
 		start_pos_0 = self.segments[0].start_pos
+		original_angles = [self.segments[i].arc_angle for i in arc_indices]
+		original_segments = [self.segments[i] for i in arc_indices]
 
-		def gap_func(angle):
-			# Rebuild from arc_idx with new angle
-			test_seg = ArcSegment(
-				original_arc.current, original_arc.start_pos,
-				original_arc.orientation, original_arc.width,
-				original_arc.height, original_arc.radius, angle)
-			# Propagate through remaining segments
-			pos = test_seg.end_pos
-			orient = test_seg.end_orientation
-			for seg in self.segments[arc_idx + 1:]:
-				if isinstance(seg, StraightSegment):
+		def _rebuild_and_gap(angles):
+			"""Rebuild path with modified arc angles, return gap."""
+			# Start from segment 0
+			pos = self.segments[0].start_pos.copy()
+			orient = self.segments[0].orientation.copy()
+
+			for i, seg in enumerate(self.segments):
+				if i in arc_indices:
+					angle = angles[arc_indices.index(i)]
+					test = ArcSegment(
+						seg.current, pos, orient,
+						seg.width, seg.height, seg.radius, angle)
+				elif isinstance(seg, StraightSegment):
 					test = StraightSegment(
 						seg.current, pos, orient,
 						seg.width, seg.height, seg.length)
@@ -556,29 +557,34 @@ class CoilBuilder:
 						seg.width, seg.height, seg.radius, seg.arc_angle)
 				pos = test.end_pos
 				orient = test.end_orientation
+
 			return np.linalg.norm(pos - start_pos_0)
 
-		result = minimize_scalar(gap_func,
-			bounds=(original_arc.arc_angle - 90, original_arc.arc_angle + 90),
-			method='bounded')
+		# Optimize all arc angles simultaneously
+		result = minimize(
+			_rebuild_and_gap,
+			x0=original_angles,
+			method='Nelder-Mead',
+			options={'xatol': 1e-8, 'fatol': tolerance * 0.01, 'maxiter': 10000})
 
 		if result.fun > tolerance:
 			raise ValueError(
-				f"Could not close loop. Residual gap = {result.fun:.6e} m")
+				f"Could not close loop. Residual gap = {result.fun:.6e} m. "
+				f"Try adding more arc segments for more degrees of freedom.")
 
-		# Replace the arc segment with optimized angle
-		new_arc = ArcSegment(
-			original_arc.current, original_arc.start_pos,
-			original_arc.orientation, original_arc.width,
-			original_arc.height, original_arc.radius, result.x)
-		self.segments[arc_idx] = new_arc
+		# Rebuild with optimized angles
+		optimized_angles = result.x
+		pos = self.segments[0].start_pos.copy()
+		orient = self.segments[0].orientation.copy()
 
-		# Rebuild state from the replaced segment onward
-		pos = new_arc.end_pos
-		orient = new_arc.end_orientation
-		for i in range(arc_idx + 1, len(self.segments)):
+		for i in range(len(self.segments)):
 			seg = self.segments[i]
-			if isinstance(seg, StraightSegment):
+			if i in arc_indices:
+				angle = optimized_angles[arc_indices.index(i)]
+				new_seg = ArcSegment(
+					seg.current, pos, orient,
+					seg.width, seg.height, seg.radius, angle)
+			elif isinstance(seg, StraightSegment):
 				new_seg = StraightSegment(
 					seg.current, pos, orient,
 					seg.width, seg.height, seg.length)
