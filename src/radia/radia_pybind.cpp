@@ -628,7 +628,6 @@ py::object Fld(int obj, const std::string& field_type, py::array_t<double> point
  * @param unit_scale Coordinate scale factor
  * @return Filename
  */
-// NOTE: FldVTS() REMOVED (2026-03-22). Use NGSolve + GmshPostExport for visualization.
 
 } // namespace radia_field
 
@@ -1915,7 +1914,6 @@ int FldFrcShpRtg(py::array_t<double> center, py::array_t<double> dimensions) {
     return handle;
 }
 
-// NOTE: FldFocPot REMOVED (2026-03-22).
 
 void FldCmpCrt(double prcB, double prcA, double prcBInt, double prcFrc, double prcTrjCrd, double prcTrjAng) {
     int n = 0;
@@ -1934,7 +1932,6 @@ void FldLenRndSw(const std::string& on_off) {
 } // namespace radia_field_ext
 
 
-// NOTE: Conductor PEEC (CndLoop, CndRecBlock) and CplMag namespaces REMOVED (2026-02-13)
 // Replaced by Python-based PEEC topology solver (peec_topology.py, peec_coupled.py)
 
 
@@ -2569,7 +2566,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   phi = rad.Fld(obj, "phi", points_Nx3)      # Batch scalar -> (N,) array
           )pbdoc");
 
-    // NOTE: FldVTS() REMOVED (2026-03-22). Use NGSolve + GmshPostExport.
 
     // ========================================================================
     // Materials
@@ -3236,7 +3232,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   Shape handle
           )pbdoc");
 
-    // NOTE: FldFocPot REMOVED (2026-03-22).
 
     m.def("FldCmpCrt", &radia_field_ext::FldCmpCrt,
           py::arg("prcB"), py::arg("prcA"), py::arg("prcBInt"),
@@ -3407,7 +3402,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
             Dictionary with 'center' and 'field' tuples
     )pbdoc");
 
-    // NOTE: FldPtcTrj (particle trajectory) REMOVED (2026-03-22).
     // Use CERN Xsuite/Xtrack for GPU-accelerated beam tracking.
 
     // FldEnrFrc - Energy-based force
@@ -3832,7 +3826,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     // NOTE: Extended Conductor (CndHexahedron, CndWire, CndSpiral, CndDefinePort,
     // CndImpedanceSweep) and Coupled Solver (CplMagSetConductor, CplMagSweep)
-    // functions REMOVED (2026-02-13). Use Python PEEC topology solver instead.
 
     // ========================================================================
     // Extended Utility Functions

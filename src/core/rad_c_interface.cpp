@@ -2045,7 +2045,6 @@ void FieldTorqueThroughEnergy(int DestElemKey, int SourceElemKey, char* TorqueCo
 	rad.ComputeFieldTorqueThroughEnergy(DestElemKey, SourceElemKey, TorqueComponID, SubdArray, 3, TorqueCenPo, 3);
 }
 
-// NOTE: ParticleTrajectory, FocusingPotential, FocusingKickPer all REMOVED (2026-03-22).
 
 //-------------------------------------------------------------------------
 
