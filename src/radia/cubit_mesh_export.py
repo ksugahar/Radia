@@ -1546,11 +1546,10 @@ def export_NGSolveCurvedMesh(cubit, order: int = 2, surface_only: bool = False,
 					           [node_map[nodes[i]] for i in PYRAMID_ORDERING]))
 
 	# ============================================================
-	# Phase 2: Map Cubit surfaces to surfnr and create FaceDescriptors
+	# Phase 2: Map Cubit surfaces and blocks to FaceDescriptors
 	# ============================================================
 	fd_index = 0
 	surfnr_to_cubit_sid = {}  # surfnr (1-indexed) -> Cubit surface ID
-	cubit_sid_to_fd = {}      # Cubit surface ID -> fd_index
 
 	# Build tri/quad -> Cubit surface mapping
 	tri_to_surface = {}
@@ -1562,16 +1561,44 @@ def export_NGSolveCurvedMesh(cubit, order: int = 2, surface_only: bool = False,
 		for quad_id in cubit.get_surface_quads(sid):
 			quad_to_surface[quad_id] = sid
 
-	# One FaceDescriptor per Cubit surface (surfnr = sequential 1-indexed)
-	for sid in sorted(surface_ids):
+	# Build tri/quad -> block_name mapping (last block wins for priority)
+	# With "set duplicate block elements on", elements can be in multiple blocks.
+	# Later blocks override earlier ones, so "source"/"sink" override "boundary".
+	tri_to_block = {}
+	quad_to_block = {}
+	for block_id in cubit.get_block_id_list():
+		block_name = cubit.get_exodus_entity_name("block", block_id)
+		tri_list = _get_block_elements(cubit, block_id, "tri")
+		quad_list = _get_block_elements(cubit, block_id, "face")
+		for tri_id in tri_list:
+			tri_to_block[tri_id] = block_name
+		for quad_id in quad_list:
+			quad_to_block[quad_id] = block_name
+
+	# Collect unique (surface_id, bcname) pairs from all elements
+	fd_keys = set()  # (sid, bcname) pairs
+	for tri_id, sid in tri_to_surface.items():
+		if tri_id in tri_to_block:
+			fd_keys.add((sid, tri_to_block[tri_id]))
+		else:
+			fd_keys.add((sid, f"surface_{sid}"))
+	for quad_id, sid in quad_to_surface.items():
+		if quad_id in quad_to_block:
+			fd_keys.add((sid, quad_to_block[quad_id]))
+		else:
+			fd_keys.add((sid, f"surface_{sid}"))
+
+	# One FaceDescriptor per (surface_id, bcname) pair
+	fd_key_to_idx = {}  # (sid, bcname) -> fd_index
+	for (sid, bcname) in sorted(fd_keys):
 		fd_index += 1
-		surfnr = fd_index  # 1-indexed
+		surfnr = fd_index  # 1-indexed, unique per FaceDescriptor
 		surfnr_to_cubit_sid[surfnr] = sid
-		cubit_sid_to_fd[sid] = fd_index
 		fd = FaceDescriptor(bc=fd_index, surfnr=surfnr)
-		fd.bcname = f"surface_{sid}"
+		fd.bcname = bcname
 		ngmesh.Add(fd)
-		ngmesh.SetBCName(fd_index - 1, f"surface_{sid}")
+		ngmesh.SetBCName(fd_index - 1, bcname)
+		fd_key_to_idx[(sid, bcname)] = fd_index
 
 	# FaceDescriptor for elements not on any surface (surfnr=0)
 	fd_index += 1
@@ -1596,52 +1623,65 @@ def export_NGSolveCurvedMesh(cubit, order: int = 2, surface_only: bool = False,
 	ngmesh_points = list(ngmesh.Points())
 	modified = 0
 
+	# Collect unique tri/quad elements across all blocks (dedup)
+	all_tris = set()
+	all_quads = set()
 	for block_id in cubit.get_block_id_list():
-		tri_list = _get_block_elements(cubit, block_id, "tri")
-		quad_list = _get_block_elements(cubit, block_id, "face")
+		all_tris.update(_get_block_elements(cubit, block_id, "tri"))
+		all_quads.update(_get_block_elements(cubit, block_id, "face"))
 
-		for tri_id in tri_list:
-			nodes = cubit.get_connectivity("tri", tri_id)
-			ng_nodes = [node_map[n] for n in nodes]
-			sid = tri_to_surface.get(tri_id)
-			bc_idx = cubit_sid_to_fd.get(sid, fd_unmatched_idx) if sid else fd_unmatched_idx
+	for tri_id in sorted(all_tris):
+		nodes = cubit.get_connectivity("tri", tri_id)
+		ng_nodes = [node_map[n] for n in nodes]
+		sid = tri_to_surface.get(tri_id)
+		bcname = None
+		if sid is not None:
+			bcname = tri_to_block.get(tri_id, f"surface_{sid}")
+			bc_idx = fd_key_to_idx.get((sid, bcname), fd_unmatched_idx)
+		else:
+			bc_idx = fd_unmatched_idx
 
+		el = Element2D(bc_idx, ng_nodes)
+		if has_setgeominfo and sid is not None and (sid, bcname) in fd_key_to_idx:
+			for i, nid in enumerate(nodes):
+				coords = cubit.get_nodal_coordinates(nid)
+				uv = cubit.surface(sid).u_v_from_position(list(coords))
+				el.SetGeomInfo(i, uv[0], uv[1])
+				modified += 1
+		ngmesh.Add(el)
+
+	for quad_id in sorted(all_quads):
+		nodes = cubit.get_connectivity("face", quad_id)
+		ng_nodes = [node_map[n] for n in nodes]
+		sid = quad_to_surface.get(quad_id)
+		bcname = None
+		if sid is not None:
+			bcname = quad_to_block.get(quad_id, f"surface_{sid}")
+			bc_idx = fd_key_to_idx.get((sid, bcname), fd_unmatched_idx)
+		else:
+			bc_idx = fd_unmatched_idx
+
+		if split_quads:
+			for tri_nodes_idx in [(0,1,2), (0,2,3)]:
+				sub_ng = [ng_nodes[j] for j in tri_nodes_idx]
+				sub_cubit = [nodes[j] for j in tri_nodes_idx]
+				el = Element2D(bc_idx, sub_ng)
+				if has_setgeominfo and sid is not None and (sid, bcname) in fd_key_to_idx:
+					for i, nid in enumerate(sub_cubit):
+						coords = cubit.get_nodal_coordinates(nid)
+						uv = cubit.surface(sid).u_v_from_position(list(coords))
+						el.SetGeomInfo(i, uv[0], uv[1])
+						modified += 1
+				ngmesh.Add(el)
+		else:
 			el = Element2D(bc_idx, ng_nodes)
-			if has_setgeominfo and sid and sid in cubit_sid_to_fd:
+			if has_setgeominfo and sid is not None and (sid, bcname) in fd_key_to_idx:
 				for i, nid in enumerate(nodes):
 					coords = cubit.get_nodal_coordinates(nid)
 					uv = cubit.surface(sid).u_v_from_position(list(coords))
 					el.SetGeomInfo(i, uv[0], uv[1])
 					modified += 1
 			ngmesh.Add(el)
-
-		for quad_id in quad_list:
-			nodes = cubit.get_connectivity("face", quad_id)
-			ng_nodes = [node_map[n] for n in nodes]
-			sid = quad_to_surface.get(quad_id)
-			bc_idx = cubit_sid_to_fd.get(sid, fd_unmatched_idx) if sid else fd_unmatched_idx
-
-			if split_quads:
-				for tri_nodes_idx in [(0,1,2), (0,2,3)]:
-					sub_ng = [ng_nodes[j] for j in tri_nodes_idx]
-					sub_cubit = [nodes[j] for j in tri_nodes_idx]
-					el = Element2D(bc_idx, sub_ng)
-					if has_setgeominfo and sid and sid in cubit_sid_to_fd:
-						for i, nid in enumerate(sub_cubit):
-							coords = cubit.get_nodal_coordinates(nid)
-							uv = cubit.surface(sid).u_v_from_position(list(coords))
-							el.SetGeomInfo(i, uv[0], uv[1])
-							modified += 1
-					ngmesh.Add(el)
-			else:
-				el = Element2D(bc_idx, ng_nodes)
-				if has_setgeominfo and sid and sid in cubit_sid_to_fd:
-					for i, nid in enumerate(nodes):
-						coords = cubit.get_nodal_coordinates(nid)
-						uv = cubit.surface(sid).u_v_from_position(list(coords))
-						el.SetGeomInfo(i, uv[0], uv[1])
-						modified += 1
-				ngmesh.Add(el)
 
 	if modified > 0:
 		print(f"  SetGeomInfo: {modified} vertex UV parameters set via ACIS")

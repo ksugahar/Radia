@@ -1,15 +1,22 @@
 """
-Inductance extractor using Hodge decomposition + ngsolve.bem LaplaceSL.
+Inductance extractor using source/sink saddle point EFIE + ngsolve.bem.
 
 Called as subprocess from Cubit panel:
-    python calc_inductance.py --cub5 model.cub5 --order 2
+    python calc_inductance.py --cub5 model.cub5 --order 2 --source source --sink sink
 
-Method (EFIE-based, NOT energy method):
+Method (saddle point EFIE):
   1. export_NGSolveCurvedMesh(surface_only=True) -> surface mesh
-  2. Hodge decomposition: harmonic = ker([D; C^T M_J])
-  3. LaplaceSL projected onto harmonic subspace
-  4. Generalized eigenvalue -> toroidal mode -> L
+     Block names become NGSolve boundary labels ("source", "sink", etc.)
+  2. Build SL (LaplaceSL) and D (divergence) matrices
+  3. Solve saddle point: [SL D^T; D 0] [J; p] = [0; g]
+     where g encodes unit current injection at source/sink
+  4. L = mu_0 * J^T @ SL @ J
   5. GMSH v2.2 export with |J| field
+
+Prerequisites (Cubit journal):
+    block N name "source"    # tri/quad on source face
+    block M name "sink"      # tri/quad on sink face
+    block K name "boundary"  # all surface tri/quad (optional)
 
 IMPORTANT: NGSolve must be imported BEFORE cubit.
 Outputs JSON to stdout (suppresses all other print output).
@@ -48,14 +55,32 @@ def _setup_cubit():
     return cubit
 
 
-def extract_inductance(cub5_file, order, msh_output=""):
-    """Extract self-inductance via Hodge decomposition + LaplaceSL."""
+def _to_dense(mat):
+    """Extract dense NumPy array from NGSolve BaseMatrix via ToDense()."""
+    return mat.ToDense().NumPy()
+
+
+def extract_inductance(cub5_file, order, source_label="source",
+                       sink_label="sink", fes_order=0, msh_output=""):
+    """Extract self-inductance via source/sink saddle point EFIE.
+
+    Args:
+        cub5_file: Path to Cubit .cub5 model
+        order: Curve order (1-2)
+        source_label: Block name for source face
+        sink_label: Block name for sink face
+        fes_order: HDivSurface basis order (0=RWG, 1+=higher-order)
+        msh_output: Optional path for GMSH .msh output
+
+    Returns:
+        dict with inductance_H, diagnostics
+    """
     import numpy as np
     import math
-    from scipy.linalg import null_space, eigh
+    from scipy.linalg import solve as scipy_solve
     from ngsolve import (HDivSurface, SurfaceL2, TaskManager, ds,
                          Integrate, CF, BND, GridFunction, Norm,
-                         BilinearForm, InnerProduct, div)
+                         BilinearForm, LinearForm, div)
     from ngsolve.bem import LaplaceSL
 
     MU_0 = 4.0 * math.pi * 1e-7
@@ -74,25 +99,22 @@ def extract_inductance(cub5_file, order, msh_output=""):
     if total_elems == 0:
         return {"error": "Volumes are not meshed."}
 
-    # Register blocks
-    cubit.cmd("set duplicate block elements on")
-    for bid in list(cubit.get_block_id_list()):
-        cubit.cmd(f"delete block {bid}")
-    for i, vid in enumerate(vol_ids):
-        cubit.cmd(f"block {i + 1} add volume {vid}")
-    bnd_id = len(vol_ids) + 1
-    cubit.cmd(f"block {bnd_id} add tri all")
-    cubit.cmd(f"block {bnd_id} add face all")
-    cubit.cmd(f'block {bnd_id} name "conductor"')
+    # Check that source/sink blocks exist
+    block_names = []
+    for bid in cubit.get_block_id_list():
+        block_names.append(cubit.get_exodus_entity_name("block", bid))
 
-    # Estimate R and a from bounding box
-    bb = cubit.get_bounding_box("volume", vol_ids[0])
-    x_span = abs(bb[1] - bb[0])
-    z_span = abs(bb[7] - bb[6])
-    R_est = x_span / 2.0
-    a_est = z_span / 2.0
+    has_source = source_label in block_names
+    has_sink = sink_label in block_names
 
-    # Export surface mesh
+    if not has_source or not has_sink:
+        return {"error": f"Missing blocks: "
+                f"{'source' if not has_source else ''} "
+                f"{'sink' if not has_sink else ''}. "
+                f"Available blocks: {block_names}. "
+                f"Define source/sink blocks in Cubit journal."}
+
+    # Export surface mesh (block names -> boundary labels)
     radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     if os.path.abspath(radia_src) not in sys.path:
         sys.path.insert(0, os.path.abspath(radia_src))
@@ -107,6 +129,12 @@ def extract_inductance(cub5_file, order, msh_output=""):
     euler = nv - ne + nse
     area = float(Integrate(CF(1), mesh, VOL_or_BND=BND))
 
+    # Verify boundary labels
+    bnd_labels = list(set(mesh.GetBoundaries()))
+    if source_label not in bnd_labels or sink_label not in bnd_labels:
+        return {"error": f"Boundary labels {bnd_labels} do not contain "
+                f"'{source_label}' and/or '{sink_label}'."}
+
     # --- Phase 1: Export mesh to GMSH (before solve) ---
     gmsh_file = msh_output if msh_output else os.path.join(
         os.path.dirname(os.path.abspath(cub5_file)), "inductance_J.msh"
@@ -120,68 +148,66 @@ def extract_inductance(cub5_file, order, msh_output=""):
     except Exception:
         pass
 
-    # --- Phase 2: Hodge decomposition ---
-    def _extract_rect(mat, nrow, ncol):
-        M = np.zeros((nrow, ncol))
-        ei = mat.CreateRowVector(); col = mat.CreateColVector()
-        for j in range(ncol):
-            ei[:] = 0; ei[j] = 1.0; mat.Mult(ei, col)
-            for i in range(nrow): M[i, j] = col[i]
-        return M
-
-    def _extract_dense(mat, n):
-        M = np.zeros((n, n))
-        ei = mat.CreateColVector(); col = mat.CreateColVector()
-        for j in range(n):
-            ei[:] = 0; ei[j] = 1.0; mat.Mult(ei, col)
-            for i in range(n): M[i, j] = col[i]
-        return M
-
-    fes_J = HDivSurface(mesh, order=0)
-    fes_L2 = SurfaceL2(mesh, order=0)
+    # --- Phase 2: Saddle point EFIE ---
+    # HDivSurface order can be 0 (RWG) or higher; constraint always order=0
+    fes_J = HDivSurface(mesh, order=fes_order)
+    fes_L2 = SurfaceL2(mesh, order=0)  # element-wise current conservation
     n_J, n_f = fes_J.ndof, fes_L2.ndof
 
-    u_J, q = fes_J.TrialFunction(), fes_L2.TestFunction()
+    # Divergence matrix D: n_f x n_J
+    u_J = fes_J.TrialFunction()
+    q = fes_L2.TestFunction()
     bf_D = BilinearForm(trialspace=fes_J, testspace=fes_L2)
     bf_D += div(u_J.Trace()) * q * ds
     bf_D.Assemble()
-    D = _extract_rect(bf_D.mat, n_f, n_J)
+    D = _to_dense(bf_D.mat)
 
-    C = np.zeros((n_J, nv))
-    for i, e in enumerate(mesh.edges):
-        vv = list(e.vertices)
-        if i < n_J:
-            C[i, vv[0].nr] = -1
-            C[i, vv[1].nr] = +1
-
-    u, v = fes_J.TnT()
-    bf_M = BilinearForm(fes_J)
-    bf_M += InnerProduct(u.Trace(), v.Trace()) * ds
-    bf_M.Assemble()
-    M_J = _extract_dense(bf_M.mat, n_J)
-
-    c_h_all = null_space(np.vstack([D, C.T @ M_J]), rcond=1e-10)
-    n_harm = c_h_all.shape[1]
-
-    if n_harm == 0:
-        return {"error": "No harmonic modes found (check Euler characteristic)"}
-
-    # --- Phase 3: LaplaceSL + eigenvalue ---
+    # LaplaceSL: n_J x n_J
     jt, jv = fes_J.TnT()
     with TaskManager():
         V_op = LaplaceSL(jt.Trace() * ds, use_fmm=False) * jv.Trace() * ds
         SL = V_op.mat.ToDense().NumPy()
 
-    eigvals, eigvecs = eigh(c_h_all.T @ SL @ c_h_all,
-                            c_h_all.T @ M_J @ c_h_all)
+    # Source/sink RHS
+    f_src = LinearForm(fes_L2)
+    f_src += q * ds(source_label)
+    f_src.Assemble()
+    g_src = f_src.vec.FV().NumPy().copy()
+    A_src = np.sum(g_src)
 
-    idx = 1 if n_harm >= 2 else 0
-    L_total = MU_0 * eigvals[idx] * R_est / a_est
+    f_snk = LinearForm(fes_L2)
+    f_snk += q * ds(sink_label)
+    f_snk.Assemble()
+    g_snk = f_snk.vec.FV().NumPy().copy()
+    A_snk = np.sum(g_snk)
 
-    # --- Phase 4: GMSH with |J| field ---
-    c_tor = c_h_all @ eigvecs[:, idx]
+    if A_src < 1e-30 or A_snk < 1e-30:
+        return {"error": f"Source/sink faces empty (A_src={A_src}, A_snk={A_snk})."}
+
+    g = g_src / A_src - g_snk / A_snk
+
+    # Saddle point solve (remove last constraint for regularity)
+    D_red = D[:-1, :]
+    g_red = g[:-1]
+    n_c = n_f - 1
+
+    K = np.block([
+        [SL,              D_red.T],
+        [D_red, np.zeros((n_c, n_c))]
+    ])
+    rhs = np.zeros(n_J + n_c)
+    rhs[n_J:] = g_red
+
+    x = scipy_solve(K, rhs)
+    J = x[:n_J]
+
+    # Inductance: L = mu_0 * J^T @ SL @ J
+    L_total = MU_0 * J @ SL @ J
+    residual = float(np.max(np.abs(D @ J - g)))
+
+    # --- Phase 3: GMSH with |J| field ---
     gf_J = GridFunction(fes_J)
-    gf_J.vec.FV().NumPy()[:] = c_tor
+    gf_J.vec.FV().NumPy()[:] = J
 
     elem_J = Integrate(Norm(gf_J), mesh, VOL_or_BND=BND, element_wise=True)
     elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
@@ -195,7 +221,7 @@ def extract_inductance(cub5_file, order, msh_output=""):
 
     try:
         post = GmshPostExport(mesh, boundary=True)
-        post.add_field("|J_toroidal|", node_J, ncomp=1)
+        post.add_field("|J|", node_J, ncomp=1)
         post.write(gmsh_file)
         sys.stderr.write(f"FIELD_READY:{gmsh_file}\n")
         sys.stderr.flush()
@@ -205,20 +231,26 @@ def extract_inductance(cub5_file, order, msh_output=""):
     return {
         "inductance_H": float(L_total),
         "n_dofs": n_J,
-        "n_harmonic": n_harm,
+        "n_faces": n_f,
         "euler": euler,
         "surface_area": area,
-        "R_est": R_est,
-        "a_est": a_est,
-        "order": order,
+        "source_area": float(A_src),
+        "sink_area": float(A_snk),
+        "constraint_residual": residual,
+        "curve_order": order,
+        "fes_order": fes_order,
         "gmsh_file": gmsh_file,
     }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="BEM inductance (Hodge decomposition)")
+    parser = argparse.ArgumentParser(
+        description="BEM inductance (source/sink saddle point EFIE)")
     parser.add_argument("--cub5", required=True, help="Cubit .cub5 model file")
     parser.add_argument("--order", type=int, default=2, help="Curve order (1-2)")
+    parser.add_argument("--fes-order", type=int, default=0, help="HDivSurface order (0=RWG)")
+    parser.add_argument("--source", default="source", help="Source block name")
+    parser.add_argument("--sink", default="sink", help="Sink block name")
     parser.add_argument("--msh-output", default="", help="GMSH .msh output path")
     parser.add_argument("--output", default="", help="Output JSON file (optional)")
     args = parser.parse_args()
@@ -227,7 +259,9 @@ def main():
     real_stdout = sys.stdout
     sys.stdout = _io.StringIO()
     try:
-        result = extract_inductance(args.cub5, args.order, args.msh_output)
+        result = extract_inductance(args.cub5, args.order,
+                                    args.source, args.sink,
+                                    args.fes_order, args.msh_output)
     except Exception as e:
         result = {"error": str(e)}
     sys.stdout = real_stdout
