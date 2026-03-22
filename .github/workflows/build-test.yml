@@ -77,7 +77,7 @@ jobs:
         shell: pwsh
         working-directory: ${{ github.workspace }}
         env:
-          PYTHONPATH: '${{ env.NGSOLVE_ROOT }}\Lib\site-packages;${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
         run: |
           Write-Host "Running pytest (excluding cubit tests - require Cubit + netgen fork)..."
           python -m pytest tests/ -v --tb=short --junitxml=test-results.xml --ignore=tests/cubit --ignore=tests/mcp
