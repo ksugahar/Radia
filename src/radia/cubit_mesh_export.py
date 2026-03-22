@@ -1447,16 +1447,20 @@ def _build_cubit_callbacks(cubit, surfnr_to_cubit_sid):
 	return cubit_project, cubit_normal
 
 
-def export_NGSolveCurvedMesh(cubit, order: int = 3, surface_only: bool = False,
+def export_NGSolveCurvedMesh(cubit, order: int = 2, surface_only: bool = False,
                   split_quads: bool = False):
 	"""Export Cubit mesh with automatic high-order curving via ACIS.
 
 	Uses CallbackGeometry to delegate surface projection to Cubit's ACIS
 	kernel directly. No OCC geometry, no STEP files, no seam problems.
 
+	Note: mesh.Curve() is capped at order=2 because CallbackGeometry uses
+	Python callbacks for ACIS projection (~1.5ms/call). Higher orders are
+	stored as the requested order for GMSH export but curved at p=2.
+
 	Args:
 		cubit: Cubit Python interface object
-		order: Polynomial order for mesh.Curve() (default 3)
+		order: Requested polynomial order (default 2, curve capped at 2)
 		surface_only: If True, export surface mesh only (for BEM/PEEC)
 		split_quads: If True, split quads into triangles (for ngsolve.bem)
 
@@ -1671,7 +1675,9 @@ def export_NGSolveCurvedMesh(cubit, order: int = 3, surface_only: bool = False,
 
 	from ngsolve import Mesh
 	mesh = Mesh(ngmesh)
-	mesh.Curve(order)
+	# Cap curving at p=2 (CallbackGeometry Python callbacks are slow for p>=3)
+	curve_order = min(order, 2)
+	mesh.Curve(curve_order)
 
 	return mesh
 
