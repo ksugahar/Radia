@@ -20,7 +20,6 @@
 #include "rad_material_def.h"
 #include "rad_arc_current.h"
 #include "rad_relaxation_methods.h"
-#include "rad_particle_trajectory.h"
 #include "rad_operation_names.h"
 #include "rad_material_aux.h"
 #include "rad_point_classify.h"

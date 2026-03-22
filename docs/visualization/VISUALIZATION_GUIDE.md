@@ -385,7 +385,6 @@ import radia as rad
 
 # Radia field to VTS output
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
-rad.FldVTS(magnet, 'field.vts',
            [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15],
            41, 41, 27, 1, 0, 1.0)
 
@@ -693,14 +692,12 @@ Details: [VOL_FILE_ASSOCIATION.md](file://S:/Radia/01_GitHub/utils/VOL_FILE_ASSO
 
 ### Problem: Shape Approximation in VTS Export
 
-#### Behavior of rad.FldVTS()
 
 ```python
 # Radia analysis object (completely accurate)
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
 # VTS export (computes field values at grid points)
-rad.FldVTS(magnet, 'field.vts',
            [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15],
            41, 41, 27, 1, 0, 1.0)
 ```
@@ -736,7 +733,6 @@ mesh = geo.GenerateMesh(maxh=0.002)
 mesh.Export('magnet_shape.stl', 'STL Format')
 
 # 2. Export field as VTS
-rad.FldVTS(magnet, 'field.vts', ...)
 
 # 3. Overlay both in ParaView for high-quality figures
 # - magnet_shape.stl: Display shape semi-transparently
@@ -875,7 +871,6 @@ import pyvista as pv
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
 # VTS export
-rad.FldVTS(magnet, 'field.vts', ...)
 
 # PyVista visualization (rapid)
 grid = pv.read('field.vts')
@@ -894,7 +889,6 @@ When both shape and field accuracy are important:
 ```
 Radia → STL/STEP export ───────────┐
      ↓                              ├→ ParaView overlay
-     └→ FldVTS() → VTS ────────────┘
                   ↓
             Accurate shape + Accurate field
 ```
@@ -960,7 +954,6 @@ For details, see the "Geometry Accuracy: VTS vs OCC" section above.
 ## Implementation Status
 
 ### Phase 1: Basic Visualization (Completed)
-- ✅ `rad.FldVTS()` - VTS export
 - ✅ Basic plotting with PyVista
 - ✅ Manual visualization in ParaView
 

@@ -194,31 +194,6 @@ def main():
 	print("  4. Implementation difficulty: HIGH (requires HACApK extension)")
 	print()
 
-	# VTS Export - Export field distribution with same filename as script
-	try:
-		script_name = os.path.splitext(os.path.basename(__file__))[0]
-
-		# Magnet is 20mm cube, extend range to 50mm for far-field
-		x_range = [-50 * mm, 50 * mm]
-		y_range = [-50 * mm, 50 * mm]
-		z_range = [-50 * mm, 50 * mm]
-
-		# Export small magnet field
-		vts_filename_small = f"{script_name}_small.vts"
-		vts_path_small = os.path.join(os.path.dirname(__file__), vts_filename_small)
-		rad.FldVTS(magnet_small, vts_path_small, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
-		print(f"\n[VTS] Exported: {vts_filename_small}")
-
-		# Export medium magnet field
-		vts_filename_medium = f"{script_name}_medium.vts"
-		vts_path_medium = os.path.join(os.path.dirname(__file__), vts_filename_medium)
-		rad.FldVTS(magnet_medium, vts_path_medium, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
-		print(f"[VTS] Exported: {vts_filename_medium}")
-
-		print(f"      View with: paraview {vts_filename_small} {vts_filename_medium}")
-	except Exception as e:
-		print(f"\n[VTS] Warning: Export failed: {e}")
-
 	rad.UtiDelAll()
 
 if __name__ == "__main__":

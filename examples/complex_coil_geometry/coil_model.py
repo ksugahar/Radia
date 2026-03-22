@@ -137,26 +137,6 @@ if __name__ == '__main__':
 	print(f"    Y: {info['span']['y']/mm:.2f} mm")
 	print(f"    Z: {info['span']['z']/mm:.2f} mm")
 
-	# VTS Export - Export field distribution with same filename as script
-	try:
-		import os
-
-		script_name = os.path.splitext(os.path.basename(__file__))[0]
-		vts_filename = f"{script_name}.vts"
-		vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
-
-		# Based on bounding box, extend ranges with margin
-		margin = 100 * mm
-		x_range = [info['bbox']['x_min'] - margin, info['bbox']['x_max'] + margin]
-		y_range = [info['bbox']['y_min'] - margin, info['bbox']['y_max'] + margin]
-		z_range = [info['bbox']['z_min'] - margin, info['bbox']['z_max'] + margin]
-
-		rad.FldVTS(coil, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
-		print(f"\n[VTS] Exported: {vts_filename}")
-		print(f"      View with: paraview {vts_filename}")
-	except Exception as e:
-		print(f"\n[VTS] Warning: Export failed: {e}")
-
 	# Cleanup
 	rad.UtiDelAll()
 

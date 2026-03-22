@@ -203,7 +203,6 @@ coil = (CoilBuilder(current=1000)
 	.to_radia())
 ```
 
-### VTS Export (rad.FldVTS)
 
 **VTS export for ParaView visualization.**
 
@@ -221,7 +220,6 @@ vertices = [[-0.015,-0.015,-0.005], [0.015,-0.015,-0.005], [0.015,0.015,-0.005],
 mag = rad.ObjHexahedron(vertices, [0, 0, 954930])
 
 # Export to VTS
-rad.FldVTS(mag, 'my_magnet.vts',
            [-0.05, 0.05], [-0.05, 0.05], [0.01, 0.05],
            21, 21, 11)
 ```
@@ -234,7 +232,6 @@ Best for publication-quality figures, batch processing.
 import radia as rad
 # Radia always uses meters
 # ... create magnet ...
-rad.FldVTS(my_object, 'output.vts',
            [-0.1, 0.1], [-0.1, 0.1], [0.0, 0.2],
            21, 21, 21)
 ```

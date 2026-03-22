@@ -167,7 +167,6 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_planar_2d_part1.cpp       # 2D planar objects (part 1)
 	${CORE_DIR}/rad_planar_2d_part2.cpp       # 2D planar objects (part 2)
 	${CORE_DIR}/rad_poly_analytical.cpp       # Analytical polygon field formulas
-	${CORE_DIR}/rad_particle_trajectory.cpp   # Particle trajectory/dynamics
 	${CORE_DIR}/rad_rectangular_block.cpp     # Rectangular parallelepiped
 	${CORE_DIR}/rad_relaxation_methods.cpp    # Relaxation methods
 	${CORE_DIR}/rad_subdivided_arc_current.cpp        # Subdivided arc with current

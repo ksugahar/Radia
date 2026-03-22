@@ -457,7 +457,7 @@ EXP int CALL RadObjGeoLim(double* L, int obj);
 EXP int CALL RadObjDegFre(int* num, int obj);
 
 // RadObjDrwQD3D REMOVED (2026-01-14) - QuickDraw 3D is obsolete
-// Use VTK export (rad.FldVTS) for visualization instead
+// Visualization: use NGSolve + GmshPostExport
 
 // RadObjDrwAtr REMOVED (2026-01-14) - Drawing attributes no longer used
 // Use VTK export with ParaView for visualization
@@ -962,18 +962,7 @@ EXP int CALL RadFldInt(double* f, int* nf, int obj, char* InfOrFin, char* id, do
 */
 EXP int CALL RadFldLst(double* B, int* nB, int obj, char* id, double* P1, double* P2, int np, char* ArgOrNoArg, double start);
 
-/** Computes transverse coordinates and their derivatives (angles) of a relativistic charged trajectory in the magnetic field produced by object obj, using a Runge-Kutta integration. The charge of the particle is that of electron. All positions are in millimeters and angles in radians.
-@param f [out] computed tragectory parameters
-@param nf [out] number of tragectory parameters computed
-@param obj [in] reference number of the magnetic field source object
-@param E [in] particle energy [GeV]
-@param InitCond [in] array of 4 real numbers specifying initial transverse coordinates and angles of the trajectory (x0,dxdy0,z0,dzdy0, y is longitudinal coordinate)
-@param LongLim [in] array of 2 real numbers specifying limits of the longitudinal position (y1,y2)
-@param np [in] number of points where the trajectory should be calculated
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadFldPtcTrj(double* f, int* nf, int obj, double E, double* InitCond, double* LongLim, int np);
+// NOTE: RadFldPtcTrj (particle trajectory) REMOVED (2026-03-22). Use CERN Xsuite/Xtrack.
 
 /** Computes matrices of 2nd order kicks for trajectory of relativistic charged particle in periodic magnetic field produced by the object obj. The computed kick matrices can be used in charged particle tracking codes. The longitudinal integration along one period starts at point P1 and is done along direction pointed by vector Ns; one direction of the transverse grid is pointed by vector Ntr, the other transverse direction is given by vector product of Ntr and Ns.
 @param M1 [out] flat array of real numbers representing the matrix of kick values in the first transverse direction given by the Ntr vector
@@ -1321,27 +1310,7 @@ EXP int CALL RadFldPhi(double* phi_out, int n_points, double* points, int contai
 */
 EXP int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle);
 
-/** Export magnetic field on structured 3D grid to VTS (VTK XML Structured Grid) format.
-Computes B and/or H fields at grid points and writes directly to VTS file.
-This is more efficient than calling FldBatch and writing in Python for large grids.
-@param container_handle [in] Radia container handle
-@param filename [in] output filename (with .vts extension)
-@param x_min, x_max [in] X range in current Radia units
-@param nx [in] number of grid points in X
-@param y_min, y_max [in] Y range in current Radia units
-@param ny [in] number of grid points in Y
-@param z_min, z_max [in] Z range in current Radia units
-@param nz [in] number of grid points in Z
-@param include_B [in] 1 to include B field, 0 to skip
-@param include_H [in] 1 to include H field, 0 to skip
-@param unit_scale [in] scale factor for coordinates (e.g., 0.001 for mm to m)
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-*/
-EXP int CALL RadFldVTS(int container_handle, const char* filename,
-                       double x_min, double x_max, int nx,
-                       double y_min, double y_max, int ny,
-                       double z_min, double z_max, int nz,
-                       int include_B, int include_H, double unit_scale);
+// NOTE: RadFldVTS() REMOVED (2026-03-22). Use NGSolve + GmshPostExport for visualization.
 
 // NOTE: Conductor Analysis API (CndLoop, CndRecBlock, CplMag*, RWG*) REMOVED (2026-02-13)
 // Replaced by Python-based PEEC topology solver (peec_topology.py, peec_coupled.py)

@@ -427,7 +427,6 @@ The Netgen GUI renders **surface elements**, not volume elements directly:
 ```python
 # 1. Export to VTS
 import radia as rad
-rad.FldVTS(magnet, 'field.vts', ...)
 
 # 2. Open in ParaView
 paraview field.vts

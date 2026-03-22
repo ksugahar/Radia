@@ -284,93 +284,6 @@ def main():
 		pos_str = f"({pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f})"
 		print(f"{pos_str:<25} {Bx:<15.6f} {By:<15.6f} {Bz:<15.6f} {B_mag:<15.6f}")
 
-	# Export to VTS
-	print("\n" + "=" * 70)
-	print("Exporting field distribution to VTS...")
-	print("=" * 70)
-	try:
-		output_path = os.path.join(os.path.dirname(__file__), 'smco_array.vts')
-		# Get bounding box
-		bbox = rad.ObjGeoLim(geometry)
-		margin = 20.0 * mm
-		x_range = [bbox[0] - margin, bbox[1] + margin]
-		y_range = [bbox[2] - margin, bbox[3] + margin]
-		z_range = [bbox[4] - margin, bbox[5] + margin]
-		rad.FldVTS(geometry, output_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
-		print(f"  [OK] Created: smco_array.vts")
-	except Exception as e:
-		print(f"  [WARNING] Export failed: {e}")
-
-	# Export field distribution to VTK
-	print("\n" + "=" * 70)
-	print("Calculating field distribution...")
-	print("=" * 70)
-
-	# Get bounding box of entire geometry
-	bbox = rad.ObjGeoLim(geometry)
-	print(f"  Geometry bounding box:")
-	print(f"    X: [{bbox[0]/mm:.2f}, {bbox[1]/mm:.2f}] mm")
-	print(f"    Y: [{bbox[2]/mm:.2f}, {bbox[3]/mm:.2f}] mm")
-	print(f"    Z: [{bbox[4]/mm:.2f}, {bbox[5]/mm:.2f}] mm")
-
-	# Expand bbox by 20mm in all directions
-	margin = 20.0 * mm
-	x_min, x_max = bbox[0] - margin, bbox[1] + margin
-	y_min, y_max = bbox[2] - margin, bbox[3] + margin
-	z_min, z_max = bbox[4] - margin, bbox[5] + margin
-
-	print(f"\n  Field calculation range (bbox + 20mm):")
-	print(f"    X: [{x_min/mm:.2f}, {x_max/mm:.2f}] mm")
-	print(f"    Y: [{y_min/mm:.2f}, {y_max/mm:.2f}] mm")
-	print(f"    Z: [{z_min/mm:.2f}, {z_max/mm:.2f}] mm")
-
-	# Create grid for field calculation
-	nx, ny, nz = 21, 21, 21  # Grid resolution
-	x_vals = np.linspace(x_min, x_max, nx)
-	y_vals = np.linspace(y_min, y_max, ny)
-	z_vals = np.linspace(z_min, z_max, nz)
-
-	print(f"\n  Grid resolution: {nx} × {ny} × {nz} = {nx*ny*nz} points")
-	print(f"  Calculating magnetic field...")
-
-	# Calculate field at grid points
-	# VTK STRUCTURED_POINTS ordering: Z varies slowest, then Y, X varies fastest
-	field_data = []
-	total_points = nx * ny * nz
-	calculated = 0
-
-	for iz, z in enumerate(z_vals):
-		for iy, y in enumerate(y_vals):
-			for ix, x in enumerate(x_vals):
-				B = rad.Fld(geometry, 'b', [x, y, z])
-				field_data.append([x, y, z, B[0], B[1], B[2]])
-				calculated += 1
-
-				if calculated % 1000 == 0:
-					print(f"    Progress: {calculated}/{total_points} points", end='\r')
-
-	print(f"    Progress: {total_points}/{total_points} points")
-	print(f"  [OK] Field calculation complete")
-
-	# Export field to VTK
-	field_vtk_path = os.path.join(os.path.dirname(__file__), 'smco_field_distribution.vtk')
-	with open(field_vtk_path, 'w') as f:
-		f.write("# vtk DataFile Version 3.0\n")
-		f.write("SmCo magnet array field distribution\n")
-		f.write("ASCII\n")
-		f.write("DATASET STRUCTURED_POINTS\n")
-		f.write(f"DIMENSIONS {nx} {ny} {nz}\n")
-		f.write(f"ORIGIN {x_min} {y_min} {z_min}\n")
-		f.write(f"SPACING {(x_max-x_min)/(nx-1)} {(y_max-y_min)/(ny-1)} {(z_max-z_min)/(nz-1)}\n")
-		f.write(f"POINT_DATA {nx*ny*nz}\n")
-		f.write("VECTORS B_field float\n")
-
-		for data in field_data:
-			f.write(f"{data[3]} {data[4]} {data[5]}\n")
-
-	print(f"\n  [OK] Created: smco_field_distribution.vtk")
-	print(f"       Open in ParaView and use 'Glyph' filter to visualize vectors")
-
 	# Cleanup
 	rad.UtiDelAll()
 
@@ -382,9 +295,6 @@ def main():
 	print(f"  Array radius: {info['array_radius']/mm:.2f} mm")
 	print(f"  Magnet radius: {info['mag_radius']/mm:.2f} mm")
 	print(f"  Magnet height: {info['mag_height']/mm:.2f} mm")
-	print(f"\nOutput files:")
-	print(f"  - smco_array.vts (field distribution in VTS format)")
-	print(f"  - smco_field_distribution.vtk (magnetic field vectors)")
 	print("=" * 70 + "\n")
 
 

@@ -233,7 +233,6 @@ import radia as rad
 
 # Create magnet and export field
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
-rad.FldVTS(magnet, 'field.vts',
            [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15],
            41, 41, 27, 1, 0, 1.0)
 
@@ -271,7 +270,6 @@ python -c "
 import radia as rad
 # Radia always uses meters
 magnet = rad.ObjRecMag([0, 0, 0], [0.04, 0.04, 0.02], [0, 0, 954930])
-rad.FldVTS(magnet, 'field.vts', [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15], 41, 41, 27, 1, 0, 1.0)
 "
 
 # 2. Open in ParaView

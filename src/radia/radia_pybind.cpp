@@ -628,34 +628,7 @@ py::object Fld(int obj, const std::string& field_type, py::array_t<double> point
  * @param unit_scale Coordinate scale factor
  * @return Filename
  */
-std::string FldVTS(int obj, const std::string& filename,
-                   py::array_t<double> x_range,
-                   py::array_t<double> y_range,
-                   py::array_t<double> z_range,
-                   int nx, int ny, int nz,
-                   int include_B, int include_H,
-                   double unit_scale) {
-
-    auto xr = x_range.unchecked<1>();
-    auto yr = y_range.unchecked<1>();
-    auto zr = z_range.unchecked<1>();
-
-    if (xr.size() != 2 || yr.size() != 2 || zr.size() != 2) {
-        throw std::runtime_error("ranges must have 2 elements [min, max]");
-    }
-
-    {
-        py::gil_scoped_release release;
-        int err = RadFldVTS(obj, filename.c_str(),
-                           xr(0), xr(1), nx,
-                           yr(0), yr(1), ny,
-                           zr(0), zr(1), nz,
-                           include_B, include_H, unit_scale);
-        check_error(err);
-    }
-
-    return filename;
-}
+// NOTE: FldVTS() REMOVED (2026-03-22). Use NGSolve + GmshPostExport for visualization.
 
 } // namespace radia_field
 
@@ -2606,30 +2579,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   phi = rad.Fld(obj, "phi", points_Nx3)      # Batch scalar -> (N,) array
           )pbdoc");
 
-    m.def("FldVTS", &radia_field::FldVTS,
-          py::arg("obj"), py::arg("filename"),
-          py::arg("x_range"), py::arg("y_range"), py::arg("z_range"),
-          py::arg("nx") = 21, py::arg("ny") = 21, py::arg("nz") = 21,
-          py::arg("include_B") = 1, py::arg("include_H") = 0,
-          py::arg("unit_scale") = 1.0,
-          py::call_guard<py::gil_scoped_release>(),
-          R"pbdoc(
-              Export field to VTS file.
-
-              Args:
-                  obj: Object handle
-                  filename: Output filename
-                  x_range: [xmin, xmax]
-                  y_range: [ymin, ymax]
-                  z_range: [zmin, zmax]
-                  nx, ny, nz: Number of grid points
-                  include_B: Include B field (default: 1)
-                  include_H: Include H field (default: 0)
-                  unit_scale: Coordinate scale factor (default: 1.0)
-
-              Returns:
-                  Filename
-          )pbdoc");
+    // NOTE: FldVTS() REMOVED (2026-03-22). Use NGSolve + GmshPostExport.
 
     // ========================================================================
     // Materials
@@ -3480,51 +3430,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
             Dictionary with 'center' and 'field' tuples
     )pbdoc");
 
-    // FldPtcTrj - Particle trajectory
-    m.def("FldPtcTrj", [](int obj, double energy,
-                          const py::list& init_cond,
-                          const py::list& long_lim,
-                          int np) -> py::list {
-        auto ic = to_vector(init_cond.cast<py::object>());
-        auto ll = to_vector(long_lim.cast<py::object>());
-        if (ic.size() != 4) {
-            throw std::runtime_error("Initial conditions must be [x0, dxdy0, z0, dzdy0]");
-        }
-        if (ll.size() != 2) {
-            throw std::runtime_error("Longitudinal limits must be [y0, y1]");
-        }
-
-        std::vector<double> result(np * 5);  // y, x, dxdy, z, dzdy
-        int nf = 0;
-
-        int err = RadFldPtcTrj(result.data(), &nf, obj, energy, ic.data(), ll.data(), np);
-        check_error(err);
-
-        py::list out;
-        for (int i = 0; i < np; ++i) {
-            py::list row;
-            for (int j = 0; j < 5; ++j) {
-                row.append(result[i * 5 + j]);
-            }
-            out.append(row);
-        }
-        return out;
-    },
-    py::arg("obj"), py::arg("energy"), py::arg("init_cond"),
-    py::arg("long_lim"), py::arg("np"),
-    R"pbdoc(
-        Compute relativistic particle trajectory.
-
-        Args:
-            obj: Object handle
-            energy: Particle energy [GeV]
-            init_cond: [x0, dxdy0, z0, dzdy0] in mm and radians
-            long_lim: [y0, y1] longitudinal limits in mm
-            np: Number of integration steps
-
-        Returns:
-            List of [y, x, dxdy, z, dzdy] at each step
-    )pbdoc");
+    // NOTE: FldPtcTrj (particle trajectory) REMOVED (2026-03-22).
+    // Use CERN Xsuite/Xtrack for GPU-accelerated beam tracking.
 
     // FldEnrFrc - Energy-based force
     m.def("FldEnrFrc", [](int obj_dst, int obj_src,
