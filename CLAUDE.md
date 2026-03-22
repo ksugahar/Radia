@@ -180,6 +180,49 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Accelerator Magnet Solver Architecture
+
+The complete pipeline for accelerator electromagnet analysis:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  CoilBuilder                                                     │
+│  ─────────────────────────────────────────────────────────────  │
+│  add_straight() / add_arc() → continuous path (beam optics style)│
+│  close() → multi-variable optimization for loop closure          │
+│  mirror() / rotate_copies() → symmetry (dipole, quadrupole)     │
+│  to_radia() → Biot-Savart source Hs (NO coil mesh needed)       │
+│  write_step() → GMSH visualization                              │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ Hs (analytical)
+┌──────────────────────────┼──────────────────────────────────────┐
+│  Cubit                   │                                       │
+│  ─────────────────────────────────────────────────────────────  │
+│  Iron yoke + air + Kelvin domain → hex sweep mesh                │
+│  export_NGSolveCurvedMesh(order=N) → arbitrary-order hex mesh    │
+│  CallbackGeometry → ACIS direct curving (NO STEP/OCC)            │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ curved hex mesh
+┌──────────────────────────┼──────────────────────────────────────┐
+│  NGSolve FEM             │                                       │
+│  ─────────────────────────────────────────────────────────────  │
+│  Omega-reduced Omega (2-scalar, fastest formulation)             │
+│  Kelvin transformation (open boundary, no PML)                   │
+│  Energy-based B-input Play model (nonlinear hysteresis)          │
+│    - Reversible/irreversible separation → convex energy          │
+│    - LU factored ONCE, back-substitution iteration               │
+│    - Fast inverse: Picard 2-3 iter (vs Newton ~100 iter)         │
+│  GmshPostExport → GMSH visualization (+ coil STEP overlay)      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Unique capabilities** (no other software provides all of these):
+- Coil mesh NOT needed (Biot-Savart analytical source)
+- STEP/OCC NOT needed (ACIS CallbackGeometry)
+- Hex mesh with arbitrary-order curving
+- Energy-based hysteresis with fast inverse
+- Open source, `pip install radia`
+
 **Do NOT Implement** (use existing libraries):
 - FEM solvers (use NGSolve)
 - General sparse solvers (use MKL/MUMPS)
