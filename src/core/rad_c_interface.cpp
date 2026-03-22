@@ -184,13 +184,6 @@ void ClassifyPoints( int*, int*, int, double*, int, double );
 void ComputeFieldBatch( double*, double*, int, double*, int );
 void ComputeScalarPotentialBatch( double*, int, double*, int );
 void ComputeVectorPotentialBatch( double*, int, double*, int );
-void ParticleTrajectory( int, double, double,double,double,double, double,double, int );
-void FocusingPotential( int, double,double,double, double,double,double, int );
-//void FocusingKickPer( int, double,double,double, double,double,double, double,int, double,double,double, double,int,double,int, const char*, int,int,double,double, const char*, double );
-void FocusingKickPer( int, double,double,double, double,double,double, double,double, double,double,double, double,int,double,int, const char*, int,int,double,double, const char*, double, const char* );
-void FocusingKickPerFormStrRep( double*,double*,double*,double*,double*, int,int, double, int, const char* );
-//void FocusingKick( int, double,double,double, double,double,double, double*,long,int, double,double,double, double,int,double,int, const char*, double,double );
-void FocusingKickML();
 void ShimSignature( int, char*, double,double,double, double,double,double, double,double,double, int, double,double,double );
 
 void TolForConvergence( double, double, double );
@@ -2052,46 +2045,7 @@ void FieldTorqueThroughEnergy(int DestElemKey, int SourceElemKey, char* TorqueCo
 	rad.ComputeFieldTorqueThroughEnergy(DestElemKey, SourceElemKey, TorqueComponID, SubdArray, 3, TorqueCenPo, 3);
 }
 
-//-------------------------------------------------------------------------
-
-void ParticleTrajectory(int ElemKey, double E, double x0, double dxdy0, double z0, double dzdy0, double y0, double y1, int Np)
-{
-	rad.ComputeParticleTrajectory(ElemKey, E, radCR.Double(x0), dxdy0, radCR.Double(z0), dzdy0, radCR.Double(y0), radCR.Double(y1), Np);
-}
-
-//-------------------------------------------------------------------------
-
-void FocusingPotential(int ElemKey, double x1, double y1, double z1, double x2, double y2, double z2, int Np)
-{
-	double StPoi[] = {radCR.Double(x1), radCR.Double(y1), radCR.Double(z1)};
-	double FiPoi[] = {radCR.Double(x2), radCR.Double(y2), radCR.Double(z2)};
-	rad.ComputeFocusPotent(ElemKey, StPoi, 3, FiPoi, 3, Np);
-}
-
-//-------------------------------------------------------------------------
-
-void FocusingKickPer(int ElemKey, double x1, double y1, double z1, double nsx, double nsy, double nsz, double per, double nper, double n1x, double n1y, double n1z, double r1, int np1, double r2, int np2, const char* Comment, int nharm, int ns, double d1, double d2, const char* strKickUnit, double energyGeV, const char* strOutFormat)
-{
-	double P1[] = {radCR.Double(x1), radCR.Double(y1), radCR.Double(z1)};
-	double Nlong[] = {radCR.Double(nsx), radCR.Double(nsy), radCR.Double(nsz)};
-	double N1[] = {radCR.Double(n1x), radCR.Double(n1y), radCR.Double(n1z)};
-	rad.ComputeFocusKickPer(ElemKey, P1, Nlong, per, nper, N1, r1, np1, r2, np2, Comment, nharm, ns, d1, d2, strKickUnit, energyGeV, strOutFormat);
-}
-
-//-------------------------------------------------------------------------
-
-void FocusingKickPerFormStrRep(double* pKickData1, double* pKickData2, double* pBtE2Int, double* pCoordDir1, double* pCoordDir2, int np1, int np2, double per, int nper, const char* Comment)
-{
-	rad.ComposeFocusKickPerFormStrRep(pKickData1, pKickData2, pBtE2Int, pCoordDir1, pCoordDir2, np1, np2, per, nper, Comment);
-}
-
-//-------------------------------------------------------------------------
-
-//void FocusingKick(int ElemKey, double x1,double y1,double z1, double nsx,double nsy,double nsz, double* dsArr,long Len_dsArr,int ns, double n1x,double n1y,double n1z, double r1,int np1,double r2,int np2, const char* Comment, double d1,double d2)
-void FocusingKickML()
-{
-
-}
+// NOTE: ParticleTrajectory, FocusingPotential, FocusingKickPer all REMOVED (2026-03-22).
 
 //-------------------------------------------------------------------------
 
