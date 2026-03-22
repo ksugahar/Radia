@@ -94,7 +94,6 @@ paraview arc_current_with_magnet.vts
 ### VTS Export
 
 ```python
-rad.FldVTS(obj, "output.vts", [-40, 40], [-40, 40], [-40, 40], 21, 21, 21, 1, 0, 1.0)
 ```
 
 ### Material API

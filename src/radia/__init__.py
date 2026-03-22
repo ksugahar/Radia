@@ -118,8 +118,7 @@ except ImportError:
 # NOTE: Old conductor API (CndLoop, CndRecBlock, CplMag*, Rwg*) removed (2026-02-13).
 # Use PEEC topology solver (peec_topology.py) and coupled solver (peec_coupled.py).
 
-# VTK Export: Use rad.FldVTS() (C++ implementation)
-# See docs/api/API_REFERENCE.md for usage
+# NOTE: FldVTS() removed (2026-03-22). Use NGSolve + GmshPostExport for visualization.
 
 # Beam Tracking: NumPy-based particle trajectory computation
 # Import beam_tracking submodule for accelerator physics applications

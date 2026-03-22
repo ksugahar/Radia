@@ -57,22 +57,3 @@ field = rad.Fld(g2, 'b', [0, 0, 0])
 print(f"Magnetic field at origin: Bx={field[0]:.6e}, By={field[1]:.6e}, Bz={field[2]:.6e} T")
 
 print("Calculation complete.")
-
-# VTS Export - Export field distribution with same filename as script
-try:
-	# Get script basename without extension
-	script_name = os.path.splitext(os.path.basename(__file__))[0]
-	vts_filename = f"{script_name}.vts"
-	vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
-
-	# Geometry: arc current rmin=0.1m, rmax=0.15m, magnet 0.3x0.3x0.005m at z=-0.05m
-	# Extend range to cover geometry
-	x_range = [-0.200, 0.200]
-	y_range = [-0.200, 0.200]
-	z_range = [-0.100, 0.050]
-
-	rad.FldVTS(g, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
-	print(f"\n[VTS] Exported: {vts_filename}")
-	print(f"      View with: paraview {vts_filename}")
-except Exception as e:
-	print(f"\n[VTS] Warning: Export failed: {e}")

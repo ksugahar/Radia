@@ -351,30 +351,9 @@ def export_coil_to_vtu(coil, filename_base, num_segments=60):
     coil_vtu = f"{filename_base}_coil.vtu"
     write_coil_vtu(all_points, all_cells, coil_vtu)
 
-    # Generate B field on a grid
-    print("\nGenerating B field grid...")
-    nx, ny, nz = 21, 21, 21
-    x = np.linspace(-0.1, 0.1, nx)
-    y = np.linspace(-0.1, 0.1, ny)
-    z = np.linspace(-0.05, 0.05, nz)
-
-    B_field = np.zeros((nx, ny, nz, 3))
-
-    # Compute B field using Biot-Savart for circular loop
-    for i, xi in enumerate(x):
-        for j, yj in enumerate(y):
-            for k, zk in enumerate(z):
-                B = compute_loop_bfield(coil.R, [xi, yj, zk])
-                B_field[i, j, k, :] = B
-
-    # Write B field VTS
-    field_vts = f"{filename_base}_field.vts"
-    write_field_vts(x, y, z, B_field, field_vts)
-
     print(f"\nVTU Export complete:")
     print(f"  Coil geometry: {coil_vtu}")
-    print(f"  B field grid:  {field_vts}")
-    print("\nOpen these files in ParaView for visualization.")
+    print("\nOpen this file in ParaView for visualization.")
 
 
 def compute_loop_bfield(R, point, I=1.0):
@@ -501,144 +480,6 @@ def write_coil_vtu(points, cells, filename):
         f.write('</VTKFile>\n')
 
     print(f"Exported: {filename} ({n_cells} cells, {n_points} points)")
-
-
-def write_field_vts(x, y, z, B_field, filename):
-    """Write B field on structured grid to VTS file."""
-    nx, ny, nz = len(x), len(y), len(z)
-
-    with open(filename, 'w') as f:
-        f.write('<?xml version="1.0"?>\n')
-        f.write('<VTKFile type="StructuredGrid" version="0.1" byte_order="LittleEndian">\n')
-        f.write(f'  <StructuredGrid WholeExtent="0 {nx-1} 0 {ny-1} 0 {nz-1}">\n')
-        f.write(f'    <Piece Extent="0 {nx-1} 0 {ny-1} 0 {nz-1}">\n')
-
-        # Points
-        f.write('      <Points>\n')
-        f.write('        <DataArray type="Float64" NumberOfComponents="3" format="ascii">\n')
-        for k in range(nz):
-            for j in range(ny):
-                for i in range(nx):
-                    f.write(f'          {x[i]:.10e} {y[j]:.10e} {z[k]:.10e}\n')
-        f.write('        </DataArray>\n')
-        f.write('      </Points>\n')
-
-        # Point data
-        f.write('      <PointData>\n')
-        # B field vector
-        f.write('        <DataArray type="Float64" Name="B_field" NumberOfComponents="3" format="ascii">\n')
-        for k in range(nz):
-            for j in range(ny):
-                for i in range(nx):
-                    Bx, By, Bz = B_field[i, j, k, :]
-                    f.write(f'          {Bx:.10e} {By:.10e} {Bz:.10e}\n')
-        f.write('        </DataArray>\n')
-        # B magnitude
-        f.write('        <DataArray type="Float64" Name="B_magnitude" format="ascii">\n')
-        for k in range(nz):
-            for j in range(ny):
-                for i in range(nx):
-                    B_mag = np.linalg.norm(B_field[i, j, k, :])
-                    f.write(f'          {B_mag:.10e}\n')
-        f.write('        </DataArray>\n')
-        f.write('      </PointData>\n')
-
-        f.write('    </Piece>\n')
-        f.write('  </StructuredGrid>\n')
-        f.write('</VTKFile>\n')
-
-    print(f"Exported: {filename} ({nx}x{ny}x{nz} = {nx*ny*nz} points)")
-
-
-def export_radia_coil_vts(loop_radius, current=1.0):
-    """
-    Create a circular coil using Radia ObjArcCur and export B field using FldVTS.
-
-    Parameters:
-    -----------
-    loop_radius : float
-        Radius of the coil loop [m]
-    current : float
-        Coil current [A]
-    """
-    try:
-        import radia as rad
-    except ImportError:
-        print("Radia not available. Skipping Radia-based VTS export.")
-        return
-
-    print("\n" + "="*60)
-    print("Exporting B field using Radia FldVTS")
-    print("="*60)
-
-
-    # Create circular coil using multiple arc segments
-    # ObjArcCur(center, radii, phi_range, nseg, current, 'man'|'auto')
-    # center: [x, y, z]
-    # radii: [r_inner, r_outer] (for thin wire: same value or small difference)
-    # phi_range: [phi_start, phi_end] in degrees
-    # nseg: number of segments
-    # current: current in Amperes
-    # 'man'|'auto': manual or automatic subdivision
-
-    wire_radius = 0.001  # 1 mm wire radius for visualization
-    r_inner = loop_radius - wire_radius
-    r_outer = loop_radius + wire_radius
-
-    # Create full circle with 36 segments
-    # ObjArcCur(center, radii, phi_range, height, nseg, current_density, 'man'|'auto')
-    # phi_range is in radians: [0, 2*pi) for full circle
-    # current_density = current / cross_section_area
-    cross_section_area = (r_outer - r_inner) * 0.001  # radial * height
-    current_density = current / cross_section_area
-
-    coil = rad.ObjArcCur(
-        [0, 0, 0],                  # center [x, y, z]
-        [r_inner, r_outer],         # radii [r_inner, r_outer]
-        [0, 2 * np.pi - 0.01],      # phi range [phi_min, phi_max] in radians
-        0.001,                      # height (z-extent, thin coil in meters)
-        36,                         # number of segments
-        current_density,            # current density [A/m^2]
-        'man'                       # manual subdivision
-    )
-
-    print(f"  Coil radius: {loop_radius*1000:.1f} mm")
-    print(f"  Current: {current:.1f} A")
-
-    # Export B field using FldVTS
-    output_path = os.path.join(os.path.dirname(__file__), 'coil_bfield_radia.vts')
-
-    # Grid parameters (in meters)
-    x_range = [-0.1, 0.1]
-    y_range = [-0.1, 0.1]
-    z_range = [-0.05, 0.05]
-    nx, ny, nz = 41, 41, 21
-
-    print(f"\n  Computing B field on {nx}x{ny}x{nz} grid...")
-    print(f"  Grid range: x=[{x_range[0]:.3f}, {x_range[1]:.3f}] m")
-    print(f"              y=[{y_range[0]:.3f}, {y_range[1]:.3f}] m")
-    print(f"              z=[{z_range[0]:.3f}, {z_range[1]:.3f}] m")
-
-    # FldVTS(obj, filename, x_range, y_range, z_range, nx, ny, nz, include_B, include_H, unit_scale)
-    rad.FldVTS(coil, output_path,
-               x_range, y_range, z_range,
-               nx, ny, nz,
-               1,    # include B field
-               0,    # do not include H field
-               1.0)  # unit scale
-
-    print(f"\n  Exported: {output_path}")
-    print(f"  Grid points: {nx*ny*nz}")
-
-    # Also compute and print field at center
-    B_center = rad.Fld(coil, 'b', [0, 0, 0])
-    print(f"\n  B field at center: Bz = {B_center[2]*1e6:.2f} uT")
-
-    # Analytical comparison: Bz = mu_0 * I / (2 * R)
-    Bz_analytical = MU_0 * current / (2 * loop_radius)
-    print(f"  Analytical Bz:     Bz = {Bz_analytical*1e6:.2f} uT")
-
-    return coil
 
 
 def run_peec_solver_analysis():
@@ -820,9 +661,6 @@ def main():
     output_base = os.path.join(os.path.dirname(__file__), 'coil_impedance_peec')
     export_coil_to_vtu(coil, output_base)
 
-    # Export B field using Radia FldVTS (C++ implementation)
-    export_radia_coil_vts(coil.R, current=1.0)
-
     # Run PEEC solver analysis (C++ PEEC solver)
     peec_result = run_peec_solver_analysis()
 
@@ -843,8 +681,6 @@ def main():
 
     print("\nOutput files for ParaView:")
     print("  - coil_impedance_peec_coil.vtu  : Coil geometry (wire tube)")
-    print("  - coil_impedance_peec_field.vts : B field (Biot-Savart, Python)")
-    print("  - coil_bfield_radia.vts         : B field (Radia ObjArcCur, C++)")
     print("  - coil_impedance_peec_solver.png: PEEC solver results")
 
 

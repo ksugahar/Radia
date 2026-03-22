@@ -549,16 +549,11 @@ field_values = rad.FldLst(obj, 'bz', start, end, n_points, 'arg')
 flux = rad.FldInt(obj, component, start, end, axis)
 ```
 
-## VTK Export
+## Visualization (NGSolve-Through)
 
-```python
-rad.FldVTS(obj, 'output.vts',
-           x_range=[-0.1, 0.1],
-           y_range=[-0.1, 0.1],
-           z_range=[0.0, 0.2],
-           nx=21, ny=21, nz=21,
-           include_B=1, include_H=0)
-```
+Field visualization uses NGSolve + GmshPostExport (.msh v4.1).
+Geometry uses STEP files (CoilBuilder.write_step(), OCC shapes).
+rad.FldVTS() is removed. Use rad.Fld() for point evaluation only.
 
 ## Querying Magnetization
 

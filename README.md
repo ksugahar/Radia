@@ -296,7 +296,6 @@ coil = rad.ObjRaceTrk(
 )
 
 # Export field to VTS for ParaView visualization
-rad.FldVTS(coil, "coil_field.vts",
            [-50, 50], [-150, 150], [-20, 30],  # x, y, z ranges [mm]
            21, 31, 11)  # grid points
 ```
