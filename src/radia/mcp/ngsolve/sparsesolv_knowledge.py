@@ -805,44 +805,70 @@ Complex system matrix A = K + jw*sigma*M cannot be used directly.
 Real auxiliary matrix `A_real = K + |omega*sigma|*M` captures
 the same spectral structure without imaginary part.
 
-### Conductor-in-Air Problems: Mass Regularization Required
+### Conductor-in-Air Problems: Shifted Preconditioner (Recommended)
 
 When sigma is only in a subregion (conductor in air), the curl-curl system
-has a near-null space in the air region. This causes:
-- **COCR breakdown** at ~78 iterations (algorithm stalls, cannot reduce residual further)
-- **GMRES also stalls** (converges to a different null-space component)
-- Both solutions satisfy A*x = f (the difference is in the null space of A)
+is singular in the air region (no mass term). Two approaches:
 
-**Fix**: Add mass regularization `eps * u * v * dx` to ALL domains:
+#### Approach 1: Shifted Preconditioner (RECOMMENDED - no physics distortion)
+
+Add eps*mass to the **preconditioner only**, not the system matrix.
+The Krylov solver sees the original (singular) system.
+The preconditioner sees a shifted (non-singular) system.
+Solution is exact (no regularization error).
 
 ```python
 mu0 = 4e-7 * 3.14159265
 nu = 1.0 / mu0
-eps_reg = 0.05 * nu   # = 0.05/mu0, minimum for COCR convergence
+eps_shift = 1e-6 * nu   # shift for preconditioner only
 
-# Complex system (add eps to entire domain)
+# Original system (NO regularization)
+a = BilinearForm(fes)
 a += nu * curl(u) * curl(v) * dx
-a += 1j * omega * sigma_cf * u * v * dx
-a += eps_reg * u * v * dx                   # regularization (all domains)
+a += 1j * omega * sigma_cf * u * v * dx("cond")
 
-# Real auxiliary (also add eps)
-a_real += nu * curl(u_r) * curl(v_r) * dx
-a_real += (abs(omega*sigma) + eps_reg) * u_r * v_r * dx
+# Shifted system (for preconditioner ONLY)
+a_shifted = BilinearForm(fes)
+a_shifted += nu * curl(u) * curl(v) * dx
+a_shifted += 1j * omega * sigma_cf * u * v * dx("cond")
+a_shifted += eps_shift * u * v * dx            # shift in ALL domains
+
+# Register preconditioner on shifted system, solve original
+c = Preconditioner(a_shifted, "bddc")
+a_shifted.Assemble()
+a.Assemble()
+
+inv = CGSolver(a.mat, c.mat, ...)  # original A, shifted preconditioner
 ```
 
-**Impact on physical solution** (B = curl(E)):
+**Verified results** (conducting sphere in air, f=1kHz, BDDC):
 
-| eps/nu | COCR iters | pardiso match | B field error |
-|--------|-----------|--------------|--------------|
-| 0 (none) | 78 (breakdown) | 96% diff (null space) | - |
-| 0.01 | 78 (breakdown) | 0.94% | - |
-| **0.05** | **117** | **1.0e-04** | **0.25%** |
-| 0.10 | 111 | 9.9e-05 | ~0.3% |
-| 1.00 | 121 | 9.7e-07 | 4.7% |
+| Method | eps | iter | ||B||^2 | Physics error |
+|--------|-----|------|---------|--------------|
+| Shifted precond only | 1e-4 | 34 | 8.168674e-04 | **zero** |
+| Shifted precond only | 1e-6 | 34 | 8.168674e-04 | **zero** |
+| Shifted precond only | 1e-8 | 34 | 8.168674e-04 | **zero** |
+| Regularized (system) | 1e-6 | 33 | 8.168674e-04 | small |
+| No shift             | -    | 2000 | nan | diverges |
 
-- `eps=0.05*nu`: Best balance (B field error 0.25%, COCR converges)
-- The 96% "error" without regularization is gauge freedom (E differs, curl(E) is same)
-- Uniform sigma (all conducting): No regularization needed (COCR: 13 iters, 2e-10 error)
+Key: eps value does NOT affect the solution (only preconditioner quality).
+
+#### Approach 2: System Regularization (legacy, introduces error)
+
+Add eps*mass to the system matrix itself. Simpler but distorts physics.
+
+```python
+eps_reg = 0.05 * nu   # minimum for COCR convergence
+a += eps_reg * u * v * dx   # regularization (all domains) - distorts solution
+```
+
+| eps/nu | COCR iters | B field error |
+|--------|-----------|--------------|
+| 0 (none) | 78 (breakdown) | - |
+| **0.05** | **117** | **0.25%** |
+| 1.00 | 121 | 4.7% |
+
+- Uniform sigma (all conducting): No regularization needed (COCR: 13 iters)
 
 ### CompactAMGPreconditioner: pybind11 Registration (Fixed in v3.1.1)
 
