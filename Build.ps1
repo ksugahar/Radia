@@ -187,18 +187,15 @@ $BatchContent | Out-File -FilePath $BatchFile -Encoding ascii
 try {
     Write-Host "Building..." -ForegroundColor Cyan
 
-    if ($Verbose) {
-        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $BatchFile -NoNewWindow -PassThru -Wait
-        $BuildResult = $process.ExitCode
-    } else {
-        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "$BatchFile > `"$BuildLog`" 2>&1" -NoNewWindow -PassThru -Wait
-        $BuildResult = $process.ExitCode
-        if (Test-Path $BuildLog) {
-            Get-Content $BuildLog -Tail 30 | ForEach-Object {
-                if ($_ -match "error|ERROR") { Write-Host $_ -ForegroundColor Red }
-                elseif ($_ -match "warning|WARNING") { Write-Host $_ -ForegroundColor Yellow }
-                else { Write-Host $_ }
-            }
+    # Use cmd /c directly (not Start-Process -Wait which waits for child processes)
+    & cmd.exe /c "$BatchFile > `"$BuildLog`" 2>&1"
+    $BuildResult = $LASTEXITCODE
+
+    if (Test-Path $BuildLog) {
+        Get-Content $BuildLog -Tail 30 | ForEach-Object {
+            if ($_ -match "error|ERROR") { Write-Host $_ -ForegroundColor Red }
+            elseif ($_ -match "warning|WARNING") { Write-Host $_ -ForegroundColor Yellow }
+            else { Write-Host $_ }
         }
     }
 
