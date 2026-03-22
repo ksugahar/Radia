@@ -11,7 +11,7 @@ Method (saddle point EFIE):
   3. Solve saddle point: [SL D^T; D 0] [J; p] = [0; g]
      where g encodes unit current injection at source/sink
   4. L = mu_0 * J^T @ SL @ J
-  5. GMSH v2.2 export with |J| field
+  5. GMSH v2.2 export: J-distribution (surface) and B-distribution (volume)
 
 Prerequisites (Cubit journal):
     block N name "source"    # tri/quad on source face
@@ -70,10 +70,10 @@ def extract_inductance(cub5_file, order, source_label="source",
         source_label: Block name for source face
         sink_label: Block name for sink face
         fes_order: HDivSurface basis order (0=RWG, 1+=higher-order)
-        msh_output: Optional path for GMSH .msh output
+        msh_output: Optional path for GMSH .msh output (J-distribution)
 
     Returns:
-        dict with inductance_H, diagnostics
+        dict with inductance_H, gmsh_file_J, gmsh_file_B, diagnostics
     """
     import numpy as np
     import math
@@ -136,14 +136,14 @@ def extract_inductance(cub5_file, order, source_label="source",
                 f"'{source_label}' and/or '{sink_label}'."}
 
     # --- Phase 1: Export mesh to GMSH (before solve) ---
-    gmsh_file = msh_output if msh_output else os.path.join(
-        os.path.dirname(os.path.abspath(cub5_file)), "inductance_J.msh"
-    ).replace("\\", "/")
+    base_dir = os.path.dirname(os.path.abspath(cub5_file))
+    gmsh_file_J = msh_output if msh_output else os.path.join(
+        base_dir, "inductance_J.msh").replace("\\", "/")
     try:
         from gmsh_post_export import GmshPostExport
         post = GmshPostExport(mesh, boundary=True)
-        post.write_mesh(gmsh_file)
-        sys.stderr.write(f"MESH_READY:{gmsh_file}\n")
+        post.write_mesh(gmsh_file_J)
+        sys.stderr.write(f"MESH_READY:{gmsh_file_J}\n")
         sys.stderr.flush()
     except Exception:
         pass
@@ -205,7 +205,7 @@ def extract_inductance(cub5_file, order, source_label="source",
     L_total = MU_0 * J @ SL @ J
     residual = float(np.max(np.abs(D @ J - g)))
 
-    # --- Phase 3: GMSH with |J| scalar + J vector fields ---
+    # --- Phase 3: J-distribution GMSH (surface |J| + J vector) ---
     gf_J = GridFunction(fes_J)
     gf_J.vec.FV().NumPy()[:] = J
 
@@ -238,11 +238,20 @@ def extract_inductance(cub5_file, order, source_label="source",
         post = GmshPostExport(mesh, boundary=True)
         post.add_field("|J|", node_J_mag, ncomp=1)
         post.add_field("J", ns_vec, ncomp=3)
-        post.write(gmsh_file)
-        sys.stderr.write(f"FIELD_READY:{gmsh_file}\n")
+        post.write(gmsh_file_J)
+        sys.stderr.write(f"FIELD_READY:{gmsh_file_J}\n")
         sys.stderr.flush()
     except Exception:
-        gmsh_file = ""
+        gmsh_file_J = ""
+
+    # --- Phase 4: B-distribution GMSH (volume B via PotentialCF) ---
+    gmsh_file_B = ""
+    try:
+        gmsh_file_B = _compute_B_distribution(
+            mesh, fes_J, gf_J, jt, base_dir, MU_0)
+    except Exception as e:
+        sys.stderr.write(f"B_FIELD_ERROR:{e}\n")
+        sys.stderr.flush()
 
     return {
         "inductance_H": float(L_total),
@@ -255,8 +264,152 @@ def extract_inductance(cub5_file, order, source_label="source",
         "constraint_residual": residual,
         "curve_order": order,
         "fes_order": fes_order,
-        "gmsh_file": gmsh_file,
+        "gmsh_file": gmsh_file_J,
+        "gmsh_file_J": gmsh_file_J,
+        "gmsh_file_B": gmsh_file_B,
     }
+
+
+def _compute_B_distribution(mesh_surf, fes_J, gf_J, jt, base_dir, MU_0):
+    """Compute B field in air volume via Biot-Savart and export to GMSH.
+
+    Creates an air volume mesh (box around conductor), evaluates the
+    vector potential A via Biot-Savart quadrature over surface elements,
+    then projects into HCurl and computes B = curl(A).
+
+    Args:
+        mesh_surf: Surface-only BEM mesh
+        fes_J: HDivSurface space on mesh_surf
+        gf_J: Solved surface current GridFunction
+        jt: Trial function of fes_J
+        base_dir: Output directory for .msh file
+        MU_0: Vacuum permeability
+
+    Returns:
+        Path to B-distribution .msh file
+    """
+    import numpy as np
+    from ngsolve import (Mesh, HCurl, HDiv, GridFunction, TaskManager,
+                         BND, VOL, CF, Integrate, Norm, curl,
+                         IntegrationRule)
+    from netgen.occ import Box, Pnt, OCCGeometry
+    from netgen.meshing import MeshingParameters
+
+    INV_4PI = 1.0 / (4.0 * np.pi)
+
+    # --- Step 1: Extract per-element J and geometry from surface mesh ---
+    # For each BND element: centroid, area, average J vector
+    elem_data = []
+    elem_A = Integrate(CF(1), mesh_surf, VOL_or_BND=BND, element_wise=True)
+    elem_Jx = Integrate(gf_J[0], mesh_surf, VOL_or_BND=BND, element_wise=True)
+    elem_Jy = Integrate(gf_J[1], mesh_surf, VOL_or_BND=BND, element_wise=True)
+    elem_Jz = Integrate(gf_J[2], mesh_surf, VOL_or_BND=BND, element_wise=True)
+
+    for el in mesh_surf.Elements(BND):
+        area = abs(elem_A[el.nr])
+        if area < 1e-30:
+            continue
+        jvec = np.array([elem_Jx[el.nr], elem_Jy[el.nr], elem_Jz[el.nr]]) / area
+        verts = [mesh_surf.vertices[v.nr].point for v in el.vertices]
+        centroid = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
+        elem_data.append((centroid, area, jvec))
+
+    n_elem = len(elem_data)
+    sys.stderr.write(f"B_PROGRESS:Biot-Savart over {n_elem} elements\n")
+    sys.stderr.flush()
+
+    # Pack into arrays for vectorized computation
+    centroids = np.array([d[0] for d in elem_data])  # (n_elem, 3)
+    areas = np.array([d[1] for d in elem_data])       # (n_elem,)
+    J_vecs = np.array([d[2] for d in elem_data])       # (n_elem, 3)
+
+    # --- Step 2: Create air volume mesh ---
+    coords = np.array([(v.point[0], v.point[1], v.point[2])
+                       for v in mesh_surf.vertices])
+    bbox_min = coords.min(axis=0)
+    bbox_max = coords.max(axis=0)
+    extent = bbox_max - bbox_min
+    margin = max(extent) * 0.3
+
+    box = Box(Pnt(*(bbox_min - margin)), Pnt(*(bbox_max + margin)))
+    for f in box.faces:
+        f.name = "outer"
+
+    maxh_vol = max(extent) * 0.12
+    geo = OCCGeometry(box)
+    mesh_vol = Mesh(geo.GenerateMesh(
+        mp=MeshingParameters(maxh=maxh_vol)))
+
+    nv_vol = mesh_vol.nv
+    obs_pts = np.array([(v.point[0], v.point[1], v.point[2])
+                        for v in mesh_vol.vertices])  # (nv_vol, 3)
+
+    sys.stderr.write(f"B_PROGRESS:Evaluating A at {nv_vol} vertices\n")
+    sys.stderr.flush()
+
+    # --- Step 3: Biot-Savart A at each vertex ---
+    # A(x) = mu_0/(4*pi) * sum_e J_e * A_e / |x - c_e|
+    # Monopole approximation (centroid, constant J per element)
+    A_nodes = np.zeros((nv_vol, 3))
+    for i in range(nv_vol):
+        dx = obs_pts[i] - centroids  # (n_elem, 3)
+        r = np.sqrt(np.sum(dx**2, axis=1))  # (n_elem,)
+        r = np.maximum(r, 1e-15)  # avoid division by zero
+        weight = areas / r  # (n_elem,)
+        # A = mu_0/(4pi) * sum(J * area / r)
+        A_nodes[i] = MU_0 * INV_4PI * np.sum(J_vecs * weight[:, None], axis=0)
+
+    # --- Step 4: Project A into HCurl, B = curl(A) ---
+    from ngsolve import VectorH1
+    fes_vh1 = VectorH1(mesh_vol, order=1)
+    gf_vh1 = GridFunction(fes_vh1)
+    vec = gf_vh1.vec.FV().NumPy()
+    for i in range(nv_vol):
+        vec[3 * i] = A_nodes[i, 0]
+        vec[3 * i + 1] = A_nodes[i, 1]
+        vec[3 * i + 2] = A_nodes[i, 2]
+
+    fes_A = HCurl(mesh_vol, order=1)
+    gf_A = GridFunction(fes_A)
+    gf_A.Set(gf_vh1)
+
+    fes_B = HDiv(mesh_vol, order=1)
+    gf_B = GridFunction(fes_B)
+    gf_B.Set(curl(gf_A))
+
+    # --- Step 5: Export B field ---
+    elem_B_mag = Integrate(Norm(gf_B), mesh_vol, element_wise=True)
+    elem_V = Integrate(CF(1), mesh_vol, element_wise=True)
+    elem_Bx = Integrate(gf_B[0], mesh_vol, element_wise=True)
+    elem_By = Integrate(gf_B[1], mesh_vol, element_wise=True)
+    elem_Bz = Integrate(gf_B[2], mesh_vol, element_wise=True)
+
+    ns_mag = np.zeros(nv_vol)
+    ns_vec = np.zeros((nv_vol, 3))
+    nc_count = np.zeros(nv_vol)
+    for el in mesh_vol.Elements(VOL):
+        v = max(abs(elem_V[el.nr]), 1e-30)
+        mag = abs(elem_B_mag[el.nr]) / v
+        bvec = [elem_Bx[el.nr] / v, elem_By[el.nr] / v, elem_Bz[el.nr] / v]
+        for vtx in el.vertices:
+            ns_mag[vtx.nr] += mag
+            ns_vec[vtx.nr] += bvec
+            nc_count[vtx.nr] += 1
+
+    node_B_mag = np.where(nc_count > 0, ns_mag / nc_count, 0.0)
+    for k in range(3):
+        ns_vec[:, k] = np.where(nc_count > 0, ns_vec[:, k] / nc_count, 0.0)
+
+    from gmsh_post_export import GmshPostExport
+    gmsh_file_B = os.path.join(base_dir, "inductance_B.msh").replace("\\", "/")
+    post = GmshPostExport(mesh_vol, boundary=False)
+    post.add_field("|B|", node_B_mag, ncomp=1)
+    post.add_field("B", ns_vec, ncomp=3)
+    post.write(gmsh_file_B)
+    sys.stderr.write(f"B_FIELD_READY:{gmsh_file_B}\n")
+    sys.stderr.flush()
+
+    return gmsh_file_B
 
 
 def main():
