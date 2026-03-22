@@ -103,21 +103,3 @@ for point, desc in symmetric_points:
 print("\n" + "=" * 70)
 print("Calculation complete.")
 print("=" * 70)
-
-# VTS Export - Export field distribution with same filename as script
-try:
-	# Get script basename without extension
-	script_name = os.path.splitext(os.path.basename(__file__))[0]
-	vts_filename = f"{script_name}.vts"
-	vts_path = os.path.join(os.path.dirname(__file__), vts_filename)
-
-	# Cube is 20mm centered at origin, extend range to 40mm for far-field
-	x_range = [-0.040, 0.040]
-	y_range = [-0.040, 0.040]
-	z_range = [-0.040, 0.040]
-
-	rad.FldVTS(g1, vts_path, x_range, y_range, z_range, 21, 21, 21, 1, 0, 1.0)
-	print(f"\n[VTS] Exported: {vts_filename}")
-	print(f"      View with: paraview {vts_filename}")
-except Exception as e:
-	print(f"\n[VTS] Warning: Export failed: {e}")

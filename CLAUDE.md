@@ -316,12 +316,10 @@ The complete pipeline for accelerator electromagnet analysis:
            ┌──────────────────┼──────────────────┐
            ▼                  ▼                  ▼
     ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-    │ rad.Fld()   │    │ rad.FldVTS()│    │ CplMagFld() │
     │ (unified)   │    │ VTS export  │    │ PEEC+MMM    │
     └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
-**Users**: `rad.Fld()` (unified single/batch), `rad.FldVTS()`, `rad.RadiaField()`, `rad_particle_trajectory`, `CplMagFld()`.
 
 **Key Features**: Inside/outside classification (solid angle method), TaskManager parallelized batch, complex field support (PEEC+MMM AC).
 
@@ -623,7 +621,6 @@ container = netgen_mesh_to_radia(mesh, material=material_from_ngsolve, units='m'
 # 3. Evaluate field at arbitrary external points (exact analytical formulas)
 B = rad.Fld(container, 'b', [0, 0, 0.1])          # single point (shape (3,))
 B_batch = rad.Fld(container, 'b', obs_points)      # batch (shape (N,3))
-rad.FldVTS(container, 'field.vts', ...)             # VTK export
 ```
 
 **Why Radia objects, not dipoles**:
@@ -1191,7 +1188,6 @@ Use **snake_case** with functional prefixes:
 
 ### VTK Export
 
-All example scripts should export VTK files with the same basename as the script. Use `rad.FldVTS()` for field data export.
 
 ### Benchmark Policy
 
@@ -1307,7 +1303,6 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 - **幾何形状**: STEP 出力 → GMSH GUI で読み込み
 - **磁場ポスト**: NGSolve GridFunction → GmshPostExport (.msh v4.1) → GMSH GUI
 - **rad.Fld()**: デバッグ・確認用（ポストには使わない）
-- **rad.FldVTS()**: レガシー（新規ワークフローでは使わない）
 
 **Why**: NGSolve 経由なら構造格子に限定されない。非構造メッシュ上で高次要素の精度を保ったまま場を評価・出力できる。
 
@@ -1316,7 +1311,6 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 | **幾何形状** | CoilBuilder.write_step(), OCC shapes | **.step** → GMSH |
 | **磁場ポスト** | NGSolve GridFunction → **GmshPostExport** | **.msh v4.1** → GMSH |
 | 確認用 | `rad.Fld()` (点評価) | スクリプト内のみ |
-| レガシー | `rad.FldVTS()` (構造格子) | .vts → ParaView |
 
 **Do NOT** implement custom visualization in Radia C++ code.
 

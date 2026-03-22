@@ -15,11 +15,11 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_application.h"
-#include "rad_particle_trajectory.h"
 #include "rad_geometry_3d_aux.h"
 #include "rad_operation_names.h"
 #include "rad_interaction.h"
 #include "rad_field_unified.h"
+#include "rad_particle_trajectory.h"  // stub (removed, throws at runtime)
 
 #include <math.h>
 #include <string.h>
