@@ -35,10 +35,14 @@ dependencies = [
     # See: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
     # Fixed in 6.2.2601+. Verified: geominfo, Periodic BC, vol-to-gmsh all pass.
     "ngsolve>=6.2.2601",
+    "ngsolve-sparsesolv>=3.1.0",
     # REQUIRED: ksugahar/netgen fork (CallbackGeometry + SetGeomInfo)
     # pip cannot install from GitHub URLs, so install manually:
     #   pip install <wheel> from https://github.com/ksugahar/netgen/releases
     # Without the fork, export_curved() will raise ImportError.
+    # Run: python install_full.py  (handles netgen fork automatically)
+    # MCP server dependency (optional, for Claude Code / Cursor integration)
+    "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -49,6 +53,7 @@ viz = [
 test = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "mcp>=1.0.0",
 ]
 dev = [
     "pytest>=7.0",
@@ -67,6 +72,9 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 
 [project.scripts]
 cubit-mesh-export-install-panels = "radia.install_panels:main"
+mcp-server-radia = "radia.mcp.radia.server:main"
+mcp-server-ngsolve = "radia.mcp.ngsolve.server:main"
+mcp-server-cubit = "radia.mcp.cubit.server:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
