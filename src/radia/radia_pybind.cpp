@@ -44,6 +44,9 @@
 #include "radentry.h"
 #include "rad_constants.h"
 #include "rad_highorder_nodes.h"
+#ifdef RADIA_CUBIT_SDK
+#include "rad_cubit_projection.h"
+#endif
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -4026,4 +4029,32 @@ PYBIND11_MODULE(_radia_pybind, m) {
             elem_materials (list of str), elem_gmsh_types (list of int),
             elem_orig_idx (list of int), n_vertices (int)
     )pbdoc");
+
+#ifdef RADIA_CUBIT_SDK
+    // ================================================================
+    // Cubit C++ surface projection (replaces Python CallbackGeometry callbacks)
+    // ================================================================
+    py::class_<radia::CubitProjection>(m, "CubitProjection",
+        "C++ surface projection using Cubit/ACIS RefFace API.\n\n"
+        "Provides fast project/normal callables for CallbackGeometry,\n"
+        "replacing Python callbacks that call cubit.surface().u_v_from_position().")
+        .def(py::init([](py::dict surfnr_to_sid_py) {
+            std::unordered_map<int, int> surfnr_to_sid;
+            for (auto& [k, v] : surfnr_to_sid_py)
+                surfnr_to_sid[k.cast<int>()] = v.cast<int>();
+            return std::make_unique<radia::CubitProjection>(surfnr_to_sid);
+        }), py::arg("surfnr_to_sid"),
+        "Create projection from surfnr->Cubit_surface_id mapping")
+        .def("project", &radia::CubitProjection::Project,
+             py::arg("surfnr"), py::arg("x"), py::arg("y"), py::arg("z"),
+             py::arg("u_hint"), py::arg("v_hint"),
+             "Project point to surface, return (x, y, z, u, v)")
+        .def("normal", &radia::CubitProjection::Normal,
+             py::arg("surfnr"), py::arg("x"), py::arg("y"), py::arg("z"),
+             "Get surface normal, return (nx, ny, nz)");
+
+    m.attr("_CUBIT_SDK_AVAILABLE") = true;
+#else
+    m.attr("_CUBIT_SDK_AVAILABLE") = false;
+#endif
 }
