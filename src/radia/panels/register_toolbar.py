@@ -681,10 +681,14 @@ class InductanceDialog(QDialog):
 		self.solve_btn.clicked.connect(self._extract)
 		self.solve_btn.setEnabled(False)
 		btn_row.addWidget(self.solve_btn)
-		self.open_gmsh_btn = QPushButton("Open GMSH")
-		self.open_gmsh_btn.clicked.connect(self._open_gmsh_result)
-		self.open_gmsh_btn.setEnabled(False)
-		btn_row.addWidget(self.open_gmsh_btn)
+		self.btn_J_dist = QPushButton("J-distribution")
+		self.btn_J_dist.clicked.connect(self._open_J_distribution)
+		self.btn_J_dist.setEnabled(False)
+		btn_row.addWidget(self.btn_J_dist)
+		self.btn_B_dist = QPushButton("B-distribution")
+		self.btn_B_dist.clicked.connect(self._open_B_distribution)
+		self.btn_B_dist.setEnabled(False)
+		btn_row.addWidget(self.btn_B_dist)
 		close_btn = QPushButton("Close")
 		close_btn.clicked.connect(self.accept)
 		btn_row.addWidget(close_btn)
@@ -843,10 +847,7 @@ class InductanceDialog(QDialog):
 					data = json.load(f)
 				if "inductance_H" in data:
 					self._display_result(data)
-					gmsh_file = data.get("gmsh_file", "")
-					if gmsh_file and os.path.exists(gmsh_file):
-						self._gmsh_file = gmsh_file
-						self.open_gmsh_btn.setEnabled(True)
+					self._enable_gmsh_buttons(data)
 					self.debug_text.setText(f"Previous result loaded: {self._result_file}")
 			except Exception:
 				pass
@@ -961,7 +962,11 @@ class InductanceDialog(QDialog):
 			if line.startswith("MESH_READY:"):
 				self.debug_text.setText("Mesh exported, assembling BEM matrix...")
 			elif line.startswith("FIELD_READY:"):
-				self.debug_text.setText("Field data written, finalizing...")
+				self.debug_text.setText("J-distribution written, computing B field...")
+			elif line.startswith("B_FIELD_READY:"):
+				self.debug_text.setText("B-distribution written, finalizing...")
+			elif line.startswith("B_FIELD_ERROR:"):
+				self.debug_text.setText("B field: " + line.split(":", 1)[1])
 
 	def _on_extract_finished(self, exit_code, exit_status):
 		"""Handle async extraction result."""
@@ -997,24 +1002,27 @@ class InductanceDialog(QDialog):
 		with open(self._result_file, "w") as f:
 			json.dump(data, f)
 
-		# Enable Open GMSH button if file exists
-		gmsh_file = data.get("gmsh_file", "")
-		if gmsh_file and os.path.exists(gmsh_file):
-			self._gmsh_file = gmsh_file
-			self.open_gmsh_btn.setEnabled(True)
-			self.debug_text.setText(f"Result: {gmsh_file}")
-		else:
-			self.debug_text.setText(f"Result saved: {self._result_file}")
+		self._enable_gmsh_buttons(data)
+		self.debug_text.setText(f"Result saved: {self._result_file}")
 
-	def _open_gmsh_result(self):
-		"""Open the latest GMSH result file in GMSH GUI."""
-		gmsh_file = getattr(self, '_gmsh_file', '')
-		if not gmsh_file or not os.path.exists(gmsh_file):
-			QMessageBox.warning(self, "Error", "No GMSH result file found. Run Solve first.")
-			return
+	def _enable_gmsh_buttons(self, data):
+		"""Enable J/B distribution buttons based on available files."""
+		gmsh_J = data.get("gmsh_file_J", data.get("gmsh_file", ""))
+		gmsh_B = data.get("gmsh_file_B", "")
+		if gmsh_J and os.path.exists(gmsh_J):
+			self._gmsh_file_J = gmsh_J
+			self.btn_J_dist.setEnabled(True)
+		if gmsh_B and os.path.exists(gmsh_B):
+			self._gmsh_file_B = gmsh_B
+			self.btn_B_dist.setEnabled(True)
+
+	def _launch_gmsh(self, msh_file):
+		"""Launch GMSH GUI with .geo companion file (for NumSubEdges=4)."""
+		# Prefer .geo file (sets NumSubEdges=4 for curved element display)
+		geo_file = os.path.splitext(msh_file)[0] + '.geo'
+		open_file = geo_file if os.path.exists(geo_file) else msh_file
 		try:
 			import subprocess as _sp
-			# GMSH GUI: external python -c "import gmsh; gmsh.initialize([..., file], run=True)"
 			ext_py = self._ext_python
 			if ext_py:
 				code = (
@@ -1022,14 +1030,33 @@ class InductanceDialog(QDialog):
 					"gmsh.initialize(sys.argv, run=True); "
 					"gmsh.finalize()"
 				)
-				_sp.Popen([ext_py, "-c", code, gmsh_file])
-				self.debug_text.setText(f"GMSH: {os.path.basename(gmsh_file)}")
+				_sp.Popen([ext_py, "-c", code, open_file])
+				self.debug_text.setText(f"GMSH: {os.path.basename(open_file)}")
 			else:
-				os.startfile(gmsh_file)
-				self.debug_text.setText(f"Opened: {os.path.basename(gmsh_file)}")
+				os.startfile(open_file)
+				self.debug_text.setText(f"Opened: {os.path.basename(open_file)}")
 		except Exception as e:
 			QMessageBox.warning(self, "Error",
-				f"Failed to open GMSH: {e}\nFile: {gmsh_file}")
+				f"Failed to open GMSH: {e}\nFile: {open_file}")
+
+	def _open_J_distribution(self):
+		"""Open J-distribution (surface current) in GMSH."""
+		gmsh_file = getattr(self, '_gmsh_file_J', '')
+		if not gmsh_file or not os.path.exists(gmsh_file):
+			QMessageBox.warning(self, "Error",
+				"No J-distribution file found. Run Solve first.")
+			return
+		self._launch_gmsh(gmsh_file)
+
+	def _open_B_distribution(self):
+		"""Open B-distribution (volume magnetic field) in GMSH."""
+		gmsh_file = getattr(self, '_gmsh_file_B', '')
+		if not gmsh_file or not os.path.exists(gmsh_file):
+			QMessageBox.warning(self, "Error",
+				"No B-distribution file found. Run Solve first.\n"
+				"B-distribution requires PotentialCF (may not be available).")
+			return
+		self._launch_gmsh(gmsh_file)
 
 	def _get_cub5_path(self):
 		"""Get real cub5 path from Cubit (or fallback to cwd)."""

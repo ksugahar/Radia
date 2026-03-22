@@ -219,6 +219,10 @@ class GmshPostExport:
                         _write_node_data(
                             f, name, ncomp, data, n_nodes, time, timestep)
 
+        # Write companion .geo file for correct high-order display
+        if is_surface and _detect_curve_order(self.mesh) >= 2:
+            _write_companion_geo(filename)
+
         n_fields = len(self._fields)
         mat_str = ', '.join(f'{m}({len(mat_elem_map.get(m, []))})' for m in mat_names)
         print(f"GMSH export: {filename}")
@@ -319,6 +323,10 @@ class GmshPostExport:
                                         for c in range(ncomp))
                         f.write(f'{ni + 1} {vals}\n')
                 f.write('$EndNodeData\n')
+
+        # Write companion .geo file for correct high-order display
+        if is_surface and _detect_curve_order(mesh) >= 2:
+            _write_companion_geo(filename)
 
         print(f"GMSH v2.2 export: {filename}")
         print(f"  {n_elems} elements, {n_nodes} nodes, "
@@ -478,6 +486,22 @@ def _extract_mesh_data_grouped(mesh, is_surface):
                 mat_names.append(mat_name)
 
     return nodes, mat_names, elem_data
+
+
+def _write_companion_geo(msh_filename):
+    """Write a companion .geo file that merges .msh with correct display settings.
+
+    GMSH default Mesh.NumSubEdges=1 draws curved (Tri6) elements as flat.
+    The .geo file sets NumSubEdges=4 for proper curved surface rendering.
+    """
+    import os
+    geo_filename = os.path.splitext(msh_filename)[0] + '.geo'
+    msh_basename = os.path.basename(msh_filename)
+    with open(geo_filename, 'w', encoding='utf-8') as f:
+        f.write(f'// Auto-generated companion for {msh_basename}\n')
+        f.write(f'Merge "{msh_basename}";\n')
+        f.write('Mesh.NumSubEdges = 4;\n')
+    return geo_filename
 
 
 def _detect_curve_order(mesh):
