@@ -205,23 +205,39 @@ def extract_inductance(cub5_file, order, source_label="source",
     L_total = MU_0 * J @ SL @ J
     residual = float(np.max(np.abs(D @ J - g)))
 
-    # --- Phase 3: GMSH with |J| field ---
+    # --- Phase 3: GMSH with |J| scalar + J vector fields ---
     gf_J = GridFunction(fes_J)
     gf_J.vec.FV().NumPy()[:] = J
 
-    elem_J = Integrate(Norm(gf_J), mesh, VOL_or_BND=BND, element_wise=True)
+    # Per-node |J| (scalar) and J (vector) via vertex averaging
+    elem_J_mag = Integrate(Norm(gf_J), mesh, VOL_or_BND=BND, element_wise=True)
     elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
-    ns, nc = np.zeros(nv), np.zeros(nv)
+
+    # J vector components at element centroids
+    elem_Jx = Integrate(gf_J[0], mesh, VOL_or_BND=BND, element_wise=True)
+    elem_Jy = Integrate(gf_J[1], mesh, VOL_or_BND=BND, element_wise=True)
+    elem_Jz = Integrate(gf_J[2], mesh, VOL_or_BND=BND, element_wise=True)
+
+    ns_mag = np.zeros(nv)
+    ns_vec = np.zeros((nv, 3))
+    nc_count = np.zeros(nv)
     for el in mesh.Elements(BND):
-        aj = abs(elem_J[el.nr]) / max(abs(elem_A[el.nr]), 1e-30)
+        a = max(abs(elem_A[el.nr]), 1e-30)
+        mag = abs(elem_J_mag[el.nr]) / a
+        jvec = [elem_Jx[el.nr] / a, elem_Jy[el.nr] / a, elem_Jz[el.nr] / a]
         for vtx in el.vertices:
-            ns[vtx.nr] += aj
-            nc[vtx.nr] += 1
-    node_J = np.where(nc > 0, ns / nc, 0.0)
+            ns_mag[vtx.nr] += mag
+            ns_vec[vtx.nr] += jvec
+            nc_count[vtx.nr] += 1
+
+    node_J_mag = np.where(nc_count > 0, ns_mag / nc_count, 0.0)
+    for k in range(3):
+        ns_vec[:, k] = np.where(nc_count > 0, ns_vec[:, k] / nc_count, 0.0)
 
     try:
         post = GmshPostExport(mesh, boundary=True)
-        post.add_field("|J|", node_J, ncomp=1)
+        post.add_field("|J|", node_J_mag, ncomp=1)
+        post.add_field("J", ns_vec, ncomp=3)
         post.write(gmsh_file)
         sys.stderr.write(f"FIELD_READY:{gmsh_file}\n")
         sys.stderr.flush()
