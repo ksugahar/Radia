@@ -1915,17 +1915,7 @@ int FldFrcShpRtg(py::array_t<double> center, py::array_t<double> dimensions) {
     return handle;
 }
 
-double FldFocPot(int obj, py::array_t<double> p1, py::array_t<double> p2, int np) {
-    auto pt1 = p1.unchecked<1>();
-    auto pt2 = p2.unchecked<1>();
-    double P1[3] = {pt1(0), pt1(1), pt1(2)};
-    double P2[3] = {pt2(0), pt2(1), pt2(2)};
-
-    double d = 0;
-    int err = RadFldFocPot(&d, obj, P1, P2, np);
-    check_error(err);
-    return d;
-}
+// NOTE: FldFocPot REMOVED (2026-03-22).
 
 void FldCmpCrt(double prcB, double prcA, double prcBInt, double prcFrc, double prcTrjCrd, double prcTrjAng) {
     int n = 0;
@@ -3246,20 +3236,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   Shape handle
           )pbdoc");
 
-    m.def("FldFocPot", &radia_field_ext::FldFocPot,
-          py::arg("obj"), py::arg("p1"), py::arg("p2"), py::arg("np"),
-          R"pbdoc(
-              Compute focusing potential (integral of By*dz).
-
-              Args:
-                  obj: Object handle
-                  p1: Start point [x, y, z]
-                  p2: End point [x, y, z]
-                  np: Number of integration points
-
-              Returns:
-                  Focusing potential value
-          )pbdoc");
+    // NOTE: FldFocPot REMOVED (2026-03-22).
 
     m.def("FldCmpCrt", &radia_field_ext::FldCmpCrt,
           py::arg("prcB"), py::arg("prcA"), py::arg("prcBInt"),

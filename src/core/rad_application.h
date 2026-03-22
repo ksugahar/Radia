@@ -375,7 +375,6 @@ public:
 	void ComputeFieldTorqueThroughEnergy(int DestElemKey, int SourceElemKey, char* TorqueComponID, int* SubdArray, long lenSubdivArray, double* TorqueCenPo, long lenTorqueCenPo);
 	inline char CheckForAutoDestSubdivision(double* SubdivArray);
 
-	void ComputeParticleTrajectory(int ElemKey, double E, double x0, double dxdy0, double z0, double dzdy0, double y0, double y1, int Np);
 	void ComputeFocusPotent(int ElemKey, double* StPoi, long lenStPoi, double* FiPoi, long lenFiPoi, int Np);
 	void ComputeFocusKickPer(int ElemKey, double* P1, double* Nlong, double per, double nper, double* N1, double r1, int np1, double r2, int np2, const char* Comment, int nharm, int ns, double d1, double d2, const char* strKickUnit, double inEnergyGeV=0, const char* strOutFormat=0);
 	void ComposeFocusKickPerFormStrRep(double* pKickData1, double* pKickData2, double* pBtE2Int, double* pCoordDir1, double* pCoordDir2, int np1, int np2, double per, int nper, const char* Comment);

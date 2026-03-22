@@ -132,12 +132,10 @@ void FieldEnergy( int, int, int,int,int );
 void FieldForce( int, int );
 void FieldForceThroughEnergy( int, int, char*, int,int,int );
 void FieldTorqueThroughEnergy( int, int, char*, double,double,double, int,int,int );
-void FocusingPotential( int, double,double,double, double,double,double, int );
 //void FocusingKickPer( int, double,double,double, double,double,double, double,int, double,double,double, double,int,double,int, const char*, int,int,double,double );
 void FocusingKickPer( int, double,double,double, double,double,double, double,double, double,double,double, double,int,double,int, const char*, int,int,double,double, const char*, double, const char* ); //OC03112019
 void FocusingKickPerFormStrRep( double*,double*,double*,double*,double*, int,int, double, int, const char* );
 
-void ParticleTrajectory( int, double, double,double,double,double, double,double, int );
 void FieldInt( int, char*, char*, double,double,double, double,double,double );
 void CompCriterium( double, double, double, double, double,double );
 void CompPrecisionOpt( const char*, const char*, const char*, const char*, const char*, const char*, const char*, const char* );
@@ -1126,69 +1124,7 @@ int CALL RadFldFrc(double* pF, int* pNf, int Obj, int Shape)
 	return ErrStat;
 }
 
-//-------------------------------------------------------------------------
-
-int CALL RadFldFocPot(double* d, int Obj, double* P1, double* P2, int np)
-{
-	FocusingPotential(Obj, P1[0], P1[1], P1[2], P2[0], P2[1], P2[2], np);
-
-	*d = ioBuffer.OutDouble();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadFldFocKickPer(double* pMatr1, double* pMatr2, double* pIntBtrE2, double* pArg1, double* pArg2, int* psize, int obj, double* P1, double* Ns, double per, int nper, int nps, double* Ntr, double r1, int np1, double d1, double r2, int np2, double d2, int nh, char* com, char* unit, double en, char* frm) //OC03112019
-//int CALL RadFldFocKickPer(double* pMatr1, double* pMatr2, double* pIntBtrE2, double* pArg1, double* pArg2, int* psize, int obj, double* P1, double* Ns, double per, int nper, int nps, double* Ntr, double r1, int np1, double d1, double r2, int np2, double d2, int nh, char* com)
-{
-	FocusingKickPer(obj, P1[0], P1[1], P1[2], Ns[0], Ns[1], Ns[2], per, nper, Ntr[0], Ntr[1], Ntr[2], r1, np1, r2, np2, com, nh, nps, d1, d2, unit, en, frm); //OC03112019
-	//FocusingKickPer(obj, P1[0], P1[1], P1[2], Ns[0], Ns[1], Ns[2], per, nper, Ntr[0], Ntr[1], Ntr[2], r1, np1, r2, np2, com, nh, nps, d1, d2);
-
-	int ErrStat = ioBuffer.OutErrorStatus();
-	if(ErrStat > 0) return ErrStat;
-
-	long NpKick = np1*np2;
-	//long LenArr = 2*np1*np2 + np1 + np2 + 1;
-	long LenArr = 3*np1*np2 + np1 + np2 + 1;
-
-	double* pAuxBuf = new double[LenArr]; 
-	int Dims[20];
-	int NumDims;
-	ioBuffer.OutMultiDimArrayOfDouble(pAuxBuf, Dims, NumDims);
-
-	double *tAuxBuf = pAuxBuf;
-
-	double *tMatr1 = pMatr1;
-	double *tMatr2 = pMatr2;
-	double *tIntBtrE2 = pIntBtrE2;
-
-	double *tArg1 = pArg1;
-	double *tArg2 = pArg2;
-
-	for(long i=0; i<NpKick; i++) *(tMatr1++) = *(tAuxBuf++);
-	for(long j=0; j<NpKick; j++) *(tMatr2++) = *(tAuxBuf++);
-	for(long ii=0; ii<NpKick; ii++) *(tIntBtrE2++) = *(tAuxBuf++);
-
-	for(long k=0; k<np1; k++) *(tArg1++) = *(tAuxBuf++);
-	for(long m=0; m<np2; m++) *(tArg2++) = *(tAuxBuf++);
-	*psize = (int)(*tAuxBuf + 1.E-10);
-
-	if(pAuxBuf != 0) delete[] pAuxBuf;
-	return ErrStat;
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadFldFocKickPerFormStr(char* OutStr, double* pMatr1, double* pMatr2, double* pIntBtrE2, double* pArg1, double* pArg2, int np1, int np2, double per, int nper, char* com)
-{
-	FocusingKickPerFormStrRep(pMatr1, pMatr2, pIntBtrE2, pArg1, pArg2, np1, np2, per, nper, com);
-	
-	int ErrStat = ioBuffer.OutErrorStatus();
-	if(ErrStat > 0) return ErrStat;
-
-	ioBuffer.OutStringClean(OutStr);
-	return ErrStat;
-}
+// NOTE: RadFldFocPot, RadFldFocKickPer, RadFldFocKickPerFormStr REMOVED (2026-03-22).
 
 //-------------------------------------------------------------------------
 
