@@ -402,18 +402,24 @@ L_total = MU_0 * float(J_vec @ SL @ J_vec)
 print(f"L = {L_total*1e9:.4f} nH")
 ```
 
-## Why High-Order Curving Matters for BEM
+## High-Order Curving: Area vs Inductance
 
-BEM accuracy depends critically on surface geometry fidelity:
+p=2 curving dramatically improves **geometric accuracy** (surface area),
+but BEM inductance accuracy is dominated by **DOF density** (mesh refinement):
 
-| Curve Order | Surface Type | Typical Area Error | L Error |
-|-------------|-------------|-------------------|---------|
-| 1 (linear) | Flat facets | ~1-5% | ~5-15% |
-| 2 (quadratic) | Parabolic patches | ~0.01% | ~0.5% |
-| 3 (cubic) | Near-exact | ~0.001% | ~0.05% |
+| Curve Order | Surface Type | Area Improvement | L Improvement |
+|-------------|-------------|-----------------|--------------|
+| 1 (linear) | Flat facets | baseline | baseline |
+| 2 (quadratic) | Parabolic patches | **4-56x better** | marginal |
 
-`export_NGSolveCurvedMesh(cubit, order=3)` provides cubic-accurate surfaces
-for any geometry shape via ACIS CallbackGeometry.
+**Key finding**: For fixed DOF count, p=2 improves area but not inductance
+significantly. HDivSurface order=0 (RT0) current resolution is the bottleneck.
+Mesh refinement (more DOFs) is more effective for L accuracy.
+
+`export_NGSolveCurvedMesh(cubit, order=2)` provides quadratic-accurate surfaces
+via ACIS CallbackGeometry. order=2 is the recommended default for BEM.
+
+See: `examples/cubit_panels/inductance/demo_curving_effect.py`
 
 ## Tri and Quad Surface Meshes
 
@@ -451,42 +457,53 @@ Use `export_NGSolveCurvedMesh()` for all Cubit-to-NGSolve mesh transfers.
 """
 
 NGBEM_CURVE_ORDER_STUDY = """
-# Curve Order Convergence Study
+# Curve Order Study: Area vs Inductance
 
 ## Purpose
 
-Demonstrates that SetGeomInfo + mesh.Curve(order) directly improves
-BEM inductance accuracy by enabling high-order curved surface elements.
+Demonstrates the effect of mesh curving (p=1 vs p=2) on BEM inductance.
+Both tri (tet mesh) and quad (hex sweep mesh) surfaces are tested.
 
-## Test Case: Circular Loop (Torus)
+## Test Case: Torus (Cubit)
 
 | Parameter | Value |
 |-----------|-------|
 | Major radius R | 50 mm |
 | Minor radius a | 5 mm |
 | R/a ratio | 10 |
-| Analytical L | Neumann formula: L = mu_0*R*(ln(8R/a) - 2) |
+| Analytical L | Neumann: L = mu_0*R*(ln(8R/a) - 2) = 149.7 nH |
 
-## Expected Results
+## Measured Results (Cubit mesh -> export_NGSolveCurvedMesh -> LaplaceSL)
 
-| Curve Order | Surface | Area Error | L Error |
-|------------|---------|------------|---------|
-| 1 (flat) | Polygon | ~2-5% | ~5-15% |
-| 2 (quadratic) | Parabolic | ~0.01% | ~0.5% |
-| 3 (cubic) | Near-exact | ~0.001% | ~0.05% |
+### Tri surface (tet mesh, gap torus)
+
+| interval | p | nse | area_err | L_err | area improvement |
+|----------|---|-----|----------|-------|------------------|
+| 3 | 1 | 2498 | -2.55% | -5.95% | |
+| 3 | 2 | 2498 | -0.36% | -6.37% | 7x |
+| 8 | 1 | 2790 | -1.14% | -4.11% | |
+| 8 | 2 | 2790 | -0.02% | -4.73% | 56x |
+
+### Quad surface (hex sweep, 350-degree torus)
+
+| config | p | nse | area_err | L_err | area improvement |
+|--------|---|-----|----------|-------|------------------|
+| 2x12 | 1 | 368 | -4.92% | -8.30% | |
+| 2x12 | 2 | 368 | -1.16% | -7.79% | 4x |
+| 3x18 | 1 | 784 | -2.86% | -6.20% | |
+| 3x18 | 2 | 784 | -1.18% | -5.71% | 2x |
 
 ## Key Observations
 
-1. **Curve(1) = polygon approximation**: Flat triangles/quads approximate
-   curved surfaces poorly. A circle discretized with N flat segments has
-   area error ~ pi^2/(3*N^2). This directly impacts BEM integral quality.
+1. **p=2 dramatically improves area** (4-56x), confirming curving works.
 
-2. **Curve(2) = quadratic surfaces**: Quadratic interpolation on curved
-   surfaces reduces area error by ~100x. BEM inductance error drops
-   proportionally.
+2. **L accuracy is dominated by DOF density**, not curve order.
+   For fixed DOF count, p=2 doesn't improve L significantly.
+   HDivSurface order=0 (RT0) current resolution is the bottleneck.
 
-3. **Curve(3) = cubic surfaces**: Near-exact geometry. BEM error is
-   dominated by the BEM discretization (RT0 basis), not geometry.
+3. **Mesh refinement is more effective** for L than curving:
+   OCC cs=2.0 (10977 DOF): L_err = -0.6%
+   Cubit 8082 DOF: L_err = -0.1%
 
 ## Analytical References
 
