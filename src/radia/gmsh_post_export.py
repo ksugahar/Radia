@@ -294,14 +294,17 @@ class GmshPostExport:
                 if ncomp is None:
                     ncomp = 1 if arr.ndim == 1 else arr.shape[1]
 
+                # Limit to nodes that have data (vertex nodes only for
+                # high-order meshes where arr has nv entries, not n_nodes)
+                n_data = arr.shape[0]
                 if material is not None:
                     node_set = set()
                     for mn, _, conn, _ in elem_data:
                         if mn == material:
-                            node_set.update(conn)
+                            node_set.update(c for c in conn if c < n_data)
                     out_nodes = sorted(node_set)
                 else:
-                    out_nodes = list(range(n_nodes))
+                    out_nodes = list(range(min(n_nodes, n_data)))
 
                 f.write('$NodeData\n')
                 f.write(f'1\n"{name}"\n')
@@ -400,7 +403,27 @@ def _extract_mesh_data_grouped(mesh, is_surface):
     curve_order = _detect_curve_order(mesh)
     use_highorder = (curve_order >= 2) and is_surface
 
-    # For curved meshes: precompute high-order node positions via GetTrafo
+    # C++ fast path for high-order surface meshes
+    if use_highorder:
+        try:
+            from radia._radia_pybind import _compute_ho_bnd_nodes
+            result = _compute_ho_bnd_nodes(mesh, curve_order)
+            nodes = [tuple(row) for row in result['nodes']]
+            mat_names = []
+            elem_data = []
+            for i in range(len(result['elem_conn'])):
+                mat = result['elem_materials'][i]
+                gtype = result['elem_gmsh_types'][i]
+                conn = result['elem_conn'][i]
+                orig = result['elem_orig_idx'][i]
+                elem_data.append((mat, gtype, conn, orig))
+                if mat not in mat_names:
+                    mat_names.append(mat)
+            return nodes, mat_names, elem_data
+        except ImportError:
+            pass  # Fall back to Python path
+
+    # Python fallback for high-order (if C++ not available)
     elem_ho_nodes = {}
     if use_highorder:
         elem_ho_nodes = _compute_highorder_nodes(
@@ -797,18 +820,23 @@ def _write_elements_grouped(f, mat_names, elem_data, n_elems, dim):
 
 
 def _write_node_data(f, name, ncomp, data, n_nodes, time, timestep):
-    """Write $NodeData section (all nodes)."""
+    """Write $NodeData section (vertex nodes with data only)."""
+    # For high-order meshes, n_nodes > len(data) because data is per-vertex.
+    # Write only nodes that have data.
+    n_data = len(data) if hasattr(data, '__len__') else n_nodes
+    n_out = min(n_nodes, n_data)
+
     f.write('$NodeData\n')
     f.write(f'1\n"{name}"\n')
     f.write(f'1\n{time:.15e}\n')
-    f.write(f'3\n{timestep}\n{ncomp}\n{n_nodes}\n')
+    f.write(f'3\n{timestep}\n{ncomp}\n{n_out}\n')
 
-    for i in range(n_nodes):
+    for i in range(n_out):
         if ncomp == 1:
-            val = float(data[i]) if i < len(data) else 0.0
+            val = float(data[i])
             f.write(f'{i + 1} {val:.15e}\n')
         else:
-            vals = data[i] if i < len(data) else np.zeros(ncomp)
+            vals = data[i]
             val_str = ' '.join(f'{float(v):.15e}' for v in vals)
             f.write(f'{i + 1} {val_str}\n')
 
