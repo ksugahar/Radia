@@ -1831,8 +1831,35 @@ CRITICAL: Do NOT use gmsh.bat or `python -m gmsh` from Cubit's Python.
 - `python -m gmsh` does NOT launch the GUI
 - Only `gmsh.initialize(sys.argv, run=True)` launches the GMSH GUI window
 
-Result .msh contains |J| field (per-node current density magnitude)
-on curved surface elements (Tri6 for Curve(2)).
+Result .msh v2.2 contains two NodeData fields:
+- |J| (ncomp=1): scalar current density magnitude, colormap display
+- J (ncomp=3): vector current density, arrow display on curved surface
+
+IMPORTANT: Vector data must be passed as 2D numpy array shape (nv, 3),
+NOT flatten(). flatten() creates 1D array causing arr[ni,c] IndexError
+in GmshPostExport.write_v22().
+
+```python
+# CORRECT
+post.add_field("J", node_vec, ncomp=3)     # shape (nv, 3)
+
+# WRONG - causes empty NodeData
+post.add_field("J", node_vec.flatten(), ncomp=3)  # shape (nv*3,)
+```
+
+GMSH display: |J| shows current crowding on inner radius of torus bend
+(physically correct: shorter path = higher current density at constant
+voltage across source/sink ports).
+
+### COMSOL Import Workflow
+
+.msh v2.2 with NodeData is directly importable by COMSOL:
+
+1. File > Import > GMSH (.msh v2.2)
+2. Physical Groups ("source", "sink", "boundary") -> COMSOL Selections
+3. NodeData (|J|, J) -> Results > External dataset
+4. Heat Transfer: Q = |J|^2 / sigma as boundary heat source
+5. Lorentz force: F = J x B (vector field from NodeData)
 
 ### Panel Code Reload (No Cubit Restart)
 
