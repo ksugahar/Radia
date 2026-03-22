@@ -1,0 +1,84 @@
+{
+  "timestamp": "2026-03-07T11:36:29.867282",
+  "hostname": "lab",
+  "benchmark": "bench_parallel_setup",
+  "description": "BDDC parallel vs serial setup: 1-thread vs 8-thread",
+  "results": [
+    {
+      "space": "H1",
+      "order": 4,
+      "maxh": 0.08,
+      "ndof": 145923,
+      "elements": 12870,
+      "serial": {
+        "t_setup": 3.8151,
+        "t_solve": 7.2173,
+        "iterations": 21
+      },
+      "parallel_8t": {
+        "t_setup": 2.5579,
+        "t_solve": 7.5313,
+        "iterations": 21
+      },
+      "setup_speedup": 1.49,
+      "peak_memory_mb": 1340.7
+    },
+    {
+      "space": "H1",
+      "order": 5,
+      "maxh": 0.09,
+      "ndof": 126876,
+      "elements": 5573,
+      "serial": {
+        "t_setup": 6.0173,
+        "t_solve": 0.6285,
+        "iterations": 27
+      },
+      "parallel_8t": {
+        "t_setup": 8.7083,
+        "t_solve": 0.6325,
+        "iterations": 27
+      },
+      "setup_speedup": 0.69,
+      "peak_memory_mb": 1414.0
+    },
+    {
+      "space": "HCurl",
+      "order": 3,
+      "maxh": 0.09,
+      "ndof": 149468,
+      "elements": 5573,
+      "serial": {
+        "t_setup": 5.0806,
+        "t_solve": 1.6941,
+        "iterations": 59
+      },
+      "parallel_8t": {
+        "t_setup": 2.6904,
+        "t_solve": 3.0575,
+        "iterations": 59
+      },
+      "setup_speedup": 1.89,
+      "peak_memory_mb": 1652.9
+    },
+    {
+      "space": "HCurl",
+      "order": 4,
+      "maxh": 0.12,
+      "ndof": 191690,
+      "elements": 3568,
+      "serial": {
+        "t_setup": 14.1903,
+        "t_solve": 2.4659,
+        "iterations": 62
+      },
+      "parallel_8t": {
+        "t_setup": 4.1236,
+        "t_solve": 3.0795,
+        "iterations": 61
+      },
+      "setup_speedup": 3.44,
+      "peak_memory_mb": 3286.2
+    }
+  ]
+}

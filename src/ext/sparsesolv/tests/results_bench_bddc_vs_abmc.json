@@ -1,0 +1,108 @@
+{
+  "timestamp": "2026-03-07T11:38:34.015465",
+  "hostname": "lab",
+  "benchmark": "bench_bddc_vs_abmc",
+  "description": "BDDC vs ABMC+ICCG: setup, solve, iterations for HCurl",
+  "results": [
+    {
+      "order": 2,
+      "maxh": 0.08,
+      "sigma": 1.0,
+      "ndof": 130323,
+      "elements": 12870,
+      "bddc": {
+        "t_setup": 1.9066,
+        "t_solve": 0.8117,
+        "iterations": 36
+      },
+      "iccg": {
+        "t_setup": 2.0029,
+        "t_solve": 296.8372,
+        "iterations": 386
+      },
+      "ratio_total_bddc_over_iccg": 0.009,
+      "winner": "BDDC",
+      "peak_memory_mb": 1044.2
+    },
+    {
+      "order": 3,
+      "maxh": 0.09,
+      "sigma": 1.0,
+      "ndof": 149468,
+      "elements": 5573,
+      "bddc": {
+        "t_setup": 2.2098,
+        "t_solve": 1.4579,
+        "iterations": 59
+      },
+      "iccg": {
+        "t_setup": 4.0832,
+        "t_solve": 8.2544,
+        "iterations": 284
+      },
+      "ratio_total_bddc_over_iccg": 0.297,
+      "winner": "BDDC",
+      "peak_memory_mb": 1645.2
+    },
+    {
+      "order": 4,
+      "maxh": 0.12,
+      "sigma": 1.0,
+      "ndof": 191690,
+      "elements": 3568,
+      "bddc": {
+        "t_setup": 3.5212,
+        "t_solve": 2.3788,
+        "iterations": 62
+      },
+      "iccg": {
+        "t_setup": 19.3028,
+        "t_solve": 19.0329,
+        "iterations": 359
+      },
+      "ratio_total_bddc_over_iccg": 0.154,
+      "winner": "BDDC",
+      "peak_memory_mb": 3272.2
+    },
+    {
+      "order": 2,
+      "maxh": 0.08,
+      "sigma": 100.0,
+      "ndof": 130323,
+      "elements": 12870,
+      "bddc": {
+        "t_setup": 2.5365,
+        "t_solve": 0.6603,
+        "iterations": 37
+      },
+      "iccg": {
+        "t_setup": 0.9486,
+        "t_solve": 1.2585,
+        "iterations": 87
+      },
+      "ratio_total_bddc_over_iccg": 1.448,
+      "winner": "ICCG",
+      "peak_memory_mb": 3272.2
+    },
+    {
+      "order": 3,
+      "maxh": 0.09,
+      "sigma": 100.0,
+      "ndof": 149468,
+      "elements": 5573,
+      "bddc": {
+        "t_setup": 2.0502,
+        "t_solve": 1.09,
+        "iterations": 59
+      },
+      "iccg": {
+        "t_setup": 4.0128,
+        "t_solve": 2.0799,
+        "iterations": 76
+      },
+      "ratio_total_bddc_over_iccg": 0.515,
+      "winner": "BDDC",
+      "peak_memory_mb": 3272.2
+    }
+  ]
+}

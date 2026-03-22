@@ -1,0 +1,68 @@
+{
+  "timestamp": "2026-03-07T11:33:11.173785",
+  "hostname": "lab",
+  "benchmark": "bench_ngsolve_vs_sparsesolv",
+  "description": "NGSolve BDDC vs SparseSolv BDDC: setup, solve, iterations",
+  "results": [
+    {
+      "order": 2,
+      "maxh": 0.08,
+      "sigma": 1.0,
+      "ndof": 130323,
+      "elements": 12870,
+      "ngsolve": {
+        "t_setup": 5.4213,
+        "t_solve": 0.8871,
+        "iterations": 36
+      },
+      "sparsesolv": {
+        "t_setup": 4.4257,
+        "t_solve": 0.6414,
+        "iterations": 36
+      },
+      "ratio_total": 0.803,
+      "solution_rel_diff": 4.83e-11,
+      "peak_memory_mb": 1152.2
+    },
+    {
+      "order": 3,
+      "maxh": 0.09,
+      "sigma": 1.0,
+      "ndof": 149468,
+      "elements": 5573,
+      "ngsolve": {
+        "t_setup": 5.9616,
+        "t_solve": 1.3029,
+        "iterations": 59
+      },
+      "sparsesolv": {
+        "t_setup": 2.7106,
+        "t_solve": 1.3746,
+        "iterations": 59
+      },
+      "ratio_total": 0.562,
+      "solution_rel_diff": 8.57e-10,
+      "peak_memory_mb": 1803.4
+    },
+    {
+      "order": 4,
+      "maxh": 0.12,
+      "sigma": 1.0,
+      "ndof": 191690,
+      "elements": 3568,
+      "ngsolve": {
+        "t_setup": 11.2503,
+        "t_solve": 11.4415,
+        "iterations": 62
+      },
+      "sparsesolv": {
+        "t_setup": 11.8021,
+        "t_solve": 3.0929,
+        "iterations": 62
+      },
+      "ratio_total": 0.656,
+      "solution_rel_diff": 0.00445,
+      "peak_memory_mb": 3612.6
+    }
+  ]
+}
