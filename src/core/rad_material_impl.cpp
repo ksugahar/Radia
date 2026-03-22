@@ -828,6 +828,50 @@ int radTApplication::MatHysCommitState(int MaterElemKey)
 	catch(...) { Initialize(); return -1; }
 }
 
+int radTApplication::MatHysGetNuRev(int MaterElemKey, double* pNuRev)
+{
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(MaterElemKey, hg)) return -1;
+
+		radTMaterial* MaterPtr = Cast.MaterCast(hg.rep);
+		if(MaterPtr==nullptr) return -1;
+
+		radTPlayHysteresisMaterial* PlayPtr = dynamic_cast<radTPlayHysteresisMaterial*>(MaterPtr);
+		if(PlayPtr!=nullptr) { *pNuRev = PlayPtr->GetNuRev(); return 0; }
+
+		*pNuRev = 0;
+		return -1;
+	}
+	catch(...) { Initialize(); return -1; }
+}
+
+int radTApplication::MatHysIrreversible(int MaterElemKey, double* pB, double* pHirr)
+{
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(MaterElemKey, hg)) return -1;
+
+		radTMaterial* MaterPtr = Cast.MaterCast(hg.rep);
+		if(MaterPtr==nullptr) return -1;
+
+		radTPlayHysteresisMaterial* PlayPtr = dynamic_cast<radTPlayHysteresisMaterial*>(MaterPtr);
+		if(PlayPtr!=nullptr)
+		{
+			TVector3d B(pB[0], pB[1], pB[2]);
+			TVector3d Hirr = PlayPtr->Irreversible(B);
+			pHirr[0] = Hirr.x; pHirr[1] = Hirr.y; pHirr[2] = Hirr.z;
+			return 0;
+		}
+
+		pHirr[0] = pHirr[1] = pHirr[2] = 0;
+		return -1;
+	}
+	catch(...) { Initialize(); return -1; }
+}
+
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 

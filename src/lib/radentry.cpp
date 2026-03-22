@@ -87,7 +87,6 @@ void MvsH( int, char*, double,double,double );
 int MatHysSaveState( int, double*, int* );
 int MatHysRestoreState( int, const double*, int );
 int MatHysCommitState( int );
-
 void PreRelax( int, int );
 void ShowInteractMatrix(int);
 int GetInteractMatrix(int, double*, int*);
@@ -868,6 +867,18 @@ int CALL RadMatHysRestoreState(int mat, const double* pState, int Len)
 int CALL RadMatHysCommitState(int mat)
 {
 	return MatHysCommitState(mat);
+}
+
+extern int MatHysGetNuRev(int, double*);
+int CALL RadMatHysGetNuRev(int mat, double* pNuRev)
+{
+	return MatHysGetNuRev(mat, pNuRev);
+}
+
+extern int MatHysIrreversible(int, double*, double*);
+int CALL RadMatHysIrreversible(int mat, double* pB, double* pHirr)
+{
+	return MatHysIrreversible(mat, pB, pHirr);
 }
 
 //-------------------------------------------------------------------------

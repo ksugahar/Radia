@@ -325,6 +325,8 @@ public:
 	int MatHysSaveState(int MaterElemKey, double* pState, int* pLen);
 	int MatHysRestoreState(int MaterElemKey, const double* pState, int Len);
 	int MatHysCommitState(int MaterElemKey);
+	int MatHysGetNuRev(int MaterElemKey, double* pNuRev);
+	int MatHysIrreversible(int MaterElemKey, double* pB, double* pHirr);
 
 	int PreRelax(int ElemKey, int SrcElemKey, char skipDenseMatrix=0);
 	int SetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
