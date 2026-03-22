@@ -1300,26 +1300,35 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 
 ## Visualization Policy
 
-### Standard Output Format: GMSH .msh v4.1
+### NGSolve-Through Principle
 
-**POLICY**: The standard field output format for this fork of Radia is **GMSH .msh v4.1** via `GmshPostExport`. All field visualization (BEM, FEM, Radia) should use this format.
+**POLICY**: NGSolve を経由すれば済む問題は、NGSolve を経由するワークフローとする。Radia 独自のポスト処理機能は作らない。
 
-**Why GMSH, not VTK/VTS**:
-- GMSH natively supports **high-order elements** (Tri6, Tri10, Tri15, ..., arbitrary p)
-- VTK approximates high-order elements as linear facets — no curved surface rendering
-- GMSH has per-material Physical Groups for selective field display
-- GMSH .msh is both input (v2.2 → NGSolve) and output (v4.1 ← NGSolve) format
+- **幾何形状**: STEP 出力 → GMSH GUI で読み込み
+- **磁場ポスト**: NGSolve GridFunction → GmshPostExport (.msh v4.1) → GMSH GUI
+- **rad.Fld()**: デバッグ・確認用（ポストには使わない）
+- **rad.FldVTS()**: レガシー（新規ワークフローでは使わない）
 
-| Purpose | Tool |
-|---------|------|
-| **Standard field output** | **GmshPostExport** (.msh v4.1) -> GMSH GUI |
-| Radia structured grid | `rad.FldVTS()` (legacy, VTS format) |
-| Geometry | Netgen OCC + NGSolve Draw() |
-| Interactive | NGSolve webgui, Netgen GUI |
+**Why**: NGSolve 経由なら構造格子に限定されない。非構造メッシュ上で高次要素の精度を保ったまま場を評価・出力できる。
+
+| 用途 | ツール | 出力 |
+|------|--------|------|
+| **幾何形状** | CoilBuilder.write_step(), OCC shapes | **.step** → GMSH |
+| **磁場ポスト** | NGSolve GridFunction → **GmshPostExport** | **.msh v4.1** → GMSH |
+| 確認用 | `rad.Fld()` (点評価) | スクリプト内のみ |
+| レガシー | `rad.FldVTS()` (構造格子) | .vts → ParaView |
 
 **Do NOT** implement custom visualization in Radia C++ code.
 
 **Removed APIs**: `rad.ObjDrwVTK()`, `exportGeometryToVTK()`, `radia_pyvista_viewer.py`.
+
+### Standard Output Format: GMSH .msh v4.1
+
+GMSH を可視化ツールとして使用する理由:
+- **高次要素ネイティブ対応** (Tri6, Tri10, Tri15, ..., arbitrary p)
+- **STEP ファイルを直接読み込み** → 幾何形状と磁場を重ねて表示
+- Per-material Physical Groups で材料別表示
+- .msh v2.2 (NGSolve 入力) と v4.1 (出力) の両方をサポート
 
 ### GmshPostExport: High-Order Field Visualization
 
@@ -1356,30 +1365,17 @@ post.write("results.msh")
 
 **GMSH display setting**: `Mesh.NumSubEdges = 4` required to render curved surfaces (default=1 draws straight lines). Set via GMSH console: `Mesh.NumSubEdges = 4;`
 
-### VTS Field Export (Legacy, Radia Structured Grid)
-
-`rad.FldVTS()` outputs structured grid VTS files. Use only for Radia's own structured grid evaluation (not for mesh-based fields).
-
-```python
-rad.FldVTS(magnet, 'field_output.vts',
-           [-0.1, 0.1], [-0.1, 0.1], [0.02, 0.15],
-           41, 41, 27, 1, 0, 1.0)
-```
-
-### Visualization Stack
+### Visualization Workflow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Visualization Framework                       │
-├─────────────────────────────────────────────────────────────────┤
-│  Geometry (CAD)        │  Field Data          │  Interactive    │
-│  ──────────────────────│─────────────────────│────────────────│
-│  Netgen OCC shapes     │  GmshPostExport     │  NGSolve Draw() │
-│  STEP import (Cubit)   │  (standard output)  │  Netgen GUI     │
-│  ObjRecMag -> OCC      │  rad.FldVTS(legacy) │  webgui         │
-│                        │                     │  GMSH GUI       │
-└─────────────────────────────────────────────────────────────────┘
+GMSH GUI:
+  Merge "coil.step"        ← CoilBuilder.write_step()
+  Merge "magnet.step"      ← OCC shape → STEP
+  Merge "field.msh"        ← NGSolve → GmshPostExport (.msh v4.1)
+  → 幾何形状 + 磁場を重ねて可視化
 ```
+
+**Design principle**: Radia C++ に可視化コードを持たない。NGSolve + GMSH に任せる。少人数で最大の成果を出すため。
 
 ---
 
