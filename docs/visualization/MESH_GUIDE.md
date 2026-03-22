@@ -422,14 +422,12 @@ The Netgen GUI renders **surface elements**, not volume elements directly:
 - You need to visualise field data (B, H, etc.).
 - You need publication-quality figures.
 
-### 4.5 Workaround: ParaView slice / clip (recommended for volume-only meshes)
 
 ```python
 # 1. Export to VTS
 import radia as rad
 
 # 2. Open in ParaView
-paraview field.vts
 
 # 3. Filters > Slice
 #    - Origin: [0, 0, 0.05]
@@ -442,13 +440,10 @@ paraview field.vts
 #    - Apply
 ```
 
-### 4.6 Workaround: PyVista slice / clip
 
 ```python
-import pyvista as pv
 
 # Load VTS
-grid = pv.read('field.vts')
 
 # Create slice at z=0.05 m
 slice_z = grid.slice(normal='z', origin=[0, 0, 0.05])

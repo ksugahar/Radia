@@ -11,7 +11,6 @@ Comprehensive collection of Radia examples demonstrating magnetic field computat
 ```bash
 cd examples/simple_problems
 python arc_current_with_magnet.py
-paraview arc_current_with_magnet.vts
 ```
 
 ---
@@ -49,7 +48,6 @@ paraview arc_current_with_magnet.vts
 |-----------|---------|-------------|
 | [ngsolve_integration/](ngsolve_integration/) | 14 | RadiaField CoefficientFunction, field types, mesh convergence |
 | [KelvinTransformation/](KelvinTransformation/) | 96 | Kelvin transformation for unbounded domains (H/A formulation, adaptive mesh) |
-| [beam_tracking/](beam_tracking/) | 2 | Particle trajectory in magnetic fields |
 
 ### PEEC Conductor Modeling
 
