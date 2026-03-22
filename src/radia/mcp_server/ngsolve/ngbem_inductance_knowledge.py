@@ -53,20 +53,26 @@ Cubit / Netgen OCC
   |
   | export mesh (tet/hex volume or surface-only)
   v
-NGSolve Mesh
+NGSolve Mesh (1st order from Cubit, curved by Netgen via mesh.Curve(p))
   |
   | HDivSurface(mesh, order=0)  -- RT0 surface current basis
   v
-ngsolve.bem operators (LaplaceSL)
+ngsolve.bem operators (LaplaceSL, use_fmm=False)
   |
-  | L_ij = mu_0 * <LaplaceSL(J_j), J_i>  -- BEM inductance matrix
+  | SL = L_op.mat.ToDense().NumPy()  -- dense matrix extraction
   v
-Dense matrix extraction
+Energy method: L = mu_0 * J^T * SL * J  (for I=1 toroidal current)
   |
-  | L_total = 1 / (e^T @ L^{-1} @ e)  -- uniform current excitation
   v
 Self-inductance [H]
 ```
+
+### Port Detection
+
+| Cubit Blocks | Mode | Description |
+|-------------|------|-------------|
+| `source` + `sink` | **1-port** | Gap conductor (current in at source, out at sink) |
+| No `sink` block | **loop** | Closed loop (e.g., complete torus) |
 
 ## Key Concept: Laplace Single Layer for Inductance
 
@@ -222,58 +228,78 @@ mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3, surface_only=T
 # ngmesh.RebuildSurfaceElementLists()
 ```
 
-## PITFALL: Do NOT Use TaskManager with LaplaceSL
+## CRITICAL: TaskManager + use_fmm=False (Joachim Schoeberl, 2026-03-22)
 
-TaskManager is NOT thread-safe for LaplaceSL operator construction.
-Using `with TaskManager():` causes non-deterministic results —
-the L matrix sign flips randomly (~1 in 3 runs).
+**use_fmm=False** is required for:
+1. Reproducible results (FMM causes non-deterministic floating-point summation)
+2. Faster dense matrix extraction (FMM recomputes farfield on every MatVec)
+
+**TaskManager** must be used for BOTH setup and extraction, or neither:
 
 ```python
-# WRONG: TaskManager causes random sign flips
+# CORRECT: TaskManager wraps both setup and extraction, use_fmm=False
 with TaskManager():
-    L_op = LaplaceSL(u.Trace() * ds) * v.Trace() * ds  # non-deterministic!
+    L_op = LaplaceSL(u.Trace() * ds, use_fmm=False) * v.Trace() * ds
+    SL = L_op.mat.ToDense().NumPy()  # Optimized dense extraction
 
-# CORRECT: No TaskManager for BEM operators
-L_op = LaplaceSL(u.Trace() * ds) * v.Trace() * ds  # deterministic
+# WRONG: TaskManager only for setup, or use_fmm=True (non-deterministic)
+with TaskManager():
+    L_op = LaplaceSL(u.Trace() * ds) * v.Trace() * ds  # FMM default -> fluctuates
 ```
 
-TaskManager is fine for FEM (BilinearForm.Assemble), but NOT for BEM.
+## Dense Matrix Extraction: ToDense()
 
-## Dense Matrix Extraction
-
-ngsolve.bem returns a `BaseMatrix` object. Extract to NumPy for post-processing:
+Use `ToDense().NumPy()` (optimized for BEM operators), NOT manual column-by-column:
 
 ```python
-def extract_dense_matrix(mat, n):
-    M = np.zeros((n, n))
-    ei = mat.CreateColVector()
-    col = mat.CreateColVector()
-    for i in range(n):
-        ei[:] = 0
-        ei[i] = 1.0
-        mat.Mult(ei, col)
-        for j in range(n):
-            M[j, i] = col[j]
-    return M
+# CORRECT: ToDense() (fast, optimized)
+with TaskManager():
+    L_op = LaplaceSL(u.Trace() * ds, use_fmm=False) * v.Trace() * ds
+    SL = L_op.mat.ToDense().NumPy()
 
-L_dense = extract_dense_matrix(L_op.mat, fes.ndof)
-L_matrix = MU_0 * L_dense  # Scale by mu_0
+# WRONG: Manual column-by-column (slow, FMM recomputes each MatVec)
+for i in range(n):
+    ei[:] = 0; ei[i] = 1.0
+    L_op.mat.Mult(ei, col)  # Recomputes BEM integrals each call!
 ```
 
-## Self-Inductance from L Matrix
+## Self-Inductance: Energy Method
 
-For a single conductor with uniform current excitation:
+**CRITICAL**: Do NOT use `L = 1/(e^T L^{-1} e)` with uniform excitation.
+This formula diverges with mesh refinement (794% error at 4185 DOFs).
+
+Use the **energy method** instead:
 
 ```python
-e = np.ones(n_dof) / n_dof  # Uniform excitation vector
-L_inv_e = np.linalg.solve(L_matrix, e)
-L_total = 1.0 / (e @ L_inv_e)  # [Henry]
+# Energy method: L = mu_0 * J^T * SL * J  (for I=1)
+from ngsolve import sqrt, x, y, z
+
+# Toroidal current for I=1: J = e_phi / (2*pi*a)
+r_cf = sqrt(x*x + y*y)
+J_toroidal = CF((-y/r_cf, x/r_cf, 0)) / (2 * math.pi * a)
+
+# Project onto HDivSurface
+gf_J = GridFunction(fes)
+gf_J.Set(J_toroidal, definedon=mesh.Boundaries(".*"), dual=True)
+J_vec = gf_J.vec.FV().NumPy().copy()
+
+# L = mu_0 * J^T * SL * J  (no matrix inversion needed!)
+L_total = MU_0 * float(J_vec @ SL @ J_vec)
 ```
 
-Physical interpretation:
-- `L_matrix[i,j]` = partial inductance between surface element i and j
-- `L_total = 1 / (e^T @ L^{-1} @ e)` = total inductance under uniform current
-- This is the **network inductance** (parallel combination of all paths)
+**Why the old formula fails**: `e = ones(n)/n` is not a physical current
+in HDivSurface DOFs (edge normal fluxes). The energy method uses a
+properly projected toroidal current distribution.
+
+**Verified convergence** (R=50mm, a=5mm torus):
+
+| Mesh | ndof | L (BEM) | L (Neumann) | Error |
+|------|------|---------|-------------|-------|
+| OCC cs=0.5 | 269 | 106.5 nH | 149.7 nH | -28.9% |
+| OCC cs=1.0 | 1,790 | 142.1 nH | 149.7 nH | -5.0% |
+| OCC cs=2.0 | 10,977 | 148.7 nH | 149.7 nH | -0.6% |
+| Cubit (4611 DOF) | 4,611 | 148.7 nH | 149.7 nH | -0.7% |
+| Cubit (8082 DOF) | 8,082 | 149.5 nH | 149.7 nH | -0.1% |
 
 ## Boundary Label Selection
 
@@ -324,7 +350,8 @@ handles everything via Cubit's ACIS kernel + CallbackGeometry.
 import sys, os, math, numpy as np
 
 # Import NGSolve BEFORE Cubit (DLL conflict avoidance)
-from ngsolve import Mesh, Integrate, CF, BND, HDivSurface, ds
+from ngsolve import (Mesh, Integrate, CF, BND, HDivSurface, TaskManager,
+                     GridFunction, ds, sqrt, x, y, z)
 from ngsolve.bem import LaplaceSL
 
 cubit_path = os.environ.get("CUBIT_PATH")
@@ -334,6 +361,8 @@ import cubit
 import cubit_mesh_export
 
 MU_0 = 4.0 * math.pi * 1e-7
+R = 0.05   # Major radius [m]
+a = 0.005  # Minor radius [m]
 
 # --- Step 1: Create geometry ---
 cubit.init(['cubit', '-nojournal', '-batch'])
@@ -342,34 +371,34 @@ cubit.cmd(f"create torus major radius {R} minor radius {a}")
 
 # --- Step 2-3: Mesh and define blocks ---
 cubit.cmd("volume all scheme tetmesh")
-cubit.cmd(f"volume all size {mesh_size}")
+cubit.cmd(f"volume all size {a/2}")
 cubit.cmd("mesh volume all")
-cubit.cmd("block 1 add tet all")
-cubit.cmd('block 1 name "domain"')
-cubit.cmd("block 2 add tri all")
+cubit.cmd('block 1 add volume 1')
+cubit.cmd('block 2 add tri all')
 cubit.cmd('block 2 name "conductor"')
 
-# --- Step 4: Export with curving (single function call) ---
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+# --- Step 4: Export with curving (1st order mesh, curved by Netgen) ---
+mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
+    cubit, order=2, surface_only=True, split_quads=True)
 
-# --- Step 5: BEM inductance ---
+# --- Step 5: BEM inductance (energy method) ---
 fes = HDivSurface(mesh, order=0)
-j_trial = fes.TrialFunction()
-j_test = fes.TestFunction()
+u, v = fes.TnT()
 
-L_op = LaplaceSL(
-    j_trial.Trace() * ds("conductor")
-) * j_test.Trace() * ds("conductor")
+# Toroidal current for I=1
+r_cf = sqrt(x*x + y*y)
+J_tor = CF((-y/r_cf, x/r_cf, 0)) / (2 * math.pi * a)
+gf_J = GridFunction(fes)
+gf_J.Set(J_tor, definedon=mesh.Boundaries(".*"), dual=True)
+J_vec = gf_J.vec.FV().NumPy().copy()
 
-# Extract and solve
-n = fes.ndof
-L_dense = extract_dense_matrix(L_op.mat, n)
-L_matrix = MU_0 * L_dense
+# LaplaceSL + ToDense (use_fmm=False for speed and reproducibility)
+with TaskManager():
+    L_op = LaplaceSL(u.Trace() * ds, use_fmm=False) * v.Trace() * ds
+    SL = L_op.mat.ToDense().NumPy()
 
-e = np.ones(n) / n
-L_inv_e = np.linalg.solve(L_matrix, e)
-L_total = 1.0 / (e @ L_inv_e)
-
+# Energy method: L = mu_0 * J^T * SL * J
+L_total = MU_0 * float(J_vec @ SL @ J_vec)
 print(f"L = {L_total*1e9:.4f} nH")
 ```
 
@@ -386,22 +415,33 @@ BEM accuracy depends critically on surface geometry fidelity:
 `export_NGSolveCurvedMesh(cubit, order=3)` provides cubic-accurate surfaces
 for any geometry shape via ACIS CallbackGeometry.
 
-## Hex Mesh with Quad Surfaces
+## Tri and Quad Surface Meshes
 
-For hex meshes, the boundary consists of **quad** surface elements.
-export_NGSolveCurvedMesh() handles curving for quads as well as triangles:
+BEM supports both tri (from tet mesh) and quad (from hex mesh) surfaces.
+`export_NGSolveCurvedMesh(split_quads=True)` splits quads into triangles
+for ngsolve.bem compatibility (HDivSurface requires triangles).
 
-```cubit
-volume all scheme sweephex
-mesh volume all
-block 1 add hex all
-block 1 name "domain"
-block 2 add quad all
-block 2 name "conductor"
+```python
+# Tet mesh -> tri surface
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("mesh volume all")
+cubit.cmd("block 2 add tri all")
+
+# Hex mesh -> quad surface (split to tri for BEM)
+cubit.cmd("volume all scheme sweep")
+cubit.cmd("mesh volume all")
+cubit.cmd("block 2 add face all")  # quad elements
+
+# Export handles both:
+mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
+    cubit, order=2, surface_only=True, split_quads=True)
 ```
 
-High-order quad surfaces have better approximation properties than
-triangles for smooth doubly-curved surfaces (e.g., torus, sphere).
+Register **both** tri and face blocks to support mixed meshes:
+```python
+cubit.cmd("block 2 add tri all")   # from tet volumes
+cubit.cmd("block 2 add face all")  # from hex volumes (Cubit silently skips if none)
+```
 
 ## Deleted APIs
 
@@ -574,102 +614,70 @@ Standalone example using Netgen OCC to create a torus (no Cubit needed):
 import math
 import numpy as np
 from netgen.occ import WorkPlane, Axes, Axis, Pnt, Dir, OCCGeometry
-from ngsolve import Mesh, HDivSurface, TaskManager, ds, Integrate, CF, BND
+from netgen.meshing import MeshingParameters
+from ngsolve import (Mesh, HDivSurface, TaskManager, ds, Integrate,
+                     CF, BND, GridFunction, sqrt, x, y, z)
 from ngsolve.bem import LaplaceSL
 
 MU_0 = 4.0 * math.pi * 1e-7
-
-# Parameters
-R = 0.05       # Loop radius: 50 mm
-a = 0.002      # Wire radius: 2 mm
+R, a = 0.05, 0.005  # Major/minor radius [m]
 
 # Analytical reference
 L_ref = MU_0 * R * (math.log(8.0 * R / a) - 2.0)
-print(f"Analytical L = {L_ref*1e9:.2f} nH")
 
 # Create torus mesh via OCC
 wp = WorkPlane(Axes(p=Pnt(R, 0, 0), n=Dir(0, 1, 0), h=Dir(0, 0, 1)))
 circle = wp.Circle(a).Face()
-circle.name = "coil"
 torus = circle.Revolve(Axis(p=Pnt(0, 0, 0), d=Dir(0, 0, 1)), 360)
-
 geo = OCCGeometry(torus)
-ngmesh = geo.GenerateMesh(maxh=a * 1.5)
+ngmesh = geo.GenerateMesh(mp=MeshingParameters(maxh=1.0, curvaturesafety=1.0))
 mesh = Mesh(ngmesh)
-mesh.Curve(3)
 
-# BEM inductance
+# BEM inductance (energy method)
 fes = HDivSurface(mesh, order=0)
-j_trial = fes.TrialFunction()
-j_test = fes.TestFunction()
+u, v = fes.TnT()
+
+r_cf = sqrt(x*x + y*y)
+J_tor = CF((-y/r_cf, x/r_cf, 0)) / (2 * math.pi * a)
+gf_J = GridFunction(fes)
+gf_J.Set(J_tor, definedon=mesh.Boundaries(".*"), dual=True)
+J_vec = gf_J.vec.FV().NumPy().copy()
 
 with TaskManager():
-    L_op = LaplaceSL(
-        j_trial.Trace() * ds("coil")
-    ) * j_test.Trace() * ds("coil")
+    L_op = LaplaceSL(u.Trace() * ds, use_fmm=False) * v.Trace() * ds
+    SL = L_op.mat.ToDense().NumPy()
 
-# Extract dense matrix
-n = fes.ndof
-M = np.zeros((n, n))
-ei = L_op.mat.CreateColVector()
-col = L_op.mat.CreateColVector()
-for i in range(n):
-    ei[:] = 0; ei[i] = 1.0
-    L_op.mat.Mult(ei, col)
-    for j in range(n):
-        M[j, i] = col[j]
-
-L_matrix = MU_0 * M
-
-# Total inductance
-e = np.ones(n) / n
-L_inv_e = np.linalg.solve(L_matrix, e)
-L_total = 1.0 / (e @ L_inv_e)
-
+L_total = MU_0 * float(J_vec @ SL @ J_vec)
 error = abs(L_total - L_ref) / abs(L_ref) * 100
-print(f"BEM L = {L_total*1e9:.2f} nH (error: {error:.1f}%)")
+print(f"BEM L = {L_total*1e9:.2f} nH (ref: {L_ref*1e9:.2f} nH, error: {error:.1f}%)")
 ```
 
-## Example 2: Cubit Torus with Curve Order Study
+## Example 2: Cubit Torus with Source/Sink Port Detection
 
-See `Radia/examples/cubit/netgen_torus_bem_inductance.py`
+See `Radia/examples/cubit_panels/inductance/test_bem_inductance.py`
 
 Key workflow:
 ```python
-# Cubit: create and mesh torus
+# Cubit: create torus with gap, mesh
 cubit.cmd(f"create torus major radius {R} minor radius {a}")
+cubit.cmd(f"brick x {3*a} y {gap} z {3*a}")
+cubit.cmd(f"move Volume 2 x {R} y 0 z 0 include_merged")
+cubit.cmd("subtract volume 2 from volume 1")
 cubit.cmd("volume all scheme tetmesh")
-cubit.cmd(f"volume all size {mesh_size}")
 cubit.cmd("mesh volume all")
-cubit.cmd('block 1 add tet all; block 1 name "domain"')
-cubit.cmd('block 2 add tri all; block 2 name "conductor"')
 
-# Export with curving (single function call)
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
-# ... compute area, volume, BEM inductance ...
-```
+# Register blocks with source/sink
+cubit.cmd('block 1 add volume 1; block 1 name "conductor"')
+cubit.cmd('block 2 add tri all;  block 2 name "boundary"')
+cubit.cmd('block 3 add tri in surface {source_sid}; block 3 name "source"')
+cubit.cmd('block 4 add tri in surface {sink_sid};   block 4 name "sink"')
 
-## Example 3: Surface Area Verification
+# Export with curving (1st order mesh, curved by Netgen)
+mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
+    cubit, order=2, surface_only=True, split_quads=True)
 
-Quick test to verify export_NGSolveCurvedMesh works correctly:
-
-```python
-from ngsolve import Integrate, CF, BND
-
-# export_NGSolveCurvedMesh handles curving automatically
-for order in [1, 2, 3]:
-    mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
-    area = Integrate(CF(1), mesh, VOL_or_BND=BND)
-    area_ref = 4 * math.pi**2 * R * a  # Torus analytical area
-    err = abs(area - area_ref) / area_ref * 100
-    print(f"order={order}: area error = {err:.4f}%")
-```
-
-Expected output:
-```
-Curve(1): area error = 2.1234%    <- polygon approximation
-Curve(2): area error = 0.0123%    <- quadratic surfaces
-Curve(3): area error = 0.0006%    <- cubic (near-exact)
+# Energy method
+L_total = MU_0 * float(J_vec @ SL @ J_vec)
 ```
 """
 
@@ -751,13 +759,13 @@ mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
 
 - BEM matrix assembly is O(N^2) where N = number of surface DOFs
 - For N > 5000, assembly time becomes significant (minutes)
-- **Do NOT use TaskManager() with BEM operators** — it produces non-deterministic
-  results (floating-point summation order varies between threads). Fluctuation
-  grows with thread count (~1.4% at 8 threads) and provides no speedup.
-  TaskManager with SetNumThreads(1) is deterministic but pointless.
-- Dense matrix extraction via column-by-column mat.Mult() recomputes BEM integrals
-  on every call (~5 ms/mat-vec). For 1000 DOFs this means ~5 seconds for extraction
-  alone. No preassembled dense access is currently available in ngsolve.bem.
+- **use_fmm=False**: Required for dense extraction. FMM recomputes farfield on
+  every MatVec; without FMM, the whole operator is nearfield (computed once).
+  Dense extraction is much faster with use_fmm=False.
+- **ToDense().NumPy()**: Use this instead of manual column-by-column extraction.
+  Optimized for BEM operators (Joachim Schoeberl recommendation).
+- **TaskManager**: Wrap BOTH setup and extraction, or neither. FMM parallelization
+  bug causes non-deterministic results (Rafael fixing); use_fmm=False avoids this.
 - For very large problems, consider H-matrix acceleration (future ngsolve.bem feature)
 
 ## Standard Output Format: GMSH .msh v4.1
@@ -900,10 +908,10 @@ L = mu_0 * R * (ln(8*R/a) - 2)
 
 | R [mm] | a [mm] | R/a | L [nH] |
 |--------|--------|-----|--------|
-| 50 | 5 | 10 | 134.7 |
-| 50 | 2 | 25 | 192.4 |
+| 50 | 5 | 10 | 149.7 |
+| 50 | 2 | 25 | 193.2 |
 | 50 | 1 | 50 | 237.5 |
-| 100 | 5 | 20 | 365.2 |
+| 100 | 10 | 10 | 299.3 |
 
 Higher R/a ratios mean thinner wires -> more accurate Neumann formula.
 For R/a < 5, mutual inductance corrections become significant.
