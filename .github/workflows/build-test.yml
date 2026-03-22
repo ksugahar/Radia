@@ -29,6 +29,15 @@ jobs:
       - uses: actions/checkout@v4
 
       # ----------------------------------------------------------------
+      # Install test dependencies (MCP server tests need mcp package)
+      # ----------------------------------------------------------------
+      - name: Install test dependencies
+        shell: pwsh
+        run: |
+          python -m pip install mcp --quiet
+          Write-Host "mcp package installed"
+
+      # ----------------------------------------------------------------
       # Verify NGSolve: pip-installed version (6.2.2602+)
       # ----------------------------------------------------------------
       - name: Verify NGSolve
@@ -80,7 +89,7 @@ jobs:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
         run: |
           Write-Host "Running pytest (excluding cubit tests - require Cubit + netgen fork)..."
-          python -m pytest tests/ -v --tb=short --junitxml=test-results.xml --ignore=tests/cubit --ignore=tests/mcp_server
+          python -m pytest tests/ -v --tb=short --junitxml=test-results.xml --ignore=tests/cubit
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Basic tests failed"
             exit $LASTEXITCODE
