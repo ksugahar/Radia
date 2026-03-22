@@ -289,9 +289,7 @@ def _compute_B_distribution(mesh_surf, fes_J, gf_J, jt, base_dir, MU_0):
         Path to B-distribution .msh file
     """
     import numpy as np
-    from ngsolve import (Mesh, HCurl, HDiv, GridFunction, TaskManager,
-                         BND, VOL, CF, Integrate, Norm, curl,
-                         IntegrationRule)
+    from ngsolve import Mesh, BND, CF, Integrate
     from netgen.occ import Box, Pnt, OCCGeometry
     from netgen.meshing import MeshingParameters
 
@@ -347,64 +345,30 @@ def _compute_B_distribution(mesh_surf, fes_J, gf_J, jt, base_dir, MU_0):
     sys.stderr.write(f"B_PROGRESS:Evaluating A at {nv_vol} vertices\n")
     sys.stderr.flush()
 
-    # --- Step 3: Biot-Savart A at each vertex ---
-    # A(x) = mu_0/(4*pi) * sum_e J_e * A_e / |x - c_e|
-    # Monopole approximation (centroid, constant J per element)
-    A_nodes = np.zeros((nv_vol, 3))
+    # --- Step 3: Biot-Savart B directly at each vertex ---
+    # B(x) = mu_0/(4*pi) * sum_e J_e x (x - c_e) / |x - c_e|^3 * A_e
+    # Direct B computation avoids numerical curl noise.
+    B_nodes = np.zeros((nv_vol, 3))
     for i in range(nv_vol):
         dx = obs_pts[i] - centroids  # (n_elem, 3)
         r = np.sqrt(np.sum(dx**2, axis=1))  # (n_elem,)
-        r = np.maximum(r, 1e-15)  # avoid division by zero
-        weight = areas / r  # (n_elem,)
-        # A = mu_0/(4pi) * sum(J * area / r)
-        A_nodes[i] = MU_0 * INV_4PI * np.sum(J_vecs * weight[:, None], axis=0)
+        r = np.maximum(r, 1e-15)
+        r3_inv = areas / (r * r * r)  # A_e / |r|^3, shape (n_elem,)
+        # J x (x - c_e) for each element: cross product
+        # J_vecs: (n_elem, 3), dx: (n_elem, 3)
+        # But we need J x (obs - centroid) = J x (-dx) = -(J x dx)
+        # Actually dx = obs - centroid, so cross = J x dx
+        cross = np.cross(J_vecs, dx)  # (n_elem, 3)
+        B_nodes[i] = MU_0 * INV_4PI * np.sum(cross * r3_inv[:, None], axis=0)
 
-    # --- Step 4: Project A into HCurl, B = curl(A) ---
-    from ngsolve import VectorH1
-    fes_vh1 = VectorH1(mesh_vol, order=1)
-    gf_vh1 = GridFunction(fes_vh1)
-    vec = gf_vh1.vec.FV().NumPy()
-    for i in range(nv_vol):
-        vec[3 * i] = A_nodes[i, 0]
-        vec[3 * i + 1] = A_nodes[i, 1]
-        vec[3 * i + 2] = A_nodes[i, 2]
-
-    fes_A = HCurl(mesh_vol, order=1)
-    gf_A = GridFunction(fes_A)
-    gf_A.Set(gf_vh1)
-
-    fes_B = HDiv(mesh_vol, order=1)
-    gf_B = GridFunction(fes_B)
-    gf_B.Set(curl(gf_A))
-
-    # --- Step 5: Export B field ---
-    elem_B_mag = Integrate(Norm(gf_B), mesh_vol, element_wise=True)
-    elem_V = Integrate(CF(1), mesh_vol, element_wise=True)
-    elem_Bx = Integrate(gf_B[0], mesh_vol, element_wise=True)
-    elem_By = Integrate(gf_B[1], mesh_vol, element_wise=True)
-    elem_Bz = Integrate(gf_B[2], mesh_vol, element_wise=True)
-
-    ns_mag = np.zeros(nv_vol)
-    ns_vec = np.zeros((nv_vol, 3))
-    nc_count = np.zeros(nv_vol)
-    for el in mesh_vol.Elements(VOL):
-        v = max(abs(elem_V[el.nr]), 1e-30)
-        mag = abs(elem_B_mag[el.nr]) / v
-        bvec = [elem_Bx[el.nr] / v, elem_By[el.nr] / v, elem_Bz[el.nr] / v]
-        for vtx in el.vertices:
-            ns_mag[vtx.nr] += mag
-            ns_vec[vtx.nr] += bvec
-            nc_count[vtx.nr] += 1
-
-    node_B_mag = np.where(nc_count > 0, ns_mag / nc_count, 0.0)
-    for k in range(3):
-        ns_vec[:, k] = np.where(nc_count > 0, ns_vec[:, k] / nc_count, 0.0)
+    # --- Step 4: Compute |B| per node ---
+    node_B_mag = np.sqrt(np.sum(B_nodes**2, axis=1))
 
     from gmsh_post_export import GmshPostExport
     gmsh_file_B = os.path.join(base_dir, "inductance_B.msh").replace("\\", "/")
     post = GmshPostExport(mesh_vol, boundary=False)
     post.add_field("|B|", node_B_mag, ncomp=1)
-    post.add_field("B", ns_vec, ncomp=3)
+    post.add_field("B", B_nodes, ncomp=3)
     post.write(gmsh_file_B)
     sys.stderr.write(f"B_FIELD_READY:{gmsh_file_B}\n")
     sys.stderr.flush()
