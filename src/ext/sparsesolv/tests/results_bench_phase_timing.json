@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-03-07T11:35:04.423456",
+  "hostname": "lab",
+  "benchmark": "bench_phase_timing",
+  "description": "BDDC setup phase timing: SparseSolv vs NGSolve",
+  "results": [
+    {
+      "order": 2,
+      "ndof": 2481,
+      "elements": 206,
+      "sparsesolv": {
+        "t_setup": 0.0301
+      },
+      "ngsolve": {
+        "t_setup": 1.0037
+      },
+      "ratio_setup": 0.03,
+      "peak_memory_mb": 93.6
+    },
+    {
+      "order": 3,
+      "ndof": 6044,
+      "elements": 206,
+      "sparsesolv": {
+        "t_setup": 0.1336
+      },
+      "ngsolve": {
+        "t_setup": 1.9123
+      },
+      "ratio_setup": 0.07,
+      "peak_memory_mb": 161.2
+    },
+    {
+      "order": 4,
+      "ndof": 12005,
+      "elements": 206,
+      "sparsesolv": {
+        "t_setup": 0.7503
+      },
+      "ngsolve": {
+        "t_setup": 1.8985
+      },
+      "ratio_setup": 0.395,
+      "peak_memory_mb": 341.9
+    }
+  ]
+}

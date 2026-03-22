@@ -1,0 +1,367 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/**
+ * @file sgs_mrtr_solver.hpp
+ * @brief SGS-MRTR solver (MRTR with Symmetric Gauss-Seidel preconditioning)
+ *
+ * This is a specialized solver that applies the SGS preconditioner using
+ * a split formula (L and L^T separately) within the MRTR iteration.
+ * This is different from the generic MRTR solver which applies M^{-1} as a whole.
+ *
+ * Now inherits from IterativeSolver to gain:
+ * - save_best_result: tracks and restores best solution during iteration
+ * - divergence_check: early termination on stagnation
+ * - residual_history: residual tracking per iteration
+ */
+
+#ifndef SPARSESOLV_SOLVERS_SGS_MRTR_SOLVER_HPP
+#define SPARSESOLV_SOLVERS_SGS_MRTR_SOLVER_HPP
+
+#include "iterative_solver.hpp"
+#include "../core/constants.hpp"
+#include "../core/sparse_matrix_csr.hpp"
+#include "../core/level_schedule.hpp"
+#include <vector>
+#include <cmath>
+#include <algorithm>
+#include <limits>
+
+namespace sparsesolv {
+
+/**
+ * @brief SGS-MRTR solver
+ *
+ * Implements the MRTR algorithm with specialized SGS preconditioning using
+ * the split formula where L (forward) and L^T (backward) are applied separately.
+ *
+ * The solver works in a diagonally-scaled space (DAD) where D = diag(A)^{-1/2}.
+ * This improves conditioning and is built into the iteration.
+ *
+ * The algorithm works in the preconditioned residual space:
+ * - rd = L^{-1} * r (preconditioned residual)
+ * - ARd = L^T * rd + L^{-1} * (rd - L^T * rd) (approximate M^{-1} * A * rd)
+ *
+ * Inherits from IterativeSolver for save_best_result, divergence_check,
+ * and residual_history tracking. The precond parameter in solve() is ignored
+ * (SGS preconditioning is built into the iteration).
+ *
+ * @tparam Scalar The scalar type (double or complex<double>)
+ */
+template<typename Scalar = double>
+class SGSMRTRSolver : public IterativeSolver<Scalar> {
+public:
+    SGSMRTRSolver() = default;
+
+    std::string name() const override { return "SGS-MRTR"; }
+
+protected:
+    void allocate_work_vectors() override {
+        const index_t n = this->size_;
+
+        // Base class vectors (r_ used for scaled residual)
+        this->r_.resize(n);
+        this->z_.resize(n);   // not used but allocated by base
+        this->p_.resize(n);
+        this->Ap_.resize(n);  // not used but allocated by base
+
+        // SGS-specific vectors
+        x2_.resize(n);
+        D_.resize(n);
+        inv_D_.resize(n);
+        b2_.resize(n);
+        rd_.resize(n);
+        u_.resize(n);
+        y_.resize(n);
+        Ard_.resize(n);
+        temp_.resize(n);
+    }
+
+    void prepare_iteration() override {
+        const index_t n = this->size_;
+
+        // Save original x pointer (x_ will be redirected to x2_)
+        x_orig_ = this->x_;
+
+        // Extract diagonal scaling: D[i] = 1/sqrt(|A[i,i]|)
+        parallel_for(n, [&](index_t i) {
+            Scalar aii = this->A_->diagonal(i);
+            if (std::abs(aii) > constants::MIN_DIAGONAL_TOLERANCE) {
+                D_[i] = Scalar(1) / std::sqrt(std::abs(aii));
+                inv_D_[i] = std::sqrt(std::abs(aii));
+            } else {
+                D_[i] = Scalar(1);
+                inv_D_[i] = Scalar(1);
+            }
+        });
+
+        // Scaled RHS: b2 = D * b
+        parallel_for(n, [&](index_t i) {
+            b2_[i] = D_[i] * this->b_[i];
+        });
+
+        // Scaled initial guess: x2 = inv_D * x
+        parallel_for(n, [&](index_t i) {
+            x2_[i] = inv_D_[i] * x_orig_[i];
+        });
+
+        // Build L (lower tri of DAD) and L^T
+        build_L_and_Lt();
+
+        // Compute initial residual in scaled space: r = D*(b - A*x)
+        this->A_->multiply(x_orig_, temp_.data());
+        parallel_for(n, [&](index_t i) {
+            this->r_[i] = D_[i] * (this->b_[i] - temp_[i]);
+        });
+
+        // Normalizer: ||L * b2||
+        multiply_L(b2_.data(), temp_.data());
+        double norm_Lb = this->compute_norm(temp_.data(), n);
+        this->normalizer_ = (norm_Lb > 1e-15) ? norm_Lb : 1.0;
+
+        // Redirect x_ to x2_ so base class best-result tracking works on x2
+        this->x_ = x2_.data();
+
+        // Initialize best result tracking
+        if (this->config_.save_best_result) {
+            this->best_x_.resize(n);
+            this->best_residual_ = std::numeric_limits<double>::max();
+        }
+        this->bad_count_ = 0;
+
+        // Initial residual history
+        double norm_r = this->compute_norm(this->r_.data(), n);
+        if (this->config_.save_residual_history) {
+            this->residual_history_.clear();
+            this->residual_history_.push_back(norm_r / this->normalizer_);
+        }
+
+        // rd = L^{-1} * r (forward solve)
+        forward_solve(this->r_.data(), rd_.data());
+
+        // y_0 = -rd
+        parallel_for(n, [&](index_t i) {
+            y_[i] = -rd_[i];
+        });
+
+        // Initialize p to zero
+        std::fill(this->p_.begin(), this->p_.end(), Scalar(0));
+    }
+
+    SolverResult do_iterate() override {
+        const index_t n = this->size_;
+
+        // Check if already converged
+        double norm_b2 = this->compute_norm(b2_.data(), n);
+        if (norm_b2 < constants::BREAKDOWN_THRESHOLD) norm_b2 = 1.0;
+        double norm_r = this->compute_norm(this->r_.data(), n);
+        if (norm_r / norm_b2 < this->config_.tolerance * 0.1) {
+            auto result = this->build_result(true, 0, norm_r);
+            convert_x2_to_x();
+            return result;
+        }
+
+        Scalar zeta(1), zeta_old(1), eta(0), nu(1);
+
+        int iter = 0;
+        for (iter = 0; iter < this->config_.max_iterations; ++iter) {
+            // u = L^{-T} * rd (backward solve with L^T)
+            backward_solve(rd_.data(), u_.data());
+
+            // ARd = u + L^{-1} * (rd - u)
+            parallel_for(n, [&](index_t i) {
+                temp_[i] = rd_[i] - u_[i];
+            });
+            forward_solve(temp_.data(), Ard_.data());
+            parallel_for(n, [&](index_t i) {
+                Ard_[i] += u_[i];
+            });
+
+            // Compute inner products
+            Scalar Ar_r = this->dot_product(Ard_.data(), rd_.data(), n);
+            Scalar Ar_Ar = this->dot_product(Ard_.data(), Ard_.data(), n);
+
+            if (iter == 0) {
+                zeta = Ar_r / Ar_Ar;
+                zeta_old = zeta;
+                eta = Scalar(0);
+            } else {
+                Scalar Ar_y = this->dot_product(Ard_.data(), y_.data(), n);
+                Scalar denom = nu * Ar_Ar - Ar_y * Ar_y;
+
+                if (std::abs(denom) < constants::DENOMINATOR_BREAKDOWN) {
+                    denom = (std::real(denom) >= 0)
+                        ? Scalar(constants::DENOMINATOR_BREAKDOWN)
+                        : Scalar(-constants::DENOMINATOR_BREAKDOWN);
+                }
+
+                Scalar inv_denom = Scalar(1) / denom;
+                zeta = nu * Ar_r * inv_denom;
+                eta = -Ar_y * Ar_r * inv_denom;
+            }
+
+            nu = zeta * Ar_r;
+
+            // p = u + (eta * zeta_old / zeta) * p
+            Scalar coeff = eta * zeta_old / zeta;
+            parallel_for(n, [&](index_t i) {
+                this->p_[i] = u_[i] + coeff * this->p_[i];
+            });
+            zeta_old = zeta;
+
+            // x2 = x2 + zeta * p (x_ points to x2_)
+            parallel_for(n, [&](index_t i) {
+                this->x_[i] += zeta * this->p_[i];
+            });
+
+            // y = eta * y + zeta * ARd
+            parallel_for(n, [&](index_t i) {
+                y_[i] = eta * y_[i] + zeta * Ard_[i];
+            });
+
+            // rd = rd - y
+            parallel_for(n, [&](index_t i) {
+                rd_[i] -= y_[i];
+            });
+
+            // Convergence check (base class handles history, best-result, divergence)
+            norm_r = this->compute_norm(rd_.data(), n);
+            if (this->check_convergence(norm_r, iter)) {
+                auto result = this->build_result(true, iter + 1, norm_r);
+                convert_x2_to_x();
+                return result;
+            }
+
+            if (this->is_diverging()) {
+                auto result = this->build_result(false, iter + 1, norm_r);
+                convert_x2_to_x();
+                return result;
+            }
+        }
+
+        norm_r = this->compute_norm(rd_.data(), n);
+        auto result = this->build_result(false, iter, norm_r);
+        convert_x2_to_x();
+        return result;
+    }
+
+private:
+    // Original x pointer (before redirection to x2_)
+    Scalar* x_orig_ = nullptr;
+
+    // SGS-specific work vectors
+    std::vector<Scalar> x2_;      // Scaled solution: x2 = inv_D * x
+    std::vector<Scalar> D_;       // D[i] = 1/sqrt(|A[i,i]|)
+    std::vector<Scalar> inv_D_;   // inv_D[i] = sqrt(|A[i,i]|)
+    std::vector<Scalar> b2_;      // Scaled RHS: b2 = D * b
+    std::vector<Scalar> rd_;      // Preconditioned residual: rd = L^{-1} * r
+    std::vector<Scalar> u_;       // Work vector for L^{-T} * rd
+    std::vector<Scalar> y_;       // Accumulated correction
+    std::vector<Scalar> Ard_;     // Approximate M^{-1} * A * rd
+    std::vector<Scalar> temp_;    // Temporary buffer
+
+    // L (lower triangular of DAD) and L^T stored as CSR
+    SparseMatrixCSR<Scalar> L_;
+    SparseMatrixCSR<Scalar> Lt_;
+
+    // Level schedules for parallel triangular solves
+    LevelSchedule fwd_schedule_;     // For forward solve (L)
+    LevelSchedule bwd_schedule_;     // For backward solve (L^T)
+
+    /**
+     * @brief Convert scaled solution x2_ back to original space x
+     *
+     * Must be called AFTER build_result(), because build_result() may
+     * restore best_x_ to x_ (= x2_) when not converged.
+     * After that, we convert x2_ → x_orig_ via x = D * x2.
+     */
+    void convert_x2_to_x() {
+        parallel_for(this->size_, [&](index_t i) {
+            x_orig_[i] = D_[i] * x2_[i];
+        });
+    }
+
+    /**
+     * @brief Extract lower triangular part of DAD and compute L^T
+     */
+    void build_L_and_Lt() {
+        const index_t n = this->size_;
+        const auto& A = *this->A_;
+
+        L_.rows = L_.cols = n;
+        L_.row_ptr.resize(n + 1);
+        L_.col_idx.clear();
+        L_.values.clear();
+
+        L_.row_ptr[0] = 0;
+        for (index_t i = 0; i < n; ++i) {
+            auto [start, end] = A.row_range(i);
+            for (index_t k = start; k < end; ++k) {
+                index_t j = A.col_idx()[k];
+                if (j <= i) {
+                    L_.col_idx.push_back(j);
+                    L_.values.push_back(D_[i] * A.values()[k] * D_[j]);
+                }
+            }
+            L_.row_ptr[i + 1] = static_cast<index_t>(L_.col_idx.size());
+        }
+
+        Lt_ = L_.transpose();
+
+        // Build level schedules for parallel triangular solves
+        fwd_schedule_.build_from_lower(L_.row_ptr.data(), L_.col_idx.data(), n);
+        bwd_schedule_.build_from_upper(Lt_.row_ptr.data(), Lt_.col_idx.data(), n);
+    }
+
+    /**
+     * @brief Forward solve: L * y = rhs  →  y = L^{-1} * rhs
+     *
+     * Uses level scheduling for parallelism.
+     */
+    void forward_solve(const Scalar* rhs, Scalar* y) const {
+        for (const auto& level : fwd_schedule_.levels) {
+            const index_t level_size = static_cast<index_t>(level.size());
+            parallel_for(level_size, [&](index_t idx) {
+                const index_t i = level[idx];
+                Scalar s = rhs[i];
+                const index_t row_end = L_.row_ptr[i + 1] - 1;
+                for (index_t k = L_.row_ptr[i]; k < row_end; ++k)
+                    s -= L_.values[k] * y[L_.col_idx[k]];
+                y[i] = s / L_.values[row_end];
+            });
+        }
+    }
+
+    /**
+     * @brief Backward solve: L^T * y = rhs  →  y = L^{-T} * rhs
+     *
+     * Uses level scheduling for parallelism.
+     */
+    void backward_solve(const Scalar* rhs, Scalar* y) const {
+        for (const auto& level : bwd_schedule_.levels) {
+            const index_t level_size = static_cast<index_t>(level.size());
+            parallel_for(level_size, [&](index_t idx) {
+                const index_t i = level[idx];
+                Scalar s = rhs[i];
+                const index_t row_start = Lt_.row_ptr[i];
+                const index_t row_end = Lt_.row_ptr[i + 1];
+                if (row_start >= row_end) { y[i] = Scalar(0); return; }
+                for (index_t k = row_start + 1; k < row_end; ++k)
+                    s -= Lt_.values[k] * y[Lt_.col_idx[k]];
+                y[i] = s / Lt_.values[row_start];
+            });
+        }
+    }
+
+    /**
+     * @brief Matrix-vector multiplication: y = L * x
+     */
+    void multiply_L(const Scalar* x, Scalar* y) const {
+        L_.multiply(x, y);
+    }
+};
+
+} // namespace sparsesolv
+
+#endif // SPARSESOLV_SOLVERS_SGS_MRTR_SOLVER_HPP

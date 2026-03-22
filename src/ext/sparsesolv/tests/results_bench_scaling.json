@@ -1,0 +1,88 @@
+{
+  "timestamp": "2026-03-07T11:38:15.965894",
+  "hostname": "lab",
+  "benchmark": "bench_scaling",
+  "description": "SparseSolv BDDC vs NGSolve BDDC setup time scaling",
+  "results": [
+    {
+      "order": 3,
+      "maxh": 0.3,
+      "ndof": 6044,
+      "elements": 206,
+      "t_setup_sparsesolv": 0.1139,
+      "t_setup_ngsolve": 0.0929,
+      "ratio": 1.226,
+      "peak_memory_mb": 156.5
+    },
+    {
+      "order": 3,
+      "maxh": 0.2,
+      "ndof": 18540,
+      "elements": 648,
+      "t_setup_sparsesolv": 0.3798,
+      "t_setup_ngsolve": 0.296,
+      "ratio": 1.283,
+      "peak_memory_mb": 332.6
+    },
+    {
+      "order": 3,
+      "maxh": 0.15,
+      "ndof": 54332,
+      "elements": 2030,
+      "t_setup_sparsesolv": 1.9434,
+      "t_setup_ngsolve": 1.3527,
+      "ratio": 1.437,
+      "peak_memory_mb": 884.7
+    },
+    {
+      "order": 3,
+      "maxh": 0.12,
+      "ndof": 94460,
+      "elements": 3568,
+      "t_setup_sparsesolv": 4.2121,
+      "t_setup_ngsolve": 4.4881,
+      "ratio": 0.938,
+      "peak_memory_mb": 1494.4
+    },
+    {
+      "order": 4,
+      "maxh": 0.3,
+      "ndof": 12005,
+      "elements": 206,
+      "t_setup_sparsesolv": 0.8572,
+      "t_setup_ngsolve": 0.9253,
+      "ratio": 0.926,
+      "peak_memory_mb": 1494.4
+    },
+    {
+      "order": 4,
+      "maxh": 0.2,
+      "ndof": 37025,
+      "elements": 648,
+      "t_setup_sparsesolv": 2.7205,
+      "t_setup_ngsolve": 3.4171,
+      "ratio": 0.796,
+      "peak_memory_mb": 1494.4
+    },
+    {
+      "order": 4,
+      "maxh": 0.15,
+      "ndof": 110000,
+      "elements": 2030,
+      "t_setup_sparsesolv": 6.221,
+      "t_setup_ngsolve": 4.8257,
+      "ratio": 1.289,
+      "peak_memory_mb": 2573.1
+    },
+    {
+      "order": 4,
+      "maxh": 0.12,
+      "ndof": 191690,
+      "elements": 3568,
+      "t_setup_sparsesolv": 9.3038,
+      "t_setup_ngsolve": 9.5782,
+      "ratio": 0.971,
+      "peak_memory_mb": 4449.7
+    }
+  ]
+}
