@@ -186,6 +186,5 @@ Output:
 
 ## See Also
 
-- [export_VTK.md](export_VTK.md) - VTK export documentation
-- [export_NetgenMesh.md](export_NetgenMesh.md) - Netgen export documentation
+- [export_NetgenMesh.md](export_NetgenMesh.md) - NGSolve curved mesh export (`export_NGSolveCurvedMesh`)
 - [Cubit Documentation](https://coreform.com/products/coreform-cubit/documentation/)
