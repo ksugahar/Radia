@@ -1125,7 +1125,7 @@ The ESIM module provides specialized tools for **induction heating analysis** wi
 | `ESIMWorkpiece` | Workpiece geometry with surface panels |
 | `InductionHeatingCoil` | Coil geometry (spiral, loop, etc.) |
 | `ESIMCoupledSolver` | Coupled coil-workpiece impedance solver |
-| `ESIMVTKOutput` | VTK export for visualization |
+| `ESIMVTKOutput` | Field export for visualization |
 
 ### ESIMCellProblemSolver - Cell Problem Solver
 
