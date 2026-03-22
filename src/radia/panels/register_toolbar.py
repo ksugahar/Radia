@@ -54,8 +54,9 @@ try:
 		QLabel, QLineEdit, QComboBox, QPushButton, QSpinBox,
 		QFileDialog, QMainWindow, QMessageBox,
 		QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
+		QPlainTextEdit,
 	)
-	from PySide6.QtGui import QAction
+	from PySide6.QtGui import QAction, QFont
 	from PySide6.QtCore import Qt, QProcess
 except ImportError:
 	from PyQt5.QtWidgets import (
@@ -63,8 +64,9 @@ except ImportError:
 		QLabel, QLineEdit, QComboBox, QPushButton, QSpinBox,
 		QFileDialog, QMainWindow, QMessageBox,
 		QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
-		QAction,
+		QPlainTextEdit, QAction,
 	)
+	from PyQt5.QtGui import QFont
 	from PyQt5.QtCore import Qt, QProcess
 
 
@@ -583,12 +585,13 @@ class SurfaceAreaDialog(QDialog):
 # ================================================================
 
 class InductanceDialog(QDialog):
-	"""Dialog for ngsolve.bem inductance extraction."""
+	"""Dialog for DC inductance extraction via source/sink EFIE."""
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
-		self.setWindowTitle("Inductance Solver (ngsolve.bem)")
-		self.setMinimumWidth(500)
+		self.setWindowTitle("DC Inductance (source/sink EFIE)")
+		self.setMinimumWidth(600)
+		self.setMinimumHeight(700)
 		self._ext_python = _find_external_python()
 		self._result_file = os.path.join(tempfile.gettempdir(), "radia_inductance_result.json")
 		self._solve_start_time = None
@@ -599,39 +602,56 @@ class InductanceDialog(QDialog):
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
 
-		# Block selection
-		grid = QGridLayout()
+		# --- Journal editor ---
+		jou_label = QLabel("Cubit Journal:")
+		jou_label.setStyleSheet("font-weight: bold;")
+		layout.addWidget(jou_label)
 
-		grid.addWidget(QLabel("Source block:"), 0, 0)
-		self.source_combo = QComboBox()
-		self.source_combo.setEditable(True)
-		grid.addWidget(self.source_combo, 0, 1)
+		self.jou_edit = QPlainTextEdit()
+		self.jou_edit.setFont(QFont("Consolas", 9))
+		self.jou_edit.setPlainText(self._default_torus_journal())
+		self.jou_edit.setMaximumHeight(200)
+		layout.addWidget(self.jou_edit)
 
-		grid.addWidget(QLabel("Sink block:"), 1, 0)
-		self.sink_combo = QComboBox()
-		self.sink_combo.setEditable(True)
-		self.sink_combo.addItem("(closed loop)")
-		grid.addWidget(self.sink_combo, 1, 1)
+		jou_btn_row = QHBoxLayout()
+		load_jou_btn = QPushButton("Load .jou...")
+		load_jou_btn.clicked.connect(self._load_journal)
+		jou_btn_row.addWidget(load_jou_btn)
+		self.run_jou_btn = QPushButton("Run Journal")
+		self.run_jou_btn.clicked.connect(self._run_journal)
+		jou_btn_row.addWidget(self.run_jou_btn)
+		jou_btn_row.addStretch()
+		layout.addLayout(jou_btn_row)
 
-		grid.addWidget(QLabel("Conductivity:"), 2, 0)
-		self.sigma_edit = QLineEdit("5.8e7")
-		grid.addWidget(self.sigma_edit, 2, 1)
-		grid.addWidget(QLabel("S/m"), 2, 2)
+		# --- Port detection (auto from blocks) ---
+		port_group = QGridLayout()
+		port_group.addWidget(QLabel("Source block:"), 0, 0)
+		self.source_label = QLabel("(not found)")
+		self.source_label.setStyleSheet("font-weight: bold;")
+		port_group.addWidget(self.source_label, 0, 1)
 
-		grid.addWidget(QLabel("Curve order:"), 3, 0)
-		self.order_spin = QSpinBox()
-		self.order_spin.setRange(1, 5)
-		self.order_spin.setValue(1)
-		grid.addWidget(self.order_spin, 3, 1)
+		port_group.addWidget(QLabel("Sink block:"), 1, 0)
+		self.sink_label = QLabel("(not found)")
+		self.sink_label.setStyleSheet("font-weight: bold;")
+		port_group.addWidget(self.sink_label, 1, 1)
 
-		grid.addWidget(QLabel("Frequency:"), 4, 0)
-		self.freq_edit = QLineEdit("0")
-		grid.addWidget(self.freq_edit, 4, 1)
-		grid.addWidget(QLabel("Hz (0 = DC)"), 4, 2)
+		port_group.addWidget(QLabel("Curve order:"), 2, 0)
+		self.curve_spin = QSpinBox()
+		self.curve_spin.setRange(1, 2)
+		self.curve_spin.setValue(2)
+		self.curve_spin.setToolTip("Mesh geometry order (2 = curved elements)")
+		port_group.addWidget(self.curve_spin, 2, 1)
 
-		layout.addLayout(grid)
+		port_group.addWidget(QLabel("FES order:"), 3, 0)
+		self.fes_spin = QSpinBox()
+		self.fes_spin.setRange(0, 2)
+		self.fes_spin.setValue(0)
+		self.fes_spin.setToolTip("HDivSurface basis order (0 = RWG)")
+		port_group.addWidget(self.fes_spin, 3, 1)
 
-		# Result table
+		layout.addLayout(port_group)
+
+		# --- Result table ---
 		self.result_table = QTableWidget()
 		self.result_table.setColumnCount(2)
 		self.result_table.setHorizontalHeaderLabels(["Parameter", "Value"])
@@ -654,20 +674,159 @@ class InductanceDialog(QDialog):
 		self.debug_text.setStyleSheet("color: gray; font-size: 10px;")
 		layout.addWidget(self.debug_text)
 
-		# Buttons
+		# --- Action buttons ---
 		btn_row = QHBoxLayout()
 		btn_row.addStretch()
 		self.solve_btn = QPushButton("Solve")
 		self.solve_btn.clicked.connect(self._extract)
-		self.solve_btn.setEnabled(self._ext_python is not None)
+		self.solve_btn.setEnabled(False)
 		btn_row.addWidget(self.solve_btn)
-		self.dash_btn = QPushButton("Dashboard")
-		self.dash_btn.clicked.connect(self._launch_dashboard)
-		btn_row.addWidget(self.dash_btn)
+		self.open_gmsh_btn = QPushButton("Open GMSH")
+		self.open_gmsh_btn.clicked.connect(self._open_gmsh_result)
+		self.open_gmsh_btn.setEnabled(False)
+		btn_row.addWidget(self.open_gmsh_btn)
 		close_btn = QPushButton("Close")
 		close_btn.clicked.connect(self.accept)
 		btn_row.addWidget(close_btn)
 		layout.addLayout(btn_row)
+
+	def _default_torus_journal(self):
+		"""Default journal: hex sweep torus (736 quads, ~2208 DOFs)."""
+		lines = [
+			"# 1-turn torus coil (R=50mm, a=5mm, 355deg)",
+			"# Hex sweep -> 736 surface quads -> ~30s solve",
+			"reset",
+			"",
+			"# Geometry: revolve circle to create gapped torus",
+			"create surface circle radius 0.005 yplane",
+			"move surface 1 x 0.05 include_merged",
+			"sweep surface 1 zaxis angle 355",
+			"",
+			"# Hex sweep mesh (coarse)",
+			"volume 1 scheme sweep source surface 1 target surface 3",
+			"surface 1 size 0.005",
+			"surface 1 scheme pave",
+			"mesh surface 1",
+			"mesh volume 1",
+			"",
+			"# Blocks: source/sink before boundary",
+			"set duplicate block elements on",
+			"block 1 add volume all",
+			'block 1 name "conductor"',
+			"block 2 add face in surface 1",
+			'block 2 name "source"',
+			"block 3 add face in surface 3",
+			'block 3 name "sink"',
+			"block 4 add face in surface all",
+			'block 4 name "boundary"',
+		]
+		return "\n".join(lines) + "\n"
+
+	def _load_journal(self):
+		"""Load a .jou file into the editor."""
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Load Cubit Journal", "",
+			"Cubit Journal (*.jou);;All Files (*)")
+		if path:
+			try:
+				with open(path, "r", encoding="utf-8") as f:
+					self.jou_edit.setPlainText(f.read())
+				self.debug_text.setText(f"Loaded: {path}")
+			except Exception as e:
+				QMessageBox.warning(self, "Error", f"Failed to load: {e}")
+
+	def _run_journal(self):
+		"""Execute the journal text in Cubit, then auto-create source/sink blocks."""
+		text = self.jou_edit.toPlainText().strip()
+		if not text:
+			return
+
+		self.run_jou_btn.setEnabled(False)
+		self.run_jou_btn.setText("Running...")
+		try:
+			for line in text.splitlines():
+				line = line.strip()
+				if not line or line.startswith("#"):
+					continue
+				cubit.cmd(line)
+			self.debug_text.setText("Journal executed.")
+		except Exception as e:
+			QMessageBox.warning(self, "Journal Error", str(e))
+			self.debug_text.setText(f"Journal error: {e}")
+			self.run_jou_btn.setEnabled(True)
+			self.run_jou_btn.setText("Run Journal")
+			return
+		finally:
+			self.run_jou_btn.setEnabled(True)
+			self.run_jou_btn.setText("Run Journal")
+
+		# Auto-create source/sink blocks from planar gap faces
+		self._auto_create_source_sink_blocks()
+
+		# Re-detect blocks
+		self._populate_blocks()
+
+	def _auto_create_source_sink_blocks(self):
+		"""Find gap faces by y-coordinate and create source/sink blocks."""
+		try:
+			# Find source/sink surfaces by center y-coordinate
+			src_sid, snk_sid = None, None
+			for sid in cubit.get_entities("surface"):
+				cx, cy, cz = cubit.surface(sid).center_point()
+				if cy > 0 and src_sid is None:
+					src_sid = sid
+				elif cy < 0 and snk_sid is None:
+					snk_sid = sid
+
+			if src_sid is None or snk_sid is None:
+				self.debug_text.setText(
+					"Auto-detect: could not find faces with y>0 and y<0.")
+				return
+
+			# Next available block ID
+			existing = list(cubit.get_block_id_list())
+			next_id = max(existing) + 1 if existing else 1
+
+			# Skip if already defined
+			existing_names = set()
+			for bid in existing:
+				try:
+					existing_names.add(cubit.get_exodus_entity_name("block", bid))
+				except Exception:
+					pass
+
+			has_tri = len(cubit.get_entities("tri")) > 0
+			has_quad = len(cubit.get_entities("quad")) > 0
+			cubit.cmd("set duplicate block elements on")
+
+			if "source" not in existing_names:
+				if has_tri:
+					cubit.cmd(f"block {next_id} add tri in surface {src_sid}")
+				if has_quad:
+					cubit.cmd(f"block {next_id} add face in surface {src_sid}")
+				cubit.cmd(f'block {next_id} name "source"')
+				next_id += 1
+
+			if "sink" not in existing_names:
+				if has_tri:
+					cubit.cmd(f"block {next_id} add tri in surface {snk_sid}")
+				if has_quad:
+					cubit.cmd(f"block {next_id} add face in surface {snk_sid}")
+				cubit.cmd(f'block {next_id} name "sink"')
+				next_id += 1
+
+			if "boundary" not in existing_names:
+				if has_tri:
+					cubit.cmd(f"block {next_id} add tri all")
+				if has_quad:
+					cubit.cmd(f"block {next_id} add face all")
+				cubit.cmd(f'block {next_id} name "boundary"')
+
+			self.debug_text.setText(
+				f"source=surface {src_sid} (y>0), sink=surface {snk_sid} (y<0)")
+
+		except Exception as e:
+			self.debug_text.setText(f"Auto-detect failed: {e}")
 
 	def _set_result(self, param, value):
 		"""Set a single-row result in the table."""
@@ -684,25 +843,53 @@ class InductanceDialog(QDialog):
 					data = json.load(f)
 				if "inductance_H" in data:
 					self._display_result(data)
-					# Results available
+					gmsh_file = data.get("gmsh_file", "")
+					if gmsh_file and os.path.exists(gmsh_file):
+						self._gmsh_file = gmsh_file
+						self.open_gmsh_btn.setEnabled(True)
 					self.debug_text.setText(f"Previous result loaded: {self._result_file}")
 			except Exception:
 				pass
 
 	def _populate_blocks(self):
-		"""Populate combo boxes with Cubit block names."""
+		"""Auto-detect source/sink from Cubit block names."""
+		self._source_block = None
+		self._sink_block = None
 		try:
-			block_count = cubit.get_block_count()
-			for bid in range(1, block_count + 1):
+			for bid in cubit.get_block_id_list():
 				try:
 					name = cubit.get_exodus_entity_name("block", bid)
-					if name:
-						self.source_combo.addItem(name)
-						self.sink_combo.addItem(name)
+					if name == "source":
+						self._source_block = name
+					elif name == "sink":
+						self._sink_block = name
 				except Exception:
 					pass
 		except Exception:
 			pass
+
+		if self._source_block:
+			self.source_label.setText(self._source_block)
+			self.source_label.setStyleSheet("font-weight: bold; color: green;")
+		else:
+			self.source_label.setText("(not found)")
+			self.source_label.setStyleSheet("font-weight: bold; color: red;")
+
+		if self._sink_block:
+			self.sink_label.setText(self._sink_block)
+			self.sink_label.setStyleSheet("font-weight: bold; color: green;")
+		else:
+			self.sink_label.setText("(not found)")
+			self.sink_label.setStyleSheet("font-weight: bold; color: red;")
+
+		# Enable Solve only when both source and sink are found + Python available
+		can_solve = (self._source_block is not None
+		             and self._sink_block is not None
+		             and self._ext_python is not None)
+		self.solve_btn.setEnabled(can_solve)
+		if not can_solve and self._ext_python:
+			self.debug_text.setText(
+				'Define blocks named "source" and "sink" in your journal.')
 
 	def _extract(self):
 		"""Run inductance extraction via external Python."""
@@ -710,24 +897,19 @@ class InductanceDialog(QDialog):
 			QMessageBox.warning(self, "Error", "External Python not found.")
 			return
 
-		source = self.source_combo.currentText().strip()
-		sink = self.sink_combo.currentText().strip()
-		if sink == "(closed loop)":
-			sink = ""
+		source = self._source_block
+		sink = self._sink_block
 
-		try:
-			sigma = float(self.sigma_edit.text())
-		except ValueError:
-			QMessageBox.warning(self, "Error", "Invalid conductivity value.")
+		if not source or not sink:
+			QMessageBox.warning(self, "Error",
+				'Blocks named "source" and "sink" not found.\n'
+				"Define them in your Cubit journal:\n"
+				'  block N name "source"\n'
+				'  block M name "sink"')
 			return
 
-		try:
-			freq = float(self.freq_edit.text())
-		except ValueError:
-			QMessageBox.warning(self, "Error", "Invalid frequency value.")
-			return
-
-		order = self.order_spin.value()
+		curve_order = self.curve_spin.value()
+		fes_order = self.fes_spin.value()
 
 		self.solve_btn.setEnabled(False)
 		self.solve_btn.setText("Solving...")
@@ -741,11 +923,14 @@ class InductanceDialog(QDialog):
 		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
 		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
 
-		# Output .msh with timestamp (one file per solve, linked to Optuna trial)
+		# Output .msh with timestamp
 		ts = self._solve_start_time.strftime("%Y%m%d_%H%M%S")
 		msh_output = os.path.join(
 			os.getcwd(), f"inductance_J_{ts}.msh"
 		).replace("\\", "/")
+
+		# JSON output file (reliable, avoids stdout parsing issues)
+		self._json_output = os.path.join(tmpdir, "result.json").replace("\\", "/")
 
 		# Build command
 		calc_script = os.path.join(_this_dir, "calc_inductance.py")
@@ -755,9 +940,9 @@ class InductanceDialog(QDialog):
 			"--msh-output", msh_output,
 			"--source", source,
 			"--sink", sink,
-			"--sigma", str(sigma),
-			"--order", str(order),
-			"--freq", str(freq),
+			"--order", str(curve_order),
+			"--fes-order", str(fes_order),
+			"--output", self._json_output,
 		]
 
 		# Run async via QProcess (non-blocking)
@@ -768,35 +953,34 @@ class InductanceDialog(QDialog):
 		self._process.start(self._ext_python, args)
 
 	def _on_stderr(self):
-		"""Handle stderr from subprocess — watch for MESH_READY signal."""
+		"""Handle stderr from subprocess - progress updates."""
 		if self._process is None:
 			return
 		data = self._process.readAllStandardError().data().decode("utf-8", errors="replace")
 		for line in data.splitlines():
-			if line.startswith("MESH_READY:") and not self._gmsh_launched:
-				gmsh_file = line.split(":", 1)[1].strip()
-				if os.path.exists(gmsh_file):
-					try:
-						import subprocess as _sp
-						import shutil
-						gmsh_exe = shutil.which("gmsh") or shutil.which("gmsh.bat")
-						if gmsh_exe:
-							_sp.Popen([gmsh_exe, gmsh_file])
-							self._gmsh_launched = True
-							self.debug_text.setText(f"GMSH launched (mesh): {gmsh_file}")
-					except Exception:
-						pass
+			if line.startswith("MESH_READY:"):
+				self.debug_text.setText("Mesh exported, assembling BEM matrix...")
 			elif line.startswith("FIELD_READY:"):
-				self.debug_text.setText("Field data written — reload in GMSH (F5)")
+				self.debug_text.setText("Field data written, finalizing...")
 
 	def _on_extract_finished(self, exit_code, exit_status):
 		"""Handle async extraction result."""
 		self.solve_btn.setEnabled(True)
 		self.solve_btn.setText("Solve")
-		data = _parse_json_output(self._process)
 		self._process = None
+
+		# Read result from JSON file (more reliable than stdout parsing)
+		data = None
+		json_path = getattr(self, '_json_output', '')
+		if json_path and os.path.exists(json_path):
+			try:
+				with open(json_path, "r") as f:
+					data = json.load(f)
+			except Exception:
+				pass
+
 		if data is None:
-			self._set_result("Status", "Error")
+			self._set_result("Status", f"Error (exit code {exit_code})")
 			return
 
 		if "error" in data:
@@ -809,29 +993,38 @@ class InductanceDialog(QDialog):
 		# Record to Optuna study
 		self._record_to_optuna(data)
 
-		# Save result + open GMSH visualization
+		# Save result
 		with open(self._result_file, "w") as f:
 			json.dump(data, f)
 
+		# Enable Open GMSH button if file exists
 		gmsh_file = data.get("gmsh_file", "")
 		if gmsh_file and os.path.exists(gmsh_file):
-			if not self._gmsh_launched:
-				# GMSH not yet launched (MESH_READY signal missed) — launch now
-				try:
-					import subprocess as _sp
-					import shutil
-					gmsh_exe = shutil.which("gmsh") or shutil.which("gmsh.bat")
-					if gmsh_exe:
-						_sp.Popen([gmsh_exe, gmsh_file])
-						self.debug_text.setText(f"GMSH launched: {gmsh_file}")
-				except Exception:
-					self.debug_text.setText(f"Open in GMSH: {gmsh_file}")
-			else:
-				self.debug_text.setText(
-					f"Field updated: {gmsh_file} — reload in GMSH (F5)"
-				)
+			self._gmsh_file = gmsh_file
+			self.open_gmsh_btn.setEnabled(True)
+			self.debug_text.setText(f"Result: {gmsh_file}")
 		else:
 			self.debug_text.setText(f"Result saved: {self._result_file}")
+
+	def _open_gmsh_result(self):
+		"""Open the latest GMSH result file."""
+		gmsh_file = getattr(self, '_gmsh_file', '')
+		if not gmsh_file or not os.path.exists(gmsh_file):
+			QMessageBox.warning(self, "Error", "No GMSH result file found. Run Solve first.")
+			return
+		try:
+			import subprocess as _sp
+			# Launch GMSH via external Python (Cubit's Python can't run gmsh.bat)
+			ext_py = self._ext_python
+			if ext_py:
+				_sp.Popen([ext_py, "-m", "gmsh", gmsh_file])
+				self.debug_text.setText(f"GMSH: {os.path.basename(gmsh_file)}")
+			else:
+				os.startfile(gmsh_file)
+				self.debug_text.setText(f"Opened: {os.path.basename(gmsh_file)}")
+		except Exception as e:
+			QMessageBox.warning(self, "Error",
+				f"Failed to open GMSH: {e}\nFile: {gmsh_file}")
 
 	def _get_cub5_path(self):
 		"""Get real cub5 path from Cubit (or fallback to cwd)."""
@@ -856,11 +1049,10 @@ class InductanceDialog(QDialog):
 			return
 
 		params = {
-			"curve_order": self.order_spin.value(),
-			"conductivity": float(self.sigma_edit.text()),
-			"frequency": float(self.freq_edit.text()),
-			"source_block": self.source_combo.currentText().strip(),
-			"sink_block": self.sink_combo.currentText().strip(),
+			"curve_order": self.curve_spin.value(),
+			"fes_order": self.fes_spin.value(),
+			"source_block": self._source_block or "",
+			"sink_block": self._sink_block or "",
 		}
 
 		trial_num = study.record_trial(params, data, self._solve_start_time)
@@ -915,10 +1107,14 @@ class InductanceDialog(QDialog):
 
 		rows = [
 			("Inductance", L_str),
-			("DOFs", str(data.get("n_free_dofs", ""))),
-			("Neg diag", str(data.get("neg_diag", ""))),
-			("Surface area", f"{data.get('surface_area', 0):.4e}"),
-			("Curve order", str(data.get("order", ""))),
+			("DOFs (edges)", str(data.get("n_dofs", ""))),
+			("Faces", str(data.get("n_faces", ""))),
+			("Source area", f"{data.get('source_area', 0):.4e} m^2"),
+			("Sink area", f"{data.get('sink_area', 0):.4e} m^2"),
+			("Surface area", f"{data.get('surface_area', 0):.4e} m^2"),
+			("Constraint |D*J-g|", f"{data.get('constraint_residual', 0):.2e}"),
+			("Curve order", str(data.get("curve_order", ""))),
+			("FES order", str(data.get("fes_order", ""))),
 		]
 
 		self.result_table.setRowCount(len(rows))
@@ -983,7 +1179,13 @@ def register_menu():
 	# Inductance Extractor action
 	action_ind = QAction("Inductance...", main_window)
 	action_ind.setStatusTip("Solve inductance using ngsolve.bem LaplaceSL BEM")
-	action_ind.triggered.connect(lambda: InductanceDialog(main_window).exec())
+	def _show_inductance():
+		# Keep reference to prevent garbage collection (modeless)
+		if not hasattr(main_window, '_radia_ind_dlg') or main_window._radia_ind_dlg is None:
+			main_window._radia_ind_dlg = InductanceDialog(main_window)
+		main_window._radia_ind_dlg.show()
+		main_window._radia_ind_dlg.raise_()
+	action_ind.triggered.connect(_show_inductance)
 	radia_menu.addAction(action_ind)
 
 	print("Radia-NGSolve menu registered under Tools.")

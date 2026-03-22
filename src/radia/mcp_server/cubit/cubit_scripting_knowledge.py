@@ -490,7 +490,43 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")   # Needed for boundary conditions
 ```
 
-## 7. MODERATE: Hardcoded Absolute Paths
+## 7. CRITICAL: Block Registration Order for Source/Sink (BEM Inductance)
+
+When using `set duplicate block elements on` with source/sink blocks for BEM
+inductance extraction, register source/sink BEFORE the boundary block.
+If boundary (all tris) is registered first, subsequent source/sink blocks
+that are subsets of boundary may fail to register elements.
+
+```python
+# WRONG: boundary first -> source/sink subset registration may fail
+cubit.cmd("set duplicate block elements on")
+cubit.cmd("block 1 add tri all")
+cubit.cmd('block 1 name "boundary"')
+cubit.cmd("block 2 add tri in surface 3")   # May get 0 elements!
+cubit.cmd('block 2 name "source"')
+
+# RIGHT: source/sink first, then boundary (superset)
+cubit.cmd("set duplicate block elements on")
+cubit.cmd("block 1 add volume all")
+cubit.cmd('block 1 name "conductor"')
+cubit.cmd("block 2 add tri in surface 3")
+cubit.cmd('block 2 name "source"')
+cubit.cmd("block 3 add tri in surface 5")
+cubit.cmd('block 3 name "sink"')
+cubit.cmd("block 4 add tri all")            # Superset last
+cubit.cmd('block 4 name "boundary"')
+```
+
+In export_NGSolveCurvedMesh, the last block wins for bcname priority.
+So even with `set duplicate block elements on`, the block registration
+order determines which label an element gets:
+- source/sink blocks registered AFTER boundary -> source/sink wins (correct)
+- source/sink blocks registered BEFORE boundary -> boundary wins (wrong)
+
+Best practice: register source/sink LAST (highest block ID), or
+register boundary block first then source/sink blocks after.
+
+## 8. MODERATE: Hardcoded Absolute Paths
 
 ```python
 # WRONG: Breaks on other machines
@@ -501,7 +537,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ```
 
-## 8. HIGH: Mixed Hex-Tet Mesh for JMAG Without PYRAM=False
+## 9. HIGH: Mixed Hex-Tet Mesh for JMAG Without PYRAM=False
 
 ```python
 # WRONG: JMAG cannot read CPYRAM elements
@@ -515,7 +551,7 @@ cubit_mesh_export.export_nastran(cubit, "mesh.bdf", PYRAM=False)
 # Or use pure tet mesh to avoid pyramids entirely
 ```
 
-## 9. LOW: Using 'modify mesh volume X order 2'
+## 10. LOW: Using 'modify mesh volume X order 2'
 
 ```python
 # WRONG: May not work reliably
@@ -1618,29 +1654,21 @@ Cubit panels that use NGSolve must run computation in an **external Python
 subprocess** because Cubit's bundled Python (3.10) does not have NGSolve.
 
 ```
-┌─ Cubit GUI (bundled Python 3.10, has PyQt5) ─────────┐
-│  register_toolbar.py                                   │
-│    1. Qt dialog (PyQt5 widgets)                        │
-│    2. cubit.cmd('save cub5 "temp.cub5" overwrite')     │
-│    3. QProcess.start(external_python, [calc_*.py, ...])│
-│    4. QProcess.finished -> read JSON result file       │
-│    5. Update Qt dialog with results                    │
-└────────────────────────────────────────────────────────┘
-                    │ QProcess (non-blocking)
-┌─ External Python (system Python 3.12, has NGSolve) ───┐
-│  calc_volume.py / calc_surface.py / calc_inductance.py │
-│    1. Import NGSolve FIRST (before cubit)              │
-│    2. Import cubit (suppress banner, -noinit)          │
-│    3. cubit.cmd('open "temp.cub5"')                    │
-│    4. Compute (export_NGSolveCurvedMesh, Integrate, etc.)          │
-│    5. print(json.dumps(result)) to stdout              │
-│                                                        │
-│  RULES:                                                │
-│    - NO Qt imports (PySide6, PyQt5)                    │
-│    - NO GUI code                                       │
-│    - JSON output to stdout only                        │
-│    - All other print output suppressed                 │
-└────────────────────────────────────────────────────────┘
+Cubit GUI (bundled Python 3.10, has PyQt5)
+  register_toolbar.py
+    1. Qt dialog (modeless, non-blocking)
+    2. cubit.cmd('save cub5 "temp.cub5" overwrite')
+    3. QProcess.start(external_python, [calc_*.py, ...])
+    4. QProcess.finished -> read JSON result file (--output)
+    5. Update Qt dialog with results
+
+External Python (system Python 3.12, has NGSolve)
+  calc_volume.py / calc_surface.py / calc_inductance.py
+    1. Import NGSolve FIRST (before cubit)
+    2. Import cubit (suppress banner, -noinit)
+    3. cubit.cmd('open "temp.cub5"')
+    4. Compute (export_NGSolveCurvedMesh, BEM, etc.)
+    5. Write result to --output JSON file
 ```
 
 ## Critical Rules
@@ -1652,273 +1680,152 @@ subprocess** because Cubit's bundled Python (3.10) does not have NGSolve.
 2. **QProcess, not subprocess.run()**: subprocess.run() blocks the GUI thread,
    causing Cubit to freeze/crash. QProcess is non-blocking.
 
-3. **-noinit flag**: `cubit.init([..., "-noinit"])` prevents .cubit startup
-   file from being replayed when opening cub5 in external Python. The .cubit
-   file loads register_toolbar.py which imports PyQt5 (unavailable in external
-   Python).
-
-4. **Suppress cubit banner**: `cubit.init()` outputs a large banner to
-   C-level stderr. Use `contextlib.redirect_stderr(io.StringIO())`.
-
-5. **JSON parsing**: Use `_parse_json_output()` that finds `{` line in stdout.
-   cubit.cmd() outputs to C-level stdout which cannot be suppressed by Python.
-
-6. **Cubit site-packages cleanup**: After `import cubit`, remove Cubit's
-   bundled site-packages from sys.path to avoid numpy/scipy conflicts:
+3. **Modeless dialogs**: Use `dialog.show()` not `dialog.exec()`. Modal
+   exec() blocks Cubit's main window. Keep a reference on main_window to
+   prevent garbage collection:
    ```python
-   for p in list(sys.path):
-       if "site-packages" in p and ("cubit" in p.lower() or "Cubit" in p):
-           sys.path.remove(p)
+   def _show_dialog():
+       if not hasattr(main_window, '_dlg') or main_window._dlg is None:
+           main_window._dlg = MyDialog(main_window)
+       main_window._dlg.show()
+       main_window._dlg.raise_()
+   action.triggered.connect(_show_dialog)
    ```
 
-## Optuna SQLite Integration for Parameter Studies
+4. **-noinit flag**: `cubit.init([..., "-noinit"])` prevents .cubit startup
+   file from being replayed when opening cub5 in external Python.
 
-Panel computations (e.g., inductance extraction) can be recorded as Optuna
-trials in a SQLite database. This enables parameter sweep visualization via
-optuna-dashboard without any optimization code.
+5. **Suppress cubit banner**: `cubit.init()` outputs a large banner to
+   C-level stderr. Use `contextlib.redirect_stderr(io.StringIO())`.
 
-### Architecture
+6. **JSON result via --output file**: Do NOT rely on stdout parsing.
+   cubit.cmd() pollutes C-level stdout. Use `--output result.json`:
+   ```python
+   # calc_inductance.py
+   parser.add_argument("--output", default="")
+   if args.output:
+       with open(args.output, "w") as f:
+           json.dump(result, f)
 
+   # register_toolbar.py
+   args = [..., "--output", json_path]
+   # In _on_extract_finished:
+   with open(json_path, "r") as f:
+       data = json.load(f)
+   ```
+
+7. **Cubit site-packages cleanup**: After `import cubit`, remove Cubit's
+   bundled site-packages from sys.path to avoid numpy/scipy conflicts.
+
+8. **startup.py encoding**: Use `exec(open(..., encoding="utf-8").read())`
+   because Windows Japanese locale defaults to cp932. Never use non-ASCII
+   characters (em dash, smart quotes, etc.) in register_toolbar.py.
+
+## BEM Inductance Panel (DC, Source/Sink EFIE)
+
+### Method
+
+Saddle point EFIE with source/sink current injection:
 ```
-┌─ InductanceDialog (Qt) ──────────────────────────────────┐
-│  Solve → subprocess(calc_inductance.py) → JSON result    │
-│  → optuna_study_helper.record_trial(params, result)      │
-│  → SQLite DB (next to .cub5)                             │
-│  Dashboard button → optuna-dashboard → browser           │
-└──────────────────────────────────────────────────────────┘
+[SL  D^T] [J] = [0]
+[D   0  ] [p] = [g]
 ```
+- SL = LaplaceSL (ngsolve.bem, Laplace kernel 1/(4*pi*r))
+- D = divergence (HDivSurface -> SurfaceL2 order=0)
+- g = +1/A_source on source faces, -1/A_sink on sink faces
+- L = mu_0 * J^T @ SL @ J
 
-### Key Design Decisions
+### Block Registration for Source/Sink
 
-1. **calc_*.py does NOT depend on Optuna** — subprocess returns pure JSON.
-   Optuna recording happens in the GUI process (register_toolbar.py).
-
-2. **SQLite placed next to .cub5** — `model.cub5` → `model_optuna.db`.
-   Study name derived from filename (e.g., "model").
-
-3. **Optuna is optional** — all imports guarded with try/except.
-   Panel works identically without Optuna; trials just not recorded.
-
-4. **FrozenTrial + add_trial()** — NOT ask/tell (which is for optimization).
-   Manual parameter setting + explicit result recording.
-
-5. **.msh file linked to trial** — gmsh_file path stored in user_attrs,
-   so each trial's visualization is traceable from the dashboard.
-
-### Parameter Classification (Optuna)
-
-| Storage | Fields | Purpose |
-|---------|--------|---------|
-| **params** (suggest_*) | curve_order, conductivity, frequency, source_block, sink_block | Dashboard axes, plottable |
-| **values** | inductance_H | Objective value, sortable |
-| **user_attrs** | n_free_dofs, neg_diag, surface_area, gmsh_file, cub5_file, display | Metadata, table columns |
-
-### Usage
+CRITICAL: Register source/sink blocks AFTER conductor, BEFORE boundary.
+In export_NGSolveCurvedMesh, last block wins for bcname. Source/sink
+(subset) must have higher block ID than boundary (superset).
 
 ```python
-from optuna_study_helper import InductanceStudy
+# CORRECT: source/sink before boundary
+cubit.cmd("set duplicate block elements on")
+cubit.cmd("block 1 add volume all")
+cubit.cmd('block 1 name "conductor"')
+cubit.cmd("block 2 add face in surface 1")   # gap face
+cubit.cmd('block 2 name "source"')
+cubit.cmd("block 3 add face in surface 3")   # gap face
+cubit.cmd('block 3 name "sink"')
+cubit.cmd("block 4 add face in surface all")  # superset last
+cubit.cmd('block 4 name "boundary"')
 
-study = InductanceStudy("model.cub5")  # creates/loads model_optuna.db
-study.record_trial(
-    params={"curve_order": 2, "conductivity": 5.8e7, ...},
-    result={"inductance_H": 3.7e-7, "n_free_dofs": 1073, ...},
-)
-study.launch_dashboard()  # opens browser at localhost:8080
+# WRONG: boundary first -> source/sink labels overridden
+cubit.cmd("block 1 add face all")           # boundary first
+cubit.cmd('block 1 name "boundary"')
+cubit.cmd("block 2 add face in surface 1")  # last block wins
+cubit.cmd('block 2 name "source"')          # boundary overrides!
 ```
 
-### Future: Optimization
+### Hex Mesh for BEM (Recommended)
 
-The same DB is Optuna-native. To add automatic optimization later:
-```python
-import optuna
-study = optuna.load_study(study_name="model", storage="sqlite:///model_optuna.db")
-study.optimize(objective_fn, n_trials=50)  # Adds trials to same DB
+Create gapped torus by revolve (NOT subtract). Subtract creates complex
+topology that Cubit's sweeper cannot handle.
+
+```
+# Revolve approach (sweepable)
+create surface circle radius 0.005 yplane
+move surface 1 x 0.05 include_merged
+sweep surface 1 zaxis angle 355
+volume 1 scheme sweep source surface 1 target surface 3
+surface 1 size 0.005
+surface 1 scheme pave
+mesh surface 1
+mesh volume 1
 ```
 
-## Working Example: Volume Calculator
+Surface IDs from revolve are deterministic: 1=start, 2=body, 3=end.
 
-### Panel side (register_toolbar.py, runs in Cubit Python)
+### Panel UI Settings
 
-```python
-from PyQt5.QtCore import QProcess
+| Setting | Values | Default | Description |
+|---------|--------|---------|-------------|
+| Curve order | 1-2 | 2 | Mesh geometry (2=curved elements) |
+| FES order | 0-2 | 0 | HDivSurface basis (0=RWG) |
 
-class VolumeCalculatorDialog(QDialog):
-    def _calculate_ngsolve(self):
-        # 1. Save model
-        tmpdir = tempfile.mkdtemp(prefix="radia_vol_")
-        cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\\\", "/")
-        cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
+- Curve(2): improves geometric accuracy (integration points on curved surface)
+- FES order=0: sufficient for smooth current distributions (torus)
+- FES order=1: useful for sharp features (corners, edges)
+- Constraint (SurfaceL2) is always order=0 (element-wise current conservation)
 
-        # 2. Launch external Python (non-blocking)
-        calc_script = os.path.join(_this_dir, "calc_volume.py")
-        args = ["--cub5", cub5_file, "--order", str(order)]
+### Performance (source/sink EFIE, ToDense)
 
-        self._process = QProcess(self)
-        self._process.finished.connect(self._on_calc_finished)
-        self._process.start(external_python, [calc_script] + args)
+| DOFs | SL assembly | SL extract | Solve | Total |
+|------|------------|------------|-------|-------|
+| ~1000 | 0.6s | 1.6s | 0.1s | ~2s |
+| ~2000 | 4.5s | 26s | 0.6s | ~31s |
+| ~5000 | 19s | 143s | 2.5s | ~165s |
 
-    def _on_calc_finished(self, exit_code, exit_status):
-        # 3. Parse JSON from stdout
-        data = _parse_json_output(self._process)
-        if data and "error" not in data:
-            # 4. Update UI with results
-            self.table.setItem(row, col, QTableWidgetItem(str(data["volume"])))
+Bottleneck: SL extract (ToDense) is O(N^2). For larger problems, need
+iterative solver + FMM matvec.
+
+D matrix: use mat.ToDense().NumPy() (0.01s), NOT column-by-column extraction
+(13s for 5000 DOFs).
+
+### Cubit Surface Mesh Size Control
+
+`volume all size X` only affects interior tets, NOT surface mesh.
+Cubit's trimesher uses geometry-based sizing by default.
+
+To control surface mesh density:
+```
+set trimesher geometry sizing off   # disable curvature-based sizing
+surface all size 0.005              # explicit surface element size
 ```
 
-### Computation side (calc_volume.py, runs in system Python)
+Without this, all mesh size values give the same surface mesh count.
 
-```python
-# Import NGSolve FIRST
-from ngsolve import Mesh, Integrate, CF
-from netgen.occ import OCCGeometry
+### GMSH Visualization
 
-# Import cubit with cleanup
-import sys
-sys.path.append(find_cubit_bin())
-for p in list(sys.path):
-    if "site-packages" in p and "cubit" in p.lower():
-        sys.path.remove(p)
-import cubit
-import io, contextlib
-with contextlib.redirect_stderr(io.StringIO()):
-    cubit.init(["cubit", "-nojournal", "-batch", "-noinit"])
-for p in list(sys.path):
-    if "site-packages" in p and "cubit" in p.lower():
-        sys.path.remove(p)
+Open GMSH button launches gmsh.bat with the result .msh file.
+GMSH location: C:\\Program Files\\Python312\\Scripts\\gmsh.bat (pip install gmsh).
+Fallback: os.startfile() opens with OS default application.
 
-# Open model and compute
-cubit.cmd(f'open "{cub5_file}"')
-# ... export to Netgen, Integrate, etc.
-
-# Output JSON (only JSON on stdout, everything else suppressed)
-print(json.dumps({"volume": total_vol, "order": order}))
-```
-
-## startup.py (Cubit GUI startup)
-
-Generated by `install_panels.py`. Runs via Cubit's `play` command (line-by-line).
-Must be ONE line. Adds Cubit site-packages and exec's register_toolbar.py:
-
-```python
-import sys, os; cubit_site = os.path.join(..., "python3", "lib", "site-packages"); \\
-sys.path.insert(0, cubit_site) if cubit_site not in sys.path else None; \\
-__file__ = r"path/to/startup.py"; exec(open(r"path/to/register_toolbar.py").read())
-```
-
-## Menu Registration
-
-Add items to existing Tools menu (not top-level, not toolbar):
-
-```python
-menu_bar = main_window.menuBar()
-for action in menu_bar.actions():
-    if action.text() == "Tools":
-        tools_menu = action.menu()
-        break
-radia_menu = tools_menu.addMenu("Radia-NGSolve")
-radia_menu.addAction(action_vol)
-```
-
-Toolbars are unreliable (Cubit saves/restores visibility via QSettings).
-
-## External Python Detection
-
-```python
-def _find_external_python():
-    # 1. RADIA_PYTHON env var
-    # 2. py -3 (Windows Python Launcher)
-    # 3. python from PATH (skip if Cubit's Python)
-```
-
-## Cubit Path Detection
-
-```python
-from install_panels import find_cubit_bin  # cross-platform glob search
-```
-
-## Pitfalls & Solutions (from production experience)
-
-### 1. Multiple QMainWindows
-Cubit has multiple QMainWindows. The first one found is NOT the main GUI:
-```python
-def _find_main_window():
-    app = QApplication.instance()
-    best, best_count = None, 0
-    for widget in app.topLevelWidgets():
-        if isinstance(widget, QMainWindow):
-            count = len(widget.menuBar().actions())
-            if count > best_count:
-                best_count = count
-                best = widget
-    return best  # Select window with most menu items
-```
-
-### 2. parse_cubit_list('selected') errors
-`cubit.parse_cubit_list("volume", "selected")` prints errors in some contexts.
-Always wrap in try/except:
-```python
-try:
-    selected = cubit.parse_cubit_list("volume", "selected")
-    if selected:
-        return list(selected)
-except Exception:
-    pass
-return list(cubit.get_entities("volume"))
-```
-
-### 3. .cubit replay on cub5 open
-`cubit.cmd('open "file.cub5"')` replays `~/.cubit`, which runs startup.py,
-which loads register_toolbar.py (imports PyQt5). In external Python, PyQt5
-is not available. Two mitigations:
-- `cubit.init([..., "-noinit"])` to skip .cubit replay
-- startup.py: wrap exec in try/except to silently skip on import error
-
-### 4. C-level stdout/stderr pollution
-`cubit.init()` and `cubit.cmd()` write to C-level stdout/stderr which
-CANNOT be captured by Python's `sys.stdout` redirect. Solutions:
-- BEMExtractor print: `sys.stdout = io.StringIO()` captures Python print
-- cubit banner: `contextlib.redirect_stderr(io.StringIO())` for Python stderr
-- C-level output: cannot be suppressed, use JSON-finding parser:
-```python
-def _parse_json_output(process):
-    stdout = process.readAllStandardOutput().data().decode("utf-8")
-    for line in stdout.strip().split("\\n"):
-        if line.strip().startswith("{"):
-            try:
-                return json.loads(line)
-            except json.JSONDecodeError:
-                continue
-    return None  # No JSON found
-```
-
-### 5. Toolbar visibility (avoid toolbars)
-Cubit saves/restores toolbar visibility via QSettings. Custom toolbars
-appear invisible on restart. **Use menu items instead**:
-```python
-# Add to existing Tools menu (reliable)
-for action in menu_bar.actions():
-    if action.text() in ("Tools", "&Tools"):
-        tools_menu = action.menu()
-        break
-radia_menu = tools_menu.addMenu("Radia-NGSolve")
-# NOT: menu_bar.addMenu("Radia-NGSolve")  # top-level may not render
-# NOT: main_window.addToolBar(...)          # visibility lost on restart
-```
-
-### 6. Cubit play command (one-liner constraint)
-Cubit's `play "script.py"` executes the file **line by line**, not as a
-whole script. Multi-line statements (try/except, class, def) break.
-Use a one-liner startup.py that exec's the real script:
-```
-play "startup.py"   # .cubit file
-# startup.py content (ONE line):
-import sys; exec(open(r"path/to/register_toolbar.py").read())
-```
-
-### 7. Volume: Order >1 uses export_NGSolveCurvedMesh (ACIS CallbackGeometry)
-`export_NGSolveCurvedMesh(cubit, order=N)` handles high-order curving automatically
-via ACIS CallbackGeometry. No STEP files, no OCC geometry, no SetGeomInfo.
-For order=1, export_NGSolveCurvedMesh still works (returns uncurved mesh).
+Result .msh contains |J| field (per-node current density magnitude)
+on curved surface elements (Tri6 for Curve(2)).
 """
 
 
