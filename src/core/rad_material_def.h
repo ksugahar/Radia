@@ -1670,6 +1670,9 @@ class radTPlayHysteresisMaterial : public radTHysteresisMaterial {
 	double m_B_mono_max;                  // B at monotone boundary [Tesla]
 	double m_H_mono_max;                  // H(B_mono_max) [A/m]
 
+	// Energy-based decomposition: H = nu_rev*B + H_irr(B)
+	double m_nu_rev;                      // Reversible reluctivity [A/m/T]
+
 	// Cached results from last Forward() call
 	TMatrix3d m_last_dHdB;                // Analytical Jacobian dH/dB
 	TVector3d m_last_H;
@@ -1689,7 +1692,7 @@ public:
 
 	// Default constructor
 	radTPlayHysteresisMaterial()
-		: m_K(0), m_B_mono_max(1.0), m_H_mono_max(0),
+		: m_K(0), m_B_mono_max(1.0), m_H_mono_max(0), m_nu_rev(0),
 		  m_last_chi(0), m_last_chi_d(0), m_has_result(false) {}
 
 	// Precompute monotone limit on virgin curve
@@ -1740,6 +1743,11 @@ public:
 	TVector3d Inverse(const TVector3d& H) override;    // H -> B, Newton with analytical Jacobian
 
 	void ComputeJacobian(TMatrix3d& dBdH, double& chi_d) const override;
+
+	// Energy-based decomposition: H = nu_rev*B + H_irr(B)
+	void ComputeNuRev();                               // Called after construction
+	double GetNuRev() const { return m_nu_rev; }       // For Hantila solver
+	TVector3d Irreversible(const TVector3d& B);        // H_irr = Forward(B) - nu_rev*B
 
 	// State management
 	void SaveState(std::vector<TVector3d>& saved) const override

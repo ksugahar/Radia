@@ -3538,6 +3538,54 @@ radTPlayHysteresisMaterial::radTPlayHysteresisMaterial(
 	m_last_dHdB = Eye();
 
 	ComputeMonotoneLimits();
+	ComputeNuRev();
+}
+
+//-------------------------------------------------------------------------
+// ComputeNuRev: reversible reluctivity for energy-based decomposition
+// H = nu_rev * B + H_irr(B)
+// nu_rev = max total slope of virgin curve (ensures contraction ratio < 1)
+//-------------------------------------------------------------------------
+void radTPlayHysteresisMaterial::ComputeNuRev()
+{
+	// Scan virgin curve to find maximum dH/dB
+	double B_sat = GetBsaturation();
+	if(B_sat < 1e-10) { m_nu_rev = 0; return; }
+
+	int n_scan = 500;
+	double dB_step = B_sat / n_scan;
+	double max_dHdB = 0;
+
+	for(int i = 1; i <= n_scan; i++)
+	{
+		double B_val = i * dB_step;
+		double dHdB_val = 0;
+
+		for(int k = 0; k < m_K; k++)
+		{
+			double pk_val = B_val - m_eta[k];
+			if(pk_val <= 1e-30) continue;
+			dHdB_val += dfk(k, pk_val);
+		}
+
+		if(dHdB_val > max_dHdB)
+			max_dHdB = dHdB_val;
+	}
+
+	m_nu_rev = max_dHdB;
+}
+
+//-------------------------------------------------------------------------
+// Irreversible: H_irr = Forward(B) - nu_rev * B
+// For Hantila solver: constant matrix uses nu_rev, residual uses H_irr
+//-------------------------------------------------------------------------
+TVector3d radTPlayHysteresisMaterial::Irreversible(const TVector3d& B)
+{
+	TVector3d H = Forward(B);
+	return TVector3d(
+		H.x - m_nu_rev * B.x,
+		H.y - m_nu_rev * B.y,
+		H.z - m_nu_rev * B.z);
 }
 
 double radTPlayHysteresisMaterial::fk(int k, double r_mag) const
