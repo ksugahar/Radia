@@ -1,0 +1,28 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11", "ngsolve>=6.2.2601", "mkl-devel"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "ngsolve-sparsesolv"
+version = "3.1.1"
+description = "Compact AMS/COCR solvers for NGSolve HCurl problems"
+readme = "README.md"
+license = {text = "MPL-2.0"}
+requires-python = ">=3.10"
+dependencies = [
+    "ngsolve>=6.2.2601",
+    "mkl>=2024.2.0",
+    "intel-cmplr-lib-rt",
+    "numpy",
+]
+
+[project.urls]
+Homepage = "https://github.com/ksugahar/ngsolve-sparsesolv"
+Documentation = "https://github.com/ksugahar/ngsolve-sparsesolv/tree/main/docs"
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+wheel.packages = []
+
+[tool.scikit-build.cmake.define]
+SPARSESOLV_BUILD_NGSOLVE = "ON"

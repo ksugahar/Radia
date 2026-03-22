@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-03-09T19:48:19.094472",
+  "hostname": "lab",
+  "benchmark": "ams_vs_abmc",
+  "physics": {
+    "frequency_hz": 30000.0,
+    "sigma_cu": 59600000.0,
+    "mu_r_core": 1000,
+    "tol": 1e-10,
+    "maxiter": 20000
+  },
+  "environment": {
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "cpu_count": 8
+  },
+  "emd_reference": {
+    "paper": "Hiruma SA-26-001, 2026.3.5",
+    "ndof": 3670328,
+    "results": [
+      {
+        "method": "IC only",
+        "iterations": 15838,
+        "t_solve": 5964.8
+      },
+      {
+        "method": "EMD (IC+AMG V)",
+        "iterations": 4069,
+        "t_solve": 1716.8
+      },
+      {
+        "method": "EMD (IC+AMG W)",
+        "iterations": 2935,
+        "t_solve": 1552.9
+      },
+      {
+        "method": "EMD (IC+GenEO 24)",
+        "iterations": 1004,
+        "t_solve": 550.8
+      }
+    ]
+  },
+  "cases": [
+    {
+      "mesh": "mesh1_3.5T.msh",
+      "ne": 166198,
+      "ndof_hcurl": 197395,
+      "ndof_h1": 29901,
+      "results": [
+        {
+          "method": "Compact AMS + COCR",
+          "iterations": 168,
+          "t_setup": 0.954,
+          "t_solve": 6.272,
+          "t_total": 7.225,
+          "ms_per_iter": 37.3,
+          "true_residual": 7.816885630469495e-11,
+          "converged": true,
+          "speedup_vs_ams": 1.0
+        },
+        {
+          "method": "ABMC-ICCG (IC, block=4, colors=4)",
+          "iterations": 17178,
+          "t_setup": 0.0,
+          "t_solve": 438.358,
+          "t_total": 438.358,
+          "ms_per_iter": 25.5,
+          "true_residual": 2.751084617118953e-10,
+          "converged": false,
+          "speedup_vs_ams": null
+        },
+        {
+          "method": "ABMC-COCR (IC, block=4, colors=4)",
+          "iterations": 20000,
+          "t_setup": 0.0,
+          "t_solve": 228.895,
+          "t_total": 228.896,
+          "ms_per_iter": 11.4,
+          "true_residual": 4.00430349280723e-06,
+          "converged": false,
+          "speedup_vs_ams": null
+        }
+      ]
+    }
+  ]
+}
