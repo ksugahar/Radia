@@ -932,7 +932,6 @@ EXP int CALL RadFldFrc(double* f, int* nf, int obj, int shape);
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 @author O.C.
 */
-EXP int CALL RadFldFocPot(double* d, int obj, double* P1, double* P2, int np);
 
 /** Computes magnetic field integral produced by the object obj along a straight line specified by points P1 and P2; depending on the InfOrFin variable value, the integral is infinite ("inf") or finite ("fin"), from P1 to P2; the field integral component is specified by the id input variable. The unit is T*mm.
 @param f [out] computed field integral component(s)
@@ -964,50 +963,7 @@ EXP int CALL RadFldLst(double* B, int* nB, int obj, char* id, double* P1, double
 
 // NOTE: RadFldPtcTrj (particle trajectory) REMOVED (2026-03-22). Use CERN Xsuite/Xtrack.
 
-/** Computes matrices of 2nd order kicks for trajectory of relativistic charged particle in periodic magnetic field produced by the object obj. The computed kick matrices can be used in charged particle tracking codes. The longitudinal integration along one period starts at point P1 and is done along direction pointed by vector Ns; one direction of the transverse grid is pointed by vector Ntr, the other transverse direction is given by vector product of Ntr and Ns.
-@param M1 [out] flat array of real numbers representing the matrix of kick values in the first transverse direction given by the Ntr vector
-@param M2 [out] flat array of real numbers representing the matrix of kick values in the second transverse direction given by vector product of Ntr and Ns
-@param IntBtrE2 [out] flat array of real numbers representing the matrix of longitudinally-integrated squared transverse magnetic field
-@param Arg1 [out] array of position values in the first transverse direction where kick matrix was computed
-@param Arg2 [out] array of position values in the second transverse direction where kick matrix was computed
-@param size [out] length of formatted string containing the computed results; such string can be prepared by the function RadFldFocKickPerFormStr
-@param obj [in] reference number of the object creating the magnetic field
-@param P1 [in] array of 3 real numbers specifying cartesian coordinates of the integration start point
-@param Ns [in] array of 3 real numbers specifying cartesian coordinates of a vector defining the longitudinal direction for the periodic magnetic field
-@param per [in] period length
-@param nper [in] number of full periods
-@param nps [in] number of longitudinal points
-@param Ntr [in] array of 3 real numbers specifying cartesian coordinates of a vector defining first transverse direction
-@param r1 [in] range of the transverse grid along direction given by Ntr vector
-@param np1 [in] number of points in the transverse grid along direction given by Ntr vector
-@param d1 [in] step to calculate derivative along direction given by Ntr vector; d1=0 means that the step for derivative calculation is equal to the corresponding step of the transverse grid where kick matrix is computed
-@param r2 [in] range of the transverse grid along direction given by vector product of Ntr and Ns
-@param np2 [in] number of points in the transverse grid along direction given by vector product of Ntr and Ns
-@param d2 [in] step to calculate derivative along direction given by vector product of Ntr and Ns; d2=0 means that the step for derivative calculation is equal to the corresponding step of the transverse grid where kick matrix is computed
-@param nh [in] maximum number of magnetic field harmonics to take into account
-@param com [in] arbitrary string comment
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@authors: P.E., O.C.
-*/
-EXP int CALL RadFldFocKickPer(double* M1, double* M2, double* IntBtrE2, double* Arg1, double* Arg2, int* size, int obj, double* P1, double* Ns, double per, int nper, int nps, double* Ntr, double r1, int np1, double d1, double r2, int np2, double d2, int nh, char* com, char* unit, double en, char* frm); //OC03112019
-//EXP int CALL RadFldFocKickPer(double* M1, double* M2, double* IntBtrE2, double* Arg1, double* Arg2, int* size, int obj, double* P1, double* Ns, double per, int nper, int nps, double* Ntr, double r1, int np1, double d1, double r2, int np2, double d2, int nh, char* com);
-
-/** Prepares a formatted string containing second-order kick matrices for trajectory of relativistic charged particle in periodic magnetic field.
-@param str [out] C-string containing second-order kick matrices values in the format compatible with particle tracking computer codes (e.g. BETA, TRACY)
-@param M1 [in] flat array of real numbers representing the matrix of kick values in one transverse direction
-@param M2 [in] flat array of real numbers representing the matrix of kick values in another transverse direction
-@param IntBtrE2 [in] flat array of real numbers representing the matrix of longitudinally-integrated squared transverse magnetic field
-@param Arg1 [in] array of position values in the first transverse direction where kick matrix was computed
-@param Arg2 [in] array of position values in the second transverse direction where kick matrix was computed
-@param np1 [in] number of points in the transverse grid along the first transverse direction
-@param np2 [in] number of points in the transverse grid along the second transverse direction
-@param per [in] period length
-@param nper [in] number of full periods
-@param com [in] arbitrary string comment that will be included into the formatted string str
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@authors: O.C.
-*/
-EXP int CALL RadFldFocKickPerFormStr(char* str, double* M1, double* M2, double* IntBtrE2, double* Arg1, double* Arg2, int np1, int np2, double per, int nper, char* com);
+// NOTE: RadFldFocKickPer, RadFldFocKickPerFormStr REMOVED (2026-03-22).
 
 /** Computes a virtual "shim signature", i.e. variation of a given magnetic field component introduced by given displacement of magnetic field source object.
 @param f [out] computed array of field component values
