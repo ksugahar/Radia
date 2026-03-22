@@ -1820,12 +1820,32 @@ Without this, all mesh size values give the same surface mesh count.
 
 ### GMSH Visualization
 
-Open GMSH button launches gmsh.bat with the result .msh file.
-GMSH location: C:\\Program Files\\Python312\\Scripts\\gmsh.bat (pip install gmsh).
-Fallback: os.startfile() opens with OS default application.
+Open GMSH button launches GMSH GUI via external Python:
+```python
+ext_python -c "import sys, gmsh; gmsh.initialize(sys.argv, run=True); gmsh.finalize()" file.msh
+```
+
+CRITICAL: Do NOT use gmsh.bat or `python -m gmsh` from Cubit's Python.
+- gmsh.bat is a Python wrapper that calls system python, but Cubit's Python
+  intercepts the call
+- `python -m gmsh` does NOT launch the GUI
+- Only `gmsh.initialize(sys.argv, run=True)` launches the GMSH GUI window
 
 Result .msh contains |J| field (per-node current density magnitude)
 on curved surface elements (Tri6 for Curve(2)).
+
+### Panel Code Reload (No Cubit Restart)
+
+To reload panel code after editing register_toolbar.py, run in Cubit:
+```
+play "S:/Radia/01_GitHub/src/radia/panels/startup.py"
+```
+This re-exec's register_toolbar.py, updating all class definitions.
+The menu shows "Radia menu already registered." (duplicate check), but
+dialog classes (InductanceDialog, etc.) are reloaded with new code.
+
+After reload, close and reopen the dialog to use updated code.
+Existing dialog instances use the OLD class definition.
 """
 
 
