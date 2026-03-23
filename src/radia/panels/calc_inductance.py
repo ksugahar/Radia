@@ -244,7 +244,7 @@ def extract_inductance(cub5_file, order, source_label="source",
     except Exception:
         gmsh_file_J = ""
 
-    # --- Phase 4: B-distribution GMSH (volume B via PotentialCF) ---
+    # --- Phase 4: B-distribution (volume B via Biot-Savart) ---
     gmsh_file_B = ""
     try:
         gmsh_file_B = _compute_B_distribution(
@@ -252,6 +252,10 @@ def extract_inductance(cub5_file, order, source_label="source",
     except Exception as e:
         sys.stderr.write(f"B_FIELD_ERROR:{e}\n")
         sys.stderr.flush()
+
+    # --- Phase 5: Combined .geo (all views in one GMSH window) ---
+    gmsh_geo = os.path.join(base_dir, "inductance.geo").replace("\\", "/")
+    _write_combined_geo(gmsh_geo, gmsh_file_J, gmsh_file_B, base_dir)
 
     return {
         "inductance_H": float(L_total),
@@ -264,9 +268,7 @@ def extract_inductance(cub5_file, order, source_label="source",
         "constraint_residual": residual,
         "curve_order": order,
         "fes_order": fes_order,
-        "gmsh_file": gmsh_file_J,
-        "gmsh_file_J": gmsh_file_J,
-        "gmsh_file_B": gmsh_file_B,
+        "gmsh_file": gmsh_geo,
     }
 
 
@@ -424,6 +426,34 @@ def _write_coil_wireframe(mesh_surf, filename):
         for idx, (a, b) in enumerate(sorted(edges)):
             f.write(f'{idx + 1} 1 2 1 1 {a + 1} {b + 1}\n')  # type 1 = 2-node line
         f.write('$EndElements\n')
+
+
+def _write_combined_geo(geo_file, gmsh_file_J, gmsh_file_B, base_dir):
+    """Write a .geo that merges all result files into one GMSH window.
+
+    GMSH tree will show:
+      Post-processing
+        [0] |B|   (volume)
+        [1] B     (volume vectors)
+        [2] |J|   (surface, visible on coil)
+        [3] J     (surface vectors)
+    Plus coil wireframe as 1D mesh overlay.
+    """
+    coil_file = os.path.join(base_dir, "inductance_coil.msh").replace("\\", "/")
+    with open(geo_file, 'w', encoding='utf-8') as f:
+        f.write('// Combined inductance visualization\n')
+        # B-distribution first (volume mesh establishes 3D context)
+        if gmsh_file_B and os.path.exists(gmsh_file_B):
+            f.write(f'Merge "{os.path.basename(gmsh_file_B)}";\n')
+        # J-distribution (surface mesh + field views overlay)
+        if gmsh_file_J and os.path.exists(gmsh_file_J):
+            f.write(f'Merge "{os.path.basename(gmsh_file_J)}";\n')
+        # Coil wireframe (1D lines, always visible on top)
+        if os.path.exists(coil_file):
+            f.write(f'Merge "{os.path.basename(coil_file)}";\n')
+        f.write('Mesh.NumSubEdges = 4;\n')
+        # Hide volume mesh edges for cleaner view
+        f.write('Mesh.VolumeEdges = 0;\n')
 
 
 def main():
