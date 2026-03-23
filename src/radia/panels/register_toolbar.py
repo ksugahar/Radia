@@ -1147,11 +1147,17 @@ def register_menu():
 		# Fallback: add to menu bar directly
 		tools_menu = menu_bar
 
-	# Check if already registered (avoid duplicates on re-play)
+	# Remove old menu on re-play (so new class definitions take effect)
 	for action in tools_menu.actions():
 		if action.text() == "Radia-NGSolve":
-			print("Radia menu already registered.")
-			return
+			tools_menu.removeAction(action)
+			# Close stale modeless dialogs
+			for attr in ('_radia_ind_dlg',):
+				dlg = getattr(main_window, attr, None)
+				if dlg is not None:
+					dlg.close()
+					setattr(main_window, attr, None)
+			print("Radia menu re-registered.")
 
 	# Create Radia submenu under Tools
 	radia_menu = tools_menu.addMenu("Radia-NGSolve")
