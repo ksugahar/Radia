@@ -1197,6 +1197,23 @@ def register_menu():
 	action_ind.triggered.connect(_show_inductance)
 	radia_menu.addAction(action_ind)
 
+	# Separator + Reload
+	radia_menu.addSeparator()
+	action_reload = QAction("Reload Panels", main_window)
+	action_reload.setStatusTip("Re-read register_toolbar.py from disk (development)")
+	def _reload_panels():
+		startup = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+		                       "startup.py").replace("\\", "/")
+		if os.path.exists(startup):
+			exec(open(startup, encoding="utf-8").read(), globals())
+		else:
+			# Fallback: re-exec register_toolbar.py directly
+			rt = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+			                  "register_toolbar.py")
+			exec(open(rt, encoding="utf-8").read(), globals())
+	action_reload.triggered.connect(_reload_panels)
+	radia_menu.addAction(action_reload)
+
 	if is_reload:
 		print("Radia-NGSolve menu re-registered (code updated).")
 	else:

@@ -95,9 +95,20 @@ def find_cubit_site_packages(cubit_bin=None):
 	return None
 
 
-def _get_cubit_startup_file():
-	"""Get the path to the user's .cubit startup file."""
-	return os.path.join(os.path.expanduser("~"), ".cubit")
+def _get_cubit_startup_files():
+	"""Get paths to all .cubit startup files to install.
+
+	Returns list of paths:
+	  - Current user: ~/.cubit
+	  - Default profile: C:\\Users\\Default\\.cubit (all future users, Windows)
+	"""
+	paths = [os.path.join(os.path.expanduser("~"), ".cubit")]
+	if sys.platform == "win32":
+		default = os.path.join(os.environ.get("SystemDrive", "C:"),
+		                       os.sep, "Users", "Default", ".cubit")
+		if os.path.isdir(os.path.dirname(default)):
+			paths.append(default)
+	return paths
 
 
 def _get_panels_dir():
@@ -200,56 +211,48 @@ def install_panels():
 	cubit_bin = find_cubit_bin()
 	print(f"Cubit bin:      {cubit_bin or 'not found (set CUBIT_PATH)'}")
 
-	# Step 2: Update ~/.cubit
-	cubit_file = _get_cubit_startup_file()
-	print(f"Startup file:   {cubit_file}")
-	print()
-
-	# Read existing content
-	lines = []
-	if os.path.isfile(cubit_file):
-		with open(cubit_file, "r", encoding="utf-8") as f:
-			lines = f.readlines()
-
-	# Remove old block if present
-	lines = _remove_existing_block(lines)
-
-	# Append new block
+	# Step 2: Update all .cubit startup files (current user + default profile)
+	cubit_files = _get_cubit_startup_files()
 	block = _build_startup_block(startup_script)
-	lines.append("\n" + block)
 
-	# Write back
-	with open(cubit_file, "w", encoding="utf-8") as f:
-		f.writelines(lines)
+	for cubit_file in cubit_files:
+		lines = []
+		if os.path.isfile(cubit_file):
+			with open(cubit_file, "r", encoding="utf-8") as f:
+				lines = f.readlines()
+		lines = _remove_existing_block(lines)
+		lines.append("\n" + block)
+		try:
+			with open(cubit_file, "w", encoding="utf-8") as f:
+				f.writelines(lines)
+			print(f"Updated: {cubit_file}")
+		except PermissionError:
+			print(f"SKIP (no permission): {cubit_file}")
 
+	print()
 	print("=== Installation Complete ===")
-	print(f"Updated: {cubit_file}")
 	print("Restart Cubit to load the toolbar.")
 	return True
 
 
 def uninstall_panels():
-	"""Remove the custom toolbar registration from ~/.cubit."""
+	"""Remove the custom toolbar registration from all .cubit files."""
 	print("=== Coreform Cubit Mesh Export - Toolbar Uninstaller ===\n")
 
-	cubit_file = _get_cubit_startup_file()
-	if not os.path.isfile(cubit_file):
-		print("Nothing to uninstall (.cubit file not found).")
-		return True
+	for cubit_file in _get_cubit_startup_files():
+		if not os.path.isfile(cubit_file):
+			continue
+		with open(cubit_file, "r", encoding="utf-8") as f:
+			lines = f.readlines()
+		new_lines = _remove_existing_block(lines)
+		if len(new_lines) < len(lines):
+			try:
+				with open(cubit_file, "w", encoding="utf-8") as f:
+					f.writelines(new_lines)
+				print(f"Removed toolbar from: {cubit_file}")
+			except PermissionError:
+				print(f"SKIP (no permission): {cubit_file}")
 
-	with open(cubit_file, "r", encoding="utf-8") as f:
-		lines = f.readlines()
-
-	new_lines = _remove_existing_block(lines)
-
-	if len(new_lines) == len(lines):
-		print("Nothing to uninstall (no toolbar block found).")
-		return True
-
-	with open(cubit_file, "w", encoding="utf-8") as f:
-		f.writelines(new_lines)
-
-	print(f"Removed toolbar from: {cubit_file}")
 	print("Restart Cubit to apply changes.")
 	return True
 
