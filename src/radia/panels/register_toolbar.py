@@ -914,6 +914,9 @@ class InductanceDialog(QDialog):
 		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
 		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
 
+		# Build command
+		calc_script = os.path.join(_this_dir, "calc_inductance.py")
+
 		# Output dir = examples/cubit_panels/inductance/results/
 		_repo_root = os.path.dirname(os.path.dirname(os.path.dirname(
 			os.path.dirname(os.path.abspath(calc_script)))))
@@ -924,9 +927,6 @@ class InductanceDialog(QDialog):
 
 		# JSON output file (reliable, avoids stdout parsing issues)
 		self._json_output = os.path.join(tmpdir, "result.json").replace("\\", "/")
-
-		# Build command
-		calc_script = os.path.join(_this_dir, "calc_inductance.py")
 		args = [
 			calc_script,
 			"--cub5", cub5_file,
