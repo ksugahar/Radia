@@ -10,7 +10,7 @@ The toolbar script is used in-place (no copying):
 
 Usage:
     # From command line (after pip install):
-    cubit-mesh-export-install-panels
+    cubit-install-panels
 
     # From Python:
     from radia.install_panels import install_panels
