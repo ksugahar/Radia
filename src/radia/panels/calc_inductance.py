@@ -373,7 +373,7 @@ def _write_nastran_ctria6(filename, mesh_surf):
             if len(s) > 16:
                 s = f'{val:.5e}'
             return f'{s:>16}'
-        line1 = f'{"GRID*":8s}{nid:>16d}{"":>16s}{_fmt16(x)}{_fmt16(y)}\n'
+        line1 = f'{"GRID*":8s}{nid:>16d}{0:>16d}{_fmt16(x)}{_fmt16(y)}\n'
         line2 = f'{"*":8s}{_fmt16(z)}\n'
         return line1 + line2
 
