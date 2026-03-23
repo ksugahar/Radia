@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "3.6.1"
+version = "3.6.2"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -72,7 +72,7 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 "ESRF Radia Page" = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
 
 [project.scripts]
-cubit-mesh-export-install-panels = "radia.install_panels:main"
+cubit-install-panels = "radia.install_panels:main"
 mcp-server-radia = "radia.mcp_server.radia.server:main"
 mcp-server-ngsolve = "radia.mcp_server.ngsolve.server:main"
 mcp-server-cubit = "radia.mcp_server.cubit.server:main"
