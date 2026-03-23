@@ -144,16 +144,8 @@ def _parse_json_output(process):
 	return None
 
 
-def _get_selected_volume_ids():
-	"""Get currently selected volume IDs. Returns all if none selected."""
-	try:
-		import io as _io, contextlib
-		with contextlib.redirect_stderr(_io.StringIO()):
-			selected = cubit.parse_cubit_list("volume", "selected")
-		if selected:
-			return list(selected)
-	except Exception:
-		pass
+def _get_all_volume_ids():
+	"""Get all volume IDs in the model."""
 	return list(cubit.get_entities("volume"))
 
 
@@ -308,7 +300,7 @@ class VolumeCalculatorDialog(QDialog):
 
 	def _calculate_cad_volumes(self):
 		"""Calculate CAD volumes for selected volumes."""
-		vol_ids = _get_selected_volume_ids()
+		vol_ids = _get_all_volume_ids()
 		self.table.setRowCount(len(vol_ids) + 1)  # +1 for total row
 
 		total = 0.0
@@ -482,7 +474,7 @@ class SurfaceAreaDialog(QDialog):
 
 	def _calculate_cad_areas(self):
 		"""Calculate CAD surface areas."""
-		vol_ids = _get_selected_volume_ids()
+		vol_ids = _get_all_volume_ids()
 		self.table.setRowCount(len(vol_ids) + 1)
 		total = 0.0
 		self._vol_ids = vol_ids
