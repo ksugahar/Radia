@@ -136,9 +136,13 @@ def extract_inductance(cub5_file, order, source_label="source",
                 f"'{source_label}' and/or '{sink_label}'."}
 
     # --- Phase 1: Export mesh to GMSH (before solve) ---
-    base_dir = os.path.dirname(os.path.abspath(cub5_file))
-    gmsh_file_J = msh_output if msh_output else os.path.join(
-        base_dir, "inductance_J.msh").replace("\\", "/")
+    # Output dir: same as msh_output (all files must be co-located for .geo Merge)
+    if msh_output:
+        base_dir = os.path.dirname(os.path.abspath(msh_output))
+        gmsh_file_J = msh_output
+    else:
+        base_dir = os.path.dirname(os.path.abspath(cub5_file))
+        gmsh_file_J = os.path.join(base_dir, "inductance_J.msh").replace("\\", "/")
     try:
         from gmsh_post_export import GmshPostExport
         post = GmshPostExport(mesh, boundary=True)
