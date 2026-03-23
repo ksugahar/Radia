@@ -371,20 +371,59 @@ def _compute_B_distribution(mesh_surf, fes_J, gf_J, jt, base_dir, MU_0):
     post.add_field("B", B_nodes, ncomp=3)
     post.write(gmsh_file_B)
 
-    # Write .geo that merges B field + coil surface mesh
-    gmsh_file_J = os.path.join(base_dir, "inductance_J.msh").replace("\\", "/")
+    # Write coil wireframe as 1D line elements (always visible on top of volume)
+    coil_file = os.path.join(base_dir, "inductance_coil.msh").replace("\\", "/")
+    _write_coil_wireframe(mesh_surf, coil_file)
+
+    # Write .geo that merges B field + coil wireframe
     geo_file = os.path.splitext(gmsh_file_B)[0] + '.geo'
     with open(geo_file, 'w', encoding='utf-8') as f:
-        f.write('// B-distribution with coil overlay\n')
+        f.write('// B-distribution with coil wireframe overlay\n')
         f.write(f'Merge "{os.path.basename(gmsh_file_B)}";\n')
-        if os.path.exists(gmsh_file_J):
-            f.write(f'Merge "{os.path.basename(gmsh_file_J)}";\n')
+        if os.path.exists(coil_file):
+            f.write(f'Merge "{os.path.basename(coil_file)}";\n')
         f.write('Mesh.NumSubEdges = 4;\n')
 
     sys.stderr.write(f"B_FIELD_READY:{gmsh_file_B}\n")
     sys.stderr.flush()
 
     return gmsh_file_B
+
+
+def _write_coil_wireframe(mesh_surf, filename):
+    """Write coil surface edges as 1D line elements in GMSH v2.2 format.
+
+    1D elements are always visible on top of 3D volume elements in GMSH,
+    providing a clear coil outline overlay on the B-distribution.
+    """
+    import numpy as np
+    from ngsolve import BND
+
+    # Collect unique edges from boundary elements
+    edges = set()
+    for el in mesh_surf.Elements(BND):
+        verts = [v.nr for v in el.vertices]
+        nv = len(verts)
+        for i in range(nv):
+            a, b = verts[i], verts[(i + 1) % nv]
+            edges.add((min(a, b), max(a, b)))
+
+    # Get vertex coordinates
+    nodes = [(v.point[0], v.point[1], v.point[2]) for v in mesh_surf.vertices]
+    n_nodes = len(nodes)
+    n_edges = len(edges)
+
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write('$MeshFormat\n2.2 0 8\n$EndMeshFormat\n')
+        f.write('$PhysicalNames\n1\n1 1 "coil"\n$EndPhysicalNames\n')
+        f.write(f'$Nodes\n{n_nodes}\n')
+        for i, (x, y, z) in enumerate(nodes):
+            f.write(f'{i + 1} {x:.15e} {y:.15e} {z:.15e}\n')
+        f.write('$EndNodes\n')
+        f.write(f'$Elements\n{n_edges}\n')
+        for idx, (a, b) in enumerate(sorted(edges)):
+            f.write(f'{idx + 1} 1 2 1 1 {a + 1} {b + 1}\n')  # type 1 = 2-node line
+        f.write('$EndElements\n')
 
 
 def main():
