@@ -209,49 +209,46 @@ def extract_inductance(cub5_file, order, source_label="source",
     L_total = MU_0 * J @ SL @ J
     residual = float(np.max(np.abs(D @ J - g)))
 
-    # --- Phase 3: J-distribution GMSH (J vector on surface) ---
+    # --- Phase 3: Per-node J vector via vertex averaging ---
     gf_J = GridFunction(fes_J)
     gf_J.vec.FV().NumPy()[:] = J
 
-    # Per-node J vector via vertex averaging
     elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
     elem_Jx = Integrate(gf_J[0], mesh, VOL_or_BND=BND, element_wise=True)
     elem_Jy = Integrate(gf_J[1], mesh, VOL_or_BND=BND, element_wise=True)
     elem_Jz = Integrate(gf_J[2], mesh, VOL_or_BND=BND, element_wise=True)
 
-    ns_vec = np.zeros((nv, 3))
+    J_nodes = np.zeros((nv, 3))
     nc_count = np.zeros(nv)
     for el in mesh.Elements(BND):
         a = max(abs(elem_A[el.nr]), 1e-30)
         jvec = [elem_Jx[el.nr] / a, elem_Jy[el.nr] / a, elem_Jz[el.nr] / a]
         for vtx in el.vertices:
-            ns_vec[vtx.nr] += jvec
+            J_nodes[vtx.nr] += jvec
             nc_count[vtx.nr] += 1
-
     for k in range(3):
-        ns_vec[:, k] = np.where(nc_count > 0, ns_vec[:, k] / nc_count, 0.0)
+        J_nodes[:, k] = np.where(nc_count > 0, J_nodes[:, k] / nc_count, 0.0)
 
-    try:
-        post = GmshPostExport(mesh, boundary=True)
-        post.add_field("J", ns_vec, ncomp=3)
-        post.write(gmsh_file_J)
-        sys.stderr.write(f"FIELD_READY:{gmsh_file_J}\n")
-        sys.stderr.flush()
-    except Exception:
-        gmsh_file_J = ""
+    sys.stderr.write(f"FIELD_READY:J computed\n")
+    sys.stderr.flush()
 
     # --- Phase 4: B-distribution (volume B via Biot-Savart) ---
-    gmsh_file_B = ""
-    try:
-        gmsh_file_B = _compute_B_distribution(
-            mesh, fes_J, gf_J, jt, base_dir, MU_0)
-    except Exception as e:
-        sys.stderr.write(f"B_FIELD_ERROR:{e}\n")
-        sys.stderr.flush()
+    B_nodes, vol_nodes, vol_elems = _compute_B_field(
+        mesh, gf_J, elem_A, MU_0)
 
-    # --- Phase 5: Combined .geo (all views in one GMSH window) ---
-    gmsh_geo = os.path.join(base_dir, "inductance.geo").replace("\\", "/")
-    _write_combined_geo(gmsh_geo, gmsh_file_J, gmsh_file_B, base_dir)
+    sys.stderr.write(f"B_FIELD_READY:B computed\n")
+    sys.stderr.flush()
+
+    # --- Phase 5: Write single combined .msh (no node ID collision) ---
+    gmsh_file = os.path.join(base_dir, "inductance.msh").replace("\\", "/")
+    _write_combined_msh(gmsh_file, mesh, J_nodes, vol_nodes, vol_elems, B_nodes)
+
+    # Companion .geo
+    geo_file = os.path.join(base_dir, "inductance.geo").replace("\\", "/")
+    with open(geo_file, 'w', encoding='utf-8') as f:
+        f.write(f'Merge "{os.path.basename(gmsh_file)}";\n')
+        f.write('Mesh.NumSubEdges = 4;\n')
+        f.write('Mesh.VolumeEdges = 0;\n')
 
     return {
         "inductance_H": float(L_total),
@@ -264,136 +261,106 @@ def extract_inductance(cub5_file, order, source_label="source",
         "constraint_residual": residual,
         "curve_order": order,
         "fes_order": fes_order,
-        "gmsh_file": gmsh_geo,
+        "gmsh_file": geo_file,
     }
 
 
-def _compute_B_distribution(mesh_surf, fes_J, gf_J, jt, base_dir, MU_0):
-    """Compute B field in air volume via Biot-Savart and export to GMSH.
-
-    Creates an air volume mesh (box around conductor), evaluates the
-    vector potential A via Biot-Savart quadrature over surface elements,
-    then projects into HCurl and computes B = curl(A).
-
-    Args:
-        mesh_surf: Surface-only BEM mesh
-        fes_J: HDivSurface space on mesh_surf
-        gf_J: Solved surface current GridFunction
-        jt: Trial function of fes_J
-        base_dir: Output directory for .msh file
-        MU_0: Vacuum permeability
+def _compute_B_field(mesh_surf, gf_J, elem_A, MU_0):
+    """Compute B field in air volume via direct Biot-Savart.
 
     Returns:
-        Path to B-distribution .msh file
+        B_nodes: (nv_vol, 3) B field at volume vertices
+        vol_nodes: list of (x, y, z) volume vertex coordinates
+        vol_elems: list of (v0, v1, v2, v3) tet connectivity (0-indexed)
     """
     import numpy as np
-    from ngsolve import Mesh, BND, CF, Integrate
+    from ngsolve import Mesh, BND, CF, Integrate, VOL
     from netgen.occ import Box, Pnt, OCCGeometry
     from netgen.meshing import MeshingParameters
 
     INV_4PI = 1.0 / (4.0 * np.pi)
 
-    # --- Step 1: Extract per-element J and geometry from surface mesh ---
-    # For each BND element: centroid, area, average J vector
-    elem_data = []
-    elem_A = Integrate(CF(1), mesh_surf, VOL_or_BND=BND, element_wise=True)
+    # Extract per-element J and geometry
     elem_Jx = Integrate(gf_J[0], mesh_surf, VOL_or_BND=BND, element_wise=True)
     elem_Jy = Integrate(gf_J[1], mesh_surf, VOL_or_BND=BND, element_wise=True)
     elem_Jz = Integrate(gf_J[2], mesh_surf, VOL_or_BND=BND, element_wise=True)
 
+    centroids, areas, J_vecs = [], [], []
     for el in mesh_surf.Elements(BND):
         area = abs(elem_A[el.nr])
         if area < 1e-30:
             continue
         jvec = np.array([elem_Jx[el.nr], elem_Jy[el.nr], elem_Jz[el.nr]]) / area
         verts = [mesh_surf.vertices[v.nr].point for v in el.vertices]
-        centroid = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
-        elem_data.append((centroid, area, jvec))
+        c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
+        centroids.append(c); areas.append(area); J_vecs.append(jvec)
 
-    n_elem = len(elem_data)
-    sys.stderr.write(f"B_PROGRESS:Biot-Savart over {n_elem} elements\n")
-    sys.stderr.flush()
+    centroids = np.array(centroids)
+    areas = np.array(areas)
+    J_vecs = np.array(J_vecs)
 
-    # Pack into arrays for vectorized computation
-    centroids = np.array([d[0] for d in elem_data])  # (n_elem, 3)
-    areas = np.array([d[1] for d in elem_data])       # (n_elem,)
-    J_vecs = np.array([d[2] for d in elem_data])       # (n_elem, 3)
-
-    # --- Step 2: Create air volume mesh ---
+    # Create air volume mesh
     coords = np.array([(v.point[0], v.point[1], v.point[2])
                        for v in mesh_surf.vertices])
-    bbox_min = coords.min(axis=0)
-    bbox_max = coords.max(axis=0)
+    bbox_min, bbox_max = coords.min(axis=0), coords.max(axis=0)
     extent = bbox_max - bbox_min
     margin = max(extent) * 0.3
 
     box = Box(Pnt(*(bbox_min - margin)), Pnt(*(bbox_max + margin)))
-    for f in box.faces:
-        f.name = "outer"
-
-    maxh_vol = max(extent) * 0.12
-    geo = OCCGeometry(box)
-    mesh_vol = Mesh(geo.GenerateMesh(
+    maxh_vol = max(extent) * 0.06
+    mesh_vol = Mesh(OCCGeometry(box).GenerateMesh(
         mp=MeshingParameters(maxh=maxh_vol)))
 
     nv_vol = mesh_vol.nv
     obs_pts = np.array([(v.point[0], v.point[1], v.point[2])
-                        for v in mesh_vol.vertices])  # (nv_vol, 3)
+                        for v in mesh_vol.vertices])
 
-    sys.stderr.write(f"B_PROGRESS:Biot-Savart {n_elem} elems -> {nv_vol} pts\n")
+    sys.stderr.write(f"B_PROGRESS:{len(centroids)} elems -> {nv_vol} pts\n")
     sys.stderr.flush()
 
-    # --- Step 3: Biot-Savart B directly (fully vectorized) ---
-    # B(x) = mu_0/(4*pi) * sum_e (J_e x (x - c_e)) * A_e / |x - c_e|^3
-    # Vectorized over all observation points at once.
-    # obs_pts: (nv, 3), centroids: (ne, 3) -> dx: (nv, ne, 3)
-    dx = obs_pts[:, None, :] - centroids[None, :, :]  # (nv, ne, 3)
-    r2 = np.sum(dx**2, axis=2)  # (nv, ne)
-    r = np.sqrt(np.maximum(r2, 1e-30))  # (nv, ne)
-    r3_inv = areas[None, :] / (r * r * r)  # (nv, ne)
+    # Biot-Savart B (vectorized)
+    dx = obs_pts[:, None, :] - centroids[None, :, :]
+    r = np.sqrt(np.maximum(np.sum(dx**2, axis=2), 1e-30))
+    r3_inv = areas[None, :] / (r ** 3)
+    cross = np.cross(J_vecs[None, :, :], dx)
+    B_nodes = MU_0 * INV_4PI * np.sum(cross * r3_inv[:, :, None], axis=1)
 
-    # Cross product J x dx for all (obs, elem) pairs
-    # J_vecs: (ne, 3) broadcast to (nv, ne, 3)
-    Jx = J_vecs[None, :, :]  # (1, ne, 3)
-    cross = np.cross(Jx, dx)  # (nv, ne, 3)
+    # Extract volume mesh topology
+    vol_nodes = [(v.point[0], v.point[1], v.point[2]) for v in mesh_vol.vertices]
+    vol_elems = []
+    for el in mesh_vol.Elements(VOL):
+        vol_elems.append([v.nr for v in el.vertices])
 
-    B_nodes = MU_0 * INV_4PI * np.sum(cross * r3_inv[:, :, None], axis=1)  # (nv, 3)
-
-    from gmsh_post_export import GmshPostExport
-    gmsh_file_B = os.path.join(base_dir, "inductance_B.msh").replace("\\", "/")
-    post = GmshPostExport(mesh_vol, boundary=False)
-    post.add_field("B", B_nodes, ncomp=3)
-    post.write(gmsh_file_B)
-
-    # Write coil wireframe as 1D line elements (always visible on top of volume)
-    coil_file = os.path.join(base_dir, "inductance_coil.msh").replace("\\", "/")
-    _write_coil_wireframe(mesh_surf, coil_file)
-
-    # Write .geo that merges B field + coil wireframe
-    geo_file = os.path.splitext(gmsh_file_B)[0] + '.geo'
-    with open(geo_file, 'w', encoding='utf-8') as f:
-        f.write('// B-distribution with coil wireframe overlay\n')
-        f.write(f'Merge "{os.path.basename(gmsh_file_B)}";\n')
-        if os.path.exists(coil_file):
-            f.write(f'Merge "{os.path.basename(coil_file)}";\n')
-        f.write('Mesh.NumSubEdges = 4;\n')
-
-    sys.stderr.write(f"B_FIELD_READY:{gmsh_file_B}\n")
-    sys.stderr.flush()
-
-    return gmsh_file_B
+    return B_nodes, vol_nodes, vol_elems
 
 
-def _write_coil_wireframe(mesh_surf, filename):
-    """Write coil surface edges as 1D line elements in GMSH v2.2 format.
+def _write_combined_msh(filename, mesh_surf, J_nodes, vol_nodes, vol_elems, B_nodes):
+    """Write single .msh v2.2 with volume B + surface J + coil wireframe.
 
-    1D elements are always visible on top of 3D volume elements in GMSH,
-    providing a clear coil outline overlay on the B-distribution.
+    Node numbering:
+      1..nv_vol                  : volume mesh vertices (B field)
+      nv_vol+1..nv_vol+nv_surf   : surface mesh vertices (J field)
+    Elements:
+      1..ne_vol                  : volume tets (physical group "air")
+      ne_vol+1..ne_vol+ne_surf   : surface tris (physical group "coil_surface")
+      after that                 : coil wireframe lines (physical group "coil_wire")
     """
     import numpy as np
     from ngsolve import BND
 
-    # Collect unique edges from boundary elements
+    nv_vol = len(vol_nodes)
+    nv_surf = mesh_surf.nv
+    surf_offset = nv_vol  # surface node IDs start after volume nodes
+
+    # Surface nodes
+    surf_nodes = [(v.point[0], v.point[1], v.point[2]) for v in mesh_surf.vertices]
+
+    # Surface triangles
+    surf_elems = []
+    for el in mesh_surf.Elements(BND):
+        surf_elems.append([v.nr for v in el.vertices])
+
+    # Coil wireframe edges
     edges = set()
     for el in mesh_surf.Elements(BND):
         verts = [v.nr for v in el.vertices]
@@ -401,51 +368,63 @@ def _write_coil_wireframe(mesh_surf, filename):
         for i in range(nv):
             a, b = verts[i], verts[(i + 1) % nv]
             edges.add((min(a, b), max(a, b)))
+    edges = sorted(edges)
 
-    # Get vertex coordinates
-    nodes = [(v.point[0], v.point[1], v.point[2]) for v in mesh_surf.vertices]
-    n_nodes = len(nodes)
-    n_edges = len(edges)
+    n_nodes = nv_vol + nv_surf
+    ne_vol = len(vol_elems)
+    ne_surf = len(surf_elems)
+    ne_wire = len(edges)
+    n_elems = ne_vol + ne_surf + ne_wire
 
     with open(filename, 'w', encoding='utf-8') as f:
         f.write('$MeshFormat\n2.2 0 8\n$EndMeshFormat\n')
-        f.write('$PhysicalNames\n1\n1 1 "coil"\n$EndPhysicalNames\n')
+
+        # Physical groups
+        f.write('$PhysicalNames\n3\n')
+        f.write('3 1 "air"\n')
+        f.write('2 2 "coil_surface"\n')
+        f.write('1 3 "coil_wire"\n')
+        f.write('$EndPhysicalNames\n')
+
+        # Nodes: volume then surface
         f.write(f'$Nodes\n{n_nodes}\n')
-        for i, (x, y, z) in enumerate(nodes):
+        for i, (x, y, z) in enumerate(vol_nodes):
             f.write(f'{i + 1} {x:.15e} {y:.15e} {z:.15e}\n')
+        for i, (x, y, z) in enumerate(surf_nodes):
+            f.write(f'{surf_offset + i + 1} {x:.15e} {y:.15e} {z:.15e}\n')
         f.write('$EndNodes\n')
-        f.write(f'$Elements\n{n_edges}\n')
-        for idx, (a, b) in enumerate(sorted(edges)):
-            f.write(f'{idx + 1} 1 2 1 1 {a + 1} {b + 1}\n')  # type 1 = 2-node line
+
+        # Elements: volume tets + surface tris + wireframe lines
+        f.write(f'$Elements\n{n_elems}\n')
+        eid = 1
+        for verts in vol_elems:
+            ns = ' '.join(str(v + 1) for v in verts)
+            f.write(f'{eid} 4 2 1 1 {ns}\n')  # type 4 = tet
+            eid += 1
+        for verts in surf_elems:
+            ns = ' '.join(str(v + surf_offset + 1) for v in verts)
+            f.write(f'{eid} 2 2 2 2 {ns}\n')  # type 2 = tri
+            eid += 1
+        for a, b in edges:
+            f.write(f'{eid} 1 2 3 3 {a + surf_offset + 1} {b + surf_offset + 1}\n')
+            eid += 1
         f.write('$EndElements\n')
 
+        # NodeData: B on volume nodes
+        f.write('$NodeData\n1\n"B"\n1\n0.0\n3\n0\n3\n')
+        f.write(f'{nv_vol}\n')
+        for i in range(nv_vol):
+            bx, by, bz = B_nodes[i]
+            f.write(f'{i + 1} {bx:.15e} {by:.15e} {bz:.15e}\n')
+        f.write('$EndNodeData\n')
 
-def _write_combined_geo(geo_file, gmsh_file_J, gmsh_file_B, base_dir):
-    """Write a .geo that merges all result files into one GMSH window.
-
-    GMSH tree will show:
-      Post-processing
-        [0] |B|   (volume)
-        [1] B     (volume vectors)
-        [2] |J|   (surface, visible on coil)
-        [3] J     (surface vectors)
-    Plus coil wireframe as 1D mesh overlay.
-    """
-    coil_file = os.path.join(base_dir, "inductance_coil.msh").replace("\\", "/")
-    with open(geo_file, 'w', encoding='utf-8') as f:
-        f.write('// Combined inductance visualization\n')
-        # B-distribution first (volume mesh establishes 3D context)
-        if gmsh_file_B and os.path.exists(gmsh_file_B):
-            f.write(f'Merge "{os.path.basename(gmsh_file_B)}";\n')
-        # J-distribution (surface mesh + field views overlay)
-        if gmsh_file_J and os.path.exists(gmsh_file_J):
-            f.write(f'Merge "{os.path.basename(gmsh_file_J)}";\n')
-        # Coil wireframe (1D lines, always visible on top)
-        if os.path.exists(coil_file):
-            f.write(f'Merge "{os.path.basename(coil_file)}";\n')
-        f.write('Mesh.NumSubEdges = 4;\n')
-        # Hide volume mesh edges for cleaner view
-        f.write('Mesh.VolumeEdges = 0;\n')
+        # NodeData: J on surface nodes (offset IDs)
+        f.write('$NodeData\n1\n"J"\n1\n0.0\n3\n0\n3\n')
+        f.write(f'{nv_surf}\n')
+        for i in range(nv_surf):
+            jx, jy, jz = J_nodes[i]
+            f.write(f'{surf_offset + i + 1} {jx:.15e} {jy:.15e} {jz:.15e}\n')
+        f.write('$EndNodeData\n')
 
 
 def main():
