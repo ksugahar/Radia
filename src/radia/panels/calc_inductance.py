@@ -339,7 +339,7 @@ def _compute_B_distribution(mesh_surf, fes_J, gf_J, jt, base_dir, MU_0):
     for f in box.faces:
         f.name = "outer"
 
-    maxh_vol = max(extent) * 0.12
+    maxh_vol = max(extent) * 0.2  # coarse volume mesh (visualization only)
     geo = OCCGeometry(box)
     mesh_vol = Mesh(geo.GenerateMesh(
         mp=MeshingParameters(maxh=maxh_vol)))
@@ -348,24 +348,24 @@ def _compute_B_distribution(mesh_surf, fes_J, gf_J, jt, base_dir, MU_0):
     obs_pts = np.array([(v.point[0], v.point[1], v.point[2])
                         for v in mesh_vol.vertices])  # (nv_vol, 3)
 
-    sys.stderr.write(f"B_PROGRESS:Evaluating A at {nv_vol} vertices\n")
+    sys.stderr.write(f"B_PROGRESS:Biot-Savart {n_elem} elems -> {nv_vol} pts\n")
     sys.stderr.flush()
 
-    # --- Step 3: Biot-Savart B directly at each vertex ---
-    # B(x) = mu_0/(4*pi) * sum_e J_e x (x - c_e) / |x - c_e|^3 * A_e
-    # Direct B computation avoids numerical curl noise.
-    B_nodes = np.zeros((nv_vol, 3))
-    for i in range(nv_vol):
-        dx = obs_pts[i] - centroids  # (n_elem, 3)
-        r = np.sqrt(np.sum(dx**2, axis=1))  # (n_elem,)
-        r = np.maximum(r, 1e-15)
-        r3_inv = areas / (r * r * r)  # A_e / |r|^3, shape (n_elem,)
-        # J x (x - c_e) for each element: cross product
-        # J_vecs: (n_elem, 3), dx: (n_elem, 3)
-        # But we need J x (obs - centroid) = J x (-dx) = -(J x dx)
-        # Actually dx = obs - centroid, so cross = J x dx
-        cross = np.cross(J_vecs, dx)  # (n_elem, 3)
-        B_nodes[i] = MU_0 * INV_4PI * np.sum(cross * r3_inv[:, None], axis=0)
+    # --- Step 3: Biot-Savart B directly (fully vectorized) ---
+    # B(x) = mu_0/(4*pi) * sum_e (J_e x (x - c_e)) * A_e / |x - c_e|^3
+    # Vectorized over all observation points at once.
+    # obs_pts: (nv, 3), centroids: (ne, 3) -> dx: (nv, ne, 3)
+    dx = obs_pts[:, None, :] - centroids[None, :, :]  # (nv, ne, 3)
+    r2 = np.sum(dx**2, axis=2)  # (nv, ne)
+    r = np.sqrt(np.maximum(r2, 1e-30))  # (nv, ne)
+    r3_inv = areas[None, :] / (r * r * r)  # (nv, ne)
+
+    # Cross product J x dx for all (obs, elem) pairs
+    # J_vecs: (ne, 3) broadcast to (nv, ne, 3)
+    Jx = J_vecs[None, :, :]  # (1, ne, 3)
+    cross = np.cross(Jx, dx)  # (nv, ne, 3)
+
+    B_nodes = MU_0 * INV_4PI * np.sum(cross * r3_inv[:, :, None], axis=1)  # (nv, 3)
 
     # --- Step 4: Compute |B| per node ---
     node_B_mag = np.sqrt(np.sum(B_nodes**2, axis=1))
