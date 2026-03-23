@@ -249,6 +249,11 @@ def extract_inductance(cub5_file, order, source_label="source",
         f.write(f'Merge "{os.path.basename(gmsh_file)}";\n')
         f.write('Mesh.NumSubEdges = 4;\n')
         f.write('Mesh.VolumeEdges = 0;\n')
+        # Arrow size for B (View[0]) and J (View[1])
+        f.write('View[0].ArrowSizeMin = 20;\n')
+        f.write('View[0].ArrowSizeMax = 20;\n')
+        f.write('View[1].ArrowSizeMin = 20;\n')
+        f.write('View[1].ArrowSizeMax = 20;\n')
 
     return {
         "inductance_H": float(L_total),
@@ -307,7 +312,7 @@ def _compute_B_field(mesh_surf, gf_J, elem_A, MU_0):
     margin = max(extent) * 0.3
 
     box = Box(Pnt(*(bbox_min - margin)), Pnt(*(bbox_max + margin)))
-    maxh_vol = max(extent) * 0.06
+    maxh_vol = max(extent) * 0.1
     mesh_vol = Mesh(OCCGeometry(box).GenerateMesh(
         mp=MeshingParameters(maxh=maxh_vol)))
 
