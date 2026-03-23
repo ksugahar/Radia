@@ -470,9 +470,10 @@ def _compute_B_field(mesh_surf, gf_J, elem_A, MU_0):
                        for v in mesh_surf.vertices])
     bbox_min, bbox_max = coords.min(axis=0), coords.max(axis=0)
     extent = bbox_max - bbox_min
-    margin = max(extent) * 0.3
-
-    box = Box(Pnt(*(bbox_min - margin)), Pnt(*(bbox_max + margin)))
+    # Cubic bounding box (equal size in all directions)
+    half_size = max(extent) * 0.65  # conductor extent/2 + 30% margin
+    center = (bbox_min + bbox_max) / 2
+    box = Box(Pnt(*(center - half_size)), Pnt(*(center + half_size)))
     maxh_vol = max(extent) * 0.1
     mesh_vol = Mesh(OCCGeometry(box).GenerateMesh(
         mp=MeshingParameters(maxh=maxh_vol)))
