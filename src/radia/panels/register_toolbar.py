@@ -1148,16 +1148,21 @@ def register_menu():
 		tools_menu = menu_bar
 
 	# Remove old menu on re-play (so new class definitions take effect)
-	for action in tools_menu.actions():
+	is_reload = False
+	for action in list(tools_menu.actions()):
 		if action.text() == "Radia-NGSolve":
+			sub = action.menu()
 			tools_menu.removeAction(action)
+			if sub:
+				sub.deleteLater()
 			# Close stale modeless dialogs
 			for attr in ('_radia_ind_dlg',):
 				dlg = getattr(main_window, attr, None)
 				if dlg is not None:
 					dlg.close()
 					setattr(main_window, attr, None)
-			print("Radia menu re-registered.")
+			is_reload = True
+			break
 
 	# Create Radia submenu under Tools
 	radia_menu = tools_menu.addMenu("Radia-NGSolve")
@@ -1192,7 +1197,10 @@ def register_menu():
 	action_ind.triggered.connect(_show_inductance)
 	radia_menu.addAction(action_ind)
 
-	print("Radia-NGSolve menu registered under Tools.")
+	if is_reload:
+		print("Radia-NGSolve menu re-registered (code updated).")
+	else:
+		print("Radia-NGSolve menu registered under Tools.")
 
 
 # Auto-register when this script is executed
