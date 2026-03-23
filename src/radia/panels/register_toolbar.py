@@ -920,11 +920,8 @@ class InductanceDialog(QDialog):
 		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
 		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
 
-		# Output .msh with timestamp
-		ts = self._solve_start_time.strftime("%Y%m%d_%H%M%S")
-		msh_output = os.path.join(
-			os.getcwd(), f"inductance_J_{ts}.msh"
-		).replace("\\", "/")
+		# All output in same temp dir (required for .geo Merge with basenames)
+		msh_output = os.path.join(tmpdir, "inductance_J.msh").replace("\\", "/")
 
 		# JSON output file (reliable, avoids stdout parsing issues)
 		self._json_output = os.path.join(tmpdir, "result.json").replace("\\", "/")
