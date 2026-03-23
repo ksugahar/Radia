@@ -370,6 +370,17 @@ def _compute_B_distribution(mesh_surf, fes_J, gf_J, jt, base_dir, MU_0):
     post.add_field("|B|", node_B_mag, ncomp=1)
     post.add_field("B", B_nodes, ncomp=3)
     post.write(gmsh_file_B)
+
+    # Write .geo that merges B field + coil surface mesh
+    gmsh_file_J = os.path.join(base_dir, "inductance_J.msh").replace("\\", "/")
+    geo_file = os.path.splitext(gmsh_file_B)[0] + '.geo'
+    with open(geo_file, 'w', encoding='utf-8') as f:
+        f.write('// B-distribution with coil overlay\n')
+        f.write(f'Merge "{os.path.basename(gmsh_file_B)}";\n')
+        if os.path.exists(gmsh_file_J):
+            f.write(f'Merge "{os.path.basename(gmsh_file_J)}";\n')
+        f.write('Mesh.NumSubEdges = 4;\n')
+
     sys.stderr.write(f"B_FIELD_READY:{gmsh_file_B}\n")
     sys.stderr.flush()
 
