@@ -389,13 +389,13 @@ pip install radia
 To install the Cubit toolbar panels for GUI access (optional, requires Cubit installed):
 
 ```bash
-cubit-mesh-export-install-panels
+cubit-install-panels
 ```
 
 This registers a toolbar in `~/.cubit` so that export buttons appear in Cubit's GUI on next startup. To uninstall:
 
 ```bash
-cubit-mesh-export-install-panels --uninstall
+cubit-install-panels --uninstall
 ```
 
 ### Setup

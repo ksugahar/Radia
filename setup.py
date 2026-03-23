@@ -117,7 +117,7 @@ setup(
 	},
 	entry_points={
 		"console_scripts": [
-			"cubit-mesh-export-install-panels=radia.install_panels:main",
+			"cubit-install-panels=radia.install_panels:main",
 		],
 	},
 	include_package_data=True,
