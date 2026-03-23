@@ -331,7 +331,7 @@ def _compute_B_distribution(mesh_surf, fes_J, gf_J, jt, base_dir, MU_0):
     for f in box.faces:
         f.name = "outer"
 
-    maxh_vol = max(extent) * 0.2  # coarse volume mesh (visualization only)
+    maxh_vol = max(extent) * 0.12
     geo = OCCGeometry(box)
     mesh_vol = Mesh(geo.GenerateMesh(
         mp=MeshingParameters(maxh=maxh_vol)))
