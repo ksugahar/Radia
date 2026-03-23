@@ -1,8 +1,8 @@
 """
-Panel installer for Coreform Cubit Mesh Export.
+Panel installer for Coreform Cubit.
 
 Registers the toolbar script in Cubit's startup file (~/.cubit)
-so that custom toolbar buttons are loaded automatically on startup.
+so that custom panels are loaded automatically on startup.
 
 The toolbar script is used in-place (no copying):
   - Development (pip install -e .): points to the repo's panels/
@@ -10,11 +10,15 @@ The toolbar script is used in-place (no copying):
 
 Usage:
     # From command line (after pip install):
-    cubit-install-panels
+    cubit-install-panels                    # current user + Default profile
+    cubit-install-panels --all-users        # all existing users (admin)
+    cubit-install-panels --uninstall        # remove from current user
+    cubit-install-panels --uninstall --all-users  # remove from all users
 
     # From Python:
     from radia.install_panels import install_panels
     install_panels()
+    install_panels(all_users=True)
 """
 
 import glob
@@ -95,19 +99,37 @@ def find_cubit_site_packages(cubit_bin=None):
 	return None
 
 
-def _get_cubit_startup_files():
+def _get_cubit_startup_files(all_users=False):
 	"""Get paths to all .cubit startup files to install.
+
+	Args:
+	  all_users: If True, include all existing user profiles (Windows).
 
 	Returns list of paths:
 	  - Current user: ~/.cubit
 	  - Default profile: C:\\Users\\Default\\.cubit (all future users, Windows)
+	  - --all-users: C:\\Users\\*\\.cubit (all existing users, Windows)
 	"""
 	paths = [os.path.join(os.path.expanduser("~"), ".cubit")]
 	if sys.platform == "win32":
-		default = os.path.join(os.environ.get("SystemDrive", "C:"),
-		                       os.sep, "Users", "Default", ".cubit")
+		users_dir = os.path.join(os.environ.get("SystemDrive", "C:"),
+		                         os.sep, "Users")
+		# Default profile (future users)
+		default = os.path.join(users_dir, "Default", ".cubit")
 		if os.path.isdir(os.path.dirname(default)):
 			paths.append(default)
+		# All existing user profiles
+		if all_users:
+			skip = {"Default", "Public", "All Users", "Default User"}
+			for entry in os.listdir(users_dir):
+				if entry in skip:
+					continue
+				user_dir = os.path.join(users_dir, entry)
+				if not os.path.isdir(user_dir):
+					continue
+				cubit_file = os.path.join(user_dir, ".cubit")
+				if cubit_file not in paths:
+					paths.append(cubit_file)
 	return paths
 
 
@@ -188,15 +210,18 @@ def _remove_existing_block(lines):
 	return result
 
 
-def install_panels():
+def install_panels(all_users=False):
 	"""Register custom toolbar for Coreform Cubit.
 
 	Adds a startup block to ~/.cubit that loads the toolbar script.
 	The toolbar script location is detected automatically:
 	  - pip install -e . (editable): repo's panels/ directory
 	  - pip install (normal):        site-packages panels/ directory
+
+	Args:
+	  all_users: If True, install to all existing user profiles (admin).
 	"""
-	print("=== Coreform Cubit Mesh Export - Toolbar Installer ===\n")
+	print("=== Coreform Cubit - Panel Installer ===\n")
 
 	# Step 1: Locate panels directory and generate startup.py
 	panels_dir = _get_panels_dir()
@@ -212,8 +237,11 @@ def install_panels():
 	cubit_bin = find_cubit_bin()
 	print(f"Cubit bin:      {cubit_bin or 'not found (set CUBIT_PATH)'}")
 
-	# Step 2: Update all .cubit startup files (current user + default profile)
-	cubit_files = _get_cubit_startup_files()
+	if all_users:
+		print("Mode:           --all-users (all existing profiles)")
+
+	# Step 2: Update .cubit startup files
+	cubit_files = _get_cubit_startup_files(all_users=all_users)
 	block = _build_startup_block(startup_script)
 
 	for cubit_file in cubit_files:
@@ -236,11 +264,15 @@ def install_panels():
 	return True
 
 
-def uninstall_panels():
-	"""Remove the custom toolbar registration from all .cubit files."""
-	print("=== Coreform Cubit Mesh Export - Toolbar Uninstaller ===\n")
+def uninstall_panels(all_users=False):
+	"""Remove the custom toolbar registration from .cubit files.
 
-	for cubit_file in _get_cubit_startup_files():
+	Args:
+	  all_users: If True, uninstall from all existing user profiles (admin).
+	"""
+	print("=== Coreform Cubit - Panel Uninstaller ===\n")
+
+	for cubit_file in _get_cubit_startup_files(all_users=all_users):
 		if not os.path.isfile(cubit_file):
 			continue
 		with open(cubit_file, "r", encoding="utf-8") as f:
@@ -260,10 +292,11 @@ def uninstall_panels():
 
 def main():
 	"""Console script entry point."""
-	if len(sys.argv) > 1 and sys.argv[1] == "--uninstall":
-		success = uninstall_panels()
+	all_users = "--all-users" in sys.argv
+	if "--uninstall" in sys.argv:
+		success = uninstall_panels(all_users=all_users)
 	else:
-		success = install_panels()
+		success = install_panels(all_users=all_users)
 	sys.exit(0 if success else 1)
 
 
