@@ -263,33 +263,123 @@ for i in range(n):
     L_op.mat.Mult(ei, col)  # Recomputes BEM integrals each call!
 ```
 
-## Self-Inductance: Energy Method
+## Self-Inductance: Source/Sink Saddle Point EFIE (Recommended)
 
-**CRITICAL**: Do NOT use `L = 1/(e^T L^{-1} e)` with uniform excitation.
-This formula diverges with mesh refinement (794% error at 4185 DOFs).
+For conductors with a gap (source/sink ports), use the constrained EFIE:
 
-Use the **energy method** instead:
+```
+[SL  D^T] [J] = [0]
+[D   0  ] [p] = [g]
+```
+
+where:
+- SL = LaplaceSL matrix (HDivSurface)
+- D = divergence matrix (HDivSurface -> SurfaceL2)
+- g = source/sink current injection (+1/A_src at source, -1/A_snk at sink)
+- J = surface current (unknowns), p = Lagrange multiplier
+
+Inductance: `L = mu_0 * J^T @ SL @ J`
 
 ```python
-# Energy method: L = mu_0 * J^T * SL * J  (for I=1)
-from ngsolve import sqrt, x, y, z
+from scipy.linalg import solve as scipy_solve
 
+# Divergence matrix
+bf_D = BilinearForm(trialspace=fes_J, testspace=fes_L2)
+bf_D += div(u_J.Trace()) * q * ds
+bf_D.Assemble()
+D = bf_D.mat.ToDense().NumPy()
+
+# Source/sink RHS (unit current injection)
+f_src = LinearForm(fes_L2); f_src += q * ds("source"); f_src.Assemble()
+f_snk = LinearForm(fes_L2); f_snk += q * ds("sink"); f_snk.Assemble()
+g = f_src.vec.FV().NumPy() / sum(f_src.vec.FV().NumPy()) \
+  - f_snk.vec.FV().NumPy() / sum(f_snk.vec.FV().NumPy())
+
+# Saddle point solve (remove last constraint for regularity)
+D_red, g_red = D[:-1, :], g[:-1]
+K = np.block([[SL, D_red.T], [D_red, np.zeros((len(g_red), len(g_red)))]])
+rhs = np.concatenate([np.zeros(n_J), g_red])
+x = scipy_solve(K, rhs)
+J = x[:n_J]
+L = MU_0 * J @ SL @ J
+```
+
+**SurfaceL2 constraint**: Always use `order=0` (element-wise). Higher order
+causes rank deficiency in D matrix.
+
+## B-Distribution: Direct Biot-Savart
+
+After BEM solve, compute B field in air volume via direct Biot-Savart:
+
+```
+B(x) = mu_0/(4*pi) * sum_e J_e x (x - c_e) / |x - c_e|^3 * A_e
+```
+
+**Do NOT use curl(A)**: Monopole A approximation + numerical curl = noise.
+Direct B computation gives +0.2% accuracy at center of circular loop.
+
+```python
+# Per-element J extraction
+elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
+elem_Jx = Integrate(gf_J[0], mesh, VOL_or_BND=BND, element_wise=True)
+# ... (extract centroids, areas, J vectors)
+
+# Direct B at observation point
+dx = obs - centroids  # (n_elem, 3)
+r = np.sqrt(np.sum(dx**2, axis=1))
+cross = np.cross(J_vecs, dx)  # J x (obs - centroid)
+B = MU_0 * INV_4PI * np.sum(cross * (areas / r**3)[:, None], axis=0)
+```
+
+Volume mesh: OCC Box around conductor, Biot-Savart at each vertex.
+Export via GmshPostExport(mesh_vol, boundary=False).
+
+## PotentialCF: Cross-Mesh Limitation
+
+`LaplaceSL(jt.Trace()*ds)` returns a PotentialOperator.
+`pot_op(gf_J)` returns PotentialCF (dim=3 CoefficientFunction).
+
+**PotentialCF does NOT work across meshes**: `gf.Set(A_cf)` on a different
+volume mesh gives all zeros. Combined mesh (Box-Torus) causes DOF explosion
+(354k DOFs) because `definedon` does not reduce DOF count.
+
+Use direct Biot-Savart instead for volume B field evaluation.
+
+## GMSH Visualization: Combined .geo
+
+All results in one GMSH window via .geo that merges multiple .msh files:
+
+```geo
+// inductance.geo
+Merge "inductance_B.msh";    // volume |B|, B
+Merge "inductance_J.msh";    // surface |J|, J
+Merge "inductance_coil.msh"; // coil wireframe (1D lines)
+Mesh.NumSubEdges = 4;        // curved element display
+Mesh.VolumeEdges = 0;        // clean volume rendering
+```
+
+GMSH Post-processing tree shows all views independently toggleable.
+Coil wireframe (1D elements) is always visible on top of 3D volume.
+
+## .geo Companion File
+
+GmshPostExport automatically writes a companion .geo file alongside
+each .msh when the mesh has Curve(2+). This sets `Mesh.NumSubEdges = 4`
+for correct high-order element display (Tri6 appears curved, not flat).
+
+## Legacy: Energy Method (Closed Loops Only)
+
+For closed conductors (no gap), the energy method with toroidal current works:
+
+```python
 # Toroidal current for I=1: J = e_phi / (2*pi*a)
 r_cf = sqrt(x*x + y*y)
 J_toroidal = CF((-y/r_cf, x/r_cf, 0)) / (2 * math.pi * a)
-
-# Project onto HDivSurface
 gf_J = GridFunction(fes)
 gf_J.Set(J_toroidal, definedon=mesh.Boundaries(".*"), dual=True)
 J_vec = gf_J.vec.FV().NumPy().copy()
-
-# L = mu_0 * J^T * SL * J  (no matrix inversion needed!)
 L_total = MU_0 * float(J_vec @ SL @ J_vec)
 ```
-
-**Why the old formula fails**: `e = ones(n)/n` is not a physical current
-in HDivSurface DOFs (edge normal fluxes). The energy method uses a
-properly projected toroidal current distribution.
 
 **Verified convergence** (R=50mm, a=5mm torus):
 
