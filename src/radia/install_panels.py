@@ -166,6 +166,7 @@ def _build_startup_block(startup_script_path):
 	startup_script_path = startup_script_path.replace("\\", "/")
 	return (
 		f"{_MARKER_BEGIN}\n"
+		f"set journal off\n"
 		f"play \"{startup_script_path}\"\n"
 		f"{_MARKER_END}\n"
 	)
