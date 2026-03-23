@@ -914,8 +914,12 @@ class InductanceDialog(QDialog):
 		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
 		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
 
-		# Output dir = script directory (all .msh/.geo in same folder for Merge)
-		output_dir = os.path.dirname(os.path.abspath(calc_script))
+		# Output dir = examples/cubit_panels/inductance/results/
+		_repo_root = os.path.dirname(os.path.dirname(os.path.dirname(
+			os.path.dirname(os.path.abspath(calc_script)))))
+		output_dir = os.path.join(_repo_root, "examples", "cubit_panels",
+		                          "inductance", "results")
+		os.makedirs(output_dir, exist_ok=True)
 		msh_output = os.path.join(output_dir, "inductance_J.msh").replace("\\", "/")
 
 		# JSON output file (reliable, avoids stdout parsing issues)
