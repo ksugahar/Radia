@@ -1206,19 +1206,11 @@ def register_menu():
 	action_reload = QAction("Reload Panels", main_window)
 	action_reload.setStatusTip("Re-read register_toolbar.py from disk (development)")
 	def _reload_panels():
-		# Defer to next event loop iteration to avoid crash
-		# (deleting QMenu while its signal is still being processed)
-		from PySide6.QtCore import QTimer
-		def _do_reload():
-			startup = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-			                       "startup.py").replace("\\", "/")
-			if os.path.exists(startup):
-				exec(open(startup, encoding="utf-8").read(), globals())
-			else:
-				rt = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-				                  "register_toolbar.py")
-				exec(open(rt, encoding="utf-8").read(), globals())
-		QTimer.singleShot(0, _do_reload)
+		# Use cubit.cmd("play ...") to reload safely outside Qt signal handling.
+		# Direct exec() during signal processing crashes Qt (deletes active QMenu).
+		startup = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+		                       "startup.py").replace("\\", "/")
+		cubit.cmd(f'play "{startup}"')
 	action_reload.triggered.connect(_reload_panels)
 	radia_menu.addAction(action_reload)
 
