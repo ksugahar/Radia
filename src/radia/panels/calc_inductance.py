@@ -249,11 +249,18 @@ def extract_inductance(cub5_file, order, source_label="source",
         f.write(f'Merge "{os.path.basename(gmsh_file)}";\n')
         f.write('Mesh.NumSubEdges = 4;\n')
         f.write('Mesh.VolumeEdges = 0;\n')
-        # Arrow size for B (View[0]) and J (View[1])
         f.write('View[0].ArrowSizeMin = 20;\n')
         f.write('View[0].ArrowSizeMax = 20;\n')
         f.write('View[1].ArrowSizeMin = 20;\n')
         f.write('View[1].ArrowSizeMax = 20;\n')
+
+    # COMSOL-compatible text interpolation files
+    _write_comsol_txt(os.path.join(base_dir, "B_field.txt"), vol_nodes, B_nodes,
+                      "B", ["Bx", "By", "Bz"])
+    _write_comsol_txt(os.path.join(base_dir, "J_surface.txt"),
+                      [(mesh.vertices[i].point[0], mesh.vertices[i].point[1],
+                        mesh.vertices[i].point[2]) for i in range(nv)],
+                      J_nodes, "J", ["Jx", "Jy", "Jz"])
 
     return {
         "inductance_H": float(L_total),
@@ -268,6 +275,30 @@ def extract_inductance(cub5_file, order, source_label="source",
         "fes_order": fes_order,
         "gmsh_file": geo_file,
     }
+
+
+def _write_comsol_txt(filename, nodes, field_data, field_name, comp_names):
+    """Write COMSOL-compatible text interpolation file.
+
+    COMSOL import: Global Definitions > Interpolation > File
+    Format: % x y z Fx Fy Fz (space-separated, one header line)
+
+    Args:
+        filename: Output file path
+        nodes: list of (x, y, z) or array (n, 3)
+        field_data: array (n, 3) field values
+        field_name: e.g. "B"
+        comp_names: e.g. ["Bx", "By", "Bz"]
+    """
+    import numpy as np
+    nodes = np.asarray(nodes)
+    field_data = np.asarray(field_data)
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write(f'% x y z {" ".join(comp_names)}\n')
+        for i in range(len(nodes)):
+            x, y, z = nodes[i]
+            vals = ' '.join(f'{field_data[i, c]:.15e}' for c in range(field_data.shape[1]))
+            f.write(f'{x:.15e} {y:.15e} {z:.15e} {vals}\n')
 
 
 def _compute_B_field(mesh_surf, gf_J, elem_A, MU_0):
