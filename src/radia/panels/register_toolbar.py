@@ -1010,12 +1010,16 @@ class InductanceDialog(QDialog):
 			import subprocess as _sp
 			ext_py = self._ext_python
 			if ext_py:
+				# Use pythonw.exe to avoid console window
+				ext_pyw = ext_py.replace("python.exe", "pythonw.exe")
+				if not os.path.exists(ext_pyw):
+					ext_pyw = ext_py
 				code = (
 					"import sys, gmsh; "
 					"gmsh.initialize(sys.argv, run=True); "
 					"gmsh.finalize()"
 				)
-				_sp.Popen([ext_py, "-c", code, gmsh_file])
+				_sp.Popen([ext_pyw, "-c", code, gmsh_file])
 				self.debug_text.setText(f"GMSH: {os.path.basename(gmsh_file)}")
 			else:
 				os.startfile(gmsh_file)
