@@ -886,20 +886,51 @@ L_op = LaplaceSL(j.Trace() * ds("conductor")) * jt.Trace() * ds("conductor")
 mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
 ```
 
+## use_fmm: FMM vs Dense (No H-matrix in ngsolve.bem)
+
+**ngsolve.bem has FMM only. H-matrix (ACA) is NOT implemented.**
+
+| | `use_fmm=False` | `use_fmm=True` |
+|--|-----------------|----------------|
+| Matrix type | `SparseMatrixdouble` (100% fill) | `SumMatrix` (FMM + near-field sparse) |
+| Structure | Dense matrix in CSR format | `FMM_Operator` (far) + `SparseMatrix` (near, 0.6% fill) |
+| MatVec accuracy | Exact | ~2.6% relative error (multipole truncation) |
+| Dense extraction | COO -> scipy (fast) | **Not possible** (SumMatrix has no COO) |
+| LU / direct solve | Yes | **No** (matrix-free only) |
+| `L = mu_0 * J^T SL J` | Yes (dense matrix) | **Not directly** |
+| Best for | N < ~10,000 | N > ~10,000 (iterative solver) |
+
+**Verified** (N=5067, LaplaceSL):
+```python
+# use_fmm=True returns SumMatrix:
+#   SumMatrix = T^T @ FMM_Operator @ T  +  SparseMatrix(nze=146799)
+# GetOperatorInfo():
+#   SumMatrix
+#     ProductMatrix (far-field: FMM_Operator LaplaceSL)
+#     SparseMatrixdouble (near-field: nze=146799, 0.57% fill)
+```
+
+**FMM internals** (from `mptools.hpp`):
+- Multipole expansion: `SingularMLExpansion` / `RegularMLExpansion`
+- Octree: 8-child spatial decomposition
+- Spherical harmonics basis
+- `FMM_Parameters`: `maxdirect=100`, `minorder=20`
+
+**POLICY: Use `use_fmm=False` for N < 10,000.**
+For small-to-medium BEM (our inductance extraction target: N = 1,000-10,000):
+- Dense matrix is needed for LU solve and energy inner product
+- COO extraction is fast (0.18s at N=5085)
+- FMM accuracy loss (2.6%) is unacceptable for engineering inductance
+- FMM overhead exceeds dense assembly for small N
+
 ## Performance Tips
 
 - BEM matrix assembly is O(N^2) where N = number of surface DOFs
-- For N > 5000, assembly time becomes significant (minutes)
-- **use_fmm=False**: use_fmm=True enables real FMM (multipole expansion, octree).
-  use_fmm=False assembles full dense matrix as SparseMatrix (100% fill).
-  For dense extraction, use_fmm=False is required.
 - **COO extraction (NOT ToDense)**: `mat.COO()` + scipy is ~2500x faster than
   `mat.ToDense().NumPy()`.  ToDense() internally does N MatVecs.
   See "Dense Matrix Extraction" section above.
 - **TaskManager**: Wrap operator setup for parallel BEM assembly.
   TaskManager gives ~5x speedup on 8 cores for BEM integral assembly.
-  FMM parallelization may cause non-deterministic results; use_fmm=False avoids this.
-- For very large problems, consider H-matrix acceleration (future ngsolve.bem feature)
 
 ## Performance Reference: BEM Assembly Times
 
