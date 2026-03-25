@@ -296,7 +296,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 element type tri6")
 
 # Export to Gmsh v2.2
-cubit_mesh_export.export_gmsh_v2(cubit, "sphere_2nd.msh")
+cubit_mesh_export.export_Gmesh(cubit, "sphere_2nd.msh")
 
 # Read into NGSolve (no geometry reference needed!)
 mesh = Mesh(ReadGmsh("sphere_2nd.msh"))
@@ -372,8 +372,8 @@ def cubit_docs(topic: str = "all") -> str:
 	        "all"                    - Overview of all categories
 	        --- Export formats ---
 	        "export_overview"        - Function overview table
-	        "export_gmsh_v2"         - Gmsh v2.2 format
-	        "export_gmsh_v4"         - Gmsh v4.1 format
+	        "export_Gmesh"         - Gmsh v2.2 format
+	        "export_Gmesh"         - Gmsh v4.1 format
 	        "export_NGSolveCurvedMesh"          - Curved mesh export (replaces export_netgen)
 	        "export_nastran"         - Nastran BDF format
 	        "export_meg"             - MEG ELF/MAGIC format
@@ -443,7 +443,7 @@ def cubit_docs(topic: str = "all") -> str:
 
 	return (
 		f"Unknown topic: '{topic}'. Use prefixes: export_*, scripting_*, api_*. "
-		f"Examples: export_gmsh_v2, scripting_blocks, api_core"
+		f"Examples: export_Gmesh, scripting_blocks, api_core"
 	)
 
 
@@ -742,7 +742,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 element type tri6")
 
 # === EXPORT ===
-cubit_mesh_export.export_gmsh_v2(cubit, "mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
 
 # === IMPORT TO NGSOLVE ===
 mesh = Mesh(ReadGmsh("mesh.msh"))
@@ -923,14 +923,14 @@ def get_lint_rules() -> str:
 			'rule': 'missing-block-registration',
 			'severity': 'CRITICAL',
 			'description': 'Export function called but no block registration found.',
-			'trigger': 'export_gmsh_v2(cubit, "mesh.msh") without any block add command',
+			'trigger': 'export_Gmesh(cubit, "mesh.msh") without any block add command',
 			'fix': 'cubit.cmd("block 1 add tet all")',
 		},
 		{
 			'rule': 'missing-mesh-command',
 			'severity': 'CRITICAL',
 			'description': 'Export function called but no mesh command found.',
-			'trigger': 'export_gmsh_v2(cubit, "mesh.msh") without mesh volume/surface command',
+			'trigger': 'export_Gmesh(cubit, "mesh.msh") without mesh volume/surface command',
 			'fix': 'cubit.cmd("mesh volume all")',
 		},
 		{
@@ -972,7 +972,7 @@ def get_lint_rules() -> str:
 			'rule': 'nodeset-sideset-usage',
 			'severity': 'HIGH',
 			'description': 'nodeset/sideset commands found with non-Exodus export. Blocks-only policy.',
-			'trigger': 'nodeset 1 add surface 1 + export_gmsh_v2(...)',
+			'trigger': 'nodeset 1 add surface 1 + export_Gmesh(...)',
 			'fix': 'Use blocks: cubit.cmd("block 2 add tri all in surface 1")',
 		},
 		{
@@ -1014,7 +1014,7 @@ def get_lint_rules() -> str:
 			'rule': 'wrong-file-extension',
 			'severity': 'MODERATE',
 			'description': 'Export file extension does not match the format.',
-			'trigger': 'export_gmsh_v2(cubit, "mesh.vtk") should be .msh',
+			'trigger': 'export_Gmesh(cubit, "mesh.vtk") should be .msh',
 			'fix': 'Use correct extension: .msh, .bdf, .meg, .exo',
 		},
 		{
@@ -1061,7 +1061,7 @@ def new_cubit_mesh(geometry: str, element_type: str = "tet") -> str:
 		"4. Use relative paths for imports\n"
 		"5. For curved mesh: use export_NGSolveCurvedMesh(cubit, order=N)\n"
 		"6. Verify volume after curving\n"
-		"7. For Gmsh 2nd order: set element type tetra10/tri6 and use export_gmsh_v2\n"
+		"7. For Gmsh 2nd order: set element type tetra10/tri6 and use export_Gmesh\n"
 	)
 
 
@@ -1077,7 +1077,7 @@ def cubit_to_ngsolve(mesh_file: str) -> str:
 		"   3. Done - no STEP, no OCC, no SetGeomInfo needed\n\n"
 		"B. Gmsh 2nd order (alternative for order=2 only):\n"
 		"   1. Set block element types to tetra10/tri6\n"
-		"   2. export_gmsh_v2(cubit, 'mesh.msh')\n"
+		"   2. export_Gmesh(cubit, 'mesh.msh')\n"
 		"   3. Mesh(ReadGmsh('mesh.msh'))\n"
 	)
 
@@ -1094,7 +1094,7 @@ def cubit_export_decision_guide() -> str:
 		"| Need | Format | Function |\n"
 		"|------|--------|----------|\n"
 		"| NGSolve high-order (best) | Curved | export_NGSolveCurvedMesh(cubit, order=N) |\n"
-		"| NGSolve 2nd order (simplest) | Gmsh v2 | export_gmsh_v2(cubit, file) |\n"
+		"| NGSolve 2nd order (simplest) | Gmsh v2 | export_Gmesh(cubit, file) |\n"
 		"| General FEM (GMSH API) | Gmsh v4 | export_Gmsh_ver4(cubit, file) |\n"
 		"| Legacy/Nastran solvers | BDF | export_Nastran(cubit, file) |\n"
 		"| Exodus II (Abaqus, etc.) | Exodus | export_exodus(cubit, file) |\n"
