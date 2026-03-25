@@ -79,7 +79,7 @@ try:
             "Netgen fork (ksugahar/netgen) is NOT installed. "
             "Standard pip netgen lacks CallbackGeometry and SetGeomInfo APIs "
             "required for Cubit mesh curving (export_NGSolveCurvedMesh). "
-            "Install: python install_full.py",
+            "Install: radia-install-netgen-fork",
             stacklevel=2)
     del _NetgenMesh
 except ImportError:
