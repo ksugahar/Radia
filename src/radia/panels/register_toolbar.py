@@ -1286,6 +1286,7 @@ class InductanceDialog(QDialog):
 		rows = [
 			("Inductance", L_str),
 			("DOFs (edges)", str(data.get("n_dofs", ""))),
+			("Mesh export", f"{data.get('t_export', 0):.1f} s" if data.get('t_export') else "-"),
 			("Assembly", f"{data.get('t_assembly', 0):.1f} s" if data.get('t_assembly') else "-"),
 			("LU solve", f"{data.get('t_lu', 0):.1f} s" if data.get('t_lu') else "-"),
 			("Post", f"{data.get('t_post', 0):.1f} s" if data.get('t_post') else "-"),
