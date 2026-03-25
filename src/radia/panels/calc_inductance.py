@@ -165,9 +165,11 @@ def extract_inductance(cub5_file, order, source_label="source",
     sys.stderr.write(f"SOLVE_DONE:{t_solve:.1f}s\n")
     sys.stderr.flush()
 
-    # Save J coefficients for post-processing (separate step)
+    # Save solve results for post-processing (separate step)
     j_npy = os.path.join(base_dir, "J_coeffs.npy").replace("\\", "/")
     np.save(j_npy, sol['J'])
+    mesh_vol = os.path.join(base_dir, "surface_mesh.vol").replace("\\", "/")
+    mesh.ngmesh.Save(mesh_vol)
 
     # Conductor bounding box for default post volume
     coords = np.array([(v.point[0], v.point[1], v.point[2])
@@ -189,34 +191,36 @@ def extract_inductance(cub5_file, order, source_label="source",
         "curve_order": order,
         "fes_order": fes_order,
         "t_solve": round(t_solve, 2),
+        "t_assembly": sol['t_assembly'],
+        "t_lu": sol['t_solve'],
         "j_npy": j_npy,
+        "mesh_vol": mesh_vol,
         "default_lxyz": round(default_half, 4),
         "default_maxh": round(default_maxh, 4),
     }
 
 
-def post_process(cub5_file, order, source_label="source", sink_label="sink",
-                 fes_order=0, msh_output="", j_npy="",
+def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
                  lx=0, ly=0, lz=0, maxh_vol=0):
     """Post-process: B-field Biot-Savart, GMSH/Nastran/COMSOL export.
 
+    Loads Solve results (mesh .vol + J_coeffs.npy). No Cubit needed.
+
     Args:
-        cub5_file: Path to Cubit .cub5 model
-        order: Curve order (1-2)
-        source_label, sink_label: Block names
+        mesh_vol_path: Path to surface_mesh.vol from solve step
         fes_order: HDivSurface basis order
         msh_output: Optional .msh output path
         j_npy: Path to J_coeffs.npy from solve step
-        lx, ly, lz: Box half-sizes [m]. 0 = auto.
-        maxh_vol: Volume mesh element size [m]. 0 = auto.
+        lx, ly, lz: Box half-sizes [m].
+        maxh_vol: Volume mesh element size [m].
 
     Returns:
         dict with gmsh_file and diagnostics
     """
     import numpy as np
-    import math
     import time as _time
-    from ngsolve import Integrate, CF, BND, HDivSurface, GridFunction
+    from ngsolve import Mesh, Integrate, CF, BND, HDivSurface, GridFunction
+    from netgen.meshing import Mesh as NetgenMesh
 
     radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     if os.path.abspath(radia_src) not in sys.path:
@@ -225,23 +229,16 @@ def post_process(cub5_file, order, source_label="source", sink_label="sink",
 
     t0 = _time.perf_counter()
 
-    cubit = _setup_cubit()
-    cubit.cmd(f'open "{cub5_file}"')
-
-    radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-    if os.path.abspath(radia_src) not in sys.path:
-        sys.path.insert(0, os.path.abspath(radia_src))
-    import cubit_mesh_export
-
-    mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
-        cubit, order=order, surface_only=True, split_quads=True)
+    # Load mesh from Solve step (no Cubit needed)
+    ngmesh = NetgenMesh()
+    ngmesh.Load(mesh_vol_path)
+    mesh = Mesh(ngmesh)
     nv = mesh.nv
 
     # Output directory
+    base_dir = os.path.dirname(os.path.abspath(j_npy))
     if msh_output:
         base_dir = os.path.dirname(os.path.abspath(msh_output))
-    else:
-        base_dir = os.path.dirname(os.path.abspath(cub5_file))
 
     # Load J coefficients
     J = np.load(j_npy)
@@ -634,18 +631,21 @@ def main():
         description="BEM inductance (source/sink saddle point EFIE)")
     parser.add_argument("--mode", default="solve", choices=["solve", "post"],
                         help="solve: BEM solve only; post: B-field + GMSH export")
-    parser.add_argument("--cub5", required=True, help="Cubit .cub5 model file")
+    # Solve mode args
+    parser.add_argument("--cub5", default="", help="Cubit .cub5 model file (solve mode)")
     parser.add_argument("--order", type=int, default=2, help="Curve order (1-2)")
     parser.add_argument("--fes-order", type=int, default=0, help="HDivSurface order (0=RWG)")
     parser.add_argument("--source", default="source", help="Source block name")
     parser.add_argument("--sink", default="sink", help="Sink block name")
     parser.add_argument("--msh-output", default="", help="GMSH .msh output path")
     parser.add_argument("--output", default="", help="Output JSON file (optional)")
-    parser.add_argument("--j-npy", default="", help="J_coeffs.npy path (for post mode)")
-    parser.add_argument("--lx", type=float, default=0, help="Box half-size X [m] (0=auto)")
-    parser.add_argument("--ly", type=float, default=0, help="Box half-size Y [m] (0=auto)")
-    parser.add_argument("--lz", type=float, default=0, help="Box half-size Z [m] (0=auto)")
-    parser.add_argument("--maxh-vol", type=float, default=0, help="Volume mesh size [m] (0=auto)")
+    # Post mode args
+    parser.add_argument("--j-npy", default="", help="J_coeffs.npy path (post mode)")
+    parser.add_argument("--mesh-vol", default="", help="surface_mesh.vol path (post mode)")
+    parser.add_argument("--lx", type=float, default=0.07, help="Box half-size X [m]")
+    parser.add_argument("--ly", type=float, default=0.07, help="Box half-size Y [m]")
+    parser.add_argument("--lz", type=float, default=0.07, help="Box half-size Z [m]")
+    parser.add_argument("--maxh-vol", type=float, default=0.01, help="Volume mesh size [m]")
     args = parser.parse_args()
 
     import io as _io
@@ -657,10 +657,8 @@ def main():
                                         args.source, args.sink,
                                         args.fes_order, args.msh_output)
         else:
-            result = post_process(args.cub5, args.order,
-                                  args.source, args.sink,
-                                  args.fes_order, args.msh_output,
-                                  args.j_npy,
+            result = post_process(args.mesh_vol, args.fes_order,
+                                  args.msh_output, args.j_npy,
                                   args.lx, args.ly, args.lz,
                                   args.maxh_vol)
     except Exception as e:
