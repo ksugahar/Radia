@@ -560,7 +560,7 @@ def check_peec_p_over_jw(filepath: str, lines: List[str]) -> List[Dict]:
         kw in line
         for line in lines
         for kw in ['loop_star', 'Loop-Star', 'LoopStar', 'Z_SS', 'P_matrix',
-                    'NGBEMPEECSolver', 'ngbem_peec']
+                    'NGBEMPEECSolver', 'ngsbem_peec']
     )
     if not has_peec_ls:
         return findings

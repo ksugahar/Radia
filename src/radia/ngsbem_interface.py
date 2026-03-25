@@ -1,7 +1,7 @@
 """
-ngbem_interface.py
+ngsbem_interface.py
 
-Bridge between ngbem BEM matrices and Radia PEEC circuit extraction.
+Bridge between ngsbem BEM matrices and Radia PEEC circuit extraction.
 
 Converts NGBEMPEECSolver matrices (L, P, M_LS from HDivSurface/SurfaceL2)
 into topology_dict format consumed by PEECCircuitSolver.
@@ -36,8 +36,8 @@ Loop-Star Decomposition:
         M_LS * T_loop = 0      (loops are divergence-free)
 
 Usage:
-    from ngbem_peec import NGBEMPEECSolver, create_plate_mesh
-    from ngbem_interface import NGBEMBridge, LoopStarTransform
+    from ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
+    from ngsbem_interface import NGBEMBridge, LoopStarTransform
 
     mesh = create_plate_mesh(0.01, 0.001, 0.003)
     solver = NGBEMPEECSolver(mesh, sigma=5.8e7, thickness=1e-3)
@@ -428,13 +428,13 @@ class LoopStarTransform:
     def verify_divergence_free(self, M_LS):
         """Verify that Loop basis functions are divergence-free.
 
-        M_LS is the divergence coupling matrix from ngbem:
+        M_LS is the divergence coupling matrix from ngsbem:
             M_LS[i, j] = integral div(basis_j) * phi_i dS
 
         For loop basis: M_LS * T_loop should be ~0
 
         Args:
-            M_LS: Divergence coupling matrix (n_star_ngbem x n_edges)
+            M_LS: Divergence coupling matrix (n_star_ngsbem x n_edges)
 
         Returns:
             max_abs: Maximum absolute value of M_LS * T_loop
@@ -465,9 +465,9 @@ class LoopStarTransform:
 
 
 class NGBEMBridge:
-    """Bridge between ngbem BEM matrices and PEEC circuit solver.
+    """Bridge between ngsbem BEM matrices and PEEC circuit solver.
 
-    Converts ngbem HDivSurface/SurfaceL2 matrices into topology_dict
+    Converts ngsbem HDivSurface/SurfaceL2 matrices into topology_dict
     compatible with PEECCircuitSolver.
 
     The key mapping:
@@ -476,12 +476,12 @@ class NGBEMBridge:
       - Port: specified by user via coordinates or boundary labels
     """
 
-    def __init__(self, ngbem_solver, port_spec=None):
+    def __init__(self, ngsbem_solver, port_spec=None):
         """
         Initialize bridge.
 
         Args:
-            ngbem_solver: NGBEMPEECSolver instance (must be assembled)
+            ngsbem_solver: NGBEMPEECSolver instance (must be assembled)
             port_spec: Port specification. Options:
                 - None or 'auto': auto-detect endpoints (min/max x-coord)
                 - (pos_coords, neg_coords): tuple of two [x,y,z] arrays,
@@ -489,13 +489,13 @@ class NGBEMBridge:
                 - {'positive_label': str, 'negative_label': str}:
                   NGSolve boundary labels
         """
-        if ngbem_solver.L is None:
+        if ngsbem_solver.L is None:
             raise RuntimeError(
                 "NGBEMPEECSolver must be assembled before creating bridge. "
                 "Call solver.assemble() first.")
 
-        self.solver = ngbem_solver
-        self.mesh = ngbem_solver.mesh
+        self.solver = ngsbem_solver
+        self.mesh = ngsbem_solver.mesh
         self.port_spec = port_spec
 
         # Extract geometry on construction
@@ -599,7 +599,7 @@ class NGBEMBridge:
         return self._ports
 
     def to_topology_dict(self, decompose_loop_star=False):
-        """Convert ngbem matrices to topology_dict format.
+        """Convert ngsbem matrices to topology_dict format.
 
         This is the main entry point. Produces a dict compatible
         with PEECCircuitSolver.__init__().
@@ -639,13 +639,13 @@ class NGBEMBridge:
             'segment_lengths': self._edge_geom['lengths'],
             'node_positions': self._virtual_topo['node_positions'],
 
-            # Optional: full Loop-Star (from ngbem product space)
+            # Optional: full Loop-Star (from ngsbem product space)
             'P': mats['P'],
             'M_LS': mats['M_LS'],
             'n_star': mats['n_star'],
 
             # Metadata
-            'backend': 'ngbem',
+            'backend': 'ngsbem',
             'order': self.solver.order,
         }
 
@@ -737,7 +737,7 @@ class NGBEMBridge:
         }
 
     def to_circuit_solver(self):
-        """Create PEECCircuitSolver from ngbem matrices.
+        """Create PEECCircuitSolver from ngsbem matrices.
 
         Convenience method that calls to_topology_dict() and creates
         a PEECCircuitSolver instance.
@@ -761,7 +761,7 @@ class NGBEMBridge:
         n_star = self.solver.n_star
 
         print("NGBEMBridge Summary:")
-        print(f"  Backend: ngbem (order={self.solver.order})")
+        print(f"  Backend: ngsbem (order={self.solver.order})")
         print(f"  Mesh vertices (virtual nodes): {n_nodes}")
         print(f"  Mesh edges (virtual segments / Loop DOFs): {n_loop}")
         print(f"  Mesh triangles (Star DOFs): {n_star}")

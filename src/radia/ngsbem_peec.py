@@ -1,7 +1,7 @@
 """
-ngbem_peec.py
+ngsbem_peec.py
 
-PEEC Loop-Star Solver using ngbem (NGSolve BEM)
+PEEC Loop-Star Solver using ngsbem (NGSolve BEM)
 
 Computes port impedance Z(f) for conductors using Galerkin BEM with
 natural Loop-Star decomposition via HDivSurface / SurfaceL2 function spaces.
@@ -23,7 +23,7 @@ Modes:
 
 Usage:
     from ngsolve import Mesh
-    from ngbem_peec import NGBEMPEECSolver, create_plate_mesh
+    from ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
 
     mesh = create_plate_mesh(0.01, 0.01, 0.003, label="conductor")
     solver = NGBEMPEECSolver(mesh, conductor_label="conductor",
@@ -149,6 +149,10 @@ def make_dowell_Zs_func(n_loop, R_dc_per_edge, thickness, sigma, mu_r=1.0):
 def extract_dense_matrix(mat, ndof):
     """Extract dense numpy matrix from NGSolve BaseMatrix.
 
+    Uses COO() extraction when available (SparseMatrix with use_fmm=False),
+    which is ~2500x faster than column-by-column MatVec for BEM matrices.
+    Falls back to MatVec for SumMatrix (use_fmm=True) or other types.
+
     Args:
         mat: NGSolve BaseMatrix (from IntegralOperator.mat)
         ndof: Number of degrees of freedom
@@ -156,7 +160,15 @@ def extract_dense_matrix(mat, ndof):
     Returns:
         Dense numpy array (ndof x ndof)
     """
-    # Probe first column to detect complex output
+    try:
+        from scipy.sparse import coo_matrix
+        rows, cols, vals = mat.COO()
+        return coo_matrix((vals, (rows, cols)),
+                          shape=(mat.height, mat.width)).toarray()
+    except Exception:
+        pass
+
+    # Fallback: column-by-column MatVec (slow but universal)
     ei = mat.CreateColVector()
     ei[:] = 0
     ei[0] = 1.0
@@ -229,9 +241,9 @@ def get_mesh_triangles(mesh):
 
 
 class NGBEMPEECSolver:
-    """PEEC solver using ngbem Galerkin BEM with Loop-Star decomposition.
+    """PEEC solver using ngsbem Galerkin BEM with Loop-Star decomposition.
 
-    Uses NGSolve BEM (ngbem) for matrix assembly:
+    Uses NGSolve BEM (ngsbem) for matrix assembly:
     - HDivSurface (edge-based RWG) for inductance L (Loop DOFs)
     - SurfaceL2 (cell-based piecewise constant) for potential P (Star DOFs)
     - Divergence bilinear form for Loop-Star coupling M_LS
@@ -252,7 +264,7 @@ class NGBEMPEECSolver:
 
     def __init__(self, mesh, conductor_label="conductor", sigma=5.8e7,
                  thickness=None, order=0, intorder=5):
-        """Initialize ngbem PEEC solver.
+        """Initialize ngsbem PEEC solver.
 
         Args:
             mesh: NGSolve Mesh (surface mesh of conductor)
@@ -287,7 +299,7 @@ class NGBEMPEECSolver:
         self.t_assemble = 0.0
 
     def assemble(self):
-        """Assemble L, P, Q_0, M_LS, R matrices using ngbem.
+        """Assemble L, P, Q_0, M_LS, R matrices using ngsbem.
 
         This is the main computation step. Call once, then use
         solve_frequency() for multiple frequency sweeps.

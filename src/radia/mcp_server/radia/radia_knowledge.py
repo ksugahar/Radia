@@ -890,18 +890,18 @@ to NGSolve function spaces: `HDivSurface` (Loop) x `SurfaceL2` (Star).
 ```
 Surface Mesh (Netgen OCC)
   |
-  +-> NGBEMPEECSolver (ngbem_peec.py)
+  +-> NGBEMPEECSolver (ngsbem_peec.py)
   |     - L matrix: LaplaceSL on HDivSurface (inductance)
   |     - P matrix: SingleLayerPotential on SurfaceL2 (capacitance)
   |     - M_LS:     div coupling (FEM, not BEM)
   |     - R:        sheet resistance from sigma, thickness
   |     - solve_frequency() -> Z(f) = R + jwL (MQS) or full Loop-Star
   |
-  +-> ShieldBEMSIBC (ngbem_eddy.py)
+  +-> ShieldBEMSIBC (ngsbem_eddy.py)
   |     - BEM + SIBC for conducting shields
   |     - compute_impedance_matrix() -> Delta_Z (shield coupling)
   |
-  +-> CoupledPEECMMM (ngbem_coupled.py)
+  +-> CoupledPEECMMM (ngsbem_coupled.py)
         - Image method for ferrite core coupling
         - compute_delta_L() -> Delta_L (freq-independent)
 ```
@@ -910,16 +910,16 @@ Surface Mesh (Netgen OCC)
 
 | Module | Class | Purpose |
 |--------|-------|---------|
-| `ngbem_peec.py` | `NGBEMPEECSolver` | Galerkin PEEC: L, P, M_LS assembly + impedance sweep |
-| `ngbem_eddy.py` | `ShieldBEMSIBC` | Loop-only BEM+SIBC for conducting shields |
-| `ngbem_eddy.py` | `LoopBasisBuilder` | Div-free loop basis from face-edge topology |
-| `ngbem_coupled.py` | `CoupledPEECMMM` | Ferrite core coupling via image method |
-| `ngbem_interface.py` | `extract_edge_geometry` | Bridge: ngsolve.bem mesh to PEEC topology |
+| `ngsbem_peec.py` | `NGBEMPEECSolver` | Galerkin PEEC: L, P, M_LS assembly + impedance sweep |
+| `ngsbem_eddy.py` | `ShieldBEMSIBC` | Loop-only BEM+SIBC for conducting shields |
+| `ngsbem_eddy.py` | `LoopBasisBuilder` | Div-free loop basis from face-edge topology |
+| `ngsbem_coupled.py` | `CoupledPEECMMM` | Ferrite core coupling via image method |
+| `ngsbem_interface.py` | `extract_edge_geometry` | Bridge: ngsolve.bem mesh to PEEC topology |
 
 ## Quick Start: Plate Impedance
 
 ```python
-from ngbem_peec import NGBEMPEECSolver, create_plate_mesh
+from ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
 import numpy as np
 
 # Create conductor surface mesh
@@ -1067,7 +1067,7 @@ L_total = N * L_self + sum(2*M[i][j] for i<j)  # Neumann sum
 - Rectangular frame (10mm, w=1mm): BEM~24 nH, FastHenry=21.6 nH, Grover~24 nH
 - Computation time: ~420 ms per mesh (no bonus_intorder needed)
 
-See: `examples/peec_integration/ngsbem_peec_demo/ngbem/1_turn_coil.py`
+See: `examples/peec_integration/ngsbem_peec_demo/ngsbem/1_turn_coil.py`
      `examples/peec_integration/ngsbem_peec_demo/compute_L_final.py`
 
 ### With Conductor Shield (SIBC, Standalone)
@@ -1075,7 +1075,7 @@ See: `examples/peec_integration/ngsbem_peec_demo/ngbem/1_turn_coil.py`
 For a coil above a conducting shield plate, use ShieldBEMSIBC:
 
 ```python
-from ngbem_eddy import ShieldBEMSIBC
+from ngsbem_eddy import ShieldBEMSIBC
 from 1_turn_coil import (compute_loop_inductance, create_circular_ring_mesh,
                           discretize_ring_coil, create_shield_plate_mesh)
 
@@ -1132,8 +1132,8 @@ Shield eddy currents are computed using the EFIE with surface impedance:
                    Re(Delta_Z) > 0 (added resistance)
 
 ```python
-from ngbem_eddy import ShieldBEMSIBC
-from ngbem_interface import extract_edge_geometry
+from ngsbem_eddy import ShieldBEMSIBC
+from ngsbem_interface import extract_edge_geometry
 
 # Create shield mesh (aluminum plate)
 shield_mesh = ...  # Netgen OCC Box mesh
@@ -1158,7 +1158,7 @@ Z_shielded = Z_air + Delta_Z  # Add to PEEC branch impedance
 For planar ferrite cores, the analytical image method scales L_air directly:
 
 ```python
-from ngbem_coupled import CoupledPEECMMM, compute_delta_L
+from ngsbem_coupled import CoupledPEECMMM, compute_delta_L
 
 mu_r = 1000
 Delta_L = compute_delta_L(solver.L, mu_r)  # = L_air / (mu_r + 1)
@@ -1196,7 +1196,7 @@ Key: stabilized EFIE multiplies V by kappa^2 (not divides V by kappa^2):
 - Stabilized: cond = O(1) for all kappa (DC to RF)
 - Classical:  cond = O(kappa^{-2}) (blows up at low frequency)
 
-### Implementation in ngbem_peec.py (2026-02-22)
+### Implementation in ngsbem_peec.py (2026-02-22)
 
 - `_build_bem_coupling()`: Assembles Q_0 via LaplaceSL product space
 - `_solve_stabilized()`: Full block system with k^2*V_0
@@ -1498,7 +1498,7 @@ with TaskManager():
 ## Connection to PEEC / Low-Frequency Stabilization
 
 This preconditioner addresses the same low-frequency ill-conditioning as
-Weggler's stabilized EFIE (see ngbem_peec topic). Both target the O(kappa^{-2})
+Weggler's stabilized EFIE (see ngsbem_peec topic). Both target the O(kappa^{-2})
 condition number blow-up:
 
 | Approach | Mechanism | Use Case |
@@ -3091,7 +3091,7 @@ a += (1/Zs_cf) * A.Trace() * N.Trace() * ds("workpiece")  # Robin BC
 
 For conducting shields with ngsolve.bem BEM:
 ```python
-from radia.ngbem_eddy import ShieldBEMSIBC
+from radia.ngsbem_eddy import ShieldBEMSIBC
 shield = ShieldBEMSIBC(mesh, sigma=3.7e7, mu_r=1.0)
 ```
 
@@ -3300,7 +3300,7 @@ def get_radia_documentation(topic: str = "all") -> str:
         "mesh_import": RADIA_MESH_IMPORT,
         "best_practices": RADIA_BEST_PRACTICES,
         "peec": RADIA_PEEC,
-        "ngbem_peec": RADIA_NGBEM_PEEC,
+        "ngsbem_peec": RADIA_NGBEM_PEEC,
         "efie_preconditioner": RADIA_EFIE_PRECONDITIONER,
         "fem_verification": RADIA_FEM_VERIFICATION,
         "scalar_potential": RADIA_SCALAR_POTENTIAL,

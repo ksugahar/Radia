@@ -782,7 +782,7 @@ class FastHenryParser:
                 "Shield blocks require NGSolve/Netgen. "
                 "Install with: pip install ngsolve")
 
-        from ngbem_eddy import ShieldBEMSIBC
+        from ngsbem_eddy import ShieldBEMSIBC
 
         solvers = []
 
@@ -1037,7 +1037,7 @@ class FastHenryParser:
 
     def solve(self, freqs=None, Zs_func=None, solver_method=0,
               solver_prec=0.0001, solver_maxiter=1000,
-              use_ngbem=False, ngbem_options=None):
+              use_ngsbem=False, ngsbem_options=None):
         """
         Parse, build, and solve in one step.
 
@@ -1050,8 +1050,8 @@ class FastHenryParser:
             solver_method: Radia solver method for coupling (0=LU, 1=BiCGSTAB)
             solver_prec: Radia solver precision
             solver_maxiter: Radia solver max iterations
-            use_ngbem: If True, use ngbem BEM backend instead of PEEC filaments
-            ngbem_options: Dict with ngbem parameters:
+            use_ngsbem: If True, use ngsbem BEM backend instead of PEEC filaments
+            ngsbem_options: Dict with ngsbem parameters:
                 'maxh': max element size for surface mesh (default: auto)
                 'order': FE order (default: 0)
                 'intorder': BEM integration order (default: 5)
@@ -1065,10 +1065,10 @@ class FastHenryParser:
                 'L': imaginary part / omega (inductance)
                 'topology': build_topology() result dict
                 'Delta_L': coupling matrix (if magnetic blocks present)
-                'backend': 'peec' or 'ngbem'
+                'backend': 'peec' or 'ngsbem'
         """
-        if use_ngbem:
-            return self._solve_ngbem(freqs, Zs_func, ngbem_options or {})
+        if use_ngsbem:
+            return self._solve_ngsbem(freqs, Zs_func, ngsbem_options or {})
 
         builder = self.to_peec_builder()
         include_star = len(self.panel_blocks) > 0
@@ -1175,28 +1175,28 @@ class FastHenryParser:
 
         return result
 
-    def _solve_ngbem(self, freqs, Zs_func, options):
-        """Solve using ngbem BEM backend instead of PEEC filaments.
+    def _solve_ngsbem(self, freqs, Zs_func, options):
+        """Solve using ngsbem BEM backend instead of PEEC filaments.
 
         Builds a conductor surface mesh from the segment geometry,
-        assembles ngbem BEM matrices, bridges to PEECCircuitSolver,
+        assembles ngsbem BEM matrices, bridges to PEECCircuitSolver,
         and runs frequency sweep.
 
         Args:
             freqs: Frequency array or None
-            Zs_func: Surface impedance function (not used by ngbem path)
-            options: Dict with ngbem parameters (maxh, order, intorder, mode)
+            Zs_func: Surface impedance function (not used by ngsbem path)
+            options: Dict with ngsbem parameters (maxh, order, intorder, mode)
 
         Returns:
             dict with same format as solve()
         """
         try:
-            from ngbem_peec import NGBEMPEECSolver
-            from ngbem_interface import NGBEMBridge
+            from ngsbem_peec import NGBEMPEECSolver
+            from ngsbem_interface import NGBEMBridge
         except ImportError:
             raise ImportError(
-                "ngbem backend requires NGSolve and ngbem. "
-                "Install with: pip install ngsolve ngbem")
+                "ngsbem backend requires NGSolve and ngsbem. "
+                "Install with: pip install ngsolve ngsbem")
 
         from peec_topology import PEECCircuitSolver
 
@@ -1220,20 +1220,20 @@ class FastHenryParser:
             h = seg.get('h', 1e-3)
             thickness = min(w, h)
 
-        # Create and assemble ngbem solver
+        # Create and assemble ngsbem solver
         order = options.get('order', 0)
         intorder = options.get('intorder', 5)
         mode = options.get('mode', 'mqs')
 
-        ngbem_solver = NGBEMPEECSolver(
+        ngsbem_solver = NGBEMPEECSolver(
             mesh, sigma=sigma, thickness=thickness,
             order=order, intorder=intorder, mode=mode)
-        ngbem_solver.assemble()
+        ngsbem_solver.assemble()
 
-        # Bridge ngbem matrices to topology_dict
+        # Bridge ngsbem matrices to topology_dict
         # Determine port specification from parser's .external directives
-        port_spec = self._get_ngbem_port_spec()
-        bridge = NGBEMBridge(ngbem_solver, port_spec=port_spec)
+        port_spec = self._get_ngsbem_port_spec()
+        bridge = NGBEMBridge(ngsbem_solver, port_spec=port_spec)
         topo = bridge.to_topology_dict()
 
         # Solve using PEECCircuitSolver (same as PEEC path)
@@ -1253,7 +1253,7 @@ class FastHenryParser:
             'R': R,
             'L': L,
             'topology': topo,
-            'backend': 'ngbem',
+            'backend': 'ngsbem',
         }
 
     def _build_conductor_surface_mesh(self, options):
@@ -1266,7 +1266,7 @@ class FastHenryParser:
             options: Dict with 'maxh' (max element size)
 
         Returns:
-            ngsolve.Mesh: Surface mesh for ngbem
+            ngsolve.Mesh: Surface mesh for ngsbem
         """
         try:
             from netgen.occ import Box, Pnt, OCCGeometry
@@ -1335,8 +1335,8 @@ class FastHenryParser:
 
         return Mesh(ngmesh)
 
-    def _get_ngbem_port_spec(self):
-        """Convert FastHenry .external port spec to ngbem port coordinates.
+    def _get_ngsbem_port_spec(self):
+        """Convert FastHenry .external port spec to ngsbem port coordinates.
 
         Maps port node names to 3D coordinates for NGBEMBridge.
 

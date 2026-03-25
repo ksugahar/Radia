@@ -1,16 +1,16 @@
 """
-ngbem_coupled.py
+ngsbem_coupled.py
 
 Phase 3: Unified PEEC + Core Coupled Solver
 
 Combines:
-- Phase 1: ngbem PEEC Loop-Star (conductor coil impedance)
-- Phase 2: ngbem FEM/FEM-BEM eddy current (conducting core)
+- Phase 1: ngsbem PEEC Loop-Star (conductor coil impedance)
+- Phase 2: ngsbem FEM/FEM-BEM eddy current (conducting core)
 - Radia MMM/MSC (magnetic core, nonlinear support)
 - Coupling: Delta_L mutual inductance
 
 Core model selection:
-    'fembem'  : FEM-BEM coupling (ngbem Calderon). mu_r=1 ONLY. Unbounded domain.
+    'fembem'  : FEM-BEM coupling (ngsbem Calderon). mu_r=1 ONLY. Unbounded domain.
     'fem'     : FEM with Dirichlet BC. Any mu_r. Bounded domain approximation.
     'radia'   : Radia MMM/MSC. Any mu_r, nonlinear. Unbounded domain.
     None      : No core (PEEC only, or static mu_r without eddy currents).
@@ -94,11 +94,11 @@ def _biot_savart_finite_filament(p1, p2, obs_point):
 class CoupledPEECMMM:
     """Coupled PEEC (conductor) + Core solver.
 
-    Uses Phase 1 (ngbem_peec.py) for conductor Loop-Star matrices
+    Uses Phase 1 (ngsbem_peec.py) for conductor Loop-Star matrices
     and a selectable core model for eddy current / magnetic effects.
 
     Core model options:
-        'fembem' : FEM-BEM coupling via ngbem Calderon projector.
+        'fembem' : FEM-BEM coupling via ngsbem Calderon projector.
                    - Linear materials only (mu_r=1 for scalar Hz formulation)
                    - Unbounded domain (natural exterior BEM)
                    - High-order BEM elements available
@@ -230,7 +230,7 @@ class CoupledPEECMMM:
         This requires the Radia core object to be set up with material.
 
         Uses the same algorithm as peec_coupled.CoupledPEECSolver but
-        adapted for edge-based DOFs (ngbem HDivSurface).
+        adapted for edge-based DOFs (ngsbem HDivSurface).
 
         Args:
             solver_method: Radia solver method (0=LU, 1=BiCGSTAB, 2=HACApK)
@@ -267,7 +267,7 @@ class CoupledPEECMMM:
         else:
             core_handles = [self.radia_core]
 
-        print(f"  [ngbem_coupled] Computing Delta_L ({n_loop}x{n_loop}) "
+        print(f"  [ngsbem_coupled] Computing Delta_L ({n_loop}x{n_loop}) "
               f"via Radia...")
 
         # Create persistent container for core objects (survives across iterations)
@@ -306,7 +306,7 @@ class CoupledPEECMMM:
         self.Delta_L = Delta_L
         self._coupled = True
         self.t_coupling = time.perf_counter() - t_start
-        print(f"  [ngbem_coupled] Delta_L computed in {self.t_coupling:.2f} s")
+        print(f"  [ngsbem_coupled] Delta_L computed in {self.t_coupling:.2f} s")
 
     def _extract_edge_geometry(self, mesh):
         """Extract edge midpoints, directions, and endpoints from mesh.
@@ -319,7 +319,7 @@ class CoupledPEECMMM:
         Returns:
             list of dicts: {'center', 'direction', 'length', 'p1', 'p2'}
         """
-        from ngbem_interface import extract_edge_geometry
+        from ngsbem_interface import extract_edge_geometry
 
         geom = extract_edge_geometry(mesh)
         n_edges = len(geom['centers'])
@@ -354,7 +354,7 @@ class CoupledPEECMMM:
         Returns:
             mu_eff: Complex effective relative permeability
         """
-        from ngbem_eddy import EddyCurrentFEMBEM
+        from ngsbem_eddy import EddyCurrentFEMBEM
         from ngsolve import Integrate, CF
 
         freq = omega / (2.0 * np.pi)
@@ -432,7 +432,7 @@ class CoupledPEECMMM:
         Returns:
             mu_eff: Complex effective relative permeability
         """
-        from ngbem_eddy import VectorEddyCurrentFEMBEM
+        from ngsbem_eddy import VectorEddyCurrentFEMBEM
         from ngsolve import Integrate, CF
 
         freq = omega / (2.0 * np.pi)
