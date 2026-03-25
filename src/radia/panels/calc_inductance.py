@@ -160,14 +160,83 @@ def extract_inductance(cub5_file, order, source_label="source",
     A_src = sol['A_source']
     A_snk = sol['A_sink']
     residual = sol['residual']
-    J = sol['J']
-    gf_J = sol['gf_J']
     t_solve = sol['t_total']
 
     sys.stderr.write(f"SOLVE_DONE:{t_solve:.1f}s\n")
     sys.stderr.flush()
 
-    # --- Phase 3: Per-node J vector via vertex averaging ---
+    # Save J coefficients for post-processing (separate step)
+    j_npy = os.path.join(base_dir, "J_coeffs.npy").replace("\\", "/")
+    np.save(j_npy, sol['J'])
+
+    return {
+        "inductance_H": float(L_total),
+        "n_dofs": n_J,
+        "n_faces": n_f,
+        "euler": euler,
+        "surface_area": area,
+        "source_area": float(A_src),
+        "sink_area": float(A_snk),
+        "constraint_residual": residual,
+        "curve_order": order,
+        "fes_order": fes_order,
+        "t_solve": round(t_solve, 2),
+        "j_npy": j_npy,
+    }
+
+
+def post_process(cub5_file, order, source_label="source", sink_label="sink",
+                 fes_order=0, msh_output="", j_npy=""):
+    """Post-process: B-field Biot-Savart, GMSH/Nastran/COMSOL export.
+
+    Args:
+        cub5_file: Path to Cubit .cub5 model
+        order: Curve order (1-2)
+        source_label, sink_label: Block names
+        fes_order: HDivSurface basis order
+        msh_output: Optional .msh output path
+        j_npy: Path to J_coeffs.npy from solve step
+
+    Returns:
+        dict with gmsh_file and diagnostics
+    """
+    import numpy as np
+    import math
+    import time as _time
+    from ngsolve import Integrate, CF, BND, HDivSurface, GridFunction
+
+    radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    if os.path.abspath(radia_src) not in sys.path:
+        sys.path.insert(0, os.path.abspath(radia_src))
+    from bem_inductance import MU_0
+
+    t0 = _time.perf_counter()
+
+    cubit = _setup_cubit()
+    cubit.cmd(f'open "{cub5_file}"')
+
+    radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    if os.path.abspath(radia_src) not in sys.path:
+        sys.path.insert(0, os.path.abspath(radia_src))
+    import cubit_mesh_export
+
+    mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
+        cubit, order=order, surface_only=True, split_quads=True)
+    nv = mesh.nv
+
+    # Output directory
+    if msh_output:
+        base_dir = os.path.dirname(os.path.abspath(msh_output))
+    else:
+        base_dir = os.path.dirname(os.path.abspath(cub5_file))
+
+    # Load J coefficients
+    J = np.load(j_npy)
+    fes_J = HDivSurface(mesh, order=fes_order)
+    gf_J = GridFunction(fes_J)
+    gf_J.vec.FV().NumPy()[:] = J
+
+    # Per-node J vector via vertex averaging
     elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
     elem_Jx = Integrate(gf_J[0], mesh, VOL_or_BND=BND, element_wise=True)
     elem_Jy = Integrate(gf_J[1], mesh, VOL_or_BND=BND, element_wise=True)
@@ -187,14 +256,14 @@ def extract_inductance(cub5_file, order, source_label="source",
     sys.stderr.write(f"FIELD_READY:J computed\n")
     sys.stderr.flush()
 
-    # --- Phase 4: B-distribution (volume B via Biot-Savart) ---
+    # B-distribution (volume B via Biot-Savart)
     B_nodes, vol_nodes, vol_elems = _compute_B_field(
         mesh, gf_J, elem_A, MU_0)
 
     sys.stderr.write(f"B_FIELD_READY:B computed\n")
     sys.stderr.flush()
 
-    # --- Phase 5: Write single combined .msh (no node ID collision) ---
+    # Write single combined .msh
     gmsh_file = os.path.join(base_dir, "inductance.msh").replace("\\", "/")
     _write_combined_msh(gmsh_file, mesh, J_nodes, vol_nodes, vol_elems, B_nodes)
 
@@ -217,25 +286,14 @@ def extract_inductance(cub5_file, order, source_label="source",
                         mesh.vertices[i].point[2]) for i in range(nv)],
                       J_nodes, "J", ["Jx", "Jy", "Jz"])
 
-    # Nastran BDF with CTRIA6 (2nd order surface mesh for COMSOL geometry import)
+    # Nastran BDF with CTRIA6
     _write_nastran_ctria6(os.path.join(base_dir, "coil_surface.bdf"), mesh)
 
-    t_total = _time.perf_counter() - t_total_start
+    t_post = _time.perf_counter() - t0
 
     return {
-        "inductance_H": float(L_total),
-        "n_dofs": n_J,
-        "n_faces": n_f,
-        "euler": euler,
-        "surface_area": area,
-        "source_area": float(A_src),
-        "sink_area": float(A_snk),
-        "constraint_residual": residual,
-        "curve_order": order,
-        "fes_order": fes_order,
         "gmsh_file": geo_file,
-        "t_solve": round(t_solve, 2),
-        "t_total": round(t_total, 2),
+        "t_post": round(t_post, 2),
     }
 
 
@@ -556,6 +614,8 @@ def _write_combined_msh(filename, mesh_surf, J_nodes, vol_nodes, vol_elems, B_no
 def main():
     parser = argparse.ArgumentParser(
         description="BEM inductance (source/sink saddle point EFIE)")
+    parser.add_argument("--mode", default="solve", choices=["solve", "post"],
+                        help="solve: BEM solve only; post: B-field + GMSH export")
     parser.add_argument("--cub5", required=True, help="Cubit .cub5 model file")
     parser.add_argument("--order", type=int, default=2, help="Curve order (1-2)")
     parser.add_argument("--fes-order", type=int, default=0, help="HDivSurface order (0=RWG)")
@@ -563,15 +623,22 @@ def main():
     parser.add_argument("--sink", default="sink", help="Sink block name")
     parser.add_argument("--msh-output", default="", help="GMSH .msh output path")
     parser.add_argument("--output", default="", help="Output JSON file (optional)")
+    parser.add_argument("--j-npy", default="", help="J_coeffs.npy path (for post mode)")
     args = parser.parse_args()
 
     import io as _io
     real_stdout = sys.stdout
     sys.stdout = _io.StringIO()
     try:
-        result = extract_inductance(args.cub5, args.order,
-                                    args.source, args.sink,
-                                    args.fes_order, args.msh_output)
+        if args.mode == "solve":
+            result = extract_inductance(args.cub5, args.order,
+                                        args.source, args.sink,
+                                        args.fes_order, args.msh_output)
+        else:
+            result = post_process(args.cub5, args.order,
+                                  args.source, args.sink,
+                                  args.fes_order, args.msh_output,
+                                  args.j_npy)
     except Exception as e:
         result = {"error": str(e)}
     sys.stdout = real_stdout
