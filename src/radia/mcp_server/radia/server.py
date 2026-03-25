@@ -335,7 +335,7 @@ def radia_usage(topic: str = "all") -> str:
             "mesh_import"         - NGSolve/Cubit mesh import
             "best_practices"      - Common patterns and pitfalls
             "peec"                - PEEC conductor analysis (FastHenry, topology, SIBC)
-            "ngbem_peec"          - PEEC with ngsolve.bem: Loop-Star, shield BEM+SIBC, stabilized EFIE
+            "ngsbem_peec"          - PEEC with ngsolve.bem: Loop-Star, shield BEM+SIBC, stabilized EFIE
             "efie_preconditioner" - Calderon preconditioner for EFIE (Andriulli/Schoeberl)
             "fem_verification"    - NGSolve FEM verification results and parameters
             "scalar_potential"    - Phi-reduced scalar potential (Radia source + NGSolve FEM)

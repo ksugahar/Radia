@@ -16,7 +16,7 @@ Key difference from CoupledPEECSolver (MMM):
     - CoupledPEECSolver's Delta_L is REAL and FREQUENCY-INDEPENDENT (static)
 
 Usage:
-    from ngbem_eddy import ShieldBEMSIBC
+    from ngsbem_eddy import ShieldBEMSIBC
     from peec_shielded import ShieldedPEECSolver
     from peec_matrices import PEECBuilder
 

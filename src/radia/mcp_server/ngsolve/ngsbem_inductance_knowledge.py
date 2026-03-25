@@ -11,7 +11,7 @@ ngsolve.bem is NGSolve's native boundary element module. It provides:
 - Direct integration with NGSolve FE spaces (HDivSurface, SurfaceL2)
 
 Key references:
-  - ngsolve.bem documentation: https://docu.ngsolve.org/latest/how_to/ngbem.html
+  - ngsolve.bem documentation: https://docu.ngsolve.org/latest/how_to/ngsbem.html
   - Lucy Weggler's stabilized BEM: https://github.com/Weggler/docu-ngsbem
   - Netgen PR#232: SetGeomInfo for externally imported meshes
 """
@@ -105,7 +105,7 @@ This is the **MQS (Magneto-Quasi-Static)** approximation:
 | Skin effect | Needs SIBC | Built-in (Bessel/Dowell) |
 | SPICE output | Manual | Built-in netlist |
 | Speed (small) | Slower (dense BEM) | Fast (analytical) |
-| Speed (large) | H-matrix acceleration | H-matrix (HACApK) |
+| Speed (large) | FMM acceleration (use_fmm=True) | H-matrix (HACApK) |
 | Accuracy | High (surface integral) | Moderate (filament approx) |
 """
 
@@ -1257,7 +1257,7 @@ L = MU_0 * eigvals[1] * R / a
 """
 
 
-def get_ngbem_inductance_documentation(topic: str = "all") -> str:
+def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
     """Return ngsolve.bem inductance extraction documentation by topic."""
     topics = {
         "overview": NGBEM_OVERVIEW,
