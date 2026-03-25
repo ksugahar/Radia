@@ -1025,6 +1025,143 @@ For R/a < 5, mutual inductance corrections become significant.
 """
 
 
+NGBEM_HODGE_DECOMPOSITION = """
+# Hodge Decomposition for Closed Conductor Inductance
+
+## Motivation
+
+For **closed conductors** (no gap, no source/sink ports), the source/sink
+saddle point EFIE cannot be applied. The Hodge decomposition approach extracts
+toroidal and poloidal current modes from the topology of the surface mesh.
+
+This is useful for:
+- Closed loops (torus, ring-shaped conductors)
+- Multi-turn coils with no explicit port
+- Topological mode analysis (genus >= 1 surfaces)
+
+## Mathematical Background
+
+Surface currents decompose into 3 orthogonal subspaces (Hodge-Helmholtz):
+
+```
+J = J_grad + J_curl + J_harm
+```
+
+- `J_grad = grad(phi)`: gradient (irrotational) -- carries no net flux
+- `J_curl = curl(psi)`: co-exact -- localized vortices
+- `J_harm`: harmonic -- topological currents (toroidal, poloidal)
+
+For a genus-g surface, dim(harmonic) = 2g. A torus (g=1) has exactly
+2 harmonic modes: toroidal and poloidal.
+
+## Discrete Hodge Decomposition
+
+Using HDivSurface (RT0) basis on a surface mesh:
+
+```
+D = divergence matrix (n_faces x n_edges)  -- SurfaceL2 test x HDivSurface trial
+C = incidence matrix (n_edges x n_vertices) -- edge-vertex connectivity
+M_J = mass matrix (n_edges x n_edges)       -- HDivSurface inner product
+```
+
+The harmonic subspace is:
+
+```
+V_harm = null_space([D; C^T @ M_J])
+```
+
+- `D @ J = 0`: divergence-free (no sources/sinks)
+- `C^T @ M_J @ J = 0`: curl-free in the L2 sense
+
+## Eigenvalue Problem for Inductance
+
+Project LaplaceSL onto the harmonic subspace:
+
+```python
+SL_harm = V_harm.T @ SL @ V_harm   # projected single-layer
+M_harm  = V_harm.T @ M_J @ V_harm  # projected mass
+
+eigvals, eigvecs = scipy.linalg.eigh(SL_harm, M_harm)
+```
+
+For a torus (2 harmonic modes):
+- **Mode 0** (smaller eigenvalue): poloidal current
+- **Mode 1** (larger eigenvalue): toroidal current -> **this gives inductance**
+
+```
+L = mu_0 * eigvals[1] * R / a
+```
+
+The R/a factor normalizes by the current density (J ~ 1/(2*pi*a) for unit current).
+
+## Implementation Sketch
+
+```python
+from scipy.linalg import null_space, eigh
+
+# Spaces
+fes_J  = HDivSurface(mesh, order=0)
+fes_L2 = SurfaceL2(mesh, order=0)
+n_J, n_f, nv = fes_J.ndof, fes_L2.ndof, mesh.nv
+
+# Divergence matrix D (n_f x n_J)
+bf_D = BilinearForm(trialspace=fes_J, testspace=fes_L2)
+bf_D += div(u_J.Trace()) * q * ds
+bf_D.Assemble()
+D = bf_D.mat.ToDense().NumPy()
+
+# Incidence matrix C (n_J x nv): edge -> vertex connectivity
+C = np.zeros((n_J, nv))
+for i, e in enumerate(mesh.edges):
+    vv = list(e.vertices)
+    if i < n_J:
+        C[i, vv[0].nr] = -1
+        C[i, vv[1].nr] = +1
+
+# Mass matrix M_J (n_J x n_J)
+bf_M = BilinearForm(fes_J)
+bf_M += InnerProduct(u.Trace(), v.Trace()) * ds
+bf_M.Assemble()
+M_J = bf_M.mat.ToDense().NumPy()
+
+# Harmonic subspace
+V_harm = null_space(np.vstack([D, C.T @ M_J]), rcond=1e-10)
+# For torus: V_harm.shape[1] == 2
+
+# LaplaceSL
+with TaskManager():
+    V_op = LaplaceSL(jt.Trace() * ds, use_fmm=False) * jv.Trace() * ds
+    SL = V_op.mat.ToDense().NumPy()
+
+# Eigenvalue problem on harmonic subspace
+SL_harm = V_harm.T @ SL @ V_harm
+M_harm  = V_harm.T @ M_J @ V_harm
+eigvals, eigvecs = eigh(SL_harm, M_harm)
+
+# Toroidal mode -> inductance
+L = MU_0 * eigvals[1] * R / a
+```
+
+## Practical Notes
+
+1. **Closed surface required**: The mesh must be a closed surface (no boundary
+   edges). Use `surface_only=True` in `export_NGSolveCurvedMesh()` or OCC `Glue()`.
+
+2. **Euler characteristic**: For genus-g: V - E + F = 2 - 2g. Torus: Euler = 0.
+
+3. **Mode identification**: The poloidal mode has smaller eigenvalue than the
+   toroidal mode. Visualize |J| in GMSH to confirm which is which.
+
+4. **Comparison with source/sink**: For conductors with a gap, the source/sink
+   saddle point EFIE is simpler and more robust. Hodge decomposition is mainly
+   useful when there is no natural port location.
+
+5. **Normalization**: The eigenvalue-to-inductance conversion `L = mu_0 * lambda * R/a`
+   depends on the geometry. For non-circular cross-sections, a different normalization
+   is needed (e.g., integrate the toroidal mode to get total current).
+"""
+
+
 def get_ngbem_inductance_documentation(topic: str = "all") -> str:
     """Return ngsolve.bem inductance extraction documentation by topic."""
     topics = {
@@ -1035,12 +1172,15 @@ def get_ngbem_inductance_documentation(topic: str = "all") -> str:
         "stabilized": NGBEM_STABILIZED,
         "examples": NGBEM_EXAMPLES,
         "best_practices": NGBEM_BEST_PRACTICES,
+        "hodge": NGBEM_HODGE_DECOMPOSITION,
         # Aliases
         "cubit": NGBEM_CUBIT_WORKFLOW,
         "setgeominfo": NGBEM_CUBIT_WORKFLOW,
         "inductance": NGBEM_OVERVIEW,
         "laplace": NGBEM_API,
         "weggler": NGBEM_STABILIZED,
+        "harmonic": NGBEM_HODGE_DECOMPOSITION,
+        "topology": NGBEM_HODGE_DECOMPOSITION,
     }
 
     topic = topic.lower().strip()
@@ -1050,6 +1190,7 @@ def get_ngbem_inductance_documentation(topic: str = "all") -> str:
             NGBEM_OVERVIEW, NGBEM_API, NGBEM_CUBIT_WORKFLOW,
             NGBEM_CURVE_ORDER_STUDY, NGBEM_STABILIZED,
             NGBEM_EXAMPLES, NGBEM_BEST_PRACTICES,
+            NGBEM_HODGE_DECOMPOSITION,
         ]
         return "\n\n".join(main)
     elif topic in topics:
