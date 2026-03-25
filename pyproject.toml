@@ -82,6 +82,9 @@ addopts = [
     "--tb=short",
     "--strict-markers",
 ]
+filterwarnings = [
+    "ignore:Netgen fork.*is NOT installed:UserWarning",
+]
 markers = [
     "basic: Basic functionality tests (fast)",
     "comprehensive: Comprehensive test suite",
