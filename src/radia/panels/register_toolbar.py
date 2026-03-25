@@ -647,23 +647,14 @@ class InductanceDialog(QDialog):
 
 		# --- Post settings (B-field volume) ---
 		post_group = QGridLayout()
-		post_group.addWidget(QLabel("Post volume:"), 0, 0)
-		post_group.addWidget(QLabel("lx [m]:"), 1, 0)
-		self.lx_edit = QLineEdit("0")
-		self.lx_edit.setToolTip("Box half-size X [m]. 0 = auto (conductor bbox + 30%)")
-		post_group.addWidget(self.lx_edit, 1, 1)
-		post_group.addWidget(QLabel("ly [m]:"), 1, 2)
-		self.ly_edit = QLineEdit("0")
-		self.ly_edit.setToolTip("Box half-size Y [m]. 0 = auto")
-		post_group.addWidget(self.ly_edit, 1, 3)
-		post_group.addWidget(QLabel("lz [m]:"), 1, 4)
-		self.lz_edit = QLineEdit("0")
-		self.lz_edit.setToolTip("Box half-size Z [m]. 0 = auto")
-		post_group.addWidget(self.lz_edit, 1, 5)
-		post_group.addWidget(QLabel("maxh [m]:"), 2, 0)
-		self.maxh_vol_edit = QLineEdit("0")
-		self.maxh_vol_edit.setToolTip("Volume mesh element size [m]. 0 = auto (10% of extent)")
-		post_group.addWidget(self.maxh_vol_edit, 2, 1)
+		post_group.addWidget(QLabel("lx,ly,lz [m]:"), 0, 0)
+		self.lxyz_edit = QLineEdit("0.07, 0.07, 0.07")
+		self.lxyz_edit.setToolTip("Box half-sizes lx,ly,lz [m] (comma-separated)")
+		post_group.addWidget(self.lxyz_edit, 0, 1)
+		post_group.addWidget(QLabel("maxh [m]:"), 0, 2)
+		self.maxh_vol_edit = QLineEdit("0.01")
+		self.maxh_vol_edit.setToolTip("Volume mesh element size [m]")
+		post_group.addWidget(self.maxh_vol_edit, 0, 3)
 		layout.addLayout(post_group)
 
 		# --- Result table ---
@@ -869,6 +860,13 @@ class InductanceDialog(QDialog):
 					if j_npy and os.path.exists(j_npy):
 						self._j_npy = j_npy
 						self.post_btn.setEnabled(True)
+					# Restore default post volume
+					dl = data.get("default_lxyz")
+					dm = data.get("default_maxh")
+					if dl:
+						self.lxyz_edit.setText(f"{dl}, {dl}, {dl}")
+					if dm:
+						self.maxh_vol_edit.setText(str(dm))
 					self.debug_text.setText(f"Previous result loaded: {self._result_file}")
 			except Exception:
 				pass
@@ -1007,21 +1005,16 @@ class InductanceDialog(QDialog):
 
 		# Read post volume settings from UI
 		try:
-			lx = float(self.lx_edit.text())
-		except ValueError:
-			lx = 0
-		try:
-			ly = float(self.ly_edit.text())
-		except ValueError:
-			ly = 0
-		try:
-			lz = float(self.lz_edit.text())
-		except ValueError:
-			lz = 0
+			parts = [float(v.strip()) for v in self.lxyz_edit.text().split(",")]
+			lx = parts[0] if len(parts) > 0 else 0.07
+			ly = parts[1] if len(parts) > 1 else lx
+			lz = parts[2] if len(parts) > 2 else lx
+		except (ValueError, IndexError):
+			lx = ly = lz = 0.07
 		try:
 			maxh_vol = float(self.maxh_vol_edit.text())
 		except ValueError:
-			maxh_vol = 0
+			maxh_vol = 0.01
 
 		_repo_root = os.path.dirname(os.path.dirname(os.path.dirname(
 			os.path.dirname(os.path.abspath(
@@ -1136,6 +1129,14 @@ class InductanceDialog(QDialog):
 		if j_npy and os.path.exists(j_npy):
 			self._j_npy = j_npy
 			self.post_btn.setEnabled(True)
+
+		# Update default post volume from conductor bbox
+		dl = data.get("default_lxyz")
+		dm = data.get("default_maxh")
+		if dl:
+			self.lxyz_edit.setText(f"{dl}, {dl}, {dl}")
+		if dm:
+			self.maxh_vol_edit.setText(str(dm))
 
 		self._enable_gmsh_buttons(data)
 		self.debug_text.setText(f"Result saved: {self._result_file}")
