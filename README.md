@@ -272,23 +272,21 @@ We provide built-in formulations for the unique physics of magnetic levitation:
 
 ### Installation
 
-Download [`install_full.py`](https://raw.githubusercontent.com/ksugahar/Radia/main/install_full.py) and run:
+**First install** — download [`install_full.py`](https://raw.githubusercontent.com/ksugahar/Radia/main/install_full.py) and run:
 
 ```bash
 python install_full.py
 ```
 
-This single command installs:
+This installs:
 1. **radia** from PyPI (includes NGSolve 6.2.2602, MKL, MCP servers)
 2. **ksugahar/netgen fork** from GitHub Releases (CallbackGeometry + SetGeomInfo for Cubit mesh curving, [PR#232](https://github.com/NGSolve/netgen/pull/232) pending upstream)
 3. **Cubit panels** (if Coreform Cubit is detected)
 
-Or install manually:
+**Update** — radia only (netgen fork is preserved):
 
 ```bash
-pip install radia
-pip install https://github.com/ksugahar/netgen/releases/download/v6.2.2602.post1-setgeominfo/netgen_mesher-6.2.2602.post1-cp312-cp312-win_amd64.whl --force-reinstall
-cubit-install-panels   # optional, requires Coreform Cubit
+pip install --upgrade radia
 ```
 
 ### Example 1: Magnetostatic Source Field
