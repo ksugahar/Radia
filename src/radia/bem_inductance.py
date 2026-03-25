@@ -95,8 +95,8 @@ def compute_inductance_source_sink(mesh, source_label="source", sink_label="sink
     jt, jv = fes_J.TnT()
     with TaskManager():
         V_op = LaplaceSL(jt.Trace() * ds, use_fmm=False) * jv.Trace() * ds
-    t_assembly = time.perf_counter() - t0
     SL = _to_dense(V_op.mat)
+    t_assembly = time.perf_counter() - t0
 
     # --- Source/sink RHS ---
     f_src = LinearForm(fes_L2)
@@ -133,7 +133,7 @@ def compute_inductance_source_sink(mesh, source_label="source", sink_label="sink
 
     x = scipy_solve(K, rhs)
     J = x[:n_J]
-    t_solve = time.perf_counter() - t0
+    t_lu = time.perf_counter() - t0
 
     # --- Inductance: L = mu_0 * J^T @ SL @ J ---
     L = MU_0 * J @ SL @ J
@@ -152,7 +152,7 @@ def compute_inductance_source_sink(mesh, source_label="source", sink_label="sink
         'A_source': float(A_src),
         'A_sink': float(A_snk),
         't_assembly': round(t_assembly, 2),
-        't_solve': round(t_solve, 2),
+        't_solve': round(t_lu, 2),
         't_total': round(t_total, 2),
         'residual': float(residual),
         'J': J,
