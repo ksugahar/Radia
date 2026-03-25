@@ -269,7 +269,7 @@ def get_mesh_info(filename):
 
 
 # ===================================================================
-# Surface mesh support (for ngbem / PEEC conductor BEM)
+# Surface mesh support (for ngsbem / PEEC conductor BEM)
 # ===================================================================
 
 def read_gmsh_surface(filename, physical_group=None):
@@ -362,7 +362,7 @@ def read_gmsh_surface(filename, physical_group=None):
 
 def gmsh_surface_to_ngsolve(filename, label="conductor",
                              physical_group=None, unit_scale=1.0):
-    """Read GMSH surface mesh and create NGSolve Mesh for ngbem.
+    """Read GMSH surface mesh and create NGSolve Mesh for ngsbem.
 
     Creates a 2D surface mesh embedded in 3D, suitable for
     HDivSurface / SurfaceL2 function spaces.
@@ -428,7 +428,7 @@ def extract_surface_edges(filename, physical_group=None, unit_scale=1.0):
     """Extract unique edges from GMSH surface mesh.
 
     Each edge becomes a potential PEEC filament (Loop DOF).
-    Useful for comparing ngbem edge DOFs with PEEC filament discretization.
+    Useful for comparing ngsbem edge DOFs with PEEC filament discretization.
 
     Args:
         filename: Path to GMSH .msh file

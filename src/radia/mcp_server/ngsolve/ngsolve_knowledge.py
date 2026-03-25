@@ -11,7 +11,7 @@ Sources:
   - https://docu.ngsolve.org/latest/i-tutorials/
   - https://ngsolve.org/documentation.html (NGS24, Treasure Trove, iFEM)
   - https://forum.ngsolve.org/
-  - https://weggler.github.io/ngbem/intro.html
+  - https://weggler.github.io/ngsbem/intro.html
   - S:\\NGSolve\\EMPY\\EMPY_Analysis (K. Sugahara's EM formulations)
 """
 
@@ -534,7 +534,7 @@ NGSOLVE_BEM = """
 **ngsolve.bem is bundled with NGSolve** (compiled into ngslib.pyd). It is NOT a separate
 package. Do NOT use `import ngbem` -- use `from ngsolve.bem import ...`.
 
-Developer: Lucy Weggler (https://weggler.github.io/ngbem/intro.html)
+Developer: Lucy Weggler (https://weggler.github.io/ngsbem/intro.html)
 
 ```python
 # CORRECT: ngsolve.bem is accessed via ngsolve.bem

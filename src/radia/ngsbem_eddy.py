@@ -1,7 +1,7 @@
 """
-ngbem_eddy.py
+ngsbem_eddy.py
 
-Eddy Current Solvers using ngsolve/ngbem.
+Eddy Current Solvers using ngsolve/ngsbem.
 
 Three solver modes:
 1. FEM-only: Dirichlet BC from known external field (for validation)
@@ -503,8 +503,23 @@ class EddyCurrentFEMBEM:
 def _extract_dense_complex(mat, ndof):
     """Extract dense complex numpy matrix from NGSolve BaseMatrix.
 
-    Like ngbem_peec.extract_dense_matrix but supports complex values.
+    Uses COO() extraction for BEM operators (SparseMatrix with 100% fill,
+    use_fmm=False), which is ~2500x faster than column-by-column MatVec.
+    For FEM sparse matrices, COO also works correctly (sparse -> dense).
+    Falls back to MatVec for SumMatrix (use_fmm=True) or other types.
     """
+    if hasattr(mat, 'COO'):
+        from scipy.sparse import coo_matrix
+        rows, cols, vals = mat.COO()
+        M = coo_matrix((vals, (rows, cols)),
+                        shape=(mat.height, mat.width)).toarray()
+        # Restrict to ndof x ndof if matrix is larger (e.g. FEM with extra DOFs)
+        M = M[:ndof, :ndof]
+        if M.dtype != complex:
+            M = M.astype(complex)
+        return M
+
+    # Fallback: column-by-column MatVec (slow but universal)
     M = np.zeros((ndof, ndof), dtype=complex)
     for i in range(ndof):
         ei = mat.CreateColVector()
@@ -538,8 +553,8 @@ def _extract_cross_matrix(operator_mat, n_input, n_output,
                            col_indices=None):
     """Extract dense matrix from non-square NGSolve operator.
 
-    Handles the NGSolve convention for cross-space operators by
-    detecting vector sizes from CreateRowVector/CreateColVector.
+    Uses COO() when available for fast extraction.
+    Falls back to column-by-column MatVec otherwise.
 
     Args:
         operator_mat: NGSolve BaseMatrix (n_output x n_input)
@@ -550,24 +565,32 @@ def _extract_cross_matrix(operator_mat, n_input, n_output,
     Returns:
         Dense numpy array (n_output x n_input) or restricted
     """
-    # Detect vector conventions by checking actual sizes
+    if hasattr(operator_mat, 'COO'):
+        from scipy.sparse import coo_matrix
+        rows, cols, vals = operator_mat.COO()
+        M = coo_matrix((vals, (rows, cols)),
+                        shape=(operator_mat.height, operator_mat.width)).toarray()
+        if M.dtype != complex:
+            M = M.astype(complex)
+        # Trim to expected dimensions if needed
+        M = M[:n_output, :n_input]
+        if col_indices is not None:
+            return M[:, col_indices]
+        return M
+
+    # Fallback: column-by-column MatVec
     rv = operator_mat.CreateRowVector()
     cv = operator_mat.CreateColVector()
     rv_size = len(rv)
     cv_size = len(cv)
 
-    # Determine which is input (matches n_input) and output (matches n_output)
     if rv_size == n_input and cv_size == n_output:
-        # CreateRowVector = input, CreateColVector = output
         create_input = operator_mat.CreateRowVector
         create_output = operator_mat.CreateColVector
     elif cv_size == n_input and rv_size == n_output:
-        # CreateColVector = input, CreateRowVector = output
         create_input = operator_mat.CreateColVector
         create_output = operator_mat.CreateRowVector
     else:
-        # Fallback: try both and see which works
-        # Use the larger as output buffer
         if rv_size >= n_output:
             create_input = operator_mat.CreateColVector
             create_output = operator_mat.CreateRowVector
@@ -698,7 +721,7 @@ class EddyCurrentBEMSIBC:
         from ngsolve.bem import (SingleLayerPotentialOperator,
                                   DoubleLayerPotentialOperator,
                                   HypersingularOperator)
-        from ngbem_peec import extract_dense_matrix
+        from ngsbem_peec import extract_dense_matrix
 
         t_start = time.perf_counter()
         label = self.surface_label
@@ -1560,7 +1583,7 @@ class ShieldBEMSIBC:
         A_scat(r) = mu_0/(4*pi) * integral_S J(r')/|r-r'| dS'
 
         Uses NGSolve Integrate with the solved HDivSurface current distribution.
-        Same approach as compute_vector_potential() in ngbem_peec.py.
+        Same approach as compute_vector_potential() in ngsbem_peec.py.
 
         Must call solve() first.
 

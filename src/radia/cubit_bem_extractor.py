@@ -4,13 +4,13 @@ cubit_bem_extractor.py
 BEM Impedance Extractor for inductors/transformers.
 
 Extracts L(f), R(f), M (mutual inductance) from Cubit mesh using
-ngbem BEM solver. Supports high-order curved elements via Cubit's ACIS kernel +
+ngsbem BEM solver. Supports high-order curved elements via Cubit's ACIS kernel +
 export_NGSolveCurvedMesh().
 
 Architecture:
-    Cubit -> export_NGSolveCurvedMesh() -> NGSolve Mesh -> ngbem BEM -> L, R, M
+    Cubit -> export_NGSolveCurvedMesh() -> NGSolve Mesh -> ngsbem BEM -> L, R, M
 
-Solver: ngbem (Lucy Weggler's stabilized formulation)
+Solver: ngsbem (Lucy Weggler's stabilized formulation)
 ESIM:   Karl Hollaus's nonlinear surface impedance for magnetic cores
 Post:   GMSH .msh for high-order element visualization
 
@@ -191,7 +191,7 @@ class BEMExtractResult:
 
 
 class BEMExtractor:
-    """BEM Impedance Extractor equivalent using ngbem BEM solver.
+    """BEM Impedance Extractor equivalent using ngsbem BEM solver.
 
     Extracts L, R, M from Cubit mesh for inductors/transformers.
 
@@ -199,7 +199,7 @@ class BEMExtractor:
         1. load_cubit_mesh() — Import Cubit mesh as NGSolve mesh
         2. set_conductor()   — Define conductor blocks
         3. set_port()        — Define extraction ports
-        4. extract()         — Run ngbem BEM extraction
+        4. extract()         — Run ngsbem BEM extraction
         5. export_gmsh_post() — Visualize in GMSH
 
     Example:
@@ -461,7 +461,7 @@ class BEMExtractor:
             print(f"  Port '{name}' -> block '{block}' (open: {src} -> {snk})")
 
     def extract(self, freqs, mode='mqs', use_esim=False):
-        """Run ngbem extraction at specified frequencies.
+        """Run ngsbem extraction at specified frequencies.
 
         Workflow:
           1. Assemble BEM matrices (L, P, Q_0, M_LS, R)
@@ -532,7 +532,7 @@ class BEMExtractor:
             cond = self._conductors[block]
             Zs_func = None
             if cond['thickness'] is not None:
-                from radia.ngbem_peec import make_dowell_Zs_func
+                from radia.ngsbem_peec import make_dowell_Zs_func
                 Zs_func = make_dowell_Zs_func(
                     solver.n_loop, solver.R_loop,
                     cond['thickness'], cond['sigma'], cond['mu_r'])
@@ -569,7 +569,7 @@ class BEMExtractor:
 
     def _assemble_solvers(self):
         """Create and assemble NGBEMPEECSolver for each conductor."""
-        from radia.ngbem_peec import NGBEMPEECSolver
+        from radia.ngsbem_peec import NGBEMPEECSolver
 
         for block_name, cond in self._conductors.items():
             if block_name in self._solvers:
