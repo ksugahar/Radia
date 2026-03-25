@@ -31,17 +31,12 @@ dependencies = [
     "numpy>=1.20",
     "mkl>=2024.2.0",
     "intel-cmplr-lib-rt>=2024.2.0",
-    # NGSolve 6.2.2406~2.2501 had a regression bug in Periodic BC (Identify lost during mesh generation)
-    # See: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
-    # Fixed in 6.2.2601+. Verified: geominfo, Periodic BC, vol-to-gmsh all pass.
-    "ngsolve>=6.2.2601",
-    # sparsesolv source is in src/ext/sparsesolv/ (monorepo integrated)
-    # Build separately: cd src/ext/sparsesolv && pip install .
-    # REQUIRED: ksugahar/netgen fork (CallbackGeometry + SetGeomInfo)
-    # pip cannot install from GitHub URLs, so install manually:
-    #   pip install <wheel> from https://github.com/ksugahar/netgen/releases
-    # Without the fork, export_curved() will raise ImportError.
-    # Run: python install_full.py  (handles netgen fork automatically)
+    # NGSolve pinned to 6.2.2602 (netgen fork is built against this version)
+    # ksugahar/netgen fork adds CallbackGeometry + SetGeomInfo (PR#232 pending)
+    # Fork wheel: https://github.com/ksugahar/netgen/releases
+    # Install: python install_full.py (radia + netgen fork in one command)
+    # Without the fork: export_NGSolveCurvedMesh() will not work
+    "ngsolve==6.2.2602.post2",
     # MCP server dependency (optional, for Claude Code / Cursor integration)
     "mcp>=1.0.0",
 ]
