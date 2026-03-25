@@ -675,7 +675,12 @@ class InductanceDialog(QDialog):
 		self.solve_btn.clicked.connect(self._extract)
 		self.solve_btn.setEnabled(False)
 		btn_row.addWidget(self.solve_btn)
-		self.open_gmsh_btn = QPushButton("Open GMSH")
+		self.post_btn = QPushButton("Post")
+		self.post_btn.clicked.connect(self._post_process)
+		self.post_btn.setEnabled(False)
+		self.post_btn.setToolTip("B-field Biot-Savart + GMSH/Nastran/COMSOL export")
+		btn_row.addWidget(self.post_btn)
+		self.open_gmsh_btn = QPushButton("Open Result")
 		self.open_gmsh_btn.clicked.connect(self._open_gmsh_result)
 		self.open_gmsh_btn.setEnabled(False)
 		btn_row.addWidget(self.open_gmsh_btn)
@@ -945,6 +950,81 @@ class InductanceDialog(QDialog):
 		self._gmsh_launched = False
 		self._process.start(self._ext_python, args)
 
+	def _post_process(self):
+		"""Run post-processing (B-field + GMSH export) via external Python."""
+		j_npy = getattr(self, '_j_npy', '')
+		if not j_npy or not os.path.exists(j_npy):
+			QMessageBox.warning(self, "Error", "No solve result found. Run Solve first.")
+			return
+
+		self.post_btn.setEnabled(False)
+		self.post_btn.setText("Post...")
+		self._set_result("Status", "Post-processing...")
+
+		# Save cub5
+		tmpdir = os.path.dirname(j_npy)
+		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
+		if not os.path.exists(cub5_file):
+			cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
+
+		curve_order = self.curve_spin.value()
+		fes_order = self.fes_spin.value()
+
+		_repo_root = os.path.dirname(os.path.dirname(os.path.dirname(
+			os.path.dirname(os.path.abspath(
+				os.path.join(_this_dir, "calc_inductance.py"))))))
+		output_dir = os.path.join(_repo_root, "examples", "cubit_panels",
+		                          "inductance", "results")
+		os.makedirs(output_dir, exist_ok=True)
+		msh_output = os.path.join(output_dir, "inductance_J.msh").replace("\\", "/")
+
+		calc_script = os.path.join(_this_dir, "calc_inductance.py")
+		self._post_json = os.path.join(tmpdir, "post_result.json").replace("\\", "/")
+		args = [
+			calc_script,
+			"--mode", "post",
+			"--cub5", cub5_file,
+			"--msh-output", msh_output,
+			"--source", self._source_block or "source",
+			"--sink", self._sink_block or "sink",
+			"--order", str(curve_order),
+			"--fes-order", str(fes_order),
+			"--j-npy", j_npy,
+			"--output", self._post_json,
+		]
+
+		self._process = QProcess(self)
+		self._process.readyReadStandardError.connect(self._on_stderr)
+		self._process.finished.connect(self._on_post_finished)
+		self._process.start(self._ext_python, args)
+
+	def _on_post_finished(self, exit_code, exit_status):
+		"""Handle post-processing result."""
+		self.post_btn.setEnabled(True)
+		self.post_btn.setText("Post")
+		self._process = None
+
+		data = None
+		json_path = getattr(self, '_post_json', '')
+		if json_path and os.path.exists(json_path):
+			try:
+				with open(json_path, "r") as f:
+					data = json.load(f)
+			except Exception:
+				pass
+
+		if data is None:
+			self.debug_text.setText(f"Post error (exit code {exit_code})")
+			return
+
+		if "error" in data:
+			QMessageBox.critical(self, "Error", data["error"])
+			return
+
+		self._enable_gmsh_buttons(data)
+		t_post = data.get("t_post", "?")
+		self.debug_text.setText(f"Post done ({t_post}s). Click Open Result.")
+
 	def _on_stderr(self):
 		"""Handle stderr from subprocess - progress updates."""
 		if self._process is None:
@@ -993,6 +1073,12 @@ class InductanceDialog(QDialog):
 		# Save result
 		with open(self._result_file, "w") as f:
 			json.dump(data, f)
+
+		# Enable Post button (J_coeffs.npy available)
+		j_npy = data.get("j_npy", "")
+		if j_npy and os.path.exists(j_npy):
+			self._j_npy = j_npy
+			self.post_btn.setEnabled(True)
 
 		self._enable_gmsh_buttons(data)
 		self.debug_text.setText(f"Result saved: {self._result_file}")
