@@ -273,11 +273,16 @@ We provide built-in formulations for the unique physics of magnetic levitation:
 ### Installation
 
 ```bash
-# Windows (Python 3.12)
-pip install radia
+# Full install (recommended): radia + ngsolve + netgen fork + Cubit panels
+python install_full.py
 ```
 
-*Prerequisites for FEM features: `pip install ngsolve`*
+This single command installs:
+1. **radia** from PyPI (includes NGSolve 6.2.2602, MKL, MCP servers)
+2. **ksugahar/netgen fork** from GitHub Releases (CallbackGeometry + SetGeomInfo for Cubit mesh curving, [PR#232](https://github.com/NGSolve/netgen/pull/232) pending upstream)
+3. **Cubit panels** (if Coreform Cubit is detected)
+
+Download `install_full.py` from the [repository root](https://github.com/ksugahar/Radia).
 
 ### Example 1: Magnetostatic Source Field
 
@@ -380,22 +385,13 @@ mesh.Curve(3)  # 3rd order curved elements
 
 ### Installation
 
-The `cubit_mesh_export` module is included in Radia:
+The `cubit_mesh_export` module and Cubit panels are included in Radia.
+`python install_full.py` installs everything including the Cubit panels.
 
-```bash
-pip install radia
-```
-
-To install the Cubit toolbar panels for GUI access (optional, requires Cubit installed):
+To reinstall panels only (e.g., after Cubit update):
 
 ```bash
 cubit-install-panels
-```
-
-This registers a toolbar in `~/.cubit` so that export buttons appear in Cubit's GUI on next startup. To uninstall:
-
-```bash
-cubit-install-panels --uninstall
 ```
 
 ### Setup

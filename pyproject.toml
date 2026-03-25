@@ -67,7 +67,6 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 "ESRF Radia Page" = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
 
 [project.scripts]
-radia-install-netgen-fork = "radia.install_netgen_fork:main"
 cubit-install-panels = "radia.install_panels:main"
 mcp-server-radia = "radia.mcp_server.radia.server:main"
 mcp-server-ngsolve = "radia.mcp_server.ngsolve.server:main"
