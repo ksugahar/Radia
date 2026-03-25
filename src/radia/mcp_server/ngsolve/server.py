@@ -26,7 +26,7 @@ from .ngsolve_knowledge import get_ngsolve_documentation
 from .sparsesolv_knowledge import get_sparsesolv_documentation
 from .kelvin_knowledge import get_kelvin_documentation
 from .induction_heating_knowledge import get_induction_heating_documentation
-from .ngbem_inductance_knowledge import get_ngbem_inductance_documentation
+from .ngsbem_inductance_knowledge import get_ngsbem_inductance_documentation
 
 mcp = FastMCP("ngsolve-lint")
 
@@ -451,7 +451,7 @@ def induction_heating(topic: str = "all") -> str:
 
 
 @mcp.tool()
-def ngbem_inductance(topic: str = "all") -> str:
+def ngsbem_inductance(topic: str = "all") -> str:
     """
     Get ngsolve.bem boundary element method documentation for inductance extraction.
 
@@ -463,7 +463,7 @@ def ngbem_inductance(topic: str = "all") -> str:
       Cubit mesh -> export_NGSolveCurvedMesh(cubit, order=N) -> LaplaceSL BEM -> L extraction
 
     Sources:
-      - https://docu.ngsolve.org/latest/how_to/ngbem.html
+      - https://docu.ngsolve.org/latest/how_to/ngsbem.html
       - https://github.com/Weggler/docu-ngsbem/ (stabilized BEM)
       - https://github.com/ksugahar/Radia (cubit_mesh_export integrated in src/radia/)
 
@@ -478,7 +478,7 @@ def ngbem_inductance(topic: str = "all") -> str:
             "examples"       - Runnable examples (circular loop, Cubit torus)
             "best_practices" - Common pitfalls, validation, performance tips
     """
-    return get_ngbem_inductance_documentation(topic)
+    return get_ngsbem_inductance_documentation(topic)
 
 
 # ============================================================

@@ -112,7 +112,7 @@ def test_gmsh_v2_with_volume_block():
 	with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 		msh_file = f.name
 
-	cubit_mesh_export.export_gmsh_v2(cubit, msh_file)
+	cubit_mesh_export._export_gmsh_v2(cubit, msh_file)
 
 	# Verify file exists and has content
 	with open(msh_file, 'r') as f:

@@ -1,4 +1,4 @@
-"""Quick validation: updated ngbem_eddy.py with separate-space approach."""
+"""Quick validation: updated ngsbem_eddy.py with separate-space approach."""
 import sys
 import os
 import numpy as np
@@ -8,7 +8,7 @@ MU_0 = 4.0 * np.pi * 1e-7
 
 
 def main():
-    from ngbem_eddy import EddyCurrentFEMBEM, create_conductor_mesh
+    from ngsbem_eddy import EddyCurrentFEMBEM, create_conductor_mesh
     from ngsolve import Integrate, CF
 
     mu_r = 1.0

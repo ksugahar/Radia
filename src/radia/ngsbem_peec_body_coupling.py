@@ -1,5 +1,5 @@
 """
-ngbem_peec_body_coupling.py
+ngsbem_peec_body_coupling.py
 
 Direct coupling of PEEC filaments with FEM eddy current body.
 
