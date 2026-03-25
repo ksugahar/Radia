@@ -2,20 +2,19 @@
 """
 Radia Full Installation
 
-The single installation command for the complete Radia environment:
+Install or update the complete Radia environment:
 
     python install_full.py
 
 Steps:
-  1. pip install radia (from PyPI) -- includes NGSolve 6.2.2602, MKL, MCP servers
-  2. Install ksugahar/netgen fork  -- CallbackGeometry + SetGeomInfo (PR#232 pending)
-  3. Install Cubit panels          -- if Coreform Cubit is detected
+  1. pip install --upgrade radia  -- from PyPI (NGSolve 6.2.2602, MKL, MCP servers)
+  2. Install ksugahar/netgen fork -- CallbackGeometry + SetGeomInfo (if not already installed)
+  3. Install Cubit panels         -- if Coreform Cubit is detected
 
 Requirements:
     Python 3.12+ on Windows (x64)
 """
 
-import argparse
 import json
 import platform
 import subprocess
@@ -66,14 +65,19 @@ def _pip(*args):
         raise RuntimeError(f"pip install failed: {' '.join(args)}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Radia full installation")
-    parser.add_argument("--upgrade", action="store_true",
-                        help="Upgrade radia to latest PyPI version")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Show what would be installed")
-    args = parser.parse_args()
+def _has_netgen_fork():
+    """Check if netgen fork is already installed."""
+    try:
+        r = subprocess.run(
+            [sys.executable, "-c",
+             "from netgen.meshing import Mesh; print(hasattr(Mesh, 'SetGeomInfo'))"],
+            capture_output=True, text=True, timeout=30)
+        return "True" in r.stdout
+    except Exception:
+        return False
 
+
+def main():
     print("=" * 60)
     print("  Radia Full Installation")
     print("=" * 60)
@@ -81,54 +85,44 @@ def main():
     print(f"  Platform: {sys.platform} {platform.machine()}")
     print()
 
-    # Step 1: radia from PyPI (ngsolve==6.2.2602.post2 pinned)
-    print("[1/3] Installing radia from PyPI...")
-    if args.dry_run:
-        print("  [DRY RUN] pip install radia")
+    # Step 1: radia from PyPI (always upgrade)
+    print("[1/3] Installing/updating radia from PyPI...")
+    _pip("--upgrade", "radia")
+    print()
+
+    # Step 2: netgen fork (skip if already installed)
+    print("[2/3] Netgen fork...")
+    if _has_netgen_fork():
+        print("  Already installed (SetGeomInfo found). Skipping.")
     else:
-        pip_args = ["radia"]
-        if args.upgrade:
-            pip_args.insert(0, "--upgrade")
-        _pip(*pip_args)
-    print()
-
-    # Step 2: netgen fork (replaces standard netgen-mesher)
-    print("[2/3] Installing ksugahar/netgen fork...")
-    print("  (CallbackGeometry + SetGeomInfo for Cubit mesh curving)")
-    try:
-        url, name = _fetch_netgen_wheel_url()
-        print(f"  Wheel: {name}")
-        if args.dry_run:
-            print(f"  [DRY RUN] pip install {url} --force-reinstall")
-        else:
+        print("  Installing ksugahar/netgen fork...")
+        try:
+            url, name = _fetch_netgen_wheel_url()
+            print(f"  Wheel: {name}")
             _pip(url, "--force-reinstall")
-    except Exception as e:
-        print(f"  WARNING: {e}")
+        except Exception as e:
+            print(f"  WARNING: {e}")
     print()
 
-    # Step 3: Cubit panels
+    # Step 3: Cubit panels (always update)
     print("[3/3] Installing Cubit panels...")
     try:
-        cmd = [sys.executable, "-m", "radia.install_panels"]
-        print(f"  $ {' '.join(cmd)}")
-        if args.dry_run:
-            print("  [DRY RUN]")
-        else:
-            r = subprocess.run(cmd)
-            if r.returncode != 0:
-                print("  Cubit panels: skipped (Cubit not found or not configured)")
+        r = subprocess.run(
+            [sys.executable, "-m", "radia.install_panels"],
+            timeout=30)
+        if r.returncode != 0:
+            print("  Skipped (Cubit not found)")
     except Exception as e:
-        print(f"  Cubit panels: skipped ({e})")
+        print(f"  Skipped ({e})")
     print()
 
     # Summary
     print("=" * 60)
-    print("  Installation complete!")
+    print("  Done!")
     print("=" * 60)
     print()
     print("  Verify:")
     print('    python -c "import radia; print(radia.__version__)"')
-    print('    python -c "from netgen.meshing import Mesh; print(hasattr(Mesh, \'SetGeomInfo\'))"')
     print()
 
 
