@@ -56,8 +56,16 @@ def _setup_cubit():
 
 
 def _to_dense(mat):
-    """Extract dense NumPy array from NGSolve BaseMatrix via ToDense()."""
-    return mat.ToDense().NumPy()
+    """Extract dense NumPy array from NGSolve BaseMatrix via COO.
+
+    NGSolve BEM operators store the full dense matrix as SparseMatrix
+    with 100% fill.  ToDense() is ~2500x slower than COO extraction
+    because it performs N column-by-column MatVecs.
+    """
+    from scipy.sparse import coo_matrix
+    rows, cols, vals = mat.COO()
+    return coo_matrix((vals, (rows, cols)),
+                      shape=(mat.height, mat.width)).toarray()
 
 
 def extract_inductance(cub5_file, order, source_label="source",
