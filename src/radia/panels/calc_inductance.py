@@ -74,6 +74,10 @@ def extract_inductance(cub5_file, order, source_label="source",
     import math
     import time as _time
     from ngsolve import Integrate, CF, BND, GridFunction
+
+    radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    if os.path.abspath(radia_src) not in sys.path:
+        sys.path.insert(0, os.path.abspath(radia_src))
     from bem_inductance import compute_inductance_source_sink, MU_0
 
     t_total_start = _time.perf_counter()
