@@ -645,6 +645,27 @@ class InductanceDialog(QDialog):
 
 		layout.addLayout(port_group)
 
+		# --- Post settings (B-field volume) ---
+		post_group = QGridLayout()
+		post_group.addWidget(QLabel("Post volume:"), 0, 0)
+		post_group.addWidget(QLabel("lx [m]:"), 1, 0)
+		self.lx_edit = QLineEdit("0")
+		self.lx_edit.setToolTip("Box half-size X [m]. 0 = auto (conductor bbox + 30%)")
+		post_group.addWidget(self.lx_edit, 1, 1)
+		post_group.addWidget(QLabel("ly [m]:"), 1, 2)
+		self.ly_edit = QLineEdit("0")
+		self.ly_edit.setToolTip("Box half-size Y [m]. 0 = auto")
+		post_group.addWidget(self.ly_edit, 1, 3)
+		post_group.addWidget(QLabel("lz [m]:"), 1, 4)
+		self.lz_edit = QLineEdit("0")
+		self.lz_edit.setToolTip("Box half-size Z [m]. 0 = auto")
+		post_group.addWidget(self.lz_edit, 1, 5)
+		post_group.addWidget(QLabel("maxh [m]:"), 2, 0)
+		self.maxh_vol_edit = QLineEdit("0")
+		self.maxh_vol_edit.setToolTip("Volume mesh element size [m]. 0 = auto (10% of extent)")
+		post_group.addWidget(self.maxh_vol_edit, 2, 1)
+		layout.addLayout(post_group)
+
 		# --- Result table ---
 		self.result_table = QTableWidget()
 		self.result_table.setColumnCount(2)
@@ -835,7 +856,7 @@ class InductanceDialog(QDialog):
 
 
 	def _try_load_existing_result(self):
-		"""Load existing result JSON if available (from previous Extract)."""
+		"""Load existing result JSON if available (from previous Solve)."""
 		if os.path.exists(self._result_file):
 			try:
 				with open(self._result_file, "r") as f:
@@ -843,6 +864,11 @@ class InductanceDialog(QDialog):
 				if "inductance_H" in data:
 					self._display_result(data)
 					self._enable_gmsh_buttons(data)
+					# Restore J_coeffs.npy path for Post button
+					j_npy = data.get("j_npy", "")
+					if j_npy and os.path.exists(j_npy):
+						self._j_npy = j_npy
+						self.post_btn.setEnabled(True)
 					self.debug_text.setText(f"Previous result loaded: {self._result_file}")
 			except Exception:
 				pass
@@ -951,15 +977,24 @@ class InductanceDialog(QDialog):
 		self._process.start(self._ext_python, args)
 
 	def _post_process(self):
-		"""Run post-processing (B-field + GMSH export) via external Python."""
+		"""Run post-processing (B-field + GMSH export) via external Python.
+
+		If no Solve result exists, runs Solve first then chains to Post.
+		"""
 		j_npy = getattr(self, '_j_npy', '')
 		if not j_npy or not os.path.exists(j_npy):
-			QMessageBox.warning(self, "Error", "No solve result found. Run Solve first.")
+			# No solve result -> run Solve first, then chain to Post
+			self._chain_post_after_solve = True
+			self._extract()
 			return
 
+		self._run_post(j_npy)
+
+	def _run_post(self, j_npy):
+		"""Launch post-processing subprocess."""
 		self.post_btn.setEnabled(False)
 		self.post_btn.setText("Post...")
-		self._set_result("Status", "Post-processing...")
+		self.debug_text.setText("Post-processing (B-field + GMSH export)...")
 
 		# Save cub5
 		tmpdir = os.path.dirname(j_npy)
@@ -969,6 +1004,24 @@ class InductanceDialog(QDialog):
 
 		curve_order = self.curve_spin.value()
 		fes_order = self.fes_spin.value()
+
+		# Read post volume settings from UI
+		try:
+			lx = float(self.lx_edit.text())
+		except ValueError:
+			lx = 0
+		try:
+			ly = float(self.ly_edit.text())
+		except ValueError:
+			ly = 0
+		try:
+			lz = float(self.lz_edit.text())
+		except ValueError:
+			lz = 0
+		try:
+			maxh_vol = float(self.maxh_vol_edit.text())
+		except ValueError:
+			maxh_vol = 0
 
 		_repo_root = os.path.dirname(os.path.dirname(os.path.dirname(
 			os.path.dirname(os.path.abspath(
@@ -990,6 +1043,10 @@ class InductanceDialog(QDialog):
 			"--order", str(curve_order),
 			"--fes-order", str(fes_order),
 			"--j-npy", j_npy,
+			"--lx", str(lx),
+			"--ly", str(ly),
+			"--lz", str(lz),
+			"--maxh-vol", str(maxh_vol),
 			"--output", self._post_json,
 		]
 
@@ -1082,6 +1139,13 @@ class InductanceDialog(QDialog):
 
 		self._enable_gmsh_buttons(data)
 		self.debug_text.setText(f"Result saved: {self._result_file}")
+
+		# Chain to Post if requested
+		if getattr(self, '_chain_post_after_solve', False):
+			self._chain_post_after_solve = False
+			j_npy = getattr(self, '_j_npy', '')
+			if j_npy and os.path.exists(j_npy):
+				self._run_post(j_npy)
 
 	def _enable_gmsh_buttons(self, data):
 		"""Enable Open GMSH button if result file exists."""
