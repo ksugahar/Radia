@@ -1114,6 +1114,8 @@ class InductanceDialog(QDialog):
 		rows = [
 			("Inductance", L_str),
 			("DOFs (edges)", str(data.get("n_dofs", ""))),
+			("Solve time", f"{data.get('t_solve', 0):.1f} s"),
+			("Total time", f"{data.get('t_total', 0):.1f} s"),
 			("Faces", str(data.get("n_faces", ""))),
 			("Source area", f"{data.get('source_area', 0):.4e} m^2"),
 			("Sink area", f"{data.get('sink_area', 0):.4e} m^2"),

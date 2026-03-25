@@ -55,19 +55,6 @@ def _setup_cubit():
     return cubit
 
 
-def _to_dense(mat):
-    """Extract dense NumPy array from NGSolve BaseMatrix via COO.
-
-    NGSolve BEM operators store the full dense matrix as SparseMatrix
-    with 100% fill.  ToDense() is ~2500x slower than COO extraction
-    because it performs N column-by-column MatVecs.
-    """
-    from scipy.sparse import coo_matrix
-    rows, cols, vals = mat.COO()
-    return coo_matrix((vals, (rows, cols)),
-                      shape=(mat.height, mat.width)).toarray()
-
-
 def extract_inductance(cub5_file, order, source_label="source",
                        sink_label="sink", fes_order=0, msh_output=""):
     """Extract self-inductance via source/sink saddle point EFIE.
@@ -85,13 +72,11 @@ def extract_inductance(cub5_file, order, source_label="source",
     """
     import numpy as np
     import math
-    from scipy.linalg import solve as scipy_solve
-    from ngsolve import (HDivSurface, SurfaceL2, TaskManager, ds,
-                         Integrate, CF, BND, GridFunction, Norm,
-                         BilinearForm, LinearForm, div)
-    from ngsolve.bem import LaplaceSL
+    import time as _time
+    from ngsolve import Integrate, CF, BND, GridFunction
+    from bem_inductance import compute_inductance_source_sink, MU_0
 
-    MU_0 = 4.0 * math.pi * 1e-7
+    t_total_start = _time.perf_counter()
 
     cubit = _setup_cubit()
     cubit.cmd(f'open "{cub5_file}"')
@@ -160,67 +145,25 @@ def extract_inductance(cub5_file, order, source_label="source",
     except Exception:
         pass
 
-    # --- Phase 2: Saddle point EFIE ---
-    # HDivSurface order can be 0 (RWG) or higher; constraint always order=0
-    fes_J = HDivSurface(mesh, order=fes_order)
-    fes_L2 = SurfaceL2(mesh, order=0)  # element-wise current conservation
-    n_J, n_f = fes_J.ndof, fes_L2.ndof
+    # --- Phase 2: Saddle point EFIE (shared solver) ---
+    sol = compute_inductance_source_sink(mesh, source_label, sink_label, fes_order)
+    if 'error' in sol:
+        return sol
 
-    # Divergence matrix D: n_f x n_J
-    u_J = fes_J.TrialFunction()
-    q = fes_L2.TestFunction()
-    bf_D = BilinearForm(trialspace=fes_J, testspace=fes_L2)
-    bf_D += div(u_J.Trace()) * q * ds
-    bf_D.Assemble()
-    D = _to_dense(bf_D.mat)
+    L_total = sol['L']
+    n_J = sol['n_J']
+    n_f = sol['n_f']
+    A_src = sol['A_source']
+    A_snk = sol['A_sink']
+    residual = sol['residual']
+    J = sol['J']
+    gf_J = sol['gf_J']
+    t_solve = sol['t_total']
 
-    # LaplaceSL: n_J x n_J
-    jt, jv = fes_J.TnT()
-    with TaskManager():
-        V_op = LaplaceSL(jt.Trace() * ds, use_fmm=False) * jv.Trace() * ds
-        SL = V_op.mat.ToDense().NumPy()
-
-    # Source/sink RHS
-    f_src = LinearForm(fes_L2)
-    f_src += q * ds(source_label)
-    f_src.Assemble()
-    g_src = f_src.vec.FV().NumPy().copy()
-    A_src = np.sum(g_src)
-
-    f_snk = LinearForm(fes_L2)
-    f_snk += q * ds(sink_label)
-    f_snk.Assemble()
-    g_snk = f_snk.vec.FV().NumPy().copy()
-    A_snk = np.sum(g_snk)
-
-    if A_src < 1e-30 or A_snk < 1e-30:
-        return {"error": f"Source/sink faces empty (A_src={A_src}, A_snk={A_snk})."}
-
-    g = g_src / A_src - g_snk / A_snk
-
-    # Saddle point solve (remove last constraint for regularity)
-    D_red = D[:-1, :]
-    g_red = g[:-1]
-    n_c = n_f - 1
-
-    K = np.block([
-        [SL,              D_red.T],
-        [D_red, np.zeros((n_c, n_c))]
-    ])
-    rhs = np.zeros(n_J + n_c)
-    rhs[n_J:] = g_red
-
-    x = scipy_solve(K, rhs)
-    J = x[:n_J]
-
-    # Inductance: L = mu_0 * J^T @ SL @ J
-    L_total = MU_0 * J @ SL @ J
-    residual = float(np.max(np.abs(D @ J - g)))
+    sys.stderr.write(f"SOLVE_DONE:{t_solve:.1f}s\n")
+    sys.stderr.flush()
 
     # --- Phase 3: Per-node J vector via vertex averaging ---
-    gf_J = GridFunction(fes_J)
-    gf_J.vec.FV().NumPy()[:] = J
-
     elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
     elem_Jx = Integrate(gf_J[0], mesh, VOL_or_BND=BND, element_wise=True)
     elem_Jy = Integrate(gf_J[1], mesh, VOL_or_BND=BND, element_wise=True)
@@ -273,6 +216,8 @@ def extract_inductance(cub5_file, order, source_label="source",
     # Nastran BDF with CTRIA6 (2nd order surface mesh for COMSOL geometry import)
     _write_nastran_ctria6(os.path.join(base_dir, "coil_surface.bdf"), mesh)
 
+    t_total = _time.perf_counter() - t_total_start
+
     return {
         "inductance_H": float(L_total),
         "n_dofs": n_J,
@@ -285,6 +230,8 @@ def extract_inductance(cub5_file, order, source_label="source",
         "curve_order": order,
         "fes_order": fes_order,
         "gmsh_file": geo_file,
+        "t_solve": round(t_solve, 2),
+        "t_total": round(t_total, 2),
     }
 
 
