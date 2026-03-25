@@ -855,11 +855,14 @@ class InductanceDialog(QDialog):
 				if "inductance_H" in data:
 					self._display_result(data)
 					self._enable_gmsh_buttons(data)
-					# Restore J_coeffs.npy path for Post button
+					# Restore solve results for Post button
 					j_npy = data.get("j_npy", "")
+					mesh_vol = data.get("mesh_vol", "")
 					if j_npy and os.path.exists(j_npy):
 						self._j_npy = j_npy
 						self.post_btn.setEnabled(True)
+					if mesh_vol and os.path.exists(mesh_vol):
+						self._mesh_vol = mesh_vol
 					# Restore default post volume
 					dl = data.get("default_lxyz")
 					dm = data.get("default_maxh")
@@ -990,18 +993,21 @@ class InductanceDialog(QDialog):
 		self._run_post(j_npy)
 
 	def _run_post(self, j_npy):
-		"""Launch post-processing subprocess."""
+		"""Launch post-processing subprocess (no Cubit needed)."""
+		# Find mesh_vol alongside j_npy
+		base_dir = os.path.dirname(j_npy)
+		mesh_vol = getattr(self, '_mesh_vol', '')
+		if not mesh_vol or not os.path.exists(mesh_vol):
+			mesh_vol = os.path.join(base_dir, "surface_mesh.vol").replace("\\", "/")
+		if not os.path.exists(mesh_vol):
+			QMessageBox.warning(self, "Error",
+				f"surface_mesh.vol not found in {base_dir}.\nRun Solve first.")
+			return
+
 		self.post_btn.setEnabled(False)
 		self.post_btn.setText("Post...")
 		self.debug_text.setText("Post-processing (B-field + GMSH export)...")
 
-		# Save cub5
-		tmpdir = os.path.dirname(j_npy)
-		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
-		if not os.path.exists(cub5_file):
-			cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
-
-		curve_order = self.curve_spin.value()
 		fes_order = self.fes_spin.value()
 
 		# Read post volume settings from UI
@@ -1026,16 +1032,13 @@ class InductanceDialog(QDialog):
 		msh_output = os.path.join(output_dir, "inductance_J.msh").replace("\\", "/")
 
 		calc_script = os.path.join(_this_dir, "calc_inductance.py")
-		self._post_json = os.path.join(tmpdir, "post_result.json").replace("\\", "/")
+		self._post_json = os.path.join(base_dir, "post_result.json").replace("\\", "/")
 		args = [
 			calc_script,
 			"--mode", "post",
-			"--cub5", cub5_file,
-			"--msh-output", msh_output,
-			"--source", self._source_block or "source",
-			"--sink", self._sink_block or "sink",
-			"--order", str(curve_order),
+			"--mesh-vol", mesh_vol,
 			"--fes-order", str(fes_order),
+			"--msh-output", msh_output,
 			"--j-npy", j_npy,
 			"--lx", str(lx),
 			"--ly", str(ly),
@@ -1139,11 +1142,14 @@ class InductanceDialog(QDialog):
 		with open(self._result_file, "w") as f:
 			json.dump(data, f)
 
-		# Enable Post button (J_coeffs.npy available)
+		# Enable Post button (J_coeffs.npy + mesh_vol available)
 		j_npy = data.get("j_npy", "")
+		mesh_vol = data.get("mesh_vol", "")
 		if j_npy and os.path.exists(j_npy):
 			self._j_npy = j_npy
 			self.post_btn.setEnabled(True)
+		if mesh_vol and os.path.exists(mesh_vol):
+			self._mesh_vol = mesh_vol
 
 		# Update default post volume from conductor bbox
 		dl = data.get("default_lxyz")
@@ -1264,6 +1270,18 @@ class InductanceDialog(QDialog):
 				"Failed to launch optuna-dashboard."
 			)
 
+	@staticmethod
+	def _format_solve_time(data):
+		"""Format solve time with breakdown (assembly + LU)."""
+		t = data.get('t_solve')
+		if not t:
+			return "-"
+		t_asm = data.get('t_assembly')
+		t_lu = data.get('t_lu')
+		if t_asm and t_lu:
+			return f"{t:.1f} s (asm {t_asm:.1f} + LU {t_lu:.1f})"
+		return f"{t:.1f} s"
+
 	def _display_result(self, data):
 		"""Display extraction result in the table."""
 		L = data.get("inductance_H", 0.0)
@@ -1280,7 +1298,7 @@ class InductanceDialog(QDialog):
 		rows = [
 			("Inductance", L_str),
 			("DOFs (edges)", str(data.get("n_dofs", ""))),
-			("Solve time", f"{data.get('t_solve', 0):.1f} s" if data.get('t_solve') else "-"),
+			("Solve time", self._format_solve_time(data)),
 			("Post time", f"{data.get('t_post', 0):.1f} s" if data.get('t_post') else "-"),
 			("Faces", str(data.get("n_faces", ""))),
 			("Source area", f"{data.get('source_area', 0):.4e} m^2"),
