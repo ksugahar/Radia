@@ -117,8 +117,10 @@ def extract_inductance(cub5_file, order, source_label="source",
         sys.path.insert(0, os.path.abspath(radia_src))
     import cubit_mesh_export
 
+    t0_export = _time.perf_counter()
     mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
         cubit, order=order, surface_only=True, split_quads=True)
+    t_export = _time.perf_counter() - t0_export
 
     nse = mesh.GetNE(BND)
     nv = mesh.nv
@@ -191,6 +193,7 @@ def extract_inductance(cub5_file, order, source_label="source",
         "curve_order": order,
         "fes_order": fes_order,
         "t_solve": round(t_solve, 2),
+        "t_export": round(t_export, 2),
         "t_assembly": sol['t_assembly'],
         "t_lu": sol['t_solve'],
         "j_npy": j_npy,
