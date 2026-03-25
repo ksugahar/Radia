@@ -73,17 +73,18 @@ if sys.platform == 'win32':
 # Install: python install_full.py (or manual wheel from https://github.com/ksugahar/netgen/releases)
 try:
     from netgen.meshing import Mesh as _NetgenMesh
-    if not hasattr(_NetgenMesh, 'SetGeomInfo'):
-        import warnings
-        warnings.warn(
-            "Netgen fork (ksugahar/netgen) is NOT installed. "
-            "Standard pip netgen lacks CallbackGeometry and SetGeomInfo APIs "
-            "required for Cubit mesh curving (export_NGSolveCurvedMesh). "
-            "Install: python install_full.py",
-            stacklevel=2)
+    _has_netgen_fork = hasattr(_NetgenMesh, 'SetGeomInfo')
     del _NetgenMesh
 except ImportError:
-    pass
+    _has_netgen_fork = False
+
+def check_netgen_fork():
+    """Check if netgen fork is installed. Print warning if not."""
+    if not _has_netgen_fork:
+        print("WARNING: Netgen fork (ksugahar/netgen) is NOT installed. "
+              "Standard pip netgen lacks CallbackGeometry and SetGeomInfo APIs "
+              "required for Cubit mesh curving (export_NGSolveCurvedMesh). "
+              "Install: python install_full.py")
 
 # Import all symbols from the pybind11 C++ extension module (_radia_pybind.pyd)
 try:
