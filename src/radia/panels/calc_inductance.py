@@ -169,6 +169,14 @@ def extract_inductance(cub5_file, order, source_label="source",
     j_npy = os.path.join(base_dir, "J_coeffs.npy").replace("\\", "/")
     np.save(j_npy, sol['J'])
 
+    # Conductor bounding box for default post volume
+    coords = np.array([(v.point[0], v.point[1], v.point[2])
+                       for v in mesh.vertices])
+    bbox_min, bbox_max = coords.min(axis=0), coords.max(axis=0)
+    extent = bbox_max - bbox_min
+    default_half = float(max(extent) * 0.65)
+    default_maxh = float(max(extent) * 0.1)
+
     return {
         "inductance_H": float(L_total),
         "n_dofs": n_J,
@@ -182,6 +190,8 @@ def extract_inductance(cub5_file, order, source_label="source",
         "fes_order": fes_order,
         "t_solve": round(t_solve, 2),
         "j_npy": j_npy,
+        "default_lxyz": round(default_half, 4),
+        "default_maxh": round(default_maxh, 4),
     }
 
 
@@ -498,14 +508,8 @@ def _compute_B_field(mesh_surf, gf_J, elem_A, MU_0,
     extent = bbox_max - bbox_min
     center = (bbox_min + bbox_max) / 2
 
-    # User-specified or auto box size
-    hx = lx if lx > 0 else max(extent) * 0.65
-    hy = ly if ly > 0 else max(extent) * 0.65
-    hz = lz if lz > 0 else max(extent) * 0.65
-    half = np.array([hx, hy, hz])
+    half = np.array([lx, ly, lz])
     box = Box(Pnt(*(center - half)), Pnt(*(center + half)))
-    if maxh_vol <= 0:
-        maxh_vol = max(extent) * 0.1
     mesh_vol = Mesh(OCCGeometry(box).GenerateMesh(
         mp=MeshingParameters(maxh=maxh_vol)))
 
