@@ -38,7 +38,7 @@ The overall workflow is simply:
 
 1. **Is your geometry planar (no curved surfaces)?**
    -> Use any export format. Curving is not needed.
-   -> Simplest: `export_gmsh_v2()` + `ReadGmsh()`
+   -> Simplest: `export_Gmesh(version="2.2")` + `ReadGmsh()`
    -> Or: `export_NGSolveCurvedMesh(cubit, order=1)` for Netgen mesh
 
 2. **Do you only need 2nd order (not 3rd+)?**
@@ -49,7 +49,7 @@ The overall workflow is simply:
    ```
    b. **Gmsh 2nd order** workflow (no geometry reference needed):
    ```
-   Cubit -> block element type tetra10 -> export_gmsh_v2() -> ReadGmsh()
+   Cubit -> block element type tetra10 -> export_Gmesh(version="2.2") -> ReadGmsh()
    ```
 
 3. **Do you need 3rd order or higher?**
@@ -356,7 +356,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 element type tri6")       # 2nd order boundary
 
 # Step 3: Export to Gmsh v2.2
-cubit_mesh_export.export_gmsh_v2(cubit, "mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
 
 # Step 4: Read into NGSolve
 mesh = Mesh(ReadGmsh("mesh.msh"))

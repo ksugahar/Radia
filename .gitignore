@@ -292,3 +292,4 @@ examples/cubit_panels/inductance/results/
 examples/cubit/inductance_torus_result.cub5
 examples/c_type_electromagnet/dipole_coils.step
 examples/c_type_electromagnet/dipole_field.msh
+.code-workspace

@@ -12,18 +12,19 @@ EXPORT_OVERVIEW = """
 |----------|--------|-----------|-----------|------------|
 | `export_NGSolveCurvedMesh()` | ngsolve.Mesh (curved) | Yes | Yes | Yes |
 | `export_exodus()` | Exodus II (.exo) | Yes | Yes | Yes |
-| `export_gmsh_v2()` | Gmsh v2.2 (.msh) | Yes | Yes | No |
-| `export_gmsh_v4()` | Gmsh v4.1 (.msh) | Yes | Yes | No |
+| `export_Gmesh(version="2.2")` | Gmsh v2.2 (.msh) | Yes | Yes | No |
+| `export_Gmesh(version="4.1")` | Gmsh v4.1 (.msh) | Yes | Yes | No |
 | `export_nastran()` | Nastran BDF (.bdf) | Yes | No | No |
 | `export_meg()` | MEG/ELF (.meg) | Yes | No | No |
 
-## Function Name Aliases
+## API
 
-| Canonical Name | Alias |
-|----------------|-------|
-| `export_Gmsh_ver2` | `export_gmsh_v2` |
-| `export_Gmsh_ver4` | `export_gmsh_v4` |
-| `export_Nastran` | `export_nastran` |
+```python
+# Unified Gmsh export (version argument selects format)
+export_Gmesh(cubit, FileName, version="2.2", DIM="auto")
+#   version: "2.2" (default, for NGSolve ReadGmsh) or "4.1"
+#   DIM: "auto", "2D", "3D" (v4.1 only)
+```
 
 ## Removed Functions (replaced by export_NGSolveCurvedMesh)
 
@@ -53,7 +54,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Export
-cubit_mesh_export.export_gmsh_v2(cubit, "mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
 ```
 """
 
@@ -61,8 +62,7 @@ EXPORT_GMSH_V2 = """
 # Gmsh v2.2 Export
 
 ```python
-export_gmsh_v2(cubit, FileName)
-# Aliases: export_Gmsh_ver2
+export_Gmesh(cubit, FileName)  # version="2.2" is default
 ```
 
 | Parameter | Type | Default | Description |
@@ -93,7 +93,7 @@ from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh
 
 cubit.cmd("block 1 element type tetra10")  # Convert to 2nd order
-cubit_mesh_export.export_gmsh_v2(cubit, "mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
 mesh = Mesh(ReadGmsh("mesh.msh"))  # ~0.001% volume error
 ```
 """
@@ -102,8 +102,7 @@ EXPORT_GMSH_V4 = """
 # Gmsh v4.1 Export
 
 ```python
-export_gmsh_v4(cubit, FileName, DIM="auto")
-# Aliases: export_Gmsh_ver4
+export_Gmesh(cubit, FileName, version="4.1", DIM="auto")
 ```
 
 | Parameter | Type | Default | Description |
@@ -410,8 +409,8 @@ EXPORT_COMPARISON = """
 | Use Case | Recommended Format | Why |
 |----------|-------------------|-----|
 | NGSolve FEM (any order) | `export_NGSolveCurvedMesh()` | Arbitrary order via ACIS CallbackGeometry |
-| NGSolve FEM (2nd order, simple) | `export_gmsh_v2()` | ReadGmsh() supports v2.2, ~0.001% accuracy |
-| Gmsh solver | `export_gmsh_v4()` | Full v4.1 with $Entities |
+| NGSolve FEM (2nd order, simple) | `export_Gmesh(version="2.2")` | ReadGmsh() supports v2.2, ~0.001% accuracy |
+| Gmsh solver | `export_Gmesh(version="4.1")` | Full v4.1 with $Entities |
 | JMAG solver | `export_nastran()` | PYRAM=False for degenerate hex |
 | ELF/MAGIC solver | `export_meg()` | Native ELF element names |
 | Cubit-native archival | `export_exodus()` | Full fidelity, all features |
@@ -429,7 +428,7 @@ EXPORT_COMPARISON = """
 
 ## export_NGSolveCurvedMesh vs Gmsh for NGSolve
 
-| Aspect | export_NGSolveCurvedMesh() | Gmsh v2.2 (export_gmsh_v2) |
+| Aspect | export_NGSolveCurvedMesh() | Gmsh v2.2 (export_Gmesh) |
 |--------|----------------|---------------------------|
 | Max order | Unlimited | 2nd order |
 | Accuracy at order 2 | ~0.003% | ~0.001% |
@@ -453,13 +452,13 @@ EXPORT_DECISION_GUIDE = """
   ```
   Works for ANY geometry shape. No STEP files, no OCC, no SetGeomInfo.
 
-- **Alternative for 2nd order only** -> Use `export_gmsh_v2()`:
+- **Alternative for 2nd order only** -> Use `export_Gmesh(version="2.2")`:
   ```python
   cubit.cmd("block 1 add tet all")
   cubit.cmd("block 1 element type tetra10")
   cubit.cmd("block 2 add tri all")
   cubit.cmd("block 2 element type tri6")
-  cubit_mesh_export.export_gmsh_v2(cubit, "mesh.msh")
+  cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
   mesh = Mesh(ReadGmsh("mesh.msh"))
   ```
 
@@ -510,10 +509,10 @@ geometry leads to poor quality or failed meshing.
 
 ## "I want Gmsh solver integration"
 
--> Use `export_gmsh_v4()` for full v4.1 format
+-> Use `export_Gmesh(version="4.1")` for full v4.1 format
 - Includes $Entities section
 - DIM parameter: `"2D"` or `"3D"`
-- **Note**: For NGSolve, use `export_gmsh_v2()` instead (ReadGmsh uses v2.2)
+- **Note**: For NGSolve, use `export_Gmesh(version="2.2")` instead (ReadGmsh uses v2.2)
 
 ## Performance & Feature Summary
 

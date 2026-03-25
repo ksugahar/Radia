@@ -167,8 +167,8 @@ print(len(nodes_all))   # 10 for TET10, 4 for TET4
 
 | Export Function | API | Respects Element Type |
 |----------------|-----|----------------------|
-| `export_gmsh_v2()` | `get_expanded_connectivity()` | Yes |
-| `export_gmsh_v4()` | `get_expanded_connectivity()` | Yes |
+| `export_Gmesh(version="2.2")` | `get_expanded_connectivity()` | Yes |
+| `export_Gmesh(version="4.1")` | `get_expanded_connectivity()` | Yes |
 | `export_exodus()` | `get_expanded_connectivity()` | Yes |
 | `export_NGSolveCurvedMesh()` | `get_connectivity()` | No (curves via ACIS) |
 | `export_nastran()` | `get_connectivity()` | No (1st order only) |
@@ -425,12 +425,12 @@ CUBIT_COMMON_MISTAKES = """
 ```python
 # WRONG: Export without blocks -> empty file!
 cubit.cmd("mesh volume 1")
-cubit_mesh_export.export_gmsh_v2(cubit, "mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
 
 # RIGHT: Register blocks first
 cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
-cubit_mesh_export.export_gmsh_v2(cubit, "mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
 ```
 
 ## 2. CRITICAL: Geometry Block with 2nd Order Conversion
@@ -764,7 +764,7 @@ Several export formats support 2D mesh export:
 - `export_nastran(cubit, "file.bdf", DIM="2D")`
 - `export_meg(cubit, "file.meg", DIM='K')` (planar)
 - `export_meg(cubit, "file.meg", DIM='R')` (axisymmetric)
-- `export_gmsh_v4(cubit, "file.msh", DIM="2D")`
+- `export_Gmesh(cubit, "file.msh", version="4.1", DIM="2D")`
 
 ## Surface Creation
 
@@ -858,7 +858,7 @@ cubit.cmd("surface 1 scheme trimesh")
 cubit.cmd("surface 1 size 0.3")
 cubit.cmd("mesh surface 1")
 cubit.cmd("block 1 add tri all")
-cubit_mesh_export.export_gmsh_v4(cubit, "plate.msh", DIM="2D")
+cubit_mesh_export.export_Gmesh(cubit, "plate.msh", version="4.1", DIM="2D")
 ```
 
 ## 2D Normal Orientation
@@ -1140,7 +1140,7 @@ cubit.cmd('export nastran "mesh.bdf"')  # Does not exist
 **Always** use the module functions:
 ```python
 # RIGHT: Use cubit_mesh_export functions
-cubit_mesh_export.export_gmsh_v2(cubit, "mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
 cubit_mesh_export.export_nastran(cubit, "mesh.bdf", DIM="3D")
 ```
 """
@@ -1178,7 +1178,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd('block 2 name "boundary"')
 
 # Export to desired format
-cubit_mesh_export.export_gmsh_v2(cubit, "mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
 ```
 
 ## Prerequisites
