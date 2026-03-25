@@ -283,11 +283,14 @@ This installs:
 2. **ksugahar/netgen fork** from GitHub Releases (CallbackGeometry + SetGeomInfo for Cubit mesh curving, [PR#232](https://github.com/NGSolve/netgen/pull/232) pending upstream)
 3. **Cubit panels** (if Coreform Cubit is detected)
 
-**Update** — radia only (netgen fork is preserved):
+**Update**:
 
 ```bash
 pip install --upgrade radia
+cubit-install-panels            # if panel update needed
 ```
+
+Netgen fork is preserved during upgrade (ngsolve version is pinned).
 
 ### Example 1: Magnetostatic Source Field
 
