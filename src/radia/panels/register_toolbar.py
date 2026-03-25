@@ -689,8 +689,8 @@ class InductanceDialog(QDialog):
 		btn_row.addWidget(self.solve_btn)
 		self.post_btn = QPushButton("Post")
 		self.post_btn.clicked.connect(self._post_process)
-		self.post_btn.setEnabled(False)
-		self.post_btn.setToolTip("B-field Biot-Savart + GMSH/Nastran/COMSOL export")
+		self.post_btn.setEnabled(True)
+		self.post_btn.setToolTip("B-field + GMSH export (runs Solve first if needed)")
 		btn_row.addWidget(self.post_btn)
 		self.open_gmsh_btn = QPushButton("Open Result")
 		self.open_gmsh_btn.clicked.connect(self._open_gmsh_result)
@@ -902,11 +902,12 @@ class InductanceDialog(QDialog):
 			self.sink_label.setText("(not found)")
 			self.sink_label.setStyleSheet("font-weight: bold; color: red;")
 
-		# Enable Solve only when both source and sink are found + Python available
+		# Enable Solve/Post when both source and sink are found + Python available
 		can_solve = (self._source_block is not None
 		             and self._sink_block is not None
 		             and self._ext_python is not None)
 		self.solve_btn.setEnabled(can_solve)
+		self.post_btn.setEnabled(can_solve)
 		if not can_solve and self._ext_python:
 			self.debug_text.setText(
 				'Define blocks named "source" and "sink" in your journal.')
