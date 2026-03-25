@@ -1270,18 +1270,6 @@ class InductanceDialog(QDialog):
 				"Failed to launch optuna-dashboard."
 			)
 
-	@staticmethod
-	def _format_solve_time(data):
-		"""Format solve time with breakdown (assembly + LU)."""
-		t = data.get('t_solve')
-		if not t:
-			return "-"
-		t_asm = data.get('t_assembly')
-		t_lu = data.get('t_lu')
-		if t_asm and t_lu:
-			return f"{t:.1f} s (asm {t_asm:.1f} + LU {t_lu:.1f})"
-		return f"{t:.1f} s"
-
 	def _display_result(self, data):
 		"""Display extraction result in the table."""
 		L = data.get("inductance_H", 0.0)
@@ -1298,8 +1286,9 @@ class InductanceDialog(QDialog):
 		rows = [
 			("Inductance", L_str),
 			("DOFs (edges)", str(data.get("n_dofs", ""))),
-			("Solve time", self._format_solve_time(data)),
-			("Post time", f"{data.get('t_post', 0):.1f} s" if data.get('t_post') else "-"),
+			("Assembly", f"{data.get('t_assembly', 0):.1f} s" if data.get('t_assembly') else "-"),
+			("LU solve", f"{data.get('t_lu', 0):.1f} s" if data.get('t_lu') else "-"),
+			("Post", f"{data.get('t_post', 0):.1f} s" if data.get('t_post') else "-"),
 			("Faces", str(data.get("n_faces", ""))),
 			("Source area", f"{data.get('source_area', 0):.4e} m^2"),
 			("Sink area", f"{data.get('sink_area', 0):.4e} m^2"),
