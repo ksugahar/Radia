@@ -186,7 +186,8 @@ def extract_inductance(cub5_file, order, source_label="source",
 
 
 def post_process(cub5_file, order, source_label="source", sink_label="sink",
-                 fes_order=0, msh_output="", j_npy=""):
+                 fes_order=0, msh_output="", j_npy="",
+                 lx=0, ly=0, lz=0, maxh_vol=0):
     """Post-process: B-field Biot-Savart, GMSH/Nastran/COMSOL export.
 
     Args:
@@ -196,6 +197,8 @@ def post_process(cub5_file, order, source_label="source", sink_label="sink",
         fes_order: HDivSurface basis order
         msh_output: Optional .msh output path
         j_npy: Path to J_coeffs.npy from solve step
+        lx, ly, lz: Box half-sizes [m]. 0 = auto.
+        maxh_vol: Volume mesh element size [m]. 0 = auto.
 
     Returns:
         dict with gmsh_file and diagnostics
@@ -258,7 +261,8 @@ def post_process(cub5_file, order, source_label="source", sink_label="sink",
 
     # B-distribution (volume B via Biot-Savart)
     B_nodes, vol_nodes, vol_elems = _compute_B_field(
-        mesh, gf_J, elem_A, MU_0)
+        mesh, gf_J, elem_A, MU_0,
+        lx=lx, ly=ly, lz=lz, maxh_vol=maxh_vol)
 
     sys.stderr.write(f"B_FIELD_READY:B computed\n")
     sys.stderr.flush()
@@ -448,8 +452,13 @@ def _write_comsol_txt(filename, nodes, field_data, field_name, comp_names):
             f.write(f'{x:.15e} {y:.15e} {z:.15e} {vals}\n')
 
 
-def _compute_B_field(mesh_surf, gf_J, elem_A, MU_0):
+def _compute_B_field(mesh_surf, gf_J, elem_A, MU_0,
+                     lx=0, ly=0, lz=0, maxh_vol=0):
     """Compute B field in air volume via direct Biot-Savart.
+
+    Args:
+        lx, ly, lz: Box half-sizes [m]. 0 = auto (conductor bbox + 30%).
+        maxh_vol: Volume mesh element size [m]. 0 = auto (10% of extent).
 
     Returns:
         B_nodes: (nv_vol, 3) B field at volume vertices
@@ -487,11 +496,16 @@ def _compute_B_field(mesh_surf, gf_J, elem_A, MU_0):
                        for v in mesh_surf.vertices])
     bbox_min, bbox_max = coords.min(axis=0), coords.max(axis=0)
     extent = bbox_max - bbox_min
-    # Cubic bounding box (equal size in all directions)
-    half_size = max(extent) * 0.65  # conductor extent/2 + 30% margin
     center = (bbox_min + bbox_max) / 2
-    box = Box(Pnt(*(center - half_size)), Pnt(*(center + half_size)))
-    maxh_vol = max(extent) * 0.1
+
+    # User-specified or auto box size
+    hx = lx if lx > 0 else max(extent) * 0.65
+    hy = ly if ly > 0 else max(extent) * 0.65
+    hz = lz if lz > 0 else max(extent) * 0.65
+    half = np.array([hx, hy, hz])
+    box = Box(Pnt(*(center - half)), Pnt(*(center + half)))
+    if maxh_vol <= 0:
+        maxh_vol = max(extent) * 0.1
     mesh_vol = Mesh(OCCGeometry(box).GenerateMesh(
         mp=MeshingParameters(maxh=maxh_vol)))
 
@@ -624,6 +638,10 @@ def main():
     parser.add_argument("--msh-output", default="", help="GMSH .msh output path")
     parser.add_argument("--output", default="", help="Output JSON file (optional)")
     parser.add_argument("--j-npy", default="", help="J_coeffs.npy path (for post mode)")
+    parser.add_argument("--lx", type=float, default=0, help="Box half-size X [m] (0=auto)")
+    parser.add_argument("--ly", type=float, default=0, help="Box half-size Y [m] (0=auto)")
+    parser.add_argument("--lz", type=float, default=0, help="Box half-size Z [m] (0=auto)")
+    parser.add_argument("--maxh-vol", type=float, default=0, help="Volume mesh size [m] (0=auto)")
     args = parser.parse_args()
 
     import io as _io
@@ -638,7 +656,9 @@ def main():
             result = post_process(args.cub5, args.order,
                                   args.source, args.sink,
                                   args.fes_order, args.msh_output,
-                                  args.j_npy)
+                                  args.j_npy,
+                                  args.lx, args.ly, args.lz,
+                                  args.maxh_vol)
     except Exception as e:
         result = {"error": str(e)}
     sys.stdout = real_stdout
