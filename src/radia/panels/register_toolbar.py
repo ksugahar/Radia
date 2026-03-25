@@ -1074,6 +1074,20 @@ class InductanceDialog(QDialog):
 
 		self._enable_gmsh_buttons(data)
 		t_post = data.get("t_post", "?")
+
+		# Merge t_post into saved result JSON and re-display
+		if os.path.exists(self._result_file):
+			try:
+				with open(self._result_file, "r") as f:
+					saved = json.load(f)
+				saved["t_post"] = data.get("t_post")
+				saved["gmsh_file"] = data.get("gmsh_file", "")
+				with open(self._result_file, "w") as f:
+					json.dump(saved, f)
+				self._display_result(saved)
+			except Exception:
+				pass
+
 		self.debug_text.setText(f"Post done ({t_post}s). Click Open Result.")
 
 	def _on_stderr(self):
@@ -1139,7 +1153,7 @@ class InductanceDialog(QDialog):
 		if dm:
 			self.maxh_vol_edit.setText(str(dm))
 
-		self._enable_gmsh_buttons(data)
+		self.open_gmsh_btn.setEnabled(False)  # Post not yet done
 		self.debug_text.setText(f"Result saved: {self._result_file}")
 
 		# Chain to Post if requested
@@ -1267,7 +1281,7 @@ class InductanceDialog(QDialog):
 			("Inductance", L_str),
 			("DOFs (edges)", str(data.get("n_dofs", ""))),
 			("Solve time", f"{data.get('t_solve', 0):.1f} s" if data.get('t_solve') else "-"),
-			("Total time", f"{data.get('t_total', 0):.1f} s" if data.get('t_total') else "-"),
+			("Post time", f"{data.get('t_post', 0):.1f} s" if data.get('t_post') else "-"),
 			("Faces", str(data.get("n_faces", ""))),
 			("Source area", f"{data.get('source_area', 0):.4e} m^2"),
 			("Sink area", f"{data.get('sink_area', 0):.4e} m^2"),
