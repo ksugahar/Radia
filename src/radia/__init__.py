@@ -9,7 +9,7 @@
 # pybind11 Migration Complete (2026-01):
 # All bindings now use pybind11 exclusively.
 
-__version__ = "3.6.4"
+__version__ = "3.7.0"
 
 # DLL loader for Windows
 # MKL DLLs are installed via pip dependency (mkl>=2024.2.0)
