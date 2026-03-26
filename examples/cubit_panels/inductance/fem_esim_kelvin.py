@@ -308,26 +308,32 @@ def solve_fem_full(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
 # ============================================================
 # FEM-ESIM: workpiece as Robin BC
 # ============================================================
-def solve_fem_esim(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
+def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
                    bh_curve=None, mu_r=1.0,
                    I_total=1.0, a_kelvin=0.15, z_offset=0.4,
-                   maxh=0.003, order=3):
-    """Solve external field with FEM+Kelvin, then apply ESIM on surface.
+                   maxh=0.003, order=3, max_iter=15, tol=1e-4):
+    """Solve with SIBC Robin BC + Karl Hollaus iteration.
 
-    Same approach as BEM+ESIM:
-      1. FEM (static A-formulation + Kelvin) solves air domain
-         Workpiece = hole with Neumann BC (perfect conductor approx)
-      2. Compute H_t on workpiece surface from grad(u)
-      3. ESIM cell problem per surface segment -> P, Q
+    Karl iteration (Hollaus, IEEE Trans. Mag., 2025):
+      1. Solve FEM with current Z_s as Robin BC on workpiece surface
+      2. Compute H_t from solution (gradient sampling near boundary)
+      3. Update Z_s from ESIM cell problem at average H_t
+      4. Repeat until Z_s converges
 
-    Returns dict with P_total, Q_total, L.
+    Robin BC weak form (2D axi, u = r*A_theta):
+      int (nu/r) grad(u).grad(v) dx - (jw/Zs) int u*v/r ds = int J*v dx
+
+    Power (Poynting flux, correct factor = pi not 2*pi):
+      P = pi * w^2 * Re(Zs)/|Zs|^2 * int |u|^2/r ds
+
+    Returns dict with P_total, L, iteration info.
     """
     from esim_cell_problem import ESIMFiniteSlabSolver
 
+    omega = 2 * np.pi * frequency
     J0 = I_total / (2 * a_coil)**2
-    half_thickness = R_wp
 
-    print("  Building geometry (workpiece = hole, Neumann)...")
+    print("  Building geometry (workpiece = hole)...")
     t0 = time.perf_counter()
     mesh = build_geometry(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset,
                           include_workpiece_volume=False, maxh=maxh)
@@ -336,13 +342,6 @@ def solve_fem_esim(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
     materials = mesh.GetMaterials()
     print(f"  Mesh: {mesh.ne} elements")
 
-    # Static A-formulation (real-valued, no eddy current in air)
-    fes_base = H1(mesh, order=order, complex=False,
-                  dirichlet="axis|axis_ext", dirichlet_bbnd="GND")
-    fes = Periodic(fes_base)
-    u, v = fes.TnT()
-    print(f"  DOFs: {fes.ndof}")
-
     r_cf = IfPos(x - 1e-10, x, 1e-10)
 
     # Kelvin
@@ -350,102 +349,94 @@ def solve_fem_esim(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
     rho_prime = sqrt(x**2 + y_local**2)
     rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
     kelvin_fac = (rho_safe / a_kelvin)**2
-    nu_dict = {}
-    for mat in materials:
-        nu_dict[mat] = NU_0 * kelvin_fac if "outer" in mat.lower() else NU_0
+    nu_dict = {m: NU_0 * kelvin_fac if "outer" in m.lower() else NU_0
+               for m in materials}
     nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
 
-    a_bf = BilinearForm(fes)
-    a_bf += nu_cf / r_cf * grad(u) * grad(v) * dx
-    f_lf = LinearForm(fes)
-    f_lf += J0 * v * dx("coil")
-
-    print("  Solving static field...")
-    t0 = time.perf_counter()
-    a_bf.Assemble()
-    f_lf.Assemble()
-    gfu = GridFunction(fes)
-    gfu.vec.data = a_bf.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f_lf.vec
-    t_solve = time.perf_counter() - t0
-
-    # Inductance
-    W = 2 * np.pi * Integrate(0.5 * nu_cf / r_cf * grad(gfu) * grad(gfu), mesh)
-    L = 2 * W / I_total**2
-
-    # --- H_t on workpiece surface ---
-    # Sample on lateral (r=R_wp) and caps (z=+-H_wp/2)
-    n_lat, n_cap = 30, 15
-    eps = maxh * 0.3  # offset into air
-
-    grad_u = grad(gfu)
+    # ESIM solver
     esim_solver = ESIMFiniteSlabSolver(
-        half_thickness=half_thickness, bh_curve=bh_curve,
-        sigma=sigma, frequency=frequency,
+        half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
+        frequency=frequency,
         mu_r=mu_r if bh_curve is None else None, n_nodes=200)
 
-    P_total = 0.0
-    Q_total = 0.0
-    H_vals = []
+    # Initial Z_s
+    sol0 = esim_solver.solve(5.0)
+    Z_s = sol0['Z']
+    print(f"  Initial Z_s = {Z_s:.4e}, delta = {sol0['delta']*1e3:.3f} mm")
 
-    # Lateral surface (r = R_wp): H_z = (1/(mu0*r)) du/dr
-    for j in range(n_lat):
-        z_j = -H_wp / 2 + (j + 0.5) * H_wp / n_lat
-        dA = 2 * np.pi * R_wp * (H_wp / n_lat)
-        try:
-            mip = mesh(R_wp + eps, z_j)
-            H_t = abs(grad_u[0](mip) / (MU_0 * max(R_wp + eps, 1e-10)))
-        except:
-            H_t = 0.0
-        H_vals.append(H_t)
-        sol = esim_solver.solve(max(H_t, 1e-3))
-        P_total += sol['P_prime'] * dA
-        Q_total += sol['Q_prime'] * dA
+    # Sample points for H_t evaluation (just outside workpiece boundary)
+    eps = maxh * 0.2
+    pts_lat = [(R_wp + eps, z) for z in
+               np.linspace(-H_wp / 2 + 0.001, H_wp / 2 - 0.001, 20)]
+    pts_cap = [(r, H_wp / 2 + eps) for r in np.linspace(0.002, R_wp - 0.001, 8)]
+    pts_cap += [(r, -H_wp / 2 - eps) for r in np.linspace(0.002, R_wp - 0.001, 8)]
+    sample_pts = pts_lat + pts_cap
 
-    # Top cap (z = +H_wp/2): H_r = (1/(mu0*r)) |du/dz|
-    for k in range(n_cap):
-        r_k = (k + 0.5) * R_wp / n_cap
-        if r_k < 1e-6:
-            continue
-        dA = 2 * np.pi * r_k * (R_wp / n_cap)
-        try:
-            mip = mesh(r_k, H_wp / 2 + eps)
-            H_t = abs(grad_u[1](mip) / (MU_0 * max(r_k, 1e-10)))
-        except:
-            H_t = 0.0
-        H_vals.append(H_t)
-        sol = esim_solver.solve(max(H_t, 1e-3))
-        P_total += sol['P_prime'] * dA
-        Q_total += sol['Q_prime'] * dA
+    # --- Karl iteration ---
+    print(f"  {'Iter':>4s} {'|Z_s|':>12s} {'P [W]':>12s} {'H_t_avg':>10s} {'dZ/Z':>10s}")
 
-    # Bottom cap (z = -H_wp/2)
-    for k in range(n_cap):
-        r_k = (k + 0.5) * R_wp / n_cap
-        if r_k < 1e-6:
-            continue
-        dA = 2 * np.pi * r_k * (R_wp / n_cap)
-        try:
-            mip = mesh(r_k, -H_wp / 2 - eps)
-            H_t = abs(grad_u[1](mip) / (MU_0 * max(r_k, 1e-10)))
-        except:
-            H_t = 0.0
-        H_vals.append(H_t)
-        sol = esim_solver.solve(max(H_t, 1e-3))
-        P_total += sol['P_prime'] * dA
-        Q_total += sol['Q_prime'] * dA
+    t0_solve = time.perf_counter()
+    for iteration in range(max_iter):
+        # Robin BC: -(jw/Zs) * int u*v/r ds
+        robin = -1j * omega / Z_s
 
-    H_arr = np.array(H_vals)
-    delta = esim_solver.delta
-    print(f"  H_t range: [{H_arr.min():.2f}, {H_arr.max():.2f}] A/m")
-    print(f"  Skin depth: {delta*1e3:.3f} mm")
+        fesc = Periodic(H1(mesh, order=order, complex=True,
+                           dirichlet="axis|axis_ext", dirichlet_bbnd="GND"))
+        uc, vc = fesc.TnT()
+        bf = BilinearForm(fesc)
+        bf += nu_cf / r_cf * grad(uc) * grad(vc) * dx
+        bf += robin * uc * vc / r_cf * ds("wp_sibc")
+        lfc = LinearForm(fesc)
+        lfc += J0 * vc * dx("coil")
+        bf.Assemble()
+        lfc.Assemble()
+        gfu = GridFunction(fesc)
+        gfu.vec.data = bf.mat.Inverse(fesc.FreeDofs(), inverse="pardiso") * lfc.vec
+
+        # Power: P = pi * w^2 * Re(Zs)/|Zs|^2 * int|u|^2/r ds
+        int_u2r = Integrate(gfu * Conj(gfu) / r_cf, mesh,
+                            definedon=mesh.Boundaries("wp_sibc")).real
+        P = np.pi * omega**2 * Z_s.real / abs(Z_s)**2 * int_u2r
+
+        # Sample H_t
+        grad_u = grad(gfu)
+        H_t_vals = []
+        for (r_pt, z_pt) in sample_pts:
+            try:
+                mip = mesh(r_pt, z_pt)
+                H_z = abs(NU_0 * grad_u[0](mip) / max(r_pt, 1e-10))
+                H_r = abs(NU_0 * grad_u[1](mip) / max(r_pt, 1e-10))
+                H_t_vals.append(max(H_z, H_r))
+            except:
+                H_t_vals.append(1e-3)
+        H_t_avg = np.mean(H_t_vals)
+
+        # Update Z_s (under-relaxation)
+        Z_s_old = Z_s
+        sol_new = esim_solver.solve(max(float(H_t_avg), 1e-3), relaxation=0.3)
+        Z_s = 0.5 * Z_s_old + 0.5 * sol_new['Z']
+
+        dZ = abs(Z_s - Z_s_old) / abs(Z_s_old)
+        print(f"  {iteration:4d} {abs(Z_s):12.4e} {P:12.4e} {H_t_avg:10.2f} {dZ:10.4e}")
+
+        if dZ < tol and iteration > 0:
+            break
+
+    t_solve = time.perf_counter() - t0_solve
+
+    # Inductance
+    W = 2 * np.pi * Integrate(
+        0.5 * nu_cf / r_cf * grad(gfu) * Conj(grad(gfu)), mesh).real
+    L = 2 * W / I_total**2
 
     return {
-        'mode': 'FEM-ESIM',
-        'P_total': float(P_total),
-        'Q_total': float(Q_total),
+        'mode': 'FEM-SIBC (Karl)',
+        'P_total': float(P),
         'L': float(L),
-        'H_t_max': float(H_arr.max()),
-        'delta': delta,
-        'ndof': fes.ndof,
+        'Z_s': Z_s,
+        'H_t_avg': float(H_t_avg),
+        'iterations': iteration + 1,
+        'ndof': fesc.ndof,
         'ne': mesh.ne,
         't_mesh': t_mesh,
         't_solve': t_solve,
@@ -497,9 +488,9 @@ def main(mode='both'):
         print()
 
     if mode in ('both', 'esim'):
-        print("[FEM-ESIM] External field -> ESIM on workpiece surface")
+        print("[FEM-SIBC] External field -> ESIM on workpiece surface")
         print("-" * 65)
-        r_esim = solve_fem_esim(
+        r_esim = solve_fem_sibc(
             R_coil, a_coil, R_wp, H_wp, sigma, frequency,
             mu_r=mu_r,
             I_total=I_total, maxh=0.003, order=3,
@@ -520,7 +511,7 @@ def main(mode='both'):
         P_e = results['esim']['P_total']
         L_f = results['full']['L']
         L_e = results['esim']['L']
-        print(f"  {'':>20s}  {'FEM-full':>12s}  {'FEM-ESIM':>12s}  {'diff':>8s}")
+        print(f"  {'':>20s}  {'FEM-full':>12s}  {'FEM-SIBC':>12s}  {'diff':>8s}")
         print(f"  {'P [W]':>20s}  {P_f:12.4e}  {P_e:12.4e}  "
               f"{(P_e-P_f)/max(abs(P_f),1e-30)*100:+8.2f}%")
         print(f"  {'L [nH]':>20s}  {L_f*1e9:12.4f}  {L_e*1e9:12.4f}  "

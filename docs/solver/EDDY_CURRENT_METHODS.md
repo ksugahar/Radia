@@ -775,67 +775,90 @@ Method C: FEM-full    -- FEM+Kelvin(AC, sigma in workpiece) -> direct P
 - Material: copper (sigma=5.8e7 S/m, mu_r=1)
 - Frequency: 1 kHz (skin depth delta=2.09 mm, xi=R/delta=4.8)
 
+### Method D: FEM-SIBC (Karl Hollaus Iteration)
+
+The correct SIBC approach solves FEM with Robin BC and iterates Z_s:
+
+```
+Method D: FEM-SIBC   -- FEM+Kelvin(complex, Robin BC) + Karl iteration -> P
+```
+
+Robin BC weak form (2D axi, u = r*A_theta):
+```
+int (nu/r) grad(u).grad(v) dx - (jw/Zs) int u*v/r ds = int J*v dx
+```
+
+Power (Poynting flux through surface):
+```
+P = pi * w^2 * Re(Zs)/|Zs|^2 * int |u|^2/r ds
+```
+Note: factor is **pi** (not 2*pi). Derivation: `P = (1/2) * 2*pi * int Re(E*H*) r ds`.
+
+Karl iteration:
+1. Solve FEM with current Z_s (Robin BC)
+2. Sample H_t near workpiece boundary from grad(u)
+3. Update Z_s from ESIM cell problem at H_t
+4. Under-relaxation: Z_s = 0.5*Z_s_old + 0.5*Z_s_new
+5. Repeat until |dZ_s/Z_s| < tol
+
 ### Results (I = 1 A)
+
+**Copper (sigma=5.8e7, mu_r=1), 1 kHz, xi=4.8:**
 
 | Method | P [W] | L [nH] | DOFs | Time [s] |
 |--------|-------|--------|------|----------|
-| **BEM-ESIM** | 1.51e-6 | 86.7 (coil only) | 5,064 | 24 |
-| **FEM-ESIM** | 3.90e-7 | 102.9 (with shielding) | 84,077 | 2 |
-| **FEM-full** | 2.30e-6 | 92.0 | 2,878,208 | 103 |
+| **FEM-full** (reference) | 2.30e-6 | 92.0 | 2,878,208 | 103 |
+| **FEM-SIBC** (Karl) | 3.24e-6 | 91.4 | 82,835 | 5 |
+| **BEM-ESIM** (transparent) | 1.50e-6 | 86.7 | 5,064 | 24 |
+
+**Steel (sigma=2e6, nonlinear BH), 1 kHz (Karl converges in 10 iterations):**
+
+| Method | P [W] | Notes |
+|--------|-------|-------|
+| **FEM-SIBC** (Karl) | 1.53e-6 | Converged, 10 iter |
+| **BEM-ESIM** (transparent) | 1.51e-6 | Good agreement |
+| FEM-full | N/A | delta=0.16mm, mesh impractical |
 
 ### Analysis
 
-**P varies by ~6x** across methods. This is expected at xi=4.8 (transitional regime):
+1. **FEM-SIBC vs FEM-full (copper, xi=4.8)**: +40% error. Source: 0th-order SIBC (slab
+   approximation for cylindrical geometry). Higher-order SIBC with curvature correction
+   (1/R term in cell problem) would reduce this. At xi >> 10, error < 10%.
 
-1. **FEM-full** (reference): directly resolves skin layer (maxh=0.5mm << delta=2.1mm).
-   Captures 2D eddy current distribution and mutual coupling. P = 2.30e-6 W.
+2. **FEM-SIBC vs BEM-ESIM (steel, xi >> 20)**: 1% agreement. Both use ESIM Z_s, and
+   at strong skin effect the slab model is accurate. Steel is the target application.
 
-2. **BEM-ESIM**: BEM gives coil current J on 3D torus surface, then Biot-Savart
-   computes H at cylindrical workpiece panels. ESIM 1D cell problem per panel.
-   P = 1.51e-6 W (34% lower than FEM-full).
-   - BEM H at workpiece is 3D (includes panel discretization effects)
-   - No feedback from workpiece eddy currents to coil field
+3. **BEM-ESIM is 35% below FEM-full** (copper): the "transparent workpiece" assumption
+   ignores eddy current feedback. FEM-SIBC includes this feedback via Robin BC.
 
-3. **FEM-ESIM**: FEM+Kelvin solves 2D axisymmetric static field with workpiece as
-   perfect conductor (Neumann BC). H_t sampled near surface, then ESIM applied.
-   P = 3.90e-7 W (83% lower than FEM-full).
-   - Perfect conductor approximation overestimates shielding at xi=4.8
-   - Static field underestimates H_t (no eddy current redistribution)
+4. **Power formula**: Must use P = pi (not 2*pi) in 2D axisymmetric Poynting flux.
 
-### When ESIM Works Well
+### Remaining Issues
 
-ESIM accuracy depends on xi = R_wp / delta:
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| +40% P at xi=4.8 | 0th-order SIBC (flat slab) | Higher-order SIBC with curvature 1/R |
+| Z_s spatially uniform | Average H_t used | Per-element Z_s on boundary (CoefficientFunction) |
+| Cylinder vs slab | Bessel I0/I1 vs tanh | Z_cyl = rho*gamma*I0(gamma*R)/I1(gamma*R) |
 
-| xi | Regime | ESIM accuracy |
-|----|--------|---------------|
-| < 1 | Weak skin | Poor (current nearly uniform, ESIM not designed for this) |
-| 1-5 | Transitional | Fair (30-80% error vs FEM-full) |
-| 5-20 | Strong skin | Good (< 20% error) |
-| > 20 | Very strong | Excellent (< 5% error, ESIM's target regime) |
+### When Each Method is Best
 
-For **steel** at 50 kHz: mu_r ~ 500 -> delta ~ 0.04 mm -> xi ~ 250 -> **ESIM is excellent**.
-
-### Key Insight
-
-ESIM is designed for strong skin effect (induction heating of steel, high-frequency
-shielding). For moderate xi (copper at low frequency), FEM-full is more accurate
-but 30-50x more expensive in DOFs.
-
-**Recommendation**:
-- **Induction heating (steel, f > 10 kHz)**: Use ESIM (BEM or FEM)
-- **Moderate skin (copper, f ~ 1 kHz)**: Use FEM-full or FEM-BEM
-- **Quick parametric sweeps**: Use BEM-ESIM (fastest, surface DOFs only)
+| Method | Best for | P accuracy | Cost |
+|--------|----------|------------|------|
+| **FEM-full** | Reference, moderate xi | Exact (mesh-dependent) | Very high (skin mesh) |
+| **FEM-SIBC** (Karl) | Any xi, nonlinear BH | Good (xi>10), fair (xi~5) | Low (air mesh only) |
+| **BEM-ESIM** | Quick estimates, xi>10 | Good (no feedback) | Lowest (surface DOFs) |
 
 ### Scripts
 
 | Script | Method | Location |
 |--------|--------|----------|
 | `impedance_esim.py` | BEM-ESIM | `examples/cubit_panels/inductance/` |
-| `fem_esim_kelvin.py --mode esim` | FEM-ESIM | `examples/cubit_panels/inductance/` |
+| `fem_esim_kelvin.py --mode esim` | FEM-SIBC (Karl) | `examples/cubit_panels/inductance/` |
 | `fem_esim_kelvin.py --mode full` | FEM-full | `examples/cubit_panels/inductance/` |
 | `verify_esim.py` | ESIM vs NGSolve FEM 1D | `examples/cubit_panels/inductance/` |
 
-### ESIM Verification (1D Cell Problem)
+### ESIM 1D Cell Problem Verification
 
 The ESIM 1D cell problem itself (independent of BEM/FEM exterior) is verified
 against NGSolve H1 FEM (p=4) as independent method:
@@ -845,6 +868,18 @@ against NGSolve H1 FEM (p=4) as independent method:
 | Linear Z_s | Analytical rho*gamma*tanh(gamma*a) | 0.25% |
 | Linear Z_s | NGSolve H1 FEM (p=4) | 0.04% |
 | Nonlinear Z_s (steel BH) | NGSolve H1 FEM + Picard | 0.78% |
+
+### Literature
+
+SIBC references in `W:\03_文献・論文\00_電磁界解析\SIBC\`:
+
+| File | Topic |
+|------|-------|
+| `Surface Impedance Boundary Conditions a Comprehensive Approach.pdf` | 0th/higher-order SIBC theory |
+| `Course G2ELab 2018 - Derivation of High Order SIBCs - lesson 2.pdf` | Curvature correction derivation |
+| `Course G2ELab 2018 - FEM Formulation - lesson 4.pdf` | FEM weak form with SIBC |
+| `A_Nonlinear_Effective_Surface_Impedance_...pdf` | Hollaus ESIM (nonlinear, Karl iteration) |
+| `FEM and BEM implementations of a high order surface impedance...pdf` | High-order SIBC in FEM/BEM |
 
 ---
 
