@@ -841,13 +841,34 @@ Karl iteration:
 | Z_s spatially uniform | Average H_t used | Per-element Z_s on boundary (CoefficientFunction) |
 | Cylinder vs slab | Bessel I0/I1 vs tanh | Z_cyl = rho*gamma*I0(gamma*R)/I1(gamma*R) |
 
+### Cubit Panel: 2-Stage Design
+
+```
+[Solve L]  Stage 1: BEM (surface mesh only) -> coil inductance L
+[Solve P]  Stage 2: FEM-ESIM (auto air mesh) -> workpiece heating P
+```
+
+Stage 1 and Stage 2 are **independent** (Solve P does NOT depend on Solve L).
+
+Stage 2 pipeline (`calc_heating.py`):
+1. Extract coil/workpiece geometry from Cubit blocks (bounding boxes)
+2. Auto-generate 2D axisymmetric mesh (OCC: air + coil + workpiece hole + Kelvin)
+3. FEM static solve (A-formulation, coil = J0 source, ~0.4s)
+4. Sample H_t on workpiece surface from grad(u)
+5. ESIM cell problem per surface segment -> P density [W/m^2]
+6. Return P distribution + total P as JSON
+
+User only needs to define Cubit blocks: `conductor`, `source`, `sink`, `workpiece`.
+No air mesh creation needed.
+
 ### When Each Method is Best
 
 | Method | Best for | P accuracy | Cost |
 |--------|----------|------------|------|
 | **FEM-full** | Reference, moderate xi | Exact (mesh-dependent) | Very high (skin mesh) |
 | **FEM-SIBC** (Karl) | Any xi, nonlinear BH | Good (xi>10), fair (xi~5) | Low (air mesh only) |
-| **BEM-ESIM** | Quick estimates, xi>10 | Good (no feedback) | Lowest (surface DOFs) |
+| **FEM-ESIM** (panel) | Design, steel induction heating | Good (xi>10) | Lowest (auto mesh) |
+| **BEM-ESIM** | Quick L+P, xi>10 | Good (no feedback) | Low (surface DOFs) |
 
 ### Scripts
 
