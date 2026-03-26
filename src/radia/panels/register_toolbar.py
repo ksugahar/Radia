@@ -643,7 +643,45 @@ class InductanceDialog(QDialog):
 		self.fes_spin.setToolTip("HDivSurface basis order (0 = RWG)")
 		port_group.addWidget(self.fes_spin, 3, 1)
 
+		port_group.addWidget(QLabel("Workpiece block:"), 4, 0)
+		self.workpiece_label = QLabel("(none)")
+		self.workpiece_label.setStyleSheet("font-weight: bold; color: gray;")
+		port_group.addWidget(self.workpiece_label, 4, 1)
+
 		layout.addLayout(port_group)
+
+		# --- ESIM / Dowell settings (visible only when workpiece found) ---
+		self.esim_group = QGroupBox("Workpiece Surface Impedance")
+		esim_layout = QGridLayout(self.esim_group)
+
+		esim_layout.addWidget(QLabel("Model:"), 0, 0)
+		self.model_combo = QComboBox()
+		self.model_combo.addItems(["ESIM", "Dowell"])
+		self.model_combo.setToolTip("ESIM: 1D cell problem (nonlinear OK)\n"
+		                            "Dowell: analytical (linear only)")
+		esim_layout.addWidget(self.model_combo, 0, 1)
+
+		esim_layout.addWidget(QLabel("Material:"), 1, 0)
+		self.material_combo = QComboBox()
+		self.material_combo.addItems(["Steel", "Copper", "Aluminum"])
+		esim_layout.addWidget(self.material_combo, 1, 1)
+
+		esim_layout.addWidget(QLabel("Frequency [Hz]:"), 2, 0)
+		self.freq_edit = QLineEdit("50000")
+		esim_layout.addWidget(self.freq_edit, 2, 1)
+
+		esim_layout.addWidget(QLabel("Sigma [S/m]:"), 3, 0)
+		self.sigma_edit = QLineEdit("2.0e6")
+		self.material_combo.currentTextChanged.connect(self._on_material_changed)
+		esim_layout.addWidget(self.sigma_edit, 3, 1)
+
+		esim_layout.addWidget(QLabel("Half-thickness [m]:"), 4, 0)
+		self.thickness_edit = QLineEdit("0.005")
+		self.thickness_edit.setToolTip("Slab model half-thickness for skin effect")
+		esim_layout.addWidget(self.thickness_edit, 4, 1)
+
+		self.esim_group.setVisible(False)
+		layout.addWidget(self.esim_group)
 
 		# --- Post settings (B-field volume) ---
 		post_group = QGridLayout()
@@ -874,10 +912,16 @@ class InductanceDialog(QDialog):
 			except Exception:
 				pass
 
+	def _on_material_changed(self, text):
+		"""Update sigma when material combo changes."""
+		sigma_map = {"Steel": "2.0e6", "Copper": "5.8e7", "Aluminum": "3.5e7"}
+		self.sigma_edit.setText(sigma_map.get(text, "2.0e6"))
+
 	def _populate_blocks(self):
-		"""Auto-detect source/sink from Cubit block names."""
+		"""Auto-detect source/sink/workpiece from Cubit block names."""
 		self._source_block = None
 		self._sink_block = None
+		self._workpiece_block = None
 		try:
 			for bid in cubit.get_block_id_list():
 				try:
@@ -886,6 +930,8 @@ class InductanceDialog(QDialog):
 						self._source_block = name
 					elif name == "sink":
 						self._sink_block = name
+					elif name == "workpiece":
+						self._workpiece_block = name
 				except Exception:
 					pass
 		except Exception:
@@ -904,6 +950,16 @@ class InductanceDialog(QDialog):
 		else:
 			self.sink_label.setText("(not found)")
 			self.sink_label.setStyleSheet("font-weight: bold; color: red;")
+
+		# Workpiece block detection -> show/hide ESIM group
+		if self._workpiece_block:
+			self.workpiece_label.setText(self._workpiece_block)
+			self.workpiece_label.setStyleSheet("font-weight: bold; color: green;")
+			self.esim_group.setVisible(True)
+		else:
+			self.workpiece_label.setText("(none)")
+			self.workpiece_label.setStyleSheet("font-weight: bold; color: gray;")
+			self.esim_group.setVisible(False)
 
 		# Enable Solve/Post when both source and sink are found + Python available
 		can_solve = (self._source_block is not None
@@ -970,6 +1026,17 @@ class InductanceDialog(QDialog):
 			"--fes-order", str(fes_order),
 			"--output", self._json_output,
 		]
+
+		# ESIM / Dowell parameters (only when workpiece block exists)
+		if self._workpiece_block:
+			args += [
+				"--workpiece", self._workpiece_block,
+				"--impedance-model", self.model_combo.currentText().lower(),
+				"--frequency", self.freq_edit.text().strip(),
+				"--sigma", self.sigma_edit.text().strip(),
+				"--half-thickness", self.thickness_edit.text().strip(),
+				"--material", self.material_combo.currentText().lower(),
+			]
 
 		# Run async via QProcess (non-blocking)
 		self._process = QProcess(self)
@@ -1107,6 +1174,10 @@ class InductanceDialog(QDialog):
 				self.debug_text.setText("B-distribution written, finalizing...")
 			elif line.startswith("B_FIELD_ERROR:"):
 				self.debug_text.setText("B field: " + line.split(":", 1)[1])
+			elif line.startswith("ESIM_START:"):
+				self.debug_text.setText("Computing workpiece impedance (ESIM)...")
+			elif line.startswith("ESIM_DONE:"):
+				self.debug_text.setText("Workpiece impedance done. " + line.split(":", 1)[1])
 
 	def _on_extract_finished(self, exit_code, exit_status):
 		"""Handle async extraction result."""
@@ -1284,7 +1355,7 @@ class InductanceDialog(QDialog):
 			L_str = f"{L:.4e} H"
 
 		rows = [
-			("Inductance", L_str),
+			("Inductance (coil)", L_str),
 			("DOFs (edges)", str(data.get("n_dofs", ""))),
 			("Mesh export", f"{data.get('t_export', 0):.1f} s" if data.get('t_export') else "-"),
 			("Assembly", f"{data.get('t_assembly', 0):.1f} s" if data.get('t_assembly') else "-"),
@@ -1298,6 +1369,39 @@ class InductanceDialog(QDialog):
 			("Curve order", str(data.get("curve_order", ""))),
 			("FES order", str(data.get("fes_order", ""))),
 		]
+
+		# Workpiece ESIM/Dowell results
+		if "wp_R_effective" in data:
+			freq = data.get("wp_frequency", 0)
+			R = data.get("wp_R_effective", 0)
+			P = data.get("wp_P_total", 0)
+			Q = data.get("wp_Q_total", 0)
+			delta_min = data.get("wp_delta_min", 0)
+			delta_max = data.get("wp_delta_max", 0)
+			n_panels = data.get("wp_n_panels", 0)
+			model = data.get("wp_model", "")
+			material = data.get("wp_material", "")
+
+			rows.append(("", ""))  # separator
+			rows.append(("--- Workpiece ---", f"{model.upper()} / {material}"))
+			rows.append(("Frequency", f"{freq:.0f} Hz"))
+			rows.append(("R (workpiece)", f"{R:.4e} Ohm"))
+			rows.append(("P (workpiece)", f"{P:.4e} W"))
+			rows.append(("Q (workpiece)", f"{Q:.4e} var"))
+			if delta_min > 0:
+				rows.append(("Skin depth", f"{delta_min*1e3:.3f} - {delta_max*1e3:.3f} mm"))
+			rows.append(("Panels", str(n_panels)))
+
+			# Total impedance
+			omega = 2 * 3.14159265 * freq
+			X_coil = omega * L
+			Z_total_R = R
+			Z_total_X = X_coil + data.get("wp_X_effective", 0)
+			rows.append(("", ""))
+			rows.append(("--- Total (I=1A) ---", ""))
+			rows.append(("R_total", f"{Z_total_R:.4e} Ohm"))
+			rows.append(("X_total", f"{Z_total_X:.4e} Ohm"))
+			rows.append(("|Z_total|", f"{(Z_total_R**2 + Z_total_X**2)**0.5:.4e} Ohm"))
 
 		self.result_table.setRowCount(len(rows))
 		for i, (param, val) in enumerate(rows):
