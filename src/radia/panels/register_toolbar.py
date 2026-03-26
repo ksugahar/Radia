@@ -721,14 +721,20 @@ class InductanceDialog(QDialog):
 		# --- Action buttons ---
 		btn_row = QHBoxLayout()
 		btn_row.addStretch()
-		self.solve_btn = QPushButton("Solve")
+		self.solve_btn = QPushButton("Solve L")
 		self.solve_btn.clicked.connect(self._extract)
 		self.solve_btn.setEnabled(False)
+		self.solve_btn.setToolTip("Stage 1: BEM inductance (surface mesh only)")
 		btn_row.addWidget(self.solve_btn)
+		self.solve_p_btn = QPushButton("Solve P")
+		self.solve_p_btn.clicked.connect(self._solve_heating)
+		self.solve_p_btn.setEnabled(False)
+		self.solve_p_btn.setToolTip("Stage 2: FEM-ESIM workpiece heating (auto air mesh)")
+		btn_row.addWidget(self.solve_p_btn)
 		self.post_btn = QPushButton("Post")
 		self.post_btn.clicked.connect(self._post_process)
 		self.post_btn.setEnabled(True)
-		self.post_btn.setToolTip("B-field + GMSH export (runs Solve first if needed)")
+		self.post_btn.setToolTip("B-field + GMSH export (runs Solve L first if needed)")
 		btn_row.addWidget(self.post_btn)
 		self.open_gmsh_btn = QPushButton("Open Result")
 		self.open_gmsh_btn.clicked.connect(self._open_gmsh_result)
@@ -961,13 +967,16 @@ class InductanceDialog(QDialog):
 			self.workpiece_label.setStyleSheet("font-weight: bold; color: gray;")
 			self.esim_group.setVisible(False)
 
-		# Enable Solve/Post when both source and sink are found + Python available
-		can_solve = (self._source_block is not None
-		             and self._sink_block is not None
-		             and self._ext_python is not None)
-		self.solve_btn.setEnabled(can_solve)
-		self.post_btn.setEnabled(can_solve)
-		if not can_solve and self._ext_python:
+		# Enable Solve L when source+sink found, Solve P when workpiece found
+		can_solve_L = (self._source_block is not None
+		               and self._sink_block is not None
+		               and self._ext_python is not None)
+		can_solve_P = (self._workpiece_block is not None
+		               and self._ext_python is not None)
+		self.solve_btn.setEnabled(can_solve_L)
+		self.post_btn.setEnabled(can_solve_L)
+		self.solve_p_btn.setEnabled(can_solve_P)
+		if not can_solve_L and self._ext_python:
 			self.debug_text.setText(
 				'Define blocks named "source" and "sink" in your journal.')
 
@@ -1044,6 +1053,142 @@ class InductanceDialog(QDialog):
 		self._process.finished.connect(self._on_extract_finished)
 		self._gmsh_launched = False
 		self._process.start(self._ext_python, args)
+
+	def _solve_heating(self):
+		"""Stage 2: FEM-ESIM workpiece heating (independent from BEM)."""
+		if not self._ext_python:
+			QMessageBox.warning(self, "Error", "External Python not found.")
+			return
+		if not self._workpiece_block:
+			QMessageBox.warning(self, "Error", 'Block named "workpiece" not found.')
+			return
+
+		self.solve_p_btn.setEnabled(False)
+		self.solve_p_btn.setText("Solving P...")
+		self._set_result("Status", "Computing heating (FEM-ESIM)...")
+
+		# Get workpiece geometry from Cubit block bounding box
+		try:
+			wp_vids = []
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				if name == self._workpiece_block:
+					for vid in cubit.get_block_volumes(bid):
+						wp_vids.append(vid)
+					break
+			if not wp_vids:
+				# Fallback: use all volumes not in conductor/source/sink blocks
+				wp_vids = list(cubit.get_entities("volume"))
+
+			# Bounding box of workpiece
+			bb = cubit.get_bounding_box("volume", wp_vids[0])
+			# bb = (xmin, xmax, ymin, ymax, zmin, zmax, ...)
+			r_wp = max(abs(bb[1]), abs(bb[0]), abs(bb[3]), abs(bb[2]))
+			h_wp = abs(bb[5] - bb[4])
+		except Exception:
+			r_wp = 0.01
+			h_wp = 0.02
+
+		# Get coil geometry (from conductor block bounding box)
+		try:
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				if name == "conductor":
+					cond_vids = list(cubit.get_block_volumes(bid))
+					if cond_vids:
+						bb_c = cubit.get_bounding_box("volume", cond_vids[0])
+						r_coil = (abs(bb_c[1]) + abs(bb_c[0])) / 2
+						a_coil = min(abs(bb_c[1] - bb_c[0]),
+						             abs(bb_c[5] - bb_c[4])) / 4
+					break
+		except Exception:
+			r_coil = 0.03
+			a_coil = 0.003
+
+		freq = float(self.freq_edit.text().strip() or "50000")
+		sigma_str = self.sigma_edit.text().strip() or "2e6"
+		sigma_val = float(sigma_str)
+		material = self.material_combo.currentText().lower()
+
+		# Build command
+		calc_script = os.path.join(_this_dir, "calc_heating.py")
+		tmpdir = tempfile.mkdtemp(prefix="radia_heat_")
+		self._heat_json = os.path.join(tmpdir, "heat_result.json").replace("\\", "/")
+
+		args = [
+			calc_script,
+			"--r-coil", str(round(r_coil, 6)),
+			"--a-coil", str(round(a_coil, 6)),
+			"--r-wp", str(round(r_wp, 6)),
+			"--h-wp", str(round(h_wp, 6)),
+			"--frequency", str(freq),
+			"--sigma", str(sigma_val),
+			"--material", material,
+			"--output", self._heat_json,
+		]
+
+		self._process = QProcess(self)
+		self._process.readyReadStandardError.connect(self._on_stderr)
+		self._process.finished.connect(self._on_heating_finished)
+		self._process.start(self._ext_python, args)
+
+	def _on_heating_finished(self, exit_code, exit_status):
+		"""Handle FEM-ESIM heating result."""
+		self.solve_p_btn.setEnabled(True)
+		self.solve_p_btn.setText("Solve P")
+		self._process = None
+
+		data = None
+		json_path = getattr(self, '_heat_json', '')
+		if json_path and os.path.exists(json_path):
+			try:
+				with open(json_path, "r") as f:
+					data = json.load(f)
+			except Exception:
+				pass
+
+		if data is None:
+			self._set_result("Status", f"Heating error (exit code {exit_code})")
+			return
+		if "error" in data:
+			QMessageBox.critical(self, "Error", data["error"])
+			return
+
+		# Display heating results
+		P = data.get("P_total", 0)
+		Q = data.get("Q_total", 0)
+		L = data.get("L_coil", 0)
+		delta = data.get("delta", 0)
+		freq = data.get("frequency", 0)
+		material = data.get("material", "")
+
+		rows = [
+			("--- FEM-ESIM Heating ---", f"{material}, {freq:.0f} Hz"),
+			("P (workpiece)", f"{P:.4e} W"),
+			("Q (workpiece)", f"{Q:.4e} var"),
+			("L (coil, FEM)", f"{L*1e9:.2f} nH"),
+			("Skin depth", f"{delta*1e3:.3f} mm"),
+			("Panels", str(data.get("n_panels", ""))),
+			("DOFs (FEM)", str(data.get("ndof", ""))),
+			("Time: mesh", f"{data.get('t_mesh', 0):.1f} s"),
+			("Time: solve", f"{data.get('t_solve', 0):.1f} s"),
+			("Time: ESIM", f"{data.get('t_esim', 0):.1f} s"),
+		]
+
+		# P at different currents
+		for I in [10, 100, 1000]:
+			rows.append((f"P at {I} A", f"{P * I**2:.2f} W"))
+
+		self.result_table.setRowCount(len(rows))
+		for i, (param, val) in enumerate(rows):
+			self.result_table.setItem(i, 0, QTableWidgetItem(param))
+			item = QTableWidgetItem(val)
+			item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+			self.result_table.setItem(i, 1, item)
+
+		self.debug_text.setText(
+			f"Heating done: P={P:.4e} W (per 1A), "
+			f"mesh={data.get('t_mesh',0):.1f}s, solve={data.get('t_solve',0):.1f}s")
 
 	def _post_process(self):
 		"""Run post-processing (B-field + GMSH export) via external Python.
@@ -1178,6 +1323,12 @@ class InductanceDialog(QDialog):
 				self.debug_text.setText("Computing workpiece impedance (ESIM)...")
 			elif line.startswith("ESIM_DONE:"):
 				self.debug_text.setText("Workpiece impedance done. " + line.split(":", 1)[1])
+			elif line.startswith("HEATING_MESH:"):
+				self.debug_text.setText("Building FEM-ESIM mesh (auto)...")
+			elif line.startswith("HEATING_SOLVE:"):
+				self.debug_text.setText("FEM static solve...")
+			elif line.startswith("HEATING_ESIM:"):
+				self.debug_text.setText("Computing ESIM surface impedance...")
 
 	def _on_extract_finished(self, exit_code, exit_status):
 		"""Handle async extraction result."""

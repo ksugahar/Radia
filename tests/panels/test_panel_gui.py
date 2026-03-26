@@ -275,15 +275,24 @@ class TestResultDisplay:
 # ============================================================
 class TestSolveButtonState:
 
-    def test_solve_enabled_with_blocks(self, dialog_no_workpiece):
-        """Solve button should reflect external Python availability."""
+    def test_solve_L_enabled_with_blocks(self, dialog_no_workpiece):
+        """Solve L button should reflect source+sink+python availability."""
         dlg = dialog_no_workpiece
-        # External Python may or may not be found in test env
-        # But source+sink are found, so state depends on _ext_python
         if dlg._ext_python:
             assert dlg.solve_btn.isEnabled() is True
         else:
             assert dlg.solve_btn.isEnabled() is False
+
+    def test_solve_P_disabled_without_workpiece(self, dialog_no_workpiece):
+        """Solve P button disabled without workpiece block."""
+        dlg = dialog_no_workpiece
+        assert dlg.solve_p_btn.isEnabled() is False
+
+    def test_solve_P_enabled_with_workpiece(self, dialog_with_workpiece):
+        """Solve P button enabled when workpiece block found."""
+        dlg = dialog_with_workpiece
+        if dlg._ext_python:
+            assert dlg.solve_p_btn.isEnabled() is True
 
     def test_solve_disabled_without_blocks(self, qapp):
         """No blocks -> solve disabled."""
