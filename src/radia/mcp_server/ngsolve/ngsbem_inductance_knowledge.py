@@ -1258,17 +1258,24 @@ L = MU_0 * eigvals[1] * R / a
 
 
 NGBEM_ESIM_WORKPIECE = """
-# BEM Coil + ESIM Workpiece Coupling
+# Two-Stage Induction Heating Design
 
 ## Overview
 
-The inductance panel supports coupled BEM + ESIM analysis for induction heating.
-When a `workpiece` block is defined in the Cubit model, the panel computes:
+The inductance panel supports a 2-stage workflow for induction heating design:
 
-1. **Coil current J** via BEM (source/sink saddle point EFIE, LaplaceSL)
-2. **H at workpiece** via Biot-Savart from coil J
-3. **Surface impedance** via ESIM (nonlinear) or Dowell (analytical)
-4. **Total power loss P, reactive Q, resistance R** integrated over workpiece
+**Stage 1: Solve L** (BEM, fast, surface mesh only)
+- Coil inductance L from source/sink saddle point EFIE
+- Quick design exploration, no volume mesh needed
+
+**Stage 2: Solve P** (FEM-ESIM, independent from BEM)
+- Workpiece heating power P via FEM + ESIM
+- Auto-generated 2D axisymmetric air mesh (Kelvin open boundary)
+- Coil modeled as J0 current source (no BEM dependency)
+- ESIM surface impedance on workpiece (no skin mesh needed)
+
+When a `workpiece` block is defined in the Cubit model, the panel shows
+"Solve P" button and ESIM settings (material, frequency, sigma).
 
 ## Cubit Setup
 
