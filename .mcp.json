@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "mcp-server-radia": {
+      "command": "mcp-server-radia",
+      "args": []
+    },
+    "mcp-server-ngsolve": {
+      "command": "mcp-server-ngsolve",
+      "args": []
+    },
+    "mcp-server-cubit": {
+      "command": "mcp-server-cubit",
+      "args": []
+    }
+  }
+}

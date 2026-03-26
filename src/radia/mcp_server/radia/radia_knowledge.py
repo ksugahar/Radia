@@ -3105,6 +3105,72 @@ shield = ShieldBEMSIBC(mesh, sigma=3.7e7, mu_r=1.0)
 | Solver | One-shot | Picard iteration |
 | Best for | Cu, Al | Steel, iron, ferrite |
 
+## 4. BEM Coil + ESIM Workpiece (Induction Heating)
+
+Coupled analysis: BEM computes coil current, ESIM computes workpiece heating.
+
+Pipeline:
+1. BEM (source/sink saddle point EFIE) -> coil surface current J
+2. Biot-Savart from J -> H at workpiece surface panels
+3. ESIM cell problem (or Dowell analytical) -> Z_s(H), P', Q' per panel
+4. Integration over surface -> total R, P, Q, effective impedance
+
+```python
+from impedance_esim import run
+
+# Torus coil (R=30mm) + steel cylinder workpiece at center
+result = run(
+    material='steel',       # Nonlinear BH curve
+    frequency=50000,        # 50 kHz
+    R=0.030,                # Coil major radius [m]
+    a=0.003,                # Coil wire radius [m]
+    wp_radius=0.010,        # Workpiece radius [m]
+    wp_height=0.030,        # Workpiece height [m]
+)
+
+# Scale to actual current (results are per unit current I=1A)
+I = 100.0  # Amperes
+P_heating = result['P_total'] * I**2       # Total heating power [W]
+R_wp = result['R_effective']               # Workpiece resistance [Ohm]
+L_coil = result['L_coil']                  # Coil inductance [H]
+```
+
+Typical results (1-turn coil, steel, 50 kHz):
+- P = 11.5 W at 100A (scales as N^2 * I^2 for N-turn coil)
+- Skin depth = 0.040 mm (steel, high mu)
+- Power factor cos(phi) ~ 0.08 (resonant compensation needed)
+
+Model selection:
+- **ESIM**: Nonlinear BH, Picard iteration, accurate for steel/iron/ferrite
+- **Dowell**: Analytical Z_s = (rho/a)*gamma*a*tanh(gamma*a), linear materials only
+
+### Cubit Panel Workpiece Block
+
+The Cubit inductance panel auto-detects a `workpiece` block:
+
+```
+block N add volume <workpiece_volume_id>
+block N name "workpiece"
+```
+
+When present, the panel shows ESIM/Dowell settings:
+- Model: ESIM / Dowell
+- Material: Steel / Copper / Aluminum (sigma auto-set)
+- Frequency, sigma, half-thickness
+- Results: L (coil), R (workpiece), P, Q, skin depth, |Z_total|
+
+### Verification
+
+ESIM verified against NGSolve H1 FEM (p=4) as independent method:
+
+| Test | Max error |
+|------|-----------|
+| Linear Z_s vs analytical | 0.25% |
+| Linear Z_s vs NGSolve FEM | 0.04% |
+| Nonlinear Z_s vs NGSolve FEM + Picard | 0.78% |
+
+Run: `python examples/cubit_panels/inductance/verify_esim.py`
+
 ## Key Files
 
 | File | Class/Function | Purpose |
@@ -3115,7 +3181,9 @@ shield = ShieldBEMSIBC(mesh, sigma=3.7e7, mu_r=1.0)
 | `esim_cell_problem.py` | `generate_esi_table_from_bh_curve()` | Main entry point |
 | `esim_coupled_solver.py` | `ESIMCoupledSolver` | PEEC + ESIM coupled solver |
 | `esim_workpiece.py` | `ESIMWorkpiece` | 3D workpiece with ESI tables |
-| `esim_vtk_export.py` | `ESIMVTKOutput` | VTK visualization |
+| `panels/calc_inductance.py` | `_compute_workpiece_impedance()` | Panel ESIM/Dowell backend |
+| `examples/.../impedance_esim.py` | `run()` | Standalone BEM+ESIM analysis |
+| `examples/.../verify_esim.py` | `test1..4()` | ESIM vs NGSolve FEM verification |
 """
 
 RADIA_BUILD_AND_RELEASE = """

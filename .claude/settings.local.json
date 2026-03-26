@@ -928,7 +928,9 @@
       "Bash(# Check new install site-packages ls \"\"S:/NGSolve/01_GitHub/install_ksugahar_new/Lib/site-packages/\"\")",
       "Bash(tar tf:*)",
       "Bash(export PATH=\"/c/Program Files/Python312/Library/bin:$PATH\")",
-      "Bash(PATH=\"/c/Program Files/Python312/Library/bin:$PATH\")"
+      "Bash(PATH=\"/c/Program Files/Python312/Library/bin:$PATH\")",
+      "Skill(update-config)",
+      "Skill(update-config:*)"
     ],
     "deny": [],
     "ask": [],
