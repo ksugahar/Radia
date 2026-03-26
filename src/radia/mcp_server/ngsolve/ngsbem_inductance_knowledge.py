@@ -1257,6 +1257,72 @@ L = MU_0 * eigvals[1] * R / a
 """
 
 
+NGBEM_ESIM_WORKPIECE = """
+# BEM Coil + ESIM Workpiece Coupling
+
+## Overview
+
+The inductance panel supports coupled BEM + ESIM analysis for induction heating.
+When a `workpiece` block is defined in the Cubit model, the panel computes:
+
+1. **Coil current J** via BEM (source/sink saddle point EFIE, LaplaceSL)
+2. **H at workpiece** via Biot-Savart from coil J
+3. **Surface impedance** via ESIM (nonlinear) or Dowell (analytical)
+4. **Total power loss P, reactive Q, resistance R** integrated over workpiece
+
+## Cubit Setup
+
+```
+# Coil blocks (existing)
+block 1 add volume <coil_vid>
+block 1 name "conductor"
+block 2 add tri in surface <source_sid>
+block 2 name "source"
+block 3 add tri in surface <sink_sid>
+block 3 name "sink"
+
+# Workpiece block (NEW)
+block 5 add volume <workpiece_vid>
+block 5 name "workpiece"
+```
+
+## Panel Settings (auto-visible when workpiece block found)
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| Model | ESIM (nonlinear BH) / Dowell (analytical) | ESIM |
+| Material | Steel / Copper / Aluminum | Steel |
+| Frequency | Operating frequency [Hz] | 50000 |
+| Sigma | Conductivity [S/m] (auto-set by material) | 2.0e6 |
+| Half-thickness | Slab model parameter [m] | 0.005 |
+
+## Result Table (additional rows when workpiece present)
+
+| Row | Description |
+|-----|-------------|
+| R (workpiece) | Effective resistance [Ohm] |
+| P (workpiece) | Active power (heating) [W] |
+| Q (workpiece) | Reactive power [var] |
+| Skin depth | delta range [mm] |
+| R_total | Total circuit resistance |
+| X_total | Total circuit reactance |
+| \\|Z_total\\| | Total impedance magnitude |
+
+## Scaling
+
+Results are for **unit current I=1A**. For actual current I:
+- P_actual = P_result * I^2
+- For N-turn coil: P_actual = P_result * (N*I)^2
+
+## Standalone Script
+
+```bash
+python examples/cubit_panels/inductance/impedance_esim.py --material steel --freq 50000
+python examples/cubit_panels/inductance/impedance_esim.py --sweep  # frequency sweep
+```
+"""
+
+
 def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
     """Return ngsolve.bem inductance extraction documentation by topic."""
     topics = {
@@ -1268,6 +1334,7 @@ def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
         "examples": NGBEM_EXAMPLES,
         "best_practices": NGBEM_BEST_PRACTICES,
         "hodge": NGBEM_HODGE_DECOMPOSITION,
+        "esim_workpiece": NGBEM_ESIM_WORKPIECE,
         # Aliases
         "cubit": NGBEM_CUBIT_WORKFLOW,
         "setgeominfo": NGBEM_CUBIT_WORKFLOW,
@@ -1276,6 +1343,8 @@ def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
         "weggler": NGBEM_STABILIZED,
         "harmonic": NGBEM_HODGE_DECOMPOSITION,
         "topology": NGBEM_HODGE_DECOMPOSITION,
+        "workpiece": NGBEM_ESIM_WORKPIECE,
+        "induction_heating": NGBEM_ESIM_WORKPIECE,
     }
 
     topic = topic.lower().strip()
@@ -1285,13 +1354,14 @@ def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
             NGBEM_OVERVIEW, NGBEM_API, NGBEM_CUBIT_WORKFLOW,
             NGBEM_CURVE_ORDER_STUDY, NGBEM_STABILIZED,
             NGBEM_EXAMPLES, NGBEM_BEST_PRACTICES,
-            NGBEM_HODGE_DECOMPOSITION,
+            NGBEM_HODGE_DECOMPOSITION, NGBEM_ESIM_WORKPIECE,
         ]
         return "\n\n".join(main)
     elif topic in topics:
         return topics[topic]
     else:
         available = [k for k in topics if k not in (
-            "cubit", "setgeominfo", "inductance", "laplace", "weggler"
+            "cubit", "setgeominfo", "inductance", "laplace", "weggler",
+            "workpiece", "induction_heating",
         )]
         return f"Unknown topic: '{topic}'. Available: {', '.join(available)}"

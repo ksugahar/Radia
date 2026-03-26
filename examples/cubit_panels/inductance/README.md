@@ -1,8 +1,11 @@
-# BEM Inductance Extraction (Source/Sink Saddle Point EFIE)
+# BEM Inductance + ESIM Surface Impedance
 
 Self-inductance extraction using `ngsolve.bem.LaplaceSL` with source/sink constrained EFIE.
+Optional workpiece surface impedance (ESIM/Dowell) for induction heating analysis.
 
 ## Method
+
+### Inductance (BEM)
 
 Solves the constrained EFIE on the conductor surface:
 
@@ -21,6 +24,20 @@ Inductance: `L = mu_0 * J^T @ SL @ J`
 
 B-distribution: direct Biot-Savart `B(x) = mu_0/(4pi) * sum J_e x r / |r|^3 * A_e`
 
+### Workpiece Surface Impedance (ESIM/Dowell)
+
+When a `workpiece` block is defined, the pipeline extends:
+
+1. **BEM** on coil surface -> surface current J
+2. **Biot-Savart** from J -> H at workpiece surface panels
+3. **ESIM** or **Dowell** -> surface impedance Z_s(H), power loss P per panel
+4. Integration -> total R, P, Q for workpiece
+
+**ESIM** (Effective Surface Impedance Method): solves 1D cell problem
+`rho * d^2H/dz^2 + j*omega*mu(|H|)*H = 0` per panel. Handles nonlinear BH curves.
+
+**Dowell**: analytical formula `Z_s = (rho/a) * gamma*a * tanh(gamma*a)` for linear materials.
+
 ## Key Settings
 
 - **`use_fmm=False`**: Reproducible results, faster dense extraction
@@ -29,6 +46,8 @@ B-distribution: direct Biot-Savart `B(x) = mu_0/(4pi) * sum J_e x r / |r|^3 * A_
 - **`mesh.Curve(2)`**: Quadratic curving for geometry accuracy
 
 ## Verification
+
+### Inductance
 
 Neumann formula: `L = mu_0 * R * (ln(8R/a) - 2)` = 149.67 nH (R=50mm, a=5mm)
 
@@ -40,12 +59,23 @@ Neumann formula: `L = mu_0 * R * (ln(8R/a) - 2)` = 149.67 nH (R=50mm, a=5mm)
 
 Note: -3.5% error is due to the 5-degree gap (not mesh error). Gap -> 0 converges to analytical.
 
+### ESIM
+
+Verified against NGSolve H1 FEM (p=4) as independent method (`verify_esim.py`):
+
+| Test | ESIM vs | Max error | Result |
+|------|---------|-----------|--------|
+| Linear Z_s | Analytical rho*gamma*tanh(gamma*a) | 0.25% | PASS |
+| Linear Z_s | NGSolve H1 FEM (p=4) | 0.04% | PASS |
+| Nonlinear Z_s (steel BH) | NGSolve H1 FEM + Picard | 0.78% | PASS |
+| H(z) profile | Analytical / FEM | < 0.2% | PASS |
+
 ## GMSH Visualization
 
 Results output as combined `inductance.geo` merging:
-- `inductance_B.msh` — volume |B| and B vector fields
-- `inductance_J.msh` — surface |J| and J vector fields
-- `inductance_coil.msh` — coil wireframe (1D line elements)
+- `inductance_B.msh` -- volume |B| and B vector fields
+- `inductance_J.msh` -- surface |J| and J vector fields
+- `inductance_coil.msh` -- coil wireframe (1D line elements)
 
 All views independently toggleable in GMSH Post-processing tree.
 `.geo` sets `Mesh.NumSubEdges = 4` for curved Tri6 display.
@@ -56,20 +86,65 @@ All views independently toggleable in GMSH Post-processing tree.
 |------|-------------|
 | `inductance_source_sink.py` | Source/sink EFIE (OCC gapped torus, standalone) |
 | `inductance_hodge.py` | Hodge decomposition (OCC closed torus, legacy) |
-| `test_bem_inductance.py` | Cubit torus: Hodge decomposition + GMSH export |
 | `inductance_torus.py` | Cubit model creation (torus with gap) |
 | `inductance_torus.cub5` | Pre-built Cubit model |
+| `impedance_esim.py` | BEM coil + ESIM workpiece coupled analysis |
+| `verify_esim.py` | ESIM verification against analytical + NGSolve FEM |
 
 ## Cubit Panel
 
 The Cubit panel (`src/radia/panels/calc_inductance.py`) provides GUI access:
 - Journal editor with default hex sweep torus
 - Auto source/sink block detection
+- **Workpiece block detection** -> ESIM/Dowell settings appear automatically
+- Model selection: ESIM (nonlinear) / Dowell (analytical)
+- Material selection: Steel / Copper / Aluminum (sigma auto-set)
+- Result table: L, R, P, Q, skin depth, total Z
 - Solve + Open GMSH button (combined J + B visualization)
+
+### Cubit blocks for workpiece
+
+```
+block N add volume <workpiece_vid>
+block N name "workpiece"
+```
+
+When the `workpiece` block exists, the panel shows additional settings:
+- **Model**: ESIM / Dowell
+- **Material**: Steel / Copper / Aluminum
+- **Frequency** [Hz]
+- **Sigma** [S/m] (auto-updated by material selection)
+- **Half-thickness** [m] (slab model parameter)
 
 ## Usage
 
 ```bash
-python inductance_source_sink.py         # OCC gapped torus (standalone)
-python inductance_hodge.py               # OCC closed torus (legacy)
+# Inductance only (no workpiece)
+python inductance_source_sink.py
+
+# BEM + ESIM coupled analysis
+python impedance_esim.py                        # Steel, 50 kHz (default)
+python impedance_esim.py --material copper      # Copper workpiece
+python impedance_esim.py --material steel --sweep  # Frequency sweep 1kHz-1MHz
+python impedance_esim.py --freq 100000 --wp-radius 0.015
+
+# ESIM verification
+python verify_esim.py           # All tests (analytical + NGSolve FEM)
+python verify_esim.py --test 3  # Nonlinear only
+```
+
+## Tests
+
+```bash
+# Layer 1: Computation (CI, no Cubit)
+pytest tests/panels/test_calc_inductance.py -v    # 8 tests, ~60s
+
+# Layer 2: UI logic (CI, no Cubit, no Qt)
+pytest tests/panels/test_panel_ui_logic.py -v     # 17 tests, ~0.5s
+
+# Layer 2b: GUI widget (CI, no Cubit, requires PySide6)
+pytest tests/panels/test_panel_gui.py -v          # 13 tests, ~1.5s
+
+# Layer 3: Integration (local only, requires Cubit)
+python tests/panels/test_panel_integration.py
 ```

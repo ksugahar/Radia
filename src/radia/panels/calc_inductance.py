@@ -56,7 +56,10 @@ def _setup_cubit():
 
 
 def extract_inductance(cub5_file, order, source_label="source",
-                       sink_label="sink", fes_order=0, msh_output=""):
+                       sink_label="sink", fes_order=0, msh_output="",
+                       workpiece="", impedance_model="esim",
+                       frequency=50000, sigma=2e6, half_thickness=0.005,
+                       material="steel"):
     """Extract self-inductance via source/sink saddle point EFIE.
 
     Args:
@@ -181,7 +184,7 @@ def extract_inductance(cub5_file, order, source_label="source",
     default_half = float(max(extent) * 0.65)
     default_maxh = float(max(extent) * 0.1)
 
-    return {
+    result = {
         "inductance_H": float(L_total),
         "n_dofs": n_J,
         "n_faces": n_f,
@@ -200,6 +203,191 @@ def extract_inductance(cub5_file, order, source_label="source",
         "mesh_vol": mesh_vol,
         "default_lxyz": round(default_half, 4),
         "default_maxh": round(default_maxh, 4),
+    }
+
+    # --- Workpiece surface impedance (ESIM or Dowell) ---
+    if workpiece:
+        sys.stderr.write("ESIM_START:computing workpiece impedance\n")
+        sys.stderr.flush()
+        wp_result = _compute_workpiece_impedance(
+            mesh, sol['gf_J'], workpiece, cubit,
+            impedance_model=impedance_model,
+            frequency=frequency, sigma=sigma,
+            half_thickness=half_thickness, material=material)
+        result.update(wp_result)
+        sys.stderr.write(f"ESIM_DONE:R={wp_result.get('wp_R_effective', 0):.4e}\n")
+        sys.stderr.flush()
+
+    return result
+
+
+def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
+                                  impedance_model="esim", frequency=50000,
+                                  sigma=2e6, half_thickness=0.005,
+                                  material="steel"):
+    """Compute workpiece surface impedance via ESIM or Dowell.
+
+    Pipeline:
+      1. Extract workpiece surface panels from Cubit block geometry
+      2. Biot-Savart from coil J -> H at workpiece panels
+      3. ESIM cell problem or Dowell formula -> Z_s, P, Q per panel
+      4. Integrate over surface
+
+    Returns dict with wp_* keys to merge into main result.
+    """
+    import math
+    from ngsolve import Integrate, CF, BND
+
+    rho = 1.0 / sigma
+    omega = 2 * math.pi * frequency
+
+    # --- Step 1: Workpiece surface panels from Cubit block ---
+    # Get workpiece volume IDs from block
+    wp_vol_ids = []
+    for bid in cubit_mod.get_block_id_list():
+        try:
+            name = cubit_mod.get_exodus_entity_name("block", bid)
+            if name == workpiece_label:
+                # Block may contain volumes
+                for vid in cubit_mod.get_block_volumes(bid):
+                    wp_vol_ids.append(vid)
+                break
+        except Exception:
+            pass
+
+    if not wp_vol_ids:
+        return {"wp_error": f"Workpiece block '{workpiece_label}' has no volumes"}
+
+    # Get workpiece surface panels: centroid + normal + area from Cubit surfaces
+    panels = []
+    for vid in wp_vol_ids:
+        surfaces = cubit_mod.get_relatives("volume", vid, "surface")
+        for sid in surfaces:
+            s = cubit_mod.surface(sid)
+            cx, cy, cz = s.center_point()
+            # Normal from Cubit (outward)
+            nx, ny, nz = s.normal_at(s.center_point())
+            area = s.area()
+            panels.append({
+                'center': np.array([cx, cy, cz]),
+                'normal': np.array([nx, ny, nz]),
+                'area': area,
+            })
+
+    if not panels:
+        return {"wp_error": "No workpiece surfaces found"}
+
+    n_panels = len(panels)
+
+    # --- Step 2: Biot-Savart H at workpiece panels ---
+    INV_4PI = 1.0 / (4.0 * np.pi)
+
+    elem_A = Integrate(CF(1), mesh_coil, VOL_or_BND=BND, element_wise=True)
+    elem_Jx = Integrate(gf_J[0], mesh_coil, VOL_or_BND=BND, element_wise=True)
+    elem_Jy = Integrate(gf_J[1], mesh_coil, VOL_or_BND=BND, element_wise=True)
+    elem_Jz = Integrate(gf_J[2], mesh_coil, VOL_or_BND=BND, element_wise=True)
+
+    centroids, areas_c, J_vecs = [], [], []
+    for el in mesh_coil.Elements(BND):
+        area = abs(elem_A[el.nr])
+        if area < 1e-30:
+            continue
+        jvec = np.array([elem_Jx[el.nr], elem_Jy[el.nr], elem_Jz[el.nr]]) / area
+        verts = [mesh_coil.vertices[v.nr].point for v in el.vertices]
+        c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
+        centroids.append(c)
+        areas_c.append(area)
+        J_vecs.append(jvec)
+
+    centroids = np.array(centroids)
+    areas_c = np.array(areas_c)
+    J_vecs = np.array(J_vecs)
+
+    obs_pts = np.array([p['center'] for p in panels])
+    dx = obs_pts[:, None, :] - centroids[None, :, :]
+    r = np.sqrt(np.maximum(np.sum(dx**2, axis=2), 1e-30))
+    r3_inv = areas_c[None, :] / (r ** 3)
+    cross = np.cross(J_vecs[None, :, :], dx)
+    H_panels = INV_4PI * np.sum(cross * r3_inv[:, :, None], axis=1)
+
+    # Tangential H
+    normals = np.array([p['normal'] for p in panels])
+    H_n = np.sum(H_panels * normals, axis=1, keepdims=True)
+    H_t_vec = H_panels - H_n * normals
+    H_t_mag = np.linalg.norm(H_t_vec, axis=1)
+
+    # --- Step 3: Surface impedance per panel ---
+    # BH curve for steel
+    STEEL_BH = [
+        [0.0, 0.0], [50.0, 0.10], [100.0, 0.25], [200.0, 0.55],
+        [500.0, 0.95], [1000.0, 1.20], [2000.0, 1.40], [5000.0, 1.55],
+        [10000.0, 1.65], [20000.0, 1.75], [50000.0, 1.90], [100000.0, 2.00],
+    ]
+
+    bh_curve = STEEL_BH if material == "steel" else None
+    mu_r = 1.0 if material in ("copper", "aluminum") else None
+
+    from esim_cell_problem import ESIMFiniteSlabSolver
+
+    P_total = 0.0
+    Q_total = 0.0
+    Z_sum = 0.0 + 0.0j
+    delta_min = float('inf')
+    delta_max = 0.0
+
+    if impedance_model == "esim":
+        solver = ESIMFiniteSlabSolver(
+            half_thickness=half_thickness, bh_curve=bh_curve,
+            sigma=sigma, frequency=frequency,
+            mu_r=mu_r if mu_r else 1.0, n_nodes=200)
+
+        for i in range(n_panels):
+            H0 = max(float(H_t_mag[i]), 1e-3)
+            sol = solver.solve(H0)
+            P_total += sol['P_prime'] * panels[i]['area']
+            Q_total += sol['Q_prime'] * panels[i]['area']
+            Z_sum += sol['Z'] * H_t_mag[i]**2 * panels[i]['area']
+            delta_min = min(delta_min, sol['delta'])
+            delta_max = max(delta_max, sol['delta'])
+
+    elif impedance_model == "dowell":
+        # Dowell: Z_s = (rho/a) * gamma*a * tanh(gamma*a)
+        mu_eff = MU_0 * (mu_r if mu_r else 1.0)
+        delta = math.sqrt(2 * rho / (omega * mu_eff)) if omega > 0 else 1e10
+        xi = half_thickness / delta
+        gamma_a = complex(1, 1) * xi
+        try:
+            Z_s = (rho / half_thickness) * gamma_a * np.tanh(gamma_a)
+        except OverflowError:
+            Z_s = (rho / half_thickness) * gamma_a
+
+        delta_min = delta_max = delta
+        for i in range(n_panels):
+            H0 = float(H_t_mag[i])
+            P_panel = Z_s.real * H0**2 / 2 * panels[i]['area']
+            Q_panel = Z_s.imag * H0**2 / 2 * panels[i]['area']
+            P_total += P_panel
+            Q_total += Q_panel
+            Z_sum += Z_s * H0**2 * panels[i]['area']
+
+    R_eff = float(Z_sum.real)
+    X_eff = float(Z_sum.imag)
+
+    return {
+        "wp_model": impedance_model,
+        "wp_material": material,
+        "wp_frequency": frequency,
+        "wp_sigma": sigma,
+        "wp_half_thickness": half_thickness,
+        "wp_n_panels": n_panels,
+        "wp_H_t_max": float(H_t_mag.max()),
+        "wp_H_t_min": float(H_t_mag.min()),
+        "wp_P_total": float(P_total),
+        "wp_Q_total": float(Q_total),
+        "wp_R_effective": R_eff,
+        "wp_X_effective": X_eff,
+        "wp_delta_min": float(delta_min),
+        "wp_delta_max": float(delta_max),
     }
 
 
@@ -642,6 +830,16 @@ def main():
     parser.add_argument("--sink", default="sink", help="Sink block name")
     parser.add_argument("--msh-output", default="", help="GMSH .msh output path")
     parser.add_argument("--output", default="", help="Output JSON file (optional)")
+    # Workpiece ESIM/Dowell args
+    parser.add_argument("--workpiece", default="", help="Workpiece block name")
+    parser.add_argument("--impedance-model", default="esim",
+                        choices=["esim", "dowell"], help="Surface impedance model")
+    parser.add_argument("--frequency", type=float, default=50000, help="Frequency [Hz]")
+    parser.add_argument("--sigma", type=float, default=2e6, help="Conductivity [S/m]")
+    parser.add_argument("--half-thickness", type=float, default=0.005,
+                        help="Slab half-thickness [m]")
+    parser.add_argument("--material", default="steel",
+                        choices=["steel", "copper", "aluminum"])
     # Post mode args
     parser.add_argument("--j-npy", default="", help="J_coeffs.npy path (post mode)")
     parser.add_argument("--mesh-vol", default="", help="surface_mesh.vol path (post mode)")
@@ -658,7 +856,13 @@ def main():
         if args.mode == "solve":
             result = extract_inductance(args.cub5, args.order,
                                         args.source, args.sink,
-                                        args.fes_order, args.msh_output)
+                                        args.fes_order, args.msh_output,
+                                        workpiece=args.workpiece,
+                                        impedance_model=args.impedance_model,
+                                        frequency=args.frequency,
+                                        sigma=args.sigma,
+                                        half_thickness=args.half_thickness,
+                                        material=args.material)
         else:
             result = post_process(args.mesh_vol, args.fes_order,
                                   args.msh_output, args.j_npy,
