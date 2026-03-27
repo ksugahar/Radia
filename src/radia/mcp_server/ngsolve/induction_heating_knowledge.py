@@ -961,6 +961,121 @@ vtk = VTKOutput(mesh, ..., legacy=False)  # Smaller, modern format
 """
 
 
+INDUCTION_HEATING_ESIM_KELVIN = """
+# ESIM + Kelvin Integration for Induction Heating
+
+## Motivation: Three Approaches to Workpiece Heating
+
+| Method | Workpiece mesh | Open BC | Skin mesh | Nonlinear BH |
+|--------|---------------|---------|-----------|--------------|
+| **FEM-full** (current) | Volume (skin layer) | Dirichlet/PML | Required | Via mu(H) |
+| **FEM-ESIM + Kelvin** (target) | Surface only (SIBC) | Kelvin (exact) | NOT needed | Via ESIM Z_s(H) |
+| **BEM-ESIM** | None (panels) | Exact (BEM) | NOT needed | Via ESIM Z_s(H) |
+
+FEM-ESIM + Kelvin combines the best: no skin mesh, exact open BC, nonlinear BH.
+
+## Reference: Go-Tech Toymodel (FEM-full, production code)
+
+Source: `W:\\31_Go-Tech\\10_誘導加熱の解析\\2025_09_20_toymodel_Gmsh\\NGSolve`
+
+### A-Phi Formulation (3D, frequency domain)
+
+```python
+# FE spaces: HCurl (A) + H1 (phi on coil only)
+fesA = HCurl(mesh, order=order, nograds=True, dirichlet="...", complex=True)
+fesPhi = H1(mesh, order=order, definedon="coil_main|coil_skin", dirichlet="...", complex=True)
+fesAPhi = fesA * fesPhi
+(A, phi), (N, psi) = fesAPhi.TnT()
+
+# Bilinear form
+s = 1j * 2 * pi * freq
+a += nu * curl(A) * curl(N) * dx                           # curl-curl
+a += 1e-6 * nu * A * N * dx                                # gauge regularization
+a += s * sigma * (A + grad(phi)) * (N + grad(psi)) * dx("coil_...")  # eddy current
+
+# Current scaling: solve for arbitrary I, then scale to target
+I_out = Integrate(J * grad(psi) * dx("coil_..."), mesh)  # computed current
+B = curl(gfA) * I_target / I_out                          # scale to I_target
+E = -s * (gfA + grad(gfPhi)) * I_target / I_out
+Q = 0.5 * sigma * InnerProduct(E, E).real                 # Joule heat [W/m^3]
+```
+
+### Mesh Structure (Gmsh)
+
+| Region | Material | Role |
+|--------|----------|------|
+| `coil_main` | Copper (sigma=57e6) | Coil bulk |
+| `coil_skin` | Copper | Coil boundary layer |
+| `work_main` | Steel (sigma=10e6, mu_r=1000) | Workpiece bulk |
+| `work_skin` | Steel | Workpiece boundary layer |
+| `Sair` | Air | Near-field air |
+| `air` | Air | Far-field air |
+
+Boundary layer mesh (`work_skin`) resolves skin depth delta ~ 0.18 mm at 8 kHz.
+
+### Thermal Coupling
+
+```python
+Q = 0.5 * sigma * InnerProduct(E, E).real  # from EM solve
+# theta-scheme: rho*c * dT/dt = div(k*grad(T)) + Q
+# dt = 0.5s, t_end = 5s, h = 10 W/m^2K convection
+```
+
+## FEM-ESIM + Kelvin Design (Replacing FEM-full)
+
+### Changes from FEM-full to FEM-ESIM
+
+1. **Remove** `work_main` and `work_skin` from volume mesh
+2. **Add** SIBC Robin BC on workpiece surface:
+   ```python
+   # Robin BC: -(jw/Zs) * A_t * N_t on workpiece surface
+   a += -(s / Z_s) * A.Trace() * N.Trace() * ds("work_surface")
+   ```
+3. **Add** Kelvin exterior sphere (replaces `air` Dirichlet BC):
+   ```python
+   # Kelvin: nu' = nu0 * (r'/a)^4 in exterior sphere (3D)
+   # Periodic BC: inner sphere <-> outer sphere
+   ```
+4. **Compute** Q from ESIM (not from E field inside workpiece):
+   ```python
+   # H_t at workpiece surface from curl(A)
+   H_t = (1/mu0) * curl(gfA)  # tangential component
+   # ESIM cell problem -> P'(H_t) per surface element
+   sol = esim_solver.solve(H_t)
+   Q_surface = sol['P_prime']  # W/m^2 (surface density, not volume)
+   ```
+
+### Karl Hollaus Iteration (for nonlinear BH)
+
+For steel with nonlinear B-H curve, Z_s depends on H_t:
+```
+1. Initial Z_s from ESIM at estimated H_t
+2. Solve FEM with Robin BC -> get A on workpiece boundary
+3. Compute H_t = (1/mu0) curl(A) at surface
+4. Update Z_s from ESIM cell problem at new H_t
+5. Under-relaxation: Z_s = 0.5*Z_s_old + 0.5*Z_s_new
+6. Repeat until |dZ_s/Z_s| < tol (typically 10 iterations)
+```
+
+### Accuracy at Target Conditions
+
+Steel 7 kHz induction heating (R_wp=10mm):
+- mu_r ~ 500 -> delta ~ 0.07 mm -> xi ~ 140
+- 0th-order SIBC (flat slab) curvature error: **< 0.4%**
+- ESIM handles nonlinear BH (Dowell/linear SIBC cannot)
+- Boundary layer mesh for skin effect: **NOT needed**
+
+### 2-Stage Panel Workflow
+
+```
+[Solve L]  Stage 1: BEM inductance (surface mesh, fast, for design exploration)
+[Solve P]  Stage 2: FEM-ESIM heating (auto 2D-axi mesh, independent from BEM)
+```
+
+Stage 2 implementation: `src/radia/panels/calc_heating.py`
+"""
+
+
 def get_induction_heating_documentation(topic: str = "all") -> str:
     """Return induction heating simulation documentation by topic."""
     topics = {
@@ -971,6 +1086,7 @@ def get_induction_heating_documentation(topic: str = "all") -> str:
         "rotating": INDUCTION_HEATING_ROTATING,
         "postprocess": INDUCTION_HEATING_POSTPROCESS,
         "pitfalls": INDUCTION_HEATING_PITFALLS,
+        "esim_kelvin": INDUCTION_HEATING_ESIM_KELVIN,
     }
 
     topic = topic.lower().strip()
