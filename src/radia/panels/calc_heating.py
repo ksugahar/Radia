@@ -199,7 +199,7 @@ def compute_heating(R_coil, a_coil, R_wp, H_wp,
     esim_solver = ESIMFiniteSlabSolver(
         half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
         frequency=frequency,
-        mu_r=mu_r if mu_r else 1.0, n_nodes=200)
+        mu_r=mu_r if bh_curve is None else None, n_nodes=200)
 
     grad_u = grad(gfu)
     eps = maxh * 0.2

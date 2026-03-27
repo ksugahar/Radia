@@ -339,7 +339,7 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
         solver = ESIMFiniteSlabSolver(
             half_thickness=half_thickness, bh_curve=bh_curve,
             sigma=sigma, frequency=frequency,
-            mu_r=mu_r if mu_r else 1.0, n_nodes=200)
+            mu_r=mu_r if bh_curve is None else None, n_nodes=200)
 
         for i in range(n_panels):
             H0 = max(float(H_t_mag[i]), 1e-3)

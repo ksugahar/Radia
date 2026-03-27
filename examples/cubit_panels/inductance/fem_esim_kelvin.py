@@ -385,7 +385,7 @@ def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
         uc, vc = fesc.TnT()
         bf = BilinearForm(fesc)
         bf += nu_cf / r_cf * grad(uc) * grad(vc) * dx
-        bf += robin * uc * vc / r_cf * ds("wp_sibc")
+        bf += robin * uc * vc / r_cf * ds("workpiece_bnd")
         lfc = LinearForm(fesc)
         lfc += J0 * vc * dx("coil")
         bf.Assemble()
@@ -395,7 +395,7 @@ def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
 
         # Power: P = pi * w^2 * Re(Zs)/|Zs|^2 * int|u|^2/r ds
         int_u2r = Integrate(gfu * Conj(gfu) / r_cf, mesh,
-                            definedon=mesh.Boundaries("wp_sibc")).real
+                            definedon=mesh.Boundaries("workpiece_bnd")).real
         P = np.pi * omega**2 * Z_s.real / abs(Z_s)**2 * int_u2r
 
         # Sample H_t
