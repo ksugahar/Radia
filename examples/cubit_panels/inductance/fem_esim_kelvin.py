@@ -306,7 +306,200 @@ def solve_fem_full(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
 
 
 # ============================================================
-# FEM-ESIM: workpiece as Robin BC
+# FEM-ESIM one-way: static FEM (no hole) + ESIM per panel
+# ============================================================
+def solve_fem_esim_oneway(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
+                          bh_curve=None, mu_r=1.0,
+                          I_total=1.0, a_kelvin=0.15, z_offset=0.4,
+                          maxh=0.003, order=3):
+    """One-way coupled FEM-ESIM: static coil field + ESIM power.
+
+    Equivalent to BEM-ESIM but using FEM for the coil field.
+    No workpiece hole in the mesh (avoids PMC artifact).
+
+    Pipeline:
+      1. Build mesh WITHOUT workpiece hole (air + coil + Kelvin)
+      2. Solve static A-formulation (no eddy currents)
+      3. Sample H_incident at workpiece surface location
+      4. ESIM per panel -> P
+
+    Returns dict with P_total, L, H_t distribution.
+    """
+    from esim_cell_problem import ESIMFiniteSlabSolver
+
+    omega = 2 * np.pi * frequency
+    J0 = I_total / (2 * a_coil)**2
+
+    print("  Building geometry (no workpiece hole)...")
+    t0 = time.perf_counter()
+    # Build geometry WITHOUT workpiece (include_workpiece_volume=True
+    # but we skip the workpiece subtraction by building a simpler mesh)
+    inner = WorkPlane().Circle(a_kelvin).Face()
+    cutter = MoveTo(-a_kelvin - 0.1, -a_kelvin - 0.1).Rectangle(
+        a_kelvin + 0.1, 2 * a_kelvin + 0.2).Face()
+    inner = inner - cutter
+    w = 2 * a_coil
+    coil = MoveTo(R_coil - w / 2, -w / 2).Rectangle(w, w).Face()
+    coil.name = "coil"
+    coil.maxh = maxh / 2
+    air = inner - coil
+    air.name = "air_inner"
+
+    # Kelvin exterior
+    from netgen.occ import Axes, Z, X, Vertex, Pnt, IdentificationType
+    outer = WorkPlane(Axes((0, z_offset, 0), n=Z, h=X)).Circle(a_kelvin).Face()
+    cut_ext = MoveTo(-a_kelvin - 0.1, z_offset - a_kelvin - 0.1).Rectangle(
+        a_kelvin + 0.1, 2 * a_kelvin + 0.2).Face()
+    outer = outer - cut_ext
+    outer.name = "air_outer"
+    gnd = Vertex(Pnt(0, z_offset, 0))
+    gnd.name = "GND"
+
+    ki, ke = [], []
+    for e in air.edges:
+        cx = e.center.x
+        try:
+            v0, v1 = e.vertices
+            d0 = math.sqrt(v0.p.x**2 + v0.p.y**2)
+            d1 = math.sqrt(v1.p.x**2 + v1.p.y**2)
+            is_arc = abs(d0 - a_kelvin) < 0.01 and abs(d1 - a_kelvin) < 0.01 and cx > 0.01
+        except:
+            is_arc = False
+        if is_arc:
+            e.name = "kelvin_int"; ki.append(e)
+        elif cx < 1e-4:
+            e.name = "axis"
+        else:
+            e.name = "default"
+    for e in coil.edges:
+        e.name = "coil_bnd" if e.center.x > 0.01 else "axis"
+    for e in outer.edges:
+        cx = e.center.x
+        try:
+            v0, v1 = e.vertices
+            d0 = math.sqrt(v0.p.x**2 + (v0.p.y - z_offset)**2)
+            d1 = math.sqrt(v1.p.x**2 + (v1.p.y - z_offset)**2)
+            is_arc = abs(d0 - a_kelvin) < 0.01 and abs(d1 - a_kelvin) < 0.01 and cx > 0.01
+        except:
+            is_arc = False
+        if cx < 0.01:
+            e.name = "axis_ext"
+        elif is_arc:
+            e.name = "kelvin_ext"; ke.append(e)
+        else:
+            e.name = "default"
+    for ie in ki:
+        for ee in ke:
+            iy = ie.center.y
+            ey = ee.center.y - z_offset
+            if (iy > 0 and ey > 0) or (iy < 0 and ey < 0):
+                ie.Identify(ee, "kelvin", IdentificationType.PERIODIC)
+                break
+
+    shape = Glue([air, coil, outer, gnd])
+    mesh = Mesh(OCCGeometry(shape, dim=2).GenerateMesh(maxh=maxh, grading=0.4))
+    t_mesh = time.perf_counter() - t0
+
+    materials = mesh.GetMaterials()
+    print(f"  Mesh: {mesh.ne} elements")
+
+    r_cf = IfPos(x - 1e-10, x, 1e-10)
+    y_local = y - z_offset
+    rho_prime = sqrt(x**2 + y_local**2)
+    rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+    kelvin_fac = (rho_safe / a_kelvin)**2
+    nu_dict = {m: NU_0 * kelvin_fac if "outer" in m.lower() else NU_0
+               for m in materials}
+    nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
+
+    # Static solve (real, no Robin BC, no eddy currents)
+    fes = Periodic(H1(mesh, order=order, complex=False,
+                      dirichlet="axis|axis_ext", dirichlet_bbnd="GND"))
+    u, v = fes.TnT()
+    bf = BilinearForm(fes)
+    bf += nu_cf / r_cf * grad(u) * grad(v) * dx
+    bf.Assemble()
+    lf = LinearForm(fes)
+    lf += J0 * v * dx("coil")
+    lf.Assemble()
+
+    t0_s = time.perf_counter()
+    gfu = GridFunction(fes)
+    gfu.vec.data = bf.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * lf.vec
+    t_solve = time.perf_counter() - t0_s
+
+    # Inductance
+    W = 2 * np.pi * Integrate(
+        0.5 * nu_cf / r_cf * grad(gfu) * grad(gfu), mesh).real
+    L = 2 * W / I_total**2
+
+    # ESIM per panel (sample H_incident at workpiece surface location)
+    esim_solver = ESIMFiniteSlabSolver(
+        half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
+        frequency=frequency,
+        mu_r=mu_r if bh_curve is None else None, n_nodes=200,
+        geometry='cylinder')
+
+    grad_u = grad(gfu)
+    n_z_panel = 24
+    n_r_cap = 6
+    P_total = 0.0
+    Q_total = 0.0
+    H_t_vals = []
+
+    # Lateral panels
+    for j in range(n_z_panel):
+        z_j = -H_wp / 2 + (j + 0.5) * H_wp / n_z_panel
+        dA = 2 * np.pi * R_wp * (H_wp / n_z_panel)
+        try:
+            mip = mesh(R_wp, z_j)  # ON the surface (no hole, no offset needed)
+            H_z = abs(float(grad_u[0](mip)) / (MU_0 * R_wp))
+        except:
+            H_z = 0.0
+        H_t_vals.append(H_z)
+        sol_p = esim_solver.solve(max(H_z, 1e-3))
+        P_total += sol_p['P_prime'] * dA
+        Q_total += sol_p['Q_prime'] * dA
+
+    # Cap panels
+    for sign in [+1, -1]:
+        for k in range(n_r_cap):
+            r_k = (k + 0.5) * R_wp / n_r_cap
+            if r_k < 1e-6:
+                continue
+            dA = 2 * np.pi * r_k * (R_wp / n_r_cap)
+            try:
+                mip = mesh(r_k, sign * H_wp / 2)
+                H_r = abs(float(grad_u[1](mip)) / (MU_0 * r_k))
+            except:
+                H_r = 0.0
+            H_t_vals.append(H_r)
+            sol_p = esim_solver.solve(max(H_r, 1e-3))
+            P_total += sol_p['P_prime'] * dA
+            Q_total += sol_p['Q_prime'] * dA
+
+    H_t_arr = np.array(H_t_vals)
+    H_t_avg = float(np.mean(H_t_arr[H_t_arr > 0])) if np.any(H_t_arr > 0) else 0
+
+    print(f"  P (one-way ESIM) = {P_total:.6e} W")
+    print(f"  L (static)       = {L*1e9:.2f} nH")
+    print(f"  H_t range        = [{H_t_arr.min():.2f}, {H_t_arr.max():.2f}] A/m")
+
+    return {
+        'mode': 'FEM-ESIM one-way',
+        'P_total': float(P_total),
+        'Q_total': float(Q_total),
+        'L': float(L),
+        'H_t_avg': float(H_t_avg),
+        'ndof': fes.ndof,
+        'ne': mesh.ne,
+        't_mesh': t_mesh,
+        't_solve': t_solve,
+    }
+
+
+# ============================================================
+# FEM-ESIM: workpiece as Robin BC (two-way coupled)
 # ============================================================
 def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
                    bh_curve=None, mu_r=1.0,
@@ -357,7 +550,8 @@ def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
     esim_solver = ESIMFiniteSlabSolver(
         half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
         frequency=frequency,
-        mu_r=mu_r if bh_curve is None else None, n_nodes=200)
+        mu_r=mu_r if bh_curve is None else None, n_nodes=200,
+        geometry='cylinder')
 
     # Initial Z_s
     sol0 = esim_solver.solve(5.0)
@@ -444,39 +638,56 @@ def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
 # ============================================================
 # Main
 # ============================================================
-def main(mode='both'):
-    # Copper at 1kHz: delta = 2.1 mm, resolvable with maxh=0.5mm
-    R_coil = 0.030      # Coil radius [m]
-    a_coil = 0.003      # Coil wire radius [m]
-    R_wp = 0.010         # Workpiece radius [m]
-    H_wp = 0.020         # Workpiece height [m]
-    sigma = 5.8e7        # Copper [S/m]
-    frequency = 1000     # 1 kHz -> delta ~ 2.1 mm (resolvable)
-    mu_r = 1.0
+def main(mode='both', material='copper'):
+    R_coil = 0.030
+    a_coil = 0.003
+    R_wp = 0.010
+    H_wp = 0.020
     I_total = 1.0
 
+    STEEL_BH = [
+        [0, 0], [50, 0.1], [100, 0.25], [200, 0.55],
+        [500, 0.95], [1000, 1.2], [2000, 1.4], [5000, 1.55],
+        [10000, 1.65], [20000, 1.75], [50000, 1.9], [100000, 2.0],
+    ]
+
+    if material == 'steel':
+        sigma = 2e6
+        frequency = 7000
+        mu_r = None
+        bh_curve = STEEL_BH
+        mu_r_display = "~1600 (BH curve)"
+    else:
+        sigma = 5.8e7
+        frequency = 1000
+        mu_r = 1.0
+        bh_curve = None
+        mu_r_display = "1.0"
+
     rho = 1.0 / sigma
-    delta = math.sqrt(2 * rho / (2 * np.pi * frequency * MU_0 * mu_r))
+    mu_eff = MU_0 * (mu_r if mu_r else 1.0)
+    delta = math.sqrt(2 * rho / (2 * np.pi * frequency * mu_eff))
 
     print("=" * 65)
-    print("FEM-full vs FEM-ESIM (2D axisymmetric + Kelvin)")
+    print(f"FEM-full vs FEM-ESIM (2D axisymmetric + Kelvin) [{material}]")
     print("=" * 65)
     print(f"Coil:      R={R_coil*1e3:.0f} mm, a={a_coil*1e3:.1f} mm")
     print(f"Workpiece: R={R_wp*1e3:.0f} mm, H={H_wp*1e3:.0f} mm")
-    print(f"Material:  Copper (sigma={sigma:.1e} S/m, mu_r={mu_r})")
+    print(f"Material:  {material} (sigma={sigma:.1e} S/m, mu_r={mu_r_display})")
     print(f"Frequency: {frequency} Hz")
-    print(f"Skin depth: {delta*1e3:.2f} mm (xi = R_wp/delta = {R_wp/delta:.2f})")
+    print(f"Skin depth: {delta*1e3:.3f} mm (xi = R_wp/delta = {R_wp/delta:.1f})")
     print()
 
     results = {}
 
+    maxh_full = max(delta / 3, 0.0002)  # resolve skin layer for FEM-full
+
     if mode in ('both', 'full'):
         print("[FEM-full] Workpiece volume meshed (direct eddy current)")
         print("-" * 65)
-        # maxh_wp = delta/3 for adequate skin layer resolution
         r_full = solve_fem_full(
             R_coil, a_coil, R_wp, H_wp, sigma, frequency,
-            I_total=I_total, maxh=0.0005, order=3,
+            I_total=I_total, maxh=maxh_full, order=3,
             a_kelvin=0.15, z_offset=0.4)
         results['full'] = r_full
         print(f"  P = {r_full['P_total']:.6e} W")
@@ -485,43 +696,53 @@ def main(mode='both'):
               f"asm={r_full['t_asm']:.1f}s, solve={r_full['t_solve']:.1f}s")
         print()
 
-    if mode in ('both', 'esim'):
-        print("[FEM-SIBC] External field -> ESIM on workpiece surface")
+    if mode in ('both', 'esim', 'oneway'):
+        print("[FEM-ESIM one-way] Static FEM + ESIM per panel (BEM-equivalent)")
         print("-" * 65)
-        r_esim = solve_fem_sibc(
+        r_oneway = solve_fem_esim_oneway(
             R_coil, a_coil, R_wp, H_wp, sigma, frequency,
-            mu_r=mu_r,
+            bh_curve=bh_curve, mu_r=mu_r if mu_r else 1.0,
             I_total=I_total, maxh=0.003, order=3,
             a_kelvin=0.15, z_offset=0.4)
-        results['esim'] = r_esim
-        print(f"  P = {r_esim['P_total']:.6e} W")
-        print(f"  L = {r_esim['L']*1e9:.2f} nH")
-        print(f"  Time: mesh={r_esim['t_mesh']:.1f}s, "
-              f"solve={r_esim['t_solve']:.1f}s")
+        results['oneway'] = r_oneway
+        print(f"  P = {r_oneway['P_total']:.6e} W")
+        print(f"  L = {r_oneway['L']*1e9:.2f} nH")
         print()
 
     # Comparison
-    if 'full' in results and 'esim' in results:
-        print("=" * 65)
-        print("Comparison: FEM-full vs FEM-ESIM")
-        print("=" * 65)
+    print("=" * 65)
+    print("Comparison")
+    print("=" * 65)
+    header = f"  {'':>20s}"
+    if 'full' in results:
+        header += f"  {'FEM-full':>12s}"
+    if 'oneway' in results:
+        header += f"  {'one-way':>12s}"
+    print(header)
+
+    if 'full' in results:
         P_f = results['full']['P_total']
-        P_e = results['esim']['P_total']
         L_f = results['full']['L']
-        L_e = results['esim']['L']
-        print(f"  {'':>20s}  {'FEM-full':>12s}  {'FEM-SIBC':>12s}  {'diff':>8s}")
-        print(f"  {'P [W]':>20s}  {P_f:12.4e}  {P_e:12.4e}  "
-              f"{(P_e-P_f)/max(abs(P_f),1e-30)*100:+8.2f}%")
-        print(f"  {'L [nH]':>20s}  {L_f*1e9:12.4f}  {L_e*1e9:12.4f}  "
-              f"{(L_e-L_f)/max(abs(L_f),1e-30)*100:+8.2f}%")
-        print(f"  {'DOFs':>20s}  {results['full']['ndof']:>12d}  "
-              f"{results['esim']['ndof']:>12d}")
-        print(f"  {'Elements':>20s}  {results['full']['ne']:>12d}  "
-              f"{results['esim']['ne']:>12d}")
-        print()
-        print(f"  FEM-full: resolves skin layer (maxh << delta)")
-        print(f"  FEM-ESIM: static solve + ESIM 1D cell problem")
-        print(f"  delta = {delta*1e3:.2f} mm, xi = {R_wp/delta:.2f}")
+    if 'oneway' in results:
+        P_o = results['oneway']['P_total']
+        L_o = results['oneway']['L']
+
+    row_P = f"  {'P [W]':>20s}"
+    row_L = f"  {'L [nH]':>20s}"
+    if 'full' in results:
+        row_P += f"  {P_f:12.4e}"
+        row_L += f"  {L_f*1e9:12.4f}"
+    if 'oneway' in results:
+        row_P += f"  {P_o:12.4e}"
+        row_L += f"  {L_o*1e9:12.4f}"
+    if 'full' in results and 'oneway' in results:
+        row_P += f"  {(P_o-P_f)/max(abs(P_f),1e-30)*100:+8.1f}%"
+        row_L += f"  {(L_o-L_f)/max(abs(L_f),1e-30)*100:+8.1f}%"
+    print(row_P)
+    print(row_L)
+    print()
+    print(f"  delta = {delta*1e3:.3f} mm, xi = {R_wp/delta:.1f}")
+    print(f"  FEM-ESIM one-way: static FEM (no hole) + cylinder ESIM")
 
     return results
 
@@ -531,6 +752,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="FEM A-formulation + Kelvin + ESIM prototype")
     parser.add_argument("--mode", default="both",
-                        choices=["both", "full", "esim"])
+                        choices=["both", "full", "esim", "oneway"])
+    parser.add_argument("--material", default="copper",
+                        choices=["copper", "steel"])
     args = parser.parse_args()
-    main(mode=args.mode)
+    main(mode=args.mode, material=args.material)
