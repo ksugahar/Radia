@@ -306,32 +306,15 @@ def solve(mesh, R_coil=0.030, a_coil=0.005,
                 gfu.vec.data = inv * f_lf.vec
         t_solve = time.perf_counter() - t0_iter
 
-        # Sample H_t at workpiece surface panels
-        H_cf = NU_0 * curl(gfu)  # H = (1/mu0) * B = nu0 * curl(A)
-        H_t_vals = []
-
-        for panel in sample_panels:
-            px, py, pz = panel['pt']
-            nr = panel['normal']
-            try:
-                mip = mesh(px, py, pz)
-                Hx = complex(H_cf[0](mip))
-                Hy = complex(H_cf[1](mip))
-                Hz = complex(H_cf[2](mip))
-                H_vec = np.array([Hx, Hy, Hz])
-                # Tangential: remove normal component
-                H_n = np.dot(H_vec, nr)
-                H_t_vec = H_vec - H_n * nr
-                H_t = np.linalg.norm(H_t_vec)
-            except:
-                H_t = 0.0
-            H_t_vals.append(abs(H_t))
-
-        H_t_arr = np.array(H_t_vals)
-        dA_arr = np.array([p['dA'] for p in sample_panels])
-
-        # Area-weighted RMS for uniform Z_s
-        H_t_rms = np.sqrt(np.sum(H_t_arr**2 * dA_arr) / np.sum(dA_arr))
+        # H_t from SIBC relation on boundary (NOT offset sampling)
+        # SIBC: |H_t| = w*|A_t|/|Z_s|, so H_t_rms from int|A_t|^2 dS:
+        #   H_rms^2 = w^2/|Z_s|^2 * int|A_t|^2 dS / A_wp
+        int_A2 = Integrate(
+            gfu * Conj(gfu), mesh, BND,
+            definedon=mesh.Boundaries("wp_surface")).real
+        wp_area = 2 * np.pi * R_wp * H_wp + 2 * np.pi * R_wp**2  # lat + caps
+        H_t_rms = omega / abs(Z_s) * np.sqrt(
+            max(int_A2 / wp_area, 0)) if int_A2 > 0 else 1e-3
 
         # Update Z_s (under-relaxation)
         Z_s_old = Z_s
@@ -353,133 +336,43 @@ def solve(mesh, R_coil=0.030, a_coil=0.005,
 
     t_total = time.perf_counter() - t0_total
 
-    # --- Post-process: P and Q per panel via ESIM ---
-    print("\nComputing power distribution via ESIM...")
-    P_total = 0.0
-    Q_total = 0.0
-    panel_results = []
-
-    for i, panel in enumerate(sample_panels):
-        H_t = H_t_vals[i]
-        dA = panel['dA']
-        sol = esim_solver.solve(max(float(H_t), 1e-3))
-        P_panel = sol['P_prime'] * dA
-        Q_panel = sol['Q_prime'] * dA
-        P_total += P_panel
-        Q_total += Q_panel
-        panel_results.append({
-            'type': panel['type'],
-            'H_t': float(H_t),
-            'P_prime': float(sol['P_prime']),
-            'P': float(P_panel),
-            'dA': float(dA),
-        })
-
-    # --- Cross-check: Poynting flux P from Robin BC ---
+    # --- Post-process: P from Poynting flux (self-consistent) ---
     # P = 0.5 * w^2 * Re(Z_s)/|Z_s|^2 * int_S |A_t|^2 dS
-    # Exact power from the FEM's Robin BC (no sampling offset error)
     from ngsolve import BND
-    int_A2 = Integrate(
+    int_A2_final = Integrate(
         gfu * Conj(gfu), mesh, BND,
         definedon=mesh.Boundaries("wp_surface")).real
-    P_poynting = 0.5 * omega**2 * Z_s.real / abs(Z_s)**2 * int_A2
+    P_total = 0.5 * omega**2 * Z_s.real / abs(Z_s)**2 * int_A2_final
+    # Q from imaginary part of Z_s
+    Q_total = 0.5 * omega**2 * Z_s.imag / abs(Z_s)**2 * int_A2_final
+    panel_results = []  # per-panel not available from boundary integral
 
-    # Energy method for L (includes Re+Im parts of complex B field)
+    # Energy method for L
     W_mag = Integrate(
         0.5 * nu_cf * curl(gfu) * Conj(curl(gfu)), mesh).real
-    L_energy = 2 * W_mag / I_total**2
-
-    # --- Cross-check: Static FEM (no Robin BC) for BEM comparison ---
-    # Solve the same mesh WITHOUT workpiece impedance → incident field only
-    print("\n[Static] Solving without Robin BC (incident field only)...")
-    t0_static = time.perf_counter()
-
-    a_static = BilinearForm(fes)
-    a_static += nu_cf * curl(u) * curl(v) * dx
-    a_static += 1e-6 * NU_0 * u * v * dx  # gauge
-    a_static.Assemble()
-
-    f_static = LinearForm(fes)
-    f_static += J_source * v * dx("coil")
-    f_static.Assemble()
-
-    gfu_static = GridFunction(fes)
-    with TaskManager():
-        gfu_static.vec.data = a_static.mat.Inverse(
-            fes.FreeDofs(), inverse="pardiso") * f_static.vec
-    t_static = time.perf_counter() - t0_static
-    print(f"  Static solve: {t_static:.1f}s")
-
-    # Sample H_t from static solve (same panels)
-    H_static = NU_0 * curl(gfu_static)
-    P_static = 0.0
-    H_t_static_vals = []
-    for panel in sample_panels:
-        px, py, pz = panel['pt']
-        nr = panel['normal']
-        dA = panel['dA']
-        try:
-            mip = mesh(px, py, pz)
-            Hx = float(H_static[0](mip).real)
-            Hy = float(H_static[1](mip).real)
-            Hz = float(H_static[2](mip).real)
-            H_vec = np.array([Hx, Hy, Hz])
-            H_n_val = np.dot(H_vec, nr)
-            H_t_vec = H_vec - H_n_val * nr
-            H_t = np.linalg.norm(H_t_vec)
-        except:
-            H_t = 0.0
-        H_t_static_vals.append(H_t)
-        sol_e = esim_solver.solve(max(float(H_t), 1e-3))
-        P_static += sol_e['P_prime'] * dA
-
-    H_t_static_arr = np.array(H_t_static_vals)
-    dA_arr2 = np.array([p['dA'] for p in sample_panels])
-    H_t_static_rms = np.sqrt(np.sum(H_t_static_arr**2 * dA_arr2)
-                              / np.sum(dA_arr2))
-
-    # Static L from real field energy
-    W_static = Integrate(
-        0.5 * nu_cf * curl(gfu_static) * curl(gfu_static), mesh).real
-    L_static = 2 * W_static / I_total**2
-
-    L = L_static  # static L is the coil self-inductance
+    L = 2 * W_mag / I_total**2
 
     # --- Summary ---
     print()
     print("=" * 65)
-    print("Results: FEM-ESIM with Robin BC (two-way coupling)")
+    print("Results: FEM-ESIM with Robin BC (Poynting flux)")
     print("=" * 65)
-    print(f"  P (ESIM panels)  = {P_total:.6e} W   (offset sampling)")
-    print(f"  P (Poynting)     = {P_poynting:.6e} W   (boundary self-consistent)")
-    print(f"  Q (ESIM)         = {Q_total:.6e} var")
-    print(f"  L (energy cmplx) = {L_energy*1e9:.2f} nH")
+    print(f"  P (Poynting)     = {P_total:.6e} W")
+    print(f"  Q                = {Q_total:.6e} var")
+    print(f"  L (energy)       = {L*1e9:.2f} nH")
     print(f"  Z_s (converged)  = {Z_s:.4e}")
-    print(f"  H_t range        = [{H_t_arr.min():.2f}, {H_t_arr.max():.2f}] A/m")
+    print(f"  H_t rms (SIBC)   = {H_t_rms:.2f} A/m")
     print(f"  Karl iterations  = {len(history)}")
-    print()
-    print("Results: Static FEM (no Robin BC, same as BEM one-way coupling)")
-    print("-" * 65)
-    print(f"  P (static ESIM)  = {P_static:.6e} W   <- should match BEM-ESIM")
-    print(f"  L (static)       = {L_static*1e9:.2f} nH   <- should match BEM L")
-    print(f"  H_t range        = [{H_t_static_arr.min():.2f}, "
-          f"{H_t_static_arr.max():.2f}] A/m")
-    print(f"  H_t rms (static) = {H_t_static_rms:.2f} A/m")
-    print()
     print(f"  DOFs             = {fes.ndof}")
     print(f"  Total time       = {t_total:.1f} s")
     print("=" * 65)
 
     return {
         'P_total': float(P_total),
-        'P_poynting': float(P_poynting),
         'Q_total': float(Q_total),
         'L': float(L),
-        'L_energy': float(L_energy),
         'Z_s': complex(Z_s),
         'H_t_rms': float(H_t_rms),
-        'H_t_max': float(H_t_arr.max()),
-        'H_t_min': float(H_t_arr.min()),
         'ndof': fes.ndof,
         'ne': ne,
         'iterations': len(history),
