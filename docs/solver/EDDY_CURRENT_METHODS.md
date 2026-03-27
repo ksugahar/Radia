@@ -833,13 +833,39 @@ Karl iteration:
 
 4. **Power formula**: Must use P = pi (not 2*pi) in 2D axisymmetric Poynting flux.
 
+### Curvature Correction Analysis
+
+0th-order SIBC (flat slab) error depends on xi = R/delta:
+
+| xi | delta/R | Curvature err | Typical case |
+|----|---------|--------------|--------------|
+| 5 | 0.20 | ~10% | Copper 1 kHz |
+| 8 | 0.13 | ~6% | Steel 50 Hz (power transformer) |
+| 36 | 0.03 | ~1.4% | Steel 1 kHz |
+| 140 | 0.007 | **< 0.4%** | **Steel 7 kHz (induction heating target)** |
+| 250 | 0.004 | ~0.2% | Steel 50 kHz |
+
+**Target application**: Steel induction heating at 7 kHz (nonlinear BH).
+At xi ~ 140, 0th-order SIBC is sufficient (< 0.4% curvature error).
+ESIM is required because Dowell/linear SIBC cannot handle nonlinear B-H curves.
+
+Mitzner 1st-order correction (Yuferev & Ida, 2010):
+```
+E_u = -Z_s * [1 + (1-j)/2 * delta * (kv - ku)] * H_v
+```
+where ku, kv are principal curvatures. For cylinder: ku=1/R, kv=0.
+
+Higher-order SIBC is needed only for:
+- Power transformers (steel, 50 Hz, xi ~ 8)
+- Copper/aluminum conductors at low frequency (xi < 10)
+
 ### Remaining Issues
 
-| Issue | Cause | Solution |
+| Issue | Cause | Priority |
 |-------|-------|----------|
-| +40% P at xi=4.8 | 0th-order SIBC (flat slab) | Higher-order SIBC with curvature 1/R |
-| Z_s spatially uniform | Average H_t used | Per-element Z_s on boundary (CoefficientFunction) |
-| Cylinder vs slab | Bessel I0/I1 vs tanh | Z_cyl = rho*gamma*I0(gamma*R)/I1(gamma*R) |
+| +40% P at xi=4.8 | 0th-order SIBC + 2D geometry | Low (not target regime) |
+| Per-element Z_s | Average H_t used | Medium (improves P distribution) |
+| High-order SIBC | Mitzner curvature 1/R | Low (< 0.4% at target xi=140) |
 
 ### Cubit Panel: 2-Stage Design
 
