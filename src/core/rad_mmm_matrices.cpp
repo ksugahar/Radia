@@ -805,6 +805,29 @@ void MMMBuilder::Compute3x3Block(int elem_i, int elem_j, double* N_block) const 
         H_z_total[0] += H_z.x; H_z_total[1] += H_z.y; H_z_total[2] += H_z.z;
     }
 
+    // Point charge correction at source element center
+    Vec3d r = obs - src_center;
+    double dist_sq = r.x * r.x + r.y * r.y + r.z * r.z;
+    if (dist_sq > 1e-30) {
+        double dist = std::sqrt(dist_sq);
+        double inv_dist3 = 1.0 / (dist * dist_sq);
+
+        double coef_x = -total_charge_x * inv_dist3;
+        H_x_total[0] += coef_x * r.x;
+        H_x_total[1] += coef_x * r.y;
+        H_x_total[2] += coef_x * r.z;
+
+        double coef_y = -total_charge_y * inv_dist3;
+        H_y_total[0] += coef_y * r.x;
+        H_y_total[1] += coef_y * r.y;
+        H_y_total[2] += coef_y * r.z;
+
+        double coef_z = -total_charge_z * inv_dist3;
+        H_z_total[0] += coef_z * r.x;
+        H_z_total[1] += coef_z * r.y;
+        H_z_total[2] += coef_z * r.z;
+    }
+
     // Apply 1/(4pi) and store in N matrix (row-major)
     N_block[0] = H_x_total[0] * constants::INV_FOUR_PI;
     N_block[1] = H_y_total[0] * constants::INV_FOUR_PI;
@@ -849,6 +872,21 @@ void MMMBuilder::Compute6x6Block(int elem_i, int elem_j, double* K_block) const 
 
             const TriangleFace& tri2 = elem_src.triangles[f_src * 2 + 1];
             H_total = H_total + FieldFromChargedTriangle(tri2, obs, 1.0);
+
+            // Point charge correction at source element center
+            // H_point = -area * (obs - center) / |obs - center|^3
+            // Compensates for net charge of the face placed at element center
+            double area_src = elem_src.face_areas[f_src];
+            Vec3d r = obs - src_center;
+            double dist_sq = r.x * r.x + r.y * r.y + r.z * r.z;
+            if (dist_sq > 1e-30) {
+                double dist = std::sqrt(dist_sq);
+                double inv_dist3 = 1.0 / (dist * dist_sq);
+                double coef = -area_src * inv_dist3;
+                H_total.x += coef * r.x;
+                H_total.y += coef * r.y;
+                H_total.z += coef * r.z;
+            }
 
             // K[f_obs, f_src] = n_obs . H_total / (4*pi)
             K_block[f_obs * 6 + f_src] = n_obs.dot(H_total) * constants::INV_FOUR_PI;
