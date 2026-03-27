@@ -363,18 +363,19 @@ class ESIMFiniteSlabSolver:
     """
 
     def __init__(self, half_thickness, bh_curve=None, sigma=None, frequency=None,
-                 n_nodes=100, complex_mu=None, mu_r=None):
+                 n_nodes=100, complex_mu=None, mu_r=None, geometry='slab'):
         """
-        Initialize the Finite Slab Cell Problem solver.
+        Initialize the Finite Slab/Cylinder Cell Problem solver.
 
         Parameters:
-            half_thickness: Half of conductor thickness [m] (a in equations)
+            half_thickness: Half of conductor thickness [m] (slab) or radius [m] (cylinder)
             bh_curve: BH curve data as [[H1, B1], [H2, B2], ...]
             sigma: Electrical conductivity [S/m]
             frequency: Operating frequency [Hz]
             n_nodes: Number of mesh nodes (default: 100)
             complex_mu: Complex permeability data (alternative to bh_curve)
             mu_r: Relative permeability for linear material (alternative to bh_curve)
+            geometry: 'slab' (default) or 'cylinder' (r-weighted for cylindrical workpiece)
         """
         if not SCIPY_AVAILABLE:
             raise ImportError("Scipy is required for ESIM Cell Problem solver")
@@ -382,11 +383,12 @@ class ESIMFiniteSlabSolver:
         if sigma is None or frequency is None:
             raise ValueError("sigma and frequency are required parameters")
 
-        self.half_thickness = half_thickness  # a
+        self.half_thickness = half_thickness  # a (slab) or R (cylinder)
         self.sigma = sigma
         self.frequency = frequency
         self.omega = 2 * np.pi * frequency
         self.rho = 1.0 / sigma
+        self.geometry = geometry  # 'slab' or 'cylinder'
 
         self.n_nodes = n_nodes
 
@@ -455,10 +457,19 @@ class ESIMFiniteSlabSolver:
         # Initial guess using analytical solution for linear material
         if self.delta < float('inf') and self.delta > 0:
             gamma = complex(1, 1) / self.delta
-            try:
-                H = H0 * np.cosh(gamma * (a - z)) / np.cosh(gamma * a)
-            except (OverflowError, FloatingPointError):
-                H = H0 * np.exp(-z / self.delta) * np.exp(-1j * z / self.delta)
+            if self.geometry == 'cylinder':
+                # Cylinder: H(r) = H0 * I0(gamma*r) / I0(gamma*R)
+                from scipy.special import iv as bessel_iv
+                try:
+                    H = H0 * bessel_iv(0, gamma * z) / bessel_iv(0, gamma * a)
+                except (OverflowError, FloatingPointError):
+                    H = H0 * np.exp(-(a - z) / self.delta)
+            else:
+                # Slab: H(z) = H0 * cosh(gamma*(a-z)) / cosh(gamma*a)
+                try:
+                    H = H0 * np.cosh(gamma * (a - z)) / np.cosh(gamma * a)
+                except (OverflowError, FloatingPointError):
+                    H = H0 * np.exp(-z / self.delta) * np.exp(-1j * z / self.delta)
         else:
             H = np.full(n, H0, dtype=complex)  # DC: uniform current
 
@@ -510,63 +521,81 @@ class ESIMFiniteSlabSolver:
 
     def _solve_linear_system(self, H0, mu_dist):
         """
-        Solve the linearized Cell Problem with Neumann BC at surface (current-driven).
+        Solve the linearized Cell Problem.
 
-        For skin effect analysis, we drive the conductor with a fixed surface
-        current density J0, not fixed surface H field. This gives correct
-        behavior in the DC limit.
+        Slab (geometry='slab'):
+            Domain: z from 0 (surface) to a (center)
+            PDE: rho * d^2H/dz^2 + jw*mu*H = 0
+            BC: H(0) = H0, dH/dz(a) = 0
+            Solution: H(z) = H0 * cosh(gamma*(a-z)) / cosh(gamma*a)
 
-        Boundary conditions:
-            dH/dz(0) = -J0      (surface current density)
-            dH/dz(a) = 0        (symmetry at center)
-
-        The surface field H(0) adapts to the current.
-
-        For normalization, we use J0 such that total current I = a * J_avg = H0
-        (i.e., DC case with uniform current has total I = H0).
-
-        After solving, we scale the solution so that the total current I = H(0) - H(a)
-        equals H0, allowing comparison with the Dirichlet BC case.
+        Cylinder (geometry='cylinder'):
+            Domain: r from 0 (center) to R (surface)
+            PDE: rho/r * d/dr(r * dH/dr) + jw*mu*H = 0
+            BC: dH/dr(0) = 0 (symmetry), H(R) = H0
+            Solution: H(r) = H0 * I0(gamma*r) / I0(gamma*R)
         """
         n = self.n_nodes
-        z = self.mesh_points
-        h = z[1] - z[0]  # Uniform mesh spacing
-        a = self.half_thickness
+        z = self.mesh_points  # z for slab, r for cylinder
+        h = z[1] - z[0]
+        a = self.half_thickness  # half-thickness (slab) or radius (cylinder)
 
-        # For DC with uniform J: I = integral{J} dz = J*a, so J = I/a
-        # We want total current I = H0, so J_surface = H0/a for DC reference
-        # But for AC, current concentrates at surface
-
-        # Use Dirichlet at surface (H(0) = H0) and Neumann at center (dH/dz(a) = 0)
-        # This is actually the correct formulation!
-        # The analytical solution is H(z) = H0 * cosh(gamma*(a-z)) / cosh(gamma*a)
-
-        # Coefficient arrays for tridiagonal matrix
         diag_main = np.zeros(n, dtype=complex)
         diag_lower = np.zeros(n - 1, dtype=complex)
         diag_upper = np.zeros(n - 1, dtype=complex)
         rhs = np.zeros(n, dtype=complex)
 
-        coef = self.rho / (h * h)
+        if self.geometry == 'cylinder':
+            # Cylindrical: (1/r)*d/dr[r*dH/dr] + jw*mu*sigma*H = 0
+            # FD on uniform mesh r_i = i*h:
+            #   [r_{i+1/2}*(H_{i+1}-H_i) - r_{i-1/2}*(H_i-H_{i-1})] / (r_i*h^2)
+            #   + jw*mu*sigma*H_i = 0
+            # Multiply by rho: rho/r_i * [...] + jw*mu*H_i = 0
 
-        # Interior points (i = 1, ..., n-2)
-        for i in range(1, n - 1):
-            diag_lower[i - 1] = coef
-            diag_upper[i] = coef
-            diag_main[i] = -2 * coef + 1j * self.omega * mu_dist[i]
-            rhs[i] = 0.0
+            for i in range(1, n - 1):
+                r_i = z[i]
+                r_ip = z[i] + h / 2  # r_{i+1/2}
+                r_im = z[i] - h / 2  # r_{i-1/2}
+                coef_p = self.rho * r_ip / (r_i * h * h)
+                coef_m = self.rho * r_im / (r_i * h * h)
+                diag_lower[i - 1] = coef_m
+                diag_upper[i] = coef_p
+                diag_main[i] = -(coef_p + coef_m) + 1j * self.omega * mu_dist[i]
+                rhs[i] = 0.0
 
-        # BC at z=0: H(0) = H0 (Dirichlet)
-        diag_main[0] = 1.0
-        rhs[0] = H0
+            # BC at r=0: dH/dr = 0 (symmetry)
+            # L'Hopital: (1/r)*d/dr(r*dH/dr)|_{r=0} = 2*d^2H/dr^2
+            # With symmetry H[-1]=H[1]: d^2H/dr^2 = 2*(H[1]-H[0])/h^2
+            # So equation: rho*4*(H[1]-H[0])/h^2 + jw*mu*H[0] = 0
+            coef_0 = 4 * self.rho / (h * h)
+            diag_main[0] = -coef_0 + 1j * self.omega * mu_dist[0]
+            diag_upper[0] = coef_0
+            rhs[0] = 0.0
 
-        # BC at z=a: dH/dz = 0 (Neumann - symmetry)
-        # Use ghost point H[n] = H[n-2] from dH/dz = 0
-        # rho*(H[n-2] - 2*H[n-1] + H[n]) / h^2 + jωμH[n-1] = 0
-        # rho*(2*H[n-2] - 2*H[n-1]) / h^2 + jωμH[n-1] = 0
-        diag_main[n - 1] = -2 * coef + 1j * self.omega * mu_dist[n - 1]
-        diag_lower[n - 2] = 2 * coef
-        rhs[n - 1] = 0.0
+            # BC at r=R: H(R) = H0 (Dirichlet at surface)
+            diag_main[n - 1] = 1.0
+            if n >= 2:
+                diag_lower[n - 2] = 0.0
+            rhs[n - 1] = H0
+
+        else:
+            # Slab: rho * d^2H/dz^2 + jw*mu*H = 0
+            coef = self.rho / (h * h)
+
+            for i in range(1, n - 1):
+                diag_lower[i - 1] = coef
+                diag_upper[i] = coef
+                diag_main[i] = -2 * coef + 1j * self.omega * mu_dist[i]
+                rhs[i] = 0.0
+
+            # BC at z=0: H(0) = H0 (Dirichlet at surface)
+            diag_main[0] = 1.0
+            rhs[0] = H0
+
+            # BC at z=a: dH/dz = 0 (Neumann - symmetry)
+            diag_main[n - 1] = -2 * coef + 1j * self.omega * mu_dist[n - 1]
+            diag_lower[n - 2] = 2 * coef
+            rhs[n - 1] = 0.0
 
         # Solve tridiagonal system
         from scipy.sparse import diags as sp_diags
@@ -609,24 +638,43 @@ class ESIMFiniteSlabSolver:
         n = self.n_nodes
         a = self.half_thickness
 
-        # Total current (per unit width): I = H(0) - H(a) by fundamental theorem
-        I_total = H[0] - H[n-1]
-
-        I_abs_sq = np.abs(I_total) ** 2
-        if I_abs_sq < 1e-30:
-            # Fall back to surface impedance method
-            return self._compute_resistance_ratio_surface_impedance(H)
-
-        # Compute integral{|J|^2} dz using J at element midpoints
-        J_sq_integral = 0.0
-        for i in range(n - 1):
-            dz = z[i + 1] - z[i]
-            # J = -dH/dz at midpoint
-            J_mid = -(H[i + 1] - H[i]) / dz
-            J_sq_integral += np.abs(J_mid) ** 2 * dz
-
-        # R_ac/R_dc = a * integral{|J|^2} dz / |I|^2
-        R_ratio = a * J_sq_integral / I_abs_sq
+        if self.geometry == 'cylinder':
+            # Cylinder: I = integral_0^R J*2pi*r dr, J = -dH/dr
+            # Using Ampere: I_total = 2*pi*R*H(R) (for H_z with symmetry)
+            # R_ac/R_dc = (R/2) * integral_0^R |J|^2*r dr / (|I/(pi*R^2)|^2 * pi*R^2)
+            # Simpler: use P_ac/P_dc method
+            I_total = H[n-1]  # H(R) = H0, total current per unit length = H0
+            I_abs_sq = np.abs(I_total) ** 2
+            if I_abs_sq < 1e-30:
+                return self._compute_resistance_ratio_surface_impedance(H)
+            J_sq_r_integral = 0.0
+            for i in range(n - 1):
+                dr = z[i + 1] - z[i]
+                J_mid = -(H[i + 1] - H[i]) / dr
+                r_mid = 0.5 * (z[i] + z[i + 1])
+                J_sq_r_integral += np.abs(J_mid) ** 2 * r_mid * dr
+            # P_dc for uniform J in cylinder: J_dc = I/(pi*R^2), P_dc = rho*|J_dc|^2*pi*R^2
+            # P_ac = rho * 2*pi * integral |J|^2 * r dr
+            # R_ac/R_dc = P_ac/P_dc = (R^2/2) * integral|J|^2*r dr / |I|^2
+            # But I = H0 (Ampere, per unit length), I_total = 2*pi*R*H0
+            # R_dc = rho * L / A = rho / (pi*R^2) per unit length
+            # P_dc = |I_total|^2 * R_dc = 4*pi^2*R^2*|H0|^2 * rho/(pi*R^2) = 4*pi*rho*|H0|^2
+            # P_ac = rho * 2*pi * integral|J|^2*r dr
+            # R_ratio = 2*pi*rho*integral|J|^2*r dr / (4*pi*rho*|H0|^2)
+            #         = integral|J|^2*r dr / (2*|H0|^2)
+            R_ratio = J_sq_r_integral / (2 * I_abs_sq) * a
+        else:
+            # Slab: I = H(0) - H(a)
+            I_total = H[0] - H[n-1]
+            I_abs_sq = np.abs(I_total) ** 2
+            if I_abs_sq < 1e-30:
+                return self._compute_resistance_ratio_surface_impedance(H)
+            J_sq_integral = 0.0
+            for i in range(n - 1):
+                dz = z[i + 1] - z[i]
+                J_mid = -(H[i + 1] - H[i]) / dz
+                J_sq_integral += np.abs(J_mid) ** 2 * dz
+            R_ratio = a * J_sq_integral / I_abs_sq
 
         return max(R_ratio, 1.0)
 
@@ -657,9 +705,14 @@ class ESIMFiniteSlabSolver:
         return max(R_ratio, 1.0)
 
     def _compute_power_losses(self, H, mu_dist):
-        """Compute power losses (same as semi-infinite solver)."""
+        """Compute power losses per unit surface area.
+
+        Slab: P' = integral_0^a (1/2)*rho*|dH/dz|^2 dz  [W/m^2]
+        Cylinder: P' = (1/R)*integral_0^R (1/2)*rho*|dH/dr|^2 * r dr  [W/m^2]
+        """
         z = self.mesh_points
         n = self.n_nodes
+        R = self.half_thickness
 
         P_ohmic = 0.0
         P_magnetic = 0.0
@@ -672,15 +725,22 @@ class ESIMFiniteSlabSolver:
             mu_mid = 0.5 * (mu_dist[i] + mu_dist[i + 1])
             H_sq = np.abs(H_mid) ** 2
 
-            P_ohmic += 0.5 * self.rho * np.abs(dHdz) ** 2 * dz
+            if self.geometry == 'cylinder':
+                # r-weighted, normalized by R (per unit surface area)
+                r_mid = 0.5 * (z[i] + z[i + 1])
+                w = r_mid / R  # cylindrical weight / surface normalization
+            else:
+                w = 1.0  # slab: no weight
+
+            P_ohmic += 0.5 * self.rho * np.abs(dHdz) ** 2 * w * dz
 
             if self.use_complex_mu:
                 mu_prime = mu_mid.real
                 mu_double_prime = -mu_mid.imag
-                P_magnetic += 0.5 * self.omega * mu_double_prime * H_sq * dz
-                Q_prime += 0.5 * self.omega * mu_prime * H_sq * dz
+                P_magnetic += 0.5 * self.omega * mu_double_prime * H_sq * w * dz
+                Q_prime += 0.5 * self.omega * mu_prime * H_sq * w * dz
             else:
-                Q_prime += 0.5 * self.omega * mu_mid.real * H_sq * dz
+                Q_prime += 0.5 * self.omega * mu_mid.real * H_sq * w * dz
 
         P_prime = P_ohmic + P_magnetic
         return float(P_prime), float(Q_prime), float(P_magnetic)
