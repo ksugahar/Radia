@@ -441,16 +441,15 @@ class SchurComplementSolver:
 
     def _msc_matvec(self, x):
         """
-        MSC system matvec: y = K_msc * x = (-diag(1/chi) - N) * x
+        MSC system matvec: y = K_msc * x = (diag(1/chi) + N) * x
 
         Uses H-matrix callback if set, otherwise dense numpy.
         """
         if self._msc_matvec_func is not None:
             return self._msc_matvec_func(x.real) + 1j * self._msc_matvec_func(x.imag)
 
-        # Dense: A = -diag(inv_chi) - N
-        # y = -diag(inv_chi)*x - N*x
-        y = -self._inv_chi * x - self._N @ x
+        # Dense: A = diag(inv_chi) + N
+        y = self._inv_chi * x + self._N @ x
         return y
 
     def solve(self, freq, V_source, tol=1e-8, max_iter=1000, x0=None):
