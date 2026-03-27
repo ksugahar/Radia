@@ -393,23 +393,18 @@ def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
         gfu = GridFunction(fesc)
         gfu.vec.data = bf.mat.Inverse(fesc.FreeDofs(), inverse="pardiso") * lfc.vec
 
-        # Power: P = pi * w^2 * Re(Zs)/|Zs|^2 * int|u|^2/r ds
+        # Power (Poynting): P = pi * w^2 * Re(Zs)/|Zs|^2 * int|u|^2/r ds
         int_u2r = Integrate(gfu * Conj(gfu) / r_cf, mesh,
                             definedon=mesh.Boundaries("workpiece_bnd")).real
         P = np.pi * omega**2 * Z_s.real / abs(Z_s)**2 * int_u2r
 
-        # Sample H_t
-        grad_u = grad(gfu)
-        H_t_vals = []
-        for (r_pt, z_pt) in sample_pts:
-            try:
-                mip = mesh(r_pt, z_pt)
-                H_z = abs(NU_0 * grad_u[0](mip) / max(r_pt, 1e-10))
-                H_r = abs(NU_0 * grad_u[1](mip) / max(r_pt, 1e-10))
-                H_t_vals.append(max(H_z, H_r))
-            except:
-                H_t_vals.append(1e-3)
-        H_t_avg = np.mean(H_t_vals)
+        # H_t from SIBC relation on the boundary (NOT offset sampling)
+        # SIBC: H_t = (-jw/Z_s) * A_t, so |H_t| = w*|A_t|/|Z_s| = w*|u|/(r*|Z_s|)
+        # H_t_rms^2 = w^2/|Z_s|^2 * (1/A_wp) * int |u|^2/r ds  (2D axi)
+        # where A_wp = 2*pi * int r ds = workpiece surface area
+        wp_area = 2 * np.pi * (R_wp * H_wp + 2 * 0.5 * R_wp**2)  # lateral + caps
+        H_t_avg = omega / abs(Z_s) * np.sqrt(
+            max(int_u2r / wp_area, 0)) if int_u2r > 0 else 1e-3
 
         # Update Z_s (under-relaxation)
         Z_s_old = Z_s
@@ -424,10 +419,13 @@ def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
 
     t_solve = time.perf_counter() - t0_solve
 
-    # Inductance
+    # Inductance (complex field: use real part only for physical L)
     W = 2 * np.pi * Integrate(
         0.5 * nu_cf / r_cf * grad(gfu) * Conj(grad(gfu)), mesh).real
     L = 2 * W / I_total**2
+
+    print(f"  P (Poynting Robin)  = {P:.6e} W")
+    print(f"  L (energy, complex) = {L*1e9:.2f} nH")
 
     return {
         'mode': 'FEM-SIBC (Karl)',
