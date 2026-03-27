@@ -1025,37 +1025,112 @@ Q = 0.5 * sigma * InnerProduct(E, E).real  # from EM solve
 
 ### Changes from FEM-full to FEM-ESIM
 
-1. **Remove** `work_main` and `work_skin` from volume mesh
-2. **Add** SIBC Robin BC on workpiece surface:
+1. **Keep** workpiece as separate material with air/vacuum properties (NOT a hole!)
    ```python
-   # Robin BC: -(jw/Zs) * A_t * N_t on workpiece surface
-   a += -(s / Z_s) * A.Trace() * N.Trace() * ds("work_surface")
+   # CORRECT: workpiece meshed as air, internal interface for SIBC
+   air = air_sphere - torus - wp_cyl
+   air.name = "air"
+   wp_cyl.name = "workpiece"   # same nu0 as air, separate material
+   shape = Glue([air, wp_cyl, torus])  # THREE volumes
+   # WRONG: air = sphere - torus - wp_cyl  (hole = PEC for all Z_s!)
+   ```
+2. **Add** SIBC Robin BC on internal workpiece surface:
+   ```python
+   # Robin BC: (jw/Z_s) * A_t * v_t on internal wp_surface
+   a += (1j * omega / Z_s) * u.Trace() * v.Trace() * ds("wp_surface")
+   # Without penalty: transparent (field passes through). Correct.
+   # With large penalty (Z_s->0): PEC. Correct.
    ```
 3. **Add** Kelvin exterior sphere (replaces `air` Dirichlet BC):
    ```python
    # Kelvin: nu' = nu0 * (r'/a)^4 in exterior sphere (3D)
    # Periodic BC: inner sphere <-> outer sphere
    ```
-4. **Compute** Q from ESIM (not from E field inside workpiece):
+4. **Compute** H_t from SIBC relation (NOT from curl(A)):
    ```python
-   # H_t at workpiece surface from curl(A)
-   H_t = (1/mu0) * curl(gfA)  # tangential component
-   # ESIM cell problem -> P'(H_t) per surface element
+   # CORRECT: H_t = |J_s| = |jw/Z_s| * |A_t| (surface current for ESIM)
+   At_sq = sum(gfu[i].real**2 + gfu[i].imag**2 for i in range(3))
+   At_rms = sqrt(Integrate(At_sq, mesh, BND, definedon=wp_region) / A_wp)
+   H_t = abs(1j * omega / Z_s) * At_rms
+   # WRONG: curl(A)/mu0 gives total H (incident + scattered), NOT surface current
    sol = esim_solver.solve(H_t)
    Q_surface = sol['P_prime']  # W/m^2 (surface density, not volume)
    ```
 
-### Karl Hollaus Iteration (for nonlinear BH)
+### Why Hole Approach Fails
 
-For steel with nonlinear B-H curve, Z_s depends on H_t:
+For a hole in the mesh, the natural Neumann BC is `n x H = 0` (PEC). Adding
+Robin penalty `(jw/Z_s)*A_t` only strengthens PEC. Both Z_s->0 and Z_s->inf
+give PEC, which is physically wrong (Z_s->inf should be transparent).
+
+With internal interface (workpiece meshed as air): no penalty = transparent,
+penalty = finite-impedance screening. Both limits are correct.
+
+### Validated (fem_esim_3d.py vs efie_sibc.py)
+
+| Material | Freq | FEM-SIBC | BEM | Diff |
+|----------|------|----------|-----|------|
+| Steel | 7 kHz | 1.76e-6 W | 1.96e-6 W | -9.9% |
+| Copper | 1 kHz | 1.26e-6 W | 1.35e-6 W | -6.8% |
+
+### Karl Iteration (for nonlinear BH)
+
+For steel with nonlinear B-H curve, Z_s depends on H_t. Linear materials
+(copper, aluminum) have constant Z_s and converge in 1 iteration (no need
+for Karl iteration).
+
 ```
 1. Initial Z_s from ESIM at estimated H_t
 2. Solve FEM with Robin BC -> get A on workpiece boundary
-3. Compute H_t = (1/mu0) curl(A) at surface
+3. H_t = |jw/Z_s| * |A_t|_rms  (from SIBC relation, NOT curl(A))
 4. Update Z_s from ESIM cell problem at new H_t
 5. Under-relaxation: Z_s = 0.5*Z_s_old + 0.5*Z_s_new
-6. Repeat until |dZ_s/Z_s| < tol (typically 10 iterations)
+6. Repeat until |dZ_s/Z_s| < tol (typically 4-5 iterations for steel)
 ```
+
+### ESIM Geometry: Slab vs Cylinder
+
+The ESIM cell problem ODE depends on geometry:
+
+| Geometry | ODE | Analytical (linear) | Use |
+|----------|-----|---------------------|-----|
+| `slab` | rho*d^2H/dz^2 + jw*mu*H = 0 | cosh(gamma*(a-z))/cosh(gamma*a) | Flat plates |
+| `cylinder` | (rho/r)*d/dr(r*dH/dr) + jw*mu*H = 0 | I0(gamma*r)/I0(gamma*R) | Cylindrical workpieces |
+
+Impact on Z_s (mu_r=100, sigma=2e6, R=10mm):
+
+| delta/R | |Z_s| diff | P' diff | When slab approx OK |
+|---------|-----------|---------|---------------------|
+| 0.04 (steel 7kHz) | -1% | -2% | Yes (thin skin) |
+| 0.21 (copper 1kHz) | -5% | -11% | No (curvature matters) |
+
+Rule: when delta/R < 0.1, slab and cylinder give <2% difference.
+For delta/R > 0.1, use the correct geometry.
+
+Both `fem_esim_3d.py` and `efie_sibc.py` support `--geometry cylinder|slab`.
+
+### Per-Element Curvature (Future Extension)
+
+For general curved surfaces (not just cylinders), each surface element has
+local principal curvatures kappa_1, kappa_2. The ESIM cell problem can use
+the local effective radius R_eff = 1/kappa_max:
+
+```python
+# Future: per-element ESIM with local curvature
+for el in mesh.Elements(BND):
+    # Get local curvature from NGSolve GetTrafo (high-order element mapping)
+    trafo = mesh.GetTrafo(el)
+    # Compute principal curvatures from Jacobian -> second fundamental form
+    kappa = compute_principal_curvatures(trafo)
+    R_local = 1.0 / max(abs(kappa[0]), abs(kappa[1]), 1e-10)
+    geometry = 'slab' if R_local > 100 * delta else 'cylinder'
+    esim_local = ESIMFiniteSlabSolver(half_thickness=R_local, ..., geometry=geometry)
+```
+
+**NGSolve advantage**: `mesh.Curve(order)` provides exact high-order geometry
+via `GetTrafo`. From the element Jacobian, the second fundamental form
+(Weingarten map) gives exact principal curvatures at any point. This is
+unavailable with flat (order=1) elements — another reason to use Curve(3)+.
 
 ### Accuracy at Target Conditions
 
