@@ -27,7 +27,7 @@ Key operators:
 | Operator | Kernel | Use |
 |----------|--------|-----|
 | `LaplaceSL` | 1/(4*pi*r) | MQS inductance (L matrix) |
-| `LaplaceDL` | d/dn[1/(4*pi*r)] | Potential problems |
+| `LaplaceDL` | d/dn[1/(4*pi*r)] | Scalar DL (NOT MFIE K operator, see EFIE-SIBC docs) |
 | `HelmholtzSL` | exp(-jkr)/(4*pi*r) | Full-wave BEM |
 | `HelmholtzDL` | d/dn[exp(-jkr)/(4*pi*r)] | Full-wave BEM |
 | `MaxwellSL` | Full Maxwell kernel | High-frequency |
@@ -1258,75 +1258,208 @@ L = MU_0 * eigvals[1] * R / a
 
 
 NGBEM_ESIM_WORKPIECE = """
-# Two-Stage Induction Heating Design
+# EFIE-SIBC: Two-Way Eddy Current BEM Solver
 
 ## Overview
 
-The inductance panel supports a 2-stage workflow for induction heating design:
+EFIE-SIBC provides **two-way coupled** eddy current analysis for induction heating.
+The workpiece surface currents are solved self-consistently with the coil excitation,
+capturing the screening effect that one-way models miss.
 
-**Stage 1: Solve L** (BEM, fast, surface mesh only)
-- Coil inductance L from source/sink saddle point EFIE
-- Quick design exploration, no volume mesh needed
+**File**: `examples/cubit_panels/inductance/efie_sibc.py`
+**Verification**: `examples/cubit_panels/inductance/verify_laplace_bem.py`
 
-**Stage 2: Solve P** (FEM-ESIM, independent from BEM)
-- Workpiece heating power P via FEM + ESIM
-- Auto-generated 2D axisymmetric air mesh (Kelvin open boundary)
-- Coil modeled as J0 current source (no BEM dependency)
-- ESIM surface impedance on workpiece (no skin mesh needed)
-
-When a `workpiece` block is defined in the Cubit model, the panel shows
-"Solve P" button and ESIM settings (material, frequency, sigma).
-
-## Cubit Setup
+## Formulation (Saddle-Point EFIE + SIBC)
 
 ```
-# Coil blocks (existing)
-block 1 add volume <coil_vid>
-block 1 name "conductor"
-block 2 add tri in surface <source_sid>
-block 2 name "source"
-block 3 add tri in surface <sink_sid>
-block 3 name "sink"
-
-# Workpiece block (NEW)
-block 5 add volume <workpiece_vid>
-block 5 name "workpiece"
+[Z_s*M + jw*mu0*SL,  D^T] [J] = [-jw * A_inc]
+[D,                   0  ] [p]   [0          ]
 ```
 
-## Panel Settings (auto-visible when workpiece block found)
+- **SL**: `LaplaceSL(u.Trace()*ds, use_fmm=False) * v.Trace()*ds` (self-inductance of surface currents)
+- **M**: HDivSurface mass matrix (surface impedance coupling)
+- **D**: divergence matrix HDivSurface -> SurfaceL2 (enforces div J = 0)
+  - Closed surface: rank = n_elem - 1 (one redundant row removed)
+- **Z_s**: per-element complex surface impedance from ESIM cell problem
+- **A_inc**: incident vector potential from coil via Biot-Savart:
+  `A(r) = (mu0/4pi) * sum(J_coil / |r-r'| * dA)`
+- **Karl iteration**: solve -> H_t = |J| per element -> update Z_s from ESIM -> repeat
+  - Relaxation factor 0.5, convergence in 4-5 iterations (dZ/Z < 1e-3)
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| Model | ESIM (nonlinear BH) / Dowell (analytical) | ESIM |
-| Material | Steel / Copper / Aluminum | Steel |
-| Frequency | Operating frequency [Hz] | 50000 |
-| Sigma | Conductivity [S/m] (auto-set by material) | 2.0e6 |
-| Half-thickness | Slab model parameter [m] | 0.005 |
+## Critical: LaplaceDL is NOT MFIE
 
-## Result Table (additional rows when workpiece present)
+`LaplaceDL` in ngsolve.bem for HDivSurface computes the **scalar double layer**
+(dG/dn_y applied to vector basis), with eigenvalue **-1/6** on unit sphere l=1 mode.
 
-| Row | Description |
-|-----|-------------|
-| R (workpiece) | Effective resistance [Ohm] |
-| P (workpiece) | Active power (heating) [W] |
-| Q (workpiece) | Reactive power [var] |
-| Skin depth | delta range [mm] |
-| R_total | Total circuit resistance |
-| X_total | Total circuit reactance |
-| \\|Z_total\\| | Total impedance magnitude |
+This is **NOT** the MFIE K operator `n x curl(SL)` which would have eigenvalue +1/6.
+The MFIE K operator is not available in current ngsolve.bem.
 
-## Scaling
+**Consequence**: The original PMCHWT formulation `(1/2 M + K)*J = n x H_inc` was
+incorrect because `LaplaceDL != MFIE K`. The correct formulation is the EFIE above.
 
-Results are for **unit current I=1A**. For actual current I:
-- P_actual = P_result * I^2
-- For N-turn coil: P_actual = P_result * (N*I)^2
+## Screening Physics
 
-## Standalone Script
+The key dimensionless parameter is `Z_s / (jw * mu0 * a)` where `a` is the workpiece
+characteristic size (radius for cylinder).
 
-```bash
-python examples/cubit_panels/inductance/impedance_esim.py --material steel --freq 50000
-python examples/cubit_panels/inductance/impedance_esim.py --sweep  # frequency sweep
+| Z_s / (jw*mu0*a) | Behavior | One-way accuracy |
+|-------------------|----------|-----------------|
+| < 0.3 | Weak screening | One-way OK (-11%) |
+| 0.3 - 3 | Transition | One-way unreliable |
+| > 3 | Strong screening | **One-way fails (100x+ error)** |
+
+One-way models (BEM-ESIM, FEM-ESIM) use `H_t = H_inc` (PEC approximation).
+The correct surface current is:
 ```
+H_t = omega * mu0 * H_inc * R_wp / (2 * Z_s)   (EMF / loop impedance)
+```
+For steel at 7kHz: H_t = 0.77 A/m, not 18 A/m. One-way overestimates P by 300x.
+
+## Validated Results (EFIE-SIBC BEM)
+
+| Condition | Z_s/(jw*mu0*a) | H_t [A/m] | P [W] | vs one-way |
+|-----------|----------------|-----------|-------|------------|
+| Sphere PEC (Z_s=0) | 0 | J/J_pec = 1.002 | - | 0.2% error |
+| Copper 1kHz (xi=4.8) | 0.1 | 13.93 | 1.35e-6 | -11% |
+| Steel 7kHz (xi=2.4) | 8.9 | 0.77 | 1.96e-6 | -99.7% |
+
+## Cross-Validation: EFIE-SIBC (BEM) vs FEM-SIBC
+
+| Material | Freq | EFIE-SIBC (BEM) | FEM-SIBC | Diff |
+|----------|------|-----------------|----------|------|
+| Steel | 7 kHz | 1.96e-6 W | 1.76e-6 W | -9.9% |
+| Copper | 1 kHz | 1.35e-6 W | 1.26e-6 W | -6.8% |
+
+Both methods agree within ~10%. FEM-SIBC is slightly lower due to the thin-shell
+approximation (zero-thickness interface vs BEM's SL self-inductance).
+
+## Usage
+
+```python
+# Standalone
+python efie_sibc.py --material steel --freq 7000
+python efie_sibc.py --material copper --freq 1000
+
+# As module
+from efie_sibc import run
+result = run(material='steel', frequency=7000)
+# result keys: P_total, Q_total, H_t_rms, Z_s_elem, J_sol, ndof, ne, area
+```
+
+## Pipeline
+
+```
+Coil BEM (source/sink EFIE)
+  -> gf_J (coil surface current for 1A)
+  -> Biot-Savart -> A_inc, H_inc at workpiece
+
+Workpiece surface mesh (OCC Cylinder -> Glue -> GenerateMesh)
+  -> HDivSurface order=0, SurfaceL2 order=0
+
+EFIE-SIBC saddle point + Karl iteration
+  -> J (surface current), Z_s (per-element impedance)
+  -> P = sum(P'_i * area_i), Q = sum(Q'_i * area_i)
+```
+
+## FEM-SIBC: Two-Way FEM with Surface Impedance
+
+**File**: `examples/cubit_panels/inductance/fem_esim_3d.py`
+
+FEM-SIBC solves `curl(nu*curl(A)) = J_source` with SIBC penalty on an internal
+interface. Validated against EFIE-SIBC (BEM) to within 10%.
+
+### Critical Design: Internal Interface, NOT Hole
+
+**WRONG** (gives PEC for all Z_s):
+```python
+# Hole approach: workpiece removed from mesh
+air = air_sphere - torus - wp_cyl    # wp_cyl subtracted = hole
+shape = Glue([air, torus])
+# Natural Neumann on hole boundary = n x H = 0 = PEC
+# Robin penalty (jw/Z_s)*A_t only strengthens PEC tendency
+# Z_s -> infinity (transparent) STILL gives PEC. Fundamentally wrong.
+```
+
+**CORRECT** (transparent for Z_s->inf, PEC for Z_s->0):
+```python
+# Internal interface: workpiece kept as separate material (air properties)
+air = air_sphere - torus - wp_cyl
+air.name = "air"
+wp_cyl.name = "workpiece"    # meshed with same nu0 as air
+shape = Glue([air, wp_cyl, torus])   # THREE volumes
+# Without SIBC penalty: field passes through = transparent. CORRECT.
+# With SIBC penalty: Robin correction on internal interface.
+```
+
+### Critical: H_t from SIBC Relation, NOT curl(A)
+
+**WRONG** (gives incident field ~18 A/m, not surface current ~0.7 A/m):
+```python
+H_cf = nu0 * curl(gfu)
+H_mag_sq = sum(H_cf[i].real**2 + H_cf[i].imag**2 for i in range(3))
+H_t_rms = sqrt(Integrate(H_mag_sq, mesh, BND, definedon=wp_region) / A_wp)
+# This gives the TOTAL tangential H dominated by incident coil field.
+```
+
+**CORRECT** (gives physical surface current for ESIM input):
+```python
+# J_s = -(jw/Z_s) * A_t  =>  H_t = |jw/Z_s| * |A_t|
+At_sq = sum(gfu[i].real**2 + gfu[i].imag**2 for i in range(3))
+At_rms = sqrt(Integrate(At_sq, mesh, BND, definedon=wp_region) / A_wp)
+H_t_rms = abs(1j * omega / Z_s) * At_rms
+# H_t is the thin-shell surface current density = ESIM input H_0
+```
+
+**Why curl(A) is wrong on internal interface**: On an internal SIBC interface,
+`curl(A)/mu0` from adjacent elements gives the local H field in each element.
+This includes the incident field from the coil (~18 A/m) plus a small scattered
+contribution. The ESIM cell problem needs the physical surface current
+`J_s = H_t_surface`, not the total H. The SIBC relation `J_s = -(jw/Z_s)*A_t`
+extracts the correct surface current from the continuous tangential A.
+
+### Formulation
+
+```
+int nu0 * curl(A) . curl(v) dx + (jw/Z_s) * int A_t . v_t ds("wp_surface")
+  = int J_source . v dx("coil")
+
+dx: all domains (air + workpiece_interior + coil)
+ds("wp_surface"): internal interface between air and workpiece
+```
+
+**Thin conducting shell model**: The penalty term represents a jump condition
+`[n x H] = J_s = -(jw/Z_s) * A_t` on the internal interface.
+
+### ESIM Geometry: Slab vs Cylinder
+
+The `--geometry` flag selects the 1D cell problem ODE:
+- `cylinder` (default): Bessel I0/I1, for cylindrical workpieces
+- `slab`: cosh/sinh, for flat plates
+
+When delta/R < 0.1 (thin skin): slab ~ cylinder (<2% difference).
+When delta/R > 0.1: curvature matters (up to 11% P' difference for delta/R=0.2).
+
+### Usage
+
+```python
+python fem_esim_3d.py --material steel --freq 7000
+python fem_esim_3d.py --material copper --freq 1000 --geometry slab
+
+from fem_esim_3d import run
+result = run(material='steel', frequency=7000, sigma=2e6, esim_geometry='cylinder')
+# result keys: P_total, Q_total, L, H_t_rms, Z_s, ndof, ne
+```
+
+### When to Use FEM-SIBC vs EFIE-SIBC (BEM)
+
+| Criterion | FEM-SIBC | EFIE-SIBC (BEM) |
+|-----------|----------|-----------------|
+| Accuracy | -7% to -10% | Reference |
+| Speed (this geometry) | ~300s | ~5s |
+| Magnetic core coupling | Easy (FEM volume) | Needs FEM-BEM coupling |
+| Complex coil geometry | Easy (volume J source) | Needs Biot-Savart |
+| Self-inductance of eddy current | Approximate (thin shell) | Exact (SL operator) |
+| Recommended for | FEM-dominant workflows | Standalone surface analysis |
 """
 
 
@@ -1352,6 +1485,10 @@ def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
         "topology": NGBEM_HODGE_DECOMPOSITION,
         "workpiece": NGBEM_ESIM_WORKPIECE,
         "induction_heating": NGBEM_ESIM_WORKPIECE,
+        "efie_sibc": NGBEM_ESIM_WORKPIECE,
+        "fem_sibc": NGBEM_ESIM_WORKPIECE,
+        "eddy_current": NGBEM_ESIM_WORKPIECE,
+        "screening": NGBEM_ESIM_WORKPIECE,
     }
 
     topic = topic.lower().strip()

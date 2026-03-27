@@ -127,7 +127,8 @@ def build_axi_mesh(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset, maxh):
 
 def compute_heating(R_coil, a_coil, R_wp, H_wp,
                     sigma, frequency, material="steel",
-                    I_total=1.0, maxh=0.003, order=3):
+                    I_total=1.0, maxh=0.003, order=3,
+                    esim_geometry='cylinder'):
     """Compute workpiece heating via FEM-ESIM.
 
     Returns dict with P_total, P_distribution, L_coil, diagnostics.
@@ -199,7 +200,8 @@ def compute_heating(R_coil, a_coil, R_wp, H_wp,
     esim_solver = ESIMFiniteSlabSolver(
         half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
         frequency=frequency,
-        mu_r=mu_r if bh_curve is None else None, n_nodes=200)
+        mu_r=mu_r if bh_curve is None else None, n_nodes=200,
+        geometry=esim_geometry)
 
     grad_u = grad(gfu)
     eps = maxh * 0.2
@@ -284,8 +286,14 @@ def main():
     parser.add_argument("--material", default="steel",
                         choices=["steel", "copper", "aluminum"])
     parser.add_argument("--maxh", type=float, default=0.003, help="Mesh size [m]")
+    parser.add_argument("--esim-geometry", default="local_curvature",
+                        choices=["local_curvature", "none"],
+                        help="ESIM curvature: local_curvature or none (flat)")
     parser.add_argument("--output", default="", help="Output JSON file")
     args = parser.parse_args()
+
+    _geom_map = {"local_curvature": "cylinder", "none": "slab"}
+    esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
 
     import io as _io
     real_stdout = sys.stdout
@@ -293,7 +301,8 @@ def main():
     try:
         result = compute_heating(
             args.r_coil, args.a_coil, args.r_wp, args.h_wp,
-            args.sigma, args.frequency, args.material, maxh=args.maxh)
+            args.sigma, args.frequency, args.material, maxh=args.maxh,
+            esim_geometry=esim_geom)
     except Exception as e:
         result = {"error": str(e)}
     sys.stdout = real_stdout
