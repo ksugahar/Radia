@@ -3356,6 +3356,77 @@ src/radia/
 """
 
 
+RADIA_MSC_KERNEL = """
+# MSC Kernel Implementation Notes (mmm_core / MMMBuilder)
+
+## Critical: FieldFromChargedTriangle must compute full 3D H vector
+
+The H-field from a uniformly charged triangular face has **three components**:
+tangential (2) + normal (1). A common bug is to compute only the normal
+component using the solid angle Omega:
+
+```
+WRONG: H = sigma * Omega / (4*pi) * n_face   (normal only, missing tangential)
+RIGHT: H = full analytical integral with edge log-terms + atan-terms (3 components)
+```
+
+The correct formula (same as radTInteraction::FieldFromChargedTriangleLocal in Radia core):
+- **HH1** (tangential along edge direction a): `-sigma * sum_edges(YD[j] * log(RM/RP))`
+- **HH2** (tangential along b = c x a):       `-sigma * sum_edges(XD[j] * log(RM/RP))`
+- **HH3** (normal along face normal c):         `sigma * sum_edges(atan terms)`
+
+All three are computed WITHOUT the 1/(4*pi) factor; the caller multiplies by INV_FOUR_PI.
+
+### Sign convention
+
+The analytical formula returns H pointing INTO the charged surface (negative of
+the physical field from positive sigma). The result must be **negated** to match
+Radia's sign convention where positive sigma produces H pointing away from the surface.
+
+### Yano-Sugahara evaluation point
+
+For MSC hexahedra, the evaluation point for each face is the **midpoint between
+the face center and the element center**, NOT the face center itself:
+
+```
+eval_point = 0.5 * (face_center + element_center)
+```
+
+Using the face center directly causes the self-interaction term (same face)
+to be singular (solid angle = 2*pi on the surface).
+
+### Point charge correction (multi-element only)
+
+For multi-element problems, Radia adds a point charge correction term at the
+source element center to improve convergence of the far-field expansion:
+
+```
+H_point = -area_face * (obs - src_center) / |obs - src_center|^3
+```
+
+This is included in radTInteraction::Compute6x6BlockFast but may not be needed
+for single-element validation. For production use with multiple elements, include it.
+
+### Schur complement for PEEC-MSC coupling
+
+The coupled PEEC-MSC system can be solved efficiently by eliminating PEEC DOFs
+(small, n_peec) via Schur complement, preserving H-matrix (HACApK) for MSC:
+
+```
+K_schur = K_msc + B_pm * Z_peec^{-1} * jw * M_mp    (low-rank correction, rank = n_peec)
+rhs_schur = -B_pm * Z_peec^{-1} * V_source
+```
+
+The coupling matrices B_pm (Biot-Savart -> face normals) and M_mp (A-field -> flux linkage)
+must use the same face ordering as MMMBuilder:
+- Face 0: bottom (-Z), Face 1: top (+Z)
+- Face 2: front (-Y), Face 3: back (+Y)
+- Face 4: left (-X), Face 5: right (+X)
+
+Implementation: `peec_msc_schur.py::SchurComplementSolver`
+"""
+
+
 def get_radia_documentation(topic: str = "all") -> str:
     """Return Radia usage documentation by topic."""
     topics = {
@@ -3377,6 +3448,7 @@ def get_radia_documentation(topic: str = "all") -> str:
         "hysteresis": RADIA_HYSTERESIS,
         "esim": RADIA_ESIM,
         "build_and_release": RADIA_BUILD_AND_RELEASE,
+        "msc_kernel": RADIA_MSC_KERNEL,
     }
 
     topic = topic.lower().strip()

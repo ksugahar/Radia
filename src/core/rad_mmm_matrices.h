@@ -325,6 +325,19 @@ public:
                        int max_iter = 1000,
                        bool chi_per_element = false);
 
+    /**
+     * Public matrix-vector product: y = A * x where A = -diag(inv_chi) - N
+     * For use in external iterative solvers (e.g., Schur complement coupling)
+     * @param inv_chi: 1/chi values [totalDOF] or [n_elem]
+     * @param x: Input vector [totalDOF]
+     * @param y: Output vector [totalDOF]
+     * @param chi_per_element: If true, inv_chi is [n_elem] and broadcast
+     */
+    void ApplySystemMatrix(const std::vector<double>& inv_chi,
+                           const std::vector<double>& x,
+                           std::vector<double>& y,
+                           bool chi_per_element = false);
+
     // Accessors
     int TotalDOF() const { return total_dof_; }
     int NumElements() const { return n_elements_; }
@@ -404,6 +417,24 @@ public:
         int n_points) const;
 
     /**
+     * Compute vector potential A at observation points
+     * @param M: Solved magnetization [total_dof]
+     *           For tetrahedra (3 DOF): M = [Mx, My, Mz] per element
+     *           For hexahedra (6 DOF): M = [sigma_0..5] per element,
+     *             reconstructed to equivalent M via least-squares on face normals
+     * @param obs_points: Observation points [n_points x 3]
+     * @param n_points: Number of observation points
+     * @return A field [n_points x 3] in T*m (= Wb/m = V*s/m)
+     *
+     * Uses magnetic dipole formula: A = (mu_0/4pi) * m x r_hat / r^2
+     * where m = M * V is the magnetic moment of the element.
+     */
+    std::vector<double> ComputeAField(
+        const std::vector<double>& M,
+        const std::vector<double>& obs_points,
+        int n_points) const;
+
+    /**
      * Get element centers for diagnostics
      * @return Element centers [n_elements x 3]
      */
@@ -429,6 +460,15 @@ private:
     // Field from dipole at element center
     Vec3d DipoleField(const Vec3d& M, const Vec3d& elem_center, double volume,
                       const Vec3d& obs) const;
+
+    // Vector potential from dipole: A = (mu_0/4pi) * m x r / |r|^3
+    Vec3d DipoleVectorPotential(const Vec3d& M, const Vec3d& elem_center,
+                                 double volume, const Vec3d& obs) const;
+
+    // Reconstruct M from surface charges for hexahedron
+    // Least-squares: M = (N^T N)^{-1} N^T sigma where N is (n_faces x 3) normal matrix
+    Vec3d ReconstructMFromSurfaceCharges(const MMMElement& elem,
+                                          const double* sigma) const;
 
     // Field from surface charges (MSC)
     Vec3d SurfaceChargeField(const MMMElement& elem, const double* sigma,
