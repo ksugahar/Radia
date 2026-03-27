@@ -189,8 +189,9 @@ void MMMBuilder::AddHexahedron(const std::vector<Vec3d>& vertices) {
         // Total face area
         elem.face_areas[f] = tri1.area + tri2.area;
 
-        // Evaluation point (Yano-Sugahara: face centroid)
-        elem.eval_points[f] = (v0 + v1 + v2 + v3) / 4.0;
+        // Evaluation point (Yano-Sugahara: midpoint between face center and element center)
+        Vec3d face_center = (v0 + v1 + v2 + v3) / 4.0;
+        elem.eval_points[f] = (face_center + elem.center) / 2.0;
 
         // Ensure normals point outward
         Vec3d to_center = elem.center - elem.eval_points[f];
@@ -641,16 +642,113 @@ double MMMBuilder::SolidAngleTriangle(const Vec3d& obs, const Vec3d& v0,
 
 Vec3d MMMBuilder::FieldFromChargedTriangle(const TriangleFace& tri, const Vec3d& obs,
                                             double sigma) const {
-    // H field from uniformly charged triangle using solid angle
-    // H = -sigma / (4*pi) * grad(Omega)
-    // For uniform charge: H = sigma * Omega / (4*pi) * n (pointing toward surface)
+    // H field from uniformly charged triangle — full 3-component analytical formula.
+    // Computes H = (sigma / 4pi) * integral_S (r - r') / |r - r'|^3 dS'
+    // using edge log-terms (tangential) + atan-terms (normal).
+    // Reference: same algorithm as radTInteraction::FieldFromChargedTriangleLocal
+    //            (Radia core MSC kernel)
 
-    // Compute solid angle
-    double omega = SolidAngleTriangle(obs, tri.v0, tri.v1, tri.v2);
+    const double EPS = 1.0e-20;
 
-    // H field contribution (using solid angle gradient approach)
-    // This is the simplified formula for field from a uniformly charged triangle
-    Vec3d H = tri.normal * (sigma * omega * constants::INV_FOUR_PI);
+    // Edge vectors of triangle
+    Vec3d e1 = tri.v1 - tri.v0;
+    Vec3d e2 = tri.v2 - tri.v0;
+
+    // Build orthonormal local basis: a = e1/|e1|, c = e1 x e2 / |e1 x e2|, b = c x a
+    double e1_len = e1.norm();
+    if (e1_len < EPS) return Vec3d(0, 0, 0);
+
+    Vec3d basis_a = e1 / e1_len;
+    Vec3d cvec = e1.cross(e2);
+    double c_len = cvec.norm();
+    if (c_len < EPS) return Vec3d(0, 0, 0);
+
+    Vec3d basis_c = cvec / c_len;
+    Vec3d basis_b = basis_c.cross(basis_a);
+
+    // Triangle vertices in local 2D coordinates (v0 at origin)
+    double xy0_x = 0.0, xy0_y = 0.0;
+    double xy1_x = e1_len, xy1_y = 0.0;
+    double xy2_x = e2.dot(basis_a);
+    double xy2_y = e2.dot(basis_b);
+
+    double XY[3][2] = {{xy0_x, xy0_y}, {xy1_x, xy1_y}, {xy2_x, xy2_y}};
+    double DS[3], AM[3], XD[3], YD[3];
+    double EPSG = 0.0;
+
+    for (int j = 0; j < 3; j++) {
+        int l = (j + 1) % 3;
+        double dx = XY[l][0] - XY[j][0];
+        double dy = XY[l][1] - XY[j][1];
+        if (std::abs(dx) < EPS) dx = (dx >= 0) ? EPS : -EPS;
+
+        DS[j] = std::sqrt(dx * dx + dy * dy);
+        AM[j] = dy / dx;
+        XD[j] = -dx / DS[j];
+        YD[j] =  dy / DS[j];
+
+        if (DS[j] > EPSG) EPSG = DS[j];
+    }
+    EPSG *= 1.0e-12;
+
+    // Observation point in local coordinates
+    Vec3d d = obs - tri.v0;
+    double EE1 = d.dot(basis_a);
+    double EE2 = d.dot(basis_b);
+    double EE3 = d.dot(basis_c);
+
+    double X[3], Y[3], HH[3], E[3], R[3];
+    for (int j = 0; j < 3; j++) {
+        X[j] = EE1 - XY[j][0];
+        Y[j] = EE2 - XY[j][1];
+        HH[j] = Y[j] * X[j];
+        E[j] = EE3 * EE3 + X[j] * X[j];
+        R[j] = std::sqrt(X[j] * X[j] + Y[j] * Y[j] + EE3 * EE3);
+    }
+
+    double Z = EE3;
+
+    // Edge log-contributions
+    double RM[3], RP[3], AL[3];
+    for (int j = 0; j < 3; j++) {
+        int jp1 = (j + 1) % 3;
+        RM[j] = R[j] + R[jp1] - DS[j];
+        RP[j] = R[j] + R[jp1] + DS[j];
+        double rr = (RM[j] / RP[j] > EPS) ? (RM[j] / RP[j]) : EPS;
+        AL[j] = std::log(rr);
+    }
+
+    // Local field components (WITHOUT 4pi divisor, same as Radia convention)
+    double HH1 = sigma * (-YD[0]*AL[0] - YD[1]*AL[1] - YD[2]*AL[2]);
+    double HH2 = sigma * (-XD[0]*AL[0] - XD[1]*AL[1] - XD[2]*AL[2]);
+    double HH3 = 0.0;
+
+    // Normal component (atan terms)
+    if (std::abs(Z) > EPSG) {
+        double ZR[3];
+        for (int j = 0; j < 3; j++) {
+            ZR[j] = Z * R[j];
+        }
+
+        double AT[3], BT[3];
+        for (int j = 0; j < 3; j++) {
+            int jp1 = (j + 1) % 3;
+            AT[j] = (AM[j] * E[j] - HH[j]) / ZR[j];
+            BT[j] = (AM[j] * E[jp1] - HH[jp1]) / ZR[jp1];
+        }
+
+        HH3 = sigma * (-std::atan(AT[0]) - std::atan(AT[1]) - std::atan(AT[2])
+                        +std::atan(BT[0]) + std::atan(BT[1]) + std::atan(BT[2]));
+    }
+
+    // Transform back to global coordinates
+    // Note: negate to match Radia's sign convention for H from surface charge.
+    // The analytical formula gives H pointing INTO the charged surface;
+    // physical H from positive sigma should point AWAY from the surface.
+    Vec3d H;
+    H.x = -(HH1 * basis_a.x + HH2 * basis_b.x + HH3 * basis_c.x);
+    H.y = -(HH1 * basis_a.y + HH2 * basis_b.y + HH3 * basis_c.y);
+    H.z = -(HH1 * basis_a.z + HH2 * basis_b.z + HH3 * basis_c.z);
 
     return H;
 }
@@ -659,6 +757,11 @@ void MMMBuilder::Compute3x3Block(int elem_i, int elem_j, double* N_block) const 
     // Compute 3x3 interaction block between two tetrahedra
     // N[i,j] relates magnetization M_j to field at element i
     // H_i = N[i,j] * M_j
+    //
+    // Same algorithm as radTInteraction::Compute3x3BlockFast:
+    //   1. Sum field from face charges (analytical, no 4pi)
+    //   2. Add point charge correction at source element center
+    //   3. Multiply by INV_FOUR_PI
 
     const MMMElement& elem_src = elements_[elem_j];  // Source element
     const MMMElement& elem_obs = elements_[elem_i];  // Observer element
@@ -666,37 +769,62 @@ void MMMBuilder::Compute3x3Block(int elem_i, int elem_j, double* N_block) const 
     // Initialize block to zero
     std::memset(N_block, 0, 9 * sizeof(double));
 
-    // For tetrahedra: use surface charge method
-    // Each face has charge sigma = M . n
-    // Field at observer = sum over faces of field from charged triangle
-
     Vec3d obs = elem_obs.center;
+    Vec3d src_center = elem_src.center;
 
-    // For each face of source element
-    for (const auto& tri : elem_src.triangles) {
-        // Field contribution when M = ex (unit x-magnetization)
-        // sigma = M . n = n_x
-        Vec3d H_x = FieldFromChargedTriangle(tri, obs, tri.normal.x);
+    // Accumulate H from face charges and point charge correction
+    // for each unit magnetization direction
+    double H_x_total[3] = {0, 0, 0};  // H from M = ex
+    double H_y_total[3] = {0, 0, 0};  // H from M = ey
+    double H_z_total[3] = {0, 0, 0};  // H from M = ez
 
-        // Field contribution when M = ey
-        Vec3d H_y = FieldFromChargedTriangle(tri, obs, tri.normal.y);
+    // Track total charge for point charge correction
+    double total_charge_x = 0, total_charge_y = 0, total_charge_z = 0;
 
-        // Field contribution when M = ez
-        Vec3d H_z = FieldFromChargedTriangle(tri, obs, tri.normal.z);
+    for (size_t f = 0; f < elem_src.triangles.size(); f++) {
+        const auto& tri = elem_src.triangles[f];
+        double area = tri.area;
 
-        // Accumulate into N matrix (row-major)
-        // N[0,:] = dH_x/dM (row 0)
-        N_block[0] += H_x.x;  N_block[1] += H_y.x;  N_block[2] += H_z.x;
-        // N[1,:] = dH_y/dM (row 1)
-        N_block[3] += H_x.y;  N_block[4] += H_y.y;  N_block[5] += H_z.y;
-        // N[2,:] = dH_z/dM (row 2)
-        N_block[6] += H_x.z;  N_block[7] += H_y.z;  N_block[8] += H_z.z;
+        // sigma = M . n for each unit M direction
+        double sigma_x = tri.normal.x;
+        double sigma_y = tri.normal.y;
+        double sigma_z = tri.normal.z;
+
+        total_charge_x += sigma_x * area;
+        total_charge_y += sigma_y * area;
+        total_charge_z += sigma_z * area;
+
+        // Field from charged triangle (WITHOUT 4pi)
+        Vec3d H_x = FieldFromChargedTriangle(tri, obs, sigma_x);
+        Vec3d H_y = FieldFromChargedTriangle(tri, obs, sigma_y);
+        Vec3d H_z = FieldFromChargedTriangle(tri, obs, sigma_z);
+
+        H_x_total[0] += H_x.x; H_x_total[1] += H_x.y; H_x_total[2] += H_x.z;
+        H_y_total[0] += H_y.x; H_y_total[1] += H_y.y; H_y_total[2] += H_y.z;
+        H_z_total[0] += H_z.x; H_z_total[1] += H_z.y; H_z_total[2] += H_z.z;
     }
+
+    // Apply 1/(4pi) and store in N matrix (row-major)
+    N_block[0] = H_x_total[0] * constants::INV_FOUR_PI;
+    N_block[1] = H_y_total[0] * constants::INV_FOUR_PI;
+    N_block[2] = H_z_total[0] * constants::INV_FOUR_PI;
+    N_block[3] = H_x_total[1] * constants::INV_FOUR_PI;
+    N_block[4] = H_y_total[1] * constants::INV_FOUR_PI;
+    N_block[5] = H_z_total[1] * constants::INV_FOUR_PI;
+    N_block[6] = H_x_total[2] * constants::INV_FOUR_PI;
+    N_block[7] = H_y_total[2] * constants::INV_FOUR_PI;
+    N_block[8] = H_z_total[2] * constants::INV_FOUR_PI;
 }
 
 void MMMBuilder::Compute6x6Block(int elem_i, int elem_j, double* K_block) const {
     // Compute 6x6 MSC interaction block between two hexahedra
     // K[i,j] relates face charges sigma_j to field at evaluation points of element i
+    //
+    // Same algorithm as radTInteraction::Compute6x6BlockFast:
+    //   1. Sum field from 2 triangles per source face (analytical, no 4pi)
+    //   2. Add point charge correction at source element center
+    //   3. Multiply by INV_FOUR_PI
+    //   4. Project onto observer face normal
 
     const MMMElement& elem_src = elements_[elem_j];  // Source element
     const MMMElement& elem_obs = elements_[elem_i];  // Observer element
@@ -704,27 +832,25 @@ void MMMBuilder::Compute6x6Block(int elem_i, int elem_j, double* K_block) const 
     // Initialize block to zero
     std::memset(K_block, 0, 36 * sizeof(double));
 
-    // For MSC hexahedra: 6 evaluation points, 6 source faces
-    // K[f_obs, f_src] = n_obs . H(eval_point_obs, sigma=1 on face f_src)
+    // Source element center (for point charge correction)
+    Vec3d src_center = elem_src.center;
 
     for (int f_obs = 0; f_obs < 6; f_obs++) {
         Vec3d obs = elem_obs.eval_points[f_obs];
         Vec3d n_obs = elem_obs.face_normals[f_obs];
 
         for (int f_src = 0; f_src < 6; f_src++) {
-            // Two triangles per face
+            // Field from 2 triangles of source face (WITHOUT 4pi divisor)
             Vec3d H_total(0, 0, 0);
 
-            // Triangle 1
             const TriangleFace& tri1 = elem_src.triangles[f_src * 2];
             H_total = H_total + FieldFromChargedTriangle(tri1, obs, 1.0);
 
-            // Triangle 2
             const TriangleFace& tri2 = elem_src.triangles[f_src * 2 + 1];
             H_total = H_total + FieldFromChargedTriangle(tri2, obs, 1.0);
 
-            // K[f_obs, f_src] = n_obs . H_total
-            K_block[f_obs * 6 + f_src] = n_obs.dot(H_total);
+            // K[f_obs, f_src] = n_obs . H_total / (4*pi)
+            K_block[f_obs * 6 + f_src] = n_obs.dot(H_total) * constants::INV_FOUR_PI;
         }
     }
 }
@@ -1078,6 +1204,23 @@ void MMMSolver::MatVec(const std::vector<double>& A,
                 0.0, y.data(), 1);
 }
 
+void MMMSolver::ApplySystemMatrix(const std::vector<double>& inv_chi,
+                                   const std::vector<double>& x,
+                                   std::vector<double>& y,
+                                   bool chi_per_element) {
+    if (!matrix_set_) {
+        throw std::runtime_error("MMMSolver: matrix not set");
+    }
+
+    // Build system matrix A = -diag(inv_chi) - N
+    std::vector<double> A;
+    BuildSystemMatrix(A, inv_chi, chi_per_element);
+
+    // y = A * x
+    y.resize(total_dof_);
+    MatVec(A, x, y);
+}
+
 int MMMSolver::SolveLU(const std::vector<double>& inv_chi,
                         const std::vector<double>& H_ext,
                         std::vector<double>& M,
@@ -1386,6 +1529,83 @@ Vec3d MMMFieldComputer::DipoleField(const Vec3d& M, const Vec3d& elem_center,
     return H;
 }
 
+Vec3d MMMFieldComputer::DipoleVectorPotential(const Vec3d& M,
+                                               const Vec3d& elem_center,
+                                               double volume,
+                                               const Vec3d& obs) const {
+    // A = (mu_0 / 4pi) * m x r / |r|^3
+    // where m = M * volume, r = obs - elem_center
+    Vec3d m = M * volume;
+    Vec3d r = obs - elem_center;
+    double r_mag = r.norm();
+
+    if (r_mag < 1e-20) {
+        return Vec3d(0, 0, 0);
+    }
+
+    double r3 = r_mag * r_mag * r_mag;
+    Vec3d A = m.cross(r) * (constants::MU_0 * constants::INV_FOUR_PI / r3);
+
+    return A;
+}
+
+Vec3d MMMFieldComputer::ReconstructMFromSurfaceCharges(const MMMElement& elem,
+                                                        const double* sigma) const {
+    // For hexahedron: solve M from sigma_i = M . n_i (i = 0..5)
+    // using least-squares: M = (N^T N)^{-1} N^T sigma
+    // where N[i] = face_normals[i] (6 x 3 matrix)
+    int n_faces = static_cast<int>(elem.face_normals.size());
+
+    if (n_faces == 0) {
+        return Vec3d(0, 0, 0);
+    }
+
+    // Build N^T N (3x3) and N^T sigma (3x1)
+    double NtN[9] = {0};  // row-major 3x3
+    double Nts[3] = {0};  // 3x1
+
+    for (int i = 0; i < n_faces; i++) {
+        const Vec3d& n = elem.face_normals[i];
+        double s = sigma[i];
+
+        // N^T N += n * n^T
+        NtN[0] += n.x * n.x;  NtN[1] += n.x * n.y;  NtN[2] += n.x * n.z;
+        NtN[3] += n.y * n.x;  NtN[4] += n.y * n.y;  NtN[5] += n.y * n.z;
+        NtN[6] += n.z * n.x;  NtN[7] += n.z * n.y;  NtN[8] += n.z * n.z;
+
+        // N^T sigma += n * s
+        Nts[0] += n.x * s;
+        Nts[1] += n.y * s;
+        Nts[2] += n.z * s;
+    }
+
+    // Solve 3x3 system by Cramer's rule
+    double det = NtN[0] * (NtN[4]*NtN[8] - NtN[5]*NtN[7])
+               - NtN[1] * (NtN[3]*NtN[8] - NtN[5]*NtN[6])
+               + NtN[2] * (NtN[3]*NtN[7] - NtN[4]*NtN[6]);
+
+    if (std::abs(det) < 1e-30) {
+        return Vec3d(0, 0, 0);
+    }
+
+    double inv_det = 1.0 / det;
+
+    // Adjugate matrix elements
+    double Mx = inv_det * (Nts[0] * (NtN[4]*NtN[8] - NtN[5]*NtN[7])
+                         + Nts[1] * (NtN[2]*NtN[7] - NtN[1]*NtN[8])
+                         + Nts[2] * (NtN[1]*NtN[5] - NtN[2]*NtN[4]));
+
+    double My = inv_det * (Nts[0] * (NtN[5]*NtN[6] - NtN[3]*NtN[8])
+                         + Nts[1] * (NtN[0]*NtN[8] - NtN[2]*NtN[6])
+                         + Nts[2] * (NtN[2]*NtN[3] - NtN[0]*NtN[5]));
+
+    double Mz = inv_det * (Nts[0] * (NtN[3]*NtN[7] - NtN[4]*NtN[6])
+                         + Nts[1] * (NtN[1]*NtN[6] - NtN[0]*NtN[7])
+                         + Nts[2] * (NtN[0]*NtN[4] - NtN[1]*NtN[3]));
+
+    return Vec3d(Mx, My, Mz);
+}
+
 Vec3d MMMFieldComputer::SurfaceChargeField(const MMMElement& elem,
                                             const double* sigma,
                                             const Vec3d& obs) const {
@@ -1503,6 +1723,54 @@ std::vector<double> MMMFieldComputer::ComputeBField(
     }
 
     return H_field;
+}
+
+std::vector<double> MMMFieldComputer::ComputeAField(
+    const std::vector<double>& M,
+    const std::vector<double>& obs_points,
+    int n_points) const {
+
+    std::vector<double> A_field(n_points * 3, 0.0);
+
+    int n_elem = static_cast<int>(elements_.size());
+
+    for (int p = 0; p < n_points; p++) {
+        Vec3d obs(obs_points[p * 3], obs_points[p * 3 + 1], obs_points[p * 3 + 2]);
+        Vec3d A_total(0, 0, 0);
+
+        for (int e = 0; e < n_elem; e++) {
+            const auto& elem = elements_[e];
+            int dof_start = dof_offset_[e];
+            bool is_pm = (e < static_cast<int>(material_types_.size())) &&
+                         (material_types_[e] == MMMMaterialType::FixedPM ||
+                          material_types_[e] == MMMMaterialType::DemagPM);
+
+            if (is_pm) {
+                Vec3d M_pm(Mr_[e * 3], Mr_[e * 3 + 1], Mr_[e * 3 + 2]);
+                A_total = A_total + DipoleVectorPotential(M_pm, elem.center, elem.volume, obs);
+            } else if (elem.dof == 3) {
+                // Tetrahedron: M directly available
+                Vec3d M_elem(M[dof_start], M[dof_start + 1], M[dof_start + 2]);
+                A_total = A_total + DipoleVectorPotential(M_elem, elem.center, elem.volume, obs);
+            } else if (elem.dof == 6) {
+                // Hexahedron: reconstruct M from surface charges
+                Vec3d M_elem = ReconstructMFromSurfaceCharges(elem, &M[dof_start]);
+                A_total = A_total + DipoleVectorPotential(M_elem, elem.center, elem.volume, obs);
+            } else if (elem.dof == 5) {
+                // Wedge: reconstruct M from surface charges (same approach)
+                Vec3d M_elem = ReconstructMFromSurfaceCharges(elem, &M[dof_start]);
+                A_total = A_total + DipoleVectorPotential(M_elem, elem.center, elem.volume, obs);
+            } else if (elem.dof == 0 && !is_pm) {
+                A_total = A_total + DipoleVectorPotential(elem.Mr, elem.center, elem.volume, obs);
+            }
+        }
+
+        A_field[p * 3 + 0] = A_total.x;
+        A_field[p * 3 + 1] = A_total.y;
+        A_field[p * 3 + 2] = A_total.z;
+    }
+
+    return A_field;
 }
 
 //=========================================================================

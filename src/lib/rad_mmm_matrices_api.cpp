@@ -425,6 +425,46 @@ public:
         );
     }
 
+    /**
+     * Matrix-vector product: y = A * x where A = -diag(inv_chi) - N
+     * For use in external iterative solvers (e.g., Schur complement coupling)
+     */
+    py::array_t<double> matvec(
+            py::array_t<double, py::array::c_style | py::array::forcecast> inv_chi,
+            py::array_t<double, py::array::c_style | py::array::forcecast> x,
+            bool chi_per_element = false) {
+
+        auto inv_chi_info = inv_chi.request();
+        auto x_info = x.request();
+
+        int n = solver_->TotalDOF();
+        int n_elem = solver_->NumElements();
+
+        if (chi_per_element) {
+            if (inv_chi_info.size != n_elem) {
+                throw std::runtime_error("inv_chi size must equal n_elements when chi_per_element=True");
+            }
+        } else {
+            if (inv_chi_info.size != n) {
+                throw std::runtime_error("inv_chi size must equal total_dof");
+            }
+        }
+
+        if (x_info.size != n) {
+            throw std::runtime_error("x size must equal total_dof");
+        }
+
+        std::vector<double> inv_chi_vec(static_cast<const double*>(inv_chi_info.ptr),
+                                         static_cast<const double*>(inv_chi_info.ptr) + inv_chi_info.size);
+        std::vector<double> x_vec(static_cast<const double*>(x_info.ptr),
+                                   static_cast<const double*>(x_info.ptr) + x_info.size);
+        std::vector<double> y;
+
+        solver_->ApplySystemMatrix(inv_chi_vec, x_vec, y, chi_per_element);
+
+        return py::array_t<double>(y.size(), y.data());
+    }
+
     // Properties
     int total_dof() const { return solver_->TotalDOF(); }
     int num_elements() const { return solver_->NumElements(); }
@@ -520,6 +560,45 @@ public:
             buf(i, 0) = H[i * 3];
             buf(i, 1) = H[i * 3 + 1];
             buf(i, 2) = H[i * 3 + 2];
+        }
+        return result;
+    }
+
+    /**
+     * Compute vector potential A at observation points
+     * @param M: Magnetization vector (total_dof,)
+     * @param obs_points: Observation points (n_points, 3) [m]
+     * @return A field (n_points, 3) [T*m]
+     *
+     * Uses magnetic dipole formula. For hexahedra, reconstructs M
+     * from surface charges via least-squares on face normals.
+     */
+    py::array_t<double> compute_a_field(
+            py::array_t<double, py::array::c_style | py::array::forcecast> M,
+            py::array_t<double, py::array::c_style | py::array::forcecast> obs_points) {
+
+        auto M_info = M.request();
+        auto obs_info = obs_points.request();
+
+        if (obs_info.ndim != 2 || obs_info.shape[1] != 3) {
+            throw std::runtime_error("obs_points must have shape (n, 3)");
+        }
+
+        int n_points = static_cast<int>(obs_info.shape[0]);
+
+        std::vector<double> M_vec(static_cast<const double*>(M_info.ptr),
+                                   static_cast<const double*>(M_info.ptr) + M_info.size);
+        std::vector<double> obs_vec(static_cast<const double*>(obs_info.ptr),
+                                     static_cast<const double*>(obs_info.ptr) + obs_info.size);
+
+        std::vector<double> A = computer_->ComputeAField(M_vec, obs_vec, n_points);
+
+        py::array_t<double> result({n_points, 3});
+        auto buf = result.mutable_unchecked<2>();
+        for (int i = 0; i < n_points; i++) {
+            buf(i, 0) = A[i * 3];
+            buf(i, 1) = A[i * 3 + 1];
+            buf(i, 2) = A[i * 3 + 2];
         }
         return result;
     }
@@ -926,6 +1005,23 @@ Example:
                    n_iter: Number of iterations
              )doc")
 
+        .def("matvec", &PyMMMSolver::matvec,
+             py::arg("inv_chi"), py::arg("x"),
+             py::arg("chi_per_element") = false,
+             R"doc(
+             Matrix-vector product: y = A * x where A = -diag(inv_chi) - N
+
+             For use in external iterative solvers (e.g., Schur complement coupling).
+
+             Args:
+                 inv_chi: 1/chi values (total_dof,) or (n_elem,)
+                 x: Input vector (total_dof,)
+                 chi_per_element: If True, inv_chi is per-element
+
+             Returns:
+                 y: Output vector (total_dof,)
+             )doc")
+
         .def_property_readonly("total_dof", &PyMMMSolver::total_dof,
             "Total degrees of freedom")
         .def_property_readonly("num_elements", &PyMMMSolver::num_elements,
@@ -989,6 +1085,23 @@ Example:
 
              Returns:
                  H: Magnetic field intensity (n_points, 3) [A/m]
+             )doc")
+
+        .def("compute_a_field", &PyMMMFieldComputer::compute_a_field,
+             py::arg("M"), py::arg("obs_points"),
+             R"doc(
+             Compute vector potential A at observation points.
+
+             Uses magnetic dipole formula. For hexahedra (6 DOF), reconstructs
+             equivalent magnetization M from surface charges via least-squares
+             on face normals, then computes A = (mu_0/4pi) * m x r / |r|^3.
+
+             Args:
+                 M: Magnetization vector (total_dof,) [A/m or surface charge]
+                 obs_points: Observation points (n_points, 3) [m]
+
+             Returns:
+                 A: Vector potential (n_points, 3) [T*m]
              )doc")
 
         .def("get_element_centers", &PyMMMFieldComputer::get_element_centers,
