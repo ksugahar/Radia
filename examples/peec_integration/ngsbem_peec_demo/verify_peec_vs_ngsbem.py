@@ -182,11 +182,13 @@ def test_ngsbem_inductance():
         from ngsolve import Mesh, BND
         from ngsolve.bem import LaplaceSL
         from ngsolve import HDivSurface, SurfaceL2, BilinearForm, LinearForm, ds, div, GridFunction, TaskManager
-        from netgen.occ import Box, Pnt, OCCGeometry
+        from netgen.occ import Box, Pnt, Glue, OCCGeometry
     except ImportError as e:
         return None, str(e)
 
     # Create wire geometry: 100mm x 1mm x 1mm
+    # IMPORTANT: Use Glue(faces) for surface-only mesh (no volume).
+    # Volume mesh boundary extraction causes degenerate HDivSurface DOFs.
     wire = Box(Pnt(0, -0.5e-3, -0.5e-3), Pnt(0.1, 0.5e-3, 0.5e-3))
 
     for f in wire.faces:
@@ -198,8 +200,10 @@ def test_ngsbem_inductance():
         else:
             f.name = "wire"
 
-    geo = OCCGeometry(wire)
-    ngmesh = geo.GenerateMesh(maxh=0.005)
+    wire_surf = Glue(wire.faces)  # Surface-only, no volume mesh
+    geo = OCCGeometry(wire_surf)
+    # maxh must be <= min cross-section / 2 for well-shaped elements
+    ngmesh = geo.GenerateMesh(maxh=0.5e-3)
     mesh = Mesh(ngmesh)
 
     nse = sum(1 for _ in mesh.Elements(BND))
