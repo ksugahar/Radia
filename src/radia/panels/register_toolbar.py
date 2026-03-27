@@ -677,8 +677,19 @@ class InductanceDialog(QDialog):
 
 		esim_layout.addWidget(QLabel("Half-thickness [m]:"), 4, 0)
 		self.thickness_edit = QLineEdit("0.005")
-		self.thickness_edit.setToolTip("Slab model half-thickness for skin effect")
+		self.thickness_edit.setToolTip("Half-thickness (slab) or radius (cylinder) for ESIM cell problem")
 		esim_layout.addWidget(self.thickness_edit, 4, 1)
+
+		esim_layout.addWidget(QLabel("Curvature:"), 5, 0)
+		self.curvature_combo = QComboBox()
+		self.curvature_combo.addItems(["Local curvature", "None (flat)"])
+		self.curvature_combo.setToolTip(
+			"Local curvature: cylindrical cell problem (Bessel I0/I1),\n"
+			"  uses half-thickness as local radius of curvature.\n"
+			"  Accurate for delta/R > 0.1 where curvature affects Z_s by >2%.\n"
+			"None (flat): planar slab cell problem (cosh/sinh).\n"
+			"  Good approximation when delta << half-thickness.")
+		esim_layout.addWidget(self.curvature_combo, 5, 1)
 
 		self.esim_group.setVisible(False)
 		layout.addWidget(self.esim_group)
@@ -1038,6 +1049,9 @@ class InductanceDialog(QDialog):
 
 		# ESIM / Dowell parameters (only when workpiece block exists)
 		if self._workpiece_block:
+			# Map UI curvature label to CLI argument
+			_curv = self.curvature_combo.currentText()
+			_curv_arg = "local_curvature" if "Local" in _curv else "none"
 			args += [
 				"--workpiece", self._workpiece_block,
 				"--impedance-model", self.model_combo.currentText().lower(),
@@ -1045,6 +1059,7 @@ class InductanceDialog(QDialog):
 				"--sigma", self.sigma_edit.text().strip(),
 				"--half-thickness", self.thickness_edit.text().strip(),
 				"--material", self.material_combo.currentText().lower(),
+				"--esim-geometry", _curv_arg,
 			]
 
 		# Run async via QProcess (non-blocking)
@@ -1115,6 +1130,8 @@ class InductanceDialog(QDialog):
 		tmpdir = tempfile.mkdtemp(prefix="radia_heat_")
 		self._heat_json = os.path.join(tmpdir, "heat_result.json").replace("\\", "/")
 
+		_curv = self.curvature_combo.currentText()
+		_curv_arg = "local_curvature" if "Local" in _curv else "none"
 		args = [
 			calc_script,
 			"--r-coil", str(round(r_coil, 6)),
@@ -1124,6 +1141,7 @@ class InductanceDialog(QDialog):
 			"--frequency", str(freq),
 			"--sigma", str(sigma_val),
 			"--material", material,
+			"--esim-geometry", _curv_arg,
 			"--output", self._heat_json,
 		]
 

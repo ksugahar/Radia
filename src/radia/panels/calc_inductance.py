@@ -59,7 +59,7 @@ def extract_inductance(cub5_file, order, source_label="source",
                        sink_label="sink", fes_order=0, msh_output="",
                        workpiece="", impedance_model="esim",
                        frequency=50000, sigma=2e6, half_thickness=0.005,
-                       material="steel"):
+                       material="steel", esim_geometry="cylinder"):
     """Extract self-inductance via source/sink saddle point EFIE.
 
     Args:
@@ -213,7 +213,8 @@ def extract_inductance(cub5_file, order, source_label="source",
             mesh, sol['gf_J'], workpiece, cubit,
             impedance_model=impedance_model,
             frequency=frequency, sigma=sigma,
-            half_thickness=half_thickness, material=material)
+            half_thickness=half_thickness, material=material,
+            esim_geometry=esim_geometry)
         result.update(wp_result)
         sys.stderr.write(f"ESIM_DONE:R={wp_result.get('wp_R_effective', 0):.4e}\n")
         sys.stderr.flush()
@@ -224,7 +225,7 @@ def extract_inductance(cub5_file, order, source_label="source",
 def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
                                   impedance_model="esim", frequency=50000,
                                   sigma=2e6, half_thickness=0.005,
-                                  material="steel"):
+                                  material="steel", esim_geometry="cylinder"):
     """Compute workpiece surface impedance via ESIM or Dowell.
 
     Pipeline:
@@ -339,7 +340,8 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
         solver = ESIMFiniteSlabSolver(
             half_thickness=half_thickness, bh_curve=bh_curve,
             sigma=sigma, frequency=frequency,
-            mu_r=mu_r if bh_curve is None else None, n_nodes=200)
+            mu_r=mu_r if bh_curve is None else None, n_nodes=200,
+            geometry=esim_geometry)
 
         for i in range(n_panels):
             H0 = max(float(H_t_mag[i]), 1e-3)
@@ -840,6 +842,10 @@ def main():
                         help="Slab half-thickness [m]")
     parser.add_argument("--material", default="steel",
                         choices=["steel", "copper", "aluminum"])
+    parser.add_argument("--esim-geometry", default="local_curvature",
+                        choices=["local_curvature", "none"],
+                        help="ESIM curvature: local_curvature=Bessel (R=half_thickness), "
+                             "none=flat slab (cosh/sinh)")
     # Post mode args
     parser.add_argument("--j-npy", default="", help="J_coeffs.npy path (post mode)")
     parser.add_argument("--mesh-vol", default="", help="surface_mesh.vol path (post mode)")
@@ -854,6 +860,9 @@ def main():
     sys.stdout = _io.StringIO()
     try:
         if args.mode == "solve":
+            # Map user-facing curvature name to internal ESIM geometry
+            _geom_map = {"local_curvature": "cylinder", "none": "slab"}
+            esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
             result = extract_inductance(args.cub5, args.order,
                                         args.source, args.sink,
                                         args.fes_order, args.msh_output,
@@ -862,7 +871,8 @@ def main():
                                         frequency=args.frequency,
                                         sigma=args.sigma,
                                         half_thickness=args.half_thickness,
-                                        material=args.material)
+                                        material=args.material,
+                                        esim_geometry=esim_geom)
         else:
             result = post_process(args.mesh_vol, args.fes_order,
                                   args.msh_output, args.j_npy,

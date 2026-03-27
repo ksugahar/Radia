@@ -1,19 +1,30 @@
 """
-3D FEM-ESIM + Kelvin: same gapped torus geometry as BEM, fair P comparison.
+3D FEM-SIBC: gapped torus coil + cylindrical workpiece with ESIM surface impedance.
 
-Uses OCC gapped torus (coil) + air sphere + Kelvin exterior (spherical inversion).
-Kelvin transform: r' = a^2/r, nu' = nu0 * (r'/a)^4 (3D spherical).
+Key insight: workpiece interior MUST be meshed (as air/vacuum), NOT cut as a hole.
+  - Hole approach: natural Neumann BC = PEC, SIBC penalty only strengthens PEC.
+  - Full mesh approach: no SIBC = transparent, SIBC penalty provides correct screening.
 
-Pipeline:
-  1. OCC: gapped torus coil + workpiece hole + inner sphere + Kelvin outer sphere
-  2. HCurl FEM: curl(nu*curl(A)) = J0 in coil volume
-  3. Periodic BC on Kelvin boundary (inner <-> outer sphere surface)
-  4. Sample H_t = (1/mu0) curl(A) at workpiece surface
-  5. ESIM cell problem -> P per panel
+Formulation (thin conducting shell on internal interface):
+  int nu0 * curl(A) . curl(v) dx + (jw/Z_s) * int A_t . v_t ds(wp) = int J . v dx
+
+  dx covers ALL domains (air + workpiece_interior + coil)
+  ds("wp_surface") is the internal interface between air and workpiece
+
+Physics:
+  [n x H] = J_s = -(jw/Z_s) * A_t  (jump of tangential H = surface current)
+  E_t = Z_s * J_s  (Ohm's law in the thin shell)
+
+Karl iteration for nonlinear Z_s(H_t):
+  1. Solve FEM with SIBC penalty
+  2. H_t = |n x H| = |jw/Z_s| * |A_t| on wp_surface
+  3. Update Z_s from ESIM cell problem
+  4. Repeat until Z_s converges
 
 Usage:
     python fem_esim_3d.py
     python fem_esim_3d.py --freq 7000 --material steel
+    python fem_esim_3d.py --freq 1000 --material copper
 """
 
 import math
@@ -31,8 +42,8 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
         R_wp=0.010, H_wp=0.020,
         sigma=2e6, frequency=7000, material="steel",
         R_air=0.12, maxh_air=0.015, maxh_coil=0.005,
-        order=1):
-    """3D FEM-ESIM with gapped torus coil.
+        order=1, esim_geometry='cylinder'):
+    """3D FEM-SIBC with internal interface (workpiece meshed as air).
 
     Args:
         R_coil, a_coil: Torus major/minor radius [m]
@@ -45,12 +56,13 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
         maxh_air: Air mesh size [m]
         maxh_coil: Coil mesh size [m]
         order: HCurl polynomial order
+        esim_geometry: 'cylinder' (Bessel I0/I1) or 'slab' (cosh/sinh)
     """
     from ngsolve import (Mesh, HCurl, BilinearForm, LinearForm, GridFunction,
-                         Integrate, curl, dx, CF, BND, TaskManager)
+                         Integrate, curl, dx, ds, CF, BND, VOL, TaskManager,
+                         InnerProduct)
     from netgen.occ import (WorkPlane, Axes, Axis, Pnt, Dir, Sphere,
-                             Cylinder, OCCGeometry, Glue, Box)
-    from netgen.meshing import MeshingParameters
+                             Cylinder, OCCGeometry, Glue)
     from esim_cell_problem import ESIMFiniteSlabSolver
 
     STEEL_BH = [
@@ -62,238 +74,276 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
     mu_r = 1.0 if material in ("copper", "aluminum") else None
 
     I_total = 1.0
-    J0 = I_total / (math.pi * a_coil**2)  # Current density [A/m^2]
+    J0 = I_total / (math.pi * a_coil**2)
+
+    omega = 2 * np.pi * frequency
+    nu0 = 1.0 / MU_0
+
+    # Skin depth estimate (linear mu)
+    mu_eff = MU_0 * (mu_r if mu_r else 100.0)  # rough estimate for steel
+    delta = math.sqrt(2.0 / (omega * mu_eff * sigma))
 
     print("=" * 65)
-    print("3D FEM-ESIM: Gapped Torus + Air Sphere")
+    print("3D FEM-SIBC: Gapped Torus + Workpiece (internal interface)")
     print("=" * 65)
     print(f"Coil:      R={R_coil*1e3:.0f}mm, a={a_coil*1e3:.1f}mm, gap={gap_deg}deg")
     print(f"Workpiece: R={R_wp*1e3:.0f}mm, H={H_wp*1e3:.0f}mm")
     print(f"Material:  {material}, sigma={sigma:.0e}, f={frequency}Hz")
+    print(f"Skin depth: delta={delta*1e3:.2f}mm, delta/R={delta/R_wp:.2f}")
     print(f"Air sphere: R={R_air*1e3:.0f}mm")
     print()
 
-    # === Geometry ===
-    print("[1/4] Building 3D geometry...")
+    # === Geometry: workpiece as separate material (NOT a hole) ===
+    print("[1/3] Building 3D geometry (workpiece meshed as air)...")
     t0 = time.perf_counter()
 
     # Gapped torus (coil volume)
-    wp = WorkPlane(Axes(p=Pnt(R_coil, 0, 0), n=Dir(0, 1, 0), h=Dir(0, 0, 1)))
-    circle = wp.Circle(a_coil).Face()
+    wp_plane = WorkPlane(Axes(p=Pnt(R_coil, 0, 0),
+                              n=Dir(0, 1, 0), h=Dir(0, 0, 1)))
+    circle = wp_plane.Circle(a_coil).Face()
     torus = circle.Revolve(Axis(Pnt(0, 0, 0), Dir(0, 0, 1)), 360 - gap_deg)
     torus.name = "coil"
     torus.maxh = maxh_coil
 
-    # Air sphere
+    # Air sphere (label outer surface for Dirichlet)
     air_sphere = Sphere(Pnt(0, 0, 0), R_air)
     air_sphere.name = "air"
+    for f in air_sphere.faces:
+        f.name = "outer"
 
-    # Workpiece cylinder (hole in air, not meshed)
+    # Workpiece cylinder: KEPT as separate material (not subtracted!)
     wp_cyl = Cylinder(Pnt(0, 0, -H_wp / 2), Dir(0, 0, 1), R_wp, H_wp)
+    wp_cyl.name = "workpiece"
+    for f in wp_cyl.faces:
+        f.name = "wp_surface"
+        f.maxh = min(R_wp / 4, maxh_coil)
 
-    # Boolean: air = sphere - coil - workpiece
+    # Boolean: air = sphere - coil - workpiece (outside workpiece)
     air = air_sphere - torus - wp_cyl
     air.name = "air"
 
-    # Label outer sphere as Dirichlet
-    for f in air.faces:
-        # Sphere boundary: all vertices at distance ~R_air from origin
-        try:
-            c = f.center
-            d = math.sqrt(c.x**2 + c.y**2 + c.z**2)
-            if abs(d - R_air) < R_air * 0.1:
-                f.name = "outer"
-            elif abs(math.sqrt(c.x**2 + c.y**2) - R_wp) < R_wp * 0.3 and abs(c.z) < H_wp:
-                f.name = "wp_surface"
-            else:
-                f.name = "default"
-        except:
-            f.name = "default"
-
-    shape = Glue([air, torus])
+    # Glue ALL THREE volumes: air + workpiece_interior + coil
+    shape = Glue([air, wp_cyl, torus])
     geo = OCCGeometry(shape)
     with TaskManager():
         ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=0.3)
     mesh = Mesh(ngmesh)
     t_mesh = time.perf_counter() - t0
 
-    ne = mesh.GetNE(VOL)
+    ne = mesh.ne
+    mats = mesh.GetMaterials()
+    bnds = mesh.GetBoundaries()
     print(f"  Mesh: {ne} tets, {mesh.nv} vertices ({t_mesh:.1f}s)")
-    print(f"  Materials: {mesh.GetMaterials()}")
+    print(f"  Materials: {mats}")
+    print(f"  Boundaries: {bnds}")
 
-    # === FEM Solve ===
-    print("[2/4] HCurl FEM solve...")
+    # Verify workpiece material exists
+    if "workpiece" not in mats:
+        print("  ERROR: 'workpiece' material not found!")
+        print("  Workpiece was probably not meshed as a separate volume.")
+        return None
+
+    # Check wp_surface boundary
+    has_wp = "wp_surface" in bnds
+    if not has_wp:
+        print("  WARNING: 'wp_surface' boundary not found.")
+        print("  The interface may have a different name.")
+        # List all boundaries and their types
+        for i, b in enumerate(bnds):
+            if b and b != "default":
+                print(f"    [{i}] {b}")
+
+    # === FEM-SIBC solve with Karl iteration ===
+    print("[2/3] FEM-SIBC solve...")
     t0 = time.perf_counter()
 
-    fes = HCurl(mesh, order=order, dirichlet="outer")
+    fes = HCurl(mesh, order=order, dirichlet="outer", complex=True)
     u, v = fes.TnT()
     print(f"  DOFs: {fes.ndof}")
 
-    nu0 = 1.0 / MU_0
-    a_bf = BilinearForm(fes)
-    a_bf += nu0 * curl(u) * curl(v) * dx
-    a_bf.Assemble()
-
-    # Source: J = J0 * e_theta in coil (approximate as J0 in tangential direction)
-    # For a torus at radius R, the tangential direction is (-sin(phi), cos(phi), 0)
-    # phi = atan2(y, x)
+    # Source: J = J0 * e_phi in coil
     from ngsolve import x, y, z, sqrt, IfPos
-    r_xy = sqrt(x*x + y*y)
+    r_xy = sqrt(x * x + y * y)
     r_safe = IfPos(r_xy - 1e-10, r_xy, 1e-10)
-    # Unit tangential vector: e_phi = (-y/r, x/r, 0)
     J_source = J0 * CF((-y / r_safe, x / r_safe, 0))
 
+    # RHS (assembled once, constant)
     f_lf = LinearForm(fes)
     f_lf += J_source * v * dx("coil")
     f_lf.Assemble()
 
-    gfu = GridFunction(fes)
-    with TaskManager():
-        gfu.vec.data = a_bf.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f_lf.vec
-    t_solve = time.perf_counter() - t0
-    print(f"  Solve: {t_solve:.1f}s")
+    # Pre-compute wp_surface area
+    if has_wp:
+        wp_region = mesh.Boundaries("wp_surface")
+        A_wp = Integrate(CF(1), mesh, BND, definedon=wp_region).real
+        print(f"  A_wp = {A_wp:.6e} m^2")
+    else:
+        A_wp = 2 * math.pi * R_wp * H_wp  # analytical cylinder lateral area
+        print(f"  A_wp (analytical) = {A_wp:.6e} m^2")
 
-    # === Sample H at workpiece surface ===
-    print("[3/4] Sampling H_t at workpiece surface...")
-    t0 = time.perf_counter()
-
-    B = nu0 * curl(gfu)  # This is H, not B (nu0 * curl A = (1/mu0)*B = H)
-    # Actually: curl(A) = B, so H = (1/mu0)*curl(A) = nu0*curl(A)
-    # Wait: curl(A) = B, H = B/mu0 = nu0 * curl(A). Yes, correct for air.
-
+    # ESIM solver
     esim_solver = ESIMFiniteSlabSolver(
         half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
         frequency=frequency,
         mu_r=mu_r if bh_curve is None else None, n_nodes=200,
-        geometry='cylinder')
+        geometry=esim_geometry)
+    print(f"  ESIM geometry: {esim_geometry}")
 
-    # Sample on cylindrical workpiece surface (same panels as BEM-ESIM)
-    n_phi, n_z = 32, 16
-    eps = maxh_coil * 0.3
+    # Karl iteration
+    Z_s = esim_solver.solve(5.0)['Z']
+    gfu = GridFunction(fes)
+    max_iter = 15
+    tol = 1e-3
+    relax = 0.5
+
+    print(f"  |Z_s| init = {abs(Z_s):.4e}")
+    print(f"  Z_s/(jw*mu0*a) = {abs(Z_s)/(omega*MU_0*R_wp):.2f}")
+    print(f"  {'Iter':>4s} {'|Z_s|':>12s} {'P [W]':>12s} "
+          f"{'H_t_rms':>10s} {'dZ/Z':>10s}")
+
     P_total = 0.0
     Q_total = 0.0
-    H_vals = []
+    H_t_rms = 5.0
 
-    # Lateral surface
-    for i in range(n_phi):
-        phi = (i + 0.5) * 2 * math.pi / n_phi
-        cos_p, sin_p = math.cos(phi), math.sin(phi)
-        r_eval = R_wp + eps
-        for j in range(n_z):
-            z_j = -H_wp / 2 + (j + 0.5) * H_wp / n_z
-            px, py, pz = r_eval * cos_p, r_eval * sin_p, z_j
-            dA = 2 * math.pi * R_wp * (H_wp / n_z) / n_phi  # panel area / n_phi
-            # Actually for 3D: dA = R_wp * dphi * dz
-            dA = R_wp * (2 * math.pi / n_phi) * (H_wp / n_z)
-            try:
-                mip = mesh(px, py, pz)
-                Hx = float(B[0](mip))
-                Hy = float(B[1](mip))
-                Hz = float(B[2](mip))
-                # Tangential H: remove normal component (radial)
-                nr = np.array([cos_p, sin_p, 0])
-                H_vec = np.array([Hx, Hy, Hz])
-                H_n = np.dot(H_vec, nr)
-                H_t_vec = H_vec - H_n * nr
-                H_t = np.linalg.norm(H_t_vec)
-            except:
-                H_t = 0.0
+    # Determine SIBC boundary name
+    sibc_bnd = "wp_surface" if has_wp else None
 
-            H_vals.append(H_t)
-            sol = esim_solver.solve(max(H_t, 1e-3))
-            P_total += sol['P_prime'] * dA
-            Q_total += sol['Q_prime'] * dA
+    for iteration in range(max_iter):
+        # Assemble: curl-curl + SIBC penalty on internal interface
+        a_bf = BilinearForm(fes)
+        a_bf += nu0 * curl(u) * curl(v) * dx
+        if sibc_bnd:
+            sibc_coeff = 1j * omega / Z_s
+            a_bf += sibc_coeff * u.Trace() * v.Trace() * ds(sibc_bnd)
+        a_bf.Assemble()
 
-    # Top/bottom caps
-    n_r_cap = 8
-    for sign in [+1, -1]:
-        for i in range(n_phi):
-            phi = (i + 0.5) * 2 * math.pi / n_phi
-            cos_p, sin_p = math.cos(phi), math.sin(phi)
-            for k in range(n_r_cap):
-                r_k = (k + 0.5) * R_wp / n_r_cap
-                if r_k < 1e-6:
-                    continue
-                px = r_k * cos_p
-                py = r_k * sin_p
-                pz = sign * (H_wp / 2 + eps)
-                dr = R_wp / n_r_cap
-                dA = r_k * (2 * math.pi / n_phi) * dr
-                try:
-                    mip = mesh(px, py, pz)
-                    Hx = float(B[0](mip))
-                    Hy = float(B[1](mip))
-                    Hz = float(B[2](mip))
-                    # Normal is +/-z, tangential is in-plane
-                    H_t = math.sqrt(Hx**2 + Hy**2)
-                except:
-                    H_t = 0.0
-                H_vals.append(H_t)
-                sol = esim_solver.solve(max(H_t, 1e-3))
-                P_total += sol['P_prime'] * dA
-                Q_total += sol['Q_prime'] * dA
+        with TaskManager():
+            gfu.vec.data = a_bf.mat.Inverse(
+                fes.FreeDofs(), inverse="pardiso") * f_lf.vec
 
-    t_esim = time.perf_counter() - t0
-    H_arr = np.array(H_vals)
+        # Compute H_t on workpiece surface using SIBC relation:
+        #   J_s = -(jw/Z_s) * A_t  =>  H_t = |J_s| = |jw/Z_s| * |A_t|
+        #
+        # NOTE: Do NOT use curl(A) for H_t. On an internal interface,
+        # curl(A)/mu0 gives the FULL tangential H (incident + scattered),
+        # dominated by the incident coil field (~18 A/m). The SIBC-based
+        # H_t gives the physical surface current (~0.7 A/m), which is the
+        # correct input for the ESIM cell problem.
+        if sibc_bnd:
+            At_sq = sum(gfu[i].real * gfu[i].real +
+                        gfu[i].imag * gfu[i].imag for i in range(3))
+            At_int = Integrate(At_sq, mesh, BND,
+                               definedon=wp_region).real
+            At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
+            H_t_rms = abs(1j * omega / Z_s) * At_rms
+
+            if iteration == 0:
+                print(f"  DEBUG: |A_t| rms = {At_rms:.4e}, "
+                      f"|jw/Z_s| = {abs(1j*omega/Z_s):.4e}")
+                print(f"  DEBUG: H_t (SIBC) = {H_t_rms:.2f} A/m")
+                # Also show curl-based H for reference (includes incident)
+                H_cf = nu0 * curl(gfu)
+                H_mag_sq = sum(H_cf[i].real * H_cf[i].real +
+                               H_cf[i].imag * H_cf[i].imag
+                               for i in range(3))
+                Hmag_int = Integrate(H_mag_sq, mesh, BND,
+                                     definedon=wp_region).real
+                H_curl = math.sqrt(max(Hmag_int, 0) / max(A_wp, 1e-30))
+                print(f"  DEBUG: H (curl, includes incident) = {H_curl:.2f}")
+        else:
+            H_t_rms = 5.0
+
+        # ESIM update
+        Z_s_old = Z_s
+        sol = esim_solver.solve(max(H_t_rms, 1e-3))
+        Z_s_new = sol['Z']
+        Z_s = relax * Z_s_new + (1 - relax) * Z_s_old
+
+        P_total = sol['P_prime'] * A_wp
+        Q_total = sol['Q_prime'] * A_wp
+
+        dZ = abs(Z_s - Z_s_old) / max(abs(Z_s_old), 1e-30)
+        print(f"  {iteration:4d} {abs(Z_s):12.4e} {P_total:12.4e} "
+              f"{H_t_rms:10.2f} {dZ:10.4e}")
+
+        if dZ < tol and iteration > 0:
+            print(f"  Converged at iteration {iteration}")
+            break
+
+    t_solve = time.perf_counter() - t0
 
     # Inductance from magnetic energy
-    W = Integrate(0.5 * nu0 * curl(gfu) * curl(gfu), mesh)
+    curl_A = curl(gfu)
+    B_sq = sum(curl_A[i].real * curl_A[i].real +
+               curl_A[i].imag * curl_A[i].imag for i in range(3))
+    W = 0.5 * Integrate(nu0 * B_sq, mesh).real
     L = 2 * W / I_total**2
-
-    print(f"  H_t range: [{H_arr.min():.2f}, {H_arr.max():.2f}] A/m")
-    print(f"  ESIM + sampling: {t_esim:.1f}s")
 
     # === Results ===
     print()
-    print("[4/4] Results")
+    print("[3/3] Results")
     print("-" * 65)
-    print(f"  P (FEM-ESIM 3D) = {P_total:.6e} W")
-    print(f"  Q                = {Q_total:.6e} var")
-    print(f"  L (FEM 3D)       = {L*1e9:.2f} nH")
+    print(f"  P (FEM-SIBC 3D)   = {P_total:.6e} W")
+    print(f"  Q                  = {Q_total:.6e} var")
+    print(f"  H_t_rms            = {H_t_rms:.2f} A/m")
+    print(f"  |Z_s|              = {abs(Z_s):.4e} Ohm")
+    print(f"  L (FEM 3D)         = {L*1e9:.2f} nH")
     print(f"  DOFs: {fes.ndof}, Elements: {ne}")
-    print(f"  Time: mesh={t_mesh:.1f}s, solve={t_solve:.1f}s, esim={t_esim:.1f}s")
+    print(f"  Time: mesh={t_mesh:.1f}s, solve={t_solve:.1f}s")
     print("-" * 65)
 
     return {
         'P_total': float(P_total),
         'Q_total': float(Q_total),
         'L': float(L),
-        'H_t_max': float(H_arr.max()),
-        'H_t_min': float(H_arr.min()),
+        'H_t_rms': float(H_t_rms),
+        'Z_s': complex(Z_s),
         'ndof': fes.ndof,
         'ne': ne,
         't_mesh': t_mesh,
         't_solve': t_solve,
-        't_esim': t_esim,
     }
 
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="3D FEM-ESIM")
+    parser = argparse.ArgumentParser(description="3D FEM-SIBC")
     parser.add_argument("--freq", type=float, default=7000)
     parser.add_argument("--material", default="steel")
     parser.add_argument("--maxh", type=float, default=0.012)
+    parser.add_argument("--geometry", default="local_curvature",
+                        choices=["local_curvature", "none"],
+                        help="ESIM curvature: local_curvature (Bessel) or none (flat slab)")
     args = parser.parse_args()
 
-    r = run(frequency=args.freq, material=args.material, maxh_air=args.maxh)
+    # Material-dependent sigma
+    sigma_map = {'steel': 2e6, 'copper': 5.8e7, 'aluminum': 3.5e7}
+    sigma = sigma_map.get(args.material, 2e6)
+    _geom_map = {"local_curvature": "cylinder", "none": "slab"}
+    esim_geom = _geom_map.get(args.geometry, "cylinder")
+    r = run(frequency=args.freq, material=args.material, sigma=sigma,
+            maxh_air=args.maxh, esim_geometry=esim_geom)
 
-    # Compare with BEM-ESIM
+    if r is None:
+        sys.exit(1)
+
+    # Compare with EFIE-SIBC (BEM two-way)
     print()
-    print("Running BEM-ESIM for comparison...")
+    print("Running EFIE-SIBC (BEM) for comparison...")
     sys.path.insert(0, os.path.dirname(__file__))
-    from impedance_esim import run as bem_run
-    r_bem = bem_run(material=args.material, frequency=args.freq,
-                    R=0.030, a=0.003, wp_radius=0.010, wp_height=0.020,
-                    n_phi=32, n_z=16, verbose=False)
+    from pmchwt_sibc import run as efie_run
+    r_bem = efie_run(material=args.material, frequency=args.freq, verbose=False)
 
     print()
     print("=" * 65)
-    print(f"Comparison: 3D FEM-ESIM vs BEM-ESIM ({args.material}, {args.freq}Hz)")
+    print(f"Comparison: FEM-SIBC vs EFIE-SIBC ({args.material}, {args.freq}Hz)")
     print("=" * 65)
-    print(f"{'':>20s} {'FEM-ESIM 3D':>14s} {'BEM-ESIM':>14s} {'diff':>8s}")
+    print(f"{'':>20s} {'FEM-SIBC':>14s} {'EFIE-SIBC':>14s} {'diff':>8s}")
     P_f, P_b = r['P_total'], r_bem['P_total']
-    L_f, L_b = r['L'], r_bem['L_coil']
-    print(f"{'P [W]':>20s} {P_f:14.4e} {P_b:14.4e} {(P_f-P_b)/P_b*100:+8.1f}%")
-    print(f"{'L [nH]':>20s} {L_f*1e9:14.2f} {L_b*1e9:14.2f} {(L_f-L_b)/L_b*100:+8.1f}%")
-    print(f"{'H_t max [A/m]':>20s} {r['H_t_max']:14.2f} {r_bem['H_t_mag'].max():14.2f}")
+    if abs(P_b) > 1e-30:
+        print(f"{'P [W]':>20s} {P_f:14.4e} {P_b:14.4e} "
+              f"{(P_f-P_b)/P_b*100:+8.1f}%")
+    else:
+        print(f"{'P [W]':>20s} {P_f:14.4e} {P_b:14.4e}")
+    print(f"{'H_t_rms [A/m]':>20s} {r['H_t_rms']:14.2f} "
+          f"{r_bem['H_t_rms']:14.2f}")
