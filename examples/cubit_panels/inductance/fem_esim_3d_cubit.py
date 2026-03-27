@@ -196,7 +196,8 @@ def solve(mesh, R_coil=0.030, a_coil=0.005,
     esim_solver = ESIMFiniteSlabSolver(
         half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
         frequency=frequency,
-        mu_r=mu_r_lin if bh_curve is None else None, n_nodes=200)
+        mu_r=mu_r_lin if bh_curve is None else None, n_nodes=200,
+        geometry='cylinder')
 
     # Initial Z_s
     sol0 = esim_solver.solve(5.0)
