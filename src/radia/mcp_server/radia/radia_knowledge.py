@@ -3356,6 +3356,61 @@ src/radia/
 """
 
 
+RADIA_MAGNETIC_CORE_SOLVER_GUIDE = """
+# Magnetic Core Solver Selection Guide
+
+When coupling PEEC conductors with magnetic cores, choose the solver based on
+material properties and frequency range.
+
+## Decision Matrix
+
+| Core Type | Solver | core_model | Key Limitation |
+|-----------|--------|------------|----------------|
+| Ferrite (high mu_r, sigma~0) | Radia MSC | 'radia' | No eddy currents |
+| Laminated steel (low eff. sigma) | Radia MSC + complex mu | 'radia' | Static Delta_L |
+| Solid steel (high mu_r + sigma) | Vector FEM-BEM | 'vector_fembem' | Linear only |
+| Al/Cu shield (mu_r=1, high sigma) | Scalar FEM-BEM | 'fembem' | mu_r=1 only |
+| Nonlinear (B-H curve, hysteresis) | Radia MSC | 'radia' | No eddy currents |
+
+## Radia MSC vs NGSBEM (vector FEM-BEM)
+
+| Aspect | Radia MSC | NGSBEM vector FEM-BEM |
+|--------|-----------|----------------------|
+| Eddy currents | No | Yes |
+| Nonlinear | Yes (B-H, hysteresis) | No |
+| Domain | Unbounded (no air mesh) | Unbounded (BEM) |
+| DOF per hex | 6 (surface charge) | ~100+ (FEM volume) |
+| Acceleration | HACApK (H-matrix) | Dense/FMM |
+| Best regime | DC / low freq / nonlinear | AC / eddy current |
+
+## API
+
+```python
+# Option 1: ngsbem_coupled.py (NGSBEM PEEC + core)
+from ngsbem_coupled import CoupledPEECMMM
+coupled = CoupledPEECMMM(peec_solver, core_model='radia', radia_core=core)
+coupled.compute_coupling_radia()
+
+# Option 2: peec_coupled.py (simpler, column-by-column)
+from peec_coupled import CoupledPEECSolver
+solver = CoupledPEECSolver(topo, [core], mu_r_imag=0)
+solver.compute_coupling_matrix()
+
+# Option 3: peec_msc_schur.py (standalone, preserves H-matrix)
+from peec_msc_schur import SchurComplementSolver
+schur = SchurComplementSolver()
+schur.set_msc_system(N, dof_offset, inv_chi)
+schur.solve(freq, V_source)
+```
+
+## Validation (2026-03-28)
+
+MMMBuilder MSC matches Radia direct Solve:
+- 1 hex: ratio = 1.000002
+- 27 hex (3x3x3): ratio = 0.999685 (0.03%)
+- PEEC/NGSBEM loop inductance: 4.5% agreement
+"""
+
 RADIA_MSC_KERNEL = """
 # MSC Kernel Implementation Notes (mmm_core / MMMBuilder)
 
@@ -3449,6 +3504,7 @@ def get_radia_documentation(topic: str = "all") -> str:
         "esim": RADIA_ESIM,
         "build_and_release": RADIA_BUILD_AND_RELEASE,
         "msc_kernel": RADIA_MSC_KERNEL,
+        "magnetic_core_guide": RADIA_MAGNETIC_CORE_SOLVER_GUIDE,
     }
 
     topic = topic.lower().strip()
