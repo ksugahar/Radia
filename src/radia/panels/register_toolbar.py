@@ -654,35 +654,41 @@ class InductanceDialog(QDialog):
 		self.esim_group = QGroupBox("Workpiece Surface Impedance")
 		esim_layout = QGridLayout(self.esim_group)
 
-		esim_layout.addWidget(QLabel("Model:"), 0, 0)
-		self.model_combo = QComboBox()
-		self.model_combo.addItems(["ESIM", "Dowell", "BEM-SIBC", "FEM-ESIM"])
-		self.model_combo.setToolTip("ESIM: per-panel 1D cell problem (fast)\n"
-		                            "Dowell: analytical formula (linear only)\n"
-		                            "BEM-SIBC: scalar BIE on surface (accurate)\n"
-		                            "FEM-ESIM: 3D volume FEM (reference)")
-		esim_layout.addWidget(self.model_combo, 0, 1)
+		esim_layout.addWidget(QLabel("Solver:"), 0, 0)
+		self.solver_combo = QComboBox()
+		self.solver_combo.addItems(["BEM", "FEM"])
+		self.solver_combo.setToolTip("BEM: surface mesh only (fast)\n"
+		                             "FEM: 3D volume mesh (reference)")
+		esim_layout.addWidget(self.solver_combo, 0, 1)
 
-		esim_layout.addWidget(QLabel("Material:"), 1, 0)
+		esim_layout.addWidget(QLabel("Impedance:"), 1, 0)
+		self.model_combo = QComboBox()
+		self.model_combo.addItems(["ESIM", "Dowell", "SIBC"])
+		self.model_combo.setToolTip("ESIM: 1D cell problem (nonlinear OK)\n"
+		                            "Dowell: analytical (linear only)\n"
+		                            "SIBC: BIE surface Laplacian (BEM only)")
+		esim_layout.addWidget(self.model_combo, 1, 1)
+
+		esim_layout.addWidget(QLabel("Material:"), 2, 0)
 		self.material_combo = QComboBox()
 		self.material_combo.addItems(["Steel", "Copper", "Aluminum"])
-		esim_layout.addWidget(self.material_combo, 1, 1)
+		esim_layout.addWidget(self.material_combo, 2, 1)
 
-		esim_layout.addWidget(QLabel("Frequency [Hz]:"), 2, 0)
+		esim_layout.addWidget(QLabel("Frequency [Hz]:"), 3, 0)
 		self.freq_edit = QLineEdit("50000")
-		esim_layout.addWidget(self.freq_edit, 2, 1)
+		esim_layout.addWidget(self.freq_edit, 3, 1)
 
-		esim_layout.addWidget(QLabel("Sigma [S/m]:"), 3, 0)
+		esim_layout.addWidget(QLabel("Sigma [S/m]:"), 4, 0)
 		self.sigma_edit = QLineEdit("2.0e6")
 		self.material_combo.currentTextChanged.connect(self._on_material_changed)
-		esim_layout.addWidget(self.sigma_edit, 3, 1)
+		esim_layout.addWidget(self.sigma_edit, 4, 1)
 
-		esim_layout.addWidget(QLabel("Half-thickness [m]:"), 4, 0)
+		esim_layout.addWidget(QLabel("Half-thickness [m]:"), 5, 0)
 		self.thickness_edit = QLineEdit("0.005")
 		self.thickness_edit.setToolTip("Half-thickness (slab) or radius (cylinder) for ESIM cell problem")
-		esim_layout.addWidget(self.thickness_edit, 4, 1)
+		esim_layout.addWidget(self.thickness_edit, 5, 1)
 
-		esim_layout.addWidget(QLabel("Curvature:"), 5, 0)
+		esim_layout.addWidget(QLabel("Curvature:"), 6, 0)
 		self.curvature_combo = QComboBox()
 		self.curvature_combo.addItems(["Local curvature", "None (flat)"])
 		self.curvature_combo.setToolTip(
@@ -691,7 +697,7 @@ class InductanceDialog(QDialog):
 			"  Accurate for delta/R > 0.1 where curvature affects Z_s by >2%.\n"
 			"None (flat): planar slab cell problem (cosh/sinh).\n"
 			"  Good approximation when delta << half-thickness.")
-		esim_layout.addWidget(self.curvature_combo, 5, 1)
+		esim_layout.addWidget(self.curvature_combo, 6, 1)
 
 		self.esim_group.setVisible(False)
 		layout.addWidget(self.esim_group)
@@ -1049,14 +1055,24 @@ class InductanceDialog(QDialog):
 			"--output", self._json_output,
 		]
 
-		# ESIM / Dowell parameters (only when workpiece block exists)
+		# Workpiece parameters (only when workpiece block exists)
 		if self._workpiece_block:
-			# Map UI curvature label to CLI argument
 			_curv = self.curvature_combo.currentText()
 			_curv_arg = "local_curvature" if "Local" in _curv else "none"
+			# Map (Solver, Impedance) -> --impedance-model value
+			_solver = self.solver_combo.currentText()   # "BEM" or "FEM"
+			_imp = self.model_combo.currentText()       # "ESIM", "Dowell", "SIBC"
+			if _solver == "BEM" and _imp == "SIBC":
+				_model_arg = "bem-sibc"
+			elif _solver == "FEM":
+				# FEM always uses Robin BC; ESIM/Dowell control Z_s formula
+				_model_arg = "fem-esim" if _imp != "Dowell" else "fem-dowell"
+			else:
+				# BEM + ESIM or BEM + Dowell
+				_model_arg = _imp.lower()
 			args += [
 				"--workpiece", self._workpiece_block,
-				"--impedance-model", self.model_combo.currentText().lower(),
+				"--impedance-model", _model_arg,
 				"--frequency", self.freq_edit.text().strip(),
 				"--sigma", self.sigma_edit.text().strip(),
 				"--half-thickness", self.thickness_edit.text().strip(),
