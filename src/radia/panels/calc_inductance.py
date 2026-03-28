@@ -716,42 +716,90 @@ def _compute_workpiece_fem_esim(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     P_total = 0.0
     Q_total = 0.0
 
+    # Per-element Z_s on workpiece surface (for ESIM spatially varying Z_s)
+    from ngsolve import SurfaceL2, NumberSpace
+    fes_zs = SurfaceL2(mesh, order=0, complex=True)
+    gf_zs_inv = GridFunction(fes_zs)  # stores 1/Z_s per element (for Robin coeff)
+    # Initialize with uniform Z_s
+    gf_zs_inv.Set(1.0 / Z_s, definedon=wp_region)
+
     sys.stderr.write(f"{_label}: {fes.ndof} DOFs, solving...\n")
     sys.stderr.flush()
 
     for iteration in range(max_iter):
         a_bf = BilinearForm(fes)
         a_bf += nu0 * curl(u) * curl(v) * dx
-        sibc_coeff = 1j * omega / Z_s
-        a_bf += sibc_coeff * u.Trace() * v.Trace() * ds("wp_surface")
+        # SIBC Robin: (jw/Z_s)*A_t*v_t, with Z_s varying per element
+        if esim_solver:
+            sibc_cf = 1j * omega * gf_zs_inv  # per-element
+        else:
+            sibc_cf = 1j * omega / Z_s  # uniform scalar
+        a_bf += sibc_cf * u.Trace() * v.Trace() * ds("wp_surface")
         a_bf.Assemble()
 
         with TaskManager():
             gfu.vec.data = a_bf.mat.Inverse(
                 fes.FreeDofs(), inverse="pardiso") * f_lf.vec
 
-        At_sq = sum(gfu[i].real * gfu[i].real +
-                    gfu[i].imag * gfu[i].imag for i in range(3))
-        At_int = Integrate(At_sq, mesh, BND, definedon=wp_region).real
-        At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
-        H_t_rms = abs(1j * omega / Z_s) * At_rms
-
         if esim_solver:
-            Z_s_old = Z_s
-            sol = esim_solver.solve(max(H_t_rms, 1e-3))
-            Z_s_new = sol['Z']
-            Z_s = relax * Z_s_new + (1 - relax) * Z_s_old
-            P_total = sol['P_prime'] * A_wp
-            Q_total = sol['Q_prime'] * A_wp
-            dZ = abs(Z_s - Z_s_old) / max(abs(Z_s_old), 1e-30)
+            # Per-element H_t and Z_s update
+            At_sq = sum(gfu[i].real * gfu[i].real +
+                        gfu[i].imag * gfu[i].imag for i in range(3))
+            elem_At2 = Integrate(At_sq, mesh, BND,
+                                 definedon=wp_region, element_wise=True)
+            elem_area = Integrate(CF(1), mesh, BND,
+                                  definedon=wp_region, element_wise=True)
+
+            Z_s_old_arr = gf_zs_inv.vec.FV().NumPy().copy()
+            P_total = 0.0
+            Q_total = 0.0
+            max_dZ = 0.0
+            n_wp_elems = 0
+
+            for el in mesh.Elements(BND):
+                if mesh.GetBCName(el.index) != "wp_surface":
+                    continue
+                area_e = abs(elem_area[el.nr])
+                if area_e < 1e-30:
+                    continue
+                At2_e = abs(elem_At2[el.nr])
+                At_rms_e = math.sqrt(At2_e / area_e)
+                # H_t from SIBC: H_t = |jw/Z_s|*|A_t|
+                Zs_old_e = 1.0 / Z_s_old_arr[el.nr] if abs(Z_s_old_arr[el.nr]) > 1e-30 else Z_s
+                H_t_e = abs(1j * omega / Zs_old_e) * At_rms_e
+
+                sol = esim_solver.solve(max(float(H_t_e), 1e-3))
+                Zs_new = sol['Z']
+                Zs_e = relax * Zs_new + (1 - relax) * Zs_old_e
+                gf_zs_inv.vec[el.nr] = 1.0 / Zs_e
+
+                P_total += sol['P_prime'] * area_e
+                Q_total += sol['Q_prime'] * area_e
+                dZ_e = abs(Zs_e - Zs_old_e) / max(abs(Zs_old_e), 1e-30)
+                max_dZ = max(max_dZ, dZ_e)
+                n_wp_elems += 1
+
+            dZ = max_dZ
+            # Compute overall H_t_rms
+            At_int = Integrate(At_sq, mesh, BND, definedon=wp_region).real
+            At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
+            # Mean |Z_s| for reporting
+            Zs_mean = A_wp / max(abs(np.sum(gf_zs_inv.vec.FV().NumPy()[:n_wp_elems])), 1e-30)
+            H_t_rms = abs(1j * omega * np.mean(np.abs(
+                gf_zs_inv.vec.FV().NumPy()[:fes_zs.ndof]))) * At_rms
         else:
-            # Dowell: Z_s is constant, compute P/Q directly
+            # Uniform Z_s (Dowell or SIBC): single scalar
+            At_sq = sum(gfu[i].real * gfu[i].real +
+                        gfu[i].imag * gfu[i].imag for i in range(3))
+            At_int = Integrate(At_sq, mesh, BND, definedon=wp_region).real
+            At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
+            H_t_rms = abs(1j * omega / Z_s) * At_rms
             P_total = 0.5 * Z_s.real * H_t_rms**2 * A_wp
             Q_total = 0.5 * Z_s.imag * H_t_rms**2 * A_wp
             dZ = 0.0
 
-        sys.stderr.write(f"{_label}: iter {iteration} |Z_s|={abs(Z_s):.4e} "
-                         f"H_t={H_t_rms:.2f} dZ={dZ:.4e}\n")
+        sys.stderr.write(f"{_label}: iter {iteration} "
+                         f"H_t={H_t_rms:.2f} P={P_total:.4e} dZ={dZ:.4e}\n")
         sys.stderr.flush()
         if dZ < tol and iteration > 0:
             break
