@@ -685,6 +685,50 @@ def check_ngsbem_volume_mesh(filepath: str, lines: List[str]) -> List[Dict]:
     return findings
 
 
+def check_scattered_field_sibc_missing_nxH(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: Scattered-field SIBC needs BOTH RHS terms: sibc(A_inc) + n x H_inc."""
+    findings = []
+    # Only check files with scattered-field SIBC context
+    has_scat_sibc = any(
+        kw in line.lower()
+        for line in lines
+        for kw in ['scattered', 'a_scat', 'a_inc']
+    )
+    has_sibc = any('sibc' in line.lower() for line in lines)
+    if not (has_scat_sibc and has_sibc):
+        return findings
+
+    # Look for SIBC RHS with A_inc but without n x H_inc
+    has_sibc_A_inc_rhs = False
+    has_nxH_term = False
+    sibc_rhs_line = 0
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            continue
+        # Detect SIBC RHS: something like sibc_coeff * A_inc * v * ds
+        if re.search(r'sibc.*A_inc.*ds|A_inc.*sibc.*ds', stripped, re.IGNORECASE):
+            has_sibc_A_inc_rhs = True
+            sibc_rhs_line = i
+        # Detect n x H_inc term: nxH or n_cross_H or curl(A_inc)
+        if re.search(r'nxH|n_cross_H|curl.*A_inc|H_inc.*ds', stripped, re.IGNORECASE):
+            has_nxH_term = True
+
+    if has_sibc_A_inc_rhs and not has_nxH_term:
+        findings.append({
+            'line': sibc_rhs_line,
+            'severity': 'HIGH',
+            'rule': 'scattered-sibc-missing-nxH',
+            'message': (
+                'Scattered-field SIBC RHS has -(jw/Z_s)*<A_inc, v> but is missing '
+                'the second term -<n x H_inc, v>. Both terms are required. '
+                'Missing this term causes a factor-of-3 error. '
+                'Total-field formulation (J_source in volume) does not have this issue.'
+            ),
+        })
+    return findings
+
+
 # All rules in execution order
 ALL_RULES = [
     # NGSolve FEM rules
@@ -709,4 +753,46 @@ ALL_RULES = [
     check_peec_p_over_jw,
     # BEM mesh rules
     check_ngsbem_volume_mesh,
+    # FEM-SIBC rules
+    check_scattered_field_sibc_missing_nxH,
+    # Scalar BIE recommendation
+    check_efie_sibc_use_scalar_bie,
 ]
+
+
+def check_efie_sibc_use_scalar_bie(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: EFIE-SIBC is wrong for finite Z_s. Use Scalar BIE + SIBC instead."""
+    findings = []
+    has_efie = any(
+        re.search(r'LaplaceSL.*HDivSurface|HDivSurface.*LaplaceSL', line)
+        for line in lines
+    )
+    has_sibc_zs = any(
+        re.search(r'Z_s|surface.impedance|sibc', line, re.IGNORECASE)
+        for line in lines
+    )
+    if not (has_efie and has_sibc_zs):
+        return findings
+
+    # Check if already using ScalarBIESIBCSolver
+    has_scalar_bie = any('ScalarBIESIBCSolver' in line for line in lines)
+    if has_scalar_bie:
+        return findings
+
+    for i, line in enumerate(lines, 1):
+        if re.search(r'Z_s.*LaplaceSL|LaplaceSL.*Z_s', line):
+            findings.append({
+                'line': i,
+                'severity': 'HIGH',
+                'rule': 'efie-sibc-use-scalar-bie',
+                'message': (
+                    'EFIE with HDivSurface + Z_s is wrong for finite Z_s '
+                    '(SL eigenvalue R/3 causes factor-of-3 error). '
+                    'Use ScalarBIESIBCSolver (H1 scalar potential BIE) instead: '
+                    'from radia.bem_sibc_solver import ScalarBIESIBCSolver. '
+                    'It uses existing LaplaceSL/DL with H1 and surface '
+                    'Laplacian for SIBC coupling. Validated <0.1% on sphere.'
+                ),
+            })
+            break
+    return findings
