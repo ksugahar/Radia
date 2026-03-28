@@ -414,6 +414,110 @@ def check_peec_p_over_jw(filepath: str, lines: List[str]) -> List[Dict]:
 
 
 
+def check_msc_wrong_sign(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: MSC system matrix must be (1/chi + N), not (-1/chi - N)."""
+    findings = []
+    # Only check files with MSC/MMMBuilder context
+    has_msc = any(
+        kw in line
+        for line in lines
+        for kw in ['MMMSolver', 'MMMBuilder', 'inv_chi', 'K_msc', 'msc_matvec']
+    )
+    if not has_msc:
+        return findings
+
+    patterns = [
+        re.compile(r'-\s*np\.diag\s*\(\s*inv_chi\s*\)\s*-\s*N'),
+        re.compile(r'-\s*self\._inv_chi\s*\*\s*x\s*-\s*self\._N'),
+        re.compile(r'A\s*=\s*-N'),
+    ]
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            continue
+        for pattern in patterns:
+            if pattern.search(stripped):
+                findings.append({
+                    'line': i,
+                    'severity': 'HIGH',
+                    'rule': 'msc-wrong-sign',
+                    'message': (
+                        'MSC system matrix has wrong sign. '
+                        'Correct: K = diag(1/chi) + N (positive). '
+                        'The old convention (-1/chi - N) produces inverted magnetization.'
+                    ),
+                })
+                break
+    return findings
+
+
+def check_ngsbem_volume_mesh(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: NGSBEM BEM requires surface-only mesh, not volume mesh."""
+    findings = []
+    has_bem = any(
+        kw in line
+        for line in lines
+        for kw in ['LaplaceSL', 'HelmholtzSL', 'HDivSurface', 'bem_inductance']
+    )
+    if not has_bem:
+        return findings
+
+    # Detect OCCGeometry(Box(...)) without Glue
+    has_box = False
+    has_glue = False
+    box_line = 0
+    for i, line in enumerate(lines, 1):
+        if 'Box(' in line:
+            has_box = True
+            box_line = i
+        if 'Glue(' in line:
+            has_glue = True
+
+    if has_box and not has_glue:
+        findings.append({
+            'line': box_line,
+            'severity': 'HIGH',
+            'rule': 'ngsbem-volume-mesh',
+            'message': (
+                'BEM with Box() creates a volume mesh. HDivSurface on volume '
+                'mesh includes interior edges → singular SL matrix (cond ~1e17). '
+                'Use: OCCGeometry(Glue(box.faces)) for surface-only mesh.'
+            ),
+        })
+    return findings
+
+
+def check_msc_eval_face_center(filepath: str, lines: List[str]) -> List[Dict]:
+    """MODERATE: MSC eval point should be midpoint, not face center."""
+    findings = []
+    has_msc = any(
+        kw in line
+        for line in lines
+        for kw in ['eval_point', 'eval_pts', 'MMMBuilder', 'Yano']
+    )
+    if not has_msc:
+        return findings
+
+    # Detect face_center without midpoint averaging with element center
+    pattern = re.compile(r'eval_point.*=.*face_center\b(?!.*elem)')
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            continue
+        if pattern.search(stripped):
+            findings.append({
+                'line': i,
+                'severity': 'MODERATE',
+                'rule': 'msc-eval-face-center',
+                'message': (
+                    'MSC evaluation point should be Yano-Sugahara midpoint: '
+                    '(face_center + element_center) / 2, not face_center alone. '
+                    'Using face_center makes the self-interaction term singular.'
+                ),
+            })
+    return findings
+
+
 # All rules in execution order
 ALL_RULES = [
     # Radia rules
@@ -430,4 +534,8 @@ ALL_RULES = [
     check_efie_v_minus_sign,
     check_classical_efie_breakdown,
     check_peec_p_over_jw,
+    # MSC / multi-level rules
+    check_msc_wrong_sign,
+    check_ngsbem_volume_mesh,
+    check_msc_eval_face_center,
 ]
