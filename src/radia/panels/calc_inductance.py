@@ -425,7 +425,8 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     import time as _time
     from ngsolve import (Mesh, Integrate, CF, BND, TaskManager)
     from netgen.occ import Cylinder, Pnt, Dir, OCCGeometry, Glue
-    from bem_sibc_solver import ScalarBIESIBCSolver, compute_phi_inc_from_loop
+    from bem_sibc_solver import (ScalarBIESIBCSolver,
+                                 compute_phi_inc_from_surface_J)
     from esim_cell_problem import ESIMFiniteSlabSolver
 
     omega = 2 * math.pi * frequency
@@ -435,30 +436,39 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     wp_center = np.mean(centers, axis=0)
     z_min, z_max = centers[:, 2].min(), centers[:, 2].max()
     wp_height = z_max - z_min
-    # Estimate radius from lateral surface centroids
     rho = np.sqrt((centers[:, 0] - wp_center[0])**2 +
                   (centers[:, 1] - wp_center[1])**2)
-    wp_radius = float(np.max(rho))  # lateral surface is at max radius
+    wp_radius = float(np.max(rho))
     if wp_radius < 1e-6:
-        wp_radius = half_thickness  # fallback
+        wp_radius = half_thickness
 
     sys.stderr.write(f"BEM-SIBC: wp R={wp_radius*1e3:.1f}mm, "
-                     f"H={wp_height*1e3:.1f}mm, center=({wp_center[0]*1e3:.1f},"
-                     f"{wp_center[1]*1e3:.1f},{wp_center[2]*1e3:.1f})mm\n")
+                     f"H={wp_height*1e3:.1f}mm\n")
     sys.stderr.flush()
 
-    # --- Auto-detect coil geometry from coil mesh ---
-    coil_coords = np.array([(v.point[0], v.point[1], v.point[2])
-                            for v in mesh_coil.vertices])
-    coil_center = np.mean(coil_coords, axis=0)
-    coil_center[2] = np.median(coil_coords[:, 2])  # z from median
-    coil_rho = np.sqrt((coil_coords[:, 0] - coil_center[0])**2 +
-                       (coil_coords[:, 1] - coil_center[1])**2)
-    coil_radius = float(np.mean(coil_rho))  # approximate center line radius
+    # --- Extract per-element J from EFIE solution (actual surface current) ---
+    from ngsolve import Integrate, CF, BND
+    elem_A = Integrate(CF(1), mesh_coil, VOL_or_BND=BND, element_wise=True)
+    elem_Jx = Integrate(gf_J[0], mesh_coil, VOL_or_BND=BND, element_wise=True)
+    elem_Jy = Integrate(gf_J[1], mesh_coil, VOL_or_BND=BND, element_wise=True)
+    elem_Jz = Integrate(gf_J[2], mesh_coil, VOL_or_BND=BND, element_wise=True)
 
-    sys.stderr.write(f"BEM-SIBC: coil R={coil_radius*1e3:.1f}mm, "
-                     f"center=({coil_center[0]*1e3:.1f},{coil_center[1]*1e3:.1f},"
-                     f"{coil_center[2]*1e3:.1f})mm\n")
+    src_centroids, src_areas, src_J_vecs = [], [], []
+    for el in mesh_coil.Elements(BND):
+        area = abs(elem_A[el.nr])
+        if area < 1e-30:
+            continue
+        jvec = np.array([elem_Jx[el.nr], elem_Jy[el.nr], elem_Jz[el.nr]]) / area
+        verts = [mesh_coil.vertices[v.nr].point for v in el.vertices]
+        c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
+        src_centroids.append(c)
+        src_areas.append(area)
+        src_J_vecs.append(jvec)
+
+    src_centroids = np.array(src_centroids)
+    src_areas = np.array(src_areas)
+    src_J_vecs = np.array(src_J_vecs)
+    sys.stderr.write(f"BEM-SIBC: {len(src_areas)} coil elements for Biot-Savart\n")
     sys.stderr.flush()
 
     # --- Create workpiece surface mesh (OCC cylinder) ---
@@ -475,9 +485,7 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     t_mesh = _time.perf_counter() - t0
 
     ne_wp = wp_mesh.GetNE(BND)
-    ndof_wp = wp_mesh.nv  # H1 order=1
-
-    sys.stderr.write(f"BEM-SIBC: wp mesh {ne_wp} elems, {ndof_wp} verts ({t_mesh:.1f}s)\n")
+    sys.stderr.write(f"BEM-SIBC: wp mesh {ne_wp} elems ({t_mesh:.1f}s)\n")
     sys.stderr.flush()
 
     # --- Assemble BEM operators ---
@@ -485,13 +493,12 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     sys.stderr.write(f"BEM-SIBC: assembled {solver.ndof} DOFs ({solver.t_assembly:.1f}s)\n")
     sys.stderr.flush()
 
-    # --- Compute phi_inc from coil ---
+    # --- Compute phi_inc from actual coil surface current (no filament approx) ---
     t0 = _time.perf_counter()
     node_coords = np.array([[wp_mesh.vertices[i].point[j] for j in range(3)]
                             for i in range(wp_mesh.nv)])
-    phi_inc = compute_phi_inc_from_loop(
-        node_coords, loop_center=coil_center.tolist(),
-        loop_radius=coil_radius, current=1.0, n_quad=30)
+    phi_inc = compute_phi_inc_from_surface_J(
+        node_coords, src_centroids, src_areas, src_J_vecs, n_quad=20)
     t_phi = _time.perf_counter() - t0
 
     sys.stderr.write(f"BEM-SIBC: phi_inc [{phi_inc.min():.4f}, {phi_inc.max():.4f}] "
@@ -560,7 +567,7 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
         "wp_delta_max": float(delta),
         "wp_bem_ndof": solver.ndof,
         "wp_bem_t_assembly": solver.t_assembly,
-        "wp_bem_coil_radius": coil_radius,
+        "wp_bem_n_coil_elems": len(src_areas),
         "wp_bem_wp_radius": wp_radius,
     }
 
