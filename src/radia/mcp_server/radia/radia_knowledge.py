@@ -274,7 +274,8 @@ rad.SolverConfig(
     bicgstab_tol=1e-4,
     hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0,
     relax_param=0.3,
-    newton_method=True,
+    newton_method=True,       # Start with Newton (fast convergence)
+    keep_magnetization=False, # True = continue from previous Solve state
     newton_damping=True, newton_damping_max_iter=5, newton_damping_min_omega=0.01,
     # B-input solvers for energy-based hysteresis
     b_input_newton=False,     # Pure B-input Newton (2-4 iter)
@@ -3456,6 +3457,16 @@ RADIA_PEEC_CORE_PITFALLS = """
 
 9. **Hex vertex order**: bottom CCW (v0-v3), top CCW (v4-v7).
    Face 0=bottom(-Z), 1=top(+Z), 2=front(-Y), 3=back(+Y), 4=left(-X), 5=right(+X).
+
+10. **Nonlinear: Newton first, then Picard** (not the reverse!):
+    Newton can excite zero-eigenvalue modes → wrong solution branch.
+    Picard is slow but avoids these modes.
+    ```python
+    rad.SolverConfig(newton_method=True)
+    rad.Solve(obj, 1e-3, 10, 2)   # Newton: fast approach
+    rad.SolverConfig(newton_method=False, keep_magnetization=True)
+    rad.Solve(obj, 1e-3, 100, 2)  # Picard: stable finish
+    ```
 
 ## Solver Selection
 
