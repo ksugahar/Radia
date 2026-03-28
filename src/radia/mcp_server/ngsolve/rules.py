@@ -649,6 +649,42 @@ def check_axisymmetric_h1_over_r(filepath, lines):
     return findings
 
 
+# SHARED: also in radia/rules.py - keep synchronized
+def check_ngsbem_volume_mesh(filepath: str, lines: List[str]) -> List[Dict]:
+    """HIGH: NGSBEM BEM requires surface-only mesh, not volume mesh."""
+    findings = []
+    has_bem = any(
+        kw in line
+        for line in lines
+        for kw in ['LaplaceSL', 'HelmholtzSL', 'HDivSurface', 'bem_inductance']
+    )
+    if not has_bem:
+        return findings
+
+    has_box = False
+    has_glue = False
+    box_line = 0
+    for i, line in enumerate(lines, 1):
+        if 'Box(' in line:
+            has_box = True
+            box_line = i
+        if 'Glue(' in line:
+            has_glue = True
+
+    if has_box and not has_glue:
+        findings.append({
+            'line': box_line,
+            'severity': 'HIGH',
+            'rule': 'ngsbem-volume-mesh',
+            'message': (
+                'BEM with Box() creates a volume mesh. HDivSurface on volume '
+                'mesh includes interior edges -> singular SL matrix (cond ~1e17). '
+                'Use: OCCGeometry(Glue(box.faces)) for surface-only mesh.'
+            ),
+        })
+    return findings
+
+
 # All rules in execution order
 ALL_RULES = [
     # NGSolve FEM rules
@@ -671,4 +707,6 @@ ALL_RULES = [
     check_efie_v_minus_sign,
     check_classical_efie_breakdown,
     check_peec_p_over_jw,
+    # BEM mesh rules
+    check_ngsbem_volume_mesh,
 ]
