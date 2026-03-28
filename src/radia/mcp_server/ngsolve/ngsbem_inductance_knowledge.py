@@ -1336,6 +1336,88 @@ for finite Z_s problems.
 **Diagnostic script**: `examples/cubit_panels/inductance/debug_efie_sibc.py`
 **Verification script**: `examples/cubit_panels/inductance/verify_sphere_sibc.py`
 
+## FIX: Scalar Potential BIE + SIBC (2026-03-29)
+
+**The scalar potential BIE correctly handles all Z_s values using EXISTING
+ngsolve.bem operators.** No new C++ code needed.
+
+### System
+```
+(1/2*M - DL + gamma * SL * M^{-1} * K) phi = rhs
+gamma = Z_s / (jw * mu0)
+```
+
+- `M` = H1 surface mass matrix
+- `K` = H1 surface stiffness (Laplace-Beltrami)
+- `DL` = LaplaceDL (scalar, H1 trial/test)
+- `SL` = LaplaceSL (scalar, H1 trial/test)
+- Gauge: Lagrange multiplier for `int(phi) dS = 0`
+- Unknown `phi` = exterior scalar magnetic potential (H = -grad phi)
+
+### Physics
+SIBC enters via surface Laplacian:
+```
+E_t = Z_s * J_s = -Z_s * (n x grad_s phi)
+Faraday: dphi/dn = -(Z_s / (jw*mu0)) * Delta_s(phi)
+Weak form: M*g = gamma * K * phi  (integration by parts)
+```
+
+### Why EFIE (HDivSurface) fails but Scalar BIE (H1) works
+RT0 (HDivSurface order=0) has **zero surface curl**: curl_s(J) = 0 for RT0
+basis functions. The SIBC requires curl_s(J)·n = Delta_s(phi) which vanishes
+for RT0. The H1 scalar potential avoids this because grad_s and Delta_s
+are well-defined for H1 (order >= 1).
+
+### Validated accuracy
+- Sphere: <0.1% error for ALL Z_s (PEC to transparent)
+- Cylinder workpiece + coil: +7% vs FEM-SIBC (mesh density dependent)
+
+### Usage (reusable solver module)
+```python
+from radia.bem_sibc_solver import ScalarBIESIBCSolver
+
+solver = ScalarBIESIBCSolver(mesh_wp, order=1)   # assemble once
+result = solver.solve(phi_inc, Z_s=Z_s, omega=omega)  # fast per Z_s
+H_t_rms = result['H_t_rms']
+P_density = result['P_density']   # [W/m^2]
+```
+
+### phi_inc from coil surface current
+For the incident scalar potential at workpiece from EFIE-solved coil current:
+```python
+from radia.bem_sibc_solver import compute_phi_inc_from_surface_J
+
+# Extract per-element J from EFIE solution
+coil_c, coil_a, coil_J = extract_element_J(mesh_coil, gf_J)
+# Compute phi_inc via Biot-Savart + two-stage path integration
+phi_inc = compute_phi_inc_from_surface_J(wp_nodes, coil_c, coil_a, coil_J)
+```
+
+**NOTE**: ngsolve.bem does not have a grad(G) kernel for cross-mesh evaluation.
+LaplaceDL gives dG/dn' (normal component only), which is insufficient for
+cross-mesh Biot-Savart (n_src != n_obs). Feature request submitted to Joachim.
+Direct numerical Biot-Savart (vectorized NumPy) is used as workaround.
+
+### Coupled two-body BEM (coil + workpiece)
+```python
+from radia.bem_coupled_solver import CoupledBEMSolver
+
+solver = CoupledBEMSolver(mesh_coil, mesh_wp)
+result = solver.solve(Z_s=Z_s, omega=omega)
+L_total = result['L_total']    # includes mutual coupling Delta_L
+P_total = result['P_total']
+```
+
+### Panel integration
+Cubit panel offers: Solver (BEM/FEM) x Impedance (ESIM/Dowell/SIBC).
+All 6 combinations produce compatible results: P_total, P_density, H_t_rms.
+
+### Files
+- `src/radia/bem_sibc_solver.py`: ScalarBIESIBCSolver + phi_inc computation
+- `src/radia/bem_coupled_solver.py`: CoupledBEMSolver (two-body iteration)
+- `examples/cubit_panels/inductance/scalar_bie_sibc.py`: sphere validation
+- `examples/cubit_panels/inductance/bem_sibc_workpiece.py`: coil + workpiece demo
+
 ## Screening Physics
 
 The key dimensionless parameter is `Z_s / (jw * mu0 * a)` where `a` is the workpiece
