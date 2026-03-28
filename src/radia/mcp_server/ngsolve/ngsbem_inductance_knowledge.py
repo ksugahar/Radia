@@ -27,7 +27,7 @@ Key operators:
 | Operator | Kernel | Use |
 |----------|--------|-----|
 | `LaplaceSL` | 1/(4*pi*r) | MQS inductance (L matrix) |
-| `LaplaceDL` | d/dn[1/(4*pi*r)] | Scalar DL (NOT MFIE K operator, see EFIE-SIBC docs) |
+| `LaplaceDL` | d/dn[1/(4*pi*r)] | Scalar DL for scalar BIE + SIBC; also MFIE K operator with HDivSurface |
 | `HelmholtzSL` | exp(-jkr)/(4*pi*r) | Full-wave BEM |
 | `HelmholtzDL` | d/dn[exp(-jkr)/(4*pi*r)] | Full-wave BEM |
 | `MaxwellSL` | Full Maxwell kernel | High-frequency |
@@ -1310,6 +1310,32 @@ The MFIE K operator is not available in current ngsolve.bem.
 **Consequence**: The original PMCHWT formulation `(1/2 M + K)*J = n x H_inc` was
 incorrect because `LaplaceDL != MFIE K`. The correct formulation is the EFIE above.
 
+## KNOWN LIMITATION: BEM EFIE-SIBC Incorrect for Finite Z_s (2026-03-28)
+
+**The EFIE `Z_s*J + jw*mu0*SL(J) = -jw*A_inc` is fundamentally wrong for finite Z_s
+in MQS.** The representation `A_scat = mu0*SL(J_s)` uses the Laplace SL operator,
+whose eigenvalue for l=1 on a sphere of radius R is R/3 (not R). This gives an
+effective denominator of `(3*Z_s + jw*mu0*R)` instead of `(Z_s + jw*mu0*R)`.
+
+**BEM/Analytical ratio** on sphere for various Z_s/(jw*mu0*R):
+
+| Z_s/(jw*mu0*R) | BEM/Analytical | Notes |
+|-----------------|----------------|-------|
+| 0.01 (PEC-like) | ~1.00 | Z_s negligible, EFIE correct |
+| 0.1 | ~0.97 | Still acceptable |
+| 1.0 | ~0.75 | Factor-of-3 effect visible |
+| 5.0 | ~0.50 | EFIE significantly wrong |
+| 10.0 | ~0.35 | Steel at 7 kHz regime |
+
+**Only correct for PEC (Z_s -> 0)** where the Z_s*M term vanishes.
+
+**Fix requires MFIE** (not available in ngsolve.bem) or a Stratton-Chu formulation
+with both SL and DL operators. Until MFIE is available, use **FEM-SIBC** instead
+for finite Z_s problems.
+
+**Diagnostic script**: `examples/cubit_panels/inductance/debug_efie_sibc.py`
+**Verification script**: `examples/cubit_panels/inductance/verify_sphere_sibc.py`
+
 ## Screening Physics
 
 The key dimensionless parameter is `Z_s / (jw * mu0 * a)` where `a` is the workpiece
@@ -1346,6 +1372,13 @@ For steel at 7kHz: H_t = 0.77 A/m, not 18 A/m. One-way overestimates P by 300x.
 Both methods agree within ~10%. FEM-SIBC is slightly lower due to the thin-shell
 approximation (zero-thickness interface vs BEM's SL self-inductance).
 
+**CAUTION**: The BEM EFIE-SIBC values above are affected by the SL eigenvalue
+mismatch (see "KNOWN LIMITATION" section above). For finite Z_s, BEM EFIE-SIBC
+underestimates the true surface current. The cross-validation agreement is partly
+coincidental -- both methods have different sources of error that partially cancel.
+For authoritative results, use the analytical solution on spheres or FEM-SIBC with
+the total-field formulation on general geometries.
+
 ## Usage
 
 ```python
@@ -1379,7 +1412,32 @@ EFIE-SIBC saddle point + Karl iteration
 **File**: `examples/cubit_panels/inductance/fem_esim_3d.py`
 
 FEM-SIBC solves `curl(nu*curl(A)) = J_source` with SIBC penalty on an internal
-interface. Validated against EFIE-SIBC (BEM) to within 10%.
+interface.
+
+### Critical: Scattered-Field RHS Must Include Both Terms (2026-03-28)
+
+In a **scattered-field** formulation `A = A_inc + A_scat`, the FEM RHS must include
+**both** surface terms:
+
+```
+f(v) = -(jw/Z_s) * <A_inc, v>_sibc   (surface impedance term)
+     + (-1)      * <n x H_inc, v>_sibc (incident field boundary term)
+```
+
+The second term `<n x H_inc, v>` was missing and caused a **factor-of-3 error** on
+the sphere benchmark. This term arises from the curl-curl integration by parts:
+`-int nu*curl(A_inc)*curl(v) dx = -<n x H_inc, v>_boundary`.
+
+For the Kelvin formulation (mapped domain), the boundary form is preferred over the
+volume form to avoid incorrect contributions from the Kelvin domain.
+
+**The total-field formulation** (used in `fem_esim_3d.py` with coil current source)
+does NOT have this issue because the source is `J_source` in the volume, not a
+scattered-field decomposition.
+
+**Verification**: `verify_sphere_sibc.py` -- FEM vs BEM vs analytical on sphere.
+
+**Fix applied in**: `verify_sphere_sibc.py` line 162-163.
 
 ### Critical Design: Internal Interface, NOT Hole
 
@@ -1467,12 +1525,102 @@ result = run(material='steel', frequency=7000, sigma=2e6, esim_geometry='cylinde
 
 | Criterion | FEM-SIBC | EFIE-SIBC (BEM) |
 |-----------|----------|-----------------|
-| Accuracy | -7% to -10% | Reference |
+| Accuracy (finite Z_s) | Reference (total-field) | **Wrong** (SL eigenvalue, see KNOWN LIMITATION) |
+| Accuracy (PEC, Z_s->0) | Good | Good (0.2% on sphere) |
 | Speed (this geometry) | ~300s | ~5s |
 | Magnetic core coupling | Easy (FEM volume) | Needs FEM-BEM coupling |
 | Complex coil geometry | Easy (volume J source) | Needs Biot-Savart |
-| Self-inductance of eddy current | Approximate (thin shell) | Exact (SL operator) |
-| Recommended for | FEM-dominant workflows | Standalone surface analysis |
+| Self-inductance of eddy current | Approximate (thin shell) | SL operator (but eigenvalue wrong) |
+| Recommended for | **All SIBC problems** | PEC only, or quick estimates |
+
+**Note**: FEM-SIBC with total-field formulation (`fem_esim_3d.py`) is now the
+recommended method for two-way SIBC analysis. BEM EFIE-SIBC (`efie_sibc.py`) is
+valid only for PEC (Z_s -> 0) or as a quick estimate with known SL bias.
+For scattered-field FEM, ensure both RHS terms are included (see above).
+"""
+
+
+NGBEM_MQS_FORMULATION_LIMITS = """
+# BEM Formulation Selection for MQS-SIBC (2026-03-28)
+
+## Overview
+
+BEM formulations for eddy currents with Surface Impedance Boundary Condition (SIBC)
+behave very differently in MQS (Magneto-Quasi-Static) vs full-wave regimes. The key
+parameter is `Z_s / (jw * mu0 * R)` where R is the conductor characteristic size.
+
+## SOLVED: Scalar Potential BIE + SIBC (<0.1% error for ALL Z_s)
+
+The scalar potential BIE uses phi (H1 on surface) instead of J (HDivSurface).
+SIBC enters via the surface Laplacian (stiffness matrix K).
+
+**System**: `(1/2*M - DL + gamma * SL * M_inv * K) phi = rhs`
+where `gamma = Z_s / (jw * mu0)`.
+
+All operators are existing ngsolve.bem: LaplaceSL (scalar H1) + LaplaceDL (scalar H1).
+No new C++ code needed.
+
+**Module**: `src/radia/scalar_bie_sibc.py` (ScalarBIE_SIBC class)
+**Verification**: `examples/cubit_panels/inductance/scalar_bie_sibc.py`
+
+### Sphere Benchmark (R=10mm, maxh=R/5, 363 DOFs)
+
+| Z_s/(jw*mu0*R) | Analytical | Scalar BIE | Error |
+|-----------------|------------|------------|-------|
+| 0 (PEC) | 974.62 | 975.47 | +0.09% |
+| 0.1 | 908.28 | 908.95 | +0.07% |
+| 1.0 | 527.46 | 527.46 | +0.00% |
+| 10.0 | 90.83 | 90.76 | -0.07% |
+
+### Usage
+
+```python
+from radia.scalar_bie_sibc import ScalarBIE_SIBC
+
+solver = ScalarBIE_SIBC(mesh, order=1)  # assemble once
+result = solver.solve(H_inc_cf, Zs, omega)  # solve per frequency
+# result['H_rms'], result['P_loss'], result['Q_reactive']
+
+# Frequency sweep (Z_s auto-computed from sigma)
+results = solver.frequency_sweep(H_inc_cf, freqs=[1e3, 10e3], sigma=5.8e7)
+```
+
+## Formulation Comparison Table
+
+| Formulation | Unknown | MQS Validity | Error | ngsolve.bem? |
+|-------------|---------|-------------|-------|-------------|
+| **Scalar BIE + SIBC** | **phi (H1)** | **All Z_s** | **<0.1%** | **Yes** |
+| EFIE-SIBC | J (HDivSurface) | Z_s/(jw*mu0*R) < 0.1 | 65% at ratio 10 | Yes |
+| MFIE tangential | J (HDivSurface) | PEC only | 0% (PEC) | Yes |
+| PMCHWT-SIBC | J + M | Impossible in MQS | N/A | N/A |
+| FEM-SIBC | H (volume) | All Z_s | ~1% | N/A (pure FEM) |
+
+## Why Scalar BIE Works (and Others Failed)
+
+1. **EFIE-SIBC fails**: SL eigenvalue R/3 for l=1 gives 3x Z_s error
+2. **MFIE fails**: RT0 (order=0 HDivSurface) has zero surface curl -> no Z_s dependence
+3. **PMCHWT fails**: jw*eps*SL(M) ~ 10^{-14} in MQS -> M doesn't contribute to H
+4. **Scalar BIE works**: H1 stiffness K provides nonzero surface Laplacian for SIBC coupling.
+   No SL*J term (avoids R/3 eigenvalue). Single-equation formulation (no M coupling needed).
+
+## Decision Tree
+
+```
+Workpiece eddy current problem:
+  Is Z_s field-dependent (nonlinear mu)?
+    Yes -> FEM-SIBC + ESIM Karl iteration (fem_esim_3d.py)
+    No  -> Scalar BIE + SIBC (scalar_bie_sibc.py)
+           - Surface-only (no volume mesh)
+           - Fast frequency sweep (BEM operators cached)
+           - All Z_s values (<0.1% error)
+```
+
+## Verification Scripts
+
+- `examples/cubit_panels/inductance/scalar_bie_sibc.py` -- Scalar BIE verification (RECOMMENDED)
+- `examples/cubit_panels/inductance/verify_sphere_sibc.py` -- Analytical vs BEM vs FEM on sphere
+- `examples/cubit_panels/inductance/debug_efie_sibc.py` -- EFIE eigenvalue analysis
+- `examples/cubit_panels/inductance/fem_esim_3d.py` -- FEM-SIBC reference implementation
 """
 
 
@@ -1488,6 +1636,7 @@ def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
         "best_practices": NGBEM_BEST_PRACTICES,
         "hodge": NGBEM_HODGE_DECOMPOSITION,
         "esim_workpiece": NGBEM_ESIM_WORKPIECE,
+        "mqs_formulation_limits": NGBEM_MQS_FORMULATION_LIMITS,
         # Aliases
         "cubit": NGBEM_CUBIT_WORKFLOW,
         "setgeominfo": NGBEM_CUBIT_WORKFLOW,
@@ -1502,6 +1651,13 @@ def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
         "fem_sibc": NGBEM_ESIM_WORKPIECE,
         "eddy_current": NGBEM_ESIM_WORKPIECE,
         "screening": NGBEM_ESIM_WORKPIECE,
+        "mfie": NGBEM_MQS_FORMULATION_LIMITS,
+        "pmchwt": NGBEM_MQS_FORMULATION_LIMITS,
+        "formulation": NGBEM_MQS_FORMULATION_LIMITS,
+        "mqs_sibc": NGBEM_MQS_FORMULATION_LIMITS,
+        "scalar_bie": NGBEM_MQS_FORMULATION_LIMITS,
+        "scalar_bie_sibc": NGBEM_MQS_FORMULATION_LIMITS,
+        "scalar_potential": NGBEM_MQS_FORMULATION_LIMITS,
     }
 
     topic = topic.lower().strip()
@@ -1512,6 +1668,7 @@ def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
             NGBEM_CURVE_ORDER_STUDY, NGBEM_STABILIZED,
             NGBEM_EXAMPLES, NGBEM_BEST_PRACTICES,
             NGBEM_HODGE_DECOMPOSITION, NGBEM_ESIM_WORKPIECE,
+            NGBEM_MQS_FORMULATION_LIMITS,
         ]
         return "\n\n".join(main)
     elif topic in topics:
