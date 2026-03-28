@@ -70,6 +70,15 @@ public:
 	// Can be set via Python API: rad.SolverConfig(relax_param=value)
 	double m_relax;
 
+	// Keep magnetization from previous solve (default: false = reset to zero)
+	// When true, rad.Solve() continues from the previous magnetization state.
+	// Enables Newton->Picard hybrid:
+	//   rad.SolverConfig(newton_method=True)
+	//   rad.Solve(obj, 1e-3, 10, 2)   # Newton phase
+	//   rad.SolverConfig(newton_method=False, keep_magnetization=True)
+	//   rad.Solve(obj, 1e-3, 100, 2)  # Picard continues from Newton state
+	bool m_keep_magnetization;
+
 	// Newton-Raphson nonlinear iteration (default: false = Picard/fixed-point)
 	// When true, uses differential susceptibility chi_d = (dB/dH)/mu_0 - 1 for system matrix
 	// and adds correction term to RHS for quadratic convergence
@@ -154,6 +163,7 @@ public:
 		NonlinearMethod = 1;  // Default: mucal2 (B-change/Newton) for faster convergence
 		m_bicg_tol = 1.0e-4;  // Default: 1e-4 (ELF-compatible)
 		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
+		m_keep_magnetization = false; // Default: reset M to zero before each Solve
 		m_use_newton = false; // Default: Picard iteration (backward compatible)
 
 		// Newton line search damping init
