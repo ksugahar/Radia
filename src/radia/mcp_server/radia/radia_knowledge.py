@@ -3356,6 +3356,54 @@ src/radia/
 """
 
 
+RADIA_PEEC_CORE_PITFALLS = """
+# PEEC + Magnetic Core: Common Pitfalls
+
+## Critical Issues (will produce wrong results silently)
+
+1. **Coordinates in meters**: Radia always uses meters. `60mm` = `0.06`, not `60`.
+
+2. **Call `rad.UtiDelAll()` first**: Radia keeps global state. Previous objects persist.
+
+3. **NGSBEM: Use `Glue(wire.faces)` for surface mesh**:
+   Volume mesh causes BEM cond=1e17 (singular). Surface-only gives cond=1e4.
+   ```python
+   geo = OCCGeometry(Glue(wire.faces))   # CORRECT
+   # geo = OCCGeometry(wire)              # WRONG (volume mesh)
+   ```
+
+4. **NGSBEM: Set maxh <= min_cross_section / 2**:
+   For 1mm wire: `maxh=0.5e-3`. Larger creates elongated triangles → bad SL entries.
+
+5. **MSC sign: `(1/chi + N) sigma = H_ext`**, not `(-1/chi - N)`.
+
+6. **Yano-Sugahara eval point = midpoint(face_center, element_center)**:
+   Using face_center makes the self-term singular.
+
+7. **Point charge correction required for multi-element**:
+   Without it, 3x3x3 hex has 650% error. With it, 0.03%.
+
+8. **Loop port**: Don't use `add_port(n1, n1)`. Split the loop:
+   ```python
+   n1 = builder.add_node_at(x, y, z)    # port A
+   n1b = builder.add_node_at(x, y, z)   # port B (same position!)
+   builder.add_port(n1, n1b)
+   ```
+
+9. **Hex vertex order**: bottom CCW (v0-v3), top CCW (v4-v7).
+   Face 0=bottom(-Z), 1=top(+Z), 2=front(-Y), 3=back(+Y), 4=left(-X), 5=right(+X).
+
+## Solver Selection
+
+```
+Core conducting?
+ No  → Radia MSC ('radia')     [ferrite, laminated steel, nonlinear]
+ Yes → mu_r > 1?
+        No  → Scalar FEM-BEM ('fembem')     [Al/Cu shield]
+        Yes → Vector FEM-BEM ('vector_fembem') [solid steel]
+```
+"""
+
 RADIA_MAGNETIC_CORE_SOLVER_GUIDE = """
 # Magnetic Core Solver Selection Guide
 
@@ -3505,6 +3553,7 @@ def get_radia_documentation(topic: str = "all") -> str:
         "build_and_release": RADIA_BUILD_AND_RELEASE,
         "msc_kernel": RADIA_MSC_KERNEL,
         "magnetic_core_guide": RADIA_MAGNETIC_CORE_SOLVER_GUIDE,
+        "peec_core_pitfalls": RADIA_PEEC_CORE_PITFALLS,
     }
 
     topic = topic.lower().strip()
