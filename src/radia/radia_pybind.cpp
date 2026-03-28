@@ -1657,6 +1657,19 @@ double GetRelaxParam() {
     return relax;
 }
 
+void SetKeepMagnetization(bool keep) {
+    int n = 0;
+    int err = RadSetKeepMagnetization(&n, keep ? 1 : 0);
+    check_error(err);
+}
+
+bool GetKeepMagnetization() {
+    int keep = 0;
+    int err = RadGetKeepMagnetization(&keep);
+    check_error(err);
+    return keep != 0;
+}
+
 void SetNewtonMethod(bool use_newton) {
     int n = 0;
     int err = RadSetNewtonMethod(&n, use_newton ? 1 : 0);
@@ -1805,6 +1818,10 @@ void SolverConfig(py::kwargs kwargs) {
     if (kwargs.contains("hantila_relax")) {
         SetHantilaRelax(kwargs["hantila_relax"].cast<double>());
     }
+
+    if (kwargs.contains("keep_magnetization")) {
+        SetKeepMagnetization(kwargs["keep_magnetization"].cast<bool>());
+    }
 }
 
 py::dict GetSolverConfig() {
@@ -1819,6 +1836,9 @@ py::dict GetSolverConfig() {
     { double relax = 0.0;
       RadGetRelaxParam(&relax);
       config["relax_param"] = relax; }
+
+    // Keep magnetization
+    config["keep_magnetization"] = GetKeepMagnetization();
 
     // Newton method
     { int use_newton = 0;
