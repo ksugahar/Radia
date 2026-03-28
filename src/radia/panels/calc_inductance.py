@@ -378,11 +378,12 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
             frequency=frequency, sigma=sigma, half_thickness=half_thickness,
             material=material, esim_geometry=esim_geometry)
 
-    elif impedance_model == "fem-esim":
+    elif impedance_model in ("fem-esim", "fem-dowell"):
         return _compute_workpiece_fem_esim(
             mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
             frequency=frequency, sigma=sigma, half_thickness=half_thickness,
-            material=material, esim_geometry=esim_geometry)
+            material=material, esim_geometry=esim_geometry,
+            use_dowell=(impedance_model == "fem-dowell"))
 
     R_eff = float(Z_sum.real)
     X_eff = float(Z_sum.imag)
@@ -564,7 +565,8 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
 
 def _compute_workpiece_fem_esim(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
                                  frequency=50000, sigma=2e6, half_thickness=0.005,
-                                 material="steel", esim_geometry="cylinder"):
+                                 material="steel", esim_geometry="cylinder",
+                                 use_dowell=False):
     """Compute workpiece impedance via 3D FEM with SIBC Robin condition.
 
     Creates 3D volume mesh (air + coil + workpiece cavity),
@@ -678,22 +680,36 @@ def _compute_workpiece_fem_esim(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     bh_curve = STEEL_BH if material == "steel" else None
     mu_r = 1.0 if material in ("copper", "aluminum") else None
 
-    esim_solver = ESIMFiniteSlabSolver(
-        half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
-        frequency=frequency,
-        mu_r=mu_r if bh_curve is None else None, n_nodes=200,
-        geometry=esim_geometry)
+    # Z_s computation: ESIM (nonlinear, Karl iteration) or Dowell (linear, no iteration)
+    rho = 1.0 / sigma
+    mu_eff = MU_0 * (mu_r if mu_r else 100.0)
+    delta = math.sqrt(2.0 / (omega * mu_eff * sigma)) if omega > 0 else 1e10
+    _label = "FEM-Dowell" if use_dowell else "FEM-ESIM"
 
-    Z_s = esim_solver.solve(5.0)['Z']
+    if use_dowell:
+        # Dowell: Z_s = (rho/a)*gamma_a*tanh(gamma_a), no iteration needed
+        xi = half_thickness / delta
+        gamma_a = complex(1, 1) * xi
+        Z_s = (rho / half_thickness) * gamma_a * np.tanh(gamma_a)
+        esim_solver = None
+        max_iter = 1  # single solve, no Karl iteration
+    else:
+        esim_solver = ESIMFiniteSlabSolver(
+            half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
+            frequency=frequency,
+            mu_r=mu_r if bh_curve is None else None, n_nodes=200,
+            geometry=esim_geometry)
+        Z_s = esim_solver.solve(5.0)['Z']
+        max_iter = 15
+
     gfu = GridFunction(fes)
-    max_iter = 15
     tol = 1e-3
     relax = 0.5
     H_t_rms = 5.0
     P_total = 0.0
     Q_total = 0.0
 
-    sys.stderr.write(f"FEM-ESIM: {fes.ndof} DOFs, solving...\n")
+    sys.stderr.write(f"{_label}: {fes.ndof} DOFs, solving...\n")
     sys.stderr.flush()
 
     for iteration in range(max_iter):
@@ -713,15 +729,21 @@ def _compute_workpiece_fem_esim(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
         At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
         H_t_rms = abs(1j * omega / Z_s) * At_rms
 
-        Z_s_old = Z_s
-        sol = esim_solver.solve(max(H_t_rms, 1e-3))
-        Z_s_new = sol['Z']
-        Z_s = relax * Z_s_new + (1 - relax) * Z_s_old
-        P_total = sol['P_prime'] * A_wp
-        Q_total = sol['Q_prime'] * A_wp
+        if esim_solver:
+            Z_s_old = Z_s
+            sol = esim_solver.solve(max(H_t_rms, 1e-3))
+            Z_s_new = sol['Z']
+            Z_s = relax * Z_s_new + (1 - relax) * Z_s_old
+            P_total = sol['P_prime'] * A_wp
+            Q_total = sol['Q_prime'] * A_wp
+            dZ = abs(Z_s - Z_s_old) / max(abs(Z_s_old), 1e-30)
+        else:
+            # Dowell: Z_s is constant, compute P/Q directly
+            P_total = 0.5 * Z_s.real * H_t_rms**2 * A_wp
+            Q_total = 0.5 * Z_s.imag * H_t_rms**2 * A_wp
+            dZ = 0.0
 
-        dZ = abs(Z_s - Z_s_old) / max(abs(Z_s_old), 1e-30)
-        sys.stderr.write(f"FEM-ESIM: iter {iteration} |Z_s|={abs(Z_s):.4e} "
+        sys.stderr.write(f"{_label}: iter {iteration} |Z_s|={abs(Z_s):.4e} "
                          f"H_t={H_t_rms:.2f} dZ={dZ:.4e}\n")
         sys.stderr.flush()
         if dZ < tol and iteration > 0:
@@ -729,11 +751,8 @@ def _compute_workpiece_fem_esim(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
 
     t_solve = _time.perf_counter() - t0
 
-    mu_eff = MU_0 * (mu_r if mu_r else 100.0)
-    delta = math.sqrt(2.0 / (omega * mu_eff * sigma)) if omega > 0 else 1e10
-
     return {
-        "wp_model": "fem-esim",
+        "wp_model": _label.lower(),
         "wp_material": material,
         "wp_frequency": frequency,
         "wp_sigma": sigma,
@@ -1197,8 +1216,11 @@ def main():
     # Workpiece ESIM/Dowell args
     parser.add_argument("--workpiece", default="", help="Workpiece block name")
     parser.add_argument("--impedance-model", default="esim",
-                        choices=["esim", "dowell", "bem-sibc", "fem-esim"],
-                        help="Surface impedance model")
+                        choices=["esim", "dowell", "bem-sibc", "fem-esim", "fem-dowell"],
+                        help="Surface impedance model: "
+                             "esim/dowell = BEM per-panel, "
+                             "bem-sibc = BEM scalar BIE, "
+                             "fem-esim/fem-dowell = 3D FEM")
     parser.add_argument("--frequency", type=float, default=50000, help="Frequency [Hz]")
     parser.add_argument("--sigma", type=float, default=2e6, help="Conductivity [S/m]")
     parser.add_argument("--half-thickness", type=float, default=0.005,
