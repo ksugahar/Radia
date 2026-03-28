@@ -378,12 +378,14 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
             frequency=frequency, sigma=sigma, half_thickness=half_thickness,
             material=material, esim_geometry=esim_geometry)
 
-    elif impedance_model in ("fem-esim", "fem-dowell"):
+    elif impedance_model in ("fem-esim", "fem-dowell", "fem-sibc"):
+        _zs_mode = {"fem-esim": "esim", "fem-dowell": "dowell",
+                     "fem-sibc": "sibc"}[impedance_model]
         return _compute_workpiece_fem_esim(
             mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
             frequency=frequency, sigma=sigma, half_thickness=half_thickness,
             material=material, esim_geometry=esim_geometry,
-            use_dowell=(impedance_model == "fem-dowell"))
+            zs_mode=_zs_mode)
 
     R_eff = float(Z_sum.real)
     X_eff = float(Z_sum.imag)
@@ -566,7 +568,7 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
 def _compute_workpiece_fem_esim(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
                                  frequency=50000, sigma=2e6, half_thickness=0.005,
                                  material="steel", esim_geometry="cylinder",
-                                 use_dowell=False):
+                                 zs_mode="esim"):
     """Compute workpiece impedance via 3D FEM with SIBC Robin condition.
 
     Creates 3D volume mesh (air + coil + workpiece cavity),
@@ -680,27 +682,32 @@ def _compute_workpiece_fem_esim(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     bh_curve = STEEL_BH if material == "steel" else None
     mu_r = 1.0 if material in ("copper", "aluminum") else None
 
-    # Z_s computation: ESIM (nonlinear, Karl iteration) or Dowell (linear, no iteration)
+    # Z_s computation: ESIM (nonlinear, Karl iteration), Dowell or SIBC (linear, no iteration)
     rho = 1.0 / sigma
     mu_eff = MU_0 * (mu_r if mu_r else 100.0)
     delta = math.sqrt(2.0 / (omega * mu_eff * sigma)) if omega > 0 else 1e10
-    _label = "FEM-Dowell" if use_dowell else "FEM-ESIM"
+    _label = f"FEM-{zs_mode.upper()}"
+    esim_solver = None
 
-    if use_dowell:
-        # Dowell: Z_s = (rho/a)*gamma_a*tanh(gamma_a), no iteration needed
+    if zs_mode == "sibc":
+        # Classical SIBC: Z_s = (1+j)/(sigma*delta), semi-infinite half-space
+        Z_s = complex(1, 1) / (sigma * delta)
+        max_iter = 1  # no iteration (linear, no thickness correction)
+    elif zs_mode == "dowell":
+        # Dowell: Z_s = (rho/a)*gamma_a*tanh(gamma_a), finite slab
         xi = half_thickness / delta
         gamma_a = complex(1, 1) * xi
         Z_s = (rho / half_thickness) * gamma_a * np.tanh(gamma_a)
-        esim_solver = None
-        max_iter = 1  # single solve, no Karl iteration
+        max_iter = 1  # no iteration (linear)
     else:
+        # ESIM: 1D cell problem, supports nonlinear BH + curvature
         esim_solver = ESIMFiniteSlabSolver(
             half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
             frequency=frequency,
             mu_r=mu_r if bh_curve is None else None, n_nodes=200,
             geometry=esim_geometry)
         Z_s = esim_solver.solve(5.0)['Z']
-        max_iter = 15
+        max_iter = 15  # Karl iteration for nonlinear
 
     gfu = GridFunction(fes)
     tol = 1e-3
@@ -1216,11 +1223,10 @@ def main():
     # Workpiece ESIM/Dowell args
     parser.add_argument("--workpiece", default="", help="Workpiece block name")
     parser.add_argument("--impedance-model", default="esim",
-                        choices=["esim", "dowell", "bem-sibc", "fem-esim", "fem-dowell"],
-                        help="Surface impedance model: "
-                             "esim/dowell = BEM per-panel, "
-                             "bem-sibc = BEM scalar BIE, "
-                             "fem-esim/fem-dowell = 3D FEM")
+                        choices=["esim", "dowell", "bem-sibc",
+                                 "fem-esim", "fem-dowell", "fem-sibc"],
+                        help="esim/dowell=BEM per-panel, bem-sibc=BEM scalar BIE, "
+                             "fem-esim/fem-dowell/fem-sibc=3D FEM with Z_s model")
     parser.add_argument("--frequency", type=float, default=50000, help="Frequency [Hz]")
     parser.add_argument("--sigma", type=float, default=2e6, help="Conductivity [S/m]")
     parser.add_argument("--half-thickness", type=float, default=0.005,
