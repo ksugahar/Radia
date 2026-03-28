@@ -1149,6 +1149,13 @@ When enabled, uses differential susceptibility chi_d = (dB/dH)/mu_0 - 1 for the 
 and adds a correction term to the RHS for quadratic convergence.
 @param use_newton [in] 1 to enable Newton, 0 for Picard (default)
 */
+/** Keep magnetization from previous Solve (for Newton->Picard workflow).
+@param n [out] always 1
+@param keep [in] 1 to keep, 0 to reset (default)
+*/
+EXP int CALL RadSetKeepMagnetization(int* n, int keep);
+EXP int CALL RadGetKeepMagnetization(int* keep);
+
 EXP int CALL RadSetNewtonMethod(int* n, int use_newton);
 
 /** Gets current Newton method setting.

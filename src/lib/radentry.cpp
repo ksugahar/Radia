@@ -108,6 +108,8 @@ void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
 double GetRelaxParam();
+void SetKeepMagnetization( bool );
+bool GetKeepMagnetization();
 void SetNewtonMethod( bool );
 bool GetNewtonMethod();
 void SetNewtonDamping( bool, int, double );
@@ -1609,6 +1611,19 @@ int CALL RadSetRelaxParam(int* n, double relax)
 int CALL RadGetRelaxParam(double* relax)
 {
 	*relax = GetRelaxParam();
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadSetKeepMagnetization(int* n, int keep)
+{
+	SetKeepMagnetization(keep != 0);
+	*n = 1;
+	return ioBuffer.OutErrorStatus();
+}
+
+int CALL RadGetKeepMagnetization(int* keep)
+{
+	*keep = GetKeepMagnetization() ? 1 : 0;
 	return ioBuffer.OutErrorStatus();
 }
 

@@ -1541,7 +1541,7 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			radTOptionNames OptNam;
 			const char** BufNameString = arOptionNames;
 			const char** BufValString = arOptionValues;
-			char MagnResetIsNotNeeded = 0;
+			char MagnResetIsNotNeeded = m_keep_magnetization ? 1 : 0;
 			for(int i=0; i<numOptions; i++)
 			{
 				if(!strcmp(*BufNameString, OptNam.ZeroM))
