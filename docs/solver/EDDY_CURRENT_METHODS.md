@@ -372,47 +372,64 @@ Z = R + s * L
 
 ## Decision Guide
 
+### Which Eddy Current Method to Use
+
 ```
-                    Start
-                      |
-            Need eddy currents?
-                   /       \
-                 Yes        No
-                  |          |
-                  |     Kelvin Transform
-                  |     (magnetostatic Omega-Reduced Omega)
-                  |
-         Nonlinear mu_r(H)?
-              /          \
-            Yes           No
-             |             |
-    FEM + Kelvin           |
-    (A-Phi or T-Omega,     |
-     Newton iteration)     |
+                         Start
                            |
-                  Need air mesh free?
-                      /         \
-                    Yes          No
-                     |            |
-               ngbem BEM     FEM + Kelvin
-                     |       (A-Phi: simple)
-                     |       (T-Omega: multi-loop)
+               Need eddy currents?
+                      /       \
+                    Yes        No -> Kelvin Transform (Omega-Reduced Omega)
                      |
-            Need frequency sweep?
-                  /           \
-                Yes            No
-                 |              |
-        BEM + SIBC         FEM-BEM
-        (fast sweep)    (exact interior)
-                 |
-        PEEC coupling needed?
-             /       \
-           Yes        No
-            |          |
-     ShieldBEMSIBC   EddyCurrentBEMSIBC
-     (loop basis,    (scalar Hz,
-      Biot-Savart)    Costabel)
+            Nonlinear mu_r(H)?
+                 /          \
+               Yes           No
+                |             |
+       FEM-SIBC + ESIM       |
+       (Karl iteration,      |
+        fem_esim_3d.py)      |
+                              |
+                    Need air mesh free? (BEM vs FEM)
+                         /         \
+                       Yes          No
+                        |            |
+                   BEM methods   FEM + Kelvin
+                        |        (A-Phi: simple)
+                        |        (T-Omega: multi-loop)
+                        |
+              +-------------------+
+              |                   |
+        Workpiece (SIBC)    Coil self-L
+              |                   |
+     Scalar BIE + SIBC    EFIE saddle point
+     (all Z_s, <0.1%)     (LaplaceSL, PEC)
+     scalar_bie_sibc.py    bem_inductance.py
 ```
+
+### Method Selection Table
+
+| Scenario | Recommended Method | Why |
+|----------|-------------------|-----|
+| Coil self-inductance (L_air) | EFIE saddle point | PEC assumption OK for copper coils |
+| Workpiece eddy current (linear) | **Scalar BIE + SIBC** | All Z_s, surface-only, fast freq sweep |
+| Workpiece eddy current (nonlinear mu) | FEM-SIBC + ESIM | Need H-dependent Z_s via Karl iteration |
+| Coil + magnetic core | FEM + Kelvin | Nonlinear iron needs volume mesh |
+| High-frequency (>1 MHz) | ngsolve.bem Helmholtz | Wave effects matter |
+| Circuit extraction (L, R, C, M) | Radia PEEC pipeline | Direct SPICE netlist output |
+
+### Why Scalar BIE + SIBC (Not EFIE or MFIE)
+
+| Formulation | Unknown | Z_s Support | Error | Issue |
+|-------------|---------|-------------|-------|-------|
+| EFIE-SIBC | J (HDivSurface) | PEC only | 65% at Z_s/beta=10 | SL eigenvalue R/3 |
+| MFIE | J (HDivSurface) | PEC only | 0% (PEC) | No Z_s dependence (M->H=0 in MQS) |
+| PMCHWT | J + M | Impossible in MQS | N/A | jw*eps*SL(M) ~ 10^{-14} |
+| **Scalar BIE** | **phi (H1)** | **All Z_s** | **<0.1%** | **None** |
+
+The scalar potential BIE avoids all three failure modes because:
+1. No SL*J term (avoids R/3 eigenvalue)
+2. Uses H1 stiffness K (nonzero surface Laplacian, unlike RT0 which has zero curl_s)
+3. Single-equation formulation (no need for M coupling)
 
 ## Performance Characteristics
 
@@ -431,6 +448,7 @@ Z = R + s * L
 
 | Method | Typical DOFs | Breakdown |
 |---|---|---|
+| **Scalar BIE + SIBC** | **~128** | **H1 vertices on surface** |
 | VectorEddyCurrentFEMBEM | ~164 | 94 H(curl) + 42 HDivSurf + 28 SurfL2 |
 | EddyCurrentFEMBEM | ~100 | H1 interior + H1/2 boundary |
 | ShieldBEMSIBC | ~174 loops | From V-1 (genus-0 surface) |
@@ -441,6 +459,7 @@ Z = R + s * L
 
 | Method | Operators Used | Package |
 |---|---|---|
+| **Scalar BIE + SIBC** | **LaplaceSL, LaplaceDL (scalar H1)** | **ngsolve.bem** |
 | EddyCurrentFEMBEM | V (SLP), K (DLP), D (Hypersingular) | ngbem or ngsolve.bem |
 | VectorEddyCurrentFEMBEM | HelmholtzSL only | ngsolve.bem |
 | EddyCurrentBEMSIBC | V, K, D (cached) | ngbem or ngsolve.bem |
@@ -916,6 +935,43 @@ against NGSolve H1 FEM (p=4) as independent method:
 | Linear Z_s | NGSolve H1 FEM (p=4) | 0.04% |
 | Nonlinear Z_s (steel BH) | NGSolve H1 FEM + Picard | 0.78% |
 
+### Scattered-Field FEM-SIBC: Missing RHS Term (2026-03-28)
+
+In a **scattered-field** FEM with SIBC (e.g., `verify_sphere_sibc.py`), the RHS
+must include BOTH surface terms:
+
+```
+f(v) = -(jw/Z_s) * <A_inc, v>_sibc   (surface impedance term)
+     + (-1)      * <n x H_inc, v>_sibc (incident field boundary term)
+```
+
+The second term `<n x H_inc, v>` arises from the curl-curl integration by parts
+and was initially missing, causing a **factor-of-3 error** on the sphere benchmark.
+
+The **total-field formulation** (used in `fem_esim_3d.py` with a coil current source)
+does NOT have this issue because the source is `J_source` in the volume:
+```
+int nu0 * curl(A) . curl(v) dx + (jw/Z_s) * int A_t . v_t ds(wp) = int J . v dx
+```
+
+**Rule**: Use total-field formulation for coil+workpiece problems.  Use scattered-field
+only when A_inc is known analytically (e.g., uniform field).
+
+### BEM EFIE-SIBC Limitation: SL Eigenvalue Mismatch (2026-03-28)
+
+The EFIE `Z_s*J + jw*mu0*SL(J) = -jw*A_inc` is fundamentally incorrect for finite
+Z_s in MQS. The Laplace SL eigenvalue for l=1 on a sphere of radius R is R/3 (not R),
+so the BEM EFIE gives an effective denominator `(3*Z_s + jw*mu0*R)` instead of the
+correct `(Z_s + jw*mu0*R)`.
+
+This produces BEM/Analytical ratios from 0.35 (Z_s/(jw*mu0*R)=10) to 1.00 (PEC).
+Only correct for PEC (Z_s -> 0).
+
+**SOLVED**: Use the **Scalar Potential BIE + SIBC** formulation (Section 6 below),
+which achieves <0.1% error for all Z_s using existing ngsolve.bem operators.
+
+See: `examples/cubit_panels/inductance/scalar_bie_sibc.py`
+
 ### Literature
 
 SIBC references in `W:\03_文献・論文\00_電磁界解析\SIBC\`:
@@ -930,6 +986,254 @@ SIBC references in `W:\03_文献・論文\00_電磁界解析\SIBC\`:
 
 ---
 
+## 5. BEM Formulation Selection for MQS-SIBC (2026-03-28)
+
+### Background
+
+In MQS (Magneto-Quasi-Static) regime, BEM formulations for eddy currents with
+Surface Impedance Boundary Condition (SIBC) behave very differently from their
+full-wave counterparts. This section summarizes findings from systematic analysis
+on a sphere benchmark (analytical solution available).
+
+### EFIE-SIBC in MQS: Limited to PEC-Like Conductors
+
+The MQS EFIE-SIBC formulation:
+```
+Z_s * M * J + jw * mu0 * SL(J) = -jw * A_inc
+```
+
+**Works ONLY when** `Z_s / (jw * mu0 * R) < 0.1` (copper at high frequency).
+
+**Fails for** steel, ferrite, or any material where `Z_s / (jw * mu0 * R) >> 1`.
+
+**Root cause**: In MQS, the scattered vector potential representation
+`A_scat = mu0 * SL(J_s)` is incomplete when the workpiece has magnetization
+M != 0 (mu_r > 1). The SL operator eigenvalue for l=1 on a sphere of radius R
+is R/3, not R. This gives an effective denominator `(3*Z_s + jw*mu0*R)` instead
+of the correct `(Z_s + jw*mu0*R)`, producing factor-of-3 errors.
+
+**Why full-wave EFIE-SIBC works**: At GHz frequencies, `Z_s / eta_0 << 1` for
+good conductors (eta_0 = sqrt(mu0/eps0) ~ 377 Ohm). The Z_s term is negligible
+relative to the Maxwell SL operator, so the eigenvalue mismatch does not matter.
+In MQS: `Z_s / (jw*mu0*R)` can be 1-100 for steel, breaking the formulation.
+
+| Z_s/(jw*mu0*R) | BEM/Analytical | Regime |
+|-----------------|----------------|--------|
+| 0.01 | ~1.00 | PEC-like (copper at high f) |
+| 0.1 | ~0.97 | Acceptable |
+| 1.0 | ~0.75 | Factor-of-3 effect visible |
+| 5.0 | ~0.50 | Significantly wrong |
+| 10.0 | ~0.35 | Steel at 7 kHz |
+
+### MFIE in MQS: Two Variants
+
+#### Tangential MFIE (n x H)
+
+The tangential MFIE uses the MFIE K operator:
+```
+(1/2) * J + K(J) = n x H_inc
+```
+where `K(J)(x) = n(x) x curl integral_S G(x,y) J(y) dS_y`.
+
+**Key property**: Gives `J = J_pec` for ALL values of Z_s (no Z_s dependence).
+
+In ngsolve.bem, this requires `LaplaceDL` + `HDivSurface` to form the K operator.
+On a PEC sphere, this gives 99.8% accuracy for the l=1 mode.
+
+**Why Z_s-independent**: In MQS, magnetization M does not contribute to the
+magnetic field H (only to B). The tangential MFIE relates J to H_inc via the
+free-space Green's function, and M's contribution to H vanishes in the
+Laplace regime.
+
+**Limitation**: Cannot incorporate finite Z_s correction -- always gives the
+PEC solution.
+
+#### Normal MFIE (n . H) -- Sugahara Formulation
+
+Uses the normal component of B on the surface:
+```
+n . B_total = n . B_inc + n . B_scat(J)
+```
+
+The SIBC enters via the surface divergence relation:
+```
+n . B_total = -(Z_s / jw) * curl_s(J) = -(Z_s / jw) * div_s(n x J)
+```
+
+**Advantages**:
+- n . B_scat computed via Biot-Savart (collocation, not Galerkin)
+- SIBC naturally incorporated through surface divergence
+- Works for arbitrary Z_s
+
+**Requirements**:
+- Biot-Savart matrix assembly (not available as ngsolve.bem operator)
+- GRAPH constraint for multiply-connected bodies (loops/holes)
+- Collocation method (not Galerkin -- different from ngsolve.bem framework)
+
+**Reference**: Sugahara et al., IEEE TAP, 2006.
+
+### PMCHWT-SIBC in MQS: Impossible
+
+The PMCHWT formulation couples electric and magnetic surface currents (J, M)
+via the Stratton-Chu representation. In MQS:
+
+```
+jw * eps * SL(M) / ((1/2) * M)  =  O((kR)^2)  ~  10^{-14}
+```
+
+The electric displacement current term `jw*eps*SL(M)` that couples M into the
+system is 14 orders of magnitude smaller than the identity term. The
+`grad*SL*div(M)` correction acts only on the irrotational subspace, orthogonal
+to the divergence-free physical solution.
+
+**Weggler stabilization** (low-frequency stabilized BEM): NOT implemented in
+current ngsolve.bem. Only standard Laplace/Helmholtz/Maxwell operators are
+available. Even with stabilization, the 10^{-14} physics gap on the solenoidal
+subspace cannot be bridged.
+
+### Recommended Approach Summary
+
+| Problem | Method | Module/File |
+|---------|--------|-------------|
+| **Any Z_s (BEM)** | **Scalar BIE + SIBC** | **`scalar_bie_sibc.py`** |
+| PEC (Z_s -> 0) | MFIE tangential (LaplaceDL + HDivSurface) | ngsolve.bem |
+| PEC quick check | EFIE (LaplaceSL) | `efie_sibc.py` |
+| Finite Z_s (nonlinear) | FEM-SIBC + ESIM (Karl iteration) | `fem_esim_3d.py` |
+| Circuit extraction (L, R) | Radia PEEC pipeline | `peec_topology.py` |
+
+**Decision tree**:
+```
+Is Z_s frequency-dependent only (linear material)?
+  Yes -> Scalar BIE + SIBC (BEM, surface-only, fast frequency sweep)
+  No  -> Is Z_s field-dependent (nonlinear mu)?
+           Yes -> FEM-SIBC + ESIM (Karl iteration)
+           No  -> Scalar BIE + SIBC
+```
+
+---
+
+## 6. Scalar Potential BIE with SIBC (2026-03-28)
+
+### Overview
+
+The Scalar Potential BIE + SIBC is a BEM formulation that correctly handles
+finite surface impedance Z_s in the MQS regime. Unlike EFIE-SIBC (which
+fails for Z_s/(jw*mu0*R) > 0.1) and MFIE (which gives PEC-only results),
+this formulation achieves <0.1% error for ALL Z_s values.
+
+**Key insight**: Use the scalar magnetic potential phi (H = -grad phi) as
+the unknown, not the surface current J. The SIBC enters naturally through
+the surface Laplacian (Laplace-Beltrami operator), which is well-defined
+in the H1 finite element space.
+
+### Formulation
+
+**Exterior problem**: Laplace equation for H = -grad(phi) outside conductor.
+
+**BIE** (Green's representation, exterior limit):
+```
+(1/2) phi + DL(phi) - SL(g) = phi_inc
+```
+where g = dphi/dn (Neumann data), DL = scalar double layer, SL = scalar single layer.
+
+**SIBC** (derived from Faraday's law on the surface):
+```
+E_t = Z_s * J_s = -Z_s * (n x grad_s phi)
+Faraday: curl_s(E_t).n = -jw * n.B = jw * mu0 * dphi/dn
+Surface identity: curl_s(n x grad_s f).n = Delta_s f
+
+=> dphi/dn = -(Z_s / (jw*mu0)) * Delta_s(phi)
+```
+
+**Combined system** (single unknown phi in H1):
+```
+(1/2*M - DL + gamma * SL * M_inv * K) phi = rhs
+
+M  = H1 surface mass matrix
+K  = H1 surface stiffness (Laplace-Beltrami)
+DL = LaplaceDL (scalar, ngsolve.bem)
+SL = LaplaceSL (scalar, ngsolve.bem)
+gamma = Z_s / (jw * mu0)
+```
+
+**Sign convention**: NGSolve `LaplaceDL` has (1/2*M - DL) for the exterior
+Dirichlet problem. The SIBC correction enters with **positive** gamma.
+
+**Gauge**: Lagrange multiplier for int(phi) dS = 0 fixes the constant null space.
+
+### Why It Works (and Why EFIE/MFIE Failed)
+
+| Issue | EFIE-SIBC | MFIE | Scalar BIE + SIBC |
+|-------|-----------|------|-------------------|
+| SL eigenvalue R/3 | Causes 3x Z_s error | N/A | N/A (no SL*J term) |
+| RT0 curl_s = 0 | N/A | No Z_s dependence | Uses H1 stiffness K |
+| M -> H = 0 in MQS | Incomplete A_scat | No coupling | N/A (scalar pot.) |
+
+The scalar potential phi naturally encodes both tangential H (via grad_s phi)
+and normal B (via dphi/dn). The SIBC couples them through the surface Laplacian K,
+which is nonzero for H1 order >= 1.
+
+### Verification: Sphere Benchmark
+
+Sphere (R=10mm, B0=1mT, f=1kHz), mesh maxh=R/5 (722 elements, 363 H1 DOFs):
+
+| Z_s/(jw*mu0*R) | Analytical H_rms | Scalar BIE H_rms | Error |
+|-----------------|------------------|------------------|-------|
+| 0 (PEC) | 974.62 | 975.47 | +0.09% |
+| 0.001 | 973.93 | 974.78 | +0.09% |
+| 0.01 | 967.75 | 968.58 | +0.09% |
+| 0.1 | 908.28 | 908.95 | +0.07% |
+| 1.0 | 527.46 | 527.46 | +0.00% |
+| 10.0 | 90.83 | 90.76 | -0.07% |
+
+Errors decrease with mesh refinement (R/3: 0.25%, R/5: 0.09%).
+
+### Usage
+
+```python
+from radia.scalar_bie_sibc import ScalarBIE_SIBC
+
+# 1. Create solver (assembles BEM operators once)
+solver = ScalarBIE_SIBC(mesh, order=1)
+
+# 2. Solve for given H_inc, Z_s, omega
+result = solver.solve(H_inc_cf, Zs=0.01+0.01j, omega=2*pi*1e3)
+print(f"H_rms = {result['H_rms']:.2f} A/m")
+print(f"P_loss = {result['P_loss']:.4f} W")
+
+# 3. Frequency sweep (Z_s recomputed per frequency)
+results = solver.frequency_sweep(H_inc_cf, freqs=[1e3, 10e3, 100e3],
+                                  sigma=5.8e7)  # copper
+```
+
+### Advantages
+
+- **All Z_s**: Works from PEC to highly resistive (steel, ferrite)
+- **Surface-only**: No volume mesh needed (BEM)
+- **Fast frequency sweep**: DL and SL are frequency-independent;
+  only the gamma*SL*M_inv*K term changes with frequency
+- **Existing operators**: No new C++ code; uses ngsolve.bem LaplaceSL/DL
+- **Small DOF count**: H1 on surface (~N_vertices vs ~N_edges for HDivSurface)
+
+### Limitations
+
+- **Linear Z_s only**: For nonlinear mu(H), use FEM-SIBC + ESIM Karl iteration
+- **Dense matrices**: Current implementation is O(N^2) memory, O(N^3) solve.
+  For large meshes, H-matrix compression (HACApK) could be applied to SL/DL.
+- **Closed surfaces**: The gauge condition assumes a closed surface.
+  Open conductors need a different formulation.
+- **H_inc reconstruction**: When phi_inc is not known analytically,
+  it must be recovered from H_inc via surface Poisson (adds one extra solve)
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `src/radia/scalar_bie_sibc.py` | Core solver module (ScalarBIE_SIBC class) |
+| `examples/cubit_panels/inductance/scalar_bie_sibc.py` | Sphere verification script |
+
+---
+
 ## References
 
 - **EMPY T-Omega method**: `S:\NGSolve\EMPY\EMPY_Analysis\EddyCurrent` (T_Omega_Method.py)
@@ -941,3 +1245,4 @@ SIBC references in `W:\03_文献・論文\00_電磁界解析\SIBC\`:
 - **Costabel symmetric coupling**: M. Costabel, "Symmetric methods for the coupling of FEM and BEM", 1987
 - **Kelvin transform**: T. Kuwahara & T. Takeda, "Unbounded FEM using Kelvin transformation", 1990
 - **Hollaus ESIM**: K. Hollaus et al., "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation", IEEE Trans. Magnetics, 2025
+- **Sugahara normal MFIE**: Sugahara et al., "Electromagnetic analysis using the GRAPH method", IEEE Trans. Antennas Propagat., 2006
