@@ -1065,10 +1065,11 @@ class InductanceDialog(QDialog):
 			if _solver == "BEM" and _imp == "SIBC":
 				_model_arg = "bem-sibc"
 			elif _solver == "FEM":
-				# FEM always uses Robin BC; ESIM/Dowell control Z_s formula
-				_model_arg = "fem-esim" if _imp != "Dowell" else "fem-dowell"
+				# FEM + Robin BC with Z_s from selected impedance model
+				_model_arg = {"ESIM": "fem-esim", "Dowell": "fem-dowell",
+				              "SIBC": "fem-sibc"}[_imp]
 			else:
-				# BEM + ESIM or BEM + Dowell
+				# BEM + ESIM or BEM + Dowell (per-panel)
 				_model_arg = _imp.lower()
 			args += [
 				"--workpiece", self._workpiece_block,
