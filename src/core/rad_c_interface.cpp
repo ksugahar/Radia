@@ -166,6 +166,8 @@ void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
 double GetRelaxParam();
+void SetKeepMagnetization( bool );
+bool GetKeepMagnetization();
 void SetNewtonMethod( bool );
 bool GetNewtonMethod();
 void SetNewtonDamping( bool, int, double );
@@ -1729,6 +1731,16 @@ void SetRelaxParam(double relax)
 double GetRelaxParam()
 {
 	return rad.m_relax;
+}
+
+void SetKeepMagnetization(bool keep)
+{
+	rad.m_keep_magnetization = keep;
+}
+
+bool GetKeepMagnetization()
+{
+	return rad.m_keep_magnetization;
 }
 
 void SetNewtonMethod(bool use_newton)
