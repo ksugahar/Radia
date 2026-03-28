@@ -3356,6 +3356,70 @@ src/radia/
 """
 
 
+RADIA_MULTILEVEL_SIMULATOR = """
+# Multi-Level Simulator
+
+Radia provides 3 levels of EM analysis in one repository.
+All share the same geometry and coordinate system for cross-validation.
+
+## The Three Levels
+
+| Level | Method | Speed | Accuracy | Use Case |
+|-------|--------|-------|----------|----------|
+| **1. PEEC** | Filament + Neumann | seconds | ~5% | Design exploration, parametric |
+| **2. NGSBEM** | Surface BEM (Laplace SL) | minutes | ~1% | Detailed analysis, validation |
+| **3. FEM** | Volume (NGSolve) | hours | reference | Final verification, nonlinear |
+
+## Level 1: PEEC (fast screening)
+
+```python
+from fasthenry_parser import FastHenryParser
+result = FastHenryParser().parse_string(inp).solve()  # L, R, Z(f)
+```
+- Sub-second for 100 frequency points
+- Magnetic core via Delta_L (Radia MSC)
+- Limitation: filament approximation (no skin/proximity in conductor)
+
+## Level 2: NGSBEM (detailed)
+
+```python
+from ngsbem_peec import NGBEMPEECSolver
+solver = NGBEMPEECSolver(mesh, order=0, sigma=5.8e7)
+solver.assemble(intorder=6)
+Z = solver.solve_frequency(1e6)
+```
+- Surface current captures skin/proximity effects
+- Eddy current: scalar FEM-BEM (mu_r=1) or vector FEM-BEM (any mu_r)
+- Limitation: dense O(N^2), ~10k DOF max for direct
+
+## Level 3: FEM (final verification)
+
+- Any geometry, nonlinear, adaptive refinement
+- Kelvin transformation for open boundaries
+- Via NGSolve / esim_coupled_solver.py
+
+## Cross-Validation
+
+Any two levels validate each other on the same geometry:
+- PEEC vs NGSBEM: ~5% (filament vs surface current)
+- PEEC vs Analytical: ~0.1% (same approximation)
+- MMMBuilder vs Radia: ~0.03% (same MSC kernel)
+
+## Magnetic Core Across Levels
+
+| Level | Core Method | Eddy | Nonlinear |
+|-------|------------|------|-----------|
+| 1 PEEC | Radia MSC (Delta_L) | No | Yes |
+| 2 NGSBEM | Scalar/Vector FEM-BEM | Yes | No |
+| 3 FEM | Volume FEM | Yes | Yes |
+
+## Design Workflow
+
+1. **Explore** (PEEC): Sweep 100 core positions in 10s → select top 5
+2. **Validate** (NGSBEM): Z(f) at 20 freqs in 5min → confirm trends
+3. **Sign-off** (FEM): Nonlinear solve → final report
+"""
+
 RADIA_PEEC_CORE_PITFALLS = """
 # PEEC + Magnetic Core: Common Pitfalls
 
@@ -3554,6 +3618,7 @@ def get_radia_documentation(topic: str = "all") -> str:
         "msc_kernel": RADIA_MSC_KERNEL,
         "magnetic_core_guide": RADIA_MAGNETIC_CORE_SOLVER_GUIDE,
         "peec_core_pitfalls": RADIA_PEEC_CORE_PITFALLS,
+        "multilevel": RADIA_MULTILEVEL_SIMULATOR,
     }
 
     topic = topic.lower().strip()
