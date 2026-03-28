@@ -196,6 +196,19 @@ fes = HDivSurface(mesh, order=0)
 **For Cubit meshes**: Use `export_NGSolveCurvedMesh(cubit, surface_only=True)` which
 creates a dim=2 surface mesh from Cubit surface blocks (triangles/quads only).
 
+**For OCC (netgen.occ) meshes**: Use `Glue(shape.faces)` to extract surface:
+```python
+from netgen.occ import Box, Pnt, Glue, OCCGeometry
+wire = Box(Pnt(0, -0.5e-3, -0.5e-3), Pnt(0.1, 0.5e-3, 0.5e-3))
+# WRONG: OCCGeometry(wire) -> volume mesh -> BEM cond = 1e17
+# CORRECT: surface-only
+geo = OCCGeometry(Glue(wire.faces))
+mesh = Mesh(geo.GenerateMesh(maxh=0.5e-3))  # maxh <= min_cross_section / 2
+```
+
+**maxh rule**: Set `maxh <= smallest_cross_section / 2` to avoid elongated
+triangles. For 1mm wire: `maxh=0.5e-3`. Larger gives cond ~1e17 (singular).
+
 ## PITFALL: ds(label) Boundary Name Mismatch
 
 When using `export_NGSolveCurvedMesh(cubit, order=N)`, boundary labels come from
