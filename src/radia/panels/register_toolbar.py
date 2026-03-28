@@ -656,10 +656,11 @@ class InductanceDialog(QDialog):
 
 		esim_layout.addWidget(QLabel("Model:"), 0, 0)
 		self.model_combo = QComboBox()
-		self.model_combo.addItems(["ESIM", "Dowell", "BEM-SIBC"])
-		self.model_combo.setToolTip("ESIM: 1D cell problem (nonlinear OK)\n"
-		                            "Dowell: analytical (linear only)\n"
-		                            "BEM-SIBC: scalar potential BIE (most accurate)")
+		self.model_combo.addItems(["ESIM", "Dowell", "BEM-SIBC", "FEM-ESIM"])
+		self.model_combo.setToolTip("ESIM: per-panel 1D cell problem (fast)\n"
+		                            "Dowell: analytical formula (linear only)\n"
+		                            "BEM-SIBC: scalar BIE on surface (accurate)\n"
+		                            "FEM-ESIM: 3D volume FEM (reference)")
 		esim_layout.addWidget(self.model_combo, 0, 1)
 
 		esim_layout.addWidget(QLabel("Material:"), 1, 0)
@@ -1338,7 +1339,7 @@ class InductanceDialog(QDialog):
 				self.debug_text.setText("B-distribution written, finalizing...")
 			elif line.startswith("B_FIELD_ERROR:"):
 				self.debug_text.setText("B field: " + line.split(":", 1)[1])
-			elif line.startswith("BEM-SIBC:"):
+			elif line.startswith("BEM-SIBC:") or line.startswith("FEM-ESIM:"):
 				self.debug_text.setText(line.strip())
 			elif line.startswith("ESIM_START:"):
 				self.debug_text.setText("Computing workpiece impedance (ESIM)...")
@@ -1562,10 +1563,16 @@ class InductanceDialog(QDialog):
 			rows.append(("Q (workpiece)", f"{Q:.4e} var"))
 			if delta_min > 0:
 				rows.append(("Skin depth", f"{delta_min*1e3:.3f} - {delta_max*1e3:.3f} mm"))
-			rows.append(("Panels/Elements", str(n_panels)))
+			if "wp_P_density" in data and data["wp_P_density"] > 0:
+				rows.append(("P density", f"{data['wp_P_density']:.2e} W/m^2"))
+			rows.append(("Elements/Panels", str(n_panels)))
 			if "wp_bem_ndof" in data:
 				rows.append(("BEM DOFs", str(data["wp_bem_ndof"])))
 				rows.append(("BEM assembly", f"{data['wp_bem_t_assembly']:.1f} s"))
+			if "wp_fem_ndof" in data:
+				rows.append(("FEM DOFs", str(data["wp_fem_ndof"])))
+				rows.append(("FEM mesh", f"{data['wp_fem_t_mesh']:.1f} s"))
+				rows.append(("FEM solve", f"{data['wp_fem_t_solve']:.1f} s"))
 
 			# Total impedance
 			omega = 2 * 3.14159265 * freq

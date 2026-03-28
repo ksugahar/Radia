@@ -378,8 +378,15 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
             frequency=frequency, sigma=sigma, half_thickness=half_thickness,
             material=material, esim_geometry=esim_geometry)
 
+    elif impedance_model == "fem-esim":
+        return _compute_workpiece_fem_esim(
+            mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
+            frequency=frequency, sigma=sigma, half_thickness=half_thickness,
+            material=material, esim_geometry=esim_geometry)
+
     R_eff = float(Z_sum.real)
     X_eff = float(Z_sum.imag)
+    wp_area = sum(p['area'] for p in panels)
 
     return {
         "wp_model": impedance_model,
@@ -392,6 +399,7 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
         "wp_H_t_min": float(H_t_mag.min()),
         "wp_P_total": float(P_total),
         "wp_Q_total": float(Q_total),
+        "wp_P_density": float(P_total / wp_area) if wp_area > 0 else 0,
         "wp_R_effective": R_eff,
         "wp_X_effective": X_eff,
         "wp_delta_min": float(delta_min),
@@ -542,6 +550,7 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
         "wp_H_t_min": float(H_t_rms),
         "wp_P_total": float(P_total),
         "wp_Q_total": float(Q_total),
+        "wp_P_density": float(P_density),
         "wp_R_effective": float(0.5 * Z_s.real * H_t_rms**2 * result['area']),
         "wp_X_effective": float(0.5 * Z_s.imag * H_t_rms**2 * result['area']),
         "wp_delta_min": float(delta),
@@ -550,6 +559,199 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
         "wp_bem_t_assembly": solver.t_assembly,
         "wp_bem_coil_radius": coil_radius,
         "wp_bem_wp_radius": wp_radius,
+    }
+
+
+def _compute_workpiece_fem_esim(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
+                                 frequency=50000, sigma=2e6, half_thickness=0.005,
+                                 material="steel", esim_geometry="cylinder"):
+    """Compute workpiece impedance via 3D FEM with SIBC Robin condition.
+
+    Creates 3D volume mesh (air + coil + workpiece cavity),
+    solves HCurl curl-curl + SIBC penalty, Karl iteration for Z_s.
+
+    Returns dict with wp_* keys (same format as BEM-SIBC).
+    """
+    import math
+    import time as _time
+    from ngsolve import (Mesh, HCurl, BilinearForm, LinearForm, GridFunction,
+                         Integrate, curl, dx, ds, CF, BND, VOL, TaskManager,
+                         InnerProduct, x, y, z, sqrt, IfPos)
+    from netgen.occ import (WorkPlane, Axes, Axis, Pnt, Dir, Sphere,
+                             Cylinder, OCCGeometry, Glue)
+    from esim_cell_problem import ESIMFiniteSlabSolver
+
+    MU_0 = 4e-7 * np.pi
+    omega = 2 * math.pi * frequency
+    nu0 = 1.0 / MU_0
+
+    # --- Auto-detect geometry from panels + coil mesh ---
+    centers = np.array([p['center'] for p in panels])
+    wp_center = np.mean(centers, axis=0)
+    z_min, z_max = centers[:, 2].min(), centers[:, 2].max()
+    wp_height = z_max - z_min
+    rho = np.sqrt((centers[:, 0] - wp_center[0])**2 +
+                  (centers[:, 1] - wp_center[1])**2)
+    R_wp = float(np.max(rho))
+    if R_wp < 1e-6:
+        R_wp = half_thickness
+    H_wp = wp_height if wp_height > 1e-6 else 2 * R_wp
+
+    coil_coords = np.array([(v.point[0], v.point[1], v.point[2])
+                            for v in mesh_coil.vertices])
+    coil_rho = np.sqrt(coil_coords[:, 0]**2 + coil_coords[:, 1]**2)
+    R_coil = float(np.mean(coil_rho))
+    coil_extent = np.max(np.abs(coil_coords))
+    a_coil = float(np.std(coil_rho)) * 2  # rough cross-section estimate
+
+    sys.stderr.write(f"FEM-ESIM: coil R={R_coil*1e3:.1f}mm, "
+                     f"wp R={R_wp*1e3:.1f}mm H={H_wp*1e3:.1f}mm\n")
+    sys.stderr.flush()
+
+    # --- 3D Geometry ---
+    t0 = _time.perf_counter()
+    gap_deg = 5
+    wp_plane = WorkPlane(Axes(p=Pnt(R_coil, 0, 0),
+                              n=Dir(0, 1, 0), h=Dir(0, 0, 1)))
+    circle = wp_plane.Circle(a_coil).Face()
+    torus = circle.Revolve(Axis(Pnt(0, 0, 0), Dir(0, 0, 1)), 360 - gap_deg)
+    torus.name = "coil"
+    torus.maxh = a_coil
+
+    R_air = max(R_coil * 4, coil_extent * 3)
+    air_sphere = Sphere(Pnt(0, 0, 0), R_air)
+    air_sphere.name = "air"
+    for f in air_sphere.faces:
+        f.name = "outer"
+
+    wp_cyl = Cylinder(Pnt(wp_center[0], wp_center[1], z_min),
+                      Dir(0, 0, 1), R_wp, H_wp)
+    for f in wp_cyl.faces:
+        f.name = "wp_surface"
+        f.maxh = min(R_wp / 4, a_coil)
+
+    air = air_sphere - torus - wp_cyl
+    air.name = "air"
+    shape = Glue([air, torus])
+
+    geo = OCCGeometry(shape)
+    maxh_air = R_air / 8
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=0.3)
+    mesh = Mesh(ngmesh)
+    mesh.Curve(2)
+    t_mesh = _time.perf_counter() - t0
+
+    ne = mesh.ne
+    bnds = mesh.GetBoundaries()
+    has_wp = "wp_surface" in bnds
+
+    sys.stderr.write(f"FEM-ESIM: {ne} tets, {mesh.nv} verts ({t_mesh:.1f}s)\n")
+    sys.stderr.flush()
+
+    if not has_wp:
+        return {"wp_error": "wp_surface boundary not found in FEM mesh"}
+
+    # --- FEM-SIBC solve with Karl iteration ---
+    t0 = _time.perf_counter()
+    fes = HCurl(mesh, order=1, dirichlet="outer", complex=True)
+    u, v = fes.TnT()
+
+    I_total = 1.0
+    J0 = I_total / (math.pi * a_coil**2)
+    r_xy = sqrt(x * x + y * y)
+    r_safe = IfPos(r_xy - 1e-10, r_xy, 1e-10)
+    J_source = J0 * CF((-y / r_safe, x / r_safe, 0))
+
+    f_lf = LinearForm(fes)
+    f_lf += J_source * v * dx("coil")
+    f_lf.Assemble()
+
+    wp_region = mesh.Boundaries("wp_surface")
+    A_wp = Integrate(CF(1), mesh, BND, definedon=wp_region).real
+
+    STEEL_BH = [
+        [0, 0], [50, 0.1], [100, 0.25], [200, 0.55],
+        [500, 0.95], [1000, 1.2], [2000, 1.4], [5000, 1.55],
+        [10000, 1.65], [20000, 1.75], [50000, 1.9], [100000, 2.0],
+    ]
+    bh_curve = STEEL_BH if material == "steel" else None
+    mu_r = 1.0 if material in ("copper", "aluminum") else None
+
+    esim_solver = ESIMFiniteSlabSolver(
+        half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
+        frequency=frequency,
+        mu_r=mu_r if bh_curve is None else None, n_nodes=200,
+        geometry=esim_geometry)
+
+    Z_s = esim_solver.solve(5.0)['Z']
+    gfu = GridFunction(fes)
+    max_iter = 15
+    tol = 1e-3
+    relax = 0.5
+    H_t_rms = 5.0
+    P_total = 0.0
+    Q_total = 0.0
+
+    sys.stderr.write(f"FEM-ESIM: {fes.ndof} DOFs, solving...\n")
+    sys.stderr.flush()
+
+    for iteration in range(max_iter):
+        a_bf = BilinearForm(fes)
+        a_bf += nu0 * curl(u) * curl(v) * dx
+        sibc_coeff = 1j * omega / Z_s
+        a_bf += sibc_coeff * u.Trace() * v.Trace() * ds("wp_surface")
+        a_bf.Assemble()
+
+        with TaskManager():
+            gfu.vec.data = a_bf.mat.Inverse(
+                fes.FreeDofs(), inverse="pardiso") * f_lf.vec
+
+        At_sq = sum(gfu[i].real * gfu[i].real +
+                    gfu[i].imag * gfu[i].imag for i in range(3))
+        At_int = Integrate(At_sq, mesh, BND, definedon=wp_region).real
+        At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
+        H_t_rms = abs(1j * omega / Z_s) * At_rms
+
+        Z_s_old = Z_s
+        sol = esim_solver.solve(max(H_t_rms, 1e-3))
+        Z_s_new = sol['Z']
+        Z_s = relax * Z_s_new + (1 - relax) * Z_s_old
+        P_total = sol['P_prime'] * A_wp
+        Q_total = sol['Q_prime'] * A_wp
+
+        dZ = abs(Z_s - Z_s_old) / max(abs(Z_s_old), 1e-30)
+        sys.stderr.write(f"FEM-ESIM: iter {iteration} |Z_s|={abs(Z_s):.4e} "
+                         f"H_t={H_t_rms:.2f} dZ={dZ:.4e}\n")
+        sys.stderr.flush()
+        if dZ < tol and iteration > 0:
+            break
+
+    t_solve = _time.perf_counter() - t0
+
+    mu_eff = MU_0 * (mu_r if mu_r else 100.0)
+    delta = math.sqrt(2.0 / (omega * mu_eff * sigma)) if omega > 0 else 1e10
+
+    return {
+        "wp_model": "fem-esim",
+        "wp_material": material,
+        "wp_frequency": frequency,
+        "wp_sigma": sigma,
+        "wp_half_thickness": half_thickness,
+        "wp_n_panels": ne,
+        "wp_H_t_max": float(H_t_rms),
+        "wp_H_t_min": float(H_t_rms),
+        "wp_P_total": float(P_total),
+        "wp_Q_total": float(Q_total),
+        "wp_P_density": float(P_total / A_wp) if A_wp > 0 else 0,
+        "wp_R_effective": float(P_total),
+        "wp_X_effective": float(Q_total),
+        "wp_delta_min": float(delta),
+        "wp_delta_max": float(delta),
+        "wp_fem_ndof": fes.ndof,
+        "wp_fem_ne": ne,
+        "wp_fem_t_mesh": round(t_mesh, 1),
+        "wp_fem_t_solve": round(t_solve, 1),
     }
 
 
@@ -995,7 +1197,7 @@ def main():
     # Workpiece ESIM/Dowell args
     parser.add_argument("--workpiece", default="", help="Workpiece block name")
     parser.add_argument("--impedance-model", default="esim",
-                        choices=["esim", "dowell", "bem-sibc"],
+                        choices=["esim", "dowell", "bem-sibc", "fem-esim"],
                         help="Surface impedance model")
     parser.add_argument("--frequency", type=float, default=50000, help="Frequency [Hz]")
     parser.add_argument("--sigma", type=float, default=2e6, help="Conductivity [S/m]")
