@@ -170,6 +170,90 @@ The Radia MSC method bridges Level 1 and Level 2:
 - At Level 1: Direct Delta_L computation (fast, column-by-column)
 - At Level 2: Schur complement coupling preserving H-matrix (peec_msc_schur.py)
 
+### Core Solver Selection
+
+```
+Core conducting (sigma > 0)?
+ No  → Radia MSC ('radia')         [ferrite, laminated steel, nonlinear]
+ Yes → mu_r > 1?
+        No  → Scalar FEM-BEM ('fembem')     [Al/Cu shield]
+        Yes → Vector FEM-BEM ('vector_fembem') [solid steel]
+```
+
+| Core Type | `core_model` | Eddy | Nonlinear | Module |
+|-----------|-------------|------|-----------|--------|
+| Ferrite (sigma~0) | `'radia'` | No | Yes | `peec_coupled.py` |
+| Laminated steel | `'radia'` + complex mu | No | Yes | `peec_coupled.py` |
+| Solid steel (mu_r>1, sigma>0) | `'vector_fembem'` | Yes | No | `ngsbem_eddy.py` |
+| Al/Cu shield (mu_r=1) | `'fembem'` | Yes | No | `ngsbem_eddy.py` |
+| Any, bounded domain | `'fem'` | Yes | No | NGSolve direct |
+
+### Delta_L Computation APIs
+
+```python
+# Level 1a: FastHenry format (simplest)
+from fasthenry_parser import FastHenryParser
+result = FastHenryParser().parse_string(inp).solve()
+
+# Level 1b: Python API (peec_coupled.py)
+solver = CoupledPEECSolver(topo, [core_handle])
+solver.compute_coupling_matrix()
+
+# Level 1c: Standalone MSC (peec_msc_schur.py, H-matrix preserving)
+schur = SchurComplementSolver()
+schur.set_msc_system(N_matrix, dof_offset, inv_chi)
+schur.solve(freq, V_source)
+
+# Level 2: NGSBEM + Radia core (ngsbem_coupled.py)
+coupled = CoupledPEECMMM(peec_solver, core_model='radia', radia_core=core)
+coupled.compute_coupling_radia()
+```
+
+## Quick Start: Wire + Ferrite Core (Level 1)
+
+```python
+import radia as rad
+import numpy as np
+from peec_matrices import PEECBuilder
+from peec_coupled import CoupledPEECSolver
+
+rad.UtiDelAll()
+
+# Conductor
+builder = PEECBuilder()
+n1 = builder.add_node_at(0, 0, 0)
+n2 = builder.add_node_at(0.1, 0, 0)          # 100mm wire
+builder.add_connected_segment(n1, n2, 1e-3, 1e-3, sigma=5.8e7)
+builder.add_port(n1, n2)
+topo = builder.build_topology()
+
+# Magnetic core
+core = rad.ObjHexahedron([
+    [0.02,0.005,-0.005],[0.08,0.005,-0.005],
+    [0.08,0.015,-0.005],[0.02,0.015,-0.005],
+    [0.02,0.005,0.005],[0.08,0.005,0.005],
+    [0.08,0.015,0.005],[0.02,0.015,0.005]], [0,0,0])
+rad.MatApl(core, rad.MatLin(999))
+
+# Solve
+solver = CoupledPEECSolver(topo, [core])
+solver.compute_coupling_matrix(mu_r_real=1000)
+Z = solver.compute_port_impedance(1e6)
+L = np.imag(Z) / (2*np.pi*1e6)
+```
+
+## Common Pitfalls
+
+1. **Coordinates in meters**: `60mm` = `0.06`, not `60`
+2. **`rad.UtiDelAll()` first**: Radia keeps global state
+3. **Hex vertex order**: bottom CCW (v0-v3), top CCW (v4-v7)
+4. **NGSBEM surface mesh**: Use `Glue(wire.faces)`, not volume Box
+5. **NGSBEM maxh**: `maxh <= min_cross_section / 2` for equilateral elements
+6. **MSC sign**: `(1/chi + N) sigma = H_ext` (not negated)
+7. **Yano-Sugahara**: eval_point = (face_center + element_center) / 2
+8. **Point charge correction**: Required for multi-element (650% error without)
+9. **Loop port**: Split loop with two nodes at same position, not `add_port(n,n)`
+
 ## Implementation Status (2026-03-28)
 
 | Component | Status | Validated |
