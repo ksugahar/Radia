@@ -253,6 +253,14 @@ L = np.imag(Z) / (2*np.pi*1e6)
 7. **Yano-Sugahara**: eval_point = (face_center + element_center) / 2
 8. **Point charge correction**: Required for multi-element (650% error without)
 9. **Loop port**: Split loop with two nodes at same position, not `add_port(n,n)`
+10. **Nonlinear: Newton→Picard order**: Start Newton (fast), finish Picard (stable).
+    Newton can excite zero-eigenvalue modes → wrong solution. Use `keep_magnetization`:
+    ```python
+    rad.SolverConfig(newton_method=True)
+    rad.Solve(obj, 1e-3, 10, 2)   # Newton phase
+    rad.SolverConfig(newton_method=False, keep_magnetization=True)
+    rad.Solve(obj, 1e-3, 100, 2)  # Picard continues
+    ```
 
 ## Implementation Status (2026-03-28)
 

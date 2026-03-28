@@ -160,9 +160,12 @@ def run_benchmark(nodes, hex_elements, bh_data, solver_method, solver_name,
     if hmatrix_enabled:
         rad.SolverConfig(hacapk_eps=HMAT_EPS, hacapk_leaf=HMAT_LEAF_SIZE, hacapk_eta=HMAT_ETA)
 
-    # HACApK uses Newton (hybrid Picard+Newton)
+    # HACApK uses hybrid Newton->Picard nonlinear iteration:
+    #   Newton converges fast but can excite zero-eigenvalue modes
+    #   (rigid rotation of magnetization), leading to unphysical solutions.
+    #   Picard is slower but stable against these modes.
     use_newton = hmatrix_enabled
-    rad.SolverConfig(newton_method=use_newton)
+    NEWTON_ITERS = 10  # Newton phase: fast convergence from initial guess
 
     # Measure memory before solve
     mem_before = get_current_memory_mb()
@@ -170,11 +173,31 @@ def run_benchmark(nodes, hex_elements, bh_data, solver_method, solver_name,
     t0 = time.time()
     converged = True
     try:
-        if use_ima:
-            result = rad.Solve(model, NONL_TOL, max_iter, solver_method,
-                               image='+x-z')
+        if use_newton:
+            # Phase 1: Newton (fast, max NEWTON_ITERS iterations)
+            rad.SolverConfig(newton_method=True, keep_magnetization=False)
+            if use_ima:
+                rad.Solve(model, NONL_TOL, NEWTON_ITERS, solver_method,
+                          image='+x-z')
+            else:
+                rad.Solve(model, NONL_TOL, NEWTON_ITERS, solver_method)
+
+            # Phase 2: Picard (stable, continue from Newton state)
+            rad.SolverConfig(newton_method=False, keep_magnetization=True)
+            if use_ima:
+                result = rad.Solve(model, NONL_TOL, max_iter - NEWTON_ITERS,
+                                   solver_method, image='+x-z')
+            else:
+                result = rad.Solve(model, NONL_TOL, max_iter - NEWTON_ITERS,
+                                   solver_method)
         else:
-            result = rad.Solve(model, NONL_TOL, max_iter, solver_method)
+            # Pure Picard (for non-HACApK solvers)
+            rad.SolverConfig(newton_method=False, keep_magnetization=False)
+            if use_ima:
+                result = rad.Solve(model, NONL_TOL, max_iter, solver_method,
+                                   image='+x-z')
+            else:
+                result = rad.Solve(model, NONL_TOL, max_iter, solver_method)
     except RuntimeError as e:
         converged = False
         result = [0, 0]
@@ -206,8 +229,8 @@ def run_benchmark(nodes, hex_elements, bh_data, solver_method, solver_name,
         except (AttributeError, Exception):
             pass
 
-    # Reset Newton method
-    rad.SolverConfig(newton_method=False)
+    # Reset solver config
+    rad.SolverConfig(newton_method=False, keep_magnetization=False)
 
     # ELF reference
     elf_ref = ELF_REFERENCE.get(mesh_name)
