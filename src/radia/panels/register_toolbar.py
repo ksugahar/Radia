@@ -648,6 +648,12 @@ class InductanceDialog(QDialog):
 		self.workpiece_label.setStyleSheet("font-weight: bold; color: gray;")
 		port_group.addWidget(self.workpiece_label, 4, 1)
 
+		port_group.addWidget(QLabel("Air block (Post B):"), 5, 0)
+		self.air_label = QLabel("(none)")
+		self.air_label.setStyleSheet("font-weight: bold; color: gray;")
+		port_group.addWidget(self.air_label, 5, 1)
+
+
 		layout.addLayout(port_group)
 
 		# --- ESIM / Dowell settings (visible only when workpiece found) ---
@@ -692,18 +698,6 @@ class InductanceDialog(QDialog):
 		self.esim_group.setVisible(False)
 		layout.addWidget(self.esim_group)
 
-		# --- Post settings (B-field volume) ---
-		post_group = QGridLayout()
-		post_group.addWidget(QLabel("lx,ly,lz [m]:"), 0, 0)
-		self.lxyz_edit = QLineEdit("0.07, 0.07, 0.07")
-		self.lxyz_edit.setToolTip("Box half-sizes lx,ly,lz [m] (comma-separated)")
-		post_group.addWidget(self.lxyz_edit, 0, 1)
-		post_group.addWidget(QLabel("maxh [m]:"), 0, 2)
-		self.maxh_vol_edit = QLineEdit("0.01")
-		self.maxh_vol_edit.setToolTip("Volume mesh element size [m]")
-		post_group.addWidget(self.maxh_vol_edit, 0, 3)
-		layout.addLayout(post_group)
-
 		# --- Result table ---
 		self.result_table = QTableWidget()
 		self.result_table.setColumnCount(2)
@@ -747,9 +741,10 @@ class InductanceDialog(QDialog):
 	def _default_torus_journal(self):
 		"""Default BEM journal: coil surface mesh + workpiece (no air volume)."""
 		lines = [
-			"# IH (BEM): Torus coil + workpiece cylinder",
+			"# IH (BEM): Torus coil + workpiece + air (B-field post)",
 			"# Coil: R=30mm, a=3mm, 355deg (surface mesh for BEM EFIE)",
 			"# Workpiece: R=10mm, H=20mm cylinder (SIBC heating)",
+			"# Air: R=60mm sphere (B-field distribution output)",
 			"reset",
 			"",
 			"# --- Coil: revolve circle to create gapped torus ---",
@@ -770,6 +765,12 @@ class InductanceDialog(QDialog):
 			"volume 2 size 0.003",
 			"mesh volume 2",
 			"",
+			"# --- Air: sphere for B-field post-processing ---",
+			"create sphere radius 0.060",
+			"volume 3 scheme tetmesh",
+			"volume 3 size 0.010",
+			"mesh volume 3",
+			"",
 			"# --- Blocks ---",
 			"set duplicate block elements on",
 			"block 1 add volume 1",
@@ -782,6 +783,8 @@ class InductanceDialog(QDialog):
 			'block 4 name "boundary"',
 			"block 5 add volume 2",
 			'block 5 name "workpiece"',
+			"block 6 add volume 3",
+			'block 6 name "air"',
 		]
 		return "\n".join(lines) + "\n"
 
@@ -996,6 +999,7 @@ class InductanceDialog(QDialog):
 		self._source_block = None
 		self._sink_block = None
 		self._workpiece_block = None
+		self._air_block = None
 		try:
 			for bid in cubit.get_block_id_list():
 				try:
@@ -1006,6 +1010,8 @@ class InductanceDialog(QDialog):
 						self._sink_block = name
 					elif name == "workpiece":
 						self._workpiece_block = name
+					elif name == "air":
+						self._air_block = name
 				except Exception:
 					pass
 		except Exception:
@@ -1024,6 +1030,14 @@ class InductanceDialog(QDialog):
 		else:
 			self.sink_label.setText("(not found)")
 			self.sink_label.setStyleSheet("font-weight: bold; color: red;")
+
+		# Air block detection (for B-field post-processing)
+		if self._air_block:
+			self.air_label.setText(self._air_block)
+			self.air_label.setStyleSheet("font-weight: bold; color: green;")
+		else:
+			self.air_label.setText("(none - no B post)")
+			self.air_label.setStyleSheet("font-weight: bold; color: gray;")
 
 		# Workpiece block detection -> show/hide ESIM group
 		if self._workpiece_block:
