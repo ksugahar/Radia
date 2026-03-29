@@ -682,32 +682,39 @@ class InductanceDialog(QDialog):
 		self.material_combo.currentTextChanged.connect(self._on_material_changed)
 		esim_layout.addWidget(self.sigma_edit, 3, 1)
 
-		esim_layout.addWidget(QLabel("mu_r (SIBC/Dowell):"), 4, 0)
+		# mu_r row (SIBC/Dowell only)
+		self.mur_label = QLabel("mu_r:")
+		esim_layout.addWidget(self.mur_label, 4, 0)
 		self.mur_edit = QLineEdit("100")
-		self.mur_edit.setToolTip("Relative permeability for SIBC/Dowell\n"
-		                         "(ESIM uses BH curve instead)")
 		esim_layout.addWidget(self.mur_edit, 4, 1)
 
-		esim_layout.addWidget(QLabel("BH curve (ESIM):"), 5, 0)
+		# BH curve row (ESIM only)
+		self.bh_label = QLabel("BH curve:")
+		esim_layout.addWidget(self.bh_label, 5, 0)
 		bh_row = QHBoxLayout()
 		self.bh_edit = QLineEdit("(built-in Steel)")
 		self.bh_edit.setReadOnly(True)
-		self.bh_edit.setToolTip("BH curve file (2-column: H[A/m] B[T])\n"
-		                        "Leave as built-in for default Steel curve")
+		self.bh_edit.setToolTip("BH curve file (2-column: H[A/m] B[T])")
 		bh_row.addWidget(self.bh_edit)
-		bh_browse = QPushButton("...")
-		bh_browse.setFixedWidth(30)
-		bh_browse.clicked.connect(self._browse_bh)
-		bh_row.addWidget(bh_browse)
+		self.bh_browse = QPushButton("...")
+		self.bh_browse.setFixedWidth(30)
+		self.bh_browse.clicked.connect(self._browse_bh)
+		bh_row.addWidget(self.bh_browse)
 		esim_layout.addLayout(bh_row, 5, 1)
 
-		esim_layout.addWidget(QLabel("Curvature:"), 7, 0)
+		# Curvature row (ESIM only)
+		self.curv_label = QLabel("Curvature:")
+		esim_layout.addWidget(self.curv_label, 6, 0)
 		self.curvature_combo = QComboBox()
 		self.curvature_combo.addItems(["Local curvature", "None (flat)"])
 		self.curvature_combo.setToolTip(
 			"Local curvature: cylindrical cell problem (Bessel I0/I1),\n"
 			"None (flat): planar slab cell problem (cosh/sinh).")
-		esim_layout.addWidget(self.curvature_combo, 7, 1)
+		esim_layout.addWidget(self.curvature_combo, 6, 1)
+
+		# Connect impedance model change -> show/hide mu_r vs BH
+		self.model_combo.currentTextChanged.connect(self._on_impedance_changed)
+		self._on_impedance_changed(self.model_combo.currentText())
 
 		self.esim_group.setVisible(False)
 		layout.addWidget(self.esim_group)
@@ -1005,6 +1012,19 @@ class InductanceDialog(QDialog):
 					self.debug_text.setText(f"Previous result loaded: {self._result_file}")
 			except Exception:
 				pass
+
+	def _on_impedance_changed(self, text):
+		"""Show mu_r for SIBC/Dowell, BH curve for ESIM."""
+		is_esim = (text == "ESIM")
+		# mu_r: SIBC/Dowell only (linear)
+		self.mur_label.setVisible(not is_esim)
+		self.mur_edit.setVisible(not is_esim)
+		# BH curve + curvature: ESIM only (nonlinear)
+		self.bh_label.setVisible(is_esim)
+		self.bh_edit.setVisible(is_esim)
+		self.bh_browse.setVisible(is_esim)
+		self.curv_label.setVisible(is_esim)
+		self.curvature_combo.setVisible(is_esim)
 
 	def _on_material_changed(self, text):
 		"""Update sigma, mu_r, and BH curve when material combo changes."""
@@ -1790,6 +1810,29 @@ class IHFEMDialog(QDialog):
 		self.material_combo.currentTextChanged.connect(self._on_material_changed)
 		wp_layout.addWidget(self.sigma_edit, 3, 1)
 
+		# mu_r (SIBC only, linear)
+		self.mur_label = QLabel("mu_r:")
+		wp_layout.addWidget(self.mur_label, 4, 0)
+		self.mur_edit = QLineEdit("100")
+		wp_layout.addWidget(self.mur_edit, 4, 1)
+
+		# BH curve (ESIM only, nonlinear)
+		self.bh_label = QLabel("BH curve:")
+		wp_layout.addWidget(self.bh_label, 5, 0)
+		bh_row = QHBoxLayout()
+		self.bh_edit = QLineEdit("(built-in Steel)")
+		self.bh_edit.setReadOnly(True)
+		bh_row.addWidget(self.bh_edit)
+		self.bh_browse = QPushButton("...")
+		self.bh_browse.setFixedWidth(30)
+		self.bh_browse.clicked.connect(self._browse_bh)
+		bh_row.addWidget(self.bh_browse)
+		wp_layout.addLayout(bh_row, 5, 1)
+
+		# Toggle visibility based on impedance model
+		self.model_combo.currentTextChanged.connect(self._on_impedance_changed)
+		self._on_impedance_changed(self.model_combo.currentText())
+
 		layout.addWidget(wp_group)
 
 		# --- Result ---
@@ -1818,9 +1861,31 @@ class IHFEMDialog(QDialog):
 		py_label.setStyleSheet("color: green;" if self._ext_python else "color: red;")
 		layout.addWidget(py_label)
 
+	def _on_impedance_changed(self, text):
+		"""Show mu_r for SIBC (linear), BH for ESIM (nonlinear)."""
+		is_esim = (text == "ESIM")
+		self.mur_label.setVisible(not is_esim)
+		self.mur_edit.setVisible(not is_esim)
+		self.bh_label.setVisible(is_esim)
+		self.bh_edit.setVisible(is_esim)
+		self.bh_browse.setVisible(is_esim)
+
 	def _on_material_changed(self, text):
 		sigma_map = {"Steel": "2.0e6", "Copper": "5.8e7", "Aluminum": "3.5e7"}
+		mur_map = {"Steel": "100", "Copper": "1", "Aluminum": "1"}
 		self.sigma_edit.setText(sigma_map.get(text, "2.0e6"))
+		self.mur_edit.setText(mur_map.get(text, "1"))
+		if text == "Steel":
+			self.bh_edit.setText("(built-in Steel)")
+		else:
+			self.bh_edit.setText("(linear, mu_r=1)")
+
+	def _browse_bh(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Load BH Curve", "",
+			"Text files (*.txt *.csv *.dat);;All Files (*)")
+		if path:
+			self.bh_edit.setText(path)
 
 	def _load_journal(self):
 		path, _ = QFileDialog.getOpenFileName(
