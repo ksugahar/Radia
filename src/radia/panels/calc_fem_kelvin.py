@@ -48,13 +48,13 @@ if _this_dir not in sys.path:
 from calc_common import (MU_0, NU_0, setup_paths, setup_cubit, export_mesh,
                           add_periodic_kelvin, detect_kelvin_offset,
                           create_esim_solver, get_bh_curve,
-                          compute_T0_source, compute_J_theta)
+                          compute_T0_source, compute_J_theta,
+                          progress, calc_main)
 
 
 def _log(msg):
     """Write progress to stderr (panel reads these)."""
-    sys.stderr.write(f"FEM:{msg}\n")
-    sys.stderr.flush()
+    progress("FEM", msg)
 
 
 def solve_fem(cub5_file="", order=2, fes_order=1,
@@ -410,14 +410,9 @@ def main():
                         help="GMSH .msh output path")
     parser.add_argument("--output", default="",
                         help="JSON output file")
-    args = parser.parse_args()
 
-    # Suppress stdout from NGSolve/Cubit
-    import io as _io
-    real_stdout = sys.stdout
-    sys.stdout = _io.StringIO()
-    try:
-        result = solve_fem(
+    def run(args):
+        return solve_fem(
             cub5_file=args.cub5,
             order=args.order,
             fes_order=args.fes_order,
@@ -433,14 +428,8 @@ def main():
             max_iter=args.max_iter,
             msh_output=args.msh_output,
         )
-    except Exception as e:
-        result = {"error": str(e)}
-    sys.stdout = real_stdout
 
-    if args.output:
-        with open(args.output, "w", encoding="utf-8") as f:
-            json.dump(result, f)
-    print(json.dumps(result))
+    calc_main(run, parser)
 
 
 if __name__ == "__main__":
