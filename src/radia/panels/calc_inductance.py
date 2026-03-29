@@ -471,17 +471,44 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     sys.stderr.write(f"BEM-SIBC: {len(src_areas)} coil elements for Biot-Savart\n")
     sys.stderr.flush()
 
-    # --- Create workpiece surface mesh (OCC cylinder) ---
+    # --- Workpiece surface mesh ---
+    # Try Cubit export first (ACIS curved, order=2), fallback to OCC
     t0 = _time.perf_counter()
-    wp_cyl = Cylinder(Pnt(wp_center[0], wp_center[1], z_min),
-                      Dir(0, 0, 1), wp_radius, wp_height)
-    for f in wp_cyl.faces:
-        f.name = "wp_surface"
-    geo = OCCGeometry(Glue(wp_cyl.faces))
-    maxh = wp_radius / 4
-    ngmesh = geo.GenerateMesh(maxh=maxh)
-    wp_mesh = Mesh(ngmesh)
-    wp_mesh.Curve(3)
+    import cubit_mesh_export
+    try:
+        # Mesh workpiece volumes in Cubit if not already meshed
+        for vid in wp_vol_ids:
+            n_tets = len(cubit_mod.get_volume_tets(vid))
+            n_hexes = len(cubit_mod.get_volume_hexes(vid))
+            if n_tets + n_hexes == 0:
+                cubit_mod.cmd(f'volume {vid} scheme tetmesh')
+                cubit_mod.cmd(f'volume {vid} size {wp_radius / 4}')
+                cubit_mod.cmd(f'mesh volume {vid}')
+                sys.stderr.write(f"BEM-SIBC: auto-meshed wp volume {vid}\n")
+                sys.stderr.flush()
+
+        # Temporarily hide non-workpiece volumes, export surface
+        all_vids = list(cubit_mod.get_entities("volume"))
+        hidden = [v for v in all_vids if v not in wp_vol_ids]
+        for v in hidden:
+            cubit_mod.cmd(f'volume {v} visibility off')
+        wp_mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
+            cubit_mod, order=2, surface_only=True, split_quads=True)
+        for v in hidden:
+            cubit_mod.cmd(f'volume {v} visibility on')
+        sys.stderr.write(f"BEM-SIBC: Cubit export OK (ACIS order=2)\n")
+        sys.stderr.flush()
+    except Exception as e:
+        sys.stderr.write(f"BEM-SIBC: Cubit export failed ({e}), OCC fallback\n")
+        sys.stderr.flush()
+        from netgen.occ import (Cylinder as _Cyl, Pnt as _P, Dir as _D,
+                                 OCCGeometry as _G, Glue as _Gl)
+        wp_cyl = _Cyl(_P(wp_center[0], wp_center[1], z_min),
+                       _D(0, 0, 1), wp_radius, wp_height)
+        for f in wp_cyl.faces:
+            f.name = "wp_surface"
+        wp_mesh = Mesh(_G(_Gl(wp_cyl.faces)).GenerateMesh(maxh=wp_radius / 4))
+        wp_mesh.Curve(3)
     t_mesh = _time.perf_counter() - t0
 
     ne_wp = wp_mesh.GetNE(BND)
