@@ -682,13 +682,26 @@ class InductanceDialog(QDialog):
 		self.material_combo.currentTextChanged.connect(self._on_material_changed)
 		esim_layout.addWidget(self.sigma_edit, 3, 1)
 
-		esim_layout.addWidget(QLabel("Curvature:"), 4, 0)
+		esim_layout.addWidget(QLabel("BH curve:"), 4, 0)
+		bh_row = QHBoxLayout()
+		self.bh_edit = QLineEdit("(built-in Steel)")
+		self.bh_edit.setReadOnly(True)
+		self.bh_edit.setToolTip("BH curve file (2-column: H[A/m] B[T])\n"
+		                        "Leave as built-in for default Steel curve")
+		bh_row.addWidget(self.bh_edit)
+		bh_browse = QPushButton("...")
+		bh_browse.setFixedWidth(30)
+		bh_browse.clicked.connect(self._browse_bh)
+		bh_row.addWidget(bh_browse)
+		esim_layout.addLayout(bh_row, 4, 1)
+
+		esim_layout.addWidget(QLabel("Curvature:"), 5, 0)
 		self.curvature_combo = QComboBox()
 		self.curvature_combo.addItems(["Local curvature", "None (flat)"])
 		self.curvature_combo.setToolTip(
 			"Local curvature: cylindrical cell problem (Bessel I0/I1),\n"
 			"None (flat): planar slab cell problem (cosh/sinh).")
-		esim_layout.addWidget(self.curvature_combo, 4, 1)
+		esim_layout.addWidget(self.curvature_combo, 5, 1)
 
 		self.esim_group.setVisible(False)
 		layout.addWidget(self.esim_group)
@@ -988,9 +1001,22 @@ class InductanceDialog(QDialog):
 				pass
 
 	def _on_material_changed(self, text):
-		"""Update sigma when material combo changes."""
+		"""Update sigma and BH curve when material combo changes."""
 		sigma_map = {"Steel": "2.0e6", "Copper": "5.8e7", "Aluminum": "3.5e7"}
 		self.sigma_edit.setText(sigma_map.get(text, "2.0e6"))
+		if text == "Steel":
+			self.bh_edit.setText("(built-in Steel)")
+		else:
+			self.bh_edit.setText("(linear, mu_r=1)")
+
+	def _browse_bh(self):
+		"""Browse for BH curve file (2-column: H[A/m] B[T])."""
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Load BH Curve", "",
+			"Text files (*.txt *.csv *.dat);;All Files (*)")
+		if path:
+			self.bh_edit.setText(path)
+			self.material_combo.setCurrentText("Steel")
 
 	def _populate_blocks(self):
 		"""Auto-detect source/sink/workpiece from Cubit block names."""
@@ -1143,6 +1169,10 @@ class InductanceDialog(QDialog):
 				"--material", self.material_combo.currentText().lower(),
 				"--esim-geometry", _curv_arg,
 			]
+			# BH curve file (if user-specified)
+			bh_text = self.bh_edit.text().strip()
+			if bh_text and not bh_text.startswith("(") and os.path.isfile(bh_text):
+				args += ["--bh-file", bh_text]
 
 		# Run async via QProcess (non-blocking)
 		self._process = QProcess(self)
