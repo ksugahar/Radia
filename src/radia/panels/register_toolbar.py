@@ -827,31 +827,63 @@ class InductanceDialog(QDialog):
 
 	@staticmethod
 	def _default_fem_journal():
-		"""Default FEM journal: coil + air + Kelvin (via create_induction_model)."""
-		script_candidates = [
-			os.path.join(_this_dir, "..", "..", "..",
-			             "examples", "cubit_panels", "inductance",
-			             "create_induction_model.py"),
-			os.path.join(os.path.dirname(_this_dir),
-			             "examples", "cubit_panels", "inductance",
-			             "create_induction_model.py"),
+		"""Default FEM journal: coil + workpiece hole + air + Kelvin.
+
+		Embeds full Cubit commands directly (no external script dependency).
+		Creates: coil torus, air sphere (R=60mm), Kelvin shell (R=120mm),
+		workpiece hole (R=10mm, H=20mm).
+		"""
+		lines = [
+			"# IH (FEM): coil + air + Kelvin + workpiece hole",
+			"# Coil: R=30mm, a=3mm torus (355deg gap)",
+			"# Air: R=60mm sphere, Kelvin: R=120mm shell",
+			"# Workpiece: R=10mm, H=20mm cylinder (hole, SIBC Robin BC)",
+			"# Kelvin weight: nu = nu0 * (a/r')^2 (conformal symmetry)",
+			"reset",
+			"",
+			"# --- Kelvin shell: outer sphere - inner sphere ---",
+			"create sphere radius 0.120",
+			"create sphere radius 0.060",
+			"subtract volume 2 from volume 1",
+			"# -> kelvin shell (volume 3)",
+			"",
+			"# --- Air sphere with workpiece hole ---",
+			"create sphere radius 0.060",
+			"create cylinder height 0.020 radius 0.010",
+			"subtract volume 5 from volume 4",
+			"# -> air with hole (volume 6)",
+			"",
+			"# --- Coil torus (subtract from air, then recreate) ---",
+			"create torus major radius 0.030 minor radius 0.003",
+			"subtract volume 7 from volume 6",
+			"create torus major radius 0.030 minor radius 0.003",
+			"# -> coil (volume 9), air (volume 8)",
+			"",
+			"# --- Imprint and merge ---",
+			"imprint volume all",
+			"merge volume all",
+			"",
+			"# --- Mesh ---",
+			"volume all scheme tetmesh",
+			"volume 9 size 0.003",
+			"volume 8 size 0.008",
+			"volume 3 size 0.020",
+			"mesh volume all",
+			"",
+			"# --- Blocks (classified by geometry) ---",
+			"set duplicate block elements on",
+			"block 1 add volume 9",
+			'block 1 name "coil"',
+			"block 2 add volume 8",
+			'block 2 name "air"',
+			"block 3 add volume 3",
+			'block 3 name "kelvin"',
+			"",
+			"# Workpiece surface (free surfaces near cylinder hole)",
+			"# NOTE: surface IDs depend on boolean results - inspect geometry",
+			"# Use 'list surface all' to find wp surfaces (R~10mm, |z|<10mm)",
 		]
-		for c in script_candidates:
-			p = os.path.normpath(c)
-			if os.path.isfile(p):
-				return (
-					"# IH (FEM): coil + air + Kelvin + workpiece hole\n"
-					"# Coil: R=30mm, a=5mm torus\n"
-					"# Air: R=100mm, Kelvin: R=200mm\n"
-					"# Kelvin weight: nu = nu0 * (a/r')^2\n"
-					"\n"
-					f'play "{p.replace(chr(92), "/")}"\n'
-				)
-		# Fallback
-		return (
-			"# IH (FEM): create_induction_model.py not found\n"
-			"# Please load a .cub5 with coil/air/kelvin/wp_surface blocks\n"
-		)
+		return "\n".join(lines) + "\n"
 
 	def _load_journal(self):
 		"""Load a .jou file into the editor."""
