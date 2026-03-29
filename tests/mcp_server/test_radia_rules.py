@@ -338,7 +338,7 @@ class TestPeecPOverJw:
 
 class TestAllRulesList:
     def test_all_rules_count(self):
-        assert len(ALL_RULES) == 13
+        assert len(ALL_RULES) == 17
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:
