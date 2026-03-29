@@ -53,71 +53,6 @@ from peec_topology import PEECCircuitSolver
 MU_0 = 4.0 * np.pi * 1e-7  # H/m
 
 
-def biot_savart_finite_filament(p1, p2, obs_point):
-    """
-    Compute H-field at obs_point from a finite current filament (p1 -> p2)
-    carrying unit current (I = 1 A).
-
-    Formula:
-        H = (1 / 4*pi*d) * (cos(alpha1) - cos(alpha2)) * e_perp
-
-    where d is perpendicular distance from obs_point to filament axis,
-    alpha1, alpha2 are angles at p1 and p2.
-
-    Args:
-        p1: Start point of filament [x, y, z] (meters)
-        p2: End point of filament [x, y, z] (meters)
-        obs_point: Observation point [x, y, z] (meters)
-
-    Returns:
-        H-field vector [Hx, Hy, Hz] in A/m (for I = 1 A)
-    """
-    p1 = np.asarray(p1, dtype=float)
-    p2 = np.asarray(p2, dtype=float)
-    r = np.asarray(obs_point, dtype=float)
-
-    # Filament direction vector
-    dl = p2 - p1
-    L = np.linalg.norm(dl)
-    if L < 1e-20:
-        return np.zeros(3)
-
-    e_l = dl / L  # unit direction
-
-    # Vector from p1 to observation point
-    r1 = r - p1
-    r2 = r - p2
-
-    # Perpendicular distance
-    cross = np.cross(e_l, r1)
-    d = np.linalg.norm(cross)
-
-    if d < 1e-20:
-        # Point on filament axis - H is zero (or singular)
-        return np.zeros(3)
-
-    # Unit perpendicular direction (H direction)
-    e_perp = cross / d  # This gives e_l x (r - p1) / |e_l x (r - p1)|
-
-    # Cosines of angles
-    r1_mag = np.linalg.norm(r1)
-    r2_mag = np.linalg.norm(r2)
-
-    if r1_mag < 1e-20 or r2_mag < 1e-20:
-        return np.zeros(3)
-
-    cos_alpha1 = np.dot(e_l, r1) / r1_mag
-    cos_alpha2 = np.dot(e_l, r2) / r2_mag
-
-    # H = (1 / 4*pi*d) * (cos_alpha1 - cos_alpha2) * e_perp
-    # Note: The correct Biot-Savart for finite wire is:
-    #   H = I/(4*pi*d) * (cos(alpha1) - cos(alpha2)) * e_phi
-    # where alpha1 and alpha2 are angles FROM the wire axis
-    H = (1.0 / (4.0 * np.pi * d)) * (cos_alpha1 - cos_alpha2) * e_perp
-
-    return H
-
-
 class CoupledPEECSolver(PEECCircuitSolver):
     """
     Coupled PEEC + MMM solver for conductors near magnetic materials.
@@ -253,12 +188,12 @@ class CoupledPEECSolver(PEECCircuitSolver):
             p1_j = self.seg_p1[j]
             p2_j = self.seg_p2[j]
 
-            # H-field function from unit current in segment j
+            # H-field from unit current in segment j
+            # TODO: Replace with ngsolve.bem MaxwellDL(J*dC) when available
             def h_field_from_seg_j(point, _p1=p1_j, _p2=p2_j):
-                H = biot_savart_finite_filament(_p1, _p2, point)
-                # Convert H to B for ObjBckg (which expects B in Tesla)
-                B = MU_0 * H
-                return [B[0], B[1], B[2]]
+                raise NotImplementedError(
+                    "biot_savart_finite_filament removed. "
+                    "Use ngsolve.bem MaxwellDL(J*dC) instead.")
 
             # Create background field
             bkg = ObjBckg(h_field_from_seg_j)
