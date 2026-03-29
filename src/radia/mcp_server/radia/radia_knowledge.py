@@ -2998,6 +2998,18 @@ for nonlinear magnetic conductors by solving a 1D cell problem.
 
 ## Physics
 
+## Impedance Model Selection Rules
+
+| Model | Type | Material input | Use case |
+|-------|------|---------------|----------|
+| **SIBC** | Linear | mu_r, sigma | Known constant permeability |
+| **Dowell** | Linear | mu_r, sigma | Slab geometry, analytical |
+| **ESIM** | Nonlinear | BH curve, sigma | Steel, saturation, Karl iteration |
+
+- SIBC/Dowell: specify mu_r (scalar). BH curve NOT used.
+- ESIM: specify BH curve (H[A/m], B[T] table). mu_r NOT used (derived from BH).
+- Do NOT pass both mu_r and BH curve to the same model.
+
 Standard SIBC uses constant Zs = (1+j)/(sigma*delta) (linear mu).
 ESIM solves the 1D penetration problem with nonlinear mu(H):
 
