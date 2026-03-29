@@ -814,61 +814,64 @@ class InductanceDialog(QDialog):
 
 	@staticmethod
 	def _default_fem_journal():
-		"""Default FEM journal: coil + workpiece hole + air + Kelvin.
+		"""Default FEM journal: Periodic Kelvin (2 spheres) + coil + wp hole.
 
-		Embeds full Cubit commands directly (no external script dependency).
-		Creates: coil torus, air sphere (R=60mm), Kelvin shell (R=120mm),
-		workpiece hole (R=10mm, H=20mm).
+		Interior sphere at origin: air + coil + workpiece hole
+		Exterior sphere at offset: Kelvin-mapped domain (same radius)
+		Periodic identification via matching surface labels.
 		"""
 		lines = [
-			"# IH (FEM): coil + air + Kelvin + workpiece hole",
-			"# Coil: R=30mm, a=3mm torus (355deg gap)",
-			"# Air: R=60mm sphere, Kelvin: R=120mm shell",
-			"# Workpiece: R=10mm, H=20mm cylinder (hole, SIBC Robin BC)",
+			"# IH (FEM): Periodic Kelvin (2-sphere) + coil + workpiece hole",
+			"# Interior: R=60mm sphere at origin (air + coil + wp hole)",
+			"# Exterior: R=60mm sphere at x=150mm (Kelvin domain)",
 			"# Kelvin weight: nu = nu0 * (a/r')^2 (conformal symmetry)",
+			"# Coil: R=30mm, a=3mm torus (355deg gap)",
+			"# Workpiece: R=10mm, H=20mm cylinder (hole, SIBC Robin BC)",
 			"reset",
 			"",
-			"# --- Kelvin shell: outer sphere - inner sphere ---",
-			"create sphere radius 0.120",
-			"create sphere radius 0.060",
-			"subtract volume 2 from volume 1",
-			"# -> kelvin shell (volume 3)",
-			"",
-			"# --- Air sphere with workpiece hole ---",
+			"# === Interior domain (origin) ===",
+			"# Air sphere with workpiece hole",
 			"create sphere radius 0.060",
 			"create cylinder height 0.020 radius 0.010",
-			"subtract volume 5 from volume 4",
-			"# -> air with hole (volume 6)",
+			"subtract volume 2 from volume 1",
+			"# -> air_with_hole (volume 3)",
 			"",
-			"# --- Coil torus (subtract from air, then recreate) ---",
+			"# Coil torus (subtract from air, then recreate)",
 			"create torus major radius 0.030 minor radius 0.003",
-			"subtract volume 7 from volume 6",
+			"subtract volume 4 from volume 3",
 			"create torus major radius 0.030 minor radius 0.003",
-			"# -> coil (volume 9), air (volume 8)",
+			"# -> coil (volume 6), air (volume 5)",
 			"",
-			"# --- Imprint and merge ---",
+			"# === Exterior domain (Kelvin, offset x=150mm) ===",
+			"create sphere radius 0.060",
+			"move volume 7 x 0.150 include_merged",
+			"# -> kelvin (volume 7)",
+			"",
+			"# === Imprint and merge ===",
 			"imprint volume all",
 			"merge volume all",
 			"",
-			"# --- Mesh ---",
+			"# === Mesh ===",
 			"volume all scheme tetmesh",
-			"volume 9 size 0.003",
-			"volume 8 size 0.008",
-			"volume 3 size 0.020",
+			"volume 6 size 0.003",
+			"volume 5 size 0.008",
+			"volume 7 size 0.015",
 			"mesh volume all",
 			"",
-			"# --- Blocks (classified by geometry) ---",
+			"# === Blocks ===",
 			"set duplicate block elements on",
-			"block 1 add volume 9",
+			"block 1 add volume 6",
 			'block 1 name "coil"',
-			"block 2 add volume 8",
+			"block 2 add volume 5",
 			'block 2 name "air"',
-			"block 3 add volume 3",
+			"block 3 add volume 7",
 			'block 3 name "kelvin"',
 			"",
-			"# Workpiece surface (free surfaces near cylinder hole)",
-			"# NOTE: surface IDs depend on boolean results - inspect geometry",
-			"# Use 'list surface all' to find wp surfaces (R~10mm, |z|<10mm)",
+			"# wp_surface and outer blocks are auto-created by _detect_blocks()",
+			"",
+			"# === Hide non-essential volumes ===",
+			"volume 5 visibility off",
+			"volume 7 visibility off",
 		]
 		return "\n".join(lines) + "\n"
 
@@ -1910,7 +1913,9 @@ class IHFEMDialog(QDialog):
 		self._detect_blocks()
 
 	def _detect_blocks(self):
-		"""Detect FEM blocks: coil, air, kelvin, wp_surface, outer."""
+		"""Detect FEM blocks and auto-create wp_surface/outer from geometry."""
+		import math
+
 		found = {}
 		try:
 			for bid in cubit.get_block_id_list():
@@ -1918,6 +1923,20 @@ class IHFEMDialog(QDialog):
 				found[name] = bid
 		except Exception:
 			pass
+
+		# Auto-classify wp_surface and outer if not already defined
+		if "wp_surface" not in found and "air" in found:
+			self._auto_create_wp_surface(found)
+			# Re-scan
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				found[name] = bid
+
+		if "outer" not in found and "kelvin" in found:
+			self._auto_create_outer(found)
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				found[name] = bid
 
 		for key, attr in [("coil", "_coil_block"), ("air", "_air_block"),
 		                   ("kelvin", "_kelvin_block"),
@@ -1933,6 +1952,68 @@ class IHFEMDialog(QDialog):
 
 		has_all = all(k in found for k in ("coil", "air", "wp_surface"))
 		self.solve_btn.setEnabled(has_all and self._ext_python is not None)
+
+	def _auto_create_wp_surface(self, found):
+		"""Auto-detect workpiece hole surfaces on air volume."""
+		import math
+		try:
+			air_bid = found["air"]
+			air_vids = list(cubit.get_block_volumes(air_bid))
+			if not air_vids:
+				return
+			# Find free surfaces near the center (wp hole)
+			wp_sids = []
+			for vid in air_vids:
+				for sid in cubit.get_relatives("volume", vid, "surface"):
+					adj = cubit.get_relatives("surface", sid, "volume")
+					if len(adj) > 1:
+						continue  # shared interface
+					s = cubit.surface(sid)
+					cx, cy, cz = s.center_point()
+					d = math.sqrt(cx**2 + cy**2 + cz**2)
+					# Inner free surface (not the Kelvin boundary)
+					air_R = 0.060  # default
+					if d < air_R * 0.7:
+						wp_sids.append(sid)
+
+			if wp_sids:
+				bid_next = max(cubit.get_block_id_list()) + 1
+				cubit.cmd("set duplicate block elements on")
+				for sid in wp_sids:
+					tris = cubit.get_surface_tris(sid)
+					if tris:
+						cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+				cubit.cmd(f'block {bid_next} name "wp_surface"')
+		except Exception:
+			pass
+
+	def _auto_create_outer(self, found):
+		"""Auto-detect outer surface on Kelvin volume."""
+		import math
+		try:
+			kelvin_bid = found["kelvin"]
+			kelvin_vids = list(cubit.get_block_volumes(kelvin_bid))
+			if not kelvin_vids:
+				return
+			outer_sids = []
+			for vid in kelvin_vids:
+				for sid in cubit.get_relatives("volume", vid, "surface"):
+					adj = cubit.get_relatives("surface", sid, "volume")
+					if len(adj) > 1:
+						continue
+					# Free surface = outer boundary
+					outer_sids.append(sid)
+
+			if outer_sids:
+				bid_next = max(cubit.get_block_id_list()) + 1
+				cubit.cmd("set duplicate block elements on")
+				for sid in outer_sids:
+					tris = cubit.get_surface_tris(sid)
+					if tris:
+						cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+				cubit.cmd(f'block {bid_next} name "outer"')
+		except Exception:
+			pass
 
 	def _solve(self):
 		"""Run FEM-ESIM via external Python (calc_heating.py)."""
