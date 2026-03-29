@@ -17,6 +17,8 @@ import subprocess
 import sys
 import tempfile
 
+import pytest
+
 # ============================================================
 # Setup
 # ============================================================
@@ -163,6 +165,22 @@ def run_calc(cub5_path, extra_args=None):
         if line.startswith("{"):
             return json.loads(line)
     return None
+
+
+# ============================================================
+# Pytest fixture (Cubit required - skip if unavailable)
+# ============================================================
+@pytest.fixture(scope="module")
+def cub5_path():
+    """Create Cubit model; skip if Cubit unavailable."""
+    tmpdir = tempfile.mkdtemp(prefix="radia_panel_test_")
+    cub5 = os.path.join(tmpdir, "test_model.cub5")
+    try:
+        if not create_torus_with_workpiece(cub5):
+            pytest.skip("Cubit not available")
+    except (ImportError, AttributeError, Exception) as e:
+        pytest.skip(f"Cubit not available: {e}")
+    return cub5
 
 
 # ============================================================

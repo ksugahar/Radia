@@ -6,13 +6,15 @@ Provides:
   - OCC fallback mesh generation (no Cubit required)
   - ESIM/SIBC solver creation
   - BH curve constants and loading
-  - Suppress-stdout context manager
+  - Subprocess output protocol (progress / calc_main)
 """
 
 import io
+import json
 import math
 import os
 import sys
+import traceback
 
 import numpy as np
 
@@ -414,3 +416,76 @@ def compute_J_theta(I_total, a_coil):
     r_xy = sqrt(x * x + y * y)
     r_safe = IfPos(r_xy - 1e-10, r_xy, 1e-10)
     return J0 * CF((-y / r_safe, x / r_safe, 0))
+
+
+# ============================================================
+# Subprocess Output Protocol
+# ============================================================
+
+def progress(tag, msg):
+    """Write progress message to stderr for panel GUI consumption.
+
+    Protocol: stderr lines matching ``TAG:detail`` are parsed by
+    register_toolbar.py ``_on_stderr`` handlers.  Tags should be
+    short uppercase identifiers.
+
+    Examples::
+
+        progress("MESH_READY", "42 elements exported")
+        progress("BEM-SIBC", "wp R=10.0mm, sigma=2e6")
+        progress("FEM", "354 DOFs, solving...")
+    """
+    sys.stderr.write(f"{tag}:{msg}\n")
+    sys.stderr.flush()
+
+
+def calc_main(solve_func, parser):
+    """Common main() wrapper for all calc_*.py scripts.
+
+    Handles:
+      - stdout suppression (NGSolve/Cubit banners)
+      - Exception -> ``{"error": ...}`` JSON
+      - ``--output FILE`` JSON dump + stdout JSON print
+      - Traceback on stderr for debugging
+
+    Usage in calc_*.py::
+
+        def main():
+            parser = argparse.ArgumentParser(...)
+            parser.add_argument(...)
+
+            def run(args):
+                return solve_something(args.cub5, args.order, ...)
+
+            calc_main(run, parser)
+
+    Args:
+        solve_func: callable(args) -> dict.  Receives parsed argparse
+            Namespace; must return a JSON-serializable dict.
+        parser: argparse.ArgumentParser (must include ``--output``
+            argument if file output is desired; added automatically
+            if missing).
+    """
+    # Ensure --output is available
+    known_dests = {a.dest for a in parser._actions}
+    if "output" not in known_dests:
+        parser.add_argument("--output", default="",
+                            help="JSON output file (optional)")
+
+    args = parser.parse_args()
+
+    real_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    try:
+        result = solve_func(args)
+    except Exception as e:
+        result = {"error": str(e)}
+        sys.stderr.write(traceback.format_exc())
+        sys.stderr.flush()
+    sys.stdout = real_stdout
+
+    output_path = getattr(args, "output", "")
+    if output_path:
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(result, f)
+    print(json.dumps(result))

@@ -275,6 +275,11 @@ def compute_heating(R_coil, a_coil, R_wp, H_wp,
 
 
 def main():
+    _panels_dir = os.path.dirname(os.path.abspath(__file__))
+    if _panels_dir not in sys.path:
+        sys.path.insert(0, _panels_dir)
+    from calc_common import calc_main
+
     parser = argparse.ArgumentParser(
         description="FEM-ESIM workpiece heating (2D axisymmetric)")
     parser.add_argument("--r-coil", type=float, required=True, help="Coil radius [m]")
@@ -290,27 +295,16 @@ def main():
                         choices=["local_curvature", "none"],
                         help="ESIM curvature: local_curvature or none (flat)")
     parser.add_argument("--output", default="", help="Output JSON file")
-    args = parser.parse_args()
 
-    _geom_map = {"local_curvature": "cylinder", "none": "slab"}
-    esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
-
-    import io as _io
-    real_stdout = sys.stdout
-    sys.stdout = _io.StringIO()
-    try:
-        result = compute_heating(
+    def run(args):
+        _geom_map = {"local_curvature": "cylinder", "none": "slab"}
+        esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
+        return compute_heating(
             args.r_coil, args.a_coil, args.r_wp, args.h_wp,
             args.sigma, args.frequency, args.material, maxh=args.maxh,
             esim_geometry=esim_geom)
-    except Exception as e:
-        result = {"error": str(e)}
-    sys.stdout = real_stdout
 
-    if args.output:
-        with open(args.output, "w", encoding="utf-8") as f:
-            json.dump(result, f)
-    print(json.dumps(result))
+    calc_main(run, parser)
 
 
 if __name__ == "__main__":
