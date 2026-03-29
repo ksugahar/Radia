@@ -44,53 +44,6 @@ EPS_0 = 8.854187817e-12
 VALID_CORE_MODELS = (None, 'fembem', 'fem', 'radia', 'vector_fembem')
 
 
-def _biot_savart_finite_filament(p1, p2, obs_point):
-    """Compute H-field from a finite current filament carrying I = 1 A.
-
-    Formula: H = (1/4*pi*d) * (cos(alpha1) - cos(alpha2)) * e_perp
-
-    Same implementation as peec_coupled.biot_savart_finite_filament().
-
-    Args:
-        p1: Start point [x, y, z] (meters)
-        p2: End point [x, y, z] (meters)
-        obs_point: Observation point [x, y, z] (meters)
-
-    Returns:
-        H-field vector [Hx, Hy, Hz] in A/m (for I = 1 A)
-    """
-    p1 = np.asarray(p1, dtype=float)
-    p2 = np.asarray(p2, dtype=float)
-    r = np.asarray(obs_point, dtype=float)
-
-    dl = p2 - p1
-    L = np.linalg.norm(dl)
-    if L < 1e-20:
-        return np.zeros(3)
-    e_l = dl / L
-
-    r1 = r - p1
-    r2 = r - p2
-
-    cross = np.cross(e_l, r1)
-    d = np.linalg.norm(cross)
-    if d < 1e-20:
-        return np.zeros(3)
-
-    e_perp = cross / d
-
-    r1_mag = np.linalg.norm(r1)
-    r2_mag = np.linalg.norm(r2)
-    if r1_mag < 1e-20 or r2_mag < 1e-20:
-        return np.zeros(3)
-
-    cos_alpha1 = np.dot(e_l, r1) / r1_mag
-    cos_alpha2 = np.dot(e_l, r2) / r2_mag
-
-    H = (1.0 / (4.0 * np.pi * d)) * (cos_alpha1 - cos_alpha2) * e_perp
-    return H
-
-
 class CoupledPEECMMM:
     """Coupled PEEC (conductor) + Core solver.
 
@@ -277,11 +230,10 @@ class CoupledPEECMMM:
             p1_j = edge_data[j]['p1']
             p2_j = edge_data[j]['p2']
 
-            # Biot-Savart H-field from unit current along edge j
+            # TODO: Replace with ngsolve.bem MaxwellDL(J*dC)
             def h_field_from_edge_j(point, _p1=p1_j, _p2=p2_j):
-                H = _biot_savart_finite_filament(_p1, _p2, point)
-                B = MU_0 * H
-                return [B[0], B[1], B[2]]
+                raise NotImplementedError(
+                    "biot_savart removed. Use MaxwellDL(J*dC).")
 
             # Create background field and solve
             bkg = rad.ObjBckg(h_field_from_edge_j)
