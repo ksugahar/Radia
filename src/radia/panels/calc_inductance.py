@@ -237,6 +237,7 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
     Returns dict with wp_* keys to merge into main result.
     """
     import math
+    import numpy as np
     from ngsolve import Integrate, CF, BND
 
     rho = 1.0 / sigma
