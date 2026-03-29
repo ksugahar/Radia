@@ -493,10 +493,12 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     sys.stderr.write(f"BEM-SIBC: assembled {solver.ndof} DOFs ({solver.t_assembly:.1f}s)\n")
     sys.stderr.flush()
 
-    # --- Compute phi_inc from actual coil surface current (no filament approx) ---
+    # --- Compute phi_inc ---
     t0 = _time.perf_counter()
     node_coords = np.array([[wp_mesh.vertices[i].point[j] for j in range(3)]
                             for i in range(wp_mesh.nv)])
+
+    # Use EFIE-solved surface J for phi_inc (accounts for proximity effects)
     phi_inc = compute_phi_inc_from_surface_J(
         node_coords, src_centroids, src_areas, src_J_vecs, n_quad=20)
     t_phi = _time.perf_counter() - t0
